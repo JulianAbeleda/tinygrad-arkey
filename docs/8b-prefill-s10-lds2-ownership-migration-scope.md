@@ -299,8 +299,8 @@ After the first S10 implementation pass:
 | G2 route selects spec | done for opt-in trace/runtime surface | `PREFILL_WMMA_LDS_PRIMITIVE=1` route trace selects generated transport without `build_gemm_lds2` |
 | G3 fallback explicit | done for trace | route trace records `fallback_reason`, `selected_surface`, and `calls_build_gemm_lds2` |
 | G4 route trace | done | `bench/prefill-s10-lds2-ownership/route-trace.json` |
-| G5 correctness smoke | done for isolated ffn_gate/up LDS primitive | `bench/prefill-pipe-mvp/ffn-gate-up-lds-primitive.json` passes sampled correctness |
-| G6 whole-prefill smoke | done for smoke compile/run | `lds-only` mixed route compiles/runs; composed route also compiles/runs after `attn_kv` pipe resource gate |
+| G5 correctness smoke | done for isolated ffn_gate/up LDS primitive | `prefill_pipe_mvp_artifact.py --lds-primitive --lds-sample-correctness` passes sampled correctness for generated LDS and generated DBUF transports |
+| G6 whole-prefill smoke | blocked before route entry on `DEV=AMD:ISA` | `s10_compile_capture.py --scenario lds-only` currently fails during Q4_K weight realization with `AMD:ISA CAST dtypes.char -> dtypes.float unsupported` |
 | G7 classification update | done | route manifest/surface guard classify S10 as spec-owned with ASM backend atom, not strict pure, and do not claim generated-pipe ownership for resource-gated `attn_kv` |
 
 Current result:
@@ -336,7 +336,7 @@ ffn_down    -> raw_pipe_oracle
 ffn_gate_up -> lds_dbuf
 ```
 
-Smoke result:
+Historical smoke result:
 
 ```text
 captured_failures = 0
@@ -346,6 +346,29 @@ binding_gate      = PREFILL_ROUTE_BINDING_PASS
 
 This is a correctness/route-ownership smoke, not a performance result. It proves the `ffn_gate/up` LDS primitive path can
 run inside whole-prefill once the generated pipe primitive is removed from the experiment.
+
+Current-head tiny-slice result:
+
+```text
+PYTHONPATH=. DEV=AMD:ISA python3 extra/qk/prefill_pipe_mvp_artifact.py \
+  --lds-primitive --lds-sample-correctness --sample-cols 8 --no-artifact --compact
+
+lds_route_sample_correctness.passed      = true
+lds_route_sample_correctness.rel_rmse    = 0.0002039360
+lds_dbuf_route_sample_correctness.passed = true
+lds_dbuf_route_sample_correctness.rel_rmse = 0.0002039362
+generated_dbuf_cadence_probe.candidate_ok = true
+generated_dbuf_cadence_probe.promoted      = true
+```
+
+So the tiny S10 slice works at the role-local level: the runtime opt-in route uses ordinary generated matmul transport,
+does not use the hand LDS oracle, installs the warmstart key, and passes sampled correctness for `ffn_gate_up`. The
+whole-prefill lds-only smoke is not yet a valid S10 verdict on `DEV=AMD:ISA`, because it fails before the prefill route
+while realizing Q4_K weights:
+
+```text
+NotImplementedError: AMD:ISA CAST dtypes.char -> dtypes.float unsupported
+```
 
 After adding the pipe resource gate:
 
