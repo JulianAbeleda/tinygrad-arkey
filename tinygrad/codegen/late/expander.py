@@ -68,7 +68,6 @@ def do_expand(root:UOp):
 
   new_arg = root.arg
   if root.op is Ops.GEP:
-    if root.dtype.count != 1 and getenv("PREFILL_LDS_PACK_CARRIER", 0): return None
     assert root.dtype.count == 1
     # is this right?
     if new_srcs[0].dtype.count == 1 and root.arg == (0,):

@@ -379,12 +379,6 @@ def _tc_local_stage_with_planned_local() -> bool:
 def _tc_local_stage_post_opt() -> bool:
   return bool(getenv("PREFILL_TC_LOCAL_STAGE_POST", 0))
 
-def _prefill_lds_pack_post_expand() -> bool:
-  return bool(getenv("PREFILL_LDS_PACK_POST_EXPAND", 0))
-
-def _prefill_lds_pack_carrier() -> bool:
-  return bool(getenv("PREFILL_LDS_PACK_CARRIER", 0))
-
 def _prefill_dbuf_lds_addr_serial() -> bool:
   return bool(PREFILL_DBUF() and getenv("PREFILL_DBUF_LDS_ADDR_SERIAL", 0))
 
@@ -467,7 +461,7 @@ def _tc_local_stage_paired_contract_src(src:UOp, operand_idx:int, *, owner_tag:t
   def _slot_idx(i:int|UOp) -> UOp:
     return slot + row*16 + i
 
-  store_gate = UOp.const(dtypes.bool, True) if operand_idx == 0 and a_full_lane else lane < 16
+  store_gate = lane < 16
   stores: list[UOp] = []
   prev_store: UOp|None = None
   stage_store_i = 0
@@ -480,13 +474,8 @@ def _tc_local_stage_paired_contract_src(src:UOp, operand_idx:int, *, owner_tag:t
     stores.append(st.end())
     prev_store = st
 
-  if _prefill_lds_pack_carrier():
-    for elems, store_slot in ((tuple(range(0, 8)), 0), (tuple(range(8, 16)), 8)):
-      carry = UOp(Ops.NOOP, src.dtype.scalar().vec(8), tuple(src.gep(i) for i in elems))
-      _append_stage_store(bsh.index(_slot_idx(store_slot), dtype=bsh.dtype), carry)
-  else:
-    for i in range(16):
-      _append_stage_store(bsh.index(_slot_idx(i), dtype=bsh.dtype).gep(0), src.gep(i))
+  for i in range(16):
+    _append_stage_store(bsh.index(_slot_idx(i), dtype=bsh.dtype).gep(0), src.gep(i))
 
   stage = UOp.group(*stores)
   if tile_ranges: stage = stage.end(*tile_ranges)
@@ -710,15 +699,7 @@ def _warmstart_local_stage_allowed(k:Scheduler) -> bool:
   # to a concrete key set so LDS/DBUF rewrites only touch the intended role, not every warmstarted GEMM in the model.
   if (allowed := getattr(k, "_warmstart_local_stage_allowed", None)) is not None: return allowed
   key = _warmstart_key(k)
-  attn_kv_no_stage = _warmstart_pipe_primitive_no_local_stage_key(key)
   allowed = _warmstart_local_stage_allowed_key(key)
-  if getenv("PREFILL_WARMSTART_LOCAL_STAGE_DUMP", 0):
-    print("PREFILL_WARMSTART_LOCAL_STAGE", {
-      "key": (sorted(key[0]), key[1]), "allowed": allowed, "attn_kv_no_stage": bool(attn_kv_no_stage),
-      "deny": (sorted(key[0]), key[1]) in [((sorted(k[0]), k[1])) for k in _WARMSTART_LOCAL_STAGE_DENY_KEYS],
-      "keys_is_none": _WARMSTART_LOCAL_STAGE_KEYS is None,
-      "keys": None if _WARMSTART_LOCAL_STAGE_KEYS is None else [(sorted(k[0]), k[1]) for k in _WARMSTART_LOCAL_STAGE_KEYS],
-    })
   return allowed
 
 def _prefill_dbuf_peel(k:Scheduler) -> None:

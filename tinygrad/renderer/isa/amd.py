@@ -209,8 +209,7 @@ def _vpool(ctx:IselContext):
   # window [FRAG_BASE, FRAG_TOP) fully reserved (virtuals [lo, FRAG_BASE)), unchanged.
   lo = ACCUM_PIN_TOP if getenv("AMD_ISA_REG_ACCUM", 0) else 1
   def reserve_lds_pack(pool:tuple[Register, ...]) -> tuple[Register, ...]:
-    if getenv("PREFILL_LDS_PACK_ALLOW_POOL", 0): return pool
-    top = LDS_PACK_TOP if (getenv("PREFILL_LDS_PACK_LATE_MATCHER", 0) or getenv("PREFILL_LDS_PACK_WITHLOCAL_B128", 0)) else LDS_PACK_BASE
+    top = LDS_PACK_TOP if getenv("PREFILL_LDS_PACK_WITHLOCAL_B128", 0) else LDS_PACK_BASE
     if top == LDS_PACK_BASE: return pool
     return tuple(r for r in pool if not (LDS_PACK_BASE <= r.index < top))
   if not _has_wmma(ctx): return reserve_lds_pack(VBASE[lo:])
@@ -532,9 +531,6 @@ def isel_store(ctx:IselContext, a:UOp, b:UOp, x:UOp):
       # Fail-closed: require explicit packed VGPR data for DS_STORE_B128.
       addr, lds_imm = _ds_addr_imm(ctx, a.src[0], lds_imm, 16)
       return UOp(Ops.INS, dtypes.void, src=(addr,) + bdata + _lds_b128_store_deps(b) + (a.src[1], UOp.const(dtypes.int32, lds_imm).rtag()), arg=AMDOps.DS_STORE_B128)
-    if (bdata := _lds_b64_store_data(ctx, b)) is not None:
-      addr, lds_imm = _ds_addr_imm(ctx, a.src[0], lds_imm, 8)
-      return UOp(Ops.INS, dtypes.void, src=(addr,) + bdata + _lds_b64_store_deps(b) + (a.src[1], UOp.const(dtypes.int32, lds_imm).rtag()), arg=AMDOps.DS_STORE_B64)
     esz = b.dtype.itemsize                    # element width from the value's dtype (KNOWN here; lowered INS srcs are void)
     if b.op is Ops.CONST: b = UOp(Ops.INS, b.dtype, src=(b.rtag(),), arg=AMDOps.V_CONST, tag=_vreg_def(ctx))  # e.g. acc init 0.0
     addr = a.src[0] if lds_imm == 0 else UOp(Ops.INS, dtypes.int32, src=(a.src[0], UOp.const(dtypes.int32, lds_imm).rtag()), arg=AMDOps.V_IADD, tag=_vreg_def(ctx))
@@ -638,9 +634,6 @@ def isel_gated_store(ctx:IselContext, a:UOp, b:UOp, g:UOp, x:UOp):
     if (bdata := _lds_b128_store_data(ctx, b)) is not None:
       addr, lds_imm = _ds_addr_imm(ctx, a.src[0], lds_imm, 16)
       return UOp(Ops.INS, dtypes.void, src=(gate, addr) + bdata + _lds_b128_store_deps(b) + (a.src[1], UOp.const(dtypes.int32, lds_imm).rtag()), arg=AMDOps.GATED_STORE_B128)
-    if (bdata := _lds_b64_store_data(ctx, b)) is not None:
-      addr, lds_imm = _ds_addr_imm(ctx, a.src[0], lds_imm, 8)
-      return UOp(Ops.INS, dtypes.void, src=(gate, addr) + bdata + _lds_b64_store_deps(b) + (a.src[1], UOp.const(dtypes.int32, lds_imm).rtag()), arg=AMDOps.GATED_STORE_B64)
     val = _tov(ctx, b)
     addr = a.src[0] if lds_imm == 0 else UOp(Ops.INS, dtypes.int32, src=(a.src[0], UOp.const(dtypes.int32, lds_imm).rtag()), arg=AMDOps.V_IADD, tag=_vreg_def(ctx))
     return UOp(Ops.INS, dtypes.void, src=(gate, addr, val, UOp.const(dtypes.int32, 1).rtag(), a.src[1], UOp.const(dtypes.int32, esz).rtag()), arg=AMDOps.GATED_STORE)
@@ -719,8 +712,6 @@ def _lds_b128_store_data(ctx:IselContext|None, u:UOp) -> tuple[UOp, ...]|None:
                 arg=AMDOps.GLOBAL_LOAD_B128, tag=_pin(LDS_PACK_BASE, 0)),)
   if ctx is not None and u.op in (Ops.NOOP, Ops.STACK) and u.dtype.count == 8 and u.dtype.scalar() is dtypes.half and len(u.src) >= 8:
     if not all(s.dtype is dtypes.half for s in u.src[:8]): return None
-    if getenv("PREFILL_LDS_PACK_B_TILEKEY_DUMP", 0):
-      print("B_TILEKEY_PAYLOAD", [(None if (a := _wmma_half_addr(s)) is None else a[3]) for s in u.src[:8]])
     base = LDS_PACK_BASE
     if base + 4 > LDS_PACK_TOP: return None
     return tuple(UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, u.src[2*i]), _tov(ctx, u.src[2*i+1])),
@@ -738,22 +729,6 @@ def _lds_b128_store_deps(u:UOp) -> tuple[UOp, ...]:
   if u.op is Ops.NOOP and isinstance(u.arg, tuple) and len(u.arg) == 2 and u.arg[0] == "global_b128":
     return u.src[1:]
   return u.src[8:] if u.op in (Ops.NOOP, Ops.STACK) and u.dtype.count == 8 and u.dtype.scalar() is dtypes.half and len(u.src) > 8 else ()
-
-def _lds_b64_store_data(ctx:IselContext|None, u:UOp) -> tuple[UOp, ...]|None:
-  if not getenv("PREFILL_LDS_PACK_WITHLOCAL_B64", 0) or ctx is None or isinstance(u.dtype, PtrDType):
-    return None
-  if u.op is not Ops.NOOP or u.dtype.count != 4 or u.dtype.scalar() is not dtypes.half or len(u.src) < 4:
-    return None
-  if not all(s.dtype is dtypes.half for s in u.src[:4]):
-    return None
-  base = LDS_PACK_BASE
-  if base + 2 > LDS_PACK_TOP:
-    return None
-  return tuple(UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, u.src[2*i]), _tov(ctx, u.src[2*i+1])),
-                   arg=AMDOps.V_PACK, tag=_pin(base, i)) for i in range(2))
-
-def _lds_b64_store_deps(u:UOp) -> tuple[UOp, ...]:
-  return u.src[4:] if u.op is Ops.NOOP and u.dtype.count == 4 and u.dtype.scalar() is dtypes.half and len(u.src) > 4 else ()
 
 def _ins_const_add(x:UOp) -> int|None:
   if x.op is Ops.CONST: return int(x.arg)
@@ -803,7 +778,6 @@ def _fold_lds_addr_imm(ctx:IselContext, addr:UOp) -> tuple[UOp, int]:
 
 def _withlocal_b128_store(ctx:IselContext, a:UOp, b:UOp) -> UOp|None:
   if not getenv("PREFILL_LDS_PACK_WITHLOCAL_B128", 0): return None
-  if getenv("PREFILL_LDS_PACK_WITHLOCAL_B128_GROUP_ONLY", 0): return None
   stage_mode = str(getenv("PREFILL_TC_LOCAL_STAGE", "")).strip().lower()
   if _n_workitem_dims(ctx) > 1 and stage_mode in ("a", "both", "1", "true", "yes") and \
      not getenv("PREFILL_LDS_PACK_WITHLOCAL_MULTIDIM_UNSAFE", 0): return None
@@ -1750,46 +1724,6 @@ def _mark_uniform(x:UOp):
   if all(uni(s) for s in x.src): return x.replace(arg=_N1B_UNI)
   return None
 
-def _pack_coop_lds_stores(x:UOp):
-  if not getenv("PREFILL_LDS_PACK_LATE_MATCHER", 0): return None
-  if len(x.src) != 16 or not all(g.op is Ops.GROUP and len(g.src) == 4 for g in x.src): return None
-  rows: dict[int, tuple[UOp, ...]] = {}
-  buf = base_expr = gate = None
-  for g in x.src:
-    stores = []
-    slot = None
-    for st in g.src:
-      if st.op is not Ops.STORE or len(st.src) != 3: return None
-      idx, val, cur_gate = st.src
-      if idx.op is not Ops.INDEX or idx.addrspace != AddrSpace.LOCAL or idx.dtype.base is not dtypes.half: return None
-      if val.dtype is not dtypes.half: return None
-      cur_base, cur_slot = _const_base(idx.src[1])
-      if cur_base is None: return None
-      if slot is None: slot = cur_slot
-      elif slot != cur_slot: return None
-      if buf is None: buf = idx.src[0]
-      elif idx.src[0] is not buf: return None
-      if base_expr is None: base_expr = cur_base
-      elif cur_base is not base_expr: return None
-      if gate is None: gate = cur_gate
-      elif cur_gate is not gate: return None
-      stores.append(st)
-    if slot is None or slot in rows: return None
-    rows[slot] = tuple(stores)
-  if sorted(rows) != list(range(16)): return None
-  packed = []
-  prev = None
-  for rep in range(4):
-    for slot0 in (0, 8):
-      raw_vals = tuple(rows[slot][rep].src[1] for slot in range(slot0, slot0 + 8))
-      vals = tuple(_after_load_addr(v, prev) for v in raw_vals)
-      carrier = UOp(Ops.NOOP, dtypes.half.vec(8), vals + ((prev,) if prev is not None else ()),
-                    arg=("global_b128", idx0) if getenv("PREFILL_LDS_PACK_GLOBAL_B128", 0) and (idx0 := _global_half8_base(raw_vals)) is not None else None)
-      tag = _tc_stage_tag(rows[slot0][rep]) or _tc_stage_tag(rows[slot0][rep].src[0])
-      prev = _retag_tc_stage_store(_retag_tc_stage_index(rows[slot0][rep].src[0], tag).store(carrier, gate), tag)
-      packed.append(prev)
-  return UOp.group(*packed)
-
 def _dbuf_store_addr_seed(x:UOp) -> UOp|None:
   if not (getenv("PREFILL_DBUF", 0) and getenv("PREFILL_DBUF_GLOBAL_ADDR_INLOOP", 0)): return None
   rs = sorted([r for r in x.ranges if r.op is Ops.RANGE and r.arg[-1] is AxisType.REDUCE], key=lambda r: r.arg)
@@ -1797,37 +1731,11 @@ def _dbuf_store_addr_seed(x:UOp) -> UOp|None:
 
 def _pack_withlocal_lds_stores(x:UOp):
   if not getenv("PREFILL_LDS_PACK_WITHLOCAL_B128", 0): return None
-  dump = getenv("PREFILL_LDS_PACK_WITHLOCAL_DUMP", 0)
-  def fail(reason:str):
-    if dump:
-      infos = [_local_vec4_store_info(st) for st in x.src] if all(st.op is Ops.STORE for st in x.src) else []
-      print("WITHLOCAL_PACK_SKIP", reason, {"group_len": len(x.src), "ops": [s.op.name for s in x.src[:8]],
-                                            "local_consts": [None if info is None else info[3] for info in infos[:32]],
-                                            "global_consts": [None if info is None else info[7] for info in infos[:32]]})
-    return None
+  def fail(reason:str): return None
   if len(x.src) < 2 or len(x.src) % 2 != 0 or not all(st.op is Ops.STORE for st in x.src): return fail("shape")
   infos = [_local_vec4_store_info(st) for st in x.src]
   if any(info is None for info in infos): return fail("store_info")
-  if getenv("PREFILL_LDS_PACK_WITHLOCAL_SKIP_SMALL_B_TILEKEY_BUF", 0) and getenv("PREFILL_TC_LOCAL_STAGE_B_TILEKEY", 0):
-    try:
-      local_nbytes = infos[0][0].src[0].dtype.nbytes()
-    except Exception:
-      local_nbytes = 0
-    # Diagnostic only: in the DBUF 4x2 both-stage route, A's local tile is 32KiB and B's tile-key local tile is
-    # 16KiB. Skipping the smaller generic pack tests whether B needs the explicit tile-major bridge instead.
-    if local_nbytes == 16 * 1024: return fail("small_b_tilekey_buf")
   if any(_has_local_axis(info[6]) and not _has_local_axis(info[2]) for info in infos): return fail("local_identity")
-  if dump:
-    print("WITHLOCAL_PACK", {"group_len": len(x.src),
-                             "local_consts": [info[3] for info in infos[:32]],
-                             "global_consts": [info[7] for info in infos[:32]],
-                             "load_src_lens": [len(info[1].src) for info in infos[:32]],
-                             "load_src_ops": [[s.op.name for s in info[1].src] for info in infos[:4]],
-                             "local_base0": str(infos[0][2])[:240],
-                             "global_base0": str(infos[0][6])[:240]})
-  if getenv("PREFILL_LDS_PACK_REJECT_GLOBAL_DISCONTINUITY", 0):
-    gconsts = [info[7] for info in infos]
-    if any(abs(gconsts[i+1] - gconsts[i]) > 64 for i in range(len(gconsts)-1)): return fail("global_discontinuity")
   packed = []
   prev = _dbuf_store_addr_seed(x)
   for i in range(0, len(infos), 2):
@@ -1856,19 +1764,10 @@ def _store_local_scalar_info(st:UOp):
 
 def _pack_b_tilekey_lds_stores(x:UOp):
   if not (getenv("PREFILL_TC_LOCAL_STAGE_B_TILEKEY", 0) and getenv("PREFILL_LDS_PACK_WITHLOCAL_B128", 0)): return None
-  dump = getenv("PREFILL_LDS_PACK_B_TILEKEY_DUMP", 0)
-  def fail(reason:str):
-    if dump:
-      flat_infos = [_store_local_scalar_info(st) for st in x.src] if all(st.op is Ops.STORE for st in x.src) else []
-      print("B_TILEKEY_PACK_SKIP", reason, {"group_len": len(x.src), "ops": [s.op.name for s in x.src[:4]],
-                                            "flat_consts": [None if info is None else info[4] for info in flat_infos[:64]]})
-    return None
+  def fail(reason:str): return None
   if len(x.src) != 16 or not all(g.op is Ops.GROUP and len(g.src) > 0 for g in x.src): return fail("shape")
   infos = [[_store_local_scalar_info(st) for st in g.src] for g in x.src]
   if any(info is None for row in infos for info in row): return fail("scalar_info")
-  if dump:
-    print("B_TILEKEY_PACK", [[info[4] for info in row] for row in infos])
-    print("B_TILEKEY_VALS", [[(None if (a := _wmma_half_addr(info[1])) is None else a[3]) for info in row] for row in infos])
   gate = infos[0][0][2]
   base_expr = infos[0][0][3]
   if any(info[2] is not gate or info[3] is not base_expr for row in infos for info in row): return fail("gate_or_base")
@@ -1898,7 +1797,6 @@ def _pack_b_tilekey_lds_stores(x:UOp):
 pre_isel_matcher = PatternMatcher([
   (UPat(Ops.GROUP, name="x"), _pack_b_tilekey_lds_stores),
   (UPat(Ops.GROUP, name="x"), _pack_withlocal_lds_stores),
-  (UPat(Ops.GROUP, name="x"), _pack_coop_lds_stores),
   (UPat((Ops.ADD, Ops.MUL, Ops.SHL), dtype=dtypes.ints, name="x"), lambda ctx, x: _mark_uniform(x) if getenv("AMD_ISA_N1B", 0) else None),
 ])
 

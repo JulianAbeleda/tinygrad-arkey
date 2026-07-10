@@ -803,32 +803,13 @@ class TestAMDISALDSB128Lowering(unittest.TestCase):
     self.assertIs(out.arg, AMDOps.DS_STORE_B128)
     self.assertEqual(out.src[-1].arg, 0, "Wide source from GLOBAL_LOAD_B128 should keep the packed offset0=0")
 
-  def test_lds_store_selects_b64_for_half_vec4_with_flag(self):
-    old = os.environ.get("PREFILL_LDS_PACK_WITHLOCAL_B64")
-    os.environ["PREFILL_LDS_PACK_WITHLOCAL_B64"] = "1"; getenv.cache_clear()
-    try:
-      addr, order = self._v(31), UOp(Ops.NOOP, dtypes.void)
-      a = UOp(Ops.NOOP, dtypes.int32.ptr(), src=(addr, order), arg="lds")
-      vals = UOp(Ops.NOOP, dtypes.half.vec(4), src=tuple(UOp(Ops.INS, dtypes.half, arg=AMDOps.MOV, tag=(Register(f"v{i}", i),)) for i in range(10, 14)))
-      out = isel_store(IselContext(UOp.sink()), a, vals, UOp(Ops.STORE, dtypes.void))
-    finally:
-      if old is None: os.environ.pop("PREFILL_LDS_PACK_WITHLOCAL_B64", None)
-      else: os.environ["PREFILL_LDS_PACK_WITHLOCAL_B64"] = old
-      getenv.cache_clear()
-    self.assertIs(out.arg, AMDOps.DS_STORE_B64)
-    self.assertEqual(out.src[-1].arg, 0)
-
-  def test_lds_store_rejects_b64_without_flag(self):
-    old = os.environ.get("PREFILL_LDS_PACK_WITHLOCAL_B64")
-    os.environ.pop("PREFILL_LDS_PACK_WITHLOCAL_B64", None); getenv.cache_clear()
-    try:
-      addr, order = self._v(31), UOp(Ops.NOOP, dtypes.void)
-      a = UOp(Ops.NOOP, dtypes.int32.ptr(), src=(addr, order), arg="lds")
-      vals = UOp(Ops.NOOP, dtypes.half.vec(4), src=tuple(UOp(Ops.INS, dtypes.half, arg=AMDOps.MOV, tag=(Register(f"v{i}", i),)) for i in range(10, 14)))
-      out = isel_store(IselContext(UOp.sink()), a, vals, UOp(Ops.STORE, dtypes.void))
-    finally:
-      if old is not None: os.environ["PREFILL_LDS_PACK_WITHLOCAL_B64"] = old
-      getenv.cache_clear()
+  def test_lds_store_half_vec4_selects_scalar_ds_store(self):
+    # half.vec(4) LDS store lowers to the scalar DS_STORE path (the removed PREFILL_LDS_PACK_WITHLOCAL_B64 probe
+    # that once produced DS_STORE_B64 here was a dead, never-routed diagnostic; deleted in the Phase-2 flag-collapse).
+    addr, order = self._v(31), UOp(Ops.NOOP, dtypes.void)
+    a = UOp(Ops.NOOP, dtypes.int32.ptr(), src=(addr, order), arg="lds")
+    vals = UOp(Ops.NOOP, dtypes.half.vec(4), src=tuple(UOp(Ops.INS, dtypes.half, arg=AMDOps.MOV, tag=(Register(f"v{i}", i),)) for i in range(10, 14)))
+    out = isel_store(IselContext(UOp.sink()), a, vals, UOp(Ops.STORE, dtypes.void))
     self.assertIs(out.arg, AMDOps.DS_STORE)
 
   def test_lds_store_rejects_global_load_b128_without_fixed_register_span(self):
