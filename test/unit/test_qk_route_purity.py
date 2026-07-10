@@ -58,6 +58,27 @@ def test_prefill_hybrid_and_pure_route_identities():
   assert {"PREFILL_WMMA_PIPE_PRIMITIVE", "PREFILL_WMMA_LDS_PRIMITIVE", "PREFILL_DBUF"} <= set(pure_env)
 
 
+def test_14b_hybrid_mmq_atom_manifest_is_research_only_and_ordered_for_m8():
+  from extra.qk.route_manifest import ROUTES, default_routes, route_env, rollback_env
+  route_id = "prefill_14b_q4k_q8_1_hybrid_mmq_atom"
+  row = ROUTES[route_id]
+
+  assert route_id not in default_routes()
+  assert row["status"] == "research"
+  assert row["roles"] == ["ffn_gate_up"]
+  assert set(row["excluded_roles"]) == {"attn_qo", "attn_kv", "ffn_down"}
+  assert row["route_classification"] == "compiler_primitive_spec_owned__hand_mmq_backend_atom"
+  assert row["baseline_route_id"] == "prefill_q4k_direct_tile4x4_default"
+  assert route_env(route_id) == {"PREFILL_14B_Q4K_Q8_1_MMQ_ATOM": "1", "PREFILL_ROUTE_STRICT": "1"}
+  assert rollback_env(route_id) == {"PREFILL_14B_Q4K_Q8_1_MMQ_ATOM": "0", "PREFILL_ROUTE": "direct_packed"}
+  assert [(item["role"], item["quant"]) for item in row["m8_expansion_order"]] == [
+    ("ffn_gate_up", "Q4_K"),
+    ("attn_qo", "Q4_K"),
+    ("attn_kv", "Q4_K"),
+    ("ffn_down", "Q6_K"),
+  ]
+
+
 def test_default_path_census_uses_manifest_provenance():
   census = build_census()
   assert census["verdict"] == "PMS_R0_PASS_CENSUS_PINNED"

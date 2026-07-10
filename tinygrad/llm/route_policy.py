@@ -58,6 +58,8 @@ _ROUTE_KIND_DECODE_FLASH = "decode_flash"
 _ROUTE_KIND_Q4K_G3 = "decode_q4k_g3"
 _ROUTE_KIND_Q6K_GEN = "decode_q6k_generated"
 _ROUTE_KIND_PREFILL_GEN = "prefill_generated"
+_ROUTE_KIND_PREFILL_MMQ_ATOM = "prefill_mmq_atom"
+_PREFILL_14B_Q4K_MMQ_ATOM_ROUTE = "prefill_14b_q4k_q8_1_hybrid_mmq_atom"
 _ROUTE_POLICY_LOCAL = {
   "decode_flash_block_tile_g5_konly": {"kind": _ROUTE_KIND_DECODE_FLASH, "compat_params": ({"DECODE_LIVE_SPLIT": "1"},)},
   "decode_flash_live_split_g4_8b_kvboth": {"kind": _ROUTE_KIND_DECODE_FLASH, "compat_params": ({"DECODE_LIVE_SPLIT": "1"},)},
@@ -65,6 +67,7 @@ _ROUTE_POLICY_LOCAL = {
   "decode_q6k_coop_generated": {"kind": _ROUTE_KIND_Q6K_GEN, "compat_params": ({"DECODE_Q6K_GENERATED": "1"},)},
   "prefill_q4k_int8_wmma_generated_research": {"kind": _ROUTE_KIND_PREFILL_GEN, "compat_params": ({},)},
   "prefill_q4k_int8_wmma_tiled_research": {"kind": _ROUTE_KIND_PREFILL_GEN, "compat_params": ({},)},
+  _PREFILL_14B_Q4K_MMQ_ATOM_ROUTE: {"kind": _ROUTE_KIND_PREFILL_MMQ_ATOM, "compat_params": ()},
 }
 _MANIFEST_ROUTE_CACHE: dict[str, dict]|None = None
 
@@ -126,6 +129,18 @@ def _route_shape_rows_cols(policy_path:pathlib.Path, route_id:str, row:dict) -> 
     raise ValueError(f"{policy_path} route {route_id!r} has non-positive shape rows={rows_i} cols={cols_i}")
   return rows_i, cols_i
 
+def _validate_prefill_mmq_atom_row(policy_path:pathlib.Path, route_id:str, row:dict) -> None:
+  rows_i, cols_i = _route_shape_rows_cols(policy_path, route_id, row)
+  role = str(row.get("role", ""))
+  quant = str(row.get("quant", ""))
+  if route_id == _PREFILL_14B_Q4K_MMQ_ATOM_ROUTE:
+    if not bool(row.get("atom_available", False)):
+      raise ValueError(f"{policy_path} route {route_id!r} is fail-closed until atom_available=true")
+    if (role, rows_i, cols_i, quant) != ("ffn_gate_up", 17408, 5120, "Q4_K"):
+      raise ValueError(f"{policy_path} route {route_id!r} only supports role='ffn_gate_up', "
+                       f"shape rows=17408 cols=5120, quant='Q4_K'; got role={role!r}, "
+                       f"rows={rows_i}, cols={cols_i}, quant={quant!r}")
+
 def load_qk_route_policy(path:str) -> dict:
   policy_path = pathlib.Path(path).expanduser()
   data = json.loads(policy_path.read_text())
@@ -135,6 +150,7 @@ def load_qk_route_policy(path:str) -> dict:
   q4k_g3_rows: list[dict] = []
   q6k_gen_rows: list[dict] = []
   prefill_gen_rows: list[dict] = []
+  prefill_mmq_atom_rows: list[dict] = []
   route_specs = _qk_route_specs()
   supported_route_ids = set(route_specs)
   for row in data.get("routes", []):
@@ -159,10 +175,14 @@ def load_qk_route_policy(path:str) -> dict:
       _route_shape_rows_cols(policy_path, route_id, row)
       prefill_gen_rows.append(row)
       selected.setdefault(route_id, row)
+    elif route_kind == _ROUTE_KIND_PREFILL_MMQ_ATOM:
+      _validate_prefill_mmq_atom_row(policy_path, route_id, row)
+      prefill_mmq_atom_rows.append(row)
+      selected.setdefault(route_id, row)
     else:
       selected[route_id] = row
   return {"path": str(policy_path), "selected": selected, "q4k_g3": q4k_g3_rows, "q6k_gen": q6k_gen_rows,
-          "prefill_gen": prefill_gen_rows}
+          "prefill_gen": prefill_gen_rows, "prefill_mmq_atom": prefill_mmq_atom_rows}
 
 def set_qk_route_policy(policy:dict|None, strict:bool=False, debug:bool=False) -> None:
   global _QK_ROUTE_POLICY, _QK_ROUTE_POLICY_STRICT, _QK_ROUTE_POLICY_DEBUG

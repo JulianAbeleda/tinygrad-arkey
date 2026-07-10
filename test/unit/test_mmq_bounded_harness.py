@@ -1,0 +1,50 @@
+import pytest
+
+from extra.qk.mmq_bounded_harness import (
+  CANDIDATE_ROUTE_ID, COMPARATOR_ID, K, M, N, ROLE, BoundedMMQConfig, MMQAtomUnavailableError,
+  candidate_metadata, run_bounded_harness,
+)
+
+
+def test_mmq_bounded_harness_metadata_names_required_14b_candidate_surface():
+  cfg = BoundedMMQConfig(m_tile=8, n_tile=8, k_groups=8)
+  meta = candidate_metadata(cfg)
+
+  assert meta["role"] == ROLE == "ffn_gate_up"
+  assert (meta["M"], meta["N"], meta["K"]) == (M, N, K) == (512, 17408, 5120)
+  assert meta["quant"] == "Q4_K"
+  assert meta["activation"] == "Q8_1"
+  assert meta["candidate_route_id"] == CANDIDATE_ROUTE_ID == "prefill_14b_q4k_q8_1_hybrid_mmq_atom"
+  assert meta["comparator_id"] == COMPARATOR_ID == "direct_packed"
+  assert meta["rollback"] == "direct_packed"
+  assert meta["primitive_class"] == "compiler_primitive_spec_owned__hand_mmq_backend_atom"
+
+
+def test_mmq_bounded_harness_reference_only_runs_without_atom_or_gpu_route_binding():
+  report = run_bounded_harness(BoundedMMQConfig(m_tile=4, n_tile=5, k_groups=8, rounds=1, backend="reference"))
+
+  assert report["schema"] == "q4k-q8-1-mmq-bounded-harness.v1"
+  assert report["status"] == "PASS"
+  assert report["metadata"]["backend"] == "reference"
+  assert report["metadata"]["candidate_route_id"] == CANDIDATE_ROUTE_ID
+  assert report["timing"]["comparator_id"] == "direct_packed"
+  assert report["timing"]["comparator_status"] == "named_not_measured"
+  assert report["artifacts"]["emitted_binary_hash"] is None
+
+
+def test_mmq_bounded_harness_multi_tile_reference_surface_is_bounded():
+  report = run_bounded_harness(BoundedMMQConfig(m_tile=4, n_tile=5, k_groups=8, m_tiles=2, n_tiles=3, rounds=1))
+
+  assert report["status"] == "PASS"
+  assert report["correctness"]["tiles"] == 6
+  assert report["metadata"]["bounded_shape"] == {"M": 8, "N": 15, "K": 256}
+
+
+def test_mmq_bounded_harness_atom_backend_fails_loud_when_unavailable():
+  with pytest.raises(MMQAtomUnavailableError, match="selected.*run_q4k_q8_1_mmq_tile is unavailable"):
+    run_bounded_harness(BoundedMMQConfig(m_tile=4, n_tile=4, k_groups=8, backend="atom"))
+
+
+def test_mmq_bounded_harness_rejects_unbounded_shape():
+  with pytest.raises(ValueError, match="exceeds role shape"):
+    BoundedMMQConfig(m_tile=M + 1).validate()

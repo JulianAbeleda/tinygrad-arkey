@@ -470,6 +470,23 @@ artifact names selected role and route id
 direct-packed remains rollback/comparator
 ```
 
+Scaffold status:
+
+```text
+route id: prefill_14b_q4k_q8_1_hybrid_mmq_atom
+manifest status: research
+selector: BoltBeam_route_policy_explicit_atom_available
+env: PREFILL_14B_Q4K_Q8_1_MMQ_ATOM=1, PREFILL_ROUTE_STRICT=1
+rollback: PREFILL_14B_Q4K_Q8_1_MMQ_ATOM=0, PREFILL_ROUTE=direct_packed
+policy binding: only role=ffn_gate_up, rows=17408, cols=5120, quant=Q4_K
+fail-closed gate: policy row must declare atom_available=true
+default promotion: none
+```
+
+This is route-transfer scaffolding only. Until the backend atom implementation exists, the policy loader rejects the
+route unless the policy row explicitly marks the atom available. That prevents hidden fallback to direct-packed while
+claiming hybrid MMQ attribution.
+
 Done:
 
 ```text
@@ -486,6 +503,10 @@ Order:
 3. attn_kv Q4_K
 4. ffn_down Q6_K only if role profiling says it matters
 ```
+
+The M8 expansion order is also recorded as manifest metadata on
+`prefill_14b_q4k_q8_1_hybrid_mmq_atom`; M7 policy validation intentionally rejects `attn_qo`, `attn_kv`, and
+`ffn_down` until explicit expansion rows and gates land.
 
 Each role requires:
 
