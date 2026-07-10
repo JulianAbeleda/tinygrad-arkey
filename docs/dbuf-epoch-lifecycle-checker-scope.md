@@ -230,6 +230,23 @@ The attempted direct tag-survival route is intentionally not used: AMD regalloc 
 so proof metadata cannot simply survive through regalloc in `UOp.tag`. The remaining P7 hook must be a side-channel export
 before metadata tags are stripped, or a metadata carrier that regalloc explicitly ignores.
 
+The side-channel route is now formalized through `DBUF_D3A_AUDIT_LOG` rows:
+
+```python
+{
+  "kind": "dbuf_lifecycle_event",
+  "op": "produce" | "consume" | "barrier",
+  "role": "A" | "B",
+  "epoch": ...,
+  "slot": ...,
+  "window": ...,
+}
+```
+
+`kernel_lifecycle_trace.py::_side_channel_lifecycle_events` normalizes those rows into checker events. P7 currently keeps
+this as context on fail-closed reports until every side-channel event can be reconciled to actual lowered store/load/barrier
+rows. That reconciliation step is the next remaining hard requirement.
+
 ## Decoupling Path
 
 1. Keep the checker pure metadata/event based.

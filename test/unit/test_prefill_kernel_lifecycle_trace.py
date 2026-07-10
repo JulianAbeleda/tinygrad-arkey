@@ -168,6 +168,46 @@ def test_p7_lowered_stream_export_reports_partial_metadata():
   assert out["partial_metadata_sample"][0]["kind"] == "tc_local_stage_store"
 
 
+def test_side_channel_lifecycle_events_check_when_complete():
+  out = life._side_channel_lifecycle_events([
+    {"kind": "dbuf_lifecycle_event", "op": "produce", "role": "B", "epoch": 0, "slot": 0, "window": "B:slot0"},
+    {"kind": "dbuf_lifecycle_event", "op": "barrier"},
+    {"kind": "dbuf_lifecycle_event", "op": "consume", "role": "B", "epoch": 0, "slot": 0, "window": "B:slot0"},
+  ])
+
+  assert out["row_count"] == 3
+  assert out["event_count"] == 3
+  assert out["errors"] == []
+  assert out["check"]["ok"] is True
+
+
+def test_side_channel_lifecycle_events_reports_incomplete_rows():
+  out = life._side_channel_lifecycle_events([
+    {"kind": "dbuf_lifecycle_event", "op": "produce", "role": "B", "slot": 0},
+  ])
+
+  assert out["row_count"] == 1
+  assert out["event_count"] == 0
+  assert "missing=['epoch']" in out["errors"][0]["error"]
+
+
+def test_p7_lowered_stream_export_carries_side_channel_fail_closed_context():
+  side = life._side_channel_lifecycle_events([
+    {"kind": "dbuf_lifecycle_event", "op": "produce", "role": "B", "epoch": 0, "slot": 0, "window": "B:slot0"},
+    {"kind": "dbuf_lifecycle_event", "op": "barrier"},
+    {"kind": "dbuf_lifecycle_event", "op": "consume", "role": "B", "epoch": 0, "slot": 0, "window": "B:slot0"},
+  ])
+  out = life._p7_lowered_stream_export({
+    "ds_store_b128": [{"idx": 0}],
+    "s_barrier": [{"idx": 1}],
+    "ds_load_b128": [{"idx": 2}],
+  }, {"covered_load_count": 1, "load_count": 1, "key_strength": "synthetic"}, side)
+
+  assert out["status"] == "fail_closed"
+  assert "side-channel records exist" in out["reason"]
+  assert out["side_channel"]["check"]["ok"] is True
+
+
 def test_lowered_row_tag_normalizer_exports_complete_lifecycle_metadata():
   dbuf, partial = sp._dbuf_metadata_from_tag((
     "dbuf_lifecycle", ("role", "A"), ("epoch", 3), ("slot", 1), ("window", "A:slot1"),

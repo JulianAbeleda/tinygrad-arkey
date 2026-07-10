@@ -412,7 +412,35 @@ def _dbuf_metadata(row: dict[str, Any]) -> dict[str, Any] | None:
   return None
 
 
-def _p7_lowered_stream_export(ops: dict[str, list[dict[str, Any]]], reaching: dict[str, Any]) -> dict[str, Any]:
+def _side_channel_lifecycle_events(rows: list[dict[str, Any]]) -> dict[str, Any]:
+  from extra.qk.prefill.dbuf_epoch_lifecycle_checker import DBUFEvent, check_events
+  events: list[DBUFEvent] = []
+  errors: list[dict[str, Any]] = []
+  lifecycle_rows = [r for r in rows if r.get("kind") == "dbuf_lifecycle_event"]
+  for i, row in enumerate(lifecycle_rows):
+    op = row.get("op")
+    if op == "barrier":
+      events.append(DBUFEvent("barrier", step=i, phase=str(row.get("phase", ""))))
+      continue
+    missing = [k for k in ("op", "role", "epoch", "slot") if row.get(k) is None]
+    if op not in ("produce", "consume") or missing:
+      errors.append({"row_index": i, "row": row, "error": f"incomplete lifecycle side-channel row: missing={missing}"})
+      continue
+    events.append(DBUFEvent(str(op), role=str(row["role"]), epoch=row["epoch"], slot=row["slot"],
+                            window=str(row.get("window", "default")), step=i, phase=str(row.get("phase", ""))))
+  check = check_events(events) if events else None
+  return {
+    "schema": "dbuf-lifecycle-side-channel.v1",
+    "row_count": len(lifecycle_rows),
+    "event_count": len(events),
+    "errors": errors,
+    "check": check,
+    "events": [e.to_json() for e in events],
+  }
+
+
+def _p7_lowered_stream_export(ops: dict[str, list[dict[str, Any]]], reaching: dict[str, Any],
+                              side_channel: dict[str, Any] | None=None) -> dict[str, Any]:
   """Export lowered stream DBUF events only when logical metadata is present."""
   stores = sorted(ops.get("ds_store_b128", []), key=lambda r: r["idx"])
   loads = sorted(ops.get("ds_load_b128", []), key=lambda r: r["idx"])
@@ -427,15 +455,21 @@ def _p7_lowered_stream_export(ops: dict[str, list[dict[str, Any]]], reaching: di
   }
   metadata_rows = [r for r in stores + loads if _dbuf_metadata(r) is not None]
   partial_rows = [r for r in stores + loads if r.get("dbuf_partial") is not None]
+  side = side_channel or {"row_count": 0, "event_count": 0, "errors": [], "check": None, "events": []}
   if not stores or not loads or not barriers:
     return {"schema": "dbuf-lowered-stream-export.v1", "status": "fail_closed",
-            "reason": "lowered stream lacks complete LDS store/load/barrier chain", "physical": physical, "events": []}
+            "reason": "lowered stream lacks complete LDS store/load/barrier chain", "physical": physical,
+            "side_channel": side, "events": []}
   if len(metadata_rows) != len(stores) + len(loads):
+    reason = "insufficient lowered lifecycle metadata: role/epoch/slot not present on every LDS store/load"
+    if side.get("event_count"):
+      reason += "; side-channel records exist but are not yet reconciled to all lowered rows with barriers"
     return {"schema": "dbuf-lowered-stream-export.v1", "status": "fail_closed",
-            "reason": "insufficient lowered lifecycle metadata: role/epoch/slot not present on every LDS store/load",
+            "reason": reason,
             "physical": physical, "metadata_rows": len(metadata_rows), "partial_metadata_rows": len(partial_rows),
             "partial_metadata_sample": [r.get("dbuf_partial") for r in partial_rows[:8]],
             "required_metadata_rows": len(stores) + len(loads),
+            "side_channel": side,
             "events": []}
 
   from extra.qk.prefill.dbuf_epoch_lifecycle_checker import DBUFEvent, check_events
@@ -515,6 +549,7 @@ def _report(label: str, insts: list[Any], meta: dict[str, Any], full_rows: bool)
   operand_families = sp._wmma_lds_operand_families(insts, ops[sp.WMMA_NAME])
   dbuf = sp._dbuf_gate_summary(ops, overlap, lds_families, operand_families, origins)
   dbuf_compile_audit = sp._dbuf_d3a_compile_audit_summary(list(amd_isa.DBUF_D3A_AUDIT_LOG))
+  lifecycle_side_channel = _side_channel_lifecycle_events(list(amd_isa.DBUF_D3A_AUDIT_LOG))
   origin_counts = Counter((x["src0"], x["src1"]) for x in origins)
   construction = _dbuf_pipeline_construction_audit(ops, widx)
   reaching = _lds_reaching_def_map(ops, widx, meta.get("ds_byte_window_rows"))
@@ -552,7 +587,8 @@ def _report(label: str, insts: list[Any], meta: dict[str, Any], full_rows: bool)
     "dbuf_pipeline_construction_audit": construction,
     "owned_b_emitter_oracle": _owned_b_emitter_oracle(meta, construction),
     "lds_reaching_def_map": reaching,
-    "p7_lowered_stream_export": _p7_lowered_stream_export(ops, reaching),
+    "p7_lowered_stream_export": _p7_lowered_stream_export(ops, reaching, lifecycle_side_channel),
+    "dbuf_lifecycle_side_channel": lifecycle_side_channel,
     "dbuf_d3a_compile_audit": dbuf_compile_audit,
   }
   if full_rows:

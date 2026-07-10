@@ -64,6 +64,10 @@ FRAG_BASE, FRAG_TOP = 200, 238
 LDS_PACK_BASE, LDS_PACK_TOP = 232, 236
 DBUF_D3A_AUDIT_LOG:list[dict] = []
 
+def _dbuf_lifecycle_audit(row:dict) -> None:
+  if getenv("PREFILL_DBUF_LIFECYCLE_AUDIT", 0) or getenv("PREFILL_DBUF_D3A_AUDIT", 0):
+    DBUF_D3A_AUDIT_LOG.append({"kind": "dbuf_lifecycle_event", **row})
+
 class LDSAddr(NamedTuple):
   buf: UOp
   dyn: UOp|None
@@ -1670,12 +1674,18 @@ def _dbuf_d3a_probe_marker(ctx:IselContext, tile:UOp, dep:tuple[UOp,...], phase_
         continue
       moved.append(st)
       if use_memo and skey is not None: moved_memo[skey] = st
+      abs_slot = _dbuf_stage_store_abs_slot(ctx, cand)
+      _dbuf_lifecycle_audit({
+        "op": "produce", "role": role, "phase": "body", "phase_i": phase_i,
+        "slot": abs_slot, "epoch": phase_i, "window": None if abs_slot is None else f"{role}:slot{abs_slot}",
+        "stage_store_key": repr(skey), "value_key": repr(_dbuf_stage_value_key(cand)),
+      })
       if getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL", 0):
         stolen = ctx._dbuf_stolen_stage_stores = getattr(ctx, "_dbuf_stolen_stage_stores", set())
         stolen.add(id(cand))
         if skey is not None:
           stolen.add(skey)
-        if (abs_slot := _dbuf_stage_store_abs_slot(ctx, cand)) is not None:
+        if abs_slot is not None:
           stolen.add(("lds_slot", abs_slot))
           if getenv("PREFILL_WMMA_KMAJOR_PIPELINE_EPOCHS", 0):
             body_slots = ctx._dbuf_pipeline_body_slots = getattr(ctx, "_dbuf_pipeline_body_slots", set())
@@ -1698,7 +1708,15 @@ def _dbuf_d3a_probe_marker(ctx:IselContext, tile:UOp, dep:tuple[UOp,...], phase_
     if not moved: continue
     if getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL", 0):
       out = (UOp(Ops.INS, dtypes.void, src=tuple(moved), arg=AMDOps.BARRIER),)
-    if getenv("PREFILL_DBUF_D3A_AUDIT", 0): DBUF_D3A_AUDIT_LOG.append(_dbuf_d3a_stage_proof(ctx, role, carrier))
+    proof_row = _dbuf_d3a_stage_proof(ctx, role, carrier)
+    if proof_row.get("ok"):
+      slot = proof_row.get("dbuf_slot")
+      _dbuf_lifecycle_audit({
+        "op": "consume", "role": role, "phase": "body", "phase_i": phase_i,
+        "slot": slot, "epoch": proof_row.get("producer_epoch"), "window": f"{role}:slot{slot}",
+        "byte_start": proof_row.get("byte_start"), "byte_len": proof_row.get("byte_len"),
+      })
+    if getenv("PREFILL_DBUF_D3A_AUDIT", 0): DBUF_D3A_AUDIT_LOG.append(proof_row)
   return out
 
 # B0.M residency: build ONE subtile v_wmma from ALREADY-PACKED resident A/B fragments (apk,bpk) + this subtile's 8 cin
