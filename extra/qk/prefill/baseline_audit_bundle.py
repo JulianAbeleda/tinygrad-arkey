@@ -217,7 +217,7 @@ def next_commands(args: argparse.Namespace) -> dict[str, str]:
     "schedule_gate": f"{py} DEV=AMD:ISA python3 extra/qk/prefill_v2_schedule_table_gate.py --shapes 5120x5120 --run-amd",
     "route_census": f"mkdir -p {args.route_census.parent} && {py} DEV=AMD:ISA python3 extra/qk/prefill/prefill_route_census.py --structural-only --routes generated-direct,generated-kmajor,hand-lds2 --shapes '2,2;4,2;2,4' --json > {args.route_census}",
     "shape_matrix": f"mkdir -p {args.shape_matrix.parent} && {py} DEV=AMD:ISA python3 extra/qk/prefill/hand_vs_generated_shape_matrix.py --shapes '2,2;4,2;2,4' --generated-env dbuf-safe --json > {args.shape_matrix}",
-    "s9_report": f"{py} python3 extra/qk/prefill/lds2_s9_report.py --output {args.s9_report}",
+    "s9_report": f"{py} python3 extra/qk/prefill/lds2_s9_final_report.py --output {args.s9_report}",
   }
 
 
