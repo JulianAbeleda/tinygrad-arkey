@@ -26,6 +26,66 @@ from extra.qk.mmq_bounded_harness import (
 
 SCHEMA = "q4k-q8-1-mmq-machine-search.v1"
 DEFAULT_OUTPUT = pathlib.Path("bench/prefill-14b-mmq-machine-search/search-report.json")
+LLAMA_KERNEL_SOURCES: tuple[dict[str, Any], ...] = (
+  {
+    "component": "mmq_route_and_launch",
+    "path": "/home/ubuntu/env/llama.cpp/ggml/src/ggml-cuda/mmq.cu",
+    "anchors": ["GGML_TYPE_Q4_K", "mul_mat_q_case"],
+  },
+  {
+    "component": "mmq_tile_geometry_and_layout",
+    "path": "/home/ubuntu/env/llama.cpp/ggml/src/ggml-cuda/mmq.cuh",
+    "anchors": ["MMQ_ITER_K", "MMQ_NWARPS", "block_q8_1_mmq", "load_tiles_q4_K"],
+  },
+  {
+    "component": "q8_1_mmq_ds4_quantizer",
+    "path": "/home/ubuntu/env/llama.cpp/ggml/src/ggml-cuda/quantize.cu",
+    "anchors": ["quantize_mmq_q8_1", "MMQ_Q8_1_DS_LAYOUT_DS4"],
+  },
+  {
+    "component": "q4k_q8_1_dot_formula",
+    "path": "/home/ubuntu/env/llama.cpp/ggml/src/ggml-cuda/vecdotq.cuh",
+    "anchors": ["vec_dot_q4_K_q8_1_impl_mmq", "VDR_Q4_K_Q8_1_MMQ"],
+  },
+  {
+    "component": "q4k_block_format",
+    "path": "/home/ubuntu/env/llama.cpp/ggml/src/ggml-common.h",
+    "anchors": ["block_q4_K"],
+  },
+)
+
+DONE_COMPONENTS: tuple[dict[str, Any], ...] = (
+  {
+    "component": "DS4 layout",
+    "status": "done",
+    "implementation": "extra.qk.mmq_q4k_q8_reference.Q81MMQDS4ActivationSpec",
+    "proof": "test/unit/test_mmq_q4k_q8_reference.py",
+  },
+  {
+    "component": "DS4 reference correctness",
+    "status": "done",
+    "implementation": "extra.qk.mmq_q4k_q8_reference.q8_1_mmq_ds4_quantize_reference",
+    "proof": "test/unit/test_mmq_q4k_q8_reference.py",
+  },
+  {
+    "component": "Q4_K x DS4 formula",
+    "status": "done",
+    "implementation": "extra.qk.mmq_q4k_q8_reference.q4k_q8_1_mmq_ds4_tile_reference",
+    "proof": "test/unit/test_mmq_q4k_q8_reference.py",
+  },
+  {
+    "component": "sudot4 primitive availability",
+    "status": "done",
+    "implementation": "extra.qk.mmq_q4k_q8_atom._sudot4",
+    "proof": "test/unit/test_mmq_q4k_q8_atom.py",
+  },
+  {
+    "component": "direct DS4 GPU atom",
+    "status": "done",
+    "implementation": "extra.qk.mmq_q4k_q8_atom.run_q4k_q8_1_mmq_bounded_amd_ds4_warp",
+    "proof": "test/unit/test_mmq_q4k_q8_atom.py",
+  },
+)
 
 
 @dataclass(frozen=True)
@@ -164,15 +224,17 @@ def build_search_report(*, run: bool = False, warmups: int = 0, rounds: int = 1,
     "public_label": PUBLIC_LABEL,
     "comparator_id": COMPARATOR_ID,
     "llama_mmq_geometry": LLAMA_MMQ_GEOMETRY,
+    "llama_kernel_source_policy": {
+      "mode": "point_to_local_clone_do_not_vendor",
+      "handcoded_translation": True,
+      "reduction_model": "unconverted_parts_point_to_clone_converted_parts_become_bounded_atoms",
+      "atom_definition": "the atom is the minimized hand-coded tinygrad translation of the cloned llama kernel pieces that pass bounded machine-search proof",
+      "sources": list(LLAMA_KERNEL_SOURCES),
+    },
     "production_dispatch_changed": False,
     "default_route": "direct_packed",
-    "searchable_components": [
-      "DS4 layout",
-      "DS4 reference correctness",
-      "Q4_K x DS4 formula",
-      "sudot4 primitive availability",
-      "direct DS4 GPU atom",
-    ],
+    "done_components": list(DONE_COMPONENTS),
+    "searchable_components": [row["component"] for row in DONE_COMPONENTS],
     "searchable_candidates": rows,
     "blocked_candidates": list(BLOCKED_CANDIDATES),
     "promotion_verdict": "BLOCKED_UNTIL_PACKED_DOT_AND_COOPERATIVE_TILE_PASS",

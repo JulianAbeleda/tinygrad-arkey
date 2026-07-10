@@ -8,6 +8,13 @@ def test_mmq_machine_search_only_marks_completed_components_searchable():
   assert report["schema"] == "q4k-q8-1-mmq-machine-search.v1"
   assert report["production_dispatch_changed"] is False
   assert report["default_route"] == "direct_packed"
+  assert report["llama_kernel_source_policy"]["mode"] == "point_to_local_clone_do_not_vendor"
+  assert report["llama_kernel_source_policy"]["handcoded_translation"] is True
+  assert report["llama_kernel_source_policy"]["reduction_model"] == "unconverted_parts_point_to_clone_converted_parts_become_bounded_atoms"
+  assert "minimized hand-coded tinygrad translation" in report["llama_kernel_source_policy"]["atom_definition"]
+  source_paths = {row["path"] for row in report["llama_kernel_source_policy"]["sources"]}
+  assert "/home/ubuntu/env/llama.cpp/ggml/src/ggml-cuda/mmq.cuh" in source_paths
+  assert "/home/ubuntu/env/llama.cpp/ggml/src/ggml-cuda/vecdotq.cuh" in source_paths
   assert report["promotion_verdict"] == "BLOCKED_UNTIL_PACKED_DOT_AND_COOPERATIVE_TILE_PASS"
   assert report["searchable_components"] == [
     "DS4 layout",
@@ -16,6 +23,8 @@ def test_mmq_machine_search_only_marks_completed_components_searchable():
     "sudot4 primitive availability",
     "direct DS4 GPU atom",
   ]
+  assert [row["status"] for row in report["done_components"]] == ["done"] * 5
+  assert {row["component"] for row in report["done_components"]} == set(report["searchable_components"])
 
   rows = {row["candidate_id"]: row for row in report["searchable_candidates"]}
   assert set(rows) == {
