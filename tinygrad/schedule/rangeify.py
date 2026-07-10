@@ -40,47 +40,6 @@ def prefill_dbuf_clear_rotated_stage_lowering_audit() -> None:
 def prefill_dbuf_rotated_stage_lowering_audit_rows() -> list[dict]:
   return list(_PREFILL_DBUF_ROTATED_STAGE_LOWERING_AUDIT_ROWS)
 
-def _prefill_dbuf_audit_stage_lowering(x:UOp, idx:UOp, size:int) -> None:
-  if not getenv("PREFILL_DBUF_ROTATED_STAGE_LOWERING_AUDIT", 0): return
-  fields = prefill_dbuf_rotated_stage_owner_fields(x.tag)
-  if not fields or fields.get("role") not in ("A", "B"): return
-  stage_rngs = sorted(x.ranges, key=lambda r: repr(r.arg))
-  idx_rngs = sorted(idx.ranges, key=lambda r: repr(r.arg))
-  all_rngs = sorted(dedup(tuple(stage_rngs) + tuple(idx_rngs)), key=lambda r: repr(r.arg))
-  reduce_ranges = [repr(r.arg) for r in all_rngs if r.arg[-1] is AxisType.REDUCE]
-  global_ranges = [repr(r.arg) for r in all_rngs if r.arg[-1] is AxisType.GLOBAL]
-  unroll_ranges = [repr(r.arg) for r in all_rngs if r.arg[-1] is AxisType.UNROLL]
-  _PREFILL_DBUF_ROTATED_STAGE_LOWERING_AUDIT_ROWS.append({
-    "stage_id": id(x),
-    "role": fields.get("role"),
-    "lds_buffer_id": fields.get("lds_buffer_id"),
-    "nbuf": fields.get("nbuf"),
-    "tile_count": fields.get("tile_count"),
-    "tile_elems": fields.get("tile_elems"),
-    "owned_stage": fields.get("owned_stage"),
-    "lifecycle": fields.get("lifecycle"),
-    "rotation": fields.get("rotation"),
-    "producer_epoch": fields.get("producer_epoch"),
-    "consumer_epoch": fields.get("consumer_epoch"),
-    "stage_dtype": str(x.dtype),
-    "stage_size": size,
-    "stage_shape": tuple(str(s) for s in x.shape),
-    "stage_src_ops": [s.op.name for s in x.src],
-    "stage_src_dtypes": [str(s.dtype) for s in x.src],
-    "stage_src_shapes": [tuple(str(z) for z in s.shape) for s in x.src],
-    "idx_op": idx.op.name,
-    "idx_src_ops": [s.op.name for s in idx.src],
-    "idx_src": [repr(s) for s in idx.src[:4]],
-    "idx_dtype": str(idx.dtype),
-    "stage_ranges": [repr(r.arg) for r in stage_rngs],
-    "idx_ranges": [repr(r.arg) for r in idx_rngs],
-    "reduce_ranges": reduce_ranges,
-    "global_ranges": global_ranges,
-    "unroll_ranges": unroll_ranges,
-    "has_reduce_range": bool(reduce_ranges),
-    "tag": repr(x.tag),
-  })
-
 def _prefill_dbuf_owned_b_stage_lowering(ctx:itertools.count, x:UOp, idx:UOp, size:int, rngs:list[UOp], sdtype:PtrDType) -> UOp|None:
   fields = prefill_dbuf_rotated_stage_owner_fields(x.tag)
   if not fields or fields.get("role") != "B" or fields.get("owned_stage") != "B_ROTATE": return None
@@ -522,7 +481,6 @@ def bufferize_to_store(ctx:itertools.count, x:UOp, idx:UOp, allow_locals=True):
     # downstream read still used the SAME idx (no per-slot (k&1) offset), so it only wasted LDS while producing
     # byte-identical results. The real paired (k&1) store+read indexing lives at the co-located _tc_local_stage_src
     # site in postrange.py. The dead branch has been deleted; the plain single-slot allocation below is the sole path.
-    _prefill_dbuf_audit_stage_lowering(x, idx, size)
     if (owned_lowering := _prefill_dbuf_owned_b_stage_lowering(ctx, x, idx, size, rngs, sdtype)) is not None: return owned_lowering
     buf = UOp.placeholder((size,), x.dtype, next(ctx), AddrSpace.LOCAL)
     if getenv("PREFILL_STAGE_PRESERVE_TAGS", 0): buf = buf.replace(tag=x.tag)

@@ -33,58 +33,12 @@ DEFAULT_RESOURCE_U = (2, 4)
 DEFAULT_RESOURCE_LOC = (0, 2)
 DEFAULT_RESOURCE_UNR = (2, 4, 8)
 LDS_LIMIT_BYTES = 65536
-A_WINDOW_QUANTUM_BYTES = 4096
 
 def _allow_parked_4x4() -> bool:
   return os.environ.get("PREFILL_ALLOW_PARKED_4X4", "0").strip() == "1"
 
 def _dbuf_slots() -> int:
   return getenv("PREFILL_DBUF_NBUF", 2) if getenv("PREFILL_DBUF", 0) else 1
-
-
-def _compressed_a_window_key_estimate(stage: str, u0: int, u1: int, loc: int, unr: int) -> dict[str, Any] | None:
-  """Prospective resource model for a bounded A fragment-window identity.
-
-  This is deliberately opt-in: it describes the target sidecar model for the
-  next primitive, not the current compiler's authoritative allocation. The raw
-  A GLOBAL identity is known to be 64KiB per DBUF slot, so it cannot be used as
-  the LDS key. The proposed compressed key charges only the live A window:
-
-    total_bytes = NBUF * 4KiB * (A_upcast_fragments + B_tile_fragments)
-
-  for the supported A-window frontier (`loc=2`, `u1=2`). `unr` is accepted only
-  when the implementation proves the live producer/consumer window is bounded;
-  the model exposes that assumed live window as metadata.
-  """
-  if not (getenv("PREFILL_DBUF_A_WINDOW_KEY_MODEL", 0) and getenv("PREFILL_TC_LOCAL_STAGE_POST", 0) and getenv("PREFILL_DBUF", 0)):
-    return None
-  st = stage.lower()
-  if st not in ("a", "both"): return None
-  nbuf = _dbuf_slots()
-  live_unr_window = getenv("PREFILL_DBUF_A_WINDOW_LIVE_UNR", 2)
-  b_fragments = u1 if st == "both" else 0
-  a_fragments = u0
-  estimate = nbuf * A_WINDOW_QUANTUM_BYTES * (a_fragments + b_fragments)
-  reasons = []
-  if loc != 2: reasons.append("requires loc=2 A local-y identity proof")
-  if st == "both" and u1 != 2 and not getenv("PREFILL_DBUF_B_WINDOW_KEY_MODEL", 0):
-    reasons.append("u1>2 needs a separate bounded B-window proof")
-  if live_unr_window > 2:
-    reasons.append("live UNR window must be proven <=2 before treating total UNR as bounded")
-  return {
-    "static_dbuf_lds_estimate_bytes": estimate,
-    "static_dbuf_lds_estimate_model": "future_compressed_a_window_key_v1",
-    "dbuf_slots": nbuf,
-    "a_window_quantum_bytes": A_WINDOW_QUANTUM_BYTES,
-    "a_upcast_fragments": a_fragments,
-    "b_tile_fragments": b_fragments,
-    "a_lidy_slices": loc,
-    "schedule_unr": unr,
-    "assumed_live_unr_window": live_unr_window,
-    "raw_a_global_identity_bytes": 65536 * nbuf,
-    "candidate_filter": "accept" if not reasons else "reject",
-    "candidate_filter_reasons": reasons,
-  }
 
 
 def _dbuf_static_lds_estimate(stage: str, u0: int, u1: int, loc: int, unr: int) -> dict[str, Any] | None:
@@ -106,8 +60,6 @@ def _dbuf_static_lds_estimate(stage: str, u0: int, u1: int, loc: int, unr: int) 
   This is only a prefilter; below-limit candidates still compile and report the
   authoritative ELF group-segment size.
   """
-  compressed = _compressed_a_window_key_estimate(stage, u0, u1, loc, unr)
-  if compressed is not None: return compressed
   st = stage.lower()
   if getenv("PREFILL_TC_LOCAL_STAGE_POST", 0) and getenv("PREFILL_DBUF", 0):
     if st == "both":

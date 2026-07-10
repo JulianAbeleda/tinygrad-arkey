@@ -13,12 +13,12 @@ EXPERIMENTAL-FLAG INDEX (prefill/machine-search staging plane; ALL default-off):
   This file accreted ~80 PREFILL_*/AMD_ISA_* getenv knobs from the prefill machine-search research plane. They fall in
   two classes: (1) real staging knobs that gate an experimental codegen/staging transform (e.g. PREFILL_DBUF*,
   PREFILL_TC_LOCAL_STAGE*, PREFILL_WMMA_KMAJOR_STAGE_STEAL, PREFILL_LDS_PACK*, AMD_ISA_N1B/SCHED/WAITCNT*), and
-  (2) pure diagnostic probes that only print/log and cannot change emitted code (the *_DUMP / *_AUDIT / *_PROOF_* knobs,
-  e.g. PREFILL_DBUF_D3A_AUDIT, PREFILL_WMMA_*_KEY_DUMP, PREFILL_LDS_PACK_*_DUMP). Several class-1 knobs carry an
+  (2) pure diagnostic probes that only print/log and cannot change emitted code (the *_DUMP / *_AUDIT / *_PROOF_* knobs).
+  The class-2 probe knobs are being deleted (see docs/prefill-flag-graveyard.md). Several class-1 knobs carry an
   _UNSAFE suffix (PREFILL_DBUF_LDS_CONST_IMM_UNSAFE, PREFILL_TC_LOCAL_STAGE_A_MULTIDIM_UNSAFE,
   PREFILL_LDS_PACK_WITHLOCAL_MULTIDIM_UNSAFE) and stay gated behind their documented invariant -- do NOT remove the gate.
-  Collapsing these reads behind one PrefillStagingSpec descriptor is a scoped follow-up (see the refactor report): the
-  probe deletions and the mass consolidation are deferred here to keep the stock (no-flag) renderer path byte-identical.
+  Collapsing the surviving class-1 reads behind one PrefillStagingSpec descriptor is a scoped follow-up (see the refactor
+  report): the mass consolidation is deferred here to keep the stock (no-flag) renderer path byte-identical.
 """
 from __future__ import annotations
 from typing import NamedTuple
@@ -74,10 +74,6 @@ def _n_workitem_dims(ctx:IselContext) -> int:
 FRAG_BASE, FRAG_TOP = 200, 238
 LDS_PACK_BASE, LDS_PACK_TOP = 232, 236
 DBUF_D3A_AUDIT_LOG:list[dict] = []
-
-def _dbuf_lifecycle_audit(row:dict) -> None:
-  if getenv("PREFILL_DBUF_LIFECYCLE_AUDIT", 0) or getenv("PREFILL_DBUF_D3A_AUDIT", 0):
-    DBUF_D3A_AUDIT_LOG.append({"kind": "dbuf_lifecycle_event", **row})
 
 class LDSAddr(NamedTuple):
   buf: UOp
@@ -908,24 +904,6 @@ def _lds_proof_key(idx:UOp, width:int) -> tuple|None:
   if base_expr is None: return None
   return (_lds_key_uop(idx.src[0]), _lds_key_uop(base_expr), const, width)
 
-def _dump_lds_proof_key(role:str, idx:UOp, width:int, extra:dict|None=None, ctx:IselContext|None=None, order:UOp|None=None) -> None:
-  if not getenv("PREFILL_DBUF_LDS_PROOF_KEY_DUMP", 0): return
-  key = _lds_proof_key(idx, width)
-  base_expr, const = _const_base(idx.src[1]) if idx.op is Ops.INDEX and len(idx.src) >= 2 else (None, None)
-  desc = decompose_lds_index(ctx, idx, order) if ctx is not None else None
-  print("LDS_PROOF_KEY", {"role": role, "key": key, "const": const, "width": width,
-                          "buf_id": None if idx.op is not Ops.INDEX else id(idx.src[0]),
-                          "base_id": None if base_expr is None else id(base_expr),
-                          "base": None if base_expr is None else str(base_expr)[:240],
-                          "desc": None if desc is None else {"buf_id": id(desc.buf),
-                                                             "dyn_id": None if desc.dyn is None else id(desc.dyn),
-                                                             "const_half": desc.const_half,
-                                                             "const_bytes": desc.const_bytes,
-                                                             "itemsize": desc.itemsize,
-                                                             "base_bytes": desc.base_bytes,
-                                                             "has_order": desc.order is not None},
-                          **(extra or {})})
-
 def _load_vec4_index(v:UOp) -> UOp|None:
   if v.op is not Ops.LOAD or v.dtype.count != 4 or v.dtype.scalar() is not dtypes.half: return None
   idx = v.src[0].src[0] if v.src[0].op is Ops.CAST else v.src[0]
@@ -1226,7 +1204,6 @@ def _frag_b128_loads(ctx:IselContext, E:tuple[UOp, ...], base:int, dep:tuple[UOp
   idxc = isel_index(ctx, idx0)
   if idxc is None or idxc.op is not Ops.NOOP or len(idxc.src) not in (2, 3): return None
   if idxc.arg == "lds":
-    _dump_lds_proof_key(f"frag_load_b128_{role}", idx0, 16, {"base": base, "first_const": c0}, ctx, idxc.src[1])
     addr, order = idxc.src[0], idxc.src[1]
     desc = decompose_lds_index(ctx, idx0, order)
     proof = _wmma_frag_buffer_proof_from_elem(E[0], desc, role) or _wmma_frag_buffer_proof_from_desc(desc, role)
@@ -1243,13 +1220,6 @@ def _frag_b128_loads(ctx:IselContext, E:tuple[UOp, ...], base:int, dep:tuple[UOp
       load_addr, ds_imm = _ds_addr_imm(ctx, load_addr, base_imm + imm, 16)
       ld = UOp(Ops.INS, dtypes.int32, src=(load_addr, order, UOp.const(dtypes.int32, ds_imm).rtag()) + active_dep,
                arg=AMDOps.DS_LOAD_B128, tag=_pin(base, j * 4))
-      if j == 0 and role in ("A", "B") and proof is not None:
-        slot = proof.get("dbuf_slot")
-        _dbuf_lifecycle_audit({
-          "op": "consume", "role": role, "phase": "frag_load_b128",
-          "slot": repr(slot), "epoch": repr(proof.get("producer_epoch")), "window": f"{role}:slot{slot!r}",
-          "uop_id": id(ld), "byte_start": proof.get("byte_start"), "byte_len": proof.get("byte_len"),
-        })
       loads.extend([ld] + [UOp(Ops.INS, dtypes.int32, src=(ld,), arg=AMDOps.MOV, tag=_pin(base, j * 4 + i)) for i in range(1, 4)])
       if getenv("PREFILL_DBUF_LDS_LOAD_SERIAL", 0): active_dep = active_dep + (ld,)
     return tuple(loads)
@@ -1418,45 +1388,19 @@ def _emit_dbuf_stage_store(ctx:IselContext, st:UOp, dep:tuple[UOp,...]) -> tuple
   return UOp(Ops.INS, dtypes.void, src=(addr,) + bdata + _lds_b128_store_deps(val) + extra_deps + (a.src[1], UOp.const(dtypes.int32, lds_imm).rtag()),
              arg=AMDOps.DS_STORE_B128), "ok"
 
-def _dbuf_d3a_stage_proof(ctx:IselContext, role:str, carrier:UOp) -> dict:
-  try:
-    elems = _wmma_elems(carrier, 16)
-    idx0, _ptr0, _expr0, c0 = _wmma_half_addr(elems[0]) or (None, None, None, None)
-  except Exception as e:
-    return {"role": role, "ok": False, "reason": f"{type(e).__name__}:{e}"}
-  if idx0 is None or idx0.op is not Ops.INDEX:
-    return {"role": role, "ok": False, "reason": "no_lds_index"}
-  desc = decompose_lds_index(ctx, idx0, None) if idx0.addrspace == AddrSpace.LOCAL else None
-  proof = _wmma_frag_buffer_proof_from_elem(elems[0], desc, role) or _wmma_frag_buffer_proof_from_desc(desc, role)
-  desc_row = None if desc is None else {
-    "buf_arg": getattr(desc.buf, "arg", None), "buf_id": id(desc.buf), "const_bytes": desc.const_bytes,
-    "base_bytes": desc.base_bytes, "itemsize": desc.itemsize, "idx_id": id(idx0),
-  }
-  if proof is None:
-    return {"role": role, "ok": False, "reason": "no_buffer_proof", "first_const_lane": c0, "lds_desc": repr(desc_row)}
-  keep = ("role", "lds_buffer_id", "nbuf", "dbuf_slot", "k_phase", "logical_row_or_col", "byte_start", "byte_len",
-          "producer_epoch", "overwrite_epoch")
-  return {"ok": True, "first_const_lane": c0, **{k: repr(proof.get(k)) for k in keep}}
-
-def _freeze_audit_payload(payload:dict) -> tuple:
-  return tuple(sorted(payload.items(), key=lambda x: x[0]))
-
 def _dbuf_d3a_probe_marker(ctx:IselContext, tile:UOp, dep:tuple[UOp,...], phase_i:int|None=None) -> tuple[UOp,...]:
   if not (getenv("PREFILL_DBUF_D3A_POST", 0) and dep): return dep
   out = dep
   for role, carrier in (("A", tile.src[0]), ("B", tile.src[1])):
     if role == "A" and not getenv("PREFILL_DBUF_D3A_STAGE_A", 0):
-      if getenv("PREFILL_DBUF_D3A_AUDIT", 0): DBUF_D3A_AUDIT_LOG.append({"role": role, "ok": False, "reason": "a_stage_gated_off"})
       continue
     if role == "B" and not getenv("PREFILL_DBUF_D3A_STAGE_B", 1):
-      if getenv("PREFILL_DBUF_D3A_AUDIT", 0): DBUF_D3A_AUDIT_LOG.append({"role": role, "ok": False, "reason": "b_stage_gated_off"})
       continue
     cands, reason = _dbuf_stage_candidates(carrier) if getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL", 0) else ([], "")
     if not cands:
       cand, reason = _dbuf_stage_candidate(carrier)
       cands = [] if cand is None else [cand]
     if not cands:
-      if getenv("PREFILL_DBUF_D3A_AUDIT", 0): DBUF_D3A_AUDIT_LOG.append({"role": role, "ok": False, "reason": reason})
       continue
     moved: list[UOp] = []
     for cand in cands:
@@ -1467,17 +1411,10 @@ def _dbuf_d3a_probe_marker(ctx:IselContext, tile:UOp, dep:tuple[UOp,...], phase_
         out = (UOp(Ops.INS, dtypes.void, src=(moved_memo[skey],), arg=AMDOps.BARRIER),); continue
       st, emit_reason = _emit_dbuf_stage_store(ctx, cand, out)
       if st is None:
-        if getenv("PREFILL_DBUF_D3A_AUDIT", 0): DBUF_D3A_AUDIT_LOG.append({"role": role, "ok": False, "reason": f"emit_rejected:{emit_reason}"})
         continue
       moved.append(st)
       if use_memo and skey is not None: moved_memo[skey] = st
       abs_slot = _dbuf_stage_store_abs_slot(ctx, cand)
-      _dbuf_lifecycle_audit({
-        "op": "produce", "role": role, "phase": "body", "phase_i": phase_i,
-        "slot": abs_slot, "epoch": phase_i, "window": None if abs_slot is None else f"{role}:slot{abs_slot}",
-        "uop_id": id(st),
-        "stage_store_key": repr(skey), "value_key": repr(_dbuf_stage_value_key(cand)),
-      })
       if getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL", 0):
         stolen = ctx._dbuf_stolen_stage_stores = getattr(ctx, "_dbuf_stolen_stage_stores", set())
         stolen.add(id(cand))
@@ -1494,17 +1431,7 @@ def _dbuf_d3a_probe_marker(ctx:IselContext, tile:UOp, dep:tuple[UOp,...], phase_
     if not moved: continue
     if getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL", 0):
       barrier = UOp(Ops.INS, dtypes.void, src=tuple(moved), arg=AMDOps.BARRIER)
-      _dbuf_lifecycle_audit({"op": "barrier", "phase": "body", "phase_i": phase_i, "uop_id": id(barrier)})
       out = (barrier,)
-    proof_row = _dbuf_d3a_stage_proof(ctx, role, carrier)
-    if proof_row.get("ok"):
-      slot = proof_row.get("dbuf_slot")
-      _dbuf_lifecycle_audit({
-        "op": "consume", "role": role, "phase": "body", "phase_i": phase_i,
-        "slot": slot, "epoch": proof_row.get("producer_epoch"), "window": f"{role}:slot{slot}",
-        "byte_start": proof_row.get("byte_start"), "byte_len": proof_row.get("byte_len"),
-      })
-    if getenv("PREFILL_DBUF_D3A_AUDIT", 0): DBUF_D3A_AUDIT_LOG.append(proof_row)
   return out
 
 # B0.M residency: build ONE subtile v_wmma from ALREADY-PACKED resident A/B fragments (apk,bpk) + this subtile's 8 cin
@@ -1767,8 +1694,6 @@ def _strip_linear_order_deps(x:UOp):
   elif x.arg is AMDOps.DS_STORE_B128 and len(x.src) > 7: nx = x.replace(src=x.src[:5] + x.src[-2:])
   elif x.arg is AMDOps.GATED_STORE_B128 and len(x.src) > 8: nx = x.replace(src=x.src[:6] + x.src[-2:])
   if nx is not None:
-    if getenv("PREFILL_DBUF_LIFECYCLE_AUDIT", 0) or getenv("PREFILL_DBUF_D3A_AUDIT", 0):
-      DBUF_D3A_AUDIT_LOG.append({"kind": "dbuf_lifecycle_anchor_alias", "from_uop_id": id(x), "uop_id": id(nx)})
     return (nx, [nx])
   return None
 
@@ -1914,7 +1839,6 @@ def _pack_withlocal_lds_stores(x:UOp):
     carrier = UOp(Ops.NOOP, dtypes.half.vec(8), (gidx0,) + ((prev,) if prev is not None else ()), arg=("global_b128", gidx0))
     tag = tag0 or _tc_stage_tag(idx0) or _tc_stage_tag_from_buffer(idx0, lconst0, 8)
     sidx = _retag_tc_stage_index(_index_after_dep(_split_dbuf_lds_index(idx0, "store"), prev), tag)
-    _dump_lds_proof_key("withlocal_store_b128", sidx, 8, {"pair": i // 2, "global_const": gconst0}, None, prev)
     prev = _retag_tc_stage_store(sidx.store(carrier), tag)
     packed.append(prev)
   return UOp.group(*packed)
@@ -1964,7 +1888,6 @@ def _pack_b_tilekey_lds_stores(x:UOp):
       if prev is not None: carrier = carrier.after(prev)
       tag = row[0][5] or _tc_stage_tag(row[0][0]) or _tc_stage_tag_from_buffer(row[0][0], const0, 8)
       sidx = _retag_tc_stage_index(_index_after_dep(_split_dbuf_lds_index(row[0][0], "store"), prev), tag)
-      _dump_lds_proof_key("tilekey_store_b128", sidx, 8, {"tile": tile, "half_row": half_row}, None, prev)
       prev = _retag_tc_stage_store(sidx.store(carrier, gate), tag)
       packed.append(prev)
   return UOp.group(*packed)
@@ -1987,9 +1910,6 @@ def _Vr(r:Register): return _V[r.index]
 # its producer's allocated reg via src[].reg, but line_rewrite has already replaced the src with its (tagless) lowered
 # form -- so every value-producing representative keeps tag=x.tag (the real def Register) to preserve .reg downstream.
 def _ins(arg, tag): return UOp(Ops.INS, arg=arg, tag=tag)
-def _audit_anchor_alias(old:UOp, new:UOp) -> None:
-  if getenv("PREFILL_DBUF_LIFECYCLE_AUDIT", 0) or getenv("PREFILL_DBUF_D3A_AUDIT", 0):
-    DBUF_D3A_AUDIT_LOG.append({"kind": "dbuf_lifecycle_anchor_alias", "from_uop_id": id(old), "uop_id": id(new)})
 
 def _vop2_f(mk, x:UOp, src):
   # float VOP2: vsrc1 must be a VGPR; a CONST operand (folded to src[1] by _binop) becomes a float literal in src0
@@ -2020,7 +1940,6 @@ def lower_inst(x:UOp):
     return _ins(v_dot2_f32_f16(vdst=_Vr(x.reg), src0=_Vr(src[1].reg), src1=_Vr(src[2].reg), src2=_Vr(src[0].reg)), x.tag)
   if a is AMDOps.BARRIER:
     b = UOp(Ops.INS, arg=s_barrier())
-    _audit_anchor_alias(x, b)
     return (b, [b])
   if a is AMDOps.V_WMMA:                             # B0.L7: D = A*B + C, 16x16x16 fp16->fp32. src=(A0..7,B0..7,C0..7).
     # Fragment bases are the FIRST reg of each 8-VGPR run (src[0]=A base, src[8]=B base, src[16]=C base). D writes in
@@ -2052,7 +1971,6 @@ def lower_inst(x:UOp):
     return (st, [st])
   if a is AMDOps.DS_LOAD_B128:
     ld = _ins(ds_load_b128(vdst=_V[x.reg.index:x.reg.index+3], addr=_Vr(src[0].reg), offset0=src[2].arg), x.tag)
-    _audit_anchor_alias(x, ld)
     return (ld, [ld])
   if a is AMDOps.DS_STORE_B128:
     if len(src) == 3:
@@ -2062,7 +1980,6 @@ def lower_inst(x:UOp):
     else:
       raise NotImplementedError(f"AMD:ISA unsupported DS_STORE_B128 source shape: {len(src)}")
     st = UOp(Ops.INS, arg=ds_store_b128(addr=_Vr(src[0].reg), data0=_V[data.reg.index:data.reg.index+3], offset0=imm.arg))
-    _audit_anchor_alias(x, st)
     return (st, [st])
   if a is AMDOps.DS_STORE_B64:
     data, imm = src[1], src[-1]
@@ -2364,16 +2281,6 @@ class AMDISARenderer(ISARenderer):
     # backedges/exits drain so cross-iteration store->load hazards can't slip past). Labels start a clean block.
     # Full-drain (simm16=0) is always correct; the count drop comes from batching loads + dropping needless store waits.
     from tinygrad.helpers import getenv
-    def _audit_wait_uop(wait:UOp, vm:int, lgkm:int, phase:str) -> None:
-      if vm == 0 and lgkm == 0:
-        wait_kind, count = "full", 0
-      elif vm != 63:
-        wait_kind, count = "vm", vm
-      elif lgkm != 63:
-        wait_kind, count = "lgkm", lgkm
-      else:
-        wait_kind, count = "full", 0
-      _dbuf_lifecycle_audit({"op": "wait", "wait_kind": wait_kind, "count": count, "phase": phase, "uop_id": id(wait)})
     if getenv("AMD_ISA_WAITCNT_CONSERVATIVE", 0):   # baseline (Phase J A/B): drain after every memory op (old model)
       out: list[UOp] = []
       for u in uops:
@@ -2381,7 +2288,6 @@ class AMDISARenderer(ISARenderer):
         if not isinstance(u.arg, tuple) and str(u.arg).split("(", 1)[0].startswith(
             ("global_load", "global_store", "ds_load", "ds_store", "ds_bpermute", "s_load")):
           wait = UOp(Ops.INS, arg=s_waitcnt(simm16=self._waitcnt_simm16(0, 0, 0)))
-          _audit_wait_uop(wait, 0, 0, "conservative_after_memory")
           out.append(wait)
       return out
     if getenv("AMD_ISA_WAITCNT_TARGETED", 0):
@@ -2394,7 +2300,6 @@ class AMDISARenderer(ISARenderer):
       def _drain(vm:int=0, lgkm:int=0, exp:int=0):
         nonlocal vm_store, lgkm_store
         wait = UOp(Ops.INS, arg=s_waitcnt(simm16=self._waitcnt_simm16(vm, lgkm, exp)))
-        _audit_wait_uop(wait, vm, lgkm, "targeted_drain")
         out.append(wait)
         if vm == 0: pend_vm.clear(); vm_store = False
         if lgkm == 0: pend_lgkm.clear(); lgkm_store = False
@@ -2405,7 +2310,6 @@ class AMDISARenderer(ISARenderer):
         vm = 0 if (coalesce_vm and vdeps) else (len(pend_vm) - max(vdeps) - 1 if vdeps else 63)
         lgkm = 0 if (coalesce_lgkm and ldeps) else (len(pend_lgkm) - max(ldeps) - 1 if ldeps else 63)
         wait = UOp(Ops.INS, arg=s_waitcnt(simm16=self._waitcnt_simm16(vm, lgkm, 7)))
-        _audit_wait_uop(wait, vm, lgkm, "targeted_consumer")
         out.append(wait)
         if vdeps: del pend_vm[:(len(pend_vm) if coalesce_vm else max(vdeps)+1)]
         if ldeps: del pend_lgkm[:(len(pend_lgkm) if coalesce_lgkm else max(ldeps)+1)]
@@ -2437,7 +2341,6 @@ class AMDISARenderer(ISARenderer):
     def _drain():
       nonlocal vm_store, lgkm_store
       wait = UOp(Ops.INS, arg=s_waitcnt(simm16=self._waitcnt_simm16(0, 0, 0)))
-      _audit_wait_uop(wait, 0, 0, "default_drain")
       out.append(wait)
       pend_vm.clear(); pend_lgkm.clear(); vm_store = lgkm_store = False
     for u in uops:
