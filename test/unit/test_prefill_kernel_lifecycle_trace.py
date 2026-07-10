@@ -375,6 +375,49 @@ def test_p7_byte_window_fallback_fails_closed_without_store_cover():
   assert "stores do not exactly cover consume byte window" in out["byte_window_reconciled_side_channel"]["errors"][0]["error"]
 
 
+def test_p7_hand_oracle_diff_accepts_contract_equivalent_events():
+  p7 = {
+    "status": "exported",
+    "proof_source": "unit",
+    "byte_window_reconciled_side_channel": {"p5_check": {"ok": True, "errors": []}},
+    "events": [
+      {"op": "wait", "step": 0, "kind": "vm", "count": 0},
+      {"op": "produce", "step": 1, "role": "A", "epoch": 0, "slot": 0, "window": "A:w0", "lds_window": {"base": "a", "bytes": 32}},
+      {"op": "produce", "step": 2, "role": "B", "epoch": 0, "slot": 0, "window": "B:w0", "lds_window": {"base": "b", "bytes": 32}},
+      {"op": "wait", "step": 3, "kind": "lgkm", "count": 0},
+      {"op": "barrier", "step": 4},
+      {"op": "wait", "step": 5, "kind": "lgkm", "count": 0},
+      {"op": "consume", "step": 6, "role": "A", "epoch": 0, "slot": 0, "window": "A:w0", "lds_window": {"base": "a", "bytes": 32}},
+      {"op": "consume", "step": 7, "role": "B", "epoch": 0, "slot": 0, "window": "B:w0", "lds_window": {"base": "b", "bytes": 32}},
+    ],
+  }
+
+  out = life._p7_hand_oracle_diff(p7, k_tiles=1)
+
+  assert out["ok"] is True
+  assert out["equivalence"] == "contract_level_not_byte_identical"
+
+
+def test_p7_hand_oracle_diff_rejects_missing_role():
+  p7 = {
+    "status": "exported",
+    "byte_window_reconciled_side_channel": {"p5_check": {"ok": True, "errors": []}},
+    "events": [
+      {"op": "wait", "step": 0, "kind": "vm", "count": 0},
+      {"op": "produce", "step": 1, "role": "A", "epoch": 0, "slot": 0, "window": "A:w0", "lds_window": {"base": "a", "bytes": 32}},
+      {"op": "wait", "step": 2, "kind": "lgkm", "count": 0},
+      {"op": "barrier", "step": 3},
+      {"op": "wait", "step": 4, "kind": "lgkm", "count": 0},
+      {"op": "consume", "step": 5, "role": "A", "epoch": 0, "slot": 0, "window": "A:w0", "lds_window": {"base": "a", "bytes": 32}},
+    ],
+  }
+
+  out = life._p7_hand_oracle_diff(p7, k_tiles=1)
+
+  assert out["ok"] is False
+  assert any(err["error"] == "role coverage differs" for err in out["errors"])
+
+
 def test_side_channel_reconciliation_rejects_missing_p5_wait():
   side = life._side_channel_lifecycle_events([
     {"kind": "dbuf_lifecycle_event", "op": "wait", "wait_kind": "vm", "count": 0, "uop_id": 9},

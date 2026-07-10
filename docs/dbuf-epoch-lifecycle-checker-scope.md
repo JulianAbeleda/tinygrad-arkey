@@ -274,11 +274,14 @@ Current generated-trace result:
   `ds_store_b128` byte-window coverage of each logical 32-byte consume.
 - Strict bridge P5 passes for all three active shapes. The bridge validates VM waits before LDS produces, LGKM drains before
   barriers, and targeted LGKM waits before the WMMA that consumes each loaded fragment.
+- `p7_hand_oracle_diff` now passes for `2x2`, `4x2`, and `2x4` with
+  `equivalence=contract_level_not_byte_identical`. The generated final-stream proof has A/B role coverage, balanced
+  produce/consume counts per role, LDS-window-backed consumes, VM/LGKM wait coverage, and strict bridge P5; the hand oracle
+  remains the logical lifecycle template, not a byte-identical stream target.
 
 Remaining MVP work:
 
-1. Diff generated checked events against the hand/hybrid oracle for role/epoch/window/value coverage.
-2. Keep `4x4` parked under the hardware/register-budget decision; do not reopen it as part of this P7 MVP.
+1. Keep `4x4` parked under the hardware/register-budget decision; do not reopen it as part of this P7 MVP.
 
 ## Decoupling Path
 

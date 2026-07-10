@@ -776,6 +776,83 @@ def _p7_lowered_stream_export(ops: dict[str, list[dict[str, Any]]], reaching: di
           "physical": physical, "check": report, "events": [e.to_json() for e in raw_events]}
 
 
+def _event_contract_summary(events: list[Any]) -> dict[str, Any]:
+  out: dict[str, Any] = {
+    "event_count": len(events),
+    "op_counts": dict(sorted(Counter(e.op for e in events).items())),
+    "roles": sorted({e.role for e in events if e.role}),
+    "role_counts": {},
+    "wait_kinds": dict(sorted(Counter(e.kind for e in events if e.op == "wait").items())),
+    "windowed_event_count": sum(1 for e in events if e.window != "default"),
+    "lds_window_event_count": sum(1 for e in events if e.lds_window is not None),
+  }
+  for role in out["roles"]:
+    out["role_counts"][role] = {
+      "produce": sum(1 for e in events if e.op == "produce" and e.role == role),
+      "consume": sum(1 for e in events if e.op == "consume" and e.role == role),
+    }
+  return out
+
+
+def _p7_hand_oracle_diff(p7: dict[str, Any], *, k_tiles: int=4) -> dict[str, Any]:
+  from extra.qk.prefill.dbuf_epoch_lifecycle_checker import DBUFEvent, check_events, events_from_hand_lds2_lifecycle
+  errors: list[dict[str, Any]] = []
+  if p7.get("status") != "exported":
+    errors.append({"error": f"generated P7 did not export: status={p7.get('status')!r}", "reason": p7.get("reason")})
+    return {"schema": "dbuf-p7-hand-oracle-diff.v1", "ok": False, "errors": errors}
+
+  generated_events = [DBUFEvent.from_json(e) for e in p7.get("events", [])]
+  hand_events = events_from_hand_lds2_lifecycle(k_tiles=k_tiles)
+  generated_check = check_events(generated_events)
+  hand_check = check_events(hand_events, require_p5=True)
+  generated_summary = _event_contract_summary(generated_events)
+  hand_summary = _event_contract_summary(hand_events)
+  p5 = (p7.get("byte_window_reconciled_side_channel") or {}).get("p5_check")
+
+  if not generated_check["ok"]:
+    errors.append({"error": "generated P7 events fail DBUF checker", "check_errors": generated_check["errors"]})
+  if p5 is not None and not p5.get("ok"):
+    errors.append({"error": "generated P7 byte-window P5 check failed", "p5_errors": p5.get("errors", [])})
+  if not hand_check["ok"]:
+    errors.append({"error": "hand oracle events fail strict DBUF checker", "check_errors": hand_check["errors"]})
+  if generated_summary["roles"] != hand_summary["roles"]:
+    errors.append({"error": "role coverage differs", "generated": generated_summary["roles"], "hand": hand_summary["roles"]})
+  for role in hand_summary["roles"]:
+    g = generated_summary["role_counts"].get(role, {})
+    h = hand_summary["role_counts"].get(role, {})
+    if g.get("produce", 0) <= 0 or g.get("consume", 0) <= 0:
+      errors.append({"error": f"generated lacks role coverage for {role!r}", "generated": g})
+    if g.get("produce") != g.get("consume"):
+      errors.append({"error": f"generated produce/consume imbalance for {role!r}", "generated": g})
+    if h.get("produce") != h.get("consume"):
+      errors.append({"error": f"hand oracle produce/consume imbalance for {role!r}", "hand": h})
+  if generated_summary["lds_window_event_count"] < generated_summary["op_counts"].get("consume", 0):
+    errors.append({"error": "generated consumes are not fully backed by LDS window metadata",
+                   "summary": generated_summary})
+  if not {"vm", "lgkm"} <= set(generated_summary["wait_kinds"]):
+    errors.append({"error": "generated wait coverage lacks VM or LGKM waits", "wait_kinds": generated_summary["wait_kinds"]})
+  if not {"vm", "lgkm"} <= set(hand_summary["wait_kinds"]):
+    errors.append({"error": "hand wait coverage lacks VM or LGKM waits", "wait_kinds": hand_summary["wait_kinds"]})
+
+  return {
+    "schema": "dbuf-p7-hand-oracle-diff.v1",
+    "ok": not errors,
+    "equivalence": "contract_level_not_byte_identical",
+    "generated": {
+      "summary": generated_summary,
+      "check": generated_check,
+      "p5_check": p5,
+      "proof_source": p7.get("proof_source"),
+    },
+    "hand_oracle": {
+      "summary": hand_summary,
+      "check": hand_check,
+      "k_tiles": k_tiles,
+    },
+    "errors": errors,
+  }
+
+
 def _bytes(insts: list[Any]) -> int:
   total = 0
   for inst in insts:
@@ -840,6 +917,7 @@ def _report(label: str, insts: list[Any], meta: dict[str, Any], full_rows: bool)
   origin_counts = Counter((x["src0"], x["src1"]) for x in origins)
   construction = _dbuf_pipeline_construction_audit(ops, widx)
   reaching = _lds_reaching_def_map(ops, widx, meta.get("ds_byte_window_rows"))
+  p7 = _p7_lowered_stream_export(ops, reaching, lifecycle_side_channel, meta.get("ds_byte_window_rows"))
   report = {
     "label": label,
     **meta,
@@ -874,7 +952,8 @@ def _report(label: str, insts: list[Any], meta: dict[str, Any], full_rows: bool)
     "dbuf_pipeline_construction_audit": construction,
     "owned_b_emitter_oracle": _owned_b_emitter_oracle(meta, construction),
     "lds_reaching_def_map": reaching,
-    "p7_lowered_stream_export": _p7_lowered_stream_export(ops, reaching, lifecycle_side_channel, meta.get("ds_byte_window_rows")),
+    "p7_lowered_stream_export": p7,
+    "p7_hand_oracle_diff": _p7_hand_oracle_diff(p7) if label.startswith("generated-active") else None,
     "dbuf_lifecycle_side_channel": lifecycle_side_channel,
     "dbuf_d3a_compile_audit": dbuf_compile_audit,
   }
