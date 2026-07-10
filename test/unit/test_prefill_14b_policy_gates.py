@@ -50,6 +50,44 @@ def test_prefill_14b_model_authority_gate_loaded_policy_branch_is_safe():
   assert report["classified_blocker"] is True
 
 
+def test_prefill_14b_model_authority_gate_accepts_hybrid_atom_one_role_scope(tmp_path):
+  policy_path = tmp_path / "hybrid_atom_policy.json"
+  policy_path.write_text(json.dumps({
+    "schema": "boltbeam.route_policy.v1",
+    "model_id": PROFILE_14B.id,
+    "architecture_class": "dense_decoder",
+    "authorized": True,
+    "routes": [{
+      "role": FFN_GATE_UP_14B.role,
+      "shape": _policy_shape(FFN_GATE_UP_14B),
+      "quant": "Q4_K",
+      "selected_route": "prefill_14b_q4k_q8_1_hybrid_mmq_atom",
+      "route_params": {"PREFILL_14B_Q4K_Q8_1_MMQ_ATOM": "1", "PREFILL_ROUTE_STRICT": "1"},
+      "atom_available": True,
+    }],
+  }))
+  policy = route_policy.load_qk_route_policy(str(policy_path))
+  route_policy.set_qk_route_policy(policy)
+  try:
+    report = model_gate.build(
+      target_route_ids=("prefill_14b_q4k_q8_1_hybrid_mmq_atom",),
+      representative_shapes=((FFN_GATE_UP_14B.role, FFN_GATE_UP_14B.M, FFN_GATE_UP_14B.N, FFN_GATE_UP_14B.K),),
+      scope="unit hybrid atom authority scope")
+  finally:
+    route_policy.set_qk_route_policy(None)
+
+  assert report["verdict"] == "PREFILL_14B_MODEL_AUTHORITY_PASS"
+  assert report["classified_blocker"] is False
+  assert report["target_routes"] == ("prefill_14b_q4k_q8_1_hybrid_mmq_atom",)
+  assert report["policy_evidence"]["candidate_routes_present"] == ["prefill_14b_q4k_q8_1_hybrid_mmq_atom"]
+  assert report["policy_evidence"]["policy_selected_roles"] == [{
+    "role": "ffn_gate_up",
+    "rows": 17408,
+    "cols": 5120,
+    "selected_route": "prefill_14b_q4k_q8_1_hybrid_mmq_atom",
+  }]
+
+
 def test_qk_route_policy_accepts_prefill_direct_and_tiled_shape_rows(tmp_path):
   policy_path = tmp_path / "prefill_policy.json"
   policy_path.write_text(json.dumps({
