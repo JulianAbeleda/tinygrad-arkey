@@ -32,6 +32,8 @@ from the tracked tree; use git history for archaeology.
 - `8b-prefill-pipe-mvp-rest-scope.md` - remaining opt-in pipe MVP gates using existing harnesses only.
 - `8b-prefill-hybrid-machine-search-over-backend-atom-scope.md` - hybrid-machine-search classification and done gates for machine search
   over a hand-coded reusable DBUF backend atom; explicitly hybrid, not pure generated and not full hand-kernel ownership.
+- `model-agnostic-route-dehardcoding-scope-20260710.md` - scope for moving 8B/14B route shape constants into reusable
+  profile/policy data while reusing the existing route manifest, policy loader, and gates.
 - `handwritten-kernel-exhaustive-lowering-scope-20260706.md` - exhaustive lowering scope for converting handwritten
   route surfaces into pure tinygrad/codegen paths.
 - `pure-machine-search-roadmap.md` - current route/search roadmap and promotion rules.
