@@ -1,10 +1,10 @@
-# 8B Prefill S10.5 Machine Search Over Backend Atom Scope
+# 8B Prefill Hybrid Machine Search Over Backend Atom Scope
 
 Date: 2026-07-10.
 
 ## Decision
 
-S10.5 accepts the hybrid boundary:
+`hybrid_machine_search` accepts the hybrid boundary:
 
 ```text
 ffn_gate_up = machine-searched compiler primitive + hand-coded reusable DBUF backend atom
@@ -21,8 +21,12 @@ epoch coordinator/prologue/body/tail atom remains hand-coded. It is not a full f
 role lifecycle must not be an opaque role-specific instruction list selected by a flag; searchable compiler/spec metadata
 owns the safe schedule, route, legality, and wait-policy decisions around the atom.
 
-The purpose of S10.5 is to move every safe decision around the `ffn_gate_up` backend atom into searchable/spec-owned
+The purpose of `hybrid_machine_search` is to move every safe decision around the `ffn_gate_up` backend atom into searchable/spec-owned
 metadata while preserving the S9 4k pp512 band.
+
+Historical note: this was originally named S10.5 because it sat between the S10 generated-transport attempt and the
+S9 backend-atom authority path. The reusable concept is hybrid machine search, so code and artifact names now use
+`hybrid_machine_search`.
 
 ## Current Facts
 
@@ -33,15 +37,15 @@ metadata while preserving the S9 4k pp512 band.
 | S10 generated composed | `prefill_wmma_pipe_lds_dbuf_primitive_generated` | pinned | `~1332` | `~1189` | correct route, slow generated transport |
 | S10 generated composed | `prefill_wmma_pipe_lds_dbuf_primitive_generated` | unpinned | `~1514` | `~1341` | not a clock regression, still structurally slow |
 
-So S10.5 must not promote the slow generated LDS/DBUF transport. It keeps the fast backend atom and makes the surrounding
+So `hybrid_machine_search` must not promote the slow generated LDS/DBUF transport. It keeps the fast backend atom and makes the surrounding
 contract machine-owned.
 
 ## Non-Goals And Prior Work Boundary
 
-S10.5 is not a restart of the older generated LDS/DBUF route. Do not duplicate or reopen the prior generated transport
+`hybrid_machine_search` is not a restart of the older generated LDS/DBUF route. Do not duplicate or reopen the prior generated transport
 work unless a candidate first proves that it can match the backend atom contract and authority timing gates in this doc.
 
-Out of scope for S10.5:
+Out of scope for `hybrid_machine_search`:
 
 - copying the S10 generated composed LDS/DBUF transport into a second route,
 - adding another generated postrange DBUF stage-movement experiment,
@@ -52,7 +56,7 @@ Out of scope for S10.5:
 
 ## Ownership Boundary
 
-| Surface | S10.5 owner | Classification |
+| Surface | Hybrid-machine-search owner | Classification |
 |---|---|---|
 | role detection, `ffn_gate_up = 512x12288x4096` | compiler/spec | machine-owned |
 | route policy, `ffn_gate_up -> LDS2/DBUF` | compiler/search | machine-owned |
@@ -63,7 +67,7 @@ Out of scope for S10.5:
 | prologue/body/tail instruction choreography | backend atom | hand-coded reusable primitive |
 | physical registers and instruction cadence inside atom | backend atom | hand-coded primitive |
 
-The path becomes a fine-tuned hand kernel again if S10.5 hides role-specific shape, fixed registers, output epilogue, or
+The path becomes a fine-tuned hand kernel again if `hybrid_machine_search` hides role-specific shape, fixed registers, output epilogue, or
 full instruction-stream decisions inside a new opaque emitter. The path remains acceptable if the hand-coded part is a
 small reusable atom parameterized by the spec.
 
@@ -108,7 +112,7 @@ No new benchmark harness should be created.
 
 ## Done Gates
 
-S10.5 is done only when all gates pass:
+`hybrid_machine_search` is done only when all gates pass:
 
 | Gate | Required result |
 |---|---|
@@ -117,8 +121,8 @@ S10.5 is done only when all gates pass:
 | legality/proof | `WMMALDSSpec` legality passes, slot identity proves active_buffers=2, DBUF lifecycle P1 passes, and P5 wait proof passes when explicit waits are present |
 | harness reuse | timing, traces, reports, baseline freeze, lifecycle proof, LDS export, and classification use the existing harnesses listed above |
 | authority timing | pinned `pp512 >= 4000` through `extra/qk/prefill_whole_synced.py --mode authority --pin-clock` |
-| route binding | S10.5 report confirms `route_attribution.prefill_route_family == prefill_pipe_role_selective_generated`; the generic pure-route binding gate is expected to reject this hybrid route |
-| promotion report | final report says either `S10_5_HYBRID_SEARCH_OWNED_BACKEND_ATOM_READY` or `S10_5_HYBRID_SEARCH_BLOCKED_WITH_EXACT_REASON` |
+| route binding | hybrid-machine-search report confirms `route_attribution.prefill_route_family == prefill_pipe_role_selective_generated`; the generic pure-route binding gate is expected to reject this hybrid route |
+| promotion report | final report says either `HYBRID_MACHINE_SEARCH_OWNED_BACKEND_ATOM_READY` or `HYBRID_MACHINE_SEARCH_BLOCKED_WITH_EXACT_REASON` |
 
 Default policy stays unchanged until a candidate satisfies every gate and matches or beats the current S9 authority band.
 
@@ -151,18 +155,18 @@ expected classification
 Output target:
 
 ```text
-bench/prefill-s10_5-machine-search/ffn-gate-up-candidates.json
+bench/prefill-hybrid-machine-search/ffn-gate-up-candidates.json
 ```
 
 ### P2. Search Runner
 
-Build a small runner over existing S9-safe knobs. It may call existing S9 search helpers, but its output must be S10.5
+Build a small runner over existing S9-safe knobs. It may call existing S9 search helpers, but its output must be hybrid-machine-search
 candidate rows, not only env strings.
 
 Output target:
 
 ```text
-bench/prefill-s10_5-machine-search/search-report.json
+bench/prefill-hybrid-machine-search/search-report.json
 ```
 
 Done means every candidate states:
@@ -197,7 +201,7 @@ Use only the existing authority harness:
 PYTHONPATH=. DEV=AMD PREFILL_V2=1 PREFILL_GRAPH_GEMM=1 \
 python3 extra/qk/prefill_whole_synced.py \
   --mode authority -K 8 --warmups 4 --rounds 3 --pin-clock \
-  --artifact bench/prefill-s10_5-machine-search/<candidate>-authority.json \
+  --artifact bench/prefill-hybrid-machine-search/<candidate>-authority.json \
   --json
 ```
 
@@ -211,12 +215,12 @@ classification remains hybrid/backend-atom
 
 Do not compare pinned candidates to unpinned baselines.
 
-Do not use the generic `--require-route` binding gate as the S10.5 acceptance gate. That gate enforces pure/generated
-route provenance and correctly rejects `prefill_pipe_role_selective_generated` as external/hybrid. S10.5 instead records
+Do not use the generic `--require-route` binding gate as the hybrid-machine-search acceptance gate. That gate enforces pure/generated
+route provenance and correctly rejects `prefill_pipe_role_selective_generated` as external/hybrid. `hybrid_machine_search` instead records
 that rejection and applies its own hybrid route/performance gate in:
 
 ```text
-extra/qk/prefill/s10_5_machine_search.py --authority-artifact ...
+extra/qk/prefill/hybrid_machine_search.py --authority-artifact ...
 ```
 
 ### P5. Report And Default Policy
@@ -224,8 +228,8 @@ extra/qk/prefill/s10_5_machine_search.py --authority-artifact ...
 Write a final report that says one of:
 
 ```text
-S10_5_HYBRID_SEARCH_OWNED_BACKEND_ATOM_READY
-S10_5_HYBRID_SEARCH_BLOCKED_WITH_EXACT_REASON
+HYBRID_MACHINE_SEARCH_OWNED_BACKEND_ATOM_READY
+HYBRID_MACHINE_SEARCH_BLOCKED_WITH_EXACT_REASON
 ```
 
 Default policy remains unchanged unless a candidate passes P1-P4 and matches or beats the current S9 authority band.
@@ -234,8 +238,8 @@ Default policy remains unchanged unless a candidate passes P1-P4 and matches or 
 
 | Lane | Can run parallel? | Files |
 |---|---:|---|
-| candidate serializer | yes | `extra/qk/prefill/s10_5_machine_search.py`, tests |
-| checker integration | yes | `extra/qk/prefill/s10_5_machine_search.py`, DBUF checker tests |
+| candidate serializer | yes | `extra/qk/prefill/hybrid_machine_search.py`, tests |
+| checker integration | yes | `extra/qk/prefill/hybrid_machine_search.py`, DBUF checker tests |
 | classification audit | yes | docs/manifest/audit only |
 | authority timing | sequence after candidates pass legality | benchmark artifacts |
 

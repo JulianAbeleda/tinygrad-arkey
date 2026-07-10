@@ -42,7 +42,7 @@ Read these as current working numbers, not a universal claim. **Decode is a tiny
 
 - **Decode** — tinygrad leads llama across 8B/14B/32B, widening at long context (HBM-bound; that's the fork's headline).
 - **Prefill (`PREFILL_V2` tuned graph-GEMM path)** — on **8B this EXCEEDS llama: ~4408 tok/s pp512 vs llama ~3050 (~145%)**, measured by the synced authority harness (`extra/qk/prefill_whole_synced.py`). BUT this path realizes the covered linears in fp16 (~2× params VRAM), so it **only fits 8B on 24 GB**; and it is **off by default** — the *default* prefill path is the slow universal one.
-- **Prefill S-phase current state** — the canonical prefill phase ledger and current route/number live in [docs/prefill-current-state.md](docs/prefill-current-state.md) (active phase **S10.5**, route `prefill_pipe_role_selective_generated`, pinned pp512 ~4413).
+- **Prefill current state** — the canonical prefill phase ledger and current route/number live in [docs/prefill-current-state.md](docs/prefill-current-state.md) (active phase **hybrid_machine_search**, route `prefill_pipe_role_selective_generated`, pinned pp512 ~4413).
 - **Prefill on 14B/32B** — the tuned path doesn't fit (fp16 overlay ~28 GB / ~64 GB), so today they fall back to the slow universal path. Closing that is a real project (a fast-prefill path that doesn't materialize the whole model in fp16).
 
 **Measurement discipline:** report prefill/decode throughput ONLY from the authority harnesses via `extra/qk/bench.py` (below). **Never** report throughput from a `model.generate` TTFT bench — TTFT folds in generate's Python overhead + sampling + host jitter and **understates prefill by ~3×** (a hand-rolled ttft harness read 1247 tok/s for 8B where the synced authority reads ~4408).

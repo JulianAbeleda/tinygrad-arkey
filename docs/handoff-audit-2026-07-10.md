@@ -6,9 +6,9 @@ committed on `master` (workflow rule: commit on master, never branch). Full unit
 
 ## What was done (in order)
 
-1. **6-plane principle audit** of the S10.5 machine-search build → fixed 6 sections: bound the purity guard to the
+1. **6-plane principle audit** of the hybrid machine-search build → fixed 6 sections: bound the purity guard to the
    real dispatcher (was a parallel model that couldn't fail); single-sourced route authority (census now generated
-   from `route_manifest`); made S10.5/whole-synced promotion verdicts honest (a research route was stamped `READY`
+   from `route_manifest`); made hybrid-machine-search/whole-synced promotion verdicts honest (a research route was stamped `READY`
    on a bare proxy with a failing binding gate); added fp16 WMMA + int8 value-semantics tests (via remu); routed
    `model.py`'s leaked `extra.qk` import through the adapter (`test_tinygrad_boundary` green); retired 12 orphan
    probes; restored 9 principle-cited refutation docs that delete-to-git-history had orphaned + added a dead-link

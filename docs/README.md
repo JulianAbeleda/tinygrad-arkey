@@ -30,7 +30,7 @@ from the tracked tree; use git history for archaeology.
 - `8b-prefill-generated-pipe-lowerer-mvp-scope.md` - first generated pipe lowerer slice: diagnostic compiler-owned
   b128/WMMA/store structure and the remaining wait-policy/route-transport blockers.
 - `8b-prefill-pipe-mvp-rest-scope.md` - remaining opt-in pipe MVP gates using existing harnesses only.
-- `8b-prefill-s10_5-machine-search-over-backend-atom-scope.md` - S10.5 classification and done gates for machine search
+- `8b-prefill-hybrid-machine-search-over-backend-atom-scope.md` - hybrid-machine-search classification and done gates for machine search
   over a hand-coded reusable DBUF backend atom; explicitly hybrid, not pure generated and not full hand-kernel ownership.
 - `handwritten-kernel-exhaustive-lowering-scope-20260706.md` - exhaustive lowering scope for converting handwritten
   route surfaces into pure tinygrad/codegen paths.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""S10.5 machine-search candidate serializer for ffn_gate_up.
+"""hybrid machine-search candidate serializer for ffn_gate_up.
 
 This module only writes metadata. It does not import the runtime route and does
 not lower or emit a kernel body.
@@ -20,10 +20,10 @@ from extra.qk.prefill_schedule_spec import describe_prefill_schedule
 from extra.qk.wmma_lds_spec import LDS2_OWNERSHIP_CLASSIFICATION, extract_wmma_lds_spec, wmma_lds_slot_identity_proof
 
 
-SCHEMA = "prefill-s10.5-machine-search-candidate.v1"
-DEFAULT_OUTPUT = pathlib.Path("bench/prefill-s10_5-machine-search/ffn-gate-up-candidates.json")
-DEFAULT_SEARCH_OUTPUT = pathlib.Path("bench/prefill-s10_5-machine-search/search-report.json")
-DEFAULT_REPORT_OUTPUT = pathlib.Path("bench/prefill-s10_5-machine-search/final-report.json")
+SCHEMA = "prefill-hybrid-machine-search-candidate.v1"
+DEFAULT_OUTPUT = pathlib.Path("bench/prefill-hybrid-machine-search/ffn-gate-up-candidates.json")
+DEFAULT_SEARCH_OUTPUT = pathlib.Path("bench/prefill-hybrid-machine-search/search-report.json")
+DEFAULT_REPORT_OUTPUT = pathlib.Path("bench/prefill-hybrid-machine-search/final-report.json")
 ROLE = "ffn_gate_up"
 SHAPE = {"M": 512, "N": 12288, "K": 4096}
 CLASSIFICATION = LDS2_OWNERSHIP_CLASSIFICATION
@@ -111,7 +111,7 @@ def _prior_authority_summary(path: str | None) -> dict[str, Any] | None:
 
 
 def build_ffn_gate_up_candidate(*, active_buffers: int = 2, variant: dict[str, Any] | None = None) -> dict[str, Any]:
-  """Return a machine-readable S10.5 candidate record for the existing LDS atom."""
+  """Return a machine-readable hybrid machine-search candidate record for the existing LDS atom."""
   variant = WAIT_VARIANTS[0] if variant is None else variant
   schedule = describe_prefill_schedule(SHAPE["N"], SHAPE["K"], role=ROLE)
   schedule_json = schedule.to_json()
@@ -188,7 +188,7 @@ def build_search_report(*, active_buffers: int = 2) -> dict[str, Any]:
     })
   recommended = [v for v in viable if v["recommended_for_authority"]]
   return {
-    "schema": "prefill-s10.5-machine-search-report.v1",
+    "schema": "prefill-hybrid-machine-search-report.v1",
     "route": AUTHORITY_ROUTE,
     "classification": CLASSIFICATION,
     "pure_generated": False,
@@ -196,8 +196,8 @@ def build_search_report(*, active_buffers: int = 2) -> dict[str, Any]:
     "pp512_min_tok_s": PP512_MIN_TOK_S,
     "candidate_count": len(candidates),
     "recommended_candidate_ids": [v["candidate_id"] for v in recommended],
-    "verdict": "S10_5_SEARCH_READY_FOR_AUTHORITY"
-               if recommended else "S10_5_SEARCH_BLOCKED_NO_AUTHORITY_VIABLE_CANDIDATE",
+    "verdict": "HYBRID_MACHINE_SEARCH_READY_FOR_AUTHORITY"
+               if recommended else "HYBRID_MACHINE_SEARCH_BLOCKED_NO_AUTHORITY_VIABLE_CANDIDATE",
     "summary": viable,
     "candidates": candidates,
   }
@@ -323,7 +323,7 @@ def build_authority_gate(authority: dict[str, Any], *, comparator: dict[str, Any
   # a passing quality/correctness gate, AND a shipped-promotable classification. perf_floor_ok is NOT sufficient.
   authority_ok = bool(route_ok and binding_ok and comparator_ok and quality_ok and classification_ok)
   return {
-    "schema": "prefill-s10.5-authority-gate.v2",
+    "schema": "prefill-hybrid-machine-search-authority-gate.v2",
     "required_route": AUTHORITY_ROUTE,
     "selected_route": route,
     "route_ok": route_ok,
@@ -342,7 +342,7 @@ def build_authority_gate(authority: dict[str, Any], *, comparator: dict[str, Any
     "binding_gate_verdict": binding_verdict,
     "binding_ok": binding_ok,
     "binding_gate_note": (
-      "S10.5 classifies this path as hybrid/backend-atom, but a FAILING binding gate is NOT waved off: a "
+      "hybrid_machine_search classifies this path as hybrid/backend-atom, but a FAILING binding gate is NOT waved off: a "
       "binding FAIL blocks authority. The route stays research until the binding gate passes."
     ),
     "authority_ok": authority_ok,
@@ -357,7 +357,7 @@ def build_final_report(*, candidate: dict[str, Any] | None = None,
   candidate = build_ffn_gate_up_candidate() if candidate is None else candidate
   authority_gate = build_authority_gate(authority, comparator=comparator, quality_gate=quality_gate) \
     if authority is not None else {
-      "schema": "prefill-s10.5-authority-gate.v2",
+      "schema": "prefill-hybrid-machine-search-authority-gate.v2",
       "ok": False, "authority_ok": False, "status": "not_run",
       "required_route": AUTHORITY_ROUTE, "pp512_min_tok_s": PP512_MIN_TOK_S,
     }
@@ -380,10 +380,10 @@ def build_final_report(*, candidate: dict[str, Any] | None = None,
   ):
     if authority_gate.get(key) is False:
       blocking_reasons.append(msg)
-  verdict = "S10_5_HYBRID_SEARCH_OWNED_BACKEND_ATOM_READY" if ready \
-    else "S10_5_HYBRID_SEARCH_RESEARCH_CANDIDATE_NOT_PROMOTED"
+  verdict = "HYBRID_MACHINE_SEARCH_OWNED_BACKEND_ATOM_READY" if ready \
+    else "HYBRID_MACHINE_SEARCH_RESEARCH_CANDIDATE_NOT_PROMOTED"
   return {
-    "schema": "prefill-s10.5-machine-search-final-report.v2",
+    "schema": "prefill-hybrid-machine-search-final-report.v2",
     "verdict": verdict,
     "classification": CLASSIFICATION,
     "pure_generated": False,
@@ -391,8 +391,8 @@ def build_final_report(*, candidate: dict[str, Any] | None = None,
     "candidate_ok": candidate_ok,
     "promotion": {
       "ready": ready,
-      "decision": "promote_s10_5_backend_atom" if ready
-                  else "keep_default_authority_and_treat_s10_5_as_research",
+      "decision": "promote_hybrid_machine_search_backend_atom" if ready
+                  else "keep_default_authority_and_treat_hybrid_machine_search_as_research",
       "blocking_reasons": blocking_reasons,
     },
     "authority_gate": authority_gate,
@@ -411,7 +411,7 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
   ap.add_argument("--quality-gate-artifact", type=pathlib.Path,
                   help="whole-model quality/correctness gate JSON with a 'status' field (F3)")
   ap.add_argument("--active-buffers", type=int, default=2)
-  ap.add_argument("--search", action="store_true", help="write the S10.5 wait-policy search report")
+  ap.add_argument("--search", action="store_true", help="write the hybrid machine-search wait-policy search report")
   ap.add_argument("--json", action="store_true", help="print the candidate JSON to stdout")
   args = ap.parse_args(argv)
 

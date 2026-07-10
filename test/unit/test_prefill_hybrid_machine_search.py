@@ -1,6 +1,6 @@
 import json
 
-from extra.qk.prefill.s10_5_machine_search import (
+from extra.qk.prefill.hybrid_machine_search import (
   CLASSIFICATION, DEFAULT_OUTPUT, SCHEMA, build_authority_gate, build_ffn_gate_up_candidate, build_final_report,
   build_search_report, main)
 
@@ -97,14 +97,14 @@ def test_final_report_is_research_candidate_when_binding_and_gates_fail():
     "prefill_route_binding_gate": {"verdict": "PREFILL_ROUTE_BINDING_FAIL"},
   })
 
-  assert report["verdict"] == "S10_5_HYBRID_SEARCH_RESEARCH_CANDIDATE_NOT_PROMOTED"
+  assert report["verdict"] == "HYBRID_MACHINE_SEARCH_RESEARCH_CANDIDATE_NOT_PROMOTED"
   assert report["classification"] == "compiler_primitive_spec_owned__asm_backend_atom"
   assert report["pure_generated"] is False
   assert report["full_fine_tuned_hand_kernel"] is False
   assert report["candidate_ok"] is True
   assert report["authority_gate"]["ok"] is False
   assert report["promotion"]["ready"] is False
-  assert report["promotion"]["decision"] == "keep_default_authority_and_treat_s10_5_as_research"
+  assert report["promotion"]["decision"] == "keep_default_authority_and_treat_hybrid_machine_search_as_research"
   assert any("binding gate is not PASS" in r for r in report["promotion"]["blocking_reasons"])
 
 
@@ -124,9 +124,9 @@ def test_final_report_ready_only_when_all_gates_pass():
     "route_attribution": {"prefill_route_provenance": "tinygrad_scheduler_generated"},
   }
   quality_gate = {"status": "PASS", "metric": "greedy_parity", "value": 1.0}
-  import extra.qk.prefill.s10_5_machine_search as s10
+  import extra.qk.prefill.hybrid_machine_search as hms
   # Force the required route + a shippable classification for this synthetic promote path.
-  gate = s10.build_authority_gate(authority, comparator=comparator, quality_gate=quality_gate)
+  gate = hms.build_authority_gate(authority, comparator=comparator, quality_gate=quality_gate)
   # route_ok is False here (route != AUTHORITY_ROUTE) so authority is still correctly refused;
   # this asserts the gate does not over-grant even with comparator+quality present.
   assert gate["comparator_ok"] is True
@@ -139,7 +139,7 @@ def test_final_report_ready_only_when_all_gates_pass():
 def test_search_report_enumerates_s9_safe_wait_policy_candidates():
   report = build_search_report()
 
-  assert report["schema"] == "prefill-s10.5-machine-search-report.v1"
+  assert report["schema"] == "prefill-hybrid-machine-search-report.v1"
   assert report["search_space"] == "s9_safe_wait_policy_over_backend_atom"
   assert report["classification"] == "compiler_primitive_spec_owned__asm_backend_atom"
   assert report["pure_generated"] is False
@@ -157,7 +157,7 @@ def test_search_report_recommends_candidates_with_prior_4k_authority_band():
   report = build_search_report()
   summary = {row["candidate_id"]: row for row in report["summary"]}
 
-  assert report["verdict"] == "S10_5_SEARCH_READY_FOR_AUTHORITY"
+  assert report["verdict"] == "HYBRID_MACHINE_SEARCH_READY_FOR_AUTHORITY"
   assert summary["wait-default"]["recommended_for_authority"] is True
   assert summary["wait-lgkm-coop-store-2"]["recommended_for_authority"] is True
   assert summary["wait-lgkm-frag-load-2"]["recommended_for_authority"] is True

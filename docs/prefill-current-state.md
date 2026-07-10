@@ -5,7 +5,7 @@ Canonical current-state page for the prefill S-phase work. This is the single so
 this page tracks state.
 
 Last updated: 2026-07-10. Numbers pulled from
-`docs/8b-prefill-s10_5-machine-search-over-backend-atom-scope.md` and
+`docs/8b-prefill-hybrid-machine-search-over-backend-atom-scope.md` and
 `docs/8b-prefill-s10-lds2-ownership-migration-scope.md`. Do not invent numbers here; update from the
 authority harness (`extra/qk/prefill_whole_synced.py --mode authority --pin-clock`) and the scope docs.
 
@@ -31,11 +31,11 @@ authority harness (`extra/qk/prefill_whole_synced.py --mode authority --pin-cloc
 | S10-F | pending | Real parameterized epoch primitive interface beyond metadata. |
 | S10-G | later | Partial generated replacement around the epoch primitive. |
 | S10-H | parked | Full generated DBUF lifecycle replacement. |
-| S10.5 | current | Machine-search / spec-ownership over the proven hand-coded backend atom. Route `prefill_pipe_role_selective_generated`, hybrid backend-atom (not pure generated). Pinned pp512 `~4413`. See `docs/8b-prefill-s10_5-machine-search-over-backend-atom-scope.md`. |
+| hybrid_machine_search | current | Machine-search / spec-ownership over the proven hand-coded backend atom. Route `prefill_pipe_role_selective_generated`, hybrid backend-atom (not pure generated). Pinned pp512 `~4413`. See `docs/8b-prefill-hybrid-machine-search-over-backend-atom-scope.md`. Formerly tracked as S10.5 in the S-phase chronology. |
 
 ## Current route
 
-- Active phase: **S10.5** (machine-search over backend atom).
+- Active phase: **hybrid_machine_search** (machine-search over backend atom).
 - Route family: `prefill_pipe_role_selective_generated`.
 - Classification: `compiler_primitive_spec_owned__asm_backend_atom` — hybrid compiler primitive plus
   hand-coded reusable DBUF backend atom. Not pure generated; not full hand-kernel ownership.
@@ -47,5 +47,5 @@ authority harness (`extra/qk/prefill_whole_synced.py --mode authority --pin-cloc
 
 - Generated composed LDS/DBUF transport (`prefill_wmma_pipe_lds_dbuf_primitive_generated`) is the
   correct route but slow generated transport: pinned `pp512 ~1332` vs the `~4413` backend-atom band.
-  Retired by S10.5 as correct-but-slow. Lessons banked in `docs/prefill-lessons-ledger.md`
+  Retired by `hybrid_machine_search` as correct-but-slow. Lessons banked in `docs/prefill-lessons-ledger.md`
   (DBUF/LDS operand staging + "why hand beats generated" density thesis).
