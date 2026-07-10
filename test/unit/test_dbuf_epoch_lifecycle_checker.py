@@ -1,7 +1,8 @@
 import json
 
 from extra.qk.prefill.dbuf_epoch_lifecycle_checker import (
-  DBUFEvent, canonical_dbuf_events, canonical_dbuf_events_with_waits, check_events, check_pressure_summary,
+  DBUFEvent, canonical_dbuf_events, canonical_dbuf_events_with_waits, check_events, check_phase_cluster_quality,
+  check_pressure_summary,
   events_from_epoch_primitive, events_from_hand_lds2_lifecycle, events_from_postrange_owner_records,
   events_from_s10_role_trace, main, s10_readiness_roadmap)
 
@@ -14,6 +15,80 @@ def test_canonical_dbuf_lifecycle_passes():
   assert report["consumer_count"] == 8
   assert report["barrier_count"] == 4
   assert report["errors"] == []
+
+
+def test_phase_cluster_quality_accepts_hand_like_lifecycle():
+  trace = {
+    "instruction_total": 675,
+    "track_counts": {
+      "global_load_b128": 48,
+      "ds_store_b128": 48,
+      "ds_load_b128": 96,
+      "s_barrier": 3,
+      "s_waitcnt": 18,
+      "v_wmma_f32_16x16x16_f16": 64,
+    },
+    "waitcnt_summary": {"count": 18, "per_wmma_avg": 0.281},
+    "waits_per_wmma": (
+      [{"wait_count_since_prev_wmma": 4}] +
+      [{"wait_count_since_prev_wmma": 0} for _ in range(7)] +
+      [{"wait_count_since_prev_wmma": 1}] +
+      [{"wait_count_since_prev_wmma": 0} for _ in range(55)]
+    ),
+    "dbuf_gate_summary": {
+      "D3_cadence": {"ok": True, "body_has_next_slot_work": True},
+      "D7_scheduler_readiness": {"ok": True},
+    },
+    "active_shape_dbuf_cadence": {
+      "packed_global_to_lds_to_wmma_visible": True,
+      "scalar_lds_fallback_total": 0,
+    },
+    "p7_lowered_stream_export": {"status": "exported"},
+  }
+
+  report = check_phase_cluster_quality(trace)
+
+  assert report["ok"] is True
+  assert report["classification"] == "hand_lds2_quality"
+  assert report["metrics"]["wait_per_wmma"] == 0.281
+  assert report["metrics"]["max_wmma_burst"] >= 8
+
+
+def test_phase_cluster_quality_rejects_wait_heavy_generated_lifecycle():
+  trace = {
+    "instruction_total": 1387,
+    "track_counts": {
+      "global_load_b128": 96,
+      "ds_store_b128": 96,
+      "ds_load_b128": 128,
+      "s_barrier": 2,
+      "s_waitcnt": 157,
+      "v_wmma_f32_16x16x16_f16": 32,
+    },
+    "waitcnt_summary": {"count": 157, "per_wmma_avg": 4.906},
+    "waits_per_wmma": (
+      [{"wait_count_since_prev_wmma": 53}] +
+      [{"wait_count_since_prev_wmma": 4} for _ in range(16)] +
+      [{"wait_count_since_prev_wmma": 3} for _ in range(8)] +
+      [{"wait_count_since_prev_wmma": 2} for _ in range(7)]
+    ),
+    "dbuf_gate_summary": {
+      "D3_cadence": {"ok": True, "body_has_next_slot_work": True},
+      "D7_scheduler_readiness": {"ok": True},
+    },
+    "active_shape_dbuf_cadence": {
+      "packed_global_to_lds_to_wmma_visible": True,
+      "scalar_lds_fallback_total": 0,
+    },
+    "p7_lowered_stream_export": {"status": "exported"},
+  }
+
+  report = check_phase_cluster_quality(trace)
+
+  assert report["ok"] is False
+  assert "waits_per_wmma 4.906 exceeds" in report["errors"][0]
+  assert report["metrics"]["global_load_b128_per_wmma"] == 3.0
+  assert report["metrics"]["ds_store_b128_per_wmma"] == 3.0
 
 
 def test_consume_without_matching_epoch_fails():
@@ -540,6 +615,9 @@ def test_s10_roadmap_does_not_overclaim_readiness():
   assert layers["P5"]["status"] == "checker_reconcile_live_wait_and_byte_window_bridge_ready"
   assert layers["P6"]["status"] == "advisory_schema_ready"
   assert layers["P7"]["status"] == "active_packed_lds_exports_via_byte_window_ownership"
+  assert layers["P8"]["status"] == "checker_ready_trace_exporter_ready"
+  assert "P1-P7 pass" in roadmap["reopen_generated_dbuf_when"]
+  assert "P8 phase-cluster quality passes" in roadmap["promote_generated_dbuf_when"]
   assert exporters["E1"]["status"] == "done"
   assert exporters["E3"]["status"] == "done_for_lds2_template"
   assert exporters["E4"]["status"] == "done_for_owner_records"

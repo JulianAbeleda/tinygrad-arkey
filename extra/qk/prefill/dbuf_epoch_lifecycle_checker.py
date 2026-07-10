@@ -38,6 +38,8 @@ PROOF_LAYERS: tuple[dict[str, str], ...] = (
    "proof": "advisory reg-pressure summaries reject known DBUF address live-range hazards"},
   {"id": "P7", "name": "lowered_stream", "status": "active_packed_lds_exports_via_byte_window_ownership",
    "proof": "generated graph or stream exports actual stores/loads/waits/WMMA into this schema"},
+  {"id": "P8", "name": "phase_cluster_quality", "status": "checker_ready_trace_exporter_ready",
+   "proof": "waits are amortized by lifecycle phase and WMMA bursts instead of emitted per tiny producer/consumer edge"},
 )
 
 EXPORTERS: tuple[dict[str, str], ...] = (
@@ -58,10 +60,153 @@ def s10_readiness_roadmap() -> dict[str, Any]:
   return {
     "schema": "dbuf-epoch-lifecycle-s10-roadmap.v1",
     "complete_for_s10": False,
-    "current_proof_coverage": "epoch/slot/barrier plus optional LDS byte-window equality when exporters provide windows",
+    "current_proof_coverage": "epoch/slot/barrier plus optional LDS byte-window equality and P8 phase-cluster quality when exporters provide final-stream counters",
     "proof_layers": [dict(x) for x in PROOF_LAYERS],
     "exporters": [dict(x) for x in EXPORTERS],
-    "reopen_generated_dbuf_when": "P1-P7 pass on both hand/hybrid trace and generated candidate trace with equivalent coverage",
+    "reopen_generated_dbuf_when": "P1-P7 pass on both hand/hybrid trace and generated candidate trace with equivalent correctness coverage",
+    "promote_generated_dbuf_when": "P1-P7 correctness passes and P8 phase-cluster quality passes against the hand/hybrid quality envelope",
+  }
+
+
+def check_phase_cluster_quality(trace: dict[str, Any], *, mode: str = "lds2") -> dict[str, Any]:
+  """Advisory performance-shape gate for lowered DBUF streams.
+
+  P1-P7 answer whether a DBUF lifecycle is safe. P8 answers whether the final stream
+  has the hand-LDS2 class of phase clustering: memory work batched by phase, one
+  wait per phase/cluster, and WMMA emitted in bursts. It intentionally does not
+  prove correctness.
+  """
+  counts = dict(trace.get("track_counts") or {})
+  wait_summary = dict(trace.get("waitcnt_summary") or {})
+  waits_per_wmma = list(trace.get("waits_per_wmma") or [])
+  dbuf_gate = dict(trace.get("dbuf_gate_summary") or {})
+  d3 = dict(dbuf_gate.get("D3_cadence") or {})
+  d7 = dict(dbuf_gate.get("D7_scheduler_readiness") or {})
+  cadence = dict(trace.get("active_shape_dbuf_cadence") or {})
+  p7 = dict(trace.get("p7_lowered_stream_export") or {})
+  wmma = int(counts.get("v_wmma_f32_16x16x16_f16", counts.get("wmma", 0)) or 0)
+  instruction_total = int(trace.get("instruction_total", 0) or 0)
+  waitcnt = int(counts.get("s_waitcnt", wait_summary.get("count", 0)) or 0)
+  ds_load = int(counts.get("ds_load_b128", 0) or 0)
+  ds_store = int(counts.get("ds_store_b128", 0) or 0)
+  global_load = int(counts.get("global_load_b128", 0) or 0)
+  barriers = int(counts.get("s_barrier", counts.get("barriers", 0)) or 0)
+  waits_avg = float(wait_summary.get("per_wmma_avg", waitcnt / wmma if wmma else 0.0) or 0.0)
+  burst_sizes: list[int] = []
+  current = 0
+  max_waits_before_wmma = 0
+  wait_distribution: dict[int, int] = {}
+  for row in waits_per_wmma:
+    wc = int(row.get("wait_count_since_prev_wmma", 0) or 0)
+    wait_distribution[wc] = wait_distribution.get(wc, 0) + 1
+    max_waits_before_wmma = max(max_waits_before_wmma, wc)
+    if wc == 0:
+      current += 1
+    else:
+      if current: burst_sizes.append(current)
+      current = 1
+  if current: burst_sizes.append(current)
+  max_burst = max(burst_sizes) if burst_sizes else 0
+  avg_burst = sum(burst_sizes) / len(burst_sizes) if burst_sizes else 0.0
+  wait_per_wmma_threshold = 1.0
+  max_waits_before_wmma_threshold = 8
+  min_burst_threshold = 3
+  ds_load_per_wmma_threshold = 2.0
+  global_load_per_wmma_threshold = 2.25
+  ds_store_per_wmma_threshold = 2.25
+  barrier_total_threshold = 4
+  scalar_fallback_total = int(cadence.get("scalar_lds_fallback_total", 0) or 0)
+  p7_required = str(trace.get("label", "")).startswith("generated")
+  preconditions = {
+    "p7_lowered_stream_ok": (not p7_required) or p7.get("status") == "exported",
+    "d3_ok": bool(d3.get("ok", True)),
+    "body_has_next_slot_work": bool(d3.get("body_has_next_slot_work", True)),
+    "d7_ok": bool(d7.get("ok", True)),
+    "packed_chain_visible": bool(cadence.get("packed_global_to_lds_to_wmma_visible", True)),
+    "scalar_lds_fallback_total": scalar_fallback_total,
+  }
+  errors: list[str] = []
+  warnings: list[str] = []
+  for name, ok in preconditions.items():
+    if name == "scalar_lds_fallback_total":
+      if ok != 0: errors.append(f"scalar_lds_fallback_total is {ok}, expected 0")
+    elif ok is False:
+      errors.append(f"precondition {name} is false")
+  if wmma <= 0:
+    errors.append("no WMMA instructions found")
+  if waitcnt <= 0:
+    errors.append("no waitcnt instructions found")
+  if waits_avg > wait_per_wmma_threshold:
+    errors.append(f"waits_per_wmma {waits_avg:.3f} exceeds {wait_per_wmma_threshold:.3f}")
+  if max_waits_before_wmma > max_waits_before_wmma_threshold:
+    errors.append(f"max waits before a WMMA {max_waits_before_wmma} exceeds {max_waits_before_wmma_threshold}")
+  if max_burst < min_burst_threshold:
+    errors.append(f"max WMMA burst {max_burst} is below {min_burst_threshold}")
+  if ds_load and wmma and ds_load / wmma > ds_load_per_wmma_threshold:
+    errors.append(f"ds_load_b128_per_wmma {ds_load / wmma:.3f} exceeds {ds_load_per_wmma_threshold:.3f}")
+  if global_load and wmma and global_load / wmma > global_load_per_wmma_threshold:
+    errors.append(f"global_load_b128_per_wmma {global_load / wmma:.3f} exceeds {global_load_per_wmma_threshold:.3f}")
+  if ds_store and wmma and ds_store / wmma > ds_store_per_wmma_threshold:
+    errors.append(f"ds_store_b128_per_wmma {ds_store / wmma:.3f} exceeds {ds_store_per_wmma_threshold:.3f}")
+  if barriers > barrier_total_threshold:
+    errors.append(f"barrier_total {barriers} exceeds {barrier_total_threshold}")
+  if max_burst >= 4 and not errors:
+    quality_class = "hand_lds2_quality"
+  elif (ds_load and wmma and ds_load / wmma > ds_load_per_wmma_threshold) or max_burst < min_burst_threshold:
+    quality_class = "baseline_like"
+  elif not preconditions["d3_ok"]:
+    quality_class = "kmajor_but_not_dbuf_like"
+  elif errors:
+    quality_class = "combined_but_heavy"
+  else:
+    quality_class = "phase_clustered"
+  verdict = "PASS" if not errors else "FAIL"
+  return {
+    "schema": "dbuf-phase-cluster-quality.v1",
+    "proof_layer": "P8",
+    "mode": mode,
+    "ok": verdict == "PASS",
+    "verdict": verdict,
+    "classification": quality_class if verdict == "PASS" else f"{quality_class}:correctness_may_pass_but_wait_amortization_fails",
+    "preconditions": preconditions,
+    "metrics": {
+      "wmma_count": wmma,
+      "instruction_per_wmma": instruction_total / wmma if wmma else None,
+      "s_waitcnt": waitcnt,
+      "wait_per_wmma": waits_avg,
+      "waits_per_wmma": waits_avg,
+      "max_waits_before_wmma": max_waits_before_wmma,
+      "wmma_burst_sizes": burst_sizes,
+      "max_wmma_burst": max_burst,
+      "avg_wmma_burst": avg_burst,
+      "zero_wait_wmma_count": wait_distribution.get(0, 0),
+      "cluster_histogram": {str(k): burst_sizes.count(k) for k in sorted(set(burst_sizes))},
+      "global_load_b128": global_load,
+      "ds_store_b128": ds_store,
+      "ds_load_b128": ds_load,
+      "barrier_total": barriers,
+      "barrier_per_wmma": barriers / wmma if wmma else None,
+      "global_load_b128_per_wmma": global_load / wmma if wmma else None,
+      "ds_store_b128_per_wmma": ds_store / wmma if wmma else None,
+      "ds_load_b128_per_wmma": ds_load / wmma if wmma else None,
+      "duplicate_stage_overhead_global_per_wmma": max(0.0, global_load / wmma - global_load_per_wmma_threshold) if wmma else None,
+      "duplicate_stage_overhead_store_per_wmma": max(0.0, ds_store / wmma - ds_store_per_wmma_threshold) if wmma else None,
+      "wait_distribution_before_wmma": {str(k): v for k, v in sorted(wait_distribution.items())},
+    },
+    "thresholds": {
+      "waits_per_wmma_max": wait_per_wmma_threshold,
+      "max_waits_before_wmma_max": max_waits_before_wmma_threshold,
+      "max_wmma_burst_min": min_burst_threshold,
+      "max_wmma_burst_target": 4,
+      "global_load_b128_per_wmma_max": global_load_per_wmma_threshold,
+      "ds_store_b128_per_wmma_max": ds_store_per_wmma_threshold,
+      "ds_load_b128_per_wmma_max": ds_load_per_wmma_threshold,
+      "barrier_total_max": barrier_total_threshold,
+      "scalar_lds_fallback_total": 0,
+    },
+    "errors": errors,
+    "warnings": warnings,
+    "meaning": "P8 is a performance-shape gate only; P1-P7 still own DBUF correctness.",
   }
 
 

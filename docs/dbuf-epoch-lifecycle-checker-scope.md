@@ -92,12 +92,33 @@ Required proof layers:
 | P5 wait/sync proof | VMEM waits, LGKM waits, and barriers are present in the right phase | prevents memory visibility hazards | checker strict mode, side-channel reconciliation, live wait anchors, and byte-window bridge P5 implemented |
 | P6 lifetime/pressure proof | address/fragment live ranges are bounded by the lifecycle | prevents the generated route from recreating VGPR pressure failures | advisory summary checker implemented |
 | P7 lowered-stream proof | generated graph/stream exports actual stores/loads/waits/WMMA into this schema | proves S10 generation, not only the hand-coded primitive metadata | active packed-LDS trace exports through normalized byte-window producer ownership |
+| P8 phase-cluster quality | waits stay clustered around phase boundaries instead of appearing per-fragment/per-WMMA | catches performance-shape regressions after correctness proofs pass | checker implemented; trace exporter emits `p8_phase_cluster_quality` |
 
 S10 is ready to reopen generated DBUF replacement only when P1-P7 pass on:
 
 1. the hand-coded S9/S10 hybrid trace,
 2. the generated candidate trace,
 3. and a diff proving both traces have equivalent role/epoch/window/value coverage.
+
+P8 is not part of this correctness reopening condition. It is a performance-shape gate layered after P1-P7: the stream may
+be logically correct and still fail P8 if the waits are distributed in a way that destroys the intended DBUF schedule.
+
+P8 `phase_cluster_quality` scope:
+
+- Input: lowered-stream phase summaries with counted wait instructions and WMMA instructions.
+- Output: advisory pass/fail plus density, burst, and precondition metrics under `p8_phase_cluster_quality`.
+- Correctness boundary: P8 must not claim epoch, byte-window, value, layout, sync visibility, lifetime, or lowered-stream
+  correctness. Those remain P1-P7.
+- Fail signature for the generated S10 shape: `157 waits / 32 WMMA`, `waits_per_wmma=4.9`.
+- Pass signature for the hand/hybrid LDS2 shape: `18 waits / 64 WMMA`, `waits_per_wmma=0.28`.
+- Intended decision: fail generated shapes that technically satisfy proof obligations but emit fine-grained wait traffic
+  instead of clustered phase-boundary waits.
+- Current implementation:
+  - `extra/qk/prefill/dbuf_epoch_lifecycle_checker.py::check_phase_cluster_quality`
+  - `extra/qk/prefill/kernel_lifecycle_trace.py` emits `p8_phase_cluster_quality` for every final-stream report.
+  - Real hand LDS2 `ffn_gate_up` trace passes as `hand_lds2_quality`: `18 waits / 64 WMMA`, `max_wmma_burst=8`.
+  - Current generated S10 DBUF `2x4` fails as `baseline_like:correctness_may_pass_but_wait_amortization_fails`:
+    `157 waits / 32 WMMA`, `max_wmma_burst=1`, `ds_load_b128_per_wmma=4.0`.
 
 ## Exporters Needed
 
@@ -127,7 +148,7 @@ For every WMMA operand consumer in generated ffn_gate_up:
 Current answer: epoch/slot/barrier is proven, the checker validates LDS byte-window equality, and S10 LDS spec exports
 static A/B layout keys. The checker has a P3 `value_key` field and rejects partial or mismatched value proofs, but no
 exporter currently emits semantic global tile identity. The checker also has an opt-in P5 strict mode for VM/LGKM wait
-events.
+events. P8 now scores whether the final stream is hand-quality enough to promote; it does not change P1-P7 correctness.
 
 ## Current Status
 

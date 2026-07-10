@@ -853,6 +853,11 @@ def _p7_hand_oracle_diff(p7: dict[str, Any], *, k_tiles: int=4) -> dict[str, Any
   }
 
 
+def _p8_phase_cluster_quality(report: dict[str, Any]) -> dict[str, Any]:
+  from extra.qk.prefill.dbuf_epoch_lifecycle_checker import check_phase_cluster_quality
+  return check_phase_cluster_quality(report)
+
+
 def _bytes(insts: list[Any]) -> int:
   total = 0
   for inst in insts:
@@ -918,6 +923,14 @@ def _report(label: str, insts: list[Any], meta: dict[str, Any], full_rows: bool)
   construction = _dbuf_pipeline_construction_audit(ops, widx)
   reaching = _lds_reaching_def_map(ops, widx, meta.get("ds_byte_window_rows"))
   p7 = _p7_lowered_stream_export(ops, reaching, lifecycle_side_channel, meta.get("ds_byte_window_rows"))
+  track_counts = {k: len(v) for k, v in ops.items()}
+  waitcnt_summary = {
+    "count": len(waits),
+    "vmcnt_sequence": [x["vmcnt"] for x in waits],
+    "lgkmcnt_sequence": [x["lgkmcnt"] for x in waits],
+    "nonfull_count": len([x for x in waits if x["vmcnt"] < 0x3F or x["lgkmcnt"] < 0x3F]),
+    "per_wmma_avg": round(len(waits) / len(widx), 3) if widx else 0.0,
+  }
   report = {
     "label": label,
     **meta,
@@ -925,19 +938,13 @@ def _report(label: str, insts: list[Any], meta: dict[str, Any], full_rows: bool)
     "instruction_total": len(mns),
     "byte_count": _bytes(insts),
     "instruction_counts": dict(sorted(Counter(mns).items())),
-    "track_counts": {k: len(v) for k, v in ops.items()},
+    "track_counts": track_counts,
     "wmma_indices": widx,
     "global_load_b128_indices": [x["idx"] for x in ops["global_load_b128"]],
     "ds_store_b128_indices": [x["idx"] for x in ops["ds_store_b128"]],
     "ds_load_b128_indices": [x["idx"] for x in ops["ds_load_b128"]],
     "barrier_indices": [x["idx"] for x in ops["s_barrier"]],
-    "waitcnt_summary": {
-      "count": len(waits),
-      "vmcnt_sequence": [x["vmcnt"] for x in waits],
-      "lgkmcnt_sequence": [x["lgkmcnt"] for x in waits],
-      "nonfull_count": len([x for x in waits if x["vmcnt"] < 0x3F or x["lgkmcnt"] < 0x3F]),
-      "per_wmma_avg": round(len(waits) / len(widx), 3) if widx else 0.0,
-    },
+    "waitcnt_summary": waitcnt_summary,
     "waits_per_wmma": waits_by_wmma,
     "cadence": sp._cadence_summary(overlap),
     "active_shape_dbuf_cadence": _active_cadence_report(ops, overlap, waits_by_wmma),
@@ -957,6 +964,7 @@ def _report(label: str, insts: list[Any], meta: dict[str, Any], full_rows: bool)
     "dbuf_lifecycle_side_channel": lifecycle_side_channel,
     "dbuf_d3a_compile_audit": dbuf_compile_audit,
   }
+  report["p8_phase_cluster_quality"] = _p8_phase_cluster_quality(report)
   if full_rows:
     report["track_rows"] = ops
     report["waitcnt"] = waits
