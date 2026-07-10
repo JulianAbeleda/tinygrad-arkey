@@ -142,6 +142,32 @@ def canonical_dbuf_events(*, roles: tuple[str, ...] = ("A", "B"), k_tiles: int =
   return events
 
 
+def events_from_epoch_primitive(primitive: dict[str, Any], *, roles: tuple[str, ...] = ("A", "B"),
+                                k_tiles: int = 4) -> list[DBUFEvent]:
+  """Export a DBUFEpochPrimitive-style contract into checker events.
+
+  This is a metadata exporter, not a lowering pass. The primitive supplies the
+  ring size; the exported trace models the prologue/body/tail ownership implied
+  by the primitive.
+  """
+  nbuf = int(primitive.get("nbuf", 2))
+  slot_expr = str(primitive.get("slot_expr", "epoch % 2")).replace(" ", "")
+  if slot_expr != "epoch%2" and nbuf == 2:
+    raise ValueError(f"unsupported slot_expr for DBUF exporter: {primitive.get('slot_expr')!r}")
+  return canonical_dbuf_events(roles=roles, k_tiles=k_tiles, nbuf=nbuf)
+
+
+def events_from_s10_role_trace(trace: dict[str, Any], *, role: str = "ffn_gate_up", k_tiles: int = 4,
+                               roles: tuple[str, ...] = ("A", "B")) -> list[DBUFEvent]:
+  rows = trace.get("rows", [])
+  if not isinstance(rows, list): raise ValueError("S10 role trace has no rows list")
+  matches = [row for row in rows if isinstance(row, dict) and row.get("role") == role]
+  if len(matches) != 1: raise ValueError(f"expected exactly one role row for {role!r}, found {len(matches)}")
+  primitive = matches[0].get("hand_coded_epoch_primitive")
+  if not isinstance(primitive, dict): raise ValueError(f"role {role!r} has no hand_coded_epoch_primitive")
+  return events_from_epoch_primitive(primitive, roles=roles, k_tiles=k_tiles)
+
+
 def load_events(path: pathlib.Path) -> list[DBUFEvent]:
   data = json.loads(path.read_text())
   if isinstance(data, dict): data = data.get("events", [])
@@ -152,19 +178,28 @@ def load_events(path: pathlib.Path) -> list[DBUFEvent]:
 def main(argv: list[str] | None = None) -> dict[str, Any]:
   ap = argparse.ArgumentParser(description=__doc__)
   ap.add_argument("--input", type=pathlib.Path, help="JSON list of events or object with events")
+  ap.add_argument("--s10-role-trace", type=pathlib.Path, help="export events from a S10 hybrid role trace artifact")
+  ap.add_argument("--role", default="ffn_gate_up", help="role to export from --s10-role-trace")
   ap.add_argument("--canonical", action="store_true", help="check the built-in canonical DBUF plan")
   ap.add_argument("--k-tiles", type=int, default=4)
   ap.add_argument("--roles", default="A,B", help="comma-separated roles for --canonical")
   ap.add_argument("--json", action="store_true")
   args = ap.parse_args(argv)
 
+  roles = tuple(x.strip() for x in args.roles.split(",") if x.strip())
   if args.input:
     events = load_events(args.input)
+    source = {"kind": "input", "path": str(args.input)}
+  elif args.s10_role_trace:
+    trace = json.loads(args.s10_role_trace.read_text())
+    events = events_from_s10_role_trace(trace, role=args.role, k_tiles=args.k_tiles, roles=roles)
+    source = {"kind": "s10_role_trace", "path": str(args.s10_role_trace), "role": args.role}
   else:
-    roles = tuple(x.strip() for x in args.roles.split(",") if x.strip())
     events = canonical_dbuf_events(roles=roles, k_tiles=args.k_tiles)
+    source = {"kind": "canonical"}
   report = check_events(events)
-  report["events"] = [event.to_json() for event in events] if args.canonical else []
+  report["source"] = source
+  report["events"] = [event.to_json() for event in events] if args.canonical or args.s10_role_trace else []
   if args.json: print(json.dumps(report, indent=2))
   else: print("PASS" if report["ok"] else "FAIL")
   return report

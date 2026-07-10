@@ -47,6 +47,22 @@ analysis tool. S10 can export traces into it, but S10 should not be required to 
 
 Implemented as a standalone metadata/event checker. It does not alter S9/S10 execution.
 
+The first exporter is also implemented:
+
+```text
+S10 hybrid role trace -> hand_coded_epoch_primitive -> DBUF checker events
+```
+
+Command:
+
+```bash
+PYTHONPATH=. python3 extra/qk/prefill/dbuf_epoch_lifecycle_checker.py \
+  --s10-role-trace bench/prefill-s10-lds2-ownership/hybrid-s9-s10-role-trace.json \
+  --k-tiles 4 --json
+```
+
+This validates the current `ffn_gate_up` `DBUFEpochPrimitive` contract without changing the fast path.
+
 Unit gate:
 
 ```bash
@@ -59,6 +75,6 @@ consume traces fail.
 ## Decoupling Path
 
 1. Keep the checker pure metadata/event based.
-2. Add exporters from S10 role/spec traces into checker events.
+2. Add exporters from S10 role/spec traces into checker events. Done for the hybrid role trace.
 3. Add exporters from generated DBUF attempts into checker events.
 4. Move the checker out of `extra/qk/prefill` once it has a stable schema and multiple producers.

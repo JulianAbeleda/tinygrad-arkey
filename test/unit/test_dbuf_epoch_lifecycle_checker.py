@@ -1,6 +1,7 @@
 import json
 
-from extra.qk.prefill.dbuf_epoch_lifecycle_checker import DBUFEvent, canonical_dbuf_events, check_events, main
+from extra.qk.prefill.dbuf_epoch_lifecycle_checker import (
+  DBUFEvent, canonical_dbuf_events, check_events, events_from_epoch_primitive, events_from_s10_role_trace, main)
 
 
 def test_canonical_dbuf_lifecycle_passes():
@@ -76,3 +77,58 @@ def test_cli_loads_event_json(tmp_path):
 
   assert report["ok"] is True
   assert report["producer_count"] == 4
+
+
+def test_epoch_primitive_exporter_builds_checkable_events():
+  primitive = {
+    "name": "s9_dbuf_epoch_coordinator",
+    "nbuf": 2,
+    "slot_expr": "epoch % 2",
+  }
+
+  events = events_from_epoch_primitive(primitive, roles=("A", "B"), k_tiles=3)
+  report = check_events(events)
+
+  assert report["ok"] is True
+  assert report["producer_count"] == 6
+  assert events[0] == DBUFEvent("produce", role="A", epoch=0, slot=0, step=0)
+  assert events[-1] == DBUFEvent("consume", role="B", epoch=2, slot=0, step=14)
+
+
+def test_s10_role_trace_exporter_uses_ffn_gate_up_epoch_primitive():
+  trace = {
+    "rows": [
+      {"role": "attn_qo"},
+      {
+        "role": "ffn_gate_up",
+        "hand_coded_epoch_primitive": {
+          "name": "s9_dbuf_epoch_coordinator",
+          "nbuf": 2,
+          "slot_expr": "epoch % 2",
+        },
+      },
+    ]
+  }
+
+  events = events_from_s10_role_trace(trace, k_tiles=2)
+  report = check_events(events)
+
+  assert report["ok"] is True
+  assert report["producer_count"] == 4
+  assert report["consumer_count"] == 4
+
+
+def test_cli_exports_s10_role_trace(tmp_path):
+  trace_path = tmp_path / "trace.json"
+  trace_path.write_text(json.dumps({
+    "rows": [{
+      "role": "ffn_gate_up",
+      "hand_coded_epoch_primitive": {"nbuf": 2, "slot_expr": "epoch % 2"},
+    }]
+  }))
+
+  report = main(["--s10-role-trace", str(trace_path), "--k-tiles", "2", "--json"])
+
+  assert report["ok"] is True
+  assert report["source"]["kind"] == "s10_role_trace"
+  assert len(report["events"]) == 10
