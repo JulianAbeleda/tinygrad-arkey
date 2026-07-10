@@ -143,6 +143,34 @@ def test_dbuf_pipeline_construction_audit_reports_source_mismatch_for_same_lds_w
   assert audit["prologue_body_source_mismatch_sample"][0]["body_sources"] == ["saddr=s10:11|vaddr=v85:85"]
 
 
+def test_p7_lowered_stream_export_fails_closed_without_metadata():
+  out = life._p7_lowered_stream_export({
+    "ds_store_b128": [{"idx": 0}],
+    "s_barrier": [{"idx": 1}],
+    "ds_load_b128": [{"idx": 2}],
+  }, {"covered_load_count": 1, "load_count": 1, "key_strength": "synthetic"})
+
+  assert out["status"] == "fail_closed"
+  assert "role/epoch/slot" in out["reason"]
+  assert out["events"] == []
+
+
+def test_p7_lowered_stream_export_checks_metadata_when_present():
+  out = life._p7_lowered_stream_export({
+    "ds_store_b128": [{"idx": 0, "dbuf": {"role": "B", "epoch": 0, "slot": 0, "window": "B:slot0"}}],
+    "s_barrier": [{"idx": 1}],
+    "ds_load_b128": [{"idx": 2, "dbuf": {"role": "B", "epoch": 0, "slot": 0, "window": "B:slot0"}}],
+  }, {"covered_load_count": 1, "load_count": 1, "key_strength": "synthetic"})
+
+  assert out["status"] == "exported"
+  assert out["check"]["ok"] is True
+  assert out["events"] == [
+    {"op": "produce", "step": 0, "role": "B", "epoch": 0, "slot": 0, "window": "B:slot0"},
+    {"op": "barrier", "step": 1},
+    {"op": "consume", "step": 2, "role": "B", "epoch": 0, "slot": 0, "window": "B:slot0"},
+  ]
+
+
 def test_stage_key_compile_audit_reports_strong_key_collisions():
   out = sp._dbuf_d3a_compile_audit_summary([
     {"kind": "stage_key_audit", "slot": 16, "source": "A0", "strong_key": "K0"},

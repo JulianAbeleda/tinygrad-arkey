@@ -402,6 +402,55 @@ def _lds_reaching_def_map(ops: dict[str, list[dict[str, Any]]], wmma_indices: li
   }
 
 
+def _dbuf_metadata(row: dict[str, Any]) -> dict[str, Any] | None:
+  for key in ("dbuf", "dbuf_metadata", "lifecycle", "lifecycle_metadata"):
+    val = row.get(key)
+    if isinstance(val, dict): return val
+  tag = row.get("tag_fields")
+  if isinstance(tag, dict) and {"role", "epoch", "slot"} <= set(tag): return tag
+  return None
+
+
+def _p7_lowered_stream_export(ops: dict[str, list[dict[str, Any]]], reaching: dict[str, Any]) -> dict[str, Any]:
+  """Export lowered stream DBUF events only when logical metadata is present."""
+  stores = sorted(ops.get("ds_store_b128", []), key=lambda r: r["idx"])
+  loads = sorted(ops.get("ds_load_b128", []), key=lambda r: r["idx"])
+  barriers = sorted(ops.get("s_barrier", []), key=lambda r: r["idx"])
+  physical = {
+    "ds_store_b128": len(stores),
+    "ds_load_b128": len(loads),
+    "s_barrier": len(barriers),
+    "reaching_def_covered_load_count": reaching.get("covered_load_count"),
+    "reaching_def_load_count": reaching.get("load_count"),
+    "key_strength": reaching.get("key_strength"),
+  }
+  metadata_rows = [r for r in stores + loads if _dbuf_metadata(r) is not None]
+  if not stores or not loads or not barriers:
+    return {"schema": "dbuf-lowered-stream-export.v1", "status": "fail_closed",
+            "reason": "lowered stream lacks complete LDS store/load/barrier chain", "physical": physical, "events": []}
+  if len(metadata_rows) != len(stores) + len(loads):
+    return {"schema": "dbuf-lowered-stream-export.v1", "status": "fail_closed",
+            "reason": "insufficient lowered lifecycle metadata: role/epoch/slot not present on every LDS store/load",
+            "physical": physical, "metadata_rows": len(metadata_rows), "required_metadata_rows": len(stores) + len(loads),
+            "events": []}
+
+  from extra.qk.prefill.dbuf_epoch_lifecycle_checker import DBUFEvent, check_events
+  raw_events: list[DBUFEvent] = []
+  for row in sorted(stores + loads + barriers, key=lambda r: r["idx"]):
+    if row in barriers:
+      raw_events.append(DBUFEvent("barrier", step=int(row["idx"])))
+      continue
+    meta = _dbuf_metadata(row)
+    assert meta is not None
+    op = "produce" if row in stores else "consume"
+    raw_events.append(DBUFEvent(op, role=str(meta["role"]), epoch=meta["epoch"], slot=meta["slot"],
+                                window=str(meta.get("window", "default")), step=int(row["idx"])))
+  report = check_events(raw_events)
+  return {"schema": "dbuf-lowered-stream-export.v1", "status": "exported" if report["ok"] else "invalid",
+          "reason": None if report["ok"] else "exported metadata failed DBUF checker",
+          "physical": physical, "check": report, "events": [e.to_json() for e in raw_events]}
+
+
 def _bytes(insts: list[Any]) -> int:
   total = 0
   for inst in insts:
@@ -463,6 +512,7 @@ def _report(label: str, insts: list[Any], meta: dict[str, Any], full_rows: bool)
   dbuf_compile_audit = sp._dbuf_d3a_compile_audit_summary(list(amd_isa.DBUF_D3A_AUDIT_LOG))
   origin_counts = Counter((x["src0"], x["src1"]) for x in origins)
   construction = _dbuf_pipeline_construction_audit(ops, widx)
+  reaching = _lds_reaching_def_map(ops, widx, meta.get("ds_byte_window_rows"))
   report = {
     "label": label,
     **meta,
@@ -496,7 +546,8 @@ def _report(label: str, insts: list[Any], meta: dict[str, Any], full_rows: bool)
     "dbuf_gate_summary": dbuf,
     "dbuf_pipeline_construction_audit": construction,
     "owned_b_emitter_oracle": _owned_b_emitter_oracle(meta, construction),
-    "lds_reaching_def_map": _lds_reaching_def_map(ops, widx, meta.get("ds_byte_window_rows")),
+    "lds_reaching_def_map": reaching,
+    "p7_lowered_stream_export": _p7_lowered_stream_export(ops, reaching),
     "dbuf_d3a_compile_audit": dbuf_compile_audit,
   }
   if full_rows:

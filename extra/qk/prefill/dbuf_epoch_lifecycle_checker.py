@@ -49,7 +49,7 @@ EXPORTERS: tuple[dict[str, str], ...] = (
    "source": "kernel_lifecycle_trace.py / wmma.py lifecycle template"},
   {"id": "E4", "name": "generated_postrange_exporter", "status": "done_for_owner_records",
    "source": "pre-lowering Ops.STAGE / owner metadata"},
-  {"id": "E5", "name": "lowered_stream_exporter", "status": "pending",
+  {"id": "E5", "name": "lowered_stream_exporter", "status": "fail_closed_status_report",
    "source": "generated AMD ISA or UOp stream"},
 )
 

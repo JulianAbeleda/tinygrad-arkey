@@ -542,7 +542,7 @@ def test_s10_roadmap_does_not_overclaim_readiness():
   assert exporters["E1"]["status"] == "done"
   assert exporters["E3"]["status"] == "done_for_lds2_template"
   assert exporters["E4"]["status"] == "done_for_owner_records"
-  assert exporters["E5"]["status"] == "pending"
+  assert exporters["E5"]["status"] == "fail_closed_status_report"
 
 
 def test_cli_prints_s10_roadmap():

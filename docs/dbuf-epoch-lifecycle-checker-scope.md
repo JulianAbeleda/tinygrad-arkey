@@ -107,7 +107,7 @@ S10 is ready to reopen generated DBUF replacement only when P1-P7 pass on:
 | E2 S10 LDS spec exporter | `WMMALDSSpec` / slot identity proof | P2 LDS windows | done |
 | E3 hand lifecycle exporter | `kernel_lifecycle_trace.py` / `wmma.py` lifecycle template | P1/P2/P5 hand oracle events from the LDS2 template | done for template oracle |
 | E4 generated postrange exporter | pre-lowering `Ops.STAGE` / owner metadata | P1 generated owner events from postrange owner records | done for owner records |
-| E5 lowered stream exporter | generated AMD ISA or UOp stream | P5-P7 actual instruction events | pending |
+| E5 lowered stream exporter | generated AMD ISA or UOp stream | fail-closed P7 status plus checker export when role/epoch/slot metadata exists | fail-closed status report implemented |
 
 ## Done Definition For "All S10 Info"
 
@@ -212,6 +212,17 @@ check_pressure_summary(summary)
 It fails known unsafe summaries such as VGPR peak overflow, `64 V_OFFSET + 64 V_IADD` live to reduce END, DBUF address
 values live to reduce END, address values feeding non-address consumers, and rematerializable values feeding WMMA/data or
 control uses. It remains advisory until backed by allocator live intervals or exported UOp def/use traces.
+
+The E5/P7 lowered-stream bridge is implemented in `kernel_lifecycle_trace.py`:
+
+```text
+_p7_lowered_stream_export(ops, reaching)
+```
+
+It exports actual lowered `ds_store_b128` / `s_barrier` / `ds_load_b128` rows into checker events only when every store
+and load carries explicit logical `role`, `epoch`, and `slot` metadata. If that metadata is absent, it returns
+`status=fail_closed` with physical counts and the reason instead of guessing from registers or byte windows. Current real
+lowered streams are expected to fail closed until ownership tags survive lowering.
 
 ## Decoupling Path
 
