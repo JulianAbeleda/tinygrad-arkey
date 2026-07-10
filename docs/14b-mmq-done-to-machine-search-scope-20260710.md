@@ -4,6 +4,8 @@ Goal: freeze the completed 14B Q4_K/Q8_1 MMQ pieces as a bounded machine-search 
 unfinished llama-style pieces blocked. The kernel remains hand-coded in tinygrad. The machine-search layer selects and
 proves bounded candidates; it does not claim pure generated code and does not change production dispatch.
 
+Full reduction roadmap: `docs/14b-mmq-llama-kernel-reduction-roadmap-20260710.md`.
+
 ## Source Authority
 
 The source of truth for the target structure is the local llama.cpp clone:
