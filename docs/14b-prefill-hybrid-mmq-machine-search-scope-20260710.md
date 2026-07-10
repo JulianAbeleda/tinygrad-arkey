@@ -460,15 +460,28 @@ Current executable atom status:
 extra/qk/mmq_q4k_q8_atom.py
 ```
 
-The first atom body is reference-backed and spec-validated. It makes `backend="atom"` runnable in the bounded harness,
-emits lifecycle rows, and records an atom source hash. It is not the AMD GPU MMQ body and is not promoted into
-whole-prefill route selection.
-
-Current blocker:
+The first atom body has two bounded modes:
 
 ```text
-atom backend is reference-backed; AMD GPU atom body is not implemented
+backend=atom  -> reference-backed executable atom API with lifecycle rows
+backend=amd   -> AMD UOp custom-kernel tile atom
 ```
+
+The AMD path is intentionally narrow: whole-Q4_K-block K tiles only (`k0 % 256 == 0`, `k_groups % 8 == 0`), fp32
+output, and no whole-prefill route binding. It records an `amd_uop_hash`; `emitted_binary_hash` is still null because
+the harness does not yet capture compiled binary/code-object identity.
+
+Current bounded evidence:
+
+```text
+backend=amd, m_tile=4, n_tile=4, k_groups=8, m_tiles=2, n_tiles=2
+status=PASS
+max_abs=0.00018310546875 at atol=0.0005
+tiles=4
+```
+
+Current blocker: performance/comparator. The AMD UOp atom is scalar and slow; the bounded harness still names
+`direct_packed` as comparator but does not measure the same bounded direct-packed shape.
 
 ### M7 - One-Role Whole-Prefill Transfer
 

@@ -50,6 +50,14 @@ def test_mmq_bounded_harness_atom_backend_runs_bounded_correctness():
   assert report["blockers"] == ["atom backend is reference-backed; AMD GPU atom body is not implemented"]
 
 
+def test_mmq_bounded_harness_amd_backend_is_selectable_metadata_only():
+  cfg = BoundedMMQConfig(m_tile=4, n_tile=4, k_groups=8, backend="amd")
+  meta = candidate_metadata(cfg)
+
+  assert meta["backend"] == "amd"
+  assert meta["candidate_route_id"] == CANDIDATE_ROUTE_ID
+
+
 def test_mmq_bounded_harness_rejects_unbounded_shape():
   with pytest.raises(ValueError, match="exceeds role shape"):
     BoundedMMQConfig(m_tile=M + 1).validate()

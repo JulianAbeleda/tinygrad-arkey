@@ -53,7 +53,7 @@ class BoundedMMQConfig:
   warmups: int = 0
   rounds: int = 1
   seed: int = 20260710
-  backend: Literal["reference", "atom"] = "reference"
+  backend: Literal["reference", "atom", "amd"] = "reference"
 
   @property
   def bounded_m(self) -> int:
@@ -68,7 +68,7 @@ class BoundedMMQConfig:
     return self.k_groups * Q8_1_BLOCK_ELEMS
 
   def validate(self) -> None:
-    if self.backend not in ("reference", "atom"): raise ValueError(f"unknown backend={self.backend!r}")
+    if self.backend not in ("reference", "atom", "amd"): raise ValueError(f"unknown backend={self.backend!r}")
     if min(self.m_tile, self.n_tile, self.k_groups, self.m_tiles, self.n_tiles) <= 0:
       raise ValueError("tile sizes, tile counts, and k_groups must be positive")
     if self.warmups < 0 or self.rounds < 1: raise ValueError("warmups >= 0 and rounds >= 1 are required")
@@ -144,11 +144,29 @@ def _run_atom_tile(q4k_bytes:np.ndarray, xq:np.ndarray, xscales:np.ndarray, spec
   return np.asarray(run_q4k_q8_1_mmq_tile(q4k_bytes, xq, xscales, spec), dtype=np.float32)
 
 
+def _run_amd_tile(q4k_bytes:np.ndarray, xq:np.ndarray, xscales:np.ndarray, spec:Q4KQ81MMQTileSpec) -> np.ndarray:
+  try:
+    from extra.qk.mmq_q4k_q8_atom import run_q4k_q8_1_mmq_tile_amd
+  except Exception as exc:
+    raise MMQAtomUnavailableError(
+      f"{CANDIDATE_ROUTE_ID} selected but AMD UOp atom entrypoint is unavailable"
+    ) from exc
+  return np.asarray(run_q4k_q8_1_mmq_tile_amd(q4k_bytes, xq, xscales, spec).output, dtype=np.float32)
+
+
+def _amd_uop_hash(spec:Q4KQ81MMQTileSpec) -> str | None:
+  try:
+    from extra.qk.mmq_q4k_q8_atom import amd_atom_source_hash
+    return amd_atom_source_hash(spec)
+  except Exception:
+    return None
+
+
 def run_bounded_harness(config: BoundedMMQConfig) -> dict[str, Any]:
   config.validate()
   q4k_bytes = _finite_q4k_bytes(config.bounded_n, config.bounded_k, config.seed)
   xq, xscales = _q8_inputs(config.bounded_m, config.bounded_k, config.seed + 1)
-  runner = _run_reference_tile if config.backend == "reference" else _run_atom_tile
+  runner = {"reference": _run_reference_tile, "atom": _run_atom_tile, "amd": _run_amd_tile}[config.backend]
 
   specs = [
     describe_q4k_q8_1_mmq_tile(role=ROLE, m=config.bounded_m, n=config.bounded_n, k=config.bounded_k,
@@ -169,12 +187,13 @@ def run_bounded_harness(config: BoundedMMQConfig) -> dict[str, Any]:
     samples_ms.append((time.perf_counter() - t0) * 1000.0)
 
   max_abs = max(float(np.max(np.abs(got - ref))) for got, ref in zip(last_tiles, reference_tiles)) if last_tiles else 0.0
-  ok = max_abs <= 2e-5
+  atol = 5e-4 if config.backend == "amd" else 2e-5
+  ok = max_abs <= atol
   return {
     "schema": "q4k-q8-1-mmq-bounded-harness.v1",
     "metadata": candidate_metadata(config),
     "status": "PASS" if ok else "FAIL",
-    "correctness": {"max_abs": max_abs, "atol": 2e-5, "tiles": len(specs)},
+    "correctness": {"max_abs": max_abs, "atol": atol, "tiles": len(specs)},
     "timing": {
       "samples_ms": samples_ms,
       "min_ms": min(samples_ms),
@@ -182,15 +201,17 @@ def run_bounded_harness(config: BoundedMMQConfig) -> dict[str, Any]:
       "comparator_id": COMPARATOR_ID,
       "comparator_status": "named_not_measured",
     },
-    "artifacts": {"harness_source_hash": _source_hash(), "atom_source_hash": _atom_source_hash() if config.backend == "atom" else None,
+    "artifacts": {"harness_source_hash": _source_hash(),
+                  "atom_source_hash": _atom_source_hash() if config.backend in ("atom", "amd") else None,
+                  "amd_uop_hash": _amd_uop_hash(specs[0]) if config.backend == "amd" and specs else None,
                   "emitted_binary_hash": None},
-    "blockers": [] if config.backend == "reference" else ["atom backend is reference-backed; AMD GPU atom body is not implemented"],
+    "blockers": [] if config.backend != "atom" else ["atom backend is reference-backed; AMD GPU atom body is not implemented"],
   }
 
 
 def _parse_args() -> argparse.Namespace:
   ap = argparse.ArgumentParser(description="Bounded Q4_K/Q8_1 MMQ harness for 14B ffn_gate_up")
-  ap.add_argument("--backend", choices=("reference", "atom"), default="reference")
+  ap.add_argument("--backend", choices=("reference", "atom", "amd"), default="reference")
   ap.add_argument("--m-tile", type=int, default=16)
   ap.add_argument("--n-tile", type=int, default=16)
   ap.add_argument("--k-groups", type=int, default=8)
