@@ -417,7 +417,8 @@ barriers
 intermediate_global_writes
 output_store_epochs
 output_stores
-duplicate quant/dequant work
+duplicate_quant_work
+duplicate_dequant_or_scale_work
 split_k_reductions
 ```
 
@@ -451,6 +452,22 @@ Done:
 
 ```text
 Candidate beats direct-packed bounded baseline or records a precise blocker.
+```
+
+Current executable atom status:
+
+```text
+extra/qk/mmq_q4k_q8_atom.py
+```
+
+The first atom body is reference-backed and spec-validated. It makes `backend="atom"` runnable in the bounded harness,
+emits lifecycle rows, and records an atom source hash. It is not the AMD GPU MMQ body and is not promoted into
+whole-prefill route selection.
+
+Current blocker:
+
+```text
+atom backend is reference-backed; AMD GPU atom body is not implemented
 ```
 
 ### M7 - One-Role Whole-Prefill Transfer

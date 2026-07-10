@@ -1,8 +1,7 @@
 import pytest
 
 from extra.qk.mmq_bounded_harness import (
-  CANDIDATE_ROUTE_ID, COMPARATOR_ID, K, M, N, ROLE, BoundedMMQConfig, MMQAtomUnavailableError,
-  candidate_metadata, run_bounded_harness,
+  CANDIDATE_ROUTE_ID, COMPARATOR_ID, K, M, N, ROLE, BoundedMMQConfig, candidate_metadata, run_bounded_harness,
 )
 
 
@@ -40,9 +39,15 @@ def test_mmq_bounded_harness_multi_tile_reference_surface_is_bounded():
   assert report["metadata"]["bounded_shape"] == {"M": 8, "N": 15, "K": 256}
 
 
-def test_mmq_bounded_harness_atom_backend_fails_loud_when_unavailable():
-  with pytest.raises(MMQAtomUnavailableError, match="selected.*run_q4k_q8_1_mmq_tile is unavailable"):
-    run_bounded_harness(BoundedMMQConfig(m_tile=4, n_tile=4, k_groups=8, backend="atom"))
+def test_mmq_bounded_harness_atom_backend_runs_bounded_correctness():
+  report = run_bounded_harness(BoundedMMQConfig(m_tile=4, n_tile=4, k_groups=8, m_tiles=2, n_tiles=2, backend="atom"))
+
+  assert report["status"] == "PASS"
+  assert report["metadata"]["backend"] == "atom"
+  assert report["correctness"]["max_abs"] == 0.0
+  assert report["correctness"]["tiles"] == 4
+  assert report["artifacts"]["atom_source_hash"]
+  assert report["blockers"] == ["atom backend is reference-backed; AMD GPU atom body is not implemented"]
 
 
 def test_mmq_bounded_harness_rejects_unbounded_shape():

@@ -121,6 +121,15 @@ def _source_hash() -> str:
   return hashlib.sha256(data).hexdigest()[:16]
 
 
+def _atom_source_hash() -> str | None:
+  try:
+    import extra.qk.mmq_q4k_q8_atom as atom
+    path = pathlib.Path(atom.__file__)
+  except Exception:
+    return None
+  return hashlib.sha256(path.read_bytes()).hexdigest()[:16]
+
+
 def _run_reference_tile(q4k_bytes:np.ndarray, xq:np.ndarray, xscales:np.ndarray, spec:Q4KQ81MMQTileSpec) -> np.ndarray:
   return q4k_q8_1_mmq_tile_reference(q4k_bytes, xq, xscales, spec)
 
@@ -173,8 +182,9 @@ def run_bounded_harness(config: BoundedMMQConfig) -> dict[str, Any]:
       "comparator_id": COMPARATOR_ID,
       "comparator_status": "named_not_measured",
     },
-    "artifacts": {"harness_source_hash": _source_hash(), "emitted_binary_hash": None},
-    "blockers": [] if config.backend == "reference" else ["atom backend is diagnostic-only until the hand atom exists"],
+    "artifacts": {"harness_source_hash": _source_hash(), "atom_source_hash": _atom_source_hash() if config.backend == "atom" else None,
+                  "emitted_binary_hash": None},
+    "blockers": [] if config.backend == "reference" else ["atom backend is reference-backed; AMD GPU atom body is not implemented"],
   }
 
 
