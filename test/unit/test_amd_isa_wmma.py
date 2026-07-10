@@ -516,7 +516,7 @@ class TestAMDISAWmmaMultiOutputTileGate(unittest.TestCase):
     self.assertTrue(self._between_wmma_has(mns, {"ds_load_b128"}))
     self.assertFalse(self._between_wmma_has(mns, {"global_load_b128", "ds_store_b128", "ds_store_b64", "ds_store_b32", "ds_store_b16"}))
 
-  @unittest.expectedFailure
+  @unittest.skip("D3 4x4 future-staging target is parked under current GPU constraints; D3-A prototype coverage runs below")
   def test_dbuf_withlocal_both_d3_target_future_staging_between_wmmas(self):
     mns = self._dbuf_withlocal_both_mns()
     self.assertTrue(self._between_wmma_has(mns, {"ds_load_b128"}),
