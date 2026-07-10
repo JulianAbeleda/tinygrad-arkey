@@ -465,6 +465,7 @@ The first atom body has two bounded modes:
 ```text
 backend=atom  -> reference-backed executable atom API with lifecycle rows
 backend=amd   -> AMD UOp custom-kernel tile atom
+backend=amd_warp -> AMD UOp custom-kernel tile atom with one wave reducing 32 Q positions
 ```
 
 The AMD path is intentionally narrow: whole-Q4_K-block K tiles only (`k0 % 256 == 0`, `k_groups % 8 == 0`), fp32
@@ -478,10 +479,16 @@ backend=amd, m_tile=4, n_tile=4, k_groups=8, m_tiles=2, n_tiles=2
 status=PASS
 max_abs=0.00018310546875 at atol=0.0005
 tiles=4
+
+backend=amd_warp, same bounded shape, warmups=1, rounds=3
+status=PASS
+max_abs=0.0001678466796875 at atol=0.0005
+median_ms ~= 23.8 vs scalar backend=amd ~= 23.0
 ```
 
-Current blocker: performance/comparator. The AMD UOp atom is scalar and slow; the bounded harness still names
-`direct_packed` as comparator but does not measure the same bounded direct-packed shape.
+Current blocker: performance/comparator. The warp-owned atom is correct but not faster on the tiny bounded shape;
+launch/tile granularity dominates. The bounded harness still names `direct_packed` as comparator but does not measure
+the same bounded direct-packed shape.
 
 ### M7 - One-Role Whole-Prefill Transfer
 

@@ -6,7 +6,8 @@ from tinygrad import Tensor, dtypes
 from extra.qk.layout import Q4_K_BLOCK_BYTES, Q4_K_BLOCK_ELEMS, Q8_1_BLOCK_ELEMS, q8_1_quantize
 from extra.qk.mmq_lifecycle import COUNTER_NAMES
 from extra.qk.mmq_q4k_q8_atom import (
-  AMD_BACKEND_ATOM_ID, BACKEND_ATOM_ID, amd_atom_source_hash, run_q4k_q8_1_mmq_tile, run_q4k_q8_1_mmq_tile_amd,
+  AMD_BACKEND_ATOM_ID, AMD_WARP_BACKEND_ATOM_ID, BACKEND_ATOM_ID, amd_atom_source_hash, amd_warp_atom_source_hash,
+  run_q4k_q8_1_mmq_tile, run_q4k_q8_1_mmq_tile_amd, run_q4k_q8_1_mmq_tile_amd_warp,
   run_q4k_q8_1_mmq_tile_with_lifecycle,
 )
 from extra.qk.mmq_q4k_q8_reference import describe_q4k_q8_1_mmq_tile, q4k_q8_1_mmq_tile_reference
@@ -76,4 +77,20 @@ def test_q4k_q8_1_mmq_amd_atom_matches_reference_when_amd_available():
 
   assert result.backend_atom_id == AMD_BACKEND_ATOM_ID
   assert amd_atom_source_hash(spec)
+  np.testing.assert_allclose(result.output, ref, rtol=1e-6, atol=5e-4)
+
+
+def test_q4k_q8_1_mmq_amd_warp_atom_matches_reference_when_amd_available():
+  if not _has_amd():
+    pytest.skip("AMD device is not available")
+  m, n, k = 4, 4, 256
+  raw = _finite_q4k_bytes(n, k, seed=403)
+  xq, xscales = _q8_inputs(m, k, seed=404)
+  spec = describe_q4k_q8_1_mmq_tile(role="ffn_gate_up", m=m, n=n, k=k, m_tile=m, n_tile=n, k_groups=8)
+
+  result = run_q4k_q8_1_mmq_tile_amd_warp(raw, xq, xscales, spec)
+  ref = q4k_q8_1_mmq_tile_reference(raw, xq, xscales, spec)
+
+  assert result.backend_atom_id == AMD_WARP_BACKEND_ATOM_ID
+  assert amd_warp_atom_source_hash(spec)
   np.testing.assert_allclose(result.output, ref, rtol=1e-6, atol=5e-4)
