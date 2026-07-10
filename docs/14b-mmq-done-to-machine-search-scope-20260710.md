@@ -93,12 +93,13 @@ Searchable candidates:
 | `amd_ds4_warp_direct` | `q4k_q8_1_mmq_amd_ds4_warp_atom_v0` | working hand-coded AMD DS4 direct warp atom |
 | `staged_ds4_reference_probe` | `q4k_q8_1_mmq_amd_staged_ds4_atom_v0` | lifecycle/reference evidence only |
 | `amd_ds4_dot4x4_packed` | `q4k_q8_1_mmq_amd_ds4_dot4x4_atom_v0` | R1 packed DS4 dot4x4 atom, bounded-searchable |
+| `amd_ds4_lds_skeleton` | `q4k_q8_1_mmq_amd_ds4_lds_skeleton_atom_v0` | R3 real LDS/barrier skeleton, evidence-only |
 
 Blocked candidates:
 
 | Candidate | Why blocked |
 |---|---|
-| `cooperative_shared_lds_tile` | cooperative multi-wave shared/LDS tile ownership is not implemented |
+| `cooperative_multi_wave_tile` | cooperative multi-wave output ownership is not implemented |
 | `full_14b_prefill_route` | full llama-style MMQ route is not implemented; default remains `direct_packed` |
 
 Promotion verdict remains:
@@ -142,8 +143,9 @@ ds4_reference_formula         PASS
 amd_ds4_warp_direct           PASS
 staged_ds4_reference_probe    PASS
 amd_ds4_dot4x4_packed         PASS/searchable
+amd_ds4_lds_skeleton          PASS/evidence_only
 q4k_tile_loader_source_hash   present in run artifacts
-cooperative_shared_lds_tile   blocked
+cooperative_multi_wave_tile   blocked
 full_14b_prefill_route        blocked
 ```
 
@@ -152,10 +154,9 @@ full_14b_prefill_route        blocked
 The next implementation is not a new route. It is a hand-coded translation of the next llama kernel structure into
 `extra/qk/mmq_q4k_q8_atom.py`, guarded by bounded machine-search rows:
 
-1. Add a new shared/LDS skeleton backend ID; keep it bounded-only and promotion-ineligible.
-2. Add cooperative multi-wave output ownership after the LDS skeleton is stable.
-3. Compare cooperative tile candidates against `direct_packed`, `amd_ds4_warp_direct`, and `amd_ds4_dot4x4_packed` in the machine-search report.
-4. Only after bounded win, add one-role opt-in route evidence for `ffn_gate_up`.
+1. Add cooperative multi-wave output ownership after the LDS skeleton is stable.
+2. Compare cooperative tile candidates against `direct_packed`, `amd_ds4_warp_direct`, `amd_ds4_dot4x4_packed`, and `amd_ds4_lds_skeleton` in the machine-search report.
+3. Only after bounded win, add one-role opt-in route evidence for `ffn_gate_up`.
 
 Non-goals remain:
 

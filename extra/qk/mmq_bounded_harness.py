@@ -44,6 +44,7 @@ COMPARATOR_ID = "direct_packed"
 STAGED_DS4_BACKEND_ID = "q4k_q8_1_mmq_amd_staged_ds4_atom_v0"
 AMD_DS4_WARP_BACKEND_ID = "q4k_q8_1_mmq_amd_ds4_warp_atom_v0"
 AMD_DS4_DOT4X4_BACKEND_ID = "q4k_q8_1_mmq_amd_ds4_dot4x4_atom_v0"
+AMD_DS4_LDS_SKELETON_BACKEND_ID = "q4k_q8_1_mmq_amd_ds4_lds_skeleton_atom_v0"
 ACTIVATION_LAYOUT_ROW_MAJOR = "row_major_q8_1"
 ACTIVATION_LAYOUT_MMQ_DS4 = "mmq_ds4"
 LLAMA_MMQ_GEOMETRY = {"mmq_x": 128, "mmq_y": 128, "iter_k": 256, "nwarps": 8}
@@ -65,7 +66,7 @@ class BoundedMMQConfig:
   warmups: int = 0
   rounds: int = 1
   seed: int = 20260710
-  backend: Literal["reference", "atom", "amd", "amd_warp", "amd_warp_batched", "amd_dot4_batched", "amd_dot4x4_batched", "direct_packed", "q4k_q8_1_mmq_amd_staged_ds4_atom_v0", "q4k_q8_1_mmq_amd_ds4_warp_atom_v0", "q4k_q8_1_mmq_amd_ds4_dot4x4_atom_v0"] = "reference"
+  backend: Literal["reference", "atom", "amd", "amd_warp", "amd_warp_batched", "amd_dot4_batched", "amd_dot4x4_batched", "direct_packed", "q4k_q8_1_mmq_amd_staged_ds4_atom_v0", "q4k_q8_1_mmq_amd_ds4_warp_atom_v0", "q4k_q8_1_mmq_amd_ds4_dot4x4_atom_v0", "q4k_q8_1_mmq_amd_ds4_lds_skeleton_atom_v0"] = "reference"
   activation_layout: Literal["row_major_q8_1", "mmq_ds4"] = ACTIVATION_LAYOUT_ROW_MAJOR
   measure_direct_packed: bool = False
 
@@ -82,7 +83,7 @@ class BoundedMMQConfig:
     return self.k_groups * Q8_1_BLOCK_ELEMS
 
   def validate(self) -> None:
-    if self.backend not in ("reference", "atom", "amd", "amd_warp", "amd_warp_batched", "amd_dot4_batched", "amd_dot4x4_batched", "direct_packed", STAGED_DS4_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID, AMD_DS4_DOT4X4_BACKEND_ID):
+    if self.backend not in ("reference", "atom", "amd", "amd_warp", "amd_warp_batched", "amd_dot4_batched", "amd_dot4x4_batched", "direct_packed", STAGED_DS4_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID, AMD_DS4_DOT4X4_BACKEND_ID, AMD_DS4_LDS_SKELETON_BACKEND_ID):
       raise ValueError(f"unknown backend={self.backend!r}")
     if self.activation_layout not in (ACTIVATION_LAYOUT_ROW_MAJOR, ACTIVATION_LAYOUT_MMQ_DS4):
       raise ValueError(f"unknown activation_layout={self.activation_layout!r}")
@@ -102,7 +103,7 @@ class BoundedMMQConfig:
 def candidate_metadata(config: BoundedMMQConfig | None = None) -> dict[str, Any]:
   cfg = config or BoundedMMQConfig()
   cfg.validate()
-  activation_layout = ACTIVATION_LAYOUT_MMQ_DS4 if cfg.backend in (STAGED_DS4_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID, AMD_DS4_DOT4X4_BACKEND_ID) else cfg.activation_layout
+  activation_layout = ACTIVATION_LAYOUT_MMQ_DS4 if cfg.backend in (STAGED_DS4_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID, AMD_DS4_DOT4X4_BACKEND_ID, AMD_DS4_LDS_SKELETON_BACKEND_ID) else cfg.activation_layout
   return {
     "role": ROLE,
     "M": M,
@@ -116,7 +117,7 @@ def candidate_metadata(config: BoundedMMQConfig | None = None) -> dict[str, Any]
     "comparator_id": COMPARATOR_ID,
     "rollback": COMPARATOR_ID,
     "backend": cfg.backend,
-    "backend_atom_id": cfg.backend if cfg.backend in (STAGED_DS4_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID, AMD_DS4_DOT4X4_BACKEND_ID) else None,
+    "backend_atom_id": cfg.backend if cfg.backend in (STAGED_DS4_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID, AMD_DS4_DOT4X4_BACKEND_ID, AMD_DS4_LDS_SKELETON_BACKEND_ID) else None,
     "activation_layout": activation_layout,
     "bounded_shape": {"M": cfg.bounded_m, "N": cfg.bounded_n, "K": cfg.bounded_k},
     "tile": {"M": cfg.m_tile, "N": cfg.n_tile, "K_groups": cfg.k_groups},
@@ -316,6 +317,11 @@ def _run_amd_ds4_warp(q4k_bytes:np.ndarray, ds4:Any) -> np.ndarray:
   return np.asarray(run_q4k_q8_1_mmq_bounded_amd_ds4_warp(q4k_bytes, ds4, role=ROLE).output, dtype=np.float32)
 
 
+def _run_amd_ds4_lds_skeleton(q4k_bytes:np.ndarray, ds4:Any) -> np.ndarray:
+  from extra.qk.mmq_q4k_q8_atom import run_q4k_q8_1_mmq_bounded_amd_ds4_lds_skeleton
+  return np.asarray(run_q4k_q8_1_mmq_bounded_amd_ds4_lds_skeleton(q4k_bytes, ds4, role=ROLE).output, dtype=np.float32)
+
+
 def _amd_uop_hash(spec:Q4KQ81MMQTileSpec) -> str | None:
   try:
     from extra.qk.mmq_q4k_q8_atom import amd_atom_source_hash
@@ -380,6 +386,14 @@ def _amd_ds4_warp_atom_hash(config:BoundedMMQConfig) -> str | None:
     return None
 
 
+def _amd_ds4_lds_skeleton_atom_hash(config:BoundedMMQConfig) -> str | None:
+  try:
+    from extra.qk.mmq_q4k_q8_atom import amd_ds4_lds_skeleton_atom_source_hash
+    return amd_ds4_lds_skeleton_atom_source_hash(config.bounded_m, config.bounded_n, config.bounded_k, ROLE)
+  except Exception:
+    return None
+
+
 def _time_full_output(runner, warmups:int, rounds:int) -> tuple[list[float], np.ndarray]:
   for _ in range(warmups): runner()
   samples_ms: list[float] = []
@@ -399,7 +413,7 @@ def _fp32_accum_atol(k:int) -> float:
 def run_bounded_harness(config: BoundedMMQConfig) -> dict[str, Any]:
   config.validate()
   q4k_bytes = _finite_q4k_bytes(config.bounded_n, config.bounded_k, config.seed)
-  ds4_backends = (STAGED_DS4_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID, AMD_DS4_DOT4X4_BACKEND_ID)
+  ds4_backends = (STAGED_DS4_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID, AMD_DS4_DOT4X4_BACKEND_ID, AMD_DS4_LDS_SKELETON_BACKEND_ID)
   effective_activation_layout = ACTIVATION_LAYOUT_MMQ_DS4 if config.backend in ds4_backends else config.activation_layout
   activation = _q8_activation_inputs(config.bounded_m, config.bounded_k, config.seed + 1, effective_activation_layout)
   xq, xscales = activation.row_values, activation.row_scales
@@ -455,6 +469,11 @@ def run_bounded_harness(config: BoundedMMQConfig) -> dict[str, Any]:
     full_runner = lambda: _run_amd_ds4_warp(q4k_bytes, staged_ds4)
     samples_ms, last_full = _time_full_output(full_runner, config.warmups, config.rounds)
     last_tiles = [last_full[spec.m0:spec.m0+spec.tile_m, spec.n0:spec.n0+spec.tile_n] for spec in specs]
+  elif config.backend == AMD_DS4_LDS_SKELETON_BACKEND_ID:
+    assert staged_ds4 is not None
+    full_runner = lambda: _run_amd_ds4_lds_skeleton(q4k_bytes, staged_ds4)
+    samples_ms, last_full = _time_full_output(full_runner, config.warmups, config.rounds)
+    last_tiles = [last_full[spec.m0:spec.m0+spec.tile_m, spec.n0:spec.n0+spec.tile_n] for spec in specs]
   else:
     assert runner is not None
     for _ in range(config.warmups):
@@ -501,6 +520,7 @@ def run_bounded_harness(config: BoundedMMQConfig) -> dict[str, Any]:
       STAGED_DS4_BACKEND_ID: "atom_q8_1_mmq_ds4_direct_carrier",
       AMD_DS4_WARP_BACKEND_ID: "amd_ds4_warp_gpu_direct_carrier",
       AMD_DS4_DOT4X4_BACKEND_ID: "amd_ds4_dot4x4_gpu_direct_carrier",
+      AMD_DS4_LDS_SKELETON_BACKEND_ID: "amd_ds4_lds_skeleton_gpu_local_carrier",
     }[config.backend]
     layout_report = {
       "activation_layout": ACTIVATION_LAYOUT_MMQ_DS4,
@@ -545,7 +565,7 @@ def run_bounded_harness(config: BoundedMMQConfig) -> dict[str, Any]:
     },
     "artifacts": {"harness_source_hash": _source_hash(),
                   "q4k_tile_loader_source_hash": _q4k_tile_loader_source_hash(),
-                  "atom_source_hash": _atom_source_hash() if config.backend in ("atom", "amd", "amd_warp", "amd_warp_batched", "amd_dot4_batched", "amd_dot4x4_batched", STAGED_DS4_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID, AMD_DS4_DOT4X4_BACKEND_ID) else None,
+                  "atom_source_hash": _atom_source_hash() if config.backend in ("atom", "amd", "amd_warp", "amd_warp_batched", "amd_dot4_batched", "amd_dot4x4_batched", STAGED_DS4_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID, AMD_DS4_DOT4X4_BACKEND_ID, AMD_DS4_LDS_SKELETON_BACKEND_ID) else None,
                   "amd_uop_hash": _amd_uop_hash(specs[0]) if config.backend == "amd" and specs else None,
                   "amd_warp_uop_hash": _amd_warp_uop_hash(specs[0]) if config.backend == "amd_warp" and specs else None,
                   "amd_warp_batched_uop_hash": _amd_warp_batched_uop_hash(config) if config.backend == "amd_warp_batched" else None,
@@ -554,6 +574,7 @@ def run_bounded_harness(config: BoundedMMQConfig) -> dict[str, Any]:
                   "staged_ds4_atom_source_hash": _staged_ds4_atom_hash(specs[0]) if config.backend == STAGED_DS4_BACKEND_ID and specs else None,
                   "amd_ds4_warp_atom_source_hash": _amd_ds4_warp_atom_hash(config) if config.backend == AMD_DS4_WARP_BACKEND_ID else None,
                   "amd_ds4_dot4x4_atom_source_hash": _amd_ds4_dot4x4_atom_hash(config) if config.backend == AMD_DS4_DOT4X4_BACKEND_ID else None,
+                  "amd_ds4_lds_skeleton_atom_source_hash": _amd_ds4_lds_skeleton_atom_hash(config) if config.backend == AMD_DS4_LDS_SKELETON_BACKEND_ID else None,
                   "emitted_binary_hash": None},
     "blockers": (
       ["atom backend is reference-backed; AMD GPU atom body is not implemented"] if config.backend == "atom" else
@@ -569,7 +590,7 @@ def run_bounded_harness(config: BoundedMMQConfig) -> dict[str, Any]:
 
 def _parse_args() -> argparse.Namespace:
   ap = argparse.ArgumentParser(description="Bounded Q4_K/Q8_1 MMQ harness for 14B ffn_gate_up")
-  ap.add_argument("--backend", choices=("reference", "atom", "amd", "amd_warp", "amd_warp_batched", "amd_dot4_batched", "amd_dot4x4_batched", "direct_packed", STAGED_DS4_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID, AMD_DS4_DOT4X4_BACKEND_ID), default="reference")
+  ap.add_argument("--backend", choices=("reference", "atom", "amd", "amd_warp", "amd_warp_batched", "amd_dot4_batched", "amd_dot4x4_batched", "direct_packed", STAGED_DS4_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID, AMD_DS4_DOT4X4_BACKEND_ID, AMD_DS4_LDS_SKELETON_BACKEND_ID), default="reference")
   ap.add_argument("--activation-layout", choices=(ACTIVATION_LAYOUT_ROW_MAJOR, ACTIVATION_LAYOUT_MMQ_DS4), default=ACTIVATION_LAYOUT_ROW_MAJOR)
   ap.add_argument("--m-tile", type=int, default=16)
   ap.add_argument("--n-tile", type=int, default=16)

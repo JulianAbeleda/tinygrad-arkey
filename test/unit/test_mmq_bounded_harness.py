@@ -3,8 +3,8 @@ import pytest
 import extra.qk.mmq_bounded_harness as harness
 from extra.qk.mmq_bounded_harness import (
   ACTIVATION_LAYOUT_MMQ_DS4, ACTIVATION_LAYOUT_ROW_MAJOR, AMD_DS4_DOT4X4_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID,
-  CANDIDATE_ROUTE_ID, COMPARATOR_ID, K, M, N, ROLE, STAGED_DS4_BACKEND_ID, BoundedMMQConfig, candidate_metadata,
-  run_bounded_harness,
+  AMD_DS4_LDS_SKELETON_BACKEND_ID, CANDIDATE_ROUTE_ID, COMPARATOR_ID, K, M, N, ROLE, STAGED_DS4_BACKEND_ID,
+  BoundedMMQConfig, candidate_metadata, run_bounded_harness,
 )
 
 
@@ -176,6 +176,35 @@ def test_mmq_bounded_harness_amd_ds4_warp_backend_metadata_only_is_not_default_r
   assert meta["activation_layout"] == ACTIVATION_LAYOUT_MMQ_DS4
   assert meta["candidate_route_id"] == CANDIDATE_ROUTE_ID
   assert meta["comparator_id"] == COMPARATOR_ID
+
+
+def test_mmq_bounded_harness_amd_ds4_lds_skeleton_backend_runs_bounded_correctness(monkeypatch):
+  seen = []
+
+  def fake_ds4_lds_runner(q4k_bytes, ds4):
+    seen.append(ds4)
+    m, k = ds4.spec.m, ds4.spec.k
+    n = q4k_bytes.shape[0]
+    spec = harness.describe_q4k_q8_1_mmq_tile(role=ROLE, m=m, n=n, k=k, m_tile=m, n_tile=n,
+                                              k_groups=k // harness.Q8_1_BLOCK_ELEMS,
+                                              activation_layout=harness.Q8_1_MMQ_DS4_LAYOUT)
+    return harness.q4k_q8_1_mmq_ds4_tile_reference(q4k_bytes, ds4, spec)
+
+  monkeypatch.setattr(harness, "_run_amd_ds4_lds_skeleton", fake_ds4_lds_runner)
+
+  report = run_bounded_harness(BoundedMMQConfig(m_tile=4, n_tile=5, k_groups=8,
+                                               backend=AMD_DS4_LDS_SKELETON_BACKEND_ID, rounds=1))
+
+  assert len(seen) == 1
+  assert report["status"] == "PASS"
+  assert report["metadata"]["backend"] == AMD_DS4_LDS_SKELETON_BACKEND_ID
+  assert report["metadata"]["backend_atom_id"] == AMD_DS4_LDS_SKELETON_BACKEND_ID
+  assert report["metadata"]["activation_layout"] == ACTIVATION_LAYOUT_MMQ_DS4
+  assert report["activation_layout_source"] == "amd_ds4_lds_skeleton_gpu_local_carrier"
+  assert report["correctness"]["max_abs"] == 0.0
+  assert report["artifacts"]["amd_ds4_lds_skeleton_atom_source_hash"]
+  assert report["timing"]["comparator_id"] == COMPARATOR_ID
+  assert report["blockers"] == []
 
 
 @pytest.mark.parametrize("backend", ["direct_packed", "amd_warp_batched", "amd_dot4_batched", "amd_dot4x4_batched"])

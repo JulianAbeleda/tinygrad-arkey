@@ -19,8 +19,8 @@ if __package__ in (None, ""):
 
 from extra.qk.mmq_bounded_harness import (
   ACTIVATION_LAYOUT_MMQ_DS4, ACTIVATION_LAYOUT_ROW_MAJOR, AMD_DS4_DOT4X4_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID,
-  BoundedMMQConfig, CANDIDATE_ROUTE_ID, COMPARATOR_ID, LLAMA_MMQ_GEOMETRY, PUBLIC_LABEL, STAGED_DS4_BACKEND_ID,
-  candidate_metadata, run_bounded_harness,
+  AMD_DS4_LDS_SKELETON_BACKEND_ID, BoundedMMQConfig, CANDIDATE_ROUTE_ID, COMPARATOR_ID, LLAMA_MMQ_GEOMETRY,
+  PUBLIC_LABEL, STAGED_DS4_BACKEND_ID, candidate_metadata, run_bounded_harness,
 )
 
 
@@ -89,6 +89,12 @@ DONE_COMPONENTS: tuple[dict[str, Any], ...] = (
     "component": "direct DS4 GPU atom",
     "status": "done",
     "implementation": "extra.qk.mmq_q4k_q8_atom.run_q4k_q8_1_mmq_bounded_amd_ds4_warp",
+    "proof": "test/unit/test_mmq_q4k_q8_atom.py",
+  },
+  {
+    "component": "R3 LDS skeleton atom",
+    "status": "done",
+    "implementation": "extra.qk.mmq_q4k_q8_atom.run_q4k_q8_1_mmq_bounded_amd_ds4_lds_skeleton",
     "proof": "test/unit/test_mmq_q4k_q8_atom.py",
   },
 )
@@ -185,17 +191,30 @@ SEARCHABLE_CANDIDATES: tuple[MMQSearchCandidate, ...] = (
     k_groups=8,
     measure_direct_packed=True,
   ),
+  MMQSearchCandidate(
+    candidate_id="amd_ds4_lds_skeleton",
+    backend=AMD_DS4_LDS_SKELETON_BACKEND_ID,
+    activation_layout=ACTIVATION_LAYOUT_MMQ_DS4,
+    status="evidence_only",
+    search_class="bounded_shared_lds_skeleton",
+    promotion_eligible=False,
+    reason="R3 real tinygrad custom kernel stages DS4 q8 values through LOCAL memory and a barrier; bounded-only skeleton, not production dispatch",
+    m_tile=4,
+    n_tile=5,
+    k_groups=8,
+    measure_direct_packed=True,
+  ),
 )
 
 BLOCKED_CANDIDATES: tuple[dict[str, Any], ...] = (
   {
-    "candidate_id": "cooperative_shared_lds_tile",
+    "candidate_id": "cooperative_multi_wave_tile",
     "backend": "not_implemented",
     "activation_layout": ACTIVATION_LAYOUT_MMQ_DS4,
     "status": "blocked",
     "search_class": "llama_style_tile_structure",
     "promotion_eligible": False,
-    "reason": "cooperative multi-wave shared/LDS tile ownership is not implemented",
+    "reason": "cooperative multi-wave output ownership is not implemented",
   },
   {
     "candidate_id": "full_14b_prefill_route",

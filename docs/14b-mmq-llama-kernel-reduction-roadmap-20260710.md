@@ -39,7 +39,7 @@ The source queue is the Q4_K MMQ path in:
 | Q4_K x Q8_1 MMQ dot formula | `vecdotq.cuh`: `vec_dot_q4_K_q8_1_impl_mmq` | converted_searchable |
 | packed dot primitive | `vecdotq.cuh`: `ggml_cuda_dp4a`/AMD `sudot4` path | partially converted |
 | packed DS4 dot4x4 lane mapping | `mmq.cuh`: callsite around `vec_dot_q4_K_q8_1_impl_mmq` | converted_searchable |
-| shared/LDS tile layout | `mmq.cuh`: shared `tile_y`, `tile_x`, `mmq_get_nbytes_shared` | source_clone |
+| shared/LDS tile layout | `mmq.cuh`: shared `tile_y`, `tile_x`, `mmq_get_nbytes_shared` | converted_searchable skeleton |
 | cooperative tile loop | `mmq.cuh`: `mul_mat_q_process_tile` | source_clone |
 | writeback | `mmq.cuh`: `mmq_write_back_mma` / `mmq_write_back_dp4a` | source_clone |
 | full launch integration | `mmq.cuh`: `launch_mul_mat_q`, `mul_mat_q_case` | source_clone |
@@ -57,6 +57,7 @@ These are machine-search-owned now:
 | `sudot4` primitive availability | `done_components: sudot4 primitive availability` | `test_mmq_q4k_q8_atom.py` |
 | direct DS4 GPU atom | `amd_ds4_warp_direct` | `test_mmq_q4k_q8_atom.py`, `mmq_machine_search.py --run` |
 | packed DS4 dot4x4 atom | `amd_ds4_dot4x4_packed` | `test_mmq_q4k_q8_atom.py`, `mmq_machine_search.py --run` |
+| LDS skeleton atom | `amd_ds4_lds_skeleton` | `test_mmq_q4k_q8_atom.py`, `mmq_machine_search.py --run` |
 
 Current executable proof shape:
 
@@ -66,8 +67,9 @@ ds4_reference_formula         PASS
 amd_ds4_warp_direct           PASS
 staged_ds4_reference_probe    PASS
 amd_ds4_dot4x4_packed         PASS/searchable
+amd_ds4_lds_skeleton          PASS/evidence_only
 q4k_tile_loader_source_hash   present in run artifacts
-cooperative_shared_lds_tile   blocked
+cooperative_multi_wave_tile   blocked
 full_14b_prefill_route        blocked
 production_dispatch_changed   false
 default_route                 direct_packed
@@ -218,6 +220,10 @@ bounded correctness passes for a minimal output tile
 lifecycle counters distinguish global loads, local stores, barriers, and output stores
 machine-search marks lds_skeleton searchable but promotion_eligible=false
 ```
+
+Status: done. The backend `q4k_q8_1_mmq_amd_ds4_lds_skeleton_atom_v0` is a real bounded tinygrad custom kernel with
+LOCAL Q8 staging and a barrier. It is evidence-only and promotion-ineligible because it does not yet implement
+llama's cooperative multi-wave output ownership.
 
 Stop if:
 
