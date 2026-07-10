@@ -24,7 +24,7 @@ if str(ROOT) not in sys.path:
 
 from tinygrad import Tensor, dtypes
 
-from extra.qk.layout import Q4_K_BLOCK_BYTES, Q4_K_BLOCK_ELEMS, Q8_1_BLOCK_ELEMS, q8_1_quantize
+from extra.qk.layout import Q4_K_BLOCK_BYTES, Q4_K_BLOCK_ELEMS, Q8_1_BLOCK_ELEMS, q8_1_dequantize, q8_1_quantize
 from extra.qk.mmq_q4k_q8_reference import Q4KQ81MMQTileSpec, describe_q4k_q8_1_mmq_tile, q4k_q8_1_mmq_tile_reference
 
 ROLE = "ffn_gate_up"
@@ -53,7 +53,8 @@ class BoundedMMQConfig:
   warmups: int = 0
   rounds: int = 1
   seed: int = 20260710
-  backend: Literal["reference", "atom", "amd", "amd_warp"] = "reference"
+  backend: Literal["reference", "atom", "amd", "amd_warp", "amd_warp_batched", "direct_packed"] = "reference"
+  measure_direct_packed: bool = False
 
   @property
   def bounded_m(self) -> int:
@@ -68,7 +69,8 @@ class BoundedMMQConfig:
     return self.k_groups * Q8_1_BLOCK_ELEMS
 
   def validate(self) -> None:
-    if self.backend not in ("reference", "atom", "amd", "amd_warp"): raise ValueError(f"unknown backend={self.backend!r}")
+    if self.backend not in ("reference", "atom", "amd", "amd_warp", "amd_warp_batched", "direct_packed"):
+      raise ValueError(f"unknown backend={self.backend!r}")
     if min(self.m_tile, self.n_tile, self.k_groups, self.m_tiles, self.n_tiles) <= 0:
       raise ValueError("tile sizes, tile counts, and k_groups must be positive")
     if self.warmups < 0 or self.rounds < 1: raise ValueError("warmups >= 0 and rounds >= 1 are required")
@@ -164,6 +166,35 @@ def _run_amd_warp_tile(q4k_bytes:np.ndarray, xq:np.ndarray, xscales:np.ndarray, 
   return np.asarray(run_q4k_q8_1_mmq_tile_amd_warp(q4k_bytes, xq, xscales, spec).output, dtype=np.float32)
 
 
+def _run_direct_packed(q4k_bytes:np.ndarray, xq:np.ndarray, xscales:np.ndarray, *, role:str=ROLE, device:str="AMD") -> np.ndarray:
+  from extra.qk.mmq_q4k_q8_atom import _as_u32_words
+  from extra.qk.q4k_prefill_route_spec import describe_q4k_packed_prefill, emit_q4k_packed_prefill_kernel
+  m, k = xq.shape
+  n = q4k_bytes.shape[0]
+  spec = describe_q4k_packed_prefill(n, k, m, role=role, output_layout="direct_out")
+  words = Tensor(_as_u32_words(q4k_bytes), dtype=dtypes.uint32, device=device).realize()
+  x = q8_1_dequantize(Tensor(np.ascontiguousarray(xq.reshape(-1)), dtype=dtypes.int8, device=device),
+                      Tensor(np.ascontiguousarray(xscales.reshape(-1)), dtype=dtypes.float32, device=device)).realize()
+  out = Tensor.empty(m, n, dtype=dtypes.float32, device=device).custom_kernel(
+    words, x, fxn=emit_q4k_packed_prefill_kernel(spec))[0].realize()
+  return out.numpy().astype(np.float32)
+
+
+def _run_direct_packed_tile(q4k_bytes:np.ndarray, xq:np.ndarray, xscales:np.ndarray, spec:Q4KQ81MMQTileSpec) -> np.ndarray:
+  full = _run_direct_packed(q4k_bytes, xq, xscales, role=spec.role)
+  return np.asarray(full[spec.m0:spec.m0+spec.tile_m, spec.n0:spec.n0+spec.tile_n], dtype=np.float32)
+
+
+def _run_amd_warp_batched(q4k_bytes:np.ndarray, xq:np.ndarray, xscales:np.ndarray) -> np.ndarray:
+  try:
+    from extra.qk.mmq_q4k_q8_atom import run_q4k_q8_1_mmq_bounded_amd_warp
+  except Exception as exc:
+    raise MMQAtomUnavailableError(
+      f"{CANDIDATE_ROUTE_ID} selected but AMD warp batched atom entrypoint is unavailable"
+    ) from exc
+  return np.asarray(run_q4k_q8_1_mmq_bounded_amd_warp(q4k_bytes, xq, xscales, role=ROLE).output, dtype=np.float32)
+
+
 def _amd_uop_hash(spec:Q4KQ81MMQTileSpec) -> str | None:
   try:
     from extra.qk.mmq_q4k_q8_atom import amd_atom_source_hash
@@ -180,12 +211,36 @@ def _amd_warp_uop_hash(spec:Q4KQ81MMQTileSpec) -> str | None:
     return None
 
 
+def _amd_warp_batched_uop_hash(config:BoundedMMQConfig) -> str | None:
+  try:
+    from extra.qk.mmq_q4k_q8_atom import amd_warp_batched_atom_source_hash
+    return amd_warp_batched_atom_source_hash(config.bounded_m, config.bounded_n, config.bounded_k, ROLE)
+  except Exception:
+    return None
+
+
+def _time_full_output(runner, warmups:int, rounds:int) -> tuple[list[float], np.ndarray]:
+  for _ in range(warmups): runner()
+  samples_ms: list[float] = []
+  last = None
+  for _ in range(rounds):
+    t0 = time.perf_counter()
+    last = runner()
+    samples_ms.append((time.perf_counter() - t0) * 1000.0)
+  if last is None: raise ValueError("rounds must be >= 1")
+  return samples_ms, np.asarray(last, dtype=np.float32)
+
+
+def _fp32_accum_atol(k:int) -> float:
+  return max(5e-4, 3e-6 * k)
+
+
 def run_bounded_harness(config: BoundedMMQConfig) -> dict[str, Any]:
   config.validate()
   q4k_bytes = _finite_q4k_bytes(config.bounded_n, config.bounded_k, config.seed)
   xq, xscales = _q8_inputs(config.bounded_m, config.bounded_k, config.seed + 1)
   runner = {"reference": _run_reference_tile, "atom": _run_atom_tile, "amd": _run_amd_tile,
-            "amd_warp": _run_amd_warp_tile}[config.backend]
+            "amd_warp": _run_amd_warp_tile, "direct_packed": _run_direct_packed_tile}.get(config.backend)
 
   specs = [
     describe_q4k_q8_1_mmq_tile(role=ROLE, m=config.bounded_m, n=config.bounded_n, k=config.bounded_k,
@@ -194,20 +249,39 @@ def run_bounded_harness(config: BoundedMMQConfig) -> dict[str, Any]:
     for mt in range(config.m_tiles) for nt in range(config.n_tiles)
   ]
 
-  reference_tiles = [_run_reference_tile(q4k_bytes, xq, xscales, spec) for spec in specs]
-  for _ in range(config.warmups):
-    for spec in specs: runner(q4k_bytes, xq, xscales, spec)
+  reference_full = np.zeros((config.bounded_m, config.bounded_n), dtype=np.float32)
+  for spec in specs:
+    reference_full[spec.m0:spec.m0+spec.tile_m, spec.n0:spec.n0+spec.tile_n] = _run_reference_tile(q4k_bytes, xq, xscales, spec)
 
-  samples_ms: list[float] = []
-  last_tiles: list[np.ndarray] = []
-  for _ in range(config.rounds):
-    t0 = time.perf_counter()
-    last_tiles = [runner(q4k_bytes, xq, xscales, spec) for spec in specs]
-    samples_ms.append((time.perf_counter() - t0) * 1000.0)
+  if config.backend in ("amd_warp_batched", "direct_packed"):
+    full_runner = (lambda: _run_amd_warp_batched(q4k_bytes, xq, xscales)) if config.backend == "amd_warp_batched" else (
+      lambda: _run_direct_packed(q4k_bytes, xq, xscales))
+    samples_ms, last_full = _time_full_output(full_runner, config.warmups, config.rounds)
+    last_tiles = [last_full[spec.m0:spec.m0+spec.tile_m, spec.n0:spec.n0+spec.tile_n] for spec in specs]
+  else:
+    assert runner is not None
+    for _ in range(config.warmups):
+      for spec in specs: runner(q4k_bytes, xq, xscales, spec)
 
+    samples_ms = []
+    last_tiles = []
+    for _ in range(config.rounds):
+      t0 = time.perf_counter()
+      last_tiles = [runner(q4k_bytes, xq, xscales, spec) for spec in specs]
+      samples_ms.append((time.perf_counter() - t0) * 1000.0)
+
+  reference_tiles = [reference_full[spec.m0:spec.m0+spec.tile_m, spec.n0:spec.n0+spec.tile_n] for spec in specs]
   max_abs = max(float(np.max(np.abs(got - ref))) for got, ref in zip(last_tiles, reference_tiles)) if last_tiles else 0.0
-  atol = 5e-4 if config.backend in ("amd", "amd_warp") else 2e-5
+  atol = _fp32_accum_atol(config.bounded_k) if config.backend in ("amd", "amd_warp", "amd_warp_batched", "direct_packed") else 2e-5
   ok = max_abs <= atol
+  direct_samples_ms, direct_max_abs, direct_status = None, None, "not_requested"
+  if config.backend == "direct_packed":
+    direct_samples_ms, direct_full = samples_ms, last_full
+  elif config.measure_direct_packed:
+    direct_samples_ms, direct_full = _time_full_output(lambda: _run_direct_packed(q4k_bytes, xq, xscales), config.warmups, config.rounds)
+  if direct_samples_ms is not None:
+    direct_max_abs = float(np.max(np.abs(direct_full - reference_full)))
+    direct_status = "PASS" if direct_max_abs <= _fp32_accum_atol(config.bounded_k) else "FAIL"
   return {
     "schema": "q4k-q8-1-mmq-bounded-harness.v1",
     "metadata": candidate_metadata(config),
@@ -218,12 +292,21 @@ def run_bounded_harness(config: BoundedMMQConfig) -> dict[str, Any]:
       "min_ms": min(samples_ms),
       "median_ms": float(np.median(np.asarray(samples_ms, dtype=np.float64))),
       "comparator_id": COMPARATOR_ID,
-      "comparator_status": "named_not_measured",
+      "comparator_status": "measured" if direct_samples_ms is not None else "named_not_measured",
+      "direct_packed": None if direct_samples_ms is None else {
+        "status": direct_status,
+        "samples_ms": direct_samples_ms,
+        "min_ms": min(direct_samples_ms),
+        "median_ms": float(np.median(np.asarray(direct_samples_ms, dtype=np.float64))),
+        "max_abs_vs_reference": direct_max_abs,
+        "atol": _fp32_accum_atol(config.bounded_k),
+      },
     },
     "artifacts": {"harness_source_hash": _source_hash(),
-                  "atom_source_hash": _atom_source_hash() if config.backend in ("atom", "amd", "amd_warp") else None,
+                  "atom_source_hash": _atom_source_hash() if config.backend in ("atom", "amd", "amd_warp", "amd_warp_batched") else None,
                   "amd_uop_hash": _amd_uop_hash(specs[0]) if config.backend == "amd" and specs else None,
                   "amd_warp_uop_hash": _amd_warp_uop_hash(specs[0]) if config.backend == "amd_warp" and specs else None,
+                  "amd_warp_batched_uop_hash": _amd_warp_batched_uop_hash(config) if config.backend == "amd_warp_batched" else None,
                   "emitted_binary_hash": None},
     "blockers": [] if config.backend != "atom" else ["atom backend is reference-backed; AMD GPU atom body is not implemented"],
   }
@@ -231,7 +314,7 @@ def run_bounded_harness(config: BoundedMMQConfig) -> dict[str, Any]:
 
 def _parse_args() -> argparse.Namespace:
   ap = argparse.ArgumentParser(description="Bounded Q4_K/Q8_1 MMQ harness for 14B ffn_gate_up")
-  ap.add_argument("--backend", choices=("reference", "atom", "amd", "amd_warp"), default="reference")
+  ap.add_argument("--backend", choices=("reference", "atom", "amd", "amd_warp", "amd_warp_batched", "direct_packed"), default="reference")
   ap.add_argument("--m-tile", type=int, default=16)
   ap.add_argument("--n-tile", type=int, default=16)
   ap.add_argument("--k-groups", type=int, default=8)
@@ -240,6 +323,7 @@ def _parse_args() -> argparse.Namespace:
   ap.add_argument("--warmups", type=int, default=0)
   ap.add_argument("--rounds", type=int, default=1)
   ap.add_argument("--seed", type=int, default=20260710)
+  ap.add_argument("--measure-direct-packed", action="store_true")
   return ap.parse_args()
 
 
@@ -247,7 +331,8 @@ def main() -> None:
   args = _parse_args()
   report = run_bounded_harness(BoundedMMQConfig(m_tile=args.m_tile, n_tile=args.n_tile, k_groups=args.k_groups,
                                                m_tiles=args.m_tiles, n_tiles=args.n_tiles, warmups=args.warmups,
-                                               rounds=args.rounds, seed=args.seed, backend=args.backend))
+                                               rounds=args.rounds, seed=args.seed, backend=args.backend,
+                                               measure_direct_packed=args.measure_direct_packed))
   print(json.dumps(report, indent=2, sort_keys=True))
 
 

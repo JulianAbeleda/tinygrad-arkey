@@ -460,12 +460,14 @@ Current executable atom status:
 extra/qk/mmq_q4k_q8_atom.py
 ```
 
-The first atom body has two bounded modes:
+The first atom body has bounded modes:
 
 ```text
 backend=atom  -> reference-backed executable atom API with lifecycle rows
 backend=amd   -> AMD UOp custom-kernel tile atom
 backend=amd_warp -> AMD UOp custom-kernel tile atom with one wave reducing 32 Q positions
+backend=direct_packed -> bounded comparator using the existing Q4KPrefillRouteSpec direct-packed lowering
+backend=amd_warp_batched -> one custom-kernel launch for the whole bounded MxN grid
 ```
 
 The AMD path is intentionally narrow: whole-Q4_K-block K tiles only (`k0 % 256 == 0`, `k_groups % 8 == 0`), fp32
@@ -484,11 +486,28 @@ backend=amd_warp, same bounded shape, warmups=1, rounds=3
 status=PASS
 max_abs=0.0001678466796875 at atol=0.0005
 median_ms ~= 23.8 vs scalar backend=amd ~= 23.0
+
+backend=direct_packed, bounded 8x8x256, warmups=1, rounds=3
+status=PASS
+max_abs=0.00018310546875
+median_ms ~= 9.1
+
+backend=amd_warp_batched, bounded 8x8x256, warmups=1, rounds=3, measure_direct_packed=true
+status=PASS
+max_abs=0.0001678466796875
+median_ms ~= 6.0 vs direct_packed ~= 9.3
+
+backend=amd_warp_batched, bounded 16x16x512, warmups=1, rounds=3, measure_direct_packed=true
+status=PASS
+max_abs=0.00030517578125 at K-scaled fp32 accumulation atol=0.001536
+median_ms ~= 5.9 vs direct_packed ~= 9.0
 ```
 
-Current blocker: performance/comparator. The warp-owned atom is correct but not faster on the tiny bounded shape;
-launch/tile granularity dominates. The bounded harness still names `direct_packed` as comparator but does not measure
-the same bounded direct-packed shape.
+Current blocker: representativeness. The one-launch warp atom is now correct and beats the bounded direct-packed
+comparator on small synthetic bounded shapes, but this is not whole-prefill authority. The bounded direct-packed
+comparator deliberately uses the existing direct-packed math/lowering without forcing the live production `LOCAL`
+opts; applying those opts directly in this custom bounded harness rejects with `local is for globals`. Whole-prefill
+promotion still requires the canonical 14B smoke/authority path to beat the live direct-packed baseline.
 
 ### M7 - One-Role Whole-Prefill Transfer
 
