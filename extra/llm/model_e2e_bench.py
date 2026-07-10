@@ -3,9 +3,9 @@
 
 This is a *whole-model* benchmark, not a kernel A/B gate. It uses the retained model-measurement authority:
 clean W==D via `model.generate`, PROFILE=0, auto clock, warmup before
-measuring, repeated steady-state samples with a median+spread band (extra.qk.harness_contract.repro_band), and a
-git/hardware/env provenance stamp. Decode tok/s is the headline (HBM-bound); prefill pp512 is secondary and
-measured on whatever prefill path is active by default (reported in env).
+measuring, repeated steady-state samples with a median+spread band, and a git/hardware/env provenance stamp.
+Decode tok/s is the headline (HBM-bound); prefill pp512 is secondary and measured on whatever prefill path is
+active by default (reported in env).
 
 Usage:
   python extra/llm/model_e2e_bench.py --model /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf --id qwen3-8b \
@@ -19,11 +19,18 @@ from tinygrad.helpers import getenv, GlobalCounters, fetch, Context, DEBUG
 from tinygrad.llm.model import Transformer
 import tinygrad.llm.model as _M
 from tinygrad.llm.cli import SimpleTokenizer, models as BUILTIN, _quant_from_name, _device_target
-from extra.qk.harness_contract import repro_band
 
 def _git(*args):
   try: return subprocess.check_output(["git", *args], cwd=pathlib.Path(__file__).resolve().parents[2]).decode().strip()
   except Exception: return None
+
+def repro_band(samples):
+  if not samples: return {"median": None, "min": None, "max": None, "spread_pct": None}
+  ss = sorted(samples)
+  median = ss[len(ss) // 2]
+  lo, hi = ss[0], ss[-1]
+  spread_pct = round((hi - lo) / median * 100, 2) if median else None
+  return {"median": median, "min": lo, "max": hi, "spread_pct": spread_pct}
 
 def measure_decode(model, n_tokens:int, skip:int):
   seed = 0

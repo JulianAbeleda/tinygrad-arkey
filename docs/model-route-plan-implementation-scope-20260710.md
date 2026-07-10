@@ -4,7 +4,8 @@
 
 QK dispatch is now candidate-based at execution time, but model load still has a legacy policy layer:
 
-- primitive install calls `q4k_policy(name)` / `q6k_policy(name)` when no generated policy is supplied;
+- primitive install is driven by `ModelRoutePlan` entries; the legacy direct `q4k_policy(name)` /
+  `q6k_policy(name)` dispatch functions were removed in the decouple/prune pass;
 - those policy functions infer route choices from tensor-name substrings;
 - role inference also appears in prefill/decode helpers;
 - model profiles exist for search and gates, but runtime loading does not yet produce a single route-facts object.

@@ -6,8 +6,8 @@ from tinygrad.helpers import prod
 from tinygrad.llm.gguf import ggml_data_to_tensor
 from tinygrad.llm import route_ops as qk_ops
 from tinygrad.llm.decode_routes import q4k_primitive_linear_call, q6k_primitive_linear_call
-from tinygrad.llm.route_policy import _q4k_policy, _qk_generated_policy_entry
-from tinygrad.llm.model_route_plan import ModelRoutePlan, build_model_route_plan
+from tinygrad.llm.route_policy import _qk_generated_policy_entry
+from tinygrad.llm.model_route_plan import ModelRoutePlan, build_model_route_plan, primitive_route_entry_for_tensor
 
 
 def _qk_amd_gfx1100_arch_ok() -> bool:
@@ -426,12 +426,14 @@ def _demote_q6k_to_q4(model, linears:list, targets:tuple[str, ...]) -> list:
   # B3: re-quantize over-provisioned Q6_K tensors to Q4_K (offline quantizer; ffn_down measured ~free
   # quality, fewer per-token bytes -> an operating point llama.cpp's fixed Q4_K_M doesn't offer). `targets`
   # is a tuple of tensor-name substrings (e.g. ("ffn_down","attn_v")) selected by the demotion search;
-  # each demoted tensor's (parts, opts) reuse _q4k_policy, with a shape-based fallback for roles it omits.
+  # each demoted tensor's (parts, opts) reuse the model route plan's Q4_K defaults.
   out = []
   for lin in linears:
     if isinstance(lin, Q6KPrimitiveLinear) and any(t in lin.name for t in targets):
-      pol = _q4k_policy(lin.name) or ((4, ("LOCAL:0:32",)) if lin.out_features > 8192 else (1, ("LOCAL:0:64",)))
-      parts, opt_strs = pol
+      route_entry = primitive_route_entry_for_tensor(lin.name, 12, lin.out_features, lin.in_features,
+                                                     role=getattr(lin, "route_role", ""))
+      if route_entry is None: raise ValueError(f"no Q4_K demotion route for {lin.name}")
+      parts, opt_strs = route_entry.parts, route_entry.opts
       opts = tuple(qk_ops.q4k_parse_opt(x) for x in opt_strs)
       words = Tensor(qk_ops.quantize_q4_k(lin.weight.numpy())).to(None).contiguous().realize()
       q4_bytes = lin.out_features * lin.in_features // 256 * 144

@@ -38,6 +38,10 @@ from the tracked tree; use git history for archaeology.
   and a primitive route plan consumed by Q4/Q6 install.
 - `model-fact-routing-consolidation-scope-20260710.md` - consolidation scope for proving route-plan parity,
   carrying route roles into primitives, and keeping live scripts profile-driven.
+- `model-routing-decouple-prune-scope-20260710.md` - prune scope for deleting unearned route dispatch scaffolding,
+  decoupling Q4/Q6 defaults from route policy, and repairing the stale E2E harness surface before core cleanup.
+- `budget-reduction-lanes-3-5-scope-20260710.md` - executable scope for the next budget lanes: Q4/Q6 install-loop
+  dedupe, model admission extraction, and staged AMD ISA / prefill machine-search extraction.
 - `handwritten-kernel-exhaustive-lowering-scope-20260706.md` - exhaustive lowering scope for converting handwritten
   route surfaces into pure tinygrad/codegen paths.
 - `pure-machine-search-roadmap.md` - current route/search roadmap and promotion rules.

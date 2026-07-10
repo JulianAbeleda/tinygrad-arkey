@@ -1,4 +1,5 @@
 from __future__ import annotations
+from dataclasses import dataclass
 import subprocess
 from tinygrad import getenv
 
@@ -6,6 +7,31 @@ AUTO_MAX_CONTEXT = "auto"
 MIN_USABLE_CTX = getenv("MIN_USABLE_CTX", 2048)
 MIN_RING_WINDOW = getenv("MIN_RING_WINDOW", 1024)   # below this a StreamingLLM window is a toy -> don't offer the ring
 VRAM_ADMIT_FRACTION = float(getenv("VRAM_ADMIT_FRACTION", "0.8"))
+
+@dataclass(frozen=True)
+class AdmissionInputs:
+  requested:int|str|None; trained_ctx:int; free_vram:int|None; q4_bytes:int; est_fp16:int; num_blocks:int
+  n_heads:int; n_kv_heads:int; head_dim:int; prefill_ubatch:int; v2_on:bool; resident_fp16_admit:bool
+  prefill_chunked:bool; model_label:str; stream:str="auto"; rope_dim:int|None=None; kv_quant_supported:bool=False
+  kv_quant_disabled:bool=False; live_split_s:int=48; chunk_resident_blocks:int=4
+
+@dataclass(frozen=True)
+class AdmissionPlan:
+  max_context:int; kv_quant:bool; report:dict; weights:int; kv_per_tok:int; prefill_per_tok:int
+
+def plan_context_admission(inp:AdmissionInputs) -> AdmissionPlan:
+  kv_per_tok = 2 * inp.n_kv_heads * inp.head_dim * 2 * inp.num_blocks
+  weights = inp.q4_bytes + ((inp.est_fp16 // max(inp.num_blocks, 1)) * inp.chunk_resident_blocks
+                            if inp.v2_on and inp.prefill_chunked else inp.est_fp16 if inp.resident_fp16_admit else 0)
+  prefill_per_tok = 4 * inp.n_heads * inp.prefill_ubatch
+  flash_scratch = inp.n_heads * inp.live_split_s * (inp.head_dim + 2) * 4
+  kv_quant_shape = inp.head_dim == 128 and inp.n_kv_heads == 8 and inp.n_heads % inp.n_kv_heads == 0; kv_quant_supported = inp.kv_quant_supported and kv_quant_shape and not inp.kv_quant_disabled
+  ring_supported = kv_quant_shape and (inp.rope_dim if inp.rope_dim is not None else inp.head_dim) == inp.head_dim
+  scale_per_tok = 2 * inp.n_kv_heads * 2 * inp.num_blocks if kv_quant_supported else 0
+  max_context, kv_quant, report = resolve_max_context_admission(
+    inp.requested, inp.trained_ctx, inp.free_vram, weights, kv_per_tok, prefill_per_tok, flash_scratch, inp.model_label,
+    kv_quant_supported=kv_quant_supported, scale_per_tok=scale_per_tok, stream=inp.stream, ring_supported=ring_supported)
+  return AdmissionPlan(max_context, kv_quant, report, weights, kv_per_tok, prefill_per_tok)
 
 def detect_total_vram_bytes() -> int|None:
   # cheap one-shot total-VRAM probe via rocm-smi; None on any failure.

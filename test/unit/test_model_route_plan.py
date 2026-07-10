@@ -1,7 +1,9 @@
 from types import SimpleNamespace
+import ast
+import pathlib
 
 from tinygrad import Tensor, dtypes
-from tinygrad.llm import qk_primitives, route_policy
+from tinygrad.llm import route_policy
 from tinygrad.llm.model_facts import model_facts_from_gguf_metadata
 from tinygrad.llm.model_route_plan import build_model_route_plan
 from tinygrad.llm.qk_primitives import _install_q4k_primitives, _install_q6k_primitives, Q4KPrimitiveLinear, Q6KPrimitiveLinear
@@ -49,7 +51,21 @@ def _qwen_kv(profile):
   }
 
 
-def test_model_facts_route_plan_matches_legacy_q4_q6_policy_for_qwen3_like_tensors():
+EXPECTED_PRIMITIVE_DEFAULTS = {
+  "blk.0.ffn_gate.weight": (1, ("LOCAL:0:64",), "Q4_K"),
+  "blk.0.ffn_up.weight": (1, ("LOCAL:0:64",), "Q4_K"),
+  "blk.0.ffn_down.weight": (4, ("LOCAL:0:32",), "Q4_K"),
+  "blk.0.attn_q.weight": (1, ("LOCAL:0:64",), "Q4_K"),
+  "blk.0.attn_output.weight": (1, ("LOCAL:0:64",), "Q4_K"),
+  "blk.0.attn_k.weight": (1, ("LOCAL:0:64",), "Q4_K"),
+  "blk.0.attn_v.weight": (1, ("LOCAL:0:64",), "Q4_K"),
+  "blk.1.ffn_down.weight": (1, ("LOCAL:0:64",), "Q6_K"),
+  "blk.1.attn_v.weight": (4, ("LOCAL:0:32",), "Q6_K"),
+  "output.weight": (1, ("LOCAL:0:64",), "Q6_K"),
+}
+
+
+def test_model_facts_route_plan_sets_q4_q6_defaults_from_tensor_facts_for_qwen3_like_tensors():
   for profile in QWEN3_LIKE_PROFILES:
     meta = _meta_for_profile(profile)
     facts = model_facts_from_gguf_metadata(_qwen_kv(profile), meta)
@@ -59,13 +75,13 @@ def test_model_facts_route_plan_matches_legacy_q4_q6_policy_for_qwen3_like_tenso
     assert len(facts.tensors) == len(meta["tensor_infos"]), profile["name"]
     for name, dims, typ, _off in meta["tensor_infos"]:
       entry = plan.primitive(name)
-      legacy = route_policy.q4k_policy(name) if typ == 12 else route_policy.q6k_policy(name)
-      assert legacy is not None
       assert entry is not None
+      expected_parts, expected_opts, expected_quant = EXPECTED_PRIMITIVE_DEFAULTS[name]
       assert (entry.rows, entry.cols) == tuple(reversed(dims))
-      assert (entry.parts, entry.opts) == (legacy[0], tuple(legacy[1]))
+      assert (entry.parts, entry.opts) == (expected_parts, expected_opts)
       assert entry.module_path == name.removesuffix(".weight")
       assert entry.role == expected_roles[name]
+      assert entry.quant_label == expected_quant
       assert entry.quant_label == ("Q4_K" if typ == 12 else "Q6_K")
 
 
@@ -85,13 +101,13 @@ def test_q4k_install_uses_route_plan_without_direct_policy_call(tmp_path, monkey
   gguf.write_bytes(bytes((256 * 256) // 256 * 144))
   meta = {"data_start": 0, "tensor_infos": [("blk.0.ffn_gate.weight", (256, 256), 12, 0)]}
   plan = build_model_route_plan(meta)
-  monkeypatch.setattr(qk_primitives, "_q4k_policy", lambda _name: (_ for _ in ()).throw(AssertionError("direct q4 policy called")))
+  monkeypatch.delattr(route_policy, "_qk_generated_policy_entry")
 
   installed = _install_q4k_primitives(_install_model(), gguf, meta, route_plan=plan)
 
   assert len(installed) == 1
   assert isinstance(installed[0], Q4KPrimitiveLinear)
-  assert installed[0].parts == route_policy.q4k_policy("blk.0.ffn_gate.weight")[0]
+  assert installed[0].parts == 1
 
 
 def test_q6k_install_uses_route_plan_without_direct_policy_call(tmp_path, monkeypatch):
@@ -99,13 +115,41 @@ def test_q6k_install_uses_route_plan_without_direct_policy_call(tmp_path, monkey
   gguf.write_bytes(bytes((256 * 256) // 256 * 210))
   meta = {"data_start": 0, "tensor_infos": [("blk.0.ffn_down.weight", (256, 256), 14, 0)]}
   plan = build_model_route_plan(meta)
-  monkeypatch.setattr(route_policy, "q6k_policy", lambda _name: (_ for _ in ()).throw(AssertionError("direct q6 policy called")))
+  monkeypatch.delattr(route_policy, "_qk_generated_policy_entry")
 
   installed = _install_q6k_primitives(_install_model(), gguf, meta, route_plan=plan)
 
   assert len(installed) == 1
   assert isinstance(installed[0], Q6KPrimitiveLinear)
   assert installed[0].parts == 1
+
+
+def test_legacy_q4_q6_install_policy_dispatchers_are_deleted():
+  assert not hasattr(route_policy, "q4k_policy")
+  assert not hasattr(route_policy, "q6k_policy")
+  assert not hasattr(route_policy, "_q4k_policy")
+  assert not hasattr(route_policy, "_q6k_policy")
+
+
+def test_runtime_dispatch_install_selection_does_not_branch_on_model_size_or_name_literals():
+  repo = pathlib.Path(__file__).resolve().parents[2]
+  runtime_files = [
+    repo / "tinygrad/llm/model.py",
+    repo / "tinygrad/llm/model_route_plan.py",
+    repo / "tinygrad/llm/route_policy.py",
+    repo / "tinygrad/llm/qk_primitives.py",
+  ]
+  banned = ("8B", "14B", "32B", "8b", "14b", "32b")
+  banned_ints = {8000, 8192, 14000, 14336, 32000, 32768}
+  for path in runtime_files:
+    tree = ast.parse(path.read_text(), filename=str(path))
+    for node in ast.walk(tree):
+      if not isinstance(node, (ast.If, ast.IfExp, ast.Match)): continue
+      src = ast.get_source_segment(path.read_text(), node) or ""
+      assert not any(token in src for token in banned), f"{path} branches on model name/size literal: {src}"
+      for child in ast.walk(node):
+        if isinstance(child, ast.Constant) and isinstance(child.value, int):
+          assert child.value not in banned_ints, f"{path} branches on model-size literal {child.value}: {src}"
 
 
 def test_generated_policy_override_still_wins_over_route_plan(tmp_path):

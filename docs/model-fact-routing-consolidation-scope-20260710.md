@@ -25,7 +25,7 @@ on labels like 8B, 14B, or 32B.
 - The route-plan path needs stronger old-vs-new parity proof.
 - Primitive linears still mostly expose only `name`, so decode/prefill role helpers parse names as fallback authority.
 - Some live QK scripts still carry model-size labels or hardcoded defaults that should be profile/role parameters.
-- `RouteCandidateRegistry` should not grow until route parity and fact ownership prove it is earning its weight.
+- Do not add a generic dispatch registry until route parity and fact ownership prove it is earning its weight.
 
 ## This Slice
 

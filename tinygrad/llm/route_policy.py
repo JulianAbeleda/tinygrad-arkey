@@ -5,26 +5,6 @@ from tinygrad import UOp, getenv
 from tinygrad.llm import route_ops
 
 
-def q4k_policy(name:str) -> tuple[int, tuple[str, ...]]|None:
-  if ".ffn_gate.weight" in name or ".ffn_up.weight" in name: return 1, ("LOCAL:0:64",)
-  if ".ffn_down.weight" in name: return 4, ("LOCAL:0:32",)
-  if ".attn_q.weight" in name or ".attn_output.weight" in name: return 1, ("LOCAL:0:64",)
-  if ".attn_k.weight" in name and getenv("DECODE_ROUTE_ATTN_K", 1): return 1, ("LOCAL:0:64",)
-  # PROMOTED default-ON 2026-07-03 (rollback DECODE_ROUTE_ATTN_V=0): the Q4_K attn_v tensors were omitted here, so
-  # they fell to the generic nn.Linear lazy-dequant GEMV at 2.8% of peak (24 GB/s) = 12.5% of 14B decode -- the same
-  # route-miss class as attn_k, one tensor over. attn_v is 5120->1024 (same shape as attn_k) so it takes the same
-  # primitive route (q4k_g3_lanemap_gemv, ~35% peak). Byte-identical; W==D token-identical; 14B ctx512 +13.3%, 8B
-  # +8.7% (no regression -> global default-on). Found by the 2026-07-03 in-context lifecycle profile.
-  if ".attn_v.weight" in name and getenv("DECODE_ROUTE_ATTN_V", 1): return 1, ("LOCAL:0:64",)
-  return None
-
-def q6k_policy(name:str) -> tuple[int, tuple[str, ...]]|None:
-  if ".ffn_down.weight" in name: return 1, ("LOCAL:0:64",)
-  if getenv("Q6K_COVER_MORE", 1):
-    if ".attn_v.weight" in name: return 4, ("LOCAL:0:32",)
-    if name == "output.weight": return 1, ("LOCAL:0:64",)
-  return None
-
 def qk_policy_value(entry:dict) -> dict:
   cand = entry.get("candidate") or {}
   return {
@@ -252,9 +232,6 @@ def should_use_flash_decode(start_pos, T, use_flash:bool=False, getenv_fn=getenv
   except Exception: return False
   return ctx >= getenv_fn("FLASH_DECODE_THRESHOLD", 512)
 
-# Compatibility aliases used by existing tests and callers during the extraction.
-_q4k_policy = q4k_policy
-_q6k_policy = q6k_policy
 _qk_policy_value = qk_policy_value
 _load_qk_generated_policy = load_qk_generated_policy
 _qk_generated_policy_len = qk_generated_policy_len

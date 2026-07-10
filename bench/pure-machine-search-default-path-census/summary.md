@@ -15,7 +15,7 @@ Headline: 6 kernels on the default path are non-tinygrad-generated. 6 are machin
 | decode_flash_live_split_g4_8b_kvboth | decode | machine_authored_generated | yes | BoltBeam_route_policy_or_env_default | fp16 | bench/tg-p14-amd-recovery-and-pure-attention-landing/phase2_final_result.json | DECODE_LIVE_SPLIT=0 exits the live-split default; no manifest fallback route row remains |
 | decode_flash_block_tile_g5_konly | decode | machine_authored_generated | yes | BoltBeam_route_policy_or_env_default | fp16 | bench/gp-track/gp4_latest.json | DECODE_LIVE_SPLIT=0 exits the live-split default; no manifest fallback route row remains |
 | prefill_v2_scheduler_matmul_default | prefill | tinygrad_scheduler_generated | yes | env_default | Q4_K,Q6_K,fp16 | docs/pure-machine-search.md | PREFILL_GRAPH_GEMM=1 opts into prefill_pipe_role_selective_generated raw graph-GEMM research |
-| prefill_q4k_direct_tile4x4_default | prefill | machine_authored_generated | yes | env_default | Q4_K | docs/prefill-packed-generated-tile-scope-20260704.md | PREFILL_Q4K_DIRECT_SCHEDULE=legacy |
+| prefill_q4k_direct_tile4x4_default | prefill | machine_authored_generated | yes | env_default | Q4_K | docs/prefill-lessons-ledger.md | PREFILL_Q4K_DIRECT_SCHEDULE=legacy |
 | prefill_q6k_direct_generated | prefill | machine_authored_generated | yes | env_default | Q6_K | test/unit/test_q6k_prefill_route_spec.py + test/unit/test_llm_prefill_routes.py | PREFILL_Q6K_PACKED_LOAD=0 reaches the legacy non-packed debug path; no manifest default rollback remains |
 
 ## Fallback / reference / refuted / research routes (NOT default path)

@@ -6,7 +6,7 @@ from tinygrad.codegen.opt import Opt, OptOps
 from tinygrad.helpers import prod
 from tinygrad.llm.admission import (
   AUTO_MAX_CONTEXT, VRAM_ADMIT_FRACTION, detect_free_vram_bytes, detect_total_vram_bytes,
-  resolve_max_context_admission,
+  AdmissionInputs, plan_context_admission,
 )
 from tinygrad.llm.gguf import gguf_load, gguf_load_metadata, gguf_load_with_metadata
 from tinygrad.llm import route_ops as qk_ops
@@ -403,12 +403,12 @@ class TransformerBlock(FFNBlock):
 
   def _init_state(self, x:Tensor):
     if not hasattr(self, "cache_kv"):
-      # 8B generated decode attention was validated with fp16 K/V cache storage (TG-P14 KV_BOTH parity and roofline
-      # closeout). Keep this shape on fp16 so the generated tile reads the same cache dtype the promotion measured;
-      # other shapes keep the default dtype.
-      _generated_8b_supported = QK_AMD_GFX1100_ARCH_OK and x.shape[0] == 1 and self.config.n_heads == 32 \
+      # The promoted generated decode-attention shape was validated with fp16 K/V cache storage (TG-P14 KV_BOTH parity
+      # and roofline closeout). Keep that fact-defined shape on fp16 so the generated tile reads the same cache dtype
+      # the promotion measured; other shapes keep the default dtype.
+      _generated_decode_shape_supported = QK_AMD_GFX1100_ARCH_OK and x.shape[0] == 1 and self.config.n_heads == 32 \
         and self.config.n_kv_heads == 8 and self.config.head_dim == 128
-      _kv_dtype = dtypes.float16 if _generated_8b_supported else None
+      _kv_dtype = dtypes.float16 if _generated_decode_shape_supported else None
       # Admission guardrail (B5): assert the ACTUAL cache_kv bytes (with the real dtype) fit the admitted VRAM budget
       # before allocating -- converts a silent late OOM into a clear, actionable failure. O(1), no re-probe: the
       # admission report carries free/budget/weights so we re-derive the KV allowance and check this model's total KV.
@@ -705,7 +705,7 @@ class Transformer:
       # VRAM-frugal per-layer path: realize nothing up-front and store no `_pf16_w`; the layer TinyJit dequants to
       # replay-owned fp16 scratch that is reused across block tensor inputs.
       return 0
-    # preflight: realizing ~fp16-model-size on top of Q4_K OOMs for 14B/32B -> fail fast with the estimate.
+    # Preflight: realizing an fp16 overlay on top of Q4_K can exceed the configured VRAM budget; fail fast with the estimate.
     est_gb = prefill_v2_realize_bytes([(o, i) for _, o, i in covered]) / 1e9
     budget_gb = getenv("PREFILL_V2_MAX_REALIZE_GB", 18)
     has_direct_packed = any(is_direct_packed_prefill_linear(lin) for lin, _, _ in covered)
@@ -714,8 +714,8 @@ class Transformer:
       return 0
     if est_gb > budget_gb and not getenv("PREFILL_V2_FORCE_REALIZE", 0):
       raise RuntimeError(f"PREFILL_V2 would realize ~{est_gb:.1f} GB of fp16 weights (on top of Q4_K decode "
-                         f"storage), over the ~{budget_gb} GB budget -- likely OOM. This is 8B-sized work; for "
-                         f"larger models raise PREFILL_V2_MAX_REALIZE_GB, set PREFILL_V2_FORCE_REALIZE=1, use "
+                         f"storage), over the ~{budget_gb} GB budget -- likely OOM. To permit this overlay, raise "
+                         f"PREFILL_V2_MAX_REALIZE_GB, set PREFILL_V2_FORCE_REALIZE=1, use "
                          f"PREFILL_ROUTE=direct_packed, or use PREFILL_CHUNKED=1.")
     n = 0
     for lin, _, _ in covered:
@@ -797,7 +797,7 @@ class Transformer:
     if is_prefill_v2 and PREFILL_CHUNKED:
       if prefill_route_policy() == "chunked" and not getenv("PREFILL_CHUNKED_EXPERIMENTAL", 0):
         raise RuntimeError("PREFILL_ROUTE=chunked is disabled: the fp16 per-layer overlay can replay stale captured "
-                           "state and has produced AMD MMU faults. Use PREFILL_ROUTE=direct_packed for 14B/32B "
+                           "state and has produced AMD MMU faults. Use PREFILL_ROUTE=direct_packed for memory-frugal "
                            "prefill, or set PREFILL_CHUNKED_EXPERIMENTAL=1 to debug the overlay.")
       import tinygrad.codegen.opt.postrange as pr
       saved = pr._WARMSTART_OPTS
@@ -849,12 +849,18 @@ class Transformer:
     if (use_q4k_primitive or use_q6k_primitive or use_qk_generated_policy or use_qk_route_policy) and Device.DEFAULT != "AMD":
       raise ValueError(f"QK quant primitive paths (Q4K_PRIMITIVE/Q6K_PRIMITIVE/QK_GENERATED_POLICY/QK_ROUTE_POLICY) require "
                        f"DEV=AMD; the kernels are AMD-targeted. Got Device.DEFAULT={Device.DEFAULT!r}.")
-    # Auto-scan replaces the old hardcoded clamp: capture the request now (AUTO_MAX_CONTEXT/None -> auto, or an int).
-    # Path GGUFs can be admitted from header metadata before any full tensor realization; this is load-bearing for
-    # oversized models because gguf_load_with_metadata otherwise realizes the whole file on the default device first.
-    _requested_max_context, _admit_resolved = max_context, False
+    _requested_max_context, _admit_resolved, _ring_admitted = max_context, False, False
     _kv_quant = bool(getenv("DECODE_KV_QUANT", 0))   # default off; the tiered admission below may enable it
-    _ring_admitted = False                           # set by the admission ring tier (lossy streaming)
+    _admit_has_direct = (use_q4k_primitive or use_q6k_primitive or use_qk_generated_policy or use_qk_route_policy); _v2_should_auto = PREFILL_V2_AUTO or (PREFILL_SERVER_PROFILE and "PREFILL_V2" not in os.environ)
+    _cov = tuple(f"{n}.weight" for n in Transformer._PREFILL_V2_LINEARS)
+    def _print_admission(plan, kv_tag:str, cap_text:str):
+      admit = plan.report
+      print(f"max_context={admit['mode']} -> {plan.max_context} "
+            f"(free {admit.get('free_gb', float('nan')):.1f}GB, budget {admit.get('budget_gb', float('nan')):.1f}GB "
+            f"@{VRAM_ADMIT_FRACTION}, weights {admit.get('weights_gb', plan.weights/1e9):.1f}GB, "
+            f"KV{kv_tag} {admit.get('kv_gb_per_1k', plan.kv_per_tok*1000/1e9):.2f}GB/1k, "
+            f"prefill-peak {admit.get('prefill_gb_per_1k', plan.prefill_per_tok*1000/1e9):.2f}GB/1k, {cap_text})")
+      if admit.get("banner"): print(admit["banner"])
     if not isinstance(gguf, Tensor):
       _admit_kv, _admit_meta = gguf_load_metadata(gguf)
       _admit_arch = _admit_kv["general.architecture"]
@@ -865,52 +871,29 @@ class Transformer:
       num_blocks = _admit_kv[f"{_admit_arch}.block_count"] - _admit_kv.get(f"{_admit_arch}.nextn_predict_layers", 0)
       trained_ctx = _admit_kv[f"{_admit_arch}.context_length"]
       _q4_bytes = pathlib.Path(gguf).stat().st_size
-      _cov = tuple(f"{n}.weight" for n in Transformer._PREFILL_V2_LINEARS)
       _est_fp16 = sum(prod(dims) * 2 for name, dims, _, _ in _admit_meta["tensor_infos"] if any(name.endswith(s) for s in _cov))
-      _kv_per_tok = 2 * _admit_n_kv_heads * _admit_head_dim * 2 * num_blocks
-      _v2_should_auto = PREFILL_V2_AUTO or (PREFILL_SERVER_PROFILE and "PREFILL_V2" not in os.environ)
       _v2_reason = None
       if _v2_should_auto:
-        _v2_on, _v2_reason = prefill_v2_auto_decision(_total_vram, _est_fp16, _q4_bytes, _kv_per_tok * trained_ctx)
+        _kv_per_tok_auto = 2 * _admit_n_kv_heads * _admit_head_dim * 2 * num_blocks
+        _v2_on, _v2_reason = prefill_v2_auto_decision(_total_vram, _est_fp16, _q4_bytes, _kv_per_tok_auto * trained_ctx)
         _set_prefill_v2(_v2_on)
       else:
         _v2_on = PREFILL_V2
-      _admit_has_direct = (use_q4k_primitive or use_q6k_primitive or use_qk_generated_policy or use_qk_route_policy)
       _resident_fp16_admit = _v2_on and prefill_route_wants_resident_fp16(
         est_gb=_est_fp16 / 1e9, budget_gb=getenv("PREFILL_V2_MAX_REALIZE_GB", 18),
         has_direct_packed=_admit_has_direct, prefill_chunked=PREFILL_CHUNKED)
-      if _v2_on and PREFILL_CHUNKED:
-        # per-layer overlay: fp16 weights are replay scratch, not a resident copy. Reserve a few layer-sized overlays
-        # instead of the whole fp16 model. Tune with PREFILL_CHUNK_RESIDENT_BLOCKS.
-        _overlay_resident = (_est_fp16 // max(num_blocks, 1)) * getenv("PREFILL_CHUNK_RESIDENT_BLOCKS", 4)
-        _weights = _q4_bytes + _overlay_resident
-      else:
-        _weights = _q4_bytes + (_est_fp16 if _resident_fp16_admit else 0)
-      _prefill_per_tok = 4 * _admit_n_heads * PREFILL_UBATCH
-      _flash_scratch = _admit_n_heads * int(getenv("DECODE_LIVE_SPLIT_S", 48)) * (_admit_head_dim + 2) * 4
-      _model_label = f"{_admit_arch} ({_q4_bytes/1e9:.0f}GB Q4)"
-      # KV-quant tier available iff the decode live-split structural shape class holds (B=1 decode, Hd=128, Hkv=8,
-      # Hq%Hkv==0) -- the only route that dequants int8 KV in-register. scale_per_tok = per-(K|V,head) fp16 scale x blocks.
-      _kv_quant_shape = _admit_head_dim == 128 and _admit_n_kv_heads == 8 and _admit_n_heads % _admit_n_kv_heads == 0
-      _kv_quant_supported = _kv_quant_shape and not bool(getenv("DECODE_KV_QUANT_DISABLE", 0))
-      # ring tier needs the same live-split shape class AND full-head rope (rope_dim==head_dim; ring re-bases positions).
       _admit_rope_dim = _admit_kv.get(f"{_admit_arch}.rope.dimension_count", _admit_head_dim)
-      _ring_supported = _kv_quant_shape and _admit_rope_dim == _admit_head_dim
       _stream = str(getenv("STREAM", stream))
-      _scale_per_tok = 2 * _admit_n_kv_heads * 2 * num_blocks
-      max_context, _kv_quant, _admit = resolve_max_context_admission(
-        _requested_max_context, trained_ctx, _free_vram, _weights, _kv_per_tok, _prefill_per_tok, _flash_scratch,
-        _model_label, kv_quant_supported=_kv_quant_supported, scale_per_tok=_scale_per_tok,
-        stream=_stream, ring_supported=_ring_supported)
+      _plan = plan_context_admission(AdmissionInputs(
+        _requested_max_context, trained_ctx, _free_vram, _q4_bytes, _est_fp16, num_blocks, _admit_n_heads,
+        _admit_n_kv_heads, _admit_head_dim, PREFILL_UBATCH, _v2_on, _resident_fp16_admit, PREFILL_CHUNKED,
+        f"{_admit_arch} ({_q4_bytes/1e9:.0f}GB Q4)", stream=_stream, rope_dim=_admit_rope_dim, kv_quant_supported=True,
+        kv_quant_disabled=bool(getenv("DECODE_KV_QUANT_DISABLE", 0)), live_split_s=int(getenv("DECODE_LIVE_SPLIT_S", 48)),
+        chunk_resident_blocks=getenv("PREFILL_CHUNK_RESIDENT_BLOCKS", 4)))
+      max_context, _kv_quant, _admit = _plan.max_context, _plan.kv_quant, _plan.report
       if getenv("DECODE_KV_QUANT", -1) != -1: _kv_quant = bool(getenv("DECODE_KV_QUANT", 0))  # explicit override
       _ring_admitted = _admit.get("ring", False)
-      print(f"max_context={_admit['mode']} -> {max_context} "
-            f"(free {_admit.get('free_gb', float('nan')):.1f}GB, budget {_admit.get('budget_gb', float('nan')):.1f}GB "
-            f"@{VRAM_ADMIT_FRACTION}, weights {_admit.get('weights_gb', _weights/1e9):.1f}GB, "
-            f"KV{'(int8)' if _kv_quant else ''} {_admit.get('kv_gb_per_1k', _kv_per_tok*1000/1e9):.2f}GB/1k, "
-            f"prefill-peak {_admit.get('prefill_gb_per_1k', _prefill_per_tok*1000/1e9):.2f}GB/1k, "
-            f"trained {trained_ctx}, fp16-cap {_admit.get('mc_fp16', '-')}, q8-cap {_admit.get('mc_q8', '-')})")
-      if _admit.get("banner"): print(_admit["banner"])
+      _print_admission(_plan, "(int8)" if _kv_quant else "", f"trained {trained_ctx}, fp16-cap {_admit.get('mc_fp16', '-')}, q8-cap {_admit.get('mc_q8', '-')}")
       _admit_resolved = True
     if use_q4k_primitive or use_q6k_primitive or use_qk_generated_policy or use_qk_route_policy:
       kv, state_dict, q4k_meta = gguf_load_with_metadata(gguf)
@@ -939,46 +922,28 @@ class Transformer:
     rope_dim = kv.get(f'{arch}.rope.dimension_count', head_dim)
 
     if not _admit_resolved:
-      # Fallback for preloaded Tensor GGUF inputs, where no path header is available before load.
       num_blocks = kv[f'{arch}.block_count'] - kv.get(f'{arch}.nextn_predict_layers', 0)
       trained_ctx = kv[f'{arch}.context_length']
       _q4_bytes = pathlib.Path(gguf).stat().st_size if not isinstance(gguf, Tensor) else 0
-      _cov = tuple(f"{n}.weight" for n in Transformer._PREFILL_V2_LINEARS)
       _est_fp16 = sum(t.numel() * 2 for k, t in state_dict.items() if any(k.endswith(s) for s in _cov))
-      _kv_per_tok = 2 * n_kv_heads * head_dim * 2 * num_blocks
-      _v2_should_auto = PREFILL_V2_AUTO or (PREFILL_SERVER_PROFILE and "PREFILL_V2" not in os.environ)
       _v2_reason = None
       if _v2_should_auto:
-        _v2_on, _v2_reason = prefill_v2_auto_decision(_total_vram, _est_fp16, _q4_bytes, _kv_per_tok * trained_ctx)
+        _kv_per_tok_auto = 2 * n_kv_heads * head_dim * 2 * num_blocks
+        _v2_on, _v2_reason = prefill_v2_auto_decision(_total_vram, _est_fp16, _q4_bytes, _kv_per_tok_auto * trained_ctx)
         _set_prefill_v2(_v2_on)
       else:
         _v2_on = PREFILL_V2
-      _admit_has_direct = (use_q4k_primitive or use_q6k_primitive or use_qk_generated_policy or use_qk_route_policy)
       _resident_fp16_admit = _v2_on and prefill_route_wants_resident_fp16(
         est_gb=_est_fp16 / 1e9, budget_gb=getenv("PREFILL_V2_MAX_REALIZE_GB", 18),
         has_direct_packed=_admit_has_direct, prefill_chunked=PREFILL_CHUNKED)
-      if _v2_on and PREFILL_CHUNKED:
-        # per-layer overlay: fp16 weights are replay scratch, not a resident copy. Reserve a few layer-sized overlays
-        # instead of the whole fp16 model. Tune with PREFILL_CHUNK_RESIDENT_BLOCKS.
-        _overlay_resident = (_est_fp16 // max(num_blocks, 1)) * getenv("PREFILL_CHUNK_RESIDENT_BLOCKS", 4)
-        _weights = _q4_bytes + _overlay_resident
-      else:
-        _weights = _q4_bytes + (_est_fp16 if _resident_fp16_admit else 0)
-      _prefill_per_tok = 4 * n_heads * PREFILL_UBATCH
-      _flash_scratch = n_heads * int(getenv("DECODE_LIVE_SPLIT_S", 48)) * (head_dim + 2) * 4
-      _model_label = f"{arch} ({_q4_bytes/1e9:.0f}GB Q4)"
-      _ring_supported = (head_dim == 128 and n_kv_heads == 8 and n_heads % n_kv_heads == 0 and rope_dim == head_dim)
-      max_context, _kv_quant, _admit = resolve_max_context_admission(_requested_max_context, trained_ctx, _free_vram, _weights,
-                                                                     _kv_per_tok, _prefill_per_tok, _flash_scratch, _model_label,
-                                                                     stream=str(getenv("STREAM", stream)), ring_supported=_ring_supported)
+      _plan = plan_context_admission(AdmissionInputs(
+        _requested_max_context, trained_ctx, _free_vram, _q4_bytes, _est_fp16, num_blocks, n_heads, n_kv_heads, head_dim,
+        PREFILL_UBATCH, _v2_on, _resident_fp16_admit, PREFILL_CHUNKED, f"{arch} ({_q4_bytes/1e9:.0f}GB Q4)",
+        stream=str(getenv("STREAM", stream)), rope_dim=rope_dim, live_split_s=int(getenv("DECODE_LIVE_SPLIT_S", 48)),
+        chunk_resident_blocks=getenv("PREFILL_CHUNK_RESIDENT_BLOCKS", 4)))
+      max_context, _kv_quant, _admit = _plan.max_context, _plan.kv_quant, _plan.report
       _ring_admitted = _admit.get("ring", False)
-      print(f"max_context={_admit['mode']} -> {max_context} "
-            f"(free {_admit.get('free_gb', float('nan')):.1f}GB, budget {_admit.get('budget_gb', float('nan')):.1f}GB "
-            f"@{VRAM_ADMIT_FRACTION}, weights {_admit.get('weights_gb', _weights/1e9):.1f}GB, "
-            f"KV {_admit.get('kv_gb_per_1k', _kv_per_tok*1000/1e9):.2f}GB/1k, "
-            f"prefill-peak {_admit.get('prefill_gb_per_1k', _prefill_per_tok*1000/1e9):.2f}GB/1k, "
-            f"trained {trained_ctx}, mem-cap {_admit.get('mc_mem', '-')})")
-      if _admit.get("banner"): print(_admit["banner"])
+      _print_admission(_plan, "", f"trained {trained_ctx}, mem-cap {_admit.get('mc_mem', '-')}")
 
     # Permute RoPE weights from interleaved to half-split layout.
     for name in state_dict:
@@ -1057,7 +1022,8 @@ class Transformer:
       model_facts = model_facts_from_gguf_metadata(kv, q4k_meta)
       route_plan = build_model_route_plan(q4k_meta, model_facts)
       # auto-enabled primitives default to `shared` storage (view the GGUF in place, storage_bytes=0) so
-      # large models (e.g. 32B) stay within VRAM; explicit Q4K_PRIMITIVE keeps `sidecar`; env always wins.
+      # quantized models with large resident weight sets stay within VRAM; explicit Q4K_PRIMITIVE keeps `sidecar`;
+      # env always wins.
       qk_cfg = QKConfig.from_env(storage_default="shared" if q4k_auto else "sidecar")
       primitive_linears = []
       primitive_budget = QKPrimitiveBudget(qk_cfg.max_storage_bytes, qk_cfg.generated_policy_strict)
