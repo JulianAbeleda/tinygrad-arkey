@@ -627,9 +627,11 @@ def _tc_local_stage_b_src(src:UOp, fallback:tuple[UOp, ...]) -> UOp:
   owned_b_emit = str(getenv("PREFILL_DBUF_OWNED_B_STAGE_EMIT", "")).strip().lower()
   if getenv("PREFILL_DBUF_OWNED_B_STAGE_IDENTITY", 0) and owned_b_emit in ("", "0", "false", "off", "no"):
     owned_b_emit = "identity"
-  if owned_b_emit in ("identity", "audit", "object_identity", "rotate", "rotated"):
+  # Failed probe: compiles at full lowering but over-pressures native ISA regalloc and collapses the target WMMA count.
+  rotate_materialize = owned_b_emit in ("rotate", "rotated") and getenv("PREFILL_DBUF_OWNED_B_STAGE_ROTATE_MATERIALIZE", 0)
+  if owned_b_emit in ("identity", "audit", "object_identity", "rotate", "rotated") and not rotate_materialize:
     return OwnedBStageEmitter(owned_b_emit, src, fallback).emit()
-  if owned_b_emit not in ("", "0", "false", "off", "no"):
+  if owned_b_emit not in ("", "0", "false", "off", "no", "rotate", "rotated"):
     raise KernelOptError(f"unknown PREFILL_DBUF_OWNED_B_STAGE_EMIT={owned_b_emit!r}; expected identity, object_identity, or rotate")
   if not getenv("PREFILL_TC_LOCAL_STAGE_B_TILEKEY", 0): return _fallback("flag_disabled")
   if not _tc_local_stage_with_planned_local(): return _fallback("planned_local_disabled")
@@ -647,7 +649,7 @@ def _tc_local_stage_b_src(src:UOp, fallback:tuple[UOp, ...]) -> UOp:
   if not tile_ranges: return _fallback("missing_global_tile_ranges")
   stage_loop_ranges = tile_ranges
   tile_count = prod(r.vmax+1 for r in tile_ranges)
-  if tile_count > 64 and getenv("PREFILL_TC_LOCAL_STAGE_B_TILEKEY_DROP_GLOBAL", 0):
+  if tile_count > 64 and (getenv("PREFILL_TC_LOCAL_STAGE_B_TILEKEY_DROP_GLOBAL", 0) or rotate_materialize):
     # Active prefill has a large N tile loop. Staging all N tiles as one resident LDS object is not viable;
     # stage the current loop instance and let the surrounding global loop reuse the same LDS window.
     tile_ranges = ()
@@ -670,17 +672,37 @@ def _tc_local_stage_b_src(src:UOp, fallback:tuple[UOp, ...]) -> UOp:
   row = lane if generic_layout else lane & 15
   slot = ((kr % nbuf) * tile_count + tile_idx) * layout_elems if kr is not None and not generic_no_slot else tile_idx * layout_elems
   gate = UOp.const(dtypes.bool, True) if generic_layout else lane < 16
+  if rotate_materialize:
+    if kr is None or generic_no_slot:
+      raise KernelOptError("PREFILL_DBUF owned B rotate materializer requires DBUF reduce slot carrier")
+    if tile_count != 1 or generic_layout:
+      raise KernelOptError("PREFILL_DBUF owned B rotate materializer currently requires non-generic tile_count=1 layout")
+    kr_end = kr.src[0]
+    current_gate = gate & (kr == 0)
+    future_gate = gate & (kr < (kr_end - 1))
+    future_kr = (kr + 1).valid(kr < (kr_end - 1))
+    future_src = src.substitute({kr: future_kr}, walk=True)
+    future_slot = (((kr + 1) % nbuf) * tile_count + tile_idx) * layout_elems
   def slot_idx(i:int|UOp) -> UOp:
     if generic_layout:
       assert local_lane is not None
       return slot + (row*2 + local_lane)*128 + i
     return slot + row*16 + i
+  def future_slot_idx(i:int|UOp) -> UOp:
+    return future_slot + row*16 + i
   stores: list[UOp] = []
   prev_store: UOp|None = None
   for i in range(16):
-    st = bsh.index(slot_idx(i), dtype=bsh.dtype).store(src.gep(i), gate)
-    stores.append(st.end())
-    prev_store = st
+    if rotate_materialize:
+      st0 = bsh.index(slot_idx(i), dtype=bsh.dtype).store(src.gep(i), current_gate)
+      stores.append(st0.end())
+      st1 = bsh.index(future_slot_idx(i), dtype=bsh.dtype).store(future_src.gep(i), future_gate)
+      stores.append(st1.end())
+      prev_store = st1
+    else:
+      st = bsh.index(slot_idx(i), dtype=bsh.dtype).store(src.gep(i), gate)
+      stores.append(st.end())
+      prev_store = st
   stage = UOp.group(*stores).end(*stage_loop_ranges)
   bar = UOp.barrier(stage)
   range_by_axis = {r.arg[0]: r for r in src.src[0].ranges if r.op is Ops.RANGE}

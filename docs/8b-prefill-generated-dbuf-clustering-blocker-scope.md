@@ -552,6 +552,66 @@ guard: fail if B_ROTATE reaches generic STAGE lowering unmaterialized
 audit: record owner fields and exact lowered boundary
 ```
 
+P2 probe result:
+
+```text
+PREFILL_DBUF_OWNED_B_STAGE_ROTATE_MATERIALIZE=1
+```
+
+Attempted implementation:
+
+```text
+reuse B tile-key layout
+emit current slot only for kr==0
+emit future slot for kr+1 when kr < K-1
+guard future value with valid(kr < K-1)
+drop the large GLOBAL tile loop for this owned materializer
+```
+
+What it proved:
+
+```text
+full lowering can represent the guarded future-store graph
+rangeify no longer sees an unmaterialized B_ROTATE STAGE
+```
+
+Why it is not the fix:
+
+```text
+native ISA trace fails during allocation:
+  NotImplementedError: Inc 0: no spills
+
+full-boundary audit also shows the materialized graph has only 8 WMMA where the bounded 2x2 target expects 16.
+```
+
+Pressure-reduction test:
+
+```text
+PREFILL_LDS_PACK_CARRIER=1
+```
+
+Result:
+
+```text
+still fails native ISA allocation with NotImplementedError: Inc 0: no spills
+```
+
+Conclusion:
+
+```text
+The simple guarded future-store materializer is not viable. It creates too much live producer pressure and perturbs the
+WMMA grouping before the K-major phase can recover it.
+```
+
+Next viable P2 shape:
+
+```text
+build the materializer at the K-major phase boundary, where B fragments are already grouped into the WMMA cluster,
+or introduce an explicit stage pseudo that survives until K-major lowering.
+```
+
+Do not promote `PREFILL_DBUF_OWNED_B_STAGE_ROTATE_MATERIALIZE`; it is a default-off failed probe.
+
 ### P3. A+B Owned Materializer
 
 Extend P2 to A and B only after B-only is correct.
