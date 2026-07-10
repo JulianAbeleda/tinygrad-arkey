@@ -135,3 +135,41 @@ def test_route_binding_gate_marks_dbuf_flags_on_pipe_only_route(monkeypatch):
   assert gate["verdict"] == "PREFILL_ROUTE_BINDING_FAIL"
   assert gate["lds_dbuf_requested"] is True
   assert any("pipe-only" in failure for failure in gate["failures"])
+
+
+def test_measurement_regime_names_generated_vs_hand_regimes():
+  gen = whole.measurement_regime({"route_attribution": {"prefill_route_provenance": "tinygrad_scheduler_generated"}})
+  hand = whole.measurement_regime({"route_attribution": {"prefill_route_provenance": "external_handwritten_kernel"}})
+  assert gen["regime_id"] == "generated_pure"
+  assert gen["authoritative_for_generated_promotion"] is True
+  assert hand["regime_id"] == "hand_external_reference"
+  assert hand["authoritative_for_generated_promotion"] is False
+
+
+def test_reproducibility_band_flags_single_sample_and_computes_cv():
+  single = whole.reproducibility_band({"0": [4354.14]})
+  assert single["single_sample"] is True
+  multi = whole.reproducibility_band({"0": [100.0, 102.0, 98.0]})
+  assert multi["single_sample"] is False
+  assert multi["worst_cv"] > 0.0
+  assert multi["per_chunk"]["0"]["n"] == 3
+
+
+def test_authority_completeness_gate_refuses_without_checklist_fields():
+  bare = whole.authority_completeness_gate({"reproducibility_band": {"single_sample": True}})
+  assert bare["ok"] is False
+  assert set(bare["missing"]) == {
+    "comparator_id", "reproducibility_band", "candidate_id", "primitive_class", "threshold",
+    "ledger", "quality_gate_pass",
+  }
+
+
+def test_authority_completeness_gate_passes_with_full_checklist():
+  full = whole.authority_completeness_gate({
+    "comparator_id": "baseline-after-s10", "candidate_id": "cand-1", "primitive_class": "generated_pure",
+    "threshold": {"pp512_min": 1629}, "ledger": "docs/ledger.md",
+    "reproducibility_band": {"single_sample": False, "worst_cv": 0.01},
+    "quality_gate": {"status": "PASS"},
+  })
+  assert full["ok"] is True
+  assert full["missing"] == []

@@ -91,6 +91,73 @@ def _enabled(env: dict[str, Any], key: str) -> bool:
   return str(env.get(key, "0")).strip().lower() not in ("", "0", "false", "off", "no")
 
 
+# Route provenance -> named measurement regime (F2). The prefill-whole-synced-authority schema is reused for THREE
+# incomparable regimes: the pure tinygrad-generated scheduler path, the S10 compiler-primitive spec-owned hybrid,
+# and the external hand-written kernel reference. They differ ~2.7x in pp512 and MUST NOT be compared across regimes.
+REGIME_BY_PROVENANCE = {
+  "tinygrad_scheduler_generated": "generated_pure",
+  "machine_authored_generated": "generated_pure",
+  "compiler_primitive_spec_owned": "spec_owned_hybrid",
+  "external_handwritten_kernel": "hand_external_reference",
+  "rollback_oracle": "hand_external_reference",
+}
+
+
+def measurement_regime(report: dict[str, Any]) -> dict[str, Any]:
+  ra = report.get("route_attribution") or {}
+  prov = ra.get("prefill_route_provenance")
+  regime_id = REGIME_BY_PROVENANCE.get(prov, "unknown")
+  chunked = str(report.get("prefill_chunked", "")).strip().lower() not in ("", "0", "false", "off", "no")
+  return {
+    "regime_id": regime_id,
+    "provenance": prov,
+    "route_pure": ra.get("prefill_route_pure"),
+    "route_rolled_back": ra.get("prefill_route_rolled_back"),
+    "mode": report.get("mode"),
+    "logits_only": report.get("logits_only"),
+    "chunked": chunked,
+    # only the pure generated regime is authoritative for the generated-route promotion question
+    "authoritative_for_generated_promotion": regime_id == "generated_pure",
+  }
+
+
+def reproducibility_band(chunk_samples_ms: dict[Any, list[float]]) -> dict[str, Any]:
+  """Compute per-chunk spread/CV from the raw burst samples (F4). Single-sample runs cannot form a band."""
+  import statistics
+  per: dict[str, Any] = {}
+  worst_cv = worst_spread = 0.0
+  for k, samples in (chunk_samples_ms or {}).items():
+    vals = [float(x) for x in samples if x is not None]
+    if not vals: continue
+    mn, mx, mean = min(vals), max(vals), sum(vals) / len(vals)
+    std = statistics.pstdev(vals) if len(vals) > 1 else 0.0
+    cv = std / mean if mean else 0.0
+    spread = (mx - mn) / mn if mn else 0.0
+    per[str(k)] = {"n": len(vals), "min_ms": round(mn, 4), "max_ms": round(mx, 4), "mean_ms": round(mean, 4),
+                   "std_ms": round(std, 4), "cv": round(cv, 5), "spread": round(spread, 5)}
+    worst_cv, worst_spread = max(worst_cv, cv), max(worst_spread, spread)
+  return {"per_chunk": per, "worst_cv": round(worst_cv, 5), "worst_spread": round(worst_spread, 5),
+          "single_sample": (not per) or all(v["n"] < 2 for v in per.values())}
+
+
+def authority_completeness_gate(report: dict[str, Any], *, quality_gate: dict[str, Any] | None = None) -> dict[str, Any]:
+  """Refuse to call a report mode:"authority" without the valid-benchmark-artifact checklist fields (F3/F4)."""
+  band = report.get("reproducibility_band") or {}
+  qg = quality_gate if quality_gate is not None else (report.get("quality_gate") or {"status": "MISSING"})
+  fields = {
+    "comparator_id": bool(report.get("comparator_id")),
+    "reproducibility_band": bool(band) and not band.get("single_sample", True),
+    "candidate_id": bool(report.get("candidate_id")),
+    "primitive_class": bool(report.get("primitive_class")),
+    "threshold": report.get("threshold") is not None,
+    "ledger": bool(report.get("ledger")),
+    "quality_gate_pass": qg.get("status") == "PASS",
+  }
+  missing = [k for k, v in fields.items() if not v]
+  return {"schema": "prefill-whole-synced-authority-completeness.v1", "fields": fields,
+          "missing": missing, "ok": not missing}
+
+
 def _prefill_role_routes(route_id: str) -> dict[str, str]:
   if route_id == PREFILL_WMMA_PIPE_LDS_DBUF_ROUTE:
     return dict(PREFILL_ROLE_ROUTES_PIPE_LDS_DBUF)
@@ -176,7 +243,10 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
                       K: int = 8, max_context: int = 4608, warmups: int = 4, rounds: int = 3,
                       mode: str = "authority", pin_clock: bool = False, verbose: bool = True,
                       logits_only: bool = False, require_generated_pipe: bool = False,
-                      require_route: str | None = None) -> dict[str, Any]:
+                      require_route: str | None = None, comparator_id: str | None = None,
+                      candidate_id: str | None = None, primitive_class: str | None = None,
+                      threshold: dict[str, Any] | None = None, ledger: str | None = None,
+                      quality_gate: dict[str, Any] | None = None) -> dict[str, Any]:
   if K < 1 or warmups < 0 or rounds < 1: raise ValueError("K >= 1, warmups >= 0, and rounds >= 1 are required")
   os.environ.setdefault("PREFILL_V2", "1")
   if pin_clock: set_clock_pin_env(os.environ, True)
@@ -266,7 +336,27 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
     "route_attribution": route_attr,
     "prefill_role_routes": _prefill_role_routes(str(route_attr.get("prefill_route_family", ""))),
     "timing_authority": "synced model.__call__ prefill-v2 warmstart path, min over repeated bursts, no generate TTFT/sampling",
+    # valid-benchmark-artifact checklist fields (F3/F4). None/MISSING here means the completeness gate
+    # below refuses to stamp mode:"authority" -- honesty over invention.
+    "comparator_id": comparator_id,
+    "candidate_id": candidate_id,
+    "primitive_class": primitive_class,
+    "threshold": threshold,
+    "ledger": ledger,
+    "quality_gate": quality_gate if quality_gate is not None else {
+      "status": "MISSING",
+      "note": "no whole-model dNLL/greedy-parity quality gate supplied; supply --quality-gate to promote (F3)",
+    },
+    "reproducibility_band": reproducibility_band({str(k): row["samples_ms"] for k, row in chunk_rows.items()}),
   }
+  report["measurement_regime"] = measurement_regime(report)
+  completeness = authority_completeness_gate(report, quality_gate=quality_gate)
+  report["authority_completeness"] = completeness
+  if mode == "authority" and not completeness["ok"]:
+    # Refuse to leak "authority": downgrade the stamped mode and record exactly what is missing.
+    report["mode"] = "authority_incomplete"
+    report["authority_blocked_reason"] = ("refusing mode:authority; missing required fields: "
+                                          + ", ".join(completeness["missing"]))
   binding_gate = route_binding_gate(report, require_route)
   report["prefill_route_binding_gate"] = binding_gate
   if require_route and binding_gate["failures"]:
@@ -300,6 +390,12 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
                   help="fail if route attribution is not prefill_wmma_pipe_primitive_generated/pure/not rolled back")
   ap.add_argument("--require-route", default="",
                   help="fail unless prefill GEMM route attribution equals this effective route id")
+  ap.add_argument("--comparator-id", default="", help="id of the same-regime current-default comparator (F4)")
+  ap.add_argument("--candidate-id", default="", help="candidate id for this measurement (F4)")
+  ap.add_argument("--primitive-class", default="", help="primitive class of the candidate route (F4)")
+  ap.add_argument("--threshold", default="", help="explicit pass/fail threshold as inline JSON, e.g. '{\"pp512_min\":1629}' (F4)")
+  ap.add_argument("--ledger", default="", help="path/URL to the ledger/refutation record for this candidate (F4)")
+  ap.add_argument("--quality-gate", default="", help="path to a whole-model quality/correctness gate JSON with a 'status' field (F3)")
   add_clock_pin_arg(ap)
   args = ap.parse_args(argv)
   if args.path1_mvp:
@@ -315,12 +411,20 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
     whole_lengths=csv_ints(args.whole_lengths) if args.whole_lengths else None,
     max_context=args.max_context,
   )
+  threshold = None
+  if args.threshold:
+    try: threshold = json.loads(args.threshold)
+    except json.JSONDecodeError: threshold = {"raw": args.threshold}
+  quality_gate = json.loads(pathlib.Path(args.quality_gate).read_text()) if args.quality_gate else None
   report = prefill_authority(model_path=args.model, K=profile.K, warmups=profile.warmups, rounds=profile.rounds,
                              start_positions=profile.start_positions, whole_lengths=profile.whole_lengths,
                              chunk_n=profile.chunk_n, max_context=profile.max_context, mode=profile.mode,
                              pin_clock=args.pin_clock, logits_only=args.logits_only,
                              require_generated_pipe=args.require_generated_pipe,
-                             require_route=args.require_route or None)
+                             require_route=args.require_route or None,
+                             comparator_id=args.comparator_id or None, candidate_id=args.candidate_id or None,
+                             primitive_class=args.primitive_class or None, threshold=threshold,
+                             ledger=args.ledger or None, quality_gate=quality_gate)
   if not args.no_artifact:
     out = pathlib.Path(args.artifact) if args.artifact else ARTIFACT_DIR / "latest.json"
     if not out.is_absolute(): out = ROOT / out

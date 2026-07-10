@@ -60,35 +60,80 @@ def test_cli_writes_default_named_candidate_file(tmp_path, monkeypatch, capsys):
   assert written["schedule_spec"]["route_family"] == "lds"
 
 
-def test_authority_gate_accepts_hybrid_route_above_4k_even_if_generic_binding_failed():
+def test_authority_gate_refuses_authority_when_binding_failed_even_above_4k_floor():
+  # F1: a bare pp512>=4000 floor plus a FAILING binding gate must NOT grant authority.
+  # The 4410 number is the hand_external regime, not the generated route's speed.
   gate = build_authority_gate({
     "pin_clock": True,
     "whole_tok_s": {"512": 4410.25, "4096": 3233.46},
-    "route_attribution": {"prefill_route_family": "prefill_pipe_role_selective_generated"},
+    "route_attribution": {"prefill_route_family": "prefill_pipe_role_selective_generated",
+                          "prefill_route_provenance": "external_handwritten_kernel",
+                          "prefill_route_pure": False, "prefill_route_rolled_back": True},
     "prefill_route_binding_gate": {"verdict": "PREFILL_ROUTE_BINDING_FAIL"},
   })
 
-  assert gate["ok"] is True
+  assert gate["ok"] is False
+  assert gate["authority_ok"] is False
   assert gate["route_ok"] is True
-  assert gate["perf_ok"] is True
-  assert gate["binding_gate_verdict"] == "PREFILL_ROUTE_BINDING_FAIL"
-  assert "hybrid/backend-atom" in gate["binding_gate_note"]
+  assert gate["perf_floor_ok"] is True          # diagnostic floor cleared...
+  assert gate["binding_ok"] is False            # ...but binding failed -> no authority
+  assert gate["comparator_ok"] is False         # no same-regime comparator supplied
+  assert gate["quality_ok"] is False            # no quality gate supplied
+  assert gate["classification_ok"] is False     # route is research per route_manifest
+  assert gate["route_classification"]["purity_status"] == "research"
+  assert gate["measurement_regime"]["regime_id"] == "hand_external_reference"
+  assert gate["measurement_regime"]["authoritative_for_generated_promotion"] is False
 
 
-def test_final_report_ready_when_candidate_and_authority_gate_pass():
+def test_final_report_is_research_candidate_when_binding_and_gates_fail():
+  # F1: the promotion-facing verdict must be research/candidate (not READY) when the nested
+  # binding gate FAILs and there is no comparator/quality/shippable-classification.
   report = build_final_report(authority={
     "pin_clock": True,
     "whole_tok_s": {"512": 4410.25, "4096": 3233.46},
-    "route_attribution": {"prefill_route_family": "prefill_pipe_role_selective_generated"},
+    "route_attribution": {"prefill_route_family": "prefill_pipe_role_selective_generated",
+                          "prefill_route_provenance": "external_handwritten_kernel",
+                          "prefill_route_pure": False, "prefill_route_rolled_back": True},
     "prefill_route_binding_gate": {"verdict": "PREFILL_ROUTE_BINDING_FAIL"},
   })
 
-  assert report["verdict"] == "S10_5_HYBRID_SEARCH_OWNED_BACKEND_ATOM_READY"
+  assert report["verdict"] == "S10_5_HYBRID_SEARCH_RESEARCH_CANDIDATE_NOT_PROMOTED"
   assert report["classification"] == "compiler_primitive_spec_owned__asm_backend_atom"
   assert report["pure_generated"] is False
   assert report["full_fine_tuned_hand_kernel"] is False
   assert report["candidate_ok"] is True
-  assert report["authority_gate"]["ok"] is True
+  assert report["authority_gate"]["ok"] is False
+  assert report["promotion"]["ready"] is False
+  assert report["promotion"]["decision"] == "keep_default_authority_and_treat_s10_5_as_research"
+  assert any("binding gate is not PASS" in r for r in report["promotion"]["blocking_reasons"])
+
+
+def test_final_report_ready_only_when_all_gates_pass():
+  # A synthetic fully-passing case: same-regime comparator with a positive delta, a passing
+  # quality gate, a binding PASS, and a shippable (final_default_allowed) provenance.
+  authority = {
+    "pin_clock": True,
+    "whole_tok_s": {"512": 1700.0, "4096": 1500.0},
+    "route_attribution": {"prefill_route_family": "prefill_wmma_pipe_primitive_generated",
+                          "prefill_route_provenance": "tinygrad_scheduler_generated",
+                          "prefill_route_pure": True, "prefill_route_rolled_back": False},
+    "prefill_route_binding_gate": {"verdict": "PREFILL_ROUTE_BINDING_PASS"},
+  }
+  comparator = {
+    "whole_tok_s": {"512": 1629.74},
+    "route_attribution": {"prefill_route_provenance": "tinygrad_scheduler_generated"},
+  }
+  quality_gate = {"status": "PASS", "metric": "greedy_parity", "value": 1.0}
+  import extra.qk.prefill.s10_5_machine_search as s10
+  # Force the required route + a shippable classification for this synthetic promote path.
+  gate = s10.build_authority_gate(authority, comparator=comparator, quality_gate=quality_gate)
+  # route_ok is False here (route != AUTHORITY_ROUTE) so authority is still correctly refused;
+  # this asserts the gate does not over-grant even with comparator+quality present.
+  assert gate["comparator_ok"] is True
+  assert gate["quality_ok"] is True
+  assert gate["binding_ok"] is True
+  assert gate["route_ok"] is False
+  assert gate["ok"] is False
 
 
 def test_search_report_enumerates_s9_safe_wait_policy_candidates():

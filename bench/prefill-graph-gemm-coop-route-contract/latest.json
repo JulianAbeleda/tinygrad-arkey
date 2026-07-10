@@ -6,18 +6,41 @@
   "required_evidence": {
     "custom_coop_partition_probe_pass": true,
     "medium_gate_has_b_tile_operand_stage": true,
-    "medium_b_tile_operand_stage_beats_baseline": false,
+    "medium_b_tile_operand_stage_beats_baseline": true,
     "medium_gate_defines_route_bound_coop_partition_case": true,
     "medium_gate_route_bound_coop_partition_executes": true,
+    "route_bound_coop_partition_rewrite_applied": false,
+    "route_bound_coop_partition_tflops_beats_baseline": true,
     "route_bound_coop_partition_beats_baseline": false
   },
   "artifacts": {
     "coop_partition": "bench/prefill-graph-gemm-coop-partition/latest.json",
     "medium_stage": "bench/prefill-graph-gemm-medium-stage/latest.json",
-    "baseline_tflops": 35.71,
-    "post_tile_b_tflops": 35.78,
+    "baseline_tflops": 14.91,
+    "post_tile_b_tflops": 35.09,
     "route_bound_coop_status": "ok",
-    "route_bound_coop_tflops": 26.96
+    "route_bound_coop_tflops": 26.87,
+    "route_bound_coop_stage_stats": {
+      "seen": 1,
+      "skipped": 1,
+      "rewritten": 0,
+      "skip_payloads": [
+        {
+          "reason": "unsupported_tile_loop_range_type",
+          "warp": {
+            "arg": "(-1, AxisType.WARP)",
+            "size": 32
+          },
+          "unsupported_ranges": [
+            {
+              "arg": "(2, AxisType.GLOBAL)",
+              "size": 64
+            }
+          ]
+        }
+      ],
+      "rewrite_payloads": []
+    }
   },
-  "remaining_blocker": "custom cooperative B-tile partition is proven, but the warmstart TC route-bound cooperative case executes without beating baseline"
+  "remaining_blocker": "custom cooperative B-tile partition is proven, but the warmstart TC route-bound cooperative case beats baseline on tflops while the cooperative-B rewrite is SKIPPED (rewritten=0/skipped>0) -- proxy win, not a bound coop partition"
 }

@@ -217,17 +217,113 @@ def write_search_report(path: pathlib.Path = DEFAULT_SEARCH_OUTPUT, *, active_bu
   return report
 
 
-def build_authority_gate(authority: dict[str, Any]) -> dict[str, Any]:
+def _as_float(v: Any) -> float:
+  try: return float(v)
+  except (TypeError, ValueError): return float("nan")
+
+
+def measurement_regime(authority: dict[str, Any]) -> dict[str, Any]:
+  """Name the measurement regime of a whole-synced authority artifact (F2).
+
+  The `prefill-whole-synced-authority.v1` schema is reused for THREE incomparable
+  regimes distinguished by route provenance: the pure tinygrad-generated scheduler
+  path (~1.6k tok/s pp512), the S10 compiler-primitive spec-owned hybrid path
+  (~1.5k), and the external hand-written kernel reference (~4.4k). Only the pure
+  generated regime is authoritative for the generated-route promotion question;
+  the hand-external number is an aspirational ceiling, NOT this route's speed.
+  Cross-regime comparison is forbidden by the comparator check below.
+  """
+  ra = authority.get("route_attribution") or {}
+  prov = ra.get("prefill_route_provenance")
+  regime_id = {
+    "tinygrad_scheduler_generated": "generated_pure",
+    "machine_authored_generated": "generated_pure",
+    "compiler_primitive_spec_owned": "spec_owned_hybrid",
+    "external_handwritten_kernel": "hand_external_reference",
+    "rollback_oracle": "hand_external_reference",
+  }.get(prov, "unknown")
+  chunked = str(authority.get("prefill_chunked", "")).strip().lower() not in ("", "0", "false", "off", "no")
+  return {
+    "regime_id": regime_id,
+    "provenance": prov,
+    "route_pure": ra.get("prefill_route_pure"),
+    "route_rolled_back": ra.get("prefill_route_rolled_back"),
+    "mode": authority.get("mode"),
+    "logits_only": authority.get("logits_only"),
+    "chunked": chunked,
+    # only the pure generated regime may be cited as the generated route's promotion authority
+    "authoritative_for_generated_promotion": regime_id == "generated_pure",
+  }
+
+
+def _route_classification(route: str | None) -> dict[str, Any]:
+  """Authoritative shipped/research classification, sourced from route_manifest (read-only)."""
+  try:
+    from extra.qk import route_manifest as rm
+    r = rm.route(route)
+    prov, status = r.get("provenance"), r.get("status")
+    return {
+      "route_id": route, "status": status, "provenance": prov,
+      "purity_status": rm.derive_purity_status(status, prov),
+      "final_default_allowed": prov in rm.FINAL_DEFAULT_PROVENANCE,
+      "source": "extra/qk/route_manifest.py",
+    }
+  except Exception as e:
+    return {"route_id": route, "status": None, "provenance": None, "purity_status": "unknown",
+            "final_default_allowed": False, "error": f"{type(e).__name__}: {e}"}
+
+
+def _comparator_delta(authority: dict[str, Any], comparator: dict[str, Any] | None,
+                      cand_regime: dict[str, Any]) -> dict[str, Any]:
+  """Same-regime comparator vs the current default (F1b). A bare floor is NOT a comparator."""
+  if comparator is None:
+    return {"status": "MISSING", "ok": False,
+            "note": "no same-regime current-default comparator supplied; the bare pp512>=floor is a "
+                    "diagnostic, not a comparator delta (F1b) -> authority refused"}
+  comp_regime = measurement_regime(comparator)
+  cand_pp512 = _as_float((authority.get("whole_tok_s") or {}).get("512"))
+  base_pp512 = _as_float((comparator.get("whole_tok_s") or {}).get("512"))
+  same_regime = cand_regime["regime_id"] == comp_regime["regime_id"]
+  delta = None
+  if base_pp512 == base_pp512 and base_pp512 != 0 and cand_pp512 == cand_pp512:
+    delta = round((cand_pp512 - base_pp512) / base_pp512 * 100.0, 2)
+  ok = bool(same_regime and delta is not None and delta >= 0.0)
+  return {
+    "status": "OK" if same_regime else "CROSS_REGIME_FORBIDDEN",
+    "candidate_regime": cand_regime["regime_id"], "comparator_regime": comp_regime["regime_id"],
+    "candidate_pp512": None if cand_pp512 != cand_pp512 else cand_pp512,
+    "comparator_pp512": None if base_pp512 != base_pp512 else base_pp512,
+    "delta_pct": delta, "same_regime": same_regime, "ok": ok,
+    "note": None if same_regime else
+            f"candidate regime {cand_regime['regime_id']!r} != comparator regime {comp_regime['regime_id']!r}; "
+            "cross-regime pp512 comparison is forbidden (F2)",
+  }
+
+
+def build_authority_gate(authority: dict[str, Any], *, comparator: dict[str, Any] | None = None,
+                         quality_gate: dict[str, Any] | None = None) -> dict[str, Any]:
   route = (authority.get("route_attribution") or {}).get("prefill_route_family")
   whole = authority.get("whole_tok_s") or {}
-  pp512 = whole.get("512")
-  pp4096 = whole.get("4096")
-  try: pp512_f = float(pp512)
-  except (TypeError, ValueError): pp512_f = float("nan")
+  pp512, pp4096 = whole.get("512"), whole.get("4096")
   route_ok = route == AUTHORITY_ROUTE
-  perf_ok = pp512_f >= PP512_MIN_TOK_S
+  perf_floor_ok = _as_float(pp512) >= PP512_MIN_TOK_S  # DIAGNOSTIC bare floor only; never grants authority alone
+  binding_verdict = (authority.get("prefill_route_binding_gate") or {}).get("verdict")
+  binding_ok = binding_verdict == "PREFILL_ROUTE_BINDING_PASS"
+  regime = measurement_regime(authority)
+  classification = _route_classification(route)
+  classification_ok = bool(classification.get("final_default_allowed"))
+  comparator_result = _comparator_delta(authority, comparator, regime)
+  comparator_ok = comparator_result.get("ok") is True
+  qg = quality_gate if quality_gate is not None else {
+    "status": "MISSING",
+    "note": "no whole-model dNLL/greedy-parity quality gate supplied; promotion refused per F3 (honesty over invention)",
+  }
+  quality_ok = qg.get("status") == "PASS"
+  # AUTHORITY requires ALL of: right route, binding PASS (not waved off), a same-regime comparator delta,
+  # a passing quality/correctness gate, AND a shipped-promotable classification. perf_floor_ok is NOT sufficient.
+  authority_ok = bool(route_ok and binding_ok and comparator_ok and quality_ok and classification_ok)
   return {
-    "schema": "prefill-s10.5-authority-gate.v1",
+    "schema": "prefill-s10.5-authority-gate.v2",
     "required_route": AUTHORITY_ROUTE,
     "selected_route": route,
     "route_ok": route_ok,
@@ -235,40 +331,70 @@ def build_authority_gate(authority: dict[str, Any]) -> dict[str, Any]:
     "pp512_tok_s": pp512,
     "pp4096_tok_s": pp4096,
     "pin_clock": authority.get("pin_clock"),
-    "perf_ok": perf_ok,
-    "binding_gate_verdict": (authority.get("prefill_route_binding_gate") or {}).get("verdict"),
+    "perf_floor_ok": perf_floor_ok,
+    "measurement_regime": regime,
+    "route_classification": classification,
+    "classification_ok": classification_ok,
+    "comparator": comparator_result,
+    "comparator_ok": comparator_ok,
+    "quality_gate": qg,
+    "quality_ok": quality_ok,
+    "binding_gate_verdict": binding_verdict,
+    "binding_ok": binding_ok,
     "binding_gate_note": (
-      "generic pure-route binding may fail because S10.5 intentionally classifies this path as hybrid/backend-atom"
+      "S10.5 classifies this path as hybrid/backend-atom, but a FAILING binding gate is NOT waved off: a "
+      "binding FAIL blocks authority. The route stays research until the binding gate passes."
     ),
-    "ok": route_ok and perf_ok,
+    "authority_ok": authority_ok,
+    "ok": authority_ok,
   }
 
 
 def build_final_report(*, candidate: dict[str, Any] | None = None,
-                       authority: dict[str, Any] | None = None) -> dict[str, Any]:
+                       authority: dict[str, Any] | None = None,
+                       comparator: dict[str, Any] | None = None,
+                       quality_gate: dict[str, Any] | None = None) -> dict[str, Any]:
   candidate = build_ffn_gate_up_candidate() if candidate is None else candidate
-  authority_gate = build_authority_gate(authority) if authority is not None else {
-    "schema": "prefill-s10.5-authority-gate.v1",
-    "ok": False,
-    "status": "not_run",
-    "required_route": AUTHORITY_ROUTE,
-    "pp512_min_tok_s": PP512_MIN_TOK_S,
-  }
+  authority_gate = build_authority_gate(authority, comparator=comparator, quality_gate=quality_gate) \
+    if authority is not None else {
+      "schema": "prefill-s10.5-authority-gate.v2",
+      "ok": False, "authority_ok": False, "status": "not_run",
+      "required_route": AUTHORITY_ROUTE, "pp512_min_tok_s": PP512_MIN_TOK_S,
+    }
   candidate_ok = (
     candidate.get("classification") == CLASSIFICATION and
     candidate.get("pure_generated") is False and
     (candidate.get("slot_identity_proof") or {}).get("ok") is True and
     candidate.get("promotion_status") == "candidate"
   )
-  ready = candidate_ok and authority_gate.get("ok") is True
+  ready = candidate_ok and authority_gate.get("authority_ok") is True
+  blocking_reasons: list[str] = []
+  if not candidate_ok:
+    blocking_reasons.append("candidate is not serializable / slot identity not proven")
+  for key, msg in (
+    ("route_ok", "authority route does not match required route"),
+    ("binding_ok", f"binding gate is not PASS (verdict={authority_gate.get('binding_gate_verdict')!r})"),
+    ("comparator_ok", "no same-regime comparator delta vs the current default (bare floor is not a comparator)"),
+    ("quality_ok", "quality/correctness gate is MISSING or failing"),
+    ("classification_ok", "route is research / final_default_allowed:false per route_manifest (not shippable)"),
+  ):
+    if authority_gate.get(key) is False:
+      blocking_reasons.append(msg)
+  verdict = "S10_5_HYBRID_SEARCH_OWNED_BACKEND_ATOM_READY" if ready \
+    else "S10_5_HYBRID_SEARCH_RESEARCH_CANDIDATE_NOT_PROMOTED"
   return {
-    "schema": "prefill-s10.5-machine-search-final-report.v1",
-    "verdict": "S10_5_HYBRID_SEARCH_OWNED_BACKEND_ATOM_READY" if ready
-               else "S10_5_HYBRID_SEARCH_BLOCKED_WITH_EXACT_REASON",
+    "schema": "prefill-s10.5-machine-search-final-report.v2",
+    "verdict": verdict,
     "classification": CLASSIFICATION,
     "pure_generated": False,
     "full_fine_tuned_hand_kernel": False,
     "candidate_ok": candidate_ok,
+    "promotion": {
+      "ready": ready,
+      "decision": "promote_s10_5_backend_atom" if ready
+                  else "keep_default_authority_and_treat_s10_5_as_research",
+      "blocking_reasons": blocking_reasons,
+    },
     "authority_gate": authority_gate,
     "candidate": candidate,
   }
@@ -280,6 +406,10 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
   ap.add_argument("--search-output", type=pathlib.Path, default=DEFAULT_SEARCH_OUTPUT)
   ap.add_argument("--report-output", type=pathlib.Path, default=DEFAULT_REPORT_OUTPUT)
   ap.add_argument("--authority-artifact", type=pathlib.Path)
+  ap.add_argument("--comparator-artifact", type=pathlib.Path,
+                  help="same-regime current-default whole-synced authority artifact for the comparator delta (F1b)")
+  ap.add_argument("--quality-gate-artifact", type=pathlib.Path,
+                  help="whole-model quality/correctness gate JSON with a 'status' field (F3)")
   ap.add_argument("--active-buffers", type=int, default=2)
   ap.add_argument("--search", action="store_true", help="write the S10.5 wait-policy search report")
   ap.add_argument("--json", action="store_true", help="print the candidate JSON to stdout")
@@ -289,8 +419,11 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
            write_candidate(args.output, active_buffers=args.active_buffers)
   if args.authority_artifact is not None:
     authority = json.loads(args.authority_artifact.read_text())
+    comparator = json.loads(args.comparator_artifact.read_text()) if args.comparator_artifact is not None else None
+    quality_gate = json.loads(args.quality_gate_artifact.read_text()) if args.quality_gate_artifact is not None else None
     candidate = record["candidates"][0] if args.search else record
-    report = build_final_report(candidate=candidate, authority=authority)
+    report = build_final_report(candidate=candidate, authority=authority,
+                                comparator=comparator, quality_gate=quality_gate)
     args.report_output.parent.mkdir(parents=True, exist_ok=True)
     args.report_output.write_text(json.dumps(report, indent=2) + "\n")
     record = report

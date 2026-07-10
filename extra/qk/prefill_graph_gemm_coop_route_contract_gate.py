@@ -40,8 +40,16 @@ def build_report(*, artifact: bool = True) -> dict[str, Any]:
   route_bound_coop_case = medium_cases.get("post_coop_b_partition_stage", {})
   route_bound_coop_defined = isinstance(route_bound_coop_case, dict) and bool(route_bound_coop_case)
   route_bound_coop_executes = bool(route_bound_coop_defined and route_bound_coop_case.get("status") == "ok")
-  route_bound_coop_beats = bool(route_bound_coop_executes and baseline.get("status") == "ok" and
+  # The contract is that the scheduler actually BINDS the cooperative mapping into the route -- NOT merely that a
+  # case labelled "coop" runs fast. A tflops-beats-baseline win with the cooperative-B rewrite SKIPPED
+  # (rewritten==0/skipped>0) is a proxy win: the speedup comes from ordinary staging, not a bound coop partition.
+  coop_stage = route_bound_coop_case.get("cooperative_b_stage", {}) if isinstance(route_bound_coop_case, dict) else {}
+  route_bound_coop_rewrite_applied = bool(int(coop_stage.get("rewritten", 0) or 0) > 0
+                                          and int(coop_stage.get("skipped", 0) or 0) == 0)
+  route_bound_coop_tflops_beats_baseline = bool(route_bound_coop_executes and baseline.get("status") == "ok" and
                                 float(route_bound_coop_case.get("tflops", 0.0)) > float(baseline.get("tflops", 0.0)) * 1.05)
+  # The contract bit: the ACTUALLY-APPLIED cooperative partition beat baseline (not just some staging).
+  route_bound_coop_beats = bool(route_bound_coop_rewrite_applied and route_bound_coop_tflops_beats_baseline)
   passed = bool(coop_probe_pass and route_bound_coop_beats)
 
   report = {
@@ -56,6 +64,8 @@ def build_report(*, artifact: bool = True) -> dict[str, Any]:
       "medium_b_tile_operand_stage_beats_baseline": medium_b_tile_beats,
       "medium_gate_defines_route_bound_coop_partition_case": route_bound_coop_defined,
       "medium_gate_route_bound_coop_partition_executes": route_bound_coop_executes,
+      "route_bound_coop_partition_rewrite_applied": route_bound_coop_rewrite_applied,
+      "route_bound_coop_partition_tflops_beats_baseline": route_bound_coop_tflops_beats_baseline,
       "route_bound_coop_partition_beats_baseline": route_bound_coop_beats,
     },
     "artifacts": {
@@ -65,10 +75,13 @@ def build_report(*, artifact: bool = True) -> dict[str, Any]:
       "post_tile_b_tflops": post_tile_b.get("tflops"),
       "route_bound_coop_status": route_bound_coop_case.get("status") if isinstance(route_bound_coop_case, dict) else None,
       "route_bound_coop_tflops": route_bound_coop_case.get("tflops") if isinstance(route_bound_coop_case, dict) else None,
+      "route_bound_coop_stage_stats": coop_stage,
     },
     "remaining_blocker": None if passed else (
       "custom cooperative B-tile partition is proven, but the warmstart TC route-bound cooperative case "
-      + ("executes without beating baseline" if route_bound_coop_executes else "does not execute")
+      + ("beats baseline on tflops while the cooperative-B rewrite is SKIPPED (rewritten=0/skipped>0) -- proxy win, "
+         "not a bound coop partition" if (route_bound_coop_tflops_beats_baseline and not route_bound_coop_rewrite_applied)
+         else "executes without beating baseline" if route_bound_coop_executes else "does not execute")
     ),
   }
   if artifact:

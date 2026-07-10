@@ -23,7 +23,11 @@ from extra.qk.pure_search_guard import effective_routes
 
 SCHEMA = "prefill-v2-schedule-table-gate.v1"
 ARTIFACT_DIR = pathlib.Path("bench/prefill-v2-schedule-table")
-DEFAULT_SHAPES = ("4096x4096", "5120x5120")
+# The frozen warmstart table was narrowed to a single freshly-measured 5120x5120 row in commit 8ab3ee80c
+# ("carry warmstart local-stage policy"), which dropped the previous 4096x4096 (+8 other) rows. The default
+# shape set tracks the table's real contents; requesting a shape absent from the table now yields an honest
+# coverage-gap BLOCKED verdict (see build_report) rather than a KeyError crash.
+DEFAULT_SHAPES = ("5120x5120",)
 DEFAULT_RESOURCE_STAGES = ("both", "A", "B")
 DEFAULT_RESOURCE_U = (2, 4)
 DEFAULT_RESOURCE_LOC = (0, 2)
@@ -287,7 +291,8 @@ def build_report(*, run_amd: bool = False, shapes: tuple[str, ...] = DEFAULT_SHA
                  resource_unr_values: tuple[int, ...] = DEFAULT_RESOURCE_UNR,
                  resource_run_below_limit: bool = False, resource_run_limit: int = 12) -> dict[str, Any]:
   table = _read_table()
-  rows = [_table_row(shape, table) for shape in shapes]
+  missing_shapes = [shape for shape in shapes if shape not in table]
+  rows = [_table_row(shape, table) for shape in shapes if shape in table]
   if run_amd:
     rows = [_run_shape(row["shape"], row, m, pin_clock=pin_clock) for row in rows]
   resource_rows = [_resource_search(row, m, stages=resource_stages, u_values=resource_u_values,
@@ -298,18 +303,29 @@ def build_report(*, run_amd: bool = False, shapes: tuple[str, ...] = DEFAULT_SHA
   missing = [row["shape"] for row in rows if row["params"]["loc"] == 0]
   executed = [row for row in rows if "measured" in row]
   measured_ok = [row for row in executed if row["measured"].get("status") == "ok" and row["measured"].get("tflops", 0.0) > 0.0]
-  verdict = "PREFILL_V2_SCHEDULE_TABLE_APPLIES_PASS" if rows and not missing and (not run_amd or len(measured_ok) == len(rows)) \
+  verdict = "PREFILL_V2_SCHEDULE_TABLE_APPLIES_PASS" \
+    if rows and not missing_shapes and not missing and (not run_amd or len(measured_ok) == len(rows)) \
     else "PREFILL_V2_SCHEDULE_TABLE_BLOCKED"
+  blocker = None
+  if verdict.endswith("_BLOCKED"):
+    if missing_shapes:
+      blocker = (f"requested shapes absent from the frozen warmstart table: {missing_shapes}; the table was "
+                 f"narrowed to {sorted(table)} (commit 8ab3ee80c). Re-measure those shapes to restore coverage.")
+    else:
+      blocker = "warmstart table missing LOCAL schedule or AMD measurement failed"
   report = {
     "schema": SCHEMA,
     "route_id": "prefill_v2_scheduler_matmul_default",
     "m": m,
     "shape_count": len(rows),
-    "shapes": list(shapes),
+    "shapes": [row["shape"] for row in rows],
+    "requested_shapes": list(shapes),
+    "missing_shapes": missing_shapes,
+    "table_shapes": sorted(table),
     "verdict": verdict,
     "evidence": {
       "table_exists": TABLE_PATH.exists(),
-      "all_selected_shapes_present": len(rows) == len(shapes),
+      "all_selected_shapes_present": not missing_shapes,
       "all_selected_shapes_use_local": not missing,
       "run_amd": run_amd,
       "pin_clock": pin_clock,
@@ -320,7 +336,7 @@ def build_report(*, run_amd: bool = False, shapes: tuple[str, ...] = DEFAULT_SHA
     "route_attribution": next((r for r in effective_routes() if r.get("family") == "prefill_gemm"), None),
     "rows": rows,
     "resource_search": resource_rows,
-    "remaining_blocker": None if verdict.endswith("_PASS") else "warmstart table missing LOCAL schedule or AMD measurement failed",
+    "remaining_blocker": blocker,
   }
   if artifact:
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
