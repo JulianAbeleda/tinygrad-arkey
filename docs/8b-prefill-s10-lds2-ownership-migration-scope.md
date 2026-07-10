@@ -300,7 +300,7 @@ After the first S10 implementation pass:
 | G3 fallback explicit | done for trace | route trace records `fallback_reason`, `selected_surface`, and `calls_build_gemm_lds2` |
 | G4 route trace | done | `bench/prefill-s10-lds2-ownership/route-trace.json` |
 | G5 correctness smoke | done for isolated ffn_gate/up LDS primitive | `prefill_pipe_mvp_artifact.py --lds-primitive --lds-sample-correctness` passes sampled correctness for generated LDS and generated DBUF transports |
-| G6 whole-prefill smoke | blocked before route entry on `DEV=AMD:ISA` | `s10_compile_capture.py --scenario lds-only` currently fails during Q4_K weight realization with `AMD:ISA CAST dtypes.char -> dtypes.float unsupported` |
+| G6 whole-prefill smoke | runs on the canonical `DEV=AMD` authority path; fails before route entry only when forced to `DEV=AMD:ISA` | `s10_compile_capture.py --scenario lds-only --mode authority` reaches the mixed S10 route on `DEV=AMD`; `DEV=AMD:ISA` fails during Q4_K weight realization with `AMD:ISA CAST dtypes.char -> dtypes.float unsupported` |
 | G7 classification update | done | route manifest/surface guard classify S10 as spec-owned with ASM backend atom, not strict pure, and do not claim generated-pipe ownership for resource-gated `attn_kv` |
 
 Current result:
@@ -369,6 +369,47 @@ while realizing Q4_K weights:
 ```text
 NotImplementedError: AMD:ISA CAST dtypes.char -> dtypes.float unsupported
 ```
+
+The canonical whole-prefill authority path should use `DEV=AMD`, not `DEV=AMD:ISA`, because model-load fp16
+realization still depends on the normal AMD/HIP lowering path for Q4_K byte-to-float dequant. With `DEV=AMD`, the
+same lds-only S10 capture reaches the route and passes binding:
+
+```text
+PYTHONPATH=. DEV=AMD python3 extra/qk/prefill/s10_compile_capture.py \
+  --scenario lds-only --mode authority --json
+
+status = ok
+captured_failures = 0
+route = prefill_wmma_lds_dbuf_primitive_mixed
+binding_gate = PREFILL_ROUTE_BINDING_PASS
+role map:
+  attn_qo     -> raw_pipe_oracle
+  attn_kv     -> raw_pipe_oracle
+  ffn_down    -> raw_pipe_oracle
+  ffn_gate_up -> lds_dbuf
+pp512 = 2336 tok/s
+pp4096 = 1974 tok/s
+```
+
+Current-head S9 comparison under the same `DEV=AMD` authority methodology:
+
+```text
+PYTHONPATH=. DEV=AMD PREFILL_V2=1 PREFILL_GRAPH_GEMM=1 python3 extra/qk/prefill_whole_synced.py \
+  --mode authority -K 8 --warmups 4 --rounds 3 --whole-lengths 512 --max-context 4608 --json
+
+pp512 = 5107 tok/s
+```
+
+So the blocker is no longer "whole-prefill cannot reach S10." It is:
+
+```text
+S10_LDS_GENERATED_TRANSPORT_PERF_REGRESSION
+```
+
+The generated LDS/DBUF role-local transport is correct, but replacing the fast `ffn_gate_up` backend atom with it
+roughly halves whole-prefill pp512 on current head. S10 should therefore keep the generated LDS/DBUF transport as a
+correctness/R&D candidate, not the promoted mixed-route default, until its instruction structure is competitive with
+the S9 `lower_lds2_gemm_kernel/build_gemm_lds2` backend atom.
 
 After adding the pipe resource gate:
 

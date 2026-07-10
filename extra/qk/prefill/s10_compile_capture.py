@@ -174,17 +174,27 @@ def run_capture(*, out_dir: pathlib.Path = DEFAULT_OUTPUT_DIR, model: str = DEFA
           "message": str(exc),
           "traceback_tail": traceback.format_exc().splitlines()[-80:],
         }
+    device_env = os.environ.get("DEV", "")
+    pre_route_note = None
+    if error is not None and device_env == "AMD:ISA" and "CAST dtypes.char -> dtypes.float unsupported" in error.get("message", ""):
+      pre_route_note = (
+        "This failure occurs during Q4_K -> fp16 prefill weight realization before the S10 route is entered. "
+        "Use the canonical whole-prefill authority device path DEV=AMD for end-to-end S10 route smoke; "
+        "reserve DEV=AMD:ISA for role-local/generated-kernel probes that do not require model-load dequant."
+      )
     return {
       "schema": "prefill-s10-compile-capture.v1",
       "scenario": scenario,
       "required_route": required_route,
       "route_env": dict(route_env),
+      "device_env": device_env,
       "mode": mode,
       "model": model,
       "max_context": max_context,
       "pin_clock": pin_clock,
       "status": "ok" if error is None else "compile_or_runtime_error",
       "error": error,
+      "pre_route_blocker_note": pre_route_note,
       "captured_failures": failures,
       "whole_prefill_report": report,
     }

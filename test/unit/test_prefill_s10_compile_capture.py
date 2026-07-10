@@ -101,6 +101,35 @@ def test_run_capture_records_error(monkeypatch, tmp_path):
   assert out["status"] == "compile_or_runtime_error"
   assert out["error"]["type"] == "RuntimeError"
   assert "compile failed" in out["error"]["message"]
+  assert out["pre_route_blocker_note"] is None
+
+
+def test_run_capture_explains_amd_isa_q4k_prefill_weight_blocker(monkeypatch, tmp_path):
+  def fake_profile(mode, max_context):
+    class Profile:
+      K = 1
+      warmups = 0
+      rounds = 1
+      start_positions = (0,)
+      whole_lengths = (512,)
+      chunk_n = 512
+      max_context = 1024
+      mode = "smoke"
+    return Profile()
+
+  def fake_authority(**kwargs):
+    raise NotImplementedError("AMD:ISA CAST dtypes.char -> dtypes.float unsupported")
+
+  monkeypatch.setenv("DEV", "AMD:ISA")
+  monkeypatch.setattr(cap, "prefill_run_profile", fake_profile)
+  import extra.qk.prefill_whole_synced as whole
+  monkeypatch.setattr(whole, "prefill_authority", fake_authority)
+
+  out = cap.run_capture(out_dir=tmp_path, scenario="lds-only")
+
+  assert out["status"] == "compile_or_runtime_error"
+  assert out["device_env"] == "AMD:ISA"
+  assert "before the S10 route is entered" in out["pre_route_blocker_note"]
 
 
 def test_run_capture_supports_decoupled_lds_only_scenario(monkeypatch, tmp_path):
