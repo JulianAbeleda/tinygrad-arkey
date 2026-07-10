@@ -16,6 +16,7 @@ import numpy as np
 from tinygrad import Tensor
 
 from extra.qk.layout import Q4_K_BLOCK_BYTES, Q4_K_BLOCK_ELEMS, Q8_1_BLOCK_ELEMS, q4_k_reference
+from extra.qk.q4k_tile_loader import Q4KTileLoadSpec, load_q4k_256_tile
 
 
 Q8_1_MMQ_DS4_LAYOUT = "q8_1_mmq_ds4_transposed_blocks"
@@ -341,23 +342,13 @@ def _q4k_group_metadata(q4k_bytes:np.ndarray, spec:Q4KQ81MMQTileSpec) -> tuple[n
   expected_weight_bytes = spec.n * (spec.k // Q4_K_BLOCK_ELEMS) * Q4_K_BLOCK_BYTES
   if raw.size != expected_weight_bytes:
     raise ValueError(f"expected {expected_weight_bytes} Q4_K bytes for N={spec.n} K={spec.k}, got {raw.size}")
-  blocks = raw.reshape(spec.n, spec.k // Q4_K_BLOCK_ELEMS, Q4_K_BLOCK_BYTES)
-  d = blocks[:, :, 0:2].reshape(-1, 2).view(np.float16).astype(np.float32).reshape(spec.n, -1)
-  dmin = blocks[:, :, 2:4].reshape(-1, 2).view(np.float16).astype(np.float32).reshape(spec.n, -1)
-  sb = blocks[:, :, 4:16].astype(np.uint8)
-  sc_lo = sb[:, :, 0:4] & np.uint8(63)
-  mn_lo = sb[:, :, 4:8] & np.uint8(63)
-  high = sb[:, :, 8:12]
-  sc_hi = (high & np.uint8(0x0f)) | ((sb[:, :, 0:4] >> np.uint8(6)) << np.uint8(4))
-  mn_hi = (high >> np.uint8(4)) | ((sb[:, :, 4:8] >> np.uint8(6)) << np.uint8(4))
-  sc = np.concatenate([sc_lo, sc_hi], axis=2).reshape(spec.n, spec.groups).astype(np.float32)
-  mn = np.concatenate([mn_lo, mn_hi], axis=2).reshape(spec.n, spec.groups).astype(np.float32)
-
-  qs = blocks[:, :, 16:144].reshape(spec.n, -1, 4, Q8_1_BLOCK_ELEMS)
-  codes = np.stack([qs & np.uint8(0x0f), qs >> np.uint8(4)], axis=3).reshape(spec.n, spec.groups, Q8_1_BLOCK_ELEMS)
-  d_groups = np.repeat(d[:, :, None], Q4_K_BLOCK_ELEMS // Q8_1_BLOCK_ELEMS, axis=2).reshape(spec.n, spec.groups)
-  dmin_groups = np.repeat(dmin[:, :, None], Q4_K_BLOCK_ELEMS // Q8_1_BLOCK_ELEMS, axis=2).reshape(spec.n, spec.groups)
-  return codes.astype(np.int16), d_groups * sc, dmin_groups * mn
+  codes, scales, mins = [], [], []
+  for k0 in range(0, spec.k, Q4_K_BLOCK_ELEMS):
+    tile = load_q4k_256_tile(raw, Q4KTileLoadSpec(n=spec.n, k=spec.k, n_tile=spec.n, k0=k0))
+    codes.append(tile.q.astype(np.int16))
+    scales.append(tile.scales.astype(np.float32))
+    mins.append(tile.mins.astype(np.float32))
+  return (np.concatenate(codes, axis=1), np.concatenate(scales, axis=1), np.concatenate(mins, axis=1))
 
 
 def _validate_ds4(q8_ds4:Q81MMQDS4Activation, spec:Q4KQ81MMQTileSpec) -> Q81MMQDS4Activation:

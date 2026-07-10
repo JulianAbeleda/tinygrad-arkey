@@ -198,6 +198,14 @@ def _atom_source_hash() -> str | None:
     return None
   return hashlib.sha256(path.read_bytes()).hexdigest()[:16]
 
+def _q4k_tile_loader_source_hash() -> str | None:
+  try:
+    import extra.qk.q4k_tile_loader as tile_loader
+    path = pathlib.Path(tile_loader.__file__)
+  except Exception:
+    return None
+  return hashlib.sha256(path.read_bytes()).hexdigest()[:16]
+
 
 def _run_reference_tile(q4k_bytes:np.ndarray, xq:np.ndarray, xscales:np.ndarray, spec:Q4KQ81MMQTileSpec) -> np.ndarray:
   return q4k_q8_1_mmq_tile_reference(q4k_bytes, xq, xscales, spec)
@@ -536,6 +544,7 @@ def run_bounded_harness(config: BoundedMMQConfig) -> dict[str, Any]:
       },
     },
     "artifacts": {"harness_source_hash": _source_hash(),
+                  "q4k_tile_loader_source_hash": _q4k_tile_loader_source_hash(),
                   "atom_source_hash": _atom_source_hash() if config.backend in ("atom", "amd", "amd_warp", "amd_warp_batched", "amd_dot4_batched", "amd_dot4x4_batched", STAGED_DS4_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID, AMD_DS4_DOT4X4_BACKEND_ID) else None,
                   "amd_uop_hash": _amd_uop_hash(specs[0]) if config.backend == "amd" and specs else None,
                   "amd_warp_uop_hash": _amd_warp_uop_hash(specs[0]) if config.backend == "amd_warp" and specs else None,

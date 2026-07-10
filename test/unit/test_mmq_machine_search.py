@@ -22,10 +22,11 @@ def test_mmq_machine_search_only_marks_completed_components_searchable():
     "DS4 layout",
     "DS4 reference correctness",
     "Q4_K x DS4 formula",
+    "Q4_K tile loader",
     "sudot4 primitive availability",
     "direct DS4 GPU atom",
   ]
-  assert [row["status"] for row in report["done_components"]] == ["done"] * 5
+  assert [row["status"] for row in report["done_components"]] == ["done"] * 6
   assert {row["component"] for row in report["done_components"]} == set(report["searchable_components"])
 
   rows = {row["candidate_id"]: row for row in report["searchable_candidates"]}
@@ -66,7 +67,7 @@ def test_mmq_machine_search_runner_receives_bounded_configs():
       "status": "PASS",
       "correctness": {"max_abs": 0.0, "atol": 0.001, "tiles": 1},
       "timing": {"samples_ms": [1.0], "min_ms": 1.0, "median_ms": 1.0},
-      "artifacts": {"atom_source_hash": "fake"},
+      "artifacts": {"atom_source_hash": "fake", "q4k_tile_loader_source_hash": "loader"},
       "blockers": [],
     }
 
@@ -77,3 +78,4 @@ def test_mmq_machine_search_runner_receives_bounded_configs():
   assert any(cfg.backend == AMD_DS4_WARP_BACKEND_ID and cfg.activation_layout == ACTIVATION_LAYOUT_MMQ_DS4 for cfg in seen)
   assert any(cfg.backend == AMD_DS4_DOT4X4_BACKEND_ID and cfg.activation_layout == ACTIVATION_LAYOUT_MMQ_DS4 for cfg in seen)
   assert all(row["run"]["status"] == "PASS" for row in report["searchable_candidates"])
+  assert all(row["run"]["artifacts"]["q4k_tile_loader_source_hash"] == "loader" for row in report["searchable_candidates"])

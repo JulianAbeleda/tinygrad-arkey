@@ -35,7 +35,7 @@ The source queue is the Q4_K MMQ path in:
 | Q8_1 MMQ DS4 block | `mmq.cuh`: `block_q8_1_mmq` | converted_searchable |
 | Q8_1 MMQ DS4 quantizer | `quantize.cu`: `quantize_mmq_q8_1`, `MMQ_Q8_1_DS_LAYOUT_DS4` | converted_searchable in reference form |
 | Q4_K block format | `ggml-common.h`: `block_q4_K` | converted enough for existing Q4_K helpers |
-| Q4_K tile loader | `mmq.cuh`: `load_tiles_q4_K` | source_clone |
+| Q4_K tile loader | `mmq.cuh`: `load_tiles_q4_K` | converted_searchable |
 | Q4_K x Q8_1 MMQ dot formula | `vecdotq.cuh`: `vec_dot_q4_K_q8_1_impl_mmq` | converted_searchable |
 | packed dot primitive | `vecdotq.cuh`: `ggml_cuda_dp4a`/AMD `sudot4` path | partially converted |
 | packed DS4 dot4x4 lane mapping | `mmq.cuh`: callsite around `vec_dot_q4_K_q8_1_impl_mmq` | converted_searchable |
@@ -53,6 +53,7 @@ These are machine-search-owned now:
 | DS4 layout | `done_components: DS4 layout` | `test_mmq_q4k_q8_reference.py` |
 | DS4 reference correctness | `done_components: DS4 reference correctness` | `test_mmq_q4k_q8_reference.py` |
 | Q4_K x DS4 formula | `done_components: Q4_K x DS4 formula` | `test_mmq_q4k_q8_reference.py` |
+| Q4_K tile loader | `done_components: Q4_K tile loader` | `test_mmq_q4k_q8_reference.py` |
 | `sudot4` primitive availability | `done_components: sudot4 primitive availability` | `test_mmq_q4k_q8_atom.py` |
 | direct DS4 GPU atom | `amd_ds4_warp_direct` | `test_mmq_q4k_q8_atom.py`, `mmq_machine_search.py --run` |
 | packed DS4 dot4x4 atom | `amd_ds4_dot4x4_packed` | `test_mmq_q4k_q8_atom.py`, `mmq_machine_search.py --run` |
@@ -65,6 +66,7 @@ ds4_reference_formula         PASS
 amd_ds4_warp_direct           PASS
 staged_ds4_reference_probe    PASS
 amd_ds4_dot4x4_packed         PASS/searchable
+q4k_tile_loader_source_hash   present in run artifacts
 cooperative_shared_lds_tile   blocked
 full_14b_prefill_route        blocked
 production_dispatch_changed   false
@@ -173,6 +175,11 @@ tile-loader unit test compares source-clone-derived layout expectations to tinyg
 packed dot4x4 uses the tile-load spec instead of ad hoc offsets
 machine-search report lists Q4_K tile loader as converted_searchable
 ```
+
+Status: done. The bounded tile-loader spec lives in `extra.qk.q4k_tile_loader`, covers the 256-wide Q4_K block,
+proves q nibble and scale/min layout against the existing Q4_K reference, and provides the loader source hash in
+machine-search run artifacts. The packed dot4x4 atom now consumes the shared packed-lane loader helper rather than
+embedding its qword/nibble expression locally.
 
 Stop if:
 

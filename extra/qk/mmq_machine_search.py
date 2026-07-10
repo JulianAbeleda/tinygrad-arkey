@@ -74,6 +74,12 @@ DONE_COMPONENTS: tuple[dict[str, Any], ...] = (
     "proof": "test/unit/test_mmq_q4k_q8_reference.py",
   },
   {
+    "component": "Q4_K tile loader",
+    "status": "done",
+    "implementation": "extra.qk.q4k_tile_loader.load_q4k_256_tile",
+    "proof": "test/unit/test_mmq_q4k_q8_reference.py",
+  },
+  {
     "component": "sudot4 primitive availability",
     "status": "done",
     "implementation": "extra.qk.mmq_q4k_q8_atom._sudot4",

@@ -30,7 +30,7 @@ from extra.qk.mmq_q4k_q8_reference import (
   Q81MMQDS4Activation, Q4KQ81MMQTileSpec, Q8_1_MMQ_DS4_LAYOUT, q4k_q8_1_mmq_tile_reference,
   q8_1_mmq_ds4_from_row_major_reference,
 )
-from extra.qk.quant.q4_k_gemv_primitive import _q4k_group_params, _q4k_quant
+from extra.qk.quant.q4_k_gemv_primitive import _q4k_group_params, _q4k_group_qpack_lane4, _q4k_quant
 
 BACKEND_ATOM_ID = "q4k_q8_1_mmq_reference_backed_atom_v0"
 AMD_BACKEND_ATOM_ID = "q4k_q8_1_mmq_amd_uop_atom_v0"
@@ -432,8 +432,7 @@ def _q4k_q8_1_bounded_ds4_dot4x4_kernel(m:int, n:int, k:int, role:str):
     contrib = UOp.const(dtypes.float32, 0.0)
     for grp in range(8):
       d, dmin, sc, mn = _q4k_group_params(words, base, grp)
-      qword = words[base + 4 + (grp//2)*8 + lane4]
-      qpack = qword.rshift((grp % 2) * 4).bitwise_and(0x0F0F0F0F)
+      qpack = _q4k_group_qpack_lane4(words, base, grp, lane4)
       ds4_block = blk * 2 + (grp // 4)
       ds4_group = grp % 4
       q8_idx = (ds4_block * m + bb) * 128 + ds4_group * Q8_1_BLOCK_ELEMS + lane4 * 4

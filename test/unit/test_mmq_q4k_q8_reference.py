@@ -10,6 +10,9 @@ from extra.qk.mmq_q4k_q8_reference import (
   describe_q4k_q8_1_mmq_tile, q4k_q8_1_mmq_ds4_tile_reference, q4k_q8_1_mmq_tile_reference,
   q8_1_mmq_ds4_dequantize_reference, q8_1_mmq_ds4_from_row_major_reference, q8_1_mmq_ds4_quantize_reference,
 )
+from extra.qk.q4k_tile_loader import (
+  Q4K_QS_BYTES, Q4K_QS_OFFSET, Q4K_SCALE_MIN_BYTES, Q4K_SCALE_MIN_OFFSET, Q4KTileLoadSpec, load_q4k_256_tile,
+)
 
 
 def _finite_q4k_bytes(n:int, k:int, seed:int) -> np.ndarray:
@@ -43,6 +46,48 @@ def _dequant_reference(raw:np.ndarray, xq:np.ndarray, xscales:np.ndarray) -> np.
   w = q4_k_reference(Tensor(raw.reshape(-1).copy()), n * k_blocks * Q4_K_BLOCK_ELEMS).reshape(n, -1).numpy().astype(np.float32)
   x = (xq.reshape(m, -1, Q8_1_BLOCK_ELEMS).astype(np.float32) * xscales.reshape(m, -1, 1)).reshape(m, k)
   return (x @ w.T).astype(np.float32)
+
+
+def test_q4k_256_tile_loader_matches_existing_q4k_reference_for_middle_tile():
+  n, k = 5, 768
+  raw = _finite_q4k_bytes(n, k, seed=20260720)
+  spec = Q4KTileLoadSpec(n=n, k=k, n0=1, n_tile=3, k0=256)
+
+  tile = load_q4k_256_tile(raw, spec)
+  ref = q4_k_reference(Tensor(raw.reshape(-1).copy()), n * k).reshape(n, k).numpy().astype(np.float32)[1:4, 256:512]
+
+  assert tile.q.shape == (3, 8, 32)
+  assert tile.scales.shape == tile.mins.shape == (3, 8)
+  np.testing.assert_allclose(tile.dequantized(), ref, rtol=0, atol=0)
+  assert tile.to_json()["q4k_tile_load_spec"]["layout"] == "ggml_q4_k_256_block"
+
+
+def test_q4k_256_tile_loader_captures_q_nibble_and_scale_min_layout():
+  raw = np.zeros((1, 1, Q4_K_BLOCK_BYTES), dtype=np.uint8)
+  raw[0, 0, 0:2] = np.array([0.5], dtype=np.float16).view(np.uint8)
+  raw[0, 0, 2:4] = np.array([0.25], dtype=np.float16).view(np.uint8)
+  raw[0, 0, 4:8] = np.array([1, 2, 3, 4], dtype=np.uint8)
+  raw[0, 0, 8:12] = np.array([5, 6, 7, 8], dtype=np.uint8)
+  raw[0, 0, 12:16] = np.array([0x90, 0xa1, 0xb2, 0xc3], dtype=np.uint8)
+  raw[0, 0, 16:48] = 0x21
+  raw[0, 0, 48:80] = 0x43
+  raw[0, 0, 80:112] = 0x65
+  raw[0, 0, 112:144] = 0x87
+
+  spec = Q4KTileLoadSpec(n=1, k=256)
+  tile = load_q4k_256_tile(raw, spec)
+  meta = spec.to_json()
+
+  assert meta["scale_min_offset"] == Q4K_SCALE_MIN_OFFSET
+  assert meta["scale_min_bytes"] == Q4K_SCALE_MIN_BYTES
+  assert meta["qs_offset"] == Q4K_QS_OFFSET
+  assert meta["qs_bytes"] == Q4K_QS_BYTES
+  np.testing.assert_array_equal(tile.q[:, :, 0], np.array([[1, 2, 3, 4, 5, 6, 7, 8]], dtype=np.uint8))
+  np.testing.assert_allclose(tile.scales[0], np.array([1, 2, 3, 4, 0, 1, 2, 3], dtype=np.float32) * 0.5, rtol=0, atol=0)
+  np.testing.assert_allclose(tile.mins[0], np.array([5, 6, 7, 8, 9, 10, 11, 12], dtype=np.float32) * 0.25, rtol=0, atol=0)
+
+  with pytest.raises(ValueError, match="Q4_K block aligned"):
+    Q4KTileLoadSpec(n=1, k=256, k0=32).validate()
 
 
 def test_q8_1_mmq_ds4_quantize_reference_matches_existing_q8_1_dequant():

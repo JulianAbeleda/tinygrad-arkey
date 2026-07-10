@@ -60,6 +60,7 @@ This is machine-search over a hand-coded translation, not pure generated code.
 | DS4 layout | `Q81MMQDS4ActivationSpec` and DS4 carrier in `extra/qk/mmq_q4k_q8_reference.py` | `test/unit/test_mmq_q4k_q8_reference.py` |
 | DS4 reference correctness | `q8_1_mmq_ds4_quantize_reference`, dequant/reference checks | `test/unit/test_mmq_q4k_q8_reference.py` |
 | Q4_K x DS4 formula | `q4k_q8_1_mmq_ds4_tile_reference` | `test/unit/test_mmq_q4k_q8_reference.py` |
+| Q4_K tile loader | `load_q4k_256_tile` in `extra/qk/q4k_tile_loader.py` | `test/unit/test_mmq_q4k_q8_reference.py` |
 | `sudot4` primitive | `_sudot4` in `extra/qk/mmq_q4k_q8_atom.py` | `test/unit/test_mmq_q4k_q8_atom.py` |
 | Direct DS4 GPU atom | `run_q4k_q8_1_mmq_bounded_amd_ds4_warp` | `test/unit/test_mmq_q4k_q8_atom.py`, bounded search run |
 
@@ -141,6 +142,7 @@ ds4_reference_formula         PASS
 amd_ds4_warp_direct           PASS
 staged_ds4_reference_probe    PASS
 amd_ds4_dot4x4_packed         PASS/searchable
+q4k_tile_loader_source_hash   present in run artifacts
 cooperative_shared_lds_tile   blocked
 full_14b_prefill_route        blocked
 ```
@@ -150,9 +152,10 @@ full_14b_prefill_route        blocked
 The next implementation is not a new route. It is a hand-coded translation of the next llama kernel structure into
 `extra/qk/mmq_q4k_q8_atom.py`, guarded by bounded machine-search rows:
 
-1. Add a new cooperative shared/LDS tile backend ID; keep it bounded-only.
-2. Compare cooperative tile candidates against `direct_packed`, `amd_ds4_warp_direct`, and `amd_ds4_dot4x4_packed` in the machine-search report.
-3. Only after bounded win, add one-role opt-in route evidence for `ffn_gate_up`.
+1. Add a new shared/LDS skeleton backend ID; keep it bounded-only and promotion-ineligible.
+2. Add cooperative multi-wave output ownership after the LDS skeleton is stable.
+3. Compare cooperative tile candidates against `direct_packed`, `amd_ds4_warp_direct`, and `amd_ds4_dot4x4_packed` in the machine-search report.
+4. Only after bounded win, add one-role opt-in route evidence for `ffn_gate_up`.
 
 Non-goals remain:
 

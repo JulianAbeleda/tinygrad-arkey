@@ -32,6 +32,10 @@ def _q4k_quant(words:UOp, base:UOp, grp:int, pos:UOp) -> UOp:
   qword = words[base + 4 + (grp//2)*8 + pos//4]
   return qword.rshift((pos%4)*8 + (grp%2)*4).bitwise_and(0xf)
 
+def _q4k_group_qpack_lane4(words:UOp, base:UOp, grp:int, lane4:UOp) -> UOp:
+  qword = words[base + 4 + (grp//2)*8 + lane4]
+  return qword.rshift((grp%2)*4).bitwise_and(0x0F0F0F0F)
+
 def _q4k_weight(words:UOp, base:UOp, grp:int, pos:UOp) -> UOp:
   d, dmin, sc, mn = _q4k_group_params(words, base, grp)
   q = _q4k_quant(words, base, grp, pos)
@@ -49,11 +53,11 @@ def w_f16(words:UOp, n, k:int, k_blocks:int) -> UOp:
 
 def _q4k_group_dot_packed_load(words:UOp, x:UOp, base:UOp, x_block:UOp, grp:int, lane4:UOp) -> UOp:
   d, dmin, sc, mn = _q4k_group_params(words, base, grp)
-  qword = words[base + 4 + (grp//2)*8 + lane4]
+  qpack = _q4k_group_qpack_lane4(words, base, grp, lane4)
   contrib = UOp.const(dtypes.float32, 0.0)
   for nib in range(4):
     pos = lane4 * 4 + nib
-    q = qword.rshift(nib*8 + (grp%2)*4).bitwise_and(0xf)
+    q = qpack.rshift(nib*8).bitwise_and(0xf)
     weight = d * sc.cast(dtypes.float32) * q.cast(dtypes.float32) - dmin * mn.cast(dtypes.float32)
     contrib = contrib + weight * x[x_block*Q4_K_BLOCK_ELEMS + grp*32 + pos].cast(dtypes.float32)
   return contrib
@@ -178,4 +182,3 @@ def q4k_gemm_packed_load_reduce_out_kernel(rows:int, k:int, b:int, schedule:str,
       arg=_kernel_info(f"{name}_{rows}_{k}_{b}_1", schedule, opts))
 
   return kernel
-
