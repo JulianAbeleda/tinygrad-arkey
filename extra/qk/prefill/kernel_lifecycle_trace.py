@@ -905,6 +905,58 @@ def _active_cadence_report(ops: dict[str, list[dict[str, Any]]], overlap: dict[s
     "waits_per_wmma": waits_per_wmma,
   }
 
+def _matrix_consumer_cluster_audit(waits_per_wmma: list[dict[str, Any]], p7: dict[str, Any],
+                                   reaching: dict[str, Any],
+                                   *, target: int = 4) -> dict[str, Any]:
+  """Trace-only check for already-lowered WMMA consume clusters.
+
+  This does not prove correctness or transform the stream. It answers a narrower
+  question: does the final stream already contain target-sized WMMA windows where
+  all A/B LDS loads have happened before the first WMMA in the window? If not, a
+  wait-only pass cannot create the hand-LDS2 shape; lowering must group fragment
+  loads and WMMA consumers earlier.
+  """
+  wmma_rows = list(reaching.get("wmma_rows") or (p7.get("events") or {}).get("wmma_rows") or [])
+  by_ord = {int(r.get("wmma_ordinal", -1)): r for r in wmma_rows}
+  windows: list[dict[str, Any]] = []
+  for start in range(0, max(0, len(waits_per_wmma) - target + 1)):
+    rows = waits_per_wmma[start:start + target]
+    ords = [int(r.get("wmma_ordinal", start + i)) for i, r in enumerate(rows)]
+    p7_rows = [by_ord.get(o, {}) for o in ords]
+    first_wmma_idx = int(rows[0].get("wmma_idx", -1))
+    load_indices = [int(r[k]) for r in p7_rows for k in ("a_load_idx", "b_load_idx") if isinstance(r.get(k), int)]
+    statuses = [r.get(k) for r in p7_rows for k in ("a_status", "b_status") if r.get(k) is not None]
+    loads_before_first = bool(load_indices) and all(idx < first_wmma_idx for idx in load_indices)
+    zero_wait_after_first = all(int(r.get("wait_count_since_prev_wmma", 0) or 0) == 0 for r in rows[1:])
+    covered = bool(statuses) and all(s == "covered" for s in statuses)
+    wait_total = sum(int(r.get("wait_count_since_prev_wmma", 0) or 0) for r in rows)
+    windows.append({
+      "start_ordinal": start,
+      "end_ordinal": start + target - 1,
+      "wmma_indices": [int(r.get("wmma_idx", -1)) for r in rows],
+      "waits_in_window": wait_total,
+      "zero_wait_after_first": zero_wait_after_first,
+      "unique_lds_loads": len(set(load_indices)),
+      "loads_before_first_wmma": loads_before_first,
+      "covered_by_reaching_def": covered,
+      "already_cluster_like": loads_before_first and zero_wait_after_first and covered,
+    })
+  already = [w for w in windows if w["already_cluster_like"]]
+  best = sorted(windows, key=lambda w: (
+    not w["zero_wait_after_first"], not w["loads_before_first_wmma"], w["waits_in_window"], -w["unique_lds_loads"]
+  ))[:8]
+  return {
+    "schema": "matrix-consumer-cluster-audit.v1",
+    "target_wmma_cluster": target,
+    "wmma_count": len(waits_per_wmma),
+    "reaching_wmma_rows": len(wmma_rows),
+    "candidate_window_count": len(windows),
+    "already_cluster_like_count": len(already),
+    "best_windows": best,
+    "needs_earlier_lowering": len(already) == 0,
+    "meaning": "If no target-sized window has all fragment LDS loads before its first WMMA, late wait coalescing cannot create the desired cluster.",
+  }
+
 
 def _report(label: str, insts: list[Any], meta: dict[str, Any], full_rows: bool) -> dict[str, Any]:
   mns = [sp._mn(x) for x in insts if not isinstance(x, tuple)]
@@ -965,6 +1017,7 @@ def _report(label: str, insts: list[Any], meta: dict[str, Any], full_rows: bool)
     "dbuf_d3a_compile_audit": dbuf_compile_audit,
   }
   report["p8_phase_cluster_quality"] = _p8_phase_cluster_quality(report)
+  report["matrix_consumer_cluster_audit"] = _matrix_consumer_cluster_audit(waits_by_wmma, p7, reaching)
   if full_rows:
     report["track_rows"] = ops
     report["waitcnt"] = waits

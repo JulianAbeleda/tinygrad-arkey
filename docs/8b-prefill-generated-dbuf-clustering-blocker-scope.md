@@ -935,6 +935,118 @@ dependency-only preloading,
 or 4x4 route promotion.
 ```
 
+## Next Test And Implementation List - 2026-07-10
+
+The corrected S9/S10 math changes the priority. The instruction gap is mostly a density/window artifact:
+
+```text
+S9 hand LDS2:      611 total inst - 64 WMMA = 547 non-matrix inst
+S10 generated:     554 total inst - 16 WMMA = 538 non-matrix inst
+```
+
+So the next work should not chase generic bookkeeping instruction deletion first. The real gap is wait amortization and
+matrix-op density over one lifecycle window:
+
+```text
+S9 hand LDS2:      64 WMMA / 26 waits = 2.46 ops/wait
+S10 generated:     16 WMMA / 46 waits = 0.35 ops/wait
+```
+
+### Things To Test, In Order
+
+| Test | Purpose | Done Criteria | Current Readout |
+|---|---|---|---|
+| T0. Reconfirm S9 hand oracle | Keep the target math honest. | `64 WMMA`, `26 waits`, `max burst=4`, `global/store/load=1/1/2 per WMMA`. | Done. Still passes P8 as `hand_lds2_quality`. |
+| T1. Reconfirm generated K-major base | Separate load-density wins from DBUF cadence. | `ds_load/WMMA=2.0`, but D3 false and wait-heavy. | Done. `16 WMMA`, `46 waits`, `max burst=3`, `D3=false`. |
+| T2. Reconfirm D3 marker | Test whether D3 plus reuse exists at all. | `D3=true`, `ds_load/WMMA=2.0`, no correctness loss. | Done. Exists, but heavy: `global/store=2.5625 per WMMA`, `max burst=2`, `58 waits`. |
+| T3. D3 marker + clustered wait | See if wait coalescing rescues the combined path. | Fewer waits and `max burst>=3` without traffic increase. | Done. Not enough: `55 waits`, `max burst=2`, traffic still duplicated. |
+| T4. Lean owner-stage probe | Move/reuse the producer instead of emitting duplicate D3 marker stores. | `D3=true`, `global/store<=2.25 per WMMA`, `ds_load/WMMA<=2.0`, barriers <= 3. | Next implementation test. |
+| T5. Cluster planner audit | Prove whether current final stream contains legal 4-WMMA clusters before lowering changes. | Emit candidate windows with required A/B loads, overwrite hazards, waits, and expected ops/wait. | Needed before broad rewrite. |
+| T6. Real matrix-consumer cluster lowering | If T5 says legal windows exist, emit one resident-fragment cluster. | `max burst>=4`, `waits/WMMA<=1.0`, correctness pass. | Not started. |
+| T7. Bounded timing | Verify structural movement translates to speed. | Candidate beats K-major base bounded TFLOPS. | After T4-T6. |
+| T8. S10 route transfer | Verify it matters e2e. | Per-role correctness passes; whole-prefill beats Path1 or records next bottleneck. | After T7. |
+
+### Fresh Small-Test Results
+
+Fresh trace runs on 2026-07-10 confirm the current stop point:
+
+| Variant | D3 | WMMA | waits | waits/WMMA | max burst | global/WMMA | store/WMMA | load/WMMA | Verdict |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---|
+| S9 hand LDS2 oracle | true | 64 | 26 | 0.406 | 4 | 1.0 | 1.0 | 2.0 | target shape |
+| generated K-major base | false | 16 | 46 | 2.875 | 3 | 2.0 | 2.0 | 2.0 | reuse but no DBUF cadence |
+| K-major + D3 marker | true | 16 | 58 | 3.625 | 2 | 2.5625 | 2.5625 | 2.0 | cadence exists but duplicate/heavy |
+| K-major + D3 marker + clustered wait | true | 16 | 55 | 3.438 | 2 | 2.5625 | 2.5625 | 2.0 | wait flag cannot rescue heavy lifecycle |
+
+Conclusion:
+
+```text
+The immediate primitive is a lean owner-stage body producer, not a wait-only pass.
+After that, add a cluster planner/lowering that increases WMMA work per lifecycle window.
+```
+
+### T5 Probe: Matrix Consumer Cluster Audit
+
+The tracer now exports:
+
+```text
+matrix_consumer_cluster_audit
+```
+
+It checks whether the final stream already has target-sized WMMA windows where:
+
+```text
+all required A/B LDS loads occur before the first WMMA,
+all A/B loads are covered by a reaching LDS store,
+and later WMMAs in the window do not need intervening waits.
+```
+
+Fresh generated K-major `2x2` result:
+
+| Metric | Value |
+|---|---:|
+| target cluster | 4 WMMA |
+| WMMA count | 16 |
+| reaching-def WMMA rows | 16 |
+| candidate 4-WMMA windows | 13 |
+| already cluster-like windows | 0 |
+
+Best windows show useful partial structure:
+
+```text
+start=4..7,  waits_in_window=2, unique_lds_loads=4, loads_before_first=true, covered=true
+start=8..11, waits_in_window=2, unique_lds_loads=4, loads_before_first=true, covered=true
+start=12..15, waits_in_window=3, unique_lds_loads=4, loads_before_first=true, covered=true
+```
+
+Readout:
+
+```text
+The data dependencies for 4-WMMA windows are close, but the current lowered stream still inserts waits inside those
+windows. Since no already-cluster-like 4-WMMA window exists, a late wait-only pass is not the primitive. The fix must
+own the matrix-consumer cluster at the K-major/lowering boundary: choose the resident fragment group, emit its LDS
+loads, emit one readiness wait, then emit the 4 WMMAs before fragment reuse.
+```
+
+The next code should be small and fail-closed:
+
+```python
+for each phase cluster:
+  identify existing stage producer for (role, slot, epoch)
+  if producer is needed by an earlier load:
+    keep prologue producer
+  if future epoch producer can be moved into body:
+    move/reuse it with explicit owner metadata
+  never suppress by LDS slot alone
+  emit trace row: producer_epoch, consumer_epoch, slot, barrier_between
+```
+
+Stop condition for T4:
+
+```text
+If a lean owner-stage probe cannot get global/store below 2.25 per WMMA without breaking correctness,
+then the current postrange representation is still too late and the primitive must move earlier than final LDS lowering.
+```
+
 ### P3. A+B Owned Materializer
 
 Extend P2 to A and B only after B-only is correct.
