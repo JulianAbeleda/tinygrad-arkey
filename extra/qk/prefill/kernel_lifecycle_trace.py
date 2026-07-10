@@ -542,8 +542,98 @@ def _reconcile_side_channel_to_rows(ops: dict[str, list[dict[str, Any]]], side: 
   }
 
 
+def _byte_window_tuple(row: dict[str, Any]) -> tuple[Any, int, int] | None:
+  norm = row.get("normalized_window")
+  if not isinstance(norm, dict): return None
+  if norm.get("base") is None or norm.get("lo") is None or norm.get("hi") is None: return None
+  return (norm["base"], int(norm["lo"]), int(norm["hi"]))
+
+
+def _reconcile_side_channel_by_byte_windows(ops: dict[str, list[dict[str, Any]]], side: dict[str, Any],
+                                            byte_rows: dict[str, Any] | None) -> dict[str, Any] | None:
+  from extra.qk.prefill.dbuf_epoch_lifecycle_checker import DBUFEvent, check_events
+  if not isinstance(byte_rows, dict): return None
+  stores = [r for r in byte_rows.get("stores", []) if r.get("op") == "ds_store_b128" and _byte_window_tuple(r) is not None]
+  loads = [r for r in byte_rows.get("loads", []) if r.get("op") == "ds_load_b128" and _byte_window_tuple(r) is not None]
+  barriers = sorted(ops.get("s_barrier", []), key=lambda r: r["idx"])
+  if not stores or not loads or not barriers: return None
+  by_load_start: dict[tuple[Any, int], dict[str, Any]] = {}
+  store_windows: dict[tuple[Any, int, int], dict[str, Any]] = {}
+  for row in loads:
+    base, lo, _hi = _byte_window_tuple(row)  # type: ignore[misc]
+    by_load_start[(base, lo)] = row
+  for row in stores:
+    store_windows[_byte_window_tuple(row)] = row  # type: ignore[index]
+
+  errors: list[dict[str, Any]] = []
+  events: list[DBUFEvent] = []
+  wait_seen: set[int] = set()
+  for row in side.get("rows", []):
+    if row.get("op") != "wait": continue
+    anchor = _side_anchor(row)
+    if anchor is None: continue
+    for physical in ops.get("s_waitcnt", []):
+      if _row_anchor(physical) == anchor and int(physical["idx"]) not in wait_seen:
+        wait_seen.add(int(physical["idx"]))
+        wait_kind = row.get("wait_kind", row.get("wait", row.get("waitcnt_kind")))
+        count = row.get("count")
+        if wait_kind is not None and count is not None:
+          events.append(DBUFEvent("wait", kind=str(wait_kind), count=int(count), step=int(physical["idx"]),
+                                  phase=str(row.get("phase", ""))))
+        break
+
+  for i, row in enumerate([r for r in side.get("rows", []) if r.get("op") == "consume"]):
+    if row.get("byte_start") is None or row.get("byte_len") is None:
+      errors.append({"row_index": i, "row": row, "error": "byte-window fallback consume row lacks byte_start/byte_len"})
+      continue
+    start, length = int(row["byte_start"]), int(row["byte_len"])
+    end = start + length
+    matching_loads = [(base, by_load_start[(base, start)]) for base, _lo in by_load_start if _lo == start]
+    if not matching_loads:
+      errors.append({"row_index": i, "row": row, "error": f"no physical ds_load_b128 starts consume byte window {start}:{end}"})
+      continue
+    base, load0 = min(matching_loads, key=lambda x: int(x[1]["idx"]))
+    store_parts = []
+    cursor = start
+    while cursor < end:
+      part = store_windows.get((base, cursor, min(cursor + 16, end)))
+      if part is None: break
+      store_parts.append(part)
+      cursor += 16
+    if cursor != end:
+      errors.append({"row_index": i, "row": row, "error": f"stores do not exactly cover consume byte window {start}:{end}"})
+      continue
+    store_step = min(int(s["idx"]) for s in store_parts)
+    consume_step = int(load0["idx"])
+    barrier = next((b for b in barriers if store_step < int(b["idx"]) < consume_step), None)
+    if barrier is None:
+      errors.append({"row_index": i, "row": row, "error": f"no barrier separates store window {start}:{end} from consume"})
+      continue
+    role, epoch, slot = str(row["role"]), row["epoch"], row["slot"]
+    window = str(row.get("window", "default"))
+    events.append(DBUFEvent("produce", role=role, epoch=epoch, slot=slot, window=window,
+                            lds_window={"base": str(base), "bytes": length, "stride": 16},
+                            step=store_step, phase="byte_window_store_cover"))
+    events.append(DBUFEvent("barrier", step=int(barrier["idx"]), phase="byte_window_physical_barrier"))
+    events.append(DBUFEvent("consume", role=role, epoch=epoch, slot=slot, window=window,
+                            lds_window={"base": str(base), "bytes": length, "stride": 16},
+                            step=consume_step, phase=str(row.get("phase", ""))))
+
+  events = sorted(events, key=lambda e: e.step)
+  # This bridge proves lowered producer/consumer/barrier ownership. P5 remains covered by the direct wait reconciler.
+  check = check_events(events, require_p5=False) if events else None
+  return {
+    "schema": "dbuf-byte-window-row-reconcile.v1",
+    "ok": bool(events) and not errors and check is not None and check["ok"],
+    "event_count": len(events),
+    "errors": errors,
+    "check": check,
+    "events": [e.to_json() for e in events],
+  }
+
+
 def _p7_lowered_stream_export(ops: dict[str, list[dict[str, Any]]], reaching: dict[str, Any],
-                              side_channel: dict[str, Any] | None=None) -> dict[str, Any]:
+                              side_channel: dict[str, Any] | None=None, byte_rows: dict[str, Any] | None=None) -> dict[str, Any]:
   """Export lowered stream DBUF events only when logical metadata is present."""
   stores = sorted(ops.get("ds_store_b128", []), key=lambda r: r["idx"])
   loads = sorted(ops.get("ds_load_b128", []), key=lambda r: r["idx"])
@@ -560,15 +650,24 @@ def _p7_lowered_stream_export(ops: dict[str, list[dict[str, Any]]], reaching: di
   partial_rows = [r for r in stores + loads if r.get("dbuf_partial") is not None]
   side = side_channel or {"row_count": 0, "event_count": 0, "errors": [], "check": None, "events": []}
   reconciled = _reconcile_side_channel_to_rows(ops, side) if side.get("row_count") else None
+  byte_reconciled = _reconcile_side_channel_by_byte_windows(ops, side, byte_rows) if side.get("row_count") else None
   if reconciled is not None and reconciled.get("ok"):
     return {"schema": "dbuf-lowered-stream-export.v1", "status": "exported",
             "reason": None, "physical": physical, "check": reconciled["check"],
             "side_channel": side, "reconciled_side_channel": reconciled,
             "events": reconciled["events"]}
+  if byte_reconciled is not None and byte_reconciled.get("ok"):
+    return {"schema": "dbuf-lowered-stream-export.v1", "status": "exported",
+            "reason": None, "physical": physical, "check": byte_reconciled["check"],
+            "side_channel": side, "reconciled_side_channel": reconciled,
+            "byte_window_reconciled_side_channel": byte_reconciled,
+            "proof_source": "normalized_lds_byte_window_store_cover",
+            "events": byte_reconciled["events"]}
   if not stores or not loads or not barriers:
     return {"schema": "dbuf-lowered-stream-export.v1", "status": "fail_closed",
             "reason": "lowered stream lacks complete LDS store/load/barrier chain", "physical": physical,
-            "side_channel": side, "reconciled_side_channel": reconciled, "events": []}
+            "side_channel": side, "reconciled_side_channel": reconciled,
+            "byte_window_reconciled_side_channel": byte_reconciled, "events": []}
   if len(metadata_rows) != len(stores) + len(loads):
     reason = "insufficient lowered lifecycle metadata: role/epoch/slot not present on every LDS store/load"
     if side.get("event_count"):
@@ -579,6 +678,7 @@ def _p7_lowered_stream_export(ops: dict[str, list[dict[str, Any]]], reaching: di
             "partial_metadata_sample": [r.get("dbuf_partial") for r in partial_rows[:8]],
             "required_metadata_rows": len(stores) + len(loads),
             "side_channel": side, "reconciled_side_channel": reconciled,
+            "byte_window_reconciled_side_channel": byte_reconciled,
             "events": []}
 
   from extra.qk.prefill.dbuf_epoch_lifecycle_checker import DBUFEvent, check_events
@@ -696,7 +796,7 @@ def _report(label: str, insts: list[Any], meta: dict[str, Any], full_rows: bool)
     "dbuf_pipeline_construction_audit": construction,
     "owned_b_emitter_oracle": _owned_b_emitter_oracle(meta, construction),
     "lds_reaching_def_map": reaching,
-    "p7_lowered_stream_export": _p7_lowered_stream_export(ops, reaching, lifecycle_side_channel),
+    "p7_lowered_stream_export": _p7_lowered_stream_export(ops, reaching, lifecycle_side_channel, meta.get("ds_byte_window_rows")),
     "dbuf_lifecycle_side_channel": lifecycle_side_channel,
     "dbuf_d3a_compile_audit": dbuf_compile_audit,
   }

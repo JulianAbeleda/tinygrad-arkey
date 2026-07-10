@@ -322,6 +322,54 @@ def test_p7_lowered_stream_export_exports_reconciled_side_channel_with_waits():
   assert [event["op"] for event in out["events"]] == ["wait", "produce", "wait", "barrier", "wait", "consume"]
 
 
+def test_p7_lowered_stream_export_exports_byte_window_fallback():
+  side = life._side_channel_lifecycle_events([
+    {"kind": "dbuf_lifecycle_event", "op": "consume", "role": "A", "epoch": "e0", "slot": "s0", "window": "A:s0",
+     "byte_start": 32, "byte_len": 32, "uop_id": 900},
+  ])
+
+  out = life._p7_lowered_stream_export({
+    "ds_store_b128": [{"idx": 10}, {"idx": 11}],
+    "s_barrier": [{"idx": 12}],
+    "ds_load_b128": [{"idx": 20}, {"idx": 21}],
+    "s_waitcnt": [],
+  }, {"covered_load_count": 1, "load_count": 1, "key_strength": "synthetic"}, side, {
+    "stores": [
+      {"idx": 10, "op": "ds_store_b128", "normalized_window": {"base": "lds0", "lo": 32, "hi": 48}},
+      {"idx": 11, "op": "ds_store_b128", "normalized_window": {"base": "lds0", "lo": 48, "hi": 64}},
+    ],
+    "loads": [
+      {"idx": 20, "op": "ds_load_b128", "normalized_window": {"base": "lds0", "lo": 32, "hi": 48}},
+      {"idx": 21, "op": "ds_load_b128", "normalized_window": {"base": "lds0", "lo": 48, "hi": 64}},
+    ],
+  })
+
+  assert out["status"] == "exported"
+  assert out["proof_source"] == "normalized_lds_byte_window_store_cover"
+  assert out["check"]["ok"] is True
+  assert [event["op"] for event in out["events"]] == ["produce", "barrier", "consume"]
+
+
+def test_p7_byte_window_fallback_fails_closed_without_store_cover():
+  side = life._side_channel_lifecycle_events([
+    {"kind": "dbuf_lifecycle_event", "op": "consume", "role": "A", "epoch": "e0", "slot": "s0", "window": "A:s0",
+     "byte_start": 32, "byte_len": 32, "uop_id": 900},
+  ])
+
+  out = life._p7_lowered_stream_export({
+    "ds_store_b128": [{"idx": 10}],
+    "s_barrier": [{"idx": 12}],
+    "ds_load_b128": [{"idx": 20}],
+  }, {"covered_load_count": 1, "load_count": 1, "key_strength": "synthetic"}, side, {
+    "stores": [{"idx": 10, "op": "ds_store_b128", "normalized_window": {"base": "lds0", "lo": 32, "hi": 48}}],
+    "loads": [{"idx": 20, "op": "ds_load_b128", "normalized_window": {"base": "lds0", "lo": 32, "hi": 48}}],
+  })
+
+  assert out["status"] == "fail_closed"
+  assert out["byte_window_reconciled_side_channel"]["ok"] is False
+  assert "stores do not exactly cover consume byte window" in out["byte_window_reconciled_side_channel"]["errors"][0]["error"]
+
+
 def test_side_channel_reconciliation_rejects_missing_p5_wait():
   side = life._side_channel_lifecycle_events([
     {"kind": "dbuf_lifecycle_event", "op": "wait", "wait_kind": "vm", "count": 0, "uop_id": 9},

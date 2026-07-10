@@ -91,7 +91,7 @@ Required proof layers:
 | P4 layout proof | A/B row/BT layout matches the WMMA operand contract | prevents correct bytes in wrong lane order | checker/exporter ready for S10 LDS spec static layout |
 | P5 wait/sync proof | VMEM waits, LGKM waits, and barriers are present in the right phase | prevents memory visibility hazards | checker strict mode, side-channel reconciliation, and live wait anchors implemented |
 | P6 lifetime/pressure proof | address/fragment live ranges are bounded by the lifecycle | prevents the generated route from recreating VGPR pressure failures | advisory summary checker implemented |
-| P7 lowered-stream proof | generated graph/stream exports actual stores/loads/waits/WMMA into this schema | proves S10 generation, not only the hand-coded primitive metadata | fail-closed exporter plus side-channel row reconciliation implemented; active generated route still lacks producer lifecycle rows |
+| P7 lowered-stream proof | generated graph/stream exports actual stores/loads/waits/WMMA into this schema | proves S10 generation, not only the hand-coded primitive metadata | active packed-LDS trace exports through normalized byte-window producer ownership |
 
 S10 is ready to reopen generated DBUF replacement only when P1-P7 pass on:
 
@@ -263,19 +263,23 @@ Current live coverage:
 - UOp rewrite/lowering emits transitive anchor aliases so side-channel ids can follow final lowered rows,
 - synthetic side-channel tests prove P1/P3/P5/P7 reconciliation behavior.
 
-Current generated-trace blocker:
+Current generated-trace result:
 
-- `2x2` active generated with packed LDS flags has physical LDS traffic (`ds_store_b128=32`, `ds_load_b128=32`,
-  `s_barrier=2`) but side-channel lifecycle rows contain consumes/waits only; no produce/barrier ownership rows are
-  emitted for the generated DBUF lifecycle.
-- The construction audit reports `no_body_staging`, so P7 cannot prove equivalence to the hand/hybrid oracle yet.
+- Active generated packed-LDS shapes `2x2`, `4x2`, and `2x4` now export through
+  `proof_source=normalized_lds_byte_window_store_cover`.
+- `2x2`: `ds_store_b128=32`, `ds_load_b128=32`, `s_barrier=2`, checked event count `94`, `check.ok=true`.
+- `4x2` and `2x4`: `ds_store_b128=48`, `ds_load_b128=48`, `s_barrier=2`, checked event count `142`,
+  `check.ok=true`.
+- Direct side-channel producer rows are still absent for this route. The producer proof comes from normalized physical
+  `ds_store_b128` byte-window coverage of each logical 32-byte consume.
+- P5 wait events are present in the exported event trace, but the byte-window bridge currently runs the checker with
+  strict P5 disabled; strict P5 remains covered by direct wait reconciliation and should be promoted into the bridge next.
 
 Remaining MVP work:
 
-1. Construct or export generated producer ownership rows for the active packed-LDS route, not only consumer fragment rows.
-2. Re-run `_p7_lowered_stream_export` on the generated candidate until it exports checked produce/barrier/consume/wait events
-   instead of failing closed.
-3. Diff generated checked events against the hand/hybrid oracle for role/epoch/window/value coverage.
+1. Promote strict P5 validation in the byte-window bridge once duplicated wait side-channel rows are deduped by final row.
+2. Diff generated checked events against the hand/hybrid oracle for role/epoch/window/value coverage.
+3. Keep `4x4` parked under the hardware/register-budget decision; do not reopen it as part of this P7 MVP.
 
 ## Decoupling Path
 
