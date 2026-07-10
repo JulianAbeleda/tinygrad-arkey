@@ -13,6 +13,7 @@ DEFAULT_CANDIDATE = Path("bench/prefill-whole-synced/s10-composed-warmstart-poli
 DEFAULT_SCHEDULE_GATE = Path("bench/prefill-v2-schedule-table/latest.json")
 DEFAULT_ROUTE_CENSUS = Path("bench/prefill-baseline-audit/route-census-structural.json")
 DEFAULT_SHAPE_MATRIX = Path("bench/prefill-baseline-audit/hand-vs-generated-shape-matrix.json")
+DEFAULT_S9_REPORT = Path("bench/prefill-lds2-s9/report.json")
 DEFAULT_OUTPUT = Path("bench/prefill-baseline-audit/latest.json")
 
 
@@ -88,6 +89,50 @@ def authority_comparison(baseline: dict[str, Any] | None, candidate: dict[str, A
     "baseline_family": baseline.get("route_attribution", {}).get("prefill_route_family"),
     "candidate_family": candidate.get("route_attribution", {}).get("prefill_route_family"),
     "whole_tok_s": whole,
+  }
+
+
+def s9_authority_summary(report: dict[str, Any] | None) -> dict[str, Any] | None:
+  if report is None: return None
+  whole = report.get("whole_prefill", {})
+  detail = report.get("whole_prefill_detail", {})
+  return {
+    "schema": report.get("schema"),
+    "verdict": report.get("verdict"),
+    "pp512_median": _round(_num(whole.get("pp512_median")), 2),
+    "pp4096_median": _round(_num(whole.get("pp4096_median")), 2),
+    "pp512_samples": [_round(_num(x), 2) for x in detail.get("pp512_samples", [])],
+    "pp4096_samples": [_round(_num(x), 2) for x in detail.get("pp4096_samples", [])],
+    "binding_failure_count": len(detail.get("binding_failures", [])),
+    "used_paths": detail.get("used_paths", []),
+  }
+
+
+def s9_promotion_gates(s9: dict[str, Any] | None, baseline: dict[str, Any] | None,
+                       candidate: dict[str, Any] | None) -> dict[str, Any] | None:
+  if s9 is None: return None
+  s9_whole = s9.get("whole_prefill", {})
+  s9_512, s9_4096 = _num(s9_whole.get("pp512_median")), _num(s9_whole.get("pp4096_median"))
+  cand_512 = _num((candidate or {}).get("whole_tok_s", {}).get("512"))
+  cand_4096 = _num((candidate or {}).get("whole_tok_s", {}).get("4096"))
+  base_512 = _num((baseline or {}).get("whole_tok_s", {}).get("512"))
+  base_4096 = _num((baseline or {}).get("whole_tok_s", {}).get("4096"))
+  def row(actual: float | None, target: float | None) -> dict[str, Any]:
+    return {"actual": _round(actual, 2), "target": _round(target, 2),
+            "pass": actual is not None and target is not None and actual >= target}
+  return {
+    "s9_98pct": {
+      "pp512": row(cand_512, None if s9_512 is None else 0.98 * s9_512),
+      "pp4096": row(cand_4096, None if s9_4096 is None else 0.98 * s9_4096),
+    },
+    "pure_baseline": {
+      "pp512": row(cand_512, base_512),
+      "pp4096": row(cand_4096, base_4096),
+    },
+    "decision": "candidate_promotable" if (
+      cand_512 is not None and cand_4096 is not None and s9_512 is not None and s9_4096 is not None and
+      cand_512 >= 0.98 * s9_512 and cand_4096 >= 0.98 * s9_4096
+    ) else "keep_s9_authority_and_treat_candidate_as_research",
   }
 
 
@@ -172,26 +217,29 @@ def next_commands(args: argparse.Namespace) -> dict[str, str]:
     "schedule_gate": f"{py} DEV=AMD:ISA python3 extra/qk/prefill_v2_schedule_table_gate.py --shapes 5120x5120 --run-amd",
     "route_census": f"mkdir -p {args.route_census.parent} && {py} DEV=AMD:ISA python3 extra/qk/prefill/prefill_route_census.py --structural-only --routes generated-direct,generated-kmajor,hand-lds2 --shapes '2,2;4,2;2,4' --json > {args.route_census}",
     "shape_matrix": f"mkdir -p {args.shape_matrix.parent} && {py} DEV=AMD:ISA python3 extra/qk/prefill/hand_vs_generated_shape_matrix.py --shapes '2,2;4,2;2,4' --generated-env dbuf-safe --json > {args.shape_matrix}",
+    "s9_report": f"{py} python3 extra/qk/prefill/lds2_s9_report.py --output {args.s9_report}",
   }
 
 
 def build_bundle(args: argparse.Namespace) -> dict[str, Any]:
   loaded = {}
   for name, path in (("baseline", args.baseline), ("candidate", args.candidate), ("schedule_gate", args.schedule_gate),
-                     ("route_census", args.route_census), ("shape_matrix", args.shape_matrix)):
+                     ("route_census", args.route_census), ("shape_matrix", args.shape_matrix),
+                     ("s9_report", args.s9_report)):
     loaded[name] = (*_load_json(path), path)
   baseline, base_err, _ = loaded["baseline"]
   candidate, cand_err, _ = loaded["candidate"]
   schedule, sched_err, _ = loaded["schedule_gate"]
   census, census_err, _ = loaded["route_census"]
   matrix, matrix_err, _ = loaded["shape_matrix"]
+  s9, s9_err, _ = loaded["s9_report"]
   missing_required = [k for k in ("baseline",) if loaded[k][0] is None]
-  missing_optional = [k for k in ("candidate", "schedule_gate", "route_census", "shape_matrix") if loaded[k][0] is None]
+  missing_optional = [k for k in ("candidate", "schedule_gate", "route_census", "shape_matrix", "s9_report") if loaded[k][0] is None]
   verdict = "BASELINE_AUDIT_BLOCKED_MISSING_BASELINE" if missing_required else \
             ("BASELINE_AUDIT_READY_WITH_GAPS" if missing_optional else "BASELINE_AUDIT_READY")
   command_key_for_layer = {
     "baseline": "baseline_authority", "candidate": "candidate_authority", "schedule_gate": "schedule_gate",
-    "route_census": "route_census", "shape_matrix": "shape_matrix",
+    "route_census": "route_census", "shape_matrix": "shape_matrix", "s9_report": "s9_report",
   }
   all_next_commands = next_commands(args)
   missing_layers = missing_required + missing_optional
@@ -204,10 +252,13 @@ def build_bundle(args: argparse.Namespace) -> dict[str, Any]:
       "schedule_gate": _artifact_status(args.schedule_gate, schedule, sched_err),
       "route_census": _artifact_status(args.route_census, census, census_err),
       "shape_matrix": _artifact_status(args.shape_matrix, matrix, matrix_err),
+      "s9_report": _artifact_status(args.s9_report, s9, s9_err),
     },
+    "s9_authority": s9_authority_summary(s9),
     "baseline": authority_summary(baseline),
     "candidate": authority_summary(candidate),
     "comparison": authority_comparison(baseline, candidate),
+    "promotion_gates": s9_promotion_gates(s9, baseline, candidate),
     "schedule_gate": schedule_gate_summary(schedule),
     "route_census": route_census_summary(census),
     "shape_matrix": shape_matrix_summary(matrix),
@@ -225,6 +276,7 @@ def main(argv: list[str] | None = None) -> int:
   ap.add_argument("--schedule-gate", type=Path, default=DEFAULT_SCHEDULE_GATE)
   ap.add_argument("--route-census", type=Path, default=DEFAULT_ROUTE_CENSUS)
   ap.add_argument("--shape-matrix", type=Path, default=DEFAULT_SHAPE_MATRIX)
+  ap.add_argument("--s9-report", type=Path, default=DEFAULT_S9_REPORT)
   ap.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
   ap.add_argument("--no-write", action="store_true")
   ap.add_argument("--json", action="store_true")
