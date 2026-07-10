@@ -14,7 +14,7 @@ import json
 import pathlib
 from typing import Any
 
-from extra.qk.wmma_lds_spec import WMMALDSSpec, wmma_lds_slot_identity_proof
+from extra.qk.wmma_lds_spec import WMMALDSSpec, wmma_lds_layout_key, wmma_lds_slot_identity_proof
 
 
 SCHEMA = "dbuf-s10-lds-spec-export.v1"
@@ -69,6 +69,7 @@ def _proof_windows(proof: dict[str, Any]) -> dict[tuple[str, int], S10LDSByteWin
 
 
 def _event(op: str, *, step: int, window: S10LDSByteWindow | None = None,
+           layout_key: dict[str, Any] | None = None,
            epoch: int | None = None, phase: str = "") -> dict[str, Any]:
   row: dict[str, Any] = {"schema": EVENT_SCHEMA, "op": op, "step": step}
   if phase: row["phase"] = phase
@@ -80,6 +81,7 @@ def _event(op: str, *, step: int, window: S10LDSByteWindow | None = None,
       "window": window.window_id,
       "byte_window": window.to_json(),
     })
+    if layout_key is not None: row["layout_key"] = dict(layout_key)
   return row
 
 
@@ -103,11 +105,13 @@ def s10_lds_spec_dbuf_events(spec: WMMALDSSpec, *, active_buffers: int = 2, k_ti
   windows = _proof_windows(proof)
   missing = [(role, slot) for slot in range(active_buffers) for role in roles if (role, slot) not in windows]
   if missing: raise ValueError(f"slot identity proof did not provide all requested role/slot windows: {missing!r}")
+  layout_keys = {role: wmma_lds_layout_key(spec, role) for role in roles}
 
   events: list[dict[str, Any]] = []
   step = 0
   for role in roles:
-    events.append(_event("produce", step=step, epoch=0, window=windows[(role, 0)], phase="prologue"))
+    events.append(_event("produce", step=step, epoch=0, window=windows[(role, 0)],
+                         layout_key=layout_keys[role], phase="prologue"))
     step += 1
   events.append(_event("barrier", step=step, phase="prologue_to_body"))
   step += 1
@@ -115,13 +119,15 @@ def s10_lds_spec_dbuf_events(spec: WMMALDSSpec, *, active_buffers: int = 2, k_ti
   for epoch in range(k_tiles):
     slot = epoch % active_buffers
     for role in roles:
-      events.append(_event("consume", step=step, epoch=epoch, window=windows[(role, slot)], phase="body"))
+      events.append(_event("consume", step=step, epoch=epoch, window=windows[(role, slot)],
+                           layout_key=layout_keys[role], phase="body"))
       step += 1
     next_epoch = epoch + 1
     if next_epoch < k_tiles:
       next_slot = next_epoch % active_buffers
       for role in roles:
-        events.append(_event("produce", step=step, epoch=next_epoch, window=windows[(role, next_slot)], phase="body"))
+        events.append(_event("produce", step=step, epoch=next_epoch, window=windows[(role, next_slot)],
+                             layout_key=layout_keys[role], phase="body"))
         step += 1
       events.append(_event("barrier", step=step, phase="body"))
       step += 1
@@ -149,6 +155,7 @@ def export_s10_lds_spec(spec: WMMALDSSpec, *, active_buffers: int = 2, k_tiles: 
       "P1_epoch_lifecycle_shape": "event-like metadata only",
       "P2_byte_window": "done",
       "P3_value_key": "not_proven",
+      "P4_layout": "done_for_s10_lds_spec_static",
       "P5_wait_sync": "not_proven",
       "dbuf_cadence": "not_proven" if not proof["dbuf_cadence_proven"] else "proven",
     },
@@ -173,6 +180,8 @@ def checker_compatible_events(events: list[dict[str, Any]]) -> list[dict[str, An
     if "byte_window" in event:
       bw = event["byte_window"]
       row["lds_window"] = {"base": bw["base"], "bytes": bw["bytes"], "stride": bw["row_stride_bytes"]}
+    if "layout_key" in event:
+      row["layout_key"] = dict(event["layout_key"])
     out.append(row)
   return out
 

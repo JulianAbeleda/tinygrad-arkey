@@ -33,10 +33,15 @@ def test_s10_lds_spec_exporter_emits_p2_byte_window_events():
     "role": "A", "slot": 0, "window": "A:slot0:0-10240", "base": 0, "end": 10240,
     "bytes": 10240, "rows": 128, "row_stride_bytes": 80, "vector_bytes": 16, "total_vectors": 640,
   }
+  assert events[0]["layout_key"]["role"] == "A"
+  assert events[0]["layout_key"]["operand"] == "src0"
+  assert events[0]["layout_key"]["lds_layout"] == "global_row_major_fp16_to_lds"
   assert events[6]["role"] == "B"
   assert events[6]["epoch"] == 1
   assert events[6]["slot"] == 1
   assert events[6]["window"] == "B:slot1:30720-40960"
+  assert events[6]["layout_key"]["operand"] == "src1"
+  assert events[6]["layout_key"]["lds_layout"] == "global_row_major_bt_fp16_to_lds"
 
 
 def test_s10_lds_spec_exporter_events_are_checker_compatible():
@@ -50,6 +55,13 @@ def test_s10_lds_spec_exporter_events_are_checker_compatible():
   assert checker_rows[0] == {
     "op": "produce", "step": 0, "role": "A", "epoch": 0, "slot": 0, "window": "A:slot0:0-10240",
     "lds_window": {"base": 0, "bytes": 10240, "stride": 80},
+    "layout_key": {
+      "role": "A", "operand": "src0", "lds_layout": "global_row_major_fp16_to_lds",
+      "wmma_contract": "rdna3_wmma_f32_16x16x16_f16", "fragment_shape": [16, 16],
+      "lane_map_id": "rdna3_wmma_f32_16x16x16_f16_lds2_static", "lane_count": 32,
+      "lane_replication": "A_lanes_16_31_replicate", "per_lane_elements": 16,
+      "vector_bytes": 16, "lds_row_stride_bytes": 80,
+    },
   }
 
 
@@ -61,6 +73,7 @@ def test_export_s10_lds_spec_report_does_not_overclaim_cadence_or_value_proof():
   assert report["proof_schema"] == "wmma-lds-slot-identity-proof.v1"
   assert report["proof_coverage"]["P2_byte_window"] == "done"
   assert report["proof_coverage"]["P3_value_key"] == "not_proven"
+  assert report["proof_coverage"]["P4_layout"] == "done_for_s10_lds_spec_static"
   assert report["proof_coverage"]["P5_wait_sync"] == "not_proven"
   assert report["proof_coverage"]["dbuf_cadence"] == "not_proven"
   assert report["event_counts"] == {"produce": 4, "consume": 4, "barrier": 2}

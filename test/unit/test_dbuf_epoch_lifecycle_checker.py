@@ -1,8 +1,8 @@
 import json
 
 from extra.qk.prefill.dbuf_epoch_lifecycle_checker import (
-  DBUFEvent, canonical_dbuf_events, check_events, events_from_epoch_primitive, events_from_s10_role_trace, main,
-  s10_readiness_roadmap)
+  DBUFEvent, canonical_dbuf_events, canonical_dbuf_events_with_waits, check_events, events_from_epoch_primitive,
+  events_from_s10_role_trace, main, s10_readiness_roadmap)
 
 
 def test_canonical_dbuf_lifecycle_passes():
@@ -110,6 +110,153 @@ def test_incomplete_lds_window_fails():
   assert any(err["error"] == "lds_window requires base and bytes" for err in report["errors"])
 
 
+def _layout_key(role="A", **overrides):
+  data = {
+    "role": role,
+    "operand": "src0" if role == "A" else "src1",
+    "lds_layout": "global_row_major_fp16_to_lds" if role == "A" else "global_row_major_bt_fp16_to_lds",
+    "wmma_contract": "rdna3_wmma_f32_16x16x16_f16",
+    "fragment_shape": [16, 16],
+    "lane_map_id": "rdna3_wmma_f32_16x16x16_f16_lds2_static",
+    "lane_count": 32,
+    "lane_replication": "A_lanes_16_31_replicate" if role == "A" else None,
+    "per_lane_elements": 16,
+    "vector_bytes": 16,
+    "lds_row_stride_bytes": 80,
+  }
+  data.update(overrides)
+  return data
+
+
+def test_matching_layout_keys_pass():
+  layout = _layout_key("A")
+  events = [
+    DBUFEvent("produce", role="A", epoch=0, slot=0, layout_key=layout, step=0),
+    DBUFEvent("barrier", step=1),
+    DBUFEvent("consume", role="A", epoch=0, slot=0, layout_key=layout, step=2),
+  ]
+
+  report = check_events(events)
+
+  assert report["ok"] is True
+  assert report["errors"] == []
+
+
+def test_valid_wait_events_pass_p5_required_mode():
+  report = check_events(canonical_dbuf_events_with_waits(k_tiles=2), require_p5=True)
+
+  assert report["ok"] is True
+  assert report["wait_count"] == 6
+  assert report["p5_wait_sync"] == "checked"
+
+
+def test_invalid_wait_kind_fails():
+  events = [
+    DBUFEvent("wait", kind="bad", count=0, step=0),
+    DBUFEvent("produce", role="A", epoch=0, slot=0, step=1),
+    DBUFEvent("barrier", step=2),
+    DBUFEvent("consume", role="A", epoch=0, slot=0, step=3),
+  ]
+
+  report = check_events(events)
+
+  assert report["ok"] is False
+  assert report["errors"][0]["error"] == "invalid wait kind 'bad'"
+
+
+def test_invalid_wait_count_fails():
+  events = [
+    DBUFEvent("wait", kind="vm", count=64, step=0),
+  ]
+
+  report = check_events(events)
+
+  assert report["ok"] is False
+  assert report["errors"][0]["error"] == "wait count must be an integer in 0..63"
+
+
+def test_legacy_events_pass_without_p5_but_fail_when_required():
+  events = canonical_dbuf_events(k_tiles=2)
+
+  legacy = check_events(events)
+  strict = check_events(events, require_p5=True)
+
+  assert legacy["ok"] is True
+  assert legacy["p5_wait_sync"] == "not_proven"
+  assert strict["ok"] is False
+  assert any("P5 requires VM wait before LDS produce" in err["error"] for err in strict["errors"])
+
+
+def test_wait_without_barrier_does_not_satisfy_visibility():
+  events = [
+    DBUFEvent("wait", kind="vm", count=0, step=0),
+    DBUFEvent("produce", role="A", epoch=0, slot=0, step=1),
+    DBUFEvent("wait", kind="lgkm", count=0, step=2),
+    DBUFEvent("consume", role="A", epoch=0, slot=0, step=3),
+  ]
+
+  report = check_events(events, require_p5=True)
+
+  assert report["ok"] is False
+  assert any(err["error"] == "no barrier separates producer and consumer" for err in report["errors"])
+
+
+def test_barrier_without_store_lgkm_wait_fails_p5():
+  events = [
+    DBUFEvent("wait", kind="vm", count=0, step=0),
+    DBUFEvent("produce", role="A", epoch=0, slot=0, step=1),
+    DBUFEvent("barrier", step=2),
+    DBUFEvent("wait", kind="lgkm", count=0, step=3),
+    DBUFEvent("consume", role="A", epoch=0, slot=0, step=4),
+  ]
+
+  report = check_events(events, require_p5=True)
+
+  assert report["ok"] is False
+  assert any("P5 requires LGKM wait after LDS stores before barrier" in err["error"] for err in report["errors"])
+
+
+def test_layout_key_operand_mismatch_fails():
+  events = [
+    DBUFEvent("produce", role="A", epoch=0, slot=0, layout_key=_layout_key("A", operand="src1"), step=0),
+    DBUFEvent("barrier", step=1),
+    DBUFEvent("consume", role="A", epoch=0, slot=0, layout_key=_layout_key("A", operand="src1"), step=2),
+  ]
+
+  report = check_events(events)
+
+  assert report["ok"] is False
+  assert any("layout_key operand mismatch" in err["error"] for err in report["errors"])
+
+
+def test_layout_key_lds_layout_mismatch_fails():
+  events = [
+    DBUFEvent("produce", role="B", epoch=0, slot=0, layout_key=_layout_key("B"), step=0),
+    DBUFEvent("barrier", step=1),
+    DBUFEvent("consume", role="B", epoch=0, slot=0,
+              layout_key=_layout_key("B", lds_layout="global_row_major_fp16_to_lds"), step=2),
+  ]
+
+  report = check_events(events)
+
+  assert report["ok"] is False
+  assert any("layout_key LDS layout mismatch" in err["error"] for err in report["errors"])
+
+
+def test_consumer_layout_key_mismatch_fails():
+  events = [
+    DBUFEvent("produce", role="A", epoch=0, slot=0, layout_key=_layout_key("A"), step=0),
+    DBUFEvent("barrier", step=1),
+    DBUFEvent("consume", role="A", epoch=0, slot=0,
+              layout_key=_layout_key("A", lane_map_id="different_lane_map"), step=2),
+  ]
+
+  report = check_events(events)
+
+  assert report["ok"] is False
+  assert any("consumer layout_key does not match producer" in err["error"] for err in report["errors"])
+
+
 def test_cli_loads_event_json(tmp_path):
   path = tmp_path / "events.json"
   path.write_text(json.dumps({"events": [event.to_json() for event in canonical_dbuf_events(k_tiles=2)]}))
@@ -175,6 +322,13 @@ def test_cli_exports_s10_role_trace(tmp_path):
   assert len(report["events"]) == 10
 
 
+def test_cli_require_p5_fails_legacy_canonical():
+  report = main(["--canonical", "--k-tiles", "2", "--require-p5", "--json"])
+
+  assert report["ok"] is False
+  assert report["p5_wait_sync"] == "checked"
+
+
 def test_s10_roadmap_does_not_overclaim_readiness():
   roadmap = s10_readiness_roadmap()
 
@@ -184,6 +338,7 @@ def test_s10_roadmap_does_not_overclaim_readiness():
   exporters = {exporter["id"]: exporter for exporter in roadmap["exporters"]}
   assert layers["P1"]["status"] == "done"
   assert layers["P2"]["status"] == "done_for_s10_lds_spec"
+  assert layers["P4"]["status"] == "done_for_s10_lds_spec_static"
   assert layers["P7"]["status"] == "pending"
   assert exporters["E1"]["status"] == "done"
   assert exporters["E5"]["status"] == "pending"

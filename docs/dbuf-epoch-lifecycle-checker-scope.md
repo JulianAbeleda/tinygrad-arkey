@@ -18,6 +18,7 @@ It validates an event trace:
 produce(role, epoch, slot, window)
 barrier()
 consume(role, epoch, slot, window)
+wait(kind, count, phase)
 ```
 
 ## Why Separate
@@ -42,6 +43,8 @@ analysis tool. S10 can export traces into it, but S10 should not be required to 
 | barrier separation | at least one barrier lies between producer and consumer |
 | no early overwrite | a slot cannot be reused before the previous epoch in that slot is consumed |
 | no duplicate consume | a producer cannot feed multiple consumers unless the trace explicitly models fanout later |
+| optional layout proof | when `layout_key` is exported, producer and consumer must agree on A/B WMMA operand layout |
+| optional wait proof | with `--require-p5`, VM/LGKM wait events must bracket LDS production, barriers, and consume/WMMA phases |
 
 ## Exhaustive S10 Target
 
@@ -85,8 +88,8 @@ Required proof layers:
 | P1 epoch lifecycle | producer/consumer/barrier/overwrite correctness | proves the DBUF ring is logically safe | done |
 | P2 byte-window proof | producer and consumer agree on exact LDS byte interval | prevents same-slot wrong-window bugs | checker/exporter ready for S10 LDS spec |
 | P3 value-key proof | global tile loaded by producer equals tile consumed by WMMA | prevents wrong epoch/tensor/tile values | not started |
-| P4 layout proof | A/B row/BT layout matches the WMMA operand contract | prevents correct bytes in wrong lane order | not started |
-| P5 wait/sync proof | VMEM waits, LGKM waits, and barriers are present in the right phase | prevents memory visibility hazards | not started |
+| P4 layout proof | A/B row/BT layout matches the WMMA operand contract | prevents correct bytes in wrong lane order | checker/exporter ready for S10 LDS spec static layout |
+| P5 wait/sync proof | VMEM waits, LGKM waits, and barriers are present in the right phase | prevents memory visibility hazards | checker schema and strict mode implemented; exporters pending |
 | P6 lifetime/pressure proof | address/fragment live ranges are bounded by the lifecycle | prevents the generated route from recreating VGPR pressure failures | not started |
 | P7 lowered-stream proof | generated graph/stream exports actual stores/loads/waits/WMMA into this schema | proves S10 generation, not only the hand-coded primitive metadata | not started |
 
@@ -121,8 +124,9 @@ For every WMMA operand consumer in generated ffn_gate_up:
   were live ranges bounded enough to avoid recreating the known pressure wall?
 ```
 
-Current answer: epoch/slot/barrier is proven, and the checker validates LDS byte-window equality. The S10 LDS spec
-exporter now feeds exact slot-identity byte windows from `WMMALDSSpec` into the checker-compatible `lds_window` field.
+Current answer: epoch/slot/barrier is proven, the checker validates LDS byte-window equality, and S10 LDS spec exports
+static A/B layout keys. The checker also has an opt-in P5 strict mode for VM/LGKM wait events, but no production exporter
+feeds wait events yet.
 
 ## Current Status
 
@@ -147,7 +151,7 @@ This validates the current `ffn_gate_up` `DBUFEpochPrimitive` contract without c
 The second exporter is implemented:
 
 ```text
-WMMALDSSpec / wmma_lds_slot_identity_proof -> P2 LDS byte-window events
+WMMALDSSpec / wmma_lds_slot_identity_proof -> P2 LDS byte-window events + P4 static layout keys
 ```
 
 Tool:
@@ -159,11 +163,17 @@ extra/qk/prefill/dbuf_s10_lds_spec_exporter.py
 Unit gate:
 
 ```bash
-PYTHONPATH=. pytest -q test/unit/test_dbuf_epoch_lifecycle_checker.py
+PYTHONPATH=. pytest -q test/unit/test_dbuf_epoch_lifecycle_checker.py test/unit/test_dbuf_s10_lds_spec_exporter.py
 ```
 
 The built-in canonical DBUF plan passes; intentionally broken epoch, slot-overwrite, missing-barrier, and duplicate
-consume traces fail.
+consume traces fail. P5 strict mode is available through:
+
+```bash
+PYTHONPATH=. python3 extra/qk/prefill/dbuf_epoch_lifecycle_checker.py --canonical --require-p5 --json
+```
+
+Legacy traces without explicit wait events still pass P1/P2/P4 checks, but fail when P5 is required.
 
 ## Decoupling Path
 

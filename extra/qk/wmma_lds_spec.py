@@ -380,6 +380,27 @@ def wmma_lds_slot_identity_proof(spec: WMMALDSSpec, *, active_buffers: int | Non
   }
 
 
+def wmma_lds_layout_key(spec: WMMALDSSpec, role: str) -> dict[str, Any]:
+  """Return the static WMMA operand layout contract for one LDS-staged role."""
+  if not isinstance(spec, WMMALDSSpec):
+    raise TypeError(f"wmma_lds_layout_key expected WMMALDSSpec, got {type(spec).__name__}")
+  if role not in ("A", "B"): raise ValueError(f"unsupported WMMA LDS role {role!r}")
+  lds_layout = spec.memory_layout.operand_a if role == "A" else spec.memory_layout.operand_b
+  return {
+    "role": role,
+    "operand": "src0" if role == "A" else "src1",
+    "lds_layout": lds_layout,
+    "wmma_contract": "rdna3_wmma_f32_16x16x16_f16",
+    "fragment_shape": [16, 16],
+    "lane_map_id": "rdna3_wmma_f32_16x16x16_f16_lds2_static",
+    "lane_count": 32,
+    "lane_replication": "A_lanes_16_31_replicate" if role == "A" else None,
+    "per_lane_elements": 16,
+    "vector_bytes": 16,
+    "lds_row_stride_bytes": spec.stride_a_bytes if role == "A" else spec.stride_b_bytes,
+  }
+
+
 def extract_wmma_lds_spec(prefill_spec) -> WMMALDSSpec | None:
   if prefill_spec.route_family != "lds": return None
   spec = WMMALDSSpec(
