@@ -6,7 +6,7 @@ import json
 from typing import Any
 
 from tinygrad.llm import route_policy
-from tinygrad.llm.generated_candidates import builtin_registry
+from extra.qk.generated_candidates import builtin_registry
 
 from extra.qk import route_manifest
 from extra.qk.q4k_wmma_tile_lowering import QWEN3_14B_Q4K_ROLE_SHAPES

@@ -8,6 +8,10 @@ from functools import cache
 def _attr(module:str, name:str):
   return getattr(importlib.import_module(module), name)
 
+def qk_runtime_specs_attr(name:str): return _attr("extra.qk.runtime_specs", name)
+def qk_quant_specs_attr(name:str): return _attr("extra.qk.quant_specs", name)
+def qk_generated_candidates_attr(name:str): return _attr("extra.qk.generated_candidates", name)
+
 
 def route_pf16_graph_gemm(*args, **kwargs): return _attr("extra.qk.prefill_graph_gemm_route", "route_pf16_graph_gemm")(*args, **kwargs)
 def route_q4k_graph_gemm(*args, **kwargs): return _attr("extra.qk.prefill_graph_gemm_route", "route_q4k_graph_gemm")(*args, **kwargs)

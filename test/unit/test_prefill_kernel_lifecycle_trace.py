@@ -4,9 +4,9 @@ from pathlib import Path
 from extra.qk import pure_kernel_surface_audit as surface_audit
 from extra.qk.prefill import kernel_lifecycle_trace as life
 from extra.qk.prefill import native_isa_l4_stream_probe as sp
-from tinygrad.llm.generated_candidates import select_generated_candidate
-from tinygrad.llm.quant_specs import activation_spec, quant_spec
-from tinygrad.llm.runtime_specs import RuntimeOpSpec
+from extra.qk.generated_candidates import select_generated_candidate
+from extra.qk.quant_specs import activation_spec, quant_spec
+from extra.qk.runtime_specs import RuntimeOpSpec
 
 ROOT = Path(__file__).resolve().parents[2]
 

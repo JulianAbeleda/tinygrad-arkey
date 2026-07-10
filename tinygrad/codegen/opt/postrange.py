@@ -17,6 +17,7 @@ from tinygrad.dtype import dtypes, AddrSpace
 from tinygrad.helpers import colored, getenv, DEBUG, to_function_name, NOOPT, argsort, round_up, prod, merge_dicts, get_single_element, flatten
 from tinygrad.helpers import ALLOW_TF32, count
 from tinygrad.codegen.opt import Opt, OptOps, KernelOptError, check
+from tinygrad.codegen.opt.extensions import get_codegen_extension_registry
 from tinygrad.codegen.simplify import pm_flatten_range
 from tinygrad.renderer import Renderer
 from tinygrad.schedule.indexing import BufferizeOpts
@@ -371,16 +372,16 @@ _WARMSTART_LOCAL_STAGE_DENY_KEYS = set()
 _warmstart_stats = {"match": 0, "apply": 0, "error": 0}
 
 def _tc_local_stage_mode() -> str:
-  return str(getenv("PREFILL_TC_LOCAL_STAGE", "")).strip().lower()
+  return get_codegen_extension_registry().tc_local_stage_mode()
 
 def _tc_local_stage_with_planned_local() -> bool:
-  return bool(getenv("PREFILL_TC_LOCAL_STAGE_WITH_LOCAL", 0))
+  return get_codegen_extension_registry().tc_local_stage_with_planned_local()
 
 def _tc_local_stage_post_opt() -> bool:
-  return bool(getenv("PREFILL_TC_LOCAL_STAGE_POST", 0))
+  return get_codegen_extension_registry().tc_local_stage_post_opt()
 
 def _prefill_dbuf_lds_addr_serial() -> bool:
-  return bool(PREFILL_DBUF() and getenv("PREFILL_DBUF_LDS_ADDR_SERIAL", 0))
+  return get_codegen_extension_registry().prefill_dbuf_lds_addr_serial(bool(PREFILL_DBUF()))
 
 def _tc_local_stage_ordered_local(bsh:UOp, dep:UOp|None) -> UOp:
   return bsh.after(dep) if _prefill_dbuf_lds_addr_serial() and dep is not None else bsh
@@ -499,15 +500,14 @@ def _tc_local_stage_paired_contract_src(src:UOp, operand_idx:int, *, owner_tag:t
 
 
 def _tc_local_stage_owned_stage_meta(operand_idx:int) -> bool:
-  return bool(getenv("PREFILL_DBUF_OWNED_AB_STAGE_META", 0) or
-              getenv("PREFILL_DBUF_OWNED_A_STAGE_META" if operand_idx == 0 else "PREFILL_DBUF_OWNED_B_STAGE_META", 0))
+  return get_codegen_extension_registry().tc_local_stage_owned_stage_meta(operand_idx)
 
 def _tc_local_stage_buffer_tag(operand_idx:int, lds_buffer_id:int, nbuf:int, tile_count:int, tile_elems:int) -> tuple:
   tag = ("wmma_frag_buffer_proof", ("role", "A" if operand_idx == 0 else "B"), ("lds_buffer_id", lds_buffer_id),
          ("nbuf", nbuf), ("tile_count", tile_count), ("tile_elems", tile_elems))
   if _tc_local_stage_owned_stage_meta(operand_idx):
     role = "A" if operand_idx == 0 else "B"
-    mode = str(getenv("PREFILL_DBUF_OWNED_A_STAGE_EMIT" if operand_idx == 0 else "PREFILL_DBUF_OWNED_B_STAGE_EMIT", "")).strip().lower()
+    mode = get_codegen_extension_registry().tc_local_stage_owned_stage_emit_mode(operand_idx)
     if mode in ("rotate", "rotated"):
       tag += (("owned_stage", f"{role}_ROTATE"), ("lifecycle", "prologue_body_tail"), ("rotation", "kr_mod_nbuf"))
     else:
@@ -628,10 +628,7 @@ def _tc_local_stage_b_src(src:UOp, fallback:tuple[UOp, ...]) -> UOp:
   return UOp(Ops.CONTRACT, src.dtype, (scalar,), src.arg, tag=1)
 
 def _tc_local_stage_pipe_primitive_disabled_for_ranges(stage_ranges:tuple[UOp, ...]) -> bool:
-  if not getenv("PREFILL_WMMA_PIPE_PRIMITIVE", 0): return False
-  if str(getenv("PREFILL_WMMA_PIPE_ATTN_KV_NO_LOCAL_STAGE", "1")).strip().lower() in ("", "0", "false", "off", "no"): return False
-  dims = {r.vmax + 1 for r in stage_ranges}
-  return bool(dims & {1024, 4096}) and 12288 not in dims
+  return get_codegen_extension_registry().tc_local_stage_pipe_primitive_disabled_for_ranges(stage_ranges)
 
 def _tc_local_stage_wmma_sources(srcs:list[UOp], stage_ranges:tuple[UOp, ...], *, enabled:bool=True, phase:str="early") -> list[UOp]:
   mode = _tc_local_stage_mode()
@@ -679,20 +676,14 @@ def _warmstart_match(k):
   return _WARMSTART_OPTS.get(_warmstart_key(k))
 
 def _warmstart_pipe_primitive_no_local_stage_key(key:tuple[frozenset[int], int]) -> bool:
-  if not getenv("PREFILL_WMMA_PIPE_PRIMITIVE", 0): return False
-  if str(getenv("PREFILL_WMMA_PIPE_ATTN_KV_NO_LOCAL_STAGE", "1")).strip().lower() in ("", "0", "false", "off", "no"): return False
-  out_dims, red = key
-  # Pipe primitive roles are register-resident. The route-level matmul key is (M,N,K); in composed whole-prefill, the
-  # local-stage rewrite can instead see a decomposed WMMA key: tiny structural output dims plus N, red=1.
-  pipe_ns = {1024, 4096}
-  return (512 in out_dims and bool(out_dims & pipe_ns) and red in (4096, 12288)) or (bool(out_dims & pipe_ns) and red == 1)
+  return get_codegen_extension_registry().warmstart_pipe_primitive_no_local_stage_key(key)
 
 def _warmstart_attn_kv_no_local_stage_key(key:tuple[frozenset[int], int]) -> bool:
   return _warmstart_pipe_primitive_no_local_stage_key(key)
 
 def _warmstart_local_stage_allowed_key(key:tuple[frozenset[int], int]) -> bool:
-  return (not _warmstart_pipe_primitive_no_local_stage_key(key)) and key not in _WARMSTART_LOCAL_STAGE_DENY_KEYS and (
-    _WARMSTART_LOCAL_STAGE_KEYS is None or key in _WARMSTART_LOCAL_STAGE_KEYS)
+  return get_codegen_extension_registry().warmstart_local_stage_allowed_key(
+    key, _WARMSTART_LOCAL_STAGE_KEYS, _WARMSTART_LOCAL_STAGE_DENY_KEYS)
 
 def _warmstart_local_stage_allowed(k:Scheduler) -> bool:
   # None preserves the historical global env behavior used by standalone probes. Primitive graph-GEMM routes set this
@@ -710,8 +701,9 @@ def _prefill_dbuf_peel(k:Scheduler) -> None:
   # ROLE GUARD: this peel is a WMMA/GEMM-only primitive. Without this guard it would fire on ANY const-even REDUCE
   # (softmax, RMSNorm, ...), which is out of scope and could perturb unrelated kernels. Only proceed when this
   # kernel actually carries a tensor-core role -- a TC opt already applied, or an Ops.WMMA node in the AST.
-  if not (any(o.op is OptOps.TC for o in (*k.applied_opts, *k.planned_opts))
-          or any(u.op is Ops.WMMA for u in k.ast.backward_slice)): return
+  if not get_codegen_extension_registry().prefill_dbuf_peel_allowed(
+    any(o.op is OptOps.TC for o in (*k.applied_opts, *k.planned_opts)),
+    any(u.op is Ops.WMMA for u in k.ast.backward_slice)): return
   # Fail-closed: no plain const-even REDUCE axis (e.g. already TC-consumed to UNROLL, or symbolic/odd) -> no-op.
   for ui, ax in enumerate(k.unrollable_dims):
     r = k.rngs[ax]

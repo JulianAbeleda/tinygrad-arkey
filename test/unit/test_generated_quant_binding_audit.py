@@ -1,5 +1,5 @@
-from tinygrad.llm.generated_candidates import builtin_registry
-from tinygrad.llm.runtime_specs import GENERATED_PROVENANCE
+from extra.qk.generated_candidates import builtin_registry
+from extra.qk.runtime_specs import GENERATED_PROVENANCE
 from extra.qk import route_manifest
 
 

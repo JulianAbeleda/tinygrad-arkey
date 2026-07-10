@@ -1,8 +1,8 @@
 import pytest
 
-from tinygrad.llm.generated_candidates import GeneratedCandidateRegistry, builtin_registry, select_generated_candidate
-from tinygrad.llm.quant_specs import activation_spec, quant_spec
-from tinygrad.llm.runtime_specs import ActivationQuantSpec, GeneratedCandidate, QuantizedTensorSpec, RuntimeOpSpec
+from extra.qk.generated_candidates import GeneratedCandidateRegistry, builtin_registry, select_generated_candidate
+from extra.qk.quant_specs import activation_spec, quant_spec
+from extra.qk.runtime_specs import ActivationQuantSpec, GeneratedCandidate, QuantizedTensorSpec, RuntimeOpSpec
 
 
 def test_runtime_op_spec_round_trips_and_validates():

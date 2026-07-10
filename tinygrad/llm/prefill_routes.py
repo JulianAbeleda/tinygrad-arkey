@@ -4,9 +4,11 @@ import os
 from dataclasses import dataclass
 from typing import Any
 from tinygrad import Tensor, dtypes
-from tinygrad.llm.quant_specs import activation_spec, quant_spec
-from tinygrad.llm.runtime_specs import RuntimeOpSpec
 from tinygrad.llm import route_ops as qk_ops
+
+activation_spec = qk_ops.qk_quant_specs_attr("activation_spec")
+quant_spec = qk_ops.qk_quant_specs_attr("quant_spec")
+RuntimeOpSpec = qk_ops.qk_runtime_specs_attr("RuntimeOpSpec")
 
 PREFILL_ROUTE_CHOICES = ("auto", "fp16", "direct_packed", "chunked")
 # Handwritten sdot4/MMQ/Q8_1-GEMM prefill research modes deleted 2026-07-06 (no backups; dead end ~237 tok/s).
