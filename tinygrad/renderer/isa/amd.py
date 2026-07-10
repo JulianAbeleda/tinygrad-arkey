@@ -8,6 +8,17 @@ LLVM AMDGPU model used as the map: bench/amd-llvm-backend-model/latest.json.
 Inc 0 scope: a trivial elementwise kernel (out[i]=a[i]+b[i]) compiles + runs numerically correct on gfx1100.
 ABI (from LLVM model): s[0:1]=kernarg ptr at entry; v0=workitem id; buffer ptrs s_load'd from kernarg[i*8];
 s_waitcnt drains after memory ops.
+
+EXPERIMENTAL-FLAG INDEX (prefill/machine-search staging plane; ALL default-off):
+  This file accreted ~80 PREFILL_*/AMD_ISA_* getenv knobs from the prefill machine-search research plane. They fall in
+  two classes: (1) real staging knobs that gate an experimental codegen/staging transform (e.g. PREFILL_DBUF*,
+  PREFILL_TC_LOCAL_STAGE*, PREFILL_WMMA_KMAJOR_STAGE_STEAL, PREFILL_LDS_PACK*, AMD_ISA_N1B/SCHED/WAITCNT*), and
+  (2) pure diagnostic probes that only print/log and cannot change emitted code (the *_DUMP / *_AUDIT / *_PROOF_* knobs,
+  e.g. PREFILL_DBUF_D3A_AUDIT, PREFILL_WMMA_*_KEY_DUMP, PREFILL_LDS_PACK_*_DUMP). Several class-1 knobs carry an
+  _UNSAFE suffix (PREFILL_DBUF_LDS_CONST_IMM_UNSAFE, PREFILL_TC_LOCAL_STAGE_A_MULTIDIM_UNSAFE,
+  PREFILL_LDS_PACK_WITHLOCAL_MULTIDIM_UNSAFE) and stay gated behind their documented invariant -- do NOT remove the gate.
+  Collapsing these reads behind one PrefillStagingSpec descriptor is a scoped follow-up (see the refactor report): the
+  probe deletions and the mass consolidation are deferred here to keep the stock (no-flag) renderer path byte-identical.
 """
 from __future__ import annotations
 from typing import NamedTuple

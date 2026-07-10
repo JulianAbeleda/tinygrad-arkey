@@ -1,4 +1,13 @@
 from __future__ import annotations
+# EXPERIMENTAL-FLAG INDEX (prefill/machine-search staging plane; ALL default-off):
+#   This file accreted ~40 PREFILL_* getenv knobs from the prefill machine-search research plane, in two classes:
+#   (1) real staging knobs gating an experimental TC-local-stage / owned-buffer / LDS-pack transform (PREFILL_TC_LOCAL_STAGE*,
+#       PREFILL_DBUF_OWNED_*_STAGE_*, PREFILL_LDS_PACK_*, PREFILL_WMMA_PIPE_*), and
+#   (2) pure diagnostic probes that only print/collect stats and cannot change emitted code (the *_DUMP / *_PROBE / *_PROOF_*
+#       knobs, e.g. PREFILL_TC_LOCAL_STAGE_DUMP[_LIMIT], PREFILL_WMMA_PROOF_CHAIN_DUMP, WARMSTART_DUMP,
+#       PREFILL_DBUF_OWNED_B_STAGE_PAIR_PROBE, PREFILL_WARMSTART_LOCAL_STAGE_DUMP).
+#   Collapsing these reads behind one PrefillStagingSpec descriptor, and deleting the class-2 probes, are a scoped
+#   follow-up (see the refactor report): deferred here to keep the stock (no-flag) postrange path byte-identical.
 import json, math, itertools
 from collections import defaultdict
 from typing import cast, Final
