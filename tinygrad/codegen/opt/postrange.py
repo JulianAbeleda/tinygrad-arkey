@@ -596,8 +596,8 @@ class OwnedBStageEmitter:
         }))
       return _tc_local_stage_src(self.src, self.fallback, 1)
     if self.mode in ("rotate", "rotated"):
-      if not getenv("PREFILL_DBUF_OWNED_B_STAGE_META", 0):
-        raise KernelOptError("PREFILL_DBUF_OWNED_B_STAGE_EMIT=rotate requires PREFILL_DBUF_OWNED_B_STAGE_META=1")
+      if not _tc_local_stage_owned_stage_meta(1):
+        raise KernelOptError("PREFILL_DBUF_OWNED_B_STAGE_EMIT=rotate requires PREFILL_DBUF_OWNED_B_STAGE_META=1 or PREFILL_DBUF_OWNED_AB_STAGE_META=1")
       if getenv("PREFILL_TC_LOCAL_STAGE_DUMP"):
         print("PREFILL_DBUF_OWNED_B_STAGE", json.dumps({
           "mode": "rotate_tagged_stage_contract",

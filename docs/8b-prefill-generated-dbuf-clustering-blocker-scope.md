@@ -421,6 +421,38 @@ rotation=kr_mod_nbuf
 
 This must still fail closed before materialization if no owner-aware lowering is installed.
 
+Status: complete for B.
+
+Observed with:
+
+```bash
+PYTHONPATH=. \
+PREFILL_DBUF_OWNED_AB_STAGE_META=1 \
+PREFILL_DBUF_OWNED_B_STAGE_EMIT=rotate \
+PREFILL_DBUF_ROTATED_STAGE_LOWERING_AUDIT=1 \
+python3 extra/qk/prefill/prefill_stage_owner_audit.py \
+  --shape 2,2 --m 512 --n 5120 --k 5120 --loc 2 --unr 2 \
+  --boundary postrange --json
+```
+
+The postrange audit shows:
+
+```text
+B owned_stage=B_ROTATE
+lifecycle=prologue_body_tail
+rotation=kr_mod_nbuf
+```
+
+Full lowering with the same flags fails at the intended boundary:
+
+```text
+PREFILL_DBUF owned B rotate lowering reached rangeify hook,
+but prologue/body/tail materializer is not implemented
+```
+
+That is the correct fail-closed behavior. It proves the owner metadata reaches the lowering hook without silently
+falling back to old generic staging.
+
 ### P2. B-Only Owned Materializer
 
 Implement the smallest real lifecycle rewrite for B only:
@@ -455,6 +487,69 @@ Pass gate:
 correct 2x2 bounded result
 global_b128/WMMA and ds_store_b128/WMMA do not rise above base
 D3 body staging appears
+```
+
+Initial implementation boundary tested:
+
+```text
+tinygrad/schedule/rangeify.py::_prefill_dbuf_owned_b_stage_lowering
+```
+
+Inputs available there:
+
+```text
+Ops.STAGE with owned_stage=B_ROTATE
+role/lds_buffer_id/nbuf/tile_count/tile_elems
+reduce slot carrier from prefill_dbuf_reduce_range(...)
+the consumer idx used by generic STAGE lowering
+```
+
+The materializer must construct new graph ownership. It must not:
+
+```text
+rewrite the same STAGE idx to k+1 without prologue/tail guards
+emit generic STAGE and then suppress stores later
+use final LDS slot equality as an epoch proof
+```
+
+P2 boundary correction:
+
+The rangeify hook is the right fail-closed guard, but it is too late to be the lifecycle constructor. At that point the
+audit row is:
+
+```text
+role=B
+owned_stage=B_ROTATE
+stage_dtype=dtypes.half.vec(128)
+stage_src_ops=[GEP, ADD]
+idx_op=ADD
+stage_ranges=[REDUCE, GLOBAL]
+idx_ranges=[WARP, LOCAL]
+```
+
+That proves owner identity survives to rangeify, but rangeify only owns `STAGE -> local buffer/store/barrier` lowering.
+It does not own the surrounding WMMA consume schedule, so it cannot safely express:
+
+```text
+consume(k)
+produce(k+1)
+barrier
+consume(k+1)
+```
+
+without either reintroducing all-before generic staging or creating a same-stage dependency cycle.
+
+Therefore the B-only materializer must move one level earlier:
+
+```text
+postrange owned-stage rewrite before generic Ops.STAGE lowering
+```
+
+The rangeify hook should remain as:
+
+```text
+guard: fail if B_ROTATE reaches generic STAGE lowering unmaterialized
+audit: record owner fields and exact lowered boundary
 ```
 
 ### P3. A+B Owned Materializer

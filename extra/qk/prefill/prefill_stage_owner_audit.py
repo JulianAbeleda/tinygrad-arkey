@@ -288,17 +288,22 @@ def owned_b_stage_lifecycle(contract: dict[str, Any]) -> dict[str, Any]:
   if len(stages) != 1 or not consumers:
     return {"ok": False, "reason": "requires exactly one B stage and at least one direct B consumer"}
   st, c = stages[0], consumers[0]
-  if st.get("owned_stage") != "B_IDENTITY" or c.get("carrier_owned_stage") != "B_IDENTITY":
-    return {"ok": False, "reason": "owned B identity metadata is missing"}
-  if st.get("producer_epoch") != "same_reduce" or c.get("carrier_consumer_epoch") != "same_reduce":
+  owned_stage, carrier_owned_stage = st.get("owned_stage"), c.get("carrier_owned_stage")
+  rotate = owned_stage == "B_ROTATE" and carrier_owned_stage == "B_ROTATE"
+  identity = owned_stage == "B_IDENTITY" and carrier_owned_stage == "B_IDENTITY"
+  if not (identity or rotate):
+    return {"ok": False, "reason": "owned B identity/rotate metadata is missing"}
+  if identity and (st.get("producer_epoch") != "same_reduce" or c.get("carrier_consumer_epoch") != "same_reduce"):
     return {"ok": False, "reason": "identity epoch metadata is incomplete"}
+  if rotate and (st.get("rotation") != "kr_mod_nbuf" or c.get("carrier_rotation") != "kr_mod_nbuf"):
+    return {"ok": False, "reason": "rotate metadata is incomplete"}
   reduce_size = _range_size(st.get("stage_ranges", []), "AxisType.REDUCE")
   if reduce_size is None or reduce_size < 2:
     return {"ok": False, "reason": "rotated lifecycle requires a reduce range of at least two epochs", "reduce_size": reduce_size}
   owner = ("B", "lds_buffer_id=991", "nbuf=2")
   return {
     "ok": True,
-    "source": "audit_only_owned_b_stage_lifecycle",
+    "source": "audit_only_owned_b_stage_lifecycle" if identity else "audit_only_owned_b_rotated_stage_lifecycle",
     "owner": owner,
     "reduce_size": reduce_size,
     "invariant": "consume(k) reads the most recent completed produce(k) for slot k%2; body produces k+1 before the next consume; prologue and tail are explicit",

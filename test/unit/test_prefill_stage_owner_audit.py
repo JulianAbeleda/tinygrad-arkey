@@ -133,6 +133,21 @@ def test_ab_owned_stage_metadata_tags_are_opt_in(monkeypatch):
   assert b_fields["consumer_epoch"] == "same_reduce"
 
 
+def test_b_rotate_stage_metadata_is_explicit_and_fail_closed_ready(monkeypatch):
+  monkeypatch.setenv("PREFILL_DBUF_OWNED_AB_STAGE_META", "1")
+  monkeypatch.setenv("PREFILL_DBUF_OWNED_B_STAGE_EMIT", "rotate")
+  postrange.getenv.cache_clear()
+  try:
+    b_tag = postrange._tc_local_stage_buffer_tag(1, 991, 2, 1, 256)
+  finally:
+    postrange.getenv.cache_clear()
+
+  fields = rangeify.prefill_dbuf_rotated_stage_owner_fields(b_tag)
+  assert fields["owned_stage"] == "B_ROTATE"
+  assert fields["lifecycle"] == "prologue_body_tail"
+  assert fields["rotation"] == "kr_mod_nbuf"
+
+
 def test_lowering_hook_summary_marks_ab_dbuf_ready():
   rows = [
     {"role": "A", "nbuf": 2, "has_reduce_range": True},
@@ -188,6 +203,23 @@ def test_owned_b_stage_lifecycle_builds_prologue_body_tail():
   ready = audit.p4c_rotation_readiness(contract, plan)
   assert ready["ready"] is False
   assert "no postrange/codegen emitter" in ready["reason"]
+
+
+def test_owned_b_stage_lifecycle_accepts_rotate_metadata():
+  contract = {
+    "ok": True,
+    "stages": [{
+      "owned_stage": "B_ROTATE", "rotation": "kr_mod_nbuf",
+      "stage_ranges": [{"axis_type": "AxisType.REDUCE", "size": 80}],
+    }],
+    "consumers": [{"carrier_owned_stage": "B_ROTATE", "carrier_rotation": "kr_mod_nbuf"}],
+  }
+
+  plan = audit.owned_b_stage_lifecycle(contract)
+
+  assert plan["ok"] is True
+  assert plan["source"] == "audit_only_owned_b_rotated_stage_lifecycle"
+  assert plan["body"][1]["epoch"] == "k+1"
 
 
 def test_owned_b_stage_emitter_scope_names_identity_and_blocks_rotate():
