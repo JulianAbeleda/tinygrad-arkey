@@ -47,7 +47,7 @@ EXPORTERS: tuple[dict[str, str], ...] = (
    "source": "WMMALDSSpec / slot identity proof"},
   {"id": "E3", "name": "hand_lifecycle_exporter", "status": "done_for_lds2_template",
    "source": "kernel_lifecycle_trace.py / wmma.py lifecycle template"},
-  {"id": "E4", "name": "generated_postrange_exporter", "status": "pending",
+  {"id": "E4", "name": "generated_postrange_exporter", "status": "done_for_owner_records",
    "source": "pre-lowering Ops.STAGE / owner metadata"},
   {"id": "E5", "name": "lowered_stream_exporter", "status": "pending",
    "source": "generated AMD ISA or UOp stream"},
@@ -347,6 +347,51 @@ def events_from_hand_lds2_lifecycle(*, roles: tuple[str, ...] = ("A", "B"), k_ti
     next_epoch = epoch + 1
     if next_epoch < k_tiles:
       append_produce_phase(next_epoch, next_epoch % 2, "body")
+  return events
+
+
+def events_from_postrange_owner_records(records: list[dict[str, Any]], *, k_tiles: int = 4,
+                                        roles: tuple[str, ...] = ("A", "B")) -> list[DBUFEvent]:
+  """Export generated postrange owner records into conservative DBUF events.
+
+  `prefill_stage_owner_audit.owner_records` is the intended source. This proves
+  generated role/epoch/slot ownership while owner tags are still present. It does
+  not claim P2 byte windows, P3 value keys, P5 waits, or P7 lowered-stream facts.
+  """
+  if k_tiles < 1: raise ValueError("k_tiles must be >= 1")
+  by_role: dict[str, dict[str, Any]] = {}
+  for record in records:
+    role = str(record.get("role", ""))
+    if role not in roles: continue
+    if role in by_role: raise ValueError(f"duplicate postrange owner record for role {role!r}")
+    if int(record.get("nbuf", 0)) != 2:
+      raise ValueError(f"postrange owner record for role {role!r} must have nbuf=2")
+    if record.get("lds_buffer_id") is None:
+      raise ValueError(f"postrange owner record for role {role!r} has no lds_buffer_id")
+    by_role[role] = record
+  missing = [role for role in roles if role not in by_role]
+  if missing: raise ValueError(f"missing postrange owner records for roles {missing!r}")
+
+  events: list[DBUFEvent] = []
+  step = 0
+
+  def window(role: str, slot: int) -> str:
+    return f"{role}:owner{by_role[role]['lds_buffer_id']}:slot{slot}"
+
+  for role in roles:
+    events.append(DBUFEvent("produce", role=role, epoch=0, slot=0, window=window(role, 0), step=step)); step += 1
+  events.append(DBUFEvent("barrier", phase="postrange_prologue", step=step)); step += 1
+  for epoch in range(k_tiles):
+    slot = epoch % 2
+    for role in roles:
+      events.append(DBUFEvent("consume", role=role, epoch=epoch, slot=slot, window=window(role, slot), step=step)); step += 1
+    next_epoch = epoch + 1
+    if next_epoch < k_tiles:
+      next_slot = next_epoch % 2
+      for role in roles:
+        events.append(DBUFEvent("produce", role=role, epoch=next_epoch, slot=next_slot,
+                                window=window(role, next_slot), step=step)); step += 1
+      events.append(DBUFEvent("barrier", phase="postrange_body", step=step)); step += 1
   return events
 
 

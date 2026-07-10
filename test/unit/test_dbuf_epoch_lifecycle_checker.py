@@ -2,7 +2,8 @@ import json
 
 from extra.qk.prefill.dbuf_epoch_lifecycle_checker import (
   DBUFEvent, canonical_dbuf_events, canonical_dbuf_events_with_waits, check_events, events_from_epoch_primitive,
-  events_from_hand_lds2_lifecycle, events_from_s10_role_trace, main, s10_readiness_roadmap)
+  events_from_hand_lds2_lifecycle, events_from_postrange_owner_records, events_from_s10_role_trace, main,
+  s10_readiness_roadmap)
 
 
 def test_canonical_dbuf_lifecycle_passes():
@@ -329,6 +330,44 @@ def test_hand_lds2_lifecycle_exporter_rejects_single_buffer():
     raise AssertionError("expected hand LDS2 DBUF exporter to reject dbuf=0")
 
 
+def test_postrange_owner_record_exporter_builds_checkable_generated_events():
+  records = [
+    {"role": "A", "lds_buffer_id": 990, "nbuf": 2},
+    {"role": "B", "lds_buffer_id": 991, "nbuf": 2},
+  ]
+
+  events = events_from_postrange_owner_records(records, k_tiles=3)
+  report = check_events(events)
+
+  assert report["ok"] is True
+  assert report["producer_count"] == 6
+  assert report["consumer_count"] == 6
+  assert events[0].window == "A:owner990:slot0"
+  assert events[1].window == "B:owner991:slot0"
+  assert events[6].window == "B:owner991:slot1"
+
+
+def test_postrange_owner_record_exporter_fails_closed_without_ab():
+  try:
+    events_from_postrange_owner_records([{"role": "B", "lds_buffer_id": 991, "nbuf": 2}], k_tiles=2)
+  except ValueError as e:
+    assert "missing postrange owner records" in str(e)
+  else:
+    raise AssertionError("expected missing A record to fail")
+
+
+def test_postrange_owner_record_exporter_fails_closed_without_dbuf():
+  try:
+    events_from_postrange_owner_records([
+      {"role": "A", "lds_buffer_id": 990, "nbuf": 1},
+      {"role": "B", "lds_buffer_id": 991, "nbuf": 2},
+    ], k_tiles=2)
+  except ValueError as e:
+    assert "must have nbuf=2" in str(e)
+  else:
+    raise AssertionError("expected nbuf=1 record to fail")
+
+
 def test_cli_exports_s10_role_trace(tmp_path):
   trace_path = tmp_path / "trace.json"
   trace_path.write_text(json.dumps({
@@ -374,6 +413,7 @@ def test_s10_roadmap_does_not_overclaim_readiness():
   assert layers["P7"]["status"] == "pending"
   assert exporters["E1"]["status"] == "done"
   assert exporters["E3"]["status"] == "done_for_lds2_template"
+  assert exporters["E4"]["status"] == "done_for_owner_records"
   assert exporters["E5"]["status"] == "pending"
 
 

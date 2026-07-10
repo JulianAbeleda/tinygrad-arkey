@@ -106,7 +106,7 @@ S10 is ready to reopen generated DBUF replacement only when P1-P7 pass on:
 | E1 hybrid primitive exporter | `hybrid-s9-s10-role-trace.json` | P1 events from `DBUFEpochPrimitive` | done |
 | E2 S10 LDS spec exporter | `WMMALDSSpec` / slot identity proof | P2 LDS windows | done |
 | E3 hand lifecycle exporter | `kernel_lifecycle_trace.py` / `wmma.py` lifecycle template | P1/P2/P5 hand oracle events from the LDS2 template | done for template oracle |
-| E4 generated postrange exporter | pre-lowering `Ops.STAGE` / owner metadata | P1-P4 generated candidate events | pending |
+| E4 generated postrange exporter | pre-lowering `Ops.STAGE` / owner metadata | P1 generated owner events from postrange owner records | done for owner records |
 | E5 lowered stream exporter | generated AMD ISA or UOp stream | P5-P7 actual instruction events | pending |
 
 ## Done Definition For "All S10 Info"
@@ -191,6 +191,16 @@ PYTHONPATH=. python3 extra/qk/prefill/dbuf_epoch_lifecycle_checker.py \
 This proves the hand oracle's logical DBUF ring, exact LDS slot byte windows, and VM/LGKM wait phases. It is not the P7
 lowered-stream proof; final instruction rows still need a fail-closed exporter once role/epoch/slot metadata survives
 lowering.
+
+The fourth exporter is implemented for generated postrange owner records:
+
+```text
+prefill_stage_owner_audit.owner_records -> conservative P1 checker events
+```
+
+It requires exactly A+B owner records with `nbuf=2` and `lds_buffer_id`, then exports role/epoch/slot ownership windows
+like `A:owner990:slot0`. It deliberately does not claim P2 byte windows, P3 value keys, P5 waits, or P7 final-stream
+facts.
 
 ## Decoupling Path
 
