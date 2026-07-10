@@ -797,6 +797,38 @@ not improve. The next primitive must move/cluster LDS loads and WMMAs together, 
 current stream has already chosen its load placement.
 ```
 
+### Small Test: Dependency-Only Clustered LDS Consume
+
+Probe:
+
+```text
+PREFILL_WMMA_CLUSTERED_LDS_CONSUME=1
+```
+
+Attempted design:
+
+```text
+Inside `_try_wmma_kmajor_phase`, materialize all A/B packs for a phase first and add them as dependencies to the phase's
+WMMA nodes. This tries to force "load all fragments, then emit WMMAs" without changing the fragment planner.
+```
+
+Results:
+
+| Route | Correct | TFLOPS | waits/WMMA | max burst | ds_load/WMMA | inst/WMMA | Verdict |
+|---|---|---:|---:|---:|---:|---:|---|
+| K-major + dependency-only clustered consume | structural only | n/a | 2.812 | 3 | 2.0 | 34.562 | no material P8 movement |
+| K-major + dependency-only clustered consume + clustered LGKM wait | yes | 11.55 | 2.562 | 4 | 2.0 | 34.312 | same shape as wait coalescing, slower |
+
+Decision:
+
+```text
+Dependency-only preloading is not the primitive.
+It does not change the final DS-load/WMMA/wait structure enough for P8, because the underlying fragment planner still
+emits/reuses fragment packs in a shape the wait pass treats as per-WMMA-ish. The real primitive needs ownership of the
+cluster plan itself: choose the WMMA group, choose the resident fragment VGPRs for that group, emit the LDS loads for
+that group, then emit the WMMAs before those VGPRs are reused.
+```
+
 ### P3. A+B Owned Materializer
 
 Extend P2 to A and B only after B-only is correct.

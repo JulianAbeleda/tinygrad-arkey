@@ -1774,6 +1774,8 @@ def _try_wmma_kmajor_phase(ctx:IselContext, x:UOp):
     pack_cache:dict[tuple, tuple[UOp, ...]] = {}
     prev_wm:UOp|None = None
     phase_dep = () if prev_phase_last is None else (prev_phase_last,)
+    clustered = bool(getenv("PREFILL_WMMA_CLUSTERED_LDS_CONSUME", 0))
+    phase_tiles: list[tuple[int, UOp, tuple, tuple, int, int, tuple[UOp, ...]]] = []
     for chain_i, phase in enumerate(phases):
       tile = phase[phase_i]
       if getenv("PREFILL_WMMA_KMAJOR_PIPELINE_EPOCHS", 0) and phase_i == 0:
@@ -1800,13 +1802,26 @@ def _try_wmma_kmajor_phase(ctx:IselContext, x:UOp):
         pkey = (role, key, base)
         if pkey not in pack_cache: pack_cache[pkey] = _pack_frag_tile(ctx, carrier, base, tile_phase_dep, role)
         return pack_cache[pkey]
+      apk, bpk = pack("A", tile.src[0], akey, abase), pack("B", tile.src[1], bkey, bbase)
+      if clustered:
+        phase_tiles.append((chain_i, tile, akey, bkey, abase, bbase, apk + bpk))
+        continue
       dep = () if prev_wm is None else (prev_wm,)
-      out = _build_wmma_from_packs(ctx, pack("A", tile.src[0], akey, abase), pack("B", tile.src[1], bkey, bbase),
-                                   cins[chain_i], cbases[chain_i], dep)
+      out = _build_wmma_from_packs(ctx, apk, bpk, cins[chain_i], cbases[chain_i], dep)
       memo[tile] = out
       cins[chain_i] = list(out.src)
       prev_wm = out.src[0]
       prev_phase_last = prev_wm
+    if clustered:
+      preload_deps = tuple(p for *_prefix, packs in phase_tiles for p in packs)
+      for chain_i, tile, _akey, _bkey, _abase, _bbase, packs in phase_tiles:
+        dep = preload_deps if prev_wm is None else preload_deps + (prev_wm,)
+        apk, bpk = packs[:8], packs[8:]
+        out = _build_wmma_from_packs(ctx, apk, bpk, cins[chain_i], cbases[chain_i], dep)
+        memo[tile] = out
+        cins[chain_i] = list(out.src)
+        prev_wm = out.src[0]
+        prev_phase_last = prev_wm
   return memo.get(x)
 
 # B0.K: K-reduction (K>16) accumulates IN PLACE. postrange.py:324 + the devectorizer's `WMMA+add -> WMMA(src2+=add)` fold
