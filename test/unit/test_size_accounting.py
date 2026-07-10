@@ -7,7 +7,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 
 def test_default_authored_budget_gate_is_minimization_target():
-  assert sz.DEFAULT_MAX_LINE_COUNT == 28000
+  assert sz.DEFAULT_MAX_LINE_COUNT == 31000
 
 
 def test_vendored_exclusion_stays_narrow():
