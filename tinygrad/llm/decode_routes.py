@@ -11,6 +11,9 @@ from tinygrad.llm.route_policy import (
 )
 
 def _linear_role(linear:Any) -> str:
+  for attr in ("route_role", "role"):
+    role = str(getattr(linear, attr, ""))
+    if role: return role
   name = str(getattr(linear, "name", ""))
   if "ffn_down" in name: return "ffn_down"
   if "lm_head" in name: return "lm_head"

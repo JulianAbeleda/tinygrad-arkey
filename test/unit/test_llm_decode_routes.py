@@ -148,6 +148,18 @@ def test_q4k_candidate_binds_decode_module_facts_non_8b_shape():
   }
 
 
+def test_decode_role_prefers_carried_route_role_over_ambiguous_name():
+  linear = SimpleNamespace(
+    decode_enabled=True, bias=None, in_features=1536, out_features=96, route_role="attn_qo",
+    q4k_storage=SimpleNamespace(mode="sidecar", words=_Words()), name="blk.0.attn_k.weight")
+  x = _TensorShapeOnly(shape=(1, 1, 1536))
+
+  facts = decode_routes.Q4K_DECODE_CANDIDATE.bind(linear, x, arch_ok=False)
+
+  assert facts is not None
+  assert facts["role"] == "attn_qo"
+
+
 def test_q4k_candidate_rejects_unsupported_shapes_and_bias():
   linear = SimpleNamespace(
     decode_enabled=True, bias=None, in_features=1536, out_features=96,

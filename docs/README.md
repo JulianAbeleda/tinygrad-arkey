@@ -36,6 +36,8 @@ from the tracked tree; use git history for archaeology.
   profile/policy data while reusing the existing route manifest, policy loader, and gates.
 - `model-route-plan-implementation-scope-20260710.md` - implementation scope for making GGUF load produce model facts
   and a primitive route plan consumed by Q4/Q6 install.
+- `model-fact-routing-consolidation-scope-20260710.md` - consolidation scope for proving route-plan parity,
+  carrying route roles into primitives, and keeping live scripts profile-driven.
 - `handwritten-kernel-exhaustive-lowering-scope-20260706.md` - exhaustive lowering scope for converting handwritten
   route surfaces into pure tinygrad/codegen paths.
 - `pure-machine-search-roadmap.md` - current route/search roadmap and promotion rules.

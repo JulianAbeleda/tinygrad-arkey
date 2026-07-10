@@ -70,6 +70,9 @@ def _direct_packed_b_upcast(m:int) -> int:
 def _direct_packed_role(lin, spec:"PrefillLinearRouteSpec") -> str:
   role = spec.role
   if role: return role
+  for attr in ("route_role", "role"):
+    role = str(getattr(lin, attr, ""))
+    if role: return role
   name = str(getattr(lin, "name", ""))
   if any(x in name for x in ("ffn_gate", "ffn_up")): return "ffn_gate_up"
   if "ffn_down" in name: return "ffn_down"
@@ -267,6 +270,9 @@ def _direct_packed_quant(lin) -> str:
 def _direct_packed_module_role(lin) -> str:
   role = str(getattr(lin, "_prefill_graph_role", ""))
   if role: return role
+  for attr in ("route_role", "role"):
+    role = str(getattr(lin, attr, ""))
+    if role: return role
   name = str(getattr(lin, "name", ""))
   if any(x in name for x in ("ffn_gate", "ffn_up")): return "ffn_gate_up"
   if "ffn_down" in name: return "ffn_down"
@@ -305,7 +311,7 @@ def _direct_packed_spec(lin, x:Tensor) -> PrefillLinearRouteSpec | None:
   quant = "q4k" if _is_q4k_linear(lin) else "q6k" if _is_q6k_linear(lin) else ""
   if quant == "": return None
   if not _direct_packed_enabled_for(lin, "Q4_K" if quant == "q4k" else "Q6_K"): return None
-  return PrefillLinearRouteSpec("direct_packed", quant, str(getattr(lin, "_prefill_graph_role", "")), m, n, k)
+  return PrefillLinearRouteSpec("direct_packed", quant, _direct_packed_module_role(lin), m, n, k)
 
 
 def route_direct_packed_prefill(lin, x:Tensor) -> Tensor | None:

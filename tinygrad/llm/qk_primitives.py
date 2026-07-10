@@ -51,13 +51,14 @@ class Q4KPrimitiveRegistry:
 class Q4KPrimitiveLinear:
   def __init__(self, weight:Tensor, bias:Tensor|None, words:Tensor, out_features:int, in_features:int, parts:int, opts:tuple,
                name:str, source_bytes:int, persistent_bytes:int, storage_mode:str,
-               shared_bytes:int=0, nonpersistent_bytes:int=0, kernel_mode:str="partial"):
+               shared_bytes:int=0, nonpersistent_bytes:int=0, kernel_mode:str="partial", route_role:str=""):
     if kernel_mode not in ("partial", "direct_out"): raise ValueError(f"unsupported Q4_K primitive kernel mode {kernel_mode!r}")
     if kernel_mode == "direct_out" and parts != 1: raise ValueError("Q4_K direct_out primitive requires parts=1")
     self.weight, self.bias = weight, bias
     self.q4k_storage = Q4KPrimitiveStorage(words, source_bytes, persistent_bytes, storage_mode, shared_bytes, nonpersistent_bytes)
     self.out_features, self.in_features, self.parts, self.opts, self.name = out_features, in_features, parts, opts, name
     self.kernel_mode = kernel_mode
+    self.route_role = route_role
     self.decode_enabled = False
 
   def _fallback(self, x:Tensor) -> Tensor:
@@ -112,10 +113,11 @@ def _install_q4k_fusions(model) -> None:
 class Q6KPrimitiveLinear:
   def __init__(self, weight:Tensor, bias:Tensor|None, halfs:Tensor, out_features:int, in_features:int, parts:int, opts:tuple,
                name:str, source_bytes:int, persistent_bytes:int, storage_mode:str,
-               shared_bytes:int=0, nonpersistent_bytes:int=0):
+               shared_bytes:int=0, nonpersistent_bytes:int=0, route_role:str=""):
     self.weight, self.bias = weight, bias
     self.q6k_storage = Q6KPrimitiveStorage(halfs, source_bytes, persistent_bytes, storage_mode, shared_bytes, nonpersistent_bytes)
     self.out_features, self.in_features, self.parts, self.opts, self.name = out_features, in_features, parts, opts, name
+    self.route_role = route_role
     self.decode_enabled = False
 
   def _fallback(self, x:Tensor) -> Tensor:
@@ -277,6 +279,7 @@ def _install_q4k_primitives(model, gguf:pathlib.Path, meta:dict, generated_polic
         continue
       parts, opt_specs = route_entry.parts, route_entry.opts
       kernel_mode = route_entry.kernel_mode
+      route_role = route_entry.role
     else:
       if (policy_entry := _qk_generated_policy_entry(generated_policy, typ, rows, cols, name)) is None:
         skipped["policy_missing"] += 1
@@ -289,6 +292,7 @@ def _install_q4k_primitives(model, gguf:pathlib.Path, meta:dict, generated_polic
         continue
       parts, opt_specs = policy_entry["parts"], policy_entry["opts"]
       kernel_mode = "direct_out" if policy_entry["family"] == "q4_k_packed_u32_direct" or policy_entry.get("reduction") == "direct_out" else "partial"
+      route_role = ""
       if kernel_mode == "direct_out" and parts != 1:
         skipped["policy_invalid_direct_parts"] += 1
         continue
@@ -319,7 +323,8 @@ def _install_q4k_primitives(model, gguf:pathlib.Path, meta:dict, generated_polic
       words = source.contiguous() if storage_mode == "q4_ondemand" else source.to(None).contiguous().realize()
       shared_bytes, nonpersistent_bytes = 0, q4_bytes if storage_mode == "q4_ondemand" else 0
     q4k_linear = Q4KPrimitiveLinear(module.weight, module.bias, words, rows, cols, parts, tuple(qk_ops.q4k_parse_opt(x) for x in opt_specs), name,
-                                    q4_bytes, persistent_bytes, storage_mode, shared_bytes, nonpersistent_bytes, kernel_mode=kernel_mode)
+                                    q4_bytes, persistent_bytes, storage_mode, shared_bytes, nonpersistent_bytes,
+                                    kernel_mode=kernel_mode, route_role=route_role)
     _set_module_at(model, module_path, q4k_linear)
     installed.append(q4k_linear)
   if debug:
@@ -363,6 +368,7 @@ def _install_q6k_primitives(model, gguf:pathlib.Path, meta:dict, generated_polic
         skipped["policy_unsupported"] += 1
         continue
       parts, opt_specs = route_entry.parts, route_entry.opts
+      route_role = route_entry.role
     else:
       if (policy_entry := _qk_generated_policy_entry(generated_policy, typ, rows, cols, name)) is None:
         skipped["policy_missing"] += 1
@@ -374,6 +380,7 @@ def _install_q6k_primitives(model, gguf:pathlib.Path, meta:dict, generated_polic
         skipped["policy_unsupported"] += 1
         continue
       parts, opt_specs = policy_entry["parts"], policy_entry["opts"]
+      route_role = ""
     byte_start = meta["data_start"] + off
     if byte_start % 2 != 0:
       skipped["misaligned"] += 1
@@ -399,7 +406,7 @@ def _install_q6k_primitives(model, gguf:pathlib.Path, meta:dict, generated_polic
     else:
       halfs, shared_bytes = raw_halfs[byte_start//2:byte_start//2+q6_bytes//2].to(None).contiguous().realize(), 0
     q6k_linear = Q6KPrimitiveLinear(module.weight, module.bias, halfs, rows, cols, parts, tuple(qk_ops.q6k_parse_opt(x) for x in opt_specs), name,
-                                    q6_bytes, persistent_bytes, storage_mode, shared_bytes, 0)
+                                    q6_bytes, persistent_bytes, storage_mode, shared_bytes, 0, route_role=route_role)
     _set_module_at(model, module_path, q6k_linear)
     installed.append(q6k_linear)
   if debug:
@@ -429,7 +436,7 @@ def _demote_q6k_to_q4(model, linears:list, targets:tuple[str, ...]) -> list:
       words = Tensor(qk_ops.quantize_q4_k(lin.weight.numpy())).to(None).contiguous().realize()
       q4_bytes = lin.out_features * lin.in_features // 256 * 144
       q4 = Q4KPrimitiveLinear(lin.weight, lin.bias, words, lin.out_features, lin.in_features, parts, opts,
-                              lin.name, q4_bytes, q4_bytes, "sidecar")
+                              lin.name, q4_bytes, q4_bytes, "sidecar", route_role=getattr(lin, "route_role", ""))
       _set_module_at(model, lin.name[:-len(".weight")], q4)
       out.append(q4)
     else:

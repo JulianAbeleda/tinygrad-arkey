@@ -270,6 +270,19 @@ def test_direct_packed_q6_shadow_request_facts_are_built_from_fake_module():
     "quant": "Q6_K", "role": "ffn_down", "M": 37, "N": 80, "K": 384, "bias": True, "ubatch": 64}
 
 
+def test_direct_packed_request_prefers_carried_route_role_over_ambiguous_name():
+  from tinygrad.llm.prefill_routes import PrefillLinearRouteSpec, _direct_packed_role, build_direct_packed_prefill_request
+
+  lin = SimpleNamespace(
+    bias=None, in_features=384, out_features=96, parts=1, opts=(), name="custom.layers.7.attn_k.weight",
+    route_role="attn_qo", q4k_storage=SimpleNamespace(), prefill_packed_weight=lambda: _Q4PrefillWeight())
+
+  req = build_direct_packed_prefill_request(lin, _SmallPrefillTensorStub(), ubatch=123)
+  assert req is not None
+  assert req.role == "attn_qo"
+  assert _direct_packed_role(lin, PrefillLinearRouteSpec("direct_packed", "q4k", "", 37, 96, 384)) == "attn_qo"
+
+
 def test_q4_direct_packed_prefill_default_uses_generated_descriptor(monkeypatch):
   from tinygrad.llm import prefill_routes
 
