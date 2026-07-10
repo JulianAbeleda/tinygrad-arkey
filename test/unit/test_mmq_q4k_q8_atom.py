@@ -6,8 +6,10 @@ from tinygrad import Tensor, dtypes
 from extra.qk.layout import Q4_K_BLOCK_BYTES, Q4_K_BLOCK_ELEMS, Q8_1_BLOCK_ELEMS, q8_1_quantize
 from extra.qk.mmq_lifecycle import COUNTER_NAMES
 from extra.qk.mmq_q4k_q8_atom import (
-  AMD_BACKEND_ATOM_ID, AMD_WARP_BACKEND_ATOM_ID, BACKEND_ATOM_ID, amd_atom_source_hash, amd_warp_atom_source_hash,
-  run_q4k_q8_1_mmq_tile, run_q4k_q8_1_mmq_tile_amd, run_q4k_q8_1_mmq_tile_amd_warp,
+  AMD_BACKEND_ATOM_ID, AMD_STAGED_DS4_BACKEND_ATOM_ID, AMD_WARP_BACKEND_ATOM_ID, BACKEND_ATOM_ID,
+  q8_1_mmq_ds4_from_row_major, run_q4k_q8_1_mmq_staged_ds4_atom, amd_atom_source_hash,
+  amd_warp_atom_source_hash, staged_ds4_atom_source_hash, run_q4k_q8_1_mmq_tile,
+  run_q4k_q8_1_mmq_tile_amd, run_q4k_q8_1_mmq_tile_amd_warp,
   run_q4k_q8_1_mmq_tile_with_lifecycle,
 )
 from extra.qk.mmq_q4k_q8_reference import describe_q4k_q8_1_mmq_tile, q4k_q8_1_mmq_tile_reference
@@ -54,6 +56,50 @@ def test_q4k_q8_1_mmq_atom_reports_lifecycle_contract():
   assert set(row["lifecycle"]["counters"]) == set(COUNTER_NAMES)
   assert row["lifecycle"]["counters"]["activation_quant_epochs"] == 1
   assert row["lifecycle"]["counters"]["output_stores"] == 16
+
+
+def test_q4k_q8_1_mmq_staged_ds4_atom_matches_reference_and_uses_sums():
+  m, n, k = 4, 5, 256
+  raw = _finite_q4k_bytes(n, k, seed=503)
+  xq, xscales = _q8_inputs(m, k, seed=504)
+  ds4 = q8_1_mmq_ds4_from_row_major(xq, xscales)
+  spec = describe_q4k_q8_1_mmq_tile(role="ffn_gate_up", m=m, n=n, k=k, m_tile=m, n_tile=n, k_groups=8)
+
+  result = run_q4k_q8_1_mmq_staged_ds4_atom(raw, ds4, spec)
+  ref = q4k_q8_1_mmq_tile_reference(raw, xq, xscales, spec)
+
+  assert result.backend_atom_id == AMD_STAGED_DS4_BACKEND_ATOM_ID
+  assert result.lifecycle_detail["backend_stage"] == "reference_backed_staged_ds4_probe"
+  assert result.lifecycle_detail["promotion_claim"] is False
+  assert result.lifecycle_detail["uses_precomputed_activation_sums"] is True
+  assert staged_ds4_atom_source_hash(spec)
+  np.testing.assert_allclose(result.output, ref, rtol=0, atol=8e-4)
+
+  changed_sums = q8_1_mmq_ds4_from_row_major(xq, xscales)
+  changed_sums = type(changed_sums)(values=changed_sums.values, scales=changed_sums.scales,
+                                    sums=changed_sums.sums + 1.0, spec=changed_sums.spec)
+  changed = run_q4k_q8_1_mmq_staged_ds4_atom(raw, changed_sums, spec).output
+  assert not np.allclose(changed, result.output, rtol=0, atol=1e-6)
+
+
+def test_q4k_q8_1_mmq_staged_ds4_lifecycle_distinguishes_stages():
+  m, n, k = 4, 4, 256
+  raw = _finite_q4k_bytes(n, k, seed=603)
+  xq, xscales = _q8_inputs(m, k, seed=604)
+  spec = describe_q4k_q8_1_mmq_tile(role="ffn_gate_up", m=m, n=n, k=k, m_tile=m, n_tile=n, k_groups=8)
+
+  row = run_q4k_q8_1_mmq_staged_ds4_atom(raw, q8_1_mmq_ds4_from_row_major(xq, xscales), spec).to_json()
+
+  counters = row["lifecycle"]["counters"]
+  detail = row["lifecycle_detail"]
+  assert counters["activation_q8_1_reads"] > 0
+  assert counters["packed_weight_global_loads"] > 0
+  assert counters["scale_min_metadata_loads"] > 0
+  assert counters["barriers"] > 0
+  assert counters["dot_accumulation_epochs"] > 0
+  assert counters["output_stores"] == m * n
+  assert detail["global_activation_ds4_loads"] == detail["staged_activation_tile_loads"]
+  assert detail["global_q4k_tile_loads"] == detail["staged_q4k_tile_loads"]
 
 
 def _has_amd() -> bool:

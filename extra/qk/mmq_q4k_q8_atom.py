@@ -9,7 +9,7 @@ the AMD kernel body replaces the reference execution core.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import hashlib
 from typing import Any
 
@@ -20,13 +20,16 @@ from tinygrad.dtype import AddrSpace
 from tinygrad.uop.ops import AxisType, KernelInfo, Ops, UOp
 
 from extra.qk.amd_warp_reduce import warp_reduce_sum
-from extra.qk.layout import Q4K_WORDS_PER_BLOCK, Q4_K_BLOCK_ELEMS, Q8_1_BLOCK_ELEMS
+from extra.qk.layout import Q4K_WORDS_PER_BLOCK, Q4_K_BLOCK_BYTES, Q4_K_BLOCK_ELEMS, Q8_1_BLOCK_ELEMS
 from extra.qk.mmq_atom_boundary import (
   PREFILL_14B_Q4K_Q8_1_HYBRID_MMQ_ATOM_CLASSIFICATION,
   PREFILL_14B_Q4K_Q8_1_HYBRID_MMQ_ATOM_ROUTE_ID,
 )
 from extra.qk.mmq_lifecycle import MMQLifecycleRow, zero_counters
-from extra.qk.mmq_q4k_q8_reference import Q4KQ81MMQTileSpec, q4k_q8_1_mmq_tile_reference
+from extra.qk.mmq_q4k_q8_reference import (
+  Q81MMQDS4Activation, Q4KQ81MMQTileSpec, Q8_1_MMQ_DS4_LAYOUT, q4k_q8_1_mmq_tile_reference,
+  q8_1_mmq_ds4_from_row_major_reference,
+)
 from extra.qk.quant.q4_k_gemv_primitive import _q4k_group_params, _q4k_quant
 
 BACKEND_ATOM_ID = "q4k_q8_1_mmq_reference_backed_atom_v0"
@@ -35,6 +38,8 @@ AMD_WARP_BACKEND_ATOM_ID = "q4k_q8_1_mmq_amd_warp_atom_v0"
 AMD_WARP_BATCHED_BACKEND_ATOM_ID = "q4k_q8_1_mmq_amd_warp_batched_atom_v0"
 AMD_DOT4_BATCHED_BACKEND_ATOM_ID = "q4k_q8_1_mmq_amd_dot4_batched_atom_v0"
 AMD_DOT4X4_BATCHED_BACKEND_ATOM_ID = "q4k_q8_1_mmq_amd_dot4x4_batched_atom_v0"
+AMD_STAGED_DS4_BACKEND_ATOM_ID = "q4k_q8_1_mmq_amd_staged_ds4_atom_v0"
+DS4_ACTIVATION_LAYOUT = Q8_1_MMQ_DS4_LAYOUT
 
 
 @dataclass(frozen=True)
@@ -42,15 +47,140 @@ class Q4KQ8MMQAtomResult:
   output: np.ndarray
   lifecycle: MMQLifecycleRow
   backend_atom_id: str = BACKEND_ATOM_ID
+  lifecycle_detail: dict[str, Any] = field(default_factory=dict)
 
   def to_json(self) -> dict[str, Any]:
-    return {
+    row = {
       "backend_atom_id": self.backend_atom_id,
       "route_id": PREFILL_14B_Q4K_Q8_1_HYBRID_MMQ_ATOM_ROUTE_ID,
       "classification": PREFILL_14B_Q4K_Q8_1_HYBRID_MMQ_ATOM_CLASSIFICATION,
       "output_shape": list(self.output.shape),
       "lifecycle": self.lifecycle.to_json(),
     }
+    if self.lifecycle_detail:
+      row["lifecycle_detail"] = self.lifecycle_detail
+    return row
+
+
+def q8_1_mmq_ds4_from_row_major(xq: np.ndarray, xscales: np.ndarray) -> Q81MMQDS4Activation:
+  return q8_1_mmq_ds4_from_row_major_reference(xq, xscales)
+
+
+def _q4k_f16_pair(block: np.ndarray) -> tuple[np.float32, np.float32]:
+  vals = block[:4].view("<f2").astype(np.float32)
+  return np.float32(vals[0]), np.float32(vals[1])
+
+
+def _q4k_scale_min(block: np.ndarray, grp: int) -> tuple[int, int]:
+  qs = block[4:16]
+  if grp < 4:
+    return int(qs[grp] & 63), int(qs[4 + grp] & 63)
+  high = int(qs[8 + grp - 4])
+  sc = (high & 0x0f) | ((int(qs[grp - 4]) >> 6) << 4)
+  mn = (high >> 4) | ((int(qs[4 + grp - 4]) >> 6) << 4)
+  return sc, mn
+
+
+def _q4k_unsigned_nibbles(block: np.ndarray, grp: int) -> np.ndarray:
+  qbytes = block[16:].reshape(4, 32)
+  packed = qbytes[grp // 2]
+  return ((packed >> ((grp % 2) * 4)) & 0x0f).astype(np.float32)
+
+
+def _validate_staged_ds4_inputs(q4k_bytes: np.ndarray, ds4: Q81MMQDS4Activation,
+                                spec: Q4KQ81MMQTileSpec) -> np.ndarray:
+  spec.validate()
+  ds4.spec.validate()
+  if spec.k != ds4.spec.k or spec.m != ds4.spec.m:
+    raise ValueError(f"DS4 activation shape {(ds4.spec.m, ds4.spec.k)} does not match spec {(spec.m, spec.k)}")
+  if spec.k0 % 128 or spec.effective_k_groups % 4:
+    raise ValueError("staged DS4 atom requires k0 and k_groups to be aligned to 128-value DS4 blocks")
+  raw = np.asarray(q4k_bytes, dtype=np.uint8)
+  expected = (spec.n, spec.k // Q4_K_BLOCK_ELEMS, Q4_K_BLOCK_BYTES)
+  if raw.reshape(-1).size != spec.n * (spec.k // Q4_K_BLOCK_ELEMS) * Q4_K_BLOCK_BYTES:
+    raise ValueError(f"expected Q4_K bytes for shape {expected}, got {raw.shape}")
+  return np.ascontiguousarray(raw.reshape(expected))
+
+
+def _staged_ds4_lifecycle_for_spec(spec: Q4KQ81MMQTileSpec) -> tuple[MMQLifecycleRow, dict[str, Any]]:
+  k_blocks = spec.effective_k_groups // 8
+  ds4_blocks = spec.effective_k_groups // 4
+  staged_activation_loads = spec.tile_m * ds4_blocks
+  staged_weight_loads = spec.tile_n * k_blocks
+  metadata_loads = spec.tile_n * k_blocks * 8
+  counters = zero_counters(
+    activation_quant_epochs=1,
+    activation_q8_1_reads=staged_activation_loads,
+    packed_weight_global_loads=staged_weight_loads,
+    scale_min_metadata_loads=metadata_loads,
+    dot_accumulation_epochs=spec.tile_m * spec.tile_n * spec.effective_k_groups,
+    dot_ops_or_packed_dot_insts=spec.tile_m * spec.tile_n * spec.effective_k_groups * 8,
+    barriers=2 * max(ds4_blocks, 1),
+    intermediate_global_writes=0,
+    output_store_epochs=1,
+    output_stores=spec.tile_m * spec.tile_n,
+    duplicate_quant_work=0,
+    duplicate_dequant_or_scale_work=0,
+    split_k_reductions=0,
+  )
+  detail = {
+    "backend_stage": "reference_backed_staged_ds4_probe",
+    "promotion_claim": False,
+    "global_activation_ds4_loads": staged_activation_loads,
+    "global_q4k_tile_loads": staged_weight_loads,
+    "staged_activation_tile_loads": staged_activation_loads,
+    "staged_q4k_tile_loads": staged_weight_loads,
+    "barrier_epochs": counters["barriers"],
+    "dot_epochs": counters["dot_accumulation_epochs"],
+    "output_store_epochs": counters["output_store_epochs"],
+    "uses_precomputed_activation_sums": True,
+  }
+  return MMQLifecycleRow(role=spec.role, tile_id=f"staged_ds4_{_tile_id(spec)}", counters=counters), detail
+
+
+def q4k_q8_1_mmq_staged_ds4_tile_reference(q4k_bytes: np.ndarray, ds4: Q81MMQDS4Activation,
+                                           spec: Q4KQ81MMQTileSpec) -> np.ndarray:
+  q4 = _validate_staged_ds4_inputs(q4k_bytes, ds4, spec)
+  out = np.zeros((spec.tile_m, spec.tile_n), dtype=np.float32)
+  first_block = spec.k0 // Q4_K_BLOCK_ELEMS
+  k_blocks = spec.effective_k_groups // 8
+  for mi, mrow in enumerate(range(spec.m0, spec.m0 + spec.tile_m)):
+    for ni, nrow in enumerate(range(spec.n0, spec.n0 + spec.tile_n)):
+      acc = np.float32(0.0)
+      for blk_i in range(k_blocks):
+        q4_blk = q4[nrow, first_block + blk_i]
+        d, dmin = _q4k_f16_pair(q4_blk)
+        for grp in range(8):
+          ds4_block = (spec.k0 // 128) + blk_i * 2 + grp // 4
+          ds4_group = grp % 4
+          xvals = ds4.values[ds4_block, mrow].reshape(4, Q8_1_BLOCK_ELEMS)[ds4_group].astype(np.float32)
+          xscale = np.float32(ds4.scales[ds4_block, mrow, ds4_group])
+          xsum = np.float32(ds4.sums[ds4_block, mrow, ds4_group])
+          sc, mn = _q4k_scale_min(q4_blk, grp)
+          q = _q4k_unsigned_nibbles(q4_blk, grp)
+          dot_term = np.float32(np.dot(q, xvals))
+          acc += xscale * (d * np.float32(sc) * dot_term) - (dmin * np.float32(mn) * xsum)
+      out[mi, ni] = acc
+  return out
+
+
+def staged_ds4_atom_source_hash(spec: Q4KQ81MMQTileSpec) -> str:
+  payload = "|".join((
+    AMD_STAGED_DS4_BACKEND_ATOM_ID,
+    DS4_ACTIVATION_LAYOUT,
+    str(spec.to_json()),
+    "q8_sums=precomputed_dequantized_group_sums",
+    "reference_backed_no_gpu_kernel",
+  ))
+  return hashlib.sha256(payload.encode()).hexdigest()[:16]
+
+
+def run_q4k_q8_1_mmq_staged_ds4_atom(q4k_bytes: np.ndarray, ds4: Q81MMQDS4Activation,
+                                     spec: Q4KQ81MMQTileSpec) -> Q4KQ8MMQAtomResult:
+  output = q4k_q8_1_mmq_staged_ds4_tile_reference(q4k_bytes, ds4, spec)
+  lifecycle, detail = _staged_ds4_lifecycle_for_spec(spec)
+  return Q4KQ8MMQAtomResult(output=np.asarray(output, dtype=np.float32), lifecycle=lifecycle,
+                            backend_atom_id=AMD_STAGED_DS4_BACKEND_ATOM_ID, lifecycle_detail=detail)
 
 
 def _tile_id(spec: Q4KQ81MMQTileSpec) -> str:

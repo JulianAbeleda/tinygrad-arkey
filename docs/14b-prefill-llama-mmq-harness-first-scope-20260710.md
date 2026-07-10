@@ -269,15 +269,66 @@ run one-role ffn_gate_up smoke
 then run whole-prefill authority
 ```
 
+The staged DS4 atom is a candidate only. Adding metadata for
+`q4k_q8_1_mmq_amd_staged_ds4_atom_v0` must not change shipped dispatch behavior, default route policy, or decode
+route selection. The default 14B prefill route remains direct_packed until a later, explicit promotion patch changes
+that default with whole-prefill authority attached.
+
 Promotion criteria:
 
 ```text
+default 14B prefill is still direct_packed before and after the gate run
+candidate is reachable only through explicit opt-in route policy/env metadata
+missing or false atom availability fails closed before any silent direct_packed fallback
+candidate route scope is ffn_gate_up only until explicit expansion rows land
+bounded DS4 staged atom wins before one-role smoke or whole-prefill authority is attempted
 same-session direct_packed comparator
 same-session llama pp512 comparator or linked fresh artifact
 quality gate pass
 no hidden fallback to direct_packed while claiming MMQ
 route manifest status remains research until whole-prefill improves
 decode route unchanged
+```
+
+Required L4 report fields:
+
+```text
+route_id = prefill_14b_q4k_q8_1_hybrid_mmq_atom
+public_label = hybrid_machine_search_mmq
+backend_id = q4k_q8_1_mmq_amd_staged_ds4_atom_v0
+activation_layout = mmq_ds4
+route_manifest_status = research
+default_14b_prefill_route_before = direct_packed
+default_14b_prefill_route_after = direct_packed
+candidate_opt_in = true
+atom_available = true
+atom_availability_source = policy_row_or_runtime_probe
+atom_missing_behavior = fail_closed
+role_scope = [ffn_gate_up]
+excluded_roles = [attn_qo, attn_kv, ffn_down]
+q6k_prefill_route = direct_packed
+decode_routes_changed = false
+same_session_direct_packed_comparator_artifact = <path>
+same_session_llama_pp512_comparator_artifact = <path>
+bounded_direct_packed_ms = <number>
+bounded_ds4_atom_ms = <number>
+bounded_win = true
+one_role_ffn_gate_up_smoke_artifact = <path>
+whole_prefill_authority_artifact = <path or pending_after_bounded_win>
+hidden_fallback_detected = false
+```
+
+Fail-closed checks:
+
+```text
+reject policy rows for this route unless atom_available=true is present
+reject policy rows that bind this route to any role other than ffn_gate_up
+reject policy rows that bind attn_qo, attn_kv, ffn_down, or Q6_K ffn_down to the DS4 atom
+reject reports that claim hybrid_machine_search_mmq while observed kernels are direct_packed kernels
+reject reports missing the same-session direct_packed comparator
+reject reports missing either a same-session llama pp512 comparator or an explicitly linked fresh llama artifact
+reject whole-prefill runs when bounded_win is absent or false
+reject any diff that changes production dispatch defaults as part of L4
 ```
 
 Route/e2e freeze checklist:
@@ -288,6 +339,19 @@ shared extra/qk/bench.py --model-profile 14b remains the authority surface
 initial atom scope remains ffn_gate_up only
 attn_qo, attn_kv, and ffn_down stay direct-packed until explicit expansion rows land
 Q6_K remains direct until a separate Q6 MMQ route exists
+decode route inventory and decode defaults remain unchanged
+```
+
+Manifest/check expectations:
+
+```text
+route manifest row may record the DS4 staged atom as research metadata only
+route manifest env remains opt-in and must not become {}
+route manifest baseline/rollback remains direct_packed
+route manifest status remains research until whole-prefill authority beats the frozen baseline
+policy validation keeps atom availability fail-closed
+policy validation keeps ffn_gate_up-only binding
+promotion documentation must name the bounded win artifact before naming a whole-prefill promotion artifact
 ```
 
 ## Agent Slices Spawned
