@@ -98,7 +98,7 @@ No new benchmark harness should be created.
 | Need | Existing tool |
 |---|---|
 | E2E authority timing | `extra/qk/prefill_whole_synced.py` |
-| S9 report aggregation | `extra/qk/prefill/lds2_s9_report.py` |
+| S9 report aggregation | `extra/qk/prefill/lds2_s9_final_report.py` |
 | S9 search artifacts | `extra/qk/prefill/lds2_s9_*_search.py` |
 | route/lifecycle trace | `extra/qk/prefill/s10_hybrid_role_trace.py` |
 | baseline freeze | `extra/qk/prefill/s10_baseline_freeze.py` |

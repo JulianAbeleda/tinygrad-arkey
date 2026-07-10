@@ -379,7 +379,7 @@ Owner: agent lane.
 Expected file:
 
 ```text
-extra/qk/prefill/lds2_s9_report.py
+extra/qk/prefill/lds2_s9_final_report.py
 ```
 
 Expected artifact:

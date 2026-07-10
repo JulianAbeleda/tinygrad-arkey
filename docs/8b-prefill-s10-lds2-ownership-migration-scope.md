@@ -4,6 +4,10 @@ Date: 2026-07-09.
 
 ## S-Phase Ledger
 
+Canonical current-state (including the S10.5 row) now lives in `docs/prefill-current-state.md`.
+The table below is kept for local context; treat `docs/prefill-current-state.md` as the single
+source of truth for the active phase and current route/number.
+
 Repo scan result: there is no committed `S11` or later phase after S10. Later work is documented as either old S10
 composed-route work or parked generated DBUF/P4 work, not as a numbered post-S10 phase.
 

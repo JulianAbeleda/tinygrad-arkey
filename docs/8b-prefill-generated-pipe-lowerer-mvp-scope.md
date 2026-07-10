@@ -1,5 +1,7 @@
 # 8B Prefill Generated Pipe Lowerer MVP Scope
 
+## Status: Deferred by S10.5 (generated transport correct-but-slow; see docs/8b-prefill-s10_5-machine-search-over-backend-atom-scope.md)
+
 Date: 2026-07-08.
 
 ## Goal
