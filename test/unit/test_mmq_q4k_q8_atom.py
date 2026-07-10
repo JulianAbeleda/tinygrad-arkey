@@ -6,10 +6,12 @@ from tinygrad import Tensor, dtypes
 from extra.qk.layout import Q4_K_BLOCK_BYTES, Q4_K_BLOCK_ELEMS, Q8_1_BLOCK_ELEMS, q8_1_quantize
 from extra.qk.mmq_lifecycle import COUNTER_NAMES
 from extra.qk.mmq_q4k_q8_atom import (
-  AMD_BACKEND_ATOM_ID, AMD_STAGED_DS4_BACKEND_ATOM_ID, AMD_WARP_BACKEND_ATOM_ID, BACKEND_ATOM_ID,
-  q8_1_mmq_ds4_from_row_major, run_q4k_q8_1_mmq_staged_ds4_atom, amd_atom_source_hash,
-  amd_warp_atom_source_hash, staged_ds4_atom_source_hash, run_q4k_q8_1_mmq_tile,
-  run_q4k_q8_1_mmq_tile_amd, run_q4k_q8_1_mmq_tile_amd_warp,
+  AMD_BACKEND_ATOM_ID, AMD_DS4_DOT4X4_BACKEND_ATOM_ID, AMD_DS4_WARP_BACKEND_ATOM_ID, AMD_STAGED_DS4_BACKEND_ATOM_ID,
+  AMD_WARP_BACKEND_ATOM_ID, BACKEND_ATOM_ID, q8_1_mmq_ds4_from_row_major, run_q4k_q8_1_mmq_bounded_amd_ds4_dot4x4,
+  run_q4k_q8_1_mmq_bounded_amd_ds4_warp, run_q4k_q8_1_mmq_staged_ds4_atom, amd_atom_source_hash,
+  amd_ds4_dot4x4_atom_source_hash, amd_ds4_warp_atom_source_hash,
+  amd_warp_atom_source_hash, staged_ds4_atom_source_hash, run_q4k_q8_1_mmq_tile, run_q4k_q8_1_mmq_tile_amd,
+  run_q4k_q8_1_mmq_tile_amd_warp,
   run_q4k_q8_1_mmq_tile_with_lifecycle,
 )
 from extra.qk.mmq_q4k_q8_reference import describe_q4k_q8_1_mmq_tile, q4k_q8_1_mmq_tile_reference
@@ -100,6 +102,45 @@ def test_q4k_q8_1_mmq_staged_ds4_lifecycle_distinguishes_stages():
   assert counters["output_stores"] == m * n
   assert detail["global_activation_ds4_loads"] == detail["staged_activation_tile_loads"]
   assert detail["global_q4k_tile_loads"] == detail["staged_q4k_tile_loads"]
+
+
+@pytest.mark.xfail(reason="DS4 dot4x4 packed path compiles but has incorrect DS4 indexing; keep blocked until fixed")
+def test_q4k_q8_1_mmq_amd_ds4_dot4x4_atom_matches_reference_when_amd_available():
+  if not _has_amd():
+    pytest.skip("AMD device is not available")
+  m, n, k = 4, 5, 256
+  raw = _finite_q4k_bytes(n, k, seed=703)
+  xq, xscales = _q8_inputs(m, k, seed=704)
+  ds4 = q8_1_mmq_ds4_from_row_major(xq, xscales)
+  result = run_q4k_q8_1_mmq_bounded_amd_ds4_dot4x4(raw, ds4, role="ffn_gate_up")
+  spec = describe_q4k_q8_1_mmq_tile(role="ffn_gate_up", m=m, n=n, k=k, m_tile=m, n_tile=n, k_groups=8)
+  ref = q4k_q8_1_mmq_tile_reference(raw, xq, xscales, spec)
+
+  assert result.backend_atom_id == AMD_DS4_DOT4X4_BACKEND_ATOM_ID
+  assert result.lifecycle_detail["backend_stage"] == "amd_ds4_dot4x4_direct_gpu"
+  assert result.lifecycle_detail["uses_precomputed_activation_sums"] is True
+  assert result.lifecycle_detail["shared_memory_staging"] is False
+  assert amd_ds4_dot4x4_atom_source_hash(m, n, k, "ffn_gate_up")
+  np.testing.assert_allclose(result.output, ref, rtol=1e-6, atol=8e-4)
+
+
+def test_q4k_q8_1_mmq_amd_ds4_warp_atom_matches_reference_when_amd_available():
+  if not _has_amd():
+    pytest.skip("AMD device is not available")
+  m, n, k = 4, 5, 256
+  raw = _finite_q4k_bytes(n, k, seed=803)
+  xq, xscales = _q8_inputs(m, k, seed=804)
+  ds4 = q8_1_mmq_ds4_from_row_major(xq, xscales)
+  result = run_q4k_q8_1_mmq_bounded_amd_ds4_warp(raw, ds4, role="ffn_gate_up")
+  spec = describe_q4k_q8_1_mmq_tile(role="ffn_gate_up", m=m, n=n, k=k, m_tile=m, n_tile=n, k_groups=8)
+  ref = q4k_q8_1_mmq_tile_reference(raw, xq, xscales, spec)
+
+  assert result.backend_atom_id == AMD_DS4_WARP_BACKEND_ATOM_ID
+  assert result.lifecycle_detail["backend_stage"] == "amd_ds4_warp_direct_gpu"
+  assert result.lifecycle_detail["uses_precomputed_activation_sums"] is True
+  assert result.lifecycle_detail["shared_memory_staging"] is False
+  assert amd_ds4_warp_atom_source_hash(m, n, k, "ffn_gate_up")
+  np.testing.assert_allclose(result.output, ref, rtol=1e-6, atol=1e-3)
 
 
 def _has_amd() -> bool:

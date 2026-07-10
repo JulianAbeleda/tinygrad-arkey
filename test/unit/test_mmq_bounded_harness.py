@@ -1,8 +1,9 @@
 import pytest
 
 from extra.qk.mmq_bounded_harness import (
-  ACTIVATION_LAYOUT_MMQ_DS4, ACTIVATION_LAYOUT_ROW_MAJOR, CANDIDATE_ROUTE_ID, COMPARATOR_ID, K, M, N, ROLE,
-  STAGED_DS4_BACKEND_ID, BoundedMMQConfig, candidate_metadata, run_bounded_harness,
+  ACTIVATION_LAYOUT_MMQ_DS4, ACTIVATION_LAYOUT_ROW_MAJOR, AMD_DS4_DOT4X4_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID,
+  CANDIDATE_ROUTE_ID, COMPARATOR_ID, K, M, N, ROLE, STAGED_DS4_BACKEND_ID, BoundedMMQConfig, candidate_metadata,
+  run_bounded_harness,
 )
 
 
@@ -121,6 +122,26 @@ def test_mmq_bounded_harness_staged_ds4_backend_metadata_only_is_not_default_rou
   assert meta["comparator_id"] == COMPARATOR_ID
 
 
+def test_mmq_bounded_harness_amd_ds4_dot4x4_backend_metadata_only_is_not_default_route():
+  meta = candidate_metadata(BoundedMMQConfig(m_tile=4, n_tile=4, k_groups=8, backend=AMD_DS4_DOT4X4_BACKEND_ID))
+
+  assert meta["backend"] == AMD_DS4_DOT4X4_BACKEND_ID
+  assert meta["backend_atom_id"] == AMD_DS4_DOT4X4_BACKEND_ID
+  assert meta["activation_layout"] == ACTIVATION_LAYOUT_MMQ_DS4
+  assert meta["candidate_route_id"] == CANDIDATE_ROUTE_ID
+  assert meta["comparator_id"] == COMPARATOR_ID
+
+
+def test_mmq_bounded_harness_amd_ds4_warp_backend_metadata_only_is_not_default_route():
+  meta = candidate_metadata(BoundedMMQConfig(m_tile=4, n_tile=4, k_groups=8, backend=AMD_DS4_WARP_BACKEND_ID))
+
+  assert meta["backend"] == AMD_DS4_WARP_BACKEND_ID
+  assert meta["backend_atom_id"] == AMD_DS4_WARP_BACKEND_ID
+  assert meta["activation_layout"] == ACTIVATION_LAYOUT_MMQ_DS4
+  assert meta["candidate_route_id"] == CANDIDATE_ROUTE_ID
+  assert meta["comparator_id"] == COMPARATOR_ID
+
+
 @pytest.mark.parametrize("backend", ["direct_packed", "amd_warp_batched", "amd_dot4_batched", "amd_dot4x4_batched"])
 def test_mmq_bounded_harness_comparator_and_batched_backends_are_selectable_metadata_only(backend):
   cfg = BoundedMMQConfig(m_tile=4, n_tile=4, k_groups=8, backend=backend, measure_direct_packed=True)
@@ -141,3 +162,8 @@ def test_mmq_bounded_harness_rejects_unknown_activation_layout():
 
   with pytest.raises(ValueError, match="unknown activation_layout"):
     cfg.validate()
+
+
+def test_mmq_bounded_harness_amd_ds4_dot4x4_requires_m_multiple_of_4():
+  with pytest.raises(ValueError, match="multiple of 4"):
+    BoundedMMQConfig(m_tile=2, m_tiles=1, n_tile=4, k_groups=8, backend=AMD_DS4_DOT4X4_BACKEND_ID).validate()
