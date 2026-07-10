@@ -44,6 +44,7 @@ Measured structural counters:
 | Generated baseline `2x2` | fail | 16 | 131072 | 3.312 | 1 | 4.0 | 39.062 | 2473 |
 | Generated K-major `2x2` | fail | 16 | 131072 | 2.875 | 3 | 2.0 | 34.625 | 2849 |
 | Generated K-major + wait coalesce | fail | 16 | 131072 | 2.562 | 4 | 2.0 | 34.312 | ~3197 |
+| Generated `4x4` math oracle + wait coalesce | fail/wrong output | 64 | 524288 | 1.141 | 16 | 1.0 | 23.078 | ~7182 |
 
 Interpretation:
 
@@ -135,6 +136,17 @@ The instruction/op gap is mostly a density/window artifact:
   non-matrix inst count = 538 generated vs 547 fast reference
   FLOPs/instruction    = 237 generated vs 858 fast reference because the fast reference spreads similar fixed overhead
                          across 4x the matrix work.
+```
+
+Additional existing-flag tests:
+
+```text
+4x2 and 2x4 legal generated windows:
+  wait coalesce improves max burst to 8 and waits/op to 1.781, but timing is worse and P8 still fails.
+
+4x4 generated:
+  moves much closer to the math target (64 ops, max burst 13-16, waits/op 1.141-1.375),
+  but output is wrong (`rr=nan`), so it is only a math oracle, not a route.
 ```
 
 So the next design should not primarily target fewer shared loads. It should target:
@@ -271,6 +283,14 @@ max op burst >= 4
 shared loads/op <= 2.0
 inst/op materially closer to 9-12 than 34+
 correctness preserved
+```
+
+Important constraint:
+
+```text
+Do not propose "just use 4x4" as the answer. 4x4 currently demonstrates the desired amortization direction but is wrong
+on the GPU in this generated route. The useful design is: get 4x4-like scheduling-window amortization inside a legal
+2x2/4x2/2x4 path, or explain why that is impossible.
 ```
 
 ## Question

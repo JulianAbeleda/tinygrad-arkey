@@ -829,6 +829,112 @@ cluster plan itself: choose the WMMA group, choose the resident fragment VGPRs f
 that group, then emit the WMMAs before those VGPRs are reused.
 ```
 
+## Math-Driven Existing-Flag Ladder - 2026-07-10
+
+After correcting the amortization inference, the test ladder is:
+
+```text
+T1. Does larger generated window size improve ops/wait with existing K-major?
+T2. Does conservative clustered LGKM wait improve the larger windows?
+T3. Does 4x4 prove the target math, and is it correct?
+T4. If 4x4 proves math but is wrong, design a legal cluster-window primitive that gets 4x4-like math inside active
+    legal shapes.
+```
+
+### T1. K-major Shape Sweep
+
+Flags:
+
+```text
+PREFILL_WMMA_KMAJOR_PHASE=1
+PREFILL_WMMA_AB_PROOF_KEY=1
+PREFILL_WMMA_AB_PHASE_SCOPED_KEY=1
+PREFILL_WMMA_AB_PROOF_FROM_LDS_DESC=1
+```
+
+| Shape | Correct | TFLOPS | WMMA | waits | waits/WMMA | ops/wait | FLOPs/wait | max burst | ds_load/WMMA | inst/WMMA |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `2x2` | yes | 11.68 | 16 | 46 | 2.875 | 0.348 | 2849 | 3 | 2.0 | 34.625 |
+| `4x2` | yes | 9.05 | 32 | 70 | 2.188 | 0.457 | 3745 | 4 | 1.5 | 29.188 |
+| `2x4` | yes | 8.24 | 32 | 70 | 2.188 | 0.457 | 3745 | 5 | 1.5 | 29.188 |
+
+Readout:
+
+```text
+Larger legal generated windows improve amortization counters but reduce timing.
+They are not enough: ops/wait is still far below S9 hand 2x2's 2.46.
+```
+
+### T2. K-major + Clustered LGKM Wait Shape Sweep
+
+Additional flag:
+
+```text
+AMD_ISA_WMMA_CLUSTER_LGKM_WAIT=1
+```
+
+| Shape | Correct | TFLOPS | WMMA | waits | waits/WMMA | ops/wait | max burst | ds_load/WMMA |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| `2x2` | yes | 11.79 | 16 | 41 | 2.562 | 0.390 | 4 | 2.0 |
+| `4x2` | yes | 9.16 | 32 | 57 | 1.781 | 0.561 | 8 | 1.5 |
+| `2x4` | yes | 7.90 | 32 | 57 | 1.781 | 0.561 | 8 | 1.5 |
+
+Readout:
+
+```text
+Clustered wait helps structure only when the window is already larger.
+It still does not cross P8, and timing remains worse than 2x2 K-major.
+```
+
+### T3. 4x4 As Math Oracle, Not A Valid Route
+
+`4x4` is parked for correctness/resource reasons, but it is useful as a math oracle.
+
+| Shape | Cluster wait | Correct | WMMA | waits | waits/WMMA | ops/wait | max burst | global/store/load per WMMA | inst/WMMA |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|
+| `4x4` | no | wrong, `rr=nan` | 64 | 88 | 1.375 | 0.727 | 13 | 1.0 / 1.0 / 1.0 | 23.312 |
+| `4x4` | yes | wrong, `rr=nan` | 64 | 73 | 1.141 | 0.877 | 16 | 1.0 / 1.0 / 1.0 | 23.078 |
+
+Readout:
+
+```text
+4x4 moves strongly toward the target math:
+  WMMA count = 64
+  max burst = 13-16
+  waits/WMMA = 1.141-1.375
+  global/store/load per WMMA = 1.0/1.0/1.0
+
+But it is not correct on GPU, so it remains a math oracle only.
+Do not unpark 4x4 as a route.
+```
+
+### Current Test Conclusion
+
+The math path is now clear:
+
+```text
+Need 4x4-like scheduling-window amortization without relying on the current 4x4 generated route.
+```
+
+That means the next primitive should create a larger matrix-op cluster inside legal active shapes:
+
+```text
+cluster window over legal 2x2/4x2/2x4 execution
+  -> choose resident fragments
+  -> emit cluster loads
+  -> one/few waits
+  -> emit a 4+ WMMA burst
+  -> preserve correctness and register pressure
+```
+
+Do not spend more time on:
+
+```text
+standalone wait coalescing,
+dependency-only preloading,
+or 4x4 route promotion.
+```
+
 ### P3. A+B Owned Materializer
 
 Extend P2 to A and B only after B-only is correct.
