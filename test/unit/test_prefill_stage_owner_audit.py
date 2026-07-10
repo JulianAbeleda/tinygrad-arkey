@@ -1,5 +1,6 @@
 from extra.qk.prefill import prefill_stage_owner_audit as audit
 from extra.qk.prefill import kernel_lifecycle_trace as life
+from tinygrad.codegen.opt import postrange
 from tinygrad.schedule import rangeify
 
 
@@ -113,6 +114,23 @@ def test_rotated_stage_owner_tag_parser_is_fail_closed():
   assert rotated["owned_stage"] == "B_ROTATE"
   assert rotated["lifecycle"] == "prologue_body_tail"
   assert rotated["rotation"] == "kr_mod_nbuf"
+
+
+def test_ab_owned_stage_metadata_tags_are_opt_in(monkeypatch):
+  monkeypatch.setenv("PREFILL_DBUF_OWNED_AB_STAGE_META", "1")
+  postrange.getenv.cache_clear()
+  try:
+    a_tag = postrange._tc_local_stage_buffer_tag(0, 990, 2, 1, 256)
+    b_tag = postrange._tc_local_stage_buffer_tag(1, 991, 2, 1, 256)
+  finally:
+    postrange.getenv.cache_clear()
+
+  a_fields = rangeify.prefill_dbuf_rotated_stage_owner_fields(a_tag)
+  b_fields = rangeify.prefill_dbuf_rotated_stage_owner_fields(b_tag)
+  assert a_fields["owned_stage"] == "A_IDENTITY"
+  assert b_fields["owned_stage"] == "B_IDENTITY"
+  assert a_fields["producer_epoch"] == "same_reduce"
+  assert b_fields["consumer_epoch"] == "same_reduce"
 
 
 def test_lowering_hook_summary_marks_ab_dbuf_ready():

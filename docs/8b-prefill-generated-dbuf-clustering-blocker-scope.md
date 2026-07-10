@@ -346,3 +346,158 @@ set to distinguish:
 from
 (same lds slot, producer epoch moved into body for later K phase)
 ```
+
+## Fix Scope - 2026-07-09
+
+The P8 failure should be fixed at the owned-stage lifecycle layer, not by adding another renderer-side deletion rule.
+
+The primitive plan is:
+
+```text
+postrange owner metadata
+  -> owned-stage prologue/body/tail materializer
+  -> K-major fragment reuse on the materialized stream
+  -> P8 phase-cluster gate
+```
+
+Do not use these as fixes:
+
+```text
+PREFILL_WMMA_KMAJOR_STAGE_KEY_SUPPRESS late deletion
+slot-only suppression
+renderer moved-store memoization
+waitcnt-only tuning before the lifecycle shape changes
+```
+
+### P0. Owner Metadata Probe
+
+Status: first slice implemented.
+
+Flag:
+
+```text
+PREFILL_DBUF_OWNED_AB_STAGE_META=1
+```
+
+Result:
+
+```text
+postrange audit sees:
+  A owned_stage=A_IDENTITY, nbuf=2, reduce range present
+  B owned_stage=B_IDENTITY, nbuf=2, reduce range present
+```
+
+This is behavior-neutral. It only gives later lowering an explicit owner object instead of making the renderer infer
+ownership from final LDS addresses.
+
+Verification:
+
+```bash
+PYTHONPATH=. pytest -q test/unit/test_prefill_stage_owner_audit.py test/unit/test_prefill_kernel_lifecycle_trace.py
+```
+
+Result:
+
+```text
+40 passed
+```
+
+### P1. Rotate Metadata Probe
+
+Add an opt-in rotate tag without changing codegen:
+
+```text
+PREFILL_DBUF_OWNED_AB_STAGE_META=1
+PREFILL_DBUF_OWNED_B_STAGE_EMIT=rotate
+```
+
+Required audit result:
+
+```text
+B owned_stage=B_ROTATE
+lifecycle=prologue_body_tail
+rotation=kr_mod_nbuf
+```
+
+This must still fail closed before materialization if no owner-aware lowering is installed.
+
+### P2. B-Only Owned Materializer
+
+Implement the smallest real lifecycle rewrite for B only:
+
+```python
+prologue:
+  produce_B(slot=0, epoch=k0)
+  barrier()
+
+body:
+  consume_B(slot=k % 2, epoch=k)
+  produce_B(slot=(k + 1) % 2, epoch=k + 1)
+  barrier()
+
+tail:
+  consume_B(slot=last % 2, epoch=last)
+```
+
+Safety requirements:
+
+```text
+no late suppression
+no same-epoch STAGE index rewrite
+each consume has exactly one prior producer
+barrier separates producer from consumer
+phase 0 producer stays prologue-owned
+```
+
+Pass gate:
+
+```text
+correct 2x2 bounded result
+global_b128/WMMA and ds_store_b128/WMMA do not rise above base
+D3 body staging appears
+```
+
+### P3. A+B Owned Materializer
+
+Extend P2 to A and B only after B-only is correct.
+
+Pass gate:
+
+```text
+D3=true
+body_has_next_slot_work=true
+ds_load_b128/WMMA <= 2.0
+global_b128/WMMA <= 2.25
+ds_store_b128/WMMA <= 2.25
+max WMMA cluster >= 3
+barriers <= 3 on bounded trace
+```
+
+### P4. Bounded Timing
+
+Run the existing bounded matrix harness.
+
+Promotion gate:
+
+```text
+candidate TFLOPS > K-major base
+candidate is correct
+candidate passes P8 phase-cluster quality
+```
+
+### P5. Route Transfer
+
+Only after P4:
+
+```text
+enable for composed generated S10 route
+run per-role correctness/timing
+run whole-prefill fail-closed smoke
+```
+
+Success is:
+
+```text
+whole prefill beats stored Path1 or records the next named bottleneck
+no route silently falls back
+```

@@ -530,15 +530,20 @@ def _tc_local_stage_paired_contract_src(src:UOp, operand_idx:int, *, owner_tag:t
   return UOp(Ops.CONTRACT, src.dtype, (scalar,), src.arg, tag=1)
 
 
+def _tc_local_stage_owned_stage_meta(operand_idx:int) -> bool:
+  return bool(getenv("PREFILL_DBUF_OWNED_AB_STAGE_META", 0) or
+              getenv("PREFILL_DBUF_OWNED_A_STAGE_META" if operand_idx == 0 else "PREFILL_DBUF_OWNED_B_STAGE_META", 0))
+
 def _tc_local_stage_buffer_tag(operand_idx:int, lds_buffer_id:int, nbuf:int, tile_count:int, tile_elems:int) -> tuple:
   tag = ("wmma_frag_buffer_proof", ("role", "A" if operand_idx == 0 else "B"), ("lds_buffer_id", lds_buffer_id),
          ("nbuf", nbuf), ("tile_count", tile_count), ("tile_elems", tile_elems))
-  if operand_idx == 1 and getenv("PREFILL_DBUF_OWNED_B_STAGE_META", 0):
-    mode = str(getenv("PREFILL_DBUF_OWNED_B_STAGE_EMIT", "")).strip().lower()
+  if _tc_local_stage_owned_stage_meta(operand_idx):
+    role = "A" if operand_idx == 0 else "B"
+    mode = str(getenv("PREFILL_DBUF_OWNED_A_STAGE_EMIT" if operand_idx == 0 else "PREFILL_DBUF_OWNED_B_STAGE_EMIT", "")).strip().lower()
     if mode in ("rotate", "rotated"):
-      tag += (("owned_stage", "B_ROTATE"), ("lifecycle", "prologue_body_tail"), ("rotation", "kr_mod_nbuf"))
+      tag += (("owned_stage", f"{role}_ROTATE"), ("lifecycle", "prologue_body_tail"), ("rotation", "kr_mod_nbuf"))
     else:
-      tag += (("owned_stage", "B_IDENTITY"), ("producer_epoch", "same_reduce"), ("consumer_epoch", "same_reduce"),
+      tag += (("owned_stage", f"{role}_IDENTITY"), ("producer_epoch", "same_reduce"), ("consumer_epoch", "same_reduce"),
               ("rotation", "none"))
   return tag
 
@@ -563,8 +568,8 @@ def _tc_local_stage_proof_dump(stage:str, operand_idx:int, idx:UOp, buffer_tag:t
 def _tc_local_stage_src(src:UOp, ranges:tuple[UOp, ...], operand_idx:int|None=None) -> UOp:
   staged = src.bufferize(*ranges, arg=BufferizeOpts(None, AddrSpace.LOCAL, removable=False))
   buffer_tag = None
-  owned_b_meta = operand_idx == 1 and getenv("PREFILL_DBUF_OWNED_B_STAGE_META", 0)
-  if (getenv("PREFILL_WMMA_AB_PROOF_META", 0) or owned_b_meta) and operand_idx is not None and src.op is Ops.CONTRACT and src.dtype.count == 16:
+  owned_meta = operand_idx is not None and _tc_local_stage_owned_stage_meta(operand_idx)
+  if (getenv("PREFILL_WMMA_AB_PROOF_META", 0) or owned_meta) and operand_idx is not None and src.op is Ops.CONTRACT and src.dtype.count == 16:
     nbuf = PREFILL_DBUF_NBUF() if PREFILL_DBUF() else 1
     buffer_tag = _tc_local_stage_buffer_tag(operand_idx, 990 + operand_idx, nbuf, 1, 256)
     staged = staged.replace(tag=buffer_tag)
@@ -658,7 +663,8 @@ def _tc_local_stage_b_src(src:UOp, fallback:tuple[UOp, ...]) -> UOp:
   layout_elems = 8192 if generic_layout else 256
   generic_no_slot = generic_layout and bool(getenv("PREFILL_TC_LOCAL_STAGE_B_TILEKEY_GENERIC_NO_SLOT", 0))
   base = tile_count * layout_elems * nbuf if kr is not None and not generic_no_slot else tile_count * layout_elems
-  buffer_tag = _tc_local_stage_buffer_tag(1, 993, nbuf, tile_count, layout_elems) if getenv("PREFILL_WMMA_AB_PROOF_META", 0) else None
+  buffer_tag = _tc_local_stage_buffer_tag(1, 993, nbuf, tile_count, layout_elems) \
+    if getenv("PREFILL_WMMA_AB_PROOF_META", 0) or _tc_local_stage_owned_stage_meta(1) else None
   bsh = UOp.placeholder((base,), src.dtype.scalar(), 993, addrspace=AddrSpace.LOCAL)
   if buffer_tag is not None: bsh = bsh.replace(tag=buffer_tag)
   row = lane if generic_layout else lane & 15
@@ -809,8 +815,7 @@ def _tc_local_stage_coop_operand(wmma:UOp, operand_idx:int) -> UOp|None:
     tile_mul *= r.vmax+1
   slot = ((kr % nbuf) * tile_count + tile_idx) * tile_elems if kr is not None else tile_idx * tile_elems
   lds_buffer_id = 990 + operand_idx
-  buffer_tag = ("wmma_frag_buffer_proof", ("role", "A" if operand_idx == 0 else "B"), ("lds_buffer_id", lds_buffer_id),
-                ("nbuf", nbuf), ("tile_count", tile_count), ("tile_elems", tile_elems))
+  buffer_tag = _tc_local_stage_buffer_tag(operand_idx, lds_buffer_id, nbuf, tile_count, tile_elems)
   bsh = UOp.placeholder((base,), src.dtype.scalar(), lds_buffer_id, addrspace=AddrSpace.LOCAL).replace(tag=buffer_tag)
 
   def _slot_idx(i:int|UOp) -> UOp:
