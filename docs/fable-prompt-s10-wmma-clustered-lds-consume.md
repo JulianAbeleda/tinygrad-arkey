@@ -57,6 +57,76 @@ But it did not fix wait amortization:
   generated:      2.562-2.875 waits/op
 ```
 
+## Why We Think The Fast Reference Is Fast
+
+The fast reference is not just faster because it has more matrix ops. It is faster because fixed overhead is amortized
+over larger matrix-op clusters.
+
+Fast reference `2x2` raw counts:
+
+```text
+matrix_op_count       = 64
+useful_flops          = 64 * 8192 = 524288
+wait_count            = 26
+shared_load_count     = 128
+instruction_count     = 611
+max_matrix_op_burst   = 4
+```
+
+Derived math:
+
+```text
+waits/op              = 26 / 64  = 0.406
+shared_loads/op       = 128 / 64 = 2.0
+instructions/op       = 611 / 64 = 9.547
+
+FLOPs/wait            = 524288 / 26  ~= 20165
+FLOPs/shared_load     = 524288 / 128 = 4096
+FLOPs/instruction     = 524288 / 611 ~= 858
+```
+
+Generated K-major raw counts:
+
+```text
+matrix_op_count       = 16
+useful_flops          = 16 * 8192 = 131072
+wait_count            = 46
+shared_load_count     = 32
+instruction_count     = 554
+max_matrix_op_burst   = 3
+```
+
+Derived math:
+
+```text
+waits/op              = 46 / 16  = 2.875
+shared_loads/op       = 32 / 16  = 2.0
+instructions/op       = 554 / 16 = 34.625
+
+FLOPs/wait            = 131072 / 46  ~= 2849
+FLOPs/shared_load     = 131072 / 32  = 4096
+FLOPs/instruction     = 131072 / 554 ~= 237
+```
+
+This is the key inference:
+
+```text
+Generated K-major already matches the fast reference on shared-load amortization:
+  FLOPs/shared_load = 4096 in both
+
+But it is still far behind on wait and instruction amortization:
+  FLOPs/wait        = 2849 generated vs 20165 fast reference
+  FLOPs/instruction = 237 generated vs 858 fast reference
+```
+
+So the next design should not primarily target fewer shared loads. It should target:
+
+```text
+1. fewer waits per cluster,
+2. larger matrix-op bursts after each wait,
+3. fewer bookkeeping instructions between useful matrix ops.
+```
+
 ## Current Generated Shape
 
 Approximate shape:
@@ -198,4 +268,3 @@ Please review this as a compiler scheduling problem.
 
 Please answer in pseudocode and design terms. Avoid assuming access to special hardware counters; use only final-stream
 instruction counts, wait counts, shared-load counts, and correctness/timing smoke tests.
-
