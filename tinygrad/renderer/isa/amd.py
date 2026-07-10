@@ -2624,17 +2624,17 @@ class AMDISARenderer(ISARenderer):
         out.append(wait)
         if vm == 0: pend_vm.clear(); vm_store = False
         if lgkm == 0: pend_lgkm.clear(); lgkm_store = False
-      def _target_wait(uses:set[int], coalesce_vm:bool=False):
+      def _target_wait(uses:set[int], coalesce_vm:bool=False, coalesce_lgkm:bool=False):
         vdeps = [i for i, d in enumerate(pend_vm) if uses & d]
         ldeps = [i for i, d in enumerate(pend_lgkm) if uses & d]
         if not vdeps and not ldeps: return
         vm = 0 if (coalesce_vm and vdeps) else (len(pend_vm) - max(vdeps) - 1 if vdeps else 63)
-        lgkm = len(pend_lgkm) - max(ldeps) - 1 if ldeps else 63
+        lgkm = 0 if (coalesce_lgkm and ldeps) else (len(pend_lgkm) - max(ldeps) - 1 if ldeps else 63)
         wait = UOp(Ops.INS, arg=s_waitcnt(simm16=self._waitcnt_simm16(vm, lgkm, 7)))
         _audit_wait_uop(wait, vm, lgkm, "targeted_consumer")
         out.append(wait)
         if vdeps: del pend_vm[:(len(pend_vm) if coalesce_vm else max(vdeps)+1)]
-        if ldeps: del pend_lgkm[:max(ldeps)+1]
+        if ldeps: del pend_lgkm[:(len(pend_lgkm) if coalesce_lgkm else max(ldeps)+1)]
       for u in uops:
         a = u.arg
         if isinstance(a, tuple):
@@ -2649,7 +2649,8 @@ class AMDISARenderer(ISARenderer):
         else:
           # Scalarized half-fragment paths otherwise emit one partial wait per v_pack. Coalesce those narrow-load
           # consumers to the default-equivalent VMEM drain; the b128/WMMA route still gets true targeted waits.
-          _target_wait(uses, coalesce_vm=m.startswith("v_pack"))
+          _target_wait(uses, coalesce_vm=m.startswith("v_pack"),
+                       coalesce_lgkm=m.startswith("v_wmma") and getenv("AMD_ISA_WMMA_CLUSTER_LGKM_WAIT", 0))
         out.append(u)
         regs = self._inst_regs(a)
         if m.startswith("global_load") and regs: pend_vm.append(_span(regs[0]))

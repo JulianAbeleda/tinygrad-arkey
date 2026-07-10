@@ -756,6 +756,47 @@ But it does not yet solve wait amortization:
 So the remaining primitive gap is not just LDS load reuse. The generated route must also move waits from per-WMMA shape
 toward phase-cluster shape.
 
+### Small Test: Clustered LGKM Wait Coalescing
+
+Probe:
+
+```text
+AMD_ISA_WMMA_CLUSTER_LGKM_WAIT=1
+```
+
+Meaning:
+
+```text
+For WMMA consumers only, coalesce a targeted LDS wait into `lgkmcnt(0)`.
+This drains all outstanding LDS loads at the first WMMA in a group, so later WMMAs in the same group may avoid their
+own waits. It is correctness-conservative, not an aggressive wait deletion.
+```
+
+Results:
+
+| Route | Correct | TFLOPS | waits/WMMA | max burst | ds_load/WMMA | inst/WMMA | Verdict |
+|---|---|---:|---:|---:|---:|---:|---|
+| baseline DBUF + clustered LGKM wait | yes | 8.21 | 3.312 | 1 | 4.0 | 39.062 | no structural movement |
+| K-major + clustered LGKM wait | yes | 11.88 | 2.562 | 4 | 2.0 | 34.312 | structural movement, slower than K-major-only |
+
+Comparison to prior K-major-only:
+
+```text
+waits:      46 -> 41
+wait/WMMA:  2.875 -> 2.562
+max burst:  3 -> 4
+TFLOPS:     12.24 -> 11.88
+```
+
+Decision:
+
+```text
+Do not promote clustered LGKM wait coalescing as a standalone performance fix.
+It proves the target shape is reachable only after K-major grouping, but the larger drain hurts enough that timing does
+not improve. The next primitive must move/cluster LDS loads and WMMAs together, not merely coalesce waits after the
+current stream has already chosen its load placement.
+```
+
 ### P3. A+B Owned Materializer
 
 Extend P2 to A and B only after B-only is correct.
