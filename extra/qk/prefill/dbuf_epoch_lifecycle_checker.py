@@ -36,7 +36,7 @@ PROOF_LAYERS: tuple[dict[str, str], ...] = (
    "proof": "VMEM waits, LGKM waits, and barriers are present in the right phase when exporters provide wait events"},
   {"id": "P6", "name": "lifetime_pressure", "status": "advisory_schema_ready",
    "proof": "advisory reg-pressure summaries reject known DBUF address live-range hazards"},
-  {"id": "P7", "name": "lowered_stream", "status": "side_channel_anchor_reconcile_ready_live_exporters_partial",
+  {"id": "P7", "name": "lowered_stream", "status": "side_channel_anchors_ready_generated_producers_missing",
    "proof": "generated graph or stream exports actual stores/loads/waits/WMMA into this schema"},
 )
 

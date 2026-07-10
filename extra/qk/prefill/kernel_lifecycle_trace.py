@@ -417,6 +417,11 @@ def _side_channel_lifecycle_events(rows: list[dict[str, Any]]) -> dict[str, Any]
   events: list[DBUFEvent] = []
   errors: list[dict[str, Any]] = []
   lifecycle_rows = [r for r in rows if r.get("kind") == "dbuf_lifecycle_event"]
+  anchor_aliases = {
+    ("uop_id", r["from_uop_id"]): ("uop_id", r["uop_id"])
+    for r in rows
+    if r.get("kind") == "dbuf_lifecycle_anchor_alias" and r.get("from_uop_id") is not None and r.get("uop_id") is not None
+  }
   for i, row in enumerate(lifecycle_rows):
     op = row.get("op")
     if op == "wait":
@@ -434,8 +439,9 @@ def _side_channel_lifecycle_events(rows: list[dict[str, Any]]) -> dict[str, Any]
     if op not in ("produce", "consume") or missing:
       errors.append({"row_index": i, "row": row, "error": f"incomplete lifecycle side-channel row: missing={missing}"})
       continue
+    value_key = row.get("value_key") if isinstance(row.get("value_key"), dict) else None
     events.append(DBUFEvent(str(op), role=str(row["role"]), epoch=row["epoch"], slot=row["slot"],
-                            window=str(row.get("window", "default")), value_key=row.get("value_key"),
+                            window=str(row.get("window", "default")), value_key=value_key,
                             step=i, phase=str(row.get("phase", ""))))
   check = check_events(events) if events else None
   return {
@@ -446,6 +452,7 @@ def _side_channel_lifecycle_events(rows: list[dict[str, Any]]) -> dict[str, Any]
     "check": check,
     "events": [e.to_json() for e in events],
     "rows": lifecycle_rows,
+    "anchor_aliases": [{"from": list(k), "to": list(v)} for k, v in anchor_aliases.items()],
   }
 
 
@@ -476,6 +483,11 @@ def _reconcile_side_channel_to_rows(ops: dict[str, list[dict[str, Any]]], side: 
       if (anchor := _row_anchor(row)) is not None: by_anchor[anchor] = (op, row)
   errors: list[dict[str, Any]] = []
   events: list[DBUFEvent] = []
+  anchor_aliases = {
+    tuple(alias["from"]): tuple(alias["to"])
+    for alias in side.get("anchor_aliases", [])
+    if isinstance(alias, dict) and isinstance(alias.get("from"), list) and isinstance(alias.get("to"), list)
+  }
   for i, row in enumerate(side.get("rows", [])):
     op = row.get("op")
     if op not in ("produce", "consume", "barrier", "wait"):
@@ -485,6 +497,10 @@ def _reconcile_side_channel_to_rows(ops: dict[str, list[dict[str, Any]]], side: 
     if anchor is None:
       errors.append({"row_index": i, "row": row, "error": "side-channel row has no uop_id/inst_idx anchor"})
       continue
+    seen: set[tuple[str, Any]] = set()
+    while anchor in anchor_aliases and anchor not in seen:
+      seen.add(anchor)
+      anchor = anchor_aliases[anchor]
     found = by_anchor.get(anchor)
     if found is None:
       errors.append({"row_index": i, "row": row, "error": f"side-channel anchor not found in lowered rows: {anchor!r}"})
@@ -509,8 +525,9 @@ def _reconcile_side_channel_to_rows(ops: dict[str, list[dict[str, Any]]], side: 
     if missing:
       errors.append({"row_index": i, "row": row, "error": f"anchored side-channel row is incomplete: missing={missing}"})
       continue
+    value_key = row.get("value_key") if isinstance(row.get("value_key"), dict) else None
     events.append(DBUFEvent(str(op), role=str(row["role"]), epoch=row["epoch"], slot=row["slot"],
-                            window=str(row.get("window", "default")), value_key=row.get("value_key"),
+                            window=str(row.get("window", "default")), value_key=value_key,
                             step=int(physical_row["idx"]),
                             phase=str(row.get("phase", ""))))
   events = sorted(events, key=lambda e: e.step)

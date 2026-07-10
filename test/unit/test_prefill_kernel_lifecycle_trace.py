@@ -245,6 +245,41 @@ def test_side_channel_reconciliation_rejects_wrong_physical_op():
   assert out["errors"][0]["error"] == "side-channel op 'produce' maps to physical 'consume'"
 
 
+def test_side_channel_reconciliation_accepts_live_consume_anchor():
+  side = life._side_channel_lifecycle_events([
+    {"kind": "dbuf_lifecycle_event", "op": "produce", "role": "A", "epoch": "e0", "slot": "s0", "window": "A:slot0", "uop_id": 30},
+    {"kind": "dbuf_lifecycle_event", "op": "barrier", "uop_id": 31},
+    {"kind": "dbuf_lifecycle_event", "op": "consume", "role": "A", "epoch": "e0", "slot": "s0", "window": "A:slot0", "uop_id": 32},
+  ])
+
+  out = life._reconcile_side_channel_to_rows({
+    "ds_store_b128": [{"idx": 40, "uop_id": 30}],
+    "s_barrier": [{"idx": 41, "uop_id": 31}],
+    "ds_load_b128": [{"idx": 42, "uop_id": 32}],
+  }, side)
+
+  assert out["ok"] is True
+  assert out["events"][-1] == {"op": "consume", "step": 42, "role": "A", "epoch": "e0", "slot": "s0", "window": "A:slot0"}
+
+
+def test_side_channel_reconciliation_follows_anchor_aliases():
+  side = life._side_channel_lifecycle_events([
+    {"kind": "dbuf_lifecycle_event", "op": "produce", "role": "A", "epoch": "e0", "slot": "s0", "window": "A:slot0", "uop_id": 30},
+    {"kind": "dbuf_lifecycle_event", "op": "barrier", "uop_id": 31},
+    {"kind": "dbuf_lifecycle_event", "op": "consume", "role": "A", "epoch": "e0", "slot": "s0", "window": "A:slot0", "uop_id": 32},
+    {"kind": "dbuf_lifecycle_anchor_alias", "from_uop_id": 32, "uop_id": 33},
+  ])
+
+  out = life._reconcile_side_channel_to_rows({
+    "ds_store_b128": [{"idx": 40, "uop_id": 30}],
+    "s_barrier": [{"idx": 41, "uop_id": 31}],
+    "ds_load_b128": [{"idx": 42, "uop_id": 33}],
+  }, side)
+
+  assert out["ok"] is True
+  assert out["events"][-1]["step"] == 42
+
+
 def test_side_channel_reconciliation_checks_value_keys():
   side = life._side_channel_lifecycle_events([
     {"kind": "dbuf_lifecycle_event", "op": "produce", "role": "B", "epoch": 0, "slot": 0, "window": "B:slot0",

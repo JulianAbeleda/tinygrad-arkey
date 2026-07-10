@@ -1371,6 +1371,8 @@ def _frag_b128_loads(ctx:IselContext, E:tuple[UOp, ...], base:int, dep:tuple[UOp
   if idxc.arg == "lds":
     _dump_lds_proof_key(f"frag_load_b128_{role}", idx0, 16, {"base": base, "first_const": c0}, ctx, idxc.src[1])
     addr, order = idxc.src[0], idxc.src[1]
+    desc = decompose_lds_index(ctx, idx0, order)
+    proof = _wmma_frag_buffer_proof_from_elem(E[0], desc, role) or _wmma_frag_buffer_proof_from_desc(desc, role)
     remat_load_anchor = bool(getenv("PREFILL_DBUF_LDS_RELOAD_ANCHOR", 0))
     if getenv("PREFILL_DBUF_LDS_BASE_REMAT", 0) and getenv("PREFILL_DBUF", 0) and not remat_load_anchor:
       addr = _remat_lds_load_addr(ctx, addr, dep[-1] if dep else order, bool(getenv("PREFILL_DBUF_LDS_BASE_REMAT_DEEP", 0)))
@@ -1384,6 +1386,13 @@ def _frag_b128_loads(ctx:IselContext, E:tuple[UOp, ...], base:int, dep:tuple[UOp
       load_addr, ds_imm = _ds_addr_imm(ctx, load_addr, base_imm + imm, 16)
       ld = UOp(Ops.INS, dtypes.int32, src=(load_addr, order, UOp.const(dtypes.int32, ds_imm).rtag()) + active_dep,
                arg=AMDOps.DS_LOAD_B128, tag=_pin(base, j * 4))
+      if j == 0 and role in ("A", "B") and proof is not None:
+        slot = proof.get("dbuf_slot")
+        _dbuf_lifecycle_audit({
+          "op": "consume", "role": role, "phase": "frag_load_b128",
+          "slot": repr(slot), "epoch": repr(proof.get("producer_epoch")), "window": f"{role}:slot{slot!r}",
+          "uop_id": id(ld), "byte_start": proof.get("byte_start"), "byte_len": proof.get("byte_len"),
+        })
       loads.extend([ld] + [UOp(Ops.INS, dtypes.int32, src=(ld,), arg=AMDOps.MOV, tag=_pin(base, j * 4 + i)) for i in range(1, 4)])
       if getenv("PREFILL_DBUF_LDS_LOAD_SERIAL", 0): active_dep = active_dep + (ld,)
     return tuple(loads)
@@ -1983,7 +1992,10 @@ def _strip_linear_order_deps(x:UOp):
   elif x.arg is AMDOps.DS_LOAD_B128 and len(x.src) > 3: nx = x.replace(src=x.src[:3])
   elif x.arg is AMDOps.DS_STORE_B128 and len(x.src) > 7: nx = x.replace(src=x.src[:5] + x.src[-2:])
   elif x.arg is AMDOps.GATED_STORE_B128 and len(x.src) > 8: nx = x.replace(src=x.src[:6] + x.src[-2:])
-  if nx is not None: return (nx, [nx])
+  if nx is not None:
+    if getenv("PREFILL_DBUF_LIFECYCLE_AUDIT", 0) or getenv("PREFILL_DBUF_D3A_AUDIT", 0):
+      DBUF_D3A_AUDIT_LOG.append({"kind": "dbuf_lifecycle_anchor_alias", "from_uop_id": id(x), "uop_id": id(nx)})
+    return (nx, [nx])
   return None
 
 def _strip_metadata_tag(x:UOp):
@@ -2201,6 +2213,9 @@ def _Vr(r:Register): return _V[r.index]
 # its producer's allocated reg via src[].reg, but line_rewrite has already replaced the src with its (tagless) lowered
 # form -- so every value-producing representative keeps tag=x.tag (the real def Register) to preserve .reg downstream.
 def _ins(arg, tag): return UOp(Ops.INS, arg=arg, tag=tag)
+def _audit_anchor_alias(old:UOp, new:UOp) -> None:
+  if getenv("PREFILL_DBUF_LIFECYCLE_AUDIT", 0) or getenv("PREFILL_DBUF_D3A_AUDIT", 0):
+    DBUF_D3A_AUDIT_LOG.append({"kind": "dbuf_lifecycle_anchor_alias", "from_uop_id": id(old), "uop_id": id(new)})
 
 def _vop2_f(mk, x:UOp, src):
   # float VOP2: vsrc1 must be a VGPR; a CONST operand (folded to src[1] by _binop) becomes a float literal in src0
@@ -2231,6 +2246,7 @@ def lower_inst(x:UOp):
     return _ins(v_dot2_f32_f16(vdst=_Vr(x.reg), src0=_Vr(src[1].reg), src1=_Vr(src[2].reg), src2=_Vr(src[0].reg)), x.tag)
   if a is AMDOps.BARRIER:
     b = UOp(Ops.INS, arg=s_barrier())
+    _audit_anchor_alias(x, b)
     return (b, [b])
   if a is AMDOps.V_WMMA:                             # B0.L7: D = A*B + C, 16x16x16 fp16->fp32. src=(A0..7,B0..7,C0..7).
     # Fragment bases are the FIRST reg of each 8-VGPR run (src[0]=A base, src[8]=B base, src[16]=C base). D writes in
@@ -2262,6 +2278,7 @@ def lower_inst(x:UOp):
     return (st, [st])
   if a is AMDOps.DS_LOAD_B128:
     ld = _ins(ds_load_b128(vdst=_V[x.reg.index:x.reg.index+3], addr=_Vr(src[0].reg), offset0=src[2].arg), x.tag)
+    _audit_anchor_alias(x, ld)
     return (ld, [ld])
   if a is AMDOps.DS_STORE_B128:
     if len(src) == 3:
@@ -2271,6 +2288,7 @@ def lower_inst(x:UOp):
     else:
       raise NotImplementedError(f"AMD:ISA unsupported DS_STORE_B128 source shape: {len(src)}")
     st = UOp(Ops.INS, arg=ds_store_b128(addr=_Vr(src[0].reg), data0=_V[data.reg.index:data.reg.index+3], offset0=imm.arg))
+    _audit_anchor_alias(x, st)
     return (st, [st])
   if a is AMDOps.DS_STORE_B64:
     data, imm = src[1], src[-1]

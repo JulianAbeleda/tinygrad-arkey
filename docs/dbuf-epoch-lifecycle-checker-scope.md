@@ -91,7 +91,7 @@ Required proof layers:
 | P4 layout proof | A/B row/BT layout matches the WMMA operand contract | prevents correct bytes in wrong lane order | checker/exporter ready for S10 LDS spec static layout |
 | P5 wait/sync proof | VMEM waits, LGKM waits, and barriers are present in the right phase | prevents memory visibility hazards | checker strict mode, side-channel reconciliation, and live wait anchors implemented |
 | P6 lifetime/pressure proof | address/fragment live ranges are bounded by the lifecycle | prevents the generated route from recreating VGPR pressure failures | advisory summary checker implemented |
-| P7 lowered-stream proof | generated graph/stream exports actual stores/loads/waits/WMMA into this schema | proves S10 generation, not only the hand-coded primitive metadata | fail-closed exporter plus side-channel row reconciliation implemented; live consume anchors pending |
+| P7 lowered-stream proof | generated graph/stream exports actual stores/loads/waits/WMMA into this schema | proves S10 generation, not only the hand-coded primitive metadata | fail-closed exporter plus side-channel row reconciliation implemented; active generated route still lacks producer lifecycle rows |
 
 S10 is ready to reopen generated DBUF replacement only when P1-P7 pass on:
 
@@ -258,13 +258,24 @@ Current live coverage:
 - final-row extraction exports `uop_id` for UOp-backed rows,
 - D3A produce events emit `uop_id`,
 - D3A explicit barrier events emit `uop_id`,
+- LDS fragment consumes emit live `ds_load_b128` anchors,
 - waitcnt insertion emits live `s_waitcnt` side-channel anchors,
+- UOp rewrite/lowering emits transitive anchor aliases so side-channel ids can follow final lowered rows,
 - synthetic side-channel tests prove P1/P3/P5/P7 reconciliation behavior.
 
-Remaining live exporter work:
+Current generated-trace blocker:
 
-- emit consume anchors from the actual lowered `ds_load_b128` producer, not only the WMMA fragment proof,
-- run the reconciled exporter on the generated candidate trace and compare coverage to the hand/hybrid oracle.
+- `2x2` active generated with packed LDS flags has physical LDS traffic (`ds_store_b128=32`, `ds_load_b128=32`,
+  `s_barrier=2`) but side-channel lifecycle rows contain consumes/waits only; no produce/barrier ownership rows are
+  emitted for the generated DBUF lifecycle.
+- The construction audit reports `no_body_staging`, so P7 cannot prove equivalence to the hand/hybrid oracle yet.
+
+Remaining MVP work:
+
+1. Construct or export generated producer ownership rows for the active packed-LDS route, not only consumer fragment rows.
+2. Re-run `_p7_lowered_stream_export` on the generated candidate until it exports checked produce/barrier/consume/wait events
+   instead of failing closed.
+3. Diff generated checked events against the hand/hybrid oracle for role/epoch/window/value coverage.
 
 ## Decoupling Path
 
