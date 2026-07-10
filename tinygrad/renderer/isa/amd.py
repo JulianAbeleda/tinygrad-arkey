@@ -525,27 +525,6 @@ def isel_store(ctx:IselContext, a:UOp, b:UOp, x:UOp):
   if a.arg == "accum":                        # RA1: write pinned accumulator -> v_mov v[pin], vsrc. a.src=(order, pin)
     return UOp(Ops.INS, dtypes.void, src=(_tov(ctx, b), a.src[0], a.src[1]), arg=AMDOps.ACCUM_WRITE)   # (vsrc, order, pin)
   if a.arg == "lds":                          # LDS store: ds_store_b16 for half-element tiles, else b32 (a.src[0]=addr, a.src[1]=order)
-    stolen_stages = getattr(ctx, "_dbuf_stolen_stage_stores", set()) if ctx is not None else set()
-    if ctx is not None and getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL_AUDIT", 0) and getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL", 0):
-      DBUF_D3A_AUDIT_LOG.append({"kind": "store_lower_key", "gated": False, "id": id(x),
-                                 "op": x.op.name, "src0_op": x.src[0].op.name if x.src else None,
-                                 "a0": repr(a.src[0])[:160] if a.src else None,
-                                 "key": repr(_dbuf_stage_store_key(x)), "addr_key": repr(_dbuf_stage_addr_key(a)),
-                                 "value_key": repr(_dbuf_stage_value_key(x)),
-                                 "epoch_key": repr(_dbuf_stage_epoch_key_for_store(ctx, x, a)),
-                                 "slot": _dbuf_lowered_lds_slot(a),
-                                 "stolen_count": len(stolen_stages)})
-    if ctx is not None and getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL", 0) and getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL_SUPPRESS_EPOCH", 0) and \
-       (ekey := _dbuf_stage_epoch_key_for_store(ctx, x, a)) is not None and ekey in stolen_stages:
-      return UOp(Ops.NOOP, dtypes.void, src=(a.src[1],))
-    if _dbuf_stage_key_should_suppress(ctx, x, a):
-      return UOp(Ops.NOOP, dtypes.void, src=(a.src[1],))
-    if _dbuf_pipeline_epoch_should_suppress(ctx, x, a):
-      return UOp(Ops.NOOP, dtypes.void, src=(a.src[1],))
-    if ctx is not None and getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL", 0) and getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL_SUPPRESS", 0) and \
-       (id(x) in stolen_stages or _dbuf_stage_store_stolen(stolen_stages, x) or _dbuf_stage_addr_key(a) in stolen_stages or
-        any(k in stolen_stages for k in _dbuf_lowered_lds_slot_keys(a))):
-      return UOp(Ops.NOOP, dtypes.void, src=(a.src[1],))
     if ctx is not None and _n_workitem_dims(ctx) > 1 and str(getenv("PREFILL_TC_LOCAL_STAGE", "")).strip().lower() in ("a", "both", "1", "true", "yes") and \
        getenv("PREFILL_TC_LOCAL_STAGE_WITH_LOCAL", 0) and not getenv("PREFILL_TC_LOCAL_STAGE_POST", 0) and \
        not getenv("PREFILL_TC_LOCAL_STAGE_A_MULTIDIM_UNSAFE", 0):
@@ -659,27 +638,6 @@ def isel_gated_store(ctx:IselContext, a:UOp, b:UOp, g:UOp, x:UOp):
   esz = b.dtype.itemsize   # element width (half=2/float=4) from the value dtype, known here (lowered INS srcs are void)
   gate = _tov(ctx, g)
   if a.arg == "lds":   # src = (gate, addr_vgpr, val, kind=1, order, esz)
-    stolen_stages = getattr(ctx, "_dbuf_stolen_stage_stores", set()) if ctx is not None else set()
-    if ctx is not None and getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL_AUDIT", 0) and getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL", 0):
-      DBUF_D3A_AUDIT_LOG.append({"kind": "store_lower_key", "gated": True, "id": id(x),
-                                 "op": x.op.name, "src0_op": x.src[0].op.name if x.src else None,
-                                 "a0": repr(a.src[0])[:160] if a.src else None,
-                                 "key": repr(_dbuf_stage_store_key(x)), "addr_key": repr(_dbuf_stage_addr_key(a)),
-                                 "value_key": repr(_dbuf_stage_value_key(x)),
-                                 "epoch_key": repr(_dbuf_stage_epoch_key_for_store(ctx, x, a)),
-                                 "slot": _dbuf_lowered_lds_slot(a),
-                                 "stolen_count": len(stolen_stages)})
-    if ctx is not None and getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL", 0) and getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL_SUPPRESS_EPOCH", 0) and \
-       (ekey := _dbuf_stage_epoch_key_for_store(ctx, x, a)) is not None and ekey in stolen_stages:
-      return UOp(Ops.NOOP, dtypes.void, src=(a.src[1],))
-    if _dbuf_stage_key_should_suppress(ctx, x, a):
-      return UOp(Ops.NOOP, dtypes.void, src=(a.src[1],))
-    if _dbuf_pipeline_epoch_should_suppress(ctx, x, a):
-      return UOp(Ops.NOOP, dtypes.void, src=(a.src[1],))
-    if ctx is not None and getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL", 0) and getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL_SUPPRESS", 0) and \
-       (id(x) in stolen_stages or _dbuf_stage_store_stolen(stolen_stages, x) or _dbuf_stage_addr_key(a) in stolen_stages or
-        any(k in stolen_stages for k in _dbuf_lowered_lds_slot_keys(a))):
-      return UOp(Ops.NOOP, dtypes.void, src=(a.src[1],))
     lds_imm = a.src[2].arg if len(a.src) >= 3 else 0
     if (bdata := _lds_b128_store_data(ctx, b)) is not None:
       addr, lds_imm = _ds_addr_imm(ctx, a.src[0], lds_imm, 16)
@@ -1028,20 +986,6 @@ def _wmma_half_addr(e:UOp):
   if base_expr is None: return None
   return idx, idx.src[0], base_expr, const + lane
 
-def _wmma_frag_addr_key(carrier:UOp) -> tuple|None:
-  # Experimental A/B residency key. The generated LDS path can clone
-  # equivalent row/column carriers, making id(carrier) too fine-grained and
-  # forcing per-subtile reloads. When all 16 lanes are a contiguous memory
-  # fragment, key by the source address structure instead.
-  if not getenv("PREFILL_WMMA_AB_ADDR_KEY", 0): return None
-  try: elems = _wmma_elems(carrier, 16)
-  except Exception: return None
-  addrs = [_wmma_half_addr(e) for e in elems]
-  if any(a is None for a in addrs): return None
-  _idx0, ptr0, expr0, c0 = addrs[0]
-  if any(ptr is not ptr0 or expr is not expr0 or c != c0 + i for i, (_idx, ptr, expr, c) in enumerate(addrs)): return None
-  return (_lds_key_uop(ptr0), _lds_key_uop(expr0), c0)
-
 def _wmma_frag_proof_reuse_key(ctx:IselContext, role:str, carrier:UOp) -> tuple|None:
   try: elems = _wmma_elems(carrier, 16)
   except Exception: return None
@@ -1083,10 +1027,10 @@ def _wmma_frag_phase_reuse_key(ctx:IselContext, role:str, carrier:UOp) -> tuple|
 def _wmma_frag_reuse_key(ctx:IselContext|UOp, role:str|None=None, carrier:UOp|None=None, fallback_key=None):
   if carrier is None:
     carrier = ctx  # type: ignore[assignment]
-    return _wmma_frag_addr_key(carrier) or id(carrier)
+    return id(carrier)
   if getenv("PREFILL_WMMA_AB_PROOF_KEY", 0):
     return _wmma_frag_proof_reuse_key(ctx, role, carrier) or (fallback_key if fallback_key is not None else ("no_proof", role, id(carrier)))  # type: ignore[arg-type]
-  return _wmma_frag_addr_key(carrier) or id(carrier)
+  return id(carrier)
 
 def _wmma_frag_proof_from_elem(e:UOp) -> dict|None:
   if e.op is Ops.GEP: e = e.src[0]
@@ -1227,104 +1171,6 @@ def _wmma_frag_proof_debug(e:UOp) -> dict:
       out["index_buf_tag"] = repr(idx.src[0].tag)
   return out
 
-def _wmma_frag_key_dump(ctx:IselContext, role:str, carrier:UOp, *, phase:str, tile_i:int|None=None) -> None:
-  if not getenv("PREFILL_WMMA_FRAG_KEY_DUMP", 0): return
-  import json
-  try: elems = _wmma_elems(carrier, 16)
-  except Exception as e:
-    print("WMMA_FRAG_KEY", {"role": role, "phase": phase, "tile": tile_i, "carrier_id": id(carrier),
-                            "provable": False, "reason": f"not_16_lane_carrier:{type(e).__name__}"})
-    print("WMMA_FRAG_KEY_JSON", json.dumps({"role": role, "phase": phase, "tile": tile_i, "carrier_id": id(carrier),
-                                            "provable": False, "reason": f"not_16_lane_carrier:{type(e).__name__}"}))
-    return
-  addrs = [_wmma_half_addr(e) for e in elems]
-  if any(a is None for a in addrs):
-    print("WMMA_FRAG_KEY", {"role": role, "phase": phase, "tile": tile_i, "carrier_id": id(carrier),
-                            "provable": False, "reason": "non_memory_lane",
-                            "lane_addr_ok": [a is not None for a in addrs]})
-    print("WMMA_FRAG_KEY_JSON", json.dumps({"role": role, "phase": phase, "tile": tile_i, "carrier_id": id(carrier),
-                                            "provable": False, "reason": "non_memory_lane",
-                                            "lane_addr_ok": [a is not None for a in addrs]}))
-    return
-  idx0, ptr0, expr0, c0 = addrs[0]
-  contiguous = all(ptr is ptr0 and expr is expr0 and c == c0 + i for i, (_idx, ptr, expr, c) in enumerate(addrs))
-  desc = decompose_lds_index(ctx, idx0, None) if idx0.addrspace == AddrSpace.LOCAL else None
-  dyn, _const_elems = _const_base(idx0.src[1]) if idx0.op is Ops.INDEX and len(idx0.src) >= 2 else (None, 0)
-  reuse_key = _wmma_frag_addr_key(carrier)
-  proof_key = _wmma_frag_proof_key(role, carrier)
-  lane_proofs = [_wmma_frag_proof_from_elem(e) for e in elems]
-  proof0 = lane_proofs[0] if lane_proofs and lane_proofs[0] is not None else None
-  const_bytes = None if desc is None else desc.const_bytes
-  byte_len = 16 * (2 if desc is None else desc.itemsize)
-  if proof0 is None:
-    proof0 = _wmma_frag_buffer_proof_from_elem(elems[0], desc, role) or _wmma_frag_buffer_proof_from_desc(desc, role)
-    if proof0 is not None:
-      required_for_key = ("role", "lds_buffer_id", "dbuf_slot", "k_phase", "logical_row_or_col", "byte_len", "producer_epoch", "overwrite_epoch")
-      proof_key = tuple((k, proof0[k]) for k in required_for_key) if all(proof0.get(k) is not None for k in required_for_key) else None
-  required = ("dbuf_slot", "k_phase", "logical_row_or_col", "producer_epoch", "overwrite_epoch")
-  missing = ["missing_proof_key"] if proof0 is None else [k for k in required if proof0.get(k) is None]
-  row_json = {
-    "role": role, "phase": phase, "tile": tile_i, "carrier_id": id(carrier), "provable": contiguous,
-    "reuse_key": None if reuse_key is None else repr(reuse_key), "fallback_id_key": id(carrier),
-    "proof_key": None if proof_key is None else repr(proof_key),
-    "proof_fields": None if proof0 is None else {k: repr(v) for k, v in proof0.items()},
-    "proof_debug": _wmma_frag_proof_debug(elems[0]),
-    "ptr_key": repr(_lds_key_uop(ptr0)),
-    "dyn_key": None if dyn is None else repr(_lds_key_uop(dyn)),
-    "first_const_lane": c0, "lane_consts": [c for (_idx, _ptr, _expr, c) in addrs],
-    "contiguous": contiguous,
-    "const_byte_start": const_bytes, "const_byte_end": None if const_bytes is None else const_bytes + byte_len,
-    "byte_len": byte_len,
-    "lds": None if desc is None else {
-      "buf_id": id(desc.buf), "dyn_id": None if desc.dyn is None else id(desc.dyn),
-      "const_bytes": desc.const_bytes, "base_bytes": desc.base_bytes, "itemsize": desc.itemsize,
-    },
-    "missing_proof_fields": missing,
-    "proof_key_status": "ok" if proof_key is not None else ("unprovable:no_proof_metadata" if proof0 is None else "unprovable:incomplete_or_inconsistent_proof"),
-  }
-  print("WMMA_FRAG_KEY", {
-    "role": role, "phase": phase, "tile": tile_i, "carrier_id": id(carrier), "provable": contiguous,
-    "reuse_key": reuse_key, "proof_key": proof_key, "fallback_id_key": id(carrier),
-    "ptr_id": id(ptr0), "ptr_key": _lds_key_uop(ptr0),
-    "dyn_id": None if dyn is None else id(dyn), "dyn_key": None if dyn is None else _lds_key_uop(dyn),
-    "first_const_lane": c0, "lane_consts": [c for (_idx, _ptr, _expr, c) in addrs],
-    "contiguous": contiguous,
-    "lds": None if desc is None else {
-      "buf_id": id(desc.buf), "dyn_id": None if desc.dyn is None else id(desc.dyn),
-      "const_bytes": desc.const_bytes, "base_bytes": desc.base_bytes, "itemsize": desc.itemsize,
-    },
-    "missing_proof_fields": missing,
-  })
-  print("WMMA_FRAG_KEY_JSON", json.dumps(row_json, sort_keys=True))
-
-def _wmma_chain_key_dump(ctx:IselContext, A:UOp, B:UOp, cbase:int, *, phase:str) -> None:
-  if not getenv("PREFILL_WMMA_CHAIN_KEY_DUMP", 0): return
-  import json
-  idx = getattr(ctx, "_wmma_chain_key_dump_idx", 0)
-  ctx._wmma_chain_key_dump_idx = idx + 1
-  def key(role:str, carrier:UOp) -> dict:
-    try:
-      elems = _wmma_elems(carrier, 16)
-      addrs = [_wmma_half_addr(e) for e in elems]
-      if any(a is None for a in addrs): return {"role": role, "provable": False, "reason": "non_memory_lane", "carrier_id": id(carrier)}
-      idx0, ptr0, expr0, c0 = addrs[0]
-      contiguous = all(ptr is ptr0 and expr is expr0 and c == c0 + i for i, (_idx, ptr, expr, c) in enumerate(addrs))
-      dyn, _const_elems = _const_base(idx0.src[1]) if idx0.op is Ops.INDEX and len(idx0.src) >= 2 else (None, 0)
-      desc = decompose_lds_index(ctx, idx0, None) if idx0.addrspace == AddrSpace.LOCAL else None
-      return {
-        "role": role, "provable": contiguous, "carrier_id": id(carrier),
-        "ptr_key": repr(_lds_key_uop(ptr0)), "dyn_key": None if dyn is None else repr(_lds_key_uop(dyn)),
-        "first_const_lane": c0, "lane_consts": [c for (_idx, _ptr, _expr, c) in addrs],
-        "reuse_key": None if _wmma_frag_addr_key(carrier) is None else repr(_wmma_frag_addr_key(carrier)),
-        "lds": None if desc is None else {"const_bytes": desc.const_bytes, "base_bytes": desc.base_bytes, "itemsize": desc.itemsize},
-      }
-    except Exception as e:
-      return {"role": role, "provable": False, "reason": f"{type(e).__name__}:{e}", "carrier_id": id(carrier)}
-  print("WMMA_CHAIN_KEY_JSON", json.dumps({
-    "wmma_ordinal": idx, "phase": phase, "cbase": cbase, "c_span": [cbase, cbase + 7],
-    "A": key("A", A), "B": key("B", B),
-  }, sort_keys=True))
-
 def _remat_final_const_add_index(idx:UOp) -> UOp:
   if idx.op is not Ops.INDEX or len(idx.src) < 2: return idx
   expr = idx.src[1]
@@ -1420,7 +1266,6 @@ def _frag_b128_loads(ctx:IselContext, E:tuple[UOp, ...], base:int, dep:tuple[UOp
 # carry `dep` (the prior WMMA def) as an extra ignored src so the shared-frag reload is scheduled AFTER the prior matmul
 # read it (WAR guard). Returns the 8-lane NOOP output carrier (lane 0 = the V_WMMA def, lanes 1..7 = passthrough MOVs).
 def _build_wmma_tile(ctx:IselContext, A:UOp, B:UOp, cin:list[UOp], abase:int, bbase:int, cbase:int, dep:tuple[UOp,...]):
-  _wmma_chain_key_dump(ctx, A, B, cbase, phase="build_wmma_tile")
   aE, bE = _wmma_elems(A, 16), _wmma_elems(B, 16)
   apk = _pack_frag_tile(ctx, A, abase, dep, "A")
   bpk = _pack_frag_tile(ctx, B, bbase, dep, "B")
@@ -1516,33 +1361,12 @@ def _dbuf_stage_value_key(st:UOp) -> tuple|None:
     return ("vpack4", tuple(tuple(_lds_key_uop(x) for x in p.src[:2]) for p in val.src))
   return None
 
-def _dbuf_stage_key_overlaps(a:tuple|None, b:tuple|None) -> bool:
-  if a is None or b is None or len(a) < 4 or len(b) < 4: return False
-  if a[:2] != b[:2]: return False
-  try:
-    a0, a1 = int(a[2]), int(a[2]) + int(a[3])
-    b0, b1 = int(b[2]), int(b[2]) + int(b[3])
-  except Exception:
-    return False
-  return a0 < b1 and b0 < a1
-
-def _dbuf_stage_store_stolen(stolen:set, st:UOp) -> bool:
-  skey = _dbuf_stage_store_key(st)
-  if skey in stolen: return True
-  return any(isinstance(k, tuple) and _dbuf_stage_key_overlaps(skey, k) for k in stolen)
-
 def _dbuf_stage_store_abs_slot(ctx:IselContext, st:UOp) -> int|None:
   if st.op is not Ops.STORE or not st.src: return None
   idx = st.src[0]
   while idx.op in (Ops.AFTER, Ops.CAST) and idx.src: idx = idx.src[0]
   desc = decompose_lds_index(ctx, idx, None) if idx.op is Ops.INDEX and idx.addrspace == AddrSpace.LOCAL else None
   return None if desc is None else desc.const_half
-
-def _dbuf_stage_addr_key(a:UOp) -> tuple|None:
-  if isinstance(a.tag, tuple) and a.tag[:1] == ("tc_local_stage_store",): return a.tag
-  if isinstance(a.tag, tuple) and a.tag[:1] == ("wmma_frag_buffer_proof",) and (slot := _dbuf_lowered_lds_slot(a)) is not None:
-    return ("wmma_frag_stage_window", a.tag, (slot // 16) * 16, 16)
-  return None
 
 def _dbuf_lowered_lds_slot(a:UOp) -> int|None:
   if a.op is not Ops.NOOP or a.arg != "lds" or not a.src: return None
@@ -1555,24 +1379,11 @@ def _dbuf_lowered_lds_slot(a:UOp) -> int|None:
       return None if add is None else slot + add // 2 + imm // 2
   return None
 
-def _dbuf_lowered_lds_slot_keys(a:UOp) -> tuple[tuple[str, int], ...]:
-  if (slot := _dbuf_lowered_lds_slot(a)) is None: return tuple()
-  return (("lds_slot", slot),)
-
 def _dbuf_stage_epoch_key_for_store(ctx:IselContext|None, st:UOp, a:UOp|None=None) -> tuple|None:
   slot = _dbuf_stage_store_abs_slot(ctx, st) if ctx is not None else None
   if slot is None and a is not None: slot = _dbuf_lowered_lds_slot(a)
   vkey = _dbuf_stage_value_key(st)
   return None if slot is None or vkey is None else ("stage_epoch", slot, vkey)
-
-def _dbuf_stage_strong_key(ctx:IselContext|None, role:str, st:UOp, *, phase:str, phase_i:int|None=None) -> tuple|None:
-  if ctx is None: return None
-  slot = _dbuf_stage_store_abs_slot(ctx, st)
-  vkey = _dbuf_stage_value_key(st)
-  skey = _dbuf_stage_store_key(st)
-  if slot is None or vkey is None: return None
-  return ("stage_key", ("role", role), ("source", vkey), ("logical_phase", phase_i),
-          ("lds_slot", slot), ("stage_store_key", skey), ("phase", phase))
 
 def _dbuf_stage_owner_key(ctx:IselContext|None, role:str, st:UOp, *, phase_i:int|None=None, a:UOp|None=None) -> tuple|None:
   if ctx is None: return None
@@ -1582,40 +1393,6 @@ def _dbuf_stage_owner_key(ctx:IselContext|None, role:str, st:UOp, *, phase_i:int
   if slot is None or vkey is None: return None
   return ("stage_owner", ("role", role), ("source", vkey), ("logical_phase", phase_i),
           ("lds_slot", slot))
-
-def _dbuf_stage_key_audit(ctx:IselContext|None, row:dict) -> None:
-  if ctx is None or not getenv("PREFILL_WMMA_KMAJOR_STAGE_KEY_AUDIT", 0): return
-  DBUF_D3A_AUDIT_LOG.append({"kind": "stage_key_audit", **row})
-
-def _dbuf_stage_key_suppress_role() -> str:
-  return str(getenv("PREFILL_WMMA_KMAJOR_STAGE_KEY_SUPPRESS_ROLE", "B")).strip().upper()
-
-def _dbuf_stage_key_suppress_phase() -> int:
-  try: return int(getenv("PREFILL_WMMA_KMAJOR_STAGE_KEY_SUPPRESS_PHASE", 1))
-  except ValueError: return 1
-
-def _dbuf_stage_key_should_suppress(ctx:IselContext|None, st:UOp, a:UOp) -> bool:
-  if ctx is None or not getenv("PREFILL_WMMA_KMAJOR_STAGE_KEY_SUPPRESS", 0): return False
-  role, phase_i = _dbuf_stage_key_suppress_role(), _dbuf_stage_key_suppress_phase()
-  key = _dbuf_stage_owner_key(ctx, role, st, phase_i=phase_i, a=a)
-  owners = getattr(ctx, "_dbuf_stage_owner_keys", set())
-  ok = key is not None and key in owners
-  if getenv("PREFILL_WMMA_KMAJOR_STAGE_KEY_SUPPRESS_AUDIT", 0):
-    DBUF_D3A_AUDIT_LOG.append({"kind": "stage_key_suppress_decision", "role": role, "phase_i": phase_i,
-                               "suppressed": ok, "owner_key": repr(key), "owner_count": len(owners),
-                               "slot": _dbuf_lowered_lds_slot(a), "source": repr(_dbuf_stage_value_key(st))})
-  return ok
-
-def _dbuf_pipeline_epoch_should_suppress(ctx:IselContext|None, st:UOp, a:UOp) -> bool:
-  # Diagnostic-only first pipeline construction probe. This removes physical-window duplicates but is not a proof of
-  # runtime epoch equality; docs/8b-prefill-epoch-aware-d3-self-sufficiency-scope.md records the wrong-output result.
-  if ctx is None or not getenv("PREFILL_WMMA_KMAJOR_PIPELINE_EPOCHS", 0): return False
-  slot = _dbuf_stage_store_abs_slot(ctx, st)
-  if slot is None: slot = _dbuf_lowered_lds_slot(a)
-  if slot is None: return False
-  body_slots = getattr(ctx, "_dbuf_pipeline_body_slots", set())
-  warmup_slots = getattr(ctx, "_dbuf_pipeline_warmup_slots", set())
-  return slot in body_slots and slot not in warmup_slots
 
 def _emit_dbuf_stage_store(ctx:IselContext, st:UOp, dep:tuple[UOp,...]) -> tuple[UOp|None, str]:
   if st.op is not Ops.STORE or len(st.src) < 2 or not dep: return None, "bad_store_or_dep"
@@ -1708,23 +1485,11 @@ def _dbuf_d3a_probe_marker(ctx:IselContext, tile:UOp, dep:tuple[UOp,...], phase_
           stolen.add(skey)
         if abs_slot is not None:
           stolen.add(("lds_slot", abs_slot))
-          if getenv("PREFILL_WMMA_KMAJOR_PIPELINE_EPOCHS", 0):
-            body_slots = ctx._dbuf_pipeline_body_slots = getattr(ctx, "_dbuf_pipeline_body_slots", set())
-            body_slots.add(abs_slot)
         if (ekey := _dbuf_stage_epoch_key_for_store(ctx, cand)) is not None:
           stolen.add(ekey)
         if (owner_key := _dbuf_stage_owner_key(ctx, role, cand, phase_i=phase_i)) is not None:
           owners = ctx._dbuf_stage_owner_keys = getattr(ctx, "_dbuf_stage_owner_keys", set())
           owners.add(owner_key)
-        if getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL_AUDIT", 0):
-          DBUF_D3A_AUDIT_LOG.append({"kind": "stolen_stage_key", "role": role, "id": id(cand),
-                                     "key": repr(skey), "value_key": repr(_dbuf_stage_value_key(cand)),
-                                     "epoch_key": repr(_dbuf_stage_epoch_key_for_store(ctx, cand)),
-                                     "abs_slot": abs_slot})
-        _dbuf_stage_key_audit(ctx, {"phase": "body", "role": role, "id": id(cand), "phase_i": phase_i,
-                                    "strong_key": repr(_dbuf_stage_strong_key(ctx, role, cand, phase="body", phase_i=phase_i)),
-                                    "owner_key": repr(_dbuf_stage_owner_key(ctx, role, cand, phase_i=phase_i)),
-                                    "slot": abs_slot, "source": repr(_dbuf_stage_value_key(cand))})
       out = (st,)
     if not moved: continue
     if getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL", 0):
@@ -1789,21 +1554,6 @@ def _try_wmma_kmajor_phase(ctx:IselContext, x:UOp):
     phase_tiles: list[tuple[int, UOp, tuple, tuple, int, int, tuple[UOp, ...]]] = []
     for chain_i, phase in enumerate(phases):
       tile = phase[phase_i]
-      if getenv("PREFILL_WMMA_KMAJOR_PIPELINE_EPOCHS", 0) and phase_i == 0:
-        warmup_slots = ctx._dbuf_pipeline_warmup_slots = getattr(ctx, "_dbuf_pipeline_warmup_slots", set())
-        for carrier in (tile.src[0], tile.src[1]):
-          cands, _reason = _dbuf_stage_candidates(carrier)
-          for cand in cands:
-            if (abs_slot := _dbuf_stage_store_abs_slot(ctx, cand)) is not None: warmup_slots.add(abs_slot)
-      if getenv("PREFILL_WMMA_KMAJOR_STAGE_KEY_AUDIT", 0):
-        for role, carrier in (("A", tile.src[0]), ("B", tile.src[1])):
-          cands, _reason = _dbuf_stage_candidates(carrier)
-          for cand in cands:
-            _dbuf_stage_key_audit(ctx, {"phase": "needed", "role": role, "id": id(cand), "phase_i": phase_i,
-                                        "strong_key": repr(_dbuf_stage_strong_key(ctx, role, cand, phase="needed", phase_i=phase_i)),
-                                        "owner_key": repr(_dbuf_stage_owner_key(ctx, role, cand, phase_i=phase_i)),
-                                        "slot": _dbuf_stage_store_abs_slot(ctx, cand),
-                                        "source": repr(_dbuf_stage_value_key(cand))})
       akey, bkey = _wmma_frag_phase_reuse_key(ctx, "A", tile.src[0]), _wmma_frag_phase_reuse_key(ctx, "B", tile.src[1])
       if akey is None or bkey is None: return None
       abase, bbase = _ab_base(ctx, ("A", akey)), _ab_base(ctx, ("B", bkey))
@@ -1923,8 +1673,6 @@ def isel_wmma(ctx:IselContext, x:UOp):
       dep = (prev.src[0],)                      # WAR guard: reload this tile's shared A/B frags only after the prior matmul
       dep = _dbuf_d3a_probe_marker(ctx, tile, dep)
     if getenv("PREFILL_WMMA_CHAIN_AB_RESIDENT", 0) and _c_low(ctx):
-      _wmma_frag_key_dump(ctx, "A", tile.src[0], phase="chain_resident", tile_i=tile_i)
-      _wmma_frag_key_dump(ctx, "B", tile.src[1], phase="chain_resident", tile_i=tile_i)
       resident_a = bool(getenv("PREFILL_WMMA_CHAIN_RESIDENT_A", 1))
       resident_b = bool(getenv("PREFILL_WMMA_CHAIN_RESIDENT_B", 1))
       if getenv("PREFILL_WMMA_AB_PROOF_KEY", 0):

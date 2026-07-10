@@ -4,10 +4,9 @@ from __future__ import annotations
 #   (1) real staging knobs gating an experimental TC-local-stage / owned-buffer / LDS-pack transform (PREFILL_TC_LOCAL_STAGE*,
 #       PREFILL_DBUF_OWNED_*_STAGE_*, PREFILL_LDS_PACK_*, PREFILL_WMMA_PIPE_*), and
 #   (2) pure diagnostic probes that only print/collect stats and cannot change emitted code (the *_DUMP / *_PROBE / *_PROOF_*
-#       knobs, e.g. PREFILL_TC_LOCAL_STAGE_DUMP[_LIMIT], PREFILL_WMMA_PROOF_CHAIN_DUMP, WARMSTART_DUMP,
-#       PREFILL_DBUF_OWNED_B_STAGE_PAIR_PROBE, PREFILL_WARMSTART_LOCAL_STAGE_DUMP).
-#   Collapsing these reads behind one PrefillStagingSpec descriptor, and deleting the class-2 probes, are a scoped
-#   follow-up (see the refactor report): deferred here to keep the stock (no-flag) postrange path byte-identical.
+#       knobs, e.g. PREFILL_TC_LOCAL_STAGE_DUMP[_LIMIT], PREFILL_DBUF_OWNED_B_STAGE_PAIR_PROBE).
+#   The class-2 probes are being deleted (see docs/prefill-flag-graveyard.md); collapsing the surviving class-1 reads
+#   behind one PrefillStagingSpec descriptor is a scoped follow-up, deferred to keep the stock (no-flag) path byte-identical.
 import json, math, itertools
 from collections import defaultdict
 from typing import cast, Final
@@ -556,24 +555,6 @@ def _tc_local_stage_buffer_tag(operand_idx:int, lds_buffer_id:int, nbuf:int, til
               ("rotation", "none"))
   return tag
 
-def _tc_local_stage_proof_dump(stage:str, operand_idx:int, idx:UOp, buffer_tag:tuple|None, extra:dict|None=None) -> None:
-  if not getenv("PREFILL_WMMA_PROOF_CHAIN_DUMP", 0): return
-  import json
-  buf = idx.src[0] if idx.op is Ops.INDEX and idx.src else None
-  row = {
-    "stage": stage,
-    "role": "A" if operand_idx == 0 else "B",
-    "index_id": id(idx),
-    "index_op": idx.op.name,
-    "index_tag": repr(idx.tag),
-    "buffer_op": None if buf is None else buf.op.name,
-    "buffer_id": None if buf is None else id(buf),
-    "buffer_tag": None if buf is None else repr(buf.tag),
-    "created_buffer_tag": repr(buffer_tag),
-  }
-  if extra is not None: row.update(extra)
-  print("POSTRANGE_WMMA_PROOF_JSON", json.dumps(row, sort_keys=True))
-
 def _tc_local_stage_src(src:UOp, ranges:tuple[UOp, ...], operand_idx:int|None=None) -> UOp:
   staged = src.bufferize(*ranges, arg=BufferizeOpts(None, AddrSpace.LOCAL, removable=False))
   buffer_tag = None
@@ -583,11 +564,6 @@ def _tc_local_stage_src(src:UOp, ranges:tuple[UOp, ...], operand_idx:int|None=No
     buffer_tag = _tc_local_stage_buffer_tag(operand_idx, 990 + operand_idx, nbuf, 1, 256)
     staged = staged.replace(tag=buffer_tag)
   idx = staged.index(*ranges)
-  if operand_idx is not None:
-    _tc_local_stage_proof_dump("local_stage_src", operand_idx, idx, buffer_tag, {
-      "src_op": src.op.name, "src_tag": repr(src.tag), "range_count": len(ranges),
-      "ranges": [repr(r.arg) for r in ranges],
-    })
   return idx.replace(tag=buffer_tag) if buffer_tag is not None else idx
 
 class OwnedBStageEmitter:
@@ -723,11 +699,6 @@ def _tc_local_stage_b_src(src:UOp, fallback:tuple[UOp, ...]) -> UOp:
   if mul != src.dtype.count: return _fallback("contract_fragment_count_mismatch")
   scalar_idx = _tc_local_stage_ordered_local(bsh, prev_store).after(bar).index(slot_idx(frag_idx))
   if buffer_tag is not None: scalar_idx = scalar_idx.replace(tag=buffer_tag)
-  _tc_local_stage_proof_dump("local_stage_b_tilekey", 1, scalar_idx, buffer_tag, {
-    "src_op": src.op.name, "src_tag": repr(src.tag), "tile_count": tile_count, "generic_layout": generic_layout,
-    "generic_no_slot": generic_no_slot,
-    "nbuf": nbuf, "has_kr": kr is not None, "tile_ranges": [repr(r.arg) for r in tile_ranges],
-  })
   scalar = scalar_idx.load()
   return UOp(Ops.CONTRACT, src.dtype, (scalar,), src.arg, tag=1)
 

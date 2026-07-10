@@ -472,7 +472,7 @@ def p4_readiness(summary: dict[str, Any], plan: dict[str, Any], boundary: str) -
     "blocked_at": "P4",
     "reason": "no implemented owner-aware STAGE lowering hook; current lowering materializes generic local stores before renderer",
     "required_hook": "lower Ops.STAGE with RotatedStageOwner so legacy duplicate producers are never emitted",
-    "forbidden_fallback": "PREFILL_WMMA_KMAJOR_STAGE_KEY_SUPPRESS late deletion",
+    "forbidden_fallback": "late destructive stage-key suppression (owner identity is gone by late lowering)",
   }
 
 

@@ -77,7 +77,7 @@ def test_p4_readiness_blocks_without_owner_aware_stage_lowering():
   assert out["ready"] is False
   assert out["blocked_at"] == "P4"
   assert "STAGE lowering" in out["reason"]
-  assert out["forbidden_fallback"].startswith("PREFILL_WMMA_KMAJOR_STAGE_KEY_SUPPRESS")
+  assert "destructive stage-key suppression" in out["forbidden_fallback"]
 
 
 def test_p4_readiness_rejects_full_lowering_boundary():
