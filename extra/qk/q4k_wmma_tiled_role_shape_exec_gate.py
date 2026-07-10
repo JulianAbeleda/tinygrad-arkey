@@ -6,20 +6,23 @@ import contextlib
 import io
 import json
 import re
+import sys
 from pathlib import Path
 from shutil import which
 from typing import Any
 
 import numpy as np
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
 from tinygrad import Context, GlobalCounters, Tensor, dtypes
 from extra.qk.prefill_mmq_parity_gate import _make_q4k_words, RTOL, _rel_rmse
 from tinygrad.llm import route_ops as qk_ops
 from extra.qk.q4k_wmma_tile_lowering import (
   Int8WMMATileLoweringSpec,
-  QWEN3_14B_Q4K_ROLE_SHAPES,
   build_scheduler_owned_tile_loop_contract,
-  describe_int8_wmma_tile_lowering,
+  describe_q4k_full_role_lowering,
+  qwen3_14b_q4k_m_gfx1100_profile,
 )
 from extra.qk.q4k_wmma_tiled_lifecycle_gate import build as lifecycle_build
 
@@ -166,9 +169,9 @@ def _role_row(spec: Int8WMMATileLoweringSpec, lifecycle: dict[str, Any]) -> dict
 
 def build(lifecycle: dict[str, Any] | None = None) -> dict[str, Any]:
   lifecycle = lifecycle if lifecycle is not None else lifecycle_build()
-  role_specs = tuple(describe_int8_wmma_tile_lowering(m, n, k, role=role, m_tile=16, n_tile=16, group_tile=1)
-                    for role, m, n, k in QWEN3_14B_Q4K_ROLE_SHAPES)
-  loop_contract = build_scheduler_owned_tile_loop_contract(role_specs, route_id="prefill_q4k_int8_wmma_tiled_research")
+  lowering = describe_q4k_full_role_lowering(qwen3_14b_q4k_m_gfx1100_profile())
+  role_specs = lowering.roles
+  loop_contract = build_scheduler_owned_tile_loop_contract(role_specs, route_id=lowering.route_id)
   rows = [_role_row(spec, lifecycle) for spec in role_specs]
   all_attempted = all(row["exec"]["attempted"] for row in rows)
   all_numeric_ok = all_attempted and all(bool(row["exec"].get("numeric_ok")) for row in rows)
@@ -178,7 +181,7 @@ def build(lifecycle: dict[str, Any] | None = None) -> dict[str, Any]:
     "scope": "synthetic execution gate for all 14B Q4_K/Q8_1 wmma_tiled prefill role shapes",
     "verdict": "Q4K_WMMA_TILED_ROLE_SHAPE_EXEC_BLOCKED_FULL_ROLE_LOWERING" if blocker else
       "Q4K_WMMA_TILED_ROLE_SHAPE_EXEC_BLOCKED_LIFECYCLE",
-    "route_id": "prefill_q4k_int8_wmma_tiled_research",
+    "route_id": lowering.route_id,
     "scheduler_owned_tile_loop": loop_contract,
     "remaining_blocker": loop_contract["remaining_blocker"] if blocker else None,
     "required_next": loop_contract["remaining_blocker"] if blocker else None,

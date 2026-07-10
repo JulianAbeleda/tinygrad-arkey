@@ -10,6 +10,28 @@ from extra.qk.amd_isa_renderer_policy import PREFILL_AMD_ISA_RENDERER_POLICY
 
 
 @dataclass(frozen=True)
+class TransitionalPrefillPipeShapeProfile:
+  # Transitional home for current prefill pipe codegen shape predicates. These
+  # values mirror the existing Qwen prefill roles and should move to route/spec
+  # profile data once codegen hooks receive that context directly.
+  name: str = "qwen_prefill_pipe_codegen_compat"
+  pipe_ns: frozenset[int] = frozenset((1024, 4096))
+  ffn_dim: int = 12288
+  ubatch_m: int = 512
+  base_red_dim: int = 4096
+  scalar_red_dim: int = 1
+
+  def disables_local_stage_for_stage_dims(self, dims:frozenset[int]) -> bool:
+    return bool(dims & self.pipe_ns) and self.ffn_dim not in dims
+
+  def disables_warmstart_local_stage(self, out_dims:frozenset[int], red:int) -> bool:
+    return ((self.ubatch_m in out_dims and bool(out_dims & self.pipe_ns) and red in (self.base_red_dim, self.ffn_dim)) or
+            (bool(out_dims & self.pipe_ns) and red == self.scalar_red_dim))
+
+TRANSITIONAL_PREFILL_PIPE_SHAPE_PROFILE = TransitionalPrefillPipeShapeProfile()
+
+
+@dataclass(frozen=True)
 class PrefillDevectorizerExtension:
   name: str = "prefill"
   def disables_ptr_group(self, buf:UOp) -> bool:
@@ -39,14 +61,13 @@ class PrefillPostRangeExtension:
   def tc_local_stage_pipe_primitive_disabled_for_ranges(self, stage_ranges:tuple[UOp, ...]) -> bool:
     if not getenv("PREFILL_WMMA_PIPE_PRIMITIVE", 0): return False
     if str(getenv("PREFILL_WMMA_PIPE_ATTN_KV_NO_LOCAL_STAGE", "1")).strip().lower() in ("", "0", "false", "off", "no"): return False
-    dims = {r.vmax + 1 for r in stage_ranges}
-    return bool(dims & {1024, 4096}) and 12288 not in dims
+    dims = frozenset(r.vmax + 1 for r in stage_ranges)
+    return TRANSITIONAL_PREFILL_PIPE_SHAPE_PROFILE.disables_local_stage_for_stage_dims(dims)
   def warmstart_pipe_primitive_no_local_stage_key(self, key:tuple[frozenset[int], int]) -> bool:
     if not getenv("PREFILL_WMMA_PIPE_PRIMITIVE", 0): return False
     if str(getenv("PREFILL_WMMA_PIPE_ATTN_KV_NO_LOCAL_STAGE", "1")).strip().lower() in ("", "0", "false", "off", "no"): return False
     out_dims, red = key
-    pipe_ns = {1024, 4096}
-    return (512 in out_dims and bool(out_dims & pipe_ns) and red in (4096, 12288)) or (bool(out_dims & pipe_ns) and red == 1)
+    return TRANSITIONAL_PREFILL_PIPE_SHAPE_PROFILE.disables_warmstart_local_stage(out_dims, red)
   def warmstart_local_stage_allowed_key(self, key:tuple[frozenset[int], int], local_stage_keys,
                                         local_stage_deny_keys:set[tuple[frozenset[int], int]]) -> bool:
     return (not self.warmstart_pipe_primitive_no_local_stage_key(key)) and key not in local_stage_deny_keys and (

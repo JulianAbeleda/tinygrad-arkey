@@ -13,8 +13,8 @@ This is a provenance conversion: the generated route resolves the schedule throu
 the spec. The old fixed call site and PREFILL_GENERATED_SCHEDULE rollback have been removed from runtime.
 
 role_policy: the current default pipes the latency-bound roles (attn q/o, attn k/v, ffn_down) and EXCLUDES the
-saturated ffn_gate_up (uniquely out_f==12288), which keeps its faster LDS path. That fact is carried on the spec as
-`route_family` ('pipe' vs 'lds') + `protected_roles`, resolved structurally from out_f (no model-name hardcode).
+saturated ffn_gate_up, which keeps its faster LDS path. That fact is carried on the spec as `route_family` ('pipe' vs
+'lds') + `protected_roles`, resolved by role first and shape second for legacy callers (no model-name hardcode).
 """
 from __future__ import annotations
 
@@ -22,10 +22,21 @@ from dataclasses import dataclass, field
 import os
 from typing import Any
 
-# ffn_gate_up is the protected (pipe-excluded) role: uniquely out_f==12288 on the tracked dense prefill shapes.
+# ffn_gate_up is the protected (pipe-excluded) role. Shape fallback is retained for legacy callers that cannot annotate
+# the role yet; runtime schedule selection should call the helper instead of matching this shape literal directly.
 PROTECTED_PIPE_ROLES = ("ffn_gate_up",)
-_GATE_UP_OUT_F = 12288
+_GATE_UP_SHAPES = frozenset(((12288, 4096), (12288, 5120)))
 PIPELINE_TARGET_SUBSTRATE = ("tinygrad.schedule.wmma.shaped_wmma", "tinygrad.schedule.rangeify")
+
+
+def prefill_pipe_excluded_by_role_shape_policy(out_f: int, in_f: int, *, role: str | None = None) -> bool:
+  """Return whether the role/shape should keep the LDS route under role-selective prefill.
+
+  Role is authoritative when present. Shape fallback preserves existing 8B behavior for unannotated legacy call sites and
+  keeps the known gate/up profiles protected without exposing model-size literals in runtime schedule selection.
+  """
+  if role is not None: return role in PROTECTED_PIPE_ROLES and (out_f, in_f) in _GATE_UP_SHAPES
+  return (out_f, in_f) in _GATE_UP_SHAPES
 
 
 def prefill_pipe_role_selective_generated_pure_search_proof() -> dict[str, Any]:
@@ -116,7 +127,7 @@ def describe_prefill_schedule(out_f: int, in_f: int, *, role: str | None = None)
   """Resolve the current default schedule for a prefill (out_f, in_f) GEMM into a PrefillGEMMScheduleSpec. Uses the
   graph-GEMM resolver, so the spec is a faithful snapshot of the resolved schedule."""
   from extra.qk.prefill_graph_gemm_route import _resolve_schedule
-  return _params_to_spec(_resolve_schedule(out_f, in_f), role)
+  return _params_to_spec(_resolve_schedule(out_f, in_f, role), role)
 
 
 def _spec_to_params(spec: PrefillGEMMScheduleSpec) -> dict:

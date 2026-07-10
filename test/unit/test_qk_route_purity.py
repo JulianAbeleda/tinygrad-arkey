@@ -1,4 +1,4 @@
-import json
+import json, subprocess, sys
 
 import pytest
 
@@ -79,6 +79,18 @@ def test_default_path_census_uses_manifest_provenance():
   assert "prefill_pipe_role_selective_default" not in by_route
   assert by_route["prefill_q4k_direct_tile4x4_default"]["provenance"] == "machine_authored_generated"
   assert by_route["prefill_q4k_direct_tile4x4_default"]["final_default_allowed"] is True
+
+
+def test_route_policy_import_does_not_eagerly_import_qk_manifest():
+  code = "import sys; import tinygrad.llm.route_policy; print(any(k.startswith('extra.qk') for k in sys.modules))"
+  out = subprocess.check_output([sys.executable, "-c", code], text=True).strip()
+  assert out == "False"
+
+
+def test_qk_route_policy_supported_ids_include_manifest_defaults():
+  from extra.qk.route_manifest import default_routes
+  from tinygrad.llm import route_policy
+  assert set(default_routes()) <= route_policy._supported_qk_route_ids()
 
 
 def test_qk_route_policy_selects_g5_by_shape(tmp_path):

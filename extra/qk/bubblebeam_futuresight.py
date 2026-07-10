@@ -13,6 +13,7 @@ from tinygrad.uop.ops import UOp
 from extra.qk.amd_warp_reduce import WARP
 from extra.qk.lane_partition_reduce import LanePartition, q4k_packed_word_index
 from extra.qk.layout_coalesce_check import axis_stride, vector_width
+from extra.qk.route_manifest import ROUTES
 
 @dataclass(frozen=True)
 class CoalesceCandidate:
@@ -61,11 +62,18 @@ def score_layout_transform(name:str, lane:UOp|None=None) -> CoalesceScore:
   if name != "q4k_lane_partition": raise ValueError(f"unknown layout transform {name!r}")
   return choose_q4k_candidate(lane)
 
+def _manifest_q4k_g3_shapes() -> frozenset[tuple[int, int]]:
+  return frozenset((int(g["N"]), int(g["K"])) for g in ROUTES["decode_q4k_g3_generated"].get("shape_guards", [])
+                   if isinstance(g.get("N"), int) and isinstance(g.get("K"), int))
+
+def q4k_g3_manifest_shape(out_features:int, in_features:int) -> bool:
+  return (out_features, in_features) in _manifest_q4k_g3_shapes()
+
 def should_route_q4k_lane_partition(out_features:int, in_features:int) -> bool:
-  """Search-owned q4k route selector for tracked Q4_K GEMV roles.
+  """Search-owned q4k route selector for manifest-tracked Q4_K GEMV roles.
 
   The original P3.3 selector covered only FFN gate/up. It now covers the promoted G3 LaneMap Q4_K roles:
-  gate/up, FFN down, and 4096x4096 projection.
+  gate/up, FFN down, and projection shapes declared by the route manifest.
   """
-  if not ((out_features in (4096, 12288) and in_features == 4096) or (out_features == 4096 and in_features == 12288)): return False
+  if not q4k_g3_manifest_shape(out_features, in_features): return False
   return choose_q4k_candidate().candidate.requires_lane_partition

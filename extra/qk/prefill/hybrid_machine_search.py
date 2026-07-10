@@ -17,6 +17,7 @@ if __package__ in (None, ""):
 
 from extra.qk.prefill.dbuf_s10_lds_spec_exporter import export_s10_lds_spec
 from extra.qk.prefill_schedule_spec import describe_prefill_schedule
+from extra.qk.model_profiles import prefill_role_shapes, profile_by_id
 from extra.qk.wmma_lds_spec import LDS2_OWNERSHIP_CLASSIFICATION, extract_wmma_lds_spec, wmma_lds_slot_identity_proof
 
 
@@ -25,7 +26,7 @@ DEFAULT_OUTPUT = pathlib.Path("bench/prefill-hybrid-machine-search/ffn-gate-up-c
 DEFAULT_SEARCH_OUTPUT = pathlib.Path("bench/prefill-hybrid-machine-search/search-report.json")
 DEFAULT_REPORT_OUTPUT = pathlib.Path("bench/prefill-hybrid-machine-search/final-report.json")
 ROLE = "ffn_gate_up"
-SHAPE = {"M": 512, "N": 12288, "K": 4096}
+DEFAULT_PROFILE = "qwen3_8b_q4k_m_gfx1100"
 CLASSIFICATION = LDS2_OWNERSHIP_CLASSIFICATION
 AUTHORITY_ROUTE = "prefill_pipe_role_selective_generated"
 PP512_MIN_TOK_S = 4000.0
@@ -55,11 +56,42 @@ WAIT_VARIANTS: tuple[dict[str, Any], ...] = (
 )
 
 
-def _unsupported_record(schedule_json: dict[str, Any], errors: list[str]) -> dict[str, Any]:
+def _profile_role_shapes(profile: str) -> tuple[Any, ...]:
+  try: return prefill_role_shapes(profile_by_id(profile))
+  except KeyError as e: raise ValueError(f"unsupported profile {profile!r}") from e
+
+
+def _shape_value(row: Any, key: str) -> Any:
+  if isinstance(row, dict): return row[key]
+  return getattr(row, key)
+
+
+def select_prefill_role_shape(*, profile: str = DEFAULT_PROFILE, role: str = ROLE) -> Any:
+  matches = [row for row in _profile_role_shapes(profile)
+             if _shape_value(row, "role") == role and _shape_value(row, "phase") == "prefill"]
+  if not matches:
+    raise ValueError(f"profile {profile!r} has no prefill role shape for role {role!r}")
+  return matches[0]
+
+
+def _shape_dict(row: Any) -> dict[str, int]:
+  return {k: int(_shape_value(row, k)) for k in ("M", "N", "K")}
+
+
+def _unsupported_record(role: str, shape: dict[str, int], schedule_json: dict[str, Any],
+                        errors: list[str], variant: dict[str, Any]) -> dict[str, Any]:
   return {
     "schema": SCHEMA,
-    "role": ROLE,
-    "shape": dict(SHAPE),
+    "role": role,
+    "shape": dict(shape),
+    "candidate_id": variant.get("candidate_id", "wait-default"),
+    "candidate_label": variant.get("label", "default"),
+    "env_overrides": dict(variant.get("env_overrides", {})),
+    "search_knobs": {
+      "class": "s9_safe_wait_policy",
+      "wait_policy": dict(variant.get("wait_policy", {})),
+      "runtime_emission_changed": False,
+    },
     "schedule_spec": schedule_json,
     "lds_spec": None,
     "selected_backend_atom": {
@@ -110,14 +142,23 @@ def _prior_authority_summary(path: str | None) -> dict[str, Any] | None:
   }
 
 
-def build_ffn_gate_up_candidate(*, active_buffers: int = 2, variant: dict[str, Any] | None = None) -> dict[str, Any]:
+def build_role_shape_candidate(role_shape: Any, *, active_buffers: int = 2,
+                               variant: dict[str, Any] | None = None) -> dict[str, Any]:
   """Return a machine-readable hybrid machine-search candidate record for the existing LDS atom."""
   variant = WAIT_VARIANTS[0] if variant is None else variant
-  schedule = describe_prefill_schedule(SHAPE["N"], SHAPE["K"], role=ROLE)
+  role = str(_shape_value(role_shape, "role"))
+  shape = _shape_dict(role_shape)
+  schedule = describe_prefill_schedule(shape["N"], shape["K"], role=role)
   schedule_json = schedule.to_json()
   lds_spec = extract_wmma_lds_spec(schedule)
   if lds_spec is None:
-    return _unsupported_record(schedule_json, ["extract_wmma_lds_spec returned None"])
+    route_family = schedule_json.get("route_family")
+    return _unsupported_record(
+      role, shape, schedule_json,
+      [f"backend atom unsupported for role/shape: schedule route_family={route_family!r}; "
+       "extract_wmma_lds_spec returned None"],
+      variant,
+    )
 
   lds_json = lds_spec.to_json()
   legality_errors = list(lds_json.get("legality_errors", []))
@@ -132,8 +173,8 @@ def build_ffn_gate_up_candidate(*, active_buffers: int = 2, variant: dict[str, A
 
   return {
     "schema": SCHEMA,
-    "role": ROLE,
-    "shape": dict(SHAPE),
+    "role": role,
+    "shape": dict(shape),
     "candidate_id": variant.get("candidate_id", "wait-default"),
     "candidate_label": variant.get("label", "default"),
     "env_overrides": dict(variant.get("env_overrides", {})),
@@ -163,12 +204,19 @@ def build_ffn_gate_up_candidate(*, active_buffers: int = 2, variant: dict[str, A
     "promotion_reason": promotion_reason,
     "prior_authority": _prior_authority_summary(variant.get("prior_authority_artifact")),
     "pure_generated": False,
-    "not_pure_generated_reason": "ffn_gate_up is spec-owned around a reusable ASM backend atom; runtime emission is unchanged",
+    "not_pure_generated_reason": f"{role} is spec-owned around a reusable ASM backend atom; runtime emission is unchanged",
   }
 
 
-def build_search_report(*, active_buffers: int = 2) -> dict[str, Any]:
-  candidates = [build_ffn_gate_up_candidate(active_buffers=active_buffers, variant=v) for v in WAIT_VARIANTS]
+def build_ffn_gate_up_candidate(*, active_buffers: int = 2, variant: dict[str, Any] | None = None,
+                                profile: str = DEFAULT_PROFILE) -> dict[str, Any]:
+  return build_role_shape_candidate(select_prefill_role_shape(profile=profile, role=ROLE),
+                                    active_buffers=active_buffers, variant=variant)
+
+
+def build_search_report(*, active_buffers: int = 2, profile: str = DEFAULT_PROFILE, role: str = ROLE) -> dict[str, Any]:
+  role_shape = select_prefill_role_shape(profile=profile, role=role)
+  candidates = [build_role_shape_candidate(role_shape, active_buffers=active_buffers, variant=v) for v in WAIT_VARIANTS]
   viable = []
   for cand in candidates:
     prior = cand.get("prior_authority") or {}
@@ -203,15 +251,18 @@ def build_search_report(*, active_buffers: int = 2) -> dict[str, Any]:
   }
 
 
-def write_candidate(path: pathlib.Path = DEFAULT_OUTPUT, *, active_buffers: int = 2) -> dict[str, Any]:
-  record = build_ffn_gate_up_candidate(active_buffers=active_buffers)
+def write_candidate(path: pathlib.Path = DEFAULT_OUTPUT, *, active_buffers: int = 2,
+                    profile: str = DEFAULT_PROFILE, role: str = ROLE) -> dict[str, Any]:
+  record = build_role_shape_candidate(select_prefill_role_shape(profile=profile, role=role),
+                                      active_buffers=active_buffers)
   path.parent.mkdir(parents=True, exist_ok=True)
   path.write_text(json.dumps(record, indent=2) + "\n")
   return record
 
 
-def write_search_report(path: pathlib.Path = DEFAULT_SEARCH_OUTPUT, *, active_buffers: int = 2) -> dict[str, Any]:
-  report = build_search_report(active_buffers=active_buffers)
+def write_search_report(path: pathlib.Path = DEFAULT_SEARCH_OUTPUT, *, active_buffers: int = 2,
+                        profile: str = DEFAULT_PROFILE, role: str = ROLE) -> dict[str, Any]:
+  report = build_search_report(active_buffers=active_buffers, profile=profile, role=role)
   path.parent.mkdir(parents=True, exist_ok=True)
   path.write_text(json.dumps(report, indent=2) + "\n")
   return report
@@ -411,12 +462,16 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
   ap.add_argument("--quality-gate-artifact", type=pathlib.Path,
                   help="whole-model quality/correctness gate JSON with a 'status' field (F3)")
   ap.add_argument("--active-buffers", type=int, default=2)
+  ap.add_argument("--profile", default=DEFAULT_PROFILE,
+                  help="model profile id to select role-shape data from")
+  ap.add_argument("--role", default=ROLE, help="prefill linear role to serialize")
   ap.add_argument("--search", action="store_true", help="write the hybrid machine-search wait-policy search report")
   ap.add_argument("--json", action="store_true", help="print the candidate JSON to stdout")
   args = ap.parse_args(argv)
 
-  record = write_search_report(args.search_output, active_buffers=args.active_buffers) if args.search else \
-           write_candidate(args.output, active_buffers=args.active_buffers)
+  record = write_search_report(args.search_output, active_buffers=args.active_buffers,
+                               profile=args.profile, role=args.role) if args.search else \
+           write_candidate(args.output, active_buffers=args.active_buffers, profile=args.profile, role=args.role)
   if args.authority_artifact is not None:
     authority = json.loads(args.authority_artifact.read_text())
     comparator = json.loads(args.comparator_artifact.read_text()) if args.comparator_artifact is not None else None

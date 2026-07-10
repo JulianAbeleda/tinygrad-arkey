@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json, pathlib
 from tinygrad import UOp, getenv
+from tinygrad.llm import route_ops
 
 
 def q4k_policy(name:str) -> tuple[int, tuple[str, ...]]|None:
@@ -73,9 +74,77 @@ def qk_generated_policy_entry(policy:dict|None, typ:int, rows:int, cols:int, nam
 _QK_ROUTE_POLICY: dict|None = None
 _QK_ROUTE_POLICY_STRICT = False
 _QK_ROUTE_POLICY_DEBUG = False
-_SUPPORTED_QK_ROUTE_IDS = {"decode_flash_block_tile_g5_konly", "decode_flash_live_split_g4_8b_kvboth",
-                           "decode_q4k_g3_generated", "decode_q6k_coop_generated",
-                           "prefill_v2_scheduler_matmul_default"}
+_ROUTE_KIND_DECODE_FLASH = "decode_flash"
+_ROUTE_KIND_Q4K_G3 = "decode_q4k_g3"
+_ROUTE_KIND_Q6K_GEN = "decode_q6k_generated"
+_ROUTE_KIND_PREFILL_GEN = "prefill_generated"
+_ROUTE_POLICY_LOCAL = {
+  "decode_flash_block_tile_g5_konly": {"kind": _ROUTE_KIND_DECODE_FLASH, "compat_params": ({"DECODE_LIVE_SPLIT": "1"},)},
+  "decode_flash_live_split_g4_8b_kvboth": {"kind": _ROUTE_KIND_DECODE_FLASH, "compat_params": ({"DECODE_LIVE_SPLIT": "1"},)},
+  "decode_q4k_g3_generated": {"kind": _ROUTE_KIND_Q4K_G3, "compat_params": ({"BUBBLEBEAM_FUTURESIGHT": "1"},)},
+  "decode_q6k_coop_generated": {"kind": _ROUTE_KIND_Q6K_GEN, "compat_params": ({"DECODE_Q6K_GENERATED": "1"},)},
+  "prefill_q4k_int8_wmma_generated_research": {"kind": _ROUTE_KIND_PREFILL_GEN, "compat_params": ({},)},
+  "prefill_q4k_int8_wmma_tiled_research": {"kind": _ROUTE_KIND_PREFILL_GEN, "compat_params": ({},)},
+}
+_MANIFEST_ROUTE_CACHE: dict[str, dict]|None = None
+
+def _manifest_routes() -> dict[str, dict]:
+  global _MANIFEST_ROUTE_CACHE
+  if _MANIFEST_ROUTE_CACHE is None:
+    try:
+      routes = route_ops.qk_route_manifest_attr("ROUTES")
+      _MANIFEST_ROUTE_CACHE = {rid: {"env": dict(row.get("env", {})), "status": row.get("status")}
+                               for rid, row in routes.items()
+                               if row.get("workload") in ("decode", "prefill")}
+    except Exception:
+      _MANIFEST_ROUTE_CACHE = {}
+  return _MANIFEST_ROUTE_CACHE
+
+def _qk_route_specs() -> dict[str, dict]:
+  specs = {rid: dict(spec) for rid, spec in _ROUTE_POLICY_LOCAL.items()}
+  for rid, manifest in _manifest_routes().items():
+    if manifest.get("status") not in ("promoted_default", "default_shipped"): continue
+    kind = specs.get(rid, {}).get("kind", _ROUTE_KIND_PREFILL_GEN if rid.startswith("prefill_") else _ROUTE_KIND_DECODE_FLASH)
+    specs.setdefault(rid, {})["kind"] = kind
+  for rid, manifest in _manifest_routes().items():
+    if rid in specs: specs[rid]["manifest_env"] = dict(manifest.get("env", {}))
+  return specs
+
+def _supported_qk_route_ids() -> set[str]:
+  return set(_qk_route_specs())
+
+class _LazySupportedQKRouteIds:
+  def __iter__(self): return iter(_supported_qk_route_ids())
+  def __contains__(self, route_id): return route_id in _supported_qk_route_ids()
+  def __len__(self): return len(_supported_qk_route_ids())
+
+_SUPPORTED_QK_ROUTE_IDS = _LazySupportedQKRouteIds()
+
+def _route_policy_params_allowed(route_id:str) -> set[tuple[tuple[str, str], ...]]:
+  spec = _qk_route_specs()[route_id]
+  allowed = {tuple(sorted((str(k), str(v)) for k, v in spec.get("manifest_env", {}).items()))}
+  allowed.update(tuple(sorted((str(k), str(v)) for k, v in p.items())) for p in spec.get("compat_params", ()))
+  return allowed
+
+def _validate_route_params(policy_path:pathlib.Path, route_id:str, params:dict) -> None:
+  actual = tuple(sorted((str(k), str(v)) for k, v in params.items()))
+  allowed = _route_policy_params_allowed(route_id)
+  allowed_keys = {k for item in allowed for k, _ in item}
+  if set(params) - allowed_keys:
+    raise ValueError(f"{policy_path} route {route_id!r} has unsupported params {sorted(set(params)-allowed_keys)}")
+  if actual not in allowed:
+    expected = [dict(item) for item in sorted(allowed)]
+    raise ValueError(f"{policy_path} route {route_id!r} route_params must match manifest env/compat params {expected}, got {params}")
+
+def _route_shape_rows_cols(policy_path:pathlib.Path, route_id:str, row:dict) -> tuple[int, int]:
+  shape = row.get("shape", {})
+  try:
+    rows_i, cols_i = int(shape["rows"]), int(shape["cols"])
+  except (KeyError, TypeError, ValueError):
+    raise ValueError(f"{policy_path} route {route_id!r} has malformed shape {shape!r}; expected integer rows/cols")
+  if rows_i <= 0 or cols_i <= 0:
+    raise ValueError(f"{policy_path} route {route_id!r} has non-positive shape rows={rows_i} cols={cols_i}")
+  return rows_i, cols_i
 
 def load_qk_route_policy(path:str) -> dict:
   policy_path = pathlib.Path(path).expanduser()
@@ -86,66 +155,28 @@ def load_qk_route_policy(path:str) -> dict:
   q4k_g3_rows: list[dict] = []
   q6k_gen_rows: list[dict] = []
   prefill_gen_rows: list[dict] = []
+  route_specs = _qk_route_specs()
+  supported_route_ids = set(route_specs)
   for row in data.get("routes", []):
     route_id = row.get("selected_route")
     if not route_id: continue
-    if route_id not in _SUPPORTED_QK_ROUTE_IDS:
-      raise ValueError(f"{policy_path} selects unsupported route {route_id!r}; supported={sorted(_SUPPORTED_QK_ROUTE_IDS)}")
+    if route_id not in supported_route_ids:
+      raise ValueError(f"{policy_path} selects unsupported route {route_id!r}; supported={sorted(supported_route_ids)}")
     params = dict(row.get("route_params", {}))
-    if route_id == "decode_flash_block_tile_g5_konly":
-      allowed = {"DECODE_LIVE_SPLIT"}
-      if set(params) - allowed:
-        raise ValueError(f"{policy_path} route {route_id!r} has unsupported params {sorted(set(params)-allowed)}")
-      if params and params != {"DECODE_LIVE_SPLIT": "1"}:
-        raise ValueError(f"{policy_path} route {route_id!r} must select the generated live-split route, got {params}")
+    _validate_route_params(policy_path, route_id, params)
+    route_kind = route_specs[route_id]["kind"]
+    if route_kind == _ROUTE_KIND_DECODE_FLASH:
       selected[route_id] = row
-    elif route_id == "decode_flash_live_split_g4_8b_kvboth":
-      allowed = {"DECODE_LIVE_SPLIT"}
-      if set(params) - allowed:
-        raise ValueError(f"{policy_path} route {route_id!r} has unsupported params {sorted(set(params)-allowed)}")
-      if params and params != {"DECODE_LIVE_SPLIT": "1"}:
-        raise ValueError(f"{policy_path} route {route_id!r} must select the generated 8B live-split route, got {params}")
-      selected[route_id] = row
-    elif route_id == "decode_q4k_g3_generated":
-      allowed = {"BUBBLEBEAM_FUTURESIGHT"}
-      if set(params) - allowed:
-        raise ValueError(f"{policy_path} route {route_id!r} has unsupported params {sorted(set(params)-allowed)}")
-      if params and params != {"BUBBLEBEAM_FUTURESIGHT": "1"}:
-        raise ValueError(f"{policy_path} route {route_id!r} must select the generated G3 route (BUBBLEBEAM_FUTURESIGHT=1), got {params}")
-      shape = row.get("shape", {})
-      try:
-        rows_i, cols_i = int(shape["rows"]), int(shape["cols"])
-      except (KeyError, TypeError, ValueError):
-        raise ValueError(f"{policy_path} route {route_id!r} has malformed shape {shape!r}; expected integer rows/cols")
-      if rows_i <= 0 or cols_i <= 0:
-        raise ValueError(f"{policy_path} route {route_id!r} has non-positive shape rows={rows_i} cols={cols_i}")
+    elif route_kind == _ROUTE_KIND_Q4K_G3:
+      _route_shape_rows_cols(policy_path, route_id, row)
       q4k_g3_rows.append(row)
       selected.setdefault(route_id, row)
-    elif route_id == "decode_q6k_coop_generated":
-      allowed = {"DECODE_Q6K_GENERATED"}
-      if set(params) - allowed:
-        raise ValueError(f"{policy_path} route {route_id!r} has unsupported params {sorted(set(params)-allowed)}")
-      if params and params != {"DECODE_Q6K_GENERATED": "1"}:
-        raise ValueError(f"{policy_path} route {route_id!r} must select the generated Q6_K route (DECODE_Q6K_GENERATED=1), got {params}")
-      shape = row.get("shape", {})
-      try:
-        rows_i, cols_i = int(shape["rows"]), int(shape["cols"])
-      except (KeyError, TypeError, ValueError):
-        raise ValueError(f"{policy_path} route {route_id!r} has malformed shape {shape!r}; expected integer rows/cols")
-      if rows_i <= 0 or cols_i <= 0:
-        raise ValueError(f"{policy_path} route {route_id!r} has non-positive shape rows={rows_i} cols={cols_i}")
+    elif route_kind == _ROUTE_KIND_Q6K_GEN:
+      _route_shape_rows_cols(policy_path, route_id, row)
       q6k_gen_rows.append(row)
       selected.setdefault(route_id, row)
-    elif route_id == "prefill_v2_scheduler_matmul_default":
-      if params:
-        raise ValueError(f"{policy_path} route {route_id!r} no longer accepts route_params; scheduler prefill is the pure default, got {params}")
-      shape = row.get("shape", {})
-      try:
-        rows_i, cols_i = int(shape["rows"]), int(shape["cols"])
-      except (KeyError, TypeError, ValueError):
-        raise ValueError(f"{policy_path} route {route_id!r} has malformed shape {shape!r}; expected integer rows/cols")
-      if rows_i <= 0 or cols_i <= 0:
-        raise ValueError(f"{policy_path} route {route_id!r} has non-positive shape rows={rows_i} cols={cols_i}")
+    elif route_kind == _ROUTE_KIND_PREFILL_GEN:
+      _route_shape_rows_cols(policy_path, route_id, row)
       prefill_gen_rows.append(row)
       selected.setdefault(route_id, row)
     else:
@@ -165,9 +196,12 @@ def qk_route_policy_selected(route_id:str, shape:dict[str, int]|None=None) -> bo
   row = _QK_ROUTE_POLICY.get("selected", {}).get(route_id)
   if row is None: return False
   if shape is not None:
-    policy_shape = dict(row.get("shape", {}))
-    for k, v in shape.items():
-      if k in policy_shape and int(policy_shape[k]) != int(v): return False
+    rows = [cand for cand in _QK_ROUTE_POLICY.get("prefill_gen", []) if cand.get("selected_route") == route_id]
+    if not rows: rows = [row]
+    for cand in rows:
+      policy_shape = dict(cand.get("shape", {}))
+      if all(k not in policy_shape or int(policy_shape[k]) == int(v) for k, v in shape.items()): return True
+    return False
   return True
 
 def qk_route_policy_selects_q4k_g3(out_features:int, in_features:int) -> bool:

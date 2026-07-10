@@ -54,7 +54,7 @@ def _route_dump(payload: dict[str, Any]) -> None:
 
 
 @lru_cache(maxsize=None)
-def _resolve_schedule(out_f: int, in_f: int):
+def _resolve_schedule(out_f: int, in_f: int, role: str | None = None):
   # TG-P4 refactor: resolve the prefill GEMM schedule parameters (tile/waves/pipeline/role-selective) into a data
   # dict. The runtime route emits only through extra/qk/prefill_schedule_spec.py; this remains the single resolver for
   # both the spec description and host-only structural gates.
@@ -106,8 +106,11 @@ def _resolve_schedule(out_f: int, in_f: int):
   pipe_mode = bool(_envint("PREFILL_GEMM_PIPELINE", 1))
   pipe_tm = _envint("PREFILL_GEMM_PIPELINE_TM", 2)
   pipe_tn = _envint("PREFILL_GEMM_PIPELINE_TN", 2)
-  # default-ON: exclude ffn gate/up (uniquely out_f==12288) from the pipe -> it takes the faster lds path; the rest stay piped.
-  if _envint("PREFILL_PIPE_ROLE_SELECTIVE", 1) and out_f == 12288:
+  from extra.qk.prefill_schedule_spec import prefill_pipe_excluded_by_role_shape_policy
+  role_selective_excluded = bool(_envint("PREFILL_PIPE_ROLE_SELECTIVE", 1) and
+                                 prefill_pipe_excluded_by_role_shape_policy(out_f, in_f, role=role))
+  # default-ON: exclude protected gate/up role/shapes from the pipe -> they take the faster lds path; the rest stay piped.
+  if role_selective_excluded:
     pipe_mode = False
   pad = _envint("PREFILL_GEMM_PAD", pad)
   bm, bn, threads = waves_m * wm * 16, waves_n * wn * 16, waves_m * waves_n * 32
@@ -118,7 +121,7 @@ def _resolve_schedule(out_f: int, in_f: int):
           "dbuf": dbuf, "plra": plra, "plrab": plrab, "leanaddr": leanaddr, "pipe_mode": bool(pipe_mode),
           "pipe_tm": pipe_tm, "pipe_tn": pipe_tn, "bm": bm, "bn": bn, "threads": threads,
           "reloc": reloc, "reloc_max_wgs": reloc_max_wgs,
-          "role_selective_excluded": bool(_envint("PREFILL_PIPE_ROLE_SELECTIVE", 1) and out_f == 12288)}
+          "role_selective_excluded": role_selective_excluded}
 
 
 def _emit_schedule(p: dict, name: str):

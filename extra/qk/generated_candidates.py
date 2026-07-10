@@ -3,7 +3,44 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Iterable
 
+from extra.qk import route_manifest
 from extra.qk.runtime_specs import GENERATED_PROVENANCE, GeneratedCandidate, RuntimeOpSpec
+
+
+_ROLE_ALIASES = {
+  "attn_k": "attn_kv",
+  "attn_v": "attn_kv",
+  "attention_tile": "attention",
+  "attention_combine": "attention",
+}
+
+
+def _manifest(route_id:str) -> dict:
+  if route_id not in route_manifest.ROUTES:
+    raise KeyError(f"generated candidate route {route_id!r} is missing from route_manifest.ROUTES")
+  return route_manifest.ROUTES[route_id]
+
+
+def _manifest_roles(route_id:str, *, extra:tuple[str, ...]=()) -> tuple[str, ...]:
+  roles: list[str] = []
+  for role in list(_manifest(route_id).get("roles", ())) + list(extra):
+    normalized = _ROLE_ALIASES.get(str(role), str(role))
+    if normalized not in roles:
+      roles.append(normalized)
+  return tuple(roles)
+
+
+def _manifest_quant(route_id:str, *, extra:tuple[str, ...]=()) -> tuple[str, ...]:
+  quant: list[str] = []
+  for q in list(_manifest(route_id).get("quant", ())) + list(extra):
+    if str(q) not in quant:
+      quant.append(str(q))
+  return tuple(quant)
+
+
+def _authority_gates_from_manifest(route_id:str) -> tuple[str, ...]:
+  gate = str(_manifest(route_id).get("authority_gate", ""))
+  return tuple(part.strip() for part in gate.split(" + ") if part.strip())
 
 
 @dataclass(frozen=True)
@@ -47,58 +84,54 @@ class GeneratedCandidateRegistry:
 BUILTIN_GENERATED_CANDIDATES: tuple[GeneratedCandidate, ...] = (
   GeneratedCandidate(
     candidate_id="quant_linear_prefill.prefill_v2_scheduler_matmul_default",
-    op_family="QuantizedLinear", supported_quant_formats=("Q4_K", "Q6_K", "fp16"),
+    op_family="QuantizedLinear", supported_quant_formats=_manifest_quant("prefill_v2_scheduler_matmul_default"),
     supported_activation_formats=("fp16",), phases=("prefill",),
-    roles=("ffn_gate_up", "ffn_down", "attn_qo", "attn_kv"),
-    lowering_strategy="tinygrad_scheduler", provenance="tinygrad_scheduler_generated",
+    roles=_manifest_roles("prefill_v2_scheduler_matmul_default"),
+    lowering_strategy="tinygrad_scheduler", provenance=route_manifest.route_provenance("prefill_v2_scheduler_matmul_default"),
     route_id="prefill_v2_scheduler_matmul_default", search_space_id="prefill_v2_scheduler_matmul",
-    authority_gates=("extra.qk.pure_search_guard",)),
+    authority_gates=_authority_gates_from_manifest("prefill_v2_scheduler_matmul_default")),
   GeneratedCandidate(
     candidate_id="quant_linear_prefill.q4k_int8_wmma_tensor_substrate",
-    op_family="QuantizedLinear", supported_quant_formats=("Q4_K",),
+    op_family="QuantizedLinear", supported_quant_formats=_manifest_quant("prefill_q4k_int8_wmma_generated_research"),
     supported_activation_formats=("Q8_1",), phases=("prefill",),
-    roles=("ffn_gate_up", "ffn_down", "attn_qo", "attn_kv"),
-    lowering_strategy="iu8_wmma_grouped_dot", provenance="machine_authored_generated",
+    roles=_manifest_roles("prefill_q4k_int8_wmma_generated_research"),
+    lowering_strategy="iu8_wmma_grouped_dot", provenance=route_manifest.route_provenance("prefill_q4k_int8_wmma_generated_research"),
     route_id="prefill_q4k_int8_wmma_generated_research", search_space_id="q4k_int8_wmma_prefill",
     required_codegen_features=("wmma_i32_16x16x16_iu8",),
-    authority_gates=("extra/qk/prefill_mmq_parity_gate.py", "extra/qk/int8_wmma_codegen_gate.py")),
+    authority_gates=_authority_gates_from_manifest("prefill_q4k_int8_wmma_generated_research")),
   GeneratedCandidate(
     candidate_id="quant_linear_prefill.q4k_int8_wmma_tiled_substrate",
-    op_family="QuantizedLinear", supported_quant_formats=("Q4_K",),
+    op_family="QuantizedLinear", supported_quant_formats=_manifest_quant("prefill_q4k_int8_wmma_tiled_research"),
     supported_activation_formats=("Q8_1",), phases=("prefill",),
-    roles=("ffn_gate_up", "ffn_down", "attn_qo", "attn_kv"),
-    lowering_strategy="iu8_wmma_tiled_grouped_dot", provenance="machine_authored_generated",
+    roles=_manifest_roles("prefill_q4k_int8_wmma_tiled_research"),
+    lowering_strategy="iu8_wmma_tiled_grouped_dot", provenance=route_manifest.route_provenance("prefill_q4k_int8_wmma_tiled_research"),
     route_id="prefill_q4k_int8_wmma_tiled_research", search_space_id="q4k_int8_wmma_tiled_prefill",
     required_codegen_features=("wmma_i32_16x16x16_iu8",),
-    authority_gates=("extra/qk/q4k_wmma_tiled_lowering_feasibility.py",
-                     "extra/qk/q4k_wmma_tiled_microgate.py",
-                     "extra/qk/q4k_wmma_tiled_surface_gate.py",
-                     "extra/qk/q4k_wmma_tiled_lifecycle_gate.py",
-                     "extra/qk/q4k_wmma_tiled_role_shape_exec_gate.py",
-                     "extra/qk/q4k_wmma_tiled_no_hand_kernel_gate.py")),
+    authority_gates=_authority_gates_from_manifest("prefill_q4k_int8_wmma_tiled_research")),
   GeneratedCandidate(
     candidate_id="quant_linear_decode.q4k_g3_lanemap",
-    op_family="QuantizedLinear", supported_quant_formats=("Q4_K",),
+    op_family="QuantizedLinear", supported_quant_formats=_manifest_quant("decode_q4k_g3_generated"),
     supported_activation_formats=("fp16",), phases=("decode",),
-    roles=("ffn_gate_up", "ffn_down", "attn_qo", "attn_kv", "lm_head", "unknown"),
-    lowering_strategy="packed_dequant_dot", provenance="machine_authored_generated",
+    roles=_manifest_roles("decode_q4k_g3_generated", extra=("lm_head", "unknown")),
+    lowering_strategy="packed_dequant_dot", provenance=route_manifest.route_provenance("decode_q4k_g3_generated"),
     route_id="decode_q4k_g3_generated", search_space_id="q4k_g3_lanemap",
-    authority_gates=("bench/amd-isa-backend-g3-weight-promotion/latest.json",)),
+    authority_gates=_authority_gates_from_manifest("decode_q4k_g3_generated")),
   GeneratedCandidate(
     candidate_id="quant_linear_decode.q6k_generated_coop",
-    op_family="QuantizedLinear", supported_quant_formats=("Q6_K",),
+    op_family="QuantizedLinear", supported_quant_formats=_manifest_quant("decode_q6k_coop_generated"),
     supported_activation_formats=("fp16",), phases=("decode",),
-    roles=("ffn_down", "lm_head", "attn_kv", "unknown"),
-    lowering_strategy="packed_dequant_dot", provenance="machine_authored_generated",
+    roles=_manifest_roles("decode_q6k_coop_generated", extra=("unknown",)),
+    lowering_strategy="packed_dequant_dot", provenance=route_manifest.route_provenance("decode_q6k_coop_generated"),
     route_id="decode_q6k_coop_generated", search_space_id="q6k_generated_coop",
-    authority_gates=("extra/qk/q6k_generated_coop_gate.py",)),
+    authority_gates=_authority_gates_from_manifest("decode_q6k_coop_generated")),
   GeneratedCandidate(
     candidate_id="attention_decode.live_split_flash",
-    op_family="FlashAttention", supported_quant_formats=("fp16",),
+    op_family="FlashAttention", supported_quant_formats=_manifest_quant("decode_flash_live_split_g4_8b_kvboth"),
     supported_activation_formats=("fp16",), phases=("decode",),
-    roles=("attention",), lowering_strategy="online_softmax_flash", provenance="machine_authored_generated",
+    roles=_manifest_roles("decode_flash_live_split_g4_8b_kvboth"), lowering_strategy="online_softmax_flash",
+    provenance=route_manifest.route_provenance("decode_flash_live_split_g4_8b_kvboth"),
     route_id="decode_flash_live_split_g4_8b_kvboth", search_space_id="decode_live_split_flash",
-    authority_gates=("extra/qk/prefilled_route_parity.py", "extra/qk/decode_runtime_overhead.py")),
+    authority_gates=_authority_gates_from_manifest("decode_flash_live_split_g4_8b_kvboth")),
 )
 
 

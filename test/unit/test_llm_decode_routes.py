@@ -126,6 +126,42 @@ def test_q4k_single_token_keeps_generated_g3_path(monkeypatch):
   assert g3_calls["n"] == 1
 
 
+def test_q4k_candidate_binds_decode_module_facts_non_8b_shape():
+  linear = SimpleNamespace(
+    decode_enabled=True, bias=None, in_features=1536, out_features=96,
+    q4k_storage=SimpleNamespace(mode="sidecar", words=_Words()), name="blk.0.attn_k.weight")
+  x = _TensorShapeOnly(shape=(1, 1, 1536))
+
+  facts = decode_routes.Q4K_DECODE_CANDIDATE.bind(linear, x, arch_ok=False)
+
+  assert facts == {
+    "quant": "Q4_K",
+    "phase": "decode",
+    "role": "attn_kv",
+    "B": 1,
+    "T": 1,
+    "K": 1536,
+    "N": 96,
+    "bias": False,
+    "decode_enabled": True,
+    "arch_ok": False,
+  }
+
+
+def test_q4k_candidate_rejects_unsupported_shapes_and_bias():
+  linear = SimpleNamespace(
+    decode_enabled=True, bias=None, in_features=1536, out_features=96,
+    q4k_storage=SimpleNamespace(mode="sidecar", words=_Words()), name="blk.0.attn_k.weight")
+
+  assert decode_routes.Q4K_DECODE_CANDIDATE.bind(linear, _TensorShapeOnly(shape=(2, 1, 1536)), True) is None
+  assert decode_routes.Q4K_DECODE_CANDIDATE.bind(linear, _TensorShapeOnly(shape=(1, 2, 1536)), True) is None
+  assert decode_routes.Q4K_DECODE_CANDIDATE.bind(linear, _TensorShapeOnly(shape=(1, 1, 1024)), True) is None
+  assert decode_routes.Q4K_DECODE_CANDIDATE.bind(linear, _TensorShapeOnly(shape=(1, "T", 1536)), True) is None
+
+  biased = SimpleNamespace(**{**linear.__dict__, "bias": object()})
+  assert decode_routes.Q4K_DECODE_CANDIDATE.bind(biased, _TensorShapeOnly(shape=(1, 1, 1536)), True) is None
+
+
 def test_q6k_smallk_batched_routes_to_fallback(monkeypatch):
   monkeypatch.setattr(decode_routes.qk_ops, "q6k_gemm_kernel", lambda *_args, **_kwargs: (_ for _ in ()).throw(
     AssertionError("batched K!=1 should not use q6k_gemm_kernel")))
@@ -142,6 +178,42 @@ def test_q6k_smallk_batched_routes_to_fallback(monkeypatch):
   out = decode_routes.q6k_primitive_linear_call(linear, x, fallback, True)
   assert out == "fallback"
   assert called == [x]
+
+
+def test_q6k_candidate_binds_decode_module_facts():
+  linear = SimpleNamespace(
+    decode_enabled=True, bias=None, in_features=4, out_features=16, q6k_storage=SimpleNamespace(halfs=0),
+    parts=1, opts=(), name="blk.0.ffn_down.weight")
+  x = _TensorShapeOnly(shape=(1, 1, 4))
+
+  facts = decode_routes.Q6K_DECODE_CANDIDATE.bind(linear, x, arch_ok=False)
+
+  assert facts == {
+    "quant": "Q6_K",
+    "phase": "decode",
+    "role": "ffn_down",
+    "B": 1,
+    "T": 1,
+    "K": 4,
+    "N": 16,
+    "bias": False,
+    "decode_enabled": True,
+    "arch_ok": False,
+  }
+
+
+def test_q6k_candidate_rejects_unsupported_shapes_and_bias():
+  linear = SimpleNamespace(
+    decode_enabled=True, bias=None, in_features=4, out_features=16, q6k_storage=SimpleNamespace(halfs=0),
+    parts=1, opts=(), name="ffn_down.weight")
+
+  assert decode_routes.Q6K_DECODE_CANDIDATE.bind(linear, _TensorShapeOnly(shape=(2, 1, 4)), True) is None
+  assert decode_routes.Q6K_DECODE_CANDIDATE.bind(linear, _TensorShapeOnly(shape=(1, 2, 4)), True) is None
+  assert decode_routes.Q6K_DECODE_CANDIDATE.bind(linear, _TensorShapeOnly(shape=(1, 1, 8)), True) is None
+  assert decode_routes.Q6K_DECODE_CANDIDATE.bind(linear, _TensorShapeOnly(shape=(1, "T", 4)), True) is None
+
+  biased = SimpleNamespace(**{**linear.__dict__, "bias": object()})
+  assert decode_routes.Q6K_DECODE_CANDIDATE.bind(biased, _TensorShapeOnly(shape=(1, 1, 4)), True) is None
 
 
 def test_q6k_single_token_keeps_generated_path(monkeypatch):

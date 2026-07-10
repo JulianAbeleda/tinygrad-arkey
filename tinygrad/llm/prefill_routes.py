@@ -164,6 +164,138 @@ class PrefillLinearRouteSpec:
                          route_id=f"prefill_{self.quant}_{self.route}")
 
 
+@dataclass(frozen=True)
+class DirectPackedPrefillRequest:
+  quant: str
+  role: str
+  m: int
+  n: int
+  k: int
+  bias: bool
+  ubatch: int
+
+  @property
+  def route_facts(self) -> dict[str, Any]:
+    return {"quant": self.quant, "role": self.role, "M": self.m, "N": self.n, "K": self.k,
+            "bias": self.bias, "ubatch": self.ubatch}
+
+
+@dataclass(frozen=True)
+class DirectPackedPrefillCandidate:
+  quant: str
+
+  def matches(self, lin, spec:PrefillLinearRouteSpec) -> bool:
+    return spec.quant == self.quant
+
+  def run(self, lin, x:Tensor, x_batch:Tensor, spec:PrefillLinearRouteSpec) -> Tensor | None:
+    raise NotImplementedError
+
+
+@dataclass(frozen=True)
+class Q4KDirectPackedPrefillCandidate(DirectPackedPrefillCandidate):
+  quant: str = "q4k"
+
+  def run(self, lin, x:Tensor, x_batch:Tensor, spec:PrefillLinearRouteSpec) -> Tensor | None:
+    words = lin.prefill_packed_weight().to(x.device)
+    parts = _direct_packed_parts(lin, spec)
+    partials = Tensor.empty(spec.n, spec.m, parts, dtype=dtypes.float32, device=x.device)
+    opts = _direct_packed_opts(lin, spec)
+    if bool(_env("PREFILL_Q4K_PACKED_LOAD", 1)):
+      output_layout = "partials"
+      if parts == 1 and bool(_env("PREFILL_DIRECT_OUT", 1)):
+        output_layout = "reduce_out" if bool(_env("PREFILL_Q4K_REDUCE_OUT", 0)) else "direct_out"
+      q4_spec = qk_ops.describe_q4k_packed_prefill_generated(spec.n, spec.k, spec.m,
+                                                             role=_direct_packed_role(lin, spec), parts=parts,
+                                                             output_layout=output_layout, opts=opts)
+      if output_layout in ("direct_out", "reduce_out"):
+        out = Tensor.empty(spec.m, spec.n, dtype=dtypes.float32, device=x.device).custom_kernel(
+          words, x_batch.reshape(spec.m * spec.k), fxn=qk_ops.emit_q4k_packed_prefill_kernel(q4_spec))[0]
+        return out.reshape(1, spec.m, spec.n)
+      out = partials.custom_kernel(words, x_batch.reshape(spec.m * spec.k),
+        fxn=qk_ops.emit_q4k_packed_prefill_kernel(q4_spec))[0]
+    else:
+      kernel = qk_ops.q4k_gemm_kernel
+      out = partials.custom_kernel(words, x_batch.reshape(spec.m * spec.k),
+        fxn=kernel(spec.n, spec.k, spec.m, parts, "prefill", opts, name=spec.q4k_kernel_prefix))[0]
+    return out.sum(axis=2).transpose(0, 1).reshape(1, spec.m, spec.n)
+
+
+@dataclass(frozen=True)
+class Q6KDirectPackedPrefillCandidate(DirectPackedPrefillCandidate):
+  quant: str = "q6k"
+
+  def run(self, lin, x:Tensor, x_batch:Tensor, spec:PrefillLinearRouteSpec) -> Tensor | None:
+    halfs = lin.prefill_packed_weight().to(x.device)
+    parts = _direct_packed_parts(lin, spec)
+    partials = Tensor.empty(spec.n, spec.m, parts, dtype=dtypes.float32, device=x.device)
+    opts = _direct_packed_opts(lin, spec)
+    if bool(_env("PREFILL_Q6K_PACKED_LOAD", 1)):
+      output_layout = "direct_out" if parts == 1 and bool(_env("PREFILL_DIRECT_OUT", 1)) else "partials"
+      q6_spec = qk_ops.describe_q6k_packed_prefill(spec.n, spec.k, spec.m, role=_direct_packed_role(lin, spec),
+                                                   parts=parts, output_layout=output_layout, opts=opts)
+      if output_layout == "direct_out":
+        out = Tensor.empty(spec.m, spec.n, dtype=dtypes.float32, device=x.device).custom_kernel(
+          halfs, x_batch.reshape(spec.m * spec.k), fxn=qk_ops.emit_q6k_packed_prefill_kernel(q6_spec))[0]
+        return out.reshape(1, spec.m, spec.n)
+      out = partials.custom_kernel(halfs, x_batch.reshape(spec.m * spec.k),
+        fxn=qk_ops.emit_q6k_packed_prefill_kernel(q6_spec))[0]
+    else:
+      kernel = qk_ops.q6k_gemm_kernel
+      out = partials.custom_kernel(halfs, x_batch.reshape(spec.m * spec.k),
+        fxn=kernel(spec.n, spec.k, spec.m, parts, opts, name=spec.q6k_kernel_prefix))[0]
+    return out.sum(axis=2).transpose(0, 1).reshape(1, spec.m, spec.n)
+
+
+DIRECT_PACKED_PREFILL_CANDIDATES: tuple[DirectPackedPrefillCandidate, ...] = (
+  Q4KDirectPackedPrefillCandidate(),
+  Q6KDirectPackedPrefillCandidate(),
+)
+
+
+def select_direct_packed_prefill_candidate(lin, spec:PrefillLinearRouteSpec) -> DirectPackedPrefillCandidate | None:
+  for candidate in DIRECT_PACKED_PREFILL_CANDIDATES:
+    if candidate.matches(lin, spec): return candidate
+  return None
+
+
+def _direct_packed_quant(lin) -> str:
+  if _is_q4k_linear(lin): return "Q4_K"
+  if _is_q6k_linear(lin): return "Q6_K"
+  return ""
+
+
+def _direct_packed_module_role(lin) -> str:
+  role = str(getattr(lin, "_prefill_graph_role", ""))
+  if role: return role
+  name = str(getattr(lin, "name", ""))
+  if any(x in name for x in ("ffn_gate", "ffn_up")): return "ffn_gate_up"
+  if "ffn_down" in name: return "ffn_down"
+  if any(x in name for x in ("attn_q", "attn_output")): return "attn_qo"
+  if any(x in name for x in ("attn_k", "attn_v")): return "attn_kv"
+  return ""
+
+
+def build_direct_packed_prefill_request(lin, x:Tensor | None=None, *, ubatch:int | None=None) -> DirectPackedPrefillRequest | None:
+  quant = _direct_packed_quant(lin)
+  n, k = getattr(lin, "out_features", None), getattr(lin, "in_features", None)
+  if quant == "" or not all(isinstance(v, int) for v in (n, k)): return None
+  requested_ubatch = int(_env("PREFILL_UBATCH", 512)) if ubatch is None else int(ubatch)
+  m = requested_ubatch
+  if x is not None:
+    if len(x.shape) != 3 or x.shape[0] != 1: return None
+    m, x_k = x.shape[-2], x.shape[-1]
+    if not all(isinstance(v, int) for v in (m, x_k)) or x_k != k: return None
+  return DirectPackedPrefillRequest(quant, _direct_packed_module_role(lin), m, n, k,
+                                    getattr(lin, "bias", None) is not None, requested_ubatch)
+
+
+def select_direct_packed_prefill_shadow_request(lin, x:Tensor | None=None, *, ubatch:int | None=None) -> DirectPackedPrefillRequest | None:
+  req = build_direct_packed_prefill_request(lin, x, ubatch=ubatch)
+  if req is None: return None
+  if not _direct_packed_enabled_for(lin, req.quant): return None
+  return req
+
+
 def _direct_packed_spec(lin, x:Tensor) -> PrefillLinearRouteSpec | None:
   if getattr(lin, "bias", None) is not None or len(x.shape) != 3 or x.shape[0] != 1: return None
   m, k = x.shape[-2], x.shape[-1]
@@ -180,17 +312,14 @@ def route_direct_packed_prefill(lin, x:Tensor) -> Tensor | None:
   spec = _direct_packed_spec(lin, x)
   if spec is None: return None
   x_batch = x[0].cast(dtypes.float16).contiguous()
-  parts = _direct_packed_parts(lin, spec)
   if _is_q4k_linear(lin):
-    words = lin.prefill_packed_weight().to(x.device)
-    partials = Tensor.empty(spec.n, spec.m, parts, dtype=dtypes.float32, device=x.device)
-    opts = _direct_packed_opts(lin, spec)
     role = _direct_packed_role(lin, spec)
     if bool(_env("PREFILL_QK_GENERATED_TILE", 0)):
       raise RuntimeError("PREFILL_QK_GENERATED_TILE was retired after the generated packed-tile route was refuted; "
                          "use the Q4KPrefillRouteSpec direct-packed default or PREFILL_Q4K_Q8=wmma_tiled research.")
     q8_mode = prefill_q4k_q8_mode()
     if q8_mode:
+      words = lin.prefill_packed_weight().to(x.device)
       xq, xscales = qk_ops.q8_1_quantize(x_batch.cast(dtypes.float32))
       if q8_mode == "wmma":
         wmma_spec = qk_ops.describe_q4k_int8_wmma_prefill(spec.n, spec.k, spec.m, role=role,
@@ -228,43 +357,9 @@ def route_direct_packed_prefill(lin, x:Tensor) -> Tensor | None:
         return out.reshape(1, spec.m, spec.n)
       raise RuntimeError(f"PREFILL_Q4K_Q8={q8_mode!r} matched no generated route; the handwritten sdot4/MMQ/Q8_1-GEMM "
                          f"modes were deleted 2026-07-06. Only 'wmma'/'wmma_tiled' (generated) or off-values are valid.")
-    else:
-      if bool(_env("PREFILL_Q4K_PACKED_LOAD", 1)):
-        output_layout = "partials"
-        if parts == 1 and bool(_env("PREFILL_DIRECT_OUT", 1)):
-          output_layout = "reduce_out" if bool(_env("PREFILL_Q4K_REDUCE_OUT", 0)) else "direct_out"
-        q4_spec = qk_ops.describe_q4k_packed_prefill_generated(spec.n, spec.k, spec.m,
-                                                               role=_direct_packed_role(lin, spec), parts=parts,
-                                                               output_layout=output_layout, opts=opts)
-        if output_layout in ("direct_out", "reduce_out"):
-          out = Tensor.empty(spec.m, spec.n, dtype=dtypes.float32, device=x.device).custom_kernel(
-            words, x_batch.reshape(spec.m * spec.k), fxn=qk_ops.emit_q4k_packed_prefill_kernel(q4_spec))[0]
-          return out.reshape(1, spec.m, spec.n)
-        out = partials.custom_kernel(words, x_batch.reshape(spec.m * spec.k),
-          fxn=qk_ops.emit_q4k_packed_prefill_kernel(q4_spec))[0]
-      else:
-        kernel = qk_ops.q4k_gemm_kernel
-        out = partials.custom_kernel(words, x_batch.reshape(spec.m * spec.k),
-          fxn=kernel(spec.n, spec.k, spec.m, parts, "prefill", opts, name=spec.q4k_kernel_prefix))[0]
-  else:
-    halfs = lin.prefill_packed_weight().to(x.device)
-    partials = Tensor.empty(spec.n, spec.m, parts, dtype=dtypes.float32, device=x.device)
-    opts = _direct_packed_opts(lin, spec)
-    if bool(_env("PREFILL_Q6K_PACKED_LOAD", 1)):
-      output_layout = "direct_out" if parts == 1 and bool(_env("PREFILL_DIRECT_OUT", 1)) else "partials"
-      q6_spec = qk_ops.describe_q6k_packed_prefill(spec.n, spec.k, spec.m, role=_direct_packed_role(lin, spec),
-                                                   parts=parts, output_layout=output_layout, opts=opts)
-      if output_layout == "direct_out":
-        out = Tensor.empty(spec.m, spec.n, dtype=dtypes.float32, device=x.device).custom_kernel(
-          halfs, x_batch.reshape(spec.m * spec.k), fxn=qk_ops.emit_q6k_packed_prefill_kernel(q6_spec))[0]
-        return out.reshape(1, spec.m, spec.n)
-      out = partials.custom_kernel(halfs, x_batch.reshape(spec.m * spec.k),
-        fxn=qk_ops.emit_q6k_packed_prefill_kernel(q6_spec))[0]
-    else:
-      kernel = qk_ops.q6k_gemm_kernel
-      out = partials.custom_kernel(halfs, x_batch.reshape(spec.m * spec.k),
-        fxn=kernel(spec.n, spec.k, spec.m, parts, opts, name=spec.q6k_kernel_prefix))[0]
-  return out.sum(axis=2).transpose(0, 1).reshape(1, spec.m, spec.n)
+  candidate = select_direct_packed_prefill_candidate(lin, spec)
+  if candidate is None: return None
+  return candidate.run(lin, x, x_batch, spec)
 
 
 def route_prefill_linear(lin, x:Tensor, *, prefill_graph_gemm:bool, prefill_chunked:bool) -> Tensor:

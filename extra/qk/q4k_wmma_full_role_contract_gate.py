@@ -8,12 +8,16 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
 from extra.qk.q4k_wmma_tile_lowering import (
   SCHEDULER_OWNED_TILE_LOOP_BLOCKER,
-  describe_qwen3_14b_q4k_full_role_lowering,
+  describe_q4k_full_role_lowering,
+  qwen3_14b_q4k_m_gfx1100_profile,
   build_scheduler_owned_tile_loop_contract,
 )
 
@@ -32,7 +36,7 @@ def _load_json(path: Path) -> dict[str, Any]:
 
 
 def build_report() -> dict[str, Any]:
-  spec = describe_qwen3_14b_q4k_full_role_lowering(wmma_surface="shaped_wmma_tile")
+  spec = describe_q4k_full_role_lowering(qwen3_14b_q4k_m_gfx1100_profile(), wmma_surface="shaped_wmma_tile")
   surface = _load_json(SURFACE_ARTIFACT)
   lifecycle = _load_json(LIFECYCLE_ARTIFACT)
   no_hand = _load_json(NO_HAND_ARTIFACT)

@@ -2,7 +2,22 @@ import pytest
 
 from extra.qk.generated_candidates import GeneratedCandidateRegistry, builtin_registry, select_generated_candidate
 from extra.qk.quant_specs import activation_spec, quant_spec
+from extra.qk import route_manifest
 from extra.qk.runtime_specs import ActivationQuantSpec, GeneratedCandidate, QuantizedTensorSpec, RuntimeOpSpec
+
+
+def _manifest_authority_gates(route_id):
+  return tuple(part.strip() for part in route_manifest.ROUTES[route_id]["authority_gate"].split(" + ") if part.strip())
+
+
+def _manifest_runtime_roles(route_id):
+  aliases = {"attn_k": "attn_kv", "attn_v": "attn_kv", "attention_tile": "attention", "attention_combine": "attention"}
+  roles = []
+  for role in route_manifest.ROUTES[route_id]["roles"]:
+    normalized = aliases.get(role, role)
+    if normalized not in roles:
+      roles.append(normalized)
+  return tuple(roles)
 
 
 def test_runtime_op_spec_round_trips_and_validates():
@@ -47,6 +62,16 @@ def test_builtin_registry_selects_wmma_tiled_candidate():
   selected = select_generated_candidate(op, preferred=("quant_linear_prefill.q4k_int8_wmma_tiled_substrate",))
   assert selected.status == "selected"
   assert selected.candidate and selected.candidate.route_id == "prefill_q4k_int8_wmma_tiled_research"
+
+
+def test_builtin_generated_candidates_match_manifest_route_metadata():
+  for candidate in builtin_registry().all():
+    assert candidate.route_id in route_manifest.ROUTES
+    manifest = route_manifest.ROUTES[candidate.route_id]
+    assert candidate.provenance == route_manifest.route_provenance(candidate.route_id)
+    assert candidate.supported_quant_formats == tuple(manifest["quant"])
+    assert candidate.authority_gates == _manifest_authority_gates(candidate.route_id)
+    assert set(_manifest_runtime_roles(candidate.route_id)).issubset(set(candidate.roles))
 
 
 def test_quant_specs_are_data_descriptors():

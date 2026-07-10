@@ -19,7 +19,6 @@ class GeneratedRouteDescriptor(TypedDict):
   owner: str
   writer_files: list[str]
   emitter: str
-  required_gates: list[str]
   rollback_route: str | None
 
 
@@ -34,7 +33,6 @@ _GENERATION_REGISTRY: tuple[GeneratedRouteDescriptor, ...] = (
       "extra/qk/gemv_g2_lanemap.py",
     ],
     "emitter": "extra/qk/gemv_g3_codegen_lowering.py q4k_g3_lanemap_gemv_kernel",
-    "required_gates": ["BUBBLEBEAM_FUTURESIGHT"],
     "rollback_route": None,
   },
   {
@@ -47,7 +45,6 @@ _GENERATION_REGISTRY: tuple[GeneratedRouteDescriptor, ...] = (
       "extra/qk/quant/q6_k_gemv_primitive.py",
     ],
     "emitter": "extra/qk/q6k_route_spec.py emit_q6k_gemv_kernel",
-    "required_gates": [],
     "rollback_route": None,
   },
   {
@@ -61,7 +58,6 @@ _GENERATION_REGISTRY: tuple[GeneratedRouteDescriptor, ...] = (
       "extra/qk/flash_decode_attention_spec.py",
     ],
     "emitter": "extra/qk/flash_decode_attention_spec.py describe_flash_decode_attention",
-    "required_gates": ["extra/qk/prefilled_route_parity.py"],
     "rollback_route": None,
   },
   {
@@ -75,7 +71,6 @@ _GENERATION_REGISTRY: tuple[GeneratedRouteDescriptor, ...] = (
       "extra/qk/flash_decode_attention_spec.py",
     ],
     "emitter": "extra/qk/flash_decode_attention_spec.py describe_flash_decode_attention",
-    "required_gates": ["extra/qk/decode_runtime_overhead.py"],
     "rollback_route": None,
   },
   {
@@ -88,7 +83,6 @@ _GENERATION_REGISTRY: tuple[GeneratedRouteDescriptor, ...] = (
       "extra/qk/quant/q6_k_gemv_primitive.py",
     ],
     "emitter": "extra/qk/q6k_prefill_route_spec.py emit_q6k_packed_prefill_kernel",
-    "required_gates": [],
     "rollback_route": None,
   },
   {
@@ -101,7 +95,6 @@ _GENERATION_REGISTRY: tuple[GeneratedRouteDescriptor, ...] = (
       "extra/qk/quant/q4_k_gemv_primitive.py",
     ],
     "emitter": "extra/qk/q4k_prefill_route_spec.py emit_q4k_packed_prefill_kernel",
-    "required_gates": [],
     "rollback_route": None,
   },
   {
@@ -114,7 +107,6 @@ _GENERATION_REGISTRY: tuple[GeneratedRouteDescriptor, ...] = (
       "extra/qk/quant/q4_k_gemv_primitive.py",
     ],
     "emitter": "extra/qk/q4k_prefill_route_spec.py emit_q4k_packed_prefill_kernel",
-    "required_gates": [],
     "rollback_route": "prefill_q4k_direct_tile4x4_default",
   },
 )
@@ -133,6 +125,11 @@ def _shape_role_policy(manifest: dict[str, Any]) -> dict[str, Any]:
     "quant": list(manifest.get("quant", ())),
     "shape_guards": [dict(g) for g in manifest.get("shape_guards", ())],
   }
+
+
+def _required_gates(manifest: dict[str, Any]) -> list[str]:
+  gate = str(manifest.get("authority_gate", ""))
+  return [part.strip() for part in gate.split(" + ") if part.strip()]
 
 
 def _sanitize_row(row: GeneratedRouteDescriptor) -> dict[str, Any]:
@@ -155,7 +152,7 @@ def _sanitize_row(row: GeneratedRouteDescriptor) -> dict[str, Any]:
     "manifest_provenance": route_manifest.route_provenance(row["route_id"]),
     "manifest_purity_status": str(manifest.get("purity_status", "")),
     "route_attribution": str(manifest.get("route_attribution", "")),
-    "required_gates": list(row["required_gates"]),
+    "required_gates": _required_gates(manifest),
     "rollback_route": row["rollback_route"],
   }
 

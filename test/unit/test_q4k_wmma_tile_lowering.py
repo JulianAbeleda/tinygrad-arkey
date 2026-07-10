@@ -1,4 +1,5 @@
 import json
+from types import SimpleNamespace
 
 import pytest
 
@@ -7,8 +8,10 @@ from extra.qk.q4k_wmma_tile_lowering import (
   QWEN3_14B_Q4K_ROLE_SHAPES,
   SCHEDULER_OWNED_TILE_LOOP_BLOCKER,
   build_scheduler_owned_tile_loop_contract,
+  describe_q4k_full_role_lowering,
   describe_int8_wmma_tile_lowering,
   describe_qwen3_14b_q4k_full_role_lowering,
+  qwen3_14b_q4k_m_gfx1100_profile,
 )
 
 
@@ -22,6 +25,25 @@ def test_q4k_wmma_full_role_contract_covers_14b_roles():
   assert all(r["bounds"]["bounded_raw_ok"] for r in payload["roles"])
   assert all(r["lowering"]["requires_scheduler_owned_loop"] for r in payload["roles"])
   json.dumps(payload)
+
+
+def test_q4k_wmma_full_role_contract_accepts_profile_role_shapes():
+  profile = SimpleNamespace(roles=(
+    SimpleNamespace(role="custom_prefill", phase="prefill", quant="Q4_K_M", M=32, N=64, K=256),
+  ))
+  spec = describe_q4k_full_role_lowering(profile)
+  payload = spec.to_json()
+  assert payload["role_count"] == 1
+  assert payload["roles"][0]["role"] == "custom_prefill"
+  assert payload["roles"][0]["m"] == 32
+  assert payload["roles"][0]["n"] == 64
+  assert payload["roles"][0]["k"] == 256
+
+
+def test_qwen3_14b_compat_wrapper_matches_profile_lowering():
+  compat = describe_qwen3_14b_q4k_full_role_lowering().to_json()
+  profile = describe_q4k_full_role_lowering(qwen3_14b_q4k_m_gfx1100_profile()).to_json()
+  assert compat == profile
 
 
 def test_q4k_wmma_tile_contract_rejects_unaligned_shapes():

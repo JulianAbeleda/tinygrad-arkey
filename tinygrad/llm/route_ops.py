@@ -11,6 +11,7 @@ def _attr(module:str, name:str):
 def qk_runtime_specs_attr(name:str): return _attr("extra.qk.runtime_specs", name)
 def qk_quant_specs_attr(name:str): return _attr("extra.qk.quant_specs", name)
 def qk_generated_candidates_attr(name:str): return _attr("extra.qk.generated_candidates", name)
+def qk_route_manifest_attr(name:str): return _attr("extra.qk.route_manifest", name)
 
 
 def route_pf16_graph_gemm(*args, **kwargs): return _attr("extra.qk.prefill_graph_gemm_route", "route_pf16_graph_gemm")(*args, **kwargs)
@@ -36,6 +37,7 @@ def q8_1_quantize(*args, **kwargs): return _attr("extra.qk.layout", "q8_1_quanti
 def quantize_q4_k(*args, **kwargs): return _attr("extra.qk.quantize", "quantize_q4_k")(*args, **kwargs)
 
 def should_route_q4k_lane_partition(*args, **kwargs): return _attr("extra.qk.bubblebeam_futuresight", "should_route_q4k_lane_partition")(*args, **kwargs)
+def q4k_g3_manifest_shape(*args, **kwargs): return _attr("extra.qk.bubblebeam_futuresight", "q4k_g3_manifest_shape")(*args, **kwargs)
 def q4k_g3_lanemap_gemv_kernel(*args, **kwargs): return _attr("extra.qk.gemv_g3_codegen_lowering", "q4k_g3_lanemap_gemv_kernel")(*args, **kwargs)
 def q4k_g3_lanemap_gemv_splitk_kernel(*args, **kwargs):
   return _attr("extra.qk.gemv_g3_codegen_lowering", "q4k_g3_lanemap_gemv_splitk_kernel")(*args, **kwargs)

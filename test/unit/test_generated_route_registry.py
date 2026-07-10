@@ -1,5 +1,6 @@
 import json
 
+from extra.qk.generated_candidates import builtin_registry
 from extra.qk import generated_route_registry as registry
 from extra.qk import route_manifest
 
@@ -27,6 +28,10 @@ REQUIRED_L3_FIELDS = {
   "required_gates",
   "rollback_route",
 }
+
+
+def _manifest_required_gates(route_id):
+  return [part.strip() for part in route_manifest.ROUTES[route_id]["authority_gate"].split(" + ") if part.strip()]
 
 
 def test_generated_route_registry_contains_positive_controls():
@@ -65,6 +70,35 @@ def test_seeded_rows_have_expanded_l3_scope_fields():
     assert route_row["manifest_provenance"] == route_manifest.route_provenance(route_id)
     assert route_row["manifest_purity_status"] == manifest["purity_status"]
     assert route_row["route_attribution"] == manifest["route_attribution"]
+    assert route_row["required_gates"] == _manifest_required_gates(route_id)
+
+
+def test_generated_route_registry_route_ids_and_manifest_fields_are_consistent():
+  assert set(registry.route_ids()) == {row["route_id"] for row in registry.rows()}
+  for route_row in registry.rows():
+    route_id = route_row["route_id"]
+    assert route_id in route_manifest.ROUTES
+    manifest = route_manifest.ROUTES[route_id]
+    assert route_row["authority_gate"] == manifest["authority_gate"]
+    assert route_row["authority_artifacts"] == list(manifest["promotion_artifacts"])
+    assert route_row["selector_binding"] == manifest["selector"]
+    assert route_row["shape_role_policy"]["roles"] == list(manifest["roles"])
+    assert route_row["shape_role_policy"]["excluded_roles"] == list(manifest["excluded_roles"])
+    assert route_row["shape_role_policy"]["quant"] == list(manifest["quant"])
+
+
+def test_generated_candidates_and_route_registry_agree_on_shared_manifest_rows():
+  candidates_by_route = {candidate.route_id: candidate for candidate in builtin_registry().all()}
+  registry_by_route = {route_row["route_id"]: route_row for route_row in registry.rows()}
+  shared = set(candidates_by_route) & set(registry_by_route)
+  assert shared
+  for route_id in shared:
+    candidate = candidates_by_route[route_id]
+    route_row = registry_by_route[route_id]
+    assert candidate.route_id == route_row["route_id"]
+    assert candidate.supported_quant_formats == tuple(route_row["shape_role_policy"]["quant"])
+    assert candidate.provenance == route_row["manifest_provenance"]
+    assert list(candidate.authority_gates) == route_row["required_gates"]
 
 
 def test_rows_and_build_are_json_serializable():

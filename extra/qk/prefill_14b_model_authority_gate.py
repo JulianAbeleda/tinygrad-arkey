@@ -9,12 +9,17 @@ from tinygrad.llm import route_policy
 from extra.qk.generated_candidates import builtin_registry
 
 from extra.qk import route_manifest
-from extra.qk.q4k_wmma_tile_lowering import QWEN3_14B_Q4K_ROLE_SHAPES
+from extra.qk.model_profiles import qwen3_14b_q4k_m_gfx1100_profile
+from extra.qk.q4k_wmma_tile_lowering import q4k_prefill_role_shape_tuples
 
 TARGET_ROUTE_IDS = (
   "prefill_q4k_int8_wmma_generated_research",
   "prefill_q4k_int8_wmma_tiled_research",
 )
+
+
+def _representative_q4k_shapes() -> tuple[tuple[str, int, int, int], ...]:
+  return q4k_prefill_role_shape_tuples(qwen3_14b_q4k_m_gfx1100_profile())
 
 
 def _route_manifest_row(route_id: str) -> dict[str, Any]:
@@ -44,7 +49,8 @@ def _policy_selection_evidence() -> dict[str, Any]:
 
   selected_roles = []
   routes_selected_any: set[str] = set()
-  for role, _m, n, k in QWEN3_14B_Q4K_ROLE_SHAPES:
+  representative_shapes = _representative_q4k_shapes()
+  for role, _m, n, k in representative_shapes:
     selected_route: str | None = None
     for route_id in TARGET_ROUTE_IDS:
       if route_policy.qk_route_policy_selected(route_id, {"rows": n, "cols": k}):
@@ -63,7 +69,7 @@ def _policy_selection_evidence() -> dict[str, Any]:
     "loaded": True,
     "selected_roles": selected_roles,
     "routes_selected_any": sorted(routes_selected_any),
-    "fully_selectable": len(selected_roles) == len(QWEN3_14B_Q4K_ROLE_SHAPES) and all(
+    "fully_selectable": len(selected_roles) == len(representative_shapes) and all(
       row["selected_route"] is not None for row in selected_roles),
   }
 
@@ -116,7 +122,7 @@ def build() -> dict[str, Any]:
     "route_matrix": route_rows,
     "target_routes": TARGET_ROUTE_IDS,
     "representative_q4k_shapes": [
-      {"role": role, "m": m, "n": n, "k": k} for role, m, n, k in QWEN3_14B_Q4K_ROLE_SHAPES
+      {"role": role, "m": m, "n": n, "k": k} for role, m, n, k in _representative_q4k_shapes()
     ],
     "policy_evidence": {
       "candidate_routes_present": _candidate_routes(),

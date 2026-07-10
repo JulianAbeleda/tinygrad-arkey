@@ -1,8 +1,18 @@
 import json
 
+from extra.qk.model_profiles import qwen3_8b_q4k_m_gfx1100_profile, qwen3_14b_q4k_m_gfx1100_profile
 from extra.qk.prefill.hybrid_machine_search import (
   CLASSIFICATION, DEFAULT_OUTPUT, SCHEMA, build_authority_gate, build_ffn_gate_up_candidate, build_final_report,
-  build_search_report, main)
+  build_search_report, main, select_prefill_role_shape)
+
+PROFILE_8B = qwen3_8b_q4k_m_gfx1100_profile()
+PROFILE_14B = qwen3_14b_q4k_m_gfx1100_profile()
+FFN_GATE_UP_8B = PROFILE_8B.role_shape("ffn_gate_up")
+FFN_GATE_UP_14B = PROFILE_14B.role_shape("ffn_gate_up")
+
+
+def _mnk_shape(row):
+  return {k: getattr(row, k) if not isinstance(row, dict) else row[k] for k in ("M", "N", "K")}
 
 
 def test_ffn_gate_up_candidate_schema_and_route_family():
@@ -10,10 +20,33 @@ def test_ffn_gate_up_candidate_schema_and_route_family():
 
   assert record["schema"] == SCHEMA
   assert record["role"] == "ffn_gate_up"
-  assert record["shape"] == {"M": 512, "N": 12288, "K": 4096}
+  assert record["shape"] == _mnk_shape(FFN_GATE_UP_8B)
   assert record["schedule_spec"]["route_family"] == "lds"
   assert record["lds_spec"]["ownership_classification"] == CLASSIFICATION
   assert record["legality_errors"] == []
+
+
+def test_default_candidate_shape_is_selected_from_profile_row():
+  row = select_prefill_role_shape(profile=PROFILE_8B.id, role=FFN_GATE_UP_8B.role)
+  record = build_ffn_gate_up_candidate()
+  row_shape = _mnk_shape(row)
+
+  assert row_shape == _mnk_shape(FFN_GATE_UP_8B)
+  assert record["shape"] == row_shape
+
+
+def test_14b_profile_role_shape_serializes_blocked_backend_atom_candidate():
+  record = build_ffn_gate_up_candidate(profile=PROFILE_14B.id)
+
+  assert record["schema"] == SCHEMA
+  assert record["role"] == FFN_GATE_UP_14B.role
+  assert record["shape"] == _mnk_shape(FFN_GATE_UP_14B)
+  assert record["promotion_status"] == "blocked"
+  assert record["lds_spec"] is None
+  assert record["pure_generated"] is False
+  assert record["legality_errors"] == [
+    "backend atom unsupported for role/shape: schedule route_family='pipe'; extract_wmma_lds_spec returned None"
+  ]
 
 
 def test_ffn_gate_up_candidate_backend_atom_classification():
@@ -58,6 +91,19 @@ def test_cli_writes_default_named_candidate_file(tmp_path, monkeypatch, capsys):
   assert written == record
   assert written["role"] == "ffn_gate_up"
   assert written["schedule_spec"]["route_family"] == "lds"
+
+
+def test_cli_profile_role_writes_14b_blocked_candidate(tmp_path, monkeypatch, capsys):
+  monkeypatch.chdir(tmp_path)
+
+  record = main(["--json", "--profile", PROFILE_14B.id, "--role", FFN_GATE_UP_14B.role])
+  printed = json.loads(capsys.readouterr().out)
+  written = json.loads((tmp_path / DEFAULT_OUTPUT).read_text())
+
+  assert printed == record
+  assert written == record
+  assert written["shape"] == _mnk_shape(FFN_GATE_UP_14B)
+  assert written["promotion_status"] == "blocked"
 
 
 def test_authority_gate_refuses_authority_when_binding_failed_even_above_4k_floor():
@@ -151,6 +197,22 @@ def test_search_report_enumerates_s9_safe_wait_policy_candidates():
   ]
   assert all((c["slot_identity_proof"] or {})["ok"] for c in report["candidates"])
   assert all(c["search_knobs"]["runtime_emission_changed"] is False for c in report["candidates"])
+
+
+def test_14b_search_report_serializes_blocked_rows_with_exact_reason():
+  report = build_search_report(profile=PROFILE_14B.id, role=FFN_GATE_UP_14B.role)
+
+  assert report["candidate_count"] == 3
+  assert [c["candidate_id"] for c in report["candidates"]] == [
+    "wait-default",
+    "wait-lgkm-coop-store-2",
+    "wait-lgkm-frag-load-2",
+  ]
+  assert all(c["promotion_status"] == "blocked" for c in report["candidates"])
+  assert all(c["shape"] == _mnk_shape(FFN_GATE_UP_14B) for c in report["candidates"])
+  assert all(c["legality_errors"] == [
+    "backend atom unsupported for role/shape: schedule route_family='pipe'; extract_wmma_lds_spec returned None"
+  ] for c in report["candidates"])
 
 
 def test_search_report_recommends_candidates_with_prior_4k_authority_band():

@@ -3,7 +3,8 @@ from types import SimpleNamespace
 
 from extra.qk.prefill_schedule_spec import (
   PIPELINE_TARGET_SUBSTRATE, PrefillGEMMScheduleSpec, describe_prefill_schedule,
-  emit_prefill_gemm_from_spec, prefill_pipe_role_selective_generated_pure_search_proof)
+  emit_prefill_gemm_from_spec, prefill_pipe_excluded_by_role_shape_policy,
+  prefill_pipe_role_selective_generated_pure_search_proof)
 
 
 def _schedule_spec(route_family: str, *, out_f: int = 4096, in_f: int = 4096, reloc: bool = True) -> PrefillGEMMScheduleSpec:
@@ -25,6 +26,13 @@ def test_describe_prefill_schedule_keeps_role_policy_in_spec():
   assert spec_lds.route_family == "lds"
   assert spec_lds.role == "ffn_gate_up"
   assert spec_lds.protected_roles == ("ffn_gate_up",)
+
+
+def test_prefill_pipe_excluded_policy_uses_role_then_shape():
+  assert prefill_pipe_excluded_by_role_shape_policy(12288, 4096, role="ffn_gate_up")
+  assert not prefill_pipe_excluded_by_role_shape_policy(12288, 4096, role="attn_qo")
+  assert not prefill_pipe_excluded_by_role_shape_policy(4096, 4096, role="ffn_gate_up")
+  assert prefill_pipe_excluded_by_role_shape_policy(12288, 4096)
 
 
 def test_emit_prefill_gemm_from_spec_targets_expected_wmma_builders(monkeypatch):

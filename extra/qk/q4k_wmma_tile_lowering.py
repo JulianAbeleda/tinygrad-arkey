@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from extra.qk.layout import Q4_K_BLOCK_ELEMS, Q8_1_BLOCK_ELEMS
+from extra.qk.model_profiles import prefill_role_shapes, qwen3_14b_q4k_m_gfx1100_profile
 
 VALID_WMMA_SURFACES = ("tc_matcher_tile", "shaped_wmma_tile")
 VALID_OUTPUT_LAYOUTS = ("direct",)
@@ -199,11 +200,33 @@ class Q4KWMMAFullRoleLoweringSpec:
     }
 
 
-QWEN3_14B_Q4K_ROLE_SHAPES: tuple[tuple[str, int, int, int], ...] = (
-  ("attn_kv", 512, 1024, 5120),
-  ("attn_qo", 512, 5120, 5120),
-  ("ffn_down", 512, 5120, 17408),
-  ("ffn_gate_up", 512, 17408, 5120),
+def _role_shape_tuple(role_shape: Any) -> tuple[str, int, int, int]:
+  if isinstance(role_shape, dict):
+    return (
+      str(role_shape["role"]),
+      int(role_shape["M"] if "M" in role_shape else role_shape["m"]),
+      int(role_shape["N"] if "N" in role_shape else role_shape["n"]),
+      int(role_shape["K"] if "K" in role_shape else role_shape["k"]),
+    )
+  if isinstance(role_shape, tuple):
+    if len(role_shape) < 4:
+      raise ValueError(f"role shape tuple must include role,M,N,K, got {role_shape!r}")
+    role, m, n, k = role_shape[:4]
+    return str(role), int(m), int(n), int(k)
+  return (
+    str(getattr(role_shape, "role")),
+    int(role_shape.M if hasattr(role_shape, "M") else role_shape.m),
+    int(role_shape.N if hasattr(role_shape, "N") else role_shape.n),
+    int(role_shape.K if hasattr(role_shape, "K") else role_shape.k),
+  )
+
+
+def q4k_prefill_role_shape_tuples(profile: Any) -> tuple[tuple[str, int, int, int], ...]:
+  return tuple(_role_shape_tuple(role_shape) for role_shape in prefill_role_shapes(profile))
+
+
+QWEN3_14B_Q4K_ROLE_SHAPES: tuple[tuple[str, int, int, int], ...] = q4k_prefill_role_shape_tuples(
+  qwen3_14b_q4k_m_gfx1100_profile()
 )
 
 
@@ -215,13 +238,17 @@ def describe_int8_wmma_tile_lowering(m:int, n:int, k:int, *, role:str, m_tile:in
   return spec
 
 
-def describe_qwen3_14b_q4k_full_role_lowering(*, wmma_surface:str="shaped_wmma_tile") -> Q4KWMMAFullRoleLoweringSpec:
+def describe_q4k_full_role_lowering(profile: Any, *, wmma_surface:str="shaped_wmma_tile") -> Q4KWMMAFullRoleLoweringSpec:
   spec = Q4KWMMAFullRoleLoweringSpec(tuple(
     describe_int8_wmma_tile_lowering(m, n, k, role=role, wmma_surface=wmma_surface)
-    for role, m, n, k in QWEN3_14B_Q4K_ROLE_SHAPES
+    for role, m, n, k in q4k_prefill_role_shape_tuples(profile)
   ))
   spec.validate()
   return spec
+
+
+def describe_qwen3_14b_q4k_full_role_lowering(*, wmma_surface:str="shaped_wmma_tile") -> Q4KWMMAFullRoleLoweringSpec:
+  return describe_q4k_full_role_lowering(qwen3_14b_q4k_m_gfx1100_profile(), wmma_surface=wmma_surface)
 
 
 def main() -> None:

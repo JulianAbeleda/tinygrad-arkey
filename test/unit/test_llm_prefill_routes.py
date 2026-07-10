@@ -21,7 +21,8 @@ def clean_prefill_route_env():
                                         "PREFILL_Q4K_WMMA_TILED_GROUP_TILE", "PREFILL_Q4K_WMMA_TILED_MAX_RAW_TILE_STEPS",
                                         "PREFILL_QK_GENERATED_TILE",
                                         "PREFILL_QK_GENERATED_TILE_ROLES", "PREFILL_QK_GENERATED_TILE_MODE",
-                                        "PREFILL_QK_GENERATED_TILE_ROWS", "PREFILL_QK_GENERATED_TILE_TOKENS")}
+                                        "PREFILL_QK_GENERATED_TILE_ROWS", "PREFILL_QK_GENERATED_TILE_TOKENS",
+                                        "PREFILL_UBATCH")}
   for k in old: os.environ.pop(k, None)
   yield
   for k, v in old.items():
@@ -219,6 +220,10 @@ class _TensorFactoryStub(_PrefillTensorStub):
     return cls()
 
 
+class _SmallPrefillTensorStub(_PrefillTensorStub):
+  shape = (1, 37, 384)
+
+
 class _Q6PrefillWeight:
   def to(self, *_args, **_kwargs):
     return self
@@ -239,6 +244,30 @@ def _q6_prefill_linear(parts=1):
   return SimpleNamespace(
     bias=None, in_features=256, out_features=16, parts=parts, opts=(), name="blk.0.ffn_down.weight",
     q6k_storage=SimpleNamespace(), prefill_packed_weight=lambda: _Q6PrefillWeight())
+
+
+def test_direct_packed_q4_request_facts_are_built_from_fake_module():
+  from tinygrad.llm.prefill_routes import build_direct_packed_prefill_request
+
+  lin = SimpleNamespace(
+    bias=None, in_features=384, out_features=96, parts=1, opts=(), name="custom.layers.7.ffn_gate_proj",
+    _prefill_graph_role="mlp_expand", q4k_storage=SimpleNamespace(), prefill_packed_weight=lambda: _Q4PrefillWeight())
+  req = build_direct_packed_prefill_request(lin, _SmallPrefillTensorStub(), ubatch=123)
+  assert req is not None
+  assert req.route_facts == {
+    "quant": "Q4_K", "role": "mlp_expand", "M": 37, "N": 96, "K": 384, "bias": False, "ubatch": 123}
+
+
+def test_direct_packed_q6_shadow_request_facts_are_built_from_fake_module():
+  from tinygrad.llm.prefill_routes import select_direct_packed_prefill_shadow_request
+
+  lin = SimpleNamespace(
+    bias=object(), in_features=384, out_features=80, parts=1, opts=(), name="toy.block.3.ffn_down",
+    q6k_storage=SimpleNamespace(), prefill_packed_weight=lambda: _Q6PrefillWeight())
+  req = select_direct_packed_prefill_shadow_request(lin, _SmallPrefillTensorStub(), ubatch=64)
+  assert req is not None
+  assert req.route_facts == {
+    "quant": "Q6_K", "role": "ffn_down", "M": 37, "N": 80, "K": 384, "bias": True, "ubatch": 64}
 
 
 def test_q4_direct_packed_prefill_default_uses_generated_descriptor(monkeypatch):

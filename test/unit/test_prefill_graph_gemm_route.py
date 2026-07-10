@@ -32,6 +32,20 @@ def test_prefill_pipe_role_selective_zero_is_retired(monkeypatch):
   route._resolve_schedule.cache_clear()
 
 
+def test_resolve_schedule_uses_role_shape_pipe_exclusion_policy(monkeypatch):
+  route._resolve_schedule.cache_clear()
+  monkeypatch.delenv("PREFILL_GEMM_PIPELINE", raising=False)
+  monkeypatch.delenv("PREFILL_GEMM_CFG_12288_4096", raising=False)
+  monkeypatch.delenv("PREFILL_GEMM_CFG_4096_4096", raising=False)
+
+  assert route._resolve_schedule(12288, 4096, "ffn_gate_up")["pipe_mode"] is False
+  route._resolve_schedule.cache_clear()
+  assert route._resolve_schedule(12288, 4096, "attn_qo")["pipe_mode"] is True
+  route._resolve_schedule.cache_clear()
+  assert route._resolve_schedule(12288, 4096)["pipe_mode"] is False
+  route._resolve_schedule.cache_clear()
+
+
 def test_route_pf16_graph_gemm_current_lowering_path_still_wraps_ops_ins(monkeypatch):
   route._resolve_schedule.cache_clear()
   captured = {}

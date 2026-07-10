@@ -1,7 +1,20 @@
+import json
+
 from tinygrad.llm import route_policy
 
+from extra.qk.model_profiles import qwen3_14b_q4k_m_gfx1100_profile
 import extra.qk.prefill_14b_model_authority_gate as model_gate
 import extra.qk.prefill_14b_q6_decision_gate as q6_gate
+
+PROFILE_14B = qwen3_14b_q4k_m_gfx1100_profile()
+ATTN_QO_14B = PROFILE_14B.role_shape("attn_qo")
+ATTN_KV_14B = PROFILE_14B.role_shape("attn_kv")
+FFN_DOWN_14B = PROFILE_14B.role_shape("ffn_down")
+FFN_GATE_UP_14B = PROFILE_14B.role_shape("ffn_gate_up")
+
+
+def _policy_shape(row):
+  return {"rows": row.N, "cols": row.K}
 
 
 def test_prefill_14b_model_authority_gate_blocks_without_route_policy_selection():
@@ -24,7 +37,7 @@ def test_prefill_14b_model_authority_gate_loaded_policy_branch_is_safe():
     "selected": {
       "prefill_q4k_int8_wmma_tiled_research": {
         "selected_route": "prefill_q4k_int8_wmma_tiled_research",
-        "shape": {"rows": 1024, "cols": 5120},
+        "shape": _policy_shape(ATTN_KV_14B),
       }
     }
   })
@@ -35,6 +48,69 @@ def test_prefill_14b_model_authority_gate_loaded_policy_branch_is_safe():
   assert report["policy_evidence"]["policy_loaded"] is True
   assert report["policy_evidence"]["policy_selected_routes"] == ["prefill_q4k_int8_wmma_tiled_research"]
   assert report["classified_blocker"] is True
+
+
+def test_qk_route_policy_accepts_prefill_direct_and_tiled_shape_rows(tmp_path):
+  policy_path = tmp_path / "prefill_policy.json"
+  policy_path.write_text(json.dumps({
+    "schema": "boltbeam.route_policy.v1",
+    "model_id": "shape-profile",
+    "architecture_class": "dense_decoder",
+    "authorized": True,
+    "routes": [
+      {"role": FFN_GATE_UP_14B.role, "shape": _policy_shape(FFN_GATE_UP_14B), "quant": "Q4_K",
+       "selected_route": "prefill_q4k_direct_tile4x4_default", "route_params": {}},
+      {"role": FFN_DOWN_14B.role, "shape": _policy_shape(FFN_DOWN_14B), "quant": "Q6_K",
+       "selected_route": "prefill_q6k_direct_generated", "route_params": {}},
+      {"role": FFN_GATE_UP_14B.role, "shape": _policy_shape(FFN_GATE_UP_14B), "quant": "Q4_K",
+       "selected_route": "prefill_q4k_int8_wmma_generated_research", "route_params": {}},
+      {"role": "attn_q", "shape": _policy_shape(ATTN_QO_14B), "quant": "Q4_K",
+       "selected_route": "prefill_q4k_int8_wmma_tiled_research", "route_params": {}},
+      {"role": ATTN_KV_14B.role, "shape": _policy_shape(ATTN_KV_14B), "quant": "Q4_K",
+       "selected_route": "prefill_q4k_int8_wmma_tiled_research", "route_params": {}},
+    ],
+  }))
+  policy = route_policy.load_qk_route_policy(str(policy_path))
+  assert [row["selected_route"] for row in policy["prefill_gen"]] == [
+    "prefill_q4k_direct_tile4x4_default",
+    "prefill_q6k_direct_generated",
+    "prefill_q4k_int8_wmma_generated_research",
+    "prefill_q4k_int8_wmma_tiled_research",
+    "prefill_q4k_int8_wmma_tiled_research",
+  ]
+  route_policy.set_qk_route_policy(policy)
+  try:
+    assert route_policy.qk_route_policy_selected("prefill_q4k_direct_tile4x4_default", _policy_shape(FFN_GATE_UP_14B))
+    assert route_policy.qk_route_policy_selected("prefill_q6k_direct_generated", _policy_shape(FFN_DOWN_14B))
+    assert route_policy.qk_route_policy_selected("prefill_q4k_int8_wmma_generated_research", _policy_shape(FFN_GATE_UP_14B))
+    assert route_policy.qk_route_policy_selected("prefill_q4k_int8_wmma_tiled_research", _policy_shape(ATTN_QO_14B))
+    assert route_policy.qk_route_policy_selected("prefill_q4k_int8_wmma_tiled_research", _policy_shape(ATTN_KV_14B))
+    assert not route_policy.qk_route_policy_selected("prefill_q4k_int8_wmma_tiled_research", {"rows": 4096, "cols": 4096})
+    assert route_policy.qk_route_policy_selects_prefill_generated(ATTN_KV_14B.N, ATTN_KV_14B.K)
+  finally:
+    route_policy.set_qk_route_policy(None)
+
+
+def test_prefill_14b_q6_decision_gate_sees_direct_policy_selection(tmp_path):
+  policy_path = tmp_path / "q6_prefill_policy.json"
+  policy_path.write_text(json.dumps({
+    "schema": "boltbeam.route_policy.v1",
+    "routes": [{
+      "role": FFN_DOWN_14B.role,
+      "shape": _policy_shape(FFN_DOWN_14B),
+      "quant": "Q6_K",
+      "selected_route": "prefill_q6k_direct_generated",
+      "route_params": {},
+    }],
+  }))
+  policy = route_policy.load_qk_route_policy(str(policy_path))
+  route_policy.set_qk_route_policy(policy)
+  try:
+    report = q6_gate.build()
+  finally:
+    route_policy.set_qk_route_policy(None)
+  assert report["generated_route_inventory"]["policy_loaded"] is True
+  assert report["generated_route_inventory"]["policy_selects_direct"] is True
 
 
 def test_prefill_14b_q6_decision_gate_blocks_when_no_q6_mmq_route_exists():

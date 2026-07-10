@@ -20,7 +20,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from extra.qk.route_manifest import ROUTES, FINAL_DEFAULT_PROVENANCE
+from extra.qk.route_manifest import ROUTES, FINAL_DEFAULT_PROVENANCE, default_routes
 from extra.qk.pure_kernel_surface_audit import route_surface_row
 
 def _enabled(env: dict[str, Any], key: str) -> bool:
@@ -51,42 +51,102 @@ def _decode_attention_rolled_back(e: dict[str, Any]) -> bool:
   return not _env_flag(e, "DECODE_LIVE_SPLIT", 1)
 
 
+def _route_ids_matching(*, default_only: bool = False, env: dict[str, str] | None = None, **facts: Any) -> list[str]:
+  candidates = set(default_routes()) if default_only else set(ROUTES)
+  out = []
+  for rid in candidates:
+    row = ROUTES[rid]
+    if env is not None and {k: str(v) for k, v in row.get("env", {}).items()} != env:
+      continue
+    ok = True
+    for key, expected in facts.items():
+      exact = key.endswith("_exact")
+      if exact:
+        key = key[:-6]
+      actual = row.get(key)
+      if exact:
+        if list(actual or ()) != list(expected):
+          ok = False
+          break
+      elif isinstance(expected, (set, tuple, list)):
+        if not set(expected) <= set(actual or ()):
+          ok = False
+          break
+      elif actual != expected:
+        ok = False
+        break
+    if ok:
+      out.append(rid)
+  return sorted(out)
+
+
+def _single_route_id(*, default_only: bool = False, env: dict[str, str] | None = None, **facts: Any) -> str:
+  matches = _route_ids_matching(default_only=default_only, env=env, **facts)
+  if len(matches) != 1:
+    raise RuntimeError(f"expected one manifest route for facts={facts}, default_only={default_only}, env={env}; got {matches}")
+  return matches[0]
+
+
+def _default_route_id(**facts: Any) -> str:
+  return _single_route_id(default_only=True, env={}, **facts)
+
+
+def _env_route_id(env: dict[str, str], **facts: Any) -> str:
+  return _single_route_id(env=env, **facts)
+
+
+_PREFILL_GRAPH_GEMM_ENV = {"PREFILL_GRAPH_GEMM": "1"}
+
+
 # Each hot route family resolves to an EFFECTIVE route id from the environment. `rollback_active(env)` is True when the
-# env leaves the generated default; `generated`/`oracle` are the manifest route ids for the two arms. The decode
+# env leaves the generated default; `generated`/`oracle` are manifest-resolved route ids for the two arms. The decode
 # rollback predicates read the REAL decode_routes.py env gates (with real getenv defaults) so the guard's model tracks
 # the actual selector rather than a hardcoded constant; the boundary test drives the real dispatcher to prove it. The
 # handwritten decode rollback kernels were deleted (no backups), so the decode "oracle" arm is the family's own
 # generated route (its canonical manifest route); the boundary test is what catches an impure/de-selected decode
 # default, since a rollback here lands on the pure ordinary graph or fails loud rather than a hand kernel.
 HOT_FAMILIES = [
-  {"family": "decode_q4k_gemv", "generated": "decode_q4k_g3_generated", "oracle": "decode_q4k_g3_generated",
+  {"family": "decode_q4k_gemv",
+   "generated": _default_route_id(workload="decode", quant=["Q4_K"]),
+   "oracle": _default_route_id(workload="decode", quant=["Q4_K"]),
    "rollback_active": _decode_q4k_rolled_back},
   # Q6_K shipped hand-kernel rollback was deleted (no backups): generated Q6_K decode is unconditional -- no env
   # de-selects it in decode_routes.py q6k_primitive_linear_call.
-  {"family": "decode_q6k_gemv", "generated": "decode_q6k_coop_generated", "oracle": "decode_q6k_coop_generated",
+  {"family": "decode_q6k_gemv",
+   "generated": _default_route_id(workload="decode", quant=["Q6_K"]),
+   "oracle": _default_route_id(workload="decode", quant=["Q6_K"]),
    "rollback_active": lambda e: False},
-  {"family": "prefill_gemm", "generated": "prefill_v2_scheduler_matmul_default", "oracle": "prefill_pipe_role_selective_generated",
+  {"family": "prefill_gemm",
+   "generated": _default_route_id(workload="prefill", quant=["fp16"], roles=["attn_qo", "attn_kv", "ffn_down", "ffn_gate_up"]),
+   "oracle": _env_route_id(_PREFILL_GRAPH_GEMM_ENV, workload="prefill", quant=["fp16", "Q4_K", "Q6_K"]),
    "effective": "prefill_gemm"},
   # Q4_K quantized prefill (14B/32B memory-safe default). The direct-packed default is descriptor-owned; the opt-in
   # PREFILL_Q4K_WMMA_FUSED route remains raw-ISA WMMA and is not selected here.
-  {"family": "prefill_q4k", "generated": "prefill_q4k_direct_tile4x4_default", "oracle": "prefill_q4k_direct_tile4x4_default",
+  {"family": "prefill_q4k",
+   "generated": _default_route_id(workload="prefill", quant_exact=["Q4_K"]),
+   "oracle": _default_route_id(workload="prefill", quant_exact=["Q4_K"]),
    "rollback_active": lambda e: False},
-  {"family": "decode_attention", "generated": "decode_flash_live_split_g4_8b_kvboth", "oracle": "decode_flash_live_split_g4_8b_kvboth",
+  {"family": "decode_attention",
+   "generated": _default_route_id(workload="decode", quant=["fp16"], profile_id="qwen3_8b_q4_k_m_gfx1100_decode"),
+   "oracle": _default_route_id(workload="decode", quant=["fp16"], profile_id="qwen3_8b_q4_k_m_gfx1100_decode"),
    "rollback_active": _decode_attention_rolled_back},
 ]
 
 
 def _prefill_gemm_effective(env: dict[str, Any]) -> tuple[str, bool]:
   if not _enabled(env, "PREFILL_GRAPH_GEMM"):
-    return "prefill_v2_scheduler_matmul_default", False
+    return _default_route_id(workload="prefill", quant=["fp16"], roles=["attn_qo", "attn_kv", "ffn_down", "ffn_gate_up"]), False
   if (_enabled(env, "PREFILL_WMMA_PIPE_PRIMITIVE") and _enabled(env, "PREFILL_WMMA_LDS_PRIMITIVE") and
       _enabled(env, "PREFILL_DBUF")):
-    return "prefill_wmma_pipe_lds_dbuf_primitive_generated", False
+    return _env_route_id({**_PREFILL_GRAPH_GEMM_ENV, "PREFILL_WMMA_PIPE_PRIMITIVE": "1",
+                          "PREFILL_WMMA_LDS_PRIMITIVE": "1", "PREFILL_DBUF": "1"}, workload="prefill", quant=["fp16"]), False
   if _enabled(env, "PREFILL_WMMA_PIPE_PRIMITIVE"):
-    return "prefill_wmma_pipe_primitive_generated", False
+    return _env_route_id({**_PREFILL_GRAPH_GEMM_ENV, "PREFILL_WMMA_PIPE_PRIMITIVE": "1"},
+                         workload="prefill", quant=["fp16"]), False
   if _enabled(env, "PREFILL_WMMA_LDS_PRIMITIVE") and _enabled(env, "PREFILL_DBUF"):
-    return "prefill_wmma_lds_dbuf_primitive_mixed", False
-  return "prefill_pipe_role_selective_generated", True
+    return _env_route_id({**_PREFILL_GRAPH_GEMM_ENV, "PREFILL_WMMA_LDS_PRIMITIVE": "1", "PREFILL_DBUF": "1"},
+                         workload="prefill", quant=["fp16"]), False
+  return _env_route_id(_PREFILL_GRAPH_GEMM_ENV, workload="prefill", quant=["fp16", "Q4_K", "Q6_K"]), True
 
 
 def _provenance(rid: str) -> str:
