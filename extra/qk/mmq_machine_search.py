@@ -166,18 +166,22 @@ SEARCHABLE_CANDIDATES: tuple[MMQSearchCandidate, ...] = (
     reason="completed lifecycle/reference probe; no real staged AMD tile kernel emitted",
     measure_direct_packed=True,
   ),
+  MMQSearchCandidate(
+    candidate_id="amd_ds4_dot4x4_packed",
+    backend=AMD_DS4_DOT4X4_BACKEND_ID,
+    activation_layout=ACTIVATION_LAYOUT_MMQ_DS4,
+    status="searchable",
+    search_class="packed_dot_candidate",
+    promotion_eligible=False,
+    reason="R1 packed DS4 dot4x4 lane mapping passes bounded proof; still bounded-only until cooperative tile passes",
+    m_tile=4,
+    n_tile=5,
+    k_groups=8,
+    measure_direct_packed=True,
+  ),
 )
 
 BLOCKED_CANDIDATES: tuple[dict[str, Any], ...] = (
-  {
-    "candidate_id": "amd_ds4_dot4x4_packed",
-    "backend": AMD_DS4_DOT4X4_BACKEND_ID,
-    "activation_layout": ACTIVATION_LAYOUT_MMQ_DS4,
-    "status": "blocked",
-    "search_class": "packed_dot_candidate",
-    "promotion_eligible": False,
-    "reason": "compiles but has incorrect DS4 packed indexing/math; unit test is xfailed until fixed",
-  },
   {
     "candidate_id": "cooperative_shared_lds_tile",
     "backend": "not_implemented",
@@ -237,7 +241,7 @@ def build_search_report(*, run: bool = False, warmups: int = 0, rounds: int = 1,
     "searchable_components": [row["component"] for row in DONE_COMPONENTS],
     "searchable_candidates": rows,
     "blocked_candidates": list(BLOCKED_CANDIDATES),
-    "promotion_verdict": "BLOCKED_UNTIL_PACKED_DOT_AND_COOPERATIVE_TILE_PASS",
+    "promotion_verdict": "BLOCKED_UNTIL_COOPERATIVE_TILE_PASS",
   }
 
 

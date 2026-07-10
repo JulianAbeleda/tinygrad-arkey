@@ -442,7 +442,8 @@ def _q4k_q8_1_bounded_ds4_dot4x4_kernel(m:int, n:int, k:int, role:str):
       dot_q = _sudot4(qpack, xpack).cast(dtypes.float32)
       scale = q8_scales[meta_idx].cast(dtypes.float32)
       xsum = q8_sums[meta_idx].cast(dtypes.float32)
-      contrib = contrib + scale * d * sc.cast(dtypes.float32) * dot_q - dmin * mn.cast(dtypes.float32) * xsum
+      min_term = lane4.eq(0).where(dmin * mn.cast(dtypes.float32) * xsum, UOp.const(dtypes.float32, 0.0))
+      contrib = contrib + scale * d * sc.cast(dtypes.float32) * dot_q - min_term
     acc = UOp.placeholder((1,), dtypes.float32, 70, addrspace=AddrSpace.REG)
     acc = acc.after(acc[0].store(0.0))
     acc = acc.after(acc[0].store(acc.after(blk)[0] + contrib).end(blk))

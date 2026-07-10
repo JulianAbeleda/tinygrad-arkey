@@ -91,19 +91,19 @@ Searchable candidates:
 | `ds4_reference_formula` | `reference` + `mmq_ds4` | completed DS4 formula/reference |
 | `amd_ds4_warp_direct` | `q4k_q8_1_mmq_amd_ds4_warp_atom_v0` | working hand-coded AMD DS4 direct warp atom |
 | `staged_ds4_reference_probe` | `q4k_q8_1_mmq_amd_staged_ds4_atom_v0` | lifecycle/reference evidence only |
+| `amd_ds4_dot4x4_packed` | `q4k_q8_1_mmq_amd_ds4_dot4x4_atom_v0` | R1 packed DS4 dot4x4 atom, bounded-searchable |
 
 Blocked candidates:
 
 | Candidate | Why blocked |
 |---|---|
-| `amd_ds4_dot4x4_packed` | compiles but has incorrect DS4 packed indexing/math |
 | `cooperative_shared_lds_tile` | cooperative multi-wave shared/LDS tile ownership is not implemented |
 | `full_14b_prefill_route` | full llama-style MMQ route is not implemented; default remains `direct_packed` |
 
 Promotion verdict remains:
 
 ```text
-BLOCKED_UNTIL_PACKED_DOT_AND_COOPERATIVE_TILE_PASS
+BLOCKED_UNTIL_COOPERATIVE_TILE_PASS
 ```
 
 ## Proof Commands
@@ -140,7 +140,7 @@ direct_packed_comparator      PASS
 ds4_reference_formula         PASS
 amd_ds4_warp_direct           PASS
 staged_ds4_reference_probe    PASS
-amd_ds4_dot4x4_packed         blocked
+amd_ds4_dot4x4_packed         PASS/searchable
 cooperative_shared_lds_tile   blocked
 full_14b_prefill_route        blocked
 ```
@@ -150,11 +150,9 @@ full_14b_prefill_route        blocked
 The next implementation is not a new route. It is a hand-coded translation of the next llama kernel structure into
 `extra/qk/mmq_q4k_q8_atom.py`, guarded by bounded machine-search rows:
 
-1. Fix `q4k_q8_1_mmq_amd_ds4_dot4x4_atom_v0` indexing/math against the local llama clone's DS4 and Q4_K lane layout.
-2. When packed DS4 dot4x4 is correct, mark it searchable and remove the xfail.
-3. Add a new cooperative shared/LDS tile backend ID; keep it bounded-only.
-4. Compare cooperative tile candidates against `direct_packed` and `amd_ds4_warp_direct` in the machine-search report.
-5. Only after bounded win, add one-role opt-in route evidence for `ffn_gate_up`.
+1. Add a new cooperative shared/LDS tile backend ID; keep it bounded-only.
+2. Compare cooperative tile candidates against `direct_packed`, `amd_ds4_warp_direct`, and `amd_ds4_dot4x4_packed` in the machine-search report.
+3. Only after bounded win, add one-role opt-in route evidence for `ffn_gate_up`.
 
 Non-goals remain:
 

@@ -38,7 +38,7 @@ The source queue is the Q4_K MMQ path in:
 | Q4_K tile loader | `mmq.cuh`: `load_tiles_q4_K` | source_clone |
 | Q4_K x Q8_1 MMQ dot formula | `vecdotq.cuh`: `vec_dot_q4_K_q8_1_impl_mmq` | converted_searchable |
 | packed dot primitive | `vecdotq.cuh`: `ggml_cuda_dp4a`/AMD `sudot4` path | partially converted |
-| packed DS4 dot4x4 lane mapping | `mmq.cuh`: callsite around `vec_dot_q4_K_q8_1_impl_mmq` | blocked_translation |
+| packed DS4 dot4x4 lane mapping | `mmq.cuh`: callsite around `vec_dot_q4_K_q8_1_impl_mmq` | converted_searchable |
 | shared/LDS tile layout | `mmq.cuh`: shared `tile_y`, `tile_x`, `mmq_get_nbytes_shared` | source_clone |
 | cooperative tile loop | `mmq.cuh`: `mul_mat_q_process_tile` | source_clone |
 | writeback | `mmq.cuh`: `mmq_write_back_mma` / `mmq_write_back_dp4a` | source_clone |
@@ -55,6 +55,7 @@ These are machine-search-owned now:
 | Q4_K x DS4 formula | `done_components: Q4_K x DS4 formula` | `test_mmq_q4k_q8_reference.py` |
 | `sudot4` primitive availability | `done_components: sudot4 primitive availability` | `test_mmq_q4k_q8_atom.py` |
 | direct DS4 GPU atom | `amd_ds4_warp_direct` | `test_mmq_q4k_q8_atom.py`, `mmq_machine_search.py --run` |
+| packed DS4 dot4x4 atom | `amd_ds4_dot4x4_packed` | `test_mmq_q4k_q8_atom.py`, `mmq_machine_search.py --run` |
 
 Current executable proof shape:
 
@@ -63,9 +64,11 @@ direct_packed_comparator      PASS
 ds4_reference_formula         PASS
 amd_ds4_warp_direct           PASS
 staged_ds4_reference_probe    PASS
-amd_ds4_dot4x4_packed         blocked
+amd_ds4_dot4x4_packed         PASS/searchable
 cooperative_shared_lds_tile   blocked
 full_14b_prefill_route        blocked
+production_dispatch_changed   false
+default_route                 direct_packed
 ```
 
 ## Conversion Phases
@@ -108,7 +111,7 @@ Current tinygrad row:
 ```text
 candidate_id = amd_ds4_dot4x4_packed
 backend = q4k_q8_1_mmq_amd_ds4_dot4x4_atom_v0
-state = blocked_translation
+state = converted_searchable
 ```
 
 Work:
@@ -128,7 +131,12 @@ remove xfail from test_q4k_q8_1_mmq_amd_ds4_dot4x4_atom_matches_reference_when_a
 bounded harness backend=q4k_q8_1_mmq_amd_ds4_dot4x4_atom_v0 reports PASS
 mmq_machine_search marks amd_ds4_dot4x4_packed searchable
 same-session direct_packed comparator is present
+production_dispatch_changed remains false
+default_route remains direct_packed
 ```
+
+Status: done. The bug was over-applying the precomputed DS4 group sum once per packed lane; the corrected atom applies
+the Q4_K min correction only on `lane4 == 0` before the 8-lane reduce.
 
 Stop if:
 
@@ -353,6 +361,16 @@ default_route=direct_packed
 candidate_route_id=prefill_14b_q4k_q8_1_hybrid_mmq_atom
 public_label=hybrid_machine_search_mmq
 same-session direct_packed comparator when run=true
+```
+
+R1 completion contract:
+
+```text
+default report includes amd_ds4_dot4x4_packed in searchable_candidates
+default report keeps amd_ds4_dot4x4_packed out of blocked_candidates
+promotion_verdict becomes BLOCKED_UNTIL_COOPERATIVE_TILE_PASS
+production_dispatch_changed=false is preserved
+default_route=direct_packed is preserved
 ```
 
 Promotion is illegal unless:

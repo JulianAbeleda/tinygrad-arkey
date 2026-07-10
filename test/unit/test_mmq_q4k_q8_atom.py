@@ -104,11 +104,10 @@ def test_q4k_q8_1_mmq_staged_ds4_lifecycle_distinguishes_stages():
   assert detail["global_q4k_tile_loads"] == detail["staged_q4k_tile_loads"]
 
 
-@pytest.mark.xfail(reason="DS4 dot4x4 packed path compiles but has incorrect DS4 indexing; keep blocked until fixed")
 def test_q4k_q8_1_mmq_amd_ds4_dot4x4_atom_matches_reference_when_amd_available():
   if not _has_amd():
     pytest.skip("AMD device is not available")
-  m, n, k = 4, 5, 256
+  m, n, k = 8, 7, 256
   raw = _finite_q4k_bytes(n, k, seed=703)
   xq, xscales = _q8_inputs(m, k, seed=704)
   ds4 = q8_1_mmq_ds4_from_row_major(xq, xscales)

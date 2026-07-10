@@ -1,4 +1,6 @@
-from extra.qk.mmq_bounded_harness import ACTIVATION_LAYOUT_MMQ_DS4, AMD_DS4_WARP_BACKEND_ID, BoundedMMQConfig
+from extra.qk.mmq_bounded_harness import (
+  ACTIVATION_LAYOUT_MMQ_DS4, AMD_DS4_DOT4X4_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID, BoundedMMQConfig,
+)
 from extra.qk.mmq_machine_search import build_search_report
 
 
@@ -15,7 +17,7 @@ def test_mmq_machine_search_only_marks_completed_components_searchable():
   source_paths = {row["path"] for row in report["llama_kernel_source_policy"]["sources"]}
   assert "/home/ubuntu/env/llama.cpp/ggml/src/ggml-cuda/mmq.cuh" in source_paths
   assert "/home/ubuntu/env/llama.cpp/ggml/src/ggml-cuda/vecdotq.cuh" in source_paths
-  assert report["promotion_verdict"] == "BLOCKED_UNTIL_PACKED_DOT_AND_COOPERATIVE_TILE_PASS"
+  assert report["promotion_verdict"] == "BLOCKED_UNTIL_COOPERATIVE_TILE_PASS"
   assert report["searchable_components"] == [
     "DS4 layout",
     "DS4 reference correctness",
@@ -32,14 +34,25 @@ def test_mmq_machine_search_only_marks_completed_components_searchable():
     "ds4_reference_formula",
     "amd_ds4_warp_direct",
     "staged_ds4_reference_probe",
+    "amd_ds4_dot4x4_packed",
   }
   assert rows["amd_ds4_warp_direct"]["backend"] == AMD_DS4_WARP_BACKEND_ID
   assert rows["amd_ds4_warp_direct"]["activation_layout"] == ACTIVATION_LAYOUT_MMQ_DS4
   assert rows["amd_ds4_warp_direct"]["promotion_eligible"] is False
+  assert rows["amd_ds4_dot4x4_packed"]["backend"] == AMD_DS4_DOT4X4_BACKEND_ID
+  assert rows["amd_ds4_dot4x4_packed"]["activation_layout"] == ACTIVATION_LAYOUT_MMQ_DS4
+  assert rows["amd_ds4_dot4x4_packed"]["status"] == "searchable"
+  assert rows["amd_ds4_dot4x4_packed"]["promotion_eligible"] is False
+  assert rows["amd_ds4_dot4x4_packed"]["bounded_config"] == {
+    "m_tile": 4,
+    "n_tile": 5,
+    "k_groups": 8,
+    "m_tiles": 1,
+    "n_tiles": 1,
+  }
 
   blocked = {row["candidate_id"]: row for row in report["blocked_candidates"]}
-  assert blocked["amd_ds4_dot4x4_packed"]["status"] == "blocked"
-  assert "incorrect DS4 packed indexing" in blocked["amd_ds4_dot4x4_packed"]["reason"]
+  assert "amd_ds4_dot4x4_packed" not in blocked
   assert blocked["cooperative_shared_lds_tile"]["status"] == "blocked"
   assert blocked["full_14b_prefill_route"]["status"] == "blocked"
 
@@ -62,4 +75,5 @@ def test_mmq_machine_search_runner_receives_bounded_configs():
   assert len(seen) == len(report["searchable_candidates"])
   assert all(cfg.warmups == 2 and cfg.rounds == 3 for cfg in seen)
   assert any(cfg.backend == AMD_DS4_WARP_BACKEND_ID and cfg.activation_layout == ACTIVATION_LAYOUT_MMQ_DS4 for cfg in seen)
+  assert any(cfg.backend == AMD_DS4_DOT4X4_BACKEND_ID and cfg.activation_layout == ACTIVATION_LAYOUT_MMQ_DS4 for cfg in seen)
   assert all(row["run"]["status"] == "PASS" for row in report["searchable_candidates"])
