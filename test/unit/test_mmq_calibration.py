@@ -2,7 +2,7 @@ import pytest
 
 from extra.qk.mmq_calibration import (CalibrationCase, default_calibration_matrix, dependent_valu_case,
                                       independent_valu_case, launch_case, lds_barrier_case, resource_pressure_case,
-                                      run_calibration_case)
+                                      global_load_case, run_calibration_case)
 
 
 def test_calibration_case_contract_and_matrix():
@@ -10,7 +10,7 @@ def test_calibration_case_contract_and_matrix():
   assert dependent_valu_case(96, 64).family == "dependent_valu"
   assert independent_valu_case(96, 64).independent_streams == 4
   matrix = default_calibration_matrix()
-  assert len(matrix) == 18 and len({case.case_id for case in matrix}) == len(matrix)
+  assert len(matrix) == 24 and len({case.case_id for case in matrix}) == len(matrix)
   with pytest.raises(ValueError, match="unknown family"): CalibrationCase("x", "bad", 1).validate()
 
 
@@ -35,3 +35,8 @@ def test_real_lds_case_emits_static_lds_and_visibility_evidence():
 
 def test_resource_pressure_contract_exposes_stream_sweep():
   assert resource_pressure_case(96, 16).independent_streams == 16
+
+
+def test_global_load_contract_keeps_physical_transactions_unknown():
+  case = global_load_case(96, 32)
+  assert case.stride == 32 and case.case_id.endswith("stride32")

@@ -27,11 +27,13 @@ class CalibrationCase:
   workgroups: int
   chain_length: int = 0
   independent_streams: int = 1
+  stride: int = 1
 
   def validate(self) -> None:
     if self.family not in ("launch", "dependent_valu", "independent_valu", "lds_barrier", "resource_pressure"):
       raise ValueError(f"unknown family {self.family!r}")
-    if self.workgroups <= 0 or self.chain_length < 0 or self.independent_streams <= 0: raise ValueError("invalid calibration dimensions")
+    if self.workgroups <= 0 or self.chain_length < 0 or self.independent_streams <= 0 or self.stride <= 0:
+      raise ValueError("invalid calibration dimensions")
     if self.family == "dependent_valu" and self.chain_length <= 0: raise ValueError("dependent chains require chain_length")
     if self.family == "independent_valu" and (self.chain_length <= 0 or self.independent_streams < 2):
       raise ValueError("independent chains require length and at least two streams")
@@ -58,12 +60,16 @@ def resource_pressure_case(workgroups:int, streams:int) -> CalibrationCase:
   return CalibrationCase(f"resource_pressure.wg{workgroups}.s{streams}", "resource_pressure", workgroups, 8, streams)
 
 
+def global_load_case(workgroups:int, stride:int) -> CalibrationCase:
+  return CalibrationCase(f"global_load.wg{workgroups}.stride{stride}", "launch", workgroups, stride=stride)
+
+
 def _kernel(case:CalibrationCase) -> Callable[..., UOp]:
   case.validate()
   def kernel(out:UOp, inp:UOp) -> UOp:
     gid, lane = UOp.special(case.workgroups, "gidx0"), UOp.special(32, "lidx0")
     idx = gid * 32 + lane
-    if case.family == "launch": value = inp[idx]
+    if case.family == "launch": value = inp[idx * case.stride]
     elif case.family == "lds_barrier":
       local = UOp.placeholder((32,), dtypes.float32, 100, addrspace=AddrSpace.LOCAL)
       stage = local[lane].store(inp[idx])
@@ -84,7 +90,7 @@ def _kernel(case:CalibrationCase) -> Callable[..., UOp]:
 
 def _sink(case:CalibrationCase) -> UOp:
   size = case.workgroups * 32
-  return _kernel(case)(UOp.placeholder((size,), dtypes.float32, 0), UOp.placeholder((size,), dtypes.float32, 1))
+  return _kernel(case)(UOp.placeholder((size,), dtypes.float32, 0), UOp.placeholder((size * case.stride,), dtypes.float32, 1))
 
 
 def run_calibration_case(case:CalibrationCase, *, warmups:int=5, rounds:int=30, device:str="AMD",
@@ -92,7 +98,7 @@ def run_calibration_case(case:CalibrationCase, *, warmups:int=5, rounds:int=30, 
   case.validate()
   if warmups < 1 or rounds < 3: raise ValueError("calibration requires warmups >= 1 and rounds >= 3")
   size = case.workgroups * 32
-  inp = Tensor.empty(size, dtype=dtypes.float32, device=device).realize()
+  inp = Tensor.empty(size * case.stride, dtype=dtypes.float32, device=device).realize()
   out = Tensor.empty(size, device=device).custom_kernel(inp, fxn=_kernel(case))[0].realize()
   program = to_program(_sink(case), Device[device].renderer)
   from tinygrad.engine.realize import runtime_cache
@@ -112,12 +118,15 @@ def run_calibration_case(case:CalibrationCase, *, warmups:int=5, rounds:int=30, 
             "source_sha256": hashlib.sha256(source.encode()).hexdigest(),
             "binary_sha256": hashlib.sha256(binary).hexdigest(),
             "isa_sha256": hashlib.sha256(disassembly.encode()).hexdigest()}
-  result = {"schema": SCHEMA, "case": case.__dict__, "target": metadata["target"], "function_name": program.arg.function_name,
+  result = {"schema": SCHEMA, "provenance_class": "generated_microbenchmark", "case": case.__dict__,
+          "target": metadata["target"], "function_name": program.arg.function_name,
           "system_snapshot_id": system_snapshot_id, "system_binding_status": "bound" if system_snapshot_id else "unknown",
           "program_key": program.key.hex(), "hashes": hashes, "binary_bytes": len(binary), "resources": metadata,
           "isa": isa,
           "launch": {"global_size": list(global_size), "local_size": list(local_size)},
           "protocol": {"warmups": warmups, "rounds": rounds, "clock": {"status": "unknown"}},
+          "memory_contract": {"logical_load_bytes_per_lane": 4, "stride_elements": case.stride,
+                              "physical_transactions": {"status": "unknown", "join": "GL2/MC_WRREQ calibration proxy"}},
           "samples_ms": samples_ms, "median_ms": statistics.median(samples_ms),
           "min_ms": min(samples_ms), "max_ms": max(samples_ms), "disassembly_tool": tool,
           "production_dispatch_changed": False}
@@ -137,7 +146,8 @@ def default_calibration_matrix() -> tuple[CalibrationCase, ...]:
                [dependent_valu_case(96, n) for n in (16, 64, 256)] +
                [independent_valu_case(96, n, 4) for n in (16, 64, 256)] +
                [lds_barrier_case(wg) for wg in (1, 96)] +
-               [resource_pressure_case(96, streams) for streams in (4, 8, 16, 32)])
+               [resource_pressure_case(96, streams) for streams in (4, 8, 16, 32)] +
+               [global_load_case(96, stride) for stride in (1, 2, 4, 8, 16, 32)])
 
 
 def run_calibration_matrix(output:Path, *, warmups:int=5, rounds:int=30, system_snapshot_id:str | None=None) -> dict[str, Any]:
