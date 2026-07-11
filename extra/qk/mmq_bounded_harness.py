@@ -338,7 +338,7 @@ def _run_amd_ds4_lds_skeleton(q4k_bytes:np.ndarray, ds4:Any) -> np.ndarray:
 def coop_tile_blocked_translation_evidence(config:BoundedMMQConfig | None = None) -> dict[str, Any]:
   cfg = config or BoundedMMQConfig(m_tile=16, n_tile=16, k_groups=8, backend=AMD_DS4_COOP_TILE_BACKEND_ID)
   return {
-    "status": "blocked_translation",
+    "status": "blocked_numeric_compute",
     "backend": AMD_DS4_COOP_TILE_BACKEND_ID,
     "blocked_backend_id": AMD_DS4_COOP_TILE_BACKEND_ID,
     "bounded_only": True,
@@ -351,14 +351,14 @@ def coop_tile_blocked_translation_evidence(config:BoundedMMQConfig | None = None
     ],
     "requested_bounded_shape": {"M": cfg.bounded_m, "N": cfg.bounded_n, "K": cfg.bounded_k},
     "exact_blocker": (
-      "tinygrad custom UOp lowering has no proven block-shared output ownership primitive for multiple waves "
-      "to cooperatively accumulate the same DS4 output tile and store each output exactly once; the R3 LOCAL-memory "
-      "skeleton still maps one output owner per gidx/lidx lane group, so translating llama MMQ cooperative output "
-      "ownership would risk duplicate or missing stores."
+      "R4 lowered store-owner trace passes as a fragmented AMD ISA proof, but the full cooperative Q4_K x Q8_1 "
+      "numeric compute atom is not complete; no q4k_q8_1_mmq_amd_ds4_coop_tile_atom_v0 bounded numeric PASS or "
+      "production route promotion is claimed."
     ),
     "blocked_translation_evidence": [
       "R3 q4k_q8_1_mmq_amd_ds4_lds_skeleton_atom_v0 stages DS4 q8 values through LOCAL memory and a barrier.",
       "R3 lifecycle marks shared_memory_staging=True but promotion_eligible=False and production_dispatch_changed=False.",
+      "R4 lowered AMD ISA proof covers the 16x16 owner map as eight spill-free 32-store fragments.",
       "No q4k_q8_1_mmq_amd_ds4_coop_tile_atom_v0 kernel entrypoint is emitted or benchmarked as PASS.",
     ],
   }
@@ -456,7 +456,7 @@ def run_bounded_harness(config: BoundedMMQConfig) -> dict[str, Any]:
   config.validate()
   if config.backend == AMD_DS4_COOP_TILE_BACKEND_ID:
     evidence = coop_tile_blocked_translation_evidence(config)
-    raise MMQAtomUnavailableError(f"{AMD_DS4_COOP_TILE_BACKEND_ID} blocked_translation: {evidence['exact_blocker']}")
+    raise MMQAtomUnavailableError(f"{AMD_DS4_COOP_TILE_BACKEND_ID} blocked_numeric_compute: {evidence['exact_blocker']}")
   q4k_bytes = _finite_q4k_bytes(config.bounded_n, config.bounded_k, config.seed)
   ds4_backends = (STAGED_DS4_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID, AMD_DS4_DOT4X4_BACKEND_ID,
                   AMD_DS4_LDS_SKELETON_BACKEND_ID, LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID)

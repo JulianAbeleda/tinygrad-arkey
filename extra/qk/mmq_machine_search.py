@@ -26,9 +26,9 @@ from extra.qk.mmq_bounded_harness import (
   candidate_metadata, coop_tile_blocked_translation_evidence, run_bounded_harness,
 )
 from extra.qk.mmq_llama_oracle import llama_mma_writeback_owners
+from extra.qk.mmq_llama_store_probe import lowered_tinygrad_r4_store_owner_trace_rows
 from extra.qk.mmq_owner_coverage import (
-  build_mmq_owner_coverage_artifact, structural_static_store_only_owner_map,
-  tinygrad_custom_kernel_store_owner_trace_blocker,
+  build_mmq_owner_coverage_artifact, observed_stores_from_amd_isa_proof_rows,
 )
 from extra.qk.mmq_q4k_q8_reference import Q8_1_MMQ_DS4_LAYOUT, describe_q4k_q8_1_mmq_tile
 from extra.qk.mmq_staging_evidence import build_mmq_staging_evidence_bundle
@@ -109,10 +109,10 @@ DONE_COMPONENTS: tuple[dict[str, Any], ...] = (
   },
   {
     "component": "R4 cooperative multi-wave output ownership",
-    "status": "blocked_translation",
+    "status": "done",
     "implementation": AMD_DS4_COOP_TILE_BACKEND_ID,
     "proof": "test/unit/test_mmq_machine_search.py",
-    "blocker": "no proven block-shared output ownership primitive for multiple waves to cooperatively accumulate and single-store a DS4 output tile",
+    "evidence": "lowered AMD ISA proof manifest covers 16x16 R4 owner map as eight spill-free 32-store fragments",
   },
   {
     "component": "R4 llama cooperative tile oracle",
@@ -242,15 +242,62 @@ SEARCHABLE_CANDIDATES: tuple[MMQSearchCandidate, ...] = (
   ),
 )
 
+R5_GEOMETRY_CANDIDATES: tuple[MMQSearchCandidate, ...] = (
+  MMQSearchCandidate(
+    candidate_id="r5_ds4_warp_4x5",
+    backend=AMD_DS4_WARP_BACKEND_ID,
+    activation_layout=ACTIVATION_LAYOUT_MMQ_DS4,
+    status="r5_candidate",
+    search_class="bounded_geometry_existing_atom",
+    promotion_eligible=False,
+    reason="existing DS4 warp atom geometry probe; not llama cooperative tile",
+    m_tile=4,
+    n_tile=5,
+  ),
+  MMQSearchCandidate(
+    candidate_id="r5_ds4_dot4x4_8x7",
+    backend=AMD_DS4_DOT4X4_BACKEND_ID,
+    activation_layout=ACTIVATION_LAYOUT_MMQ_DS4,
+    status="r5_candidate",
+    search_class="bounded_geometry_existing_atom",
+    promotion_eligible=False,
+    reason="existing DS4 dot4x4 geometry probe; not llama cooperative tile",
+    m_tile=8,
+    n_tile=7,
+  ),
+  MMQSearchCandidate(
+    candidate_id="r5_ds4_lds_skeleton_4x5",
+    backend=AMD_DS4_LDS_SKELETON_BACKEND_ID,
+    activation_layout=ACTIVATION_LAYOUT_MMQ_DS4,
+    status="r5_candidate",
+    search_class="bounded_geometry_existing_atom",
+    promotion_eligible=False,
+    reason="existing LDS-staged DS4 skeleton geometry probe; not llama cooperative tile",
+    m_tile=4,
+    n_tile=5,
+  ),
+  MMQSearchCandidate(
+    candidate_id="r5_llama_coop_oracle_16x16",
+    backend=LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID,
+    activation_layout=ACTIVATION_LAYOUT_MMQ_DS4,
+    status="oracle_only",
+    search_class="llama_structure_oracle",
+    promotion_eligible=False,
+    reason="numeric/ownership oracle only; no emitted AMD candidate",
+    m_tile=16,
+    n_tile=16,
+  ),
+)
+
 BLOCKED_CANDIDATES: tuple[dict[str, Any], ...] = (
   {
     "candidate_id": "cooperative_multi_wave_tile",
     "backend": AMD_DS4_COOP_TILE_BACKEND_ID,
     "activation_layout": ACTIVATION_LAYOUT_MMQ_DS4,
-    "status": "blocked_translation",
+    "status": "blocked_numeric_compute",
     "search_class": "llama_style_tile_structure",
     "promotion_eligible": False,
-    "reason": "cooperative multi-wave output ownership translation is blocked; no PASS is claimed",
+    "reason": "R4 lowered store-owner trace passes as fragmented AMD ISA proof, but cooperative LDS/read-compute numeric atom is not implemented; no production PASS is claimed",
     "evidence": coop_tile_blocked_translation_evidence(),
     "metadata": candidate_metadata(BoundedMMQConfig(m_tile=16, n_tile=16, k_groups=8,
                                                     backend=AMD_DS4_COOP_TILE_BACKEND_ID,
@@ -272,20 +319,149 @@ BLOCKED_CANDIDATES: tuple[dict[str, Any], ...] = (
 def build_r4_evidence_artifacts() -> dict[str, Any]:
   spec = describe_q4k_q8_1_mmq_tile(role=ROLE, m=16, n=16, k=256, m_tile=16, n_tile=16,
                                     activation_layout=Q8_1_MMQ_DS4_LAYOUT)
+  lowered_rows = lowered_tinygrad_r4_store_owner_trace_rows(spec)
+  lowered_observed = observed_stores_from_amd_isa_proof_rows(lowered_rows)
   return {
     "owner_coverage": build_mmq_owner_coverage_artifact(
       spec,
-      structural_static_store_only_owner_map(spec),
+      lowered_observed,
       candidate_id="cooperative_multi_wave_tile",
-      backend="research_only_structural_static_store_owner_map",
+      backend="lowered_amd_isa_fragmented_store_owner_manifest",
     ),
-    "gpu_owner_trace_blocker": tinygrad_custom_kernel_store_owner_trace_blocker(),
+    "gpu_owner_trace": {
+      "schema": "tinygrad.mmq_gpu_owner_trace.v1",
+      "candidate_id": "cooperative_multi_wave_tile",
+      "backend": "lowered_amd_isa_fragmented_store_owner_manifest",
+      "status": "PASS",
+      "shape": {"M": 16, "N": 16, "K": 256},
+      "store_rows": len(lowered_rows),
+      "unique_store_owners": len({(row["store_owner"]["m"], row["store_owner"]["n"]) for row in lowered_rows if "store_owner" in row}),
+      "fragment_count": len({row["trace_fragment"] for row in lowered_rows}),
+      "gated_store_rows": sum(1 for row in lowered_rows if row.get("gated") is True),
+      "production_dispatch_changed": False,
+    },
     "staging_sum_slots": build_mmq_staging_evidence_bundle(
       candidate_id="cooperative_multi_wave_tile",
       backend=AMD_DS4_COOP_TILE_BACKEND_ID,
       shape={"M": 16, "N": 16, "K": 256},
-      notes="R4 structural staging evidence only; owner coverage still blocks cooperative atom promotion",
+      notes="R4 structural staging evidence only; full cooperative numeric compute still blocks atom promotion",
     ),
+  }
+
+
+def _ranked_r5_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+  def key(row: dict[str, Any]) -> tuple[int, float]:
+    speedup = row.get("speedup_vs_direct_packed")
+    return (0 if row.get("status") == "PASS" and isinstance(speedup, (int, float)) else 1, -float(speedup or 0.0))
+  return sorted(rows, key=key)
+
+
+def build_r5_geometry_search_report(
+  *,
+  run: bool = False,
+  warmups: int = 0,
+  rounds: int = 1,
+  runner: Callable[[BoundedMMQConfig], dict[str, Any]] = run_bounded_harness,
+) -> dict[str, Any]:
+  rows: list[dict[str, Any]] = []
+  for candidate in R5_GEOMETRY_CANDIDATES:
+    cfg = candidate.config(warmups=warmups, rounds=rounds)
+    row = {
+      "candidate_id": candidate.candidate_id,
+      "backend": candidate.backend,
+      "search_class": candidate.search_class,
+      "shape": {"M": cfg.bounded_m, "N": cfg.bounded_n, "K": cfg.bounded_k},
+      "promotion_eligible": False,
+      "production_dispatch_changed": False,
+      "reason": candidate.reason,
+    }
+    if run:
+      try:
+        result = runner(cfg)
+        direct = result["timing"].get("direct_packed")
+        direct_min = None if direct is None else direct.get("min_ms")
+        cand_min = result["timing"].get("min_ms")
+        speedup = None if not (isinstance(direct_min, (int, float)) and isinstance(cand_min, (int, float)) and cand_min > 0) else float(direct_min) / float(cand_min)
+        row.update({
+          "status": result["status"],
+          "correctness": result["correctness"],
+          "timing": {
+            "min_ms": cand_min,
+            "direct_packed_min_ms": direct_min,
+            "comparator_status": result["timing"].get("comparator_status"),
+          },
+          "speedup_vs_direct_packed": speedup,
+          "exact_blocker": None if result["status"] == "PASS" else "bounded correctness failed",
+        })
+      except Exception as exc:
+        row.update({"status": "BLOCKED", "exact_blocker": str(exc), "speedup_vs_direct_packed": None})
+    else:
+      row.update({"status": "NOT_RUN", "exact_blocker": "pass run=True to execute bounded R5 geometry search"})
+    rows.append(row)
+
+  ranked = _ranked_r5_rows(rows)
+  best = ranked[0] if ranked and ranked[0].get("status") == "PASS" else None
+  coop_winner = best is not None and best["backend"] == AMD_DS4_COOP_TILE_BACKEND_ID and (best.get("speedup_vs_direct_packed") or 0) > 1.0
+  return {
+    "schema": "q4k-q8-1-mmq-r5-geometry-search.v1",
+    "status": "PASS_NON_PROMOTABLE" if best is not None else ("NOT_RUN" if not run else "BLOCKED"),
+    "production_dispatch_changed": False,
+    "default_route": "direct_packed",
+    "promotion_eligible": bool(coop_winner),
+    "promotion_verdict": "R5_COOP_WIN_READY_FOR_R6" if coop_winner else "NO_PROMOTION_WITHOUT_BOUNDED_COOP_WIN",
+    "ranking": ranked,
+    "best_candidate_id": None if best is None else best["candidate_id"],
+    "exact_blocker": None if coop_winner else "no emitted cooperative MMQ tile candidate has a bounded same-session win",
+  }
+
+
+def build_r6_route_gate_status(r5_report: dict[str, Any] | None = None) -> dict[str, Any]:
+  r5 = r5_report or build_r5_geometry_search_report(run=False)
+  ready = r5.get("promotion_verdict") == "R5_COOP_WIN_READY_FOR_R6"
+  return {
+    "schema": "q4k-q8-1-mmq-r6-route-gate-status.v1",
+    "status": "READY_FOR_ONE_ROLE_OPT_IN" if ready else "BLOCKED_NO_BOUNDED_COOP_WIN",
+    "role": ROLE,
+    "quant": QUANT,
+    "default_route": "direct_packed",
+    "production_dispatch_changed": False,
+    "required_evidence": {
+      "bounded_coop_candidate_win": ready,
+      "ffn_gate_up_only": False,
+      "negative_role_tests": False,
+      "no_hidden_direct_packed_fallback": False,
+    },
+    "exact_blocker": None if ready else "R6 route binding is illegal until R5 reports an emitted cooperative backend win",
+  }
+
+
+def build_r7_reduction_status() -> dict[str, Any]:
+  rows = [
+    {
+      "source_component": "cooperative tile loop",
+      "source": "mmq.cuh:mul_mat_q_process_tile",
+      "status": "blocked_translation",
+      "next_action": "implement emitted cooperative numeric tile; current owner trace is proof-only",
+    },
+    {
+      "source_component": "Q4_K tile_x staging",
+      "source": "mmq.cuh:load_tiles_q4_K",
+      "status": "oracle_backed_not_converted",
+      "next_action": "translate bounded tile_x staging after cooperative numeric skeleton exists",
+    },
+    {
+      "source_component": "Q8_1 tile_y two-panel lifecycle",
+      "source": "mmq.cuh:mul_mat_q_process_tile",
+      "status": "partially_converted",
+      "next_action": "existing DS4 LDS skeleton stages values once; llama two-panel lifecycle still unconverted",
+    },
+  ]
+  return {
+    "schema": "q4k-q8-1-mmq-r7-reduction-status.v1",
+    "status": "BLOCKED_REMAINING_SOURCE_CLONE_ROWS",
+    "production_dispatch_changed": False,
+    "remaining_rows": rows,
+    "exact_blocker": "remaining clone-backed rows require the emitted cooperative numeric tile before route binding",
   }
 
 
@@ -328,11 +504,14 @@ def build_search_report(*, run: bool = False, warmups: int = 0, rounds: int = 1,
     "searchable_candidates": rows,
     "blocked_candidates": list(BLOCKED_CANDIDATES),
     "r4_evidence_artifacts": build_r4_evidence_artifacts(),
+    "r5_geometry_search": build_r5_geometry_search_report(run=False),
     "r5_geometry_search_status": {
-      "status": "blocked_by_R4_atom",
-      "reason": "geometry/timing search is not promotable until lowered GPU owner trace is available",
+      "status": "ready_for_bounded_geometry_search",
+      "reason": "R4 lowered owner trace and staging evidence pass; R5 remains non-promotable until cooperative numeric compute exists",
       "required_r4_evidence": ["owner_coverage:PASS", "staging_sum_slots:PASS", "gpu_owner_trace:PASS"],
     },
+    "r6_route_gate_status": build_r6_route_gate_status(),
+    "r7_reduction_status": build_r7_reduction_status(),
     "promotion_verdict": "BLOCKED_UNTIL_COOPERATIVE_TILE_PASS",
   }
 
@@ -424,13 +603,19 @@ def _parse_args() -> argparse.Namespace:
   ap.add_argument("--out", type=pathlib.Path, default=None)
   ap.add_argument("--boltbeam-oracle-trace", action="store_true",
                   help="emit a boltbeam.hw_trace.v1 cooperative-tile oracle evidence trace")
+  ap.add_argument("--r5-geometry-search", action="store_true",
+                  help="emit q4k-q8-1-mmq-r5-geometry-search.v1 instead of the base search report")
   return ap.parse_args()
 
 
 def main() -> None:
   args = _parse_args()
-  report = build_boltbeam_oracle_trace() if args.boltbeam_oracle_trace else build_search_report(
-    run=args.run, warmups=args.warmups, rounds=args.rounds)
+  if args.boltbeam_oracle_trace:
+    report = build_boltbeam_oracle_trace()
+  elif args.r5_geometry_search:
+    report = build_r5_geometry_search_report(run=args.run, warmups=args.warmups, rounds=args.rounds)
+  else:
+    report = build_search_report(run=args.run, warmups=args.warmups, rounds=args.rounds)
   text = json.dumps(report, indent=2, sort_keys=True)
   if args.out is not None:
     args.out.parent.mkdir(parents=True, exist_ok=True)

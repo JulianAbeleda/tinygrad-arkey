@@ -135,7 +135,7 @@ def test_mmq_bounded_harness_amd_ds4_dot4x4_backend_metadata_only_is_not_default
   assert meta["comparator_id"] == COMPARATOR_ID
 
 
-def test_mmq_bounded_harness_amd_ds4_coop_tile_is_known_but_blocked_translation():
+def test_mmq_bounded_harness_amd_ds4_coop_tile_is_known_but_blocked_numeric_compute():
   cfg = BoundedMMQConfig(m_tile=16, n_tile=16, k_groups=16, backend=AMD_DS4_COOP_TILE_BACKEND_ID,
                          measure_direct_packed=True)
   meta = candidate_metadata(cfg)
@@ -146,7 +146,7 @@ def test_mmq_bounded_harness_amd_ds4_coop_tile_is_known_but_blocked_translation(
   assert meta["activation_layout"] == ACTIVATION_LAYOUT_MMQ_DS4
   assert meta["bounded_shape"] == {"M": 16, "N": 16, "K": 512}
   assert meta["comparator_id"] == COMPARATOR_ID
-  assert evidence["status"] == "blocked_translation"
+  assert evidence["status"] == "blocked_numeric_compute"
   assert evidence["bounded_only"] is True
   assert evidence["production_dispatch_changed"] is False
   assert evidence["default_route"] == "direct_packed"
@@ -154,7 +154,10 @@ def test_mmq_bounded_harness_amd_ds4_coop_tile_is_known_but_blocked_translation(
   assert {"M": 16, "N": 16, "K": 256} in evidence["attempted_shapes"]
   assert {"M": 16, "N": 16, "K": 512} in evidence["attempted_shapes"]
 
-  with pytest.raises(MMQAtomUnavailableError, match="blocked_translation"):
+  assert "lowered store-owner trace passes" in evidence["exact_blocker"]
+  assert "numeric compute atom is not complete" in evidence["exact_blocker"]
+
+  with pytest.raises(MMQAtomUnavailableError, match="blocked_numeric_compute"):
     run_bounded_harness(cfg)
 
 
@@ -320,4 +323,4 @@ def test_mmq_bounded_candidate_result_preserves_blocked_backend_exact_error():
   assert result["shape"] == {"M": 16, "N": 16, "K": 256}
   assert result["harness_report"] is None
   assert AMD_DS4_COOP_TILE_BACKEND_ID in result["exact_blocker"]
-  assert "blocked_translation" in result["exact_blocker"]
+  assert "blocked_numeric_compute" in result["exact_blocker"]

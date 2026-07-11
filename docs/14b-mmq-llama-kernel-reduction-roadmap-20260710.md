@@ -40,7 +40,7 @@ The source queue is the Q4_K MMQ path in:
 | packed dot primitive | `vecdotq.cuh`: `ggml_cuda_dp4a`/AMD `sudot4` path | partially converted |
 | packed DS4 dot4x4 lane mapping | `mmq.cuh`: callsite around `vec_dot_q4_K_q8_1_impl_mmq` | converted_searchable |
 | shared/LDS tile layout | `mmq.cuh`: shared `tile_y`, `tile_x`, `mmq_get_nbytes_shared` | converted_searchable skeleton |
-| cooperative tile loop | `mmq.cuh`: `mul_mat_q_process_tile` | oracle_available; atom blocked_translation |
+| cooperative tile loop | `mmq.cuh`: `mul_mat_q_process_tile` | owner proof PASS as fragmented AMD ISA; numeric atom blocked |
 | writeback | `mmq.cuh`: `mmq_write_back_mma` / `mmq_write_back_dp4a` | source_clone |
 | full launch integration | `mmq.cuh`: `launch_mul_mat_q`, `mul_mat_q_case` | source_clone |
 
@@ -71,7 +71,7 @@ amd_ds4_dot4x4_packed         PASS/searchable
 amd_ds4_lds_skeleton          PASS/evidence_only
 llama_mmq_coop_tile_oracle    PASS/oracle_only
 q4k_tile_loader_source_hash   present in run artifacts
-cooperative_multi_wave_tile   blocked_translation
+cooperative_multi_wave_tile   blocked_numeric_compute
 full_14b_prefill_route        blocked
 production_dispatch_changed   false
 default_route                 direct_packed
@@ -265,11 +265,11 @@ tests cover at least 8x8x256, 16x16x256, and 16x16x512
 machine-search compares it against direct_packed and amd_ds4_warp_direct
 ```
 
-Status: blocked_translation. The target backend ID is registered as
-`q4k_q8_1_mmq_amd_ds4_coop_tile_atom_v0`, but no PASS is claimed. The exact blocker is that tinygrad custom UOp
-lowering has no proven block-shared output ownership primitive for multiple waves to cooperatively accumulate the same
-DS4 output tile and store each output exactly once. The R3 LDS skeleton proves LOCAL memory and a barrier, but it still
-maps one output owner per `gidx`/`lidx` lane group, not llama's 8-wave 128x128 fragment ownership.
+Status: owner proof PASS, numeric atom blocked. The target backend ID is registered as
+`q4k_q8_1_mmq_amd_ds4_coop_tile_atom_v0`. The lowered store-owner trace now passes as a fragmented AMD ISA proof:
+the 16x16 R4 owner map lowers as eight spill-free 32-store fragments with no missing or duplicate stores. This is
+structural evidence only. It does not prove full Q4_K x Q8_1 cooperative numeric compute, does not emit a bounded
+numeric PASS for the coop atom, and does not change production routing.
 
 Oracle status: available. `extra.qk.mmq_llama_oracle.run_llama_mmq_coop_tile_oracle` is a translated structure oracle
 for llama's cooperative writeback ownership. It points to the local llama clone anchors instead of vendoring CUDA,
@@ -308,8 +308,9 @@ machine-search emits candidate rows with geometry, correctness, timing, source h
 best candidate beats or explains failure against direct_packed and current direct DS4 warp
 ```
 
-Status: blocked_by_R4_atom. Geometry search can use the oracle as the expected owner map, but promotion-oriented search
-is not meaningful until a cooperative multi-wave atom candidate exists and passes bounded correctness.
+Status: ready_for_bounded_geometry_search, non-promotable. Geometry search can use the oracle and lowered owner proof
+as constraints, but promotion-oriented search is not meaningful until a cooperative multi-wave numeric atom candidate
+exists and passes bounded correctness. Until then, any R5 row is evidence-only.
 
 Stop if:
 
@@ -339,8 +340,8 @@ same-session bounded comparator exists
 whole-prefill authority artifact exists only after bounded win
 ```
 
-Status: blocked_by_R4_atom. One-role route evidence is illegal until a bounded cooperative candidate wins against the
-same-session comparator.
+Status: blocked_until_bounded_win. One-role route evidence is illegal until a bounded cooperative numeric candidate
+wins against the same-session comparator.
 
 Stop if:
 
@@ -378,11 +379,11 @@ Final acceptable outcomes:
 READY_FOR_ONE_ROLE_PROMOTION
 BLOCKED_ON_PACKED_DOT_INDEXING
 BLOCKED_ON_LDS_RESOURCE_LIMIT
-BLOCKED_ON_COOPERATIVE_OWNERSHIP_UOP_GAP
+BLOCKED_ON_COOPERATIVE_NUMERIC_COMPUTE
 BLOCKED_NO_BOUNDED_WIN_VS_DIRECT_PACKED
 ```
 
-Current outcome: `BLOCKED_ON_COOPERATIVE_OWNERSHIP_UOP_GAP`.
+Current outcome: `BLOCKED_ON_COOPERATIVE_NUMERIC_COMPUTE`.
 
 ## Machine-Search Report Requirements
 

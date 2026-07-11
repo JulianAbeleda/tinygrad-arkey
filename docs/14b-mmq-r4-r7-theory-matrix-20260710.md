@@ -16,10 +16,10 @@ extra/qk/mmq_llama_oracle.py
 ## Current State
 
 ```text
-R4: blocked_translation
-R5: blocked_by_R4_atom
-R6: blocked_by_R4_atom
-R7: blocked_by_R4_atom plus remaining source-clone rows
+R4: owner proof PASS; full numeric cooperative atom blocked
+R5: ready_for_bounded_geometry_search only after numeric coop candidate exists; non-promotable until then
+R6: blocked_until_bounded_win
+R7: blocked_until_bounded_win plus remaining source-clone rows
 ```
 
 What is already true:
@@ -30,9 +30,10 @@ HIP/gfx1100 build compiles the CUDA-named MMQ source into libggml-hip.so
 Q4_K DS4 layout/reference/formula are done
 direct DS4 atom is done
 packed DS4 dot4x4 atom is bounded-searchable
-LDS skeleton exists but does not implement llama writeback ownership
+LDS skeleton exists but does not implement full cooperative numeric compute
 llama cooperative owner oracle exists
-owner coverage proves no missing/duplicate stores for selected oracle shapes
+lowered R4 store-owner proof passes as eight fragmented AMD ISA traces for 16x16
+owner coverage proves no missing/duplicate stores for selected oracle/lowered shapes
 production route remains direct_packed
 ```
 
@@ -41,8 +42,8 @@ production route remains direct_packed
 R4-R7 are not independent:
 
 ```text
-R4: prove one correct cooperative multi-wave atom
-R5: search geometry/resource choices only after R4 correctness exists
+R4: prove one correct cooperative multi-wave numeric atom; lowered store ownership is already proven
+R5: search geometry/resource choices only after a numeric coop candidate exists
 R6: bind one role only after R5 has a same-session bounded win
 R7: repeat conversion until no source-clone piece remains worth translating
 ```
@@ -73,17 +74,17 @@ The current blocked evidence names duplicate/missing stores as the exact risk.
 Information needed:
 
 ```text
-actual tinygrad wave/workgroup axes for the candidate kernel
-mapping from lidx/gidx to wave_id and lane_id
-store address expression emitted by tinygrad for each lane
-actual owner map from a store-only marker kernel
-comparison against llama_mma_writeback_coverage
+actual tinygrad wave/workgroup axes for the candidate kernel: proven for the lowered 16x16 fragmented trace
+mapping from lidx/gidx to wave_id and lane_id: proven for the lowered 16x16 fragmented trace
+store address expression emitted by tinygrad for each lane: proven by lowered AMD ISA rows
+actual owner map from a store-only marker kernel: represented by lowered AMD ISA proof rows
+comparison against llama_mma_writeback_coverage: PASS for the 16x16 R4 owner map
 ```
 
 Test:
 
 ```text
-store-only cooperative kernel writes marker=1 to each output exactly once
+lowered store-only cooperative proof writes each output exactly once
 duplicate_store_count == 0
 missing_store_count == 0
 actual_owner_hash == oracle_owner_hash
@@ -98,8 +99,8 @@ owner map matches but numeric kernel is still wrong or slow for reasons unrelate
 Unlocks:
 
 ```text
-R4 owner trace
-R4 store-only proof
+R4 owner trace: PASS as fragmented AMD ISA proof
+R4 store-only proof: PASS as fragmented AMD ISA proof
 first legal cooperative numeric atom attempt
 ```
 
@@ -453,10 +454,10 @@ R4 complete means:
 
 ```text
 q4k_q8_1_mmq_amd_ds4_coop_tile_atom_v0 passes bounded correctness
-owner coverage matches oracle
-no duplicate/missing stores
+owner coverage matches oracle: PASS for the lowered 16x16 fragmented AMD ISA proof
+no duplicate/missing stores: PASS for the lowered 16x16 fragmented AMD ISA proof
 resource evidence exists
-machine-search row changes from blocked_translation to searchable/evidence with PASS
+machine-search row changes from blocked_numeric_compute to searchable/evidence with PASS
 ```
 
 ### R5 - Geometry Search
@@ -472,6 +473,9 @@ resource/timing per candidate
 same-session direct_packed and amd_ds4_warp timings
 failure reason for every rejected candidate
 ```
+
+R5 is ready to run bounded geometry search only after a cooperative numeric candidate exists. Before then, it remains
+non-promotable even though the R4 owner proof passed.
 
 R5 complete means:
 
@@ -526,21 +530,21 @@ remaining clone-backed pieces are explicitly oracle-only or blocked with evidenc
 Order matters:
 
 ```text
-1. Add tinygrad store-only owner-trace atom.
-2. Compare its store coverage to llama_mma_writeback_coverage.
+1. Preserve the lowered R4 store-owner proof as PASS evidence.
+2. Keep R5 geometry rows non-promotable until a numeric coop candidate exists.
 3. Add sum-slot mapping without Q4/Q8 math.
 4. Add Q8_1 tile_y byte/panel staging check.
 5. Add Q4_K tile_x byte/scales staging check.
 6. Combine staging + sum + writeback for 16x16x256 numeric.
 7. Scale to 32x32x256, then resource-safe larger tiles.
-8. Only then run R5 timing search.
+8. Only then run R5 timing search for promotion.
 ```
 
 Stop conditions:
 
 ```text
-tinygrad cannot express wave_id -> row stripe ownership
-store-only owner map has duplicate/missing stores after reasonable lowering attempts
+full numeric compute cannot reuse the proven owner map without spills, wrong values, or unsupported lowering
+numeric coop candidate is unavailable, so R5/R6/R7 loop without a bounded win/source-row update
 resource extraction shows unavoidable scratch/spill for all useful geometries
 all correct resource-safe candidates lose and no remaining source-clone mechanism explains a path to win
 ```
