@@ -13,6 +13,7 @@ from extra.qk.mmq_amd_pmc import (
 from extra.qk.mmq_amd_telemetry import (
   SCHEMA as TELEMETRY_SCHEMA, collect_process_telemetry, collect_telemetry, read_sensor, validate_telemetry,
 )
+from extra.qk.mmq_amd_probes import SCHEMA as PROBE_SCHEMA, summarize_store_calibration, validate_differential_probe
 
 
 def test_parse_rocprof_counter_names_filters_prose_and_preserves_metrics():
@@ -109,3 +110,21 @@ def test_observability_artifacts_are_json_serializable(tmp_path):
   artifacts = [probe_amd_counter_capabilities(rocm_root=tmp_path),
                collect_telemetry("test", sensors={"missing": str(tmp_path / "none")})]
   for artifact in artifacts: json.loads(json.dumps(artifact))
+
+
+def test_store_calibration_only_derives_transaction_rule_when_every_sample_matches():
+  points = [{"samples": [{"status": "live", "unique_64b_lines": 4, "counters": {"GL2C_MC_WRREQ": 4}},
+                          {"status": "live", "unique_64b_lines": 8, "counters": {"GL2C_MC_WRREQ": 8}}]}]
+  result = summarize_store_calibration(points)
+  assert result == {"status": "live", "truth_status": "derived",
+                    "rule": "GL2C_MC_WRREQ equals unique touched 64B output lines",
+                    "supporting_samples": 2, "all_samples_exact": True}
+  points[0]["samples"][1]["counters"]["GL2C_MC_WRREQ"] = 7
+  assert summarize_store_calibration(points)["status"] == "zero_suspect"
+
+
+def test_differential_probe_validation_requires_system_identity_and_known_status():
+  artifact = {"schema": PROBE_SCHEMA, "system_snapshot_id": "sys", "points": [{"status": "live"}]}
+  validate_differential_probe(artifact)
+  artifact["system_snapshot_id"] = None
+  with pytest.raises(ValueError, match="system_snapshot_id"): validate_differential_probe(artifact)
