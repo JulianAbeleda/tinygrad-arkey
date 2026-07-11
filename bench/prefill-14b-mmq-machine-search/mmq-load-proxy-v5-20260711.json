@@ -1,0 +1,97 @@
+{
+  "schema": "tinygrad.mmq_load_proxy.v1",
+  "system_snapshot_id": "sha256:85a79a43845283896b360b0faadfc22bbeda0a9f5da3f3673b9b4ba7d00a72e7",
+  "system_fingerprint": {
+    "gpu_uuid": "GPU-db466b901e983568",
+    "architecture": "gfx1100",
+    "compute_units": 96,
+    "boltbeam_commit": "4a5d1c23d0609bb9a579bf0c5969707771964ce4",
+    "tinygrad_commit": "43fa1a7094340d60227f27180fdb7786f5e6c54d"
+  },
+  "collector": "tinygrad_kfd_native_pmc",
+  "counter": "GL2C_MC_RDREQ",
+  "transaction_semantics": "GL2 external-address 128-byte read requests",
+  "counter_liveness": {
+    "status": "live",
+    "controls": "1K-element versus 64K-element global-memory kernels",
+    "repetitions": 3,
+    "GL2C_MC_RDREQ": {"negative": [82, 83, 82], "positive": [4173, 4163, 4168]},
+    "GL2C_EA_RDREQ_128B": {"negative": [68, 68, 68], "positive": [4100, 4100, 4100]},
+    "GL2C_HIT": {"negative": [58, 58, 58], "positive": [2200, 2200, 2200]},
+    "GL2C_MISS": {"negative": [114, 115, 114], "positive": [6221, 6211, 6216]}
+  },
+  "protocol": {
+    "kind": "randomized_same_process_candidate_pmc",
+    "seed": 20260711,
+    "warmup": "both loaded candidate binaries execute before sampling",
+    "rounds_per_candidate": 12,
+    "counter_passes": 1,
+    "counters_collected_together": ["GL2C_MC_RDREQ", "GL2C_EA_RDREQ_128B", "GL2C_HIT", "GL2C_MISS"],
+    "clock_policy": "auto_nonprivileged_interleaved",
+    "production_dispatch_changed": false
+  },
+  "semantic_contract": {
+    "shape": {"M": 16, "N": 16, "K": 256},
+    "transaction_bytes": 128,
+    "truth_status": "derived",
+    "allocations": {
+      "q4k_weights": {"bytes": 2304, "unique_128b_lines": 18, "address_semantics": "16 rows * one 144-byte Q4_K block"},
+      "q8_ds4_values": {"bytes": 4096, "unique_128b_lines": 32, "address_semantics": "2 DS4 blocks * 16 tokens * 128 int8 values"},
+      "q8_ds4_scales": {"bytes": 512, "unique_128b_lines": 4, "address_semantics": "2 blocks * 16 tokens * 4 fp32 scales"},
+      "q8_ds4_sums": {"bytes": 512, "unique_128b_lines": 4, "address_semantics": "2 blocks * 16 tokens * 4 fp32 sums"}
+    },
+    "semantic_unique_input_line_floor": 58,
+    "assumptions": [
+      "Each separately allocated input is at least 128-byte aligned.",
+      "The floor counts each semantic input line once and assumes neither cache retention nor request overhead."
+    ]
+  },
+  "candidates": [
+    {
+      "candidate_id": "mmq.wb.gated_matrix.m16.n16.k256.v1",
+      "writeback_mode": "gated_matrix_v0",
+      "backend": "q4k_q8_1_mmq_amd_ds4_coop_tile_atom_v0",
+      "binary_sha256": "4797f09f8961d75db4bff10a71e1c003b458c75c7cd7ec6d27e02476ec23ae43",
+      "binary_bytes": 14600,
+      "final_isa_global_load_sites": 12,
+      "samples": [137, 137, 137, 137, 138, 137, 137, 137, 138, 137, 137, 137],
+      "measured_request_interval": [137, 138],
+      "semantic_unique_input_line_floor": 58,
+      "excess_request_interval": [79, 80],
+      "median_ms": 17.2011995,
+      "truth_status": "measured"
+    },
+    {
+      "candidate_id": "mmq.wb.direct_owner.m16.n16.k256.v1",
+      "writeback_mode": "direct_owner_v0",
+      "backend": "q4k_q8_1_mmq_amd_ds4_coop_tile_atom_v0",
+      "binary_sha256": "3810864792e79b1304dc78dd31c40026c5274f356028476257ae00c54b0acb69",
+      "binary_bytes": 6792,
+      "final_isa_global_load_sites": 12,
+      "samples": [75, 75, 75, 76, 75, 75, 76, 75, 75, 75, 76, 75],
+      "measured_request_interval": [75, 76],
+      "semantic_unique_input_line_floor": 58,
+      "excess_request_interval": [17, 18],
+      "median_ms": 6.3256375,
+      "truth_status": "measured"
+    }
+  ],
+  "cross_candidate": {
+    "same_semantic_input_line_floor": true,
+    "same_final_isa_global_load_sites": true,
+    "gated_minus_direct_request_interval": [61, 63],
+    "result": "bounded_candidate_specific_load_amplification",
+    "truth_status": "derived"
+  },
+  "calibration_provenance": {
+    "artifact": "bench/prefill-14b-mmq-machine-search/global-load-proxy-v4-20260711.json",
+    "scoped_rule": "Within global_load.wg96, GL2C_MC_RDREQ - 4 equals unique touched 128-byte input lines.",
+    "transfer_to_mmq": false,
+    "reason": "The calibration family's fixed overhead is not assumed for MMQ; MMQ uses its own measured interval."
+  },
+  "limits": [
+    "The excess interval includes repeated semantic input requests and MMQ-specific fixed/runtime requests.",
+    "Per-allocation attribution of the excess requires an additional allocation-isolation experiment."
+  ],
+  "production_dispatch_changed": false
+}

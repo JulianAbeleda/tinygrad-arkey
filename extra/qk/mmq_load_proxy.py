@@ -66,7 +66,9 @@ def build_mmq_load_proxy(*, system_snapshot_id:str, binaries:Mapping[str, str],
 
 def validate_mmq_load_proxy(artifact:Mapping[str, Any]) -> None:
   if artifact.get("schema") != SCHEMA: raise ValueError(f"schema must be {SCHEMA}")
-  if artifact.get("counter_liveness") != "live": raise ValueError("GL2 read counter must be live")
+  liveness = artifact.get("counter_liveness")
+  if not (liveness == "live" or isinstance(liveness, Mapping) and liveness.get("status") == "live"):
+    raise ValueError("GL2 read counter must be live")
   rows = artifact.get("candidates")
   if not isinstance(rows, list) or {row.get("writeback_mode") for row in rows} != set(CANDIDATES):
     raise ValueError("both canonical candidates are required")
