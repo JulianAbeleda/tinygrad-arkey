@@ -59,7 +59,7 @@ _ROUTE_KIND_Q4K_G3 = "decode_q4k_g3"
 _ROUTE_KIND_Q6K_GEN = "decode_q6k_generated"
 _ROUTE_KIND_PREFILL_GEN = "prefill_generated"
 _ROUTE_KIND_PREFILL_MMQ_ATOM = "prefill_mmq_atom"
-_PREFILL_14B_Q4K_MMQ_ATOM_ROUTE = "prefill_14b_q4k_q8_1_hybrid_mmq_atom"
+_PREFILL_Q4K_MMQ_ATOM_ROUTE = "prefill_14b_q4k_q8_1_hybrid_mmq_atom"
 _ROUTE_POLICY_LOCAL = {
   "decode_flash_block_tile_g5_konly": {"kind": _ROUTE_KIND_DECODE_FLASH, "compat_params": ({"DECODE_LIVE_SPLIT": "1"},)},
   "decode_flash_live_split_g4_8b_kvboth": {"kind": _ROUTE_KIND_DECODE_FLASH, "compat_params": ({"DECODE_LIVE_SPLIT": "1"},)},
@@ -67,7 +67,7 @@ _ROUTE_POLICY_LOCAL = {
   "decode_q6k_coop_generated": {"kind": _ROUTE_KIND_Q6K_GEN, "compat_params": ({"DECODE_Q6K_GENERATED": "1"},)},
   "prefill_q4k_int8_wmma_generated_research": {"kind": _ROUTE_KIND_PREFILL_GEN, "compat_params": ({},)},
   "prefill_q4k_int8_wmma_tiled_research": {"kind": _ROUTE_KIND_PREFILL_GEN, "compat_params": ({},)},
-  _PREFILL_14B_Q4K_MMQ_ATOM_ROUTE: {"kind": _ROUTE_KIND_PREFILL_MMQ_ATOM, "compat_params": ()},
+  _PREFILL_Q4K_MMQ_ATOM_ROUTE: {"kind": _ROUTE_KIND_PREFILL_MMQ_ATOM, "compat_params": ()},
 }
 _MANIFEST_ROUTE_CACHE: dict[str, dict]|None = None
 
@@ -133,7 +133,7 @@ def _validate_prefill_mmq_atom_row(policy_path:pathlib.Path, route_id:str, row:d
   rows_i, cols_i = _route_shape_rows_cols(policy_path, route_id, row)
   role = str(row.get("role", ""))
   quant = str(row.get("quant", ""))
-  if route_id == _PREFILL_14B_Q4K_MMQ_ATOM_ROUTE:
+  if route_id == _PREFILL_Q4K_MMQ_ATOM_ROUTE:
     if not bool(row.get("atom_available", False)):
       raise ValueError(f"{policy_path} route {route_id!r} is fail-closed until atom_available=true")
     if (role, rows_i, cols_i, quant) != ("ffn_gate_up", 17408, 5120, "Q4_K"):
