@@ -2,9 +2,9 @@
   "schema": "tinygrad.mmq_dynamic_evidence_summary.v1",
   "captured_on": "2026-07-11",
   "target": "gfx1100",
-  "system_snapshot_id": null,
+  "system_snapshot_id": "sha256:2ed78cdcf2ab65584306a8e7b8c0b06ee56c7d973da74dab8c383cc87301ffc2",
   "rejected_system_snapshot_id": "sha256:d0c3474355426a1eefebec1c00b38f61865f84e92107512bd5f33e0112a7525a",
-  "system_identity_status": "direct_fingerprint_bound_snapshot_rejected_cpu_gpu_node_mix",
+  "system_identity_status": "canonical_snapshot_bound_after_gpu_node_parser_fix",
   "system_fingerprint": {
     "gpu_uuid": "GPU-db466b901e983568",
     "gpu_architecture": "gfx1100",
@@ -16,8 +16,8 @@
     "amdgpu_driver_reported_by_rocm_smi": "6.16.13",
     "kernel": "6.8.0-134-generic",
     "rocm": "7.2.4",
-    "boltbeam_commit": "405250924ef00d60c726975b10db947879ba6f81",
-    "tinygrad_commit": "74a4f813e64a1dabe91f0f43e1bfae88e0389b0f"
+    "boltbeam_commit": "36cc0a16c32a47385510f8cfa34a220bafb9dbf2",
+    "tinygrad_commit": "97b8309df66916bb347ef24e4a556ee421ad00a3"
   },
   "snapshot_rejection": {
     "reason": "capture_system_snapshot selected CPU-XX and 16 compute units from the CPU node while also selecting gfx1100",
@@ -143,6 +143,48 @@
       "A zero core-clock sensor sample is zero_suspect and is not interpreted as a stopped clock.",
       "The two windows selected different memory DPM states, so telemetry does not support a controlled clock-normalized comparison."
     ]
+  },
+  "nonprivileged_clock_policy": {
+    "status": "blocked",
+    "performance_level": "auto",
+    "stable_policy_enforceable_without_privilege": false,
+    "sysfs_controls_writable": false,
+    "rocm_smi_stable_std_result": "invalid_performance_level",
+    "privileged_action_attempted": false,
+    "fallback": "single-process randomized interleaving with per-launch telemetry and PMCs"
+  },
+  "interleaved_candidate_probe": {
+    "schema": "tinygrad.mmq_differential_probe.v1",
+    "system_snapshot_id": "sha256:2ed78cdcf2ab65584306a8e7b8c0b06ee56c7d973da74dab8c383cc87301ffc2",
+    "seed": 20260711,
+    "unprofiled_rounds_per_candidate": 20,
+    "unprofiled_median_ms": {"gated_matrix_v0": 15.0817915, "direct_owner_v0": 4.453295},
+    "unprofiled_median_ratio": 3.3866589794747477,
+    "unprofiled_memory_clock_hz": 456000000,
+    "profiled_rounds_per_candidate_per_pass": 8,
+    "sq_pass": {
+      "median_ms": {"gated_matrix_v0": 18.0492825, "direct_owner_v0": 7.228157},
+      "SQ_INSTS_VALU": {"gated_matrix_v0": 75008, "direct_owner_v0": 43008},
+      "SQ_INSTS_SALU": {"gated_matrix_v0": 147712, "direct_owner_v0": 17664},
+      "SQ_WAVES": {"gated_matrix_v0": 256, "direct_owner_v0": 256},
+      "SQ_BUSY_CYCLES_range": {"gated_matrix_v0": [1106794, 1118089], "direct_owner_v0": [326041, 345683]},
+      "SQ_WAVE_CYCLES_range": {"gated_matrix_v0": [5885011, 5945962], "direct_owner_v0": [1726818, 1831932]},
+      "SQ_WAIT_ANY_range": {"gated_matrix_v0": [5556016, 5612658], "direct_owner_v0": [1639446, 1743931]}
+    },
+    "lds_pass": {
+      "median_ms": {"gated_matrix_v0": 16.7356795, "direct_owner_v0": 6.2219925},
+      "SQC_LDS_IDX_ACTIVE": {"gated_matrix_v0": 6656, "direct_owner_v0": 6656},
+      "SQC_LDS_BANK_CONFLICT": {"gated_matrix_v0": 0, "direct_owner_v0": 0},
+      "SQ_INSTS_LDS": {"gated_matrix_v0": 5376, "direct_owner_v0": 5376}
+    },
+    "gl2_pass": {
+      "median_ms": {"gated_matrix_v0": 17.1173835, "direct_owner_v0": 6.222414},
+      "GL2C_MC_WRREQ": {"gated_matrix_v0": 16, "direct_owner_v0": 16},
+      "GL2C_MC_RDREQ_range": {"gated_matrix_v0": [137, 137], "direct_owner_v0": [75, 76]},
+      "GL2C_MISS_range": {"gated_matrix_v0": [145, 145], "direct_owner_v0": [83, 84]}
+    },
+    "truth_status": "measured",
+    "production_dispatch_changed": false
   },
   "conclusions": [
     {

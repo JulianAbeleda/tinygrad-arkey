@@ -161,7 +161,7 @@ def test_committed_dynamic_evidence_is_binary_bound_and_rejects_bad_snapshot():
   path = Path(__file__).resolve().parents[2] / "bench/prefill-14b-mmq-machine-search/dynamic-evidence-v3-20260711.json"
   artifact = json.loads(path.read_text())
   assert artifact["production_dispatch_changed"] is False
-  assert artifact["system_snapshot_id"] is None and artifact["rejected_system_snapshot_id"].startswith("sha256:")
+  assert artifact["system_snapshot_id"].startswith("sha256:") and artifact["rejected_system_snapshot_id"].startswith("sha256:")
   assert artifact["system_fingerprint"]["gpu_uuid"].startswith("GPU-")
   assert artifact["system_fingerprint"]["gpu_compute_units"] == 96
   assert {row["binary_sha256"] for row in artifact["candidates"]} == {
