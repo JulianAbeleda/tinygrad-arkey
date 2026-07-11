@@ -7,15 +7,20 @@ from extra.qk.layout import Q4_K_BLOCK_BYTES, Q4_K_BLOCK_ELEMS, Q8_1_BLOCK_ELEMS
 from extra.qk.mmq_lifecycle import COUNTER_NAMES
 from extra.qk.mmq_q4k_q8_atom import (
   AMD_BACKEND_ATOM_ID, AMD_DS4_DOT4X4_BACKEND_ATOM_ID, AMD_DS4_WARP_BACKEND_ATOM_ID, AMD_STAGED_DS4_BACKEND_ATOM_ID,
-  AMD_DS4_LDS_SKELETON_BACKEND_ATOM_ID, AMD_WARP_BACKEND_ATOM_ID, BACKEND_ATOM_ID, q8_1_mmq_ds4_from_row_major,
+  AMD_DS4_COOP_TILE_BACKEND_ATOM_ID, AMD_DS4_COOP_TILE_BLOCKER, AMD_DS4_LDS_SKELETON_BACKEND_ATOM_ID,
+  AMD_WARP_BACKEND_ATOM_ID, BACKEND_ATOM_ID, q8_1_mmq_ds4_from_row_major,
   run_q4k_q8_1_mmq_bounded_amd_ds4_dot4x4,
   run_q4k_q8_1_mmq_bounded_amd_ds4_warp, run_q4k_q8_1_mmq_staged_ds4_atom, amd_atom_source_hash,
-  amd_ds4_dot4x4_atom_source_hash, amd_ds4_lds_skeleton_atom_source_hash, amd_ds4_warp_atom_source_hash,
+  amd_ds4_coop_tile_atom_source_hash, amd_ds4_dot4x4_atom_source_hash, amd_ds4_lds_skeleton_atom_source_hash,
+  amd_ds4_warp_atom_source_hash,
   amd_warp_atom_source_hash, staged_ds4_atom_source_hash, run_q4k_q8_1_mmq_tile, run_q4k_q8_1_mmq_tile_amd,
   run_q4k_q8_1_mmq_bounded_amd_ds4_lds_skeleton, run_q4k_q8_1_mmq_tile_amd_warp,
-  run_q4k_q8_1_mmq_tile_with_lifecycle,
+  run_q4k_q8_1_mmq_bounded_amd_ds4_coop_tile, run_q4k_q8_1_mmq_tile_with_lifecycle,
 )
-from extra.qk.mmq_q4k_q8_reference import describe_q4k_q8_1_mmq_tile, q4k_q8_1_mmq_tile_reference
+from extra.qk.mmq_q4k_q8_reference import (
+  Q8_1_MMQ_DS4_LAYOUT, describe_q4k_q8_1_mmq_tile, q4k_q8_1_mmq_ds4_tile_reference,
+  q4k_q8_1_mmq_tile_reference,
+)
 
 
 def _finite_q4k_bytes(n:int, k:int, seed:int) -> np.ndarray:
@@ -147,6 +152,39 @@ def test_q4k_q8_1_mmq_amd_ds4_lds_skeleton_hash_is_real_local_barrier_uop():
   h = amd_ds4_lds_skeleton_atom_source_hash(4, 5, 256, "ffn_gate_up")
 
   assert h
+
+
+def test_q4k_q8_1_mmq_amd_ds4_coop_tile_hash_exists():
+  h = amd_ds4_coop_tile_atom_source_hash(16, 16, 256, "ffn_gate_up")
+
+  assert h
+  assert AMD_DS4_COOP_TILE_BACKEND_ATOM_ID == "q4k_q8_1_mmq_amd_ds4_coop_tile_atom_v0"
+
+
+def test_q4k_q8_1_mmq_amd_ds4_coop_tile_matches_reference_when_amd_available():
+  if not _has_amd():
+    pytest.skip("AMD device is not available")
+  m = n = 16
+  k = 256
+  raw = _finite_q4k_bytes(n, k, seed=1003)
+  xq, xscales = _q8_inputs(m, k, seed=1004)
+  ds4 = q8_1_mmq_ds4_from_row_major(xq, xscales)
+  spec = describe_q4k_q8_1_mmq_tile(
+    role="ffn_gate_up", m=m, n=n, k=k, m_tile=m, n_tile=n, k_groups=8, activation_layout=Q8_1_MMQ_DS4_LAYOUT)
+  ref = q4k_q8_1_mmq_ds4_tile_reference(raw, ds4, spec)
+
+  result = run_q4k_q8_1_mmq_bounded_amd_ds4_coop_tile(raw, ds4, role="ffn_gate_up")
+
+  assert result.backend_atom_id == AMD_DS4_COOP_TILE_BACKEND_ATOM_ID
+  assert result.lifecycle_detail["shared_memory_staging"] is True
+  assert result.lifecycle_detail["bounded_only"] is True
+  assert result.lifecycle_detail["production_dispatch_changed"] is False
+  assert result.lifecycle_detail["store_owner_metadata"] is False
+  assert result.lifecycle_detail["store_owner_count"] == 0
+  assert result.lifecycle_detail["store_owner_proof"] == "separate_r4_lowered_isa_trace"
+  assert result.lifecycle_detail["default_route"] == "direct_packed"
+  assert "R4 owner proof remains separate" in AMD_DS4_COOP_TILE_BLOCKER
+  np.testing.assert_allclose(result.output, ref, rtol=1e-6, atol=1e-3)
 
 
 def test_q4k_q8_1_mmq_amd_ds4_lds_skeleton_matches_reference_when_amd_available():

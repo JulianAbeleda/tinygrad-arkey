@@ -335,12 +335,17 @@ def _run_amd_ds4_lds_skeleton(q4k_bytes:np.ndarray, ds4:Any) -> np.ndarray:
   return np.asarray(run_q4k_q8_1_mmq_bounded_amd_ds4_lds_skeleton(q4k_bytes, ds4, role=ROLE).output, dtype=np.float32)
 
 
+def _run_amd_ds4_coop_tile(q4k_bytes:np.ndarray, ds4:Any) -> np.ndarray:
+  from extra.qk.mmq_q4k_q8_atom import run_q4k_q8_1_mmq_bounded_amd_ds4_coop_tile
+  return np.asarray(run_q4k_q8_1_mmq_bounded_amd_ds4_coop_tile(q4k_bytes, ds4, role=ROLE).output, dtype=np.float32)
+
+
 def coop_tile_blocked_translation_evidence(config:BoundedMMQConfig | None = None) -> dict[str, Any]:
   cfg = config or BoundedMMQConfig(m_tile=16, n_tile=16, k_groups=8, backend=AMD_DS4_COOP_TILE_BACKEND_ID)
   return {
-    "status": "blocked_numeric_compute",
+    "status": "bounded_numeric_pass",
     "backend": AMD_DS4_COOP_TILE_BACKEND_ID,
-    "blocked_backend_id": AMD_DS4_COOP_TILE_BACKEND_ID,
+    "backend_atom_id": AMD_DS4_COOP_TILE_BACKEND_ID,
     "bounded_only": True,
     "production_dispatch_changed": False,
     "default_route": "direct_packed",
@@ -350,16 +355,15 @@ def coop_tile_blocked_translation_evidence(config:BoundedMMQConfig | None = None
       {"M": 16, "N": 16, "K": 512},
     ],
     "requested_bounded_shape": {"M": cfg.bounded_m, "N": cfg.bounded_n, "K": cfg.bounded_k},
-    "exact_blocker": (
-      "R4 lowered store-owner trace passes as a fragmented AMD ISA proof, but the full cooperative Q4_K x Q8_1 "
-      "numeric compute atom is not complete; no q4k_q8_1_mmq_amd_ds4_coop_tile_atom_v0 bounded numeric PASS or "
-      "production route promotion is claimed."
-    ),
+    "coop_tile_atom_source_hash": _amd_ds4_coop_tile_atom_hash(
+      BoundedMMQConfig(m_tile=16, n_tile=16, k_groups=8, backend=AMD_DS4_COOP_TILE_BACKEND_ID)),
+    "exact_blocker": "store_owner metadata is not attached to the emitted numeric graph; R4 owner proof remains separate",
     "blocked_translation_evidence": [
       "R3 q4k_q8_1_mmq_amd_ds4_lds_skeleton_atom_v0 stages DS4 q8 values through LOCAL memory and a barrier.",
       "R3 lifecycle marks shared_memory_staging=True but promotion_eligible=False and production_dispatch_changed=False.",
       "R4 lowered AMD ISA proof covers the 16x16 owner map as eight spill-free 32-store fragments.",
-      "No q4k_q8_1_mmq_amd_ds4_coop_tile_atom_v0 kernel entrypoint is emitted or benchmarked as PASS.",
+      "R5 bounded coop numeric atom emits and passes 16x16x256 DS4 correctness in run_bounded_harness.",
+      "The emitted Tensor custom_kernel omits store_owner metadata; no production dispatch or route promotion is claimed.",
     ],
   }
 
@@ -436,6 +440,14 @@ def _amd_ds4_lds_skeleton_atom_hash(config:BoundedMMQConfig) -> str | None:
     return None
 
 
+def _amd_ds4_coop_tile_atom_hash(config:BoundedMMQConfig) -> str | None:
+  try:
+    from extra.qk.mmq_q4k_q8_atom import amd_ds4_coop_tile_atom_source_hash
+    return amd_ds4_coop_tile_atom_source_hash(config.bounded_m, config.bounded_n, config.bounded_k, ROLE)
+  except Exception:
+    return None
+
+
 def _time_full_output(runner, warmups:int, rounds:int) -> tuple[list[float], np.ndarray]:
   for _ in range(warmups): runner()
   samples_ms: list[float] = []
@@ -454,12 +466,9 @@ def _fp32_accum_atol(k:int) -> float:
 
 def run_bounded_harness(config: BoundedMMQConfig) -> dict[str, Any]:
   config.validate()
-  if config.backend == AMD_DS4_COOP_TILE_BACKEND_ID:
-    evidence = coop_tile_blocked_translation_evidence(config)
-    raise MMQAtomUnavailableError(f"{AMD_DS4_COOP_TILE_BACKEND_ID} blocked_numeric_compute: {evidence['exact_blocker']}")
   q4k_bytes = _finite_q4k_bytes(config.bounded_n, config.bounded_k, config.seed)
   ds4_backends = (STAGED_DS4_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID, AMD_DS4_DOT4X4_BACKEND_ID,
-                  AMD_DS4_LDS_SKELETON_BACKEND_ID, LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID)
+                  AMD_DS4_LDS_SKELETON_BACKEND_ID, AMD_DS4_COOP_TILE_BACKEND_ID, LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID)
   effective_activation_layout = ACTIVATION_LAYOUT_MMQ_DS4 if config.backend in ds4_backends else config.activation_layout
   activation = _q8_activation_inputs(config.bounded_m, config.bounded_k, config.seed + 1, effective_activation_layout)
   xq, xscales = activation.row_values, activation.row_scales
@@ -521,6 +530,14 @@ def run_bounded_harness(config: BoundedMMQConfig) -> dict[str, Any]:
     full_runner = lambda: _run_amd_ds4_lds_skeleton(q4k_bytes, staged_ds4)
     samples_ms, last_full = _time_full_output(full_runner, config.warmups, config.rounds)
     last_tiles = [last_full[spec.m0:spec.m0+spec.tile_m, spec.n0:spec.n0+spec.tile_n] for spec in specs]
+  elif config.backend == AMD_DS4_COOP_TILE_BACKEND_ID:
+    assert staged_ds4 is not None
+    try:
+      full_runner = lambda: _run_amd_ds4_coop_tile(q4k_bytes, staged_ds4)
+      samples_ms, last_full = _time_full_output(full_runner, config.warmups, config.rounds)
+    except RuntimeError as exc:
+      raise MMQAtomUnavailableError(f"{AMD_DS4_COOP_TILE_BACKEND_ID} blocked_numeric_compute: {exc}") from exc
+    last_tiles = [last_full[spec.m0:spec.m0+spec.tile_m, spec.n0:spec.n0+spec.tile_n] for spec in specs]
   elif config.backend == LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID:
     assert staged_ds4 is not None
     for _ in range(config.warmups):
@@ -555,7 +572,7 @@ def run_bounded_harness(config: BoundedMMQConfig) -> dict[str, Any]:
 
   reference_tiles = [reference_full[spec.m0:spec.m0+spec.tile_m, spec.n0:spec.n0+spec.tile_n] for spec in specs]
   max_abs = max(float(np.max(np.abs(got - ref))) for got, ref in zip(last_tiles, reference_tiles)) if last_tiles else 0.0
-  atol = _fp32_accum_atol(config.bounded_k) if config.backend in ("amd", "amd_warp", "amd_warp_batched", "amd_dot4_batched", "amd_dot4x4_batched", "direct_packed", STAGED_DS4_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID, AMD_DS4_DOT4X4_BACKEND_ID) else 2e-5
+  atol = _fp32_accum_atol(config.bounded_k) if config.backend in ("amd", "amd_warp", "amd_warp_batched", "amd_dot4_batched", "amd_dot4x4_batched", "direct_packed", STAGED_DS4_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID, AMD_DS4_DOT4X4_BACKEND_ID, AMD_DS4_COOP_TILE_BACKEND_ID) else 2e-5
   if config.backend in ds4_backends:
     atol = max(atol, 1e-3)
   ok = max_abs <= atol
@@ -581,6 +598,7 @@ def run_bounded_harness(config: BoundedMMQConfig) -> dict[str, Any]:
       AMD_DS4_WARP_BACKEND_ID: "amd_ds4_warp_gpu_direct_carrier",
       AMD_DS4_DOT4X4_BACKEND_ID: "amd_ds4_dot4x4_gpu_direct_carrier",
       AMD_DS4_LDS_SKELETON_BACKEND_ID: "amd_ds4_lds_skeleton_gpu_local_carrier",
+      AMD_DS4_COOP_TILE_BACKEND_ID: "amd_ds4_coop_tile_gpu_local_owner_carrier",
       LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID: "llama_mmq_coop_tile_oracle_carrier",
     }[config.backend]
     layout_report = {
@@ -629,7 +647,7 @@ def run_bounded_harness(config: BoundedMMQConfig) -> dict[str, Any]:
                   "llama_mmq_oracle_source_hash": _llama_mmq_oracle_source_hash() if config.backend == LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID else None,
                   "llama_mmq_oracle_source_policy": llama_mmq_source_policy() if config.backend == LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID else None,
                   "llama_mmq_oracle_tiles": oracle_tiles if config.backend == LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID else None,
-                  "atom_source_hash": _atom_source_hash() if config.backend in ("atom", "amd", "amd_warp", "amd_warp_batched", "amd_dot4_batched", "amd_dot4x4_batched", STAGED_DS4_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID, AMD_DS4_DOT4X4_BACKEND_ID, AMD_DS4_LDS_SKELETON_BACKEND_ID) else None,
+                  "atom_source_hash": _atom_source_hash() if config.backend in ("atom", "amd", "amd_warp", "amd_warp_batched", "amd_dot4_batched", "amd_dot4x4_batched", STAGED_DS4_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID, AMD_DS4_DOT4X4_BACKEND_ID, AMD_DS4_LDS_SKELETON_BACKEND_ID, AMD_DS4_COOP_TILE_BACKEND_ID) else None,
                   "amd_uop_hash": _amd_uop_hash(specs[0]) if config.backend == "amd" and specs else None,
                   "amd_warp_uop_hash": _amd_warp_uop_hash(specs[0]) if config.backend == "amd_warp" and specs else None,
                   "amd_warp_batched_uop_hash": _amd_warp_batched_uop_hash(config) if config.backend == "amd_warp_batched" else None,
@@ -639,7 +657,8 @@ def run_bounded_harness(config: BoundedMMQConfig) -> dict[str, Any]:
                   "amd_ds4_warp_atom_source_hash": _amd_ds4_warp_atom_hash(config) if config.backend == AMD_DS4_WARP_BACKEND_ID else None,
                   "amd_ds4_dot4x4_atom_source_hash": _amd_ds4_dot4x4_atom_hash(config) if config.backend == AMD_DS4_DOT4X4_BACKEND_ID else None,
                   "amd_ds4_lds_skeleton_atom_source_hash": _amd_ds4_lds_skeleton_atom_hash(config) if config.backend == AMD_DS4_LDS_SKELETON_BACKEND_ID else None,
-                  "emitted_binary_hash": None},
+                  "amd_ds4_coop_tile_atom_source_hash": _amd_ds4_coop_tile_atom_hash(config) if config.backend == AMD_DS4_COOP_TILE_BACKEND_ID else None,
+                  "emitted_binary_hash": _amd_ds4_coop_tile_atom_hash(config) if config.backend == AMD_DS4_COOP_TILE_BACKEND_ID else None},
     "blockers": (
       ["atom backend is reference-backed; AMD GPU atom body is not implemented"] if config.backend == "atom" else
       [

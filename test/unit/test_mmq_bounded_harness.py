@@ -135,30 +135,40 @@ def test_mmq_bounded_harness_amd_ds4_dot4x4_backend_metadata_only_is_not_default
   assert meta["comparator_id"] == COMPARATOR_ID
 
 
-def test_mmq_bounded_harness_amd_ds4_coop_tile_is_known_but_blocked_numeric_compute():
-  cfg = BoundedMMQConfig(m_tile=16, n_tile=16, k_groups=16, backend=AMD_DS4_COOP_TILE_BACKEND_ID,
-                         measure_direct_packed=True)
+def test_mmq_bounded_harness_amd_ds4_coop_tile_runs_bounded_correctness():
+  cfg = BoundedMMQConfig(m_tile=16, n_tile=16, k_groups=8, backend=AMD_DS4_COOP_TILE_BACKEND_ID,
+                         measure_direct_packed=True, rounds=1)
   meta = candidate_metadata(cfg)
   evidence = coop_tile_blocked_translation_evidence(cfg)
+  report = run_bounded_harness(cfg)
 
   assert meta["backend"] == AMD_DS4_COOP_TILE_BACKEND_ID
   assert meta["backend_atom_id"] == AMD_DS4_COOP_TILE_BACKEND_ID
   assert meta["activation_layout"] == ACTIVATION_LAYOUT_MMQ_DS4
-  assert meta["bounded_shape"] == {"M": 16, "N": 16, "K": 512}
+  assert meta["bounded_shape"] == {"M": 16, "N": 16, "K": 256}
   assert meta["comparator_id"] == COMPARATOR_ID
-  assert evidence["status"] == "blocked_numeric_compute"
+  assert evidence["status"] == "bounded_numeric_pass"
   assert evidence["bounded_only"] is True
   assert evidence["production_dispatch_changed"] is False
   assert evidence["default_route"] == "direct_packed"
+  assert evidence["coop_tile_atom_source_hash"]
   assert {"M": 8, "N": 8, "K": 256} in evidence["attempted_shapes"]
   assert {"M": 16, "N": 16, "K": 256} in evidence["attempted_shapes"]
   assert {"M": 16, "N": 16, "K": 512} in evidence["attempted_shapes"]
 
-  assert "lowered store-owner trace passes" in evidence["exact_blocker"]
-  assert "numeric compute atom is not complete" in evidence["exact_blocker"]
+  assert "store_owner metadata is not attached" in evidence["exact_blocker"]
 
-  with pytest.raises(MMQAtomUnavailableError, match="blocked_numeric_compute"):
-    run_bounded_harness(cfg)
+  assert report["status"] == "PASS"
+  assert report["metadata"]["backend"] == AMD_DS4_COOP_TILE_BACKEND_ID
+  assert report["metadata"]["backend_atom_id"] == AMD_DS4_COOP_TILE_BACKEND_ID
+  assert report["metadata"]["activation_layout"] == ACTIVATION_LAYOUT_MMQ_DS4
+  assert report["activation_layout_source"] == "amd_ds4_coop_tile_gpu_local_owner_carrier"
+  assert report["correctness"]["tiles"] == 1
+  assert report["correctness"]["max_abs"] <= report["correctness"]["atol"]
+  assert report["artifacts"]["atom_source_hash"]
+  assert report["artifacts"]["amd_ds4_coop_tile_atom_source_hash"]
+  assert report["artifacts"]["emitted_binary_hash"]
+  assert report["blockers"] == []
 
 
 def test_mmq_bounded_harness_llama_coop_tile_oracle_runs_without_route_promotion():
@@ -314,13 +324,14 @@ def test_mmq_bounded_candidate_result_marks_reference_backed_atom_as_missing_emi
   assert result["exact_blocker"] == "atom backend is reference-backed; AMD GPU atom body is not implemented"
 
 
-def test_mmq_bounded_candidate_result_preserves_blocked_backend_exact_error():
+def test_mmq_bounded_candidate_result_records_coop_numeric_pass():
   cfg = BoundedMMQConfig(m_tile=16, n_tile=16, k_groups=8, backend=AMD_DS4_COOP_TILE_BACKEND_ID)
   result = build_bounded_candidate_result(cfg)
 
-  assert result["status"] == "blocked_emitted_candidate_missing"
-  assert result["numeric_status"] == "not_run"
+  assert result["status"] == "PASS"
+  assert result["numeric_status"] == "PASS"
   assert result["shape"] == {"M": 16, "N": 16, "K": 256}
-  assert result["harness_report"] is None
-  assert AMD_DS4_COOP_TILE_BACKEND_ID in result["exact_blocker"]
-  assert "blocked_numeric_compute" in result["exact_blocker"]
+  assert result["harness_report"]["status"] == "PASS"
+  assert result["harness_report"]["artifacts"]["amd_ds4_coop_tile_atom_source_hash"]
+  assert result["harness_report"]["artifacts"]["emitted_binary_hash"]
+  assert result["exact_blocker"] is None

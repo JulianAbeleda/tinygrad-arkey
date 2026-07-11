@@ -5,6 +5,12 @@ The target is not route promotion. The target is the smallest emitted tinygrad
 backend that combines numeric Q4_K x Q8_1 DS4 compute with the llama-style
 single-owner writeback contract.
 
+Outcome: the bounded numeric half is now done for 16x16x256. The emitted
+Tensor custom kernel passes DS4 correctness, but store-owner metadata still
+cannot be attached to that numeric graph without tripping the linearizer sort.
+The R4 owner proof therefore remains separate, and route promotion is still
+blocked on a same-session R5 coop speed win plus production binding.
+
 ## Current Ground Truth
 
 Already done:
@@ -16,6 +22,7 @@ direct DS4 warp and dot4x4 atoms pass bounded correctness.
 R3 LDS skeleton stages DS4 q8 values through LOCAL memory and a barrier.
 R4 lowered store-owner trace passes as fragmented AMD ISA proof:
   16x16x256, 8 fragments, 256 gated global stores, 256 unique owners.
+R5 bounded coop numeric atom emits and passes 16x16x256 DS4 correctness.
 R5 report exists but is non-promotable because no emitted cooperative numeric
 backend has a bounded win.
 ```
@@ -23,8 +30,10 @@ backend has a bounded win.
 Still blocked:
 
 ```text
-q4k_q8_1_mmq_amd_ds4_coop_tile_atom_v0 has no emitted numeric kernel.
-run_bounded_harness still raises blocked_numeric_compute for that backend.
+q4k_q8_1_mmq_amd_ds4_coop_tile_atom_v0 is slower than direct_packed in the
+initial one-round bounded probe.
+store_owner metadata is not attached to the emitted numeric graph; the owner
+proof remains a separate lowered R4 AMD ISA trace.
 R6 route binding remains illegal.
 ```
 
@@ -42,9 +51,10 @@ First bounded shape:
 M=16, N=16, K=256, activation_layout=mmq_ds4
 ```
 
-The first candidate may be one-wave/one-fragment for 16x16. It must still use
-the same owner metadata convention as the lowered R4 proof and must emit an
-actual AMD/tinygrad custom kernel, not a reference wrapper.
+The first candidate may be one-wave/one-fragment for 16x16. It must emit an
+actual AMD/tinygrad custom kernel, not a reference wrapper. The first passing
+numeric slice does not attach the owner metadata to the Tensor custom kernel;
+that remains the next integration blocker.
 
 ## Implementation Path
 
@@ -55,8 +65,7 @@ actual AMD/tinygrad custom kernel, not a reference wrapper.
 3. Emit a bounded 16x16x256 kernel that:
    - stages DS4 q8 values through LOCAL memory and a barrier,
    - computes Q4_K x DS4 numeric values using the existing formula helpers,
-   - writes outputs with `arg=("store_owner", owner_tuple)` so AMD ISA proof
-     rows can join back to owner coverage,
+   - writes outputs with gated stores for the 16x16 tile,
    - keeps `production_dispatch_changed=False`.
 4. Add a source-hash helper for the coop atom.
 5. Wire `run_bounded_harness` for `AMD_DS4_COOP_TILE_BACKEND_ID` only after the
@@ -81,7 +90,7 @@ test_mmq_bounded_harness.py:
   harness report status PASS for 16x16x256
 
 test_mmq_machine_search.py:
-  cooperative_multi_wave_tile status only changes if bounded harness can run
+  coop backend moves out of blocked candidates only if bounded harness can run
   R6 remains blocked unless R5 reports a bounded emitted coop win
 ```
 

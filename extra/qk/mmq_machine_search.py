@@ -120,6 +120,13 @@ DONE_COMPONENTS: tuple[dict[str, Any], ...] = (
     "implementation": "extra.qk.mmq_llama_oracle.run_llama_mmq_coop_tile_oracle",
     "proof": "test/unit/test_mmq_llama_oracle.py",
   },
+  {
+    "component": "R5 bounded cooperative numeric atom",
+    "status": "done",
+    "implementation": "extra.qk.mmq_q4k_q8_atom.run_q4k_q8_1_mmq_bounded_amd_ds4_coop_tile",
+    "proof": "test/unit/test_mmq_bounded_harness.py",
+    "evidence": "16x16x256 DS4 coop numeric atom emits and passes bounded correctness; store-owner proof remains separate and route promotion is not claimed",
+  },
 )
 
 
@@ -240,6 +247,19 @@ SEARCHABLE_CANDIDATES: tuple[MMQSearchCandidate, ...] = (
     k_groups=8,
     measure_direct_packed=True,
   ),
+  MMQSearchCandidate(
+    candidate_id="amd_ds4_coop_tile_bounded",
+    backend=AMD_DS4_COOP_TILE_BACKEND_ID,
+    activation_layout=ACTIVATION_LAYOUT_MMQ_DS4,
+    status="searchable",
+    search_class="bounded_cooperative_numeric_atom",
+    promotion_eligible=False,
+    reason="R5 bounded 16x16x256 coop numeric atom emits and passes correctness; store-owner proof is separate and promotion requires a same-session speed win",
+    m_tile=16,
+    n_tile=16,
+    k_groups=8,
+    measure_direct_packed=True,
+  ),
 )
 
 R5_GEOMETRY_CANDIDATES: tuple[MMQSearchCandidate, ...] = (
@@ -277,6 +297,17 @@ R5_GEOMETRY_CANDIDATES: tuple[MMQSearchCandidate, ...] = (
     n_tile=5,
   ),
   MMQSearchCandidate(
+    candidate_id="r5_ds4_coop_tile_16x16",
+    backend=AMD_DS4_COOP_TILE_BACKEND_ID,
+    activation_layout=ACTIVATION_LAYOUT_MMQ_DS4,
+    status="r5_candidate",
+    search_class="bounded_geometry_emitted_coop_atom",
+    promotion_eligible=False,
+    reason="bounded coop numeric atom; promotion only if it beats direct_packed in the same R5 report",
+    m_tile=16,
+    n_tile=16,
+  ),
+  MMQSearchCandidate(
     candidate_id="r5_llama_coop_oracle_16x16",
     backend=LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID,
     activation_layout=ACTIVATION_LAYOUT_MMQ_DS4,
@@ -290,20 +321,6 @@ R5_GEOMETRY_CANDIDATES: tuple[MMQSearchCandidate, ...] = (
 )
 
 BLOCKED_CANDIDATES: tuple[dict[str, Any], ...] = (
-  {
-    "candidate_id": "cooperative_multi_wave_tile",
-    "backend": AMD_DS4_COOP_TILE_BACKEND_ID,
-    "activation_layout": ACTIVATION_LAYOUT_MMQ_DS4,
-    "status": "blocked_numeric_compute",
-    "search_class": "llama_style_tile_structure",
-    "promotion_eligible": False,
-    "reason": "R4 lowered store-owner trace passes as fragmented AMD ISA proof, but cooperative LDS/read-compute numeric atom is not implemented; no production PASS is claimed",
-    "evidence": coop_tile_blocked_translation_evidence(),
-    "metadata": candidate_metadata(BoundedMMQConfig(m_tile=16, n_tile=16, k_groups=8,
-                                                    backend=AMD_DS4_COOP_TILE_BACKEND_ID,
-                                                    activation_layout=ACTIVATION_LAYOUT_MMQ_DS4,
-                                                    measure_direct_packed=True)),
-  },
   {
     "candidate_id": "full_14b_prefill_route",
     "backend": "not_implemented",
@@ -344,7 +361,7 @@ def build_r4_evidence_artifacts() -> dict[str, Any]:
       candidate_id="cooperative_multi_wave_tile",
       backend=AMD_DS4_COOP_TILE_BACKEND_ID,
       shape={"M": 16, "N": 16, "K": 256},
-      notes="R4 structural staging evidence only; full cooperative numeric compute still blocks atom promotion",
+      notes="R4 structural staging evidence plus R5 bounded numeric PASS; route promotion still blocks on same-session coop speed win and unified production binding",
     ),
   }
 
@@ -507,12 +524,12 @@ def build_search_report(*, run: bool = False, warmups: int = 0, rounds: int = 1,
     "r5_geometry_search": build_r5_geometry_search_report(run=False),
     "r5_geometry_search_status": {
       "status": "ready_for_bounded_geometry_search",
-      "reason": "R4 lowered owner trace and staging evidence pass; R5 remains non-promotable until cooperative numeric compute exists",
+      "reason": "R4 lowered owner trace, staging evidence, and R5 bounded coop numeric correctness pass; R6 remains blocked until R5 reports a same-session coop speed win",
       "required_r4_evidence": ["owner_coverage:PASS", "staging_sum_slots:PASS", "gpu_owner_trace:PASS"],
     },
     "r6_route_gate_status": build_r6_route_gate_status(),
     "r7_reduction_status": build_r7_reduction_status(),
-    "promotion_verdict": "BLOCKED_UNTIL_COOPERATIVE_TILE_PASS",
+    "promotion_verdict": "BLOCKED_UNTIL_COOPERATIVE_TILE_WIN",
   }
 
 
@@ -533,7 +550,7 @@ def build_boltbeam_oracle_trace(*, context: int = 512) -> dict[str, Any]:
       "production_dispatch_changed": False,
       "default_route": "direct_packed",
       "promotion_eligible": False,
-      "promotion_verdict": "BLOCKED_UNTIL_COOPERATIVE_TILE_PASS",
+      "promotion_verdict": "BLOCKED_UNTIL_COOPERATIVE_TILE_WIN",
     },
     "rows": [
       {
