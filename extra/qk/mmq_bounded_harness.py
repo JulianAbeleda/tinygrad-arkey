@@ -74,6 +74,7 @@ class BoundedMMQConfig:
   backend: Literal["reference", "atom", "amd", "amd_warp", "amd_warp_batched", "amd_dot4_batched", "amd_dot4x4_batched", "direct_packed", "q4k_q8_1_mmq_amd_staged_ds4_atom_v0", "q4k_q8_1_mmq_amd_ds4_warp_atom_v0", "q4k_q8_1_mmq_amd_ds4_dot4x4_atom_v0", "q4k_q8_1_mmq_amd_ds4_lds_skeleton_atom_v0", "q4k_q8_1_mmq_amd_ds4_coop_tile_atom_v0", "llama_mmq_q4k_q8_1_coop_tile_oracle"] = "reference"
   activation_layout: Literal["row_major_q8_1", "mmq_ds4"] = ACTIVATION_LAYOUT_ROW_MAJOR
   measure_direct_packed: bool = False
+  writeback_mode: Literal["gated_matrix_v0", "direct_owner_v0"] = "gated_matrix_v0"
 
   @property
   def bounded_m(self) -> int:
@@ -103,6 +104,8 @@ class BoundedMMQConfig:
       raise ValueError(f"bounded K={self.bounded_k} must be MMQ DS4 block aligned")
     if self.backend == AMD_DS4_DOT4X4_BACKEND_ID and self.bounded_m % 4:
       raise ValueError(f"{AMD_DS4_DOT4X4_BACKEND_ID} requires bounded M to be a multiple of 4")
+    if self.writeback_mode not in ("gated_matrix_v0", "direct_owner_v0"):
+      raise ValueError(f"unknown writeback_mode={self.writeback_mode!r}")
 
 
 def candidate_metadata(config: BoundedMMQConfig | None = None) -> dict[str, Any]:
@@ -126,6 +129,7 @@ def candidate_metadata(config: BoundedMMQConfig | None = None) -> dict[str, Any]
     "activation_layout": activation_layout,
     "bounded_shape": {"M": cfg.bounded_m, "N": cfg.bounded_n, "K": cfg.bounded_k},
     "tile": {"M": cfg.m_tile, "N": cfg.n_tile, "K_groups": cfg.k_groups},
+    "writeback_mode": cfg.writeback_mode if cfg.backend == AMD_DS4_COOP_TILE_BACKEND_ID else None,
   }
 
 
@@ -335,9 +339,10 @@ def _run_amd_ds4_lds_skeleton(q4k_bytes:np.ndarray, ds4:Any) -> np.ndarray:
   return np.asarray(run_q4k_q8_1_mmq_bounded_amd_ds4_lds_skeleton(q4k_bytes, ds4, role=ROLE).output, dtype=np.float32)
 
 
-def _run_amd_ds4_coop_tile(q4k_bytes:np.ndarray, ds4:Any) -> np.ndarray:
+def _run_amd_ds4_coop_tile(q4k_bytes:np.ndarray, ds4:Any, writeback_mode:str="gated_matrix_v0") -> np.ndarray:
   from extra.qk.mmq_q4k_q8_atom import run_q4k_q8_1_mmq_bounded_amd_ds4_coop_tile
-  return np.asarray(run_q4k_q8_1_mmq_bounded_amd_ds4_coop_tile(q4k_bytes, ds4, role=ROLE).output, dtype=np.float32)
+  return np.asarray(run_q4k_q8_1_mmq_bounded_amd_ds4_coop_tile(
+    q4k_bytes, ds4, role=ROLE, writeback_mode=writeback_mode).output, dtype=np.float32)
 
 
 def coop_tile_blocked_translation_evidence(config:BoundedMMQConfig | None = None) -> dict[str, Any]:
@@ -443,7 +448,8 @@ def _amd_ds4_lds_skeleton_atom_hash(config:BoundedMMQConfig) -> str | None:
 def _amd_ds4_coop_tile_atom_hash(config:BoundedMMQConfig) -> str | None:
   try:
     from extra.qk.mmq_q4k_q8_atom import amd_ds4_coop_tile_atom_source_hash
-    return amd_ds4_coop_tile_atom_source_hash(config.bounded_m, config.bounded_n, config.bounded_k, ROLE)
+    return amd_ds4_coop_tile_atom_source_hash(
+      config.bounded_m, config.bounded_n, config.bounded_k, ROLE, config.writeback_mode)
   except Exception:
     return None
 
@@ -533,7 +539,7 @@ def run_bounded_harness(config: BoundedMMQConfig) -> dict[str, Any]:
   elif config.backend == AMD_DS4_COOP_TILE_BACKEND_ID:
     assert staged_ds4 is not None
     try:
-      full_runner = lambda: _run_amd_ds4_coop_tile(q4k_bytes, staged_ds4)
+      full_runner = lambda: _run_amd_ds4_coop_tile(q4k_bytes, staged_ds4, config.writeback_mode)
       samples_ms, last_full = _time_full_output(full_runner, config.warmups, config.rounds)
     except RuntimeError as exc:
       raise MMQAtomUnavailableError(f"{AMD_DS4_COOP_TILE_BACKEND_ID} blocked_numeric_compute: {exc}") from exc

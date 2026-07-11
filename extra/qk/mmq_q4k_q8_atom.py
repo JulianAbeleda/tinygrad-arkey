@@ -43,6 +43,7 @@ AMD_DS4_WARP_BACKEND_ATOM_ID = "q4k_q8_1_mmq_amd_ds4_warp_atom_v0"
 AMD_DS4_DOT4X4_BACKEND_ATOM_ID = "q4k_q8_1_mmq_amd_ds4_dot4x4_atom_v0"
 AMD_DS4_LDS_SKELETON_BACKEND_ATOM_ID = "q4k_q8_1_mmq_amd_ds4_lds_skeleton_atom_v0"
 AMD_DS4_COOP_TILE_BACKEND_ATOM_ID = "q4k_q8_1_mmq_amd_ds4_coop_tile_atom_v0"
+MMQ_WRITEBACK_MODES = ("gated_matrix_v0", "direct_owner_v0")
 AMD_DS4_COOP_TILE_BLOCKER = (
   "16x16x256 DS4 coop numeric atom emits and passes bounded correctness only after omitting store_owner metadata "
   "from the Tensor custom_kernel graph; attaching tuple owner metadata still fails in "
@@ -538,9 +539,12 @@ def _q4k_q8_1_bounded_ds4_lds_skeleton_kernel(m:int, n:int, k:int, role:str):
   return kernel
 
 
-def _q4k_q8_1_bounded_ds4_coop_tile_kernel(m:int, n:int, k:int, role:str):
+def _q4k_q8_1_bounded_ds4_coop_tile_kernel(m:int, n:int, k:int, role:str,
+                                             writeback_mode:str="gated_matrix_v0"):
   if (m, n, k) != (16, 16, 256):
     raise ValueError(f"AMD DS4 coop tile atom is bounded to 16x16x256, got {m}x{n}x{k}")
+  if writeback_mode not in MMQ_WRITEBACK_MODES:
+    raise ValueError(f"unknown MMQ writeback_mode={writeback_mode!r}")
   k_blocks = k // Q4_K_BLOCK_ELEMS
   name = f"q4k_q8_1_mmq_ds4_coop_tile_atom_{role}_{m}_{n}_{k}"
 
@@ -577,11 +581,15 @@ def _q4k_q8_1_bounded_ds4_coop_tile_kernel(m:int, n:int, k:int, role:str):
     acc = acc.after(acc[0].store(0.0))
     acc = acc.after(acc[0].store(acc.after(blk)[0] + contrib).end(blk))
     total = warp_reduce_sum(acc[0], lane, 32)
-    stores = []
-    for mi in range(16):
-      for ni in range(16):
-        stores.append(out[mi, ni].store(total, gate=bb.eq(mi) & row.eq(ni)))
-    return UOp.group(*stores).sink(arg=KernelInfo(name=name, opts_to_apply=()))
+    if writeback_mode == "direct_owner_v0":
+      writeback = out[bb, row].store(total)
+    else:
+      stores = []
+      for mi in range(16):
+        for ni in range(16):
+          stores.append(out[mi, ni].store(total, gate=bb.eq(mi) & row.eq(ni)))
+      writeback = UOp.group(*stores)
+    return writeback.sink(arg=KernelInfo(name=f"{name}_{writeback_mode}", opts_to_apply=()))
 
   return kernel
 
@@ -660,8 +668,9 @@ def amd_ds4_lds_skeleton_atom_source_hash(m:int, n:int, k:int, role:str) -> str:
   return hashlib.sha256(payload.encode()).hexdigest()[:16]
 
 
-def amd_ds4_coop_tile_atom_source_hash(m:int, n:int, k:int, role:str) -> str:
-  payload = repr(_q4k_q8_1_bounded_ds4_coop_tile_kernel(m, n, k, role)(
+def amd_ds4_coop_tile_atom_source_hash(m:int, n:int, k:int, role:str,
+                                       writeback_mode:str="gated_matrix_v0") -> str:
+  payload = repr(_q4k_q8_1_bounded_ds4_coop_tile_kernel(m, n, k, role, writeback_mode)(
     UOp.placeholder((m, n), dtypes.float32, 0),
     UOp.placeholder((n * (k // Q4_K_BLOCK_ELEMS) * Q4K_WORDS_PER_BLOCK,), dtypes.uint32, 1),
     UOp.placeholder(((k // 128) * m * 128,), dtypes.int8, 2),
@@ -849,7 +858,8 @@ def run_q4k_q8_1_mmq_bounded_amd_ds4_lds_skeleton(q4k_bytes: np.ndarray, ds4: Q8
 
 
 def run_q4k_q8_1_mmq_bounded_amd_ds4_coop_tile(q4k_bytes: np.ndarray, ds4: Q81MMQDS4Activation, *,
-                                               role: str, device: str = "AMD") -> Q4KQ8MMQAtomResult:
+                                               role: str, device: str = "AMD",
+                                               writeback_mode: str = "gated_matrix_v0") -> Q4KQ8MMQAtomResult:
   q4 = np.asarray(q4k_bytes, dtype=np.uint8)
   if q4.ndim != 3:
     raise ValueError(f"q4k_bytes must have shape [N,K/256,144], got {q4.shape}")
@@ -861,11 +871,14 @@ def run_q4k_q8_1_mmq_bounded_amd_ds4_coop_tile(q4k_bytes: np.ndarray, ds4: Q81MM
     raise ValueError(f"AMD DS4 coop tile atom is bounded to 16x16x256, got {m}x{n}x{k}")
   if ds4.spec.k != k:
     raise ValueError(f"DS4 K={ds4.spec.k} does not match Q4_K K={k}")
+  if writeback_mode not in MMQ_WRITEBACK_MODES:
+    raise ValueError(f"unknown MMQ writeback_mode={writeback_mode!r}")
   words = Tensor(_as_u32_words(q4), dtype=dtypes.uint32, device=device).realize()
   values_t, scales_t, sums_t = _ds4_tensors(ds4, device)
   try:
     out = Tensor.empty(m, n, dtype=dtypes.float32, device=device).custom_kernel(
-      words, values_t, scales_t, sums_t, fxn=_q4k_q8_1_bounded_ds4_coop_tile_kernel(m, n, k, role))[0].realize()
+      words, values_t, scales_t, sums_t,
+      fxn=_q4k_q8_1_bounded_ds4_coop_tile_kernel(m, n, k, role, writeback_mode))[0].realize()
   except TypeError as exc:
     if "'tuple' and 'NoneType'" in str(exc):
       raise RuntimeError(AMD_DS4_COOP_TILE_BLOCKER) from exc
@@ -874,7 +887,8 @@ def run_q4k_q8_1_mmq_bounded_amd_ds4_coop_tile(q4k_bytes: np.ndarray, ds4: Q81MM
     Q4KQ81MMQTileSpec(role=role, m=m, n=n, k=k, m_tile=m, n_tile=n, activation_layout=Q8_1_MMQ_DS4_LAYOUT))
   detail = {**detail, "backend_stage": "amd_ds4_coop_tile_gpu", "gpu_kernel_emitted": True,
             "uses_precomputed_activation_sums": True, "shared_memory_staging": True,
-            "store_owner_metadata": False, "store_owner_count": 0,
+            "writeback_mode": writeback_mode,
+            "store_owner_metadata": False, "store_owner_count": 0, "expected_output_owner_count": 256,
             "store_owner_proof": "separate_r4_lowered_isa_trace",
             "bounded_only": True, "promotion_eligible": False,
             "production_dispatch_changed": False, "default_route": "direct_packed"}

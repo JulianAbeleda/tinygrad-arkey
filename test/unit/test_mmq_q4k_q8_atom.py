@@ -161,7 +161,8 @@ def test_q4k_q8_1_mmq_amd_ds4_coop_tile_hash_exists():
   assert AMD_DS4_COOP_TILE_BACKEND_ATOM_ID == "q4k_q8_1_mmq_amd_ds4_coop_tile_atom_v0"
 
 
-def test_q4k_q8_1_mmq_amd_ds4_coop_tile_matches_reference_when_amd_available():
+@pytest.mark.parametrize("writeback_mode", ("gated_matrix_v0", "direct_owner_v0"))
+def test_q4k_q8_1_mmq_amd_ds4_coop_tile_matches_reference_when_amd_available(writeback_mode):
   if not _has_amd():
     pytest.skip("AMD device is not available")
   m = n = 16
@@ -173,7 +174,8 @@ def test_q4k_q8_1_mmq_amd_ds4_coop_tile_matches_reference_when_amd_available():
     role="ffn_gate_up", m=m, n=n, k=k, m_tile=m, n_tile=n, k_groups=8, activation_layout=Q8_1_MMQ_DS4_LAYOUT)
   ref = q4k_q8_1_mmq_ds4_tile_reference(raw, ds4, spec)
 
-  result = run_q4k_q8_1_mmq_bounded_amd_ds4_coop_tile(raw, ds4, role="ffn_gate_up")
+  result = run_q4k_q8_1_mmq_bounded_amd_ds4_coop_tile(
+    raw, ds4, role="ffn_gate_up", writeback_mode=writeback_mode)
 
   assert result.backend_atom_id == AMD_DS4_COOP_TILE_BACKEND_ATOM_ID
   assert result.lifecycle_detail["shared_memory_staging"] is True
@@ -181,6 +183,7 @@ def test_q4k_q8_1_mmq_amd_ds4_coop_tile_matches_reference_when_amd_available():
   assert result.lifecycle_detail["production_dispatch_changed"] is False
   assert result.lifecycle_detail["store_owner_metadata"] is False
   assert result.lifecycle_detail["store_owner_count"] == 0
+  assert result.lifecycle_detail["writeback_mode"] == writeback_mode
   assert result.lifecycle_detail["store_owner_proof"] == "separate_r4_lowered_isa_trace"
   assert result.lifecycle_detail["default_route"] == "direct_packed"
   assert "R4 owner proof remains separate" in AMD_DS4_COOP_TILE_BLOCKER
