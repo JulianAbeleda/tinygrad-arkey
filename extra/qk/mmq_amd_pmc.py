@@ -66,7 +66,7 @@ def _child_control(kind: str, size: int) -> dict[str, Any]:
           "counters": _decode_event(events[-1]) if events else {}}
 
 
-def _child_mmq(writeback_mode: str, seed: int) -> dict[str, Any]:
+def _child_mmq(writeback_mode: str, seed: int, repetitions: int = 1, announce_ready: bool = False) -> dict[str, Any]:
   from tinygrad import Tensor, dtypes
   from tinygrad.device import Compiled, Device
   from extra.qk.mmq_bounded_harness import ACTIVATION_LAYOUT_MMQ_DS4, _finite_q4k_bytes, _q8_activation_inputs
@@ -76,14 +76,18 @@ def _child_mmq(writeback_mode: str, seed: int) -> dict[str, Any]:
   assert activation.ds4_activation is not None
   words = Tensor(_as_u32_words(q4), dtype=dtypes.uint32, device="AMD").realize()
   values, scales, sums = _ds4_tensors(activation.ds4_activation, "AMD")
+  fxn = _q4k_q8_1_bounded_ds4_coop_tile_kernel(16, 16, 256, "ffn_gate_up", writeback_mode)
+  Tensor.empty(16, 16, dtype=dtypes.float32, device="AMD").custom_kernel(words, values, scales, sums, fxn=fxn)[0].realize()
+  Device["AMD"].synchronize()
+  if announce_ready: print("MMQ_KERNEL_WINDOW_READY", flush=True)
   Compiled.profile_events.clear()
-  out = Tensor.empty(16, 16, dtype=dtypes.float32, device="AMD").custom_kernel(
-    words, values, scales, sums,
-    fxn=_q4k_q8_1_bounded_ds4_coop_tile_kernel(16, 16, 256, "ffn_gate_up", writeback_mode))[0].realize()
+  out = None
+  for _ in range(repetitions):
+    out = Tensor.empty(16, 16, dtype=dtypes.float32, device="AMD").custom_kernel(words, values, scales, sums, fxn=fxn)[0].realize()
   Device["AMD"].synchronize()
   events = [e for e in Compiled.profile_events if type(e).__name__ == "ProfilePMCEvent"]
   return {"status": "live" if events else "blocked", "event_count": len(events),
-          "kernel": "q4k_q8_1_mmq_ds4_coop_tile", "writeback_mode": writeback_mode,
+          "kernel": "q4k_q8_1_mmq_ds4_coop_tile", "writeback_mode": writeback_mode, "repetitions": repetitions,
           "counters": _decode_event(events[-1]) if events else {}, "output_device": out.device}
 
 
@@ -227,12 +231,16 @@ def _main() -> None:
   ap = argparse.ArgumentParser()
   ap.add_argument("--child", nargs=2, metavar=("KIND", "SIZE"))
   ap.add_argument("--mmq-child", nargs=2, metavar=("WRITEBACK_MODE", "SEED"))
+  ap.add_argument("--mmq-loop", nargs=3, metavar=("WRITEBACK_MODE", "SEED", "REPETITIONS"))
   ap.add_argument("--liveness", action="store_true")
   args = ap.parse_args()
   if args.child:
     print("MMQ_PMC_JSON=" + json.dumps(_child_control(args.child[0], int(args.child[1])), sort_keys=True))
   elif args.mmq_child:
     print("MMQ_PMC_JSON=" + json.dumps(_child_mmq(args.mmq_child[0], int(args.mmq_child[1])), sort_keys=True))
+  elif args.mmq_loop:
+    print("MMQ_PMC_JSON=" + json.dumps(_child_mmq(args.mmq_loop[0], int(args.mmq_loop[1]),
+      repetitions=int(args.mmq_loop[2]), announce_ready=True), sort_keys=True))
   elif args.liveness: print(json.dumps(run_pmc_liveness_suite(), indent=2, sort_keys=True))
   else: ap.error("choose --child or --liveness")
 

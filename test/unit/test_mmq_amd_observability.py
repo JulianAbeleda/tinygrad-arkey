@@ -11,7 +11,7 @@ from extra.qk.mmq_amd_pmc import (
   DEFAULT_GROUPS, SCHEMA as PMC_SCHEMA, classify_liveness, collect_kernel_pmc, collect_mmq_pmc, probe_rocprof_fallback, validate_pmc_result,
 )
 from extra.qk.mmq_amd_telemetry import (
-  SCHEMA as TELEMETRY_SCHEMA, collect_process_telemetry, collect_telemetry, read_sensor, validate_telemetry,
+  SCHEMA as TELEMETRY_SCHEMA, collect_mmq_kernel_window_telemetry, collect_process_telemetry, collect_telemetry, read_sensor, validate_telemetry,
 )
 from extra.qk.mmq_amd_probes import SCHEMA as PROBE_SCHEMA, summarize_store_calibration, validate_differential_probe
 
@@ -104,6 +104,15 @@ def test_process_telemetry_binds_candidate_binary_and_samples_window(tmp_path):
   validate_telemetry(artifact)
   assert artifact["status"] == "live" and artifact["sample_count"] >= 1
   assert artifact["candidate_id"] == "candidate" and artifact["binary_sha256"] == "a" * 64
+
+
+def test_kernel_window_telemetry_validates_identity_before_execution():
+  with pytest.raises(ValueError, match="writeback_mode"):
+    collect_mmq_kernel_window_telemetry("other", repetitions=1, interval_s=.01, system_snapshot_id="s",
+      experiment_id="e", candidate_id="c", binary_sha256="a" * 64)
+  with pytest.raises(ValueError, match="binary_sha256"):
+    collect_mmq_kernel_window_telemetry("direct_owner_v0", repetitions=1, interval_s=.01, system_snapshot_id="s",
+      experiment_id="e", candidate_id="c", binary_sha256="short")
 
 
 def test_observability_artifacts_are_json_serializable(tmp_path):

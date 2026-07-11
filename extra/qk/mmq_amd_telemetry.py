@@ -7,6 +7,7 @@ import json
 import math
 from pathlib import Path
 import subprocess
+import sys
 import time
 from typing import Any, Iterable
 
@@ -82,6 +83,40 @@ def collect_process_telemetry(command: list[str], *, interval_s: float = 0.01, s
           "binary_sha256": binary_sha256, "command": command, "returncode": proc.returncode,
           "sample_count": len(rows), "interval_s": interval_s, "samples": rows,
           "stdout": stdout[-4000:], "stderr": stderr[-4000:], "timed_out": timed_out}
+
+
+def collect_mmq_kernel_window_telemetry(writeback_mode: str, *, repetitions: int, interval_s: float,
+                                        system_snapshot_id: str, experiment_id: str, candidate_id: str,
+                                        binary_sha256: str, sensors: dict[str, str] | None = None,
+                                        timeout: float = 120.0) -> dict[str, Any]:
+  if writeback_mode not in ("gated_matrix_v0", "direct_owner_v0"): raise ValueError("writeback_mode is invalid")
+  if repetitions < 1: raise ValueError("repetitions must be positive")
+  if len(binary_sha256) != 64 or any(c not in "0123456789abcdef" for c in binary_sha256):
+    raise ValueError("binary_sha256 must be lowercase SHA-256")
+  root = Path(__file__).resolve().parents[2]
+  command = ["/usr/bin/env", f"PYTHONPATH={root}", "PROFILE=0", "PMC=0", sys.executable,
+             str(root / "extra/qk/mmq_amd_pmc.py"), "--mmq-loop", writeback_mode, "0", str(repetitions)]
+  configured, rows, started = sensors or DEFAULT_SENSORS, [], time.monotonic()
+  proc = subprocess.Popen(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+  assert proc.stdout is not None
+  ready = proc.stdout.readline().strip()
+  if ready != "MMQ_KERNEL_WINDOW_READY":
+    stdout, stderr = proc.communicate()
+    return {"schema": SCHEMA, "window": "kernel_loop", "status": "blocked", "reason": "child did not announce kernel window",
+            "ready_line": ready, "stdout": stdout[-4000:], "stderr": stderr[-4000:], "sample_count": 0, "samples": [],
+            "system_snapshot_id": system_snapshot_id, "experiment_id": experiment_id, "candidate_id": candidate_id,
+            "binary_sha256": binary_sha256}
+  while proc.poll() is None:
+    rows.append({"sample": len(rows), "monotonic_ns": time.monotonic_ns(),
+                 "sensors": {name: {"path": path, **read_sensor(path)} for name, path in configured.items()}})
+    if time.monotonic() - started > timeout: proc.kill(); break
+    time.sleep(interval_s)
+  stdout, stderr = proc.communicate()
+  return {"schema": SCHEMA, "window": "kernel_loop", "status": "live" if proc.returncode == 0 and rows else "blocked",
+          "writeback_mode": writeback_mode, "repetitions": repetitions, "system_snapshot_id": system_snapshot_id,
+          "experiment_id": experiment_id, "candidate_id": candidate_id, "binary_sha256": binary_sha256,
+          "sample_count": len(rows), "interval_s": interval_s, "samples": rows, "returncode": proc.returncode,
+          "stdout": stdout[-4000:], "stderr": stderr[-4000:]}
 
 
 def validate_telemetry(artifact: dict[str, Any]) -> None:
