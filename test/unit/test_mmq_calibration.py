@@ -10,7 +10,7 @@ def test_calibration_case_contract_and_matrix():
   assert dependent_valu_case(96, 64).family == "dependent_valu"
   assert independent_valu_case(96, 64).independent_streams == 4
   matrix = default_calibration_matrix()
-  assert len(matrix) == 24 and len({case.case_id for case in matrix}) == len(matrix)
+  assert len(matrix) == 29 and len({case.case_id for case in matrix}) == len(matrix)
   with pytest.raises(ValueError, match="unknown family"): CalibrationCase("x", "bad", 1).validate()
 
 

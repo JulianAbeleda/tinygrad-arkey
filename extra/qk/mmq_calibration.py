@@ -31,7 +31,8 @@ class CalibrationCase:
   local_threads: int = 32
 
   def validate(self) -> None:
-    if self.family not in ("launch", "dependent_valu", "independent_valu", "lds_barrier", "resource_pressure"):
+    if self.family not in ("launch", "dependent_valu", "independent_valu", "dependent_valu_int", "dependent_salu",
+                           "mixed_salu_valu", "lds_barrier", "lds_wait", "store_only", "resource_pressure"):
       raise ValueError(f"unknown family {self.family!r}")
     if self.workgroups <= 0 or self.chain_length < 0 or self.independent_streams <= 0 or self.stride <= 0 or self.local_threads <= 0:
       raise ValueError("invalid calibration dimensions")
@@ -57,6 +58,14 @@ def lds_barrier_case(workgroups:int) -> CalibrationCase:
   return CalibrationCase(f"lds_barrier.wg{workgroups}.t64", "lds_barrier", workgroups, local_threads=64)
 
 
+def lds_wait_case(workgroups:int) -> CalibrationCase:
+  return CalibrationCase(f"lds_wait.wg{workgroups}.t64", "lds_wait", workgroups, local_threads=64)
+
+
+def store_only_case(workgroups:int) -> CalibrationCase:
+  return CalibrationCase(f"store_only.wg{workgroups}", "store_only", workgroups)
+
+
 def resource_pressure_case(workgroups:int, streams:int) -> CalibrationCase:
   return CalibrationCase(f"resource_pressure.wg{workgroups}.s{streams}", "resource_pressure", workgroups, 8, streams)
 
@@ -65,19 +74,40 @@ def global_load_case(workgroups:int, stride:int) -> CalibrationCase:
   return CalibrationCase(f"global_load.wg{workgroups}.stride{stride}", "launch", workgroups, stride=stride)
 
 
+def issue_case(family:str, workgroups:int=96, chain_length:int=64) -> CalibrationCase:
+  if family not in ("dependent_valu_int", "dependent_salu", "mixed_salu_valu"): raise ValueError("unknown issue family")
+  return CalibrationCase(f"{family}.wg{workgroups}.n{chain_length}", family, workgroups, chain_length)
+
+
 def _kernel(case:CalibrationCase) -> Callable[..., UOp]:
   case.validate()
   def kernel(out:UOp, inp:UOp) -> UOp:
     gid, lane = UOp.special(case.workgroups, "gidx0"), UOp.special(case.local_threads, "lidx0")
     idx = gid * case.local_threads + lane
     if case.family == "launch": value = inp[idx * case.stride]
-    elif case.family == "lds_barrier":
+    elif case.family == "store_only": value = gid.cast(dtypes.float32)
+    elif case.family in ("lds_barrier", "lds_wait"):
       local = UOp.placeholder((case.local_threads,), dtypes.float32, 100, addrspace=AddrSpace.LOCAL)
       stage = local[lane].store(inp[idx])
-      value = local.after(UOp.barrier(UOp.group(stage)))[lane]
+      order = UOp.barrier(UOp.group(stage)) if case.family == "lds_barrier" else UOp.group(stage)
+      value = local.after(order)[lane]
     elif case.family == "dependent_valu":
       value = inp[idx]
       for step in range(case.chain_length): value = value * UOp.const(dtypes.float32, 1.000001) + UOp.const(dtypes.float32, step * 1e-7)
+    elif case.family == "dependent_valu_int":
+      ivalue = inp[idx].cast(dtypes.int32)
+      for step in range(case.chain_length): ivalue = (ivalue * UOp.const(dtypes.int32, 3 + step % 4)) ^ UOp.const(dtypes.int32, step + 1)
+      value = ivalue.cast(dtypes.float32)
+    elif case.family == "dependent_salu":
+      svalue = gid
+      for step in range(case.chain_length): svalue = (svalue * UOp.const(dtypes.int32, 3 + step % 4)) ^ UOp.const(dtypes.int32, step + 1)
+      value = svalue.cast(dtypes.float32)
+    elif case.family == "mixed_salu_valu":
+      svalue, value = gid, inp[idx]
+      for step in range(case.chain_length):
+        svalue = (svalue * UOp.const(dtypes.int32, 3 + step % 4)) ^ UOp.const(dtypes.int32, step + 1)
+        value = value * UOp.const(dtypes.float32, 1.000001) + UOp.const(dtypes.float32, step * 1e-7)
+      value = value + svalue.cast(dtypes.float32)
     else:
       values = [inp[(idx + stream) % (case.workgroups * case.local_threads)] for stream in range(case.independent_streams)]
       for step in range(case.chain_length):
@@ -108,7 +138,9 @@ def run_calibration_case(case:CalibrationCase, *, warmups:int=5, rounds:int=30, 
   binary = getattr(runtime, "lib", None)
   if binary != program.src[4].arg: raise RuntimeError("loaded calibration binary mismatch")
   global_size, local_size = program.arg.global_size, program.arg.local_size
-  args = (out.uop.buffer._buf, inp.uop.buffer._buf)
+  buffers = {0: out.uop.buffer._buf}
+  if 1 in program.arg.globals: buffers[1] = inp.uop.buffer._buf
+  args = tuple(buffers[index] for index in program.arg.globals)
   for _ in range(warmups): runtime(*args, global_size=global_size, local_size=local_size, wait=True)
   samples_ms = [float(runtime(*args, global_size=global_size, local_size=local_size, wait=True)) * 1e3 for _ in range(rounds)]
   metadata = parse_amdgpu_metadata(binary)
@@ -147,8 +179,10 @@ def default_calibration_matrix() -> tuple[CalibrationCase, ...]:
                [dependent_valu_case(96, n) for n in (16, 64, 256)] +
                [independent_valu_case(96, n, 4) for n in (16, 64, 256)] +
                [lds_barrier_case(wg) for wg in (1, 96)] +
+               [lds_wait_case(96), store_only_case(96)] +
                [resource_pressure_case(96, streams) for streams in (4, 8, 16, 32)] +
-               [global_load_case(96, stride) for stride in (1, 2, 4, 8, 16, 32)])
+               [global_load_case(96, stride) for stride in (1, 2, 4, 8, 16, 32)] +
+               [issue_case(family) for family in ("dependent_valu_int", "dependent_salu", "mixed_salu_valu")])
 
 
 def run_calibration_matrix(output:Path, *, warmups:int=5, rounds:int=30, system_snapshot_id:str | None=None) -> dict[str, Any]:
@@ -161,6 +195,22 @@ def run_calibration_matrix(output:Path, *, warmups:int=5, rounds:int=30, system_
                                   artifact_output=output)
     (output / f"{case.case_id}.json").write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
     results.append({"case_id": case.case_id, "binary_sha256": result["hashes"]["binary_sha256"], "median_ms": result["median_ms"]})
-  manifest = {"schema": SCHEMA, "results": results, "production_dispatch_changed": False}
+  ids = [row["case_id"] for row in results]
+  coverage = {
+    "launch_latency": [x for x in ids if x.startswith("launch.")],
+    "grid_tail_cu_boundaries": [x for x in ids if x.startswith("launch.wg")],
+    "valu_float_latency_issue": [x for x in ids if x.startswith(("dependent_valu.", "independent_valu."))],
+    "valu_int_latency": [x for x in ids if x.startswith("dependent_valu_int.")],
+    "salu_latency_issue": [x for x in ids if x.startswith("dependent_salu.")],
+    "salu_valu_compatibility": [x for x in ids if x.startswith("mixed_salu_valu.")],
+    "vmem_load_stride_transactions": [x for x in ids if x.startswith("global_load.")],
+    "vmem_store": [x for x in ids if x.startswith("store_only.")],
+    "lds_issue_latency": [x for x in ids if x.startswith(("lds_barrier.", "lds_wait."))],
+    "barrier_wait_differential": [x for x in ids if x.startswith(("lds_barrier.", "lds_wait."))],
+    "resource_pressure_occupancy": [x for x in ids if x.startswith("resource_pressure.")],
+  }
+  manifest = {"schema": SCHEMA, "provenance_class": "generated_microbenchmark", "system_snapshot_id": system_snapshot_id,
+              "protocol": {"warmups": warmups, "rounds": rounds}, "coverage": coverage, "results": results,
+              "production_dispatch_changed": False}
   (output / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
   return manifest
