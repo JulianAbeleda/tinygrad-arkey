@@ -5,8 +5,10 @@ from typing import Any
 
 
 SCHEMA = "tinygrad.kernel_resource_trace.v1"
-RESOURCE_FIELDS = ("vgpr", "sgpr", "lds_bytes", "scratch_bytes", "workgroup", "grid", "occupancy")
-_INTEGER_RESOURCE_FIELDS = ("vgpr", "sgpr", "lds_bytes", "scratch_bytes")
+RESOURCE_FIELDS = ("vgpr", "sgpr", "lds_bytes", "scratch_bytes", "vgpr_spills", "sgpr_spills", "workgroup_threads",
+                   "max_workgroup_threads", "wavefront_size", "dynamic_stack", "workgroup", "grid", "occupancy")
+_INTEGER_RESOURCE_FIELDS = ("vgpr", "sgpr", "lds_bytes", "scratch_bytes", "vgpr_spills", "sgpr_spills",
+                            "workgroup_threads", "max_workgroup_threads", "wavefront_size")
 _DIMENSION_RESOURCE_FIELDS = ("workgroup", "grid")
 
 
@@ -56,6 +58,12 @@ def build_kernel_resource_trace_bundle(
   sgpr: int | None = None,
   lds_bytes: int | None = None,
   scratch_bytes: int | None = None,
+  vgpr_spills: int | None = None,
+  sgpr_spills: int | None = None,
+  workgroup_threads: int | None = None,
+  max_workgroup_threads: int | None = None,
+  wavefront_size: int | None = None,
+  dynamic_stack: bool | None = None,
   workgroup: Sequence[int] | None = None,
   grid: Sequence[int] | None = None,
   occupancy: int | float | None = None,
@@ -66,7 +74,10 @@ def build_kernel_resource_trace_bundle(
   _validate_optional_sha256(binary_sha256, "binary_sha256")
 
   resources: dict[str, Any] = {}
-  for field, value in (("vgpr", vgpr), ("sgpr", sgpr), ("lds_bytes", lds_bytes), ("scratch_bytes", scratch_bytes)):
+  for field, value in (("vgpr", vgpr), ("sgpr", sgpr), ("lds_bytes", lds_bytes), ("scratch_bytes", scratch_bytes),
+                       ("vgpr_spills", vgpr_spills), ("sgpr_spills", sgpr_spills),
+                       ("workgroup_threads", workgroup_threads), ("max_workgroup_threads", max_workgroup_threads),
+                       ("wavefront_size", wavefront_size)):
     if value is not None:
       resources[field] = _validate_non_negative_int(value, f"resources.{field}")
   for field, value in (("workgroup", workgroup), ("grid", grid)):
@@ -74,6 +85,9 @@ def build_kernel_resource_trace_bundle(
       resources[field] = _validate_positive_int_sequence(value, f"resources.{field}")
   if occupancy is not None:
     resources["occupancy"] = _validate_occupancy(occupancy, "resources.occupancy")
+  if dynamic_stack is not None:
+    if not isinstance(dynamic_stack, bool): raise ValueError("resources.dynamic_stack must be a boolean")
+    resources["dynamic_stack"] = dynamic_stack
 
   bundle: dict[str, Any] = {
     "schema": SCHEMA,
@@ -108,4 +122,6 @@ def validate_kernel_resource_trace_bundle(bundle: Any) -> dict[str, Any]:
     for field in _DIMENSION_RESOURCE_FIELDS:
       if field in resources: _validate_positive_int_sequence(resources[field], f"resources.{field}")
     if "occupancy" in resources: _validate_occupancy(resources["occupancy"], "resources.occupancy")
+    if "dynamic_stack" in resources and not isinstance(resources["dynamic_stack"], bool):
+      raise ValueError("resources.dynamic_stack must be a boolean")
   return dict(bundle)

@@ -12,6 +12,7 @@ from extra.qk.mmq_experiment import (
   BACKEND, BUNDLE_SCHEMA, CANDIDATE_SCHEMA, CANDIDATE_IDS, MMQCandidateSpec, canonical_candidate,
   produce_experiment_bundle,
 )
+from extra.qk.mmq_compile_evidence import MMQCompileEvidence, compile_mmq_program
 from extra.qk.mmq_q4k_q8_atom import _q4k_q8_1_bounded_ds4_coop_tile_kernel
 
 
@@ -26,6 +27,21 @@ def _fake_report(status="PASS"):
                "direct_packed": {"status": "PASS", "samples_ms": [1.0] * 10,
                                  "min_ms": 1.0, "median_ms": 1.0}},
   }
+
+
+def _fake_compile(spec):
+  program = compile_mmq_program(spec)
+  binary, source = program.src[4].arg, program.src[3].arg
+  metadata = {"vgpr": 27, "sgpr": 29, "vgpr_spills": 0, "sgpr_spills": 0, "lds_bytes": 256,
+              "scratch_bytes": 0, "max_workgroup_threads": 32, "wavefront_size": 32, "dynamic_stack": False,
+              "symbol": program.arg.function_name + ".kd", "target": "amdgcn-amd-amdhsa--gfx1100", "metadata_tool": "fixture"}
+  isa = {"instruction_count": 1, "encoded_dwords": 2, "global_load_sites": 0,
+         "global_store_sites": 1 if spec.writeback_mode == "direct_owner_v0" else 256,
+         "ds_load_sites": 0, "ds_store_sites": 0, "barrier_sites": 0, "waitcnt_sites": 0, "scratch_sites": 0,
+         "branch_sites": 0, "predicate_sites": 0, "max_referenced_vgpr": 0, "max_referenced_sgpr": 0,
+         "store_instructions": [], "instructions": []}
+  return MMQCompileEvidence(program, repr(program.src[0]), source, binary, "fixture isa\n", metadata, isa,
+                            {"renderer": "fixture", "compiler": "fixture"})
 
 
 @pytest.mark.parametrize("mode", tuple(CANDIDATE_IDS))
@@ -74,7 +90,7 @@ def test_atomic_bundle_propagates_identity_and_hashes_files(tmp_path):
   out = tmp_path / "bundle"
   spec = canonical_candidate("direct_owner_v0")
   produce_experiment_bundle(spec, out, experiment_id="exp-1", system_snapshot_id="sys-1",
-                            runner=lambda config: _fake_report())
+                            runner=lambda config: _fake_report(), compile_capture=_fake_compile)
   manifest = json.loads((out / "manifest.json").read_text())
   assert manifest["schema"] == BUNDLE_SCHEMA
   assert manifest["state"] == "EVIDENCE_COMPLETE"
@@ -84,6 +100,7 @@ def test_atomic_bundle_propagates_identity_and_hashes_files(tmp_path):
   for name, digest in manifest["files"].items():
     raw = (out / name).read_bytes()
     assert hashlib.sha256(raw).hexdigest() == digest
+    if not name.endswith(".json"): continue
     artifact = json.loads(raw)
     assert artifact["candidate_id"] == spec.candidate_id
     assert artifact["experiment_id"] == "exp-1"
@@ -96,7 +113,7 @@ def test_failure_bundle_is_atomic_structured_and_not_complete(tmp_path):
   def fail(_config): raise RuntimeError("compile failed")
   out = tmp_path / "failed"
   produce_experiment_bundle(canonical_candidate("gated_matrix_v0"), out, experiment_id="exp-fail",
-                            system_snapshot_id="sys-1", runner=fail)
+                            system_snapshot_id="sys-1", runner=fail, compile_capture=_fake_compile)
   manifest = json.loads((out / "manifest.json").read_text())
   assert manifest["state"] == "PRODUCER_ERROR"
   assert manifest["evidence_complete"] is False
@@ -111,4 +128,4 @@ def test_bundle_refuses_to_replace_existing_output(tmp_path):
   out.mkdir()
   with pytest.raises(FileExistsError):
     produce_experiment_bundle(canonical_candidate("gated_matrix_v0"), out, experiment_id="e",
-                              system_snapshot_id="s", runner=lambda config: _fake_report())
+                              system_snapshot_id="s", runner=lambda config: _fake_report(), compile_capture=_fake_compile)

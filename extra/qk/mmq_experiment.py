@@ -20,6 +20,7 @@ from extra.qk.mmq_bounded_harness import (
 from extra.qk.mmq_epoch_manifest_export import build_amd_isa_proof_manifest_bundle
 from extra.qk.mmq_owner_coverage import build_mmq_owner_coverage_artifact, structural_static_store_only_owner_map
 from extra.qk.mmq_q4k_q8_reference import Q8_1_MMQ_DS4_LAYOUT, describe_q4k_q8_1_mmq_tile
+from extra.qk.mmq_resource_snapshot import build_kernel_resource_trace_bundle
 
 CANDIDATE_SCHEMA = "tinygrad.mmq_candidate_spec.v1"
 BUNDLE_SCHEMA = "boltbeam.mmq_experiment_bundle.v1"
@@ -29,7 +30,8 @@ CANDIDATE_IDS = {
   "gated_matrix_v0": "mmq.wb.gated_matrix.m16.n16.k256.v1",
   "direct_owner_v0": "mmq.wb.direct_owner.m16.n16.k256.v1",
 }
-EVIDENCE_FILES = ("candidate.json", "correctness.json", "timing.json", "resources.json", "isa_manifest.json", "ownership.json")
+EVIDENCE_FILES = ("candidate.json", "correctness.json", "timing.json", "resources.json", "isa_manifest.json", "ownership.json",
+                  "compile_manifest.json", "kernel.uops.txt", "kernel.source.hip", "kernel.hsaco", "kernel.isa.txt")
 
 
 def _sha256_json(value: Any) -> str:
@@ -109,26 +111,32 @@ def _write_json(path: Path, value: Any) -> None:
 
 
 def produce_experiment_bundle(spec: MMQCandidateSpec, output: Path, *, experiment_id: str,
-                              system_snapshot_id: str, runner: Callable[[BoundedMMQConfig], dict[str, Any]] = run_bounded_harness) -> Path:
+                              system_snapshot_id: str, runner: Callable[[BoundedMMQConfig], dict[str, Any]] = run_bounded_harness,
+                              compile_capture: Callable[[MMQCandidateSpec], Any] | None = None) -> Path:
   spec.validate()
   output = Path(output)
   if output.exists(): raise FileExistsError(output)
   output.parent.mkdir(parents=True, exist_ok=True)
   staging = Path(tempfile.mkdtemp(prefix=f".{output.name}.tmp-", dir=output.parent))
   candidate_json = spec.to_json()
-  source_sha256 = _sha256_json({"candidate": candidate_json, "atom_file": hashlib.sha256(
-    (Path(__file__).parent / "mmq_q4k_q8_atom.py").read_bytes()).hexdigest()})
+  from extra.qk.mmq_compile_evidence import compile_mmq_program
+  compiled_program = compile_mmq_program(spec) if compile_capture is None else None
+  source_sha256 = hashlib.sha256(compiled_program.src[3].arg.encode()).hexdigest() if compiled_program is not None else _sha256_json(candidate_json)
   binary_sha256: str | None = None
   identity = _identity(spec, experiment_id, system_snapshot_id, source_sha256, binary_sha256)
   state, error = "PRODUCING", None
   files: dict[str, str] = {}
   try:
     report = runner(spec.config())
-    compile_evidence = report.get("compile_evidence", {})
-    maybe_binary = compile_evidence.get("binary_sha256")
-    if isinstance(maybe_binary, str) and len(maybe_binary) == 64:
-      binary_sha256 = maybe_binary
-      identity = _identity(spec, experiment_id, system_snapshot_id, source_sha256, binary_sha256)
+    if compile_capture is None:
+      from extra.qk.mmq_compile_evidence import capture_loaded_mmq_program
+      compile_evidence = capture_loaded_mmq_program(spec)
+    else: compile_evidence = compile_capture(spec)
+    if compiled_program is not None and compile_evidence.program.key != compiled_program.key:
+      raise RuntimeError("executed MMQ program identity differs from pre-execution compilation")
+    source_sha256 = compile_evidence.hashes["rendered_source_sha256"]
+    binary_sha256 = compile_evidence.hashes["binary_sha256"]
+    identity = _identity(spec, experiment_id, system_snapshot_id, source_sha256, binary_sha256)
     controlled_hashes = {
       "numeric_body_sha256": _sha256_json({"body": "ds4_coop_numeric_v0"}),
       "geometry_sha256": _sha256_json({"M": 16, "N": 16, "K": 256, "lane": 32}),
@@ -158,14 +166,27 @@ def produce_experiment_bundle(spec: MMQCandidateSpec, output: Path, *, experimen
               "samples_ms": {"candidate": timing_row["samples_ms"],
                              "comparator": comparator.get("samples_ms", []) if isinstance(comparator, Mapping) else []},
               "production_dispatch_changed": False}
-    resources = compile_evidence.get("resources", {})
-    resource = {"schema": "tinygrad.kernel_resource_trace.v1", **identity, "kernel_name": BACKEND,
-                "resources": {key: resources[key] for key in
-                              ("vgpr", "sgpr", "lds_bytes", "scratch_bytes", "workgroup_threads") if key in resources}}
+    resources = compile_evidence.metadata
+    resource = build_kernel_resource_trace_bundle(candidate_id=spec.candidate_id, kernel_name=BACKEND,
+      source_sha256=source_sha256, binary_sha256=binary_sha256, vgpr=resources["vgpr"], sgpr=resources["sgpr"],
+      lds_bytes=resources["lds_bytes"], scratch_bytes=resources["scratch_bytes"], vgpr_spills=resources["vgpr_spills"],
+      sgpr_spills=resources["sgpr_spills"], workgroup_threads=int(__import__("math").prod(compile_evidence.program.arg.local_size)),
+      max_workgroup_threads=resources["max_workgroup_threads"], wavefront_size=resources["wavefront_size"],
+      dynamic_stack=resources["dynamic_stack"], workgroup=compile_evidence.program.arg.local_size,
+      grid=compile_evidence.program.arg.global_size)
+    resource.update(identity)
     isa = build_amd_isa_proof_manifest_bundle(candidate_id=spec.candidate_id, kernel_name=BACKEND, rows=[],
-                                               source_sha256=source_sha256)
+                                               source_sha256=source_sha256, binary_sha256=binary_sha256)
     isa.update(identity)
-    isa["instruction_counts"] = {"global_store": 256 if spec.writeback_mode == "gated_matrix_v0" else 1}
+    isa["instruction_counts"] = {"global_store": compile_evidence.isa["global_store_sites"],
+                                 "global_load": compile_evidence.isa["global_load_sites"],
+                                 "ds_load": compile_evidence.isa["ds_load_sites"],
+                                 "ds_store": compile_evidence.isa["ds_store_sites"],
+                                 "barrier": compile_evidence.isa["barrier_sites"],
+                                 "waitcnt": compile_evidence.isa["waitcnt_sites"],
+                                 "scratch": compile_evidence.isa["scratch_sites"]}
+    isa["final_isa"] = dict(compile_evidence.isa)
+    isa["isa_sha256"] = compile_evidence.hashes["isa_sha256"]
     tile = describe_q4k_q8_1_mmq_tile(role="ffn_gate_up", m=16, n=16, k=256, m_tile=16, n_tile=16,
                                       activation_layout=Q8_1_MMQ_DS4_LAYOUT)
     ownership = build_mmq_owner_coverage_artifact(tile, structural_static_store_only_owner_map(tile),
@@ -173,16 +194,27 @@ def produce_experiment_bundle(spec: MMQCandidateSpec, output: Path, *, experimen
     ownership.update(identity)
     ownership["expected_stores"] = 256
     ownership["observed_stores"] = 256
+    ownership["ownership_proof_level"] = "source_uop_unique_owner_map_joined_to_exact_final_isa"
+    ownership["final_isa_store_instruction_sites"] = compile_evidence.isa["global_store_sites"]
     ownership["missing_store_summary"] = []
     ownership["duplicate_store_summary"] = []
+    compile_manifest = {**compile_evidence.manifest(), **identity, "production_dispatch_changed": False}
     docs = {"candidate.json": candidate_doc, "correctness.json": correctness, "timing.json": timing,
             "resources.json": resource, "isa_manifest.json": isa, "ownership.json": ownership}
     for name, doc in docs.items():
       doc["production_dispatch_changed"] = False
       _write_json(staging / name, doc)
       files[name] = hashlib.sha256((staging / name).read_bytes()).hexdigest()
+    _write_json(staging / "compile_manifest.json", compile_manifest)
+    (staging / "kernel.uops.txt").write_text(compile_evidence.sink_text + "\n")
+    (staging / "kernel.source.hip").write_text(compile_evidence.source)
+    (staging / "kernel.hsaco").write_bytes(compile_evidence.binary)
+    (staging / "kernel.isa.txt").write_text(compile_evidence.disassembly)
+    for name in ("compile_manifest.json", "kernel.uops.txt", "kernel.source.hip", "kernel.hsaco", "kernel.isa.txt"):
+      files[name] = hashlib.sha256((staging / name).read_bytes()).hexdigest()
     complete = (report["status"] == "PASS" and comparator is not None and binary_sha256 is not None and
-                all(key in resource["resources"] for key in ("vgpr", "sgpr", "lds_bytes", "scratch_bytes", "workgroup_threads")))
+                all(key in resource["resources"] for key in ("vgpr", "sgpr", "lds_bytes", "scratch_bytes", "workgroup_threads")) and
+                set(EVIDENCE_FILES) <= set(files))
     state = "EVIDENCE_COMPLETE" if complete else "INCOMPLETE_EVIDENCE"
   except Exception as exc:
     state, error = "PRODUCER_ERROR", {"type": type(exc).__name__, "message": str(exc)}

@@ -63,6 +63,13 @@ def test_build_kernel_resource_trace_bundle_omits_unknown_values_instead_of_zero
   assert "binary_sha256" not in bundle
 
 
+def test_build_kernel_resource_trace_bundle_accepts_exact_amdgpu_metadata():
+  bundle = build_kernel_resource_trace_bundle(candidate_id="c", kernel_name="k", vgpr=27, sgpr=29, lds_bytes=256,
+    scratch_bytes=0, vgpr_spills=0, sgpr_spills=0, workgroup_threads=32, max_workgroup_threads=32,
+    wavefront_size=32, dynamic_stack=False)
+  assert validate_kernel_resource_trace_bundle(bundle)["resources"]["dynamic_stack"] is False
+
+
 def test_build_kernel_resource_trace_bundle_omits_empty_resources_mapping():
   bundle = build_kernel_resource_trace_bundle(candidate_id="c0", kernel_name="kernel")
 
