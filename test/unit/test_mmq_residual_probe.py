@@ -4,3 +4,4 @@ def test_real_residual_probe_binds_false_sites_without_candidate_identity():
   assert r["dynamic_contract"]["false_sites_execute"] is False
   assert r["isa_summary"]["global_store_sites"]>=2
   assert "candidate_id" not in r and len(r["binary_sha256"])==64
+  assert r["protocol"]["compiled_global_size"][0]==r["protocol"]["timed_global_size"][0]+1

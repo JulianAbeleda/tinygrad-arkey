@@ -20,12 +20,13 @@ class ResidualCase:
   false_sites:int
   lds_stage:bool
   real_stores:int
+  workgroups:int=1
   @property
-  def case_id(self): return f"residual.false{self.false_sites}.lds{int(self.lds_stage)}.real{self.real_stores}"
+  def case_id(self): return f"residual.wg{self.workgroups}.false{self.false_sites}.lds{int(self.lds_stage)}.real{self.real_stores}"
 
 def _kernel(case:ResidualCase):
   def kernel(out:UOp, inp:UOp):
-    gid,lane=UOp.special(16,"gidx0"),UOp.special(64,"lidx0")
+    gid,lane=UOp.special(case.workgroups+1,"gidx0"),UOp.special(64,"lidx0")
     value=inp[lane]
     ordered=None
     if case.lds_stage:
@@ -34,7 +35,7 @@ def _kernel(case:ResidualCase):
     stores=[out[i].store(value) for i in range(case.real_stores)]
     for site in range(case.false_sites):
       # Runtime launches gidx0=0 only; these remain statically present but dynamically false.
-      stores.append(out[case.real_stores+site].store(value,gate=gid.eq(1+site%15)))
+      stores.append(out[case.real_stores+site].store(value,gate=gid.eq(case.workgroups)))
     return UOp.group(*stores).sink(arg=KernelInfo(name=case.case_id.replace(".","_"),opts_to_apply=()))
   return kernel
 
@@ -49,7 +50,7 @@ def run_case(case:ResidualCase,*,warmups=5,rounds=30,system_snapshot_id:str):
   rt=runtime_cache[(prg.key,"AMD")]
   if rt.lib!=prg.src[4].arg: raise RuntimeError("loaded residual binary mismatch")
   args=(out.uop.buffer._buf,inp.uop.buffer._buf)
-  gs=(1,1,1);ls=prg.arg.local_size
+  gs=(case.workgroups,1,1);ls=prg.arg.local_size
   from tinygrad.device import Compiled
   Compiled.profile_events.clear()
   for _ in range(warmups):rt(*args,global_size=gs,local_size=ls,wait=True)
@@ -58,8 +59,9 @@ def run_case(case:ResidualCase,*,warmups=5,rounds=30,system_snapshot_id:str):
   result={"schema":SCHEMA,"provenance_class":"generated_microbenchmark","case_id":case.case_id,"knobs":case.__dict__,
     "system_snapshot_id":system_snapshot_id,"binary_sha256":hashlib.sha256(binary).hexdigest(),"isa_sha256":hashlib.sha256(disasm.encode()).hexdigest(),
     "resources":meta,"isa_summary":{k:v for k,v in isa.items() if k!="instructions"},"samples_ms":samples,"median_ms":statistics.median(samples),
-    "protocol":{"warmups":warmups,"rounds":rounds,"timed_global_size":[1,1,1],"compiled_global_size":list(prg.arg.global_size),"gpu_timestamp_only":True},
-    "dynamic_contract":{"gidx0":0,"false_sites_execute":False,"real_stores_execute":case.real_stores,"transactions":"profile_pass_required"},
+    "protocol":{"warmups":warmups,"rounds":rounds,"timed_global_size":list(gs),"compiled_global_size":list(prg.arg.global_size),"gpu_timestamp_only":True},
+    "dynamic_contract":{"gidx0_range":[0,case.workgroups-1],"excluded_false_gate_gidx0":case.workgroups,
+                        "false_sites_execute":False,"real_stores_execute_per_workgroup":case.real_stores,"transactions":"profile_pass_required"},
     "disassembly_tool":tool,"production_dispatch_changed":False}
   events=[e for e in Compiled.profile_events if type(e).__name__=="ProfilePMCEvent"]
   if events:
@@ -69,7 +71,7 @@ def run_case(case:ResidualCase,*,warmups=5,rounds=30,system_snapshot_id:str):
 
 def collect_sq_profile(case:ResidualCase,*,system_snapshot_id:str,timeout=90):
   code=("import json;from extra.qk.mmq_residual_probe import ResidualCase,run_case;"
-        f"print(json.dumps(run_case(ResidualCase({case.false_sites},{case.lds_stage!r},{case.real_stores}),warmups=1,rounds=3,system_snapshot_id={system_snapshot_id!r})))")
+        f"print(json.dumps(run_case(ResidualCase({case.false_sites},{case.lds_stage!r},{case.real_stores},{case.workgroups}),warmups=1,rounds=3,system_snapshot_id={system_snapshot_id!r})))")
   env=dict(os.environ,PROFILE="1",PMC="1",PMC_COUNTERS="SQ_BUSY_CYCLES,SQ_INSTS_VALU,SQ_INSTS_SALU,SQ_WAVES,SQ_WAVE_CYCLES,SQ_WAIT_ANY",VIZ="0")
   proc=subprocess.run([sys.executable,"-c",code],env=env,text=True,capture_output=True,timeout=timeout,check=True)
   row=json.loads(proc.stdout.splitlines()[-1]); return {"case_id":case.case_id,"binary_sha256":row["binary_sha256"],"sq_profile":row.get("sq_profile",{}),"stderr":proc.stderr[-2000:]}
@@ -88,4 +90,32 @@ def run_matrix(output:Path,*,system_snapshot_id:str,warmups=5,rounds=30):
   coef=np.linalg.lstsq(np.asarray(X,float),np.asarray(y),rcond=None)[0];pred=np.asarray(X)@coef
   r2=1-float(np.sum((np.asarray(y)-pred)**2))/float(np.sum((np.asarray(y)-np.mean(y))**2))
   manifest={"schema":SCHEMA,"system_snapshot_id":system_snapshot_id,"cases":len(rows),"fit":{"terms":["intercept","static_store_sites","branch_sites","lds","store_sites_x_lds","real_stores"],"coefficients_ms":coef.tolist(),"r2":r2},"rows":[{"case_id":r["case_id"],"median_ms":r["median_ms"],"binary_sha256":r["binary_sha256"]} for r in rows]}
+  (output/"manifest.json").write_text(json.dumps(manifest,indent=2,sort_keys=True)+"\n");return manifest
+
+def run_v5_matrix(output:Path,*,system_snapshot_id:str,warmups=5,rounds=30,bootstrap=1000):
+  output=Path(output);output.mkdir(parents=True,exist_ok=False);rows=[]
+  for workgroups in (1,32,96,256):
+    for false in (0,128,256):
+      for lds in (False,True):
+        case=ResidualCase(false,lds,1,workgroups)
+        row=run_case(case,warmups=warmups,rounds=rounds,system_snapshot_id=system_snapshot_id)
+        (output/(row["case_id"]+".json")).write_text(json.dumps(row,indent=2,sort_keys=True)+"\n");rows.append(row)
+  def design(selected):
+    X=[];y=[]
+    for r in selected:
+      k=r["knobs"];wg,fs,lds=k["workgroups"],k["false_sites"],int(k["lds_stage"])
+      X.append([1,wg,fs,lds,wg*fs,fs*lds,wg*fs*lds]);y.append(r["median_ms"])
+    return np.asarray(X,float),np.asarray(y,float)
+  X,y=design(rows);coef=np.linalg.lstsq(X,y,rcond=None)[0];pred=X@coef
+  rng=np.random.default_rng(20260711);boots=[]
+  for _ in range(bootstrap):
+    sampled=[]
+    for row in rows:
+      copy=dict(row);copy["median_ms"]=float(np.median(rng.choice(row["samples_ms"],len(row["samples_ms"]),replace=True)));sampled.append(copy)
+    bx,by=design(sampled);boots.append(np.linalg.lstsq(bx,by,rcond=None)[0])
+  boot=np.asarray(boots);terms=["intercept","workgroups","false_sites","lds","workgroups_x_false_sites","false_sites_x_lds","workgroups_x_false_sites_x_lds"]
+  fit={"terms":terms,"coefficients_ms":coef.tolist(),"interval95_ms":[{"low":float(np.quantile(boot[:,i],.025)),"high":float(np.quantile(boot[:,i],.975))} for i in range(len(terms))],
+       "r2":1-float(np.sum((y-pred)**2))/float(np.sum((y-y.mean())**2)),"bootstrap_replicates":bootstrap}
+  manifest={"schema":"tinygrad.mmq_residual_grid_factorial.v5","provenance_class":"generated_microbenchmark","system_snapshot_id":system_snapshot_id,
+            "protocol":{"warmups":warmups,"rounds":rounds},"cells":len(rows),"fit":fit,"case_ids":[r["case_id"] for r in rows],"production_dispatch_changed":False}
   (output/"manifest.json").write_text(json.dumps(manifest,indent=2,sort_keys=True)+"\n");return manifest
