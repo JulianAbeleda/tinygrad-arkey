@@ -103,6 +103,35 @@ class TestAMDISAExtractionFixtures(unittest.TestCase):
     self.assertEqual(waitcnts[0]["logical_op"], "WAITCNT")
     self.assertIn("simm16", waitcnts[0])
 
+  def test_opt_in_proof_manifest_preserves_global_store_owner_metadata(self):
+    old = os.environ.get("AMD_ISA_PROOF_MANIFEST")
+    os.environ["AMD_ISA_PROOF_MANIFEST"] = "1"
+    getenv.cache_clear()
+    try:
+      reset_amd_isa_proof_manifest()
+      off = UOp(Ops.INS, dtypes.int32, arg=AMDOps.V_CONST, tag=(Register("v10", 10),))
+      ptr = UOp(Ops.INS, dtypes.ulong, arg=AMDOps.S_LOAD_PTR, tag=(Register("s6", 6),))
+      val = UOp(Ops.INS, dtypes.float32, arg=AMDOps.V_CONST, tag=(Register("v11", 11),))
+      owner = {"m": 3, "n": 5, "warp_id": 0, "lane_id": 53, "accumulator_slot": 245}
+      owner_tag = tuple(sorted(owner.items()))
+      lower_inst(UOp(
+        Ops.INS, dtypes.void,
+        src=(off, ptr, val, UOp.const(dtypes.int32, 4).rtag()),
+        arg=AMDOps.GLOBAL_STORE,
+        tag=("store_owner", owner_tag),
+      ))
+      rows = amd_isa_proof_manifest()
+    finally:
+      if old is None: os.environ.pop("AMD_ISA_PROOF_MANIFEST", None)
+      else: os.environ["AMD_ISA_PROOF_MANIFEST"] = old
+      getenv.cache_clear()
+
+    stores = [r for r in rows if r["kind"] == "global_store"]
+    self.assertEqual(len(stores), 1)
+    self.assertEqual(stores[0]["store_owner"], owner)
+    self.assertEqual(stores[0]["addr_vgpr"], 10)
+    self.assertEqual(stores[0]["data_vgpr"], 11)
+
   def test_opt_in_proof_manifest_records_ds_and_barrier_rows(self):
     old = os.environ.get("AMD_ISA_PROOF_MANIFEST")
     os.environ["AMD_ISA_PROOF_MANIFEST"] = "1"

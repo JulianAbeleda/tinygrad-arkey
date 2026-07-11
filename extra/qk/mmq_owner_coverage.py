@@ -112,14 +112,36 @@ def tinygrad_custom_kernel_store_owner_trace_blocker() -> dict[str, Any]:
     "status": "BLOCKED",
     "gpu_execution_trace": False,
     "exact_blocker": (
-      "tinygrad custom_kernel lowering can emit output stores, but this research path does not expose a per-store "
-      "stable owner identity tying each lowered global store back to thread/lane, accumulator slot, and output index"
+      "AMD ISA proof rows can now carry per-store owner identity, but the cooperative MMQ store-only custom kernel "
+      "that tags each lowered output store with thread/lane, accumulator slot, and output index has not landed yet"
     ),
     "smallest_next_code_change": (
-      "add opt-in debug metadata on lowered global_store UOps/instructions carrying output index, lane/thread scope, "
-      "and accumulator/register source identity"
+      "emit the R4 cooperative store-only custom kernel with store_owner tags on each output store, then build "
+      "owner coverage from the lowered AMD ISA proof manifest rows"
     ),
   }
+
+
+def observed_stores_from_amd_isa_proof_rows(rows: Iterable[dict[str, Any]]) -> tuple[ObservedStore, ...]:
+  stores: list[ObservedStore] = []
+  for index, row in enumerate(rows):
+    if row.get("kind") != "global_store":
+      continue
+    owner = row.get("store_owner")
+    if not isinstance(owner, dict):
+      continue
+    if "m" not in owner or "n" not in owner:
+      continue
+    stores.append(ObservedStore(m=int(owner["m"]), n=int(owner["n"]), owner={
+      **owner,
+      "evidence": "lowered_amd_isa_global_store_proof_manifest",
+      "gpu_execution_trace": False,
+      "lowered_store_index": index,
+      "emitted": row.get("emitted"),
+      "addr_vgpr": row.get("addr_vgpr"),
+      "data_vgpr": row.get("data_vgpr"),
+    }))
+  return tuple(stores)
 
 
 def _summarize_store_map(stores: Iterable[ObservedStore], expected_points: set[tuple[int, int]]) -> dict[str, Any]:

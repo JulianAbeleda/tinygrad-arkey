@@ -119,6 +119,15 @@ def _proof_record_inst(kind:str, logical_op:str, inst, extra:dict|None=None) -> 
   if extra is not None: row.update(extra)
   AMD_ISA_PROOF_MANIFEST.append(row)
 
+def _store_owner_proof_meta(tag) -> dict:
+  if not (isinstance(tag, tuple) and len(tag) >= 2 and tag[0] == "store_owner"):
+    return {}
+  owner = tag[1]
+  if isinstance(owner, tuple):
+    try: owner = dict(owner)
+    except Exception: pass
+  return {"store_owner": dict(owner)} if isinstance(owner, dict) else {"store_owner": owner}
+
 class LDSAddr(NamedTuple):
   buf: UOp
   dyn: UOp|None
@@ -588,7 +597,8 @@ def isel_store(ctx:IselContext, a:UOp, b:UOp, x:UOp):
   vals = b.src if (b.op is Ops.NOOP and not isinstance(b.dtype, PtrDType)) else (b,)   # STACK lane-carrier -> per-lane vals
   isz = vals[0].dtype.scalar().itemsize
   vals = tuple(_tov(ctx, v) for v in vals)   # CONST value (e.g. Tensor.ones stores 1.0) -> V_CONST; RANGE -> MOV_S2V
-  return UOp(Ops.INS, dtypes.void, src=(off, base) + tuple(vals) + (UOp.const(dtypes.int32, isz).rtag(),), arg=AMDOps.GLOBAL_STORE)
+  return UOp(Ops.INS, dtypes.void, src=(off, base) + tuple(vals) + (UOp.const(dtypes.int32, isz).rtag(),),
+             arg=AMDOps.GLOBAL_STORE, tag=x.tag)
 
 def _tov(ctx:IselContext, u:UOp):
   # ensure an operand is in a VGPR: CONST -> v_mov, RANGE loop counter (SGPR) -> v_mov s->v, else already an INS VGPR
@@ -1907,6 +1917,7 @@ def lower_inst(x:UOp):
         "addr_vgpr": off_r.index,
         "data_vgpr": v.reg.index,
         "saddr_sgpr_pair": [ptr_r.index, ptr_r.index + 1],
+        **_store_owner_proof_meta(x.tag),
       })
       stores.append(UOp(Ops.INS, arg=inst))
     return (stores[-1], stores)    # vmcnt drain before endpgm inserted by _insert_waitcnt

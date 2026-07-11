@@ -1,5 +1,6 @@
 from extra.qk.mmq_owner_coverage import (
-  SCHEMA, build_mmq_owner_coverage_artifact, structural_static_store_only_owner_map,
+  SCHEMA, build_mmq_owner_coverage_artifact, observed_stores_from_amd_isa_proof_rows,
+  structural_static_store_only_owner_map,
   tinygrad_custom_kernel_store_owner_trace_blocker, validate_mmq_owner_coverage_artifact,
 )
 from extra.qk.mmq_q4k_q8_reference import Q8_1_MMQ_DS4_LAYOUT, describe_q4k_q8_1_mmq_tile
@@ -99,4 +100,28 @@ def test_mmq_owner_coverage_records_custom_kernel_owner_trace_blocker():
 
   assert blocker["status"] == "BLOCKED"
   assert blocker["gpu_execution_trace"] is False
-  assert "per-store stable owner identity" in blocker["exact_blocker"]
+  assert "proof rows can now carry per-store owner identity" in blocker["exact_blocker"]
+
+
+def test_mmq_owner_coverage_accepts_lowered_amd_isa_store_owner_rows():
+  spec = _spec()
+  rows = [
+    {
+      "kind": "global_store",
+      "store_owner": store.owner | {"m": store.m, "n": store.n},
+      "emitted": "global_store_b32 ...",
+      "addr_vgpr": 10,
+      "data_vgpr": 11,
+    }
+    for store in structural_static_store_only_owner_map(spec)
+  ]
+
+  observed = observed_stores_from_amd_isa_proof_rows(rows)
+  artifact = build_mmq_owner_coverage_artifact(spec, observed, backend="lowered_amd_isa_store_owner_manifest")
+
+  assert len(observed) == 256
+  assert observed[0].owner["evidence"] == "lowered_amd_isa_global_store_proof_manifest"
+  assert observed[0].owner["gpu_execution_trace"] is False
+  assert artifact["status"] == "PASS"
+  assert artifact["duplicate_store_summary"]["count"] == 0
+  assert artifact["missing_store_summary"]["count"] == 0

@@ -101,7 +101,7 @@ def test_mmq_machine_search_only_marks_completed_components_searchable():
   assert r4["owner_coverage"]["observed_stores"]["stores"][0]["owner"]["gpu_execution_trace"] is False
   assert r4["owner_coverage"]["production_dispatch_changed"] is False
   assert r4["gpu_owner_trace_blocker"]["status"] == "BLOCKED"
-  assert "per-store stable owner identity" in r4["gpu_owner_trace_blocker"]["exact_blocker"]
+  assert "proof rows can now carry per-store owner identity" in r4["gpu_owner_trace_blocker"]["exact_blocker"]
   assert r4["staging_sum_slots"]["schema"] == "tinygrad.mmq_staging_evidence.v1"
   assert r4["staging_sum_slots"]["candidate_id"] == "cooperative_multi_wave_tile"
   assert r4["staging_sum_slots"]["backend"] == AMD_DS4_COOP_TILE_BACKEND_ID
