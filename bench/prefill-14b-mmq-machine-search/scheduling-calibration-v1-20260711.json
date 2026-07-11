@@ -1,0 +1,4859 @@
+{
+  "candidate_timing_used_for_fit": false,
+  "collector": "tinygrad_kfd_native_pmc",
+  "counter_liveness": "live",
+  "production_dispatch_changed": false,
+  "provenance_class": "generated_microbenchmark",
+  "randomized_orders": [
+    [
+      "launch.wg128",
+      "resource_pressure.wg96.s32",
+      "launch.wg64",
+      "launch.wg1",
+      "independent_valu.wg96.n64.s4",
+      "dependent_valu_int.wg96.n64",
+      "mixed_salu_valu.wg96.n64",
+      "launch.wg192",
+      "launch.wg96",
+      "dependent_salu.wg96.n64",
+      "resource_pressure.wg96.s8",
+      "launch.wg32",
+      "resource_pressure.wg96.s16",
+      "resource_pressure.wg96.s4",
+      "dependent_valu.wg96.n64"
+    ],
+    [
+      "launch.wg96",
+      "dependent_salu.wg96.n64",
+      "launch.wg32",
+      "resource_pressure.wg96.s8",
+      "resource_pressure.wg96.s16",
+      "dependent_valu_int.wg96.n64",
+      "resource_pressure.wg96.s4",
+      "launch.wg192",
+      "launch.wg128",
+      "launch.wg1",
+      "resource_pressure.wg96.s32",
+      "mixed_salu_valu.wg96.n64",
+      "dependent_valu.wg96.n64",
+      "launch.wg64",
+      "independent_valu.wg96.n64.s4"
+    ],
+    [
+      "resource_pressure.wg96.s16",
+      "independent_valu.wg96.n64.s4",
+      "resource_pressure.wg96.s8",
+      "launch.wg96",
+      "launch.wg192",
+      "dependent_salu.wg96.n64",
+      "resource_pressure.wg96.s4",
+      "dependent_valu_int.wg96.n64",
+      "launch.wg128",
+      "launch.wg64",
+      "launch.wg1",
+      "resource_pressure.wg96.s32",
+      "launch.wg32",
+      "mixed_salu_valu.wg96.n64",
+      "dependent_valu.wg96.n64"
+    ]
+  ],
+  "relationships": {
+    "cases": {
+      "dependent_salu.wg96.n64": {
+        "median_counters": {
+          "SQ_BUSY_CYCLES": 145074,
+          "SQ_INSTS_SALU": 9216,
+          "SQ_INSTS_VALU": 576,
+          "SQ_WAIT_ANY": 277452,
+          "SQ_WAVES": 96,
+          "SQ_WAVE_CYCLES": 288684
+        },
+        "median_ms": 0.00532,
+        "samples": 3
+      },
+      "dependent_valu.wg96.n64": {
+        "median_counters": {
+          "SQ_BUSY_CYCLES": 163165,
+          "SQ_INSTS_SALU": 192,
+          "SQ_INSTS_VALU": 6720,
+          "SQ_WAIT_ANY": 317223,
+          "SQ_WAVES": 96,
+          "SQ_WAVE_CYCLES": 324903
+        },
+        "median_ms": 0.00548,
+        "samples": 3
+      },
+      "dependent_valu_int.wg96.n64": {
+        "median_counters": {
+          "SQ_BUSY_CYCLES": 199025,
+          "SQ_INSTS_SALU": 0,
+          "SQ_INSTS_VALU": 10080,
+          "SQ_WAIT_ANY": 385720,
+          "SQ_WAVES": 96,
+          "SQ_WAVE_CYCLES": 396568
+        },
+        "median_ms": 0.00592,
+        "samples": 3
+      },
+      "independent_valu.wg96.n64.s4": {
+        "median_counters": {
+          "SQ_BUSY_CYCLES": 379707,
+          "SQ_INSTS_SALU": 768,
+          "SQ_INSTS_VALU": 30720,
+          "SQ_WAIT_ANY": 722356,
+          "SQ_WAVES": 96,
+          "SQ_WAVE_CYCLES": 757972
+        },
+        "median_ms": 0.00808,
+        "samples": 3
+      },
+      "launch.wg1": {
+        "median_counters": {
+          "SQ_BUSY_CYCLES": 2648,
+          "SQ_INSTS_SALU": 0,
+          "SQ_INSTS_VALU": 1,
+          "SQ_WAIT_ANY": 2639,
+          "SQ_WAVES": 1,
+          "SQ_WAVE_CYCLES": 2646
+        },
+        "median_ms": 0.00508,
+        "samples": 3
+      },
+      "launch.wg128": {
+        "median_counters": {
+          "SQ_BUSY_CYCLES": 125828,
+          "SQ_INSTS_SALU": 0,
+          "SQ_INSTS_VALU": 896,
+          "SQ_WAIT_ANY": 328119,
+          "SQ_WAVES": 128,
+          "SQ_WAVE_CYCLES": 329911
+        },
+        "median_ms": 0.00512,
+        "samples": 3
+      },
+      "launch.wg192": {
+        "median_counters": {
+          "SQ_BUSY_CYCLES": 128046,
+          "SQ_INSTS_SALU": 0,
+          "SQ_INSTS_VALU": 1344,
+          "SQ_WAIT_ANY": 495412,
+          "SQ_WAVES": 192,
+          "SQ_WAVE_CYCLES": 498100
+        },
+        "median_ms": 0.00508,
+        "samples": 3
+      },
+      "launch.wg32": {
+        "median_counters": {
+          "SQ_BUSY_CYCLES": 81700,
+          "SQ_INSTS_SALU": 0,
+          "SQ_INSTS_VALU": 224,
+          "SQ_WAIT_ANY": 81188,
+          "SQ_WAVES": 32,
+          "SQ_WAVE_CYCLES": 81636
+        },
+        "median_ms": 0.00508,
+        "samples": 3
+      },
+      "launch.wg64": {
+        "median_counters": {
+          "SQ_BUSY_CYCLES": 134038,
+          "SQ_INSTS_SALU": 0,
+          "SQ_INSTS_VALU": 448,
+          "SQ_WAIT_ANY": 177228,
+          "SQ_WAVES": 64,
+          "SQ_WAVE_CYCLES": 178124
+        },
+        "median_ms": 0.00512,
+        "samples": 3
+      },
+      "launch.wg96": {
+        "median_counters": {
+          "SQ_BUSY_CYCLES": 125658,
+          "SQ_INSTS_SALU": 0,
+          "SQ_INSTS_VALU": 672,
+          "SQ_WAIT_ANY": 245068,
+          "SQ_WAVES": 96,
+          "SQ_WAVE_CYCLES": 246412
+        },
+        "median_ms": 0.00508,
+        "samples": 3
+      },
+      "mixed_salu_valu.wg96.n64": {
+        "median_counters": {
+          "SQ_BUSY_CYCLES": 222285,
+          "SQ_INSTS_SALU": 9408,
+          "SQ_INSTS_VALU": 6912,
+          "SQ_WAIT_ANY": 425405,
+          "SQ_WAVES": 96,
+          "SQ_WAVE_CYCLES": 443071
+        },
+        "median_ms": 0.00632,
+        "samples": 3
+      },
+      "resource_pressure.wg96.s16": {
+        "median_counters": {
+          "SQ_BUSY_CYCLES": 316118,
+          "SQ_INSTS_SALU": 2592,
+          "SQ_INSTS_VALU": 27648,
+          "SQ_WAIT_ANY": 597052,
+          "SQ_WAVES": 96,
+          "SQ_WAVE_CYCLES": 630748
+        },
+        "median_ms": 0.00732,
+        "samples": 3
+      },
+      "resource_pressure.wg96.s32": {
+        "median_counters": {
+          "SQ_BUSY_CYCLES": 566556,
+          "SQ_INSTS_SALU": 4608,
+          "SQ_INSTS_VALU": 55392,
+          "SQ_WAIT_ANY": 1066470,
+          "SQ_WAVES": 96,
+          "SQ_WAVE_CYCLES": 1131750
+        },
+        "median_ms": 0.0104,
+        "samples": 3
+      },
+      "resource_pressure.wg96.s4": {
+        "median_counters": {
+          "SQ_BUSY_CYCLES": 143553,
+          "SQ_INSTS_SALU": 768,
+          "SQ_INSTS_VALU": 7008,
+          "SQ_WAIT_ANY": 276629,
+          "SQ_WAVES": 96,
+          "SQ_WAVE_CYCLES": 285653
+        },
+        "median_ms": 0.00532,
+        "samples": 3
+      },
+      "resource_pressure.wg96.s8": {
+        "median_counters": {
+          "SQ_BUSY_CYCLES": 209206,
+          "SQ_INSTS_SALU": 1440,
+          "SQ_INSTS_VALU": 13824,
+          "SQ_WAIT_ANY": 399507,
+          "SQ_WAVES": 96,
+          "SQ_WAVE_CYCLES": 416883
+        },
+        "median_ms": 0.00608,
+        "samples": 3
+      }
+    },
+    "grid_relationship": {
+      "busy_cycles": [
+        2648,
+        81700,
+        134038,
+        125658,
+        125828,
+        128046
+      ],
+      "wave_cycles": [
+        2646,
+        81636,
+        178124,
+        246412,
+        329911,
+        498100
+      ],
+      "waves": [
+        1,
+        32,
+        64,
+        96,
+        128,
+        192
+      ]
+    },
+    "resource_relationship": {
+      "valu_instructions": [
+        7008,
+        13824,
+        27648,
+        55392
+      ],
+      "wait_cycles": [
+        276629,
+        399507,
+        597052,
+        1066470
+      ],
+      "wave_cycles": [
+        285653,
+        416883,
+        630748,
+        1131750
+      ]
+    },
+    "truth_status": "derived"
+  },
+  "repetitions": 3,
+  "samples": [
+    {
+      "binary_sha256": "c12bd4d5aced5c26a0420afb674d2c9cc4ca7a8550629259d0f2d28dd3df6104",
+      "case_id": "launch.wg128",
+      "counters": {
+        "SQ_BUSY_CYCLES": 129938,
+        "SQ_INSTS_SALU": 0,
+        "SQ_INSTS_VALU": 896,
+        "SQ_WAIT_ANY": 339140,
+        "SQ_WAVES": 128,
+        "SQ_WAVE_CYCLES": 340932
+      },
+      "family": "launch",
+      "independent_streams": 1,
+      "median_ms": 0.00512,
+      "repetition": 0,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1585000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1585Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 60
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 91000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116281344
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "errno": 16,
+          "error": "[Errno 16] Device or resource busy",
+          "status": "blocked",
+          "value": null
+        },
+        "core_dpm": {
+          "errno": 16,
+          "error": "[Errno 16] Device or resource busy",
+          "status": "blocked",
+          "value": null
+        },
+        "gpu_busy_percent": {
+          "errno": 16,
+          "error": "[Errno 16] Device or resource busy",
+          "status": "blocked",
+          "value": null
+        },
+        "memory_clock_hz": {
+          "errno": 16,
+          "error": "[Errno 16] Device or resource busy",
+          "status": "blocked",
+          "value": null
+        },
+        "memory_dpm": {
+          "errno": 16,
+          "error": "[Errno 16] Device or resource busy",
+          "status": "blocked",
+          "value": null
+        },
+        "performance_level": {
+          "errno": 16,
+          "error": "[Errno 16] Device or resource busy",
+          "status": "blocked",
+          "value": null
+        },
+        "power_uw": {
+          "errno": 16,
+          "error": "[Errno 16] Device or resource busy",
+          "status": "blocked",
+          "value": null
+        },
+        "temperature_mc": {
+          "errno": 16,
+          "error": "[Errno 16] Device or resource busy",
+          "status": "blocked",
+          "value": null
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 27947008
+        }
+      },
+      "workgroups": 128
+    },
+    {
+      "binary_sha256": "d94778c2d77b1f490da79d1532120dcfb7a6859d38d3219acc8abbcd3b18f434",
+      "case_id": "resource_pressure.wg96.s32",
+      "counters": {
+        "SQ_BUSY_CYCLES": 566556,
+        "SQ_INSTS_SALU": 4608,
+        "SQ_INSTS_VALU": 55392,
+        "SQ_WAIT_ANY": 1066470,
+        "SQ_WAVES": 96,
+        "SQ_WAVE_CYCLES": 1131750
+      },
+      "family": "resource_pressure",
+      "independent_streams": 32,
+      "median_ms": 0.0104,
+      "repetition": 0,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1758000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1758Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 119000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116322304
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1585000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1585Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 60
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 91000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116281344
+        }
+      },
+      "workgroups": 96
+    },
+    {
+      "binary_sha256": "ed32f9648b8f2ce337259fbc53344402a359e902009fda9cefc48d17799b3d2d",
+      "case_id": "launch.wg64",
+      "counters": {
+        "SQ_BUSY_CYCLES": 134038,
+        "SQ_INSTS_SALU": 0,
+        "SQ_INSTS_VALU": 448,
+        "SQ_WAIT_ANY": 177228,
+        "SQ_WAVES": 64,
+        "SQ_WAVE_CYCLES": 178124
+      },
+      "family": "launch",
+      "independent_streams": 1,
+      "median_ms": 0.00516,
+      "repetition": 0,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1759000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1759Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 119000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116346880
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1758000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1758Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 119000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116322304
+        }
+      },
+      "workgroups": 64
+    },
+    {
+      "binary_sha256": "7f19a8e6a0c1d762739b13b6ffe615d6c4c8ea7db33f8af365fca04c32da1b41",
+      "case_id": "launch.wg1",
+      "counters": {
+        "SQ_BUSY_CYCLES": 2914,
+        "SQ_INSTS_SALU": 0,
+        "SQ_INSTS_VALU": 1,
+        "SQ_WAIT_ANY": 2905,
+        "SQ_WAVES": 1,
+        "SQ_WAVE_CYCLES": 2912
+      },
+      "family": "launch",
+      "independent_streams": 1,
+      "median_ms": 0.0052,
+      "repetition": 0,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1758000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1758Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 119000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116363264
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1759000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1759Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 119000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116346880
+        }
+      },
+      "workgroups": 1
+    },
+    {
+      "binary_sha256": "436ec6c323c39e51bda72548ad7a3f12d875ad57999ed2a3e33a4a761d98c2ef",
+      "case_id": "independent_valu.wg96.n64.s4",
+      "counters": {
+        "SQ_BUSY_CYCLES": 380942,
+        "SQ_INSTS_SALU": 768,
+        "SQ_INSTS_VALU": 30720,
+        "SQ_WAIT_ANY": 724854,
+        "SQ_WAVES": 96,
+        "SQ_WAVE_CYCLES": 760470
+      },
+      "family": "independent_valu",
+      "independent_streams": 4,
+      "median_ms": 0.008119999999999999,
+      "repetition": 0,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1758000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1758Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 119000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116375552
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1758000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1758Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 119000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116363264
+        }
+      },
+      "workgroups": 96
+    },
+    {
+      "binary_sha256": "5823a29a6523649eb4a23672f6d85af274368960d51bcbde8188eced4111cfce",
+      "case_id": "dependent_valu_int.wg96.n64",
+      "counters": {
+        "SQ_BUSY_CYCLES": 199025,
+        "SQ_INSTS_SALU": 0,
+        "SQ_INSTS_VALU": 10080,
+        "SQ_WAIT_ANY": 385720,
+        "SQ_WAVES": 96,
+        "SQ_WAVE_CYCLES": 396568
+      },
+      "family": "dependent_valu_int",
+      "independent_streams": 1,
+      "median_ms": 0.00592,
+      "repetition": 0,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1759000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1759Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 119000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116387840
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1758000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1758Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 119000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116375552
+        }
+      },
+      "workgroups": 96
+    },
+    {
+      "binary_sha256": "b38e668a954c7e07bc94b5ad73effd2b7001b1c5349aef1cd04d05f8a29a80cd",
+      "case_id": "mixed_salu_valu.wg96.n64",
+      "counters": {
+        "SQ_BUSY_CYCLES": 222285,
+        "SQ_INSTS_SALU": 9408,
+        "SQ_INSTS_VALU": 6912,
+        "SQ_WAIT_ANY": 425405,
+        "SQ_WAVES": 96,
+        "SQ_WAVE_CYCLES": 443071
+      },
+      "family": "mixed_salu_valu",
+      "independent_streams": 1,
+      "median_ms": 0.0064,
+      "repetition": 0,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 119000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116396032
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1759000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1759Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 119000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116387840
+        }
+      },
+      "workgroups": 96
+    },
+    {
+      "binary_sha256": "39c8f5bd64eebeb24610e1361dfd1e68c2ddb53b2d7e2f9b8e31eb137422c43e",
+      "case_id": "launch.wg192",
+      "counters": {
+        "SQ_BUSY_CYCLES": 131720,
+        "SQ_INSTS_SALU": 0,
+        "SQ_INSTS_VALU": 1344,
+        "SQ_WAIT_ANY": 511949,
+        "SQ_WAVES": 192,
+        "SQ_WAVE_CYCLES": 514637
+      },
+      "family": "launch",
+      "independent_streams": 1,
+      "median_ms": 0.00516,
+      "repetition": 0,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 119000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116457472
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 119000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116396032
+        }
+      },
+      "workgroups": 192
+    },
+    {
+      "binary_sha256": "ab0557683c7c6ea33cf3ca7044241bb247553d1ab8e99792601fb88e3d42089c",
+      "case_id": "launch.wg96",
+      "counters": {
+        "SQ_BUSY_CYCLES": 128861,
+        "SQ_INSTS_SALU": 0,
+        "SQ_INSTS_VALU": 672,
+        "SQ_WAIT_ANY": 251410,
+        "SQ_WAVES": 96,
+        "SQ_WAVE_CYCLES": 252754
+      },
+      "family": "launch",
+      "independent_streams": 1,
+      "median_ms": 0.00512,
+      "repetition": 0,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 119000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 47000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116465664
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 119000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116457472
+        }
+      },
+      "workgroups": 96
+    },
+    {
+      "binary_sha256": "674924d602dac67060ee7894223494cef17f89c6b520e990636ed6b1957ded5d",
+      "case_id": "dependent_salu.wg96.n64",
+      "counters": {
+        "SQ_BUSY_CYCLES": 148089,
+        "SQ_INSTS_SALU": 9216,
+        "SQ_INSTS_VALU": 576,
+        "SQ_WAIT_ANY": 283422,
+        "SQ_WAVES": 96,
+        "SQ_WAVE_CYCLES": 294654
+      },
+      "family": "dependent_salu",
+      "independent_streams": 1,
+      "median_ms": 0.00536,
+      "repetition": 0,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1758000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1758Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 119000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 47000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116473856
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 119000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 47000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116465664
+        }
+      },
+      "workgroups": 96
+    },
+    {
+      "binary_sha256": "8e893bbd88aed47b7943bbc2d4ec8369a1527341eb89ef74b0ec326cd4098246",
+      "case_id": "resource_pressure.wg96.s8",
+      "counters": {
+        "SQ_BUSY_CYCLES": 209206,
+        "SQ_INSTS_SALU": 1440,
+        "SQ_INSTS_VALU": 13824,
+        "SQ_WAIT_ANY": 399507,
+        "SQ_WAVES": 96,
+        "SQ_WAVE_CYCLES": 416883
+      },
+      "family": "resource_pressure",
+      "independent_streams": 8,
+      "median_ms": 0.00608,
+      "repetition": 0,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116482048
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1758000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1758Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 119000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 47000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116473856
+        }
+      },
+      "workgroups": 96
+    },
+    {
+      "binary_sha256": "9c51e166a06788c4ad5f6108559d3acedccddb34aa248e8c4a0db3d0ff010970",
+      "case_id": "launch.wg32",
+      "counters": {
+        "SQ_BUSY_CYCLES": 76026,
+        "SQ_INSTS_SALU": 0,
+        "SQ_INSTS_VALU": 224,
+        "SQ_WAIT_ANY": 75514,
+        "SQ_WAVES": 32,
+        "SQ_WAVE_CYCLES": 75962
+      },
+      "family": "launch",
+      "independent_streams": 1,
+      "median_ms": 0.00496,
+      "repetition": 0,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116498432
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116482048
+        }
+      },
+      "workgroups": 32
+    },
+    {
+      "binary_sha256": "668dd5d578cdb6b9d7f8e51da4f95bf0617373aebe04a8adb990358c5f8585fa",
+      "case_id": "resource_pressure.wg96.s16",
+      "counters": {
+        "SQ_BUSY_CYCLES": 305925,
+        "SQ_INSTS_SALU": 2592,
+        "SQ_INSTS_VALU": 27648,
+        "SQ_WAIT_ANY": 576735,
+        "SQ_WAVES": 96,
+        "SQ_WAVE_CYCLES": 610431
+      },
+      "family": "resource_pressure",
+      "independent_streams": 16,
+      "median_ms": 0.007200000000000001,
+      "repetition": 0,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116510720
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116498432
+        }
+      },
+      "workgroups": 96
+    },
+    {
+      "binary_sha256": "1a048f66ebf3b2c2438b3ef0020a596fbccbdff6f9fcba327e7e133b9c3595c5",
+      "case_id": "resource_pressure.wg96.s4",
+      "counters": {
+        "SQ_BUSY_CYCLES": 138380,
+        "SQ_INSTS_SALU": 768,
+        "SQ_INSTS_VALU": 7008,
+        "SQ_WAIT_ANY": 266253,
+        "SQ_WAVES": 96,
+        "SQ_WAVE_CYCLES": 275373
+      },
+      "family": "resource_pressure",
+      "independent_streams": 4,
+      "median_ms": 0.00524,
+      "repetition": 0,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116523008
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116510720
+        }
+      },
+      "workgroups": 96
+    },
+    {
+      "binary_sha256": "ffb9c2e58955d0552615c57acb856e6f01df5874869802eb963644fa20bb701f",
+      "case_id": "dependent_valu.wg96.n64",
+      "counters": {
+        "SQ_BUSY_CYCLES": 163165,
+        "SQ_INSTS_SALU": 192,
+        "SQ_INSTS_VALU": 6720,
+        "SQ_WAIT_ANY": 317223,
+        "SQ_WAVES": 96,
+        "SQ_WAVE_CYCLES": 324903
+      },
+      "family": "dependent_valu",
+      "independent_streams": 1,
+      "median_ms": 0.00548,
+      "repetition": 0,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1758000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1758Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116523008
+        }
+      },
+      "workgroups": 96
+    },
+    {
+      "binary_sha256": "ab0557683c7c6ea33cf3ca7044241bb247553d1ab8e99792601fb88e3d42089c",
+      "case_id": "launch.wg96",
+      "counters": {
+        "SQ_BUSY_CYCLES": 118035,
+        "SQ_INSTS_SALU": 0,
+        "SQ_INSTS_VALU": 672,
+        "SQ_WAIT_ANY": 229500,
+        "SQ_WAVES": 96,
+        "SQ_WAVE_CYCLES": 230844
+      },
+      "family": "launch",
+      "independent_streams": 1,
+      "median_ms": 0.005,
+      "repetition": 1,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1758000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1758Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "workgroups": 96
+    },
+    {
+      "binary_sha256": "674924d602dac67060ee7894223494cef17f89c6b520e990636ed6b1957ded5d",
+      "case_id": "dependent_salu.wg96.n64",
+      "counters": {
+        "SQ_BUSY_CYCLES": 140570,
+        "SQ_INSTS_SALU": 9216,
+        "SQ_INSTS_VALU": 576,
+        "SQ_WAIT_ANY": 268521,
+        "SQ_WAVES": 96,
+        "SQ_WAVE_CYCLES": 279753
+      },
+      "family": "dependent_salu",
+      "independent_streams": 1,
+      "median_ms": 0.00524,
+      "repetition": 1,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1758000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1758Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "workgroups": 96
+    },
+    {
+      "binary_sha256": "9c51e166a06788c4ad5f6108559d3acedccddb34aa248e8c4a0db3d0ff010970",
+      "case_id": "launch.wg32",
+      "counters": {
+        "SQ_BUSY_CYCLES": 82155,
+        "SQ_INSTS_SALU": 0,
+        "SQ_INSTS_VALU": 224,
+        "SQ_WAIT_ANY": 81643,
+        "SQ_WAVES": 32,
+        "SQ_WAVE_CYCLES": 82091
+      },
+      "family": "launch",
+      "independent_streams": 1,
+      "median_ms": 0.00508,
+      "repetition": 1,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1758000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1758Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1758000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1758Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "workgroups": 32
+    },
+    {
+      "binary_sha256": "8e893bbd88aed47b7943bbc2d4ec8369a1527341eb89ef74b0ec326cd4098246",
+      "case_id": "resource_pressure.wg96.s8",
+      "counters": {
+        "SQ_BUSY_CYCLES": 210035,
+        "SQ_INSTS_SALU": 1440,
+        "SQ_INSTS_VALU": 13824,
+        "SQ_WAIT_ANY": 401259,
+        "SQ_WAVES": 96,
+        "SQ_WAVE_CYCLES": 418635
+      },
+      "family": "resource_pressure",
+      "independent_streams": 8,
+      "median_ms": 0.00608,
+      "repetition": 1,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1758000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1758Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "workgroups": 96
+    },
+    {
+      "binary_sha256": "668dd5d578cdb6b9d7f8e51da4f95bf0617373aebe04a8adb990358c5f8585fa",
+      "case_id": "resource_pressure.wg96.s16",
+      "counters": {
+        "SQ_BUSY_CYCLES": 317352,
+        "SQ_INSTS_SALU": 2592,
+        "SQ_INSTS_VALU": 27648,
+        "SQ_WAIT_ANY": 599582,
+        "SQ_WAVES": 96,
+        "SQ_WAVE_CYCLES": 633278
+      },
+      "family": "resource_pressure",
+      "independent_streams": 16,
+      "median_ms": 0.007360000000000001,
+      "repetition": 1,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "workgroups": 96
+    },
+    {
+      "binary_sha256": "5823a29a6523649eb4a23672f6d85af274368960d51bcbde8188eced4111cfce",
+      "case_id": "dependent_valu_int.wg96.n64",
+      "counters": {
+        "SQ_BUSY_CYCLES": 200635,
+        "SQ_INSTS_SALU": 0,
+        "SQ_INSTS_VALU": 10080,
+        "SQ_WAIT_ANY": 388960,
+        "SQ_WAVES": 96,
+        "SQ_WAVE_CYCLES": 399808
+      },
+      "family": "dependent_valu_int",
+      "independent_streams": 1,
+      "median_ms": 0.00596,
+      "repetition": 1,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1758000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1758Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "workgroups": 96
+    },
+    {
+      "binary_sha256": "1a048f66ebf3b2c2438b3ef0020a596fbccbdff6f9fcba327e7e133b9c3595c5",
+      "case_id": "resource_pressure.wg96.s4",
+      "counters": {
+        "SQ_BUSY_CYCLES": 146732,
+        "SQ_INSTS_SALU": 768,
+        "SQ_INSTS_VALU": 7008,
+        "SQ_WAIT_ANY": 282964,
+        "SQ_WAVES": 96,
+        "SQ_WAVE_CYCLES": 291988
+      },
+      "family": "resource_pressure",
+      "independent_streams": 4,
+      "median_ms": 0.00532,
+      "repetition": 1,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1758000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1758Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "workgroups": 96
+    },
+    {
+      "binary_sha256": "39c8f5bd64eebeb24610e1361dfd1e68c2ddb53b2d7e2f9b8e31eb137422c43e",
+      "case_id": "launch.wg192",
+      "counters": {
+        "SQ_BUSY_CYCLES": 120325,
+        "SQ_INSTS_SALU": 0,
+        "SQ_INSTS_VALU": 1344,
+        "SQ_WAIT_ANY": 467537,
+        "SQ_WAVES": 192,
+        "SQ_WAVE_CYCLES": 470225
+      },
+      "family": "launch",
+      "independent_streams": 1,
+      "median_ms": 0.00504,
+      "repetition": 1,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "workgroups": 192
+    },
+    {
+      "binary_sha256": "c12bd4d5aced5c26a0420afb674d2c9cc4ca7a8550629259d0f2d28dd3df6104",
+      "case_id": "launch.wg128",
+      "counters": {
+        "SQ_BUSY_CYCLES": 117997,
+        "SQ_INSTS_SALU": 0,
+        "SQ_INSTS_VALU": 896,
+        "SQ_WAIT_ANY": 305730,
+        "SQ_WAVES": 128,
+        "SQ_WAVE_CYCLES": 307522
+      },
+      "family": "launch",
+      "independent_streams": 1,
+      "median_ms": 0.00512,
+      "repetition": 1,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "workgroups": 128
+    },
+    {
+      "binary_sha256": "7f19a8e6a0c1d762739b13b6ffe615d6c4c8ea7db33f8af365fca04c32da1b41",
+      "case_id": "launch.wg1",
+      "counters": {
+        "SQ_BUSY_CYCLES": 2648,
+        "SQ_INSTS_SALU": 0,
+        "SQ_INSTS_VALU": 1,
+        "SQ_WAIT_ANY": 2639,
+        "SQ_WAVES": 1,
+        "SQ_WAVE_CYCLES": 2646
+      },
+      "family": "launch",
+      "independent_streams": 1,
+      "median_ms": 0.00504,
+      "repetition": 1,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1756000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1756Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "workgroups": 1
+    },
+    {
+      "binary_sha256": "d94778c2d77b1f490da79d1532120dcfb7a6859d38d3219acc8abbcd3b18f434",
+      "case_id": "resource_pressure.wg96.s32",
+      "counters": {
+        "SQ_BUSY_CYCLES": 557206,
+        "SQ_INSTS_SALU": 4608,
+        "SQ_INSTS_VALU": 55392,
+        "SQ_WAIT_ANY": 1047651,
+        "SQ_WAVES": 96,
+        "SQ_WAVE_CYCLES": 1112931
+      },
+      "family": "resource_pressure",
+      "independent_streams": 32,
+      "median_ms": 0.01024,
+      "repetition": 1,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1756000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1756Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "workgroups": 96
+    },
+    {
+      "binary_sha256": "b38e668a954c7e07bc94b5ad73effd2b7001b1c5349aef1cd04d05f8a29a80cd",
+      "case_id": "mixed_salu_valu.wg96.n64",
+      "counters": {
+        "SQ_BUSY_CYCLES": 220908,
+        "SQ_INSTS_SALU": 9408,
+        "SQ_INSTS_VALU": 6912,
+        "SQ_WAIT_ANY": 422625,
+        "SQ_WAVES": 96,
+        "SQ_WAVE_CYCLES": 440355
+      },
+      "family": "mixed_salu_valu",
+      "independent_streams": 1,
+      "median_ms": 0.00628,
+      "repetition": 1,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "workgroups": 96
+    },
+    {
+      "binary_sha256": "ffb9c2e58955d0552615c57acb856e6f01df5874869802eb963644fa20bb701f",
+      "case_id": "dependent_valu.wg96.n64",
+      "counters": {
+        "SQ_BUSY_CYCLES": 162024,
+        "SQ_INSTS_SALU": 192,
+        "SQ_INSTS_VALU": 6720,
+        "SQ_WAIT_ANY": 314873,
+        "SQ_WAVES": 96,
+        "SQ_WAVE_CYCLES": 322553
+      },
+      "family": "dependent_valu",
+      "independent_streams": 1,
+      "median_ms": 0.00548,
+      "repetition": 1,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1758000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1758Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "workgroups": 96
+    },
+    {
+      "binary_sha256": "ed32f9648b8f2ce337259fbc53344402a359e902009fda9cefc48d17799b3d2d",
+      "case_id": "launch.wg64",
+      "counters": {
+        "SQ_BUSY_CYCLES": 114776,
+        "SQ_INSTS_SALU": 0,
+        "SQ_INSTS_VALU": 448,
+        "SQ_WAIT_ANY": 151543,
+        "SQ_WAVES": 64,
+        "SQ_WAVE_CYCLES": 152439
+      },
+      "family": "launch",
+      "independent_streams": 1,
+      "median_ms": 0.00496,
+      "repetition": 1,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1758000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1758Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1758000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1758Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "workgroups": 64
+    },
+    {
+      "binary_sha256": "436ec6c323c39e51bda72548ad7a3f12d875ad57999ed2a3e33a4a761d98c2ef",
+      "case_id": "independent_valu.wg96.n64.s4",
+      "counters": {
+        "SQ_BUSY_CYCLES": 379707,
+        "SQ_INSTS_SALU": 768,
+        "SQ_INSTS_VALU": 30720,
+        "SQ_WAIT_ANY": 722356,
+        "SQ_WAVES": 96,
+        "SQ_WAVE_CYCLES": 757972
+      },
+      "family": "independent_valu",
+      "independent_streams": 4,
+      "median_ms": 0.008039999999999999,
+      "repetition": 1,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1759000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1759Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1758000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1758Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "workgroups": 96
+    },
+    {
+      "binary_sha256": "668dd5d578cdb6b9d7f8e51da4f95bf0617373aebe04a8adb990358c5f8585fa",
+      "case_id": "resource_pressure.wg96.s16",
+      "counters": {
+        "SQ_BUSY_CYCLES": 316118,
+        "SQ_INSTS_SALU": 2592,
+        "SQ_INSTS_VALU": 27648,
+        "SQ_WAIT_ANY": 597052,
+        "SQ_WAVES": 96,
+        "SQ_WAVE_CYCLES": 630748
+      },
+      "family": "resource_pressure",
+      "independent_streams": 16,
+      "median_ms": 0.00732,
+      "repetition": 2,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1759000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1759Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "workgroups": 96
+    },
+    {
+      "binary_sha256": "436ec6c323c39e51bda72548ad7a3f12d875ad57999ed2a3e33a4a761d98c2ef",
+      "case_id": "independent_valu.wg96.n64.s4",
+      "counters": {
+        "SQ_BUSY_CYCLES": 369010,
+        "SQ_INSTS_SALU": 768,
+        "SQ_INSTS_VALU": 30720,
+        "SQ_WAIT_ANY": 700955,
+        "SQ_WAVES": 96,
+        "SQ_WAVE_CYCLES": 736571
+      },
+      "family": "independent_valu",
+      "independent_streams": 4,
+      "median_ms": 0.00808,
+      "repetition": 2,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "workgroups": 96
+    },
+    {
+      "binary_sha256": "8e893bbd88aed47b7943bbc2d4ec8369a1527341eb89ef74b0ec326cd4098246",
+      "case_id": "resource_pressure.wg96.s8",
+      "counters": {
+        "SQ_BUSY_CYCLES": 208876,
+        "SQ_INSTS_SALU": 1440,
+        "SQ_INSTS_VALU": 13824,
+        "SQ_WAIT_ANY": 398884,
+        "SQ_WAVES": 96,
+        "SQ_WAVE_CYCLES": 416260
+      },
+      "family": "resource_pressure",
+      "independent_streams": 8,
+      "median_ms": 0.00608,
+      "repetition": 2,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1758000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1758Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "workgroups": 96
+    },
+    {
+      "binary_sha256": "ab0557683c7c6ea33cf3ca7044241bb247553d1ab8e99792601fb88e3d42089c",
+      "case_id": "launch.wg96",
+      "counters": {
+        "SQ_BUSY_CYCLES": 125658,
+        "SQ_INSTS_SALU": 0,
+        "SQ_INSTS_VALU": 672,
+        "SQ_WAIT_ANY": 245068,
+        "SQ_WAVES": 96,
+        "SQ_WAVE_CYCLES": 246412
+      },
+      "family": "launch",
+      "independent_streams": 1,
+      "median_ms": 0.00508,
+      "repetition": 2,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1758000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1758Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "workgroups": 96
+    },
+    {
+      "binary_sha256": "39c8f5bd64eebeb24610e1361dfd1e68c2ddb53b2d7e2f9b8e31eb137422c43e",
+      "case_id": "launch.wg192",
+      "counters": {
+        "SQ_BUSY_CYCLES": 128046,
+        "SQ_INSTS_SALU": 0,
+        "SQ_INSTS_VALU": 1344,
+        "SQ_WAIT_ANY": 495412,
+        "SQ_WAVES": 192,
+        "SQ_WAVE_CYCLES": 498100
+      },
+      "family": "launch",
+      "independent_streams": 1,
+      "median_ms": 0.00508,
+      "repetition": 2,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "workgroups": 192
+    },
+    {
+      "binary_sha256": "674924d602dac67060ee7894223494cef17f89c6b520e990636ed6b1957ded5d",
+      "case_id": "dependent_salu.wg96.n64",
+      "counters": {
+        "SQ_BUSY_CYCLES": 145074,
+        "SQ_INSTS_SALU": 9216,
+        "SQ_INSTS_VALU": 576,
+        "SQ_WAIT_ANY": 277452,
+        "SQ_WAVES": 96,
+        "SQ_WAVE_CYCLES": 288684
+      },
+      "family": "dependent_salu",
+      "independent_streams": 1,
+      "median_ms": 0.00532,
+      "repetition": 2,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "workgroups": 96
+    },
+    {
+      "binary_sha256": "1a048f66ebf3b2c2438b3ef0020a596fbccbdff6f9fcba327e7e133b9c3595c5",
+      "case_id": "resource_pressure.wg96.s4",
+      "counters": {
+        "SQ_BUSY_CYCLES": 143553,
+        "SQ_INSTS_SALU": 768,
+        "SQ_INSTS_VALU": 7008,
+        "SQ_WAIT_ANY": 276629,
+        "SQ_WAVES": 96,
+        "SQ_WAVE_CYCLES": 285653
+      },
+      "family": "resource_pressure",
+      "independent_streams": 4,
+      "median_ms": 0.00532,
+      "repetition": 2,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1758000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1758Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "workgroups": 96
+    },
+    {
+      "binary_sha256": "5823a29a6523649eb4a23672f6d85af274368960d51bcbde8188eced4111cfce",
+      "case_id": "dependent_valu_int.wg96.n64",
+      "counters": {
+        "SQ_BUSY_CYCLES": 197525,
+        "SQ_INSTS_SALU": 0,
+        "SQ_INSTS_VALU": 10080,
+        "SQ_WAIT_ANY": 382769,
+        "SQ_WAVES": 96,
+        "SQ_WAVE_CYCLES": 393617
+      },
+      "family": "dependent_valu_int",
+      "independent_streams": 1,
+      "median_ms": 0.00592,
+      "repetition": 2,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1758000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1758Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "workgroups": 96
+    },
+    {
+      "binary_sha256": "c12bd4d5aced5c26a0420afb674d2c9cc4ca7a8550629259d0f2d28dd3df6104",
+      "case_id": "launch.wg128",
+      "counters": {
+        "SQ_BUSY_CYCLES": 125828,
+        "SQ_INSTS_SALU": 0,
+        "SQ_INSTS_VALU": 896,
+        "SQ_WAIT_ANY": 328119,
+        "SQ_WAVES": 128,
+        "SQ_WAVE_CYCLES": 329911
+      },
+      "family": "launch",
+      "independent_streams": 1,
+      "median_ms": 0.00508,
+      "repetition": 2,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1758000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1758Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "workgroups": 128
+    },
+    {
+      "binary_sha256": "ed32f9648b8f2ce337259fbc53344402a359e902009fda9cefc48d17799b3d2d",
+      "case_id": "launch.wg64",
+      "counters": {
+        "SQ_BUSY_CYCLES": 134258,
+        "SQ_INSTS_SALU": 0,
+        "SQ_INSTS_VALU": 448,
+        "SQ_WAIT_ANY": 177547,
+        "SQ_WAVES": 64,
+        "SQ_WAVE_CYCLES": 178443
+      },
+      "family": "launch",
+      "independent_streams": 1,
+      "median_ms": 0.00512,
+      "repetition": 2,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1758000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1758Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1758000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1758Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "workgroups": 64
+    },
+    {
+      "binary_sha256": "7f19a8e6a0c1d762739b13b6ffe615d6c4c8ea7db33f8af365fca04c32da1b41",
+      "case_id": "launch.wg1",
+      "counters": {
+        "SQ_BUSY_CYCLES": 2475,
+        "SQ_INSTS_SALU": 0,
+        "SQ_INSTS_VALU": 1,
+        "SQ_WAIT_ANY": 2466,
+        "SQ_WAVES": 1,
+        "SQ_WAVE_CYCLES": 2473
+      },
+      "family": "launch",
+      "independent_streams": 1,
+      "median_ms": 0.00508,
+      "repetition": 2,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1758000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1758Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "workgroups": 1
+    },
+    {
+      "binary_sha256": "d94778c2d77b1f490da79d1532120dcfb7a6859d38d3219acc8abbcd3b18f434",
+      "case_id": "resource_pressure.wg96.s32",
+      "counters": {
+        "SQ_BUSY_CYCLES": 574107,
+        "SQ_INSTS_SALU": 4608,
+        "SQ_INSTS_VALU": 55392,
+        "SQ_WAIT_ANY": 1081532,
+        "SQ_WAVES": 96,
+        "SQ_WAVE_CYCLES": 1146812
+      },
+      "family": "resource_pressure",
+      "independent_streams": 32,
+      "median_ms": 0.01044,
+      "repetition": 2,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "workgroups": 96
+    },
+    {
+      "binary_sha256": "9c51e166a06788c4ad5f6108559d3acedccddb34aa248e8c4a0db3d0ff010970",
+      "case_id": "launch.wg32",
+      "counters": {
+        "SQ_BUSY_CYCLES": 81700,
+        "SQ_INSTS_SALU": 0,
+        "SQ_INSTS_VALU": 224,
+        "SQ_WAIT_ANY": 81188,
+        "SQ_WAVES": 32,
+        "SQ_WAVE_CYCLES": 81636
+      },
+      "family": "launch",
+      "independent_streams": 1,
+      "median_ms": 0.00512,
+      "repetition": 2,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "workgroups": 32
+    },
+    {
+      "binary_sha256": "b38e668a954c7e07bc94b5ad73effd2b7001b1c5349aef1cd04d05f8a29a80cd",
+      "case_id": "mixed_salu_valu.wg96.n64",
+      "counters": {
+        "SQ_BUSY_CYCLES": 230954,
+        "SQ_INSTS_SALU": 9408,
+        "SQ_INSTS_VALU": 6912,
+        "SQ_WAIT_ANY": 442712,
+        "SQ_WAVES": 96,
+        "SQ_WAVE_CYCLES": 460492
+      },
+      "family": "mixed_salu_valu",
+      "independent_streams": 1,
+      "median_ms": 0.00632,
+      "repetition": 2,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1758000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1758Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1757000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1757Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "workgroups": 96
+    },
+    {
+      "binary_sha256": "ffb9c2e58955d0552615c57acb856e6f01df5874869802eb963644fa20bb701f",
+      "case_id": "dependent_valu.wg96.n64",
+      "counters": {
+        "SQ_BUSY_CYCLES": 170805,
+        "SQ_INSTS_SALU": 192,
+        "SQ_INSTS_VALU": 6720,
+        "SQ_WAIT_ANY": 332491,
+        "SQ_WAVES": 96,
+        "SQ_WAVE_CYCLES": 340171
+      },
+      "family": "dependent_valu",
+      "independent_streams": 1,
+      "median_ms": 0.0056,
+      "repetition": 2,
+      "telemetry_after": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1758000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1758Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "telemetry_before": {
+        "core_clock_hz": {
+          "status": "live",
+          "value": 1758000000
+        },
+        "core_dpm": {
+          "status": "live",
+          "value": "0: 500Mhz\n1: 1758Mhz *\n2: 2304Mhz"
+        },
+        "gpu_busy_percent": {
+          "status": "live",
+          "value": 100
+        },
+        "memory_clock_hz": {
+          "status": "live",
+          "value": 1249000000
+        },
+        "memory_dpm": {
+          "status": "live",
+          "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz *"
+        },
+        "performance_level": {
+          "status": "live",
+          "value": "profile_standard"
+        },
+        "power_uw": {
+          "status": "live",
+          "value": 118000000
+        },
+        "temperature_mc": {
+          "status": "live",
+          "value": 46000
+        },
+        "vram_total_bytes": {
+          "status": "live",
+          "value": 25753026560
+        },
+        "vram_used_bytes": {
+          "status": "live",
+          "value": 116531200
+        }
+      },
+      "workgroups": 96
+    }
+  ],
+  "schema": "tinygrad.mmq_scheduling_calibration.v1",
+  "seed": 20260711,
+  "source_artifact_dir": "/tmp/mmq-calibration-complete-v4",
+  "system_snapshot_id": "sha256:6aeef657a88d2ac886739094eefff464c8ada597963ed364f2a1ff092a9df21b"
+}
