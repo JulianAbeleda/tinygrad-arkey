@@ -1,7 +1,11 @@
 {
   "schema": "tinygrad.mmq_differential_probe.v1",
   "probe": "global_load_transaction_proxy",
-  "system_snapshot_id": "sha256:2ed78cdcf2ab65584306a8e7b8c0b06ee56c7d973da74dab8c383cc87301ffc2",
+  "system_snapshot_id": "sha256:aa7ab329a6901840cee610007c6bfc7b64c80ed5c1ac72840a9d50f566ade4e5",
+  "producer_commits": {
+    "boltbeam": "36cc0a16c32a47385510f8cfa34a220bafb9dbf2",
+    "tinygrad": "13664c74b66be646cc95eb0afd548514bf04d9cb"
+  },
   "collector": "tinygrad_kfd_native_pmc",
   "counter_liveness": {
     "GL2C_MC_RDREQ": "live",
