@@ -33,6 +33,7 @@ from extra.qk.mmq_q4k_q8_reference import (
 from extra.qk.mmq_llama_oracle import (
   LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID, llama_mmq_source_policy, run_llama_mmq_coop_tile_oracle,
 )
+from extra.qk.mmq_epoch_manifest_export import build_amd_isa_proof_manifest_bundle
 
 ROLE = "ffn_gate_up"
 M = 512
@@ -649,6 +650,106 @@ def run_bounded_harness(config: BoundedMMQConfig) -> dict[str, Any]:
     ),
   }
   return report
+
+
+def bounded_candidate_id(config: BoundedMMQConfig) -> str:
+  config.validate()
+  return (
+    f"{CANDIDATE_ROUTE_ID}."
+    f"{config.backend}.m{config.bounded_m}.n{config.bounded_n}.k{config.bounded_k}."
+    f"{config.activation_layout}"
+  )
+
+
+def build_bounded_candidate_result(config: BoundedMMQConfig) -> dict[str, Any]:
+  """Research-only candidate result tying bounded numerics to proof export shape.
+
+  This deliberately does not promote or bind a production MMQ route. If the
+  selected path is oracle-only or lacks an emitted GPU candidate, the status is
+  explicit and the exact blocker is carried in the artifact.
+  """
+  config.validate()
+  candidate_id = bounded_candidate_id(config)
+  proof_bundle = build_amd_isa_proof_manifest_bundle(candidate_id=candidate_id, kernel_name=config.backend, rows=[])
+  shape = {"M": config.bounded_m, "N": config.bounded_n, "K": config.bounded_k}
+
+  try:
+    report = run_bounded_harness(config)
+  except MMQAtomUnavailableError as exc:
+    return {
+      "schema": "q4k-q8-1-mmq-bounded-candidate-result.v1",
+      "candidate_id": candidate_id,
+      "candidate_route_id": CANDIDATE_ROUTE_ID,
+      "backend": config.backend,
+      "shape": shape,
+      "research_only": True,
+      "production_dispatch_changed": False,
+      "default_route": COMPARATOR_ID,
+      "status": "blocked_emitted_candidate_missing",
+      "numeric_status": "not_run",
+      "oracle_only": False,
+      "exact_blocker": str(exc),
+      "amd_isa_proof_bundle": proof_bundle,
+      "harness_report": None,
+    }
+
+  numeric_status = report["status"]
+  if config.backend == LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID:
+    return {
+      "schema": "q4k-q8-1-mmq-bounded-candidate-result.v1",
+      "candidate_id": candidate_id,
+      "candidate_route_id": CANDIDATE_ROUTE_ID,
+      "backend": config.backend,
+      "shape": shape,
+      "research_only": True,
+      "production_dispatch_changed": False,
+      "default_route": COMPARATOR_ID,
+      "status": "oracle_only",
+      "numeric_status": numeric_status,
+      "oracle_only": True,
+      "exact_blocker": "llama MMQ cooperative-tile path is a translated structure/numeric oracle only; no emitted AMD GPU candidate is claimed",
+      "amd_isa_proof_bundle": proof_bundle,
+      "harness_report": report,
+    }
+
+  emitted_binary_hash = report.get("artifacts", {}).get("emitted_binary_hash")
+  if emitted_binary_hash is None and config.backend != "reference":
+    blocker = "no emitted AMD GPU candidate binary/hash is present for this bounded MMQ backend"
+    if report.get("blockers"):
+      blocker = "; ".join(report["blockers"])
+    return {
+      "schema": "q4k-q8-1-mmq-bounded-candidate-result.v1",
+      "candidate_id": candidate_id,
+      "candidate_route_id": CANDIDATE_ROUTE_ID,
+      "backend": config.backend,
+      "shape": shape,
+      "research_only": True,
+      "production_dispatch_changed": False,
+      "default_route": COMPARATOR_ID,
+      "status": "blocked_emitted_candidate_missing",
+      "numeric_status": numeric_status,
+      "oracle_only": False,
+      "exact_blocker": blocker,
+      "amd_isa_proof_bundle": proof_bundle,
+      "harness_report": report,
+    }
+
+  return {
+    "schema": "q4k-q8-1-mmq-bounded-candidate-result.v1",
+    "candidate_id": candidate_id,
+    "candidate_route_id": CANDIDATE_ROUTE_ID,
+    "backend": config.backend,
+    "shape": shape,
+    "research_only": True,
+    "production_dispatch_changed": False,
+    "default_route": COMPARATOR_ID,
+    "status": "reference_only" if config.backend == "reference" else numeric_status,
+    "numeric_status": numeric_status,
+    "oracle_only": False,
+    "exact_blocker": None,
+    "amd_isa_proof_bundle": proof_bundle,
+    "harness_report": report,
+  }
 
 
 def _parse_args() -> argparse.Namespace:

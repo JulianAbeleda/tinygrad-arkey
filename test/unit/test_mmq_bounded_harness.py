@@ -5,7 +5,7 @@ from extra.qk.mmq_bounded_harness import (
   ACTIVATION_LAYOUT_MMQ_DS4, ACTIVATION_LAYOUT_ROW_MAJOR, AMD_DS4_DOT4X4_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID,
   AMD_DS4_COOP_TILE_BACKEND_ID, AMD_DS4_LDS_SKELETON_BACKEND_ID, CANDIDATE_ROUTE_ID, COMPARATOR_ID, K, M, N, ROLE,
   LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID, STAGED_DS4_BACKEND_ID, BoundedMMQConfig, MMQAtomUnavailableError,
-  candidate_metadata,
+  bounded_candidate_id, build_bounded_candidate_result, candidate_metadata,
   coop_tile_blocked_translation_evidence, run_bounded_harness,
 )
 
@@ -275,3 +275,49 @@ def test_mmq_bounded_harness_rejects_unknown_activation_layout():
 def test_mmq_bounded_harness_amd_ds4_dot4x4_requires_m_multiple_of_4():
   with pytest.raises(ValueError, match="multiple of 4"):
     BoundedMMQConfig(m_tile=2, m_tiles=1, n_tile=4, k_groups=8, backend=AMD_DS4_DOT4X4_BACKEND_ID).validate()
+
+
+def test_mmq_bounded_candidate_result_oracle_only_exports_numeric_artifact():
+  cfg = BoundedMMQConfig(m_tile=16, n_tile=16, k_groups=8, backend=LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID)
+  result = build_bounded_candidate_result(cfg)
+
+  assert result["schema"] == "q4k-q8-1-mmq-bounded-candidate-result.v1"
+  assert result["candidate_id"] == bounded_candidate_id(cfg)
+  assert result["shape"] == {"M": 16, "N": 16, "K": 256}
+  assert result["status"] == "oracle_only"
+  assert result["numeric_status"] == "PASS"
+  assert result["oracle_only"] is True
+  assert result["production_dispatch_changed"] is False
+  assert result["default_route"] == COMPARATOR_ID
+  assert "no emitted AMD GPU candidate is claimed" in result["exact_blocker"]
+  assert result["amd_isa_proof_bundle"]["schema"] == "tinygrad.amd_isa_proof_manifest.v1"
+  assert result["amd_isa_proof_bundle"]["candidate_id"] == result["candidate_id"]
+  assert result["amd_isa_proof_bundle"]["kernel_name"] == LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID
+  assert result["amd_isa_proof_bundle"]["rows"] == []
+  assert result["harness_report"]["artifacts"]["llama_mmq_oracle_tiles"][0]["oracle_only"] is True
+
+
+def test_mmq_bounded_candidate_result_marks_reference_backed_atom_as_missing_emitted_candidate():
+  cfg = BoundedMMQConfig(m_tile=4, n_tile=4, k_groups=8, backend="atom")
+  result = build_bounded_candidate_result(cfg)
+
+  assert result["candidate_id"] == bounded_candidate_id(cfg)
+  assert result["shape"] == {"M": 4, "N": 4, "K": 256}
+  assert result["status"] == "blocked_emitted_candidate_missing"
+  assert result["numeric_status"] == "PASS"
+  assert result["oracle_only"] is False
+  assert result["production_dispatch_changed"] is False
+  assert result["harness_report"]["artifacts"]["emitted_binary_hash"] is None
+  assert result["exact_blocker"] == "atom backend is reference-backed; AMD GPU atom body is not implemented"
+
+
+def test_mmq_bounded_candidate_result_preserves_blocked_backend_exact_error():
+  cfg = BoundedMMQConfig(m_tile=16, n_tile=16, k_groups=8, backend=AMD_DS4_COOP_TILE_BACKEND_ID)
+  result = build_bounded_candidate_result(cfg)
+
+  assert result["status"] == "blocked_emitted_candidate_missing"
+  assert result["numeric_status"] == "not_run"
+  assert result["shape"] == {"M": 16, "N": 16, "K": 256}
+  assert result["harness_report"] is None
+  assert AMD_DS4_COOP_TILE_BACKEND_ID in result["exact_blocker"]
+  assert "blocked_translation" in result["exact_blocker"]
