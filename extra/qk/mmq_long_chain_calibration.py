@@ -6,6 +6,9 @@ import json
 from pathlib import Path
 import random
 import statistics
+import os
+import subprocess
+import sys
 from typing import Any, Mapping
 
 SCHEMA = "tinygrad.mmq_long_chain_calibration.v1"
@@ -18,6 +21,61 @@ def long_chain_cases(include_controls:bool=True):
     cases += [CalibrationCase("dependent_salu.wg96.n1024", "dependent_salu", 96, 1024),
               CalibrationCase("mixed_salu_valu.wg96.n1024", "mixed_salu_valu", 96, 1024)]
   return tuple(cases)
+
+
+def _case(family:str, length:int):
+  from extra.qk.mmq_calibration import CalibrationCase, dependent_valu_case
+  if family == "dependent_valu": return dependent_valu_case(96, length)
+  if family in ("dependent_salu", "mixed_salu_valu"):
+    return CalibrationCase(f"{family}.wg96.n{length}", family, 96, length)
+  raise ValueError("unsupported long-chain family")
+
+
+def collect_long_chain_case(*, mode:str, family:str, length:int, system_snapshot_id:str) -> dict[str, Any]:
+  from tinygrad.device import Compiled, Device
+  from extra.qk.mmq_amd_pmc import _decode_event
+  from extra.qk.mmq_amd_telemetry import DEFAULT_SENSORS, read_sensor
+  from extra.qk.mmq_calibration import run_calibration_case
+  case = _case(family, length)
+  pmc_enabled = bool(getattr(Device["AMD"], "pmc_enabled", False))
+  if mode == "profile_standard" and not pmc_enabled: raise RuntimeError("profile_standard collection requires native PMC")
+  if mode == "auto" and pmc_enabled: raise RuntimeError("auto collection must not enable native PMC")
+  warm = run_calibration_case(case, warmups=1, rounds=3, system_snapshot_id=system_snapshot_id)
+  before = {name: read_sensor(path) for name, path in DEFAULT_SENSORS.items()}
+  Compiled.profile_events.clear()
+  result = run_calibration_case(case, warmups=5, rounds=30, system_snapshot_id=system_snapshot_id)
+  after = {name: read_sensor(path) for name, path in DEFAULT_SENSORS.items()}
+  if result["hashes"]["binary_sha256"] != warm["hashes"]["binary_sha256"]: raise RuntimeError("binary changed during collection")
+  events = [event for event in Compiled.profile_events if type(event).__name__ == "ProfilePMCEvent"]
+  return {"status": "live", "case_id": case.case_id, "family": family, "chain_length": length,
+          "binary_sha256": result["hashes"]["binary_sha256"], "binary_bytes": result["binary_bytes"],
+          "protocol": {"warmups": 5, "rounds": 30}, "samples_ms": result["samples_ms"], "median_ms": result["median_ms"],
+          "counters": _decode_event(events[-1]) if events else None, "telemetry_before": before, "telemetry_after": after}
+
+
+def collect_long_chain_subprocess_suite(*, mode:str, system_snapshot_id:str, seed:int=20260711,
+                                        timeout:int=300) -> dict[str, Any]:
+  specs = [("dependent_valu", n) for n in (1024, 4096, 16384)] + [("dependent_salu", 1024), ("mixed_salu_valu", 1024)]
+  random.Random(seed).shuffle(specs)
+  rows, root = [], Path(__file__).resolve().parents[2]
+  for family, length in specs:
+    env = dict(os.environ, PROFILE="1" if mode == "profile_standard" else "0", PMC="1" if mode == "profile_standard" else "0",
+               PMC_COUNTERS="SQ_WAVE_CYCLES,SQ_BUSY_CYCLES,SQ_WAVES,SQ_WAIT_ANY", VIZ="0")
+    env["PYTHONPATH"] = str(root) + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+    argv = [sys.executable, str(Path(__file__).resolve()), "--case", mode, family, str(length), system_snapshot_id]
+    try:
+      proc = subprocess.run(argv, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout)
+      marker = next((line for line in reversed(proc.stdout.splitlines()) if line.startswith("MMQ_LONG_CHAIN_JSON=")), None)
+      row = json.loads(marker.split("=", 1)[1]) if proc.returncode == 0 and marker else {
+        "status": "blocked", "family": family, "chain_length": length, "returncode": proc.returncode,
+        "stderr": proc.stderr[-4000:], "stdout": proc.stdout[-4000:]}
+    except (OSError, subprocess.TimeoutExpired) as exc:
+      row = {"status": "blocked", "family": family, "chain_length": length, "error": f"{type(exc).__name__}: {exc}"}
+    rows.append(row)
+  return {"schema": SCHEMA, "provenance_class": "generated_microbenchmark", "mode": mode,
+          "system_snapshot_id": system_snapshot_id, "seed": seed, "randomized_order": [f"{f}.n{n}" for f,n in specs],
+          "native_pmc_enabled": mode == "profile_standard", "sq_status": "live" if mode == "profile_standard" else "blocked_profile_mode_precondition",
+          "cases": rows, "candidate_timing_used_for_fit": False, "production_dispatch_changed": False}
 
 
 def collect_long_chain_mode(*, mode:str, system_snapshot_id:str, seed:int=20260711,
@@ -81,3 +139,14 @@ def validate_long_chain_calibration(artifact:Mapping[str, Any]) -> None:
   if artifact.get("provenance_class") != "generated_microbenchmark": raise ValueError("generated provenance required")
   if artifact.get("candidate_timing_used_for_fit") is not False: raise ValueError("candidate fitting is forbidden")
   if artifact.get("production_dispatch_changed") is not False: raise ValueError("production dispatch changed")
+
+
+if __name__ == "__main__":
+  import argparse
+  parser = argparse.ArgumentParser()
+  parser.add_argument("--case", nargs=4, metavar=("MODE", "FAMILY", "LENGTH", "SYSTEM_SNAPSHOT_ID"))
+  args = parser.parse_args()
+  if not args.case: parser.error("--case is required")
+  mode, family, length, snapshot = args.case
+  print("MMQ_LONG_CHAIN_JSON=" + json.dumps(collect_long_chain_case(
+    mode=mode, family=family, length=int(length), system_snapshot_id=snapshot), sort_keys=True))
