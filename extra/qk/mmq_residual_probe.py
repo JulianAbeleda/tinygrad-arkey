@@ -119,3 +119,53 @@ def run_v5_matrix(output:Path,*,system_snapshot_id:str,warmups=5,rounds=30,boots
   manifest={"schema":"tinygrad.mmq_residual_grid_factorial.v5","provenance_class":"generated_microbenchmark","system_snapshot_id":system_snapshot_id,
             "protocol":{"warmups":warmups,"rounds":rounds},"cells":len(rows),"fit":fit,"case_ids":[r["case_id"] for r in rows],"production_dispatch_changed":False}
   (output/"manifest.json").write_text(json.dumps(manifest,indent=2,sort_keys=True)+"\n");return manifest
+
+def _exact_kernel(sites:int):
+  def kernel(out:UOp,inp:UOp):
+    gid,lane=UOp.special(256+sites+1,"gidx0"),UOp.special(64,"lidx0");value=inp[lane]
+    lds=UOp.placeholder((64,),dtypes.float32,240,addrspace=AddrSpace.LOCAL);stage=lds[lane].store(value)
+    value=lds.after(UOp.barrier(UOp.group(stage)))[lane];stores=[out[0].store(value)]
+    for site in range(sites): stores.append(out[site+1].store(value,gate=gid >= (256+site)))
+    return UOp.group(*stores).sink(arg=KernelInfo(name=f"residual_v6_exact_{sites}",opts_to_apply=()))
+  return kernel
+
+def run_exact_isa_case(sites:int,*,system_snapshot_id:str,warmups=5,rounds=30):
+  if sites not in (0,64,128,256): raise ValueError("unsupported exact ISA point")
+  fxn=_exact_kernel(sites);sink=fxn(UOp.placeholder((sites+1,),dtypes.float32,0),UOp.placeholder((64,),dtypes.float32,1))
+  inp=Tensor.empty(64,dtype=dtypes.float32,device="AMD").realize();out=Tensor.empty(sites+1,dtype=dtypes.float32,device="AMD").custom_kernel(inp,fxn=fxn)[0].realize()
+  prg=to_program(sink,Device["AMD"].renderer);from tinygrad.engine.realize import runtime_cache
+  rt=runtime_cache[(prg.key,"AMD")];args=(out.uop.buffer._buf,inp.uop.buffer._buf);gs=(256,1,1);ls=prg.arg.local_size
+  from tinygrad.device import Compiled
+  Compiled.profile_events.clear()
+  for _ in range(warmups):rt(*args,global_size=gs,local_size=ls,wait=True)
+  samples=[float(rt(*args,global_size=gs,local_size=ls,wait=True))*1e3 for _ in range(rounds)]
+  meta=parse_amdgpu_metadata(rt.lib);disasm,_=disassemble_amdgpu(rt.lib);isa=analyze_final_isa(disasm,wavefront_size=meta["wavefront_size"])
+  store_mnemonics={row["mnemonic"] for row in isa["instructions"] if row["instruction_class"]=="global_store"}
+  expected={"global_store_sites":sites+1,"branch_sites":max(0,2*sites-1),"predicate_sites":max(0,4*sites-2)}
+  actual={key:isa[key] for key in expected};admitted=actual==expected and store_mnemonics=={"global_store_b32"}
+  result={"schema":"tinygrad.mmq_exact_isa_residual.v6","provenance_class":"generated_microbenchmark","point":sites,
+    "system_snapshot_id":system_snapshot_id,"admitted":admitted,"expected":expected,"actual":actual,"store_mnemonics":sorted(store_mnemonics),
+    "binary_sha256":hashlib.sha256(rt.lib).hexdigest(),"isa_sha256":hashlib.sha256(disasm.encode()).hexdigest(),"resources":meta,
+    "samples_ms":samples,"median_ms":statistics.median(samples),"protocol":{"workgroups":256,"warmups":warmups,"rounds":rounds,"gpu_timestamp_only":True},
+    "dynamic_contract":{"false_sites_execute":False,"gate":"gidx0 >= 256+site","timed_gidx0_range":[0,255]},"production_dispatch_changed":False}
+  events=[e for e in Compiled.profile_events if type(e).__name__=="ProfilePMCEvent"]
+  if events:
+    from extra.qk.mmq_amd_pmc import _decode_event
+    counters=_decode_event(events[-1]);result["sq_profile"]={k:{"value":v,"status":"live" if v>0 else "zero_suspect"} for k,v in counters.items()}
+  return result
+
+def run_v6_exact_matrix(output:Path,*,system_snapshot_id:str):
+  output=Path(output);output.mkdir(parents=True,exist_ok=False);rows=[]
+  for sites in (0,64,128,256):
+    row=run_exact_isa_case(sites,system_snapshot_id=system_snapshot_id);rows.append(row);(output/f"point-{sites}.json").write_text(json.dumps(row,indent=2,sort_keys=True)+"\n")
+  admitted=[r for r in rows if r["admitted"]];x=np.asarray([[1,r["point"]] for r in admitted],float);y=np.asarray([r["median_ms"] for r in admitted]);coef=np.linalg.lstsq(x,y,rcond=None)[0]
+  manifest={"schema":"tinygrad.mmq_exact_isa_residual.v6","system_snapshot_id":system_snapshot_id,"admitted_points":len(admitted),
+            "fit":{"intercept_ms":float(coef[0]),"per_false_site_ms":float(coef[1])},"rows":[{"point":r["point"],"admitted":r["admitted"],"median_ms":r["median_ms"]} for r in rows]}
+  (output/"manifest.json").write_text(json.dumps(manifest,indent=2,sort_keys=True)+"\n");return manifest
+
+def collect_exact_sq_profile(sites:int,*,system_snapshot_id:str,timeout=90):
+  code=("import json;from extra.qk.mmq_residual_probe import run_exact_isa_case;"
+        f"print(json.dumps(run_exact_isa_case({sites},system_snapshot_id={system_snapshot_id!r},warmups=1,rounds=3)))")
+  env=dict(os.environ,PROFILE="1",PMC="1",PMC_COUNTERS="SQ_BUSY_CYCLES,SQ_WAVES",VIZ="0")
+  proc=subprocess.run([sys.executable,"-c",code],env=env,text=True,capture_output=True,timeout=timeout,check=True)
+  row=json.loads(proc.stdout.splitlines()[-1]);return {"point":sites,"binary_sha256":row["binary_sha256"],"sq_profile":row.get("sq_profile",{}),"stderr":proc.stderr[-2000:]}
