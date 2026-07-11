@@ -6,6 +6,7 @@ import errno
 import json
 import math
 from pathlib import Path
+import subprocess
 import time
 from typing import Any, Iterable
 
@@ -53,6 +54,34 @@ def collect_telemetry(process_or_window: str, *, samples: int = 1, interval_s: f
     if idx + 1 < samples and interval_s: time.sleep(interval_s)
   return {"schema": SCHEMA, "window": process_or_window, "system_snapshot_id": system_snapshot_id,
           "experiment_id": experiment_id, "sample_count": samples, "interval_s": interval_s, "samples": rows}
+
+
+def collect_process_telemetry(command: list[str], *, interval_s: float = 0.01, sensors: dict[str, str] | None = None,
+                              system_snapshot_id: str, experiment_id: str, candidate_id: str,
+                              binary_sha256: str, timeout: float = 120.0) -> dict[str, Any]:
+  if not command or not all(isinstance(arg, str) and arg for arg in command): raise ValueError("command must be a non-empty argv list")
+  if len(binary_sha256) != 64 or any(c not in "0123456789abcdef" for c in binary_sha256):
+    raise ValueError("binary_sha256 must be lowercase SHA-256")
+  configured, rows, started = sensors or DEFAULT_SENSORS, [], time.monotonic()
+  try:
+    proc = subprocess.Popen(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+  except OSError as exc:
+    return {"schema": SCHEMA, "window": "process", "status": "blocked", "error": f"{type(exc).__name__}: {exc}",
+            "command": command, "system_snapshot_id": system_snapshot_id, "experiment_id": experiment_id,
+            "candidate_id": candidate_id, "binary_sha256": binary_sha256, "sample_count": 0, "samples": []}
+  timed_out = False
+  while proc.poll() is None:
+    rows.append({"sample": len(rows), "monotonic_ns": time.monotonic_ns(),
+                 "sensors": {name: {"path": path, **read_sensor(path)} for name, path in configured.items()}})
+    if time.monotonic() - started > timeout:
+      proc.kill(); timed_out = True; break
+    time.sleep(interval_s)
+  stdout, stderr = proc.communicate()
+  return {"schema": SCHEMA, "window": "process", "status": "blocked" if timed_out or proc.returncode else "live",
+          "system_snapshot_id": system_snapshot_id, "experiment_id": experiment_id, "candidate_id": candidate_id,
+          "binary_sha256": binary_sha256, "command": command, "returncode": proc.returncode,
+          "sample_count": len(rows), "interval_s": interval_s, "samples": rows,
+          "stdout": stdout[-4000:], "stderr": stderr[-4000:], "timed_out": timed_out}
 
 
 def validate_telemetry(artifact: dict[str, Any]) -> None:

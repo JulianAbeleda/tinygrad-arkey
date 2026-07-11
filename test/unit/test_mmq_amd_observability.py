@@ -11,7 +11,7 @@ from extra.qk.mmq_amd_pmc import (
   DEFAULT_GROUPS, SCHEMA as PMC_SCHEMA, classify_liveness, collect_kernel_pmc, collect_mmq_pmc, probe_rocprof_fallback, validate_pmc_result,
 )
 from extra.qk.mmq_amd_telemetry import (
-  SCHEMA as TELEMETRY_SCHEMA, collect_telemetry, read_sensor, validate_telemetry,
+  SCHEMA as TELEMETRY_SCHEMA, collect_process_telemetry, collect_telemetry, read_sensor, validate_telemetry,
 )
 
 
@@ -94,6 +94,15 @@ def test_telemetry_trace_preserves_identity_and_failures(tmp_path):
   assert artifact["system_snapshot_id"] == "sys" and artifact["experiment_id"] == "exp"
   assert all(row["sensors"]["good"]["status"] == "live" for row in artifact["samples"])
   assert all(row["sensors"]["missing"]["status"] == "unsupported" for row in artifact["samples"])
+
+
+def test_process_telemetry_binds_candidate_binary_and_samples_window(tmp_path):
+  sensor = tmp_path / "sensor"; sensor.write_text("9")
+  artifact = collect_process_telemetry(["sleep", "0.04"], interval_s=0.005, sensors={"test": str(sensor)},
+    system_snapshot_id="sys", experiment_id="exp", candidate_id="candidate", binary_sha256="a" * 64)
+  validate_telemetry(artifact)
+  assert artifact["status"] == "live" and artifact["sample_count"] >= 1
+  assert artifact["candidate_id"] == "candidate" and artifact["binary_sha256"] == "a" * 64
 
 
 def test_observability_artifacts_are_json_serializable(tmp_path):
