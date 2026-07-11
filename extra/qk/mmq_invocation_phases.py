@@ -74,3 +74,16 @@ def run_invocation_phase_probe(*,rounds=30,warmups=3,seed=20260711,system_snapsh
     "binary_sha256":{m:v[2] for m,v in state.items()},"samples":samples,"summary_median_ms":summary,"production_dispatch_changed":False}
 
 def write_probe(result,path):Path(path).write_text(json.dumps(result,indent=2,sort_keys=True)+"\n")
+
+def run_source_construction_factorial(*,rounds=30,seed=20260711):
+  """Independent generated-source timing; does not compile or use MMQ candidate identities."""
+  from tinygrad.uop.ops import UOp
+  from extra.qk.mmq_residual_probe import _exact_kernel
+  points=(0,64,128,256);order=[p for p in points for _ in range(rounds)];random.Random(seed).shuffle(order);samples={p:[] for p in points};overhead=_clock_overhead()
+  for sites in order:
+    fn=_exact_kernel(sites);_,_,elapsed=_timed(lambda:fn(UOp.placeholder((sites+1,),dtypes.float32,0),UOp.placeholder((64,),dtypes.float32,1)),overhead);samples[sites].append(elapsed)
+  x=np.asarray([[1,p] for p in points],float);y=np.asarray([statistics.median(samples[p]) for p in points]);coef=np.linalg.lstsq(x,y,rcond=None)[0]
+  return {"schema":"tinygrad.mmq_source_construction_factorial.v1","provenance_class":"generated_microbenchmark","rounds":rounds,
+          "points":[{"sites":p,"samples_ms":samples[p],"median_ms":statistics.median(samples[p])} for p in points],
+          "fit":{"intercept_ms":float(coef[0]),"per_site_ms":float(coef[1]),"predicted_256_ms":float(coef[0]+256*coef[1])},
+          "timer_overhead_ns":overhead,"candidate_id":None}
