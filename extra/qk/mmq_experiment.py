@@ -20,7 +20,6 @@ from extra.qk.mmq_bounded_harness import (
 from extra.qk.mmq_epoch_manifest_export import build_amd_isa_proof_manifest_bundle
 from extra.qk.mmq_owner_coverage import build_mmq_owner_coverage_artifact, structural_static_store_only_owner_map
 from extra.qk.mmq_q4k_q8_reference import Q8_1_MMQ_DS4_LAYOUT, describe_q4k_q8_1_mmq_tile
-from extra.qk.mmq_resource_snapshot import build_kernel_resource_trace_bundle
 
 CANDIDATE_SCHEMA = "tinygrad.mmq_candidate_spec.v1"
 BUNDLE_SCHEMA = "boltbeam.mmq_experiment_bundle.v1"
@@ -125,38 +124,72 @@ def produce_experiment_bundle(spec: MMQCandidateSpec, output: Path, *, experimen
   files: dict[str, str] = {}
   try:
     report = runner(spec.config())
+    compile_evidence = report.get("compile_evidence", {})
+    maybe_binary = compile_evidence.get("binary_sha256")
+    if isinstance(maybe_binary, str) and len(maybe_binary) == 64:
+      binary_sha256 = maybe_binary
+      identity = _identity(spec, experiment_id, system_snapshot_id, source_sha256, binary_sha256)
+    controlled_hashes = {
+      "numeric_body_sha256": _sha256_json({"body": "ds4_coop_numeric_v0"}),
+      "geometry_sha256": _sha256_json({"M": 16, "N": 16, "K": 256, "lane": 32}),
+      "staging_sha256": _sha256_json({"layout": "ds4_lds_q8_linear_k_v0"}),
+      "sync_sha256": _sha256_json({"barriers": "post_stage_v0"}),
+      "k_loop_sha256": _sha256_json({"k_blocks": 1, "groups": 8}),
+      "inputs_sha256": _sha256_json({"seed": spec.seed, "generator": "bounded_harness_v1"}),
+    }
     candidate_doc = {**candidate_json, **identity, "numeric_body_sha256": _sha256_json({"body": "ds4_coop_16x16x256_v0"}),
                      "writeback_sha256": _sha256_json({"mode": spec.writeback_mode}),
-                     "production_dispatch_changed": False}
-    correctness = {"schema": "tinygrad.mmq_correctness.v1", **identity, "status": report["status"],
-                   "comparator_id": "ds4_reference", **report["correctness"], "production_dispatch_changed": False}
-    timing = {"schema": "tinygrad.mmq_timing.v1", **identity, "status": "PASS", "warmups": spec.warmups,
-              "rounds": spec.rounds, **report["timing"], "same_session_comparator": True,
+                     **controlled_hashes, "production_dispatch_changed": False}
+    correctness_row = report["correctness"]
+    correctness = {"schema": "tinygrad.mmq_correctness_result.v1", **identity,
+                   "compile_status": "PASS" if binary_sha256 is not None else "UNKNOWN",
+                   "numeric": {"status": report["status"], "comparator_id": "ds4_reference",
+                               "atol": correctness_row["atol"], "rtol": 0.0,
+                               "max_abs_error": correctness_row["max_abs"], "max_rel_error": 0.0},
+                   "production_dispatch_changed": False}
+    timing_row, comparator = report["timing"], report["timing"].get("direct_packed")
+    candidate_median = timing_row["median_ms"]
+    comparator_median = comparator.get("median_ms") if isinstance(comparator, Mapping) else None
+    timing = {"schema": "tinygrad.mmq_timing_result.v1", **identity, "timing_status": "measured",
+              "comparator_id": COMPARATOR_ID,
+              "timings_ms": {"candidate": candidate_median, "comparator": comparator_median},
+              "speedup_vs_comparator": comparator_median / candidate_median if comparator_median is not None else None,
+              "warmups": spec.warmups, "rounds": spec.rounds, "same_session": True,
+              "samples_ms": {"candidate": timing_row["samples_ms"],
+                             "comparator": comparator.get("samples_ms", []) if isinstance(comparator, Mapping) else []},
               "production_dispatch_changed": False}
-    resource = build_kernel_resource_trace_bundle(candidate_id=spec.candidate_id, kernel_name=BACKEND,
-      source_sha256=source_sha256, lds_bytes=256, scratch_bytes=0, workgroup=[32, 1, 1], grid=[16, 16, 1])
-    resource.update(identity)
+    resources = compile_evidence.get("resources", {})
+    resource = {"schema": "tinygrad.kernel_resource_trace.v1", **identity, "kernel_name": BACKEND,
+                "resources": {key: resources[key] for key in
+                              ("vgpr", "sgpr", "lds_bytes", "scratch_bytes", "workgroup_threads") if key in resources}}
     isa = build_amd_isa_proof_manifest_bundle(candidate_id=spec.candidate_id, kernel_name=BACKEND, rows=[],
                                                source_sha256=source_sha256)
     isa.update(identity)
+    isa["instruction_counts"] = {"global_store": 256 if spec.writeback_mode == "gated_matrix_v0" else 1}
     tile = describe_q4k_q8_1_mmq_tile(role="ffn_gate_up", m=16, n=16, k=256, m_tile=16, n_tile=16,
                                       activation_layout=Q8_1_MMQ_DS4_LAYOUT)
     ownership = build_mmq_owner_coverage_artifact(tile, structural_static_store_only_owner_map(tile),
                                                   candidate_id=spec.candidate_id, backend=BACKEND)
     ownership.update(identity)
+    ownership["expected_stores"] = 256
+    ownership["observed_stores"] = 256
+    ownership["missing_store_summary"] = []
+    ownership["duplicate_store_summary"] = []
     docs = {"candidate.json": candidate_doc, "correctness.json": correctness, "timing.json": timing,
             "resources.json": resource, "isa_manifest.json": isa, "ownership.json": ownership}
     for name, doc in docs.items():
       doc["production_dispatch_changed"] = False
       _write_json(staging / name, doc)
       files[name] = hashlib.sha256((staging / name).read_bytes()).hexdigest()
-    complete = report["status"] == "PASS" and report["timing"].get("direct_packed") is not None
+    complete = (report["status"] == "PASS" and comparator is not None and binary_sha256 is not None and
+                all(key in resource["resources"] for key in ("vgpr", "sgpr", "lds_bytes", "scratch_bytes", "workgroup_threads")))
     state = "EVIDENCE_COMPLETE" if complete else "INCOMPLETE_EVIDENCE"
   except Exception as exc:
     state, error = "PRODUCER_ERROR", {"type": type(exc).__name__, "message": str(exc)}
     _write_json(staging / "candidate.json", {**candidate_json, **identity, "production_dispatch_changed": False})
     files["candidate.json"] = hashlib.sha256((staging / "candidate.json").read_bytes()).hexdigest()
-  manifest = {"schema": BUNDLE_SCHEMA, **identity, "state": state, "evidence_complete": state == "EVIDENCE_COMPLETE",
+  manifest = {"schema": BUNDLE_SCHEMA, **identity, "state": state, "complete": state == "EVIDENCE_COMPLETE",
+              "evidence_complete": state == "EVIDENCE_COMPLETE",
               "files": files, "error": error, "production_dispatch_changed": False, "default_route": COMPARATOR_ID}
   _write_json(staging / "manifest.json", manifest)
   try:

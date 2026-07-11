@@ -18,6 +18,8 @@ from extra.qk.mmq_q4k_q8_atom import _q4k_q8_1_bounded_ds4_coop_tile_kernel
 def _fake_report(status="PASS"):
   return {
     "status": status,
+    "compile_evidence": {"binary_sha256": "b" * 64, "resources": {
+      "vgpr": 32, "sgpr": 16, "lds_bytes": 256, "scratch_bytes": 0, "workgroup_threads": 32}},
     "correctness": {"max_abs": 0.0, "atol": 0.001, "tiles": 1},
     "timing": {"samples_ms": [2.0] * 10, "min_ms": 2.0, "median_ms": 2.0,
                "comparator_id": "direct_packed", "comparator_status": "measured",
@@ -76,6 +78,7 @@ def test_atomic_bundle_propagates_identity_and_hashes_files(tmp_path):
   manifest = json.loads((out / "manifest.json").read_text())
   assert manifest["schema"] == BUNDLE_SCHEMA
   assert manifest["state"] == "EVIDENCE_COMPLETE"
+  assert manifest["complete"] is True
   assert manifest["production_dispatch_changed"] is False
   assert not list(tmp_path.glob(".bundle.tmp-*"))
   for name, digest in manifest["files"].items():
@@ -97,6 +100,7 @@ def test_failure_bundle_is_atomic_structured_and_not_complete(tmp_path):
   manifest = json.loads((out / "manifest.json").read_text())
   assert manifest["state"] == "PRODUCER_ERROR"
   assert manifest["evidence_complete"] is False
+  assert manifest["complete"] is False
   assert manifest["error"] == {"type": "RuntimeError", "message": "compile failed"}
   assert set(manifest["files"]) == {"candidate.json"}
   assert not list(tmp_path.glob(".failed.tmp-*"))
