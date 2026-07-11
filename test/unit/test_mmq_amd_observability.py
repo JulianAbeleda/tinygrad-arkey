@@ -12,7 +12,8 @@ from extra.qk.mmq_amd_pmc import (
   DEFAULT_GROUPS, SCHEMA as PMC_SCHEMA, classify_liveness, collect_kernel_pmc, collect_mmq_pmc, probe_rocprof_fallback, validate_pmc_result,
 )
 from extra.qk.mmq_amd_telemetry import (
-  SCHEMA as TELEMETRY_SCHEMA, collect_mmq_kernel_window_telemetry, collect_process_telemetry, collect_telemetry, read_sensor, validate_telemetry,
+  SCHEMA as TELEMETRY_SCHEMA, collect_mmq_kernel_window_telemetry, collect_process_telemetry, collect_telemetry,
+  probe_clock_policy, read_sensor, run_interleaved_mmq_clock_probe, validate_telemetry,
 )
 from extra.qk.mmq_amd_probes import SCHEMA as PROBE_SCHEMA, summarize_store_calibration, validate_differential_probe
 
@@ -114,6 +115,22 @@ def test_kernel_window_telemetry_validates_identity_before_execution():
   with pytest.raises(ValueError, match="binary_sha256"):
     collect_mmq_kernel_window_telemetry("direct_owner_v0", repetitions=1, interval_s=.01, system_snapshot_id="s",
       experiment_id="e", candidate_id="c", binary_sha256="short")
+
+
+def test_clock_policy_preflight_reports_nonprivileged_controls(tmp_path):
+  for name in ("power_dpm_force_performance_level", "pp_dpm_sclk", "pp_dpm_mclk"):
+    (tmp_path / name).write_text("auto")
+  result = probe_clock_policy(sysfs_root=tmp_path)
+  assert result["schema"] == "tinygrad.amd_clock_policy_preflight.v1"
+  assert result["privileged_action_attempted"] is False
+  assert result["stable_policy_enforceable_without_privilege"] is True
+
+
+def test_interleaved_probe_validates_rounds_and_binary_pair_before_gpu():
+  with pytest.raises(ValueError, match="rounds"):
+    run_interleaved_mmq_clock_probe(rounds=2, seed=0, system_snapshot_id="s", binary_sha256={})
+  with pytest.raises(ValueError, match="both writeback modes"):
+    run_interleaved_mmq_clock_probe(rounds=3, seed=0, system_snapshot_id="s", binary_sha256={"gated_matrix_v0": "a" * 64})
 
 
 def test_observability_artifacts_are_json_serializable(tmp_path):

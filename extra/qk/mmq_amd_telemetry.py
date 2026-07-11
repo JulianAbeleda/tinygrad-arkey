@@ -5,9 +5,11 @@ from __future__ import annotations
 import errno
 import json
 import math
+import os
 from pathlib import Path
 import subprocess
 import sys
+import random
 import time
 from typing import Any, Iterable
 
@@ -39,6 +41,19 @@ def read_sensor(path: str | Path) -> dict[str, Any]:
     return {"status": "blocked", "value": None, "error": str(exc), "errno": errno.EACCES}
   except OSError as exc:
     return {"status": "blocked", "value": None, "error": str(exc), "errno": exc.errno}
+
+
+def probe_clock_policy(*, sysfs_root: str | Path = "/sys/class/drm/card0/device") -> dict[str, Any]:
+  root = Path(sysfs_root)
+  controls = {}
+  for name in ("power_dpm_force_performance_level", "pp_dpm_sclk", "pp_dpm_mclk"):
+    path = root / name
+    controls[name] = {"path": str(path), **read_sensor(path), "writable": path.exists() and os.access(path, os.W_OK)}
+  writable = controls["power_dpm_force_performance_level"]["writable"]
+  return {"schema": "tinygrad.amd_clock_policy_preflight.v1", "status": "live" if writable else "blocked",
+          "stable_policy_enforceable_without_privilege": writable, "controls": controls,
+          "reason": None if writable else "DPM controls are not writable by the current process",
+          "privileged_action_attempted": False}
 
 
 def collect_telemetry(process_or_window: str, *, samples: int = 1, interval_s: float = 0.0,
@@ -117,6 +132,46 @@ def collect_mmq_kernel_window_telemetry(writeback_mode: str, *, repetitions: int
           "experiment_id": experiment_id, "candidate_id": candidate_id, "binary_sha256": binary_sha256,
           "sample_count": len(rows), "interval_s": interval_s, "samples": rows, "returncode": proc.returncode,
           "stdout": stdout[-4000:], "stderr": stderr[-4000:]}
+
+
+def run_interleaved_mmq_clock_probe(*, rounds: int, seed: int, system_snapshot_id: str,
+                                    binary_sha256: dict[str, str], sensors: dict[str, str] | None = None) -> dict[str, Any]:
+  if rounds < 3: raise ValueError("rounds must be >= 3")
+  modes = ("gated_matrix_v0", "direct_owner_v0")
+  if set(binary_sha256) != set(modes): raise ValueError("binary_sha256 must identify both writeback modes")
+  from tinygrad import Tensor, dtypes
+  from tinygrad.device import Compiled, Device
+  from extra.qk.mmq_amd_pmc import _decode_event
+  from extra.qk.mmq_bounded_harness import ACTIVATION_LAYOUT_MMQ_DS4, _finite_q4k_bytes, _q8_activation_inputs
+  from extra.qk.mmq_q4k_q8_atom import _as_u32_words, _ds4_tensors, _q4k_q8_1_bounded_ds4_coop_tile_kernel
+  q4 = _finite_q4k_bytes(16, 256, seed)
+  activation = _q8_activation_inputs(16, 256, seed + 1, ACTIVATION_LAYOUT_MMQ_DS4)
+  assert activation.ds4_activation is not None
+  words = Tensor(_as_u32_words(q4), dtype=dtypes.uint32, device="AMD").realize()
+  values, scales, sums = _ds4_tensors(activation.ds4_activation, "AMD")
+  fxns = {mode: _q4k_q8_1_bounded_ds4_coop_tile_kernel(16, 16, 256, "ffn_gate_up", mode) for mode in modes}
+  for mode in modes:
+    Tensor.empty(16, 16, dtype=dtypes.float32, device="AMD").custom_kernel(words, values, scales, sums, fxn=fxns[mode])[0].realize()
+  Device["AMD"].synchronize()
+  order = [mode for _ in range(rounds) for mode in modes]
+  random.Random(seed).shuffle(order)
+  configured, rows = sensors or DEFAULT_SENSORS, []
+  for index, mode in enumerate(order):
+    before = {name: {"path": path, **read_sensor(path)} for name, path in configured.items()}
+    Compiled.profile_events.clear()
+    start = time.perf_counter_ns()
+    Tensor.empty(16, 16, dtype=dtypes.float32, device="AMD").custom_kernel(words, values, scales, sums, fxn=fxns[mode])[0].realize()
+    Device["AMD"].synchronize()
+    elapsed_ns = time.perf_counter_ns() - start
+    after = {name: {"path": path, **read_sensor(path)} for name, path in configured.items()}
+    pmc_events = [e for e in Compiled.profile_events if type(e).__name__ == "ProfilePMCEvent"]
+    rows.append({"sequence": index, "writeback_mode": mode, "elapsed_ms": elapsed_ns / 1e6,
+                 "telemetry_before": before, "telemetry_after": after,
+                 "pmc": _decode_event(pmc_events[-1]) if pmc_events else None})
+  return {"schema": "tinygrad.mmq_differential_probe.v1", "probe": "interleaved_clock_normalization",
+          "system_snapshot_id": system_snapshot_id, "clock_policy": probe_clock_policy(),
+          "binary_sha256": binary_sha256, "rounds_per_candidate": rounds, "seed": seed,
+          "randomized_order": order, "samples": rows, "production_dispatch_changed": False}
 
 
 def validate_telemetry(artifact: dict[str, Any]) -> None:
