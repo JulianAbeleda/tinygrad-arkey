@@ -66,6 +66,27 @@ def _child_control(kind: str, size: int) -> dict[str, Any]:
           "counters": _decode_event(events[-1]) if events else {}}
 
 
+def _child_mmq(writeback_mode: str, seed: int) -> dict[str, Any]:
+  from tinygrad import Tensor, dtypes
+  from tinygrad.device import Compiled, Device
+  from extra.qk.mmq_bounded_harness import ACTIVATION_LAYOUT_MMQ_DS4, _finite_q4k_bytes, _q8_activation_inputs
+  from extra.qk.mmq_q4k_q8_atom import _as_u32_words, _ds4_tensors, _q4k_q8_1_bounded_ds4_coop_tile_kernel
+  q4 = _finite_q4k_bytes(16, 256, seed)
+  activation = _q8_activation_inputs(16, 256, seed + 1, ACTIVATION_LAYOUT_MMQ_DS4)
+  assert activation.ds4_activation is not None
+  words = Tensor(_as_u32_words(q4), dtype=dtypes.uint32, device="AMD").realize()
+  values, scales, sums = _ds4_tensors(activation.ds4_activation, "AMD")
+  Compiled.profile_events.clear()
+  out = Tensor.empty(16, 16, dtype=dtypes.float32, device="AMD").custom_kernel(
+    words, values, scales, sums,
+    fxn=_q4k_q8_1_bounded_ds4_coop_tile_kernel(16, 16, 256, "ffn_gate_up", writeback_mode))[0].realize()
+  Device["AMD"].synchronize()
+  events = [e for e in Compiled.profile_events if type(e).__name__ == "ProfilePMCEvent"]
+  return {"status": "live" if events else "blocked", "event_count": len(events),
+          "kernel": "q4k_q8_1_mmq_ds4_coop_tile", "writeback_mode": writeback_mode,
+          "counters": _decode_event(events[-1]) if events else {}, "output_device": out.device}
+
+
 def _extract_json(stdout: str) -> dict[str, Any]:
   marker = "MMQ_PMC_JSON="
   line = next((line for line in reversed(stdout.splitlines()) if line.startswith(marker)), None)
@@ -143,6 +164,8 @@ def collect_kernel_pmc(candidate: Mapping[str, Any], counters: Iterable[str], re
     raise ValueError("binary_sha256 must be lowercase SHA-256")
   group, samples = tuple(dict.fromkeys(counters)), []
   env = dict(os.environ, PROFILE="1", PMC="1", PMC_COUNTERS=",".join(group), VIZ="0")
+  root = str(Path(__file__).resolve().parents[2])
+  env["PYTHONPATH"] = root + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
   for _ in range(repetitions):
     try:
       proc = subprocess.run(command, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout)
@@ -156,6 +179,15 @@ def collect_kernel_pmc(candidate: Mapping[str, Any], counters: Iterable[str], re
           "system_snapshot_id": system_snapshot_id, "binary_sha256": binary_sha256,
           "command_sha256": hashlib.sha256(json.dumps(command).encode()).hexdigest(),
           "counters": list(group), "repetitions": repetitions, "samples": samples}
+
+
+def collect_mmq_pmc(candidate: Mapping[str, Any], counters: Iterable[str], repetitions: int, *,
+                    system_snapshot_id: str, binary_sha256: str, seed: int = 0, timeout: int = 60) -> dict[str, Any]:
+  mode = candidate.get("knobs", {}).get("writeback_mode") if isinstance(candidate.get("knobs"), Mapping) else None
+  if mode not in ("gated_matrix_v0", "direct_owner_v0"): raise ValueError("candidate writeback_mode is invalid")
+  command = [sys.executable, str(Path(__file__).resolve()), "--mmq-child", mode, str(seed)]
+  return collect_kernel_pmc(candidate, counters, repetitions, command=command,
+                            system_snapshot_id=system_snapshot_id, binary_sha256=binary_sha256, timeout=timeout)
 
 
 def probe_rocprof_fallback(command: list[str], counters: Iterable[str], *,
@@ -194,10 +226,13 @@ def validate_pmc_result(artifact: Mapping[str, Any]) -> None:
 def _main() -> None:
   ap = argparse.ArgumentParser()
   ap.add_argument("--child", nargs=2, metavar=("KIND", "SIZE"))
+  ap.add_argument("--mmq-child", nargs=2, metavar=("WRITEBACK_MODE", "SEED"))
   ap.add_argument("--liveness", action="store_true")
   args = ap.parse_args()
   if args.child:
     print("MMQ_PMC_JSON=" + json.dumps(_child_control(args.child[0], int(args.child[1])), sort_keys=True))
+  elif args.mmq_child:
+    print("MMQ_PMC_JSON=" + json.dumps(_child_mmq(args.mmq_child[0], int(args.mmq_child[1])), sort_keys=True))
   elif args.liveness: print(json.dumps(run_pmc_liveness_suite(), indent=2, sort_keys=True))
   else: ap.error("choose --child or --liveness")
 

@@ -8,7 +8,7 @@ from extra.qk.mmq_amd_counter_capability import (
   SCHEMA as CAPABILITY_SCHEMA, parse_rocprof_counter_names, probe_amd_counter_capabilities, validate_counter_capability,
 )
 from extra.qk.mmq_amd_pmc import (
-  DEFAULT_GROUPS, SCHEMA as PMC_SCHEMA, classify_liveness, collect_kernel_pmc, probe_rocprof_fallback, validate_pmc_result,
+  DEFAULT_GROUPS, SCHEMA as PMC_SCHEMA, classify_liveness, collect_kernel_pmc, collect_mmq_pmc, probe_rocprof_fallback, validate_pmc_result,
 )
 from extra.qk.mmq_amd_telemetry import (
   SCHEMA as TELEMETRY_SCHEMA, collect_telemetry, read_sensor, validate_telemetry,
@@ -61,6 +61,12 @@ def test_identity_bound_candidate_collection_rejects_missing_or_fake_binary():
 def test_default_groups_isolate_native_unsupported_ta_block():
   assert any(all(name.startswith("TA_") for name in group) for group in DEFAULT_GROUPS)
   assert all(not (any(name.startswith("TA_") for name in group) and any(name.startswith("GL2C_") for name in group)) for group in DEFAULT_GROUPS)
+
+
+def test_mmq_collection_requires_canonical_writeback_mode_before_execution():
+  with pytest.raises(ValueError, match="writeback_mode"):
+    collect_mmq_pmc({"candidate_id": "c", "knobs": {"writeback_mode": "other"}}, ["SQ_BUSY_CYCLES"], 1,
+                    system_snapshot_id="s", binary_sha256="a" * 64)
 
 
 def test_rocprof_fallback_missing_tool_is_unsupported():
