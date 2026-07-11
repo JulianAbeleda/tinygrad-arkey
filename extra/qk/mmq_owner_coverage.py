@@ -112,12 +112,12 @@ def tinygrad_custom_kernel_store_owner_trace_blocker() -> dict[str, Any]:
     "status": "BLOCKED",
     "gpu_execution_trace": False,
     "exact_blocker": (
-      "AMD ISA proof rows can now carry per-store owner identity, but the cooperative MMQ store-only custom kernel "
-      "that tags each lowered output store with thread/lane, accumulator slot, and output index has not landed yet"
+      "AMD ISA proof rows now carry per-store owner identity and the 16x16 R4 map lowers as eight spill-free "
+      "32-store fragments; the remaining gap is a single full cooperative MMQ store/compute kernel for R5+"
     ),
     "smallest_next_code_change": (
-      "emit the R4 cooperative store-only custom kernel with store_owner tags on each output store, then build "
-      "owner coverage from the lowered AMD ISA proof manifest rows"
+      "lower the R5 cooperative LDS/read-compute fragment against the same owner proof manifest, then collapse "
+      "fragmented R4 lowering only after the AMD ISA renderer has a spill-free single-kernel shape"
     ),
   }
 

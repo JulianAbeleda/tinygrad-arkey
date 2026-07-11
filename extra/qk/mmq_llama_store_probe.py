@@ -172,3 +172,65 @@ def compare_llama_r4_store_probe_to_oracle(
     "owner_mismatches": mismatches,
     "sample_stores": [store.to_json() for store in stores[:min(8, len(stores))]],
   }
+
+
+def lowered_tinygrad_r4_store_owner_trace_rows(
+  spec: Q4KQ81MMQTileSpec,
+  geometry: LlamaMMQOracleGeometry = LlamaMMQOracleGeometry(),
+  *,
+  target: str = "AMD:ISA:gfx1100",
+) -> tuple[dict[str, Any], ...]:
+  """Lower the R4 16x16 store-owner trace through AMDISARenderer proof rows.
+
+  The full 256-store unrolled probe currently spills in the AMD ISA renderer.
+  This lowers the same 16x16 owner map as eight 32-store fragments, one
+  `store_iter` at a time. It is still lowered ISA evidence for every predicated
+  global store; it is not a production dispatch kernel.
+  """
+  spec.validate()
+  geometry.validate()
+  if spec.tile_m != geometry.tile_c_i or spec.tile_n != geometry.tile_c_j:
+    raise ValueError(f"lowered R4 store trace currently supports one {geometry.tile_c_i}x{geometry.tile_c_j} fragment, got {(spec.tile_m, spec.tile_n)}")
+
+  import os
+  from tinygrad.codegen import to_program, to_program_cache
+  from tinygrad.dtype import dtypes
+  from tinygrad.helpers import Target, getenv
+  from tinygrad.renderer.isa.amd import AMDISARenderer, amd_isa_proof_manifest, reset_amd_isa_proof_manifest
+  from tinygrad.uop.ops import KernelInfo, UOp
+
+  old = os.environ.get("AMD_ISA_PROOF_MANIFEST")
+  os.environ["AMD_ISA_PROOF_MANIFEST"] = "1"
+  getenv.cache_clear()
+  all_rows: list[dict[str, Any]] = []
+  try:
+    for store_iter in range((geometry.tile_c_i * geometry.tile_c_j) // geometry.warp_size):
+      reset_amd_isa_proof_manifest()
+      to_program_cache.clear()
+      out = UOp.placeholder((spec.tile_m, spec.tile_n), dtypes.float32, 0)
+      lane = UOp.special(geometry.warp_size, "lidx0")
+      stores = []
+      for lane_id in range(geometry.warp_size):
+        fragment_linear = store_iter * geometry.warp_size + lane_id
+        local_m, local_n = divmod(fragment_linear, geometry.tile_c_j)
+        owner = tuple(sorted({
+          "m": spec.m0 + local_m,
+          "n": spec.n0 + local_n,
+          "warp_id": 0,
+          "lane_id": lane_id,
+          "store_iter": store_iter,
+          "accumulator_slot": fragment_linear,
+          "fragment_m_range": (spec.m0, spec.m0 + spec.tile_m),
+          "fragment_n_range": (spec.n0, spec.n0 + spec.tile_n),
+        }.items()))
+        stores.append(out[local_m, local_n].store(0.0, gate=lane.eq(lane_id), arg=("store_owner", owner)))
+      ast = UOp.group(*stores).sink(arg=KernelInfo(name=f"mmq_r4_store_owner_trace_{spec.tile_m}x{spec.tile_n}_i{store_iter}", opts_to_apply=()))
+      to_program(ast, AMDISARenderer(Target.parse(target)))
+      all_rows.extend(dict(row, trace_fragment=store_iter) for row in amd_isa_proof_manifest() if row.get("kind") == "global_store")
+  finally:
+    if old is None: os.environ.pop("AMD_ISA_PROOF_MANIFEST", None)
+    else: os.environ["AMD_ISA_PROOF_MANIFEST"] = old
+    getenv.cache_clear()
+    reset_amd_isa_proof_manifest()
+    to_program_cache.clear()
+  return tuple(all_rows)

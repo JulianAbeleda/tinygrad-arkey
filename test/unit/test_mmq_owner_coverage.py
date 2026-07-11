@@ -3,6 +3,7 @@ from extra.qk.mmq_owner_coverage import (
   structural_static_store_only_owner_map,
   tinygrad_custom_kernel_store_owner_trace_blocker, validate_mmq_owner_coverage_artifact,
 )
+from extra.qk.mmq_llama_store_probe import lowered_tinygrad_r4_store_owner_trace_rows
 from extra.qk.mmq_q4k_q8_reference import Q8_1_MMQ_DS4_LAYOUT, describe_q4k_q8_1_mmq_tile
 
 
@@ -100,7 +101,7 @@ def test_mmq_owner_coverage_records_custom_kernel_owner_trace_blocker():
 
   assert blocker["status"] == "BLOCKED"
   assert blocker["gpu_execution_trace"] is False
-  assert "proof rows can now carry per-store owner identity" in blocker["exact_blocker"]
+  assert "16x16 R4 map lowers as eight spill-free" in blocker["exact_blocker"]
 
 
 def test_mmq_owner_coverage_accepts_lowered_amd_isa_store_owner_rows():
@@ -125,3 +126,20 @@ def test_mmq_owner_coverage_accepts_lowered_amd_isa_store_owner_rows():
   assert artifact["status"] == "PASS"
   assert artifact["duplicate_store_summary"]["count"] == 0
   assert artifact["missing_store_summary"]["count"] == 0
+
+
+def test_mmq_owner_coverage_passes_lowered_tinygrad_r4_store_owner_trace_rows():
+  spec = _spec()
+
+  rows = lowered_tinygrad_r4_store_owner_trace_rows(spec)
+  observed = observed_stores_from_amd_isa_proof_rows(rows)
+  artifact = build_mmq_owner_coverage_artifact(spec, observed, backend="lowered_amd_isa_fragmented_store_owner_manifest")
+
+  assert len(rows) == 256
+  assert len(observed) == 256
+  assert artifact["status"] == "PASS"
+  assert artifact["observed_stores"]["unique_store_count"] == 256
+  assert artifact["duplicate_store_summary"]["count"] == 0
+  assert artifact["missing_store_summary"]["count"] == 0
+  assert all(row["logical_op"] == "GATED_STORE" for row in rows)
+  assert all(row["gated"] is True for row in rows)

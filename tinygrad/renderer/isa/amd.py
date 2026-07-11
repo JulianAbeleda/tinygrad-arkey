@@ -120,6 +120,15 @@ def _proof_record_inst(kind:str, logical_op:str, inst, extra:dict|None=None) -> 
   AMD_ISA_PROOF_MANIFEST.append(row)
 
 def _store_owner_proof_meta(tag) -> dict:
+  if isinstance(tag, frozenset):
+    try: tag = dict(tag)
+    except Exception: pass
+  if isinstance(tag, dict) and "store_owner" in tag:
+    owner = tag["store_owner"]
+    if isinstance(owner, tuple):
+      try: owner = dict(owner)
+      except Exception: pass
+    return {"store_owner": dict(owner)} if isinstance(owner, dict) else {"store_owner": owner}
   if not (isinstance(tag, tuple) and len(tag) >= 2 and tag[0] == "store_owner"):
     return {}
   owner = tag[1]
@@ -127,6 +136,16 @@ def _store_owner_proof_meta(tag) -> dict:
     try: owner = dict(owner)
     except Exception: pass
   return {"store_owner": dict(owner)} if isinstance(owner, dict) else {"store_owner": owner}
+
+def _store_owner_tag_from_store_arg(x:UOp):
+  if isinstance(x.arg, tuple) and len(x.arg) >= 2 and x.arg[0] == "store_owner":
+    owner = x.arg[1]
+    if isinstance(owner, dict): owner = tuple(sorted(owner.items()))
+    return frozenset((("store_owner", owner),))
+  return x.tag
+
+def _store_owner_meta_from_ins(x:UOp) -> dict:
+  return _store_owner_proof_meta(x.tag)
 
 class LDSAddr(NamedTuple):
   buf: UOp
@@ -598,7 +617,7 @@ def isel_store(ctx:IselContext, a:UOp, b:UOp, x:UOp):
   isz = vals[0].dtype.scalar().itemsize
   vals = tuple(_tov(ctx, v) for v in vals)   # CONST value (e.g. Tensor.ones stores 1.0) -> V_CONST; RANGE -> MOV_S2V
   return UOp(Ops.INS, dtypes.void, src=(off, base) + tuple(vals) + (UOp.const(dtypes.int32, isz).rtag(),),
-             arg=AMDOps.GLOBAL_STORE, tag=x.tag)
+             arg=AMDOps.GLOBAL_STORE, tag=_store_owner_tag_from_store_arg(x))
 
 def _tov(ctx:IselContext, u:UOp):
   # ensure an operand is in a VGPR: CONST -> v_mov, RANGE loop counter (SGPR) -> v_mov s->v, else already an INS VGPR
@@ -692,12 +711,12 @@ def isel_gated_store(ctx:IselContext, a:UOp, b:UOp, g:UOp, x:UOp):
     lds_imm = a.src[2].arg if len(a.src) >= 3 else 0
     if (bdata := _lds_b128_store_data(ctx, b)) is not None:
       addr, lds_imm = _ds_addr_imm(ctx, a.src[0], lds_imm, 16)
-      return UOp(Ops.INS, dtypes.void, src=(gate, addr) + bdata + _lds_b128_store_deps(b) + (a.src[1], UOp.const(dtypes.int32, lds_imm).rtag()), arg=AMDOps.GATED_STORE_B128)
+      return UOp(Ops.INS, dtypes.void, src=(gate, addr) + bdata + _lds_b128_store_deps(b) + (a.src[1], UOp.const(dtypes.int32, lds_imm).rtag()), arg=AMDOps.GATED_STORE_B128, tag=_store_owner_tag_from_store_arg(x))
     val = _tov(ctx, b)
     addr = a.src[0] if lds_imm == 0 else UOp(Ops.INS, dtypes.int32, src=(a.src[0], UOp.const(dtypes.int32, lds_imm).rtag()), arg=AMDOps.V_IADD, tag=_vreg_def(ctx))
-    return UOp(Ops.INS, dtypes.void, src=(gate, addr, val, UOp.const(dtypes.int32, 1).rtag(), a.src[1], UOp.const(dtypes.int32, esz).rtag()), arg=AMDOps.GATED_STORE)
+    return UOp(Ops.INS, dtypes.void, src=(gate, addr, val, UOp.const(dtypes.int32, 1).rtag(), a.src[1], UOp.const(dtypes.int32, esz).rtag()), arg=AMDOps.GATED_STORE, tag=_store_owner_tag_from_store_arg(x))
   val = _tov(ctx, b)
-  return UOp(Ops.INS, dtypes.void, src=(gate, a.src[1], val, UOp.const(dtypes.int32, 0).rtag(), a.src[0], UOp.const(dtypes.int32, esz).rtag()), arg=AMDOps.GATED_STORE)  # (gate,off,val,kind=0,base,esz)
+  return UOp(Ops.INS, dtypes.void, src=(gate, a.src[1], val, UOp.const(dtypes.int32, 0).rtag(), a.src[0], UOp.const(dtypes.int32, esz).rtag()), arg=AMDOps.GATED_STORE, tag=_store_owner_tag_from_store_arg(x))  # (gate,off,val,kind=0,base,esz)
 
 def isel_gep(x:UOp):
   # lane extract from a scalarized-load lane-carrier -> the lane's scalar load INS directly (no real GEP instruction)
@@ -1886,6 +1905,16 @@ def lower_inst(x:UOp):
     save = UOp(Ops.INS, arg=s_and_saveexec_b32(_S[5], VCC))   # s5 = EXEC; EXEC = VCC & EXEC  (s5 reserved: not in any pool)
     st = UOp(Ops.INS, arg=((ds_store_b16 if src[5].arg == 2 else ds_store_b32)(addr=addr, data0=val) if kind == 1
                            else (global_store_b16 if src[5].arg == 2 else global_store_b32)(addr=addr, data=val, saddr=_S2(src[4].reg), offset=0)))   # src[5]=element size
+    if kind == 0:
+      _proof_record("global_store", x, st.arg, {
+        "gated": True,
+        "itemsize": src[5].arg,
+        "addr_vgpr": src[1].reg.index,
+        "data_vgpr": src[2].reg.index,
+        "gate_vgpr": src[0].reg.index,
+        "saddr_sgpr_pair": [src[4].reg.index, src[4].reg.index + 1],
+        **_store_owner_meta_from_ins(x),
+      })
     restore = UOp(Ops.INS, arg=s_mov_b32(EXEC, _S[5]))        # restore EXEC (store ordering -> _insert_waitcnt)
     return (restore, [cmp, save, st, restore])
   if a is AMDOps.GATED_STORE_B128:
@@ -1917,7 +1946,7 @@ def lower_inst(x:UOp):
         "addr_vgpr": off_r.index,
         "data_vgpr": v.reg.index,
         "saddr_sgpr_pair": [ptr_r.index, ptr_r.index + 1],
-        **_store_owner_proof_meta(x.tag),
+        **_store_owner_meta_from_ins(x),
       })
       stores.append(UOp(Ops.INS, arg=inst))
     return (stores[-1], stores)    # vmcnt drain before endpgm inserted by _insert_waitcnt

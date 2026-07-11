@@ -132,6 +132,38 @@ class TestAMDISAExtractionFixtures(unittest.TestCase):
     self.assertEqual(stores[0]["addr_vgpr"], 10)
     self.assertEqual(stores[0]["data_vgpr"], 11)
 
+  def test_opt_in_proof_manifest_preserves_gated_global_store_owner_metadata(self):
+    old = os.environ.get("AMD_ISA_PROOF_MANIFEST")
+    os.environ["AMD_ISA_PROOF_MANIFEST"] = "1"
+    getenv.cache_clear()
+    try:
+      reset_amd_isa_proof_manifest()
+      gate = UOp(Ops.INS, dtypes.bool, arg=AMDOps.V_CONST, tag=(Register("v9", 9),))
+      off = UOp(Ops.INS, dtypes.int32, arg=AMDOps.V_CONST, tag=(Register("v10", 10),))
+      val = UOp(Ops.INS, dtypes.float32, arg=AMDOps.V_CONST, tag=(Register("v11", 11),))
+      ptr = UOp(Ops.INS, dtypes.ulong, arg=AMDOps.S_LOAD_PTR, tag=(Register("s6", 6),))
+      owner = {"m": 3, "n": 5, "warp_id": 0, "lane_id": 21, "accumulator_slot": 42}
+      owner_tag = tuple(sorted(owner.items()))
+      lower_inst(UOp(
+        Ops.INS, dtypes.void,
+        src=(gate, off, val, UOp.const(dtypes.int32, 0).rtag(), ptr, UOp.const(dtypes.int32, 4).rtag()),
+        arg=AMDOps.GATED_STORE,
+        tag=("store_owner", owner_tag),
+      ))
+      rows = amd_isa_proof_manifest()
+    finally:
+      if old is None: os.environ.pop("AMD_ISA_PROOF_MANIFEST", None)
+      else: os.environ["AMD_ISA_PROOF_MANIFEST"] = old
+      getenv.cache_clear()
+
+    stores = [r for r in rows if r["kind"] == "global_store"]
+    self.assertEqual(len(stores), 1)
+    self.assertTrue(stores[0]["gated"])
+    self.assertEqual(stores[0]["store_owner"], owner)
+    self.assertEqual(stores[0]["gate_vgpr"], 9)
+    self.assertEqual(stores[0]["addr_vgpr"], 10)
+    self.assertEqual(stores[0]["data_vgpr"], 11)
+
   def test_opt_in_proof_manifest_records_ds_and_barrier_rows(self):
     old = os.environ.get("AMD_ISA_PROOF_MANIFEST")
     os.environ["AMD_ISA_PROOF_MANIFEST"] = "1"
