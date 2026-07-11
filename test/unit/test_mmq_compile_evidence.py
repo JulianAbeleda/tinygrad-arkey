@@ -51,6 +51,13 @@ def test_final_isa_analysis_derives_store_and_register_facts():
   assert result["predicate_sites"] == 1
   assert result["max_referenced_vgpr"] == 4
   assert result["store_instructions"][0]["pc"] == 0x1818
+  load, store = result["instructions"][0], result["instructions"][4]
+  assert load["instruction_class"] == "global_load" and load["issue_domain"] == "vmem"
+  assert load["reads"] == ["v2", "v3"] and load["writes"] == ["v1"]
+  assert store["instruction_class"] == "global_store" and store["epoch"] == "writeback"
+  assert store["reads"] == ["v2", "v3", "v1"] and store["writes"] == []
+  assert store["active_lanes"] is None and store["transactions"] is None
+  assert result["instructions"][3]["writes"] == ["vcc_lo"]
 
 
 def test_metadata_parser_requires_and_returns_exact_fields(monkeypatch):

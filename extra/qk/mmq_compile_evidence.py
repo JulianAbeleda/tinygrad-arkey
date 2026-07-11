@@ -98,7 +98,52 @@ def disassemble_amdgpu(binary:bytes) -> tuple[str, str]:
 
 
 _INST = re.compile(r"^\s*([a-z][a-z0-9_]*)\s*(.*?)\s*//\s*([0-9A-Fa-f]+):\s*([0-9A-Fa-f ]+)\s*$")
-_REG = re.compile(r"\b([vs])(?:\[(\d+):(\d+)\]|(\d+))\b")
+_REG = re.compile(r"\b([vs])(?:\[(\d+):(\d+)\]|(\d+)\b)|\b(vcc(?:_lo|_hi)?|scc|exec(?:_lo|_hi)?)\b")
+
+
+def _registers(text:str) -> list[str]:
+  out: list[str] = []
+  for match in _REG.finditer(text):
+    if special := match.group(5): out.append(special); continue
+    kind, lo, hi, scalar = match.group(1), match.group(2), match.group(3), match.group(4)
+    if scalar is not None: out.append(kind + scalar)
+    else: out.extend(f"{kind}{idx}" for idx in range(int(lo), int(hi) + 1))
+  return out
+
+
+def _instruction_class(mnemonic:str) -> tuple[str, str]:
+  if mnemonic.startswith(("global_load", "flat_load", "buffer_load")): return "global_load", "vmem"
+  if mnemonic.startswith(("global_store", "flat_store", "buffer_store")): return "global_store", "vmem"
+  if mnemonic.startswith("ds_load"): return "lds_load", "lds"
+  if mnemonic.startswith("ds_store"): return "lds_store", "lds"
+  if mnemonic.startswith("scratch_load"): return "global_load", "vmem"
+  if mnemonic.startswith("scratch_store"): return "global_store", "vmem"
+  if mnemonic.startswith("s_barrier"): return "barrier", "salu"
+  if mnemonic.startswith("s_waitcnt"): return "waitcnt", "salu"
+  if mnemonic.startswith(("s_branch", "s_cbranch", "s_cmp", "v_cmp")): return "branch_predicate", "salu"
+  if any(token in mnemonic for token in ("wmma", "mfma", "dot")): return "dot_mfma", "valu"
+  if mnemonic.startswith("v_"):
+    return ("valu_float" if re.search(r"(?:^|_)(?:f16|f32|f64|bf16)(?:_|$)", mnemonic) else "valu_int"), "valu"
+  return "salu", "salu"
+
+
+def _read_write_registers(mnemonic:str, operands:str, instruction_class:str) -> tuple[list[str], list[str]]:
+  pieces = [piece.strip() for piece in operands.split(",")]
+  all_regs = _registers(operands)
+  if not pieces or instruction_class in ("global_store", "lds_store", "barrier", "waitcnt") or mnemonic.startswith(("s_branch", "s_cbranch", "s_endpgm")):
+    return all_regs, []
+  first = _registers(pieces[0])
+  writes = list(first)
+  reads = _registers(",".join(pieces[1:]))
+  if mnemonic.startswith(("v_cmp", "s_cmp")):
+    writes = first if first and first[0] in ("vcc", "vcc_lo", "vcc_hi", "scc") else (["vcc"] if mnemonic.startswith("v_cmp") else ["scc"])
+    reads = [reg for reg in all_regs if reg not in writes]
+  if "_co_" in mnemonic and len(pieces) > 1:
+    carry = _registers(pieces[1])
+    writes.extend(reg for reg in carry if reg not in writes)
+    reads = _registers(",".join(pieces[2:]))
+  if "saveexec" in mnemonic and "exec" not in writes: writes.append("exec")
+  return list(dict.fromkeys(reads)), list(dict.fromkeys(writes))
 
 
 def analyze_final_isa(disassembly:str) -> dict[str, Any]:
@@ -107,12 +152,18 @@ def analyze_final_isa(disassembly:str) -> dict[str, Any]:
     match = _INST.match(line)
     if not match: continue
     mnemonic, operands, pc, encoding = match.groups()
-    for reg in _REG.finditer(operands):
-      end = int(reg.group(3) or reg.group(4))
-      if reg.group(1) == "v": max_vgpr = max(max_vgpr, end)
-      else: max_sgpr = max(max_sgpr, end)
+    for reg in _registers(operands):
+      if reg.startswith("v") and reg[1:].isdigit(): max_vgpr = max(max_vgpr, int(reg[1:]))
+      if reg.startswith("s") and reg[1:].isdigit(): max_sgpr = max(max_sgpr, int(reg[1:]))
+    instruction_class, issue_domain = _instruction_class(mnemonic)
+    reads, writes = _read_write_registers(mnemonic, operands, instruction_class)
+    epoch = ({"global_load": "load_decode", "global_store": "writeback", "lds_load": "dot_k_loop",
+              "lds_store": "stage", "barrier": "visibility_sync", "waitcnt": "visibility_sync"}.get(instruction_class, "unknown"))
     rows.append({"index": len(rows), "pc": int(pc, 16), "mnemonic": mnemonic, "operands": operands.strip(),
-                 "encoding": encoding.strip().split()})
+                 "encoding": encoding.strip().split(), "instruction_class": instruction_class,
+                 "issue_domain": issue_domain, "reads": reads, "writes": writes, "dependencies": [], "epoch": epoch,
+                 "active_lanes": None, "transactions": None,
+                 "operand_role_source": "amd_isa_destination_first_convention"})
   if not rows: raise ValueError("no AMD instructions parsed from disassembly")
   def selected(prefixes:tuple[str, ...]) -> list[dict[str, Any]]:
     return [row for row in rows if row["mnemonic"].startswith(prefixes)]
