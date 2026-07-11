@@ -12,6 +12,7 @@ from typing import Any, Callable
 from tinygrad import Tensor, dtypes
 from tinygrad.codegen import to_program
 from tinygrad.device import Device
+from tinygrad.dtype import AddrSpace
 from tinygrad.uop.ops import KernelInfo, UOp
 
 from extra.qk.mmq_compile_evidence import analyze_final_isa, disassemble_amdgpu, parse_amdgpu_metadata
@@ -28,11 +29,13 @@ class CalibrationCase:
   independent_streams: int = 1
 
   def validate(self) -> None:
-    if self.family not in ("launch", "dependent_valu", "independent_valu"): raise ValueError(f"unknown family {self.family!r}")
+    if self.family not in ("launch", "dependent_valu", "independent_valu", "lds_barrier", "resource_pressure"):
+      raise ValueError(f"unknown family {self.family!r}")
     if self.workgroups <= 0 or self.chain_length < 0 or self.independent_streams <= 0: raise ValueError("invalid calibration dimensions")
     if self.family == "dependent_valu" and self.chain_length <= 0: raise ValueError("dependent chains require chain_length")
     if self.family == "independent_valu" and (self.chain_length <= 0 or self.independent_streams < 2):
       raise ValueError("independent chains require length and at least two streams")
+    if self.family == "resource_pressure" and self.independent_streams < 2: raise ValueError("resource pressure requires multiple streams")
 
 
 def launch_case(workgroups:int) -> CalibrationCase:
@@ -47,12 +50,24 @@ def independent_valu_case(workgroups:int, chain_length:int, streams:int=4) -> Ca
   return CalibrationCase(f"independent_valu.wg{workgroups}.n{chain_length}.s{streams}", "independent_valu", workgroups, chain_length, streams)
 
 
+def lds_barrier_case(workgroups:int) -> CalibrationCase:
+  return CalibrationCase(f"lds_barrier.wg{workgroups}", "lds_barrier", workgroups)
+
+
+def resource_pressure_case(workgroups:int, streams:int) -> CalibrationCase:
+  return CalibrationCase(f"resource_pressure.wg{workgroups}.s{streams}", "resource_pressure", workgroups, 8, streams)
+
+
 def _kernel(case:CalibrationCase) -> Callable[..., UOp]:
   case.validate()
   def kernel(out:UOp, inp:UOp) -> UOp:
     gid, lane = UOp.special(case.workgroups, "gidx0"), UOp.special(32, "lidx0")
     idx = gid * 32 + lane
     if case.family == "launch": value = inp[idx]
+    elif case.family == "lds_barrier":
+      local = UOp.placeholder((32,), dtypes.float32, 100, addrspace=AddrSpace.LOCAL)
+      stage = local[lane].store(inp[idx])
+      value = local.after(UOp.barrier(UOp.group(stage)))[lane]
     elif case.family == "dependent_valu":
       value = inp[idx]
       for step in range(case.chain_length): value = value * UOp.const(dtypes.float32, 1.000001) + UOp.const(dtypes.float32, step * 1e-7)
@@ -120,7 +135,9 @@ def run_calibration_case(case:CalibrationCase, *, warmups:int=5, rounds:int=30, 
 def default_calibration_matrix() -> tuple[CalibrationCase, ...]:
   return tuple([launch_case(wg) for wg in (1, 32, 64, 96, 128, 192)] +
                [dependent_valu_case(96, n) for n in (16, 64, 256)] +
-               [independent_valu_case(96, n, 4) for n in (16, 64, 256)])
+               [independent_valu_case(96, n, 4) for n in (16, 64, 256)] +
+               [lds_barrier_case(wg) for wg in (1, 96)] +
+               [resource_pressure_case(96, streams) for streams in (4, 8, 16, 32)])
 
 
 def run_calibration_matrix(output:Path, *, warmups:int=5, rounds:int=30, system_snapshot_id:str | None=None) -> dict[str, Any]:
