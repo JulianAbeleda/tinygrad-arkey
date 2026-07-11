@@ -108,6 +108,17 @@ def _proof_record(kind:str, x:UOp, inst, extra:dict|None=None) -> None:
   if extra is not None: row.update(extra)
   AMD_ISA_PROOF_MANIFEST.append(row)
 
+def _proof_record_inst(kind:str, logical_op:str, inst, extra:dict|None=None) -> None:
+  if not _proof_manifest_enabled(): return
+  row = {
+    "schema": "amd-isa-renderer-proof-manifest-row.v1",
+    "kind": kind,
+    "logical_op": logical_op,
+    "emitted": str(inst),
+  }
+  if extra is not None: row.update(extra)
+  AMD_ISA_PROOF_MANIFEST.append(row)
+
 class LDSAddr(NamedTuple):
   buf: UOp
   dyn: UOp|None
@@ -1713,6 +1724,7 @@ def lower_inst(x:UOp):
     return _ins(v_dot2_f32_f16(vdst=_Vr(x.reg), src0=_Vr(src[1].reg), src1=_Vr(src[2].reg), src2=_Vr(src[0].reg)), x.tag)
   if a is AMDOps.BARRIER:
     b = UOp(Ops.INS, arg=s_barrier())
+    _proof_record_inst("barrier", "BARRIER", b.arg)
     return (b, [b])
   if a is AMDOps.V_WMMA:                             # B0.L7: D = A*B + C, 16x16x16 fp16->fp32. src=(A0..7,B0..7,C0..7).
     # Fragment bases are the FIRST reg of each 8-VGPR run (src[0]=A base, src[8]=B base, src[16]=C base). D writes in
@@ -1754,13 +1766,20 @@ def lower_inst(x:UOp):
   if a is AMDOps.DS_LOAD:                            # LDS load: 16-bit for half (else b32) so half tiles don't overlap
     ldfn = ds_load_u16 if x.dtype.itemsize == 2 else ds_load_b32
     ld = _ins(ldfn(vdst=_Vr(x.reg), addr=_Vr(src[0].reg)), x.tag)
+    _proof_record("ds_load", x, ld.arg, {"itemsize": x.dtype.itemsize, "dest_vgpr": x.reg.index, "addr_vgpr": src[0].reg.index})
     return (ld, [ld])
   if a is AMDOps.DS_STORE:                           # LDS store: 16-bit for half tiles (else b32). addr=src[0], data=src[1], esz=src[3]
     stfn = ds_store_b16 if src[3].arg == 2 else ds_store_b32
     st = UOp(Ops.INS, arg=stfn(addr=_Vr(src[0].reg), data0=_Vr(src[1].reg)))
+    _proof_record("ds_store", x, st.arg, {"itemsize": src[3].arg, "addr_vgpr": src[0].reg.index, "data_vgpr": src[1].reg.index})
     return (st, [st])
   if a is AMDOps.DS_LOAD_B128:
     ld = _ins(ds_load_b128(vdst=_V[x.reg.index:x.reg.index+3], addr=_Vr(src[0].reg), offset0=src[2].arg), x.tag)
+    _proof_record("ds_load_b128", x, ld.arg, {
+      "dest_vgpr_range": [x.reg.index, x.reg.index + 3],
+      "addr_vgpr": src[0].reg.index,
+      "byte_offset": src[2].arg,
+    })
     return (ld, [ld])
   if a is AMDOps.DS_STORE_B128:
     if len(src) == 3:
@@ -1770,6 +1789,11 @@ def lower_inst(x:UOp):
     else:
       raise NotImplementedError(f"AMD:ISA unsupported DS_STORE_B128 source shape: {len(src)}")
     st = UOp(Ops.INS, arg=ds_store_b128(addr=_Vr(src[0].reg), data0=_V[data.reg.index:data.reg.index+3], offset0=imm.arg))
+    _proof_record("ds_store_b128", x, st.arg, {
+      "addr_vgpr": src[0].reg.index,
+      "data_vgpr_range": [data.reg.index, data.reg.index + 3],
+      "byte_offset": imm.arg,
+    })
     return (st, [st])
   if a is AMDOps.DS_STORE_B64:
     data, imm = src[1], src[-1]
@@ -1787,10 +1811,23 @@ def lower_inst(x:UOp):
     # Phase-1a: fp16 (itemsize 2) must use a 16-bit load; b32 reads 2 bytes past the final element -> page-boundary MMU fault.
     gl = global_load_u8 if x.dtype.itemsize == 1 else global_load_u16 if x.dtype.itemsize == 2 else global_load_b32
     ld = _ins(gl(vdst=_Vr(x.reg), addr=_Vr(off_r), saddr=_S2(ptr_r), offset=imm), x.tag)
+    _proof_record("global_load", x, ld.arg, {
+      "itemsize": x.dtype.itemsize,
+      "dest_vgpr": x.reg.index,
+      "addr_vgpr": off_r.index,
+      "saddr_sgpr_pair": [ptr_r.index, ptr_r.index + 1],
+      "byte_offset": imm,
+    })
     return (ld, [ld])
   if a is AMDOps.GLOBAL_LOAD_B128:
     off_r, ptr_r, imm = src[0].reg, src[1].reg, src[2].arg
     ld = _ins(global_load_b128(vdst=_V[x.reg.index:x.reg.index+3], addr=_Vr(off_r), saddr=_S2(ptr_r), offset=imm), x.tag)
+    _proof_record("global_load_b128", x, ld.arg, {
+      "dest_vgpr_range": [x.reg.index, x.reg.index + 3],
+      "addr_vgpr": off_r.index,
+      "saddr_sgpr_pair": [ptr_r.index, ptr_r.index + 1],
+      "byte_offset": imm,
+    })
     return (ld, [ld])
   # float VOP2 (add/mul): src0 may be a 32-bit float literal, vsrc1 must be a VGPR -> a CONST operand goes in src0.
   if a is AMDOps.V_ADD: return _ins(_vop2_f(v_add_f32_e32, x, src), x.tag)
@@ -1897,6 +1934,11 @@ def lower_sink(x:UOp):
   end = UOp(Ops.INS, arg=s_endpgm())
   return (x.replace(op=Ops.NOOP, src=()), [end])
 
+def lower_barrier(x:UOp):
+  b = UOp(Ops.INS, arg=s_barrier())
+  _proof_record_inst("barrier", "BARRIER", b.arg)
+  return (b, [b])
+
 def _lower_inst(x:UOp):
   # line_rewrite expects (representative, [emitted...]); a single-instruction lowering returns one UOp -> normalize.
   r = lower_inst(x)
@@ -1907,7 +1949,7 @@ post_regalloc_matcher = PatternMatcher([
   (UPat(Ops.RANGE, name="x"), lower_range),
   (UPat(Ops.END, name="x"), lower_end),
   # workgroup barrier -> s_barrier (preceding ds-store waitcnt already drained lgkmcnt, so this is conservative+correct)
-  (UPat(Ops.BARRIER, name="x"), lambda x: (b:=UOp(Ops.INS, arg=s_barrier()), [b])),
+  (UPat(Ops.BARRIER, name="x"), lower_barrier),
   (UPat(Ops.SINK, name="x"), lower_sink),
   # drop leftover non-instruction nodes (rtag'd immediate CONSTs read via .arg; carrier NOOPs/AFTER ordering; PARAM kept
   # for the kernarg-segment scan, SPECIAL gidx0 for the workgroup-id descriptor scan, DEFINE_REG for group-segment sizing)
@@ -2087,7 +2129,9 @@ class AMDISARenderer(ISARenderer):
         out.append(u)
         if not isinstance(u.arg, tuple) and str(u.arg).split("(", 1)[0].startswith(
             ("global_load", "global_store", "ds_load", "ds_store", "ds_bpermute", "s_load")):
-          wait = UOp(Ops.INS, arg=s_waitcnt(simm16=self._waitcnt_simm16(0, 0, 0)))
+          simm16 = self._waitcnt_simm16(0, 0, 0)
+          wait = UOp(Ops.INS, arg=s_waitcnt(simm16=simm16))
+          _proof_record_inst("waitcnt", "WAITCNT", wait.arg, {"simm16": simm16, "reason": "conservative_after_memory"})
           out.append(wait)
       return out
     if getenv("AMD_ISA_WAITCNT_TARGETED", 0):
@@ -2099,7 +2143,9 @@ class AMDISARenderer(ISARenderer):
         return set().union(*(_span(r) for r in self._inst_regs(a))) if self._inst_regs(a) else set()
       def _drain(vm:int=0, lgkm:int=0, exp:int=0):
         nonlocal vm_store, lgkm_store
-        wait = UOp(Ops.INS, arg=s_waitcnt(simm16=self._waitcnt_simm16(vm, lgkm, exp)))
+        simm16 = self._waitcnt_simm16(vm, lgkm, exp)
+        wait = UOp(Ops.INS, arg=s_waitcnt(simm16=simm16))
+        _proof_record_inst("waitcnt", "WAITCNT", wait.arg, {"simm16": simm16, "vmcnt": vm, "lgkmcnt": lgkm, "expcnt": exp, "reason": "targeted_drain"})
         out.append(wait)
         if vm == 0: pend_vm.clear(); vm_store = False
         if lgkm == 0: pend_lgkm.clear(); lgkm_store = False
@@ -2109,7 +2155,12 @@ class AMDISARenderer(ISARenderer):
         if not vdeps and not ldeps: return
         vm = 0 if (coalesce_vm and vdeps) else (len(pend_vm) - max(vdeps) - 1 if vdeps else 63)
         lgkm = 0 if (coalesce_lgkm and ldeps) else (len(pend_lgkm) - max(ldeps) - 1 if ldeps else 63)
-        wait = UOp(Ops.INS, arg=s_waitcnt(simm16=self._waitcnt_simm16(vm, lgkm, 7)))
+        simm16 = self._waitcnt_simm16(vm, lgkm, 7)
+        wait = UOp(Ops.INS, arg=s_waitcnt(simm16=simm16))
+        _proof_record_inst("waitcnt", "WAITCNT", wait.arg, {
+          "simm16": simm16, "vmcnt": vm, "lgkmcnt": lgkm, "expcnt": 7,
+          "reason": "targeted_consumer", "consumer_regs": sorted(uses),
+        })
         out.append(wait)
         if vdeps: del pend_vm[:(len(pend_vm) if coalesce_vm else max(vdeps)+1)]
         if ldeps: del pend_lgkm[:(len(pend_lgkm) if coalesce_lgkm else max(ldeps)+1)]
@@ -2140,7 +2191,9 @@ class AMDISARenderer(ISARenderer):
     pend_vm:set[int] = set(); pend_lgkm:set[int] = set(); vm_store = lgkm_store = False
     def _drain():
       nonlocal vm_store, lgkm_store
-      wait = UOp(Ops.INS, arg=s_waitcnt(simm16=self._waitcnt_simm16(0, 0, 0)))
+      simm16 = self._waitcnt_simm16(0, 0, 0)
+      wait = UOp(Ops.INS, arg=s_waitcnt(simm16=simm16))
+      _proof_record_inst("waitcnt", "WAITCNT", wait.arg, {"simm16": simm16, "vmcnt": 0, "lgkmcnt": 0, "expcnt": 0, "reason": "default_drain"})
       out.append(wait)
       pend_vm.clear(); pend_lgkm.clear(); vm_store = lgkm_store = False
     for u in uops:

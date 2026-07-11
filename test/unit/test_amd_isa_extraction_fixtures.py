@@ -68,7 +68,7 @@ class TestAMDISAExtractionFixtures(unittest.TestCase):
         comparable = {k: v for k, v in expected.items() if k != "ast"}
         self.assertEqual(got, comparable)
 
-  def test_opt_in_proof_manifest_records_wmma_and_global_stores(self):
+  def test_opt_in_proof_manifest_records_wmma_load_store_and_waitcnt_rows(self):
     old = os.environ.get("AMD_ISA_PROOF_MANIFEST")
     os.environ["AMD_ISA_PROOF_MANIFEST"] = "1"
     getenv.cache_clear()
@@ -82,14 +82,58 @@ class TestAMDISAExtractionFixtures(unittest.TestCase):
       getenv.cache_clear()
 
     wmma = [r for r in rows if r["kind"] == "wmma"]
+    loads = [r for r in rows if r["kind"] == "global_load"]
+    b128_loads = [r for r in rows if r["kind"] == "global_load_b128"]
     stores = [r for r in rows if r["kind"] == "global_store"]
+    waitcnts = [r for r in rows if r["kind"] == "waitcnt"]
     self.assertEqual(len(wmma), 1)
+    self.assertGreaterEqual(len(loads), 1)
+    self.assertGreaterEqual(len(b128_loads), 1)
     self.assertGreaterEqual(len(stores), 8)
+    self.assertGreaterEqual(len(waitcnts), 1)
     self.assertEqual(wmma[0]["logical_op"], "V_WMMA")
     self.assertTrue(wmma[0]["accumulator_in_place"])
     self.assertEqual(wmma[0]["c_vgpr_range"][1] - wmma[0]["c_vgpr_range"][0], 7)
+    self.assertEqual(loads[0]["logical_op"], "GLOBAL_LOAD")
+    self.assertIn("dest_vgpr", loads[0])
+    self.assertEqual(b128_loads[0]["logical_op"], "GLOBAL_LOAD_B128")
+    self.assertIn("dest_vgpr_range", b128_loads[0])
     self.assertTrue(stores[0]["emitted"].startswith("global_store_"))
     self.assertIn("data_vgpr", stores[0])
+    self.assertEqual(waitcnts[0]["logical_op"], "WAITCNT")
+    self.assertIn("simm16", waitcnts[0])
+
+  def test_opt_in_proof_manifest_records_ds_and_barrier_rows(self):
+    old = os.environ.get("AMD_ISA_PROOF_MANIFEST")
+    os.environ["AMD_ISA_PROOF_MANIFEST"] = "1"
+    getenv.cache_clear()
+    try:
+      reset_amd_isa_proof_manifest()
+      addr = UOp(Ops.INS, dtypes.int32, arg=AMDOps.V_CONST, tag=(Register("v10", 10),))
+      data = UOp(Ops.INS, dtypes.int32, arg=AMDOps.V_CONST, tag=(Register("v11", 11),))
+      lower_inst(UOp(Ops.INS, dtypes.float32, src=(addr, UOp.const(dtypes.int32, 0).rtag()),
+                     arg=AMDOps.DS_LOAD, tag=(Register("v12", 12),)))
+      lower_inst(UOp(Ops.INS, dtypes.void, src=(addr, data, UOp.const(dtypes.int32, 0).rtag(), UOp.const(dtypes.int32, 4).rtag()),
+                     arg=AMDOps.DS_STORE))
+      lower_inst(UOp(Ops.INS, dtypes.int32, src=(addr, data, UOp.const(dtypes.int32, 16).rtag()),
+                     arg=AMDOps.DS_LOAD_B128, tag=(Register("v20", 20),)))
+      lower_inst(UOp(Ops.INS, dtypes.void, src=(addr, data, UOp.const(dtypes.int32, 32).rtag()),
+                     arg=AMDOps.DS_STORE_B128))
+      lower_inst(UOp(Ops.INS, dtypes.void, arg=AMDOps.BARRIER))
+      rows = amd_isa_proof_manifest()
+    finally:
+      if old is None: os.environ.pop("AMD_ISA_PROOF_MANIFEST", None)
+      else: os.environ["AMD_ISA_PROOF_MANIFEST"] = old
+      getenv.cache_clear()
+
+    by_kind = {r["kind"]: r for r in rows}
+    self.assertEqual(by_kind["ds_load"]["logical_op"], "DS_LOAD")
+    self.assertEqual(by_kind["ds_store"]["logical_op"], "DS_STORE")
+    self.assertEqual(by_kind["ds_load_b128"]["logical_op"], "DS_LOAD_B128")
+    self.assertEqual(by_kind["ds_store_b128"]["logical_op"], "DS_STORE_B128")
+    self.assertEqual(by_kind["barrier"]["logical_op"], "BARRIER")
+    self.assertEqual(by_kind["ds_load_b128"]["dest_vgpr_range"], [20, 23])
+    self.assertEqual(by_kind["ds_store_b128"]["data_vgpr_range"], [11, 14])
 
   def test_opt_in_proof_manifest_preserves_accumulator_source_identity(self):
     old = os.environ.get("AMD_ISA_PROOF_MANIFEST")
