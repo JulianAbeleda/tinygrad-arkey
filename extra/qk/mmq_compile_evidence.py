@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
+import json
 import os
 from pathlib import Path
 import re
@@ -97,7 +98,7 @@ def disassemble_amdgpu(binary:bytes) -> tuple[str, str]:
   return text, tool
 
 
-_INST = re.compile(r"^\s*([a-z][a-z0-9_]*)\s*(.*?)\s*//\s*([0-9A-Fa-f]+):\s*([0-9A-Fa-f ]+)\s*$")
+_INST = re.compile(r"^\s*([a-z][a-z0-9_]*)\s*(.*?)\s*//\s*([0-9A-Fa-f]+):\s*([0-9A-Fa-f ]+?)(?:\s+<.*>)?\s*$")
 _REG = re.compile(r"\b([vs])(?:\[(\d+):(\d+)\]|(\d+)\b)|\b(vcc(?:_lo|_hi)?|scc|exec(?:_lo|_hi)?)\b")
 
 
@@ -146,7 +147,68 @@ def _read_write_registers(mnemonic:str, operands:str, instruction_class:str) -> 
   return list(dict.fromkeys(reads)), list(dict.fromkeys(writes))
 
 
-def analyze_final_isa(disassembly:str) -> dict[str, Any]:
+_EPOCH_ORDER = ("load_decode", "stage", "visibility_sync", "dot_k_loop", "writeback", "epilogue")
+
+
+def _assign_mmq_epochs(rows:list[dict[str, Any]]) -> dict[str, Any]:
+  def indexes(prefix:str) -> list[int]: return [r["index"] for r in rows if r["mnemonic"].startswith(prefix)]
+  ds_stores, ds_loads, global_stores = indexes("ds_store"), indexes("ds_load"), indexes("global_store")
+  endpgm = indexes("s_endpgm")
+  if not ds_stores or not ds_loads or not global_stores or not endpgm:
+    return {"status": "incomplete", "reason": "required MMQ final-ISA epoch anchors are absent"}
+  first_stage, last_stage = min(ds_stores), max(ds_stores)
+  first_dot, first_writeback, last_writeback, first_epilogue = min(ds_loads), min(global_stores), max(global_stores), min(endpgm)
+  syncs = [r["index"] for r in rows if last_stage < r["index"] < first_dot and r["mnemonic"].startswith(("s_waitcnt", "s_barrier"))]
+  if not syncs: return {"status": "incomplete", "reason": "post-stage visibility synchronization anchor is absent"}
+  for row in rows:
+    idx = row["index"]
+    if idx < first_stage: row["epoch"] = "load_decode"
+    elif first_stage <= idx <= last_stage: row["epoch"] = "stage"
+    elif idx in syncs: row["epoch"] = "visibility_sync"
+    elif last_stage < idx < max(syncs): row["epoch"] = "unknown"
+    elif max(syncs) < idx < first_writeback: row["epoch"] = "dot_k_loop"
+    elif first_writeback <= idx <= last_writeback: row["epoch"] = "writeback"
+    elif idx >= first_epilogue: row["epoch"] = "epilogue"
+    else: row["epoch"] = "unknown"
+  known = [row["epoch"] for row in rows if row["epoch"] != "unknown"]
+  monotonic = all(_EPOCH_ORDER.index(a) <= _EPOCH_ORDER.index(b) for a, b in zip(known, known[1:]))
+  anchors = {"first_stage_store": first_stage, "last_stage_store": last_stage,
+             "visibility_sync": syncs, "first_dot_lds_load": first_dot,
+             "first_writeback_store": first_writeback, "last_writeback_store": last_writeback,
+             "first_epilogue": first_epilogue}
+  assignments = [{"index": row["index"], "epoch": row["epoch"]} for row in rows]
+  return {"status": "complete" if monotonic else "invalid", "monotonic": monotonic,
+          "legal_order": list(_EPOCH_ORDER), "anchors": anchors,
+          "anchor_source": "final ISA memory/synchronization/endpgm sites joined to canonical MMQ UOp lifecycle",
+          "unknown_count": sum(row["epoch"] == "unknown" for row in rows),
+          "assignment_sha256": _sha256(json.dumps(assignments, sort_keys=True, separators=(",", ":")).encode())}
+
+
+def _analyze_exec_masks(rows:list[dict[str, Any]], wavefront_size:int | None=None) -> dict[str, Any]:
+  stack: list[str] = []
+  save_sites, restore_sites, blockers = [], [], []
+  for row in rows:
+    mnemonic, operands = row["mnemonic"], row["operands"]
+    if "saveexec" in mnemonic:
+      saved = next((reg for reg in row["writes"] if reg.startswith("s") and reg[1:].isdigit()), "unknown")
+      stack.append(saved); save_sites.append(row["index"])
+    elif mnemonic.startswith("s_or_b32") and operands.startswith(("exec,", "exec_lo,")):
+      reads = [reg for reg in row["reads"] if reg.startswith("s") and reg[1:].isdigit()]
+      if not stack or not reads or reads[-1] != stack[-1]: blockers.append(f"unmatched exec restore at instruction {row['index']}")
+      else: stack.pop()
+      restore_sites.append(row["index"])
+    if row["instruction_class"] == "global_store":
+      row["active_lane_bounds"] = [0, wavefront_size] if stack or wavefront_size is None else [wavefront_size, wavefront_size]
+      if not stack and wavefront_size is not None: row["active_lanes"] = wavefront_size
+  if stack: blockers.append(f"unclosed saveexec regions: {stack}")
+  branch_sites = [row["index"] for row in rows if row["mnemonic"].startswith(("s_branch", "s_cbranch"))]
+  return {"status": "complete" if not blockers else "incomplete", "wavefront_size": wavefront_size,
+          "saveexec_sites": save_sites, "restore_exec_sites": restore_sites, "balanced": not blockers,
+          "scalar_branch_sites": branch_sites, "store_lane_bound_source": "full-wave launch plus balanced saveexec/restore regions",
+          "transactions": None, "blockers": blockers}
+
+
+def analyze_final_isa(disassembly:str, *, wavefront_size:int | None=None) -> dict[str, Any]:
   rows, max_vgpr, max_sgpr = [], -1, -1
   for line in disassembly.splitlines():
     match = _INST.match(line)
@@ -157,17 +219,18 @@ def analyze_final_isa(disassembly:str) -> dict[str, Any]:
       if reg.startswith("s") and reg[1:].isdigit(): max_sgpr = max(max_sgpr, int(reg[1:]))
     instruction_class, issue_domain = _instruction_class(mnemonic)
     reads, writes = _read_write_registers(mnemonic, operands, instruction_class)
-    epoch = ({"global_load": "load_decode", "global_store": "writeback", "lds_load": "dot_k_loop",
-              "lds_store": "stage", "barrier": "visibility_sync", "waitcnt": "visibility_sync"}.get(instruction_class, "unknown"))
     rows.append({"index": len(rows), "pc": int(pc, 16), "mnemonic": mnemonic, "operands": operands.strip(),
                  "encoding": encoding.strip().split(), "instruction_class": instruction_class,
-                 "issue_domain": issue_domain, "reads": reads, "writes": writes, "dependencies": [], "epoch": epoch,
+                 "issue_domain": issue_domain, "reads": reads, "writes": writes, "dependencies": [], "epoch": "unknown",
                  "active_lanes": None, "transactions": None,
                  "operand_role_source": "amd_isa_destination_first_convention"})
   if not rows: raise ValueError("no AMD instructions parsed from disassembly")
   def selected(prefixes:tuple[str, ...]) -> list[dict[str, Any]]:
     return [row for row in rows if row["mnemonic"].startswith(prefixes)]
   stores = selected(("global_store",))
+  epoch_mapping = _assign_mmq_epochs(rows)
+  if epoch_mapping.get("status") == "invalid": raise ValueError("MMQ final-ISA epochs are not monotonic")
+  exec_masks = _analyze_exec_masks(rows, wavefront_size)
   return {"instruction_count": len(rows), "encoded_dwords": sum(len(r["encoding"]) for r in rows),
           "global_load_sites": len(selected(("global_load",))), "global_store_sites": len(stores),
           "ds_load_sites": len(selected(("ds_load",))), "ds_store_sites": len(selected(("ds_store",))),
@@ -177,7 +240,9 @@ def analyze_final_isa(disassembly:str) -> dict[str, Any]:
           "predicate_sites": len(selected(("v_cmp", "s_cmp", "s_cbranch"))),
           "max_referenced_vgpr": max_vgpr, "max_referenced_sgpr": max_sgpr,
           "store_instructions": [{"index": r["index"], "pc": r["pc"], "mnemonic": r["mnemonic"],
-                                  "operands": r["operands"]} for r in stores], "instructions": rows}
+                                  "operands": r["operands"], "active_lane_bounds": r.get("active_lane_bounds")}
+                                 for r in stores], "epoch_mapping": epoch_mapping, "exec_mask_analysis": exec_masks,
+          "instructions": rows}
 
 
 @dataclass(frozen=True)
@@ -218,11 +283,15 @@ def capture_loaded_mmq_program(spec:Any, device:str="AMD") -> MMQCompileEvidence
   source = program.src[3].arg
   metadata = parse_amdgpu_metadata(loaded)
   disassembly, disasm_tool = disassemble_amdgpu(loaded)
-  isa = analyze_final_isa(disassembly)
+  isa = analyze_final_isa(disassembly, wavefront_size=metadata["wavefront_size"])
+  sink_text = repr(build_mmq_sink(spec))
+  epoch_mapping = isa["epoch_mapping"]
+  epoch_mapping["binding"] = {"uop_sha256": _sha256(sink_text.encode()), "isa_sha256": _sha256(disassembly.encode())}
+  epoch_mapping["mapping_sha256"] = _sha256(json.dumps(epoch_mapping, sort_keys=True, separators=(",", ":")).encode())
   renderer, compiler = Device[device].renderer, Device[device].compiler
   compiler_info = {"renderer": type(renderer).__name__, "compiler": type(compiler).__name__,
                    "compiler_cache_key": compiler.cachekey, "disassembly_tool": disasm_tool}
-  evidence = MMQCompileEvidence(program, repr(build_mmq_sink(spec)), source, loaded, disassembly, metadata, isa, compiler_info)
+  evidence = MMQCompileEvidence(program, sink_text, source, loaded, disassembly, metadata, isa, compiler_info)
   if metadata["symbol"] != program.arg.function_name + ".kd": raise RuntimeError("metadata symbol does not match program")
   if not metadata["target"].endswith(str(renderer.target.arch)): raise RuntimeError("metadata target does not match renderer")
   if metadata["max_workgroup_threads"] != __import__("math").prod(program.arg.local_size):

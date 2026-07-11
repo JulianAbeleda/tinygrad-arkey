@@ -12,6 +12,7 @@ DISASM = """
   ds_store_b32 v4, v1 offset:0 // 000000001808: D8340000 00000104
   s_waitcnt lgkmcnt(0) // 000000001810: BF89FC07
   v_cmp_eq_u32_e32 vcc_lo, 0, v0 // 000000001814: 7D520080
+  s_cbranch_scc1 3 // 000000001816: BFA20003 <kernel+0x20>
   global_store_b32 v[2:3], v1, off // 000000001818: DC700000 007C0102
   s_endpgm // 000000001820: BFB00000
 """
@@ -43,21 +44,52 @@ def test_build_and_compile_exact_candidate_program():
 
 def test_final_isa_analysis_derives_store_and_register_facts():
   result = ce.analyze_final_isa(DISASM)
-  assert result["instruction_count"] == 6
+  assert result["instruction_count"] == 7
   assert result["global_load_sites"] == 1
   assert result["global_store_sites"] == 1
   assert result["ds_store_sites"] == 1
   assert result["waitcnt_sites"] == 1
-  assert result["predicate_sites"] == 1
+  assert result["predicate_sites"] == 2
   assert result["max_referenced_vgpr"] == 4
   assert result["store_instructions"][0]["pc"] == 0x1818
-  load, store = result["instructions"][0], result["instructions"][4]
+  load, store = result["instructions"][0], result["instructions"][5]
   assert load["instruction_class"] == "global_load" and load["issue_domain"] == "vmem"
   assert load["reads"] == ["v2", "v3"] and load["writes"] == ["v1"]
-  assert store["instruction_class"] == "global_store" and store["epoch"] == "writeback"
+  assert store["instruction_class"] == "global_store" and store["epoch"] == "unknown"
   assert store["reads"] == ["v2", "v3", "v1"] and store["writes"] == []
   assert store["active_lanes"] is None and store["transactions"] is None
   assert result["instructions"][3]["writes"] == ["vcc_lo"]
+  assert result["branch_sites"] == 1
+  assert result["epoch_mapping"]["status"] == "incomplete"
+
+
+def test_epoch_mapping_uses_monotonic_final_isa_anchors_and_preserves_unknown_gap():
+  mnemonics = ["global_load_b32", "ds_store_b32", "v_add_u32", "s_waitcnt", "v_add_u32",
+               "ds_load_b32", "v_add_f32", "global_store_b32", "s_endpgm", "s_code_end"]
+  rows = [{"index": i, "mnemonic": mnemonic, "epoch": "unknown"} for i, mnemonic in enumerate(mnemonics)]
+  mapping = ce._assign_mmq_epochs(rows)
+  assert mapping["status"] == "complete" and mapping["monotonic"] is True
+  assert [row["epoch"] for row in rows] == ["load_decode", "stage", "unknown", "visibility_sync", "dot_k_loop",
+                                             "dot_k_loop", "dot_k_loop", "writeback", "epilogue", "epilogue"]
+  assert len(mapping["assignment_sha256"]) == 64
+
+
+def test_exec_mask_analysis_bounds_only_stores_outside_balanced_regions():
+  rows = [
+    {"index": 0, "mnemonic": "s_and_saveexec_b32", "operands": "s8, vcc_lo", "writes": ["s8", "exec"],
+     "reads": ["vcc_lo"], "instruction_class": "salu", "active_lanes": None},
+    {"index": 1, "mnemonic": "global_store_b32", "operands": "v0, v1", "writes": [], "reads": ["v0", "v1"],
+     "instruction_class": "global_store", "active_lanes": None},
+    {"index": 2, "mnemonic": "s_or_b32", "operands": "exec_lo, exec_lo, s8", "writes": ["exec_lo"],
+     "reads": ["exec_lo", "s8"], "instruction_class": "salu", "active_lanes": None},
+    {"index": 3, "mnemonic": "global_store_b32", "operands": "v0, v1", "writes": [], "reads": ["v0", "v1"],
+     "instruction_class": "global_store", "active_lanes": None},
+  ]
+  analysis = ce._analyze_exec_masks(rows, 32)
+  assert analysis["balanced"] is True
+  assert rows[1]["active_lane_bounds"] == [0, 32] and rows[1]["active_lanes"] is None
+  assert rows[3]["active_lane_bounds"] == [32, 32] and rows[3]["active_lanes"] == 32
+  assert analysis["transactions"] is None
 
 
 def test_metadata_parser_requires_and_returns_exact_fields(monkeypatch):
