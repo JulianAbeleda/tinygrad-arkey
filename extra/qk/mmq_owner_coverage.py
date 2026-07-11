@@ -19,7 +19,7 @@ from extra.qk.mmq_q4k_q8_reference import Q4KQ81MMQTileSpec
 
 SCHEMA = "tinygrad.mmq_owner_coverage.v1"
 DEFAULT_CANDIDATE_ID = "llama_mmq_r4_store_owner_coverage_probe"
-DEFAULT_BACKEND = "research_only_store_owner_map"
+DEFAULT_BACKEND = "research_only_structural_static_store_owner_map"
 TOP_LEVEL_FIELDS = frozenset((
   "schema", "evidence_kind", "candidate_id", "backend", "shape", "oracle_source", "oracle_backend",
   "expected_stores", "observed_stores", "duplicate_store_summary", "missing_store_summary",
@@ -57,23 +57,69 @@ def _coerce_observed_store(raw: ObservedStore | dict[str, Any] | tuple[Any, ...]
   raise TypeError(f"unsupported observed store marker: {raw!r}")
 
 
+def structural_static_store_only_owner_map(
+  spec: Q4KQ81MMQTileSpec,
+  geometry: LlamaMMQOracleGeometry = LlamaMMQOracleGeometry(),
+) -> tuple[ObservedStore, ...]:
+  """Research-only structural store map for a llama-style cooperative MMQ tile.
+
+  This is not a GPU execution trace. It materializes the intended store owners
+  from the static 16x16 C-fragment writeback structure so the owner-coverage
+  artifact can test duplicate/missing stores against the llama oracle.
+  """
+  spec.validate()
+  geometry.validate()
+  if spec.tile_m > geometry.mmq_y or spec.tile_n > geometry.mmq_x:
+    raise ValueError(f"store map tile {(spec.tile_m, spec.tile_n)} exceeds llama geometry {(geometry.mmq_y, geometry.mmq_x)}")
+
+  stores: list[ObservedStore] = []
+  fragment_id = 0
+  for warp_id in range(geometry.nwarps):
+    local_m0 = warp_id * geometry.tile_c_i
+    local_m1 = min(local_m0 + geometry.tile_c_i, spec.tile_m)
+    if local_m0 >= spec.tile_m:
+      continue
+    for local_n0 in range(0, min(geometry.mmq_x, spec.tile_n), geometry.tile_c_j):
+      local_n1 = min(local_n0 + geometry.tile_c_j, spec.tile_n)
+      for local_m in range(local_m0, local_m1):
+        for local_n in range(local_n0, local_n1):
+          fragment_linear = (local_m - local_m0) * geometry.tile_c_j + (local_n - local_n0)
+          lane_id = fragment_linear % geometry.warp_size
+          stores.append(ObservedStore(m=spec.m0 + local_m, n=spec.n0 + local_n, owner={
+            "evidence": "structural_static_store_only_map",
+            "gpu_execution_trace": False,
+            "warp_id": warp_id,
+            "lane_id": lane_id,
+            "store_iter": fragment_linear // geometry.warp_size,
+            "fragment_id": fragment_id,
+            "fragment_m_range": [spec.m0 + local_m0, spec.m0 + local_m1],
+            "fragment_n_range": [spec.n0 + local_n0, spec.n0 + local_n1],
+            "source": "translated_llama_mmq_16x16_c_fragment_writeback_structure",
+          }))
+      fragment_id += 1
+  return tuple(stores)
+
+
 def observed_stores_from_oracle(spec: Q4KQ81MMQTileSpec,
                                 geometry: LlamaMMQOracleGeometry = LlamaMMQOracleGeometry()) -> tuple[ObservedStore, ...]:
-  """Expand oracle owner fragments into one observed store marker per output."""
-  coverage = llama_mma_writeback_coverage(spec, geometry)
-  stores: list[ObservedStore] = []
-  for owner in coverage["owners"]:
-    m0, m1 = owner["m_range"]
-    n0, n1 = owner["n_range"]
-    for m in range(m0, m1):
-      for n in range(n0, n1):
-        stores.append(ObservedStore(m=m, n=n, owner={
-          "warp_id": owner["warp_id"],
-          "fragment_m_range": owner["m_range"],
-          "fragment_n_range": owner["n_range"],
-          "source": "llama_mma_writeback_coverage",
-        }))
-  return tuple(stores)
+  """Compatibility alias for the structural static map; this is not execution evidence."""
+  return structural_static_store_only_owner_map(spec, geometry)
+
+
+def tinygrad_custom_kernel_store_owner_trace_blocker() -> dict[str, Any]:
+  return {
+    "attempted_path": "tinygrad custom_kernel store-only probe",
+    "status": "BLOCKED",
+    "gpu_execution_trace": False,
+    "exact_blocker": (
+      "tinygrad custom_kernel lowering can emit output stores, but this research path does not expose a per-store "
+      "stable owner identity tying each lowered global store back to thread/lane, accumulator slot, and output index"
+    ),
+    "smallest_next_code_change": (
+      "add opt-in debug metadata on lowered global_store UOps/instructions carrying output index, lane/thread scope, "
+      "and accumulator/register source identity"
+    ),
+  }
 
 
 def _summarize_store_map(stores: Iterable[ObservedStore], expected_points: set[tuple[int, int]]) -> dict[str, Any]:

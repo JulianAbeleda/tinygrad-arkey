@@ -1,5 +1,6 @@
 from extra.qk.mmq_owner_coverage import (
-  SCHEMA, build_mmq_owner_coverage_artifact, observed_stores_from_oracle, validate_mmq_owner_coverage_artifact,
+  SCHEMA, build_mmq_owner_coverage_artifact, structural_static_store_only_owner_map,
+  tinygrad_custom_kernel_store_owner_trace_blocker, validate_mmq_owner_coverage_artifact,
 )
 from extra.qk.mmq_q4k_q8_reference import Q8_1_MMQ_DS4_LAYOUT, describe_q4k_q8_1_mmq_tile
 
@@ -9,16 +10,21 @@ def _spec(m=16, n=16, k=256):
                                     activation_layout=Q8_1_MMQ_DS4_LAYOUT)
 
 
-def test_mmq_owner_coverage_passes_perfect_oracle_observed_map_without_dispatch_claim():
+def test_mmq_owner_coverage_passes_structural_static_observed_map_without_dispatch_claim():
   spec = _spec()
-  artifact = build_mmq_owner_coverage_artifact(spec, observed_stores_from_oracle(spec))
+  stores = structural_static_store_only_owner_map(spec)
+  artifact = build_mmq_owner_coverage_artifact(spec, stores)
 
   assert artifact["schema"] == SCHEMA
   assert artifact["evidence_kind"] == "owner_coverage"
   assert artifact["candidate_id"] == "llama_mmq_r4_store_owner_coverage_probe"
+  assert artifact["backend"] == "research_only_structural_static_store_owner_map"
   assert artifact["shape"] == {"M": 16, "N": 16, "K": 256}
   assert artifact["oracle_backend"] == "llama_mmq_q4k_q8_1_coop_tile_oracle"
   assert artifact["expected_stores"]["store_count"] == 256
+  assert stores[0].owner["evidence"] == "structural_static_store_only_map"
+  assert stores[0].owner["gpu_execution_trace"] is False
+  assert stores[0].owner["source"] == "translated_llama_mmq_16x16_c_fragment_writeback_structure"
   assert artifact["observed_stores"]["store_event_count"] == 256
   assert artifact["observed_stores"]["unique_store_count"] == 256
   assert artifact["duplicate_store_summary"]["count"] == 0
@@ -32,7 +38,7 @@ def test_mmq_owner_coverage_passes_perfect_oracle_observed_map_without_dispatch_
 
 def test_mmq_owner_coverage_fails_duplicate_store():
   spec = _spec()
-  stores = list(observed_stores_from_oracle(spec))
+  stores = list(structural_static_store_only_owner_map(spec))
   stores.append(stores[0])
 
   artifact = build_mmq_owner_coverage_artifact(spec, stores)
@@ -48,7 +54,7 @@ def test_mmq_owner_coverage_fails_duplicate_store():
 
 def test_mmq_owner_coverage_fails_missing_store():
   spec = _spec()
-  stores = list(observed_stores_from_oracle(spec))[1:]
+  stores = list(structural_static_store_only_owner_map(spec))[1:]
 
   artifact = build_mmq_owner_coverage_artifact(spec, stores)
 
@@ -77,7 +83,7 @@ def test_mmq_owner_coverage_blocks_without_observed_map():
 
 def test_mmq_owner_coverage_rejects_production_dispatch_claim():
   spec = _spec()
-  artifact = build_mmq_owner_coverage_artifact(spec, observed_stores_from_oracle(spec))
+  artifact = build_mmq_owner_coverage_artifact(spec, structural_static_store_only_owner_map(spec))
   artifact["production_dispatch_changed"] = True
 
   try:
@@ -86,3 +92,11 @@ def test_mmq_owner_coverage_rejects_production_dispatch_claim():
     assert "production_dispatch_changed must be False" in str(exc)
   else:
     raise AssertionError("production dispatch claim should fail")
+
+
+def test_mmq_owner_coverage_records_custom_kernel_owner_trace_blocker():
+  blocker = tinygrad_custom_kernel_store_owner_trace_blocker()
+
+  assert blocker["status"] == "BLOCKED"
+  assert blocker["gpu_execution_trace"] is False
+  assert "per-store stable owner identity" in blocker["exact_blocker"]

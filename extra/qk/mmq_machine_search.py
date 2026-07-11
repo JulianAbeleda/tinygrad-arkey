@@ -26,7 +26,10 @@ from extra.qk.mmq_bounded_harness import (
   candidate_metadata, coop_tile_blocked_translation_evidence, run_bounded_harness,
 )
 from extra.qk.mmq_llama_oracle import llama_mma_writeback_owners
-from extra.qk.mmq_owner_coverage import build_mmq_owner_coverage_artifact
+from extra.qk.mmq_owner_coverage import (
+  build_mmq_owner_coverage_artifact, structural_static_store_only_owner_map,
+  tinygrad_custom_kernel_store_owner_trace_blocker,
+)
 from extra.qk.mmq_q4k_q8_reference import Q8_1_MMQ_DS4_LAYOUT, describe_q4k_q8_1_mmq_tile
 from extra.qk.mmq_staging_evidence import build_mmq_staging_evidence_bundle
 
@@ -272,11 +275,11 @@ def build_r4_evidence_artifacts() -> dict[str, Any]:
   return {
     "owner_coverage": build_mmq_owner_coverage_artifact(
       spec,
-      None,
+      structural_static_store_only_owner_map(spec),
       candidate_id="cooperative_multi_wave_tile",
-      backend=AMD_DS4_COOP_TILE_BACKEND_ID,
-      exact_blocker="observed store-only owner map is unavailable for the cooperative multi-wave tinygrad atom",
+      backend="research_only_structural_static_store_owner_map",
     ),
+    "gpu_owner_trace_blocker": tinygrad_custom_kernel_store_owner_trace_blocker(),
     "staging_sum_slots": build_mmq_staging_evidence_bundle(
       candidate_id="cooperative_multi_wave_tile",
       backend=AMD_DS4_COOP_TILE_BACKEND_ID,
@@ -327,8 +330,8 @@ def build_search_report(*, run: bool = False, warmups: int = 0, rounds: int = 1,
     "r4_evidence_artifacts": build_r4_evidence_artifacts(),
     "r5_geometry_search_status": {
       "status": "blocked_by_R4_atom",
-      "reason": "geometry/timing search is not promotable until cooperative owner coverage passes",
-      "required_r4_evidence": ["owner_coverage:PASS", "staging_sum_slots:PASS"],
+      "reason": "geometry/timing search is not promotable until lowered GPU owner trace is available",
+      "required_r4_evidence": ["owner_coverage:PASS", "staging_sum_slots:PASS", "gpu_owner_trace:PASS"],
     },
     "promotion_verdict": "BLOCKED_UNTIL_COOPERATIVE_TILE_PASS",
   }

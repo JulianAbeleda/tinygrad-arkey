@@ -23,8 +23,8 @@ def test_mmq_machine_search_only_marks_completed_components_searchable():
   assert report["promotion_verdict"] == "BLOCKED_UNTIL_COOPERATIVE_TILE_PASS"
   assert report["r5_geometry_search_status"] == {
     "status": "blocked_by_R4_atom",
-    "reason": "geometry/timing search is not promotable until cooperative owner coverage passes",
-    "required_r4_evidence": ["owner_coverage:PASS", "staging_sum_slots:PASS"],
+    "reason": "geometry/timing search is not promotable until lowered GPU owner trace is available",
+    "required_r4_evidence": ["owner_coverage:PASS", "staging_sum_slots:PASS", "gpu_owner_trace:PASS"],
   }
   assert report["searchable_components"] == [
     "DS4 layout",
@@ -96,9 +96,12 @@ def test_mmq_machine_search_only_marks_completed_components_searchable():
   r4 = report["r4_evidence_artifacts"]
   assert r4["owner_coverage"]["schema"] == "tinygrad.mmq_owner_coverage.v1"
   assert r4["owner_coverage"]["candidate_id"] == "cooperative_multi_wave_tile"
-  assert r4["owner_coverage"]["backend"] == AMD_DS4_COOP_TILE_BACKEND_ID
-  assert r4["owner_coverage"]["status"] == "BLOCKED"
+  assert r4["owner_coverage"]["backend"] == "research_only_structural_static_store_owner_map"
+  assert r4["owner_coverage"]["status"] == "PASS"
+  assert r4["owner_coverage"]["observed_stores"]["stores"][0]["owner"]["gpu_execution_trace"] is False
   assert r4["owner_coverage"]["production_dispatch_changed"] is False
+  assert r4["gpu_owner_trace_blocker"]["status"] == "BLOCKED"
+  assert "per-store stable owner identity" in r4["gpu_owner_trace_blocker"]["exact_blocker"]
   assert r4["staging_sum_slots"]["schema"] == "tinygrad.mmq_staging_evidence.v1"
   assert r4["staging_sum_slots"]["candidate_id"] == "cooperative_multi_wave_tile"
   assert r4["staging_sum_slots"]["backend"] == AMD_DS4_COOP_TILE_BACKEND_ID
@@ -109,13 +112,14 @@ def test_mmq_machine_search_only_marks_completed_components_searchable():
 def test_mmq_r4_evidence_artifacts_are_transfer_shaped_and_non_promoting():
   artifacts = build_r4_evidence_artifacts()
 
-  assert set(artifacts) == {"owner_coverage", "staging_sum_slots"}
-  for artifact in artifacts.values():
+  assert set(artifacts) == {"owner_coverage", "gpu_owner_trace_blocker", "staging_sum_slots"}
+  for artifact in (artifacts["owner_coverage"], artifacts["staging_sum_slots"]):
     assert artifact["candidate_id"] == "cooperative_multi_wave_tile"
     assert artifact["shape"] == {"M": 16, "N": 16, "K": 256}
     assert artifact["production_dispatch_changed"] is False
   assert artifacts["owner_coverage"]["evidence_kind"] == "owner_coverage"
-  assert artifacts["owner_coverage"]["status"] == "BLOCKED"
+  assert artifacts["owner_coverage"]["status"] == "PASS"
+  assert artifacts["gpu_owner_trace_blocker"]["status"] == "BLOCKED"
   assert artifacts["staging_sum_slots"]["evidence_kind"] == "staging_sum_slots"
   assert artifacts["staging_sum_slots"]["status"] == "PASS"
 
