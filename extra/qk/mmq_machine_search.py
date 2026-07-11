@@ -622,11 +622,25 @@ def _parse_args() -> argparse.Namespace:
                   help="emit a boltbeam.hw_trace.v1 cooperative-tile oracle evidence trace")
   ap.add_argument("--r5-geometry-search", action="store_true",
                   help="emit q4k-q8-1-mmq-r5-geometry-search.v1 instead of the base search report")
+  ap.add_argument("--experiment", type=pathlib.Path,
+                  help="canonical tinygrad.mmq_candidate_spec.v1 to execute")
+  ap.add_argument("--bundle-out", type=pathlib.Path, help="atomic experiment bundle output directory")
+  ap.add_argument("--experiment-id", help="immutable BoltBeam experiment identity")
+  ap.add_argument("--system-snapshot-id", help="closed-system snapshot identity")
   return ap.parse_args()
 
 
 def main() -> None:
   args = _parse_args()
+  if args.experiment is not None:
+    if args.bundle_out is None or not args.experiment_id or not args.system_snapshot_id:
+      raise SystemExit("--experiment requires --bundle-out, --experiment-id, and --system-snapshot-id")
+    from extra.qk.mmq_experiment import MMQCandidateSpec, produce_experiment_bundle
+    spec = MMQCandidateSpec.from_json(json.loads(args.experiment.read_text()))
+    output = produce_experiment_bundle(spec, args.bundle_out, experiment_id=args.experiment_id,
+                                       system_snapshot_id=args.system_snapshot_id)
+    print(json.dumps({"bundle": str(output), "candidate_id": spec.candidate_id}, sort_keys=True))
+    return
   if args.boltbeam_oracle_trace:
     report = build_boltbeam_oracle_trace()
   elif args.r5_geometry_search:
