@@ -26,7 +26,9 @@ from extra.qk.mmq_bounded_harness import (
   candidate_metadata, coop_tile_blocked_translation_evidence, run_bounded_harness,
 )
 from extra.qk.mmq_llama_oracle import llama_mma_writeback_owners
+from extra.qk.mmq_owner_coverage import build_mmq_owner_coverage_artifact
 from extra.qk.mmq_q4k_q8_reference import Q8_1_MMQ_DS4_LAYOUT, describe_q4k_q8_1_mmq_tile
+from extra.qk.mmq_staging_evidence import build_mmq_staging_evidence_bundle
 
 
 SCHEMA = "q4k-q8-1-mmq-machine-search.v1"
@@ -264,6 +266,26 @@ BLOCKED_CANDIDATES: tuple[dict[str, Any], ...] = (
 )
 
 
+def build_r4_evidence_artifacts() -> dict[str, Any]:
+  spec = describe_q4k_q8_1_mmq_tile(role=ROLE, m=16, n=16, k=256, m_tile=16, n_tile=16,
+                                    activation_layout=Q8_1_MMQ_DS4_LAYOUT)
+  return {
+    "owner_coverage": build_mmq_owner_coverage_artifact(
+      spec,
+      None,
+      candidate_id="cooperative_multi_wave_tile",
+      backend=AMD_DS4_COOP_TILE_BACKEND_ID,
+      exact_blocker="observed store-only owner map is unavailable for the cooperative multi-wave tinygrad atom",
+    ),
+    "staging_sum_slots": build_mmq_staging_evidence_bundle(
+      candidate_id="cooperative_multi_wave_tile",
+      backend=AMD_DS4_COOP_TILE_BACKEND_ID,
+      shape={"M": 16, "N": 16, "K": 256},
+      notes="R4 structural staging evidence only; owner coverage still blocks cooperative atom promotion",
+    ),
+  }
+
+
 def build_search_report(*, run: bool = False, warmups: int = 0, rounds: int = 1,
                         runner: Callable[[BoundedMMQConfig], dict[str, Any]] = run_bounded_harness) -> dict[str, Any]:
   rows = []
@@ -302,6 +324,12 @@ def build_search_report(*, run: bool = False, warmups: int = 0, rounds: int = 1,
     "searchable_components": [row["component"] for row in DONE_COMPONENTS if row["status"] == "done"],
     "searchable_candidates": rows,
     "blocked_candidates": list(BLOCKED_CANDIDATES),
+    "r4_evidence_artifacts": build_r4_evidence_artifacts(),
+    "r5_geometry_search_status": {
+      "status": "blocked_by_R4_atom",
+      "reason": "geometry/timing search is not promotable until cooperative owner coverage passes",
+      "required_r4_evidence": ["owner_coverage:PASS", "staging_sum_slots:PASS"],
+    },
     "promotion_verdict": "BLOCKED_UNTIL_COOPERATIVE_TILE_PASS",
   }
 
