@@ -28,11 +28,12 @@ class CalibrationCase:
   chain_length: int = 0
   independent_streams: int = 1
   stride: int = 1
+  local_threads: int = 32
 
   def validate(self) -> None:
     if self.family not in ("launch", "dependent_valu", "independent_valu", "lds_barrier", "resource_pressure"):
       raise ValueError(f"unknown family {self.family!r}")
-    if self.workgroups <= 0 or self.chain_length < 0 or self.independent_streams <= 0 or self.stride <= 0:
+    if self.workgroups <= 0 or self.chain_length < 0 or self.independent_streams <= 0 or self.stride <= 0 or self.local_threads <= 0:
       raise ValueError("invalid calibration dimensions")
     if self.family == "dependent_valu" and self.chain_length <= 0: raise ValueError("dependent chains require chain_length")
     if self.family == "independent_valu" and (self.chain_length <= 0 or self.independent_streams < 2):
@@ -53,7 +54,7 @@ def independent_valu_case(workgroups:int, chain_length:int, streams:int=4) -> Ca
 
 
 def lds_barrier_case(workgroups:int) -> CalibrationCase:
-  return CalibrationCase(f"lds_barrier.wg{workgroups}", "lds_barrier", workgroups)
+  return CalibrationCase(f"lds_barrier.wg{workgroups}.t64", "lds_barrier", workgroups, local_threads=64)
 
 
 def resource_pressure_case(workgroups:int, streams:int) -> CalibrationCase:
@@ -67,18 +68,18 @@ def global_load_case(workgroups:int, stride:int) -> CalibrationCase:
 def _kernel(case:CalibrationCase) -> Callable[..., UOp]:
   case.validate()
   def kernel(out:UOp, inp:UOp) -> UOp:
-    gid, lane = UOp.special(case.workgroups, "gidx0"), UOp.special(32, "lidx0")
-    idx = gid * 32 + lane
+    gid, lane = UOp.special(case.workgroups, "gidx0"), UOp.special(case.local_threads, "lidx0")
+    idx = gid * case.local_threads + lane
     if case.family == "launch": value = inp[idx * case.stride]
     elif case.family == "lds_barrier":
-      local = UOp.placeholder((32,), dtypes.float32, 100, addrspace=AddrSpace.LOCAL)
+      local = UOp.placeholder((case.local_threads,), dtypes.float32, 100, addrspace=AddrSpace.LOCAL)
       stage = local[lane].store(inp[idx])
       value = local.after(UOp.barrier(UOp.group(stage)))[lane]
     elif case.family == "dependent_valu":
       value = inp[idx]
       for step in range(case.chain_length): value = value * UOp.const(dtypes.float32, 1.000001) + UOp.const(dtypes.float32, step * 1e-7)
     else:
-      values = [inp[(idx + stream) % (case.workgroups * 32)] for stream in range(case.independent_streams)]
+      values = [inp[(idx + stream) % (case.workgroups * case.local_threads)] for stream in range(case.independent_streams)]
       for step in range(case.chain_length):
         values = [value * UOp.const(dtypes.float32, 1.000001 + stream * 1e-7) + UOp.const(dtypes.float32, step * 1e-7)
                   for stream, value in enumerate(values)]
@@ -89,7 +90,7 @@ def _kernel(case:CalibrationCase) -> Callable[..., UOp]:
 
 
 def _sink(case:CalibrationCase) -> UOp:
-  size = case.workgroups * 32
+  size = case.workgroups * case.local_threads
   return _kernel(case)(UOp.placeholder((size,), dtypes.float32, 0), UOp.placeholder((size * case.stride,), dtypes.float32, 1))
 
 
@@ -97,7 +98,7 @@ def run_calibration_case(case:CalibrationCase, *, warmups:int=5, rounds:int=30, 
                          system_snapshot_id:str | None=None, artifact_output:Path | None=None) -> dict[str, Any]:
   case.validate()
   if warmups < 1 or rounds < 3: raise ValueError("calibration requires warmups >= 1 and rounds >= 3")
-  size = case.workgroups * 32
+  size = case.workgroups * case.local_threads
   inp = Tensor.empty(size * case.stride, dtype=dtypes.float32, device=device).realize()
   out = Tensor.empty(size, device=device).custom_kernel(inp, fxn=_kernel(case))[0].realize()
   program = to_program(_sink(case), Device[device].renderer)

@@ -28,9 +28,10 @@ def test_real_launch_calibration_binds_binary_resources_and_samples(tmp_path):
 
 def test_real_lds_case_emits_static_lds_and_visibility_evidence():
   result = run_calibration_case(lds_barrier_case(1), warmups=1, rounds=3)
-  assert result["resources"]["lds_bytes"] >= 32 * 4
+  assert result["resources"]["lds_bytes"] >= 64 * 4
   assert result["isa"]["ds_store_sites"] > 0 and result["isa"]["ds_load_sites"] > 0
   assert result["isa"]["waitcnt_sites"] > 0
+  assert result["isa"]["barrier_sites"] > 0
 
 
 def test_resource_pressure_contract_exposes_stream_sweep():
