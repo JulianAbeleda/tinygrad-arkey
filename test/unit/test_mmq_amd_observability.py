@@ -9,7 +9,8 @@ from extra.qk.mmq_amd_counter_capability import (
   SCHEMA as CAPABILITY_SCHEMA, parse_rocprof_counter_names, probe_amd_counter_capabilities, validate_counter_capability,
 )
 from extra.qk.mmq_amd_pmc import (
-  DEFAULT_GROUPS, SCHEMA as PMC_SCHEMA, classify_liveness, collect_kernel_pmc, collect_mmq_pmc, probe_rocprof_fallback, validate_pmc_result,
+  DEFAULT_GROUPS, SCHEMA as PMC_SCHEMA, classify_liveness, collect_global_load_transaction_proxy, collect_kernel_pmc,
+  collect_mmq_pmc, probe_rocprof_fallback, validate_pmc_result,
 )
 from extra.qk.mmq_amd_telemetry import (
   SCHEMA as TELEMETRY_SCHEMA, collect_mmq_kernel_window_telemetry, collect_process_telemetry, collect_telemetry,
@@ -75,6 +76,11 @@ def test_mmq_collection_requires_canonical_writeback_mode_before_execution():
 def test_rocprof_fallback_missing_tool_is_unsupported():
   result = probe_rocprof_fallback(["true"], ["SQ_BUSY_CYCLES"], rocprof="/not/a/tool")
   assert result["schema"] == PMC_SCHEMA and result["status"] == "unsupported"
+
+
+def test_global_load_proxy_requires_repeated_controls_before_execution():
+  with pytest.raises(ValueError, match="repetitions"):
+    collect_global_load_transaction_proxy((1,), repetitions=1, system_snapshot_id="s")
 
 
 def test_sensor_reads_live_unsupported_and_blocked_without_coercing_to_zero(tmp_path, monkeypatch):
@@ -169,3 +175,13 @@ def test_committed_dynamic_evidence_is_binary_bound_and_rejects_bad_snapshot():
     "3810864792e79b1304dc78dd31c40026c5274f356028476257ae00c54b0acb69",
   }
   assert artifact["store_transaction_calibration"]["supporting_samples"] == 24
+
+
+def test_committed_global_load_proxy_is_scoped_and_binary_bound():
+  path = Path(__file__).resolve().parents[2] / "bench/prefill-14b-mmq-machine-search/global-load-proxy-v4-20260711.json"
+  artifact = json.loads(path.read_text())
+  assert artifact["calibration_result"]["status"] == "live"
+  assert artifact["calibration_result"]["fixed_case_request_overhead"] == 4
+  assert artifact["calibration_result"]["supporting_samples"] == 12
+  assert len({point["binary_sha256"] for point in artifact["points"]}) == 6
+  assert all(point["GL2C_MC_RDREQ"][0] - 4 == point["unique_128b_input_lines"] for point in artifact["points"])

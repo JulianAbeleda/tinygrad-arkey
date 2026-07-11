@@ -91,6 +91,22 @@ def _child_mmq(writeback_mode: str, seed: int, repetitions: int = 1, announce_re
           "counters": _decode_event(events[-1]) if events else {}, "output_device": out.device}
 
 
+def _child_global_load_calibration(stride: int, system_snapshot_id: str) -> dict[str, Any]:
+  from tinygrad.device import Compiled
+  from extra.qk.mmq_calibration import global_load_case, issue_case, run_calibration_case
+  Compiled.profile_events.clear()
+  case = issue_case("dependent_salu") if stride == 0 else global_load_case(96, stride)
+  result = run_calibration_case(case, warmups=1, rounds=3,
+                                system_snapshot_id=system_snapshot_id)
+  events = [e for e in Compiled.profile_events if type(e).__name__ == "ProfilePMCEvent"]
+  lanes = 96 * 32
+  unique_lines = 0 if stride == 0 else len({(lane * stride * 4) // 128 for lane in range(lanes)})
+  return {"status": "live" if events else "blocked", "event_count": len(events), "stride_elements": stride,
+          "logical_lane_loads": 0 if stride == 0 else lanes, "unique_128b_lines": unique_lines,
+          "binary_sha256": result["hashes"]["binary_sha256"], "case_id": result["case"]["case_id"],
+          "counters": _decode_event(events[-1]) if events else {}}
+
+
 def _extract_json(stdout: str) -> dict[str, Any]:
   marker = "MMQ_PMC_JSON="
   line = next((line for line in reversed(stdout.splitlines()) if line.startswith(marker)), None)
@@ -217,6 +233,52 @@ def probe_rocprof_fallback(command: list[str], counters: Iterable[str], *,
               "status": "blocked", "reason": f"{type(exc).__name__}: {exc}", "counters": list(group), "command": command}
 
 
+def collect_global_load_transaction_proxy(strides: Iterable[int], *, repetitions: int,
+                                          system_snapshot_id: str, timeout: int = 60) -> dict[str, Any]:
+  if repetitions < 2: raise ValueError("repetitions must be >= 2")
+  groups = (("GL2C_MC_RDREQ",), ("GL2C_EA_RDREQ_32B", "GL2C_EA_RDREQ_64B", "GL2C_EA_RDREQ_96B", "GL2C_EA_RDREQ_128B"))
+  points = []
+  root = str(Path(__file__).resolve().parents[2])
+  for stride in strides:
+    command = [sys.executable, str(Path(__file__).resolve()), "--global-load-child", str(stride), system_snapshot_id]
+    samples = []
+    for _ in range(repetitions):
+      pass_rows = []
+      for group in groups:
+        env = dict(os.environ, PROFILE="1", PMC="1", PMC_COUNTERS=",".join(group), VIZ="0")
+        env["PYTHONPATH"] = root + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+        try:
+          proc = subprocess.run(command, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout)
+          row = _extract_json(proc.stdout) if proc.returncode == 0 else {"status": "blocked", "returncode": proc.returncode}
+          row["stderr"] = proc.stderr[-4000:]
+        except (OSError, subprocess.TimeoutExpired, ValueError) as exc:
+          row = {"status": "blocked", "error": f"{type(exc).__name__}: {exc}"}
+        pass_rows.append(row)
+      sample = dict(pass_rows[0])
+      sample["counter_passes"] = len(pass_rows)
+      if all(row.get("status") == "live" and row.get("binary_sha256") == sample.get("binary_sha256") for row in pass_rows):
+        sample["counters"] = {key: value for row in pass_rows for key, value in row["counters"].items()}
+      else: sample["status"] = "blocked"
+      samples.append(sample)
+    points.append({"stride_elements": stride, "status": "live" if all(s.get("status") == "live" for s in samples) else "blocked",
+                   "samples": samples})
+  live = [sample for point in points for sample in point["samples"] if sample.get("status") == "live"]
+  load_rows = [sample for point in points if point["stride_elements"] != 0 for sample in point["samples"] if sample.get("status") == "live"]
+  offsets = {sample["counters"].get("GL2C_MC_RDREQ") - sample["unique_128b_lines"] for sample in load_rows}
+  fixed_overhead = next(iter(offsets)) if len(offsets) == 1 else None
+  exact = fixed_overhead is not None and bool(load_rows) and all(sample["counters"].get("GL2C_MC_RDREQ") - fixed_overhead == sample["unique_128b_lines"] and
+    sample["counters"].get("GL2C_MC_RDREQ") ==
+    sample["counters"].get("GL2C_EA_RDREQ_32B", 0) + sample["counters"].get("GL2C_EA_RDREQ_64B", 0) +
+    sample["counters"].get("GL2C_EA_RDREQ_96B", 0) + sample["counters"].get("GL2C_EA_RDREQ_128B", 0) for sample in load_rows)
+  return {"schema": "tinygrad.mmq_differential_probe.v1", "probe": "global_load_transaction_proxy",
+          "system_snapshot_id": system_snapshot_id, "collector": "tinygrad_kfd_native_pmc", "points": points,
+          "calibration_result": {"status": "live" if exact else "zero_suspect", "truth_status": "derived",
+                                 "rule": "within global_load.wg96, GL2C_MC_RDREQ minus fixed case overhead equals unique touched 128B input lines" if exact else None,
+                                 "fixed_case_request_overhead": fixed_overhead, "no_load_control_requests": [sample["counters"].get("GL2C_MC_RDREQ")
+                                   for point in points if point["stride_elements"] == 0 for sample in point["samples"] if sample.get("status") == "live"],
+                                 "supporting_samples": len(load_rows), "all_samples_exact": exact}}
+
+
 def validate_pmc_result(artifact: Mapping[str, Any]) -> None:
   if artifact.get("schema") != SCHEMA: raise ValueError(f"schema must be {SCHEMA}")
   for pidx, p in enumerate(artifact.get("passes", [])):
@@ -232,6 +294,7 @@ def _main() -> None:
   ap.add_argument("--child", nargs=2, metavar=("KIND", "SIZE"))
   ap.add_argument("--mmq-child", nargs=2, metavar=("WRITEBACK_MODE", "SEED"))
   ap.add_argument("--mmq-loop", nargs=3, metavar=("WRITEBACK_MODE", "SEED", "REPETITIONS"))
+  ap.add_argument("--global-load-child", nargs=2, metavar=("STRIDE", "SYSTEM_SNAPSHOT_ID"))
   ap.add_argument("--liveness", action="store_true")
   args = ap.parse_args()
   if args.child:
@@ -241,6 +304,9 @@ def _main() -> None:
   elif args.mmq_loop:
     print("MMQ_PMC_JSON=" + json.dumps(_child_mmq(args.mmq_loop[0], int(args.mmq_loop[1]),
       repetitions=int(args.mmq_loop[2]), announce_ready=True), sort_keys=True))
+  elif args.global_load_child:
+    print("MMQ_PMC_JSON=" + json.dumps(_child_global_load_calibration(int(args.global_load_child[0]), args.global_load_child[1]),
+      sort_keys=True))
   elif args.liveness: print(json.dumps(run_pmc_liveness_suite(), indent=2, sort_keys=True))
   else: ap.error("choose --child or --liveness")
 
