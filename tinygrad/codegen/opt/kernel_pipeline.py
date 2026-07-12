@@ -264,7 +264,11 @@ def build_stage1_uop_graph(plan:KernelStage1PipelinePlan, k_tiles:int,
   if body_readiness == "legacy":
     body_frag=fragments(rng,slot,prologue.ready)
   elif body_readiness == "matching":
-    pending_body_prod=produce(rng+1,(rng+1)%plan.buffer_count,None)
+    # The body consumes the current slot while prefetching the next slot.  The
+    # first current-slot value comes from the prologue, so keep that producer
+    # in the readiness dependency as well; subsequent iterations are ordered by
+    # the loop END rooted at the prior body join.
+    pending_body_prod=produce(rng+1,(rng+1)%plan.buffer_count,prologue.ready)
     body_frag=fragments(rng,slot,pending_body_prod.ready)
   else:
     raise ValueError(f"unsupported body readiness mode {body_readiness!r}")

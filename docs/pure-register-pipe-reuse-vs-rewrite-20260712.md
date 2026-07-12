@@ -13,6 +13,23 @@ by an LDS-specific adapter. A typed AMD LLVM wait intrinsic now exists, but the
 missing lifecycle/dependency wiring is still a coordinated extension, not a
 second compiler.
 
+## Implementation status
+
+The reusable storage boundary is now implemented in
+`tinygrad/codegen/opt/register_pipeline.py` (commit `448a13dc7` plus the
+prologue-ordering follow-up). Each A/B role owns a persistent two-slot
+`DEFINE_REG` half buffer; producers write `half.vec(16)` global-load carriers
+to the selected slot, and fragments load the current slot after typed producer
+readiness. The shared stage-1 builder uses matching current-consume/next-slot
+prefetch semantics and keeps the prologue dependency on the first body read.
+K=1, K=2, K=3, and K=256 ownership proofs pass with no `DEFINE_LOCAL` or raw
+ISA nodes.
+
+This does not yet make a full-K AMD kernel executable. Normal full-K rewrite
+still reaches a devectorizer `IndexError` while splitting symbolic vector
+register-buffer accesses. That compiler-lowering issue is a separate gate; no
+route is promoted and no fail-closed evidence gate is weakened to bypass it.
+
 ## Evidence inventory
 
 ### Reusable without semantic rewrite
@@ -32,12 +49,12 @@ second compiler.
 
 | Gap | Why it blocks a reusable register path | Smallest change |
 |---|---|---|
-| Storage callback is LDS-only | `PrecontractPipelineTemplate` requires `DEFINE_LOCAL`, LDS windows, and `active_lds_bytes` | Split shared operand/descriptor validation from `LDSStorageTemplate`; add `RegisterStorageTemplate` with no local allocation |
+| Storage callback was LDS-only | `PrecontractPipelineTemplate` requires `DEFINE_LOCAL`, LDS windows, and `active_lds_bytes` | **Implemented:** register adapter emits persistent `DEFINE_REG` stage buffers and no local allocation; retain the shared descriptor checks |
 | Lifecycle plan encodes stage-1 LDS semantics | `KernelStage1PipelinePlan` requires `stage_count == 1` and derives slots from LDS bytes | Keep physical LDS slots separate from logical register stages; add an explicit register mapping (two logical stages, zero LDS slots) rather than changing the existing plan in place |
 | Wait dependency is not yet a compiler UOp contract | Typed `WaitCount` now lowers through AMD LLVM's `llvm.amdgcn.s.waitcnt`, while dependency selection is still inserted/derived separately from the lifecycle | Thread typed `WaitDependency` through graph metadata; require a backend hook and provenance join before launch |
 | Native targeted waits are renderer-local | `_insert_waitcnt` tracks physical register spans after post-regalloc; route code cannot reuse it without importing `AMDOps`/`Ops.INS` | Reuse the dependency algorithm as backend implementation, not its raw instruction representation; add a typed marker/source proof at the compiler boundary |
 | Wait lowering is not yet lifecycle-proven | Commit `6deda3c7c` proves a typed `WaitCount` intrinsic can compile on gfx1100, but an arbitrary `Ops.WAIT(WaitCount)` is not itself proof of a load-group dependency | Keep the new intrinsic as the backend seam; wire it to `WaitDependency` and reject unproven/untagged waits before promotion |
-| Exact global-load-to-WMMA ABI | A synthetic direct global-load graph currently fails devectorization unless real range ownership, CONTRACT axes/remaps, half.vec(16), and float.vec(8) accumulator ABI are present | Reuse existing precontract contracts and fixture construction; add a real register producer that preserves those nodes |
+| Exact global-load-to-WMMA ABI | A synthetic direct global-load graph currently fails devectorization unless real range ownership, CONTRACT axes/remaps, half.vec(16), and float.vec(8) accumulator ABI are present | **Partially implemented:** persistent register producer preserves those nodes; fix the full-K devectorizer path before execution claims |
 | Mixed-role route attribution | The current authority can report selected candidate roles without recording fallback roles | Fix attribution before combined pure promotion; this is instrumentation, not a compiler rewrite |
 
 ## What “reuse” means in practice

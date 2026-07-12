@@ -93,6 +93,7 @@ def test_register_matching_readiness_proves_k2_epoch_slot_mapping():
   assert graph.body_readiness == "matching"
   assert graph.body_fragments.epoch.render() == graph.body_range.render()
   assert graph.body_fragments.slot.render() == (graph.body_range % 2).render()
+  assert graph.prologue.ready in graph.body_fragments.ready.backward_slice_with_self
   assert len([u for u in graph.sink.toposort() if u.op is Ops.DEFINE_REG]) == 3
 
 

@@ -107,7 +107,7 @@ class RegisterPipeTemplate:
           tag=("register_pipe_load", operand.role, frag, epoch, slot))
         vectors.append(buffer.index(slot * self.stage_width + frag * 16, dtype=dtypes.half.vec(16)).store(value))
       nodes.append(UOp.group(*vectors).replace(tag=("register_pipe_producer", operand.role, epoch, slot)))
-    ready = UOp.group(*nodes).replace(tag=("register_pipe_ready", epoch, slot))
+    ready = UOp.group(*nodes, reuse).replace(tag=("register_pipe_ready", epoch, slot))
     return KernelStage1ProducerStage(epoch, slot, (nodes[0], nodes[1]), ready)
 
   def fragments(self, epoch: UOp, slot: UOp, ready: UOp) -> KernelStage1FragmentStage:
