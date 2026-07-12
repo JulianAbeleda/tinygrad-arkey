@@ -280,7 +280,9 @@ class Compiler:
   def __init__(self, cachekey:str|None=None): self.cachekey = cachekey if CCACHE else None
   def compile(self, src:str) -> bytes: return src.encode()   # NOTE: empty compiler is the default
   def compile_cached(self, src:str, cache_context:tuple[str, str]|None=None) -> bytes:
-    key = src if cache_context is None else {"source": src, "candidate_schema": cache_context[0], "candidate_identity": cache_context[1]}
+    # Keep the historical one-column string cache schema. Candidate context namespaces the source key without
+    # migrating or invalidating existing compiler cache tables; the legacy key remains exactly `src`.
+    key = src if cache_context is None else f"candidate:{cache_context[0]}:{cache_context[1]}\n{src}"
     if self.cachekey is not None and (lib := diskcache_get(self.cachekey, key)) is not None:
       Compiler.cache_hits += 1
       return lib

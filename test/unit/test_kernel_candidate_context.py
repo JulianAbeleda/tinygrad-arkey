@@ -36,6 +36,7 @@ def test_candidate_context_enters_compiler_cache_identity(monkeypatch):
   compiler.compile_cached("same source", ("boltbeam.full_kernel_candidate.v1", "1" * 64))
   compiler.compile_cached("same source", ("boltbeam.full_kernel_candidate.v1", "2" * 64))
   assert seen[0] != seen[1]
+  assert all(isinstance(key, str) and key.startswith("candidate:boltbeam.full_kernel_candidate.v1:") for key in seen)
 
 
 def test_legacy_default_cache_identity_is_neutral(monkeypatch):
