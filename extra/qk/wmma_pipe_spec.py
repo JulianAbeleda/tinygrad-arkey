@@ -78,9 +78,13 @@ class WMMAPipeOp:
   local_size: tuple[int, int, int]
   wait_scope: str = "per_stage"
   resource_owner: str = "compiler"
+  stage_count: int = 2
+  wait_vmcnt: int = 8
 
   def __post_init__(self):
-    if self.wait_scope != "per_stage" or self.resource_owner != "compiler": raise ValueError("invalid pipe op contract")
+    if self.wait_scope != "per_stage" or self.resource_owner != "compiler" or self.stage_count != self.ir.stages:
+      raise ValueError("invalid pipe op contract")
+    if self.wait_vmcnt != self.ir.loads_per_stage: raise ValueError("pipe wait does not match staged loads")
 
 def build_wmma_pipe_ir(spec: WMMAPipeSpec) -> WMMAPipeIR:
   return WMMAPipeIR(spec.role, (spec.m, spec.n, spec.k), spec.stages, spec.loads_per_stage, spec.wait_policy)
