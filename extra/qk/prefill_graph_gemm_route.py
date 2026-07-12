@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from functools import lru_cache
-import os
+from dataclasses import replace
+import json, os, pathlib
 from typing import Any
 
 from tinygrad import Tensor, dtypes, getenv
@@ -14,6 +15,31 @@ from extra.qk.prefill import wmma as ref
 
 _FULL_KERNEL_CANDIDATE_JSON_ENV = "BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON"
 _FULL_KERNEL_CANDIDATE_HASH_ENV = "BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH"
+_FULL_KERNEL_CANDIDATE_SET_JSON_ENV = "BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_JSON"
+_FULL_KERNEL_CANDIDATE_SET_PATH_ENV = "BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH"
+_DEFAULT_CANDIDATE_PROFILE = "qwen3_8b_q4k_m_gfx1100"
+
+def _candidate_registry_from_env(env:dict[str,Any]|None=None):
+  env=os.environ if env is None else env
+  set_text,set_path=env.get(_FULL_KERNEL_CANDIDATE_SET_JSON_ENV),env.get(_FULL_KERNEL_CANDIDATE_SET_PATH_ENV)
+  payload_text,identity=env.get(_FULL_KERNEL_CANDIDATE_JSON_ENV),env.get(_FULL_KERNEL_CANDIDATE_HASH_ENV)
+  if set_text is not None and set_path is not None: raise ValueError("candidate set JSON and path are mutually exclusive")
+  if (set_text is not None or set_path is not None) and (payload_text is not None or identity is not None):
+    raise ValueError("candidate set and legacy candidate environment forms are mutually exclusive")
+  from extra.qk.runtime_specs import FullKernelCandidateSet, admit_full_kernel_candidate_set, full_kernel_candidate_set_from_legacy
+  if set_path is not None:
+    try: set_text=pathlib.Path(str(set_path)).read_text()
+    except OSError as exc: raise ValueError(f"candidate set path cannot be read: {exc}") from exc
+  if set_text is not None:
+    try: row=json.loads(str(set_text))
+    except json.JSONDecodeError as exc: raise ValueError(f"candidate set JSON is invalid: {exc}") from exc
+    return admit_full_kernel_candidate_set(FullKernelCandidateSet.from_json(row))
+  if payload_text is None and identity is None: return None
+  if payload_text is None or identity is None:
+    raise ValueError(f"{_FULL_KERNEL_CANDIDATE_JSON_ENV} and {_FULL_KERNEL_CANDIDATE_HASH_ENV} must be provided together")
+  try: payload=json.loads(str(payload_text))
+  except json.JSONDecodeError as exc: raise ValueError(f"{_FULL_KERNEL_CANDIDATE_JSON_ENV} is not valid JSON: {exc}") from exc
+  return admit_full_kernel_candidate_set(full_kernel_candidate_set_from_legacy(payload,str(identity)))
 
 
 def _primitive_warmstart_key(spec) -> tuple[frozenset[int], int]:
@@ -67,6 +93,31 @@ def _anchor_candidate_context(spec, lds_spec):
   from extra.qk.runtime_specs import bind_full_kernel_candidate
   return bind_full_kernel_candidate(payload, identity, profile="qwen3_8b_q4k_m_gfx1100", role="ffn_gate_up",
     shape=(512, 12288, 4096), target={"backend": "AMD", "arch": "gfx1100", "wave_size": 32})
+
+def _candidate_schedule_spec(spec,admission):
+  schedule=admission.normalized_payload["schedule"]; factors=admission.plan
+  return replace(spec,route_family="lds",tile_m=admission.geometry.tile[0],tile_n=admission.geometry.tile[1],
+    tile_k=admission.geometry.tile[2],waves_m=admission.geometry.waves[0],waves_n=admission.geometry.waves[1],
+    wm=factors.subtiles_m,wn=factors.subtiles_n,threads=admission.geometry.threads,
+    pipeline_depth=admission.pipeline_plan.buffer_count,dbuf=int(admission.pipeline_plan.buffer_count == 2),
+    pad=schedule["lds"]["padding"])
+
+def _install_candidate_matmul(x,w,out_f,in_f,spec,admission):
+  from extra.qk.wmma_lds_spec import extract_wmma_lds_spec, wmma_lds_generated_env_defaults, wmma_lds_postrange_opts
+  candidate_spec=_candidate_schedule_spec(spec,admission); lds_spec=extract_wmma_lds_spec(candidate_spec)
+  if lds_spec is None: raise ValueError("admitted full-kernel candidate cannot produce an LDS schedule spec")
+  for key,value in wmma_lds_generated_env_defaults(lds_spec).items(): os.environ.setdefault(key,value)
+  getenv.cache_clear()
+  import tinygrad.codegen.opt.postrange as pr
+  key=_primitive_warmstart_key(candidate_spec)
+  existing=(pr._WARMSTART_CANDIDATE_CONTEXTS or {}).get(key)
+  if existing is not None and existing.canonical_identity != admission.canonical_identity:
+    raise ValueError(f"candidate warmstart key collision for {key!r}")
+  pr._WARMSTART_OPTS={**(pr._WARMSTART_OPTS or {}),key:wmma_lds_postrange_opts(lds_spec,cooperative_waves=True)}
+  pr._WARMSTART_CANDIDATE_CONTEXTS={**(pr._WARMSTART_CANDIDATE_CONTEXTS or {}),key:admission.context}
+  _ensure_role_scoped_local_stage(pr).add(key)
+  a=x.reshape(512,in_f).cast(dtypes.float16).contiguous(); bt=w.cast(dtypes.float16).contiguous()
+  return (a @ bt.transpose()).reshape(*x.shape[:-1],out_f)
 
 
 @lru_cache(maxsize=None)
@@ -251,6 +302,15 @@ def route_pf16_graph_gemm(lin, x: Tensor, w: Tensor | None = None) -> Tensor | N
   role = getattr(lin, "_prefill_graph_role", None)
   from extra.qk.prefill_schedule_spec import _spec_to_params, describe_prefill_schedule, emit_prefill_gemm_from_spec
   spec = describe_prefill_schedule(out_f, in_f, role=role)
+  registry=_candidate_registry_from_env()
+  profile=getattr(lin,"_prefill_model_profile",None) or os.environ.get("BOLTBEAM_MODEL_PROFILE",_DEFAULT_CANDIDATE_PROFILE)
+  target={"backend":"AMD","arch":"gfx1100","wave_size":32}
+  admission=None if registry is None or role is None else registry.get(profile,role,(512,out_f,in_f),target)
+  if admission is not None:
+    _route_dump({"role":role,"shape":(512,out_f,in_f),"decision":"candidate_set_lds_buffer2",
+                 "canonical_identity":admission.canonical_identity})
+    setattr(lin,"_prefill_full_kernel_candidate_identity",admission.canonical_identity)
+    return _install_candidate_matmul(x,w,out_f,in_f,spec,admission)
   candidate_requested = os.environ.get(_FULL_KERNEL_CANDIDATE_JSON_ENV) is not None or os.environ.get(_FULL_KERNEL_CANDIDATE_HASH_ENV) is not None
   if candidate_requested and os.environ.get("PREFILL_WMMA_LDS_PRIMITIVE") != "1":
     raise ValueError("full-kernel candidate requires PREFILL_WMMA_LDS_PRIMITIVE=1 generated transport")

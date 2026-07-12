@@ -22,6 +22,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[3]
 SCHEMA = "prefill-single-buffer-execution-authority.v1"
 SELECTED_SURFACE = "route_pf16_graph_gemm.generated_lds_matmul_transport"
 M, N, K = 512, 12288, 4096
+SUPPORTED_ROLES = ("ffn_gate_up", "ffn_down", "attn_qo", "attn_kv")
 
 @dataclass
 class PreparedCandidateExecution:
@@ -281,18 +282,18 @@ def _require_pre_gpu_structure(binding: dict[str, Any]) -> None:
     raise RuntimeError("candidate emitted-program structure is not proven; refusing GPU execution: " + "; ".join(binding["errors"]))
 
 
-def _case_arrays(case: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def _case_arrays(case: str, *, m:int=M, n:int=N, k:int=K) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
   # References are independently defined and cheap despite covering every
   # output element of the exact anchor.
   if case == "constant":
     av, bv = np.float16(0.03125), np.float16(-0.0625)
-    a, b = np.full((M, K), av, np.float16), np.full((N, K), bv, np.float16)
-    ref = np.full((M, N), np.float32(K) * np.float32(av) * np.float32(bv), np.float32)
+    a, b = np.full((m, k), av, np.float16), np.full((n, k), bv, np.float16)
+    ref = np.full((m, n), np.float32(k) * np.float32(av) * np.float32(bv), np.float32)
   elif case == "row_col":
-    av = ((np.arange(M) % 7) - 3).astype(np.float16)[:, None] * np.float16(1/64)
-    bv = ((np.arange(N) % 11) - 5).astype(np.float16)[:, None] * np.float16(1/64)
-    a, b = np.broadcast_to(av, (M, K)).copy(), np.broadcast_to(bv, (N, K)).copy()
-    ref = np.float32(K) * av.astype(np.float32) @ bv.astype(np.float32).T
+    av = ((np.arange(m) % 7) - 3).astype(np.float16)[:, None] * np.float16(1/64)
+    bv = ((np.arange(n) % 11) - 5).astype(np.float16)[:, None] * np.float16(1/64)
+    a, b = np.broadcast_to(av, (m, k)).copy(), np.broadcast_to(bv, (n, k)).copy()
+    ref = np.float32(k) * av.astype(np.float32) @ bv.astype(np.float32).T
   else: raise ValueError(f"unknown case {case!r}")
   return a, b, ref
 
@@ -303,9 +304,12 @@ def run(payload: dict[str, Any], candidate_hash: str, *, case: str = "constant",
   """Compile and execute the exact candidate through its production route."""
   identity = canonical_candidate_hash(payload)
   if candidate_hash != identity: raise ValueError("candidate hash does not match exact payload")
-  if (payload["workload"]["shape"] != {"m": M, "n": N, "k": K} or
-      payload["workload"]["role"] != "ffn_gate_up"):
-    raise ValueError("execution authority only accepts the exact ffn_gate_up anchor")
+  from extra.qk.runtime_specs import admit_full_kernel_candidate_set, full_kernel_candidate_set_from_legacy
+  admitted = admit_full_kernel_candidate_set(full_kernel_candidate_set_from_legacy(payload, identity)).admissions[0]
+  workload = admitted.normalized_payload["workload"]
+  role, shape = workload["role"], workload["shape"]
+  if role not in SUPPORTED_ROLES: raise ValueError(f"execution authority does not support role {role!r}")
+  m, n, k = (shape[x] for x in ("m", "n", "k"))
 
   from tinygrad import Device, Tensor
   from tinygrad.codegen import to_program_cache
@@ -317,9 +321,9 @@ def run(payload: dict[str, Any], candidate_hash: str, *, case: str = "constant",
 
   class Linear:
     bias = None
-    _prefill_graph_role = "ffn_gate_up"
+    _prefill_graph_role = role
 
-  a_np, b_np, ref = _case_arrays(case)
+  a_np, b_np, ref = _case_arrays(case, m=m, n=n, k=k)
   env = {"BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON": json.dumps(payload, separators=(",", ":")),
          "BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH": identity,
          "PREFILL_GRAPH_GEMM": "1", "PREFILL_WMMA_LDS_PRIMITIVE": "1",
@@ -332,7 +336,7 @@ def run(payload: dict[str, Any], candidate_hash: str, *, case: str = "constant",
       getenv.cache_clear(); to_program_cache.clear()
       x, w = Tensor(a_np), Tensor(b_np)
       out = route_pf16_graph_gemm(Linear(), x, w=w)
-      if out is None: raise RuntimeError("exact route declined the anchor")
+      if out is None: raise RuntimeError(f"exact route declined {role} shape {(m, n, k)}")
       linear = out.schedule_linear()
       compiled = compile_linear(linear)
       programs = _candidate_programs(compiled, identity)

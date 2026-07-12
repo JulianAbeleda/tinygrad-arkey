@@ -378,6 +378,42 @@ def test_prefill_v2_covered_linears_are_role_tagged():
   assert covered["ffn_down"]._prefill_graph_role == "ffn_down"
   assert covered["attn_k"].name == "attn_k"
 
+class _CandidateRouteTensor:
+  def __init__(self,shape): self.shape=shape; self.device="CPU"
+  @property
+  def ndim(self): return len(self.shape)
+
+@pytest.mark.parametrize(("role","shape"),(
+  ("ffn_gate_up",(512,12288,4096)),("ffn_down",(512,4096,12288)),
+  ("attn_qo",(512,4096,4096)),("attn_kv",(512,1024,4096))))
+def test_candidate_set_exact_entry_overrides_role_policy(monkeypatch,role,shape):
+  identity=(role.encode().hex()+"0"*64)[:64]; admission=SimpleNamespace(canonical_identity=identity)
+  class Registry:
+    def get(self,profile,selected_role,selected_shape,target):
+      assert profile == "qwen3_8b_q4k_m_gfx1100" and target["arch"] == "gfx1100"
+      return admission if (selected_role,selected_shape) == (role,shape) else None
+  monkeypatch.setattr(route,"_candidate_registry_from_env",lambda:Registry())
+  monkeypatch.setattr(route,"_install_candidate_matmul",lambda x,w,n,k,spec,selected:(selected.canonical_identity,spec.route_family))
+  monkeypatch.setattr(spec,"describe_prefill_schedule",lambda n,k,role=None:_prefill_schedule("pipe",n,k))
+  lin=SimpleNamespace(_prefill_graph_role=role,bias=None)
+  out=route.route_pf16_graph_gemm(lin,_CandidateRouteTensor((1,shape[0],shape[2])),w=_CandidateRouteTensor((shape[1],shape[2])))
+  assert out == (identity,"pipe") and lin._prefill_full_kernel_candidate_identity == identity
+
+def test_candidate_set_missing_exact_role_preserves_existing_emitter(monkeypatch):
+  class Registry:
+    def get(self,*_args): return None
+  monkeypatch.setattr(route,"_candidate_registry_from_env",lambda:Registry())
+  monkeypatch.setattr(spec,"describe_prefill_schedule",lambda n,k,role=None:_prefill_schedule("pipe",n,k))
+  marker=object(); monkeypatch.setattr(spec,"emit_prefill_gemm_from_spec",lambda _spec:None)
+  lin=SimpleNamespace(_prefill_graph_role="attn_qo",bias=None)
+  assert route.route_pf16_graph_gemm(lin,_CandidateRouteTensor((1,512,4096)),w=_CandidateRouteTensor((2048,4096))) is None
+  assert not hasattr(lin,"_prefill_full_kernel_candidate_identity")
+
+def test_four_role_candidate_specs_have_distinct_warmstart_keys():
+  rows=(("ffn_gate_up",12288,4096),("ffn_down",4096,12288),("attn_qo",4096,4096),("attn_kv",1024,4096))
+  keys={route._primitive_warmstart_key(_prefill_schedule("pipe",n,k)) for _role,n,k in rows}
+  assert len(keys) == 4
+
 
 def test_route_pf16_graph_gemm_lds_primitive_opt_in_uses_existing_generated_lds_transport(monkeypatch):
   route._resolve_schedule.cache_clear()

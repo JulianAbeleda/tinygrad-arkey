@@ -101,6 +101,13 @@ _PREFILL_CANDIDATE_ROUTE = "prefill_wmma_lds_single_buffer_candidate_generated"
 
 
 def _prefill_candidate_selected(env: dict[str, Any]) -> bool:
+  set_requested = env.get("BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_JSON") is not None or \
+                  env.get("BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH") is not None
+  if set_requested:
+    if not _enabled(env,"PREFILL_GRAPH_GEMM"):
+      raise ValueError("BoltBeam full-kernel candidate set requires the graph-GEMM route")
+    from extra.qk.prefill_graph_gemm_route import _candidate_registry_from_env
+    return _candidate_registry_from_env(env) is not None
   payload_text = env.get("BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON")
   identity = env.get("BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH")
   if payload_text is None and identity is None: return False
@@ -192,7 +199,12 @@ def effective_routes(env: dict[str, Any] | None = None) -> list[dict[str, Any]]:
                 "surface_class": surface["surface_class"], "strict_pure": surface["strict_pure"],
                 "manifest_pure": prov in FINAL_DEFAULT_PROVENANCE,
                 "rolled_back_to_oracle": rolled_back, "pure": surface["strict_pure"]}
-    if rid == _PREFILL_CANDIDATE_ROUTE: row["candidate_identity"] = str(e["BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH"])
+    if rid == _PREFILL_CANDIDATE_ROUTE:
+      if "BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH" in e: row["candidate_identity"] = str(e["BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH"])
+      else:
+        from extra.qk.prefill_graph_gemm_route import _candidate_registry_from_env
+        registry=_candidate_registry_from_env(e)
+        row["candidate_set_identities"]=[x.canonical_identity for x in registry.admissions]
     out.append(row)
   return out
 

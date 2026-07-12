@@ -1,4 +1,5 @@
 import hashlib, json, sys, pytest
+import numpy as np
 
 from tinygrad.dtype import AddrSpace, dtypes
 from tinygrad.uop.ops import KernelCandidateContext, KernelInfo, Ops, ProgramInfo, UOp
@@ -106,3 +107,24 @@ def test_cli_writes_blocked_artifact_and_returns_nonzero(monkeypatch, tmp_path):
                                     "--candidate-hash", "1" * 64, "--output", str(output)])
   assert auth.main() == 1
   assert json.loads(output.read_text()) == report
+
+
+@pytest.mark.parametrize("role,shape", (
+  ("ffn_gate_up", (8, 24, 16)),
+  ("ffn_down", (8, 16, 24)),
+  ("attn_qo", (8, 16, 16)),
+  ("attn_kv", (8, 4, 16)),
+))
+def test_nonconstant_full_output_case_is_role_shape_agnostic(role, shape):
+  m, n, k = shape
+  a, b, reference = auth._case_arrays("row_col", m=m, n=n, k=k)
+  assert a.shape == (m, k) and b.shape == (n, k) and reference.shape == (m, n)
+  assert np.array_equal(reference, a.astype(np.float32) @ b.astype(np.float32).T)
+  assert np.unique(a).size > 1 and np.unique(b).size > 1
+  assert role in auth.SUPPORTED_ROLES
+
+
+def test_case_array_defaults_preserve_gate_up_anchor_shape():
+  a, b, reference = auth._case_arrays("constant")
+  assert a.shape == (auth.M, auth.K) and b.shape == (auth.N, auth.K)
+  assert reference.shape == (auth.M, auth.N)
