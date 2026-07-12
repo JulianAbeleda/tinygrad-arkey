@@ -423,15 +423,28 @@ proven wait dependency. Current evidence shows neither condition.
   added typed producer/consumer stage coverage, duplicate-edge rejection, and
   validated A/B load-group edges. It intentionally does not emit executable
   waits or admit the register route.
-- **R3 register storage: blocked at the safe host-only boundary.** The first
-  scaffold was rejected because it used synthetic remaps and did not prove the
-  real WMMA descriptor or the body consumer's two-stage readiness. No partial
-  register implementation was retained. The next implementation must consume
-  the R2 helpers, take the real tensor-core descriptor, and solve the lifecycle
-  dependency before adding a producer/fragment template.
+- **R3 register storage: host-structural scaffold complete; executable path
+  remains blocked.** Commit `c40343957` adds a real-descriptor/remap-validated
+  `RegisterPipeTemplate` for `attn_qo`, zero-LDS structural UOps, carrier/ABI
+  checks, dominance checks, and shared lifecycle proofs for K=1/2/3/256. It is
+  intentionally not wired into postrange execution because the existing stage1
+  builder still needs true two-stage readiness and wait integration.
+- **R4 mapping: structural only.** The logical two-stage/zero-LDS mapping is
+  represented separately from the stage1 LDS plan, but it is not yet an
+  executable register lifecycle.
+- **R5/R6: compile-only bridge complete.** Commit `4cd94ec74` builds a small
+  coverage-derived `Ops.WAIT` slice, preserves it through spec/shape handling,
+  and reaches AMDLLVM wait lowering. Full graph lowering still stops at the
+  known synthetic WMMA CONTRACT/ABI fixture, so this is not a full GEMM route.
+- **R7-R10: fail-closed evidence gates complete.** Commit `876fa3a23` adds
+  compile, final-resource, correctness/timing, and machine-search evidence
+  gates. They reject missing register artifacts and require per-role,
+  fallback-free identity joins; they do not fabricate performance evidence.
 
 The reviewed Spark work leaves the tree clean. The combined policy, wait,
-LDS, precontract, route, and pipeline suites pass with **143 tests**, 3 known
+LDS, precontract, route, register-scaffold, and evaluation suites pass with
+**160 tests**, 3 known
 pytest configuration warnings, and 26 subtests. The project is not blocked at
-the architecture level; it is blocked only on the substantive R3 register
-storage/lifecycle implementation described above.
+the architecture level; it is blocked only on wiring the structural R3/R4
+scaffold into the normal postrange graph with a fully proven two-stage
+producer/consumer lifecycle and final WMMA ABI.
