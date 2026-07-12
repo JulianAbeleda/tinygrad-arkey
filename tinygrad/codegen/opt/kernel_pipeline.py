@@ -215,8 +215,8 @@ def build_stage1_uop_graph(plan:KernelStage1PipelinePlan, k_tiles:int,
     acc=reg.after(init,rng).index(UOp.const(dtypes.weakint,i*8),dtype=dtypes.float.vec(8))
     updates.append(reg.index(UOp.const(dtypes.weakint,i*8),dtype=dtypes.float.vec(8)).store(wmma(body_frag,acc,i)))
   body_prod=produce(rng+1,(rng+1)%plan.buffer_count,None)
-  join=UOp.barrier(UOp.group(*updates,body_prod.ready)); end=join.end(rng)
-  drain_frag=fragments(last,UOp.const(dtypes.weakint,plan.slot_for_epoch(k_tiles-1)),body_prod.ready.after(end))
+  join=UOp.barrier(UOp.group(*updates,*body_prod.role_nodes)); end=join.end(rng)
+  drain_frag=fragments(last,UOp.const(dtypes.weakint,plan.slot_for_epoch(k_tiles-1)),end)
   drain=tuple(wmma(drain_frag,reg.after(end).index(UOp.const(dtypes.weakint,i*8),dtype=dtypes.float.vec(8)),i) for i in range(subtile_count))
   return KernelStage1UOpGraph(plan,k_tiles,UOp.sink(*drain,end,prologue.ready),drain,reg,init,rng,end,join,
     prologue,body_prod,body_frag,drain_frag,drain,subtile_count,events)
@@ -238,7 +238,7 @@ def prove_stage1_uop_graph(graph:KernelStage1UOpGraph) -> KernelStage1UOpProof:
     stores=[u for u in graph.body_join.backward_slice if u.op is Ops.STORE and graph.accumulator_reg in u.src[0].backward_slice and
             u.src[1].dtype == dtypes.float.vec(8)]
     if len(stores) != graph.subtile_count or any(u.src[1].dtype != dtypes.float.vec(8) for u in stores): errors.append("body lacks distinct vec8 accumulator stores")
-    if graph.body_producer.ready not in graph.body_join.backward_slice: errors.append("body join lacks sibling producer")
+    if any(node not in graph.body_join.backward_slice for node in graph.body_producer.role_nodes): errors.append("body join lacks sibling producer")
     for out in graph.drain:
       if not any(u.op is Ops.INDEX and u.dtype == dtypes.float.vec(8) and graph.loop_end in u.backward_slice for u in out.backward_slice):
         errors.append("drain lacks vec8 accumulator read after END")
