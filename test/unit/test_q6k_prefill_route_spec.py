@@ -35,6 +35,17 @@ def test_describe_q6k_packed_prefill_prefill_direct_out_defaults():
   assert spec.kernel_name == "q6k_gen_prefill_direct_out_17408_5120_512"
 
 
+def test_describe_q6k_packed_prefill_lm_head_authority_shape():
+  """The real 8B lm_head prefill authority is full-token M=512, not decode M=1."""
+  from extra.qk.q6k_prefill_route_spec import describe_q6k_packed_prefill
+  spec = describe_q6k_packed_prefill(151936, 4096, 512, role="lm_head")
+  assert (spec.rows, spec.k, spec.tokens) == (151936, 4096, 512)
+  assert spec.role == "lm_head"
+  assert spec.output_layout == "direct_out"
+  assert spec.parts == 1
+  assert spec.kernel_name == "q6k_gen_prefill_direct_out_151936_4096_512"
+
+
 def test_describe_q6k_packed_prefill_partials_layout():
   from extra.qk.q6k_prefill_route_spec import describe_q6k_packed_prefill
   spec = describe_q6k_packed_prefill(17408, 5120, 512, parts=4, output_layout="partials")
