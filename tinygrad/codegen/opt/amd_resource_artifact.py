@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib, re
-from typing import Any
+from typing import Any, Literal
 from tinygrad.codegen.opt.register_contracts import RegisterBank
 
 AMD_ARTIFACT_SCHEMA = "tinygrad.amd.resource_artifact.v1"
@@ -87,9 +87,11 @@ class AMDResourceArtifact:
   resources: AMDResourceFacts
   intervals: tuple[AMDPhysicalInterval, ...]
   schema: str = AMD_ARTIFACT_SCHEMA
+  resource_stage: Literal["final_program"] = "final_program"
 
   def __post_init__(self):
     if self.schema != AMD_ARTIFACT_SCHEMA: raise ValueError("unsupported AMD resource artifact schema")
+    if self.resource_stage != "final_program": raise ValueError("AMD resource artifact requires final_program facts")
     for name, value in (("target", self.target), ("abi", self.abi), ("candidate_identity", self.candidate_identity)):
       if not isinstance(value, str) or not value: raise ValueError(f"{name} must be non-empty")
     for name, value in (("source_sha256", self.source_sha256), ("binary_sha256", self.binary_sha256),
@@ -114,9 +116,27 @@ class AMDResourceArtifact:
     for interval in self.intervals: role_map.setdefault(interval.logical_role, []).append(interval.to_json())
     return {"schema": self.schema, "target": self.target, "abi": self.abi,
             "source_sha256": self.source_sha256, "binary_sha256": self.binary_sha256,
-            "candidate_identity": self.candidate_identity, "resources": self.resources.to_json(),
+            "candidate_identity": self.candidate_identity, "resource_stage": self.resource_stage,
+            "resources": self.resources.to_json(),
             "logical_role_intervals": {role: role_map[role] for role in sorted(role_map)},
             "physical_intervals": [x.to_json() for x in self.intervals]}
+
+  @classmethod
+  def from_json(cls, row: dict[str, Any]) -> "AMDResourceArtifact":
+    """Parse a serialized final artifact without weakening validation."""
+    if not isinstance(row, dict): raise TypeError("AMD resource artifact must be an object")
+    resources = row.get("resources")
+    if not isinstance(resources, dict): raise ValueError("AMD resource artifact resources are missing")
+    facts = AMDResourceFacts(**{name: resources.get(name) for name in
+      ("vgpr", "sgpr", "lds_bytes", "scratch_bytes", "vgpr_spills", "sgpr_spills", "workgroup_threads", "wavefront_size")})
+    rows = row.get("physical_intervals")
+    if not isinstance(rows, list): raise ValueError("AMD resource artifact physical intervals are missing")
+    intervals = tuple(AMDPhysicalInterval(x["logical_role"], x["bank"], x["start"], x["end"], x.get("purpose", "value"))
+                      for x in rows if isinstance(x, dict))
+    if len(intervals) != len(rows): raise ValueError("AMD resource artifact has malformed physical intervals")
+    return cls(row.get("target"), row.get("abi"), row.get("source_sha256"), row.get("binary_sha256"),
+               row.get("candidate_identity"), facts, intervals, row.get("schema", AMD_ARTIFACT_SCHEMA),
+               row.get("resource_stage", "final_program"))
 
 
 def join_amd_resource_artifact(*, target: str, abi: str, source: bytes | str, binary: bytes,

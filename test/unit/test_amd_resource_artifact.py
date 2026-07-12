@@ -1,7 +1,7 @@
 import pytest
 
 from tinygrad.codegen.opt.amd_resource_artifact import (
-  AMDPhysicalInterval, AMDResourceFacts, join_amd_resource_artifact, validate_amd_resource_artifact)
+  AMDPhysicalInterval, AMDResourceArtifact, AMDResourceFacts, join_amd_resource_artifact, validate_amd_resource_artifact)
 from tinygrad.codegen.opt.register_contracts import RegisterBank
 
 
@@ -19,6 +19,7 @@ def test_amd_resource_artifact_joins_identity_resources_and_intervals():
   assert artifact.source_sha256 != artifact.binary_sha256
   assert artifact.to_json()["candidate_identity"] == "a" * 64
   assert artifact.to_json()["logical_role_intervals"]["A"][0]["start"] == 0
+  assert artifact.from_json(artifact.to_json()) == artifact
   assert validate_amd_resource_artifact(artifact, expected_target="gfx1100") is artifact
 
 
@@ -41,3 +42,5 @@ def test_amd_resource_artifact_rejects_identity_mismatch_and_unknown_facts():
     join_amd_resource_artifact(target="gfx1100", abi="amdgpu_kernel", source=b"s", binary=b"b",
       candidate_identity="not-a-sha", resources=AMDResourceFacts(vgpr=1, sgpr=1),
       intervals=(AMDPhysicalInterval("A", "vgpr", 0, 1),))
+  with pytest.raises(ValueError, match="final_program"):
+    row = _artifact().to_json(); row["resource_stage"] = "host_estimate"; AMDResourceArtifact.from_json(row)
