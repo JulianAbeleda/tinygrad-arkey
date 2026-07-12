@@ -5,7 +5,8 @@ from tinygrad.codegen.opt.kernel_lds import (PrecontractContractSpec, Precontrac
   PrecontractPipelineTemplate, PrecontractThreadAxes, build_precontract_lds_stage, instantiate_precontract_fragments,
   instantiate_precontract_producer)
 from tinygrad.codegen.opt.kernel_pipeline import (KernelStage1FragmentStage, KernelStage1PipelinePlan, KernelStage1ProducerStage,
-  build_stage1_uop_graph, prove_stage1_uop_graph)
+  Stage1StorageAdapter, build_stage1_uop_graph_with_storage, prove_stage1_uop_graph)
+from tinygrad.codegen.opt.compiler_policies import StoragePolicy
 from tinygrad.codegen.opt.tc import amd_rdna3
 from tinygrad.dtype import AddrSpace
 from tinygrad.uop.ops import AxisType, KernelLDSWindow, KernelTileGeometry, Ops, UOp
@@ -116,7 +117,10 @@ def test_real_anchor_symbolic_pipeline_adapter_uses_actual_contracts_and_64_floa
     first=UOp(Ops.WMMA,dtypes.float.vec(8),(stage.fragments[0],stage.fragments[1],acc),arg,tag=("pipeline_subtile",subtile,0))
     return UOp(Ops.WMMA,dtypes.float.vec(8),(stage.fragments[2],stage.fragments[3],first),arg,tag=("pipeline_subtile",subtile,1))
   caxes=tuple(UOp.range(2,50+i,AxisType.UPCAST) for i in range(3));celem=(caxes[0]*2+caxes[1])*2+caxes[2]
-  graph=build_stage1_uop_graph(KernelStage1PipelinePlan(2,20480),128,produce,fragments,wmma,subtile_count=1,
+  plan=KernelStage1PipelinePlan(2,20480)
+  callbacks=type("_Callbacks", (), {"producer": staticmethod(produce), "fragments": staticmethod(fragments)})()
+  adapter=Stage1StorageAdapter(callbacks, StoragePolicy("lds",2,20480))
+  graph=build_stage1_uop_graph_with_storage(adapter, plan,128,wmma,subtile_count=1,
     accumulator_elements=64,accumulator_offset=(sm*4+sn)*8,
     accumulator_contract=(celem,tuple((x.arg[0],2) for x in caxes)))
   proof=prove_stage1_uop_graph(graph)

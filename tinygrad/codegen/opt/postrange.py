@@ -362,7 +362,8 @@ class Scheduler:
               if candidate_pipeline is not None:
                 from tinygrad.codegen.opt.kernel_lds import PrecontractPipelineTemplate
                 from tinygrad.codegen.opt.kernel_pipeline import (KernelStage1FragmentStage, KernelStage1ProducerStage,
-                  build_stage1_uop_graph, prove_stage1_uop_graph)
+                  Stage1StorageAdapter, build_stage1_uop_graph_with_storage, prove_stage1_uop_graph,
+                  storage_policy_from_stage1)
                 template=PrecontractPipelineTemplate(candidate_geometry,tc,allocation,operands,thread_axes,
                   subtile_m,subtile_n,tuple(contracts),candidate_pipeline)
                 factors=template.factors
@@ -389,7 +390,11 @@ class Scheduler:
                   for sn in range(factors.subtiles_n) for elem in range(8)]
                 if len(accumulator_owners) != 64 or set(accumulator_owners) != set(range(64)):
                   raise KernelOptError("buffer2 accumulator ownership must be an exact unique cover of [0, 64)")
-                graph=build_stage1_uop_graph(candidate_pipeline,outer_k.vmax+1,_produce,_fragments,_wmma,subtile_count=1,
+                class _StageCallbacks:
+                  producer = staticmethod(_produce)
+                  fragments = staticmethod(_fragments)
+                storage_adapter = Stage1StorageAdapter(_StageCallbacks(), storage_policy_from_stage1(candidate_pipeline))
+                graph=build_stage1_uop_graph_with_storage(storage_adapter, candidate_pipeline, outer_k.vmax+1, _wmma, subtile_count=1,
                   accumulator_elements=factors.subtiles_m*factors.subtiles_n*8,
                   accumulator_offset=(subtile_m*factors.subtiles_n+subtile_n)*8,
                   accumulator_contract=(c_elem,tc_upcast_axes[2]),body_range_id=next(self.opt_range),accumulator_id=next(self.opt_range))

@@ -12,8 +12,8 @@ PipelinePhase = Literal["prologue", "body", "drain"]
 PipelineOp = Literal["produce", "ready", "consume", "release"]
 
 class StorageCallbacks(Protocol):
-  def producer(self, epoch: UOp, slot: UOp): ...
-  def fragments(self, epoch: UOp, slot: UOp): ...
+  def producer(self, epoch: UOp, slot: UOp, reuse: UOp|None = None): ...
+  def fragments(self, epoch: UOp, slot: UOp, ready: UOp|None = None): ...
 
 @dataclass(frozen=True)
 class Stage1StorageAdapter:
@@ -22,6 +22,22 @@ class Stage1StorageAdapter:
 
   def producer(self, epoch: UOp, slot: UOp): return self.callbacks.producer(epoch, slot)
   def fragments(self, epoch: UOp, slot: UOp): return self.callbacks.fragments(epoch, slot)
+
+  # Stage-1 lowering callbacks carry the lifecycle dependency in addition to
+  # the symbolic epoch and slot.  Keep the two-argument accessors above for
+  # callers that inspect raw storage callbacks, while exposing typed methods
+  # for the graph builder.
+  def producer_stage(self, epoch: UOp, slot: UOp, reuse: UOp|None) -> "KernelStage1ProducerStage":
+    stage = self.callbacks.producer(epoch, slot, reuse)
+    if not isinstance(stage, KernelStage1ProducerStage):
+      raise TypeError("stage-1 producer callback must return KernelStage1ProducerStage")
+    return stage
+
+  def fragment_stage(self, epoch: UOp, slot: UOp, ready: UOp) -> "KernelStage1FragmentStage":
+    stage = self.callbacks.fragments(epoch, slot, ready)
+    if not isinstance(stage, KernelStage1FragmentStage):
+      raise TypeError("stage-1 fragment callback must return KernelStage1FragmentStage")
+    return stage
 
 def storage_policy_from_stage1(plan: "KernelStage1PipelinePlan") -> StoragePolicy:
   return StoragePolicy("lds", plan.buffer_count, plan.slot_bytes, plan.roles)
@@ -256,6 +272,28 @@ def build_stage1_uop_graph(plan:KernelStage1PipelinePlan, k_tiles:int,
   drain=tuple(drain)
   return KernelStage1UOpGraph(plan,k_tiles,UOp.sink(*drain,end,prologue.ready),drain,reg,init,rng,end,join,
     prologue,body_prod,body_frag,drain_frag,drain,subtile_count,events)
+
+
+def build_stage1_uop_graph_with_storage(adapter: Stage1StorageAdapter, plan: KernelStage1PipelinePlan, k_tiles: int,
+                                        wmma: Callable[[KernelStage1FragmentStage,UOp,int], UOp], *, subtile_count: int = 8,
+                                        accumulator_elements: int|None = None, accumulator_offset: UOp|None = None,
+                                        accumulator_contract: tuple[UOp,tuple[tuple[int,int],...]]|None = None,
+                                        body_range_id: int = 9100, accumulator_id: int = 9200) -> KernelStage1UOpGraph:
+  """Build a stage-1 graph through a typed storage adapter.
+
+  This is deliberately a wrapper around ``build_stage1_uop_graph``: existing
+  callers retain the legacy callback entrypoint and therefore identical UOp
+  output, while policy-aware lowering can swap storage implementations at one
+  boundary.  The current stage-1 graph is an LDS plan, so fail closed if an
+  adapter advertises a different storage contract.
+  """
+  if not isinstance(adapter, Stage1StorageAdapter): raise TypeError("expected Stage1StorageAdapter")
+  expected = storage_policy_from_stage1(plan)
+  if adapter.policy != expected:
+    raise ValueError(f"storage policy does not match stage-1 plan: expected {expected!r}, got {adapter.policy!r}")
+  return build_stage1_uop_graph(plan, k_tiles, adapter.producer_stage, adapter.fragment_stage, wmma,
+    subtile_count=subtile_count, accumulator_elements=accumulator_elements, accumulator_offset=accumulator_offset,
+    accumulator_contract=accumulator_contract, body_range_id=body_range_id, accumulator_id=accumulator_id)
 
 def prove_stage1_uop_graph(graph:KernelStage1UOpGraph) -> KernelStage1UOpProof:
   lifecycle=prove_stage1_lifecycle(graph.plan,graph.k_tiles,graph.events); errors=list(lifecycle.errors)
