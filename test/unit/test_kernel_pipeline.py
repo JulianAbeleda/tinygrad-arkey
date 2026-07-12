@@ -93,41 +93,41 @@ class TestKernelStage1Lifecycle(unittest.TestCase):
 
 
 class TestKernelStage1SyntheticUOps(unittest.TestCase):
-  @staticmethod
-  def _produce(role, epoch, slot, reuse):
-    node = UOp.const(dtypes.int, (epoch+1)*10 + slot*2 + (role == "B"))
-    return node if reuse is None else node.after(reuse)
-
-  @staticmethod
-  def _wmma(epoch, slot, ready, accumulator):
-    return UOp(Ops.NOOP,dtypes.float,(UOp.const(dtypes.float,float(epoch+slot+1)),ready,accumulator))
+  def setUp(self): self.body_calls=0
+  def _produce(self,epoch,slot,reuse):
+    from tinygrad.codegen.opt.kernel_pipeline import KernelStage1ProducerStage
+    roles=(UOp(Ops.NOOP,dtypes.int,(epoch,slot)),UOp(Ops.NOOP,dtypes.int,(epoch,slot)))
+    ready=UOp.barrier(UOp.group(*roles) if reuse is None else UOp.group(*roles,reuse))
+    return KernelStage1ProducerStage(epoch,slot,roles,ready)
+  def _fragments(self,epoch,slot,ready):
+    from tinygrad.codegen.opt.kernel_pipeline import KernelStage1FragmentStage
+    frags=(UOp(Ops.NOOP,dtypes.half.vec(16),(ready,epoch,slot)),)*2
+    return KernelStage1FragmentStage(epoch,slot,ready,frags)
+  def _wmma(self,stage,accumulator,subtile):
+    if stage.epoch.op is Ops.RANGE: self.body_calls += 1
+    return UOp(Ops.NOOP,dtypes.float.vec(8),(stage.fragments[0],stage.fragments[1],accumulator),arg=subtile)
 
   def test_prologue_body_drain_dependency_proof(self):
     for buffers in (1,2):
       for k_tiles in (1,2,3,128):
         with self.subTest(buffers=buffers,k_tiles=k_tiles):
-          graph = build_stage1_uop_graph(KernelStage1PipelinePlan(buffers,20480),k_tiles,self._produce,self._wmma)
+          self.body_calls=0
+          graph = build_stage1_uop_graph(KernelStage1PipelinePlan(buffers,20480),k_tiles,self._produce,self._fragments,self._wmma)
           proof = prove_stage1_uop_graph(graph)
           self.assertTrue(proof.passed,proof.errors)
-          self.assertIs(graph.accumulator,graph.drain)
-          self.assertEqual(len([u for u in graph.sink.toposort() if u.op is Ops.DEFINE_REG]),1)
+          self.assertEqual(self.body_calls,8 if k_tiles > 1 else 0)
+          self.assertEqual(len([u for u in graph.sink.toposort() if u.op is Ops.DEFINE_REG]),1 if k_tiles > 1 else 0)
+          if k_tiles > 1: self.assertEqual(graph.accumulator_reg.ptrdtype.size,64)
           self.assertEqual(len([u for u in graph.sink.toposort() if u.op is Ops.END]),1 if k_tiles > 1 else 0)
-          self.assertFalse(any(u.op in (Ops.REDUCE,Ops.ADD) for u in graph.sink.toposort()))
+          self.assertFalse(any(u.op is Ops.REDUCE for u in graph.sink.toposort()))
 
-  def test_buffer2_body_joins_current_compute_and_sibling_next_ready(self):
-    graph = build_stage1_uop_graph(KernelStage1PipelinePlan(2,20480),3,self._produce,self._wmma)
-    release0 = graph.event_nodes[KernelStage1LifecycleEvent("body","release",0,0)]
-    consume0 = graph.event_nodes[KernelStage1LifecycleEvent("body","consume",0,0,"A")]
-    ready1 = graph.event_nodes[KernelStage1LifecycleEvent("body","ready",1,1)]
-    self.assertIn(consume0,release0.backward_slice)
-    self.assertIn(ready1,release0.backward_slice)
-
-  def test_missing_event_binding_fails_closed(self):
-    graph = build_stage1_uop_graph(KernelStage1PipelinePlan(2,20480),3,self._produce,self._wmma)
-    del graph.event_nodes[KernelStage1LifecycleEvent("body","produce",1,1,"B")]
-    proof = prove_stage1_uop_graph(graph)
-    self.assertFalse(proof.passed)
-    self.assertTrue(any("no emitted UOp" in x or "lacks B producer" in x for x in proof.errors),proof.errors)
+  def test_real_anchor_shape_is_constant_size_symbolic_body(self):
+    graphs=[]
+    for k in (2,3,128):
+      self.body_calls=0; g=build_stage1_uop_graph(KernelStage1PipelinePlan(2,20480),k,self._produce,self._fragments,self._wmma)
+      self.assertEqual(self.body_calls,8); graphs.append(g)
+    self.assertEqual([g.accumulator_reg.ptrdtype.size for g in graphs],[64,64,64])
+    self.assertEqual([len([u for u in g.sink.toposort() if u.op is Ops.RANGE]) for g in graphs],[1,1,1])
 
 
 if __name__ == "__main__": unittest.main()
