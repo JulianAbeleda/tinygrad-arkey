@@ -103,6 +103,17 @@ class WMMAPipeOp:
   @property
   def derived_wait_vmcnt(self) -> int: return self.ir.loads_per_stage
 
+  def resource_estimate(self) -> dict[str, Any]:
+    """Compiler-side launch/resource facts; register counts remain unknown until lowering."""
+    if len(self.global_size) != 3 or len(self.local_size) != 3 or any(x <= 0 for x in (*self.global_size, *self.local_size)):
+      raise ValueError("pipe launch dimensions must be positive 3-tuples")
+    if any(g < l for g, l in zip(self.global_size, self.local_size)):
+      raise ValueError("pipe global dimensions must cover local dimensions")
+    return {"global_size": self.global_size, "local_size": self.local_size,
+            "lds_bytes": self.slot_bytes * self.stage_count,
+            "scratch_bytes": 0, "vgpr": None, "sgpr": None,
+            "resource_provenance": "typed_host_estimate_registers_unknown_until_lowering"}
+
 def build_wmma_pipe_ir(spec: WMMAPipeSpec) -> WMMAPipeIR:
   return WMMAPipeIR(spec.role, (spec.m, spec.n, spec.k), spec.stages, spec.loads_per_stage, spec.wait_policy)
 

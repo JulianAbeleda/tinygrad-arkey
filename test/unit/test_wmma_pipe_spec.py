@@ -30,6 +30,13 @@ def test_pipe_op_lifecycle_derives_wait_and_rejects_unconsumed_slot():
   else:
     raise AssertionError("unconsumed slot must fail closed")
 
+def test_pipe_op_resource_estimate_is_explicit_about_unknown_registers():
+  from extra.qk.wmma_pipe_spec import WMMAPipeOp, build_wmma_pipe_ir
+  spec = WMMAPipeSpec(m=512, n=4096, k=4096, tile_m=128, tile_n=128, role="attn_qo")
+  op = WMMAPipeOp(build_wmma_pipe_ir(spec), 0, 1, 2, (256, 1, 1), (64, 1, 1), slot_bytes=20480)
+  res = op.resource_estimate()
+  assert res["lds_bytes"] == 40960 and res["vgpr"] is None and res["scratch_bytes"] == 0
+
 
 def _prefill_spec(route_family: str = "pipe", *, n: int = 4096, role: str = "attn_qo",
                   pipeline_depth: int = 2, waitcnt_policy: str = "targeted_vmcnt"):
