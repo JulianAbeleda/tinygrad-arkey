@@ -135,7 +135,10 @@ def capture_candidate_program(program: UOp, payload: dict[str, Any], candidate_h
   ds_store_count = sum(1 for line in lowered.splitlines() if "ds_store" in line)
   ds_load_count = sum(1 for line in lowered.splitlines() if "ds_load" in line)
   local_defs = [u for u in program.src[0].toposort() if u.op is Ops.DEFINE_LOCAL]
-  local_sizes = [u.dtype.size for u in local_defs]
+  tagged_local_buffers = [u for u in program.src[0].toposort() if u.op is Ops.BUFFER and
+                          isinstance(u.tag, tuple) and u.tag[0] == "kernel_tile_lds"]
+  local_sizes = [u.dtype.nbytes() for u in local_defs]
+  local_sizes += [u.src[0].arg * u.dtype.itemsize for u in tagged_local_buffers if u.src and u.src[0].op is Ops.CONST]
   local_size = row["program"]["launch"]["local_size"]
   workgroup_threads = 0 if not local_size else __import__("math").prod(local_size)
   required = ("vgpr", "sgpr", "vgpr_spills", "sgpr_spills", "lds_bytes", "scratch_bytes",
