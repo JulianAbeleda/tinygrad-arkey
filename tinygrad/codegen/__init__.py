@@ -33,7 +33,15 @@ from tinygrad.codegen.late.regalloc import LinearScanRegallocContext, pm_regallo
 def _register_pipe_vcat(x):
   return UOp(Ops.STACK, x.dtype, x.src) if len(x.src) == x.dtype.count and all(y.dtype.count == 1 for y in x.src) else None
 
-register_pipe_symbolic = symbolic_simple + PatternMatcher([(UPat(Ops.VCAT, name="x"), _register_pipe_vcat)])
+register_pipe_symbolic = symbolic_simple + PatternMatcher([
+  (UPat(Ops.VCAT, name="x"), _register_pipe_vcat),
+  # The generic symbolic pass normally removes this late weak-index cast;
+  # register carriers skip GEP pushing, so normalize the concrete range here.
+  (UPat(Ops.CAST, dtype=dtypes.weakint, src=(UPat(Ops.RANGE, dtype=dtypes.ints),), name="x"), lambda x: x.src[0]),
+  # A fully contracted side-effect group carries the same ordering as its
+  # enclosing void UNROLL; retain the GROUP directly for program legality.
+  (UPat(Ops.UNROLL, dtype=dtypes.void, src=(UPat(Ops.GROUP, name="g"),)), lambda g: g),
+])
 
 pm_index_is_shrink = PatternMatcher([
   # rewrite non-image INDEX to SHRINK
@@ -143,7 +151,8 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   has_register_pipe = any(isinstance(u.tag, tuple) and u.tag[:1] == ("register_pipe_stage_buffer",)
                           for u in sink.toposort())
   devectorize_symbolic = register_pipe_symbolic if has_register_pipe else sym
-  sink = graph_rewrite(sink, devectorize_symbolic+devectorize_alu+devectorize_buf_and_index+load_store_folding+correct_load_store+load_store_indexing,
+  devectorize_folding = PatternMatcher([]) if has_register_pipe else load_store_folding
+  sink = graph_rewrite(sink, devectorize_symbolic+devectorize_alu+devectorize_buf_and_index+devectorize_folding+correct_load_store+load_store_indexing,
                        ctx=ren, name="devectorize")
   if ren.target.device == "AMD":
     sink = graph_rewrite(sink, pm_distinct_reg_store_devec, name="distinct reg store devec")

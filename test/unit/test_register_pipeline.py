@@ -326,6 +326,7 @@ def test_register_native_full_graph_scalarizes_vector_reg_index_carriers():
   topo = rewritten.toposort()
   assert not any(u.op is Ops.VCAT for u in topo)
   assert not any(u.op is Ops.LOAD and u.src and u.src[0].op is Ops.STACK and u.dtype.count > 1 for u in topo)
+  assert not any(u.op is Ops.CAST and u.dtype is dtypes.weakint and u.src and u.src[0].op is Ops.RANGE for u in topo)
 
 
 def test_register_template_rejects_fake_descriptor_remap():
