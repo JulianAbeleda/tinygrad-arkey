@@ -350,12 +350,16 @@ class Scheduler:
                   tuple(tc.lane_map.remaps()[operand_idx].items())))
               allocation = UOp.placeholder((candidate_geometry.lds_windows[-1].end//2,), dtypes.half, _candidate_lds_buffer_id(self),
                                              addrspace=AddrSpace.LOCAL).replace(tag=("kernel_tile_lds", candidate_geometry))
+              candidate_pipeline = getattr(self.ast.arg.candidate_context, "pipeline", None)
+              if candidate_pipeline is not None:
+                allocation = UOp.placeholder((candidate_pipeline.active_lds_bytes//2,), dtypes.half, _candidate_lds_buffer_id(self),
+                                               addrspace=AddrSpace.LOCAL).replace(tag=("kernel_tile_lds", candidate_geometry, candidate_pipeline))
               stage = build_precontract_lds_stage(candidate_geometry, tc=tc, allocation=allocation,
                 operands=(PrecontractOperandTemplate("A", in0, original_axes[1], original_axes[2], outer_m*candidate_geometry.tile[0]),
                           PrecontractOperandTemplate("B", in1, original_axes[0], original_axes[2], outer_n*candidate_geometry.tile[1])),
                 threads=PrecontractThreadAxes(wave_m, wave_n, lane),
                 k_axis=PrecontractKAxis(outer_k, k_substep, outer_k*candidate_geometry.tile[2], k_substep),
-                subtile_m=subtile_m, subtile_n=subtile_n, contracts=tuple(contracts))
+                subtile_m=subtile_m, subtile_n=subtile_n, contracts=tuple(contracts), pipeline_plan=candidate_pipeline)
               wmma_srcs = [stage.fragment_a, stage.fragment_b]
             else:
               wmma_srcs = [

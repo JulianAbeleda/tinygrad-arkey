@@ -8,7 +8,7 @@ from extra.qk import pure_search_guard
 from extra.qk.runtime_specs import (
   ANCHOR_SINGLE_BUFFER_CANDIDATE_HASH, FULL_KERNEL_CANDIDATE_SCHEMA, ActivationQuantSpec, GeneratedCandidate,
   QuantizedTensorSpec, RuntimeOpSpec,
-  admit_full_kernel_candidate, bind_full_kernel_candidate,
+  GFX1100_TWO_BUFFER_STAGE1_CAPABILITY, admit_full_kernel_candidate, bind_full_kernel_candidate,
 )
 
 
@@ -222,6 +222,24 @@ def test_bind_full_kernel_candidate_to_exact_single_buffer_anchor():
   assert context.geometry.threads == 256 and context.geometry.wave_size == 32
   assert [(w.role, w.base, w.end, w.stride_bytes) for w in context.geometry.lds_windows] == [
     ("A", 0, 10240, 80), ("B", 10240, 20480, 80)]
+
+
+def test_two_buffer_stage1_requires_separate_capability_and_typed_plan():
+  payload = _single_buffer_anchor_candidate().full_kernel_candidate
+  assert payload is not None
+  payload["schedule"]["pipeline"]["buffer_count"] = 2
+  candidate = _strict_full_kernel_candidate(full_kernel_candidate=payload)
+  kwargs = dict(profile="qwen3_8b_q4k_m_gfx1100", role="ffn_gate_up", shape=(512,12288,4096),
+                target={"backend":"AMD","arch":"gfx1100","wave_size":32})
+  with pytest.raises(ValueError, match="capability_pipeline"):
+    admit_full_kernel_candidate(payload, candidate.canonical_identity, **kwargs)
+  admission = admit_full_kernel_candidate(payload, candidate.canonical_identity,
+    capability=GFX1100_TWO_BUFFER_STAGE1_CAPABILITY, **kwargs)
+  assert admission.capability.capability_id == "amd.gfx1100.prefill.wmma_lds.two_buffer_stage1.v1"
+  assert admission.active_lds_bytes == 40960
+  assert admission.pipeline_plan.slot_window(0) == (0,20480)
+  assert admission.pipeline_plan.slot_window(1) == (20480,40960)
+  assert admission.context.pipeline == admission.pipeline_plan
 
 
 @pytest.mark.parametrize(("field", "value", "error"), (

@@ -4,6 +4,7 @@ from tinygrad import dtypes
 from tinygrad.codegen.opt.kernel_lds import (PrecontractContractSpec, PrecontractKAxis, PrecontractOperandTemplate,
   PrecontractThreadAxes, build_precontract_lds_stage)
 from tinygrad.codegen.opt.tc import amd_rdna3
+from tinygrad.codegen.opt.kernel_pipeline import KernelStage1PipelinePlan
 from tinygrad.dtype import AddrSpace
 from tinygrad.uop.ops import AxisType, KernelLDSWindow, KernelTileGeometry, Ops, UOp
 
@@ -73,6 +74,22 @@ def test_local4_local2_warp32_b128_store_coverage():
         actual={x+e for x in starts for e in range(8)}; tid=(m*2+n)*32+l; row,vec=tid//4,tid%4
         expected={(base//2)+r*40+vec*8+e for base in (0,10240) for r in (row,row+64) for e in range(8)}
         assert actual == expected
+
+
+def test_two_buffer_stage_uses_epoch_slot_expression_and_disjoint_windows():
+  allocation = UOp.placeholder((20480,),dtypes.half,994,addrspace=AddrSpace.LOCAL)
+  stage = _stage(allocation=allocation, pipeline_plan=KernelStage1PipelinePlan(2, 20480))
+  assert stage.allocation.ptrdtype.size*2 == 40960
+  stores = [x for x in stage.producer.backward_slice_with_self if x.op is Ops.STORE]
+  owner = next(x for x in stage.producer.backward_slice if x.op is Ops.RANGE and x.arg[0] == 32)
+  starts = [x.src[0].src[1] for x in stores]
+  epoch0 = {x.substitute({owner:UOp.const(dtypes.weakint,0)}).simplify().render() for x in starts}
+  epoch1 = {x.substitute({owner:UOp.const(dtypes.weakint,1)}).simplify().render() for x in starts}
+  assert len(epoch0) == len(epoch1) == 4
+  # Slot 1 begins 20,480 bytes (10,240 fp16 elements) after slot 0.
+  assert all((b-a).simplify().arg == 10240 for a,b in zip(
+    [x.substitute({owner:UOp.const(dtypes.weakint,0)}).simplify() for x in starts],
+    [x.substitute({owner:UOp.const(dtypes.weakint,1)}).simplify() for x in starts]))
 
 def test_fail_closed_detached_axes_contract_and_allocation():
   allocation,ops,threads,kaxis,sm,sn,contracts=_fixture()

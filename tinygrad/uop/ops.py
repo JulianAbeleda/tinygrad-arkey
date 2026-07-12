@@ -1147,6 +1147,7 @@ class KernelCandidateContext:
   schema_version: str
   canonical_identity: str
   geometry: KernelTileGeometry|None = None
+  pipeline: Any|None = None
 
   def __post_init__(self):
     if self.schema_version != "boltbeam.full_kernel_candidate.v1":

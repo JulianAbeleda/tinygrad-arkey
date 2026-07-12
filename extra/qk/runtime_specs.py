@@ -36,6 +36,8 @@ class FullKernelCapability:
   fragment_layout: str = "rdna3_wmma_f32_16x16x16_f16_lds2_static"
 
 GFX1100_SINGLE_BUFFER_CAPABILITY = FullKernelCapability()
+GFX1100_TWO_BUFFER_STAGE1_CAPABILITY = FullKernelCapability(
+  capability_id="amd.gfx1100.prefill.wmma_lds.two_buffer_stage1.v1", buffer_count=2, stage_count=1)
 
 @dataclass(frozen=True)
 class FullKernelAdmission:
@@ -43,6 +45,7 @@ class FullKernelAdmission:
   normalized_payload: dict[str, Any]
   geometry: Any
   plan: Any
+  pipeline_plan: Any
   active_lds_bytes: int
   capability: FullKernelCapability
   context: Any
@@ -84,7 +87,9 @@ def admit_full_kernel_candidate(payload:dict[str, Any], canonical_identity:str, 
     tuple(KernelLDSWindow(r.upper(),*schedule["lds"]["windows"][r],schedule["lds"]["strides"][r]) for r in ("a","b")))
   except ValueError as exc: raise FullKernelAdmissionError("geometry_invalid", str(exc)) from exc
   if any(shape[i] % geometry.tile[i] for i in range(3)): raise FullKernelAdmissionError("geometry_divisibility", "workload is not tile divisible")
-  active_lds = geometry.lds_windows[-1].end
+  from tinygrad.codegen.opt.kernel_pipeline import KernelStage1PipelinePlan
+  pipeline_plan = KernelStage1PipelinePlan(capability.buffer_count, geometry.lds_windows[-1].end, capability.stage_count)
+  active_lds = pipeline_plan.active_lds_bytes
   if active_lds > capability.max_lds_bytes or active_lds > normalized["static_constraints"]["max_lds_bytes"]:
     raise FullKernelAdmissionError("capability_lds", "active LDS exceeds a declared limit")
   try:
@@ -94,8 +99,10 @@ def admit_full_kernel_candidate(payload:dict[str, Any], canonical_identity:str, 
     tc = next(x for x in amd_rdna3 if x.dtype_in == dtypes.half and x.dtype_out == dtypes.float)
     plan = derive_precontract_factors(geometry, tc)
   except ValueError as exc: raise FullKernelAdmissionError("capability_geometry", str(exc)) from exc
-  context = KernelCandidateContext(normalized["schema_version"],actual_identity,geometry)
-  return FullKernelAdmission(actual_identity,normalized,geometry,plan,active_lds,capability,context)
+  # Keep the established buffer1 context and binary identity unchanged.
+  context = KernelCandidateContext(normalized["schema_version"],actual_identity,geometry,
+                                   pipeline_plan if capability.buffer_count > 1 else None)
+  return FullKernelAdmission(actual_identity,normalized,geometry,plan,pipeline_plan,active_lds,capability,context)
 
 
 def bind_full_kernel_candidate(payload:dict[str, Any], canonical_identity:str, *, profile:str, role:str,
@@ -104,7 +111,11 @@ def bind_full_kernel_candidate(payload:dict[str, Any], canonical_identity:str, *
                                stage_count:int|None=None, lds_windows:dict[str, list[int]]|None=None,
                                lds_strides:dict[str, int]|None=None, lds_padding:int|None=None, lds_bytes:int|None=None):
   """Compatibility wrapper. Schedule authority comes exclusively from the canonical payload."""
-  return admit_full_kernel_candidate(payload,canonical_identity,profile=profile,role=role,shape=shape,target=target).context
+  pipeline = payload.get("schedule", {}).get("pipeline", {})
+  capability = (GFX1100_TWO_BUFFER_STAGE1_CAPABILITY if
+                (pipeline.get("buffer_count"), pipeline.get("stage_count")) == (2, 1) else GFX1100_SINGLE_BUFFER_CAPABILITY)
+  return admit_full_kernel_candidate(payload,canonical_identity,profile=profile,role=role,shape=shape,target=target,
+                                     capability=capability).context
 
 
 def _check(name:str, value:str, allowed:tuple[str, ...]) -> str:

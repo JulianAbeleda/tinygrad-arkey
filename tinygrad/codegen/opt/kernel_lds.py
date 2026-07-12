@@ -251,7 +251,7 @@ def wmma_output_owners(geometry:KernelTileGeometry, *, tc) -> tuple[WMMAOutputOw
 def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:UOp,
                                 operands:tuple[PrecontractOperandTemplate, ...], threads:PrecontractThreadAxes,
                                 k_axis:PrecontractKAxis, subtile_m:UOp, subtile_n:UOp,
-                                contracts:tuple[PrecontractContractSpec, ...]) -> PrecontractLDSStage:
+                                contracts:tuple[PrecontractContractSpec, ...], pipeline_plan=None) -> PrecontractLDSStage:
   """Build an unwired vector cooperative stage while full operand index templates still exist."""
   factors = derive_precontract_factors(geometry, tc)
   if tuple(x.role for x in operands) != ("A", "B"): raise ValueError("precontract operands must be exactly ordered A and B")
@@ -283,11 +283,14 @@ def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:U
         contract.arg != tuple((a.arg[0], 2) for a in contract.axes) or contract.element is not folded or
         contract.descriptor_remap != descriptor_remaps[operand_idx]):
       raise ValueError(f"precontract {contract.role} contract does not match actual descriptor operand mapping")
-  total_bytes = geometry.lds_windows[-1].end
+  slot_bytes = geometry.lds_windows[-1].end
+  total_bytes = slot_bytes if pipeline_plan is None else pipeline_plan.active_lds_bytes
   if (allocation.op is not Ops.DEFINE_LOCAL or allocation.ptrdtype.addrspace is not AddrSpace.LOCAL or
       allocation.ptrdtype.base != dtypes.half or allocation.ptrdtype.size * dtypes.half.itemsize != total_bytes):
     raise ValueError("precontract caller allocation must be one exact fp16 LDS window")
   stores = []
+  slot_base = UOp.const(dtypes.weakint, 0) if pipeline_plan is None else \
+    (k_axis.tile_owner % pipeline_plan.buffer_count) * (slot_bytes // 2)
   thread = (threads.wave_m * geometry.waves[1] + threads.wave_n) * geometry.wave_size + threads.lane
   for operand in operands:
     window = _window(geometry, operand.role)
@@ -299,7 +302,7 @@ def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:U
       values = tuple(operand.source.substitute({operand.row_axis: operand.row_tile_base + row,
                                                 operand.k_axis: k_axis.tile_base + logical_k + elem}) for elem in range(8))
       value = UOp(Ops.STACK, dtypes.half.vec(8), values)
-      index = (window.base + row * window.stride_bytes + logical_k * 2) // 2
+      index = slot_base + (window.base + row * window.stride_bytes + logical_k * 2) // 2
       store_tag = ("kernel_tile_store", operand.role, row_iteration)
       store_idx = allocation.index(index, dtype=dtypes.half.vec(8)).replace(tag=store_tag)
       stores.append(store_idx.store(value).replace(tag=store_tag).end())
@@ -311,7 +314,7 @@ def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:U
     window = _window(geometry, role)
     row = (wave * subtiles + subtile) * 16 + lane % 16
     logical_k = k_axis.substep * tc.dims[2] + contract.element
-    index = (window.base + row * window.stride_bytes + logical_k * 2) // 2
+    index = slot_base + (window.base + row * window.stride_bytes + logical_k * 2) // 2
     load = ordered.index(index, dtype=dtypes.half).replace(tag=("kernel_tile_fragment_load", role)).load()
     return UOp(Ops.CONTRACT, dtypes.half.vec(16), (load,), contract.arg, tag=("kernel_tile_fragment", role))
   return PrecontractLDSStage(allocation, producer, barrier, _fragment("A", subtile_m, wave_m, factors.subtiles_m, contracts[0]),
