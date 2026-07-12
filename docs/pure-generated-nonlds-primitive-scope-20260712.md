@@ -164,6 +164,46 @@ metadata, graph capture, cache key, and runtime argument ABI. Identify the exact
 function where a typed pipe primitive can enter before `to_program`. No edits
 unless a missing type annotation is necessary.
 
+#### Compiler insertion-point inventory (C4)
+
+The implementation must cross these existing boundaries in order; adding an
+`Ops` enum alone is insufficient:
+
+1. **Typed IR and UOp ownership:** define the immutable `WMMAPipeIR` beside
+   `WMMAPipeSpec` in `extra/qk/wmma_pipe_spec.py`. If a core UOp is required,
+   add it in `tinygrad/uop/ops.py` together with `range_start`, shape/dtype
+   inference, `type_verify`, `toposort`/graph traversal, and serialization
+   behavior. The IR must lower to ordinary loads, WMMA, waits, and stores; it
+   must never carry source text or native instructions.
+2. **Verifier and rangeification:** teach `tinygrad/shape/` verification and
+   `tinygrad/codegen/opt/rangeify.py`/`symbolic.py` the operation's axis and
+   buffer contracts. A malformed A/B/output dtype, stride, tile divisibility,
+   or wait/stage count must fail before scheduling.
+3. **Postrange/sink:** lower or expand the typed operation in
+   `tinygrad/codegen/opt/postrange.py` before `apply_opts` finalizes the sink.
+   Preserve `KernelInfo.candidate_context`, `opts_to_apply`, and pipe metadata
+   through every `replace`; warmstart state must restore on both normal and
+   exceptional exits.
+4. **Program/cache boundary:** `tinygrad/codegen/__init__.py::to_program` must
+   see an ordinary sink and produce `ProgramInfo`; candidate identity must enter
+   the compiler cache key in `tinygrad/device.py::Compiler.compile_cached`.
+   Distinct identities with identical source must produce distinct program and
+   binary cache entries.
+5. **AMD lowering:** the existing WMMA/load/store UOps then flow through
+   `tinygrad/renderer/amd.py` (and renderer pattern tables), followed by normal
+   metadata extraction. No `Ops.INS`, assembly source, or precompiled binary is
+   permitted. Resource output must include launch dimensions, VGPR/SGPR, LDS,
+   scratch, and wave size.
+6. **Runtime/graph ABI:** `tinygrad/engine/realize.py::get_runtime`,
+   `tinygrad/runtime/graph/hcq.py`, and the HCQ call tuple must retain ordinary
+   A/B/output argument order, dtypes, contiguous strides, and candidate
+   identity. Graph capture/replay must not rebind buffers across roles.
+
+Acceptance is a host structural test at each boundary, followed by AMD compile,
+resource/binary identity, nonconstant correctness, and pinned timing. Until all
+six boundaries pass, the primitive remains a scoped blocker and cannot enter
+route selection or the pure default.
+
 ### S1 — Typed context/schema review
 
 Owner: `extra/qk/wmma_pipe_spec.py`, `extra/qk/runtime_specs.py`, focused tests.
