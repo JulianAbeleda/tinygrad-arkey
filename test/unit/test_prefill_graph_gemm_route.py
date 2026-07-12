@@ -378,6 +378,34 @@ def test_prefill_v2_covered_linears_are_role_tagged():
   assert covered["ffn_down"]._prefill_graph_role == "ffn_down"
   assert covered["attn_k"].name == "attn_k"
 
+def test_prefill_lm_head_direct_flag_excludes_output_from_resident_realize():
+  # PREFILL_LM_HEAD_DIRECT=1 must drop self.output from _prefill_v2_covered so no resident _pf16_w is realized
+  # for it (w stays None -> route_prefill_linear dispatches the packed q6k kernel). Default off keeps it covered.
+  import os
+  from tinygrad.llm.model import Transformer
+  from tinygrad.helpers import getenv
+
+  class _Weight:
+    def __init__(self, shape): self.shape = shape
+
+  def build():
+    tr = object.__new__(Transformer)
+    tr.blk = [SimpleNamespace()]  # no per-block linears -> block loop yields nothing; isolate the lm_head branch
+    tr.output = SimpleNamespace(weight=_Weight((151936, 4096)), q6k_storage=object(),
+                                prefill_packed_weight=lambda: None, name="output.weight")
+    return tr
+
+  prev = os.environ.get("PREFILL_LM_HEAD_DIRECT")
+  try:
+    os.environ.pop("PREFILL_LM_HEAD_DIRECT", None); getenv.cache_clear()
+    tr = build(); assert any(lin is tr.output for lin, _, _ in tr._prefill_v2_covered())   # off -> covered
+    os.environ["PREFILL_LM_HEAD_DIRECT"] = "1"; getenv.cache_clear()
+    tr = build(); assert not any(lin is tr.output for lin, _, _ in tr._prefill_v2_covered())  # on -> excluded
+  finally:
+    if prev is None: os.environ.pop("PREFILL_LM_HEAD_DIRECT", None)
+    else: os.environ["PREFILL_LM_HEAD_DIRECT"] = prev
+    getenv.cache_clear()
+
 class _CandidateRouteTensor:
   def __init__(self,shape): self.shape=shape; self.device="CPU"
   @property

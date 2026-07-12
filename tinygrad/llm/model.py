@@ -620,8 +620,11 @@ class Transformer:
     # A plain nn.Linear self.output (primitives not installed / not yet installed) is never yielded here, so it
     # is excluded from the warmstart table / VRAM estimate / realize loop exactly like before this change --
     # it keeps taking the unmodified self.output(x) path (see _lm_head_wants_pf16).
+    # PREFILL_LM_HEAD_DIRECT=1 excludes it from resident-fp16 realize so _pf16_w stays unset; route_prefill_linear
+    # then takes the direct-packed branch (w is None) and dispatches the packed q6k kernel instead of a resident
+    # fp16 GEMM. This is the single-variable knob for the LM-head A/B (four promoted roles stay on their route).
     lin = getattr(self, "output", None)
-    if lin is not None and is_direct_packed_prefill_linear(lin):
+    if lin is not None and is_direct_packed_prefill_linear(lin) and not getenv("PREFILL_LM_HEAD_DIRECT", 0):
       setattr(lin, "_prefill_graph_role", "lm_head")
       out_f, in_f = self._prefill_v2_dims(lin)
       if out_f is not None: yield lin, out_f, in_f
