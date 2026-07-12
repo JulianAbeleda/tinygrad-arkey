@@ -24,6 +24,7 @@ class FullKernelAdmissionError(ValueError):
 
 @dataclass(frozen=True)
 class FullKernelCapability:
+  capability_id: str = "amd.gfx1100.prefill.wmma_lds.single_buffer.v1"
   backend: str = "AMD"
   arch: str = "gfx1100"
   wave_size: int = 32

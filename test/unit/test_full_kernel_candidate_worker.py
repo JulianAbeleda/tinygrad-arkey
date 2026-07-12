@@ -26,6 +26,8 @@ def _run(row):
 def test_worker_admits_dynamic_second_candidate_with_structured_plan():
   candidate=_candidate(True); out=_run(_request(candidate))
   assert out["ok"] and out["request_id"]=="req-1" and out["result"]["canonical_identity"]==candidate.canonical_identity
+  assert out["result"]["capability_id"]=="amd.gfx1100.prefill.wmma_lds.single_buffer.v1"
+  assert out["environment"]["capability"]["capability_id"]==out["result"]["capability_id"]
   assert out["result"]["plan"]=={"tile":[64,64,32],"waves":[2,2],"threads":128,"active_lds_bytes":10240,"subtiles":[2,2],"k_substeps":2}
 
 def test_worker_rejects_unsupported_action_hash_and_malformed_requests():

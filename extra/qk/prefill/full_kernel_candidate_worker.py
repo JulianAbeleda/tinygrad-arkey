@@ -20,7 +20,8 @@ def _environment() -> dict[str, Any]:
     dirty = bool(subprocess.check_output(["git","status","--short"],cwd=root,text=True,stderr=subprocess.DEVNULL).strip())
   except (OSError,subprocess.SubprocessError): revision,dirty=None,None
   return {"python":platform.python_version(),"git_revision":revision,"git_dirty":dirty,
-          "capability":{"backend":GFX1100_SINGLE_BUFFER_CAPABILITY.backend,"arch":GFX1100_SINGLE_BUFFER_CAPABILITY.arch,
+          "capability":{"capability_id":GFX1100_SINGLE_BUFFER_CAPABILITY.capability_id,
+                        "backend":GFX1100_SINGLE_BUFFER_CAPABILITY.backend,"arch":GFX1100_SINGLE_BUFFER_CAPABILITY.arch,
                         "wave_size":GFX1100_SINGLE_BUFFER_CAPABILITY.wave_size,
                         "max_lds_bytes":GFX1100_SINGLE_BUFFER_CAPABILITY.max_lds_bytes}}
 
@@ -41,6 +42,7 @@ def _request(row:Any) -> tuple[str,dict[str,Any]]:
   admission=admit_full_kernel_candidate(candidate["payload"],candidate["canonical_identity"],profile=workload["profile"],
     role=workload["role"],shape=tuple(workload["shape"]),target=workload["target"])
   return request_id,{"status":"admitted","canonical_identity":admission.canonical_identity,
+    "capability_id":admission.capability.capability_id,
     "candidate_schema":FULL_KERNEL_CANDIDATE_SCHEMA,"plan":{"tile":list(admission.geometry.tile),"waves":list(admission.geometry.waves),
       "threads":admission.geometry.threads,"active_lds_bytes":admission.active_lds_bytes,
       "subtiles":[admission.plan.subtiles_m,admission.plan.subtiles_n],"k_substeps":admission.plan.k_substeps}}
