@@ -78,9 +78,54 @@ def compile_only(candidate: dict[str, Any] | None, artifact: dict[str, Any] | No
     errors.append("compile artifact does not prove global_register_resident storage")
   if pipeline.get("lds_bytes", pipeline.get("active_lds_bytes", 0)) != 0:
     errors.append("register compile artifact claims LDS storage")
+  mapping = pipeline.get("register_mapping")
+  required_roles: tuple[str, ...] = ()
+  if not isinstance(mapping, dict):
+    errors.append("register compile artifact lacks physical VGPR mapping evidence")
+  else:
+    if mapping.get("backend") != "amd_vgpr":
+      errors.append("register compile artifact mapping backend is not amd_vgpr")
+    if mapping.get("addressing") not in ("static", "sequential"):
+      errors.append("register compile artifact mapping does not prove static VGPR addressing")
+    raw_roles = mapping.get("required_roles")
+    if not isinstance(raw_roles, list) or not raw_roles or any(not isinstance(role, str) or not role for role in raw_roles):
+      errors.append("register compile artifact mapping has no required logical register roles")
+    elif len(set(raw_roles)) != len(raw_roles):
+      errors.append("register compile artifact mapping has duplicate logical register roles")
+    else:
+      required_roles = tuple(raw_roles)
+      try:
+        validate_amd_resource_artifact(resource_obj, expected_candidate_identity=identity,
+                                       required_roles=required_roles)
+      except (TypeError, ValueError) as exc:
+        errors.append(f"register physical mapping is invalid: {exc}")
   wait = artifact.get("wait") if isinstance(artifact.get("wait"), dict) else {}
   if wait.get("typed") is not True or wait.get("kind") != "targeted_vmcnt":
     errors.append("compile artifact lacks typed targeted wait evidence")
+  coverage = wait.get("coverage")
+  if not isinstance(coverage, dict):
+    errors.append("compile artifact lacks serialized wait dependency coverage")
+  else:
+    try:
+      from tinygrad.codegen.opt.compiler_policies import WaitDependencyCoverage
+      coverage_obj = WaitDependencyCoverage.from_json(coverage)
+      if not coverage_obj.passed:
+        errors.append("compile artifact wait dependency coverage did not pass")
+      raw_required = pipeline.get("wait_required_edges")
+      if not isinstance(raw_required, list) or not raw_required:
+        errors.append("compile artifact lacks required wait stage edges")
+      else:
+        required_edges = set()
+        for edge in raw_required:
+          if not isinstance(edge, list) or len(edge) != 3 or not isinstance(edge[0], str) or not edge[0] or \
+             any(not isinstance(value, int) or isinstance(value, bool) or value < 0 for value in edge[1:]):
+            errors.append("compile artifact has malformed required wait stage edge")
+            continue
+          required_edges.add((edge[0], edge[1], edge[2]))
+        if required_edges - set(coverage_obj.covered):
+          errors.append("compile artifact wait coverage is missing required stage edges")
+    except (TypeError, ValueError) as exc:
+      errors.append(f"compile artifact wait dependency coverage is invalid: {exc}")
   abi = artifact.get("abi") if isinstance(artifact.get("abi"), dict) else {}
   for name, expected in (("wave_size", 32), ("fragment_carrier", "half.vec(16)"),
                          ("accumulator_carrier", "float.vec(8)")):

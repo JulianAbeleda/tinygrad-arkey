@@ -149,11 +149,20 @@ def join_amd_resource_artifact(*, target: str, abi: str, source: bytes | str, bi
 
 
 def validate_amd_resource_artifact(artifact: AMDResourceArtifact, *, expected_target: str | None = None,
-                                   expected_abi: str | None = None, expected_candidate_identity: str | None = None) -> AMDResourceArtifact:
+                                   expected_abi: str | None = None, expected_candidate_identity: str | None = None,
+                                   required_roles: tuple[str, ...] | list[str] = ()) -> AMDResourceArtifact:
   """Revalidate an artifact and optional external identity bindings."""
   if not isinstance(artifact, AMDResourceArtifact): raise TypeError("expected AMDResourceArtifact")
   if expected_target is not None and artifact.target != expected_target: raise ValueError("AMD target identity mismatch")
   if expected_abi is not None and artifact.abi != expected_abi: raise ValueError("AMD ABI identity mismatch")
   if expected_candidate_identity is not None and artifact.candidate_identity != expected_candidate_identity:
     raise ValueError("AMD candidate identity mismatch")
+  if not isinstance(required_roles, (tuple, list)) or any(not isinstance(role, str) or not role for role in required_roles):
+    raise TypeError("required register roles must be non-empty strings")
+  if len(set(required_roles)) != len(required_roles):
+    raise ValueError("required register roles must be unique")
+  present_roles = {interval.logical_role for interval in artifact.intervals}
+  missing = tuple(role for role in required_roles if role not in present_roles)
+  if missing:
+    raise ValueError(f"AMD resource artifact is missing required logical register roles: {missing!r}")
   return artifact

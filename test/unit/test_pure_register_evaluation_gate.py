@@ -16,8 +16,12 @@ def _compile(**overrides):
                                      {"logical_role": "B", "bank": "vgpr", "start": 8, "end": 16}]}
   row = {"schema": COMPILE_SCHEMA, "canonical_identity": IDENTITY, "binary_sha256": BINARY,
          "passed": True, "surface": {"strict_pure": True, "ops_ins_count": 0, "source_kind": "compiler_rendered"},
-         "pipeline": {"storage_kind": REGISTER_STORAGE, "lds_bytes": 0},
-         "wait": {"typed": True, "kind": "targeted_vmcnt"},
+         "pipeline": {"storage_kind": REGISTER_STORAGE, "lds_bytes": 0,
+                      "register_mapping": {"backend": "amd_vgpr", "addressing": "sequential",
+                                            "required_roles": ["A", "B"]},
+                      "wait_required_edges": [["A", 0, 1], ["B", 0, 1]]},
+         "wait": {"typed": True, "kind": "targeted_vmcnt",
+                  "coverage": {"passed": True, "errors": [], "covered": [["A", 0, 1], ["B", 0, 1]]}},
          "abi": {"wave_size": 32, "fragment_carrier": "half.vec(16)", "accumulator_carrier": "float.vec(8)"},
          "resources": {"stage": "final_program", "vgpr": 100, "sgpr": 80, "lds_bytes": 0,
                        "scratch_bytes": 0, "vgpr_spills": 0, "sgpr_spills": 0,
@@ -57,6 +61,25 @@ def test_lds_candidate_is_not_admitted_as_register_compile():
   assert row["passed"] is False
   assert any("global_register_resident" in error for error in row["errors"])
   assert any("claims LDS" in error for error in row["errors"])
+
+
+def test_register_compile_requires_physical_mapping_and_wait_edges():
+  no_mapping = _compile(pipeline={"storage_kind": REGISTER_STORAGE, "lds_bytes": 0},
+                        wait={"typed": True, "kind": "targeted_vmcnt"})
+  row = compile_only({"canonical_identity": IDENTITY}, no_mapping)
+  assert row["passed"] is False
+  assert any("physical VGPR mapping" in error for error in row["errors"])
+  assert any("wait dependency coverage" in error for error in row["errors"])
+
+
+def test_register_compile_mapping_must_cover_artifact_roles():
+  artifact = _compile(pipeline={"storage_kind": REGISTER_STORAGE, "lds_bytes": 0,
+                                "register_mapping": {"backend": "amd_vgpr", "addressing": "sequential",
+                                                      "required_roles": ["A", "B", "accumulator"]},
+                                "wait_required_edges": [["A", 0, 1], ["B", 0, 1]]})
+  row = compile_only({"canonical_identity": IDENTITY}, artifact)
+  assert row["passed"] is False
+  assert any("missing required logical register roles" in error for error in row["errors"])
 
 
 def test_final_resource_gate_rejects_host_estimates_and_spills():

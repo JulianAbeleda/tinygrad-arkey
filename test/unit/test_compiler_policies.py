@@ -42,6 +42,21 @@ def test_wait_dependency_coverage_proves_typed_stage_edges():
   proof = prove_wait_dependency_coverage(policy, deps, (("A", 0, 1), ("B", 0, 1)))
   assert proof.passed and proof.covered == (("A", 0, 1), ("B", 0, 1))
 
+def test_wait_dependency_coverage_json_roundtrip_preserves_edges():
+  policy = pipeline_policy_for_route("pipe")
+  deps = (WaitDependency(policy.wait, "load_a", "wmma", "A", 0, 1, "per_stage"),
+          WaitDependency(policy.wait, "load_b", "wmma", "B", 0, 1, "per_stage"))
+  proof = prove_wait_dependency_coverage(policy, deps, (("A", 0, 1), ("B", 0, 1)))
+  encoded = proof.to_json()
+  from tinygrad.codegen.opt.compiler_policies import WaitDependencyCoverage
+  decoded = WaitDependencyCoverage.from_json(encoded)
+  assert decoded == proof
+
+def test_wait_dependency_coverage_json_rejects_malformed_edge():
+  from tinygrad.codegen.opt.compiler_policies import WaitDependencyCoverage
+  with pytest.raises(ValueError, match="malformed wait dependency coverage edge"):
+    WaitDependencyCoverage.from_json({"passed": True, "errors": [], "covered": [["A", 0]]})
+
 def test_wait_dependency_coverage_rejects_duplicate_and_missing_edges():
   policy = pipeline_policy_for_route("pipe")
   dep = WaitDependency(policy.wait, "load_a", "wmma", "A", 0, 1, "per_stage")

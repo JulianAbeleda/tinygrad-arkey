@@ -51,6 +51,37 @@ class WaitDependencyCoverage:
   errors: tuple[str, ...]
   covered: tuple[tuple[str, int, int], ...]
 
+  def to_json(self) -> dict[str, object]:
+    """Serialize the proof without losing its typed stage-edge identity.
+
+    Evidence consumers must receive the actual covered edges; a bare
+    ``passed`` flag is insufficient to prove that the waits belong to this
+    pipeline.  Keep this representation backend-neutral so AMD and other
+    consumers can share the same artifact join.
+    """
+    return {"passed": self.passed, "errors": list(self.errors),
+            "covered": [list(edge) for edge in self.covered]}
+
+  @classmethod
+  def from_json(cls, row: object) -> "WaitDependencyCoverage":
+    """Parse serialized coverage fail-closed for artifact readers."""
+    if not isinstance(row, dict):
+      raise TypeError("wait dependency coverage must be an object")
+    passed = row.get("passed")
+    errors = row.get("errors", [])
+    covered = row.get("covered", [])
+    if not isinstance(passed, bool) or not isinstance(errors, list) or any(not isinstance(x, str) for x in errors):
+      raise ValueError("malformed wait dependency coverage status")
+    if not isinstance(covered, list):
+      raise ValueError("malformed wait dependency coverage edges")
+    edges: list[tuple[str, int, int]] = []
+    for edge in covered:
+      if not isinstance(edge, list) or len(edge) != 3 or not isinstance(edge[0], str) or not edge[0] or \
+         any(not isinstance(value, int) or isinstance(value, bool) or value < 0 for value in edge[1:]):
+        raise ValueError("malformed wait dependency coverage edge")
+      edges.append((edge[0], edge[1], edge[2]))
+    return cls(passed, tuple(errors), tuple(edges))
+
 def prove_wait_dependency_coverage(policy: PipelinePolicy, dependencies: tuple[WaitDependency, ...] | list[WaitDependency],
                                    required: tuple[tuple[str, int, int], ...] = ()) -> WaitDependencyCoverage:
   """Validate stage coverage without emitting or inferring a backend wait.
