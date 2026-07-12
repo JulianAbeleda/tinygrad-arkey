@@ -72,12 +72,18 @@ class GeneratedCandidateRegistry:
   def get(self, candidate_id:str) -> GeneratedCandidate:
     return self._candidates[candidate_id]
 
-  def select(self, op:RuntimeOpSpec, *, preferred:tuple[str, ...]=()) -> CandidateSelection:
+  def select(self, op:RuntimeOpSpec, *, preferred:tuple[str, ...]=(), require_full_kernel:bool=False,
+             required_canonical_identity:str="") -> CandidateSelection:
+    if require_full_kernel and (len(required_canonical_identity) != 64 or
+                                any(c not in "0123456789abcdef" for c in required_canonical_identity)):
+      return CandidateSelection(None, "blocked", "strict full-kernel selection requires a lowercase 64-hex canonical identity")
     ordered = [self._candidates[cid] for cid in preferred if cid in self._candidates]
     ordered += [c for c in self.all() if c.candidate_id not in preferred]
-    matches = [c for c in ordered if c.supports(op)]
+    matches = [c for c in ordered if (not require_full_kernel or
+               (c.is_full_kernel_candidate and c.canonical_identity == required_canonical_identity)) and c.supports(op)]
     if not matches:
-      return CandidateSelection(None, "blocked", f"no generated candidate supports {op.family}/{op.phase}/{op.role}/{op.weight.format}/{op.activation.format}")
+      strict = " strict full-kernel" if require_full_kernel else ""
+      return CandidateSelection(None, "blocked", f"no{strict} generated candidate supports {op.family}/{op.phase}/{op.role}/{op.weight.format}/{op.activation.format}")
     return CandidateSelection(matches[0], "selected")
 
 
@@ -139,5 +145,7 @@ def builtin_registry() -> GeneratedCandidateRegistry:
   return GeneratedCandidateRegistry(BUILTIN_GENERATED_CANDIDATES)
 
 
-def select_generated_candidate(op:RuntimeOpSpec, *, preferred:tuple[str, ...]=()) -> CandidateSelection:
-  return builtin_registry().select(op, preferred=preferred)
+def select_generated_candidate(op:RuntimeOpSpec, *, preferred:tuple[str, ...]=(), require_full_kernel:bool=False,
+                               required_canonical_identity:str="") -> CandidateSelection:
+  return builtin_registry().select(op, preferred=preferred, require_full_kernel=require_full_kernel,
+                                   required_canonical_identity=required_canonical_identity)
