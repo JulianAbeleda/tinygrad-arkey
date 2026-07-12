@@ -81,7 +81,8 @@ class PrecontractThreadAxes:
 
 @dataclass(frozen=True)
 class PrecontractKAxis:
-  owner: UOp
+  tile_owner: UOp
+  substep_owner: UOp
   tile_base: UOp
   substep: UOp
 
@@ -240,9 +241,12 @@ def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:U
       (threads.wave_n.op, threads.wave_n.vmax+1, threads.wave_n.arg[-1]) != (Ops.RANGE, 2, AxisType.LOCAL) or
       (threads.lane.op, threads.lane.vmax+1, threads.lane.arg[-1]) != (Ops.RANGE, 32, AxisType.WARP)):
     raise ValueError("precontract thread axes must be LOCAL4/LOCAL2/WARP32")
-  if (k_axis.owner.op is not Ops.RANGE or k_axis.owner.arg[-1] not in (AxisType.REDUCE, AxisType.UNROLL) or
-      k_axis.owner not in k_axis.tile_base.backward_slice_with_self or k_axis.owner not in k_axis.substep.backward_slice_with_self):
-    raise ValueError("precontract K owner must remain live in tile base and substep")
+  if (k_axis.tile_owner.op is not Ops.RANGE or k_axis.tile_owner.arg[-1] is not AxisType.REDUCE or
+      k_axis.tile_owner not in k_axis.tile_base.backward_slice_with_self):
+    raise ValueError("precontract K tile owner must be a live REDUCE range in tile base")
+  if (k_axis.substep_owner.op is not Ops.RANGE or k_axis.substep_owner.arg[-1] is not AxisType.UNROLL or
+      k_axis.substep_owner.vmax+1 != 2 or k_axis.substep_owner not in k_axis.substep.backward_slice_with_self):
+    raise ValueError("precontract K substep owner must be a live size-2 UNROLL range in substep")
   if (subtile_m.op is not Ops.RANGE or subtile_m.vmax+1 != 2 or subtile_n.op is not Ops.RANGE or subtile_n.vmax+1 != 4):
     raise ValueError("precontract K/subtile axes are invalid")
   if tuple(c.role for c in contracts) != ("A", "B"): raise ValueError("precontract contracts must be exactly ordered A and B")

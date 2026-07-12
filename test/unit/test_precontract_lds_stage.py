@@ -18,7 +18,8 @@ def _fixture():
   ops=(PrecontractOperandTemplate("A",a.index(ra*4096+ka).load(),ra,ka,UOp.const(dtypes.weakint,128)),
        PrecontractOperandTemplate("B",b.index(rb*4096+kb).load(),rb,kb,UOp.const(dtypes.weakint,384)))
   threads=PrecontractThreadAxes(UOp.range(4,30,AxisType.LOCAL),UOp.range(2,31,AxisType.LOCAL),UOp.range(32,-1,AxisType.WARP))
-  owner=UOp.range(256,32,AxisType.REDUCE); kaxis=PrecontractKAxis(owner,(owner//2)*32,owner%2)
+  tile_owner=UOp.range(128,32,AxisType.REDUCE); substep_owner=UOp.range(2,43,AxisType.UNROLL)
+  kaxis=PrecontractKAxis(tile_owner,substep_owner,tile_owner*32,substep_owner)
   sm,sn=UOp.range(2,33,AxisType.UPCAST),UOp.range(4,34,AxisType.UPCAST)
   contracts=[]
   for operand_idx,role in enumerate(("A","B")):
@@ -72,8 +73,12 @@ def test_local4_local2_warp32_scalar_store_coverage():
 
 def test_fail_closed_detached_axes_contract_and_allocation():
   allocation,ops,threads,kaxis,sm,sn,contracts=_fixture()
-  detached=PrecontractKAxis(kaxis.owner,UOp.const(dtypes.weakint,0),kaxis.owner%2)
-  with pytest.raises(ValueError,match="K owner"): _stage(k_axis=detached)
+  detached_tile=PrecontractKAxis(kaxis.tile_owner,kaxis.substep_owner,UOp.const(dtypes.weakint,0),kaxis.substep)
+  with pytest.raises(ValueError,match="K tile owner"): _stage(k_axis=detached_tile)
+  detached_substep=PrecontractKAxis(kaxis.tile_owner,kaxis.substep_owner,kaxis.tile_base,UOp.const(dtypes.weakint,0))
+  with pytest.raises(ValueError,match="K substep owner"): _stage(k_axis=detached_substep)
+  swapped=PrecontractKAxis(kaxis.substep_owner,kaxis.tile_owner,kaxis.tile_base,kaxis.substep)
+  with pytest.raises(ValueError,match="K tile owner"): _stage(k_axis=swapped)
   a_contract,b_contract=contracts
   bad_contract=PrecontractContractSpec("A",a_contract.axes,((99,16),),a_contract.element,a_contract.descriptor_remap)
   with pytest.raises(ValueError,match="actual descriptor"): _stage(contracts=(bad_contract,b_contract))
