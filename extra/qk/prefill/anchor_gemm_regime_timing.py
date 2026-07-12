@@ -42,6 +42,11 @@ def _git_revision() -> str | None:
   except Exception: return None
 
 
+def _git_dirty() -> bool:
+  try: return bool(subprocess.check_output(["git", "status", "--short"], cwd=ROOT, text=True).strip())
+  except Exception: return True
+
+
 def _matrix_command(regime: str, *, pin_clock: bool, reps: int, iters: int) -> list[str]:
   cmd = [sys.executable, "extra/qk/prefill/hand_vs_generated_shape_matrix.py",
          "--m", str(M), "--n", str(N), "--k", str(K), "--shapes", "2,4",
@@ -128,7 +133,7 @@ def build_report(*, regimes: tuple[str, ...], pin_clock: bool, reps: int, iters:
   return {"schema": SCHEMA, "role": ROLE, "shape": {"m": M, "n": N, "k": K},
           "measurement_scope": "role_isolated_dense_fp16_gemm_no_model_load",
           "clock_policy": {"requested_pin": pin_clock, "per_regime_provenance_required": pin_clock},
-          "environment": {"python": platform.python_version(), "git_revision": _git_revision()},
+          "environment": {"python": platform.python_version(), "git_revision": _git_revision(), "git_dirty": _git_dirty()},
           "rows": rows, "complete": len(rows) == 3 and all(row["binding_pass"] for row in rows)}
 
 
@@ -137,7 +142,9 @@ def main() -> int:
   ap.add_argument("--regimes", default="pure_scheduler,spec_owned,s9_oracle")
   ap.add_argument("--reps", type=int, default=3); ap.add_argument("--iters", type=int, default=15)
   ap.add_argument("--pin-clock", action="store_true"); ap.add_argument("--out", type=pathlib.Path)
+  ap.add_argument("--allow-dirty", action="store_true")
   args = ap.parse_args()
+  if _git_dirty() and not args.allow_dirty: ap.error("refusing authority timing from a dirty worktree; use --allow-dirty for diagnostics")
   regimes = tuple(x.strip() for x in args.regimes.split(",") if x.strip())
   report = build_report(regimes=regimes, pin_clock=args.pin_clock, reps=args.reps, iters=args.iters)
   text = json.dumps(report, indent=2) + "\n"

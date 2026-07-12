@@ -17,11 +17,13 @@ def test_matrix_commands_bind_exact_anchor_and_existing_harness():
 
 def test_report_labels_ownership_and_requires_all_three_for_complete(monkeypatch):
   monkeypatch.setattr(timing, "_git_revision", lambda: "abc")
+  monkeypatch.setattr(timing, "_git_dirty", lambda: False)
   report = timing.build_report(regimes=tuple(timing.REGIMES), pin_clock=True, reps=1, iters=1,
                                runner=lambda name: {"status": "ok", "clock_pin": {"ok": True}, "tflops": 1})
   assert report["shape"] == {"m": 512, "n": 12288, "k": 4096}
   assert report["measurement_scope"] == "role_isolated_dense_fp16_gemm_no_model_load"
   assert report["complete"] is True
+  assert report["environment"]["git_dirty"] is False
   rows = {row["regime"]: row for row in report["rows"]}
   assert rows["pure_scheduler"]["strict_pure"] is True
   assert rows["spec_owned"]["provenance"] == "compiler_primitive_spec_owned"

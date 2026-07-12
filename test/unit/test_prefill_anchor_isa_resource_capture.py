@@ -29,3 +29,12 @@ def test_capture_program_binds_hashes_resources_and_purity(monkeypatch):
   assert out["purity_matches_expectation"] is True
   assert len(out["program"]["binary_sha256"]) == 64
   assert out["resources"]["vgpr"] == 7
+
+
+def test_capture_anchor_records_repository_state(monkeypatch):
+  monkeypatch.setattr(cap, "_git_state", lambda: {"revision": "abc", "dirty": False})
+  monkeypatch.setattr(cap, "build_pure_program", lambda: _program((UOp(Ops.NOOP, dtypes.void),)))
+  monkeypatch.setattr(cap, "build_s9_oracle_program", lambda: _program((UOp(Ops.INS, arg="s_endpgm"),), ".text\nk:"))
+  monkeypatch.setattr(cap, "parse_amdgpu_metadata", lambda _: {"symbol": "k.kd"})
+  monkeypatch.setattr(cap, "disassemble_amdgpu", lambda _: ("s_endpgm", "objdump"))
+  assert cap.capture_anchor()["git"] == {"revision": "abc", "dirty": False}

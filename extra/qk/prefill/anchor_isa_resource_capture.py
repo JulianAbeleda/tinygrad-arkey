@@ -25,6 +25,15 @@ PURE_ROUTE = "prefill_v2_scheduler_matmul_default"
 ORACLE_ROUTE = "prefill_pipe_role_selective_generated"
 
 
+def _git_state() -> dict[str, Any]:
+  try:
+    revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+    dirty = bool(subprocess.check_output(["git", "status", "--short"], cwd=ROOT, text=True).strip())
+    return {"revision": revision, "dirty": dirty}
+  except Exception:
+    return {"revision": None, "dirty": True}
+
+
 def _sha256(data: bytes) -> str: return hashlib.sha256(data).hexdigest()
 
 
@@ -121,7 +130,7 @@ def capture_anchor() -> dict[str, Any]:
                           route_id=PURE_ROUTE, expected_pure=True),
           capture_program(build_s9_oracle_program(), candidate_id="oracle.s9.m512n12288k4096",
                           route_id=ORACLE_ROUTE, expected_pure=False)]
-  return {"schema": SCHEMA, "anchor": {"role": ROLE, "shape": SHAPE}, "captures": rows,
+  return {"schema": SCHEMA, "anchor": {"role": ROLE, "shape": SHAPE}, "git": _git_state(), "captures": rows,
           "binding_complete": all(row["purity_matches_expectation"] for row in rows),
           "oracle_policy": "evidence_only_never_candidate_substrate"}
 
@@ -129,7 +138,10 @@ def capture_anchor() -> dict[str, Any]:
 def main(argv: list[str] | None = None) -> None:
   ap = argparse.ArgumentParser(description=__doc__)
   ap.add_argument("--output", type=pathlib.Path, required=True)
+  ap.add_argument("--allow-dirty", action="store_true")
   args = ap.parse_args(argv)
+  if _git_state()["dirty"] and not args.allow_dirty:
+    ap.error("refusing authority capture from a dirty worktree; use --allow-dirty for diagnostics")
   report = capture_anchor()
   args.output.parent.mkdir(parents=True, exist_ok=True)
   args.output.write_text(json.dumps(report, indent=2) + "\n")
