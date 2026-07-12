@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from typing import Any
 from tinygrad.uop.ops import KernelCandidateContext, Ops, KernelInfo, UOp
 from tinygrad.dtype import dtypes
-from tinygrad.codegen.opt.compiler_policies import (PipelinePolicy, RegisterPipePlan, WaitDependency, WaitPolicy,
+from tinygrad.codegen.opt.compiler_policies import (PipelinePolicy, RegisterPipePlan, WaitCount, WaitDependency, WaitPolicy,
   WaitDependencyCoverage, prove_wait_dependency_coverage)
 
 
@@ -199,6 +199,40 @@ def build_wmma_pipe_barrier_chain(spec: WMMAPipeSpec, context: KernelCandidateCo
   mma = UOp(Ops.WMMA, dtypes.float.vec(8), (la, lb, c), tc_arg)
   store = out.index(UOp.const(dtypes.weakint, 0), ptr=True).store(mma)
   return attach_pipe_candidate_context(UOp.sink(store, ready), context)
+
+def build_wmma_pipe_wait_chain(spec: WMMAPipeSpec, context: KernelCandidateContext) -> UOp:
+  """Build a compile-only targeted-wait slice from proven pipe metadata.
+
+  This is intentionally a small AMDLLVM structural probe, not a full GEMM
+  route.  Loads are ordinary graph ``LOAD`` UOps; the typed ``Ops.WAIT`` is
+  ordered after both producers through ``AFTER`` and the WMMA/store value is
+  ordered after that wait.  No handwritten instruction payload or native
+  ``_insert_waitcnt`` path is involved.
+  """
+  if not isinstance(spec, WMMAPipeSpec) or not isinstance(context, KernelCandidateContext): raise TypeError("invalid pipe chain inputs")
+  if spec.role != "attn_qo" or (spec.m, spec.n, spec.k) != (512, 4096, 4096):
+    raise ValueError("wait pipe slice only supports attn_qo 512x4096x4096")
+  ir = build_wmma_pipe_ir(spec)
+  coverage = ir.wait_coverage
+  if not coverage.passed:
+    raise ValueError(f"wait dependency coverage failed: {coverage.errors}")
+  a = UOp.param(0, dtypes.half.ptr(spec.tile_m * spec.k))
+  b = UOp.param(1, dtypes.half.ptr(spec.tile_n * spec.k))
+  out = UOp.param(2, dtypes.float.vec(8).ptr(spec.tile_m * spec.tile_n // 8))
+  ia = a.index(UOp.const(dtypes.weakint, 0), ptr=True)
+  ib = b.index(UOp.const(dtypes.weakint, 0), ptr=True)
+  la = ia.load(dtype=dtypes.half.vec(16))
+  lb = ib.load(dtype=dtypes.half.vec(16))
+  wait_count = WaitCount(vmcnt=ir.loads_per_stage)
+  raw_wait = UOp(Ops.WAIT, dtypes.void, (), wait_count,
+                 tag=("wait_coverage", coverage.covered, "compile_only"))
+  wait = raw_wait.after(la, lb)
+  c = UOp.const(dtypes.float.vec(8), 0.0)
+  tc_arg = ("WMMA_16_16_16_half_float", (16, 16, 16), dtypes.half, dtypes.float, "AMD", 32,
+            (((101, 2), (102, 2), (103, 2), (104, 2)),) * 2 + (((1, 2),),), ())
+  mma = UOp(Ops.WMMA, dtypes.float.vec(8), (la, lb, c), tc_arg).after(wait)
+  store = out.index(UOp.const(dtypes.weakint, 0), ptr=True).store(mma)
+  return attach_pipe_candidate_context(UOp.sink(store, wait), context)
 
 def pipe_candidate_context(spec: WMMAPipeSpec, canonical_identity: str) -> KernelCandidateContext:
   """Typed compiler context for a generated pipe candidate.

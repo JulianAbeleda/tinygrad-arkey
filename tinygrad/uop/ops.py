@@ -307,6 +307,7 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
       case Ops.CUSTOMI: return self.src[0]._shape if len(self.src) else None
 
       # passthrough ops
+      case Ops.WAIT: return None
       case Ops.MSTACK | Ops.MSELECT | Ops.DETACH | Ops.CONTIGUOUS | Ops.CONTIGUOUS_BACKWARD | Ops.AFTER | Ops.LOAD | \
            Ops.COPY | Ops.ALLREDUCE | Ops.STORE:
         return self.src[0]._shape
