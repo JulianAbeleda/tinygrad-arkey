@@ -22,6 +22,18 @@ def _swizzle_args(cargs:tuple[tuple[int, int], ...], eargs:tuple[tuple[int, int]
 def do_expand(root:UOp):
   expands = [x for x in root.src if x.op is Ops.UNROLL]
   if len(expands) == 0: return None
+  # A vector load over the scalar REG indexes produced below must remain a
+  # stack of scalar loads; vectorizing its pointer operand creates an invalid
+  # LOAD(vector, STACK(vector)) shape at the native ABI boundary.
+  if root.op is Ops.LOAD and len(expands) == 1 and len(expands[0].src) == 1 and expands[0].src[0].op in (Ops.STACK, Ops.VCAT):
+    carriers = expands[0].src[0]
+    if all(x.op is Ops.INDEX for x in carriers.src):
+      loads = tuple(root.replace(src=(x,), dtype=x.dtype) for x in carriers.src)
+      if all(x.dtype.count == 1 for x in loads):
+        value = UOp(Ops.STACK, root.dtype.scalar().vec(len(loads)), loads)
+      else:
+        value = UOp(Ops.VCAT, root.dtype.scalar().vec(sum(x.dtype.count for x in loads)), loads)
+      return UOp(Ops.UNROLL, root.dtype, (value,), expands[0].arg)
   # NOTE: we 0 out the reduce axis for WMMA. in theory they should all be the same, but is this always correct?
   exclude_args = tuple(dedup(root.arg[-1] + tuple(y[0] for y in flatten(root.arg[-2])))) if root.op is Ops.WMMA else ()
   if all_same(expands_args:=[x.arg for x in expands]) and len(exclude_args) == 0:
@@ -59,12 +71,17 @@ def do_expand(root:UOp):
   # for non-PtrDType INDEX on REG buffers, expand into individual scalar INDEXes instead of one vectorized INDEX
   # this avoids creating a VECTORIZE of REG pointers which the devectorizer can't resolve
   if root.op is Ops.INDEX and not isinstance(root.dtype, PtrDType) and \
-     isinstance(root.src[0].dtype, PtrDType) and root.src[0].dtype.addrspace == AddrSpace.REG:
+    isinstance(root.src[0].dtype, PtrDType) and root.src[0].dtype.addrspace == AddrSpace.REG:
     idxs = []
     for j in range(expand_sz):
       idx_srcs = tuple(s.gep(j) if isinstance(s.dtype, PtrDType) or s.dtype.count > 1 else s for s in new_srcs)
       idxs.append(UOp(Ops.INDEX, root.dtype, idx_srcs, root.arg))
-    return UOp(Ops.UNROLL, root.dtype, (UOp(Ops.STACK, root.dtype.vec(expand_sz), tuple(idxs)),), expand_args)
+    # A vector carrier cannot itself be vectorized with ``dtype.vec``. Keep
+    # each per-expansion vector INDEX as a VCAT child; the paired LOAD rule
+    # above then materializes one vector LOAD per child without nesting STACK.
+    values = UOp(Ops.STACK, root.dtype.vec(expand_sz), tuple(idxs)) if root.dtype.count == 1 else \
+      UOp(Ops.VCAT, root.dtype.scalar().vec(expand_sz * root.dtype.count), tuple(idxs))
+    return UOp(Ops.UNROLL, root.dtype, (values,), expand_args)
 
   new_arg = root.arg
   if root.op is Ops.GEP:

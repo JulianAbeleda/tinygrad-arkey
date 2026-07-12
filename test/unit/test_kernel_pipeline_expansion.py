@@ -2,7 +2,7 @@ import pytest
 
 from tinygrad import dtypes
 from tinygrad.codegen.late.devectorizer import ReduceContext, _group_wmma_reg_store, pm_group_wmma_reg_store, pm_reduce
-from tinygrad.codegen.late.expander import do_contract, expander, pm_group_for_reduce, pm_pre_expander
+from tinygrad.codegen.late.expander import do_contract, do_expand, expander, pm_group_for_reduce, pm_pre_expander
 from tinygrad.dtype import AddrSpace
 from tinygrad.uop.ops import AxisType, Ops, UOp, graph_rewrite
 from tinygrad.uop.symbolic import gep_pushing, sym
@@ -16,6 +16,18 @@ def test_contract_preserves_matching_vector_carrier_and_rejects_mismatched_vecto
   mismatched = UOp(Ops.CONTRACT, dtypes.half.vec(16), (UOp.const(dtypes.half.vec(8), 0.0),), ((101, 16),))
   with pytest.raises(ValueError, match="scalar source or matching vector"):
     do_contract(mismatched)
+
+def test_reg_index_load_expansion_keeps_scalar_loads_under_stack():
+  reg = UOp.placeholder((8,), dtypes.float, 9400, addrspace=AddrSpace.REG)
+  idxs = tuple(reg.index(UOp.const(dtypes.weakint, i)) for i in (0, 1))
+  pointers = UOp(Ops.STACK, idxs[0].dtype.vec(2), idxs)
+  unroll = UOp(Ops.UNROLL, pointers.dtype, (pointers,), ())
+  load = UOp(Ops.LOAD, dtypes.float.vec(2), (unroll,))
+  expanded = do_expand(load)
+  assert expanded is not None and expanded.op is Ops.UNROLL
+  carrier = expanded.src[0]
+  assert carrier.op is Ops.STACK and carrier.dtype == dtypes.float.vec(2)
+  assert all(x.op is Ops.LOAD and x.dtype == dtypes.float for x in carrier.src)
 
 
 def _expanded_pipeline_accumulator(axis_ids,m=2,n=4,group=True):

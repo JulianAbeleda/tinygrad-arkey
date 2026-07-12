@@ -309,6 +309,25 @@ def test_register_native_full_graph_has_flat_stage_carriers():
   assert not any(u.op is Ops.VCAT for u in topo)
 
 
+def test_register_native_full_graph_scalarizes_vector_reg_index_carriers():
+  """Accumulator CONTRACT reads must not become LOAD(vector, STACK)."""
+  from tinygrad.codegen import full_rewrite_to_sink
+  from tinygrad.helpers import Target
+  from tinygrad.renderer.isa.amd import AMDISARenderer
+  base = _fixture()
+  t = RegisterPipeTemplate(base.tc, base.geometry, base.operands, base.contracts, schedule="sequential")
+  adapter = RegisterStorageAdapter.from_template(t)
+  c_axes = tuple(UOp.range(2, 50 + i, AxisType.UPCAST) for i in range(3))
+  c_elem = (c_axes[0] * 2 + c_axes[1]) * 2 + c_axes[2]
+  c_arg = tuple((x.arg[0], 2) for x in c_axes)
+  graph = build_stage1_uop_graph_with_storage(adapter, adapter.logical_plan, 2, _register_wmma(t),
+    subtile_count=8, accumulator_elements=64, accumulator_contract=(c_elem, c_arg))
+  rewritten = full_rewrite_to_sink(graph.sink, AMDISARenderer(Target.parse("AMD:ISA:gfx1100")), optimize=False)
+  topo = rewritten.toposort()
+  assert not any(u.op is Ops.VCAT for u in topo)
+  assert not any(u.op is Ops.LOAD and u.src and u.src[0].op is Ops.STACK and u.dtype.count > 1 for u in topo)
+
+
 def test_register_template_rejects_fake_descriptor_remap():
   t = _fixture()
   bad = list(t.contracts); bad[0] = PrecontractContractSpec("A", bad[0].axes, bad[0].arg, bad[0].element, (("bad", "map"),))
