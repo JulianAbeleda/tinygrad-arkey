@@ -1,0 +1,338 @@
+{
+  "schema": "prefill-pure-anchor-mastery-dossier.v1",
+  "status": "BLOCKED_ON_MISSING_EVIDENCE",
+  "mastery_complete": false,
+  "anchor": {
+    "profile_id": "qwen3_8b_q4k_m_gfx1100",
+    "device_profile": "gfx1100",
+    "role": "ffn_gate_up",
+    "phase": "prefill",
+    "shape": {
+      "M": 512,
+      "N": 12288,
+      "K": 4096
+    },
+    "quant": "Q4_K_M"
+  },
+  "intent": {
+    "candidate_origin": "strict pure Tinygrad scheduler route",
+    "oracle_use": "evidence only; never candidate substrate",
+    "non_duplication": "references existing profile/spec/manifest/audit/artifact sources; does not benchmark or emit kernels"
+  },
+  "known_evidence": {
+    "exact_profile_shape": {
+      "state": "registry_fact",
+      "source": "extra/qk/model_profiles.py",
+      "value": {
+        "role": "ffn_gate_up",
+        "phase": "prefill",
+        "quant": "Q4_K_M",
+        "M": 512,
+        "N": 12288,
+        "K": 4096,
+        "tensor_patterns": [
+          "blk.*.ffn_gate.weight",
+          "blk.*.ffn_up.weight"
+        ]
+      }
+    },
+    "existing_schedule_spec": {
+      "state": "spec_derived",
+      "source": "extra/qk/prefill_schedule_spec.py",
+      "value": {
+        "m": 512,
+        "n": 12288,
+        "k": 4096,
+        "route_family": "lds",
+        "tile_m": 128,
+        "tile_n": 128,
+        "tile_k": 32,
+        "waves_m": 4,
+        "waves_n": 2,
+        "wm": 2,
+        "wn": 4,
+        "pipe_tm": 2,
+        "pipe_tn": 2,
+        "pipeline_depth": 2,
+        "threads": 256,
+        "dbuf": 1,
+        "plra": 0,
+        "plrab": 1,
+        "pad": 16,
+        "leanaddr": 0,
+        "role": "ffn_gate_up",
+        "protected_roles": [
+          "ffn_gate_up"
+        ],
+        "waitcnt_policy": "targeted_vmcnt",
+        "target": "amd_gfx1100",
+        "kernel_name": "prefill_gen_sched_gemm_512_12288_4096"
+      }
+    },
+    "existing_route_ownership": {
+      "state": "registry_fact",
+      "source": "extra/qk/route_manifest.py + extra/qk/pure_kernel_surface_audit.py",
+      "value": {
+        "pure_baseline": {
+          "route_id": "prefill_v2_scheduler_matmul_default",
+          "status": "promoted_default",
+          "provenance": "tinygrad_scheduler_generated",
+          "surface_class": "ordinary_tinygrad_graph",
+          "strict_pure": true,
+          "env": {},
+          "shape_guards": [
+            {
+              "M": 512,
+              "N": "*",
+              "K": "*",
+              "note": "ordinary PREFILL_V2 fp16 matmul under warmstart TC opts"
+            }
+          ],
+          "authority_gate": "tinygrad/llm/model.py PREFILL_GRAPH_GEMM default",
+          "source_paths": [
+            "tinygrad/llm/prefill_routes.py",
+            "tinygrad/llm/model.py"
+          ]
+        },
+        "structural_oracle": {
+          "route_id": "prefill_wmma_pipe_lds_dbuf_primitive_generated",
+          "status": "research",
+          "provenance": "compiler_primitive_spec_owned",
+          "surface_class": "compiler_primitive_spec_owned_asm_backend_atom",
+          "strict_pure": false,
+          "env": {
+            "PREFILL_GRAPH_GEMM": "1",
+            "PREFILL_WMMA_PIPE_PRIMITIVE": "1",
+            "PREFILL_WMMA_LDS_PRIMITIVE": "1",
+            "PREFILL_DBUF": "1"
+          },
+          "shape_guards": [
+            {
+              "role": "attn_qo",
+              "M": 512,
+              "N": 4096,
+              "K": 4096,
+              "primitive": "pipe"
+            },
+            {
+              "role": "attn_kv",
+              "M": 512,
+              "N": 1024,
+              "K": 4096,
+              "primitive": "generated_pipe_no_local_stage"
+            },
+            {
+              "role": "ffn_down",
+              "M": 512,
+              "N": 4096,
+              "K": 12288,
+              "primitive": "pipe"
+            },
+            {
+              "role": "ffn_gate_up",
+              "M": 512,
+              "N": 12288,
+              "K": 4096,
+              "primitive": "lds_dbuf"
+            },
+            {
+              "note": "graph-GEMM selected with generated pipe primitive roles plus generated LDS/DBUF primitive for ffn_gate_up; attn_kv is generated pipe transport with local staging disabled, retaining resource-gated raw fallback when that policy is disabled or unsafe"
+            }
+          ],
+          "authority_gate": "extra/qk/prefill_pipe_mvp_artifact.py --lds-primitive --lds-sample-correctness",
+          "source_paths": [
+            "extra/qk/prefill_graph_gemm_route.py",
+            "extra/qk/wmma_pipe_spec.py",
+            "extra/qk/wmma_lds_spec.py",
+            "extra/qk/prefill_pipe_mvp_artifact.py"
+          ]
+        }
+      }
+    },
+    "sample_correctness": {
+      "state": "pass",
+      "source": "bench/prefill-pipe-mvp/ffn-gate-up-lds-primitive.json",
+      "scope": "sampled structural-oracle route; not full-shape pure-candidate proof",
+      "max_abs_error": 0.0009453296661376953,
+      "max_rel_error": 0.00020393601153045893
+    },
+    "spec_resource_estimates": {
+      "state": "spec_derived",
+      "source": "bench/prefill-pipe-mvp/ffn-gate-up-lds-primitive.json",
+      "scope": "structural-oracle spec; not measured pure-candidate occupancy",
+      "lds_bytes": 40960,
+      "accum_vgprs": 64,
+      "coop_temp_vgprs": 16,
+      "spills": null
+    },
+    "exact_isa_resources": {
+      "state": "captured",
+      "source": "bench/prefill-pure-full-kernel/anchor-ffn-gate-up/mastery-v1/resources-isa.json",
+      "git": {
+        "revision": "aea1e72a698d5f657aeba64ac5ec57bccdddf825",
+        "dirty": false
+      },
+      "binding_complete": true,
+      "candidate_ids": [
+        "pure.default.m512n12288k4096",
+        "oracle.s9.m512n12288k4096"
+      ]
+    },
+    "exact_role_timing": {
+      "state": "captured",
+      "source": "bench/prefill-pure-full-kernel/anchor-ffn-gate-up/mastery-v1/role-timing.json",
+      "environment": {
+        "python": "3.12.3",
+        "git_revision": "aea1e72a698d5f657aeba64ac5ec57bccdddf825",
+        "git_dirty": false
+      },
+      "complete": true,
+      "tflops": {
+        "pure_scheduler": 22.47,
+        "spec_owned": 15.62,
+        "s9_oracle": 74.11
+      }
+    }
+  },
+  "artifact_index": {
+    "lds_primitive": {
+      "path": "bench/prefill-pipe-mvp/ffn-gate-up-lds-primitive.json",
+      "present": true,
+      "schema": "prefill-lds-primitive-result.v1",
+      "verdict": "PREFILL_LDS_DBUF_PRIMITIVE_PROMOTED_STRUCTURAL_CORRECTNESS"
+    },
+    "route_trace": {
+      "path": "bench/prefill-s10-lds2-ownership/route-trace.json",
+      "present": true,
+      "schema": "prefill-s10-lds-route-trace.v1",
+      "verdict": null
+    },
+    "whole_route_authority": {
+      "path": "bench/prefill-whole-synced/s10-composed-current-authority.json",
+      "present": true,
+      "schema": "prefill-whole-synced-authority.v1",
+      "verdict": null
+    },
+    "roofline_audit": {
+      "path": "bench/prefill-lds2-s9/roofline-audit.json",
+      "present": true,
+      "schema": "prefill-lds2-s9-roofline-audit.v1",
+      "verdict": "S9_ROOFLINE_KEEP_OPT_IN"
+    },
+    "exact_isa_resources": {
+      "path": "bench/prefill-pure-full-kernel/anchor-ffn-gate-up/mastery-v1/resources-isa.json",
+      "present": true,
+      "schema": "prefill-pure-anchor-isa-resource-capture.v1",
+      "verdict": null
+    },
+    "exact_role_timing": {
+      "path": "bench/prefill-pure-full-kernel/anchor-ffn-gate-up/mastery-v1/role-timing.json",
+      "present": true,
+      "schema": "prefill-anchor-gemm-regime-timing.v1",
+      "verdict": null
+    }
+  },
+  "evidence_status": {
+    "exact_workload_contract": {
+      "status": "partial",
+      "requirement": "Exact M/N/K, tensor patterns, quantization boundary, input/output dtype, strides, and epilogue semantics.",
+      "known": [
+        "M/N/K",
+        "role",
+        "phase",
+        "model quant label",
+        "tensor name patterns"
+      ],
+      "missing": [
+        "runtime input/output dtypes",
+        "strides/layouts",
+        "dequantization boundary",
+        "bias/activation/epilogue semantics"
+      ]
+    },
+    "lane_fragment_map": {
+      "status": "missing",
+      "requirement": "Executable lane-to-global/LDS/WMMA-fragment/accumulator/output ownership map for the pure candidate."
+    },
+    "pipeline_dependency_graph": {
+      "status": "missing",
+      "requirement": "Machine-readable load, LDS stage, wait, barrier, WMMA, and store dependency graph."
+    },
+    "generated_isa_capture": {
+      "status": "complete",
+      "requirement": "Generated candidate ISA tied by hash to compiler IR and the executed binary.",
+      "source": "bench/prefill-pure-full-kernel/anchor-ffn-gate-up/mastery-v1/resources-isa.json",
+      "candidate_id": "pure.default.m512n12288k4096"
+    },
+    "measured_resource_capture": {
+      "status": "complete",
+      "requirement": "Compiler/runtime VGPR, SGPR, LDS, scratch/spill, waves, and occupancy evidence for that binary.",
+      "source": "bench/prefill-pure-full-kernel/anchor-ffn-gate-up/mastery-v1/resources-isa.json",
+      "authority": "amdgpu_code_object_notes"
+    },
+    "full_shape_correctness": {
+      "status": "missing",
+      "requirement": "Full M512 N12288 K4096 numerical comparison with declared tolerances and reference provenance."
+    },
+    "kernel_timing_authority": {
+      "status": "complete",
+      "requirement": "Clock-pinned kernel-only samples for the exact pure candidate, excluding compile and whole-model aggregation.",
+      "source": "bench/prefill-pure-full-kernel/anchor-ffn-gate-up/mastery-v1/role-timing.json",
+      "tflops": {
+        "pure_scheduler": 22.47,
+        "spec_owned": 15.62,
+        "s9_oracle": 74.11
+      }
+    },
+    "strict_pure_runtime_binding": {
+      "status": "missing",
+      "requirement": "Runtime proof that the exact executable used no Ops.INS, ASM atom, embedded binary, or non-pure fallback."
+    },
+    "roofline_attribution": {
+      "status": "partial",
+      "requirement": "Roofline inputs and diagnosis bound to the same pure executable and kernel-only timing.",
+      "known": [
+        "exact instruction identity",
+        "compiled resources",
+        "pinned kernel TFLOPS"
+      ],
+      "missing": [
+        "same-binary measured memory traffic",
+        "same-binary achieved bandwidth and compute counters"
+      ]
+    }
+  },
+  "missing_evidence": [
+    {
+      "id": "exact_workload_contract",
+      "reason": "Exact M/N/K, tensor patterns, quantization boundary, input/output dtype, strides, and epilogue semantics.",
+      "status": "partial"
+    },
+    {
+      "id": "lane_fragment_map",
+      "reason": "Executable lane-to-global/LDS/WMMA-fragment/accumulator/output ownership map for the pure candidate.",
+      "status": "missing"
+    },
+    {
+      "id": "pipeline_dependency_graph",
+      "reason": "Machine-readable load, LDS stage, wait, barrier, WMMA, and store dependency graph.",
+      "status": "missing"
+    },
+    {
+      "id": "full_shape_correctness",
+      "reason": "Full M512 N12288 K4096 numerical comparison with declared tolerances and reference provenance.",
+      "status": "missing"
+    },
+    {
+      "id": "strict_pure_runtime_binding",
+      "reason": "Runtime proof that the exact executable used no Ops.INS, ASM atom, embedded binary, or non-pure fallback.",
+      "status": "missing"
+    },
+    {
+      "id": "roofline_attribution",
+      "reason": "Roofline inputs and diagnosis bound to the same pure executable and kernel-only timing.",
+      "status": "partial"
+    }
+  ],
+  "blocking_gate": "Do not generalize or launch full machine search until every evidence_status entry is complete and bound to one pure executable."
+}
