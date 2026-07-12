@@ -104,11 +104,24 @@ class PrefillGEMMScheduleSpec:
   def kernel_name(self) -> str:
     return f"prefill_gen_sched_gemm_{self.m}_{self.n}_{self.k}"
 
+  @property
   def pipeline_policy(self):
+    """Return the common policy using the route's authoritative storage contract.
+
+    LDS footprint is owned by :class:`WMMALDSSpec`: its padded A/B strides and
+    DBUF count are the layout consumed by the LDS lowering. Keeping that
+    derivation in one place avoids schedule-level byte estimates drifting from
+    the emitted layout.
+    """
     from tinygrad.codegen.opt.compiler_policies import pipeline_policy_for_route
-    return pipeline_policy_for_route(self.route_family, buffer_count=self.pipeline_depth if self.route_family == "lds" else 1,
-                                     slot_bytes=1 if self.route_family == "pipe" else self.tile_k * self.tile_m * 2,
-                                     stages=self.pipeline_depth)
+    if self.route_family == "lds":
+      from extra.qk.wmma_lds_spec import extract_wmma_lds_spec
+      lds_spec = extract_wmma_lds_spec(self)
+      if lds_spec is None:
+        raise ValueError("cannot build pipeline policy for an illegal LDS schedule")
+      return pipeline_policy_for_route("lds", buffer_count=lds_spec.lds_buffers,
+                                       slot_bytes=lds_spec.lds_buffer_bytes, stages=self.pipeline_depth)
+    return pipeline_policy_for_route(self.route_family, stages=self.pipeline_depth)
 
   def to_json(self) -> dict[str, Any]:
     return {"m": self.m, "n": self.n, "k": self.k, "route_family": self.route_family, "tile_m": self.tile_m,

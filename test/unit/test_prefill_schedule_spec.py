@@ -35,6 +35,23 @@ def test_prefill_pipe_excluded_policy_uses_role_then_shape():
   assert prefill_pipe_excluded_by_role_shape_policy(12288, 4096)
 
 
+def test_schedule_pipeline_policy_uses_authoritative_lds_layout():
+  spec = _schedule_spec("lds")
+  policy = spec.pipeline_policy
+  assert policy.storage_kind == "lds"
+  assert policy.storage.buffer_count == 2
+  assert policy.storage.slot_bytes == 20480
+  assert policy.resources.lds_bytes == 40960
+  assert policy.logical_stage_count == spec.pipeline_depth
+
+
+def test_schedule_pipeline_policy_is_property_for_pipe_and_lds():
+  pipe = _schedule_spec("pipe").pipeline_policy
+  lds = _schedule_spec("lds").pipeline_policy
+  assert pipe.storage_kind == "global_register_resident"
+  assert lds.storage_kind == "lds"
+
+
 def test_emit_prefill_gemm_from_spec_targets_expected_wmma_builders(monkeypatch):
   from extra.qk import prefill_graph_gemm_route as route
 
