@@ -56,6 +56,12 @@ fallback rule.
   silently using one shared value is not an acceptable fix.
 - The postrange candidate path intentionally rejects register-resident storage
   because targeted wait lowering and final resource evidence are not complete.
+- A sequential one-buffer register schedule now exists as a structurally proved
+  fallback (`69253c3f7`): it uses compile-time slot zero and orders each
+  overwrite after accumulator updates. It passes normal graph rewrite, but it
+  still needs the same backend mapping from register-buffer values to pinned
+  VGPR fragments and removes load/compute overlap, so it is a feasibility path,
+  not yet a performance candidate.
 - The current pure 8B whole-model authority is approximately 1.5k tok/s at
   ctx512; the generated gate/up two-buffer result is approximately 2.4k tok/s.
   The historical hybrid reference is approximately 4.4k tok/s.
