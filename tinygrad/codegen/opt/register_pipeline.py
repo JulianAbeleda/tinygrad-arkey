@@ -12,7 +12,7 @@ from tinygrad.codegen.opt.compiler_policies import PipelinePolicy, StoragePolicy
 from tinygrad.codegen.opt.gemm_consumer import WMMA_CONSUMER
 from tinygrad.codegen.opt.kernel_lds import (PrecontractContractSpec, PrecontractOperandTemplate,
   derive_precontract_shape_factors, validate_precontract_carriers, validate_precontract_contracts,
-  validate_precontract_operand_templates, validate_precontract_wmma_abi, validate_rdna3_wmma_descriptor)
+  validate_precontract_operand_templates, validate_precontract_wmma_abi)
 from tinygrad.codegen.opt.kernel_pipeline import (KernelStage1FragmentStage, KernelStage1LifecycleEvent,
   KernelStage1LifecycleProof, KernelStage1ProducerStage, Stage1StorageAdapter, prove_stage1_lifecycle,
   stage1_lifecycle_events)
