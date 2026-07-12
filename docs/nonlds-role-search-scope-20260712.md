@@ -1,0 +1,76 @@
+# Non-LDS role search scope
+
+## Goal
+
+Move the validated gate/up-only pure policy from 4,012 tok/s toward the 4.4k
+ctx512 line by improving only the three remaining lean roles:
+`attn_qo`, `ffn_down`, and `attn_kv`.
+
+Frozen control:
+
+- `ffn_gate_up` remains the proven 40 KB LDS buffer2 candidate.
+- Candidate roles are selected through the exact candidate-set registry.
+- Existing S9 and gate/up-only pinned authorities remain comparators.
+- No route/emitter rewrite or LM-head work is in this phase.
+
+## Baselines
+
+| Regime | ctx512 |
+|---|---:|
+| S9 reference | 124.9 ms |
+| Gate/up-only pure policy | 127.6 ms |
+| 4.4k target | 116.36 ms |
+
+The immediate target is to remove the 2.7 ms gate/up-only residual to S9. The
+secondary target is to find whether the remaining S9-to-4.4k difference is in
+non-LDS geometry, graph overlap, or non-GEMM work.
+
+## Search space
+
+Search each role independently with exact `(M,N,K)` and role identity:
+
+- tile and wave partition compatible with the role shape;
+- non-LDS transport and pipeline depth;
+- local-stage and cooperative-load policy;
+- bounded register/upcast/vectorization options already supported by the
+  generated scheduler.
+
+Do not vary the gate/up candidate. Do not introduce hand ASM, a second emitter,
+or a weak shape-only identity. Every candidate must have its own canonical hash,
+route census entry, compiler cache identity, and evidence directory.
+
+## Candidate gates
+
+For every role, in order:
+
+1. Schema/admission and exact target/shape validation.
+2. Source compile and generated-route proof.
+3. Resource proof: LDS, VGPR/SGPR, scratch, workgroup, and no forbidden ops.
+4. Nonconstant full-output numerical comparison.
+5. Runtime binary identity and clean-commit join.
+6. Clock-pinned kernel timing with compile excluded.
+7. Whole-model ctx512 A/B against gate/up-only.
+
+Only candidates that pass all gates enter the combined set. A role may remain on
+the existing lean route if no candidate wins.
+
+## Benchmark protocol
+
+Use the existing whole-prefill authority: Qwen3-8B Q4_K_M, AMD gfx1100,
+`K=8`, four warmups, three rounds, 512-token chunks, pinned clocks, strict
+rollback disabled. First run ctx512 with route and census assertions; then run
+contexts 1024/2048/4096. Keep S9, gate/up-only, and candidate measurements in
+separate artifacts and do not mix DEBUG/profile totals into wall-time claims.
+
+## Review and acceptance
+
+Spark/agent output is not accepted automatically. Review must check:
+
+- diff stays within the existing route/candidate architecture;
+- tests cover default, explicit, missing-role, and collision behavior;
+- artifacts show clean commits, exact identities, parity, resources, and clocks;
+- the measured whole-model delta is reproducible and not a capture artifact.
+
+Completion is either a passing winner for each materially contributing role and
+a new pinned whole-model result, or a measured standstill showing that the
+remaining gap is outside these three non-LDS roles.
