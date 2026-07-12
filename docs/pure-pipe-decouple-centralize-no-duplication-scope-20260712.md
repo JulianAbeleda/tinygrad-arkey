@@ -262,3 +262,22 @@ evaluation suite passes with **163 tests**, 3 known pytest configuration
 warnings, and 26 subtests. D6-D8 remain gated on the executable register
 storage/lifecycle and final WMMA ABI; no partial execution path is being
 promoted.
+
+## Final Spark execution status (2026-07-12)
+
+- **D6 artifact join complete:** `7365f297c` requires a nested final
+  `AMDResourceArtifact`, strict source/binary/candidate joins, final-program
+  resources, and rejects host estimates, spills, and missing intervals.
+- **D7 one-epoch compile complete:** `dec34992d` compiles the real RDNA3
+  register carriers and WMMA CONTRACT ABI through normal AMD rewriting with no
+  `DEFINE_LOCAL` or raw `Ops.INS`. This is a single-epoch structural compile,
+  not a full K-loop kernel.
+- **D8 authority gates complete:** `a1db05b4a` strengthens resource,
+  correctness/timing, role-attribution, and machine-search admission. Missing
+  binary/resource/output evidence fails closed.
+
+The remaining execution blocker is precise: the shared stage1 builder supplies
+the prologue readiness marker to body fragments while the register template
+requires the body epoch/slot producer marker. Exact carrier matching therefore
+rejects the full K loop. This must be fixed in the shared lifecycle mapping;
+falling back to the prologue marker would make the two-stage proof unsound.
