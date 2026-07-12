@@ -9,10 +9,14 @@ dispatches with neither a proven identity nor a role tag remain unknown.
 import argparse, collections, json
 
 PROVEN_NAMES = {
-  # These identities are the generated buffer2 kernels used by the four-role set.
-  "E_4_8_32_4_2_2_2_2_4_2_127_2": "attn_kv",
-  "E_4_32_32_4_2_2_2_2_4_2_127_2": "candidate_dense_ambiguous",
-  "E_4_32_32_4_2_2_2_2_4_2_383_2": "ffn_gate_up",
+  # Generated buffer2 kernels for the four promoted roles (qwen3_8b_q4k_m_gfx1100). Roles verified by
+  # FLOP/dispatch against candidate-set.json + census (2026-07-12): each entry's GF/disp = 2*M*N*K matches
+  # the role shape, and dispatch-count matches calls/layer. NOTE name-based + model-specific; a shape/FLOP
+  # classifier would be more robust. Prior map mislabeled ffn_gate_up/ffn_down and omitted E_4_96 entirely.
+  "E_4_8_32_4_2_2_2_2_4_2_127_2": "attn_kv",     # 512x1024x4096   4.3 GF/disp  ~13.8 TFLOPS
+  "E_4_32_32_4_2_2_2_2_4_2_127_2": "attn_qo",     # 512x4096x4096   17.2 GF/disp ~14.4 TFLOPS
+  "E_4_32_32_4_2_2_2_2_4_2_383_2": "ffn_down",    # 512x4096x12288  51.5 GF/disp ~28.0 TFLOPS
+  "E_4_96_32_4_2_2_2_2_4_2_127_2": "ffn_gate_up", # 512x12288x4096  51.5 GF/disp ~36.7 TFLOPS
 }
 
 def _busy_union(intervals):
