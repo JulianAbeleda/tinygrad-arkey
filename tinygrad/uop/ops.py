@@ -1099,9 +1099,54 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
     return [s.after(kernel) for s in contig_srcs]
 
 @dataclass(frozen=True)
+class KernelLDSWindow:
+  role: str
+  base: int
+  end: int
+  stride_bytes: int
+
+  def __post_init__(self):
+    if self.role not in ("A", "B"): raise ValueError(f"kernel LDS window role must be A or B, got {self.role!r}")
+    for name, value in (("base", self.base), ("end", self.end), ("stride_bytes", self.stride_bytes)):
+      if not isinstance(value, int) or isinstance(value, bool): raise ValueError(f"kernel LDS window {name} must be an int")
+    if self.base < 0 or self.end <= self.base: raise ValueError("kernel LDS window must have a non-empty non-negative interval")
+    if self.stride_bytes <= 0: raise ValueError("kernel LDS window stride_bytes must be positive")
+    if self.base % 16 or self.end % 16 or self.stride_bytes % 16:
+      raise ValueError("kernel LDS window interval and stride must be b128 aligned")
+
+@dataclass(frozen=True)
+class KernelTileGeometry:
+  tile: tuple[int, int, int]
+  waves: tuple[int, int]
+  threads: int
+  wave_size: int
+  lds_windows: tuple[KernelLDSWindow, ...]
+
+  def __post_init__(self):
+    if not isinstance(self.tile, tuple) or len(self.tile) != 3 or \
+       any(not isinstance(x, int) or isinstance(x, bool) or x <= 0 for x in self.tile):
+      raise ValueError("kernel tile geometry tile must contain three positive ints")
+    if not isinstance(self.waves, tuple) or len(self.waves) != 2 or \
+       any(not isinstance(x, int) or isinstance(x, bool) or x <= 0 for x in self.waves):
+      raise ValueError("kernel tile geometry waves must contain two positive ints")
+    if not isinstance(self.threads, int) or isinstance(self.threads, bool) or self.threads <= 0:
+      raise ValueError("kernel tile geometry threads must be a positive int")
+    if not isinstance(self.wave_size, int) or isinstance(self.wave_size, bool) or self.wave_size <= 0:
+      raise ValueError("kernel tile geometry wave_size must be a positive int")
+    if self.threads != self.waves[0] * self.waves[1] * self.wave_size:
+      raise ValueError("kernel tile geometry waves do not account for threads")
+    if not isinstance(self.lds_windows, tuple) or not all(isinstance(w, KernelLDSWindow) for w in self.lds_windows):
+      raise ValueError("kernel tile geometry lds_windows must contain frozen KernelLDSWindow values")
+    if tuple(w.role for w in self.lds_windows) != ("A", "B"):
+      raise ValueError("kernel tile geometry requires exactly ordered A and B LDS windows")
+    if self.lds_windows[0].base != 0 or self.lds_windows[0].end != self.lds_windows[1].base:
+      raise ValueError("kernel tile geometry LDS windows must be contiguous from byte zero")
+
+@dataclass(frozen=True)
 class KernelCandidateContext:
   schema_version: str
   canonical_identity: str
+  geometry: KernelTileGeometry|None = None
 
   def __post_init__(self):
     if self.schema_version != "boltbeam.full_kernel_candidate.v1":

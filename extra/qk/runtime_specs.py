@@ -62,8 +62,13 @@ def bind_full_kernel_candidate(payload:dict[str, Any], canonical_identity:str, *
     if not ok: raise ValueError(f"full-kernel candidate {label} does not match selected generated route")
   if actual_identity != ANCHOR_SINGLE_BUFFER_CANDIDATE_HASH:
     raise ValueError("full-kernel candidate does not match the fixed BoltBeam anchor payload hash")
-  from tinygrad.uop.ops import KernelCandidateContext
-  return KernelCandidateContext(normalized["schema_version"], actual_identity)
+  from tinygrad.uop.ops import KernelCandidateContext, KernelLDSWindow, KernelTileGeometry
+  geometry = KernelTileGeometry(
+    tile=tuple(schedule["tile"][x] for x in ("m", "n", "k")),
+    waves=tuple(schedule["waves"][x] for x in ("m", "n")), threads=schedule["threads"], wave_size=target["wave_size"],
+    lds_windows=tuple(KernelLDSWindow(role.upper(), *schedule["lds"]["windows"][role], schedule["lds"]["strides"][role])
+                      for role in ("a", "b")))
+  return KernelCandidateContext(normalized["schema_version"], actual_identity, geometry)
 
 
 def _check(name:str, value:str, allowed:tuple[str, ...]) -> str:

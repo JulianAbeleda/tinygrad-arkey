@@ -217,6 +217,11 @@ def test_bind_full_kernel_candidate_to_exact_single_buffer_anchor():
     threads=256, buffer_count=1, stage_count=1, lds_windows={"a": [0, 10240], "b": [10240, 20480]},
     lds_strides={"a": 80, "b": 80}, lds_padding=16, lds_bytes=20480)
   assert context.canonical_identity == candidate.canonical_identity
+  assert context.geometry.tile == (128, 128, 32)
+  assert context.geometry.waves == (4, 2)
+  assert context.geometry.threads == 256 and context.geometry.wave_size == 32
+  assert [(w.role, w.base, w.end, w.stride_bytes) for w in context.geometry.lds_windows] == [
+    ("A", 0, 10240, 80), ("B", 10240, 20480, 80)]
 
 
 @pytest.mark.parametrize(("field", "value", "error"), (

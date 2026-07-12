@@ -5,7 +5,7 @@ from tinygrad.device import Compiler
 from tinygrad.dtype import dtypes
 from tinygrad.renderer import Target
 from tinygrad.runtime.ops_python import PythonRenderer
-from tinygrad.uop.ops import KernelCandidateContext, KernelInfo, UOp
+from tinygrad.uop.ops import KernelCandidateContext, KernelInfo, KernelLDSWindow, KernelTileGeometry, UOp
 from tinygrad.codegen.opt import postrange
 
 
@@ -14,6 +14,10 @@ def _sink(identity: str) -> UOp:
   context = KernelCandidateContext("boltbeam.full_kernel_candidate.v1", identity)
   return out.index(UOp.const(dtypes.int, 0), ptr=True).store(UOp.const(dtypes.float, 1)).sink(
     arg=KernelInfo(name="candidate", opts_to_apply=(), candidate_context=context))
+
+def _geometry() -> KernelTileGeometry:
+  return KernelTileGeometry((128, 128, 32), (4, 2), 256, 32,
+    (KernelLDSWindow("A", 0, 10240, 80), KernelLDSWindow("B", 10240, 20480, 80)))
 
 
 def test_two_full_kernel_candidates_remain_distinct_in_one_process():
@@ -53,6 +57,37 @@ def test_unsupported_or_malformed_candidate_context_fails_closed():
     KernelCandidateContext("boltbeam.full_kernel_candidate.v2", "1" * 64)
   with pytest.raises(ValueError, match="lowercase SHA-256"):
     KernelCandidateContext("boltbeam.full_kernel_candidate.v1", "A" * 64)
+
+
+@pytest.mark.parametrize("factory,error", (
+  (lambda: KernelLDSWindow("C", 0, 16, 16), "role"),
+  (lambda: KernelLDSWindow("A", -16, 16, 16), "non-empty non-negative"),
+  (lambda: KernelLDSWindow("A", 0, 15, 16), "b128 aligned"),
+  (lambda: KernelLDSWindow("A", 0, 16, 0), "positive"),
+  (lambda: KernelTileGeometry((128, 128), (4, 2), 256, 32, _geometry().lds_windows), "three positive"),
+  (lambda: KernelTileGeometry([128, 128, 32], (4, 2), 256, 32, _geometry().lds_windows), "three positive"),
+  (lambda: KernelTileGeometry((128, 128, 32), (4, 0), 256, 32, _geometry().lds_windows), "two positive"),
+  (lambda: KernelTileGeometry((128, 128, 32), (4, 2), 32, 32, _geometry().lds_windows), "account for threads"),
+  (lambda: KernelTileGeometry((128, 128, 32), (4, 2), 256, 32,
+    (KernelLDSWindow("B", 0, 10240, 80), KernelLDSWindow("A", 10240, 20480, 80))), "ordered A and B"),
+  (lambda: KernelTileGeometry((128, 128, 32), (4, 2), 256, 32, (object(), object())), "frozen KernelLDSWindow"),
+  (lambda: KernelTileGeometry((128, 128, 32), (4, 2), 256, 32,
+    (KernelLDSWindow("A", 16, 10240, 80), KernelLDSWindow("B", 10240, 20480, 80))), "contiguous from byte zero"),
+))
+def test_kernel_tile_geometry_rejects_malformed_fields(factory, error):
+  with pytest.raises(ValueError, match=error): factory()
+
+
+def test_candidate_geometry_survives_program_and_warmstart_propagation(monkeypatch):
+  context = KernelCandidateContext("boltbeam.full_kernel_candidate.v1", "5" * 64, _geometry())
+  sink = _sink("4" * 64).replace(arg=KernelInfo(name="candidate", opts_to_apply=(), candidate_context=context))
+  program = to_program(sink, PythonRenderer(Target("PYTHON")))
+  assert program.src[0].arg.candidate_context.geometry == _geometry()
+  key = (frozenset(), 1)
+  monkeypatch.setattr(postrange, "_WARMSTART_OPTS", {key: ()})
+  monkeypatch.setattr(postrange, "_WARMSTART_CANDIDATE_CONTEXTS", {key: context})
+  optimized = postrange.apply_opts(_sink("4" * 64).replace(arg=KernelInfo()), PythonRenderer(Target("PYTHON")))
+  assert optimized.arg.candidate_context.geometry == _geometry()
 
 
 def test_warmstart_candidate_context_reaches_optimized_kernel(monkeypatch):
