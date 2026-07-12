@@ -166,7 +166,7 @@ def _install_candidate_matmul(x,w,out_f,in_f,spec,admission):
     # Reuse the existing generic TC/UPCAST option authority to select the
     # admitted geometry. No LDS environment defaults or local-stage ownership
     # are installed for this storage policy.
-    pr._WARMSTART_OPTS = {**(pr._WARMSTART_OPTS or {}), key: wmma_lds_postrange_opts(lds_spec, cooperative_waves=False)}
+    pr._WARMSTART_OPTS = {**(pr._WARMSTART_OPTS or {}), key: wmma_lds_postrange_opts(lds_spec, cooperative_waves=True)}
     pr._WARMSTART_CANDIDATE_CONTEXTS = {**(pr._WARMSTART_CANDIDATE_CONTEXTS or {}), key: admission.context}
     a = x.reshape(512, in_f).cast(dtypes.float16).contiguous(); bt = w.cast(dtypes.float16).contiguous()
     return (a @ bt.transpose()).reshape(*x.shape[:-1], out_f)
