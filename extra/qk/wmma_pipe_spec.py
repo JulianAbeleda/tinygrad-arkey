@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 from tinygrad.uop.ops import KernelCandidateContext, Ops, KernelInfo, UOp
+from tinygrad.dtype import dtypes
 
 
 @dataclass(frozen=True)
@@ -133,6 +134,29 @@ def attach_pipe_candidate_context(sink: UOp, context: KernelCandidateContext) ->
   return sink.replace(arg=KernelInfo(name=info.name, axis_types=info.axis_types, dont_use_locals=info.dont_use_locals,
     applied_opts=info.applied_opts, opts_to_apply=info.opts_to_apply, estimates=info.estimates,
     candidate_context=context))
+
+
+def build_wmma_pipe_barrier_chain(spec: WMMAPipeSpec, context: KernelCandidateContext) -> UOp:
+  """Build the smallest compiler-owned LOAD -> barrier -> WMMA -> STORE graph.
+
+  This is a structural slice only: ``Ops.BARRIER`` is a full workgroup fence
+  in LLVM AMD lowering, not a targeted vmcnt implementation.  It is restricted
+  to the proven attn_qo shape until a general ABI/resource contract exists.
+  """
+  if not isinstance(spec, WMMAPipeSpec) or not isinstance(context, KernelCandidateContext): raise TypeError("invalid pipe chain inputs")
+  if spec.role != "attn_qo" or (spec.m, spec.n, spec.k) != (512, 4096, 4096):
+    raise ValueError("barrier pipe slice only supports attn_qo 512x4096x4096")
+  a = UOp.param(0, dtypes.half.ptr(spec.tile_m * spec.k))
+  b = UOp.param(1, dtypes.half.ptr(spec.tile_n * spec.k))
+  out = UOp.param(2, dtypes.float.ptr(spec.tile_m * spec.tile_n))
+  la = a.index(UOp.const(dtypes.int, 0), ptr=True).load(dtype=dtypes.half.vec(16))
+  lb = b.index(UOp.const(dtypes.int, 0), ptr=True).load(dtype=dtypes.half.vec(16))
+  ready = UOp.barrier(UOp.group(la, lb))
+  c = UOp.const(dtypes.float.vec(8), 0.0)
+  tc_arg = ("WMMA_16_16_16_half_float", (16, 16, 16), dtypes.half, dtypes.float, "AMD", 32, (), ())
+  mma = UOp(Ops.WMMA, dtypes.float.vec(8), (la.after(ready), lb.after(ready), c), tc_arg)
+  store = out.index(UOp.const(dtypes.int, 0), ptr=True).store(mma)
+  return attach_pipe_candidate_context(UOp.sink(store, ready), context)
 
 def pipe_candidate_context(spec: WMMAPipeSpec, canonical_identity: str) -> KernelCandidateContext:
   """Typed compiler context for a generated pipe candidate.
