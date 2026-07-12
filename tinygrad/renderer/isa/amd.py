@@ -347,12 +347,23 @@ class AMDOps(FastEnum):
   V_OR = 51                               # b32 or
   V_CVT_U2F = 52                           # unsigned int -> f32
   V_CVT_F2U = 53                           # f32 -> unsigned int
+  TYPED_WAIT = 56                         # compiler-owned WaitCount -> s_waitcnt (backend lowering seam)
 
 def _reg(r:Register): return r  # passthrough; encoding maps index in post_regalloc
 
 def _vreg_def(ctx:IselContext): return (ctx.vreg(_vpool(ctx)),)
 def _sptr_def(ctx:IselContext): return (ctx.vreg(SPTR_POOL),)
 def _sreg_def(ctx:IselContext): return (ctx.vreg(SCALAR_TMP),)     # Phase N1B: a scalar (SGPR) result
+
+def isel_typed_wait(x: UOp) -> UOp:
+  """Carry a typed compiler wait into native AMD lowering without route ISA."""
+  from tinygrad.codegen.opt.compiler_policies import WaitCount
+  if not isinstance(x.arg, WaitCount):
+    raise ValueError("AMD:ISA typed wait requires WaitCount payload")
+  # Keep load dependencies as UOp sources so linearization preserves the
+  # producer order.  The payload remains in the tag until lower_inst emits the
+  # backend-owned s_waitcnt instruction.
+  return UOp(Ops.INS, dtypes.void, x.src, AMDOps.TYPED_WAIT, tag=(x.arg, x.tag))
 
 # ---- Phase N1B: wave-uniform integer address/index math -> scalar pipe (SALU), MOV_S2V at the vector boundary ----
 _N1B_UNI = ("n1b_uni",)                            # marker set on int ADD/MUL/SHL whose inputs are all wave-uniform
@@ -1667,6 +1678,7 @@ def _chain_epilogue_stores(ctx:IselContext, x:UOp):
 
 isel_matcher = PatternMatcher([
   (UPat(Ops.SINK, name="x"), _chain_epilogue_stores),   # L5: serialize the multi-tile store epilogue (fires last, root)
+  (UPat(Ops.WAIT, name="x"), isel_typed_wait),
   (UPat(Ops.PARAM, name="x"), isel_param),
   (UPat(Ops.DEFINE_VAR, name="x"), isel_var),
   (UPat(Ops.SPECIAL, name="x"), isel_special),
@@ -1874,6 +1886,12 @@ def lower_inst(x:UOp):
   a = x.arg
   if not isinstance(a, AMDOps): return None
   src = x.src
+  if a is AMDOps.TYPED_WAIT:
+    from tinygrad.codegen.opt.compiler_policies import WaitCount
+    if not isinstance(x.tag, tuple) or not x.tag or not isinstance(x.tag[0], WaitCount):
+      raise ValueError("AMD:ISA typed wait lost its WaitCount payload")
+    wait = _ins(s_waitcnt(simm16=x.tag[0].simm16), x.tag)
+    return (wait, [wait])
   if a is AMDOps.S_LOAD_PTR:
     off = src[0].arg
     ld = _ins(s_load_b64(sdata=_S2(x.reg), sbase=_S[0:1], offset=off, soffset=NULL), x.tag)

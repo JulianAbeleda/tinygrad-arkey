@@ -8,7 +8,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from tinygrad.codegen.opt.compiler_policies import PipelinePolicy, StoragePolicy
+from tinygrad.codegen.opt.compiler_policies import (PipelinePolicy, StoragePolicy, WaitDependency,
+  prove_wait_dependency_coverage, wait_count_for_dependency)
 from tinygrad.codegen.opt.gemm_consumer import WMMA_CONSUMER
 from tinygrad.codegen.opt.kernel_lds import (PrecontractContractSpec, PrecontractOperandTemplate,
   derive_precontract_shape_factors, validate_precontract_carriers, validate_precontract_contracts,
@@ -133,6 +134,37 @@ class RegisterPipeTemplate:
     return tuple(AMDStageBufferSpec(tile.role, tile.slot_count, tile.fragments, tile.carrier_width)
                  for tile in self.logical_tiles)
 
+  @property
+  def wait_dependencies(self) -> tuple[WaitDependency, WaitDependency]:
+    """Typed A/B load edges consumed by the register-stage consumer.
+
+    The storage template owns only provenance.  Counter selection still goes
+    through :func:`wait_count_for_dependency`, and the AMD renderer remains
+    the sole owner of the intrinsic lowering.
+    """
+    policy = self.policy.wait
+    return tuple(WaitDependency(policy, f"global_load_{role}", "gemm_consumer", role,
+                                producer_stage=0, consumer_stage=1, scope="per_stage")
+                 for role in ("A", "B"))
+
+  @property
+  def wait_coverage(self):
+    required = (("A", 0, 1), ("B", 0, 1))
+    return prove_wait_dependency_coverage(self.policy, self.wait_dependencies, required)
+
+  def _typed_load_wait(self, epoch: UOp, slot: UOp, loads: tuple[UOp, ...]) -> UOp:
+    coverage = self.wait_coverage
+    if not coverage.passed:
+      raise ValueError(f"register load wait coverage failed: {coverage.errors}")
+    # Both role groups use the same staged counter.  The dependency metadata
+    # keeps the A/B ownership explicit without manufacturing backend ISA.
+    count = wait_count_for_dependency(self.wait_dependencies[0], vmcnt=self.loads_per_stage)
+    provenance = tuple((d.producer, d.consumer, d.load_group, d.producer_stage, d.consumer_stage)
+                       for d in self.wait_dependencies)
+    raw = UOp(Ops.WAIT, dtypes.void, loads, count,
+              tag=("register_pipe_wait", epoch, slot, coverage.covered, provenance))
+    return raw
+
   def _buffers(self) -> tuple[UOp, UOp]:
     # Keep A and B independent. A 2x2 pipe is 2*16 half elements per role and
     # slot, not one combined A+B allocation per role.
@@ -145,6 +177,7 @@ class RegisterPipeTemplate:
       raise ValueError("sequential register producer requires a compile-time slot")
     buffers = self._buffers()
     nodes: list[UOp] = []
+    loaded: list[UOp] = []
     for operand, count, buffer, spec in zip(self.operands, (self.pipe_tm, self.pipe_tn), buffers, self.stage_buffer_specs):
       vectors = []
       for frag in range(count):
@@ -153,6 +186,7 @@ class RegisterPipeTemplate:
           operand.k_axis: epoch * self.k_step + elem}) for elem in range(16))
         value = UOp(Ops.STACK, dtypes.half.vec(16), values,
           tag=("register_pipe_load", operand.role, frag, epoch, slot))
+        loaded.append(value)
         offset = (UOp.const(dtypes.weakint, slot.arg * spec.role_width + frag * spec.lane_width)
                   if slot.op is Ops.CONST else slot * spec.role_width + frag * spec.lane_width)
         # Sequential mode reuses one physical buffer. Make every overwrite
@@ -163,7 +197,12 @@ class RegisterPipeTemplate:
         target = base.index(offset, dtype=dtypes.half.vec(spec.lane_width))
         vectors.append(target.store(value))
       nodes.append(UOp.group(*vectors).replace(tag=("register_pipe_producer", operand.role, epoch, slot)))
-    ready = UOp.group(*nodes, reuse).replace(tag=("register_pipe_ready", epoch, slot))
+    wait = self._typed_load_wait(epoch, slot, tuple(loaded))
+    # GROUP is intentionally limited to stores/groups by the core UOp spec;
+    # put the typed wait on the existing barrier seam instead of widening that
+    # generic verifier for this route.
+    ready = UOp.barrier(UOp.group(*nodes), wait, *(tuple() if reuse is None else (reuse,))).replace(
+      tag=("register_pipe_ready", epoch, slot))
     return KernelStage1ProducerStage(epoch, slot, (nodes[0], nodes[1]), ready)
 
   def fragments(self, epoch: UOp, slot: UOp, ready: UOp) -> KernelStage1FragmentStage:

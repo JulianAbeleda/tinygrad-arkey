@@ -45,17 +45,22 @@ fallback rule.
 - A valid full-K chained WMMA graph passes normal AMD rewrite.
 - The earlier devectorizer crash was a malformed test ABI: `float.vec(8)` was
   paired with an empty C/output contract. It was corrected in `6476cb4f3`.
-- AMD ISA selection still fails for generic `AddrSpace.REG` stage buffers:
-  they are treated as LDS-like addresses instead of pinned VGPR fragments, and
-  the current stage-buffer sizing exhausts the fragment window.
+- AMD ISA now has a static, sequential one-slot mapping for the current WMMA
+  stage contract. The mapping is fail-closed for dynamic or double-buffered
+  VGPR indexing and uses the existing pinned fragment/allocator seam. The full
+  graph still hits a devectorizer/stack-carrier failure before native AMD
+  emission, so this is an isel proof, not a runnable binary.
 - AMD has no general indirect VGPR addressing. The current symbolic
   `slot = rng % 2` index therefore cannot be lowered by simply assigning a
   physical base. R1 must choose either static slot expansion/unrolling or a
   proven sequential schedule that does not require indirect register indexing.
   Mapping the dynamic index to LDS, inventing an indirect VGPR instruction, or
   silently using one shared value is not an acceptable fix.
-- The postrange candidate path intentionally rejects register-resident storage
-  because targeted wait lowering and final resource evidence are not complete.
+- The postrange candidate path now reuses `RegisterStorageAdapter` and the
+  existing stage-1 graph builder for the sequential register policy. This is
+  structural integration only: native AMD lowering still has no retained
+  `Ops.WAIT` emission (the native regalloc pseudo-op path drops it), and final
+  resource/correctness evidence is therefore not available.
 - A sequential one-buffer register schedule now exists as a structurally proved
   fallback (`69253c3f7`): it uses compile-time slot zero and orders each
   overwrite after accumulator updates. It passes normal graph rewrite, but it
@@ -147,20 +152,30 @@ The generated graph may not claim targeted-vmcnt policy while emitting only a
 full barrier. If the backend temporarily supports only a barrier, classify it
 as a measured barrier ceiling and keep it out of pure promotion.
 
+**Current status:** A/B per-stage wait edges and typed `WaitCount` nodes exist
+in the graph and LLVM path. Native AMD still needs an explicit lowering or a
+fail-closed rejection; until then the emitted mechanism does not match policy
+for the native route.
+
 **Exit:** A/B per-stage wait edges are present in the final graph and final
 artifact, the emitted wait mechanism matches policy, and tests prove duplicate,
 missing, and wrong-stage waits fail closed.
 
 ### R4: Connect the register adapter to postrange safely
 
-Add the register adapter at the existing `build_stage1_uop_graph_with_storage`
-boundary. Resolve a typed `PipelinePolicy` and logical register-stage plan;
-never allocate a zero-sized or fake LDS placeholder. Preserve existing LDS
-postrange behavior byte-for-byte.
+The adapter is now connected at the existing
+`build_stage1_uop_graph_with_storage` boundary. It resolves a typed
+`PipelinePolicy` and logical register-stage plan and does not allocate a
+zero-sized or fake LDS placeholder. Existing LDS postrange behavior remains on
+its original branch.
 
 Candidate context must carry geometry, policy, wait coverage, and exact identity
 as typed data. Do not parse an opaque payload tuple in lowering. Keep the
 current fail-closed error until R1-R3 evidence is available.
+
+**Current status:** the register candidate reaches the common postrange graph
+builder, but the full-K graph has not passed native AMD emission. The phase is
+not complete until that binary path and its waits are proven.
 
 **Exit:** an admitted register candidate reaches normal postrange, emits the
 same valid full-K graph tested in R2, and LDS candidates remain unchanged.

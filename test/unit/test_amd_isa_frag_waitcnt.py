@@ -1,6 +1,10 @@
 import unittest
 from types import SimpleNamespace
 from tinygrad.renderer.isa.amd import _frag_base, FRAG_BASE, FRAG_TOP, AMDISARenderer
+from tinygrad.renderer.isa.amd import AMDOps, isel_typed_wait, lower_inst
+from tinygrad.codegen.opt.compiler_policies import WaitCount
+from tinygrad.dtype import dtypes
+from tinygrad.uop.ops import Ops, UOp
 
 
 def _fake_ctx():
@@ -69,6 +73,14 @@ class TestWaitcntSimm16(unittest.TestCase):
   def test_full_drain_is_zero(self):
     # the value the rerouted _insert_waitcnt sites use must equal the old literal simm16=0.
     self.assertEqual(AMDISARenderer._waitcnt_simm16(0, 0, 0), 0)
+
+  def test_typed_wait_reaches_native_s_waitcnt(self):
+    wait = UOp(Ops.WAIT, dtypes.void, (), WaitCount(vmcnt=8))
+    lowered = isel_typed_wait(wait)
+    self.assertIs(lowered.op, Ops.INS)
+    self.assertIs(lowered.arg, AMDOps.TYPED_WAIT)
+    inst, _ = lower_inst(lowered)
+    self.assertEqual(inst.arg.simm16, WaitCount(vmcnt=8).simm16)
 
 
 if __name__ == "__main__":

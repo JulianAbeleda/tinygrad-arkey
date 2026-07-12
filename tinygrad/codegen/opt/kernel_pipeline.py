@@ -302,7 +302,12 @@ def build_stage1_uop_graph(plan:KernelStage1PipelinePlan, k_tiles:int,
     # One physical stage: the next producer must be ordered after all current
     # accumulator stores before it can overwrite the same VGPR fragments.
     body_prod=produce(rng+1,slot,UOp.group(*updates))
-    join=UOp.barrier(UOp.group(*updates,body_prod.ready)).replace(tag=("pipeline_body_join",rng,body_prod.epoch,body_prod.slot))
+    # Register producers may expose a BARRIER readiness node so a typed
+    # targeted wait can sit beside their stores.  Keep the generic GROUP
+    # verifier happy by joining the role stores and readiness at the barrier
+    # seam instead of placing a BARRIER inside a GROUP.
+    join=UOp.barrier(UOp.group(*updates,*body_prod.role_nodes), body_prod.ready).replace(
+      tag=("pipeline_body_join",rng,body_prod.epoch,body_prod.slot))
   else:
     body_prod=produce(rng+1,(rng+1)%plan.buffer_count,None)
     join=UOp.barrier(UOp.group(*updates,*body_prod.role_nodes)).replace(tag=("pipeline_body_join",rng,body_prod.epoch,body_prod.slot))
