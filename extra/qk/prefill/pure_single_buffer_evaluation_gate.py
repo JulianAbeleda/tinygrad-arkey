@@ -44,14 +44,15 @@ def _identity_error(row: dict[str, Any], identity: str) -> str | None:
   return None
 
 
-def _anchor_errors(payload: dict[str, Any]) -> list[str]:
+def _anchor_errors(payload: dict[str, Any], allowed_buffer_counts: tuple[int, ...]) -> list[str]:
   workload, schedule = payload["workload"], payload["schedule"]
   errors = []
   if workload["role"] != ANCHOR["role"]: errors.append("candidate role is not the ffn_gate_up anchor")
   if workload["shape"] != ANCHOR["shape"]: errors.append("candidate shape is not the exact anchor shape")
   if workload["target"] != ANCHOR["target"]: errors.append("candidate target is not AMD gfx1100 wave32")
-  if schedule["pipeline"]["buffer_count"] != 1: errors.append("candidate is not single-buffer")
-  if schedule["pipeline"]["stage_count"] != 1: errors.append("single-buffer candidate must have exactly one pipeline stage")
+  if schedule["pipeline"]["buffer_count"] not in allowed_buffer_counts:
+    errors.append(f"candidate buffer_count is not admitted by this evaluation: {allowed_buffer_counts}")
+  if schedule["pipeline"]["stage_count"] != 1: errors.append("stage1 evaluation requires exactly one pipeline stage")
   windows = schedule["lds"]["windows"]
   strides = schedule["lds"]["strides"]
   if not isinstance(windows, dict) or not windows:
@@ -97,7 +98,8 @@ def _binding_errors(row: dict[str, Any], identity: str) -> list[str]:
   return errors
 
 
-def evaluate(payload: dict[str, Any], candidate_hash: str, authorities: EvaluationAuthorities) -> dict[str, Any]:
+def evaluate(payload: dict[str, Any], candidate_hash: str, authorities: EvaluationAuthorities, *,
+             allowed_buffer_counts: tuple[int, ...]=(1,)) -> dict[str, Any]:
   """Evaluate one candidate, stopping at the first unproven authority.
 
   A report is returned for expected candidate failures.  Malformed payloads or
@@ -109,7 +111,9 @@ def evaluate(payload: dict[str, Any], candidate_hash: str, authorities: Evaluati
                             "candidate_schema": FULL_KERNEL_CANDIDATE_SCHEMA, "stages": {},
                             "passed": False, "blocked_at": None, "blockers": []}
 
-  anchor_errors = _anchor_errors(payload)
+  if not allowed_buffer_counts or any(not isinstance(x, int) or isinstance(x, bool) or x < 1 for x in allowed_buffer_counts):
+    raise ValueError("allowed_buffer_counts must contain positive integers")
+  anchor_errors = _anchor_errors(payload, allowed_buffer_counts)
   report["stages"]["candidate_contract"] = {"passed": not anchor_errors, "errors": anchor_errors}
   if anchor_errors:
     report.update(blocked_at="candidate_contract", blockers=anchor_errors)

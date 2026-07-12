@@ -117,9 +117,9 @@ class ArtifactAuthorities:
 
 
 def run(payload: dict[str, Any], candidate_hash: str, paths: dict[str, pathlib.Path | None],
-        *, expected_commit: str | None = None) -> dict[str, Any]:
+        *, expected_commit: str | None = None, allowed_buffer_counts: tuple[int, ...]=(1,)) -> dict[str, Any]:
   adapter = ArtifactAuthorities(paths, expected_commit)
-  report = evaluate(payload, candidate_hash, adapter.gate_authorities())
+  report = evaluate(payload, candidate_hash, adapter.gate_authorities(), allowed_buffer_counts=allowed_buffer_counts)
   return {"schema": SCHEMA, "verdict": "PASS" if report["passed"] else "BLOCKED",
           "joins": {"candidate_hash": candidate_hash, "binary_sha256": adapter._binary,
                     "commit": adapter._commit}, "evaluation": report}
@@ -130,12 +130,14 @@ def main(argv: list[str] | None = None) -> int:
   ap.add_argument("--payload", type=pathlib.Path, required=True)
   ap.add_argument("--candidate-hash", required=True)
   ap.add_argument("--expected-commit")
+  ap.add_argument("--allowed-buffer-count", type=int, action="append", dest="allowed_buffer_counts")
   for stage in STAGES: ap.add_argument(f"--{stage.replace('_', '-')}-artifact", type=pathlib.Path)
   ap.add_argument("--output", type=pathlib.Path)
   args = ap.parse_args(argv)
   payload = json.loads(args.payload.read_text())
   paths = {stage: getattr(args, f"{stage}_artifact") for stage in STAGES}
-  report = run(payload, args.candidate_hash, paths, expected_commit=args.expected_commit)
+  report = run(payload, args.candidate_hash, paths, expected_commit=args.expected_commit,
+               allowed_buffer_counts=tuple(args.allowed_buffer_counts or (1,)))
   text = json.dumps(report, indent=2) + "\n"
   if args.output:
     args.output.parent.mkdir(parents=True, exist_ok=True)

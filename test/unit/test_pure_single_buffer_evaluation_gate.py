@@ -75,8 +75,8 @@ def test_gate_fails_closed_until_route_binding_exists_and_skips_expensive_stages
 
 
 @pytest.mark.parametrize("mutation,error", [
-  (lambda p: p["schedule"]["pipeline"].update(buffer_count=2), "single-buffer"),
-  (lambda p: p["schedule"]["pipeline"].update(stage_count=2), "one pipeline stage"),
+  (lambda p: p["schedule"]["pipeline"].update(buffer_count=2), "not admitted"),
+  (lambda p: p["schedule"]["pipeline"].update(stage_count=2), "exactly one pipeline stage"),
   (lambda p: p["schedule"]["lds"]["windows"].update(b=[10000, 20480]), "overlap"),
   (lambda p: p["schedule"]["lds"]["strides"].update(a=96), "strides"),
   (lambda p: p["schedule"]["lds"]["windows"].update(a=[0, 10000]), "tile dimensions"),
@@ -96,6 +96,13 @@ def test_gate_rejects_hash_mismatch_and_cross_candidate_evidence():
   bad = lambda _payload, _identity: {"canonical_identity": "1" * 64, "status": "pass"}
   report = evaluate(payload, identity, EvaluationAuthorities(static_legality=bad))
   assert report["blocked_at"] == "static_legality"
+
+
+def test_buffer2_requires_explicit_evaluation_admission():
+  payload = _payload(); payload["schedule"]["pipeline"]["buffer_count"] = 2
+  identity = canonical_candidate_hash(payload)
+  assert evaluate(payload, identity, _authorities(identity))["blocked_at"] == "candidate_contract"
+  assert evaluate(payload, identity, _authorities(identity), allowed_buffer_counts=(2,))["passed"] is True
 
 
 @pytest.mark.parametrize("field,value", [("route_binding_complete", False), ("runtime_binary_matches_candidate", False),
