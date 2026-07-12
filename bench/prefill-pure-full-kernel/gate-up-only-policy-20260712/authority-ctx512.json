@@ -1,0 +1,164 @@
+{
+  "schema": "prefill-whole-synced-authority.v1",
+  "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+  "model_profile": {
+    "id": "qwen3_8b_q4k_m_gfx1100",
+    "note": "8B fp16/PREFILL_V2 authority path",
+    "env_defaults": {
+      "PREFILL_V2": "1"
+    }
+  },
+  "mode": "authority_incomplete",
+  "chunk_n": 512,
+  "chunk_ms": {
+    "0": 127.3285
+  },
+  "chunk_samples_ms": {
+    "0": [
+      127.7848,
+      127.3285,
+      127.3763
+    ]
+  },
+  "device_profile": {
+    "0": {
+      "schema": "prefill-device-profile-range-summary.v1",
+      "kernel_count": 0,
+      "device_ms": 0,
+      "by_name": {}
+    }
+  },
+  "whole_tok_s": {
+    "512": 4021.1
+  },
+  "graph_gemm": true,
+  "prefill_v2": "1",
+  "prefill_route": "auto",
+  "prefill_chunked": "",
+  "K": 8,
+  "warmups": 4,
+  "rounds": 3,
+  "pin_clock": true,
+  "logits_only": false,
+  "clock_pin": {
+    "cmd": "echo manual > /sys/class/drm/card0/device/power_dpm_force_performance_level && echo 2 > /sys/class/drm/card0/device/pp_dpm_sclk && echo 3 > /sys/class/drm/card0/device/pp_dpm_mclk",
+    "rc": 0,
+    "ok": true,
+    "out": ""
+  },
+  "git_short": "734d2a648",
+  "git_dirty": false,
+  "route_attribution": {
+    "prefill_route_family": "prefill_wmma_lds_single_buffer_candidate_generated",
+    "prefill_route_pure": true,
+    "prefill_route_rolled_back": false,
+    "prefill_route_provenance": "tinygrad_scheduler_generated",
+    "prefill_q4k_route_family": "prefill_q4k_direct_tile4x4_default",
+    "prefill_q4k_route_pure": true
+  },
+  "candidate_set_route_census": {
+    "schema": "prefill-candidate-set-route-census.v1",
+    "passed": true,
+    "policy_roles": [
+      "ffn_gate_up"
+    ],
+    "expected_entry_count": 1,
+    "selected_entry_count": 1,
+    "selected": [
+      {
+        "profile": "qwen3_8b_q4k_m_gfx1100",
+        "role": "ffn_gate_up",
+        "shape": {
+          "m": 512,
+          "n": 12288,
+          "k": 4096
+        },
+        "target": {
+          "backend": "AMD",
+          "arch": "gfx1100",
+          "wave_size": 32
+        },
+        "canonical_identity": "7e37ad6e13dee573758b3264aa9ec71b0cd91f1ca08e012d279d67300360c2d9",
+        "bindings": 144
+      }
+    ],
+    "missing": [],
+    "unexpected": [],
+    "identity_mismatches": []
+  },
+  "prefill_role_routes": {},
+  "timing_authority": "synced model.__call__ prefill-v2 warmstart path, min over repeated bursts, no generate TTFT/sampling",
+  "comparator_id": null,
+  "candidate_id": null,
+  "primitive_class": null,
+  "threshold": null,
+  "ledger": null,
+  "quality_gate": {
+    "status": "MISSING",
+    "note": "no whole-model dNLL/greedy-parity quality gate supplied; supply --quality-gate to promote (F3)"
+  },
+  "reproducibility_band": {
+    "per_chunk": {
+      "0": {
+        "n": 3,
+        "min_ms": 127.3285,
+        "max_ms": 127.7848,
+        "mean_ms": 127.4965,
+        "std_ms": 0.2048,
+        "cv": 0.00161,
+        "spread": 0.00358
+      }
+    },
+    "worst_cv": 0.00161,
+    "worst_spread": 0.00358,
+    "single_sample": false
+  },
+  "measurement_regime": {
+    "regime_id": "generated_pure",
+    "provenance": "tinygrad_scheduler_generated",
+    "route_pure": true,
+    "route_rolled_back": false,
+    "mode": "authority",
+    "logits_only": false,
+    "chunked": false,
+    "authoritative_for_generated_promotion": true
+  },
+  "authority_completeness": {
+    "schema": "prefill-whole-synced-authority-completeness.v1",
+    "fields": {
+      "comparator_id": false,
+      "reproducibility_band": true,
+      "candidate_id": false,
+      "primitive_class": false,
+      "threshold": false,
+      "ledger": false,
+      "quality_gate_pass": false
+    },
+    "missing": [
+      "comparator_id",
+      "candidate_id",
+      "primitive_class",
+      "threshold",
+      "ledger",
+      "quality_gate_pass"
+    ],
+    "ok": false
+  },
+  "authority_blocked_reason": "refusing mode:authority; missing required fields: comparator_id, candidate_id, primitive_class, threshold, ledger, quality_gate_pass",
+  "prefill_route_binding_gate": {
+    "schema": "prefill-route-binding-gate.v1",
+    "verdict": "PREFILL_ROUTE_BINDING_PASS",
+    "required_route": "prefill_wmma_lds_single_buffer_candidate_generated",
+    "selected_route": "prefill_wmma_lds_single_buffer_candidate_generated",
+    "effective_routes": [
+      "decode_flash_live_split_g4_8b_kvboth",
+      "decode_q4k_g3_generated",
+      "decode_q6k_coop_generated",
+      "prefill_q4k_direct_tile4x4_default",
+      "prefill_wmma_lds_single_buffer_candidate_generated"
+    ],
+    "lds_dbuf_requested": false,
+    "candidate_set_requested": true,
+    "failures": []
+  }
+}
