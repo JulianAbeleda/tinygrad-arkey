@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
-from tinygrad.uop.ops import KernelCandidateContext
+from tinygrad.uop.ops import KernelCandidateContext, Ops, KernelInfo, UOp
 
 
 @dataclass(frozen=True)
@@ -70,6 +70,15 @@ class WMMAPipeIR:
 def build_wmma_pipe_ir(spec: WMMAPipeSpec) -> WMMAPipeIR:
   return WMMAPipeIR(spec.role, (spec.m, spec.n, spec.k), spec.stages, spec.loads_per_stage, spec.wait_policy)
 
+def attach_pipe_candidate_context(sink: UOp, context: KernelCandidateContext) -> UOp:
+  """Attach typed pipe identity to an ordinary compiler sink; no native UOps."""
+  if sink.op is not Ops.SINK: raise TypeError("pipe context attaches only to SINK")
+  if not isinstance(context, KernelCandidateContext): raise TypeError("invalid candidate context")
+  info = sink.arg if isinstance(sink.arg, KernelInfo) else KernelInfo()
+  return sink.replace(arg=KernelInfo(name=info.name, axis_types=info.axis_types, dont_use_locals=info.dont_use_locals,
+    applied_opts=info.applied_opts, opts_to_apply=info.opts_to_apply, estimates=info.estimates,
+    candidate_context=context))
+
 def pipe_candidate_context(spec: WMMAPipeSpec, canonical_identity: str) -> KernelCandidateContext:
   """Typed compiler context for a generated pipe candidate.
 
@@ -78,9 +87,9 @@ def pipe_candidate_context(spec: WMMAPipeSpec, canonical_identity: str) -> Kerne
   """
   if not isinstance(spec, WMMAPipeSpec): raise TypeError("expected WMMAPipeSpec")
   ir = build_wmma_pipe_ir(spec)
-  payload = {"schema": "wmma_pipe_ir.v1", "role": ir.role, "shape": ir.shape,
-             "stages": ir.stages, "loads_per_stage": ir.loads_per_stage,
-             "wait_policy": ir.wait_policy, "stores": ir.stores, "provenance": ir.provenance}
+  payload = tuple((k, v) for k, v in (("schema", "wmma_pipe_ir.v1"), ("role", ir.role), ("shape", ir.shape),
+             ("stages", ir.stages), ("loads_per_stage", ir.loads_per_stage), ("wait_policy", ir.wait_policy),
+             ("stores", ir.stores), ("provenance", ir.provenance)))
   return KernelCandidateContext("boltbeam.full_kernel_candidate.v1", canonical_identity,
                                geometry=None, pipeline=payload)
 

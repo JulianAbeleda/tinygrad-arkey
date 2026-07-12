@@ -1,6 +1,7 @@
 import pytest
 from extra.qk.prefill_schedule_spec import describe_prefill_schedule
-from extra.qk.wmma_pipe_spec import extract_wmma_pipe_spec, lower_wmma_pipe_spec, build_wmma_pipe_diagnostic_lowering_report, pipe_candidate_context, build_wmma_pipe_ir
+from extra.qk.wmma_pipe_spec import extract_wmma_pipe_spec, lower_wmma_pipe_spec, build_wmma_pipe_diagnostic_lowering_report, pipe_candidate_context, build_wmma_pipe_ir, attach_pipe_candidate_context
+from tinygrad.uop.ops import UOp, Ops
 
 def test_attn_qo_lean_route_surface_is_pipe_and_lowerer_is_explicitly_blocked():
   spec = describe_prefill_schedule(4096, 4096, role="attn_qo")
@@ -19,12 +20,19 @@ def test_pipe_candidate_context_preserves_identity_and_buffer_neutral_payload():
   pipe = extract_wmma_pipe_spec(describe_prefill_schedule(4096, 4096, role="attn_qo"))
   ctx = pipe_candidate_context(pipe, "a" * 64)
   assert ctx.canonical_identity == "a" * 64 and ctx.geometry is None
-  assert ctx.pipeline["schema"] == "wmma_pipe_ir.v1"
-  assert ctx.pipeline["role"] == "attn_qo" and ctx.pipeline["shape"] == (512, 4096, 4096)
-  assert ctx.pipeline["provenance"] == "compiler_owned_typed_pipe_ir"
+  payload = dict(ctx.pipeline)
+  assert payload["schema"] == "wmma_pipe_ir.v1"
+  assert payload["role"] == "attn_qo" and payload["shape"] == (512, 4096, 4096)
+  assert payload["provenance"] == "compiler_owned_typed_pipe_ir"
 
 def test_typed_pipe_ir_carries_lifecycle_without_native_isa():
   pipe = extract_wmma_pipe_spec(describe_prefill_schedule(4096, 4096, role="attn_qo"))
   ir = build_wmma_pipe_ir(pipe)
   assert ir.shape == (512, 4096, 4096) and ir.stages == 2
   assert ir.loads_per_stage == 8 and ir.provenance == "compiler_owned_typed_pipe_ir"
+
+def test_pipe_context_attaches_to_ordinary_sink():
+  pipe = extract_wmma_pipe_spec(describe_prefill_schedule(4096, 4096, role="attn_qo"))
+  sink = UOp.sink()
+  out = attach_pipe_candidate_context(sink, pipe_candidate_context(pipe, "b" * 64))
+  assert out.op is Ops.SINK and out.arg.candidate_context.canonical_identity == "b" * 64
