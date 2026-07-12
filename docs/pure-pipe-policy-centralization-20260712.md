@@ -31,15 +31,23 @@ single route-name adapter for legacy schedule metadata.
   `PipelinePolicy` type used by LDS.
 - `WMMAPipeSpec.pipeline_policy` and `WMMAPipeIR.pipeline_policy` use the core
   contract instead of independently re-validating storage and wait semantics.
+- The existing LDS postrange lowering now enters the lifecycle through
+  `Stage1StorageAdapter`; the legacy callback builder remains available and
+  unchanged for compatibility.
+- Pipe policy admission is fail-closed for anything other than two logical
+  stages, targeted per-stage waits, and zero LDS. Pipe resource estimates now
+  report zero LDS while retaining any old slot value only as abstract
+  diagnostic metadata.
 - Existing JSON schemas and route behavior remain unchanged.
 
 ## Deliberate boundary
 
-This is policy centralization, not an executable register-resident lowering.
-The register policy still fails closed at the backend wait/resource gates, and
-the existing LDS candidate remains the only compiler-executed candidate. The
-next implementation work is to add storage-policy callbacks to the shared
-postrange lifecycle while preserving the current LDS graph byte-for-byte.
+This is policy and LDS-adapter centralization, not an executable
+register-resident lowering. The register policy still fails closed at the
+backend wait/resource gates, and the existing LDS candidate remains the only
+compiler-executed candidate. The remaining work is to implement a
+register-resident producer/fragment adapter and backend wait/resource proof;
+no register lowering is being implied by these contracts.
 
 ## Verification
 
