@@ -1,6 +1,6 @@
 # Prefill 4k breakthrough: gate/up-only buffer2 policy
 
-The first role-specific pure policy has crossed 4,000 tok/s on the RX 7900 XTX.
+The first role-specific hybrid policy has crossed 4,000 tok/s on the RX 7900 XTX.
 
 ## Pinned result
 
@@ -15,14 +15,15 @@ rounds, synchronized whole-prefill authority, and peak clock pinning:
 | 4,096 | 2,865 tok/s |
 
 The ctx512 timing is 127.6 ms. This is above the 4,000 tok/s milestone and is
-within roughly 3% of the historical S9 result at 124.9 ms. The 4.4k target is
+within roughly 3% of the hybrid reference at 124.9 ms. The 4.4k target is
 separate: it requires approximately 116.36 ms, leaving about 11.2 ms from this
 run.
 
 ## Exact policy
 
 The proven 40 KB LDS buffer2 candidate is selected only for `ffn_gate_up`.
-`attn_qo`, `ffn_down`, and `attn_kv` fall through to the existing lean route.
+`attn_qo`, `ffn_down`, and `attn_kv` fall through to the existing lean
+handwritten route, so this is hybrid rather than pure.
 The policy is explicit and reversible through
 `BOLTBEAM_FULL_KERNEL_CANDIDATE_ROLES`; its default is `ffn_gate_up`.
 

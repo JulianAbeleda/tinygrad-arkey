@@ -2,7 +2,7 @@
 
 ## Goal
 
-Move the validated gate/up-only pure policy from 4,012 tok/s toward the 4.4k
+Move the validated gate/up-only hybrid policy from 4,012 tok/s toward the 4.4k
 ctx512 line by improving only the three remaining lean roles:
 `attn_qo`, `ffn_down`, and `attn_kv`.
 
@@ -10,19 +10,19 @@ Frozen control:
 
 - `ffn_gate_up` remains the proven 40 KB LDS buffer2 candidate.
 - Candidate roles are selected through the exact candidate-set registry.
-- Existing S9 and gate/up-only pinned authorities remain comparators.
+- Existing hybrid reference and gate/up-only pinned authorities remain comparators.
 - No route/emitter rewrite or LM-head work is in this phase.
 
 ## Baselines
 
 | Regime | ctx512 |
 |---|---:|
-| S9 reference | 124.9 ms |
-| Gate/up-only pure policy | 127.6 ms |
+| Hybrid reference | 124.9 ms |
+| Gate/up-only hybrid policy | 127.6 ms |
 | 4.4k target | 116.36 ms |
 
-The immediate target is to remove the 2.7 ms gate/up-only residual to S9. The
-secondary target is to find whether the remaining S9-to-4.4k difference is in
+The immediate target is to remove the 2.7 ms gate/up-only residual to the hybrid
+reference. The secondary target is to find whether the remaining reference-to-4.4k difference is in
 non-LDS geometry, graph overlap, or non-GEMM work.
 
 ## Search space
@@ -59,7 +59,7 @@ the existing lean route if no candidate wins.
 Use the existing whole-prefill authority: Qwen3-8B Q4_K_M, AMD gfx1100,
 `K=8`, four warmups, three rounds, 512-token chunks, pinned clocks, strict
 rollback disabled. First run ctx512 with route and census assertions; then run
-contexts 1024/2048/4096. Keep S9, gate/up-only, and candidate measurements in
+contexts 1024/2048/4096. Keep hybrid, gate/up-only, and candidate measurements in
 separate artifacts and do not mix DEBUG/profile totals into wall-time claims.
 
 ## Review and acceptance
