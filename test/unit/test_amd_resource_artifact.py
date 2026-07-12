@@ -1,0 +1,41 @@
+import pytest
+
+from tinygrad.codegen.opt.amd_resource_artifact import (
+  AMDPhysicalInterval, AMDResourceFacts, join_amd_resource_artifact, validate_amd_resource_artifact)
+
+
+def _artifact():
+  return join_amd_resource_artifact(
+    target="gfx1100", abi="amdgpu_kernel", source="define void @k()", binary=b"hsaco",
+    candidate_identity="a" * 64, resources=AMDResourceFacts(vgpr=64, sgpr=32, lds_bytes=0),
+    intervals=(AMDPhysicalInterval("A", "vgpr", 0, 8), AMDPhysicalInterval("B", "vgpr", 8, 16),
+               AMDPhysicalInterval("accumulator", "vgpr", 16, 24)))
+
+
+def test_amd_resource_artifact_joins_identity_resources_and_intervals():
+  artifact = _artifact()
+  assert artifact.source_sha256 != artifact.binary_sha256
+  assert artifact.to_json()["candidate_identity"] == "a" * 64
+  assert artifact.to_json()["logical_role_intervals"]["A"][0]["start"] == 0
+  assert validate_amd_resource_artifact(artifact, expected_target="gfx1100") is artifact
+
+
+@pytest.mark.parametrize("intervals", [
+  (AMDPhysicalInterval("A", "vgpr", 0, 8), AMDPhysicalInterval("B", "vgpr", 4, 12)),
+  (AMDPhysicalInterval("A", "vgpr", 0, 65),),
+])
+def test_amd_resource_artifact_rejects_overlap_or_resource_overrun(intervals):
+  with pytest.raises(ValueError):
+    join_amd_resource_artifact(target="gfx1100", abi="amdgpu_kernel", source=b"s", binary=b"b",
+      candidate_identity="b" * 64, resources=AMDResourceFacts(vgpr=64, sgpr=32), intervals=intervals)
+
+
+def test_amd_resource_artifact_rejects_identity_mismatch_and_unknown_facts():
+  with pytest.raises(ValueError, match="target identity"):
+    validate_amd_resource_artifact(_artifact(), expected_target="gfx1200")
+  with pytest.raises(ValueError):
+    AMDResourceFacts(vgpr=-1, sgpr=1)
+  with pytest.raises(ValueError):
+    join_amd_resource_artifact(target="gfx1100", abi="amdgpu_kernel", source=b"s", binary=b"b",
+      candidate_identity="not-a-sha", resources=AMDResourceFacts(vgpr=1, sgpr=1),
+      intervals=(AMDPhysicalInterval("A", "vgpr", 0, 1),))
