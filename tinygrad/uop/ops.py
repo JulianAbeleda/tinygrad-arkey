@@ -277,6 +277,7 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
 
       # some ops init the shape
       case Ops.GETADDR: return ()
+      case Ops.GROUP: return ()
       case Ops.BIND | Ops.RANGE | Ops.SPECIAL: return ()
       case Ops.BINARY: return (len(self.arg),)
       case Ops.BUFFER: return self.src[0].as_shape if isinstance(self.arg, ParamArg) else (self.arg,)

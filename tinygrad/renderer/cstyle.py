@@ -387,8 +387,9 @@ class HIPRenderer(CStyleLanguage):
 
   def render_vector_prefix(self, dtype:DType) -> str:
     vec, scal = self.render_dtype(dtype), self.render_dtype(dtype.scalar())
+    names = _nms[:dtype.count] if dtype.count <= len(_nms) else [f"v{i}" for i in range(dtype.count)]
     return f"typedef {scal} {vec} __attribute__((ext_vector_type({dtype.count})));\nstatic inline __attribute__((device)) "+ \
-           f"{vec} make_{vec}({', '.join([f'{scal} {x}' for x in _nms[:dtype.count]])}) {{ return {{ {', '.join(_nms[:dtype.count])} }}; }}"
+           f"{vec} make_{vec}({', '.join([f'{scal} {x}' for x in names])}) {{ return {{ {', '.join(names)} }}; }}"
 
   def render_kernel(self, function_name, kernel, bufs, uops, prefix=None) -> str:
     prefix, ockl = [], []

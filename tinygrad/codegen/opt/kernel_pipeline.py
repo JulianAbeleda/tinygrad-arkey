@@ -71,7 +71,7 @@ class KernelStage1FragmentStage:
   epoch: UOp
   slot: UOp
   ready: UOp
-  fragments: tuple[UOp, UOp]
+  fragments: tuple[UOp, ...]
 
 
 @dataclass(frozen=True)
@@ -196,7 +196,10 @@ def prove_stage1_lifecycle(plan:KernelStage1PipelinePlan, k_tiles:int,
 def build_stage1_uop_graph(plan:KernelStage1PipelinePlan, k_tiles:int,
                            produce:Callable[[UOp,UOp,UOp|None], KernelStage1ProducerStage],
                            fragments:Callable[[UOp,UOp,UOp], KernelStage1FragmentStage],
-                           wmma:Callable[[KernelStage1FragmentStage,UOp,int], UOp], *, subtile_count:int=8) -> KernelStage1UOpGraph:
+                           wmma:Callable[[KernelStage1FragmentStage,UOp,int], UOp], *, subtile_count:int=8,
+                           accumulator_elements:int|None=None, accumulator_offset:UOp|None=None,
+                           accumulator_contract:tuple[UOp,tuple[tuple[int,int],...]]|None=None,
+                           body_range_id:int=9100, accumulator_id:int=9200) -> KernelStage1UOpGraph:
   if subtile_count <= 0: raise ValueError("subtile_count must be positive")
   events = stage1_lifecycle_events(plan,k_tiles)
   zero,last=UOp.const(dtypes.weakint,0),UOp.const(dtypes.weakint,k_tiles-1)
@@ -206,18 +209,35 @@ def build_stage1_uop_graph(plan:KernelStage1PipelinePlan, k_tiles:int,
     drain=tuple(wmma(frag,UOp.const(dtypes.float.vec(8),0.0),i) for i in range(subtile_count))
     return KernelStage1UOpGraph(plan,k_tiles,UOp.sink(*drain,prologue.ready),drain,None,None,None,None,None,
       prologue,None,None,frag,drain,subtile_count,events)
-  rng=UOp.range(k_tiles-1,9100,AxisType.REDUCE); slot=rng%plan.buffer_count
+  rng=UOp.range(k_tiles-1,body_range_id,AxisType.REDUCE); slot=rng%plan.buffer_count
   body_frag=fragments(rng,slot,prologue.ready)
-  reg=UOp.placeholder((subtile_count*8,),dtypes.float,9200,addrspace=AddrSpace.REG)
-  init=reg.index(UOp.const(dtypes.weakint,0),dtype=dtypes.float.vec(subtile_count*8)).store(UOp.const(dtypes.float.vec(subtile_count*8),0.0))
+  acc_elements=subtile_count*8 if accumulator_elements is None else accumulator_elements
+  if acc_elements < subtile_count*8 or acc_elements % 8: raise ValueError("accumulator_elements must contain whole vec8 slices")
+  reg=UOp.placeholder((acc_elements,),dtypes.float,accumulator_id,addrspace=AddrSpace.REG)
+  init=reg.index(UOp.const(dtypes.weakint,0),dtype=dtypes.float.vec(acc_elements)).store(UOp.const(dtypes.float.vec(acc_elements),0.0))
   updates=[]
   for i in range(subtile_count):
-    acc=reg.after(init,rng).index(UOp.const(dtypes.weakint,i*8),dtype=dtypes.float.vec(8))
-    updates.append(reg.index(UOp.const(dtypes.weakint,i*8),dtype=dtypes.float.vec(8)).store(wmma(body_frag,acc,i)))
+    off=UOp.const(dtypes.weakint,i*8) if accumulator_offset is None else accumulator_offset+i*8
+    if accumulator_contract is None:
+      acc=reg.after(init,rng).index(off,dtype=dtypes.float.vec(8)); value=wmma(body_frag,acc,i)
+      updates.append(reg.index(off,dtype=dtypes.float.vec(8)).store(value))
+    else:
+      elem,arg=accumulator_contract
+      acc=UOp(Ops.CONTRACT,dtypes.float.vec(8),(reg.after(init,rng).index(off+elem).load(),),arg)
+      value=UOp(Ops.UNROLL,dtypes.float,(wmma(body_frag,acc,i),),arg)
+      updates.append(reg.index(off+elem).store(value))
   body_prod=produce(rng+1,(rng+1)%plan.buffer_count,None)
-  join=UOp.barrier(UOp.group(*updates,*body_prod.role_nodes)); end=join.end(rng)
+  join=UOp.barrier(UOp.group(*updates,*body_prod.role_nodes)).replace(tag=("pipeline_body_join",rng,body_prod.epoch,body_prod.slot))
+  body_prod=KernelStage1ProducerStage(body_prod.epoch,body_prod.slot,body_prod.role_nodes,join)
+  end=join.end(rng).replace(tag=("pipeline_body_end",rng))
   drain_frag=fragments(last,UOp.const(dtypes.weakint,plan.slot_for_epoch(k_tiles-1)),end)
-  drain=tuple(wmma(drain_frag,reg.after(end).index(UOp.const(dtypes.weakint,i*8),dtype=dtypes.float.vec(8)),i) for i in range(subtile_count))
+  drain=[]
+  for i in range(subtile_count):
+    off=UOp.const(dtypes.weakint,i*8) if accumulator_offset is None else accumulator_offset+i*8
+    acc=(reg.after(end).index(off,dtype=dtypes.float.vec(8)) if accumulator_contract is None else
+         UOp(Ops.CONTRACT,dtypes.float.vec(8),(reg.after(end).index(off+accumulator_contract[0]).load(),),accumulator_contract[1]))
+    drain.append(wmma(drain_frag,acc,i))
+  drain=tuple(drain)
   return KernelStage1UOpGraph(plan,k_tiles,UOp.sink(*drain,end,prologue.ready),drain,reg,init,rng,end,join,
     prologue,body_prod,body_frag,drain_frag,drain,subtile_count,events)
 
@@ -232,15 +252,18 @@ def prove_stage1_uop_graph(graph:KernelStage1UOpGraph) -> KernelStage1UOpProof:
     if graph.body_producer.epoch.render() != (graph.body_range+1).render() or \
        graph.body_producer.slot.render() != ((graph.body_range+1)%graph.plan.buffer_count).render():
       errors.append("next producer callback changed symbolic epoch/slot formula")
-    if regs != [graph.accumulator_reg] or graph.accumulator_reg.ptrdtype.size != graph.subtile_count*8: errors.append("bad shared accumulator layout")
+    if regs != [graph.accumulator_reg] or graph.accumulator_reg.ptrdtype.size < graph.subtile_count*8 or graph.accumulator_reg.ptrdtype.size%8:
+      errors.append("bad shared accumulator layout")
     if graph.body_range is None or graph.body_range.arg[-1] is not AxisType.REDUCE: errors.append("missing symbolic body range")
     if ends != [graph.loop_end] or graph.loop_end.src[0] is not graph.body_join: errors.append("END is not rooted at body join")
     stores=[u for u in graph.body_join.backward_slice if u.op is Ops.STORE and graph.accumulator_reg in u.src[0].backward_slice and
-            u.src[1].dtype == dtypes.float.vec(8)]
-    if len(stores) != graph.subtile_count or any(u.src[1].dtype != dtypes.float.vec(8) for u in stores): errors.append("body lacks distinct vec8 accumulator stores")
+            (u.src[1].dtype == dtypes.float.vec(8) or u.src[1].op is Ops.UNROLL)]
+    if len(stores) != graph.subtile_count: errors.append("body lacks one accumulator update per symbolic subtile")
     if any(node not in graph.body_join.backward_slice for node in graph.body_producer.role_nodes): errors.append("body join lacks sibling producer")
     for out in graph.drain:
-      if not any(u.op is Ops.INDEX and u.dtype == dtypes.float.vec(8) and graph.loop_end in u.backward_slice for u in out.backward_slice):
+      direct=any(u.op is Ops.INDEX and u.dtype == dtypes.float.vec(8) and graph.loop_end in u.backward_slice for u in out.backward_slice)
+      contracted=any(u.op is Ops.CONTRACT and u.dtype == dtypes.float.vec(8) and graph.loop_end in u.backward_slice for u in out.backward_slice)
+      if not (direct or contracted):
         errors.append("drain lacks vec8 accumulator read after END")
   if any(u.op is Ops.REDUCE for u in topo): errors.append("forbidden Ops.REDUCE")
   return KernelStage1UOpProof(not errors,tuple(errors),lifecycle)

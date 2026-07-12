@@ -2,7 +2,8 @@ import pytest
 
 from tinygrad import dtypes
 from tinygrad.codegen.opt.kernel_lds import (PrecontractContractSpec, PrecontractKAxis, PrecontractOperandTemplate,
-  PrecontractThreadAxes, build_precontract_lds_stage, instantiate_precontract_fragments, instantiate_precontract_producer)
+  PrecontractPipelineTemplate, PrecontractThreadAxes, build_precontract_lds_stage, instantiate_precontract_fragments,
+  instantiate_precontract_producer)
 from tinygrad.codegen.opt.kernel_pipeline import (KernelStage1FragmentStage, KernelStage1PipelinePlan, KernelStage1ProducerStage,
   build_stage1_uop_graph, prove_stage1_uop_graph)
 from tinygrad.codegen.opt.tc import amd_rdna3
@@ -102,25 +103,49 @@ def test_real_anchor_symbolic_pipeline_adapter_uses_actual_contracts_and_64_floa
     ready=UOp.barrier(UOp.group(*inst.role_nodes) if reuse is None else UOp.group(*inst.role_nodes,reuse))
     return KernelStage1ProducerStage(epoch,slot,inst.role_nodes,ready)
   def fragments(epoch,slot,ready):
-    inst=instantiate_precontract_fragments(_geometry(),tc=tc,allocation=allocation,threads=threads,k_substep=kaxis.substep,
-      subtile_m=sm,subtile_n=sn,contracts=contracts,epoch=epoch,slot=slot,ready=ready)
-    return KernelStage1FragmentStage(epoch,slot,ready,inst.fragments)
+    rows=[]
+    for substep in range(2):
+      inst=instantiate_precontract_fragments(_geometry(),tc=tc,allocation=allocation,threads=threads,
+        k_substep=UOp.const(dtypes.weakint,substep),subtile_m=sm,subtile_n=sn,contracts=contracts,epoch=epoch,slot=slot,ready=ready)
+      rows.extend(inst.fragments)
+    return KernelStage1FragmentStage(epoch,slot,ready,tuple(rows))
   def wmma(stage,acc,subtile):
     calls.append((stage.epoch,subtile))
     arg=(str(tc),tc.dims,tc.dtype_in,tc.dtype_out,"AMD",tc.threads,
          (contracts[0].arg,contracts[1].arg,((50,2),(51,2),(52,2))),())
-    return UOp(Ops.WMMA,dtypes.float.vec(8),(stage.fragments[0],stage.fragments[1],acc),arg,tag=("pipeline_subtile",subtile))
-  graph=build_stage1_uop_graph(KernelStage1PipelinePlan(2,20480),128,produce,fragments,wmma)
+    first=UOp(Ops.WMMA,dtypes.float.vec(8),(stage.fragments[0],stage.fragments[1],acc),arg,tag=("pipeline_subtile",subtile,0))
+    return UOp(Ops.WMMA,dtypes.float.vec(8),(stage.fragments[2],stage.fragments[3],first),arg,tag=("pipeline_subtile",subtile,1))
+  caxes=tuple(UOp.range(2,50+i,AxisType.UPCAST) for i in range(3));celem=(caxes[0]*2+caxes[1])*2+caxes[2]
+  graph=build_stage1_uop_graph(KernelStage1PipelinePlan(2,20480),128,produce,fragments,wmma,subtile_count=1,
+    accumulator_elements=64,accumulator_offset=(sm*4+sn)*8,
+    accumulator_contract=(celem,tuple((x.arg[0],2) for x in caxes)))
   proof=prove_stage1_uop_graph(graph)
   assert proof.passed,proof.errors
   assert graph.accumulator_reg.ptrdtype.size == 64
-  assert len([x for x in calls if x[0].op is Ops.RANGE]) == 8
-  assert len([x for x in graph.sink.toposort() if x.op is Ops.WMMA]) == 16
+  assert len([x for x in calls if x[0].op is Ops.RANGE]) == 1
+  wmmas=[x for x in graph.sink.toposort() if x.op is Ops.WMMA]
+  assert len(wmmas) == 4
+  assert len([x for x in wmmas if isinstance(x.tag,tuple) and x.tag[-1] == 1 and x.src[2].op is Ops.WMMA]) == 2
   from tinygrad.codegen import full_rewrite_to_sink
   from tinygrad.renderer.cstyle import HIPRenderer
   from tinygrad.helpers import Target
   rewritten=full_rewrite_to_sink(graph.sink,HIPRenderer(Target.parse("AMD")),optimize=False)
   assert len([x for x in rewritten.toposort() if x.op is Ops.END]) == 1
+  assert len([x for x in rewritten.toposort() if x.op is Ops.WMMA]) == 32
+
+def test_pipeline_template_validates_once_and_bounds_k_substeps():
+  _,operands,threads,_,sm,sn,contracts=_fixture(); plan=KernelStage1PipelinePlan(2,20480)
+  allocation=UOp.placeholder((plan.active_lds_bytes//2,),dtypes.half,994,addrspace=AddrSpace.LOCAL)
+  template=PrecontractPipelineTemplate(_geometry(),_tc(),allocation,operands,threads,sm,sn,contracts,plan)
+  epoch,slot=UOp.const(dtypes.weakint,0),UOp.const(dtypes.weakint,0)
+  ready=UOp(Ops.NOOP, dtypes.void).barrier()
+  assert template.factors.k_substeps == 2
+  assert template.producer(epoch,slot).role_nodes[0].op is Ops.GROUP
+  assert template.fragments(epoch,slot,ready,1).fragments[0].op is Ops.CONTRACT
+  with pytest.raises(ValueError,match="K substep is out of range"): template.fragments(epoch,slot,ready,2)
+  bad_plan=KernelStage1PipelinePlan(2,10240)
+  with pytest.raises(ValueError,match="allocation does not exactly cover"):
+    PrecontractPipelineTemplate(_geometry(),_tc(),allocation,operands,threads,sm,sn,contracts,bad_plan)
 
 def test_fail_closed_detached_axes_contract_and_allocation():
   allocation,ops,threads,kaxis,sm,sn,contracts=_fixture()

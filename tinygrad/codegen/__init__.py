@@ -108,6 +108,8 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   # ** devectorizer (full_graph_rewrite) **
   # remove reduce
   sink = graph_rewrite(sink, pm_reduce+gep_pushing, ctx=ReduceContext(), name="remove_reduce")
+  if ren.target.device == "AMD":
+    sink = graph_rewrite(sink, pm_group_wmma_reg_store, name="group wmma reg ownership")
 
   # add gpu dims (late). this works after devectorize, but it's faster here
   sink = graph_rewrite(sink, pm_add_gpudims, ctx=ren, name="add gpudims")
@@ -132,7 +134,6 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   sink = graph_rewrite(sink, sym+devectorize_alu+devectorize_buf_and_index+load_store_folding+correct_load_store+load_store_indexing,
                        ctx=ren, name="devectorize")
   if ren.target.device == "AMD":
-    sink = graph_rewrite(sink, pm_group_wmma_reg_store, name="group wmma reg ownership")
     sink = graph_rewrite(sink, pm_distinct_reg_store_devec, name="distinct reg store devec")
   if (getenv("REG_STORE_DEVEC") or getenv("COALESCED_LOAD_LOWERING")) and ren.target.device == "AMD":
     sink = graph_rewrite(sink, cg_extras.reg_store_devec_pm(), name="reg store devec")

@@ -126,6 +126,67 @@ class PrecontractFactors:
   loads_a: int
   loads_b: int
 
+@dataclass(frozen=True)
+class PrecontractPipelineTemplate:
+  """Validated immutable inputs for every epoch of a precontract LDS pipeline."""
+  geometry: KernelTileGeometry
+  tc: object
+  allocation: UOp
+  operands: tuple[PrecontractOperandTemplate, ...]
+  threads: PrecontractThreadAxes
+  subtile_m: UOp
+  subtile_n: UOp
+  contracts: tuple[PrecontractContractSpec, ...]
+  pipeline_plan: object
+
+  def __post_init__(self) -> None:
+    factors = derive_precontract_factors(self.geometry, self.tc)
+    if tuple(x.role for x in self.operands) != ("A", "B"):
+      raise ValueError("precontract pipeline operands must be exactly ordered A and B")
+    for operand in self.operands:
+      if (operand.row_axis.op is not Ops.RANGE or operand.k_axis.op is not Ops.RANGE or
+          operand.row_axis not in operand.source.backward_slice_with_self or
+          operand.k_axis not in operand.source.backward_slice_with_self or operand.source.dtype.scalar() != dtypes.half):
+        raise ValueError(f"precontract pipeline {operand.role} template does not retain scalar fp16 row/K ownership")
+    if ((self.threads.wave_m.op, self.threads.wave_m.vmax+1, self.threads.wave_m.arg[-1]) !=
+        (Ops.RANGE, factors.waves_m, AxisType.LOCAL) or
+        (self.threads.wave_n.op, self.threads.wave_n.vmax+1, self.threads.wave_n.arg[-1]) !=
+        (Ops.RANGE, factors.waves_n, AxisType.LOCAL) or
+        (self.threads.lane.op, self.threads.lane.vmax+1, self.threads.lane.arg[-1]) !=
+        (Ops.RANGE, self.geometry.wave_size, AxisType.WARP)):
+      raise ValueError("precontract pipeline thread axes do not match derived wave geometry")
+    if (self.subtile_m.op is not Ops.RANGE or self.subtile_m.vmax+1 != factors.subtiles_m or
+        self.subtile_n.op is not Ops.RANGE or self.subtile_n.vmax+1 != factors.subtiles_n):
+      raise ValueError("precontract pipeline subtile axes do not match derived geometry")
+    if tuple(c.role for c in self.contracts) != ("A", "B"):
+      raise ValueError("precontract pipeline contracts must be exactly ordered A and B")
+    descriptor_remaps = tuple(tuple(x.items()) for x in self.tc.lane_map.remaps())
+    for operand_idx, contract in enumerate(self.contracts):
+      folded = ((contract.axes[0]*2+contract.axes[1])*2+contract.axes[2])*2+contract.axes[3] if len(contract.axes) == 4 else None
+      if (len(contract.axes) != 4 or any(a.op is not Ops.RANGE or a.vmax+1 != 2 for a in contract.axes) or
+          contract.arg != tuple((a.arg[0], 2) for a in contract.axes) or contract.element is not folded or
+          contract.descriptor_remap != descriptor_remaps[operand_idx]):
+        raise ValueError(f"precontract pipeline {contract.role} contract does not match the descriptor")
+    slot_bytes = self.geometry.lds_windows[-1].end
+    if (getattr(self.pipeline_plan, "slot_bytes", None) != slot_bytes or
+        self.allocation.op is not Ops.DEFINE_LOCAL or self.allocation.ptrdtype.addrspace is not AddrSpace.LOCAL or
+        self.allocation.ptrdtype.base != dtypes.half or
+        self.allocation.ptrdtype.size*dtypes.half.itemsize != self.pipeline_plan.active_lds_bytes):
+      raise ValueError("precontract pipeline allocation does not exactly cover its active LDS slots")
+
+  @property
+  def factors(self) -> PrecontractFactors: return derive_precontract_factors(self.geometry, self.tc)
+
+  def producer(self, epoch:UOp, slot:UOp) -> PrecontractProducerInstance:
+    return instantiate_precontract_producer(self.geometry, tc=self.tc, allocation=self.allocation,
+      operands=self.operands, threads=self.threads, epoch=epoch, slot=slot)
+
+  def fragments(self, epoch:UOp, slot:UOp, ready:UOp, k_substep:int) -> PrecontractFragmentInstance:
+    if not 0 <= k_substep < self.factors.k_substeps: raise ValueError("precontract K substep is out of range")
+    return instantiate_precontract_fragments(self.geometry, tc=self.tc, allocation=self.allocation, threads=self.threads,
+      k_substep=UOp.const(dtypes.weakint,k_substep), subtile_m=self.subtile_m, subtile_n=self.subtile_n,
+      contracts=self.contracts, epoch=epoch, slot=slot, ready=ready)
+
 def derive_precontract_factors(geometry:KernelTileGeometry, tc) -> PrecontractFactors:
   validate_rdna3_wmma_descriptor(tc)
   tm,tn,tk = geometry.tile
@@ -276,7 +337,7 @@ def instantiate_precontract_producer(geometry:KernelTileGeometry, *, tc, allocat
       logical_k=vector*8
       values=tuple(operand.source.substitute({operand.row_axis:operand.row_tile_base+row,
         operand.k_axis:epoch*geometry.tile[2]+logical_k+elem}) for elem in range(8))
-      tag=("kernel_tile_store",operand.role,row_iteration)
+      tag=("kernel_tile_store",operand.role,row_iteration,epoch,slot)
       idx=allocation.index(slot_base+(window.base+row*window.stride_bytes+logical_k*2)//2,dtype=dtypes.half.vec(8)).replace(tag=tag)
       stores.append(idx.store(UOp(Ops.STACK,dtypes.half.vec(8),values)).replace(tag=tag).end())
     role_nodes.append(UOp.group(*stores))
@@ -292,8 +353,9 @@ def instantiate_precontract_fragments(geometry:KernelTileGeometry, *, tc, alloca
     window=_window(geometry,role); row=(wave*subtiles+subtile)*16+lane%16
     logical_k=k_substep*tc.dims[2]+contract.element
     idx=slot_base+(window.base+row*window.stride_bytes+logical_k*2)//2
-    load=ordered.index(idx,dtype=dtypes.half).replace(tag=("kernel_tile_fragment_load",role)).load()
-    return UOp(Ops.CONTRACT,dtypes.half.vec(16),(load,),contract.arg,tag=("kernel_tile_fragment",role))
+    semantic=(role,epoch,slot,k_substep,subtile)
+    load=ordered.index(idx,dtype=dtypes.half).replace(tag=("kernel_tile_fragment_load",*semantic)).load()
+    return UOp(Ops.CONTRACT,dtypes.half.vec(16),(load,),contract.arg,tag=("kernel_tile_fragment",*semantic))
   frags=(fragment("A",subtile_m,threads.wave_m,factors.subtiles_m,contracts[0]),
          fragment("B",subtile_n,threads.wave_n,factors.subtiles_n,contracts[1]))
   return PrecontractFragmentInstance(epoch,slot,ready,frags)

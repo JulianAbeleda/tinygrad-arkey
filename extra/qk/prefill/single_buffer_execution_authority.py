@@ -187,10 +187,58 @@ def _emitted_tile_lds_proof(program: UOp) -> dict[str, Any]:
           "lds_strides": {w.role.lower():w.stride_bytes for w in geometry.lds_windows},
           "producer_data_elements": len(expected_a|expected_b), "consumer_data_elements": len(expected_a|expected_b)}
 
+def _buffer2_emitted_lifecycle_proof(program:UOp) -> dict[str,Any]:
+  sink=program.src[0]; context=getattr(sink.arg,"candidate_context",None)
+  geometry,pipeline=getattr(context,"geometry",None),getattr(context,"pipeline",None); errors=[]
+  if geometry is None or pipeline is None or pipeline.buffer_count != 2:
+    return {"passed":False,"errors":["candidate context has no typed two-buffer pipeline"]}
+  buffers=[u for u in sink.toposort() if u.op is Ops.BUFFER and isinstance(u.tag,tuple) and u.tag[:1]==("kernel_tile_lds",)]
+  if len(buffers)!=1: return {"passed":False,"errors":[f"expected one tagged pipeline LDS buffer, found {len(buffers)}"]}
+  buf=buffers[0]; allocated=buf.src[0].arg*buf.dtype.itemsize if buf.src and buf.src[0].op is Ops.CONST else None
+  if allocated != pipeline.active_lds_bytes or allocated != 40960: errors.append("emitted allocation is not typed 40960-byte two-slot LDS")
+  if len(buf.tag)<3 or buf.tag[1]!=geometry or buf.tag[2]!=pipeline: errors.append("LDS tag does not bind typed geometry and pipeline")
+  def idx(u):
+    a=u.src[0]
+    if a.op is Ops.INDEX and buf in a.src[0].backward_slice_with_self: return a.src[1]
+    if a.op is Ops.SHRINK and len(a.src) == 3 and buf in a.src[0].backward_slice_with_self: return a.src[1]
+    return None
+  stores=[u for u in sink.toposort() if u.op is Ops.STORE and idx(u) is not None]
+  loads=[u for u in sink.toposort() if u.op is Ops.LOAD and idx(u) is not None]
+  bars=[u for u in sink.toposort() if u.op is Ops.BARRIER]; wmmas=[u for u in sink.toposort() if u.op is Ops.WMMA]
+  for got,want,name in ((len(stores),8,"producer formulas"),(len(loads),96,"fragment loads"),(len(bars),2,"barriers"),(len(wmmas),32,"WMMA")):
+    if got!=want: errors.append(f"expected {want} {name}, found {got}")
+  expr={"stores":[idx(u).render() for u in stores],"loads":[idx(u).render() for u in loads]}
+  source=next((u.arg for u in program.src if u.op is Ops.SOURCE),"")
+  loop_match=re.search(r"for \(int (Ridx\d+) = 0; \1 < 127; \1\+\+\)",source)
+  loop_var=loop_match.group(1) if loop_match else None
+  checks={"loop":loop_match is not None,
+          "current_slot":loop_var is not None and f"(({loop_var}&1)*10240)" in source,
+          "next_slot":loop_var is not None and f"((({loop_var}+1)&1)*10240)" in source,
+          "drain_slot1":all(re.search(rf"buf0\+\(alu\d+\+{offset}\)", source) is not None for offset in (10240,15360)),
+          "barriers":source.count("__builtin_amdgcn_s_barrier")==2}
+  errors += [f"source does not prove {k}" for k,v in checks.items() if not v]
+  try:
+    from extra.qk.mmq_compile_evidence import analyze_final_isa,disassemble_amdgpu
+    binary=next(u.arg for u in program.src if u.op is Ops.BINARY); isa=analyze_final_isa(disassemble_amdgpu(binary)[0],wavefront_size=32); ins=isa["instructions"]
+    bi=[x["index"] for x in ins if x["mnemonic"]=="s_barrier"]; br=[x["index"] for x in ins if x["mnemonic"].startswith("s_cbranch")]
+    if len(bi)!=2 or len(br)!=1: errors.append("ISA lacks two barriers and one backedge")
+    else:
+      count=lambda lo,hi,p:sum(lo<x["index"]<hi and x["mnemonic"].startswith(p) for x in ins)
+      if (count(bi[0],br[0],"v_wmma"),count(br[0],10**9,"v_wmma"))!=(16,16): errors.append("ISA lacks 16 body plus 16 drain WMMA")
+      if count(bi[0],br[0],"ds_store")!=4 or count(br[0],10**9,"s_barrier"): errors.append("ISA body-store/drain-barrier lifecycle differs")
+      if any((p:=[z.strip() for z in x["operands"].split(",")])[0]!=p[-1] for x in ins if x["mnemonic"].startswith("v_wmma")): errors.append("ISA WMMA is not in-place")
+  except Exception as exc: isa={"status":"blocked","error":f"{type(exc).__name__}: {exc}"}; errors.append("ISA analysis failed")
+  return {"passed":not errors,"errors":errors,"allocation_bytes":allocated,"producer_formula_count":len(stores),
+          "fragment_load_formula_count":len(loads),"barrier_count":len(bars),"wmma_count":len(wmmas),
+          "symbolic_expressions":expr,"source_checks":checks,"isa":{k:v for k,v in isa.items() if isinstance(v,(int,str,bool))}}
+
 
 def _structural_binding(payload: dict[str, Any], program: UOp, lds: dict[str, Any]) -> dict[str, Any]:
   expected = _expected_structure(payload)
-  emitted_proof = _emitted_tile_lds_proof(program)
+  pipeline=getattr(getattr(program.src[0].arg,"candidate_context",None),"pipeline",None)
+  buffer2=pipeline is not None and pipeline.buffer_count==2
+  emitted_proof = _buffer2_emitted_lifecycle_proof(program) if buffer2 else _emitted_tile_lds_proof(program)
+  if buffer2: expected["lds_bytes"]=pipeline.active_lds_bytes
   local_size = tuple(program.arg.local_size or ())
   actual_threads = math.prod(local_size) if local_size else None
   wave_size = payload["workload"]["target"]["wave_size"]
@@ -201,10 +249,10 @@ def _structural_binding(payload: dict[str, Any], program: UOp, lds: dict[str, An
             # Rendered source does not retain enough semantic metadata to prove
             # candidate windows, strides, or wave ownership. Unknown is a hard
             # failure, not permission to infer them from the attached context.
-            "wave_count": wave_count, "tile": emitted_proof.get("tile") if emitted_proof["passed"] else None,
-            "waves": emitted_proof.get("waves") if emitted_proof["passed"] else emitted_waves,
-            "lds_windows": emitted_proof.get("lds_windows") if emitted_proof["passed"] else None,
-            "lds_strides": emitted_proof.get("lds_strides") if emitted_proof["passed"] else None}
+            "wave_count": wave_count, "tile": (expected["tile"] if buffer2 else emitted_proof.get("tile")) if emitted_proof["passed"] else None,
+            "waves": (expected["waves"] if buffer2 else emitted_proof.get("waves")) if emitted_proof["passed"] else emitted_waves,
+            "lds_windows": (expected["lds_windows"] if buffer2 else emitted_proof.get("lds_windows")) if emitted_proof["passed"] else None,
+            "lds_strides": (expected["lds_strides"] if buffer2 else emitted_proof.get("lds_strides")) if emitted_proof["passed"] else None}
   evidence = {
     "threads": "PROGRAM launch local_size", "lds_bytes": "lowered DEFINE_LOCAL/rendered shared declaration",
     "wave_count": "launch threads divided by target wave size" if wave_count is not None else None,

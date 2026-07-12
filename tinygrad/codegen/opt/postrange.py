@@ -348,19 +348,59 @@ class Scheduler:
                 element = ((contract_axes[0]*2+contract_axes[1])*2+contract_axes[2])*2+contract_axes[3]
                 contracts.append(PrecontractContractSpec(role, contract_axes, tc_upcast_axes[operand_idx], element,
                   tuple(tc.lane_map.remaps()[operand_idx].items())))
-              allocation = UOp.placeholder((candidate_geometry.lds_windows[-1].end//2,), dtypes.half, _candidate_lds_buffer_id(self),
+              candidate_lds_id = _candidate_lds_buffer_id(self)
+              allocation = UOp.placeholder((candidate_geometry.lds_windows[-1].end//2,), dtypes.half, candidate_lds_id,
                                              addrspace=AddrSpace.LOCAL).replace(tag=("kernel_tile_lds", candidate_geometry))
               candidate_pipeline = getattr(self.ast.arg.candidate_context, "pipeline", None)
               if candidate_pipeline is not None:
-                allocation = UOp.placeholder((candidate_pipeline.active_lds_bytes//2,), dtypes.half, _candidate_lds_buffer_id(self),
+                allocation = UOp.placeholder((candidate_pipeline.active_lds_bytes//2,), dtypes.half, candidate_lds_id,
                                                addrspace=AddrSpace.LOCAL).replace(tag=("kernel_tile_lds", candidate_geometry, candidate_pipeline))
-              stage = build_precontract_lds_stage(candidate_geometry, tc=tc, allocation=allocation,
-                operands=(PrecontractOperandTemplate("A", in0, original_axes[1], original_axes[2], outer_m*candidate_geometry.tile[0]),
-                          PrecontractOperandTemplate("B", in1, original_axes[0], original_axes[2], outer_n*candidate_geometry.tile[1])),
-                threads=PrecontractThreadAxes(wave_m, wave_n, lane),
-                k_axis=PrecontractKAxis(outer_k, k_substep, outer_k*candidate_geometry.tile[2], k_substep),
-                subtile_m=subtile_m, subtile_n=subtile_n, contracts=tuple(contracts), pipeline_plan=candidate_pipeline)
-              wmma_srcs = [stage.fragment_a, stage.fragment_b]
+              operands=(PrecontractOperandTemplate("A", in0, original_axes[1], original_axes[2], outer_m*candidate_geometry.tile[0]),
+                        PrecontractOperandTemplate("B", in1, original_axes[0], original_axes[2], outer_n*candidate_geometry.tile[1]))
+              thread_axes=PrecontractThreadAxes(wave_m,wave_n,lane)
+              pipeline_tc_uop = None
+              if candidate_pipeline is not None:
+                from tinygrad.codegen.opt.kernel_lds import PrecontractPipelineTemplate
+                from tinygrad.codegen.opt.kernel_pipeline import (KernelStage1FragmentStage, KernelStage1ProducerStage,
+                  build_stage1_uop_graph, prove_stage1_uop_graph)
+                template=PrecontractPipelineTemplate(candidate_geometry,tc,allocation,operands,thread_axes,
+                  subtile_m,subtile_n,tuple(contracts),candidate_pipeline)
+                factors=template.factors
+                def _produce(epoch,slot,reuse):
+                  p=template.producer(epoch,slot)
+                  ready=UOp.barrier(UOp.group(*p.role_nodes) if reuse is None else UOp.group(*p.role_nodes,reuse))
+                  return KernelStage1ProducerStage(epoch,slot,p.role_nodes,ready)
+                def _fragments(epoch,slot,ready):
+                  substeps=[]
+                  for substep in range(factors.k_substeps):
+                    f=template.fragments(epoch,slot,ready,substep)
+                    substeps.extend(f.fragments)
+                  return KernelStage1FragmentStage(epoch,slot,ready,tuple(substeps))
+                def _wmma(stage,acc,_subtile):
+                  chain=acc
+                  for substep in range(factors.k_substeps):
+                    chain=UOp(Ops.WMMA,tc.dtype_out.vec(tc.elements_per_thread[2]),
+                      (stage.fragments[2*substep],stage.fragments[2*substep+1],chain),wmma_arg,tag=("pipeline_k_substep",substep))
+                  return chain
+                c_axes=tuple(range_by_id[a] for a,sz in tc_upcast_axes[2] if sz == 2)
+                if len(c_axes) != 3: raise KernelOptError("buffer2 accumulator contract does not have three binary axes")
+                c_elem=(c_axes[0]*2+c_axes[1])*2+c_axes[2]
+                accumulator_owners=[(sm*factors.subtiles_n+sn)*8+elem for sm in range(factors.subtiles_m)
+                  for sn in range(factors.subtiles_n) for elem in range(8)]
+                if len(accumulator_owners) != 64 or set(accumulator_owners) != set(range(64)):
+                  raise KernelOptError("buffer2 accumulator ownership must be an exact unique cover of [0, 64)")
+                graph=build_stage1_uop_graph(candidate_pipeline,outer_k.vmax+1,_produce,_fragments,_wmma,subtile_count=1,
+                  accumulator_elements=factors.subtiles_m*factors.subtiles_n*8,
+                  accumulator_offset=(subtile_m*factors.subtiles_n+subtile_n)*8,
+                  accumulator_contract=(c_elem,tc_upcast_axes[2]),body_range_id=next(self.opt_range),accumulator_id=next(self.opt_range))
+                proof=prove_stage1_uop_graph(graph)
+                if not proof.passed: raise KernelOptError("buffer2 lifecycle UOp proof failed: "+"; ".join(proof.errors))
+                pipeline_tc_uop=UOp(Ops.UNROLL,tc.dtype_out,(graph.drain[0],),arg=tc_upcast_axes[2],tag=1)
+              else:
+                stage = build_precontract_lds_stage(candidate_geometry, tc=tc, allocation=allocation, operands=operands,
+                  threads=thread_axes,k_axis=PrecontractKAxis(outer_k,k_substep,outer_k*candidate_geometry.tile[2],k_substep),
+                  subtile_m=subtile_m,subtile_n=subtile_n,contracts=tuple(contracts),pipeline_plan=None)
+                wmma_srcs = [stage.fragment_a, stage.fragment_b]
             else:
               wmma_srcs = [
                 UOp(Ops.CONTRACT, dtype=srcs[0].dtype.vec(tc.elements_per_thread[0]), src=(srcs[0],), arg=tc_upcast_axes[0], tag=1),
@@ -374,12 +414,22 @@ class Scheduler:
                                                        enabled=not post_disables_early and early_local_stage_allowed and
                                                        (_tc_local_stage_with_planned_local() or
                                                        not any(o.op is OptOps.LOCAL for o in (*self.planned_opts, *self.applied_opts))))
-            wmma = UOp(Ops.WMMA, dtype=tc.dtype_out.vec(tc.elements_per_thread[2]), src=(
-              wmma_srcs[0], wmma_srcs[1], UOp.const(tc.dtype_out.vec(tc.elements_per_thread[2]), 0.0)), arg=wmma_arg, tag=1)
-            tc_uop = UOp(Ops.UNROLL, tc.dtype_out, (wmma,), arg=tc_upcast_axes[2], tag=1)
+            if candidate_axes is not None and pipeline_tc_uop is not None: tc_uop = pipeline_tc_uop
+            else:
+              wmma = UOp(Ops.WMMA, dtype=tc.dtype_out.vec(tc.elements_per_thread[2]), src=(
+                wmma_srcs[0], wmma_srcs[1], UOp.const(tc.dtype_out.vec(tc.elements_per_thread[2]), 0.0)), arg=wmma_arg, tag=1)
+              tc_uop = UOp(Ops.UNROLL, tc.dtype_out, (wmma,), arg=tc_upcast_axes[2], tag=1)
 
             # preserve extra reduces
             reduce_ranges = [x for x in UOp.sink(*reduceop.src[1:]).toposort() if x.op is Ops.RANGE and x.arg[0] not in tc_reduce_axes]
+            if candidate_axes is not None and pipeline_tc_uop is not None:
+              pipeline_reduce_ranges = [x for x in reduce_ranges if x.arg[-1] is AxisType.REDUCE]
+              if len(pipeline_reduce_ranges) != 1 or pipeline_reduce_ranges[0].arg != outer_k.arg:
+                raise KernelOptError(f"buffer2 must consume exactly the original outer-K reduce: "
+                                     f"expected {outer_k.arg!r}, got {[x.arg for x in pipeline_reduce_ranges]!r}")
+              if outer_k in pipeline_tc_uop.backward_slice or k_substep in pipeline_tc_uop.backward_slice:
+                raise KernelOptError("buffer2 replacement retained an original K ownership range")
+              reduce_ranges = []
             if len(reduce_ranges): tc_uop = UOp(Ops.REDUCE, tc_uop.dtype, (tc_uop,)+tuple(reduce_ranges), (Ops.ADD, ()))
             self.ast = self.ast.substitute({reduceop: tc_uop})
           self.tensor_core = tc
@@ -803,7 +853,7 @@ def apply_opts(ast:UOp, ren:Renderer) -> UOp:
       for o in forced: k.apply_opt(o)
       _warmstart_stats["apply"] += 1
     except KernelOptError as _e:  # axis/fusion mismatch -> safe fallback to the heuristic on a fresh kernel
-      if getattr(ast.arg, "candidate_context", None) is not None: raise
+      if getattr(k.ast.arg, "candidate_context", None) is not None: raise
       _warmstart_stats.setdefault("errs", []).append(f"{[str(o) for o in forced]} -> {str(_e)[:90]}")
       _warmstart_stats["error"] += 1
       k = Scheduler(ast, ren); k.convert_loop_to_global()

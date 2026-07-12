@@ -4,7 +4,7 @@ from dataclasses import replace
 from tinygrad.codegen.opt.kernel_pipeline import (KernelStage1LifecycleEvent, KernelStage1PipelinePlan,
   build_stage1_uop_graph, prove_stage1_lifecycle, prove_stage1_uop_graph, stage1_lifecycle_events)
 from tinygrad import dtypes
-from tinygrad.uop.ops import Ops, UOp
+from tinygrad.uop.ops import AxisType, Ops, UOp
 
 
 class TestKernelStage1PipelinePlan(unittest.TestCase):
@@ -128,6 +128,14 @@ class TestKernelStage1SyntheticUOps(unittest.TestCase):
       self.assertEqual(self.body_calls,8); graphs.append(g)
     self.assertEqual([g.accumulator_reg.ptrdtype.size for g in graphs],[64,64,64])
     self.assertEqual([len([u for u in g.sink.toposort() if u.op is Ops.RANGE]) for g in graphs],[1,1,1])
+
+  def test_heterogeneous_effect_group_is_shape_erased(self):
+    a=UOp.placeholder((128,),dtypes.float,9700,addrspace=__import__('tinygrad.dtype',fromlist=['AddrSpace']).AddrSpace.REG)
+    b=UOp.placeholder((8,),dtypes.float,9701,addrspace=__import__('tinygrad.dtype',fromlist=['AddrSpace']).AddrSpace.REG)
+    effects=UOp.group(a.index(UOp.range(128,9702,AxisType.LOOP)).store(UOp.const(dtypes.float,0.0)),
+                      b.index(UOp.range(8,9703,AxisType.UPCAST)).store(UOp.const(dtypes.float,0.0)))
+    self.assertEqual(effects.shape,())
+    self.assertEqual(UOp.barrier(effects).src,(effects,))
 
 
 if __name__ == "__main__": unittest.main()
