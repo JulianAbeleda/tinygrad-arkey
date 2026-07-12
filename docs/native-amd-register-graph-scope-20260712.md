@@ -1,148 +1,157 @@
-# Native AMD Register Graph Scope (2026-07-12)
+# Native AMD Register Graph Scope
 
-## Scope
+Date: 2026-07-12
 
-This note records the reproducible blocker between the structural sequential
-register pipeline and an AMD native graph.  The target is the existing
-`RegisterPipeTemplate(schedule="sequential")` fixture (RDNA3 WMMA,
-`128x128x32`, `A/B half.vec16` stage fragments, two K steps).  It is a
-compiler/devectorizer boundary problem; no new allocator or scheduler is
-required.
+## Purpose
+
+Close the remaining pre-binary blocker for the sequential, one-slot pure
+register route on AMD gfx1100. The route must pass the normal native AMD
+pipeline without weakening UOp validation, WMMA ABI checks, register ownership,
+or the pure-route evidence gate.
 
 ## Reproduction
 
-The following fixture is used by `test/unit/test_register_pipeline.py`:
+Use the existing `RegisterPipeTemplate` fixture with `schedule="sequential"`,
+the existing `RegisterStorageAdapter`, a full-K graph, and a multi-output WMMA
+shape (`subtile_count=8`, `accumulator_elements=64`). Run:
 
 ```text
-_fixture() -> RegisterPipeTemplate(..., schedule="sequential")
-build_stage1_uop_graph_with_storage(..., k_tiles=2,
-  _register_wmma, subtile_count=1, accumulator_elements=8)
-full_rewrite_to_sink(graph.sink, HIPRenderer(Target.parse("AMD")),
-  optimize=False)
+SPEC=1 full_rewrite_to_sink(..., AMDISARenderer(Target.parse("AMD:ISA:gfx1100")))
 ```
 
-Running the same graph with `SPEC=0` and `SPEC=1` produces the same graph
-shape.  `SPEC` therefore does not cause the failure; it only changes whether
-the type verifier checks the resulting graph.
+The failure is a UOp type-verification error on `Ops.STACK half.vec(16)` with
+16 children that are themselves `Ops.STACK half.vec(16)`. The same nested
+shape is observable with `SPEC=0`; disabling verification does not make it a
+valid native graph.
 
-The observed stage counts for the sequential fixture are:
+Measured rewrite boundary:
 
-| stage | nodes | `STACK` nodes | nested `STACK` nodes |
-| --- | ---: | ---: | ---: |
-| raw graph | 450 | 8 | 0 |
-| early movement | 450 | 8 | 0 |
-| post-opt symbolic | 388 | 8 | 0 |
-| expander | 388 | 12 | 0 |
-| add locals/rangeify | 388 | 12 | 0 |
-| remove reduce | 388 | 12 | 0 |
-| WMMA ownership grouping | 388 | 12 | 0 |
-| add GPU dimensions | 388 | 12 | 0 |
-| accumulator fix | 388 | 12 | 0 |
-| add loads | 390 | 12 | 0 |
-| combined AMD devectorizer | 814 | 18 | **4** |
+| Rewrite | Nodes | Nested vector stacks |
+|---|---:|---:|
+| raw graph | 450 | 0 |
+| add loads | 390 | 0 |
+| combined devectorize matcher | 814 | 4 |
+| later rewrites / control flow | 814 | 4 |
 
-The combined devectorizer is the existing call in `full_rewrite_to_sink`:
+The failure is therefore introduced by the existing combined devectorizer
+pass, not by AMD register allocation or the typed wait lowering. The native
+isel stage can map the static one-slot A/B stage elements when the graph is
+otherwise valid.
 
-```python
-sym + devectorize_alu + devectorize_buf_and_index +
-load_store_folding + correct_load_store
-```
+The four malformed parents are WMMA A/B carriers. `correct_load_store` splits
+the vector register load into scalar loads, then the fixed-point matcher revisits
+the carrier through the existing load/GEP folding rules and wraps an already
+stack-shaped target a second time. The resulting `STACK(half.vec16)` contains
+16 `STACK(half.vec16)` children instead of a flat 16-lane carrier. This is an
+interaction between existing matcher families, not a malformed producer UOp.
 
-The four new nested nodes are WMMA A/B operand carriers.  Each has dtype
-`half.vec16`, 16 children, and each child is another `STACK(half.vec16)` of
-16 scalar `LOAD`s.  The carrier is consequently a stack-of-stacks rather
-than the native AMD WMMA ABI's required flat 16-lane carrier.
+## Ownership map
 
-## Exact ownership of the transition
+1. `register_pipeline.py` owns the logical A/B stage carriers and their
+   readiness provenance. It must continue to emit scalar-correct
+   `half.vec(16)` stage contracts.
+2. `kernel_pipeline.py` owns epoch/slot/reuse ordering. It must not flatten or
+   reinterpret vector data.
+3. `devectorizer.py` owns load folding, vector splitting, GEP/STACK lowering,
+   and WMMA scalarization. The fix belongs at this boundary if the input graph
+   is valid.
+4. `amd.py` owns conversion of valid stage carriers to pinned VGPRs and
+   `WaitCount` to `s_waitcnt`. No route code may add raw ISA.
+5. `spec.py` remains the authority for legal UOp shapes. Do not suppress the
+   nested-stack error or broaden `Ops.STACK` to accept malformed children.
 
-Running each matcher as a separate graph rewrite does not create nesting.
-The first four matcher groups (`sym`, `devectorize_alu`,
-`devectorize_buf_and_index`, `load_store_folding`) leave 12 flat stacks.  The
-full combined matcher creates nesting only when `correct_load_store` is
-included as the final matcher.
+## Required investigation
 
-This is a fixed-point interaction, not a single malformed UOp emitted by the
-register producer:
+### N0: Freeze the graph
 
-1. Before AMD devectorization, WMMA A/B sources are flat `STACK(half.vec16)`
-   carriers whose children are vector `LOAD(half.vec16)` nodes from the
-   register-stage indexes.
-2. `correct_load_store.split_load_store` sees a vector register load.  REG
-   buffers intentionally have no vector fold widths, so the load is split to
-   scalar loads (length 1) and represented as a `VCAT`.
-3. Because all five matcher families share one fixed-point rewrite, the newly
-   rebuilt WMMA and its producer/consumer slices are revisited by the earlier
-   patterns.  The existing `load_store_folding.stack_load` path can then
-   materialize a `STACK` around a load whose target is already a stack-shaped
-   pointer carrier.  The rebuilt WMMA receives a second stack layer.
-4. Subsequent AMD rules do not flatten this shape.  `pm_render` only removes
-   one-element stacks and AMD ISA WMMA matching requires a flat lane carrier,
-   so the native path cannot consume the graph.
+Capture the pre-devectorize graph, post-devectorize graph, nested-stack count,
+node tags, dtype/count, and the first backward slice for each malformed parent.
+The fixture must include both A and B roles and the multi-output C ownership
+shape; single-output WMMA is not sufficient evidence.
 
-The proof is the matcher-order experiment: all permutations of the five
-families were tested; nesting requires the `correct_load_store` interaction
-with the combined fixed-point matcher.  Running `correct_load_store` as a
-separate pass after the first four does not reproduce it.
+### N1: Isolate the matcher
 
-## Required native-graph invariants
+Run the devectorizer components independently in existing order:
 
-These should be enforced at the compiler-neutral boundary before native ISA
-selection:
+- `sym`
+- `devectorize_alu`
+- `devectorize_buf_and_index`
+- `load_store_folding`
+- `correct_load_store`
+- `load_store_indexing`
 
-* WMMA A/B operands must be exactly `STACK(half.vec16)` with 16 scalar lane
-  values, or the already-lowered AMD stage carrier accepted by the backend.
-* No `STACK` child of an A/B WMMA carrier may itself be a `STACK` or `VCAT`.
-* Splitting a register-resident vector load must produce the scalar lane list
-  consumed by the existing carrier contract; it must not feed
-  `stack_load` a vector/stack pointer target.
-* The post-devectorizer graph must contain no `DEFINE_LOCAL`/`INS` stage
-  storage and must preserve the `register_pipe_stage_buffer` ownership tag.
-* The check must fail closed before AMD `isel_wmma`, rather than silently
-  selecting an LDS or global fallback.
+Record the first component that changes a valid `half.vec(16)` carrier into a
+`half.vec(16)` stack of vector children. Determine whether the cause is:
 
-## Smallest reusable fix options
+- load grouping/folding of the producer input;
+- vectorized `DEFINE_REG`/stage-buffer index lowering;
+- WMMA source scalarization (`no_vectorized_wmma` / `GEP` rendering); or
+- a tag/lifetime rewrite that loses the stage-carrier identity.
 
-1. **Preferred: make stack-load folding shape-aware.**  In the existing
-   `stack_load` matcher, decline a rewrite when the load target is a stack
-   whose elements are already vector carriers (or when the resulting stack
-   would be a stack-of-stacks).  This keeps the generic devectorizer and
-   applies to register-resident GEMM, WMMA, and dot2 consumers.
-2. **Typed register-load split adapter.**  Add one backend-neutral helper for
-   register-resident vector loads that returns a flat scalar lane carrier and
-   carries the stage tag through the split.  Route `split_load_store` through
-   this helper before generic `stack_load` folding.  Reuse existing
-   `RegisterPipeTemplate` and `LogicalRegisterTile`; do not create a second
-   scheduler or allocator.
-3. **Pass-boundary isolation (diagnostic fallback).**  Run
-   `correct_load_store` in a separate pass after the generic devectorizer and
-   add a flat-carrier assertion.  This avoids the current fixed-point loop but
-   is less reusable and may leave duplicated scalar loads; use only to verify
-   the hypothesis, not as the final architecture.
+### N2: Choose the smallest reusable fix
 
-Options 1 and 2 require focused tests for both `SPEC=0` and `SPEC=1`, a
-flat-carrier assertion on the WMMA adapter, and the existing AMD ISA fixture
-tests.  No option is allowed to claim an executable GPU route until native
-ISA lowering, resource artifact emission, numerical correctness, and pinned
-timing pass.
+Preferred order:
 
-## Verification sequence after a fix
+1. Preserve the existing scalar/vector contract through the owning matcher.
+2. Use an existing tag or codegen-extension seam to prevent only the invalid
+   grouping for register-pipe carriers.
+3. Add a narrowly scoped devectorizer pattern that converts the exact valid
+   carrier form to the expected scalar/vector form while preserving tags and
+   readiness.
+4. Reject the form with a typed error if correctness cannot be proven.
 
-1. Re-run the stage-count probe and require `nested STACK == 0` after the
-   combined devectorizer.
-2. Run the focused register/AMD suites, including
-   `test_register_pipeline.py`, `test_amd_isa_wmma.py`, extraction fixtures,
-   and waitcnt tests with both `SPEC=0` and `SPEC=1`.
-3. Run `to_program`/native AMD assembly on the real graph and inspect the
-   emitted ISA for VGPR stage reads/writes, no LDS stage allocation, and no
-   spills.
-4. Only then proceed to single-role numerical comparison, pinned timing, and
-   whole-model pure-route admission.
+Do not flatten nested stacks generically, disable all global load grouping, or
+remove ABI/spec verification. Those changes would hide shape errors or alter
+unrelated kernels.
 
-## Current conclusion
+### N3: Compiler proof
 
-The native graph is not missing a new GEMM algorithm.  The existing compiler
-pipeline reaches the right register-stage ownership and wait contracts, then
-loses the flat WMMA carrier invariant during the shared fixed-point
-devectorizer.  The smallest credible repair is a reusable shape-aware guard or
-typed register-load split in the existing devectorizer, followed by the normal
-AMD artifact/correctness/timing gates.
+The fix must prove:
+
+- no nested vector stacks at the post-devectorize/spec boundary;
+- A/B stage values remain exactly `half.vec(16)`;
+- no `DEFINE_LOCAL`, LDS stage allocation, or scratch appears;
+- producer wait and overwrite dependencies survive;
+- WMMA A/B/C contracts and multi-output ownership remain unchanged;
+- dynamic/two-slot VGPR indexing still fails closed;
+- existing LDS and non-register routes are byte/graph-equivalent.
+
+### N4: Native AMD lowering
+
+Run normal `to_program`/linearization with a real `KernelInfo` and the native
+AMD renderer. Verify:
+
+- static A/B stage accesses select `STAGE_READ`/`STAGE_WRITE`;
+- stage VGPR spans do not overlap WMMA fragments or accumulators;
+- typed waits lower to `s_waitcnt` with the expected immediate;
+- no raw `Ops.WAIT`, `Ops.STACK`, or route-owned pseudo-op remains in the final
+  instruction stream;
+- assembler/resource descriptor generation succeeds.
+
+Synthetic graphs with incomplete `KernelInfo` or missing workgroup metadata
+may be used for local matcher tests, but cannot count as binary evidence.
+
+### N5: Evidence and runtime
+
+After a native binary exists, reuse the existing authorities for:
+
+- final `AMDResourceArtifact` (VGPR/SGPR/LDS/scratch/spills and source/binary
+  identity);
+- single-role numerical correctness;
+- pinned-clock synchronized timing;
+- remaining dense roles;
+- whole-model pure attribution with no hybrid fallback;
+- typed machine-search admission.
+
+## Exit criteria
+
+This native-graph scope is complete only when N0-N4 pass. It does not by itself
+claim 100% pure 8B execution; N5 remains required for correctness, timing,
+whole-model purity, and machine search.
+
+## Current status
+
+The failure is isolated to the combined devectorizer boundary with a stable
+reproduction and a clear ownership boundary. No generic flattening or spec
+weakening is acceptable. Until N3/N4 pass, the route remains a structural
+compiler proof rather than a runnable GPU candidate.
