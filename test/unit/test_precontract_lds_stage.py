@@ -20,16 +20,19 @@ def _fixture():
   threads=PrecontractThreadAxes(UOp.range(4,30,AxisType.LOCAL),UOp.range(2,31,AxisType.LOCAL),UOp.range(32,-1,AxisType.WARP))
   owner=UOp.range(256,32,AxisType.REDUCE); kaxis=PrecontractKAxis(owner,(owner//2)*32,owner%2)
   sm,sn=UOp.range(2,33,AxisType.UPCAST),UOp.range(4,34,AxisType.UPCAST)
-  axes=tuple(UOp.range(2,35+i,AxisType.UPCAST) for i in range(4))
-  elem=((axes[0]*2+axes[1])*2+axes[2])*2+axes[3]
-  contract=PrecontractContractSpec(axes,tuple((a.arg[0],2) for a in axes),elem)
+  contracts=[]
+  for operand_idx,role in enumerate(("A","B")):
+    axes=tuple(UOp.range(2,35+operand_idx*4+i,AxisType.UPCAST) for i in range(4))
+    elem=((axes[0]*2+axes[1])*2+axes[2])*2+axes[3]
+    contracts.append(PrecontractContractSpec(role,axes,tuple((a.arg[0],2) for a in axes),elem,
+      tuple(_tc().lane_map.remaps()[operand_idx].items())))
   allocation=UOp.placeholder((10240,),dtypes.half,994,addrspace=AddrSpace.LOCAL)
-  return allocation,ops,threads,kaxis,sm,sn,contract
+  return allocation,ops,threads,kaxis,sm,sn,tuple(contracts)
 
 def _stage(**overrides):
-  allocation,ops,threads,kaxis,sm,sn,contract=_fixture()
+  allocation,ops,threads,kaxis,sm,sn,contracts=_fixture()
   values={"allocation":allocation,"operands":ops,"threads":threads,"k_axis":kaxis,
-          "subtile_m":sm,"subtile_n":sn,"contract":contract}|overrides
+          "subtile_m":sm,"subtile_n":sn,"contracts":contracts}|overrides
   return build_precontract_lds_stage(_geometry(),tc=_tc(),**values)
 
 def test_real_range_stage_structure_and_contract_args():
@@ -37,7 +40,8 @@ def test_real_range_stage_structure_and_contract_args():
   assert stage.allocation.op is Ops.DEFINE_LOCAL and stage.allocation.ptrdtype.addrspace is AddrSpace.LOCAL
   assert stage.allocation.ptrdtype.size*2 == 20480
   assert stage.producer.op is Ops.GROUP and stage.barrier.src == (stage.producer,)
-  assert stage.fragment_a.arg == stage.fragment_b.arg == ((35,2),(36,2),(37,2),(38,2))
+  assert stage.fragment_a.arg == ((35,2),(36,2),(37,2),(38,2))
+  assert stage.fragment_b.arg == ((39,2),(40,2),(41,2),(42,2))
   assert all(stage.barrier in x.backward_slice for x in UOp.sink(stage.fragment_a,stage.fragment_b).backward_slice
              if x.op is Ops.LOAD and stage.allocation in x.backward_slice)
   assert not any(x.op in (Ops.END,Ops.SPECIAL) for x in UOp.sink(stage.producer,stage.fragment_a,stage.fragment_b).backward_slice)
@@ -67,11 +71,17 @@ def test_local4_local2_warp32_scalar_store_coverage():
         assert actual == expected
 
 def test_fail_closed_detached_axes_contract_and_allocation():
-  allocation,ops,threads,kaxis,sm,sn,contract=_fixture()
+  allocation,ops,threads,kaxis,sm,sn,contracts=_fixture()
   detached=PrecontractKAxis(kaxis.owner,UOp.const(dtypes.weakint,0),kaxis.owner%2)
   with pytest.raises(ValueError,match="K owner"): _stage(k_axis=detached)
-  bad_contract=PrecontractContractSpec(contract.axes,((99,16),),contract.element)
-  with pytest.raises(ValueError,match="four actual binary"): _stage(contract=bad_contract)
+  a_contract,b_contract=contracts
+  bad_contract=PrecontractContractSpec("A",a_contract.axes,((99,16),),a_contract.element,a_contract.descriptor_remap)
+  with pytest.raises(ValueError,match="actual descriptor"): _stage(contracts=(bad_contract,b_contract))
+  with pytest.raises(ValueError,match="ordered A and B"): _stage(contracts=(b_contract,a_contract))
+  bad_remap=PrecontractContractSpec("B",b_contract.axes,b_contract.arg,b_contract.element,a_contract.descriptor_remap)
+  with pytest.raises(ValueError,match="actual descriptor"): _stage(contracts=(a_contract,bad_remap))
+  wrong_element=PrecontractContractSpec("B",b_contract.axes,b_contract.arg,b_contract.axes[0],b_contract.descriptor_remap)
+  with pytest.raises(ValueError,match="actual descriptor"): _stage(contracts=(a_contract,wrong_element))
   bad_threads=PrecontractThreadAxes(UOp.range(8,30,AxisType.LOCAL),threads.wave_n,threads.lane)
   with pytest.raises(ValueError,match="LOCAL4/LOCAL2/WARP32"): _stage(threads=bad_threads)
   with pytest.raises(ValueError,match="caller allocation"): _stage(allocation=UOp.placeholder((6144,),dtypes.half,994,addrspace=AddrSpace.LOCAL))

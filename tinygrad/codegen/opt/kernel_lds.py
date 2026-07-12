@@ -87,9 +87,11 @@ class PrecontractKAxis:
 
 @dataclass(frozen=True)
 class PrecontractContractSpec:
+  role: str
   axes: tuple[UOp, ...]
   arg: tuple[tuple[int, int], ...]
   element: UOp
+  descriptor_remap: tuple[tuple[str, str], ...]
 
 @dataclass(frozen=True)
 class PrecontractLDSStage:
@@ -219,7 +221,7 @@ def wmma_output_owners(geometry:KernelTileGeometry, *, tc) -> tuple[WMMAOutputOw
 def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:UOp,
                                 operands:tuple[PrecontractOperandTemplate, ...], threads:PrecontractThreadAxes,
                                 k_axis:PrecontractKAxis, subtile_m:UOp, subtile_n:UOp,
-                                contract:PrecontractContractSpec) -> PrecontractLDSStage:
+                                contracts:tuple[PrecontractContractSpec, ...]) -> PrecontractLDSStage:
   """Build an unwired scalar cooperative stage while full operand index templates still exist."""
   validate_rdna3_wmma_descriptor(tc)
   if (geometry.tile, geometry.waves, geometry.threads, geometry.wave_size,
@@ -243,10 +245,14 @@ def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:U
     raise ValueError("precontract K owner must remain live in tile base and substep")
   if (subtile_m.op is not Ops.RANGE or subtile_m.vmax+1 != 2 or subtile_n.op is not Ops.RANGE or subtile_n.vmax+1 != 4):
     raise ValueError("precontract K/subtile axes are invalid")
-  if (len(contract.axes) != 4 or any(a.op is not Ops.RANGE or a.vmax+1 != 2 for a in contract.axes) or
-      contract.arg != tuple((a.arg[0], 2) for a in contract.axes) or
-      any(a not in contract.element.backward_slice_with_self for a in contract.axes)):
-    raise ValueError("precontract contract must retain four actual binary axes")
+  if tuple(c.role for c in contracts) != ("A", "B"): raise ValueError("precontract contracts must be exactly ordered A and B")
+  descriptor_remaps = tuple(tuple(x.items()) for x in tc.lane_map.remaps())
+  for operand_idx, contract in enumerate(contracts):
+    folded = ((contract.axes[0]*2+contract.axes[1])*2+contract.axes[2])*2+contract.axes[3] if len(contract.axes) == 4 else None
+    if (len(contract.axes) != 4 or any(a.op is not Ops.RANGE or a.vmax+1 != 2 for a in contract.axes) or
+        contract.arg != tuple((a.arg[0], 2) for a in contract.axes) or contract.element is not folded or
+        contract.descriptor_remap != descriptor_remaps[operand_idx]):
+      raise ValueError(f"precontract {contract.role} contract does not match actual descriptor operand mapping")
   total_bytes = geometry.lds_windows[-1].end
   if (allocation.op is not Ops.DEFINE_LOCAL or allocation.ptrdtype.addrspace is not AddrSpace.LOCAL or
       allocation.ptrdtype.base != dtypes.half or allocation.ptrdtype.size * dtypes.half.itemsize != total_bytes):
@@ -269,7 +275,7 @@ def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:U
   barrier = UOp.barrier(producer)
   wave_m, wave_n, lane = threads.wave_m, threads.wave_n, threads.lane
   ordered = allocation.after(barrier)
-  def _fragment(role:str, subtile:UOp, wave:UOp, subtiles:int) -> UOp:
+  def _fragment(role:str, subtile:UOp, wave:UOp, subtiles:int, contract:PrecontractContractSpec) -> UOp:
     window = _window(geometry, role)
     row = (wave * subtiles + subtile) * 16 + lane % 16
     logical_k = k_axis.substep * 16 + contract.element
@@ -278,5 +284,5 @@ def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:U
     return UOp(Ops.CONTRACT, dtypes.half.vec(16), (load,), contract.arg, tag=("kernel_tile_fragment", role))
   subtiles_m = geometry.tile[0] // (geometry.waves[0] * 16)
   subtiles_n = geometry.tile[1] // (geometry.waves[1] * 16)
-  return PrecontractLDSStage(allocation, producer, barrier, _fragment("A", subtile_m, wave_m, subtiles_m),
-                             _fragment("B", subtile_n, wave_n, subtiles_n))
+  return PrecontractLDSStage(allocation, producer, barrier, _fragment("A", subtile_m, wave_m, subtiles_m, contracts[0]),
+                             _fragment("B", subtile_n, wave_n, subtiles_n, contracts[1]))
