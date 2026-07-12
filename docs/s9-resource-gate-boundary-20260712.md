@@ -8,4 +8,7 @@ historical result; commits after it must be bisected for the regression.
 
 The adjacent `8ab3ee80c` worktree could not admit the model (VRAM admission
 reported max_context=0), so that run is invalid and needs a clean-device
-repeat. No conclusion is drawn from it.
+repeat. A clean isolated retry after terminating stale benchmark processes
+admitted max_context=512 and measured **116.2 ms / 4,405 tok/s**. Therefore
+`8ab3ee80c` is also in the fast historical band; the regression occurs after
+this commit. The earlier admission failure was capture contamination.
