@@ -1,7 +1,7 @@
 from __future__ import annotations
 import copy, functools, itertools, os, pathlib
 from dataclasses import dataclass, replace
-from tinygrad import Tensor, nn, UOp, TinyJit, dtypes, getenv, function, Device
+from tinygrad import Tensor, nn, UOp, TinyJit, dtypes, getenv, function, Device, role_metadata
 from tinygrad.codegen.opt import Opt, OptOps
 from tinygrad.helpers import prod
 from tinygrad.llm.admission import (
@@ -143,9 +143,10 @@ class ExpertWeights:
 
 def apply_rope(x:Tensor, freqs_cis:Tensor) -> Tensor:
   assert x.shape[-1] % 2 == 0
-  cos, sin = freqs_cis.reshape(1, 1, x.shape[2], -1).chunk(2, dim=-1)
-  x1, x2 = x.chunk(2, dim=-1)
-  return (x1 * cos - x2 * sin).cat(x2 * cos + x1 * sin, dim=-1)
+  with role_metadata("rope"):
+    cos, sin = freqs_cis.reshape(1, 1, x.shape[2], -1).chunk(2, dim=-1)
+    x1, x2 = x.chunk(2, dim=-1)
+    return (x1 * cos - x2 * sin).cat(x2 * cos + x1 * sin, dim=-1)
 
 def pairwise_topk(x: Tensor, k: int) -> tuple[Tensor, Tensor]:
   n = x.shape[-1]
@@ -275,8 +276,12 @@ class FFNBlock:
     # we pass in the weights implicitly so we unpack the GGUF on the fly
     @function(precompile=True, allow_implicit=True)
     def _run(x:Tensor, start_pos:int|UOp, ring_freqs):
-      h =     x + self._attention(self.attn_norm(x), start_pos, ring_freqs)
-      return (h + self._feed_forward(self.ffn_norm(h))).contiguous()
+      with role_metadata("rms_norm"): normed_x = self.attn_norm(x)
+      attn_out = self._attention(normed_x, start_pos, ring_freqs)
+      with role_metadata("residual"): h = x + attn_out
+      with role_metadata("rms_norm"): normed_h = self.ffn_norm(h)
+      ffn_out = self._feed_forward(normed_h)
+      with role_metadata("residual"): return (h + ffn_out).contiguous()
     return _run(x, start_pos, _rf)
 
 class TransformerBlock(FFNBlock):
@@ -298,7 +303,8 @@ class TransformerBlock(FFNBlock):
       q, k, v = _pf16(self.attn_q, x).contiguous(), _pf16(self.attn_k, x).contiguous(), _pf16(self.attn_v, x).contiguous()
     elif hasattr(self, "attn_qkv"): q, k, v = self.attn_qkv(x)  # B1 fused q/k/v
     else: q, k, v = self.attn_q(x), self.attn_k(x), self.attn_v(x)
-    if self.config.qk_norm and self.config.qk_norm != self.config.head_dim: q, k = self.attn_q_norm(q), self.attn_k_norm(k)
+    if self.config.qk_norm and self.config.qk_norm != self.config.head_dim:
+      with role_metadata("rms_norm"): q, k = self.attn_q_norm(q), self.attn_k_norm(k)
 
     B, T, _ = x.shape
     if self.config.attn_output_gate:
@@ -307,7 +313,8 @@ class TransformerBlock(FFNBlock):
     q = q.reshape(B, T, self.config.n_heads,    self.config.head_dim).transpose(1, 2)  # (B,H,T,Hd)
     k = k.reshape(B, T, self.config.n_kv_heads, self.config.head_dim).transpose(1, 2)  # (B,KvH,T,Hd)
     v = v.reshape(B, T, self.config.n_kv_heads, self.config.head_dim).transpose(1, 2)  # (B,KvH,T,Hd)
-    if self.config.qk_norm == self.config.head_dim: q, k = self.attn_q_norm(q), self.attn_k_norm(k)
+    if self.config.qk_norm == self.config.head_dim:
+      with role_metadata("rms_norm"): q, k = self.attn_q_norm(q), self.attn_k_norm(k)
 
     # rope-at-read (DECODE_ROPE_AT_READ, opt-in; requires full-head rope): store UN-roped K and rotate at read -- the
     # prerequisite for the StreamingLLM ring's position re-basing. Q is never cached, so it is always roped here.
@@ -392,8 +399,11 @@ class TransformerBlock(FFNBlock):
       qg = q.reshape(B, Hkv, G, T, Hd).cast(dtypes.float16)
       kg = k.reshape(B, Hkv, 1, KV, Hd).cast(dtypes.float16)
       vg = v.reshape(B, Hkv, 1, KV, Hd).cast(dtypes.float16)
-      s = ((qg @ kg.transpose(-1, -2)).float() * scale + mask.reshape(1, 1, 1, T, KV)).softmax(-1)
-      attn = (s.cast(dtypes.float16) @ vg).reshape(B, self.config.n_heads, T, Hd).cast(q.dtype)  # (B,H,T,Hd)
+      with role_metadata("attn_score"): scores = (qg @ kg.transpose(-1, -2)).float() * scale
+      with role_metadata("attn_mask"): scores = scores + mask.reshape(1, 1, 1, T, KV)
+      with role_metadata("softmax"): s = scores.softmax(-1)
+      with role_metadata("attn_av"):
+        attn = (s.cast(dtypes.float16) @ vg).reshape(B, self.config.n_heads, T, Hd).cast(q.dtype)  # (B,H,T,Hd)
     else:
       attn = q.scaled_dot_product_attention(k, v, attn_mask=mask, enable_gqa=True)   # (B,H,T,Hd)
     attn = attn.transpose(1, 2).reshape(B, T, -1)                                    # back to (B,T,D)
@@ -455,13 +465,17 @@ class MLATransformerBlock(FFNBlock):
   def _attention(self, x:Tensor, start_pos:int|UOp, ring_freqs=None) -> Tensor:
     B, T, _ = x.shape
     q_nope_head_dim = self.config.head_dim - self.config.rope_dim
-    q_proj = self.attn_q_b(self.attn_q_a_norm(self.attn_q_a(x))) if self.config.q_lora_rank > 0 else self.attn_q(x)
+    if self.config.q_lora_rank > 0:
+      q_a = self.attn_q_a(x)
+      with role_metadata("rms_norm"): q_a_normed = self.attn_q_a_norm(q_a)
+      q_proj = self.attn_q_b(q_a_normed)
+    else: q_proj = self.attn_q(x)
     q = q_proj.reshape(B, T, self.config.n_heads, self.config.head_dim).transpose(1, 2)
     q_nope, q_rope = q[..., :q_nope_head_dim], q[..., q_nope_head_dim:]
     q = (q_nope @ self.attn_k_b["weight"].transpose(-1, -2)).cat(apply_rope(q_rope, self.freqs_cis[start_pos:start_pos+T]), dim=-1)
 
     kv_a = self.attn_kv_a_mqa(x)
-    c_kv = self.attn_kv_a_norm(kv_a[..., :self.config.kv_lora_rank])
+    with role_metadata("rms_norm"): c_kv = self.attn_kv_a_norm(kv_a[..., :self.config.kv_lora_rank])
     k_rope = apply_rope(
       kv_a[..., self.config.kv_lora_rank:].reshape(B, T, 1, self.config.rope_dim).transpose(1, 2),
       self.freqs_cis[start_pos:start_pos+T])
@@ -472,10 +486,12 @@ class MLATransformerBlock(FFNBlock):
 
     mask = Tensor.full((1, 1, T, start_pos+T), float("-inf"), dtype=x.dtype, buffer=False).triu(start_pos+1) \
       if resolve(T != 1) else None
-    attn = q @ k.transpose(-1, -2) * (1.0 / self.config.head_dim ** 0.5)
-    if mask is not None: attn = attn + mask
-    attn = attn.softmax(-1)
-    attn = ((attn @ v) @ self.attn_v_b["weight"].transpose(-1, -2)).transpose(1, 2).reshape(B, T, -1)
+    with role_metadata("attn_score"): attn = q @ k.transpose(-1, -2) * (1.0 / self.config.head_dim ** 0.5)
+    if mask is not None:
+      with role_metadata("attn_mask"): attn = attn + mask
+    with role_metadata("softmax"): attn = attn.softmax(-1)
+    with role_metadata("attn_av"): attn = attn @ v
+    attn = (attn @ self.attn_v_b["weight"].transpose(-1, -2)).transpose(1, 2).reshape(B, T, -1)
     return self.attn_output(attn)
 
   def _init_state(self, x:Tensor):
@@ -756,7 +772,7 @@ class Transformer:
   def logits(self, tokens:Tensor, start_pos:int|UOp) -> Tensor:
     x = self.token_embd(tokens).float()                   # (B, T, D)
     for block in self.blk: x = block(x, start_pos)
-    x = self.output_norm(x)
+    with role_metadata("rms_norm"): x = self.output_norm(x)
     if self._lm_head_wants_pf16(): return _pf16(self.output, x).contiguous()
     return self.output(x)
 
@@ -774,7 +790,7 @@ class Transformer:
         raise RuntimeError(f"prefill layer state pack mismatch before JIT: need {max(val_idx)+1}, got {len(vals)}")
       jit = self._prefill_v2_layer_jit(block, names, val_idx, vals, start_pos)
       x = jit(x, *vals) if isinstance(start_pos, int) else jit(x, start_pos, *vals)
-    x = self.output_norm(x)
+    with role_metadata("rms_norm"): x = self.output_norm(x)
     if self._lm_head_wants_pf16(): return _pf16(self.output, x).contiguous()
     return self.output(x)
 

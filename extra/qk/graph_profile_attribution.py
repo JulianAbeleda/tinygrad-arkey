@@ -1,8 +1,10 @@
 """Summarize HCQGraph timestamp exports without synchronizing kernels.
 
 Names are intentionally classified conservatively: only generated names that are
-already tied to an exact candidate role are labeled proven; all other dispatches
-remain unknown until a route census supplies a semantic join.
+already tied to an exact candidate role are labeled proven. Everything else falls
+back to the explicit semantic role tag attached at the Tensor call site (see
+tinygrad.tensor.role_metadata and its use in tinygrad/llm/model.py), and only
+dispatches with neither a proven identity nor a role tag remain unknown.
 """
 import argparse, collections, json
 
@@ -34,7 +36,11 @@ def summarize(paths):
     for line in open(path, encoding="utf-8"):
       for row in json.loads(line)["entries"]:
         name = row["name"]
-        role = PROVEN_NAMES.get(name, "unknown")
+        metadata = row.get("metadata") or {}
+        # resolution order: proven candidate identity (exact kernel-name join to a GEMM role) first, else
+        # the semantic_op role tag attached at the Tensor call site (rms_norm/rope/attn_score/... -- see
+        # tinygrad.tensor.role_metadata), else unknown.
+        role = PROVEN_NAMES.get(name) or metadata.get("semantic_op") or "unknown"
         b = buckets[role]; b["count"] += 1; b["duration"] += float(row["duration"]); b["names"][name] += 1
         device_spans[row["device"]].append((float(row["start"]), float(row["end"])))
   roles = {k: {"count": v["count"], "duration": v["duration"], "names": dict(v["names"])} for k,v in sorted(buckets.items())}

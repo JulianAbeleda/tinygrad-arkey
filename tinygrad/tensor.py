@@ -1,6 +1,6 @@
 # inspired by https://github.com/karpathy/micrograd/blob/master/micrograd/engine.py
 from __future__ import annotations
-import time, math, itertools, functools, sys, inspect, pathlib, hashlib, weakref
+import time, math, itertools, functools, sys, inspect, pathlib, hashlib, weakref, contextlib
 from contextlib import ContextDecorator
 from typing import Any, Callable, ClassVar, Sequence, cast, get_args, ParamSpec, TypeVar, Generic, TYPE_CHECKING
 if TYPE_CHECKING: import numpy
@@ -1363,6 +1363,20 @@ class _ContextVar(Generic[T]):
     ret, self.state = self.state, x
     return ret
 _METADATA: _ContextVar[Metadata|None] = _ContextVar(default=None)
+
+@contextlib.contextmanager
+def role_metadata(name:str):
+  """Explicitly tag every Tensor op dispatched inside this block with a semantic role `name`
+  (e.g. "rms_norm", "attn_score"), for profiling/attribution -- purely additive, no effect on
+  numerics. Reuses the exact _METADATA mechanism _metadata_wrapper uses for automatic per-call
+  tagging, including its nesting guard: if metadata is already set (we're nested inside another
+  tagged or auto-traced call), this is a no-op passthrough and the outer tag wins."""
+  if TRACEMETA < 1 or _METADATA.get() is not None:
+    yield
+    return
+  token = _METADATA.set(Metadata(name=name, caller=""))
+  try: yield
+  finally: _METADATA.set(token)
 
 def _metadata_wrapper(fn: Callable[P, T]) -> Callable[P, T]:
   def _wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
