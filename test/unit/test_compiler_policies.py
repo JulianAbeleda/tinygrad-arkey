@@ -1,5 +1,5 @@
 import pytest
-from extra.qk.compiler_policies import StoragePolicy, WaitPolicy, ResourcePlan
+from extra.qk.compiler_policies import StoragePolicy, WaitPolicy, ResourcePlan, RegisterPipePlan
 
 
 def test_policy_contracts_accept_lds_barrier_and_estimate():
@@ -14,6 +14,12 @@ def test_policy_contracts_accept_register_resident_targeted_final():
   assert ResourcePlan("final_program", vgpr=120, sgpr=32).vgpr == 120
 
 
+def test_register_pipe_plan_is_two_stage_b128_zero_lds_and_unproven_resources():
+  plan = RegisterPipePlan()
+  assert (plan.stages, plan.global_load_bytes, plan.storage.slot_bytes) == (2, 16, 0)
+  assert plan.wait.kind == "targeted_vmcnt" and plan.resources.stage == "host_estimate"
+
+
 @pytest.mark.parametrize("factory", (
   lambda: StoragePolicy("lds"),
   lambda: StoragePolicy("global_register_resident", slot_bytes=16),
@@ -21,6 +27,10 @@ def test_policy_contracts_accept_register_resident_targeted_final():
   lambda: WaitPolicy("targeted_vmcnt", scope="workgroup"),
   lambda: ResourcePlan("host_estimate", vgpr=1),
   lambda: ResourcePlan("final_program"),
+  lambda: RegisterPipePlan(stages=1),
+  lambda: RegisterPipePlan(global_load_bytes=8),
+  lambda: RegisterPipePlan(wait=WaitPolicy("full_barrier")),
+  lambda: RegisterPipePlan(resources=ResourcePlan("final_program", vgpr=1, sgpr=1)),
 ))
 def test_policy_contracts_fail_closed(factory):
   with pytest.raises(ValueError): factory()
