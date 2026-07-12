@@ -414,3 +414,24 @@ proven wait dependency. Current evidence shows neither condition.
 - `test/unit/test_kernel_pipeline.py`
 - `test/unit/test_amdllvm_waitcnt.py`
 
+## Spark packet status (2026-07-12)
+
+- **R2 shared validation: complete.** Commit `77178394b` extracted storage-
+  independent geometry, row/K, CONTRACT/remap, wave/lane, and carrier checks.
+  Existing LDS suites passed without changing the LDS allocation contract.
+- **R5 wait provenance bridge: complete as metadata.** Commit `c07ddabdf`
+  added typed producer/consumer stage coverage, duplicate-edge rejection, and
+  validated A/B load-group edges. It intentionally does not emit executable
+  waits or admit the register route.
+- **R3 register storage: blocked at the safe host-only boundary.** The first
+  scaffold was rejected because it used synthetic remaps and did not prove the
+  real WMMA descriptor or the body consumer's two-stage readiness. No partial
+  register implementation was retained. The next implementation must consume
+  the R2 helpers, take the real tensor-core descriptor, and solve the lifecycle
+  dependency before adding a producer/fragment template.
+
+The reviewed Spark work leaves the tree clean. The combined policy, wait,
+LDS, precontract, route, and pipeline suites pass with **143 tests**, 3 known
+pytest configuration warnings, and 26 subtests. The project is not blocked at
+the architecture level; it is blocked only on the substantive R3 register
+storage/lifecycle implementation described above.
