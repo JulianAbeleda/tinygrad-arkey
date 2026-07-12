@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Callable, Literal
+from extra.qk.compiler_policies import StoragePolicy
 
 from tinygrad.dtype import AddrSpace, dtypes
 from tinygrad.uop.ops import AxisType, Ops, UOp
@@ -10,14 +11,8 @@ from tinygrad.uop.ops import AxisType, Ops, UOp
 PipelinePhase = Literal["prologue", "body", "drain"]
 PipelineOp = Literal["produce", "ready", "consume", "release"]
 
-@dataclass(frozen=True)
-class StoragePolicy:
-  kind: Literal["lds", "register"]
-  active_bytes: int | None
-  resource_status: Literal["proved", "unproven"]
-
 def storage_policy_from_stage1(plan: "KernelStage1PipelinePlan") -> StoragePolicy:
-  return StoragePolicy("lds", plan.active_lds_bytes, "proved")
+  return StoragePolicy("lds", plan.buffer_count, plan.slot_bytes, plan.roles)
 
 
 @dataclass(frozen=True)
