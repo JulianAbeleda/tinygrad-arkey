@@ -171,17 +171,17 @@ def test_precontract_factor_derivation_exact_anchor_and_legal_smaller_family():
   exact = derive_precontract_factors(_geometry(), _tc())
   assert (exact.subtiles_m, exact.subtiles_n, exact.waves_m, exact.waves_n, exact.k_substeps,
           exact.vectors_per_row, exact.loads_a, exact.loads_b) == (2, 4, 4, 2, 2, 4, 2, 2)
-  smaller = KernelTileGeometry((64, 64, 16), (2, 2), 128, 32,
-    (KernelLDSWindow("A", 0, 3072, 48), KernelLDSWindow("B", 3072, 6144, 48)))
+  smaller = KernelTileGeometry((64, 64, 32), (2, 2), 128, 32,
+    (KernelLDSWindow("A", 0, 5120, 80), KernelLDSWindow("B", 5120, 10240, 80)))
   factors = derive_precontract_factors(smaller, _tc())
   assert (factors.subtiles_m, factors.subtiles_n, factors.k_substeps, factors.vectors_per_row,
-          factors.loads_a, factors.loads_b) == (2, 2, 1, 2, 1, 1)
+          factors.loads_a, factors.loads_b) == (2, 2, 2, 4, 2, 2)
 
 
 def test_precontract_factor_derivation_rejects_nondivisible_and_bad_windows():
   nondivisible = KernelTileGeometry((80, 64, 16), (2, 2), 128, 32,
     (KernelLDSWindow("A", 0, 3840, 48), KernelLDSWindow("B", 3840, 6912, 48)))
   with pytest.raises(ValueError, match="whole per-wave"): derive_precontract_factors(nondivisible, _tc())
-  uneven = KernelTileGeometry((64, 64, 16), (4, 2), 256, 32,
-    (KernelLDSWindow("A", 0, 3072, 48), KernelLDSWindow("B", 3072, 6144, 48)))
+  uneven = KernelTileGeometry((64, 64, 32), (4, 4), 512, 32,
+    (KernelLDSWindow("A", 0, 5120, 80), KernelLDSWindow("B", 5120, 10240, 80)))
   with pytest.raises(ValueError, match="divide evenly"): derive_precontract_factors(uneven, _tc())

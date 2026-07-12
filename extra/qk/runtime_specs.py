@@ -19,56 +19,91 @@ GENERATED_PROVENANCE = ("machine_authored_generated", "tinygrad_scheduler_genera
 FULL_KERNEL_CANDIDATE_SCHEMA = "boltbeam.full_kernel_candidate.v1"
 ANCHOR_SINGLE_BUFFER_CANDIDATE_HASH = "81c27275d1aad1bb8147c5c5cdaa8000e9375e81f3d085b49d62064a731313d6"
 
+class FullKernelAdmissionError(ValueError):
+  def __init__(self, code:str, message:str): self.code = code; super().__init__(f"{code}: {message}")
 
-def bind_full_kernel_candidate(payload:dict[str, Any], canonical_identity:str, *, profile:str, role:str,
-                               shape:tuple[int, int, int], target:dict[str, Any], tile:tuple[int, int, int],
-                               waves:tuple[int, int], threads:int, buffer_count:int, stage_count:int,
-                               lds_windows:dict[str, list[int]], lds_strides:dict[str, int], lds_padding:int,
-                               lds_bytes:int):
-  """Validate and bind a strict BoltBeam payload to one concrete generated kernel surface."""
+@dataclass(frozen=True)
+class FullKernelCapability:
+  backend: str = "AMD"
+  arch: str = "gfx1100"
+  wave_size: int = 32
+  max_lds_bytes: int = 65536
+  buffer_count: int = 1
+  stage_count: int = 1
+  vector_bytes: int = 16
+  instruction_family: str = "wmma_f32_16x16x16_f16"
+  fragment_layout: str = "rdna3_wmma_f32_16x16x16_f16_lds2_static"
+
+GFX1100_SINGLE_BUFFER_CAPABILITY = FullKernelCapability()
+
+@dataclass(frozen=True)
+class FullKernelAdmission:
+  canonical_identity: str
+  normalized_payload: dict[str, Any]
+  geometry: Any
+  plan: Any
+  active_lds_bytes: int
+  capability: FullKernelCapability
+  context: Any
+
+def admit_full_kernel_candidate(payload:dict[str, Any], canonical_identity:str, *, profile:str, role:str,
+                                shape:tuple[int,int,int], target:dict[str,Any],
+                                capability:FullKernelCapability=GFX1100_SINGLE_BUFFER_CAPABILITY) -> FullKernelAdmission:
   try: normalized = json.loads(json.dumps(payload, allow_nan=False))
-  except (TypeError, ValueError) as exc: raise ValueError(f"full_kernel_candidate must be JSON data: {exc}") from exc
-  _validate_full_kernel_payload(normalized)
+  except (TypeError, ValueError) as exc: raise FullKernelAdmissionError("payload_json", str(exc)) from exc
+  try: _validate_full_kernel_payload(normalized)
+  except ValueError as exc: raise FullKernelAdmissionError("payload_schema", str(exc)) from exc
   encoded = json.dumps(normalized, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False).encode("ascii")
   actual_identity = hashlib.sha256(encoded).hexdigest()
-  if canonical_identity != actual_identity:
-    raise ValueError("full-kernel candidate canonical identity does not match payload")
-  workload, schedule, applicability = normalized["workload"], normalized["schedule"], normalized["applicability"]
+  if canonical_identity != actual_identity: raise FullKernelAdmissionError("identity_mismatch", "canonical SHA-256 differs from payload")
+  workload,schedule,applicability = normalized["workload"],normalized["schedule"],normalized["applicability"]
   target_id = f"{target['backend']}:{target['arch']}:wave{target['wave_size']}"
-  checks = (
-    (workload["profile"] == profile and profile in applicability["profiles"], "profile"),
-    (workload["role"] == role and role in applicability["roles"], "role"),
-    (tuple(workload["shape"][x] for x in ("m", "n", "k")) == shape, "shape"),
-    (workload["target"] == target and target_id in applicability["targets"], "target"),
-    (tuple(schedule["tile"][x] for x in ("m", "n", "k")) == tile, "tile"),
-    (tuple(schedule["waves"][x] for x in ("m", "n")) == waves, "waves"),
-    (schedule["threads"] == threads, "threads"),
-    (schedule["pipeline"]["buffer_count"] == buffer_count, "pipeline.buffer_count"),
-    (schedule["pipeline"]["stage_count"] == stage_count, "pipeline.stage_count"),
-    (schedule["lds"]["windows"] == lds_windows, "lds.windows"),
-    (schedule["lds"]["strides"] == lds_strides, "lds.strides"),
-    (schedule["lds"]["padding"] == lds_padding, "lds.padding"),
-    (normalized["static_constraints"]["max_lds_bytes"] >= lds_bytes, "static_constraints.max_lds_bytes"),
-    (schedule["cooperative_load"]["a"] == {"lane_mapping": "cooperative_row_stride_64_b128", "vector_width": 8, "alignment": 16},
-     "cooperative_load.a"),
-    (schedule["cooperative_load"]["b"] == {"lane_mapping": "cooperative_row_stride_64_b128", "vector_width": 8, "alignment": 16},
-     "cooperative_load.b"),
-    (schedule["lds"]["store_vector_width"] == 8, "lds.store_vector_width"),
-    (schedule["lds"]["load_vector_width"] == 8, "lds.load_vector_width"),
-    (schedule["wmma"]["instruction_family"] == "wmma_f32_16x16x16_f16", "wmma.instruction_family"),
-    (schedule["wmma"]["fragment_layout"] == "rdna3_wmma_f32_16x16x16_f16_lds2_static", "wmma.fragment_layout"),
-  )
-  for ok, label in checks:
-    if not ok: raise ValueError(f"full-kernel candidate {label} does not match selected generated route")
-  if actual_identity != ANCHOR_SINGLE_BUFFER_CANDIDATE_HASH:
-    raise ValueError("full-kernel candidate does not match the fixed BoltBeam anchor payload hash")
+  if workload["profile"] != profile or profile not in applicability["profiles"]: raise FullKernelAdmissionError("workload_profile", "profile is not exact/applicable")
+  if workload["role"] != role or role not in applicability["roles"]: raise FullKernelAdmissionError("workload_role", "role is not exact/applicable")
+  if tuple(workload["shape"][x] for x in ("m","n","k")) != shape or not applicability["exact_shape"]:
+    raise FullKernelAdmissionError("workload_shape", "shape is not exact")
+  if workload["target"] != target or target_id not in applicability["targets"]: raise FullKernelAdmissionError("workload_target", "target is not exact/applicable")
+  if target != {"backend":capability.backend,"arch":capability.arch,"wave_size":capability.wave_size}:
+    raise FullKernelAdmissionError("capability_target", "target is outside frozen capability")
+  if workload["dtypes"] != {"a":"fp16","b":"fp16","c":"fp16","accumulator":"fp32"}:
+    raise FullKernelAdmissionError("capability_dtype", "only fp16/fp32 accumulation is supported")
+  if schedule["pipeline"]["buffer_count"] != capability.buffer_count or schedule["pipeline"]["stage_count"] != capability.stage_count:
+    raise FullKernelAdmissionError("capability_pipeline", "only single-buffer stage1 is supported")
+  if schedule["wmma"]["instruction_family"] != capability.instruction_family or schedule["wmma"]["fragment_layout"] != capability.fragment_layout:
+    raise FullKernelAdmissionError("capability_tc", "tensor-core descriptor is unsupported")
+  if any(schedule["lds"][x] != 8 for x in ("store_vector_width","load_vector_width")) or \
+     any(schedule["cooperative_load"][r]["vector_width"]*2 != capability.vector_bytes or
+         schedule["cooperative_load"][r]["alignment"] != capability.vector_bytes for r in ("a","b")):
+    raise FullKernelAdmissionError("capability_vector", "only aligned b128 fp16 transport is supported")
+  if any(schedule["cooperative_load"][r]["lane_mapping"] != "cooperative_row_stride_64_b128" for r in ("a","b")):
+    raise FullKernelAdmissionError("capability_lane_map", "cooperative lane mapping is unsupported")
   from tinygrad.uop.ops import KernelCandidateContext, KernelLDSWindow, KernelTileGeometry
-  geometry = KernelTileGeometry(
-    tile=tuple(schedule["tile"][x] for x in ("m", "n", "k")),
-    waves=tuple(schedule["waves"][x] for x in ("m", "n")), threads=schedule["threads"], wave_size=target["wave_size"],
-    lds_windows=tuple(KernelLDSWindow(role.upper(), *schedule["lds"]["windows"][role], schedule["lds"]["strides"][role])
-                      for role in ("a", "b")))
-  return KernelCandidateContext(normalized["schema_version"], actual_identity, geometry)
+  try: geometry = KernelTileGeometry(tuple(schedule["tile"][x] for x in ("m","n","k")),
+    tuple(schedule["waves"][x] for x in ("m","n")),schedule["threads"],target["wave_size"],
+    tuple(KernelLDSWindow(r.upper(),*schedule["lds"]["windows"][r],schedule["lds"]["strides"][r]) for r in ("a","b")))
+  except ValueError as exc: raise FullKernelAdmissionError("geometry_invalid", str(exc)) from exc
+  if any(shape[i] % geometry.tile[i] for i in range(3)): raise FullKernelAdmissionError("geometry_divisibility", "workload is not tile divisible")
+  active_lds = geometry.lds_windows[-1].end
+  if active_lds > capability.max_lds_bytes or active_lds > normalized["static_constraints"]["max_lds_bytes"]:
+    raise FullKernelAdmissionError("capability_lds", "active LDS exceeds a declared limit")
+  try:
+    from tinygrad.codegen.opt.kernel_lds import derive_precontract_factors
+    from tinygrad.codegen.opt.tc import amd_rdna3
+    from tinygrad.dtype import dtypes
+    tc = next(x for x in amd_rdna3 if x.dtype_in == dtypes.half and x.dtype_out == dtypes.float)
+    plan = derive_precontract_factors(geometry, tc)
+  except ValueError as exc: raise FullKernelAdmissionError("capability_geometry", str(exc)) from exc
+  context = KernelCandidateContext(normalized["schema_version"],actual_identity,geometry)
+  return FullKernelAdmission(actual_identity,normalized,geometry,plan,active_lds,capability,context)
+
+
+def bind_full_kernel_candidate(payload:dict[str, Any], canonical_identity:str, *, profile:str, role:str,
+                               shape:tuple[int, int, int], target:dict[str, Any], tile:tuple[int, int, int]|None=None,
+                               waves:tuple[int, int]|None=None, threads:int|None=None, buffer_count:int|None=None,
+                               stage_count:int|None=None, lds_windows:dict[str, list[int]]|None=None,
+                               lds_strides:dict[str, int]|None=None, lds_padding:int|None=None, lds_bytes:int|None=None):
+  """Compatibility wrapper. Schedule authority comes exclusively from the canonical payload."""
+  return admit_full_kernel_candidate(payload,canonical_identity,profile=profile,role=role,shape=shape,target=target).context
 
 
 def _check(name:str, value:str, allowed:tuple[str, ...]) -> str:

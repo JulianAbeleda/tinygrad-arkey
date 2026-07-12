@@ -8,7 +8,7 @@ from extra.qk import pure_search_guard
 from extra.qk.runtime_specs import (
   ANCHOR_SINGLE_BUFFER_CANDIDATE_HASH, FULL_KERNEL_CANDIDATE_SCHEMA, ActivationQuantSpec, GeneratedCandidate,
   QuantizedTensorSpec, RuntimeOpSpec,
-  bind_full_kernel_candidate,
+  admit_full_kernel_candidate, bind_full_kernel_candidate,
 )
 
 
@@ -225,13 +225,9 @@ def test_bind_full_kernel_candidate_to_exact_single_buffer_anchor():
 
 
 @pytest.mark.parametrize(("field", "value", "error"), (
-  ("canonical_identity", "0" * 64, "canonical identity"),
+  ("canonical_identity", "0" * 64, "identity_mismatch"),
   ("shape", (1024, 12288, 4096), "shape"),
   ("target", {"backend": "AMD", "arch": "gfx1200", "wave_size": 32}, "target"),
-  ("buffer_count", 2, "pipeline.buffer_count"),
-  ("stage_count", 2, "pipeline.stage_count"),
-  ("lds_windows", {"a": [0, 16384], "b": [16384, 40960]}, "lds.windows"),
-  ("lds_strides", {"a": 144, "b": 144}, "lds.strides"),
 ))
 def test_bind_full_kernel_candidate_fails_closed(field, value, error):
   candidate = _single_buffer_anchor_candidate()
@@ -247,12 +243,12 @@ def test_bind_full_kernel_candidate_fails_closed(field, value, error):
 
 
 @pytest.mark.parametrize(("mutation", "error"), (
-  (lambda p: p["schedule"]["pipeline"].update(stage_count=2), "pipeline.stage_count"),
-  (lambda p: p["schedule"]["lds"].update(windows={"a": [0, 16384], "b": [16384, 40960]}), "lds.windows"),
-  (lambda p: p["schedule"]["lds"].update(strides={"a": 144, "b": 144}), "lds.strides"),
-  (lambda p: p["schedule"]["cooperative_load"]["a"].update(vector_width=4), "cooperative_load.a"),
-  (lambda p: p["schedule"]["wmma"].update(fragment_layout="gfx11"), "wmma.fragment_layout"),
-  (lambda p: p["static_constraints"].update(max_lds_bytes=16384), "static_constraints.max_lds_bytes"),
+  (lambda p: p["schedule"]["pipeline"].update(stage_count=2), "capability_pipeline"),
+  (lambda p: p["schedule"]["lds"].update(windows={"a": [0, 16384], "b": [16384, 40960]}), "capability_geometry"),
+  (lambda p: p["schedule"]["lds"].update(strides={"a": 144, "b": 144}), "capability_geometry"),
+  (lambda p: p["schedule"]["cooperative_load"]["a"].update(vector_width=4), "capability_vector"),
+  (lambda p: p["schedule"]["wmma"].update(fragment_layout="gfx11"), "capability_tc"),
+  (lambda p: p["static_constraints"].update(max_lds_bytes=16384), "capability_lds"),
 ))
 def test_bind_rejects_self_consistent_hash_with_false_emitted_descriptor(mutation, error):
   candidate = _single_buffer_anchor_candidate()
@@ -279,6 +275,26 @@ def test_exact_anchor_candidate_selects_truthful_pure_research_route():
   assert row["strict_pure"] is True and row["pure"] is True and row["rolled_back_to_oracle"] is False
 
 
+def test_dynamic_second_supported_candidate_admits_and_joins_route_identity():
+  payload = _single_buffer_anchor_candidate().full_kernel_candidate
+  assert payload is not None
+  payload["schedule"]["tile"] = {"m": 64, "n": 64, "k": 32}
+  payload["schedule"]["waves"] = {"m": 2, "n": 2}
+  payload["schedule"]["threads"] = 128
+  payload["schedule"]["lds"]["windows"] = {"a": [0, 5120], "b": [5120, 10240]}
+  payload["schedule"]["lds"]["strides"] = {"a": 80, "b": 80}
+  candidate = _strict_full_kernel_candidate(full_kernel_candidate=payload)
+  admission = admit_full_kernel_candidate(payload, candidate.canonical_identity, profile="qwen3_8b_q4k_m_gfx1100",
+    role="ffn_gate_up", shape=(512,12288,4096), target={"backend":"AMD","arch":"gfx1100","wave_size":32})
+  assert admission.geometry.tile == (64,64,32) and admission.active_lds_bytes == 10240
+  assert (admission.plan.subtiles_m, admission.plan.subtiles_n, admission.plan.k_substeps) == (2,2,2)
+  assert admission.canonical_identity != ANCHOR_SINGLE_BUFFER_CANDIDATE_HASH
+  env = {"PREFILL_GRAPH_GEMM":"1","PREFILL_WMMA_LDS_PRIMITIVE":"1",
+    "BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON":json.dumps(payload),"BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH":candidate.canonical_identity}
+  row = {x["family"]:x for x in pure_search_guard.effective_routes(env)}["prefill_gemm"]
+  assert row["candidate_identity"] == candidate.canonical_identity
+
+
 def test_candidate_route_selector_fails_closed_and_default_is_unchanged():
   default = {x["family"]: x for x in pure_search_guard.effective_routes({})}["prefill_gemm"]
   assert default["effective_route"] == "prefill_v2_scheduler_matmul_default"
@@ -286,5 +302,5 @@ def test_candidate_route_selector_fails_closed_and_default_is_unchanged():
   base = {"PREFILL_GRAPH_GEMM": "1", "PREFILL_WMMA_LDS_PRIMITIVE": "1",
           "BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON": json.dumps(candidate.full_kernel_candidate)}
   with pytest.raises(ValueError, match="provided together"): pure_search_guard.effective_routes(base)
-  with pytest.raises(ValueError, match="canonical identity"):
+  with pytest.raises(ValueError, match="identity_mismatch"):
     pure_search_guard.effective_routes({**base, "BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH": "0" * 64})

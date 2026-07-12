@@ -119,6 +119,7 @@ def derive_precontract_factors(geometry:KernelTileGeometry, tc) -> PrecontractFa
   if tm % (geometry.waves[0]*tc.dims[1]) or tn % (geometry.waves[1]*tc.dims[0]) or tk % tc.dims[2]:
     raise ValueError("tile must divide into whole per-wave tensor-core subtiles and K steps")
   sm,sn,ks = tm//(geometry.waves[0]*tc.dims[1]), tn//(geometry.waves[1]*tc.dims[0]), tk//tc.dims[2]
+  if ks < 2: raise ValueError("current atomic staging requires at least two tensor-core K steps")
   vectors_per_row = tk*dtypes.half.itemsize//16
   if vectors_per_row <= 0 or tk*dtypes.half.itemsize % 16: raise ValueError("K row must contain whole b128 vectors")
   rows = (tm,tn)

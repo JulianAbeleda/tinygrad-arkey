@@ -66,12 +66,7 @@ def _anchor_candidate_context(spec, lds_spec):
   except json.JSONDecodeError as exc: raise ValueError(f"{_FULL_KERNEL_CANDIDATE_JSON_ENV} is not valid JSON: {exc}") from exc
   from extra.qk.runtime_specs import bind_full_kernel_candidate
   return bind_full_kernel_candidate(payload, identity, profile="qwen3_8b_q4k_m_gfx1100", role="ffn_gate_up",
-    shape=(512, 12288, 4096), target={"backend": "AMD", "arch": "gfx1100", "wave_size": 32},
-    tile=(spec.tile_m, spec.tile_n, spec.tile_k), waves=(spec.waves_m, spec.waves_n), threads=spec.threads,
-    buffer_count=1, stage_count=1,
-    lds_windows={"a": [0, lds_spec.lds_a_bytes], "b": [lds_spec.lds_a_bytes, lds_spec.lds_buffer_bytes]},
-    lds_strides={"a": lds_spec.stride_a_bytes, "b": lds_spec.stride_b_bytes}, lds_padding=lds_spec.pad,
-    lds_bytes=lds_spec.lds_buffer_bytes)
+    shape=(512, 12288, 4096), target={"backend": "AMD", "arch": "gfx1100", "wave_size": 32})
 
 
 @lru_cache(maxsize=None)

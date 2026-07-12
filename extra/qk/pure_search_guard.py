@@ -112,12 +112,7 @@ def _prefill_candidate_selected(env: dict[str, Any]) -> bool:
   except json.JSONDecodeError as exc: raise ValueError(f"BoltBeam full-kernel candidate payload is invalid JSON: {exc}") from exc
   from extra.qk.runtime_specs import bind_full_kernel_candidate
   bind_full_kernel_candidate(payload, str(identity), profile="qwen3_8b_q4k_m_gfx1100", role="ffn_gate_up",
-    shape=(512, 12288, 4096), target={"backend": "AMD", "arch": "gfx1100", "wave_size": 32},
-    tile=(128, 128, 32), waves=(4, 2), threads=256, buffer_count=1, stage_count=1,
-    lds_windows={"a": [0, 10240], "b": [10240, 20480]}, lds_strides={"a": 80, "b": 80},
-    lds_padding=16, lds_bytes=20480)
-  if ROUTES[_PREFILL_CANDIDATE_ROUTE]["candidate_identity"] != identity:
-    raise ValueError("manifest candidate identity does not match selected BoltBeam hash")
+    shape=(512, 12288, 4096), target={"backend": "AMD", "arch": "gfx1100", "wave_size": 32})
   return True
 
 
@@ -193,10 +188,12 @@ def effective_routes(env: dict[str, Any] | None = None) -> list[dict[str, Any]]:
       rid = fam["oracle"] if rolled_back else fam["generated"]
     prov = _provenance(rid)
     surface = route_surface_row(rid)
-    out.append({"family": fam["family"], "effective_route": rid, "provenance": prov,
+    row = {"family": fam["family"], "effective_route": rid, "provenance": prov,
                 "surface_class": surface["surface_class"], "strict_pure": surface["strict_pure"],
                 "manifest_pure": prov in FINAL_DEFAULT_PROVENANCE,
-                "rolled_back_to_oracle": rolled_back, "pure": surface["strict_pure"]})
+                "rolled_back_to_oracle": rolled_back, "pure": surface["strict_pure"]}
+    if rid == _PREFILL_CANDIDATE_ROUTE: row["candidate_identity"] = str(e["BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH"])
+    out.append(row)
   return out
 
 
