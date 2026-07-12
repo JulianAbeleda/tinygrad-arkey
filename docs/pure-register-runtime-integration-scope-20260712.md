@@ -5,8 +5,9 @@ Date: 2026-07-12
 ## Current Boundary
 
 The native compiler graph now lowers the sequential register candidate through
-the normal AMD rewrite. The graph fix is committed in `37d7b3b46` and covers
-both full-width WMMA A/B carriers and accumulator-contract reads.
+the normal AMD rewrite. Graph fixes are committed in `37d7b3b46` and
+`5d6aadb79`, covering full-width WMMA A/B carriers, accumulator-contract reads,
+and readiness-group expansion.
 
 This is not yet a runtime pure route. The current route path is:
 
@@ -91,6 +92,9 @@ The runtime integration is complete only in this order:
 
 - No register candidate payload/admission branch exists today.
 - No runtime compile artifact proves final register mapping/resources.
+- The real route currently reaches postrange but still encounters native
+  expansion/linearization blockers around readiness and typed waits before a
+  final binary is emitted.
 - Existing benchmark JSONs are LDS/hybrid or structural register evidence;
   they are not a pure register binary authority.
 - Synthetic `to_program` probes can fail on incomplete `KernelInfo` metadata;
