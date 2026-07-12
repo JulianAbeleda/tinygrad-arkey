@@ -281,6 +281,31 @@ existing `_expanded_pipeline_accumulator` fixture in
 `test/unit/test_kernel_pipeline_expansion.py` is the safe pattern to extract for
 the next compile-only gate.
 
+### Decision experiment result
+
+The follow-up experiments tested whether the existing internal callback seam
+could be reused for a non-LDS register-resident producer. It cannot be reused
+without a new operand/producer contract: `build_stage1_uop_graph` requires a
+complete pipeline plan, producer and fragment callbacks, accumulator contract,
+and range IDs, while the existing callbacks are LDS-oriented. A Tensor-level
+candidate-context attachment also occurs after sink creation, too late to inject
+the lifecycle before CONTRACT/WMMA formation.
+
+This makes the decision boundary explicit:
+
+- A full-barrier slice is a compile/correctness probe only. It serializes the
+  producer/consumer phases, omits the desired two-stage overlap, and has no
+  evidence that it can beat the current generated baseline.
+- The high-performance pure path requires the larger pre-expander operand
+  contract plus backend wait/resource semantics. It should not be justified by
+  the barrier slice or by generic WMMA compilation.
+
+The minimum performance proof for that larger redesign remains: a compile-valid
+full-K body, isolated waited timing against ordinary generated WMMA, resource
+and wait-count evidence, then pinned ctx512 whole-model timing with strict route
+census. Until those measurements exist, the redesign is a hypothesis rather
+than a performance commitment.
+
 ### P3 — AMD lowering slice
 
 Lower only `attn_qo` (`512x4096x4096`) through the normal renderer. Reuse backend
