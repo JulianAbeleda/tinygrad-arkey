@@ -62,6 +62,52 @@ def test_stage_value_identity_snapshot_does_not_promote_owner_metadata_to_value_
   assert snap["value_identity_count"] == 0
 
 
+def test_single_buffer_value_identity_survives_real_rangeify_local_materialization(monkeypatch):
+  import itertools
+  from tinygrad.dtype import dtypes
+  from tinygrad.uop.ops import AxisType, Ops, UOp, graph_rewrite
+
+  lane = UOp.range(32, 0, AxisType.LOCAL)
+  source = UOp(Ops.CONTRACT, dtypes.half.vec(16), (UOp.const(dtypes.half, 1),), ((3, 16),))
+  monkeypatch.setattr(postrange, "_tc_local_stage_owned_stage_meta", lambda operand_idx: operand_idx == 1)
+  postrange_sink = UOp.sink(postrange._tc_local_stage_src(source, (lane,), 1))
+  rangeified_sink = graph_rewrite(postrange_sink, rangeify.pm_add_buffers_local, ctx=itertools.count(0))
+
+  postrange_snapshot = audit.stage_value_identity_snapshot(postrange_sink, "postrange")
+  rangeify_snapshot = audit.stage_value_identity_snapshot(rangeified_sink, "rangeify_add_local_buffers")
+  postrange_keys = {repr(row["value_key"]) for row in postrange_snapshot["value_identities"]}
+  rangeify_keys = {repr(row["value_key"]) for row in rangeify_snapshot["value_identities"]}
+  assert len(postrange_keys) == 1
+  assert postrange_keys == rangeify_keys
+  key = postrange_snapshot["value_identities"][0]["value_key"]
+  anchor_snapshot = {**postrange_snapshot, "boundary": "anchor_epoch_evidence"}
+  gate = audit.stage_value_identity_survival_gate([anchor_snapshot, postrange_snapshot, rangeify_snapshot], [key])
+  assert [row["status"] for row in gate["boundaries"][:3]] == ["pass", "pass", "pass"]
+  assert gate["first_loss_boundary"] == "amd_pre_isel"
+
+
+def test_single_buffer_value_identity_rangeify_parser_is_typed_and_fail_closed():
+  from tinygrad.codegen.opt import KernelOptError
+  from tinygrad.codegen.opt.prefill_value_key import PrefillSourceValueKey
+
+  legacy = ("wmma_frag_buffer_proof", ("role", "B"), ("lds_buffer_id", 991), ("nbuf", 1))
+  assert rangeify.prefill_single_buffer_stage_value_key(legacy) is None
+  malformed = legacy + (("value_key", {"role": "B"}),)
+  try:
+    rangeify.prefill_single_buffer_stage_value_key(malformed)
+    assert False, "malformed claimed value identity must fail closed"
+  except KernelOptError:
+    pass
+  mismatched = legacy + (("value_key", PrefillSourceValueKey(
+    role="B", output_tile=(0,), k_epoch=0, k_phase=0, vector_offset=0,
+    source_id=("uop_key", "source"), buffer_id=("lds", 993, 0))),)
+  try:
+    rangeify.prefill_single_buffer_stage_value_key(mismatched)
+    assert False, "owner/value buffer mismatch must fail closed"
+  except KernelOptError:
+    pass
+
+
 def test_stage_ownership_summary_marks_full_lowering_loss():
   out = audit.stage_ownership_summary([], [{"carrier_role": None, "carrier_nbuf": None}])
 

@@ -532,6 +532,11 @@ def _tc_local_stage_src(src:UOp, ranges:tuple[UOp, ...], operand_idx:int|None=No
   if (getenv("PREFILL_WMMA_AB_PROOF_META", 0) or owned_meta) and operand_idx is not None and src.op is Ops.CONTRACT and src.dtype.count == 16:
     nbuf = PREFILL_DBUF_NBUF() if PREFILL_DBUF() else 1
     buffer_tag = _tc_local_stage_buffer_tag(operand_idx, 990 + operand_idx, nbuf, 1, 256)
+    if owned_meta and nbuf == 1:
+      value_key = single_buffer_stage_value_key(
+        role="A" if operand_idx == 0 else "B", tile_idx=UOp.const(dtypes.weakint, 0), tile_count=1,
+        source=src, lds_buffer_id=990 + operand_idx)
+      buffer_tag += (("value_key", value_key),)
     staged = staged.replace(tag=buffer_tag)
   idx = staged.index(*ranges)
   return idx.replace(tag=buffer_tag) if buffer_tag is not None else idx

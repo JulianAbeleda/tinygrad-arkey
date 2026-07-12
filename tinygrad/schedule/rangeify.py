@@ -8,6 +8,7 @@ from tinygrad.helpers import prod, all_same, getenv, dedup, all_int, DEBUG, SPLI
 from tinygrad.helpers import PCONTIG, FLOAT16, OPENPILOT_HACKS, argsort, partition, get_single_element
 from tinygrad.codegen.simplify import pm_flatten_range, pm_reduce_simplify
 from tinygrad.codegen.opt import Opt, KernelOptError
+from tinygrad.codegen.opt.prefill_value_key import PrefillSourceValueKey
 from tinygrad.schedule.indexing import run_rangeify, BufferizeOpts, IndexingContext, apply_movement_op
 from tinygrad.schedule.multi import multi_pm
 from tinygrad.schedule.allreduce import create_allreduce_function
@@ -33,6 +34,26 @@ def prefill_dbuf_rotated_stage_owner_fields(tag) -> dict:
   for item in tag[1:]:
     if isinstance(item, tuple) and len(item) == 2 and isinstance(item[0], str): out[item[0]] = item[1]
   return out
+
+def prefill_single_buffer_stage_value_key(tag) -> PrefillSourceValueKey|None:
+  """Recognize the exact typed identity carried by an owned, single-buffer prefill STAGE."""
+  if not isinstance(tag, tuple) or not tag or tag[0] != "wmma_frag_buffer_proof": return None
+  items = tag[1:]
+  if not any(isinstance(item, tuple) and item and item[0] == "value_key" for item in items): return None
+  if any(not isinstance(item, tuple) or len(item) != 2 or not isinstance(item[0], str) for item in items):
+    raise KernelOptError("prefill STAGE value identity tag has malformed fields")
+  names = [item[0] for item in items]
+  if len(names) != len(set(names)): raise KernelOptError("prefill STAGE value identity tag has duplicate fields")
+  fields = dict(items)
+  key = fields["value_key"]
+  if not isinstance(key, PrefillSourceValueKey):
+    raise KernelOptError("prefill STAGE value identity must be a PrefillSourceValueKey")
+  if fields.get("role") != key.role or fields.get("nbuf") != 1 or fields.get("owned_stage") != f"{key.role}_IDENTITY":
+    raise KernelOptError("prefill STAGE value identity requires matching owned identity role and nbuf=1")
+  buffer_id = fields.get("lds_buffer_id")
+  if key.buffer_id != ("lds", buffer_id, 0):
+    raise KernelOptError("prefill STAGE value identity LDS buffer does not match its owner tag")
+  return key
 
 def prefill_dbuf_clear_rotated_stage_lowering_audit() -> None:
   _PREFILL_DBUF_ROTATED_STAGE_LOWERING_AUDIT_ROWS.clear()
@@ -482,11 +503,16 @@ def bufferize_to_store(ctx:itertools.count, x:UOp, idx:UOp, allow_locals=True):
     # byte-identical results. The real paired (k&1) store+read indexing lives at the co-located _tc_local_stage_src
     # site in postrange.py. The dead branch has been deleted; the plain single-slot allocation below is the sole path.
     if (owned_lowering := _prefill_dbuf_owned_b_stage_lowering(ctx, x, idx, size, rngs, sdtype)) is not None: return owned_lowering
+    value_key = prefill_single_buffer_stage_value_key(x.tag)
+    identity_tag = x.tag if value_key is not None else None
     buf = UOp.placeholder((size,), x.dtype, next(ctx), AddrSpace.LOCAL)
+    if identity_tag is not None: buf = buf.replace(tag=identity_tag)
     if getenv("PREFILL_STAGE_PRESERVE_TAGS", 0): buf = buf.replace(tag=x.tag)
     store_idx = buf.broadcast(x.src[1].dtype.count).index(idx, dtype=sdtype)
+    if identity_tag is not None: store_idx = store_idx.replace(tag=identity_tag)
     if getenv("PREFILL_STAGE_PRESERVE_TAGS", 0): store_idx = store_idx.replace(tag=x.tag)
     do_store = store_idx.store(x.src[0])
+    if identity_tag is not None: do_store = do_store.replace(tag=identity_tag)
     if getenv("PREFILL_STAGE_PRESERVE_TAGS", 0): do_store = do_store.replace(tag=x.tag)
     do_store = do_store.end(*rngs)
     return buf.after(do_store.barrier())
