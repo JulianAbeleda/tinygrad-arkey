@@ -44,3 +44,12 @@ def test_amd_resource_artifact_rejects_identity_mismatch_and_unknown_facts():
       intervals=(AMDPhysicalInterval("A", "vgpr", 0, 1),))
   with pytest.raises(ValueError, match="final_program"):
     row = _artifact().to_json(); row["resource_stage"] = "host_estimate"; AMDResourceArtifact.from_json(row)
+
+
+def test_amd_resource_artifact_can_require_logical_mapping_roles():
+  artifact = _artifact()
+  assert validate_amd_resource_artifact(artifact, required_roles=("A", "B")) is artifact
+  with pytest.raises(ValueError, match="missing required logical register roles"):
+    validate_amd_resource_artifact(artifact, required_roles=("A", "stage_buffer"))
+  with pytest.raises(ValueError, match="unique"):
+    validate_amd_resource_artifact(artifact, required_roles=("A", "A"))
