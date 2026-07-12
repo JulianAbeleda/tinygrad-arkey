@@ -2,6 +2,7 @@ import pytest
 
 from tinygrad.codegen.opt.amd_resource_artifact import (
   AMDPhysicalInterval, AMDResourceFacts, join_amd_resource_artifact, validate_amd_resource_artifact)
+from tinygrad.codegen.opt.register_contracts import RegisterBank
 
 
 def _artifact():
@@ -14,6 +15,7 @@ def _artifact():
 
 def test_amd_resource_artifact_joins_identity_resources_and_intervals():
   artifact = _artifact()
+  assert artifact.intervals[0].bank is RegisterBank.VGPR
   assert artifact.source_sha256 != artifact.binary_sha256
   assert artifact.to_json()["candidate_identity"] == "a" * 64
   assert artifact.to_json()["logical_role_intervals"]["A"][0]["start"] == 0

@@ -9,10 +9,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib, re
-from typing import Literal, Any
+from typing import Any
+from tinygrad.codegen.opt.register_contracts import RegisterBank
 
 AMD_ARTIFACT_SCHEMA = "tinygrad.amd.resource_artifact.v1"
-RegisterBank = Literal["vgpr", "sgpr"]
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
 
@@ -26,7 +26,7 @@ def _hash(value: bytes | str, name: str) -> str:
 class AMDPhysicalInterval:
   """Half-open physical register interval owned by one logical role."""
   logical_role: str
-  bank: RegisterBank
+  bank: RegisterBank | str
   start: int
   end: int
   purpose: str = "value"
@@ -34,14 +34,16 @@ class AMDPhysicalInterval:
   def __post_init__(self):
     if not isinstance(self.logical_role, str) or not self.logical_role:
       raise ValueError("physical interval logical_role must be non-empty")
-    if self.bank not in ("vgpr", "sgpr"): raise ValueError("physical interval bank must be vgpr or sgpr")
+    try: bank = self.bank if isinstance(self.bank, RegisterBank) else RegisterBank(self.bank)
+    except (TypeError, ValueError) as exc: raise ValueError("physical interval bank must be vgpr or sgpr") from exc
+    object.__setattr__(self, "bank", bank)
     if any(not isinstance(x, int) or isinstance(x, bool) for x in (self.start, self.end)) or self.start < 0 or self.end <= self.start:
       raise ValueError("physical interval must satisfy 0 <= start < end")
     if not isinstance(self.purpose, str) or not self.purpose:
       raise ValueError("physical interval purpose must be non-empty")
 
   def to_json(self) -> dict[str, Any]:
-    return {"logical_role": self.logical_role, "bank": self.bank, "start": self.start,
+    return {"logical_role": self.logical_role, "bank": self.bank.value, "start": self.start,
             "end": self.end, "purpose": self.purpose}
 
 
@@ -97,15 +99,15 @@ class AMDResourceArtifact:
     if not isinstance(self.resources, AMDResourceFacts): raise TypeError("resources must be AMDResourceFacts")
     if not isinstance(self.intervals, tuple) or not self.intervals or any(not isinstance(x, AMDPhysicalInterval) for x in self.intervals):
       raise ValueError("artifact requires typed physical intervals")
-    by_bank = {bank: sorted((x for x in self.intervals if x.bank == bank), key=lambda x: (x.start, x.end, x.logical_role))
-               for bank in ("vgpr", "sgpr")}
+    by_bank = {bank: sorted((x for x in self.intervals if x.bank is bank), key=lambda x: (x.start, x.end, x.logical_role))
+               for bank in (RegisterBank.VGPR, RegisterBank.SGPR)}
     for bank, rows in by_bank.items():
       limit = getattr(self.resources, bank)
       for row in rows:
-        if row.end > limit: raise ValueError(f"{bank} interval {row} exceeds allocated {limit}")
+        if row.end > limit: raise ValueError(f"{bank.value} interval {row} exceeds allocated {limit}")
       for previous, current in zip(rows, rows[1:]):
         if current.start < previous.end:
-          raise ValueError(f"overlapping {bank} intervals: {previous} and {current}")
+          raise ValueError(f"overlapping {bank.value} intervals: {previous} and {current}")
 
   def to_json(self) -> dict[str, Any]:
     role_map: dict[str, list[dict[str, Any]]] = {}
