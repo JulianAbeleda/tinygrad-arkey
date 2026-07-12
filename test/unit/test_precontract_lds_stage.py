@@ -2,9 +2,10 @@ import pytest
 
 from tinygrad import dtypes
 from tinygrad.codegen.opt.kernel_lds import (PrecontractContractSpec, PrecontractKAxis, PrecontractOperandTemplate,
-  PrecontractThreadAxes, build_precontract_lds_stage)
+  PrecontractThreadAxes, build_precontract_lds_stage, instantiate_precontract_fragments, instantiate_precontract_producer)
+from tinygrad.codegen.opt.kernel_pipeline import (KernelStage1FragmentStage, KernelStage1PipelinePlan, KernelStage1ProducerStage,
+  build_stage1_uop_graph, prove_stage1_uop_graph)
 from tinygrad.codegen.opt.tc import amd_rdna3
-from tinygrad.codegen.opt.kernel_pipeline import KernelStage1PipelinePlan
 from tinygrad.dtype import AddrSpace
 from tinygrad.uop.ops import AxisType, KernelLDSWindow, KernelTileGeometry, Ops, UOp
 
@@ -90,6 +91,36 @@ def test_two_buffer_stage_uses_epoch_slot_expression_and_disjoint_windows():
   assert all((b-a).simplify().arg == 10240 for a,b in zip(
     [x.substitute({owner:UOp.const(dtypes.weakint,0)}).simplify() for x in starts],
     [x.substitute({owner:UOp.const(dtypes.weakint,1)}).simplify() for x in starts]))
+
+
+def test_real_anchor_symbolic_pipeline_adapter_uses_actual_contracts_and_64_float_accumulator():
+  allocation,operands,threads,kaxis,sm,sn,contracts=_fixture()
+  allocation=UOp.placeholder((20480,),dtypes.half,994,addrspace=AddrSpace.LOCAL)
+  tc=_tc(); calls=[]
+  def produce(epoch,slot,reuse):
+    inst=instantiate_precontract_producer(_geometry(),tc=tc,allocation=allocation,operands=operands,threads=threads,epoch=epoch,slot=slot)
+    ready=UOp.barrier(UOp.group(*inst.role_nodes) if reuse is None else UOp.group(*inst.role_nodes,reuse))
+    return KernelStage1ProducerStage(epoch,slot,inst.role_nodes,ready)
+  def fragments(epoch,slot,ready):
+    inst=instantiate_precontract_fragments(_geometry(),tc=tc,allocation=allocation,threads=threads,k_substep=kaxis.substep,
+      subtile_m=sm,subtile_n=sn,contracts=contracts,epoch=epoch,slot=slot,ready=ready)
+    return KernelStage1FragmentStage(epoch,slot,ready,inst.fragments)
+  def wmma(stage,acc,subtile):
+    calls.append((stage.epoch,subtile))
+    arg=(str(tc),tc.dims,tc.dtype_in,tc.dtype_out,"AMD",tc.threads,
+         (contracts[0].arg,contracts[1].arg,((50,2),(51,2),(52,2))),())
+    return UOp(Ops.WMMA,dtypes.float.vec(8),(stage.fragments[0],stage.fragments[1],acc),arg,tag=("pipeline_subtile",subtile))
+  graph=build_stage1_uop_graph(KernelStage1PipelinePlan(2,20480),128,produce,fragments,wmma)
+  proof=prove_stage1_uop_graph(graph)
+  assert proof.passed,proof.errors
+  assert graph.accumulator_reg.ptrdtype.size == 64
+  assert len([x for x in calls if x[0].op is Ops.RANGE]) == 8
+  assert len([x for x in graph.sink.toposort() if x.op is Ops.WMMA]) == 16
+  from tinygrad.codegen import full_rewrite_to_sink
+  from tinygrad.renderer.cstyle import HIPRenderer
+  from tinygrad.helpers import Target
+  rewritten=full_rewrite_to_sink(graph.sink,HIPRenderer(Target.parse("AMD")),optimize=False)
+  assert len([x for x in rewritten.toposort() if x.op is Ops.END]) == 1
 
 def test_fail_closed_detached_axes_contract_and_allocation():
   allocation,ops,threads,kaxis,sm,sn,contracts=_fixture()

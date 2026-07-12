@@ -103,6 +103,19 @@ class PrecontractLDSStage:
   fragment_b: UOp
 
 @dataclass(frozen=True)
+class PrecontractProducerInstance:
+  epoch: UOp
+  slot: UOp
+  role_nodes: tuple[UOp, UOp]
+
+@dataclass(frozen=True)
+class PrecontractFragmentInstance:
+  epoch: UOp
+  slot: UOp
+  ready: UOp
+  fragments: tuple[UOp, UOp]
+
+@dataclass(frozen=True)
 class PrecontractFactors:
   subtiles_m: int
   subtiles_n: int
@@ -247,6 +260,43 @@ def wmma_output_owners(geometry:KernelTileGeometry, *, tc) -> tuple[WMMAOutputOw
           owners.append(WMMAOutputOwner(thread, wave_m, wave_n, subtile_m, subtile_n, element, row, col))
   return tuple(owners)
 
+
+def instantiate_precontract_producer(geometry:KernelTileGeometry, *, tc, allocation:UOp,
+                                     operands:tuple[PrecontractOperandTemplate,...], threads:PrecontractThreadAxes,
+                                     epoch:UOp, slot:UOp) -> PrecontractProducerInstance:
+  factors=derive_precontract_factors(geometry,tc)
+  slot_base=slot*(geometry.lds_windows[-1].end//2)
+  thread=(threads.wave_m*geometry.waves[1]+threads.wave_n)*geometry.wave_size+threads.lane
+  role_nodes=[]
+  for operand in operands:
+    stores=[]; window=_window(geometry,operand.role); loads=factors.loads_a if operand.role == "A" else factors.loads_b
+    for row_iteration in range(loads):
+      linear_vector=thread+row_iteration*geometry.threads
+      row,vector=linear_vector//factors.vectors_per_row,linear_vector%factors.vectors_per_row
+      logical_k=vector*8
+      values=tuple(operand.source.substitute({operand.row_axis:operand.row_tile_base+row,
+        operand.k_axis:epoch*geometry.tile[2]+logical_k+elem}) for elem in range(8))
+      tag=("kernel_tile_store",operand.role,row_iteration)
+      idx=allocation.index(slot_base+(window.base+row*window.stride_bytes+logical_k*2)//2,dtype=dtypes.half.vec(8)).replace(tag=tag)
+      stores.append(idx.store(UOp(Ops.STACK,dtypes.half.vec(8),values)).replace(tag=tag).end())
+    role_nodes.append(UOp.group(*stores))
+  return PrecontractProducerInstance(epoch,slot,(role_nodes[0],role_nodes[1]))
+
+def instantiate_precontract_fragments(geometry:KernelTileGeometry, *, tc, allocation:UOp, threads:PrecontractThreadAxes,
+                                      k_substep:UOp, subtile_m:UOp, subtile_n:UOp,
+                                      contracts:tuple[PrecontractContractSpec,...], epoch:UOp, slot:UOp,
+                                      ready:UOp) -> PrecontractFragmentInstance:
+  factors=derive_precontract_factors(geometry,tc); slot_base=slot*(geometry.lds_windows[-1].end//2)
+  ordered=allocation.after(ready); lane=threads.lane
+  def fragment(role,subtile,wave,subtiles,contract):
+    window=_window(geometry,role); row=(wave*subtiles+subtile)*16+lane%16
+    logical_k=k_substep*tc.dims[2]+contract.element
+    idx=slot_base+(window.base+row*window.stride_bytes+logical_k*2)//2
+    load=ordered.index(idx,dtype=dtypes.half).replace(tag=("kernel_tile_fragment_load",role)).load()
+    return UOp(Ops.CONTRACT,dtypes.half.vec(16),(load,),contract.arg,tag=("kernel_tile_fragment",role))
+  frags=(fragment("A",subtile_m,threads.wave_m,factors.subtiles_m,contracts[0]),
+         fragment("B",subtile_n,threads.wave_n,factors.subtiles_n,contracts[1]))
+  return PrecontractFragmentInstance(epoch,slot,ready,frags)
 
 def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:UOp,
                                 operands:tuple[PrecontractOperandTemplate, ...], threads:PrecontractThreadAxes,
