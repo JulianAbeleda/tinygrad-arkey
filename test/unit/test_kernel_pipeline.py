@@ -2,7 +2,9 @@ import unittest
 from dataclasses import replace
 
 from tinygrad.codegen.opt.kernel_pipeline import (KernelStage1LifecycleEvent, KernelStage1PipelinePlan,
-                                                   prove_stage1_lifecycle, stage1_lifecycle_events)
+  build_stage1_uop_graph, prove_stage1_lifecycle, prove_stage1_uop_graph, stage1_lifecycle_events)
+from tinygrad import dtypes
+from tinygrad.uop.ops import Ops, UOp
 
 
 class TestKernelStage1PipelinePlan(unittest.TestCase):
@@ -88,6 +90,44 @@ class TestKernelStage1Lifecycle(unittest.TestCase):
     self.assertFalse(proof.passed)
     self.assertTrue(any("missing producer" in error for error in proof.errors), proof.errors)
     self.assertTrue(any("missing consumer" in error for error in proof.errors), proof.errors)
+
+
+class TestKernelStage1SyntheticUOps(unittest.TestCase):
+  @staticmethod
+  def _produce(role, epoch, slot, reuse):
+    node = UOp.const(dtypes.int, (epoch+1)*10 + slot*2 + (role == "B"))
+    return node if reuse is None else node.after(reuse)
+
+  @staticmethod
+  def _wmma(epoch, slot, ready, accumulator):
+    return UOp(Ops.NOOP,dtypes.float,(UOp.const(dtypes.float,float(epoch+slot+1)),ready,accumulator))
+
+  def test_prologue_body_drain_dependency_proof(self):
+    for buffers in (1,2):
+      for k_tiles in (1,2,3,128):
+        with self.subTest(buffers=buffers,k_tiles=k_tiles):
+          graph = build_stage1_uop_graph(KernelStage1PipelinePlan(buffers,20480),k_tiles,self._produce,self._wmma)
+          proof = prove_stage1_uop_graph(graph)
+          self.assertTrue(proof.passed,proof.errors)
+          self.assertIs(graph.accumulator,graph.drain)
+          self.assertEqual(len([u for u in graph.sink.toposort() if u.op is Ops.DEFINE_REG]),1)
+          self.assertEqual(len([u for u in graph.sink.toposort() if u.op is Ops.END]),1 if k_tiles > 1 else 0)
+          self.assertFalse(any(u.op in (Ops.REDUCE,Ops.ADD) for u in graph.sink.toposort()))
+
+  def test_buffer2_body_joins_current_compute_and_sibling_next_ready(self):
+    graph = build_stage1_uop_graph(KernelStage1PipelinePlan(2,20480),3,self._produce,self._wmma)
+    release0 = graph.event_nodes[KernelStage1LifecycleEvent("body","release",0,0)]
+    consume0 = graph.event_nodes[KernelStage1LifecycleEvent("body","consume",0,0,"A")]
+    ready1 = graph.event_nodes[KernelStage1LifecycleEvent("body","ready",1,1)]
+    self.assertIn(consume0,release0.backward_slice)
+    self.assertIn(ready1,release0.backward_slice)
+
+  def test_missing_event_binding_fails_closed(self):
+    graph = build_stage1_uop_graph(KernelStage1PipelinePlan(2,20480),3,self._produce,self._wmma)
+    del graph.event_nodes[KernelStage1LifecycleEvent("body","produce",1,1,"B")]
+    proof = prove_stage1_uop_graph(graph)
+    self.assertFalse(proof.passed)
+    self.assertTrue(any("no emitted UOp" in x or "lacks B producer" in x for x in proof.errors),proof.errors)
 
 
 if __name__ == "__main__": unittest.main()
