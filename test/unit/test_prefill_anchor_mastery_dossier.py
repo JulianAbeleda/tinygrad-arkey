@@ -16,6 +16,10 @@ def test_anchor_dossier_reuses_registries_and_fails_closed():
   assert routes["structural_oracle"]["strict_pure"] is False
   assert set(report["evidence_status"]) == set(REQUIRED_EVIDENCE)
   assert report["mastery_complete"] is False
+  assert report["evidence_status"]["full_shape_correctness"]["status"] == "complete"
+  assert report["evidence_status"]["strict_pure_runtime_binding"]["status"] == "complete"
+  assert report["evidence_status"]["lane_fragment_map"]["status"] == "partial"
+  assert report["evidence_status"]["pipeline_dependency_graph"]["status"] == "partial"
   assert {row["id"] for row in report["missing_evidence"]} == {
     key for key, value in report["evidence_status"].items() if value["status"] != "complete"
   }

@@ -26,6 +26,9 @@ ARTIFACTS = {
   "roofline_audit": "bench/prefill-lds2-s9/roofline-audit.json",
   "exact_isa_resources": "bench/prefill-pure-full-kernel/anchor-ffn-gate-up/mastery-v1/resources-isa.json",
   "exact_role_timing": "bench/prefill-pure-full-kernel/anchor-ffn-gate-up/mastery-v1/role-timing.json",
+  "lane_fragment_map": "bench/prefill-pure-full-kernel/anchor-ffn-gate-up/mastery-v1/lane-fragment-map.json",
+  "epoch_graph": "bench/prefill-pure-full-kernel/anchor-ffn-gate-up/mastery-v1/epoch-graph.json",
+  "correctness_binding": "bench/prefill-pure-full-kernel/anchor-ffn-gate-up/mastery-v1/correctness-binding.json",
 }
 
 REQUIRED_EVIDENCE = {
@@ -80,6 +83,9 @@ def build_dossier(*, root: pathlib.Path = ROOT) -> dict[str, Any]:
   resources = lds.get("resource_counters") if isinstance(lds.get("resource_counters"), dict) else {}
   exact_capture = loaded["exact_isa_resources"] or {}
   exact_timing = loaded["exact_role_timing"] or {}
+  lane_map = loaded["lane_fragment_map"] or {}
+  epoch_graph = loaded["epoch_graph"] or {}
+  correctness_binding = loaded["correctness_binding"] or {}
   known_evidence = {
     "exact_profile_shape": {"state": "registry_fact", "source": "extra/qk/model_profiles.py", "value": shape.to_json()},
     "existing_schedule_spec": {"state": "spec_derived", "source": "extra/qk/prefill_schedule_spec.py", "value": schedule.to_json()},
@@ -102,6 +108,15 @@ def build_dossier(*, root: pathlib.Path = ROOT) -> dict[str, Any]:
                           "complete": exact_timing.get("complete"),
                           "tflops": {row.get("regime"): (row.get("measurement") or {}).get("tflops")
                                      for row in exact_timing.get("rows", [])}},
+    "lane_fragment_map": {"state": "calculated_oracle_map" if lane_map else "not_available",
+                          "source": ARTIFACTS["lane_fragment_map"], "proof_class": lane_map.get("proof_class"),
+                          "counts": lane_map.get("counts"), "mapping": lane_map.get("mapping")},
+    "epoch_graph": {"state": "partial_structural_graph" if epoch_graph else "not_available",
+                    "source": ARTIFACTS["epoch_graph"], "claims": epoch_graph.get("claims"),
+                    "identity_loss": epoch_graph.get("identity_loss")},
+    "correctness_binding": {"state": "captured" if correctness_binding else "not_available",
+                            "source": ARTIFACTS["correctness_binding"], "passed": correctness_binding.get("passed"),
+                            "binding": correctness_binding.get("binding"), "surface": correctness_binding.get("surface")},
   }
   # Existing artifacts are useful context but none closes a full pure-candidate mastery requirement by itself.
   evidence_status = {key: {"status": "missing", "requirement": description} for key, description in REQUIRED_EVIDENCE.items()}
@@ -144,6 +159,40 @@ def build_dossier(*, root: pathlib.Path = ROOT) -> dict[str, Any]:
       "status": "partial", "requirement": REQUIRED_EVIDENCE["roofline_attribution"],
       "known": ["exact instruction identity", "compiled resources", "pinned kernel TFLOPS"],
       "missing": ["same-binary measured memory traffic", "same-binary achieved bandwidth and compute counters"],
+    }
+  if lane_map.get("schema") == "prefill-anchor-lane-fragment-evidence.v1" and \
+      (lane_map.get("invariants") or {}).get("accumulator_to_c_is_bijective") is True:
+    evidence_status["lane_fragment_map"] = {
+      "status": "partial", "requirement": REQUIRED_EVIDENCE["lane_fragment_map"],
+      "known": ["exhaustive S9 oracle cooperative-load map", "oracle WMMA fragment map", "oracle accumulator-to-C bijection"],
+      "missing": ["same mapping derived from the pure candidate compiler IR/ISA", "measured LDS bank behavior"],
+      "source": ARTIFACTS["lane_fragment_map"],
+    }
+  if epoch_graph.get("schema") == "ffn-gate-up-epoch-dependency-graph.v1" and \
+      (epoch_graph.get("claims") or {}).get("structural_reaching_definitions_complete") is True:
+    evidence_status["pipeline_dependency_graph"] = {
+      "status": "partial", "requirement": REQUIRED_EVIDENCE["pipeline_dependency_graph"],
+      "known": ["128 epochs", "two-slot structural dependency graph", "DBUF checker pass"],
+      "missing": ["512 value keys", "lowered final-instruction correlation"],
+      "source": ARTIFACTS["epoch_graph"],
+    }
+  binding = correctness_binding.get("binding") or {}
+  surface = correctness_binding.get("surface") or {}
+  clean_correctness = (correctness_binding.get("schema") == "prefill-pure-anchor-correctness-binding.v1" and
+                       correctness_binding.get("passed") is True and
+                       ((correctness_binding.get("environment") or {}).get("git") or {}).get("dirty") is False)
+  if clean_correctness and all(row.get("passed") is True for row in
+      ((correctness_binding.get("correctness") or {}).get("cases") or [])):
+    evidence_status["full_shape_correctness"] = {
+      "status": "complete", "requirement": REQUIRED_EVIDENCE["full_shape_correctness"],
+      "source": ARTIFACTS["correctness_binding"], "comparison": "three adversarial full-output cases",
+    }
+  if clean_correctness and surface.get("strict_pure") is True and surface.get("ops_ins_count") == 0 and \
+      binding.get("runtime_binary_matches_candidate") is True and binding.get("all_cases_same_binary") is True:
+    evidence_status["strict_pure_runtime_binding"] = {
+      "status": "complete", "requirement": REQUIRED_EVIDENCE["strict_pure_runtime_binding"],
+      "source": ARTIFACTS["correctness_binding"], "binary_sha256": binding.get("binary_sha256"),
+      "identity_scope": binding.get("identity_scope"),
     }
   missing = [{"id": key, "reason": row["requirement"], "status": row["status"]}
              for key, row in evidence_status.items() if row["status"] != "complete"]

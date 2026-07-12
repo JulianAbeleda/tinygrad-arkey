@@ -1,0 +1,122 @@
+{
+  "schema": "prefill-anchor-lane-fragment-evidence.v1",
+  "anchor": {
+    "role": "ffn_gate_up",
+    "M": 512,
+    "N": 12288,
+    "K": 4096,
+    "tile": [
+      128,
+      128,
+      32
+    ]
+  },
+  "proof_class": "calculated_from_existing_lds2_emitter_equations",
+  "sources": [
+    "extra/qk/wmma_lds_spec.py::WMMALDSSpec",
+    "extra/qk/prefill/wmma.py::LDS2PrimitiveEmitter",
+    "extra/qk/prefill/wmma.py RDNA3 WMMA operand/C fragment contract"
+  ],
+  "counts": {
+    "cooperative_stage_rows": 1024,
+    "wmma_fragment_rows": 3072,
+    "accumulator_c_rows": 16384,
+    "unique_c_tile_elements": 16384
+  },
+  "invariants": {
+    "stage_vectors_cover_each_operand_tile_once": true,
+    "stage_vectors_exclude_row_padding": true,
+    "accumulator_to_c_is_bijective": true,
+    "c_tile_bounds": true,
+    "lds_slot_identity": {
+      "schema": "wmma-lds-slot-identity-proof.v1",
+      "active_buffers": 2,
+      "spec_dbuf": 1,
+      "materialized_offsets_baseline": true,
+      "ds_immediate_folding_required": false,
+      "packed_vector_bytes": 16,
+      "lds_buffer_bytes": 20480,
+      "active_lds_bytes": 40960,
+      "windows": [
+        {
+          "operand": "A",
+          "buffer": 0,
+          "base": 0,
+          "end": 10240,
+          "bytes": 10240,
+          "rows": 128,
+          "row_stride_bytes": 80,
+          "vector_bytes": 16,
+          "vectors_per_row": 5,
+          "total_vectors": 640
+        },
+        {
+          "operand": "B",
+          "buffer": 0,
+          "base": 10240,
+          "end": 20480,
+          "bytes": 10240,
+          "rows": 128,
+          "row_stride_bytes": 80,
+          "vector_bytes": 16,
+          "vectors_per_row": 5,
+          "total_vectors": 640
+        },
+        {
+          "operand": "A",
+          "buffer": 1,
+          "base": 20480,
+          "end": 30720,
+          "bytes": 10240,
+          "rows": 128,
+          "row_stride_bytes": 80,
+          "vector_bytes": 16,
+          "vectors_per_row": 5,
+          "total_vectors": 640
+        },
+        {
+          "operand": "B",
+          "buffer": 1,
+          "base": 30720,
+          "end": 40960,
+          "bytes": 10240,
+          "rows": 128,
+          "row_stride_bytes": 80,
+          "vector_bytes": 16,
+          "vectors_per_row": 5,
+          "total_vectors": 640
+        }
+      ],
+      "vectors_by_operand_per_buffer": {
+        "A": 640,
+        "B": 640
+      },
+      "expected_stage_vectors_per_buffer": 1280,
+      "slot_identity": "A and B ds_load_b128 windows consume the same typed byte intervals staged by ds_store_b128",
+      "dbuf_slot_identity_proven": true,
+      "dbuf_cadence_proven": false,
+      "ok": true,
+      "errors": []
+    }
+  },
+  "bank_evidence": {
+    "status": "missing_measured_evidence",
+    "proven": false,
+    "known_layout_fact": "A and B row strides are 80 bytes (BK*2 + PAD, PAD=16)",
+    "not_claimed": [
+      "physical_bank_index",
+      "conflict_degree",
+      "broadcast behavior",
+      "cycle penalty"
+    ],
+    "required_measurement": "controlled gfx1100 LDS bank/cycle or PMC differential for this exact ds_load_b128 lane address set"
+  },
+  "mapping": {
+    "storage": "regenerate_with_build_evidence",
+    "sha256": {
+      "cooperative_stage": "60a454ba86596ae41cb38d116e56e0f53fe64f144ad9d8e78aac1ca19e675d64",
+      "wmma_fragments": "81934901f2c91929e70b8e845df98dff67520be0d3a7853da1075e0b399ff1ee",
+      "accumulator_to_c": "306921b2edff1bcfaf544e17975dda51c6e5b5db8cb81cebbdd40ecd8eb534a2"
+    }
+  }
+}
