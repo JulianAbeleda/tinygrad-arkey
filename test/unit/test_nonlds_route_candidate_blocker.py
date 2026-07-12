@@ -19,7 +19,9 @@ def test_pipe_candidate_context_preserves_identity_and_buffer_neutral_payload():
   pipe = extract_wmma_pipe_spec(describe_prefill_schedule(4096, 4096, role="attn_qo"))
   ctx = pipe_candidate_context(pipe, "a" * 64)
   assert ctx.canonical_identity == "a" * 64 and ctx.geometry is None
-  assert ctx.pipeline["role"] == "attn_qo" and ctx.pipeline["m"] == 512
+  assert ctx.pipeline["schema"] == "wmma_pipe_ir.v1"
+  assert ctx.pipeline["role"] == "attn_qo" and ctx.pipeline["shape"] == (512, 4096, 4096)
+  assert ctx.pipeline["provenance"] == "compiler_owned_typed_pipe_ir"
 
 def test_typed_pipe_ir_carries_lifecycle_without_native_isa():
   pipe = extract_wmma_pipe_spec(describe_prefill_schedule(4096, 4096, role="attn_qo"))

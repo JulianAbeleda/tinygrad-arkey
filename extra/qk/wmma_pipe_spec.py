@@ -67,8 +67,12 @@ def pipe_candidate_context(spec: WMMAPipeSpec, canonical_identity: str) -> Kerne
   resource ownership; the pipeline payload is immutable JSON-shaped data.
   """
   if not isinstance(spec, WMMAPipeSpec): raise TypeError("expected WMMAPipeSpec")
+  ir = build_wmma_pipe_ir(spec)
+  payload = {"schema": "wmma_pipe_ir.v1", "role": ir.role, "shape": ir.shape,
+             "stages": ir.stages, "loads_per_stage": ir.loads_per_stage,
+             "wait_policy": ir.wait_policy, "stores": ir.stores, "provenance": ir.provenance}
   return KernelCandidateContext("boltbeam.full_kernel_candidate.v1", canonical_identity,
-                               geometry=None, pipeline=spec.to_json())
+                               geometry=None, pipeline=payload)
 
 
 def extract_wmma_pipe_spec(prefill_spec) -> WMMAPipeSpec | None:
