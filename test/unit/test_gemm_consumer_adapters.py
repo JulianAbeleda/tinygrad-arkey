@@ -52,6 +52,14 @@ def test_dot2_adapter_rejects_non_pair_carriers():
     DOT2_CONSUMER.lower(a, b)
 
 
+def test_consumer_adapters_validate_fragment_carrier_width():
+  good = UOp(Ops.STACK, dtypes.half.vec(2), (UOp.const(dtypes.half, 1), UOp.const(dtypes.half, 2)))
+  DOT2_CONSUMER.validate_fragment(good)
+  with pytest.raises(ValueError, match="half.vec\(2\)"):
+    DOT2_CONSUMER.validate_fragment(UOp(Ops.STACK, dtypes.half.vec(4),
+      tuple(UOp.const(dtypes.half, x) for x in range(4))))
+
+
 def test_wmma_adapter_keeps_existing_descriptor_and_node_validators():
   WMMA_CONSUMER.validate_descriptor(amd_rdna3[0])
   assert WMMA_CONSUMER.identity == "amd.rdna3.wmma.fp16.v1"

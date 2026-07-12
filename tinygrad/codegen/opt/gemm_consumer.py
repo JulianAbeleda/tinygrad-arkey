@@ -86,6 +86,8 @@ class GemmConsumerAdapter(Protocol):
 
   def validate_tile(self, tile: LogicalTile) -> None: ...
 
+  def validate_fragment(self, fragment: UOp) -> None: ...
+
 
 def validate_consumer_wait_coverage(adapter: GemmConsumerAdapter, policy, dependencies: tuple,
                                     required: tuple[tuple[str, int, int], ...] = ()):
@@ -123,6 +125,10 @@ class WMMAConsumerAdapter:
   def validate_node(self, node: UOp) -> None:
     from tinygrad.codegen.opt.kernel_lds import validate_precontract_wmma_abi
     validate_precontract_wmma_abi(node, context=self.identity)
+
+  def validate_fragment(self, fragment: UOp) -> None:
+    if not isinstance(fragment, UOp) or fragment.dtype != self.fragment_dtype:
+      raise ValueError(f"{self.identity} requires half.vec(16) fragments")
 
 
 @dataclass(frozen=True)
@@ -163,6 +169,10 @@ class Dot2ConsumerAdapter:
     if lowered is None:
       raise ValueError(f"{self.identity} canonical pair was not accepted by fdot2 lowering")
     return lowered
+
+  def validate_fragment(self, fragment: UOp) -> None:
+    if not isinstance(fragment, UOp) or fragment.dtype != self.fragment_dtype:
+      raise ValueError(f"{self.identity} requires half.vec(2) fragments")
 
 
 WMMA_CONSUMER = WMMAConsumerAdapter()
