@@ -19,6 +19,49 @@ def test_stage_ownership_summary_marks_postrange_ready():
   assert out["next_required_object"].startswith("RotatedStageOwner")
 
 
+def test_stage_value_identity_gate_pinpoints_first_loss_not_owner_loss():
+  key = {"role": "B", "matrix": "B", "n_tile": 0, "k_tile": 7, "k_inner": [0, 32]}
+  snapshots = [
+    {"boundary": "anchor_epoch_evidence", "owner_record_count": 1,
+     "value_identities": [{"role": "B", "value_key": key}]},
+    {"boundary": "postrange", "owner_record_count": 1,
+     "value_identities": [{"role": "B", "value_key": key}]},
+    {"boundary": "rangeify_add_local_buffers", "owner_record_count": 1, "value_identities": []},
+    {"boundary": "amd_pre_isel", "owner_record_count": 0, "value_identities": []},
+    {"boundary": "amd_isel", "owner_record_count": 0, "value_identities": []},
+  ]
+
+  out = audit.stage_value_identity_survival_gate(snapshots, [key])
+
+  assert out["pass"] is False
+  assert out["first_loss_boundary"] == "rangeify_add_local_buffers"
+  assert out["boundaries"][2]["owner_record_count"] == 1
+  assert "owner/address/window equivalence is insufficient" in out["pass_condition"]
+
+
+def test_stage_value_identity_gate_requires_final_amd_isel_survival():
+  key = {"role": "A", "matrix": "A", "m_tile": 2, "k_tile": 3}
+  snapshots = [{"boundary": boundary, "owner_record_count": 1,
+                "value_identities": [{"role": "A", "value_key": key}]}
+               for boundary in audit.STAGE_VALUE_IDENTITY_BOUNDARIES]
+
+  out = audit.stage_value_identity_survival_gate(snapshots, [key])
+
+  assert out["pass"] is True
+  assert out["first_loss_boundary"] is None
+
+
+def test_stage_value_identity_snapshot_does_not_promote_owner_metadata_to_value_identity():
+  owner_only = audit.UOp(audit.Ops.NOOP, audit.dtypes.void, tag=(
+    "wmma_frag_buffer_proof", ("role", "B"), ("lds_buffer_id", 991), ("nbuf", 2),
+    ("owned_stage", "B_IDENTITY")))
+
+  snap = audit.stage_value_identity_snapshot(audit.UOp.sink(owner_only), "postrange")
+
+  assert snap["owner_record_count"] == 1
+  assert snap["value_identity_count"] == 0
+
+
 def test_stage_ownership_summary_marks_full_lowering_loss():
   out = audit.stage_ownership_summary([], [{"carrier_role": None, "carrier_nbuf": None}])
 

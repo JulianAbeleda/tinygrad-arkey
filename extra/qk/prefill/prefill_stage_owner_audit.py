@@ -80,6 +80,67 @@ def tag_fields(tag: Any) -> dict[str, Any]:
   return out
 
 
+STAGE_VALUE_IDENTITY_BOUNDARIES = (
+  "anchor_epoch_evidence", "postrange", "rangeify_add_local_buffers", "amd_pre_isel", "amd_isel",
+)
+
+
+def stage_value_identity_snapshot(sink: UOp, boundary: str) -> dict[str, Any]:
+  """Read exact stage-value identities without inferring them from address/owner metadata."""
+  identities, owners = [], []
+  for u in sink.toposort():
+    fields = tag_fields(u.tag)
+    if fields.get("role") not in ("A", "B"): continue
+    owner = {k: fields.get(k) for k in ("role", "lds_buffer_id", "nbuf", "owned_stage",
+                                        "producer_epoch", "consumer_epoch", "rotation")}
+    if any(v is not None for v in owner.values()): owners.append(owner)
+    value_key = fields.get("value_key")
+    if value_key is not None:
+      identities.append({"op": u.op.name, "role": fields["role"], "value_key": value_key})
+  return {
+    "boundary": boundary,
+    "owner_record_count": len(owners),
+    "value_identity_count": len(identities),
+    "owners": owners,
+    "value_identities": identities,
+  }
+
+
+def stage_value_identity_survival_gate(snapshots: list[dict[str, Any]],
+                                       required_value_keys: list[Any]) -> dict[str, Any]:
+  """Fail at the first lowering boundary that cannot prove every anchor value identity.
+
+  Owner, LDS-window, or address-family equality deliberately cannot satisfy this gate.
+  A future lowering fix passes only when exact producer/consumer value keys survive
+  through AMD instruction selection.
+  """
+  by_boundary = {row.get("boundary"): row for row in snapshots}
+  rows, first_loss = [], None
+  required = {repr(x) for x in required_value_keys}
+  for boundary in STAGE_VALUE_IDENTITY_BOUNDARIES:
+    snap = by_boundary.get(boundary)
+    present = set() if snap is None else {repr(x.get("value_key")) for x in snap.get("value_identities", [])}
+    missing = sorted(required - present)
+    status = "pass" if snap is not None and not missing else "missing_snapshot" if snap is None else "identity_lost"
+    row = {"boundary": boundary, "status": status, "required_count": len(required),
+           "present_count": len(present), "missing_value_keys": missing,
+           "owner_record_count": 0 if snap is None else snap.get("owner_record_count", 0)}
+    rows.append(row)
+    if first_loss is None and status != "pass": first_loss = boundary
+  passed = first_loss is None and bool(required)
+  return {
+    "schema": "ffn-gate-up-stage-value-identity-survival.v1",
+    "workload": {"role": "ffn_gate_up", "m": 512, "n": 12288, "k": 4096},
+    "pass": passed,
+    "first_loss_boundary": first_loss,
+    "boundaries": rows,
+    "pass_condition": (
+      "every exact anchor epoch value_key is present at postrange, after rangeify local-buffer lowering, "
+      "and after AMD pre-isel and isel; owner/address/window equivalence is insufficient"
+    ),
+  }
+
+
 def unwrap_index(u: UOp) -> UOp:
   while u.op in (Ops.CAST, Ops.AFTER) and u.src: u = u.src[0]
   return u
