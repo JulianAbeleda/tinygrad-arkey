@@ -41,6 +41,13 @@ helpers currently materialize backend `Ops.INS` operations. Existing graph
 `vmcnt` waits. A typed metadata object alone cannot change scheduling or
 register lifetimes.
 
+The repository also has a pure-capable `AMDLLVMRenderer` path. Generic tensor
+core graphs can already lower as `LOAD -> Ops.WMMA -> STORE` through LLVM AMDGPU
+intrinsics. That path does not consume `WMMAPipeIR` stage fields, does not bind
+the two-stage producer/ready/consume lifecycle, and has no typed targeted-wait
+dependency. Therefore attaching the pipe context to a generic matmul would be
+false provenance: it would prove ordinary WMMA, not the pure pipe primitive.
+
 ## Purity contract
 
 Pure means compiler-owned generation from graph inputs through the executable
@@ -252,6 +259,17 @@ groups, and typed wait dependencies.
 
 Exit: a structural schedule trace proves every load/ready/WMMA edge and rejects
 under-wait, over-consume, overwrite, and unsupported tail cases.
+
+Current feasibility result: **blocked at this packet**. Existing postrange
+already builds generic `Ops.WMMA` graphs, and the typed context can be attached,
+but postrange ignores pipe stage/wait fields. The reusable fixtures
+`build_stage1_uop_graph`, `KernelStage1ProducerStage`,
+`KernelStage1FragmentStage`, `prove_stage1_uop_graph`,
+`wmma_fragment_loads`, and `wmma_output_owners` validate pieces of ownership and
+fragment mapping; none binds a route-level 512x4096x4096 model kernel or proves
+contiguous fp16 A/B strides. The next implementation must integrate those
+semantics into lowering before any LLVM compile or benchmark can be called
+pure.
 
 ### P3 — AMD lowering slice
 
