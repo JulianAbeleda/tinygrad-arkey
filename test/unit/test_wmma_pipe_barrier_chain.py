@@ -14,7 +14,7 @@ def test_attn_qo_barrier_chain_has_ordered_graph_and_typed_context():
   barrier = next(u for u in ops if u.op is Ops.BARRIER)
   wmma = next(u for u in ops if u.op is Ops.WMMA)
   store = next(u for u in ops if u.op is Ops.STORE)
-  assert barrier in store.backward_slice
+  assert barrier in wmma.backward_slice
   assert wmma in store.backward_slice
   assert sink.arg.candidate_context.canonical_identity == "a" * 64
 
