@@ -690,14 +690,14 @@ def isel_store(ctx:IselContext, a:UOp, b:UOp, x:UOp):
     pending = getattr(ctx, "_stage_pending", None)
     if pending is None: pending = ctx._stage_pending = {}
     key = (role, elem // 2, pin)
-    if (elem & 1) == 0:
-      carrier = UOp(Ops.NOOP, dtypes.void, src=(val, a.src[0]), arg=("stage_pending", role, elem // 2, pin))
-      pending[key] = (val, carrier)
-      return carrier
-    if key not in pending:
-      raise NotImplementedError("AMD:ISA register stage pair arrived without its even half")
-    even, carrier = pending.pop(key)
-    return UOp(Ops.INS, dtypes.void, src=(even, val, carrier, a.src[0], a.src[1]), arg=AMDOps.STAGE_WRITE)
+    pair = pending.setdefault(key, {})
+    pair["even" if (elem & 1) == 0 else "odd"] = val
+    pair["order"] = a.src[0]
+    if "even" not in pair or "odd" not in pair:
+      return UOp(Ops.NOOP, dtypes.void, src=(val, a.src[0]), arg=("stage_pending", role, elem // 2, pin))
+    even, odd, order = pair["even"], pair["odd"], pair["order"]
+    pending.pop(key)
+    return UOp(Ops.INS, dtypes.void, src=(even, odd, UOp(Ops.NOOP, dtypes.void), order, a.src[1]), arg=AMDOps.STAGE_WRITE)
   if a.arg == "lds":                          # LDS store: ds_store_b16 for half-element tiles, else b32 (a.src[0]=addr, a.src[1]=order)
     if ctx is not None and _n_workitem_dims(ctx) > 1 and str(getenv("PREFILL_TC_LOCAL_STAGE", "")).strip().lower() in ("a", "both", "1", "true", "yes") and \
        getenv("PREFILL_TC_LOCAL_STAGE_WITH_LOCAL", 0) and not getenv("PREFILL_TC_LOCAL_STAGE_POST", 0) and \
