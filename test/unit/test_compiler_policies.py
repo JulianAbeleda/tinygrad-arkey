@@ -56,6 +56,9 @@ def test_wait_dependency_coverage_json_rejects_malformed_edge():
   from tinygrad.codegen.opt.compiler_policies import WaitDependencyCoverage
   with pytest.raises(ValueError, match="malformed wait dependency coverage edge"):
     WaitDependencyCoverage.from_json({"passed": True, "errors": [], "covered": [["A", 0]]})
+  with pytest.raises(ValueError, match="duplicate wait dependency coverage edge"):
+    WaitDependencyCoverage.from_json({"passed": True, "errors": [],
+                                      "covered": [["A", 0, 1], ["A", 0, 1]]})
 
 def test_wait_dependency_coverage_rejects_duplicate_and_missing_edges():
   policy = pipeline_policy_for_route("pipe")

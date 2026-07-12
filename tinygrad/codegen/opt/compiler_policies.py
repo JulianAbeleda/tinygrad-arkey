@@ -79,7 +79,10 @@ class WaitDependencyCoverage:
       if not isinstance(edge, list) or len(edge) != 3 or not isinstance(edge[0], str) or not edge[0] or \
          any(not isinstance(value, int) or isinstance(value, bool) or value < 0 for value in edge[1:]):
         raise ValueError("malformed wait dependency coverage edge")
-      edges.append((edge[0], edge[1], edge[2]))
+      parsed = (edge[0], edge[1], edge[2])
+      if parsed in edges:
+        raise ValueError("duplicate wait dependency coverage edge")
+      edges.append(parsed)
     return cls(passed, tuple(errors), tuple(edges))
 
 def prove_wait_dependency_coverage(policy: PipelinePolicy, dependencies: tuple[WaitDependency, ...] | list[WaitDependency],
