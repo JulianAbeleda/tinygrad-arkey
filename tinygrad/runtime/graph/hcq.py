@@ -13,7 +13,7 @@ PMC_GRAPH = getenv("PMC_GRAPH", 0)
 GRAPH_PROFILE_JSON = os.environ.get("HCQ_GRAPH_PROFILE_JSON", "")
 
 def graph_profile_payload(entries, deps, sigs):
-  rows = [{"device": ent.device, "name": str(ent.name), "start": str(sigs[ent.st_id]),
+  rows = [{"device": ent.device, "name": str(ent.name), "metadata": ent.metadata, "start": str(sigs[ent.st_id]),
            "end": str(sigs[ent.en_id]), "duration": str(sigs[ent.en_id] - sigs[ent.st_id]),
            "st_id": ent.st_id, "en_id": ent.en_id} for ent in entries]
   return {"schema": "tinygrad.hcq_graph_profile.v1", "entries": rows, "deps": deps}
@@ -167,7 +167,10 @@ class HCQGraph(MultiGraphRunner):
         prof_ji_desc = runtime.name if runtime is not None else TracingKey(f"{bufs[1].device} -> {bufs[0].device}", ret=bufs[0].nbytes) # type: ignore
 
         prof_name = enqueue_dev.device if runtime is not None else f"{enqueue_dev.device}:SDMA:{queue_idx}"
-        self.prof_graph_entries.append(ProfileGraphEntry(prof_name, prof_ji_desc, sig_st, j * 2 + 1))
+        candidate = getattr(ast.arg, "candidate_context", None)
+        metadata = None if candidate is None else {"canonical_identity": candidate.canonical_identity,
+                                                     "schema_version": candidate.schema_version}
+        self.prof_graph_entries.append(ProfileGraphEntry(prof_name, prof_ji_desc, sig_st, j * 2 + 1, metadata))
         self.prof_graph_deps.append([d - 1 for _, d in rdeps])
 
       self.last_j[enqueue_queue] = j

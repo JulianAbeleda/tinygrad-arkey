@@ -67,7 +67,7 @@ class ProfileDeviceEvent(ProfileEvent): device:str; tdiff:decimal.Decimal=decima
 class ProfileProgramEvent(ProfileEvent): device:str; name:str; lib:bytes|None; base:int|None; tag:int|None=None # noqa: E702
 
 @dataclass(frozen=True)
-class ProfileGraphEntry: device:str; name:str|TracingKey; st_id:int; en_id:int # noqa: E702
+class ProfileGraphEntry: device:str; name:str|TracingKey; st_id:int; en_id:int; metadata:dict[str,Any]|None=None # noqa: E702
 
 @dataclass(frozen=True)
 class ProfileGraphEvent(ProfileEvent): ents:list[ProfileGraphEntry]; deps:list[list[int]]; sigs:list[decimal.Decimal] # noqa: E702
