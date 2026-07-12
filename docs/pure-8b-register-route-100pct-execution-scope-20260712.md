@@ -48,6 +48,12 @@ fallback rule.
 - AMD ISA selection still fails for generic `AddrSpace.REG` stage buffers:
   they are treated as LDS-like addresses instead of pinned VGPR fragments, and
   the current stage-buffer sizing exhausts the fragment window.
+- AMD has no general indirect VGPR addressing. The current symbolic
+  `slot = rng % 2` index therefore cannot be lowered by simply assigning a
+  physical base. R1 must choose either static slot expansion/unrolling or a
+  proven sequential schedule that does not require indirect register indexing.
+  Mapping the dynamic index to LDS, inventing an indirect VGPR instruction, or
+  silently using one shared value is not an acceptable fix.
 - The postrange candidate path intentionally rejects register-resident storage
   because targeted wait lowering and final resource evidence are not complete.
 - The current pure 8B whole-model authority is approximately 1.5k tok/s at
@@ -95,6 +101,17 @@ Correct the role-specific buffer sizes. For the current 2x2 pipe, each role
 needs `2 * pipe_role_fragments * 16` half elements, not one combined A+B
 buffer. Route code must request leases through the existing AMD allocator;
 physical register numbers remain backend-owned.
+
+The current graph uses a symbolic alternating slot. Because gfx1100 cannot
+address VGPRs indirectly, this phase must also select and prove one of:
+
+- compile-time/static slot expansion with explicit physical slot ownership and
+  loop ordering; or
+- a one-buffer, no-prefetch schedule whose wait and overwrite proof is still
+  valid and whose measured cadence is acceptable.
+
+Do not lower the symbolic modulo expression as a memory address and call the
+result register-resident.
 
 **Exit:** full-K AMD isel emits VGPR-backed stage fragments for both roles;
 no LDS instructions are emitted for stage buffers; allocator and overlap tests
