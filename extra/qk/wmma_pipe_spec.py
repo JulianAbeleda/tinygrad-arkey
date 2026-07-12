@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Any
 from tinygrad.uop.ops import KernelCandidateContext, Ops, KernelInfo, UOp
 from tinygrad.dtype import dtypes
+from tinygrad.codegen.opt.compiler_policies import PipelinePolicy, RegisterPipePlan, WaitPolicy
 
 
 @dataclass(frozen=True)
@@ -37,6 +38,12 @@ class WMMAPipeSpec:
       raise ValueError("pipe shape must be divisible by tile and k_step")
     # Unsupported lifecycle/wait/target values remain constructible so the
     # fail-closed lowerer can report the exact unsupported contract.
+
+  @property
+  def pipeline_policy(self) -> PipelinePolicy:
+    """Return the common typed policy used by compiler-owned pipe lowering."""
+    return PipelinePolicy.register_resident(stages=self.stages,
+      wait=WaitPolicy(self.wait_policy, scope="per_stage"))
 
   @property
   def loads_per_stage(self) -> int:
@@ -70,6 +77,11 @@ class WMMAPipeIR:
     if self.wait_policy != "targeted_vmcnt": raise ValueError("unsupported pipe wait policy")
     if self.provenance != "compiler_owned_typed_pipe_ir": raise ValueError("invalid pipe provenance")
     if self.storage_kind != "global_register_resident" or self.resource_plan != "unproven": raise ValueError("invalid pipe resource contract")
+
+  @property
+  def pipeline_policy(self) -> PipelinePolicy:
+    """Materialize the IR's storage/wait/resource contract without re-parsing strings."""
+    return RegisterPipePlan(stages=self.stages, wait=WaitPolicy(self.wait_policy, scope="per_stage")).policy
 
 @dataclass(frozen=True)
 class WMMAPipeOp:

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Callable, Literal
-from extra.qk.compiler_policies import StoragePolicy
+from tinygrad.codegen.opt.compiler_policies import StoragePolicy
 
 from tinygrad.dtype import AddrSpace, dtypes
 from tinygrad.uop.ops import AxisType, Ops, UOp

@@ -1,5 +1,6 @@
 import pytest
-from extra.qk.compiler_policies import StoragePolicy, WaitPolicy, ResourcePlan, RegisterPipePlan, WaitDependency, amdllvm_wait_dependency
+from extra.qk.compiler_policies import (PipelinePolicy, StoragePolicy, WaitPolicy, ResourcePlan, RegisterPipePlan,
+  WaitDependency, amdllvm_wait_dependency, pipeline_policy_for_route)
 
 
 def test_policy_contracts_accept_lds_barrier_and_estimate():
@@ -18,6 +19,14 @@ def test_register_pipe_plan_is_two_stage_b128_zero_lds_and_unproven_resources():
   plan = RegisterPipePlan()
   assert (plan.stages, plan.global_load_bytes, plan.storage.slot_bytes) == (2, 16, 0)
   assert plan.wait.kind == "targeted_vmcnt" and plan.resources.stage == "host_estimate"
+  assert plan.policy.storage_kind == "global_register_resident" and plan.policy.logical_stage_count == 2
+
+def test_route_policy_factory_keeps_lds_and_register_storage_interchangeable():
+  lds = pipeline_policy_for_route("lds", buffer_count=2, slot_bytes=20480)
+  reg = pipeline_policy_for_route("pipe")
+  assert isinstance(lds, PipelinePolicy) and lds.storage_kind == "lds" and lds.resources.lds_bytes == 40960
+  assert reg.storage_kind == "global_register_resident" and reg.resources.lds_bytes == 0
+  assert reg.logical_stage_count == 2 and reg.wait.kind == "targeted_vmcnt"
 
 def test_wait_dependency_accepts_full_barrier_and_rejects_targeted_amdllvm():
   full = WaitDependency(WaitPolicy("full_barrier"), "produce", "consume", "A")
