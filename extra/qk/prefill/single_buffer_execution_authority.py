@@ -14,6 +14,7 @@ import numpy as np
 
 from extra.qk.prefill.anchor_isa_resource_capture import _program_surface
 from extra.qk.prefill.pure_single_buffer_evaluation_gate import canonical_candidate_hash
+from tinygrad.dtype import dtypes
 from tinygrad.uop.ops import Ops, UOp
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
@@ -96,8 +97,59 @@ def _expected_structure(payload: dict[str, Any]) -> dict[str, Any]:
           "lds_bytes": max(end for _start, end in windows.values())}
 
 
+def _emitted_tile_lds_proof(program: UOp) -> dict[str, Any]:
+  """Recompute the exact candidate structure from optimized emitted UOps."""
+  sink = program.src[0]
+  buffers = [u for u in sink.toposort() if u.op is Ops.BUFFER and isinstance(u.tag, tuple) and u.tag[0] == "kernel_tile_lds"]
+  errors = []
+  if len(buffers) != 1: return {"passed": False, "errors": [f"expected one tagged tile LDS buffer, found {len(buffers)}"]}
+  buf = buffers[0]
+  if not buf.src or buf.src[0].arg * buf.dtype.itemsize != 20480: errors.append("tagged tile LDS allocation is not 20480 bytes")
+  def _address(u):
+    address = u.src[0]
+    if address.op is Ops.INDEX: return address.src[0], address.src[1], 1
+    if address.op is Ops.SHRINK and len(address.src) == 3 and address.src[2].op is Ops.CONST:
+      return address.src[0], address.src[1], address.src[2].arg
+    return None
+  stores = [u for u in sink.toposort() if u.op is Ops.STORE and u.src[0].op is Ops.INDEX and u.src[0].src[0] is buf]
+  loads = [u for u in sink.toposort() if u.op is Ops.LOAD and (address := _address(u)) is not None and
+           buf in address[0].backward_slice_with_self]
+  if len(stores) != 32: errors.append(f"expected 32 scalar cooperative store formulas, found {len(stores)}")
+  if len(loads) != 48: errors.append(f"expected 48 packed fragment load formulas, found {len(loads)}")
+  allowed = re.compile(r"^[0-9lidx ()+*<>&|/%-]+$")
+  def _addresses(rows):
+    addresses = [address for u in rows if (address := _address(u)) is not None]
+    expressions = [(address[1].render(), address[2]) for address in addresses]
+    if any(allowed.fullmatch(expr) is None for expr,_width in expressions): raise ValueError("emitted LDS index is not restricted affine integer syntax")
+    return {int(eval(compile(expr, "<candidate-lds-index>", "eval"), {"__builtins__": {}},  # pylint: disable=eval-used
+                     {"lidx0": lane, "lidx1": wave_m, "lidx2": wave_n}))+element
+            for expr,width in expressions for lane in range(32) for wave_m in range(4) for wave_n in range(2) for element in range(width)}
+  expected_a = {row*40+k for row in range(128) for k in range(32)}
+  expected_b = {5120+row*40+k for row in range(128) for k in range(32)}
+  try:
+    store_addresses, load_addresses = _addresses(stores), _addresses(loads)
+    if store_addresses != expected_a | expected_b: errors.append("cooperative stores do not exactly cover stride-80 A/B data intervals")
+    if load_addresses != expected_a | expected_b: errors.append("fragment loads do not exactly consume staged A/B data intervals")
+  except ValueError as exc: errors.append(str(exc))
+  barriers = [u for u in sink.toposort() if u.op is Ops.BARRIER]
+  if len(barriers) != 1: errors.append(f"expected one shared barrier, found {len(barriers)}")
+  elif any(barriers[0] not in u.backward_slice for u in loads): errors.append("a fragment load is not ordered after the shared barrier")
+  wmmas = [u for u in sink.toposort() if u.op is Ops.WMMA]
+  if len(wmmas) != 16: errors.append(f"expected 16 emitted WMMA atoms, found {len(wmmas)}")
+  for wmma in wmmas:
+    if wmma.arg[1:6] != ((16, 16, 16), dtypes.half, dtypes.float, "AMD", 32):
+      errors.append("emitted WMMA descriptor differs from validated RDNA3 atom"); break
+    if any(not any(load in src.backward_slice for load in loads) for src in wmma.src[:2]):
+      errors.append("emitted WMMA operand is not bound to proven LDS fragment loads"); break
+  return {"passed": not errors, "errors": errors, "allocation_count": len(buffers), "store_formula_count": len(stores),
+          "load_formula_count": len(loads), "wmma_count": len(wmmas), "tile": {"m": 128, "n": 128, "k": 32},
+          "waves": {"m": 4, "n": 2}, "lds_windows": {"a": [0, 10240], "b": [10240, 20480]},
+          "lds_strides": {"a": 80, "b": 80}, "producer_data_elements": 8192, "consumer_data_elements": 8192}
+
+
 def _structural_binding(payload: dict[str, Any], program: UOp, lds: dict[str, Any]) -> dict[str, Any]:
   expected = _expected_structure(payload)
+  emitted_proof = _emitted_tile_lds_proof(program)
   local_size = tuple(program.arg.local_size or ())
   actual_threads = math.prod(local_size) if local_size else None
   wave_size = payload["workload"]["target"]["wave_size"]
@@ -108,12 +160,18 @@ def _structural_binding(payload: dict[str, Any], program: UOp, lds: dict[str, An
             # Rendered source does not retain enough semantic metadata to prove
             # candidate windows, strides, or wave ownership. Unknown is a hard
             # failure, not permission to infer them from the attached context.
-            "wave_count": wave_count, "tile": None, "waves": emitted_waves, "lds_windows": None, "lds_strides": None}
+            "wave_count": wave_count, "tile": emitted_proof.get("tile") if emitted_proof["passed"] else None,
+            "waves": emitted_proof.get("waves") if emitted_proof["passed"] else emitted_waves,
+            "lds_windows": emitted_proof.get("lds_windows") if emitted_proof["passed"] else None,
+            "lds_strides": emitted_proof.get("lds_strides") if emitted_proof["passed"] else None}
   evidence = {
     "threads": "PROGRAM launch local_size", "lds_bytes": "lowered DEFINE_LOCAL/rendered shared declaration",
     "wave_count": "launch threads divided by target wave size" if wave_count is not None else None,
-    "tile": None, "waves": "ordered PROGRAM local axes (wave_size, waves_m, waves_n)" if emitted_waves is not None else None,
-    "lds_windows": None, "lds_strides": None,
+    "tile": "optimized UOp affine producer/consumer proof" if emitted_proof["passed"] else None,
+    "waves": "optimized UOp proof + ordered PROGRAM local axes" if emitted_proof["passed"] else
+             "ordered PROGRAM local axes (wave_size, waves_m, waves_n)" if emitted_waves is not None else None,
+    "lds_windows": "optimized UOp exhaustive address-set proof" if emitted_proof["passed"] else None,
+    "lds_strides": "optimized UOp exhaustive address-set proof" if emitted_proof["passed"] else None,
   }
   errors = []
   if actual_threads != expected["threads"]: errors.append(f"threads: expected {expected['threads']}, emitted {actual_threads}")
@@ -125,7 +183,7 @@ def _structural_binding(payload: dict[str, Any], program: UOp, lds: dict[str, An
   for field in ("tile", "waves", "lds_windows", "lds_strides"):
     if actual[field] is None: errors.append(f"{field}: emitted structure is unproven")
     elif actual[field] != expected[field]: errors.append(f"{field}: emitted structure differs from payload")
-  return {"expected": expected, "actual": actual, "evidence": evidence,
+  return {"expected": expected, "actual": actual, "evidence": evidence, "emitted_proof": emitted_proof,
           "matches_payload": not errors, "pre_gpu_eligible": not errors, "errors": errors}
 
 

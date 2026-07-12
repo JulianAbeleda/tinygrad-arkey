@@ -274,7 +274,8 @@ def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:U
         value = operand.source.substitute({operand.row_axis: operand.row_tile_base + row,
                                            operand.k_axis: k_axis.tile_base + logical_k})
         index = (window.base + row * window.stride_bytes + logical_k * 2) // 2
-        stores.append(allocation.index(index, dtype=dtypes.half).store(value).end())
+        store_idx = allocation.index(index, dtype=dtypes.half).replace(tag=("kernel_tile_store", operand.role, row_iteration, elem))
+        stores.append(store_idx.store(value).end())
   producer = UOp.group(*stores)
   barrier = UOp.barrier(producer)
   wave_m, wave_n, lane = threads.wave_m, threads.wave_n, threads.lane
@@ -284,7 +285,7 @@ def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:U
     row = (wave * subtiles + subtile) * 16 + lane % 16
     logical_k = k_axis.substep * 16 + contract.element
     index = (window.base + row * window.stride_bytes + logical_k * 2) // 2
-    load = ordered.index(index, dtype=dtypes.half).load()
+    load = ordered.index(index, dtype=dtypes.half).replace(tag=("kernel_tile_fragment_load", role)).load()
     return UOp(Ops.CONTRACT, dtypes.half.vec(16), (load,), contract.arg, tag=("kernel_tile_fragment", role))
   subtiles_m = geometry.tile[0] // (geometry.waves[0] * 16)
   subtiles_n = geometry.tile[1] // (geometry.waves[1] * 16)
