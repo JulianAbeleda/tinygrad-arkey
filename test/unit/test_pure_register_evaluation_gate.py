@@ -1,0 +1,76 @@
+from extra.qk.prefill.pure_register_evaluation_gate import (COMPILE_SCHEMA, REGISTER_STORAGE, compile_only,
+  evaluate, final_resources, machine_search)
+
+
+IDENTITY = "a" * 64
+BINARY = "b" * 64
+
+
+def _compile(**overrides):
+  row = {"schema": COMPILE_SCHEMA, "canonical_identity": IDENTITY, "binary_sha256": BINARY,
+         "passed": True, "surface": {"strict_pure": True, "ops_ins_count": 0, "source_kind": "compiler_rendered"},
+         "pipeline": {"storage_kind": REGISTER_STORAGE, "lds_bytes": 0},
+         "wait": {"typed": True, "kind": "targeted_vmcnt"},
+         "abi": {"wave_size": 32, "fragment_carrier": "half.vec(16)", "accumulator_carrier": "float.vec(8)"},
+         "resources": {"stage": "final_program", "vgpr": 100, "sgpr": 80, "lds_bytes": 0,
+                       "scratch_bytes": 0, "vgpr_spills": 0, "sgpr_spills": 0,
+                       "workgroup_threads": 256, "wave_count": 8}}
+  row.update(overrides)
+  return row
+
+
+def _correctness():
+  return {"passed": True, "canonical_identity": IDENTITY, "binary_sha256": BINARY,
+          "nonconstant_cases": True, "all_output_parity": True}
+
+
+def _timing():
+  return {"passed": True, "canonical_identity": IDENTITY, "binary_sha256": BINARY,
+          "clock_pin": True, "tok_s": 2.0,
+          "protocol": {"scope": "kernel_only", "compile_excluded": True}}
+
+
+def _roles():
+  return {role: {"passed": True, "strict_pure": True, "fallback_used": False, "route_family": "pure",
+                 "canonical_identity": IDENTITY, "binary_sha256": BINARY,
+                 "policy": {"storage_kind": REGISTER_STORAGE, "wait_kind": "targeted_vmcnt"},
+                 "search_space": "typed_policy_fields"}
+          for role in ("attn_qo", "ffn_down", "attn_kv", "ffn_gate_up")}
+
+
+def test_missing_register_artifact_blocks_before_resource_or_search_claims():
+  report = evaluate({"canonical_identity": IDENTITY})
+  assert report["passed"] is False and report["blocked_at"] == "compile"
+  assert "register compile artifact is unavailable" in report["blockers"]["compile"]
+
+
+def test_lds_candidate_is_not_admitted_as_register_compile():
+  artifact = _compile(pipeline={"storage_kind": "lds", "lds_bytes": 20480})
+  row = compile_only({"canonical_identity": IDENTITY}, artifact)
+  assert row["passed"] is False
+  assert any("global_register_resident" in error for error in row["errors"])
+  assert any("claims LDS" in error for error in row["errors"])
+
+
+def test_final_resource_gate_rejects_host_estimates_and_spills():
+  artifact = _compile(resources={"stage": "host_estimate", "lds_bytes": 0})
+  assert final_resources(artifact)["passed"] is False
+  artifact = _compile(resources={"stage": "final_program", "vgpr": 100, "sgpr": 80, "lds_bytes": 0,
+                                 "scratch_bytes": 0, "vgpr_spills": 1, "sgpr_spills": 0,
+                                 "workgroup_threads": 256, "wave_count": 8})
+  assert final_resources(artifact)["passed"] is False
+
+
+def test_machine_search_requires_every_role_and_typed_policy_fields():
+  rows = _roles()
+  del rows["attn_kv"]
+  report = machine_search(rows)
+  assert report["passed"] is False and any("attn_kv" in error for error in report["errors"])
+
+
+def test_all_gates_join_for_synthetic_register_artifact():
+  report = evaluate({"canonical_identity": IDENTITY}, compile_artifact=_compile(),
+                    correctness=_correctness(), timing=_timing(), role_evidence=_roles(), baseline_tok_s=1.0)
+  assert report["passed"] is True and report["blocked_at"] is None
+  assert all(report["stages"][name]["passed"] for name in ("compile", "resources", "correctness_timing", "machine_search"))
+

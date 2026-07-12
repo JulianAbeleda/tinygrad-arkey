@@ -1,0 +1,187 @@
+"""Fail-closed gates for the future pure register-resident prefill path.
+
+This module is an evidence join, not a kernel builder.  It consumes compile,
+resource, correctness, timing, and route-census artifacts produced by the
+existing authorities.  A missing register artifact, an LDS artifact, or an
+incomplete hash/provenance join is a hard block.
+"""
+from __future__ import annotations
+
+from typing import Any, Iterable
+
+SCHEMA = "prefill-pure-register-evaluation-gate.v1"
+COMPILE_SCHEMA = "prefill-pure-register-compile.v1"
+REGISTER_STORAGE = "global_register_resident"
+TARGET = {"backend": "AMD", "arch": "gfx1100", "wave_size": 32}
+ROLES = ("attn_qo", "ffn_down", "attn_kv", "ffn_gate_up")
+
+
+def _identity(row: dict[str, Any] | None) -> str | None:
+  if not isinstance(row, dict): return None
+  value = row.get("canonical_identity", row.get("candidate_hash"))
+  return value if isinstance(value, str) and len(value) == 64 and all(c in "0123456789abcdef" for c in value) else None
+
+
+def _binary_hash(row: dict[str, Any] | None) -> str | None:
+  if not isinstance(row, dict): return None
+  program = row.get("program") if isinstance(row.get("program"), dict) else {}
+  value = row.get("binary_sha256", program.get("binary_sha256"))
+  return value if isinstance(value, str) and len(value) == 64 else None
+
+
+def _result(stage: str, passed: bool, errors: Iterable[str], **evidence: Any) -> dict[str, Any]:
+  errors = tuple(str(x) for x in errors)
+  return {"schema": f"{SCHEMA}.{stage}", "stage": stage, "passed": bool(passed and not errors),
+          "errors": list(errors), **evidence}
+
+
+def compile_only(candidate: dict[str, Any] | None, artifact: dict[str, Any] | None) -> dict[str, Any]:
+  """Validate a compiler-owned register artifact without launching it."""
+  errors: list[str] = []
+  if not isinstance(candidate, dict): errors.append("candidate payload is unavailable")
+  if not isinstance(artifact, dict):
+    errors.append("register compile artifact is unavailable")
+    return _result("compile", False, errors)
+  if artifact.get("schema") not in (COMPILE_SCHEMA, "prefill-pure-anchor-compiled-resource-authority.v1"):
+    errors.append("unsupported register compile artifact schema")
+  identity = _identity(artifact)
+  if identity is None: errors.append("compile artifact has no canonical candidate identity")
+  candidate_identity = _identity(candidate)
+  if candidate_identity is not None and identity != candidate_identity:
+    errors.append("compile artifact identity does not match candidate payload")
+  binary = _binary_hash(artifact)
+  if binary is None: errors.append("compile artifact has no binary hash")
+  surface = artifact.get("surface") if isinstance(artifact.get("surface"), dict) else {}
+  if artifact.get("passed") is not True: errors.append("compile authority did not pass")
+  if surface.get("strict_pure") is not True or artifact.get("strict_pure") is False:
+    errors.append("compiled surface is not strict pure")
+  if surface.get("ops_ins_count", artifact.get("ops_ins_count", 0)) != 0:
+    errors.append("register compile artifact contains Ops.INS")
+  if surface.get("source_kind") == "native_isa": errors.append("register compile artifact uses native ISA source")
+  pipeline = artifact.get("pipeline") if isinstance(artifact.get("pipeline"), dict) else {}
+  if pipeline.get("storage_kind") != REGISTER_STORAGE:
+    errors.append("compile artifact does not prove global_register_resident storage")
+  if pipeline.get("lds_bytes", pipeline.get("active_lds_bytes", 0)) != 0:
+    errors.append("register compile artifact claims LDS storage")
+  wait = artifact.get("wait") if isinstance(artifact.get("wait"), dict) else {}
+  if wait.get("typed") is not True or wait.get("kind") != "targeted_vmcnt":
+    errors.append("compile artifact lacks typed targeted wait evidence")
+  abi = artifact.get("abi") if isinstance(artifact.get("abi"), dict) else {}
+  for name, expected in (("wave_size", 32), ("fragment_carrier", "half.vec(16)"),
+                         ("accumulator_carrier", "float.vec(8)")):
+    if abi.get(name) != expected: errors.append(f"compile artifact ABI field {name!r} is unproven")
+  return _result("compile", not errors, errors, canonical_identity=identity, binary_sha256=binary,
+                 storage_kind=pipeline.get("storage_kind"), pipeline=pipeline, wait=wait, abi=abi,
+                 resources=artifact.get("resources") if isinstance(artifact.get("resources"), dict) else {})
+
+
+def final_resources(compile: dict[str, Any] | None) -> dict[str, Any]:
+  """Require final-program resource facts joined to the compile artifact."""
+  errors: list[str] = []
+  if not isinstance(compile, dict) or compile.get("passed") is not True:
+    errors.append("compile gate must pass before final-resource evaluation")
+    return _result("resources", False, errors)
+  resources = compile.get("resources") if isinstance(compile.get("resources"), dict) else {}
+  if resources.get("stage") != "final_program": errors.append("resource plan is not final_program")
+  for name in ("vgpr", "sgpr", "lds_bytes", "scratch_bytes", "workgroup_threads", "wave_count"):
+    value = resources.get(name)
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+      errors.append(f"final resource {name!r} is unknown")
+  if resources.get("lds_bytes") != 0: errors.append("register resource plan must report zero LDS bytes")
+  if resources.get("scratch_bytes") != 0: errors.append("register candidate uses scratch")
+  for name in ("vgpr_spills", "sgpr_spills"):
+    if resources.get(name) != 0: errors.append(f"register candidate has {name}")
+  if _identity(compile) is None or _binary_hash(compile) is None:
+    errors.append("final resources are not joined to candidate and binary hashes")
+  return _result("resources", not errors, errors, canonical_identity=_identity(compile),
+                 binary_sha256=_binary_hash(compile), resources=resources)
+
+
+def correctness_timing(resources: dict[str, Any] | None, correctness: dict[str, Any] | None,
+                       timing: dict[str, Any] | None, *, baseline_tok_s: float | None = None) -> dict[str, Any]:
+  """Require nonconstant correctness and an isolated pinned timing sample."""
+  errors: list[str] = []
+  if not isinstance(resources, dict) or resources.get("passed") is not True:
+    errors.append("final-resource gate must pass before correctness/timing")
+  if not isinstance(correctness, dict):
+    errors.append("correctness artifact is unavailable")
+  else:
+    if correctness.get("passed") is not True: errors.append("correctness authority did not pass")
+    if correctness.get("nonconstant_cases") is not True: errors.append("nonconstant correctness cases are unproven")
+    if correctness.get("all_output_parity") is not True: errors.append("full output parity is unproven")
+    if _identity(correctness) != _identity(resources): errors.append("correctness candidate identity join failed")
+    if _binary_hash(correctness) != _binary_hash(resources): errors.append("correctness binary identity join failed")
+  if not isinstance(timing, dict):
+    errors.append("timing artifact is unavailable")
+  else:
+    if timing.get("passed") is not True: errors.append("timing authority did not pass")
+    protocol = timing.get("protocol") if isinstance(timing.get("protocol"), dict) else {}
+    if protocol.get("scope") != "kernel_only" or protocol.get("compile_excluded") is not True:
+      errors.append("timing is not compile-excluded kernel-only")
+    if timing.get("clock_pin") is not True: errors.append("timing clocks are not pinned")
+    if _identity(timing) != _identity(resources): errors.append("timing candidate identity join failed")
+    if _binary_hash(timing) != _binary_hash(resources): errors.append("timing binary identity join failed")
+    measured = timing.get("tok_s", timing.get("median_tok_s"))
+    if not isinstance(measured, (int, float)) or measured <= 0: errors.append("timing throughput is unavailable")
+    elif baseline_tok_s is not None and measured <= baseline_tok_s:
+      errors.append("register candidate does not improve the pure baseline")
+  return _result("correctness_timing", not errors, errors, canonical_identity=_identity(resources),
+                 binary_sha256=_binary_hash(resources), correctness=correctness, timing=timing)
+
+
+def machine_search(role_evidence: dict[str, dict[str, Any]] | None, *, selected_roles: tuple[str, ...] = ROLES) -> dict[str, Any]:
+  """Admit search only when every selected role has complete pure evidence."""
+  errors: list[str] = []
+  if not isinstance(role_evidence, dict):
+    errors.append("role evidence census is unavailable")
+    return _result("machine_search", False, errors, selected_roles=list(selected_roles))
+  if not selected_roles or any(role not in ROLES for role in selected_roles): errors.append("selected roles are unsupported")
+  rows = {}
+  for role in selected_roles:
+    row = role_evidence.get(role)
+    if not isinstance(row, dict):
+      errors.append(f"{role}: evidence is unavailable")
+      continue
+    rows[role] = row
+    if row.get("passed") is not True: errors.append(f"{role}: pure evidence gates did not pass")
+    if row.get("strict_pure") is not True or row.get("fallback_used") is not False:
+      errors.append(f"{role}: strict pure fallback-free route is unproven")
+    if row.get("route_family") != "pure": errors.append(f"{role}: route family is not pure")
+    if not _identity(row) or not _binary_hash(row): errors.append(f"{role}: candidate/binary identity join is incomplete")
+    policy = row.get("policy") if isinstance(row.get("policy"), dict) else {}
+    if policy.get("storage_kind") != REGISTER_STORAGE or policy.get("wait_kind") != "targeted_vmcnt":
+      errors.append(f"{role}: typed register policy fields are unavailable")
+    if row.get("search_space") != "typed_policy_fields":
+      errors.append(f"{role}: search space is not typed policy fields")
+  return _result("machine_search", not errors, errors, selected_roles=list(selected_roles), roles=rows,
+                 search_space="typed_policy_fields" if not errors else None)
+
+
+def evaluate(candidate: dict[str, Any] | None, *, compile_artifact: dict[str, Any] | None = None,
+             correctness: dict[str, Any] | None = None, timing: dict[str, Any] | None = None,
+             role_evidence: dict[str, dict[str, Any]] | None = None,
+             selected_roles: tuple[str, ...] = ROLES, baseline_tok_s: float | None = None) -> dict[str, Any]:
+  """Run R6-R10 in order and stop at the first unavailable or failed gate."""
+  report: dict[str, Any] = {"schema": SCHEMA, "passed": False, "blocked_at": None, "blockers": {}, "stages": {}}
+  compile = compile_only(candidate, compile_artifact)
+  report["stages"]["compile"] = compile
+  if not compile["passed"]:
+    report.update(blocked_at="compile", blockers={"compile": compile["errors"]})
+    return report
+  resources = final_resources(compile)
+  report["stages"]["resources"] = resources
+  if not resources["passed"]:
+    report.update(blocked_at="resources", blockers={"resources": resources["errors"]})
+    return report
+  correctness_stage = correctness_timing(resources, correctness, timing, baseline_tok_s=baseline_tok_s)
+  report["stages"]["correctness_timing"] = correctness_stage
+  if not correctness_stage["passed"]:
+    report.update(blocked_at="correctness_timing", blockers={"correctness_timing": correctness_stage["errors"]})
+    return report
+  search = machine_search(role_evidence, selected_roles=selected_roles)
+  report["stages"]["machine_search"] = search
+  if not search["passed"]:
+    report.update(blocked_at="machine_search", blockers={"machine_search": search["errors"]})
+    return report
+  report["passed"] = True
+  return report
