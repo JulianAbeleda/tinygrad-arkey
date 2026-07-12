@@ -1,7 +1,7 @@
 import pytest
 
 from extra.qk.prefill.wmma import (
-  LDS2Cadence, LDS2LifecycleTemplate, LDS2MemoryLayout, LDS2RegLayout, LDS2WaitPolicy, build_gemm_lds2,
+  AMDRegisterLeaseAllocator, LDS2Cadence, LDS2LifecycleTemplate, LDS2MemoryLayout, LDS2RegLayout, LDS2WaitPolicy, build_gemm_lds2,
   default_lds2_cadence, default_lds2_lifecycle_template, default_lds2_memory_layout, default_lds2_reg_layout,
   default_lds2_wait_policy, env_lds2_lifecycle_template, env_lds2_reg_layout, env_lds2_wait_policy,
   lower_lds2_gemm_kernel)
@@ -23,6 +23,25 @@ def test_default_lds2_reg_layout_matches_legacy_formula():
     SCR=10 + 2*8 + 4*8 + 2*4*8 + 2*4 + 2*4,
     FB2=10 + 2*8 + 4*8 + 2*4*8 + 2*4 + 2*4 + 2,
   )
+
+
+def test_register_lease_allocator_fixed_abi_and_virtual_pool():
+  alloc = AMDRegisterLeaseAllocator.with_fixed_abi()
+  assert alloc.virtual_vgpr_pool == 10 and alloc.virtual_sgpr_pool == 17
+  frag = alloc.allocate("fragment", 16, bank="vgpr", align=8)
+  assert frag.start == 16 and frag.end == 32
+  with pytest.raises(ValueError, match="overlaps"):
+    alloc.reserve("overlap", 20, 2, bank="vgpr")
+
+
+def test_default_layout_leases_match_legacy_register_windows():
+  alloc = AMDRegisterLeaseAllocator.with_fixed_abi()
+  leases = [alloc.allocate(name, count, bank="vgpr") for name, count in (
+    ("wmma_fragment_a", 16), ("wmma_fragment_b", 32), ("wmma_accumulator", 64),
+    ("lds_pack_a", 8), ("lds_pack_b", 8), ("address_scratch", 2))]
+  assert [(x.name, x.start, x.end) for x in leases] == [
+    ("wmma_fragment_a", 10, 26), ("wmma_fragment_b", 26, 58), ("wmma_accumulator", 58, 122),
+    ("lds_pack_a", 122, 130), ("lds_pack_b", 130, 138), ("address_scratch", 138, 140)]
 
 
 def test_env_lds2_reg_layout_defaults_to_legacy_layout(monkeypatch):
