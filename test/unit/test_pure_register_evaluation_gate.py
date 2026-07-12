@@ -17,6 +17,7 @@ def _compile(**overrides):
   row = {"schema": COMPILE_SCHEMA, "canonical_identity": IDENTITY, "binary_sha256": BINARY,
          "passed": True, "surface": {"strict_pure": True, "ops_ins_count": 0, "source_kind": "compiler_rendered"},
          "pipeline": {"storage_kind": REGISTER_STORAGE, "lds_bytes": 0,
+                      "consumer_identity": "amd.rdna3.wmma.fp16.v1",
                       "register_mapping": {"backend": "amd_vgpr", "addressing": "sequential",
                                             "required_roles": ["A", "B"]},
                       "wait_required_edges": [["A", 0, 1], ["B", 0, 1]]},
@@ -44,6 +45,8 @@ def _timing():
 def _roles():
   return {role: {"passed": True, "strict_pure": True, "fallback_used": False, "route_family": "pure",
                  "canonical_identity": IDENTITY, "binary_sha256": BINARY,
+                 "consumer_identity": "amd.rdna3.wmma.fp16.v1",
+                 "candidate_fields": ["storage_kind", "wait_kind", "buffer_count", "slot_addressing", "consumer_identity"],
                  "policy": {"storage_kind": REGISTER_STORAGE, "wait_kind": "targeted_vmcnt"},
                  "search_space": "typed_policy_fields"}
           for role in ("attn_qo", "ffn_down", "attn_kv", "ffn_gate_up")}
@@ -72,6 +75,16 @@ def test_register_compile_requires_physical_mapping_and_wait_edges():
   assert any("wait dependency coverage" in error for error in row["errors"])
 
 
+def test_register_compile_requires_generic_consumer_identity():
+  artifact = _compile(pipeline={"storage_kind": REGISTER_STORAGE, "lds_bytes": 0,
+                                "register_mapping": {"backend": "amd_vgpr", "addressing": "sequential",
+                                                      "required_roles": ["A", "B"]},
+                                "wait_required_edges": [["A", 0, 1], ["B", 0, 1]]})
+  row = compile_only({"canonical_identity": IDENTITY}, artifact)
+  assert row["passed"] is False
+  assert any("consumer identity" in error for error in row["errors"])
+
+
 def test_register_compile_mapping_must_cover_artifact_roles():
   artifact = _compile(pipeline={"storage_kind": REGISTER_STORAGE, "lds_bytes": 0,
                                 "register_mapping": {"backend": "amd_vgpr", "addressing": "sequential",
@@ -97,6 +110,29 @@ def test_machine_search_requires_every_role_and_typed_policy_fields():
   del rows["attn_kv"]
   report = machine_search(rows)
   assert report["passed"] is False and any("attn_kv" in error for error in report["errors"])
+
+
+def test_machine_search_rejects_missing_consumer_identity():
+  rows = _roles()
+  rows["attn_qo"] = {**rows["attn_qo"], "consumer_identity": None}
+  report = machine_search(rows)
+  assert report["passed"] is False and any("attn_qo" in error and "consumer identity" in error for error in report["errors"])
+
+
+def test_machine_search_rejects_untyped_candidate_field_set():
+  rows = _roles()
+  rows["attn_qo"] = {**rows["attn_qo"], "candidate_fields": ["storage_kind", "wait_kind"]}
+  report = machine_search(rows)
+  assert report["passed"] is False and any("attn_qo" in error and "candidate fields" in error for error in report["errors"])
+
+
+def test_machine_search_joins_role_consumer_identity_when_report_supplies_it():
+  route = {"prefill_role_routes": {role: "register" for role in _roles()},
+           "prefill_role_consumers": {role: "amd.rdna3.wmma.fp16.v1" for role in _roles()}}
+  assert machine_search(_roles(), route_report=route)["passed"] is True
+  route["prefill_role_consumers"]["ffn_down"] = "amd.rdna3.dot2.fp16.v1"
+  report = machine_search(_roles(), route_report=route)
+  assert report["passed"] is False and any("ffn_down" in error and "does not match" in error for error in report["errors"])
 
 
 def test_role_attribution_requires_all_roles_and_does_not_trust_top_level_pure_flag():

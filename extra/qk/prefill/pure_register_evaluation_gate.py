@@ -14,6 +14,31 @@ COMPILE_SCHEMA = "prefill-pure-register-compile.v1"
 REGISTER_STORAGE = "global_register_resident"
 TARGET = {"backend": "AMD", "arch": "gfx1100", "wave_size": 32}
 ROLES = ("attn_qo", "ffn_down", "attn_kv", "ffn_gate_up")
+REQUIRED_SEARCH_FIELDS = ("storage_kind", "wait_kind", "buffer_count", "slot_addressing", "consumer_identity")
+
+
+def _consumer_identity(row: dict[str, Any] | None) -> str | None:
+  """Extract the generic GEMM consumer adapter identity from evidence.
+
+  The identity is deliberately opaque to this gate: WMMA, MFMA, and dot2
+  adapters can all participate, but a route must name the adapter that
+  consumed its logical register tile.  Keeping this as an evidence join
+  avoids coupling the pure-route authority to one instruction family.
+  """
+  if not isinstance(row, dict): return None
+  pipeline = row.get("pipeline") if isinstance(row.get("pipeline"), dict) else {}
+  value = row.get("consumer_identity", pipeline.get("consumer_identity"))
+  return value if isinstance(value, str) and value.strip() else None
+
+
+def _candidate_fields(row: dict[str, Any] | None) -> tuple[str, ...] | None:
+  """Return the explicitly typed policy fields exposed to machine search."""
+  if not isinstance(row, dict): return None
+  fields = row.get("candidate_fields")
+  if not isinstance(fields, list) or any(not isinstance(field, str) or not field.strip() for field in fields): return None
+  result = tuple(fields)
+  if len(set(result)) != len(result) or any(field not in result for field in REQUIRED_SEARCH_FIELDS): return None
+  return result
 
 
 def _identity(row: dict[str, Any] | None) -> str | None:
@@ -76,6 +101,8 @@ def compile_only(candidate: dict[str, Any] | None, artifact: dict[str, Any] | No
   pipeline = artifact.get("pipeline") if isinstance(artifact.get("pipeline"), dict) else {}
   if pipeline.get("storage_kind") != REGISTER_STORAGE:
     errors.append("compile artifact does not prove global_register_resident storage")
+  if _consumer_identity(artifact) is None:
+    errors.append("compile artifact lacks generic GEMM consumer identity")
   if pipeline.get("lds_bytes", pipeline.get("active_lds_bytes", 0)) != 0:
     errors.append("register compile artifact claims LDS storage")
   mapping = pipeline.get("register_mapping")
@@ -138,7 +165,8 @@ def compile_only(candidate: dict[str, Any] | None, artifact: dict[str, Any] | No
                   facts.workgroup_threads % facts.wavefront_size == 0 else None)
     artifact_resources = {**facts.to_json(), "stage": resource_obj.resource_stage, "wave_count": wave_count}
   return _result("compile", not errors, errors, canonical_identity=identity, binary_sha256=binary,
-                 storage_kind=pipeline.get("storage_kind"), pipeline=pipeline, wait=wait, abi=abi,
+                 storage_kind=pipeline.get("storage_kind"), consumer_identity=_consumer_identity(artifact),
+                 pipeline=pipeline, wait=wait, abi=abi,
                  resources=artifact_resources or (artifact.get("resources") if isinstance(artifact.get("resources"), dict) else {}),
                  resource_artifact=resource_artifact)
 
@@ -244,6 +272,10 @@ def machine_search(role_evidence: dict[str, dict[str, Any]] | None, *, selected_
       errors.append(f"{role}: strict pure fallback-free route is unproven")
     if row.get("route_family") != "pure": errors.append(f"{role}: route family is not pure")
     if not _identity(row) or not _binary_hash(row): errors.append(f"{role}: candidate/binary identity join is incomplete")
+    if _consumer_identity(row) is None:
+      errors.append(f"{role}: generic GEMM consumer identity is unavailable")
+    if _candidate_fields(row) is None:
+      errors.append(f"{role}: candidate fields are missing or not the required typed policy set")
     policy = row.get("policy") if isinstance(row.get("policy"), dict) else {}
     if policy.get("storage_kind") != REGISTER_STORAGE or policy.get("wait_kind") != "targeted_vmcnt":
       errors.append(f"{role}: typed register policy fields are unavailable")
@@ -252,6 +284,18 @@ def machine_search(role_evidence: dict[str, dict[str, Any]] | None, *, selected_
   if route_report is not None:
     attribution = validate_role_attribution(route_report, expected_roles=selected_roles, require_pure=True)
     errors.extend(f"role attribution: {error}" for error in attribution["errors"])
+    consumers = route_report.get("prefill_role_consumers") if isinstance(route_report, dict) else None
+    if consumers is not None:
+      if not isinstance(consumers, dict):
+        errors.append("role attribution: prefill_role_consumers is malformed")
+      else:
+        for role in selected_roles:
+          expected = consumers.get(role)
+          actual = _consumer_identity(rows.get(role))
+          if not isinstance(expected, str) or not expected.strip():
+            errors.append(f"role attribution: {role}: consumer identity is missing")
+          elif actual != expected:
+            errors.append(f"role attribution: {role}: consumer identity does not match evidence")
   return _result("machine_search", not errors, errors, selected_roles=list(selected_roles), roles=rows,
                  search_space="typed_policy_fields" if not errors else None)
 
