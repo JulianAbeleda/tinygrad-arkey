@@ -21,8 +21,10 @@ def run(*, warmups=4, rounds=3, device=None):
   x = Tensor.ones((M * K,), dtype=dtypes.float16, device=dev).realize()
   spec = describe_q6k_packed_prefill(N, K, M, role="lm_head", parts=1,
                                      output_layout="direct_out", opts=("UPCAST:1:4",))
-  generated = Tensor.empty(M, N, dtype=dtypes.float32, device=dev).custom_kernel(
-    halfs, x, fxn=emit_q6k_packed_prefill_kernel(spec))[0]
+  def make_generated():
+    return Tensor.empty(M, N, dtype=dtypes.float32, device=dev).custom_kernel(
+      halfs, x, fxn=emit_q6k_packed_prefill_kernel(spec))[0]
+  generated = make_generated()
   # Independent comparator: legacy packed-load partials route, then reduction.
   partials = Tensor.empty(N, M, 1, dtype=dtypes.float32, device=dev)
   ref = partials.custom_kernel(halfs, x, fxn=q6k_gemm_packed_load_kernel(
@@ -30,9 +32,9 @@ def run(*, warmups=4, rounds=3, device=None):
   generated.realize(); ref.realize()  # compile excluded from timed rounds
   diff = (generated - ref).abs().max().item()
   times = []
-  for _ in range(warmups): generated.realize(); Device[dev].synchronize()
+  for _ in range(warmups): make_generated().realize(); Device[dev].synchronize()
   for _ in range(rounds):
-    Device[dev].synchronize(); t0 = time.perf_counter(); generated.realize(); Device[dev].synchronize()
+    Device[dev].synchronize(); t0 = time.perf_counter(); make_generated().realize(); Device[dev].synchronize()
     times.append((time.perf_counter() - t0) * 1e3)
   return {"schema":"q6k-lm-head-prefill-authority.v1", "shape":{"M":M,"N":N,"K":K},
           "route":{"kernel":spec.kernel_name,"role":"lm_head","output_layout":"direct_out","parts":1},
