@@ -1,8 +1,10 @@
 import pytest
+import json
 
 from extra.qk.generated_candidates import GeneratedCandidateRegistry, builtin_registry, select_generated_candidate
 from extra.qk.quant_specs import activation_spec, quant_spec
 from extra.qk import route_manifest
+from extra.qk import pure_search_guard
 from extra.qk.runtime_specs import (
   ANCHOR_SINGLE_BUFFER_CANDIDATE_HASH, FULL_KERNEL_CANDIDATE_SCHEMA, ActivationQuantSpec, GeneratedCandidate,
   QuantizedTensorSpec, RuntimeOpSpec,
@@ -259,3 +261,25 @@ def test_bind_rejects_self_consistent_hash_with_false_emitted_descriptor(mutatio
       tile=(128, 128, 32), waves=(4, 2), threads=256, buffer_count=1, stage_count=1,
       lds_windows={"a": [0, 10240], "b": [10240, 20480]}, lds_strides={"a": 80, "b": 80},
       lds_padding=16, lds_bytes=20480)
+
+
+def test_exact_anchor_candidate_selects_truthful_pure_research_route():
+  candidate = _single_buffer_anchor_candidate()
+  env = {"PREFILL_GRAPH_GEMM": "1", "PREFILL_WMMA_LDS_PRIMITIVE": "1",
+         "BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON": json.dumps(candidate.full_kernel_candidate),
+         "BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH": candidate.canonical_identity}
+  row = {x["family"]: x for x in pure_search_guard.effective_routes(env)}["prefill_gemm"]
+  assert row["effective_route"] == "prefill_wmma_lds_single_buffer_candidate_generated"
+  assert row["provenance"] == "tinygrad_scheduler_generated"
+  assert row["strict_pure"] is True and row["pure"] is True and row["rolled_back_to_oracle"] is False
+
+
+def test_candidate_route_selector_fails_closed_and_default_is_unchanged():
+  default = {x["family"]: x for x in pure_search_guard.effective_routes({})}["prefill_gemm"]
+  assert default["effective_route"] == "prefill_v2_scheduler_matmul_default"
+  candidate = _single_buffer_anchor_candidate()
+  base = {"PREFILL_GRAPH_GEMM": "1", "PREFILL_WMMA_LDS_PRIMITIVE": "1",
+          "BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON": json.dumps(candidate.full_kernel_candidate)}
+  with pytest.raises(ValueError, match="provided together"): pure_search_guard.effective_routes(base)
+  with pytest.raises(ValueError, match="canonical identity"):
+    pure_search_guard.effective_routes({**base, "BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH": "0" * 64})

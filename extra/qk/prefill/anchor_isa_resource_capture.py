@@ -15,7 +15,8 @@ from tinygrad.dtype import AddrSpace, dtypes
 from tinygrad.engine.realize import Estimates
 from tinygrad.uop.ops import KernelInfo, Ops, UOp
 
-from extra.qk.mmq_compile_evidence import disassemble_amdgpu, parse_amdgpu_metadata
+from extra.qk.mmq_compile_evidence import analyze_final_isa, disassemble_amdgpu, parse_amdgpu_metadata
+from extra.qk.prefill.pure_single_buffer_evaluation_gate import canonical_candidate_hash
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 SCHEMA = "prefill-pure-anchor-isa-resource-capture.v1"
@@ -23,6 +24,7 @@ SHAPE = {"M": 512, "N": 12288, "K": 4096}
 ROLE = "ffn_gate_up"
 PURE_ROUTE = "prefill_v2_scheduler_matmul_default"
 ORACLE_ROUTE = "prefill_pipe_role_selective_generated"
+ANCHOR_LDS_BYTES = 20480
 
 
 def _git_state() -> dict[str, Any]:
@@ -98,6 +100,81 @@ def capture_program(program: UOp, *, candidate_id: str, route_id: str,
     "isa": {"bytes": len(disassembly.encode()), "line_count": len(disassembly.splitlines()),
             "disassembly_tool": disassembly_tool},
   }
+
+
+def capture_candidate_program(program: UOp, payload: dict[str, Any], candidate_hash: str, *,
+                              route_id: str="pure.single_buffer.anchor") -> dict[str, Any]:
+  """Compiled-resource authority for the exact route-bound single-buffer candidate.
+
+  Candidate fields describe intent.  This authority accepts them only after the
+  lowered PROGRAM context, code-object descriptor, and final ISA independently
+  agree that the requested compiler-owned single-buffer kernel was emitted.
+  """
+  identity = canonical_candidate_hash(payload)
+  if candidate_hash != identity: raise ValueError("candidate_hash does not match canonical candidate payload")
+  if program.op is not Ops.PROGRAM: raise ValueError("candidate authority requires a lowered PROGRAM")
+  context = program.src[0].arg.candidate_context
+  if context is None: raise RuntimeError("compiled PROGRAM has no full-kernel candidate context")
+  if context.schema_version != payload["schema_version"] or context.canonical_identity != identity:
+    raise RuntimeError("compiled PROGRAM candidate context does not match canonical payload")
+
+  row = capture_program(program, candidate_id=identity, route_id=route_id, expected_pure=True)
+  resources, surface = row["resources"], row["surface"]
+  source = next(u.arg for u in program.src if u.op is Ops.SOURCE)
+  binary = next(u.arg for u in program.src if u.op is Ops.BINARY)
+  disassembly, _ = disassemble_amdgpu(binary)
+  try: isa = analyze_final_isa(disassembly, wavefront_size=resources.get("wavefront_size"))
+  except ValueError as exc:
+    # The shared MMQ analyzer's epoch classifier is intentionally stricter
+    # than dense prefill.  Instruction presence below remains authoritative.
+    isa = {"status": "dense_prefill_epoch_not_applicable", "reason": str(exc)}
+  counts = isa.get("instruction_counts", isa.get("counts", {}))
+  # analyze_final_isa has evolved across evidence schemas.  Direct mnemonic
+  # evidence is retained as the fail-closed authority for generated transport.
+  lowered = disassembly.lower()
+  ds_store_count = sum(1 for line in lowered.splitlines() if "ds_store" in line)
+  ds_load_count = sum(1 for line in lowered.splitlines() if "ds_load" in line)
+  local_defs = [u for u in program.src[0].toposort() if u.op is Ops.DEFINE_LOCAL]
+  local_sizes = [u.dtype.size for u in local_defs]
+  local_size = row["program"]["launch"]["local_size"]
+  workgroup_threads = 0 if not local_size else __import__("math").prod(local_size)
+  required = ("vgpr", "sgpr", "vgpr_spills", "sgpr_spills", "lds_bytes", "scratch_bytes",
+              "max_workgroup_threads", "wavefront_size", "target")
+  missing = [name for name in required if name not in resources]
+  errors = []
+  if missing: errors.append(f"compiled AMD metadata missing authority fields: {missing}")
+  if not surface["strict_pure"]: errors.append("compiled surface contains handwritten assembly")
+  if resources.get("lds_bytes") != ANCHOR_LDS_BYTES:
+    errors.append(f"compiled LDS allocation is not the {ANCHOR_LDS_BYTES}-byte single buffer")
+  if local_sizes != [ANCHOR_LDS_BYTES]:
+    errors.append(f"compiler IR does not contain exactly one {ANCHOR_LDS_BYTES}-byte LDS allocation")
+  if not ds_store_count or not ds_load_count:
+    errors.append("final ISA does not prove compiler-emitted LDS stores and loads")
+  if resources.get("scratch_bytes") != 0 or resources.get("vgpr_spills") != 0 or resources.get("sgpr_spills") != 0:
+    errors.append("compiled candidate uses scratch or register spills")
+  if not workgroup_threads or resources.get("max_workgroup_threads") != workgroup_threads:
+    errors.append("program launch workgroup does not equal compiled metadata")
+  if resources.get("wavefront_size") != payload["workload"]["target"]["wave_size"]:
+    errors.append("compiled wavefront size does not match candidate target")
+  if not str(resources.get("target", "")).endswith(payload["workload"]["target"]["arch"]):
+    errors.append("compiled AMD target does not match candidate target")
+  if row["program"]["binary_sha256"] != _sha256(binary):
+    errors.append("captured binary identity changed during authority evaluation")
+  return {"schema": "prefill-pure-anchor-compiled-resource-authority.v1",
+          "canonical_identity": identity, "candidate_hash": identity,
+          "status": "pass" if not errors else "fail", "passed": not errors, "errors": errors,
+          "git": _git_state(),
+          "route_id": route_id, "candidate_context": {"schema_version": context.schema_version,
+            "canonical_identity": context.canonical_identity},
+          "program": row["program"], "surface": surface,
+          "resources": {name: resources.get(name) for name in required} | {"authority": resources["authority"]},
+          "isa": {**row["isa"], "analysis": isa, "instruction_counts": counts,
+                  "compiler_ir_define_local_sizes": local_sizes,
+                  "ds_store_count": ds_store_count, "ds_load_count": ds_load_count,
+                  "compiler_emitted_single_buffer_lds": not errors and ds_store_count > 0 and ds_load_count > 0},
+          "binding": {"context_matches_payload": context.canonical_identity == identity,
+                      "binary_sha256": row["program"]["binary_sha256"],
+                      "isa_sha256": row["program"]["isa_sha256"]}}
 
 
 def build_pure_program() -> UOp:

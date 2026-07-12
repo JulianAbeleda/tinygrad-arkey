@@ -18,6 +18,7 @@ kernels); model.py calls assert_pure_machine_search() at Transformer init.
 from __future__ import annotations
 
 import os
+import json
 from typing import Any
 
 from extra.qk.route_manifest import ROUTES, FINAL_DEFAULT_PROVENANCE, default_routes
@@ -96,6 +97,28 @@ def _env_route_id(env: dict[str, str], **facts: Any) -> str:
 
 
 _PREFILL_GRAPH_GEMM_ENV = {"PREFILL_GRAPH_GEMM": "1"}
+_PREFILL_CANDIDATE_ROUTE = "prefill_wmma_lds_single_buffer_candidate_generated"
+
+
+def _prefill_candidate_selected(env: dict[str, Any]) -> bool:
+  payload_text = env.get("BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON")
+  identity = env.get("BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH")
+  if payload_text is None and identity is None: return False
+  if payload_text is None or identity is None:
+    raise ValueError("BoltBeam full-kernel candidate payload and hash must be provided together")
+  if not _enabled(env, "PREFILL_GRAPH_GEMM") or not _enabled(env, "PREFILL_WMMA_LDS_PRIMITIVE"):
+    raise ValueError("BoltBeam full-kernel candidate requires the generated graph-GEMM LDS primitive")
+  try: payload = json.loads(str(payload_text))
+  except json.JSONDecodeError as exc: raise ValueError(f"BoltBeam full-kernel candidate payload is invalid JSON: {exc}") from exc
+  from extra.qk.runtime_specs import bind_full_kernel_candidate
+  bind_full_kernel_candidate(payload, str(identity), profile="qwen3_8b_q4k_m_gfx1100", role="ffn_gate_up",
+    shape=(512, 12288, 4096), target={"backend": "AMD", "arch": "gfx1100", "wave_size": 32},
+    tile=(128, 128, 32), waves=(4, 2), threads=256, buffer_count=1, stage_count=1,
+    lds_windows={"a": [0, 10240], "b": [10240, 20480]}, lds_strides={"a": 80, "b": 80},
+    lds_padding=16, lds_bytes=20480)
+  if ROUTES[_PREFILL_CANDIDATE_ROUTE]["candidate_identity"] != identity:
+    raise ValueError("manifest candidate identity does not match selected BoltBeam hash")
+  return True
 
 
 # Each hot route family resolves to an EFFECTIVE route id from the environment. `rollback_active(env)` is True when the
@@ -134,6 +157,7 @@ HOT_FAMILIES = [
 
 
 def _prefill_gemm_effective(env: dict[str, Any]) -> tuple[str, bool]:
+  if _prefill_candidate_selected(env): return _PREFILL_CANDIDATE_ROUTE, False
   if not _enabled(env, "PREFILL_GRAPH_GEMM"):
     return _default_route_id(workload="prefill", quant=["fp16"], roles=["attn_qo", "attn_kv", "ffn_down", "ffn_gate_up"]), False
   if (_enabled(env, "PREFILL_WMMA_PIPE_PRIMITIVE") and _enabled(env, "PREFILL_WMMA_LDS_PRIMITIVE") and
