@@ -1,6 +1,6 @@
 import pytest
 from extra.qk.prefill_schedule_spec import describe_prefill_schedule
-from extra.qk.wmma_pipe_spec import extract_wmma_pipe_spec, lower_wmma_pipe_spec, build_wmma_pipe_diagnostic_lowering_report
+from extra.qk.wmma_pipe_spec import extract_wmma_pipe_spec, lower_wmma_pipe_spec, build_wmma_pipe_diagnostic_lowering_report, pipe_candidate_context
 
 def test_attn_qo_lean_route_surface_is_pipe_and_lowerer_is_explicitly_blocked():
   spec = describe_prefill_schedule(4096, 4096, role="attn_qo")
@@ -14,3 +14,9 @@ def test_attn_qo_diagnostic_is_generated_but_not_route_bound():
   assert report["route_bound"] is False
   assert report["uses_hand_pipe_oracle"] is False
   assert report["mvp_structure_ok"] is True
+
+def test_pipe_candidate_context_preserves_identity_and_buffer_neutral_payload():
+  pipe = extract_wmma_pipe_spec(describe_prefill_schedule(4096, 4096, role="attn_qo"))
+  ctx = pipe_candidate_context(pipe, "a" * 64)
+  assert ctx.canonical_identity == "a" * 64 and ctx.geometry is None
+  assert ctx.pipeline["role"] == "attn_qo" and ctx.pipeline["m"] == 512

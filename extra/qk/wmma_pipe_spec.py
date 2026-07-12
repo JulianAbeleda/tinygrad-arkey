@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+from tinygrad.uop.ops import KernelCandidateContext
 
 
 @dataclass(frozen=True)
@@ -40,6 +41,16 @@ class WMMAPipeSpec:
       "operand_a": self.operand_a, "operand_b": self.operand_b, "wait_policy": self.wait_policy,
       "target": self.target, "role": self.role, "loads_per_stage": self.loads_per_stage,
     }
+
+def pipe_candidate_context(spec: WMMAPipeSpec, canonical_identity: str) -> KernelCandidateContext:
+  """Typed compiler context for a generated pipe candidate.
+
+  Geometry is intentionally absent until the backend compiler proves tile/LDS
+  resource ownership; the pipeline payload is immutable JSON-shaped data.
+  """
+  if not isinstance(spec, WMMAPipeSpec): raise TypeError("expected WMMAPipeSpec")
+  return KernelCandidateContext("boltbeam.full_kernel_candidate.v1", canonical_identity,
+                               geometry=None, pipeline=spec.to_json())
 
 
 def extract_wmma_pipe_spec(prefill_spec) -> WMMAPipeSpec | None:
