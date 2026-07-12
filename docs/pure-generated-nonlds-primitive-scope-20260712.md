@@ -254,3 +254,18 @@ S6 depends on S4–S5 and must be reviewed before S7. S8–S10 depend on all rol
 proofs. S11 is always performed by the parent/reviewer, not the implementing
 agent. If a packet is blocked, spawn a smaller investigation packet against its
 named interface; do not bypass the gate with a hybrid implementation.
+
+## Current compiler standstill
+
+Packets S0-S4a are complete. The typed context, immutable pipe IR, graph sink
+attachment, and typed pipe-op contract are implemented and host-tested. S4b is
+blocked because the current UOp/AMD renderer has no first-class operation for
+staged WMMA pipe lifecycle or per-stage `vmcnt` waits. Waits are currently
+derived from backend load scheduling, while `Ops.WMMA` represents only the
+aggregate tensor-core operation.
+
+Completing S4b requires new compiler scheduling semantics, AMD renderer
+lowering, and resource accounting together. A partial mapping is not an
+acceptable pure candidate, and copying the hybrid handwritten emitter would
+invalidate provenance. This is the named interface boundary for the current
+pure 4.4k effort.
