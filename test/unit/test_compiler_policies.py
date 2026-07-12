@@ -1,6 +1,7 @@
 import pytest
 from extra.qk.compiler_policies import (PipelinePolicy, StoragePolicy, WaitPolicy, ResourcePlan, RegisterPipePlan,
   WaitDependency, amdllvm_wait_dependency, pipeline_policy_for_route, prove_wait_dependency_coverage)
+from tinygrad.codegen.opt.compiler_policies import wait_count_for_dependency
 
 
 def test_policy_contracts_accept_lds_barrier_and_estimate():
@@ -57,6 +58,16 @@ def test_wait_dependency_coverage_rejects_unscoped_or_out_of_range_targeted_edge
   assert not proof.passed
   assert any("requires producer and consumer stages" in error for error in proof.errors)
   assert any("outside policy range" in error for error in proof.errors)
+
+
+def test_wait_count_lowering_requires_typed_staged_dependency():
+  policy = pipeline_policy_for_route("pipe")
+  dep = WaitDependency(policy.wait, "load_a", "wmma", "A", 0, 1, "per_stage")
+  assert wait_count_for_dependency(dep, vmcnt=8).vmcnt == 8
+  with pytest.raises(ValueError, match="producer and consumer stages"):
+    wait_count_for_dependency(WaitDependency(policy.wait, "load_a", "wmma", "A"), vmcnt=8)
+  with pytest.raises(ValueError, match="per-stage targeted"):
+    wait_count_for_dependency(WaitDependency(WaitPolicy("full_barrier"), "produce", "consume", "A"), vmcnt=8)
 
 
 @pytest.mark.parametrize("factory", (

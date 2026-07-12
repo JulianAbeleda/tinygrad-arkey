@@ -334,6 +334,13 @@ def build_stage1_uop_graph_with_storage(adapter: Stage1StorageAdapter, plan: Ker
 def prove_stage1_uop_graph(graph:KernelStage1UOpGraph) -> KernelStage1UOpProof:
   lifecycle=prove_stage1_lifecycle(graph.plan,graph.k_tiles,graph.events); errors=list(lifecycle.errors)
   topo=graph.sink.toposort(); regs=[u for u in topo if u.op is Ops.DEFINE_REG]; ends=[u for u in topo if u.op is Ops.END]
+  # Validate WMMA carrier/contract ABI while the graph is still structured;
+  # malformed output contracts must not reach vector decomposition.
+  from tinygrad.codegen.opt.kernel_lds import validate_precontract_wmma_abi
+  for u in topo:
+    if u.op is Ops.WMMA:
+      try: validate_precontract_wmma_abi(u, context="stage1 pipeline")
+      except ValueError as exc: errors.append(str(exc))
   if graph.k_tiles == 1:
     if graph.body_readiness == "legacy" and regs: errors.append("single tile must not emit REG/RANGE/END")
     if ends or graph.body_range is not None: errors.append("single tile must not emit REG/RANGE/END")

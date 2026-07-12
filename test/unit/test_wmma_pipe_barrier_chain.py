@@ -35,6 +35,7 @@ def test_attn_qo_wait_chain_has_proven_edges_and_no_raw_isa():
   waits = [u for u in ops if u.op is Ops.WAIT]
   assert len(waits) == 1 and waits[0].arg.vmcnt == 8
   assert waits[0].tag[:2] == ("wait_coverage", (("A", 0, 1), ("B", 0, 1)))
+  assert waits[0].tag[3] == (("global_load_A", "wmma", "A", 0, 1), ("global_load_B", "wmma", "B", 0, 1))
   assert not any(u.op is Ops.INS for u in ops)
   assert waits[0] in next(u for u in ops if u.op is Ops.STORE).backward_slice
 

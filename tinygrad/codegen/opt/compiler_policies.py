@@ -128,6 +128,23 @@ class WaitCount:
     """Pack architectural fields into the AMD SOPP immediate."""
     return (self.vmcnt << 10) | (self.lgkmcnt << 4) | self.expcnt
 
+
+def wait_count_for_dependency(dep: WaitDependency, *, vmcnt: int) -> WaitCount:
+  """Create an AMD wait immediate only from a typed staged dependency.
+
+  This is the single graph-to-intrinsic seam: callers still supply the
+  backend-derived counter value, but cannot manufacture a targeted wait from
+  an unscoped or stage-less dependency.  Physical instruction placement and
+  native wait insertion remain renderer-owned.
+  """
+  if not isinstance(dep, WaitDependency):
+    raise TypeError("expected WaitDependency")
+  if dep.policy.kind != "targeted_vmcnt" or dep.policy.scope != "per_stage":
+    raise ValueError("targeted wait lowering requires a per-stage targeted dependency")
+  if dep.producer_stage is None or dep.consumer_stage is None:
+    raise ValueError("targeted wait lowering requires producer and consumer stages")
+  return WaitCount(vmcnt=vmcnt)
+
 def amdllvm_wait_dependency(dep: WaitDependency) -> WaitDependency:
   """Validate the dependency contract still owned by the graph lifecycle.
 

@@ -190,6 +190,40 @@ def validate_precontract_carriers(fragment_dtype, accumulator_dtype, *, context:
     raise ValueError(f"{context} accumulator carrier must be float.vec(8)")
 
 
+def validate_precontract_wmma_abi(node: UOp, *, context: str = "precontract") -> None:
+  """Validate the WMMA node ABI before a backend/devectorizer sees it.
+
+  The tensor-core matcher accepts a three-input ABI: two ``half.vec(16)``
+  fragments and one ``float.vec(8)`` accumulator, producing a ``float.vec(8)``
+  result.  The argument carries the corresponding four binary A/B axes and
+  three binary C axes.  Keep this check storage-independent so LDS and
+  register-resident templates cannot drift into different ABI rules.
+  """
+  if not isinstance(node, UOp) or node.op is not Ops.WMMA:
+    raise ValueError(f"{context} WMMA ABI validator requires an Ops.WMMA node")
+  if len(node.src) != 3:
+    raise ValueError(f"{context} WMMA ABI requires A, B, and C inputs")
+  validate_precontract_carriers(node.src[0].dtype, node.src[2].dtype, context=context)
+  if node.src[1].dtype != dtypes.half.vec(16):
+    raise ValueError(f"{context} B fragment carrier must be half.vec(16)")
+  if node.dtype != dtypes.float.vec(8):
+    raise ValueError(f"{context} WMMA result carrier must be float.vec(8)")
+  arg = node.arg
+  if not isinstance(arg, tuple) or len(arg) < 8:
+    raise ValueError(f"{context} WMMA descriptor argument is incomplete")
+  try: dims = tuple(arg[1])
+  except (TypeError, ValueError) as exc:
+    raise ValueError(f"{context} WMMA descriptor dimensions are invalid") from exc
+  if dims != _RDNA3_DIMS or arg[2] != dtypes.half or arg[3] != dtypes.float or arg[5] != 32:
+    raise ValueError(f"{context} WMMA descriptor carrier ABI drifted")
+  axes = arg[6]
+  if not isinstance(axes, tuple) or len(axes) != 3:
+    raise ValueError(f"{context} WMMA descriptor requires A/B/C axis groups")
+  for role, count, group in (("A", 4, axes[0]), ("B", 4, axes[1]), ("C", 3, axes[2])):
+    if not isinstance(group, tuple) or len(group) != count or any(not isinstance(x, tuple) or len(x) != 2 or x[1] != 2 for x in group):
+      raise ValueError(f"{context} {role} WMMA contract requires {count} binary axes")
+
+
 def validate_precontract_thread_axes(geometry:KernelTileGeometry, factors:PrecontractFactors,
                                      threads:PrecontractThreadAxes, subtile_m:UOp, subtile_n:UOp,
                                      *, context:str="precontract") -> None:

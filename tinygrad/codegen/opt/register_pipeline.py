@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from tinygrad.codegen.opt.compiler_policies import PipelinePolicy, StoragePolicy
 from tinygrad.codegen.opt.kernel_lds import (PrecontractContractSpec, PrecontractOperandTemplate,
   derive_precontract_shape_factors, validate_precontract_carriers, validate_precontract_contracts,
-  validate_precontract_operand_templates, validate_rdna3_wmma_descriptor)
+  validate_precontract_operand_templates, validate_precontract_wmma_abi, validate_rdna3_wmma_descriptor)
 from tinygrad.codegen.opt.kernel_pipeline import (KernelStage1FragmentStage, KernelStage1LifecycleEvent,
   KernelStage1LifecycleProof, KernelStage1ProducerStage, Stage1StorageAdapter, prove_stage1_lifecycle,
   stage1_lifecycle_events)
@@ -167,6 +167,11 @@ def prove_register_graph_no_lds(root: UOp) -> tuple[str, ...]:
       if (len(u.src) != 1 or u.src[0].op is not Ops.LOAD or not u.src[0].src or
           not u.src[0].src[0].src or u.src[0].src[0].src[0].op is not Ops.AFTER):
         errors.append("register fragment is not ordered after producer readiness")
+    if u.op is Ops.WMMA:
+      try:
+        validate_precontract_wmma_abi(u, context="register pipe")
+      except ValueError as exc:
+        errors.append(str(exc))
   return tuple(errors)
 
 

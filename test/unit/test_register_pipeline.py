@@ -68,6 +68,18 @@ def test_register_single_epoch_compiles_through_normal_amd_rewrite():
   assert len([x for x in topo if x.op is Ops.WMMA]) == 1
 
 
+def test_register_wmma_abi_rejects_missing_c_axes_before_devectorization():
+  t = _fixture()
+  producer = t.producer(UOp.const(dtypes.weakint, 0), UOp.const(dtypes.weakint, 0))
+  fragments = t.fragments(producer.epoch, producer.slot, producer.ready)
+  malformed_arg = (str(t.tc), t.tc.dims, t.tc.dtype_in, t.tc.dtype_out, "AMD", t.tc.threads,
+                   (t.contracts[0].arg, t.contracts[1].arg, ()), ())
+  wmma = UOp(Ops.WMMA, dtypes.float.vec(8),
+    (fragments.fragments[0], fragments.fragments[2], UOp.const(dtypes.float.vec(8), 0.0)), malformed_arg)
+  errors = prove_register_graph_no_lds(UOp.sink(*producer.role_nodes, wmma))
+  assert any("C WMMA contract requires 3 binary axes" in error for error in errors)
+
+
 def test_register_fragments_fail_closed_on_unproven_stage_readiness():
   t = _fixture()
   epoch = UOp.const(dtypes.weakint, 0)

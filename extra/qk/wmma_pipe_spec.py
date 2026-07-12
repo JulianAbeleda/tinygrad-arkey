@@ -11,8 +11,8 @@ from dataclasses import dataclass
 from typing import Any
 from tinygrad.uop.ops import KernelCandidateContext, Ops, KernelInfo, UOp
 from tinygrad.dtype import dtypes
-from tinygrad.codegen.opt.compiler_policies import (PipelinePolicy, RegisterPipePlan, WaitCount, WaitDependency, WaitPolicy,
-  WaitDependencyCoverage, prove_wait_dependency_coverage)
+from tinygrad.codegen.opt.compiler_policies import (PipelinePolicy, RegisterPipePlan, WaitDependency, WaitPolicy,
+  WaitDependencyCoverage, prove_wait_dependency_coverage, wait_count_for_dependency)
 
 
 @dataclass(frozen=True)
@@ -223,9 +223,14 @@ def build_wmma_pipe_wait_chain(spec: WMMAPipeSpec, context: KernelCandidateConte
   ib = b.index(UOp.const(dtypes.weakint, 0), ptr=True)
   la = ia.load(dtype=dtypes.half.vec(16))
   lb = ib.load(dtype=dtypes.half.vec(16))
-  wait_count = WaitCount(vmcnt=ir.loads_per_stage)
+  # Derive the intrinsic payload through the typed dependency seam.  The
+  # count covers the complete staged A/B load group, while the dependency
+  # carries the producer/consumer provenance required for admission.
+  wait_count = wait_count_for_dependency(ir.wait_dependencies[0], vmcnt=ir.loads_per_stage)
   raw_wait = UOp(Ops.WAIT, dtypes.void, (), wait_count,
-                 tag=("wait_coverage", coverage.covered, "compile_only"))
+                 tag=("wait_coverage", coverage.covered, "compile_only",
+                      tuple((d.producer, d.consumer, d.load_group, d.producer_stage, d.consumer_stage)
+                            for d in ir.wait_dependencies)))
   wait = raw_wait.after(la, lb)
   c = UOp.const(dtypes.float.vec(8), 0.0)
   tc_arg = ("WMMA_16_16_16_half_float", (16, 16, 16), dtypes.half, dtypes.float, "AMD", 32,
