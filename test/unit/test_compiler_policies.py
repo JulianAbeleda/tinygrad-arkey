@@ -1,5 +1,5 @@
 import pytest
-from extra.qk.compiler_policies import StoragePolicy, WaitPolicy, ResourcePlan, RegisterPipePlan
+from extra.qk.compiler_policies import StoragePolicy, WaitPolicy, ResourcePlan, RegisterPipePlan, WaitDependency, amdllvm_wait_dependency
 
 
 def test_policy_contracts_accept_lds_barrier_and_estimate():
@@ -18,6 +18,12 @@ def test_register_pipe_plan_is_two_stage_b128_zero_lds_and_unproven_resources():
   plan = RegisterPipePlan()
   assert (plan.stages, plan.global_load_bytes, plan.storage.slot_bytes) == (2, 16, 0)
   assert plan.wait.kind == "targeted_vmcnt" and plan.resources.stage == "host_estimate"
+
+def test_wait_dependency_accepts_full_barrier_and_rejects_targeted_amdllvm():
+  full = WaitDependency(WaitPolicy("full_barrier"), "produce", "consume", "A")
+  assert amdllvm_wait_dependency(full) is full
+  targeted = WaitDependency(WaitPolicy("targeted_vmcnt", scope="per_stage"), "produce", "consume", "A")
+  with pytest.raises(ValueError, match="unsupported by pure AMDLLVM"): amdllvm_wait_dependency(targeted)
 
 
 @pytest.mark.parametrize("factory", (

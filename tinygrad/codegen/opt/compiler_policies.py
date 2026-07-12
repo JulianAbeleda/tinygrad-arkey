@@ -22,6 +22,23 @@ class WaitPolicy:
     if self.kind == "targeted_vmcnt" and self.scope != "per_stage": raise ValueError("targeted vmcnt scope must be per_stage")
 
 @dataclass(frozen=True)
+class WaitDependency:
+  policy: WaitPolicy
+  producer: str
+  consumer: str
+  load_group: str
+  def __post_init__(self):
+    if not isinstance(self.policy, WaitPolicy): raise ValueError("wait dependency requires WaitPolicy")
+    if not all(isinstance(x, str) and x for x in (self.producer, self.consumer, self.load_group)): raise ValueError("wait dependency labels must be non-empty")
+
+def amdllvm_wait_dependency(dep: WaitDependency) -> WaitDependency:
+  """Fail closed: AMDLLVM can lower only full workgroup barriers today."""
+  if not isinstance(dep, WaitDependency): raise TypeError("expected WaitDependency")
+  if dep.policy.kind != "full_barrier" or dep.policy.scope != "workgroup":
+    raise ValueError("targeted wait dependencies are unsupported by pure AMDLLVM")
+  return dep
+
+@dataclass(frozen=True)
 class ResourcePlan:
   stage: Literal["host_estimate", "final_program"]; lds_bytes: int = 0; scratch_bytes: int = 0; vgpr: int|None = None; sgpr: int|None = None
   def __post_init__(self):
