@@ -26,6 +26,15 @@ from tinygrad.schedule.rangeify import pm_add_buffers_local, rangeify_codegen, p
 from tinygrad.codegen.late.linearizer import CFGContext, pm_split_ends, pm_add_control_flow, linearize
 from tinygrad.codegen.late.regalloc import LinearScanRegallocContext, pm_regalloc_rewrite
 
+# Register carriers must not re-run the generic GEP-pushing fixed point after
+# register-index expansion: side-effecting store GEPs become GROUPs under a
+# void UNROLL, and vector carriers can become nested STACKs. Keep scalar folds
+# and flatten only scalar VCAT children for this route.
+def _register_pipe_vcat(x):
+  return UOp(Ops.STACK, x.dtype, x.src) if len(x.src) == x.dtype.count and all(y.dtype.count == 1 for y in x.src) else None
+
+register_pipe_symbolic = symbolic_simple + PatternMatcher([(UPat(Ops.VCAT, name="x"), _register_pipe_vcat)])
+
 pm_index_is_shrink = PatternMatcher([
   # rewrite non-image INDEX to SHRINK
   (UPat(Ops.INDEX, src=(UPat.var("buf"), UPat.var("idx"))).cast(name="x"), lambda buf,idx,x:
@@ -131,7 +140,10 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
     sink = graph_rewrite(sink, pm_make_images, name="create image buffers", bottom_up=True, ctx=ren.target.arch)
 
   # devectorize
-  sink = graph_rewrite(sink, sym+devectorize_alu+devectorize_buf_and_index+load_store_folding+correct_load_store+load_store_indexing,
+  has_register_pipe = any(isinstance(u.tag, tuple) and u.tag[:1] == ("register_pipe_stage_buffer",)
+                          for u in sink.toposort())
+  devectorize_symbolic = register_pipe_symbolic if has_register_pipe else sym
+  sink = graph_rewrite(sink, devectorize_symbolic+devectorize_alu+devectorize_buf_and_index+load_store_folding+correct_load_store+load_store_indexing,
                        ctx=ren, name="devectorize")
   if ren.target.device == "AMD":
     sink = graph_rewrite(sink, pm_distinct_reg_store_devec, name="distinct reg store devec")
@@ -141,8 +153,8 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
     sink = graph_rewrite(sink, cg_extras.fdot2_pm(), name="fdot2 lowering")
 
   # lower the index dtype to a concrete int
-  sink = graph_rewrite(sink, pm_lower_index_dtype+load_store_indexing+gep_pushing, name="lower all index dtypes")
-  sink = graph_rewrite(sink, symbolic, name="post index symbolic")
+  sink = graph_rewrite(sink, pm_lower_index_dtype+load_store_indexing+(PatternMatcher([]) if has_register_pipe else gep_pushing), name="lower all index dtypes")
+  sink = graph_rewrite(sink, register_pipe_symbolic if has_register_pipe else symbolic, name="post index symbolic")
 
   # optional pre matcher
   if ren.pre_matcher is not None: sink = graph_rewrite(sink, ren.pre_matcher, name="pre_matcher")
