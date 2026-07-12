@@ -145,3 +145,112 @@ Pure non-LDS transport is complete when all three roles use generated graph-boun
 pipe candidates, every candidate has exact provenance and executed-binary proof,
 the combined pure route passes parity, and the pinned whole-model result either
 reaches 4.4k or identifies a measured next ceiling.
+
+## Spark execution packets
+
+Each packet is intentionally small enough for one Spark agent. Agents must not
+silently combine packets, change defaults, or claim completion from a host-only
+test. Every packet returns a commit, tests, changed files, and an explicit
+pass/blocked verdict.
+
+### S0 — Contract inventory (read-only)
+
+Owner files: `tinygrad/uop/ops.py`, `tinygrad/codegen/__init__.py`,
+`tinygrad/codegen/opt/postrange.py`, `tinygrad/engine/realize.py`,
+`tinygrad/runtime/graph/hcq.py`, `extra/qk/wmma_pipe_spec.py`.
+
+Deliverable: a field-by-field map of the existing `KernelInfo`, sink/program
+metadata, graph capture, cache key, and runtime argument ABI. Identify the exact
+function where a typed pipe primitive can enter before `to_program`. No edits
+unless a missing type annotation is necessary.
+
+### S1 — Typed context/schema review
+
+Owner: `extra/qk/wmma_pipe_spec.py`, `extra/qk/runtime_specs.py`, focused tests.
+
+Deliverable: immutable pipe IR schema, exact identity validation, role/shape/
+target checks, and cache-key tests. It must reject wrong stage count, wait policy,
+dtype, and target. Existing LDS candidate contexts must remain byte/behavior
+compatible.
+
+### S2 — Postrange propagation
+
+Owner: `tinygrad/codegen/opt/postrange.py`, tests only for propagation.
+
+Deliverable: pipe IR survives sink creation, postrange, and graph capture through
+`KernelInfo.candidate_context`; warmstart opts, contexts, local-stage allow/deny
+keys restore after success and exception. No renderer or runtime changes yet.
+
+### S3 — Graph-owned pipe IR lowering
+
+Owner: compiler lowering module plus `extra/qk/wmma_pipe_spec.py`.
+
+Deliverable: lower one `WMMAPipeIR` into ordinary graph UOps before backend
+rendering. It must not return a precompiled binary, raw instruction tuple, or
+`Ops.INS`. Host structural test must show global b128 loads, WMMA, wait policy,
+stores, and no native-ISA source. If existing UOps cannot represent a required
+operation, document the smallest new compiler IR operation and its semantics.
+
+### S4 — AMD renderer/codegen integration
+
+Owner: AMD codegen/renderer insertion point identified by S0/S3.
+
+Deliverable: compile the S3 UOps to a normal AMD Program with launch dimensions,
+argument order, source/binary hashes, resource metadata, and candidate context.
+No route promotion. Test two distinct identities in one process and prove cache
+and binary separation.
+
+### S5 — Buffer ABI gate
+
+Owner: graph route and authority tests.
+
+Deliverable: exact output/A/B argument order, fp16 input/output contract,
+contiguous strides, shape, M/N/K divisibility, and normal graph replay. Reject
+non-512 M only when the candidate says so; do not hardcode M in transport. Test
+paired layers with different buffers using one role binary.
+
+### S6 — `attn_qo` proof ladder
+
+Run, in order: source purity, resource/no-spill, nonconstant full-output
+correctness, runtime binary equality, pinned kernel timing, then gate/up-only plus
+`attn_qo` whole-model A/B. The A/B must include route census and no fallback.
+Failure blocks later role work.
+
+### S7 — `ffn_down` and `attn_kv`
+
+Parameterize only after S6 passes. Run separate proofs for 512x4096x12288 and
+512x1024x4096. KV requires independent occupancy/LDS/tail checks and cannot
+inherit attn_qo resource assumptions.
+
+### S8 — Candidate-set assembly
+
+Add three exact candidates to the existing set format, preserving generated
+`ffn_gate_up`. Validate duplicate identities, weak-key collisions, role policy,
+cache keys, and all four route census entries.
+
+### S9 — Combined pure authority
+
+Run Qwen3-8B pinned K8/warm4/round3 at ctx512 first, then 1024/2048/4096.
+Require full-output parity, strict pure provenance, no rollback, exact binary
+joins, clean commit, and route census. Compare against hybrid only as reference.
+
+### S10 — Machine search and promotion
+
+Seed role-specific populations from the passing pipe primitive. Search only
+compiler-owned knobs. Correctness precedes timing; timing precedes whole-model
+promotion. Retain passing role winners and reject isolated-only improvements.
+
+### S11 — Completion review
+
+Review all packet diffs and artifacts for route ownership, no `Ops.INS`, cache
+identity, state restoration, ABI, resource, and provenance. Completion requires
+all three roles, combined pure authority, and either 4.4k or a measured pure
+ceiling with the remaining interface documented.
+
+## Packet handoff rules
+
+Packets S0–S2 may run in parallel. S3 depends on S0–S2. S4–S5 depend on S3.
+S6 depends on S4–S5 and must be reviewed before S7. S8–S10 depend on all role
+proofs. S11 is always performed by the parent/reviewer, not the implementing
+agent. If a packet is blocked, spawn a smaller investigation packet against its
+named interface; do not bypass the gate with a hybrid implementation.
