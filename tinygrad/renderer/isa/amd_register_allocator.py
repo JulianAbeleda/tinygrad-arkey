@@ -38,10 +38,17 @@ class AMDStageBufferSpec:
   def half_elements(self) -> int: return self.slots * self.role_width
   @property
   def fragment_count(self) -> int: return self.slots * self.fragments
+  @property
+  def packed_vgpr_width(self) -> int:
+    """Physical VGPR span when each half.vec(16) uses eight packed VGPRs."""
+    return self.fragment_count * (self.lane_width // 2)
+  @property
+  def half_bytes(self) -> int: return self.half_elements * 2
   def snapshot(self) -> dict[str, int | str]:
     return {"role": self.role, "slots": self.slots, "fragments": self.fragments,
             "lane_width": self.lane_width, "role_width": self.role_width,
-            "half_elements": self.half_elements}
+            "half_elements": self.half_elements, "half_bytes": self.half_bytes,
+            "packed_vgpr_width": self.packed_vgpr_width}
 
 
 class AMDRegisterLeaseAllocator:

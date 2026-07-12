@@ -39,8 +39,10 @@ def test_register_stage_buffers_have_independent_role_width_contracts():
   t = _fixture()
   specs = t.stage_buffer_specs
   assert [s.snapshot() for s in specs] == [
-    {"role": "A", "slots": 2, "fragments": 2, "lane_width": 16, "role_width": 32, "half_elements": 64},
-    {"role": "B", "slots": 2, "fragments": 2, "lane_width": 16, "role_width": 32, "half_elements": 64},
+    {"role": "A", "slots": 2, "fragments": 2, "lane_width": 16, "role_width": 32, "half_elements": 64,
+     "half_bytes": 128, "packed_vgpr_width": 32},
+    {"role": "B", "slots": 2, "fragments": 2, "lane_width": 16, "role_width": 32, "half_elements": 64,
+     "half_bytes": 128, "packed_vgpr_width": 32},
   ]
   p = t.producer(UOp.const(dtypes.weakint, 0), UOp.const(dtypes.weakint, 0))
   defs = [u for u in UOp.sink(*p.role_nodes).toposort() if u.op is Ops.DEFINE_REG]
