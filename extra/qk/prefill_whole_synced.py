@@ -17,6 +17,7 @@ import json
 import os
 import pathlib
 import time
+from contextlib import contextmanager
 from typing import Any
 
 from extra.llm.generate import load_model_and_tokenizer
@@ -81,6 +82,15 @@ def _route_attribution() -> dict[str, Any]:
     "prefill_q4k_route_family": prefill_q4k.get("effective_route", "unknown") if prefill_q4k else "unknown",
     "prefill_q4k_route_pure": bool(prefill_q4k.get("pure")) if prefill_q4k else False,
   }
+
+@contextmanager
+def _scoped_candidate_compiler_state():
+  import tinygrad.codegen.opt.postrange as pr
+  names=("_WARMSTART_OPTS","_WARMSTART_CANDIDATE_CONTEXTS","_WARMSTART_LOCAL_STAGE_KEYS","_WARMSTART_LOCAL_STAGE_DENY_KEYS")
+  saved={name:getattr(pr,name,None) for name in names}
+  try: yield
+  finally:
+    for name,value in saved.items(): setattr(pr,name,value)
 
 
 def _enabled(env: dict[str, Any], key: str) -> bool:
@@ -194,10 +204,20 @@ def route_binding_gate(report: dict[str, Any], required_route: str | None = None
       f"LDS/DBUF flags requested but effective prefill route is still pipe-only {PREFILL_WMMA_PIPE_ROUTE!r}; "
       f"expected {PREFILL_WMMA_PIPE_LDS_DBUF_ROUTE!r} or {PREFILL_WMMA_LDS_DBUF_MIXED_ROUTE!r} once route identity lands"
     )
+  candidate_set_requested = (e.get("BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_JSON") is not None or
+                             e.get("BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH") is not None)
+  if candidate_set_requested:
+    census=report.get("candidate_set_route_census")
+    if not isinstance(census,dict): failures.append("candidate set requested but route census is missing")
+    elif census.get("schema") != "prefill-candidate-set-route-census.v1": failures.append("candidate set route census schema is invalid")
+    elif census.get("passed") is not True:
+      missing=[(x.get("role"),x.get("shape"),x.get("canonical_identity")) for x in census.get("missing",())]
+      failures.append(f"candidate set route census did not bind every exact entry; missing={missing!r}, "
+                      f"unexpected={len(census.get('unexpected',()))}, identity_mismatches={len(census.get('identity_mismatches',()))}")
   verdict = "PREFILL_ROUTE_BINDING_PASS" if not failures else "PREFILL_ROUTE_BINDING_FAIL"
   return {"schema": "prefill-route-binding-gate.v1", "verdict": verdict, "required_route": required_route,
           "selected_route": selected_route, "effective_routes": sorted(r for r in effective_route_ids if r),
-          "lds_dbuf_requested": lds_dbuf_requested, "failures": failures}
+          "lds_dbuf_requested": lds_dbuf_requested, "candidate_set_requested":candidate_set_requested,"failures": failures}
 
 
 def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
@@ -255,7 +275,14 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
         ts.append((time.perf_counter() - t0) / K * 1e3)
     return {"min_ms": min(ts), "samples_ms": ts, "clock_pin": pin_prov}
 
-  chunk_rows = {sp: burst(sp) for sp in start_positions}
+  from extra.qk.prefill_graph_gemm_route import (_candidate_registry_from_env, candidate_route_census,
+    finalize_candidate_route_census)
+  candidate_registry=_candidate_registry_from_env(); candidate_census=None
+  with _scoped_candidate_compiler_state():
+    if candidate_registry is None: chunk_rows={sp:burst(sp) for sp in start_positions}
+    else:
+      with candidate_route_census() as collector: chunk_rows={sp:burst(sp) for sp in start_positions}
+      candidate_census=finalize_candidate_route_census(collector,candidate_registry)
   chunk_ms = {sp: row["min_ms"] for sp, row in chunk_rows.items()}
   xs = sorted(chunk_ms)
   ys = [chunk_ms[x] for x in xs]
@@ -299,6 +326,7 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
     "git_short": _git_short(),
     "git_dirty": _dirty_tree(),
     "route_attribution": route_attr,
+    "candidate_set_route_census": candidate_census,
     "prefill_role_routes": _prefill_role_routes(str(route_attr.get("prefill_route_family", ""))),
     "timing_authority": "synced model.__call__ prefill-v2 warmstart path, min over repeated bursts, no generate TTFT/sampling",
     # valid-benchmark-artifact checklist fields (F3/F4). None/MISSING here means the completeness gate
@@ -324,7 +352,7 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
                                           + ", ".join(completeness["missing"]))
   binding_gate = route_binding_gate(report, require_route)
   report["prefill_route_binding_gate"] = binding_gate
-  if require_route and binding_gate["failures"]:
+  if (require_route or binding_gate["candidate_set_requested"]) and binding_gate["failures"]:
     raise RuntimeError("prefill route binding gate failed: " + "; ".join(binding_gate["failures"]))
   return report
 

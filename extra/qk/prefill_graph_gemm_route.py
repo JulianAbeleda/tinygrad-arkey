@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from functools import lru_cache
 from dataclasses import replace
+from contextlib import contextmanager
+from contextvars import ContextVar
 import json, os, pathlib
 from typing import Any
 
@@ -18,6 +20,41 @@ _FULL_KERNEL_CANDIDATE_HASH_ENV = "BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH"
 _FULL_KERNEL_CANDIDATE_SET_JSON_ENV = "BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_JSON"
 _FULL_KERNEL_CANDIDATE_SET_PATH_ENV = "BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH"
 _DEFAULT_CANDIDATE_PROFILE = "qwen3_8b_q4k_m_gfx1100"
+_CANDIDATE_ROUTE_CENSUS:ContextVar[dict[str,Any]|None]=ContextVar("candidate_route_census",default=None)
+
+@contextmanager
+def candidate_route_census():
+  collector={"selected":{}}
+  token=_CANDIDATE_ROUTE_CENSUS.set(collector)
+  try: yield collector
+  finally: _CANDIDATE_ROUTE_CENSUS.reset(token)
+
+def _candidate_route_row(admission) -> dict[str,Any]:
+  workload=admission.normalized_payload["workload"]; shape=workload["shape"]; target=workload["target"]
+  return {"profile":workload["profile"],"role":workload["role"],"shape":{"m":shape["m"],"n":shape["n"],"k":shape["k"]},
+          "target":{"backend":target["backend"],"arch":target["arch"],"wave_size":target["wave_size"]},
+          "canonical_identity":admission.canonical_identity}
+
+def _record_candidate_route(admission) -> None:
+  collector=_CANDIDATE_ROUTE_CENSUS.get()
+  if collector is None: return
+  row=_candidate_route_row(admission); shape,target=row["shape"],row["target"]
+  key=(row["profile"],row["role"],shape["m"],shape["n"],shape["k"],target["backend"],target["arch"],target["wave_size"])
+  prior=collector["selected"].get(key)
+  if prior is not None and prior["canonical_identity"] != row["canonical_identity"]:
+    raise RuntimeError(f"candidate route census identity drift for {key!r}")
+  collector["selected"][key]={**row,"bindings":1 if prior is None else prior["bindings"]+1}
+
+def finalize_candidate_route_census(collector:dict[str,Any],registry) -> dict[str,Any]:
+  expected={entry.exact_key:{**_candidate_route_row(admission),"bindings":0}
+            for entry,admission in zip(registry.candidate_set.entries,registry.admissions)}
+  selected=dict(collector["selected"]); missing=[expected[k] for k in sorted(expected.keys()-selected.keys())]
+  unexpected=[selected[k] for k in sorted(selected.keys()-expected.keys())]
+  mismatched=[selected[k] for k in sorted(expected.keys()&selected.keys())
+              if selected[k]["canonical_identity"] != expected[k]["canonical_identity"]]
+  return {"schema":"prefill-candidate-set-route-census.v1","passed":not (missing or unexpected or mismatched),
+          "expected_entry_count":len(expected),"selected_entry_count":len(selected),
+          "selected":[selected[k] for k in sorted(selected)],"missing":missing,"unexpected":unexpected,"identity_mismatches":mismatched}
 
 def _candidate_registry_from_env(env:dict[str,Any]|None=None):
   env=os.environ if env is None else env
@@ -310,6 +347,7 @@ def route_pf16_graph_gemm(lin, x: Tensor, w: Tensor | None = None) -> Tensor | N
     _route_dump({"role":role,"shape":(512,out_f,in_f),"decision":"candidate_set_lds_buffer2",
                  "canonical_identity":admission.canonical_identity})
     setattr(lin,"_prefill_full_kernel_candidate_identity",admission.canonical_identity)
+    _record_candidate_route(admission)
     return _install_candidate_matmul(x,w,out_f,in_f,spec,admission)
   candidate_requested = os.environ.get(_FULL_KERNEL_CANDIDATE_JSON_ENV) is not None or os.environ.get(_FULL_KERNEL_CANDIDATE_HASH_ENV) is not None
   if candidate_requested and os.environ.get("PREFILL_WMMA_LDS_PRIMITIVE") != "1":

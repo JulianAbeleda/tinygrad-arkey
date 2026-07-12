@@ -414,6 +414,34 @@ def test_four_role_candidate_specs_have_distinct_warmstart_keys():
   keys={route._primitive_warmstart_key(_prefill_schedule("pipe",n,k)) for _role,n,k in rows}
   assert len(keys) == 4
 
+def _census_admission(role,n,k,identity):
+  return SimpleNamespace(canonical_identity=identity,normalized_payload={"workload":{
+    "profile":"qwen3_8b_q4k_m_gfx1100","role":role,"shape":{"m":512,"n":n,"k":k},
+    "target":{"backend":"AMD","arch":"gfx1100","wave_size":32}}})
+
+def test_candidate_route_census_requires_actual_exact_bindings_and_counts_reuse():
+  admissions=tuple(_census_admission(role,n,k,str(i)*64) for i,(role,n,k) in enumerate((
+    ("ffn_gate_up",12288,4096),("ffn_down",4096,12288),("attn_qo",4096,4096),("attn_kv",1024,4096)),1))
+  entries=tuple(SimpleNamespace(exact_key=("qwen3_8b_q4k_m_gfx1100",a.normalized_payload["workload"]["role"],512,
+    a.normalized_payload["workload"]["shape"]["n"],a.normalized_payload["workload"]["shape"]["k"],"AMD","gfx1100",32)) for a in admissions)
+  registry=SimpleNamespace(candidate_set=SimpleNamespace(entries=entries),admissions=admissions)
+  with route.candidate_route_census() as collector:
+    for admission in admissions: route._record_candidate_route(admission)
+    route._record_candidate_route(admissions[2])
+  report=route.finalize_candidate_route_census(collector,registry)
+  assert report["passed"] and report["selected_entry_count"] == report["expected_entry_count"] == 4
+  assert next(x for x in report["selected"] if x["role"] == "attn_qo")["bindings"] == 2
+  with route.candidate_route_census() as incomplete: route._record_candidate_route(admissions[0])
+  failed=route.finalize_candidate_route_census(incomplete,registry)
+  assert not failed["passed"] and len(failed["missing"]) == 3
+
+def test_candidate_route_census_context_does_not_leak_between_runs():
+  admission=_census_admission("attn_kv",1024,4096,"a"*64)
+  with route.candidate_route_census() as first: route._record_candidate_route(admission)
+  with route.candidate_route_census() as second: pass
+  route._record_candidate_route(admission)
+  assert len(first["selected"]) == 1 and second["selected"] == {}
+
 
 def test_route_pf16_graph_gemm_lds_primitive_opt_in_uses_existing_generated_lds_transport(monkeypatch):
   route._resolve_schedule.cache_clear()

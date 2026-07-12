@@ -107,6 +107,23 @@ def test_route_binding_gate_marks_dbuf_flags_on_pipe_only_route(monkeypatch):
   assert gate["lds_dbuf_requested"] is True
   assert any("pipe-only" in failure for failure in gate["failures"])
 
+def test_candidate_set_route_binding_gate_requires_passing_actual_census(monkeypatch):
+  monkeypatch.setattr(whole,"effective_routes",lambda env=None:_effective(whole.PREFILL_WMMA_PIPE_ROUTE))
+  env={"BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_JSON":"{}"}
+  missing=whole.route_binding_gate(_report(),env=env)
+  assert missing["candidate_set_requested"] and missing["verdict"] == "PREFILL_ROUTE_BINDING_FAIL"
+  assert any("census is missing" in failure for failure in missing["failures"])
+  failed_report=_report(); failed_report["candidate_set_route_census"]={
+    "schema":"prefill-candidate-set-route-census.v1","passed":False,
+    "missing":[{"role":"attn_kv","shape":{"m":512,"n":1024,"k":4096},"canonical_identity":"a"*64}],
+    "unexpected":[],"identity_mismatches":[]}
+  failed=whole.route_binding_gate(failed_report,env=env)
+  assert failed["verdict"] == "PREFILL_ROUTE_BINDING_FAIL" and "attn_kv" in failed["failures"][-1]
+  passed_report=_report(); passed_report["candidate_set_route_census"]={
+    "schema":"prefill-candidate-set-route-census.v1","passed":True,"missing":[],"unexpected":[],"identity_mismatches":[]}
+  passed=whole.route_binding_gate(passed_report,env=env)
+  assert passed["verdict"] == "PREFILL_ROUTE_BINDING_PASS" and passed["failures"] == []
+
 
 def test_measurement_regime_names_generated_vs_hand_regimes():
   gen = whole.measurement_regime({"route_attribution": {"prefill_route_provenance": "tinygrad_scheduler_generated"}})
@@ -144,3 +161,16 @@ def test_authority_completeness_gate_passes_with_full_checklist():
   })
   assert full["ok"] is True
   assert full["missing"] == []
+
+def test_candidate_compiler_state_scope_restores_all_process_globals():
+  import tinygrad.codegen.opt.postrange as pr
+  names=("_WARMSTART_OPTS","_WARMSTART_CANDIDATE_CONTEXTS","_WARMSTART_LOCAL_STAGE_KEYS","_WARMSTART_LOCAL_STAGE_DENY_KEYS")
+  saved={name:getattr(pr,name,None) for name in names}
+  try:
+    original=({"old":"opts"},{"old":"ctx"},{"old-local"},{"old-deny"})
+    for name,value in zip(names,original): setattr(pr,name,value)
+    with whole._scoped_candidate_compiler_state():
+      for name in names: setattr(pr,name,{"new"})
+    assert tuple(getattr(pr,name) for name in names) == original
+  finally:
+    for name,value in saved.items(): setattr(pr,name,value)
