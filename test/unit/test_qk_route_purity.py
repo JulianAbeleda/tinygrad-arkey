@@ -43,19 +43,18 @@ def test_qk_route_manifest_purity_debt_is_explicit():
   assert set(report["forbidden_default_routes"]) == set()
 
 
-def test_prefill_hybrid_and_pure_route_identities():
+def test_prefill_hybrid_and_spec_owned_route_identities():
   # Ground-truth mapping (verified by running the model 2026-07-10): the HYBRID is the 4k route that keeps the fast
-  # hand backend atom, selected by PREFILL_GRAPH_GEMM=1 with NO primitive flags. The PURE machine-search transport is
-  # the ~1.3k route selected by adding the primitive flags. Do not invert these.
+  # hand backend atom, selected by PREFILL_GRAPH_GEMM=1 with NO primitive flags. The spec-owned transport is the
+  # ~1.3k route selected by adding the primitive flags. It is not strictly pure because LDS2 uses an ASM backend atom.
   from extra.qk.route_manifest import route_env
   HYBRID = "prefill_pipe_role_selective_generated"          # ~4413 pp512, fast hand backend atom + machine schedule
-  PURE = "prefill_wmma_pipe_lds_dbuf_primitive_generated"   # ~1332 pp512, fully generated transport
+  SPEC_OWNED = "prefill_wmma_pipe_lds_dbuf_primitive_generated"  # ~1332 pp512
   hybrid_env = route_env(HYBRID)
-  pure_env = route_env(PURE)
+  spec_owned_env = route_env(SPEC_OWNED)
   assert hybrid_env == {"PREFILL_GRAPH_GEMM": "1"}, "hybrid selects on GRAPH_GEMM alone (no primitive flags)"
-  # The pure transport turns ON the primitive flags that the hybrid must NOT set.
-  assert set(hybrid_env.items()) < set(pure_env.items())
-  assert {"PREFILL_WMMA_PIPE_PRIMITIVE", "PREFILL_WMMA_LDS_PRIMITIVE", "PREFILL_DBUF"} <= set(pure_env)
+  assert set(hybrid_env.items()) < set(spec_owned_env.items())
+  assert {"PREFILL_WMMA_PIPE_PRIMITIVE", "PREFILL_WMMA_LDS_PRIMITIVE", "PREFILL_DBUF"} <= set(spec_owned_env)
 
 
 def test_14b_hybrid_mmq_atom_manifest_is_research_only_and_ordered_for_m8():

@@ -8,8 +8,8 @@ so no one re-adds it blind.
 Status legend: `CLASSIFIED` = verdict banked here, removal pending the wrapper build; `REMOVED <sha>` = deleted.
 
 Source: read-only flag classification 2026-07-10 (5-family audit). Route ground truth: hybrid =
-`prefill_pipe_role_selective_generated` (GRAPH_GEMM only, ~4413 pp512); pure =
-`prefill_wmma_pipe_lds_dbuf_primitive_generated` (+PIPE+LDS+DBUF, ~1332).
+`prefill_pipe_role_selective_generated` (GRAPH_GEMM only, ~4413 pp512); spec-owned =
+`prefill_wmma_pipe_lds_dbuf_primitive_generated` (+PIPE+LDS+DBUF, ~1332, ASM-backed LDS2 lifecycle).
 
 ---
 

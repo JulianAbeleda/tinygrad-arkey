@@ -2,7 +2,7 @@
 
 Two wrappers, one resolver (docs/prefill-flag-classification.md):
 
-  * canonical route wrapper -- `select(hybrid|pure|mixed|pipe_mvp)`, manifest-backed, invalid combos
+  * canonical route wrapper -- `select(hybrid|spec_owned|mixed|default)`, manifest-backed, invalid combos
     unrepresentable. It lives in `extra/qk/prefill_route_select.py` (NOT core: it reads the route manifest).
   * debug wrapper (`DebugFlags`, below) -- the single home for the surviving raw survivor flags.
 
@@ -19,14 +19,14 @@ from dataclasses import dataclass
 import os
 from typing import Mapping
 
-# The five prefill route names. Four are the canonical FORCING routes selected by the graph-GEMM primitive flags;
-# `default` is the shipped baseline (no flag, ordinary PREFILL_V2 scheduler matmul).
+# Resolved route names. `pipe_research` is detectable for diagnostics but intentionally not exposed by the
+# canonical selector; `default` is the shipped baseline (no flag, ordinary PREFILL_V2 scheduler matmul).
 ROUTE_HYBRID = "hybrid"
-ROUTE_PURE = "pure"
+ROUTE_SPEC_OWNED = "spec_owned"
 ROUTE_MIXED = "mixed"
-ROUTE_PIPE_MVP = "pipe_mvp"
+ROUTE_PIPE_RESEARCH = "pipe_research"
 ROUTE_DEFAULT = "default"
-ROUTE_NAMES = (ROUTE_HYBRID, ROUTE_PURE, ROUTE_MIXED, ROUTE_PIPE_MVP, ROUTE_DEFAULT)
+ROUTE_NAMES = (ROUTE_HYBRID, ROUTE_SPEC_OWNED, ROUTE_MIXED, ROUTE_PIPE_RESEARCH, ROUTE_DEFAULT)
 
 # The four SELECTOR-OWNED flags. These are consumed by the resolver/canonical wrapper, not user toggles
 # (docs/prefill-flag-classification.md::SELECTOR_OWNED).
@@ -44,7 +44,7 @@ class PrefillRouteSpec:
   into this object.
 
   Fields:
-    route_name: one of ROUTE_NAMES (hybrid | pure | mixed | pipe_mvp | default).
+    route_name: one of ROUTE_NAMES (hybrid | spec_owned | mixed | pipe_research | default).
     graph_gemm / wmma_pipe_primitive / wmma_lds_primitive / dbuf: the four selector-owned booleans that the
       graph-GEMM primitive route reads (their exact env is single-sourced in extra/qk/route_manifest.ROUTES).
 
@@ -82,9 +82,9 @@ def resolve_prefill_route(env: Mapping[str, str] | None = None) -> PrefillRouteS
 
   Decision tree (docs/prefill-flag-classification.md route map):
     GRAPH_GEMM=0                          -> default
-    GRAPH_GEMM + PIPE + LDS + DBUF        -> pure
+    GRAPH_GEMM + PIPE + LDS + DBUF        -> spec_owned
     GRAPH_GEMM + LDS + DBUF (PIPE off)    -> mixed
-    GRAPH_GEMM + PIPE (only)              -> pipe_mvp
+    GRAPH_GEMM + PIPE (only)              -> pipe_research
     GRAPH_GEMM only (no primitive flags)  -> hybrid
   """
   if env is None: env = os.environ
@@ -96,11 +96,11 @@ def resolve_prefill_route(env: Mapping[str, str] | None = None) -> PrefillRouteS
   if not graph_gemm:
     name = ROUTE_DEFAULT
   elif pipe and lds and dbuf:
-    name = ROUTE_PURE
+    name = ROUTE_SPEC_OWNED
   elif lds and dbuf:            # PIPE off
     name = ROUTE_MIXED
-  elif pipe:                    # pipe on, not the composed pure combo
-    name = ROUTE_PIPE_MVP
+  elif pipe:                    # diagnostic-only pipe research route
+    name = ROUTE_PIPE_RESEARCH
   else:                         # graph-GEMM only, no primitive flags
     name = ROUTE_HYBRID
 

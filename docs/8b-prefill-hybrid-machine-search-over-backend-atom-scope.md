@@ -34,8 +34,8 @@ S9 backend-atom authority path. The reusable concept is hybrid machine search, s
 |---|---|---:|---:|---:|---|
 | S9 authority | `prefill_pipe_role_selective_generated` | pinned | `~4413` | `~3237` | fast hybrid/raw backend atom baseline |
 | S9 authority | `prefill_pipe_role_selective_generated` | unpinned | `~5111` | `~3677` | same route under boost clocks |
-| S10 generated composed | `prefill_wmma_pipe_lds_dbuf_primitive_generated` | pinned | `~1332` | `~1189` | correct route, slow generated transport |
-| S10 generated composed | `prefill_wmma_pipe_lds_dbuf_primitive_generated` | unpinned | `~1514` | `~1341` | not a clock regression, still structurally slow |
+| S10 spec-owned composed | `prefill_wmma_pipe_lds_dbuf_primitive_generated` | pinned | `~1332` | `~1189` | correct route, slow ASM-backed transport |
+| S10 spec-owned composed | `prefill_wmma_pipe_lds_dbuf_primitive_generated` | unpinned | `~1514` | `~1341` | not a clock regression, still structurally slow |
 
 So `hybrid_machine_search` must not promote the slow generated LDS/DBUF transport. It keeps the fast backend atom and makes the surrounding
 contract machine-owned.

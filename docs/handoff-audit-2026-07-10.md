@@ -13,9 +13,10 @@ committed on `master` (workflow rule: commit on master, never branch). Full unit
    `model.py`'s leaked `extra.qk` import through the adapter (`test_tinygrad_boundary` green); retired 12 orphan
    probes; restored 9 principle-cited refutation docs that delete-to-git-history had orphaned + added a dead-link
    linter (`extra/tools/check_doc_links.py`).
-2. **Fixed an inverted route labeling** (was baked into a commit): hybrid = `prefill_pipe_role_selective_generated`
-   (`GRAPH_GEMM=1` only, ~4413 pp512, fast hand backend atom + machine schedule); pure =
-   `prefill_wmma_pipe_lds_dbuf_primitive_generated` (`+PIPE+LDS+DBUF`, ~1332 generated transport). **Do not invert.**
+2. **Fixed route labeling**: hybrid = `prefill_pipe_role_selective_generated`
+   (`GRAPH_GEMM=1` only, ~4413 pp512, fast hand backend atom + machine schedule); spec-owned =
+   `prefill_wmma_pipe_lds_dbuf_primitive_generated` (`+PIPE+LDS+DBUF`, ~1332, ASM-backed LDS2 lifecycle).
+   Neither route is strictly pure. **Do not invert.**
    The shipping renderer is `HIPRenderer`; `AMDISARenderer` is opt-in research (`DEV=AMD:ISA`).
 3. **Flag collapse** — classified all 131 `PREFILL_*`/`AMD_ISA_*` flags (`docs/prefill-flag-classification.md`):
    4 selector-owned, ~25 promote-to-route-spec, **49 deleted**, ~53 keep-for-debug.

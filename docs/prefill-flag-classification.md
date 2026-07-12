@@ -5,7 +5,7 @@ two-wrapper flag-collapse. Deleted-flag records live in [prefill-flag-graveyard.
 
 ## Target design: two wrappers, one resolver
 
-- **Canonical route wrapper** — `select(hybrid|pure|mixed|pipe_mvp)`. No raw-flag parameter; invalid combos unrepresentable. Production + authority runs. A partial stub already exists: `tinygrad/codegen/opt/operand_staging.py::operand_staging_policy` (keeps `PREFILL_TC_LOCAL_STAGE` as its `override` hatch; "imported by nothing yet").
+- **Canonical route wrapper** — `select(hybrid|spec_owned|mixed|default)`. No raw-flag parameter; invalid combos unrepresentable. The pipe-only research route is deliberately not selectable here.
 - **Debug wrapper** — the single home for the surviving raw flags (grouping the ~110 scattered `getenv` reads). Explicit debug opt-in; production code cannot reach a raw flag.
 - Both produce one `PrefillRouteSpec`; downstream (`prefill_graph_gemm_route`, lowerer, renderer) is unchanged.
 
@@ -14,9 +14,9 @@ two-wrapper flag-collapse. Deleted-flag records live in [prefill-flag-graveyard.
 | route | route_id | defining env | pp512 |
 |---|---|---|---|
 | hybrid | `prefill_pipe_role_selective_generated` | `GRAPH_GEMM=1` only | ~4413 |
-| pure | `prefill_wmma_pipe_lds_dbuf_primitive_generated` | `GRAPH_GEMM+PIPE+LDS+DBUF` | ~1332 |
+| spec_owned | `prefill_wmma_pipe_lds_dbuf_primitive_generated` | `GRAPH_GEMM+PIPE+LDS+DBUF` | ~1332 |
 | mixed | `prefill_wmma_lds_dbuf_primitive_mixed` | `GRAPH_GEMM+LDS+DBUF` (PIPE off) | — |
-| pipe_mvp | `prefill_wmma_pipe_primitive_generated` | `GRAPH_GEMM+PIPE` | — |
+| pipe_research (resolver diagnostic only) | `prefill_wmma_pipe_primitive_generated` | `GRAPH_GEMM+PIPE` | ~192 current whole-model |
 | default | `prefill_v2_scheduler_matmul_default` | `{}` (GRAPH_GEMM=0) | ~2688 |
 
 Structural split (no flag): `out_f==12288` (ffn_gate_up) → lds family, else → pipe family (`_resolve_schedule`).

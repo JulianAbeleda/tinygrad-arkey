@@ -29,14 +29,7 @@ from extra.qk.pure_search_guard import effective_routes
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 ARTIFACT_DIR = ROOT / "bench/prefill-whole-synced"
-PATH1_MVP_ENV = {
-  "PREFILL_V2": "1",
-  "PREFILL_GRAPH_GEMM": "1",
-  "PREFILL_WMMA_PIPE_PRIMITIVE": "1",
-  "PREFILL_ROUTE": "fp16",
-  "PREFILL_CHUNKED": "0",
-}
-PATH1_MVP_ROUTE = "prefill_wmma_pipe_primitive_generated"
+PREFILL_WMMA_PIPE_ROUTE = "prefill_wmma_pipe_primitive_generated"
 PREFILL_WMMA_PIPE_LDS_DBUF_ROUTE = "prefill_wmma_pipe_lds_dbuf_primitive_generated"
 PREFILL_WMMA_LDS_DBUF_MIXED_ROUTE = "prefill_wmma_lds_dbuf_primitive_mixed"
 PREFILL_ROLE_ROUTES_PIPE = {
@@ -166,7 +159,7 @@ def _prefill_role_routes(route_id: str) -> dict[str, str]:
     return dict(PREFILL_ROLE_ROUTES_PIPE_LDS_DBUF)
   if route_id == PREFILL_WMMA_LDS_DBUF_MIXED_ROUTE:
     return dict(PREFILL_ROLE_ROUTES_RAW_PIPE_LDS_DBUF)
-  if route_id == PATH1_MVP_ROUTE:
+  if route_id == PREFILL_WMMA_PIPE_ROUTE:
     return dict(PREFILL_ROLE_ROUTES_PIPE)
   return {}
 
@@ -196,9 +189,9 @@ def route_binding_gate(report: dict[str, Any], required_route: str | None = None
     _enabled(e, "PREFILL_DBUF") or
     _enabled(e, "PREFILL_DBUF_NBUF")
   )
-  if lds_dbuf_requested and selected_route == PATH1_MVP_ROUTE:
+  if lds_dbuf_requested and selected_route == PREFILL_WMMA_PIPE_ROUTE:
     failures.append(
-      f"LDS/DBUF flags requested but effective prefill route is still pipe-only {PATH1_MVP_ROUTE!r}; "
+      f"LDS/DBUF flags requested but effective prefill route is still pipe-only {PREFILL_WMMA_PIPE_ROUTE!r}; "
       f"expected {PREFILL_WMMA_PIPE_LDS_DBUF_ROUTE!r} or {PREFILL_WMMA_LDS_DBUF_MIXED_ROUTE!r} once route identity lands"
     )
   verdict = "PREFILL_ROUTE_BINDING_PASS" if not failures else "PREFILL_ROUTE_BINDING_FAIL"
@@ -207,45 +200,12 @@ def route_binding_gate(report: dict[str, Any], required_route: str | None = None
           "lds_dbuf_requested": lds_dbuf_requested, "failures": failures}
 
 
-def apply_path1_mvp_env(env: dict[str, str] | None = None) -> dict[str, str]:
-  out = os.environ if env is None else env
-  for key, value in PATH1_MVP_ENV.items():
-    out[key] = value
-  return out
-
-
-def path1_mvp_gate(report: dict[str, Any]) -> dict[str, Any]:
-  route = report.get("route_attribution", {})
-  failures = []
-  if route.get("prefill_route_family") != PATH1_MVP_ROUTE:
-    failures.append(f"prefill_route_family={route.get('prefill_route_family')!r}, expected {PATH1_MVP_ROUTE!r}")
-  if route.get("prefill_route_pure") is not True:
-    failures.append("prefill_route_pure is not true")
-  if route.get("prefill_route_rolled_back") is not False:
-    failures.append("prefill_route_rolled_back is not false")
-  if route.get("prefill_route_provenance") != "tinygrad_scheduler_generated":
-    failures.append(f"prefill_route_provenance={route.get('prefill_route_provenance')!r}, expected 'tinygrad_scheduler_generated'")
-  if not bool(report.get("graph_gemm")):
-    failures.append("graph_gemm is not enabled")
-  if str(report.get("prefill_v2", "")) in ("", "0", "false", "False", "off", "OFF", "no", "NO"):
-    failures.append("prefill_v2 is not enabled")
-  if str(report.get("prefill_route", "")).strip().lower() != "fp16":
-    failures.append(f"prefill_route={report.get('prefill_route')!r}, expected 'fp16' so direct-packed cannot preempt pf16 graph GEMM")
-  if str(report.get("prefill_chunked", "")).strip().lower() not in ("", "0", "false", "off", "no"):
-    failures.append(f"prefill_chunked={report.get('prefill_chunked')!r}, expected off; chunked overlay is not the path1 MVP entry")
-  if report.get("logits_only") is not True:
-    failures.append("logits_only is not true; path1 MVP smoke intentionally excludes sampling/argmax lifecycle")
-  verdict = "PATH1_MIXED_PREFILL_MVP_PASS" if not failures else "PATH1_MIXED_PREFILL_MVP_FAIL"
-  return {"schema": "path1-mixed-prefill-mvp-gate.v1", "verdict": verdict,
-          "required_route": PATH1_MVP_ROUTE, "failures": failures}
-
-
 def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
                       start_positions: tuple[int, ...] = (0, 512, 1024, 2048, 3584),
                       whole_lengths: tuple[int, ...] = (512, 1024, 2048, 4096),
                       K: int = 8, max_context: int = 4608, warmups: int = 4, rounds: int = 3,
                       mode: str = "authority", pin_clock: bool = False, verbose: bool = True,
-                      logits_only: bool = False, require_generated_pipe: bool = False,
+                      logits_only: bool = False,
                       require_route: str | None = None, comparator_id: str | None = None,
                       candidate_id: str | None = None, primitive_class: str | None = None,
                       threshold: dict[str, Any] | None = None, ledger: str | None = None,
@@ -366,11 +326,6 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
   report["prefill_route_binding_gate"] = binding_gate
   if require_route and binding_gate["failures"]:
     raise RuntimeError("prefill route binding gate failed: " + "; ".join(binding_gate["failures"]))
-  if require_generated_pipe:
-    gate = path1_mvp_gate(report)
-    report["path1_mvp_gate"] = gate
-    if gate["failures"]:
-      raise RuntimeError("path1 mixed prefill MVP gate failed: " + "; ".join(gate["failures"]))
   return report
 
 
@@ -392,10 +347,6 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
   ap.add_argument("--json", action="store_true", help="print JSON report after the human summary")
   ap.add_argument("--logits-only", action="store_true", default=os.environ.get("PREFILL_WHOLE_LOGITS_ONLY", "0") != "0",
                   help="time prefill logits and skip the final sampling/argmax expression")
-  ap.add_argument("--path1-mvp", action="store_true",
-                  help="mixed MVP: set generated pipe primitive env, use logits-only, and require pure generated route attribution")
-  ap.add_argument("--require-generated-pipe", action="store_true",
-                  help="fail if route attribution is not prefill_wmma_pipe_primitive_generated/pure/not rolled back")
   ap.add_argument("--require-route", default="",
                   help="fail unless prefill GEMM route attribution equals this effective route id")
   ap.add_argument("--comparator-id", default="", help="id of the same-regime current-default comparator (F4)")
@@ -406,10 +357,6 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
   ap.add_argument("--quality-gate", default="", help="path to a whole-model quality/correctness gate JSON with a 'status' field (F3)")
   add_clock_pin_arg(ap)
   args = ap.parse_args(argv)
-  if args.path1_mvp:
-    apply_path1_mvp_env(os.environ)
-    args.logits_only = True
-    args.require_generated_pipe = True
   profile = prefill_run_profile(
     args.mode,
     K=args.K,
@@ -428,7 +375,6 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
                              start_positions=profile.start_positions, whole_lengths=profile.whole_lengths,
                              chunk_n=profile.chunk_n, max_context=profile.max_context, mode=profile.mode,
                              pin_clock=args.pin_clock, logits_only=args.logits_only,
-                             require_generated_pipe=args.require_generated_pipe,
                              require_route=args.require_route or None,
                              comparator_id=args.comparator_id or None, candidate_id=args.candidate_id or None,
                              primitive_class=args.primitive_class or None, threshold=threshold,
