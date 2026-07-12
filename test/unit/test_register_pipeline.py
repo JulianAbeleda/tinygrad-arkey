@@ -35,6 +35,31 @@ def test_register_template_zero_lds_and_real_descriptor():
   assert adapter.logical_plan.active_lds_bytes == 0 and adapter.logical_plan.buffer_count == 2
 
 
+def test_register_stage_buffers_have_independent_role_width_contracts():
+  t = _fixture()
+  specs = t.stage_buffer_specs
+  assert [s.snapshot() for s in specs] == [
+    {"role": "A", "slots": 2, "fragments": 2, "lane_width": 16, "role_width": 32, "half_elements": 64},
+    {"role": "B", "slots": 2, "fragments": 2, "lane_width": 16, "role_width": 32, "half_elements": 64},
+  ]
+  p = t.producer(UOp.const(dtypes.weakint, 0), UOp.const(dtypes.weakint, 0))
+  defs = [u for u in UOp.sink(*p.role_nodes).toposort() if u.op is Ops.DEFINE_REG]
+  assert sorted((u.ptrdtype.size, u.tag[1]) for u in defs) == [(64, "A"), (64, "B")]
+
+
+def test_register_stage_dynamic_slot_fails_closed_at_amd_isa_boundary():
+  from tinygrad.renderer.isa import IselContext
+  from tinygrad.renderer.isa.amd import isel_index
+  t = _fixture()
+  p = t.producer(UOp.const(dtypes.weakint, 0), UOp.const(dtypes.weakint, 0))
+  root = UOp.sink(*p.role_nodes)
+  dreg = next(u for u in root.toposort() if u.op is Ops.DEFINE_REG and u.tag[1] == "A")
+  dynamic_slot = UOp.range(2, 8801, AxisType.REDUCE)
+  idx = dreg.index(dynamic_slot * t.stage_buffer_specs[0].role_width, dtype=dtypes.half.vec(16))
+  with pytest.raises(NotImplementedError, match="dynamic VGPR indexing"):
+    isel_index(IselContext(root), idx)
+
+
 def test_register_template_producer_fragments_have_no_local_or_raw_isa():
   t = _fixture()
   p = t.producer(UOp.const(dtypes.weakint, 0), UOp.const(dtypes.weakint, 0))

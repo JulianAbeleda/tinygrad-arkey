@@ -15,6 +15,35 @@ _ROLE_BY_NAME = {
 }
 
 
+class AMDStageBufferSpec:
+  """Logical contract for one alternating register-resident stage buffer.
+
+  The compiler describes half-element ownership; the ISA backend decides how
+  those elements are packed into physical VGPRs. Keeping this contract in the
+  allocator module prevents route code from inventing a combined A+B width.
+  """
+  __slots__ = ("role", "slots", "fragments", "lane_width")
+
+  def __init__(self, role: str, slots: int, fragments: int, lane_width: int = 16):
+    if role not in ("A", "B"): raise ValueError("stage-buffer role must be A or B")
+    for name, value in (("slots", slots), ("fragments", fragments), ("lane_width", lane_width)):
+      if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+        raise ValueError(f"stage-buffer {name} must be a positive int")
+    if lane_width != 16: raise ValueError("gfx1100 WMMA stage buffers require half.vec(16) lanes")
+    self.role, self.slots, self.fragments, self.lane_width = role, slots, fragments, lane_width
+
+  @property
+  def role_width(self) -> int: return self.fragments * self.lane_width
+  @property
+  def half_elements(self) -> int: return self.slots * self.role_width
+  @property
+  def fragment_count(self) -> int: return self.slots * self.fragments
+  def snapshot(self) -> dict[str, int | str]:
+    return {"role": self.role, "slots": self.slots, "fragments": self.fragments,
+            "lane_width": self.lane_width, "role_width": self.role_width,
+            "half_elements": self.half_elements}
+
+
 class AMDRegisterLeaseAllocator:
   """Reserve non-overlapping virtual SGPR/VGPR windows.
 
@@ -67,4 +96,3 @@ class AMDRegisterLeaseAllocator:
       out.reserve(name, start, count, bank=RegisterBank.SGPR, align=2 if count == 2 else 1)
     out.reserve("fixed_lane_and_address", 0, 10, bank=RegisterBank.VGPR)
     return out
-

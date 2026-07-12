@@ -16,6 +16,7 @@ from tinygrad.codegen.opt.kernel_pipeline import (KernelStage1FragmentStage, Ker
   stage1_lifecycle_events)
 from tinygrad.dtype import AddrSpace, dtypes
 from tinygrad.uop.ops import AxisType, KernelLDSWindow, KernelTileGeometry, Ops, UOp
+from tinygrad.renderer.isa.amd_register_allocator import AMDStageBufferSpec
 
 
 @dataclass(frozen=True)
@@ -90,14 +91,28 @@ class RegisterPipeTemplate:
   @property
   def stage_width(self) -> int: return (self.pipe_tm + self.pipe_tn) * 16
 
+  @property
+  def stage_buffer_specs(self) -> tuple[AMDStageBufferSpec, AMDStageBufferSpec]:
+    """Return the independent A/B logical register-buffer contracts.
+
+    A and B are separate resources.  Their widths must not be derived from
+    the combined pipe width: doing so doubles each role's allocation and
+    hides the actual VGPR pressure from the backend resource gate.
+    """
+    return tuple(AMDStageBufferSpec(role, 2, fragments)
+                 for role, fragments in (("A", self.pipe_tm), ("B", self.pipe_tn)))
+
   def _buffers(self) -> tuple[UOp, UOp]:
-    return (UOp.placeholder((self.stage_width * 2,), dtypes.half, 9300, addrspace=AddrSpace.REG),
-            UOp.placeholder((self.stage_width * 2,), dtypes.half, 9301, addrspace=AddrSpace.REG))
+    # Keep the two logical stages independent.  A 2x2 pipe is 2*16 half
+    # elements per role and slot, not one combined A+B allocation per role.
+    return tuple(UOp.placeholder((spec.half_elements,), dtypes.half, 9300 + i, addrspace=AddrSpace.REG)
+                 .replace(tag=("register_pipe_stage_buffer", spec.role, spec.slots, spec.fragments, spec.lane_width))
+                 for i, spec in enumerate(self.stage_buffer_specs))
 
   def producer(self, epoch: UOp, slot: UOp, reuse: UOp | None = None) -> KernelStage1ProducerStage:
     buffers = self._buffers()
     nodes: list[UOp] = []
-    for operand, count, buffer in zip(self.operands, (self.pipe_tm, self.pipe_tn), buffers):
+    for operand, count, buffer, spec in zip(self.operands, (self.pipe_tm, self.pipe_tn), buffers, self.stage_buffer_specs):
       vectors = []
       for frag in range(count):
         row = operand.row_tile_base + frag * 16
@@ -105,7 +120,7 @@ class RegisterPipeTemplate:
           operand.k_axis: epoch * self.k_step + elem}) for elem in range(16))
         value = UOp(Ops.STACK, dtypes.half.vec(16), values,
           tag=("register_pipe_load", operand.role, frag, epoch, slot))
-        vectors.append(buffer.index(slot * self.stage_width + frag * 16, dtype=dtypes.half.vec(16)).store(value))
+        vectors.append(buffer.index(slot * spec.role_width + frag * spec.lane_width, dtype=dtypes.half.vec(spec.lane_width)).store(value))
       nodes.append(UOp.group(*vectors).replace(tag=("register_pipe_producer", operand.role, epoch, slot)))
     ready = UOp.group(*nodes, reuse).replace(tag=("register_pipe_ready", epoch, slot))
     return KernelStage1ProducerStage(epoch, slot, (nodes[0], nodes[1]), ready)
@@ -120,9 +135,11 @@ class RegisterPipeTemplate:
       nxt = ready_epoch.render() == (epoch + 1).render() and ready_slot.render() == ((slot + 1) % 2).render()
       if not (same or nxt): raise ValueError("register fragment consumer readiness epoch/slot mismatch")
     out: list[UOp] = []
-    for operand, contract, count, buffer in zip(self.operands, self.contracts, (self.pipe_tm, self.pipe_tn), buffers):
+    for operand, contract, count, buffer, spec in zip(self.operands, self.contracts, (self.pipe_tm, self.pipe_tn), buffers,
+                                                       self.stage_buffer_specs):
       for idx in range(count):
-        load = buffer.after(ready).index(slot * self.stage_width + idx * 16, dtype=dtypes.half.vec(16)).load()
+        load = buffer.after(ready).index(slot * spec.role_width + idx * spec.lane_width,
+                                         dtype=dtypes.half.vec(spec.lane_width)).load()
         out.append(UOp(Ops.CONTRACT, dtypes.half.vec(16), (load,), contract.arg,
                        tag=("register_pipe_fragment", operand.role, epoch, slot, idx)))
     return KernelStage1FragmentStage(epoch, slot, ready, tuple(out))

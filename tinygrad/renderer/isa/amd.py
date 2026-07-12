@@ -364,6 +364,21 @@ def _tos(ctx:IselContext, u:UOp):
 def _reg_base(u:UOp) -> UOp:
   while u.op is Ops.AFTER and u.src: u = u.src[0]   # AFTER(DEFINE_REG, ...) chain -> the DEFINE_REG
   return u
+
+def _register_stage_buffer_meta(u:UOp) -> dict|None:
+  """Decode the compiler-owned register-stage tag, if present.
+
+  Register buffers are not LDS.  Keep this check at the ISA boundary so a
+  stage buffer can never silently fall through to the generic non-global/LDS
+  address path while its physical VGPR mapping is still unavailable.
+  """
+  dreg = _reg_base(u)
+  tag = dreg.tag
+  if not (isinstance(tag, tuple) and len(tag) >= 5 and tag[0] == "register_pipe_stage_buffer"): return None
+  role, slots, fragments, lane_width = tag[1:5]
+  if role not in ("A", "B") or slots != 2 or fragments <= 0 or lane_width != 16:
+    raise NotImplementedError(f"AMD:ISA malformed register stage-buffer contract: {tag!r}")
+  return {"role": role, "slots": slots, "fragments": fragments, "lane_width": lane_width}
 def _lid_ranges(ctx:IselContext) -> dict[int, int]:
   if (r:=getattr(ctx, "_lidr", None)) is None:
     r = ctx._lidr = {int(str(u.arg)[-1]): u.src[0].arg for u in ctx.uses if u.op is Ops.SPECIAL and str(u.arg).startswith("lidx")}
@@ -485,6 +500,15 @@ def isel_index(ctx:IselContext, x:UOp):
   # and ordered. idx may be CONST (accumulator), a RANGE counter, or a runtime VGPR value (e.g. lidx-derived, Phase F).
   if isinstance(base.dtype, PtrDType) and base.dtype.addrspace != AddrSpace.GLOBAL:
     dreg = _reg_base(base)
+    if (stage_meta := _register_stage_buffer_meta(dreg)) is not None:
+      # AMD has no general indirect VGPR addressing.  The logical pipeline
+      # currently carries ``epoch % 2`` as a dynamic index, so accepting this
+      # as LDS would be an unsound pure-route claim. Static-slot expansion (or
+      # an equivalent backend-owned lowering) must land before this branch is
+      # admitted.
+      raise NotImplementedError(
+        f"AMD:ISA register stage buffer {stage_meta['role']} needs static slot expansion; "
+        "dynamic VGPR indexing is unsupported")
     # ROLLED-K WMMA accumulator: this REG element IS a lane of the in-place C fragment. Carry (order, v[cbase+elem]) so
     # isel_load reads the fragment VGPR (post-loop) and isel_store inits it (pre-loop) / no-ops the ASSIGN. B0.M: the REG
     # holds a WM*WN grid of 8-lane subtiles; idx (compile-time) selects subtile idx//8 and within-tile lane idx%8. Multi-
