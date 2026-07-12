@@ -22,7 +22,10 @@ class LinearScanRegallocContext:
     ranges: list[Register] = []
     for i,u in enumerate(reversed(uops)):
       if u.op in PSEUDO_OPS: continue
-      defs = u.tag if isinstance(u.tag, tuple) else ()
+      # Backend metadata tags (for example register-pipeline stage markers)
+      # are tuples too, but only an all-Register tuple denotes physical
+      # register definitions for liveness/allocation.
+      defs = u.tag if isinstance(u.tag, tuple) and all(isinstance(v, Register) for v in u.tag) else ()
       src_regs = tuple(s.reg for s in dedup(u.src) if not (u.op is Ops.END and getenv("REGALLOC_END_NO_SOURCE_LIVE", 0) and s.op is not Ops.RANGE))
       for v in defs + src_regs:
         if isinstance(v, Register): lr.setdefault(v, []).insert(0, len(uops) - 1 - i)
@@ -145,10 +148,10 @@ class LinearScanRegallocContext:
         self.reals.setdefault(i, {})[v] = live[v]
 
       # allocate defs
-      if isinstance(u.tag, tuple):
+      if isinstance(u.tag, tuple) and all(isinstance(v, Register) for v in u.tag):
         for j,v in enumerate(u.tag):
           # register should only be defined once
-          assert isinstance(v, Register) and lr[v][0] == i
+          assert lr[v][0] == i
           cons = v.cons
           # two address instructions (src is reused by def) can only coalesce reused src. reused src goes first to get priority in case of a tiebreak
           if ren.is_two_address(u) and j == 0:

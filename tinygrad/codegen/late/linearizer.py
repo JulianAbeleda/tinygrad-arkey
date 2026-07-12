@@ -35,7 +35,22 @@ def linearize(sink:UOp) -> list[UOp]:
     priorities[u] = (run_count, priority, extra)
 
   # number the uops in "ideal" order
-  nkey = {u:i for i,u in enumerate(sorted(lst, key=lambda x: priorities[x]+(x.tuplize if TUPLE_ORDER else ())))}
+  try:
+    ordered = sorted(lst, key=lambda x: priorities[x]+(x.tuplize if TUPLE_ORDER else ()))
+  except TypeError:
+    # Some backend-owned metadata is intentionally heterogeneous (for example
+    # a stage marker tuple beside a value-less NOOP).  Preserve the normal
+    # structural order and only canonicalize incomparable metadata on retry.
+    def _stable(v):
+      # Only metadata and the node header are needed to break the failed
+      # comparison.  Avoid recursively repr'ing the entire UOp DAG here.
+      if isinstance(v, tuple): return ("tuple", len(v), tuple(_stable(y) for y in v[:4]))
+      return (type(v).__name__, repr(v))
+    def _stable_uop(u):
+      return (u.op.value, _stable(u.arg), _stable(u.dtype))
+    ordered = sorted(lst, key=lambda x: (priorities[x][0], priorities[x][1], _stable(priorities[x][2]),
+                                         _stable_uop(x) if TUPLE_ORDER else ()))
+  nkey = {u:i for i,u in enumerate(ordered)}
 
   # then force them to be toposorted in as close to the ideal order as possible
   heap = [(-nkey[sink], sink)]

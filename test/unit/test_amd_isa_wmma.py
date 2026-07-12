@@ -7,10 +7,17 @@ from tinygrad.codegen.opt import Opt, OptOps
 from tinygrad.helpers import Target, getenv
 from tinygrad.renderer.isa import IselContext, Register
 from tinygrad.renderer.isa.amd import (
-  AMDISARenderer, FRAG_BASE, FRAG_TOP, WMMA_ACC_BASE, _vpool, _acc_top, AMDOps, decompose_lds_index, isel_index, isel_store, lower_inst)
+  AMDISARenderer, FRAG_BASE, FRAG_TOP, WMMA_ACC_BASE, _vpool, _acc_top, AMDOps, _wmma_chain_prev, decompose_lds_index, isel_index, isel_store, lower_inst)
 from tinygrad.codegen import full_rewrite_to_sink, to_program, to_program_cache
 from tinygrad.codegen.late.devectorizer import load_store_folding
 from tinygrad.renderer.amd.dsl import Reg
+
+class TestAMDISAWmmaCarrierNormalization(unittest.TestCase):
+  def test_scalarized_wmma_lane_stack_recovers_previous_vector(self):
+    base = UOp(Ops.WMMA, dtypes.float.vec(8), src=(), arg=())
+    carrier = UOp(Ops.STACK, dtypes.float.vec(8), tuple(base.gep((i,)) for i in range(8)))
+    self.assertIs(_wmma_chain_prev(carrier), base)
+    self.assertIsNone(_wmma_chain_prev(carrier.replace(src=carrier.src[:-1] + (base.gep((0,)),))))
 
 
 def _tc_matmul_ast():

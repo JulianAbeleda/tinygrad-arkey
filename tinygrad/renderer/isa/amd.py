@@ -1483,8 +1483,27 @@ def _build_wmma_from_packs(ctx:IselContext, apk:tuple[UOp,...], bpk:tuple[UOp,..
 
 def _wmma_chain_nodes(root:UOp) -> list[UOp]:
   chain = [root]
-  while (c := chain[-1].src[2]).op is Ops.WMMA: chain.append(c)
+  while True:
+    c = chain[-1].src[2]
+    if c.op is Ops.WMMA: chain.append(c)
+    elif (prev := _wmma_chain_prev(c)) is not None: chain.append(prev)
+    else: break
   return chain
+
+def _wmma_chain_prev(carrier:UOp) -> UOp|None:
+  """Recover a prior vector WMMA hidden behind no_vectorized_wmma's lane GEPs.
+
+  A vector WMMA is scalarized as STACK(GEP(wmma, 0), ..., GEP(wmma, 7)).  The
+  GEPs are only lane views, so this carrier is the same loop-carried C value as
+  the underlying WMMA.  Keep the recognition exact and fail closed for any
+  other carrier shape.
+  """
+  if carrier.op not in (Ops.STACK, Ops.NOOP) or len(carrier.src) != 8: return None
+  lanes = carrier.src
+  if any(l.op is not Ops.GEP or len(l.src) != 1 or l.src[0].op is not Ops.WMMA or
+         l.src[0].dtype.count != 8 or l.arg != (i,) for i, l in enumerate(lanes)): return None
+  base = lanes[0].src[0]
+  return base if all(l.src[0] is base for l in lanes) else None
 
 def _wmma_chain_head_acc(head:UOp):
   c2 = head.src[2]
@@ -1598,7 +1617,11 @@ def isel_wmma(ctx:IselContext, x:UOp):
     cin = [UOp(Ops.INS, dtypes.float32, src=(after,), arg=AMDOps.MOV, tag=_pin(cbase, i)) for i in range(8)]
     return memo.setdefault(x, _build_wmma_tile(ctx, x.src[0], x.src[1], cin, abase, bbase, cbase, ()))
   chain = [x]                                   # outermost .. head
-  while (c := chain[-1].src[2]).op is Ops.WMMA: chain.append(c)
+  while True:
+    c = chain[-1].src[2]
+    if c.op is Ops.WMMA: chain.append(c)
+    elif (prev := _wmma_chain_prev(c)) is not None: chain.append(prev)
+    else: break
   head = chain[-1]
   head_acc = None
   c2 = head.src[2]
