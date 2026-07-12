@@ -328,3 +328,21 @@ lowering, and resource accounting together. A partial mapping is not an
 acceptable pure candidate, and copying the hybrid handwritten emitter would
 invalidate provenance. This is the named interface boundary for the current
 pure 4.4k effort.
+
+### Phase 2-A lifecycle boundary
+
+`tinygrad/codegen/opt/kernel_pipeline.py` already provides the typed host
+contract: `KernelStage1PipelinePlan`, `KernelStage1LifecycleEvent`,
+`stage1_lifecycle_events`, and `prove_stage1_lifecycle` model
+`produce -> ready -> consume -> release` with epoch/slot ownership and detect
+overwrite, early-consume, and incomplete-drain hazards. `build_stage1_uop_graph`
+threads `ready` UOps into producer/fragment dependencies, while
+`prove_stage1_uop_graph` checks symbolic epoch/slot formulas.
+
+The missing boundary is hardware wait semantics. These helpers prove logical
+ordering but do not encode a `vmcnt`/`lgkmcnt` value. The safe next step is to
+reuse lifecycle events as dependency metadata in postrange and verify that
+ordinary UOp edges preserve every ready-before-consume relation through LLVM
+AMD lowering. A new wait opcode or imported `AMDOps` would be non-pure; if LLVM
+cannot preserve the required ordering, record that as the backend blocker and
+keep the primitive non-promoted.
