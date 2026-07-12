@@ -41,6 +41,12 @@ GFX1100_SINGLE_BUFFER_CAPABILITY = FullKernelCapability()
 GFX1100_TWO_BUFFER_STAGE1_CAPABILITY = FullKernelCapability(
   capability_id="amd.gfx1100.prefill.wmma_lds.two_buffer_stage1.v1", buffer_count=2, stage_count=1)
 
+def candidate_storage_kind(payload: dict[str, Any]) -> str:
+  """Resolve typed stage storage while keeping legacy payloads on LDS."""
+  residency = payload.get("schedule", {}).get("residency", {}) if isinstance(payload, dict) else {}
+  resident = residency.get("resident", ()) if isinstance(residency, dict) else ()
+  return "global_register_resident" if isinstance(resident, (list, tuple)) and "stage_ab_register" in resident else "lds"
+
 @dataclass(frozen=True)
 class FullKernelAdmission:
   canonical_identity: str
@@ -141,7 +147,8 @@ def admit_full_kernel_candidate_set(candidate_set:FullKernelCandidateSet) -> Adm
   for entry in candidate_set.entries:
     profile,role,m,n,k,backend,arch,wave_size=entry.exact_key
     pipeline=entry.payload["schedule"]["pipeline"]
-    capability=(GFX1100_TWO_BUFFER_STAGE1_CAPABILITY if (pipeline["buffer_count"],pipeline["stage_count"]) == (2,1)
+    capability=(GFX1100_SINGLE_BUFFER_CAPABILITY if candidate_storage_kind(entry.payload) == "global_register_resident" else
+                GFX1100_TWO_BUFFER_STAGE1_CAPABILITY if (pipeline["buffer_count"],pipeline["stage_count"]) == (2,1)
                 else GFX1100_SINGLE_BUFFER_CAPABILITY)
     admissions.append(admit_full_kernel_candidate(entry.payload,entry.canonical_identity,profile=profile,role=role,
       shape=(m,n,k),target={"backend":backend,"arch":arch,"wave_size":wave_size},capability=capability))
@@ -162,6 +169,7 @@ def admit_full_kernel_candidate(payload:dict[str, Any], canonical_identity:str, 
   actual_identity = hashlib.sha256(encoded).hexdigest()
   if canonical_identity != actual_identity: raise FullKernelAdmissionError("identity_mismatch", "canonical SHA-256 differs from payload")
   workload,schedule,applicability = normalized["workload"],normalized["schedule"],normalized["applicability"]
+  storage_kind = candidate_storage_kind(normalized)
   target_id = f"{target['backend']}:{target['arch']}:wave{target['wave_size']}"
   if workload["profile"] != profile or profile not in applicability["profiles"]: raise FullKernelAdmissionError("workload_profile", "profile is not exact/applicable")
   if workload["role"] != role or role not in applicability["roles"]: raise FullKernelAdmissionError("workload_role", "role is not exact/applicable")
@@ -172,7 +180,10 @@ def admit_full_kernel_candidate(payload:dict[str, Any], canonical_identity:str, 
     raise FullKernelAdmissionError("capability_target", "target is outside frozen capability")
   if workload["dtypes"] != {"a":"fp16","b":"fp16","c":"fp16","accumulator":"fp32"}:
     raise FullKernelAdmissionError("capability_dtype", "only fp16/fp32 accumulation is supported")
-  if schedule["pipeline"]["buffer_count"] != capability.buffer_count or schedule["pipeline"]["stage_count"] != capability.stage_count:
+  if storage_kind == "global_register_resident":
+    if (schedule["pipeline"]["buffer_count"], schedule["pipeline"]["stage_count"]) != (1, 2):
+      raise FullKernelAdmissionError("capability_register_pipeline", "register candidates require one static slot and two logical stages")
+  elif schedule["pipeline"]["buffer_count"] != capability.buffer_count or schedule["pipeline"]["stage_count"] != capability.stage_count:
     raise FullKernelAdmissionError("capability_pipeline", "only single-buffer stage1 is supported")
   if schedule["wmma"]["instruction_family"] != capability.instruction_family or schedule["wmma"]["fragment_layout"] != capability.fragment_layout:
     raise FullKernelAdmissionError("capability_tc", "tensor-core descriptor is unsupported")
@@ -189,8 +200,13 @@ def admit_full_kernel_candidate(payload:dict[str, Any], canonical_identity:str, 
   except ValueError as exc: raise FullKernelAdmissionError("geometry_invalid", str(exc)) from exc
   if any(shape[i] % geometry.tile[i] for i in range(3)): raise FullKernelAdmissionError("geometry_divisibility", "workload is not tile divisible")
   from tinygrad.codegen.opt.kernel_pipeline import KernelStage1PipelinePlan
-  pipeline_plan = KernelStage1PipelinePlan(capability.buffer_count, geometry.lds_windows[-1].end, capability.stage_count)
-  active_lds = pipeline_plan.active_lds_bytes
+  if storage_kind == "global_register_resident":
+    from tinygrad.codegen.opt.compiler_policies import RegisterPipePlan
+    pipeline_plan = RegisterPipePlan()
+    active_lds = 0
+  else:
+    pipeline_plan = KernelStage1PipelinePlan(capability.buffer_count, geometry.lds_windows[-1].end, capability.stage_count)
+    active_lds = pipeline_plan.active_lds_bytes
   if active_lds > capability.max_lds_bytes or active_lds > normalized["static_constraints"]["max_lds_bytes"]:
     raise FullKernelAdmissionError("capability_lds", "active LDS exceeds a declared limit")
   try:
@@ -202,7 +218,7 @@ def admit_full_kernel_candidate(payload:dict[str, Any], canonical_identity:str, 
   except ValueError as exc: raise FullKernelAdmissionError("capability_geometry", str(exc)) from exc
   # Keep the established buffer1 context and binary identity unchanged.
   context = KernelCandidateContext(normalized["schema_version"],actual_identity,geometry,
-                                   pipeline_plan if capability.buffer_count > 1 else None)
+                                   pipeline_plan if (capability.buffer_count > 1 or storage_kind == "global_register_resident") else None)
   return FullKernelAdmission(actual_identity,normalized,geometry,plan,pipeline_plan,active_lds,capability,context)
 
 

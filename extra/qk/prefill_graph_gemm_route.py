@@ -141,10 +141,12 @@ def _anchor_candidate_context(spec, lds_spec):
 
 def _candidate_schedule_spec(spec,admission):
   schedule=admission.normalized_payload["schedule"]; factors=admission.plan
+  pipeline = admission.pipeline_plan
+  buffer_count = pipeline.buffer_count if hasattr(pipeline, "buffer_count") else pipeline.storage.buffer_count
   return replace(spec,route_family="lds",tile_m=admission.geometry.tile[0],tile_n=admission.geometry.tile[1],
     tile_k=admission.geometry.tile[2],waves_m=admission.geometry.waves[0],waves_n=admission.geometry.waves[1],
     wm=factors.subtiles_m,wn=factors.subtiles_n,threads=admission.geometry.threads,
-    pipeline_depth=admission.pipeline_plan.buffer_count,dbuf=int(admission.pipeline_plan.buffer_count == 2),
+    pipeline_depth=buffer_count,dbuf=int(buffer_count == 2),
     pad=schedule["lds"]["padding"])
 
 def _install_candidate_matmul(x,w,out_f,in_f,spec,admission):
@@ -160,7 +162,8 @@ def _install_candidate_matmul(x,w,out_f,in_f,spec,admission):
     raise ValueError(f"candidate warmstart key collision for {key!r}")
   pr._WARMSTART_OPTS={**(pr._WARMSTART_OPTS or {}),key:wmma_lds_postrange_opts(lds_spec,cooperative_waves=True)}
   pr._WARMSTART_CANDIDATE_CONTEXTS={**(pr._WARMSTART_CANDIDATE_CONTEXTS or {}),key:admission.context}
-  _ensure_role_scoped_local_stage(pr).add(key)
+  if getattr(getattr(admission.context.pipeline, "storage", None), "kind", "lds") == "lds":
+    _ensure_role_scoped_local_stage(pr).add(key)
   a=x.reshape(512,in_f).cast(dtypes.float16).contiguous(); bt=w.cast(dtypes.float16).contiguous()
   return (a @ bt.transpose()).reshape(*x.shape[:-1],out_f)
 

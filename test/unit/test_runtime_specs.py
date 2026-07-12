@@ -245,6 +245,20 @@ def test_two_buffer_stage1_requires_separate_capability_and_typed_plan():
   assert admission.context.pipeline == admission.pipeline_plan
 
 
+def test_register_candidate_admission_uses_zero_lds_typed_plan():
+  payload = json.loads(json.dumps(_single_buffer_anchor_candidate().full_kernel_candidate))
+  payload["schedule"]["pipeline"].update(buffer_count=1, stage_count=2)
+  payload["schedule"]["residency"]["resident"] = ["accumulator", "stage_ab_register"]
+  candidate = _strict_full_kernel_candidate(full_kernel_candidate=payload)
+  admission = admit_full_kernel_candidate(payload, candidate.canonical_identity,
+    profile="qwen3_8b_q4k_m_gfx1100", role="ffn_gate_up", shape=(512,12288,4096),
+    target={"backend":"AMD","arch":"gfx1100","wave_size":32})
+  assert admission.active_lds_bytes == 0
+  assert admission.pipeline_plan.storage.kind == "global_register_resident"
+  assert admission.pipeline_plan.stages == 2
+  assert admission.context.pipeline == admission.pipeline_plan
+
+
 @pytest.mark.parametrize(("field", "value", "error"), (
   ("canonical_identity", "0" * 64, "identity_mismatch"),
   ("shape", (1024, 12288, 4096), "shape"),
