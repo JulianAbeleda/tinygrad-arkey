@@ -16,7 +16,9 @@ def test_anchor_dossier_reuses_registries_and_fails_closed():
   assert routes["structural_oracle"]["strict_pure"] is False
   assert set(report["evidence_status"]) == set(REQUIRED_EVIDENCE)
   assert report["mastery_complete"] is False
-  assert {row["id"] for row in report["missing_evidence"]} == set(REQUIRED_EVIDENCE)
+  assert {row["id"] for row in report["missing_evidence"]} == {
+    key for key, value in report["evidence_status"].items() if value["status"] != "complete"
+  }
 
 
 def test_anchor_dossier_names_absent_artifacts_without_fabricating_values(tmp_path):
@@ -39,3 +41,25 @@ def test_anchor_dossier_validator_rejects_false_mastery():
   report["mastery_complete"] = True
   with pytest.raises(ValueError, match="fail closed"):
     validate_dossier(report)
+
+
+def test_anchor_dossier_accepts_clean_exact_capture_evidence(tmp_path):
+  isa = tmp_path / "bench/prefill-pure-full-kernel/anchor-ffn-gate-up/mastery-v1/resources-isa.json"
+  timing = tmp_path / "bench/prefill-pure-full-kernel/anchor-ffn-gate-up/mastery-v1/role-timing.json"
+  isa.parent.mkdir(parents=True)
+  isa.write_text(json.dumps({
+    "schema": "prefill-pure-anchor-isa-resource-capture.v1", "git": {"dirty": False}, "binding_complete": True,
+    "captures": [{"candidate_id": "pure.default.m512n12288k4096",
+      "program": {key: key for key in ("program_key", "source_sha256", "binary_sha256", "isa_sha256")},
+      "surface": {"strict_pure": True},
+      "resources": {"authority": "metadata", "vgpr": 1, "sgpr": 1, "lds_bytes": 0, "scratch_bytes": 0}}]}))
+  timing.write_text(json.dumps({
+    "schema": "prefill-anchor-gemm-regime-timing.v1", "complete": True,
+    "environment": {"git_dirty": False},
+    "rows": [{"regime": name, "binding_pass": True, "measurement": {"tflops": value}}
+             for name, value in (("pure_scheduler", 22), ("spec_owned", 15), ("s9_oracle", 74))]}))
+  report = build_dossier(root=tmp_path)
+  assert report["evidence_status"]["generated_isa_capture"]["status"] == "complete"
+  assert report["evidence_status"]["measured_resource_capture"]["status"] == "complete"
+  assert report["evidence_status"]["kernel_timing_authority"]["status"] == "complete"
+  assert report["evidence_status"]["roofline_attribution"]["status"] == "partial"

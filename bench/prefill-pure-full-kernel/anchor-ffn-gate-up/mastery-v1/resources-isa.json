@@ -1,0 +1,120 @@
+{
+  "schema": "prefill-pure-anchor-isa-resource-capture.v1",
+  "anchor": {
+    "role": "ffn_gate_up",
+    "shape": {
+      "M": 512,
+      "N": 12288,
+      "K": 4096
+    }
+  },
+  "git": {
+    "revision": "aea1e72a698d5f657aeba64ac5ec57bccdddf825",
+    "dirty": false
+  },
+  "captures": [
+    {
+      "candidate_id": "pure.default.m512n12288k4096",
+      "route_id": "prefill_v2_scheduler_matmul_default",
+      "expected_pure": true,
+      "purity_matches_expectation": true,
+      "program": {
+        "function_name": "r_16_192_32_2_2_2_2_4_32_2_8",
+        "target": "AMD",
+        "launch": {
+          "global_size": [
+            192,
+            16,
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ]
+        },
+        "program_key": "aa0db02e95d031f0494f923b0fd6837459abb063f762e121f266701901065bbe",
+        "source_sha256": "56c0ae5d1dfe6a9699a5b962160cb201e085a24929995fe33edd6f167d216b44",
+        "binary_sha256": "2bac6db48227bdaa00feaac8115698fabbe5304e913e572dfbfb17af396ad6d1",
+        "isa_sha256": "06fecb23b62995f86fbaf5d01081d118765de12b4f470e843d715d46dd875d1b"
+      },
+      "surface": {
+        "ops_ins_count": 0,
+        "source_kind": "compiler_rendered",
+        "forbidden_markers": [],
+        "strict_pure": true
+      },
+      "resources": {
+        "authority": "amdgpu_code_object_notes",
+        "vgpr": 148,
+        "sgpr": 18,
+        "vgpr_spills": 0,
+        "sgpr_spills": 0,
+        "lds_bytes": 0,
+        "scratch_bytes": 0,
+        "max_workgroup_threads": 32,
+        "wavefront_size": 32,
+        "dynamic_stack": false,
+        "symbol": "r_16_192_32_2_2_2_2_4_32_2_8.kd",
+        "target": "amdgcn-amd-amdhsa--gfx1100",
+        "metadata_tool": "/opt/rocm/llvm/bin/llvm-readelf: AMD LLVM version 22.0.0git"
+      },
+      "isa": {
+        "bytes": 56872,
+        "line_count": 629,
+        "disassembly_tool": "/opt/rocm/llvm/bin/llvm-objdump: AMD LLVM version 22.0.0git"
+      }
+    },
+    {
+      "candidate_id": "oracle.s9.m512n12288k4096",
+      "route_id": "prefill_pipe_role_selective_generated",
+      "expected_pure": false,
+      "purity_matches_expectation": true,
+      "program": {
+        "function_name": "prefill_gen_sched_gemm_512_12288_4096",
+        "target": "AMD",
+        "launch": {
+          "global_size": [
+            96,
+            4,
+            1
+          ],
+          "local_size": [
+            256,
+            1,
+            1
+          ]
+        },
+        "program_key": "aa0493b22a631ff339ae049c753e04e4f7c436fdf30e818fd01154c1508d2c6e",
+        "source_sha256": "02fcb1d375229b00e0edad126290a4085fc66a574dc84959b917baf56fe541ef",
+        "binary_sha256": "f8f96ca2bc18b85b94a141429d1fd19867d8ef215de538d78aac0810b819ad44",
+        "isa_sha256": "02fcb1d375229b00e0edad126290a4085fc66a574dc84959b917baf56fe541ef"
+      },
+      "surface": {
+        "ops_ins_count": 268,
+        "source_kind": "native_isa",
+        "forbidden_markers": [
+          "Ops.INS",
+          "assembly_source"
+        ],
+        "strict_pure": false
+      },
+      "resources": {
+        "authority": "tinygrad_native_elf_kernel_descriptor",
+        "vgpr_allocated": 144,
+        "sgpr_allocated": 8,
+        "lds_bytes": 40960,
+        "scratch_bytes": 0,
+        "compute_pgm_rsrc1": 1085014033,
+        "compute_pgm_rsrc2": 388
+      },
+      "isa": {
+        "bytes": 24403,
+        "line_count": 603,
+        "disassembly_tool": "tinygrad AMD:ISA rendered source"
+      }
+    }
+  ],
+  "binding_complete": true,
+  "oracle_policy": "evidence_only_never_candidate_substrate"
+}

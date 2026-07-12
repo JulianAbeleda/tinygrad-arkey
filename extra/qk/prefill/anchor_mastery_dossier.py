@@ -24,6 +24,8 @@ ARTIFACTS = {
   "route_trace": "bench/prefill-s10-lds2-ownership/route-trace.json",
   "whole_route_authority": "bench/prefill-whole-synced/s10-composed-current-authority.json",
   "roofline_audit": "bench/prefill-lds2-s9/roofline-audit.json",
+  "exact_isa_resources": "bench/prefill-pure-full-kernel/anchor-ffn-gate-up/mastery-v1/resources-isa.json",
+  "exact_role_timing": "bench/prefill-pure-full-kernel/anchor-ffn-gate-up/mastery-v1/role-timing.json",
 }
 
 REQUIRED_EVIDENCE = {
@@ -76,6 +78,8 @@ def build_dossier(*, root: pathlib.Path = ROOT) -> dict[str, Any]:
   lds = loaded["lds_primitive"] or {}
   correctness = lds.get("correctness") if isinstance(lds.get("correctness"), dict) else {}
   resources = lds.get("resource_counters") if isinstance(lds.get("resource_counters"), dict) else {}
+  exact_capture = loaded["exact_isa_resources"] or {}
+  exact_timing = loaded["exact_role_timing"] or {}
   known_evidence = {
     "exact_profile_shape": {"state": "registry_fact", "source": "extra/qk/model_profiles.py", "value": shape.to_json()},
     "existing_schedule_spec": {"state": "spec_derived", "source": "extra/qk/prefill_schedule_spec.py", "value": schedule.to_json()},
@@ -89,6 +93,15 @@ def build_dossier(*, root: pathlib.Path = ROOT) -> dict[str, Any]:
                                 "scope": "structural-oracle spec; not measured pure-candidate occupancy",
                                 "lds_bytes": resources.get("lds_bytes"), "accum_vgprs": resources.get("accum_vgprs"),
                                 "coop_temp_vgprs": resources.get("coop_temp_vgprs"), "spills": resources.get("spills")},
+    "exact_isa_resources": {"state": "captured" if exact_capture else "not_available",
+                            "source": ARTIFACTS["exact_isa_resources"],
+                            "git": exact_capture.get("git"), "binding_complete": exact_capture.get("binding_complete"),
+                            "candidate_ids": [row.get("candidate_id") for row in exact_capture.get("captures", [])]},
+    "exact_role_timing": {"state": "captured" if exact_timing else "not_available",
+                          "source": ARTIFACTS["exact_role_timing"], "environment": exact_timing.get("environment"),
+                          "complete": exact_timing.get("complete"),
+                          "tflops": {row.get("regime"): (row.get("measurement") or {}).get("tflops")
+                                     for row in exact_timing.get("rows", [])}},
   }
   # Existing artifacts are useful context but none closes a full pure-candidate mastery requirement by itself.
   evidence_status = {key: {"status": "missing", "requirement": description} for key, description in REQUIRED_EVIDENCE.items()}
@@ -97,6 +110,41 @@ def build_dossier(*, root: pathlib.Path = ROOT) -> dict[str, Any]:
     "known": ["M/N/K", "role", "phase", "model quant label", "tensor name patterns"],
     "missing": ["runtime input/output dtypes", "strides/layouts", "dequantization boundary", "bias/activation/epilogue semantics"],
   }
+  captures = {row.get("candidate_id"): row for row in exact_capture.get("captures", [])}
+  pure_capture = captures.get("pure.default.m512n12288k4096") or {}
+  clean_capture = (exact_capture.get("schema") == "prefill-pure-anchor-isa-resource-capture.v1" and
+                   exact_capture.get("binding_complete") is True and (exact_capture.get("git") or {}).get("dirty") is False)
+  pure_program = pure_capture.get("program") or {}
+  pure_surface = pure_capture.get("surface") or {}
+  if clean_capture and pure_surface.get("strict_pure") is True and all(pure_program.get(k) for k in
+      ("program_key", "source_sha256", "binary_sha256", "isa_sha256")):
+    evidence_status["generated_isa_capture"] = {
+      "status": "complete", "requirement": REQUIRED_EVIDENCE["generated_isa_capture"],
+      "source": ARTIFACTS["exact_isa_resources"], "candidate_id": pure_capture["candidate_id"],
+    }
+  pure_resources = pure_capture.get("resources") or {}
+  if clean_capture and all(k in pure_resources for k in ("vgpr", "sgpr", "lds_bytes", "scratch_bytes")):
+    evidence_status["measured_resource_capture"] = {
+      "status": "complete", "requirement": REQUIRED_EVIDENCE["measured_resource_capture"],
+      "source": ARTIFACTS["exact_isa_resources"], "authority": pure_resources.get("authority"),
+    }
+  timing_rows = {row.get("regime"): row for row in exact_timing.get("rows", [])}
+  clean_timing = (exact_timing.get("schema") == "prefill-anchor-gemm-regime-timing.v1" and
+                  exact_timing.get("complete") is True and (exact_timing.get("environment") or {}).get("git_dirty") is False)
+  if clean_timing and set(timing_rows) == {"pure_scheduler", "spec_owned", "s9_oracle"} and \
+      all(row.get("binding_pass") is True for row in timing_rows.values()):
+    evidence_status["kernel_timing_authority"] = {
+      "status": "complete", "requirement": REQUIRED_EVIDENCE["kernel_timing_authority"],
+      "source": ARTIFACTS["exact_role_timing"],
+      "tflops": {name: (row.get("measurement") or {}).get("tflops") for name, row in timing_rows.items()},
+    }
+  if evidence_status["generated_isa_capture"]["status"] == "complete" and \
+      evidence_status["measured_resource_capture"]["status"] == "complete" and clean_timing:
+    evidence_status["roofline_attribution"] = {
+      "status": "partial", "requirement": REQUIRED_EVIDENCE["roofline_attribution"],
+      "known": ["exact instruction identity", "compiled resources", "pinned kernel TFLOPS"],
+      "missing": ["same-binary measured memory traffic", "same-binary achieved bandwidth and compute counters"],
+    }
   missing = [{"id": key, "reason": row["requirement"], "status": row["status"]}
              for key, row in evidence_status.items() if row["status"] != "complete"]
   return {
