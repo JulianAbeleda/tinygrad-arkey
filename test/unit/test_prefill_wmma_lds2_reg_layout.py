@@ -1,10 +1,11 @@
 import pytest
 
 from extra.qk.prefill.wmma import (
-  AMDRegisterLeaseAllocator, LDS2Cadence, LDS2LifecycleTemplate, LDS2MemoryLayout, LDS2RegLayout, LDS2WaitPolicy, build_gemm_lds2,
+  LDS2Cadence, LDS2LifecycleTemplate, LDS2MemoryLayout, LDS2RegLayout, LDS2WaitPolicy, build_gemm_lds2,
   default_lds2_cadence, default_lds2_lifecycle_template, default_lds2_memory_layout, default_lds2_reg_layout,
   default_lds2_wait_policy, env_lds2_lifecycle_template, env_lds2_reg_layout, env_lds2_wait_policy,
   lower_lds2_gemm_kernel)
+from tinygrad.renderer.isa.amd_register_allocator import AMDRegisterLeaseAllocator
 
 
 def _raw(insts):
@@ -39,9 +40,9 @@ def test_default_layout_leases_match_legacy_register_windows():
   leases = [alloc.allocate(name, count, bank="vgpr") for name, count in (
     ("wmma_fragment_a", 16), ("wmma_fragment_b", 32), ("wmma_accumulator", 64),
     ("lds_pack_a", 8), ("lds_pack_b", 8), ("address_scratch", 2))]
-  assert [(x.name, x.start, x.end) for x in leases] == [
-    ("wmma_fragment_a", 10, 26), ("wmma_fragment_b", 26, 58), ("wmma_accumulator", 58, 122),
-    ("lds_pack_a", 122, 130), ("lds_pack_b", 130, 138), ("address_scratch", 138, 140)]
+  assert [(x.role.value, x.start, x.end) for x in leases] == [
+    ("fragment", 10, 26), ("fragment", 26, 58), ("accumulator", 58, 122),
+    ("lds_pack", 122, 130), ("lds_pack", 130, 138), ("scalar_temp", 138, 140)]
 
 
 def test_env_lds2_reg_layout_defaults_to_legacy_layout(monkeypatch):

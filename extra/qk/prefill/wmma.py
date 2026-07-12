@@ -15,57 +15,7 @@ from tinygrad.dtype import dtypes, AddrSpace
 from tinygrad.engine.realize import Estimates, run_linear
 from tinygrad.renderer.amd.dsl import s, v, VCC_LO, NULL, src, ttmp
 from tinygrad.runtime.autogen.amd.rdna3.ins import *
-
-
-@dataclass(frozen=True)
-class RegisterLease:
-  """One contiguous virtual register reservation."""
-  name: str
-  start: int
-  count: int
-  bank: str
-  @property
-  def end(self) -> int: return self.start + self.count
-
-
-class AMDRegisterLeaseAllocator:
-  """Single reservation interface for AMD ABI and WMMA register windows."""
-  def __init__(self, *, vgpr_capacity: int = 256, sgpr_capacity: int = 106):
-    self.vgpr_capacity, self.sgpr_capacity = vgpr_capacity, sgpr_capacity
-    self._leases: list[RegisterLease] = []
-  @property
-  def leases(self) -> tuple[RegisterLease, ...]: return tuple(self._leases)
-  @property
-  def virtual_vgpr_pool(self) -> int: return max((x.end for x in self._leases if x.bank == "vgpr"), default=0)
-  @property
-  def virtual_sgpr_pool(self) -> int: return max((x.end for x in self._leases if x.bank == "sgpr"), default=0)
-  def reserve(self, name: str, start: int, count: int, *, bank: str) -> RegisterLease:
-    if bank not in ("vgpr", "sgpr") or not name or not isinstance(start, int) or not isinstance(count, int) or start < 0 or count <= 0:
-      raise ValueError("invalid AMD register lease")
-    capacity = self.vgpr_capacity if bank == "vgpr" else self.sgpr_capacity
-    if start + count > capacity: raise ValueError(f"{bank} lease exceeds virtual pool")
-    if any(x.bank == bank and start < x.end and x.start < start + count for x in self._leases):
-      raise ValueError(f"{bank} lease overlaps an existing reservation")
-    lease = RegisterLease(name, start, count, bank); self._leases.append(lease); return lease
-  def allocate(self, name: str, count: int, *, bank: str, align: int = 1) -> RegisterLease:
-    if not isinstance(align, int) or align <= 0: raise ValueError("lease alignment must be positive")
-    capacity = self.vgpr_capacity if bank == "vgpr" else self.sgpr_capacity
-    cursor = 0
-    for lease in sorted((x for x in self._leases if x.bank == bank), key=lambda x: x.start):
-      cursor = (cursor + align - 1) // align * align
-      if cursor + count <= lease.start: return self.reserve(name, cursor, count, bank=bank)
-      cursor = max(cursor, lease.end)
-    cursor = (cursor + align - 1) // align * align
-    if cursor + count > capacity: raise ValueError(f"{bank} virtual pool exhausted")
-    return self.reserve(name, cursor, count, bank=bank)
-  @classmethod
-  def with_fixed_abi(cls) -> "AMDRegisterLeaseAllocator":
-    out = cls()
-    for name, start, count in (("abi", 0, 4), ("buffer_a", 4, 2), ("buffer_b", 6, 2),
-                               ("output", 8, 2), ("workgroup_coords", 10, 2), ("loop_counter", 16, 1)):
-      out.reserve(name, start, count, bank="sgpr")
-    out.reserve("fixed_lane_and_address", 0, 10, bank="vgpr")
-    return out
+from tinygrad.renderer.isa.amd_register_allocator import AMDRegisterLeaseAllocator
 
 
 FA, FB, ACC = 20, 32, 44   # VGPR bases: A frag(8), B frag(8), accumulator(8)
