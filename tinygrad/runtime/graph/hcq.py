@@ -168,8 +168,11 @@ class HCQGraph(MultiGraphRunner):
 
         prof_name = enqueue_dev.device if runtime is not None else f"{enqueue_dev.device}:SDMA:{queue_idx}"
         candidate = getattr(ast.arg, "candidate_context", None)
-        metadata = None if candidate is None else {"canonical_identity": candidate.canonical_identity,
-                                                     "schema_version": candidate.schema_version}
+        if candidate is not None:
+          metadata = {"canonical_identity": candidate.canonical_identity, "schema_version": candidate.schema_version}
+        else:
+          op_meta = self.call_metadata[j] if j < len(self.call_metadata) else ()
+          metadata = {"semantic_op": op_meta[0].name} if op_meta else None
         self.prof_graph_entries.append(ProfileGraphEntry(prof_name, prof_ji_desc, sig_st, j * 2 + 1, metadata))
         self.prof_graph_deps.append([d - 1 for _, d in rdeps])
 

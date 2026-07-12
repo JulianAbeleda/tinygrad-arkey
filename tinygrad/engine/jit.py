@@ -1,7 +1,7 @@
 from typing import TypeVar, Generic, Callable, Any
 import functools, collections, os
 from tinygrad.tensor import Tensor
-from tinygrad.helpers import flatten, merge_dicts, DEBUG, getenv, JIT, JIT_BATCH_SIZE, dedup, pluralize, VIZ
+from tinygrad.helpers import flatten, merge_dicts, DEBUG, getenv, JIT, JIT_BATCH_SIZE, dedup, pluralize, VIZ, Metadata
 from tinygrad.device import Buffer, Compiled, Device, MultiBuffer
 from tinygrad.dtype import DType, dtypes
 from tinygrad.uop.ops import UOp, PatternMatcher, Variable, sym_infer, Ops, buffers, track_rewrites, graph_rewrite
@@ -134,12 +134,14 @@ class GraphRunner:
   def __init__(self, linear:UOp, input_uops:tuple[UOp, ...]=()):
     self.linear = linear.src[0]
     self.calls: list[tuple[int, UOp, list[Buffer], dict[str, int]]] = []
+    self.call_metadata: list[tuple[Metadata, ...]] = []
     self.runtimes: list[Any|None] = []
     self.uop_replace: list[list[tuple[int, int]]] = []
     for call in self.linear.src:
       replace = [(p, b.arg.slot) for p, b in enumerate(get_call_arg_uops(call)) if b.op is Ops.PARAM]
       for dev_idx, (bufs, device_vars) in enumerate(unwrap_multi(call, resolve_params(call, input_uops))):
         self.calls.append((dev_idx, call.src[0], [b.ensure_allocated() for b in bufs], device_vars))
+        self.call_metadata.append(call.arg.metadata)
         self.runtimes.append(get_runtime(bufs[0].device, call.src[0]) if call.src[0].op is Ops.PROGRAM else None)
         self.uop_replace.append(replace)
 
