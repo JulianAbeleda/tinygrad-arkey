@@ -35,7 +35,9 @@ def test_pipe_op_resource_estimate_is_explicit_about_unknown_registers():
   spec = WMMAPipeSpec(m=512, n=4096, k=4096, tile_m=128, tile_n=128, role="attn_qo")
   op = WMMAPipeOp(build_wmma_pipe_ir(spec), 0, 1, 2, (256, 1, 1), (64, 1, 1), slot_bytes=20480)
   res = op.resource_estimate()
-  assert res["lds_bytes"] == 40960 and res["vgpr"] is None and res["scratch_bytes"] == 0
+  assert res["lds_bytes"] == 0 and res["logical_stage_count"] == 2
+  assert res["abstract_slot_bytes"] == 20480
+  assert res["vgpr"] is None and res["scratch_bytes"] == 0
 
 def test_pipe_spec_exposes_common_register_policy():
   spec = WMMAPipeSpec(m=512, n=4096, k=4096, tile_m=128, tile_n=128, role="attn_qo")

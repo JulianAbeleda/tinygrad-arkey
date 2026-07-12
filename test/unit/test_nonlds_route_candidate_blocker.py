@@ -42,7 +42,9 @@ def test_pipe_op_contract_is_typed_and_compiler_owned():
   pipe = extract_wmma_pipe_spec(describe_prefill_schedule(4096, 4096, role="attn_qo"))
   op = WMMAPipeOp(build_wmma_pipe_ir(pipe), 0, 1, 2, (256, 4, 1), (256, 1, 1))
   assert op.wait_scope == "per_stage" and op.resource_owner == "compiler"
-  assert op.resource_estimate()["lds_bytes"] > 0 and op.resource_estimate()["vgpr"] is None
+  estimate = op.resource_estimate()
+  assert estimate["lds_bytes"] == 0 and estimate["logical_stage_count"] == 2
+  assert estimate["vgpr"] is None
 
 def test_pipe_op_rejects_lifecycle_mismatch():
   pipe = extract_wmma_pipe_spec(describe_prefill_schedule(4096, 4096, role="attn_qo"))

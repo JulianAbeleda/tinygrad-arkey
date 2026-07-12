@@ -133,8 +133,13 @@ class WMMAPipeOp:
       raise ValueError("pipe launch dimensions must be positive 3-tuples")
     if any(g < l for g, l in zip(self.global_size, self.local_size)):
       raise ValueError("pipe global dimensions must cover local dimensions")
+    policy = self.ir.pipeline_policy
     return {"global_size": self.global_size, "local_size": self.local_size,
-            "lds_bytes": self.slot_bytes * self.stage_count,
+            # The IR is register-resident: logical stages do not allocate LDS.
+            # Keep the legacy slot value only as an explicitly abstract diagnostic.
+            "lds_bytes": policy.resources.lds_bytes,
+            "logical_stage_count": policy.logical_stage_count,
+            "abstract_slot_bytes": self.slot_bytes,
             "scratch_bytes": 0, "vgpr": None, "sgpr": None,
             "resource_provenance": "typed_host_estimate_registers_unknown_until_lowering"}
 
