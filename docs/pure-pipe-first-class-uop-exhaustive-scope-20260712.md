@@ -271,6 +271,16 @@ contiguous fp16 A/B strides. The next implementation must integrate those
 semantics into lowering before any LLVM compile or benchmark can be called
 pure.
 
+A bounded compiler-consumed slice now exists as
+`build_wmma_pipe_barrier_chain()` in `extra/qk/wmma_pipe_spec.py`. It proves a
+real `Ops.BARRIER -> input pointer/load -> Ops.WMMA -> STORE` dependency with no
+`Ops.INS`, but it is restricted to `attn_qo` and represents a full workgroup
+barrier, not targeted `vmcnt`. It is structural only until a valid WMMA
+CONTRACT/range-axis accumulator is supplied to the normal devectorizer. The
+existing `_expanded_pipeline_accumulator` fixture in
+`test/unit/test_kernel_pipeline_expansion.py` is the safe pattern to extract for
+the next compile-only gate.
+
 ### P3 — AMD lowering slice
 
 Lower only `attn_qo` (`512x4096x4096`) through the normal renderer. Reuse backend
