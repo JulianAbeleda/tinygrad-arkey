@@ -45,6 +45,13 @@ def test_pipe_spec_exposes_common_register_policy():
   assert policy.storage_kind == "global_register_resident"
   assert policy.logical_stage_count == 2 and policy.resources.lds_bytes == 0
 
+def test_pipe_ir_exposes_provenance_wait_coverage_without_backend_emission():
+  from extra.qk.wmma_pipe_spec import build_wmma_pipe_ir
+  spec = WMMAPipeSpec(m=512, n=4096, k=4096, tile_m=128, tile_n=128, role="attn_qo")
+  ir = build_wmma_pipe_ir(spec)
+  assert [(d.load_group, d.producer_stage, d.consumer_stage) for d in ir.wait_dependencies] == [("A", 0, 1), ("B", 0, 1)]
+  assert ir.wait_coverage.passed
+
 def test_pipe_spec_policy_does_not_hide_unsupported_wait_mode():
   spec = WMMAPipeSpec(m=512, n=4096, k=4096, tile_m=128, tile_n=128,
                       role="attn_qo", wait_policy="drain_all")

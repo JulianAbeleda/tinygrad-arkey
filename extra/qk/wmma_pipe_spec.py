@@ -11,7 +11,8 @@ from dataclasses import dataclass
 from typing import Any
 from tinygrad.uop.ops import KernelCandidateContext, Ops, KernelInfo, UOp
 from tinygrad.dtype import dtypes
-from tinygrad.codegen.opt.compiler_policies import PipelinePolicy, RegisterPipePlan, WaitPolicy
+from tinygrad.codegen.opt.compiler_policies import (PipelinePolicy, RegisterPipePlan, WaitDependency, WaitPolicy,
+  WaitDependencyCoverage, prove_wait_dependency_coverage)
 
 
 @dataclass(frozen=True)
@@ -82,6 +83,22 @@ class WMMAPipeIR:
   def pipeline_policy(self) -> PipelinePolicy:
     """Materialize the IR's storage/wait/resource contract without re-parsing strings."""
     return RegisterPipePlan(stages=self.stages, wait=WaitPolicy(self.wait_policy, scope="per_stage")).policy
+
+  @property
+  def wait_dependencies(self) -> tuple[WaitDependency, ...]:
+    """Declare the two staged global-load groups consumed by WMMA.
+
+    This is provenance metadata only; backend lowering must still consume the
+    validated edges before an executable register pipe can be admitted.
+    """
+    policy = self.pipeline_policy
+    return tuple(WaitDependency(policy.wait, f"global_load_{group}", "wmma", group, 0, 1, "per_stage")
+                 for group in ("A", "B"))
+
+  @property
+  def wait_coverage(self) -> WaitDependencyCoverage:
+    required = (("A", 0, 1), ("B", 0, 1))
+    return prove_wait_dependency_coverage(self.pipeline_policy, self.wait_dependencies, required)
 
 @dataclass(frozen=True)
 class WMMAPipeOp:

@@ -1,4 +1,5 @@
 """Core-neutral immutable compiler policy contracts."""
+from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
@@ -31,9 +32,77 @@ class WaitDependency:
   producer: str
   consumer: str
   load_group: str
+  producer_stage: int | None = None
+  consumer_stage: int | None = None
+  scope: str | None = None
   def __post_init__(self):
     if not isinstance(self.policy, WaitPolicy): raise ValueError("wait dependency requires WaitPolicy")
     if not all(isinstance(x, str) and x for x in (self.producer, self.consumer, self.load_group)): raise ValueError("wait dependency labels must be non-empty")
+    for name, value in (("producer_stage", self.producer_stage), ("consumer_stage", self.consumer_stage)):
+      if value is not None and (not isinstance(value, int) or isinstance(value, bool) or value < 0):
+        raise ValueError(f"{name} must be a non-negative int when provided")
+    if self.scope is not None and self.scope not in ("workgroup", "per_stage"):
+      raise ValueError("wait dependency scope must be workgroup or per_stage")
+
+@dataclass(frozen=True)
+class WaitDependencyCoverage:
+  """Lifecycle proof result for typed producer/consumer wait provenance."""
+  passed: bool
+  errors: tuple[str, ...]
+  covered: tuple[tuple[str, int, int], ...]
+
+def prove_wait_dependency_coverage(policy: PipelinePolicy, dependencies: tuple[WaitDependency, ...] | list[WaitDependency],
+                                   required: tuple[tuple[str, int, int], ...] = ()) -> WaitDependencyCoverage:
+  """Validate stage coverage without emitting or inferring a backend wait.
+
+  ``required`` identifies the producer/load-group/consumer stage edges the
+  lifecycle expects.  Targeted waits must name both stages and are rejected
+  when duplicated or outside the policy's logical stage range.  The helper is
+  deliberately backend-neutral; capability admission remains a separate
+  fail-closed step.
+  """
+  errors: list[str] = []
+  if not isinstance(policy, PipelinePolicy):
+    raise TypeError("wait coverage requires PipelinePolicy")
+  if not isinstance(dependencies, (tuple, list)):
+    raise TypeError("wait dependencies must be a tuple or list")
+  if any(not isinstance(x, WaitDependency) for x in dependencies):
+    raise TypeError("wait coverage requires typed WaitDependency values")
+  required_keys: set[tuple[str, int, int]] = set()
+  for item in required:
+    if not isinstance(item, tuple) or len(item) != 3 or not isinstance(item[0], str) or not item[0] or \
+       any(not isinstance(v, int) or isinstance(v, bool) or v < 0 for v in item[1:]):
+      errors.append(f"invalid required wait edge {item!r}")
+    elif item in required_keys:
+      errors.append(f"duplicate required wait edge {item!r}")
+    else:
+      required_keys.add(item)
+
+  covered: set[tuple[str, int, int]] = set()
+  for index, dep in enumerate(dependencies):
+    where = f"dependency {index}"
+    if dep.policy != policy.wait:
+      errors.append(f"{where}: policy does not match pipeline wait policy")
+    expected_scope = "per_stage" if dep.policy.kind == "targeted_vmcnt" else "workgroup"
+    if dep.scope is not None and dep.scope != expected_scope:
+      errors.append(f"{where}: scope {dep.scope!r} does not match {expected_scope!r}")
+    if dep.policy.kind == "targeted_vmcnt":
+      if dep.producer_stage is None or dep.consumer_stage is None:
+        errors.append(f"{where}: targeted wait requires producer and consumer stages")
+        continue
+      if dep.producer_stage >= policy.logical_stage_count or dep.consumer_stage >= policy.logical_stage_count:
+        errors.append(f"{where}: stage is outside policy range 0..{policy.logical_stage_count - 1}")
+      key = (dep.load_group, dep.producer_stage, dep.consumer_stage)
+      if key in covered:
+        errors.append(f"{where}: duplicate wait edge {key!r}")
+      else:
+        covered.add(key)
+    elif dep.producer_stage is not None or dep.consumer_stage is not None:
+      errors.append(f"{where}: full barrier wait must not claim stage-specific coverage")
+
+  missing = sorted(required_keys - covered)
+  errors.extend(f"missing wait coverage for {item!r}" for item in missing)
+  return WaitDependencyCoverage(not errors, tuple(errors), tuple(sorted(covered)))
 
 @dataclass(frozen=True)
 class WaitCount:

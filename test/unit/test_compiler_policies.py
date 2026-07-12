@@ -1,6 +1,6 @@
 import pytest
 from extra.qk.compiler_policies import (PipelinePolicy, StoragePolicy, WaitPolicy, ResourcePlan, RegisterPipePlan,
-  WaitDependency, amdllvm_wait_dependency, pipeline_policy_for_route)
+  WaitDependency, amdllvm_wait_dependency, pipeline_policy_for_route, prove_wait_dependency_coverage)
 
 
 def test_policy_contracts_accept_lds_barrier_and_estimate():
@@ -33,6 +33,30 @@ def test_wait_dependency_accepts_full_barrier_and_rejects_targeted_amdllvm():
   assert amdllvm_wait_dependency(full) is full
   targeted = WaitDependency(WaitPolicy("targeted_vmcnt", scope="per_stage"), "produce", "consume", "A")
   with pytest.raises(ValueError, match="unsupported by pure AMDLLVM"): amdllvm_wait_dependency(targeted)
+
+def test_wait_dependency_coverage_proves_typed_stage_edges():
+  policy = pipeline_policy_for_route("pipe")
+  deps = (WaitDependency(policy.wait, "load_a", "wmma", "A", 0, 1, "per_stage"),
+          WaitDependency(policy.wait, "load_b", "wmma", "B", 0, 1, "per_stage"))
+  proof = prove_wait_dependency_coverage(policy, deps, (("A", 0, 1), ("B", 0, 1)))
+  assert proof.passed and proof.covered == (("A", 0, 1), ("B", 0, 1))
+
+def test_wait_dependency_coverage_rejects_duplicate_and_missing_edges():
+  policy = pipeline_policy_for_route("pipe")
+  dep = WaitDependency(policy.wait, "load_a", "wmma", "A", 0, 1, "per_stage")
+  proof = prove_wait_dependency_coverage(policy, (dep, dep), (("A", 0, 1), ("B", 0, 1)))
+  assert not proof.passed
+  assert any("duplicate wait edge" in error for error in proof.errors)
+  assert any("missing wait coverage" in error for error in proof.errors)
+
+def test_wait_dependency_coverage_rejects_unscoped_or_out_of_range_targeted_edges():
+  policy = pipeline_policy_for_route("pipe")
+  unscoped = WaitDependency(policy.wait, "load_a", "wmma", "A")
+  out_of_range = WaitDependency(policy.wait, "load_b", "wmma", "B", 0, 2, "per_stage")
+  proof = prove_wait_dependency_coverage(policy, (unscoped, out_of_range))
+  assert not proof.passed
+  assert any("requires producer and consumer stages" in error for error in proof.errors)
+  assert any("outside policy range" in error for error in proof.errors)
 
 
 @pytest.mark.parametrize("factory", (
