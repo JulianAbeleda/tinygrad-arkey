@@ -17,6 +17,19 @@ def test_pipe_spec_rejects_non_divisible_shape_and_ir_output_contract():
   else:
     raise AssertionError("unsupported output contract must fail closed")
 
+def test_pipe_op_lifecycle_derives_wait_and_rejects_unconsumed_slot():
+  from extra.qk.wmma_pipe_spec import WMMAPipeOp, build_wmma_pipe_ir
+  spec = WMMAPipeSpec(m=512, n=4096, k=4096, tile_m=128, tile_n=128, role="attn_qo")
+  op = WMMAPipeOp(build_wmma_pipe_ir(spec), 0, 1, 2, (128, 4, 1), (256, 1, 1))
+  assert op.derived_wait_vmcnt == 8
+  try:
+    WMMAPipeOp(build_wmma_pipe_ir(spec), 0, 1, 2, (128, 4, 1), (256, 1, 1),
+               lifecycle=(("produce", 0, 0),))
+  except ValueError as exc:
+    assert "without a consume" in str(exc)
+  else:
+    raise AssertionError("unconsumed slot must fail closed")
+
 
 def _prefill_spec(route_family: str = "pipe", *, n: int = 4096, role: str = "attn_qo",
                   pipeline_depth: int = 2, waitcnt_policy: str = "targeted_vmcnt"):

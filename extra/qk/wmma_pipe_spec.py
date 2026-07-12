@@ -79,12 +79,29 @@ class WMMAPipeOp:
   wait_scope: str = "per_stage"
   resource_owner: str = "compiler"
   stage_count: int = 2
-  wait_vmcnt: int = 8
+  wait_vmcnt: int | None = None
+  slot_bytes: int = 1
+  lifecycle: tuple[tuple[str, int, int], ...] = (("produce", 0, 0), ("ready", 0, 0),
+    ("consume", 0, 0), ("produce", 1, 1), ("ready", 1, 1), ("consume", 1, 1))
 
   def __post_init__(self):
     if self.wait_scope != "per_stage" or self.resource_owner != "compiler" or self.stage_count != self.ir.stages:
       raise ValueError("invalid pipe op contract")
-    if self.wait_vmcnt != self.ir.loads_per_stage: raise ValueError("pipe wait does not match staged loads")
+    if len({self.input_a, self.input_b, self.output}) != 3 or min(self.input_a, self.input_b, self.output) < 0:
+      raise ValueError("pipe buffer ids must be distinct non-negative integers")
+    if self.slot_bytes <= 0: raise ValueError("pipe slot_bytes must be positive")
+    if any(len(x) != 3 or x[0] not in ("produce", "ready", "consume", "release") or x[1] < 0 or x[2] < 0 for x in self.lifecycle):
+      raise ValueError("invalid pipe lifecycle event")
+    produced = {(s, slot) for op, s, slot in self.lifecycle if op == "produce"}
+    consumed = {(s, slot) for op, s, slot in self.lifecycle if op == "consume"}
+    if not consumed.issubset(produced): raise ValueError("pipe consumes an unproduced stage/slot")
+    for stage, slot in produced:
+      if (stage, slot) not in consumed: raise ValueError("pipe slot is produced without a consume")
+    derived_wait = self.ir.loads_per_stage
+    if self.wait_vmcnt is not None and self.wait_vmcnt != derived_wait: raise ValueError("pipe wait does not match staged loads")
+
+  @property
+  def derived_wait_vmcnt(self) -> int: return self.ir.loads_per_stage
 
 def build_wmma_pipe_ir(spec: WMMAPipeSpec) -> WMMAPipeIR:
   return WMMAPipeIR(spec.role, (spec.m, spec.n, spec.k), spec.stages, spec.loads_per_stage, spec.wait_policy)
