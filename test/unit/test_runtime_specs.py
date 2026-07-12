@@ -247,11 +247,14 @@ def test_two_buffer_stage1_requires_separate_capability_and_typed_plan():
 
 def test_register_candidate_admission_uses_zero_lds_typed_plan():
   payload = json.loads(json.dumps(_single_buffer_anchor_candidate().full_kernel_candidate))
+  payload["workload"]["role"] = "attn_qo"
+  payload["workload"]["shape"] = {"m": 512, "n": 4096, "k": 4096}
+  payload["applicability"]["roles"] = ["attn_qo"]
   payload["schedule"]["pipeline"].update(buffer_count=1, stage_count=2)
   payload["schedule"]["residency"]["resident"] = ["accumulator", "stage_ab_register"]
   candidate = _strict_full_kernel_candidate(full_kernel_candidate=payload)
   admission = admit_full_kernel_candidate(payload, candidate.canonical_identity,
-    profile="qwen3_8b_q4k_m_gfx1100", role="ffn_gate_up", shape=(512,12288,4096),
+    profile="qwen3_8b_q4k_m_gfx1100", role="attn_qo", shape=(512,4096,4096),
     target={"backend":"AMD","arch":"gfx1100","wave_size":32})
   assert admission.active_lds_bytes == 0
   assert admission.pipeline_plan.storage.kind == "global_register_resident"
@@ -263,12 +266,15 @@ def test_register_candidate_admission_uses_zero_lds_typed_plan():
 
 def test_register_candidate_route_selects_typed_install_without_lds(monkeypatch):
   payload = json.loads(json.dumps(_single_buffer_anchor_candidate().full_kernel_candidate))
+  payload["workload"]["role"] = "attn_qo"
+  payload["workload"]["shape"] = {"m": 512, "n": 4096, "k": 4096}
+  payload["applicability"]["roles"] = ["attn_qo"]
   payload["schedule"]["pipeline"].update(buffer_count=1, stage_count=2)
   payload["schedule"]["residency"]["resident"] = ["accumulator", "stage_ab_register"]
   candidate = _strict_full_kernel_candidate(full_kernel_candidate=payload)
   monkeypatch.setenv("BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON", json.dumps(payload))
   monkeypatch.setenv("BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH", candidate.canonical_identity)
-  monkeypatch.setenv("BOLTBEAM_FULL_KERNEL_CANDIDATE_ROLES", "ffn_gate_up")
+  monkeypatch.setenv("BOLTBEAM_FULL_KERNEL_CANDIDATE_ROLES", "attn_qo")
   seen = {}
 
   def capture(_x, _w, _out_f, _in_f, _spec, admission):
@@ -281,9 +287,9 @@ def test_register_candidate_route_selects_typed_install_without_lds(monkeypatch)
     ndim = 3
     shape = (1, 512, 4096)
   class FakeWeight:
-    shape = (12288, 4096)
+    shape = (4096, 4096)
   class Lin: pass
-  lin = Lin(); lin._pf16_w = FakeWeight(); lin.bias = None; lin._prefill_graph_role = "ffn_gate_up"
+  lin = Lin(); lin._pf16_w = FakeWeight(); lin.bias = None; lin._prefill_graph_role = "attn_qo"
   assert prefill_graph_gemm_route.route_pf16_graph_gemm(lin, Fake()) == "register_install"
   assert seen == {"storage": "global_register_resident", "lds": 0}
 

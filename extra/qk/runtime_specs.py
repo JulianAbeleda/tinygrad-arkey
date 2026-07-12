@@ -183,6 +183,8 @@ def admit_full_kernel_candidate(payload:dict[str, Any], canonical_identity:str, 
   if storage_kind == "global_register_resident":
     if (schedule["pipeline"]["buffer_count"], schedule["pipeline"]["stage_count"]) != (1, 2):
       raise FullKernelAdmissionError("capability_register_pipeline", "register candidates require one static slot and two logical stages")
+    if role != "attn_qo" or shape != (512, 4096, 4096):
+      raise FullKernelAdmissionError("capability_register_shape", "the current register template is only proved for attn_qo 512x4096x4096")
   elif schedule["pipeline"]["buffer_count"] != capability.buffer_count or schedule["pipeline"]["stage_count"] != capability.stage_count:
     raise FullKernelAdmissionError("capability_pipeline", "only single-buffer stage1 is supported")
   if schedule["wmma"]["instruction_family"] != capability.instruction_family or schedule["wmma"]["fragment_layout"] != capability.fragment_layout:
