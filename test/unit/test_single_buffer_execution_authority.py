@@ -1,4 +1,4 @@
-import hashlib
+import hashlib, json, sys, pytest
 
 from tinygrad.dtype import AddrSpace, dtypes
 from tinygrad.uop.ops import KernelCandidateContext, KernelInfo, Ops, ProgramInfo, UOp
@@ -51,7 +51,7 @@ def test_raw_ops_ins_surface_is_not_pure():
 
 
 def test_structural_binding_rejects_context_bound_but_different_program():
-  payload = {"workload": {"target": {"wave_size": 32}}, "schedule": {
+  payload = {"workload": {"target": {"wave_size": 32}}, "schedule": {"tile": {"m": 128, "n": 128, "k": 32},
     "threads": 256, "waves": {"m": 4, "n": 2},
     "lds": {"windows": {"a": [0, 10240], "b": [10240, 20480]}, "strides": {"a": 80, "b": 80}}}}
   program = _program().replace(arg=ProgramInfo(local_size=(32, 1, 1)))
@@ -59,3 +59,36 @@ def test_structural_binding_rejects_context_bound_but_different_program():
   assert binding["matches_payload"] is False
   assert "threads: expected 256, emitted 32" in binding["errors"]
   assert "LDS bytes: expected 20480, emitted 12288" in binding["errors"]
+  assert "wave count: expected 8, emitted 1" in binding["errors"]
+  assert "tile: emitted structure is unproven" in binding["errors"]
+  assert binding["pre_gpu_eligible"] is False
+  with pytest.raises(RuntimeError, match="refusing GPU execution"):
+    auth._require_pre_gpu_structure(binding)
+
+
+def test_structural_binding_still_rejects_matching_resource_totals_without_semantic_proof():
+  payload = {"workload": {"target": {"wave_size": 32}}, "schedule": {"tile": {"m": 128, "n": 128, "k": 32},
+    "threads": 256, "waves": {"m": 4, "n": 2},
+    "lds": {"windows": {"a": [0, 10240], "b": [10240, 20480]}, "strides": {"a": 80, "b": 80}}}}
+  program = _program().replace(arg=ProgramInfo(local_size=(256, 1, 1)))
+  binding = auth._structural_binding(payload, program, {"lds_bytes": 20480})
+  assert binding["actual"]["wave_count"] == 8
+  assert binding["evidence"]["wave_count"] == "launch threads divided by target wave size"
+  assert binding["pre_gpu_eligible"] is False
+  assert binding["errors"] == ["tile: emitted structure is unproven", "waves: emitted structure is unproven",
+                               "lds_windows: emitted structure is unproven", "lds_strides: emitted structure is unproven"]
+
+
+def test_cli_writes_blocked_artifact_and_returns_nonzero(monkeypatch, tmp_path):
+  payload = {"schema_version": "boltbeam.full_kernel_candidate.v1"}
+  report = {"schema": auth.SCHEMA, "structural_binding": {"pre_gpu_eligible": False},
+            "runtime": {"status": "not_run", "binary_equal": None},
+            "correctness": {"status": "not_run", "passed": False},
+            "runtime_binary_matches_candidate": None, "passed": False}
+  output = tmp_path / "blocked.json"
+  monkeypatch.setattr(auth, "_load_payload", lambda _: payload)
+  monkeypatch.setattr(auth, "run", lambda *_args, **_kwargs: report)
+  monkeypatch.setattr(sys, "argv", ["authority", "--candidate", str(tmp_path / "candidate.json"),
+                                    "--candidate-hash", "1" * 64, "--output", str(output)])
+  assert auth.main() == 1
+  assert json.loads(output.read_text()) == report

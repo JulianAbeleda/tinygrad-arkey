@@ -90,7 +90,7 @@ def _candidate_programs(compiled_linear: UOp, identity: str) -> list[UOp]:
 def _expected_structure(payload: dict[str, Any]) -> dict[str, Any]:
   schedule = payload["schedule"]
   windows = schedule["lds"]["windows"]
-  return {"threads": schedule["threads"], "waves": schedule["waves"],
+  return {"threads": schedule["threads"], "tile": schedule["tile"], "waves": schedule["waves"],
           "wave_threads": schedule["waves"]["m"] * schedule["waves"]["n"] * payload["workload"]["target"]["wave_size"],
           "lds_windows": windows, "lds_strides": schedule["lds"]["strides"],
           "lds_bytes": max(end for _start, end in windows.values())}
@@ -100,20 +100,35 @@ def _structural_binding(payload: dict[str, Any], program: UOp, lds: dict[str, An
   expected = _expected_structure(payload)
   local_size = tuple(program.arg.local_size or ())
   actual_threads = math.prod(local_size) if local_size else None
+  wave_size = payload["workload"]["target"]["wave_size"]
+  wave_count = actual_threads // wave_size if actual_threads is not None and actual_threads % wave_size == 0 else None
   actual = {"threads": actual_threads, "local_size": list(local_size), "lds_bytes": lds["lds_bytes"],
             # Rendered source does not retain enough semantic metadata to prove
             # candidate windows, strides, or wave ownership. Unknown is a hard
             # failure, not permission to infer them from the attached context.
-            "waves": None, "lds_windows": None, "lds_strides": None}
+            "wave_count": wave_count, "tile": None, "waves": None, "lds_windows": None, "lds_strides": None}
+  evidence = {
+    "threads": "PROGRAM launch local_size", "lds_bytes": "lowered DEFINE_LOCAL/rendered shared declaration",
+    "wave_count": "launch threads divided by target wave size" if wave_count is not None else None,
+    "tile": None, "waves": None, "lds_windows": None, "lds_strides": None,
+  }
   errors = []
   if actual_threads != expected["threads"]: errors.append(f"threads: expected {expected['threads']}, emitted {actual_threads}")
   if expected["wave_threads"] != expected["threads"]: errors.append("payload waves do not account for payload threads")
   if actual["lds_bytes"] != expected["lds_bytes"]:
     errors.append(f"LDS bytes: expected {expected['lds_bytes']}, emitted {actual['lds_bytes']}")
-  for field in ("waves", "lds_windows", "lds_strides"):
+  expected_wave_count = expected["waves"]["m"] * expected["waves"]["n"]
+  if wave_count != expected_wave_count: errors.append(f"wave count: expected {expected_wave_count}, emitted {wave_count}")
+  for field in ("tile", "waves", "lds_windows", "lds_strides"):
     if actual[field] is None: errors.append(f"{field}: emitted structure is unproven")
     elif actual[field] != expected[field]: errors.append(f"{field}: emitted structure differs from payload")
-  return {"expected": expected, "actual": actual, "matches_payload": not errors, "errors": errors}
+  return {"expected": expected, "actual": actual, "evidence": evidence,
+          "matches_payload": not errors, "pre_gpu_eligible": not errors, "errors": errors}
+
+
+def _require_pre_gpu_structure(binding: dict[str, Any]) -> None:
+  if not binding["pre_gpu_eligible"]:
+    raise RuntimeError("candidate emitted-program structure is not proven; refusing GPU execution: " + "; ".join(binding["errors"]))
 
 
 def _case_arrays(case: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -181,6 +196,26 @@ def run(payload: dict[str, Any], candidate_hash: str, *, case: str = "constant",
       if not lds["actual_compiler_lds_staging"]: raise RuntimeError(f"candidate did not emit compiler LDS staging: {lds}")
       structural = _structural_binding(payload, program, lds)
       effective = next(row for row in effective_routes(os.environ) if row["family"] == "prefill_gemm")
+      if not structural["pre_gpu_eligible"]:
+        route_id = effective["effective_route"]
+        return {"schema": SCHEMA, "canonical_identity": identity, "route_id": route_id,
+                "selected_route_id": route_id, "environment": {"device": str(Device.DEFAULT), "git": _git_state()},
+                "route_binding_complete": False, "route_authority": effective,
+                "structural_binding": structural, "binding_errors": list(structural["errors"]), "program": hashes,
+                "runtime": {"status": "not_run", "executed_binary_sha256": None, "binary_equal": None},
+                "surface": surface, "executable_truth": {
+                  "selected_route_id": route_id, "selected_surface": SELECTED_SURFACE,
+                  "manifest_route_backed": True, "fallback_used": False, "strict_pure": False,
+                  "compiler_surface_forbidden_markers_absent": surface["strict_pure"],
+                  "ops_ins_absent": surface["ops_ins_count"] == 0,
+                  "asm_source_absent": surface["source_kind"] != "native_isa",
+                  "candidate_context_equal": (context.schema_version == payload["schema_version"] and
+                                                context.canonical_identity == identity),
+                  "runtime_binary_matches_candidate": None, **lds},
+                "correctness": {"status": "not_run", "reason": "emitted_program_structure_unproven",
+                                "case": case, "comparison": "not_run", "elements": 0, "passed": False},
+                "fallback_used": bool(effective["rolled_back_to_oracle"]), "strict_pure": False,
+                "runtime_binary_matches_candidate": None, "passed": False}
       run_linear(compiled, jit=True, wait=True)
       output = out.float().numpy()
       runtime = runtime_cache.get((program.key, str(Device.DEFAULT)))
