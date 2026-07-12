@@ -7,7 +7,7 @@ from __future__ import annotations
 #       knobs, e.g. PREFILL_TC_LOCAL_STAGE_DUMP[_LIMIT], PREFILL_DBUF_OWNED_B_STAGE_PAIR_PROBE).
 #   The class-2 probes are being deleted (see docs/prefill-flag-graveyard.md); collapsing the surviving class-1 reads
 #   behind one PrefillStagingSpec descriptor is a scoped follow-up, deferred to keep the stock (no-flag) path byte-identical.
-import json, math, itertools
+import contextlib, json, math, itertools
 from dataclasses import replace
 from collections import defaultdict
 from typing import cast, Final
@@ -464,6 +464,29 @@ _WARMSTART_CANDIDATE_CONTEXTS = None
 _WARMSTART_LOCAL_STAGE_KEYS = None
 _WARMSTART_LOCAL_STAGE_DENY_KEYS = set()
 _warmstart_stats = {"match": 0, "apply": 0, "error": 0}
+
+@contextlib.contextmanager
+def warmstart_candidate_state(opts, candidate_contexts=None, local_stage_keys=None, local_stage_deny_keys=()):
+  """Install all candidate-sensitive warmstart state for one compile/capture scope."""
+  global _WARMSTART_OPTS, _WARMSTART_CANDIDATE_CONTEXTS, _WARMSTART_LOCAL_STAGE_KEYS, _WARMSTART_LOCAL_STAGE_DENY_KEYS
+  installed_opts = None if opts is None else dict(opts)
+  installed_contexts = None if candidate_contexts is None else dict(candidate_contexts)
+  if installed_contexts:
+    missing = installed_contexts.keys() - (installed_opts or {}).keys()
+    if missing: raise RuntimeError(f"warmstart candidate contexts lack schedule opts for keys: {sorted(map(repr, missing))}")
+    active_contexts = _WARMSTART_CANDIDATE_CONTEXTS or {}
+    collisions = {key for key, context in installed_contexts.items()
+                  if key in active_contexts and active_contexts[key] != context}
+    if collisions: raise RuntimeError(f"warmstart candidate context collision for keys: {sorted(map(repr, collisions))}")
+  installed_local = None if local_stage_keys is None else set(local_stage_keys)
+  installed_deny = set(local_stage_deny_keys)
+  saved = (_WARMSTART_OPTS, _WARMSTART_CANDIDATE_CONTEXTS, _WARMSTART_LOCAL_STAGE_KEYS, _WARMSTART_LOCAL_STAGE_DENY_KEYS)
+  _WARMSTART_OPTS, _WARMSTART_CANDIDATE_CONTEXTS = installed_opts, installed_contexts
+  _WARMSTART_LOCAL_STAGE_KEYS, _WARMSTART_LOCAL_STAGE_DENY_KEYS = installed_local, installed_deny
+  try: yield
+  finally:
+    (_WARMSTART_OPTS, _WARMSTART_CANDIDATE_CONTEXTS,
+     _WARMSTART_LOCAL_STAGE_KEYS, _WARMSTART_LOCAL_STAGE_DENY_KEYS) = saved
 
 def _candidate_lds_buffer_id(k:Scheduler) -> int:
   buffer_id = next(k.opt_range)

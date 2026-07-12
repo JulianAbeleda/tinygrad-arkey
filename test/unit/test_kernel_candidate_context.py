@@ -97,3 +97,39 @@ def test_warmstart_candidate_context_reaches_optimized_kernel(monkeypatch):
   monkeypatch.setattr(postrange, "_WARMSTART_CANDIDATE_CONTEXTS", {key: context})
   optimized = postrange.apply_opts(_sink("4" * 64).replace(arg=KernelInfo()), PythonRenderer(Target("PYTHON")))
   assert optimized.arg.candidate_context == context
+
+
+def test_warmstart_candidate_state_restores_profiles_sequentially(monkeypatch):
+  old_key, first_key, second_key = (frozenset({1}), 1), (frozenset({2}), 2), (frozenset({3}), 3)
+  old_context, first_context, second_context = (_sink("a" * 64).arg.candidate_context,
+                                                _sink("b" * 64).arg.candidate_context,
+                                                _sink("c" * 64).arg.candidate_context)
+  old_opts, old_contexts, old_local, old_deny = {old_key: ()}, {old_key: old_context}, {old_key}, {old_key}
+  monkeypatch.setattr(postrange, "_WARMSTART_OPTS", old_opts)
+  monkeypatch.setattr(postrange, "_WARMSTART_CANDIDATE_CONTEXTS", old_contexts)
+  monkeypatch.setattr(postrange, "_WARMSTART_LOCAL_STAGE_KEYS", old_local)
+  monkeypatch.setattr(postrange, "_WARMSTART_LOCAL_STAGE_DENY_KEYS", old_deny)
+  for key, context in ((first_key, first_context), (second_key, second_context)):
+    with postrange.warmstart_candidate_state({key: ()}, {key: context}, {key}, {key}):
+      assert postrange._WARMSTART_OPTS == {key: ()}
+      assert postrange._WARMSTART_CANDIDATE_CONTEXTS == {key: context}
+      assert postrange._WARMSTART_LOCAL_STAGE_KEYS == {key}
+      assert postrange._WARMSTART_LOCAL_STAGE_DENY_KEYS == {key}
+    assert (postrange._WARMSTART_OPTS, postrange._WARMSTART_CANDIDATE_CONTEXTS,
+            postrange._WARMSTART_LOCAL_STAGE_KEYS, postrange._WARMSTART_LOCAL_STAGE_DENY_KEYS) == \
+           (old_opts, old_contexts, old_local, old_deny)
+
+
+def test_warmstart_candidate_state_fails_closed_on_context_collision(monkeypatch):
+  key = (frozenset({2}), 2)
+  monkeypatch.setattr(postrange, "_WARMSTART_CANDIDATE_CONTEXTS", {key: _sink("d" * 64).arg.candidate_context})
+  with pytest.raises(RuntimeError, match="candidate context collision"):
+    with postrange.warmstart_candidate_state({key: ()}, {key: _sink("e" * 64).arg.candidate_context}): pass
+
+
+def test_warmstart_candidate_state_restores_after_capture_failure(monkeypatch):
+  sentinel = object()
+  monkeypatch.setattr(postrange, "_WARMSTART_OPTS", sentinel)
+  with pytest.raises(ValueError, match="capture failed"):
+    with postrange.warmstart_candidate_state({}): raise ValueError("capture failed")
+  assert postrange._WARMSTART_OPTS is sentinel

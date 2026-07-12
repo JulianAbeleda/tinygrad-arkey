@@ -800,10 +800,8 @@ class Transformer:
                            "state and has produced AMD MMU faults. Use PREFILL_ROUTE=direct_packed for memory-frugal "
                            "prefill, or set PREFILL_CHUNKED_EXPERIMENTAL=1 to debug the overlay.")
       import tinygrad.codegen.opt.postrange as pr
-      saved = pr._WARMSTART_OPTS
-      pr._WARMSTART_OPTS = self._pf16_warmstart
-      try: return self.forward_prefill_v2_chunked(tokens.contiguous(), start_pos, temperature)
-      finally: pr._WARMSTART_OPTS = saved
+      with pr.warmstart_candidate_state(self._pf16_warmstart):
+        return self.forward_prefill_v2_chunked(tokens.contiguous(), start_pos, temperature)
     # concrete-KV: a CONCRETE int start_pos (KV concrete -> attention TC fires) gets a per-start_pos jit.
     if is_prefill_v2 and isinstance(start_pos, int):
       jit = self.prefill_v2_jits.setdefault(start_pos, TinyJit(self.forward))
@@ -815,10 +813,8 @@ class Transformer:
     # consulted at kernel-compile time, i.e. this jit's first call), then restore -- decode/other paths never
     # see a populated _WARMSTART_OPTS even within this process.
     import tinygrad.codegen.opt.postrange as pr
-    saved = pr._WARMSTART_OPTS
-    pr._WARMSTART_OPTS = self._pf16_warmstart
-    try: return jit(tokens.contiguous(), start_pos, temperature)
-    finally: pr._WARMSTART_OPTS = saved
+    with pr.warmstart_candidate_state(self._pf16_warmstart):
+      return jit(tokens.contiguous(), start_pos, temperature)
 
   @staticmethod
   def from_gguf(gguf:Tensor|str|pathlib.Path, max_context:"int|str|None"=None,
