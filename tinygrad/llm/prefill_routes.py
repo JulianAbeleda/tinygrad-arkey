@@ -78,6 +78,7 @@ def _direct_packed_role(lin, spec:"PrefillLinearRouteSpec") -> str:
   if "ffn_down" in name: return "ffn_down"
   if any(x in name for x in ("attn_q", "attn_output")): return "attn_qo"
   if any(x in name for x in ("attn_k", "attn_v")): return "attn_kv"
+  if name == "output.weight" or name.rsplit(".", 1)[-1] == "output": return "lm_head"
   return ""
 
 
@@ -278,6 +279,7 @@ def _direct_packed_module_role(lin) -> str:
   if "ffn_down" in name: return "ffn_down"
   if any(x in name for x in ("attn_q", "attn_output")): return "attn_qo"
   if any(x in name for x in ("attn_k", "attn_v")): return "attn_kv"
+  if name == "output.weight" or name.rsplit(".", 1)[-1] == "output": return "lm_head"
   return ""
 
 

@@ -416,6 +416,40 @@ def test_q6_direct_packed_prefill_default_uses_generated_descriptor(monkeypatch)
   assert calls[0][2]["output_layout"] == "direct_out"
 
 
+def test_direct_packed_role_infers_lm_head_for_output_weight():
+  # LM-head prefill-route wiring: output.weight previously matched none of the ffn/attn name patterns and fell
+  # through to "" (unrouted). A bare object with only `.name` set (no route_role/role carried) exercises the
+  # name-based fallback added for the lm_head case.
+  from tinygrad.llm.prefill_routes import PrefillLinearRouteSpec, _direct_packed_role
+  spec = PrefillLinearRouteSpec("direct_packed", "q6k", "", 512, 151936, 4096)
+  lin = SimpleNamespace(name="output.weight")
+  assert _direct_packed_role(lin, spec) == "lm_head"
+
+
+def test_direct_packed_role_lm_head_does_not_shadow_attn_output():
+  # "attn_output" also contains the substring "output" -- the lm_head fallback must sit after the attn_qo match
+  # so blk.N.attn_output.weight keeps resolving to "attn_qo", not "lm_head".
+  from tinygrad.llm.prefill_routes import PrefillLinearRouteSpec, _direct_packed_role
+  spec = PrefillLinearRouteSpec("direct_packed", "q4k", "", 512, 4096, 4096)
+  lin = SimpleNamespace(name="blk.3.attn_output.weight")
+  assert _direct_packed_role(lin, spec) == "attn_qo"
+
+
+def test_direct_packed_module_role_infers_lm_head_for_output_weight():
+  from tinygrad.llm.prefill_routes import _direct_packed_module_role
+  lin = SimpleNamespace(name="output.weight")
+  assert _direct_packed_module_role(lin) == "lm_head"
+
+
+def test_direct_packed_module_role_prefers_prefill_graph_role_lm_head():
+  # Transformer._prefill_v2_covered tags the installed lm-head primitive with _prefill_graph_role="lm_head"
+  # directly (see tinygrad/llm/model.py); that should win over any carried route_role ("output" from the
+  # generic model_route_plan install path) without needing the name fallback at all.
+  from tinygrad.llm.prefill_routes import _direct_packed_module_role
+  lin = SimpleNamespace(name="output.weight", route_role="output", _prefill_graph_role="lm_head")
+  assert _direct_packed_module_role(lin) == "lm_head"
+
+
 def test_q6_direct_packed_prefill_partials_use_generated_descriptor(monkeypatch):
   from tinygrad.llm import prefill_routes
 

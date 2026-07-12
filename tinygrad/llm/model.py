@@ -600,6 +600,15 @@ class Transformer:
         setattr(lin, "_prefill_graph_role", self._prefill_v2_role_for_name(n))
         out_f, in_f = self._prefill_v2_dims(lin)
         if out_f is not None: yield lin, out_f, in_f
+    # lm_head: top-level (not per-block), covered only once it's an installed Q4_K/Q6_K direct-packed primitive.
+    # A plain nn.Linear self.output (primitives not installed / not yet installed) is never yielded here, so it
+    # is excluded from the warmstart table / VRAM estimate / realize loop exactly like before this change --
+    # it keeps taking the unmodified self.output(x) path (see _lm_head_wants_pf16).
+    lin = getattr(self, "output", None)
+    if lin is not None and is_direct_packed_prefill_linear(lin):
+      setattr(lin, "_prefill_graph_role", "lm_head")
+      out_f, in_f = self._prefill_v2_dims(lin)
+      if out_f is not None: yield lin, out_f, in_f
 
   def _clone_block_shell(self, block:FFNBlock) -> FFNBlock:
     # Shallow-copy the module tree so rebinding template tensors for JIT inputs never mutates a real decode block.
@@ -737,10 +746,19 @@ class Transformer:
       self(dummy, sp, temp, use_flash=False).realize(); n += 1   # populates self.prefill_v2_jits[sp]
     return n
 
+  # lm_head prefill routing gate: same phase flag the per-block prefill-v2 linears check (e.g. :401) -- True only
+  # for a concrete-batch prefill-v2 forward, never for decode (T==1), so the decode M=1 byte-for-byte path is
+  # untouched. Also requires self.output to actually be an installed Q4_K/Q6_K primitive (plain nn.Linear when
+  # primitives aren't installed keeps calling self.output(x) exactly as before).
+  def _lm_head_wants_pf16(self) -> bool:
+    return bool(self.blk) and getattr(self.blk[0], '_prefill_v2', False) and is_direct_packed_prefill_linear(self.output)
+
   def logits(self, tokens:Tensor, start_pos:int|UOp) -> Tensor:
     x = self.token_embd(tokens).float()                   # (B, T, D)
     for block in self.blk: x = block(x, start_pos)
-    return self.output(self.output_norm(x))
+    x = self.output_norm(x)
+    if self._lm_head_wants_pf16(): return _pf16(self.output, x).contiguous()
+    return self.output(x)
 
   def logits_prefill_v2_chunked(self, tokens:Tensor, start_pos:int|UOp) -> Tensor:
     x = self.token_embd(tokens).float()
@@ -756,7 +774,9 @@ class Transformer:
         raise RuntimeError(f"prefill layer state pack mismatch before JIT: need {max(val_idx)+1}, got {len(vals)}")
       jit = self._prefill_v2_layer_jit(block, names, val_idx, vals, start_pos)
       x = jit(x, *vals) if isinstance(start_pos, int) else jit(x, start_pos, *vals)
-    return self.output(self.output_norm(x))
+    x = self.output_norm(x)
+    if self._lm_head_wants_pf16(): return _pf16(self.output, x).contiguous()
+    return self.output(x)
 
   def forward(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor) -> Tensor:
     logits = self.logits(tokens, start_pos)[:, -1, :]
