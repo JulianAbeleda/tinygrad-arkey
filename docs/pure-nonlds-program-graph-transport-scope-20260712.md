@@ -110,3 +110,13 @@ the combined pure authority runs. It is a genuine standstill if the compiler
 cannot expose a graph-insertable generated Program/UOp without a new backend
 ABI or hand emitter. At that point the correct deliverable is the typed missing
 interface and tests, not a relabeled hybrid result.
+
+## Negative transport test
+
+The existing opt-in ordinary generated `A @ B.T` branch was tested for all three
+non-LDS roles while retaining generated buffer2 for `ffn_gate_up`. At ctx512 it
+measured 269.2 ms / 1,902 tok/s with generated route attribution and no rollback.
+This falsifies the naive ordinary-graph transport as a performance solution:
+it does not reproduce the lean hand-pipe schedule. The typed pipe context remains
+the safe foundation, but a specialized compiler-owned lowering/transport is
+still required.
