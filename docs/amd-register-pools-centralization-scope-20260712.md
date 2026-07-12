@@ -302,3 +302,23 @@ source of truth, existing routes preserve their baseline output, and the pure
 register pipe can consume the same artifacts for resource, wait, correctness,
 timing, and machine-search gates.
 
+## Spark execution status (2026-07-12)
+
+- **G0-G2 complete:** `b7d9d6e12` adds logical register roles/banks/leases and
+  the gfx1100 descriptor. This is metadata-only and does not alter renderer
+  output.
+- **G3 complete:** `c50317551` moves the lease allocator into
+  `tinygrad/renderer/isa/amd_register_allocator.py` and makes the research
+  `wmma.py` layout reuse the canonical lease types and gfx1100 capacities.
+  Legacy register windows remain unchanged.
+- **G4 complete:** `ead74597e` plus `1e022a7ea` add the fail-closed physical
+  register/resource artifact and reuse the shared register-bank enum. The
+  artifact joins role intervals, resource facts, target/ABI, source/binary,
+  and candidate identity.
+- **G5-G7 remain pending:** the logical register-pipe graph is still a
+  structural scaffold, and final postrange integration, executable waits,
+  correctness, timing, and role expansion remain gated on the pure register
+  lifecycle/WMMA ABI.
+
+The centralization work is therefore complete through the allocator and
+artifact boundary, but it does not claim an executable pure register GEMM.
