@@ -10,6 +10,15 @@ from tinygrad.uop.ops import AxisType, Ops, UOp
 PipelinePhase = Literal["prologue", "body", "drain"]
 PipelineOp = Literal["produce", "ready", "consume", "release"]
 
+@dataclass(frozen=True)
+class StoragePolicy:
+  kind: Literal["lds", "register"]
+  active_bytes: int | None
+  resource_status: Literal["proved", "unproven"]
+
+def storage_policy_from_stage1(plan: "KernelStage1PipelinePlan") -> StoragePolicy:
+  return StoragePolicy("lds", plan.active_lds_bytes, "proved")
+
 
 @dataclass(frozen=True)
 class KernelStage1PipelinePlan:
