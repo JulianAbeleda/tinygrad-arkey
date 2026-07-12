@@ -51,6 +51,21 @@ def compile_only(candidate: dict[str, Any] | None, artifact: dict[str, Any] | No
     errors.append("compile artifact identity does not match candidate payload")
   binary = _binary_hash(artifact)
   if binary is None: errors.append("compile artifact has no binary hash")
+  resource_artifact = artifact.get("resource_artifact")
+  resource_obj = None
+  if not isinstance(resource_artifact, dict):
+    errors.append("final AMD resource artifact is unavailable")
+  else:
+    try:
+      from tinygrad.codegen.opt.amd_resource_artifact import AMDResourceArtifact, validate_amd_resource_artifact
+      resource_obj = AMDResourceArtifact.from_json(resource_artifact)
+      if resource_obj.target not in ("gfx1100", "AMD:gfx1100"):
+        errors.append("final AMD resource artifact target is not gfx1100")
+      validate_amd_resource_artifact(resource_obj, expected_candidate_identity=identity)
+      if binary is not None and resource_obj.binary_sha256 != binary:
+        errors.append("final resource artifact binary identity differs from compile binary")
+    except (TypeError, ValueError) as exc:
+      errors.append(f"final AMD resource artifact is invalid: {exc}")
   surface = artifact.get("surface") if isinstance(artifact.get("surface"), dict) else {}
   if artifact.get("passed") is not True: errors.append("compile authority did not pass")
   if surface.get("strict_pure") is not True or artifact.get("strict_pure") is False:
@@ -70,9 +85,17 @@ def compile_only(candidate: dict[str, Any] | None, artifact: dict[str, Any] | No
   for name, expected in (("wave_size", 32), ("fragment_carrier", "half.vec(16)"),
                          ("accumulator_carrier", "float.vec(8)")):
     if abi.get(name) != expected: errors.append(f"compile artifact ABI field {name!r} is unproven")
+  artifact_resources = {}
+  if resource_obj is not None:
+    facts = resource_obj.resources
+    wave_count = (facts.workgroup_threads // facts.wavefront_size
+                  if facts.workgroup_threads is not None and facts.wavefront_size and
+                  facts.workgroup_threads % facts.wavefront_size == 0 else None)
+    artifact_resources = {**facts.to_json(), "stage": resource_obj.resource_stage, "wave_count": wave_count}
   return _result("compile", not errors, errors, canonical_identity=identity, binary_sha256=binary,
                  storage_kind=pipeline.get("storage_kind"), pipeline=pipeline, wait=wait, abi=abi,
-                 resources=artifact.get("resources") if isinstance(artifact.get("resources"), dict) else {})
+                 resources=artifact_resources or (artifact.get("resources") if isinstance(artifact.get("resources"), dict) else {}),
+                 resource_artifact=resource_artifact)
 
 
 def final_resources(compile: dict[str, Any] | None) -> dict[str, Any]:
@@ -129,7 +152,35 @@ def correctness_timing(resources: dict[str, Any] | None, correctness: dict[str, 
                  binary_sha256=_binary_hash(resources), correctness=correctness, timing=timing)
 
 
-def machine_search(role_evidence: dict[str, dict[str, Any]] | None, *, selected_roles: tuple[str, ...] = ROLES) -> dict[str, Any]:
+def validate_role_attribution(report: dict[str, Any] | None, *, expected_roles: tuple[str, ...] = ROLES,
+                              require_pure: bool = False) -> dict[str, Any]:
+  """Require an explicit route row for every role in a whole-prefill artifact.
+
+  A top-level route flag never substitutes for the role map: candidate runs can
+  bind one role while the remaining roles use a fallback route.
+  """
+  errors: list[str] = []
+  if not isinstance(report, dict):
+    return _result("role_attribution", False, ("whole-prefill route artifact is unavailable",))
+  role_routes = report.get("prefill_role_routes")
+  if not isinstance(role_routes, dict):
+    errors.append("prefill_role_routes is unavailable")
+    role_routes = {}
+  for role in expected_roles:
+    route = role_routes.get(role)
+    if not isinstance(route, str) or not route:
+      errors.append(f"{role}: route attribution is missing")
+    elif require_pure and route not in ("register", "pure_register", "global_register_resident"):
+      errors.append(f"{role}: route {route!r} is not an admitted pure register route")
+  census = report.get("candidate_set_route_census")
+  if census is not None and (not isinstance(census, dict) or census.get("passed") is not True):
+    errors.append("candidate-set route census is missing or failed")
+  return _result("role_attribution", not errors, errors, roles={role: role_routes.get(role) for role in expected_roles},
+                 candidate_set_route_census=census)
+
+
+def machine_search(role_evidence: dict[str, dict[str, Any]] | None, *, selected_roles: tuple[str, ...] = ROLES,
+                   route_report: dict[str, Any] | None = None) -> dict[str, Any]:
   """Admit search only when every selected role has complete pure evidence."""
   errors: list[str] = []
   if not isinstance(role_evidence, dict):
@@ -153,6 +204,9 @@ def machine_search(role_evidence: dict[str, dict[str, Any]] | None, *, selected_
       errors.append(f"{role}: typed register policy fields are unavailable")
     if row.get("search_space") != "typed_policy_fields":
       errors.append(f"{role}: search space is not typed policy fields")
+  if route_report is not None:
+    attribution = validate_role_attribution(route_report, expected_roles=selected_roles, require_pure=True)
+    errors.extend(f"role attribution: {error}" for error in attribution["errors"])
   return _result("machine_search", not errors, errors, selected_roles=list(selected_roles), roles=rows,
                  search_space="typed_policy_fields" if not errors else None)
 
@@ -160,7 +214,8 @@ def machine_search(role_evidence: dict[str, dict[str, Any]] | None, *, selected_
 def evaluate(candidate: dict[str, Any] | None, *, compile_artifact: dict[str, Any] | None = None,
              correctness: dict[str, Any] | None = None, timing: dict[str, Any] | None = None,
              role_evidence: dict[str, dict[str, Any]] | None = None,
-             selected_roles: tuple[str, ...] = ROLES, baseline_tok_s: float | None = None) -> dict[str, Any]:
+             selected_roles: tuple[str, ...] = ROLES, baseline_tok_s: float | None = None,
+             route_report: dict[str, Any] | None = None) -> dict[str, Any]:
   """Run R6-R10 in order and stop at the first unavailable or failed gate."""
   report: dict[str, Any] = {"schema": SCHEMA, "passed": False, "blocked_at": None, "blockers": {}, "stages": {}}
   compile = compile_only(candidate, compile_artifact)
@@ -178,7 +233,7 @@ def evaluate(candidate: dict[str, Any] | None, *, compile_artifact: dict[str, An
   if not correctness_stage["passed"]:
     report.update(blocked_at="correctness_timing", blockers={"correctness_timing": correctness_stage["errors"]})
     return report
-  search = machine_search(role_evidence, selected_roles=selected_roles)
+  search = machine_search(role_evidence, selected_roles=selected_roles, route_report=route_report)
   report["stages"]["machine_search"] = search
   if not search["passed"]:
     report.update(blocked_at="machine_search", blockers={"machine_search": search["errors"]})

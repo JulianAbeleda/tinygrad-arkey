@@ -1,5 +1,5 @@
 from extra.qk.prefill.pure_register_evaluation_gate import (COMPILE_SCHEMA, REGISTER_STORAGE, compile_only,
-  evaluate, final_resources, machine_search)
+  evaluate, final_resources, machine_search, validate_role_attribution)
 
 
 IDENTITY = "a" * 64
@@ -7,6 +7,13 @@ BINARY = "b" * 64
 
 
 def _compile(**overrides):
+  resource = {"schema": "tinygrad.amd.resource_artifact.v1", "target": "gfx1100", "abi": "amdgpu_kernel",
+              "source_sha256": "c" * 64, "binary_sha256": BINARY, "candidate_identity": IDENTITY,
+              "resource_stage": "final_program",
+              "resources": {"vgpr": 100, "sgpr": 80, "lds_bytes": 0, "scratch_bytes": 0,
+                            "vgpr_spills": 0, "sgpr_spills": 0, "workgroup_threads": 256, "wavefront_size": 32},
+              "physical_intervals": [{"logical_role": "A", "bank": "vgpr", "start": 0, "end": 8},
+                                     {"logical_role": "B", "bank": "vgpr", "start": 8, "end": 16}]}
   row = {"schema": COMPILE_SCHEMA, "canonical_identity": IDENTITY, "binary_sha256": BINARY,
          "passed": True, "surface": {"strict_pure": True, "ops_ins_count": 0, "source_kind": "compiler_rendered"},
          "pipeline": {"storage_kind": REGISTER_STORAGE, "lds_bytes": 0},
@@ -14,7 +21,7 @@ def _compile(**overrides):
          "abi": {"wave_size": 32, "fragment_carrier": "half.vec(16)", "accumulator_carrier": "float.vec(8)"},
          "resources": {"stage": "final_program", "vgpr": 100, "sgpr": 80, "lds_bytes": 0,
                        "scratch_bytes": 0, "vgpr_spills": 0, "sgpr_spills": 0,
-                       "workgroup_threads": 256, "wave_count": 8}}
+                       "workgroup_threads": 256, "wave_count": 8}, "resource_artifact": resource}
   row.update(overrides)
   return row
 
@@ -53,12 +60,13 @@ def test_lds_candidate_is_not_admitted_as_register_compile():
 
 
 def test_final_resource_gate_rejects_host_estimates_and_spills():
-  artifact = _compile(resources={"stage": "host_estimate", "lds_bytes": 0})
-  assert final_resources(artifact)["passed"] is False
-  artifact = _compile(resources={"stage": "final_program", "vgpr": 100, "sgpr": 80, "lds_bytes": 0,
-                                 "scratch_bytes": 0, "vgpr_spills": 1, "sgpr_spills": 0,
-                                 "workgroup_threads": 256, "wave_count": 8})
-  assert final_resources(artifact)["passed"] is False
+  host_resource = _compile()["resource_artifact"] | {"resource_stage": "host_estimate"}
+  artifact = _compile(resource_artifact=host_resource)
+  assert compile_only({"canonical_identity": IDENTITY}, artifact)["passed"] is False
+  spill_resource = _compile()["resource_artifact"] | {"resources": _compile()["resource_artifact"]["resources"] | {"vgpr_spills": 1}}
+  artifact = _compile(resource_artifact=spill_resource)
+  compiled = compile_only({"canonical_identity": IDENTITY}, artifact)
+  assert compiled["passed"] is True and final_resources(compiled)["passed"] is False
 
 
 def test_machine_search_requires_every_role_and_typed_policy_fields():
@@ -68,9 +76,26 @@ def test_machine_search_requires_every_role_and_typed_policy_fields():
   assert report["passed"] is False and any("attn_kv" in error for error in report["errors"])
 
 
+def test_role_attribution_requires_all_roles_and_does_not_trust_top_level_pure_flag():
+  mixed = {"route_attribution": {"prefill_route_pure": True},
+           "prefill_role_routes": {"ffn_gate_up": "candidate_lds_single_buffer"}}
+  report = validate_role_attribution(mixed)
+  assert report["passed"] is False
+  assert any("attn_qo" in error for error in report["errors"])
+  pure = {"route_attribution": {"prefill_route_pure": True},
+          "prefill_role_routes": {role: "register" for role in ("attn_qo", "ffn_down", "attn_kv", "ffn_gate_up")}}
+  assert validate_role_attribution(pure, require_pure=True)["passed"] is True
+
+
+def test_machine_search_rejects_mixed_whole_prefill_role_map():
+  mixed = {"prefill_role_routes": {role: "register" for role in ("attn_qo", "ffn_down", "attn_kv", "ffn_gate_up")}}
+  mixed["prefill_role_routes"]["ffn_gate_up"] = "candidate_lds_single_buffer"
+  report = machine_search(_roles(), route_report=mixed)
+  assert report["passed"] is False and any("role attribution" in error for error in report["errors"])
+
+
 def test_all_gates_join_for_synthetic_register_artifact():
   report = evaluate({"canonical_identity": IDENTITY}, compile_artifact=_compile(),
                     correctness=_correctness(), timing=_timing(), role_evidence=_roles(), baseline_tok_s=1.0)
   assert report["passed"] is True and report["blocked_at"] is None
   assert all(report["stages"][name]["passed"] for name in ("compile", "resources", "correctness_timing", "machine_search"))
-
