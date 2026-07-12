@@ -261,6 +261,33 @@ def test_register_candidate_admission_uses_zero_lds_typed_plan():
   assert admission.context.pipeline == admission.pipeline_plan
 
 
+def test_register_candidate_route_selects_typed_install_without_lds(monkeypatch):
+  payload = json.loads(json.dumps(_single_buffer_anchor_candidate().full_kernel_candidate))
+  payload["schedule"]["pipeline"].update(buffer_count=1, stage_count=2)
+  payload["schedule"]["residency"]["resident"] = ["accumulator", "stage_ab_register"]
+  candidate = _strict_full_kernel_candidate(full_kernel_candidate=payload)
+  monkeypatch.setenv("BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON", json.dumps(payload))
+  monkeypatch.setenv("BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH", candidate.canonical_identity)
+  monkeypatch.setenv("BOLTBEAM_FULL_KERNEL_CANDIDATE_ROLES", "ffn_gate_up")
+  seen = {}
+
+  def capture(_x, _w, _out_f, _in_f, _spec, admission):
+    seen["storage"] = admission.context.pipeline.storage.kind
+    seen["lds"] = admission.active_lds_bytes
+    return "register_install"
+
+  monkeypatch.setattr(prefill_graph_gemm_route, "_install_candidate_matmul", capture)
+  class Fake:
+    ndim = 3
+    shape = (1, 512, 4096)
+  class FakeWeight:
+    shape = (12288, 4096)
+  class Lin: pass
+  lin = Lin(); lin._pf16_w = FakeWeight(); lin.bias = None; lin._prefill_graph_role = "ffn_gate_up"
+  assert prefill_graph_gemm_route.route_pf16_graph_gemm(lin, Fake()) == "register_install"
+  assert seen == {"storage": "global_register_resident", "lds": 0}
+
+
 @pytest.mark.parametrize(("field", "value", "error"), (
   ("canonical_identity", "0" * 64, "identity_mismatch"),
   ("shape", (1024, 12288, 4096), "shape"),
