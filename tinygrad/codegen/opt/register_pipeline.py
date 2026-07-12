@@ -84,6 +84,8 @@ class RegisterPipeTemplate:
     validate_precontract_operand_templates(self.operands, context="register pipe")
     validate_precontract_contracts(self.tc, self.contracts, context="register pipe")
     validate_precontract_carriers(dtypes.half.vec(16), dtypes.float.vec(8), context="register pipe")
+    for tile in self.logical_tiles:
+      self.consumer_adapter.validate_tile(tile)
 
   @property
   def consumer_adapter(self):
@@ -115,7 +117,7 @@ class RegisterPipeTemplate:
     return tuple(LogicalRegisterTile(
       role, dtypes.half, (fragments, 16), fragments, 16, 16,
       self.logical_buffer_count, "static" if self.schedule == "sequential" else "proven",
-      layout="row_major_fragment16", alignment_bytes=32,
+      layout=self.consumer_adapter.layout, alignment_bytes=32,
       ownership=("producer", "consumer", "slot"),
       lifetime=("produce", "consume", "release", "overwrite"))
       for role, fragments in (("A", self.pipe_tm), ("B", self.pipe_tn)))

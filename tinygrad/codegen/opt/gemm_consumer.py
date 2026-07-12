@@ -25,7 +25,7 @@ class LogicalTile(Protocol):
   role: str
   dtype: DType
   carrier_width: int
-  tile_shape: tuple[int, int, int]
+  tile_shape: tuple[int, ...]
   slot_count: int
   slot_addressing: str
   layout: str
@@ -59,7 +59,7 @@ def validate_logical_tile(tile: LogicalTile, *, identity: str, dtype: DType,
   if not isinstance(width, int) or isinstance(width, bool) or width != carrier_width:
     raise ValueError(f"{identity} tile carrier width does not match consumer ABI")
   shape = _tile_value(tile, "tile_shape")
-  if not isinstance(shape, tuple) or len(shape) != 3 or any(not isinstance(x, int) or x <= 0 for x in shape):
+  if not isinstance(shape, tuple) or not shape or any(not isinstance(x, int) or x <= 0 for x in shape):
     raise ValueError(f"{identity} tile shape is invalid")
   if _tile_value(tile, "layout") != layout:
     raise ValueError(f"{identity} tile layout is not proven")
@@ -67,7 +67,7 @@ def validate_logical_tile(tile: LogicalTile, *, identity: str, dtype: DType,
   if slots not in (1, 2):
     raise ValueError(f"{identity} tile slot count must be one or two")
   addressing = _tile_value(tile, "slot_addressing")
-  if addressing not in ("static", "sequential"):
+  if addressing not in ("static", "sequential", "proven"):
     raise ValueError(f"{identity} tile slot addressing is not supported")
   # Dynamic modulo addressing cannot name a VGPR.  Consumers may only receive
   # a logical tile after storage has proven static/sequential mapping.
