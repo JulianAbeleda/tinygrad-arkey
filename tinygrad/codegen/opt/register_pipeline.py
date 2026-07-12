@@ -14,7 +14,7 @@ from tinygrad.codegen.opt.kernel_lds import (PrecontractContractSpec, Precontrac
 from tinygrad.codegen.opt.kernel_pipeline import (KernelStage1FragmentStage, KernelStage1LifecycleEvent,
   KernelStage1LifecycleProof, KernelStage1ProducerStage, Stage1StorageAdapter, prove_stage1_lifecycle,
   stage1_lifecycle_events)
-from tinygrad.dtype import dtypes
+from tinygrad.dtype import AddrSpace, dtypes
 from tinygrad.uop.ops import AxisType, KernelLDSWindow, KernelTileGeometry, Ops, UOp
 
 
@@ -84,36 +84,46 @@ class RegisterPipeTemplate:
     # Each half.vec(16) carrier is two architectural b128 loads.
     return self.pipe_tm * 2 + self.pipe_tn * 2
 
+  @property
+  def body_readiness(self) -> str: return "matching"
+
+  @property
+  def stage_width(self) -> int: return (self.pipe_tm + self.pipe_tn) * 16
+
+  def _buffers(self) -> tuple[UOp, UOp]:
+    return (UOp.placeholder((self.stage_width * 2,), dtypes.half, 9300, addrspace=AddrSpace.REG),
+            UOp.placeholder((self.stage_width * 2,), dtypes.half, 9301, addrspace=AddrSpace.REG))
+
   def producer(self, epoch: UOp, slot: UOp, reuse: UOp | None = None) -> KernelStage1ProducerStage:
+    buffers = self._buffers()
     nodes: list[UOp] = []
-    for operand, count in zip(self.operands, (self.pipe_tm, self.pipe_tn)):
+    for operand, count, buffer in zip(self.operands, (self.pipe_tm, self.pipe_tn), buffers):
       vectors = []
       for frag in range(count):
         row = operand.row_tile_base + frag * 16
         values = tuple(operand.source.substitute({operand.row_axis: row,
           operand.k_axis: epoch * self.k_step + elem}) for elem in range(16))
-        vectors.append(UOp(Ops.STACK, dtypes.half.vec(16), values,
-          tag=("register_pipe_load", operand.role, frag, epoch, slot)))
-      # GROUP is restricted to side-effecting void children by the UOp spec;
-      # a producer with value-only global loads is represented as a sink carrier.
-      nodes.append(UOp.sink(*vectors).replace(tag=("register_pipe_producer", operand.role, epoch, slot)))
-    # NOOP is the spec-approved void dependency carrier for value-only loads;
-    # GROUP intentionally accepts only side-effecting children.
-    ready = UOp(Ops.NOOP, dtypes.void, tuple(nodes), tag=("register_pipe_ready", epoch, slot))
+        value = UOp(Ops.STACK, dtypes.half.vec(16), values,
+          tag=("register_pipe_load", operand.role, frag, epoch, slot))
+        vectors.append(buffer.index(slot * self.stage_width + frag * 16, dtype=dtypes.half.vec(16)).store(value))
+      nodes.append(UOp.group(*vectors).replace(tag=("register_pipe_producer", operand.role, epoch, slot)))
+    ready = UOp.group(*nodes).replace(tag=("register_pipe_ready", epoch, slot))
     return KernelStage1ProducerStage(epoch, slot, (nodes[0], nodes[1]), ready)
 
   def fragments(self, epoch: UOp, slot: UOp, ready: UOp) -> KernelStage1FragmentStage:
-    carriers = [u for u in ready.backward_slice_with_self if u.op is Ops.STACK and u.dtype == dtypes.half.vec(16)]
-    if len(carriers) < self.pipe_tm + self.pipe_tn:
-      raise ValueError("register fragment consumer has no complete producer carrier set")
+    if ready.op not in (Ops.GROUP, Ops.END, Ops.BARRIER):
+      raise ValueError("register fragment consumer has no typed producer readiness")
+    buffers = self._buffers()
+    if isinstance(ready.tag, tuple) and ready.tag[:1] == ("register_pipe_ready",):
+      ready_epoch, ready_slot = ready.tag[1], ready.tag[2]
+      same = ready_epoch.render() == epoch.render() and ready_slot.render() == slot.render()
+      nxt = ready_epoch.render() == (epoch + 1).render() and ready_slot.render() == ((slot + 1) % 2).render()
+      if not (same or nxt): raise ValueError("register fragment consumer readiness epoch/slot mismatch")
     out: list[UOp] = []
-    for operand, contract, count in zip(self.operands, self.contracts, (self.pipe_tm, self.pipe_tn)):
-      role_carriers = [u for u in carriers if isinstance(u.tag, tuple) and u.tag[:2] == ("register_pipe_load", operand.role)
-                       and u.tag[3] is epoch and u.tag[4] is slot]
-      if len(role_carriers) < count:
-        raise ValueError(f"register fragment consumer missing {operand.role} producer carriers")
+    for operand, contract, count, buffer in zip(self.operands, self.contracts, (self.pipe_tm, self.pipe_tn), buffers):
       for idx in range(count):
-        out.append(UOp(Ops.CONTRACT, dtypes.half.vec(16), (role_carriers[idx].after(ready),), contract.arg,
+        load = buffer.after(ready).index(slot * self.stage_width + idx * 16, dtype=dtypes.half.vec(16)).load()
+        out.append(UOp(Ops.CONTRACT, dtypes.half.vec(16), (load,), contract.arg,
                        tag=("register_pipe_fragment", operand.role, epoch, slot, idx)))
     return KernelStage1FragmentStage(epoch, slot, ready, tuple(out))
 
@@ -154,10 +164,9 @@ def prove_register_graph_no_lds(root: UOp) -> tuple[str, ...]:
     if u.op is Ops.DEFINE_LOCAL: errors.append("register graph contains DEFINE_LOCAL")
     if u.op is Ops.INS: errors.append("register graph contains raw Ops.INS")
     if u.op is Ops.CONTRACT and u.dtype == dtypes.half.vec(16):
-      if len(u.src) != 1 or u.src[0].op is not Ops.AFTER:
+      if (len(u.src) != 1 or u.src[0].op is not Ops.LOAD or not u.src[0].src or
+          not u.src[0].src[0].src or u.src[0].src[0].src[0].op is not Ops.AFTER):
         errors.append("register fragment is not ordered after producer readiness")
-      elif len(u.src[0].src) < 2 or u.src[0].src[1].op is not Ops.NOOP:
-        errors.append("register fragment readiness marker is missing")
   return tuple(errors)
 
 
