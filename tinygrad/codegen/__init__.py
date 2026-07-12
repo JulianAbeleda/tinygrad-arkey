@@ -17,7 +17,7 @@ from tinygrad.uop.symbolic import sym, symbolic_simple, gep_pushing, symbolic, p
 from tinygrad.uop.decompositions import get_late_rewrite_patterns, get_transcendental_patterns, pm_dtype_decomps
 from tinygrad.codegen.late.expander import expander, pm_pre_expander, pm_group_for_reduce
 from tinygrad.codegen.late.devectorizer import load_store_folding, load_store_indexing, devectorize_buf_and_index, devectorize_alu, pm_reduce, \
-  ReduceContext, correct_load_store, pm_render, pm_add_loads, pm_make_images, pm_reduce_acc_upcast_fix, pm_distinct_reg_store_devec
+  ReduceContext, correct_load_store, pm_render, pm_add_loads, pm_make_images, pm_reduce_acc_upcast_fix, pm_distinct_reg_store_devec, pm_group_wmma_reg_store
 from tinygrad.codegen.opt.postrange import apply_opts
 from tinygrad.codegen import experimental as cg_extras
 from tinygrad.codegen.late.gater import pm_move_gates_from_index
@@ -132,6 +132,7 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   sink = graph_rewrite(sink, sym+devectorize_alu+devectorize_buf_and_index+load_store_folding+correct_load_store+load_store_indexing,
                        ctx=ren, name="devectorize")
   if ren.target.device == "AMD":
+    sink = graph_rewrite(sink, pm_group_wmma_reg_store, name="group wmma reg ownership")
     sink = graph_rewrite(sink, pm_distinct_reg_store_devec, name="distinct reg store devec")
   if (getenv("REG_STORE_DEVEC") or getenv("COALESCED_LOAD_LOWERING")) and ren.target.device == "AMD":
     sink = graph_rewrite(sink, cg_extras.reg_store_devec_pm(), name="reg store devec")

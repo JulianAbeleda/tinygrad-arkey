@@ -580,6 +580,30 @@ def reduce_acc_upcast_fix(sink:UOp) -> UOp|None:
 
 pm_reduce_acc_upcast_fix = PatternMatcher([(UPat(Ops.SINK, name="sink"), reduce_acc_upcast_fix)])
 
+def _group_wmma_reg_store(tgt:UOp, val:UOp) -> UOp|None:
+  """Recover WMMA output-contract groups from an expanded distinct REG store."""
+  wmma = val if val.op is Ops.WMMA else val.src[0] if val.op is Ops.GEP and val.src[0].op is Ops.WMMA else None
+  if wmma is None or tgt.op is not Ops.STACK or len(tgt.src) != val.dtype.count: return None
+  try: width = prod(sz for _axis,sz in wmma.arg[6][2])
+  except (IndexError,TypeError,ValueError): return None
+  if width <= 1 or len(tgt.src) % width: return None
+  ptrs=[]
+  for p in tgt.src:
+    p=p.src[0] if p.op is Ops.LOAD else p
+    if p.op is not Ops.INDEX or p.src[0].addrspace != AddrSpace.REG or p.src[1].op is not Ops.CONST: return None
+    ptrs.append(p)
+  if len(set(ptrs)) != len(ptrs): return None
+  base=ptrs[0].src[0]
+  if any(p.src[0] is not base for p in ptrs): return None
+  ordered=sorted(((p.src[1].arg,lane,p) for lane,p in enumerate(ptrs)),key=lambda x:x[0])
+  if [x[0] for x in ordered] != list(range(ordered[0][0],ordered[0][0]+len(ordered))): return None
+  stores=[]
+  for start in range(0,len(ordered),width):
+    group=ordered[start:start+width]; off=group[0][0]
+    dst=base.index(UOp.const(dtypes.weakint,off),dtype=val.dtype.scalar().vec(width))
+    stores.append(dst.store(val.gep(tuple(x[1] for x in group))))
+  return UOp.group(*stores)
+
 def _devec_distinct_reg_store(tgt:UOp, val:UOp) -> UOp|None:
   ptrs: list[UOp] = []
   for s in tgt.src:
@@ -604,6 +628,9 @@ pm_distinct_reg_store_devec = PatternMatcher([
   (UPat(Ops.STORE, src=(UPat(Ops.STACK, name="tgt"), UPat.var("val"))), _devec_distinct_reg_store),
   (UPat(Ops.STORE, src=(UPat(Ops.STACK, name="tgt"), UPat.var("val"), UPat.var("gate"))), _devec_stack_store),
   (UPat(Ops.STORE, src=(UPat(Ops.STACK, name="tgt"), UPat.var("val"))), _devec_stack_store),
+])
+pm_group_wmma_reg_store = PatternMatcher([
+  (UPat(Ops.STORE, src=(UPat(Ops.STACK, name="tgt"), UPat.var("val"))), _group_wmma_reg_store),
 ])
 
 # add loads
