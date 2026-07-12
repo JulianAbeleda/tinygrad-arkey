@@ -50,6 +50,31 @@ def test_register_adapter_does_not_enter_lds_stage1_builder_before_readiness_is_
     build_stage1_uop_graph_with_storage(adapter, KernelStage1PipelinePlan(2, 20480), 2, lambda *_: None)
 
 
+def test_register_single_epoch_compiles_through_normal_amd_rewrite():
+  from tinygrad.codegen import full_rewrite_to_sink
+  from tinygrad.helpers import Target
+  from tinygrad.renderer.cstyle import HIPRenderer
+  t = _fixture()
+  producer = t.producer(UOp.const(dtypes.weakint, 0), UOp.const(dtypes.weakint, 0))
+  fragments = t.fragments(producer.epoch, producer.slot, producer.ready)
+  arg = (str(t.tc), t.tc.dims, t.tc.dtype_in, t.tc.dtype_out, "AMD", t.tc.threads,
+         (t.contracts[0].arg, t.contracts[1].arg, ()), ())
+  wmma = UOp(Ops.WMMA, dtypes.float.vec(8),
+    (fragments.fragments[0], fragments.fragments[2], UOp.const(dtypes.float.vec(8), 0.0)), arg)
+  rewritten = full_rewrite_to_sink(UOp.sink(*producer.role_nodes, wmma), HIPRenderer(Target.parse("AMD")), optimize=False)
+  topo = rewritten.toposort()
+  assert not any(x.op in (Ops.DEFINE_LOCAL, Ops.INS) for x in topo)
+  assert len([x for x in topo if x.op is Ops.WMMA]) == 1
+
+
+def test_register_fragments_fail_closed_on_unproven_stage_readiness():
+  t = _fixture()
+  epoch = UOp.const(dtypes.weakint, 0)
+  producer = t.producer(epoch, UOp.const(dtypes.weakint, 0))
+  with pytest.raises(ValueError, match="producer carriers"):
+    t.fragments(UOp.const(dtypes.weakint, 1), UOp.const(dtypes.weakint, 1), producer.ready)
+
+
 def test_register_template_rejects_fake_descriptor_remap():
   t = _fixture()
   bad = list(t.contracts); bad[0] = PrecontractContractSpec("A", bad[0].axes, bad[0].arg, bad[0].element, (("bad", "map"),))

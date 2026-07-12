@@ -94,8 +94,12 @@ class RegisterPipeTemplate:
           operand.k_axis: epoch * self.k_step + elem}) for elem in range(16))
         vectors.append(UOp(Ops.STACK, dtypes.half.vec(16), values,
           tag=("register_pipe_load", operand.role, frag, epoch, slot)))
-      nodes.append(UOp.group(*vectors).replace(tag=("register_pipe_producer", operand.role, epoch, slot)))
-    ready = UOp.group(*nodes).replace(tag=("register_pipe_ready", epoch, slot))
+      # GROUP is restricted to side-effecting void children by the UOp spec;
+      # a producer with value-only global loads is represented as a sink carrier.
+      nodes.append(UOp.sink(*vectors).replace(tag=("register_pipe_producer", operand.role, epoch, slot)))
+    # NOOP is the spec-approved void dependency carrier for value-only loads;
+    # GROUP intentionally accepts only side-effecting children.
+    ready = UOp(Ops.NOOP, dtypes.void, tuple(nodes), tag=("register_pipe_ready", epoch, slot))
     return KernelStage1ProducerStage(epoch, slot, (nodes[0], nodes[1]), ready)
 
   def fragments(self, epoch: UOp, slot: UOp, ready: UOp) -> KernelStage1FragmentStage:
@@ -104,7 +108,8 @@ class RegisterPipeTemplate:
       raise ValueError("register fragment consumer has no complete producer carrier set")
     out: list[UOp] = []
     for operand, contract, count in zip(self.operands, self.contracts, (self.pipe_tm, self.pipe_tn)):
-      role_carriers = [u for u in carriers if isinstance(u.tag, tuple) and u.tag[:2] == ("register_pipe_load", operand.role)]
+      role_carriers = [u for u in carriers if isinstance(u.tag, tuple) and u.tag[:2] == ("register_pipe_load", operand.role)
+                       and u.tag[3] is epoch and u.tag[4] is slot]
       if len(role_carriers) < count:
         raise ValueError(f"register fragment consumer missing {operand.role} producer carriers")
       for idx in range(count):
@@ -151,7 +156,7 @@ def prove_register_graph_no_lds(root: UOp) -> tuple[str, ...]:
     if u.op is Ops.CONTRACT and u.dtype == dtypes.half.vec(16):
       if len(u.src) != 1 or u.src[0].op is not Ops.AFTER:
         errors.append("register fragment is not ordered after producer readiness")
-      elif len(u.src[0].src) < 2 or u.src[0].src[1].op is not Ops.GROUP:
+      elif len(u.src[0].src) < 2 or u.src[0].src[1].op is not Ops.NOOP:
         errors.append("register fragment readiness marker is missing")
   return tuple(errors)
 
