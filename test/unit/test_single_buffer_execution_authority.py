@@ -128,3 +128,8 @@ def test_case_array_defaults_preserve_gate_up_anchor_shape():
   a, b, reference = auth._case_arrays("constant")
   assert a.shape == (auth.M, auth.K) and b.shape == (auth.N, auth.K)
   assert reference.shape == (auth.M, auth.N)
+
+
+def test_buffer2_lifecycle_loop_bound_is_derived_from_workload():
+  payload={"workload":{"shape":{"k":12288}},"schedule":{"tile":{"k":32}}}
+  assert auth._buffer2_loop_bound(payload) == 383

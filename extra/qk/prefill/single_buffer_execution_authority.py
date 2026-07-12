@@ -188,7 +188,7 @@ def _emitted_tile_lds_proof(program: UOp) -> dict[str, Any]:
           "lds_strides": {w.role.lower():w.stride_bytes for w in geometry.lds_windows},
           "producer_data_elements": len(expected_a|expected_b), "consumer_data_elements": len(expected_a|expected_b)}
 
-def _buffer2_emitted_lifecycle_proof(program:UOp) -> dict[str,Any]:
+def _buffer2_emitted_lifecycle_proof(program:UOp, *, expected_loop_bound:int) -> dict[str,Any]:
   sink=program.src[0]; context=getattr(sink.arg,"candidate_context",None)
   geometry,pipeline=getattr(context,"geometry",None),getattr(context,"pipeline",None); errors=[]
   if geometry is None or pipeline is None or pipeline.buffer_count != 2:
@@ -210,9 +210,9 @@ def _buffer2_emitted_lifecycle_proof(program:UOp) -> dict[str,Any]:
     if got!=want: errors.append(f"expected {want} {name}, found {got}")
   expr={"stores":[idx(u).render() for u in stores],"loads":[idx(u).render() for u in loads]}
   source=next((u.arg for u in program.src if u.op is Ops.SOURCE),"")
-  loop_match=re.search(r"for \(int (Ridx\d+) = 0; \1 < 127; \1\+\+\)",source)
+  loop_match=re.search(r"for \(int (Ridx\d+) = 0; \1 < (\d+); \1\+\+\)",source)
   loop_var=loop_match.group(1) if loop_match else None
-  checks={"loop":loop_match is not None,
+  checks={"loop":loop_match is not None and int(loop_match.group(2)) == expected_loop_bound,
           "current_slot":loop_var is not None and f"(({loop_var}&1)*10240)" in source,
           "next_slot":loop_var is not None and f"((({loop_var}+1)&1)*10240)" in source,
           "drain_slot1":all(re.search(rf"buf0\+\(alu\d+\+{offset}\)", source) is not None for offset in (10240,15360)),
@@ -233,12 +233,16 @@ def _buffer2_emitted_lifecycle_proof(program:UOp) -> dict[str,Any]:
           "fragment_load_formula_count":len(loads),"barrier_count":len(bars),"wmma_count":len(wmmas),
           "symbolic_expressions":expr,"source_checks":checks,"isa":{k:v for k,v in isa.items() if isinstance(v,(int,str,bool))}}
 
+def _buffer2_loop_bound(payload:dict[str,Any]) -> int:
+  return payload["workload"]["shape"]["k"]//payload["schedule"]["tile"]["k"]-1
+
 
 def _structural_binding(payload: dict[str, Any], program: UOp, lds: dict[str, Any]) -> dict[str, Any]:
   expected = _expected_structure(payload)
   pipeline=getattr(getattr(program.src[0].arg,"candidate_context",None),"pipeline",None)
   buffer2=pipeline is not None and pipeline.buffer_count==2
-  emitted_proof = _buffer2_emitted_lifecycle_proof(program) if buffer2 else _emitted_tile_lds_proof(program)
+  emitted_proof = (_buffer2_emitted_lifecycle_proof(program,expected_loop_bound=_buffer2_loop_bound(payload))
+                   if buffer2 else _emitted_tile_lds_proof(program))
   if buffer2: expected["lds_bytes"]=pipeline.active_lds_bytes
   local_size = tuple(program.arg.local_size or ())
   actual_threads = math.prod(local_size) if local_size else None
