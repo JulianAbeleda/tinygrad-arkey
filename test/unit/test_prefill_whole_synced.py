@@ -1,4 +1,5 @@
 from extra.qk import prefill_whole_synced as whole
+from tinygrad.helpers import ProfileRangeEvent
 
 
 def _report(route_id=whole.PREFILL_WMMA_PIPE_ROUTE, **route_overrides):
@@ -27,6 +28,18 @@ def _effective(route_id):
     "pure": True,
     "rolled_back_to_oracle": False,
   }]
+
+
+def test_profile_range_summary_aggregates_without_debug_sync():
+  events = [ProfileRangeEvent("AMD", "rmsnorm", 1_000, 1_250),
+            ProfileRangeEvent("AMD", "rmsnorm", 2_000, 2_100),
+            ProfileRangeEvent("AMD", "rope", 3_000, 4_000)]
+  summary = whole.profile_range_summary(events)
+  assert summary["schema"] == "prefill-device-profile-range-summary.v1"
+  assert summary["kernel_count"] == 3
+  assert summary["by_name"]["rmsnorm"]["calls"] == 2
+  assert summary["by_name"]["rmsnorm"]["device_ms"] == 0.35
+  assert summary["by_name"]["rope"]["device_ms"] == 1.0
 
 
 def test_prefill_role_routes_names_pipe_only_roles():

@@ -146,6 +146,35 @@ def reproducibility_band(chunk_samples_ms: dict[Any, list[float]]) -> dict[str, 
           "single_sample": (not per) or all(v["n"] < 2 for v in per.values())}
 
 
+def profile_range_summary(events: list[Any]) -> dict[str, Any]:
+  """Summarize asynchronous device profile ranges without forcing extra synchronizations.
+
+  AMD HCQ records ProfileRangeEvent timestamps at queue completion.  The authority already
+  synchronizes after its timed burst, so consuming the records here preserves the normal
+  TinyJit capture and wall-time protocol.  Unknown event objects are ignored deliberately.
+  """
+  from collections import defaultdict
+  from tinygrad.helpers import ProfileRangeEvent
+  by_name: dict[str, list[float]] = defaultdict(list)
+  for event in events:
+    if not isinstance(event, ProfileRangeEvent): continue
+    try:
+      # CPU and HCQ profile timestamps are expressed in microseconds.
+      delta = float(event.en) - float(event.st)
+      scale = 1e-3
+      duration_ms = delta * scale
+    except (TypeError, ValueError): continue
+    if duration_ms < 0: continue
+    by_name[str(event.name)].append(duration_ms)
+  rows = {
+    name: {"calls": len(vals), "device_ms": round(sum(vals), 4), "min_ms": round(min(vals), 4),
+           "max_ms": round(max(vals), 4)}
+    for name, vals in sorted(by_name.items()) if vals
+  }
+  return {"schema": "prefill-device-profile-range-summary.v1", "kernel_count": sum(r["calls"] for r in rows.values()),
+          "device_ms": round(sum(r["device_ms"] for r in rows.values()), 4), "by_name": rows}
+
+
 def authority_completeness_gate(report: dict[str, Any], *, quality_gate: dict[str, Any] | None = None) -> dict[str, Any]:
   """Refuse to call a report mode:"authority" without the valid-benchmark-artifact checklist fields (F3/F4)."""
   band = report.get("reproducibility_band") or {}
@@ -236,6 +265,7 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
   if pin_clock: set_clock_pin_env(os.environ, True)
 
   from tinygrad import Tensor, Device, TinyJit
+  from tinygrad.device import Compiled
   from extra.qk.timing_harness import pinned_peak_from_env
 
   dev = Device["AMD"]
@@ -265,6 +295,7 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
     # entirely, leaving _WARMSTART_OPTS empty (the phantom-1741 bench bug).
     for _ in range(warmups): prefill_call(sp_int).realize()
     dev.synchronize()
+    profile_start = len(Compiled.profile_events)
     ts = []
     with pinned_peak_from_env() as pin_prov:
       for _ in range(rounds):
@@ -273,7 +304,9 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
         for _ in range(K): prefill_call(sp_int).realize()
         dev.synchronize()
         ts.append((time.perf_counter() - t0) / K * 1e3)
-    return {"min_ms": min(ts), "samples_ms": ts, "clock_pin": pin_prov}
+    profile_events = list(Compiled.profile_events[profile_start:])
+    return {"min_ms": min(ts), "samples_ms": ts, "clock_pin": pin_prov,
+            "profile": profile_range_summary(profile_events)}
 
   from extra.qk.prefill_graph_gemm_route import (_candidate_registry_from_env, candidate_route_census,
     finalize_candidate_route_census)
@@ -312,6 +345,7 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
     "chunk_n": chunk_n,
     "chunk_ms": {str(k): round(v, 4) for k, v in chunk_ms.items()},
     "chunk_samples_ms": {str(k): [round(x, 4) for x in row["samples_ms"]] for k, row in chunk_rows.items()},
+    "device_profile": {str(k): row.get("profile", profile_range_summary([])) for k, row in chunk_rows.items()},
     "whole_tok_s": {str(k): round(v, 2) for k, v in whole.items()},
     "graph_gemm": graph_gemm,
     "prefill_v2": os.environ.get("PREFILL_V2", ""),
