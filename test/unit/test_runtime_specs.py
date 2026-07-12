@@ -6,6 +6,7 @@ from extra.qk.generated_candidates import GeneratedCandidateRegistry, builtin_re
 from extra.qk.quant_specs import activation_spec, quant_spec
 from extra.qk import route_manifest
 from extra.qk import pure_search_guard
+from extra.qk import prefill_graph_gemm_route
 from extra.qk.runtime_specs import (
   ANCHOR_SINGLE_BUFFER_CANDIDATE_HASH, FULL_KERNEL_CANDIDATE_SCHEMA, ActivationQuantSpec, GeneratedCandidate,
   QuantizedTensorSpec, RuntimeOpSpec, FullKernelCandidateSet, FullKernelCandidateSetEntry,
@@ -362,3 +363,16 @@ def test_one_entry_legacy_candidate_set_adapter_preserves_identity():
   candidate_set=full_kernel_candidate_set_from_legacy(entry.payload,entry.canonical_identity)
   assert candidate_set.entries == (entry,)
   assert FullKernelCandidateSet.from_json(candidate_set.to_json()) == candidate_set
+
+def test_candidate_set_json_path_and_legacy_environment_loaders(tmp_path):
+  entry=_buffer2_set_entry("attn_kv",(512,1024,4096)); candidate_set=FullKernelCandidateSet((entry,))
+  text=json.dumps(candidate_set.to_json()); path=tmp_path/"candidates.json"; path.write_text(text)
+  for env in ({"BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_JSON":text},
+              {"BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH":str(path)},
+              {"BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON":json.dumps(entry.payload),
+               "BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH":entry.canonical_identity}):
+    registry=prefill_graph_gemm_route._candidate_registry_from_env(env)
+    assert registry.admissions[0].canonical_identity == entry.canonical_identity
+  with pytest.raises(ValueError,match="mutually exclusive"):
+    prefill_graph_gemm_route._candidate_registry_from_env({"BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_JSON":text,
+      "BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH":str(path)})
