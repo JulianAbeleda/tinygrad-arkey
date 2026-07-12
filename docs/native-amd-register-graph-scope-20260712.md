@@ -39,9 +39,10 @@ isel stage can map the static one-slot A/B stage elements when the graph is
 otherwise valid.
 
 The four malformed parents are WMMA A/B carriers. `correct_load_store` splits
-the vector register load into scalar loads, then the fixed-point matcher revisits
-the carrier through the existing load/GEP folding rules and wraps an already
-stack-shaped target a second time. The resulting `STACK(half.vec16)` contains
+the vector register load into scalar loads, then the fixed-point symbolic pass
+applies the `gep_pushing` `VCAT`/`STACK` rule to vector-valued children and
+wraps an already stack-shaped target a second time. The resulting
+`STACK(half.vec16)` contains
 16 `STACK(half.vec16)` children instead of a flat 16-lane carrier. This is an
 interaction between existing matcher families, not a malformed producer UOp.
 
