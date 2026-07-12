@@ -101,6 +101,27 @@ def test_register_template_producer_fragments_have_no_local_or_raw_isa():
   assert len([u for u in root.toposort() if u.op is Ops.CONTRACT and u.dtype == dtypes.half.vec(16)]) == 4
 
 
+def test_register_fragment_contracts_remain_flat_through_expander():
+  """A full-width vector carrier must not become STACK(vector) during expansion."""
+  from tinygrad.codegen import expander, pm_group_for_reduce, pm_pre_expander, sym
+  from tinygrad.uop.ops import graph_rewrite
+  t = _fixture()
+  producer = t.producer(UOp.const(dtypes.weakint, 0), UOp.const(dtypes.weakint, 0))
+  fragments = t.fragments(producer.epoch, producer.slot, producer.ready)
+  arg = (str(t.tc), t.tc.dims, t.tc.dtype_in, t.tc.dtype_out, "AMD", t.tc.threads,
+         (t.contracts[0].arg, t.contracts[1].arg, ((40, 2), (41, 2), (42, 2))), ())
+  wmma = UOp(Ops.WMMA, dtypes.float.vec(8),
+    (fragments.fragments[0], fragments.fragments[2], UOp.const(dtypes.float.vec(8), 0.0)), arg)
+  expanded = graph_rewrite(UOp.sink(*producer.role_nodes, wmma),
+    sym+pm_pre_expander+pm_group_for_reduce+expander)
+  nested = [u for u in expanded.toposort() if u.op is Ops.STACK and
+            any(x.dtype.count > 1 for x in u.src)]
+  assert not nested
+  assert all(any(isinstance(x.tag, tuple) and x.tag[:1] == ("register_pipe_fragment",)
+                 for x in u.src[0].backward_slice_with_self)
+             for u in expanded.toposort() if u.op is Ops.WMMA)
+
+
 def test_register_adapter_does_not_enter_lds_stage1_builder_before_readiness_is_proven():
   adapter = RegisterStorageAdapter.from_template(_fixture())
   with pytest.raises(ValueError, match="zero LDS"):
@@ -270,6 +291,22 @@ def test_register_full_k_rewrite_accepts_real_wmma_output_contract():
   topo = rewritten.toposort()
   assert not any(x.op in (Ops.DEFINE_LOCAL, Ops.INS) for x in topo)
   assert len([x for x in topo if x.op is Ops.WMMA]) == 4
+
+def test_register_native_full_graph_has_flat_stage_carriers():
+  """The native AMD rewrite must not receive STACK-of-STACK WMMA inputs."""
+  from tinygrad.codegen import full_rewrite_to_sink
+  from tinygrad.helpers import Target
+  from tinygrad.renderer.isa.amd import AMDISARenderer
+  base = _fixture()
+  t = RegisterPipeTemplate(base.tc, base.geometry, base.operands, base.contracts, schedule="sequential")
+  adapter = RegisterStorageAdapter.from_template(t)
+  graph = build_stage1_uop_graph_with_storage(adapter, adapter.logical_plan, 2, _register_wmma(t),
+    subtile_count=8, accumulator_elements=64)
+  rewritten = full_rewrite_to_sink(graph.sink, AMDISARenderer(Target.parse("AMD:ISA:gfx1100")), optimize=False)
+  topo = rewritten.toposort()
+  nested = [u for u in topo if u.op is Ops.STACK and u.dtype.count > 1 and any(s.op is Ops.STACK for s in u.src)]
+  assert not nested
+  assert not any(u.op is Ops.VCAT for u in topo)
 
 
 def test_register_template_rejects_fake_descriptor_remap():

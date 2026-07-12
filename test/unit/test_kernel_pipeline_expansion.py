@@ -2,10 +2,20 @@ import pytest
 
 from tinygrad import dtypes
 from tinygrad.codegen.late.devectorizer import ReduceContext, _group_wmma_reg_store, pm_group_wmma_reg_store, pm_reduce
-from tinygrad.codegen.late.expander import expander, pm_group_for_reduce, pm_pre_expander
+from tinygrad.codegen.late.expander import do_contract, expander, pm_group_for_reduce, pm_pre_expander
 from tinygrad.dtype import AddrSpace
 from tinygrad.uop.ops import AxisType, Ops, UOp, graph_rewrite
 from tinygrad.uop.symbolic import gep_pushing, sym
+
+
+def test_contract_preserves_matching_vector_carrier_and_rejects_mismatched_vector():
+  carrier = UOp.const(dtypes.half.vec(16), 0.0)
+  matching = UOp(Ops.CONTRACT, dtypes.half.vec(16), (carrier,), ((101, 16),))
+  assert do_contract(matching) is carrier
+
+  mismatched = UOp(Ops.CONTRACT, dtypes.half.vec(16), (UOp.const(dtypes.half.vec(8), 0.0),), ((101, 16),))
+  with pytest.raises(ValueError, match="scalar source or matching vector"):
+    do_contract(mismatched)
 
 
 def _expanded_pipeline_accumulator(axis_ids,m=2,n=4,group=True):

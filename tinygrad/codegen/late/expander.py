@@ -80,8 +80,17 @@ def do_expand(root:UOp):
 
 def do_contract(con:UOp):
   ex = con.src[0]
+  # A carrier that is already the requested width needs no expansion.  In
+  # particular, register-resident WMMA A/B fragments arrive as a vector LOAD
+  # wrapped in a full-width CONTRACT. Repeating that vector once per lane
+  # creates STACK(vector) children, which is not a legal UOp shape.
+  if ex.dtype == con.dtype:
+    return ex.replace(tag=con.tag) if con.tag is not None else ex
   # CONTRACT without UNROLL repeats the element VECTORIZED
-  if ex.op is not Ops.UNROLL: return UOp(Ops.STACK, con.dtype, con.src*con.dtype.count)
+  if ex.op is not Ops.UNROLL:
+    if ex.dtype.count != 1:
+      raise ValueError(f"CONTRACT without UNROLL requires scalar source or matching vector, got {ex.dtype} -> {con.dtype}")
+    return UOp(Ops.STACK, con.dtype, con.src*con.dtype.count)
   # CONTRACT may remove several axes from UNROLL
   assert con.dtype == dtypes.void or con.dtype.count == prod([x[1] for x in con.arg]), "dtype is wrong"
   idxs = []
