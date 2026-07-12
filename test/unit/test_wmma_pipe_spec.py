@@ -1,7 +1,21 @@
 from extra.qk.prefill_schedule_spec import PrefillGEMMScheduleSpec
 from extra.qk.wmma_pipe_spec import (
-  WMMAPipeSpec, build_wmma_pipe_diagnostic_lowering_report, extract_wmma_pipe_spec, lower_wmma_pipe_spec,
+  WMMAPipeSpec, WMMAPipeIR, build_wmma_pipe_diagnostic_lowering_report, extract_wmma_pipe_spec, lower_wmma_pipe_spec,
   pipe_primitive_local_stage_resource_plan, wmma_pipe_lowering_insertion_point)
+
+def test_pipe_spec_rejects_non_divisible_shape_and_ir_output_contract():
+  try:
+    WMMAPipeSpec(m=513, n=4096, k=4096, tile_m=128, tile_n=128, role="attn_qo")
+  except ValueError as exc:
+    assert "divisible" in str(exc)
+  else:
+    raise AssertionError("non-divisible pipe shape must fail closed")
+  try:
+    WMMAPipeIR("attn_qo", (512, 4096, 4096), 2, 8, "targeted_vmcnt", stores="fp32_global")
+  except ValueError as exc:
+    assert "output dtype" in str(exc)
+  else:
+    raise AssertionError("unsupported output contract must fail closed")
 
 
 def _prefill_spec(route_family: str = "pipe", *, n: int = 4096, role: str = "attn_qo",

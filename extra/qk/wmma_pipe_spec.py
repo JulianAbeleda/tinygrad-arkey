@@ -29,6 +29,14 @@ class WMMAPipeSpec:
   target: str = "amd_gfx1100"
   role: str = "unknown"
 
+  def __post_init__(self):
+    if any(not isinstance(x, int) or x <= 0 for x in (self.m, self.n, self.k, self.tile_m, self.tile_n, self.k_step, self.pipe_tm, self.pipe_tn)):
+      raise ValueError("pipe dimensions and factors must be positive integers")
+    if self.m % self.tile_m or self.n % self.tile_n or self.k % self.k_step:
+      raise ValueError("pipe shape must be divisible by tile and k_step")
+    # Unsupported lifecycle/wait/target values remain constructible so the
+    # fail-closed lowerer can report the exact unsupported contract.
+
   @property
   def loads_per_stage(self) -> int:
     # build_gemm_pipe's targeted wait leaves the opposite stage's A/B b128 loads outstanding.
@@ -53,6 +61,8 @@ class WMMAPipeIR:
   provenance: str = "compiler_owned_typed_pipe_ir"
 
   def __post_init__(self):
+    if len(self.shape) != 3 or any(not isinstance(x, int) or x <= 0 for x in self.shape): raise ValueError("invalid pipe IR shape")
+    if self.stores != "fp16_global": raise ValueError("unsupported pipe output dtype/layout")
     if self.stages != 2 or self.loads_per_stage <= 0: raise ValueError("invalid pipe IR lifecycle")
     if self.wait_policy != "targeted_vmcnt": raise ValueError("unsupported pipe wait policy")
     if self.provenance != "compiler_owned_typed_pipe_ir": raise ValueError("invalid pipe provenance")
