@@ -46,6 +46,11 @@ def test_describe_q6k_packed_prefill_lm_head_authority_shape():
   assert spec.kernel_name == "q6k_gen_prefill_direct_out_151936_4096_512"
 
 
+def test_isolated_lm_head_authority_constants():
+  from extra.qk.q6k_lm_head_authority import M, N, K
+  assert (M, N, K) == (512, 151936, 4096)
+
+
 def test_describe_q6k_packed_prefill_partials_layout():
   from extra.qk.q6k_prefill_route_spec import describe_q6k_packed_prefill
   spec = describe_q6k_packed_prefill(17408, 5120, 512, parts=4, output_layout="partials")
