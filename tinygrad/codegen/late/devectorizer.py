@@ -290,7 +290,8 @@ def no_vectorized_buf(buf:UOp):
   # TODO: this fails on regs
   #assert buf.max_numel() == buf.ptrdtype.size
   out = buf.replace(dtype=buf.ptrdtype.base.scalar().ptr(buf.ptrdtype.size*buf.ptrdtype.count, buf.addrspace)).cast(buf.dtype)
-  return out.replace(tag=buf.tag) if getenv("PREFILL_WMMA_AB_PROOF_META", 0) and isinstance(buf.tag, tuple) and buf.tag and buf.tag[0] == "wmma_frag_buffer_proof" else out
+  keep = isinstance(buf.tag, tuple) and buf.tag and buf.tag[0] in ("wmma_frag_buffer_proof", "register_pipe_stage_buffer")
+  return out.replace(tag=buf.tag) if keep else out
 
 def no_vectorized_index(buf:UOp, cast:UOp, idx:UOp, bcast:UOp|None=None):
   cnt = cast.dtype.count
@@ -305,7 +306,8 @@ def no_vectorized_index(buf:UOp, cast:UOp, idx:UOp, bcast:UOp|None=None):
     pairs = [(0, c) for c in range(cnt)]
   idx_lanes, offsets = (tuple(x) for x in zip(*pairs))
   out = buf.broadcast(len(pairs)).index(idx.gep(idx_lanes)*cnt + UOp.const(dtypes.weakint.vec(len(pairs)), offsets), ptr=True)
-  return out.replace(tag=buf.tag) if getenv("PREFILL_WMMA_AB_PROOF_META", 0) and isinstance(buf.tag, tuple) and buf.tag and buf.tag[0] == "wmma_frag_buffer_proof" else out
+  keep = isinstance(buf.tag, tuple) and buf.tag and buf.tag[0] in ("wmma_frag_buffer_proof", "register_pipe_stage_buffer")
+  return out.replace(tag=buf.tag) if keep else out
 
 devectorize_buf_and_index = PatternMatcher([
   (UPat((Ops.DEFINE_LOCAL, Ops.DEFINE_REG), name="buf"), no_vectorized_buf),

@@ -285,13 +285,27 @@ def _vpool(ctx:IselContext):
     if top == LDS_PACK_BASE: return pool
     return tuple(r for r in pool if not (LDS_PACK_BASE <= r.index < top))
   if not _has_wmma(ctx): return reserve_lds_pack(VBASE[lo:])
+  # Compiler-owned sequential register stages occupy a static tail of the
+  # reclaimed high fragment window. Keep virtual registers out of that span.
+  stage_reserved = ()
+  if _c_low(ctx):
+    stage_roles = []
+    for u in ctx.uses:
+      if u.op is Ops.DEFINE_REG and _register_stage_buffer_meta(u) is not None:
+        role = _register_stage_buffer_meta(u)["role"]
+        if role not in stage_roles: stage_roles.append(role)
+    stage_width = sum(next(_register_stage_buffer_meta(u)["fragments"] * (_register_stage_buffer_meta(u)["lane_width"] // 2)
+                           for u in ctx.uses if u.op is Ops.DEFINE_REG and _register_stage_buffer_meta(u) is not None and
+                           _register_stage_buffer_meta(u)["role"] == role) for role in stage_roles)
+    if stage_width:
+      stage_reserved = tuple(range(FRAG_BASE, FRAG_BASE + stage_width))
   if _c_low(ctx):
     tail = VBASE[max(lo, _ab_top(ctx)):256]
     # Multi-output WMMA reserves v8.. for C/A/B fragments, but v1..v7 are just alignment padding.
     # Keep them available for short scalar scratch, especially the post-loop store epilogue, so it doesn't have to reuse
     # the high v200+ address/load scratch region immediately after the WMMA loop.
-    if getenv("AMD_ISA_WMMA_LOW_SCRATCH", 1): return reserve_lds_pack(VBASE[lo:WMMA_ACC_BASE] + tail)
-    return reserve_lds_pack(tail)
+    pool = VBASE[lo:WMMA_ACC_BASE] + tail if getenv("AMD_ISA_WMMA_LOW_SCRATCH", 1) else tail
+    return reserve_lds_pack(tuple(r for r in pool if r.index not in stage_reserved))
   return reserve_lds_pack(VBASE[lo:FRAG_BASE])
 
 class AMDOps(FastEnum):
@@ -321,6 +335,8 @@ class AMDOps(FastEnum):
   S_WGID = 41                            # Phase N1B: workgroup id s{2+d} as a scalar source (s_mov into a scalar temp)
   ACCUM_READ = 42                        # RA1: read a pinned loop-carried accumulator -> v_mov vvirt, v[pin] (src[-1].arg=pin)
   ACCUM_WRITE = 43                       # RA1: write a pinned accumulator from a VGPR -> v_mov v[pin], vsrc (in-place loop-carried state)
+  STAGE_READ = 54                        # static compiler-owned register stage element -> v_mov vvirt, pinned VGPR
+  STAGE_WRITE = 55                       # static compiler-owned register stage element <- v_mov pinned VGPR, vsrc
   V_WMMA = 44                            # B0.L7: RDNA3 tensor-core 16x16x16 matmul-accumulate -> v_wmma_f32_16x16x16_f16 (D=A*B+C)
   GLOBAL_LOAD_B128 = 45                  # L3: direct 16-byte fragment load into four packed fp16 WMMA operand VGPRs
   DS_LOAD_B128 = 46                       # L4/LDS: direct 16-byte LDS fragment load into four packed fp16 VGPRs
@@ -376,9 +392,46 @@ def _register_stage_buffer_meta(u:UOp) -> dict|None:
   tag = dreg.tag
   if not (isinstance(tag, tuple) and len(tag) >= 5 and tag[0] == "register_pipe_stage_buffer"): return None
   role, slots, fragments, lane_width = tag[1:5]
-  if role not in ("A", "B") or slots != 2 or fragments <= 0 or lane_width != 16:
+  if role not in ("A", "B") or slots not in (1, 2) or fragments <= 0 or lane_width != 16:
     raise NotImplementedError(f"AMD:ISA malformed register stage-buffer contract: {tag!r}")
   return {"role": role, "slots": slots, "fragments": fragments, "lane_width": lane_width}
+
+def _register_stage_base(ctx:IselContext, meta:dict) -> int:
+  """Return the static VGPR base for one sequential stage role.
+
+  gfx1100 has no indirect VGPR addressing.  Only the one-slot form is
+  lowered here; adjacent half elements share one packed VGPR and the existing
+  WMMA path consumes those b32 carriers directly. Multi-slot buffers remain
+  rejected rather than becoming an LDS fallback.
+  """
+  if meta["slots"] != 1:
+    raise NotImplementedError("AMD:ISA register stage buffers require static one-slot lowering")
+  if not _c_low(ctx):
+    raise NotImplementedError("AMD:ISA register stage buffers need the low C window (single-output WMMA has no VGPR budget)")
+  d = getattr(ctx, "_stage_reg", None)
+  if d is None: d = ctx._stage_reg = {}
+  role = meta["role"]
+  if role not in d:
+    width = meta["fragments"] * (meta["lane_width"] // 2)
+    # The high fragment window is reclaimed by the multi-output WMMA path;
+    # reserve it explicitly for compiler-owned stage elements.
+    used = sum(v[1] for v in d.values())
+    base = FRAG_BASE + used
+    if base + width > FRAG_TOP:
+      raise NotImplementedError(f"AMD:ISA register stage VGPR window exhausted for {role} ({width} regs)")
+    d[role] = (base, width)
+  return d[role][0]
+
+def _register_stage_index(ctx:IselContext, dreg:UOp, idx:UOp) -> tuple[str, int, int]|None:
+  meta = _register_stage_buffer_meta(dreg)
+  if meta is None: return None
+  if idx.op is not Ops.CONST:
+    raise NotImplementedError("AMD:ISA register stage buffers cannot use dynamic VGPR indexing")
+  elem = int(idx.arg)
+  width = meta["fragments"] * meta["lane_width"]
+  if not 0 <= elem < meta["slots"] * width:
+    raise NotImplementedError(f"AMD:ISA register stage element {elem} outside {meta['role']} buffer")
+  return meta["role"], elem, _register_stage_base(ctx, meta) + (elem // 2)
 def _lid_ranges(ctx:IselContext) -> dict[int, int]:
   if (r:=getattr(ctx, "_lidr", None)) is None:
     r = ctx._lidr = {int(str(u.arg)[-1]): u.src[0].arg for u in ctx.uses if u.op is Ops.SPECIAL and str(u.arg).startswith("lidx")}
@@ -501,14 +554,13 @@ def isel_index(ctx:IselContext, x:UOp):
   if isinstance(base.dtype, PtrDType) and base.dtype.addrspace != AddrSpace.GLOBAL:
     dreg = _reg_base(base)
     if (stage_meta := _register_stage_buffer_meta(dreg)) is not None:
-      # AMD has no general indirect VGPR addressing.  The logical pipeline
-      # currently carries ``epoch % 2`` as a dynamic index, so accepting this
-      # as LDS would be an unsound pure-route claim. Static-slot expansion (or
-      # an equivalent backend-owned lowering) must land before this branch is
-      # admitted.
-      raise NotImplementedError(
-        f"AMD:ISA register stage buffer {stage_meta['role']} needs static slot expansion; "
-        "dynamic VGPR indexing is unsupported")
+      # AMD has no general indirect VGPR addressing.  The sequential route
+      # reaches this path with a compile-time element index and is lowered to
+      # a fixed VGPR carrier; dynamic/double-buffered accesses fail closed.
+      if (stage := _register_stage_index(ctx, dreg, idx)) is None: return None
+      role, elem, pin = stage
+      return UOp(Ops.NOOP, x.dtype, src=(base, UOp.const(dtypes.int32, pin).rtag()),
+                 arg=("stage_reg", role, elem, pin, elem & 1))
     # ROLLED-K WMMA accumulator: this REG element IS a lane of the in-place C fragment. Carry (order, v[cbase+elem]) so
     # isel_load reads the fragment VGPR (post-loop) and isel_store inits it (pre-loop) / no-ops the ASSIGN. B0.M: the REG
     # holds a WM*WN grid of 8-lane subtiles; idx (compile-time) selects subtile idx//8 and within-tile lane idx%8. Multi-
@@ -595,6 +647,11 @@ def isel_load(ctx:IselContext, x:UOp):
     # wmma_acc: this serves the POST-loop read (the in-loop src[2] reads are consumed directly in isel_wmma via the
     # in-place C fragment, so they never reach isel_load). order (src[0]) keeps the END/init chain reachable + ordered.
     return UOp(Ops.INS, x.dtype.scalar(), src=(idxc.src[0], idxc.src[1]), arg=AMDOps.ACCUM_READ, tag=(ctx.vreg(_vpool(ctx)),))
+  if isinstance(idxc.arg, tuple) and idxc.arg[:1] == ("stage_reg",):
+    # Static register-stage read. src[0] carries the AFTER/order chain and
+    # src[1] is the physical pin, just like the accumulator carrier.
+    return UOp(Ops.INS, x.dtype.scalar(), src=(idxc.src[0], idxc.src[1]), arg=AMDOps.STAGE_READ,
+               tag=(ctx.vreg(_vpool(ctx)),))
   if idxc.arg == "lds":                      # LDS load -> ds_load_b32 from the carrier's address VGPR (src[0]); src[1]=order
     addr = idxc.src[0] if len(idxc.src) < 3 or idxc.src[2].arg == 0 else \
       UOp(Ops.INS, dtypes.int32, src=(idxc.src[0], idxc.src[2]), arg=AMDOps.V_IADD, tag=_vreg_def(ctx))
@@ -624,6 +681,23 @@ def isel_store(ctx:IselContext, a:UOp, b:UOp, x:UOp):
   if a.arg == "accum" or (isinstance(a.arg, tuple) and a.arg[:1] == ("accum",)):
     # RA1: write pinned accumulator -> v_mov v[pin], vsrc. a.src=(order, pin)
     return UOp(Ops.INS, dtypes.void, src=(_tov(ctx, b), a.src[0], a.src[1]), arg=AMDOps.ACCUM_WRITE)   # (vsrc, order, pin)
+  if isinstance(a.arg, tuple) and a.arg[:1] == ("stage_reg",):
+    # Pair adjacent fp16 elements into one pinned b32 VGPR.  The first store
+    # becomes an ordering carrier; the second emits the real v_pack.  This is
+    # required because gfx1100 cannot write an individual half of a VGPR.
+    role, elem, pin = a.arg[1], a.arg[2], a.arg[3]
+    val = _tov(ctx, b)
+    pending = getattr(ctx, "_stage_pending", None)
+    if pending is None: pending = ctx._stage_pending = {}
+    key = (role, elem // 2, pin)
+    if (elem & 1) == 0:
+      carrier = UOp(Ops.NOOP, dtypes.void, src=(val, a.src[0]), arg=("stage_pending", role, elem // 2, pin))
+      pending[key] = (val, carrier)
+      return carrier
+    if key not in pending:
+      raise NotImplementedError("AMD:ISA register stage pair arrived without its even half")
+    even, carrier = pending.pop(key)
+    return UOp(Ops.INS, dtypes.void, src=(even, val, carrier, a.src[0], a.src[1]), arg=AMDOps.STAGE_WRITE)
   if a.arg == "lds":                          # LDS store: ds_store_b16 for half-element tiles, else b32 (a.src[0]=addr, a.src[1]=order)
     if ctx is not None and _n_workitem_dims(ctx) > 1 and str(getenv("PREFILL_TC_LOCAL_STAGE", "")).strip().lower() in ("a", "both", "1", "true", "yes") and \
        getenv("PREFILL_TC_LOCAL_STAGE_WITH_LOCAL", 0) and not getenv("PREFILL_TC_LOCAL_STAGE_POST", 0) and \
@@ -1224,8 +1298,34 @@ def _build_wmma_tile(ctx:IselContext, A:UOp, B:UOp, cin:list[UOp], abase:int, bb
   outs = [wm] + [UOp(Ops.INS, dtypes.float32, src=(wm,), arg=AMDOps.MOV, tag=_pin(cbase, i)) for i in range(1, 8)]
   return UOp(Ops.NOOP, dtypes.float32.vec(8), src=tuple(outs))
 
+def _pack_stage_fragment(ctx:IselContext, carrier:UOp, dep:tuple[UOp,...]=()) -> tuple[UOp,...]|None:
+  """Use already-packed static stage VGPRs as a WMMA operand.
+
+  Stage elements are represented by paired STAGE_READ carriers.  The physical
+  register is already a b32 containing two fp16 values, so emit pinned
+  zero-cost carriers rather than allocating another fragment range.
+  """
+  E = _wmma_elems(carrier, 16)
+  if not E: return None
+  pins = []
+  for e in E:
+    if e.op is Ops.INS and e.arg is AMDOps.STAGE_READ:
+      pins.append(e.src[1].arg); continue
+    if e.op is not Ops.LOAD or not e.src: return None
+    idx = e.src[0]
+    while idx.op in (Ops.AFTER, Ops.CAST) and idx.src: idx = idx.src[0]
+    if idx.op is not Ops.INDEX or len(idx.src) < 2: return None
+    dreg = _reg_base(idx.src[0])
+    stage = _register_stage_index(ctx, dreg, idx.src[1])
+    if stage is None: return None
+    pins.append(stage[2])
+  if any(pins[2*i] != pins[2*i+1] for i in range(8)): return None
+  return tuple(UOp(Ops.INS, dtypes.int32, src=(E[2*i], E[2*i+1]) + dep,
+                   arg=AMDOps.MOV, tag=_pin(pins[2*i], 0)) for i in range(8))
+
 def _pack_frag_tile(ctx:IselContext, carrier:UOp, base:int, dep:tuple[UOp,...], role:str) -> tuple[UOp,...]:
   E = _wmma_elems(carrier, 16)
+  if (stage := _pack_stage_fragment(ctx, carrier, dep)) is not None: return stage
   return _frag_b128_loads(ctx, E, base, dep, role) or tuple(
     UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, E[2*i]), _tov(ctx, E[2*i+1]))+dep, arg=AMDOps.V_PACK, tag=_pin(base, i)) for i in range(8))
 
@@ -1831,6 +1931,17 @@ def lower_inst(x:UOp):
       "dest_pin_vgpr": src[2].arg,
       "source_vgpr": src[0].reg.index,
     })
+    w = _ins(inst, x.tag)
+    return (w, [w])
+  if a is AMDOps.STAGE_READ:                         # static register-stage element -> v_mov vvirt, v[pin]
+    inst = v_mov_b32_e32(_Vr(x.reg), _V[src[1].arg])
+    _proof_record("stage_read", x, inst, {"role": "register_stage", "source_pin_vgpr": src[1].arg,
+                                           "dest_vgpr": x.reg.index})
+    return _ins(inst, x.tag)
+  if a is AMDOps.STAGE_WRITE:                        # static register-stage pair <- v_pack_b32_f16 v[pin], even, odd
+    inst = v_pack_b32_f16(_V[src[4].arg], _Vr(src[0].reg), _Vr(src[1].reg))
+    _proof_record("stage_write", x, inst, {"role": "register_stage", "dest_pin_vgpr": src[4].arg,
+                                            "source_vgpr": src[0].reg.index, "pair": True})
     w = _ins(inst, x.tag)
     return (w, [w])
   if a is AMDOps.DS_LOAD:                            # LDS load: 16-bit for half (else b32) so half tiles don't overlap

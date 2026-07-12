@@ -62,6 +62,35 @@ def test_register_stage_dynamic_slot_fails_closed_at_amd_isa_boundary():
     isel_index(IselContext(root), idx)
 
 
+def test_register_stage_static_slot_maps_to_pinned_vgpr_carrier():
+  from tinygrad.renderer.isa import IselContext
+  from tinygrad.renderer.isa.amd import AMDOps, isel_index
+  t0 = _fixture()
+  t = RegisterPipeTemplate(t0.tc, t0.geometry, t0.operands, t0.contracts, schedule="sequential")
+  p = t.producer(UOp.const(dtypes.weakint, 0), UOp.const(dtypes.weakint, 0))
+  root = UOp.sink(*p.role_nodes)
+  ctx = IselContext(root)
+  # A multi-output WMMA has the low C window available for this static
+  # stage mapping; force that structural fact for the isolated carrier test.
+  ctx._ncruns = 2
+  dreg = next(u for u in root.toposort() if u.op is Ops.DEFINE_REG and u.tag[1] == "A")
+  carriers = [isel_index(ctx, dreg.index(UOp.const(dtypes.weakint, i), dtype=dtypes.half)) for i in (2, 3)]
+  assert all(c is not None and c.arg[:1] == ("stage_reg",) for c in carriers)
+  assert carriers[0].arg[1:3] == ("A", 2) and carriers[1].arg[1:3] == ("A", 3)
+  assert carriers[0].arg[3] == carriers[1].arg[3], "adjacent fp16 elements share one packed VGPR"
+
+
+def test_register_stage_carriers_have_real_amd_encoders():
+  from tinygrad.renderer.isa import Register
+  from tinygrad.renderer.isa.amd import AMDOps, lower_inst
+  pin = UOp.const(dtypes.int32, 204)
+  src = UOp.const(dtypes.half, 0).replace(tag=(Register("v41", 41),))
+  read = UOp(Ops.INS, dtypes.half, (src, pin), AMDOps.STAGE_READ, (Register("v42", 42),))
+  write = UOp(Ops.INS, dtypes.void, (src, src, src, src, pin), AMDOps.STAGE_WRITE)
+  assert lower_inst(read) is not None
+  assert lower_inst(write) is not None
+
+
 def test_register_template_producer_fragments_have_no_local_or_raw_isa():
   t = _fixture()
   p = t.producer(UOp.const(dtypes.weakint, 0), UOp.const(dtypes.weakint, 0))
