@@ -37,6 +37,17 @@ def test_pipe_op_resource_estimate_is_explicit_about_unknown_registers():
   res = op.resource_estimate()
   assert res["lds_bytes"] == 40960 and res["vgpr"] is None and res["scratch_bytes"] == 0
 
+def test_pipe_candidate_context_is_identity_and_abi_complete():
+  from extra.qk.wmma_pipe_spec import pipe_candidate_context
+  spec = WMMAPipeSpec(m=512, n=4096, k=4096, tile_m=128, tile_n=128, role="attn_qo")
+  ctx = pipe_candidate_context(spec, "a" * 64)
+  assert ctx.canonical_identity == "a" * 64
+  payload = dict(ctx.pipeline)
+  assert payload["schema"] == "wmma_pipe_ir.v1"
+  assert payload["role"] == "attn_qo" and payload["shape"] == (512, 4096, 4096)
+  assert payload["stages"] == 2 and payload["wait_policy"] == "targeted_vmcnt"
+  assert payload["stores"] == "fp16_global"
+
 
 def _prefill_spec(route_family: str = "pipe", *, n: int = 4096, role: str = "attn_qo",
                   pipeline_depth: int = 2, waitcnt_policy: str = "targeted_vmcnt"):
