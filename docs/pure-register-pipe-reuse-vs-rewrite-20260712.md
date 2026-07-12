@@ -9,9 +9,9 @@ descriptor, and resource boundaries, plus one backend wait-lowering seam.
 
 This is not a claim that the register path is executable today. It is a scope
 decision: the current code has the right reusable pieces, but they are joined
-by an LDS-specific adapter and the targeted wait is only emitted by the native
-AMD ISA renderer. The missing work is a coordinated extension, not a second
-compiler.
+by an LDS-specific adapter. A typed AMD LLVM wait intrinsic now exists, but the
+missing lifecycle/dependency wiring is still a coordinated extension, not a
+second compiler.
 
 ## Evidence inventory
 
@@ -34,9 +34,9 @@ compiler.
 |---|---|---|
 | Storage callback is LDS-only | `PrecontractPipelineTemplate` requires `DEFINE_LOCAL`, LDS windows, and `active_lds_bytes` | Split shared operand/descriptor validation from `LDSStorageTemplate`; add `RegisterStorageTemplate` with no local allocation |
 | Lifecycle plan encodes stage-1 LDS semantics | `KernelStage1PipelinePlan` requires `stage_count == 1` and derives slots from LDS bytes | Keep physical LDS slots separate from logical register stages; add an explicit register mapping (two logical stages, zero LDS slots) rather than changing the existing plan in place |
-| Wait dependency is not a compiler UOp contract | Pure AMDLLVM supports full barriers, while targeted `vmcnt` is currently inserted in `AMDISARenderer._insert_waitcnt` after raw instruction selection | Thread typed `WaitDependency` through graph metadata; add a backend hook that either lowers it or rejects it before launch |
+| Wait dependency is not yet a compiler UOp contract | Typed `WaitCount` now lowers through AMD LLVM's `llvm.amdgcn.s.waitcnt`, while dependency selection is still inserted/derived separately from the lifecycle | Thread typed `WaitDependency` through graph metadata; require a backend hook and provenance join before launch |
 | Native targeted waits are renderer-local | `_insert_waitcnt` tracks physical register spans after post-regalloc; route code cannot reuse it without importing `AMDOps`/`Ops.INS` | Reuse the dependency algorithm as backend implementation, not its raw instruction representation; add a typed marker/source proof at the compiler boundary |
-| LLVM path lacks targeted vmcnt | `amdllvm_wait_dependency` intentionally fails closed for `targeted_vmcnt` | Keep full-barrier compile/correctness diagnostics separate; do not promote them as the performance implementation. Add targeted lowering only in a backend that can prove it |
+| Wait lowering is not yet lifecycle-proven | Commit `6deda3c7c` proves a typed `WaitCount` intrinsic can compile on gfx1100, but an arbitrary `Ops.WAIT(WaitCount)` is not itself proof of a load-group dependency | Keep the new intrinsic as the backend seam; wire it to `WaitDependency` and reject unproven/untagged waits before promotion |
 | Exact global-load-to-WMMA ABI | A synthetic direct global-load graph currently fails devectorization unless real range ownership, CONTRACT axes/remaps, half.vec(16), and float.vec(8) accumulator ABI are present | Reuse existing precontract contracts and fixture construction; add a real register producer that preserves those nodes |
 | Mixed-role route attribution | The current authority can report selected candidate roles without recording fallback roles | Fix attribution before combined pure promotion; this is instrumentation, not a compiler rewrite |
 
@@ -75,7 +75,8 @@ A rewrite would be justified only if one of these facts is proven:
    retain row/K range ownership and the required CONTRACT/remap metadata;
 2. the existing WMMA and accumulator ABI cannot consume the resulting
    `half.vec(16)`/`float.vec(8)` carriers; or
-3. no backend can lower a typed wait dependency without route-owned raw ISA.
+3. no backend can lower a typed wait dependency without route-owned raw ISA
+   (the new typed AMD LLVM intrinsic is evidence against this condition).
 
 Current evidence proves none of these impossibilities. It shows an incomplete
 adapter and a backend capability gap. Therefore a full rewrite would duplicate
