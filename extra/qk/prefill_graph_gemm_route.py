@@ -12,6 +12,9 @@ from tinygrad.dtype import AddrSpace
 from tinygrad.uop.ops import KernelInfo, Ops, UOp
 from extra.qk.prefill import wmma as ref
 
+_FULL_KERNEL_CANDIDATE_JSON_ENV = "BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON"
+_FULL_KERNEL_CANDIDATE_HASH_ENV = "BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH"
+
 
 def _primitive_warmstart_key(spec) -> tuple[frozenset[int], int]:
   return (frozenset({spec.m, spec.n}), spec.k)
@@ -51,6 +54,24 @@ def _attn_kv_no_local_stage_enabled() -> bool:
 
 def _route_dump(payload: dict[str, Any]) -> None:
   if _env_enabled("PREFILL_GRAPH_GEMM_ROUTE_DUMP"): print("PREFILL_GRAPH_GEMM_ROUTE", payload)
+
+
+def _anchor_candidate_context(spec, lds_spec):
+  payload_text, identity = os.environ.get(_FULL_KERNEL_CANDIDATE_JSON_ENV), os.environ.get(_FULL_KERNEL_CANDIDATE_HASH_ENV)
+  if payload_text is None and identity is None: return None
+  if payload_text is None or identity is None:
+    raise ValueError(f"{_FULL_KERNEL_CANDIDATE_JSON_ENV} and {_FULL_KERNEL_CANDIDATE_HASH_ENV} must be provided together")
+  import json
+  try: payload = json.loads(payload_text)
+  except json.JSONDecodeError as exc: raise ValueError(f"{_FULL_KERNEL_CANDIDATE_JSON_ENV} is not valid JSON: {exc}") from exc
+  from extra.qk.runtime_specs import bind_full_kernel_candidate
+  return bind_full_kernel_candidate(payload, identity, profile="qwen3_8b_q4k_m_gfx1100", role="ffn_gate_up",
+    shape=(512, 12288, 4096), target={"backend": "AMD", "arch": "gfx1100", "wave_size": 32},
+    tile=(spec.tile_m, spec.tile_n, spec.tile_k), waves=(spec.waves_m, spec.waves_n), threads=spec.threads,
+    buffer_count=1, stage_count=1,
+    lds_windows={"a": [0, lds_spec.lds_a_bytes], "b": [lds_spec.lds_a_bytes, lds_spec.lds_buffer_bytes]},
+    lds_strides={"a": lds_spec.stride_a_bytes, "b": lds_spec.stride_b_bytes}, lds_padding=lds_spec.pad,
+    lds_bytes=lds_spec.lds_buffer_bytes)
 
 
 @lru_cache(maxsize=None)
@@ -235,6 +256,9 @@ def route_pf16_graph_gemm(lin, x: Tensor, w: Tensor | None = None) -> Tensor | N
   role = getattr(lin, "_prefill_graph_role", None)
   from extra.qk.prefill_schedule_spec import _spec_to_params, describe_prefill_schedule, emit_prefill_gemm_from_spec
   spec = describe_prefill_schedule(out_f, in_f, role=role)
+  candidate_requested = os.environ.get(_FULL_KERNEL_CANDIDATE_JSON_ENV) is not None or os.environ.get(_FULL_KERNEL_CANDIDATE_HASH_ENV) is not None
+  if candidate_requested and os.environ.get("PREFILL_WMMA_LDS_PRIMITIVE") != "1":
+    raise ValueError("full-kernel candidate requires PREFILL_WMMA_LDS_PRIMITIVE=1 generated transport")
   _route_dump({"role": role, "shape": (512, out_f, in_f), "route_family": spec.route_family,
                "pipe_primitive": os.environ.get("PREFILL_WMMA_PIPE_PRIMITIVE", "0"),
                "lds_primitive": os.environ.get("PREFILL_WMMA_LDS_PRIMITIVE", "0")})
@@ -277,12 +301,19 @@ def route_pf16_graph_gemm(lin, x: Tensor, w: Tensor | None = None) -> Tensor | N
   if os.environ.get("PREFILL_WMMA_LDS_PRIMITIVE") == "1" and spec.route_family == "lds":
     from extra.qk.wmma_lds_spec import extract_wmma_lds_spec, wmma_lds_generated_env_defaults, wmma_lds_postrange_opts
     if (lds_spec := extract_wmma_lds_spec(spec)) is not None:
+      candidate_context = _anchor_candidate_context(spec, lds_spec) if candidate_requested else None
       for k, v in wmma_lds_generated_env_defaults(lds_spec).items():
         os.environ.setdefault(k, v)
       getenv.cache_clear()
       import tinygrad.codegen.opt.postrange as pr
       key = _primitive_warmstart_key(spec)
       pr._WARMSTART_OPTS = {**(pr._WARMSTART_OPTS or {}), key: wmma_lds_postrange_opts(lds_spec)}
+      candidate_contexts = dict(pr._WARMSTART_CANDIDATE_CONTEXTS or {})
+      if candidate_context is not None:
+        candidate_contexts[key] = candidate_context
+      else:
+        candidate_contexts.pop(key, None)
+      pr._WARMSTART_CANDIDATE_CONTEXTS = candidate_contexts or None
       _ensure_role_scoped_local_stage(pr).add(key)
       _route_dump({"role": role, "shape": (512, out_f, in_f), "decision": "lds_primitive_matmul_transport"})
       a = x.reshape(512, in_f).cast(dtypes.float16).contiguous()

@@ -6,6 +6,7 @@ from tinygrad.dtype import dtypes
 from tinygrad.renderer import Target
 from tinygrad.runtime.ops_python import PythonRenderer
 from tinygrad.uop.ops import KernelCandidateContext, KernelInfo, UOp
+from tinygrad.codegen.opt import postrange
 
 
 def _sink(identity: str) -> UOp:
@@ -51,3 +52,12 @@ def test_unsupported_or_malformed_candidate_context_fails_closed():
     KernelCandidateContext("boltbeam.full_kernel_candidate.v2", "1" * 64)
   with pytest.raises(ValueError, match="lowercase SHA-256"):
     KernelCandidateContext("boltbeam.full_kernel_candidate.v1", "A" * 64)
+
+
+def test_warmstart_candidate_context_reaches_optimized_kernel(monkeypatch):
+  context = KernelCandidateContext("boltbeam.full_kernel_candidate.v1", "3" * 64)
+  key = (frozenset(), 1)
+  monkeypatch.setattr(postrange, "_WARMSTART_OPTS", {key: ()})
+  monkeypatch.setattr(postrange, "_WARMSTART_CANDIDATE_CONTEXTS", {key: context})
+  optimized = postrange.apply_opts(_sink("4" * 64).replace(arg=KernelInfo()), PythonRenderer(Target("PYTHON")))
+  assert optimized.arg.candidate_context == context

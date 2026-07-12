@@ -8,6 +8,7 @@ from __future__ import annotations
 #   The class-2 probes are being deleted (see docs/prefill-flag-graveyard.md); collapsing the surviving class-1 reads
 #   behind one PrefillStagingSpec descriptor is a scoped follow-up, deferred to keep the stock (no-flag) path byte-identical.
 import json, math, itertools
+from dataclasses import replace
 from collections import defaultdict
 from typing import cast, Final
 from tinygrad.uop.ops import Ops, UOp, UPat, PatternMatcher, KernelInfo, graph_rewrite, AxisType, ssimplify, GroupOp, remove_all_tags
@@ -369,6 +370,7 @@ def bufs_from_ast(ast:UOp, dname:str) -> list[Buffer]:
 # Step 3 warm-start: force a loop-found schedule on matmuls of a known shape signature.
 # Map key = (frozenset(output dims), product(reduce dims)); value = tuple[Opt]. Default None = no-op.
 _WARMSTART_OPTS = None
+_WARMSTART_CANDIDATE_CONTEXTS = None
 _WARMSTART_LOCAL_STAGE_KEYS = None
 _WARMSTART_LOCAL_STAGE_DENY_KEYS = set()
 _warmstart_stats = {"match": 0, "apply": 0, "error": 0}
@@ -739,6 +741,8 @@ def apply_opts(ast:UOp, ren:Renderer) -> UOp:
   elif _WARMSTART_OPTS is not None and (forced := _warmstart_match(k)) is not None:
     _warmstart_stats["match"] += 1
     warm_key = _warmstart_key(k)
+    if _WARMSTART_CANDIDATE_CONTEXTS is not None and (candidate_context := _WARMSTART_CANDIDATE_CONTEXTS.get(warm_key)) is not None:
+      k.ast = k.ast.replace(arg=replace(k.ast.arg, candidate_context=candidate_context))
     k._warmstart_original_key = warm_key
     k._warmstart_local_stage_allowed = _warmstart_local_stage_allowed_key(warm_key)
     if getenv("WARMSTART_DUMP") and len(_warmstart_stats.setdefault("dumps", [])) < 4:

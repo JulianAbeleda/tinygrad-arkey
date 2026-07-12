@@ -4,7 +4,9 @@ from extra.qk.generated_candidates import GeneratedCandidateRegistry, builtin_re
 from extra.qk.quant_specs import activation_spec, quant_spec
 from extra.qk import route_manifest
 from extra.qk.runtime_specs import (
-  FULL_KERNEL_CANDIDATE_SCHEMA, ActivationQuantSpec, GeneratedCandidate, QuantizedTensorSpec, RuntimeOpSpec,
+  ANCHOR_SINGLE_BUFFER_CANDIDATE_HASH, FULL_KERNEL_CANDIDATE_SCHEMA, ActivationQuantSpec, GeneratedCandidate,
+  QuantizedTensorSpec, RuntimeOpSpec,
+  bind_full_kernel_candidate,
 )
 
 
@@ -119,6 +121,27 @@ def _strict_full_kernel_candidate(**overrides):
   return GeneratedCandidate(**values)
 
 
+def _single_buffer_anchor_candidate():
+  payload = _strict_full_kernel_candidate().full_kernel_candidate
+  assert payload is not None
+  payload["schedule"]["pipeline"] = {"buffer_count": 1, "stage_count": 1,
+    "epoch_graph": [{"epoch": "body", "slot": 0, "produce": ["a", "b"], "wait": ["global", "lds"],
+                     "barrier": "before_fragment_load", "consume": ["a", "b"]}]}
+  payload["schedule"].update(lane_ownership="rdna3_wmma_f32_16x16x16_f16_lds2_static")
+  payload["schedule"]["cooperative_load"] = {
+    "a": {"lane_mapping": "cooperative_row_stride_64_b128", "vector_width": 8, "alignment": 16},
+    "b": {"lane_mapping": "cooperative_row_stride_64_b128", "vector_width": 8, "alignment": 16}}
+  payload["schedule"]["lds"].update(windows={"a": [0, 10240], "b": [10240, 20480]},
+                                     strides={"a": 80, "b": 80})
+  payload["schedule"]["wmma"].update(fragment_layout="rdna3_wmma_f32_16x16x16_f16_lds2_static",
+    accumulator_ownership="wmma_accum_wm_x_wn_8_vgprs")
+  payload["schedule"]["dependency_policy"] = {
+    "waitcnt": {"vm": 0, "lgkm": 0}, "barriers": ["before_fragment_load", "after_wmma_before_slot_reuse"]}
+  payload["schedule"]["residency"] = {"preload": ["a", "b"], "resident": ["accumulator"], "reuse": {"a": 4, "b": 2}}
+  payload["schedule"]["epilogue"] = {"lane_mapping": "wmma_accumulator_scalar_b16", "vector_width": 1}
+  return _strict_full_kernel_candidate(full_kernel_candidate=payload)
+
+
 def _strict_op(**overrides):
   values = dict(family="DenseLinear", phase="prefill", role="ffn_gate_up",
                 shape={"M": 512, "N": 12288, "K": 4096}, weight=QuantizedTensorSpec("fp16"),
@@ -179,3 +202,60 @@ def test_strict_full_kernel_selection_requires_exact_canonical_identity():
                          required_canonical_identity=candidate.canonical_identity.upper()).status == "blocked"
   assert registry.select(_strict_op(), require_full_kernel=True,
                          required_canonical_identity="0" * 64).status == "blocked"
+
+
+def test_bind_full_kernel_candidate_to_exact_single_buffer_anchor():
+  candidate = _single_buffer_anchor_candidate()
+  payload = candidate.full_kernel_candidate
+  assert payload is not None
+  assert candidate.canonical_identity == ANCHOR_SINGLE_BUFFER_CANDIDATE_HASH
+  context = bind_full_kernel_candidate(payload, candidate.canonical_identity,
+    profile="qwen3_8b_q4k_m_gfx1100", role="ffn_gate_up", shape=(512, 12288, 4096),
+    target={"backend": "AMD", "arch": "gfx1100", "wave_size": 32}, tile=(128, 128, 32), waves=(4, 2),
+    threads=256, buffer_count=1, stage_count=1, lds_windows={"a": [0, 10240], "b": [10240, 20480]},
+    lds_strides={"a": 80, "b": 80}, lds_padding=16, lds_bytes=20480)
+  assert context.canonical_identity == candidate.canonical_identity
+
+
+@pytest.mark.parametrize(("field", "value", "error"), (
+  ("canonical_identity", "0" * 64, "canonical identity"),
+  ("shape", (1024, 12288, 4096), "shape"),
+  ("target", {"backend": "AMD", "arch": "gfx1200", "wave_size": 32}, "target"),
+  ("buffer_count", 2, "pipeline.buffer_count"),
+  ("stage_count", 2, "pipeline.stage_count"),
+  ("lds_windows", {"a": [0, 16384], "b": [16384, 40960]}, "lds.windows"),
+  ("lds_strides", {"a": 144, "b": 144}, "lds.strides"),
+))
+def test_bind_full_kernel_candidate_fails_closed(field, value, error):
+  candidate = _single_buffer_anchor_candidate()
+  payload = candidate.full_kernel_candidate
+  assert payload is not None
+  kwargs = dict(canonical_identity=candidate.canonical_identity, profile="qwen3_8b_q4k_m_gfx1100", role="ffn_gate_up",
+                shape=(512, 12288, 4096), target={"backend": "AMD", "arch": "gfx1100", "wave_size": 32},
+                tile=(128, 128, 32), waves=(4, 2), threads=256, buffer_count=1, stage_count=1,
+                lds_windows={"a": [0, 10240], "b": [10240, 20480]}, lds_strides={"a": 80, "b": 80},
+                lds_padding=16, lds_bytes=20480)
+  kwargs[field] = value
+  with pytest.raises(ValueError, match=error): bind_full_kernel_candidate(payload, **kwargs)
+
+
+@pytest.mark.parametrize(("mutation", "error"), (
+  (lambda p: p["schedule"]["pipeline"].update(stage_count=2), "pipeline.stage_count"),
+  (lambda p: p["schedule"]["lds"].update(windows={"a": [0, 16384], "b": [16384, 40960]}), "lds.windows"),
+  (lambda p: p["schedule"]["lds"].update(strides={"a": 144, "b": 144}), "lds.strides"),
+  (lambda p: p["schedule"]["cooperative_load"]["a"].update(vector_width=4), "cooperative_load.a"),
+  (lambda p: p["schedule"]["wmma"].update(fragment_layout="gfx11"), "wmma.fragment_layout"),
+  (lambda p: p["static_constraints"].update(max_lds_bytes=16384), "static_constraints.max_lds_bytes"),
+))
+def test_bind_rejects_self_consistent_hash_with_false_emitted_descriptor(mutation, error):
+  candidate = _single_buffer_anchor_candidate()
+  payload = candidate.full_kernel_candidate
+  assert payload is not None
+  mutation(payload)
+  candidate = _strict_full_kernel_candidate(full_kernel_candidate=payload)
+  with pytest.raises(ValueError, match=error):
+    bind_full_kernel_candidate(payload, candidate.canonical_identity, profile="qwen3_8b_q4k_m_gfx1100", role="ffn_gate_up",
+      shape=(512, 12288, 4096), target={"backend": "AMD", "arch": "gfx1100", "wave_size": 32},
+      tile=(128, 128, 32), waves=(4, 2), threads=256, buffer_count=1, stage_count=1,
+      lds_windows={"a": [0, 10240], "b": [10240, 20480]}, lds_strides={"a": 80, "b": 80},
+      lds_padding=16, lds_bytes=20480)
