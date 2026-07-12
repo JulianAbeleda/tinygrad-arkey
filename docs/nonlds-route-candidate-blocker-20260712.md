@@ -11,3 +11,8 @@ cannot produce a distinct exact candidate identity on this surface without
 falling back to the raw oracle or introducing a new emitter, both outside this
 scope. Host validation and the exact blocker test are in
 `test_nonlds_route_candidate_blocker.py`.
+
+The diagnostic compiler path does compile this shape with generated WMMA loads,
+waits, and stores (`mvp_structure_ok`), but reports `route_bound: false`. The
+missing work is backend-owned route transport that turns that compiler program
+into an admitted candidate identity while preserving the existing graph ABI.
