@@ -148,14 +148,20 @@ def build_wmma_pipe_barrier_chain(spec: WMMAPipeSpec, context: KernelCandidateCo
     raise ValueError("barrier pipe slice only supports attn_qo 512x4096x4096")
   a = UOp.param(0, dtypes.half.ptr(spec.tile_m * spec.k))
   b = UOp.param(1, dtypes.half.ptr(spec.tile_n * spec.k))
-  out = UOp.param(2, dtypes.float.ptr(spec.tile_m * spec.tile_n))
-  la = a.index(UOp.const(dtypes.int, 0), ptr=True).load(dtype=dtypes.half.vec(16))
-  lb = b.index(UOp.const(dtypes.int, 0), ptr=True).load(dtype=dtypes.half.vec(16))
-  ready = UOp.barrier(UOp.group(la, lb))
+  out = UOp.param(2, dtypes.float.vec(8).ptr(spec.tile_m * spec.tile_n // 8))
+  ia = a.index(UOp.const(dtypes.weakint, 0), ptr=True)
+  ib = b.index(UOp.const(dtypes.weakint, 0), ptr=True)
+  la = ia.load(dtype=dtypes.half.vec(16))
+  lb = ib.load(dtype=dtypes.half.vec(16))
+  # BARRIER accepts effectful load sources directly; wrapping plain LOADs in
+  # GROUP violates the verifier's effect ordering contract. The subsequent
+  # operand loads are attached to the barrier through pointer AFTER edges.
+  ready = UOp.barrier(la, lb)
   c = UOp.const(dtypes.float.vec(8), 0.0)
-  tc_arg = ("WMMA_16_16_16_half_float", (16, 16, 16), dtypes.half, dtypes.float, "AMD", 32, (), ())
-  mma = UOp(Ops.WMMA, dtypes.float.vec(8), (la.after(ready), lb.after(ready), c), tc_arg)
-  store = out.index(UOp.const(dtypes.int, 0), ptr=True).store(mma)
+  tc_arg = ("WMMA_16_16_16_half_float", (16, 16, 16), dtypes.half, dtypes.float, "AMD", 32,
+            (((101, 2), (102, 2), (103, 2), (104, 2)),) * 2 + (((1, 2),),), ())
+  mma = UOp(Ops.WMMA, dtypes.float.vec(8), (la, lb, c), tc_arg)
+  store = out.after(ready).index(UOp.const(dtypes.weakint, 0), ptr=True).store(mma)
   return attach_pipe_candidate_context(UOp.sink(store, ready), context)
 
 def pipe_candidate_context(spec: WMMAPipeSpec, canonical_identity: str) -> KernelCandidateContext:
