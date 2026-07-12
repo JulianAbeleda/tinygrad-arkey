@@ -3,6 +3,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from tinygrad.dtype import AddrSpace, PtrDType, dtypes
+from tinygrad.codegen.opt import KernelOptError
+from tinygrad.codegen.opt.prefill_value_key import PrefillSourceValueKey
 from tinygrad.helpers import getenv
 from tinygrad.uop.ops import Ops, UOp
 
@@ -12,6 +14,34 @@ REQUIRED_WMMA_PROOF_FIELDS = ("role", "lds_buffer_id", "dbuf_slot", "k_phase", "
 @dataclass(frozen=True)
 class PrefillAMDISARendererPolicy:
   name: str = "prefill"
+
+  def prefill_source_value_key(self, *tags:Any) -> PrefillSourceValueKey|None:
+    """Consume only explicit, typed source identity; address equivalence is not identity."""
+    keys:list[PrefillSourceValueKey] = []
+    for tag in tags:
+      if not isinstance(tag, tuple): continue
+      claims = [item for item in tag[1:] if isinstance(item, tuple) and item and item[0] == "value_key"]
+      if not claims: continue
+      if len(claims) != 1 or len(claims[0]) != 2:
+        raise KernelOptError("AMD prefill source-value metadata has malformed or duplicate value_key fields")
+      key = claims[0][1]
+      if not isinstance(key, PrefillSourceValueKey):
+        raise KernelOptError("AMD prefill source-value metadata must carry PrefillSourceValueKey")
+      role_claims = [item[1] for item in tag[1:] if isinstance(item, tuple) and len(item) == 2 and item[0] == "role"]
+      if role_claims and (len(set(role_claims)) != 1 or role_claims[0] != key.role):
+        raise KernelOptError("AMD prefill source-value metadata role conflicts with typed key")
+      fields = {item[0]: item[1] for item in tag[1:] if isinstance(item, tuple) and len(item) == 2 and isinstance(item[0], str)}
+      if "nbuf" in fields and fields["nbuf"] != 1:
+        raise KernelOptError("AMD prefill source-value metadata requires nbuf=1")
+      if "lds_buffer_id" in fields and key.buffer_id != ("lds", fields["lds_buffer_id"], 0):
+        raise KernelOptError("AMD prefill source-value metadata LDS buffer conflicts with typed key")
+      if "owned_stage" in fields and fields["owned_stage"] != f"{key.role}_IDENTITY":
+        raise KernelOptError("AMD prefill source-value metadata conflicts with owned identity stage")
+      keys.append(key)
+    if not keys: return None
+    if any(key != keys[0] for key in keys[1:]):
+      raise KernelOptError("AMD prefill source-value metadata carries conflicting typed keys")
+    return keys[0]
 
   def wmma_frag_proof_from_elem(self, e:UOp) -> dict|None:
     if e.op is Ops.GEP: e = e.src[0]

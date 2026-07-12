@@ -108,6 +108,61 @@ def test_single_buffer_value_identity_rangeify_parser_is_typed_and_fail_closed()
     pass
 
 
+def test_single_buffer_value_identity_survives_real_amd_boundaries():
+  import itertools
+  from tinygrad.codegen import IselContext
+  from tinygrad.codegen.opt.prefill_value_key import PrefillSourceValueKey
+  from tinygrad.dtype import AddrSpace, dtypes
+  from tinygrad.helpers import Target
+  from tinygrad.renderer.isa.amd import AMDISARenderer
+  from tinygrad.uop.ops import Ops, UOp, graph_rewrite
+
+  key = PrefillSourceValueKey(role="B", output_tile=("tile", 0), k_epoch=("epoch", 0),
+    k_phase=("single_buffer", 0), vector_offset=("wide", 0), source_id=("uop_key", "abcd"),
+    buffer_id=("lds", 991, 0))
+  tag = ("wmma_frag_buffer_proof", ("role", "B"), ("lds_buffer_id", 991), ("nbuf", 1),
+         ("owned_stage", "B_IDENTITY"), ("value_key", key))
+  local = UOp(Ops.DEFINE_LOCAL, dtypes.half.ptr(64, addrspace=AddrSpace.LOCAL), arg=991, tag=tag)
+  load = local.index(UOp.const(dtypes.int32, 0)).replace(tag=tag).load(dtype=dtypes.half).replace(tag=tag)
+  source = UOp.sink(load)
+  ren = AMDISARenderer(Target.parse("AMD:ISA:gfx1100"))
+  pre_isel = graph_rewrite(source, ren.pre_isel_matcher, ctx=itertools.count(-1, -1), bottom_up=True)
+  isel = graph_rewrite(pre_isel, ren.isel_matcher, ctx=IselContext(pre_isel), bottom_up=True)
+
+  pre_snap = audit.stage_value_identity_snapshot(pre_isel, "amd_pre_isel")
+  isel_snap = audit.stage_value_identity_snapshot(isel, "amd_isel")
+  required = [key]
+  assert {row["value_key"] for row in pre_snap["value_identities"]} == {key}
+  assert {row["value_key"] for row in isel_snap["value_identities"]} == {key}
+  snapshots = [{**pre_snap, "boundary": boundary} for boundary in audit.STAGE_VALUE_IDENTITY_BOUNDARIES[:-1]] + [isel_snap]
+  assert audit.stage_value_identity_survival_gate(snapshots, required)["pass"] is True
+
+
+def test_amd_source_value_key_policy_fails_closed_and_legacy_is_neutral():
+  from extra.qk.amd_isa_renderer_policy import PREFILL_AMD_ISA_RENDERER_POLICY as policy
+  from tinygrad.codegen.opt import KernelOptError
+  from tinygrad.codegen.opt.prefill_value_key import PrefillSourceValueKey
+
+  key = PrefillSourceValueKey(role="A", output_tile=(0,), k_epoch=0, k_phase=0, vector_offset=0,
+                              source_id=("uop_key", "a"), buffer_id=("lds", 990, 0))
+  assert policy.prefill_source_value_key(("wmma_frag_buffer_proof", ("role", "A"))) is None
+  assert policy.prefill_source_value_key(("wmma_frag_buffer_proof", ("role", "A"), ("value_key", key))) == key
+  for bad in (
+    ("wmma_frag_buffer_proof", ("role", "B"), ("value_key", key)),
+    ("wmma_frag_buffer_proof", ("role", "A"), ("value_key", {"role": "A"})),
+    ("wmma_frag_buffer_proof", ("role", "A"), ("value_key", key), ("value_key", key)),
+  ):
+    try: policy.prefill_source_value_key(bad)
+    except KernelOptError: pass
+    else: assert False, "claimed malformed/conflicting value identity must fail closed"
+  other = PrefillSourceValueKey(role="A", output_tile=(1,), k_epoch=0, k_phase=0, vector_offset=0,
+                                source_id=("uop_key", "b"), buffer_id=("lds", 990, 0))
+  try:
+    policy.prefill_source_value_key(("proof", ("value_key", key)), ("proof", ("value_key", other)))
+  except KernelOptError: pass
+  else: assert False, "conflicting typed identities must fail closed"
+
+
 def test_stage_ownership_summary_marks_full_lowering_loss():
   out = audit.stage_ownership_summary([], [{"carrier_role": None, "carrier_nbuf": None}])
 

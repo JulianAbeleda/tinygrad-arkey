@@ -544,6 +544,8 @@ def isel_index(ctx:IselContext, x:UOp):
       btag_src = base
       while btag_src.op in (Ops.AFTER, Ops.CAST) and btag_src.src: btag_src = btag_src.src[0]
       if isinstance(btag_src.tag, tuple) and btag_src.tag[:1] == ("wmma_frag_buffer_proof",): lds_tag = btag_src.tag
+    # Validate typed identity across both carriers. Never reconstruct it from the LDS address.
+    _prefill_source_value_key(x.tag, lds_tag)
     return UOp(Ops.NOOP, x.dtype, src=(addr, base) + ((UOp.const(dtypes.int32, imm_off).rtag(),) if imm_off else ()), arg="lds", tag=lds_tag)
   isz = base.dtype.itemsize if isinstance(base.dtype, PtrDType) else 4
   shift = {1:0,2:1,4:2,8:3}.get(isz, 2)
@@ -572,7 +574,9 @@ def isel_load(ctx:IselContext, x:UOp):
   if idxc.arg == "lds":                      # LDS load -> ds_load_b32 from the carrier's address VGPR (src[0]); src[1]=order
     addr = idxc.src[0] if len(idxc.src) < 3 or idxc.src[2].arg == 0 else \
       UOp(Ops.INS, dtypes.int32, src=(idxc.src[0], idxc.src[2]), arg=AMDOps.V_IADD, tag=_vreg_def(ctx))
-    return UOp(Ops.INS, x.dtype.scalar(), src=(addr, idxc.src[1]) + dep, arg=AMDOps.DS_LOAD, tag=(ctx.vreg(_vpool(ctx)),))
+    meta = _prefill_source_value_metadata(idxc.tag, x.tag)
+    return UOp(Ops.INS, x.dtype.scalar(), src=(addr, idxc.src[1]) + dep + (() if meta is None else (meta,)),
+               arg=AMDOps.DS_LOAD, tag=(ctx.vreg(_vpool(ctx)),))
   base, off = idxc.src[0], idxc.src[1]
   isz, n = x.dtype.scalar().itemsize, x.dtype.count
   loads = tuple(UOp(Ops.INS, x.dtype.scalar(), src=(off, base, UOp.const(dtypes.int32, l*isz).rtag()) + dep,
@@ -611,7 +615,9 @@ def isel_store(ctx:IselContext, a:UOp, b:UOp, x:UOp):
     esz = b.dtype.itemsize                    # element width from the value's dtype (KNOWN here; lowered INS srcs are void)
     if b.op is Ops.CONST: b = UOp(Ops.INS, b.dtype, src=(b.rtag(),), arg=AMDOps.V_CONST, tag=_vreg_def(ctx))  # e.g. acc init 0.0
     addr = a.src[0] if lds_imm == 0 else UOp(Ops.INS, dtypes.int32, src=(a.src[0], UOp.const(dtypes.int32, lds_imm).rtag()), arg=AMDOps.V_IADD, tag=_vreg_def(ctx))
-    return UOp(Ops.INS, dtypes.void, src=(addr, b, a.src[1], UOp.const(dtypes.int32, esz).rtag()), arg=AMDOps.DS_STORE)  # addr,data,order,esz
+    meta = _prefill_source_value_metadata(a.tag, x.tag)
+    return UOp(Ops.INS, dtypes.void, src=(addr, b, a.src[1], UOp.const(dtypes.int32, esz).rtag()) +
+               (() if meta is None else (meta,)), arg=AMDOps.DS_STORE)  # addr,data,order,esz[,metadata]
   base, off = a.src[0], a.src[1]
   vals = b.src if (b.op is Ops.NOOP and not isinstance(b.dtype, PtrDType)) else (b,)   # STACK lane-carrier -> per-lane vals
   isz = vals[0].dtype.scalar().itemsize
@@ -1026,6 +1032,15 @@ def _amd_isa_policy_helpers():
   return SimpleNamespace(wmma_elems=_wmma_elems, wmma_half_addr=_wmma_half_addr, decompose_lds_index=decompose_lds_index,
                          lds_key_uop=_lds_key_uop, reg_base=_reg_base, const_base=_const_base, uop_byte_width=_uop_byte_width,
                          lds_proof_key=_lds_proof_key, is_vpack_int32=_is_vpack_int32)
+
+def _prefill_source_value_key(*tags):
+  policy = _amd_isa_renderer_policy()
+  return None if policy is None else policy.prefill_source_value_key(*tags)
+
+def _prefill_source_value_metadata(*tags) -> UOp|None:
+  key = _prefill_source_value_key(*tags)
+  if key is None: return None
+  return UOp(Ops.NOOP, dtypes.void, tag=("prefill_source_value_key", ("role", key.role), ("value_key", key)))
 
 def _wmma_frag_proof_reuse_key(ctx:IselContext, role:str, carrier:UOp) -> tuple|None:
   policy = _amd_isa_renderer_policy()
@@ -1580,6 +1595,7 @@ def _strip_linear_order_deps(x:UOp):
   if x.arg is AMDOps.GLOBAL_LOAD and len(x.src) > 3: nx = x.replace(src=x.src[:3])
   elif x.arg is AMDOps.DS_LOAD and len(x.src) > 2: nx = x.replace(src=x.src[:2])
   elif x.arg is AMDOps.DS_LOAD_B128 and len(x.src) > 3: nx = x.replace(src=x.src[:3])
+  elif x.arg is AMDOps.DS_STORE and len(x.src) > 4: nx = x.replace(src=x.src[:4])
   elif x.arg is AMDOps.DS_STORE_B128 and len(x.src) > 7: nx = x.replace(src=x.src[:5] + x.src[-2:])
   elif x.arg is AMDOps.GATED_STORE_B128 and len(x.src) > 8: nx = x.replace(src=x.src[:6] + x.src[-2:])
   if nx is not None:
@@ -1587,7 +1603,8 @@ def _strip_linear_order_deps(x:UOp):
   return None
 
 def _strip_metadata_tag(x:UOp):
-  if isinstance(x.tag, tuple) and x.tag and x.tag[0] in ("wmma_frag_buffer_proof", "tc_local_stage_store", "wmma_frag_stage_window"):
+  if isinstance(x.tag, tuple) and x.tag and x.tag[0] in ("wmma_frag_buffer_proof", "tc_local_stage_store", "wmma_frag_stage_window",
+                                                         "prefill_source_value_key"):
     nx = x.replace(tag=None)
     return (nx, [nx])
   return None
