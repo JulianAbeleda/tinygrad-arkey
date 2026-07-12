@@ -256,6 +256,8 @@ def test_register_candidate_admission_uses_zero_lds_typed_plan():
   assert admission.active_lds_bytes == 0
   assert admission.pipeline_plan.storage.kind == "global_register_resident"
   assert admission.pipeline_plan.stages == 2
+  assert admission.pipeline_plan.pipeline_policy.storage_kind == "global_register_resident"
+  assert admission.pipeline_plan.wait_coverage.passed
   assert admission.context.pipeline == admission.pipeline_plan
 
 

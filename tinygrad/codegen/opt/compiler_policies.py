@@ -275,3 +275,20 @@ class RegisterPipePlan:
   def policy(self) -> PipelinePolicy:
     """Expose the register plan through the common policy composition."""
     return PipelinePolicy(self.storage, self.wait, self.resources, stages=self.stages)
+
+  @property
+  def pipeline_policy(self) -> PipelinePolicy:
+    """Candidate-pipeline protocol name consumed by postrange."""
+    return self.policy
+
+  @property
+  def wait_coverage(self) -> WaitDependencyCoverage:
+    deps = tuple(WaitDependency(self.wait, f"global_load_{role}", "gemm_consumer", role,
+                                 producer_stage=0, consumer_stage=1, scope="per_stage")
+                 for role in ("A", "B"))
+    return prove_wait_dependency_coverage(self.policy, deps, (("A", 0, 1), ("B", 0, 1)))
+
+  @property
+  def pipeline_policy(self) -> PipelinePolicy:
+    """Common candidate-context accessor used by policy-aware lowering."""
+    return self.policy
