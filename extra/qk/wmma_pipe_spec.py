@@ -42,6 +42,24 @@ class WMMAPipeSpec:
       "target": self.target, "role": self.role, "loads_per_stage": self.loads_per_stage,
     }
 
+@dataclass(frozen=True)
+class WMMAPipeIR:
+  role: str
+  shape: tuple[int, int, int]
+  stages: int
+  loads_per_stage: int
+  wait_policy: str
+  stores: str = "fp16_global"
+  provenance: str = "compiler_owned_typed_pipe_ir"
+
+  def __post_init__(self):
+    if self.stages != 2 or self.loads_per_stage <= 0: raise ValueError("invalid pipe IR lifecycle")
+    if self.wait_policy != "targeted_vmcnt": raise ValueError("unsupported pipe wait policy")
+    if self.provenance != "compiler_owned_typed_pipe_ir": raise ValueError("invalid pipe provenance")
+
+def build_wmma_pipe_ir(spec: WMMAPipeSpec) -> WMMAPipeIR:
+  return WMMAPipeIR(spec.role, (spec.m, spec.n, spec.k), spec.stages, spec.loads_per_stage, spec.wait_policy)
+
 def pipe_candidate_context(spec: WMMAPipeSpec, canonical_identity: str) -> KernelCandidateContext:
   """Typed compiler context for a generated pipe candidate.
 
