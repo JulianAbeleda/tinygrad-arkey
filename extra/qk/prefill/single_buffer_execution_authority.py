@@ -137,16 +137,19 @@ def _emitted_tile_lds_proof(program: UOp) -> dict[str, Any]:
   if len(buf.tag) < 2 or buf.tag[1] != geometry: errors.append("tagged tile LDS geometry differs from candidate context")
   def _address(u):
     address = u.src[0]
-    if address.op is Ops.INDEX: return address.src[0], address.src[1], 1
+    if address.op is Ops.INDEX:
+      width = u.src[1].dtype.count if u.op is Ops.STORE else u.dtype.count
+      return address.src[0], address.src[1], width
     if address.op is Ops.SHRINK and len(address.src) == 3 and address.src[2].op is Ops.CONST:
       return address.src[0], address.src[1], address.src[2].arg
     return None
-  stores = [u for u in sink.toposort() if u.op is Ops.STORE and u.src[0].op is Ops.INDEX and u.src[0].src[0] is buf]
+  stores = [u for u in sink.toposort() if u.op is Ops.STORE and (address := _address(u)) is not None and
+            buf in address[0].backward_slice_with_self]
   loads = [u for u in sink.toposort() if u.op is Ops.LOAD and (address := _address(u)) is not None and
            buf in address[0].backward_slice_with_self]
-  expected_stores = (factors.loads_a+factors.loads_b)*8
+  expected_stores = factors.loads_a+factors.loads_b
   expected_loads = (factors.subtiles_m+factors.subtiles_n)*factors.k_substeps*4
-  if len(stores) != expected_stores: errors.append(f"expected {expected_stores} scalar cooperative store formulas, found {len(stores)}")
+  if len(stores) != expected_stores: errors.append(f"expected {expected_stores} b128 cooperative store formulas, found {len(stores)}")
   if len(loads) != expected_loads: errors.append(f"expected {expected_loads} packed fragment load formulas, found {len(loads)}")
   allowed = re.compile(r"^[0-9lidx ()+*<>&|/%-]+$")
   def _addresses(rows):

@@ -55,8 +55,10 @@ def test_nonzero_row_and_k_tile_bases_survive_producer_templates():
   owner=next(x for x in stage.producer.backward_slice if x.op is Ops.RANGE and x.arg[0] == 32)
   assert all(owner in x.backward_slice for x in global_loads)
 
-def test_local4_local2_warp32_scalar_store_coverage():
+def test_local4_local2_warp32_b128_store_coverage():
   stage=_stage(); stores=[x for x in stage.producer.backward_slice_with_self if x.op is Ops.STORE]
+  assert len(stores) == 4
+  assert all(x.src[1].dtype == dtypes.half.vec(8) for x in stores)
   indices=[x.src[0].src[1] for x in stores]
   wm,wn,lane=_fixture()[2].wave_m,_fixture()[2].wave_n,_fixture()[2].lane
   # Use the axes from the built graph, not equal-looking detached fixture axes.
@@ -67,7 +69,8 @@ def test_local4_local2_warp32_scalar_store_coverage():
     for n in range(2):
       for l in range(32):
         repl={wm:UOp.const(dtypes.weakint,m),wn:UOp.const(dtypes.weakint,n),lane:UOp.const(dtypes.weakint,l)}
-        actual={x.substitute(repl).simplify().arg for x in indices}; tid=(m*2+n)*32+l; row,vec=tid//4,tid%4
+        starts={x.substitute(repl).simplify().arg for x in indices}
+        actual={x+e for x in starts for e in range(8)}; tid=(m*2+n)*32+l; row,vec=tid//4,tid%4
         expected={(base//2)+r*40+vec*8+e for base in (0,10240) for r in (row,row+64) for e in range(8)}
         assert actual == expected
 

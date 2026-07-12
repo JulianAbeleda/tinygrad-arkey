@@ -55,6 +55,8 @@ class Renderer:
   suffix: str = ""
   # TODO: make this generic with a list of supported types
   supports_float4: bool = True
+  local_store_vector_widths: dict[DType, tuple[int, ...]] = {}
+  local_store_requires_static_alignment: bool = True
   has_local: bool = True
   has_threads: bool = False
   has_shared: bool = True

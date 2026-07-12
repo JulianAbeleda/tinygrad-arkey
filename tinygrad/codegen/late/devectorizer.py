@@ -189,7 +189,12 @@ def split_load_store(ctx:Renderer|None, ls:UOp, idx:UOp):
   # determine fold lengths
   lengths = []
   must_divide = True
-  if ctx is not None and ctx.target.device == "DSP":
+  local_widths = () if ctx is None or ls.op is not Ops.STORE or buf.addrspace != AddrSpace.LOCAL else \
+    ctx.local_store_vector_widths.get(buf.dtype.base, ())
+  if local_widths:
+    lengths = list(local_widths)
+    must_divide = ctx.local_store_requires_static_alignment
+  elif ctx is not None and ctx.target.device == "DSP":
     lengths = [128,64,32,16,8,4]
     must_divide = False
   elif buf.addrspace == AddrSpace.GLOBAL and buf.dtype.base == dtypes.uint32 and ctx is not None and ctx.supports_float4:

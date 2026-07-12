@@ -252,7 +252,7 @@ def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:U
                                 operands:tuple[PrecontractOperandTemplate, ...], threads:PrecontractThreadAxes,
                                 k_axis:PrecontractKAxis, subtile_m:UOp, subtile_n:UOp,
                                 contracts:tuple[PrecontractContractSpec, ...]) -> PrecontractLDSStage:
-  """Build an unwired scalar cooperative stage while full operand index templates still exist."""
+  """Build an unwired vector cooperative stage while full operand index templates still exist."""
   factors = derive_precontract_factors(geometry, tc)
   if tuple(x.role for x in operands) != ("A", "B"): raise ValueError("precontract operands must be exactly ordered A and B")
   for operand in operands:
@@ -295,13 +295,14 @@ def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:U
     for row_iteration in range(loads):
       linear_vector = thread + row_iteration*geometry.threads
       row, vector = linear_vector//factors.vectors_per_row, linear_vector%factors.vectors_per_row
-      for elem in range(8):
-        logical_k = vector * 8 + elem
-        value = operand.source.substitute({operand.row_axis: operand.row_tile_base + row,
-                                           operand.k_axis: k_axis.tile_base + logical_k})
-        index = (window.base + row * window.stride_bytes + logical_k * 2) // 2
-        store_idx = allocation.index(index, dtype=dtypes.half).replace(tag=("kernel_tile_store", operand.role, row_iteration, elem))
-        stores.append(store_idx.store(value).end())
+      logical_k = vector * 8
+      values = tuple(operand.source.substitute({operand.row_axis: operand.row_tile_base + row,
+                                                operand.k_axis: k_axis.tile_base + logical_k + elem}) for elem in range(8))
+      value = UOp(Ops.STACK, dtypes.half.vec(8), values)
+      index = (window.base + row * window.stride_bytes + logical_k * 2) // 2
+      store_tag = ("kernel_tile_store", operand.role, row_iteration)
+      store_idx = allocation.index(index, dtype=dtypes.half.vec(8)).replace(tag=store_tag)
+      stores.append(store_idx.store(value).replace(tag=store_tag).end())
   producer = UOp.group(*stores)
   barrier = UOp.barrier(producer)
   wave_m, wave_n, lane = threads.wave_m, threads.wave_n, threads.lane
