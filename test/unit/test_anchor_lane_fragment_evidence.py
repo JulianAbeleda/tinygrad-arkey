@@ -1,5 +1,5 @@
 from extra.qk.prefill.anchor_lane_fragment_evidence import (
-  accumulator_c_rows, build_evidence, cooperative_stage_rows, wmma_fragment_rows)
+  accumulator_c_rows, build_evidence, cooperative_stage_rows, summarize_evidence, wmma_fragment_rows)
 
 
 def test_anchor_cooperative_stage_is_exact_and_in_bounds():
@@ -44,3 +44,10 @@ def test_anchor_evidence_separates_calculation_from_missing_bank_measurement():
   assert evidence["invariants"]["lds_slot_identity"]["ok"] is True
   assert evidence["bank_evidence"]["status"] == "missing_measured_evidence"
   assert evidence["bank_evidence"]["proven"] is False
+
+
+def test_compact_summary_binds_all_exhaustive_mapping_rows():
+  evidence = summarize_evidence(build_evidence())
+  hashes = evidence["mapping"]["sha256"]
+  assert set(hashes) == {"cooperative_stage", "wmma_fragments", "accumulator_to_c"}
+  assert all(len(value) == 64 for value in hashes.values())

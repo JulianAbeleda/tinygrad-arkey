@@ -8,6 +8,7 @@ physical LDS bank-conflict behavior.
 """
 from __future__ import annotations
 
+import argparse, hashlib, json, pathlib
 from typing import Any
 
 from extra.qk.prefill_schedule_spec import PrefillGEMMScheduleSpec
@@ -139,3 +140,26 @@ def build_evidence() -> dict[str, Any]:
       "required_measurement": "controlled gfx1100 LDS bank/cycle or PMC differential for this exact ds_load_b128 lane address set",
     },
   }
+
+
+def summarize_evidence(report: dict[str, Any]) -> dict[str, Any]:
+  mappings = report["mapping"]
+  hashes = {name: hashlib.sha256(json.dumps(rows, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+            for name, rows in mappings.items()}
+  return {key: value for key, value in report.items() if key != "mapping"} | {
+    "mapping": {"storage": "regenerate_with_build_evidence", "sha256": hashes}}
+
+
+def main(argv: list[str] | None = None) -> dict[str, Any]:
+  ap = argparse.ArgumentParser(description=__doc__)
+  ap.add_argument("--output", type=pathlib.Path, required=True)
+  ap.add_argument("--full", action="store_true", help="include every mapping row instead of compact hashes")
+  args = ap.parse_args(argv)
+  report = build_evidence()
+  output = report if args.full else summarize_evidence(report)
+  args.output.parent.mkdir(parents=True, exist_ok=True)
+  args.output.write_text(json.dumps(output, indent=2) + "\n")
+  return output
+
+
+if __name__ == "__main__": main()
