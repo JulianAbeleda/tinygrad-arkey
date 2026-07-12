@@ -57,6 +57,29 @@ The logical descriptor must not import `dtypes`-specific AMD enums, `AMDOps`,
 or WMMA lane-remap implementation details. Consumer adapters may depend on the
 validated tensor-core descriptor and backend capabilities.
 
+### G0 field inventory
+
+The current prototype has one logical source of truth and two adapters.  This
+table records ownership before further extraction; names in the backend and
+consumer columns must not leak into the compiler-neutral contract.
+
+| Existing field | Current owner | Contract owner | Notes |
+|---|---|---|---|
+| `RegisterPipeTemplate.pipe_tm`, `pipe_tn` | `register_pipeline.py` | logical tile | A/B fragment counts |
+| `RegisterPipeTemplate.schedule`, `logical_buffer_count` | `register_pipeline.py` | logical tile/lifecycle | slot count and addressing mode |
+| `RegisterPipeTemplate.k_step`, `shape`, `geometry` | `register_pipeline.py` | shape instance | GEMM geometry, not physical allocation |
+| `RegisterPipeTemplate.tc`, `contracts` | `register_pipeline.py`/`kernel_lds.py` | consumer adapter | WMMA descriptor and lane contract |
+| `AMDStageBufferSpec.role`, `slots`, `fragments`, `lane_width` | `amd_register_allocator.py` | backend compatibility view | derives from logical A/B tiles; packing remains AMD-owned |
+| `AMDStageBufferSpec.packed_vgpr_width`, `half_bytes` | `amd_register_allocator.py` | backend result | physical-width estimates, never logical fields |
+| WMMA `TensorCore.dims`, `elements_per_thread`, `swizzle` | `tc.py` | WMMA consumer | lane remap and output ABI are not generic GEMM layout |
+| `RegisterLogicalStagePlan` epoch/slot methods | `register_pipeline.py` | shared lifecycle | storage-independent ownership proof |
+
+G1 introduces `LogicalRegisterTile` in `register_contracts.py` with role,
+scalar dtype, tile extents, fragment/carrier widths, slot count/addressing,
+layout identity, alignment, ownership, and lifetime labels.  The existing
+AMD stage spec remains a compatibility projection, so current snapshots and
+allocation behavior are unchanged.
+
 ## Proposed contract
 
 ### Logical register tile

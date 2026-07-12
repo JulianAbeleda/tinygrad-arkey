@@ -9,12 +9,14 @@ from dataclasses import dataclass
 from typing import Literal
 
 from tinygrad.codegen.opt.compiler_policies import PipelinePolicy, StoragePolicy
+from tinygrad.codegen.opt.gemm_consumer import WMMA_CONSUMER
 from tinygrad.codegen.opt.kernel_lds import (PrecontractContractSpec, PrecontractOperandTemplate,
   derive_precontract_shape_factors, validate_precontract_carriers, validate_precontract_contracts,
   validate_precontract_operand_templates, validate_precontract_wmma_abi, validate_rdna3_wmma_descriptor)
 from tinygrad.codegen.opt.kernel_pipeline import (KernelStage1FragmentStage, KernelStage1LifecycleEvent,
   KernelStage1LifecycleProof, KernelStage1ProducerStage, Stage1StorageAdapter, prove_stage1_lifecycle,
   stage1_lifecycle_events)
+from tinygrad.codegen.opt.register_contracts import LogicalRegisterTile
 from tinygrad.dtype import AddrSpace, dtypes
 from tinygrad.uop.ops import AxisType, KernelLDSWindow, KernelTileGeometry, Ops, UOp
 from tinygrad.renderer.isa.amd_register_allocator import AMDStageBufferSpec
@@ -72,13 +74,21 @@ class RegisterPipeTemplate:
       raise ValueError("register template requires K step 16 and a two-stage 2x2 pipe")
     if self.schedule not in ("double_buffer", "sequential"):
       raise ValueError("register template schedule must be double_buffer or sequential")
-    validate_rdna3_wmma_descriptor(self.tc)
+    # Keep instruction-family validation behind the consumer seam.  The
+    # adapter delegates to the existing storage-independent RDNA3 checks, so
+    # graph output and failure behavior remain unchanged.
+    self.consumer_adapter.validate_descriptor(self.tc)
     factors = derive_precontract_shape_factors(self.geometry, self.tc)
     if self.geometry.tile != (128, 128, 32) or (factors.subtiles_m, factors.subtiles_n) != (2, 4):
       raise ValueError("attn_qo register template requires 128x128x32 RDNA3 tile")
     validate_precontract_operand_templates(self.operands, context="register pipe")
     validate_precontract_contracts(self.tc, self.contracts, context="register pipe")
     validate_precontract_carriers(dtypes.half.vec(16), dtypes.float.vec(8), context="register pipe")
+
+  @property
+  def consumer_adapter(self):
+    """The WMMA consumer contract for this template (no physical ISA data)."""
+    return WMMA_CONSUMER
 
   @property
   def policy(self) -> PipelinePolicy:
@@ -100,6 +110,17 @@ class RegisterPipeTemplate:
   def stage_width(self) -> int: return (self.pipe_tm + self.pipe_tn) * 16
 
   @property
+  def logical_tiles(self) -> tuple[LogicalRegisterTile, LogicalRegisterTile]:
+    """Compiler-neutral A/B tile contracts; backend packing is derived below."""
+    return tuple(LogicalRegisterTile(
+      role, dtypes.half, (fragments, 16), fragments, 16, 16,
+      self.logical_buffer_count, "static" if self.schedule == "sequential" else "proven",
+      layout="row_major_fragment16", alignment_bytes=32,
+      ownership=("producer", "consumer", "slot"),
+      lifetime=("produce", "consume", "release", "overwrite"))
+      for role, fragments in (("A", self.pipe_tm), ("B", self.pipe_tn)))
+
+  @property
   def stage_buffer_specs(self) -> tuple[AMDStageBufferSpec, AMDStageBufferSpec]:
     """Return the independent A/B logical register-buffer contracts.
 
@@ -107,8 +128,8 @@ class RegisterPipeTemplate:
     the combined pipe width: doing so doubles each role's allocation and
     hides the actual VGPR pressure from the backend resource gate.
     """
-    return tuple(AMDStageBufferSpec(role, self.logical_buffer_count, fragments)
-                 for role, fragments in (("A", self.pipe_tm), ("B", self.pipe_tn)))
+    return tuple(AMDStageBufferSpec(tile.role, tile.slot_count, tile.fragments, tile.carrier_width)
+                 for tile in self.logical_tiles)
 
   def _buffers(self) -> tuple[UOp, UOp]:
     # Keep A and B independent. A 2x2 pipe is 2*16 half elements per role and
