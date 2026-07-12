@@ -22,6 +22,10 @@ _FULL_KERNEL_CANDIDATE_SET_PATH_ENV = "BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH"
 _DEFAULT_CANDIDATE_PROFILE = "qwen3_8b_q4k_m_gfx1100"
 _CANDIDATE_ROUTE_CENSUS:ContextVar[dict[str,Any]|None]=ContextVar("candidate_route_census",default=None)
 
+def candidate_set_role_enabled(role: str, env: dict[str, str] | None = None) -> bool:
+  values = (env or os.environ).get("BOLTBEAM_FULL_KERNEL_CANDIDATE_ROLES", "ffn_gate_up")
+  return role in {x.strip() for x in values.split(",") if x.strip()}
+
 @contextmanager
 def candidate_route_census():
   collector={"selected":{}}
@@ -340,9 +344,13 @@ def route_pf16_graph_gemm(lin, x: Tensor, w: Tensor | None = None) -> Tensor | N
   from extra.qk.prefill_schedule_spec import _spec_to_params, describe_prefill_schedule, emit_prefill_gemm_from_spec
   spec = describe_prefill_schedule(out_f, in_f, role=role)
   registry=_candidate_registry_from_env()
+  # The proven buffer2 candidate is conservative by default: only gate/up is
+  # admitted. Broader role promotion remains explicit and reversible for
+  # controlled experiments.
+  candidate_roles = {r for r in (role,) if candidate_set_role_enabled(r)}
   profile=getattr(lin,"_prefill_model_profile",None) or os.environ.get("BOLTBEAM_MODEL_PROFILE",_DEFAULT_CANDIDATE_PROFILE)
   target={"backend":"AMD","arch":"gfx1100","wave_size":32}
-  admission=None if registry is None or role is None else registry.get(profile,role,(512,out_f,in_f),target)
+  admission=None if registry is None or role is None or role not in candidate_roles else registry.get(profile,role,(512,out_f,in_f),target)
   if admission is not None:
     _route_dump({"role":role,"shape":(512,out_f,in_f),"decision":"candidate_set_lds_buffer2",
                  "canonical_identity":admission.canonical_identity})
