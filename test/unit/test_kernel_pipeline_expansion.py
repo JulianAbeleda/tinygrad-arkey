@@ -17,6 +17,15 @@ def test_contract_preserves_matching_vector_carrier_and_rejects_mismatched_vecto
   with pytest.raises(ValueError, match="scalar source or matching vector"):
     do_contract(mismatched)
 
+
+def test_void_contract_closes_full_store_axes_without_grouping_dependency():
+  reg = UOp.placeholder((8,), dtypes.float, 9401, addrspace=AddrSpace.REG)
+  store = reg.index(UOp.const(dtypes.weakint, 0)).store(UOp.const(dtypes.float, 0.0))
+  axes = ((3, 2), (4, 2), (5, 2))
+  expanded = UOp(Ops.UNROLL, dtypes.void, (store,), axes)
+  contract = UOp(Ops.CONTRACT, dtypes.void, (expanded,), axes[::-1])
+  assert do_contract(contract) is store
+
 def test_reg_index_load_expansion_keeps_scalar_loads_under_stack():
   reg = UOp.placeholder((8,), dtypes.float, 9400, addrspace=AddrSpace.REG)
   idxs = tuple(reg.index(UOp.const(dtypes.weakint, i)) for i in (0, 1))
@@ -28,6 +37,12 @@ def test_reg_index_load_expansion_keeps_scalar_loads_under_stack():
   carrier = expanded.src[0]
   assert carrier.op is Ops.STACK and carrier.dtype == dtypes.float.vec(2)
   assert all(x.op is Ops.LOAD and x.dtype == dtypes.float for x in carrier.src)
+
+def test_group_readiness_is_not_wrapped_in_void_unroll():
+  value = UOp.const(dtypes.float, 0.0)
+  unroll = UOp(Ops.UNROLL, dtypes.float, (value,), ((10, 2),))
+  group = UOp.group(unroll)
+  assert do_expand(group) is None
 
 
 def _expanded_pipeline_accumulator(axis_ids,m=2,n=4,group=True):

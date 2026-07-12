@@ -22,6 +22,11 @@ def _swizzle_args(cargs:tuple[tuple[int, int], ...], eargs:tuple[tuple[int, int]
 def do_expand(root:UOp):
   expands = [x for x in root.src if x.op is Ops.UNROLL]
   if len(expands) == 0: return None
+  # GROUP is an ordering container, not a value to replicate across an
+  # upcast axis. Expanding it would create an illegal void UNROLL and can
+  # duplicate readiness dependencies.
+  if root.op is Ops.GROUP:
+    return None
   # A vector load over the scalar REG indexes produced below must remain a
   # stack of scalar loads; vectorizing its pointer operand creates an invalid
   # LOAD(vector, STACK(vector)) shape at the native ABI boundary.
@@ -93,10 +98,20 @@ def do_expand(root:UOp):
       new_arg = tuple(range(root.arg[0], new_srcs[0].dtype.count, new_srcs[0].dtype.count // expand_sz))
   nsrc = UOp(root.op, root.dtype.scalar().vec(root.dtype.count*expand_sz), tuple(new_srcs), new_arg,
              tag=root.tag if getenv("PREFILL_STAGE_PRESERVE_TAGS", 0) and root.op is Ops.STAGE else None)
+  if root.dtype is dtypes.void and nsrc.op is Ops.GROUP:
+    print("DEBUG EXPAND GROUP", root.op, expand_args)
   return UOp(Ops.UNROLL, root.dtype, (nsrc,), expand_args)
 
 def do_contract(con:UOp):
   ex = con.src[0]
+  if con.dtype is dtypes.void and ex.op is Ops.UNROLL and set(con.arg) != set(ex.arg):
+    print("DEBUG PARTIAL VOID", con.arg, ex.arg, ex.src[0].op)
+  # A full void contraction only closes the axes carried by a store. GEP'ing
+  # that side-effecting store manufactures GROUP inside UNROLL, which is not
+  # a legal program carrier and does not add any ordering information.
+  if con.dtype is dtypes.void and ex.op is Ops.UNROLL and set(con.arg) == set(ex.arg):
+    print("DEBUG FULL VOID", con.arg, ex.arg, set(con.arg) == set(ex.arg))
+    return ex.src[0]
   # A carrier that is already the requested width needs no expansion.  In
   # particular, register-resident WMMA A/B fragments arrive as a vector LOAD
   # wrapped in a full-width CONTRACT. Repeating that vector once per lane
