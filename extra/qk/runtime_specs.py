@@ -250,6 +250,12 @@ class GeneratedCandidate:
                          ensure_ascii=True, allow_nan=False).encode("ascii")
     return hashlib.sha256(encoded).hexdigest()
 
+  def kernel_candidate_context(self):
+    if not self.is_full_kernel_candidate: raise ValueError("legacy candidate has no full-kernel candidate context")
+    from tinygrad.uop.ops import KernelCandidateContext
+    assert self.full_kernel_candidate is not None
+    return KernelCandidateContext(self.full_kernel_candidate["schema_version"], self.canonical_identity)
+
   def supports(self, op:RuntimeOpSpec) -> bool:
     if self.op_family != op.family: return False
     if op.phase not in self.phases: return False

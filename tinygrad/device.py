@@ -279,13 +279,14 @@ class Compiler:
   cache_misses: ClassVar[int] = 0
   def __init__(self, cachekey:str|None=None): self.cachekey = cachekey if CCACHE else None
   def compile(self, src:str) -> bytes: return src.encode()   # NOTE: empty compiler is the default
-  def compile_cached(self, src:str) -> bytes:
-    if self.cachekey is not None and (lib := diskcache_get(self.cachekey, src)) is not None:
+  def compile_cached(self, src:str, cache_context:tuple[str, str]|None=None) -> bytes:
+    key = src if cache_context is None else {"source": src, "candidate_schema": cache_context[0], "candidate_identity": cache_context[1]}
+    if self.cachekey is not None and (lib := diskcache_get(self.cachekey, key)) is not None:
       Compiler.cache_hits += 1
       return lib
     assert not getenv("ASSERT_COMPILE"), f"tried to compile with ASSERT_COMPILE set\n{src}"
     lib = self.compile(src)
-    if self.cachekey is not None: diskcache_put(self.cachekey, src, lib)
+    if self.cachekey is not None: diskcache_put(self.cachekey, key, lib)
     Compiler.cache_misses += 1
     return lib
   def disassemble(self, lib:bytes): pass

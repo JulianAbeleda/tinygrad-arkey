@@ -233,7 +233,9 @@ def do_render(ctx:Renderer, prg:UOp, lin:UOp) -> UOp:
 
 def do_compile(ctx:Renderer, prg:UOp, source:UOp) -> UOp|None:
   if DEBUG >= 4: print(source.arg)
-  lib = ctx.compiler.compile_cached(source.arg)
+  candidate = prg.src[0].arg.candidate_context
+  cache_context = None if candidate is None else (candidate.schema_version, candidate.canonical_identity)
+  lib = ctx.compiler.compile_cached(source.arg, cache_context=cache_context)
   if DEBUG >= 7: ctx.compiler.disassemble(lib)
   return prg.replace(src=prg.src + (UOp(Ops.BINARY, arg=lib),))
 

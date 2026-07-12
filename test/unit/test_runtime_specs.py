@@ -134,6 +134,8 @@ def test_strict_full_kernel_candidate_identity_round_trip_and_tamper_rejection()
   row = candidate.to_json()
   assert row["full_kernel_candidate"]["schema_version"] == FULL_KERNEL_CANDIDATE_SCHEMA
   assert row["canonical_identity"] == "56ab6f662cb52bca958b92cdbffac790784a29047c9a1f4dc1e0e9a8b6d6da3d"
+  context = candidate.kernel_candidate_context()
+  assert (context.schema_version, context.canonical_identity) == (FULL_KERNEL_CANDIDATE_SCHEMA, row["canonical_identity"])
   assert GeneratedCandidate.from_json(row) == candidate
   row["full_kernel_candidate"]["workload"]["shape"]["m"] = 1024
   with pytest.raises(ValueError, match="canonical_identity"):

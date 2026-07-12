@@ -1099,6 +1099,17 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
     return [s.after(kernel) for s in contig_srcs]
 
 @dataclass(frozen=True)
+class KernelCandidateContext:
+  schema_version: str
+  canonical_identity: str
+
+  def __post_init__(self):
+    if self.schema_version != "boltbeam.full_kernel_candidate.v1":
+      raise ValueError(f"unsupported kernel candidate context schema {self.schema_version!r}")
+    if len(self.canonical_identity) != 64 or any(c not in "0123456789abcdef" for c in self.canonical_identity):
+      raise ValueError("kernel candidate canonical_identity must be a lowercase SHA-256 hex digest")
+
+@dataclass(frozen=True)
 class KernelInfo:
   name: str = "test"            # name of the kernel
   axis_types: tuple[AxisType, ...] = tuple()
@@ -1106,6 +1117,7 @@ class KernelInfo:
   applied_opts: tuple = tuple()
   opts_to_apply: tuple|None = None
   estimates: Estimates|None = None
+  candidate_context: KernelCandidateContext|None = None
   @property
   def function_name(self): return to_function_name(self.name)
 
