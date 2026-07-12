@@ -1,0 +1,205 @@
+{
+  "schema": "prefill-single-buffer-kernel-timing.v1",
+  "passed": true,
+  "canonical_identity": "81c27275d1aad1bb8147c5c5cdaa8000e9375e81f3d085b49d62064a731313d6",
+  "binary_sha256": "e5b988f008de36242bff886b46daae1dc82816547832c0c63da72ef7c84b6c1c",
+  "git_revision": "c52e562358c31506fd1d55cdd012e66b48cf1ec1",
+  "joins": {
+    "candidate": true,
+    "binary": true,
+    "commit": true
+  },
+  "protocol": {
+    "scope": "kernel_only",
+    "wait": true,
+    "compile_excluded": true,
+    "input_setup_excluded": true,
+    "output_transfer_excluded": true,
+    "warmups": 5,
+    "rounds": 21
+  },
+  "samples_ms": [
+    1.29376,
+    1.36652,
+    1.108,
+    1.2234,
+    1.3676,
+    1.05372,
+    0.99072,
+    0.9601599999999999,
+    0.9292400000000001,
+    1.001,
+    0.9884799999999999,
+    0.94808,
+    0.9526799999999999,
+    0.94432,
+    0.90996,
+    0.9250399999999999,
+    0.77792,
+    0.85564,
+    0.8066,
+    0.80956,
+    0.82588
+  ],
+  "median_ms": 0.9526799999999999,
+  "min_ms": 0.77792,
+  "median_tflops": 54.09960065499433,
+  "max_tflops": 66.25309485808309,
+  "clock_pin": null,
+  "telemetry": {
+    "before": {
+      "schema": "tinygrad.amd_telemetry_trace.v1",
+      "window": "single_buffer_kernel_before",
+      "system_snapshot_id": null,
+      "experiment_id": null,
+      "sample_count": 1,
+      "interval_s": 0.0,
+      "samples": [
+        {
+          "sample": 0,
+          "monotonic_ns": 636274659124158,
+          "sensors": {
+            "performance_level": {
+              "path": "/sys/class/drm/card0/device/power_dpm_force_performance_level",
+              "status": "live",
+              "value": "auto"
+            },
+            "gpu_busy_percent": {
+              "path": "/sys/class/drm/card0/device/gpu_busy_percent",
+              "status": "live",
+              "value": 1
+            },
+            "vram_total_bytes": {
+              "path": "/sys/class/drm/card0/device/mem_info_vram_total",
+              "status": "live",
+              "value": 25753026560
+            },
+            "vram_used_bytes": {
+              "path": "/sys/class/drm/card0/device/mem_info_vram_used",
+              "status": "live",
+              "value": 258859008
+            },
+            "core_dpm": {
+              "path": "/sys/class/drm/card0/device/pp_dpm_sclk",
+              "status": "live",
+              "value": "0: 500Mhz\n1: 23Mhz *\n2: 2304Mhz"
+            },
+            "memory_dpm": {
+              "path": "/sys/class/drm/card0/device/pp_dpm_mclk",
+              "status": "live",
+              "value": "0: 96Mhz \n1: 456Mhz *\n2: 772Mhz \n3: 1249Mhz"
+            },
+            "power_uw": {
+              "path": "/sys/class/drm/card0/device/hwmon/hwmon1/power1_average",
+              "status": "live",
+              "value": 55000000
+            },
+            "temperature_mc": {
+              "path": "/sys/class/drm/card0/device/hwmon/hwmon1/temp1_input",
+              "status": "live",
+              "value": 45000
+            },
+            "core_clock_hz": {
+              "path": "/sys/class/drm/card0/device/hwmon/hwmon1/freq1_input",
+              "status": "live",
+              "value": 23000000
+            },
+            "memory_clock_hz": {
+              "path": "/sys/class/drm/card0/device/hwmon/hwmon1/freq2_input",
+              "status": "live",
+              "value": 456000000
+            }
+          }
+        }
+      ]
+    },
+    "after": {
+      "schema": "tinygrad.amd_telemetry_trace.v1",
+      "window": "single_buffer_kernel_after",
+      "system_snapshot_id": null,
+      "experiment_id": null,
+      "sample_count": 1,
+      "interval_s": 0.0,
+      "samples": [
+        {
+          "sample": 0,
+          "monotonic_ns": 636274695514860,
+          "sensors": {
+            "performance_level": {
+              "path": "/sys/class/drm/card0/device/power_dpm_force_performance_level",
+              "status": "live",
+              "value": "auto"
+            },
+            "gpu_busy_percent": {
+              "path": "/sys/class/drm/card0/device/gpu_busy_percent",
+              "status": "live",
+              "value": 85
+            },
+            "vram_total_bytes": {
+              "path": "/sys/class/drm/card0/device/mem_info_vram_total",
+              "status": "live",
+              "value": 25753026560
+            },
+            "vram_used_bytes": {
+              "path": "/sys/class/drm/card0/device/mem_info_vram_used",
+              "status": "live",
+              "value": 258859008
+            },
+            "core_dpm": {
+              "path": "/sys/class/drm/card0/device/pp_dpm_sclk",
+              "status": "live",
+              "value": "0: 500Mhz\n1: 1795Mhz *\n2: 2304Mhz"
+            },
+            "memory_dpm": {
+              "path": "/sys/class/drm/card0/device/pp_dpm_mclk",
+              "status": "live",
+              "value": "0: 96Mhz \n1: 456Mhz \n2: 772Mhz *\n3: 1249Mhz"
+            },
+            "power_uw": {
+              "path": "/sys/class/drm/card0/device/hwmon/hwmon1/power1_average",
+              "status": "live",
+              "value": 111000000
+            },
+            "temperature_mc": {
+              "path": "/sys/class/drm/card0/device/hwmon/hwmon1/temp1_input",
+              "status": "live",
+              "value": 44000
+            },
+            "core_clock_hz": {
+              "path": "/sys/class/drm/card0/device/hwmon/hwmon1/freq1_input",
+              "status": "live",
+              "value": 1795000000
+            },
+            "memory_clock_hz": {
+              "path": "/sys/class/drm/card0/device/hwmon/hwmon1/freq2_input",
+              "status": "live",
+              "value": 772000000
+            }
+          }
+        }
+      ]
+    }
+  },
+  "execution_authority": {
+    "schema": "prefill-single-buffer-execution-authority.v1",
+    "passed": true,
+    "canonical_identity": "81c27275d1aad1bb8147c5c5cdaa8000e9375e81f3d085b49d62064a731313d6",
+    "program": {
+      "program_key": "4268e53c85691fadc0bc9f144bb11bec4911dd2ee1c86d81a3e356ed2923f9b0",
+      "source_sha256": "0d8afa8b541f320b57983f3a6c57fdba22b4970867c8bfd06eb1944b2d18b98e",
+      "binary_sha256": "e5b988f008de36242bff886b46daae1dc82816547832c0c63da72ef7c84b6c1c",
+      "binary_bytes": 6648
+    },
+    "runtime": {
+      "executed_binary_sha256": "e5b988f008de36242bff886b46daae1dc82816547832c0c63da72ef7c84b6c1c",
+      "binary_equal": true
+    },
+    "environment": {
+      "device": "AMD",
+      "git": {
+        "revision": "c52e562358c31506fd1d55cdd012e66b48cf1ec1",
+        "dirty": false
+      }
+    }
+  }
+}

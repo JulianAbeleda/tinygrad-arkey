@@ -1,0 +1,182 @@
+{
+  "schema": "prefill-single-buffer-execution-authority.v1",
+  "canonical_identity": "81c27275d1aad1bb8147c5c5cdaa8000e9375e81f3d085b49d62064a731313d6",
+  "route_id": "prefill_wmma_lds_single_buffer_candidate_generated",
+  "selected_route_id": "prefill_wmma_lds_single_buffer_candidate_generated",
+  "environment": {
+    "device": "AMD",
+    "git": {
+      "revision": "c52e562358c31506fd1d55cdd012e66b48cf1ec1",
+      "dirty": false
+    }
+  },
+  "route_binding_complete": true,
+  "route_authority": {
+    "family": "prefill_gemm",
+    "effective_route": "prefill_wmma_lds_single_buffer_candidate_generated",
+    "provenance": "tinygrad_scheduler_generated",
+    "surface_class": "ordinary_tinygrad_graph",
+    "strict_pure": true,
+    "manifest_pure": true,
+    "rolled_back_to_oracle": false,
+    "pure": true
+  },
+  "structural_binding": {
+    "expected": {
+      "threads": 256,
+      "tile": {
+        "m": 128,
+        "n": 128,
+        "k": 32
+      },
+      "waves": {
+        "m": 4,
+        "n": 2
+      },
+      "wave_threads": 256,
+      "lds_windows": {
+        "a": [
+          0,
+          10240
+        ],
+        "b": [
+          10240,
+          20480
+        ]
+      },
+      "lds_strides": {
+        "a": 80,
+        "b": 80
+      },
+      "lds_bytes": 20480
+    },
+    "actual": {
+      "threads": 256,
+      "local_size": [
+        32,
+        4,
+        2
+      ],
+      "lds_bytes": 20480,
+      "wave_count": 8,
+      "tile": {
+        "m": 128,
+        "n": 128,
+        "k": 32
+      },
+      "waves": {
+        "m": 4,
+        "n": 2
+      },
+      "lds_windows": {
+        "a": [
+          0,
+          10240
+        ],
+        "b": [
+          10240,
+          20480
+        ]
+      },
+      "lds_strides": {
+        "a": 80,
+        "b": 80
+      }
+    },
+    "evidence": {
+      "threads": "PROGRAM launch local_size",
+      "lds_bytes": "lowered DEFINE_LOCAL/rendered shared declaration",
+      "wave_count": "launch threads divided by target wave size",
+      "tile": "optimized UOp affine producer/consumer proof",
+      "waves": "optimized UOp proof + ordered PROGRAM local axes",
+      "lds_windows": "optimized UOp exhaustive address-set proof",
+      "lds_strides": "optimized UOp exhaustive address-set proof"
+    },
+    "emitted_proof": {
+      "passed": true,
+      "errors": [],
+      "allocation_count": 1,
+      "store_formula_count": 32,
+      "load_formula_count": 48,
+      "wmma_count": 16,
+      "tile": {
+        "m": 128,
+        "n": 128,
+        "k": 32
+      },
+      "waves": {
+        "m": 4,
+        "n": 2
+      },
+      "lds_windows": {
+        "a": [
+          0,
+          10240
+        ],
+        "b": [
+          10240,
+          20480
+        ]
+      },
+      "lds_strides": {
+        "a": 80,
+        "b": 80
+      },
+      "producer_data_elements": 8192,
+      "consumer_data_elements": 8192
+    },
+    "matches_payload": true,
+    "pre_gpu_eligible": true,
+    "errors": []
+  },
+  "binding_errors": [],
+  "program": {
+    "program_key": "4268e53c85691fadc0bc9f144bb11bec4911dd2ee1c86d81a3e356ed2923f9b0",
+    "source_sha256": "0d8afa8b541f320b57983f3a6c57fdba22b4970867c8bfd06eb1944b2d18b98e",
+    "binary_sha256": "e5b988f008de36242bff886b46daae1dc82816547832c0c63da72ef7c84b6c1c",
+    "binary_bytes": 6648
+  },
+  "runtime": {
+    "executed_binary_sha256": "e5b988f008de36242bff886b46daae1dc82816547832c0c63da72ef7c84b6c1c",
+    "binary_equal": true
+  },
+  "surface": {
+    "ops_ins_count": 0,
+    "source_kind": "compiler_rendered",
+    "forbidden_markers": [],
+    "strict_pure": true
+  },
+  "executable_truth": {
+    "selected_route_id": "prefill_wmma_lds_single_buffer_candidate_generated",
+    "selected_surface": "route_pf16_graph_gemm.generated_lds_matmul_transport",
+    "manifest_route_backed": true,
+    "fallback_used": false,
+    "strict_pure": true,
+    "compiler_surface_forbidden_markers_absent": true,
+    "ops_ins_absent": true,
+    "asm_source_absent": true,
+    "candidate_context_equal": true,
+    "runtime_binary_matches_candidate": true,
+    "define_local_count": 0,
+    "shared_declaration_count": 1,
+    "lds_bytes": 20480,
+    "lds_store_markers": 128,
+    "lds_load_markers": 128,
+    "barrier_markers": 1,
+    "actual_compiler_lds_staging": true
+  },
+  "correctness": {
+    "case": "row_col",
+    "comparison": "full_output",
+    "elements": 6291456,
+    "atol": 0.125,
+    "rtol": 0.002,
+    "max_abs_error": 0.0,
+    "mean_abs_error": 0.0,
+    "passed": true
+  },
+  "fallback_used": false,
+  "strict_pure": true,
+  "runtime_binary_matches_candidate": true,
+  "passed": true
+}
