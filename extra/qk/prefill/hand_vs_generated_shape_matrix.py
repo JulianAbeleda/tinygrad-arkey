@@ -288,6 +288,7 @@ def main(argv: Iterable[str] | None = None) -> int:
   ap.add_argument("--hand-reps", type=int, default=3)
   ap.add_argument("--hand-iters", type=int, default=15)
   ap.add_argument("--skip-hand", action="store_true")
+  ap.add_argument("--skip-generated", action="store_true")
   ap.add_argument("--generated-env", choices=("current", "dbuf-safe"), default="dbuf-safe")
   ap.add_argument("--wmma-chain-trace", action="store_true", help="diagnostic-only: dump no-LDS generated WMMA chain spans/origins/stores")
   ap.add_argument("--trace-max-rows", type=int, default=0, help="limit WMMA/store rows in --wmma-chain-trace JSON; 0 means all")
@@ -304,7 +305,8 @@ def main(argv: Iterable[str] | None = None) -> int:
     for wm, wn in shapes:
       rows.append({
         "shape": f"{wm}x{wn}",
-        "generated": _run_generated(args.m, args.n, args.k, wm, wn, args.loc, args.unr, args.pin_clock,
+        "generated": {} if args.skip_generated else
+                     _run_generated(args.m, args.n, args.k, wm, wn, args.loc, args.unr, args.pin_clock,
                                     args.wmma_chain_trace, args.trace_max_rows),
         "hand_lds2": {} if args.skip_hand else _run_hand(args.m, args.n, args.k, wm, wn, args.waves_m, args.waves_n,
                                                          args.bk, args.pad, args.dbuf, args.hand_reps, args.hand_iters,
