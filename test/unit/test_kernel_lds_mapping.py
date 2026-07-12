@@ -1,8 +1,10 @@
+from types import SimpleNamespace
+
 import pytest
 
 from tinygrad.codegen.opt.kernel_lds import (cooperative_lds_padding_offsets, cooperative_lds_stores, rdna3_wmma_output_coord,
-                                             derive_precontract_factors, semantic_wave_coords, validate_rdna3_wmma_descriptor, wmma_fragment_loads,
-                                             wmma_output_owners)
+                                             derive_precontract_factors, derive_precontract_shape_factors, semantic_wave_coords,
+                                             validate_precontract_carriers, validate_rdna3_wmma_descriptor, wmma_fragment_loads, wmma_output_owners)
 from tinygrad.codegen.opt.tc import amd_rdna3
 from tinygrad import dtypes
 from tinygrad.uop.ops import KernelLDSWindow, KernelTileGeometry
@@ -176,6 +178,21 @@ def test_precontract_factor_derivation_exact_anchor_and_legal_smaller_family():
   factors = derive_precontract_factors(smaller, _tc())
   assert (factors.subtiles_m, factors.subtiles_n, factors.k_substeps, factors.vectors_per_row,
           factors.loads_a, factors.loads_b) == (2, 2, 2, 4, 2, 2)
+
+
+def test_shape_factor_derivation_is_independent_of_lds_windows():
+  shape_only = SimpleNamespace(tile=(128, 128, 32), waves=(4, 2), threads=256, wave_size=32)
+  factors = derive_precontract_shape_factors(shape_only, _tc())
+  assert (factors.subtiles_m, factors.subtiles_n, factors.k_substeps,
+          factors.vectors_per_row, factors.loads_a, factors.loads_b) == (2, 4, 2, 4, 2, 2)
+
+
+def test_wmma_carrier_abi_validation_is_storage_independent():
+  validate_precontract_carriers(dtypes.half.vec(16), dtypes.float.vec(8))
+  with pytest.raises(ValueError, match="fragment carrier"):
+    validate_precontract_carriers(dtypes.half.vec(8), dtypes.float.vec(8))
+  with pytest.raises(ValueError, match="accumulator carrier"):
+    validate_precontract_carriers(dtypes.half.vec(16), dtypes.float.vec(16))
 
 
 def test_precontract_factor_derivation_rejects_nondivisible_and_bad_windows():

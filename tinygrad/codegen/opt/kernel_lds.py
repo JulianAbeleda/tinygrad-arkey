@@ -126,6 +126,85 @@ class PrecontractFactors:
   loads_a: int
   loads_b: int
 
+
+def derive_precontract_shape_factors(geometry:KernelTileGeometry, tc) -> PrecontractFactors:
+  """Derive WMMA tile factors without consulting any storage allocation.
+
+  This is the shared geometry contract for LDS and register-resident producers.
+  ``derive_precontract_factors`` below adds the LDS-window checks needed by the
+  legacy staged implementation.
+  """
+  validate_rdna3_wmma_descriptor(tc)
+  tm, tn, tk = geometry.tile
+  if (tm % (geometry.waves[0] * tc.dims[1]) or tn % (geometry.waves[1] * tc.dims[0]) or
+      tk % tc.dims[2]):
+    raise ValueError("tile must divide into whole per-wave tensor-core subtiles and K steps")
+  sm = tm // (geometry.waves[0] * tc.dims[1])
+  sn = tn // (geometry.waves[1] * tc.dims[0])
+  ks = tk // tc.dims[2]
+  if ks < 2:
+    raise ValueError("current atomic staging requires at least two tensor-core K steps")
+  vectors_per_row = tk * dtypes.half.itemsize // 16
+  if vectors_per_row <= 0 or tk * dtypes.half.itemsize % 16:
+    raise ValueError("K row must contain whole b128 vectors")
+  rows = (tm, tn)
+  loads = tuple(row * vectors_per_row // geometry.threads for row in rows)
+  if any(row * vectors_per_row % geometry.threads for row in rows) or any(x <= 0 for x in loads):
+    raise ValueError("operand vectors must divide evenly across cooperative threads")
+  return PrecontractFactors(sm, sn, *geometry.waves, ks, vectors_per_row, *loads)
+
+
+def validate_precontract_operand_templates(operands:tuple[PrecontractOperandTemplate, ...], *,
+                                           context:str="precontract") -> None:
+  """Validate source dtype and live row/K ownership independent of storage."""
+  if tuple(x.role for x in operands) != ("A", "B"):
+    raise ValueError(f"{context} operands must be exactly ordered A and B")
+  for operand in operands:
+    if (operand.row_axis.op is not Ops.RANGE or operand.k_axis.op is not Ops.RANGE or
+        operand.row_axis not in operand.source.backward_slice_with_self or
+        operand.k_axis not in operand.source.backward_slice_with_self or
+        operand.source.dtype.scalar() != dtypes.half):
+      raise ValueError(f"{context} {operand.role} template does not retain scalar fp16 row/K ownership")
+
+
+def validate_precontract_contracts(tc, contracts:tuple[PrecontractContractSpec, ...], *,
+                                   context:str="precontract", mismatch:str="does not match the descriptor") -> None:
+  """Validate A/B CONTRACT axes, folded element identity, and descriptor remaps."""
+  if tuple(c.role for c in contracts) != ("A", "B"):
+    raise ValueError(f"{context} contracts must be exactly ordered A and B")
+  descriptor_remaps = tuple(tuple(x.items()) for x in tc.lane_map.remaps())
+  for operand_idx, contract in enumerate(contracts):
+    folded = ((contract.axes[0] * 2 + contract.axes[1]) * 2 + contract.axes[2]) * 2 + contract.axes[3] \
+      if len(contract.axes) == 4 else None
+    if (len(contract.axes) != 4 or any(a.op is not Ops.RANGE or a.vmax + 1 != 2 for a in contract.axes) or
+        contract.arg != tuple((a.arg[0], 2) for a in contract.axes) or contract.element is not folded or
+        contract.descriptor_remap != descriptor_remaps[operand_idx]):
+      raise ValueError(f"{context} {contract.role} contract {mismatch}")
+
+
+def validate_precontract_carriers(fragment_dtype, accumulator_dtype, *, context:str="precontract") -> None:
+  """Validate the stable WMMA fragment and accumulator carrier ABI."""
+  if fragment_dtype != dtypes.half.vec(16):
+    raise ValueError(f"{context} fragment carrier must be half.vec(16)")
+  if accumulator_dtype != dtypes.float.vec(8):
+    raise ValueError(f"{context} accumulator carrier must be float.vec(8)")
+
+
+def validate_precontract_thread_axes(geometry:KernelTileGeometry, factors:PrecontractFactors,
+                                     threads:PrecontractThreadAxes, subtile_m:UOp, subtile_n:UOp,
+                                     *, context:str="precontract") -> None:
+  """Validate live wave/lane and subtile RANGE ownership against tile factors."""
+  if ((threads.wave_m.op, threads.wave_m.vmax + 1, threads.wave_m.arg[-1]) !=
+      (Ops.RANGE, factors.waves_m, AxisType.LOCAL) or
+      (threads.wave_n.op, threads.wave_n.vmax + 1, threads.wave_n.arg[-1]) !=
+      (Ops.RANGE, factors.waves_n, AxisType.LOCAL) or
+      (threads.lane.op, threads.lane.vmax + 1, threads.lane.arg[-1]) !=
+      (Ops.RANGE, geometry.wave_size, AxisType.WARP)):
+    raise ValueError(f"{context} thread axes do not match derived wave geometry")
+  if (subtile_m.op is not Ops.RANGE or subtile_m.vmax + 1 != factors.subtiles_m or
+      subtile_n.op is not Ops.RANGE or subtile_n.vmax + 1 != factors.subtiles_n):
+    raise ValueError(f"{context} subtile axes do not match derived geometry")
+
 @dataclass(frozen=True)
 class PrecontractPipelineTemplate:
   """Validated immutable inputs for every epoch of a precontract LDS pipeline."""
@@ -141,32 +220,10 @@ class PrecontractPipelineTemplate:
 
   def __post_init__(self) -> None:
     factors = derive_precontract_factors(self.geometry, self.tc)
-    if tuple(x.role for x in self.operands) != ("A", "B"):
-      raise ValueError("precontract pipeline operands must be exactly ordered A and B")
-    for operand in self.operands:
-      if (operand.row_axis.op is not Ops.RANGE or operand.k_axis.op is not Ops.RANGE or
-          operand.row_axis not in operand.source.backward_slice_with_self or
-          operand.k_axis not in operand.source.backward_slice_with_self or operand.source.dtype.scalar() != dtypes.half):
-        raise ValueError(f"precontract pipeline {operand.role} template does not retain scalar fp16 row/K ownership")
-    if ((self.threads.wave_m.op, self.threads.wave_m.vmax+1, self.threads.wave_m.arg[-1]) !=
-        (Ops.RANGE, factors.waves_m, AxisType.LOCAL) or
-        (self.threads.wave_n.op, self.threads.wave_n.vmax+1, self.threads.wave_n.arg[-1]) !=
-        (Ops.RANGE, factors.waves_n, AxisType.LOCAL) or
-        (self.threads.lane.op, self.threads.lane.vmax+1, self.threads.lane.arg[-1]) !=
-        (Ops.RANGE, self.geometry.wave_size, AxisType.WARP)):
-      raise ValueError("precontract pipeline thread axes do not match derived wave geometry")
-    if (self.subtile_m.op is not Ops.RANGE or self.subtile_m.vmax+1 != factors.subtiles_m or
-        self.subtile_n.op is not Ops.RANGE or self.subtile_n.vmax+1 != factors.subtiles_n):
-      raise ValueError("precontract pipeline subtile axes do not match derived geometry")
-    if tuple(c.role for c in self.contracts) != ("A", "B"):
-      raise ValueError("precontract pipeline contracts must be exactly ordered A and B")
-    descriptor_remaps = tuple(tuple(x.items()) for x in self.tc.lane_map.remaps())
-    for operand_idx, contract in enumerate(self.contracts):
-      folded = ((contract.axes[0]*2+contract.axes[1])*2+contract.axes[2])*2+contract.axes[3] if len(contract.axes) == 4 else None
-      if (len(contract.axes) != 4 or any(a.op is not Ops.RANGE or a.vmax+1 != 2 for a in contract.axes) or
-          contract.arg != tuple((a.arg[0], 2) for a in contract.axes) or contract.element is not folded or
-          contract.descriptor_remap != descriptor_remaps[operand_idx]):
-        raise ValueError(f"precontract pipeline {contract.role} contract does not match the descriptor")
+    validate_precontract_operand_templates(self.operands, context="precontract pipeline")
+    validate_precontract_thread_axes(self.geometry, factors, self.threads, self.subtile_m, self.subtile_n,
+                                     context="precontract pipeline")
+    validate_precontract_contracts(self.tc, self.contracts, context="precontract pipeline")
     slot_bytes = self.geometry.lds_windows[-1].end
     if (getattr(self.pipeline_plan, "slot_bytes", None) != slot_bytes or
         self.allocation.op is not Ops.DEFINE_LOCAL or self.allocation.ptrdtype.addrspace is not AddrSpace.LOCAL or
@@ -188,22 +245,13 @@ class PrecontractPipelineTemplate:
       contracts=self.contracts, epoch=epoch, slot=slot, ready=ready)
 
 def derive_precontract_factors(geometry:KernelTileGeometry, tc) -> PrecontractFactors:
-  validate_rdna3_wmma_descriptor(tc)
-  tm,tn,tk = geometry.tile
-  if tm % (geometry.waves[0]*tc.dims[1]) or tn % (geometry.waves[1]*tc.dims[0]) or tk % tc.dims[2]:
-    raise ValueError("tile must divide into whole per-wave tensor-core subtiles and K steps")
-  sm,sn,ks = tm//(geometry.waves[0]*tc.dims[1]), tn//(geometry.waves[1]*tc.dims[0]), tk//tc.dims[2]
-  if ks < 2: raise ValueError("current atomic staging requires at least two tensor-core K steps")
-  vectors_per_row = tk*dtypes.half.itemsize//16
-  if vectors_per_row <= 0 or tk*dtypes.half.itemsize % 16: raise ValueError("K row must contain whole b128 vectors")
-  rows = (tm,tn)
-  loads = tuple(row*vectors_per_row//geometry.threads for row in rows)
-  if any(row*vectors_per_row % geometry.threads for row in rows) or any(x <= 0 for x in loads):
-    raise ValueError("operand vectors must divide evenly across cooperative threads")
+  factors = derive_precontract_shape_factors(geometry, tc)
+  tm, tn, tk = geometry.tile
+  rows = (tm, tn)
   for window,row in zip(geometry.lds_windows, rows):
     if window.stride_bytes < tk*2 or window.end-window.base != row*window.stride_bytes:
       raise ValueError("LDS windows must exactly cover padded operand rows")
-  return PrecontractFactors(sm,sn,*geometry.waves,ks,vectors_per_row,*loads)
+  return factors
 
 
 def semantic_wave_coords(geometry:KernelTileGeometry, thread:int) -> tuple[int, int, int]:
@@ -366,18 +414,10 @@ def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:U
                                 contracts:tuple[PrecontractContractSpec, ...], pipeline_plan=None) -> PrecontractLDSStage:
   """Build an unwired vector cooperative stage while full operand index templates still exist."""
   factors = derive_precontract_factors(geometry, tc)
-  if tuple(x.role for x in operands) != ("A", "B"): raise ValueError("precontract operands must be exactly ordered A and B")
+  validate_precontract_operand_templates(operands, context="precontract")
   for operand in operands:
-    if operand.row_axis.op is not Ops.RANGE or operand.k_axis.op is not Ops.RANGE:
-      raise ValueError(f"precontract {operand.role} template axes must be RANGE UOps")
-    if operand.row_axis not in operand.source.backward_slice_with_self or operand.k_axis not in operand.source.backward_slice_with_self:
-      raise ValueError(f"precontract {operand.role} template does not retain row and K axes")
-    if operand.source.dtype.scalar() != dtypes.half: raise ValueError("precontract operands must be fp16 scalar templates")
     if operand.row_tile_base.dtype.scalar() not in (dtypes.int, dtypes.weakint): raise ValueError("precontract row tile base must be integer")
-  if ((threads.wave_m.op, threads.wave_m.vmax+1, threads.wave_m.arg[-1]) != (Ops.RANGE, factors.waves_m, AxisType.LOCAL) or
-      (threads.wave_n.op, threads.wave_n.vmax+1, threads.wave_n.arg[-1]) != (Ops.RANGE, factors.waves_n, AxisType.LOCAL) or
-      (threads.lane.op, threads.lane.vmax+1, threads.lane.arg[-1]) != (Ops.RANGE, geometry.wave_size, AxisType.WARP)):
-    raise ValueError("precontract thread axes do not match derived wave geometry")
+  validate_precontract_thread_axes(geometry, factors, threads, subtile_m, subtile_n, context="precontract")
   if (k_axis.tile_owner.op is not Ops.RANGE or k_axis.tile_owner.arg[-1] is not AxisType.REDUCE or
       k_axis.tile_owner not in k_axis.tile_base.backward_slice_with_self):
     raise ValueError("precontract K tile owner must be a live REDUCE range in tile base")
@@ -387,14 +427,7 @@ def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:U
   if (subtile_m.op is not Ops.RANGE or subtile_m.vmax+1 != factors.subtiles_m or
       subtile_n.op is not Ops.RANGE or subtile_n.vmax+1 != factors.subtiles_n):
     raise ValueError("precontract K/subtile axes are invalid")
-  if tuple(c.role for c in contracts) != ("A", "B"): raise ValueError("precontract contracts must be exactly ordered A and B")
-  descriptor_remaps = tuple(tuple(x.items()) for x in tc.lane_map.remaps())
-  for operand_idx, contract in enumerate(contracts):
-    folded = ((contract.axes[0]*2+contract.axes[1])*2+contract.axes[2])*2+contract.axes[3] if len(contract.axes) == 4 else None
-    if (len(contract.axes) != 4 or any(a.op is not Ops.RANGE or a.vmax+1 != 2 for a in contract.axes) or
-        contract.arg != tuple((a.arg[0], 2) for a in contract.axes) or contract.element is not folded or
-        contract.descriptor_remap != descriptor_remaps[operand_idx]):
-      raise ValueError(f"precontract {contract.role} contract does not match actual descriptor operand mapping")
+  validate_precontract_contracts(tc, contracts, context="precontract", mismatch="does not match actual descriptor operand mapping")
   slot_bytes = geometry.lds_windows[-1].end
   total_bytes = slot_bytes if pipeline_plan is None else pipeline_plan.active_lds_bytes
   if (allocation.op is not Ops.DEFINE_LOCAL or allocation.ptrdtype.addrspace is not AddrSpace.LOCAL or
