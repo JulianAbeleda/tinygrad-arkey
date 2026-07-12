@@ -1,7 +1,7 @@
 import pytest
 
 from tinygrad.codegen.opt.kernel_lds import (cooperative_lds_padding_offsets, cooperative_lds_stores, rdna3_wmma_output_coord,
-                                             semantic_wave_coords, validate_rdna3_wmma_descriptor, wmma_fragment_loads,
+                                             derive_precontract_factors, semantic_wave_coords, validate_rdna3_wmma_descriptor, wmma_fragment_loads,
                                              wmma_output_owners)
 from tinygrad.codegen.opt.tc import amd_rdna3
 from tinygrad import dtypes
@@ -165,3 +165,23 @@ def test_descriptor_remap_drift_and_missing_descriptor_fail_closed():
   with pytest.raises(ValueError, match="remaps drifted"): validate_rdna3_wmma_descriptor(_RemapDrift(_tc()))
   with pytest.raises(ValueError, match="dims drifted"): wmma_fragment_loads(_geometry(), "A", tc=object())
   with pytest.raises(ValueError, match="dims drifted"): rdna3_wmma_output_coord(0, 0, tc=None)
+
+
+def test_precontract_factor_derivation_exact_anchor_and_legal_smaller_family():
+  exact = derive_precontract_factors(_geometry(), _tc())
+  assert (exact.subtiles_m, exact.subtiles_n, exact.waves_m, exact.waves_n, exact.k_substeps,
+          exact.vectors_per_row, exact.loads_a, exact.loads_b) == (2, 4, 4, 2, 2, 4, 2, 2)
+  smaller = KernelTileGeometry((64, 64, 16), (2, 2), 128, 32,
+    (KernelLDSWindow("A", 0, 3072, 48), KernelLDSWindow("B", 3072, 6144, 48)))
+  factors = derive_precontract_factors(smaller, _tc())
+  assert (factors.subtiles_m, factors.subtiles_n, factors.k_substeps, factors.vectors_per_row,
+          factors.loads_a, factors.loads_b) == (2, 2, 1, 2, 1, 1)
+
+
+def test_precontract_factor_derivation_rejects_nondivisible_and_bad_windows():
+  nondivisible = KernelTileGeometry((80, 64, 16), (2, 2), 128, 32,
+    (KernelLDSWindow("A", 0, 3840, 48), KernelLDSWindow("B", 3840, 6912, 48)))
+  with pytest.raises(ValueError, match="whole per-wave"): derive_precontract_factors(nondivisible, _tc())
+  uneven = KernelTileGeometry((64, 64, 16), (4, 2), 256, 32,
+    (KernelLDSWindow("A", 0, 3072, 48), KernelLDSWindow("B", 3072, 6144, 48)))
+  with pytest.raises(ValueError, match="divide evenly"): derive_precontract_factors(uneven, _tc())

@@ -304,14 +304,14 @@ class Scheduler:
           candidate_axes = None
           if candidate_geometry is not None:
             # Consume the complete exact candidate while the original scalar A/B templates are still available.
-            if (candidate_geometry.tile, candidate_geometry.waves, candidate_geometry.threads, candidate_geometry.wave_size) != \
-               ((128, 128, 32), (4, 2), 256, 32):
-              raise KernelOptError("unsupported full-kernel candidate geometry in TC application")
-            axes[0], subtile_n = self.shift_to(axes[0], 4, AxisType.UPCAST)
-            axes[1], subtile_m = self.shift_to(axes[1], 2, AxisType.UPCAST)
-            axes[1], wave_m = self.shift_to(axes[1], 4, AxisType.LOCAL)
-            axes[0], wave_n = self.shift_to(axes[0], 2, AxisType.LOCAL)
-            axes[2], k_substep = self.shift_to(axes[2], 2, AxisType.UNROLL)
+            from tinygrad.codegen.opt.kernel_lds import derive_precontract_factors
+            try: factors = derive_precontract_factors(candidate_geometry, tc)
+            except ValueError as exc: raise KernelOptError(str(exc)) from exc
+            axes[0], subtile_n = self.shift_to(axes[0], factors.subtiles_n, AxisType.UPCAST)
+            axes[1], subtile_m = self.shift_to(axes[1], factors.subtiles_m, AxisType.UPCAST)
+            axes[1], wave_m = self.shift_to(axes[1], factors.waves_m, AxisType.LOCAL)
+            axes[0], wave_n = self.shift_to(axes[0], factors.waves_n, AxisType.LOCAL)
+            axes[2], k_substep = self.shift_to(axes[2], factors.k_substeps, AxisType.UNROLL)
             candidate_axes = (subtile_m, subtile_n, wave_m, wave_n, k_substep, axes[0], axes[1], axes[2], warp_full)
 
           if use_tensor_cores != 2:
@@ -351,10 +351,10 @@ class Scheduler:
               allocation = UOp.placeholder((candidate_geometry.lds_windows[-1].end//2,), dtypes.half, _candidate_lds_buffer_id(self),
                                              addrspace=AddrSpace.LOCAL).replace(tag=("kernel_tile_lds", candidate_geometry))
               stage = build_precontract_lds_stage(candidate_geometry, tc=tc, allocation=allocation,
-                operands=(PrecontractOperandTemplate("A", in0, original_axes[1], original_axes[2], outer_m*128),
-                          PrecontractOperandTemplate("B", in1, original_axes[0], original_axes[2], outer_n*128)),
+                operands=(PrecontractOperandTemplate("A", in0, original_axes[1], original_axes[2], outer_m*candidate_geometry.tile[0]),
+                          PrecontractOperandTemplate("B", in1, original_axes[0], original_axes[2], outer_n*candidate_geometry.tile[1])),
                 threads=PrecontractThreadAxes(wave_m, wave_n, lane),
-                k_axis=PrecontractKAxis(outer_k, k_substep, outer_k*32, k_substep),
+                k_axis=PrecontractKAxis(outer_k, k_substep, outer_k*candidate_geometry.tile[2], k_substep),
                 subtile_m=subtile_m, subtile_n=subtile_n, contracts=tuple(contracts))
               wmma_srcs = [stage.fragment_a, stage.fragment_b]
             else:

@@ -88,5 +88,5 @@ def test_fail_closed_detached_axes_contract_and_allocation():
   wrong_element=PrecontractContractSpec("B",b_contract.axes,b_contract.arg,b_contract.axes[0],b_contract.descriptor_remap)
   with pytest.raises(ValueError,match="actual descriptor"): _stage(contracts=(a_contract,wrong_element))
   bad_threads=PrecontractThreadAxes(UOp.range(8,30,AxisType.LOCAL),threads.wave_n,threads.lane)
-  with pytest.raises(ValueError,match="LOCAL4/LOCAL2/WARP32"): _stage(threads=bad_threads)
+  with pytest.raises(ValueError,match="derived wave geometry"): _stage(threads=bad_threads)
   with pytest.raises(ValueError,match="caller allocation"): _stage(allocation=UOp.placeholder((6144,),dtypes.half,994,addrspace=AddrSpace.LOCAL))
