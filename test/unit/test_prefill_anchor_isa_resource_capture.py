@@ -79,6 +79,27 @@ def test_candidate_resource_authority_accepts_tagged_rangeified_lds_buffer(monke
   assert cap.capture_candidate_program(program, payload, identity)["passed"] is True
 
 
+def test_candidate_resource_authority_accepts_typed_buffer2_pipeline(monkeypatch):
+  from test.unit.test_pure_single_buffer_evaluation_gate import _payload
+  from extra.qk.prefill.pure_single_buffer_evaluation_gate import canonical_candidate_hash
+  from tinygrad.codegen.opt.kernel_pipeline import KernelStage1PipelinePlan
+  payload = _payload(); payload["schedule"]["pipeline"]["buffer_count"] = 2
+  identity = canonical_candidate_hash(payload); pipeline = KernelStage1PipelinePlan(2, 20480)
+  context = KernelCandidateContext(payload["schema_version"], identity, pipeline=pipeline)
+  base = _program((UOp(Ops.NOOP, dtypes.void),))
+  lds = UOp(Ops.BUFFER, dtypes.half, (UOp.const(dtypes.weakint, 20480),), tag=("kernel_tile_lds", "geometry", pipeline))
+  program = base.replace(src=(UOp.sink(lds, arg=KernelInfo(name="k", candidate_context=context)), *base.src[1:]),
+                         arg=ProgramInfo(name="k", global_size=(1,1,1), local_size=(256,1,1)))
+  metadata = {"symbol":"k.kd", "vgpr":188, "sgpr":18, "vgpr_spills":0, "sgpr_spills":0,
+              "lds_bytes":40960, "scratch_bytes":0, "max_workgroup_threads":256, "wavefront_size":32,
+              "target":"amdgcn-amd-amdhsa--gfx1100"}
+  monkeypatch.setattr(cap, "parse_amdgpu_metadata", lambda _: metadata)
+  monkeypatch.setattr(cap, "disassemble_amdgpu", lambda _: ("ds_store_b128 v0, v[1:4]\nds_load_b128 v[5:8], v0\n", "objdump"))
+  out = cap.capture_candidate_program(program, payload, identity)
+  assert out["passed"] is True and out["pipeline"] == {"buffer_count":2, "active_lds_bytes":40960}
+  assert out["isa"]["compiler_emitted_pipeline_lds"] is True
+
+
 def test_candidate_resource_authority_fails_closed_on_context_or_binary_resources(monkeypatch):
   from test.unit.test_pure_single_buffer_evaluation_gate import _payload
   from extra.qk.prefill.pure_single_buffer_evaluation_gate import canonical_candidate_hash

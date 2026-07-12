@@ -104,7 +104,7 @@ def capture_program(program: UOp, *, candidate_id: str, route_id: str,
 
 def capture_candidate_program(program: UOp, payload: dict[str, Any], candidate_hash: str, *,
                               route_id: str="pure.single_buffer.anchor") -> dict[str, Any]:
-  """Compiled-resource authority for the exact route-bound single-buffer candidate.
+  """Compiled-resource authority for an exact route-bound typed pipeline candidate.
 
   Candidate fields describe intent.  This authority accepts them only after the
   lowered PROGRAM context, code-object descriptor, and final ISA independently
@@ -117,6 +117,10 @@ def capture_candidate_program(program: UOp, payload: dict[str, Any], candidate_h
   if context is None: raise RuntimeError("compiled PROGRAM has no full-kernel candidate context")
   if context.schema_version != payload["schema_version"] or context.canonical_identity != identity:
     raise RuntimeError("compiled PROGRAM candidate context does not match canonical payload")
+  pipeline = getattr(context, "pipeline", None)
+  expected_lds_bytes = ANCHOR_LDS_BYTES if pipeline is None else pipeline.active_lds_bytes
+  if expected_lds_bytes not in (ANCHOR_LDS_BYTES, 2 * ANCHOR_LDS_BYTES):
+    raise RuntimeError("typed pipeline active LDS is outside the buffer1/buffer2 authority")
 
   row = capture_program(program, candidate_id=identity, route_id=route_id, expected_pure=True)
   resources, surface = row["resources"], row["surface"]
@@ -147,10 +151,10 @@ def capture_candidate_program(program: UOp, payload: dict[str, Any], candidate_h
   errors = []
   if missing: errors.append(f"compiled AMD metadata missing authority fields: {missing}")
   if not surface["strict_pure"]: errors.append("compiled surface contains handwritten assembly")
-  if resources.get("lds_bytes") != ANCHOR_LDS_BYTES:
-    errors.append(f"compiled LDS allocation is not the {ANCHOR_LDS_BYTES}-byte single buffer")
-  if local_sizes != [ANCHOR_LDS_BYTES]:
-    errors.append(f"compiler IR does not contain exactly one {ANCHOR_LDS_BYTES}-byte LDS allocation")
+  if resources.get("lds_bytes") != expected_lds_bytes:
+    errors.append(f"compiled LDS allocation is not the typed {expected_lds_bytes}-byte pipeline allocation")
+  if local_sizes != [expected_lds_bytes]:
+    errors.append(f"compiler IR does not contain exactly one typed {expected_lds_bytes}-byte LDS allocation")
   if not ds_store_count or not ds_load_count:
     errors.append("final ISA does not prove compiler-emitted LDS stores and loads")
   if resources.get("scratch_bytes") != 0 or resources.get("vgpr_spills") != 0 or resources.get("sgpr_spills") != 0:
@@ -174,7 +178,10 @@ def capture_candidate_program(program: UOp, payload: dict[str, Any], candidate_h
           "isa": {**row["isa"], "analysis": isa, "instruction_counts": counts,
                   "compiler_ir_define_local_sizes": local_sizes,
                   "ds_store_count": ds_store_count, "ds_load_count": ds_load_count,
-                  "compiler_emitted_single_buffer_lds": not errors and ds_store_count > 0 and ds_load_count > 0},
+                  "compiler_emitted_pipeline_lds": not errors and ds_store_count > 0 and ds_load_count > 0,
+                  "compiler_emitted_single_buffer_lds": (pipeline is None or pipeline.buffer_count == 1) and not errors and ds_store_count > 0 and ds_load_count > 0},
+          "pipeline": {"buffer_count": 1 if pipeline is None else pipeline.buffer_count,
+                       "active_lds_bytes": expected_lds_bytes},
           "binding": {"context_matches_payload": context.canonical_identity == identity,
                       "binary_sha256": row["program"]["binary_sha256"],
                       "isa_sha256": row["program"]["isa_sha256"]}}
