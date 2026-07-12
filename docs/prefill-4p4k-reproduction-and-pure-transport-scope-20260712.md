@@ -24,6 +24,31 @@ historical default. Therefore most of the current 11.3 ms gap to 4.4k is a
 code/route/runtime regression since `b1259638d`, not an unsearched S9 LDS2
 axis.
 
+## Track A3 regression shortlist
+
+Read-only comparison of `b1259638d..HEAD` identifies these ranked changes to
+check before new kernel search:
+
+1. **LM-head route/orchestration changes** (`c85ac30e1`, `f8b2c2cae`). These
+   alter whether the output projection uses the prefill-v2 direct-packed path
+   or resident realization and are the strongest fixed-cost regression
+   candidates.
+2. **Candidate multirole routing/state** (`f1b384232`, `3293b0cda`,
+   `4aaf8dd1a`). These add exact-set admission, scoped warmstarts, and timing
+   authority around the four roles; compare route census and graph-capture
+   counts for unintended fallback or duplicate work.
+3. **Compiler/resource lowering changes** (`e31f340d4`, `92d8908d6`,
+   `774ab015b`). These affect generated two-buffer pipeline resources and can
+   change occupancy or spills even when the route identity is unchanged.
+4. **Profiling/metadata changes** (`7dc431bf4`, `264a98f8c`, `456294c66`,
+   `9ce1b5ffd`). These should not affect `PROFILE=0` authority timing, but must
+   be controlled when comparing graph capture and host timing.
+
+The historical artifacts record the exact S9 environment; no evidence yet
+assigns the 11.3 ms to one commit. The next low-cost experiment is a clean
+historical/current A/B with identical env and route census, then a bisect over
+the first two groups before touching generated geometry.
+
 ## Definition of 100%
 
 This program is complete only when all of the following are true:
