@@ -1,7 +1,11 @@
+from types import SimpleNamespace
+
 from extra.qk import compiler_policies as compat
+from extra.qk import prefill_graph_gemm_route as route
 from extra.qk.prefill_schedule_spec import PrefillGEMMScheduleSpec
 from extra.qk.wmma_pipe_spec import WMMAPipeIR, WMMAPipeSpec, extract_wmma_pipe_spec
 from tinygrad.codegen.opt import compiler_policies as core
+from tinygrad.uop.ops import KernelLDSWindow, KernelTileGeometry
 
 
 def _schedule(route_family: str) -> PrefillGEMMScheduleSpec:
@@ -39,6 +43,20 @@ def test_pipe_spec_and_ir_share_policy_identity_and_no_lds_claim():
   assert spec.pipeline_policy == ir.pipeline_policy
   assert type(spec.pipeline_policy.storage) is type(ir.pipeline_policy.storage) is core.StoragePolicy
   assert spec.pipeline_policy.resources.lds_bytes == 0
+
+
+def test_candidate_schedule_path_resolves_through_authoritative_lds_policy():
+  geometry = KernelTileGeometry((128, 128, 32), (4, 2), 256, 32,
+    (KernelLDSWindow("A", 0, 10240, 80), KernelLDSWindow("B", 10240, 20480, 80)))
+  admission = SimpleNamespace(
+    normalized_payload={"schedule": {"lds": {"padding": 16}}},
+    plan=SimpleNamespace(subtiles_m=2, subtiles_n=4), geometry=geometry,
+    pipeline_plan=SimpleNamespace(buffer_count=2))
+  candidate = route._candidate_schedule_spec(_schedule("lds"), admission)
+  policy = candidate.pipeline_policy
+  assert isinstance(policy, core.PipelinePolicy)
+  assert policy.storage_kind == "lds" and policy.storage.buffer_count == 2
+  assert policy.resources.lds_bytes == 40960
 
 
 def test_unknown_route_has_no_policy_identity():
