@@ -1,0 +1,292 @@
+{
+  "schema": "prefill-single-buffer-execution-authority.v1",
+  "canonical_identity": "7e6fe384eebaff4308ced23146eee5e74b6cbdf496135b168cbba4451f0ef043",
+  "route_id": "prefill_wmma_lds_single_buffer_candidate_generated",
+  "capability_id": "amd.gfx1100.prefill.wmma_lds.single_buffer.v1",
+  "selected_route_id": "prefill_wmma_lds_single_buffer_candidate_generated",
+  "environment": {
+    "device": "AMD",
+    "git": {
+      "revision": "6d2b87640944272089d492fb6837bbce4979868e",
+      "dirty": false
+    }
+  },
+  "route_binding_complete": true,
+  "route_authority": {
+    "family": "prefill_gemm",
+    "effective_route": "prefill_wmma_lds_single_buffer_candidate_generated",
+    "provenance": "tinygrad_scheduler_generated",
+    "surface_class": "ordinary_tinygrad_graph",
+    "strict_pure": true,
+    "manifest_pure": true,
+    "rolled_back_to_oracle": false,
+    "pure": true,
+    "candidate_identity": "7e6fe384eebaff4308ced23146eee5e74b6cbdf496135b168cbba4451f0ef043"
+  },
+  "structural_binding": {
+    "expected": {
+      "threads": 256,
+      "tile": {
+        "k": 32,
+        "m": 128,
+        "n": 128
+      },
+      "waves": {
+        "m": 4,
+        "n": 2
+      },
+      "wave_threads": 256,
+      "lds_windows": {
+        "a": [
+          0,
+          10240
+        ],
+        "b": [
+          10240,
+          20480
+        ]
+      },
+      "lds_strides": {
+        "a": 80,
+        "b": 80
+      },
+      "lds_bytes": 40960
+    },
+    "actual": {
+      "threads": 256,
+      "local_size": [
+        32,
+        4,
+        2
+      ],
+      "lds_bytes": 40960,
+      "wave_count": 8,
+      "tile": {
+        "k": 32,
+        "m": 128,
+        "n": 128
+      },
+      "waves": {
+        "m": 4,
+        "n": 2
+      },
+      "lds_windows": {
+        "a": [
+          0,
+          10240
+        ],
+        "b": [
+          10240,
+          20480
+        ]
+      },
+      "lds_strides": {
+        "a": 80,
+        "b": 80
+      }
+    },
+    "evidence": {
+      "threads": "PROGRAM launch local_size",
+      "lds_bytes": "lowered DEFINE_LOCAL/rendered shared declaration",
+      "wave_count": "launch threads divided by target wave size",
+      "tile": "optimized UOp affine producer/consumer proof",
+      "waves": "optimized UOp proof + ordered PROGRAM local axes",
+      "lds_windows": "optimized UOp exhaustive address-set proof",
+      "lds_strides": "optimized UOp exhaustive address-set proof"
+    },
+    "emitted_proof": {
+      "passed": true,
+      "errors": [],
+      "allocation_bytes": 40960,
+      "producer_formula_count": 8,
+      "fragment_load_formula_count": 96,
+      "barrier_count": 2,
+      "wmma_count": 32,
+      "symbolic_expressions": {
+        "stores": [
+          "(lidx1*640+lidx2*320+(lidx0>>2)*40+((lidx0&3)<<3))",
+          "(lidx1*640+lidx2*320+(lidx0>>2)*40+((lidx0&3)<<3)+2560)",
+          "(lidx1*640+lidx2*320+(lidx0>>2)*40+((lidx0&3)<<3)+5120)",
+          "(lidx1*640+lidx2*320+(lidx0>>2)*40+((lidx0&3)<<3)+7680)",
+          "(lidx1*640+lidx2*320+(lidx0>>2)*40+((lidx0&3)<<3)+(r16+1&1)*10240)",
+          "(lidx1*640+lidx2*320+(lidx0>>2)*40+((lidx0&3)<<3)+(r16+1&1)*10240+2560)",
+          "(lidx1*640+lidx2*320+(lidx0>>2)*40+((lidx0&3)<<3)+(r16+1&1)*10240+5120)",
+          "(lidx1*640+lidx2*320+(lidx0>>2)*40+((lidx0&3)<<3)+(r16+1&1)*10240+7680)"
+        ],
+        "loads": [
+          "(lidx1*1280+(lidx0&15)*40+(r16&1)*10240+16)",
+          "(lidx1*1280+(lidx0&15)*40+(r16&1)*10240+20)",
+          "(lidx1*1280+(lidx0&15)*40+(r16&1)*10240+24)",
+          "(lidx1*1280+(lidx0&15)*40+(r16&1)*10240+28)",
+          "(lidx2*2560+(lidx0&15)*40+(r16&1)*10240+5136)",
+          "(lidx2*2560+(lidx0&15)*40+(r16&1)*10240+5140)",
+          "(lidx2*2560+(lidx0&15)*40+(r16&1)*10240+5144)",
+          "(lidx2*2560+(lidx0&15)*40+(r16&1)*10240+5148)",
+          "(lidx1*1280+(lidx0&15)*40+(r16&1)*10240)",
+          "(lidx1*1280+(lidx0&15)*40+(r16&1)*10240+4)",
+          "(lidx1*1280+(lidx0&15)*40+(r16&1)*10240+8)",
+          "(lidx1*1280+(lidx0&15)*40+(r16&1)*10240+12)",
+          "(lidx2*2560+(lidx0&15)*40+(r16&1)*10240+5120)",
+          "(lidx2*2560+(lidx0&15)*40+(r16&1)*10240+5124)",
+          "(lidx2*2560+(lidx0&15)*40+(r16&1)*10240+5128)",
+          "(lidx2*2560+(lidx0&15)*40+(r16&1)*10240+5132)",
+          "(lidx2*2560+(lidx0&15)*40+(r16&1)*10240+5776)",
+          "(lidx2*2560+(lidx0&15)*40+(r16&1)*10240+5780)",
+          "(lidx2*2560+(lidx0&15)*40+(r16&1)*10240+5784)",
+          "(lidx2*2560+(lidx0&15)*40+(r16&1)*10240+5788)",
+          "(lidx2*2560+(lidx0&15)*40+(r16&1)*10240+5760)",
+          "(lidx2*2560+(lidx0&15)*40+(r16&1)*10240+5764)",
+          "(lidx2*2560+(lidx0&15)*40+(r16&1)*10240+5768)",
+          "(lidx2*2560+(lidx0&15)*40+(r16&1)*10240+5772)",
+          "(lidx2*2560+(lidx0&15)*40+(r16&1)*10240+6416)",
+          "(lidx2*2560+(lidx0&15)*40+(r16&1)*10240+6420)",
+          "(lidx2*2560+(lidx0&15)*40+(r16&1)*10240+6424)",
+          "(lidx2*2560+(lidx0&15)*40+(r16&1)*10240+6428)",
+          "(lidx2*2560+(lidx0&15)*40+(r16&1)*10240+6400)",
+          "(lidx2*2560+(lidx0&15)*40+(r16&1)*10240+6404)",
+          "(lidx2*2560+(lidx0&15)*40+(r16&1)*10240+6408)",
+          "(lidx2*2560+(lidx0&15)*40+(r16&1)*10240+6412)",
+          "(lidx2*2560+(lidx0&15)*40+(r16&1)*10240+7056)",
+          "(lidx2*2560+(lidx0&15)*40+(r16&1)*10240+7060)",
+          "(lidx2*2560+(lidx0&15)*40+(r16&1)*10240+7064)",
+          "(lidx2*2560+(lidx0&15)*40+(r16&1)*10240+7068)",
+          "(lidx2*2560+(lidx0&15)*40+(r16&1)*10240+7040)",
+          "(lidx2*2560+(lidx0&15)*40+(r16&1)*10240+7044)",
+          "(lidx2*2560+(lidx0&15)*40+(r16&1)*10240+7048)",
+          "(lidx2*2560+(lidx0&15)*40+(r16&1)*10240+7052)",
+          "(lidx1*1280+(lidx0&15)*40+(r16&1)*10240+656)",
+          "(lidx1*1280+(lidx0&15)*40+(r16&1)*10240+660)",
+          "(lidx1*1280+(lidx0&15)*40+(r16&1)*10240+664)",
+          "(lidx1*1280+(lidx0&15)*40+(r16&1)*10240+668)",
+          "(lidx1*1280+(lidx0&15)*40+(r16&1)*10240+640)",
+          "(lidx1*1280+(lidx0&15)*40+(r16&1)*10240+644)",
+          "(lidx1*1280+(lidx0&15)*40+(r16&1)*10240+648)",
+          "(lidx1*1280+(lidx0&15)*40+(r16&1)*10240+652)",
+          "(lidx1*1280+(lidx0&15)*40+10256)",
+          "(lidx1*1280+(lidx0&15)*40+10260)",
+          "(lidx1*1280+(lidx0&15)*40+10264)",
+          "(lidx1*1280+(lidx0&15)*40+10268)",
+          "(lidx2*2560+(lidx0&15)*40+15376)",
+          "(lidx2*2560+(lidx0&15)*40+15380)",
+          "(lidx2*2560+(lidx0&15)*40+15384)",
+          "(lidx2*2560+(lidx0&15)*40+15388)",
+          "(lidx1*1280+(lidx0&15)*40+10240)",
+          "(lidx1*1280+(lidx0&15)*40+10244)",
+          "(lidx1*1280+(lidx0&15)*40+10248)",
+          "(lidx1*1280+(lidx0&15)*40+10252)",
+          "(lidx2*2560+(lidx0&15)*40+15360)",
+          "(lidx2*2560+(lidx0&15)*40+15364)",
+          "(lidx2*2560+(lidx0&15)*40+15368)",
+          "(lidx2*2560+(lidx0&15)*40+15372)",
+          "(lidx2*2560+(lidx0&15)*40+16016)",
+          "(lidx2*2560+(lidx0&15)*40+16020)",
+          "(lidx2*2560+(lidx0&15)*40+16024)",
+          "(lidx2*2560+(lidx0&15)*40+16028)",
+          "(lidx2*2560+(lidx0&15)*40+16000)",
+          "(lidx2*2560+(lidx0&15)*40+16004)",
+          "(lidx2*2560+(lidx0&15)*40+16008)",
+          "(lidx2*2560+(lidx0&15)*40+16012)",
+          "(lidx2*2560+(lidx0&15)*40+16656)",
+          "(lidx2*2560+(lidx0&15)*40+16660)",
+          "(lidx2*2560+(lidx0&15)*40+16664)",
+          "(lidx2*2560+(lidx0&15)*40+16668)",
+          "(lidx2*2560+(lidx0&15)*40+16640)",
+          "(lidx2*2560+(lidx0&15)*40+16644)",
+          "(lidx2*2560+(lidx0&15)*40+16648)",
+          "(lidx2*2560+(lidx0&15)*40+16652)",
+          "(lidx2*2560+(lidx0&15)*40+17296)",
+          "(lidx2*2560+(lidx0&15)*40+17300)",
+          "(lidx2*2560+(lidx0&15)*40+17304)",
+          "(lidx2*2560+(lidx0&15)*40+17308)",
+          "(lidx2*2560+(lidx0&15)*40+17280)",
+          "(lidx2*2560+(lidx0&15)*40+17284)",
+          "(lidx2*2560+(lidx0&15)*40+17288)",
+          "(lidx2*2560+(lidx0&15)*40+17292)",
+          "(lidx1*1280+(lidx0&15)*40+10896)",
+          "(lidx1*1280+(lidx0&15)*40+10900)",
+          "(lidx1*1280+(lidx0&15)*40+10904)",
+          "(lidx1*1280+(lidx0&15)*40+10908)",
+          "(lidx1*1280+(lidx0&15)*40+10880)",
+          "(lidx1*1280+(lidx0&15)*40+10884)",
+          "(lidx1*1280+(lidx0&15)*40+10888)",
+          "(lidx1*1280+(lidx0&15)*40+10892)"
+        ]
+      },
+      "source_checks": {
+        "loop": true,
+        "current_slot": true,
+        "next_slot": true,
+        "drain_slot1": true,
+        "barriers": true
+      },
+      "isa": {
+        "instruction_count": 574,
+        "encoded_dwords": 832,
+        "global_load_sites": 8,
+        "global_store_sites": 64,
+        "ds_load_sites": 48,
+        "ds_store_sites": 8,
+        "barrier_sites": 2,
+        "waitcnt_sites": 29,
+        "scratch_sites": 0,
+        "branch_sites": 1,
+        "predicate_sites": 2,
+        "max_referenced_vgpr": 187,
+        "max_referenced_sgpr": 15
+      }
+    },
+    "matches_payload": true,
+    "pre_gpu_eligible": true,
+    "errors": []
+  },
+  "binding_errors": [],
+  "program": {
+    "program_key": "f8794d50364e8cabe133435eaaaa75adfded2424a8f6a949e5c1f40cb3b7afe0",
+    "source_sha256": "ea8dbaf6f0b32d2556441f9079942e43bcaf8c1cacf82d9f60affba44a674ee4",
+    "binary_sha256": "fc50f333a618bcf88034d6f064813e8f261a5e1c472cf2fb04f04c632ccb210a",
+    "binary_bytes": 7280
+  },
+  "runtime": {
+    "executed_binary_sha256": "fc50f333a618bcf88034d6f064813e8f261a5e1c472cf2fb04f04c632ccb210a",
+    "binary_equal": true
+  },
+  "surface": {
+    "ops_ins_count": 0,
+    "source_kind": "compiler_rendered",
+    "forbidden_markers": [],
+    "strict_pure": true
+  },
+  "executable_truth": {
+    "selected_route_id": "prefill_wmma_lds_single_buffer_candidate_generated",
+    "selected_surface": "route_pf16_graph_gemm.generated_lds_matmul_transport",
+    "manifest_route_backed": true,
+    "fallback_used": false,
+    "strict_pure": true,
+    "compiler_surface_forbidden_markers_absent": true,
+    "ops_ins_absent": true,
+    "asm_source_absent": true,
+    "candidate_context_equal": true,
+    "runtime_binary_matches_candidate": true,
+    "define_local_count": 0,
+    "shared_declaration_count": 1,
+    "lds_bytes": 40960,
+    "lds_store_markers": 128,
+    "lds_load_markers": 128,
+    "barrier_markers": 2,
+    "actual_compiler_lds_staging": true
+  },
+  "correctness": {
+    "case": "row_col",
+    "comparison": "full_output",
+    "elements": 2097152,
+    "atol": 0.125,
+    "rtol": 0.002,
+    "max_abs_error": 0.0,
+    "mean_abs_error": 0.0,
+    "passed": true
+  },
+  "fallback_used": false,
+  "strict_pure": true,
+  "runtime_binary_matches_candidate": true,
+  "passed": true
+}
