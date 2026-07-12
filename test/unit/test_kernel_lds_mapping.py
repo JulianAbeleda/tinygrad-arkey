@@ -1,12 +1,18 @@
 import pytest
 
-from tinygrad.codegen.opt.kernel_lds import cooperative_lds_padding_offsets, cooperative_lds_stores, semantic_wave_coords
+from tinygrad.codegen.opt.kernel_lds import (cooperative_lds_padding_offsets, cooperative_lds_stores, rdna3_wmma_output_coord,
+                                             semantic_wave_coords, validate_rdna3_wmma_descriptor, wmma_fragment_loads,
+                                             wmma_output_owners)
+from tinygrad.codegen.opt.tc import amd_rdna3
+from tinygrad import dtypes
 from tinygrad.uop.ops import KernelLDSWindow, KernelTileGeometry
 
 
 def _geometry():
   return KernelTileGeometry((128, 128, 32), (4, 2), 256, 32,
     (KernelLDSWindow("A", 0, 10240, 80), KernelLDSWindow("B", 10240, 20480, 80)))
+
+def _tc(): return next(tc for tc in amd_rdna3 if tc.dtype_in == dtypes.half and tc.dtype_out == dtypes.float)
 
 
 @pytest.mark.parametrize("role,base,end", (("A", 0, 10240), ("B", 10240, 20480)))
@@ -70,3 +76,92 @@ def test_mapping_rejects_window_shape_vector_and_divisibility_errors():
   with pytest.raises(ValueError, match="exactly equal"): cooperative_lds_stores(bad_size, "A")
   with pytest.raises(ValueError, match="divisible"): cooperative_lds_stores(geometry, "A", vector_bytes=24)
   with pytest.raises(ValueError, match="positive int"): cooperative_lds_stores(geometry, "A", element_bytes=0)
+
+
+@pytest.mark.parametrize("role", ("A", "B"))
+def test_every_fragment_load_is_staged_in_bounds_and_obeys_stride(role):
+  geometry = _geometry()
+  staged = {offset + byte for store in cooperative_lds_stores(geometry, role)
+            for offset in (store.byte_offset,) for byte in range(store.vector_bytes)}
+  window = next(w for w in geometry.lds_windows if w.role == role)
+  loads = wmma_fragment_loads(geometry, role, tc=_tc())
+  assert {load.k_substep for load in loads} == {0, 1}
+  assert all(window.base <= load.byte_offset and load.byte_offset + 2 <= window.end for load in loads)
+  assert all(load.byte_offset == window.base + load.logical_row * 80 + load.logical_k * 2 for load in loads)
+  assert all(load.byte_offset in staged and load.byte_offset + 1 in staged for load in loads)
+
+
+@pytest.mark.parametrize("role", ("A", "B"))
+def test_upper_fragment_lanes_duplicate_lower_lane_addresses(role):
+  loads = wmma_fragment_loads(_geometry(), role, tc=_tc())
+  key = lambda x: (x.wave_m, x.wave_n, x.subtile, x.k_substep, x.element)
+  by_thread = {(load.thread, key(load)): load.byte_offset for load in loads}
+  for wave in range(8):
+    for lane in range(16):
+      lower, upper = wave * 32 + lane, wave * 32 + lane + 16
+      lower_rows = {k: off for (thread, k), off in by_thread.items() if thread == lower}
+      upper_rows = {k: off for (thread, k), off in by_thread.items() if thread == upper}
+      assert lower_rows == upper_rows
+
+
+def test_output_ownership_covers_128_square_exactly_once():
+  owners = wmma_output_owners(_geometry(), tc=_tc())
+  assert len(owners) == 128 * 128
+  coords = [(owner.row, owner.col) for owner in owners]
+  assert len(set(coords)) == len(coords)
+  assert set(coords) == {(row, col) for row in range(128) for col in range(128)}
+  assert {(o.subtile_m, o.subtile_n) for o in owners} == {(m, n) for m in range(2) for n in range(4)}
+
+
+def test_logical_rdna3_formulas_match_core_tensor_descriptor_and_interpreter_map():
+  tc = _tc()
+  validate_rdna3_wmma_descriptor(tc)
+  assert tc.dims == (16, 16, 16) and tc.threads == 32 and tc.elements_per_thread == (16, 16, 8)
+  # This is the c_map formula in tinygrad.runtime.ops_python's AMD WMMA model.
+  assert [rdna3_wmma_output_coord(lane, elem, tc=tc) for lane in range(32) for elem in range(8)] == [
+    (lane % 16, lane // 16 + elem * 2) for lane in range(32) for elem in range(8)]
+  assert len(set(rdna3_wmma_output_coord(lane, elem, tc=tc) for lane in range(32) for elem in range(8))) == 256
+
+
+@pytest.mark.parametrize("lane,element", ((-1, 0), (32, 0), (0, -1), (0, 8), (True, 0)))
+def test_rdna3_output_formula_rejects_bad_coordinates(lane, element):
+  with pytest.raises(ValueError): rdna3_wmma_output_coord(lane, element, tc=_tc())
+
+
+def test_fragment_and_output_mapping_fail_closed_on_unsupported_geometry():
+  k24 = KernelTileGeometry((128, 128, 24), (4, 2), 256, 32,
+    (KernelLDSWindow("A", 0, 10240, 80), KernelLDSWindow("B", 10240, 20480, 80)))
+  with pytest.raises(ValueError, match="K divisible by 16"): wmma_fragment_loads(k24, "A", tc=_tc())
+  wave64 = KernelTileGeometry((128, 128, 32), (2, 2), 256, 64,
+    (KernelLDSWindow("A", 0, 10240, 80), KernelLDSWindow("B", 10240, 20480, 80)))
+  with pytest.raises(ValueError, match="wave32"): wmma_fragment_loads(wave64, "B", tc=_tc())
+  with pytest.raises(ValueError, match="wave32"): wmma_output_owners(wave64, tc=_tc())
+
+
+class _DescriptorDrift:
+  def __init__(self, base, field, value): self.base, self.field, self.value = base, field, value
+  def __getattr__(self, name): return self.value if name == self.field else getattr(self.base, name)
+
+class _RemapDrift:
+  def __init__(self, base): self.base = base
+  def __getattr__(self, name): return self if name == "lane_map" else getattr(self.base, name)
+  def remaps(self): return [{"drift": "true"}, {"drift": "true"}]
+
+
+@pytest.mark.parametrize("field,value", (
+  ("dims", (16, 16, 8)), ("threads", 64), ("elements_per_thread", (16, 8, 8)),
+  ("dtype_in", dtypes.bfloat16), ("dtype_out", dtypes.half),
+  ("opts", ("l0",)),
+  ("swizzle", (((), (), ()), ((), (), ()))),
+))
+def test_descriptor_fingerprint_drift_fails_closed(field, value):
+  drift = _DescriptorDrift(_tc(), field, value)
+  with pytest.raises(ValueError, match=field): validate_rdna3_wmma_descriptor(drift)
+  with pytest.raises(ValueError, match=field): wmma_fragment_loads(_geometry(), "A", tc=drift)
+  with pytest.raises(ValueError, match=field): wmma_output_owners(_geometry(), tc=drift)
+
+
+def test_descriptor_remap_drift_and_missing_descriptor_fail_closed():
+  with pytest.raises(ValueError, match="remaps drifted"): validate_rdna3_wmma_descriptor(_RemapDrift(_tc()))
+  with pytest.raises(ValueError, match="dims drifted"): wmma_fragment_loads(_geometry(), "A", tc=object())
+  with pytest.raises(ValueError, match="dims drifted"): rdna3_wmma_output_coord(0, 0, tc=None)
