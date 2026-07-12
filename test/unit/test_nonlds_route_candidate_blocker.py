@@ -1,6 +1,6 @@
 import pytest
 from extra.qk.prefill_schedule_spec import describe_prefill_schedule
-from extra.qk.wmma_pipe_spec import extract_wmma_pipe_spec, lower_wmma_pipe_spec, build_wmma_pipe_diagnostic_lowering_report, pipe_candidate_context, build_wmma_pipe_ir, attach_pipe_candidate_context
+from extra.qk.wmma_pipe_spec import extract_wmma_pipe_spec, lower_wmma_pipe_spec, build_wmma_pipe_diagnostic_lowering_report, pipe_candidate_context, build_wmma_pipe_ir, attach_pipe_candidate_context, WMMAPipeOp
 from tinygrad.uop.ops import UOp, Ops
 
 def test_attn_qo_lean_route_surface_is_pipe_and_lowerer_is_explicitly_blocked():
@@ -36,3 +36,8 @@ def test_pipe_context_attaches_to_ordinary_sink():
   sink = UOp.sink()
   out = attach_pipe_candidate_context(sink, pipe_candidate_context(pipe, "b" * 64))
   assert out.op is Ops.SINK and out.arg.candidate_context.canonical_identity == "b" * 64
+
+def test_pipe_op_contract_is_typed_and_compiler_owned():
+  pipe = extract_wmma_pipe_spec(describe_prefill_schedule(4096, 4096, role="attn_qo"))
+  op = WMMAPipeOp(build_wmma_pipe_ir(pipe), 0, 1, 2, (128, 4, 1), (256, 1, 1))
+  assert op.wait_scope == "per_stage" and op.resource_owner == "compiler"

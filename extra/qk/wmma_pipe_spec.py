@@ -67,6 +67,21 @@ class WMMAPipeIR:
     if self.wait_policy != "targeted_vmcnt": raise ValueError("unsupported pipe wait policy")
     if self.provenance != "compiler_owned_typed_pipe_ir": raise ValueError("invalid pipe provenance")
 
+@dataclass(frozen=True)
+class WMMAPipeOp:
+  """Design-only typed graph op contract; renderer lowering is intentionally pending."""
+  ir: WMMAPipeIR
+  input_a: int
+  input_b: int
+  output: int
+  global_size: tuple[int, int, int]
+  local_size: tuple[int, int, int]
+  wait_scope: str = "per_stage"
+  resource_owner: str = "compiler"
+
+  def __post_init__(self):
+    if self.wait_scope != "per_stage" or self.resource_owner != "compiler": raise ValueError("invalid pipe op contract")
+
 def build_wmma_pipe_ir(spec: WMMAPipeSpec) -> WMMAPipeIR:
   return WMMAPipeIR(spec.role, (spec.m, spec.n, spec.k), spec.stages, spec.loads_per_stage, spec.wait_policy)
 
