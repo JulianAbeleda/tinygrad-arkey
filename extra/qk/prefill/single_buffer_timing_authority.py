@@ -6,7 +6,7 @@ import math, statistics
 from contextlib import nullcontext
 from typing import Any, Callable
 
-from extra.qk.runtime_specs import ANCHOR_SINGLE_BUFFER_CANDIDATE_HASH
+from extra.qk.runtime_specs import GFX1100_SINGLE_BUFFER_CAPABILITY
 from extra.qk.timing_harness import pinned_peak_from_env
 from extra.qk.mmq_amd_telemetry import collect_telemetry
 
@@ -18,7 +18,10 @@ def _validate_execution(execution:dict[str, Any]) -> tuple[str, str, str]:
   if not execution.get("passed") or not execution.get("structural_binding", {}).get("pre_gpu_eligible"):
     raise ValueError("timing requires a passing structurally proven execution authority")
   identity = execution.get("canonical_identity")
-  if identity != ANCHOR_SINGLE_BUFFER_CANDIDATE_HASH: raise ValueError("execution candidate identity is not the exact anchor")
+  if not isinstance(identity,str) or len(identity)!=64 or any(c not in "0123456789abcdef" for c in identity):
+    raise ValueError("execution candidate identity is not canonical SHA-256")
+  if execution.get("capability_id") != GFX1100_SINGLE_BUFFER_CAPABILITY.capability_id:
+    raise ValueError("execution capability join is missing or unsupported")
   program_hash = execution.get("program", {}).get("binary_sha256")
   runtime_hash = execution.get("runtime", {}).get("executed_binary_sha256")
   if not isinstance(program_hash, str) or runtime_hash != program_hash: raise ValueError("execution binary join is missing or unequal")

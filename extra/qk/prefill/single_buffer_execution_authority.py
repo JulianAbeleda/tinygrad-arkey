@@ -120,11 +120,21 @@ def _expected_structure(payload: dict[str, Any]) -> dict[str, Any]:
 def _emitted_tile_lds_proof(program: UOp) -> dict[str, Any]:
   """Recompute the exact candidate structure from optimized emitted UOps."""
   sink = program.src[0]
+  context = getattr(sink.arg, "candidate_context", None)
+  geometry = getattr(context, "geometry", None)
+  if geometry is None: return {"passed":False,"errors":["candidate context has no typed geometry"]}
+  from tinygrad.codegen.opt.kernel_lds import derive_precontract_factors
+  from tinygrad.codegen.opt.tc import amd_rdna3
+  tc = next(x for x in amd_rdna3 if x.dtype_in == dtypes.half and x.dtype_out == dtypes.float)
+  try: factors = derive_precontract_factors(geometry, tc)
+  except ValueError as exc: return {"passed":False,"errors":[f"typed plan invalid: {exc}"]}
   buffers = [u for u in sink.toposort() if u.op is Ops.BUFFER and isinstance(u.tag, tuple) and u.tag[0] == "kernel_tile_lds"]
   errors = []
   if len(buffers) != 1: return {"passed": False, "errors": [f"expected one tagged tile LDS buffer, found {len(buffers)}"]}
   buf = buffers[0]
-  if not buf.src or buf.src[0].arg * buf.dtype.itemsize != 20480: errors.append("tagged tile LDS allocation is not 20480 bytes")
+  expected_lds = geometry.lds_windows[-1].end
+  if not buf.src or buf.src[0].arg * buf.dtype.itemsize != expected_lds: errors.append("tagged tile LDS allocation size differs from geometry")
+  if len(buf.tag) < 2 or buf.tag[1] != geometry: errors.append("tagged tile LDS geometry differs from candidate context")
   def _address(u):
     address = u.src[0]
     if address.op is Ops.INDEX: return address.src[0], address.src[1], 1
@@ -134,8 +144,10 @@ def _emitted_tile_lds_proof(program: UOp) -> dict[str, Any]:
   stores = [u for u in sink.toposort() if u.op is Ops.STORE and u.src[0].op is Ops.INDEX and u.src[0].src[0] is buf]
   loads = [u for u in sink.toposort() if u.op is Ops.LOAD and (address := _address(u)) is not None and
            buf in address[0].backward_slice_with_self]
-  if len(stores) != 32: errors.append(f"expected 32 scalar cooperative store formulas, found {len(stores)}")
-  if len(loads) != 48: errors.append(f"expected 48 packed fragment load formulas, found {len(loads)}")
+  expected_stores = (factors.loads_a+factors.loads_b)*8
+  expected_loads = (factors.subtiles_m+factors.subtiles_n)*factors.k_substeps*4
+  if len(stores) != expected_stores: errors.append(f"expected {expected_stores} scalar cooperative store formulas, found {len(stores)}")
+  if len(loads) != expected_loads: errors.append(f"expected {expected_loads} packed fragment load formulas, found {len(loads)}")
   allowed = re.compile(r"^[0-9lidx ()+*<>&|/%-]+$")
   def _addresses(rows):
     addresses = [address for u in rows if (address := _address(u)) is not None]
@@ -143,28 +155,34 @@ def _emitted_tile_lds_proof(program: UOp) -> dict[str, Any]:
     if any(allowed.fullmatch(expr) is None for expr,_width in expressions): raise ValueError("emitted LDS index is not restricted affine integer syntax")
     return {int(eval(compile(expr, "<candidate-lds-index>", "eval"), {"__builtins__": {}},  # pylint: disable=eval-used
                      {"lidx0": lane, "lidx1": wave_m, "lidx2": wave_n}))+element
-            for expr,width in expressions for lane in range(32) for wave_m in range(4) for wave_n in range(2) for element in range(width)}
-  expected_a = {row*40+k for row in range(128) for k in range(32)}
-  expected_b = {5120+row*40+k for row in range(128) for k in range(32)}
+            for expr,width in expressions for lane in range(geometry.wave_size) for wave_m in range(geometry.waves[0])
+            for wave_n in range(geometry.waves[1]) for element in range(width)}
+  expected_sets = []
+  for window,rows in zip(geometry.lds_windows,geometry.tile[:2]):
+    expected_sets.append({window.base//2+row*(window.stride_bytes//2)+k for row in range(rows) for k in range(geometry.tile[2])})
+  expected_a,expected_b = expected_sets
   try:
     store_addresses, load_addresses = _addresses(stores), _addresses(loads)
-    if store_addresses != expected_a | expected_b: errors.append("cooperative stores do not exactly cover stride-80 A/B data intervals")
+    if store_addresses != expected_a | expected_b: errors.append("cooperative stores do not exactly cover geometry A/B data intervals")
     if load_addresses != expected_a | expected_b: errors.append("fragment loads do not exactly consume staged A/B data intervals")
   except ValueError as exc: errors.append(str(exc))
   barriers = [u for u in sink.toposort() if u.op is Ops.BARRIER]
   if len(barriers) != 1: errors.append(f"expected one shared barrier, found {len(barriers)}")
   elif any(barriers[0] not in u.backward_slice for u in loads): errors.append("a fragment load is not ordered after the shared barrier")
   wmmas = [u for u in sink.toposort() if u.op is Ops.WMMA]
-  if len(wmmas) != 16: errors.append(f"expected 16 emitted WMMA atoms, found {len(wmmas)}")
+  expected_wmmas=factors.subtiles_m*factors.subtiles_n*factors.k_substeps
+  if len(wmmas) != expected_wmmas: errors.append(f"expected {expected_wmmas} emitted WMMA atoms, found {len(wmmas)}")
   for wmma in wmmas:
     if wmma.arg[1:6] != ((16, 16, 16), dtypes.half, dtypes.float, "AMD", 32):
       errors.append("emitted WMMA descriptor differs from validated RDNA3 atom"); break
     if any(not any(load in src.backward_slice for load in loads) for src in wmma.src[:2]):
       errors.append("emitted WMMA operand is not bound to proven LDS fragment loads"); break
   return {"passed": not errors, "errors": errors, "allocation_count": len(buffers), "store_formula_count": len(stores),
-          "load_formula_count": len(loads), "wmma_count": len(wmmas), "tile": {"m": 128, "n": 128, "k": 32},
-          "waves": {"m": 4, "n": 2}, "lds_windows": {"a": [0, 10240], "b": [10240, 20480]},
-          "lds_strides": {"a": 80, "b": 80}, "producer_data_elements": 8192, "consumer_data_elements": 8192}
+          "load_formula_count": len(loads), "wmma_count": len(wmmas),
+          "tile": dict(zip(("m","n","k"),geometry.tile)), "waves":dict(zip(("m","n"),geometry.waves)),
+          "lds_windows": {w.role.lower():[w.base,w.end] for w in geometry.lds_windows},
+          "lds_strides": {w.role.lower():w.stride_bytes for w in geometry.lds_windows},
+          "producer_data_elements": len(expected_a|expected_b), "consumer_data_elements": len(expected_a|expected_b)}
 
 
 def _structural_binding(payload: dict[str, Any], program: UOp, lds: dict[str, Any]) -> dict[str, Any]:
@@ -328,6 +346,7 @@ def run(payload: dict[str, Any], candidate_hash: str, *, case: str = "constant",
   passed = bool(correct and binary_equal and context_equal and route_strict_pure and not binding_errors)
   if prepared_out is not None: prepared_out.append(prepared)
   return {"schema": SCHEMA, "canonical_identity": identity, "route_id": route_id,
+          "capability_id": "amd.gfx1100.prefill.wmma_lds.single_buffer.v1",
           "selected_route_id": route_id, "environment": {"device": str(Device.DEFAULT), "git": _git_state()},
           "route_binding_complete": False if binding_errors else passed, "route_authority": effective,
           "structural_binding": structural, "binding_errors": binding_errors, "program": hashes,

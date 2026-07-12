@@ -1,9 +1,10 @@
 import pytest
 
-from extra.qk.runtime_specs import ANCHOR_SINGLE_BUFFER_CANDIDATE_HASH
+from extra.qk.runtime_specs import ANCHOR_SINGLE_BUFFER_CANDIDATE_HASH, GFX1100_SINGLE_BUFFER_CAPABILITY
 from extra.qk.prefill.single_buffer_timing_authority import run_kernel_timing
 
 def _execution(): return {"passed":True,"canonical_identity":ANCHOR_SINGLE_BUFFER_CANDIDATE_HASH,
+  "capability_id":GFX1100_SINGLE_BUFFER_CAPABILITY.capability_id,
   "structural_binding":{"pre_gpu_eligible":True},"program":{"binary_sha256":"a"*64},
   "runtime":{"executed_binary_sha256":"a"*64},"environment":{"git":{"revision":"deadbeef","dirty":False}}}
 
@@ -16,6 +17,12 @@ def test_kernel_only_timing_protocol_and_statistics():
   assert waits == [True]*5 and report["samples_ms"] == [2.0,1.0,2.0]
   assert report["median_ms"] == 2.0 and report["min_ms"] == 1.0
   assert report["protocol"]["compile_excluded"] and report["joins"] == {"candidate":True,"binary":True,"commit":True}
+
+def test_timing_accepts_dynamic_canonical_identity_with_capability_join():
+  execution=_execution();execution["canonical_identity"]="b"*64
+  report=run_kernel_timing(execution,lambda **_:0.001,warmups=1,rounds=3,
+    telemetry=lambda *a,**k:{},clock_context=lambda:__import__("contextlib").nullcontext(None))
+  assert report["canonical_identity"]=="b"*64
 
 @pytest.mark.parametrize("mutation,error",(
   (lambda x:x.update(passed=False),"passing"),(lambda x:x["structural_binding"].update(pre_gpu_eligible=False),"passing"),
