@@ -1,0 +1,43 @@
+{
+  "schema": "prefill-whole-synced-authority.v1",
+  "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+  "mode": "authority",
+  "chunk_n": 512,
+  "chunk_ms": {
+    "0": 116.7959
+  },
+  "chunk_samples_ms": {
+    "0": [
+      117.7984,
+      116.7959,
+      117.2789
+    ]
+  },
+  "whole_tok_s": {
+    "512": 4383.72
+  },
+  "graph_gemm": true,
+  "prefill_v2": "1",
+  "prefill_route": "auto",
+  "K": 8,
+  "warmups": 4,
+  "rounds": 3,
+  "pin_clock": true,
+  "clock_pin": {
+    "cmd": "echo manual > /sys/class/drm/card0/device/power_dpm_force_performance_level && echo 2 > /sys/class/drm/card0/device/pp_dpm_sclk && echo 3 > /sys/class/drm/card0/device/pp_dpm_mclk",
+    "rc": 0,
+    "ok": true,
+    "out": ""
+  },
+  "git_short": "b1259638d",
+  "git_dirty": false,
+  "route_attribution": {
+    "prefill_route_family": "prefill_pipe_role_selective_generated",
+    "prefill_route_pure": false,
+    "prefill_route_rolled_back": true,
+    "prefill_route_provenance": "external_handwritten_kernel",
+    "prefill_q4k_route_family": "prefill_q4k_direct_tile4x4_default",
+    "prefill_q4k_route_pure": true
+  },
+  "timing_authority": "synced model.__call__ prefill-v2 warmstart path, min over repeated bursts, no generate TTFT/sampling"
+}
