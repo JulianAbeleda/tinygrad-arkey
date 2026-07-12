@@ -42,8 +42,8 @@ class WMMAPipeSpec:
   @property
   def pipeline_policy(self) -> PipelinePolicy:
     """Return the common typed policy used by compiler-owned pipe lowering."""
-    return PipelinePolicy.register_resident(stages=self.stages,
-      wait=WaitPolicy(self.wait_policy, scope="per_stage"))
+    return RegisterPipePlan(stages=self.stages,
+      wait=WaitPolicy(self.wait_policy, scope="per_stage")).policy
 
   @property
   def loads_per_stage(self) -> int:

@@ -55,6 +55,16 @@ def test_pipe_spec_policy_does_not_hide_unsupported_wait_mode():
   else:
     raise AssertionError("pipe policy must reject an unsupported wait mode")
 
+def test_pipe_spec_policy_requires_two_stage_register_contract():
+  spec = WMMAPipeSpec(m=512, n=4096, k=4096, tile_m=128, tile_n=128,
+                      role="attn_qo", stages=1)
+  try:
+    _ = spec.pipeline_policy
+  except ValueError as exc:
+    assert "exactly two stages" in str(exc)
+  else:
+    raise AssertionError("pipe policy must reject a non-two-stage lifecycle")
+
 def test_pipe_candidate_context_is_identity_and_abi_complete():
   from extra.qk.wmma_pipe_spec import pipe_candidate_context
   spec = WMMAPipeSpec(m=512, n=4096, k=4096, tile_m=128, tile_n=128, role="attn_qo")

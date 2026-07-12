@@ -46,6 +46,7 @@ def test_wait_dependency_accepts_full_barrier_and_rejects_targeted_amdllvm():
   lambda: RegisterPipePlan(global_load_bytes=8),
   lambda: RegisterPipePlan(wait=WaitPolicy("full_barrier")),
   lambda: RegisterPipePlan(resources=ResourcePlan("final_program", vgpr=1, sgpr=1)),
+  lambda: pipeline_policy_for_route("pipe", stages=1),
 ))
 def test_policy_contracts_fail_closed(factory):
   with pytest.raises(ValueError): factory()

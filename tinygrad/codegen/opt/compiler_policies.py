@@ -106,7 +106,10 @@ def pipeline_policy_for_route(route_family: str, *, buffer_count: int = 1, slot_
   if route_family == "lds":
     if slot_bytes <= 0: raise ValueError("LDS route requires positive slot_bytes")
     return PipelinePolicy.lds(buffer_count=buffer_count, slot_bytes=slot_bytes, stages=1 if stages is None else stages)
-  if route_family == "pipe": return PipelinePolicy.register_resident(stages=2 if stages is None else stages)
+  if route_family == "pipe":
+    # The compiler-owned register pipe contract is specifically the proved
+    # two-stage/b128 primitive. Do not silently construct a weaker variant.
+    return RegisterPipePlan(stages=2 if stages is None else stages).policy
   raise ValueError(f"unsupported pipeline route family {route_family!r}")
 
 @dataclass(frozen=True)
