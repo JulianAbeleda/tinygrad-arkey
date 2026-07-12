@@ -1,4 +1,4 @@
-from extra.qk.prefill.ffn_gate_up_epoch_graph import build_epoch_graph
+from extra.qk.prefill.ffn_gate_up_epoch_graph import build_epoch_graph, summarize_epoch_graph
 
 
 def test_exact_structural_graph_covers_all_gate_up_epochs_and_slots():
@@ -29,3 +29,10 @@ def test_graph_composes_existing_audit_summaries_without_reinterpreting_them():
   assert report["stage_owner_audit_summary"] == stage["summary"]
   assert report["lowered_reaching_def_summary"]["missing_load_count"] == 1
   assert report["claims"]["lowered_instruction_correlation_complete"] is False
+
+
+def test_compact_epoch_graph_binds_full_nodes_edges_and_identity_loss():
+  report = summarize_epoch_graph(build_epoch_graph())
+  assert report["graph_storage"]["mode"] == "compact_hashes"
+  assert all(len(value) == 64 for value in report["graph_storage"]["sha256"].values())
+  assert len(report["identity_loss"]["records_sha256"]) == 64

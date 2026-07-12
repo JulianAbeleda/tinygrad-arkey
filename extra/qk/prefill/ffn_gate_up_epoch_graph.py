@@ -2,7 +2,7 @@
 """Compose existing S10 evidence into an epoch dependency graph for the 8B gate/up GEMM."""
 from __future__ import annotations
 
-import argparse, json, pathlib
+import argparse, hashlib, json, pathlib
 from typing import Any
 
 from extra.qk.prefill.dbuf_epoch_lifecycle_checker import DBUFEvent, check_events
@@ -88,15 +88,30 @@ def build_epoch_graph(*, stage_owner_audit: dict[str, Any] | None = None,
   }
 
 
+def summarize_epoch_graph(report: dict[str, Any]) -> dict[str, Any]:
+  hashes = {key: hashlib.sha256(json.dumps(report[key], sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+            for key in ("nodes", "edges")}
+  identity_loss = report["identity_loss"]
+  return {key: value for key, value in report.items() if key not in ("nodes", "edges", "identity_loss")} | {
+    "identity_loss": {"count": identity_loss["count"],
+                      "external_evidence_gaps": identity_loss["external_evidence_gaps"],
+                      "records_sha256": hashlib.sha256(json.dumps(identity_loss["records"], sort_keys=True,
+                                                                   separators=(",", ":")).encode()).hexdigest()},
+    "graph_storage": {"mode": "compact_hashes", "sha256": hashes, "regenerate": "build_epoch_graph()"},
+  }
+
+
 def main() -> int:
   ap = argparse.ArgumentParser(description=__doc__)
   ap.add_argument("--stage-owner-audit", type=pathlib.Path)
   ap.add_argument("--lifecycle-trace", type=pathlib.Path)
   ap.add_argument("--out", type=pathlib.Path)
+  ap.add_argument("--full", action="store_true")
   args = ap.parse_args()
   load = lambda path: None if path is None else json.loads(path.read_text())
   report = build_epoch_graph(stage_owner_audit=load(args.stage_owner_audit), lifecycle_trace=load(args.lifecycle_trace))
-  text = json.dumps(report, indent=2) + "\n"
+  output = report if args.full else summarize_epoch_graph(report)
+  text = json.dumps(output, indent=2) + "\n"
   if args.out:
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(text)
