@@ -1,5 +1,6 @@
 import pytest
 
+from tinygrad.codegen import full_rewrite_to_sink
 from tinygrad.codegen.opt.compiler_policies import WaitCount
 from tinygrad.dtype import dtypes
 from tinygrad.helpers import Target
@@ -35,3 +36,17 @@ def test_amdllvm_wait_rejects_untyped_payload():
   renderer = AMDLLVMRenderer(Target.parse("AMD:LLVM:gfx1100"))
   with pytest.raises(ValueError, match="typed WaitCount"):
     renderer.render([_wait(None)])
+
+
+def test_wait_count_node_survives_full_rewrite_spec_boundary():
+  renderer = AMDLLVMRenderer(Target.parse("AMD:LLVM:gfx1100"))
+  sink = UOp(Ops.SINK, dtypes.void, (_wait(WaitCount(vmcnt=8)),))
+  rewritten = full_rewrite_to_sink(sink, renderer, optimize=False)
+  assert rewritten.src[0].op is Ops.WAIT and rewritten.src[0].arg == WaitCount(vmcnt=8)
+
+
+def test_wait_node_without_payload_fails_spec_boundary():
+  renderer = AMDLLVMRenderer(Target.parse("AMD:LLVM:gfx1100"))
+  sink = UOp(Ops.SINK, dtypes.void, (_wait(None),))
+  with pytest.raises(RuntimeError, match="UOp verification failed"):
+    full_rewrite_to_sink(sink, renderer, optimize=False)

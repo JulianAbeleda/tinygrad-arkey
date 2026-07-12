@@ -94,6 +94,12 @@ spec_shared = PatternMatcher([
   # BARRIER (on any length). TODO: this should only be in spec_program
   (UPat(Ops.BARRIER, dtypes.void), lambda: True),
 
+  # WAIT carries a backend-owned typed payload (for example compiler_policies.WaitCount or a
+  # logical dependency that a later backend resolves).  Keep the UOp layer decoupled from
+  # compiler policy modules to avoid a codegen -> uop import cycle; the backend validates the
+  # payload's concrete type.  A missing payload is always invalid.
+  (UPat(Ops.WAIT, dtypes.void, name="x"), lambda x: x.arg is not None),
+
   # SPECIAL. TODO: this should only be in spec_program
   (UPat(Ops.SPECIAL, src=(UPat.var("x", (dtypes.weakint, dtypes.int32)),), name="s"), lambda s,x: s.dtype == x.dtype and isinstance(s.arg, str)),
 
