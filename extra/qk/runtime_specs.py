@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import hashlib
 import json
+from types import MappingProxyType
 from typing import Any
 
 OP_FAMILIES = ("QuantizedLinear", "DenseLinear", "FlashAttention", "KVCache", "ActivationFusion")
@@ -17,6 +18,7 @@ LOWERING_STRATEGIES = (
 PROVENANCE = ("machine_authored_generated", "tinygrad_scheduler_generated", "banned", "unknown")
 GENERATED_PROVENANCE = ("machine_authored_generated", "tinygrad_scheduler_generated")
 FULL_KERNEL_CANDIDATE_SCHEMA = "boltbeam.full_kernel_candidate.v1"
+FULL_KERNEL_CANDIDATE_SET_SCHEMA = "boltbeam.full_kernel_candidate_set.v1"
 ANCHOR_SINGLE_BUFFER_CANDIDATE_HASH = "81c27275d1aad1bb8147c5c5cdaa8000e9375e81f3d085b49d62064a731313d6"
 
 class FullKernelAdmissionError(ValueError):
@@ -49,6 +51,105 @@ class FullKernelAdmission:
   active_lds_bytes: int
   capability: FullKernelCapability
   context: Any
+
+FullKernelExactKey = tuple[str, str, int, int, int, str, str, int]
+FullKernelWarmstartKey = tuple[frozenset[int], int]
+
+class _FrozenDict(dict):
+  def _immutable(self,*_args,**_kwargs): raise TypeError("candidate-set payload is immutable")
+  __setitem__=__delitem__=clear=pop=popitem=setdefault=update=_immutable
+
+def _freeze_json(value:Any) -> Any:
+  if isinstance(value,dict): return _FrozenDict({k:_freeze_json(v) for k,v in value.items()})
+  if isinstance(value,list): return tuple(_freeze_json(v) for v in value)
+  return value
+
+def _canonical_full_kernel_identity(payload:dict[str,Any]) -> str:
+  encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False).encode("ascii")
+  return hashlib.sha256(encoded).hexdigest()
+
+def _full_kernel_exact_key(payload:dict[str,Any]) -> FullKernelExactKey:
+  workload=payload["workload"]; shape=workload["shape"]; target=workload["target"]
+  return (workload["profile"],workload["role"],shape["m"],shape["n"],shape["k"],
+          target["backend"],target["arch"],target["wave_size"])
+
+def _full_kernel_warmstart_key(payload:dict[str,Any]) -> FullKernelWarmstartKey:
+  shape=payload["workload"]["shape"]
+  return frozenset((shape["m"],shape["n"])),shape["k"]
+
+@dataclass(frozen=True)
+class FullKernelCandidateSetEntry:
+  canonical_identity: str
+  payload: dict[str,Any]
+
+  def __post_init__(self) -> None:
+    try: payload=json.loads(json.dumps(self.payload,allow_nan=False))
+    except (TypeError,ValueError) as exc: raise FullKernelAdmissionError("payload_json",str(exc)) from exc
+    if self.canonical_identity != _canonical_full_kernel_identity(payload):
+      raise FullKernelAdmissionError("identity_mismatch","candidate-set entry identity differs from canonical payload")
+    object.__setattr__(self,"payload",_freeze_json(payload))
+
+  @property
+  def exact_key(self) -> FullKernelExactKey: return _full_kernel_exact_key(self.payload)
+  @property
+  def warmstart_key(self) -> FullKernelWarmstartKey: return _full_kernel_warmstart_key(self.payload)
+  def to_json(self) -> dict[str,Any]:
+    return {"canonical_identity":self.canonical_identity,"payload":json.loads(json.dumps(self.payload))}
+
+@dataclass(frozen=True)
+class FullKernelCandidateSet:
+  entries: tuple[FullKernelCandidateSetEntry,...]
+  schema: str = FULL_KERNEL_CANDIDATE_SET_SCHEMA
+
+  def __post_init__(self) -> None:
+    if self.schema != FULL_KERNEL_CANDIDATE_SET_SCHEMA:
+      raise FullKernelAdmissionError("candidate_set_schema",f"unsupported candidate-set schema {self.schema!r}")
+    object.__setattr__(self,"entries",tuple(self.entries))
+
+  def to_json(self) -> dict[str,Any]: return {"schema":self.schema,"entries":[x.to_json() for x in self.entries]}
+
+  @classmethod
+  def from_json(cls,row:dict[str,Any]) -> "FullKernelCandidateSet":
+    if not isinstance(row,dict) or set(row) != {"schema","entries"} or not isinstance(row["entries"],list):
+      raise FullKernelAdmissionError("candidate_set_schema","candidate set requires exactly schema and entries")
+    return cls(tuple(FullKernelCandidateSetEntry(x["canonical_identity"],x["payload"]) for x in row["entries"]),row["schema"])
+
+@dataclass(frozen=True)
+class AdmittedFullKernelCandidateSet:
+  candidate_set: FullKernelCandidateSet
+  admissions: tuple[FullKernelAdmission,...]
+  exact_index: Any = field(init=False,repr=False)
+
+  def __post_init__(self) -> None:
+    if len(self.candidate_set.entries) != len(self.admissions): raise ValueError("candidate-set admission count mismatch")
+    exact:dict[FullKernelExactKey,FullKernelAdmission]={}; weak:dict[FullKernelWarmstartKey,tuple[FullKernelExactKey,str]]={}
+    for entry,admission in zip(self.candidate_set.entries,self.admissions):
+      key=entry.exact_key
+      if key in exact: raise FullKernelAdmissionError("duplicate_exact_key",f"duplicate candidate exact key {key!r}")
+      prior=weak.get(entry.warmstart_key)
+      if prior is not None and prior != (key,entry.canonical_identity):
+        raise FullKernelAdmissionError("warmstart_key_collision",
+          f"weak warmstart key {entry.warmstart_key!r} aliases {prior[0]!r} and {key!r}")
+      exact[key]=admission; weak[entry.warmstart_key]=(key,entry.canonical_identity)
+    object.__setattr__(self,"exact_index",MappingProxyType(exact))
+
+  def get(self,profile:str,role:str,shape:tuple[int,int,int],target:dict[str,Any]) -> FullKernelAdmission|None:
+    return self.exact_index.get((profile,role,*shape,target["backend"],target["arch"],target["wave_size"]))
+
+def admit_full_kernel_candidate_set(candidate_set:FullKernelCandidateSet) -> AdmittedFullKernelCandidateSet:
+  admissions=[]
+  for entry in candidate_set.entries:
+    profile,role,m,n,k,backend,arch,wave_size=entry.exact_key
+    pipeline=entry.payload["schedule"]["pipeline"]
+    capability=(GFX1100_TWO_BUFFER_STAGE1_CAPABILITY if (pipeline["buffer_count"],pipeline["stage_count"]) == (2,1)
+                else GFX1100_SINGLE_BUFFER_CAPABILITY)
+    admissions.append(admit_full_kernel_candidate(entry.payload,entry.canonical_identity,profile=profile,role=role,
+      shape=(m,n,k),target={"backend":backend,"arch":arch,"wave_size":wave_size},capability=capability))
+  return AdmittedFullKernelCandidateSet(candidate_set,tuple(admissions))
+
+def full_kernel_candidate_set_from_legacy(payload:dict[str,Any],canonical_identity:str) -> FullKernelCandidateSet:
+  """Adapt the current JSON/hash environment pair without changing its individual candidate identity."""
+  return FullKernelCandidateSet((FullKernelCandidateSetEntry(canonical_identity,payload),))
 
 def admit_full_kernel_candidate(payload:dict[str, Any], canonical_identity:str, *, profile:str, role:str,
                                 shape:tuple[int,int,int], target:dict[str,Any],

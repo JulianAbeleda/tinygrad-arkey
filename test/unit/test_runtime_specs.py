@@ -1,5 +1,6 @@
 import pytest
 import json
+import hashlib
 
 from extra.qk.generated_candidates import GeneratedCandidateRegistry, builtin_registry, select_generated_candidate
 from extra.qk.quant_specs import activation_spec, quant_spec
@@ -7,8 +8,9 @@ from extra.qk import route_manifest
 from extra.qk import pure_search_guard
 from extra.qk.runtime_specs import (
   ANCHOR_SINGLE_BUFFER_CANDIDATE_HASH, FULL_KERNEL_CANDIDATE_SCHEMA, ActivationQuantSpec, GeneratedCandidate,
-  QuantizedTensorSpec, RuntimeOpSpec,
-  GFX1100_TWO_BUFFER_STAGE1_CAPABILITY, admit_full_kernel_candidate, bind_full_kernel_candidate,
+  QuantizedTensorSpec, RuntimeOpSpec, FullKernelCandidateSet, FullKernelCandidateSetEntry,
+  GFX1100_TWO_BUFFER_STAGE1_CAPABILITY, admit_full_kernel_candidate, admit_full_kernel_candidate_set,
+  bind_full_kernel_candidate, full_kernel_candidate_set_from_legacy,
 )
 
 
@@ -322,3 +324,41 @@ def test_candidate_route_selector_fails_closed_and_default_is_unchanged():
   with pytest.raises(ValueError, match="provided together"): pure_search_guard.effective_routes(base)
   with pytest.raises(ValueError, match="identity_mismatch"):
     pure_search_guard.effective_routes({**base, "BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH": "0" * 64})
+
+def _buffer2_set_entry(role,shape):
+  payload=json.loads(json.dumps(_single_buffer_anchor_candidate().full_kernel_candidate))
+  payload["workload"]["role"]=role; payload["workload"]["shape"]=dict(zip(("m","n","k"),shape))
+  payload["applicability"]["roles"]=[role]; payload["schedule"]["pipeline"]["buffer_count"]=2
+  identity=hashlib.sha256(json.dumps(payload,sort_keys=True,separators=(",",":"),ensure_ascii=True).encode("ascii")).hexdigest()
+  return FullKernelCandidateSetEntry(identity,payload)
+
+def test_four_role_8b_candidate_set_admits_and_exactly_indexes():
+  entries=tuple(_buffer2_set_entry(role,shape) for role,shape in (
+    ("ffn_gate_up",(512,12288,4096)),("ffn_down",(512,4096,12288)),
+    ("attn_qo",(512,4096,4096)),("attn_kv",(512,1024,4096))))
+  registry=admit_full_kernel_candidate_set(FullKernelCandidateSet(entries))
+  target={"backend":"AMD","arch":"gfx1100","wave_size":32}
+  assert len(registry.exact_index) == 4
+  for entry in entries:
+    profile,role,m,n,k,*_=entry.exact_key
+    admission=registry.get(profile,role,(m,n,k),target)
+    assert admission is not None and admission.canonical_identity == entry.canonical_identity
+    assert admission.active_lds_bytes == 40960
+  assert registry.get(entries[0].exact_key[0],"attn_kv",(512,2048,4096),target) is None
+  with pytest.raises(TypeError,match="immutable"): entries[0].payload["workload"]["role"]="other"
+
+def test_candidate_set_rejects_duplicate_exact_key_identity_mismatch_and_weak_collision():
+  entry=_buffer2_set_entry("attn_qo",(512,4096,4096))
+  with pytest.raises(ValueError,match="duplicate_exact_key"):
+    admit_full_kernel_candidate_set(FullKernelCandidateSet((entry,entry)))
+  with pytest.raises(ValueError,match="identity_mismatch"):
+    FullKernelCandidateSetEntry("0"*64,entry.payload)
+  swapped=_buffer2_set_entry("ffn_down",(4096,512,4096))
+  with pytest.raises(ValueError,match="warmstart_key_collision"):
+    admit_full_kernel_candidate_set(FullKernelCandidateSet((entry,swapped)))
+
+def test_one_entry_legacy_candidate_set_adapter_preserves_identity():
+  entry=_buffer2_set_entry("ffn_gate_up",(512,12288,4096))
+  candidate_set=full_kernel_candidate_set_from_legacy(entry.payload,entry.canonical_identity)
+  assert candidate_set.entries == (entry,)
+  assert FullKernelCandidateSet.from_json(candidate_set.to_json()) == candidate_set
