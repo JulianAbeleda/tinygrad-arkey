@@ -57,3 +57,19 @@ def run_kernel_timing(execution:dict[str, Any], kernel_call:Callable[..., float]
           "samples_ms": [x*1e3 for x in samples_s], "median_ms": median_s*1e3, "min_ms": min_s*1e3,
           "median_tflops": ops/median_s/1e12, "max_tflops": ops/min_s/1e12,
           "clock_pin": clock_pin, "telemetry": {"before": before, "after": after}}
+
+
+def run_prepared_candidate_timing(payload:dict[str, Any], candidate_hash:str, *, case:str="constant", warmups:int=5,
+                                  rounds:int=21, telemetry:Callable[...,dict[str,Any]]=collect_telemetry,
+                                  clock_context:Callable[[],Any]=pinned_peak_from_env) -> dict[str, Any]:
+  """Run correctness once, then time the exact same prepared candidate CALL."""
+  from extra.qk.prefill.single_buffer_execution_authority import run
+  prepared = []
+  execution = run(payload, candidate_hash, case=case, prepared_out=prepared)
+  if len(prepared) != 1: raise RuntimeError("execution authority did not return one prepared candidate context")
+  report = run_kernel_timing(execution, prepared[0].kernel_call, warmups=warmups, rounds=rounds,
+                             telemetry=telemetry, clock_context=clock_context)
+  report["execution_authority"] = {"schema": execution["schema"], "passed": execution["passed"],
+    "canonical_identity": execution["canonical_identity"], "program": execution["program"],
+    "runtime": execution["runtime"], "environment": execution["environment"]}
+  return report

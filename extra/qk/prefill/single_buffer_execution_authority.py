@@ -7,6 +7,7 @@ transport.  It neither defines a route nor duplicates a kernel builder.
 from __future__ import annotations
 
 import argparse, hashlib, json, math, os, pathlib, re, subprocess
+from dataclasses import dataclass
 from contextlib import contextmanager
 from typing import Any
 
@@ -21,6 +22,25 @@ ROOT = pathlib.Path(__file__).resolve().parents[3]
 SCHEMA = "prefill-single-buffer-execution-authority.v1"
 SELECTED_SURFACE = "route_pf16_graph_gemm.generated_lds_matmul_transport"
 M, N, K = 512, 12288, 4096
+
+@dataclass
+class PreparedCandidateExecution:
+  compiled: UOp
+  program: UOp
+  call: UOp
+  output: Any
+  reference: np.ndarray
+  identity: str
+  def kernel_call(self, *, wait:bool=True) -> float:
+    from tinygrad.engine.realize import ExecContext, exec_kernel
+    elapsed = exec_kernel(ExecContext(jit=True, wait=wait, update_stats=False), self.call, self.program)
+    if elapsed is None: raise RuntimeError("prepared candidate kernel returned no device timing")
+    return float(elapsed)
+
+def _prepared_candidate(compiled:UOp, program:UOp, output:Any, reference:np.ndarray, identity:str) -> PreparedCandidateExecution:
+  calls = [u for u in compiled.toposort() if u.op is Ops.CALL and u.src and u.src[0] is program]
+  if len(calls) != 1: raise RuntimeError(f"expected one exact candidate CALL, found {len(calls)}")
+  return PreparedCandidateExecution(compiled, program, calls[0], output, reference, identity)
 
 
 def _sha256(data: bytes) -> str: return hashlib.sha256(data).hexdigest()
@@ -209,7 +229,8 @@ def _case_arrays(case: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
 
 
 def run(payload: dict[str, Any], candidate_hash: str, *, case: str = "constant",
-        atol: float = 0.125, rtol: float = 0.002) -> dict[str, Any]:
+        atol: float = 0.125, rtol: float = 0.002,
+        prepared_out:list[PreparedCandidateExecution]|None=None) -> dict[str, Any]:
   """Compile and execute the exact candidate through its production route."""
   identity = canonical_candidate_hash(payload)
   if candidate_hash != identity: raise ValueError("candidate hash does not match exact payload")
@@ -277,6 +298,7 @@ def run(payload: dict[str, Any], candidate_hash: str, *, case: str = "constant",
                                 "case": case, "comparison": "not_run", "elements": 0, "passed": False},
                 "fallback_used": bool(effective["rolled_back_to_oracle"]), "strict_pure": False,
                 "runtime_binary_matches_candidate": None, "passed": False}
+      prepared = _prepared_candidate(compiled, program, out, ref, identity)
       run_linear(compiled, jit=True, wait=True)
       output = out.float().numpy()
       runtime = runtime_cache.get((program.key, str(Device.DEFAULT)))
@@ -304,6 +326,7 @@ def run(payload: dict[str, Any], candidate_hash: str, *, case: str = "constant",
   binding_errors = list(structural["errors"])
   if not route_surface_agrees: binding_errors.append(f"manifest effective route {route_id!r} does not describe selected generated surface")
   passed = bool(correct and binary_equal and context_equal and route_strict_pure and not binding_errors)
+  if prepared_out is not None: prepared_out.append(prepared)
   return {"schema": SCHEMA, "canonical_identity": identity, "route_id": route_id,
           "selected_route_id": route_id, "environment": {"device": str(Device.DEFAULT), "git": _git_state()},
           "route_binding_complete": False if binding_errors else passed, "route_authority": effective,
