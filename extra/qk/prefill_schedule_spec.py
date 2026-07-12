@@ -104,6 +104,12 @@ class PrefillGEMMScheduleSpec:
   def kernel_name(self) -> str:
     return f"prefill_gen_sched_gemm_{self.m}_{self.n}_{self.k}"
 
+  def pipeline_policy(self):
+    from tinygrad.codegen.opt.compiler_policies import pipeline_policy_for_route
+    return pipeline_policy_for_route(self.route_family, buffer_count=self.pipeline_depth if self.route_family == "lds" else 1,
+                                     slot_bytes=1 if self.route_family == "pipe" else self.tile_k * self.tile_m * 2,
+                                     stages=self.pipeline_depth)
+
   def to_json(self) -> dict[str, Any]:
     return {"m": self.m, "n": self.n, "k": self.k, "route_family": self.route_family, "tile_m": self.tile_m,
             "tile_n": self.tile_n, "tile_k": self.tile_k, "waves_m": self.waves_m, "waves_n": self.waves_n,

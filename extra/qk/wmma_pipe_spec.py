@@ -50,6 +50,10 @@ class WMMAPipeSpec:
     # build_gemm_pipe's targeted wait leaves the opposite stage's A/B b128 loads outstanding.
     return self.pipe_tm * 2 + self.pipe_tn * 2
 
+  def pipeline_policy(self):
+    from tinygrad.codegen.opt.compiler_policies import pipeline_policy_for_route
+    return pipeline_policy_for_route("pipe", stages=self.stages)
+
   def to_json(self) -> dict[str, Any]:
     return {
       "m": self.m, "n": self.n, "k": self.k, "tile_m": self.tile_m, "tile_n": self.tile_n,
