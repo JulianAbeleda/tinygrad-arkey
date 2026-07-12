@@ -6,6 +6,8 @@ from extra.qk.wmma_lds_spec import (
   DBUFEpochPrimitive, LDS2_OWNERSHIP_CLASSIFICATION, WMMALDSSpec, extract_wmma_lds_spec, lower_wmma_lds_spec,
   wmma_lds_generated_env_defaults, wmma_lds_lowering_insertion_point, wmma_lds_postrange_opts,
   wmma_lds_slot_identity_proof)
+from tinygrad.codegen.opt import postrange
+from tinygrad.uop.ops import AxisType, UOp
 
 
 def _prefill_spec(route_family: str = "lds", *, out_f: int = 12288, in_f: int = 4096) -> PrefillGEMMScheduleSpec:
@@ -154,8 +156,7 @@ def test_wmma_lds_generated_transport_reuses_existing_single_buffer_substrate():
   assert opts[2].arg == spec.wn
 
   candidate_opts = wmma_lds_postrange_opts(spec, cooperative_waves=True)
-  assert [o.op.name for o in candidate_opts] == ["TC", "UPCAST", "UPCAST", "LOCAL", "LOCAL", "UNROLL"]
-  assert [(o.axis, o.arg) for o in candidate_opts[3:5]] == [(0, spec.waves_m), (1, spec.waves_n)]
+  assert [o.op.name for o in candidate_opts] == ["TC"]
 
   try:
     wmma_lds_postrange_opts(replace(spec, threads=32), cooperative_waves=True)
@@ -163,6 +164,17 @@ def test_wmma_lds_generated_transport_reuses_existing_single_buffer_substrate():
     assert "does not account for spec threads" in str(exc)
   else:
     raise AssertionError("strict cooperative geometry must fail closed on inconsistent thread ownership")
+
+
+def test_candidate_lds_id_uses_scheduler_namespace_and_rejects_collision():
+  class SchedulerStub:
+    rngs = [UOp.range(4, 41, AxisType.LOCAL), UOp.range(2, 42, AxisType.LOCAL)]
+  safe = SchedulerStub(); safe.opt_range = iter((43,))
+  assert postrange._candidate_lds_buffer_id(safe) == 43
+  collision = SchedulerStub(); collision.opt_range = iter((42,))
+  try: postrange._candidate_lds_buffer_id(collision)
+  except postrange.KernelOptError as exc: assert "collides with a live range" in str(exc)
+  else: raise AssertionError("candidate allocation ID collision must fail closed")
 
 
 def test_wmma_lds_slot_identity_proof_for_generated_single_buffer():

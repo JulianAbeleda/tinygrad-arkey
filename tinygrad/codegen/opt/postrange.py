@@ -267,6 +267,8 @@ class Scheduler:
           axis_choices = list(itertools.product(in1_ranges, in0_ranges, red_ranges))
           if not (axis < len(axis_choices)): continue
           axes = list(axis_choices[axis])
+          original_axes = tuple(axes)
+          candidate_geometry = getattr(getattr(self.ast.arg, "candidate_context", None), "geometry", None)
 
           # tag the reduceop
           self.ast = self.ast.substitute({reduceop: reduceop.replace(tag="TC")})
@@ -284,6 +286,7 @@ class Scheduler:
 
           # we create the warp as a whole thing, in case some of these ranges are moved/removed later
           warp = UOp.range(tc.threads, -1, AxisType.WARP)
+          warp_full = warp
           ne: list[UOp] = []
           for opt in tc.opts:
             if opt[0] == "l":
@@ -297,6 +300,19 @@ class Scheduler:
           for _, amt in tc.get_reduce_axes():
             axes[2], new_range = self.shift_to(axes[2], amt, AxisType.UNROLL)
             ne.append(new_range)
+
+          candidate_axes = None
+          if candidate_geometry is not None:
+            # Consume the complete exact candidate while the original scalar A/B templates are still available.
+            if (candidate_geometry.tile, candidate_geometry.waves, candidate_geometry.threads, candidate_geometry.wave_size) != \
+               ((128, 128, 32), (4, 2), 256, 32):
+              raise KernelOptError("unsupported full-kernel candidate geometry in TC application")
+            axes[0], subtile_n = self.shift_to(axes[0], 4, AxisType.UPCAST)
+            axes[1], subtile_m = self.shift_to(axes[1], 2, AxisType.UPCAST)
+            axes[1], wave_m = self.shift_to(axes[1], 4, AxisType.LOCAL)
+            axes[0], wave_n = self.shift_to(axes[0], 2, AxisType.LOCAL)
+            axes[2], k_substep = self.shift_to(axes[2], 2, AxisType.UNROLL)
+            candidate_axes = (subtile_m, subtile_n, wave_m, wave_n, k_substep, axes[0], axes[1], axes[2], warp_full)
 
           if use_tensor_cores != 2:
             # fix the srcs
@@ -320,20 +336,40 @@ class Scheduler:
             # do the reduce_axes always disappear? i think they don't
             # they need to be moved into the WMMA srcs
             wmma_arg = (str(tc), tc.dims, tc.dtype_in, tc.dtype_out, self.ren.target.device, tc.threads, tc_upcast_axes, ()) #, tc_reduce_axes)
-            wmma_srcs = [
-              UOp(Ops.CONTRACT, dtype=srcs[0].dtype.vec(tc.elements_per_thread[0]), src=(srcs[0],), arg=tc_upcast_axes[0], tag=1),
-              UOp(Ops.CONTRACT, dtype=srcs[1].dtype.vec(tc.elements_per_thread[1]), src=(srcs[1],), arg=tc_upcast_axes[1], tag=1),
-            ]
-            post_disables_early = _tc_local_stage_post_opt()
-            early_local_stage_allowed = getattr(self, "_warmstart_local_stage_allowed", None)
-            if early_local_stage_allowed is None:
-              early_local_stage_allowed = not _warmstart_pipe_primitive_no_local_stage_key(_warmstart_key(self))
-            wmma_srcs = _tc_local_stage_wmma_sources(wmma_srcs, _tc_local_stage_ranges((wmma_srcs[0], wmma_srcs[1])),
-                                                     enabled=not post_disables_early and
-                                                     early_local_stage_allowed and
-                                                     (_tc_local_stage_with_planned_local() or
-                                                     not any(o.op is OptOps.LOCAL for o in (*self.planned_opts, *self.applied_opts)))
-                                                     )
+            if candidate_axes is not None:
+              from tinygrad.codegen.opt.kernel_lds import (PrecontractContractSpec, PrecontractKAxis,
+                PrecontractOperandTemplate, PrecontractThreadAxes, build_precontract_lds_stage)
+              subtile_m, subtile_n, wave_m, wave_n, k_substep, outer_n, outer_m, outer_k, lane = candidate_axes
+              range_by_id = {r.arg[0]:r for r in self.rngs}
+              contracts = []
+              for operand_idx, role in enumerate(("A", "B")):
+                contract_axes = tuple(range_by_id[a] for a,sz in tc_upcast_axes[operand_idx] if sz == 2)
+                if len(contract_axes) != 4: raise KernelOptError(f"candidate {role} contract does not have four binary axes")
+                element = ((contract_axes[0]*2+contract_axes[1])*2+contract_axes[2])*2+contract_axes[3]
+                contracts.append(PrecontractContractSpec(role, contract_axes, tc_upcast_axes[operand_idx], element,
+                  tuple(tc.lane_map.remaps()[operand_idx].items())))
+              allocation = UOp.placeholder((candidate_geometry.lds_windows[-1].end//2,), dtypes.half, _candidate_lds_buffer_id(self),
+                                             addrspace=AddrSpace.LOCAL).replace(tag=("kernel_tile_lds", candidate_geometry))
+              stage = build_precontract_lds_stage(candidate_geometry, tc=tc, allocation=allocation,
+                operands=(PrecontractOperandTemplate("A", in0, original_axes[1], original_axes[2], outer_m*128),
+                          PrecontractOperandTemplate("B", in1, original_axes[0], original_axes[2], outer_n*128)),
+                threads=PrecontractThreadAxes(wave_m, wave_n, lane),
+                k_axis=PrecontractKAxis(outer_k, k_substep, outer_k*32, k_substep),
+                subtile_m=subtile_m, subtile_n=subtile_n, contracts=tuple(contracts))
+              wmma_srcs = [stage.fragment_a, stage.fragment_b]
+            else:
+              wmma_srcs = [
+                UOp(Ops.CONTRACT, dtype=srcs[0].dtype.vec(tc.elements_per_thread[0]), src=(srcs[0],), arg=tc_upcast_axes[0], tag=1),
+                UOp(Ops.CONTRACT, dtype=srcs[1].dtype.vec(tc.elements_per_thread[1]), src=(srcs[1],), arg=tc_upcast_axes[1], tag=1),
+              ]
+              post_disables_early = _tc_local_stage_post_opt()
+              early_local_stage_allowed = getattr(self, "_warmstart_local_stage_allowed", None)
+              if early_local_stage_allowed is None:
+                early_local_stage_allowed = not _warmstart_pipe_primitive_no_local_stage_key(_warmstart_key(self))
+              wmma_srcs = _tc_local_stage_wmma_sources(wmma_srcs, _tc_local_stage_ranges((wmma_srcs[0], wmma_srcs[1])),
+                                                       enabled=not post_disables_early and early_local_stage_allowed and
+                                                       (_tc_local_stage_with_planned_local() or
+                                                       not any(o.op is OptOps.LOCAL for o in (*self.planned_opts, *self.applied_opts))))
             wmma = UOp(Ops.WMMA, dtype=tc.dtype_out.vec(tc.elements_per_thread[2]), src=(
               wmma_srcs[0], wmma_srcs[1], UOp.const(tc.dtype_out.vec(tc.elements_per_thread[2]), 0.0)), arg=wmma_arg, tag=1)
             tc_uop = UOp(Ops.UNROLL, tc.dtype_out, (wmma,), arg=tc_upcast_axes[2], tag=1)
@@ -374,6 +410,11 @@ _WARMSTART_CANDIDATE_CONTEXTS = None
 _WARMSTART_LOCAL_STAGE_KEYS = None
 _WARMSTART_LOCAL_STAGE_DENY_KEYS = set()
 _warmstart_stats = {"match": 0, "apply": 0, "error": 0}
+
+def _candidate_lds_buffer_id(k:Scheduler) -> int:
+  buffer_id = next(k.opt_range)
+  if any(r.arg[0] == buffer_id for r in k.rngs): raise KernelOptError("candidate LDS allocation ID collides with a live range")
+  return buffer_id
 
 def _tc_local_stage_mode() -> str:
   return get_codegen_extension_registry().tc_local_stage_mode()
@@ -758,6 +799,7 @@ def apply_opts(ast:UOp, ren:Renderer) -> UOp:
       for o in forced: k.apply_opt(o)
       _warmstart_stats["apply"] += 1
     except KernelOptError as _e:  # axis/fusion mismatch -> safe fallback to the heuristic on a fresh kernel
+      if getattr(ast.arg, "candidate_context", None) is not None: raise
       _warmstart_stats.setdefault("errs", []).append(f"{[str(o) for o in forced]} -> {str(_e)[:90]}")
       _warmstart_stats["error"] += 1
       k = Scheduler(ast, ren); k.convert_loop_to_global()

@@ -432,21 +432,16 @@ def lower_wmma_lds_spec(spec: WMMALDSSpec) -> Any:
 
 def wmma_lds_postrange_opts(spec: WMMALDSSpec, *, unr: int = 2, cooperative_waves: bool = False):
   from tinygrad.codegen.opt import Opt, OptOps
+  if cooperative_waves:
+    wave_count = spec.waves_m * spec.waves_n
+    if spec.threads != wave_count * 32: raise ValueError("cooperative wave geometry does not account for spec threads")
+    # The exact candidate is consumed atomically inside TC application so its retained operand templates are still live.
+    return (Opt(OptOps.TC, 0, (-1, 2, 1)),)
   opts = [
     Opt(OptOps.TC, 0, (-1, 2, 1)),
     Opt(OptOps.UPCAST, 0, spec.wm),
     Opt(OptOps.UPCAST, 1, spec.wn),
   ]
-  # TC materializes one hardware wave. The strict full-kernel candidate owns
-  # the complete cooperative workgroup, so retain its remaining wave factor as
-  # a generated LOCAL axis instead of silently compiling a one-wave kernel.
-  if cooperative_waves:
-    wave_count = spec.waves_m * spec.waves_n
-    if spec.threads != wave_count * 32: raise ValueError("cooperative wave geometry does not account for spec threads")
-    # Preserve the semantic M/N wave decomposition in distinct launch axes.
-    # Axis 0 is the remaining M output axis and axis 1 the remaining N axis.
-    if spec.waves_m > 1: opts.append(Opt(OptOps.LOCAL, 0, spec.waves_m))
-    if spec.waves_n > 1: opts.append(Opt(OptOps.LOCAL, 1, spec.waves_n))
   opts.append(Opt(OptOps.UNROLL, 0, unr))
   return tuple(opts)
 
