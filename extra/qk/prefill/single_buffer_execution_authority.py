@@ -314,6 +314,8 @@ def run(payload: dict[str, Any], candidate_hash: str, *, case: str = "constant",
   role, shape = workload["role"], workload["shape"]
   if role not in SUPPORTED_ROLES: raise ValueError(f"execution authority does not support role {role!r}")
   m, n, k = (shape[x] for x in ("m", "n", "k"))
+  admitted_workload = {"profile": workload["profile"], "role": role, "shape": dict(shape),
+                       "target": dict(workload["target"])}
 
   from tinygrad import Device, Tensor
   from tinygrad.codegen import to_program_cache
@@ -358,6 +360,7 @@ def run(payload: dict[str, Any], candidate_hash: str, *, case: str = "constant",
       if not structural["pre_gpu_eligible"]:
         route_id = effective["effective_route"]
         return {"schema": SCHEMA, "canonical_identity": identity, "route_id": route_id,
+                "capability_id": admitted.capability.capability_id, "workload": admitted_workload,
                 "selected_route_id": route_id, "environment": {"device": str(Device.DEFAULT), "git": _git_state()},
                 "route_binding_complete": False, "route_authority": effective,
                 "structural_binding": structural, "binding_errors": list(structural["errors"]), "program": hashes,
@@ -405,7 +408,7 @@ def run(payload: dict[str, Any], candidate_hash: str, *, case: str = "constant",
   passed = bool(correct and binary_equal and context_equal and route_strict_pure and not binding_errors)
   if prepared_out is not None: prepared_out.append(prepared)
   return {"schema": SCHEMA, "canonical_identity": identity, "route_id": route_id,
-          "capability_id": "amd.gfx1100.prefill.wmma_lds.single_buffer.v1",
+          "capability_id": admitted.capability.capability_id, "workload": admitted_workload,
           "selected_route_id": route_id, "environment": {"device": str(Device.DEFAULT), "git": _git_state()},
           "route_binding_complete": False if binding_errors else passed, "route_authority": effective,
           "structural_binding": structural, "binding_errors": binding_errors, "program": hashes,

@@ -6,36 +6,46 @@ import math, statistics
 from contextlib import nullcontext
 from typing import Any, Callable
 
-from extra.qk.runtime_specs import GFX1100_SINGLE_BUFFER_CAPABILITY
+from extra.qk.runtime_specs import GFX1100_SINGLE_BUFFER_CAPABILITY, GFX1100_TWO_BUFFER_STAGE1_CAPABILITY
 from extra.qk.timing_harness import pinned_peak_from_env
 from extra.qk.mmq_amd_telemetry import collect_telemetry
 
 SCHEMA = "prefill-single-buffer-kernel-timing.v1"
-M, N, K = 512, 12288, 4096
+M, N, K = 512, 12288, 4096  # legacy gate/up compatibility constants
+SUPPORTED_ROLES = ("ffn_gate_up", "ffn_down", "attn_qo", "attn_kv")
+SUPPORTED_CAPABILITIES = (GFX1100_SINGLE_BUFFER_CAPABILITY.capability_id,
+                          GFX1100_TWO_BUFFER_STAGE1_CAPABILITY.capability_id)
 
 
-def _validate_execution(execution:dict[str, Any]) -> tuple[str, str, str]:
+def _validate_execution(execution:dict[str, Any]) -> tuple[str, str, str, str, tuple[int, int, int], str]:
   if not execution.get("passed") or not execution.get("structural_binding", {}).get("pre_gpu_eligible"):
     raise ValueError("timing requires a passing structurally proven execution authority")
   identity = execution.get("canonical_identity")
   if not isinstance(identity,str) or len(identity)!=64 or any(c not in "0123456789abcdef" for c in identity):
     raise ValueError("execution candidate identity is not canonical SHA-256")
-  if execution.get("capability_id") != GFX1100_SINGLE_BUFFER_CAPABILITY.capability_id:
+  capability_id = execution.get("capability_id")
+  if capability_id not in SUPPORTED_CAPABILITIES:
     raise ValueError("execution capability join is missing or unsupported")
+  workload = execution.get("workload", {})
+  role, shape = workload.get("role"), workload.get("shape", {})
+  if role not in SUPPORTED_ROLES: raise ValueError("execution workload role join is missing or unsupported")
+  if (not isinstance(shape, dict) or set(shape) != {"m", "n", "k"} or
+      any(not isinstance(shape[x], int) or isinstance(shape[x], bool) or shape[x] <= 0 for x in ("m", "n", "k"))):
+    raise ValueError("execution workload shape join is missing or invalid")
   program_hash = execution.get("program", {}).get("binary_sha256")
   runtime_hash = execution.get("runtime", {}).get("executed_binary_sha256")
   if not isinstance(program_hash, str) or runtime_hash != program_hash: raise ValueError("execution binary join is missing or unequal")
   git = execution.get("environment", {}).get("git", {})
   if not isinstance(git.get("revision"), str) or git.get("dirty") is not False:
     raise ValueError("timing requires a clean execution-authority commit join")
-  return identity, program_hash, git["revision"]
+  return identity, program_hash, git["revision"], role, tuple(shape[x] for x in ("m", "n", "k")), capability_id
 
 
 def run_kernel_timing(execution:dict[str, Any], kernel_call:Callable[..., float], *, warmups:int=5, rounds:int=21,
                       telemetry:Callable[..., dict[str, Any]]=collect_telemetry,
                       clock_context:Callable[[], Any]=pinned_peak_from_env) -> dict[str, Any]:
   """Time only a prepared runtime kernel call; preparation/compile/I/O must occur before entry."""
-  identity, binary_hash, revision = _validate_execution(execution)
+  identity, binary_hash, revision, role, (m, n, k), capability_id = _validate_execution(execution)
   if not isinstance(warmups, int) or isinstance(warmups, bool) or warmups < 1: raise ValueError("warmups must be positive")
   if not isinstance(rounds, int) or isinstance(rounds, bool) or rounds < 3: raise ValueError("rounds must be >= 3")
   before = telemetry("single_buffer_kernel_before", samples=1)
@@ -52,9 +62,11 @@ def run_kernel_timing(execution:dict[str, Any], kernel_call:Callable[..., float]
       samples_s.append(float(elapsed))
   after = telemetry("single_buffer_kernel_after", samples=1)
   median_s, min_s = statistics.median(samples_s), min(samples_s)
-  ops = 2*M*N*K
+  ops = 2*m*n*k
   return {"schema": SCHEMA, "passed": True, "canonical_identity": identity, "binary_sha256": binary_hash,
-          "git_revision": revision, "joins": {"candidate": True, "binary": True, "commit": True},
+          "git_revision": revision, "capability_id": capability_id,
+          "workload": {"role": role, "shape": {"m": m, "n": n, "k": k}},
+          "joins": {"candidate": True, "binary": True, "commit": True},
           "protocol": {"scope": "kernel_only", "wait": True, "compile_excluded": True, "input_setup_excluded": True,
                        "output_transfer_excluded": True, "warmups": warmups, "rounds": rounds},
           "samples_ms": [x*1e3 for x in samples_s], "median_ms": median_s*1e3, "min_ms": min_s*1e3,
@@ -74,5 +86,6 @@ def run_prepared_candidate_timing(payload:dict[str, Any], candidate_hash:str, *,
                              telemetry=telemetry, clock_context=clock_context)
   report["execution_authority"] = {"schema": execution["schema"], "passed": execution["passed"],
     "canonical_identity": execution["canonical_identity"], "program": execution["program"],
+    "capability_id": execution["capability_id"], "workload": execution["workload"],
     "runtime": execution["runtime"], "environment": execution["environment"]}
   return report
