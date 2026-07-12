@@ -244,3 +244,21 @@ Decoupling is complete when:
 6. the pure register route passes compile, resource, correctness, timing, and
    fallback-free authority gates.
 
+## Spark execution status (2026-07-12)
+
+- **D0-D1 complete:** `ecd5d2527` and `4700a7f99` prove policy ownership and
+  candidate/schedule resolution through the existing `PipelinePolicy`.
+- **D2-D3 complete as a fail-closed mapping:** `93a517eec` exposes the
+  zero-LDS logical two-stage plan through the existing register adapter and
+  lifecycle proof. The LDS stage builder rejects the register adapter before
+  lowering because true two-stage readiness is not yet proven.
+- **D4-D5 complete as policy-aware admission:** `f57ec4cf4` resolves policy
+  before candidate storage allocation and rejects register execution unless
+  wait coverage and an executable storage adapter exist. Native waits and the
+  legacy LDS route are unchanged.
+
+The cross-phase policy, register, lifecycle, wait, artifact, route, and
+evaluation suite passes with **163 tests**, 3 known pytest configuration
+warnings, and 26 subtests. D6-D8 remain gated on the executable register
+storage/lifecycle and final WMMA ABI; no partial execution path is being
+promoted.
