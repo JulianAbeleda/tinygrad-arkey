@@ -141,7 +141,7 @@ class KernelStage1UOpGraph:
   drain: tuple[UOp, ...]
   subtile_count: int
   events: tuple[KernelStage1LifecycleEvent, ...]
-  body_readiness: Literal["legacy", "matching"] = "legacy"
+  body_readiness: Literal["legacy", "matching", "sequential"] = "legacy"
 
 
 @dataclass(frozen=True)
@@ -250,7 +250,7 @@ def build_stage1_uop_graph(plan:KernelStage1PipelinePlan, k_tiles:int,
                            accumulator_elements:int|None=None, accumulator_offset:UOp|None=None,
                            accumulator_contract:tuple[UOp,tuple[tuple[int,int],...]]|None=None,
                            body_range_id:int=9100, accumulator_id:int=9200,
-                           body_readiness:Literal["legacy", "matching"]="legacy") -> KernelStage1UOpGraph:
+                           body_readiness:Literal["legacy", "matching", "sequential"]="legacy") -> KernelStage1UOpGraph:
   if subtile_count <= 0: raise ValueError("subtile_count must be positive")
   events = stage1_lifecycle_events(plan,k_tiles)
   zero,last=UOp.const(dtypes.weakint,0),UOp.const(dtypes.weakint,k_tiles-1)
@@ -260,7 +260,10 @@ def build_stage1_uop_graph(plan:KernelStage1PipelinePlan, k_tiles:int,
     drain=tuple(wmma(frag,UOp.const(dtypes.float.vec(8),0.0),i) for i in range(subtile_count))
     return KernelStage1UOpGraph(plan,k_tiles,UOp.sink(*drain,prologue.ready),drain,None,None,None,None,None,
       prologue,None,None,frag,drain,subtile_count,events,body_readiness)
-  rng=UOp.range(k_tiles-1,body_range_id,AxisType.REDUCE); slot=rng%plan.buffer_count
+  rng=UOp.range(k_tiles-1,body_range_id,AxisType.REDUCE)
+  # gfx1100 has no indirect VGPR addressing. A sequential register schedule
+  # therefore carries a compile-time slot zero through the whole K loop.
+  slot=UOp.const(dtypes.weakint, 0) if body_readiness == "sequential" else rng%plan.buffer_count
   if body_readiness == "legacy":
     body_frag=fragments(rng,slot,prologue.ready)
   elif body_readiness == "matching":
@@ -270,6 +273,10 @@ def build_stage1_uop_graph(plan:KernelStage1PipelinePlan, k_tiles:int,
     # the loop END rooted at the prior body join.
     pending_body_prod=produce(rng+1,(rng+1)%plan.buffer_count,prologue.ready)
     body_frag=fragments(rng,slot,pending_body_prod.ready)
+  elif body_readiness == "sequential":
+    # Consume the current tile before constructing the next producer. The
+    # producer receives accumulator updates as its overwrite dependency below.
+    body_frag=fragments(rng,slot,prologue.ready)
   else:
     raise ValueError(f"unsupported body readiness mode {body_readiness!r}")
   acc_elements=subtile_count*8 if accumulator_elements is None else accumulator_elements
@@ -287,9 +294,19 @@ def build_stage1_uop_graph(plan:KernelStage1PipelinePlan, k_tiles:int,
       acc=UOp(Ops.CONTRACT,dtypes.float.vec(8),(reg.after(init,rng).index(off+elem).load(),),arg)
       value=UOp(Ops.UNROLL,dtypes.float,(wmma(body_frag,acc,i),),arg)
       updates.append(reg.index(off+elem).store(value))
-  body_prod=pending_body_prod if body_readiness == "matching" else produce(rng+1,(rng+1)%plan.buffer_count,None)
-  join=UOp.barrier(UOp.group(*updates,*body_prod.role_nodes)).replace(tag=("pipeline_body_join",rng,body_prod.epoch,body_prod.slot))
-  body_prod=KernelStage1ProducerStage(body_prod.epoch,body_prod.slot,body_prod.role_nodes,join)
+  if body_readiness == "matching":
+    body_prod=pending_body_prod
+    join=UOp.barrier(UOp.group(*updates,*body_prod.role_nodes)).replace(tag=("pipeline_body_join",rng,body_prod.epoch,body_prod.slot))
+    body_prod=KernelStage1ProducerStage(body_prod.epoch,body_prod.slot,body_prod.role_nodes,join)
+  elif body_readiness == "sequential":
+    # One physical stage: the next producer must be ordered after all current
+    # accumulator stores before it can overwrite the same VGPR fragments.
+    body_prod=produce(rng+1,slot,UOp.group(*updates))
+    join=UOp.barrier(UOp.group(*updates,body_prod.ready)).replace(tag=("pipeline_body_join",rng,body_prod.epoch,body_prod.slot))
+  else:
+    body_prod=produce(rng+1,(rng+1)%plan.buffer_count,None)
+    join=UOp.barrier(UOp.group(*updates,*body_prod.role_nodes)).replace(tag=("pipeline_body_join",rng,body_prod.epoch,body_prod.slot))
+    body_prod=KernelStage1ProducerStage(body_prod.epoch,body_prod.slot,body_prod.role_nodes,join)
   end=join.end(rng).replace(tag=("pipeline_body_end",rng))
   drain_frag=fragments(last,UOp.const(dtypes.weakint,plan.slot_for_epoch(k_tiles-1)),end)
   drain=[]
@@ -308,7 +325,7 @@ def build_stage1_uop_graph_with_storage(adapter: Stage1StorageAdapter, plan: Ker
                                         accumulator_elements: int|None = None, accumulator_offset: UOp|None = None,
                                         accumulator_contract: tuple[UOp,tuple[tuple[int,int],...]]|None = None,
                                         body_range_id: int = 9100, accumulator_id: int = 9200,
-                                        body_readiness: Literal["legacy", "matching"] | None = None) -> KernelStage1UOpGraph:
+                                        body_readiness: Literal["legacy", "matching", "sequential"] | None = None) -> KernelStage1UOpGraph:
   """Build a stage-1 graph through a typed storage adapter.
 
   This is deliberately a wrapper around ``build_stage1_uop_graph``: existing
@@ -320,7 +337,7 @@ def build_stage1_uop_graph_with_storage(adapter: Stage1StorageAdapter, plan: Ker
   if not isinstance(adapter, Stage1StorageAdapter): raise TypeError("expected Stage1StorageAdapter")
   mode = body_readiness or getattr(adapter.callbacks, "body_readiness", "legacy")
   if adapter.policy.kind == "global_register_resident":
-    if mode != "matching": raise ValueError("register storage requires matching body readiness")
+    if mode not in ("matching", "sequential"): raise ValueError("register storage requires matching or sequential body readiness")
     if getattr(plan, "active_lds_bytes", None) != 0: raise ValueError("register storage plan must declare zero LDS")
   else:
     expected = storage_policy_from_stage1(plan)
@@ -345,13 +362,15 @@ def prove_stage1_uop_graph(graph:KernelStage1UOpGraph) -> KernelStage1UOpProof:
     if graph.body_readiness == "legacy" and regs: errors.append("single tile must not emit REG/RANGE/END")
     if ends or graph.body_range is not None: errors.append("single tile must not emit REG/RANGE/END")
   else:
-    if graph.body_fragments.epoch is not graph.body_range or graph.body_fragments.slot.render() != (graph.body_range%graph.plan.buffer_count).render():
+    expected_slot = UOp.const(dtypes.weakint, 0) if graph.body_readiness == "sequential" else graph.body_range%graph.plan.buffer_count
+    if graph.body_fragments.epoch is not graph.body_range or graph.body_fragments.slot.render() != expected_slot.render():
       errors.append("body fragment callback changed symbolic epoch/slot formula")
+    expected_producer_slot = UOp.const(dtypes.weakint, 0) if graph.body_readiness == "sequential" else (graph.body_range+1)%graph.plan.buffer_count
     if graph.body_producer.epoch.render() != (graph.body_range+1).render() or \
-       graph.body_producer.slot.render() != ((graph.body_range+1)%graph.plan.buffer_count).render():
+       graph.body_producer.slot.render() != expected_producer_slot.render():
       errors.append("next producer callback changed symbolic epoch/slot formula")
     if (graph.body_readiness == "legacy" and regs != [graph.accumulator_reg]) or \
-       (graph.body_readiness == "matching" and graph.accumulator_reg not in regs) or \
+       (graph.body_readiness in ("matching", "sequential") and graph.accumulator_reg not in regs) or \
        graph.accumulator_reg.ptrdtype.size < graph.subtile_count*8 or graph.accumulator_reg.ptrdtype.size%8:
       errors.append("bad shared accumulator layout")
     if graph.body_range is None or graph.body_range.arg[-1] is not AxisType.REDUCE: errors.append("missing symbolic body range")
@@ -360,6 +379,15 @@ def prove_stage1_uop_graph(graph:KernelStage1UOpGraph) -> KernelStage1UOpProof:
             (u.src[1].dtype == dtypes.float.vec(8) or u.src[1].op is Ops.UNROLL)]
     if len(stores) != graph.subtile_count: errors.append("body lacks one accumulator update per symbolic subtile")
     if any(node not in graph.body_join.backward_slice for node in graph.body_producer.role_nodes): errors.append("body join lacks sibling producer")
+    if graph.body_readiness == "sequential":
+      # A one-buffer producer must carry the current accumulator stores as a
+      # dependency. Merely grouping the two operations would permit an
+      # overwrite before WMMA has consumed the old fragment.
+      current_updates = tuple(u for u in graph.body_join.backward_slice
+                              if u.op is Ops.STORE and graph.accumulator_reg in u.src[0].backward_slice)
+      if not current_updates or any(not any(dep in node.backward_slice for dep in current_updates)
+                                    for node in graph.body_producer.role_nodes):
+        errors.append("sequential producer is not ordered after accumulator updates")
     for out in graph.drain:
       direct=any(u.op is Ops.INDEX and u.dtype == dtypes.float.vec(8) and graph.loop_end in u.backward_slice for u in out.backward_slice)
       contracted=any(u.op is Ops.CONTRACT and u.dtype == dtypes.float.vec(8) and graph.loop_end in u.backward_slice for u in out.backward_slice)

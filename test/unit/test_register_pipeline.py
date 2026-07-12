@@ -149,6 +149,57 @@ def test_register_matching_readiness_proves_k2_epoch_slot_mapping():
   assert len([u for u in graph.sink.toposort() if u.op is Ops.DEFINE_REG]) == 3
 
 
+def test_register_sequential_schedule_uses_one_static_vgpr_slot():
+  base = _fixture()
+  t = RegisterPipeTemplate(base.tc, base.geometry, base.operands, base.contracts, schedule="sequential")
+  adapter = RegisterStorageAdapter.from_template(t)
+  assert adapter.logical_plan.buffer_count == 1
+  assert [spec.half_elements for spec in t.stage_buffer_specs] == [32, 32]
+  graph = build_stage1_uop_graph_with_storage(adapter, adapter.logical_plan, 3, _register_wmma(t),
+    subtile_count=1, accumulator_elements=8)
+  proof = prove_stage1_uop_graph(graph)
+  assert proof.passed, proof.errors
+  assert graph.body_readiness == "sequential"
+  assert graph.body_fragments.slot.op is Ops.CONST and graph.body_fragments.slot.arg == 0
+  assert graph.body_producer.slot.op is Ops.CONST and graph.body_producer.slot.arg == 0
+  # All stage-buffer indexes are compile-time offsets; no RANGE/modulo index
+  # can reach the AMD VGPR boundary in this schedule.
+  stage_defs = {u for u in graph.sink.toposort() if u.op is Ops.DEFINE_REG and
+                isinstance(u.tag, tuple) and u.tag[:1] == ("register_pipe_stage_buffer",)}
+  indexes = [u for u in graph.sink.toposort() if u.op is Ops.INDEX and u.src and u.src[0] in stage_defs]
+  assert indexes and all(u.src[1].op is Ops.CONST for u in indexes)
+  assert prove_register_lifecycle(3, buffer_count=1).passed
+
+
+def test_register_sequential_producer_carries_accumulator_reuse_dependency():
+  base = _fixture()
+  t = RegisterPipeTemplate(base.tc, base.geometry, base.operands, base.contracts, schedule="sequential")
+  adapter = RegisterStorageAdapter.from_template(t)
+  graph = build_stage1_uop_graph_with_storage(adapter, adapter.logical_plan, 2, _register_wmma(t),
+    subtile_count=1, accumulator_elements=8)
+  proof = prove_stage1_uop_graph(graph)
+  assert proof.passed, proof.errors
+  updates = tuple(u for u in graph.body_join.backward_slice if u.op is Ops.STORE and graph.accumulator_reg in u.src[0].backward_slice)
+  assert updates
+  # Each producer role group must retain the explicit update dependency, not
+  # merely appear as a sibling in the body barrier.
+  assert all(any(update in node.backward_slice for update in updates) for node in graph.body_producer.role_nodes)
+
+
+def test_register_sequential_full_k_rewrites_through_normal_amd_path():
+  from tinygrad.codegen import full_rewrite_to_sink
+  from tinygrad.helpers import Target
+  from tinygrad.renderer.cstyle import HIPRenderer
+  base = _fixture()
+  t = RegisterPipeTemplate(base.tc, base.geometry, base.operands, base.contracts, schedule="sequential")
+  adapter = RegisterStorageAdapter.from_template(t)
+  graph = build_stage1_uop_graph_with_storage(adapter, adapter.logical_plan, 2, _register_wmma(t),
+    subtile_count=1, accumulator_elements=8)
+  rewritten = full_rewrite_to_sink(graph.sink, HIPRenderer(Target.parse("AMD")), optimize=False)
+  assert not any(u.op in (Ops.DEFINE_LOCAL, Ops.INS) for u in rewritten.toposort())
+  assert len([u for u in rewritten.toposort() if u.op is Ops.WMMA]) == 2
+
+
 def test_register_full_k_chain_rewrites_with_valid_wmma_abi():
   from tinygrad.codegen import full_rewrite_to_sink
   from tinygrad.helpers import Target

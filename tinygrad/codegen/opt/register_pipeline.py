@@ -6,6 +6,7 @@ ISA payload, local allocation, or route selection side effects.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
 
 from tinygrad.codegen.opt.compiler_policies import PipelinePolicy, StoragePolicy
 from tinygrad.codegen.opt.kernel_lds import (PrecontractContractSpec, PrecontractOperandTemplate,
@@ -36,8 +37,8 @@ class RegisterLogicalStagePlan:
     return cls()
 
   def __post_init__(self) -> None:
-    if (self.buffer_count, self.slot_bytes, self.stage_count, self.roles) != (2, 0, 1, ("A", "B")):
-      raise ValueError("register pipe requires two logical stages, zero LDS, and A/B roles")
+    if self.buffer_count not in (1, 2) or self.slot_bytes != 0 or self.stage_count != 1 or self.roles != ("A", "B"):
+      raise ValueError("register pipe requires one or two logical stages, zero LDS, and A/B roles")
 
   @property
   def active_lds_bytes(self) -> int: return 0
@@ -63,11 +64,14 @@ class RegisterPipeTemplate:
   stages: int = 2
   pipe_tm: int = 2
   pipe_tn: int = 2
+  schedule: Literal["double_buffer", "sequential"] = "double_buffer"
 
   def __post_init__(self) -> None:
     if self.shape != (512, 4096, 4096): raise ValueError("register vertical slice is attn_qo 512x4096x4096")
     if self.k_step != 16 or self.stages != 2 or (self.pipe_tm, self.pipe_tn) != (2, 2):
       raise ValueError("register template requires K step 16 and a two-stage 2x2 pipe")
+    if self.schedule not in ("double_buffer", "sequential"):
+      raise ValueError("register template schedule must be double_buffer or sequential")
     validate_rdna3_wmma_descriptor(self.tc)
     factors = derive_precontract_shape_factors(self.geometry, self.tc)
     if self.geometry.tile != (128, 128, 32) or (factors.subtiles_m, factors.subtiles_n) != (2, 4):
@@ -86,7 +90,11 @@ class RegisterPipeTemplate:
     return self.pipe_tm * 2 + self.pipe_tn * 2
 
   @property
-  def body_readiness(self) -> str: return "matching"
+  def body_readiness(self) -> str: return "sequential" if self.schedule == "sequential" else "matching"
+
+  @property
+  def logical_buffer_count(self) -> int:
+    return 1 if self.schedule == "sequential" else 2
 
   @property
   def stage_width(self) -> int: return (self.pipe_tm + self.pipe_tn) * 16
@@ -99,17 +107,19 @@ class RegisterPipeTemplate:
     the combined pipe width: doing so doubles each role's allocation and
     hides the actual VGPR pressure from the backend resource gate.
     """
-    return tuple(AMDStageBufferSpec(role, 2, fragments)
+    return tuple(AMDStageBufferSpec(role, self.logical_buffer_count, fragments)
                  for role, fragments in (("A", self.pipe_tm), ("B", self.pipe_tn)))
 
   def _buffers(self) -> tuple[UOp, UOp]:
-    # Keep the two logical stages independent.  A 2x2 pipe is 2*16 half
-    # elements per role and slot, not one combined A+B allocation per role.
+    # Keep A and B independent. A 2x2 pipe is 2*16 half elements per role and
+    # slot, not one combined A+B allocation per role.
     return tuple(UOp.placeholder((spec.half_elements,), dtypes.half, 9300 + i, addrspace=AddrSpace.REG)
                  .replace(tag=("register_pipe_stage_buffer", spec.role, spec.slots, spec.fragments, spec.lane_width))
                  for i, spec in enumerate(self.stage_buffer_specs))
 
   def producer(self, epoch: UOp, slot: UOp, reuse: UOp | None = None) -> KernelStage1ProducerStage:
+    if self.schedule == "sequential" and slot.op is not Ops.CONST:
+      raise ValueError("sequential register producer requires a compile-time slot")
     buffers = self._buffers()
     nodes: list[UOp] = []
     for operand, count, buffer, spec in zip(self.operands, (self.pipe_tm, self.pipe_tn), buffers, self.stage_buffer_specs):
@@ -120,12 +130,22 @@ class RegisterPipeTemplate:
           operand.k_axis: epoch * self.k_step + elem}) for elem in range(16))
         value = UOp(Ops.STACK, dtypes.half.vec(16), values,
           tag=("register_pipe_load", operand.role, frag, epoch, slot))
-        vectors.append(buffer.index(slot * spec.role_width + frag * spec.lane_width, dtype=dtypes.half.vec(spec.lane_width)).store(value))
+        offset = (UOp.const(dtypes.weakint, slot.arg * spec.role_width + frag * spec.lane_width)
+                  if slot.op is Ops.CONST else slot * spec.role_width + frag * spec.lane_width)
+        # Sequential mode reuses one physical buffer. Make every overwrite
+        # pointer-dependent on the caller's reuse token; a GROUP alone does
+        # not impose ordering between its sources. Put AFTER on the pointer
+        # before INDEX so the STORE retains a valid pointer dtype.
+        base = buffer.after(reuse) if reuse is not None and self.schedule == "sequential" else buffer
+        target = base.index(offset, dtype=dtypes.half.vec(spec.lane_width))
+        vectors.append(target.store(value))
       nodes.append(UOp.group(*vectors).replace(tag=("register_pipe_producer", operand.role, epoch, slot)))
     ready = UOp.group(*nodes, reuse).replace(tag=("register_pipe_ready", epoch, slot))
     return KernelStage1ProducerStage(epoch, slot, (nodes[0], nodes[1]), ready)
 
   def fragments(self, epoch: UOp, slot: UOp, ready: UOp) -> KernelStage1FragmentStage:
+    if self.schedule == "sequential" and slot.op is not Ops.CONST:
+      raise ValueError("sequential register fragments require a compile-time slot")
     if ready.op not in (Ops.GROUP, Ops.END, Ops.BARRIER):
       raise ValueError("register fragment consumer has no typed producer readiness")
     buffers = self._buffers()
@@ -133,13 +153,16 @@ class RegisterPipeTemplate:
       ready_epoch, ready_slot = ready.tag[1], ready.tag[2]
       same = ready_epoch.render() == epoch.render() and ready_slot.render() == slot.render()
       nxt = ready_epoch.render() == (epoch + 1).render() and ready_slot.render() == ((slot + 1) % 2).render()
-      if not (same or nxt): raise ValueError("register fragment consumer readiness epoch/slot mismatch")
+      initial = self.schedule == "sequential" and ready_epoch.op is Ops.CONST and ready_epoch.arg == 0 and \
+        ready_slot.op is Ops.CONST and ready_slot.arg == 0
+      if not (same or nxt or initial): raise ValueError("register fragment consumer readiness epoch/slot mismatch")
     out: list[UOp] = []
     for operand, contract, count, buffer, spec in zip(self.operands, self.contracts, (self.pipe_tm, self.pipe_tn), buffers,
                                                        self.stage_buffer_specs):
       for idx in range(count):
-        load = buffer.after(ready).index(slot * spec.role_width + idx * spec.lane_width,
-                                         dtype=dtypes.half.vec(spec.lane_width)).load()
+        offset = (UOp.const(dtypes.weakint, slot.arg * spec.role_width + idx * spec.lane_width)
+                  if slot.op is Ops.CONST else slot * spec.role_width + idx * spec.lane_width)
+        load = buffer.after(ready).index(offset, dtype=dtypes.half.vec(spec.lane_width)).load()
         out.append(UOp(Ops.CONTRACT, dtypes.half.vec(16), (load,), contract.arg,
                        tag=("register_pipe_fragment", operand.role, epoch, slot, idx)))
     return KernelStage1FragmentStage(epoch, slot, ready, tuple(out))
@@ -166,7 +189,7 @@ class RegisterStorageAdapter(Stage1StorageAdapter):
   @property
   def logical_plan(self) -> RegisterLogicalStagePlan:
     """Map the common policy to logical alternating stages, never LDS slots."""
-    return RegisterLogicalStagePlan.from_policy(self.pipeline_policy)
+    return RegisterLogicalStagePlan(buffer_count=getattr(self.callbacks, "logical_buffer_count", 2))
 
 
 def register_geometry() -> KernelTileGeometry:
@@ -192,12 +215,12 @@ def prove_register_graph_no_lds(root: UOp) -> tuple[str, ...]:
   return tuple(errors)
 
 
-def register_lifecycle_events(k_tiles: int) -> tuple[KernelStage1LifecycleEvent, ...]:
-  """Return the shared ownership lifecycle for alternating register stages."""
-  return stage1_lifecycle_events(RegisterLogicalStagePlan(), k_tiles)
+def register_lifecycle_events(k_tiles: int, *, buffer_count: int = 2) -> tuple[KernelStage1LifecycleEvent, ...]:
+  """Return the shared ownership lifecycle for one- or two-buffer registers."""
+  return stage1_lifecycle_events(RegisterLogicalStagePlan(buffer_count=buffer_count), k_tiles)
 
 
-def prove_register_lifecycle(k_tiles: int) -> KernelStage1LifecycleProof:
+def prove_register_lifecycle(k_tiles: int, *, buffer_count: int = 2) -> KernelStage1LifecycleProof:
   """Prove producer/consume/release ownership for a register K loop."""
-  plan = RegisterLogicalStagePlan()
+  plan = RegisterLogicalStagePlan(buffer_count=buffer_count)
   return prove_stage1_lifecycle(plan, k_tiles, stage1_lifecycle_events(plan, k_tiles))
