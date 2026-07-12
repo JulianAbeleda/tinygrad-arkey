@@ -71,6 +71,25 @@ class PrecontractOperandTemplate:
   source: UOp
   row_axis: UOp
   k_axis: UOp
+  row_tile_base: UOp
+
+@dataclass(frozen=True)
+class PrecontractThreadAxes:
+  wave_m: UOp
+  wave_n: UOp
+  lane: UOp
+
+@dataclass(frozen=True)
+class PrecontractKAxis:
+  owner: UOp
+  tile_base: UOp
+  substep: UOp
+
+@dataclass(frozen=True)
+class PrecontractContractSpec:
+  axes: tuple[UOp, ...]
+  arg: tuple[tuple[int, int], ...]
+  element: UOp
 
 @dataclass(frozen=True)
 class PrecontractLDSStage:
@@ -197,9 +216,10 @@ def wmma_output_owners(geometry:KernelTileGeometry, *, tc) -> tuple[WMMAOutputOw
   return tuple(owners)
 
 
-def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, operands:tuple[PrecontractOperandTemplate, ...],
-                                thread:UOp, k_tile_base:UOp, k_substep:UOp, subtile_m:UOp, subtile_n:UOp,
-                                fragment_axis:UOp, end_ranges:tuple[UOp, ...]=()) -> PrecontractLDSStage:
+def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:UOp,
+                                operands:tuple[PrecontractOperandTemplate, ...], threads:PrecontractThreadAxes,
+                                k_axis:PrecontractKAxis, subtile_m:UOp, subtile_n:UOp,
+                                contract:PrecontractContractSpec) -> PrecontractLDSStage:
   """Build an unwired scalar cooperative stage while full operand index templates still exist."""
   validate_rdna3_wmma_descriptor(tc)
   if (geometry.tile, geometry.waves, geometry.threads, geometry.wave_size,
@@ -213,19 +233,26 @@ def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, operands:tup
     if operand.row_axis not in operand.source.backward_slice_with_self or operand.k_axis not in operand.source.backward_slice_with_self:
       raise ValueError(f"precontract {operand.role} template does not retain row and K axes")
     if operand.source.dtype.scalar() != dtypes.half: raise ValueError("precontract operands must be fp16 scalar templates")
-  if (thread.op is not Ops.SPECIAL or thread.arg != "lidx0" or thread.vmax+1 != geometry.threads or
-      thread.dtype.scalar() not in (dtypes.int, dtypes.weakint) or fragment_axis.op is not Ops.RANGE or fragment_axis.vmax+1 != 16):
-    raise ValueError("precontract thread/fragment axes are invalid")
-  if (k_substep.op is not Ops.RANGE or k_substep.vmax+1 != 2 or subtile_m.op is not Ops.RANGE or subtile_m.vmax+1 != 2 or
-      subtile_n.op is not Ops.RANGE or subtile_n.vmax+1 != 4):
+    if operand.row_tile_base.dtype.scalar() not in (dtypes.int, dtypes.weakint): raise ValueError("precontract row tile base must be integer")
+  if ((threads.wave_m.op, threads.wave_m.vmax+1, threads.wave_m.arg[-1]) != (Ops.RANGE, 4, AxisType.LOCAL) or
+      (threads.wave_n.op, threads.wave_n.vmax+1, threads.wave_n.arg[-1]) != (Ops.RANGE, 2, AxisType.LOCAL) or
+      (threads.lane.op, threads.lane.vmax+1, threads.lane.arg[-1]) != (Ops.RANGE, 32, AxisType.WARP)):
+    raise ValueError("precontract thread axes must be LOCAL4/LOCAL2/WARP32")
+  if (k_axis.owner.op is not Ops.RANGE or k_axis.owner.arg[-1] not in (AxisType.REDUCE, AxisType.UNROLL) or
+      k_axis.owner not in k_axis.tile_base.backward_slice_with_self or k_axis.owner not in k_axis.substep.backward_slice_with_self):
+    raise ValueError("precontract K owner must remain live in tile base and substep")
+  if (subtile_m.op is not Ops.RANGE or subtile_m.vmax+1 != 2 or subtile_n.op is not Ops.RANGE or subtile_n.vmax+1 != 4):
     raise ValueError("precontract K/subtile axes are invalid")
-  if k_tile_base.dtype.scalar() not in (dtypes.int, dtypes.weakint): raise ValueError("precontract K tile base must be integer")
-  if any(r.op is not Ops.RANGE for r in end_ranges): raise ValueError("precontract END axes must be RANGE UOps")
+  if (len(contract.axes) != 4 or any(a.op is not Ops.RANGE or a.vmax+1 != 2 for a in contract.axes) or
+      contract.arg != tuple((a.arg[0], 2) for a in contract.axes) or
+      any(a not in contract.element.backward_slice_with_self for a in contract.axes)):
+    raise ValueError("precontract contract must retain four actual binary axes")
   total_bytes = geometry.lds_windows[-1].end
-  if total_bytes % 2: raise ValueError("precontract fp16 LDS allocation must have an even byte size")
-  allocation = UOp.placeholder((total_bytes//2,), dtypes.half, 994, addrspace=AddrSpace.LOCAL).replace(
-    tag=("kernel_tile_lds", geometry))
+  if (allocation.op is not Ops.DEFINE_LOCAL or allocation.ptrdtype.addrspace is not AddrSpace.LOCAL or
+      allocation.ptrdtype.base != dtypes.half or allocation.ptrdtype.size * dtypes.half.itemsize != total_bytes):
+    raise ValueError("precontract caller allocation must be one exact fp16 LDS window")
   stores = []
+  thread = (threads.wave_m * geometry.waves[1] + threads.wave_n) * geometry.wave_size + threads.lane
   vector = thread % 4
   base_row = thread // 4
   for operand in operands:
@@ -234,22 +261,21 @@ def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, operands:tup
       row = base_row + row_iteration * 64
       for elem in range(8):
         logical_k = vector * 8 + elem
-        value = operand.source.substitute({operand.row_axis: row, operand.k_axis: k_tile_base + logical_k})
+        value = operand.source.substitute({operand.row_axis: operand.row_tile_base + row,
+                                           operand.k_axis: k_axis.tile_base + logical_k})
         index = (window.base + row * window.stride_bytes + logical_k * 2) // 2
         stores.append(allocation.index(index, dtype=dtypes.half).store(value).end())
   producer = UOp.group(*stores)
-  if end_ranges: producer = producer.end(*end_ranges)
   barrier = UOp.barrier(producer)
-  wave_id, lane = thread // geometry.wave_size, thread % geometry.wave_size
-  wave_m, wave_n = wave_id // geometry.waves[1], wave_id % geometry.waves[1]
+  wave_m, wave_n, lane = threads.wave_m, threads.wave_n, threads.lane
   ordered = allocation.after(barrier)
   def _fragment(role:str, subtile:UOp, wave:UOp, subtiles:int) -> UOp:
     window = _window(geometry, role)
     row = (wave * subtiles + subtile) * 16 + lane % 16
-    logical_k = k_substep * 16 + fragment_axis
+    logical_k = k_axis.substep * 16 + contract.element
     index = (window.base + row * window.stride_bytes + logical_k * 2) // 2
     load = ordered.index(index, dtype=dtypes.half).load()
-    return UOp(Ops.CONTRACT, dtypes.half.vec(16), (load,), ((fragment_axis.arg[0], 16),), tag=("kernel_tile_fragment", role))
+    return UOp(Ops.CONTRACT, dtypes.half.vec(16), (load,), contract.arg, tag=("kernel_tile_fragment", role))
   subtiles_m = geometry.tile[0] // (geometry.waves[0] * 16)
   subtiles_n = geometry.tile[1] // (geometry.waves[1] * 16)
   return PrecontractLDSStage(allocation, producer, barrier, _fragment("A", subtile_m, wave_m, subtiles_m),
