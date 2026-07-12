@@ -152,7 +152,9 @@ whole-model purity, and machine search.
 
 ## Current status
 
-The failure is isolated to the combined devectorizer boundary with a stable
-reproduction and a clear ownership boundary. No generic flattening or spec
-weakening is acceptable. Until N3/N4 pass, the route remains a structural
-compiler proof rather than a runnable GPU candidate.
+The original nested-carrier failure is fixed by preserving full-width
+`CONTRACT` carriers and scalarizing REG-index load expansion
+(`b46bf9fe3`, `37d7b3b46`). Production-like native rewrite now reaches the
+AMD boundary with zero nested stacks and zero residual VCATs. The remaining
+native `to_program` work is integration metadata and final resource emission;
+synthetic bare-`KernelInfo` fixtures are not runtime evidence.
