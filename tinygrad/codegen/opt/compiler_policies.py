@@ -35,8 +35,37 @@ class WaitDependency:
     if not isinstance(self.policy, WaitPolicy): raise ValueError("wait dependency requires WaitPolicy")
     if not all(isinstance(x, str) and x for x in (self.producer, self.consumer, self.load_group)): raise ValueError("wait dependency labels must be non-empty")
 
+@dataclass(frozen=True)
+class WaitCount:
+  """Typed AMD wait-counter immediate.
+
+  Fields use architectural counter values rather than an encoded instruction
+  word, so any backend that owns wait lowering can reuse this contract.
+  """
+  vmcnt: int = 63
+  lgkmcnt: int = 63
+  expcnt: int = 7
+
+  def __post_init__(self):
+    if not isinstance(self.vmcnt, int) or isinstance(self.vmcnt, bool) or not 0 <= self.vmcnt <= 63:
+      raise ValueError("vmcnt must be an integer in 0..63")
+    if not isinstance(self.lgkmcnt, int) or isinstance(self.lgkmcnt, bool) or not 0 <= self.lgkmcnt <= 63:
+      raise ValueError("lgkmcnt must be an integer in 0..63")
+    if not isinstance(self.expcnt, int) or isinstance(self.expcnt, bool) or not 0 <= self.expcnt <= 7:
+      raise ValueError("expcnt must be an integer in 0..7")
+
+  @property
+  def simm16(self) -> int:
+    """Pack architectural fields into the AMD SOPP immediate."""
+    return (self.vmcnt << 10) | (self.lgkmcnt << 4) | self.expcnt
+
 def amdllvm_wait_dependency(dep: WaitDependency) -> WaitDependency:
-  """Fail closed: AMDLLVM can lower only full workgroup barriers today."""
+  """Validate the dependency contract still owned by the graph lifecycle.
+
+  ``WaitCount`` has a backend intrinsic seam, but graph-level dependency
+  scheduling has not yet been wired to emit it; keep this adapter fail-closed
+  until that lifecycle lowering exists.
+  """
   if not isinstance(dep, WaitDependency): raise TypeError("expected WaitDependency")
   if dep.policy.kind != "full_barrier" or dep.policy.scope != "workgroup":
     raise ValueError("targeted wait dependencies are unsupported by pure AMDLLVM")
