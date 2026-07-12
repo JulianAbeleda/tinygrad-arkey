@@ -415,6 +415,7 @@ class _CandidateRouteTensor:
   ("ffn_gate_up",(512,12288,4096)),("ffn_down",(512,4096,12288)),
   ("attn_qo",(512,4096,4096)),("attn_kv",(512,1024,4096))))
 def test_candidate_set_exact_entry_overrides_role_policy(monkeypatch,role,shape):
+  monkeypatch.setenv("BOLTBEAM_FULL_KERNEL_CANDIDATE_ROLES", role)
   identity=(role.encode().hex()+"0"*64)[:64]; admission=SimpleNamespace(canonical_identity=identity)
   class Registry:
     def get(self,profile,selected_role,selected_shape,target):
