@@ -192,6 +192,66 @@
         "spec_owned": 15.62,
         "s9_oracle": 74.11
       }
+    },
+    "lane_fragment_map": {
+      "state": "calculated_oracle_map",
+      "source": "bench/prefill-pure-full-kernel/anchor-ffn-gate-up/mastery-v1/lane-fragment-map.json",
+      "proof_class": "calculated_from_existing_lds2_emitter_equations",
+      "counts": {
+        "cooperative_stage_rows": 1024,
+        "wmma_fragment_rows": 3072,
+        "accumulator_c_rows": 16384,
+        "unique_c_tile_elements": 16384
+      },
+      "mapping": {
+        "storage": "regenerate_with_build_evidence",
+        "sha256": {
+          "cooperative_stage": "60a454ba86596ae41cb38d116e56e0f53fe64f144ad9d8e78aac1ca19e675d64",
+          "wmma_fragments": "81934901f2c91929e70b8e845df98dff67520be0d3a7853da1075e0b399ff1ee",
+          "accumulator_to_c": "306921b2edff1bcfaf544e17975dda51c6e5b5db8cb81cebbdd40ecd8eb534a2"
+        }
+      }
+    },
+    "epoch_graph": {
+      "state": "partial_structural_graph",
+      "source": "bench/prefill-pure-full-kernel/anchor-ffn-gate-up/mastery-v1/epoch-graph.json",
+      "claims": {
+        "structural_reaching_definitions_complete": true,
+        "value_reaching_definitions_complete": false,
+        "lowered_instruction_correlation_complete": false,
+        "complete": false
+      },
+      "identity_loss": {
+        "count": 512,
+        "external_evidence_gaps": [
+          "stage-owner audit not supplied; graph cannot correlate epoch nodes to lowered owner records",
+          "lifecycle trace not supplied; graph cannot correlate epoch nodes to final instruction indices"
+        ],
+        "records_sha256": "bf7f9075fa0c45db96fb9a096afbbee0d95640d6b737e6bcda7187435e7be9e9"
+      }
+    },
+    "correctness_binding": {
+      "state": "captured",
+      "source": "bench/prefill-pure-full-kernel/anchor-ffn-gate-up/mastery-v1/correctness-binding.json",
+      "passed": true,
+      "binding": {
+        "execution_config_sha256": "0dc49c1f8e3ab15edf20d79da5c11dae0a54e0c58fd8e6ad97a179e1b64c584f",
+        "full_kernel_candidate_hash": null,
+        "identity_scope": "pure scheduler baseline execution config; no BoltBeam full-kernel candidate selected",
+        "program_key": "aa0db02e95d031f0494f923b0fd6837459abb063f762e121f266701901065bbe",
+        "source_sha256": "56c0ae5d1dfe6a9699a5b962160cb201e085a24929995fe33edd6f167d216b44",
+        "binary_sha256": "2bac6db48227bdaa00feaac8115698fabbe5304e913e572dfbfb17af396ad6d1",
+        "binary_bytes": 7656,
+        "compile_warmstart_apply_count": 1,
+        "all_cases_same_binary": true,
+        "runtime_binary_matches_candidate": true
+      },
+      "surface": {
+        "ops_ins_count": 0,
+        "source_kind": "compiler_rendered",
+        "forbidden_markers": [],
+        "strict_pure": true
+      }
     }
   },
   "artifact_index": {
@@ -230,6 +290,24 @@
       "present": true,
       "schema": "prefill-anchor-gemm-regime-timing.v1",
       "verdict": null
+    },
+    "lane_fragment_map": {
+      "path": "bench/prefill-pure-full-kernel/anchor-ffn-gate-up/mastery-v1/lane-fragment-map.json",
+      "present": true,
+      "schema": "prefill-anchor-lane-fragment-evidence.v1",
+      "verdict": null
+    },
+    "epoch_graph": {
+      "path": "bench/prefill-pure-full-kernel/anchor-ffn-gate-up/mastery-v1/epoch-graph.json",
+      "present": true,
+      "schema": "ffn-gate-up-epoch-dependency-graph.v1",
+      "verdict": null
+    },
+    "correctness_binding": {
+      "path": "bench/prefill-pure-full-kernel/anchor-ffn-gate-up/mastery-v1/correctness-binding.json",
+      "present": true,
+      "schema": "prefill-pure-anchor-correctness-binding.v1",
+      "verdict": null
     }
   },
   "evidence_status": {
@@ -251,12 +329,32 @@
       ]
     },
     "lane_fragment_map": {
-      "status": "missing",
-      "requirement": "Executable lane-to-global/LDS/WMMA-fragment/accumulator/output ownership map for the pure candidate."
+      "status": "partial",
+      "requirement": "Executable lane-to-global/LDS/WMMA-fragment/accumulator/output ownership map for the pure candidate.",
+      "known": [
+        "exhaustive S9 oracle cooperative-load map",
+        "oracle WMMA fragment map",
+        "oracle accumulator-to-C bijection"
+      ],
+      "missing": [
+        "same mapping derived from the pure candidate compiler IR/ISA",
+        "measured LDS bank behavior"
+      ],
+      "source": "bench/prefill-pure-full-kernel/anchor-ffn-gate-up/mastery-v1/lane-fragment-map.json"
     },
     "pipeline_dependency_graph": {
-      "status": "missing",
-      "requirement": "Machine-readable load, LDS stage, wait, barrier, WMMA, and store dependency graph."
+      "status": "partial",
+      "requirement": "Machine-readable load, LDS stage, wait, barrier, WMMA, and store dependency graph.",
+      "known": [
+        "128 epochs",
+        "two-slot structural dependency graph",
+        "DBUF checker pass"
+      ],
+      "missing": [
+        "512 value keys",
+        "lowered final-instruction correlation"
+      ],
+      "source": "bench/prefill-pure-full-kernel/anchor-ffn-gate-up/mastery-v1/epoch-graph.json"
     },
     "generated_isa_capture": {
       "status": "complete",
@@ -271,8 +369,10 @@
       "authority": "amdgpu_code_object_notes"
     },
     "full_shape_correctness": {
-      "status": "missing",
-      "requirement": "Full M512 N12288 K4096 numerical comparison with declared tolerances and reference provenance."
+      "status": "complete",
+      "requirement": "Full M512 N12288 K4096 numerical comparison with declared tolerances and reference provenance.",
+      "source": "bench/prefill-pure-full-kernel/anchor-ffn-gate-up/mastery-v1/correctness-binding.json",
+      "comparison": "three adversarial full-output cases"
     },
     "kernel_timing_authority": {
       "status": "complete",
@@ -285,8 +385,11 @@
       }
     },
     "strict_pure_runtime_binding": {
-      "status": "missing",
-      "requirement": "Runtime proof that the exact executable used no Ops.INS, ASM atom, embedded binary, or non-pure fallback."
+      "status": "complete",
+      "requirement": "Runtime proof that the exact executable used no Ops.INS, ASM atom, embedded binary, or non-pure fallback.",
+      "source": "bench/prefill-pure-full-kernel/anchor-ffn-gate-up/mastery-v1/correctness-binding.json",
+      "binary_sha256": "2bac6db48227bdaa00feaac8115698fabbe5304e913e572dfbfb17af396ad6d1",
+      "identity_scope": "pure scheduler baseline execution config; no BoltBeam full-kernel candidate selected"
     },
     "roofline_attribution": {
       "status": "partial",
@@ -311,22 +414,12 @@
     {
       "id": "lane_fragment_map",
       "reason": "Executable lane-to-global/LDS/WMMA-fragment/accumulator/output ownership map for the pure candidate.",
-      "status": "missing"
+      "status": "partial"
     },
     {
       "id": "pipeline_dependency_graph",
       "reason": "Machine-readable load, LDS stage, wait, barrier, WMMA, and store dependency graph.",
-      "status": "missing"
-    },
-    {
-      "id": "full_shape_correctness",
-      "reason": "Full M512 N12288 K4096 numerical comparison with declared tolerances and reference provenance.",
-      "status": "missing"
-    },
-    {
-      "id": "strict_pure_runtime_binding",
-      "reason": "Runtime proof that the exact executable used no Ops.INS, ASM atom, embedded binary, or non-pure fallback.",
-      "status": "missing"
+      "status": "partial"
     },
     {
       "id": "roofline_attribution",
