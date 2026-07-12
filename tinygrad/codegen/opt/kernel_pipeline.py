@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Callable, Literal, Protocol
-from tinygrad.codegen.opt.compiler_policies import StoragePolicy
+from tinygrad.codegen.opt.compiler_policies import PipelinePolicy, StoragePolicy
 
 from tinygrad.dtype import AddrSpace, dtypes
 from tinygrad.uop.ops import AxisType, Ops, UOp
@@ -70,6 +70,23 @@ class KernelStage1PipelinePlan:
     if not isinstance(slot, int) or isinstance(slot, bool) or not 0 <= slot < self.buffer_count:
       raise ValueError(f"slot must be in [0, {self.buffer_count})")
     return slot*self.slot_bytes, (slot+1)*self.slot_bytes
+
+
+def pipeline_policy_from_candidate(pipeline: object) -> PipelinePolicy:
+  """Resolve an admitted candidate's existing typed policy at one boundary.
+
+  Legacy stage-1 admissions carry ``KernelStage1PipelinePlan`` directly; new
+  policy-aware candidates expose ``pipeline_policy``. Register-resident
+  candidates are recognized here but remain unsupported by the stage-1 LDS
+  adapter, allowing callers to fail closed before allocating local storage.
+  """
+  if isinstance(pipeline, KernelStage1PipelinePlan):
+    storage = storage_policy_from_stage1(pipeline)
+    return PipelinePolicy.lds(buffer_count=storage.buffer_count, slot_bytes=storage.slot_bytes, stages=pipeline.stage_count)
+  policy = getattr(pipeline, "pipeline_policy", None)
+  if not isinstance(policy, PipelinePolicy):
+    raise ValueError("candidate pipeline does not expose a typed PipelinePolicy")
+  return policy
 
 
 @dataclass(frozen=True)

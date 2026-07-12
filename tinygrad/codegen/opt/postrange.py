@@ -353,6 +353,15 @@ class Scheduler:
                                              addrspace=AddrSpace.LOCAL).replace(tag=("kernel_tile_lds", candidate_geometry))
               candidate_pipeline = getattr(self.ast.arg.candidate_context, "pipeline", None)
               if candidate_pipeline is not None:
+                from tinygrad.codegen.opt.kernel_pipeline import pipeline_policy_from_candidate
+                try: candidate_policy = pipeline_policy_from_candidate(candidate_pipeline)
+                except (TypeError, ValueError) as exc: raise KernelOptError(str(exc)) from exc
+                if candidate_policy.storage_kind != "lds":
+                  coverage = getattr(candidate_pipeline, "wait_coverage", None)
+                  if coverage is None or not coverage.passed:
+                    raise KernelOptError("register-resident candidate lacks proven wait dependency coverage")
+                  raise KernelOptError("register-resident candidate has no executable postrange storage adapter")
+              if candidate_pipeline is not None:
                 allocation = UOp.placeholder((candidate_pipeline.active_lds_bytes//2,), dtypes.half, candidate_lds_id,
                                                addrspace=AddrSpace.LOCAL).replace(tag=("kernel_tile_lds", candidate_geometry, candidate_pipeline))
               operands=(PrecontractOperandTemplate("A", in0, original_axes[1], original_axes[2], outer_m*candidate_geometry.tile[0]),

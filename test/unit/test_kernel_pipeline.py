@@ -2,12 +2,19 @@ import unittest
 from dataclasses import replace
 
 from tinygrad.codegen.opt.kernel_pipeline import (KernelStage1LifecycleEvent, KernelStage1PipelinePlan,
-  build_stage1_uop_graph, prove_stage1_lifecycle, prove_stage1_uop_graph, stage1_lifecycle_events)
+  build_stage1_uop_graph, pipeline_policy_from_candidate, prove_stage1_lifecycle, prove_stage1_uop_graph, stage1_lifecycle_events)
 from tinygrad import dtypes
 from tinygrad.uop.ops import AxisType, Ops, UOp
 
 
 class TestKernelStage1PipelinePlan(unittest.TestCase):
+  def test_candidate_policy_bridge_reuses_lds_and_register_contracts(self):
+    self.assertEqual(pipeline_policy_from_candidate(KernelStage1PipelinePlan(2, 20_480)).storage_kind, "lds")
+    from extra.qk.wmma_pipe_spec import WMMAPipeIR
+    pipe = WMMAPipeIR("attn_qo", (512, 4096, 4096), 2, 8, "targeted_vmcnt")
+    self.assertEqual(pipeline_policy_from_candidate(pipe).storage_kind, "global_register_resident")
+    with self.assertRaises(ValueError): pipeline_policy_from_candidate(object())
+
   def test_memory_plan(self):
     plan = KernelStage1PipelinePlan(2, 20_480)
     self.assertEqual(plan.active_lds_bytes, 40_960)
