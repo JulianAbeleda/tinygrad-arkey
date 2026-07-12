@@ -204,6 +204,25 @@ resource/binary identity, nonconstant correctness, and pinned timing. Until all
 six boundaries pass, the primitive remains a scoped blocker and cannot enter
 route selection or the pure default.
 
+#### P1-B AMD backend finding
+
+The existing `tinygrad/renderer/isa/amd.py` path is not a pure insertion point:
+`AMDOps.GLOBAL_LOAD_B128`, `AMDOps.V_WMMA`, and targeted `s_waitcnt` are emitted
+as `Ops.INS` and assembled by the hand-ISA renderer. Reusing those hooks would
+violate the pure contract. The pure backend currently has `Ops.WMMA` lowering
+through `tinygrad/renderer/llvmir.py`/C-style patterns, while ordinary global
+loads, stores, and compiler dependency ordering remain the source of wait
+behavior.
+
+Therefore the smallest pure interface is metadata, not a new AMD opcode:
+`KernelCandidateContext`/`KernelInfo` carries stage ownership, operand residency,
+and wait policy; `postrange`/operand staging turns that metadata into ordinary
+LOAD -> WMMA -> STORE dependency edges; `to_program` and the LLVM AMD renderer
+lower those edges and report resources. A targeted `vmcnt` knob is not expressible
+without a new compiler scheduling primitive or LLVM/backend change, and must be
+scoped as a separate blocker. Acceptance requires proving that generated waits
+are sufficient; any `Ops.INS`/`AMDOps.*` artifact fails the purity gate.
+
 ### S1 — Typed context/schema review
 
 Owner: `extra/qk/wmma_pipe_spec.py`, `extra/qk/runtime_specs.py`, focused tests.
