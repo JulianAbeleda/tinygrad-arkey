@@ -376,3 +376,10 @@ def test_candidate_set_json_path_and_legacy_environment_loaders(tmp_path):
   with pytest.raises(ValueError,match="mutually exclusive"):
     prefill_graph_gemm_route._candidate_registry_from_env({"BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_JSON":text,
       "BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH":str(path)})
+
+def test_pure_guard_accepts_exact_non_gate_legacy_candidate():
+  entry=_buffer2_set_entry("attn_qo",(512,4096,4096))
+  env={"BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON":json.dumps(entry.payload),
+       "BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH":entry.canonical_identity,
+       "PREFILL_GRAPH_GEMM":"1","PREFILL_WMMA_LDS_PRIMITIVE":"1"}
+  assert pure_search_guard._prefill_candidate_selected(env)

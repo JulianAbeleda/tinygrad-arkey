@@ -115,12 +115,8 @@ def _prefill_candidate_selected(env: dict[str, Any]) -> bool:
     raise ValueError("BoltBeam full-kernel candidate payload and hash must be provided together")
   if not _enabled(env, "PREFILL_GRAPH_GEMM") or not _enabled(env, "PREFILL_WMMA_LDS_PRIMITIVE"):
     raise ValueError("BoltBeam full-kernel candidate requires the generated graph-GEMM LDS primitive")
-  try: payload = json.loads(str(payload_text))
-  except json.JSONDecodeError as exc: raise ValueError(f"BoltBeam full-kernel candidate payload is invalid JSON: {exc}") from exc
-  from extra.qk.runtime_specs import bind_full_kernel_candidate
-  bind_full_kernel_candidate(payload, str(identity), profile="qwen3_8b_q4k_m_gfx1100", role="ffn_gate_up",
-    shape=(512, 12288, 4096), target={"backend": "AMD", "arch": "gfx1100", "wave_size": 32})
-  return True
+  from extra.qk.prefill_graph_gemm_route import _candidate_registry_from_env
+  return _candidate_registry_from_env(env) is not None
 
 
 # Each hot route family resolves to an EFFECTIVE route id from the environment. `rollback_active(env)` is True when the
