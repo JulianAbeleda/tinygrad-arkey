@@ -3,6 +3,7 @@ import pytest
 from tinygrad import dtypes
 from tinygrad.codegen.opt.compiler_policies import StoragePolicy
 from tinygrad.codegen.opt.kernel_lds import PrecontractContractSpec, PrecontractOperandTemplate
+from tinygrad.codegen.opt.kernel_pipeline import KernelStage1PipelinePlan, build_stage1_uop_graph_with_storage
 from tinygrad.codegen.opt.register_pipeline import (RegisterLogicalStagePlan, RegisterPipeTemplate,
   RegisterStorageAdapter, prove_register_graph_no_lds, prove_register_lifecycle, register_geometry)
 from tinygrad.codegen.opt.tc import amd_rdna3
@@ -28,7 +29,9 @@ def _fixture():
 def test_register_template_zero_lds_and_real_descriptor():
   t = _fixture()
   assert t.policy.storage_kind == "global_register_resident" and t.policy.resources.lds_bytes == 0
-  assert RegisterStorageAdapter.from_template(t).policy == StoragePolicy("global_register_resident")
+  adapter = RegisterStorageAdapter.from_template(t)
+  assert adapter.policy == StoragePolicy("global_register_resident")
+  assert adapter.logical_plan.active_lds_bytes == 0 and adapter.logical_plan.buffer_count == 2
 
 
 def test_register_template_producer_fragments_have_no_local_or_raw_isa():
@@ -39,6 +42,12 @@ def test_register_template_producer_fragments_have_no_local_or_raw_isa():
   assert prove_register_graph_no_lds(root) == ()
   assert len([u for u in root.toposort() if u.op is Ops.LOAD]) == 64
   assert len([u for u in root.toposort() if u.op is Ops.CONTRACT and u.dtype == dtypes.half.vec(16)]) == 4
+
+
+def test_register_adapter_does_not_enter_lds_stage1_builder_before_readiness_is_proven():
+  adapter = RegisterStorageAdapter.from_template(_fixture())
+  with pytest.raises(ValueError, match="storage policy does not match"):
+    build_stage1_uop_graph_with_storage(adapter, KernelStage1PipelinePlan(2, 20480), 2, lambda *_: None)
 
 
 def test_register_template_rejects_fake_descriptor_remap():

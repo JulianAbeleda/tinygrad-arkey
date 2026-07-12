@@ -26,6 +26,14 @@ class RegisterLogicalStagePlan:
   stage_count: int = 1
   roles: tuple[str, ...] = ("A", "B")
 
+  @classmethod
+  def from_policy(cls, policy: PipelinePolicy) -> "RegisterLogicalStagePlan":
+    if not isinstance(policy, PipelinePolicy) or policy.storage_kind != "global_register_resident":
+      raise ValueError("register logical stages require global_register_resident policy")
+    if policy.logical_stage_count != 2 or policy.resources.lds_bytes != 0:
+      raise ValueError("register logical stages require exactly two stages and zero LDS")
+    return cls()
+
   def __post_init__(self) -> None:
     if (self.buffer_count, self.slot_bytes, self.stage_count, self.roles) != (2, 0, 1, ("A", "B")):
       raise ValueError("register pipe requires two logical stages, zero LDS, and A/B roles")
@@ -114,7 +122,19 @@ class RegisterStorageAdapter(Stage1StorageAdapter):
 
   @classmethod
   def from_template(cls, template: RegisterPipeTemplate) -> "RegisterStorageAdapter":
-    return cls(template, template.policy.storage)
+    adapter = cls(template, template.policy.storage)
+    RegisterLogicalStagePlan.from_policy(template.policy)
+    return adapter
+
+  @property
+  def pipeline_policy(self) -> PipelinePolicy:
+    """Expose the complete typed register policy without changing Stage1 ABI."""
+    return PipelinePolicy.register_resident()
+
+  @property
+  def logical_plan(self) -> RegisterLogicalStagePlan:
+    """Map the common policy to logical alternating stages, never LDS slots."""
+    return RegisterLogicalStagePlan.from_policy(self.pipeline_policy)
 
 
 def register_geometry() -> KernelTileGeometry:
