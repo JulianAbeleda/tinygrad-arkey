@@ -97,6 +97,14 @@ class WMMAPipeOp:
     if not consumed.issubset(produced): raise ValueError("pipe consumes an unproduced stage/slot")
     for stage, slot in produced:
       if (stage, slot) not in consumed: raise ValueError("pipe slot is produced without a consume")
+    live:set[int] = set()
+    for event, _stage, slot in self.lifecycle:
+      if event == "produce":
+        if slot in live: raise ValueError("pipe slot is overwritten before consume")
+        live.add(slot)
+      elif event in ("consume", "release"):
+        if slot not in live: raise ValueError("pipe consume/release lacks dominating produce")
+        live.remove(slot)
     derived_wait = self.ir.loads_per_stage
     if self.wait_vmcnt is not None and self.wait_vmcnt != derived_wait: raise ValueError("pipe wait does not match staged loads")
 

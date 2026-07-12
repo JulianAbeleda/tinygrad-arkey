@@ -48,6 +48,23 @@ def test_pipe_candidate_context_is_identity_and_abi_complete():
   assert payload["stages"] == 2 and payload["wait_policy"] == "targeted_vmcnt"
   assert payload["stores"] == "fp16_global"
 
+def test_pipe_lifecycle_rejects_overwrite_and_tail_shape():
+  from extra.qk.wmma_pipe_spec import WMMAPipeOp, build_wmma_pipe_ir
+  spec = WMMAPipeSpec(m=512, n=4096, k=4096, tile_m=128, tile_n=128, role="attn_qo")
+  with_overwrite = (("produce", 0, 0), ("produce", 1, 0), ("consume", 0, 0), ("consume", 1, 0))
+  try:
+    WMMAPipeOp(build_wmma_pipe_ir(spec), 0, 1, 2, (256, 1, 1), (64, 1, 1), lifecycle=with_overwrite)
+  except ValueError as exc:
+    assert "overwritten" in str(exc)
+  else:
+    raise AssertionError("slot overwrite before consume must fail closed")
+  try:
+    WMMAPipeSpec(m=512, n=4096, k=4100, tile_m=128, tile_n=128, role="attn_qo")
+  except ValueError as exc:
+    assert "divisible" in str(exc)
+  else:
+    raise AssertionError("non-divisible tail must fail closed")
+
 
 def _prefill_spec(route_family: str = "pipe", *, n: int = 4096, role: str = "attn_qo",
                   pipeline_depth: int = 2, waitcnt_policy: str = "targeted_vmcnt"):
