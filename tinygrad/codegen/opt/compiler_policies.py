@@ -287,8 +287,3 @@ class RegisterPipePlan:
                                  producer_stage=0, consumer_stage=1, scope="per_stage")
                  for role in ("A", "B"))
     return prove_wait_dependency_coverage(self.policy, deps, (("A", 0, 1), ("B", 0, 1)))
-
-  @property
-  def pipeline_policy(self) -> PipelinePolicy:
-    """Common candidate-context accessor used by policy-aware lowering."""
-    return self.policy

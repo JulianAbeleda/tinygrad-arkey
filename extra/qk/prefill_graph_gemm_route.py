@@ -151,6 +151,10 @@ def _candidate_schedule_spec(spec,admission):
 
 def _install_candidate_matmul(x,w,out_f,in_f,spec,admission):
   from extra.qk.runtime_specs import candidate_storage_kind
+  from extra.qk.wmma_lds_spec import extract_wmma_lds_spec, wmma_lds_generated_env_defaults, wmma_lds_postrange_opts
+  candidate_spec = _candidate_schedule_spec(spec, admission)
+  lds_spec = extract_wmma_lds_spec(candidate_spec)
+  if lds_spec is None: raise ValueError("admitted full-kernel candidate cannot produce an LDS schedule spec")
   if candidate_storage_kind(admission.normalized_payload) == "global_register_resident":
     # Register candidates reuse the ordinary compiler matmul graph, but must
     # not install LDS warmstart options or local-stage ownership.
@@ -159,12 +163,13 @@ def _install_candidate_matmul(x,w,out_f,in_f,spec,admission):
     existing = (pr._WARMSTART_CANDIDATE_CONTEXTS or {}).get(key)
     if existing is not None and existing.canonical_identity != admission.canonical_identity:
       raise ValueError(f"candidate warmstart key collision for {key!r}")
+    # Reuse the existing generic TC/UPCAST option authority to select the
+    # admitted geometry. No LDS environment defaults or local-stage ownership
+    # are installed for this storage policy.
+    pr._WARMSTART_OPTS = {**(pr._WARMSTART_OPTS or {}), key: wmma_lds_postrange_opts(lds_spec, cooperative_waves=False)}
     pr._WARMSTART_CANDIDATE_CONTEXTS = {**(pr._WARMSTART_CANDIDATE_CONTEXTS or {}), key: admission.context}
     a = x.reshape(512, in_f).cast(dtypes.float16).contiguous(); bt = w.cast(dtypes.float16).contiguous()
     return (a @ bt.transpose()).reshape(*x.shape[:-1], out_f)
-  from extra.qk.wmma_lds_spec import extract_wmma_lds_spec, wmma_lds_generated_env_defaults, wmma_lds_postrange_opts
-  candidate_spec=_candidate_schedule_spec(spec,admission); lds_spec=extract_wmma_lds_spec(candidate_spec)
-  if lds_spec is None: raise ValueError("admitted full-kernel candidate cannot produce an LDS schedule spec")
   register_mode = getattr(getattr(admission.context.pipeline, "storage", None), "kind", "lds") == "global_register_resident"
   if not register_mode:
     for key,value in wmma_lds_generated_env_defaults(lds_spec).items(): os.environ.setdefault(key,value)
