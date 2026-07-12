@@ -25,10 +25,13 @@ prefetch semantics and keeps the prologue dependency on the first body read.
 K=1, K=2, K=3, and K=256 ownership proofs pass with no `DEFINE_LOCAL` or raw
 ISA nodes.
 
-This does not yet make a full-K AMD kernel executable. Normal full-K rewrite
-still reaches a devectorizer `IndexError` while splitting symbolic vector
-register-buffer accesses. That compiler-lowering issue is a separate gate; no
-route is promoted and no fail-closed evidence gate is weakened to bypass it.
+This does not yet make a full-K AMD kernel executable. The valid full-K graph
+now passes the normal AMD rewrite; the earlier devectorizer `IndexError` was
+caused by a malformed synthetic WMMA ABI (a scalar output contract paired with
+an 8-lane accumulator), not by register-buffer lowering. The remaining gates
+are executable postrange admission, typed targeted-wait lowering, final
+resource evidence, correctness, and pinned GPU timing. No route is promoted
+until those gates pass.
 
 ## Evidence inventory
 
@@ -54,7 +57,7 @@ route is promoted and no fail-closed evidence gate is weakened to bypass it.
 | Wait dependency is not yet a compiler UOp contract | Typed `WaitCount` now lowers through AMD LLVM's `llvm.amdgcn.s.waitcnt`, while dependency selection is still inserted/derived separately from the lifecycle | Thread typed `WaitDependency` through graph metadata; require a backend hook and provenance join before launch |
 | Native targeted waits are renderer-local | `_insert_waitcnt` tracks physical register spans after post-regalloc; route code cannot reuse it without importing `AMDOps`/`Ops.INS` | Reuse the dependency algorithm as backend implementation, not its raw instruction representation; add a typed marker/source proof at the compiler boundary |
 | Wait lowering is not yet lifecycle-proven | Commit `6deda3c7c` proves a typed `WaitCount` intrinsic can compile on gfx1100, but an arbitrary `Ops.WAIT(WaitCount)` is not itself proof of a load-group dependency | Keep the new intrinsic as the backend seam; wire it to `WaitDependency` and reject unproven/untagged waits before promotion |
-| Exact global-load-to-WMMA ABI | A synthetic direct global-load graph currently fails devectorization unless real range ownership, CONTRACT axes/remaps, half.vec(16), and float.vec(8) accumulator ABI are present | **Partially implemented:** persistent register producer preserves those nodes; fix the full-K devectorizer path before execution claims |
+| Exact global-load-to-WMMA ABI | The normal devectorizer requires real range ownership, CONTRACT axes/remaps, half.vec(16), and a matching float.vec(8) output contract | **Structurally implemented:** persistent register producer and chained full-K WMMA fixture pass normal AMD rewrite; runtime execution still needs the wait/resource gates |
 | Mixed-role route attribution | The current authority can report selected candidate roles without recording fallback roles | Fix attribution before combined pure promotion; this is instrumentation, not a compiler rewrite |
 
 ## What “reuse” means in practice
