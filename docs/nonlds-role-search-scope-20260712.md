@@ -74,3 +74,20 @@ Spark/agent output is not accepted automatically. Review must check:
 Completion is either a passing winner for each materially contributing role and
 a new pinned whole-model result, or a measured standstill showing that the
 remaining gap is outside these three non-LDS roles.
+
+## First search result
+
+The first pinned scheduler search produced isolated microbench wins:
+
+| Role | Search | Default |
+|---|---:|---:|
+| `attn_qo` | 31.95 TFLOPS | 27.24 |
+| `ffn_down` | 35.70 TFLOPS | 27.51 |
+| `attn_kv` | 36.53 TFLOPS | 36.34 |
+
+Applying those options through the existing schedule-table surface changed the
+whole-model ctx512 result from 4,021 to 4,023 tok/s, which is within timing
+noise. The options are therefore not promoted. This is a useful negative result:
+the plain scheduler microbenchmark surface is not identical to the in-model
+lean route for these roles, and future search must bind the actual route
+identity before treating isolated TFLOPS as transferable.
