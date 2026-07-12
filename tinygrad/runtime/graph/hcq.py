@@ -1,5 +1,5 @@
 from __future__ import annotations
-import collections, time
+import collections, time, json, os, pathlib
 from typing import Any, cast
 from tinygrad.helpers import round_up, PROFILE, ALL2ALL, merge_dicts, getenv, suppress_finalizing, TracingKey, unwrap
 
@@ -10,6 +10,13 @@ from tinygrad.helpers import round_up, PROFILE, ALL2ALL, merge_dicts, getenv, su
 # perfcounter blocks (GRBM_GUI_ACTIVE, GL2C/SQC) read zero inline in the graph, so the derived
 # occupancy/VALU/memory-busy metrics are not yet produced. Off by default until that is resolved.
 PMC_GRAPH = getenv("PMC_GRAPH", 0)
+GRAPH_PROFILE_JSON = os.environ.get("HCQ_GRAPH_PROFILE_JSON", "")
+
+def graph_profile_payload(entries, deps, sigs):
+  rows = [{"device": ent.device, "name": str(ent.name), "start": str(sigs[ent.st_id]),
+           "end": str(sigs[ent.en_id]), "duration": str(sigs[ent.en_id] - sigs[ent.st_id]),
+           "st_id": ent.st_id, "en_id": ent.en_id} for ent in entries]
+  return {"schema": "tinygrad.hcq_graph_profile.v1", "entries": rows, "deps": deps}
 from tinygrad.runtime.support.hcq import HCQCompiled, HCQAllocator, HCQSignal, HCQBuffer, HWQueue, HCQArgsState, BumpAllocator, MMIOInterface
 from tinygrad.device import Buffer, BufferSpec, Compiled, Device, MultiBuffer, ProfileGraphEntry, ProfileGraphEvent
 from tinygrad.dtype import dtypes
@@ -329,7 +336,16 @@ class HCQGraph(MultiGraphRunner):
 
   def collect_timestamps(self):
     # NOTE: Append to any device is fine...
-    self.devices[0].profile_events += [ProfileGraphEvent(self.prof_graph_entries, self.prof_graph_deps, [s.timestamp for s in self.prof_signals])]
+    sigs = [s.timestamp for s in self.prof_signals]
+    event = ProfileGraphEvent(self.prof_graph_entries, self.prof_graph_deps, sigs)
+    self.devices[0].profile_events += [event]
+    # Opt-in export for graph-backed authorities. This reads timestamps only after the
+    # graph has completed and does not insert waits or alter the captured route.
+    if GRAPH_PROFILE_JSON:
+      payload = graph_profile_payload(self.prof_graph_entries, self.prof_graph_deps, sigs)
+      path = pathlib.Path(GRAPH_PROFILE_JSON)
+      path.parent.mkdir(parents=True, exist_ok=True)
+      with path.open("a", encoding="utf-8") as f: f.write(json.dumps(payload, sort_keys=True) + "\n")
 
   def collect_pmc(self):
     if not self.graph_pmc_buf: return
