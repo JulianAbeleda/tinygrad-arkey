@@ -24,6 +24,7 @@ def test_pipe_candidate_context_preserves_identity_and_buffer_neutral_payload():
   assert payload["schema"] == "wmma_pipe_ir.v1"
   assert payload["role"] == "attn_qo" and payload["shape"] == (512, 4096, 4096)
   assert payload["provenance"] == "compiler_owned_typed_pipe_ir"
+  assert payload["storage_kind"] == "global_register_resident" and payload["resource_plan"] == "unproven"
 
 def test_typed_pipe_ir_carries_lifecycle_without_native_isa():
   pipe = extract_wmma_pipe_spec(describe_prefill_schedule(4096, 4096, role="attn_qo"))

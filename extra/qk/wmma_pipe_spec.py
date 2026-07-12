@@ -60,6 +60,8 @@ class WMMAPipeIR:
   wait_policy: str
   stores: str = "fp16_global"
   provenance: str = "compiler_owned_typed_pipe_ir"
+  storage_kind: str = "global_register_resident"
+  resource_plan: str = "unproven"
 
   def __post_init__(self):
     if len(self.shape) != 3 or any(not isinstance(x, int) or x <= 0 for x in self.shape): raise ValueError("invalid pipe IR shape")
@@ -67,6 +69,7 @@ class WMMAPipeIR:
     if self.stages != 2 or self.loads_per_stage <= 0: raise ValueError("invalid pipe IR lifecycle")
     if self.wait_policy != "targeted_vmcnt": raise ValueError("unsupported pipe wait policy")
     if self.provenance != "compiler_owned_typed_pipe_ir": raise ValueError("invalid pipe provenance")
+    if self.storage_kind != "global_register_resident" or self.resource_plan != "unproven": raise ValueError("invalid pipe resource contract")
 
 @dataclass(frozen=True)
 class WMMAPipeOp:
@@ -173,7 +176,8 @@ def pipe_candidate_context(spec: WMMAPipeSpec, canonical_identity: str) -> Kerne
   ir = build_wmma_pipe_ir(spec)
   payload = tuple((k, v) for k, v in (("schema", "wmma_pipe_ir.v1"), ("role", ir.role), ("shape", ir.shape),
              ("stages", ir.stages), ("loads_per_stage", ir.loads_per_stage), ("wait_policy", ir.wait_policy),
-             ("stores", ir.stores), ("provenance", ir.provenance)))
+             ("stores", ir.stores), ("provenance", ir.provenance), ("storage_kind", ir.storage_kind),
+             ("resource_plan", ir.resource_plan)))
   return KernelCandidateContext("boltbeam.full_kernel_candidate.v1", canonical_identity,
                                geometry=None, pipeline=payload)
 
