@@ -448,7 +448,8 @@ def _census_admission(role,n,k,identity):
     "profile":"qwen3_8b_q4k_m_gfx1100","role":role,"shape":{"m":512,"n":n,"k":k},
     "target":{"backend":"AMD","arch":"gfx1100","wave_size":32}}})
 
-def test_candidate_route_census_requires_actual_exact_bindings_and_counts_reuse():
+def test_candidate_route_census_requires_actual_exact_bindings_and_counts_reuse(monkeypatch):
+  monkeypatch.setenv("BOLTBEAM_FULL_KERNEL_CANDIDATE_ROLES", "ffn_gate_up,ffn_down,attn_qo,attn_kv")
   admissions=tuple(_census_admission(role,n,k,str(i)*64) for i,(role,n,k) in enumerate((
     ("ffn_gate_up",12288,4096),("ffn_down",4096,12288),("attn_qo",4096,4096),("attn_kv",1024,4096)),1))
   entries=tuple(SimpleNamespace(exact_key=("qwen3_8b_q4k_m_gfx1100",a.normalized_payload["workload"]["role"],512,

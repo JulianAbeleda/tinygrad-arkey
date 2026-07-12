@@ -50,13 +50,17 @@ def _record_candidate_route(admission) -> None:
   collector["selected"][key]={**row,"bindings":1 if prior is None else prior["bindings"]+1}
 
 def finalize_candidate_route_census(collector:dict[str,Any],registry) -> dict[str,Any]:
+  enabled_roles = {admission.normalized_payload["workload"]["role"] for admission in registry.admissions
+                   if candidate_set_role_enabled(admission.normalized_payload["workload"]["role"])}
   expected={entry.exact_key:{**_candidate_route_row(admission),"bindings":0}
-            for entry,admission in zip(registry.candidate_set.entries,registry.admissions)}
+            for entry,admission in zip(registry.candidate_set.entries,registry.admissions)
+            if admission.normalized_payload["workload"]["role"] in enabled_roles}
   selected=dict(collector["selected"]); missing=[expected[k] for k in sorted(expected.keys()-selected.keys())]
   unexpected=[selected[k] for k in sorted(selected.keys()-expected.keys())]
   mismatched=[selected[k] for k in sorted(expected.keys()&selected.keys())
               if selected[k]["canonical_identity"] != expected[k]["canonical_identity"]]
   return {"schema":"prefill-candidate-set-route-census.v1","passed":not (missing or unexpected or mismatched),
+          "policy_roles": sorted(enabled_roles),
           "expected_entry_count":len(expected),"selected_entry_count":len(selected),
           "selected":[selected[k] for k in sorted(selected)],"missing":missing,"unexpected":unexpected,"identity_mismatches":mismatched}
 
