@@ -79,6 +79,20 @@ def test_structural_binding_still_rejects_matching_resource_totals_without_seman
                                "lds_windows: emitted structure is unproven", "lds_strides: emitted structure is unproven"]
 
 
+def test_structural_binding_proves_only_exact_ordered_4x2_local_axes():
+  payload = {"workload": {"target": {"wave_size": 32}}, "schedule": {"tile": {"m": 128, "n": 128, "k": 32},
+    "threads": 256, "waves": {"m": 4, "n": 2},
+    "lds": {"windows": {"a": [0, 10240], "b": [10240, 20480]}, "strides": {"a": 80, "b": 80}}}}
+  binding = auth._structural_binding(payload, _program().replace(arg=ProgramInfo(local_size=(32, 4, 2))), {"lds_bytes": 20480})
+  assert binding["actual"]["waves"] == {"m": 4, "n": 2}
+  assert binding["evidence"]["waves"] == "ordered PROGRAM local axes (wave_size, waves_m, waves_n)"
+  assert "waves: emitted structure is unproven" not in binding["errors"]
+  assert binding["pre_gpu_eligible"] is False
+  swapped = auth._structural_binding(payload, _program().replace(arg=ProgramInfo(local_size=(32, 2, 4))), {"lds_bytes": 20480})
+  assert swapped["actual"]["waves"] is None
+  assert "waves: emitted structure is unproven" in swapped["errors"]
+
+
 def test_cli_writes_blocked_artifact_and_returns_nonzero(monkeypatch, tmp_path):
   payload = {"schema_version": "boltbeam.full_kernel_candidate.v1"}
   report = {"schema": auth.SCHEMA, "structural_binding": {"pre_gpu_eligible": False},

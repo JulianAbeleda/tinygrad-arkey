@@ -154,8 +154,8 @@ def test_wmma_lds_generated_transport_reuses_existing_single_buffer_substrate():
   assert opts[2].arg == spec.wn
 
   candidate_opts = wmma_lds_postrange_opts(spec, cooperative_waves=True)
-  assert [o.op.name for o in candidate_opts] == ["TC", "UPCAST", "UPCAST", "LOCAL", "UNROLL"]
-  assert candidate_opts[3].arg == spec.waves_m * spec.waves_n
+  assert [o.op.name for o in candidate_opts] == ["TC", "UPCAST", "UPCAST", "LOCAL", "LOCAL", "UNROLL"]
+  assert [(o.axis, o.arg) for o in candidate_opts[3:5]] == [(0, spec.waves_m), (1, spec.waves_n)]
 
   try:
     wmma_lds_postrange_opts(replace(spec, threads=32), cooperative_waves=True)

@@ -102,15 +102,18 @@ def _structural_binding(payload: dict[str, Any], program: UOp, lds: dict[str, An
   actual_threads = math.prod(local_size) if local_size else None
   wave_size = payload["workload"]["target"]["wave_size"]
   wave_count = actual_threads // wave_size if actual_threads is not None and actual_threads % wave_size == 0 else None
+  emitted_waves = ({"m": local_size[1], "n": local_size[2]}
+                   if local_size == (wave_size, expected["waves"]["m"], expected["waves"]["n"]) else None)
   actual = {"threads": actual_threads, "local_size": list(local_size), "lds_bytes": lds["lds_bytes"],
             # Rendered source does not retain enough semantic metadata to prove
             # candidate windows, strides, or wave ownership. Unknown is a hard
             # failure, not permission to infer them from the attached context.
-            "wave_count": wave_count, "tile": None, "waves": None, "lds_windows": None, "lds_strides": None}
+            "wave_count": wave_count, "tile": None, "waves": emitted_waves, "lds_windows": None, "lds_strides": None}
   evidence = {
     "threads": "PROGRAM launch local_size", "lds_bytes": "lowered DEFINE_LOCAL/rendered shared declaration",
     "wave_count": "launch threads divided by target wave size" if wave_count is not None else None,
-    "tile": None, "waves": None, "lds_windows": None, "lds_strides": None,
+    "tile": None, "waves": "ordered PROGRAM local axes (wave_size, waves_m, waves_n)" if emitted_waves is not None else None,
+    "lds_windows": None, "lds_strides": None,
   }
   errors = []
   if actual_threads != expected["threads"]: errors.append(f"threads: expected {expected['threads']}, emitted {actual_threads}")

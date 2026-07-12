@@ -443,7 +443,10 @@ def wmma_lds_postrange_opts(spec: WMMALDSSpec, *, unr: int = 2, cooperative_wave
   if cooperative_waves:
     wave_count = spec.waves_m * spec.waves_n
     if spec.threads != wave_count * 32: raise ValueError("cooperative wave geometry does not account for spec threads")
-    if wave_count > 1: opts.append(Opt(OptOps.LOCAL, 0, wave_count))
+    # Preserve the semantic M/N wave decomposition in distinct launch axes.
+    # Axis 0 is the remaining M output axis and axis 1 the remaining N axis.
+    if spec.waves_m > 1: opts.append(Opt(OptOps.LOCAL, 0, spec.waves_m))
+    if spec.waves_n > 1: opts.append(Opt(OptOps.LOCAL, 1, spec.waves_n))
   opts.append(Opt(OptOps.UNROLL, 0, unr))
   return tuple(opts)
 
