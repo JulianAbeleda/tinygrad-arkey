@@ -307,7 +307,8 @@ def route_pf16_graph_gemm(lin, x: Tensor, w: Tensor | None = None) -> Tensor | N
       getenv.cache_clear()
       import tinygrad.codegen.opt.postrange as pr
       key = _primitive_warmstart_key(spec)
-      pr._WARMSTART_OPTS = {**(pr._WARMSTART_OPTS or {}), key: wmma_lds_postrange_opts(lds_spec)}
+      pr._WARMSTART_OPTS = {**(pr._WARMSTART_OPTS or {}), key:
+                            wmma_lds_postrange_opts(lds_spec, cooperative_waves=candidate_context is not None)}
       candidate_contexts = dict(pr._WARMSTART_CANDIDATE_CONTEXTS or {})
       if candidate_context is not None:
         candidate_contexts[key] = candidate_context

@@ -153,6 +153,17 @@ def test_wmma_lds_generated_transport_reuses_existing_single_buffer_substrate():
   assert opts[1].arg == spec.wm
   assert opts[2].arg == spec.wn
 
+  candidate_opts = wmma_lds_postrange_opts(spec, cooperative_waves=True)
+  assert [o.op.name for o in candidate_opts] == ["TC", "UPCAST", "UPCAST", "LOCAL", "UNROLL"]
+  assert candidate_opts[3].arg == spec.waves_m * spec.waves_n
+
+  try:
+    wmma_lds_postrange_opts(replace(spec, threads=32), cooperative_waves=True)
+  except ValueError as exc:
+    assert "does not account for spec threads" in str(exc)
+  else:
+    raise AssertionError("strict cooperative geometry must fail closed on inconsistent thread ownership")
+
 
 def test_wmma_lds_slot_identity_proof_for_generated_single_buffer():
   spec = extract_wmma_lds_spec(_prefill_spec())
