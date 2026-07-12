@@ -79,8 +79,21 @@ def test_register_fragments_fail_closed_on_unproven_stage_readiness():
 def _register_wmma(t):
   def wmma(stage, acc, _subtile):
     arg = (str(t.tc), t.tc.dims, t.tc.dtype_in, t.tc.dtype_out, "AMD", t.tc.threads,
-           (t.contracts[0].arg, t.contracts[1].arg, ()), ())
+           # WMMA's vec8 result is the 2x2x2 C contract.  Keeping this ABI
+           # metadata in sync is required by no_vectorized_wmma when it
+           # decomposes the vector result during normal lowering.
+           (t.contracts[0].arg, t.contracts[1].arg, ((40, 2), (41, 2), (42, 2))), ())
     return UOp(Ops.WMMA, dtypes.float.vec(8), (stage.fragments[0], stage.fragments[2], acc), arg)
+  return wmma
+
+
+def _register_wmma_chain(t):
+  """Build the same two-step fragment chain used by the executable pipeline."""
+  def wmma(stage, acc, _subtile):
+    arg = (str(t.tc), t.tc.dims, t.tc.dtype_in, t.tc.dtype_out, "AMD", t.tc.threads,
+           (t.contracts[0].arg, t.contracts[1].arg, ((40, 2), (41, 2), (42, 2))), ())
+    first = UOp(Ops.WMMA, dtypes.float.vec(8), (stage.fragments[0], stage.fragments[1], acc), arg)
+    return UOp(Ops.WMMA, dtypes.float.vec(8), (stage.fragments[2], stage.fragments[3], first), arg)
   return wmma
 
 
@@ -97,6 +110,18 @@ def test_register_matching_readiness_proves_k2_epoch_slot_mapping():
   assert len([u for u in graph.sink.toposort() if u.op is Ops.DEFINE_REG]) == 3
 
 
+def test_register_full_k_chain_rewrites_with_valid_wmma_abi():
+  from tinygrad.codegen import full_rewrite_to_sink
+  from tinygrad.helpers import Target
+  from tinygrad.renderer.cstyle import HIPRenderer
+  t = _fixture(); adapter = RegisterStorageAdapter.from_template(t)
+  graph = build_stage1_uop_graph_with_storage(adapter, RegisterLogicalStagePlan(), 2, _register_wmma_chain(t),
+    subtile_count=1, accumulator_elements=8)
+  rewritten = full_rewrite_to_sink(graph.sink, HIPRenderer(Target.parse("AMD")), optimize=False)
+  assert not any(u.op in (Ops.DEFINE_LOCAL, Ops.INS) for u in rewritten.toposort())
+  assert len([u for u in rewritten.toposort() if u.op is Ops.WMMA]) == 4
+
+
 @pytest.mark.parametrize("k_tiles", (1, 2, 3, 256))
 def test_register_matching_readiness_proves_full_k_tail_lifecycle(k_tiles):
   t = _fixture(); adapter = RegisterStorageAdapter.from_template(t)
@@ -105,6 +130,27 @@ def test_register_matching_readiness_proves_full_k_tail_lifecycle(k_tiles):
   proof = prove_stage1_uop_graph(graph)
   assert proof.passed, proof.errors
   assert not any(u.op is Ops.DEFINE_LOCAL for u in graph.sink.toposort())
+
+
+def test_register_full_k_rewrite_accepts_real_wmma_output_contract():
+  from tinygrad.codegen import full_rewrite_to_sink
+  from tinygrad.helpers import Target
+  from tinygrad.renderer.cstyle import HIPRenderer
+  t = _fixture(); adapter = RegisterStorageAdapter.from_template(t)
+  caxes = tuple(UOp.range(2, 50 + i, AxisType.UPCAST) for i in range(3))
+  celem = (caxes[0] * 2 + caxes[1]) * 2 + caxes[2]
+  arg = (str(t.tc), t.tc.dims, t.tc.dtype_in, t.tc.dtype_out, "AMD", t.tc.threads,
+         (t.contracts[0].arg, t.contracts[1].arg, tuple((x.arg[0], 2) for x in caxes)), ())
+  def wmma(stage, acc, _subtile):
+    first = UOp(Ops.WMMA, dtypes.float.vec(8), (stage.fragments[0], stage.fragments[1], acc), arg)
+    return UOp(Ops.WMMA, dtypes.float.vec(8), (stage.fragments[2], stage.fragments[3], first), arg)
+  graph = build_stage1_uop_graph_with_storage(adapter, RegisterLogicalStagePlan(), 2, wmma,
+    subtile_count=1, accumulator_elements=64, accumulator_offset=UOp.const(dtypes.weakint, 0),
+    accumulator_contract=(celem, tuple((x.arg[0], 2) for x in caxes)))
+  rewritten = full_rewrite_to_sink(graph.sink, HIPRenderer(Target.parse("AMD")), optimize=False)
+  topo = rewritten.toposort()
+  assert not any(x.op in (Ops.DEFINE_LOCAL, Ops.INS) for x in topo)
+  assert len([x for x in topo if x.op is Ops.WMMA]) == 4
 
 
 def test_register_template_rejects_fake_descriptor_remap():
