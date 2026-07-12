@@ -18,6 +18,7 @@ from tinygrad.helpers import colored, getenv, DEBUG, to_function_name, NOOPT, ar
 from tinygrad.helpers import ALLOW_TF32, count
 from tinygrad.codegen.opt import Opt, OptOps, KernelOptError, check
 from tinygrad.codegen.opt.extensions import get_codegen_extension_registry
+from tinygrad.codegen.opt.prefill_value_key import PrefillSourceValueKey, single_buffer_stage_value_key
 from tinygrad.codegen.simplify import pm_flatten_range
 from tinygrad.renderer import Renderer
 from tinygrad.schedule.indexing import BufferizeOpts
@@ -388,11 +389,11 @@ def _tc_local_stage_ordered_local(bsh:UOp, dep:UOp|None) -> UOp:
   return bsh.after(dep) if _prefill_dbuf_lds_addr_serial() and dep is not None else bsh
 
 def _wmma_frag_proof_tag(*, operand_idx:int, lds_buffer_id:int, nbuf:int, kr:UOp|None, tile_idx:UOp, tile_count:int,
-                         tile_elems:int, producer:UOp, byte_len:int=32) -> tuple:
+                         tile_elems:int, producer:UOp, value_key:PrefillSourceValueKey|None=None, byte_len:int=32) -> tuple:
   role = "A" if operand_idx == 0 else "B"
   slot_token = None if kr is None else f"kr_mod_{nbuf}:{id(kr)}"
   # Keep the tag hashable and compact. It is a proof token for diagnostics/reuse gating, not a serialized IR.
-  return ("wmma_frag_proof",
+  tag = ("wmma_frag_proof",
     ("role", role),
     ("lds_buffer_id", lds_buffer_id),
     ("nbuf", nbuf),
@@ -404,6 +405,7 @@ def _wmma_frag_proof_tag(*, operand_idx:int, lds_buffer_id:int, nbuf:int, kr:UOp
     ("producer_epoch", id(producer)),
     ("overwrite_epoch", (lds_buffer_id, slot_token, "next")),
   )
+  return tag if value_key is None else tag + (("value_key", value_key),)
 
 
 def _tc_local_stage_contract_axes(x:UOp) -> tuple[int, ...]:
@@ -456,6 +458,11 @@ def _tc_local_stage_paired_contract_src(src:UOp, operand_idx:int, *, owner_tag:t
     tile_mul *= r.vmax+1
   slot = ((kr % nbuf) * tile_count + tile_idx) * tile_elems if kr is not None else tile_idx * tile_elems
   lds_buffer_id = 990 + operand_idx
+  value_key = None
+  if nbuf == 1:
+    value_key = single_buffer_stage_value_key(
+      role="A" if operand_idx == 0 else "B", tile_idx=tile_idx, tile_count=tile_count,
+      source=src, lds_buffer_id=lds_buffer_id)
   buffer_tag = owner_tag or ("wmma_frag_buffer_proof", ("role", "A" if operand_idx == 0 else "B"), ("lds_buffer_id", lds_buffer_id),
                              ("nbuf", nbuf), ("tile_count", tile_count), ("tile_elems", tile_elems))
   bsh = UOp.placeholder((base,), src.dtype.scalar(), lds_buffer_id, addrspace=AddrSpace.LOCAL).replace(tag=buffer_tag)
@@ -469,7 +476,9 @@ def _tc_local_stage_paired_contract_src(src:UOp, operand_idx:int, *, owner_tag:t
   stage_store_i = 0
   def _append_stage_store(idx:UOp, val:UOp) -> None:
     nonlocal prev_store, stage_store_i
-    idx = idx.replace(tag=("tc_local_stage_store", operand_idx, lds_buffer_id, stage_store_i))
+    store_tag = ("tc_local_stage_store", operand_idx, lds_buffer_id, stage_store_i)
+    if value_key is not None: store_tag += (("role", value_key.role), ("value_key", value_key))
+    idx = idx.replace(tag=store_tag)
     stage_store_i += 1
     st = idx.store(val, store_gate)
     st = st.replace(tag=idx.tag)
@@ -493,7 +502,7 @@ def _tc_local_stage_paired_contract_src(src:UOp, operand_idx:int, *, owner_tag:t
   if mul != src.dtype.count: return None
   proof_tag = _wmma_frag_proof_tag(operand_idx=operand_idx, lds_buffer_id=lds_buffer_id, nbuf=nbuf, kr=kr,
                                    tile_idx=tile_idx, tile_count=tile_count, tile_elems=tile_elems,
-                                   producer=bar, byte_len=32)
+                                   producer=bar, value_key=value_key, byte_len=32)
   ordered_local = _tc_local_stage_ordered_local(bsh, prev_store).after(bar).replace(tag=buffer_tag)
   scalar_idx = ordered_local.index(_slot_idx(frag_idx)).replace(tag=proof_tag)
   scalar = scalar_idx.load().replace(tag=proof_tag)

@@ -15,6 +15,7 @@ import pathlib
 from typing import Any
 
 from extra.qk.wmma_lds_spec import WMMALDSSpec, wmma_lds_layout_key, wmma_lds_slot_identity_proof
+from tinygrad.codegen.opt.prefill_value_key import PrefillSourceValueKey
 
 
 SCHEMA = "dbuf-s10-lds-spec-export.v1"
@@ -70,7 +71,7 @@ def _proof_windows(proof: dict[str, Any]) -> dict[tuple[str, int], S10LDSByteWin
 
 def _event(op: str, *, step: int, window: S10LDSByteWindow | None = None,
            layout_key: dict[str, Any] | None = None,
-           epoch: int | None = None, phase: str = "") -> dict[str, Any]:
+           value_key: PrefillSourceValueKey | None = None, epoch: int | None = None, phase: str = "") -> dict[str, Any]:
   row: dict[str, Any] = {"schema": EVENT_SCHEMA, "op": op, "step": step}
   if phase: row["phase"] = phase
   if epoch is not None: row["epoch"] = epoch
@@ -82,6 +83,16 @@ def _event(op: str, *, step: int, window: S10LDSByteWindow | None = None,
       "byte_window": window.to_json(),
     })
     if layout_key is not None: row["layout_key"] = dict(layout_key)
+    if value_key is not None:
+      row["source_value_key"] = value_key.to_json()
+      row["value_key"] = {
+        "role": value_key.role, "matrix": value_key.source_id[1],
+        "m_tile": value_key.output_tile[2], "n_tile": value_key.output_tile[4],
+        "k_tile": value_key.k_epoch, "k_inner": value_key.vector_offset,
+        "global_base": value_key.source_id, "buffer_id": value_key.buffer_id,
+        "output_tile": value_key.output_tile, "k_phase": value_key.k_phase,
+        "vector_offset": value_key.vector_offset, "source_id": value_key.source_id,
+      }
   return row
 
 
@@ -107,11 +118,19 @@ def s10_lds_spec_dbuf_events(spec: WMMALDSSpec, *, active_buffers: int = 2, k_ti
   if missing: raise ValueError(f"slot identity proof did not provide all requested role/slot windows: {missing!r}")
   layout_keys = {role: wmma_lds_layout_key(spec, role) for role in roles}
 
+  def value_key(role:str, epoch:int, slot:int) -> PrefillSourceValueKey:
+    operand = "src0" if role == "A" else "src1"
+    return PrefillSourceValueKey(
+      role=role, output_tile=("symbolic_output_tile", "m", spec.tile_m, "n", spec.tile_n),
+      k_epoch=epoch, k_phase=("k_tile", epoch), vector_offset=("operand_stage_wide", 0),
+      source_id=("operand", operand, "k_tile", epoch),
+      buffer_id=("lds_window", windows[(role, slot)].window_id))
+
   events: list[dict[str, Any]] = []
   step = 0
   for role in roles:
     events.append(_event("produce", step=step, epoch=0, window=windows[(role, 0)],
-                         layout_key=layout_keys[role], phase="prologue"))
+                         layout_key=layout_keys[role], value_key=value_key(role, 0, 0), phase="prologue"))
     step += 1
   events.append(_event("barrier", step=step, phase="prologue_to_body"))
   step += 1
@@ -120,14 +139,14 @@ def s10_lds_spec_dbuf_events(spec: WMMALDSSpec, *, active_buffers: int = 2, k_ti
     slot = epoch % active_buffers
     for role in roles:
       events.append(_event("consume", step=step, epoch=epoch, window=windows[(role, slot)],
-                           layout_key=layout_keys[role], phase="body"))
+                           layout_key=layout_keys[role], value_key=value_key(role, epoch, slot), phase="body"))
       step += 1
     next_epoch = epoch + 1
     if next_epoch < k_tiles:
       next_slot = next_epoch % active_buffers
       for role in roles:
         events.append(_event("produce", step=step, epoch=next_epoch, window=windows[(role, next_slot)],
-                             layout_key=layout_keys[role], phase="body"))
+                             layout_key=layout_keys[role], value_key=value_key(role, next_epoch, next_slot), phase="body"))
         step += 1
       events.append(_event("barrier", step=step, phase="body"))
       step += 1
@@ -154,7 +173,7 @@ def export_s10_lds_spec(spec: WMMALDSSpec, *, active_buffers: int = 2, k_tiles: 
     "proof_coverage": {
       "P1_epoch_lifecycle_shape": "event-like metadata only",
       "P2_byte_window": "done",
-      "P3_value_key": "not_proven",
+      "P3_value_key": "done_for_symbolic_source_buffer_identity",
       "P4_layout": "done_for_s10_lds_spec_static",
       "P5_wait_sync": "not_proven",
       "dbuf_cadence": "not_proven" if not proof["dbuf_cadence_proven"] else "proven",
@@ -182,6 +201,8 @@ def checker_compatible_events(events: list[dict[str, Any]]) -> list[dict[str, An
       row["lds_window"] = {"base": bw["base"], "bytes": bw["bytes"], "stride": bw["row_stride_bytes"]}
     if "layout_key" in event:
       row["layout_key"] = dict(event["layout_key"])
+    if "value_key" in event: row["value_key"] = dict(event["value_key"])
+    if "source_value_key" in event: row["source_value_key"] = dict(event["source_value_key"])
     out.append(row)
   return out
 

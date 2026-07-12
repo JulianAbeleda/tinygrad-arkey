@@ -278,6 +278,8 @@ def _value_tuple(value: dict[str, Any] | None) -> tuple[Any, ...] | None:
   return (
     value.get("role"), value.get("matrix"), value.get("m_tile"), value.get("n_tile"),
     value.get("k_tile"), value.get("k_inner"), value.get("global_base"), gw,
+    value.get("output_tile"), value.get("k_phase"), value.get("vector_offset"),
+    value.get("source_id"), value.get("buffer_id"),
   )
 
 

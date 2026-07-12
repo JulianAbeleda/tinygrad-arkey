@@ -1,4 +1,7 @@
 import json
+from copy import deepcopy
+
+import pytest
 
 from extra.qk.prefill.dbuf_epoch_lifecycle_checker import DBUFEvent, check_events
 from extra.qk.prefill.dbuf_s10_lds_spec_exporter import (
@@ -52,7 +55,7 @@ def test_s10_lds_spec_exporter_events_are_checker_compatible():
   assert report["ok"] is True
   assert report["producer_count"] == 6
   assert report["consumer_count"] == 6
-  assert checker_rows[0] == {
+  expected = {
     "op": "produce", "step": 0, "role": "A", "epoch": 0, "slot": 0, "window": "A:slot0:0-10240",
     "lds_window": {"base": 0, "bytes": 10240, "stride": 80},
     "layout_key": {
@@ -63,6 +66,12 @@ def test_s10_lds_spec_exporter_events_are_checker_compatible():
       "vector_bytes": 16, "lds_row_stride_bytes": 80,
     },
   }
+  assert {key: checker_rows[0][key] for key in expected} == expected
+  assert checker_rows[0]["source_value_key"] == {
+    "role": "A", "output_tile": ["symbolic_output_tile", "m", 128, "n", 128],
+    "k_epoch": 0, "k_phase": ["k_tile", 0], "vector_offset": ["operand_stage_wide", 0],
+    "source_id": ["operand", "src0", "k_tile", 0], "buffer_id": ["lds_window", "A:slot0:0-10240"],
+  }
 
 
 def test_export_s10_lds_spec_report_does_not_overclaim_cadence_or_value_proof():
@@ -72,7 +81,7 @@ def test_export_s10_lds_spec_report_does_not_overclaim_cadence_or_value_proof():
   assert report["ok"] is True
   assert report["proof_schema"] == "wmma-lds-slot-identity-proof.v1"
   assert report["proof_coverage"]["P2_byte_window"] == "done"
-  assert report["proof_coverage"]["P3_value_key"] == "not_proven"
+  assert report["proof_coverage"]["P3_value_key"] == "done_for_symbolic_source_buffer_identity"
   assert report["proof_coverage"]["P4_layout"] == "done_for_s10_lds_spec_static"
   assert report["proof_coverage"]["P5_wait_sync"] == "not_proven"
   assert report["proof_coverage"]["dbuf_cadence"] == "not_proven"
@@ -83,6 +92,53 @@ def test_export_s10_lds_spec_report_does_not_overclaim_cadence_or_value_proof():
     ("A", 1, 20480, 30720),
     ("B", 1, 30720, 40960),
   ]
+
+
+def test_single_buffer_source_value_keys_pair_and_mutations_fail():
+  rows = checker_compatible_events(s10_lds_spec_dbuf_events(_lds_spec(), active_buffers=1, k_tiles=2))
+  report = check_events([DBUFEvent.from_json(row) for row in rows])
+  assert report["ok"] is True
+  assert all(row.get("slot") in (None, 0) for row in rows)
+  produce = next(row for row in rows if row["op"] == "produce" and row["role"] == "A" and row["epoch"] == 1)
+  consume_i = next(i for i, row in enumerate(rows) if row["op"] == "consume" and row["role"] == "A" and row["epoch"] == 1)
+  assert produce["source_value_key"] == rows[consume_i]["source_value_key"]
+  for field in ("role", "k_tile", "k_inner", "global_base", "buffer_id"):
+    mutated = deepcopy(rows)
+    mutated[consume_i]["value_key"][field] = "mutated"
+    assert check_events([DBUFEvent.from_json(row) for row in mutated])["ok"] is False
+
+
+def test_double_buffer_source_value_metadata_remains_slot_compatible():
+  rows = checker_compatible_events(s10_lds_spec_dbuf_events(_lds_spec(), active_buffers=2, k_tiles=3))
+  assert check_events([DBUFEvent.from_json(row) for row in rows])["ok"] is True
+  consumes = [row for row in rows if row["op"] == "consume" and row["role"] == "B"]
+  assert [row["slot"] for row in consumes] == [0, 1, 0]
+  assert [row["source_value_key"]["k_epoch"] for row in consumes] == [0, 1, 2]
+
+
+def test_source_value_key_fails_closed_on_incomplete_or_unhashable_fields():
+  from tinygrad.codegen.opt.prefill_value_key import PrefillSourceValueKey
+  args = dict(role="A", output_tile=("tile", 0), k_epoch=0, k_phase=("k", 0),
+              vector_offset=("vec", 0), source_id=("src", 0), buffer_id=("lds", 0))
+  with pytest.raises(ValueError, match="complete"):
+    PrefillSourceValueKey(**(args | {"source_id": None}))
+  with pytest.raises(TypeError, match="hashable"):
+    PrefillSourceValueKey(**(args | {"buffer_id": ["lds", 0]}))
+
+
+def test_equivalent_independently_built_uops_have_equal_source_value_keys():
+  from tinygrad.codegen.opt.prefill_value_key import single_buffer_stage_value_key
+  from tinygrad.dtype import dtypes
+  from tinygrad.uop.ops import UOp
+  tile_a = UOp.const(dtypes.weakint, 2) * 4 + 1
+  source_a = UOp.const(dtypes.float, 3.0) + UOp.const(dtypes.float, 4.0)
+  tile_b = UOp.const(dtypes.weakint, 2) * 4 + 1
+  source_b = UOp.const(dtypes.float, 3.0) + UOp.const(dtypes.float, 4.0)
+  key_a = single_buffer_stage_value_key(role="B", tile_idx=tile_a, tile_count=8, source=source_a, lds_buffer_id=991)
+  key_b = single_buffer_stage_value_key(role="B", tile_idx=tile_b, tile_count=8, source=source_b, lds_buffer_id=991)
+  assert key_a == key_b
+  assert hash(key_a) == hash(key_b)
+  assert key_a.vector_offset == ("operand_stage_wide", 0)
 
 
 def test_export_s10_lds_spec_reports_failed_identity_without_events():
