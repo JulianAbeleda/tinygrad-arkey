@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 import pytest
 
-from tinygrad.runtime.bridge import CompileArtifact, build_executable
+from tinygrad.runtime.bridge import CompileArtifact, build_executable, prepare_executable
 from tinygrad.uop.ops import Ops, ProgramInfo, UOp
 
 
@@ -34,3 +34,16 @@ def test_mock_runtime_is_executable_but_not_dispatched_on_construction():
   assert rt.calls == 0
   assert handle() == "done"
   assert rt.calls == 1
+
+
+def test_prepare_executable_joins_compile_evidence_to_program_without_dispatch():
+  class Runtime:
+    lib = b"ok"
+    def __call__(self, *args, **kwargs): raise AssertionError("dispatch must be explicit")
+  with patch("tinygrad.runtime.bridge.get_runtime", return_value=Runtime()):
+    handle = prepare_executable(program(b"ok"), {"passed": True, "binary_sha256": hashlib.sha256(b"ok").hexdigest()}, device="CPU")
+  assert handle.artifact.binary == b"ok"
+  with patch("tinygrad.runtime.bridge.get_runtime") as resolver:
+    with pytest.raises(ValueError, match="identity"):
+      prepare_executable(program(b"ok"), {"passed": True, "binary_sha256": "f" * 64}, device="CPU")
+  resolver.assert_not_called()
