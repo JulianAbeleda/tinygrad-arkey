@@ -431,6 +431,21 @@ repaired or disproven.  The next repair packet is narrowly bounded:
    identify whether control flow or overwrite-before-consume is causal;
 4. require exact full-shape correctness twice before any timing.
 
+Additional canary evidence: a K96 double-buffer kernel (the first shape that
+takes the backedge more than once) faults, while a forced-no-backedge K96
+variant completes dispatch but is intentionally numerically incomplete.  The
+encoded branch target is statically correct at the same loop target for K64,
+K96, K128, and K4096.  Inserting 32 scalar NOPs before the backedge does not
+restore completion.  The failure is therefore classified as an unsafe
+taken-backedge/alternating-bank lifecycle, not as a malformed branch offset or
+a simple wait-count timing shortage.
+
+At this point the raw atom is `raw_pipe_benchmark_ineligible`: the evidence is
+sufficient to reject it as a comparison authority, but not sufficient to claim
+a production repair.  Any repair must replace the current alternating-bank
+recurrence with an explicitly proved producer/consume/release lifecycle and
+then pass the existing exact guarded correctness gate.
+
 No evidence currently justifies claiming that the hand pipe is faster than
 generated direct-L2.  The only valid measured comparison remains generated
 direct-L2 versus proven WMMA-LDS, where LDS wins.
