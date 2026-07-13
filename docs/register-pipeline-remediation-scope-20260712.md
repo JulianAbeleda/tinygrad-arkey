@@ -216,6 +216,129 @@ Exit criteria:
   eligibility result;
 - legacy LDS behavior remains unchanged.
 
+## Remaining Path to Completion (2026-07-12 Audit)
+
+The fixed-stage-use representation is complete as of `84cece736`: packed A/B
+stage leases are consumed as existing physical registers rather than virtual
+definitions.  The exact compile-only kernel now reaches final register
+allocation with stage-read pressure removed.  The following work remains and
+must be completed in order; solving a later item does not waive an earlier
+gate.
+
+### F. Epilogue lifetime closure (current blocker)
+
+The exact `attn_qo 512x4096x4096` kernel currently keeps 64 output-address
+values and the accumulator/output carriers live together at the reduction
+boundary.  Linear allocation requests spills even though the arithmetic is
+individually legal.  AMD:ISA intentionally has no spill fallback.
+
+1. Serialize output stores with explicit graph dependencies.
+2. Materialize or rematerialize each output address adjacent to its store.
+3. Ensure store scheduling does not extend accumulator or loop-address
+   lifetimes backward across the reduction.
+4. Retain fixed accumulator ownership and exact output lane mapping.
+
+Exit criteria:
+
+- the exact kernel completes final register allocation with zero spills;
+- no scratch allocation or hidden spill/fill instructions are emitted;
+- output addresses have bounded, local live ranges in the final linear stream;
+- epilogue ordering tests preserve every output exactly once.
+
+### G. Final resource and binary authority
+
+Passing allocation is necessary but not sufficient.  Host estimates and
+pre-isel lease plans cannot authorize execution.
+
+1. Capture final VGPR, SGPR, LDS, scratch, wave, and workgroup metadata from
+   the assembled program.
+2. Capture allocator intervals and encoded register operands from the same
+   compilation.
+3. Join those facts to candidate identity, target/ABI, and binary hash.
+4. Reject occupancy below the explicitly selected floor; do not infer that
+   zero spills implies acceptable occupancy.
+
+Exit criteria:
+
+- final artifact reports zero LDS and zero scratch for the register route;
+- all encoded A/B/C operands lie in their authoritative intervals;
+- resource metadata and binary hash are immutable and identity-joined;
+- a stale or host-estimated resource record cannot pass compile eligibility.
+
+### H. Instruction-order and memory-safety proof
+
+Assembler success can still hide an incorrect wait, overwrite, or address.
+
+1. Prove `global_load -> vmcnt(0) -> stage_write -> fixed_stage_use -> WMMA`
+   for every staged fragment and loop epoch.
+2. Prove no stage lease is overwritten before its final consumer.
+3. Prove all global loads/stores are in bounds for exact and edge tiles.
+4. Verify ABI parameter order, workgroup mapping, vector alignment, and tail
+   behavior against the candidate identity.
+
+Exit criteria:
+
+- final disassembly, not only graph IR, satisfies every ordering edge;
+- stage overwrite, missing wait, duplicate/missing output, and out-of-bounds
+  mutations fail deterministic compile-only tests;
+- no LDS/barrier instruction is present unless the route identity is LDS.
+
+### I. Numerical promotion and fault containment
+
+The first hardware execution remains a separate promotion event.  Compilation
+must never automatically enable dispatch.
+
+1. Start with bounded canaries and guarded allocations under an external
+   timeout/reset-aware harness.
+2. Compare against a trusted implementation across deterministic and adversarial
+   inputs, including nonfinite and accumulation-sensitive cases.
+3. Expand from one workgroup to representative tiles, then the exact shape.
+4. Revoke eligibility on timeout, reset, guard corruption, nondeterminism, or
+   numerical failure.
+
+Exit criteria:
+
+- canary and exact-shape tolerances are predefined and pass repeatedly;
+- guard regions and device health checks remain clean;
+- correctness evidence is joined to the exact binary/resource artifact;
+- dispatch remains default-off without that evidence.
+
+### J. L2-to-VGPR versus LDS decision
+
+Direct L2/global-to-VGPR is a candidate schedule, not the predetermined winner.
+Likely post-correctness blockers include lower occupancy from VGPR use, memory
+latency not hidden by a one-slot sequential schedule, instruction overhead,
+and loss of cross-wave reuse that LDS provides.
+
+1. Benchmark the exact register and LDS binaries under identical inputs and
+   measurement controls.
+2. Record latency, throughput, occupancy, cache behavior, and variance by
+   role/shape.
+3. Select per exact identity; preserve LDS fallback and never generalize from
+   one favorable shape.
+
+Exit criteria:
+
+- direct staging is promoted only where it is correct, stable, and materially
+  better than LDS;
+- regressions or inconclusive measurements retain the LDS route;
+- selection evidence is versioned with compiler and binary identity.
+
+### Anticipated failure classes
+
+These are explicit audit targets rather than reasons to preemptively weaken
+the design:
+
+- fixed-register aliasing between ABI, accumulators, stages, and temporaries;
+- occupancy collapse despite zero spills;
+- instruction-encoding or descriptor limits exposed only after assembly;
+- wait-counter assumptions invalidated by load regrouping;
+- loop-carried dependencies that serialize too much and erase latency hiding;
+- edge/tail tiles diverging from the exact aligned shape;
+- numerical differences from fp16 packing or accumulator lane mapping;
+- compile cache or warmstart evidence reused across a different binary;
+- hardware hangs or resets despite graph-level correctness.
+
 ## Verification Matrix
 
 ### CPU-only unit tests
