@@ -7,7 +7,7 @@ from tinygrad.codegen.opt import Opt, OptOps
 from tinygrad.helpers import Target, getenv
 from tinygrad.renderer.isa import IselContext, Register
 from tinygrad.renderer.isa.amd import (
-  AMDISARenderer, FRAG_BASE, FRAG_TOP, WMMA_ACC_BASE, _vpool, _acc_top, AMDOps, _wmma_chain_prev, decompose_lds_index, isel_index, isel_store, lower_inst)
+  AMDISARenderer, FRAG_BASE, FRAG_TOP, WMMA_ACC_BASE, _vpool, _acc_top, AMDOps, _wmma_chain_prev, _chain_epilogue_stores, decompose_lds_index, isel_index, isel_store, lower_inst)
 from tinygrad.codegen import full_rewrite_to_sink, to_program, to_program_cache
 from tinygrad.codegen.late.devectorizer import load_store_folding
 from tinygrad.renderer.amd.dsl import Reg
@@ -18,6 +18,37 @@ class TestAMDISAWmmaCarrierNormalization(unittest.TestCase):
     carrier = UOp(Ops.STACK, dtypes.float.vec(8), tuple(base.gep((i,)) for i in range(8)))
     self.assertIs(_wmma_chain_prev(carrier), base)
     self.assertIsNone(_wmma_chain_prev(carrier.replace(src=carrier.src[:-1] + (base.gep((0,)),))))
+
+
+class TestAMDISAEpilogueStoreChaining(unittest.TestCase):
+  def test_linear_epilogue_serializes_every_store_once(self):
+    # The first store is the chain head; N stores therefore have N-1 predecessor edges.
+    stores = []
+    for i in range(68):
+      off = UOp.const(dtypes.int32, i)
+      stores.append(UOp(Ops.INS, dtypes.void, src=(off, UOp.const(dtypes.int32, 0),
+        UOp.const(dtypes.float32, 0), UOp.const(dtypes.int32, 4)), arg=AMDOps.GLOBAL_STORE,
+        tag=("store_owner", i)))
+    sink = UOp(Ops.SINK, dtypes.void, src=tuple(stores))
+    ctx = IselContext(sink); ctx._ncruns = 2
+    out = _chain_epilogue_stores(ctx, sink)
+    out_stores = [u for u in out.toposort() if u.op is Ops.INS and u.arg is AMDOps.GLOBAL_STORE]
+    self.assertEqual(len(out_stores), 68)
+    edges = []
+    for st in out_stores:
+      predecessors = [u for u in st.src[0].src if u.op is Ops.INS and u.arg is AMDOps.GLOBAL_STORE]
+      expected = 0 if st.tag[1] == 0 else st.tag[1] - 1
+      self.assertEqual(len(predecessors), 0 if st.tag[1] == 0 else 1)
+      if predecessors: self.assertEqual(predecessors[0].tag[1], expected)
+      edges.extend(predecessors)
+    self.assertEqual(len(edges), 67)
+    self.assertEqual(len({id(u) for u in edges}), 67)
+    self.assertEqual({u.tag[1] for u in out_stores}, set(range(68)))
+    pred = {u.tag[1]: [s for s in u.src[0].src if s.op is Ops.INS and s.arg is AMDOps.GLOBAL_STORE] for u in out_stores}
+    self.assertEqual(sum(not ps for ps in pred.values()), 1)
+    self.assertEqual({tag for tag, ps in pred.items() if not ps}, {0})
+    self.assertTrue(all(len(pred[tag]) == 1 for tag in range(1, 68)))
+    self.assertEqual([pred[tag][0].tag[1] for tag in range(1, 68)], list(range(67)))
 
 
 def _tc_matmul_ast():

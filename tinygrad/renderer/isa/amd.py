@@ -1728,19 +1728,67 @@ def isel_wmma(ctx:IselContext, x:UOp):
       prev = memo[tile] = _build_wmma_tile(ctx, tile.src[0], tile.src[1], cin, abase, bbase, cbase, dep)
   return memo[x]
 
+def _epilogue_address_recipe(ctx:IselContext, root:UOp, continuation:tuple[UOp, ...]) -> UOp|None:
+  """Replay the final byte-address recipe after its value and preceding store, preserving its data operands exactly."""
+  if root.op is Ops.CONST:
+    return UOp(Ops.INS, root.dtype, src=(root.rtag(),) + continuation, arg=AMDOps.V_MOVK, tag=(ctx.vreg(_vpool(ctx)),))
+  if not (root.op is Ops.INS and isinstance(root.tag, tuple) and len(root.tag) == 1 and type(root.tag[0]) is Register): return None
+  # Global INDEX selection ends in V_OFFSET(V_IADD(...), shift).  The V_IADD is the actual per-output logical address;
+  # replay it as part of the continuation instead of retaining its pre-reduction definition.  Its operands are the
+  # immutable lane/workgroup address recipe, so this changes neither the integer expression nor output ownership.
+  src = root.src
+  # Scalar GEP selection can leave a NOOP lane carrier here.  UOp.reg and V_OFFSET lowering intentionally consume only
+  # carrier.src[0]; the remaining lanes are not data operands.  Extract that selected lane before replay so the other
+  # 63 output addresses are not retained as false dependencies of every store.
+  selected = src[0].src[0] if root.arg is AMDOps.V_OFFSET and src and src[0].op is Ops.NOOP and src[0].src else src[0]
+  if root.arg is AMDOps.V_OFFSET and selected.op is Ops.INS and selected.arg is AMDOps.V_IADD:
+    addr = selected
+    if not (isinstance(addr.tag, tuple) and len(addr.tag) == 1 and type(addr.tag[0]) is Register): return None
+    addr = addr.replace(src=addr.src + continuation, tag=(ctx.vreg(addr.tag[0].cons),))
+    src = (addr,) + src[1:]
+  return root.replace(src=src + continuation, tag=(ctx.vreg(root.tag[0].cons),))
+
+def _epilogue_value_recipe(ctx:IselContext, val:UOp, continuation:tuple[UOp, ...]) -> UOp:
+  """Replay post-loop accumulator moves/conversion in the same per-store continuation."""
+  if val.op is not Ops.INS or val.arg not in (AMDOps.MOV, AMDOps.V_CVT_F2H): return val
+  if not (isinstance(val.tag, tuple) and len(val.tag) == 1 and type(val.tag[0]) is Register): return val
+  src = tuple(_epilogue_value_recipe(ctx, s, continuation) for s in val.src)
+  return val.replace(src=src + continuation, tag=(ctx.vreg(val.tag[0].cons),))
+
+def _serialize_register_stage_writes(x:UOp) -> UOp:
+  """Keep each register-stage load pair adjacent to its fixed-register write."""
+  nwrites = len([u for u in x.toposort() if u.op is Ops.INS and u.arg is AMDOps.STAGE_WRITE])
+  ret = x
+  for i in range(1, nwrites):
+    writes = [u for u in ret.toposort() if u.op is Ops.INS and u.arg is AMDOps.STAGE_WRITE]
+    prev, sw = writes[i-1], writes[i]
+    subs:dict[UOp,UOp] = {}
+    for src in sw.src[:2]:
+      load = src.src[0] if src.op is Ops.AFTER and src.src else src
+      if load.op is Ops.INS and load.arg in (AMDOps.GLOBAL_LOAD, AMDOps.GLOBAL_LOAD_B128):
+        subs[load] = load.replace(src=load.src + (prev,))
+    if subs: ret = ret.substitute(subs)
+  return ret
+
 def _chain_epilogue_stores(ctx:IselContext, x:UOp):
-  # L5: serialize the multi-output-tile store epilogue (thread offset_k -> store_{k-1} as an IGNORED trailing src) so the
-  # linearizer emits offset_0,store_0,offset_1,store_1,... -> short live ranges, regalloc reuses a tiny pool (not 128).
+  # L5: replay each output address only after the rolled reduction, then serialize store_k -> address_{k+1}.  Replaying
+  # rather than decorating the old address root is essential: otherwise its pre-reduction V_IADD inputs remain live.
   if not _c_low(ctx) or getattr(ctx, "_epi_chained", False): return None
+  x = _serialize_register_stage_writes(x)
   stores = [u for u in x.toposort() if u.op is Ops.INS and u.arg is AMDOps.GLOBAL_STORE]
   if len(stores) < 2: return None
-  ctx._epi_chained = True
-  subs:dict[UOp,UOp] = {}; prev = stores[0]
-  for st in stores[1:]:
-    off = st.src[0]
-    new_off = off.replace(src=off.src + (prev,))
-    new_st = st.replace(src=(new_off,) + st.src[1:])
+  # Each store's value is its own non-cyclic completion anchor; output values are post-reduction accumulator reads while
+  # register-stage stores retain their existing loop placement.  Every recipe also follows the preceding store.
+  # Build all replacements before publishing the transform; an unsupported address shape preserves the original graph.
+  subs:dict[UOp,UOp] = {}; prev:UOp|None = None
+  for st in stores:
+    order = () if prev is None else (prev,)
+    vals = tuple(_epilogue_value_recipe(ctx, v, order) for v in st.src[2:-1])
+    continuation = vals + order
+    if (new_off := _epilogue_address_recipe(ctx, st.src[0], continuation)) is None: return None
+    new_st = st.replace(src=(new_off, st.src[1]) + vals + st.src[-1:])
     subs[st] = new_st; prev = new_st
+  ctx._epi_chained = True
   ret = x.substitute(subs)
   if getenv("EPICHAIN_DEBUG", 0):
     chained = [u for u in ret.toposort() if u.op is Ops.INS and u.arg is AMDOps.GLOBAL_STORE and
@@ -1804,6 +1852,11 @@ post_isel_matcher = PatternMatcher([
 ])
 
 def _strip_linear_order_deps(x:UOp):
+  # Pair lowering owns register-stage writes.  A few scalar STORE shadows can remain reachable through GROUP ordering;
+  # they have STAGE_READ in both global-address slots and are not memory effects (nor valid scalar base pointers).
+  if x.arg is AMDOps.GLOBAL_STORE and len(x.src) >= 2 and x.src[0].arg is AMDOps.STAGE_READ and x.src[1].arg is AMDOps.STAGE_READ:
+    nx = UOp(Ops.NOOP, dtypes.void)
+    return (nx, [])
   nx = None
   if x.arg is AMDOps.GLOBAL_LOAD and len(x.src) > 3: nx = x.replace(src=x.src[:3])
   elif x.arg is AMDOps.DS_LOAD and len(x.src) > 2: nx = x.replace(src=x.src[:2])
@@ -1817,7 +1870,7 @@ def _strip_linear_order_deps(x:UOp):
 
 def _strip_metadata_tag(x:UOp):
   if isinstance(x.tag, tuple) and x.tag and x.tag[0] in ("wmma_frag_buffer_proof", "tc_local_stage_store", "wmma_frag_stage_window",
-                                                         "prefill_source_value_key"):
+                                                         "prefill_source_value_key", "register_stage_pair", "register_pipe_stage_buffer"):
     nx = x.replace(tag=None)
     return (nx, [nx])
   return None

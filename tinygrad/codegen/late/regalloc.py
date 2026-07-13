@@ -74,6 +74,49 @@ class LinearScanRegallocContext:
           if u.op is Ops.END:
             sys.stderr.write(f"  END {i}: src={[(s.op, getattr(s, 'arg', None), getattr(s.reg, 'index', None)) for s in u.src]}\n")
 
+    # Keep this separate from REGALLOC_DEBUG: it is intended for the exact first
+    # spill request, and is off unless explicitly requested.
+    pressure_reported = False
+    def report_pressure(i:int, v:Register):
+      nonlocal pressure_reported
+      if pressure_reported or not getenv("REGALLOC_DEBUG_PRESSURE", 0): return
+      pressure_reported = True
+      import sys
+      fixed:dict[int,list[int]] = {}
+      for j,u in enumerate(uops):
+        for s in u.src:
+          if isinstance(s.reg, FixedRegisterUse): fixed.setdefault(s.reg.index, []).append(j)
+        if isinstance(u.tag, tuple):
+          for r in u.tag:
+            if isinstance(r, FixedRegisterUse): fixed.setdefault(r.index, []).append(j)
+      fixed_ranges = {r:(min(xs), max(xs)) for r,xs in fixed.items()}
+      live_counts = [0] * len(uops)
+      physical_regs = [set[int]() for _ in uops]
+      for vr, rng in lr.items():
+        lo, hi = rng[0], rng[-1]
+        candidates = {r.index for r in vr.cons}
+        for j in range(lo, hi + 1):
+          live_counts[j] += 1
+          physical_regs[j].update(candidates)
+      peak_v = max(range(len(uops)), key=live_counts.__getitem__) if uops else 0
+      physical_counts = [len(x) for x in physical_regs]
+      peak_p = max(range(len(uops)), key=physical_counts.__getitem__) if uops else 0
+      cats:dict[str,int] = {}
+      for vr,rng in lr.items():
+        lo, hi = rng[0], rng[-1]
+        if lo <= peak_v <= hi:
+          d = uops[lo]
+          name = str(d.arg).split(".", 1)[-1] if d.op is Ops.INS else str(d.op).split(".")[-1]
+          cats[name] = cats.get(name, 0) + 1
+      largest = sorted(((rng[-1]-rng[0]+1, vr.index, rng[0], rng[-1], len(vr.cons)) for vr,rng in lr.items()), reverse=True)[:12]
+      pool = len({r.index for vr in lr for r in vr.cons})
+      sys.stderr.write(f"REGALLOC_PRESSURE: spill_request=v{v.index} at={i} pool={pool} "
+                       f"peak_virtual={live_counts[peak_v] if uops else 0}@{peak_v} "
+                       f"peak_candidate_slots={physical_counts[peak_p] if uops else 0}@{peak_p}\n")
+      sys.stderr.write(f"  FIXED_RANGES {sorted(fixed_ranges.items())}\n")
+      sys.stderr.write(f"  PEAK_CONTRIBUTORS {sorted(cats.items(), key=lambda x:-x[1])[:20]}\n")
+      sys.stderr.write(f"  LARGEST_RANGES {largest}\n")
+
     # allocate registers
     self.stack_size: int = 0
     self.locals: dict[UOp, UOp] = {}
@@ -129,6 +172,7 @@ class LinearScanRegallocContext:
         if emit_remat_before: self.remat_before.setdefault(i, []).append(v)
         return r
       if v not in self.spills:
+        report_pressure(i, v)
         dt = self.vdef(v).dtype
         sz = dt.scalar().itemsize * dt.count if not isinstance(dt, PtrDType) else 8
         offset = self.stack_size + (sz - self.stack_size % sz) % sz
@@ -239,6 +283,29 @@ class LinearScanRegallocContext:
     self._remat_uops[(i, v)] = ret
     return ret
 
+def _nosspill_diagnostic(ctx:LinearScanRegallocContext, i:int, phase:str):
+  if not getenv("REGALLOC_DEBUG_NOSPILL", 0): return
+  import sys
+  lr, uops = ctx.live_range, ctx.uops
+  live = [(v, r) for v, r in lr.items() if r[0] <= i <= r[-1]]
+  fixed = []
+  for u in uops[max(0, i-32):min(len(uops), i+33)]:
+    for s in u.src:
+      if isinstance(getattr(s, "reg", None), FixedRegisterUse): fixed.append((u, s.reg))
+  fixed_ids = sorted({r.index for _, r in fixed})
+  sys.stderr.write(f"REGALLOC_NOSPILL: phase={phase} uop={i} peak_live_virtual={len(live)} "
+                   f"live_virtual={len(live)} fixed_nearby={len(fixed_ids)} fixed_ranges={fixed_ids}\n")
+  cats = {}
+  for v, r in live:
+    d = ctx.vdef(v)
+    name = str(d.arg).split(".", 1)[-1] if d.op is Ops.INS else str(d.op).split(".")[-1]
+    cats[name] = cats.get(name, 0) + 1
+  sys.stderr.write("  largest_contributors=" + ", ".join(f"{k}:{n}" for k,n in sorted(cats.items(), key=lambda x:-x[1])[:12]) + "\n")
+  for v, r in sorted(live, key=lambda x:(x[1][0], x[0].index)):
+    sys.stderr.write(f"  LIVE v{v.index} cons={[r.index for r in v.cons]} range={r} def={ctx.vdef(v).op}:{ctx.vdef(v).arg}\n")
+  for u, r in fixed:
+    sys.stderr.write(f"  FIXED r{r.index} at_uop={uops.index(u)} op={u.op}:{u.arg}\n")
+
 def regalloc_rewrite(ctx:LinearScanRegallocContext, x:UOp):
   i = next(ctx.idx)
   if x.op in PSEUDO_OPS: return None
@@ -248,7 +315,10 @@ def regalloc_rewrite(ctx:LinearScanRegallocContext, x:UOp):
     # v here is the virtual defined by the original s as s is the rewritten version
     v = ctx.uops[i].src[j].reg
     if isinstance(v, FixedRegisterUse): nsrc.append(s)
-    elif i in ctx.reals and v in ctx.spills: nsrc.append(ctx.ren.fill(ctx.spills[v], ctx.vdef(v), ctx.reals[i][v]))
+    elif i in ctx.reals and v in ctx.spills:
+      try: nsrc.append(ctx.ren.fill(ctx.spills[v], ctx.vdef(v), ctx.reals[i][v]))
+      except NotImplementedError:
+        _nosspill_diagnostic(ctx, i, "fill"); raise
     elif isinstance(v, Register) and (i, v) in ctx.remats:
       rs, rb = ctx.remat(v, i)
       before += rb
@@ -264,12 +334,17 @@ def regalloc_rewrite(ctx:LinearScanRegallocContext, x:UOp):
     emitted_remats.add(v)
     _rs, rb = ctx.remat(v, i)
     before += rb
-  before = [ctx.ren.fill(ctx.spills[v], ctx.vdef(v), r) for v,r in ctx.insert_before.get(i, [])] + before
-  after = [ctx.ren.spill(ctx.spills[v], nx) for v in x.tag if v in ctx.spills] if isinstance(x.tag, tuple) else []
+  try:
+    before = [ctx.ren.fill(ctx.spills[v], ctx.vdef(v), r) for v,r in ctx.insert_before.get(i, [])] + before
+    after = [ctx.ren.spill(ctx.spills[v], nx) for v in x.tag if v in ctx.spills] if isinstance(x.tag, tuple) else []
+  except NotImplementedError:
+    _nosspill_diagnostic(ctx, i, "spill_or_fill"); raise
 
   # alloc/dealloc stack
   if ctx.stack_size > 0:
-    sp = ctx.ren.stack_pointer()
+    try: sp = ctx.ren.stack_pointer()
+    except NotImplementedError:
+      _nosspill_diagnostic(ctx, i, "stack_pointer"); raise
     offset = UOp(Ops.CONST, sp.dtype, arg=ctx.stack_size)
     if i == 0: before = [ctx.ren.isel_matcher.rewrite(UOp(Ops.SUB, sp.dtype, (sp, offset), tag=sp.tag))] + before
     elif i == len(ctx.uops) - 2: before += [ctx.ren.isel_matcher.rewrite(UOp(Ops.ADD, sp.dtype, (sp, offset), tag=sp.tag))]
