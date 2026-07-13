@@ -68,10 +68,29 @@ def test_prefill_role_routes_names_decoupled_lds_dbuf_role():
   }
 
 
+def test_prefill_role_routes_names_external_hybrid_backend_atoms():
+  assert whole._prefill_role_routes(whole.PREFILL_HYBRID_BACKEND_ATOM_ROUTE) == {
+    "attn_qo": "raw_pipe_oracle",
+    "attn_kv": "raw_pipe_oracle",
+    "ffn_down": "raw_pipe_oracle",
+    "ffn_gate_up": "raw_lds2_oracle",
+  }
+
+
 def test_route_binding_gate_accepts_existing_pipe_route(monkeypatch):
   monkeypatch.setattr(whole, "effective_routes", lambda env=None: _effective(whole.PREFILL_WMMA_PIPE_ROUTE))
   gate = whole.route_binding_gate(_report(), whole.PREFILL_WMMA_PIPE_ROUTE, env={})
   assert gate["verdict"] == "PREFILL_ROUTE_BINDING_PASS"
+  assert gate["failures"] == []
+
+
+def test_route_binding_gate_accepts_explicit_external_hybrid_comparator(monkeypatch):
+  route_id = whole.PREFILL_HYBRID_BACKEND_ATOM_ROUTE
+  monkeypatch.setattr(whole, "effective_routes", lambda env=None: _effective(route_id))
+  gate = whole.route_binding_gate(_report(route_id, prefill_route_pure=False, prefill_route_rolled_back=True,
+                                          prefill_route_provenance="external_handwritten_kernel"), route_id, env={})
+  assert gate["verdict"] == "PREFILL_ROUTE_BINDING_PASS"
+  assert gate["binding_regime"] == "external_comparator"
   assert gate["failures"] == []
 
 

@@ -24,7 +24,7 @@ def test_route_surface_rows_classify_known_surfaces():
   assert audit.route_surface_row("prefill_wmma_pipe_lds_dbuf_primitive_generated")["surface_class"] == "compiler_primitive_spec_owned_asm_backend_atom"
   assert audit.route_surface_row("prefill_wmma_pipe_lds_dbuf_primitive_generated")["strict_pure"] is False
   assert audit.route_surface_row("prefill_q4k_direct_tile4x4_default")["surface_class"] == "descriptor_owned_uop_codegen"
-  assert "Ops.INS" in audit.route_surface_row("prefill_pipe_role_selective_generated")["markers"]["extra/qk/prefill_graph_gemm_route.py"]
+  assert "preassembled_linear" in audit.route_surface_row("prefill_pipe_role_selective_generated")["markers"]["extra/qk/prefill_graph_gemm_route.py"]
 
 
 def test_surface_rows_distinguish_backend_asm_from_hand_kernel_authorship():

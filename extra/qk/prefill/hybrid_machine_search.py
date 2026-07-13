@@ -256,16 +256,18 @@ def write_candidate(path: pathlib.Path = DEFAULT_OUTPUT, *, active_buffers: int 
   record = build_role_shape_candidate(select_prefill_role_shape(profile=profile, role=role),
                                       active_buffers=active_buffers)
   path.parent.mkdir(parents=True, exist_ok=True)
-  path.write_text(json.dumps(record, indent=2) + "\n")
-  return record
+  serialized = json.dumps(record, indent=2)
+  path.write_text(serialized + "\n")
+  return json.loads(serialized)
 
 
 def write_search_report(path: pathlib.Path = DEFAULT_SEARCH_OUTPUT, *, active_buffers: int = 2,
                         profile: str = DEFAULT_PROFILE, role: str = ROLE) -> dict[str, Any]:
   report = build_search_report(active_buffers=active_buffers, profile=profile, role=role)
   path.parent.mkdir(parents=True, exist_ok=True)
-  path.write_text(json.dumps(report, indent=2) + "\n")
-  return report
+  serialized = json.dumps(report, indent=2)
+  path.write_text(serialized + "\n")
+  return json.loads(serialized)
 
 
 def _as_float(v: Any) -> float:

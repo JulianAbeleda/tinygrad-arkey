@@ -8,11 +8,50 @@ from tinygrad.renderer.amd.dsl import Reg, FixedBitField
 from tinygrad.runtime.autogen.amd.common import OpType
 
 # instructions used for padding
-from tinygrad.runtime.autogen.amd.rdna3.ins import s_code_end # same encoding as RDNA4
+from tinygrad.runtime.autogen.amd.rdna3.ins import s_code_end, s_branch, s_cbranch_scc0, s_cbranch_scc1 # same encoding as RDNA4
 from tinygrad.runtime.autogen.amd.cdna.ins import s_nop as s_nop_cdna
 
 _arch_map = {"gfx9": "cdna", "gfx10": "rdna3", "gfx11": "rdna3", "gfx12": "rdna4"}
+
+def resolve_symbolic_control_flow(lin:UOp) -> UOp:
+  """Resolve final-stream AMD labels/branches immediately before serialization.
+
+  Raw/preassembled kernels retain symbolic control flow while instruction order
+  and waits are finalized.  Both the native AMD:ISA renderer and the ordinary
+  AMD production renderer eventually serialize through this module, so this is
+  the shared ownership boundary where byte-relative branch offsets become safe.
+  """
+  if not any(isinstance(u.arg, tuple) and u.arg[:1] in (("label",), ("branch",)) for u in lin.src): return lin
+  positions, labels, off = [], {}, 0
+  for u in lin.src:
+    positions.append(off)
+    arg = u.arg
+    if isinstance(arg, tuple) and arg[:1] == ("label",):
+      if arg[1] in labels: raise RuntimeError(f"duplicate AMD control-flow label {arg[1]!r}")
+      labels[arg[1]] = off
+    elif isinstance(arg, tuple) and arg[:1] == ("branch",): off += 4
+    elif isinstance(arg, tuple) and arg[:1] == ("audit_dbuf_d3a_stage",): pass
+    else: off += len(arg.to_bytes())
+
+  branch_ops = {"s_branch": s_branch, "s_cbranch_scc0": s_cbranch_scc0, "s_cbranch_scc1": s_cbranch_scc1}
+  out = []
+  for u, pos in zip(lin.src, positions):
+    arg = u.arg
+    if isinstance(arg, tuple) and arg[:1] == ("label",): continue
+    if isinstance(arg, tuple) and arg[:1] == ("branch",):
+      _, kind, target = arg
+      if target not in labels: raise RuntimeError(f"unknown AMD control-flow label {target!r}")
+      if kind not in branch_ops: raise RuntimeError(f"unsupported AMD symbolic branch {kind!r}")
+      delta = labels[target] - pos - 4
+      if delta % 4: raise RuntimeError(f"unaligned AMD branch target {target!r}: byte delta {delta}")
+      simm = delta // 4
+      if not (-0x8000 <= simm <= 0x7fff): raise RuntimeError(f"AMD branch offset {simm} out of simm16 range for {target!r}")
+      out.append(UOp(Ops.INS, arg=branch_ops[kind](simm16=simm & 0xffff)))
+    else: out.append(u)
+  return lin.replace(src=tuple(out))
+
 def assemble_linear(prg:UOp, lin:UOp, arch:str) -> bytes:
+  lin = resolve_symbolic_control_flow(lin)
   insts = [u.arg for u in lin.src]
 
   # ** scan for max vgpr/sgpr/accvgpr

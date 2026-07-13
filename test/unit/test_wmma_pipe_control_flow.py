@@ -4,6 +4,7 @@ from extra.qk.prefill.wmma import build_gemm_pipe
 from tinygrad.helpers import Target
 from tinygrad.renderer.isa.amd import AMDISARenderer, preassembled_linear
 from tinygrad.uop.ops import Ops, UOp
+from tinygrad.renderer.amd.elf import assemble_linear
 
 
 class TestWMMAPipeControlFlow(unittest.TestCase):
@@ -53,6 +54,12 @@ class TestWMMAPipeControlFlow(unittest.TestCase):
     branch = next(i for i, u in enumerate(final.src) if str(u.arg).startswith("s_cbranch_scc1"))
     self.assertLess(init, first_f1_load)
     self.assertLess(first_f1_load, branch)
+
+  def test_ordinary_amd_elf_path_resolves_preassembled_pipe_control_flow(self):
+    raw = build_gemm_pipe(32, 32, 96, 2, 2)
+    program = UOp(Ops.PROGRAM, src=(UOp(Ops.SINK),))
+    binary = assemble_linear(program, preassembled_linear(raw), "gfx1100")
+    self.assertTrue(binary)
 
 
 if __name__ == "__main__": unittest.main()

@@ -33,6 +33,7 @@ ARTIFACT_DIR = ROOT / "bench/prefill-whole-synced"
 PREFILL_WMMA_PIPE_ROUTE = "prefill_wmma_pipe_primitive_generated"
 PREFILL_WMMA_PIPE_LDS_DBUF_ROUTE = "prefill_wmma_pipe_lds_dbuf_primitive_generated"
 PREFILL_WMMA_LDS_DBUF_MIXED_ROUTE = "prefill_wmma_lds_dbuf_primitive_mixed"
+PREFILL_HYBRID_BACKEND_ATOM_ROUTE = "prefill_pipe_role_selective_generated"
 PREFILL_ROLE_ROUTES_PIPE = {
   "attn_qo": "pipe",
   "attn_kv": "pipe",
@@ -50,6 +51,12 @@ PREFILL_ROLE_ROUTES_RAW_PIPE_LDS_DBUF = {
   "attn_kv": "raw_pipe_oracle",
   "ffn_down": "raw_pipe_oracle",
   "ffn_gate_up": "lds_dbuf",
+}
+PREFILL_ROLE_ROUTES_HYBRID_BACKEND_ATOM = {
+  "attn_qo": "raw_pipe_oracle",
+  "attn_kv": "raw_pipe_oracle",
+  "ffn_down": "raw_pipe_oracle",
+  "ffn_gate_up": "raw_lds2_oracle",
 }
 
 
@@ -192,6 +199,8 @@ def authority_completeness_gate(report: dict[str, Any], *, quality_gate: dict[st
 
 
 def _prefill_role_routes(route_id: str) -> dict[str, str]:
+  if route_id == PREFILL_HYBRID_BACKEND_ATOM_ROUTE:
+    return dict(PREFILL_ROLE_ROUTES_HYBRID_BACKEND_ATOM)
   if route_id == PREFILL_WMMA_PIPE_LDS_DBUF_ROUTE:
     return dict(PREFILL_ROLE_ROUTES_PIPE_LDS_DBUF)
   if route_id == PREFILL_WMMA_LDS_DBUF_MIXED_ROUTE:
@@ -214,11 +223,16 @@ def route_binding_gate(report: dict[str, Any], required_route: str | None = None
     if selected_route != required_route:
       failures.append(f"prefill_route_family={selected_route!r}, expected {required_route!r}")
   s10_compiler_primitive_route = selected_route in {PREFILL_WMMA_PIPE_LDS_DBUF_ROUTE, PREFILL_WMMA_LDS_DBUF_MIXED_ROUTE}
-  if route.get("prefill_route_pure") is not True and not s10_compiler_primitive_route:
-    failures.append("prefill_route_pure is not true")
-  if route.get("prefill_route_rolled_back") is not False:
-    failures.append("prefill_route_rolled_back is not false")
-  expected_provenance = "compiler_primitive_spec_owned" if s10_compiler_primitive_route else "tinygrad_scheduler_generated"
+  hybrid_backend_atom_route = selected_route == PREFILL_HYBRID_BACKEND_ATOM_ROUTE
+  expected_pure = False if s10_compiler_primitive_route or hybrid_backend_atom_route else True
+  expected_rollback = True if hybrid_backend_atom_route else False
+  expected_provenance = ("external_handwritten_kernel" if hybrid_backend_atom_route else
+                         "compiler_primitive_spec_owned" if s10_compiler_primitive_route else
+                         "tinygrad_scheduler_generated")
+  if route.get("prefill_route_pure") is not expected_pure:
+    failures.append(f"prefill_route_pure={route.get('prefill_route_pure')!r}, expected {expected_pure!r}")
+  if route.get("prefill_route_rolled_back") is not expected_rollback:
+    failures.append(f"prefill_route_rolled_back={route.get('prefill_route_rolled_back')!r}, expected {expected_rollback!r}")
   if route.get("prefill_route_provenance") != expected_provenance:
     failures.append(f"prefill_route_provenance={route.get('prefill_route_provenance')!r}, expected {expected_provenance!r}")
   lds_dbuf_requested = (
@@ -244,6 +258,8 @@ def route_binding_gate(report: dict[str, Any], required_route: str | None = None
   verdict = "PREFILL_ROUTE_BINDING_PASS" if not failures else "PREFILL_ROUTE_BINDING_FAIL"
   return {"schema": "prefill-route-binding-gate.v1", "verdict": verdict, "required_route": required_route,
           "selected_route": selected_route, "effective_routes": sorted(r for r in effective_route_ids if r),
+          "binding_regime": "external_comparator" if hybrid_backend_atom_route else
+                            "spec_owned_hybrid" if s10_compiler_primitive_route else "generated_pure",
           "lds_dbuf_requested": lds_dbuf_requested, "candidate_set_requested":candidate_set_requested,"failures": failures}
 
 

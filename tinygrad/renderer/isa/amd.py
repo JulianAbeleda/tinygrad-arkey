@@ -32,7 +32,7 @@ from tinygrad.renderer.amd.dsl import s as _S, v as _V, NULL, VCC, EXEC, Reg, Fi
 from tinygrad.runtime.autogen.amd.rdna3.ins import (
   s_load_b64, s_load_b32, global_load_b32, global_load_b128, global_store_b32, v_add_f32_e32, v_mul_f32_e32, v_sub_f32_e32,
   v_lshlrev_b32_e32, v_mov_b32_e32, v_mul_lo_u32, v_add_nc_u32_e32, v_bfe_u32, s_waitcnt, s_endpgm,
-  s_mov_b32, s_add_i32, s_cmp_lt_i32, s_cbranch_scc0, s_cbranch_scc1, s_branch, ds_load_b32, ds_store_b32, ds_store_b64, ds_load_b128, ds_store_b128, s_barrier,
+  s_mov_b32, s_add_i32, s_cmp_lt_i32, ds_load_b32, ds_store_b32, ds_store_b64, ds_load_b128, ds_store_b128, s_barrier,
   ds_bpermute_b32, v_dot2_f32_f16,
   # Phase G: full block-tile ALU/control surface
   v_xor_b32_e32, v_and_b32_e32, v_or_b32_e32, v_max_f32_e32, v_lshrrev_b32_e32, v_pack_b32_f16,
@@ -2330,32 +2330,8 @@ class AMDISARenderer(ISARenderer):
       lines.append(mnemonic + ((" " + ", ".join(operands)) if operands else ""))
     return "\n".join(lines)
   def _resolve_labels(self, insts:list[UOp]) -> list[UOp]:
-    # resolve ("label", id) / ("branch", kind, target) markers into PC-relative simm16 dword offsets, then drop labels.
-    # RDNA3 scalar branch: target_pc = branch_pc + 4 + simm16*4  ->  simm16 = (target_byte - branch_byte - 4)//4.
-    pos, labels = [], {}                            # byte position of each inst; label -> byte position
-    off = 0
-    for u in insts:
-      pos.append(off)
-      a = u.arg
-      if isinstance(a, tuple) and a[0] == "label": labels[a[1]] = off
-      elif isinstance(a, tuple) and a[0] == "branch": off += 4
-      elif isinstance(a, tuple) and a[0] == "audit_dbuf_d3a_stage": pass
-      else: off += len(a.to_bytes())
-    out = []
-    for u, p in zip(insts, pos):
-      a = u.arg
-      if isinstance(a, tuple) and a[0] == "label": continue                  # 0-byte marker, drop
-      if isinstance(a, tuple) and a[0] == "audit_dbuf_d3a_stage":
-        out.append(u); continue
-      if isinstance(a, tuple) and a[0] == "branch":
-        _, kind, target = a
-        simm = (labels[target] - p - 4) // 4
-        if not (-0x8000 <= simm <= 0x7fff): raise RuntimeError(f"AMD:ISA branch offset {simm} out of simm16 range for {target}")
-        ins = {"s_branch": s_branch, "s_cbranch_scc0": s_cbranch_scc0,
-               "s_cbranch_scc1": s_cbranch_scc1}[kind](simm16=simm & 0xffff)
-        out.append(UOp(Ops.INS, arg=ins))
-      else: out.append(u)
-    return out
+    from tinygrad.renderer.amd.elf import resolve_symbolic_control_flow
+    return list(resolve_symbolic_control_flow(UOp(Ops.LINEAR, src=tuple(insts))).src)
   def asm(self, prg:UOp, lin:UOp) -> bytes:
     from tinygrad.renderer.amd.elf import assemble_linear
     # Phase J: consumer-only waitcnt BEFORE label resolution (inserting waits shifts byte positions -> branch offsets

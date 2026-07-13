@@ -96,7 +96,7 @@ SURFACE_POLICY: dict[str, dict[str, str]] = {
   },
 }
 
-RAW_MARKERS = ("Ops.INS", "Ops.BINARY", "asm volatile")
+RAW_MARKERS = ("Ops.INS", "Ops.BINARY", "asm volatile", "preassembled_linear")
 CUSTOM_MARKERS = (".custom_kernel(", "Tensor.custom_kernel", "Ops.CUSTOM", "Ops.CUSTOMI")
 SOURCE_MARKERS = ("asm volatile", "__builtin_amdgcn", "Ops.BINARY")
 
@@ -130,7 +130,7 @@ ROUTE_SURFACES: dict[str, RouteSurface] = {
   "prefill_pipe_role_selective_generated": RouteSurface(
     "prefill_pipe_role_selective_generated", "external_raw_or_binary",
     ("extra/qk/prefill_graph_gemm_route.py", "extra/qk/prefill/wmma.py", "extra/qk/prefill_schedule_spec.py"),
-    "Schedule selection is spec-shaped, but executing substrate wraps raw RDNA3 instruction lists with Ops.INS.",
+    "Schedule selection is spec-shaped, but executing substrate injects raw RDNA3 instruction lists through preassembled_linear/Ops.INS.",
     replacement_scope="Route B: generated LDS+WMMA codegen substrate replacing extra/qk/prefill/wmma.py."),
   "prefill_wmma_pipe_primitive_generated": RouteSurface(
     "prefill_wmma_pipe_primitive_generated", "ordinary_tinygrad_graph",
