@@ -59,6 +59,26 @@ def test_explicit_dispatch_uses_program_launch_geometry():
   assert rt.args == (("a", "b", "c"), {"global_size": (32, 4, 1), "local_size": (256, 1, 1), "vals": (), "wait": True})
 
 
+def test_nonempty_aux_program_still_constructs_with_aux_stripped_for_runtime():
+  # Regression: get_runtime unpacks ProgramInfo.aux positionally, but the AMD
+  # runtime constructor takes no positional aux.  A program carrying a non-empty
+  # aux (e.g. the generated ISA source) must still construct a handle, and the
+  # program handed to get_runtime must have aux == () so no positional aux leaks.
+  class Runtime:
+    lib = b"ok"
+    def __call__(self, *args, **kwargs): raise AssertionError("dispatch must be explicit")
+  seen = {}
+  def fake_get_runtime(device, prg, cache=True): seen["aux"] = prg.arg.aux; return Runtime()
+  prg = UOp(Ops.PROGRAM, src=(UOp(Ops.SINK), UOp(Ops.DEVICE, arg="CPU"), UOp(Ops.LINEAR),
+                              UOp(Ops.SOURCE), UOp(Ops.BINARY, arg=b"ok")),
+            arg=ProgramInfo(global_size=(8, 1, 1), local_size=(64, 1, 1), aux=("large-isa-source",)))
+  with patch("tinygrad.runtime.bridge.get_runtime", side_effect=fake_get_runtime):
+    handle = build_executable(artifact(), prg, device="CPU")
+  assert seen["aux"] == ()
+  # The handle keeps the original program (aux preserved) for launch metadata.
+  assert handle.program.arg.aux == ("large-isa-source",)
+
+
 def test_prepare_executable_joins_compile_evidence_to_program_without_dispatch():
   class Runtime:
     lib = b"ok"

@@ -6,7 +6,7 @@ the returned handle.
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace as dataclasses_replace
 from typing import Any, Mapping
 
 from tinygrad.engine.realize import get_runtime
@@ -79,7 +79,15 @@ def build_executable(artifact: CompileArtifact | Mapping[str, Any], program: UOp
   if program.src[4].arg != artifact.binary:
     raise ValueError("compile artifact binary does not match program")
 
-  runtime = get_runtime(device, program, cache=False)
+  # get_runtime unpacks ProgramInfo.aux POSITIONALLY into the runtime constructor,
+  # but the AMD runtime constructor (AMDProgram.__init__(dev, name, lib, **kwargs))
+  # takes no positional aux, so a non-empty aux raises TypeError.  aux carries only
+  # the generated ISA source, which is not a constructor argument (the source stays
+  # in program.src via Ops.SOURCE).  Construct the runtime from a variant whose aux
+  # is empty; function_name, global/local size, runtimevars and src (incl. src[4],
+  # the binary, used by the hash checks) are all preserved.
+  runtime_program = program.replace(arg=dataclasses_replace(program.arg, aux=())) if program.arg.aux else program
+  runtime = get_runtime(device, runtime_program, cache=False)
   loaded = getattr(runtime, "lib", None)
   if loaded is None or not isinstance(loaded, bytes) or hashlib.sha256(loaded).hexdigest() != artifact.binary_sha256:
     close = getattr(runtime, "close", None)
