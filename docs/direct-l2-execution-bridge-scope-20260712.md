@@ -1,5 +1,9 @@
 # Direct-L2/LDS execution bridge scope
 
+> Historical implementation scope. Its completion definition is superseded by
+> `pure-register-direct-l2-completion-scope-20260712.md` as of 2026-07-13.
+> Preserve this as design history; do not use it to claim D100 or R100.
+
 ## Objective
 
 Make the direct-register transport and the existing LDS transport executable

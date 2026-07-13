@@ -1,5 +1,9 @@
 # Pure 8B Register Route: 100% Execution Scope
 
+> This is the broader P100 project scope. The bounded `attn_qo` D100/R100
+> contract is owned by `pure-register-direct-l2-completion-scope-20260712.md`.
+> A single-role D100 result does not complete this document.
+
 Date: 2026-07-12
 
 ## Objective
