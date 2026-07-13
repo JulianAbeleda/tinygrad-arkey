@@ -64,3 +64,4 @@ Source: read-only flag classification 2026-07-10 (5-family audit). Route ground 
 ## Retired native-ISA experiments
 
 - **AMD_ISA_N1B / AMD_ISA_N1B_GIDX** — REMOVED 2026-07-13. Uniform address scalarization was dead on the live clamped address path and triggered an SGPR-datapath fault. The opt-in tagging, SALU operations, scalar register pool, and lowering were removed; the independent SGPR loop-counter bridge remains.
+- **PREFILL_WMMA_KMAJOR_STAGE_STEAL / _MEMO** — REMOVED 2026-07-13. The experiment preserved correctness but expanded the bounded path to 17 barriers versus 2 and remained slower than the K-major baseline. It had no remaining route, harness, or test caller and was superseded by compiler-owned pipeline construction.

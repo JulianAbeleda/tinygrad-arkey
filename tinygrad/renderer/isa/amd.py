@@ -12,7 +12,7 @@ s_waitcnt drains after memory ops.
 EXPERIMENTAL-FLAG INDEX (prefill/machine-search staging plane; ALL default-off):
   This file accreted ~80 PREFILL_*/AMD_ISA_* getenv knobs from the prefill machine-search research plane. They fall in
   two classes: (1) real staging knobs that gate an experimental codegen/staging transform (e.g. PREFILL_DBUF*,
-  PREFILL_TC_LOCAL_STAGE*, PREFILL_WMMA_KMAJOR_STAGE_STEAL, PREFILL_LDS_PACK*, AMD_ISA_SCHED/WAITCNT*), and
+  PREFILL_TC_LOCAL_STAGE*, PREFILL_LDS_PACK*, AMD_ISA_SCHED/WAITCNT*), and
   (2) pure diagnostic probes that only print/log and cannot change emitted code (the *_DUMP / *_AUDIT / *_PROOF_* knobs).
   The class-2 probe knobs are being deleted (see docs/prefill-flag-graveyard.md). Several class-1 knobs carry an
   _UNSAFE suffix (PREFILL_DBUF_LDS_CONST_IMM_UNSAFE, PREFILL_TC_LOCAL_STAGE_A_MULTIDIM_UNSAFE,
@@ -1064,12 +1064,6 @@ def _lds_key_uop(u:UOp):
   if u.op is Ops.SPECIAL: return (u.op.name, u.arg)
   return (u.op.name, u.dtype, u.arg, tuple(_lds_key_uop(s) for s in u.src))
 
-def _lds_proof_key(idx:UOp, width:int) -> tuple|None:
-  if idx.op is not Ops.INDEX or idx.addrspace != AddrSpace.LOCAL or len(idx.src) < 2: return None
-  base_expr, const = _const_base(idx.src[1])
-  if base_expr is None: return None
-  return (_lds_key_uop(idx.src[0]), _lds_key_uop(base_expr), const, width)
-
 def _load_vec4_index(v:UOp) -> UOp|None:
   if v.op is not Ops.LOAD or v.dtype.count != 4 or v.dtype.scalar() is not dtypes.half: return None
   idx = v.src[0].src[0] if v.src[0].op is Ops.CAST else v.src[0]
@@ -1130,16 +1124,12 @@ def _wmma_half_addr(e:UOp):
   if base_expr is None: return None
   return idx, idx.src[0], base_expr, const + lane
 
-def _is_vpack_int32(u:UOp) -> bool:
-  return u.op is Ops.INS and u.arg is AMDOps.V_PACK and u.dtype is dtypes.int32
-
 def _amd_isa_renderer_policy():
   return next((d.renderer_policy for d in get_amd_isa_extension_descriptors() if d.renderer_policy is not None), None)
 
 def _amd_isa_policy_helpers():
   return SimpleNamespace(wmma_elems=_wmma_elems, wmma_half_addr=_wmma_half_addr, decompose_lds_index=decompose_lds_index,
-                         lds_key_uop=_lds_key_uop, reg_base=_reg_base, const_base=_const_base, uop_byte_width=_uop_byte_width,
-                         lds_proof_key=_lds_proof_key, is_vpack_int32=_is_vpack_int32)
+                         lds_key_uop=_lds_key_uop, reg_base=_reg_base, const_base=_const_base, uop_byte_width=_uop_byte_width)
 
 def _prefill_source_value_key(*tags):
   policy = _amd_isa_renderer_policy()
@@ -1384,50 +1374,6 @@ def _dbuf_stage_candidate(carrier:UOp) -> tuple[UOp|None, str]:
   policy = _amd_isa_renderer_policy()
   return (None, "no_renderer_policy") if policy is None else policy.dbuf_stage_candidate(carrier, _amd_isa_policy_helpers())
 
-def _dbuf_stage_candidates(carrier:UOp) -> tuple[list[UOp], str]:
-  policy = _amd_isa_renderer_policy()
-  return ([], "no_renderer_policy") if policy is None else policy.dbuf_stage_candidates(carrier, _amd_isa_policy_helpers())
-
-def _dbuf_stage_store_key(st:UOp) -> tuple|None:
-  policy = _amd_isa_renderer_policy()
-  return None if policy is None else policy.dbuf_stage_store_key(st, _amd_isa_policy_helpers())
-
-def _dbuf_stage_value_key(st:UOp) -> tuple|None:
-  policy = _amd_isa_renderer_policy()
-  return None if policy is None else policy.dbuf_stage_value_key(st, _amd_isa_policy_helpers())
-
-def _dbuf_stage_store_abs_slot(ctx:IselContext, st:UOp) -> int|None:
-  if st.op is not Ops.STORE or not st.src: return None
-  idx = st.src[0]
-  while idx.op in (Ops.AFTER, Ops.CAST) and idx.src: idx = idx.src[0]
-  desc = decompose_lds_index(ctx, idx, None) if idx.op is Ops.INDEX and idx.addrspace == AddrSpace.LOCAL else None
-  return None if desc is None else desc.const_half
-
-def _dbuf_lowered_lds_slot(a:UOp) -> int|None:
-  if a.op is not Ops.NOOP or a.arg != "lds" or not a.src: return None
-  imm = _lds_imm_bytes(a)
-  addr = a.src[0]
-  if (slot := _lds_addr_const_words(addr)) is not None: return slot + imm // 2
-  if addr.op is Ops.INS and addr.arg is AMDOps.V_IADD and addr.src:
-    if (slot := _lds_addr_const_words(addr.src[0])) is not None:
-      add = _ins_const_add(addr.src[1]) if len(addr.src) > 1 else None
-      return None if add is None else slot + add // 2 + imm // 2
-  return None
-
-def _dbuf_stage_epoch_key_for_store(ctx:IselContext|None, st:UOp, a:UOp|None=None) -> tuple|None:
-  slot = _dbuf_stage_store_abs_slot(ctx, st) if ctx is not None else None
-  if slot is None and a is not None: slot = _dbuf_lowered_lds_slot(a)
-  vkey = _dbuf_stage_value_key(st)
-  return None if slot is None or vkey is None else ("stage_epoch", slot, vkey)
-
-def _dbuf_stage_owner_key(ctx:IselContext|None, role:str, st:UOp, *, phase_i:int|None=None, a:UOp|None=None) -> tuple|None:
-  if ctx is None: return None
-  slot = _dbuf_stage_store_abs_slot(ctx, st)
-  if slot is None and a is not None: slot = _dbuf_lowered_lds_slot(a)
-  vkey = _dbuf_stage_value_key(st)
-  policy = _amd_isa_renderer_policy()
-  return None if policy is None else policy.dbuf_stage_owner_key(role, slot, vkey, phase_i)
-
 def _emit_dbuf_stage_store(ctx:IselContext, st:UOp, dep:tuple[UOp,...]) -> tuple[UOp|None, str]:
   if st.op is not Ops.STORE or len(st.src) < 2 or not dep: return None, "bad_store_or_dep"
   idx, val = st.src[0], st.src[1]
@@ -1452,7 +1398,7 @@ def _emit_dbuf_stage_store(ctx:IselContext, st:UOp, dep:tuple[UOp,...]) -> tuple
   return UOp(Ops.INS, dtypes.void, src=(addr,) + bdata + _lds_b128_store_deps(val) + extra_deps + (a.src[1], UOp.const(dtypes.int32, lds_imm).rtag()),
              arg=AMDOps.DS_STORE_B128), "ok"
 
-def _dbuf_d3a_probe_marker(ctx:IselContext, tile:UOp, dep:tuple[UOp,...], phase_i:int|None=None) -> tuple[UOp,...]:
+def _dbuf_d3a_probe_marker(ctx:IselContext, tile:UOp, dep:tuple[UOp,...]) -> tuple[UOp,...]:
   if not (getenv("PREFILL_DBUF_D3A_POST", 0) and dep): return dep
   out = dep
   for role, carrier in (("A", tile.src[0]), ("B", tile.src[1])):
@@ -1460,42 +1406,10 @@ def _dbuf_d3a_probe_marker(ctx:IselContext, tile:UOp, dep:tuple[UOp,...], phase_
       continue
     if role == "B" and not getenv("PREFILL_DBUF_D3A_STAGE_B", 1):
       continue
-    cands, reason = _dbuf_stage_candidates(carrier) if getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL", 0) else ([], "")
-    if not cands:
-      cand, reason = _dbuf_stage_candidate(carrier)
-      cands = [] if cand is None else [cand]
-    if not cands:
-      continue
-    moved: list[UOp] = []
-    for cand in cands:
-      skey = _dbuf_stage_store_key(cand)
-      use_memo = getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL_MEMO", 0)
-      moved_memo = ctx._dbuf_moved_stage_emits = getattr(ctx, "_dbuf_moved_stage_emits", {}) if use_memo else {}
-      if use_memo and skey is not None and skey in moved_memo:
-        out = (UOp(Ops.INS, dtypes.void, src=(moved_memo[skey],), arg=AMDOps.BARRIER),); continue
-      st, emit_reason = _emit_dbuf_stage_store(ctx, cand, out)
-      if st is None:
-        continue
-      moved.append(st)
-      if use_memo and skey is not None: moved_memo[skey] = st
-      abs_slot = _dbuf_stage_store_abs_slot(ctx, cand)
-      if getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL", 0):
-        stolen = ctx._dbuf_stolen_stage_stores = getattr(ctx, "_dbuf_stolen_stage_stores", set())
-        stolen.add(id(cand))
-        if skey is not None:
-          stolen.add(skey)
-        if abs_slot is not None:
-          stolen.add(("lds_slot", abs_slot))
-        if (ekey := _dbuf_stage_epoch_key_for_store(ctx, cand)) is not None:
-          stolen.add(ekey)
-        if (owner_key := _dbuf_stage_owner_key(ctx, role, cand, phase_i=phase_i)) is not None:
-          owners = ctx._dbuf_stage_owner_keys = getattr(ctx, "_dbuf_stage_owner_keys", set())
-          owners.add(owner_key)
-      out = (st,)
-    if not moved: continue
-    if getenv("PREFILL_WMMA_KMAJOR_STAGE_STEAL", 0):
-      barrier = UOp(Ops.INS, dtypes.void, src=tuple(moved), arg=AMDOps.BARRIER)
-      out = (barrier,)
+    cand, _reason = _dbuf_stage_candidate(carrier)
+    if cand is None: continue
+    st, _reason = _emit_dbuf_stage_store(ctx, cand, out)
+    if st is not None: out = (st,)
   return out
 
 # B0.M residency: build ONE subtile v_wmma from ALREADY-PACKED resident A/B fragments (apk,bpk) + this subtile's 8 cin
@@ -1568,7 +1482,7 @@ def _try_wmma_kmajor_phase(ctx:IselContext, x:UOp):
       if akey is None or bkey is None: return None
       abase, bbase = _ab_base(ctx, ("A", akey)), _ab_base(ctx, ("B", bkey))
       if abase is None or bbase is None or cbases[chain_i] is None: return None
-      tile_phase_dep = _dbuf_d3a_probe_marker(ctx, tile, phase_dep, phase_i=phase_i) if getenv("PREFILL_WMMA_KMAJOR_D3A_MARKER", 0) and phase_i > 0 else phase_dep
+      tile_phase_dep = _dbuf_d3a_probe_marker(ctx, tile, phase_dep) if getenv("PREFILL_WMMA_KMAJOR_D3A_MARKER", 0) and phase_i > 0 else phase_dep
       def pack(role:str, carrier:UOp, key:tuple, base:int) -> tuple[UOp, ...]:
         pkey = (role, key, base)
         if pkey not in pack_cache: pack_cache[pkey] = _pack_frag_tile(ctx, carrier, base, tile_phase_dep, role)

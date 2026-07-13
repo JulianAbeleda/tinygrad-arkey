@@ -176,25 +176,6 @@ class PrefillAMDISARendererPolicy:
     rel = desc.const_bytes - desc.base_bytes
     return (("role", role), ("lds_buffer_id", proof.get("lds_buffer_id")), ("phase_row_or_col", rel // tile_bytes), ("byte_len", 32))
 
-  def dbuf_stage_store_key(self, st:UOp, h:Any) -> tuple|None:
-    if st.op is not Ops.STORE or not st.src: return None
-    if isinstance(st.tag, tuple) and st.tag[:1] == ("tc_local_stage_store",): return st.tag
-    idx = st.src[0]
-    while idx.op in (Ops.AFTER, Ops.CAST) and idx.src: idx = idx.src[0]
-    if idx.op is Ops.NOOP and isinstance(idx.tag, tuple) and idx.tag[:1] == ("tc_local_stage_store",): return idx.tag
-    if isinstance(idx.tag, tuple) and idx.tag[:1] == ("tc_local_stage_store",): return idx.tag
-    return h.lds_proof_key(idx, 8) if idx.op is Ops.INDEX and idx.addrspace == AddrSpace.LOCAL else None
-
-  def dbuf_stage_value_key(self, st:UOp, h:Any) -> tuple|None:
-    if st.op is not Ops.STORE or len(st.src) < 2: return None
-    val = st.src[1]
-    if val.op is Ops.AFTER and val.src: val = val.src[0]
-    if val.op is Ops.NOOP and isinstance(val.arg, tuple) and len(val.arg) == 2 and val.arg[0] == "global_b128":
-      return ("global_b128", h.lds_key_uop(val.arg[1]))
-    if val.op is Ops.NOOP and val.dtype.count == 4 and val.dtype.scalar().itemsize == 4 and all(h.is_vpack_int32(s) for s in val.src):
-      return ("vpack4", tuple(tuple(h.lds_key_uop(x) for x in p.src[:2]) for p in val.src))
-    return None
-
   def dbuf_stage_candidate(self, carrier:UOp, h:Any) -> tuple[UOp|None, str]:
     try:
       elems = h.wmma_elems(carrier, 16)
@@ -210,35 +191,9 @@ class PrefillAMDISARendererPolicy:
           if val.op is Ops.NOOP and isinstance(val.arg, tuple) and len(val.arg) == 2 and val.arg[0] == "global_b128":
             return st, "global_b128"
           vv = val.src[0] if val.op is Ops.AFTER and val.src else val
-          if vv.op is Ops.NOOP and vv.dtype.count == 4 and vv.dtype.scalar().itemsize == 4 and all(h.is_vpack_int32(s) for s in vv.src):
+          if vv.op is Ops.NOOP and vv.dtype.count == 4 and vv.dtype.scalar().itemsize == 4 and \
+             all(s.op is Ops.INS and s.arg.name == "V_PACK" and s.dtype is dtypes.int32 for s in vv.src):
             return st, "vpack_vec4"
     return None, "no_matching_store_value"
-
-  def dbuf_stage_candidates(self, carrier:UOp, h:Any) -> tuple[list[UOp], str]:
-    try:
-      elems = h.wmma_elems(carrier, 16)
-      addrs = [h.wmma_half_addr(e) for e in elems]
-    except Exception:
-      return [], "not_wmma_memory_carrier"
-    if any(a is None for a in addrs): return [], "non_memory_lane"
-    idx0, ptr0, _expr0, c0 = addrs[0]
-    if not isinstance(ptr0.dtype, PtrDType) or ptr0.dtype.addrspace != AddrSpace.LOCAL: return [], "not_local_lds_operand"
-    target_consts = {c0, c0 + 8}
-    out: list[tuple[int, UOp]] = []
-    for st in idx0.src[0].toposort():
-      if st.op is not Ops.STORE or len(st.src) < 2: continue
-      sk = self.dbuf_stage_store_key(st, h)
-      if sk is None or len(sk) < 3 or sk[2] not in target_consts: continue
-      val = st.src[1]
-      ok = val.op is Ops.NOOP and isinstance(val.arg, tuple) and len(val.arg) == 2 and val.arg[0] == "global_b128"
-      vv = val.src[0] if val.op is Ops.AFTER and val.src else val
-      ok = ok or (vv.op is Ops.NOOP and vv.dtype.count == 4 and vv.dtype.scalar().itemsize == 4 and all(h.is_vpack_int32(s) for s in vv.src))
-      if ok: out.append((int(sk[2]), st))
-    if not out: return [], "no_matching_store_value"
-    return [st for _, st in sorted(out, key=lambda x: x[0])], "ok"
-
-  def dbuf_stage_owner_key(self, role:str, slot:int|None, vkey:tuple|None, phase_i:int|None) -> tuple|None:
-    if slot is None or vkey is None: return None
-    return ("stage_owner", ("role", role), ("source", vkey), ("logical_phase", phase_i), ("lds_slot", slot))
 
 PREFILL_AMD_ISA_RENDERER_POLICY = PrefillAMDISARendererPolicy()
