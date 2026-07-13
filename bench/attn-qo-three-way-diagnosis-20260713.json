@@ -1,0 +1,58 @@
+{
+  "schema": "attn-qo-three-way-diagnosis-result.v1",
+  "revision_before_diagnostic": "f3bfb832d",
+  "hardware": "AMD gfx1100",
+  "shape": {"m": 512, "n": 4096, "k": 4096},
+  "execution_policy": "strictly sequential; guarded correctness before timing; stop on first fault; independent health check",
+  "pipe": {
+    "generator": "extra.qk.prefill.wmma.build_gemm_pipe",
+    "tile": [32, 32, 16],
+    "global_size": [128, 16, 1],
+    "local_size": [32, 1, 1],
+    "argument_order": ["a", "b", "output"],
+    "binary_sha256": "7a743622e39796d555bcd9f01c03b5eb10adf1552803f55145428e5f6a44a221",
+    "resources": {"vgpr": 112, "sgpr": 8, "lds_bytes": 1, "scratch_bytes": 0},
+    "correctness": {
+      "status": "timed_out",
+      "runtime_error": "Wait timeout: 30000 ms! (the signal is not set to 66, but 65)",
+      "health_after": true,
+      "timing_performed": false
+    }
+  },
+  "static_final_isa": {
+    "direct_l2": {
+      "binary_sha256": "bb56936967ddb9b87500728706f3c2815fbe2381a11ce19ac0255e54301defa9",
+      "global_size": [32, 4, 1],
+      "local_size": [32, 4, 2],
+      "vgpr": 216,
+      "lds_bytes": 0,
+      "global_load_b128": 64,
+      "wmma": 16,
+      "global_load_b128_per_wmma": 4.0
+    },
+    "wmma_lds": {
+      "binary_sha256": "ad3a947d218302443523eb03b622302b2f7c90706fcf83b1a59666a61e17cf3e",
+      "global_size": [32, 4, 1],
+      "local_size": [32, 4, 2],
+      "vgpr": 188,
+      "lds_bytes": 40960,
+      "global_load_b128": 8,
+      "wmma": 32,
+      "global_load_b128_per_wmma": 0.25
+    },
+    "raw_pipe": {
+      "vgpr": 112,
+      "lds_bytes": 1,
+      "global_load_b128": 32,
+      "wmma": 16,
+      "global_load_b128_per_wmma": 2.0
+    }
+  },
+  "diagnosis": {
+    "primary": "The generated direct-L2 lowering has no effective software pipeline in final ISA: each WMMA is immediately dependent on four preceding global b128 loads.",
+    "secondary": "Registers are wave-private, so the inherited eight-wave 128x128 schedule cannot retain the cross-wave operand reuse supplied by LDS.",
+    "resource_pressure": "direct_l2 allocates 216 VGPR versus 188 for WMMA-LDS, further reducing latency-hiding headroom.",
+    "pipe_verdict": "The raw pipe oracle is benchmark-ineligible on the current stack because its first exact guarded dispatch does not complete.",
+    "historical_evidence_caveat": "The cited 4413 tok/s raw-hand artifact was a dirty whole-model throughput run whose own route-binding gate failed; it is not standalone full-output correctness evidence."
+  }
+}
