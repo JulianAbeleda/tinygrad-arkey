@@ -6,6 +6,8 @@ handle and must call that handle explicitly to dispatch.
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
+import os
 from typing import Any
 
 from tinygrad import Tensor, dtypes
@@ -24,6 +26,20 @@ from extra.qk.prefill_graph_gemm_route import _candidate_schedule_spec, _primiti
 from extra.qk.prefill_graph_gemm_route import _emit_schedule
 from extra.qk.prefill_schedule_spec import _spec_to_params, describe_prefill_schedule, register_resident_postrange_opts
 from extra.qk.runtime_specs import admit_full_kernel_candidate
+
+
+@contextmanager
+def _isolated_compile_environment():
+  """Prevent unrelated route experiments from changing exact artifact identity."""
+  saved = {key: value for key, value in os.environ.items() if key.startswith(("PREFILL_", "AMD_ISA_"))}
+  for key in saved: os.environ.pop(key, None)
+  getenv.cache_clear(); to_program_cache.clear()
+  try:
+    yield
+  finally:
+    for key in tuple(key for key in os.environ if key.startswith(("PREFILL_", "AMD_ISA_"))): os.environ.pop(key, None)
+    os.environ.update(saved)
+    getenv.cache_clear(); to_program_cache.clear()
 
 
 def _direct_compile_evidence(admission: Any, record: dict[str, Any]) -> dict[str, Any]:
@@ -84,45 +100,46 @@ def compile_attn_qo_program(*, transport: str = "direct_l2", target: str = "AMD:
   candidate_row = pair["candidates"][transport]
   admission = admit_full_kernel_candidate(candidate_row["payload"], candidate_row["canonical_identity"],
                                           profile=PROFILE, role=ROLE, shape=SHAPE, target=TARGET)
-  if transport == "lds":
-    program, schedule = _compile_lds_program(admission, target)
-    evidence = compile_transport_evidence(
-      program, transport=transport, canonical_identity=candidate_row["canonical_identity"], schedule=schedule,
-      surface={"strict_pure": False, "ops_ins_count": 0,
-               "generator": "extra.qk.prefill.wmma.build_gemm_lds2", "lds_transport": True},
-      runtime_binding={"profile": PROFILE, "role": ROLE,
-                       "shape": {"m": SHAPE[0], "n": SHAPE[1], "k": SHAPE[2]}, "target": dict(TARGET)})
+  with _isolated_compile_environment():
+    if transport == "lds":
+      program, schedule = _compile_lds_program(admission, target)
+      evidence = compile_transport_evidence(
+        program, transport=transport, canonical_identity=candidate_row["canonical_identity"], schedule=schedule,
+        surface={"strict_pure": False, "ops_ins_count": 0,
+                 "generator": "extra.qk.prefill.wmma.build_gemm_lds2", "lds_transport": True},
+        runtime_binding={"profile": PROFILE, "role": ROLE,
+                         "shape": {"m": SHAPE[0], "n": SHAPE[1], "k": SHAPE[2]}, "target": dict(TARGET)})
+      return {"schema": "attn_qo.executable_preparation.v1", "transport": transport,
+              "pair_key": pair["pair_key"], "schedule_digest": pair["schedule_digest"],
+              "candidate": candidate_row["payload"], "canonical_identity": candidate_row["canonical_identity"],
+              "program": program, "compile_evidence": evidence, "dispatch_performed": False}
+    spec = describe_prefill_schedule(SHAPE[1], SHAPE[2], role=ROLE)
+    candidate_spec = _candidate_schedule_spec(spec, admission)
+    key = _primitive_warmstart_key(candidate_spec)
+    old_opts, old_contexts = postrange._WARMSTART_OPTS, postrange._WARMSTART_CANDIDATE_CONTEXTS
+    try:
+      postrange._WARMSTART_OPTS = {**(old_opts or {}), key: register_resident_postrange_opts(candidate_spec)}
+      postrange._WARMSTART_CANDIDATE_CONTEXTS = {**(old_contexts or {}), key: admission.context}
+      getenv.cache_clear(); to_program_cache.clear()
+      with Context(DEV=target):
+        a = Tensor.empty(SHAPE[0], SHAPE[2], dtype=dtypes.half)
+        b = Tensor.empty(SHAPE[1], SHAPE[2], dtype=dtypes.half)
+        compiled = compile_linear((a @ b.transpose()).schedule_linear())
+    finally:
+      postrange._WARMSTART_OPTS, postrange._WARMSTART_CANDIDATE_CONTEXTS = old_opts, old_contexts
+      getenv.cache_clear(); to_program_cache.clear()
+    programs = [u for u in compiled.toposort() if u.op is Ops.PROGRAM and isinstance(u.arg, ProgramInfo)
+                and getattr(getattr(u.src[0].arg, "candidate_context", None), "canonical_identity", None)
+                == candidate_row["canonical_identity"]]
+    if len(programs) != 1: raise RuntimeError(f"expected one direct attn_qo PROGRAM, found {len(programs)}")
+    program: UOp = programs[0]
+    attachments = [x.record for x in program.arg.aux if hasattr(x, "record")]
+    if not attachments: raise RuntimeError("direct attn_qo PROGRAM has no compiler-owned final capture")
+    evidence = _direct_compile_evidence(admission, attachments[-1])
     return {"schema": "attn_qo.executable_preparation.v1", "transport": transport,
             "pair_key": pair["pair_key"], "schedule_digest": pair["schedule_digest"],
             "candidate": candidate_row["payload"], "canonical_identity": candidate_row["canonical_identity"],
             "program": program, "compile_evidence": evidence, "dispatch_performed": False}
-  spec = describe_prefill_schedule(SHAPE[1], SHAPE[2], role=ROLE)
-  candidate_spec = _candidate_schedule_spec(spec, admission)
-  key = _primitive_warmstart_key(candidate_spec)
-  old_opts, old_contexts = postrange._WARMSTART_OPTS, postrange._WARMSTART_CANDIDATE_CONTEXTS
-  try:
-    postrange._WARMSTART_OPTS = {**(old_opts or {}), key: register_resident_postrange_opts(candidate_spec)}
-    postrange._WARMSTART_CANDIDATE_CONTEXTS = {**(old_contexts or {}), key: admission.context}
-    getenv.cache_clear(); to_program_cache.clear()
-    with Context(DEV=target):
-      a = Tensor.empty(SHAPE[0], SHAPE[2], dtype=dtypes.half)
-      b = Tensor.empty(SHAPE[1], SHAPE[2], dtype=dtypes.half)
-      compiled = compile_linear((a @ b.transpose()).schedule_linear())
-  finally:
-    postrange._WARMSTART_OPTS, postrange._WARMSTART_CANDIDATE_CONTEXTS = old_opts, old_contexts
-    getenv.cache_clear(); to_program_cache.clear()
-  programs = [u for u in compiled.toposort() if u.op is Ops.PROGRAM and isinstance(u.arg, ProgramInfo)
-              and getattr(getattr(u.src[0].arg, "candidate_context", None), "canonical_identity", None)
-              == candidate_row["canonical_identity"]]
-  if len(programs) != 1: raise RuntimeError(f"expected one direct attn_qo PROGRAM, found {len(programs)}")
-  program: UOp = programs[0]
-  attachments = [x.record for x in program.arg.aux if hasattr(x, "record")]
-  if not attachments: raise RuntimeError("direct attn_qo PROGRAM has no compiler-owned final capture")
-  evidence = _direct_compile_evidence(admission, attachments[-1])
-  return {"schema": "attn_qo.executable_preparation.v1", "transport": transport,
-          "pair_key": pair["pair_key"], "schedule_digest": pair["schedule_digest"],
-          "candidate": candidate_row["payload"], "canonical_identity": candidate_row["canonical_identity"],
-          "program": program, "compile_evidence": evidence, "dispatch_performed": False}
 
 
 def compile_attn_qo_pair(*, target: str = "AMD:ISA:gfx1100") -> dict[str, Any]:

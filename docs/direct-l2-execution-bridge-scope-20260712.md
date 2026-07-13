@@ -243,7 +243,12 @@ multidimensional `WITH_LOCAL` / register-allocation failures. That is no
 longer a blocker for the paired execution milestone because the existing LDS2
 route is a compatible, reusable fallback. The remaining blockers are shared
 buffer/guard correctness, isolated hardware dispatch, and paired timing and
-counter evidence. No GPU dispatch has been performed by this milestone.
+counter evidence. The shared guarded lifecycle now lives in
+`extra/qk/prefill/guarded_execution.py`: its Buffer-backed adapter places
+payloads inside prefix/suffix guards, performs full readback comparison and
+input immutability checks, and requires health before/after dispatch. The
+transport-specific dispatch callback only binds logical buffer roles to the
+compiled ABI. No GPU dispatch has been performed by this milestone.
 
 ### Phase C — generic buffer/launch adapter
 

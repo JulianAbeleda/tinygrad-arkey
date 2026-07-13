@@ -1,7 +1,7 @@
 """Default-closed promotion policy for register-resident prefill kernels.
 
 This module prepares hardware validation but cannot launch a kernel: it has no
-device/runtime dependency and exposes no dispatch callback.  An external,
+device dispatch dependency and exposes no launch callback.  An external,
 deliberately interactive runner may consume a passing authorization only after
 the compile/resource gate and every preceding canary have passed.
 """
@@ -11,6 +11,7 @@ import math
 from typing import Any, Iterable
 
 from extra.qk.prefill.pure_register_evaluation_gate import runtime_compile_resource_eligibility
+from extra.qk.prefill.guarded_execution import GuardPolicy
 
 SCHEMA = "prefill-register-hardware-promotion.v1"
 ENABLE_ENV = "TINYGRAD_REGISTER_HARDWARE_PROMOTION"
@@ -27,12 +28,14 @@ STAGES = (
   {"name": "canary_3", "shape": (128, 4096, 4096)},
   {"name": "exact", "shape": EXACT_SHAPE},
 )
-TOLERANCES = {"reference": "float32_cpu", "rtol": 2e-2, "atol": 2e-2,
+GUARD_POLICY = GuardPolicy()
+TOLERANCES = {"reference": "float32_cpu", "rtol": GUARD_POLICY.rtol, "atol": GUARD_POLICY.atol,
               "max_nonfinite_mismatches": 0, "require_nonconstant_inputs": True,
               "require_full_output_comparison": True}
-GUARDS = {"prefix_bytes": 4096, "suffix_bytes": 4096, "pattern": "deterministic_per_buffer",
-          "check_inputs_unchanged": True, "check_before_and_after_each_launch": True}
-SAFETY = {"timeout_seconds": 10, "require_device_healthy_before": True,
+GUARDS = {"prefix_bytes": GUARD_POLICY.prefix_bytes, "suffix_bytes": GUARD_POLICY.suffix_bytes,
+          "pattern": GUARD_POLICY.pattern, "check_inputs_unchanged": GUARD_POLICY.check_inputs_unchanged,
+          "check_before_and_after_each_launch": GUARD_POLICY.check_before_and_after_each_launch}
+SAFETY = {"timeout_seconds": GUARD_POLICY.timeout_seconds, "require_device_healthy_before": True,
           "require_device_healthy_after": True, "revoke_on_timeout": True,
           "revoke_on_device_fault": True, "revoke_on_guard_corruption": True,
           "revoke_on_numerical_failure": True, "continue_after_revocation": False}
