@@ -2,10 +2,12 @@
 
 Date: 2026-07-13
 
-Status: canonical Claude handoff for the `attn_qo` comparison arc
+Status: canonical Claude handoff for the `attn_qo` comparison arc. This is the
+**sole D100 definition** for this arc; no other scope, index, or README may
+present a competing completion/"100%" definition for it.
 
 This supersedes the completion definition in
-`direct-l2-execution-bridge-scope-20260712.md`. The broader
+`direct-l2-execution-bridge-scope-20260712.md` (now historical). The broader
 `pure-8b-register-route-100pct-execution-scope-20260712.md` remains the project
 scope after this bounded comparison closes.
 
@@ -315,6 +317,11 @@ consolidation and behavior changes do not share a commit.
 - mark this as the sole D100 definition in existing scope/index docs;
 - select the one schema family;
 - add failing regressions for false dispatch state and LDS identity replacement.
+
+Schema family: `execution_bridge_contracts` (canonical). Per P1-1 the typed
+contracts in `tinygrad/runtime/execution_bridge_contracts.py` are THE schema
+family for this arc; no second schema system is added. C0 only declares this
+choice; migrating the active dict-based modules onto it is C1.
 
 Exit: one authority, both bugs pinned, no GPU dispatch.
 
