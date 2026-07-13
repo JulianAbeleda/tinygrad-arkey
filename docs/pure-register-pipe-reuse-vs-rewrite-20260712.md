@@ -392,3 +392,45 @@ This recovery is complete only when all are true:
 The highest-value first milestone is HP0+HP1.  It distinguishes a real
 historical regression from an unproven historical attribution before any new
 kernel work is attempted.
+
+### HP0/HP3 result (2026-07-13)
+
+The first recovery pass completed enough to classify the current comparison:
+
+| probe | result |
+|---|---|
+| current raw pipe compile | deterministic: source hash `b48c4f30...`, binary hash `7a743622...`, geometry 128x16 global / 32x1 local, 32 b128 loads, 16 WMMA, 6 waits |
+| historical `b1259638d` compile | byte-identical source and binary hashes to current HEAD |
+| current exact double-buffer dispatch | timeout at signal 66/65; child containment and post-child health pass |
+| exact dispatch with `FULLWAIT=1` | same timeout; full waits do not repair it |
+| single-buffer E0, K=64 | correct; RMSE 0.00162 |
+| single-buffer E0, K=4096 | correct; RMSE 0.01321 |
+| E1 high VMEM fragments | correct |
+| E2/E3 VALU-provenance fragments | correct |
+| E4 high accumulator / E6 high dead footprint | correct |
+| post-probe GPU health | healthy |
+
+This changes the diagnosis from “unknown hand-pipe hang” to:
+
+```text
+raw_pipe_double_buffer_lifecycle_or_loop_recurrence_failure
+```
+
+The historical 4413 whole-model result cannot be attributed to a different
+hand-pipe binary: its exact artifact is missing, while the historical source
+reproduces the current binary.  It remains a credible hybrid throughput
+measurement but not standalone hand-pipe correctness or performance evidence.
+
+The hand pipe is therefore benchmark-ineligible until its two-bank schedule is
+repaired or disproven.  The next repair packet is narrowly bounded:
+
+1. compare the two-bank branch target and loop counter against a one-bank
+   unrolled reference;
+2. run a double-buffer K=64 one-workgroup canary;
+3. remove only the loop backedge, then only the alternating-slot reuse, to
+   identify whether control flow or overwrite-before-consume is causal;
+4. require exact full-shape correctness twice before any timing.
+
+No evidence currently justifies claiming that the hand pipe is faster than
+generated direct-L2.  The only valid measured comparison remains generated
+direct-L2 versus proven WMMA-LDS, where LDS wins.

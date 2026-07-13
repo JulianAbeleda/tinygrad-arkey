@@ -299,16 +299,17 @@ VARIANTS = dict(E0=E0, E1=E1, E2=E2, E3=E3, E4=E4, E5=E5, E6=E6)
 # runs it on the real gfx1100, and compares vs numpy A @ Bt.T. Single wave: grid=(1,1,1), 32 threads.
 #   PASS = 0 NaN and rmse < 5e-2 (bit-exact vs numpy). FAIL = NaN present -> that perturbation triggers the fault.
 # ---------------------------------------------------------------------------------------------------------
-def gpu_run(name, base=128, seed=0):
+def gpu_run(name, base=128, seed=0, K=64):
   from tinygrad import Tensor, Device
   from tinygrad.uop.ops import UOp, Ops, KernelInfo
   from tinygrad.dtype import dtypes
   from tinygrad.engine.realize import Estimates
   from tinygrad.helpers import colored
   fn = VARIANTS[name]
-  I = fn(base=base) if name == "E5" else fn()
-  # geometry: default variants are TM=TN=2 -> M=N=32, K=64. (Every variant here uses that geometry.)
-  M = N = 32; K = 64
+  I = fn(base=base, K=K) if name == "E5" else fn(K=K)
+  # geometry: default variants are TM=TN=2 -> M=N=32, K=64.  K is exposed
+  # only to separate long-K recurrence from the canonical double-buffered atom.
+  M = N = 32
   np.random.seed(seed)
   A_np  = np.random.randn(M, K).astype(np.float16)
   Bt_np = np.random.randn(N, K).astype(np.float16)
@@ -339,12 +340,16 @@ if __name__ == "__main__":
   # DEV=AMD GPU gate (parent only):  python3 extra/qk/prefill/wmma_faultprobe.py --gpu E3
   #   E5 sweeps bases:               python3 extra/qk/prefill/wmma_faultprobe.py --gpu E5
   if sys.argv[1:2] == ["--gpu"]:
+    k = 64
+    if "--k" in sys.argv:
+      idx = sys.argv.index("--k")
+      k = int(sys.argv[idx + 1]); del sys.argv[idx:idx + 2]
     sel = sys.argv[2:] or list(VARIANTS)
     for name in sel:
       if name == "E5":
-        for base in (112, 116, 120, 124, 128): gpu_run("E5", base=base)
+        for base in (112, 116, 120, 124, 128): gpu_run("E5", base=base, K=k)
       else:
-        gpu_run(name)
+        gpu_run(name, K=k)
     sys.exit(0)
   # remu on the EXACT post-renderer bytes the GPU will run (_schedule+_insert_waitcnt+_resolve_labels):
   #   python3 extra/qk/prefill/wmma_faultprobe.py --final
