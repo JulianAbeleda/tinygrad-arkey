@@ -50,14 +50,18 @@ def test_attn_qo_register_prefill_compile_is_cpu_only_and_zero_lds():
   assert len(programs) == 1
   selected = list(programs[0].src[0].toposort())
   stores = [u for u in selected if u.op is Ops.INS and u.arg is AMDOps.GLOBAL_STORE]
-  assert len(stores) == 68
-  assert sum(any(s.op is Ops.INS and s.arg is AMDOps.GLOBAL_STORE for s in st.src[0].src) for st in stores) == 67
+  assert len(stores) == 64
   output_stores = [st for st in stores if st.src[0].arg is AMDOps.V_OFFSET]
   assert len(output_stores) == 64
-  assert all(st.src[0].src[0].arg is AMDOps.V_IADD and st.src[0].src[0].op is Ops.INS for st in output_stores)
-  assert len([u for u in selected if u.op is Ops.INS and u.arg is AMDOps.V_WMMA]) == 32
+  assert len([u for u in selected if u.op is Ops.INS and u.arg is AMDOps.V_WMMA]) == 16
+  assert not any(u.op is Ops.INS and u.arg in (AMDOps.STAGE_READ, AMDOps.STAGE_WRITE) for u in selected)
   assert not any(u.op is Ops.DEFINE_LOCAL or (u.op is Ops.INS and u.arg in
     (AMDOps.DS_LOAD, AMDOps.DS_STORE, AMDOps.DS_LOAD_B128, AMDOps.DS_STORE_B128)) for u in selected)
   emitted = " ".join(repr(x) for x in programs[0].toposort())
   assert "DEFINE_LOCAL" not in emitted and "DEFINE_ACC" not in emitted
   assert "ds_load" not in emitted.lower() and "ds_store" not in emitted.lower()
+  attachments = [x.record for x in programs[0].arg.aux if hasattr(x, "record")]
+  assert len(attachments) == 1
+  ab = [x for x in attachments[0]["allocator"]["leases"] if x["role"] in ("A", "B")]
+  assert [x["purpose"] for x in ab] == ["direct_wmma_fragment", "direct_wmma_fragment"]
+  assert all(x["slots"] == 1 for x in ab)

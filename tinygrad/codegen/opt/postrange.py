@@ -373,41 +373,34 @@ class Scheduler:
                         PrecontractOperandTemplate("B", in1, original_axes[0], original_axes[2], outer_n*candidate_geometry.tile[1]))
               thread_axes=PrecontractThreadAxes(wave_m,wave_n,lane)
               pipeline_tc_uop = None
-              if candidate_pipeline is not None:
+              if register_mode:
+                # A register-resident candidate is a direct global/L2 -> WMMA lowering. Preserve the ordinary tensor-core
+                # operand and output-axis contracts here: the staged register graph stores all eight output subtiles in a
+                # flat vec64 accumulator and consequently loses their M/N ownership before the epilogue. It also models
+                # A and B row fragments as K substeps, which feeds A/A and B/B pairs to WMMA. The ordinary CONTRACT inputs
+                # already lower to VGPR fragments without LDS and retain the exact TC lane/subtile mapping.
+                wmma_srcs = [
+                  UOp(Ops.CONTRACT, dtype=srcs[0].dtype.vec(tc.elements_per_thread[0]), src=(srcs[0],), arg=tc_upcast_axes[0], tag=1),
+                  UOp(Ops.CONTRACT, dtype=srcs[1].dtype.vec(tc.elements_per_thread[1]), src=(srcs[1],), arg=tc_upcast_axes[1], tag=1),
+                ]
+              if candidate_pipeline is not None and not register_mode:
                 from tinygrad.codegen.opt.kernel_lds import PrecontractPipelineTemplate
                 from tinygrad.codegen.opt.kernel_pipeline import (KernelStage1FragmentStage, KernelStage1ProducerStage,
                   Stage1StorageAdapter, build_stage1_uop_graph_with_storage, prove_stage1_uop_graph,
                   storage_policy_from_stage1)
-                if register_mode:
-                  # Reuse the common lifecycle builder with the static-slot
-                  # register adapter.  The AMD-stage mapping remains a
-                  # backend concern; postrange only emits typed register
-                  # storage and wait provenance here.
-                  from tinygrad.codegen.opt.register_pipeline import RegisterPipeTemplate, RegisterStorageAdapter
-                  from tinygrad.codegen.opt.kernel_lds import derive_precontract_shape_factors
-                  try:
-                    template = RegisterPipeTemplate(tc, candidate_geometry, operands, tuple(contracts), schedule="sequential")
-                  except (TypeError, ValueError) as exc:
-                    raise KernelOptError(f"register-resident candidate template rejected: {exc}") from exc
-                  storage_adapter = RegisterStorageAdapter.from_template(template)
-                  factors = derive_precontract_shape_factors(candidate_geometry, tc)
-                  def _produce(epoch,slot,reuse): return storage_adapter.producer_stage(epoch,slot,reuse)
-                  def _fragments(epoch,slot,ready): return storage_adapter.fragment_stage(epoch,slot,ready)
-                  pipeline_plan = storage_adapter.logical_plan
-                else:
-                  template=PrecontractPipelineTemplate(candidate_geometry,tc,allocation,operands,thread_axes,
-                    subtile_m,subtile_n,tuple(contracts),candidate_pipeline)
-                  factors=template.factors
-                  def _produce(epoch,slot,reuse):
-                    p=template.producer(epoch,slot)
-                    ready=UOp.barrier(UOp.group(*p.role_nodes) if reuse is None else UOp.group(*p.role_nodes,reuse))
-                    return KernelStage1ProducerStage(epoch,slot,p.role_nodes,ready)
-                  def _fragments(epoch,slot,ready):
-                    substeps=[]
-                    for substep in range(factors.k_substeps):
-                      f=template.fragments(epoch,slot,ready,substep)
-                      substeps.extend(f.fragments)
-                    return KernelStage1FragmentStage(epoch,slot,ready,tuple(substeps))
+                template=PrecontractPipelineTemplate(candidate_geometry,tc,allocation,operands,thread_axes,
+                  subtile_m,subtile_n,tuple(contracts),candidate_pipeline)
+                factors=template.factors
+                def _produce(epoch,slot,reuse):
+                  p=template.producer(epoch,slot)
+                  ready=UOp.barrier(UOp.group(*p.role_nodes) if reuse is None else UOp.group(*p.role_nodes,reuse))
+                  return KernelStage1ProducerStage(epoch,slot,p.role_nodes,ready)
+                def _fragments(epoch,slot,ready):
+                  substeps=[]
+                  for substep in range(factors.k_substeps):
+                    f=template.fragments(epoch,slot,ready,substep)
+                    substeps.extend(f.fragments)
+                  return KernelStage1FragmentStage(epoch,slot,ready,tuple(substeps))
                 def _wmma(stage,acc,_subtile):
                   chain=acc
                   for substep in range(factors.k_substeps):
@@ -421,12 +414,11 @@ class Scheduler:
                   for sn in range(factors.subtiles_n) for elem in range(8)]
                 if len(accumulator_owners) != 64 or set(accumulator_owners) != set(range(64)):
                   raise KernelOptError("buffer2 accumulator ownership must be an exact unique cover of [0, 64)")
-                if not register_mode:
-                  class _StageCallbacks:
-                    producer = staticmethod(_produce)
-                    fragments = staticmethod(_fragments)
-                  storage_adapter = Stage1StorageAdapter(_StageCallbacks(), storage_policy_from_stage1(candidate_pipeline))
-                  pipeline_plan = candidate_pipeline
+                class _StageCallbacks:
+                  producer = staticmethod(_produce)
+                  fragments = staticmethod(_fragments)
+                storage_adapter = Stage1StorageAdapter(_StageCallbacks(), storage_policy_from_stage1(candidate_pipeline))
+                pipeline_plan = candidate_pipeline
                 graph=build_stage1_uop_graph_with_storage(storage_adapter, pipeline_plan, outer_k.vmax+1, _wmma, subtile_count=1,
                   accumulator_elements=factors.subtiles_m*factors.subtiles_n*8,
                   accumulator_offset=(subtile_m*factors.subtiles_n+subtile_n)*8,
@@ -434,7 +426,7 @@ class Scheduler:
                 proof=prove_stage1_uop_graph(graph)
                 if not proof.passed: raise KernelOptError("buffer2 lifecycle UOp proof failed: "+"; ".join(proof.errors))
                 pipeline_tc_uop=UOp(Ops.UNROLL,tc.dtype_out,(graph.drain[0],),arg=tc_upcast_axes[2],tag=1)
-              else:
+              elif not register_mode:
                 stage = build_precontract_lds_stage(candidate_geometry, tc=tc, allocation=allocation, operands=operands,
                   threads=thread_axes,k_axis=PrecontractKAxis(outer_k,k_substep,outer_k*candidate_geometry.tile[2],k_substep),
                   subtile_m=subtile_m,subtile_n=subtile_n,contracts=tuple(contracts),pipeline_plan=None)

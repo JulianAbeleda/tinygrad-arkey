@@ -63,6 +63,21 @@ def test_instruction_order_does_not_accept_pack_or_move_outside_allocator_leases
   assert instruction_order_proof(disassembly, _evidence().intervals)["passed"] is False
 
 
+def test_direct_global_fragment_order_needs_no_stage_copy():
+  disassembly = """\
+global_load_b128 v[200:203], v0, v0, s[0:1]
+s_waitcnt vmcnt(0)
+v_wmma_f32_16x16x16_f16 v[8:15], v[200:207], v[208:215], v[8:15]
+"""
+  intervals = (AMDPhysicalInterval("A", "vgpr", 200, 208, "direct_wmma_fragment"),
+               AMDPhysicalInterval("B", "vgpr", 208, 216, "direct_wmma_fragment"))
+  proof = instruction_order_proof(disassembly, intervals)
+  assert proof["passed"] is True
+  assert proof["fragment_transport"] == "direct_global"
+  assert proof["positions"] == {"global_load": 0, "vmcnt0_wait": 1, "wmma": 2}
+  assert instruction_order_proof(disassembly.replace("s_waitcnt vmcnt(0)\n", ""), intervals)["passed"] is False
+
+
 @pytest.mark.parametrize(("field", "value"), [
   ("resource_authority", "host_estimate"), ("allocator_authority", "planned_intervals")])
 def test_capture_rejects_nonfinal_authorities(field, value):

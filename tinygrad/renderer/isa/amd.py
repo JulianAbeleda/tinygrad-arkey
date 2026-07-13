@@ -502,6 +502,14 @@ def _frag_base(ctx:IselContext, key, n:int, align:int=1):
     ctx._frag_top = base + n
   return d[key]
 
+def _record_direct_wmma_fragments(ctx:IselContext, abase:int|None, bbase:int|None) -> None:
+  """Record the physical A/B pair owned by the direct global/L2 WMMA path."""
+  if abase is None or bbase is None: return
+  current = getattr(ctx, "_direct_wmma_fragments", None)
+  pair = {"A": abase, "B": bbase}
+  if current is None: ctx._direct_wmma_fragments = pair
+  elif current != pair: ctx._direct_wmma_fragments = {}
+
 # ============================ instruction selection ============================
 def isel_param(ctx:IselContext, x:UOp):
   # buffer pointer arg -> s_load_b64 from kernarg[i*8] into a fresh SGPR pair. i = position among PARAMs.
@@ -1547,6 +1555,7 @@ def isel_wmma(ctx:IselContext, x:UOp):
       if cbase is None or abase is None or bbase is None:
         raise NotImplementedError(f"AMD:ISA WMMA resident A/B window [{_acc_top(ctx)},{FRAG_BASE}) exhausted (A={abase} B={bbase} C={cbase})")
       cin = [UOp(Ops.INS, dtypes.float32, src=(after,), arg=AMDOps.MOV, tag=_pin(cbase, i)) for i in range(8)]
+      if not stage_backed: _record_direct_wmma_fragments(ctx, abase, bbase)
       apk, bpk = _pack_frag(ctx, x.src[0], abase), _pack_frag(ctx, x.src[1], bbase)
       return memo.setdefault(x, _build_wmma_from_packs(ctx, apk, bpk, cin, cbase))
     # single-tile rolled (k64-rolled / 16x16x64): legacy shared A/B high-window pair (byte-identical), one v_wmma in loop.
@@ -1587,6 +1596,7 @@ def isel_wmma(ctx:IselContext, x:UOp):
   bbase = 0 if stage_backed else _frag_base(ctx, (ab_key, "B"), 8)
   if not (getenv("PREFILL_WMMA_CHAIN_AB_RESIDENT", 0) and _c_low(ctx)) and (cbase is None or abase is None or bbase is None):
     raise NotImplementedError(f"AMD:ISA WMMA fragment region [{FRAG_BASE},{FRAG_TOP}) exhausted (A={abase} B={bbase} C={cbase})")
+  if not stage_backed: _record_direct_wmma_fragments(ctx, abase, bbase)
   prev:UOp|None = None
   for tile_i, tile in enumerate(reversed(chain)):                  # head first, then each accumulate tile
     if prev is None:                            # HEAD: init the accumulator to 0 from the 8 CONST-0 seed lanes (V_CONST)
@@ -2225,14 +2235,21 @@ class AMDISARenderer(ISARenderer):
     """Freeze allocator-owned A/B stages and C accumulators before lowering discards their identities."""
     stages = _register_stage_leases(ctx)
     specs = getattr(ctx, "_stage_reg_specs", {})
+    direct = getattr(ctx, "_direct_wmma_fragments", {})
     c_leases = sorted(getattr(ctx, "_accfrag", {}).values())
-    if set(stages) != {"A", "B"} or set(specs) != {"A", "B"} or not c_leases: return None
+    stage_owned = set(stages) == {"A", "B"} and set(specs) == {"A", "B"}
+    direct_owned = set(direct) == {"A", "B"}
+    if not (stage_owned or direct_owned) or not c_leases: return None
     register_buffers = [u for u in ctx.uses if u.op is Ops.DEFINE_REG]
     owned_accumulators = _wmma_acc_regs(ctx)
     if any(_register_stage_buffer_meta(u) is None and id(u) not in owned_accumulators for u in register_buffers): return None
     if any(u.op is Ops.DEFINE_LOCAL for u in ctx.uses): return None
-    leases = tuple(CompilerRegisterLease(role, "vgpr", stages[role].start, stages[role].end,
-      "register_stage", True, specs[role].slots, ("produce", "wait", "consume", "release")) for role in ("A", "B"))
+    if stage_owned:
+      leases = tuple(CompilerRegisterLease(role, "vgpr", stages[role].start, stages[role].end,
+        "register_stage", True, specs[role].slots, ("produce", "wait", "consume", "release")) for role in ("A", "B"))
+    else:
+      leases = tuple(CompilerRegisterLease(role, "vgpr", direct[role], direct[role]+8,
+        "direct_wmma_fragment", True, 1, ("global_load", "consume", "overwrite")) for role in ("A", "B"))
     leases += tuple(CompilerRegisterLease("C", "vgpr", base, base+8, "wmma_accumulator", True, 1,
       ("initialize", "accumulate", "consume", "store")) for base in c_leases)
     return CompilerCaptureProof(leases, lds_bytes=0)

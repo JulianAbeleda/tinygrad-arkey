@@ -118,8 +118,11 @@ def instruction_order_proof(disassembly: str, intervals: tuple[AMDPhysicalInterv
     return (match := _PACK_DEST.search(line)) is not None and int(match.group(1)) in stage_regs
   def stage_read(line: str) -> bool:
     return (match := _MOV_SOURCE.search(line)) is not None and int(match.group(1)) in stage_regs
-  patterns = ((_LOAD.search, "global_load"), (_WAIT.search, "vmcnt0_wait"), (stage_write, "stage_write"),
-              (stage_read, "stage_read"), (_WMMA.search, "wmma"))
+  ab = tuple(row for row in intervals if row.logical_role in ("A", "B"))
+  direct = bool(ab) and all(row.purpose == "direct_wmma_fragment" for row in ab)
+  patterns = (((_LOAD.search, "global_load"), (_WAIT.search, "vmcnt0_wait"), (_WMMA.search, "wmma")) if direct else
+              ((_LOAD.search, "global_load"), (_WAIT.search, "vmcnt0_wait"), (stage_write, "stage_write"),
+               (stage_read, "stage_read"), (_WMMA.search, "wmma")))
   positions: dict[str, int] = {}
   cursor = 0
   for matches, name in patterns:
@@ -131,6 +134,7 @@ def instruction_order_proof(disassembly: str, intervals: tuple[AMDPhysicalInterv
   errors = ([f"final disassembly lacks ordered {name}" for name in missing] +
             (["final disassembly contains LDS transport"] if lds_lines else []))
   return {"schema": PROOF_SCHEMA, "authority": "final_disassembly", "passed": not errors, "errors": errors,
+          "fragment_transport": "direct_global" if direct else "staged_register",
           "disassembly_sha256": hashlib.sha256(disassembly.encode()).hexdigest(),
           "positions": positions, "lds_instruction_lines": lds_lines}
 
