@@ -11,7 +11,7 @@ from typing import Any, Callable
 
 from extra.qk.prefill.pure_register_direct_l2_decision import candidate
 from extra.qk.prefill.pure_single_buffer_evaluation_gate import canonical_candidate_hash
-from extra.qk.prefill.register_hardware_promotion import EXACT_ROLE, EXACT_SHAPE, TARGET
+from extra.qk.prefill.register_hardware_promotion import EXACT_ROLE, TARGET
 from extra.qk.runtime_specs import admit_full_kernel_candidate
 from tinygrad.runtime.execution_bridge_contracts import dispatch_state
 
@@ -35,8 +35,16 @@ def prepare_exact_pair(*, direct_payload: dict[str, Any] | None,
                        direct_binary_sha256: str | None,
                        lds_binary_sha256: str | None,
                        pair_key: str | None = None,
-                       profile: str = PROFILE) -> dict[str, Any]:
-  """Prepare identity-joined candidate metadata without compiling or dispatching."""
+                       profile: str = PROFILE,
+                       role: str = EXACT_ROLE,
+                       shape: dict[str, int] = SHAPE,
+                       target: dict[str, Any] = TARGET) -> dict[str, Any]:
+  """Prepare identity-joined candidate metadata without compiling or dispatching.
+
+  The expected workload (profile/role/shape/target) is row data supplied by the
+  experiment (P2-3); this adapter validates the candidates against it and stays
+  workload-neutral rather than hardcoding a single role/shape/target.
+  """
   if direct_payload is None or lds_payload is None:
     return _blocked("exact direct_l2 and lds candidate payloads are required")
   if direct_binary_sha256 == lds_binary_sha256:
@@ -49,21 +57,22 @@ def prepare_exact_pair(*, direct_payload: dict[str, Any] | None,
     direct_id, lds_id = canonical_candidate_hash(direct_payload), canonical_candidate_hash(lds_payload)
   except Exception as exc:
     return _blocked(f"candidate payload identity cannot be proven: {type(exc).__name__}: {exc}")
+  shape_tuple = (shape["m"], shape["n"], shape["k"])
   errors = []
   for name, payload in (("direct_l2", direct_payload), ("lds", lds_payload)):
     workload = payload["workload"]
     if workload.get("profile") != profile: errors.append(f"{name} workload profile is not exact")
-    if workload.get("role") != EXACT_ROLE: errors.append(f"{name} workload role is not attn_qo")
-    if workload.get("shape") != SHAPE: errors.append(f"{name} workload shape is not 512x4096x4096")
-    if workload.get("target") != TARGET: errors.append(f"{name} workload target is not AMD gfx1100 wave32")
+    if workload.get("role") != role: errors.append(f"{name} workload role is not {role}")
+    if workload.get("shape") != shape: errors.append(f"{name} workload shape is not {shape_tuple}")
+    if workload.get("target") != target: errors.append(f"{name} workload target is not the row target")
     identity = direct_id if name == "direct_l2" else lds_id
-    try: admit_full_kernel_candidate(payload, identity, profile=profile, role=EXACT_ROLE,
-                                     shape=EXACT_SHAPE, target=TARGET)
+    try: admit_full_kernel_candidate(payload, identity, profile=profile, role=role,
+                                     shape=shape_tuple, target=target)
     except Exception as exc: errors.append(f"{name} is not admitted by single_buffer authority: {exc}")
   if errors: return _blocked(*errors, canonical_identity=direct_id, pair_key=pair_key)
   return {"schema": SCHEMA, "status": "prepared", "decision": "pending_external_evidence",
           "dispatch_state": dispatch_state("not_attempted"), "canonical_identity": direct_id, "pair_key": pair_key,
-          "role": EXACT_ROLE, "shape": dict(SHAPE), "target": dict(TARGET), "profile": profile,
+          "role": role, "shape": dict(shape), "target": dict(target), "profile": profile,
           "candidates": {"direct_l2": {"storage": "direct_l2", "canonical_identity": direct_id, "binary_sha256": direct_binary_sha256},
                           "lds": {"storage": "lds", "canonical_identity": lds_id, "binary_sha256": lds_binary_sha256}}}
 
@@ -76,7 +85,7 @@ def make_benchmark_callback(pair: dict[str, Any], capture: Callable[[str, str, i
       return _blocked("canary benchmark contract identity differs from prepared pair")
     # P0-3: each benchmark row keeps its OWN distinct candidate identity; the
     # shared pair identity must never overwrite the LDS candidate identity.
-    rows = {name: {"role": EXACT_ROLE, "shape": dict(SHAPE), "canonical_identity": row["canonical_identity"],
+    rows = {name: {"role": pair["role"], "shape": dict(pair["shape"]), "canonical_identity": row["canonical_identity"],
                    "binary_sha256": row["binary_sha256"], "storage": row["storage"], "pair_key": pair["pair_key"]}
             for name, row in pair["candidates"].items()}
     for storage in ("direct_l2", "lds"):

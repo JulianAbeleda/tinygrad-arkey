@@ -50,6 +50,15 @@ def candidate_storage_kind(payload: dict[str, Any]) -> str:
   resident = residency.get("resident", ()) if isinstance(residency, dict) else ()
   return "global_register_resident" if isinstance(resident, (list, tuple)) and "stage_ab_register" in resident else "lds"
 
+def capability_transport(capability: "FullKernelCapability") -> str:
+  """Typed transport carried by an already-admitted capability.
+
+  The transport is read from the typed capability lattice element, never
+  inferred from residency marker strings.  Register-resident admission is the
+  direct-L2 transport; every other admitted capability is LDS.
+  """
+  return "direct_l2" if capability.capability_id == GFX1100_REGISTER_RESIDENT_CAPABILITY.capability_id else "lds"
+
 @dataclass(frozen=True)
 class FullKernelAdmission:
   canonical_identity: str

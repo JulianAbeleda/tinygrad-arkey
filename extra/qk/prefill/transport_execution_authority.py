@@ -3,12 +3,18 @@
 The execution, correctness, binary-identity, timing, and environment joins are
 shared.  Only transport truth and structural validation vary by storage model.
 This module is CPU-only and never allocates or dispatches a device program.
+
+The transport is a TYPED plan (``execution_bridge_contracts.TransportPlan``)
+carried on the candidate and dispatched through an EXPLICIT adapter registry
+(P1-3).  It is never inferred from residency marker strings, and any transport
+absent from the registry is rejected fail-closed instead of defaulting to LDS.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from tinygrad.runtime.execution_bridge_contracts import TransportPlan
 from tinygrad.uop.ops import Ops, UOp
 
 
@@ -21,6 +27,25 @@ class TransportValidation:
 
 
 Validator = Callable[[dict[str, Any], UOp], TransportValidation]
+
+
+# --- P1-3: explicit typed transport adapter registry -------------------------
+# One table maps a TYPED transport to its structural validator.  Adapters are
+# registered explicitly: ``direct_l2`` is built in below, and the LDS adapter is
+# owned and registered by ``single_buffer_execution_authority``.  Lookup is
+# fail-closed -- an unregistered transport never silently falls back to LDS.
+_TRANSPORT_VALIDATORS: dict[str, Validator] = {}
+
+
+def register_transport_validator(transport: str, validator: Validator) -> None:
+  """Register one transport adapter in the explicit registry."""
+  if not isinstance(transport, str) or not transport.strip(): raise ValueError("transport must be a non-empty string")
+  if not callable(validator): raise TypeError("transport validator must be callable")
+  _TRANSPORT_VALIDATORS[transport] = validator
+
+
+def registered_transports() -> tuple[str, ...]:
+  return tuple(sorted(_TRANSPORT_VALIDATORS))
 
 
 def _source(program: UOp) -> str:
@@ -48,12 +73,18 @@ def _register_validate(payload: dict[str, Any], program: UOp) -> TransportValida
      "lds_instruction_count": len(lds_markers), "strict_register_resident": not errors})
 
 
-def validate_transport(payload: dict[str, Any], program: UOp, *, lds_validator: Validator | None = None) -> TransportValidation:
-  """Validate one compiled candidate using its declared storage transport."""
-  schedule = payload.get("schedule", {})
-  residency = schedule.get("residency", {}) if isinstance(schedule, dict) else {}
-  storage = "direct_l2" if "stage_ab_register" in residency.get("resident", ()) else "lds"
-  if storage == "direct_l2": return _register_validate(payload, program)
-  if lds_validator is None:
-    return TransportValidation("lds", False, ("LDS transport validator is not installed",), {})
-  return lds_validator(payload, program)
+register_transport_validator("direct_l2", _register_validate)
+
+
+def validate_transport(payload: dict[str, Any], program: UOp, *, plan: TransportPlan) -> TransportValidation:
+  """Validate one compiled candidate using its TYPED transport plan.
+
+  The transport is carried by ``plan`` and looked up in the explicit adapter
+  registry; residency marker strings are never inspected.  A transport that is
+  not registered fails closed.
+  """
+  if not isinstance(plan, TransportPlan): raise TypeError("a typed TransportPlan is required")
+  validator = _TRANSPORT_VALIDATORS.get(plan.transport)
+  if validator is None:
+    raise ValueError(f"unknown transport {plan.transport!r}; registered adapters: {registered_transports()}")
+  return validator(payload, program)

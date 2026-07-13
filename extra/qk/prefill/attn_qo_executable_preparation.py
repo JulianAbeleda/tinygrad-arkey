@@ -20,7 +20,7 @@ from tinygrad.helpers import Context, getenv
 from tinygrad.helpers import colored
 from tinygrad.uop.ops import KernelInfo, Ops, ProgramInfo, UOp
 
-from extra.qk.prefill.attn_qo_l2_lds_pair_generator_20260712 import PROFILE, ROLE, SHAPE, TARGET, generate_pair
+from extra.qk.prefill.attn_qo_l2_lds_pair_generator_20260712 import generate_pair
 from extra.qk.prefill.executable_artifact_preparation import compile_evidence, compile_transport_evidence
 from extra.qk.prefill_graph_gemm_route import _candidate_schedule_spec, _primitive_warmstart_key
 from extra.qk.prefill_graph_gemm_route import _emit_schedule
@@ -42,7 +42,14 @@ def _isolated_compile_environment():
     getenv.cache_clear(); to_program_cache.clear()
 
 
-def _direct_compile_evidence(admission: Any, record: dict[str, Any]) -> dict[str, Any]:
+def _workload_axes(workload: dict[str, Any]) -> tuple[str, str, tuple[int, int, int], dict[str, Any]]:
+  """Unpack the experiment-row workload (P2-3) instead of module constants."""
+  shape = workload["shape"]
+  return workload["profile"], workload["role"], (shape["m"], shape["n"], shape["k"]), dict(workload["target"])
+
+
+def _direct_compile_evidence(admission: Any, record: dict[str, Any], *, profile: str, role: str,
+                             shape: tuple[int, int, int], target: dict[str, Any]) -> dict[str, Any]:
   roles = sorted({row.get("role") for row in record.get("allocator", {}).get("leases", ()) if isinstance(row, dict)})
   coverage = admission.pipeline_plan.wait_coverage
   pipeline = {"storage_kind": "global_register_resident", "lds_bytes": 0,
@@ -50,14 +57,14 @@ def _direct_compile_evidence(admission: Any, record: dict[str, Any]) -> dict[str
               "register_mapping": {"backend": "amd_vgpr", "addressing": "static", "required_roles": roles},
               "wait_required_edges": [list(edge) for edge in coverage.covered]}
   wait = {"typed": True, "kind": "targeted_vmcnt", "coverage": coverage.to_json()}
-  abi = {"wave_size": 32, "fragment_carrier": "half.vec(16)", "accumulator_carrier": "float.vec(8)"}
-  binding = {"profile": PROFILE, "role": ROLE,
-             "shape": {"m": SHAPE[0], "n": SHAPE[1], "k": SHAPE[2]}, "target": dict(TARGET)}
+  abi = {"wave_size": target["wave_size"], "fragment_carrier": "half.vec(16)", "accumulator_carrier": "float.vec(8)"}
+  binding = {"profile": profile, "role": role,
+             "shape": {"m": shape[0], "n": shape[1], "k": shape[2]}, "target": dict(target)}
   return compile_evidence(record, pipeline=pipeline, wait=wait, abi_contract=abi,
                           surface={"strict_pure": True, "ops_ins_count": 0}, runtime_binding=binding)
 
 
-def _compile_lds_program(admission: Any, target: str) -> tuple[UOp, dict[str, Any]]:
+def _compile_lds_program(admission: Any, target: str, *, role: str, shape: tuple[int, int, int]) -> tuple[UOp, dict[str, Any]]:
   """Compile the exact LDS candidate through the existing raw LDS2 generator.
 
   This deliberately does not enter the unfinished generated LDS precontract
@@ -65,26 +72,26 @@ def _compile_lds_program(admission: Any, target: str) -> tuple[UOp, dict[str, An
   working route used by the graph GEMM path; this helper only packages that
   route as a compile-only PROGRAM for the shared runtime bridge.
   """
-  spec = _candidate_schedule_spec(describe_prefill_schedule(SHAPE[1], SHAPE[2], role=ROLE), admission)
+  spec = _candidate_schedule_spec(describe_prefill_schedule(shape[1], shape[2], role=role), admission)
   built = _emit_schedule(_spec_to_params(spec), name=spec.kernel_name)
   if built is None: raise RuntimeError("exact LDS schedule is not tile-divisible")
   insts, lds_bytes, bm, bn, threads, name = built
-  grid = (SHAPE[1] // bn, SHAPE[0] // bm, 1)
+  grid = (shape[1] // bn, shape[0] // bm, 1)
 
   def asm_kernel(a, b, c):
     lds = UOp(Ops.DEFINE_LOCAL, dtypes.uint8.ptr(size=lds_bytes, addrspace=AddrSpace.LOCAL), (), "lds")
     g = [UOp.special(grid[0], "gidx0"), UOp.special(grid[1], "gidx1")]
     sink = UOp.sink(a.base, b.base, c.base, lds, *g, UOp.special(threads, "lidx0"),
                     arg=KernelInfo(name=colored(name, "cyan"),
-                                   estimates=Estimates(ops=SHAPE[0] * SHAPE[1] * SHAPE[2] * 2,
-                                                       mem=(SHAPE[0] * SHAPE[2] + SHAPE[1] * SHAPE[2] + SHAPE[0] * SHAPE[1]) * 2)))
+                                   estimates=Estimates(ops=shape[0] * shape[1] * shape[2] * 2,
+                                                       mem=(shape[0] * shape[2] + shape[1] * shape[2] + shape[0] * shape[1]) * 2)))
     return UOp(Ops.PROGRAM, src=(sink, UOp(Ops.DEVICE, arg=Device.DEFAULT),
                                  UOp(Ops.LINEAR, src=tuple(UOp(Ops.INS, arg=i) for i in insts))))
 
   with Context(DEV=target):
-    a = Tensor.empty(SHAPE[0], SHAPE[2], dtype=dtypes.half)
-    b = Tensor.empty(SHAPE[1], SHAPE[2], dtype=dtypes.half)
-    c = Tensor.empty(SHAPE[0], SHAPE[1], dtype=dtypes.half)
+    a = Tensor.empty(shape[0], shape[2], dtype=dtypes.half)
+    b = Tensor.empty(shape[1], shape[2], dtype=dtypes.half)
+    c = Tensor.empty(shape[0], shape[1], dtype=dtypes.half)
     compiled = compile_linear(Tensor.custom_kernel(a, b, c, fxn=asm_kernel)[2].schedule_linear())
   programs = [u for u in compiled.toposort() if u.op is Ops.PROGRAM and isinstance(u.arg, ProgramInfo)]
   if len(programs) != 1: raise RuntimeError(f"expected one LDS attn_qo PROGRAM, found {len(programs)}")
@@ -93,56 +100,78 @@ def _compile_lds_program(admission: Any, target: str) -> tuple[UOp, dict[str, An
                        "waves_m": spec.waves_m, "waves_n": spec.waves_n}
 
 
-def compile_attn_qo_program(*, transport: str = "direct_l2", target: str = "AMD:ISA:gfx1100") -> dict[str, Any]:
-  if transport not in ("direct_l2", "lds"):
-    raise ValueError(f"unsupported attn_qo transport: {transport}")
+def _lds_compile_adapter(candidate_row: dict[str, Any], admission: Any, workload: dict[str, Any],
+                         dev_target: str) -> tuple[UOp, dict[str, Any]]:
+  profile, role, shape, target = _workload_axes(workload)
+  program, schedule = _compile_lds_program(admission, dev_target, role=role, shape=shape)
+  evidence = compile_transport_evidence(
+    program, transport="lds", canonical_identity=candidate_row["canonical_identity"], schedule=schedule,
+    surface={"strict_pure": False, "ops_ins_count": 0,
+             "generator": "extra.qk.prefill.wmma.build_gemm_lds2", "lds_transport": True},
+    runtime_binding={"profile": profile, "role": role,
+                     "shape": {"m": shape[0], "n": shape[1], "k": shape[2]}, "target": dict(target)})
+  return program, evidence
+
+
+def _direct_compile_adapter(candidate_row: dict[str, Any], admission: Any, workload: dict[str, Any],
+                            dev_target: str) -> tuple[UOp, dict[str, Any]]:
+  profile, role, shape, target = _workload_axes(workload)
+  spec = describe_prefill_schedule(shape[1], shape[2], role=role)
+  candidate_spec = _candidate_schedule_spec(spec, admission)
+  key = _primitive_warmstart_key(candidate_spec)
+  old_opts, old_contexts = postrange._WARMSTART_OPTS, postrange._WARMSTART_CANDIDATE_CONTEXTS
+  try:
+    postrange._WARMSTART_OPTS = {**(old_opts or {}), key: register_resident_postrange_opts(candidate_spec)}
+    postrange._WARMSTART_CANDIDATE_CONTEXTS = {**(old_contexts or {}), key: admission.context}
+    getenv.cache_clear(); to_program_cache.clear()
+    with Context(DEV=dev_target):
+      a = Tensor.empty(shape[0], shape[2], dtype=dtypes.half)
+      b = Tensor.empty(shape[1], shape[2], dtype=dtypes.half)
+      compiled = compile_linear((a @ b.transpose()).schedule_linear())
+  finally:
+    postrange._WARMSTART_OPTS, postrange._WARMSTART_CANDIDATE_CONTEXTS = old_opts, old_contexts
+    getenv.cache_clear(); to_program_cache.clear()
+  programs = [u for u in compiled.toposort() if u.op is Ops.PROGRAM and isinstance(u.arg, ProgramInfo)
+              and getattr(getattr(u.src[0].arg, "candidate_context", None), "canonical_identity", None)
+              == candidate_row["canonical_identity"]]
+  if len(programs) != 1: raise RuntimeError(f"expected one direct attn_qo PROGRAM, found {len(programs)}")
+  program: UOp = programs[0]
+  attachments = [x.record for x in program.arg.aux if hasattr(x, "record")]
+  if not attachments: raise RuntimeError("direct attn_qo PROGRAM has no compiler-owned final capture")
+  evidence = _direct_compile_evidence(admission, attachments[-1], profile=profile, role=role, shape=shape, target=target)
+  return program, evidence
+
+
+# One explicit transport -> compile-adapter table.  Both compile-only paths
+# produce their compile evidence through this single boundary; an unknown
+# transport is rejected fail-closed instead of silently defaulting to LDS.
+_COMPILE_ADAPTERS = {"direct_l2": _direct_compile_adapter, "lds": _lds_compile_adapter}
+
+
+def _dev_target(target: str | None, workload_target: dict[str, Any]) -> str:
+  return target or f"{workload_target['backend']}:ISA:{workload_target['arch']}"
+
+
+def compile_attn_qo_program(*, transport: str = "direct_l2", target: str | None = None) -> dict[str, Any]:
+  adapter = _COMPILE_ADAPTERS.get(transport)
+  if adapter is None:
+    raise ValueError(f"unsupported attn_qo transport: {transport!r}; registered adapters: {tuple(sorted(_COMPILE_ADAPTERS))}")
   pair = generate_pair()
   candidate_row = pair["candidates"][transport]
+  workload = candidate_row["payload"]["workload"]
+  profile, role, shape, target_dict = _workload_axes(workload)
+  dev_target = _dev_target(target, target_dict)
   admission = admit_full_kernel_candidate(candidate_row["payload"], candidate_row["canonical_identity"],
-                                          profile=PROFILE, role=ROLE, shape=SHAPE, target=TARGET)
+                                          profile=profile, role=role, shape=shape, target=target_dict)
   with _isolated_compile_environment():
-    if transport == "lds":
-      program, schedule = _compile_lds_program(admission, target)
-      evidence = compile_transport_evidence(
-        program, transport=transport, canonical_identity=candidate_row["canonical_identity"], schedule=schedule,
-        surface={"strict_pure": False, "ops_ins_count": 0,
-                 "generator": "extra.qk.prefill.wmma.build_gemm_lds2", "lds_transport": True},
-        runtime_binding={"profile": PROFILE, "role": ROLE,
-                         "shape": {"m": SHAPE[0], "n": SHAPE[1], "k": SHAPE[2]}, "target": dict(TARGET)})
-      return {"schema": "attn_qo.executable_preparation.v1", "transport": transport,
-              "pair_key": pair["pair_key"], "schedule_digest": pair["schedule_digest"],
-              "candidate": candidate_row["payload"], "canonical_identity": candidate_row["canonical_identity"],
-              "program": program, "compile_evidence": evidence, "dispatch_performed": False}
-    spec = describe_prefill_schedule(SHAPE[1], SHAPE[2], role=ROLE)
-    candidate_spec = _candidate_schedule_spec(spec, admission)
-    key = _primitive_warmstart_key(candidate_spec)
-    old_opts, old_contexts = postrange._WARMSTART_OPTS, postrange._WARMSTART_CANDIDATE_CONTEXTS
-    try:
-      postrange._WARMSTART_OPTS = {**(old_opts or {}), key: register_resident_postrange_opts(candidate_spec)}
-      postrange._WARMSTART_CANDIDATE_CONTEXTS = {**(old_contexts or {}), key: admission.context}
-      getenv.cache_clear(); to_program_cache.clear()
-      with Context(DEV=target):
-        a = Tensor.empty(SHAPE[0], SHAPE[2], dtype=dtypes.half)
-        b = Tensor.empty(SHAPE[1], SHAPE[2], dtype=dtypes.half)
-        compiled = compile_linear((a @ b.transpose()).schedule_linear())
-    finally:
-      postrange._WARMSTART_OPTS, postrange._WARMSTART_CANDIDATE_CONTEXTS = old_opts, old_contexts
-      getenv.cache_clear(); to_program_cache.clear()
-    programs = [u for u in compiled.toposort() if u.op is Ops.PROGRAM and isinstance(u.arg, ProgramInfo)
-                and getattr(getattr(u.src[0].arg, "candidate_context", None), "canonical_identity", None)
-                == candidate_row["canonical_identity"]]
-    if len(programs) != 1: raise RuntimeError(f"expected one direct attn_qo PROGRAM, found {len(programs)}")
-    program: UOp = programs[0]
-    attachments = [x.record for x in program.arg.aux if hasattr(x, "record")]
-    if not attachments: raise RuntimeError("direct attn_qo PROGRAM has no compiler-owned final capture")
-    evidence = _direct_compile_evidence(admission, attachments[-1])
-    return {"schema": "attn_qo.executable_preparation.v1", "transport": transport,
-            "pair_key": pair["pair_key"], "schedule_digest": pair["schedule_digest"],
-            "candidate": candidate_row["payload"], "canonical_identity": candidate_row["canonical_identity"],
-            "program": program, "compile_evidence": evidence, "dispatch_performed": False}
+    program, evidence = adapter(candidate_row, admission, workload, dev_target)
+  return {"schema": "attn_qo.executable_preparation.v1", "transport": transport,
+          "pair_key": pair["pair_key"], "schedule_digest": pair["schedule_digest"],
+          "candidate": candidate_row["payload"], "canonical_identity": candidate_row["canonical_identity"],
+          "program": program, "compile_evidence": evidence, "dispatch_performed": False}
 
 
-def compile_attn_qo_pair(*, target: str = "AMD:ISA:gfx1100") -> dict[str, Any]:
+def compile_attn_qo_pair(*, target: str | None = None) -> dict[str, Any]:
   """Compile both exact transports while preserving one semantic pair key."""
   pair = generate_pair()
   prepared = {name: compile_attn_qo_program(transport=name, target=target) for name in ("direct_l2", "lds")}

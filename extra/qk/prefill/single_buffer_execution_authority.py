@@ -17,7 +17,9 @@ from extra.qk.prefill.anchor_isa_resource_capture import _program_surface
 from extra.qk.prefill.pure_single_buffer_evaluation_gate import canonical_candidate_hash
 from tinygrad.dtype import dtypes
 from tinygrad.uop.ops import Ops, UOp
-from extra.qk.prefill.transport_execution_authority import TransportValidation, validate_transport
+from tinygrad.runtime.execution_bridge_contracts import TransportPlan
+from extra.qk.prefill.transport_execution_authority import (
+  TransportValidation, register_transport_validator, validate_transport)
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 SCHEMA = "prefill-single-buffer-execution-authority.v1"
@@ -104,6 +106,10 @@ def _validate_lds_transport(payload: dict[str, Any], program: UOp) -> TransportV
   truth = _compiler_lds_truth(program)
   errors = () if truth["actual_compiler_lds_staging"] else ("compiled program does not prove LDS staging",)
   return TransportValidation("lds", not errors, errors, truth)
+
+
+# Register the LDS structural adapter in the one explicit transport registry.
+register_transport_validator("lds", _validate_lds_transport)
 
 
 def _candidate_programs(compiled_linear: UOp, identity: str) -> list[UOp]:
@@ -315,7 +321,7 @@ def run(payload: dict[str, Any], candidate_hash: str, *, case: str = "constant",
   """Compile and execute the exact candidate through its production route."""
   identity = canonical_candidate_hash(payload)
   if candidate_hash != identity: raise ValueError("candidate hash does not match exact payload")
-  from extra.qk.runtime_specs import admit_full_kernel_candidate_set, full_kernel_candidate_set_from_legacy
+  from extra.qk.runtime_specs import admit_full_kernel_candidate_set, capability_transport, full_kernel_candidate_set_from_legacy
   admitted = admit_full_kernel_candidate_set(full_kernel_candidate_set_from_legacy(payload, identity)).admissions[0]
   workload = admitted.normalized_payload["workload"]
   role, shape = workload["role"], workload["shape"]
@@ -360,7 +366,8 @@ def run(payload: dict[str, Any], candidate_hash: str, *, case: str = "constant",
       program = programs[0]
       context = program.src[0].arg.candidate_context
       surface, lds, hashes = _program_surface(program), _compiler_lds_truth(program), _program_identity(program)
-      transport = validate_transport(payload, program, lds_validator=_validate_lds_transport)
+      transport_plan = TransportPlan(transport=capability_transport(admitted.capability), schedule_digest=identity)
+      transport = validate_transport(payload, program, plan=transport_plan)
       if dump := os.environ.get("BOLTBEAM_AUTHORITY_SOURCE_DUMP"):
         pathlib.Path(dump).write_text(next(u.arg for u in program.src if u.op is Ops.SOURCE))
       if not surface["strict_pure"]: raise RuntimeError(f"candidate selected forbidden executable surface: {surface}")
