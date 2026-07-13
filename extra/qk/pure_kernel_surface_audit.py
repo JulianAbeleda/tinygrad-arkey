@@ -145,8 +145,8 @@ ROUTE_SURFACES: dict[str, RouteSurface] = {
   "prefill_wmma_lds_single_buffer_candidate_generated": RouteSurface(
     "prefill_wmma_lds_single_buffer_candidate_generated", "ordinary_tinygrad_graph",
     ("extra/qk/prefill_graph_gemm_route.py", "extra/qk/runtime_specs.py", "extra/qk/wmma_lds_spec.py"),
-    "Exact-hash BoltBeam candidate uses the existing Tensor matmul transport with generated single-buffer LDS warmstart opts.",
-    descriptor_artifact="boltbeam.full_kernel_candidate.v1+WMMALDSSpec"),
+    "Manifest-promoted exact-hash candidates use Tensor matmul transport with generated LDS warmstart opts; each payload owns its buffer count.",
+    descriptor_artifact="boltbeam.full_kernel_candidate_set.v1+WMMALDSSpec"),
   "prefill_wmma_pipe_lds_dbuf_primitive_generated": RouteSurface(
     "prefill_wmma_pipe_lds_dbuf_primitive_generated", "compiler_primitive_spec_owned_asm_backend_atom",
     ("extra/qk/prefill_graph_gemm_route.py", "extra/qk/wmma_pipe_spec.py", "extra/qk/wmma_lds_spec.py",

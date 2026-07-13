@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
+import pathlib
 from typing import Iterable
 
 from extra.qk import route_manifest
@@ -86,16 +88,36 @@ class GeneratedCandidateRegistry:
       return CandidateSelection(None, "blocked", f"no{strict} generated candidate supports {op.family}/{op.phase}/{op.role}/{op.weight.format}/{op.activation.format}")
     return CandidateSelection(matches[0], "selected")
 
+def _promoted_prefill_candidates() -> tuple[GeneratedCandidate, ...]:
+  """Materialize only manifest-promoted exact full-kernel candidates into generation selection."""
+  policy = route_manifest.promoted_prefill_candidate_policy()
+  row = json.loads(pathlib.Path(policy["candidate_set_path"]).read_text())
+  if row.get("schema") != "boltbeam.full_kernel_candidate_set.v1":
+    raise ValueError(f"promoted prefill candidate set has unsupported schema {row.get('schema')!r}")
+  out = []
+  for entry in row.get("entries", ()):
+    payload, identity = dict(entry["payload"]), str(entry["canonical_identity"])
+    workload = payload["workload"]
+    candidate = GeneratedCandidate(
+      candidate_id=f"quant_linear_prefill.{workload['role']}.{identity[:12]}",
+      op_family="QuantizedLinear", supported_quant_formats=("fp16",), supported_activation_formats=("fp16",),
+      phases=("prefill",), roles=(str(workload["role"]),), lowering_strategy="tinygrad_scheduler",
+      provenance=route_manifest.route_provenance(policy["route_id"]), route_id=policy["route_id"],
+      device_constraints=("AMD:gfx1100:wave32",),
+      required_codegen_features=(payload["schedule"]["wmma"]["instruction_family"],),
+      search_space_id="prefill_wmma_lds_full_kernel",
+      authority_gates=_authority_gates_from_manifest(policy["route_id"]), full_kernel_candidate=payload)
+    if candidate.canonical_identity != identity:
+      raise ValueError(f"promoted candidate identity mismatch for role={workload['role']}: "
+                       f"artifact={identity}, payload={candidate.canonical_identity}")
+    out.append(candidate)
+  if {candidate.roles[0] for candidate in out} != set(policy["candidate_roles"]):
+    raise ValueError("promoted candidate set does not exactly cover the manifest candidate roles")
+  return tuple(out)
+
 
 BUILTIN_GENERATED_CANDIDATES: tuple[GeneratedCandidate, ...] = (
-  GeneratedCandidate(
-    candidate_id="quant_linear_prefill.prefill_v2_scheduler_matmul_default",
-    op_family="QuantizedLinear", supported_quant_formats=_manifest_quant("prefill_v2_scheduler_matmul_default"),
-    supported_activation_formats=("fp16",), phases=("prefill",),
-    roles=_manifest_roles("prefill_v2_scheduler_matmul_default"),
-    lowering_strategy="tinygrad_scheduler", provenance=route_manifest.route_provenance("prefill_v2_scheduler_matmul_default"),
-    route_id="prefill_v2_scheduler_matmul_default", search_space_id="prefill_v2_scheduler_matmul",
-    authority_gates=_authority_gates_from_manifest("prefill_v2_scheduler_matmul_default")),
+  *_promoted_prefill_candidates(),
   GeneratedCandidate(
     candidate_id="quant_linear_prefill.q4k_int8_wmma_tensor_substrate",
     op_family="QuantizedLinear", supported_quant_formats=_manifest_quant("prefill_q4k_int8_wmma_generated_research"),

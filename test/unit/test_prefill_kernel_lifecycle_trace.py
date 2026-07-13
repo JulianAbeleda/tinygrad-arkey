@@ -5,8 +5,8 @@ from extra.qk import pure_kernel_surface_audit as surface_audit
 from extra.qk.prefill import kernel_lifecycle_trace as life
 from extra.qk.prefill import native_isa_l4_stream_probe as sp
 from extra.qk.generated_candidates import select_generated_candidate
-from extra.qk.quant_specs import activation_spec, quant_spec
-from extra.qk.runtime_specs import RuntimeOpSpec
+from extra.qk.quant_specs import activation_spec
+from extra.qk.runtime_specs import QuantizedTensorSpec, RuntimeOpSpec
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -46,12 +46,13 @@ def assert_prefill_mvp_structural_provenance_gate(report, surface_row, *, route_
 def test_attn_qo_generated_candidate_lifecycle_smoke_has_b128_wmma_targeted_waitcnt():
   op = RuntimeOpSpec(
     family="QuantizedLinear", phase="prefill", role="attn_qo", shape={"M": 512, "N": 4096, "K": 4096},
-    weight=quant_spec("Q4_K").tensor_spec(), activation=activation_spec("fp16").activation_spec(),
+    weight=QuantizedTensorSpec("fp16"), activation=activation_spec("fp16").activation_spec(),
+    profile="qwen3_8b_q4k_m_gfx1100", target={"backend": "AMD", "arch": "gfx1100", "wave_size": 32},
+    codegen_features=("wmma_f32_16x16x16_f16",),
   )
-  selected = select_generated_candidate(op, preferred=("quant_linear_prefill.prefill_v2_scheduler_matmul_default",))
-  assert selected.status == "selected"
-  assert selected.candidate is not None
-  assert selected.candidate.route_id == "prefill_v2_scheduler_matmul_default"
+  selected = select_generated_candidate(op)
+  assert selected.status == "selected" and selected.candidate is not None
+  assert selected.candidate.route_id == "prefill_wmma_lds_single_buffer_candidate_generated"
 
   env = {**os.environ,
     "DEV": "AMD:ISA",
@@ -69,11 +70,12 @@ def test_attn_qo_generated_candidate_lifecycle_smoke_has_b128_wmma_targeted_wait
   report = json.loads(proc.stdout)
 
   row = surface_audit.route_surface_row(selected.candidate.route_id)
-  assert_prefill_mvp_structural_provenance_gate(report, row, route_id="prefill_v2_scheduler_matmul_default")
+  assert_prefill_mvp_structural_provenance_gate(
+    report, row, route_id="prefill_wmma_lds_single_buffer_candidate_generated")
 
 
 def test_attn_qo_default_prefill_candidate_has_no_route_local_raw_instruction_list():
-  row = surface_audit.route_surface_row("prefill_v2_scheduler_matmul_default")
+  row = surface_audit.route_surface_row("prefill_wmma_lds_single_buffer_candidate_generated")
   assert row["strict_pure"] is True
   assert row["surface_class"] == "ordinary_tinygrad_graph"
   assert row["kernel_authorship"] == "tinygrad_scheduler_generated"

@@ -93,8 +93,9 @@ def test_default_path_census_uses_manifest_provenance():
   assert by_route["decode_q6k_coop_generated"]["final_default_allowed"] is True
   assert by_route["prefill_q6k_direct_generated"]["provenance"] == "machine_authored_generated"
   assert by_route["prefill_q6k_direct_generated"]["final_default_allowed"] is True
-  assert by_route["prefill_v2_scheduler_matmul_default"]["provenance"] == "tinygrad_scheduler_generated"
-  assert by_route["prefill_v2_scheduler_matmul_default"]["final_default_allowed"] is True
+  assert by_route["prefill_wmma_lds_single_buffer_candidate_generated"]["provenance"] == "tinygrad_scheduler_generated"
+  assert by_route["prefill_wmma_lds_single_buffer_candidate_generated"]["final_default_allowed"] is True
+  assert "prefill_v2_scheduler_matmul_default" not in by_route
   assert "prefill_pipe_role_selective_generated" not in by_route
   assert "prefill_pipe_role_selective_default" not in by_route
   assert by_route["prefill_q4k_direct_tile4x4_default"]["provenance"] == "machine_authored_generated"
@@ -165,7 +166,7 @@ def test_qk_route_policy_selects_8b_live_split_by_shape(tmp_path):
     _set_qk_route_policy(None)
 
 
-def test_qk_route_policy_accepts_pure_prefill_scheduler_route(tmp_path):
+def test_qk_route_policy_accepts_promoted_pure_prefill_candidate_route(tmp_path):
   policy_path = tmp_path / "prefill_policy.json"
   policy_path.write_text(json.dumps({
     "schema": "boltbeam.route_policy.v1",
@@ -176,14 +177,14 @@ def test_qk_route_policy_accepts_pure_prefill_scheduler_route(tmp_path):
       "role": "ffn_down",
       "shape": {"rows": 4096, "cols": 12288},
       "quant": "Q4_K",
-      "selected_route": "prefill_v2_scheduler_matmul_default",
+      "selected_route": "prefill_wmma_lds_single_buffer_candidate_generated",
       "status": "promoted",
       "route_params": {},
-      "rollback": {"PREFILL_GRAPH_GEMM": "1"},
+      "rollback": {"PREFILL_GRAPH_GEMM": "0"},
     }],
   }))
   policy = _load_qk_route_policy(str(policy_path))
-  assert policy["prefill_gen"][0]["selected_route"] == "prefill_v2_scheduler_matmul_default"
+  assert policy["prefill_gen"][0]["selected_route"] == "prefill_wmma_lds_single_buffer_candidate_generated"
 
 
 def test_qk_route_policy_rejects_raw_prefill_graph_gemm_route(tmp_path):

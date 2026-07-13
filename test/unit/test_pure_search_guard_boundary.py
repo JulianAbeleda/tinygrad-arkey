@@ -122,13 +122,17 @@ def test_real_attention_default_selects_live_split(monkeypatch):
   assert attn["rolled_back_to_oracle"] is False and attn["pure"] is True
 
 
-def test_prefill_default_is_scheduler_matmul():
-  # model.py owns the PREFILL_GRAPH_GEMM default; the raw graph-GEMM oracle must NOT be default-on.
+def test_prefill_default_is_promoted_generated_candidate_set():
+  # model.py enables graph-GEMM only for the supported target; the manifest policy then supplies exact generated
+  # candidates without selecting the raw graph-GEMM oracle.
   with env(PREFILL_GRAPH_GEMM=None):
-    assert model._prefill_graph_gemm_default() == 0
+    assert model._prefill_graph_gemm_default() == 1
   gemm = {r["family"]: r for r in guard.effective_routes({})}["prefill_gemm"]
-  assert gemm["effective_route"] == "prefill_v2_scheduler_matmul_default"
+  assert gemm["effective_route"] == "prefill_wmma_lds_single_buffer_candidate_generated"
+  assert len(gemm["candidate_set_identities"]) == 4
   assert gemm["rolled_back_to_oracle"] is False and gemm["pure"] is True
+  with env(PREFILL_GRAPH_GEMM="0"):
+    assert model._prefill_graph_gemm_default() == 0
 
 
 # ---- (2) F2: a flipped getenv DEFAULT de-selects the shipped route and this suite catches it ----

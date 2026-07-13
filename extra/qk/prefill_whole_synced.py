@@ -27,6 +27,7 @@ from extra.qk.prefill_harness import (
 )
 from extra.qk.timing_harness import add_clock_pin_arg, set_clock_pin_env
 from extra.qk.pure_search_guard import effective_routes
+from extra.qk.route_manifest import promoted_prefill_candidate_policy
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 ARTIFACT_DIR = ROOT / "bench/prefill-whole-synced"
@@ -35,6 +36,7 @@ PREFILL_WMMA_PIPE_LDS_DBUF_ROUTE = "prefill_wmma_pipe_lds_dbuf_primitive_generat
 PREFILL_WMMA_LDS_DBUF_MIXED_ROUTE = "prefill_wmma_lds_dbuf_primitive_mixed"
 PREFILL_HYBRID_BACKEND_ATOM_ROUTE = "prefill_pipe_role_selective_generated"
 PREFILL_HAND_ASM_LDS2_ROUTE = "prefill_hand_asm_lds2"
+PREFILL_PROMOTED_CANDIDATE_ROUTE = promoted_prefill_candidate_policy()["route_id"]
 PREFILL_GENERATED_DENSE_ROLES = frozenset(("attn_qo", "attn_kv", "ffn_down", "ffn_gate_up"))
 PREFILL_ROLE_ROUTES_PIPE = {
   "attn_qo": "pipe",
@@ -250,7 +252,8 @@ def route_binding_gate(report: dict[str, Any], required_route: str | None = None
       f"LDS/DBUF flags requested but effective prefill route is still pipe-only {PREFILL_WMMA_PIPE_ROUTE!r}; "
       f"expected {PREFILL_WMMA_PIPE_LDS_DBUF_ROUTE!r} or {PREFILL_WMMA_LDS_DBUF_MIXED_ROUTE!r} once route identity lands"
     )
-  candidate_set_requested = (e.get("BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_JSON") is not None or
+  candidate_set_requested = (selected_route == PREFILL_PROMOTED_CANDIDATE_ROUTE or
+                             e.get("BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_JSON") is not None or
                              e.get("BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH") is not None)
   if candidate_set_requested:
     census=report.get("candidate_set_route_census")
@@ -260,7 +263,7 @@ def route_binding_gate(report: dict[str, Any], required_route: str | None = None
       missing=[(x.get("role"),x.get("shape"),x.get("canonical_identity")) for x in census.get("missing",())]
       failures.append(f"candidate set route census did not bind every exact entry; missing={missing!r}, "
                       f"unexpected={len(census.get('unexpected',()))}, identity_mismatches={len(census.get('identity_mismatches',()))}")
-    elif selected_route == "prefill_wmma_lds_single_buffer_candidate_generated":
+    elif selected_route == PREFILL_PROMOTED_CANDIDATE_ROUTE:
       policy_roles = set(census.get("policy_roles") or ())
       if policy_roles != PREFILL_GENERATED_DENSE_ROLES:
         failures.append("generated-pure route requires complete dense-role ownership; "

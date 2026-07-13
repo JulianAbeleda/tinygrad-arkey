@@ -165,23 +165,23 @@ ROUTES = {
   # deleted; no rollback target remains.
   # ---------------- prefill GEMM ----------------
   "prefill_v2_scheduler_matmul_default": {
-    "workload": "prefill", "profile_id": PROFILE_PREFILL, "status": "promoted_default",
+    "workload": "prefill", "profile_id": PROFILE_PREFILL, "status": "superseded_rollback",
     "roles": ["attn_qo", "attn_kv", "ffn_down", "ffn_gate_up"], "excluded_roles": [],
     "quant": ["Q4_K", "Q6_K", "fp16"],
     "shape_guards": [{"M": 512, "N": "*", "K": "*", "note": "ordinary PREFILL_V2 fp16 matmul under warmstart TC opts"}],
-    "env": {},
+    "env": {"PREFILL_GRAPH_GEMM": "0"},
     "rollback": {},
     "strict_fallback": True,
     "expected_kernels": [],
     "forbidden_kernels": ["prefill_gen_sched_gemm_* (on the default path)", "Ops.INS"],
     "authority_gate": "tinygrad/llm/model.py PREFILL_GRAPH_GEMM default",
     "promotion_artifacts": ["docs/pure-machine-search.md"],
-    "purity_status": "search_generated_promoted",
+    "purity_status": "research",
     "provenance": "tinygrad_scheduler_generated",
     "replacement_scope": "",
     "selector": "env_default",
     "route_attribution": "tinygrad/llm/prefill_routes.py route_prefill_linear default path: PREFILL_GRAPH_GEMM=0 -> x.cast(float16).linear(w.transpose(), bias) inside PREFILL_V2, with model.py installing warmstart TC opts around the prefill jit.",
-    "note": "Strict pure-machine-search default for fp16 resident/chunked prefill: ordinary tinygrad graph lowering owns matmul scheduling. The raw RDNA3 graph-GEMM instruction-list route remains opt-in via PREFILL_GRAPH_GEMM=1."},
+    "note": "Pure scheduler rollback for unsupported shapes and explicit PREFILL_GRAPH_GEMM=0. It was superseded for the exact gfx1100 pp512 four-role workload by the correctness-gated generated WMMA-LDS candidate set."},
   "prefill_pipe_role_selective_generated": {
     "workload": "prefill", "profile_id": PROFILE_PREFILL, "status": "research",
     "roles": ["attn_qo", "attn_kv", "ffn_down", "ffn_gate_up"], "excluded_roles": [],
@@ -268,21 +268,29 @@ ROUTES = {
     "route_classification": "compiler_primitive_spec_owned__asm_backend_atom",
     "note": "Composed S10 route identity for lifecycle attribution: pipe primitive roles for attn_qo, attn_kv, and ffn_down; attn_kv disables local staging under LDS/DBUF because captured generated HIP with local staging declared 69632 bytes shared memory, and it retains resource-gated raw fallback if the no-local-stage policy is disabled or unsafe; WMMALDSSpec-owned LDS/DBUF primitive for ffn_gate_up. The S10 classification is compiler_primitive_spec_owned__asm_backend_atom: spec/compiler owned with a reusable ASM backend atom, distinct from both pure generated transport and the raw graph-GEMM full hand-kernel oracle."},
   "prefill_wmma_lds_single_buffer_candidate_generated": {
-    "workload": "prefill", "profile_id": PROFILE_PREFILL, "status": "research",
-    "roles": ["ffn_gate_up"], "excluded_roles": ["attn_qo", "attn_kv", "ffn_down"], "quant": ["fp16"],
-    "shape_guards": [{"role": "ffn_gate_up", "M": 512, "N": 12288, "K": 4096,
-                      "primitive": "generated_lds_single_buffer"}],
-    "env": {"PREFILL_GRAPH_GEMM": "1", "PREFILL_WMMA_LDS_PRIMITIVE": "1"},
-    "rollback": {"BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON": "", "BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH": ""},
+    "workload": "prefill", "profile_id": PROFILE_PREFILL, "status": "promoted_default",
+    "roles": ["attn_qo", "attn_kv", "ffn_down", "ffn_gate_up"], "excluded_roles": [], "quant": ["fp16"],
+    "shape_guards": [
+      {"role": "attn_qo", "M": 512, "N": 4096, "K": 4096, "primitive": "generated_lds_buffer2"},
+      {"role": "attn_kv", "M": 512, "N": 1024, "K": 4096, "primitive": "generated_lds_buffer2"},
+      {"role": "ffn_down", "M": 512, "N": 4096, "K": 12288, "primitive": "generated_lds_buffer2"},
+      {"role": "ffn_gate_up", "M": 512, "N": 12288, "K": 4096, "primitive": "generated_lds_buffer2"}],
+    "env": {},
+    "rollback": {"PREFILL_GRAPH_GEMM": "0"},
     "strict_fallback": True, "expected_kernels": [],
     "forbidden_kernels": ["extra/qk/prefill/wmma.py instruction-list emitter", "Ops.INS",
                           "prefill_gen_sched_gemm_* raw schedule substrate"],
-    "authority_gate": "canonical candidate admission + route binding + full-output correctness + kernel timing",
-    "promotion_artifacts": [], "purity_status": "research", "provenance": "tinygrad_scheduler_generated",
-    "replacement_scope": "Capability-admitted exact-workload candidates on the generated Tensor matmul/LDS single-buffer transport.",
-    "selector": "canonical_candidate_env", "candidate_identity": None,
+    "authority_gate": "canonical candidate admission + four-role route census + whole-model greedy parity + pinned whole-prefill timing",
+    "promotion_artifacts": [
+      "bench/prefill-pure-full-kernel/multirole-buffer2-candidate-set-v1/whole-model-quality.json",
+      "bench/prefill-pure-full-kernel/multirole-buffer2-candidate-set-v1/whole-prefill-pinned.json"],
+    "purity_status": "search_generated_promoted", "provenance": "tinygrad_scheduler_generated",
+    "replacement_scope": "",
+    "selector": "promoted_candidate_set", "candidate_identity": None,
+    "candidate_set_path": "bench/prefill-pure-full-kernel/multirole-buffer2-candidate-set-v1/candidate-set.json",
+    "candidate_roles": ["attn_qo", "attn_kv", "ffn_down", "ffn_gate_up"],
     "route_attribution": "extra/qk/prefill_graph_gemm_route.py route_pf16_graph_gemm with a canonically admitted payload/hash pair; dynamic candidate identity is carried through KernelInfo and compiler cache identity.",
-    "note": "Research route for frozen gfx1100 single-buffer capability admission. Each candidate remains exact-workload bound and requires emitted proof, correctness, and timing before promotion."},
+    "note": "Promoted pure generated gfx1100 pp512 route. The historical route id predates multirole promotion; the selected candidate payloads are the authoritative buffer-count source and currently specify buffer_count=2 for all four dense roles. Exact canonical identities are loaded from the promoted candidate-set artifact; research routes are not eligible for implicit selection."},
   "prefill_wmma_lds_dbuf_primitive_mixed": {
     "workload": "prefill", "profile_id": PROFILE_PREFILL, "status": "research",
     "roles": ["attn_qo", "attn_kv", "ffn_down", "ffn_gate_up"], "excluded_roles": [],
@@ -484,6 +492,33 @@ def route_env(route_id: str) -> dict:
 def rollback_env(route_id: str) -> dict:
   """The env vars that leave this route for its rollback target ({} means it IS a rollback target)."""
   return dict(route(route_id).get("rollback", {}))
+
+def promoted_prefill_candidate_policy() -> dict:
+  """Return the single promoted full-kernel candidate policy consumed by runtime and search selection.
+
+  The manifest owns promotion; the candidate-set artifact owns exact payloads and canonical identities. Keeping those
+  concerns separate lets machine search replace a candidate set without duplicating its schedules in runtime code.
+  """
+  route_id = "prefill_wmma_lds_single_buffer_candidate_generated"
+  row = route(route_id)
+  if row.get("status") != "promoted_default" or row.get("provenance") != "tinygrad_scheduler_generated":
+    raise RuntimeError(f"promoted prefill candidate policy is not eligible: route={route_id} "
+                       f"status={row.get('status')!r} provenance={row.get('provenance')!r}")
+  relpath = pathlib.Path(str(row["candidate_set_path"]))
+  path = pathlib.Path(__file__).resolve().parents[2] / relpath
+  if not path.is_file(): raise FileNotFoundError(f"promoted prefill candidate set is missing: {path}")
+  roles = tuple(str(role) for role in row.get("candidate_roles", ()))
+  if set(roles) != set(row.get("roles", ())):
+    raise RuntimeError(f"promoted prefill candidate roles drifted from route roles: {roles!r} vs {row.get('roles')!r}")
+  return {
+    "route_id": route_id, "candidate_set_path": str(path), "candidate_roles": roles,
+    "runtime_env": {
+      "PREFILL_GRAPH_GEMM": "1",
+      "BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH": str(path),
+      "BOLTBEAM_FULL_KERNEL_CANDIDATE_ROLES": ",".join(roles),
+      "BOLTBEAM_PROMOTED_FULL_KERNEL_CANDIDATE_SET": "1",
+    },
+  }
 
 def apply_route(route_id: str, env: dict | None = None) -> dict:
   """Materialize a route's env onto a copy of `env` (default: a copy of os.environ). Returns the new env; does NOT

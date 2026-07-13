@@ -47,17 +47,25 @@ PREFILL_UBATCH = getenv("PREFILL_UBATCH", 512)  # concrete token batch; warmstar
 # prefill-v2 chunk instead of the slow 32-token symbolic fallback. PREFILL_REMAINDER_FIX=0 reverts. See
 # docs/prefill-route-schedule-result-20260620.md.
 PREFILL_REMAINDER_FIX = bool(getenv("PREFILL_REMAINDER_FIX", 1))
-# Opt-in raw graph GEMM (within PREFILL_V2): eligible fp16 prefill matmuls can still be routed through the
-# dependency-free RDNA3 instruction-list GEMM for performance experiments. It is no longer default-on because strict
-# pure-machine-search default execution must not select the `Ops.INS` substrate in extra/qk/prefill_graph_gemm_route.py.
-# The default path is the ordinary scheduler-owned PREFILL_V2 matmul with warmstart TC opts. Set PREFILL_GRAPH_GEMM=1
-# explicitly to use the raw graph-GEMM research route.
+# Generated graph GEMM (within PREFILL_V2): the manifest-promoted gfx1100 pp512 candidate set is default-on for its
+# exact four dense roles. The manifest owns promotion and supplies the complete runtime environment; this module only
+# checks target applicability. Explicit PREFILL_GRAPH_GEMM=0 remains the scheduler rollback, while an explicit 1 with
+# no promoted candidate policy remains a research request.
+def _promoted_prefill_candidate_supported() -> bool:
+  try: return Device.DEFAULT.split(":", 1)[0] == "AMD" and "gfx1100" in str(getattr(Device["AMD"], "arch", ""))
+  except Exception: return False
+
 def _prefill_graph_gemm_default() -> int:
   if "PREFILL_GRAPH_GEMM" in os.environ:
     raw = os.environ.get("PREFILL_GRAPH_GEMM", "0").strip().lower()
     if raw in ("", "0", "false", "off", "no"): return 0
     if raw in ("1", "true", "on", "yes"): return 1
     return int(raw)
+  if _promoted_prefill_candidate_supported():
+    # Validate that the promoted policy and its durable candidate artifact are available. Runtime reads this policy
+    # directly; do not leak it into global environment state.
+    qk_ops.qk_route_manifest_attr("promoted_prefill_candidate_policy")()
+    return 1
   return 0
 PREFILL_GRAPH_GEMM = bool(_prefill_graph_gemm_default())
 

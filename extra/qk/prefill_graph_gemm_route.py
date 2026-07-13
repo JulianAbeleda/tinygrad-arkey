@@ -23,8 +23,23 @@ _PURE_REGISTER_COMPILE_ARTIFACT_JSON_ENV = "BOLTBEAM_PURE_REGISTER_COMPILE_ARTIF
 _DEFAULT_CANDIDATE_PROFILE = "qwen3_8b_q4k_m_gfx1100"
 _CANDIDATE_ROUTE_CENSUS:ContextVar[dict[str,Any]|None]=ContextVar("candidate_route_census",default=None)
 
+def _candidate_env_requested(env: dict[str, Any]) -> bool:
+  return any(key in env for key in (_FULL_KERNEL_CANDIDATE_JSON_ENV, _FULL_KERNEL_CANDIDATE_HASH_ENV,
+                                     _FULL_KERNEL_CANDIDATE_SET_JSON_ENV, _FULL_KERNEL_CANDIDATE_SET_PATH_ENV))
+
+def _promoted_candidate_policy_selected(env: dict[str, Any]) -> bool:
+  # An explicit graph-GEMM value is a research/rollback request. The promoted policy owns only the absent-env default.
+  return "PREFILL_GRAPH_GEMM" not in env and not _candidate_env_requested(env)
+
+def _candidate_policy_env(env: dict[str, Any]) -> dict[str, Any]:
+  if not _promoted_candidate_policy_selected(env): return env
+  from extra.qk.route_manifest import promoted_prefill_candidate_policy
+  return {**promoted_prefill_candidate_policy()["runtime_env"], **env}
+
 def candidate_set_role_enabled(role: str, env: dict[str, str] | None = None) -> bool:
-  values = (env or os.environ).get("BOLTBEAM_FULL_KERNEL_CANDIDATE_ROLES", "ffn_gate_up")
+  source = os.environ if env is None else env
+  effective = _candidate_policy_env(source)
+  values = effective.get("BOLTBEAM_FULL_KERNEL_CANDIDATE_ROLES", "ffn_gate_up")
   return role in {x.strip() for x in values.split(",") if x.strip()}
 
 @contextmanager
@@ -66,7 +81,7 @@ def finalize_candidate_route_census(collector:dict[str,Any],registry) -> dict[st
           "selected":[selected[k] for k in sorted(selected)],"missing":missing,"unexpected":unexpected,"identity_mismatches":mismatched}
 
 def _candidate_registry_from_env(env:dict[str,Any]|None=None):
-  env=os.environ if env is None else env
+  env=_candidate_policy_env(os.environ if env is None else env)
   set_text,set_path=env.get(_FULL_KERNEL_CANDIDATE_SET_JSON_ENV),env.get(_FULL_KERNEL_CANDIDATE_SET_PATH_ENV)
   payload_text,identity=env.get(_FULL_KERNEL_CANDIDATE_JSON_ENV),env.get(_FULL_KERNEL_CANDIDATE_HASH_ENV)
   if set_text is not None and set_path is not None: raise ValueError("candidate set JSON and path are mutually exclusive")
@@ -399,6 +414,12 @@ def route_pf16_graph_gemm(lin, x: Tensor, w: Tensor | None = None) -> Tensor | N
     setattr(lin,"_prefill_full_kernel_candidate_identity",admission.canonical_identity)
     _record_candidate_route(admission)
     return result
+  # The promoted candidate set is a production allowlist, not a hint. Unsupported roles/shapes return to the ordinary
+  # Tensor path; they must never fall through into the slower raw/composed research emitters merely because graph-GEMM
+  # is enabled for the promoted exact workloads.
+  if registry is not None and _promoted_candidate_policy_selected(os.environ):
+    _route_dump({"role": role, "shape": (512, out_f, in_f), "decision": "promoted_candidate_not_applicable"})
+    return None
   candidate_requested = os.environ.get(_FULL_KERNEL_CANDIDATE_JSON_ENV) is not None or os.environ.get(_FULL_KERNEL_CANDIDATE_HASH_ENV) is not None
   if candidate_requested and os.environ.get("PREFILL_WMMA_LDS_PRIMITIVE") != "1":
     raise ValueError("full-kernel candidate requires PREFILL_WMMA_LDS_PRIMITIVE=1 generated transport")

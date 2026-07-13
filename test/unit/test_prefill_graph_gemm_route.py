@@ -49,6 +49,7 @@ def test_resolve_schedule_uses_role_shape_pipe_exclusion_policy(monkeypatch):
 def test_route_pf16_graph_gemm_current_lowering_path_still_wraps_ops_ins(monkeypatch):
   route._resolve_schedule.cache_clear()
   captured = {}
+  monkeypatch.setenv("PREFILL_GRAPH_GEMM", "1")
 
   def fake_describe(out_f: int, in_f: int, role: str | None = None):
     captured["described"] = (out_f, in_f, role)
@@ -106,6 +107,7 @@ def test_route_pf16_graph_gemm_current_lowering_path_still_wraps_ops_ins(monkeyp
 def test_route_pf16_graph_gemm_pipe_primitive_opt_in_uses_generated_matmul_transport(monkeypatch):
   route._resolve_schedule.cache_clear()
   captured = {}
+  monkeypatch.setenv("PREFILL_GRAPH_GEMM", "1")
 
   def fake_describe(out_f: int, in_f: int, role: str | None = None):
     captured["described"] = (out_f, in_f, role)
@@ -185,6 +187,7 @@ def test_route_pf16_graph_gemm_pipe_primitive_opt_in_uses_generated_matmul_trans
 def test_route_pf16_graph_gemm_pipe_primitive_resource_gate_falls_back_for_attn_kv(monkeypatch):
   route._resolve_schedule.cache_clear()
   captured = {}
+  monkeypatch.setenv("PREFILL_GRAPH_GEMM", "1")
 
   def fake_describe(out_f: int, in_f: int, role: str | None = None):
     captured["described"] = (out_f, in_f, role)
@@ -251,6 +254,7 @@ def test_route_pf16_graph_gemm_pipe_primitive_resource_gate_falls_back_for_attn_
 def test_route_pf16_graph_gemm_pipe_primitive_attn_kv_uses_generated_no_local_stage(monkeypatch):
   route._resolve_schedule.cache_clear()
   captured = {}
+  monkeypatch.setenv("PREFILL_GRAPH_GEMM", "1")
 
   def fake_describe(out_f: int, in_f: int, role: str | None = None):
     captured["described"] = (out_f, in_f, role)
@@ -442,6 +446,28 @@ def test_candidate_set_missing_exact_role_preserves_existing_emitter(monkeypatch
   assert route.route_pf16_graph_gemm(lin,_CandidateRouteTensor((1,512,4096)),w=_CandidateRouteTensor((2048,4096))) is None
   assert not hasattr(lin,"_prefill_full_kernel_candidate_identity")
 
+def test_promoted_default_binds_exact_attn_qo_candidate_without_env(monkeypatch):
+  for key in ("PREFILL_GRAPH_GEMM", "BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_JSON",
+              "BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH", "BOLTBEAM_FULL_KERNEL_CANDIDATE_ROLES",
+              "BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON", "BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH"):
+    monkeypatch.delenv(key, raising=False)
+  monkeypatch.setattr(spec,"describe_prefill_schedule",lambda n,k,role=None:_prefill_schedule("pipe",n,k))
+  monkeypatch.setattr(route,"_install_candidate_matmul",lambda _x,_w,_n,_k,_spec,admission:admission.canonical_identity)
+  lin=SimpleNamespace(_prefill_graph_role="attn_qo",bias=None)
+  selected=route.route_pf16_graph_gemm(lin,_CandidateRouteTensor((1,512,4096)),w=_CandidateRouteTensor((4096,4096)))
+  assert selected == "7e6fe384eebaff4308ced23146eee5e74b6cbdf496135b168cbba4451f0ef043"
+  assert lin._prefill_full_kernel_candidate_identity == selected
+
+def test_promoted_default_never_falls_through_to_research_emitter(monkeypatch):
+  for key in ("PREFILL_GRAPH_GEMM", "BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_JSON",
+              "BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH", "BOLTBEAM_FULL_KERNEL_CANDIDATE_ROLES",
+              "BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON", "BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH"):
+    monkeypatch.delenv(key, raising=False)
+  monkeypatch.setattr(spec,"describe_prefill_schedule",lambda n,k,role=None:_prefill_schedule("pipe",n,k))
+  monkeypatch.setattr(spec,"emit_prefill_gemm_from_spec",lambda _spec:(_ for _ in ()).throw(AssertionError("research emitter selected")))
+  lin=SimpleNamespace(_prefill_graph_role="attn_qo",bias=None)
+  assert route.route_pf16_graph_gemm(lin,_CandidateRouteTensor((1,512,4096)),w=_CandidateRouteTensor((2048,4096))) is None
+
 def test_four_role_candidate_specs_have_distinct_warmstart_keys():
   rows=(("ffn_gate_up",12288,4096),("ffn_down",4096,12288),("attn_qo",4096,4096),("attn_kv",1024,4096))
   keys={route._primitive_warmstart_key(_prefill_schedule("pipe",n,k)) for _role,n,k in rows}
@@ -480,6 +506,7 @@ def test_candidate_route_census_context_does_not_leak_between_runs():
 def test_route_pf16_graph_gemm_lds_primitive_opt_in_uses_existing_generated_lds_transport(monkeypatch):
   route._resolve_schedule.cache_clear()
   captured = {}
+  monkeypatch.setenv("PREFILL_GRAPH_GEMM", "1")
 
   def fake_describe(out_f: int, in_f: int, role: str | None = None):
     captured["described"] = (out_f, in_f, role)

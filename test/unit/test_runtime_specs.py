@@ -80,7 +80,10 @@ def test_builtin_generated_candidates_match_manifest_route_metadata():
     assert candidate.provenance == route_manifest.route_provenance(candidate.route_id)
     assert candidate.supported_quant_formats == tuple(manifest["quant"])
     assert candidate.authority_gates == _manifest_authority_gates(candidate.route_id)
-    assert set(_manifest_runtime_roles(candidate.route_id)).issubset(set(candidate.roles))
+    if candidate.is_full_kernel_candidate:
+      assert set(candidate.roles).issubset(set(_manifest_runtime_roles(candidate.route_id)))
+    else:
+      assert set(_manifest_runtime_roles(candidate.route_id)).issubset(set(candidate.roles))
 
 
 def test_quant_specs_are_data_descriptors():
@@ -253,6 +256,7 @@ def test_register_candidate_admission_uses_zero_lds_typed_plan():
   payload["schedule"]["pipeline"].update(buffer_count=1, stage_count=2)
   payload["schedule"]["residency"]["resident"] = ["accumulator", "stage_ab_register"]
   payload["schedule"]["wmma"]["fragment_layout"] = "rdna3_wmma_f32_16x16x16_f16_register_static"
+  for operand in ("a", "b"): payload["schedule"]["cooperative_load"][operand]["lane_mapping"] = "wave_contiguous_b128"
   candidate = _strict_full_kernel_candidate(full_kernel_candidate=payload)
   admission = admit_full_kernel_candidate(payload, candidate.canonical_identity,
     profile="qwen3_8b_q4k_m_gfx1100", role="attn_qo", shape=(512,4096,4096),
@@ -273,6 +277,7 @@ def test_register_candidate_route_selects_typed_install_without_lds(monkeypatch)
   payload["schedule"]["pipeline"].update(buffer_count=1, stage_count=2)
   payload["schedule"]["residency"]["resident"] = ["accumulator", "stage_ab_register"]
   payload["schedule"]["wmma"]["fragment_layout"] = "rdna3_wmma_f32_16x16x16_f16_register_static"
+  for operand in ("a", "b"): payload["schedule"]["cooperative_load"][operand]["lane_mapping"] = "wave_contiguous_b128"
   candidate = _strict_full_kernel_candidate(full_kernel_candidate=payload)
   monkeypatch.setenv("BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON", json.dumps(payload))
   monkeypatch.setenv("BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH", candidate.canonical_identity)
@@ -367,9 +372,10 @@ def test_dynamic_second_supported_candidate_admits_and_joins_route_identity():
   assert row["candidate_identity"] == candidate.canonical_identity
 
 
-def test_candidate_route_selector_fails_closed_and_default_is_unchanged():
+def test_candidate_route_selector_fails_closed_and_promoted_set_is_default():
   default = {x["family"]: x for x in pure_search_guard.effective_routes({})}["prefill_gemm"]
-  assert default["effective_route"] == "prefill_v2_scheduler_matmul_default"
+  assert default["effective_route"] == "prefill_wmma_lds_single_buffer_candidate_generated"
+  assert len(default["candidate_set_identities"]) == 4
   candidate = _single_buffer_anchor_candidate()
   base = {"PREFILL_GRAPH_GEMM": "1", "PREFILL_WMMA_LDS_PRIMITIVE": "1",
           "BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON": json.dumps(candidate.full_kernel_candidate)}

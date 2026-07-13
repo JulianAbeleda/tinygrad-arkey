@@ -214,7 +214,7 @@ def test_pure_search_guard_uses_strict_surface_classification():
 
 def test_pure_search_guard_distinguishes_generated_pipe_primitive_from_raw_oracle():
   default_route = {r["family"]: r for r in effective_routes({})}["prefill_gemm"]
-  assert default_route["effective_route"] == "prefill_v2_scheduler_matmul_default"
+  assert default_route["effective_route"] == "prefill_wmma_lds_single_buffer_candidate_generated"
   assert default_route["rolled_back_to_oracle"] is False
   assert default_route["pure"] is True
 

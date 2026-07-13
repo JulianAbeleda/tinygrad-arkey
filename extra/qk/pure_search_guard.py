@@ -21,7 +21,7 @@ import os
 import json
 from typing import Any
 
-from extra.qk.route_manifest import ROUTES, FINAL_DEFAULT_PROVENANCE, default_routes
+from extra.qk.route_manifest import ROUTES, FINAL_DEFAULT_PROVENANCE, default_routes, promoted_prefill_candidate_policy
 from extra.qk.pure_kernel_surface_audit import route_surface_row
 
 def _enabled(env: dict[str, Any], key: str) -> bool:
@@ -97,10 +97,17 @@ def _env_route_id(env: dict[str, str], **facts: Any) -> str:
 
 
 _PREFILL_GRAPH_GEMM_ENV = {"PREFILL_GRAPH_GEMM": "1"}
-_PREFILL_CANDIDATE_ROUTE = "prefill_wmma_lds_single_buffer_candidate_generated"
+_PREFILL_SCHEDULER_ROLLBACK_ENV = {"PREFILL_GRAPH_GEMM": "0"}
+_PREFILL_CANDIDATE_ROUTE = promoted_prefill_candidate_policy()["route_id"]
+
+def _prefill_policy_env(env: dict[str, Any]) -> dict[str, Any]:
+  """Resolve the shipped prefill default from manifest policy without mutating the caller's environment."""
+  if "PREFILL_GRAPH_GEMM" in env: return env
+  return {**promoted_prefill_candidate_policy()["runtime_env"], **env}
 
 
 def _prefill_candidate_selected(env: dict[str, Any]) -> bool:
+  env = _prefill_policy_env(env)
   set_requested = env.get("BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_JSON") is not None or \
                   env.get("BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH") is not None
   if set_requested:
@@ -155,9 +162,11 @@ HOT_FAMILIES = [
 
 
 def _prefill_gemm_effective(env: dict[str, Any]) -> tuple[str, bool]:
+  env = _prefill_policy_env(env)
   if _prefill_candidate_selected(env): return _PREFILL_CANDIDATE_ROUTE, False
   if not _enabled(env, "PREFILL_GRAPH_GEMM"):
-    return _default_route_id(workload="prefill", quant=["fp16"], roles=["attn_qo", "attn_kv", "ffn_down", "ffn_gate_up"]), False
+    return _env_route_id(_PREFILL_SCHEDULER_ROLLBACK_ENV, workload="prefill", quant=["fp16"],
+                         roles=["attn_qo", "attn_kv", "ffn_down", "ffn_gate_up"]), False
   if str(env.get("PREFILL_GEMM_PROFILE", "auto")).strip().lower() == "hand_asm_lds2":
     return "prefill_hand_asm_lds2", True
   if (_enabled(env, "PREFILL_WMMA_PIPE_PRIMITIVE") and _enabled(env, "PREFILL_WMMA_LDS_PRIMITIVE") and
@@ -198,10 +207,12 @@ def effective_routes(env: dict[str, Any] | None = None) -> list[dict[str, Any]]:
                 "manifest_pure": prov in FINAL_DEFAULT_PROVENANCE,
                 "rolled_back_to_oracle": rolled_back, "pure": surface["strict_pure"]}
     if rid == _PREFILL_CANDIDATE_ROUTE:
-      if "BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH" in e: row["candidate_identity"] = str(e["BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH"])
+      candidate_env = _prefill_policy_env(e)
+      if "BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH" in candidate_env:
+        row["candidate_identity"] = str(candidate_env["BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH"])
       else:
         from extra.qk.prefill_graph_gemm_route import _candidate_registry_from_env
-        registry=_candidate_registry_from_env(e)
+        registry=_candidate_registry_from_env(candidate_env)
         row["candidate_set_identities"]=[x.canonical_identity for x in registry.admissions]
     out.append(row)
   return out
