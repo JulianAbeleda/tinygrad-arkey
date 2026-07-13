@@ -76,6 +76,13 @@ Bind the exact artifact to the existing `global_register_resident` candidate rou
 Admission must fail closed when the identity, artifact, route role/shape, or
 resource proof differs. Existing LDS route selection remains the fallback.
 
+The paired execution bridge now has an explicit LDS artifact path as well:
+`attn_qo` uses the existing raw LDS2 generator to produce a real compile-only
+`Ops.PROGRAM`, while preserving the pure-register capture gate exclusively for
+the direct-L2 artifact. This keeps the comparison honest: the two transports
+share workload/schedule identity and the runtime bridge, but do not share a
+fake resource proof or binary.
+
 Acceptance:
 
 - production Tensor route reaches the candidate-specific postrange plan;

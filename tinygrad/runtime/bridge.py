@@ -31,6 +31,19 @@ class ExecutableHandle:
   def __call__(self, *args, **kwargs):
     return self.runtime(*args, **kwargs)
 
+  def dispatch(self, *buffers, vals=(), wait=True):
+    """Explicitly dispatch using the launch geometry from this PROGRAM.
+
+    Callers supply only the compiled program's buffer arguments.  Geometry is
+    never reconstructed from a candidate report or left at the runtime's
+    default `(1, 1, 1)` launch.  This method is intentionally named separately
+    from construction so preparing an executable cannot dispatch by accident.
+    """
+    if self.program.op is not Ops.PROGRAM or not isinstance(self.program.arg, ProgramInfo):
+      raise ValueError("executable program metadata is unavailable")
+    return self.runtime(*buffers, global_size=self.program.arg.global_size,
+                        local_size=self.program.arg.local_size, vals=vals, wait=wait)
+
   def close(self) -> None:
     close = getattr(self.runtime, "close", None)
     if close is not None: close()

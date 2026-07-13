@@ -229,12 +229,19 @@ be coupled into compilation or dispatch.
   touching AMD hardware.
 
 Current implementation status: the exact `attn_qo` direct-L2 candidate now
-produces a real tinygrad `Ops.PROGRAM` and passing compile evidence through
-`extra/qk/prefill/attn_qo_executable_preparation.py`. The exact LDS pair is not
-yet executable through the same candidate payload: its current local-stage
-lowering reaches the renderer's multidimensional `WITH_LOCAL` rejection or
-register allocation failure (`Inc 0: no spills`). The LDS side must be bound
-to the existing generated LDS route before paired benchmarking.
+produces a real tinygrad `Ops.PROGRAM` and passing compiler-capture evidence
+through `extra/qk/prefill/attn_qo_executable_preparation.py`. The exact LDS
+candidate now also produces a real `Ops.PROGRAM`, using the existing
+`_emit_schedule -> build_gemm_lds2` route and a separate generic transport
+compile-evidence schema. Both artifacts join to `tinygrad.runtime.bridge` with
+the actual final binary hash; construction remains non-dispatching.
+
+The generated LDS *precontract* lowering is still blocked by its
+multidimensional `WITH_LOCAL` / register-allocation failures. That is no
+longer a blocker for the paired execution milestone because the existing LDS2
+route is a compatible, reusable fallback. The remaining blockers are shared
+buffer/guard correctness, isolated hardware dispatch, and paired timing and
+counter evidence. No GPU dispatch has been performed by this milestone.
 
 ### Phase C — generic buffer/launch adapter
 

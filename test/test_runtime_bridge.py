@@ -36,6 +36,21 @@ def test_mock_runtime_is_executable_but_not_dispatched_on_construction():
   assert rt.calls == 1
 
 
+def test_explicit_dispatch_uses_program_launch_geometry():
+  class Runtime:
+    lib = b"ok"
+    def __init__(self): self.args = None
+    def __call__(self, *args, **kwargs): self.args = (args, kwargs); return "launched"
+  rt = Runtime()
+  prg = UOp(Ops.PROGRAM, src=(UOp(Ops.SINK), UOp(Ops.DEVICE, arg="CPU"), UOp(Ops.LINEAR),
+                              UOp(Ops.SOURCE), UOp(Ops.BINARY, arg=b"ok")),
+            arg=ProgramInfo(global_size=(32, 4, 1), local_size=(256, 1, 1)))
+  with patch("tinygrad.runtime.bridge.get_runtime", return_value=rt):
+    handle = build_executable(artifact(), prg, device="CPU")
+  assert handle.dispatch("a", "b", "c") == "launched"
+  assert rt.args == (("a", "b", "c"), {"global_size": (32, 4, 1), "local_size": (256, 1, 1), "vals": (), "wait": True})
+
+
 def test_prepare_executable_joins_compile_evidence_to_program_without_dispatch():
   class Runtime:
     lib = b"ok"
