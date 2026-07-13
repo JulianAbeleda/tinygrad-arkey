@@ -28,6 +28,8 @@ def test_attn_qo_canary_uses_only_fake_callbacks_and_promotes_after_exact_stage(
   result = run_canary(candidate={"canonical_identity": IDENTITY},
     compile_artifact=_compile(runtime_binding=_runtime_binding()), route_binding=_route(),
     profile=_runtime_binding()["profile"], enable_value=ENABLE_VALUE,
+    stage_artifacts={s["name"]: {"passed": True, "role": "attn_qo", "shape": list(s["shape"]),
+      "canonical_identity": IDENTITY, "binary_sha256": BINARY, "target": dict(TARGET)} for s in STAGES},
     observation_callback=observe, benchmark_callback=lambda request: _pair())
   assert result["status"] == "promote_direct_l2"
   assert [x["stage"] for x in seen] == [x["name"] for x in STAGES]
@@ -52,5 +54,7 @@ def test_attn_qo_canary_rejects_route_identity_before_callback():
   result = run_canary(candidate={"canonical_identity": IDENTITY},
     compile_artifact=_compile(runtime_binding=_runtime_binding()), route_binding=_route("lds"),
     profile=_runtime_binding()["profile"], enable_value=ENABLE_VALUE,
+    stage_artifacts={s["name"]: {"passed": True, "role": "attn_qo", "shape": list(s["shape"]),
+      "canonical_identity": IDENTITY, "binary_sha256": BINARY, "target": dict(TARGET)} for s in STAGES},
     observation_callback=lambda _: calls.append(1), benchmark_callback=lambda _: _pair())
   assert result["revoked"] is True and calls == []

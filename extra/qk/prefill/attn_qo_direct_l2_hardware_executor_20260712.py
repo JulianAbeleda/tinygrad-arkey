@@ -46,7 +46,8 @@ def run_hardware_executor(*, candidate: dict[str, Any] | None,
                            route_binding: dict[str, Any] | None, profile: str = PROFILE,
                            stage_dispatch: Callable[[dict[str, Any]], dict[str, Any]] | None,
                            paired_benchmark: Callable[[dict[str, Any]], dict[str, Any]] | None,
-                           enable_value: str | None = None) -> dict[str, Any]:
+                           enable_value: str | None = None,
+                           stage_artifacts: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
   """Run one explicitly invoked, identity-bound hardware experiment.
 
   ``stage_dispatch`` and ``paired_benchmark`` own allocation and launch. They
@@ -78,7 +79,7 @@ def run_hardware_executor(*, candidate: dict[str, Any] | None,
   result = run_canary(candidate=candidate, compile_artifact=compile_artifact,
                       route_binding=route_binding, profile=profile,
                       observation_callback=observe, benchmark_callback=benchmark,
-                      enable_value=opt_in)
+                      enable_value=opt_in, stage_artifacts=stage_artifacts)
   return {**result, "executor": {"schema": SCHEMA, "device_adapter": "tinygrad.Tensor",
                                   "dispatch_explicit": True, "dispatch_performed": False}}
 

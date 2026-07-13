@@ -87,8 +87,10 @@ Acceptance:
 ## Phase 3 — guarded hardware correctness
 
 Only after Phases 1–2, use the promotion state machine to run bounded canaries:
-one exact candidate binary, one exact shape, strict timeout/health handling, no
-fallback promotion on failure, and identity-joined observations.
+each workload shape must have its own compiled artifact and dispatched-binary
+identity (the exact-shape artifact cannot be reused as proof for smaller
+canaries), with strict timeout/health handling, no fallback promotion on
+failure, and identity-joined observations.
 
 Acceptance:
 

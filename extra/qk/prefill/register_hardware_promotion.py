@@ -54,7 +54,8 @@ def _identity(row: dict[str, Any] | None, field: str) -> str | None:
 
 
 def prepare_authorization(candidate: dict[str, Any] | None, compile_artifact: dict[str, Any] | None, *,
-                          profile: str, enable_value: str | None = None) -> dict[str, Any]:
+                          profile: str, enable_value: str | None = None,
+                          stage_artifacts: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
   """Check exact evidence and explicit opt-in; never dispatch hardware."""
   evidence = runtime_compile_resource_eligibility(candidate, compile_artifact, profile=profile,
     role=EXACT_ROLE, shape=EXACT_SHAPE, target=TARGET)
@@ -63,9 +64,27 @@ def prepare_authorization(candidate: dict[str, Any] | None, compile_artifact: di
   identity, binary = _identity(evidence, "canonical_identity"), _identity(evidence, "binary_sha256")
   if identity is None or binary is None: errors.append("authorization lacks exact candidate/binary identity")
   if evidence.get("passed") is not True: errors.append("final compile/resource evidence did not pass")
+  stage_evidence: dict[str, dict[str, Any]] = {}
+  for stage in STAGES:
+    name, shape = stage["name"], list(stage["shape"])
+    row = stage_artifacts.get(name) if isinstance(stage_artifacts, dict) else None
+    sid, sbinary = _identity(row, "canonical_identity"), _identity(row, "binary_sha256")
+    if not isinstance(row, dict) or row.get("passed") is not True:
+      errors.append(f"{name}: passing stage-specific compile artifact is required")
+    if row.get("role") != EXACT_ROLE if isinstance(row, dict) else True:
+      errors.append(f"{name}: stage artifact role is invalid")
+    if tuple(row.get("shape", ())) != tuple(shape) if isinstance(row, dict) else True:
+      errors.append(f"{name}: stage artifact shape is invalid")
+    if sid is None or sbinary is None:
+      errors.append(f"{name}: stage artifact lacks candidate/binary identity")
+    if isinstance(row, dict):
+      stage_evidence[name] = {"canonical_identity": sid, "binary_sha256": sbinary,
+                              "role": row.get("role"), "shape": shape,
+                              "target": row.get("target", dict(TARGET)), "passed": row.get("passed")}
   return {"schema": f"{SCHEMA}.authorization", "passed": not errors, "errors": errors,
           "canonical_identity": identity, "binary_sha256": binary, "profile": profile,
           "role": EXACT_ROLE, "shape": list(EXACT_SHAPE), "target": dict(TARGET),
+          "stage_evidence": stage_evidence,
           "next_stage": STAGES[0]["name"] if not errors else None, "revoked": False,
           "compile_resource_evidence": evidence, "plan": promotion_plan(), "dispatch_performed": False}
 
@@ -93,6 +112,8 @@ def advance(authorization: dict[str, Any] | None, observations: Iterable[dict[st
     errors.append("authorization/final evidence identity join failed")
   expected_identity, expected_binary = (_identity(authorization, "canonical_identity"),
                                         _identity(authorization, "binary_sha256"))
+  stage_evidence = authorization.get("stage_evidence")
+  if not isinstance(stage_evidence, dict): errors.append("stage-specific artifact identities are unavailable")
   completed: list[str] = []
   try:
     rows = list(observations)
@@ -105,7 +126,9 @@ def advance(authorization: dict[str, Any] | None, observations: Iterable[dict[st
     if not isinstance(row, dict): errors.append(f"{expected['name']}: observation is unavailable"); break
     if row.get("stage") != expected["name"] or tuple(row.get("shape", ())) != expected["shape"]:
       errors.append(f"{expected['name']}: progression is out of order or shape is wrong")
-    if _identity(row, "canonical_identity") != expected_identity or _identity(row, "binary_sha256") != expected_binary:
+    expected_artifact = stage_evidence.get(expected["name"], {}) if isinstance(stage_evidence, dict) else {}
+    if (_identity(row, "canonical_identity") != expected_artifact.get("canonical_identity") or
+        _identity(row, "binary_sha256") != expected_artifact.get("binary_sha256")):
       errors.append(f"{expected['name']}: candidate/binary identity join failed")
     required_true = ("device_healthy_before", "device_healthy_after", "guards_intact",
                      "inputs_unchanged", "numerics_passed", "full_output_compared", "nonconstant_inputs")

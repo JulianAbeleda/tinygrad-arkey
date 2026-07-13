@@ -11,8 +11,12 @@ def _authorization(enable_value=ENABLE_VALUE):
     instruction_order_proof={"schema": "prefill-pure-register-instruction-order.v1",
                              "authority": "final_disassembly", "passed": True,
                              "disassembly_sha256": "d" * 64})
+  stages = {s["name"]: {"passed": True, "role": "attn_qo", "shape": list(s["shape"]),
+                         "canonical_identity": IDENTITY, "binary_sha256": BINARY, "target": dict(TARGET)}
+            for s in STAGES}
   return prepare_authorization({"canonical_identity": IDENTITY}, artifact,
-                               profile=_runtime_binding()["profile"], enable_value=enable_value)
+                               profile=_runtime_binding()["profile"], enable_value=enable_value,
+                               stage_artifacts=stages)
 
 
 def _observation(index):

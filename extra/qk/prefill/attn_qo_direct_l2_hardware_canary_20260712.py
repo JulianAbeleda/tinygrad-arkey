@@ -59,7 +59,8 @@ def run_canary(*, candidate: dict[str, Any] | None, compile_artifact: dict[str, 
                route_binding: dict[str, Any] | None, profile: str,
                observation_callback: ObservationCallback | None,
                benchmark_callback: BenchmarkCallback | None,
-               enable_value: str | None = None) -> dict[str, Any]:
+               enable_value: str | None = None,
+               stage_artifacts: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
   """Run the policy using caller callbacks; never allocate, upload, or dispatch.
 
   ``observation_callback`` may perform the externally-owned operation and must
@@ -68,7 +69,7 @@ def run_canary(*, candidate: dict[str, Any] | None, compile_artifact: dict[str, 
   direct-L2/LDS records; this module decides promote/retain on CPU.
   """
   authorization = prepare_authorization(candidate, compile_artifact, profile=profile,
-                                        enable_value=enable_value)
+                                        enable_value=enable_value, stage_artifacts=stage_artifacts)
   errors = _route_errors(authorization, route_binding) if authorization.get("passed") else []
   if errors:
     authorization = {**authorization, "passed": False, "errors": [*authorization["errors"], *errors], "revoked": True}
@@ -82,10 +83,11 @@ def run_canary(*, candidate: dict[str, Any] | None, compile_artifact: dict[str, 
   observations: list[dict[str, Any]] = []
   for stage in STAGES:
     try:
+      stage_evidence = authorization["stage_evidence"][stage["name"]]
       observation = observation_callback({"schema": f"{SCHEMA}.stage", "stage": stage["name"],
                                           "shape": list(stage["shape"]), "role": EXACT_ROLE,
-                                          "target": dict(TARGET), "canonical_identity": authorization["canonical_identity"],
-                                          "binary_sha256": authorization["binary_sha256"]})
+                                          "target": dict(TARGET), "canonical_identity": stage_evidence["canonical_identity"],
+                                          "binary_sha256": stage_evidence["binary_sha256"]})
     except Exception as exc:  # callback failure is a hardware canary failure
       observation = {"stage": stage["name"], "shape": list(stage["shape"]), "callback_error": str(exc)}
     observations.append(observation)
