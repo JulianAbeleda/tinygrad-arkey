@@ -8,70 +8,32 @@
       "PREFILL_V2": "1"
     }
   },
-  "mode": "authority_incomplete",
+  "mode": "authority",
   "chunk_n": 512,
   "chunk_ms": {
-    "0": 147.0514,
-    "512": 156.1934,
-    "1024": 171.2935,
-    "1536": 183.4945,
-    "2048": 201.5477,
-    "2560": 226.149,
-    "3072": 229.8641,
-    "3584": 242.4311
+    "0": 143.7668
   },
   "chunk_samples_ms": {
     "0": [
-      147.0984,
-      147.0514,
-      147.0721
-    ],
-    "512": [
-      156.1934,
-      156.1975,
-      156.2527
-    ],
-    "1024": [
-      171.3453,
-      171.2935,
-      171.5675
-    ],
-    "1536": [
-      183.7559,
-      183.6502,
-      183.4945
-    ],
-    "2048": [
-      201.5477,
-      201.5512,
-      201.8002
-    ],
-    "2560": [
-      226.2396,
-      226.3504,
-      226.149
-    ],
-    "3072": [
-      230.0775,
-      230.0699,
-      229.8641
-    ],
-    "3584": [
-      242.4311,
-      242.7192,
-      242.9273
+      143.9625,
+      143.7668,
+      143.8475
     ]
   },
+  "device_profile": {
+    "0": {
+      "schema": "prefill-device-profile-range-summary.v1",
+      "kernel_count": 0,
+      "device_ms": 0,
+      "by_name": {}
+    }
+  },
   "whole_tok_s": {
-    "512": 3481.78,
-    "1024": 3376.81,
-    "2048": 3112.31,
-    "4096": 2628.97
+    "512": 3561.32
   },
   "graph_gemm": true,
   "prefill_v2": "1",
   "prefill_route": "auto",
-  "prefill_chunked": "",
   "K": 8,
   "warmups": 4,
   "rounds": 3,
@@ -83,7 +45,7 @@
     "ok": true,
     "out": ""
   },
-  "git_short": "6a44e6f88",
+  "git_short": "8045efcef",
   "git_dirty": false,
   "route_attribution": {
     "prefill_route_family": "prefill_wmma_lds_single_buffer_candidate_generated",
@@ -96,6 +58,12 @@
   "candidate_set_route_census": {
     "schema": "prefill-candidate-set-route-census.v1",
     "passed": true,
+    "policy_roles": [
+      "attn_kv",
+      "attn_qo",
+      "ffn_down",
+      "ffn_gate_up"
+    ],
     "expected_entry_count": 4,
     "selected_entry_count": 4,
     "selected": [
@@ -113,7 +81,7 @@
           "wave_size": 32
         },
         "canonical_identity": "5585ac260bd84f780aee4a390a1e2318952197e8ef1b9054febd0e9c9e16a27b",
-        "bindings": 1152
+        "bindings": 144
       },
       {
         "profile": "qwen3_8b_q4k_m_gfx1100",
@@ -129,7 +97,7 @@
           "wave_size": 32
         },
         "canonical_identity": "7e6fe384eebaff4308ced23146eee5e74b6cbdf496135b168cbba4451f0ef043",
-        "bindings": 1152
+        "bindings": 144
       },
       {
         "profile": "qwen3_8b_q4k_m_gfx1100",
@@ -145,7 +113,7 @@
           "wave_size": 32
         },
         "canonical_identity": "1cc5e48ba3fa06473e89493e9d70247552e8092379845dccf04d790ab0924bb0",
-        "bindings": 576
+        "bindings": 72
       },
       {
         "profile": "qwen3_8b_q4k_m_gfx1100",
@@ -161,7 +129,7 @@
           "wave_size": 32
         },
         "canonical_identity": "7e37ad6e13dee573758b3264aa9ec71b0cd91f1ca08e012d279d67300360c2d9",
-        "bindings": 1152
+        "bindings": 144
       }
     ],
     "missing": [],
@@ -170,92 +138,161 @@
   },
   "prefill_role_routes": {},
   "timing_authority": "synced model.__call__ prefill-v2 warmstart path, min over repeated bursts, no generate TTFT/sampling",
-  "comparator_id": null,
-  "candidate_id": null,
-  "primitive_class": null,
-  "threshold": null,
-  "ledger": null,
+  "comparator_id": "llama.cpp-ac4cddeb0-pp512-pinned",
+  "candidate_id": "generated-all-four-buffer2-default",
+  "primitive_class": "tinygrad_scheduler_generated",
+  "threshold": {
+    "pp512_min": 3300
+  },
+  "ledger": "docs/pure-vs-s9-gemm-route-gap-handoff-20260712.md",
   "quality_gate": {
-    "status": "MISSING",
-    "note": "no whole-model dNLL/greedy-parity quality gate supplied; supply --quality-gate to promote (F3)"
+    "status": "PASS",
+    "passed": true,
+    "metric": "whole_model_deterministic_greedy_parity",
+    "value": 1.0,
+    "case_count": 3,
+    "route_bound": true,
+    "thresholds": {
+      "greedy_match_required": true
+    },
+    "comparisons": [
+      {
+        "case": 0,
+        "baseline_token": [
+          198
+        ],
+        "candidate_token": [
+          198
+        ],
+        "greedy_match": true
+      },
+      {
+        "case": 1,
+        "baseline_token": [
+          198
+        ],
+        "candidate_token": [
+          198
+        ],
+        "greedy_match": true
+      },
+      {
+        "case": 2,
+        "baseline_token": [
+          198
+        ],
+        "candidate_token": [
+          198
+        ],
+        "greedy_match": true
+      }
+    ],
+    "baseline_gpu_healthy": true,
+    "candidate_gpu_healthy": true,
+    "baseline": {
+      "graph_gemm": false,
+      "requested_roles": [],
+      "diagnostic_width": 0,
+      "outputs": [
+        {
+          "case": 0,
+          "token": [
+            198
+          ]
+        },
+        {
+          "case": 1,
+          "token": [
+            198
+          ]
+        },
+        {
+          "case": 2,
+          "token": [
+            198
+          ]
+        }
+      ],
+      "effective_routes": [
+        "decode_flash_live_split_g4_8b_kvboth",
+        "decode_q4k_g3_generated",
+        "decode_q6k_coop_generated",
+        "prefill_q4k_direct_tile4x4_default",
+        "prefill_v2_scheduler_matmul_default"
+      ]
+    },
+    "candidate": {
+      "graph_gemm": true,
+      "requested_roles": [],
+      "diagnostic_width": 0,
+      "outputs": [
+        {
+          "case": 0,
+          "token": [
+            198
+          ]
+        },
+        {
+          "case": 1,
+          "token": [
+            198
+          ]
+        },
+        {
+          "case": 2,
+          "token": [
+            198
+          ]
+        }
+      ],
+      "effective_routes": [
+        "decode_flash_live_split_g4_8b_kvboth",
+        "decode_q4k_g3_generated",
+        "decode_q6k_coop_generated",
+        "prefill_q4k_direct_tile4x4_default",
+        "prefill_wmma_lds_single_buffer_candidate_generated"
+      ]
+    },
+    "schema": "prefill-hybrid-whole-model-quality-gate.v1",
+    "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+    "max_context": 1024,
+    "cases": [
+      0,
+      1,
+      2
+    ],
+    "candidate_roles": [],
+    "diagnostic_width": 0,
+    "required_route": "prefill_wmma_lds_single_buffer_candidate_generated",
+    "candidate_set_path": "bench/prefill-pure-full-kernel/multirole-buffer2-candidate-set-v1/candidate-set.json",
+    "candidate_set_roles": "attn_qo,attn_kv,ffn_down,ffn_gate_up",
+    "baseline_child": {
+      "status": "passed",
+      "timed_out": false,
+      "error": null,
+      "elapsed_seconds": 20.94908036699053
+    },
+    "candidate_child": {
+      "status": "passed",
+      "timed_out": false,
+      "error": null,
+      "elapsed_seconds": 19.413355698998203
+    }
   },
   "reproducibility_band": {
     "per_chunk": {
       "0": {
         "n": 3,
-        "min_ms": 147.0514,
-        "max_ms": 147.0984,
-        "mean_ms": 147.074,
-        "std_ms": 0.0193,
-        "cv": 0.00013,
-        "spread": 0.00032
-      },
-      "512": {
-        "n": 3,
-        "min_ms": 156.1934,
-        "max_ms": 156.2527,
-        "mean_ms": 156.2145,
-        "std_ms": 0.0271,
-        "cv": 0.00017,
-        "spread": 0.00038
-      },
-      "1024": {
-        "n": 3,
-        "min_ms": 171.2935,
-        "max_ms": 171.5675,
-        "mean_ms": 171.4021,
-        "std_ms": 0.1188,
-        "cv": 0.00069,
-        "spread": 0.0016
-      },
-      "1536": {
-        "n": 3,
-        "min_ms": 183.4945,
-        "max_ms": 183.7559,
-        "mean_ms": 183.6335,
-        "std_ms": 0.1073,
-        "cv": 0.00058,
-        "spread": 0.00142
-      },
-      "2048": {
-        "n": 3,
-        "min_ms": 201.5477,
-        "max_ms": 201.8002,
-        "mean_ms": 201.633,
-        "std_ms": 0.1182,
-        "cv": 0.00059,
-        "spread": 0.00125
-      },
-      "2560": {
-        "n": 3,
-        "min_ms": 226.149,
-        "max_ms": 226.3504,
-        "mean_ms": 226.2463,
-        "std_ms": 0.0823,
-        "cv": 0.00036,
-        "spread": 0.00089
-      },
-      "3072": {
-        "n": 3,
-        "min_ms": 229.8641,
-        "max_ms": 230.0775,
-        "mean_ms": 230.0039,
-        "std_ms": 0.0989,
-        "cv": 0.00043,
-        "spread": 0.00093
-      },
-      "3584": {
-        "n": 3,
-        "min_ms": 242.4311,
-        "max_ms": 242.9273,
-        "mean_ms": 242.6925,
-        "std_ms": 0.2034,
-        "cv": 0.00084,
-        "spread": 0.00205
+        "min_ms": 143.7668,
+        "max_ms": 143.9625,
+        "mean_ms": 143.859,
+        "std_ms": 0.0803,
+        "cv": 0.00056,
+        "spread": 0.00136
       }
     },
-    "worst_cv": 0.00084,
-    "worst_spread": 0.00205,
+    "worst_cv": 0.00056,
+    "worst_spread": 0.00136,
     "single_sample": false
   },
   "measurement_regime": {
@@ -265,31 +302,22 @@
     "route_rolled_back": false,
     "mode": "authority",
     "logits_only": false,
-    "chunked": false,
     "authoritative_for_generated_promotion": true
   },
   "authority_completeness": {
     "schema": "prefill-whole-synced-authority-completeness.v1",
     "fields": {
-      "comparator_id": false,
+      "comparator_id": true,
       "reproducibility_band": true,
-      "candidate_id": false,
-      "primitive_class": false,
-      "threshold": false,
-      "ledger": false,
-      "quality_gate_pass": false
+      "candidate_id": true,
+      "primitive_class": true,
+      "threshold": true,
+      "ledger": true,
+      "quality_gate_pass": true
     },
-    "missing": [
-      "comparator_id",
-      "candidate_id",
-      "primitive_class",
-      "threshold",
-      "ledger",
-      "quality_gate_pass"
-    ],
-    "ok": false
+    "missing": [],
+    "ok": true
   },
-  "authority_blocked_reason": "refusing mode:authority; missing required fields: comparator_id, candidate_id, primitive_class, threshold, ledger, quality_gate_pass",
   "prefill_route_binding_gate": {
     "schema": "prefill-route-binding-gate.v1",
     "verdict": "PREFILL_ROUTE_BINDING_PASS",
@@ -302,6 +330,7 @@
       "prefill_q4k_direct_tile4x4_default",
       "prefill_wmma_lds_single_buffer_candidate_generated"
     ],
+    "binding_regime": "generated_pure",
     "lds_dbuf_requested": false,
     "candidate_set_requested": true,
     "failures": []

@@ -18,14 +18,14 @@
       "axis": "prefill_q4k_simple_uop_cooperative_lane_tile",
       "domain": "prefill",
       "disposition": "refuted on 14B ffn_gate_up: lane_partials 0.99 GB/s; direct_warp sweep best 1.29 GB/s vs current direct-packed floor ~2.11 GB/s",
-      "citation": "docs/prefill-packed-generated-tile-scope-20260704.md",
+      "citation": "docs/prefill-lessons-ledger.md",
       "route_id": "prefill_q4k_generated_tile_research"
     },
     {
       "axis": "prefill_q4k_direct_group_reduce_current_uop",
       "domain": "prefill",
       "disposition": "refuted for the manual direct-output recurrence: GROUP:0:10 looked fast but is numerically wrong on real 14B ffn_gate (rel_rmse ~1.26); use PREFILL_Q4K_REDUCE_OUT=1 for correct-but-not-fast grouped semantics",
-      "citation": "docs/prefill-packed-generated-tile-scope-20260704.md",
+      "citation": "docs/prefill-lessons-ledger.md",
       "route_id": "prefill_q4k_direct_tile4x4_default"
     },
     {
