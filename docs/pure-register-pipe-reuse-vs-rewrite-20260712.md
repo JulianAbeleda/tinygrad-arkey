@@ -449,3 +449,61 @@ then pass the existing exact guarded correctness gate.
 No evidence currently justifies claiming that the hand pipe is faster than
 generated direct-L2.  The only valid measured comparison remains generated
 direct-L2 versus proven WMMA-LDS, where LDS wins.
+
+### HP4-HP7 completion (2026-07-13)
+
+The bounded repair found that the alternating fragment banks were not the
+owner of the failure.  The raw stream crossed an invalid ownership boundary:
+
+1. `build_gemm_pipe` resolved `s_cbranch_scc1` to a concrete byte displacement
+   before final rendering;
+2. the generic renderer then scheduled across that concrete branch and
+   inserted additional waits without a symbolic basic-block boundary; and
+3. the serialized taken branch landed at byte 1212 in the output-store
+   epilogue instead of the loop top at byte 320.
+
+K64 survived because its backedge was not taken.  K96 was the first canary to
+take the corrupted edge and fault.  This exactly explains the observed
+boundary without requiring a speculative WMMA or register-bank hazard.
+
+The repair has two centralized parts:
+
+- raw control flow stays symbolic through scheduling/wait placement and the
+  renderer now resolves `s_cbranch_scc1` in the final byte stream; and
+- `PreassembledStreamPolicy`/`preassembled_linear` marks hand-authored ISA as
+  owning instruction order and waitcnt placement.  The generic compiler may
+  package and relocate that stream, but may not silently reschedule it.
+
+Validation of final pipe binary
+`9be1e239c274649551505243913c794bf7409ce190de127543fb8a4f2670889c`:
+
+| gate | result |
+|---|---|
+| final-stream remu K64/K96/K128/K4096 | all correct; K4096 RMSE 0.01320 |
+| guarded GPU K96 | pass; full output, guards, inputs, and health pass |
+| guarded full 512x4096x4096 | pass twice in fresh children |
+| full-shape max absolute error | 0.0001261 |
+| post-run GPU health | pass after every child |
+
+Three strictly sequential order-rotated sessions used 20 warmups and 20 timed
+rounds per candidate.  Session medians in milliseconds were:
+
+| order/session | hand pipe | generated direct-L2 | proven WMMA-LDS |
+|---|---:|---:|---:|
+| pipe, direct, LDS | 0.59880 | 0.45810 | 0.27892 |
+| direct, LDS, pipe | 0.68638 | 0.42746 | 0.28362 |
+| LDS, pipe, direct | 0.63956 | 0.44618 | 0.28492 |
+| median of session medians | **0.63956** | **0.44618** | **0.28362** |
+
+Final verdict: `retain_lds`.  At this shape the repaired hand pipe is about
+1.43x slower than generated direct-L2 and 2.25x slower than WMMA-LDS;
+generated direct-L2 is about 1.57x slower than WMMA-LDS.  Preserving the hand
+schedule materially improved it versus the compiler-mutated 0.86-1.02 ms
+stream, but did not change the winner.
+
+HP8 transfers only backend-neutral lessons: represent loop/control ownership
+explicitly, keep preassembled and compiler-owned schedules distinct, and make
+wait policy an owned lifecycle field.  No hand register numbers, branch
+displacements, or raw instruction choreography are copied into the generated
+scheduler.  The raw pipe is now correctness-eligible as a diagnostic control,
+but it is not a promotion candidate at this shape.

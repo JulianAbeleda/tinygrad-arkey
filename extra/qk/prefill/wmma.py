@@ -390,10 +390,14 @@ def build_gemm_pipe(M, N, K, TM, TN):
   LPB = TM*2 + TN*2                              # b128 loads per buffer (each frag = 2x b128)
   F0A=10; F0B=F0A+TM*8; F1A=F0B+TN*8; F1B=F1A+TM*8; VA=F1B+TN*8; ACCb=VA+(TM+TN)
   assert ACCb+TM*TN*8 <= 256, f"VGPR overflow: {ACCb+TM*TN*8}"
-  I=[]; Br=[]; lbl={}
+  I=[]
   def e(i): I.append(i); return i
-  def label(n): lbl[n]=sum(i.size() for i in I)
-  def br(t): Br.append((len(I)-1,t))
+  # Keep control flow symbolic until the renderer has scheduled each basic
+  # block and inserted its final waitcnts.  Resolving the branch here made its
+  # byte offset stale, and a concrete branch also let the renderer schedule
+  # instructions across the loop boundary.
+  def label(n): e(("label", n))
+  def br(t): e(("branch", "s_cbranch_scc1", t))
   sh = {4:6, 2:5, 1:4}
   def issue_loads(Ab, Bb):                       # load current-k frags into buffers, advance addrs by one k-tile
     for tm in range(TM):
@@ -430,7 +434,7 @@ def build_gemm_pipe(M, N, K, TM, TN):
   e(waitcnt_vm(LPB)); do_wmmas(F0A, F0B)         # F0 ready (only F1's LPB outstanding)
   issue_loads(F0A, F0B)                          # prefetch k=2j+2 -> F0
   e(waitcnt_vm(LPB)); do_wmmas(F1A, F1B)         # F1 ready
-  e(s_add_i32(s[16], s[16], 1)); e(s_cmp_lt_i32(s[16], LOOPS)); e(s_cbranch_scc1(simm16=0)); br('LOOP')
+  e(s_add_i32(s[16], s[16], 1)); e(s_cmp_lt_i32(s[16], LOOPS)); br('LOOP')
   issue_loads(F1A, F1B)                          # tail: k=NK-1 -> F1 (F0 already holds k=NK-2)
   e(waitcnt_vm(LPB)); do_wmmas(F0A, F0B)
   e(s_waitcnt(simm16=0)); do_wmmas(F1A, F1B)
@@ -450,9 +454,6 @@ def build_gemm_pipe(M, N, K, TM, TN):
         e(global_store_b16(addr=v[7:7], data=v[6], saddr=s[8:9], offset=0))
         if i<7: e(v_add_nc_u32_e32(v[7], N*4, v[7]))
   e(s_waitcnt(simm16=0)); e(s_sendmsg(simm16=3)); e(s_endpgm())
-  for idx,t in Br:
-    off=(lbl[t]-sum(i.size() for i in I[:idx+1]))//4
-    assert -32768<=off<=32767; I[idx].simm16=off
   return I
 
 def lower_lds2_gemm_kernel(M, N, K, WAVES_M, WAVES_N, WM, WN, BK, PAD, DBUF, PLRA=0, PLRAB=0, LEANADDR=0, DSHALF=0, *, reg_layout=None, memory_layout=None, wait_policy=None, cadence=None, lifecycle_template=None):

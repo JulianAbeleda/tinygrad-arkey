@@ -32,7 +32,7 @@ from tinygrad.renderer.amd.dsl import s as _S, v as _V, NULL, VCC, EXEC, Reg, Fi
 from tinygrad.runtime.autogen.amd.rdna3.ins import (
   s_load_b64, s_load_b32, global_load_b32, global_load_b128, global_store_b32, v_add_f32_e32, v_mul_f32_e32, v_sub_f32_e32,
   v_lshlrev_b32_e32, v_mov_b32_e32, v_mul_lo_u32, v_add_nc_u32_e32, v_bfe_u32, s_waitcnt, s_endpgm,
-  s_mov_b32, s_add_i32, s_cmp_lt_i32, s_cbranch_scc0, s_branch, ds_load_b32, ds_store_b32, ds_store_b64, ds_load_b128, ds_store_b128, s_barrier,
+  s_mov_b32, s_add_i32, s_cmp_lt_i32, s_cbranch_scc0, s_cbranch_scc1, s_branch, ds_load_b32, ds_store_b32, ds_store_b64, ds_load_b128, ds_store_b128, s_barrier,
   ds_bpermute_b32, v_dot2_f32_f16,
   # Phase G: full block-tile ALU/control surface
   v_xor_b32_e32, v_and_b32_e32, v_or_b32_e32, v_max_f32_e32, v_lshrrev_b32_e32, v_pack_b32_f16,
@@ -47,6 +47,17 @@ from tinygrad.codegen.opt.tc import amd_rdna3
 from tinygrad.helpers import getenv
 from tinygrad.renderer.isa.extensions import get_amd_isa_extension_descriptors
 from tinygrad.renderer.isa.amd_register_allocator import AMDStageBufferSpec, allocate_amd_stage_buffer_leases
+
+
+class PreassembledStreamPolicy(NamedTuple):
+  """A raw ISA owner already chose instruction order and waitcnt placement."""
+  preserve_instruction_order: bool = True
+  preserve_waitcnt: bool = True
+
+
+def preassembled_linear(insts) -> UOp:
+  """Package hand-authored ISA without letting compiler scheduling rewrite it."""
+  return UOp(Ops.LINEAR, src=tuple(UOp(Ops.INS, arg=inst) for inst in insts), arg=PreassembledStreamPolicy())
 
 # ---- physical register pools (Register.index -> dsl s[index]/v[index]) ----
 # s0-1 = kernarg ptr (entry), s2-3 = workgroup ids. Pointers are 64-bit = SGPR PAIRS; use even-aligned indices so
@@ -2183,7 +2194,7 @@ def lower_inst(x:UOp):
 # ---- counted-loop control flow (Phase B). Labels are (kind, counter_index) tuples; resolved to PC-relative simm16
 # dword offsets by AMDISARenderer.asm() before assemble_linear. Each loop is keyed by its unique counter SGPR. ----
 def _label(lid): return UOp(Ops.INS, arg=("label", lid))        # 0-byte marker, dropped after offset resolution
-def _branch(kind, lid): return UOp(Ops.INS, arg=("branch", kind, lid))   # resolved to s_branch / s_cbranch_scc0
+def _branch(kind, lid): return UOp(Ops.INS, arg=("branch", kind, lid))   # resolved after scheduling/wait insertion
 
 def lower_range(x:UOp):
   cnt, bound, lbl = x.reg, x.src[0].arg, x.arg[2]   # counter SGPR; loop bound (CONST); unique loop-label id (arg[2])
@@ -2294,10 +2305,12 @@ class AMDISARenderer(ISARenderer):
 
   def _final_linear(self, lin:UOp) -> UOp:
     insts = list(lin.src)
-    if getenv("AMD_ISA_SCHED", 1): insts = self._schedule(insts)
+    policy = lin.arg if isinstance(lin.arg, PreassembledStreamPolicy) else None
+    if not (policy and policy.preserve_instruction_order) and getenv("AMD_ISA_SCHED", 1): insts = self._schedule(insts)
     proof = lin.arg if isinstance(lin.arg, CompilerCaptureProof) else None
     targeted = proof is not None and proof.wait_policy == "targeted_vmcnt"
-    return lin.replace(src=tuple(self._resolve_labels(self._insert_waitcnt(insts, targeted=targeted))))
+    if not (policy and policy.preserve_waitcnt): insts = self._insert_waitcnt(insts, targeted=targeted)
+    return lin.replace(src=tuple(self._resolve_labels(insts)))
   @staticmethod
   def _final_disassembly(lin:UOp) -> str:
     """Render the exact typed instruction objects which are serialized into the code object."""
@@ -2338,7 +2351,8 @@ class AMDISARenderer(ISARenderer):
         _, kind, target = a
         simm = (labels[target] - p - 4) // 4
         if not (-0x8000 <= simm <= 0x7fff): raise RuntimeError(f"AMD:ISA branch offset {simm} out of simm16 range for {target}")
-        ins = {"s_branch": s_branch, "s_cbranch_scc0": s_cbranch_scc0}[kind](simm16=simm & 0xffff)
+        ins = {"s_branch": s_branch, "s_cbranch_scc0": s_cbranch_scc0,
+               "s_cbranch_scc1": s_cbranch_scc1}[kind](simm16=simm & 0xffff)
         out.append(UOp(Ops.INS, arg=ins))
       else: out.append(u)
     return out

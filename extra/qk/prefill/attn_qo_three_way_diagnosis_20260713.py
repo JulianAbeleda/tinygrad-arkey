@@ -21,7 +21,8 @@ from tinygrad.runtime.process_isolated import run_isolated
 SHAPE = (512, 4096, 4096)
 ROLE = "attn_qo"
 CANDIDATES = ("direct_l2", "lds", "pipe")
-PIPE_IDENTITY = hashlib.sha256(b"attn_qo:512x4096x4096:build_gemm_pipe:tm2:tn2:v1").hexdigest()
+PIPE_IDENTITY = hashlib.sha256(
+  b"attn_qo:512x4096x4096:build_gemm_pipe:tm2:tn2:v2:symbolic-control:preassembled-stream").hexdigest()
 
 
 def compile_pipe_program(*, shape: tuple[int, int, int] = SHAPE, target: str = "AMD:ISA") -> tuple[Any, dict[str, Any]]:
@@ -31,6 +32,7 @@ def compile_pipe_program(*, shape: tuple[int, int, int] = SHAPE, target: str = "
   from tinygrad.dtype import AddrSpace
   from tinygrad.engine.realize import Estimates, compile_linear
   from tinygrad.helpers import Context, colored
+  from tinygrad.renderer.isa.amd import preassembled_linear
   from tinygrad.uop.ops import KernelInfo, Ops, ProgramInfo, UOp
   from extra.qk.prefill.executable_artifact_preparation import compile_transport_evidence
   from extra.qk.prefill.wmma import build_gemm_pipe
@@ -53,8 +55,7 @@ def compile_pipe_program(*, shape: tuple[int, int, int] = SHAPE, target: str = "
     sink = UOp.sink(a.base, b.base, c.base, lds, *g, UOp.special(threads, "lidx0"),
       arg=KernelInfo(name=colored(name, "cyan"), estimates=Estimates(ops=m*n*k*2,
         mem=(m*k+n*k+m*n)*2)))
-    return UOp(Ops.PROGRAM, src=(sink, UOp(Ops.DEVICE, arg=Device.DEFAULT),
-      UOp(Ops.LINEAR, src=tuple(UOp(Ops.INS, arg=i) for i in insts))))
+    return UOp(Ops.PROGRAM, src=(sink, UOp(Ops.DEVICE, arg=Device.DEFAULT), preassembled_linear(insts)))
 
   with Context(DEV=target):
     a, b, c = Tensor.empty(m, k, dtype=dtypes.half), Tensor.empty(n, k, dtype=dtypes.half), Tensor.empty(m, n, dtype=dtypes.half)
@@ -79,18 +80,48 @@ def compile_pipe_program(*, shape: tuple[int, int, int] = SHAPE, target: str = "
 def _always_alive() -> bool: return True
 
 
-def _build_bundle(candidate: str):
+def _build_bundle(candidate: str, shape: tuple[int, int, int] = SHAPE):
   from extra.qk.prefill.isolated_guarded_executor import build_tinygrad_bundle
   if candidate == "pipe":
-    program, evidence = compile_pipe_program()
+    program, evidence = compile_pipe_program(shape=shape)
     order = ("a", "b", "output")
   else:
     from extra.qk.prefill.attn_qo_progressive_correctness_20260713 import compile_attn_qo_stage, argument_order_for
-    prepared = compile_attn_qo_stage(transport=candidate, shape=SHAPE)
+    prepared = compile_attn_qo_stage(transport=candidate, shape=shape)
     program, evidence, order = prepared["program"], prepared["compile_evidence"], argument_order_for(candidate)
   bundle = build_tinygrad_bundle(program=program, compile_evidence=evidence, device="AMD",
                                  argument_order=order, health=_always_alive)
   return bundle, program, evidence, order
+
+
+def _child_correctness_canary(candidate: str, shape: tuple[int, int, int], seed: int) -> dict[str, Any]:
+  """Compile and correctness-check one candidate without timing. Runs only in an isolated child."""
+  from extra.qk.prefill.attn_qo_progressive_correctness_20260713 import attn_qo_reference_inputs
+  bundle, _program, evidence, _order = _build_bundle(candidate, shape)
+  a, b, reference = attn_qo_reference_inputs(shape, seed=seed)
+  try:
+    correctness = run_guarded_execution(executable=bundle.executable, inputs={"a": a, "b": b}, reference=reference,
+      hooks=bundle.hooks, policy=GuardPolicy(timeout_seconds=30.0),
+      identity={"candidate": candidate, "shape": list(shape)}, output_dtype=np.float16)
+  finally:
+    bundle.executable.close()
+  return {"candidate": candidate, "shape": list(shape), "status": "passed" if correctness.get("passed") else "correctness_failed",
+          "binary_sha256": evidence["binary_sha256"], "correctness": correctness}
+
+
+def run_correctness_canary(*, candidate: str = "pipe", shape: tuple[int, int, int] = (32, 32, 96),
+                           seed: int = 0x5150, timeout_seconds: float = 60.0) -> dict[str, Any]:
+  """Parent-side isolated correctness canary with an independent post-child GPU health check."""
+  if candidate not in CANDIDATES: raise ValueError(f"unsupported candidate {candidate!r}")
+  child = run_isolated(_child_correctness_canary, args=(candidate, shape, seed), timeout_seconds=timeout_seconds,
+                       terminate_grace_seconds=0.5, start_method="spawn")
+  healthy = tiny_device_health(timeout_seconds=30.0)
+  result = child.result if isinstance(child.result, dict) else None
+  return {"candidate": candidate, "shape": list(shape),
+          "child": {"status": child.status, "timed_out": child.timed_out, "error": child.error,
+                    "elapsed_seconds": child.elapsed_seconds},
+          "health_after": healthy, "result": result,
+          "passed": child.status == "passed" and result is not None and result.get("status") == "passed" and healthy}
 
 
 def _child_candidate_session(candidate: str, seed: int, warmups: int, rounds: int) -> dict[str, Any]:
@@ -166,13 +197,22 @@ def run_sequence(*, candidates: Sequence[str] = CANDIDATES, seed: int = 0x5150,
 def main() -> int:
   parser = argparse.ArgumentParser(description=__doc__)
   parser.add_argument("--candidates", default=",".join(CANDIDATES))
+  parser.add_argument("--correctness-only", action="store_true", help="run one isolated candidate without timing")
+  parser.add_argument("--shape", default="x".join(map(str, SHAPE)), help="MxNxK shape for --correctness-only")
   parser.add_argument("--warmups", type=int, default=5)
   parser.add_argument("--rounds", type=int, default=20)
   parser.add_argument("--timeout", type=float, default=180.0)
   parser.add_argument("--out")
   args = parser.parse_args()
-  report = run_sequence(candidates=tuple(x.strip() for x in args.candidates.split(",") if x.strip()),
-                        warmups=args.warmups, rounds=args.rounds, timeout_seconds=args.timeout)
+  candidates = tuple(x.strip() for x in args.candidates.split(",") if x.strip())
+  if args.correctness_only:
+    if len(candidates) != 1: parser.error("--correctness-only requires exactly one candidate")
+    try: shape = tuple(int(x) for x in args.shape.lower().split("x"))
+    except ValueError: parser.error("--shape must be MxNxK")
+    if len(shape) != 3: parser.error("--shape must be MxNxK")
+    report = run_correctness_canary(candidate=candidates[0], shape=shape, timeout_seconds=args.timeout)  # type: ignore[arg-type]
+  else:
+    report = run_sequence(candidates=candidates, warmups=args.warmups, rounds=args.rounds, timeout_seconds=args.timeout)
   text = json.dumps(report, indent=2) + "\n"
   if args.out:
     from pathlib import Path

@@ -479,8 +479,8 @@ def route_pf16_graph_gemm(lin, x: Tensor, w: Tensor | None = None) -> Tensor | N
     sink = UOp.sink(A.base, Bt.base, C.base, lds, *g, UOp.special(threads, "lidx0"),
                     arg=KernelInfo(name=colored(name, "cyan"),
                                    estimates=Estimates(ops=512*out_f*in_f*2, mem=(512*in_f+out_f*in_f+512*out_f)*2)))
-    return UOp(Ops.PROGRAM, src=(sink, UOp(Ops.DEVICE, arg=Device.DEFAULT),
-                                 UOp(Ops.LINEAR, src=tuple([UOp(Ops.INS, arg=i) for i in insts]))))
+    from tinygrad.renderer.isa.amd import preassembled_linear
+    return UOp(Ops.PROGRAM, src=(sink, UOp(Ops.DEVICE, arg=Device.DEFAULT), preassembled_linear(insts)))
   out = Tensor.custom_kernel(a, bt, c, fxn=asm_kernel)[2]
   return out.reshape(*x.shape[:-1], out_f)
 
@@ -510,7 +510,7 @@ def route_q4k_graph_gemm(lin, x: Tensor) -> Tensor | None:
     sink = UOp.sink(A.base, W.base, C.base, lds, *g, UOp.special(THREADS, "lidx0"),
                     arg=KernelInfo(name=colored(name, "cyan"),
                                    estimates=Estimates(ops=512*out_f*in_f*2, mem=(512*in_f + out_f*in_f//2 + 512*out_f)*2)))
-    return UOp(Ops.PROGRAM, src=(sink, UOp(Ops.DEVICE, arg=Device.DEFAULT),
-                                 UOp(Ops.LINEAR, src=tuple([UOp(Ops.INS, arg=i) for i in insts]))))
+    from tinygrad.renderer.isa.amd import preassembled_linear
+    return UOp(Ops.PROGRAM, src=(sink, UOp(Ops.DEVICE, arg=Device.DEFAULT), preassembled_linear(insts)))
   out = Tensor.custom_kernel(a, words, c, fxn=asm_kernel)[2]
   return out.reshape(*x.shape[:-1], out_f)

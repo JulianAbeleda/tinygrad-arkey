@@ -262,13 +262,10 @@ def final_bytes(I):
      No GPU/device needed -- this just assembles. Lets remu validate the POST-RENDER stream."""
   from tinygrad.uop.ops import UOp, Ops
   from tinygrad.helpers import Target
-  from tinygrad.renderer.isa.amd import AMDISARenderer
+  from tinygrad.renderer.isa.amd import AMDISARenderer, preassembled_linear
   ren = AMDISARenderer(Target.parse("AMD:ISA:gfx1100"))
-  uops = [UOp(Ops.INS, arg=i) for i in I]
-  from tinygrad.helpers import getenv
-  if getenv("AMD_ISA_SCHED", 1): uops = ren._schedule(uops)
-  final = ren._resolve_labels(ren._insert_waitcnt(uops))
-  raw = b"".join(u.arg.to_bytes() for u in final)
+  final = ren._final_linear(preassembled_linear(I))
+  raw = b"".join(u.arg.to_bytes() for u in final.src)
   assert len(raw) % 4 == 0
   return raw
 
