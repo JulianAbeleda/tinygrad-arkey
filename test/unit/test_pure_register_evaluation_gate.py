@@ -1,5 +1,5 @@
 from extra.qk.prefill.pure_register_evaluation_gate import (COMPILE_SCHEMA, REGISTER_STORAGE, compile_only,
-  evaluate, final_resources, machine_search, validate_role_attribution)
+  evaluate, final_resources, machine_search, runtime_compile_resource_eligibility, validate_role_attribution)
 
 
 IDENTITY = "a" * 64
@@ -42,6 +42,12 @@ def _timing():
           "protocol": {"scope": "kernel_only", "compile_excluded": True}}
 
 
+def _runtime_binding():
+  return {"profile": "qwen3_8b_q4k_m_gfx1100", "role": "attn_qo",
+          "shape": {"m": 512, "n": 4096, "k": 4096},
+          "target": {"backend": "AMD", "arch": "gfx1100", "wave_size": 32}}
+
+
 def _roles():
   return {role: {"passed": True, "strict_pure": True, "fallback_used": False, "route_family": "pure",
                  "canonical_identity": IDENTITY, "binary_sha256": BINARY,
@@ -56,6 +62,31 @@ def test_missing_register_artifact_blocks_before_resource_or_search_claims():
   report = evaluate({"canonical_identity": IDENTITY})
   assert report["passed"] is False and report["blocked_at"] == "compile"
   assert "register compile artifact is unavailable" in report["blockers"]["compile"]
+
+
+def test_runtime_register_warmstart_missing_evidence_is_default_closed():
+  binding = _runtime_binding()
+  row = runtime_compile_resource_eligibility({"canonical_identity": IDENTITY}, None,
+    profile=binding["profile"], role=binding["role"], shape=(512,4096,4096), target=binding["target"])
+  assert row["passed"] is False
+  assert any("compile artifact is unavailable" in error for error in row["errors"])
+
+
+def test_runtime_register_warmstart_rejects_invalid_exact_evidence():
+  binding = _runtime_binding()
+  artifact = _compile(runtime_binding={**binding, "shape": {"m":512,"n":4096,"k":2048}})
+  row = runtime_compile_resource_eligibility({"canonical_identity": IDENTITY}, artifact,
+    profile=binding["profile"], role=binding["role"], shape=(512,4096,4096), target=binding["target"])
+  assert row["passed"] is False
+  assert any("exact workload/target match" in error for error in row["errors"])
+
+
+def test_runtime_register_warmstart_accepts_valid_exact_compile_resource_evidence():
+  binding = _runtime_binding()
+  row = runtime_compile_resource_eligibility({"canonical_identity": IDENTITY}, _compile(runtime_binding=binding),
+    profile=binding["profile"], role=binding["role"], shape=(512,4096,4096), target=binding["target"])
+  assert row["passed"] is True
+  assert row["canonical_identity"] == IDENTITY and row["binary_sha256"] == BINARY
 
 
 def test_lds_candidate_is_not_admitted_as_register_compile():

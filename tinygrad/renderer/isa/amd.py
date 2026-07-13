@@ -45,6 +45,7 @@ from tinygrad.runtime.autogen.amd.rdna3.ins import (
 from tinygrad.codegen.opt.tc import amd_rdna3
 from tinygrad.helpers import getenv
 from tinygrad.renderer.isa.extensions import get_amd_isa_extension_descriptors
+from tinygrad.renderer.isa.amd_register_allocator import AMDStageBufferSpec, allocate_amd_stage_buffer_leases
 
 # ---- physical register pools (Register.index -> dsl s[index]/v[index]) ----
 # s0-1 = kernarg ptr (entry), s2-3 = workgroup ids. Pointers are 64-bit = SGPR PAIRS; use even-aligned indices so
@@ -287,18 +288,7 @@ def _vpool(ctx:IselContext):
   if not _has_wmma(ctx): return reserve_lds_pack(VBASE[lo:])
   # Compiler-owned sequential register stages occupy a static tail of the
   # reclaimed high fragment window. Keep virtual registers out of that span.
-  stage_reserved = ()
-  if _c_low(ctx):
-    stage_roles = []
-    for u in ctx.uses:
-      if u.op is Ops.DEFINE_REG and _register_stage_buffer_meta(u) is not None:
-        role = _register_stage_buffer_meta(u)["role"]
-        if role not in stage_roles: stage_roles.append(role)
-    stage_width = sum(next(_register_stage_buffer_meta(u)["fragments"] * (_register_stage_buffer_meta(u)["lane_width"] // 2)
-                           for u in ctx.uses if u.op is Ops.DEFINE_REG and _register_stage_buffer_meta(u) is not None and
-                           _register_stage_buffer_meta(u)["role"] == role) for role in stage_roles)
-    if stage_width:
-      stage_reserved = tuple(range(FRAG_BASE, FRAG_BASE + stage_width))
+  stage_reserved = tuple(i for lease in _register_stage_leases(ctx).values() for i in range(lease.start, lease.end)) if _c_low(ctx) else ()
   if _c_low(ctx):
     tail = VBASE[max(lo, _ab_top(ctx)):256]
     # Multi-output WMMA reserves v8.. for C/A/B fragments, but v1..v7 are just alignment padding.
@@ -419,19 +409,32 @@ def _register_stage_base(ctx:IselContext, meta:dict) -> int:
     raise NotImplementedError("AMD:ISA register stage buffers require static one-slot lowering")
   if not _c_low(ctx):
     raise NotImplementedError("AMD:ISA register stage buffers need the low C window (single-output WMMA has no VGPR budget)")
-  d = getattr(ctx, "_stage_reg", None)
-  if d is None: d = ctx._stage_reg = {}
   role = meta["role"]
-  if role not in d:
-    width = meta["fragments"] * (meta["lane_width"] // 2)
-    # The high fragment window is reclaimed by the multi-output WMMA path;
-    # reserve it explicitly for compiler-owned stage elements.
-    used = sum(v[1] for v in d.values())
-    base = FRAG_BASE + used
-    if base + width > FRAG_TOP:
-      raise NotImplementedError(f"AMD:ISA register stage VGPR window exhausted for {role} ({width} regs)")
-    d[role] = (base, width)
-  return d[role][0]
+  leases = _register_stage_leases(ctx)
+  if role not in leases: raise NotImplementedError(f"AMD:ISA missing physical register-stage lease for {role}")
+  width = meta["fragments"] * (meta["lane_width"] // 2)
+  if leases[role].width != width: raise NotImplementedError(f"AMD:ISA register-stage lease width mismatch for {role}")
+  return leases[role].start
+
+def _register_stage_leases(ctx:IselContext):
+  """Return the single authoritative physical A/B lease map for this kernel."""
+  if (leases := getattr(ctx, "_stage_reg_leases", None)) is not None: return leases
+  specs = []
+  for u in ctx.uses:
+    if u.op is Ops.DEFINE_REG and (meta := _register_stage_buffer_meta(u)) is not None:
+      specs.append(AMDStageBufferSpec(meta["role"], meta["slots"], meta["fragments"], meta["lane_width"]))
+  if specs and not _c_low(ctx):
+    raise NotImplementedError("AMD:ISA register stage buffers need the low C window (single-output WMMA has no VGPR budget)")
+  reserved = [("abi_workitem", 0, 1), ("low_accum_fragments", WMMA_ACC_BASE, _ab_top(ctx)),
+              ("raw_ins_reserved", FRAG_TOP, len(VBASE))]
+  # The low WMMA interval already covers v8 upward; add only the disjoint
+  # prefix of the legacy accumulator window when that independent mode is on.
+  if getenv("AMD_ISA_REG_ACCUM", 0): reserved.append(("legacy_accumulators", ACCUM_PIN_BASE, WMMA_ACC_BASE))
+  if getenv("PREFILL_LDS_PACK_WITHLOCAL_B128", 0): reserved.append(("lds_pack", LDS_PACK_BASE, LDS_PACK_TOP))
+  try: leases = allocate_amd_stage_buffer_leases(tuple(specs), window=(FRAG_BASE, FRAG_TOP), reserved=tuple(reserved))
+  except ValueError as e: raise NotImplementedError(f"AMD:ISA {e}") from e
+  ctx._stage_reg_leases = leases
+  return leases
 
 def _register_stage_index(ctx:IselContext, dreg:UOp, idx:UOp) -> tuple[str, int, int]|None:
   meta = _register_stage_buffer_meta(dreg)
@@ -693,22 +696,9 @@ def isel_store(ctx:IselContext, a:UOp, b:UOp, x:UOp):
     # RA1: write pinned accumulator -> v_mov v[pin], vsrc. a.src=(order, pin)
     return UOp(Ops.INS, dtypes.void, src=(_tov(ctx, b), a.src[0], a.src[1]), arg=AMDOps.ACCUM_WRITE)   # (vsrc, order, pin)
   if isinstance(a.arg, tuple) and a.arg[:1] == ("stage_reg",):
-    # Pair adjacent fp16 elements into one pinned b32 VGPR.  The first store
-    # becomes an ordering carrier; the second emits the real v_pack.  This is
-    # required because gfx1100 cannot write an individual half of a VGPR.
-    role, elem, pin = a.arg[1], a.arg[2], a.arg[3]
-    val = _tov(ctx, b)
-    pending = getattr(ctx, "_stage_pending", None)
-    if pending is None: pending = ctx._stage_pending = {}
-    key = (role, elem // 2, pin)
-    pair = pending.setdefault(key, {})
-    pair["even" if (elem & 1) == 0 else "odd"] = val
-    pair["order"] = a.src[0]
-    if "even" not in pair or "odd" not in pair:
-      return UOp(Ops.NOOP, dtypes.void, src=(val, a.src[0]), arg=("stage_pending", role, elem // 2, pin))
-    even, odd, order = pair["even"], pair["odd"], pair["order"]
-    pending.pop(key)
-    return UOp(Ops.INS, dtypes.void, src=(even, odd, UOp(Ops.NOOP, dtypes.void), order, a.src[1]), arg=AMDOps.STAGE_WRITE)
+    # Scalar stage stores must have been consumed by the deterministic GROUP
+    # pairing pass before instruction selection.
+    raise ValueError(f"unpaired register stage store reached instruction selection: {a.arg!r}")
   if a.arg == "lds":                          # LDS store: ds_store_b16 for half-element tiles, else b32 (a.src[0]=addr, a.src[1]=order)
     if ctx is not None and _n_workitem_dims(ctx) > 1 and str(getenv("PREFILL_TC_LOCAL_STAGE", "")).strip().lower() in ("a", "both", "1", "true", "yes") and \
        getenv("PREFILL_TC_LOCAL_STAGE_WITH_LOCAL", 0) and not getenv("PREFILL_TC_LOCAL_STAGE_POST", 0) and \
@@ -743,6 +733,23 @@ def _tov(ctx:IselContext, u:UOp):
 def isel_customi(ctx:IselContext, x:UOp):
   # CUSTOMI markers: Phase F hand-built markers ("bpermute"/"fdot2") AND the generated tile's HIP-builtin strings
   # ("__builtin_amdgcn_fdot2(...)", "...__builtin_amdgcn_ds_bpermute(...)"). NOTE operand order differs between them.
+  if isinstance(x.arg, tuple) and x.arg[:1] == ("amd_register_stage_pair",):
+    a, adjacent, b = x.src
+    if not (isinstance(a.arg, tuple) and a.arg[:1] == ("stage_reg",)) or not \
+       (isinstance(adjacent.arg, tuple) and adjacent.arg[:1] == ("stage_reg",)):
+      raise ValueError("register stage pair is missing its allocator-issued carrier")
+    role, elem, pin = a.arg[1], a.arg[2], a.arg[3]
+    if adjacent.arg[1:] != (role, elem+1, pin):
+      raise ValueError(f"register stage pair has non-adjacent or mismatched carriers for {role}[{elem}]")
+    _, pair_role, _frag, _pair, even_elem, odd_elem = x.arg
+    if elem & 1: raise ValueError(f"register stage pair must start at an even element, got {role}[{elem}]")
+    if pair_role != role or (even_elem, odd_elem) != (elem % 16, elem % 16 + 1):
+      raise ValueError(f"register stage pair metadata mismatch for {role}[{elem}:{elem+2}]")
+    if b.op not in (Ops.STACK, Ops.NOOP) or b.dtype != dtypes.half.vec(2) or len(b.src) != 2:
+      raise ValueError(f"register stage {role}[{elem}:{elem+2}] requires exactly two fp16 values")
+    even, odd = (_tov(ctx, v) for v in b.src)
+    return UOp(Ops.INS, dtypes.void, src=(even, odd, b, a.src[0], adjacent.src[0], a.src[1]), arg=AMDOps.STAGE_WRITE,
+               tag=("register_stage_pair", role, elem, elem+1, pin))
   arg = str(x.arg)
   def pack(u):   # a half.vec(2) STACK/NOOP carrier -> a packed b32 (2 halves) for v_dot2; plain INS pass through.
     # NOTE: match STACK directly (rewrite order can present it before the STACK->NOOP rule fires); its two half
@@ -1885,7 +1892,42 @@ def _pack_b_tilekey_lds_stores(x:UOp):
 # Phase N1B is OPT-IN (AMD_ISA_N1B=1). Default-off: the uniform address prefixes in the decode tile sit behind a
 # vector OOB-clamp (where()->v_cndmask), so the live addresses use the clamped VGPR index; scalarizing the pre-clamp
 # uniform value yields DEAD scalar ops (no live VALU removed) and triggers an SGPR-datapath fault. See phase-n1b gate.
+def _pair_register_stage_stores(ctx, x:UOp):
+  """Replace scalar stage STOREs with deterministic, complete fp16 pairs.
+
+  This runs after expansion and before physical instruction selection, where
+  every logical element is explicit but no traversal-dependent lowering has
+  occurred yet.
+  """
+  found:dict[tuple[str, int], UOp] = {}
+  rest:list[UOp] = []
+  for st in x.src:
+    if st.op is not Ops.STORE or len(st.src) < 2 or st.src[0].op is not Ops.INDEX:
+      rest.append(st); continue
+    meta = _register_stage_buffer_meta(st.src[0].src[0])
+    if meta is None: rest.append(st); continue
+    idx = st.src[0].src[1]
+    if idx.op is not Ops.CONST: raise ValueError(f"register stage {meta['role']} pair has dynamic element index")
+    key = (meta["role"], int(idx.arg))
+    if key in found: raise ValueError(f"duplicate register stage element {key[0]}[{key[1]}]")
+    if st.src[1].dtype != dtypes.half: raise ValueError(f"register stage {key[0]}[{key[1]}] is not scalar fp16")
+    found[key] = st
+  if not found: return None
+  paired:list[UOp] = []
+  for role, elem in sorted(found):
+    if elem & 1: continue
+    even, odd = found[(role, elem)], found.get((role, elem+1))
+    if odd is None: raise ValueError(f"missing register stage pair half {role}[{elem+1}]")
+    tag = ("register_pipe_stage_pair", role, elem//16, (elem%16)//2, elem%16, elem%16+1)
+    halves = UOp(Ops.STACK, dtypes.half.vec(2), (even.src[1], odd.src[1]), tag=tag)
+    paired.append(UOp(Ops.CUSTOMI, dtypes.void, (even.src[0], odd.src[0], halves),
+                      arg=("amd_register_stage_pair", role, elem//16, (elem%16)//2, elem%16, elem%16+1), tag=tag))
+  unmatched = [(role, elem) for role, elem in found if elem & 1 and (role, elem-1) not in found]
+  if unmatched: raise ValueError(f"unmatched register stage pair halves: {unmatched}")
+  return UOp.group(*(rest + paired)).replace(tag=x.tag)
+
 pre_isel_matcher = PatternMatcher([
+  (UPat(Ops.GROUP, name="x"), _pair_register_stage_stores),
   (UPat(Ops.GROUP, name="x"), _pack_b_tilekey_lds_stores),
   (UPat(Ops.GROUP, name="x"), _pack_withlocal_lds_stores),
   (UPat((Ops.ADD, Ops.MUL, Ops.SHL), dtype=dtypes.ints, name="x"), lambda ctx, x: _mark_uniform(x) if getenv("AMD_ISA_N1B", 0) else None),
@@ -1980,8 +2022,8 @@ def lower_inst(x:UOp):
                                            "dest_vgpr": x.reg.index})
     return _ins(inst, x.tag)
   if a is AMDOps.STAGE_WRITE:                        # static register-stage pair <- v_pack_b32_f16 v[pin], even, odd
-    inst = v_pack_b32_f16(_V[src[4].arg], _Vr(src[0].reg), _Vr(src[1].reg))
-    _proof_record("stage_write", x, inst, {"role": "register_stage", "dest_pin_vgpr": src[4].arg,
+    inst = v_pack_b32_f16(_V[src[-1].arg], _Vr(src[0].reg), _Vr(src[1].reg))
+    _proof_record("stage_write", x, inst, {"role": "register_stage", "dest_pin_vgpr": src[-1].arg,
                                             "source_vgpr": src[0].reg.index, "pair": True})
     w = _ins(inst, x.tag)
     return (w, [w])

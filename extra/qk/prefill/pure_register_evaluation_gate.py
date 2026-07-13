@@ -193,6 +193,25 @@ def final_resources(compile: dict[str, Any] | None) -> dict[str, Any]:
                  binary_sha256=_binary_hash(compile), resources=resources)
 
 
+def runtime_compile_resource_eligibility(candidate: dict[str, Any] | None, artifact: dict[str, Any] | None, *,
+                                         profile: str, role: str, shape: tuple[int, int, int],
+                                         target: dict[str, Any]) -> dict[str, Any]:
+  """Default-closed runtime join for register warmstart installation; never launches a kernel."""
+  compiled = compile_only(candidate, artifact)
+  resources = final_resources(compiled)
+  errors = [*compiled["errors"], *resources["errors"]]
+  binding = artifact.get("runtime_binding") if isinstance(artifact, dict) else None
+  expected = {"profile": profile, "role": role, "shape": {"m": shape[0], "n": shape[1], "k": shape[2]}, "target": target}
+  if not isinstance(binding, dict): errors.append("compile artifact lacks exact runtime binding")
+  elif binding != expected: errors.append("compile artifact runtime binding is not an exact workload/target match")
+  candidate_identity = _identity(candidate)
+  if candidate_identity is None or _identity(compiled) != candidate_identity:
+    errors.append("runtime candidate/compile identity join failed")
+  return _result("runtime_compile_resource_eligibility", not errors, errors,
+                 canonical_identity=_identity(compiled), binary_sha256=_binary_hash(compiled), binding=binding,
+                 compile=compiled, resources=resources)
+
+
 def correctness_timing(resources: dict[str, Any] | None, correctness: dict[str, Any] | None,
                        timing: dict[str, Any] | None, *, baseline_tok_s: float | None = None) -> dict[str, Any]:
   """Require nonconstant correctness and an isolated pinned timing sample."""

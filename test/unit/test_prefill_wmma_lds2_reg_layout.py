@@ -5,7 +5,7 @@ from extra.qk.prefill.wmma import (
   default_lds2_cadence, default_lds2_lifecycle_template, default_lds2_memory_layout, default_lds2_reg_layout,
   default_lds2_wait_policy, env_lds2_lifecycle_template, env_lds2_reg_layout, env_lds2_wait_policy,
   lower_lds2_gemm_kernel)
-from tinygrad.renderer.isa.amd_register_allocator import AMDRegisterLeaseAllocator
+from tinygrad.renderer.isa.amd_register_allocator import AMDRegisterLeaseAllocator, AMDStageBufferSpec, allocate_amd_stage_buffer_leases
 
 
 def _raw(insts):
@@ -33,6 +33,23 @@ def test_register_lease_allocator_fixed_abi_and_virtual_pool():
   assert frag.start == 16 and frag.end == 32
   with pytest.raises(ValueError, match="overlaps"):
     alloc.reserve("overlap", 20, 2, bank="vgpr")
+
+
+def test_physical_stage_leases_are_deterministic_and_avoid_reserved_intervals():
+  specs = (AMDStageBufferSpec("B", 1, 1), AMDStageBufferSpec("A", 1, 2))
+  leases = allocate_amd_stage_buffer_leases(specs, window=(200, 238),
+    reserved=(("abi", 0, 1), ("accumulators_fragments_scratch", 1, 200), ("lds_pack", 232, 236), ("reserved", 238, 256)))
+  assert {role: (lease.start, lease.end) for role, lease in leases.items()} == {"A": (200, 216), "B": (216, 224)}
+  assert all(not (lease.start < 236 and 232 < lease.end) for lease in leases.values())
+
+
+def test_physical_stage_leases_fail_closed_on_collision_and_exhaustion():
+  with pytest.raises(ValueError, match="overlaps"):
+    allocate_amd_stage_buffer_leases((AMDStageBufferSpec("A", 1, 1),), window=(200, 238),
+                                      reserved=(("one", 0, 205), ("two", 204, 210)))
+  with pytest.raises(ValueError, match="exhausted"):
+    allocate_amd_stage_buffer_leases((AMDStageBufferSpec("A", 1, 3), AMDStageBufferSpec("B", 1, 2)),
+                                      window=(200, 238), reserved=(("outside", 238, 256),))
 
 
 def test_default_layout_leases_match_legacy_register_windows():

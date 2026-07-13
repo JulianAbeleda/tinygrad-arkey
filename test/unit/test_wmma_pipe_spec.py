@@ -21,7 +21,7 @@ def test_pipe_op_lifecycle_derives_wait_and_rejects_unconsumed_slot():
   from extra.qk.wmma_pipe_spec import WMMAPipeOp, build_wmma_pipe_ir
   spec = WMMAPipeSpec(m=512, n=4096, k=4096, tile_m=128, tile_n=128, role="attn_qo")
   op = WMMAPipeOp(build_wmma_pipe_ir(spec), 0, 1, 2, (128, 4, 1), (256, 1, 1))
-  assert op.derived_wait_vmcnt == 8
+  assert op.derived_wait_vmcnt == 0
   try:
     WMMAPipeOp(build_wmma_pipe_ir(spec), 0, 1, 2, (128, 4, 1), (256, 1, 1),
                lifecycle=(("produce", 0, 0),))
@@ -294,5 +294,5 @@ def test_build_wmma_pipe_diagnostic_lowering_report_proves_generated_core_struct
   assert report["mvp_pipe_wait_ok"] is True
   assert report["mvp_structure_ok"] is True
   assert report["waitcnt_summary"]["has_expected_pipe_vmcnt"] is True
-  assert 8 in report["waitcnt_summary"]["vmcnt_sequence"]
+  assert 0 in report["waitcnt_summary"]["vmcnt_sequence"]
   assert "route transport" in report["next_blocker"]

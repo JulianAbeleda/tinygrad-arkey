@@ -52,6 +52,12 @@ def test_schedule_pipeline_policy_is_property_for_pipe_and_lds():
   assert lds.storage_kind == "lds"
 
 
+def test_register_resident_schedule_has_distinct_non_lds_policy_identity():
+  register = replace(_schedule_spec("pipe"), route_family="global_register_resident").pipeline_policy
+  assert register.storage_kind == "global_register_resident"
+  assert register.resources.lds_bytes == 0
+
+
 def test_emit_prefill_gemm_from_spec_targets_expected_wmma_builders(monkeypatch):
   from extra.qk import prefill_graph_gemm_route as route
 

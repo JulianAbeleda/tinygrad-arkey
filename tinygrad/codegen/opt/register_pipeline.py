@@ -156,9 +156,9 @@ class RegisterPipeTemplate:
     coverage = self.wait_coverage
     if not coverage.passed:
       raise ValueError(f"register load wait coverage failed: {coverage.errors}")
-    # Both role groups use the same staged counter.  The dependency metadata
-    # keeps the A/B ownership explicit without manufacturing backend ISA.
-    count = wait_count_for_dependency(self.wait_dependencies[0], vmcnt=self.loads_per_stage)
+    # Sequential staging has no proven younger-load window. Drain VMEM before
+    # any loaded value is packed into the physical register stage.
+    count = wait_count_for_dependency(self.wait_dependencies[0])
     provenance = tuple((d.producer, d.consumer, d.load_group, d.producer_stage, d.consumer_stage)
                        for d in self.wait_dependencies)
     raw = UOp(Ops.WAIT, dtypes.void, loads, count,
@@ -178,8 +178,9 @@ class RegisterPipeTemplate:
     buffers = self._buffers()
     nodes: list[UOp] = []
     loaded: list[UOp] = []
+    pending: list[tuple[str, list[tuple[UOp, UOp]]]] = []
     for operand, count, buffer, spec in zip(self.operands, (self.pipe_tm, self.pipe_tn), buffers, self.stage_buffer_specs):
-      vectors = []
+      vectors: list[tuple[UOp, UOp]] = []
       for frag in range(count):
         row = operand.row_tile_base + frag * 16
         values = tuple(operand.source.substitute({operand.row_axis: row,
@@ -195,13 +196,15 @@ class RegisterPipeTemplate:
         # before INDEX so the STORE retains a valid pointer dtype.
         base = buffer.after(reuse) if reuse is not None and self.schedule == "sequential" else buffer
         target = base.index(offset, dtype=dtypes.half.vec(spec.lane_width))
-        vectors.append(target.store(value))
-      nodes.append(UOp.group(*vectors).replace(tag=("register_pipe_producer", operand.role, epoch, slot)))
+        vectors.append((target, value))
+      pending.append((operand.role, vectors))
     wait = self._typed_load_wait(epoch, slot, tuple(loaded))
-    # GROUP is intentionally limited to stores/groups by the core UOp spec;
-    # put the typed wait on the existing barrier seam instead of widening that
-    # generic verifier for this route.
-    ready = UOp.barrier(UOp.group(*nodes), wait, *(tuple() if reuse is None else (reuse,))).replace(
+    # WAIT must dominate every consumer of the global-load values. Put it on
+    # each store's value path so backend packing cannot be scheduled before it.
+    for role, vectors in pending:
+      stores = tuple(target.store(value.after(wait)) for target, value in vectors)
+      nodes.append(UOp.group(*stores).replace(tag=("register_pipe_producer", role, epoch, slot)))
+    ready = UOp.barrier(UOp.group(*nodes), *(tuple() if reuse is None else (reuse,))).replace(
       tag=("register_pipe_ready", epoch, slot))
     return KernelStage1ProducerStage(epoch, slot, (nodes[0], nodes[1]), ready)
 

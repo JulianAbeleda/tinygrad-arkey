@@ -19,6 +19,7 @@ _FULL_KERNEL_CANDIDATE_JSON_ENV = "BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON"
 _FULL_KERNEL_CANDIDATE_HASH_ENV = "BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH"
 _FULL_KERNEL_CANDIDATE_SET_JSON_ENV = "BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_JSON"
 _FULL_KERNEL_CANDIDATE_SET_PATH_ENV = "BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH"
+_PURE_REGISTER_COMPILE_ARTIFACT_JSON_ENV = "BOLTBEAM_PURE_REGISTER_COMPILE_ARTIFACT_JSON"
 _DEFAULT_CANDIDATE_PROFILE = "qwen3_8b_q4k_m_gfx1100"
 _CANDIDATE_ROUTE_CENSUS:ContextVar[dict[str,Any]|None]=ContextVar("candidate_route_census",default=None)
 
@@ -143,7 +144,9 @@ def _candidate_schedule_spec(spec,admission):
   schedule=admission.normalized_payload["schedule"]; factors=admission.plan
   pipeline = admission.pipeline_plan
   buffer_count = pipeline.buffer_count if hasattr(pipeline, "buffer_count") else pipeline.storage.buffer_count
-  return replace(spec,route_family="lds",tile_m=admission.geometry.tile[0],tile_n=admission.geometry.tile[1],
+  from extra.qk.runtime_specs import candidate_storage_kind
+  route_family = "global_register_resident" if candidate_storage_kind(admission.normalized_payload) == "global_register_resident" else "lds"
+  return replace(spec,route_family=route_family,tile_m=admission.geometry.tile[0],tile_n=admission.geometry.tile[1],
     tile_k=admission.geometry.tile[2],waves_m=admission.geometry.waves[0],waves_n=admission.geometry.waves[1],
     wm=factors.subtiles_m,wn=factors.subtiles_n,threads=admission.geometry.threads,
     pipeline_depth=buffer_count,dbuf=int(buffer_count == 2),
@@ -151,28 +154,31 @@ def _candidate_schedule_spec(spec,admission):
 
 def _install_candidate_matmul(x,w,out_f,in_f,spec,admission):
   from extra.qk.runtime_specs import candidate_storage_kind
-  from extra.qk.wmma_lds_spec import extract_wmma_lds_spec, wmma_lds_generated_env_defaults, wmma_lds_postrange_opts
   candidate_spec = _candidate_schedule_spec(spec, admission)
-  lds_spec = extract_wmma_lds_spec(candidate_spec)
-  if lds_spec is None: raise ValueError("admitted full-kernel candidate cannot produce an LDS schedule spec")
   if candidate_storage_kind(admission.normalized_payload) == "global_register_resident":
-    # Register candidates reuse the ordinary compiler matmul graph, but must
-    # not install LDS warmstart options or local-stage ownership.
+    artifact_text = os.environ.get(_PURE_REGISTER_COMPILE_ARTIFACT_JSON_ENV)
+    try: artifact = json.loads(artifact_text) if artifact_text is not None else None
+    except json.JSONDecodeError as exc: raise ValueError(f"{_PURE_REGISTER_COMPILE_ARTIFACT_JSON_ENV} is not valid JSON: {exc}") from exc
+    workload = admission.normalized_payload["workload"]
+    from extra.qk.prefill.pure_register_evaluation_gate import runtime_compile_resource_eligibility
+    eligibility = runtime_compile_resource_eligibility({"canonical_identity": admission.canonical_identity}, artifact,
+      profile=workload["profile"], role=workload["role"], shape=(512,out_f,in_f), target=workload["target"])
+    if not eligibility["passed"]:
+      raise ValueError("register-resident warmstart is ineligible: " + "; ".join(eligibility["errors"]))
+    from extra.qk.prefill_schedule_spec import register_resident_postrange_opts
     import tinygrad.codegen.opt.postrange as pr
-    key = _primitive_warmstart_key(spec)
+    key = _primitive_warmstart_key(candidate_spec)
     existing = (pr._WARMSTART_CANDIDATE_CONTEXTS or {}).get(key)
     if existing is not None and existing.canonical_identity != admission.canonical_identity:
       raise ValueError(f"candidate warmstart key collision for {key!r}")
-    # Reuse the existing generic TC/UPCAST option authority to select the
-    # admitted geometry. No LDS environment defaults or local-stage ownership
-    # are installed for this storage policy.
-    pr._WARMSTART_OPTS = {**(pr._WARMSTART_OPTS or {}), key: wmma_lds_postrange_opts(lds_spec, cooperative_waves=True)}
+    pr._WARMSTART_OPTS = {**(pr._WARMSTART_OPTS or {}), key: register_resident_postrange_opts(candidate_spec)}
     pr._WARMSTART_CANDIDATE_CONTEXTS = {**(pr._WARMSTART_CANDIDATE_CONTEXTS or {}), key: admission.context}
     a = x.reshape(512, in_f).cast(dtypes.float16).contiguous(); bt = w.cast(dtypes.float16).contiguous()
     return (a @ bt.transpose()).reshape(*x.shape[:-1], out_f)
-  register_mode = getattr(getattr(admission.context.pipeline, "storage", None), "kind", "lds") == "global_register_resident"
-  if not register_mode:
-    for key,value in wmma_lds_generated_env_defaults(lds_spec).items(): os.environ.setdefault(key,value)
+  from extra.qk.wmma_lds_spec import extract_wmma_lds_spec, wmma_lds_generated_env_defaults, wmma_lds_postrange_opts
+  lds_spec = extract_wmma_lds_spec(candidate_spec)
+  if lds_spec is None: raise ValueError("admitted LDS candidate cannot produce an LDS schedule spec")
+  for key,value in wmma_lds_generated_env_defaults(lds_spec).items(): os.environ.setdefault(key,value)
   getenv.cache_clear()
   import tinygrad.codegen.opt.postrange as pr
   key=_primitive_warmstart_key(candidate_spec)
@@ -181,10 +187,9 @@ def _install_candidate_matmul(x,w,out_f,in_f,spec,admission):
     raise ValueError(f"candidate warmstart key collision for {key!r}")
   # The schedule opts select the existing compiler TC geometry. Only the LDS
   # candidate installs LDS-specific environment defaults/local-stage ownership.
-  pr._WARMSTART_OPTS={**(pr._WARMSTART_OPTS or {}),key:wmma_lds_postrange_opts(lds_spec,cooperative_waves=not register_mode)}
+  pr._WARMSTART_OPTS={**(pr._WARMSTART_OPTS or {}),key:wmma_lds_postrange_opts(lds_spec,cooperative_waves=True)}
   pr._WARMSTART_CANDIDATE_CONTEXTS={**(pr._WARMSTART_CANDIDATE_CONTEXTS or {}),key:admission.context}
-  if getattr(getattr(admission.context.pipeline, "storage", None), "kind", "lds") == "lds":
-    _ensure_role_scoped_local_stage(pr).add(key)
+  _ensure_role_scoped_local_stage(pr).add(key)
   a=x.reshape(512,in_f).cast(dtypes.float16).contiguous(); bt=w.cast(dtypes.float16).contiguous()
   return (a @ bt.transpose()).reshape(*x.shape[:-1],out_f)
 
@@ -380,11 +385,14 @@ def route_pf16_graph_gemm(lin, x: Tensor, w: Tensor | None = None) -> Tensor | N
   target={"backend":"AMD","arch":"gfx1100","wave_size":32}
   admission=None if registry is None or role is None or role not in candidate_roles else registry.get(profile,role,(512,out_f,in_f),target)
   if admission is not None:
-    _route_dump({"role":role,"shape":(512,out_f,in_f),"decision":"candidate_set_lds_buffer2",
+    from extra.qk.runtime_specs import candidate_storage_kind
+    storage_kind = candidate_storage_kind(getattr(admission, "normalized_payload", {}))
+    _route_dump({"role":role,"shape":(512,out_f,in_f),"decision":f"candidate_set_{storage_kind}",
                  "canonical_identity":admission.canonical_identity})
+    result = _install_candidate_matmul(x,w,out_f,in_f,spec,admission)
     setattr(lin,"_prefill_full_kernel_candidate_identity",admission.canonical_identity)
     _record_candidate_route(admission)
-    return _install_candidate_matmul(x,w,out_f,in_f,spec,admission)
+    return result
   candidate_requested = os.environ.get(_FULL_KERNEL_CANDIDATE_JSON_ENV) is not None or os.environ.get(_FULL_KERNEL_CANDIDATE_HASH_ENV) is not None
   if candidate_requested and os.environ.get("PREFILL_WMMA_LDS_PRIMITIVE") != "1":
     raise ValueError("full-kernel candidate requires PREFILL_WMMA_LDS_PRIMITIVE=1 generated transport")

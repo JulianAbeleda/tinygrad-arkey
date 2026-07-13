@@ -163,13 +163,14 @@ class WaitCount:
     return (self.vmcnt << 10) | (self.lgkmcnt << 4) | self.expcnt
 
 
-def wait_count_for_dependency(dep: WaitDependency, *, vmcnt: int) -> WaitCount:
-  """Create an AMD wait immediate only from a typed staged dependency.
+def wait_count_for_dependency(dep: WaitDependency, *, younger_vmem_loads: int | None = None) -> WaitCount:
+  """Create a sound AMD wait immediate from a typed staged dependency.
 
-  This is the single graph-to-intrinsic seam: callers still supply the
-  backend-derived counter value, but cannot manufacture a targeted wait from
-  an unscoped or stage-less dependency.  Physical instruction placement and
-  native wait insertion remain renderer-owned.
+  AMD ``vmcnt(N)`` permits *N outstanding VMEM operations*; it does not mean
+  "wait for N loads".  The sequential register pipeline therefore defaults to
+  a full VMEM drain.  A non-zero value is accepted only when a caller supplies
+  a backend-proven count of younger VMEM loads which are safe to leave in
+  flight.  Physical instruction placement remains renderer-owned.
   """
   if not isinstance(dep, WaitDependency):
     raise TypeError("expected WaitDependency")
@@ -177,7 +178,10 @@ def wait_count_for_dependency(dep: WaitDependency, *, vmcnt: int) -> WaitCount:
     raise ValueError("targeted wait lowering requires a per-stage targeted dependency")
   if dep.producer_stage is None or dep.consumer_stage is None:
     raise ValueError("targeted wait lowering requires producer and consumer stages")
-  return WaitCount(vmcnt=vmcnt)
+  if younger_vmem_loads is None: younger_vmem_loads = 0
+  if not isinstance(younger_vmem_loads, int) or isinstance(younger_vmem_loads, bool) or younger_vmem_loads < 0:
+    raise ValueError("younger_vmem_loads must be a non-negative backend-proven count")
+  return WaitCount(vmcnt=younger_vmem_loads)
 
 def amdllvm_wait_dependency(dep: WaitDependency) -> WaitDependency:
   """Validate the dependency contract still owned by the graph lifecycle.

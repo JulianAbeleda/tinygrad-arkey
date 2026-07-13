@@ -252,6 +252,7 @@ def test_register_candidate_admission_uses_zero_lds_typed_plan():
   payload["applicability"]["roles"] = ["attn_qo"]
   payload["schedule"]["pipeline"].update(buffer_count=1, stage_count=2)
   payload["schedule"]["residency"]["resident"] = ["accumulator", "stage_ab_register"]
+  payload["schedule"]["wmma"]["fragment_layout"] = "rdna3_wmma_f32_16x16x16_f16_register_static"
   candidate = _strict_full_kernel_candidate(full_kernel_candidate=payload)
   admission = admit_full_kernel_candidate(payload, candidate.canonical_identity,
     profile="qwen3_8b_q4k_m_gfx1100", role="attn_qo", shape=(512,4096,4096),
@@ -271,6 +272,7 @@ def test_register_candidate_route_selects_typed_install_without_lds(monkeypatch)
   payload["applicability"]["roles"] = ["attn_qo"]
   payload["schedule"]["pipeline"].update(buffer_count=1, stage_count=2)
   payload["schedule"]["residency"]["resident"] = ["accumulator", "stage_ab_register"]
+  payload["schedule"]["wmma"]["fragment_layout"] = "rdna3_wmma_f32_16x16x16_f16_register_static"
   candidate = _strict_full_kernel_candidate(full_kernel_candidate=payload)
   monkeypatch.setenv("BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON", json.dumps(payload))
   monkeypatch.setenv("BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH", candidate.canonical_identity)

@@ -95,6 +95,23 @@ class AMDRegisterLeaseAllocator:
     if cursor + count > capacity: raise ValueError(f"{bank.value} virtual pool exhausted")
     return self.reserve(name, cursor, count, bank=bank, align=align)
 
+  def allocate_in_window(self, name: str, count: int, *, bank: str | RegisterBank,
+                         start: int, end: int, align: int = 1) -> Lease:
+    """First-fit a lease inside ``[start, end)`` and fail closed on pressure."""
+    bank = RegisterBank(bank)
+    if not (0 <= start < end <= (self.vgpr_capacity if bank is RegisterBank.VGPR else self.sgpr_capacity)):
+      raise ValueError(f"invalid {bank.value} allocation window")
+    if not isinstance(count, int) or isinstance(count, bool) or count <= 0:
+      raise ValueError("lease width must be positive")
+    if not isinstance(align, int) or isinstance(align, bool) or align <= 0:
+      raise ValueError("lease alignment must be positive")
+    cursor = (start + align - 1) // align * align
+    for lease in sorted((x for x in self._leases if x.bank is bank and x.end > start and x.start < end), key=lambda x: x.start):
+      if cursor + count <= min(lease.start, end): return self.reserve(name, cursor, count, bank=bank, align=align)
+      cursor = (max(cursor, lease.end) + align - 1) // align * align
+    if cursor + count > end: raise ValueError(f"{bank.value} allocation window exhausted for {name} ({count} regs)")
+    return self.reserve(name, cursor, count, bank=bank, align=align)
+
   @classmethod
   def with_fixed_abi(cls) -> "AMDRegisterLeaseAllocator":
     out = cls()
@@ -103,3 +120,29 @@ class AMDRegisterLeaseAllocator:
       out.reserve(name, start, count, bank=RegisterBank.SGPR, align=2 if count == 2 else 1)
     out.reserve("fixed_lane_and_address", 0, 10, bank=RegisterBank.VGPR)
     return out
+
+
+def allocate_amd_stage_buffer_leases(specs: tuple[AMDStageBufferSpec, ...], *, window: tuple[int, int],
+                                     reserved: tuple[tuple[str, int, int], ...] = (), vgpr_capacity: int | None = None
+                                     ) -> dict[str, Lease]:
+  """Allocate physical stage carriers once, in stable A/B order.
+
+  ``reserved`` contains physical ``(name, start, end)`` intervals owned by the
+  ABI, accumulators, fragments, scratch, or another renderer facility.  The
+  returned leases are the physical truth consumed by instruction selection.
+  """
+  by_role: dict[str, AMDStageBufferSpec] = {}
+  for spec in specs:
+    prior = by_role.get(spec.role)
+    if prior is not None and prior.snapshot() != spec.snapshot():
+      raise ValueError(f"conflicting register stage-buffer contracts for {spec.role}")
+    by_role[spec.role] = spec
+  alloc = AMDRegisterLeaseAllocator(vgpr_capacity=vgpr_capacity)
+  for name, start, end in sorted(reserved, key=lambda x: (x[1], x[2], x[0])):
+    if end > start: alloc.reserve(name, start, end-start, bank=RegisterBank.VGPR)
+  out: dict[str, Lease] = {}
+  for role in ("A", "B"):
+    if (spec := by_role.get(role)) is not None:
+      out[role] = alloc.allocate_in_window(f"stage_{role}", spec.packed_vgpr_width, bank=RegisterBank.VGPR,
+                                           start=window[0], end=window[1])
+  return out

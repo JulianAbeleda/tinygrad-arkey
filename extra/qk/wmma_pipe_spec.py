@@ -48,7 +48,7 @@ class WMMAPipeSpec:
 
   @property
   def loads_per_stage(self) -> int:
-    # build_gemm_pipe's targeted wait leaves the opposite stage's A/B b128 loads outstanding.
+    # Structural load cardinality only; this must not be used as vmcnt.
     return self.pipe_tm * 2 + self.pipe_tn * 2
 
   def to_json(self) -> dict[str, Any]:
@@ -138,11 +138,11 @@ class WMMAPipeOp:
       elif event in ("consume", "release"):
         if slot not in live: raise ValueError("pipe consume/release lacks dominating produce")
         live.remove(slot)
-    derived_wait = self.ir.loads_per_stage
+    derived_wait = 0
     if self.wait_vmcnt is not None and self.wait_vmcnt != derived_wait: raise ValueError("pipe wait does not match staged loads")
 
   @property
-  def derived_wait_vmcnt(self) -> int: return self.ir.loads_per_stage
+  def derived_wait_vmcnt(self) -> int: return 0
 
   def resource_estimate(self) -> dict[str, Any]:
     """Compiler-side launch/resource facts; register counts remain unknown until lowering."""
@@ -224,9 +224,9 @@ def build_wmma_pipe_wait_chain(spec: WMMAPipeSpec, context: KernelCandidateConte
   la = ia.load(dtype=dtypes.half.vec(16))
   lb = ib.load(dtype=dtypes.half.vec(16))
   # Derive the intrinsic payload through the typed dependency seam.  The
-  # count covers the complete staged A/B load group, while the dependency
-  # carries the producer/consumer provenance required for admission.
-  wait_count = wait_count_for_dependency(ir.wait_dependencies[0], vmcnt=ir.loads_per_stage)
+  # This sequential probe has no proven younger VMEM loads, so the typed wait
+  # drains VMEM. The dependency carries producer/consumer provenance.
+  wait_count = wait_count_for_dependency(ir.wait_dependencies[0])
   raw_wait = UOp(Ops.WAIT, dtypes.void, (), wait_count,
                  tag=("wait_coverage", coverage.covered, "compile_only",
                       tuple((d.producer, d.consumer, d.load_group, d.producer_stage, d.consumer_stage)
@@ -419,7 +419,7 @@ def build_wmma_pipe_diagnostic_lowering_report(spec: WMMAPipeSpec, *, loc: int =
     simm16 = sp._waitcnt_simm16(inst)
     if simm16 is not None: waits.append({"idx": idx, **sp._decode_waitcnt(simm16)})
   nonfull_waits = [w for w in waits if w["vmcnt"] < 0x3F or w["lgkmcnt"] < 0x3F]
-  vmcnt_target_waits = [w for w in waits if 0 < w["vmcnt"] < 0x3F]
+  vmcnt_target_waits = [w for w in waits if w["vmcnt"] < 0x3F]
   core_structure_ok = (
     counts.get("global_load_b128", 0) > 0 and
     counts.get(sp.WMMA_NAME, 0) > 0 and
@@ -428,7 +428,7 @@ def build_wmma_pipe_diagnostic_lowering_report(spec: WMMAPipeSpec, *, loc: int =
     counts.get("global_load_u16", 0) == 0 and
     postrange._warmstart_stats["apply"] > 0
   )
-  pipe_wait_ok = any(w["vmcnt"] == spec.loads_per_stage for w in vmcnt_target_waits)
+  pipe_wait_ok = any(w["vmcnt"] == 0 for w in vmcnt_target_waits)
   return {
     "schema": "wmma-pipe-diagnostic-lowering.v1",
     "transport": "generated_program_diagnostic",
@@ -450,7 +450,7 @@ def build_wmma_pipe_diagnostic_lowering_report(spec: WMMAPipeSpec, *, loc: int =
       "count": len(waits),
       "nonfull_count": len(nonfull_waits),
       "vmcnt_target_count": len(vmcnt_target_waits),
-      "expected_pipe_vmcnt": spec.loads_per_stage,
+      "expected_pipe_vmcnt": 0,
       "has_expected_pipe_vmcnt": pipe_wait_ok,
       "vmcnt_sequence": [w["vmcnt"] for w in waits],
       "lgkmcnt_sequence": [w["lgkmcnt"] for w in waits],

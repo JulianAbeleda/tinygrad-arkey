@@ -81,11 +81,14 @@ def test_wait_dependency_coverage_rejects_unscoped_or_out_of_range_targeted_edge
 def test_wait_count_lowering_requires_typed_staged_dependency():
   policy = pipeline_policy_for_route("pipe")
   dep = WaitDependency(policy.wait, "load_a", "wmma", "A", 0, 1, "per_stage")
-  assert wait_count_for_dependency(dep, vmcnt=8).vmcnt == 8
+  assert wait_count_for_dependency(dep).vmcnt == 0
+  assert wait_count_for_dependency(dep, younger_vmem_loads=2).vmcnt == 2
+  with pytest.raises(ValueError, match="younger_vmem_loads"):
+    wait_count_for_dependency(dep, younger_vmem_loads=-1)
   with pytest.raises(ValueError, match="producer and consumer stages"):
-    wait_count_for_dependency(WaitDependency(policy.wait, "load_a", "wmma", "A"), vmcnt=8)
+    wait_count_for_dependency(WaitDependency(policy.wait, "load_a", "wmma", "A"))
   with pytest.raises(ValueError, match="per-stage targeted"):
-    wait_count_for_dependency(WaitDependency(WaitPolicy("full_barrier"), "produce", "consume", "A"), vmcnt=8)
+    wait_count_for_dependency(WaitDependency(WaitPolicy("full_barrier"), "produce", "consume", "A"))
 
 
 @pytest.mark.parametrize("factory", (

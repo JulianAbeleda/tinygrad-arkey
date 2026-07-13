@@ -76,7 +76,7 @@ class PrefillGEMMScheduleSpec:
   m: int
   n: int
   k: int
-  route_family: str                 # "pipe" (build_gemm_pipe) | "lds" (build_gemm_lds2)
+  route_family: str                 # "pipe" | "lds" | "global_register_resident"
   tile_m: int                       # bm = waves_m*wm*16
   tile_n: int                       # bn = waves_n*wn*16
   tile_k: int                       # bk (DepthU)
@@ -121,6 +121,9 @@ class PrefillGEMMScheduleSpec:
         raise ValueError("cannot build pipeline policy for an illegal LDS schedule")
       return pipeline_policy_for_route("lds", buffer_count=lds_spec.lds_buffers,
                                        slot_bytes=lds_spec.lds_buffer_bytes, stages=self.pipeline_depth)
+    if self.route_family == "global_register_resident":
+      from tinygrad.codegen.opt.compiler_policies import RegisterPipePlan
+      return RegisterPipePlan(stages=self.pipeline_depth).policy
     return pipeline_policy_for_route(self.route_family, stages=self.pipeline_depth)
 
   def to_json(self) -> dict[str, Any]:
@@ -167,5 +170,14 @@ def emit_prefill_gemm_from_spec(spec: PrefillGEMMScheduleSpec):
     from extra.qk import wmma_lds_spec
     lds_spec = wmma_lds_spec.extract_wmma_lds_spec(spec)
     if lds_spec is not None: return wmma_lds_spec.lower_wmma_lds_spec(lds_spec)
+  if spec.route_family == "global_register_resident":
+    raise ValueError("register-resident schedules lower only through the compiler matmul route")
   from extra.qk.prefill_graph_gemm_route import _emit_schedule
   return _emit_schedule(_spec_to_params(spec), name=spec.kernel_name)
+
+
+def register_resident_postrange_opts(spec: PrefillGEMMScheduleSpec):
+  """Select TC geometry without importing an LDS layout or LDS proof object."""
+  if spec.route_family != "global_register_resident": raise ValueError("register opts require a register-resident schedule")
+  from tinygrad.codegen.opt import Opt, OptOps
+  return (Opt(OptOps.TC, 0, (-1, 2, 1)),)

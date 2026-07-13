@@ -8,7 +8,7 @@ from tinygrad.codegen.opt.kernel_pipeline import (KernelStage1PipelinePlan, buil
 from tinygrad.codegen.opt.register_pipeline import (RegisterLogicalStagePlan, RegisterPipeTemplate,
   RegisterStorageAdapter, prove_register_graph_no_lds, prove_register_lifecycle, register_geometry)
 from tinygrad.codegen.opt.tc import amd_rdna3
-from tinygrad.uop.ops import AxisType, Ops, UOp
+from tinygrad.uop.ops import AddrSpace, AxisType, Ops, UOp
 
 
 def _fixture():
@@ -80,6 +80,23 @@ def test_register_stage_static_slot_maps_to_pinned_vgpr_carrier():
   assert carriers[0].arg[3] == carriers[1].arg[3], "adjacent fp16 elements share one packed VGPR"
 
 
+def test_register_stage_emitted_pins_match_authoritative_leases_independent_of_access_order():
+  from tinygrad.renderer.isa import IselContext
+  from tinygrad.renderer.isa.amd import isel_index
+  t0 = _fixture()
+  t = RegisterPipeTemplate(t0.tc, t0.geometry, t0.operands, t0.contracts, schedule="sequential")
+  p = t.producer(UOp.const(dtypes.weakint, 0), UOp.const(dtypes.weakint, 0))
+  root, ctx = UOp.sink(*p.role_nodes), None
+  ctx = IselContext(root); ctx._ncruns = 2
+  defs = {u.tag[1]: u for u in root.toposort() if u.op is Ops.DEFINE_REG and u.tag[1] in ("A", "B")}
+  # Ask for B first: physical placement must still be stable A then B.
+  b = isel_index(ctx, defs["B"].index(UOp.const(dtypes.weakint, 0), dtype=dtypes.half))
+  a = isel_index(ctx, defs["A"].index(UOp.const(dtypes.weakint, 0), dtype=dtypes.half))
+  assert {role: (lease.start, lease.end) for role, lease in ctx._stage_reg_leases.items()} == {"A": (200, 216), "B": (216, 232)}
+  assert a.arg[3] == ctx._stage_reg_leases["A"].start
+  assert b.arg[3] == ctx._stage_reg_leases["B"].start
+
+
 def test_register_stage_carriers_have_real_amd_encoders():
   from tinygrad.renderer.isa import Register
   from tinygrad.renderer.isa.amd import AMDOps, lower_inst
@@ -91,6 +108,39 @@ def test_register_stage_carriers_have_real_amd_encoders():
   assert lower_inst(write) is not None
 
 
+def _scalar_stage_store(dreg, elem, value=None):
+  value = value or UOp.const(dtypes.half, float(elem))
+  return dreg.index(UOp.const(dtypes.weakint, elem), dtype=dtypes.half).store(value)
+
+
+def test_register_stage_pairing_is_deterministic_under_reordered_stores():
+  from tinygrad.renderer.isa.amd import _pair_register_stage_stores
+  dreg = UOp.placeholder((16,), dtypes.half, 9900, addrspace=AddrSpace.REG).replace(
+    tag=("register_pipe_stage_buffer", "A", 1, 1, 16))
+  stores = tuple(_scalar_stage_store(dreg, i) for i in range(4))
+  forward = _pair_register_stage_stores(None, UOp.group(*stores))
+  reverse = _pair_register_stage_stores(None, UOp.group(*reversed(stores)))
+  def snapshot(group):
+    return [(u.arg, tuple(v.arg for v in u.src[2].src)) for u in group.src]
+  assert snapshot(forward) == snapshot(reverse) == [
+    (("amd_register_stage_pair", "A", 0, 0, 0, 1), (0.0, 1.0)),
+    (("amd_register_stage_pair", "A", 0, 1, 2, 3), (2.0, 3.0)),
+  ]
+
+
+def test_register_stage_pairing_rejects_missing_and_duplicate_halves():
+  from tinygrad.renderer.isa.amd import _pair_register_stage_stores
+  dreg = UOp.placeholder((16,), dtypes.half, 9901, addrspace=AddrSpace.REG).replace(
+    tag=("register_pipe_stage_buffer", "B", 1, 1, 16))
+  with pytest.raises(ValueError, match="missing register stage pair half B\\[1\\]"):
+    _pair_register_stage_stores(None, UOp(Ops.GROUP, dtypes.void, (_scalar_stage_store(dreg, 0),)))
+  duplicate = _scalar_stage_store(dreg, 0)
+  with pytest.raises(ValueError, match="duplicate register stage element B\\[0\\]"):
+    _pair_register_stage_stores(None, UOp.group(duplicate, duplicate.replace(src=(duplicate.src[0], UOp.const(dtypes.half, 9.0)))))
+  with pytest.raises(ValueError, match="unmatched register stage pair halves"):
+    _pair_register_stage_stores(None, UOp(Ops.GROUP, dtypes.void, (_scalar_stage_store(dreg, 1),)))
+
+
 def test_register_template_producer_fragments_have_no_local_or_raw_isa():
   t = _fixture()
   p = t.producer(UOp.const(dtypes.weakint, 0), UOp.const(dtypes.weakint, 0))
@@ -99,6 +149,21 @@ def test_register_template_producer_fragments_have_no_local_or_raw_isa():
   assert prove_register_graph_no_lds(root) == ()
   assert len([u for u in root.toposort() if u.op is Ops.LOAD]) == 68
   assert len([u for u in root.toposort() if u.op is Ops.CONTRACT and u.dtype == dtypes.half.vec(16)]) == 4
+
+
+def test_register_stage_wait_is_full_drain_and_dominates_every_stage_write():
+  t = _fixture()
+  p = t.producer(UOp.const(dtypes.weakint, 0), UOp.const(dtypes.weakint, 0))
+  topo = UOp.sink(*p.role_nodes, p.ready).toposort()
+  waits = [u for u in topo if u.op is Ops.WAIT]
+  stores = [u for u in topo if u.op is Ops.STORE and any(
+    x.op is Ops.DEFINE_REG and isinstance(x.tag, tuple) and x.tag[:1] == ("register_pipe_stage_buffer",)
+    for x in u.src[0].backward_slice_with_self)]
+  assert len(waits) == 1 and waits[0].arg.vmcnt == 0
+  assert waits[0].tag[:1] == ("register_pipe_wait",)
+  assert len(stores) == t.pipe_tm + t.pipe_tn
+  assert all(waits[0] in store.src[1].backward_slice for store in stores)
+  assert waits[0] not in p.ready.src, "wait must dominate stores, not remain a barrier sibling"
 
 
 def test_register_fragment_contracts_remain_flat_through_expander():
