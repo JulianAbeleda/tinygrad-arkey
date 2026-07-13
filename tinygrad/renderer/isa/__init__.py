@@ -32,6 +32,49 @@ class PreRegAllocContext:
   lock: UOp|None = None
   clobbered: set[UOp] = field(default_factory=set)
 
+@dataclass(frozen=True)
+class CompilerRegisterLease:
+  """Selection-owned physical register lease carried to final assembly."""
+  logical_role: str
+  bank: str
+  start: int
+  end: int
+  purpose: str
+  fixed: bool
+  slots: int
+  lifetime: tuple[str, ...]
+
+  def __post_init__(self):
+    if self.logical_role not in ("A", "B", "C"): raise ValueError("capture lease role must be A, B, or C")
+    if self.bank not in ("vgpr", "sgpr"): raise ValueError("capture lease bank must be vgpr or sgpr")
+    if not (isinstance(self.start, int) and isinstance(self.end, int) and 0 <= self.start < self.end):
+      raise ValueError("capture lease must be a non-empty half-open interval")
+    if not isinstance(self.purpose, str) or not self.purpose: raise ValueError("capture lease purpose is required")
+    if self.fixed is not True: raise ValueError("capture leases must be fixed by their compiler owner")
+    if not isinstance(self.slots, int) or self.slots <= 0: raise ValueError("capture lease slots must be positive")
+    if len(self.lifetime) < 2 or any(not isinstance(x, str) or not x for x in self.lifetime):
+      raise ValueError("capture lease lifetime requires named boundaries")
+
+@dataclass(frozen=True)
+class CompilerCaptureProof:
+  """Hashable A/B/C ownership handoff, finalized only by register allocation."""
+  leases: tuple[CompilerRegisterLease, ...]
+  authority: str = "instruction_selection"
+  regalloc_status: str = "selection_complete"
+  scratch_spills: int|None = None
+  vgpr_spills: int|None = None
+  sgpr_spills: int|None = None
+  lds_bytes: int|None = None
+
+  def __post_init__(self):
+    if not isinstance(self.leases, tuple) or any(not isinstance(x, CompilerRegisterLease) for x in self.leases):
+      raise TypeError("compiler capture proof requires typed leases")
+    if self.leases and not {"A", "B", "C"}.issubset({x.logical_role for x in self.leases}):
+      raise ValueError("compiler capture proof requires A, B, and C ownership")
+
+  def finalize_zero_spill(self) -> CompilerCaptureProof:
+    return CompilerCaptureProof(self.leases, "final_regalloc", "post_regalloc", 0, 0, 0, self.lds_bytes)
+
 class ISARenderer(Renderer):
   pre_isel_matcher: PatternMatcher
   isel_matcher: PatternMatcher
@@ -45,3 +88,4 @@ class ISARenderer(Renderer):
   def spill(self, disp:UOp, x:UOp) -> UOp: raise NotImplementedError("arch specific")
   def fill(self, disp:UOp, x:UOp, reg:Register) -> UOp: raise NotImplementedError("arch specific")
   def asm_str(self, uops:list[UOp], function_name:str) -> str: raise NotImplementedError("arch specific")
+  def capture_selection_proof(self, ctx:IselContext) -> CompilerCaptureProof|None: return None

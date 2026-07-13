@@ -25,6 +25,35 @@ Required implementation:
 4. Construct an `AMDCompileCapture` record at `do_assemble`, then adapt it through
    `capture_final_program_compile_only` and the existing evaluation gate.
 
+### Phase 1 execution plan
+
+1. **Renderer record.** `AMDISARenderer.asm` retains the exact scheduled,
+   wait-inserted, label-resolved instruction list used for the emitted ELF.
+   `compile_capture(prg, lin, binary)` consumes that exact `binary`; it must not
+   assemble a second code object or create an `AMDProgram`.
+2. **Descriptor facts.** Parse the exact ELF descriptor for VGPR, LDS,
+   workgroup-thread, and wave facts. Scratch/spill facts are accepted only from
+   final allocator state; descriptor absence is not evidence of zero spills.
+3. **Allocator role evidence.** Export final fixed leases as role-bearing
+   lifetime segments, not inferred register ranges. Required current roles are
+   A and B one-slot register-stage leases and every C WMMA accumulator fragment.
+   Each record includes bank, half-open range, purpose, owner, slot/fragment or
+   subtile identity, fixed status, and lifetime segment. ABI registers (`v0`,
+   kernarg SGPRs), alignment padding, and optional packing scratch are recorded
+   separately and never attributed to A/B/C.
+4. **Reuse rule.** A/B intervals may reuse physical registers at distinct times.
+   Capture must preserve their segment boundaries; a union range alone is not
+   proof of simultaneous ownership. Dynamic/multi-slot stage indexing is
+   rejected for this one-slot milestone.
+5. **Disassembly.** Return text and tool/failure identity from the exact ELF.
+   A missing disassembler, failed disassembly, malformed stage provenance, or
+   any LDS instruction blocks promotion.
+6. **End-to-end compile-only gate.** Compile the production-shaped
+   `(attn_qo, 512, 4096, 4096)` Tensor route, retrieve its capture attachment,
+   and pass it through `capture_final_program_compile_only` and `evaluate`.
+   The test may pass only with all final authorities; partial records must
+   produce a precise fail-closed error.
+
 Acceptance:
 
 - source and binary hashes are joined to the candidate identity;
@@ -35,6 +64,11 @@ Acceptance:
 - final instruction proof establishes global-load → vmcnt(0) → register-stage →
   WMMA and no LDS instruction;
 - the capture path has no runtime program creation or dispatch.
+
+Phase 1 exit produces one immutable artifact plus a negative-test matrix for
+missing descriptor facts, missing A/B/C leases, overlapping or ambiguous reuse,
+spills/scratch, stale binary identity, failed disassembly, malformed waits, and
+LDS presence. Only this exit unlocks runtime route binding.
 
 ## Phase 2 — production route admission
 
@@ -79,6 +113,32 @@ Promotion acceptance:
 - direct path is materially faster under the declared decision threshold;
 - no regression in timeout, variance, or required occupancy;
 - otherwise retain LDS as the promoted route and record the direct path result.
+
+### CPU-only paired decision and machine-search specification
+
+The research-plane authority is `extra/qk/prefill/pure_register_direct_l2_decision.py`.
+It validates captured records and computes a decision; it never imports a device,
+creates a program, or dispatches hardware.
+
+Each candidate is schema `pure-register-prefill-candidate.v1` and contains:
+`role`, exact `shape={m,n,k}`, shared `canonical_identity`, distinct
+`binary_sha256`, `storage` (`direct_l2` or `lds`), and passing `artifact` and
+`correctness` authorities. A pair is admissible only when all identity fields
+match except binary identity, both artifacts are final/passing, both correctness
+records pass, and both records have at least 9 positive finite kernel-only
+latency samples. Samples must be paired by warmup, clock/environment, repetition
+protocol, commit, target, ABI, launch geometry, and input/output binding. Any
+missing or unequal join is `status=blocked`, never a win.
+
+The machine-search result records both medians, population coefficient of
+variation, speedup, thresholds, and blockers. Counter evidence must be live and
+identity-joined for `l2`, `memory`, and `compute`; unavailable counters are
+blocked rather than zero. Direct-L2 is promoted only when speedup is at least
+3% and its CV is no more than 1.25 times LDS CV. Otherwise a complete pair
+returns `retain_lds`. Correctness, artifact, identity, sample, or counter gaps
+return explicit `blocked` results. This is a decision artifact, not route
+admission; LDS remains the fallback until a separately authorized guarded
+runner exists.
 
 ## Phase 5 — role expansion and whole-prefill attribution
 

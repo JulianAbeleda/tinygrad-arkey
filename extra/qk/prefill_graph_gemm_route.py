@@ -155,7 +155,8 @@ def _candidate_schedule_spec(spec,admission):
 def _install_candidate_matmul(x,w,out_f,in_f,spec,admission):
   from extra.qk.runtime_specs import candidate_storage_kind
   candidate_spec = _candidate_schedule_spec(spec, admission)
-  if candidate_storage_kind(admission.normalized_payload) == "global_register_resident":
+  register_route = candidate_storage_kind(admission.normalized_payload) == "global_register_resident"
+  if register_route:
     artifact_text = os.environ.get(_PURE_REGISTER_COMPILE_ARTIFACT_JSON_ENV)
     try: artifact = json.loads(artifact_text) if artifact_text is not None else None
     except json.JSONDecodeError as exc: raise ValueError(f"{_PURE_REGISTER_COMPILE_ARTIFACT_JSON_ENV} is not valid JSON: {exc}") from exc
@@ -163,18 +164,22 @@ def _install_candidate_matmul(x,w,out_f,in_f,spec,admission):
     from extra.qk.prefill.pure_register_evaluation_gate import runtime_compile_resource_eligibility
     eligibility = runtime_compile_resource_eligibility({"canonical_identity": admission.canonical_identity}, artifact,
       profile=workload["profile"], role=workload["role"], shape=(512,out_f,in_f), target=workload["target"])
-    if not eligibility["passed"]:
-      raise ValueError("register-resident warmstart is ineligible: " + "; ".join(eligibility["errors"]))
-    from extra.qk.prefill_schedule_spec import register_resident_postrange_opts
-    import tinygrad.codegen.opt.postrange as pr
-    key = _primitive_warmstart_key(candidate_spec)
-    existing = (pr._WARMSTART_CANDIDATE_CONTEXTS or {}).get(key)
-    if existing is not None and existing.canonical_identity != admission.canonical_identity:
-      raise ValueError(f"candidate warmstart key collision for {key!r}")
-    pr._WARMSTART_OPTS = {**(pr._WARMSTART_OPTS or {}), key: register_resident_postrange_opts(candidate_spec)}
-    pr._WARMSTART_CANDIDATE_CONTEXTS = {**(pr._WARMSTART_CANDIDATE_CONTEXTS or {}), key: admission.context}
-    a = x.reshape(512, in_f).cast(dtypes.float16).contiguous(); bt = w.cast(dtypes.float16).contiguous()
-    return (a @ bt.transpose()).reshape(*x.shape[:-1], out_f)
+    if eligibility["passed"]:
+      from extra.qk.prefill_schedule_spec import register_resident_postrange_opts
+      import tinygrad.codegen.opt.postrange as pr
+      key = _primitive_warmstart_key(candidate_spec)
+      existing = (pr._WARMSTART_CANDIDATE_CONTEXTS or {}).get(key)
+      if existing is not None and existing.canonical_identity != admission.canonical_identity:
+        raise ValueError(f"candidate warmstart key collision for {key!r}")
+      pr._WARMSTART_OPTS = {**(pr._WARMSTART_OPTS or {}), key: register_resident_postrange_opts(candidate_spec)}
+      pr._WARMSTART_CANDIDATE_CONTEXTS = {**(pr._WARMSTART_CANDIDATE_CONTEXTS or {}), key: admission.context}
+      a = x.reshape(512, in_f).cast(dtypes.float16).contiguous(); bt = w.cast(dtypes.float16).contiguous()
+      return (a @ bt.transpose()).reshape(*x.shape[:-1], out_f)
+    _route_dump({"role": workload["role"], "shape": (512, out_f, in_f),
+                 "decision": "register_artifact_gated_lds_fallback",
+                 "canonical_identity": admission.canonical_identity,
+                 "reasons": eligibility["errors"]})
+    candidate_spec = replace(candidate_spec, route_family="lds")
   from extra.qk.wmma_lds_spec import extract_wmma_lds_spec, wmma_lds_generated_env_defaults, wmma_lds_postrange_opts
   lds_spec = extract_wmma_lds_spec(candidate_spec)
   if lds_spec is None: raise ValueError("admitted LDS candidate cannot produce an LDS schedule spec")

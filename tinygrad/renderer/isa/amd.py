@@ -26,7 +26,8 @@ from types import SimpleNamespace
 from tinygrad.uop import FastEnum
 from tinygrad.uop.ops import UOp, UPat, PatternMatcher, Ops, AxisType, GroupOp
 from tinygrad.dtype import dtypes, PtrDType, AddrSpace
-from tinygrad.renderer.isa import FixedRegisterUse, ISARenderer, IselContext, Register
+from tinygrad.renderer.isa import (CompilerCaptureProof, CompilerRegisterLease, FixedRegisterUse, ISARenderer,
+                                  IselContext, Register)
 from tinygrad.renderer.amd.dsl import s as _S, v as _V, NULL, VCC, EXEC, Reg, FixedBitField
 from tinygrad.runtime.autogen.amd.rdna3.ins import (
   s_load_b64, s_load_b32, global_load_b32, global_load_b128, global_store_b32, v_add_f32_e32, v_mul_f32_e32, v_sub_f32_e32,
@@ -427,6 +428,7 @@ def _register_stage_leases(ctx:IselContext):
   for u in ctx.uses:
     if u.op is Ops.DEFINE_REG and (meta := _register_stage_buffer_meta(u)) is not None:
       specs.append(AMDStageBufferSpec(meta["role"], meta["slots"], meta["fragments"], meta["lane_width"]))
+  ctx._stage_reg_specs = {x.role: x for x in specs}
   if specs and not _c_low(ctx):
     raise NotImplementedError("AMD:ISA register stage buffers need the low C window (single-output WMMA has no VGPR budget)")
   reserved = [("abi_workitem", 0, 1), ("low_accum_fragments", WMMA_ACC_BASE, _ab_top(ctx)),
@@ -2362,6 +2364,52 @@ class AMDISARenderer(ISARenderer):
     for u in uops:
       if u.op is Ops.INS and not isinstance(u.arg, (AMDOps, tuple)): lines.append("  " + str(u.arg))
     return "\n".join(lines)
+  def capture_selection_proof(self, ctx:IselContext) -> CompilerCaptureProof|None:
+    """Freeze allocator-owned A/B stages and C accumulators before lowering discards their identities."""
+    stages = _register_stage_leases(ctx)
+    specs = getattr(ctx, "_stage_reg_specs", {})
+    c_leases = sorted(getattr(ctx, "_accfrag", {}).values())
+    if set(stages) != {"A", "B"} or set(specs) != {"A", "B"} or not c_leases: return None
+    register_buffers = [u for u in ctx.uses if u.op is Ops.DEFINE_REG]
+    owned_accumulators = _wmma_acc_regs(ctx)
+    if any(_register_stage_buffer_meta(u) is None and id(u) not in owned_accumulators for u in register_buffers): return None
+    if any(u.op is Ops.DEFINE_LOCAL for u in ctx.uses): return None
+    leases = tuple(CompilerRegisterLease(role, "vgpr", stages[role].start, stages[role].end,
+      "register_stage", True, specs[role].slots, ("produce", "wait", "consume", "release")) for role in ("A", "B"))
+    leases += tuple(CompilerRegisterLease("C", "vgpr", base, base+8, "wmma_accumulator", True, 1,
+      ("initialize", "accumulate", "consume", "store")) for base in c_leases)
+    return CompilerCaptureProof(leases, lds_bytes=0)
+
+  @staticmethod
+  def _assembly_program(prg:UOp, proof:CompilerCaptureProof|None) -> UOp:
+    """Project metadata after selection proved all DEFINE_REG storage is fixed A/B/C VGPR state."""
+    if proof is None or proof.lds_bytes != 0: return prg
+    sink = prg.src[0]
+    metadata = tuple(u for u in sink.toposort() if u.op in (Ops.PARAM, Ops.DEFINE_VAR, Ops.SPECIAL, Ops.DEFINE_LOCAL))
+    return prg.replace(src=(UOp(Ops.SINK, src=metadata, arg=sink.arg),) + prg.src[1:])
+
+  def _final_linear(self, lin:UOp) -> UOp:
+    insts = list(lin.src)
+    if getenv("AMD_ISA_SCHED", 1): insts = self._schedule(insts)
+    return lin.replace(src=tuple(self._resolve_labels(self._insert_waitcnt(insts))))
+  @staticmethod
+  def _final_disassembly(lin:UOp) -> str:
+    """Render the exact typed instruction objects which are serialized into the code object."""
+    lines = []
+    for u in lin.src:
+      inst = u.arg
+      mnemonic = inst.op.name.lower() if hasattr(inst, "op") else type(inst).__name__.lower()
+      if mnemonic == "s_waitcnt":
+        simm = int(inst.simm16)
+        lines.append(f"s_waitcnt vmcnt({(simm >> 10) & 0x3f}) lgkmcnt({(simm >> 4) & 0x3f}) expcnt({simm & 7})")
+        continue
+      operands = []
+      for name, field in inst._fields:
+        if name == "op" or isinstance(field, FixedBitField): continue
+        value = getattr(inst, name)
+        operands.append(value.fmt(upper=False) if isinstance(value, Reg) else str(value))
+      lines.append(mnemonic + ((" " + ", ".join(operands)) if operands else ""))
+    return "\n".join(lines)
   def _resolve_labels(self, insts:list[UOp]) -> list[UOp]:
     # resolve ("label", id) / ("branch", kind, target) markers into PC-relative simm16 dword offsets, then drop labels.
     # RDNA3 scalar branch: target_pc = branch_pc + 4 + simm16*4  ->  simm16 = (target_byte - branch_byte - 4)//4.
@@ -2392,10 +2440,63 @@ class AMDISARenderer(ISARenderer):
     from tinygrad.renderer.amd.elf import assemble_linear
     # Phase J: consumer-only waitcnt BEFORE label resolution (inserting waits shifts byte positions -> branch offsets
     # must be resolved after).
-    insts = list(lin.src)
-    from tinygrad.helpers import getenv
-    if getenv("AMD_ISA_SCHED", 1): insts = self._schedule(insts)   # Phase K list scheduler; DEFAULT-ON (Phase L: +4.6% W==D with grid, token_match preserved). AMD_ISA_SCHED=0 disables.
-    return assemble_linear(prg, lin.replace(src=tuple(self._resolve_labels(self._insert_waitcnt(insts)))), self.target.arch)
+    proof = lin.arg if isinstance(lin.arg, CompilerCaptureProof) else None
+    return assemble_linear(self._assembly_program(prg, proof), self._final_linear(lin), self.target.arch)
+
+  def compile_capture(self, prg:UOp, lin:UOp, binary:bytes, proof:CompilerCaptureProof|None=None) -> dict|None:
+    """Return a final capture only when the compiler supplied the complete proof.
+
+    In particular, physical operands are never used to invent A/B/C roles.
+    The proof is attached by the lowering/regalloc owner; until that boundary
+    is wired, this intentionally produces no artifact.
+    """
+    if not isinstance(binary, bytes) or not binary: return None
+    try:
+      from tinygrad.renderer.amd.elf import assemble_linear, final_elf_capture
+      from tinygrad.runtime.support.compiler_amd import amdgpu_disassemble_result
+      if not isinstance(proof, CompilerCaptureProof) or proof.authority != "final_regalloc" or proof.regalloc_status != "post_regalloc": return None
+      if (proof.scratch_spills, proof.vgpr_spills, proof.sgpr_spills) != (0, 0, 0): return None
+      if proof.lds_bytes != 0: return None
+      if any(x.logical_role in ("A", "B") and x.slots != 1 for x in proof.leases): return None
+      final_lin = self._final_linear(lin)
+      assembly_prg = self._assembly_program(prg, proof)
+      if assemble_linear(assembly_prg, final_lin, self.target.arch) != binary: return None
+      base = final_elf_capture(assembly_prg, final_lin, self.target.arch, binary=binary,
+                               target=getattr(self.target, "arch", None))
+      disassembly = amdgpu_disassemble_result(binary)
+      # assemble_linear emits a minimal ELF which some llvm-objdump builds decline. Its typed final stream is the
+      # exact disassembly authority after byte-for-byte reassembly above, so no external tool is required.
+      disassembly_text = disassembly.disassembly if disassembly.ok else self._final_disassembly(final_lin)
+      disassembly_tool = disassembly.tool if disassembly.ok else "renderer-final-stream"
+      if not disassembly_text: return None
+      resources = base["descriptor"]["resources"]
+      resources.update(lds_bytes=0, scratch_bytes=0, vgpr_spills=0, sgpr_spills=0)
+      # RDNA descriptors do not encode SGPR count. Count the exact final stream's SGPR operands instead.
+      vgpr_end, sgpr_end = 0, 0
+      for u in final_lin.src:
+        for name, field in u.arg._fields:
+          if field.__class__.__name__ == "FixedBitField": continue
+          value = getattr(u.arg, name, None)
+          if value.__class__.__name__ != "Reg": continue
+          if 256 <= value.offset < 512: vgpr_end = max(vgpr_end, value.offset - 256 + value.sz)
+          elif value.offset < 106: sgpr_end = max(sgpr_end, value.offset + value.sz)
+      resources["vgpr"], resources["sgpr"] = ((vgpr_end + 7) // 8 * 8), sgpr_end
+      base["allocator"] = {"authority": "final_regalloc", "status": proof.regalloc_status,
+        "intervals": [{"logical_role": x.logical_role, "bank": x.bank, "start": x.start, "end": x.end, "purpose": x.purpose}
+                      for x in proof.leases],
+        "leases": [{"role": x.logical_role, "bank": x.bank, "start": x.start, "end": x.end, "purpose": x.purpose,
+                    "fixed": x.fixed, "slots": x.slots, "lifetime": list(x.lifetime)} for x in proof.leases],
+        "scratch_spills": 0, "vgpr_spills": 0, "sgpr_spills": 0}
+      base["source"] = "\n".join(str(u.arg) for u in final_lin.src)
+      base["disassembly"] = disassembly_text
+      candidate = getattr(prg.src[0].arg, "candidate_context", None)
+      if candidate is None: return None
+      base["candidate_identity"] = candidate.canonical_identity
+      base["disassembly_tool"] = disassembly_tool
+      if resources["lds_bytes"] != 0: return None
+      return base
+    except (AttributeError, KeyError, TypeError, ValueError, RuntimeError, IndexError):
+      return None
 
   # ---- B1.L6: pack an s_waitcnt simm16 field. Bit layout (SPEC ONLY, from extra/qk/prefill/wmma.py L19-28, never
   # imported): expcnt=bits[2:0], lgkmcnt=bits[9:4], vmcnt=bits[15:10]. A MAXED field (vm=63/lgkm=63/exp=7, the defaults)

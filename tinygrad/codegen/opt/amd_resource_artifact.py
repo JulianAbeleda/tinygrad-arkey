@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib, re
-from typing import Any, Literal
+from typing import Any, Iterable, Literal, Mapping
 from tinygrad.codegen.opt.register_contracts import RegisterBank
 
 AMD_ARTIFACT_SCHEMA = "tinygrad.amd.resource_artifact.v1"
@@ -45,6 +45,78 @@ class AMDPhysicalInterval:
   def to_json(self) -> dict[str, Any]:
     return {"logical_role": self.logical_role, "bank": self.bank.value, "start": self.start,
             "end": self.end, "purpose": self.purpose}
+
+
+def extract_amd_physical_intervals(linear_instructions: Iterable[Any], *,
+                                   role_evidence: Mapping[str, AMDPhysicalInterval | Mapping[str, Any]],
+                                   fixed_register_ownership: Mapping[str, Iterable[int]] | None = None,
+                                   post_regalloc: bool = False) -> tuple[AMDPhysicalInterval, ...]:
+  """Extract final physical leases, using only explicit ownership evidence.
+
+  ``role_evidence`` is compiler/renderer-owned evidence: each entry names the
+  complete physical interval for that role.  The instruction list merely
+  validates that the interval is actually used.  ``fixed_register_ownership``
+  lists ABI/fixed registers which are allowed but intentionally do not acquire
+  a logical role.  Numeric register windows never create roles.
+
+  This helper accepts final ISA instruction objects (objects with ``_fields``
+  and ``Reg`` operands), not pre-regalloc UOps.  The explicit ``post_regalloc``
+  gate prevents callers from accidentally treating virtual registers as
+  authoritative facts.
+  """
+  if not post_regalloc: raise ValueError("authoritative AMD intervals require post_regalloc=True")
+  if not isinstance(role_evidence, Mapping) or not role_evidence:
+    raise ValueError("explicit AMD logical-role evidence is required")
+  if fixed_register_ownership is None: fixed_register_ownership = {}
+  if not isinstance(fixed_register_ownership, Mapping):
+    raise TypeError("fixed_register_ownership must map banks to register numbers")
+  fixed: dict[RegisterBank, set[int]] = {RegisterBank.VGPR: set(), RegisterBank.SGPR: set()}
+  for bank, values in fixed_register_ownership.items():
+    try: b = bank if isinstance(bank, RegisterBank) else RegisterBank(bank)
+    except (TypeError, ValueError) as exc: raise ValueError("fixed register bank must be vgpr or sgpr") from exc
+    if isinstance(values, (str, bytes)): raise TypeError("fixed register ownership must be integer iterables")
+    vals = tuple(values)
+    fixed[b] = {x for x in vals if isinstance(x, int) and not isinstance(x, bool) and x >= 0}
+    if len(fixed[b]) != len(set(vals)): raise ValueError("fixed register ownership contains invalid registers")
+
+  intervals: list[AMDPhysicalInterval] = []
+  for role, raw in role_evidence.items():
+    if not isinstance(role, str) or not role: raise ValueError("AMD logical roles must be non-empty strings")
+    if isinstance(raw, AMDPhysicalInterval): interval = raw
+    elif isinstance(raw, Mapping):
+      interval = AMDPhysicalInterval(role, raw.get("bank"), raw.get("start"), raw.get("end"), raw.get("purpose", "value"))
+    else: raise TypeError("role evidence must contain typed intervals or interval mappings")
+    if interval.logical_role != role: raise ValueError(f"role evidence key disagrees with interval role: {role!r}")
+    intervals.append(interval)
+  if len({x.logical_role for x in intervals}) != len(intervals): raise ValueError("AMD logical roles must be unique")
+  for bank in (RegisterBank.VGPR, RegisterBank.SGPR):
+    rows = sorted((x for x in intervals if x.bank is bank), key=lambda x: x.start)
+    if any(cur.start < prev.end for prev, cur in zip(rows, rows[1:])):
+      raise ValueError(f"overlapping explicit {bank.value} role intervals")
+
+  seen: dict[RegisterBank, set[int]] = {RegisterBank.VGPR: set(), RegisterBank.SGPR: set()}
+  for inst in linear_instructions:
+    text = str(inst).lower()
+    if "spill" in text or "scratch" in text: raise ValueError("final AMD instruction list contains spill/scratch evidence")
+    fields = getattr(inst, "_fields", None)
+    if fields is None: raise ValueError("final AMD instruction list contains an untyped instruction")
+    for name, field in fields:
+      if field.__class__.__name__ == "FixedBitField": continue
+      value = getattr(inst, name, None)
+      if value.__class__.__name__ != "Reg": continue
+      off, size = getattr(value, "offset", None), getattr(value, "sz", None)
+      if not isinstance(off, int) or not isinstance(size, int) or size <= 0: raise ValueError("invalid physical AMD register operand")
+      bank, start = (RegisterBank.VGPR, off - 256) if off >= 256 else (RegisterBank.SGPR, off)
+      seen[bank].update(range(start, start + size))
+  for bank, regs in seen.items():
+    allowed_fixed = fixed[bank]
+    for reg in regs - allowed_fixed:
+      owners = [x for x in intervals if x.bank is bank and x.start <= reg < x.end]
+      if len(owners) != 1: raise ValueError(f"AMD physical register {bank.value}{reg} lacks unique explicit role ownership")
+  for interval in intervals:
+    if not (seen[interval.bank] & set(range(interval.start, interval.end))):
+      raise ValueError(f"AMD role {interval.logical_role!r} has no evidence in final instruction list")
+  return tuple(intervals)
 
 
 @dataclass(frozen=True)

@@ -1,4 +1,5 @@
 from typing import cast
+import inspect
 from dataclasses import replace
 import itertools
 from tinygrad.helpers import DISABLE_FAST_IDIV, TRANSCENDENTAL, SPEC, DEBUG, VIZ, IMAGE, NOOPT, EMULATED_DTYPES, NOLOCALS, USE_TC, getenv
@@ -8,7 +9,7 @@ from tinygrad.uop.ops import ParamArg
 from tinygrad.uop.render import pyrender
 from tinygrad.uop.spec import type_verify, spec_tensor, spec_program
 from tinygrad.renderer import Renderer, Estimates
-from tinygrad.renderer.isa import ISARenderer, IselContext, PreRegAllocContext
+from tinygrad.renderer.isa import CompilerCaptureProof, ISARenderer, IselContext, PreRegAllocContext
 from tinygrad.dtype import dtypes, PtrDType, ImageDType, AddrSpace
 
 # import all pattern matchers here
@@ -232,13 +233,17 @@ def do_linearize(ctx:Renderer, prg:UOp, sink:UOp) -> UOp:
     lst = cg_extras.line_lower_fdot2(lst)
   lst = line_rewrite(lst, pm_linearize_cleanups)
   # isa renderers need to allocate registers
+  selection_proof = sink.tag if isinstance(sink.tag, CompilerCaptureProof) else None
+  final_regalloc_proof = None
   if isinstance(ctx, ISARenderer):
     if ctx.pre_regalloc_matcher is not None: lst = line_rewrite(lst, ctx.pre_regalloc_matcher, PreRegAllocContext())
     regalloc_ctx = LinearScanRegallocContext(lst, ctx)
     lst = line_rewrite(lst, pm_regalloc_rewrite, regalloc_ctx)
     lst = line_rewrite(lst, ctx.post_regalloc_matcher, regalloc_ctx)
+    if selection_proof is not None and not regalloc_ctx.spills and regalloc_ctx.stack_size == 0:
+      final_regalloc_proof = selection_proof.finalize_zero_spill()
     if DEBUG >= 4: print(ctx.asm_str(lst, sink.arg.function_name))
-  return prg.replace(src=prg.src + (UOp(Ops.LINEAR, src=tuple(lst)),))
+  return prg.replace(src=prg.src + (UOp(Ops.LINEAR, src=tuple(lst), arg=final_regalloc_proof),))
 
 def do_estimates(prg:UOp, sink:UOp, lin:UOp) -> UOp|None:
   if sink.arg.estimates is not None: return None
@@ -259,7 +264,16 @@ def do_assemble(ctx:Renderer, prg:UOp, lin:UOp) -> UOp:
   # The hook runs after asm(), so its record can join the exact source/binary
   # with renderer-owned final descriptor/regalloc/disassembly facts.
   capture = getattr(ctx, "compile_capture", None) if isinstance(ctx, ISARenderer) else None
-  record = capture(prg, lin, binary) if callable(capture) else None
+  if callable(capture):
+    # New capture hooks may receive the proof directly.  Inspecting the bound
+    # signature preserves the established three-argument hook ABI, including
+    # hooks which intentionally reject extra backend metadata.
+    try:
+      accepts_proof = len(inspect.signature(capture).parameters) >= 4
+    except (TypeError, ValueError):
+      accepts_proof = False
+    record = capture(prg, lin, binary, lin.arg) if accepts_proof else capture(prg, lin, binary)
+  else: record = None
   new_arg = prg.arg
   if record is not None and hasattr(new_arg, "aux"):
     # ProgramInfo participates in UOp interning and therefore must remain
@@ -313,6 +327,8 @@ def do_to_program(ast:UOp, renderer:Renderer) -> UOp:
       full_sink = graph_rewrite(full_sink, renderer.isel_matcher, ctx=isel_ctx, name="instruction selection", bottom_up=True)
       if renderer.post_isel_matcher is not None:
         full_sink = graph_rewrite(full_sink, renderer.post_isel_matcher, ctx=isel_ctx, name="post instruction selection", bottom_up=True)
+      if (capture_proof := renderer.capture_selection_proof(isel_ctx)) is not None:
+        full_sink = full_sink.replace(tag=capture_proof)
     prg = UOp(Ops.PROGRAM, src=(full_sink, UOp(Ops.DEVICE, arg=renderer.target.device)), arg=prog_info)
   else: raise RuntimeError(f"can't call to_program on {ast.op}")
   if not isinstance(prg.arg, ProgramInfo): prg = prg.replace(arg=ProgramInfo.from_sink(prg.src[0]))
