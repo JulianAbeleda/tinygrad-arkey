@@ -5,7 +5,7 @@ def test_attn_qo_adapter_blocks_without_exact_payloads():
   result = prepare_exact_pair(direct_payload=None, lds_payload=None,
                               direct_binary_sha256=None, lds_binary_sha256=None)
   assert result["status"] == "blocked"
-  assert result["dispatch_performed"] is False
+  assert result["dispatch_state"] == "not_attempted"
   assert result["blockers"] == ["exact direct_l2 and lds candidate payloads are required"]
 
 

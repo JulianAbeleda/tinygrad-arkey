@@ -7,17 +7,18 @@ from test.unit.test_pure_register_evaluation_gate import BINARY, IDENTITY, _comp
 def _route(storage="direct_l2"):
   return {"role": "attn_qo", "shape": list(EXACT_SHAPE), "target": dict(TARGET),
           "canonical_identity": IDENTITY, "binary_sha256": BINARY, "storage": storage,
-          "dispatch_performed": False}
+          "dispatch_state": "not_attempted"}
 
 
 def _pair():
   base = {"role": "attn_qo", "shape": {"m": 512, "n": 4096, "k": 4096},
-          "canonical_identity": IDENTITY, "environment": {"target": "gfx1100"},
+          "environment": {"target": "gfx1100"},
           "pair_key": "attn_qo:512:4096:4096:semantic-v1",
           "artifact": {"status": "pass"}, "correctness": {"status": "pass"},
           "counters": {g: {"status": "live"} for g in ("l2", "memory", "compute")}}
-  return {"direct_l2": base | {"storage": "direct_l2", "binary_sha256": BINARY, "samples_ms": [8.] * 12},
-          "lds": base | {"storage": "lds", "binary_sha256": "c" * 64, "samples_ms": [10.] * 12}}
+  # P0-3: the LDS row carries its OWN distinct candidate identity.
+  return {"direct_l2": base | {"storage": "direct_l2", "canonical_identity": IDENTITY, "binary_sha256": BINARY, "samples_ms": [8.] * 12},
+          "lds": base | {"storage": "lds", "canonical_identity": "e" * 64, "binary_sha256": "c" * 64, "samples_ms": [10.] * 12}}
 
 
 def test_attn_qo_canary_uses_only_fake_callbacks_and_promotes_after_exact_stage():
@@ -33,7 +34,7 @@ def test_attn_qo_canary_uses_only_fake_callbacks_and_promotes_after_exact_stage(
     observation_callback=observe, benchmark_callback=lambda request: _pair())
   assert result["status"] == "promote_direct_l2"
   assert [x["stage"] for x in seen] == [x["name"] for x in STAGES]
-  assert result["dispatch_performed"] is False
+  assert result["dispatch_state"] == "not_attempted"
 
 
 def test_attn_qo_canary_revokes_on_fake_guard_failure_and_does_not_benchmark():
@@ -46,7 +47,7 @@ def test_attn_qo_canary_revokes_on_fake_guard_failure_and_does_not_benchmark():
     compile_artifact=_compile(runtime_binding=_runtime_binding()), route_binding=_route(),
     profile=_runtime_binding()["profile"], enable_value=ENABLE_VALUE,
     observation_callback=observe, benchmark_callback=lambda _: (_ for _ in ()).throw(AssertionError()))
-  assert result["revoked"] is True and result["dispatch_performed"] is False
+  assert result["revoked"] is True and result["dispatch_state"] == "not_attempted"
 
 
 def test_attn_qo_canary_rejects_route_identity_before_callback():

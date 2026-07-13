@@ -10,7 +10,7 @@ def test_executor_is_default_closed_and_does_not_call_callbacks(monkeypatch):
   result = run_hardware_executor(candidate={}, compile_artifact={}, route_binding={},
     stage_dispatch=lambda _: called.append("stage"), paired_benchmark=lambda _: called.append("pair"))
   assert result["status"] == "blocked"
-  assert result["dispatch_performed"] is False
+  assert result["dispatch_state"] == "not_attempted"
   assert called == []
 
 
@@ -25,7 +25,7 @@ def test_executor_requires_both_callbacks_after_opt_in(monkeypatch):
 def test_pair_metadata_is_cpu_only_and_explicitly_dispatch_free():
   result = exact_pair_metadata()
   assert result["status"] == "prepared"
-  assert result["dispatch_performed"] is False
+  assert result["dispatch_state"] == "not_attempted"
   assert result["role"] == "attn_qo"
 
 

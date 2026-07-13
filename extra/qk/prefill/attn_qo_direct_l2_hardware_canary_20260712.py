@@ -14,6 +14,12 @@ from extra.qk.prefill.register_hardware_promotion import (
   ENABLE_VALUE, EXACT_ROLE, EXACT_SHAPE, STAGES, TARGET, advance,
   prepare_authorization,
 )
+from tinygrad.runtime.execution_bridge_contracts import dispatch_state
+
+# P0-1: the canary reports a truthful typed dispatch state, never a bare boolean.
+# No callback in this module allocates or launches, so every terminal record is
+# "not_attempted".
+_NOT_ATTEMPTED = dispatch_state("not_attempted")
 
 SCHEMA = "attn-qo-direct-l2-hardware-canary.v1"
 ObservationCallback = Callable[[dict[str, Any]], dict[str, Any]]
@@ -34,20 +40,27 @@ def _route_errors(authorization: dict[str, Any], route: Any) -> list[str]:
   for field, value in expected.items():
     if route.get(field) != value: errors.append(f"route binding {field} does not match authorization")
   if route.get("storage") != "direct_l2": errors.append("route binding is not direct_l2")
-  if route.get("dispatch_performed") is not False: errors.append("route binding is not dispatch-free")
+  if route.get("dispatch_state") != "not_attempted": errors.append("route binding is not dispatch-free")
   return errors
 
 
 def _pair_errors(pair: Any, authorization: dict[str, Any]) -> list[str]:
   if not isinstance(pair, dict): return ["paired benchmark did not return a pair"]
   errors: list[str] = []
+  direct_id = authorization.get("canonical_identity")
   for name in ("direct_l2", "lds"):
     row = pair.get(name)
     if not isinstance(row, dict): errors.append(f"paired {name} record is unavailable"); continue
     if row.get("role") != EXACT_ROLE or row.get("shape") != {"m": 512, "n": 4096, "k": 4096}:
       errors.append(f"paired {name} role/shape identity differs")
-    if row.get("canonical_identity") != authorization.get("canonical_identity"):
-      errors.append(f"paired {name} artifact identity differs")
+    # P0-3: direct joins the authorized artifact identity; LDS keeps its OWN
+    # distinct candidate identity and must never be stamped with the direct one.
+    if name == "direct_l2":
+      if row.get("canonical_identity") != direct_id: errors.append("paired direct_l2 artifact identity differs")
+    elif not _sha(row.get("canonical_identity")):
+      errors.append("paired lds artifact identity is invalid")
+    elif row.get("canonical_identity") == direct_id:
+      errors.append("paired lds identity must be distinct from direct_l2")
     if not _sha(row.get("binary_sha256")):
       errors.append(f"paired {name} binary identity is invalid")
   if isinstance(pair.get("direct_l2"), dict) and pair["direct_l2"].get("binary_sha256") != authorization.get("binary_sha256"):
@@ -78,7 +91,7 @@ def run_canary(*, candidate: dict[str, Any] | None, compile_artifact: dict[str, 
     missing += ([] if benchmark_callback is not None else ["paired benchmark callback is required"])
     return {"schema": SCHEMA, "status": "revoked", "revoked": True,
             "errors": [*authorization.get("errors", []), *missing], "authorization": authorization,
-            "dispatch_performed": False}
+            "dispatch_state": _NOT_ATTEMPTED}
 
   observations: list[dict[str, Any]] = []
   for stage in STAGES:
@@ -94,7 +107,7 @@ def run_canary(*, candidate: dict[str, Any] | None, compile_artifact: dict[str, 
     state = advance(authorization, observations)
     if state["revoked"]:
       return {"schema": SCHEMA, "status": "revoked", "revoked": True, "errors": state["errors"],
-              "state": state, "authorization": authorization, "dispatch_performed": False}
+              "state": state, "authorization": authorization, "dispatch_state": _NOT_ATTEMPTED}
   try:
     pair = benchmark_callback({"canonical_identity": authorization["canonical_identity"],
                                "binary_sha256": authorization["binary_sha256"], "role": EXACT_ROLE,
@@ -102,11 +115,11 @@ def run_canary(*, candidate: dict[str, Any] | None, compile_artifact: dict[str, 
     pair_errors = _pair_errors(pair, authorization)
     if pair_errors:
       return {"schema": SCHEMA, "status": "revoked", "revoked": True, "errors": pair_errors,
-              "dispatch_performed": False}
+              "dispatch_state": _NOT_ATTEMPTED}
     decision = decide(pair)
   except Exception as exc:
     return {"schema": SCHEMA, "status": "revoked", "revoked": True, "errors": [f"paired benchmark failed: {exc}"],
-            "dispatch_performed": False}
+            "dispatch_state": _NOT_ATTEMPTED}
   return {"schema": SCHEMA, "status": decision["decision"], "revoked": False,
           "decision": decision, "state": advance(authorization, observations),
-          "authorization": authorization, "dispatch_performed": False}
+          "authorization": authorization, "dispatch_state": _NOT_ATTEMPTED}

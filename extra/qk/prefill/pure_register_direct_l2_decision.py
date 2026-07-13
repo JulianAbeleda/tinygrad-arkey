@@ -9,10 +9,14 @@ import math
 import statistics
 from typing import Any
 
+from tinygrad.runtime.execution_bridge_contracts import reject_synthetic
+
 SCHEMA = "pure-register-direct-l2-vs-lds-decision.v1"
 ROLES = ("attn_qo", "attn_kv", "ffn_down", "ffn_gate_up")
 DEFAULT_THRESHOLDS = {"min_speedup": 0.03, "max_cv_ratio": 1.25, "min_samples": 9}
 REQUIRED_COUNTER_GROUPS = ("l2", "memory", "compute")
+# P0-4: a real decision must be backed by a canonical persisted candidate schema.
+PERSISTED_CANDIDATE_SCHEMA = "pure-register-prefill-candidate.v1"
 
 
 def candidate(*, role: str, shape: dict[str, int], identity: str, binary_sha256: str,
@@ -31,7 +35,7 @@ def _valid_samples(row: dict[str, Any], minimum: int) -> bool:
       isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x) and x > 0 for x in values)
 
 
-def _blockers(pair: dict[str, Any], thresholds: dict[str, float]) -> list[str]:
+def _blockers(pair: dict[str, Any], thresholds: dict[str, float], production: bool) -> list[str]:
   blockers: list[str] = []
   left, right = pair.get("direct_l2"), pair.get("lds")
   if not isinstance(left, dict) or not isinstance(right, dict): return ["both direct_l2 and lds candidates are required"]
@@ -42,9 +46,18 @@ def _blockers(pair: dict[str, Any], thresholds: dict[str, float]) -> list[str]:
   if left.get("storage") != "direct_l2" or right.get("storage") != "lds": blockers.append("storage labels are not direct_l2/lds")
   if not isinstance(left.get("pair_key"), str) or not left.get("pair_key"):
     blockers.append("semantic pair key is required")
-  if not all(isinstance(x, str) and len(x) == 64 for x in (left.get("canonical_identity"), left.get("binary_sha256"), right.get("binary_sha256"))):
-    blockers.append("canonical and binary SHA-256 identities are required")
+  # P0-3: BOTH candidates must carry their own distinct canonical identity; the
+  # LDS identity is required, not inferred from the direct one.
+  if not all(isinstance(x, str) and len(x) == 64 for x in (left.get("canonical_identity"), right.get("canonical_identity"), left.get("binary_sha256"), right.get("binary_sha256"))):
+    blockers.append("both canonical and binary SHA-256 identities are required")
   if left.get("binary_sha256") == right.get("binary_sha256"): blockers.append("paired binaries must be distinct")
+  # P0-4: a production decision rejects synthetic evidence and requires the
+  # canonical persisted candidate schema on each row.
+  for name, row in (("direct_l2", left), ("lds", right)):
+    try: reject_synthetic(row, production=production, name=f"{name} evidence")
+    except ValueError as exc: blockers.append(str(exc))
+    if production and row.get("schema") != PERSISTED_CANDIDATE_SCHEMA:
+      blockers.append(f"{name} lacks the canonical persisted candidate schema")
   for name, row in (("direct_l2", left), ("lds", right)):
     if row.get("artifact", {}).get("status") != "pass": blockers.append(f"{name} artifact prerequisite is missing or failed")
     if row.get("correctness", {}).get("status") != "pass": blockers.append(f"{name} correctness prerequisite is missing or failed")
@@ -55,12 +68,19 @@ def _blockers(pair: dict[str, Any], thresholds: dict[str, float]) -> list[str]:
   return blockers
 
 
-def decide(pair: dict[str, Any], *, thresholds: dict[str, float] | None = None) -> dict[str, Any]:
-  """Return a fail-closed decision from two identity-joined captured records."""
+def decide(pair: dict[str, Any], *, thresholds: dict[str, float] | None = None,
+           production: bool = False) -> dict[str, Any]:
+  """Return a fail-closed decision from two identity-joined captured records.
+
+  P1-5: the record separates the execution/validity status (``status``), the
+  research ``verdict``, and the ``shipping_decision``.  A valid negative
+  performance result is ``retain_lds`` with an EMPTY ``blockers`` list; it is
+  never ``blocked`` or ``failed``.  ``blockers`` are only prerequisite failures.
+  """
   t = {**DEFAULT_THRESHOLDS, **(thresholds or {})}
-  blockers = _blockers(pair, t)
+  blockers = _blockers(pair, t, production)
   result: dict[str, Any] = {"schema": SCHEMA, "status": "blocked", "decision": "blocked",
-      "thresholds": t, "blockers": blockers}
+      "verdict": "blocked", "shipping_decision": "retain_lds", "thresholds": t, "blockers": blockers}
   if blockers: return result
   direct, lds = pair["direct_l2"], pair["lds"]
   dm, lm = statistics.median(direct["samples_ms"]), statistics.median(lds["samples_ms"])
@@ -70,7 +90,11 @@ def decide(pair: dict[str, Any], *, thresholds: dict[str, float] | None = None) 
   result["evidence"] = {"direct_l2_median_ms": dm, "lds_median_ms": lm,
       "speedup": speedup, "direct_l2_cv": dcv, "lds_cv": lcv}
   if speedup >= t["min_speedup"] and dcv <= lcv * t["max_cv_ratio"]:
-    result.update(status="pass", decision="promote_direct_l2")
+    result.update(status="pass", decision="promote_direct_l2", verdict="direct_l2_wins",
+                  shipping_decision="promote_direct_l2")
   else:
-    result.update(status="pass", decision="retain_lds", blockers=["direct-L2 is not materially faster and stable"])
+    # A completed, valid measurement that simply does not clear the bar.
+    result.update(status="pass", decision="retain_lds", verdict="retain_lds",
+                  shipping_decision="retain_lds", blockers=[],
+                  reasons=["direct-L2 is not materially faster and stable"])
   return result

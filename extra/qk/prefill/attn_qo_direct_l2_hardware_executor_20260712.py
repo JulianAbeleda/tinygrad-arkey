@@ -17,6 +17,7 @@ from extra.qk.prefill.attn_qo_direct_l2_hardware_canary_20260712 import run_cana
 from extra.qk.prefill.attn_qo_l2_lds_pair_generator_20260712 import generate_pair
 from extra.qk.prefill.attn_qo_direct_l2_adapter_20260712 import PROFILE, SHAPE
 from extra.qk.prefill.register_hardware_promotion import ENABLE_ENV, ENABLE_VALUE, EXACT_ROLE, TARGET
+from tinygrad.runtime.execution_bridge_contracts import dispatch_state
 
 SCHEMA = "attn-qo-direct-l2-hardware-executor.v1"
 _BLOCKED = "hardware dispatch is blocked: exact explicit GPU promotion opt-in is absent"
@@ -24,7 +25,7 @@ _BLOCKED = "hardware dispatch is blocked: exact explicit GPU promotion opt-in is
 
 def _blocked(reason: str, **extra: Any) -> dict[str, Any]:
   return {"schema": SCHEMA, "status": "blocked", "revoked": True,
-          "dispatch_performed": False, "blockers": [reason], **extra}
+          "dispatch_state": dispatch_state("not_attempted"), "blockers": [reason], **extra}
 
 
 def _tensor_evidence(value: Any) -> dict[str, Any]:
@@ -81,12 +82,12 @@ def run_hardware_executor(*, candidate: dict[str, Any] | None,
                       observation_callback=observe, benchmark_callback=benchmark,
                       enable_value=opt_in, stage_artifacts=stage_artifacts)
   return {**result, "executor": {"schema": SCHEMA, "device_adapter": "tinygrad.Tensor",
-                                  "dispatch_explicit": True, "dispatch_performed": False}}
+                                  "dispatch_explicit": True, "dispatch_state": result.get("dispatch_state", "not_attempted")}}
 
 
 def exact_pair_metadata() -> dict[str, Any]:
   """Return CPU-generated pair metadata for callers preparing exact evidence."""
   pair = generate_pair()
-  return {"schema": SCHEMA, "status": "prepared", "dispatch_performed": False,
+  return {"schema": SCHEMA, "status": "prepared", "dispatch_state": dispatch_state("not_attempted"),
           "role": EXACT_ROLE, "shape": dict(SHAPE), "target": dict(TARGET),
           "pair": pair}

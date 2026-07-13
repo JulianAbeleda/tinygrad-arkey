@@ -13,6 +13,7 @@ from extra.qk.prefill.pure_register_direct_l2_decision import candidate
 from extra.qk.prefill.pure_single_buffer_evaluation_gate import canonical_candidate_hash
 from extra.qk.prefill.register_hardware_promotion import EXACT_ROLE, EXACT_SHAPE, TARGET
 from extra.qk.runtime_specs import admit_full_kernel_candidate
+from tinygrad.runtime.execution_bridge_contracts import dispatch_state
 
 SCHEMA = "attn-qo-direct-l2-adapter.v1"
 PROFILE = "qwen3_8b_q4k_m_gfx1100"
@@ -26,7 +27,7 @@ def _sha(value: Any) -> bool:
 
 def _blocked(*reasons: str, **extra: Any) -> dict[str, Any]:
   return {"schema": SCHEMA, "status": "blocked", "decision": "blocked",
-          "dispatch_performed": False, "blockers": list(reasons), **extra}
+          "dispatch_state": dispatch_state("not_attempted"), "blockers": list(reasons), **extra}
 
 
 def prepare_exact_pair(*, direct_payload: dict[str, Any] | None,
@@ -61,7 +62,7 @@ def prepare_exact_pair(*, direct_payload: dict[str, Any] | None,
     except Exception as exc: errors.append(f"{name} is not admitted by single_buffer authority: {exc}")
   if errors: return _blocked(*errors, canonical_identity=direct_id, pair_key=pair_key)
   return {"schema": SCHEMA, "status": "prepared", "decision": "pending_external_evidence",
-          "dispatch_performed": False, "canonical_identity": direct_id, "pair_key": pair_key,
+          "dispatch_state": dispatch_state("not_attempted"), "canonical_identity": direct_id, "pair_key": pair_key,
           "role": EXACT_ROLE, "shape": dict(SHAPE), "target": dict(TARGET), "profile": profile,
           "candidates": {"direct_l2": {"storage": "direct_l2", "canonical_identity": direct_id, "binary_sha256": direct_binary_sha256},
                           "lds": {"storage": "lds", "canonical_identity": lds_id, "binary_sha256": lds_binary_sha256}}}
@@ -73,8 +74,10 @@ def make_benchmark_callback(pair: dict[str, Any], capture: Callable[[str, str, i
     if pair.get("status") != "prepared": return _blocked(*pair.get("blockers", ()))
     if contract.get("canonical_identity") != pair["canonical_identity"]:
       return _blocked("canary benchmark contract identity differs from prepared pair")
-    rows = {name: {"role": EXACT_ROLE, "shape": dict(SHAPE), "canonical_identity": pair["canonical_identity"],
-                   "binary_sha256": row["binary_sha256"], "storage": row["storage"]}
+    # P0-3: each benchmark row keeps its OWN distinct candidate identity; the
+    # shared pair identity must never overwrite the LDS candidate identity.
+    rows = {name: {"role": EXACT_ROLE, "shape": dict(SHAPE), "canonical_identity": row["canonical_identity"],
+                   "binary_sha256": row["binary_sha256"], "storage": row["storage"], "pair_key": pair["pair_key"]}
             for name, row in pair["candidates"].items()}
     for storage in ("direct_l2", "lds"):
       rows[storage].update(capture(storage, "timed", 0))

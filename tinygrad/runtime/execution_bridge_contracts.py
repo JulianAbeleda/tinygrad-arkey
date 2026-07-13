@@ -17,6 +17,31 @@ def _mapping(value: Any, name: str) -> dict[str, Any]:
   return dict(value)
 
 
+# --- Typed lifecycle/outcome vocabularies (P0-1, P1-5) -----------------------
+# The dispatch lifecycle STATE is truthful evidence of what the executor did.
+# It is deliberately distinct from every downstream outcome, so a record can
+# never conflate execution with correctness, benchmark validity, research
+# verdict, or shipping decision.
+DISPATCH_STATES: tuple[str, ...] = ("not_attempted", "attempted", "submitted", "completed", "failed", "timed_out", "device_lost")
+RESEARCH_VERDICTS: tuple[str, ...] = ("direct_l2_wins", "retain_lds", "measurement_inconclusive", "blocked", "failed")
+SHIPPING_DECISIONS: tuple[str, ...] = ("retain_lds", "promote_direct_l2")
+
+def dispatch_state(value: Any, name: str = "dispatch_state") -> str:
+  if value not in DISPATCH_STATES: raise ValueError(f"{name} must be one of {DISPATCH_STATES}")
+  return value
+
+def canonical_json(payload: Mapping[str, Any], name: str = "payload") -> str:
+  return json.dumps(_mapping(payload, name), sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+
+def canonical_digest(payload: Mapping[str, Any], name: str = "payload") -> str:
+  return hashlib.sha256(canonical_json(payload, name).encode()).hexdigest()
+
+def reject_synthetic(record: Mapping[str, Any], *, production: bool, name: str = "evidence") -> None:
+  # P0-4: synthetic fixtures declare synthetic=True; production decisions reject them.
+  if production and record.get("synthetic") is True:
+    raise ValueError(f"{name} is synthetic and cannot back a production decision")
+
+
 class Contract:
   schema: ClassVar[str]
   def to_dict(self) -> dict[str, Any]: return {"schema": self.schema, **{f.name: getattr(self, f.name) for f in fields(self)}}
@@ -76,10 +101,12 @@ class ExecutableArtifactMetadata(Contract):
 @dataclass(frozen=True)
 class DispatchEvidence(Contract):
   schema: ClassVar[str] = "execution_bridge.dispatch_evidence.v1"
-  executable_digest: str; workload_digest: str; transport: str; status: str; elapsed_ns: int | None = None; output_digest: str | None = None; errors: tuple[str, ...] = ()
+  executable_digest: str; workload_digest: str; transport: str; state: str
+  synthetic: bool = False; elapsed_ns: int | None = None; output_digest: str | None = None; errors: tuple[str, ...] = ()
   def __post_init__(self):
     for name in ("executable_digest", "workload_digest", "transport"): _text(getattr(self, name), name)
-    if self.status not in ("passed", "failed", "timed_out"): raise ValueError("unsupported dispatch status")
+    dispatch_state(self.state, "state")
+    if not isinstance(self.synthetic, bool): raise ValueError("synthetic must be bool")
     if self.elapsed_ns is not None and (not isinstance(self.elapsed_ns, int) or self.elapsed_ns < 0): raise ValueError("elapsed_ns must be non-negative")
     if self.output_digest is not None: _text(self.output_digest, "output_digest")
 
@@ -95,4 +122,19 @@ class SafetyAdmission(Contract):
     if self.authorized and self.revocation_reason is not None: raise ValueError("authorized admission cannot be revoked")
 
 
-__all__ = ["Contract", "WorkloadIdentity", "SemanticScheduleIdentity", "TransportPlan", "CompileArtifactMetadata", "ExecutableArtifactMetadata", "DispatchEvidence", "SafetyAdmission"]
+@dataclass(frozen=True)
+class TypedError(Contract):
+  schema: ClassVar[str] = "execution_bridge.typed_error.v1"
+  code: str; phase: str; recoverable: bool; candidate: str | None = None; run: str | None = None; context: Mapping[str, Any] = field(default_factory=dict)
+  def __post_init__(self):
+    _text(self.code, "code"); _text(self.phase, "phase")
+    if not isinstance(self.recoverable, bool): raise ValueError("recoverable must be bool")
+    for opt in ("candidate", "run"):
+      if getattr(self, opt) is not None: _text(getattr(self, opt), opt)
+    _mapping(self.context, "context")
+
+
+__all__ = ["Contract", "WorkloadIdentity", "SemanticScheduleIdentity", "TransportPlan", "CompileArtifactMetadata",
+           "ExecutableArtifactMetadata", "DispatchEvidence", "SafetyAdmission", "TypedError",
+           "DISPATCH_STATES", "RESEARCH_VERDICTS", "SHIPPING_DECISIONS", "dispatch_state",
+           "canonical_json", "canonical_digest", "reject_synthetic"]

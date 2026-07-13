@@ -36,3 +36,21 @@ def test_cpu_pair_accepts_distinct_candidate_identities_with_shared_semantic_key
   direct = _row("direct_l2", "b" * 64, [8.0] * 12) | {"canonical_identity": "d" * 64, "pair_key": "semantic-v1"}
   lds = _row("lds", "c" * 64, [10.0] * 12) | {"canonical_identity": "e" * 64, "pair_key": "semantic-v1"}
   assert decide({"direct_l2": direct, "lds": lds})["decision"] == "promote_direct_l2"
+
+
+def test_valid_negative_result_is_retain_lds_not_blocked():
+  # P1-5: a completed, valid, slower measurement is retain_lds with NO blockers.
+  report = decide({"direct_l2": _row("direct_l2", "b" * 64, [10.1] * 12),
+                   "lds": _row("lds", "c" * 64, [10.0] * 12)})
+  assert report["status"] == "pass" and report["decision"] == "retain_lds"
+  assert report["verdict"] == "retain_lds" and report["shipping_decision"] == "retain_lds"
+  assert report["blockers"] == []
+
+
+def test_production_mode_rejects_synthetic_evidence():
+  # P0-4: synthetic evidence cannot back a production decision.
+  direct = _row("direct_l2", "b" * 64, [8.0] * 12) | {"canonical_identity": "d" * 64, "synthetic": True}
+  lds = _row("lds", "c" * 64, [10.0] * 12) | {"canonical_identity": "e" * 64}
+  report = decide({"direct_l2": direct, "lds": lds}, production=True)
+  assert report["status"] == "blocked"
+  assert any("synthetic" in reason for reason in report["blockers"])
