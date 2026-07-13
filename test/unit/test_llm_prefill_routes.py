@@ -22,7 +22,7 @@ def clean_prefill_route_env():
                                         "PREFILL_QK_GENERATED_TILE",
                                         "PREFILL_QK_GENERATED_TILE_ROLES", "PREFILL_QK_GENERATED_TILE_MODE",
                                         "PREFILL_QK_GENERATED_TILE_ROWS", "PREFILL_QK_GENERATED_TILE_TOKENS",
-                                        "PREFILL_UBATCH")}
+                                        "PREFILL_LM_HEAD_ROUTE", "PREFILL_LM_HEAD_DIRECT", "PREFILL_UBATCH")}
   for k in old: os.environ.pop(k, None)
   yield
   for k, v in old.items():
@@ -46,6 +46,20 @@ def test_prefill_route_rejects_unknown_policy():
   os.environ["PREFILL_ROUTE"] = "chunked"
   with pytest.raises(ValueError):
     prefill_route_policy()
+
+
+def test_lm_head_prefill_defaults_lazy_and_keeps_direct_alias():
+  from tinygrad.llm.prefill_routes import prefill_lm_head_route_policy
+  assert prefill_lm_head_route_policy() == "lazy"
+  os.environ["PREFILL_LM_HEAD_DIRECT"] = "1"
+  assert prefill_lm_head_route_policy() == "direct_packed"
+
+
+def test_lm_head_prefill_route_rejects_unknown_policy():
+  from tinygrad.llm.prefill_routes import prefill_lm_head_route_policy
+  os.environ["PREFILL_LM_HEAD_ROUTE"] = "eager_everything"
+  with pytest.raises(ValueError, match="PREFILL_LM_HEAD_ROUTE"):
+    prefill_lm_head_route_policy()
 
 
 def test_auto_keeps_resident_fp16_when_it_fits():

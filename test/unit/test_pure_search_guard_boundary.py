@@ -183,3 +183,10 @@ def test_prefill_graph_gemm_env_selects_raw_oracle_impure():
   assert gemm["rolled_back_to_oracle"] is True and gemm["pure"] is False
   with pytest.raises(RuntimeError, match="surface=external_raw_or_binary"):
     guard.assert_pure_machine_search({"PURE_MACHINE_SEARCH_ONLY": "1", "PREFILL_GRAPH_GEMM": "1"})
+
+
+def test_hand_asm_lds2_profile_has_exact_impure_route_identity():
+  gemm = {r["family"]: r for r in guard.effective_routes({
+    "PREFILL_GRAPH_GEMM": "1", "PREFILL_GEMM_PROFILE": "hand_asm_lds2"})}["prefill_gemm"]
+  assert gemm["effective_route"] == "prefill_hand_asm_lds2"
+  assert gemm["rolled_back_to_oracle"] is True and gemm["pure"] is False

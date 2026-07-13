@@ -158,6 +158,8 @@ def _prefill_gemm_effective(env: dict[str, Any]) -> tuple[str, bool]:
   if _prefill_candidate_selected(env): return _PREFILL_CANDIDATE_ROUTE, False
   if not _enabled(env, "PREFILL_GRAPH_GEMM"):
     return _default_route_id(workload="prefill", quant=["fp16"], roles=["attn_qo", "attn_kv", "ffn_down", "ffn_gate_up"]), False
+  if str(env.get("PREFILL_GEMM_PROFILE", "auto")).strip().lower() == "hand_asm_lds2":
+    return "prefill_hand_asm_lds2", True
   if (_enabled(env, "PREFILL_WMMA_PIPE_PRIMITIVE") and _enabled(env, "PREFILL_WMMA_LDS_PRIMITIVE") and
       _enabled(env, "PREFILL_DBUF")):
     return _env_route_id({**_PREFILL_GRAPH_GEMM_ENV, "PREFILL_WMMA_PIPE_PRIMITIVE": "1",

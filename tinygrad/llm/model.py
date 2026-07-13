@@ -16,7 +16,7 @@ from tinygrad.llm.prefill_policy import (
   prefill_v2_validate_ubatch,
 )
 from tinygrad.llm.prefill_routes import (
-  is_direct_packed_prefill_linear, prefill_route_wants_resident_fp16, route_prefill_linear,
+  is_direct_packed_prefill_linear, prefill_lm_head_route_policy, prefill_route_wants_resident_fp16, route_prefill_linear,
 )
 from tinygrad.llm.qk_primitives import (
   QK_AMD_GFX1100_ARCH_OK, QKConfig, QKPrimitiveBudget, Q4KPrimitiveLinear, Q4KPrimitiveRegistry, Q6KPrimitiveLinear,
@@ -610,15 +610,12 @@ class Transformer:
         setattr(lin, "_prefill_graph_role", self._prefill_v2_role_for_name(n))
         out_f, in_f = self._prefill_v2_dims(lin)
         if out_f is not None: yield lin, out_f, in_f
-    # lm_head: top-level (not per-block), covered only once it's an installed Q4_K/Q6_K direct-packed primitive.
-    # A plain nn.Linear self.output (primitives not installed / not yet installed) is never yielded here, so it
-    # is excluded from the warmstart table / VRAM estimate / realize loop exactly like before this change --
-    # it keeps taking the unmodified self.output(x) path (see _lm_head_wants_pf16).
-    # PREFILL_LM_HEAD_DIRECT=1 excludes it from resident-fp16 realize so _pf16_w stays unset; route_prefill_linear
-    # then takes the direct-packed branch (w is None) and dispatches the packed q6k kernel instead of a resident
-    # fp16 GEMM. This is the single-variable knob for the LM-head A/B (four promoted roles stay on their route).
+    # LM head is lazy by default: inference consumes only the final token's logits, so preserving self.output(x)
+    # lets the downstream [:, -1, :] prune a 512-token vocabulary projection to one token. Full-sequence LM-head
+    # materialization is an explicit workload policy, not a prefill default. Only resident_fp16 needs inclusion in
+    # the warmstart/VRAM/realize set; direct_packed intentionally keeps _pf16_w absent.
     lin = getattr(self, "output", None)
-    if lin is not None and is_direct_packed_prefill_linear(lin) and not getenv("PREFILL_LM_HEAD_DIRECT", 0):
+    if lin is not None and is_direct_packed_prefill_linear(lin) and prefill_lm_head_route_policy() == "resident_fp16":
       setattr(lin, "_prefill_graph_role", "lm_head")
       out_f, in_f = self._prefill_v2_dims(lin)
       if out_f is not None: yield lin, out_f, in_f
@@ -678,12 +675,11 @@ class Transformer:
       self(dummy, sp, temp, use_flash=False).realize(); n += 1   # populates self.prefill_v2_jits[sp]
     return n
 
-  # lm_head prefill routing gate: same phase flag the per-block prefill-v2 linears check (e.g. :401) -- True only
-  # for a concrete-batch prefill-v2 forward, never for decode (T==1), so the decode M=1 byte-for-byte path is
-  # untouched. Also requires self.output to actually be an installed Q4_K/Q6_K primitive (plain nn.Linear when
-  # primitives aren't installed keeps calling self.output(x) exactly as before).
+  # Full-sequence LM-head routing is explicit. The default lazy path is both faster for inference (the final-token
+  # slice prunes M=512 to M=1) and lower-memory; resident/direct M=512 routes remain available for full-logit jobs.
   def _lm_head_wants_pf16(self) -> bool:
-    return bool(self.blk) and getattr(self.blk[0], '_prefill_v2', False) and is_direct_packed_prefill_linear(self.output)
+    return (prefill_lm_head_route_policy() != "lazy" and bool(self.blk) and
+            getattr(self.blk[0], '_prefill_v2', False) and is_direct_packed_prefill_linear(self.output))
 
   def logits(self, tokens:Tensor, start_pos:int|UOp) -> Tensor:
     x = self.token_embd(tokens).float()                   # (B, T, D)

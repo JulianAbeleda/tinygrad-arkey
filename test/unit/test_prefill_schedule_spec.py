@@ -1,4 +1,5 @@
 from dataclasses import replace
+import hashlib
 from types import SimpleNamespace
 
 from extra.qk.prefill_schedule_spec import (
@@ -170,3 +171,16 @@ def test_prefill_pipe_role_selective_generated_pure_search_proof_points_to_shape
   assert "tinygrad.schedule.rangeify" in proof["target_lowering_substrate"]["path"]
   assert proof["target_lowering_substrate"]["goal"] == "backend-owned matrix instructions via Tinygrad IR"
   assert proof["executing_surface"]["writer"] == "extra/qk/prefill_graph_gemm_route.py::route_pf16_graph_gemm"
+
+
+def test_hand_asm_lds2_profile_freezes_the_validated_schedule(monkeypatch):
+  from extra.qk.prefill_schedule_spec import describe_prefill_schedule
+  monkeypatch.setenv("PREFILL_GEMM_PROFILE", "hand_asm_lds2")
+  spec = describe_prefill_schedule(4096, 4096, role="attn_qo")
+  assert (spec.route_family, spec.tile_m, spec.tile_n, spec.tile_k) == ("lds", 128, 128, 32)
+  assert (spec.waves_m, spec.waves_n, spec.wm, spec.wn, spec.threads) == (2, 2, 4, 4, 128)
+  assert (spec.dbuf, spec.plra, spec.plrab, spec.pad, spec.reloc) == (0, 1, 0, 16, False)
+  insts = emit_prefill_gemm_from_spec(spec)[0]
+  binary = b"".join(inst.to_bytes() for inst in insts)
+  assert (len(insts), len(binary)) == (751, 4512)
+  assert hashlib.sha256(binary).hexdigest() == "4a576be126ff08aad7e2df56514098684dd3f9adf7068792adece7127fd1c739"

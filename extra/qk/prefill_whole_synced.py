@@ -34,6 +34,7 @@ PREFILL_WMMA_PIPE_ROUTE = "prefill_wmma_pipe_primitive_generated"
 PREFILL_WMMA_PIPE_LDS_DBUF_ROUTE = "prefill_wmma_pipe_lds_dbuf_primitive_generated"
 PREFILL_WMMA_LDS_DBUF_MIXED_ROUTE = "prefill_wmma_lds_dbuf_primitive_mixed"
 PREFILL_HYBRID_BACKEND_ATOM_ROUTE = "prefill_pipe_role_selective_generated"
+PREFILL_HAND_ASM_LDS2_ROUTE = "prefill_hand_asm_lds2"
 PREFILL_GENERATED_DENSE_ROLES = frozenset(("attn_qo", "attn_kv", "ffn_down", "ffn_gate_up"))
 PREFILL_ROLE_ROUTES_PIPE = {
   "attn_qo": "pipe",
@@ -59,6 +60,7 @@ PREFILL_ROLE_ROUTES_HYBRID_BACKEND_ATOM = {
   "ffn_down": "raw_pipe_oracle",
   "ffn_gate_up": "raw_lds2_oracle",
 }
+PREFILL_ROLE_ROUTES_HAND_ASM_LDS2 = {role: "raw_lds2_oracle" for role in PREFILL_GENERATED_DENSE_ROLES}
 
 
 def _git_short() -> str:
@@ -200,6 +202,8 @@ def authority_completeness_gate(report: dict[str, Any], *, quality_gate: dict[st
 
 
 def _prefill_role_routes(route_id: str) -> dict[str, str]:
+  if route_id == PREFILL_HAND_ASM_LDS2_ROUTE:
+    return dict(PREFILL_ROLE_ROUTES_HAND_ASM_LDS2)
   if route_id == PREFILL_HYBRID_BACKEND_ATOM_ROUTE:
     return dict(PREFILL_ROLE_ROUTES_HYBRID_BACKEND_ATOM)
   if route_id == PREFILL_WMMA_PIPE_LDS_DBUF_ROUTE:
@@ -224,7 +228,7 @@ def route_binding_gate(report: dict[str, Any], required_route: str | None = None
     if selected_route != required_route:
       failures.append(f"prefill_route_family={selected_route!r}, expected {required_route!r}")
   s10_compiler_primitive_route = selected_route in {PREFILL_WMMA_PIPE_LDS_DBUF_ROUTE, PREFILL_WMMA_LDS_DBUF_MIXED_ROUTE}
-  hybrid_backend_atom_route = selected_route == PREFILL_HYBRID_BACKEND_ATOM_ROUTE
+  hybrid_backend_atom_route = selected_route in {PREFILL_HYBRID_BACKEND_ATOM_ROUTE, PREFILL_HAND_ASM_LDS2_ROUTE}
   expected_pure = False if s10_compiler_primitive_route or hybrid_backend_atom_route else True
   expected_rollback = True if hybrid_backend_atom_route else False
   expected_provenance = ("external_handwritten_kernel" if hybrid_backend_atom_route else

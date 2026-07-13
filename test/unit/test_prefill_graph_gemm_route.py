@@ -378,9 +378,9 @@ def test_prefill_v2_covered_linears_are_role_tagged():
   assert covered["ffn_down"]._prefill_graph_role == "ffn_down"
   assert covered["attn_k"].name == "attn_k"
 
-def test_prefill_lm_head_direct_flag_excludes_output_from_resident_realize():
-  # PREFILL_LM_HEAD_DIRECT=1 must drop self.output from _prefill_v2_covered so no resident _pf16_w is realized
-  # for it (w stays None -> route_prefill_linear dispatches the packed q6k kernel). Default off keeps it covered.
+def test_prefill_lm_head_route_controls_resident_realize():
+  # Lazy/default and direct-packed keep self.output out of the fp16 overlay. Only the explicit resident mode owns
+  # a full-sequence fp16 LM-head buffer.
   import os
   from tinygrad.llm.model import Transformer
   from tinygrad.helpers import getenv
@@ -395,15 +395,19 @@ def test_prefill_lm_head_direct_flag_excludes_output_from_resident_realize():
                                 prefill_packed_weight=lambda: None, name="output.weight")
     return tr
 
-  prev = os.environ.get("PREFILL_LM_HEAD_DIRECT")
+  prev_route, prev_direct = os.environ.get("PREFILL_LM_HEAD_ROUTE"), os.environ.get("PREFILL_LM_HEAD_DIRECT")
   try:
-    os.environ.pop("PREFILL_LM_HEAD_DIRECT", None); getenv.cache_clear()
-    tr = build(); assert any(lin is tr.output for lin, _, _ in tr._prefill_v2_covered())   # off -> covered
-    os.environ["PREFILL_LM_HEAD_DIRECT"] = "1"; getenv.cache_clear()
-    tr = build(); assert not any(lin is tr.output for lin, _, _ in tr._prefill_v2_covered())  # on -> excluded
+    os.environ.pop("PREFILL_LM_HEAD_ROUTE", None); os.environ.pop("PREFILL_LM_HEAD_DIRECT", None); getenv.cache_clear()
+    tr = build(); assert not any(lin is tr.output for lin, _, _ in tr._prefill_v2_covered())
+    os.environ["PREFILL_LM_HEAD_ROUTE"] = "resident_fp16"; getenv.cache_clear()
+    tr = build(); assert any(lin is tr.output for lin, _, _ in tr._prefill_v2_covered())
+    os.environ["PREFILL_LM_HEAD_ROUTE"] = "direct_packed"; getenv.cache_clear()
+    tr = build(); assert not any(lin is tr.output for lin, _, _ in tr._prefill_v2_covered())
   finally:
-    if prev is None: os.environ.pop("PREFILL_LM_HEAD_DIRECT", None)
-    else: os.environ["PREFILL_LM_HEAD_DIRECT"] = prev
+    if prev_route is None: os.environ.pop("PREFILL_LM_HEAD_ROUTE", None)
+    else: os.environ["PREFILL_LM_HEAD_ROUTE"] = prev_route
+    if prev_direct is None: os.environ.pop("PREFILL_LM_HEAD_DIRECT", None)
+    else: os.environ["PREFILL_LM_HEAD_DIRECT"] = prev_direct
     getenv.cache_clear()
 
 class _CandidateRouteTensor:

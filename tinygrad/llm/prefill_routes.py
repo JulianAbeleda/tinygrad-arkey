@@ -11,6 +11,7 @@ quant_spec = qk_ops.qk_quant_specs_attr("quant_spec")
 RuntimeOpSpec = qk_ops.qk_runtime_specs_attr("RuntimeOpSpec")
 
 PREFILL_ROUTE_CHOICES = ("auto", "fp16", "direct_packed")
+LM_HEAD_PREFILL_ROUTE_CHOICES = ("lazy", "resident_fp16", "direct_packed")
 # Handwritten sdot4/MMQ/Q8_1-GEMM prefill research modes deleted 2026-07-06 (no backups; dead end ~237 tok/s).
 # Only the generated int8-WMMA parity substrates remain selectable; off-values fall to the direct-packed default.
 Q4K_Q8_CHOICES = ("", "0", "false", "off", "no", "wmma", "wmma_tiled")
@@ -31,6 +32,23 @@ def prefill_route_policy() -> str:
 
 def prefill_route_strict() -> bool:
   return bool(_env("PREFILL_ROUTE_STRICT", _env("QK_GENERATED_POLICY_STRICT", 0)))
+
+
+def prefill_lm_head_route_policy() -> str:
+  """Select how a full-sequence LM head is evaluated during prefill.
+
+  ``lazy`` preserves the ordinary output-linear graph so a downstream
+  ``[:, -1, :]`` can prune the projection to one token.  The two explicit
+  full-sequence modes are retained for workloads that consume every token's
+  logits.  ``PREFILL_LM_HEAD_DIRECT=1`` remains a compatibility alias for the
+  direct-packed experiment.
+  """
+  route = str(os.environ.get("PREFILL_LM_HEAD_ROUTE", "")).strip().lower()
+  if not route:
+    route = "direct_packed" if bool(_env("PREFILL_LM_HEAD_DIRECT", 0)) else "lazy"
+  if route not in LM_HEAD_PREFILL_ROUTE_CHOICES:
+    raise ValueError(f"PREFILL_LM_HEAD_ROUTE must be one of {', '.join(LM_HEAD_PREFILL_ROUTE_CHOICES)}, got {route!r}")
+  return route
 
 
 def prefill_q4k_q8_mode() -> str:

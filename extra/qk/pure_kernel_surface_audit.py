@@ -132,6 +132,11 @@ ROUTE_SURFACES: dict[str, RouteSurface] = {
     ("extra/qk/prefill_graph_gemm_route.py", "extra/qk/prefill/wmma.py", "extra/qk/prefill_schedule_spec.py"),
     "Schedule selection is spec-shaped, but executing substrate injects raw RDNA3 instruction lists through preassembled_linear/Ops.INS.",
     replacement_scope="Route B: generated LDS+WMMA codegen substrate replacing extra/qk/prefill/wmma.py."),
+  "prefill_hand_asm_lds2": RouteSurface(
+    "prefill_hand_asm_lds2", "external_raw_or_binary",
+    ("extra/qk/prefill_graph_gemm_route.py", "extra/qk/prefill/wmma.py", "extra/qk/prefill_schedule_spec.py"),
+    "Frozen all-LDS2 oracle injects the hand-authored RDNA3 instruction stream through the raw preassembled route.",
+    replacement_scope="Generated LDS/WMMA compiler substrate matching the hand-ASM density oracle."),
   "prefill_wmma_pipe_primitive_generated": RouteSurface(
     "prefill_wmma_pipe_primitive_generated", "ordinary_tinygrad_graph",
     ("extra/qk/prefill_graph_gemm_route.py", "extra/qk/wmma_pipe_spec.py", "extra/qk/prefill_pipe_mvp_artifact.py"),

@@ -27,6 +27,8 @@ from typing import Any
 PROTECTED_PIPE_ROLES = ("ffn_gate_up",)
 _GATE_UP_SHAPES = frozenset(((12288, 4096), (12288, 5120)))
 PIPELINE_TARGET_SUBSTRATE = ("tinygrad.schedule.wmma.shaped_wmma", "tinygrad.schedule.rangeify")
+HAND_ASM_LDS2_PROFILE = "hand_asm_lds2"
+PREFILL_GEMM_PROFILES = ("auto", HAND_ASM_LDS2_PROFILE)
 
 
 def prefill_pipe_excluded_by_role_shape_policy(out_f: int, in_f: int, *, role: str | None = None) -> bool:
@@ -148,6 +150,19 @@ def _params_to_spec(p: dict, role: str | None) -> PrefillGEMMScheduleSpec:
 def describe_prefill_schedule(out_f: int, in_f: int, *, role: str | None = None) -> PrefillGEMMScheduleSpec:
   """Resolve the current default schedule for a prefill (out_f, in_f) GEMM into a PrefillGEMMScheduleSpec. Uses the
   graph-GEMM resolver, so the spec is a faithful snapshot of the resolved schedule."""
+  profile = os.environ.get("PREFILL_GEMM_PROFILE", "auto").strip().lower()
+  if profile not in PREFILL_GEMM_PROFILES:
+    raise ValueError(f"PREFILL_GEMM_PROFILE must be one of {', '.join(PREFILL_GEMM_PROFILES)}, got {profile!r}")
+  if profile == HAND_ASM_LDS2_PROFILE:
+    if any(os.environ.get(key, "0").strip().lower() not in ("", "0", "false", "off", "no")
+           for key in ("PREFILL_WMMA_PIPE_PRIMITIVE", "PREFILL_WMMA_LDS_PRIMITIVE")):
+      raise ValueError(f"{HAND_ASM_LDS2_PROFILE} is the raw hand-ASM oracle and cannot be combined with generated primitive flags")
+    # Frozen 2026-06-20 all-LDS2 schedule. This exact profile emits the validated 751-instruction attn_qo stream
+    # (2x2 waves, 4x4 WMMA tiles, BK32, PAD16, single-buffer PLRA) and intentionally bypasses later pipe/DBUF defaults.
+    return PrefillGEMMScheduleSpec(
+      m=512, n=out_f, k=in_f, route_family="lds", tile_m=128, tile_n=128, tile_k=32,
+      waves_m=2, waves_n=2, wm=4, wn=4, pipe_tm=2, pipe_tn=2, pipeline_depth=1, threads=128,
+      dbuf=0, plra=1, plrab=0, pad=16, leanaddr=0, reloc=False, reloc_max_wgs=1, role=role or "")
   from extra.qk.prefill_graph_gemm_route import _resolve_schedule
   return _params_to_spec(_resolve_schedule(out_f, in_f, role), role)
 

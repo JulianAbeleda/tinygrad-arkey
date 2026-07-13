@@ -43,9 +43,11 @@ M=512,N=151936,K=4096).
    `PREFILL_LM_HEAD_DIRECT=1` is retained only as the measurement knob that selects
    this (currently slow) route for re-testing if the kernel is ever made
    bandwidth-efficient.
-3. The committed LM-head wiring (route `self.output` through the resident-fp16
-   prefill path, `_lm_head_wants_pf16`) is the better of the two measured options
-   and stays.
+3. A later commit bisect closed the lazy-path question below: both full-M routes
+   lose to preserving ordinary lazy `self.output(x)`, because inference's
+   downstream `[:, -1, :]` slice prunes the vocabulary projection to M=1.
+   `PREFILL_LM_HEAD_ROUTE=lazy` is now the default. Resident-fp16 and packed are
+   explicit full-logit workload modes only.
 
 ## Next
 
@@ -56,9 +58,9 @@ non-GEMM norm/rope/softmax/mask/residual, memory transport, low-occupancy
 fresh ctx512 capture to rank those lanes by measured device-time share before
 selecting the next lever.
 
-## Open question (not measured here)
+## Later resolution
 
-Whether the committed resident-fp16 LM-head wiring is itself a win vs the
-pre-wiring per-call fp16-recast path (the recorded 147.05 ms authority predates the
-wiring). Needs a controlled 3-way, not the single-run 155.8 vs 147.05 comparison
-(different run config).
+Commit bisect on 2026-07-13 identified the eager full-M LM-head wiring in
+`c85ac30e1` as the first whole-prefill regression: its parent remained in the
+3.5k tok/s class while the commit fell to about 2.44k tok/s, both correctness
+passing. See `docs/hand-asm-prefill-recovery-20260713.md`.

@@ -67,7 +67,19 @@ def _install_stubs(monkeypatch):
   return calls
 
 
-def test_logits_routes_lm_head_through_pf16_for_t512_prefill_v2_batch(monkeypatch):
+def test_logits_keeps_lm_head_lazy_by_default_for_t512_prefill_v2_batch(monkeypatch):
+  calls = _install_stubs(monkeypatch)
+  fake = _FakeTransformer(prefill_v2=True, output_is_direct_packed=True)
+  tokens = SimpleNamespace(shape=(1, 512))
+
+  out = fake.logits(tokens, 0)
+
+  assert calls == []
+  assert out[0] == "plain_output_call"
+
+
+def test_logits_routes_lm_head_through_pf16_when_full_sequence_route_is_explicit(monkeypatch):
+  monkeypatch.setenv("PREFILL_LM_HEAD_ROUTE", "resident_fp16")
   calls = _install_stubs(monkeypatch)
   fake = _FakeTransformer(prefill_v2=True, output_is_direct_packed=True)
   tokens = SimpleNamespace(shape=(1, 512))
