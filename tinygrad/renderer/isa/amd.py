@@ -1792,10 +1792,6 @@ def _chain_epilogue_stores(ctx:IselContext, x:UOp):
     subs[st] = new_st; prev = new_st
   ctx._epi_chained = True
   ret = x.substitute(subs)
-  if getenv("EPICHAIN_DEBUG", 0):
-    chained = [u for u in ret.toposort() if u.op is Ops.INS and u.arg is AMDOps.GLOBAL_STORE and
-               u.src and any(s.op is Ops.INS and s.arg is AMDOps.GLOBAL_STORE for s in u.src[0].src)]
-    print(f"EPICHAIN c_low={_c_low(ctx)} stores={len(stores)} chained={len(chained)}")
   return ret
 
 isel_matcher = PatternMatcher([

@@ -62,8 +62,6 @@ def _run_case_diagnostic(m: int, out_f: int, in_f: int, *, pin_clock: bool, env:
   base_env.setdefault("PYTHONPATH", ".")
   base_env.setdefault("DEV", "AMD")
   base_env["DEBUG"] = base_env.get("DEBUG") or "4"
-  base_env["PREFILL_TC_LOCAL_STAGE_DUMP"] = "1"
-  base_env.setdefault("PREFILL_TC_LOCAL_STAGE_DUMP_LIMIT", "8")
   set_clock_pin_env(base_env, pin_clock)
   for k, v in env.items():
     if v is None:

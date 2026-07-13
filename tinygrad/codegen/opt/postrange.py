@@ -3,11 +3,10 @@ from __future__ import annotations
 #   This file accreted ~40 PREFILL_* getenv knobs from the prefill machine-search research plane, in two classes:
 #   (1) real staging knobs gating an experimental TC-local-stage / owned-buffer / LDS-pack transform (PREFILL_TC_LOCAL_STAGE*,
 #       PREFILL_DBUF_OWNED_*_STAGE_*, PREFILL_LDS_PACK_*, PREFILL_WMMA_PIPE_*), and
-#   (2) pure diagnostic probes that only print/collect stats and cannot change emitted code (the *_DUMP / *_PROBE / *_PROOF_*
-#       knobs, e.g. PREFILL_TC_LOCAL_STAGE_DUMP[_LIMIT], PREFILL_DBUF_OWNED_B_STAGE_PAIR_PROBE).
+#   (2) pure diagnostic probes that only print/collect stats and cannot change emitted code.
 #   The class-2 probes are being deleted (see docs/prefill-flag-graveyard.md); collapsing the surviving class-1 reads
 #   behind one PrefillStagingSpec descriptor is a scoped follow-up, deferred to keep the stock (no-flag) path byte-identical.
-import contextlib, json, math, itertools
+import contextlib, math, itertools
 from dataclasses import replace
 from collections import defaultdict
 from typing import cast, Final
@@ -567,107 +566,6 @@ def _wmma_frag_proof_tag(*, operand_idx:int, lds_buffer_id:int, nbuf:int, kr:UOp
   return tag if value_key is None else tag + (("value_key", value_key),)
 
 
-def _tc_local_stage_contract_axes(x:UOp) -> tuple[int, ...]:
-  if x.op is not Ops.CONTRACT: return tuple()
-  if not isinstance(x.arg, tuple): return tuple()
-  axes: list[int] = []
-  for item in x.arg:
-    if not isinstance(item, tuple): continue
-    if len(item) < 1 or not isinstance(item[0], int): continue
-    axes.append(item[0])
-  return tuple(axes)
-
-
-def _tc_local_stage_coop_b_ranges(src:UOp) -> tuple[tuple[UOp, ...], tuple[UOp, ...]]:
-  ranges = sorted(src.ranges, key=lambda r: r.arg)
-  # Fragment identity carries warp rows plus explicit CONTRACT fragment axes.
-  contract_axes = set(_tc_local_stage_contract_axes(src))
-  fragment = tuple(r for r in ranges if r.arg[-1] is AxisType.WARP or r.arg[0] in contract_axes)
-  tile = tuple(r for r in ranges if r.arg[-1] is not AxisType.REDUCE and r not in fragment)
-  return fragment, tile
-
-def _tc_local_stage_paired_contract_src(src:UOp, operand_idx:int, *, owner_tag:tuple|None=None,
-                                        stage_ranges:tuple[UOp, ...]|None=None) -> UOp|None:
-  # Paired materializer: unlike generic STAGE lowering, this owns both the LDS producer stores and the
-  # WMMA operand loads, so the DBUF slot offset is applied symmetrically to both sides.
-  if src.op in {Ops.STAGE, Ops.AFTER, Ops.BARRIER} or src.op_in_backward_slice_with_self(Ops.BARRIER): return None
-  warp_ranges = [r for r in sorted(src.ranges, key=lambda r: r.arg) if r.arg[-1] is AxisType.WARP]
-  if len(warp_ranges) != 1 or src.dtype.count != 16: return None
-  lane = warp_ranges[0]
-  if stage_ranges is None:
-    fragment_ranges, tile_ranges = _tc_local_stage_coop_b_ranges(src)
-  else:
-    sranges = sorted(stage_ranges, key=lambda r: r.arg)
-    fragment_ranges = tuple(r for r in sranges if r.arg[-1] is AxisType.WARP)
-    tile_ranges = tuple(r for r in sranges if r.arg[-1] is not AxisType.WARP)
-  if lane not in fragment_ranges: return None
-  allowed_tile_types = {AxisType.UPCAST, AxisType.UNROLL}
-  if stage_ranges is not None: allowed_tile_types |= {AxisType.LOCAL, AxisType.GLOBAL}
-  if any(r.arg[-1] not in allowed_tile_types for r in tile_ranges): return None
-  row = lane & 15
-  nbuf = PREFILL_DBUF_NBUF() if PREFILL_DBUF() else 1
-  kr = prefill_dbuf_reduce_range(src.ranges) if nbuf > 1 else None
-  tile_count = prod(r.vmax+1 for r in tile_ranges)
-  tile_elems = 256
-  base = tile_elems * tile_count * nbuf if kr is not None else tile_elems * tile_count
-  tile_idx = UOp.const(dtypes.weakint, 0)
-  tile_mul = 1
-  for r in tile_ranges[::-1]:
-    tile_idx = tile_idx + r * tile_mul
-    tile_mul *= r.vmax+1
-  slot = ((kr % nbuf) * tile_count + tile_idx) * tile_elems if kr is not None else tile_idx * tile_elems
-  lds_buffer_id = 990 + operand_idx
-  value_key = None
-  if nbuf == 1:
-    value_key = single_buffer_stage_value_key(
-      role="A" if operand_idx == 0 else "B", tile_idx=tile_idx, tile_count=tile_count,
-      source=src, lds_buffer_id=lds_buffer_id)
-  buffer_tag = owner_tag or ("wmma_frag_buffer_proof", ("role", "A" if operand_idx == 0 else "B"), ("lds_buffer_id", lds_buffer_id),
-                             ("nbuf", nbuf), ("tile_count", tile_count), ("tile_elems", tile_elems))
-  bsh = UOp.placeholder((base,), src.dtype.scalar(), lds_buffer_id, addrspace=AddrSpace.LOCAL).replace(tag=buffer_tag)
-
-  def _slot_idx(i:int|UOp) -> UOp:
-    return slot + row*16 + i
-
-  store_gate = lane < 16
-  stores: list[UOp] = []
-  prev_store: UOp|None = None
-  stage_store_i = 0
-  def _append_stage_store(idx:UOp, val:UOp) -> None:
-    nonlocal prev_store, stage_store_i
-    store_tag = ("tc_local_stage_store", operand_idx, lds_buffer_id, stage_store_i)
-    if value_key is not None: store_tag += (("role", value_key.role), ("value_key", value_key))
-    idx = idx.replace(tag=store_tag)
-    stage_store_i += 1
-    st = idx.store(val, store_gate)
-    st = st.replace(tag=idx.tag)
-    stores.append(st.end())
-    prev_store = st
-
-  for i in range(16):
-    _append_stage_store(bsh.index(_slot_idx(i), dtype=bsh.dtype).gep(0), src.gep(i))
-
-  stage = UOp.group(*stores)
-  if tile_ranges: stage = stage.end(*tile_ranges)
-  bar = UOp.barrier(stage)
-  range_by_axis = {r.arg[0]: r for r in src.src[0].ranges if r.op is Ops.RANGE}
-  frag_idx = UOp.const(dtypes.weakint, 0)
-  mul = 1
-  if not isinstance(src.arg, tuple): return None
-  for axis, size in src.arg[::-1]:
-    if axis not in range_by_axis: return None
-    frag_idx = frag_idx + range_by_axis[axis] * mul
-    mul *= size
-  if mul != src.dtype.count: return None
-  proof_tag = _wmma_frag_proof_tag(operand_idx=operand_idx, lds_buffer_id=lds_buffer_id, nbuf=nbuf, kr=kr,
-                                   tile_idx=tile_idx, tile_count=tile_count, tile_elems=tile_elems,
-                                   producer=bar, value_key=value_key, byte_len=32)
-  ordered_local = _tc_local_stage_ordered_local(bsh, prev_store).after(bar).replace(tag=buffer_tag)
-  scalar_idx = ordered_local.index(_slot_idx(frag_idx)).replace(tag=proof_tag)
-  scalar = scalar_idx.load().replace(tag=proof_tag)
-  return UOp(Ops.CONTRACT, src.dtype, (scalar,), src.arg, tag=1)
-
-
 def _tc_local_stage_owned_stage_meta(operand_idx:int) -> bool:
   return get_codegen_extension_registry().tc_local_stage_owned_stage_meta(operand_idx)
 
@@ -706,43 +604,15 @@ class OwnedBStageEmitter:
 
   def emit(self) -> UOp:
     if self.mode in ("identity", "audit", "object_identity"):
-      if getenv("PREFILL_TC_LOCAL_STAGE_DUMP"):
-        print("PREFILL_DBUF_OWNED_B_STAGE", json.dumps({
-          "mode": "object_identity_generic_stage_contract" if self.mode == "object_identity" else "identity_generic_stage_contract",
-          "src_op": self.src.op.name,
-          "src_dtype": str(self.src.dtype),
-          "fallback_ranges": [repr(r.arg) for r in self.fallback],
-        }))
       return _tc_local_stage_src(self.src, self.fallback, 1)
     if self.mode in ("rotate", "rotated"):
       if not _tc_local_stage_owned_stage_meta(1):
         raise KernelOptError("PREFILL_DBUF_OWNED_B_STAGE_EMIT=rotate requires PREFILL_DBUF_OWNED_B_STAGE_META=1 or PREFILL_DBUF_OWNED_AB_STAGE_META=1")
-      if getenv("PREFILL_TC_LOCAL_STAGE_DUMP"):
-        print("PREFILL_DBUF_OWNED_B_STAGE", json.dumps({
-          "mode": "rotate_tagged_stage_contract",
-          "src_op": self.src.op.name,
-          "src_dtype": str(self.src.dtype),
-          "fallback_ranges": [repr(r.arg) for r in self.fallback],
-        }))
-      if getenv("PREFILL_DBUF_OWNED_B_STAGE_PAIR_PROBE", 0):
-        owner_tag = _tc_local_stage_buffer_tag(1, 991, PREFILL_DBUF_NBUF() if PREFILL_DBUF() else 1, 1, 256)
-        if (out := _tc_local_stage_paired_contract_src(self.src, 1, owner_tag=owner_tag, stage_ranges=self.fallback)) is not None: return out
-        raise KernelOptError("PREFILL_DBUF_OWNED_B_STAGE_PAIR_PROBE could not materialize paired B store/load contract")
       return _tc_local_stage_src(self.src, self.fallback, 1)
     raise KernelOptError(f"unknown PREFILL_DBUF_OWNED_B_STAGE_EMIT={self.mode!r}; expected identity, object_identity, or rotate")
 
 def _tc_local_stage_b_src(src:UOp, fallback:tuple[UOp, ...]) -> UOp:
-  def _fallback(reason:str) -> UOp:
-    if getenv("PREFILL_TC_LOCAL_STAGE_DUMP"):
-      print("TC_LOCAL_STAGE_B_TILEKEY_SKIP", json.dumps({
-        "reason": reason,
-        "src_op": src.op.name,
-        "src_dtype": str(src.dtype),
-        "src_count": src.dtype.count,
-        "src_arg": repr(src.arg),
-        "ranges": [{"arg": str(r.arg), "size": r.vmax+1} for r in sorted(src.ranges, key=lambda r: r.arg)],
-      }))
-    return _tc_local_stage_src(src, fallback, 1)
+  def _fallback() -> UOp: return _tc_local_stage_src(src, fallback, 1)
   owned_b_emit = str(getenv("PREFILL_DBUF_OWNED_B_STAGE_EMIT", "")).strip().lower()
   if getenv("PREFILL_DBUF_OWNED_B_STAGE_IDENTITY", 0) and owned_b_emit in ("", "0", "false", "off", "no"):
     owned_b_emit = "identity"
@@ -750,19 +620,19 @@ def _tc_local_stage_b_src(src:UOp, fallback:tuple[UOp, ...]) -> UOp:
     return OwnedBStageEmitter(owned_b_emit, src, fallback).emit()
   if owned_b_emit not in ("", "0", "false", "off", "no", "rotate", "rotated"):
     raise KernelOptError(f"unknown PREFILL_DBUF_OWNED_B_STAGE_EMIT={owned_b_emit!r}; expected identity, object_identity, or rotate")
-  if not getenv("PREFILL_TC_LOCAL_STAGE_B_TILEKEY", 0): return _fallback("flag_disabled")
-  if not _tc_local_stage_with_planned_local(): return _fallback("planned_local_disabled")
-  if src.op is not Ops.CONTRACT: return _fallback("src_not_contract")
-  if src.dtype.count != 16: return _fallback("dtype_count_not_16")
+  if not getenv("PREFILL_TC_LOCAL_STAGE_B_TILEKEY", 0): return _fallback()
+  if not _tc_local_stage_with_planned_local(): return _fallback()
+  if src.op is not Ops.CONTRACT: return _fallback()
+  if src.dtype.count != 16: return _fallback()
   warp_ranges = [r for r in sorted(src.ranges, key=lambda r: r.arg) if r.arg[-1] is AxisType.WARP]
-  if len(warp_ranges) != 1: return _fallback("warp_range_count_not_1")
-  if not isinstance(src.arg, tuple): return _fallback("contract_arg_not_tuple")
+  if len(warp_ranges) != 1: return _fallback()
+  if not isinstance(src.arg, tuple): return _fallback()
   lane = warp_ranges[0]
   tile_ranges = tuple(r for r in sorted(src.ranges, key=lambda r: r.arg) if r.arg[-1] is AxisType.GLOBAL)
-  if not tile_ranges: return _fallback("missing_global_tile_ranges")
+  if not tile_ranges: return _fallback()
   stage_loop_ranges = tile_ranges
   tile_count = prod(r.vmax+1 for r in tile_ranges)
-  if tile_count <= 0 or tile_count > 64: return _fallback("tile_count_out_of_bounds")
+  if tile_count <= 0 or tile_count > 64: return _fallback()
   tile_idx = UOp.const(dtypes.weakint, 0)
   tile_mul = 1
   for r in tile_ranges[::-1]:
@@ -795,7 +665,7 @@ def _tc_local_stage_b_src(src:UOp, fallback:tuple[UOp, ...]) -> UOp:
   for axis, size in src.arg[::-1]:
     frag_idx = frag_idx + range_by_axis[axis] * mul
     mul *= size
-  if mul != src.dtype.count: return _fallback("contract_fragment_count_mismatch")
+  if mul != src.dtype.count: return _fallback()
   scalar_idx = _tc_local_stage_ordered_local(bsh, prev_store).after(bar).index(slot_idx(frag_idx))
   if buffer_tag is not None: scalar_idx = scalar_idx.replace(tag=buffer_tag)
   scalar = scalar_idx.load()
@@ -810,10 +680,6 @@ def _tc_local_stage_wmma_sources(srcs:list[UOp], stage_ranges:tuple[UOp, ...], *
   if _tc_local_stage_pipe_primitive_disabled_for_ranges(stage_ranges): return srcs
   if mode not in ("a", "b", "both", "1", "true", "yes"):
     raise KernelOptError(f"PREFILL_TC_LOCAL_STAGE supports a/b/both/off, got {mode!r}")
-  if getenv("PREFILL_TC_LOCAL_STAGE_DUMP"):
-    print("TC_LOCAL_STAGE", {"ranges": [(r.arg, r.vmax+1) for r in stage_ranges],
-                             "src0_ranges": [(r.arg, r.vmax+1) for r in sorted(srcs[0].ranges, key=lambda r: r.arg)],
-                             "src1_ranges": [(r.arg, r.vmax+1) for r in sorted(srcs[1].ranges, key=lambda r: r.arg)]})
   stage_a = mode in ("a", "1", "true", "yes", "both")
   stage_b = mode in ("b", "both")
   if stage_a: srcs[0] = _tc_local_stage_src(srcs[0], stage_ranges, 0)
@@ -827,9 +693,6 @@ def _tc_local_stage_ranges(srcs:tuple[UOp, ...]) -> tuple[UOp, ...]:
 
 def _tc_local_stage_wmma_post(wmma:UOp) -> UOp|None:
   if wmma.src[0].op_in_backward_slice_with_self(Ops.STAGE): return None
-  if getenv("PREFILL_TC_LOCAL_STAGE_DUMP"):
-    print("TC_LOCAL_STAGE_POST", {"wmma_ranges": [(r.arg, r.vmax+1) for r in sorted(wmma.ranges, key=lambda r: r.arg)],
-                                  "src0_ranges": [(r.arg, r.vmax+1) for r in sorted(wmma.src[0].ranges, key=lambda r: r.arg)]})
   srcs = _tc_local_stage_wmma_sources([wmma.src[0], wmma.src[1]], _tc_local_stage_ranges((wmma.src[0],)), phase="post")
   return wmma.replace(src=(srcs[0], srcs[1], wmma.src[2])) if srcs[0] is not wmma.src[0] or srcs[1] is not wmma.src[1] else None
 
@@ -902,14 +765,6 @@ def apply_opts(ast:UOp, ren:Renderer) -> UOp:
       k.ast = k.ast.replace(arg=replace(k.ast.arg, candidate_context=candidate_context))
     k._warmstart_original_key = warm_key
     k._warmstart_local_stage_allowed = _warmstart_local_stage_allowed_key(warm_key)
-    if getenv("WARMSTART_DUMP") and len(_warmstart_stats.setdefault("dumps", [])) < 4:
-      rs = k.reduceops
-      if rs:
-        r = rs[0]; s0 = r.src[0]
-        s0b = s0.src[0] if s0.op is Ops.CAST else s0
-        _warmstart_stats["dumps"].append(f"reduce.arg={r.arg[0]} dtype={r.dtype} src0={s0.op} "
-          f"(after-cast={s0b.op} dtypes={[x.dtype for x in s0b.src][:2] if s0b.op is Ops.MUL else '?'})")
-      else: _warmstart_stats["dumps"].append("NO reduceops")
     try:
       k.planned_opts = tuple(forced)
       for o in forced: k.apply_opt(o)

@@ -34,6 +34,8 @@ Source: read-only flag classification 2026-07-10 (5-family audit). Route ground 
 
 ## TC_LOCAL_STAGE family — cooperative + refuted staging variants
 
+- **PREFILL_DBUF_OWNED_B_STAGE_PAIR_PROBE** — REMOVED 2026-07-13. Paired B materializer probe was `WRONG rr=nan`, emitted 8 WMMA where 16 were expected, and collapsed WMMA grouping through the wrong cooperative row layout. Its sole opt-in caller and materializer were deleted together.
+- **PREFILL_TC_LOCAL_STAGE_DUMP / WARMSTART_DUMP / EPICHAIN_DEBUG** — REMOVED 2026-07-13. Print-only diagnostics with no active decision consumer; structural gates and banked artifacts supersede their transient output.
 - **PREFILL_TC_LOCAL_STAGE_COOP_POST / _COOP_B_POST / _COOP_B_LIMIT** — REMOVED (Phase 2, Group C). Cooperative packed LDS store/load rewrite (+ B-only entry + rewrite-count cap). Verifier-clean but central route-bound gate **non-finite**; "does not solve this route." Bank: `docs/prefill-lessons-ledger.md`, `docs/prefill-lessons-ledger.md`. Superseded by the correct B_TILEKEY path (kept). Safe: off, no route.
 - **PREFILL_TC_LOCAL_STAGE_COOP_GLOBAL / _COOP_LOCAL / _COOP_DROP_GLOBAL / _COOP_DROP_LOCAL / _COOP_DROP_UNROLL / _COOP_DROP_UNROLL_SIZE** — REMOVED (Phase 2, Group C). Tune which tile-axis types the coop materializer accepts/drops. Only ever exercised inside the non-finite coop probe. Safe: pure tuning for an abandoned path.
 - **PREFILL_TC_LOCAL_STAGE_A_FULL_LANE** — REMOVED (Phase 2, Group C). 512-elem full-lane A LDS layout attempt. "Diagnostic-only… does not fix the cooperative correctness failure," gate non-finite. Safe: off, superseded.
