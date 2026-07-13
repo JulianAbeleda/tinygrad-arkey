@@ -108,6 +108,19 @@ def test_register_stage_carriers_have_real_amd_encoders():
   assert lower_inst(write) is not None
 
 
+def test_packed_stage_fragment_is_a_fixed_use_not_a_virtual_definition():
+  from tinygrad.renderer.isa import FixedRegisterUse, IselContext, Register
+  from tinygrad.renderer.isa.amd import AMDOps, _pack_stage_fragment
+  order = UOp(Ops.NOOP)
+  elems = tuple(UOp(Ops.INS, dtypes.half, (order, UOp.const(dtypes.int32, 200+i//2).rtag()),
+                    AMDOps.STAGE_READ, (Register(f"v{i}", i),)) for i in range(16))
+  packed = _pack_stage_fragment(IselContext(UOp.sink(*elems)), UOp(Ops.NOOP, dtypes.half.vec(16), elems))
+  assert packed is not None and len(packed) == 8
+  assert all(x.op is Ops.NOOP and isinstance(x.reg, FixedRegisterUse) for x in packed)
+  assert [x.reg.index for x in packed] == list(range(200, 208))
+  assert not any(x.op is Ops.INS and x.arg is AMDOps.MOV for x in packed)
+
+
 def _scalar_stage_store(dreg, elem, value=None):
   value = value or UOp.const(dtypes.half, float(elem))
   return dreg.index(UOp.const(dtypes.weakint, elem), dtype=dtypes.half).store(value)
@@ -392,6 +405,13 @@ def test_register_native_full_graph_scalarizes_vector_reg_index_carriers():
   assert not any(u.op is Ops.VCAT for u in topo)
   assert not any(u.op is Ops.LOAD and u.src and u.src[0].op is Ops.STACK and u.dtype.count > 1 for u in topo)
   assert not any(u.op is Ops.CAST and u.dtype is dtypes.weakint and u.src and u.src[0].op is Ops.RANGE for u in topo)
+
+
+def test_register_symbolic_normalizes_weak_launch_indices():
+  from tinygrad.codegen import register_pipe_symbolic
+  from tinygrad.uop.ops import graph_rewrite
+  idx = UOp.special(32, "gidx1").cast(dtypes.weakint)
+  assert graph_rewrite(idx, register_pipe_symbolic).op is Ops.SPECIAL
 
 
 def test_register_template_rejects_fake_descriptor_remap():

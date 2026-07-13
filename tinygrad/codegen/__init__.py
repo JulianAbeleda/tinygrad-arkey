@@ -35,9 +35,10 @@ def _register_pipe_vcat(x):
 
 register_pipe_symbolic = symbolic_simple + PatternMatcher([
   (UPat(Ops.VCAT, name="x"), _register_pipe_vcat),
-  # The generic symbolic pass normally removes this late weak-index cast;
-  # register carriers skip GEP pushing, so normalize the concrete range here.
-  (UPat(Ops.CAST, dtype=dtypes.weakint, src=(UPat(Ops.RANGE, dtype=dtypes.ints),), name="x"), lambda x: x.src[0]),
+  # The generic symbolic pass normally removes these late weak-index casts;
+  # register carriers skip GEP pushing, so normalize concrete loop and launch
+  # index sources here without widening this to arbitrary integer values.
+  (UPat(Ops.CAST, dtype=dtypes.weakint, src=(UPat((Ops.RANGE, Ops.SPECIAL), dtype=dtypes.ints),), name="x"), lambda x: x.src[0]),
   # A fully contracted side-effect group carries the same ordering as its
   # enclosing void UNROLL; retain the GROUP directly for program legality.
   (UPat(Ops.UNROLL, dtype=dtypes.void, src=(UPat(Ops.GROUP, name="g"),)), lambda g: g),

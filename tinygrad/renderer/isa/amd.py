@@ -26,7 +26,7 @@ from types import SimpleNamespace
 from tinygrad.uop import FastEnum
 from tinygrad.uop.ops import UOp, UPat, PatternMatcher, Ops, AxisType, GroupOp
 from tinygrad.dtype import dtypes, PtrDType, AddrSpace
-from tinygrad.renderer.isa import ISARenderer, IselContext, Register
+from tinygrad.renderer.isa import FixedRegisterUse, ISARenderer, IselContext, Register
 from tinygrad.renderer.amd.dsl import s as _S, v as _V, NULL, VCC, EXEC, Reg, FixedBitField
 from tinygrad.runtime.autogen.amd.rdna3.ins import (
   s_load_b64, s_load_b32, global_load_b32, global_load_b128, global_store_b32, v_add_f32_e32, v_mul_f32_e32, v_sub_f32_e32,
@@ -239,6 +239,10 @@ def _n_ab_frags(ctx:IselContext) -> int:
     As, Bs = set(), set()
     for u in ctx.uses:
       if u.op is not Ops.WMMA: continue
+      # Register-stage operands are already packed in allocator-issued high
+      # VGPR leases. They must not also reserve legacy low resident fragments.
+      if _register_stage_fragment_role(u.src[0]) is not None and _register_stage_fragment_role(u.src[1]) is not None:
+        continue
       if getenv("PREFILL_WMMA_CHAIN_AB_RESIDENT", 0):
         if getenv("PREFILL_WMMA_AB_PROOF_KEY", 0):
           if bool(getenv("PREFILL_WMMA_CHAIN_RESIDENT_A", 1)) and \
@@ -735,12 +739,16 @@ def isel_customi(ctx:IselContext, x:UOp):
   # ("__builtin_amdgcn_fdot2(...)", "...__builtin_amdgcn_ds_bpermute(...)"). NOTE operand order differs between them.
   if isinstance(x.arg, tuple) and x.arg[:1] == ("amd_register_stage_pair",):
     a, adjacent, b = x.src
+    # CUSTOMI selection can run before its INDEX children in the unified
+    # rewrite. Resolve the two typed stage carriers explicitly.
+    if a.op is Ops.INDEX: a = isel_index(ctx, a)
+    if adjacent.op is Ops.INDEX: adjacent = isel_index(ctx, adjacent)
     if not (isinstance(a.arg, tuple) and a.arg[:1] == ("stage_reg",)) or not \
        (isinstance(adjacent.arg, tuple) and adjacent.arg[:1] == ("stage_reg",)):
-      raise ValueError("register stage pair is missing its allocator-issued carrier")
+      raise ValueError(f"register stage pair is missing its allocator-issued carrier: {a.op}/{a.arg!r}, {adjacent.op}/{adjacent.arg!r}")
     role, elem, pin = a.arg[1], a.arg[2], a.arg[3]
-    if adjacent.arg[1:] != (role, elem+1, pin):
-      raise ValueError(f"register stage pair has non-adjacent or mismatched carriers for {role}[{elem}]")
+    if a.arg[4] != 0 or adjacent.arg[1:4] != (role, elem+1, pin) or adjacent.arg[4] != 1:
+      raise ValueError(f"register stage pair has non-adjacent or mismatched carriers for {role}[{elem}]: {a.arg!r}, {adjacent.arg!r}")
     _, pair_role, _frag, _pair, even_elem, odd_elem = x.arg
     if elem & 1: raise ValueError(f"register stage pair must start at an even element, got {role}[{elem}]")
     if pair_role != role or (even_elem, odd_elem) != (elem % 16, elem % 16 + 1):
@@ -1325,10 +1333,10 @@ def _pack_stage_fragment(ctx:IselContext, carrier:UOp, dep:tuple[UOp,...]=()) ->
   """
   E = _wmma_elems(carrier, 16)
   if not E: return None
-  pins = []
+  pins, orders = [], []
   for e in E:
     if e.op is Ops.INS and e.arg is AMDOps.STAGE_READ:
-      pins.append(e.src[1].arg); continue
+      pins.append(e.src[1].arg); orders.append(e.src[0]); continue
     if e.op is not Ops.LOAD or not e.src: return None
     idx = e.src[0]
     while idx.op in (Ops.AFTER, Ops.CAST) and idx.src: idx = idx.src[0]
@@ -1337,9 +1345,32 @@ def _pack_stage_fragment(ctx:IselContext, carrier:UOp, dep:tuple[UOp,...]=()) ->
     stage = _register_stage_index(ctx, dreg, idx.src[1])
     if stage is None: return None
     pins.append(stage[2])
+    orders.append(idx.src[0])
   if any(pins[2*i] != pins[2*i+1] for i in range(8)): return None
-  return tuple(UOp(Ops.INS, dtypes.int32, src=(E[2*i], E[2*i+1]) + dep,
-                   arg=AMDOps.MOV, tag=_pin(pins[2*i], 0)) for i in range(8))
+  packed = []
+  for i in range(8):
+    pin = pins[2*i]
+    fixed = UOp(Ops.NOOP, dtypes.int32, tag=(FixedRegisterUse(f"v{pin}", pin),))
+    # Keep producer/write ordering and explicit phase dependencies reachable,
+    # but do not lower logical stage reads into physical copies.
+    packed.append(UOp(Ops.NOOP, dtypes.int32, src=(fixed, orders[2*i], orders[2*i+1]) + dep,
+                      arg=("fixed_stage_use", pin)))
+  return tuple(packed)
+
+def _register_stage_fragment_role(carrier:UOp) -> str|None:
+  """Return A/B when every lane is backed by one logical register stage."""
+  E = _wmma_elems(carrier, 16)
+  if not E: return None
+  roles = set()
+  for e in E:
+    if e.op is not Ops.LOAD or not e.src: return None
+    idx = e.src[0]
+    while idx.op in (Ops.AFTER, Ops.CAST) and idx.src: idx = idx.src[0]
+    if idx.op is not Ops.INDEX or not idx.src: return None
+    meta = _register_stage_buffer_meta(_reg_base(idx.src[0]))
+    if meta is None: return None
+    roles.add(meta["role"])
+  return next(iter(roles)) if len(roles) == 1 else None
 
 def _pack_frag_tile(ctx:IselContext, carrier:UOp, base:int, dep:tuple[UOp,...], role:str) -> tuple[UOp,...]:
   E = _wmma_elems(carrier, 16)
@@ -1354,6 +1385,9 @@ def _pack_frag(ctx:IselContext, carrier:UOp, base:int, dep:tuple[UOp,...]=()) ->
   memo = ctx._frag_pack = getattr(ctx, "_frag_pack", {})
   memo_key = (_wmma_frag_reuse_key(carrier), base)
   if (pk := memo.get(memo_key)) is not None: return pk
+  if (pk := _pack_stage_fragment(ctx, carrier, dep)) is not None:
+    memo[memo_key] = pk
+    return pk
   E = _wmma_elems(carrier, 16)
   if getenv("PREFILL_DBUF_LDS_LOAD_SERIAL", 0) and (prev := getattr(ctx, "_frag_pack_prev", None)) is not None:
     dep = dep + (prev,)
@@ -1609,8 +1643,9 @@ def isel_wmma(ctx:IselContext, x:UOp):
       # 8-VGPR runs in the LOW window [_acc_top, _ab_top). Each fragment is packed ONCE (memoized in _pack_frag) and
       # shared by every subtile in its row/col -> WM+WN pack-sets total (not WM*WN), so the pack lifetimes never contend.
       cbase = _acc_base(ctx, (id(dreg), subtile))
-      abase = _ab_base(ctx, ("A", _wmma_frag_reuse_key(ctx, "A", x.src[0], ("no_proof", "A", id(x)))))
-      bbase = _ab_base(ctx, ("B", _wmma_frag_reuse_key(ctx, "B", x.src[1], ("no_proof", "B", id(x)))))
+      stage_backed = _register_stage_fragment_role(x.src[0]) == "A" and _register_stage_fragment_role(x.src[1]) == "B"
+      abase = 0 if stage_backed else _ab_base(ctx, ("A", _wmma_frag_reuse_key(ctx, "A", x.src[0], ("no_proof", "A", id(x)))))
+      bbase = 0 if stage_backed else _ab_base(ctx, ("B", _wmma_frag_reuse_key(ctx, "B", x.src[1], ("no_proof", "B", id(x)))))
       if cbase is None or abase is None or bbase is None:
         raise NotImplementedError(f"AMD:ISA WMMA resident A/B window [{_acc_top(ctx)},{FRAG_BASE}) exhausted (A={abase} B={bbase} C={cbase})")
       cin = [UOp(Ops.INS, dtypes.float32, src=(after,), arg=AMDOps.MOV, tag=_pin(cbase, i)) for i in range(8)]
@@ -1648,8 +1683,10 @@ def isel_wmma(ctx:IselContext, x:UOp):
   # Single-chain kernels (_c_low False) keep the legacy per-head high C + per-head A/B (k64-chain / single-tile tests).
   cbase = _acc_base(ctx, (id(head_acc[0]), head_acc[1]) if head_acc is not None else id(head.src[2])) if _c_low(ctx) else _frag_base(ctx, id(head.src[2]), 8)
   ab_key = "wmma_ab" if _c_low(ctx) else id(head.src[2])
-  abase = _frag_base(ctx, (ab_key, "A"), 8)
-  bbase = _frag_base(ctx, (ab_key, "B"), 8)
+  stage_backed = all(_register_stage_fragment_role(tile.src[0]) == "A" and
+                     _register_stage_fragment_role(tile.src[1]) == "B" for tile in chain)
+  abase = 0 if stage_backed else _frag_base(ctx, (ab_key, "A"), 8)
+  bbase = 0 if stage_backed else _frag_base(ctx, (ab_key, "B"), 8)
   if not (getenv("PREFILL_WMMA_CHAIN_AB_RESIDENT", 0) and _c_low(ctx)) and (cbase is None or abase is None or bbase is None):
     raise NotImplementedError(f"AMD:ISA WMMA fragment region [{FRAG_BASE},{FRAG_TOP}) exhausted (A={abase} B={bbase} C={cbase})")
   prev:UOp|None = None

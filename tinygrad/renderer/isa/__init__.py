@@ -13,6 +13,10 @@ class Register:
   def cons(self): return self._cons or (self,)
   def __repr__(self): return self.name
 
+@dataclass(frozen=True)
+class FixedRegisterUse(Register):
+  """An already-owned physical register operand, never a virtual definition."""
+
 class IselContext:
   def __init__(self, sink:UOp):
     self.uses = consumer_map_from_toposort(sink.toposort())

@@ -1,7 +1,7 @@
 import itertools
 from tinygrad.helpers import dedup, getenv
 from tinygrad.uop.ops import UOp, Ops, PatternMatcher, UPat
-from tinygrad.renderer.isa import ISARenderer, Register
+from tinygrad.renderer.isa import FixedRegisterUse, ISARenderer, Register
 from tinygrad.dtype import dtypes, PtrDType
 
 PSEUDO_OPS = {Ops.CONST, Ops.NOOP, Ops.AFTER, Ops.BARRIER, Ops.WAIT, Ops.GROUP}
@@ -28,6 +28,7 @@ class LinearScanRegallocContext:
       defs = u.tag if isinstance(u.tag, tuple) and all(isinstance(v, Register) for v in u.tag) else ()
       src_regs = tuple(s.reg for s in dedup(u.src) if not (u.op is Ops.END and getenv("REGALLOC_END_NO_SOURCE_LIVE", 0) and s.op is not Ops.RANGE))
       for v in defs + src_regs:
+        if isinstance(v, FixedRegisterUse): continue
         if isinstance(v, Register): lr.setdefault(v, []).insert(0, len(uops) - 1 - i)
       for v in defs:
         if getenv("REGALLOC_NO_LOOP_EXTEND_ADDR", 0) and u.op is Ops.INS and str(u.arg).split(".", 1)[-1] in {"V_OFFSET", "V_IADD"}:
@@ -144,6 +145,7 @@ class LinearScanRegallocContext:
         # HACK: cause of later hacks to lower range
         if u.op is Ops.END: continue
         if not isinstance(v:=s.reg, Register): continue
+        if isinstance(v, FixedRegisterUse): continue
         if v not in live: live[v] = fill(v, i)
         self.reals.setdefault(i, {})[v] = live[v]
 
@@ -245,7 +247,8 @@ def regalloc_rewrite(ctx:LinearScanRegallocContext, x:UOp):
   for j,s in enumerate(x.src):
     # v here is the virtual defined by the original s as s is the rewritten version
     v = ctx.uops[i].src[j].reg
-    if i in ctx.reals and v in ctx.spills: nsrc.append(ctx.ren.fill(ctx.spills[v], ctx.vdef(v), ctx.reals[i][v]))
+    if isinstance(v, FixedRegisterUse): nsrc.append(s)
+    elif i in ctx.reals and v in ctx.spills: nsrc.append(ctx.ren.fill(ctx.spills[v], ctx.vdef(v), ctx.reals[i][v]))
     elif isinstance(v, Register) and (i, v) in ctx.remats:
       rs, rb = ctx.remat(v, i)
       before += rb

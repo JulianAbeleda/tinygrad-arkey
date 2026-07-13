@@ -304,8 +304,11 @@ class Scheduler:
           candidate_axes = None
           if candidate_geometry is not None:
             # Consume the complete exact candidate while the original scalar A/B templates are still available.
-            from tinygrad.codegen.opt.kernel_lds import derive_precontract_factors
-            try: factors = derive_precontract_factors(candidate_geometry, tc)
+            from tinygrad.codegen.opt.kernel_lds import derive_precontract_factors, derive_precontract_shape_factors
+            candidate_pipeline = getattr(self.ast.arg.candidate_context, "pipeline", None)
+            register_candidate = getattr(getattr(candidate_pipeline, "storage", None), "kind", None) == "global_register_resident"
+            try: factors = (derive_precontract_shape_factors(candidate_geometry, tc) if register_candidate else
+                            derive_precontract_factors(candidate_geometry, tc))
             except ValueError as exc: raise KernelOptError(str(exc)) from exc
             axes[0], subtile_n = self.shift_to(axes[0], factors.subtiles_n, AxisType.UPCAST)
             axes[1], subtile_m = self.shift_to(axes[1], factors.subtiles_m, AxisType.UPCAST)
