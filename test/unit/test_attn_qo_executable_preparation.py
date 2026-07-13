@@ -17,10 +17,17 @@ def test_exact_direct_attn_qo_compiles_to_real_program_and_passes_evidence():
 def test_exact_lds_attn_qo_compiles_to_real_program_and_preserves_transport_identity():
   prepared = compile_attn_qo_program(transport="lds")
   assert prepared["transport"] == "lds"
-  assert prepared["compile_evidence"]["passed"] is True
-  assert prepared["compile_evidence"]["transport"] == "lds"
-  assert prepared["compile_evidence"]["schedule"]["lds_bytes"] == 20480
-  assert prepared["compile_evidence"]["capture"]["dispatch_permitted"] is False
+  ev = prepared["compile_evidence"]
+  assert ev["passed"] is True
+  assert ev["transport"] == "lds"
+  # The lds candidate is now the proven route_pf16_graph_gemm WMMA-LDS kernel:
+  # strict-pure compiler-rendered surface, two-buffer 40960-byte LDS.
+  assert ev["surface"]["strict_pure"] is True
+  assert ev["surface"]["generator"] == "route_pf16_graph_gemm.generated_lds_matmul_transport"
+  assert ev["schedule"]["lds_bytes"] == 40960 and ev["schedule"]["buffer_count"] == 2
+  assert ev["structural"]["emitted_proof"]["allocation_bytes"] == 40960
+  assert ev["argument_order"] == ["output", "a", "b"]
+  assert ev["capture"]["dispatch_permitted"] is False
   assert prepared["dispatch_performed"] is False
 
 

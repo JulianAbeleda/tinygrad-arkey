@@ -314,11 +314,51 @@ def _case_arrays(case: str, *, m:int=M, n:int=N, k:int=K) -> tuple[np.ndarray, n
   return a, b, ref
 
 
-def run(payload: dict[str, Any], candidate_hash: str, *, case: str = "constant",
-        atol: float = 0.125, rtol: float = 0.002,
-        compile_artifact: dict[str, Any] | None = None,
-        prepared_out:list[PreparedCandidateExecution]|None=None) -> dict[str, Any]:
-  """Compile and execute the exact candidate through its production route."""
+@dataclass
+class PreparedCandidateCompilation:
+  """Compile-only truth for the exact candidate (NO dispatch performed).
+
+  Everything here is derived from the real compiled tinygrad PROGRAM emitted by
+  ``route_pf16_graph_gemm`` for the exact candidate: the compiled linear graph,
+  the exact candidate PROGRAM, its structural/transport/surface/binary proofs,
+  and the admitted (two-buffer aware) capability.  Constructing it neither runs
+  the kernel, transfers output, nor inspects the runtime cache.
+  """
+  compiled: UOp
+  program: UOp
+  output: Any
+  admission: Any
+  structural_binding: dict[str, Any]
+  program_identity: dict[str, Any]
+  transport_evidence: dict[str, Any]
+  surface: dict[str, Any]
+  lds_truth: dict[str, Any]
+  transport: Any
+  context: Any
+  identity: str
+  workload: dict[str, Any]
+  effective: dict[str, Any]
+
+
+def compile_candidate_program(payload: dict[str, Any], candidate_hash: str, *,
+                              inputs: tuple[Any, Any] | None = None,
+                              compile_artifact: dict[str, Any] | None = None) -> PreparedCandidateCompilation:
+  """Compile the exact candidate through its production route (COMPILE ONLY).
+
+  This helper OWNS the compile-only half of :func:`run`: (1) canonical hash
+  validation; (2) candidate-set admission via ``admit_full_kernel_candidate_set``
+  (the two-buffer GFX1100_TWO_BUFFER_STAGE1 capability is only reachable through
+  the set path); (3) the exact generated-transport env (including the role flag,
+  which the route otherwise defaults to ffn_gate_up); (4) the ``Linear`` role
+  binding; (5) ``route_pf16_graph_gemm``; (6) ``schedule_linear`` + ``compile_linear``;
+  (7) exact PROGRAM extraction via :func:`_candidate_programs`; (8) candidate
+  context / transport / surface / structural / binary identity validation.  It
+  RETURNS WITHOUT ``run_linear``, output transfer, or runtime-cache inspection.
+
+  ``inputs`` defaults to ``Tensor.empty`` (compile only); dispatching callers
+  pass real device tensors so the compiled graph they receive is bound to known
+  inputs.
+  """
   identity = canonical_candidate_hash(payload)
   if candidate_hash != identity: raise ValueError("candidate hash does not match exact payload")
   from extra.qk.runtime_specs import admit_full_kernel_candidate_set, capability_transport, full_kernel_candidate_set_from_legacy
@@ -327,13 +367,12 @@ def run(payload: dict[str, Any], candidate_hash: str, *, case: str = "constant",
   role, shape = workload["role"], workload["shape"]
   if role not in SUPPORTED_ROLES: raise ValueError(f"execution authority does not support role {role!r}")
   m, n, k = (shape[x] for x in ("m", "n", "k"))
-  admitted_workload = {"profile": workload["profile"], "role": role, "shape": dict(shape),
-                       "target": dict(workload["target"])}
+  profile = workload["profile"]
 
-  from tinygrad import Device, Tensor
+  from tinygrad import Tensor
   from tinygrad.codegen import to_program_cache
   from tinygrad.codegen.opt import postrange
-  from tinygrad.engine.realize import compile_linear, run_linear, runtime_cache
+  from tinygrad.engine.realize import compile_linear
   from tinygrad.helpers import getenv
   from extra.qk.prefill_graph_gemm_route import route_pf16_graph_gemm
   from extra.qk.pure_search_guard import effective_routes
@@ -342,9 +381,12 @@ def run(payload: dict[str, Any], candidate_hash: str, *, case: str = "constant",
     bias = None
     _prefill_graph_role = role
 
-  a_np, b_np, ref = _case_arrays(case, m=m, n=n, k=k)
+  # The role flag is critical: prefill_graph_gemm_route defaults candidate-set
+  # role enablement to ffn_gate_up only, so the exact attn_qo/attn_kv/ffn_down
+  # candidate would silently decline without it.
   env = {"BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON": json.dumps(payload, separators=(",", ":")),
          "BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH": identity,
+         "BOLTBEAM_FULL_KERNEL_CANDIDATE_ROLES": role, "BOLTBEAM_MODEL_PROFILE": profile,
          "PREFILL_GRAPH_GEMM": "1", "PREFILL_WMMA_LDS_PRIMITIVE": "1",
          "PREFILL_WMMA_PIPE_PRIMITIVE": "0",
          "PREFILL_DBUF": "0", "PURE_MACHINE_SEARCH_ALLOW_ROLLBACK": "0"}
@@ -355,7 +397,8 @@ def run(payload: dict[str, Any], candidate_hash: str, *, case: str = "constant",
   try:
     with _temporary_env(env):
       getenv.cache_clear(); to_program_cache.clear()
-      x, w = Tensor(a_np), Tensor(b_np)
+      x, w = inputs if inputs is not None else (Tensor.empty(m, k, dtype=dtypes.half),
+                                                Tensor.empty(n, k, dtype=dtypes.half))
       out = route_pf16_graph_gemm(Linear(), x, w=w)
       if out is None: raise RuntimeError(f"exact route declined {role} shape {(m, n, k)}")
       linear = out.schedule_linear()
@@ -377,39 +420,76 @@ def run(payload: dict[str, Any], candidate_hash: str, *, case: str = "constant",
                      "transport": transport.storage, **transport.truth}
                     if transport.storage == "direct_l2" else _structural_binding(payload, program, lds))
       effective = next(row for row in effective_routes(os.environ) if row["family"] == "prefill_gemm")
-      if not structural["pre_gpu_eligible"]:
-        route_id = effective["effective_route"]
-        return {"schema": SCHEMA, "canonical_identity": identity, "route_id": route_id,
-                "capability_id": admitted.capability.capability_id, "workload": admitted_workload,
-                "selected_route_id": route_id, "environment": {"device": str(Device.DEFAULT), "git": _git_state()},
-                "route_binding_complete": False, "route_authority": effective,
-                "structural_binding": structural, "binding_errors": list(structural["errors"]), "program": hashes,
-                "runtime": {"status": "not_run", "executed_binary_sha256": None, "binary_equal": None},
-                "surface": surface, "executable_truth": {
-                  "selected_route_id": route_id, "selected_surface": SELECTED_SURFACE,
-                  "manifest_route_backed": True, "fallback_used": False, "strict_pure": False,
-                  "compiler_surface_forbidden_markers_absent": surface["strict_pure"],
-                  "ops_ins_absent": surface["ops_ins_count"] == 0,
-                  "asm_source_absent": surface["source_kind"] != "native_isa",
-                  "candidate_context_equal": (context.schema_version == payload["schema_version"] and
-                                                context.canonical_identity == identity),
-                  "runtime_binary_matches_candidate": None, **lds},
-                "correctness": {"status": "not_run", "reason": "emitted_program_structure_unproven",
-                                "case": case, "comparison": "not_run", "elements": 0, "passed": False},
-                "fallback_used": bool(effective["rolled_back_to_oracle"]), "strict_pure": False,
-                "runtime_binary_matches_candidate": None, "passed": False}
-      prepared = _prepared_candidate(compiled, program, out, ref, identity)
-      run_linear(compiled, jit=True, wait=True)
-      output = out.float().numpy()
-      runtime = runtime_cache.get((program.key, str(Device.DEFAULT)))
-      if runtime is None: runtime = runtime_cache.get((program.key, Device.DEFAULT))
-      loaded = getattr(runtime, "lib", None)
-      if not isinstance(loaded, bytes): raise RuntimeError("exact executed binary absent from runtime cache")
-      loaded_hash = _sha256(loaded)
   finally:
     postrange._WARMSTART_OPTS, postrange._WARMSTART_CANDIDATE_CONTEXTS = old_opts, old_contexts
     postrange._WARMSTART_LOCAL_STAGE_KEYS = old_local
     getenv.cache_clear(); to_program_cache.clear()
+
+  transport_evidence = {"transport": transport.storage, "passed": transport.passed,
+                        "errors": list(transport.errors), "truth": dict(transport.truth)}
+  return PreparedCandidateCompilation(compiled=compiled, program=program, output=out, admission=admitted,
+    structural_binding=structural, program_identity=hashes, transport_evidence=transport_evidence,
+    surface=surface, lds_truth=lds, transport=transport, context=context, identity=identity,
+    workload=workload, effective=effective)
+
+
+def run(payload: dict[str, Any], candidate_hash: str, *, case: str = "constant",
+        atol: float = 0.125, rtol: float = 0.002,
+        compile_artifact: dict[str, Any] | None = None,
+        prepared_out:list[PreparedCandidateExecution]|None=None) -> dict[str, Any]:
+  """Compile and execute the exact candidate through its production route.
+
+  The compile-only half is owned by :func:`compile_candidate_program`; this
+  function adds only the dispatch + correctness half on top.
+  """
+  identity = canonical_candidate_hash(payload)
+  if candidate_hash != identity: raise ValueError("candidate hash does not match exact payload")
+
+  from tinygrad import Device, Tensor
+  from tinygrad.engine.realize import run_linear, runtime_cache
+
+  wshape = payload["workload"]["shape"]
+  m, n, k = wshape["m"], wshape["n"], wshape["k"]
+  a_np, b_np, ref = _case_arrays(case, m=m, n=n, k=k)
+  prepared = compile_candidate_program(payload, candidate_hash, inputs=(Tensor(a_np), Tensor(b_np)),
+                                       compile_artifact=compile_artifact)
+  admitted, workload = prepared.admission, prepared.workload
+  role, shape = workload["role"], workload["shape"]
+  admitted_workload = {"profile": workload["profile"], "role": role, "shape": dict(shape),
+                       "target": dict(workload["target"])}
+  compiled, program, out = prepared.compiled, prepared.program, prepared.output
+  context, surface, lds, hashes = prepared.context, prepared.surface, prepared.lds_truth, prepared.program_identity
+  transport, structural, effective = prepared.transport, prepared.structural_binding, prepared.effective
+
+  if not structural["pre_gpu_eligible"]:
+    route_id = effective["effective_route"]
+    return {"schema": SCHEMA, "canonical_identity": identity, "route_id": route_id,
+            "capability_id": admitted.capability.capability_id, "workload": admitted_workload,
+            "selected_route_id": route_id, "environment": {"device": str(Device.DEFAULT), "git": _git_state()},
+            "route_binding_complete": False, "route_authority": effective,
+            "structural_binding": structural, "binding_errors": list(structural["errors"]), "program": hashes,
+            "runtime": {"status": "not_run", "executed_binary_sha256": None, "binary_equal": None},
+            "surface": surface, "executable_truth": {
+              "selected_route_id": route_id, "selected_surface": SELECTED_SURFACE,
+              "manifest_route_backed": True, "fallback_used": False, "strict_pure": False,
+              "compiler_surface_forbidden_markers_absent": surface["strict_pure"],
+              "ops_ins_absent": surface["ops_ins_count"] == 0,
+              "asm_source_absent": surface["source_kind"] != "native_isa",
+              "candidate_context_equal": (context.schema_version == payload["schema_version"] and
+                                            context.canonical_identity == identity),
+              "runtime_binary_matches_candidate": None, **lds},
+            "correctness": {"status": "not_run", "reason": "emitted_program_structure_unproven",
+                            "case": case, "comparison": "not_run", "elements": 0, "passed": False},
+            "fallback_used": bool(effective["rolled_back_to_oracle"]), "strict_pure": False,
+            "runtime_binary_matches_candidate": None, "passed": False}
+  prepared_execution = _prepared_candidate(compiled, program, out, ref, identity)
+  run_linear(compiled, jit=True, wait=True)
+  output = out.float().numpy()
+  runtime = runtime_cache.get((program.key, str(Device.DEFAULT)))
+  if runtime is None: runtime = runtime_cache.get((program.key, Device.DEFAULT))
+  loaded = getattr(runtime, "lib", None)
+  if not isinstance(loaded, bytes): raise RuntimeError("exact executed binary absent from runtime cache")
+  loaded_hash = _sha256(loaded)
 
   abs_err = np.abs(output - ref)
   correct = bool(np.all(np.isfinite(output)) and np.allclose(output, ref, atol=atol, rtol=rtol))
@@ -426,7 +506,7 @@ def run(payload: dict[str, Any], candidate_hash: str, *, case: str = "constant",
   binding_errors = list(structural["errors"])
   if not route_surface_agrees: binding_errors.append(f"manifest effective route {route_id!r} does not describe selected generated surface")
   passed = bool(correct and binary_equal and context_equal and route_strict_pure and not binding_errors)
-  if prepared_out is not None: prepared_out.append(prepared)
+  if prepared_out is not None: prepared_out.append(prepared_execution)
   return {"schema": SCHEMA, "canonical_identity": identity, "route_id": route_id,
           "capability_id": admitted.capability.capability_id, "workload": admitted_workload,
           "selected_route_id": route_id, "environment": {"device": str(Device.DEFAULT), "git": _git_state()},

@@ -12,7 +12,7 @@ from typing import Any, Callable
 from extra.qk.prefill.pure_register_direct_l2_decision import candidate
 from extra.qk.prefill.pure_single_buffer_evaluation_gate import canonical_candidate_hash
 from extra.qk.prefill.register_hardware_promotion import EXACT_ROLE, TARGET
-from extra.qk.runtime_specs import admit_full_kernel_candidate
+from extra.qk.runtime_specs import admit_full_kernel_candidate_set, full_kernel_candidate_set_from_legacy
 from tinygrad.runtime.execution_bridge_contracts import dispatch_state
 
 SCHEMA = "attn-qo-direct-l2-adapter.v1"
@@ -66,8 +66,9 @@ def prepare_exact_pair(*, direct_payload: dict[str, Any] | None,
     if workload.get("shape") != shape: errors.append(f"{name} workload shape is not {shape_tuple}")
     if workload.get("target") != target: errors.append(f"{name} workload target is not the row target")
     identity = direct_id if name == "direct_l2" else lds_id
-    try: admit_full_kernel_candidate(payload, identity, profile=profile, role=role,
-                                     shape=shape_tuple, target=target)
+    # Set-path admission so the two-buffer LDS candidate admits its two-buffer
+    # capability (the singular admit only supports single-buffer stage1).
+    try: admit_full_kernel_candidate_set(full_kernel_candidate_set_from_legacy(payload, identity))
     except Exception as exc: errors.append(f"{name} is not admitted by single_buffer authority: {exc}")
   if errors: return _blocked(*errors, canonical_identity=direct_id, pair_key=pair_key)
   return {"schema": SCHEMA, "status": "prepared", "decision": "pending_external_evidence",
