@@ -1,3 +1,5 @@
+import pytest
+
 from extra.qk.prefill.pure_register_evaluation_gate import (COMPILE_SCHEMA, REGISTER_STORAGE, compile_only,
   evaluate, final_resources, machine_search, runtime_compile_resource_eligibility, validate_role_attribution)
 
@@ -16,6 +18,14 @@ def _compile(**overrides):
                                      {"logical_role": "B", "bank": "vgpr", "start": 8, "end": 16}]}
   row = {"schema": COMPILE_SCHEMA, "canonical_identity": IDENTITY, "binary_sha256": BINARY,
          "passed": True, "surface": {"strict_pure": True, "ops_ins_count": 0, "source_kind": "compiler_rendered"},
+         "capture": {"mode": "compile_only", "dispatch_permitted": False,
+                     "resource_authority": "final_code_object_descriptor", "allocator_authority": "final_regalloc"},
+         "target_evidence": {"authority": "final_program", "target": "gfx1100", "abi": "amdgpu_kernel"},
+         "instruction_order_proof": {"schema": "prefill-pure-register-instruction-order.v1",
+           "authority": "final_disassembly", "passed": True, "errors": [],
+           "disassembly_sha256": "d" * 64,
+           "positions": {"global_load": 0, "vmcnt0_wait": 1, "stage_write": 2, "stage_read": 3, "wmma": 4},
+           "lds_instruction_lines": []},
          "pipeline": {"storage_kind": REGISTER_STORAGE, "lds_bytes": 0,
                       "consumer_identity": "amd.rdna3.wmma.fp16.v1",
                       "register_mapping": {"backend": "amd_vgpr", "addressing": "sequential",
@@ -134,6 +144,29 @@ def test_final_resource_gate_rejects_host_estimates_and_spills():
   artifact = _compile(resource_artifact=spill_resource)
   compiled = compile_only({"canonical_identity": IDENTITY}, artifact)
   assert compiled["passed"] is True and final_resources(compiled)["passed"] is False
+
+
+def test_compile_gate_rejects_estimated_or_dispatch_capable_capture():
+  estimated = _compile(capture={"mode": "compile_only", "dispatch_permitted": False,
+                                "resource_authority": "host_estimate", "allocator_authority": "final_regalloc"})
+  assert any("estimated" in error for error in compile_only({"canonical_identity": IDENTITY}, estimated)["errors"])
+  dispatching = _compile(capture={"mode": "compile_only", "dispatch_permitted": True,
+                                  "resource_authority": "final_code_object_descriptor", "allocator_authority": "final_regalloc"})
+  assert any("non-dispatching" in error for error in compile_only({"canonical_identity": IDENTITY}, dispatching)["errors"])
+
+
+@pytest.mark.parametrize("field", ["target_evidence", "resource_artifact"])
+def test_compile_gate_rejects_target_or_abi_identity_mismatch(field):
+  artifact = _compile()
+  if field == "target_evidence":
+    artifact["target_evidence"] = {"authority": "final_program", "target": "gfx1200", "abi": "amdgpu_kernel"}
+  else:
+    artifact["resource_artifact"] = artifact["resource_artifact"] | {"abi": "amdgpu_wave"}
+  assert compile_only({"canonical_identity": IDENTITY}, artifact)["passed"] is False
+
+
+def test_compile_gate_rejects_non_sha256_binary_identity():
+  assert compile_only({"canonical_identity": IDENTITY}, _compile(binary_sha256="z" * 64))["passed"] is False
 
 
 def test_machine_search_requires_every_role_and_typed_policy_fields():

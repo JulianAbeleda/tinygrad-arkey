@@ -51,7 +51,7 @@ def _binary_hash(row: dict[str, Any] | None) -> str | None:
   if not isinstance(row, dict): return None
   program = row.get("program") if isinstance(row.get("program"), dict) else {}
   value = row.get("binary_sha256", program.get("binary_sha256"))
-  return value if isinstance(value, str) and len(value) == 64 else None
+  return value if isinstance(value, str) and len(value) == 64 and all(c in "0123456789abcdef" for c in value) else None
 
 
 def _result(stage: str, passed: bool, errors: Iterable[str], **evidence: Any) -> dict[str, Any]:
@@ -76,6 +76,23 @@ def compile_only(candidate: dict[str, Any] | None, artifact: dict[str, Any] | No
     errors.append("compile artifact identity does not match candidate payload")
   binary = _binary_hash(artifact)
   if binary is None: errors.append("compile artifact has no binary hash")
+  capture = artifact.get("capture") if isinstance(artifact.get("capture"), dict) else {}
+  if capture.get("mode") != "compile_only" or capture.get("dispatch_permitted") is not False:
+    errors.append("artifact does not prove non-dispatching compile-only capture")
+  if capture.get("resource_authority") != "final_code_object_descriptor":
+    errors.append("resource evidence is missing, estimated, or non-final")
+  if capture.get("allocator_authority") != "final_regalloc":
+    errors.append("allocator interval evidence is missing, estimated, or non-final")
+  target_evidence = artifact.get("target_evidence") if isinstance(artifact.get("target_evidence"), dict) else {}
+  if target_evidence != {"authority": "final_program", "target": "gfx1100", "abi": "amdgpu_kernel"}:
+    errors.append("final target/ABI evidence is missing or mismatched")
+  order = artifact.get("instruction_order_proof") if isinstance(artifact.get("instruction_order_proof"), dict) else {}
+  if order.get("schema") != "prefill-pure-register-instruction-order.v1" or \
+     order.get("authority") != "final_disassembly" or order.get("passed") is not True:
+    errors.append("final instruction-order proof is unavailable or did not pass")
+  disassembly_hash = order.get("disassembly_sha256")
+  if not isinstance(disassembly_hash, str) or len(disassembly_hash) != 64 or any(c not in "0123456789abcdef" for c in disassembly_hash):
+    errors.append("final instruction-order proof lacks disassembly identity")
   resource_artifact = artifact.get("resource_artifact")
   resource_obj = None
   if not isinstance(resource_artifact, dict):
@@ -86,7 +103,7 @@ def compile_only(candidate: dict[str, Any] | None, artifact: dict[str, Any] | No
       resource_obj = AMDResourceArtifact.from_json(resource_artifact)
       if resource_obj.target not in ("gfx1100", "AMD:gfx1100"):
         errors.append("final AMD resource artifact target is not gfx1100")
-      validate_amd_resource_artifact(resource_obj, expected_candidate_identity=identity)
+      validate_amd_resource_artifact(resource_obj, expected_target="gfx1100", expected_abi="amdgpu_kernel", expected_candidate_identity=identity)
       if binary is not None and resource_obj.binary_sha256 != binary:
         errors.append("final resource artifact binary identity differs from compile binary")
     except (TypeError, ValueError) as exc:
@@ -122,7 +139,7 @@ def compile_only(candidate: dict[str, Any] | None, artifact: dict[str, Any] | No
     else:
       required_roles = tuple(raw_roles)
       try:
-        validate_amd_resource_artifact(resource_obj, expected_candidate_identity=identity,
+        validate_amd_resource_artifact(resource_obj, expected_target="gfx1100", expected_abi="amdgpu_kernel", expected_candidate_identity=identity,
                                        required_roles=required_roles)
       except (TypeError, ValueError) as exc:
         errors.append(f"register physical mapping is invalid: {exc}")

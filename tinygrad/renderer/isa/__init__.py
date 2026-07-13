@@ -35,6 +35,7 @@ class PreRegAllocContext:
 class ISARenderer(Renderer):
   pre_isel_matcher: PatternMatcher
   isel_matcher: PatternMatcher
+  post_isel_matcher: PatternMatcher|None = None
   pre_regalloc_matcher: PatternMatcher|None = None
   post_regalloc_matcher: PatternMatcher
 

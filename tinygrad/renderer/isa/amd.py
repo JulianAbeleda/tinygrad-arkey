@@ -1741,10 +1741,14 @@ def _chain_epilogue_stores(ctx:IselContext, x:UOp):
     new_off = off.replace(src=off.src + (prev,))
     new_st = st.replace(src=(new_off,) + st.src[1:])
     subs[st] = new_st; prev = new_st
-  return x.substitute(subs)
+  ret = x.substitute(subs)
+  if getenv("EPICHAIN_DEBUG", 0):
+    chained = [u for u in ret.toposort() if u.op is Ops.INS and u.arg is AMDOps.GLOBAL_STORE and
+               u.src and any(s.op is Ops.INS and s.arg is AMDOps.GLOBAL_STORE for s in u.src[0].src)]
+    print(f"EPICHAIN c_low={_c_low(ctx)} stores={len(stores)} chained={len(chained)}")
+  return ret
 
 isel_matcher = PatternMatcher([
-  (UPat(Ops.SINK, name="x"), _chain_epilogue_stores),   # L5: serialize the multi-tile store epilogue (fires last, root)
   (UPat(Ops.WAIT, name="x"), isel_typed_wait),
   (UPat(Ops.PARAM, name="x"), isel_param),
   (UPat(Ops.DEFINE_VAR, name="x"), isel_var),
@@ -1791,6 +1795,12 @@ isel_matcher = PatternMatcher([
   (UPat(Ops.WMMA, name="x"), isel_wmma),
   # catch-all register allocation seed (x86 alloc_vregs analog): tag None -> fresh vreg; physical -> constrained vreg
   (UPat(Ops.INS, name="x"), lambda ctx, x: alloc_vregs(ctx, x)),
+])
+
+# Store chaining requires the fully-selected instruction graph.  Running this from isel_matcher sees the SINK before
+# its STORE children have become GLOBAL_STORE instructions, leaving all output addresses live across the reduction.
+post_isel_matcher = PatternMatcher([
+  (UPat(Ops.SINK, name="x"), _chain_epilogue_stores),
 ])
 
 def _strip_linear_order_deps(x:UOp):
@@ -2281,6 +2291,7 @@ class AMDISARenderer(ISARenderer):
   tensor_cores = amd_rdna3
   pre_isel_matcher = pre_isel_matcher
   isel_matcher = isel_matcher
+  post_isel_matcher = post_isel_matcher
   pre_regalloc_matcher = pre_regalloc_matcher
   post_regalloc_matcher = post_regalloc_matcher
   # EXP2 listed as natively supported -> the shared transcendental pass leaves Ops.EXP2 intact (no VALU polynomial)
