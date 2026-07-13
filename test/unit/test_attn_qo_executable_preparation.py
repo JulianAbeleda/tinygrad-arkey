@@ -1,6 +1,7 @@
 import pytest
 
-from extra.qk.prefill.attn_qo_executable_preparation import compile_attn_qo_program
+from extra.qk.prefill.attn_qo_executable_preparation import compile_attn_qo_pair, compile_attn_qo_program
+from extra.qk.prefill.attn_qo_direct_l2_adapter_20260712 import prepare_exact_pair
 from tinygrad.runtime.bridge import prepare_executable
 from tinygrad.uop.ops import Ops
 
@@ -42,3 +43,14 @@ def test_both_transports_join_to_the_shared_non_dispatching_bridge(transport):
   with patch("tinygrad.runtime.bridge.get_runtime", return_value=Runtime()):
     handle = prepare_executable(prepared["program"], prepared["compile_evidence"], device="AMD")
   assert handle.artifact.binary == binary
+
+
+def test_exact_pair_is_admitted_by_the_existing_pair_authority():
+  prepared = compile_attn_qo_pair()
+  direct, lds = prepared["transports"]["direct_l2"], prepared["transports"]["lds"]
+  result = prepare_exact_pair(
+    direct_payload=direct["candidate"], lds_payload=lds["candidate"],
+    direct_binary_sha256=direct["compile_evidence"]["binary_sha256"],
+    lds_binary_sha256=lds["compile_evidence"]["binary_sha256"], pair_key=prepared["pair_key"])
+  assert result["status"] == "prepared"
+  assert result["candidates"]["direct_l2"]["binary_sha256"] != result["candidates"]["lds"]["binary_sha256"]

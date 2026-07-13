@@ -234,7 +234,9 @@ through `extra/qk/prefill/attn_qo_executable_preparation.py`. The exact LDS
 candidate now also produces a real `Ops.PROGRAM`, using the existing
 `_emit_schedule -> build_gemm_lds2` route and a separate generic transport
 compile-evidence schema. Both artifacts join to `tinygrad.runtime.bridge` with
-the actual final binary hash; construction remains non-dispatching.
+the actual final binary hash; construction remains non-dispatching. The pair
+helper also joins both artifacts through the existing semantic pair authority,
+preserving one `pair_key`/schedule digest while requiring distinct binaries.
 
 The generated LDS *precontract* lowering is still blocked by its
 multidimensional `WITH_LOCAL` / register-allocation failures. That is no

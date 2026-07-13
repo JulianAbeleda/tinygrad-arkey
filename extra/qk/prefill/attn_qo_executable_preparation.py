@@ -93,6 +93,7 @@ def compile_attn_qo_program(*, transport: str = "direct_l2", target: str = "AMD:
       runtime_binding={"profile": PROFILE, "role": ROLE,
                        "shape": {"m": SHAPE[0], "n": SHAPE[1], "k": SHAPE[2]}, "target": dict(TARGET)})
     return {"schema": "attn_qo.executable_preparation.v1", "transport": transport,
+            "pair_key": pair["pair_key"], "schedule_digest": pair["schedule_digest"],
             "candidate": candidate_row["payload"], "canonical_identity": candidate_row["canonical_identity"],
             "program": program, "compile_evidence": evidence, "dispatch_performed": False}
   spec = describe_prefill_schedule(SHAPE[1], SHAPE[2], role=ROLE)
@@ -119,8 +120,20 @@ def compile_attn_qo_program(*, transport: str = "direct_l2", target: str = "AMD:
   if not attachments: raise RuntimeError("direct attn_qo PROGRAM has no compiler-owned final capture")
   evidence = _direct_compile_evidence(admission, attachments[-1])
   return {"schema": "attn_qo.executable_preparation.v1", "transport": transport,
+          "pair_key": pair["pair_key"], "schedule_digest": pair["schedule_digest"],
           "candidate": candidate_row["payload"], "canonical_identity": candidate_row["canonical_identity"],
           "program": program, "compile_evidence": evidence, "dispatch_performed": False}
 
 
-__all__ = ["compile_attn_qo_program"]
+def compile_attn_qo_pair(*, target: str = "AMD:ISA:gfx1100") -> dict[str, Any]:
+  """Compile both exact transports while preserving one semantic pair key."""
+  pair = generate_pair()
+  prepared = {name: compile_attn_qo_program(transport=name, target=target) for name in ("direct_l2", "lds")}
+  if any(row["pair_key"] != pair["pair_key"] or row["schedule_digest"] != pair["schedule_digest"]
+         for row in prepared.values()):
+    raise RuntimeError("compiled transport artifacts do not share the generated semantic pair identity")
+  return {"schema": "attn_qo.executable_pair_preparation.v1", "pair_key": pair["pair_key"],
+          "schedule_digest": pair["schedule_digest"], "transports": prepared, "dispatch_performed": False}
+
+
+__all__ = ["compile_attn_qo_program", "compile_attn_qo_pair"]
