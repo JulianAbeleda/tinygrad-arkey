@@ -228,6 +228,14 @@ be coupled into compilation or dispatch.
 - Add a CPU/mock runtime test proving artifact creation and lifetime without
   touching AMD hardware.
 
+Current implementation status: the exact `attn_qo` direct-L2 candidate now
+produces a real tinygrad `Ops.PROGRAM` and passing compile evidence through
+`extra/qk/prefill/attn_qo_executable_preparation.py`. The exact LDS pair is not
+yet executable through the same candidate payload: its current local-stage
+lowering reaches the renderer's multidimensional `WITH_LOCAL` rejection or
+register allocation failure (`Inc 0: no spills`). The LDS side must be bound
+to the existing generated LDS route before paired benchmarking.
+
 ### Phase C — generic buffer/launch adapter
 
 - Implement allocation and buffer-role binding with `Tensor`/`Buffer`.
