@@ -60,3 +60,7 @@ Source: read-only flag classification 2026-07-10 (5-family audit). Route ground 
 ## Retired serving experiments
 
 - **PREFILL_CHUNKED / _CHUNKED_EXPERIMENTAL / _CHUNK_RESIDENT_BLOCKS** — REMOVED 2026-07-13. The chunked per-layer fp16 overlay replayed stale captured state and produced AMD MMU faults. Superseded by `PREFILL_ROUTE=direct_packed` for memory-frugal 14B/32B prefill; its implementation, route, admission accounting, harness switch, and tests were removed together.
+
+## Retired native-ISA experiments
+
+- **AMD_ISA_N1B / AMD_ISA_N1B_GIDX** — REMOVED 2026-07-13. Uniform address scalarization was dead on the live clamped address path and triggered an SGPR-datapath fault. The opt-in tagging, SALU operations, scalar register pool, and lowering were removed; the independent SGPR loop-counter bridge remains.

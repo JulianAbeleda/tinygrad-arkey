@@ -176,7 +176,7 @@ proof tags that downstream renderer policy consumes.
 | `tinygrad/renderer/isa/amd.py` | `PREFILL_WMMA_CHAIN_AB_RESIDENT`, resident A/B proof-key reuse | QK/prefill policy | 45 | Policy callbacks for proof keys | Not safe without occupancy/register/source hash proof. |
 | `tinygrad/renderer/isa/amd.py` | `_pack_withlocal_lds_stores`, `_pack_b_tilekey_lds_stores`, `PREFILL_LDS_PACK_WITHLOCAL_B128` | QK/prefill policy | 95 | None beyond tags | Changes pre-isel UOps and b128 store emission; needs emitted-code proof. |
 | `tinygrad/renderer/isa/amd.py` | `audit_dbuf_d3a_stage` label-resolution marker | debug/proof marker | 8 | None | Move/delete only after proving no live route consumes marker. |
-| `tinygrad/renderer/isa/amd.py` | `AMD_ISA_N1B`, waitcnt/scheduler tuning flags | generic AMD substrate, some search knobs | 120 | Core env flags | Keep until a separate generic AMD tuning interface exists. |
+| `tinygrad/renderer/isa/amd.py` | waitcnt/scheduler tuning flags | generic AMD substrate, some search knobs | 120 | Core env flags | Keep until a separate generic AMD tuning interface exists; failed `AMD_ISA_N1B` was removed. |
 
 ### Proof Matrix
 

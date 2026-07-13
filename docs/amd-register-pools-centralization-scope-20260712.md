@@ -43,7 +43,7 @@ Current hard-coded pools:
 
 - pointer pairs `s6:s38` (`SPTR_POOL`, even aligned);
 - scalar loop counters `s40:s63` (`SCNT_POOL`);
-- scalar address/math temporaries `s64:s103` (`SCALAR_TMP`).
+- scalar address/math temporaries `s64:s103` (`SCALAR_TMP`, subsequently removed with failed N1B scalarization).
 
 These need one allocator-facing bank descriptor with width, alignment,
 reserved intervals, and use class.
@@ -143,7 +143,7 @@ Existing behaviors map as follows:
 - `_ab_base` -> resident multi-tile A/B lease;
 - `_pin` -> constrained lease attachment;
 - `_vpool` -> free-bank calculation after reservations;
-- `SPTR_POOL`/`SCNT_POOL`/`SCALAR_TMP` -> SGPR bank leases.
+- `SPTR_POOL`/`SCNT_POOL` -> SGPR bank leases (`SCALAR_TMP` was retired with N1B).
 
 ### 4. Register artifact and resource proof
 
