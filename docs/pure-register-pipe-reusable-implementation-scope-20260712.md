@@ -482,3 +482,14 @@ most two b128 loads per WMMA; proven targeted waits; full guarded correctness;
 isolated timing against the unchanged proven WMMA-LDS candidate; and no route
 promotion unless direct wins.  Cross-iteration modulo pipelining is a later
 search dimension, not something to claim from the current intra-tile overlap.
+
+Exact isolated hardware evidence passed on gfx1100 for candidate
+`a51aca406e7d...`: full nonconstant output, max absolute error `1.261e-4`,
+guards and inputs intact, and GPU health before/after.  A sequential 5-warmup,
+20-round comparison measured direct at `0.799 ms` median (`0.439 ms` minimum)
+and the proven WMMA-LDS candidate at `0.521 ms` median (`0.283 ms` minimum).
+Both median and minimum ratios put direct about 1.54x behind.  The result is
+therefore `retain_lds`; it validates the scheduler integration but refutes this
+specific 32x32 register-native policy as a promotion candidate.  The next
+search dimension is a larger legal wave tile and/or true cross-iteration
+modulo pipeline, each behind the same correctness/resource gates.

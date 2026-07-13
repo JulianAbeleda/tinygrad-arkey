@@ -48,7 +48,9 @@ the ladder -- there is no reset, retry, or larger-stage continuation.
 """
 from __future__ import annotations
 
+import argparse
 import copy
+import json
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping, Sequence
 
@@ -375,3 +377,18 @@ __all__ = ["SCHEMA", "EXACT_SHAPE", "RUNTIME_DEVICE", "DIRECT_ARGUMENT_ORDER", "
            "argument_order_for", "attn_qo_reference_inputs", "default_stage_ladder", "stage_candidate_identity",
            "compile_attn_qo_stage", "build_attn_qo_stage_bundle", "StagePlan", "StageResult",
            "ProgressiveCorrectnessRecord", "run_progressive_correctness"]
+
+
+def main() -> int:
+  parser = argparse.ArgumentParser(description="Guarded attn_qo candidate correctness")
+  parser.add_argument("candidate", choices=tuple(_ARGUMENT_ORDERS))
+  parser.add_argument("--execute", action="store_true", help="dispatch through the isolated guarded executor")
+  parser.add_argument("--timeout-seconds", type=float, default=None)
+  args = parser.parse_args()
+  record = run_progressive_correctness(candidate=args.candidate, execute=args.execute,
+                                       timeout_seconds=args.timeout_seconds, printer=None)
+  print(json.dumps(record.to_dict(), indent=2))
+  return 0 if (record.passed if args.execute else True) else 1
+
+
+if __name__ == "__main__": raise SystemExit(main())
