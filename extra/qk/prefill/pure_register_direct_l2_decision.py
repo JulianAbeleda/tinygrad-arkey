@@ -17,12 +17,12 @@ REQUIRED_COUNTER_GROUPS = ("l2", "memory", "compute")
 
 def candidate(*, role: str, shape: dict[str, int], identity: str, binary_sha256: str,
               storage: str, artifact: dict[str, Any], correctness: dict[str, Any],
-              environment: dict[str, Any] | None = None) -> dict[str, Any]:
+              environment: dict[str, Any] | None = None, pair_key: str | None = None) -> dict[str, Any]:
   """Build the stable, serializable candidate half of a comparison pair."""
   return {"schema": "pure-register-prefill-candidate.v1", "role": role, "shape": shape,
           "canonical_identity": identity, "binary_sha256": binary_sha256,
           "storage": storage, "artifact": artifact, "correctness": correctness,
-          "environment": environment or {}}
+          "environment": environment or {}, "pair_key": pair_key or identity}
 
 
 def _valid_samples(row: dict[str, Any], minimum: int) -> bool:
@@ -35,12 +35,13 @@ def _blockers(pair: dict[str, Any], thresholds: dict[str, float]) -> list[str]:
   blockers: list[str] = []
   left, right = pair.get("direct_l2"), pair.get("lds")
   if not isinstance(left, dict) or not isinstance(right, dict): return ["both direct_l2 and lds candidates are required"]
-  fields = ("role", "shape", "canonical_identity", "environment")
+  fields = ("role", "shape", "pair_key", "environment")
   for field in fields:
     if left.get(field) != right.get(field): blockers.append(f"paired {field} identity differs")
   if left.get("role") not in ROLES: blockers.append("unsupported or missing prefill role")
   if left.get("storage") != "direct_l2" or right.get("storage") != "lds": blockers.append("storage labels are not direct_l2/lds")
-  if left.get("canonical_identity") != right.get("canonical_identity"): blockers.append("candidate identity is not shared")
+  if not isinstance(left.get("pair_key"), str) or not left.get("pair_key"):
+    blockers.append("semantic pair key is required")
   if not all(isinstance(x, str) and len(x) == 64 for x in (left.get("canonical_identity"), left.get("binary_sha256"), right.get("binary_sha256"))):
     blockers.append("canonical and binary SHA-256 identities are required")
   if left.get("binary_sha256") == right.get("binary_sha256"): blockers.append("paired binaries must be distinct")

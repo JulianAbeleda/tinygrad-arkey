@@ -16,7 +16,7 @@ STORAGES = ("direct_l2", "lds")
 
 
 def run_paired_direct_l2_benchmark(*, role: str, shape: dict[str, int],
-    canonical_identity: str, environment: dict[str, Any],
+    canonical_identity: str, environment: dict[str, Any], pair_key: str | None = None,
     artifact: Callable[[str], dict[str, Any]],
     route_binding: Callable[[str], dict[str, Any]],
     correctness: Callable[[str], dict[str, Any]],
@@ -44,6 +44,7 @@ def run_paired_direct_l2_benchmark(*, role: str, shape: dict[str, int],
   for storage in STORAGES:
     a, b, c = artifact(storage), route_binding(storage), correctness(storage)
     rows[storage] = {"role": role, "shape": shape, "canonical_identity": canonical_identity,
+                     "pair_key": pair_key or canonical_identity,
                      "environment": environment, "storage": storage, **a, **b, **c,
                      "samples_ms": [], "counters": {}}
   for phase, count in (("warmup", warmups), ("timed", rounds)):

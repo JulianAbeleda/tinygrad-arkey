@@ -30,3 +30,9 @@ def test_cpu_pair_blocks_missing_identity_or_evidence():
   report = decide({"direct_l2": direct, "lds": _row("lds", "c" * 64, [10.0] * 12)})
   assert report["status"] == "blocked"
   assert any("correctness" in reason or "samples" in reason for reason in report["blockers"])
+
+
+def test_cpu_pair_accepts_distinct_candidate_identities_with_shared_semantic_key():
+  direct = _row("direct_l2", "b" * 64, [8.0] * 12) | {"canonical_identity": "d" * 64, "pair_key": "semantic-v1"}
+  lds = _row("lds", "c" * 64, [10.0] * 12) | {"canonical_identity": "e" * 64, "pair_key": "semantic-v1"}
+  assert decide({"direct_l2": direct, "lds": lds})["decision"] == "promote_direct_l2"

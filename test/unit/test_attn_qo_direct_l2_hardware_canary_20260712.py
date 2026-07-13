@@ -13,6 +13,7 @@ def _route(storage="direct_l2"):
 def _pair():
   base = {"role": "attn_qo", "shape": {"m": 512, "n": 4096, "k": 4096},
           "canonical_identity": IDENTITY, "environment": {"target": "gfx1100"},
+          "pair_key": "attn_qo:512:4096:4096:semantic-v1",
           "artifact": {"status": "pass"}, "correctness": {"status": "pass"},
           "counters": {g: {"status": "live"} for g in ("l2", "memory", "compute")}}
   return {"direct_l2": base | {"storage": "direct_l2", "binary_sha256": BINARY, "samples_ms": [8.] * 12},
