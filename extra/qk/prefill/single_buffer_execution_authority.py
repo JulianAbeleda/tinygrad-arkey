@@ -17,6 +17,7 @@ from extra.qk.prefill.anchor_isa_resource_capture import _program_surface
 from extra.qk.prefill.pure_single_buffer_evaluation_gate import canonical_candidate_hash
 from tinygrad.dtype import dtypes
 from tinygrad.uop.ops import Ops, UOp
+from extra.qk.prefill.transport_execution_authority import TransportValidation, validate_transport
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 SCHEMA = "prefill-single-buffer-execution-authority.v1"
@@ -98,6 +99,11 @@ def _compiler_lds_truth(program: UOp) -> dict[str, Any]:
   return {"define_local_count": len(local_defs), "shared_declaration_count": len(shared), "lds_bytes": lds_bytes,
           "lds_store_markers": stores, "lds_load_markers": loads, "barrier_markers": barriers,
           "actual_compiler_lds_staging": bool((local_defs or shared) and stores and loads and barriers)}
+
+def _validate_lds_transport(payload: dict[str, Any], program: UOp) -> TransportValidation:
+  truth = _compiler_lds_truth(program)
+  errors = () if truth["actual_compiler_lds_staging"] else ("compiled program does not prove LDS staging",)
+  return TransportValidation("lds", not errors, errors, truth)
 
 
 def _candidate_programs(compiled_linear: UOp, identity: str) -> list[UOp]:
@@ -304,6 +310,7 @@ def _case_arrays(case: str, *, m:int=M, n:int=N, k:int=K) -> tuple[np.ndarray, n
 
 def run(payload: dict[str, Any], candidate_hash: str, *, case: str = "constant",
         atol: float = 0.125, rtol: float = 0.002,
+        compile_artifact: dict[str, Any] | None = None,
         prepared_out:list[PreparedCandidateExecution]|None=None) -> dict[str, Any]:
   """Compile and execute the exact candidate through its production route."""
   identity = canonical_candidate_hash(payload)
@@ -335,6 +342,8 @@ def run(payload: dict[str, Any], candidate_hash: str, *, case: str = "constant",
          "PREFILL_GRAPH_GEMM": "1", "PREFILL_WMMA_LDS_PRIMITIVE": "1",
          "PREFILL_WMMA_PIPE_PRIMITIVE": "0",
          "PREFILL_DBUF": "0", "PURE_MACHINE_SEARCH_ALLOW_ROLLBACK": "0"}
+  if compile_artifact is not None:
+    env["BOLTBEAM_PURE_REGISTER_COMPILE_ARTIFACT_JSON"] = json.dumps(compile_artifact, separators=(",", ":"))
   old_opts, old_contexts = postrange._WARMSTART_OPTS, postrange._WARMSTART_CANDIDATE_CONTEXTS
   old_local = getattr(postrange, "_WARMSTART_LOCAL_STAGE_KEYS", None)
   try:
@@ -351,11 +360,15 @@ def run(payload: dict[str, Any], candidate_hash: str, *, case: str = "constant",
       program = programs[0]
       context = program.src[0].arg.candidate_context
       surface, lds, hashes = _program_surface(program), _compiler_lds_truth(program), _program_identity(program)
+      transport = validate_transport(payload, program, lds_validator=_validate_lds_transport)
       if dump := os.environ.get("BOLTBEAM_AUTHORITY_SOURCE_DUMP"):
         pathlib.Path(dump).write_text(next(u.arg for u in program.src if u.op is Ops.SOURCE))
       if not surface["strict_pure"]: raise RuntimeError(f"candidate selected forbidden executable surface: {surface}")
-      if not lds["actual_compiler_lds_staging"]: raise RuntimeError(f"candidate did not emit compiler LDS staging: {lds}")
-      structural = _structural_binding(payload, program, lds)
+      if not transport.passed: raise RuntimeError("candidate transport proof failed: " + "; ".join(transport.errors))
+      structural = ({"pre_gpu_eligible": transport.passed, "passed": transport.passed,
+                     "matches_payload": transport.passed, "errors": list(transport.errors),
+                     "transport": transport.storage, **transport.truth}
+                    if transport.storage == "direct_l2" else _structural_binding(payload, program, lds))
       effective = next(row for row in effective_routes(os.environ) if row["family"] == "prefill_gemm")
       if not structural["pre_gpu_eligible"]:
         route_id = effective["effective_route"]
