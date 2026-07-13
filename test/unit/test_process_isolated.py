@@ -23,3 +23,9 @@ def test_isolated_timeout_is_hard_and_fail_closed():
 def test_isolated_missing_result_fails_closed():
   result = run_isolated(_no_result, timeout_seconds=2)
   assert result.status == "failed" and "without a result" in (result.error or "")
+
+
+def test_isolated_runs_under_spawn_with_picklable_target():
+  # The GPU path uses spawn so the child initializes the device FRESH; a
+  # module-level target + picklable args survive the pickle spawn requires.
+  assert run_isolated(_success, args=(5,), timeout_seconds=30, start_method="spawn").result == {"value": 5}

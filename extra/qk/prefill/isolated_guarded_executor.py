@@ -19,8 +19,16 @@ records the child's terminal state, runs an INDEPENDENT health probe in its own
 isolated child, and persists failures.  The runtime is constructed strictly
 inside the child, by the ``builder`` -- a grep of the parent code path finds no
 ``Device[...]``, ``.runtime(``, ``get_runtime``, ``prepare_executable``, or
-``Buffer(``.  The production builder :func:`make_tinygrad_bundle_builder` holds
-that construction and is invoked only from inside the child.
+``Buffer(``.  Runtime construction lives in the module-level
+:func:`build_tinygrad_bundle`, wrapped into a picklable :class:`BundleSpec` by
+:func:`make_tinygrad_bundle_builder`; it is invoked only from inside the child.
+
+C3.5 (fork cannot initialize the GPU).  The real-GPU child runs under a SPAWN
+multiprocessing context so it initializes the device FRESH; a fork()ed child
+inherits unusable driver fds and the AMD/ROCm runtime fails there.  Because
+spawn pickles the child target and args, the builder is a picklable spec (a
+module-level build fn + picklable args) and the child RECONSTRUCTS the PROGRAM +
+runtime -- it never receives a live UOp/runtime/closure.
 
 P0-7 (device-loss recovery is unproved).  Any timeout, vanished child, device
 fault, guard corruption, or numerical failure produces a truthful terminal
@@ -93,13 +101,17 @@ def _child_execute(builder: Callable[[], ExecutableBundle], request: ExecutionRe
   Every controlled outcome returns a dict; only a genuinely vanished child
   (crash/kill/hard-timeout) fails to return one, which the parent reads as
   device loss.  Runtime construction failures and dispatch/ABI errors are
-  controlled and come back as a dict with ``passed=False``.
+  controlled and come back as a dict with ``passed=False``.  A construction/init
+  failure (ImportError, OSError bad-fd, a broken runtime) is tagged
+  ``construction_failed`` so the parent types it as a SOFTWARE ``failed``, never
+  as device loss (see :func:`_classify`).
   """
   try:
     bundle = builder()
-  except BaseException as exc:  # runtime construction is a controlled failure, not a crash
+  except BaseException as exc:  # runtime construction is a controlled software failure, not a device fault
     return {"schema": SCHEMA, "status": "failed", "passed": False, "dispatch_performed": False,
-            "device_fault": False, "errors": [f"runtime construction failed: {type(exc).__name__}: {exc}"]}
+            "device_fault": False, "construction_failed": True,
+            "errors": [f"runtime construction failed: {type(exc).__name__}: {exc}"]}
   cleanup_errors: list[str] = []
   try:
     result = run_guarded_execution(executable=bundle.executable, inputs=request.inputs,
@@ -126,6 +138,7 @@ def _classify(child: IsolatedResult, health_after: bool) -> tuple[str, bool, dic
   """Map the child's terminal state + independent health to a typed outcome."""
   errors: list[str] = []
   guarded: dict[str, Any] | None = None
+  construction_failed = False
   if child.timed_out:
     state = "timed_out"
     errors.append("isolated child exceeded the hard timeout")
@@ -137,13 +150,22 @@ def _classify(child: IsolatedResult, health_after: bool) -> tuple[str, bool, dic
   else:
     guarded = dict(child.result)
     errors.extend(str(e) for e in guarded.get("errors", ()))
-    if guarded.get("device_fault") is True: state = "device_lost"
+    construction_failed = guarded.get("construction_failed") is True
+    # A runtime CONSTRUCTION/init failure (import/OSError bad-fd/broken runtime)
+    # is SOFTWARE, not a device fault: type it ``failed``, never ``device_lost``.
+    if construction_failed: state = "failed"
+    elif guarded.get("device_fault") is True: state = "device_lost"
     elif guarded.get("passed") is True: state = "completed"
     else: state = "failed"
   if not health_after:
-    # P0-7: independent post-run health loss ends the session as device loss.
-    if state not in ("timed_out", "device_lost"): errors.append("independent health check failed after dispatch")
-    state = "device_lost"
+    if construction_failed:
+      # The health probe is the same software runtime that could not construct;
+      # its failure is not evidence of device loss, so keep the ``failed`` type.
+      errors.append("independent health check also failed (software init failure, not device loss)")
+    else:
+      # P0-7: independent post-run health loss ends the session as device loss.
+      if state not in ("timed_out", "device_lost"): errors.append("independent health check failed after dispatch")
+      state = "device_lost"
   return dispatch_state(state), state == "completed" and health_after, guarded, errors
 
 
@@ -171,16 +193,22 @@ def run_isolated_guarded_execution(*, builder: Callable[[], ExecutableBundle], r
     return _terminal("not_attempted", identity, ["a non-empty ndarray reference is required"], persist)
 
   timeout = float(timeout_seconds if timeout_seconds is not None else request.policy.timeout_seconds)
-  # The builder is passed as OPAQUE data into the child; the parent never calls it.
+  # SPAWN (not fork): the child must initialize the GPU FRESH.  The builder is
+  # pickled to the child as OPAQUE data and CALLED only there; the parent never
+  # calls it.  Because spawn pickles the target+args, ``builder`` must be a
+  # picklable spec (module-level build fn + picklable args, e.g. BundleSpec) and
+  # ``request`` picklable -- never a closure, live UOp, or runtime handle.
   child = run_isolated(_child_execute, args=(builder, request), timeout_seconds=timeout,
-                       terminate_grace_seconds=terminate_grace_seconds)
+                       terminate_grace_seconds=terminate_grace_seconds, start_method="spawn")
 
   # Independent, separately-timed health probe -- in ITS OWN isolated child, so
   # the parent still constructs no runtime and cannot itself be wedged.
   health_after, health_terminal = True, None
   if health_probe is not None:
+    # Also spawn: the health probe re-initializes the GPU FRESH, so it too must
+    # be a picklable callable (module-level fn or a picklable object, no lambda).
     hp = run_isolated(_child_health, args=(health_probe,), timeout_seconds=health_timeout_seconds,
-                      terminate_grace_seconds=terminate_grace_seconds)
+                      terminate_grace_seconds=terminate_grace_seconds, start_method="spawn")
     health_after = bool(hp.status == "passed" and hp.result is True)
     health_terminal = {"status": hp.status, "result": bool(hp.result is True), "timed_out": hp.timed_out,
                        "error": hp.error, "elapsed_seconds": hp.elapsed_seconds}
@@ -205,25 +233,53 @@ def _terminal(state: str, identity: dict[str, Any], errors: list[str],
   return outcome
 
 
-# --- Production builder (RUN IN THE CHILD ONLY) ------------------------------
+# --- Picklable builder spec (RUN IN THE CHILD ONLY) --------------------------
 
-def make_tinygrad_bundle_builder(*, program: Any, compile_evidence: Mapping[str, Any], device: str = "AMD",
-                                 health: Callable[[], bool], argument_order: tuple[str, ...] = ("a", "b", "output")
-                                 ) -> Callable[[], ExecutableBundle]:
-  """Return a builder that constructs the real runtime bundle INSIDE the child.
+@dataclass(frozen=True)
+class BundleSpec:
+  """A PICKLABLE builder: a module-level build function + picklable kwargs.
 
-  The returned closure -- and ONLY the returned closure, invoked by
-  ``_child_execute`` in the isolated child -- imports the bridge, resolves the
-  live :class:`ExecutableHandle` via ``prepare_executable``, and binds the
-  Buffer-backed guarded hooks.  Nothing here runs in the parent.
+  spawn pickles the child target and every arg, so the builder cannot be a
+  closure/lambda or carry a live UOp/runtime.  This frozen dataclass pickles by
+  reference (``build`` must be a MODULE-LEVEL function; ``kwargs`` must be
+  picklable scalars/dicts/dtypes).  The child unpickles it and CALLS it there,
+  where ``build`` reconstructs the PROGRAM + runtime FRESH in-process.
   """
-  def build() -> ExecutableBundle:
-    from tinygrad.runtime.bridge import prepare_executable
-    executable = prepare_executable(program, compile_evidence, device=device)
-    hooks = make_tinygrad_executable_hooks(device, health, argument_order)
-    return ExecutableBundle(executable, hooks)
-  return build
+  build: Callable[..., ExecutableBundle]
+  kwargs: Mapping[str, Any] = field(default_factory=dict)
+
+  def __call__(self) -> ExecutableBundle:
+    return self.build(**self.kwargs)
+
+
+def build_tinygrad_bundle(*, program: Any, compile_evidence: Mapping[str, Any], device: str,
+                          argument_order: tuple[str, ...], health: Callable[[], bool]) -> ExecutableBundle:
+  """Construct the real runtime bundle from an ALREADY-COMPILED PROGRAM.
+
+  RUNS IN THE CHILD.  It imports the bridge, resolves the live
+  :class:`ExecutableHandle` via ``prepare_executable``, and binds the
+  Buffer-backed guarded hooks.  Because a UOp is not picklable, callers crossing
+  the spawn boundary must RECOMPILE the program inside the child and pass that
+  fresh program here (see ``host_safety_canary.build_tiny_add_bundle``).
+  """
+  from tinygrad.runtime.bridge import prepare_executable
+  executable = prepare_executable(program, compile_evidence, device=device)
+  hooks = make_tinygrad_executable_hooks(device, health, argument_order)
+  return ExecutableBundle(executable, hooks)
+
+
+def make_tinygrad_bundle_builder(*, build: Callable[..., ExecutableBundle], **kwargs: Any) -> BundleSpec:
+  """Wrap a MODULE-LEVEL build function + PICKLABLE kwargs into a ``BundleSpec``.
+
+  ``build`` reconstructs program + runtime FRESH inside the spawned child; it
+  must be importable at module level (no closures/lambdas) and ``kwargs`` must be
+  picklable (no live UOp/runtime).  Nothing here runs in the parent beyond the
+  cheap spec construction.
+  """
+  if "<locals>" in getattr(build, "__qualname__", "<locals>") or getattr(build, "__module__", None) is None:
+    raise ValueError("build must be a module-level function so it survives spawn pickling")
+  return BundleSpec(build, dict(kwargs))
 
 
 __all__ = ["SCHEMA", "DISPATCH_STATES", "ExecutableBundle", "ExecutionRequest", "IsolatedExecutionResult",
-           "run_isolated_guarded_execution", "make_tinygrad_bundle_builder"]
+           "BundleSpec", "build_tinygrad_bundle", "run_isolated_guarded_execution", "make_tinygrad_bundle_builder"]

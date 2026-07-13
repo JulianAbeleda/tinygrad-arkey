@@ -62,13 +62,22 @@ def _stop_group(proc: multiprocessing.Process, grace_seconds: float) -> None:
 
 def run_isolated(callback: Callable[..., Any], *, args: tuple[Any, ...] = (), kwargs: dict[str, Any] | None = None,
                  timeout_seconds: float = 10.0, terminate_grace_seconds: float = 0.25,
-                 output_limit: int = 65536) -> IsolatedResult:
-  """Run ``callback`` with a hard deadline and fail closed on timeout/no result."""
+                 output_limit: int = 65536, start_method: str | None = None) -> IsolatedResult:
+  """Run ``callback`` with a hard deadline and fail closed on timeout/no result.
+
+  ``start_method`` selects the multiprocessing context.  The default keeps the
+  historic behaviour (``fork`` on posix).  Callers that dispatch to a GPU MUST
+  pass ``"spawn"`` so the child initializes the device FRESH -- a fork()ed child
+  inherits the parent's (unusable) GPU/driver fds and the AMD/ROCm runtime fails
+  to initialize there (``OSError: [Errno 9] Bad file descriptor``).  Under spawn
+  the callback and every arg are pickled, so they must be picklable (module-level
+  callables + picklable args, never closures/lambdas or live runtime objects).
+  """
   if not callable(callback): raise TypeError("callback must be callable")
   if not isinstance(timeout_seconds, (int, float)) or timeout_seconds <= 0: raise ValueError("timeout must be positive")
   if not isinstance(output_limit, int) or output_limit <= 0: raise ValueError("output_limit must be positive")
   kwargs = {} if kwargs is None else dict(kwargs)
-  ctx = multiprocessing.get_context("fork" if os.name == "posix" else "spawn")
+  ctx = multiprocessing.get_context(start_method or ("fork" if os.name == "posix" else "spawn"))
   queue = ctx.Queue(maxsize=1)
   proc = ctx.Process(target=_child, args=(queue, callback, tuple(args), kwargs, output_limit), daemon=True)
   started = time.monotonic(); proc.start(); proc.join(float(timeout_seconds))
