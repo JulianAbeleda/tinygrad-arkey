@@ -4,7 +4,7 @@ Canonical current-state page for the prefill S-phase work. This is the single so
 "which phase is active and what is the current route/number". Scope docs describe intent and detail;
 this page tracks state.
 
-Last updated: 2026-07-10. Numbers pulled from
+Last updated: 2026-07-13. Numbers pulled from
 `docs/8b-prefill-hybrid-machine-search-over-backend-atom-scope.md` and
 `docs/8b-prefill-s10-lds2-ownership-migration-scope.md`. Do not invent numbers here; update from the
 authority harness (`extra/qk/prefill_whole_synced.py --mode authority --pin-clock`) and the scope docs.
@@ -31,17 +31,24 @@ authority harness (`extra/qk/prefill_whole_synced.py --mode authority --pin-cloc
 | S10-F | pending | Real parameterized epoch primitive interface beyond metadata. |
 | S10-G | later | Partial generated replacement around the epoch primitive. |
 | S10-H | parked | Full generated DBUF lifecycle replacement. |
-| hybrid_machine_search | current | Machine-search / spec-ownership over the proven hand-coded backend atom. Route `prefill_pipe_role_selective_generated`, hybrid backend-atom (not pure generated). Pinned pp512 `~4413`. See `docs/8b-prefill-hybrid-machine-search-over-backend-atom-scope.md`. Formerly tracked as S10.5 in the S-phase chronology. |
+| hybrid_machine_search | reference-only / quality-blocked | The external backend-atom route was recreated on clean HEAD at pinned pp512 `4099`, but deterministic whole-model greedy parity fails. It is a performance reference, not a usable route. |
 
 ## Current route
 
-- Active phase: **hybrid_machine_search** (machine-search over backend atom).
+- Active phase: **hybrid recreation quality blocker**.
 - Route family: `prefill_pipe_role_selective_generated`.
-- Classification: `compiler_primitive_spec_owned__asm_backend_atom` — hybrid compiler primitive plus
-  hand-coded reusable DBUF backend atom. Not pure generated; not full hand-kernel ownership.
-- Authority number: pinned `pp512 ~4413`, `pp4096 ~3237` (unpinned/boost: `~5111` / `~3677`).
-- Authority gate: pinned `pp512 >= 4000` through
-  `extra/qk/prefill_whole_synced.py --mode authority --pin-clock`.
+- Classification: `external_handwritten_kernel` / `hand_external_reference`; the schedule is spec-described, but
+  final pipe/LDS2 instruction streams come from the raw backend atoms.
+- Clean recreation (`7cc2e6447`): pinned `pp512 4098.95`, `pp4096 3102.37`; route binding passes and the maximum
+  timing CV is `0.248%`.
+- Quality: **FAIL**. A deterministic TinyJit `argmax(model.logits)` comparison against the ordinary scheduler gives
+  baseline token `198` versus hybrid token `0` for the bounded case. Both children dispatch and both post-run GPU
+  health checks pass. Gate/up-only parity passes; an attn_qo-only production-graph probe fails even though the exact
+  standalone attn_qo pipe GEMM is correct. This isolates the remaining blocker to raw pipe model-graph integration,
+  not pipe instruction bytes (ordinary `AMD` and `AMD:ISA` compile the same `9be1e239...` binary).
+- Therefore the `~4413` historical number remains a performance reference only. Do not promote or use this route
+  until custom-kernel graph ownership is fixed, or replace the three raw pipe roles with the compiler-owned direct
+  register transport and repeat correctness plus pinned timing.
 
 ## Refuted / deferred branches
 

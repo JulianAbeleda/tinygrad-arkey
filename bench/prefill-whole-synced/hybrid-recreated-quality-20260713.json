@@ -1,0 +1,83 @@
+{
+  "status": "FAIL",
+  "passed": false,
+  "metric": "whole_model_deterministic_greedy_parity",
+  "value": 0.0,
+  "case_count": 1,
+  "route_bound": true,
+  "thresholds": {
+    "greedy_match_required": true
+  },
+  "comparisons": [
+    {
+      "case": 0,
+      "baseline_token": [
+        198
+      ],
+      "candidate_token": [
+        0
+      ],
+      "greedy_match": false
+    }
+  ],
+  "baseline_gpu_healthy": true,
+  "candidate_gpu_healthy": true,
+  "baseline": {
+    "graph_gemm": false,
+    "requested_roles": [],
+    "outputs": [
+      {
+        "case": 0,
+        "token": [
+          198
+        ]
+      }
+    ],
+    "effective_routes": [
+      "decode_flash_live_split_g4_8b_kvboth",
+      "decode_q4k_g3_generated",
+      "decode_q6k_coop_generated",
+      "prefill_q4k_direct_tile4x4_default",
+      "prefill_v2_scheduler_matmul_default"
+    ]
+  },
+  "candidate": {
+    "graph_gemm": true,
+    "requested_roles": [],
+    "outputs": [
+      {
+        "case": 0,
+        "token": [
+          0
+        ]
+      }
+    ],
+    "effective_routes": [
+      "decode_flash_live_split_g4_8b_kvboth",
+      "decode_q4k_g3_generated",
+      "decode_q6k_coop_generated",
+      "prefill_pipe_role_selective_generated",
+      "prefill_q4k_direct_tile4x4_default"
+    ]
+  },
+  "schema": "prefill-hybrid-whole-model-quality-gate.v1",
+  "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+  "max_context": 4608,
+  "cases": [
+    0
+  ],
+  "candidate_roles": [],
+  "required_route": "prefill_pipe_role_selective_generated",
+  "baseline_child": {
+    "status": "passed",
+    "timed_out": false,
+    "error": null,
+    "elapsed_seconds": 18.691434231004678
+  },
+  "candidate_child": {
+    "status": "passed",
+    "timed_out": false,
+    "error": null,
+    "elapsed_seconds": 17.686849183999584
+  }
+}
