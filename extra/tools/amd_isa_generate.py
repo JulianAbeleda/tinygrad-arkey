@@ -509,7 +509,7 @@ if __name__ == "__main__":
       all_fmts[fmt] = bits
     all_op_types.update(op_types_set)
   # Write common.py
-  autogen_base = pathlib.Path(__file__).parents[2] / "runtime" / "autogen" / "amd"
+  autogen_base = pathlib.Path(__file__).resolve().parents[2] / "tinygrad" / "runtime" / "autogen" / "amd"
   common_path = autogen_base / "common.py"
   write_common(all_fmts, all_op_types, common_path)
   print(f"Wrote common.py: {len(all_fmts)} formats, {len(all_op_types)} op types")
@@ -529,3 +529,4 @@ if __name__ == "__main__":
     base = autogen_base / arch
     write_pcode(pcode, arch_data[arch]["enums"], arch, base / "str_pcode.py")
     print(f"  {arch}: {len(pcode)} pcode entries")
+

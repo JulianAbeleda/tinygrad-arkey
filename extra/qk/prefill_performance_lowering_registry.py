@@ -388,7 +388,7 @@ _PERFORMANCE_ROWS: tuple[PrefillPerformanceLoweringRow, ...] = (
     "blockers": [],
     "reuse_files": [
       "docs/prefill-lessons-ledger.md",
-      "tinygrad/renderer/amd/generate.py",
+      "extra/tools/amd_isa_generate.py",
       "tinygrad/codegen/experimental.py",
       "bench/q4k-wmma-scheduler-surface/latest.json",
     ],
