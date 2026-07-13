@@ -34,6 +34,7 @@ PREFILL_WMMA_PIPE_ROUTE = "prefill_wmma_pipe_primitive_generated"
 PREFILL_WMMA_PIPE_LDS_DBUF_ROUTE = "prefill_wmma_pipe_lds_dbuf_primitive_generated"
 PREFILL_WMMA_LDS_DBUF_MIXED_ROUTE = "prefill_wmma_lds_dbuf_primitive_mixed"
 PREFILL_HYBRID_BACKEND_ATOM_ROUTE = "prefill_pipe_role_selective_generated"
+PREFILL_GENERATED_DENSE_ROLES = frozenset(("attn_qo", "attn_kv", "ffn_down", "ffn_gate_up"))
 PREFILL_ROLE_ROUTES_PIPE = {
   "attn_qo": "pipe",
   "attn_kv": "pipe",
@@ -255,6 +256,11 @@ def route_binding_gate(report: dict[str, Any], required_route: str | None = None
       missing=[(x.get("role"),x.get("shape"),x.get("canonical_identity")) for x in census.get("missing",())]
       failures.append(f"candidate set route census did not bind every exact entry; missing={missing!r}, "
                       f"unexpected={len(census.get('unexpected',()))}, identity_mismatches={len(census.get('identity_mismatches',()))}")
+    elif selected_route == "prefill_wmma_lds_single_buffer_candidate_generated":
+      policy_roles = set(census.get("policy_roles") or ())
+      if policy_roles != PREFILL_GENERATED_DENSE_ROLES:
+        failures.append("generated-pure route requires complete dense-role ownership; "
+                        f"selected={sorted(policy_roles)!r}, expected={sorted(PREFILL_GENERATED_DENSE_ROLES)!r}")
   verdict = "PREFILL_ROUTE_BINDING_PASS" if not failures else "PREFILL_ROUTE_BINDING_FAIL"
   return {"schema": "prefill-route-binding-gate.v1", "verdict": verdict, "required_route": required_route,
           "selected_route": selected_route, "effective_routes": sorted(r for r in effective_route_ids if r),

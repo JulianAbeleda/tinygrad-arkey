@@ -124,6 +124,14 @@ def test_nonconstant_full_output_case_is_role_shape_agnostic(role, shape):
   assert role in auth.SUPPORTED_ROLES
 
 
+def test_indexed_case_is_k_sensitive_and_exact():
+  m, n, k = 5, 9, 17
+  a, b, reference = auth._case_arrays("indexed", m=m, n=n, k=k)
+  assert np.count_nonzero(b, axis=1).tolist() == [1] * n
+  assert np.unique(a, axis=1).shape[1] > 1
+  np.testing.assert_allclose(reference, a.astype(np.float32) @ b.astype(np.float32).T)
+
+
 def test_case_array_defaults_preserve_gate_up_anchor_shape():
   a, b, reference = auth._case_arrays("constant")
   assert a.shape == (auth.M, auth.K) and b.shape == (auth.N, auth.K)

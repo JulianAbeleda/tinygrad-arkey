@@ -442,9 +442,7 @@ class Scheduler:
                 UOp(Ops.CONTRACT, dtype=srcs[1].dtype.vec(tc.elements_per_thread[1]), src=(srcs[1],), arg=tc_upcast_axes[1], tag=1),
               ]
               post_disables_early = _tc_local_stage_post_opt()
-              early_local_stage_allowed = getattr(self, "_warmstart_local_stage_allowed", None)
-              if early_local_stage_allowed is None:
-                early_local_stage_allowed = not _warmstart_pipe_primitive_no_local_stage_key(_warmstart_key(self))
+              early_local_stage_allowed = _tc_local_stage_early_allowed(self)
               wmma_srcs = _tc_local_stage_wmma_sources(wmma_srcs, _tc_local_stage_ranges((wmma_srcs[0], wmma_srcs[1])),
                                                        enabled=not post_disables_early and early_local_stage_allowed and
                                                        (_tc_local_stage_with_planned_local() or
@@ -726,6 +724,14 @@ def _warmstart_local_stage_allowed(k:Scheduler) -> bool:
   key = _warmstart_key(k)
   allowed = _warmstart_local_stage_allowed_key(key)
   return allowed
+
+def _tc_local_stage_early_allowed(k:Scheduler) -> bool:
+  # Heuristic TC kernels do not carry the attribute installed by the warmstart
+  # branch. They must still honor the same role-scoped allow-list; otherwise a
+  # selected candidate's ambient LDS flags rewrite every unrelated TC kernel
+  # compiled in the model graph.
+  if (allowed := getattr(k, "_warmstart_local_stage_allowed", None)) is not None: return allowed
+  return _warmstart_local_stage_allowed_key(_warmstart_key(k))
 
 def _prefill_dbuf_peel(k:Scheduler) -> None:
   # 1c: peel the K reduce by 2 by applying ONE extra UNROLL(=2) on a const-even REDUCE axis. UNROLL becomes an

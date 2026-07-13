@@ -35,3 +35,13 @@ def test_tc_local_stage_disabled_bypasses_unvalidated_mode(monkeypatch):
   srcs = []
   monkeypatch.setattr(postrange, "_tc_local_stage_mode", lambda: "b")
   assert postrange._tc_local_stage_wmma_sources(srcs, (), enabled=False) is srcs
+
+
+def test_heuristic_tc_early_stage_honors_role_scoped_allowlist(monkeypatch):
+  key = (frozenset({512, 4096}), 4096)
+  kernel = type("Kernel", (), {})()
+  monkeypatch.setattr(postrange, "_warmstart_key", lambda _kernel: key)
+  monkeypatch.setattr(postrange, "_warmstart_local_stage_allowed_key", lambda candidate: candidate != key)
+  assert postrange._tc_local_stage_early_allowed(kernel) is False
+  kernel._warmstart_local_stage_allowed = True
+  assert postrange._tc_local_stage_early_allowed(kernel) is True

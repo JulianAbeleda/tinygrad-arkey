@@ -310,6 +310,19 @@ def _case_arrays(case: str, *, m:int=M, n:int=N, k:int=K) -> tuple[np.ndarray, n
     bv = ((np.arange(n) % 11) - 5).astype(np.float16)[:, None] * np.float16(1/64)
     a, b = np.broadcast_to(av, (m, k)).copy(), np.broadcast_to(bv, (n, k)).copy()
     ref = np.float32(k) * av.astype(np.float32) @ bv.astype(np.float32).T
+  elif case == "indexed":
+    # K-sensitive without an impractically expensive dense CPU reference. Each
+    # B row selects one deterministic K lane, so wrong fragment/K addressing
+    # cannot hide behind the K-constant inputs used by ``row_col``.
+    rows = np.arange(m, dtype=np.int64)[:, None]
+    ks = np.arange(k, dtype=np.int64)[None, :]
+    a = ((((rows * 17 + ks * 13) % 29) - 14) / 128).astype(np.float16)
+    cols = np.arange(n, dtype=np.int64)
+    selected_k = (cols * 37 + 11) % k
+    scale = ((((cols * 7) % 13) - 6) / 32).astype(np.float16)
+    b = np.zeros((n, k), dtype=np.float16)
+    b[cols, selected_k] = scale
+    ref = a[:, selected_k].astype(np.float32) * scale.astype(np.float32)[None, :]
   else: raise ValueError(f"unknown case {case!r}")
   return a, b, ref
 
@@ -530,7 +543,7 @@ def _load_payload(path: pathlib.Path) -> dict[str, Any]:
 def main() -> int:
   ap = argparse.ArgumentParser(description=__doc__)
   ap.add_argument("--candidate", type=pathlib.Path, required=True)
-  ap.add_argument("--candidate-hash"); ap.add_argument("--case", default="constant", choices=("constant", "row_col"))
+  ap.add_argument("--candidate-hash"); ap.add_argument("--case", default="constant", choices=("constant", "row_col", "indexed"))
   ap.add_argument("--output", type=pathlib.Path)
   args = ap.parse_args()
   payload = _load_payload(args.candidate); identity = args.candidate_hash or canonical_candidate_hash(payload)

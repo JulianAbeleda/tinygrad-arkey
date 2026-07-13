@@ -151,9 +151,21 @@ def test_candidate_set_route_binding_gate_requires_passing_actual_census(monkeyp
   failed=whole.route_binding_gate(failed_report,env=env)
   assert failed["verdict"] == "PREFILL_ROUTE_BINDING_FAIL" and "attn_kv" in failed["failures"][-1]
   passed_report=_report(); passed_report["candidate_set_route_census"]={
-    "schema":"prefill-candidate-set-route-census.v1","passed":True,"missing":[],"unexpected":[],"identity_mismatches":[]}
+    "schema":"prefill-candidate-set-route-census.v1","passed":True,
+    "policy_roles":sorted(whole.PREFILL_GENERATED_DENSE_ROLES),"missing":[],"unexpected":[],"identity_mismatches":[]}
   passed=whole.route_binding_gate(passed_report,env=env)
   assert passed["verdict"] == "PREFILL_ROUTE_BINDING_PASS" and passed["failures"] == []
+
+
+def test_generated_candidate_route_rejects_partial_role_ownership(monkeypatch):
+  route = "prefill_wmma_lds_single_buffer_candidate_generated"
+  monkeypatch.setattr(whole,"effective_routes",lambda env=None:_effective(route))
+  report = _report(route); report["candidate_set_route_census"] = {
+    "schema":"prefill-candidate-set-route-census.v1","passed":True,"policy_roles":["ffn_gate_up"],
+    "missing":[],"unexpected":[],"identity_mismatches":[]}
+  gate = whole.route_binding_gate(report, env={"BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_JSON":"{}"})
+  assert gate["verdict"] == "PREFILL_ROUTE_BINDING_FAIL"
+  assert any("complete dense-role ownership" in failure for failure in gate["failures"])
 
 
 def test_measurement_regime_names_generated_vs_hand_regimes():
