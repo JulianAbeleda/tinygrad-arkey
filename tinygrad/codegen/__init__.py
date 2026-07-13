@@ -244,11 +244,28 @@ def do_estimates(prg:UOp, sink:UOp, lin:UOp) -> UOp|None:
   if sink.arg.estimates is not None: return None
   return prg.replace(src=(sink.replace(arg=replace(sink.arg, estimates=Estimates.from_uops(lin.src, ignore_indexing=True))),)+prg.src[1:])
 
+class _CompileCaptureAttachment:
+  """Hashable carrier for a backend-owned, opaque compile-only record."""
+  __slots__ = ("record",)
+  def __init__(self, record): self.record = record
+
 def do_assemble(ctx:Renderer, prg:UOp, lin:UOp) -> UOp:
   src = "\n".join(str(u.arg) for u in lin.src)
   if DEBUG >= 4: print(src)
   binary = ctx.asm(prg, lin)
-  return prg.replace(src=prg.src[:3]+(UOp(Ops.SOURCE, arg=src), UOp(Ops.BINARY, arg=binary)))
+  # ISA renderers may expose a pure, compile-only final-artifact hook.  Keep
+  # this duck-typed: the generic codegen path must not import a backend's
+  # capture schema, create a runtime program, or make capture mandatory.
+  # The hook runs after asm(), so its record can join the exact source/binary
+  # with renderer-owned final descriptor/regalloc/disassembly facts.
+  capture = getattr(ctx, "compile_capture", None) if isinstance(ctx, ISARenderer) else None
+  record = capture(prg, lin, binary) if callable(capture) else None
+  new_arg = prg.arg
+  if record is not None and hasattr(new_arg, "aux"):
+    # ProgramInfo participates in UOp interning and therefore must remain
+    # hashable even when the backend record is a dict-like payload.
+    new_arg = replace(new_arg, aux=new_arg.aux + (_CompileCaptureAttachment(record),))
+  return prg.replace(src=prg.src[:3]+(UOp(Ops.SOURCE, arg=src), UOp(Ops.BINARY, arg=binary)), arg=new_arg)
 
 def do_render(ctx:Renderer, prg:UOp, lin:UOp) -> UOp:
   src = ctx.render(list(lin.src))

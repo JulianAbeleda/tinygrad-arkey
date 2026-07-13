@@ -1,5 +1,6 @@
 import ctypes, hashlib, tempfile, subprocess, pathlib, shutil
-from tinygrad.helpers import system, getenv
+from dataclasses import dataclass
+from tinygrad.helpers import getenv
 from tinygrad.runtime.autogen import comgr
 try:
   comgr.amd_comgr_get_version(ctypes.byref(major:=ctypes.c_uint64()), ctypes.byref(minor:=ctypes.c_uint64()))
@@ -20,10 +21,39 @@ def _find_llvm_objdump():
     if shutil.which(p): return p
   raise FileNotFoundError("llvm-objdump not found")
 
-def amdgpu_disassemble(lib:bytes):
-  asm = system(f"{_find_llvm_objdump()} -d -", input=lib).splitlines()
+@dataclass(frozen=True)
+class AMDDisassemblyResult:
+  """A CPU-only result from disassembling an already-built AMD code object."""
+  ok: bool
+  disassembly: str = ""
+  tool: str | None = None
+  error: dict[str, str] | None = None
+
+def amdgpu_disassemble_result(lib:bytes) -> AMDDisassemblyResult:
+  """Disassemble ``lib`` without creating a program, allocating, or dispatching.
+
+  Failure is returned as data so compile-capture callers can fail closed.
+  """
+  try:
+    tool = _find_llvm_objdump()
+  except FileNotFoundError as exc:
+    return AMDDisassemblyResult(False, tool=None,
+      error={"kind": "tool_unavailable", "message": str(exc)})
+  try:
+    asm = subprocess.run([tool, "-d", "-"], input=lib, stdout=subprocess.PIPE,
+                         stderr=subprocess.STDOUT, check=True).stdout.decode().splitlines()
+  except (OSError, subprocess.CalledProcessError, UnicodeDecodeError) as exc:
+    return AMDDisassemblyResult(False, tool=tool,
+      error={"kind": "disassembly_failed", "message": str(exc)})
   while asm and ("s_nop 0" in asm[-1] or "s_code_end" in asm[-1]): asm.pop()
-  print("\n".join(asm))
+  return AMDDisassemblyResult(True, "\n".join(asm), tool=tool)
+
+def amdgpu_disassemble(lib:bytes):
+  """Preserve the historical debug-printing disassembly API."""
+  result = amdgpu_disassemble_result(lib)
+  if not result.ok:
+    raise RuntimeError(result.error["message"] if result.error else "AMD disassembly failed")
+  print(result.disassembly)
 
 def check(status):
   if status != 0:

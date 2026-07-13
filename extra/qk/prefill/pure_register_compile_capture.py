@@ -24,6 +24,62 @@ _PACK_DEST = re.compile(r"\bv_pack_b32_f16\s+v(\d+)\b", re.I)
 _MOV_SOURCE = re.compile(r"\bv_mov_b32\w*\s+v\d+\s*,\s*v(\d+)\b", re.I)
 
 
+def _final_field(program: Any, name: str) -> Any:
+  """Read a field from a final-program record without invoking compiler/runtime APIs."""
+  if isinstance(program, Mapping): return program.get(name)
+  return getattr(program, name, None)
+
+
+def _required_final_mapping(program: Any, name: str, authority: str) -> Mapping[str, Any]:
+  value = _final_field(program, name)
+  if not isinstance(value, Mapping): raise ValueError(f"final program lacks {name} mapping")
+  if value.get("authority") != authority:
+    raise ValueError(f"{name} lacks authoritative {authority} descriptor")
+  return value
+
+
+def capture_final_program_compile_only(program: Any, *, pipeline: Mapping[str, Any], wait: Mapping[str, Any],
+                                      abi_contract: Mapping[str, Any], surface: Mapping[str, Any],
+                                      runtime_binding: Mapping[str, Any] | None = None) -> dict[str, Any]:
+  """Adapt one actual final AMD ISA assembler result into the existing capture gate.
+
+  ``program`` is a mapping or object produced by the assembler/compiler and must
+  expose ``candidate_identity``, ``target``, ``abi``, ``source``, ``binary``,
+  ``disassembly``, plus ``descriptor`` and ``allocator`` mappings.  The latter
+  must carry ``authority`` values ``final_code_object_descriptor`` and
+  ``final_regalloc`` respectively.  Descriptor ``resources`` and allocator
+  ``intervals`` may be typed objects or their exact serialized JSON forms.
+  Missing or estimated fields are rejected; this adapter never compiles,
+  disassembles, allocates, or dispatches.
+  """
+  if isinstance(program, (str, bytes)) or program is None:
+    raise TypeError("final AMD program record/object is required")
+  descriptor = _required_final_mapping(program, "descriptor", "final_code_object_descriptor")
+  allocator = _required_final_mapping(program, "allocator", "final_regalloc")
+  resources = descriptor.get("resources")
+  if isinstance(resources, Mapping):
+    try:
+      resources = AMDResourceFacts(**{name: resources.get(name) for name in
+        ("vgpr", "sgpr", "lds_bytes", "scratch_bytes", "vgpr_spills", "sgpr_spills",
+         "workgroup_threads", "wavefront_size")})
+    except (TypeError, ValueError) as exc:
+      raise ValueError("final descriptor lacks typed resources") from exc
+  if not isinstance(resources, AMDResourceFacts):
+    raise ValueError("final descriptor lacks typed resources")
+  rows = allocator.get("intervals")
+  if isinstance(rows, list):
+    try: rows = tuple(AMDPhysicalInterval(x["logical_role"], x["bank"], x["start"], x["end"], x.get("purpose", "value")) for x in rows)
+    except (KeyError, TypeError, ValueError) as exc: raise ValueError("final allocator intervals are malformed") from exc
+  if not isinstance(rows, tuple) or not rows or any(not isinstance(x, AMDPhysicalInterval) for x in rows):
+    raise ValueError("final allocator lacks typed intervals")
+  fields = {name: _final_field(program, name) for name in
+            ("candidate_identity", "target", "abi", "source", "binary", "disassembly")}
+  if any(value is None for value in fields.values()): raise ValueError("final AMD program record is incomplete")
+  evidence = FinalCompileEvidence(**fields, resources=resources, intervals=rows)
+  return capture_compile_only(evidence, pipeline=pipeline, wait=wait, abi_contract=abi_contract,
+                              surface=surface, runtime_binding=runtime_binding)
+
+
 @dataclass(frozen=True)
 class FinalCompileEvidence:
   """All authorities needed to capture one final program without executing it."""

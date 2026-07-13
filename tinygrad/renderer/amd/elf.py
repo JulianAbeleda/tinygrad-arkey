@@ -155,3 +155,38 @@ def kernel_descriptor_from_elf(binary:bytes) -> amdgpu_kd.llvm_amdhsa_kernel_des
 
 def group_segment_fixed_size_from_elf(binary:bytes) -> int:
   return kernel_descriptor_from_elf(binary).group_segment_fixed_size
+
+def final_elf_capture(prg: UOp, lin: UOp, arch: str, *, binary: bytes, target: str | None = None,
+                      abi: str = "amdgpu_kernel") -> dict:
+  """Return the CPU-only final ELF boundary for an already lowered AMD program.
+
+  This is deliberately a sink/instruction-list inspection helper.  It calls no
+  runtime construction or allocator/dispatch code.  Fields not represented by
+  the final ELF descriptor (notably scratch/spill and post-regalloc intervals)
+  are reported as unavailable rather than estimated.
+  """
+  if not isinstance(prg, UOp) or not isinstance(lin, UOp): raise TypeError("final UOp program and linear list are required")
+  if not isinstance(binary, bytes) or not binary: raise ValueError("exact final ELF binary is required")
+  desc = kernel_descriptor_from_elf(binary)
+  is_cdna = _arch_map[next(k for k in _arch_map if arch.startswith(k))] == "cdna"
+  rsrc1 = int(desc.compute_pgm_rsrc1)
+  vgpr = ((rsrc1 >> amdgpu_kd.COMPUTE_PGM_RSRC1_GRANULATED_WORKITEM_VGPR_COUNT_SHIFT) + 1) * 8
+  sgpr = ((rsrc1 >> amdgpu_kd.COMPUTE_PGM_RSRC1_GRANULATED_WAVEFRONT_SGPR_COUNT_SHIFT) + 1) * 8 if is_cdna else None
+  sink = prg.src[0]
+  threads = 1
+  for u in sink.toposort():
+    if u.op is Ops.SPECIAL and u.arg.startswith("lidx"): threads *= u.src[0].arg
+  wave = 64 if is_cdna else (32 if int(desc.kernel_code_properties) & (1 << amdgpu_kd.KERNEL_CODE_PROPERTY_ENABLE_WAVEFRONT_SIZE32_SHIFT) else 64)
+  return {"schema": "tinygrad.amd.final_elf_capture.v1", "binary": binary,
+          "descriptor": {"authority": "final_code_object_descriptor", "resources": {
+            "vgpr": vgpr, "sgpr": sgpr, "lds_bytes": int(desc.group_segment_fixed_size),
+            "scratch_bytes": None, "vgpr_spills": None, "sgpr_spills": None,
+            "workgroup_threads": threads, "wavefront_size": wave}},
+          "allocator": {"authority": "final_regalloc", "intervals": None,
+                        "status": "unavailable_from_elf_boundary"},
+          "instruction_list": tuple(lin.src), "program_sink": sink,
+          "target": target or arch, "abi": abi}
+
+# Descriptive compatibility spelling for callers that treat this as an
+# assemble operation returning a final capture.
+assemble_linear_capture = final_elf_capture
