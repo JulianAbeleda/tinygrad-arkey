@@ -130,3 +130,265 @@ This decision is validated only when the register candidate has:
 
 Until then, the current LDS candidate remains the execution oracle and the
 register policy remains a fail-closed compile/selection candidate.
+
+## Hand-pipe recovery and comparison scope (2026-07-13)
+
+### Objective
+
+Recover enough trustworthy evidence to answer one narrow question:
+
+```text
+At attn_qo (M,N,K)=(512,4096,4096) on gfx1100, is the historical
+build_gemm_pipe register/L2 atom faster than the compiler-generated direct_l2
+candidate when both are correct, independently identified, and timed under the
+same isolated protocol?
+```
+
+This is a diagnostic recovery of an existing backend atom.  It is not a route
+promotion, a rewrite of the atom, or permission to copy its instruction list
+into the generated compiler path.  The hand atom remains a cadence/resource
+teacher even if it wins.
+
+### Facts already established
+
+| Fact | Current evidence | Meaning |
+|---|---|---|
+| raw hand source | `extra/qk/prefill/wmma.py::build_gemm_pipe` | one wave computes a 32x32 tile with two VGPR fragment banks and targeted VMEM waits |
+| current raw route | `route_pf16_graph_gemm -> emit_prefill_gemm_from_spec -> _emit_schedule -> build_gemm_pipe` | uses `Tensor.custom_kernel`, argument order A/B/C, grid 128x16x1, local 32x1x1, and one-byte non-transport LDS placeholder |
+| standalone wrapper | `attn_qo_three_way_diagnosis_20260713.py::compile_pipe_program` | reproduces the current route's builder, ABI, geometry, sink, and assembler construction |
+| standalone result | `bench/attn-qo-three-way-diagnosis-20260713.json` | exact guarded dispatch times out; completion signal remains 65 rather than 66; post-child GPU health passes |
+| historical source | git `b1259638d` | contains materially the same two-bank loop, waits, branch, epilogue, `s_sendmsg(3)`, and `s_endpgm` |
+| historical performance | `raw-hand-s9-combined-best-authority.json` | dirty whole-model run reports 4413 pp512, but has no per-role program/binary dispatch join and its binding gate fails purity/rollback expectations |
+| generated direct | candidate `a51aca406e7d...` | exact correctness passes; 112 VGPR, zero LDS/spill, 0.799 ms median and 0.439 ms minimum in the latest session |
+| proven LDS | candidate `7e6fe384...` | exact correctness passes; 40 KiB LDS, 0.521 ms median and 0.283 ms minimum in the same session |
+
+The present standalone and route construction are too similar to assume an
+adapter bug.  The first unresolved fact is whether the historical performance
+run actually dispatched the claimed pipe binary, or whether a later assembler,
+ELF, descriptor, launch, or runtime change made a previously working atom hang.
+
+### Hypotheses, ordered by information value
+
+| ID | Hypothesis | Decisive evidence |
+|---|---|---|
+| H0 | historical route attribution was incomplete or false | whole-model trace lacks the exact attn_qo function, source hash, binary hash, geometry, and dispatch count |
+| H1 | post-`b1259638d` stack regression | the historical tree's exact binary passes today while current HEAD hangs; bounded commit bisection identifies the first bad change |
+| H2 | launch/ABI or descriptor mismatch | builder instruction bytes agree but kernarg order, SGPR enable bits, wave32 mode, workgroup geometry, LDS declaration, or code-object metadata differ |
+| H3 | loop/control-flow defect | no-WMMA/no-memory loop canary hangs, or branch count/target does not terminate for K-derived `LOOPS` |
+| H4 | targeted waitcnt defect | full-wait variant completes while `vmcnt(LPB)` hangs, with all other bytes semantically unchanged |
+| H5 | WMMA/resource defect | control/load/wait canaries finish but first-WMMA or repeated-WMMA canary hangs; descriptor VGPR count or operand ranges disagree with final ISA |
+| H6 | epilogue/termination defect | compute-without-store completes but epilogue, final wait, `s_sendmsg(3)`, or `s_endpgm` boundary does not |
+| H7 | shape/grid interaction | one-workgroup legal shapes pass but exact multi-workgroup grid hangs; guard/readback then isolates addressing from completion |
+
+These are diagnostic classifications, not preselected conclusions.  Every
+canary changes one axis and carries its own binary identity.
+
+### One authority path
+
+Extend the existing `attn_qo_three_way_diagnosis_20260713.py` and guarded
+executor.  Do not add another allocator, dispatcher, timeout process, health
+probe, reference implementation, or timing harness.  Compile-only extraction
+may be factored from the current route, but the route and diagnostic must call
+the same helper so their program construction cannot drift.
+
+The shared compile result must expose:
+
+- generator revision and normalized generator parameters;
+- final function name, source hash, binary hash, and code-object hash;
+- argument order and kernarg segment size;
+- global/local geometry, wave size, workgroup size, and LDS bytes;
+- descriptor SGPR/VGPR/scratch fields and final register high-water marks;
+- branch targets/offsets, waitcnt immediates, WMMA count, and termination tail;
+- whether it came from historical replay, current route, or a named canary.
+
+### Ordered packets
+
+#### HP0 — Freeze current failure
+
+Recompile the current exact raw pipe twice in fresh processes and prove stable
+source/binary identity.  Dispatch only once per child through the existing
+30-second timeout, then run the independent health probe.  Record no timing.
+
+Exit: stable identity plus two matching `timed_out` results, or stop and record
+that the failure is nondeterministic.  Never retry an unhealthy GPU.
+
+#### HP1 — Historical replay
+
+Use a clean detached worktree at `b1259638d`; do not alter the active tree.
+Run compile-only first, capture the historical code object and metadata, then
+run one exact guarded dispatch using that tree's own compiler/runtime.  Also
+compile the historical generator through the current stack as a cross join:
+
+```text
+old generator + old stack
+old generator + current stack
+current generator + current stack
+```
+
+Exit cases:
+
+- old/old passes: proceed to HP2 stack bisection;
+- old/old hangs: historical 4413 is not standalone correctness authority;
+  proceed to HP3 canaries, not performance comparison;
+- identities cannot be reconstructed: classify the historical artifact as
+  non-replayable and retain only its whole-model throughput claim.
+
+#### HP2 — Differential stack bisection
+
+Only if old/old passes.  Compare generated instruction objects, serialized ISA,
+ELF notes, kernel descriptors, launch packet, and kernarg packing before doing
+a commit bisection.  Bisect only the smallest implicated surface:
+
+1. AMD instruction encoding/assembly;
+2. ELF/code-object descriptor generation;
+3. `ProgramInfo` geometry and kernarg ABI;
+4. runtime queue/dispatch packet construction.
+
+Each bisection point gets compile-only identity first and at most one isolated
+dispatch.  Stop at the first bad commit with a minimal reproducer; do not patch
+around an unknown descriptor or runtime regression.
+
+Exit: first bad change and failing field/instruction are identified, or the
+old/current cross matrix disproves a stack regression.
+
+#### HP3 — Bounded completion canaries
+
+Only when no passing historical binary exists.  Add diagnostic-only variants
+to the existing builder interface; production defaults remain byte-identical.
+Run the minimum legal one-workgroup shape before exact shape.  Canaries are
+strictly ordered and stop on the first unhealthy result:
+
+1. termination only: prologue plus final termination;
+2. finite scalar loop only: same branch structure, no VMEM/WMMA;
+3. global loads plus full wait, no WMMA/store;
+4. one WMMA with initialized fragments, no K loop;
+5. one K pair with full waits;
+6. one K pair with targeted `vmcnt(LPB)` waits;
+7. full K loop, no epilogue stores;
+8. epilogue stores with guards;
+9. exact grid.
+
+For termination, compare the existing `s_sendmsg(3); s_endpgm` tail against an
+`s_endpgm`-only canary.  For waits, compare full drain and targeted count while
+preserving load order.  For control flow, statically prove loop count and
+branch destinations before dispatch.
+
+Exit: the first single feature that changes completion is identified.  A
+canary that merely completes is not numerical correctness evidence.
+
+#### HP4 — Minimal fix or refutation
+
+Fix only the owner of the proven defect.  Examples: descriptor field in ELF
+owner, branch relocation in assembler owner, or wait immediate/lifecycle in
+the hand atom.  Do not add route-specific environment repair or special-case
+the benchmark adapter.  If the defect is intrinsic to the raw atom and a safe
+minimal fix cannot be stated, mark the atom refuted and stop.
+
+Exit: exact dispatch completes in two fresh children, GPU remains healthy, and
+the final fixed binary has a new explicit identity.
+
+#### HP5 — Full correctness
+
+Reuse the exact deterministic nonconstant A/B inputs and fp32 reference used by
+direct and LDS.  Require full 512x4096 output comparison, unchanged inputs,
+intact guards, finite output, and pre/post health.  Report max error and reject
+constant, sparse, partial-row, NaN, or timeout results.
+
+Exit: correctness passes twice with stable binary identity.  Otherwise the
+hand atom is benchmark-ineligible.
+
+#### HP6 — Apples-to-apples timing
+
+Run strictly sequential fresh-child sessions for:
+
+1. hand pipe;
+2. generated direct_l2;
+3. proven WMMA-LDS control.
+
+Use identical inputs, warmups, rounds, clock policy, device timestamps, guard
+checks, and post-session health.  Run at least three sessions with rotated
+candidate order.  Compilation, allocation, upload, reference, and readback are
+excluded.  Record every sample; use session medians and bootstrap confidence
+or a conservative noise band.  Do not compare kernel milliseconds directly to
+historical whole-model tok/s.
+
+Exit: hand-vs-generated ratio has a stable sign outside the noise band, or the
+result is explicitly `inconclusive`.
+
+#### HP7 — ISA attribution
+
+Explain the result from final artifacts rather than source intent.  Compare:
+
+- global b128 loads per WMMA and distinct A/B fragment reuse;
+- targeted wait values and load-to-first-use distance;
+- cross-iteration preload overlap;
+- address/loop/control instruction counts;
+- VGPR/SGPR allocation, spills, waves/workgroup, and occupancy constraints;
+- code size and epilogue instruction count.
+
+On gfx11, unavailable PMC groups remain unavailable; do not fabricate L2,
+memory, or compute counters.  Static ISA plus controlled variants may support
+mechanism attribution, while timing alone supports only the winner verdict.
+
+#### HP8 — Feed the generated scheduler
+
+Translate only proven, backend-neutral lessons into existing policy/search
+fields: wave tile, K unroll, fragment-bank count, reuse, wait policy, and
+prefetch distance.  The generated path must continue through ordinary compiler
+UOps and the centralized storage-aware schedule.  Never import hand-register
+numbers, instruction objects, branch choreography, or the raw atom itself.
+
+Exit: a generated candidate independently passes compile/resource/correctness
+gates.  Promotion remains a separate decision against LDS.
+
+### Safety and stop rules
+
+- One GPU child at a time; no background GPU agents.
+- Compile/static inspection precedes every new binary dispatch.
+- One dispatch per unproven binary, 30-second hard timeout, independent health
+  after termination, and no automatic retry.
+- Stop immediately on failed health, process isolation failure, guard damage,
+  or a fault that escapes the child boundary.
+- Historical worktrees are read-only diagnostic inputs; do not cherry-pick or
+  merge during replay.
+- Never claim historical correctness from throughput, route labels, source
+  similarity, or a cached artifact without exact binary/dispatch identity.
+- Never time a candidate before exact correctness passes.
+- If old and current binaries both hang and HP3 cannot isolate a first failing
+  feature without broad ISA mutation, stop as `raw_pipe_refuted` rather than
+  spinning.
+
+### Definition of 100 percent
+
+This recovery is complete only when all are true:
+
+1. the historical 4413 claim is classified as replayed-and-bound,
+   throughput-only, or non-replayable;
+2. current route and diagnostic compile through one shared program builder;
+3. exact source/binary/descriptor/ABI/geometry identity is captured;
+4. the hang is assigned to one proven owner, or the raw atom is explicitly
+   refuted with bounded evidence;
+5. a surviving hand candidate passes full exact correctness twice under guards
+   and isolation;
+6. hand, generated direct, and LDS are timed under one sequential protocol in
+   at least three order-rotated sessions;
+7. the verdict is `hand_pipe_wins`, `generated_direct_wins`, `retain_lds`,
+   `inconclusive`, or `raw_pipe_refuted`;
+8. the verdict includes final ISA/resource attribution and states unavailable
+   counters honestly;
+9. no production route changes merely to make the diagnostic pass; and
+10. any lesson transferred to generated code is represented in the existing
+    centralized policy/search space rather than copied raw ISA.
+
+### Estimated effort after scoping
+
+| Outcome | Expected effort |
+|---|---:|
+| historical replay immediately identifies a stack regression | 4-8 hours to isolate and validate |
+| bounded wait/termination/ABI defect | 1-2 days including exact correctness and timing |
+| control-flow or WMMA defect requiring atom repair | 2-4 days |
+| no passing historical binary and canaries do not isolate safely | stop after roughly one day with `raw_pipe_refuted` |
+
+The highest-value first milestone is HP0+HP1.  It distinguishes a real
+historical regression from an unproven historical attribution before any new
+kernel work is attempted.
