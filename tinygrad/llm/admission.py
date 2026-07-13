@@ -12,8 +12,8 @@ VRAM_ADMIT_FRACTION = float(getenv("VRAM_ADMIT_FRACTION", "0.8"))
 class AdmissionInputs:
   requested:int|str|None; trained_ctx:int; free_vram:int|None; q4_bytes:int; est_fp16:int; num_blocks:int
   n_heads:int; n_kv_heads:int; head_dim:int; prefill_ubatch:int; v2_on:bool; resident_fp16_admit:bool
-  prefill_chunked:bool; model_label:str; stream:str="auto"; rope_dim:int|None=None; kv_quant_supported:bool=False
-  kv_quant_disabled:bool=False; live_split_s:int=48; chunk_resident_blocks:int=4
+  model_label:str; stream:str="auto"; rope_dim:int|None=None; kv_quant_supported:bool=False
+  kv_quant_disabled:bool=False; live_split_s:int=48
 
 @dataclass(frozen=True)
 class AdmissionPlan:
@@ -21,8 +21,7 @@ class AdmissionPlan:
 
 def plan_context_admission(inp:AdmissionInputs) -> AdmissionPlan:
   kv_per_tok = 2 * inp.n_kv_heads * inp.head_dim * 2 * inp.num_blocks
-  weights = inp.q4_bytes + ((inp.est_fp16 // max(inp.num_blocks, 1)) * inp.chunk_resident_blocks
-                            if inp.v2_on and inp.prefill_chunked else inp.est_fp16 if inp.resident_fp16_admit else 0)
+  weights = inp.q4_bytes + (inp.est_fp16 if inp.resident_fp16_admit else 0)
   prefill_per_tok = 4 * inp.n_heads * inp.prefill_ubatch
   flash_scratch = inp.n_heads * inp.live_split_s * (inp.head_dim + 2) * 4
   kv_quant_shape = inp.head_dim == 128 and inp.n_kv_heads == 8 and inp.n_heads % inp.n_kv_heads == 0; kv_quant_supported = inp.kv_quant_supported and kv_quant_shape and not inp.kv_quant_disabled

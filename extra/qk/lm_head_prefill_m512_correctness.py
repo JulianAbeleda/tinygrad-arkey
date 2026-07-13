@@ -5,7 +5,7 @@ script (per the LM-head prefill-route wiring task: host-side only, GPU correctne
 Standalone M=512 LM-head correctness check for the prefill-route wiring landed in:
   - tinygrad/llm/prefill_routes.py (_direct_packed_role / _direct_packed_module_role now resolve "output"/
     "output.weight" to role "lm_head")
-  - tinygrad/llm/model.py (Transformer.logits / logits_prefill_v2_chunked route self.output through _pf16 when
+  - tinygrad/llm/model.py (Transformer.logits routes self.output through _pf16 when
     self.blk[0]._prefill_v2 is True and self.output is an installed Q4_K/Q6_K direct-packed primitive)
   - tinygrad/llm/model.py (Transformer._prefill_v2_covered now also yields self.output, tagged
     _prefill_graph_role="lm_head", so the VRAM budget preflight in realize_prefill_v2_weights accounts for it)
@@ -72,7 +72,7 @@ def run(rows:int=DEFAULT_ROWS, k:int=DEFAULT_K, m:int=DEFAULT_M, seed:int=1337) 
   # comparator 1: the packed direct_out kernel, role="lm_head" -- the exact spec/emit pair
   # route_direct_packed_prefill -> Q6KDirectPackedPrefillCandidate.run now reaches for self.output once
   # self.blk[0]._prefill_v2 and is_direct_packed_prefill_linear(self.output) are both true (see
-  # tinygrad/llm/model.py:_lm_head_wants_pf16 / logits / logits_prefill_v2_chunked).
+  # tinygrad/llm/model.py:_lm_head_wants_pf16 / logits).
   spec = describe_q6k_packed_prefill(rows, k, m, role="lm_head", parts=1, output_layout="direct_out",
                                      opts=("LOCAL:0:64",))
   assert spec.kernel_name == f"q6k_gen_prefill_direct_out_{rows}_{k}_{m}"

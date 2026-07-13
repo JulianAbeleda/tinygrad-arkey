@@ -43,31 +43,31 @@ def test_prefill_qk_direct_alias_selects_direct_packed():
 
 def test_prefill_route_rejects_unknown_policy():
   from tinygrad.llm.prefill_routes import prefill_route_policy
-  os.environ["PREFILL_ROUTE"] = "hardcoded_14b"
+  os.environ["PREFILL_ROUTE"] = "chunked"
   with pytest.raises(ValueError):
     prefill_route_policy()
 
 
 def test_auto_keeps_resident_fp16_when_it_fits():
   from tinygrad.llm.prefill_routes import prefill_route_wants_resident_fp16
-  assert prefill_route_wants_resident_fp16(est_gb=12.0, budget_gb=18.0, has_direct_packed=True, prefill_chunked=False)
+  assert prefill_route_wants_resident_fp16(est_gb=12.0, budget_gb=18.0, has_direct_packed=True)
 
 
 def test_auto_skips_resident_fp16_when_direct_packed_exists_and_fp16_exceeds_budget():
   from tinygrad.llm.prefill_routes import prefill_route_wants_resident_fp16
-  assert not prefill_route_wants_resident_fp16(est_gb=24.0, budget_gb=18.0, has_direct_packed=True, prefill_chunked=False)
+  assert not prefill_route_wants_resident_fp16(est_gb=24.0, budget_gb=18.0, has_direct_packed=True)
 
 
 def test_fp16_policy_keeps_resident_fp16_even_over_budget():
   from tinygrad.llm.prefill_routes import prefill_route_wants_resident_fp16
   os.environ["PREFILL_ROUTE"] = "fp16"
-  assert prefill_route_wants_resident_fp16(est_gb=24.0, budget_gb=18.0, has_direct_packed=True, prefill_chunked=False)
+  assert prefill_route_wants_resident_fp16(est_gb=24.0, budget_gb=18.0, has_direct_packed=True)
 
 
 def test_direct_policy_skips_resident_fp16_for_8b_experiments_too():
   from tinygrad.llm.prefill_routes import prefill_route_wants_resident_fp16
   os.environ["PREFILL_ROUTE"] = "direct_packed"
-  assert not prefill_route_wants_resident_fp16(est_gb=12.0, budget_gb=18.0, has_direct_packed=True, prefill_chunked=False)
+  assert not prefill_route_wants_resident_fp16(est_gb=12.0, budget_gb=18.0, has_direct_packed=True)
 
 
 def test_direct_packed_quant_selector():

@@ -293,7 +293,6 @@ def measurement_regime(authority: dict[str, Any]) -> dict[str, Any]:
     "external_handwritten_kernel": "hand_external_reference",
     "rollback_oracle": "hand_external_reference",
   }.get(prov, "unknown")
-  chunked = str(authority.get("prefill_chunked", "")).strip().lower() not in ("", "0", "false", "off", "no")
   return {
     "regime_id": regime_id,
     "provenance": prov,
@@ -301,7 +300,6 @@ def measurement_regime(authority: dict[str, Any]) -> dict[str, Any]:
     "route_rolled_back": ra.get("prefill_route_rolled_back"),
     "mode": authority.get("mode"),
     "logits_only": authority.get("logits_only"),
-    "chunked": chunked,
     # only the pure generated regime may be cited as the generated route's promotion authority
     "authoritative_for_generated_promotion": regime_id == "generated_pure",
   }

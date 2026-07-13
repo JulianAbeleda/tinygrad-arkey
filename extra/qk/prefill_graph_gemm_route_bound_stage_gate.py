@@ -3,7 +3,7 @@
 
 This gate exercises the actual default prefill linear route, not a custom microkernel:
 
-  route_prefill_linear(..., prefill_graph_gemm=False, prefill_chunked=False)
+  route_prefill_linear(..., prefill_graph_gemm=False)
 
 The expected current state is intentionally not a pass for performance recovery. The route is
 strict-pure and emits fp16 WMMA, but it does not route-bind generated LOCAL operand staging yet.
@@ -37,7 +37,7 @@ x = Tensor(x_np)
 w = Tensor(w_np)
 lin = SimpleNamespace(_pf16_w=w, bias=None, weight=w, name="route_bound_probe")
 with pinned_peak_from_env() as pin_prov:
-  out = route_prefill_linear(lin, x, prefill_graph_gemm=False, prefill_chunked=False).realize()
+  out = route_prefill_linear(lin, x, prefill_graph_gemm=False).realize()
 arr = out.numpy()
 ref = x_np.reshape(512, 512).astype(np.float32) @ w_np.astype(np.float32).T
 diff = arr.reshape(512, 512).astype(np.float32) - ref

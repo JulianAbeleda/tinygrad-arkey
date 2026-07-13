@@ -113,7 +113,6 @@ def measurement_regime(report: dict[str, Any]) -> dict[str, Any]:
   ra = report.get("route_attribution") or {}
   prov = ra.get("prefill_route_provenance")
   regime_id = REGIME_BY_PROVENANCE.get(prov, "unknown")
-  chunked = str(report.get("prefill_chunked", "")).strip().lower() not in ("", "0", "false", "off", "no")
   return {
     "regime_id": regime_id,
     "provenance": prov,
@@ -121,7 +120,6 @@ def measurement_regime(report: dict[str, Any]) -> dict[str, Any]:
     "route_rolled_back": ra.get("prefill_route_rolled_back"),
     "mode": report.get("mode"),
     "logits_only": report.get("logits_only"),
-    "chunked": chunked,
     # only the pure generated regime is authoritative for the generated-route promotion question
     "authoritative_for_generated_promotion": regime_id == "generated_pure",
   }
@@ -283,7 +281,7 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
     saved = pr._WARMSTART_OPTS
     pr._WARMSTART_OPTS = model._pf16_warmstart
     try:
-      return model.logits_prefill_v2_chunked(chunk.contiguous(), sp_int) if os.environ.get("PREFILL_CHUNKED", "0") != "0" else model.logits(chunk.contiguous(), sp_int)
+      return model.logits(chunk.contiguous(), sp_int)
     finally:
       pr._WARMSTART_OPTS = saved
 
@@ -350,7 +348,6 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
     "graph_gemm": graph_gemm,
     "prefill_v2": os.environ.get("PREFILL_V2", ""),
     "prefill_route": os.environ.get("PREFILL_ROUTE", "auto"),
-    "prefill_chunked": os.environ.get("PREFILL_CHUNKED", ""),
     "K": K,
     "warmups": warmups,
     "rounds": rounds,

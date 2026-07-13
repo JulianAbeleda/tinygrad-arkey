@@ -358,7 +358,7 @@ def prefill_lds_primitive_route_trace(out_f: int = 12288, in_f: int = 4096, *, r
 
 
 def route_pf16_graph_gemm(lin, x: Tensor, w: Tensor | None = None) -> Tensor | None:
-  # `w` (optional): an explicit fp16 weight to GEMM against. PREFILL_CHUNKED passes an unstored
+  # `w` (optional): an explicit fp16 weight to GEMM against. Callers may pass an unstored
   # `lin.weight.cast(fp16).contiguous()` from inside a layer-sized TinyJit, so replay reuses the graph-owned fp16
   # dequant scratch across blocks instead of pinning resident `lin._pf16_w` for every block.
   # NOTE: the gfx1100 arch restriction for default-on lives in model.PREFILL_GRAPH_GEMM (computed once at import);

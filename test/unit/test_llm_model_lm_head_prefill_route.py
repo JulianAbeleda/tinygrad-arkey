@@ -1,4 +1,4 @@
-"""Host-side (no GPU) proof that Transformer.logits()/logits_prefill_v2_chunked() select the packed prefill
+"""Host-side (no GPU) proof that Transformer.logits() selects the packed prefill
 route for self.output ONLY on a concrete prefill-v2 batch (e.g. T=512), and take the byte-for-byte unchanged
 decode (T==1) path otherwise -- the wiring described in the LM-head prefill-route task.
 
@@ -11,8 +11,7 @@ from tinygrad.llm.model import Transformer
 
 
 class _XStub:
-  """Minimal activation-tensor stand-in: supports the handful of chained calls logits()/
-  logits_prefill_v2_chunked() make on `x` (float/contiguous/realize/device), always returning itself."""
+  """Minimal activation-tensor stand-in for the chained calls logits() makes on `x`."""
   device = "CPU"
   def float(self): return self
   def contiguous(self): return self
@@ -43,16 +42,12 @@ class _FakeTransformer:
   # attributes/collaborators they touch, so this never needs a real GGUF-loaded model or a GPU device.
   _lm_head_wants_pf16 = Transformer._lm_head_wants_pf16
   logits = Transformer.logits
-  logits_prefill_v2_chunked = Transformer.logits_prefill_v2_chunked
 
   def __init__(self, *, prefill_v2:bool, output_is_direct_packed:bool):
     self.blk = [_FakeBlock(prefill_v2)]
     self.output = _FakeOutputLinear(output_is_direct_packed)
     self.output_norm = lambda x: x
     self.token_embd = lambda tokens: _XStub()
-    # logits_prefill_v2_chunked collaborators (only reached by that method, not by logits()):
-    self._prefill_v2_block_state = lambda block, device: ((), (), ())
-    self._prefill_v2_layer_jit = lambda block, names, val_idx, vals, start_pos: (lambda x, *v: x)
 
 
 def _install_stubs(monkeypatch):
@@ -106,37 +101,4 @@ def test_logits_keeps_plain_linear_path_when_primitives_not_installed(monkeypatc
   out = fake.logits(tokens, 0)
 
   assert calls == [], "plain nn.Linear LM head must not be routed through _pf16"
-  assert out[0] == "plain_output_call"
-
-
-def test_logits_prefill_v2_chunked_routes_lm_head_through_pf16(monkeypatch):
-  # logits_prefill_v2_chunked is only ever invoked from inside an is_prefill_v2==True forward
-  # (Transformer.__call__: `if is_prefill_v2 and PREFILL_CHUNKED: ... forward_prefill_v2_chunked`), so its
-  # block loop always sees _prefill_v2=True in practice; this proves the tail lm_head gate reuses the
-  # identical `_lm_head_wants_pf16` gate `logits` uses.
-  calls = _install_stubs(monkeypatch)
-  from tinygrad.llm import model as model_mod
-  monkeypatch.setattr(model_mod, "getenv", lambda k, d=0: d)  # PREFILL_PACKED_STREAM off (default)
-
-  fake = _FakeTransformer(prefill_v2=True, output_is_direct_packed=True)
-  tokens = SimpleNamespace(shape=(1, 512))
-
-  out = fake.logits_prefill_v2_chunked(tokens, 0)
-
-  assert len(calls) == 1
-  assert calls[0][0] is fake.output
-  assert not isinstance(out, tuple)
-
-
-def test_logits_prefill_v2_chunked_keeps_decode_t1_path_unchanged(monkeypatch):
-  calls = _install_stubs(monkeypatch)
-  from tinygrad.llm import model as model_mod
-  monkeypatch.setattr(model_mod, "getenv", lambda k, d=0: d)
-
-  fake = _FakeTransformer(prefill_v2=False, output_is_direct_packed=True)
-  tokens = SimpleNamespace(shape=(1, 1))
-
-  out = fake.logits_prefill_v2_chunked(tokens, 5)
-
-  assert calls == []
   assert out[0] == "plain_output_call"

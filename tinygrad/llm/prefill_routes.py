@@ -10,7 +10,7 @@ activation_spec = qk_ops.qk_quant_specs_attr("activation_spec")
 quant_spec = qk_ops.qk_quant_specs_attr("quant_spec")
 RuntimeOpSpec = qk_ops.qk_runtime_specs_attr("RuntimeOpSpec")
 
-PREFILL_ROUTE_CHOICES = ("auto", "fp16", "direct_packed", "chunked")
+PREFILL_ROUTE_CHOICES = ("auto", "fp16", "direct_packed")
 # Handwritten sdot4/MMQ/Q8_1-GEMM prefill research modes deleted 2026-07-06 (no backups; dead end ~237 tok/s).
 # Only the generated int8-WMMA parity substrates remain selectable; off-values fall to the direct-packed default.
 Q4K_Q8_CHOICES = ("", "0", "false", "off", "no", "wmma", "wmma_tiled")
@@ -128,10 +128,10 @@ def _direct_packed_opts(lin, spec:"PrefillLinearRouteSpec"):
   return opts
 
 
-def prefill_route_wants_resident_fp16(*, est_gb:float, budget_gb:float, has_direct_packed:bool, prefill_chunked:bool) -> bool:
+def prefill_route_wants_resident_fp16(*, est_gb:float, budget_gb:float, has_direct_packed:bool) -> bool:
   route = prefill_route_policy()
   if route == "fp16": return True
-  if route in ("direct_packed", "chunked") or prefill_chunked: return False
+  if route == "direct_packed": return False
   return not has_direct_packed or est_gb <= budget_gb
 
 
@@ -370,7 +370,7 @@ def route_direct_packed_prefill(lin, x:Tensor) -> Tensor | None:
   return candidate.run(lin, x, x_batch, spec)
 
 
-def route_prefill_linear(lin, x:Tensor, *, prefill_graph_gemm:bool, prefill_chunked:bool) -> Tensor:
+def route_prefill_linear(lin, x:Tensor, *, prefill_graph_gemm:bool) -> Tensor:
   route = prefill_route_policy()
   w = getattr(lin, "_pf16_w", None)
 
@@ -385,16 +385,6 @@ def route_prefill_linear(lin, x:Tensor, *, prefill_graph_gemm:bool, prefill_chun
     if routed is not None: return routed
     if route == "direct_packed" and prefill_route_strict():
       raise RuntimeError(f"PREFILL_ROUTE=direct_packed did not bind for {getattr(lin, 'name', type(lin).__name__)}")
-
-  if route == "chunked": prefill_chunked = True
-  if prefill_chunked and w is None:
-    if is_direct_packed_prefill_linear(lin): w_local = lin.prefill_fp16_weight()
-    else: w_local = lin.weight.cast(dtypes.float16).contiguous()
-    if prefill_graph_gemm:
-      routed = qk_ops.route_pf16_graph_gemm(lin, x, w=w_local)
-      if routed is not None: return routed
-    b = getattr(lin, "bias", None)
-    return x.cast(dtypes.float16).linear(w_local.transpose(), b.cast(dtypes.float16) if b is not None else None)
 
   if prefill_graph_gemm and w is not None:
     routed = qk_ops.route_pf16_graph_gemm(lin, x)

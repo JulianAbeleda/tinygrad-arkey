@@ -55,6 +55,6 @@ Source: read-only flag classification 2026-07-10 (5-family audit). Route ground 
 
 ---
 
-## Delete candidates held as KEEP for now (revisit)
+## Retired serving experiments
 
-- **PREFILL_CHUNKED / _CHUNKED_EXPERIMENTAL / _CHUNK_RESIDENT_BLOCKS** — the chunked per-layer fp16 overlay. Verdict banked at `tinygrad/llm/model.py` ("replays stale captured state → AMD MMU faults") + `docs/prefill-lessons-ledger.md`; superseded by `PREFILL_ROUTE=direct_packed` for 14B/32B. Fail-loud disabled unless `_EXPERIMENTAL=1`. Kept as debug overlay for now; delete together if the overlay is formally abandoned.
+- **PREFILL_CHUNKED / _CHUNKED_EXPERIMENTAL / _CHUNK_RESIDENT_BLOCKS** — REMOVED 2026-07-13. The chunked per-layer fp16 overlay replayed stale captured state and produced AMD MMU faults. Superseded by `PREFILL_ROUTE=direct_packed` for memory-frugal 14B/32B prefill; its implementation, route, admission accounting, harness switch, and tests were removed together.

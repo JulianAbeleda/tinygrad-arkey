@@ -14,7 +14,6 @@ def _report(route_id=whole.PREFILL_WMMA_PIPE_ROUTE, **route_overrides):
     "graph_gemm": True,
     "prefill_v2": "1",
     "prefill_route": "fp16",
-    "prefill_chunked": "0",
     "logits_only": True,
     "route_attribution": route,
   }
