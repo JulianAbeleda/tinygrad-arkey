@@ -311,8 +311,13 @@ class Scheduler:
             except ValueError as exc: raise KernelOptError(str(exc)) from exc
             axes[0], subtile_n = self.shift_to(axes[0], factors.subtiles_n, AxisType.UPCAST)
             axes[1], subtile_m = self.shift_to(axes[1], factors.subtiles_m, AxisType.UPCAST)
-            axes[1], wave_m = self.shift_to(axes[1], factors.waves_m, AxisType.LOCAL)
-            axes[0], wave_n = self.shift_to(axes[0], factors.waves_n, AxisType.LOCAL)
+            # Wave-private register schedules have no cross-wave axis.  A
+            # constant encodes that ownership without creating a size-one
+            # RANGE, which shift_to intentionally does not support.
+            if factors.waves_m == 1: wave_m = UOp.const(dtypes.weakint, 0)
+            else: axes[1], wave_m = self.shift_to(axes[1], factors.waves_m, AxisType.LOCAL)
+            if factors.waves_n == 1: wave_n = UOp.const(dtypes.weakint, 0)
+            else: axes[0], wave_n = self.shift_to(axes[0], factors.waves_n, AxisType.LOCAL)
             axes[2], k_substep = self.shift_to(axes[2], factors.k_substeps, AxisType.UNROLL)
             candidate_axes = (subtile_m, subtile_n, wave_m, wave_n, k_substep, axes[0], axes[1], axes[2], warp_full)
 

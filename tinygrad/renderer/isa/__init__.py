@@ -65,6 +65,7 @@ class CompilerCaptureProof:
   vgpr_spills: int|None = None
   sgpr_spills: int|None = None
   lds_bytes: int|None = None
+  wait_policy: str|None = None
 
   def __post_init__(self):
     if not isinstance(self.leases, tuple) or any(not isinstance(x, CompilerRegisterLease) for x in self.leases):
@@ -73,7 +74,7 @@ class CompilerCaptureProof:
       raise ValueError("compiler capture proof requires A, B, and C ownership")
 
   def finalize_zero_spill(self) -> CompilerCaptureProof:
-    return CompilerCaptureProof(self.leases, "final_regalloc", "post_regalloc", 0, 0, 0, self.lds_bytes)
+    return CompilerCaptureProof(self.leases, "final_regalloc", "post_regalloc", 0, 0, 0, self.lds_bytes, self.wait_policy)
 
 class ISARenderer(Renderer):
   pre_isel_matcher: PatternMatcher

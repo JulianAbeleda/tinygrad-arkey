@@ -144,12 +144,13 @@ def _candidate_schedule_spec(spec,admission):
   schedule=admission.normalized_payload["schedule"]; factors=admission.plan
   pipeline = admission.pipeline_plan
   buffer_count = pipeline.buffer_count if hasattr(pipeline, "buffer_count") else pipeline.storage.buffer_count
+  pipeline_depth = getattr(pipeline, "logical_stage_count", getattr(pipeline, "stages", buffer_count))
   from extra.qk.runtime_specs import candidate_storage_kind
   route_family = "global_register_resident" if candidate_storage_kind(admission.normalized_payload) == "global_register_resident" else "lds"
   return replace(spec,route_family=route_family,tile_m=admission.geometry.tile[0],tile_n=admission.geometry.tile[1],
     tile_k=admission.geometry.tile[2],waves_m=admission.geometry.waves[0],waves_n=admission.geometry.waves[1],
     wm=factors.subtiles_m,wn=factors.subtiles_n,threads=admission.geometry.threads,
-    pipeline_depth=buffer_count,dbuf=int(buffer_count == 2),
+    pipeline_depth=pipeline_depth,dbuf=int(buffer_count == 2),
     pad=schedule["lds"]["padding"])
 
 def _install_candidate_matmul(x,w,out_f,in_f,spec,admission):

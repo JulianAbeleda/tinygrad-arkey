@@ -213,8 +213,9 @@ def admit_full_kernel_candidate(payload:dict[str, Any], canonical_identity:str, 
      any(schedule["cooperative_load"][r]["vector_width"]*2 != capability.vector_bytes or
          schedule["cooperative_load"][r]["alignment"] != capability.vector_bytes for r in ("a","b")):
     raise FullKernelAdmissionError("capability_vector", "only aligned b128 fp16 transport is supported")
-  if any(schedule["cooperative_load"][r]["lane_mapping"] != "cooperative_row_stride_64_b128" for r in ("a","b")):
-    raise FullKernelAdmissionError("capability_lane_map", "cooperative lane mapping is unsupported")
+  expected_lane_mapping = "wave_contiguous_b128" if storage_kind == "global_register_resident" else "cooperative_row_stride_64_b128"
+  if any(schedule["cooperative_load"][r]["lane_mapping"] != expected_lane_mapping for r in ("a","b")):
+    raise FullKernelAdmissionError("capability_lane_map", f"{storage_kind} requires {expected_lane_mapping}")
   from tinygrad.uop.ops import KernelCandidateContext, KernelLDSWindow, KernelTileGeometry
   # KernelTileGeometry predates non-LDS transport and still carries mandatory
   # compatibility windows. Register admission uses inert aligned sentinels;

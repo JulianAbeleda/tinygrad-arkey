@@ -19,3 +19,9 @@ def test_attn_qo_pair_is_exact_and_transport_distinct_cpu_only():
   assert rows["direct_l2"]["canonical_identity"] != rows["lds"]["canonical_identity"]
   assert rows["direct_l2"]["payload"]["schedule"]["residency"]["resident"][-1] == "stage_ab_register"
   assert "stage_ab_register" not in rows["lds"]["payload"]["schedule"]["residency"]["resident"]
+  assert pair["semantic_schedule"] == {"operation":"a@b_transpose", "input_dtype":"fp16", "accumulator_dtype":"fp32",
+                                       "output_dtype":"fp16", "numerical_mode":"ieee_fp16_acc_fp32"}
+  assert pair["schedule_policies"]["direct_l2"] == {"tile":(32,32,32), "waves":(1,1), "threads":32,
+    "ownership":"wave_private", "storage":"global_register_resident", "stages":2}
+  assert pair["schedule_policies"]["lds"] == {"tile":(128,128,32), "waves":(4,2), "threads":256,
+    "ownership":"workgroup_shared", "storage":"lds", "stages":1}

@@ -448,3 +448,37 @@ pytest configuration warnings, and 26 subtests. The project is not blocked at
 the architecture level; it is blocked only on wiring the structural R3/R4
 scaffold into the normal postrange graph with a fully proven two-stage
 producer/consumer lifecycle and final WMMA ABI.
+
+## Storage-aware scheduler integration (2026-07-13)
+
+The earlier scope incorrectly treated the LDS 128x128 workgroup tile as part
+of the immutable mathematical schedule.  Only the operation, dtype/layout,
+shape, numerical mode, and target are shared.  Work decomposition belongs to
+the storage policy because LDS operands are workgroup-shared while registers
+are wave-private.
+
+The central policy now composes `GEMMWorkgroupPolicy` with `PipelinePolicy`.
+The exact comparison uses these two legal decompositions:
+
+| transport | tile | waves | threads | ownership | physical storage |
+|---|---:|---:|---:|---|---|
+| direct_l2 | 32x32x32 | 1x1 | 32 | wave-private | VGPR |
+| LDS | 128x128x32 | 4x2 | 256 | workgroup-shared | 2x20480-byte LDS |
+
+This is one scheduler authority with storage-specific policies, not a second
+scheduler.  The register policy is consumed by the ordinary compiler path and
+selects row/column fragment residency and targeted VMEM waits from typed
+candidate/capture metadata.  Legacy environment switches remain diagnostic
+fallbacks, not the authority.
+
+Current compile-only evidence for the exact direct candidate is one wave,
+zero LDS, zero spill, 112 VGPR, 16 b128 global loads for 8 WMMAs, and partial
+`vmcnt(8/6/2/0)` waits that overlap younger fragment loads with earlier WMMAs.
+This replaces the previous 216-VGPR, four-loads-per-WMMA decomposition.
+
+For this attn_qo milestone, 100% means: typed policy/admission; distinct legal
+work decomposition; final identity/resource/ABI join; no LDS or spill; at
+most two b128 loads per WMMA; proven targeted waits; full guarded correctness;
+isolated timing against the unchanged proven WMMA-LDS candidate; and no route
+promotion unless direct wins.  Cross-iteration modulo pipelining is a later
+search dimension, not something to claim from the current intra-tile overlap.

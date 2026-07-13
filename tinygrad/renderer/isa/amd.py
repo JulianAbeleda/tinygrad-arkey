@@ -208,6 +208,21 @@ def _n_c_runs(ctx:IselContext) -> int:
     ctx._ncruns = n
   return n
 def _c_low(ctx:IselContext) -> bool: return _n_c_runs(ctx) > 1   # multi-output-tile -> C accumulators go LOW
+
+def _candidate_register_resident(ctx:IselContext) -> bool:
+  """Read storage intent from the typed candidate carried by the kernel sink."""
+  for u in ctx.uses:
+    if u.op is not Ops.SINK: continue
+    candidate = getattr(u.arg, "candidate_context", None)
+    pipeline = getattr(candidate, "pipeline", None)
+    geometry = getattr(candidate, "geometry", None)
+    return getattr(getattr(pipeline, "storage", None), "kind", None) == "global_register_resident" and \
+      getattr(geometry, "waves", None) == (1, 1) and getattr(geometry, "threads", None) == getattr(geometry, "wave_size", None)
+  return False
+
+def _resident_ab_enabled(ctx:IselContext) -> bool:
+  # The candidate contract is authoritative.  Keep the env flag only for legacy standalone diagnostics.
+  return _candidate_register_resident(ctx) or bool(getenv("PREFILL_WMMA_CHAIN_AB_RESIDENT", 0))
 def _acc_base(ctx:IselContext, key) -> int:
   # LOW C-accumulator allocator (multi-tile only): each distinct `key` (a subtile identity) gets an 8-aligned, contiguous
   # 8-VGPR run from WMMA_ACC_BASE, STABLE across repeat calls. Bump-by-8 keeps every run 8-aligned. Separate dict from
@@ -243,7 +258,7 @@ def _n_ab_frags(ctx:IselContext) -> int:
       # VGPR leases. They must not also reserve legacy low resident fragments.
       if _register_stage_fragment_role(u.src[0]) is not None and _register_stage_fragment_role(u.src[1]) is not None:
         continue
-      if getenv("PREFILL_WMMA_CHAIN_AB_RESIDENT", 0):
+      if _resident_ab_enabled(ctx):
         if getenv("PREFILL_WMMA_AB_PROOF_KEY", 0):
           if bool(getenv("PREFILL_WMMA_CHAIN_RESIDENT_A", 1)) and \
              (akey := (_wmma_frag_phase_reuse_key(ctx, "A", u.src[0]) or _wmma_frag_proof_reuse_key(ctx, "A", u.src[0]))) is not None: As.add(akey)
@@ -509,6 +524,12 @@ def _record_direct_wmma_fragments(ctx:IselContext, abase:int|None, bbase:int|Non
   pair = {"A": abase, "B": bbase}
   if current is None: ctx._direct_wmma_fragments = pair
   elif current != pair: ctx._direct_wmma_fragments = {}
+
+def _record_resident_wmma_fragment(ctx:IselContext, role:str, base:int|None) -> None:
+  if base is None: return
+  fragments = getattr(ctx, "_resident_wmma_fragments", None)
+  if fragments is None: fragments = ctx._resident_wmma_fragments = {"A": set(), "B": set()}
+  fragments[role].add(base)
 
 # ============================ instruction selection ============================
 def isel_param(ctx:IselContext, x:UOp):
@@ -1594,9 +1615,10 @@ def isel_wmma(ctx:IselContext, x:UOp):
                      _register_stage_fragment_role(tile.src[1]) == "B" for tile in chain)
   abase = 0 if stage_backed else _frag_base(ctx, (ab_key, "A"), 8)
   bbase = 0 if stage_backed else _frag_base(ctx, (ab_key, "B"), 8)
-  if not (getenv("PREFILL_WMMA_CHAIN_AB_RESIDENT", 0) and _c_low(ctx)) and (cbase is None or abase is None or bbase is None):
+  resident_ab = _resident_ab_enabled(ctx) and _c_low(ctx)
+  if not resident_ab and (cbase is None or abase is None or bbase is None):
     raise NotImplementedError(f"AMD:ISA WMMA fragment region [{FRAG_BASE},{FRAG_TOP}) exhausted (A={abase} B={bbase} C={cbase})")
-  if not stage_backed: _record_direct_wmma_fragments(ctx, abase, bbase)
+  if not stage_backed and not resident_ab: _record_direct_wmma_fragments(ctx, abase, bbase)
   prev:UOp|None = None
   for tile_i, tile in enumerate(reversed(chain)):                  # head first, then each accumulate tile
     if prev is None:                            # HEAD: init the accumulator to 0 from the 8 CONST-0 seed lanes (V_CONST)
@@ -1613,7 +1635,7 @@ def isel_wmma(ctx:IselContext, x:UOp):
       cin = list(prev.src)                      #   -> lower_inst reads dbase=v{cbase} for both src2 and vdst (in place)
       dep = (prev.src[0],)                      # WAR guard: reload this tile's shared A/B frags only after the prior matmul
       dep = _dbuf_d3a_probe_marker(ctx, tile, dep)
-    if getenv("PREFILL_WMMA_CHAIN_AB_RESIDENT", 0) and _c_low(ctx):
+    if resident_ab:
       resident_a = bool(getenv("PREFILL_WMMA_CHAIN_RESIDENT_A", 1))
       resident_b = bool(getenv("PREFILL_WMMA_CHAIN_RESIDENT_B", 1))
       if getenv("PREFILL_WMMA_AB_PROOF_KEY", 0):
@@ -1628,6 +1650,8 @@ def isel_wmma(ctx:IselContext, x:UOp):
       tbbase = _ab_base(ctx, ("B", bkey)) if resident_b else bbase
       if cbase is None or tabase is None or tbbase is None:
         raise NotImplementedError(f"AMD:ISA WMMA resident A/B window [{_acc_top(ctx)},{FRAG_BASE}) exhausted (A={tabase} B={tbbase} C={cbase})")
+      if resident_a: _record_resident_wmma_fragment(ctx, "A", tabase)
+      if resident_b: _record_resident_wmma_fragment(ctx, "B", tbbase)
       resident_dep = dep if getenv("PREFILL_WMMA_RESIDENT_PACK_DEP", 0) else ()
       apk = _pack_frag(ctx, tile.src[0], tabase, resident_dep) if resident_a else _pack_frag_tile(ctx, tile.src[0], tabase, dep, "A")
       bpk = _pack_frag(ctx, tile.src[1], tbbase, resident_dep) if resident_b else _pack_frag_tile(ctx, tile.src[1], tbbase, dep, "B")
@@ -2236,10 +2260,12 @@ class AMDISARenderer(ISARenderer):
     stages = _register_stage_leases(ctx)
     specs = getattr(ctx, "_stage_reg_specs", {})
     direct = getattr(ctx, "_direct_wmma_fragments", {})
+    resident = getattr(ctx, "_resident_wmma_fragments", {})
     c_leases = sorted(getattr(ctx, "_accfrag", {}).values())
     stage_owned = set(stages) == {"A", "B"} and set(specs) == {"A", "B"}
     direct_owned = set(direct) == {"A", "B"}
-    if not (stage_owned or direct_owned) or not c_leases: return None
+    resident_owned = set(resident) == {"A", "B"} and all(resident[role] for role in ("A", "B"))
+    if not (stage_owned or direct_owned or resident_owned) or not c_leases: return None
     register_buffers = [u for u in ctx.uses if u.op is Ops.DEFINE_REG]
     owned_accumulators = _wmma_acc_regs(ctx)
     if any(_register_stage_buffer_meta(u) is None and id(u) not in owned_accumulators for u in register_buffers): return None
@@ -2247,12 +2273,16 @@ class AMDISARenderer(ISARenderer):
     if stage_owned:
       leases = tuple(CompilerRegisterLease(role, "vgpr", stages[role].start, stages[role].end,
         "register_stage", True, specs[role].slots, ("produce", "wait", "consume", "release")) for role in ("A", "B"))
-    else:
+    elif direct_owned:
       leases = tuple(CompilerRegisterLease(role, "vgpr", direct[role], direct[role]+8,
         "direct_wmma_fragment", True, 1, ("global_load", "consume", "overwrite")) for role in ("A", "B"))
+    else:
+      leases = tuple(CompilerRegisterLease(role, "vgpr", base, base+8,
+        "direct_wmma_fragment", True, 1, ("global_load", "consume", "overwrite"))
+        for role in ("A", "B") for base in sorted(resident[role]))
     leases += tuple(CompilerRegisterLease("C", "vgpr", base, base+8, "wmma_accumulator", True, 1,
       ("initialize", "accumulate", "consume", "store")) for base in c_leases)
-    return CompilerCaptureProof(leases, lds_bytes=0)
+    return CompilerCaptureProof(leases, lds_bytes=0, wait_policy="targeted_vmcnt")
 
   @staticmethod
   def _assembly_program(prg:UOp, proof:CompilerCaptureProof|None) -> UOp:
@@ -2265,7 +2295,9 @@ class AMDISARenderer(ISARenderer):
   def _final_linear(self, lin:UOp) -> UOp:
     insts = list(lin.src)
     if getenv("AMD_ISA_SCHED", 1): insts = self._schedule(insts)
-    return lin.replace(src=tuple(self._resolve_labels(self._insert_waitcnt(insts))))
+    proof = lin.arg if isinstance(lin.arg, CompilerCaptureProof) else None
+    targeted = proof is not None and proof.wait_policy == "targeted_vmcnt"
+    return lin.replace(src=tuple(self._resolve_labels(self._insert_waitcnt(insts, targeted=targeted))))
   @staticmethod
   def _final_disassembly(lin:UOp) -> str:
     """Render the exact typed instruction objects which are serialized into the code object."""
@@ -2466,7 +2498,7 @@ class AMDISARenderer(ISARenderer):
       if isinstance(v, Reg): out.append(v)
     return out
 
-  def _insert_waitcnt(self, uops:list[UOp]) -> list[UOp]:
+  def _insert_waitcnt(self, uops:list[UOp], *, targeted:bool=False) -> list[UOp]:
     # Correct CONSUMER-ONLY waitcnt: replaces the conservative drain-after-every-memory-op model. Track regs defined by
     # outstanding VMEM (vmcnt) and LDS/SMEM (lgkmcnt) loads + whether a store of each class is outstanding. Insert a
     # single full-drain s_waitcnt(0) only before: a consumer that touches a pending load's reg (RAW/WAR), a ds_load
@@ -2485,7 +2517,7 @@ class AMDISARenderer(ISARenderer):
           _proof_record_inst("waitcnt", "WAITCNT", wait.arg, {"simm16": simm16, "reason": "conservative_after_memory"})
           out.append(wait)
       return out
-    if getenv("AMD_ISA_WAITCNT_TARGETED", 0):
+    if targeted or getenv("AMD_ISA_WAITCNT_TARGETED", 0):
       out = []
       pend_vm:list[set[int]] = []; pend_lgkm:list[set[int]] = []
       vm_store = lgkm_store = False

@@ -21,6 +21,7 @@ def test_attn_qo_register_prefill_compile_is_cpu_only_and_zero_lds():
   payload["applicability"]["roles"] = ["attn_qo"]
   payload["schedule"]["pipeline"].update(buffer_count=1, stage_count=2)
   payload["schedule"]["residency"]["resident"] = ["accumulator", "stage_ab_register"]
+  for role in ("a", "b"): payload["schedule"]["cooperative_load"][role]["lane_mapping"] = "wave_contiguous_b128"
   payload["schedule"]["wmma"]["fragment_layout"] = "rdna3_wmma_f32_16x16x16_f16_register_static"
   candidate = _strict_full_kernel_candidate(full_kernel_candidate=payload)
   admission = admit_full_kernel_candidate(payload, candidate.canonical_identity,
