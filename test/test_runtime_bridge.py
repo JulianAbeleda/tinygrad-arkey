@@ -25,15 +25,23 @@ def test_missing_or_mismatched_artifact_fails_closed_without_runtime():
 def test_mock_runtime_is_executable_but_not_dispatched_on_construction():
   class Runtime:
     lib = b"ok"
-    def __init__(self): self.calls = 0
-    def __call__(self, *args, **kwargs): self.calls += 1; return "done"
+    def __init__(self): self.calls = 0; self.kwargs = None
+    def __call__(self, *args, **kwargs): self.calls += 1; self.kwargs = kwargs; return "done"
   rt = Runtime()
+  prg = UOp(Ops.PROGRAM, src=(UOp(Ops.SINK), UOp(Ops.DEVICE, arg="CPU"), UOp(Ops.LINEAR),
+                              UOp(Ops.SOURCE), UOp(Ops.BINARY, arg=b"ok")),
+            arg=ProgramInfo(global_size=(8, 1, 1), local_size=(64, 1, 1)))
   with patch("tinygrad.runtime.bridge.get_runtime", return_value=rt) as resolver:
-    handle = build_executable(artifact(), program(b"ok"), device="CPU")
+    handle = build_executable(artifact(), prg, device="CPU")
   resolver.assert_called_once()
   assert rt.calls == 0
+  # P1-2: __call__ is a pure alias for dispatch and therefore uses the PROGRAM
+  # launch geometry; there is no alternate default-geometry dispatch path.
   assert handle() == "done"
   assert rt.calls == 1
+  assert rt.kwargs == {"global_size": (8, 1, 1), "local_size": (64, 1, 1), "vals": (), "wait": True}
+  assert handle.dispatch() == "done"
+  assert rt.kwargs["global_size"] == (8, 1, 1)
 
 
 def test_explicit_dispatch_uses_program_launch_geometry():

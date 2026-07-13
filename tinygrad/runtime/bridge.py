@@ -28,8 +28,12 @@ class ExecutableHandle:
   program: UOp
   artifact: CompileArtifact
 
-  def __call__(self, *args, **kwargs):
-    return self.runtime(*args, **kwargs)
+  def __call__(self, *buffers, vals=(), wait=True):
+    # P1-2: there is exactly ONE runtime dispatch path.  ``__call__`` is a thin
+    # alias for :meth:`dispatch`; it can never invoke the runtime directly with
+    # a different (e.g. default ``(1, 1, 1)``) launch geometry.  A caller cannot
+    # supply-or-omit geometry to reach a second code path.
+    return self.dispatch(*buffers, vals=vals, wait=wait)
 
   def dispatch(self, *buffers, vals=(), wait=True):
     """Explicitly dispatch using the launch geometry from this PROGRAM.
