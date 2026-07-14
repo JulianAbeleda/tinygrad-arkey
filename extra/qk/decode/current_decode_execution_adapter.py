@@ -151,17 +151,81 @@ def prepare_current_decode_compile(request: CurrentDecodeCompileRequest) -> tupl
   return program, evidence
 
 
+_ARTIFACT_FIELDS = ("packed_words", "activation", "reference")
+
+
+def load_immutable_decode_artifact(path: str, request: CurrentDecodeCompileRequest) -> dict[str, Any]:
+  """Load and content-identity-bind the immutable packed-weight/activation/reference artifact.
+
+  The reference is produced independently (Q4_K dequant @ activation), never by the candidate kernel.
+  Every value carries a dtype+shape+bytes SHA-256; shapes/dtypes must match the exact admitted ABI."""
+  import numpy as np
+  from pathlib import Path
+  artifact = Path(path)
+  if not artifact.is_file(): raise ValueError(f"decode input artifact does not exist: {artifact}")
+  with np.load(artifact, allow_pickle=False) as row:
+    if set(row.files) != set(_ARTIFACT_FIELDS): raise ValueError(f"decode NPZ must contain exactly {_ARTIFACT_FIELDS}")
+    words, activation, reference = (np.ascontiguousarray(row[f]) for f in _ARTIFACT_FIELDS)
+  words_len = request.rows * (request.k // 256) * _Q4K_WORDS_PER_BLOCK
+  if words.shape != (words_len,) or words.dtype != np.uint32: raise ValueError("packed_words shape/dtype != exact ABI")
+  if activation.shape != (request.k,) or activation.dtype != np.float16: raise ValueError("activation shape/dtype != exact ABI")
+  if reference.shape != (request.rows,) or reference.dtype != np.float32: raise ValueError("reference shape/dtype != exact ABI")
+
+  def _sha(a: "np.ndarray") -> str:
+    c = np.ascontiguousarray(a)
+    return hashlib.sha256(f"{c.dtype.str}:{','.join(map(str, c.shape))}:".encode() + c.tobytes()).hexdigest()
+
+  return {"words": words, "activation": activation, "reference": reference,
+          "identities": {"schema": "tinygrad.decode_input_identity.v1", "algorithm": "sha256",
+                         "packed_words_sha256": _sha(words), "activation_sha256": _sha(activation),
+                         "reference_sha256": _sha(reference), "artifact_sha256": hashlib.sha256(artifact.read_bytes()).hexdigest()}}
+
+
+def verify_decode_full_output(request: CurrentDecodeCompileRequest, artifact: Mapping[str, Any]) -> dict[str, Any]:
+  """Dispatch the promoted G3 GEMV against the immutable inputs and check EVERY float32 output element
+  against the independent reference. Correctness gates any downstream timing; a dispatch that produces a
+  non-finite or mismatched element fails closed."""
+  import numpy as np
+  from tinygrad import Tensor, dtypes
+  from extra.qk.gemv_g3_codegen_lowering import q4k_g3_lanemap_gemv_kernel
+  words = Tensor(artifact["words"].copy()).realize()
+  x = Tensor(artifact["activation"].copy()).realize()
+  before = hashlib.sha256(artifact["words"].tobytes()).hexdigest()
+  kfn = q4k_g3_lanemap_gemv_kernel(request.rows, request.k)
+  out = Tensor.empty(request.rows, dtype=dtypes.float32, device=words.device).custom_kernel(words, x, fxn=kfn)[0].numpy()
+  ref = artifact["reference"]
+  finite = bool(np.all(np.isfinite(out)))
+  max_abs = float(np.max(np.abs(out - ref)))
+  rel = max_abs / (float(np.max(np.abs(ref))) + 1e-9)
+  inputs_unchanged = hashlib.sha256(artifact["words"].tobytes()).hexdigest() == before
+  passed = finite and inputs_unchanged and out.size == request.rows and rel < 1e-2
+  return {"schema": "tinygrad.decode_full_output_correctness.v1", "scope": "full_gemm",
+          "element_count": int(out.size), "max_abs_error": max_abs, "relative_error": rel,
+          "finite_output": finite, "inputs_unchanged": inputs_unchanged, "status": "pass" if passed else "fail",
+          "reference_basis": "independent_q4k_dequant_gemv", "identities": dict(artifact["identities"])}
+
+
 @dataclass(frozen=True)
 class CurrentDecodeExecutionAdapter:
-  """Classification adapter. It intentionally cannot yield PreparedExecution."""
+  """Classification + immutable-artifact correctness adapter for the promoted Q4_K G3 decode GEMV.
+
+  It yields compile evidence, and — given an immutable content-addressed input/reference artifact —
+  a guarded full-output correctness result. Without an artifact it still refuses to fabricate one."""
   def classify(self, request: CurrentDecodeCompileRequest) -> tuple[UOp, dict[str, Any]]:
     return prepare_current_decode_compile(request)
 
-  def prepare(self, request: CurrentDecodeCompileRequest):
-    _, evidence = self.classify(request)
-    raise DecodeExecutionBlocked(DecodeExecutionBlocker(**evidence["execution"]["blocker"]))
+  def verify(self, request: CurrentDecodeCompileRequest, artifact_path: str) -> dict[str, Any]:
+    artifact = load_immutable_decode_artifact(artifact_path, request)
+    return verify_decode_full_output(request, artifact)
+
+  def prepare(self, request: CurrentDecodeCompileRequest, artifact_path: str | None = None):
+    if artifact_path is None:
+      _, evidence = self.classify(request)
+      raise DecodeExecutionBlocked(DecodeExecutionBlocker(**evidence["execution"]["blocker"]))
+    return self.verify(request, artifact_path)
 
 
 __all__ = ["ADAPTER_ID", "ROUTE_ID", "TARGET", "CurrentDecodeCompileRequest", "DecodeExecutionBlocker",
            "DecodeExecutionBlocked", "CurrentDecodeExecutionAdapter", "build_current_decode_sink",
-           "compile_current_decode_program", "prepare_current_decode_compile"]
+           "compile_current_decode_program", "prepare_current_decode_compile",
+           "load_immutable_decode_artifact", "verify_decode_full_output"]

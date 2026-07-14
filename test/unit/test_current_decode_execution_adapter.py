@@ -58,3 +58,54 @@ def test_adapter_refuses_to_fabricate_prepared_execution(monkeypatch):
   with pytest.raises(adapter.DecodeExecutionBlocked) as exc:
     instance.prepare(_request())
   assert exc.value.blocker == blocker
+
+
+def _build_immutable_artifact(tmp_path, rows=32, k=1024, seed=99):
+  import numpy as np
+  from tinygrad import Tensor, dtypes
+  from extra.qk.layout import Q4_K_BLOCK_BYTES, Q4_K_BLOCK_ELEMS, q4_k_reference
+  rng = np.random.default_rng(seed)
+  nblocks = (rows * k) // Q4_K_BLOCK_ELEMS
+  raw = rng.integers(0, 256, size=nblocks * Q4_K_BLOCK_BYTES, dtype=np.uint8).reshape(nblocks, Q4_K_BLOCK_BYTES)
+  d = (rng.standard_normal(nblocks).astype(np.float32) * 5e-4).astype(np.float16)
+  dmin = (rng.standard_normal(nblocks).astype(np.float32) * 5e-4).astype(np.float16)
+  raw[:, 0:2] = d.view(np.uint8).reshape(nblocks, 2); raw[:, 2:4] = dmin.view(np.uint8).reshape(nblocks, 2)
+  byte_t = Tensor(raw.reshape(-1).copy()).realize()
+  words = byte_t.bitcast(dtypes.uint32).numpy().astype(np.uint32)
+  W = q4_k_reference(byte_t, rows * k).reshape(rows, k).cast(dtypes.float32).realize()
+  x = (rng.standard_normal(k).astype(np.float32)).astype(np.float16)
+  reference = (W @ Tensor(x.copy()).cast(dtypes.float32)).numpy().astype(np.float32)
+  p = tmp_path / "decode_artifact.npz"
+  np.savez(p, packed_words=words, activation=x, reference=reference)
+  return str(p), rows, k
+
+
+def test_verify_full_output_correctness_against_immutable_artifact(tmp_path):
+  path, rows, k = _build_immutable_artifact(tmp_path)
+  req = adapter.CurrentDecodeCompileRequest(adapter_id=adapter.ADAPTER_ID, route_id=adapter.ROUTE_ID,
+                                            role="ffn_gate_up", rows=rows, k=k)
+  result = adapter.CurrentDecodeExecutionAdapter().verify(req, path)
+  assert result["status"] == "pass"
+  assert result["element_count"] == rows and result["finite_output"] and result["inputs_unchanged"]
+  assert result["relative_error"] < 1e-2
+  assert result["reference_basis"] == "independent_q4k_dequant_gemv"
+  assert result["identities"]["packed_words_sha256"] and result["identities"]["reference_sha256"]
+
+
+def test_load_artifact_rejects_wrong_shape(tmp_path):
+  import numpy as np, pytest
+  p = tmp_path / "bad.npz"
+  np.savez(p, packed_words=np.zeros(10, np.uint32), activation=np.zeros(1024, np.float16),
+           reference=np.zeros(32, np.float32))
+  req = adapter.CurrentDecodeCompileRequest(adapter_id=adapter.ADAPTER_ID, route_id=adapter.ROUTE_ID,
+                                            role="ffn_gate_up", rows=32, k=1024)
+  with pytest.raises(ValueError):
+    adapter.load_immutable_decode_artifact(str(p), req)
+
+
+def test_prepare_without_artifact_still_blocks():
+  import pytest
+  req = adapter.CurrentDecodeCompileRequest(adapter_id=adapter.ADAPTER_ID, route_id=adapter.ROUTE_ID,
+                                            role="ffn_gate_up", rows=12288, k=4096)
+  with pytest.raises(adapter.DecodeExecutionBlocked):
+    adapter.CurrentDecodeExecutionAdapter().prepare(req)
