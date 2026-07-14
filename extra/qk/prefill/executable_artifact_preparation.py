@@ -6,6 +6,7 @@ runtime bridge.  It does not lower, allocate, or dispatch by itself.
 from __future__ import annotations
 
 import hashlib
+from math import prod
 from typing import Any, Mapping
 
 from extra.qk.prefill.pure_register_compile_capture import capture_final_program_compile_only
@@ -58,7 +59,8 @@ def compile_transport_evidence(program: UOp, *, transport: str, canonical_identi
   if not binary: raise ValueError("compiled PROGRAM has no final binary")
   launch = program.arg
   errors = []
-  if getattr(launch, "local_size", None) != (int(schedule.get("threads", 0)), 1, 1):
+  local_size = getattr(launch, "local_size", None)
+  if not isinstance(local_size, tuple) or prod(local_size) != int(schedule.get("threads", 0)):
     errors.append("compiled local size does not match schedule threads")
   if int(schedule.get("lds_bytes", 0)) < 0: errors.append("schedule LDS bytes must be non-negative")
   row = {"schema": "prefill-transport-compile.v1", "transport": transport,

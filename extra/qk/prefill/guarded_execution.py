@@ -144,7 +144,7 @@ def _blocked(identity: Mapping[str, Any], *, error: str, policy: GuardPolicy,
   return {"schema": "guarded-execution.v1", "status": "blocked", "passed": False,
           "errors": [error], "identity": dict(identity), "device_healthy_before": before,
           "device_healthy_after": after, "guards_intact": False, "inputs_unchanged": False,
-          "numerics_passed": False, "full_output_compared": False, "nonconstant_inputs": False,
+          "finite_output": False, "numerics_passed": False, "full_output_compared": False, "nonconstant_inputs": False,
           "device_fault": not after if dispatch_performed else False, "dispatch_performed": dispatch_performed,
           "elapsed_seconds": 0.0, "rtol": policy.rtol, "atol": policy.atol}
 
@@ -205,6 +205,12 @@ def run_guarded_execution(*, executable: Any, inputs: Mapping[str, np.ndarray], 
       except Exception: unchanged = False
     if not unchanged: errors.append("input buffer mutation detected")
   finite = _finite(output) if output is not None else False
+  output_array = np.asarray(output) if output is not None else None
+  nan_fraction = float(np.mean(np.isnan(output_array))) if output_array is not None and output_array.dtype.kind in "fc" else None
+  inf_fraction = float(np.mean(np.isinf(output_array))) if output_array is not None and output_array.dtype.kind in "fc" else None
+  finite_values = output_array[np.isfinite(output_array)] if output_array is not None and output_array.dtype.kind in "fc" else None
+  finite_min = float(np.min(finite_values)) if finite_values is not None and finite_values.size else None
+  finite_max = float(np.max(finite_values)) if finite_values is not None and finite_values.size else None
   if not finite: errors.append("output is missing or contains non-finite values")
   full = output is not None and output.shape == reference.shape
   if not full: errors.append("full output shape comparison was not possible")
@@ -220,13 +226,14 @@ def run_guarded_execution(*, executable: Any, inputs: Mapping[str, np.ndarray], 
   return {"schema": "guarded-execution.v1", "status": "passed" if not errors else "failed", "passed": not errors,
           "errors": errors, "identity": identity, "device_healthy_before": before,
           "device_healthy_after": after, "guards_intact": guards, "inputs_unchanged": unchanged,
-          "numerics_passed": numerics, "full_output_compared": full, "nonconstant_inputs": True,
+          "finite_output": finite, "numerics_passed": numerics, "full_output_compared": full, "nonconstant_inputs": True,
           "device_fault": dispatch_performed and not after, "dispatch_performed": dispatch_performed,
           "elapsed_seconds": float(elapsed), "rtol": policy.rtol, "atol": policy.atol,
           "output_shape": list(output.shape) if output is not None else None,
+          "nan_fraction": nan_fraction, "inf_fraction": inf_fraction,
+          "finite_min": finite_min, "finite_max": finite_max,
           "max_abs_error": float(np.max(np.abs(output - reference))) if output is not None and output.shape == reference.shape else None}
 
 
 __all__ = ["GuardPolicy", "GuardedBuffer", "GuardedExecutionHooks", "make_tinygrad_guarded_hooks",
            "make_tinygrad_executable_hooks", "run_guarded_execution", "run_tinygrad_executable_guarded"]
-
