@@ -174,7 +174,10 @@ def attribute_operands(rows: Sequence[Mapping[str, Any]], abi: Mapping[str, Any]
   }
 
 
-_OPERAND_MANIFEST_ID = {"a": "A", "b": "B", "out": "C"}
+def _manifest_id(operand: str) -> str:
+  """Uppercase manifest id for any semantic operand: 'out' -> 'C' (accumulator), otherwise a->A, b->B, ...
+  Generalizes to N operands without a fixed table, so non-GEMM/many-input kernels are handled uniformly."""
+  return "C" if operand == "out" else operand.upper()
 
 
 def operand_paths_for_manifest(attribution: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], *,
@@ -191,15 +194,15 @@ def operand_paths_for_manifest(attribution: Mapping[str, Any], rows: Sequence[Ma
             "semantic_ownership": a.get("semantic_ownership", "unknown")}
     if a["kind"] == "wmma":
       srcs = a.get("source_operands")
-      if srcs and all(s in _OPERAND_MANIFEST_ID for s in srcs):
+      if srcs and all(s and s != "unknown" for s in srcs):
         out.append({**base, "operand_id": "C",
-                    "source_operands": [_OPERAND_MANIFEST_ID[s] for s in srcs]})
+                    "source_operands": [_manifest_id(s) for s in srcs]})
       else:
         out.append({**base, "operand_id": "unknown", "missing": a.get("missing", "wmma_source_fragment_provenance")})
       continue
     operand = a.get("operand_id", "unknown")
-    if operand in _OPERAND_MANIFEST_ID:
-      mid = _OPERAND_MANIFEST_ID[operand]
+    if operand != "unknown":
+      mid = _manifest_id(operand)
       path = {**base, "operand_id": mid, "source_operand_id": mid}
       if "fetch_group" in a:
         path["fetch_group"] = a["fetch_group"]
