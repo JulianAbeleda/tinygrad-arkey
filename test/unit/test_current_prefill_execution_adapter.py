@@ -1,4 +1,4 @@
-import hashlib, json, pickle
+import copy, hashlib, json, pickle
 
 import numpy as np
 import pytest
@@ -13,6 +13,22 @@ from tinygrad.uop.ops import Ops
 def _candidate():
   row = json.loads(open(promoted_prefill_candidate_policy()["candidate_set_path"]).read())
   return next(entry for entry in row["entries"] if entry["payload"]["workload"]["role"] == "attn_qo")
+
+
+def _packed_candidate(quant_format):
+  """Derive a strict packed-B candidate without borrowing an identity from the promoted dense payload."""
+  entry, block_bytes = _candidate(), {"Q4_K": 144, "Q6_K": 210}[quant_format]
+  payload = copy.deepcopy(entry["payload"])
+  shape = payload["workload"]["shape"]
+  payload["operand_sources"] = {
+    "a": {"kind": "dense", "logical_dtype": "fp16", "storage_dtype": "fp16", "abi_slot": 1},
+    "b": {"kind": "packed_scalar_decoder", "logical_dtype": "fp16",
+          "storage_dtype": "uint32" if quant_format == "Q4_K" else "uint16", "abi_slot": 2,
+          "quant_format": quant_format, "rows": shape["n"], "k": shape["k"],
+          "block_elems": 256, "block_bytes": block_bytes, "decoder_version": "ggml_k_quant_v1"},
+  }
+  canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False).encode("ascii")
+  return payload, hashlib.sha256(canonical).hexdigest()
 
 
 def _request(entry, **compiler_changes):
@@ -99,6 +115,25 @@ def test_input_identity_hashes_exact_npz_and_loaded_reference(tmp_path):
   assert identity["reference_sha256"] == hashlib.sha256(b"<f2:2,3:" + reference.tobytes()).hexdigest()
 
 
+@pytest.mark.parametrize("quant_format,np_dtype,units", (("Q4_K", np.uint32, 4096*16*36),
+                                                          ("Q6_K", np.uint16, 4096*16*105)))
+def test_packed_input_artifact_binds_exact_slot2_storage_contract(tmp_path, quant_format, np_dtype, units):
+  payload, identity = _packed_candidate(quant_format)
+  admission = adapter.admit_current_prefill(payload, identity)
+  path = tmp_path / "packed.npz"
+  np.savez(path, a=np.zeros((512,4096), np.float16), b=np.zeros(units, np_dtype),
+           reference=np.zeros((512,4096), np.float16))
+  inputs, _ = adapter._arrays(str(path), (512,4096,4096), admission.context.packed_weight)
+  assert inputs["b"].dtype == np.dtype(np_dtype)
+  assert inputs["b"].nbytes == admission.context.packed_weight.packed_bytes
+
+  wrong = tmp_path / "wrong.npz"
+  np.savez(wrong, a=np.zeros((512,4096), np.float16), b=np.zeros(1, np.float16),
+           reference=np.zeros((512,4096), np.float16))
+  with pytest.raises(ValueError, match="packed prefill B"):
+    adapter._arrays(str(wrong), (512,4096,4096), admission.context.packed_weight)
+
+
 def test_promoted_attn_qo_compile_only_produces_one_bound_final_program_and_proof_resources():
   entry = _candidate()
   program, evidence = adapter.prepare_current_prefill_compile(
@@ -138,3 +173,49 @@ def test_promoted_attn_qo_compile_only_produces_one_bound_final_program_and_proo
   assert "double_buffered_lds_window_binding" in st["missing_evidence"]
   assert evidence["artifacts"]["final_isa_manifest"]["status"] == "partial"
   assert evidence["artifacts"]["final_isa_manifest"]["attributed_rows"] == st["attributed_row_count"]
+
+
+@pytest.mark.parametrize("quant_format,storage_dtype,dtype_name,block_bytes,units_per_block", (
+  ("Q4_K", "uint32", "unsigned int", 144, 36),
+  ("Q6_K", "uint16", "unsigned short", 210, 105),
+))
+def test_packed_attn_qo_compile_only_is_one_fp16_wmma_program_with_packed_b_abi(
+    quant_format, storage_dtype, dtype_name, block_bytes, units_per_block):
+  payload, identity = _packed_candidate(quant_format)
+  program, admission = adapter.compile_current_prefill_program(payload, identity, device="AMD:ISA:gfx1100")
+
+  programs = [u for u in program.toposort() if u.op is Ops.PROGRAM]
+  assert programs == [program], "packed decode must be fused, with no prerequisite dequant PROGRAM"
+  assert getattr(program.src[0].arg.candidate_context, "canonical_identity", None) == identity
+  assert (tuple(program.arg.globals), tuple(program.arg.outs), tuple(program.arg.ins)) == ((0, 1, 2), (0,), (1, 2))
+
+  transform = admission.context.packed_weight
+  assert transform is not None
+  assert transform.to_json() == {
+    "quant_format": quant_format, "rows": 4096, "k": 4096, "block_elems": 256,
+    "block_bytes": block_bytes, "storage_dtype": dtype_name,
+    "storage_width": 4 if quant_format == "Q4_K" else 2,
+    "units_per_block": units_per_block,
+    "packed_bytes": 4096 * (4096 // 256) * block_bytes,
+  }
+
+  source = next(u.arg for u in program.src if u.op is Ops.SOURCE)
+  assert "wmma_f32_16x16x16_f16" in source
+  params = {u.arg.slot: u.dtype for u in program.src[0].toposort() if u.op is Ops.PARAM}
+  assert set(params) == {0, 1, 2}
+  assert params[0].base.name == params[1].base.name == "half"
+  assert params[2].base.name == dtype_name
+
+
+@pytest.mark.parametrize("quant_format,storage_dtype", (("Q4_K", "uint32"), ("Q6_K", "uint16")))
+def test_packed_shipping_binary_passes_resource_and_representation_gate(quant_format, storage_dtype):
+  payload, identity = _packed_candidate(quant_format)
+  _, evidence = adapter.prepare_current_prefill_compile(payload, identity, device="AMD")
+  assert evidence["packed_wmma_compile_gate"]["passed"] is True
+  assert evidence["isa_structure"]["counts"]["wmma"] == 32
+  assert evidence["resource_summary"]["lds_bytes"] == 40960
+  assert evidence["resource_summary"]["workgroup_threads"] == 256
+  assert all(evidence["resource_summary"][field] == 0 for field in ("scratch_bytes", "vgpr_spills", "sgpr_spills"))
+  packed_b = evidence["final_isa_manifest"]["ownership_metadata"]["semantic_operands"][2]
+  assert packed_b["representation"] == "packed_scalar_decoder"
+  assert (packed_b["quant_format"], packed_b["storage_dtype"]) == (quant_format, storage_dtype)

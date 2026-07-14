@@ -8,7 +8,7 @@ from extra.qk import route_manifest
 from extra.qk import pure_search_guard
 from extra.qk import prefill_graph_gemm_route
 from extra.qk.runtime_specs import (
-  ANCHOR_SINGLE_BUFFER_CANDIDATE_HASH, FULL_KERNEL_CANDIDATE_SCHEMA, ActivationQuantSpec, GeneratedCandidate,
+  ANCHOR_SINGLE_BUFFER_CANDIDATE_HASH, FULL_KERNEL_CANDIDATE_SCHEMA, PACKED_SCALAR_DECODER_VERSION, ActivationQuantSpec, GeneratedCandidate,
   CandidateAdmissionFacts, QuantizedTensorSpec, RuntimeOpSpec, FullKernelCandidateSet, FullKernelCandidateSetEntry,
   GFX1100_TWO_BUFFER_STAGE1_CAPABILITY, admit_full_kernel_candidate, admit_full_kernel_candidate_set,
   bind_full_kernel_candidate, full_kernel_candidate_set_from_legacy,
@@ -209,6 +209,55 @@ def test_strict_full_kernel_candidate_identity_round_trip_and_tamper_rejection()
   row["full_kernel_candidate"]["workload"]["shape"]["m"] = 1024
   with pytest.raises(ValueError, match="canonical_identity"):
     GeneratedCandidate.from_json(row)
+
+
+def _operand_sources_b(kind="dense", quant_format="Q4_K"):
+  a = {"kind":"dense", "logical_dtype":"fp16", "storage_dtype":"fp16", "abi_slot":1}
+  if kind == "dense": b = {"kind":"dense", "logical_dtype":"fp16", "storage_dtype":"fp16", "abi_slot":2}
+  else:
+    b = {"kind":"packed_scalar_decoder", "logical_dtype":"fp16",
+         "storage_dtype":"uint32" if quant_format == "Q4_K" else "uint16", "abi_slot":2,
+         "quant_format":quant_format, "rows":12288, "k":4096, "block_elems":256,
+         "block_bytes":144 if quant_format == "Q4_K" else 210,
+         "decoder_version":PACKED_SCALAR_DECODER_VERSION}
+  return {"a":a, "b":b}
+
+
+@pytest.mark.parametrize("kind,quant_format", (("dense", "Q4_K"), ("packed_scalar_decoder", "Q4_K"),
+                                                ("packed_scalar_decoder", "Q6_K")))
+def test_full_kernel_operand_sources_roundtrip_and_typed_context(kind, quant_format):
+  payload = _single_buffer_anchor_candidate().full_kernel_candidate
+  assert payload is not None
+  payload["operand_sources"] = _operand_sources_b(kind, quant_format)
+  candidate = _strict_full_kernel_candidate(full_kernel_candidate=payload)
+  assert GeneratedCandidate.from_json(candidate.to_json()) == candidate
+  admission = admit_full_kernel_candidate(payload, candidate.canonical_identity,
+    profile="qwen3_8b_q4k_m_gfx1100", role="ffn_gate_up", shape=(512,12288,4096),
+    target={"backend":"AMD","arch":"gfx1100","wave_size":32})
+  if kind == "dense": assert admission.context.packed_weight is None
+  else:
+    assert admission.context.packed_weight.quant_format == quant_format
+    assert (admission.context.packed_weight.rows, admission.context.packed_weight.k) == (12288,4096)
+
+
+@pytest.mark.parametrize("mutation,error", (
+  (lambda s: s["a"].update(abi_slot=2), "operand_sources.a"),
+  (lambda s: s["b"].update(logical_dtype="uint32"), "logical_dtype"),
+  (lambda s: s["b"].update(storage_dtype="uint16"), "storage_dtype"),
+  (lambda s: s["b"].update(rows=12287), "rows/k"),
+  (lambda s: s["b"].update(k=3840), "rows/k"),
+  (lambda s: s["b"].update(block_bytes=210), "block_bytes"),
+  (lambda s: s["b"].update(decoder_version="v2"), "decoder_version"),
+  (lambda s: s["b"].update(abi_slot=3), "ABI slot 2"),
+  (lambda s: s["b"].update(extra=True), "unknown fields"),
+  (lambda s: s["b"].update(kind="mystery"), "kind"),
+))
+def test_full_kernel_packed_operand_sources_reject_mismatch_and_unknown_keys(mutation, error):
+  payload = _single_buffer_anchor_candidate().full_kernel_candidate
+  assert payload is not None
+  payload["operand_sources"] = _operand_sources_b("packed_scalar_decoder", "Q4_K")
+  mutation(payload["operand_sources"])
+  with pytest.raises(ValueError, match=error): _strict_full_kernel_candidate(full_kernel_candidate=payload)
 
 
 @pytest.mark.parametrize("change", (

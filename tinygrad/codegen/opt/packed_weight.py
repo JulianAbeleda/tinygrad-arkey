@@ -126,10 +126,13 @@ class PackedWeightTransform:
         scale = high.bitwise_and(15).bitwise_or(byte(group-4).rshift(6).lshift(4))
         minimum = high.rshift(4).bitwise_or(byte(4+group-4).rshift(6).lshift(4))
     else:
+      # WHERE is branchless on the GPU. Clamp the high-half group before constructing loads so groups 0..3 never
+      # speculatively address byte(group-4) before the packed block.
+      high_group = (group < 4).where(0, group-4)
       low_scale, low_minimum = byte(group).bitwise_and(63), byte(4+group).bitwise_and(63)
-      high = byte(8+group-4)
-      high_scale = high.bitwise_and(15).bitwise_or(byte(group-4).rshift(6).lshift(4))
-      high_minimum = high.rshift(4).bitwise_or(byte(4+group-4).rshift(6).lshift(4))
+      high = byte(8+high_group)
+      high_scale = high.bitwise_and(15).bitwise_or(byte(high_group).rshift(6).lshift(4))
+      high_minimum = high.rshift(4).bitwise_or(byte(4+high_group).rshift(6).lshift(4))
       scale, minimum = (group < 4).where(low_scale, high_scale), (group < 4).where(low_minimum, high_minimum)
     qword = self._load(source, base + 4 + (group//2)*8 + pos//4)
     q = qword.rshift((pos%4)*8 + (group%2)*4).bitwise_and(15)

@@ -800,10 +800,12 @@ def isel_cast(ctx:IselContext, x:UOp):
   if (s, d) in {(dtypes.long, dtypes.int), (dtypes.int, dtypes.long), (dtypes.bool, dtypes.int), (dtypes.int, dtypes.bool),
                 (dtypes.uint, dtypes.int), (dtypes.int, dtypes.uint)}:
     return x.src[0]
-  if (s, d) in {(dtypes.uchar, dtypes.ushort), (dtypes.uchar, dtypes.uint), (dtypes.ushort, dtypes.uint), (dtypes.uint, dtypes.ulong)}:
+  if (s, d) in {(dtypes.uchar, dtypes.ushort), (dtypes.uchar, dtypes.uint), (dtypes.ushort, dtypes.uint), (dtypes.uint, dtypes.ulong)} or \
+     (s in (dtypes.uchar, dtypes.ushort) and d in (dtypes.int, dtypes.long)):
     return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]), UOp.const(dtypes.int32, (1 << (s.itemsize * 8)) - 1).rtag()),
                arg=AMDOps.V_AND, tag=_vreg_def(ctx))
-  if s in (dtypes.ushort, dtypes.uint, dtypes.ulong) and d in (dtypes.uchar, dtypes.ushort, dtypes.uint) and d.itemsize < s.itemsize:
+  if s in (dtypes.short, dtypes.int, dtypes.long, dtypes.ushort, dtypes.uint, dtypes.ulong) and \
+     d in (dtypes.uchar, dtypes.ushort, dtypes.uint) and d.itemsize < s.itemsize:
     return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]), UOp.const(dtypes.int32, (1 << (d.itemsize * 8)) - 1).rtag()),
                arg=AMDOps.V_AND, tag=_vreg_def(ctx))
   if s in (dtypes.char, dtypes.short, dtypes.int) and d in (dtypes.short, dtypes.int, dtypes.long) and s.itemsize < d.itemsize:
@@ -867,8 +869,9 @@ def isel_divmod(ctx:IselContext, x:UOp, mod:bool):  # only constant power-of-two
 
 def isel_shift(ctx:IselContext, x:UOp, left:bool):
   b = x.src[1]
-  if b.op is not Ops.CONST: raise NotImplementedError(f"AMD:ISA {'SHL' if left else 'SHR'} non-const shift")
-  return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]), b.rtag()), arg=AMDOps.V_OFFSET if left else AMDOps.V_LSHR, tag=_vreg_def(ctx))
+  shift = b.rtag() if b.op is Ops.CONST else _tov(ctx, b)
+  return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]), shift), arg=AMDOps.V_OFFSET if left else AMDOps.V_LSHR,
+             tag=_vreg_def(ctx))
 
 def isel_gated_store(ctx:IselContext, a:UOp, b:UOp, g:UOp, x:UOp):
   # store(addr, val, gate) -> EXEC-predicated store: only lanes with gate!=0 write. kind const: 1=LDS, 0=global.
@@ -2028,7 +2031,8 @@ def lower_inst(x:UOp):
     val = float(src[0].arg) if src[0].dtype in dtypes.floats else int(src[0].arg)
     return _ins(v_mov_b32_e32(_Vr(x.reg), val), x.tag)
   if a is AMDOps.V_OFFSET:
-    return _ins(v_lshlrev_b32_e32(_Vr(x.reg), src[1].arg, _Vr(src[0].reg)), x.tag)
+    shift = src[1].arg if src[1].op is Ops.CONST else _Vr(src[1].reg)
+    return _ins(v_lshlrev_b32_e32(_Vr(x.reg), shift, _Vr(src[0].reg)), x.tag)
   if a is AMDOps.GLOBAL_LOAD:
     off_r, ptr_r, imm = src[0].reg, src[1].reg, src[2].arg    # imm = per-lane element byte offset
     # Phase-1a: fp16 (itemsize 2) must use a 16-bit load; b32 reads 2 bytes past the final element -> page-boundary MMU fault.
@@ -2073,8 +2077,9 @@ def lower_inst(x:UOp):
     if src[1].op is Ops.CONST: return _ins(v_or_b32_e32(_Vr(x.reg), src[1].arg, _Vr(src[0].reg)), x.tag)
     return _ins(v_or_b32_e32(_Vr(x.reg), _Vr(src[0].reg), _Vr(src[1].reg)), x.tag)
   if a is AMDOps.V_MAX: return _ins(_vop2_f(v_max_f32_e32, x, src), x.tag)   # f32 max (VOP2)
-  if a is AMDOps.V_LSHR:                            # logical >> k (CDIV-by-pow2); shift imm in src[1], value in src[0]
-    return _ins(v_lshrrev_b32_e32(_Vr(x.reg), src[1].arg, _Vr(src[0].reg)), x.tag)
+  if a is AMDOps.V_LSHR:                            # logical >> k; shift in src[1], value in src[0]
+    shift = src[1].arg if src[1].op is Ops.CONST else _Vr(src[1].reg)
+    return _ins(v_lshrrev_b32_e32(_Vr(x.reg), shift, _Vr(src[0].reg)), x.tag)
   if a is AMDOps.V_CVT_F2H: return _ins(v_cvt_f16_f32_e32(_Vr(x.reg), _Vr(src[0].reg)), x.tag)
   if a is AMDOps.V_CVT_H2F: return _ins(v_cvt_f32_f16_e32(_Vr(x.reg), _Vr(src[0].reg)), x.tag)
   if a is AMDOps.V_CVT_F2I: return _ins(v_cvt_i32_f32_e32(_Vr(x.reg), _Vr(src[0].reg)), x.tag)

@@ -88,6 +88,16 @@ def test_symbolic_row_and_k_survive_scalar_decoder(fmt, dtype):
   assert indexes
 
 
+@pytest.mark.parametrize("fmt,rows,k", [("Q4_K", 2, 512), ("Q6_K", 2, 512)])
+def test_every_symbolic_decoder_load_stays_within_packed_storage(fmt, rows, k):
+  desc = PackedWeightTransform(fmt, rows, k)
+  row, kk, offsets = UOp.range(rows, 80), UOp.range(k, 81), []
+  desc.dequant(lambda offset: offsets.append(offset) or UOp.const(desc.storage_dtype, 0), row, kk)
+  assert offsets
+  assert all(offset.vmin >= 0 for offset in offsets)
+  assert all(offset.vmax < desc.packed_bytes // desc.storage_width for offset in offsets)
+
+
 def test_candidate_context_carries_validated_packed_transform_only_with_geometry():
   desc = PackedWeightTransform("Q4_K", 16, 256)
   identity = "1" * 64

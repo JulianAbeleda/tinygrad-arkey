@@ -72,13 +72,24 @@ def compile_current_prefill_program(payload: dict[str, Any], canonical_identity:
   getenv.cache_clear(); to_program_cache.clear()
   try:
     with warmstart_candidate_state(opts, {key: admission.context}), Context(DEV=device):
-      a, b = Tensor.empty(m, k, dtype=dtypes.half), Tensor.empty(n, k, dtype=dtypes.half)
+      a = Tensor.empty(m, k, dtype=dtypes.half)
+      if (transform := admission.context.packed_weight) is None:
+        b = Tensor.empty(n, k, dtype=dtypes.half)
+      else:
+        # Movement-only logical carrier: it preserves the real packed PARAM plus N/K ownership for ordinary matmul
+        # matching. Postrange replaces these dummy half values with transform.dequant at the B tile producer.
+        blocks, halfwords = n*k//transform.block_elems, transform.block_bytes//2
+        packed = Tensor.empty(transform.packed_bytes//transform.storage_width, dtype=transform.storage_dtype)
+        b = packed.bitcast(dtypes.uint16).reshape(blocks, halfwords).pad(((0,0),(0,128-halfwords))) \
+          .reshape(blocks,128,1).expand(blocks,128,2).reshape(n,k).bitcast(dtypes.half)
       compiled = compile_linear((a @ b.transpose()).schedule_linear())
   finally:
     getenv.cache_clear(); to_program_cache.clear()
-  programs = [u for u in compiled.toposort() if u.op is Ops.PROGRAM and
+  all_programs = [u for u in compiled.toposort() if u.op is Ops.PROGRAM]
+  programs = [u for u in all_programs if
               getattr(getattr(u.src[0].arg, "candidate_context", None), "canonical_identity", None) == canonical_identity]
-  if len(programs) != 1: raise ValueError(f"expected one identity-bound candidate PROGRAM, found {len(programs)}")
+  if len(programs) != 1 or len(all_programs) != 1:
+    raise ValueError(f"expected one total identity-bound candidate PROGRAM, found {len(programs)} bound/{len(all_programs)} total")
   return programs[0], admission
 
 
@@ -90,11 +101,13 @@ def prepare_current_prefill_compile(payload: dict[str, Any], canonical_identity:
   except Exception as exc:
     raise ValueError(f"required final_isa_manifest/resource_summary unavailable: final compile failed ({type(exc).__name__}: {exc})") from exc
   schedule = admission.normalized_payload["schedule"]
+  transform = admission.context.packed_weight
   evidence = compile_transport_evidence(program, transport=capability_transport(admission.capability),
     canonical_identity=canonical_identity,
     schedule={"threads": schedule["threads"], "lds_bytes": admission.active_lds_bytes,
               "tile": dict(schedule["tile"]), "pipeline": dict(schedule["pipeline"])},
-    surface={"source_kind": "tinygrad_scheduler", "consumer": "dense_gemm", "role": "attn_qo"},
+    surface={"source_kind": "tinygrad_scheduler", "consumer": "packed_dequant_wmma" if transform else "dense_gemm",
+             "role": "attn_qo"},
     runtime_binding=dict(admission.normalized_payload["workload"]))
   if evidence.get("passed") is not True: raise ValueError("current prefill compile evidence failed")
   source = next((u.arg for u in program.src if u.op.name == "SOURCE" and isinstance(u.arg, str)), None)
@@ -113,7 +126,12 @@ def prepare_current_prefill_compile(payload: dict[str, Any], canonical_identity:
     ownership_metadata={"semantic_operands": [
       {"operand_id": "C", "abi_index": 0, "abi_argument": "output", "semantic_role": "output"},
       {"operand_id": "A", "abi_index": 1, "abi_argument": "a", "semantic_role": "lhs_activation"},
-      {"operand_id": "B", "abi_index": 2, "abi_argument": "b", "semantic_role": "rhs_weight"}]},
+      {"operand_id": "B", "abi_index": 2, "abi_argument": "b", "semantic_role": "rhs_weight", **(
+        {"representation": "packed_scalar_decoder", "quant_format": transform.quant_format,
+         "storage_dtype": admission.normalized_payload["operand_sources"]["b"]["storage_dtype"],
+         "packed_bytes": transform.packed_bytes,
+         "decoder_version": admission.normalized_payload["operand_sources"]["b"]["decoder_version"]}
+        if transform is not None else {"representation": "dense", "storage_dtype": "half"})}]},
     digest_metadata={"canonical_identity": canonical_identity})
   # The shipping AMD/HIP compiler does not pass through the ISA renderer's row
   # tags. Analyze its exact code object and leave semantic row ownership
@@ -167,6 +185,18 @@ def prepare_current_prefill_compile(payload: dict[str, Any], canonical_identity:
     "grid": list(global_size) if global_size else None, "wavefront_size": 32,
     "source_sha256": source_sha, "binary_sha256": binary_sha, "canonical_identity": canonical_identity, "target": target,
     "compiled_device": compiled_target}
+  packed_gate = None
+  if transform is not None:
+    from extra.qk.packed_wmma_compile_gate import (CandidateEvidence, ProgramEvidence, ResourceEvidence,
+      classify_registered_packed_wmma_candidate)
+    wmma_families = tuple(sorted({row["mnemonic"] for row in final_isa["instructions"] if "wmma" in row["mnemonic"]}))
+    packed_candidate = CandidateEvidence(canonical_identity, transform.quant_format, transform.rows, transform.k, (
+      ProgramEvidence(str(getattr(program.arg, "name", "")), True,
+        wmma_families,
+        ("activation", "packed_weight"), ("packed_weight",), resources=ResourceEvidence(
+          descriptor_lds, metadata["scratch_bytes"], metadata["vgpr_spills"], metadata["sgpr_spills"])),))
+    packed_gate = classify_registered_packed_wmma_candidate(transform.quant_format, packed_candidate).to_json()
+    if packed_gate["passed"] is not True: raise ValueError(f"packed WMMA compile gate failed: {packed_gate['reasons']}")
   evidence.update(source_sha256=source_sha, binary_sha256=binary_sha, target_id="amd_gfx1100", target=target,
     compiled_device=compiled_target, compile_target=device,
     canonical_identity=canonical_identity, final_isa_manifest=manifest,
@@ -182,6 +212,7 @@ def prepare_current_prefill_compile(payload: dict[str, Any], canonical_identity:
     child_recompile_binary_identity_contract={"enabled": True, "reject_sha256_mismatch_before_dispatch": True,
       "canonical_identity": canonical_identity, "source_sha256": source_sha, "binary_sha256": binary_sha,
       "target": target, "compile_target": device})
+  if packed_gate is not None: evidence["packed_wmma_compile_gate"] = packed_gate
   return program, evidence
 
 
@@ -208,16 +239,22 @@ def build_current_prefill_bundle(*, payload: dict[str, Any], canonical_identity:
                                argument_order=_ARGUMENT_ORDER, health=_runtime_alive)
 
 
-def _arrays(path: str, shape: tuple[int, int, int]) -> tuple[dict[str, np.ndarray], np.ndarray]:
+def _arrays(path: str, shape: tuple[int, int, int], packed_weight: Any | None = None) -> tuple[dict[str, np.ndarray], np.ndarray]:
   artifact = Path(path)
   if not artifact.is_file(): raise ValueError(f"input artifact does not exist: {artifact}")
   with np.load(artifact, allow_pickle=False) as row:
     if set(row.files) != {"a", "b", "reference"}: raise ValueError("input NPZ must contain exactly a, b, reference")
     a, b, reference = (np.ascontiguousarray(row[x]) for x in ("a", "b", "reference"))
   m, n, k = shape
-  if a.shape != (m, k) or b.shape != (n, k) or reference.shape != (m, n):
-    raise ValueError("input NPZ shapes do not match the exact candidate workload")
-  if any(x.dtype != np.float16 for x in (a, b, reference)): raise ValueError("current prefill inputs and reference must be fp16")
+  if a.shape != (m, k) or reference.shape != (m, n): raise ValueError("input NPZ A/reference shapes do not match the exact candidate workload")
+  if a.dtype != np.float16 or reference.dtype != np.float16: raise ValueError("current prefill A and reference must be fp16")
+  if packed_weight is None:
+    if b.shape != (n, k) or b.dtype != np.float16: raise ValueError("dense prefill B must be fp16 with exact (N,K) shape")
+  else:
+    expected_dtype = np.dtype(np.uint32 if packed_weight.quant_format == "Q4_K" else np.uint16)
+    expected_shape = (packed_weight.packed_bytes // packed_weight.storage_width,)
+    if b.shape != expected_shape or b.dtype != expected_dtype or b.nbytes != packed_weight.packed_bytes:
+      raise ValueError(f"packed prefill B must be {expected_dtype.name}{expected_shape} with {packed_weight.packed_bytes} bytes")
   return {"a": a, "b": b}, reference
 
 
@@ -247,7 +284,7 @@ class CurrentPrefillAdapter:
     declared = capability_transport(admission.capability)
     if request.transport_plan.transport != declared:
       raise ValueError(f"typed transport {request.transport_plan.transport!r} does not match admitted {declared!r}")
-    inputs, reference = _arrays(str(context.get("input_npz", "")), _workload(payload)[2])
+    inputs, reference = _arrays(str(context.get("input_npz", "")), _workload(payload)[2], admission.context.packed_weight)
     _, evidence = self.compile_prepare(payload, identity, device=_COMPILE_DEVICE)
     evidence = dict(evidence)
     identity_detail = _input_artifact_identities(str(context.get("input_npz", "")), reference)

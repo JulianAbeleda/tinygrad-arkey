@@ -1,9 +1,7 @@
 """CPU-only evidence gate for generated, direct-packed fp16 WMMA candidates.
 
-This module never compiles or executes a kernel.  Producers serialize facts about
-an already compiled program and this module classifies those facts.  The default
-emitter registry is intentionally empty: the current Q4_K and Q6_K experiments
-which first materialize an fp16 weight are not fused packed emitters.
+This module never compiles or executes a kernel. Producers serialize facts about
+an already compiled program and this module classifies those facts.
 """
 from __future__ import annotations
 
@@ -83,8 +81,10 @@ class GateResult:
             "contraction_program": self.contraction_program, "reasons": list(self.reasons)}
 
 
-# Deliberately empty until a fused generated emitter supplies compile evidence.
-PACKED_WMMA_EMITTERS: dict[str, EmitterDescriptor] = {}
+_PRECONTRACT_EMITTER_ID = "tinygrad.precontract_lds_fp16_wmma.v1"
+PACKED_WMMA_EMITTERS: dict[str, EmitterDescriptor] = {
+  fmt: EmitterDescriptor(_PRECONTRACT_EMITTER_ID, (fmt,)) for fmt in SUPPORTED_QUANT_FORMATS
+}
 
 
 def _tensor(value: TensorEvidence | Mapping[str, Any]) -> TensorEvidence:

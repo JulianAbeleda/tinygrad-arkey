@@ -142,6 +142,19 @@ class TestAMDISAWmmaStructuralGate(unittest.TestCase):
 
 
 class TestAMDISAIntegerCastGate(unittest.TestCase):
+  def test_variable_integer_shifts_use_vgpr_shift_operands(self):
+    ren = AMDISARenderer(Target.parse("AMD:ISA:gfx1100"))
+    value, shift = Tensor.empty(8, dtype=dtypes.uint), Tensor.empty(8, dtype=dtypes.uint)
+    lin = ((value >> (shift & 7)) + (value << (shift & 3))).contiguous().schedule_linear()
+    ast = [u for u in lin.toposort() if u.op is Ops.SINK][0]
+    prg = to_program(ast, ren)
+    lin_uop = [u for u in prg.src if u.op is Ops.LINEAR][0]
+    lines = [str(u.arg) for u in lin_uop.src if not isinstance(u.arg, tuple)]
+    right = [line for line in lines if line.startswith("v_lshrrev_b32_e32")]
+    left = [line for line in lines if line.startswith("v_lshlrev_b32_e32")]
+    self.assertTrue(right and left)
+    self.assertTrue(all(", v" in line for line in right + left), (right, left))
+
   def test_char_to_int_sign_extends(self):
     ren = AMDISARenderer(Target.parse("AMD:ISA:gfx1100"))
     a = Tensor.empty(8, dtype=dtypes.char)
@@ -157,6 +170,29 @@ class TestAMDISAIntegerCastGate(unittest.TestCase):
   def test_uint_to_ushort_masks_to_destination_width(self):
     ren = AMDISARenderer(Target.parse("AMD:ISA:gfx1100"))
     a = Tensor.empty(8, dtype=dtypes.uint)
+    lin = a.cast(dtypes.ushort).contiguous().schedule_linear()
+    ast = [u for u in lin.toposort() if u.op is Ops.SINK][0]
+    prg = to_program(ast, ren)
+    lin_uop = [u for u in prg.src if u.op is Ops.LINEAR][0]
+    mns = [str(u.arg).split("(", 1)[0] for u in lin_uop.src if not isinstance(u.arg, tuple)]
+    self.assertIn("v_and_b32_e32", mns)
+    self.assertIn("global_store_b16", mns)
+
+  def test_ushort_to_int_zero_extends(self):
+    ren = AMDISARenderer(Target.parse("AMD:ISA:gfx1100"))
+    a = Tensor.empty(8, dtype=dtypes.ushort)
+    lin = a.cast(dtypes.int).contiguous().schedule_linear()
+    ast = [u for u in lin.toposort() if u.op is Ops.SINK][0]
+    prg = to_program(ast, ren)
+    lin_uop = [u for u in prg.src if u.op is Ops.LINEAR][0]
+    mns = [str(u.arg).split("(", 1)[0] for u in lin_uop.src if not isinstance(u.arg, tuple)]
+    self.assertIn("global_load_u16", mns)
+    self.assertIn("v_and_b32_e32", mns)
+    self.assertIn("global_store_b32", mns)
+
+  def test_int_to_ushort_masks_to_destination_width(self):
+    ren = AMDISARenderer(Target.parse("AMD:ISA:gfx1100"))
+    a = Tensor.empty(8, dtype=dtypes.int)
     lin = a.cast(dtypes.ushort).contiguous().schedule_linear()
     ast = [u for u in lin.toposort() if u.op is Ops.SINK][0]
     prg = to_program(ast, ren)

@@ -19,6 +19,7 @@ PROVENANCE = ("machine_authored_generated", "tinygrad_scheduler_generated", "ban
 GENERATED_PROVENANCE = ("machine_authored_generated", "tinygrad_scheduler_generated")
 FULL_KERNEL_CANDIDATE_SCHEMA = "boltbeam.full_kernel_candidate.v1"
 FULL_KERNEL_CANDIDATE_SET_SCHEMA = "boltbeam.full_kernel_candidate_set.v1"
+PACKED_SCALAR_DECODER_VERSION = "ggml_k_quant_v1"
 ANCHOR_SINGLE_BUFFER_CANDIDATE_HASH = "81c27275d1aad1bb8147c5c5cdaa8000e9375e81f3d085b49d62064a731313d6"
 
 class FullKernelAdmissionError(ValueError):
@@ -245,8 +246,18 @@ def admit_full_kernel_candidate(payload:dict[str, Any], canonical_identity:str, 
             derive_precontract_factors(geometry, tc))
   except ValueError as exc: raise FullKernelAdmissionError("capability_geometry", str(exc)) from exc
   # Keep the established buffer1 context and binary identity unchanged.
-  context = KernelCandidateContext(normalized["schema_version"],actual_identity,geometry,
-                                   pipeline_plan if (capability.buffer_count > 1 or storage_kind == "global_register_resident") else None)
+  packed_weight = None
+  if "operand_sources" in normalized:
+    b_source = normalized["operand_sources"]["b"]
+    if b_source["kind"] == "packed_scalar_decoder":
+      if storage_kind == "global_register_resident":
+        raise FullKernelAdmissionError("capability_storage", "packed-weight candidates require LDS tile storage")
+      from tinygrad.codegen.opt.packed_weight import PackedWeightTransform
+      packed_weight = PackedWeightTransform(b_source["quant_format"], b_source["rows"], b_source["k"],
+                                            b_source["block_elems"], b_source["block_bytes"])
+  context = KernelCandidateContext(schema_version=normalized["schema_version"], canonical_identity=actual_identity, geometry=geometry,
+    pipeline=pipeline_plan if (capability.buffer_count > 1 or storage_kind == "global_register_resident") else None,
+    packed_weight=packed_weight)
   return FullKernelAdmission(actual_identity,normalized,geometry,plan,pipeline_plan,active_lds,capability,context)
 
 
@@ -295,8 +306,11 @@ def _nonempty_str(value:Any, label:str) -> None:
 
 
 def _validate_full_kernel_payload(payload:dict[str, Any]) -> None:
-  _strict_keys(payload, {"schema_version", "workload", "schedule", "static_constraints", "applicability"},
-               "full_kernel_candidate")
+  required = {"schema_version", "workload", "schedule", "static_constraints", "applicability"}
+  if not isinstance(payload, dict): raise ValueError("full_kernel_candidate must be an object")
+  missing, unknown = required - set(payload), set(payload) - required - {"operand_sources"}
+  if missing: raise ValueError(f"full_kernel_candidate missing fields {sorted(missing)}")
+  if unknown: raise ValueError(f"full_kernel_candidate has unknown fields {sorted(unknown)}")
   if payload["schema_version"] != FULL_KERNEL_CANDIDATE_SCHEMA:
     raise ValueError(f"unsupported full-kernel candidate schema_version {payload['schema_version']!r}")
   workload = payload["workload"]
@@ -311,6 +325,39 @@ def _validate_full_kernel_payload(payload:dict[str, Any]) -> None:
     for key, value in workload[group].items(): _nonempty_str(value, f"workload.{group}.{key}")
   for key in ("backend", "arch"): _nonempty_str(workload["target"][key], f"workload.target.{key}")
   _positive_int(workload["target"]["wave_size"], "workload.target.wave_size")
+
+  if "operand_sources" in payload:
+    sources = payload["operand_sources"]
+    _strict_keys(sources, {"a", "b"}, "operand_sources")
+    dense_keys = {"kind", "logical_dtype", "storage_dtype", "abi_slot"}
+    _strict_keys(sources["a"], dense_keys, "operand_sources.a")
+    if sources["a"] != {"kind":"dense", "logical_dtype":"fp16", "storage_dtype":"fp16", "abi_slot":1}:
+      raise ValueError("operand_sources.a must be dense fp16 at ABI slot 1")
+    b = sources["b"]
+    if not isinstance(b, dict): raise ValueError("operand_sources.b must be an object")
+    if b.get("kind") == "dense":
+      _strict_keys(b, dense_keys, "operand_sources.b")
+      if b != {"kind":"dense", "logical_dtype":"fp16", "storage_dtype":"fp16", "abi_slot":2}:
+        raise ValueError("dense operand_sources.b must be logical/storage fp16 at ABI slot 2")
+    elif b.get("kind") == "packed_scalar_decoder":
+      packed_keys = dense_keys | {"quant_format", "rows", "k", "block_elems", "block_bytes", "decoder_version"}
+      _strict_keys(b, packed_keys, "operand_sources.b")
+      if b["logical_dtype"] != "fp16": raise ValueError("packed operand_sources.b logical_dtype must be fp16")
+      if b["abi_slot"] != 2: raise ValueError("packed operand_sources.b must use ABI slot 2")
+      if b["decoder_version"] != PACKED_SCALAR_DECODER_VERSION:
+        raise ValueError(f"packed operand_sources.b decoder_version must be {PACKED_SCALAR_DECODER_VERSION!r}")
+      try:
+        from tinygrad.codegen.opt.packed_weight import PackedWeightTransform
+        transform = PackedWeightTransform(b["quant_format"], b["rows"], b["k"], b["block_elems"], b["block_bytes"])
+      except (TypeError, ValueError) as exc: raise ValueError(f"invalid packed operand_sources.b: {exc}") from exc
+      expected_storage_dtype = "uint32" if transform.quant_format == "Q4_K" else "uint16"
+      if b["storage_dtype"] != expected_storage_dtype:
+        raise ValueError(f"packed operand_sources.b storage_dtype must be {expected_storage_dtype}")
+      if workload["dtypes"]["b"] != "fp16":
+        raise ValueError("packed operand_sources.b logical fp16 dtype must match workload.dtypes.b")
+      if (transform.rows, transform.k) != (workload["shape"]["n"], workload["shape"]["k"]):
+        raise ValueError("packed operand_sources.b rows/k must exactly match workload N/K")
+    else: raise ValueError("operand_sources.b kind must be dense or packed_scalar_decoder")
 
   schedule = payload["schedule"]
   schedule_groups = {"tile", "waves", "threads", "lane_ownership", "cooperative_load", "lds", "pipeline", "wmma",

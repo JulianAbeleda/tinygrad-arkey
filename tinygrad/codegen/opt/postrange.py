@@ -6,7 +6,7 @@ from typing import cast, Final
 from tinygrad.uop.ops import Ops, UOp, UPat, PatternMatcher, KernelInfo, graph_rewrite, AxisType, ssimplify, GroupOp, remove_all_tags
 from tinygrad.uop.ops import axis_letters, axis_colors, axis_to_pos
 from tinygrad.device import Buffer
-from tinygrad.dtype import dtypes, AddrSpace
+from tinygrad.dtype import dtypes, AddrSpace, PtrDType
 from tinygrad.helpers import colored, getenv, DEBUG, to_function_name, NOOPT, argsort, round_up, prod, merge_dicts, get_single_element, flatten
 from tinygrad.helpers import ALLOW_TF32, count
 from tinygrad.codegen.opt import Opt, OptOps, KernelOptError, check
@@ -343,8 +343,8 @@ class Scheduler:
             # they need to be moved into the WMMA srcs
             wmma_arg = (str(tc), tc.dims, tc.dtype_in, tc.dtype_out, self.ren.target.device, tc.threads, tc_upcast_axes, ()) #, tc_reduce_axes)
             if candidate_axes is not None:
-              from tinygrad.codegen.opt.kernel_lds import (PrecontractContractSpec, PrecontractKAxis,
-                PrecontractOperandTemplate, PrecontractThreadAxes, build_precontract_lds_stage)
+              from tinygrad.codegen.opt.kernel_lds import (PackedPrecontractOperandTemplate, PrecontractContractSpec,
+                PrecontractKAxis, PrecontractOperandTemplate, PrecontractThreadAxes, build_precontract_lds_stage)
               subtile_m, subtile_n, wave_m, wave_n, k_substep, outer_n, outer_m, outer_k, lane = candidate_axes
               range_by_id = {r.arg[0]:r for r in self.rngs}
               contracts = []
@@ -373,8 +373,26 @@ class Scheduler:
               if candidate_pipeline is not None and not register_mode:
                 allocation = UOp.placeholder((candidate_pipeline.active_lds_bytes//2,), dtypes.half, candidate_lds_id,
                                                addrspace=AddrSpace.LOCAL).replace(tag=("kernel_tile_lds", candidate_geometry, candidate_pipeline))
-              operands=(PrecontractOperandTemplate("A", in0, original_axes[1], original_axes[2], outer_m*candidate_geometry.tile[0]),
-                        PrecontractOperandTemplate("B", in1, original_axes[0], original_axes[2], outer_n*candidate_geometry.tile[1]))
+              operand_a=PrecontractOperandTemplate("A",in0,original_axes[1],original_axes[2],outer_m*candidate_geometry.tile[0])
+              packed_weight=getattr(self.ast.arg.candidate_context,"packed_weight",None)
+              if packed_weight is None:
+                operand_b=PrecontractOperandTemplate("B",in1,original_axes[0],original_axes[2],outer_n*candidate_geometry.tile[1])
+              else:
+                if register_mode: raise KernelOptError("packed-weight candidate requires LDS tile storage")
+                if (original_axes[0].vmax+1,original_axes[2].vmax+1) != (packed_weight.rows,packed_weight.k):
+                  raise KernelOptError("packed-weight candidate row/K ownership does not match admitted transform")
+                packed_params=[u for u in in1.toposort() if u.op is Ops.PARAM and isinstance(u.dtype,PtrDType) and
+                               u.ptrdtype.base == packed_weight.storage_dtype]
+                if len(packed_params) != 1:
+                  raise KernelOptError(f"packed-weight B carrier must reach exactly one canonical packed PARAM, found {len(packed_params)}")
+                if getattr(packed_params[0].arg, "slot", packed_params[0].arg) != 2:
+                  raise KernelOptError(f"packed-weight B carrier must own ABI slot 2, got PARAM {packed_params[0].arg!r}")
+                if any(u.op is Ops.PARAM and isinstance(u.dtype,PtrDType) and u.ptrdtype.base == dtypes.half
+                       for u in in1.toposort()):
+                  raise KernelOptError("packed-weight B carrier unexpectedly reaches a dense fp16 PARAM")
+                operand_b=PackedPrecontractOperandTemplate("B",packed_params[0],packed_weight,original_axes[0],
+                  original_axes[2],outer_n*candidate_geometry.tile[1])
+              operands=(operand_a,operand_b)
               thread_axes=PrecontractThreadAxes(wave_m,wave_n,lane)
               pipeline_tc_uop = None
               if register_mode:

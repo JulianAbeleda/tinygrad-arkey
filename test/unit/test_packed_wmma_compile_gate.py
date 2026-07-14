@@ -20,12 +20,12 @@ def test_valid_compile_evidence_passes_without_gpu():
   assert result.to_json()["schema"] == "packed-wmma-compile-gate.v1"
 
 
-def test_absent_current_emitters_and_candidate_are_clearly_blocked():
+def test_registered_primitive_still_blocks_without_compiled_candidate():
   result = classify_registered_packed_wmma_candidate("Q4_K", None)
   assert result.blocked and not result.passed
-  assert result.reasons == ("no fused packed WMMA emitter is registered for Q4_K",
-                            "no compiled generated candidate is available for Q4_K")
-  assert classify_registered_packed_wmma_candidate("Q6_K", _candidate()).blocked
+  assert result.reasons == ("no compiled generated candidate is available for Q4_K",)
+  mismatch = classify_registered_packed_wmma_candidate("Q6_K", _candidate())
+  assert not mismatch.passed and any("quant format" in reason for reason in mismatch.reasons)
 
 
 def test_requires_exactly_one_contraction_program_and_fp16_wmma():
