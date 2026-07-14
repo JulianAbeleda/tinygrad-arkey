@@ -267,7 +267,7 @@ ROUTES = {
     "route_attribution": "extra/qk/prefill_graph_gemm_route.py route_pf16_graph_gemm, gated by PREFILL_GRAPH_GEMM=1 + PREFILL_WMMA_PIPE_PRIMITIVE=1 + PREFILL_WMMA_LDS_PRIMITIVE=1 + PREFILL_DBUF=1; attn_qo/ffn_down use generated pipe primitive transport, attn_kv uses generated pipe transport with local staging disabled when generated local staging would exceed 64 KiB LDS, and ffn_gate_up uses the generated LDS/DBUF primitive.",
     "route_classification": "compiler_primitive_spec_owned__asm_backend_atom",
     "note": "Composed S10 route identity for lifecycle attribution: pipe primitive roles for attn_qo, attn_kv, and ffn_down; attn_kv disables local staging under LDS/DBUF because captured generated HIP with local staging declared 69632 bytes shared memory, and it retains resource-gated raw fallback if the no-local-stage policy is disabled or unsafe; WMMALDSSpec-owned LDS/DBUF primitive for ffn_gate_up. The S10 classification is compiler_primitive_spec_owned__asm_backend_atom: spec/compiler owned with a reusable ASM backend atom, distinct from both pure generated transport and the raw graph-GEMM full hand-kernel oracle."},
-  "prefill_wmma_lds_single_buffer_candidate_generated": {
+  "prefill_wmma_lds_dbuf_generated": {
     "workload": "prefill", "profile_id": PROFILE_PREFILL, "status": "promoted_default",
     "roles": ["attn_qo", "attn_kv", "ffn_down", "ffn_gate_up"], "excluded_roles": [], "quant": ["fp16"],
     "shape_guards": [
@@ -290,7 +290,7 @@ ROUTES = {
     "candidate_set_path": "bench/prefill-pure-full-kernel/multirole-buffer2-candidate-set-v1/candidate-set.json",
     "candidate_roles": ["attn_qo", "attn_kv", "ffn_down", "ffn_gate_up"],
     "route_attribution": "extra/qk/prefill_graph_gemm_route.py route_pf16_graph_gemm with a canonically admitted payload/hash pair; dynamic candidate identity is carried through KernelInfo and compiler cache identity.",
-    "note": "Promoted pure generated gfx1100 pp512 route. The historical route id predates multirole promotion; the selected candidate payloads are the authoritative buffer-count source and currently specify buffer_count=2 for all four dense roles. Exact canonical identities are loaded from the promoted candidate-set artifact; research routes are not eligible for implicit selection."},
+    "note": "Promoted pure generated gfx1100 pp512 WMMA-LDS double-buffer route. The selected candidate payloads are the authoritative buffer-count source and specify buffer_count=2 for all four dense roles. Exact canonical identities are loaded from the promoted candidate-set artifact; research routes are not eligible for implicit selection."},
   "prefill_wmma_lds_dbuf_primitive_mixed": {
     "workload": "prefill", "profile_id": PROFILE_PREFILL, "status": "research",
     "roles": ["attn_qo", "attn_kv", "ffn_down", "ffn_gate_up"], "excluded_roles": [],
@@ -499,7 +499,7 @@ def promoted_prefill_candidate_policy() -> dict:
   The manifest owns promotion; the candidate-set artifact owns exact payloads and canonical identities. Keeping those
   concerns separate lets machine search replace a candidate set without duplicating its schedules in runtime code.
   """
-  route_id = "prefill_wmma_lds_single_buffer_candidate_generated"
+  route_id = "prefill_wmma_lds_dbuf_generated"
   row = route(route_id)
   if row.get("status") != "promoted_default" or row.get("provenance") != "tinygrad_scheduler_generated":
     raise RuntimeError(f"promoted prefill candidate policy is not eligible: route={route_id} "

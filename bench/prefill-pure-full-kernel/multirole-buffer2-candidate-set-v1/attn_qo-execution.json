@@ -1,9 +1,9 @@
 {
   "schema": "prefill-single-buffer-execution-authority.v1",
   "canonical_identity": "7e6fe384eebaff4308ced23146eee5e74b6cbdf496135b168cbba4451f0ef043",
-  "route_id": "prefill_wmma_lds_single_buffer_candidate_generated",
+  "route_id": "prefill_wmma_lds_dbuf_generated",
   "capability_id": "amd.gfx1100.prefill.wmma_lds.single_buffer.v1",
-  "selected_route_id": "prefill_wmma_lds_single_buffer_candidate_generated",
+  "selected_route_id": "prefill_wmma_lds_dbuf_generated",
   "environment": {
     "device": "AMD",
     "git": {
@@ -14,7 +14,7 @@
   "route_binding_complete": true,
   "route_authority": {
     "family": "prefill_gemm",
-    "effective_route": "prefill_wmma_lds_single_buffer_candidate_generated",
+    "effective_route": "prefill_wmma_lds_dbuf_generated",
     "provenance": "tinygrad_scheduler_generated",
     "surface_class": "ordinary_tinygrad_graph",
     "strict_pure": true,
@@ -257,7 +257,7 @@
     "strict_pure": true
   },
   "executable_truth": {
-    "selected_route_id": "prefill_wmma_lds_single_buffer_candidate_generated",
+    "selected_route_id": "prefill_wmma_lds_dbuf_generated",
     "selected_surface": "route_pf16_graph_gemm.generated_lds_matmul_transport",
     "manifest_route_backed": true,
     "fallback_used": false,

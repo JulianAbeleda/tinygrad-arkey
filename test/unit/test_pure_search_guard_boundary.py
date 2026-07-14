@@ -128,7 +128,7 @@ def test_prefill_default_is_promoted_generated_candidate_set():
   with env(PREFILL_GRAPH_GEMM=None):
     assert model._prefill_graph_gemm_default() == 1
   gemm = {r["family"]: r for r in guard.effective_routes({})}["prefill_gemm"]
-  assert gemm["effective_route"] == "prefill_wmma_lds_single_buffer_candidate_generated"
+  assert gemm["effective_route"] == "prefill_wmma_lds_dbuf_generated"
   assert len(gemm["candidate_set_identities"]) == 4
   assert gemm["rolled_back_to_oracle"] is False and gemm["pure"] is True
   with env(PREFILL_GRAPH_GEMM="0"):

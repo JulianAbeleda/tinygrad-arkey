@@ -93,8 +93,8 @@ def test_default_path_census_uses_manifest_provenance():
   assert by_route["decode_q6k_coop_generated"]["final_default_allowed"] is True
   assert by_route["prefill_q6k_direct_generated"]["provenance"] == "machine_authored_generated"
   assert by_route["prefill_q6k_direct_generated"]["final_default_allowed"] is True
-  assert by_route["prefill_wmma_lds_single_buffer_candidate_generated"]["provenance"] == "tinygrad_scheduler_generated"
-  assert by_route["prefill_wmma_lds_single_buffer_candidate_generated"]["final_default_allowed"] is True
+  assert by_route["prefill_wmma_lds_dbuf_generated"]["provenance"] == "tinygrad_scheduler_generated"
+  assert by_route["prefill_wmma_lds_dbuf_generated"]["final_default_allowed"] is True
   assert "prefill_v2_scheduler_matmul_default" not in by_route
   assert "prefill_pipe_role_selective_generated" not in by_route
   assert "prefill_pipe_role_selective_default" not in by_route
@@ -177,14 +177,14 @@ def test_qk_route_policy_accepts_promoted_pure_prefill_candidate_route(tmp_path)
       "role": "ffn_down",
       "shape": {"rows": 4096, "cols": 12288},
       "quant": "Q4_K",
-      "selected_route": "prefill_wmma_lds_single_buffer_candidate_generated",
+      "selected_route": "prefill_wmma_lds_dbuf_generated",
       "status": "promoted",
       "route_params": {},
       "rollback": {"PREFILL_GRAPH_GEMM": "0"},
     }],
   }))
   policy = _load_qk_route_policy(str(policy_path))
-  assert policy["prefill_gen"][0]["selected_route"] == "prefill_wmma_lds_single_buffer_candidate_generated"
+  assert policy["prefill_gen"][0]["selected_route"] == "prefill_wmma_lds_dbuf_generated"
 
 
 def test_qk_route_policy_rejects_raw_prefill_graph_gemm_route(tmp_path):

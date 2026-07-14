@@ -92,7 +92,7 @@ CENSUS_OVERLAY = [
     "rollback_flag": "PREFILL_GRAPH_GEMM=0 returns to the scheduler-owned default",
     "next_action": "keep opt-in until the executing WMMA substrate is generated instead of Ops.INS",
   }),
-  ("prefill_wmma_lds_single_buffer_candidate_generated", {
+  ("prefill_wmma_lds_dbuf_generated", {
     "shape_guard": "gfx1100 pp512 exact candidate set: attn_qo, attn_kv, ffn_down, ffn_gate_up",
     "writer": "tinygrad_generated",
     "selector": "promoted_candidate_set",

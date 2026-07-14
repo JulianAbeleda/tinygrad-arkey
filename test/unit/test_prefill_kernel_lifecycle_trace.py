@@ -52,7 +52,7 @@ def test_attn_qo_generated_candidate_lifecycle_smoke_has_b128_wmma_targeted_wait
   )
   selected = select_generated_candidate(op)
   assert selected.status == "selected" and selected.candidate is not None
-  assert selected.candidate.route_id == "prefill_wmma_lds_single_buffer_candidate_generated"
+  assert selected.candidate.route_id == "prefill_wmma_lds_dbuf_generated"
 
   env = {**os.environ,
     "DEV": "AMD:ISA",
@@ -71,11 +71,11 @@ def test_attn_qo_generated_candidate_lifecycle_smoke_has_b128_wmma_targeted_wait
 
   row = surface_audit.route_surface_row(selected.candidate.route_id)
   assert_prefill_mvp_structural_provenance_gate(
-    report, row, route_id="prefill_wmma_lds_single_buffer_candidate_generated")
+    report, row, route_id="prefill_wmma_lds_dbuf_generated")
 
 
 def test_attn_qo_default_prefill_candidate_has_no_route_local_raw_instruction_list():
-  row = surface_audit.route_surface_row("prefill_wmma_lds_single_buffer_candidate_generated")
+  row = surface_audit.route_surface_row("prefill_wmma_lds_dbuf_generated")
   assert row["strict_pure"] is True
   assert row["surface_class"] == "ordinary_tinygrad_graph"
   assert row["kernel_authorship"] == "tinygrad_scheduler_generated"

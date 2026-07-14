@@ -103,7 +103,7 @@
       "decode_q4k_g3_generated",
       "decode_q6k_coop_generated",
       "prefill_q4k_direct_tile4x4_default",
-      "prefill_wmma_lds_single_buffer_candidate_generated"
+      "prefill_wmma_lds_dbuf_generated"
     ]
   },
   "schema": "prefill-hybrid-whole-model-quality-gate.v1",
@@ -116,7 +116,7 @@
   ],
   "candidate_roles": [],
   "diagnostic_width": 0,
-  "required_route": "prefill_wmma_lds_single_buffer_candidate_generated",
+  "required_route": "prefill_wmma_lds_dbuf_generated",
   "candidate_set_path": "bench/prefill-pure-full-kernel/multirole-buffer2-candidate-set-v1/candidate-set.json",
   "candidate_set_roles": "attn_qo,attn_kv,ffn_down,ffn_gate_up",
   "baseline_child": {

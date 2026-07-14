@@ -158,7 +158,7 @@ def test_candidate_set_route_binding_gate_requires_passing_actual_census(monkeyp
 
 
 def test_generated_candidate_route_rejects_partial_role_ownership(monkeypatch):
-  route = "prefill_wmma_lds_single_buffer_candidate_generated"
+  route = "prefill_wmma_lds_dbuf_generated"
   monkeypatch.setattr(whole,"effective_routes",lambda env=None:_effective(route))
   report = _report(route); report["candidate_set_route_census"] = {
     "schema":"prefill-candidate-set-route-census.v1","passed":True,"policy_roles":["ffn_gate_up"],

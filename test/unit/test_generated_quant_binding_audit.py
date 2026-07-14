@@ -8,7 +8,7 @@ def test_builtin_generated_candidates_point_at_known_generated_routes():
   assert len(rows) == 9
   by_id = {r.candidate_id: r for r in rows}
 
-  promoted = [r for r in rows if r.route_id == "prefill_wmma_lds_single_buffer_candidate_generated"]
+  promoted = [r for r in rows if r.route_id == "prefill_wmma_lds_dbuf_generated"]
   assert len(promoted) == 4 and {r.roles[0] for r in promoted} == {"attn_qo", "attn_kv", "ffn_down", "ffn_gate_up"}
   assert all(r.is_full_kernel_candidate for r in promoted)
   assert not any(r.route_id == "prefill_v2_scheduler_matmul_default" for r in rows)
@@ -28,6 +28,6 @@ def test_prefill_direct_packed_default_is_no_longer_transitional_debt():
 
   assert rows["prefill_q4k_direct_tile4x4_default"]["provenance"] == "machine_authored_generated"
   assert rows["prefill_q4k_direct_tile4x4_default"]["final_default_allowed"] is True
-  assert rows["prefill_wmma_lds_single_buffer_candidate_generated"]["provenance"] == "tinygrad_scheduler_generated"
-  assert rows["prefill_wmma_lds_single_buffer_candidate_generated"]["final_default_allowed"] is True
+  assert rows["prefill_wmma_lds_dbuf_generated"]["provenance"] == "tinygrad_scheduler_generated"
+  assert rows["prefill_wmma_lds_dbuf_generated"]["final_default_allowed"] is True
   assert report["verdict"] == "TINYGRAD_DEFAULT_PURITY_PASS"

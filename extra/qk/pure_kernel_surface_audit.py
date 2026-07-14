@@ -142,8 +142,8 @@ ROUTE_SURFACES: dict[str, RouteSurface] = {
     ("extra/qk/prefill_graph_gemm_route.py", "extra/qk/wmma_pipe_spec.py", "extra/qk/prefill_pipe_mvp_artifact.py"),
     "Opt-in graph-GEMM pipe primitive uses ordinary Tensor matmul transport plus generated warmstart opts; it does not call the raw instruction-list pipe oracle.",
     descriptor_artifact="WMMAPipeSpec"),
-  "prefill_wmma_lds_single_buffer_candidate_generated": RouteSurface(
-    "prefill_wmma_lds_single_buffer_candidate_generated", "ordinary_tinygrad_graph",
+  "prefill_wmma_lds_dbuf_generated": RouteSurface(
+    "prefill_wmma_lds_dbuf_generated", "ordinary_tinygrad_graph",
     ("extra/qk/prefill_graph_gemm_route.py", "extra/qk/runtime_specs.py", "extra/qk/wmma_lds_spec.py"),
     "Manifest-promoted exact-hash candidates use Tensor matmul transport with generated LDS warmstart opts; each payload owns its buffer count.",
     descriptor_artifact="boltbeam.full_kernel_candidate_set.v1+WMMALDSSpec"),

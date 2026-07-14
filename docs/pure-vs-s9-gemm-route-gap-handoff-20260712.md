@@ -8,7 +8,7 @@ falsified** this session; don't repeat them.
 
 8B Qwen3 prefill, ctx512. The historical **S9 / hybrid** route (hand-ASM backend atoms,
 `prefill_pipe_role_selective_generated`) hits ~4.4k tok/s. The **pure / generated** route
-(`prefill_wmma_lds_single_buffer_candidate_generated`, tinygrad-scheduler-generated GEMMs
+(`prefill_wmma_lds_dbuf_generated`, tinygrad-scheduler-generated GEMMs
 selected via the BoltBeam candidate set) is stuck ~3.3–3.5k. Goal: explain and close the gap.
 
 ## THE reliable measurement (trust this)
@@ -27,7 +27,7 @@ cmd: python3 extra/qk/prefill_whole_synced.py --model .../Qwen3-8B-Q4_K_M.gguf \
 | route | family | pinned ctx512 | tok/s |
 |---|---|---:|---:|
 | HAND (S9)  | `prefill_pipe_role_selective_generated` | **124.9 ms** | 4099 |
-| PURE (gen) | `prefill_wmma_lds_single_buffer_candidate_generated` | **155.9 ms** | 3285 |
+| PURE (gen) | `prefill_wmma_lds_dbuf_generated` | **155.9 ms** | 3285 |
 
 **Gap = ~31 ms, and it is 100% the GEMM route** (single variable). The `route_attribution.
 prefill_route_family` confirms the flip actually happened — always verify this, don't trust flags.

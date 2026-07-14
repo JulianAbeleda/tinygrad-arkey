@@ -347,7 +347,7 @@ def test_exact_anchor_candidate_selects_truthful_pure_research_route():
          "BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON": json.dumps(candidate.full_kernel_candidate),
          "BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH": candidate.canonical_identity}
   row = {x["family"]: x for x in pure_search_guard.effective_routes(env)}["prefill_gemm"]
-  assert row["effective_route"] == "prefill_wmma_lds_single_buffer_candidate_generated"
+  assert row["effective_route"] == "prefill_wmma_lds_dbuf_generated"
   assert row["provenance"] == "tinygrad_scheduler_generated"
   assert row["strict_pure"] is True and row["pure"] is True and row["rolled_back_to_oracle"] is False
 
@@ -374,7 +374,7 @@ def test_dynamic_second_supported_candidate_admits_and_joins_route_identity():
 
 def test_candidate_route_selector_fails_closed_and_promoted_set_is_default():
   default = {x["family"]: x for x in pure_search_guard.effective_routes({})}["prefill_gemm"]
-  assert default["effective_route"] == "prefill_wmma_lds_single_buffer_candidate_generated"
+  assert default["effective_route"] == "prefill_wmma_lds_dbuf_generated"
   assert len(default["candidate_set_identities"]) == 4
   candidate = _single_buffer_anchor_candidate()
   base = {"PREFILL_GRAPH_GEMM": "1", "PREFILL_WMMA_LDS_PRIMITIVE": "1",
