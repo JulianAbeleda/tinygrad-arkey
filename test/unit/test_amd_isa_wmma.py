@@ -186,9 +186,10 @@ class TestAMDISAIntegerCastGate(unittest.TestCase):
     prg = to_program(ast, ren)
     lin_uop = [u for u in prg.src if u.op is Ops.LINEAR][0]
     mns = [str(u.arg).split("(", 1)[0] for u in lin_uop.src if not isinstance(u.arg, tuple)]
-    self.assertIn("global_load_u16", mns)
-    self.assertIn("v_and_b32_e32", mns)
-    self.assertIn("global_store_b32", mns)
+    self.assertEqual(mns.count("global_load_b64"), 1)
+    self.assertEqual(mns.count("v_bfe_u32"), 4)
+    self.assertEqual(mns.count("v_and_b32_e32"), 4)
+    self.assertEqual(mns.count("global_store_b32"), 4)
 
   def test_int_to_ushort_masks_to_destination_width(self):
     ren = AMDISARenderer(Target.parse("AMD:ISA:gfx1100"))

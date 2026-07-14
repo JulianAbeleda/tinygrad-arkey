@@ -23,10 +23,11 @@ from tinygrad.uop import FastEnum
 from tinygrad.uop.ops import UOp, UPat, PatternMatcher, Ops, AxisType, GroupOp
 from tinygrad.dtype import dtypes, PtrDType, AddrSpace
 from tinygrad.renderer.isa import (CompilerCaptureProof, CompilerRegisterLease, FixedRegisterUse, ISARenderer,
-                                  IselContext, Register)
+                                  IselContext, Register, RegisterSpan)
 from tinygrad.renderer.amd.dsl import s as _S, v as _V, NULL, VCC, EXEC, Reg, FixedBitField
 from tinygrad.runtime.autogen.amd.rdna3.ins import (
-  s_load_b64, s_load_b32, global_load_b32, global_load_b128, global_store_b32, v_add_f32_e32, v_mul_f32_e32, v_sub_f32_e32,
+  s_load_b64, s_load_b32, global_load_b32, global_load_b64, global_load_b128, global_store_b32,
+  v_add_f32_e32, v_mul_f32_e32, v_sub_f32_e32,
   v_lshlrev_b32_e32, v_mov_b32_e32, v_mul_lo_u32, v_add_nc_u32_e32, v_bfe_u32, s_waitcnt, s_endpgm,
   s_mov_b32, s_add_i32, s_cmp_lt_i32, ds_load_b32, ds_store_b32, ds_store_b64, ds_load_b128, ds_store_b128, s_barrier,
   ds_bpermute_b32, v_dot2_f32_f16,
@@ -402,6 +403,10 @@ class AMDOps(FastEnum):
   V_CVT_F2U = 53                           # f32 -> unsigned int
   TYPED_WAIT = 56                         # compiler-owned WaitCount -> s_waitcnt (backend lowering seam)
   V_WMMA_I8 = 57                         # RDNA3 signed int8 inputs -> int32 accumulator
+  GLOBAL_LOAD_B64 = 58                   # ordinary aligned 8-byte integer vector load into a two-VGPR span
+  GLOBAL_LOAD_B128_GENERIC = 59          # ordinary aligned 16-byte integer vector load into a four-VGPR span
+  V_BFE_U32 = 60                         # extract a uint16 lane from a packed wide-load destination dword
+  SPAN_LANE = 61                         # zero-code lane view; becomes a NOOP before register allocation
 
 def _reg(r:Register): return r  # passthrough; encoding maps index in post_regalloc
 
@@ -667,13 +672,38 @@ def isel_index(ctx:IselContext, x:UOp):
   else:
     vidx = _movs2v(ctx, idx) if _is_sgpr(idx) else idx
     off = UOp(Ops.INS, dtypes.int32, src=(vidx, UOp.const(dtypes.int32, shift).rtag()), arg=AMDOps.V_OFFSET, tag=_vreg_def(ctx))
+  # Preserve the strongest useful natural byte-alignment proof for ordinary wide global loads.  This is derived only
+  # from the scalar INDEX expression and element size; an unknown/misaligned expression therefore stays scalar.
+  alignment = next((width for width in (16, 8, 4, 2) if width % isz == 0 and idx.divides(width // isz) is not None), 1)
   # tag the INDEX result as a pair (base_ptr, byte_offset) via a NOOP carrier
-  return UOp(Ops.NOOP, x.dtype, src=(base, off))
+  return UOp(Ops.NOOP, x.dtype, src=(base, off), arg=("global_alignment", alignment))
+
+def _span_lane(owner:UOp, lane:int, dtype=dtypes.int32) -> UOp:
+  """Zero-cost view of one dword in a RegisterSpan-owned wide result."""
+  return UOp(Ops.INS, dtype, src=(owner,), arg=AMDOps.SPAN_LANE, tag=owner.tag + (lane,))
+
+def _ordinary_integer_wide_load(ctx:IselContext, x:UOp, idxc:UOp, dep:tuple[UOp, ...]) -> UOp|None:
+  """Select b64/b128 for proven-aligned uint16/uint32 global vector LOADs."""
+  if x.dtype.scalar() not in (dtypes.uint16, dtypes.uint32) or x.dtype.count <= 1: return None
+  width = x.dtype.itemsize
+  if width not in (8, 16) or not (isinstance(idxc.arg, tuple) and idxc.arg[:1] == ("global_alignment",)) or idxc.arg[1] < width:
+    return None
+  nregs = width // 4
+  base, off = idxc.src
+  op = AMDOps.GLOBAL_LOAD_B64 if width == 8 else AMDOps.GLOBAL_LOAD_B128_GENERIC
+  owner = UOp(Ops.INS, dtypes.int32.vec(nregs), src=(off, base, UOp.const(dtypes.int32, 0).rtag()) + dep, arg=op,
+              tag=(ctx.vreg(_vpool(ctx), RegisterSpan(nregs)),))
+  words = tuple(_span_lane(owner, i) for i in range(nregs))
+  if x.dtype.scalar() is dtypes.uint32: lanes = words
+  else:
+    lanes = tuple(UOp(Ops.INS, dtypes.uint16,
+      src=(words[i//2], UOp.const(dtypes.int32, (i & 1) * 16).rtag(), UOp.const(dtypes.int32, 16).rtag()),
+      arg=AMDOps.V_BFE_U32, tag=_vreg_def(ctx)) for i in range(x.dtype.count))
+  return UOp(Ops.NOOP, x.dtype, src=lanes, arg=("register_span_carrier", nregs))
 
 def isel_load(ctx:IselContext, x:UOp):
-  # SCALARIZED vec load (Inc 0): a vec(N) LOAD becomes N independent scalar global_load_b32, one per lane, with the
-  # per-lane element offset folded into the load's immediate (offset=lane*itemsize). vec4/b128 + consecutive-VGPR
-  # allocation are deferred to Inc 1+. The N loads are wrapped in a NOOP lane-carrier consumed by GEP (lane extract).
+  # Proven-aligned uint16/uint32 vectors totaling 8 or 16 bytes use one span-owned wide global load. Other vector loads
+  # remain scalarized: N independent loads with per-lane byte immediates, wrapped in a GEP-consumed NOOP carrier.
   idxc = x.src[0]                            # NOOP(base_ptr, byte_offset) or LDS carrier (arg=="lds")
   dep:tuple[UOp, ...] = ()
   if idxc.op is Ops.AFTER:
@@ -701,6 +731,7 @@ def isel_load(ctx:IselContext, x:UOp):
       loads.append(UOp(Ops.INS, x.dtype.scalar(), src=(addr, idxc.src[1]) + dep + (() if meta is None else (meta,)),
                        arg=AMDOps.DS_LOAD, tag=(ctx.vreg(_vpool(ctx)),)))
     return loads[0] if n == 1 else UOp(Ops.NOOP, x.dtype, src=tuple(loads))
+  if (wide := _ordinary_integer_wide_load(ctx, x, idxc, dep)) is not None: return wide
   base, off = idxc.src[0], idxc.src[1]
   isz, n = x.dtype.scalar().itemsize, x.dtype.count
   loads = tuple(UOp(Ops.INS, x.dtype.scalar(), src=(off, base, UOp.const(dtypes.int32, l*isz).rtag()) + dep,
@@ -1746,7 +1777,7 @@ def _strip_linear_order_deps(x:UOp):
     nx = UOp(Ops.NOOP, dtypes.void)
     return (nx, [])
   nx = None
-  if x.arg is AMDOps.GLOBAL_LOAD and len(x.src) > 3: nx = x.replace(src=x.src[:3])
+  if x.arg in (AMDOps.GLOBAL_LOAD, AMDOps.GLOBAL_LOAD_B64, AMDOps.GLOBAL_LOAD_B128_GENERIC) and len(x.src) > 3: nx = x.replace(src=x.src[:3])
   elif x.arg is AMDOps.DS_LOAD and len(x.src) > 2: nx = x.replace(src=x.src[:2])
   elif x.arg is AMDOps.DS_LOAD_B128 and len(x.src) > 3: nx = x.replace(src=x.src[:3])
   elif x.arg is AMDOps.DS_STORE and len(x.src) > 4: nx = x.replace(src=x.src[:4])
@@ -1756,6 +1787,12 @@ def _strip_linear_order_deps(x:UOp):
     return (nx, [nx])
   return None
 
+def _lower_span_lane_to_pseudo(x:UOp):
+  if x.arg is not AMDOps.SPAN_LANE or not (isinstance(x.tag, tuple) and len(x.tag) == 2 and isinstance(x.tag[0], Register)):
+    return None
+  nx = x.replace(op=Ops.NOOP, arg=("register_span_lane", x.tag[1]), tag=(x.tag[0],))
+  return (nx, [nx])
+
 def _strip_metadata_tag(x:UOp):
   if isinstance(x.tag, tuple) and x.tag and x.tag[0] in ("wmma_frag_buffer_proof", "tc_local_stage_store", "wmma_frag_stage_window",
                                                          "prefill_source_value_key", "register_stage_pair", "register_pipe_stage_buffer"):
@@ -1764,6 +1801,7 @@ def _strip_metadata_tag(x:UOp):
   return None
 
 pre_regalloc_matcher = PatternMatcher([
+  (UPat(Ops.INS, name="x"), _lower_span_lane_to_pseudo),
   (UPat(Ops.INS, name="x"), _strip_linear_order_deps),
   (UPat(GroupOp.All, name="x"), _strip_metadata_tag),
 ])
@@ -1894,6 +1932,13 @@ pre_isel_matcher = PatternMatcher([
 # ============================ post-regalloc: build real rdna3 Insts + waitcnts ============================
 def _S2(r:Register): return _S[r.index:r.index+1]   # SGPR pair s[i:i+1]
 def _Vr(r:Register): return _V[r.index]
+
+def _lower_register_span_lane(x:UOp):
+  """Resolve a zero-cost lane view after its owner has received an atomic physical span."""
+  if not (isinstance(x.arg, tuple) and x.arg[:1] == ("register_span_lane",) and len(x.src) == 1): return None
+  lane, base = x.arg[1], x.src[0].reg
+  fixed = FixedRegisterUse(f"v{base.index + lane}", base.index + lane)
+  return (x.replace(src=(), arg=None, tag=(fixed,)), [])
 
 # post_regalloc lowers each INS to the real rdna3 Inst, baking in the allocated registers. NOTE: a consumer reads
 # its producer's allocated reg via src[].reg, but line_rewrite has already replaced the src with its (tagless) lowered
@@ -2046,6 +2091,26 @@ def lower_inst(x:UOp):
       "byte_offset": imm,
     })
     return (ld, [ld])
+  if a is AMDOps.GLOBAL_LOAD_B64:
+    off_r, ptr_r, imm = src[0].reg, src[1].reg, src[2].arg
+    ld = _ins(global_load_b64(vdst=_V[x.reg.index:x.reg.index+1], addr=_Vr(off_r), saddr=_S2(ptr_r), offset=imm), x.tag)
+    _proof_record("global_load_b64", x, ld.arg, {
+      "dest_vgpr_range": [x.reg.index, x.reg.index + 1],
+      "addr_vgpr": off_r.index,
+      "saddr_sgpr_pair": [ptr_r.index, ptr_r.index + 1],
+      "byte_offset": imm,
+    })
+    return (ld, [ld])
+  if a is AMDOps.GLOBAL_LOAD_B128_GENERIC:
+    off_r, ptr_r, imm = src[0].reg, src[1].reg, src[2].arg
+    ld = _ins(global_load_b128(vdst=_V[x.reg.index:x.reg.index+3], addr=_Vr(off_r), saddr=_S2(ptr_r), offset=imm), x.tag)
+    _proof_record("global_load_b128", x, ld.arg, {
+      "dest_vgpr_range": [x.reg.index, x.reg.index + 3],
+      "addr_vgpr": off_r.index,
+      "saddr_sgpr_pair": [ptr_r.index, ptr_r.index + 1],
+      "byte_offset": imm,
+    })
+    return (ld, [ld])
   if a is AMDOps.GLOBAL_LOAD_B128:
     off_r, ptr_r, imm = src[0].reg, src[1].reg, src[2].arg
     ld = _ins(global_load_b128(vdst=_V[x.reg.index:x.reg.index+3], addr=_Vr(off_r), saddr=_S2(ptr_r), offset=imm), x.tag)
@@ -2056,6 +2121,8 @@ def lower_inst(x:UOp):
       "byte_offset": imm,
     })
     return (ld, [ld])
+  if a is AMDOps.V_BFE_U32:
+    return _ins(v_bfe_u32(_Vr(x.reg), _Vr(src[0].reg), src[1].arg, src[2].arg), x.tag)
   # float VOP2 (add/mul): src0 may be a 32-bit float literal, vsrc1 must be a VGPR -> a CONST operand goes in src0.
   if a is AMDOps.V_ADD: return _ins(_vop2_f(v_add_f32_e32, x, src), x.tag)
   if a is AMDOps.V_MUL: return _ins(_vop2_f(v_mul_f32_e32, x, src), x.tag)
@@ -2194,6 +2261,7 @@ post_regalloc_matcher = PatternMatcher([
   # for the kernarg-segment scan, SPECIAL gidx0 for the workgroup-id descriptor scan, DEFINE_REG for group-segment sizing)
   # Ops.GROUP (PSEUDO_OP) just bundles already-linearized stores (e.g. the WMMA path's vec(8) output -> 8 scalar
   # global_store INS via no_vectorized_store/UOp.group); its children are emitted on their own lines, so drop the wrapper.
+  (UPat(Ops.NOOP, name="x"), _lower_register_span_lane),
   (UPat((Ops.CONST, Ops.NOOP, Ops.AFTER, Ops.PARAM, Ops.DEFINE_VAR, Ops.SPECIAL, Ops.DEFINE_REG, Ops.GROUP), name="x"), lambda x: (x, [])),
 ])
 
