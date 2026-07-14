@@ -74,6 +74,29 @@ Anything less is a diagnostic or candidate result, not a shipped 14B completion.
 Weighted status is approximately 35% to the full definition above. The safety/correctness substrate is near complete;
 most remaining weight is primitive efficiency, role coverage, Q6 strategy, and whole-model promotion.
 
+### 2026-07-14 execution update
+
+The exact six-row generated packed candidate now has full-output correctness and three isolated timing sessions. The
+latest candidate is stable and spill-free, but its final code object remains in the 248 allocated-VGPR bucket and is
+well below the promotion budget: Q4 rows measure approximately 9.5-26.6 TFLOP/s and Q6 rows approximately 9.9-24.3
+TFLOP/s. The authoritative artifacts are the six-row correctness artifact and timing sessions recorded in
+`bench/prefill-pure-full-kernel/`; this is a correctness-complete candidate, not a 14B promotion.
+
+Two alternative strategies were also checked on the smallest full Q6/Q4 role (`attn_kv`, M=512, N=1024, K=5120):
+
+- Q6 dequant-once-to-fp16 followed by generated fp16 WMMA is numerically exact, but the fresh dequant-plus-GEMM
+  median was about 4.7 ms versus about 0.54 ms for the fused candidate. It is therefore not a viable fast route in
+  its current implementation; keep it as an explicit diagnostic/rollback candidate.
+- Q4 Tensor-level Q8_1 packing plus generated integer-WMMA is numerically correct (max absolute error about 0.016),
+  but the fresh packing-plus-contraction median was about 232 ms on the same role. The graph-level packing lifecycle
+  is refuted for promotion even though the integer-WMMA algebra is sound.
+
+The next owning layer is therefore the fused MMQ-style tile producer: stage/reuse Q4_K and Q8_1 tile data inside one
+bounded kernel lifecycle, then reconnect the existing correctness/admission/evidence path. The current bounded
+cooperative MMQ atoms remain proof substrates only; they are not silently selected by the production route. Delegated
+alternative-path agents are currently unavailable because the agent usage budget is exhausted, so no promotion is
+claimed from those agents.
+
 ## Frozen measurement authority
 
 The current comparator pair is historical but reproducible and must remain immutable until a controlled refresh:
