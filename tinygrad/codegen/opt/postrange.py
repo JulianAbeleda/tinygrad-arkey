@@ -1,13 +1,12 @@
 from __future__ import annotations
 import contextlib, math, itertools
 from dataclasses import replace
-from collections import defaultdict
-from typing import cast, Final
+from typing import cast
 from tinygrad.uop.ops import Ops, UOp, UPat, PatternMatcher, KernelInfo, graph_rewrite, AxisType, ssimplify, GroupOp, remove_all_tags
 from tinygrad.uop.ops import axis_letters, axis_colors, axis_to_pos
 from tinygrad.device import Buffer
 from tinygrad.dtype import dtypes, AddrSpace, PtrDType
-from tinygrad.helpers import colored, getenv, DEBUG, to_function_name, NOOPT, argsort, round_up, prod, merge_dicts, get_single_element, flatten
+from tinygrad.helpers import colored, getenv, DEBUG, NOOPT, argsort, round_up, prod, merge_dicts, get_single_element, flatten
 from tinygrad.helpers import ALLOW_TF32, count
 from tinygrad.codegen.opt import Opt, OptOps, KernelOptError, check
 from tinygrad.codegen.simplify import pm_flatten_range
@@ -50,7 +49,6 @@ class Scheduler:
     if hasattr(self, 'tensor_core'): ret.tensor_core = self.tensor_core
     return ret
 
-  kernel_cnt: Final[defaultdict[str, int]] = defaultdict(int)
   def get_optimized_ast(self, name_override:str|None=None) -> UOp:
     if name_override is not None: name = name_override
     else:
@@ -58,9 +56,10 @@ class Scheduler:
       special_uops = sorted([x for x in self.ast.toposort() if x.op is Ops.SPECIAL], key=lambda x: x.arg)
       special_ops = [colored(str(x.vmax+1), "blue" if x.arg[0] == "g" else "cyan") for x in special_uops]
       name = k_type + colored('_', 'BLACK').join(['']+special_ops+[colored(x.src[0].render(), color) for x,color in zip(self.rngs, self.colors())])
-      Scheduler.kernel_cnt[(function_name := to_function_name(name))] += 1
-      num = f"n{Scheduler.kernel_cnt[function_name]-1}" if Scheduler.kernel_cnt[function_name] > 1 else ""
-      name += colored(num, 'BLACK')
+      # UOp.key covers operation arguments and graph topology while intentionally excluding tags and metadata. Drop the
+      # root KernelInfo too: its display name and candidate context are provenance, not generated-kernel structure.
+      # The full digest makes equal optimized graphs process-independently equal and avoids counter/order collisions.
+      name += colored("_" + self.ast.replace(arg=None).key.hex(), 'BLACK')
     self.ast = graph_rewrite(self.ast, pm_flatten_range, name="flatten range")
     return self.ast.replace(arg=KernelInfo(name=name, applied_opts=tuple(self.applied_opts), dont_use_locals=self.dont_use_locals,
                                            candidate_context=self.ast.arg.candidate_context), tag=1)
