@@ -324,7 +324,10 @@ def regalloc_rewrite(ctx:LinearScanRegallocContext, x:UOp):
       before += rb
       nsrc.append(rs)
     else: nsrc.append(s)
-  ndefs = tuple(ctx.reals[i][v] for v in x.tag) if isinstance(x.tag, tuple) else x.tag
+  # Tuple tags can also carry backend metadata. Keep this definition test in sync
+  # with liveness/allocation above: only an all-Register tuple names vreg defs.
+  defs = x.tag if isinstance(x.tag, tuple) and all(isinstance(v, Register) for v in x.tag) else ()
+  ndefs = tuple(ctx.reals[i][v] for v in defs) if defs else x.tag
   if x.op is Ops.DEFINE_LOCAL: nx = ctx.ren.isel_matcher.rewrite(ctx.ren.stack_pointer().index(ctx.locals[x], dtype=x.dtype, tag=ndefs))
   else: nx = x.replace(src=tuple(nsrc), tag=ndefs)
 
@@ -336,7 +339,7 @@ def regalloc_rewrite(ctx:LinearScanRegallocContext, x:UOp):
     before += rb
   try:
     before = [ctx.ren.fill(ctx.spills[v], ctx.vdef(v), r) for v,r in ctx.insert_before.get(i, [])] + before
-    after = [ctx.ren.spill(ctx.spills[v], nx) for v in x.tag if v in ctx.spills] if isinstance(x.tag, tuple) else []
+    after = [ctx.ren.spill(ctx.spills[v], nx) for v in defs if v in ctx.spills]
   except NotImplementedError:
     _nosspill_diagnostic(ctx, i, "spill_or_fill"); raise
 

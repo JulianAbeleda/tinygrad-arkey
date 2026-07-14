@@ -174,6 +174,18 @@ def kernel_descriptor_from_elf(binary:bytes) -> amdgpu_kd.llvm_amdhsa_kernel_des
 def group_segment_fixed_size_from_elf(binary:bytes) -> int:
   return kernel_descriptor_from_elf(binary).group_segment_fixed_size
 
+def _descriptor_field(value:int, mask:int, shift:int) -> int:
+  """Extract one packed descriptor field without admitting neighboring control bits."""
+  return (value & mask) >> shift
+
+def descriptor_register_counts(desc, *, is_cdna:bool) -> tuple[int, int|None]:
+  rsrc1 = int(desc.compute_pgm_rsrc1)
+  vgpr_granule = _descriptor_field(rsrc1, amdgpu_kd.COMPUTE_PGM_RSRC1_GRANULATED_WORKITEM_VGPR_COUNT,
+                                   amdgpu_kd.COMPUTE_PGM_RSRC1_GRANULATED_WORKITEM_VGPR_COUNT_SHIFT)
+  sgpr_granule = _descriptor_field(rsrc1, amdgpu_kd.COMPUTE_PGM_RSRC1_GRANULATED_WAVEFRONT_SGPR_COUNT,
+                                   amdgpu_kd.COMPUTE_PGM_RSRC1_GRANULATED_WAVEFRONT_SGPR_COUNT_SHIFT)
+  return (vgpr_granule + 1) * 8, ((sgpr_granule + 1) * 8 if is_cdna else None)
+
 def final_elf_capture(prg: UOp, lin: UOp, arch: str, *, binary: bytes, target: str | None = None,
                       abi: str = "amdgpu_kernel") -> dict:
   """Return the CPU-only final ELF boundary for an already lowered AMD program.
@@ -187,9 +199,7 @@ def final_elf_capture(prg: UOp, lin: UOp, arch: str, *, binary: bytes, target: s
   if not isinstance(binary, bytes) or not binary: raise ValueError("exact final ELF binary is required")
   desc = kernel_descriptor_from_elf(binary)
   is_cdna = _arch_map[next(k for k in _arch_map if arch.startswith(k))] == "cdna"
-  rsrc1 = int(desc.compute_pgm_rsrc1)
-  vgpr = ((rsrc1 >> amdgpu_kd.COMPUTE_PGM_RSRC1_GRANULATED_WORKITEM_VGPR_COUNT_SHIFT) + 1) * 8
-  sgpr = ((rsrc1 >> amdgpu_kd.COMPUTE_PGM_RSRC1_GRANULATED_WAVEFRONT_SGPR_COUNT_SHIFT) + 1) * 8 if is_cdna else None
+  vgpr, sgpr = descriptor_register_counts(desc, is_cdna=is_cdna)
   sink = prg.src[0]
   threads = 1
   for u in sink.toposort():

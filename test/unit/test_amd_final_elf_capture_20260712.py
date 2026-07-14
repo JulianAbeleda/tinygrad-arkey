@@ -27,3 +27,11 @@ def test_final_elf_capture_uses_exact_binary_without_reassembly(monkeypatch):
 def test_final_elf_capture_rejects_missing_exact_binary():
   with pytest.raises(ValueError, match="exact final ELF"):
     elf.final_elf_capture(_program(), _linear(), "gfx1100", binary=b"")
+
+
+def test_descriptor_register_extraction_masks_neighboring_control_fields():
+  desc = _Descriptor()
+  desc.compute_pgm_rsrc1 = (26 << elf.amdgpu_kd.COMPUTE_PGM_RSRC1_GRANULATED_WORKITEM_VGPR_COUNT_SHIFT) | \
+    (9 << elf.amdgpu_kd.COMPUTE_PGM_RSRC1_GRANULATED_WAVEFRONT_SGPR_COUNT_SHIFT) | (1 << 30)
+  assert elf.descriptor_register_counts(desc, is_cdna=False) == (216, None)
+  assert elf.descriptor_register_counts(desc, is_cdna=True) == (216, 80)

@@ -5,7 +5,7 @@ import pytest
 import extra.qk.mmq_epoch_manifest_export as manifest_export
 from extra.qk.mmq_epoch_manifest_export import (
   DEFAULT_MAX_ROWS, ROW_SCHEMA, SCHEMA, build_amd_isa_proof_manifest_bundle,
-  export_current_amd_isa_proof_manifest_bundle, validate_amd_isa_proof_rows)
+  export_current_amd_isa_proof_manifest_bundle, summarize_amd_isa_proof_rows, validate_amd_isa_proof_rows)
 
 
 def _row(**overrides):
@@ -97,3 +97,45 @@ def test_export_current_uses_renderer_helpers_with_synthetic_rows(monkeypatch):
 
   assert bundle["rows"][0]["kind"] == "barrier"
   assert reset_calls == ["reset"]
+
+
+def test_bundle_carries_and_validates_explicit_abi_ownership_and_digests():
+  digest = "b" * 64
+  bundle = build_amd_isa_proof_manifest_bundle(
+    candidate_id="c0", kernel_name="kernel",
+    rows=[_row(operand_id="A", source_operand_id="arg0", fetch_group="k0", width_bytes=4,
+               vector_width_bytes=16, retained_fragment={"bytes": 32}, semantic_owner={"role": "lhs"})],
+    abi_metadata={"arguments": {"arg0": {"offset": 0}}}, ownership_metadata={"A": "arg0"},
+    digest_metadata={"candidate_sha256": digest, "semantic_schedule_sha256": "c" * 64})
+
+  assert bundle["abi_metadata"]["arguments"]["arg0"]["offset"] == 0
+  assert bundle["ownership_metadata"] == {"A": "arg0"}
+  assert bundle["digest_metadata"]["candidate_sha256"] == digest
+
+
+@pytest.mark.parametrize("kwargs, match", [
+  ({"abi_metadata": []}, "abi_metadata must be a mapping"),
+  ({"ownership_metadata": {1: "arg0"}}, "ownership_metadata key must be a non-empty string"),
+  ({"digest_metadata": {"candidate_sha256": "bad"}}, "lowercase hex sha256"),
+])
+def test_bundle_rejects_invalid_identity_metadata(kwargs, match):
+  with pytest.raises(ValueError, match=match):
+    build_amd_isa_proof_manifest_bundle(candidate_id="c0", kernel_name="kernel", rows=[], **kwargs)
+
+
+def test_rows_reject_invalid_explicit_operand_path_metadata():
+  with pytest.raises(ValueError, match="width_bytes must be a positive integer"):
+    validate_amd_isa_proof_rows([_row(operand_id="A", width_bytes=0)])
+
+
+def test_structure_summary_counts_final_rows_and_only_exports_explicit_operand_metadata():
+  summary = summarize_amd_isa_proof_rows([
+    _row(kind="global_load", emitted="global_load_b128", source_regs=[6, 7]),
+    _row(kind="ds_load_b128", emitted="ds_load_b128", operand_id="B", source_operand_id="arg1"),
+    _row(kind="waitcnt", emitted="s_waitcnt vmcnt(0)"), _row(kind="barrier", emitted="s_barrier"),
+    _row(kind="wmma", emitted="v_wmma", semantic_ownership={"A": "lhs", "B": "rhs"}),
+  ])
+  assert summary["counts"] == {"global_load": 1, "ds_load": 1, "ds_store": 0, "wait": 1, "barrier": 1, "wmma": 1}
+  assert len(summary["operand_paths"]) == 2
+  assert summary["operand_paths"][0]["row_index"] == 1
+  assert all("source_regs" not in row for row in summary["operand_paths"])

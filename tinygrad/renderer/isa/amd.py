@@ -15,6 +15,8 @@ always enabled. Experimental PREFILL_DBUF/TC_LOCAL_STAGE tuning does not live
 in this renderer.
 """
 from __future__ import annotations
+from contextlib import contextmanager
+from contextvars import ContextVar
 from typing import NamedTuple
 from types import SimpleNamespace
 from tinygrad.uop import FastEnum
@@ -78,6 +80,10 @@ def _n_workitem_dims(ctx:IselContext) -> int:
 FRAG_BASE, FRAG_TOP = 200, 238
 LDS_PACK_BASE, LDS_PACK_TOP = 232, 236
 AMD_ISA_PROOF_MANIFEST:list[dict] = []
+_AMD_ISA_PROOF_CAPTURE:ContextVar[tuple[list[dict], int]|None] = ContextVar("amd_isa_proof_capture", default=None)
+AMD_ISA_OPERAND_PATH_TAG = "amd_operand_path"
+AMD_ISA_OPERAND_PATH_FIELDS = frozenset(("operand_id", "source_operand_id", "fetch_group", "cache_policy", "width_bytes",
+                                         "vector_width_bytes", "retained_fragment", "semantic_owner", "semantic_ownership"))
 
 def reset_amd_isa_proof_manifest() -> None:
   AMD_ISA_PROOF_MANIFEST.clear()
@@ -85,14 +91,69 @@ def reset_amd_isa_proof_manifest() -> None:
 def amd_isa_proof_manifest() -> tuple[dict, ...]:
   return tuple(AMD_ISA_PROOF_MANIFEST)
 
+@contextmanager
+def capture_amd_isa_proof_manifest(*, max_rows:int=4096):
+  """Capture proof rows for one compile without changing process environment or global default state."""
+  if not isinstance(max_rows, int) or isinstance(max_rows, bool) or max_rows < 0:
+    raise ValueError("max_rows must be a non-negative integer")
+  rows:list[dict] = []
+  token = _AMD_ISA_PROOF_CAPTURE.set((rows, max_rows))
+  try: yield rows
+  finally: _AMD_ISA_PROOF_CAPTURE.reset(token)
+
 def _proof_manifest_enabled() -> bool:
-  return bool(getenv("AMD_ISA_PROOF_MANIFEST", 0))
+  return _AMD_ISA_PROOF_CAPTURE.get() is not None or bool(getenv("AMD_ISA_PROOF_MANIFEST", 0))
+
+def _append_proof_row(row:dict) -> None:
+  if (capture:=_AMD_ISA_PROOF_CAPTURE.get()) is not None:
+    rows, limit = capture
+    if len(rows) >= limit: raise ValueError(f"AMD ISA proof exceeds max_rows={limit}")
+    rows.append(row)
+  else: AMD_ISA_PROOF_MANIFEST.append(row)
 
 def _proof_carrier_meta(u:UOp|None) -> dict:
   if u is None or not isinstance(u.arg, tuple): return {}
   if u.arg[:1] == ("wmma_acc",):
     return {"carrier_kind": "wmma_acc", "define_reg_id": u.arg[1], "subtile": u.arg[2], "element": u.arg[3], "physical_vgpr": u.arg[4]}
   return {}
+
+def _freeze_operand_path_value(value):
+  if isinstance(value, dict): return frozenset((key, _freeze_operand_path_value(item)) for key, item in value.items())
+  if isinstance(value, list): return tuple(_freeze_operand_path_value(item) for item in value)
+  return value
+
+def _thaw_operand_path_value(value):
+  if isinstance(value, frozenset): return {key: _thaw_operand_path_value(item) for key, item in value}
+  if isinstance(value, tuple): return tuple(_thaw_operand_path_value(item) for item in value)
+  return value
+
+def amd_isa_operand_path_tag(tag, **metadata):
+  """Attach explicit operand-path metadata without displacing an allocator-owned tag payload."""
+  unknown = set(metadata) - AMD_ISA_OPERAND_PATH_FIELDS
+  if unknown: raise ValueError(f"unknown AMD ISA operand-path metadata: {sorted(unknown)}")
+  payload = tuple(sorted((key, _freeze_operand_path_value(value)) for key, value in metadata.items()))
+  return (tag, (AMD_ISA_OPERAND_PATH_TAG, payload)) if not isinstance(tag, tuple) else tag + ((AMD_ISA_OPERAND_PATH_TAG, payload),)
+
+def _proof_operand_path_meta(tag) -> dict:
+  """Decode only the explicit contract. Register identities and route names are deliberately ignored."""
+  candidates = tag if isinstance(tag, tuple) else (tag,)
+  for candidate in candidates:
+    if isinstance(candidate, tuple) and len(candidate) == 2 and candidate[0] == AMD_ISA_OPERAND_PATH_TAG:
+      raw = candidate[1]
+      if isinstance(raw, tuple):
+        try: raw = dict(raw)
+        except (TypeError, ValueError): return {}
+      if not isinstance(raw, dict): return {}
+      return {key: _thaw_operand_path_value(value) for key, value in raw.items() if key in AMD_ISA_OPERAND_PATH_FIELDS}
+    if isinstance(candidate, dict) and AMD_ISA_OPERAND_PATH_TAG in candidate:
+      raw = candidate[AMD_ISA_OPERAND_PATH_TAG]
+      return {key: _thaw_operand_path_value(value) for key, value in raw.items() if key in AMD_ISA_OPERAND_PATH_FIELDS} if isinstance(raw, dict) else {}
+  return {}
+
+def _proof_register_index(value) -> int|None:
+  """Return a concrete physical index, never an object's bound ``index`` method."""
+  index = getattr(getattr(value, "reg", None), "index", None)
+  return index if isinstance(index, int) and not isinstance(index, bool) else None
 
 def _proof_record(kind:str, x:UOp, inst, extra:dict|None=None) -> None:
   if not _proof_manifest_enabled(): return
@@ -101,11 +162,12 @@ def _proof_record(kind:str, x:UOp, inst, extra:dict|None=None) -> None:
     "kind": kind,
     "logical_op": x.arg.name if isinstance(x.arg, AMDOps) else str(x.arg),
     "emitted": str(inst),
-    "dest_reg": getattr(getattr(x, "reg", None), "index", None),
-    "source_regs": [getattr(getattr(s, "reg", None), "index", None) for s in x.src],
+    "dest_reg": _proof_register_index(x),
+    "source_regs": [_proof_register_index(s) for s in x.src],
+    **_proof_operand_path_meta(x.tag),
   }
   if extra is not None: row.update(extra)
-  AMD_ISA_PROOF_MANIFEST.append(row)
+  _append_proof_row(row)
 
 def _proof_record_inst(kind:str, logical_op:str, inst, extra:dict|None=None) -> None:
   if not _proof_manifest_enabled(): return
@@ -116,7 +178,7 @@ def _proof_record_inst(kind:str, logical_op:str, inst, extra:dict|None=None) -> 
     "emitted": str(inst),
   }
   if extra is not None: row.update(extra)
-  AMD_ISA_PROOF_MANIFEST.append(row)
+  _append_proof_row(row)
 
 def _store_owner_proof_meta(tag) -> dict:
   if isinstance(tag, frozenset):
@@ -1834,7 +1896,7 @@ def lower_inst(x:UOp):
     inst = v_wmma_f32_16x16x16_f16(vdst=_V[dbase:dbase+7], src0=_V[a0:a0+7], src1=_V[b0:b0+7], src2=_V[dbase:dbase+7])
     _proof_record("wmma", x, inst, {
       "a_vgpr_range": [a0, a0 + 7], "b_vgpr_range": [b0, b0 + 7], "c_vgpr_range": [dbase, dbase + 7],
-      "accumulator_in_place": True,
+      "accumulator_in_place": True, "semantic_ownership": {"A": "lhs", "B": "rhs"},
     })
     return _ins(inst, x.tag)
   if a is AMDOps.V_EXP:                              # Phase N1A: hardware exp2 (2^x) -> one VALU op instead of a polynomial
@@ -2115,10 +2177,9 @@ class AMDISARenderer(ISARenderer):
     direct_owned = set(direct) == {"A", "B"}
     resident_owned = set(resident) == {"A", "B"} and all(resident[role] for role in ("A", "B"))
     if not (stage_owned or direct_owned or resident_owned) or not c_leases: return None
-    register_buffers = [u for u in ctx.uses if u.op is Ops.DEFINE_REG]
+    register_buffers = [u for u in ctx.uses if u.op is Ops.DEFINE_REG and u.ptrdtype.addrspace == AddrSpace.REG]
     owned_accumulators = _wmma_acc_regs(ctx)
     if any(_register_stage_buffer_meta(u) is None and id(u) not in owned_accumulators for u in register_buffers): return None
-    if any(u.op is Ops.DEFINE_LOCAL for u in ctx.uses): return None
     if stage_owned:
       leases = tuple(CompilerRegisterLease(role, "vgpr", stages[role].start, stages[role].end,
         "register_stage", True, specs[role].slots, ("produce", "wait", "consume", "release")) for role in ("A", "B"))
@@ -2131,14 +2192,17 @@ class AMDISARenderer(ISARenderer):
         for role in ("A", "B") for base in sorted(resident[role]))
     leases += tuple(CompilerRegisterLease("C", "vgpr", base, base+8, "wmma_accumulator", True, 1,
       ("initialize", "accumulate", "consume", "store")) for base in c_leases)
-    return CompilerCaptureProof(leases, lds_bytes=0, wait_policy="targeted_vmcnt")
+    lds_bytes = sum(u.ptrdtype.size * u.ptrdtype.base.itemsize for u in ctx.uses
+                    if u.op is Ops.DEFINE_LOCAL or (u.op is Ops.DEFINE_REG and u.ptrdtype.addrspace != AddrSpace.REG))
+    return CompilerCaptureProof(leases, lds_bytes=lds_bytes, wait_policy="targeted_vmcnt")
 
   @staticmethod
   def _assembly_program(prg:UOp, proof:CompilerCaptureProof|None) -> UOp:
     """Project metadata after selection proved all DEFINE_REG storage is fixed A/B/C VGPR state."""
-    if proof is None or proof.lds_bytes != 0: return prg
+    if proof is None: return prg
     sink = prg.src[0]
-    metadata = tuple(u for u in sink.toposort() if u.op in (Ops.PARAM, Ops.DEFINE_VAR, Ops.SPECIAL, Ops.DEFINE_LOCAL))
+    metadata = tuple(u for u in sink.toposort() if u.op in (Ops.PARAM, Ops.DEFINE_VAR, Ops.SPECIAL, Ops.DEFINE_LOCAL) or
+                     (u.op is Ops.DEFINE_REG and u.ptrdtype.addrspace != AddrSpace.REG))
     return prg.replace(src=(UOp(Ops.SINK, src=metadata, arg=sink.arg),) + prg.src[1:])
 
   def _final_linear(self, lin:UOp) -> UOp:

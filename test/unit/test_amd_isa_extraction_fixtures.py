@@ -5,7 +5,8 @@ from tinygrad.codegen import to_program, to_program_cache
 from tinygrad.dtype import dtypes
 from tinygrad.helpers import Target, getenv
 from tinygrad.renderer.isa import Register
-from tinygrad.renderer.isa.amd import AMDISARenderer, AMDOps, amd_isa_proof_manifest, lower_inst, reset_amd_isa_proof_manifest
+from tinygrad.renderer.isa.amd import (AMDISARenderer, AMDOps, amd_isa_operand_path_tag, amd_isa_proof_manifest, lower_inst,
+                                      reset_amd_isa_proof_manifest)
 from tinygrad.uop.ops import Ops, UOp
 
 
@@ -195,3 +196,34 @@ class TestAMDISAExtractionFixtures(unittest.TestCase):
     self.assertEqual(by_kind["barrier"]["logical_op"], "BARRIER")
     self.assertEqual(by_kind["ds_load_b128"]["dest_vgpr_range"], [20, 23])
     self.assertEqual(by_kind["ds_store_b128"]["data_vgpr_range"], [11, 14])
+
+  def test_explicit_operand_path_tags_propagate_to_load_ds_and_wmma_rows(self):
+    old = os.environ.get("AMD_ISA_PROOF_MANIFEST")
+    os.environ["AMD_ISA_PROOF_MANIFEST"] = "1"
+    getenv.cache_clear()
+    try:
+      reset_amd_isa_proof_manifest()
+      regs = [UOp(Ops.INS, dtypes.int32, arg=AMDOps.V_CONST, tag=(Register(f"v{i}", i),)) for i in range(1, 25)]
+      ptr = UOp(Ops.INS, dtypes.ulong, arg=AMDOps.S_LOAD_PTR, tag=(Register("s6", 6),))
+      load_meta = dict(operand_id="A", source_operand_id="arg0", fetch_group="k0", cache_policy="default",
+                       width_bytes=4, vector_width_bytes=4, semantic_owner={"role": "lhs"})
+      lower_inst(UOp(Ops.INS, dtypes.float32, src=(regs[0], ptr, UOp.const(dtypes.int32, 0).rtag()), arg=AMDOps.GLOBAL_LOAD,
+                     tag=amd_isa_operand_path_tag((Register("v30", 30),), **load_meta)))
+      lower_inst(UOp(Ops.INS, dtypes.float32, src=(regs[1], UOp.const(dtypes.int32, 0).rtag()), arg=AMDOps.DS_LOAD,
+                     tag=amd_isa_operand_path_tag((Register("v31", 31),), operand_id="B", source_operand_id="arg1",
+                                                  fetch_group=2, width_bytes=2, retained_fragment={"bytes": 16})))
+      lower_inst(UOp(Ops.INS, dtypes.float32, src=tuple(regs), arg=AMDOps.V_WMMA,
+                     tag=amd_isa_operand_path_tag((Register("v17", 17),), semantic_ownership={"A": "lhs", "B": "rhs"},
+                                                  vector_width_bytes=32, retained_fragment=True)))
+      rows = amd_isa_proof_manifest()
+    finally:
+      if old is None: os.environ.pop("AMD_ISA_PROOF_MANIFEST", None)
+      else: os.environ["AMD_ISA_PROOF_MANIFEST"] = old
+      getenv.cache_clear()
+
+    by_kind = {row["kind"]: row for row in rows}
+    for key, value in load_meta.items(): self.assertEqual(by_kind["global_load"][key], value)
+    self.assertEqual(by_kind["ds_load"]["operand_id"], "B")
+    self.assertEqual(by_kind["ds_load"]["retained_fragment"], {"bytes": 16})
+    self.assertEqual(by_kind["wmma"]["semantic_ownership"], {"A": "lhs", "B": "rhs"})
+    self.assertNotIn("operand_id", by_kind["wmma"])
