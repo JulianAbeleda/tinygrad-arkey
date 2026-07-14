@@ -115,6 +115,28 @@ class FullKernelCandidateSetEntry:
   def to_json(self) -> dict[str,Any]:
     return {"canonical_identity":self.canonical_identity,"payload":json.loads(json.dumps(self.payload))}
 
+
+def derive_packed_weight_candidate(payload:dict[str,Any], quant_format:str) -> FullKernelCandidateSetEntry:
+  """Return a canonical full-kernel candidate whose ABI slot 2 is a packed Q4_K/Q6_K weight.
+
+  This is the single construction authority shared by compile gates, canaries, and future model routing; callers do
+  not hand-maintain packed block geometry or canonical identities.
+  """
+  normalized = json.loads(json.dumps(payload, allow_nan=False))
+  shape = normalized.get("workload", {}).get("shape", {})
+  try: rows, k = int(shape["n"]), int(shape["k"])
+  except (KeyError, TypeError, ValueError) as exc: raise ValueError("packed candidate requires workload shape n/k") from exc
+  from tinygrad.codegen.opt.packed_weight import PackedWeightTransform
+  transform = PackedWeightTransform(quant_format, rows, k)
+  normalized["operand_sources"] = {
+    "a":{"kind":"dense", "logical_dtype":"fp16", "storage_dtype":"fp16", "abi_slot":1},
+    "b":{"kind":"packed_scalar_decoder", "logical_dtype":"fp16",
+         "storage_dtype":"uint32" if quant_format == "Q4_K" else "uint16", "abi_slot":2,
+         "quant_format":quant_format, "rows":rows, "k":k, "block_elems":transform.block_elems,
+         "block_bytes":transform.block_bytes, "decoder_version":PACKED_SCALAR_DECODER_VERSION}}
+  identity = _canonical_full_kernel_identity(normalized)
+  return FullKernelCandidateSetEntry(identity, normalized)
+
 @dataclass(frozen=True)
 class FullKernelCandidateSet:
   entries: tuple[FullKernelCandidateSetEntry,...]

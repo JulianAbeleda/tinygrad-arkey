@@ -10,7 +10,7 @@ from extra.qk import prefill_graph_gemm_route
 from extra.qk.runtime_specs import (
   ANCHOR_SINGLE_BUFFER_CANDIDATE_HASH, FULL_KERNEL_CANDIDATE_SCHEMA, PACKED_SCALAR_DECODER_VERSION, ActivationQuantSpec, GeneratedCandidate,
   CandidateAdmissionFacts, QuantizedTensorSpec, RuntimeOpSpec, FullKernelCandidateSet, FullKernelCandidateSetEntry,
-  GFX1100_TWO_BUFFER_STAGE1_CAPABILITY, admit_full_kernel_candidate, admit_full_kernel_candidate_set,
+  GFX1100_TWO_BUFFER_STAGE1_CAPABILITY, admit_full_kernel_candidate, admit_full_kernel_candidate_set, derive_packed_weight_candidate,
   bind_full_kernel_candidate, full_kernel_candidate_set_from_legacy,
 )
 
@@ -238,6 +238,18 @@ def test_full_kernel_operand_sources_roundtrip_and_typed_context(kind, quant_for
   else:
     assert admission.context.packed_weight.quant_format == quant_format
     assert (admission.context.packed_weight.rows, admission.context.packed_weight.k) == (12288,4096)
+
+
+@pytest.mark.parametrize("quant_format,storage_dtype,block_bytes", (("Q4_K", "uint32", 144), ("Q6_K", "uint16", 210)))
+def test_derive_packed_weight_candidate_is_canonical_and_geometry_owned(quant_format, storage_dtype, block_bytes):
+  payload = _single_buffer_anchor_candidate().full_kernel_candidate
+  assert payload is not None and "operand_sources" not in payload
+  entry = derive_packed_weight_candidate(payload, quant_format)
+  assert "operand_sources" not in payload
+  b = entry.payload["operand_sources"]["b"]
+  assert (b["quant_format"], b["storage_dtype"], b["rows"], b["k"], b["block_bytes"]) == \
+         (quant_format, storage_dtype, 12288, 4096, block_bytes)
+  assert FullKernelCandidateSetEntry(entry.canonical_identity, entry.to_json()["payload"]) == entry
 
 
 @pytest.mark.parametrize("mutation,error", (

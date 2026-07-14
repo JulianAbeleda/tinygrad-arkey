@@ -1,4 +1,4 @@
-import copy, hashlib, json, pickle
+import hashlib, json, pickle
 
 import numpy as np
 import pytest
@@ -6,6 +6,7 @@ import pytest
 from extra.qk.prefill import current_prefill_execution_adapter as adapter
 from extra.qk.prefill.operand_path_execution_worker import AdapterRegistry
 from extra.qk.route_manifest import promoted_prefill_candidate_policy
+from extra.qk.runtime_specs import derive_packed_weight_candidate
 from tinygrad.runtime.execution_bridge_contracts import ExecutionRequest, TransportPlan
 from tinygrad.uop.ops import Ops
 
@@ -17,18 +18,8 @@ def _candidate():
 
 def _packed_candidate(quant_format):
   """Derive a strict packed-B candidate without borrowing an identity from the promoted dense payload."""
-  entry, block_bytes = _candidate(), {"Q4_K": 144, "Q6_K": 210}[quant_format]
-  payload = copy.deepcopy(entry["payload"])
-  shape = payload["workload"]["shape"]
-  payload["operand_sources"] = {
-    "a": {"kind": "dense", "logical_dtype": "fp16", "storage_dtype": "fp16", "abi_slot": 1},
-    "b": {"kind": "packed_scalar_decoder", "logical_dtype": "fp16",
-          "storage_dtype": "uint32" if quant_format == "Q4_K" else "uint16", "abi_slot": 2,
-          "quant_format": quant_format, "rows": shape["n"], "k": shape["k"],
-          "block_elems": 256, "block_bytes": block_bytes, "decoder_version": "ggml_k_quant_v1"},
-  }
-  canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False).encode("ascii")
-  return payload, hashlib.sha256(canonical).hexdigest()
+  entry = derive_packed_weight_candidate(_candidate()["payload"], quant_format)
+  return entry.to_json()["payload"], entry.canonical_identity
 
 
 def _request(entry, **compiler_changes):
