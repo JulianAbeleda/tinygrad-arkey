@@ -121,8 +121,20 @@ def test_promoted_attn_qo_compile_only_produces_one_bound_final_program_and_proo
   json.dumps(evidence)
   assert evidence["isa_structure"]["counts"]["wmma"] == 32
   assert evidence["isa_structure"]["counts"]["ds_load"] == 48
-  assert evidence["isa_structure"]["operand_paths"] == []
-  assert evidence["isa_structure"]["operand_ownership_authority"] == "unavailable_for_shipping_hip_final_isa"
-  assert evidence["artifacts"] == {"final_isa": {"status": "satisfied"},
-    "final_isa_manifest": {"status": "partial", "missing": ["semantic_operand_instruction_mapping"]},
-    "resource_summary": {"status": "satisfied", "unavailable_fields": []}}
+  # Semantic operand ownership is now derived from the exact shipping code object via ABI dataflow;
+  # the clean global-load->LDS-stage A/B flow is attributed and the double-buffered LDS windows stay
+  # explicit unknown with a named discriminator (no route-name or alternate-binary inference).
+  st = evidence["isa_structure"]
+  assert st["operand_ownership_authority"] == "abi_dataflow_v1"
+  assert st["operand_ownership_binary_sha256"] == evidence["binary_sha256"]
+  paths = st["operand_paths"]
+  assert paths and all(p["binary_sha256"] == evidence["binary_sha256"] for p in paths)
+  attributed = [p for p in paths if p["operand_id"] != "unknown"]
+  assert st["attributed_row_count"] == len(attributed) >= 16   # 8 global loads + 8 ds stores at minimum
+  gl = [p for p in paths if p["kind"] == "global_load" and p["operand_id"] in ("A", "B")]
+  assert sum(p["operand_id"] == "A" for p in gl) == 4 and sum(p["operand_id"] == "B" for p in gl) == 4
+  assert all(p["source_operands"] == ["A", "B"] for p in paths if p["kind"] == "wmma" and "source_operands" in p)
+  assert all("missing" in p for p in paths if p["operand_id"] == "unknown")
+  assert "double_buffered_lds_window_binding" in st["missing_evidence"]
+  assert evidence["artifacts"]["final_isa_manifest"]["status"] == "partial"
+  assert evidence["artifacts"]["final_isa_manifest"]["attributed_rows"] == st["attributed_row_count"]

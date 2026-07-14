@@ -120,9 +120,19 @@ def prepare_current_prefill_compile(payload: dict[str, Any], canonical_identity:
   # explicitly unavailable rather than borrowing rows from the distinct
   # AMD:ISA binary.
   from extra.qk.mmq_compile_evidence import analyze_final_isa, disassemble_amdgpu, parse_amdgpu_metadata
+  from extra.qk.operand_attribution import attribute_operands, operand_paths_for_manifest
   disassembly, disassembly_tool = disassemble_amdgpu(binary)
   metadata = parse_amdgpu_metadata(binary)
   final_isa = analyze_final_isa(disassembly, wavefront_size=metadata["wavefront_size"])
+  # Derive semantic operand ownership from the EXACT shipping code object via a bounded ABI-rooted
+  # dataflow pass (kernarg pointer -> global load -> LDS stage -> WMMA). Rows that cannot be traced
+  # (e.g. the double-buffered LDS windows) remain explicit unknown with a named discriminator; nothing
+  # is inferred from route names or the distinct AMD:ISA binary.
+  attribution = attribute_operands(final_isa["instructions"],
+    {"outs": list(program.arg.outs), "ins": list(program.arg.ins)})
+  operand_paths = operand_paths_for_manifest(attribution, final_isa["instructions"], binary_sha256=binary_sha)
+  attributed_rows = [p for p in operand_paths if p["operand_id"] != "unknown"]
+  unknown_discriminators = sorted({p["missing"] for p in operand_paths if p["operand_id"] == "unknown"})
   structure = {"schema": "tinygrad.amd_isa_structure_summary.v1",
     "row_count": final_isa["instruction_count"],
     "counts": {"global_load": final_isa["global_load_sites"], "global_store": final_isa["global_store_sites"],
@@ -130,8 +140,12 @@ def prepare_current_prefill_compile(payload: dict[str, Any], canonical_identity:
       "wait": final_isa["waitcnt_sites"], "barrier": final_isa["barrier_sites"],
       "wmma": sum("wmma" in row["mnemonic"] for row in final_isa["instructions"]),
       "scratch": final_isa["scratch_sites"]},
-    "operand_paths": [], "operand_ownership_authority": "unavailable_for_shipping_hip_final_isa",
-    "missing_evidence": ["source_to_final_instruction_semantic_operand_mapping"]}
+    "operand_paths": operand_paths,
+    "operand_ownership_authority": attribution["authority"],
+    "operand_ownership_binary_sha256": binary_sha,
+    "attributed_row_count": len(attributed_rows),
+    "unknown_row_count": len(operand_paths) - len(attributed_rows),
+    "missing_evidence": unknown_discriminators}
   from tinygrad.renderer.amd.elf import descriptor_register_counts, kernel_descriptor_from_elf
   desc = kernel_descriptor_from_elf(binary)
   allocated_vgpr, _ = descriptor_register_counts(desc, is_cdna=False)
@@ -160,7 +174,9 @@ def prepare_current_prefill_compile(payload: dict[str, Any], canonical_identity:
       "tool": disassembly_tool, "instruction_count": final_isa["instruction_count"], "binary_sha256": binary_sha},
     resource_summary=resources, isa_structure=structure,
     artifacts={"final_isa": {"status": "satisfied"},
-      "final_isa_manifest": {"status": "partial", "missing": ["semantic_operand_instruction_mapping"]},
+      "final_isa_manifest": {"status": "satisfied" if not unknown_discriminators else "partial",
+        "attributed_rows": len(attributed_rows), "unknown_rows": len(operand_paths) - len(attributed_rows),
+        "missing": unknown_discriminators},
       "resource_summary": {"status": "satisfied", "unavailable_fields": []}},
     executed_binary_matches_compile=True,
     child_recompile_binary_identity_contract={"enabled": True, "reject_sha256_mismatch_before_dispatch": True,
