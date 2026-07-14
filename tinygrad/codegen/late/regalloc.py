@@ -130,13 +130,34 @@ class LinearScanRegallocContext:
     live_ins: list[dict[Register, Register]] = [] # mapping from virtual to real at loop entry
     remat_pinned: set[Register] = set() # remat dependencies that must not be evicted while materializing a parent
 
-    def alloc(cons:tuple[Register, ...], i:int) -> Register:
-      live_inv = {v:k for k,v in live.items()}
+    def physical_slots(v:Register, base:Register) -> tuple[Register, ...]:
+      by_index = {r.index:r for r in v.cons}
+      return tuple(by_index[base.index+j] for j in range(v.span.count))
+
+    def alloc(cons:tuple[Register, ...], i:int, span:int=1, alignment:int=1) -> Register:
+      occupied = {slot:v for v,base in live.items() for slot in physical_slots(v, base)}
       # allocate the best register. Registers not in live or not used again are free and have priority,
       # otherwise pick the one with the furthest next use. Regs that appear first in cons have priority in case of a tie
-      reg,vreg = max(((r,live_inv.get(r)) for r in cons),
-                    key=lambda rv: -1 if rv[1] in remat_pinned else next((j-i for j in ([] if rv[1] is None else lr[rv[1]]) if j >= i), len(uops)))
-      return live.pop(vreg) if vreg is not None else reg
+      if span == 1:
+        reg,vreg = max(((r,occupied.get(r)) for r in cons),
+                      key=lambda rv: -1 if rv[1] in remat_pinned else next((j-i for j in ([] if rv[1] is None else lr[rv[1]]) if j >= i), len(uops)))
+        if vreg is not None: live.pop(vreg)
+        return reg
+
+      by_index = {r.index:r for r in cons}
+      candidates = [(r, tuple(by_index[r.index+j] for j in range(span))) for r in cons if r.index % alignment == 0 and
+                    all(r.index+j in by_index for j in range(span))]
+      if not candidates: raise RuntimeError(f"no {span}-register span aligned to {alignment} in constrained register pool")
+      def owners(slots:tuple[Register, ...]) -> tuple[Register, ...]: return tuple(dict.fromkeys(occupied.get(r) for r in slots if r in occupied))
+      def score(candidate:tuple[Register, tuple[Register, ...]]) -> int:
+        evicted = owners(candidate[1])
+        if any(v in remat_pinned for v in evicted): return -1
+        return min((next((j-i for j in lr[v] if j >= i), len(uops)) for v in evicted), default=len(uops))
+      reg,slots = max(candidates, key=score)
+      evicted = owners(slots)
+      if any(v in remat_pinned for v in evicted): raise RuntimeError("no register span available while dependencies are pinned")
+      for v in evicted: live.pop(v)
+      return reg
 
     def can_remat(v:Register, i:int) -> bool:
       if not getenv("REGALLOC_ADDR_REMAT", 0): return False
@@ -166,19 +187,20 @@ class LinearScanRegallocContext:
           self.reals.setdefault(i, {})[sv] = live[sv]
           remat_pinned.add(sv)
           pinned.append(sv)
-        r = alloc(cons if cons is not None else v.cons, i)
+        r = alloc(cons if cons is not None else v.cons, i, v.span.count, v.span.alignment)
         for sv in pinned: remat_pinned.discard(sv)
         self.remats[(i, v)] = r
         if emit_remat_before: self.remat_before.setdefault(i, []).append(v)
         return r
       if v not in self.spills:
+        if v.span.count > 1: raise RuntimeError("spilling a multi-register span is unsupported")
         report_pressure(i, v)
         dt = self.vdef(v).dtype
         sz = dt.scalar().itemsize * dt.count if not isinstance(dt, PtrDType) else 8
         offset = self.stack_size + (sz - self.stack_size % sz) % sz
         self.spills[v] = UOp.const(dtypes.int32, offset)
         self.stack_size = offset + sz
-      r = alloc(cons if cons is not None else v.cons, i)
+      r = alloc(cons if cons is not None else v.cons, i, v.span.count, v.span.alignment)
       self.insert_before.setdefault(i, []).append((v, r))
       return r
 
@@ -204,7 +226,7 @@ class LinearScanRegallocContext:
             uses = tuple(live.get(s.reg) for s in u.src)
             cons = ((uses[0],) if uses[0] in cons else ()) + tuple(r for r in cons if r not in uses)
           # HACK: cause the range is missing the comparison
-          live[v] = alloc(cons, i+1 if u.op is not Ops.RANGE else i)
+          live[v] = alloc(cons, i+1 if u.op is not Ops.RANGE else i, v.span.count, v.span.alignment)
           self.reals.setdefault(i, {})[v] = live[v]
 
       # allocate stack array
@@ -237,7 +259,7 @@ class LinearScanRegallocContext:
           sys.stderr.write(f"REGALLOC_LOOP_END {i}: restoring={[(v.index, r.index, v in live, None if v not in live else live[v].index) for v,r in live_ins[-1].items()]}\n")
         for v,r in live_ins.pop().items():
           if remat_addr_def(v) or v not in live or live[v] != r:
-            live[v] = fill(v, i, (r,), emit_remat_before=not getenv("REGALLOC_ADDR_REMAT_END_NO_EMIT", 0))
+            live[v] = fill(v, i, physical_slots(v, r), emit_remat_before=not getenv("REGALLOC_ADDR_REMAT_END_NO_EMIT", 0))
         if getenv("REGALLOC_DEBUG_LOOP_LIVE"):
           import sys
           sys.stderr.write(f"REGALLOC_LOOP_END {i}: remat_before={[(v.index, self.remats[(i, v)].index) for v in self.remat_before.get(i, [])]}\n")

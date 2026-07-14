@@ -5,12 +5,27 @@ from tinygrad.renderer import Renderer
 from tinygrad.uop.ops import PatternMatcher, UOp, Ops, consumer_map_from_toposort
 
 @dataclass(frozen=True)
+class RegisterSpan:
+  """Physical-register shape required by one virtual register definition."""
+  count: int
+  alignment: int = 1
+
+  def __post_init__(self):
+    if not isinstance(self.count, int) or isinstance(self.count, bool) or self.count < 1:
+      raise ValueError("register span count must be a positive integer")
+    if not isinstance(self.alignment, int) or isinstance(self.alignment, bool) or self.alignment < 1:
+      raise ValueError("register span alignment must be a positive integer")
+
+@dataclass(frozen=True)
 class Register:
   name: str
   index: int
   _cons: tuple[Register, ...] = field(default_factory=tuple)
+  _span: RegisterSpan = field(default_factory=lambda: RegisterSpan(1))
   @property
   def cons(self): return self._cons or (self,)
+  @property
+  def span(self): return self._span
   def __repr__(self): return self.name
 
 @dataclass(frozen=True)
@@ -24,8 +39,8 @@ class IselContext:
     arg_order = {Ops.PARAM: 0, Ops.DEFINE_VAR: 1, Ops.SPECIAL: 2}
     self.func_args = sorted([u for u in self.uses if u.op in arg_order], key=lambda k: (arg_order[k.op], k.arg))
 
-  def vreg(self, cons:tuple[Register, ...]|Register):
-    return Register(f"v{next(self.reg_n)}", 0, _cons=cons if isinstance(cons, tuple) else (cons,))
+  def vreg(self, cons:tuple[Register, ...]|Register, span:RegisterSpan|None=None):
+    return Register(f"v{next(self.reg_n)}", 0, _cons=cons if isinstance(cons, tuple) else (cons,), _span=span or RegisterSpan(1))
 
 @dataclass
 class PreRegAllocContext:
