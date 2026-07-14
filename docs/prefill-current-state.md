@@ -22,33 +22,31 @@ authority harness (`extra/qk/prefill_whole_synced.py --mode authority --pin-cloc
 | S6 | done | Extract LDS2 primitive emitter. |
 | S7 | done | Extract shell/epilogue emitter. |
 | S8 | done | Make `build_gemm_lds2` a wrapper around `lower_lds2_gemm_kernel`. |
-| S9 | done / baseline | Safe search over extracted knobs; keep opt-in; S9 authority path preserves the 4k pp512 band. |
+| S9 | refuted oracle | Historical 4.4k/4.1k runs under-dispatched the pipe roles and are not valid performance authorities. |
 | S10-A | done | Hybrid S9/S10 scope: S10 owns metadata/spec/search gates while S9 emits backend atoms. |
 | S10-B | done | Repeatable hybrid role trace over S9 backend atoms. |
 | S10-C | done | Isolate the hard DBUF epoch choreography as `DBUFEpochPrimitive`. |
-| S10-D | next | Search/control safe S10-owned knobs around the hybrid boundary while preserving pp512 `>=4000`. |
+| S10-D | superseded | The `>=4000` condition depended on incomplete pipe execution and is retired. |
 | S10-E | pending | Promotion/rollback gate for the hybrid route. |
 | S10-F | pending | Real parameterized epoch primitive interface beyond metadata. |
 | S10-G | later | Partial generated replacement around the epoch primitive. |
 | S10-H | parked | Full generated DBUF lifecycle replacement. |
-| hybrid_machine_search | reference-only / quality-blocked | The external backend-atom route was recreated on clean HEAD at pinned pp512 `4099`, but deterministic whole-model greedy parity fails. It is a performance reference, not a usable route. |
+| hybrid_machine_search | correct / refuted on speed | Explicit pipe geometry and buffer effects restore whole-model parity; honest pinned pp512 is `2096`, below the generated candidate's `3482` performance reference. |
 
 ## Current route
 
-- Active phase: **hybrid recreation quality blocker**.
+- Active phase: **generated candidate whole-model correctness blocker**.
 - Route family: `prefill_pipe_role_selective_generated`.
 - Classification: `external_handwritten_kernel` / `hand_external_reference`; the schedule is spec-described, but
   final pipe/LDS2 instruction streams come from the raw backend atoms.
-- Clean recreation (`7cc2e6447`): pinned `pp512 4098.95`, `pp4096 3102.37`; route binding passes and the maximum
-  timing CV is `0.248%`.
-- Quality: **FAIL**. A deterministic TinyJit `argmax(model.logits)` comparison against the ordinary scheduler gives
-  baseline token `198` versus hybrid token `0` for the bounded case. Both children dispatch and both post-run GPU
-  health checks pass. Gate/up-only parity passes; an attn_qo-only production-graph probe fails even though the exact
-  standalone attn_qo pipe GEMM is correct. This isolates the remaining blocker to raw pipe model-graph integration,
-  not pipe instruction bytes (ordinary `AMD` and `AMD:ISA` compile the same `9be1e239...` binary).
-- Therefore the `~4413` historical number remains a performance reference only. Do not promote or use this route
-  until custom-kernel graph ownership is fixed, or replace the three raw pipe roles with the compiler-owned direct
-  register transport and repeat correctness plus pinned timing.
+- Root cause: `_emit_schedule` paired `build_gemm_pipe` with the alternate LDS tile geometry. The model launched
+  `global=(32,4,1) local=(256,1,1)` instead of the pipe-owned `global=(128,16,1) local=(32,1,1)`, leaving exactly
+  `93.75%` of attn_qo output zero. Raw PROGRAM metadata also omitted its A/B-read and C-write effects.
+- Corrected authority: pinned `pp512 2095.70`, `pp4096 1823.67`; maximum timing CV `0.155%`. Three deterministic
+  whole-model cases match baseline greedy output and both isolated children leave the GPU healthy.
+- Therefore historical `~4413` and recreated `4099` are **refuted performance oracles**, not targets: they measured
+  incomplete computation. The generated four-role route's stored pinned `pp512 3481.78` is faster, but its newly
+  added whole-model gate fails, so it remains a candidate until its multi-kernel graph integration is corrected.
 
 ## Refuted / deferred branches
 

@@ -1,4 +1,7 @@
-# Post-8ab S9 regression matrix
+# Post-8ab S9 regression matrix (historical, superseded)
+
+> Superseded 2026-07-13: these runs used a raw pipe route that launched LDS geometry and computed only 1/16 of its
+> output tiles. The matrix is useful commit-history evidence, but none of its throughput rows is a valid oracle.
 
 Measured with the exact S9 authority (`DEV=AMD PREFILL_V2=1
 PREFILL_GRAPH_GEMM=1`, K=8, warmups=4, rounds=3, ctx512, pinned clocks):
@@ -10,10 +13,5 @@ PREFILL_GRAPH_GEMM=1`, K=8, warmups=4, rounds=3, ctx512, pinned clocks):
 | `84536d5c6` | 124.8 ms / 4101 tok/s | first slow state |
 | `84536d5c6` + direct `load_table()` | 116.4 ms / 4398 tok/s | minimal isolated recovery |
 
-The first slow state is the route-ops table-loader adapter introduced at
-`84536d5c6`. Later candidate, census, and LM-head commits do not run when the
-candidate set is absent and therefore cannot explain the original S9 boundary;
-they can affect pure/mixed policies separately. The controlled interaction is
-that the adapter must be removed (or its callable resolved/cached before model
-capture). Recommended fix: restore the direct loader in the hot model-build
-path, preserving route defaults and candidate policy.
+The loader attribution was not reproduced on the corrected stack and is withdrawn. The valid comparison is the
+corrected hybrid authority (`244.31 ms / 2095.70 tok/s`) with whole-model parity, not any row above.

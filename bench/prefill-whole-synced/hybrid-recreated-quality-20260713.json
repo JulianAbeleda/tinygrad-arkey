@@ -1,9 +1,9 @@
 {
-  "status": "FAIL",
-  "passed": false,
+  "status": "PASS",
+  "passed": true,
   "metric": "whole_model_deterministic_greedy_parity",
-  "value": 0.0,
-  "case_count": 1,
+  "value": 1.0,
+  "case_count": 3,
   "route_bound": true,
   "thresholds": {
     "greedy_match_required": true
@@ -15,9 +15,29 @@
         198
       ],
       "candidate_token": [
-        0
+        198
       ],
-      "greedy_match": false
+      "greedy_match": true
+    },
+    {
+      "case": 1,
+      "baseline_token": [
+        198
+      ],
+      "candidate_token": [
+        198
+      ],
+      "greedy_match": true
+    },
+    {
+      "case": 2,
+      "baseline_token": [
+        198
+      ],
+      "candidate_token": [
+        198
+      ],
+      "greedy_match": true
     }
   ],
   "baseline_gpu_healthy": true,
@@ -25,9 +45,22 @@
   "baseline": {
     "graph_gemm": false,
     "requested_roles": [],
+    "diagnostic_width": 0,
     "outputs": [
       {
         "case": 0,
+        "token": [
+          198
+        ]
+      },
+      {
+        "case": 1,
+        "token": [
+          198
+        ]
+      },
+      {
+        "case": 2,
         "token": [
           198
         ]
@@ -44,11 +77,24 @@
   "candidate": {
     "graph_gemm": true,
     "requested_roles": [],
+    "diagnostic_width": 0,
     "outputs": [
       {
         "case": 0,
         "token": [
-          0
+          198
+        ]
+      },
+      {
+        "case": 1,
+        "token": [
+          198
+        ]
+      },
+      {
+        "case": 2,
+        "token": [
+          198
         ]
       }
     ],
@@ -56,28 +102,33 @@
       "decode_flash_live_split_g4_8b_kvboth",
       "decode_q4k_g3_generated",
       "decode_q6k_coop_generated",
-      "prefill_pipe_role_selective_generated",
-      "prefill_q4k_direct_tile4x4_default"
+      "prefill_q4k_direct_tile4x4_default",
+      "prefill_wmma_lds_single_buffer_candidate_generated"
     ]
   },
   "schema": "prefill-hybrid-whole-model-quality-gate.v1",
   "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
   "max_context": 4608,
   "cases": [
-    0
+    0,
+    1,
+    2
   ],
   "candidate_roles": [],
-  "required_route": "prefill_pipe_role_selective_generated",
+  "diagnostic_width": 0,
+  "required_route": "prefill_wmma_lds_single_buffer_candidate_generated",
+  "candidate_set_path": "bench/prefill-pure-full-kernel/multirole-buffer2-candidate-set-v1/candidate-set.json",
+  "candidate_set_roles": "ffn_gate_up",
   "baseline_child": {
     "status": "passed",
     "timed_out": false,
     "error": null,
-    "elapsed_seconds": 18.691434231004678
+    "elapsed_seconds": 20.07494391799264
   },
   "candidate_child": {
     "status": "passed",
     "timed_out": false,
     "error": null,
-    "elapsed_seconds": 17.686849183999584
+    "elapsed_seconds": 19.834541128991987
   }
 }

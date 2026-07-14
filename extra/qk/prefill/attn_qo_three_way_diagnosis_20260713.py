@@ -28,14 +28,12 @@ PIPE_IDENTITY = hashlib.sha256(
 def compile_pipe_program(*, shape: tuple[int, int, int] = SHAPE, target: str = "AMD:ISA") -> tuple[Any, dict[str, Any]]:
   """Package the existing shipping raw pipe emitter as a compile-only PROGRAM."""
   from tinygrad import Tensor, dtypes
-  from tinygrad.device import Device
-  from tinygrad.dtype import AddrSpace
   from tinygrad.engine.realize import Estimates, compile_linear
-  from tinygrad.helpers import Context, colored
-  from tinygrad.renderer.isa.amd import preassembled_linear
-  from tinygrad.uop.ops import KernelInfo, Ops, ProgramInfo, UOp
+  from tinygrad.helpers import Context
+  from tinygrad.uop.ops import Ops, ProgramInfo
   from extra.qk.prefill.executable_artifact_preparation import compile_transport_evidence
   from extra.qk.prefill.wmma import build_gemm_pipe
+  from extra.qk.prefill_graph_gemm_route import preassembled_gemm_program
   from extra.qk.prefill_schedule_spec import describe_prefill_schedule
 
   m, n, k = shape
@@ -48,14 +46,8 @@ def compile_pipe_program(*, shape: tuple[int, int, int] = SHAPE, target: str = "
   grid = (n // bn, m // bm, 1)
 
   def asm_kernel(a, b, c):
-    # The one-byte local allocation is the historical ABI placeholder used by
-    # this emitter.  The instruction stream contains no DS operations.
-    lds = UOp(Ops.DEFINE_LOCAL, dtypes.uint8.ptr(size=lds_bytes, addrspace=AddrSpace.LOCAL), (), "lds")
-    g = [UOp.special(grid[0], "gidx0"), UOp.special(grid[1], "gidx1")]
-    sink = UOp.sink(a.base, b.base, c.base, lds, *g, UOp.special(threads, "lidx0"),
-      arg=KernelInfo(name=colored(name, "cyan"), estimates=Estimates(ops=m*n*k*2,
-        mem=(m*k+n*k+m*n)*2)))
-    return UOp(Ops.PROGRAM, src=(sink, UOp(Ops.DEVICE, arg=Device.DEFAULT), preassembled_linear(insts)))
+    return preassembled_gemm_program(a, b, c, insts=insts, lds_bytes=lds_bytes, grid=grid, threads=threads, name=name,
+      estimates=Estimates(ops=m*n*k*2, mem=(m*k+n*k+m*n)*2))
 
   with Context(DEV=target):
     a, b, c = Tensor.empty(m, k, dtype=dtypes.half), Tensor.empty(n, k, dtype=dtypes.half), Tensor.empty(m, n, dtype=dtypes.half)
