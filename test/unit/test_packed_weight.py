@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 
 from tinygrad import Tensor, dtypes
-from tinygrad.codegen.opt.packed_weight import PackedWeightTransform
-from tinygrad.uop.ops import KernelCandidateContext, KernelInfo, KernelLDSWindow, KernelTileGeometry, UOp
+from tinygrad.codegen.opt.packed_weight import PackedWeightTile, PackedWeightTransform
+from tinygrad.uop.ops import KernelCandidateContext, KernelInfo, KernelLDSWindow, KernelTileGeometry, Ops, UOp
 from extra.qk.layout import Q4_K_BLOCK_BYTES, Q6_K_BLOCK_BYTES, q4_k_reference, q6_k_reference
 
 
@@ -33,6 +33,53 @@ def test_scalar_fp16_producer_matches_reference(fmt:str, rows:int, k:int, device
   got = Tensor.empty(rows, k, dtype=dtypes.float16, device=device).custom_kernel(storage, fxn=kernel)[0].numpy()
   reference = (q4_k_reference if fmt == "Q4_K" else q6_k_reference)(packed.bitcast(dtypes.uint8), rows*k)
   np.testing.assert_array_equal(got, reference.reshape(rows, k).cast(dtypes.float16).numpy())
+
+
+@pytest.mark.parametrize("fmt,start,width", [("Q4_K", 28, 8), ("Q4_K", 248, 16),
+                                               ("Q6_K", 12, 8), ("Q6_K", 248, 16)])
+def test_tile_fp16_producer_matches_scalar_across_group_and_block_boundaries(fmt:str, start:int, width:int):
+  packed = _packed(fmt, 1, 512, 20260715).to("PYTHON")
+  desc = PackedWeightTransform(fmt, 1, 512)
+  storage = packed.bitcast(desc.storage_dtype).contiguous().realize()
+  def kernel(out:UOp, source:UOp) -> UOp:
+    tile = desc.dequant_tile(source, 0, start, width)
+    assert isinstance(tile, PackedWeightTile) and tile.value.dtype == dtypes.half.vec(width)
+    return UOp.sink(out.index(UOp.const(dtypes.weakint, 0), dtype=dtypes.half.vec(width)).store(tile.value),
+                    arg=KernelInfo(name=f"packed_tile_{fmt.lower()}"))
+  got = Tensor.empty(width, dtype=dtypes.float16, device="PYTHON").custom_kernel(storage, fxn=kernel)[0].numpy()
+  reference = (q4_k_reference if fmt == "Q4_K" else q6_k_reference)(packed.bitcast(dtypes.uint8), 512)
+  np.testing.assert_array_equal(got, reference.reshape(512)[start:start+width].cast(dtypes.float16).numpy())
+
+
+@pytest.mark.parametrize("fmt,start", [("Q4_K", 24), ("Q6_K", 8)])
+def test_tile_consumes_shared_native_units(fmt:str, start:int):
+  desc, offsets = PackedWeightTransform(fmt, 1, 256), []
+  tile = desc.dequant_tile(lambda offset: offsets.append(offset) or UOp.const(desc.storage_dtype, 0), 0, start, 16)
+  assert tile.value.op is Ops.STACK and len(tile.value.src) == 16
+  assert all(isinstance(x, int) for x in offsets)
+  scalar_offsets = []
+  for k in range(start, start+16):
+    desc.dequant(lambda offset: scalar_offsets.append(offset) or UOp.const(desc.storage_dtype, 0), 0, k)
+  assert len(offsets) == len(set(offsets)) < len(scalar_offsets)
+
+
+@pytest.mark.parametrize("fmt", ["Q4_K", "Q6_K"])
+def test_symbolic_tile_bounds_and_ownership(fmt:str):
+  desc = PackedWeightTransform(fmt, 2, 512)
+  row, base = UOp.range(2, 73), UOp.range(497, 74)
+  source = UOp.placeholder((desc.packed_bytes//desc.storage_width,), desc.storage_dtype, 75)
+  tile = desc.dequant_tile(source, row, base, 16)
+  assert tile.value.dtype == dtypes.half.vec(16)
+  assert row in tile.value.backward_slice_with_self and base in tile.value.backward_slice_with_self
+  offsets = []
+  desc.dequant_tile(lambda offset: offsets.append(offset) or UOp.const(desc.storage_dtype, 0), row, base, 16)
+  assert offsets and all(x.vmin >= 0 and x.vmax < desc.packed_bytes//desc.storage_width for x in offsets)
+
+
+def test_tile_width_and_interval_validation():
+  desc = PackedWeightTransform("Q4_K", 1, 256)
+  with pytest.raises(ValueError, match="width"): desc.dequant_tile(lambda _: UOp.const(dtypes.uint32, 0), 0, 0, 4)  # type: ignore[arg-type]
+  with pytest.raises(IndexError, match="tile"): desc.dequant_tile(lambda _: UOp.const(dtypes.uint32, 0), 0, 249, 8)
 
 
 def test_addresses_follow_canonical_blocks_and_units():

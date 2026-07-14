@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Callable, Literal, TypeAlias
 
 from tinygrad.dtype import dtypes
-from tinygrad.uop.ops import UOp
+from tinygrad.uop.ops import Ops, UOp
 
 from tinygrad.llm.qk_layout import (Q4K_WORDS_PER_BLOCK, Q4_K_BLOCK_BYTES, Q4_K_BLOCK_ELEMS,
                                     Q6K_HALFWORDS_PER_BLOCK, Q6_K_BLOCK_BYTES, Q6_K_BLOCK_ELEMS)
@@ -12,6 +12,20 @@ from tinygrad.llm.qk_layout import (Q4K_WORDS_PER_BLOCK, Q4_K_BLOCK_BYTES, Q4_K_
 PackedFormat: TypeAlias = Literal["Q4_K", "Q6_K"]
 ScalarIndex: TypeAlias = int | UOp
 LoadSource: TypeAlias = UOp | Callable[[ScalarIndex], UOp]
+
+
+@dataclass(frozen=True)
+class PackedWeightTile:
+  """A decoded packed-weight tile and the logical interval it represents."""
+  value: UOp
+  row: ScalarIndex
+  k_base: ScalarIndex
+  width: Literal[8, 16]
+
+  def __post_init__(self) -> None:
+    if self.width not in (8, 16): raise ValueError(f"packed tile width must be 8 or 16, got {self.width}")
+    if self.value.dtype != dtypes.half.vec(self.width):
+      raise TypeError(f"packed tile value must be half.vec({self.width}), got {self.value.dtype}")
 
 
 @dataclass(frozen=True)
@@ -112,6 +126,27 @@ class PackedWeightTransform:
     unit_base = block * self.units_per_block
     if self.quant_format == "Q4_K": return self._dequant_q4(source, unit_base, k % 256)
     return self._dequant_q6(source, unit_base, k % 256)
+
+  def dequant_tile(self, source:LoadSource, row:ScalarIndex, k_base:ScalarIndex, width:Literal[8, 16]=8) -> PackedWeightTile:
+    """Decode 8 or 16 adjacent weights while sharing loads of their native packed units.
+
+    Each lane retains scalar decoder semantics.  A per-tile native-unit cache hoists
+    block/group metadata and naturally splits tiles which cross quant groups or
+    blocks without introducing speculative out-of-range accesses.
+    """
+    if width not in (8, 16): raise ValueError(f"packed tile width must be 8 or 16, got {width}")
+    self._check_coords(row, k_base)
+    if isinstance(k_base, int) and k_base + width > self.k:
+      raise IndexError(f"tile [{k_base}, {k_base+width}) is outside [0, {self.k})")
+    cache: dict[ScalarIndex, UOp] = {}
+    def cached_load(index:ScalarIndex) -> UOp:
+      # Simplification is important for symbolic aligned tile bases: all lanes in
+      # one block/group then use exactly the same key for shared metadata.
+      key = index.simplify() if isinstance(index, UOp) else index
+      if key not in cache: cache[key] = self._load(source, key)
+      return cache[key]
+    lanes = tuple(self.dequant(cached_load, row, k_base+i) for i in range(width))
+    return PackedWeightTile(UOp(Ops.STACK, dtypes.half.vec(width), lanes), row, k_base, width)
 
   def _dequant_q4(self, source:LoadSource, base:ScalarIndex, within:ScalarIndex) -> UOp:
     group, pos = within // 32, within % 32

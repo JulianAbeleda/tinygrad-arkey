@@ -77,6 +77,10 @@ def test_packed_b_template_decodes_directly_into_fp16_lds_stores(fmt, dtype):
                  for x in b_window for u in x.src[1].toposort())
   owner=next(x for x in stage.producer.backward_slice if x.op is Ops.RANGE and x.arg[0] == 32)
   assert all(owner in x.src[1].backward_slice_with_self for x in b_window)
+  # One tile decoder root feeds each b128 store, with native packed loads shared
+  # by multiple lanes instead of eight independently rooted scalar decoders.
+  assert all(x.src[1].op is Ops.STACK and len(x.src[1].src) == 8 for x in b_window)
+  assert all(len([u for u in x.src[1].toposort() if u.op is Ops.LOAD and packed in u.backward_slice_with_self]) < 8*6 for x in b_window)
 
 
 @pytest.mark.parametrize("fmt,dtype", (("Q4_K", dtypes.uint32), ("Q6_K", dtypes.uint16)))

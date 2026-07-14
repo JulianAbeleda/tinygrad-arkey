@@ -439,12 +439,12 @@ def instantiate_precontract_producer(geometry:KernelTileGeometry, *, tc, allocat
       row,vector=linear_vector//factors.vectors_per_row,linear_vector%factors.vectors_per_row
       logical_k=vector*8
       logical_row = operand.row_tile_base + row
-      values=tuple(operand.transform.dequant(operand.source, logical_row, epoch*geometry.tile[2]+logical_k+elem)
-        if isinstance(operand, PackedPrecontractOperandTemplate) else operand.source.substitute({
-          operand.row_axis:logical_row, operand.k_axis:epoch*geometry.tile[2]+logical_k+elem}) for elem in range(8))
+      value = operand.transform.dequant_tile(operand.source, logical_row, epoch*geometry.tile[2]+logical_k, 8).value \
+        if isinstance(operand, PackedPrecontractOperandTemplate) else UOp(Ops.STACK,dtypes.half.vec(8),tuple(operand.source.substitute({
+          operand.row_axis:logical_row, operand.k_axis:epoch*geometry.tile[2]+logical_k+elem}) for elem in range(8)))
       tag=("kernel_tile_store",operand.role,row_iteration,epoch,slot)
       idx=allocation.index(slot_base+(window.base+row*window.stride_bytes+logical_k*2)//2,dtype=dtypes.half.vec(8)).replace(tag=tag)
-      stores.append(idx.store(UOp(Ops.STACK,dtypes.half.vec(8),values)).replace(tag=tag).end())
+      stores.append(idx.store(value).replace(tag=tag).end())
     role_nodes.append(UOp.group(*stores))
   return PrecontractProducerInstance(epoch,slot,(role_nodes[0],role_nodes[1]))
 
@@ -502,10 +502,9 @@ def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:U
       row, vector = linear_vector//factors.vectors_per_row, linear_vector%factors.vectors_per_row
       logical_k = vector * 8
       logical_row = operand.row_tile_base + row
-      values = tuple(operand.transform.dequant(operand.source, logical_row, k_axis.tile_base + logical_k + elem)
-        if isinstance(operand, PackedPrecontractOperandTemplate) else operand.source.substitute({
-          operand.row_axis: logical_row, operand.k_axis: k_axis.tile_base + logical_k + elem}) for elem in range(8))
-      value = UOp(Ops.STACK, dtypes.half.vec(8), values)
+      value = operand.transform.dequant_tile(operand.source, logical_row, k_axis.tile_base + logical_k, 8).value \
+        if isinstance(operand, PackedPrecontractOperandTemplate) else UOp(Ops.STACK, dtypes.half.vec(8), tuple(operand.source.substitute({
+          operand.row_axis: logical_row, operand.k_axis: k_axis.tile_base + logical_k + elem}) for elem in range(8)))
       index = slot_base + (window.base + row * window.stride_bytes + logical_k * 2) // 2
       store_tag = ("kernel_tile_store", operand.role, row_iteration)
       store_idx = allocation.index(index, dtype=dtypes.half.vec(8)).replace(tag=store_tag)
