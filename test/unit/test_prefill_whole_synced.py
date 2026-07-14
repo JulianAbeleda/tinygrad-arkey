@@ -81,3 +81,14 @@ def test_candidate_compiler_state_scope_restores_typed_state():
     assert tuple(getattr(pr,name) for name in names) == original
   finally:
     for name,value in saved.items(): setattr(pr,name,value)
+
+
+def test_route_binding_gate_can_require_q4k_substrate(monkeypatch):
+  effective = _effective() + [{"family":"prefill_q4k", "effective_route":"prefill_q4k_int8_wmma_tiled_research",
+    "provenance":"machine_authored_generated", "pure":True, "rolled_back_to_oracle":False}]
+  monkeypatch.setattr(whole, "effective_routes", lambda env=None: effective)
+  report = _report(prefill_q4k_route_family="prefill_q4k_int8_wmma_tiled_research",
+    prefill_q4k_route_pure=True, prefill_q4k_route_rolled_back=False,
+    prefill_q4k_route_provenance="machine_authored_generated")
+  gate = whole.route_binding_gate(report, "prefill_q4k_int8_wmma_tiled_research", env={})
+  assert gate["verdict"] == "PREFILL_ROUTE_BINDING_PASS" and gate["selected_family"] == "prefill_q4k"

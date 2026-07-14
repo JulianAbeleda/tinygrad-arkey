@@ -173,7 +173,9 @@ def q8_1_quantize(x:Tensor, block_elems:int=Q8_1_BLOCK_ELEMS) -> tuple[Tensor, T
   if x.shape[-1] % block_elems != 0: raise ValueError(f"last dimension {x.shape[-1]} is not q8_1 block aligned")
   blocks = x.cast(dtypes.float32).reshape(-1, block_elems)
   scales = blocks.abs().max(axis=1, keepdim=True) / 127.0
-  scales = (scales == 0).where(1.0, scales)
+  # The scale reduction feeds both quantized values and the caller. Make that small shared result an explicit global
+  # prerequisite so a downstream contraction's partial-contiguous policy cannot turn the entire scale vector into LDS.
+  scales = (scales == 0).where(1.0, scales).contiguous()
   qs = (blocks / scales).round().clip(-128, 127).cast(dtypes.int8)
   return qs.flatten().contiguous(), scales.reshape(-1).contiguous()
 

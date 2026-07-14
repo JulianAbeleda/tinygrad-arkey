@@ -1,11 +1,11 @@
 from dataclasses import dataclass, field, replace
 import itertools
 from tinygrad.dtype import dtypes, PtrDType, AddrSpace, Invalid
-from tinygrad.uop.ops import PatternMatcher, UPat, Ops, UOp, resolve, GroupOp, _substitute, KernelInfo, ParamArg
+from tinygrad.uop.ops import PatternMatcher, UPat, Ops, UOp, resolve, GroupOp, _substitute, KernelInfo, ParamArg, ScheduleHints
 from tinygrad.uop.ops import graph_rewrite, sint, AxisType, BottomUpGate, profile_matches, identity_element
 from tinygrad.uop.symbolic import symbolic
 from tinygrad.helpers import prod, all_same, getenv, dedup, all_int, DEBUG, SPLIT_REDUCEOP, DEBUG_RANGEIFY, VIZ, MAX_KERNEL_BUFFERS
-from tinygrad.helpers import PCONTIG, FLOAT16, OPENPILOT_HACKS, argsort, partition, get_single_element
+from tinygrad.helpers import PCONTIG, FLOAT16, OPENPILOT_HACKS, Context, argsort, partition, get_single_element
 from tinygrad.codegen.simplify import pm_flatten_range, pm_reduce_simplify
 from tinygrad.codegen.opt import Opt, KernelOptError
 from tinygrad.schedule.indexing import run_rangeify, BufferizeOpts, IndexingContext, apply_movement_op
@@ -476,6 +476,7 @@ class LocalAddBufferContext:
   vars:dict = field(default_factory=dict)
   range:int = 0
   opts:tuple|None = None
+  name:str|None = None
 
 def debuf(ctx:LocalAddBufferContext, buf:UOp):
   ret = UOp(Ops.PARAM, buf.dtype.ptr(prod(buf.max_shape), buf.addrspace), arg=ParamArg(ctx.dg, addrspace=buf.addrspace)).reshape(buf.max_shape)
@@ -535,6 +536,7 @@ to_define_global = PatternMatcher([
 
 def get_contiguous(ctx:LocalAddBufferContext, x:UOp):
   if isinstance(x.arg, tuple) and all(isinstance(y, Opt) for y in x.arg): ctx.opts = x.arg
+  elif isinstance(x.arg, ScheduleHints): ctx.opts, ctx.name = x.arg.opts_to_apply, x.arg.name
   return x.src[0]
 
 rangeify_codegen = PatternMatcher([
@@ -565,6 +567,10 @@ def split_store(x:UOp) -> UOp|None:
 
   # local kernel rewrite
   lctx = LocalAddBufferContext()
+  hint = x.arg if x.op is Ops.STORE else x.src[0].arg
+  if isinstance(hint, ScheduleHints):
+    lctx.opts, lctx.name = hint.opts_to_apply, hint.name
+    x = x.replace(arg=None) if x.op is Ops.STORE else x.replace(src=(x.src[0].replace(arg=None),)+x.src[1:])
   ret = graph_rewrite(x, to_define_global+pm_flatten_range+rangeify_codegen, ctx=lctx, name="kernel split", bottom_up=True)
 
   # SINK requires all buffers on the same device, but COPY/SLICE are cross-device or special hardware ops
@@ -572,7 +578,7 @@ def split_store(x:UOp) -> UOp|None:
   elif ret.op is Ops.END and ret.src[0].op is Ops.STORE: stored = ret.src[0].src[1]
   else: raise RuntimeError(f"unknown kernel type {ret.op}")
   if stored.op in {Ops.COPY, Ops.SLICE}: ret = stored.replace(src=stored.src + ret.ended_ranges)
-  else: ret = ret.sink(arg=KernelInfo(opts_to_apply=lctx.opts))
+  else: ret = ret.sink(arg=KernelInfo(name=lctx.name or "test", opts_to_apply=lctx.opts))
 
   kernel = ret.call(*lctx.map.values(), *lctx.vars.keys())
   if ret.op is Ops.SINK and not all_same([x.device for x in kernel.src[1:] if x.op is not Ops.BIND]):
@@ -585,6 +591,13 @@ split_kernels = PatternMatcher([
 
 @profile_matches
 def get_kernel_graph(sink:UOp) -> UOp:
+  hints = [x.arg for x in sink.toposort() if isinstance(x.arg, ScheduleHints)]
+  if hints and max(x.pcontig for x in hints) > PCONTIG.value:
+    with Context(PCONTIG=max(x.pcontig for x in hints)):
+      return _get_kernel_graph(sink)
+  return _get_kernel_graph(sink)
+
+def _get_kernel_graph(sink:UOp) -> UOp:
   tsink = graph_rewrite(sink, multi_pm, name="multi_pm")
   if OPENPILOT_HACKS: tsink = graph_rewrite(tsink, pm_fold_moved_after, ctx={}, name="fold moved afters")
   tsink = graph_rewrite(tsink, pm_syntactic_sugar+pm_mops+earliest_rewrites, bottom_up=True, name="earliest rewrites")

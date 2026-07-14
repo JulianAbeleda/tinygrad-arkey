@@ -38,7 +38,7 @@ from tinygrad.runtime.autogen.amd.rdna3.ins import (
   # Phase-1a: 16-bit global access for fp16 elements (b32 over-reads/writes 2 bytes past the last element -> MMU fault)
   global_load_u8, global_store_b8, global_load_u16, global_store_b16,
   # B0.L7: RDNA3 wave32 tensor-core multiply-accumulate D = A*B + C (fp16 in, fp32 out)
-  v_wmma_f32_16x16x16_f16)
+  v_wmma_f32_16x16x16_f16, v_wmma_i32_16x16x16_iu8)
 from tinygrad.codegen.opt.tc import amd_rdna3
 from tinygrad.helpers import getenv
 from tinygrad.renderer.isa.extensions import get_amd_isa_extension_descriptors
@@ -401,6 +401,7 @@ class AMDOps(FastEnum):
   V_CVT_U2F = 52                           # unsigned int -> f32
   V_CVT_F2U = 53                           # f32 -> unsigned int
   TYPED_WAIT = 56                         # compiler-owned WaitCount -> s_waitcnt (backend lowering seam)
+  V_WMMA_I8 = 57                         # RDNA3 signed int8 inputs -> int32 accumulator
 
 def _reg(r:Register): return r  # passthrough; encoding maps index in post_regalloc
 
@@ -688,12 +689,18 @@ def isel_load(ctx:IselContext, x:UOp):
     # src[1] is the physical pin, just like the accumulator carrier.
     return UOp(Ops.INS, x.dtype.scalar(), src=(idxc.src[0], idxc.src[1]), arg=AMDOps.STAGE_READ,
                tag=(ctx.vreg(_vpool(ctx)),))
-  if idxc.arg == "lds":                      # LDS load -> ds_load_b32 from the carrier's address VGPR (src[0]); src[1]=order
-    addr = idxc.src[0] if len(idxc.src) < 3 or idxc.src[2].arg == 0 else \
-      UOp(Ops.INS, dtypes.int32, src=(idxc.src[0], idxc.src[2]), arg=AMDOps.V_IADD, tag=_vreg_def(ctx))
+  if idxc.arg == "lds":                      # LDS load(s) from carrier address VGPR; src[1]=ordering dependency
+    isz, n = x.dtype.scalar().itemsize, x.dtype.count
+    base_imm = 0 if len(idxc.src) < 3 else idxc.src[2].arg
     meta = _prefill_source_value_metadata(idxc.tag, x.tag)
-    return UOp(Ops.INS, x.dtype.scalar(), src=(addr, idxc.src[1]) + dep + (() if meta is None else (meta,)),
-               arg=AMDOps.DS_LOAD, tag=(ctx.vreg(_vpool(ctx)),))
+    loads = []
+    for lane in range(n):
+      imm = base_imm + lane * isz
+      addr = idxc.src[0] if imm == 0 else UOp(Ops.INS, dtypes.int32,
+        src=(idxc.src[0], UOp.const(dtypes.int32, imm).rtag()), arg=AMDOps.V_IADD, tag=_vreg_def(ctx))
+      loads.append(UOp(Ops.INS, x.dtype.scalar(), src=(addr, idxc.src[1]) + dep + (() if meta is None else (meta,)),
+                       arg=AMDOps.DS_LOAD, tag=(ctx.vreg(_vpool(ctx)),)))
+    return loads[0] if n == 1 else UOp(Ops.NOOP, x.dtype, src=tuple(loads))
   base, off = idxc.src[0], idxc.src[1]
   isz, n = x.dtype.scalar().itemsize, x.dtype.count
   loads = tuple(UOp(Ops.INS, x.dtype.scalar(), src=(off, base, UOp.const(dtypes.int32, l*isz).rtag()) + dep,
@@ -796,6 +803,16 @@ def isel_cast(ctx:IselContext, x:UOp):
   if (s, d) in {(dtypes.uchar, dtypes.ushort), (dtypes.uchar, dtypes.uint), (dtypes.ushort, dtypes.uint), (dtypes.uint, dtypes.ulong)}:
     return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]), UOp.const(dtypes.int32, (1 << (s.itemsize * 8)) - 1).rtag()),
                arg=AMDOps.V_AND, tag=_vreg_def(ctx))
+  if s in (dtypes.ushort, dtypes.uint, dtypes.ulong) and d in (dtypes.uchar, dtypes.ushort, dtypes.uint) and d.itemsize < s.itemsize:
+    return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]), UOp.const(dtypes.int32, (1 << (d.itemsize * 8)) - 1).rtag()),
+               arg=AMDOps.V_AND, tag=_vreg_def(ctx))
+  if s in (dtypes.char, dtypes.short, dtypes.int) and d in (dtypes.short, dtypes.int, dtypes.long) and s.itemsize < d.itemsize:
+    mask, sign = (1 << (s.itemsize * 8)) - 1, 1 << (s.itemsize * 8 - 1)
+    narrowed = UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, x.src[0]), UOp.const(dtypes.int32, mask).rtag()),
+                   arg=AMDOps.V_AND, tag=_vreg_def(ctx))
+    biased = UOp(Ops.INS, dtypes.int32, src=(narrowed, UOp.const(dtypes.int32, sign).rtag()),
+                 arg=AMDOps.V_XOR, tag=_vreg_def(ctx))
+    return UOp(Ops.INS, x.dtype, src=(biased, UOp.const(dtypes.int32, -sign).rtag()), arg=AMDOps.V_IADD, tag=_vreg_def(ctx))
   if (s, d) == (dtypes.ulong, dtypes.uint):
     return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]), UOp.const(dtypes.int32, (1 << 32) - 1).rtag()),
                arg=AMDOps.V_AND, tag=_vreg_def(ctx))
@@ -1246,16 +1263,25 @@ def _frag_b128_loads(ctx:IselContext, E:tuple[UOp, ...], base:int, dep:tuple[UOp
 # carry `dep` (the prior WMMA def) as an extra ignored src so the shared-frag reload is scheduled AFTER the prior matmul
 # read it (WAR guard). Returns the 8-lane NOOP output carrier (lane 0 = the V_WMMA def, lanes 1..7 = passthrough MOVs).
 def _build_wmma_tile(ctx:IselContext, A:UOp, B:UOp, cin:list[UOp], abase:int, bbase:int, cbase:int, dep:tuple[UOp,...]):
-  aE, bE = _wmma_elems(A, 16), _wmma_elems(B, 16)
   apk = _pack_frag_tile(ctx, A, abase, dep, "A")
   bpk = _pack_frag_tile(ctx, B, bbase, dep, "B")
-  # V_WMMA INS: srcs = A0..A7, B0..B7, C0..C7 (keeps all 24 fragment defs reachable + ordered before the matmul); the
-  # def (tag) is the C-range base -> vdst base. lower_inst reads the three fragment bases off src[0]/src[8]/src[16].
-  wm = UOp(Ops.INS, dtypes.float32, src=tuple(apk) + tuple(bpk) + tuple(cin), arg=AMDOps.V_WMMA, tag=_pin(cbase, 0))
-  # D outputs: element 0 is the WMMA def (v{cbase}); elements 1..7 are zero-cost passthroughs pinned to v{cbase+i} that
-  # DEPEND on the WMMA (MOV lowers to nothing) so the 8 result GEPs (devectorizer output split) read D[i] after the mma.
-  outs = [wm] + [UOp(Ops.INS, dtypes.float32, src=(wm,), arg=AMDOps.MOV, tag=_pin(cbase, i)) for i in range(1, 8)]
-  return UOp(Ops.NOOP, dtypes.float32.vec(8), src=tuple(outs))
+  return _build_wmma_from_packs(ctx, apk, bpk, cin, cbase)
+
+def _pack_i8_fragment(ctx:IselContext, carrier:UOp, base:int, dep:tuple[UOp, ...]) -> tuple[UOp, ...]:
+  """Pack sixteen signed bytes into the four b32 source registers required by RDNA3 iu8 WMMA."""
+  elems = _wmma_elems(carrier, 16)
+  packed = []
+  for word in range(4):
+    lanes = []
+    for byte in range(4):
+      masked = UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, elems[word*4+byte]), UOp.const(dtypes.int32, 0xff).rtag()),
+                   arg=AMDOps.V_AND, tag=_vreg_def(ctx))
+      lanes.append(masked if byte == 0 else UOp(Ops.INS, dtypes.int32,
+        src=(masked, UOp.const(dtypes.int32, byte*8).rtag()), arg=AMDOps.V_OFFSET, tag=_vreg_def(ctx)))
+    lo = UOp(Ops.INS, dtypes.int32, src=(lanes[0], lanes[1]), arg=AMDOps.V_OR, tag=_vreg_def(ctx))
+    hi = UOp(Ops.INS, dtypes.int32, src=(lanes[2], lanes[3]), arg=AMDOps.V_OR, tag=_vreg_def(ctx))
+    packed.append(UOp(Ops.INS, dtypes.int32, src=(lo, hi)+dep, arg=AMDOps.V_OR, tag=_pin(base, word)))
+  return tuple(packed)
 
 def _pack_stage_fragment(ctx:IselContext, carrier:UOp, dep:tuple[UOp,...]=()) -> tuple[UOp,...]|None:
   """Use already-packed static stage VGPRs as a WMMA operand.
@@ -1307,6 +1333,7 @@ def _register_stage_fragment_role(carrier:UOp) -> str|None:
 
 def _pack_frag_tile(ctx:IselContext, carrier:UOp, base:int, dep:tuple[UOp,...], role:str) -> tuple[UOp,...]:
   E = _wmma_elems(carrier, 16)
+  if carrier.dtype.scalar() is dtypes.char: return _pack_i8_fragment(ctx, carrier, base, dep)
   if (stage := _pack_stage_fragment(ctx, carrier, dep)) is not None: return stage
   return _frag_b128_loads(ctx, E, base, dep, role) or tuple(
     UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, E[2*i]), _tov(ctx, E[2*i+1]))+dep, arg=AMDOps.V_PACK, tag=_pin(base, i)) for i in range(8))
@@ -1318,6 +1345,10 @@ def _pack_frag(ctx:IselContext, carrier:UOp, base:int, dep:tuple[UOp,...]=()) ->
   memo = ctx._frag_pack = getattr(ctx, "_frag_pack", {})
   memo_key = (_wmma_frag_reuse_key(carrier), base)
   if (pk := memo.get(memo_key)) is not None: return pk
+  if carrier.dtype.scalar() is dtypes.char:
+    pk = _pack_i8_fragment(ctx, carrier, base, dep)
+    memo[memo_key] = pk
+    return pk
   if (pk := _pack_stage_fragment(ctx, carrier, dep)) is not None:
     memo[memo_key] = pk
     return pk
@@ -1373,9 +1404,11 @@ def _dbuf_d3a_probe_marker(ctx:IselContext, tile:UOp, dep:tuple[UOp,...]) -> tup
 # accumulator lanes. Same element/lane order as _build_wmma_tile (A0..A7,B0..B7,C0..C7; def -> cbase) -- only the packs
 # are hoisted out (shared) instead of rebuilt per subtile. Returns the 8-lane D output carrier.
 def _build_wmma_from_packs(ctx:IselContext, apk:tuple[UOp,...], bpk:tuple[UOp,...], cin:list[UOp], cbase:int, dep:tuple[UOp,...]=()):
-  wm = UOp(Ops.INS, dtypes.float32, src=tuple(apk) + tuple(bpk) + tuple(cin) + dep, arg=AMDOps.V_WMMA, tag=_pin(cbase, 0))
-  outs = [wm] + [UOp(Ops.INS, dtypes.float32, src=(wm,), arg=AMDOps.MOV, tag=_pin(cbase, i)) for i in range(1, 8)]
-  return UOp(Ops.NOOP, dtypes.float32.vec(8), src=tuple(outs))
+  if len(apk) != len(bpk) or len(apk) not in (4, 8): raise ValueError(f"invalid WMMA packed fragment widths {len(apk)}/{len(bpk)}")
+  acc_dtype, op = (dtypes.int32, AMDOps.V_WMMA_I8) if len(apk) == 4 else (dtypes.float32, AMDOps.V_WMMA)
+  wm = UOp(Ops.INS, acc_dtype, src=tuple(apk) + tuple(bpk) + tuple(cin) + dep, arg=op, tag=_pin(cbase, 0))
+  outs = [wm] + [UOp(Ops.INS, acc_dtype, src=(wm,), arg=AMDOps.MOV, tag=_pin(cbase, i)) for i in range(1, 8)]
+  return UOp(Ops.NOOP, acc_dtype.vec(8), src=tuple(outs))
 
 def _wmma_chain_nodes(root:UOp) -> list[UOp]:
   chain = [root]
@@ -1501,7 +1534,7 @@ def isel_wmma(ctx:IselContext, x:UOp):
       bbase = 0 if stage_backed else _ab_base(ctx, ("B", _wmma_frag_reuse_key(ctx, "B", x.src[1], ("no_proof", "B", id(x)))))
       if cbase is None or abase is None or bbase is None:
         raise NotImplementedError(f"AMD:ISA WMMA resident A/B window [{_acc_top(ctx)},{FRAG_BASE}) exhausted (A={abase} B={bbase} C={cbase})")
-      cin = [UOp(Ops.INS, dtypes.float32, src=(after,), arg=AMDOps.MOV, tag=_pin(cbase, i)) for i in range(8)]
+      cin = [UOp(Ops.INS, x.dtype.scalar(), src=(after,), arg=AMDOps.MOV, tag=_pin(cbase, i)) for i in range(8)]
       if not stage_backed: _record_direct_wmma_fragments(ctx, abase, bbase)
       apk, bpk = _pack_frag(ctx, x.src[0], abase), _pack_frag(ctx, x.src[1], bbase)
       return memo.setdefault(x, _build_wmma_from_packs(ctx, apk, bpk, cin, cbase))
@@ -1510,7 +1543,7 @@ def isel_wmma(ctx:IselContext, x:UOp):
     abase = _frag_base(ctx, (id(dreg), "A"), 8); bbase = _frag_base(ctx, (id(dreg), "B"), 8)
     if cbase is None or abase is None or bbase is None:
       raise NotImplementedError(f"AMD:ISA WMMA fragment region [{FRAG_BASE},{FRAG_TOP}) exhausted (A={abase} B={bbase} C={cbase})")
-    cin = [UOp(Ops.INS, dtypes.float32, src=(after,), arg=AMDOps.MOV, tag=_pin(cbase, i)) for i in range(8)]
+    cin = [UOp(Ops.INS, x.dtype.scalar(), src=(after,), arg=AMDOps.MOV, tag=_pin(cbase, i)) for i in range(8)]
     return memo.setdefault(x, _build_wmma_tile(ctx, x.src[0], x.src[1], cin, abase, bbase, cbase, ()))
   chain = [x]                                   # outermost .. head
   while True:
@@ -1549,13 +1582,13 @@ def isel_wmma(ctx:IselContext, x:UOp):
   for tile_i, tile in enumerate(reversed(chain)):                  # head first, then each accumulate tile
     if prev is None:                            # HEAD: init the accumulator to 0 from the 8 CONST-0 seed lanes (V_CONST)
       if head_acc is not None:
-        cin = [UOp(Ops.INS, dtypes.float32, src=(head_acc[2],), arg=AMDOps.MOV, tag=_pin(cbase, i)) for i in range(8)]
+        cin = [UOp(Ops.INS, x.dtype.scalar(), src=(head_acc[2],), arg=AMDOps.MOV, tag=_pin(cbase, i)) for i in range(8)]
       else:
         cE = _wmma_elems(tile.src[2], 8)
         for i in range(8):
           if cE[i].op is not Ops.CONST:
             raise NotImplementedError(f"AMD:ISA WMMA C init lane {i} is {cE[i].op}, expected CONST at the K-reduction chain head")
-        cin = [UOp(Ops.INS, dtypes.float32, src=(cE[i].rtag(),), arg=AMDOps.V_CONST, tag=_pin(cbase, i)) for i in range(8)]
+        cin = [UOp(Ops.INS, x.dtype.scalar(), src=(cE[i].rtag(),), arg=AMDOps.V_CONST, tag=_pin(cbase, i)) for i in range(8)]
       dep:tuple[UOp,...] = ()
     else:                                       # ACCUMULATE: src2 = prior tile's 8 pinned D lanes (== v{cbase..cbase+7})
       cin = list(prev.src)                      #   -> lower_inst reads dbase=v{cbase} for both src2 and vdst (in place)
@@ -1897,6 +1930,16 @@ def lower_inst(x:UOp):
     _proof_record("wmma", x, inst, {
       "a_vgpr_range": [a0, a0 + 7], "b_vgpr_range": [b0, b0 + 7], "c_vgpr_range": [dbase, dbase + 7],
       "accumulator_in_place": True, "semantic_ownership": {"A": "lhs", "B": "rhs"},
+    })
+    return _ins(inst, x.tag)
+  if a is AMDOps.V_WMMA_I8:                          # signed int8 A/B packed as 4 b32 each; int32 C/D is 8 b32
+    a0, b0, dbase = src[0].reg.index, src[4].reg.index, src[8].reg.index
+    inst = v_wmma_i32_16x16x16_iu8(vdst=_V[dbase:dbase+7], src0=_V[a0:a0+3], src1=_V[b0:b0+3],
+                                    src2=_V[dbase:dbase+7], neg=3)
+    _proof_record("wmma", x, inst, {
+      "a_vgpr_range": [a0, a0 + 3], "b_vgpr_range": [b0, b0 + 3], "c_vgpr_range": [dbase, dbase + 7],
+      "accumulator_in_place": True, "input_dtype": "int8", "accumulator_dtype": "int32",
+      "signed_inputs": [True, True], "semantic_ownership": {"A": "lhs", "B": "rhs"},
     })
     return _ins(inst, x.tag)
   if a is AMDOps.V_EXP:                              # Phase N1A: hardware exp2 (2^x) -> one VALU op instead of a polynomial

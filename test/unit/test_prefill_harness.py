@@ -33,11 +33,13 @@ def test_prefill_run_profile_validates_bounds():
 def test_prefill_csv_and_argv_are_canonical():
   assert csv_ints("0, 512,1024") == (0, 512, 1024)
   prof = prefill_run_profile("smoke", K=2, warmups=0, rounds=1)
-  argv = prefill_authority_argv(DEFAULT_MODEL, prof, pin_clock=True, artifact=False)
+  argv = prefill_authority_argv(DEFAULT_MODEL, prof, pin_clock=True, artifact=False,
+                               require_route="prefill_q4k_int8_wmma_tiled_research")
   assert argv[:3] == ["extra/qk/prefill_whole_synced.py", "--model", DEFAULT_MODEL]
   assert "--model-profile" in argv and "qwen3_8b_q4k_m_gfx1100" in argv
   assert "--pin-clock" in argv
   assert "--no-artifact" in argv
+  assert argv[-2:] == ["--require-route", "prefill_q4k_int8_wmma_tiled_research"]
   assert "--start-positions" in argv and "0" in argv
   assert "--whole-lengths" in argv and "512" in argv
 

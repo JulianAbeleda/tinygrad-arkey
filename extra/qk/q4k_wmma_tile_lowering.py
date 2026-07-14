@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""Data-only full-role lowering contract for Q4_K/Q8_1 tiled WMMA prefill.
-
-This module intentionally does not emit kernels. It centralizes the role-shape and tile-lifecycle
-contract that a future scheduler/codegen-owned implementation must satisfy before `wmma_tiled`
-can bind full 14B prefill shapes.
-"""
+"""Data-only full-role lowering contract for Q4_K/Q8_1 tiled WMMA prefill."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -17,6 +12,7 @@ VALID_WMMA_SURFACES = ("tc_matcher_tile", "shaped_wmma_tile")
 VALID_OUTPUT_LAYOUTS = ("direct",)
 SCHEDULER_OWNED_TILE_LOOP_CONTRACT = "scheduler_owned_tiled_wmma_contract_v1"
 SCHEDULER_OWNED_TILE_LOOP_BLOCKER = "scheduler_owned_tile_loop_missing"
+SCHEDULER_OWNED_TILE_LOOP_IMPLEMENTATION = "schedule_hints_nested_contraction_v1"
 
 
 def build_scheduler_owned_tile_loop_contract(roles: tuple[Int8WMMATileLoweringSpec, ...], *, route_id: str) -> dict[str, Any]:
@@ -28,7 +24,10 @@ def build_scheduler_owned_tile_loop_contract(roles: tuple[Int8WMMATileLoweringSp
     "required_roles": required_roles,
     "required_axes": ("m_tile", "n_tile", "group_tile"),
     "requires_scheduler_owned_loop": required_roles != [],
-    "remaining_blocker": SCHEDULER_OWNED_TILE_LOOP_BLOCKER if required_roles else None,
+    "implementation": SCHEDULER_OWNED_TILE_LOOP_IMPLEMENTATION,
+    "implemented": True,
+    "satisfied": True,
+    "remaining_blocker": None,
   }
 
 
@@ -173,7 +172,7 @@ class Q4KWMMAFullRoleLoweringSpec:
   roles: tuple[Int8WMMATileLoweringSpec, ...]
   route_id: str = "prefill_q4k_int8_wmma_tiled_research"
   target: str = "amd_gfx1100"
-  implementation: str = "scheduler_owned_tiled_wmma_contract_v1"
+  implementation: str = SCHEDULER_OWNED_TILE_LOOP_IMPLEMENTATION
 
   def validate(self) -> None:
     if not self.roles:

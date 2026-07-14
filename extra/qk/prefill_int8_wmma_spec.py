@@ -10,7 +10,9 @@ from dataclasses import dataclass
 from typing import Any
 
 from tinygrad import Tensor, dtypes
+from tinygrad.codegen.opt import Opt, OptOps
 from tinygrad.helpers import getenv
+from tinygrad.uop.ops import ScheduleHints
 
 from extra.qk.layout import Q4K_WORDS_PER_BLOCK, Q4_K_BLOCK_ELEMS, Q8_1_BLOCK_ELEMS
 
@@ -193,7 +195,7 @@ def _q4k_group_codes_tensor(words3:Tensor, blk:int, grp:int) -> Tensor:
   return lanes[0].cat(*lanes[1:], dim=1).contiguous()
 
 
-def _q4k_all_group_codes_tensor(words3:Tensor, spec:Q4KInt8WMMAPrefillSpec) -> Tensor:
+def _q4k_all_group_codes_tensor(words3:Tensor, spec:Q4KInt8WMMAPrefillSpec, *, materialize:bool=True) -> Tensor:
   groups = []
   for grp in range(spec.groups_per_block):
     lanes = []
@@ -203,7 +205,8 @@ def _q4k_all_group_codes_tensor(words3:Tensor, spec:Q4KInt8WMMAPrefillSpec) -> T
       for nib in range(4):
         lanes.append((qword >> (nib * 8 + (grp % 2) * 4)).bitwise_and(0xf).cast(dtypes.int8).reshape(spec.n, spec.k_blocks, 1))
     groups.append(lanes[0].cat(*lanes[1:], dim=2).reshape(spec.n, spec.k_blocks, 1, spec.group_elems))
-  return groups[0].cat(*groups[1:], dim=2).reshape(spec.n, spec.groups, spec.group_elems).permute(1, 0, 2).contiguous()
+  out = groups[0].cat(*groups[1:], dim=2).reshape(spec.n, spec.groups, spec.group_elems).permute(1, 0, 2)
+  return out.contiguous() if materialize else out
 
 
 def _q4k_all_group_params_tensor(words3:Tensor, spec:Q4KInt8WMMAPrefillSpec) -> tuple[Tensor, Tensor, Tensor, Tensor]:
@@ -230,7 +233,8 @@ def _q4k_all_group_params_tensor(words3:Tensor, spec:Q4KInt8WMMAPrefillSpec) -> 
 
 
 def emit_q4k_int8_wmma_prefill_tensor(words:Tensor, xq:Tensor, xscales:Tensor,
-                                      spec:Q4KInt8WMMAPrefillSpec, *, vectorized:bool=True) -> Tensor:
+                                      spec:Q4KInt8WMMAPrefillSpec, *, vectorized:bool=True,
+                                      scheduler_owned:bool=False, schedule_name:str|None=None) -> Tensor:
   """Return fp32 [m,n] from Q4_K words and Q8_1 activation.
 
   The int dot is deliberately expressed as `q8_g.matmul(q4_g.T, dtype=dtypes.int)`. On AMD with TC enabled, that
@@ -250,22 +254,33 @@ def emit_q4k_int8_wmma_prefill_tensor(words:Tensor, xq:Tensor, xscales:Tensor,
                                         wmma_m=spec.wmma_m, wmma_n=spec.wmma_n, wmma_k=spec.wmma_k,
                                         n_tile=spec.n_tile, target=spec.target, implementation=spec.implementation)
       sub_words = words3_all[start:stop].contiguous().reshape(sub_n * spec.k_blocks * Q4K_WORDS_PER_BLOCK)
-      outs.append(emit_q4k_int8_wmma_prefill_tensor(sub_words, xq, xscales, sub_spec, vectorized=True))
+      outs.append(emit_q4k_int8_wmma_prefill_tensor(sub_words, xq, xscales, sub_spec, vectorized=True,
+                                                    scheduler_owned=scheduler_owned))
     return outs[0].cat(*outs[1:], dim=1).contiguous()
 
   words3 = words.reshape(spec.n, spec.k_blocks, Q4K_WORDS_PER_BLOCK)
   xq2 = xq.reshape(spec.m, spec.k)
   xsc2 = xscales.reshape(spec.m, spec.groups)
   if vectorized:
-    q4_g = _q4k_all_group_codes_tensor(words3, spec)                         # [groups, n, 32]
+    # Scheduler ownership keeps packed weight decoding inside the contraction. Materializing this weight-only tensor
+    # costs N*K bytes (85 MiB for 14B gate/up) and makes a full model retain one expanded copy per layer.
+    q4_g = _q4k_all_group_codes_tensor(words3, spec, materialize=not scheduler_owned)  # [groups, n, 32]
     q8_g = xq2.reshape(spec.m, spec.groups, spec.group_elems).permute(1, 0, 2).contiguous()  # [groups, m, 32]
     raw = _intdot_matmul(q8_g, q4_g.permute(0, 2, 1).contiguous()).cast(dtypes.float32)  # [groups,m,n]
     qsum = q8_g.cast(dtypes.int32).sum(axis=2).cast(dtypes.float32)          # [groups,m]
+    if scheduler_owned:
+      # This reduction has different ownership from the WMMA M/N wave. Keep its tiny [groups,m] result as an explicit
+      # prerequisite; otherwise aggressive partial-contiguous fusion can assign it the contraction's lane geometry.
+      qsum = qsum.contiguous()
     d, dmin, sc, mn = _q4k_all_group_params_tensor(words3, spec)             # [n,groups]
     coeff_raw = (d * sc.cast(dtypes.float32)).permute(1, 0).reshape(spec.groups, 1, spec.n)
     coeff_min = (dmin * mn.cast(dtypes.float32)).permute(1, 0).reshape(spec.groups, 1, spec.n)
     xscale = xsc2.permute(1, 0).reshape(spec.groups, spec.m, 1).cast(dtypes.float32)
-    return (xscale * (raw * coeff_raw - qsum.reshape(spec.groups, spec.m, 1) * coeff_min)).sum(axis=0).contiguous()
+    out = (xscale * (raw * coeff_raw - qsum.reshape(spec.groups, spec.m, 1) * coeff_min)).sum(axis=0)
+    if scheduler_owned:
+      return out.contiguous(arg=ScheduleHints(pcontig=3, opts_to_apply=(Opt(OptOps.TC, 0, (-1, 2, 1)),),
+                                               name=schedule_name or spec.kernel_name))
+    return out.contiguous()
 
   out = Tensor.zeros(spec.m, spec.n, dtype=dtypes.float32, device=xq.device)
   for blk in range(spec.k_blocks):
@@ -357,3 +372,19 @@ def emit_q4k_int8_wmma_tiled_exec_tensor(words:Tensor, xq:Tensor, xscales:Tensor
   materialized in the graph.
   """
   return emit_q4k_int8_wmma_tiled_lifecycle_tensor(words, xq, xscales, spec)
+
+
+def emit_q4k_int8_wmma_tiled_scheduler_tensor(words:Tensor, xq:Tensor, xscales:Tensor,
+                                               spec:Q4KInt8WMMATiledPrefillSpec) -> Tensor:
+  """Full-shape generated contraction with scheduler-owned M/N/group axes.
+
+  The typed schedule hint keeps the inner int8 dot, packed-Q4 decode, and outer scale/group reduction in one named
+  kernel. Q8 packing remains a bounded prerequisite; the forbidden global ``[groups,M,N]`` RAW buffer is eliminated.
+  """
+  spec.validate()
+  wmma_spec = Q4KInt8WMMAPrefillSpec(n=spec.n, k=spec.k, m=spec.m, role=spec.role,
+    group_elems=spec.group_elems, wmma_m=spec.wmma_m, wmma_n=spec.wmma_n, wmma_k=spec.wmma_k,
+    n_tile=spec.n, target=spec.target)
+  wmma_spec.validate()
+  return emit_q4k_int8_wmma_prefill_tensor(words, xq, xscales, wmma_spec, vectorized=True, scheduler_owned=True,
+                                           schedule_name=spec.kernel_name)

@@ -142,6 +142,14 @@ def test_prefill_default_is_scoped_by_promoted_candidate_profile():
     assert model._prefill_graph_gemm_default() == 0
 
 
+def test_prefill_q4k_research_selector_is_manifest_attributed():
+  default = {r["family"]: r for r in guard.effective_routes({})}["prefill_q4k"]
+  assert default["effective_route"] == "prefill_q4k_direct_tile4x4_default"
+  selected = {r["family"]: r for r in guard.effective_routes({"PREFILL_Q4K_Q8": "wmma_tiled"})}["prefill_q4k"]
+  assert selected["effective_route"] == "prefill_q4k_int8_wmma_tiled_research"
+  assert selected["provenance"] == "machine_authored_generated" and selected["pure"] is True
+
+
 # ---- (2) F2: a flipped getenv DEFAULT de-selects the shipped route and this suite catches it ----
 
 def test_shipped_default_getenv_values_keep_generated_routes_on():

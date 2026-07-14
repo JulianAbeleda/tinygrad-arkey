@@ -19,22 +19,21 @@ def test_q4k_wmma_tiled_no_hand_scan_is_clean():
   assert report["findings"] == []
 
 
-def test_q4k_wmma_tiled_role_shape_exec_classifier_is_not_a_false_pass():
+def test_q4k_wmma_tiled_role_shape_exec_pass_requires_scheduler_evidence(monkeypatch):
   lifecycle = {"verdict": "Q4K_WMMA_TILED_LIFECYCLE_PASS", "class": "pass.bounded_multi_tile_lifecycle"}
+  def fake_role_row(spec, _lifecycle):
+    return {"role": spec.role, "exec": {"attempted": True, "class": "pass.scheduler_owned_nested_contraction",
+      "numeric_ok": True, "wmma_present": True}}
+  monkeypatch.setattr(role_shape_gate, "_role_row", fake_role_row)
   report = build_role_shape_exec(lifecycle)
-  assert report["verdict"] == "Q4K_WMMA_TILED_ROLE_SHAPE_EXEC_BLOCKED_FULL_ROLE_LOWERING"
-  assert report["classified_blocker"] is True
+  assert report["verdict"] == "Q4K_WMMA_TILED_ROLE_SHAPE_EXEC_PASS"
+  assert report["classified_blocker"] is False
   assert len(report["roles"]) == 4
   assert all(row["exec"]["attempted"] for row in report["roles"])
-  for row in report["roles"]:
-    assert row["exec"]["class"] in {
-      "pass.generated_tiled_loop",
-      "blocked.generated_tiled_loop_execution_failed",
-      "blocked.compiler_unavailable",
-    }
   assert report["scheduler_owned_tile_loop"]["required"] is True
-  assert report["scheduler_owned_tile_loop"]["remaining_blocker"] == "scheduler_owned_tile_loop_missing"
-  assert report["required_next"] == "scheduler_owned_tile_loop_missing"
+  assert report["scheduler_owned_tile_loop"]["implemented"] is True
+  assert report["scheduler_owned_tile_loop"]["remaining_blocker"] is None
+  assert report["required_next"] is None
 
 
 def test_q4k_wmma_tiled_role_shape_exec_all_numeric_ok_requires_all_roles(monkeypatch):
@@ -45,8 +44,9 @@ def test_q4k_wmma_tiled_role_shape_exec_all_numeric_ok_requires_all_roles(monkey
       "role": spec.role,
       "exec": {
         "attempted": True,
-        "class": "pass.generated_tiled_loop",
+        "class": "pass.scheduler_owned_nested_contraction",
         "numeric_ok": spec.role == "attn_kv",
+        "wmma_present": True,
       },
     }
 

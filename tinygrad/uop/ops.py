@@ -1170,6 +1170,24 @@ class KernelInfo:
   def function_name(self): return to_function_name(self.name)
 
 @dataclass(frozen=True)
+class ScheduleHints:
+  """Narrow, per-expression scheduler policy carried by CONTIGUOUS.
+
+  This avoids ambient Context flags for contractions that require nested reductions to stay in one kernel. The
+  scheduler consumes ``pcontig``; postrange consumes ``opts_to_apply`` through the resulting KernelInfo.
+  """
+  pcontig: int = 0
+  opts_to_apply: tuple = tuple()
+  name: str|None = None
+
+  def __post_init__(self):
+    if not isinstance(self.pcontig, int) or isinstance(self.pcontig, bool) or not 0 <= self.pcontig <= 3:
+      raise ValueError("ScheduleHints.pcontig must be an int in [0, 3]")
+    if not isinstance(self.opts_to_apply, tuple): raise TypeError("ScheduleHints.opts_to_apply must be a tuple")
+    if self.name is not None and (not isinstance(self.name, str) or not self.name):
+      raise ValueError("ScheduleHints.name must be None or a non-empty string")
+
+@dataclass(frozen=True)
 class ProgramInfo:
   name: str = "test"
   global_size: tuple[int|float, ...] = (1, 1, 1)

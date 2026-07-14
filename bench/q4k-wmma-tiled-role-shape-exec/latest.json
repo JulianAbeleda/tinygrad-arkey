@@ -1,7 +1,7 @@
 {
   "schema": "q4k_wmma_tiled_role_shape_exec_gate.v1",
   "scope": "synthetic execution gate for all 14B Q4_K/Q8_1 wmma_tiled prefill role shapes",
-  "verdict": "Q4K_WMMA_TILED_ROLE_SHAPE_EXEC_BLOCKED_FULL_ROLE_LOWERING",
+  "verdict": "Q4K_WMMA_TILED_ROLE_SHAPE_EXEC_PASS",
   "route_id": "prefill_q4k_int8_wmma_tiled_research",
   "scheduler_owned_tile_loop": {
     "contract": "scheduler_owned_tiled_wmma_contract_v1",
@@ -19,13 +19,16 @@
       "group_tile"
     ],
     "requires_scheduler_owned_loop": true,
-    "remaining_blocker": "scheduler_owned_tile_loop_missing"
+    "implementation": "schedule_hints_nested_contraction_v1",
+    "implemented": true,
+    "satisfied": true,
+    "remaining_blocker": null
   },
-  "remaining_blocker": "scheduler_owned_tile_loop_missing",
-  "required_next": "scheduler_owned_tile_loop_missing",
+  "remaining_blocker": null,
+  "required_next": null,
   "lifecycle": {
-    "verdict": "Q4K_WMMA_TILED_LIFECYCLE_PASS",
-    "class": "pass.bounded_multi_tile_lifecycle"
+    "required": false,
+    "superseded_by": "schedule_hints_nested_contraction_v1"
   },
   "roles": [
     {
@@ -81,14 +84,32 @@
       },
       "exec": {
         "attempted": true,
-        "class": "blocked.compiler_unavailable",
-        "compile_ms": null,
-        "runtime_ms": null,
-        "kernel_count": null,
+        "class": "pass.scheduler_owned_nested_contraction",
+        "compile_ms": 2150.2774330001557,
+        "runtime_ms": 0.22844,
+        "kernel_count": 7,
         "graph_node_count": null,
-        "wmma_present": false,
-        "error": "execution_skipped_no_clang",
-        "raw_tile_steps": 2560
+        "wmma_present": true,
+        "raw_tile_steps": 2560,
+        "m": 64,
+        "n": 64,
+        "k": 5120,
+        "wmma_evidence": "exact_full_role_compiled_program_source",
+        "full_shape": {
+          "m": 512,
+          "n": 1024,
+          "k": 5120,
+          "program_count": 4
+        },
+        "numeric_probe_shape": {
+          "m": 64,
+          "n": 64,
+          "k": 5120
+        },
+        "numeric_ok": true,
+        "rel_rmse": 3.3956075640162453e-07,
+        "rtol": 0.006,
+        "error": null
       }
     },
     {
@@ -144,14 +165,32 @@
       },
       "exec": {
         "attempted": true,
-        "class": "blocked.compiler_unavailable",
-        "compile_ms": null,
-        "runtime_ms": null,
-        "kernel_count": null,
+        "class": "pass.scheduler_owned_nested_contraction",
+        "compile_ms": 1041.0972590034362,
+        "runtime_ms": 0.24684,
+        "kernel_count": 7,
         "graph_node_count": null,
-        "wmma_present": false,
-        "error": "execution_skipped_no_clang",
-        "raw_tile_steps": 2560
+        "wmma_present": true,
+        "raw_tile_steps": 2560,
+        "m": 64,
+        "n": 64,
+        "k": 5120,
+        "wmma_evidence": "exact_full_role_compiled_program_source",
+        "full_shape": {
+          "m": 512,
+          "n": 5120,
+          "k": 5120,
+          "program_count": 4
+        },
+        "numeric_probe_shape": {
+          "m": 64,
+          "n": 64,
+          "k": 5120
+        },
+        "numeric_ok": true,
+        "rel_rmse": 3.3956075640162453e-07,
+        "rtol": 0.006,
+        "error": null
       }
     },
     {
@@ -207,14 +246,32 @@
       },
       "exec": {
         "attempted": true,
-        "class": "blocked.compiler_unavailable",
-        "compile_ms": null,
-        "runtime_ms": null,
-        "kernel_count": null,
+        "class": "pass.scheduler_owned_nested_contraction",
+        "compile_ms": 1162.9306730028475,
+        "runtime_ms": 0.26243999999999995,
+        "kernel_count": 7,
         "graph_node_count": null,
-        "wmma_present": false,
-        "error": "execution_skipped_no_clang",
-        "raw_tile_steps": 8704
+        "wmma_present": true,
+        "raw_tile_steps": 2560,
+        "m": 64,
+        "n": 64,
+        "k": 5120,
+        "wmma_evidence": "exact_full_role_compiled_program_source",
+        "full_shape": {
+          "m": 512,
+          "n": 5120,
+          "k": 17408,
+          "program_count": 4
+        },
+        "numeric_probe_shape": {
+          "m": 64,
+          "n": 64,
+          "k": 5120
+        },
+        "numeric_ok": true,
+        "rel_rmse": 3.2832539886840095e-07,
+        "rtol": 0.006,
+        "error": null
       }
     },
     {
@@ -270,14 +327,32 @@
       },
       "exec": {
         "attempted": true,
-        "class": "blocked.compiler_unavailable",
-        "compile_ms": null,
-        "runtime_ms": null,
-        "kernel_count": null,
+        "class": "pass.scheduler_owned_nested_contraction",
+        "compile_ms": 1100.9106450073887,
+        "runtime_ms": 0.2470399999999999,
+        "kernel_count": 7,
         "graph_node_count": null,
-        "wmma_present": false,
-        "error": "execution_skipped_no_clang",
-        "raw_tile_steps": 2560
+        "wmma_present": true,
+        "raw_tile_steps": 2560,
+        "m": 64,
+        "n": 64,
+        "k": 5120,
+        "wmma_evidence": "exact_full_role_compiled_program_source",
+        "full_shape": {
+          "m": 512,
+          "n": 17408,
+          "k": 5120,
+          "program_count": 4
+        },
+        "numeric_probe_shape": {
+          "m": 64,
+          "n": 64,
+          "k": 5120
+        },
+        "numeric_ok": true,
+        "rel_rmse": 3.050299346796237e-05,
+        "rtol": 0.006,
+        "error": null
       }
     }
   ],
@@ -288,9 +363,9 @@
     "ffn_down",
     "ffn_gate_up"
   ],
-  "classified_blocker": true,
-  "all_numeric_ok": false,
-  "blocker": "role execution is intentionally blocked until a scheduler-owned tile_m/tile_n/group loop is ownership-integrated",
-  "distinction_from_classifier": "q4k_wmma_tiled_role_shape enumerates/selects shapes; this gate executes bounded synthetic role-shape subgraphs and reports the remaining loop-boundary blocker.",
-  "next_blocker": "scheduler_owned_tile_loop_missing"
+  "classified_blocker": false,
+  "all_numeric_ok": true,
+  "blocker": null,
+  "distinction_from_classifier": "q4k_wmma_tiled_role_shape enumerates/selects shapes; this gate executes bounded full-K scheduler-owned subgraphs and verifies generated iu8 WMMA plus numeric parity.",
+  "next_blocker": null
 }

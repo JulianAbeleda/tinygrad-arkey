@@ -160,7 +160,7 @@ HOT_FAMILIES = [
   {"family": "prefill_q4k",
    "generated": _default_route_id(workload="prefill", quant_exact=["Q4_K"]),
    "oracle": _default_route_id(workload="prefill", quant_exact=["Q4_K"]),
-   "rollback_active": lambda e: False},
+   "effective": "prefill_q4k"},
   {"family": "decode_attention",
    "generated": _default_route_id(workload="decode", quant=["fp16"], profile_id="qwen3_8b_q4_k_m_gfx1100_decode"),
    "oracle": _default_route_id(workload="decode", quant=["fp16"], profile_id="qwen3_8b_q4_k_m_gfx1100_decode"),
@@ -175,6 +175,17 @@ def _prefill_gemm_effective(env: dict[str, Any]) -> tuple[str, bool]:
     return _env_route_id(_PREFILL_SCHEDULER_ROLLBACK_ENV, workload="prefill", quant=["fp16"],
                          roles=["attn_qo", "attn_kv", "ffn_down", "ffn_gate_up"]), False
   raise RuntimeError("PREFILL_GRAPH_GEMM=1 requires an admitted generated candidate set")
+
+
+def _prefill_q4k_effective(env: dict[str, Any]) -> tuple[str, bool]:
+  """Resolve the Q4 prefill substrate from manifest-owned selector data."""
+  mode = str(env.get("PREFILL_Q4K_Q8", "")).strip().lower()
+  if mode in ("", "0", "false", "off", "no"):
+    return _default_route_id(workload="prefill", quant_exact=["Q4_K"]), False
+  matches = _route_ids_matching(env={"PREFILL_Q4K_Q8": mode}, workload="prefill", quant_exact=["Q4_K"])
+  if len(matches) != 1:
+    raise ValueError(f"PREFILL_Q4K_Q8={mode!r} does not resolve to exactly one manifest route; got {matches}")
+  return matches[0], False
 
 
 def _provenance(rid: str) -> str:
@@ -198,6 +209,8 @@ def effective_routes(env: dict[str, Any] | None = None) -> list[dict[str, Any]]:
   for fam in HOT_FAMILIES:
     if fam.get("effective") == "prefill_gemm":
       rid, rolled_back = _prefill_gemm_effective(e)
+    elif fam.get("effective") == "prefill_q4k":
+      rid, rolled_back = _prefill_q4k_effective(e)
     else:
       rolled_back = fam["rollback_active"](e)
       rid = fam["oracle"] if rolled_back else fam["generated"]

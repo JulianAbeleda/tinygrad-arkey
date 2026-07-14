@@ -20,7 +20,8 @@ from extra.qk.layout import q8_1_quantize
 from extra.qk.prefill_mmq_parity_gate import _make_q4k_words, _rel_rmse, RTOL
 from extra.qk.prefill_int8_wmma_spec import (
   describe_q4k_int8_wmma_prefill, emit_q4k_int8_wmma_prefill_tensor,
-  describe_q4k_int8_wmma_tiled_prefill, emit_q4k_int8_wmma_tiled_prefill_tensor)
+  describe_q4k_int8_wmma_tiled_prefill, emit_q4k_int8_wmma_tiled_prefill_tensor,
+  emit_q4k_int8_wmma_tiled_scheduler_tensor)
 
 IS_AMD = Device.DEFAULT == "AMD"
 
@@ -66,6 +67,15 @@ class TestQ4KInt8WmmaValueSemantics(unittest.TestCase):
     # the live RAW tensor must stay bounded to the declared tile (no full [groups,M,N] materialization).
     self.assertEqual(spec.live_raw_elems, spec.forbidden_full_raw_elems,
                      "one-tile microgate spec should have live == full for this bounded shape")
+
+  def test_scheduler_owned_multitile_parity(self):
+    n, k, m = 32, 256, 32
+    words, xq, xscales, ref_out = _q4k_reference_and_inputs(n, k, m, seed=20260714)
+    spec = describe_q4k_int8_wmma_tiled_prefill(n, k, m, role="scheduler_multitile",
+                                                m_tile=16, n_tile=16, group_tile=8)
+    got = emit_q4k_int8_wmma_tiled_scheduler_tensor(words, xq, xscales, spec).realize().numpy()
+    rel = _rel_rmse(got, ref_out)
+    self.assertLess(rel, RTOL, f"scheduler-owned signed-dot parity FAILED rel_rmse={rel:.3e}")
 
 
 if __name__ == "__main__":

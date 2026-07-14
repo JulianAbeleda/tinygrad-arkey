@@ -227,15 +227,27 @@ class Scheduler:
 
   def _apply_tc_opt(self, use_tensor_cores:int, axis:int, tc_select:int, opt_level:int) -> None|list[UOp]:
     if not (reduceops := self.reduceops): raise KernelOptError("no reduce ops for TensorCore")
-    reduceop = reduceops[0]
+    try:
+      tensor_cores = self.ren.tensor_cores if tc_select == -1 else [self.ren.tensor_cores[tc_select]]
+    except IndexError:
+      raise KernelOptError(f"invalid tensor core choice {tc_select}")
+
+    # A grouped contraction can carry an outer epilogue reduction around the actual dot-product reduction. Select
+    # the first reduce whose body is a tensor-core-compatible MUL instead of assuming reduceops[0] is the dot. This
+    # keeps group/tile ownership in the scheduler while allowing the inner K contraction to become WMMA.
+    reduceop, mul = None, None
+    for candidate in reduceops:
+      if candidate.arg[0] is not Ops.ADD: continue
+      candidate_mul = candidate.src[0] if candidate.src[0].op is not Ops.CAST else candidate.src[0].src[0]
+      if candidate_mul.op is not Ops.MUL: continue
+      in0, in1 = candidate_mul.src
+      compatible = any(not (self.ren.target.device in ("CUDA", "NV") and tc.dtype_in == dtypes.float and not ALLOW_TF32) and
+        tc.dtype_in == in0.dtype.scalar() and tc.dtype_in == in1.dtype.scalar() and tc.dtype_out == candidate.dtype.scalar()
+        for tc in tensor_cores)
+      if compatible: reduceop, mul = candidate, candidate_mul; break
+    if reduceop is None or mul is None: return None
     if use_tensor_cores and reduceop.arg[0] is Ops.ADD:
-      mul = reduceop.src[0] if reduceop.src[0].op is not Ops.CAST else reduceop.src[0].src[0]
-      if mul.op is not Ops.MUL: return None
       in0, in1 = mul.src
-      try:
-        tensor_cores = self.ren.tensor_cores if tc_select == -1 else [self.ren.tensor_cores[tc_select]]
-      except IndexError:
-        raise KernelOptError(f"invalid tensor core choice {tc_select}")
       for tc in tensor_cores:
         if self.ren.target.device in ("CUDA", "NV") and tc.dtype_in == dtypes.float and not ALLOW_TF32: continue
         if tc.dtype_in == in0.dtype.scalar() and tc.dtype_in == in1.dtype.scalar() and tc.dtype_out == reduceop.dtype.scalar():

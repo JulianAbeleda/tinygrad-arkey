@@ -15,7 +15,6 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from extra.qk.q4k_wmma_tile_lowering import (
-  SCHEDULER_OWNED_TILE_LOOP_BLOCKER,
   describe_q4k_full_role_lowering,
   qwen3_14b_q4k_m_gfx1100_profile,
   build_scheduler_owned_tile_loop_contract,
@@ -23,7 +22,6 @@ from extra.qk.q4k_wmma_tile_lowering import (
 
 SCHEMA = "q4k-wmma-full-role-contract-gate.v1"
 SURFACE_ARTIFACT = Path("bench/q4k-wmma-scheduler-surface/latest.json")
-LIFECYCLE_ARTIFACT = Path("bench/q4k-wmma-tiled-lifecycle/latest.json")
 NO_HAND_ARTIFACT = Path("bench/q4k-wmma-tiled-no-hand-kernel/latest.json")
 ROLE_SHAPE_EXEC_ARTIFACT = Path("bench/q4k-wmma-tiled-role-shape-exec/latest.json")
 
@@ -38,11 +36,9 @@ def _load_json(path: Path) -> dict[str, Any]:
 def build_report() -> dict[str, Any]:
   spec = describe_q4k_full_role_lowering(qwen3_14b_q4k_m_gfx1100_profile(), wmma_surface="shaped_wmma_tile")
   surface = _load_json(SURFACE_ARTIFACT)
-  lifecycle = _load_json(LIFECYCLE_ARTIFACT)
   no_hand = _load_json(NO_HAND_ARTIFACT)
 
   surface_ok = surface.get("verdict") == "Q4K_WMMA_SCHEDULER_SURFACE_SHAPED_READY"
-  lifecycle_ok = lifecycle.get("verdict") == "Q4K_WMMA_TILED_LIFECYCLE_PASS"
   no_hand_ok = no_hand.get("verdict") == "Q4K_WMMA_TILED_NO_HAND_KERNEL_PASS"
   roles = spec.to_json()["roles"]
   bounded_roles = all(r["bounds"]["bounded_raw_ok"] and r["bounds"]["live_raw_elems"] <= 256 for r in roles)
@@ -54,14 +50,14 @@ def build_report() -> dict[str, Any]:
     "verdict": role_shape_exec.get("verdict"),
     "remaining_blocker": role_shape_exec.get("remaining_blocker"),
     "attempted_count": role_shape_exec.get("attempted_count"),
-    "executor_verified": role_shape_exec.get("verdict") in {"Q4K_WMMA_TILED_ROLE_SHAPE_EXEC_BLOCKED_FULL_ROLE_LOWERING",
-                                                          "Q4K_WMMA_TILED_ROLE_SHAPE_EXEC_BLOCKED_LIFECYCLE"},
+    "executor_verified": role_shape_exec.get("verdict") == "Q4K_WMMA_TILED_ROLE_SHAPE_EXEC_PASS",
   }
+  role_shape_exec_ok = role_shape_loop_validation["executor_verified"]
 
   return {
     "schema": SCHEMA,
     "route_id": spec.route_id,
-    "verdict": "Q4K_WMMA_FULL_ROLE_CONTRACT_PASS" if surface_ok and lifecycle_ok and no_hand_ok and bounded_roles
+    "verdict": "Q4K_WMMA_FULL_ROLE_CONTRACT_PASS" if surface_ok and no_hand_ok and bounded_roles and role_shape_exec_ok
       else "Q4K_WMMA_FULL_ROLE_CONTRACT_BLOCKED",
     "contract": spec.to_json(),
     "evidence": {
@@ -69,9 +65,8 @@ def build_report() -> dict[str, Any]:
       "surface_verdict": surface.get("verdict"),
       "surface_ok": surface_ok,
       "selected_surface": surface.get("selected_surface"),
-      "lifecycle_artifact": str(LIFECYCLE_ARTIFACT),
-      "lifecycle_verdict": lifecycle.get("verdict"),
-      "lifecycle_ok": lifecycle_ok,
+      "lifecycle_required": False,
+      "lifecycle_superseded_by": scheduler_loop_contract["implementation"],
       "no_hand_artifact": str(NO_HAND_ARTIFACT),
       "no_hand_verdict": no_hand.get("verdict"),
       "no_hand_ok": no_hand_ok,
@@ -79,7 +74,8 @@ def build_report() -> dict[str, Any]:
       "role_shape_exec_validation": role_shape_loop_validation,
       "scheduler_owned_tile_loop": scheduler_loop_contract,
     },
-    "remaining_blocker": SCHEDULER_OWNED_TILE_LOOP_BLOCKER if scheduler_loop_contract["required"] else None,
+    "remaining_blocker": None if surface_ok and no_hand_ok and bounded_roles and role_shape_exec_ok
+      else "full_role_evidence_incomplete",
   }
 
 

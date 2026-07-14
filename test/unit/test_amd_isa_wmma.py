@@ -116,8 +116,55 @@ class TestAMDISAWmmaStructuralGate(unittest.TestCase):
     # and it assembled to a non-empty binary
     self.assertTrue(any(u.op is Ops.BINARY and len(u.arg) > 0 for u in prg.src), "assemble_linear produced no binary")
 
+  def test_nested_q4k_contraction_renders_signed_i8_wmma(self):
+    from extra.qk.layout import Q4K_WORDS_PER_BLOCK
+    from extra.qk.prefill_int8_wmma_spec import (
+      describe_q4k_int8_wmma_tiled_prefill, emit_q4k_int8_wmma_tiled_scheduler_tensor)
+    n, k, m = 16, 256, 16
+    spec = describe_q4k_int8_wmma_tiled_prefill(n, k, m, role="isa_nested",
+                                                m_tile=16, n_tile=16, group_tile=8)
+    words = Tensor.empty(n * (k // 256) * Q4K_WORDS_PER_BLOCK, dtype=dtypes.uint)
+    xq = Tensor.empty(m, k, dtype=dtypes.char)
+    xscales = Tensor.empty(m, k // 32, dtype=dtypes.float32)
+    linear = emit_q4k_int8_wmma_tiled_scheduler_tensor(words, xq, xscales, spec).schedule_linear()
+    asts = [u for u in linear.toposort() if u.op is Ops.SINK]
+    # Packed Q4 decode is fused into the contraction; only bounded metadata/Q8 prerequisites remain.
+    self.assertEqual(len(asts), 4)
+    self.assertEqual(sum(u.op is Ops.REDUCE for u in asts[-1].toposort()), 2)
+    prg = to_program(asts[-1], self.ren)
+    self.assertEqual(prg.src[0].arg.name,
+      "prefill_q4k_q8_1_wmma_tiled_generated_gemm_isa_nested_16_256_16_16x16x8")
+    lin_uop = [u for u in prg.src if u.op is Ops.LINEAR][0]
+    lines = [str(u.arg) for u in lin_uop.src if not isinstance(u.arg, tuple)]
+    wmmas = [line for line in lines if line.startswith("v_wmma_i32_16x16x16_iu8")]
+    self.assertEqual(len(wmmas), 1)
+    self.assertTrue(wmmas[0].endswith(", 3)"), f"signed A/B flags missing from iu8 WMMA: {wmmas[0]}")
+
 
 class TestAMDISAIntegerCastGate(unittest.TestCase):
+  def test_char_to_int_sign_extends(self):
+    ren = AMDISARenderer(Target.parse("AMD:ISA:gfx1100"))
+    a = Tensor.empty(8, dtype=dtypes.char)
+    lin = a.cast(dtypes.int).contiguous().schedule_linear()
+    ast = [u for u in lin.toposort() if u.op is Ops.SINK][0]
+    prg = to_program(ast, ren)
+    lin_uop = [u for u in prg.src if u.op is Ops.LINEAR][0]
+    mns = [str(u.arg).split("(", 1)[0] for u in lin_uop.src if not isinstance(u.arg, tuple)]
+    self.assertIn("v_and_b32_e32", mns)
+    self.assertIn("v_xor_b32_e32", mns)
+    self.assertIn("v_add_nc_u32_e32", mns)
+
+  def test_uint_to_ushort_masks_to_destination_width(self):
+    ren = AMDISARenderer(Target.parse("AMD:ISA:gfx1100"))
+    a = Tensor.empty(8, dtype=dtypes.uint)
+    lin = a.cast(dtypes.ushort).contiguous().schedule_linear()
+    ast = [u for u in lin.toposort() if u.op is Ops.SINK][0]
+    prg = to_program(ast, ren)
+    lin_uop = [u for u in prg.src if u.op is Ops.LINEAR][0]
+    mns = [str(u.arg).split("(", 1)[0] for u in lin_uop.src if not isinstance(u.arg, tuple)]
+    self.assertIn("v_and_b32_e32", mns)
+    self.assertIn("global_store_b16", mns)
+
   def test_uchar_to_ushort_uses_byte_load_half_store(self):
     ren = AMDISARenderer(Target.parse("AMD:ISA:gfx1100"))
     a = Tensor.empty(8, dtype=dtypes.uchar)

@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from tinygrad.dtype import dtypes, AddrSpace, PtrDType, ImageDType
-from tinygrad.uop.ops import UOp, UPat, PatternMatcher, Ops, GroupOp, graph_rewrite, track_rewrites
+from tinygrad.uop.ops import UOp, UPat, PatternMatcher, Ops, GroupOp, ScheduleHints, graph_rewrite, track_rewrites
 from tinygrad.helpers import VIZ, pluralize, all_int
 
 @dataclass
@@ -49,7 +49,9 @@ def replace_contig_with_store_after(u:UOp):
   # no real contig for DISK/TINYFS tensors, they are left alone
   if isinstance(u.device, str) and u.device.startswith(("DISK", "TINYFS")): return u.rtag(None)
   buf = u.empty_like()
-  return buf.after(buf.store(u.src[0])).rtag(u.tag)
+  # Per-expression scheduling policy belongs to the output store after CONTIGUOUS becomes a concrete buffer boundary.
+  store_arg = u.arg if isinstance(u.arg, ScheduleHints) else None
+  return buf.after(buf.store(u.src[0], arg=store_arg)).rtag(u.tag)
 
 def replace_store_after_with_contig(u:UOp, src:UOp):
   assigned_to = u

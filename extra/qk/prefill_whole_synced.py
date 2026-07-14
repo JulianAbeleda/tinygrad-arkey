@@ -64,6 +64,8 @@ def _route_attribution() -> dict[str, Any]:
     "prefill_route_provenance": prefill_gemm.get("provenance", "unknown") if prefill_gemm else "unknown",
     "prefill_q4k_route_family": prefill_q4k.get("effective_route", "unknown") if prefill_q4k else "unknown",
     "prefill_q4k_route_pure": bool(prefill_q4k.get("pure")) if prefill_q4k else False,
+    "prefill_q4k_route_rolled_back": bool(prefill_q4k.get("rolled_back_to_oracle")) if prefill_q4k else False,
+    "prefill_q4k_route_provenance": prefill_q4k.get("provenance", "unknown") if prefill_q4k else "unknown",
   }
 
 @contextmanager
@@ -179,21 +181,27 @@ def route_binding_gate(report: dict[str, Any], required_route: str | None = None
                        env: dict[str, Any] | None = None) -> dict[str, Any]:
   e = os.environ if env is None else env
   route = report.get("route_attribution", {})
-  selected_route = route.get("prefill_route_family")
-  effective_route_ids = {r.get("effective_route") for r in effective_routes(e)}
+  effective = effective_routes(e)
+  effective_route_ids = {r.get("effective_route") for r in effective}
+  selected_family = "prefill_gemm"
+  if required_route and (required_row := next((r for r in effective if r.get("effective_route") == required_route), None)) is not None:
+    selected_family = str(required_row.get("family"))
+  prefix = "prefill_q4k" if selected_family == "prefill_q4k" else "prefill"
+  selected_route = route.get(f"{prefix}_route_family")
   failures = []
   if required_route:
     if required_route not in effective_route_ids:
       failures.append(f"required_route={required_route!r} is not reported by effective_routes")
     if selected_route != required_route:
       failures.append(f"prefill_route_family={selected_route!r}, expected {required_route!r}")
-  expected_pure, expected_rollback, expected_provenance = True, False, "tinygrad_scheduler_generated"
-  if route.get("prefill_route_pure") is not expected_pure:
-    failures.append(f"prefill_route_pure={route.get('prefill_route_pure')!r}, expected {expected_pure!r}")
-  if route.get("prefill_route_rolled_back") is not expected_rollback:
-    failures.append(f"prefill_route_rolled_back={route.get('prefill_route_rolled_back')!r}, expected {expected_rollback!r}")
-  if route.get("prefill_route_provenance") != expected_provenance:
-    failures.append(f"prefill_route_provenance={route.get('prefill_route_provenance')!r}, expected {expected_provenance!r}")
+  expected_pure, expected_rollback = True, False
+  if route.get(f"{prefix}_route_pure") is not expected_pure:
+    failures.append(f"{prefix}_route_pure={route.get(f'{prefix}_route_pure')!r}, expected {expected_pure!r}")
+  if route.get(f"{prefix}_route_rolled_back") is not expected_rollback:
+    failures.append(f"{prefix}_route_rolled_back={route.get(f'{prefix}_route_rolled_back')!r}, expected {expected_rollback!r}")
+  provenance = route.get(f"{prefix}_route_provenance")
+  if provenance not in REGIME_BY_PROVENANCE or REGIME_BY_PROVENANCE[provenance] != "generated_pure":
+    failures.append(f"{prefix}_route_provenance={provenance!r}, expected generated-pure provenance")
   candidate_set_requested = (selected_route == PREFILL_PROMOTED_CANDIDATE_ROUTE or
                              e.get("BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_JSON") is not None or
                              e.get("BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH") is not None)
@@ -212,7 +220,8 @@ def route_binding_gate(report: dict[str, Any], required_route: str | None = None
                         f"selected={sorted(policy_roles)!r}, expected={sorted(PREFILL_GENERATED_DENSE_ROLES)!r}")
   verdict = "PREFILL_ROUTE_BINDING_PASS" if not failures else "PREFILL_ROUTE_BINDING_FAIL"
   return {"schema": "prefill-route-binding-gate.v1", "verdict": verdict, "required_route": required_route,
-          "selected_route": selected_route, "effective_routes": sorted(r for r in effective_route_ids if r),
+          "selected_family": selected_family, "selected_route": selected_route,
+          "effective_routes": sorted(r for r in effective_route_ids if r),
           "binding_regime": "generated_pure", "candidate_set_requested":candidate_set_requested,"failures": failures}
 
 

@@ -45,6 +45,7 @@ def main(argv: list[str] | None = None) -> int:
   ap.add_argument("--prefill-start-positions", default=None)
   ap.add_argument("--prefill-whole-lengths", default=None)
   ap.add_argument("--prefill-no-artifact", action="store_true", help="do not write prefill-whole-synced/latest.json")
+  ap.add_argument("--prefill-require-route", default="", help="fail unless this exact prefill route is attributed")
   ap.add_argument("--decode-ckpts", default=None, help="comma-separated decode checkpoint contexts")
   ap.add_argument("--decode-nmeas", type=int, default=None, help="override decode measurements per context")
   ap.add_argument("--decode-max-context", type=int, default=None, help="override decode model max_context")
@@ -60,7 +61,8 @@ def main(argv: list[str] | None = None) -> int:
                                   start_positions=csv_ints(args.prefill_start_positions) if args.prefill_start_positions else None,
                                   whole_lengths=csv_ints(args.prefill_whole_lengths) if args.prefill_whole_lengths else None)
     rc = _run("PREFILL pp@L", prefill_authority_argv(args.model, profile, model_profile_id=model_profile.id, pin_clock=args.pin_clock,
-                                                     artifact=not args.prefill_no_artifact),
+                                                     artifact=not args.prefill_no_artifact,
+                                                     require_route=args.prefill_require_route or None),
               prefill_subprocess_env(model_profile_id=model_profile.id, model_path=args.model), label=f"{profile.mode}:{model_profile.id}") or rc
   if args.decode or both:
     profile = decode_run_profile(ckpts=decode_csv_ints(args.decode_ckpts) if args.decode_ckpts else None,

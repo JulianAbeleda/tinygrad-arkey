@@ -124,7 +124,7 @@ def prefill_run_profile(mode: str = "authority", *, K: int | None = None, warmup
 
 
 def prefill_authority_argv(model_path: str, profile: PrefillRunProfile, *, model_profile_id: str | None = None,
-                           pin_clock: bool = False, artifact: bool = True) -> list[str]:
+                           pin_clock: bool = False, artifact: bool = True, require_route: str | None = None) -> list[str]:
   profile.validate()
   model_profile = resolve_prefill_model_profile(model_profile_id, model_path=model_path)
   argv = ["extra/qk/prefill_whole_synced.py", "--model", model_path, "--mode", profile.mode,
@@ -135,6 +135,7 @@ def prefill_authority_argv(model_path: str, profile: PrefillRunProfile, *, model
           "--max-context", str(profile.max_context)]
   if pin_clock: argv.append("--pin-clock")
   if not artifact: argv.append("--no-artifact")
+  if require_route: argv.extend(("--require-route", require_route))
   return argv
 
 
