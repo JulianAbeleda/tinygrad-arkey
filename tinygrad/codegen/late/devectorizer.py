@@ -194,8 +194,9 @@ def split_load_store(ctx:Renderer|None, ls:UOp, idx:UOp):
   elif ctx is not None and ctx.target.device == "DSP":
     lengths = [128,64,32,16,8,4]
     must_divide = False
-  elif buf.addrspace == AddrSpace.GLOBAL and buf.dtype.base == dtypes.uint32 and ctx is not None and ctx.supports_float4:
-    lengths = [4]
+  elif buf.addrspace == AddrSpace.GLOBAL and buf.dtype.base in (dtypes.uint32, dtypes.uint16) and ctx is not None and ctx.supports_float4:
+    # Native packed storage uses the same generic b128/b64 memory carriers.
+    lengths = [16//buf.dtype.base.itemsize, 8//buf.dtype.base.itemsize]
   elif buf.dtype.base not in (dtypes.float, dtypes.half, *dtypes.fp8s) and not isinstance(buf.dtype, ImageDType):
     pass
   elif buf.addrspace == AddrSpace.REG:
@@ -219,7 +220,9 @@ def split_load_store(ctx:Renderer|None, ls:UOp, idx:UOp):
     # with 1 at the end of the lengths list, this will always hit
     for fold_length in lengths:
       if global_offset+fold_length > sz: continue
-      lidx = buf.index((offset + global_offset).valid(mask), ptr=True)
+      chunk_offset = offset + global_offset
+      if fold_length > 1 and (chunk_offset.vmin < 0 or chunk_offset.vmax + fold_length > buf_size): continue
+      lidx = buf.index(chunk_offset.valid(mask), ptr=True)
       if fold_length > 1: lidx = lidx.cast(buf.ptrdtype.base.vec(fold_length).ptr(size=buf_size, addrspace=buf.addrspace))
       if ls.op is Ops.STORE:
         ret.append(ls.replace(src=(lidx,ls.src[1].gep(tuple(range(global_offset, global_offset+fold_length))))+ls.src[2:]))

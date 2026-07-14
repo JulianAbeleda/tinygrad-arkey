@@ -34,3 +34,33 @@ def test_local_store_width_can_still_require_static_alignment():
   rewritten = split_load_store(_context((8, 4, 2)), store, store.src[0])
   assert rewritten is not None
   assert len([x for x in rewritten.toposort() if x.op is Ops.STORE]) == 8
+
+
+def _global_load(dtype, size, offset, width):
+  buf = UOp.placeholder((size,), dtype, 8, addrspace=AddrSpace.GLOBAL)
+  idx = buf.index(UOp.const(dtypes.weakint, offset), dtype=dtype.vec(width))
+  return idx.load()
+
+
+def test_generic_packed_integer_global_widths_preserve_b128_and_b64():
+  for dtype, widths in ((dtypes.uint32, (4, 2)), (dtypes.uint16, (8, 4))):
+    for width in widths:
+      load = _global_load(dtype, 32, 0, width)
+      assert split_load_store(_context(), load, load.src[0]) is None
+
+
+def test_generic_packed_integer_global_widths_require_static_alignment():
+  for dtype, width in ((dtypes.uint32, 4), (dtypes.uint16, 8)):
+    load = _global_load(dtype, 32, 1, width)
+    rewritten = split_load_store(_context(), load, load.src[0])
+    assert rewritten is not None
+    assert [u.dtype.count for u in rewritten.toposort() if u.op is Ops.LOAD] == [1] * width
+
+
+def test_generic_vector_chunks_never_cross_buffer_bounds():
+  # The source operation has a common validity gate. Even if its full logical
+  # width is larger, the final in-bounds suffix must not become a vector read.
+  load = _global_load(dtypes.uint16, 6, 4, 4)
+  rewritten = split_load_store(_context(), load, load.src[0])
+  assert rewritten is not None
+  assert all(u.dtype.count == 1 for u in rewritten.toposort() if u.op is Ops.LOAD)

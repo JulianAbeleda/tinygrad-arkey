@@ -119,6 +119,39 @@ class PackedWeightTransform:
   def _load(source:LoadSource, index:ScalarIndex) -> UOp:
     return source(index) if callable(source) else source[index]
 
+  def _tile_loads(self, source:LoadSource, indices:tuple[ScalarIndex, ...]) -> Callable[[ScalarIndex], UOp]:
+    """Cache native units, preserving proven adjacent units as b128/b64 LOADs.
+
+    Direct-buffer offsets are unconditional and have exact descriptor bounds.
+    Symbolic root-plus-constant runs widen only with alignment/range proofs;
+    callable or otherwise unprovable sources keep the scalar path.
+    """
+    cache: dict[ScalarIndex, UOp] = {}
+    if not callable(source):
+      limit = self.packed_bytes // self.storage_width
+      groups: dict[UOp|None, dict[int, ScalarIndex]] = {}
+      for key in dict.fromkeys(indices):
+        if isinstance(key, int): root, offset = None, key
+        elif key.op is Ops.CONST and isinstance(key.arg, int): root, offset = None, key.arg
+        else:
+          root, offset = key.pop_const()
+          if not isinstance(offset, int): continue
+        groups.setdefault(root, {})[offset] = key
+      for width in (16 // self.storage_width, 8 // self.storage_width):
+        for root, offsets in groups.items():
+          for start in sorted(offsets):
+            run = tuple(range(start, start+width))
+            if not all(x in offsets and offsets[x] not in cache for x in run): continue
+            start_index = UOp.const(dtypes.weakint, start) if root is None else (root + start).simplify()
+            if start_index.divides(width) is None or start_index.vmin < 0 or start_index.vmax+width > limit: continue
+            carrier = source.index(start_index, dtype=self.storage_dtype.vec(width)).load()
+            for lane, offset in enumerate(run): cache[offsets[offset]] = carrier.gep(lane)
+    def load(index:ScalarIndex) -> UOp:
+      key = index.simplify() if isinstance(index, UOp) else index
+      if key not in cache: cache[key] = self._load(source, key)
+      return cache[key]
+    return load
+
   def dequant(self, source:LoadSource, row:ScalarIndex, k:ScalarIndex) -> UOp:
     """Return a pure scalar UOp expression, rounded to fp16, for ``weight[row, k]``."""
     self._check_coords(row, k)
@@ -138,13 +171,13 @@ class PackedWeightTransform:
     self._check_coords(row, k_base)
     if isinstance(k_base, int) and k_base + width > self.k:
       raise IndexError(f"tile [{k_base}, {k_base+width}) is outside [0, {self.k})")
-    cache: dict[ScalarIndex, UOp] = {}
-    def cached_load(index:ScalarIndex) -> UOp:
-      # Simplification is important for symbolic aligned tile bases: all lanes in
-      # one block/group then use exactly the same key for shared metadata.
-      key = index.simplify() if isinstance(index, UOp) else index
-      if key not in cache: cache[key] = self._load(source, key)
-      return cache[key]
+    requested: list[ScalarIndex] = []
+    def collect(index:ScalarIndex) -> UOp:
+      requested.append(index.simplify() if isinstance(index, UOp) else index)
+      return UOp.const(self.storage_dtype, 0)
+    # Discover the exact native-unit set before constructing lane expressions.
+    for i in range(width): self.dequant(collect, row, k_base+i)
+    cached_load = self._tile_loads(source, tuple(requested))
     lanes = tuple(self.dequant(cached_load, row, k_base+i) for i in range(width))
     return PackedWeightTile(UOp(Ops.STACK, dtypes.half.vec(width), lanes), row, k_base, width)
 

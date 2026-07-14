@@ -63,6 +63,38 @@ def test_tile_consumes_shared_native_units(fmt:str, start:int):
   assert len(offsets) == len(set(offsets)) < len(scalar_offsets)
 
 
+@pytest.mark.parametrize("fmt,widths", [("Q4_K", {2, 4}), ("Q6_K", {4, 8})])
+def test_tile_preserves_adjacent_storage_as_vector_load_carriers(fmt, widths):
+  desc = PackedWeightTransform(fmt, 1, 256)
+  source = UOp.placeholder((desc.packed_bytes//desc.storage_width,), desc.storage_dtype, 76)
+  tile = desc.dequant_tile(source, 0, 0, 16)
+  packed_loads = [u for u in tile.value.toposort() if u.op is Ops.LOAD and source in u.backward_slice_with_self]
+  assert any(u.dtype.count in widths for u in packed_loads)
+  assert all(u.dtype.scalar() == desc.storage_dtype for u in packed_loads)
+  assert any(u.op is Ops.GEP and u.src[0] in packed_loads for u in tile.value.toposort())
+
+
+@pytest.mark.parametrize("fmt", ["Q4_K", "Q6_K"])
+def test_symbolic_tile_offsets_keep_existing_scalar_index_path(fmt):
+  desc = PackedWeightTransform(fmt, 2, 512)
+  source = UOp.placeholder((desc.packed_bytes//desc.storage_width,), desc.storage_dtype, 77)
+  tile = desc.dequant_tile(source, UOp.range(2, 78), UOp.range(497, 79), 16)
+  indexes = [u for u in tile.value.toposort() if u.op is Ops.INDEX and source in u.backward_slice_with_self]
+  assert indexes and all(u.dtype.count == 1 for u in indexes)
+  assert not any(u.op is Ops.LOAD and source in u.backward_slice_with_self for u in tile.value.toposort())
+
+
+@pytest.mark.parametrize("fmt", ["Q4_K", "Q6_K"])
+def test_aligned_symbolic_tile_uses_proven_vector_carriers(fmt):
+  desc = PackedWeightTransform(fmt, 1, 256)
+  source = UOp.placeholder((desc.packed_bytes//desc.storage_width,), desc.storage_dtype, 80)
+  tile = desc.dequant_tile(source, 0, UOp.range(16, 81) * 16, 16)
+  packed_loads = [u for u in tile.value.toposort() if u.op is Ops.LOAD and source in u.backward_slice_with_self]
+  assert packed_loads and any(u.dtype.count > 1 for u in packed_loads)
+  assert all(u.src[0].src[1].divides(u.dtype.count) is not None for u in packed_loads if u.dtype.count > 1)
+  assert all(u.src[0].src[1].vmax + u.dtype.count <= desc.packed_bytes//desc.storage_width for u in packed_loads)
+
+
 @pytest.mark.parametrize("fmt", ["Q4_K", "Q6_K"])
 def test_symbolic_tile_bounds_and_ownership(fmt:str):
   desc = PackedWeightTransform(fmt, 2, 512)
