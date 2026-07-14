@@ -28,6 +28,10 @@ The only promotion evidence retained in-tree is under
 - `whole-prefill-pinned.json`: clean authority at commit `8045efcef`, pinned pp512 `3561.32 tok/s`, all four candidate
   identities observed, no missing or unexpected bindings.
 
+The current raw-versus-practical placement is owned by BoltBeam in
+`BoltBeam/docs/qwen3-8b-current-dual-roofline-20260713.md`. The retired
+`bench/qk-prefill-theoretical-ceiling/latest.json` missing-evidence placeholder is intentionally removed.
+
 ## Closed branches
 
 - Historical `~4413` and recreated `~4099` pipe results were invalid: leaked LDS geometry launched only 1/16 of the
