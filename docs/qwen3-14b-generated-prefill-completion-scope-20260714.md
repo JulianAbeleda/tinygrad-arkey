@@ -148,7 +148,12 @@ Exit gate:
 
 ## Phase 1 — Build the exact 14B workload and candidate inventory
 
-Status: next integration milestone.
+Status: implemented and CPU-admitted from the actual GGUF.
+
+The committed inventory contains 282 tensor facts collapsed into the six measured role/quant rows, partitioned into
+four Q4_K and two Q6_K candidate sets so identical shape warmstart keys cannot alias across formats. Regeneration from
+the current 8.4 GiB GGUF is byte-for-byte JSON-equivalent to the committed artifact, and all six canonical candidates
+pass schema, geometry, capability, packed-layout, and collision admission.
 
 Tasks:
 
