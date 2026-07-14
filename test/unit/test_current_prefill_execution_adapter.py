@@ -7,6 +7,8 @@ from extra.qk.prefill import current_prefill_execution_adapter as adapter
 from extra.qk.prefill.operand_path_execution_worker import AdapterRegistry
 from extra.qk.route_manifest import promoted_prefill_candidate_policy
 from extra.qk.runtime_specs import derive_packed_weight_candidate
+from extra.qk.model_profiles import MODEL_PROFILES, prefill_role_shapes
+from extra.qk.prefill.packed_wmma_correctness_canary import candidate_payload
 from tinygrad.runtime.execution_bridge_contracts import ExecutionRequest, TransportPlan
 from tinygrad.uop.ops import Ops
 
@@ -68,6 +70,24 @@ def test_adapter_reuses_admission_and_rejects_identity_or_typed_transport_drift(
     request.target_context, request.compiler_context)
   with pytest.raises(ValueError, match="does not match admitted"):
     instance.prepare(request)
+
+
+@pytest.mark.parametrize("quant_format", ("Q4_K", "Q6_K"))
+def test_adapter_admission_is_shared_across_8b_and_14b_role_shapes(quant_format):
+  for profile in MODEL_PROFILES:
+    for role_shape in prefill_role_shapes(profile):
+      entry = derive_packed_weight_candidate(candidate_payload(profile.id, role_shape.role), quant_format)
+      admission = adapter.admit_current_prefill(entry.to_json()["payload"], entry.canonical_identity)
+      assert admission.context.packed_weight is not None
+      assert (admission.context.packed_weight.rows, admission.context.packed_weight.k) == (role_shape.N, role_shape.K)
+      assert admission.active_lds_bytes == 40960
+
+
+def test_adapter_admission_contains_no_model_or_shape_selector():
+  import inspect
+  source = inspect.getsource(adapter.admit_current_prefill)
+  assert "qwen" not in source.lower() and "14b" not in source.lower()
+  assert "512" not in source and "4096" not in source
 
 
 def test_registration_is_explicit_and_has_no_route_name_fallback():

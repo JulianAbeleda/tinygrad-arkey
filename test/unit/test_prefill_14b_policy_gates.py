@@ -2,9 +2,10 @@ import json
 
 from tinygrad.llm import route_policy
 
-from extra.qk.model_profiles import qwen3_14b_q4k_m_gfx1100_profile
+from extra.qk.model_profiles import qwen3_14b_q4k_m_gfx1100_profile, qwen3_8b_q4k_m_gfx1100_profile
 import extra.qk.prefill_14b_model_authority_gate as model_gate
 import extra.qk.prefill_14b_q6_decision_gate as q6_gate
+from extra.qk.prefill_model_authority_gate import build as build_profile_authority
 
 PROFILE_14B = qwen3_14b_q4k_m_gfx1100_profile()
 ATTN_QO_14B = PROFILE_14B.role_shape("attn_qo")
@@ -48,6 +49,17 @@ def test_prefill_14b_model_authority_gate_loaded_policy_branch_is_safe():
   assert report["policy_evidence"]["policy_loaded"] is True
   assert report["policy_evidence"]["policy_selected_routes"] == ["prefill_q4k_int8_wmma_tiled_research"]
   assert report["classified_blocker"] is True
+
+
+def test_generic_model_authority_gate_derives_8b_role_shapes_from_profile():
+  route_policy.set_qk_route_policy(None)
+  report = build_profile_authority(qwen3_8b_q4k_m_gfx1100_profile(),
+    target_route_ids=model_gate.DEFAULT_TARGET_ROUTE_IDS)
+  assert report["schema"] == "prefill_model_authority_gate.v1"
+  assert report["profile"] == "qwen3_8b_q4k_m_gfx1100"
+  assert [(x["role"], x["m"], x["n"], x["k"]) for x in report["representative_shapes"]] == [
+    ("attn_kv",512,1024,4096), ("attn_qo",512,4096,4096),
+    ("ffn_down",512,4096,12288), ("ffn_gate_up",512,12288,4096)]
 
 
 def test_qk_route_policy_accepts_prefill_direct_and_tiled_shape_rows(tmp_path):

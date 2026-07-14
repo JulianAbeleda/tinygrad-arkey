@@ -1,0 +1,369 @@
+# Qwen3-14B generated-prefill completion scope
+
+Date: 2026-07-14
+
+## Objective
+
+Reach correctness-qualified Qwen3-14B pp512 parity or better against the frozen llama.cpp comparator using generated
+tinygrad kernels, while leaving behind a model-agnostic system rather than a 14B route fork.
+
+The model is the proving workload. It is not compiler policy. Runtime and compiler decisions must be functions of:
+
+```text
+quant format + operation role + M/N/K + layouts + target capability + memory budget + correctness class
+```
+
+Model profile names may select input facts and benchmark fixtures. They may not select compiler lowering, transport,
+schedule, or promotion state.
+
+## Definition of 100%
+
+Completion requires all of the following:
+
+1. The exact six dominant packed 14B prefill role/quant rows are discovered from the loaded GGUF/trace, not maintained
+   as compiler branches.
+2. Every row binds an identity-qualified generated candidate through the same adapter, admission, compiler, executor,
+   and evidence path used by other models.
+3. Every selected binary passes full-output or an explicitly equivalent exhaustive correctness authority, immutable
+   input checks, output guards, timeout isolation, and a post-dispatch GPU health check.
+4. Evidence proves the executed binary, packed ABI, launch geometry, WMMA family, resource allocation, and candidate
+   identity. A route name or source-level intention is not evidence of execution.
+5. Q4_K reaches at least 60 aggregate logical TFLOP/s and Q6_K reaches at least 69 aggregate logical TFLOP/s, or a
+   newer measured role budget proves an equivalent whole-model result.
+6. Three alternating sequential pp512 sessions produce a candidate median at least 98% of the frozen llama median,
+   with no credible correctness or stability regression. The beyond-parity target is at least 105% of llama; the
+   project target is at least 2,000 tok/s.
+7. The route census proves that every intended packed role fired and that no handwritten/oracle, scalar fallback, or
+   unmeasured route silently supplied the result.
+8. Decode remains correct and does not regress outside the declared tolerance.
+9. The same machinery admits and tests 8B plus at least one non-default shape without adding a model-name condition.
+10. Rollback is one explicit candidate-policy change and retains the last correctness-qualified default.
+
+Anything less is a diagnostic or candidate result, not a shipped 14B completion.
+
+## Current position
+
+### Completed substrate
+
+- Q4_K and Q6_K share one `PackedWeightTransform` and `dequant_tile` interface.
+- Packed slot-2 weights can be decoded inside a generated fp16 LDS-to-WMMA program.
+- The generated packed primitive has passed full-output real-GPU correctness at `(512,4096,4096)` for both formats.
+- Guarded spawn isolation, timeout handling, immutable inputs, output guards, health checks, compile identity, final ISA,
+  resource evidence, and packed ABI gates are present.
+- Candidate construction, capability selection, admission, and canonical identity are centralized in `runtime_specs`.
+- The current prefill adapter now consumes any exact capability-supported workload; it contains no model or exact-shape
+  selector.
+- Canary artifact generation is shape-driven. A profile/role request can reuse an existing exact candidate or rebind a
+  same-role schedule template, after which ordinary admission must prove legality.
+- The 8B and 14B profile role matrices, for Q4_K and Q6_K, pass the same CPU admission boundary.
+- 14B-named policy entry points are compatibility wrappers over generic profile/quant gates.
+
+### Not completed
+
+- Real-GPU compile/correctness evidence exists for the packed primitive only at the established 8B `attn_qo` shape.
+- The current fused packed primitive reaches about 19-20 TFLOP/s at that shape, versus roughly 50-70 TFLOP/s practical
+  role targets. Correctness is complete; performance lowering is not.
+- The final shipping ISA still expands packed values through scalar loads and scalar unpack/conversion arithmetic and
+  lands in the 248 allocated-VGPR bucket.
+- No identity-qualified packed candidate set exists for all six observed 14B role/quant rows.
+- The profile's family quant label does not encode the exact mixed Q4_K/Q6_K tensor inventory. Exact quant must come
+  from loaded tensor facts.
+- No new packed primitive has completed all 14B role correctness, timing, mixed-route integration, or pp512 promotion.
+- The current 14B default remains the safe direct-packed baseline, not the new primitive.
+
+Weighted status is approximately 35% to the full definition above. The safety/correctness substrate is near complete;
+most remaining weight is primitive efficiency, role coverage, Q6 strategy, and whole-model promotion.
+
+## Frozen measurement authority
+
+The current comparator pair is historical but reproducible and must remain immutable until a controlled refresh:
+
+| implementation | commit | clean pp512 wall | prefill |
+|---|---|---:|---:|
+| llama.cpp | `ac4cddeb0` | 271.230 ms | 1,889.41 tok/s |
+| Arkey generated scalar baseline | `05b67146a` | 1,397.840 ms | 366.28 tok/s |
+
+The six measured packed rows account for 96.4% of the Arkey profile and about 98.5% of the absolute gap:
+
+| role | quant | M | N | K | Arkey rate | llama practical rate |
+|---|---|---:|---:|---:|---:|---:|
+| `ffn_gate_up` | Q4_K | 512 | 17408 | 5120 | 12.37 | 59.90 TFLOP/s |
+| `attn_qo` | Q4_K | 512 | 5120 | 5120 | 11.41 | 50.05 TFLOP/s |
+| `ffn_down` | Q4_K | 512 | 5120 | 17408 | 11.76 | 51.96 TFLOP/s |
+| `attn_kv` | Q4_K | 512 | 1024 | 5120 | 7.89 | 32.38 TFLOP/s |
+| `ffn_down` | Q6_K | 512 | 5120 | 17408 | 5.13 | 70.21 TFLOP/s |
+| `attn_kv` | Q6_K | 512 | 1024 | 5120 | 5.93 | 53.75 TFLOP/s |
+
+These are optimization budgets, not hardcoded route rules. Refresh them only with the same model, workload, clock
+policy, correctness policy, and sequential-run protocol, recording both old and new artifacts.
+
+## Target architecture
+
+```text
+GGUF tensor facts / model trace
+  -> typed workload inventory
+  -> generated candidate registry
+  -> capability + memory admission
+  -> tinygrad schedule/compiler
+  -> compile evidence
+  -> isolated correctness execution
+  -> isolated role timing
+  -> BoltBeam ranking/policy artifact
+  -> tinygrad runtime binding
+  -> route census + whole-model correctness/timing
+  -> promotion or rollback
+```
+
+Authority boundaries:
+
+- Tensor/model facts own quant, role, shape, and layout.
+- Candidate descriptors own mathematical/dataflow strategy and schedule parameters.
+- Capability admission owns target legality, LDS, vector alignment, divisibility, and memory limits.
+- tinygrad owns lowering, compilation, and execution.
+- BoltBeam owns analysis, search orchestration, comparison, and policy output; it does not fabricate runtime evidence.
+- The route policy owns selection. The manifest reports provenance/lifecycle and must not become a second selector.
+- The whole-model harness requests a policy and reports the exact bound binaries; it does not choose kernels.
+
+## Phase 0 — Generalize the integration boundary
+
+Status: implemented and integration-verified.
+
+Deliverables:
+
+- Typed `FullKernelWorkload` parser.
+- One capability resolver for candidate sets, adapters, and compatibility binding.
+- Workload rebinding that changes only workload/applicability and forces a new canonical identity.
+- Profile/shape-driven prefill adapter and correctness canary.
+- Generic profile policy gate and generic quant-route decision gate.
+- One structured harness record per model profile.
+- Cross-model admission and no-model-selector tests.
+
+Exit gate:
+
+- Focused and broad CPU suites pass (202 integration-focused tests in the implementation change).
+- Existing 8B Q4_K packed candidate binary remains
+  `5821ce7e86dc14f88f3f6063134fece6af9261a5327aa2e4729c8d4087336449` with 248 allocated VGPRs, 40,960-byte
+  LDS, and 32 WMMA instructions.
+- Adapter source contains no model name or exact model shape decision.
+
+## Phase 1 — Build the exact 14B workload and candidate inventory
+
+Status: next integration milestone.
+
+Tasks:
+
+1. Read the actual GGUF tensor inventory and map each packed linear to canonical roles. Profile-level `Q4_K_M` is not
+   sufficient because the model contains mixed Q4_K and Q6_K tensors.
+2. Emit a machine-readable inventory row containing tensor identity, quant format, role, M/N/K, layout, call count,
+   source bytes, logical FLOP, and memory lifetime.
+3. Reconcile inventory with the six measured trace rows. Unknown or duplicate mappings block promotion.
+4. Generate exact candidate payloads by rebinding admitted schedule templates to inventory facts and deriving packed
+   operand metadata centrally.
+5. Store the resulting candidate set as immutable JSON with canonical identities. Do not add six Python branches.
+6. Add candidate-set tests for duplicate exact keys, warmstart-key collisions, tensor/shape mismatches, and unsupported
+   formats.
+
+Exit gate:
+
+- All six rows have exact tensor evidence and canonical candidate identities.
+- Candidate payloads pass CPU schema/capability/admission.
+- No model-specific compiler code was added.
+
+## Phase 2 — Fix packed producer efficiency at the established canary shape
+
+Status: critical compiler path.
+
+Current diagnosis:
+
+- WMMA geometry and the correctness contract work.
+- Packed expansion remains scalar and ALU-heavy.
+- Q4 uses roughly 841 final instructions and Q6 roughly 947 versus about 574 for dense.
+- Q4/Q6 allocate 248 VGPRs and issue more scalar global loads than the dense program.
+- The tile API did not alter final ISA because UOp CSE already commoned equivalent scalar loads.
+
+Work packages:
+
+1. Add a native packed-block/group carrier so the compiler sees physical packed units rather than unrelated scalar
+   logical values.
+2. Fold aligned adjacent same-base packed reads into b64/b128 loads in generic lowering.
+3. Unpack lanes from vector carriers using generic GEP/bitcast/permute operations while preserving bounds and format
+   semantics.
+4. Hoist Q4 `d/dmin/scale/min` and Q6 `d/scale` once per native group.
+5. Use packed half2 conversion/arithmetic where it reduces instruction count without changing required fp16 rounding.
+6. Decode near the LDS store, shorten fp32 temporary lifetimes, and measure whether allocation leaves the 248-VGPR
+   bucket.
+7. Common fragment loads by semantic `(operand,row,k_substep)` identity where final ISA proves duplication.
+8. Only after lowering improves, search tile M/N/K, wave decomposition, load width, buffering, and stage depth through
+   typed candidate data.
+
+Per-change evidence:
+
+- Full Q4_K and Q6_K canary correctness.
+- Exact binary/resource/ISA diff.
+- Packed global-load, shift/mask, conversion, WMMA, LDS, scratch, spill, VGPR, and SGPR counts.
+- At least three isolated timing sessions with medians and spread.
+
+Decision rule:
+
+- Continue the fused fp16 packed primitive if controlled changes move it above 40 TFLOP/s and toward 50-60.
+- If two well-attributed lowering iterations leave it below about 40 TFLOP/s, retain it as a fallback/candidate and
+  prioritize Q4 integer-WMMA and Q6 dequant-once. Do not keep tuning an uncompetitive universal route indefinitely.
+
+Exit gate:
+
+- One correctness-qualified generated strategy reaches practical candidate territory without spills or hidden global
+  dequant materialization, or a precise refutation identifies which alternative strategy must own each quant family.
+
+## Phase 3 — Q4_K role completion
+
+Candidate families:
+
+1. Fused packed-to-fp16 LDS/WMMA primitive from Phase 2.
+2. Existing generated Q4_K/Q8_1 integer-WMMA substrate, including activation-pack cost.
+3. Scalar direct-packed only as rollback/comparator.
+
+Tasks for all four Q4 roles:
+
+- Compile exact final programs and reject scalar fallback or missing WMMA.
+- Prove no full global RAW/dequant tensor is materialized.
+- Prove activation Q8_1 lifecycle, reuse, and packing cost for integer-WMMA candidates.
+- Run full-output correctness where memory permits; otherwise use a bounded proof only temporarily and require full
+  role correctness before model integration.
+- Benchmark whole primitive cost, not a kernel that excludes required Q8 packing/correction work.
+- Search schedules per workload descriptor without role-local environment branches.
+
+Aggregate gate: at least 60 TFLOP/s; target at least 66 TFLOP/s. Role wall budgets are approximately gate/up 122-132
+ms, q/o 43 ms, down 35 ms, and k/v 10 ms per pp512 step.
+
+## Phase 4 — Q6_K role completion
+
+Evaluate in order:
+
+1. Dequant once to fp16 followed by ordinary generated WMMA. This is the shortest path to the measured llama design.
+2. Per-role or ephemeral dequant-once if a full resident overlay fails memory admission.
+3. Fused packed-to-fp16 LDS/WMMA from Phase 2 when materialization/lifetime is not admissible.
+4. Scalar direct-packed only as rollback.
+
+Memory authority must account for model weights, KV/cache/runtime buffers, compiled graphs, output/reference buffers,
+and allocator headroom. A theoretical byte count alone is not admission.
+
+Gates:
+
+- `ffn_down` dequant plus GEMM no more than about 26 ms aggregate.
+- `attn_kv` dequant plus GEMM no more than about 2 ms aggregate.
+- Q6 aggregate at least 69 TFLOP/s; target at least 70 TFLOP/s.
+- No stale captured overlay, OOM, unbounded materialization, spill, or excluded dequant cost.
+
+## Phase 5 — Central candidate search and policy
+
+Tasks:
+
+- Materialize each eligible strategy as a typed `GeneratedCandidate` with quant, role, shape, target, required
+  features, memory requirements, lifecycle, and authority gates.
+- Keep lifecycle states explicit: diagnostic, candidate, shipped, refuted, deferred.
+- Make registry plus route policy the sole selection path. Remove selection decisions from harness environment defaults.
+- Have BoltBeam consume compile/correctness/timing artifacts and emit an authorized policy keyed by exact workload and
+  target.
+- Cache measurements by source identity, binary identity, driver/runtime identity, device, clock policy, and workload.
+- Require an explicit comparator and rollback for every promoted row.
+
+Exit gate:
+
+- A policy file selects one exact eligible candidate for every six-row workload entry.
+- Unknown workload, identity drift, or missing evidence fails closed to the safe rollback.
+- Route manifest and harness cannot independently override the policy.
+
+## Phase 6 — Mixed-route 14B integration
+
+Sequence:
+
+1. Load model and inventory without allocating optional overlays.
+2. Admit all selected candidates against one measured memory budget.
+3. Compile all candidates in isolation and record binary/resource evidence.
+4. Run role correctness before whole-model timing.
+5. Run one smoke prefill with route census and output/token checks.
+6. Run the synchronized authority workload only after the smoke gate passes.
+7. Confirm decode route identities and run decode regression separately.
+
+Required census fields per role:
+
+```text
+tensor -> quant -> role -> M/N/K -> candidate id -> canonical identity
+-> source hash -> binary hash -> launch count -> median kernel time -> correctness artifact
+```
+
+Exit gate: all intended rows fire, no fallback fires, outputs are correct, GPU remains healthy, and the measured wall is
+consistent with the sum of role and residual budgets.
+
+## Phase 7 — Parity and promotion
+
+Protocol:
+
+- Run llama and Arkey sequentially because concurrent residency is not admissible.
+- Alternate order across at least three sessions.
+- Use the same pp512 workload, model bytes, clock policy, warmup, sample count, and host synchronization.
+- Report median, spread, and all individual samples.
+- Re-profile the candidate after timing; do not project from stale role shares.
+
+Decisions:
+
+- Below 98% of llama: candidate remains unshipped; attribute residual by role before changing code.
+- At least 98%: parity-qualified, subject to correctness and decode gates.
+- At least 105%: beyond-parity-qualified.
+- At least 2,000 tok/s: project target reached.
+
+Optimize norms/elementwise residuals only if Q4 and Q6 gates pass but whole-model parity does not. At projected Q4=60
+and Q6=70 TFLOP/s, the existing residual should already permit parity.
+
+## Phase 8 — Generalization closeout
+
+- Re-run 8B prefill and decode with the same registry/admission/policy path.
+- Add a supported profile from facts without editing compiler or adapter code.
+- Exercise tail/non-divisible shapes: either generate a legal tail strategy or reject them through typed admission.
+- Verify Q4_K/Q6_K format code contains no model names.
+- Verify runtime selection contains no model-size or exact-shape branch outside immutable candidate data/test fixtures.
+- Delete superseded experimental scripts and flags only after their negative evidence is preserved in the lessons ledger.
+
+Exit gate: adding a previously unseen supported model requires data/artifacts and search, not a tinygrad source edit.
+
+## Failure classification and stop rules
+
+Every failed run must classify one owning layer:
+
+- inventory/layout
+- candidate schema/admission
+- packed math/rounding
+- compiler vectorization/instruction selection
+- register scheduling/resources
+- synchronization/dispatch
+- artifact/harness
+- memory lifecycle
+- route binding
+- whole-model residual
+
+Stop a candidate, not the project, when:
+
+- exact correctness fails after the smallest violated invariant is isolated;
+- required wide loads cannot preserve alignment/bounds;
+- controlled lowering variants cannot leave an occupancy/resource cliff;
+- required activation packing erases the isolated kernel win;
+- memory admission rejects dequant-once and measured fused lowering is superior;
+- role timing cannot translate to synchronized whole-model wall;
+- correctness depends on a handwritten/oracle wrapper.
+
+Unavailable gfx11 performance counters are not a completion blocker. They limit dynamic cache attribution; they do not
+invalidate correctness, final ISA/resource evidence, controlled A/B timing, or whole-model measurement.
+
+## Immediate execution order
+
+1. Finish Phase 0 verification and freeze this generalized boundary.
+2. Emit the exact mixed-quant 14B six-row inventory and candidate set.
+3. Implement generic packed wide-load folding and packed conversion/lifetime reduction.
+4. Re-run Q4_K/Q6_K canaries and make the first strategy decision at the 40 TFLOP/s checkpoint.
+5. Complete Q4 role candidates and aggregate gate.
+6. Complete Q6 dequant-once/fused comparison and aggregate gate.
+7. Emit one authorized six-row policy.
+8. Run mixed-route correctness, census, pp512 authority, decode regression, and promotion decision.
+
+This order avoids building six integrations around a correct but currently uncompetitive 20 TFLOP/s primitive, while
+ensuring every optimization contributes to a reusable model-agnostic system.

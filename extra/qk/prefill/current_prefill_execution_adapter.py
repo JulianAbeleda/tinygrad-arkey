@@ -20,14 +20,13 @@ from extra.qk.prefill.isolated_guarded_executor import (ExecutableBundle, build_
   make_tinygrad_bundle_builder)
 from extra.qk.prefill.operand_path_execution_worker import PreparedExecution
 from extra.qk.mmq_epoch_manifest_export import DEFAULT_MAX_ROWS, build_amd_isa_proof_manifest_bundle
-from extra.qk.runtime_specs import (GFX1100_TWO_BUFFER_STAGE1_CAPABILITY, admit_full_kernel_candidate,
-                                    capability_transport)
+from extra.qk.runtime_specs import (admit_full_kernel_candidate, capability_transport, full_kernel_candidate_capability,
+                                    full_kernel_workload)
 from tinygrad.runtime.execution_bridge_contracts import ExecutionRequest
 
 ADAPTER_ID = "tinygrad.amd.gfx1100.current_prefill.v1"
 # ProgramInfo.globals=(0,1,2), outs=(0,), ins=(1,2): output, A, B.
 _ARGUMENT_ORDER = ("output", "a", "b")
-_TARGET = {"backend": "AMD", "arch": "gfx1100", "wave_size": 32}
 _COMPILE_DEVICE = "AMD"
 _RUNTIME_DEVICE = "AMD"
 
@@ -37,28 +36,17 @@ def _runtime_alive() -> bool:
   return True
 
 
-def _workload(payload: Mapping[str, Any]) -> tuple[str, str, tuple[int, int, int], dict[str, Any]]:
-  row = payload.get("workload")
-  if not isinstance(row, Mapping): raise ValueError("candidate payload has no workload")
-  shape, target = row.get("shape"), row.get("target")
-  if not isinstance(shape, Mapping) or not isinstance(target, Mapping): raise ValueError("candidate workload is malformed")
-  return str(row.get("profile", "")), str(row.get("role", "")), tuple(int(shape[x]) for x in ("m", "n", "k")), dict(target)
-
-
 def admit_current_prefill(payload: dict[str, Any], canonical_identity: str):
-  """Reuse canonical admission and additionally restrict this adapter's production surface."""
-  profile, role, shape, target = _workload(payload)
-  if role != "attn_qo" or shape != (512, 4096, 4096):
-    raise ValueError("current prefill adapter supports only attn_qo 512x4096x4096")
-  if target != _TARGET: raise ValueError("current prefill adapter requires AMD:gfx1100:wave32")
-  return admit_full_kernel_candidate(payload, canonical_identity, profile=profile, role=role, shape=shape, target=target,
-                                     capability=GFX1100_TWO_BUFFER_STAGE1_CAPABILITY)
+  """Admit any exact prefill workload supported by its typed hardware capability."""
+  workload = full_kernel_workload(payload)
+  return admit_full_kernel_candidate(payload, canonical_identity, profile=workload.profile, role=workload.role,
+    shape=workload.shape, target=workload.target, capability=full_kernel_candidate_capability(payload))
 
 
 def compile_current_prefill_program(payload: dict[str, Any], canonical_identity: str, *, device: str):
   """Compile the admitted current Tensor GEMM; never allocate runtime buffers or dispatch."""
   admission = admit_current_prefill(payload, canonical_identity)
-  _, _, (m, n, k), _ = _workload(admission.normalized_payload)
+  m, n, k = full_kernel_workload(admission.normalized_payload).shape
   from tinygrad import Tensor, dtypes
   from tinygrad.codegen import to_program_cache
   from tinygrad.codegen.opt import Opt, OptOps
@@ -101,13 +89,14 @@ def prepare_current_prefill_compile(payload: dict[str, Any], canonical_identity:
   except Exception as exc:
     raise ValueError(f"required final_isa_manifest/resource_summary unavailable: final compile failed ({type(exc).__name__}: {exc})") from exc
   schedule = admission.normalized_payload["schedule"]
+  workload = full_kernel_workload(admission.normalized_payload)
   transform = admission.context.packed_weight
   evidence = compile_transport_evidence(program, transport=capability_transport(admission.capability),
     canonical_identity=canonical_identity,
     schedule={"threads": schedule["threads"], "lds_bytes": admission.active_lds_bytes,
               "tile": dict(schedule["tile"]), "pipeline": dict(schedule["pipeline"])},
     surface={"source_kind": "tinygrad_scheduler", "consumer": "packed_dequant_wmma" if transform else "dense_gemm",
-             "role": "attn_qo"},
+             "role": workload.role},
     runtime_binding=dict(admission.normalized_payload["workload"]))
   if evidence.get("passed") is not True: raise ValueError("current prefill compile evidence failed")
   source = next((u.arg for u in program.src if u.op.name == "SOURCE" and isinstance(u.arg, str)), None)
@@ -284,7 +273,8 @@ class CurrentPrefillAdapter:
     declared = capability_transport(admission.capability)
     if request.transport_plan.transport != declared:
       raise ValueError(f"typed transport {request.transport_plan.transport!r} does not match admitted {declared!r}")
-    inputs, reference = _arrays(str(context.get("input_npz", "")), _workload(payload)[2], admission.context.packed_weight)
+    inputs, reference = _arrays(str(context.get("input_npz", "")), full_kernel_workload(payload).shape,
+                                admission.context.packed_weight)
     _, evidence = self.compile_prepare(payload, identity, device=_COMPILE_DEVICE)
     evidence = dict(evidence)
     identity_detail = _input_artifact_identities(str(context.get("input_npz", "")), reference)

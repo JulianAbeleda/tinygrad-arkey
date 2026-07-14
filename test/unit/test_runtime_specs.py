@@ -11,7 +11,8 @@ from extra.qk.runtime_specs import (
   ANCHOR_SINGLE_BUFFER_CANDIDATE_HASH, FULL_KERNEL_CANDIDATE_SCHEMA, PACKED_SCALAR_DECODER_VERSION, ActivationQuantSpec, GeneratedCandidate,
   CandidateAdmissionFacts, QuantizedTensorSpec, RuntimeOpSpec, FullKernelCandidateSet, FullKernelCandidateSetEntry,
   GFX1100_TWO_BUFFER_STAGE1_CAPABILITY, admit_full_kernel_candidate, admit_full_kernel_candidate_set, derive_packed_weight_candidate,
-  bind_full_kernel_candidate, full_kernel_candidate_set_from_legacy,
+  bind_full_kernel_candidate, full_kernel_candidate_set_from_legacy, full_kernel_candidate_capability,
+  full_kernel_workload, rebind_full_kernel_workload,
 )
 
 
@@ -250,6 +251,20 @@ def test_derive_packed_weight_candidate_is_canonical_and_geometry_owned(quant_fo
   assert (b["quant_format"], b["storage_dtype"], b["rows"], b["k"], b["block_bytes"]) == \
          (quant_format, storage_dtype, 12288, 4096, block_bytes)
   assert FullKernelCandidateSetEntry(entry.canonical_identity, entry.to_json()["payload"]) == entry
+
+
+def test_schedule_template_rebinds_to_typed_workload_without_model_logic():
+  payload = _single_buffer_anchor_candidate().full_kernel_candidate
+  assert payload is not None
+  rebound = rebind_full_kernel_workload(payload, profile="qwen3_14b_q4k_m_gfx1100", role="ffn_gate_up",
+                                        shape=(512,17408,5120))
+  workload = full_kernel_workload(rebound.payload)
+  assert (workload.profile, workload.role, workload.shape) == \
+         ("qwen3_14b_q4k_m_gfx1100", "ffn_gate_up", (512,17408,5120))
+  assert rebound.payload["applicability"] == {"exact_shape":True, "profiles":(workload.profile,),
+    "roles":(workload.role,), "targets":(workload.target_id,)}
+  assert "operand_sources" not in rebound.payload
+  assert full_kernel_candidate_capability(rebound.payload).capability_id.endswith("single_buffer.v1")
 
 
 @pytest.mark.parametrize("mutation,error", (

@@ -67,23 +67,16 @@ class PrefillModelHarnessProfile:
             **self.env_overrides}
 
 
-_MODEL_DEFAULT_PATHS = {
-  "qwen3_8b_q4k_m_gfx1100": DEFAULT_MODEL,
-  "qwen3_14b_q4k_m_gfx1100": "/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf",
-}
-_MODEL_ENV_OVERRIDES = {
-  "qwen3_14b_q4k_m_gfx1100": {"PREFILL_ROUTE": "direct_packed", "PREFILL_PACKED_STREAM": "1",
-                                  "ALLOW_DEVICE_USAGE": "1"},
-}
-_MODEL_NOTES = {
-  "qwen3_8b_q4k_m_gfx1100": "8B fp16/PREFILL_V2 authority path",
-  "qwen3_14b_q4k_m_gfx1100": "14B memory-safe direct-packed authority baseline",
-}
-MODEL_HARNESS_PROFILES: dict[str, PrefillModelHarnessProfile] = {
-  profile.id: PrefillModelHarnessProfile(profile, _MODEL_DEFAULT_PATHS[profile.id],
-    _MODEL_ENV_OVERRIDES.get(profile.id, {}), _MODEL_NOTES[profile.id])
-  for profile in MODEL_PROFILES
-}
+MODEL_HARNESS_PROFILE_ROWS = (
+  PrefillModelHarnessProfile(profile_by_id("qwen3_8b_q4k_m_gfx1100"), DEFAULT_MODEL, {},
+                             "8B fp16/PREFILL_V2 authority path"),
+  PrefillModelHarnessProfile(profile_by_id("qwen3_14b_q4k_m_gfx1100"), "/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf",
+    {"PREFILL_ROUTE":"direct_packed", "PREFILL_PACKED_STREAM":"1", "ALLOW_DEVICE_USAGE":"1"},
+    "14B memory-safe direct-packed authority baseline"),
+)
+if {row.id for row in MODEL_HARNESS_PROFILE_ROWS} != {profile.id for profile in MODEL_PROFILES}:
+  raise ValueError("every model profile must have exactly one prefill harness record")
+MODEL_HARNESS_PROFILES: dict[str, PrefillModelHarnessProfile] = {row.id:row for row in MODEL_HARNESS_PROFILE_ROWS}
 MODEL_HARNESS_ALIASES = tuple(profile.size_label.lower() for profile in MODEL_PROFILES)
 
 

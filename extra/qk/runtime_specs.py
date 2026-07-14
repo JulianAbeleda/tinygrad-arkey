@@ -60,6 +60,13 @@ def capability_transport(capability: "FullKernelCapability") -> str:
   """
   return "direct_l2" if capability.capability_id == GFX1100_REGISTER_RESIDENT_CAPABILITY.capability_id else "lds"
 
+def full_kernel_candidate_capability(payload:dict[str,Any]) -> "FullKernelCapability":
+  """Resolve the frozen hardware capability from typed schedule facts in one place."""
+  if candidate_storage_kind(payload) == "global_register_resident": return GFX1100_REGISTER_RESIDENT_CAPABILITY
+  pipeline = payload.get("schedule", {}).get("pipeline", {})
+  return GFX1100_TWO_BUFFER_STAGE1_CAPABILITY if \
+    (pipeline.get("buffer_count"), pipeline.get("stage_count")) == (2, 1) else GFX1100_SINGLE_BUFFER_CAPABILITY
+
 @dataclass(frozen=True)
 class FullKernelAdmission:
   canonical_identity: str
@@ -73,6 +80,41 @@ class FullKernelAdmission:
 
 FullKernelExactKey = tuple[str, str, int, int, int, str, str, int]
 FullKernelWarmstartKey = tuple[frozenset[int], int]
+
+@dataclass(frozen=True)
+class FullKernelWorkload:
+  """Typed model-independent workload identity carried by a full-kernel candidate."""
+  profile: str
+  role: str
+  shape: tuple[int, int, int]
+  target: dict[str, Any]
+
+  @property
+  def target_id(self) -> str:
+    return f"{self.target['backend']}:{self.target['arch']}:wave{self.target['wave_size']}"
+
+  @property
+  def exact_key(self) -> FullKernelExactKey:
+    return (self.profile, self.role, *self.shape, self.target["backend"], self.target["arch"], self.target["wave_size"])
+
+
+def full_kernel_workload(payload:dict[str,Any]) -> FullKernelWorkload:
+  """Parse the canonical workload identity without making model or route decisions."""
+  try:
+    workload, shape, target = payload["workload"], payload["workload"]["shape"], payload["workload"]["target"]
+    profile, role = workload["profile"], workload["role"]
+    mnk = tuple(shape[x] for x in ("m", "n", "k"))
+    target_row = {x:target[x] for x in ("backend", "arch", "wave_size")}
+  except (KeyError, TypeError) as exc:
+    raise FullKernelAdmissionError("workload_schema", "candidate workload is malformed") from exc
+  if not isinstance(profile, str) or not profile or not isinstance(role, str) or not role:
+    raise FullKernelAdmissionError("workload_schema", "candidate profile and role must be non-empty strings")
+  if any(not isinstance(x, int) or isinstance(x, bool) or x <= 0 for x in mnk):
+    raise FullKernelAdmissionError("workload_schema", "candidate M/N/K must be positive integers")
+  if any(not isinstance(target_row[x], str) or not target_row[x] for x in ("backend", "arch")) or \
+     not isinstance(target_row["wave_size"], int) or isinstance(target_row["wave_size"], bool) or target_row["wave_size"] <= 0:
+    raise FullKernelAdmissionError("workload_schema", "candidate target is malformed")
+  return FullKernelWorkload(profile, role, mnk, target_row)
 
 class _FrozenDict(dict):
   def _immutable(self,*_args,**_kwargs): raise TypeError("candidate-set payload is immutable")
@@ -88,9 +130,7 @@ def _canonical_full_kernel_identity(payload:dict[str,Any]) -> str:
   return hashlib.sha256(encoded).hexdigest()
 
 def _full_kernel_exact_key(payload:dict[str,Any]) -> FullKernelExactKey:
-  workload=payload["workload"]; shape=workload["shape"]; target=workload["target"]
-  return (workload["profile"],workload["role"],shape["m"],shape["n"],shape["k"],
-          target["backend"],target["arch"],target["wave_size"])
+  return full_kernel_workload(payload).exact_key
 
 def _full_kernel_warmstart_key(payload:dict[str,Any]) -> FullKernelWarmstartKey:
   shape=payload["workload"]["shape"]
@@ -137,6 +177,30 @@ def derive_packed_weight_candidate(payload:dict[str,Any], quant_format:str) -> F
   identity = _canonical_full_kernel_identity(normalized)
   return FullKernelCandidateSetEntry(identity, normalized)
 
+
+def rebind_full_kernel_workload(payload:dict[str,Any], *, profile:str, role:str, shape:tuple[int,int,int],
+                                target:dict[str,Any]|None=None) -> FullKernelCandidateSetEntry:
+  """Rebind a schedule template to an exact workload and return its new canonical identity.
+
+  This changes workload/applicability data only. Admission remains responsible for proving that the retained schedule is
+  legal for the new shape and target.
+  """
+  normalized = json.loads(json.dumps(payload, allow_nan=False))
+  if len(shape) != 3 or any(not isinstance(x, int) or isinstance(x, bool) or x <= 0 for x in shape):
+    raise ValueError("rebound workload shape must contain positive integer M/N/K")
+  if not isinstance(profile, str) or not profile or not isinstance(role, str) or not role:
+    raise ValueError("rebound workload profile and role must be non-empty strings")
+  workload = normalized.get("workload")
+  if not isinstance(workload, dict): raise ValueError("schedule template has no workload")
+  target_row = dict(workload.get("target", {}) if target is None else target)
+  if set(target_row) != {"backend", "arch", "wave_size"}: raise ValueError("rebound workload target is malformed")
+  workload.update(profile=profile, role=role, shape=dict(zip(("m", "n", "k"), shape)), target=target_row)
+  normalized["applicability"] = {"exact_shape":True, "profiles":[profile], "roles":[role],
+    "targets":[f"{target_row['backend']}:{target_row['arch']}:wave{target_row['wave_size']}"]}
+  normalized.pop("operand_sources", None)
+  _validate_full_kernel_payload(normalized)
+  return FullKernelCandidateSetEntry(_canonical_full_kernel_identity(normalized), normalized)
+
 @dataclass(frozen=True)
 class FullKernelCandidateSet:
   entries: tuple[FullKernelCandidateSetEntry,...]
@@ -181,12 +245,9 @@ def admit_full_kernel_candidate_set(candidate_set:FullKernelCandidateSet) -> Adm
   admissions=[]
   for entry in candidate_set.entries:
     profile,role,m,n,k,backend,arch,wave_size=entry.exact_key
-    pipeline=entry.payload["schedule"]["pipeline"]
-    capability=(GFX1100_REGISTER_RESIDENT_CAPABILITY if candidate_storage_kind(entry.payload) == "global_register_resident" else
-                GFX1100_TWO_BUFFER_STAGE1_CAPABILITY if (pipeline["buffer_count"],pipeline["stage_count"]) == (2,1)
-                else GFX1100_SINGLE_BUFFER_CAPABILITY)
     admissions.append(admit_full_kernel_candidate(entry.payload,entry.canonical_identity,profile=profile,role=role,
-      shape=(m,n,k),target={"backend":backend,"arch":arch,"wave_size":wave_size},capability=capability))
+      shape=(m,n,k),target={"backend":backend,"arch":arch,"wave_size":wave_size},
+      capability=full_kernel_candidate_capability(entry.payload)))
   return AdmittedFullKernelCandidateSet(candidate_set,tuple(admissions))
 
 def full_kernel_candidate_set_from_legacy(payload:dict[str,Any],canonical_identity:str) -> FullKernelCandidateSet:
@@ -289,12 +350,8 @@ def bind_full_kernel_candidate(payload:dict[str, Any], canonical_identity:str, *
                                stage_count:int|None=None, lds_windows:dict[str, list[int]]|None=None,
                                lds_strides:dict[str, int]|None=None, lds_padding:int|None=None, lds_bytes:int|None=None):
   """Compatibility wrapper. Schedule authority comes exclusively from the canonical payload."""
-  pipeline = payload.get("schedule", {}).get("pipeline", {})
-  capability = (GFX1100_REGISTER_RESIDENT_CAPABILITY if candidate_storage_kind(payload) == "global_register_resident" else
-                GFX1100_TWO_BUFFER_STAGE1_CAPABILITY if
-                (pipeline.get("buffer_count"), pipeline.get("stage_count")) == (2, 1) else GFX1100_SINGLE_BUFFER_CAPABILITY)
   return admit_full_kernel_candidate(payload,canonical_identity,profile=profile,role=role,shape=shape,target=target,
-                                     capability=capability).context
+                                     capability=full_kernel_candidate_capability(payload)).context
 
 
 def _check(name:str, value:str, allowed:tuple[str, ...]) -> str:
