@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import pathlib
+import re
 from typing import Any
 
 
@@ -96,6 +98,7 @@ MODEL_PROFILES: tuple[ModelProfile, ...] = (
 )
 
 _PROFILE_ALIASES = {
+  **{profile.size_label.lower(): profile.id for profile in MODEL_PROFILES},
   "qwen3_8b_q4_k_m_gfx1100": "qwen3_8b_q4k_m_gfx1100",
   "qwen3_14b_q4_k_m_gfx1100": "qwen3_14b_q4k_m_gfx1100",
 }
@@ -108,7 +111,23 @@ _PROFILES_BY_CONFIG = {
 
 
 def profile_by_id(profile_id: str) -> ModelProfile:
-  return _PROFILES_BY_ID[_PROFILE_ALIASES.get(profile_id, profile_id)]
+  key = profile_id.strip().lower()
+  return _PROFILES_BY_ID[_PROFILE_ALIASES.get(key, key)]
+
+
+def profile_ids() -> tuple[str, ...]:
+  return tuple(profile.id for profile in MODEL_PROFILES)
+
+
+def profile_from_model_path(model_path: str, *, default_profile_id: str | None = None) -> ModelProfile:
+  """Resolve a known profile from model filename facts, without duplicating size-specific branches in callers."""
+  tokens = set(filter(None, re.split(r"[^a-z0-9]+", pathlib.Path(model_path).name.lower())))
+  matches = [profile for profile in MODEL_PROFILES
+             if profile.family.lower() in tokens and profile.size_label.lower() in tokens]
+  if len(matches) == 1: return matches[0]
+  if len(matches) > 1: raise KeyError(f"ambiguous model profile for {model_path!r}: {[profile.id for profile in matches]}")
+  if default_profile_id is not None: return profile_by_id(default_profile_id)
+  raise KeyError(f"no model profile matches {model_path!r}; known={list(profile_ids())}")
 
 
 def qwen3_8b_q4k_m_gfx1100_profile() -> ModelProfile:

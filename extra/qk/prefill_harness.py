@@ -10,6 +10,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 import pathlib
 
+from extra.qk.model_profiles import MODEL_PROFILES, ModelProfile, profile_by_id, profile_from_model_path
+from extra.qk.route_manifest import promoted_prefill_candidate_supports_profile
+
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 DEFAULT_MODEL = "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf"
@@ -48,44 +51,50 @@ class PrefillRunProfile:
 
 @dataclass(frozen=True)
 class PrefillModelHarnessProfile:
-  id: str
+  model_profile: ModelProfile
   default_model: str
-  env: dict[str, str]
+  env_overrides: dict[str, str]
   note: str
 
+  @property
+  def id(self) -> str: return self.model_profile.id
 
+  @property
+  def env(self) -> dict[str, str]:
+    # Exact generated candidates are enabled from their artifact applicability, never from a model-size branch.
+    graph_gemm = "1" if promoted_prefill_candidate_supports_profile(self.id) else "0"
+    return {"PREFILL_V2": "1", "BOLTBEAM_MODEL_PROFILE": self.id, "PREFILL_GRAPH_GEMM": graph_gemm,
+            **self.env_overrides}
+
+
+_MODEL_DEFAULT_PATHS = {
+  "qwen3_8b_q4k_m_gfx1100": DEFAULT_MODEL,
+  "qwen3_14b_q4k_m_gfx1100": "/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf",
+}
+_MODEL_ENV_OVERRIDES = {
+  "qwen3_14b_q4k_m_gfx1100": {"PREFILL_ROUTE": "direct_packed", "PREFILL_PACKED_STREAM": "1",
+                                  "ALLOW_DEVICE_USAGE": "1"},
+}
+_MODEL_NOTES = {
+  "qwen3_8b_q4k_m_gfx1100": "8B fp16/PREFILL_V2 authority path",
+  "qwen3_14b_q4k_m_gfx1100": "14B memory-safe direct-packed authority baseline",
+}
 MODEL_HARNESS_PROFILES: dict[str, PrefillModelHarnessProfile] = {
-  "qwen3_8b_q4k_m_gfx1100": PrefillModelHarnessProfile(
-    id="qwen3_8b_q4k_m_gfx1100",
-    default_model=DEFAULT_MODEL,
-    env={"PREFILL_V2": "1"},
-    note="8B fp16/PREFILL_V2 authority path",
-  ),
-  "qwen3_14b_q4k_m_gfx1100": PrefillModelHarnessProfile(
-    id="qwen3_14b_q4k_m_gfx1100",
-    default_model="/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf",
-    env={"PREFILL_V2": "1", "PREFILL_ROUTE": "direct_packed", "PREFILL_PACKED_STREAM": "1", "ALLOW_DEVICE_USAGE": "1"},
-    note="14B memory-safe direct-packed authority baseline",
-  ),
+  profile.id: PrefillModelHarnessProfile(profile, _MODEL_DEFAULT_PATHS[profile.id],
+    _MODEL_ENV_OVERRIDES.get(profile.id, {}), _MODEL_NOTES[profile.id])
+  for profile in MODEL_PROFILES
 }
-_MODEL_PROFILE_ALIASES = {
-  "8b": "qwen3_8b_q4k_m_gfx1100",
-  "qwen3_8b_q4_k_m_gfx1100": "qwen3_8b_q4k_m_gfx1100",
-  "14b": "qwen3_14b_q4k_m_gfx1100",
-  "qwen3_14b_q4_k_m_gfx1100": "qwen3_14b_q4k_m_gfx1100",
-}
+MODEL_HARNESS_ALIASES = tuple(profile.size_label.lower() for profile in MODEL_PROFILES)
 
 
 def resolve_prefill_model_profile(profile_id: str | None = None, *, model_path: str | None = None) -> PrefillModelHarnessProfile:
   if profile_id:
-    key = _MODEL_PROFILE_ALIASES.get(profile_id.strip().lower(), profile_id.strip())
-    try: return MODEL_HARNESS_PROFILES[key]
+    try: return MODEL_HARNESS_PROFILES[profile_by_id(profile_id).id]
     except KeyError as exc:
       raise KeyError(f"unknown prefill model profile {profile_id!r}; known={sorted(MODEL_HARNESS_PROFILES)}") from exc
-  name = pathlib.Path(model_path or DEFAULT_MODEL).name.lower()
-  if "14b" in name: return MODEL_HARNESS_PROFILES["qwen3_14b_q4k_m_gfx1100"]
-  if "8b" in name: return MODEL_HARNESS_PROFILES["qwen3_8b_q4k_m_gfx1100"]
-  return MODEL_HARNESS_PROFILES[DEFAULT_MODEL_PROFILE]
+  profile = profile_from_model_path(model_path or DEFAULT_MODEL,
+                                    default_profile_id=DEFAULT_MODEL_PROFILE if model_path is None else None)
+  return MODEL_HARNESS_PROFILES[profile.id]
 
 
 def csv_ints(raw: str) -> tuple[int, ...]:

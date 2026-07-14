@@ -45,6 +45,8 @@ def test_prefill_csv_and_argv_are_canonical():
 def test_prefill_subprocess_env_is_import_light_policy():
   env = prefill_subprocess_env({"DEV": "AMD"})
   assert env["PREFILL_V2"] == "1"
+  assert env["BOLTBEAM_MODEL_PROFILE"] == "qwen3_8b_q4k_m_gfx1100"
+  assert env["PREFILL_GRAPH_GEMM"] == "1"
   assert env["DEV"] == "AMD"
   assert "PYTHONPATH" in env
 
@@ -56,6 +58,7 @@ def test_prefill_model_profile_selects_14b_direct_packed_defaults():
   assert env["PREFILL_V2"] == "1"
   assert env["PREFILL_ROUTE"] == "direct_packed"
   assert env["PREFILL_PACKED_STREAM"] == "1"
+  assert env["PREFILL_GRAPH_GEMM"] == "0"
   assert env["ALLOW_DEVICE_USAGE"] == "1"
   run = prefill_run_profile("smoke")
   argv = prefill_authority_argv(prof.default_model, run, model_profile_id=prof.id)
@@ -85,6 +88,8 @@ def test_bench_prefill_dispatches_14b_profile(monkeypatch):
   args, kwargs = calls[0]
   assert "--model-profile" in args[1] and "qwen3_14b_q4k_m_gfx1100" in args[1]
   assert args[2]["PREFILL_ROUTE"] == "direct_packed"
+  assert args[2]["BOLTBEAM_MODEL_PROFILE"] == "qwen3_14b_q4k_m_gfx1100"
+  assert args[2]["PREFILL_GRAPH_GEMM"] == "0"
   assert kwargs["label"] == "smoke:qwen3_14b_q4k_m_gfx1100"
 
 

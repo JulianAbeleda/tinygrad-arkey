@@ -368,16 +368,28 @@ def promoted_prefill_candidate_policy() -> dict:
   relpath = pathlib.Path(str(row["candidate_set_path"]))
   path = pathlib.Path(__file__).resolve().parents[2] / relpath
   if not path.is_file(): raise FileNotFoundError(f"promoted prefill candidate set is missing: {path}")
+  artifact = json.loads(path.read_text())
+  entries = artifact.get("entries", ())
+  if artifact.get("schema") != "boltbeam.full_kernel_candidate_set.v1" or not isinstance(entries, list) or not entries:
+    raise RuntimeError("promoted prefill candidate set has an invalid schema or no entries")
+  profiles = tuple(sorted({str(entry["payload"]["workload"]["profile"]) for entry in entries}))
   roles = tuple(str(role) for role in row.get("candidate_roles", ()))
   if set(roles) != set(row.get("roles", ())):
     raise RuntimeError(f"promoted prefill candidate roles drifted from route roles: {roles!r} vs {row.get('roles')!r}")
+  artifact_roles = {str(entry["payload"]["workload"]["role"]) for entry in entries}
+  if artifact_roles != set(roles):
+    raise RuntimeError(f"promoted prefill candidate artifact roles drifted from policy: {sorted(artifact_roles)!r} vs {roles!r}")
   return {
-    "route_id": route_id, "candidate_set_path": str(path), "candidate_roles": roles,
+    "route_id": route_id, "candidate_set_path": str(path), "candidate_profiles": profiles, "candidate_roles": roles,
     "runtime_env": {
       "PREFILL_GRAPH_GEMM": "1",
       "BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH": str(path),
     },
   }
+
+def promoted_prefill_candidate_supports_profile(profile_id: str) -> bool:
+  """Whether the promoted exact candidate artifact owns any workload for this model profile."""
+  return profile_id in promoted_prefill_candidate_policy()["candidate_profiles"]
 
 def apply_route(route_id: str, env: dict | None = None) -> dict:
   """Materialize a route's env onto a copy of `env` (default: a copy of os.environ). Returns the new env; does NOT

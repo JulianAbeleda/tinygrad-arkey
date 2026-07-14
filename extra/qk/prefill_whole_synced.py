@@ -22,7 +22,8 @@ from typing import Any
 
 from extra.llm.generate import load_model_and_tokenizer
 from extra.qk.prefill_harness import (
-  DEFAULT_MODEL, DEFAULT_MODEL_PROFILE, MODEL_HARNESS_PROFILES, PREFILL_MODES, csv_ints, prefill_run_profile,
+  DEFAULT_MODEL, DEFAULT_MODEL_PROFILE, MODEL_HARNESS_ALIASES, MODEL_HARNESS_PROFILES, PREFILL_MODES, csv_ints,
+  prefill_run_profile,
   resolve_prefill_model_profile,
 )
 from extra.qk.timing_harness import add_clock_pin_arg, set_clock_pin_env
@@ -360,7 +361,7 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
   ap = argparse.ArgumentParser(description=__doc__)
   ap.add_argument("--model", default=os.environ.get("QK_MODEL", DEFAULT_MODEL), help="GGUF path")
   ap.add_argument("--model-profile", default=os.environ.get("QK_MODEL_PROFILE", ""),
-                  choices=("", *MODEL_HARNESS_PROFILES.keys(), "8b", "14b"),
+                  choices=("", *MODEL_HARNESS_PROFILES.keys(), *MODEL_HARNESS_ALIASES),
                   help=f"model/profile defaults; default infers from --model or uses {DEFAULT_MODEL_PROFILE}")
   ap.add_argument("--mode", choices=PREFILL_MODES, default="authority")
   ap.add_argument("-K", type=int, default=None, help="bursts to min over")

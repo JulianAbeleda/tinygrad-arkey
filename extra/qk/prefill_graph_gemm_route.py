@@ -12,7 +12,6 @@ _FULL_KERNEL_CANDIDATE_HASH_ENV = "BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH"
 _FULL_KERNEL_CANDIDATE_SET_JSON_ENV = "BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_JSON"
 _FULL_KERNEL_CANDIDATE_SET_PATH_ENV = "BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH"
 _PURE_REGISTER_COMPILE_ARTIFACT_JSON_ENV = "BOLTBEAM_PURE_REGISTER_COMPILE_ARTIFACT_JSON"
-_DEFAULT_CANDIDATE_PROFILE = "qwen3_8b_q4k_m_gfx1100"
 _CANDIDATE_ROUTE_CENSUS:ContextVar[dict[str,Any]|None]=ContextVar("candidate_route_census",default=None)
 
 def _candidate_env_requested(env: dict[str, Any]) -> bool:
@@ -129,9 +128,13 @@ def route_pf16_graph_gemm(lin, x: Tensor, w: Tensor | None = None) -> Tensor | N
   if in_f != x.shape[-1]: return None
   role = getattr(lin, "_prefill_graph_role", None)
   registry=_candidate_registry_from_env()
-  profile=getattr(lin,"_prefill_model_profile",None) or os.environ.get("BOLTBEAM_MODEL_PROFILE",_DEFAULT_CANDIDATE_PROFILE)
+  profile=getattr(lin,"_prefill_model_profile",None) or os.environ.get("BOLTBEAM_MODEL_PROFILE")
+  if profile is None and registry is not None:
+    # Backward-compatible data-derived default for a single-profile artifact; never bake a model ID into dispatch.
+    profiles={entry.exact_key[0] for entry in registry.candidate_set.entries}
+    if len(profiles) == 1: profile=next(iter(profiles))
   target={"backend":"AMD","arch":"gfx1100","wave_size":32}
-  admission=None if registry is None or role is None else registry.get(profile,role,(512,out_f,in_f),target)
+  admission=None if registry is None or role is None or profile is None else registry.get(profile,role,(512,out_f,in_f),target)
   if admission is not None:
     result = _install_candidate_matmul(x,w,out_f,in_f,admission)
     if result is None: return None

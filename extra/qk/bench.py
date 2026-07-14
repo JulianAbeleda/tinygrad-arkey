@@ -16,7 +16,8 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from extra.qk.prefill_harness import (
-  DEFAULT_MODEL_PROFILE, MODEL_HARNESS_PROFILES, PREFILL_MODES, csv_ints, prefill_authority_argv, prefill_run_profile,
+  DEFAULT_MODEL_PROFILE, MODEL_HARNESS_ALIASES, MODEL_HARNESS_PROFILES, PREFILL_MODES, csv_ints,
+  prefill_authority_argv, prefill_run_profile,
   prefill_subprocess_env, resolve_prefill_model_profile,
 )
 from extra.qk.decode_harness import (
@@ -33,7 +34,7 @@ def _run(desc: str, argv: list[str], env_extra: dict[str, str], label: str = "au
 def main(argv: list[str] | None = None) -> int:
   ap = argparse.ArgumentParser(description=__doc__)
   ap.add_argument("--model", required=True, help="GGUF path")
-  ap.add_argument("--model-profile", default="", choices=("", *MODEL_HARNESS_PROFILES.keys(), "8b", "14b"),
+  ap.add_argument("--model-profile", default="", choices=("", *MODEL_HARNESS_PROFILES.keys(), *MODEL_HARNESS_ALIASES),
                   help=f"prefill model/profile defaults; default infers from --model or uses {DEFAULT_MODEL_PROFILE}")
   ap.add_argument("--prefill", action="store_true", help="prefill authority only")
   ap.add_argument("--decode", action="store_true", help="decode authority only")

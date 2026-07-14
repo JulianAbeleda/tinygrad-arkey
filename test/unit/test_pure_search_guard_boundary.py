@@ -135,6 +135,13 @@ def test_prefill_default_is_promoted_generated_candidate_set():
     assert model._prefill_graph_gemm_default() == 0
 
 
+def test_prefill_default_is_scoped_by_promoted_candidate_profile():
+  with env(PREFILL_GRAPH_GEMM=None, BOLTBEAM_MODEL_PROFILE="qwen3_8b_q4k_m_gfx1100"):
+    assert model._prefill_graph_gemm_default() == 1
+  with env(PREFILL_GRAPH_GEMM=None, BOLTBEAM_MODEL_PROFILE="qwen3_14b_q4k_m_gfx1100"):
+    assert model._prefill_graph_gemm_default() == 0
+
+
 # ---- (2) F2: a flipped getenv DEFAULT de-selects the shipped route and this suite catches it ----
 
 def test_shipped_default_getenv_values_keep_generated_routes_on():

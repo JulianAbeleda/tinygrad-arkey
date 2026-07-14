@@ -64,6 +64,9 @@ def _prefill_graph_gemm_default() -> int:
   if _promoted_prefill_candidate_supported():
     # Validate that the promoted policy and its durable candidate artifact are available. Runtime reads this policy
     # directly; do not leak it into global environment state.
+    profile = os.environ.get("BOLTBEAM_MODEL_PROFILE")
+    if profile is not None and not qk_ops.qk_route_manifest_attr("promoted_prefill_candidate_supports_profile")(profile):
+      return 0
     qk_ops.qk_route_manifest_attr("promoted_prefill_candidate_policy")()
     return 1
   return 0

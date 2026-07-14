@@ -10,6 +10,7 @@ from extra.qk.model_profiles import (
   attention_shape,
   prefill_role_shapes,
   profile_by_id,
+  profile_from_model_path,
   profile_from_transformer_config,
 )
 
@@ -40,6 +41,7 @@ def test_qwen3_14b_q4k_profile_carries_tiled_wmma_role_shapes():
 
 
 def test_profile_lookup_by_id_and_transformer_config():
+  assert profile_by_id("14b") is QWEN3_14B_Q4_K_M_GFX1100
   assert profile_by_id("qwen3_14b_q4k_m_gfx1100") is QWEN3_14B_Q4_K_M_GFX1100
   assert profile_by_id("qwen3_14b_q4_k_m_gfx1100") is QWEN3_14B_Q4_K_M_GFX1100
   config = {
@@ -59,6 +61,13 @@ def test_profile_lookup_by_id_and_transformer_config():
   local_config = SimpleNamespace(family="qwen3", dim=4096, hidden_dim=12288, n_heads=32, n_kv_heads=8, head_dim=128)
   assert profile_from_transformer_config(local_config, quant="Q4_K_M",
                                          device_profile="gfx1100") is QWEN3_8B_Q4_K_M_GFX1100
+
+
+def test_profile_lookup_from_model_path_uses_central_model_facts():
+  assert profile_from_model_path("/models/Qwen3-14B-Q4_K_M.gguf") is QWEN3_14B_Q4_K_M_GFX1100
+  assert profile_from_model_path("/models/Qwen3-8B-Q4_K_M.gguf") is QWEN3_8B_Q4_K_M_GFX1100
+  with pytest.raises(KeyError, match="no model profile"):
+    profile_from_model_path("/models/Qwen3-32B-Q4_K_M.gguf")
 
 
 def test_profile_lookup_blocks_unknown_shape_and_role():

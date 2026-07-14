@@ -64,14 +64,14 @@ def test_candidate_set_exact_entries_bind(monkeypatch,role,shape):
       return admission if (selected_role,selected_shape) == (role,shape) else None
   monkeypatch.setattr(route,"_candidate_registry_from_env",lambda:Registry())
   monkeypatch.setattr(route,"_install_candidate_matmul",lambda x,w,n,k,selected:selected.canonical_identity)
-  lin=SimpleNamespace(_prefill_graph_role=role,bias=None)
+  lin=SimpleNamespace(_prefill_graph_role=role,_prefill_model_profile="qwen3_8b_q4k_m_gfx1100",bias=None)
   out=route.route_pf16_graph_gemm(lin,CandidateTensor((1,shape[0],shape[2])),w=CandidateTensor((shape[1],shape[2])))
   assert out == identity and lin._prefill_full_kernel_candidate_identity == identity
 
 
 def test_missing_exact_candidate_falls_back(monkeypatch):
   monkeypatch.setattr(route,"_candidate_registry_from_env",lambda:SimpleNamespace(get=lambda *_:None))
-  lin=SimpleNamespace(_prefill_graph_role="attn_qo",bias=None)
+  lin=SimpleNamespace(_prefill_graph_role="attn_qo",_prefill_model_profile="qwen3_8b_q4k_m_gfx1100",bias=None)
   assert route.route_pf16_graph_gemm(lin,CandidateTensor((1,512,4096)),w=CandidateTensor((2048,4096))) is None
   assert not hasattr(lin,"_prefill_full_kernel_candidate_identity")
 
