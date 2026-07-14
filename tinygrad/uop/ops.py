@@ -1150,12 +1150,20 @@ class KernelCandidateContext:
   canonical_identity: str
   geometry: KernelTileGeometry|None = None
   pipeline: Any|None = None
+  packed_weight: Any|None = None
 
   def __post_init__(self):
     if self.schema_version != "boltbeam.full_kernel_candidate.v1":
       raise ValueError(f"unsupported kernel candidate context schema {self.schema_version!r}")
     if len(self.canonical_identity) != 64 or any(c not in "0123456789abcdef" for c in self.canonical_identity):
       raise ValueError("kernel candidate canonical_identity must be a lowercase SHA-256 hex digest")
+    if self.packed_weight is not None:
+      # Keep the graph-level context independent from a quant package import at module load time. The concrete value
+      # remains typed and validated at construction, while ordinary dense candidates retain an empty context.
+      from tinygrad.codegen.opt.packed_weight import PackedWeightTransform
+      if not isinstance(self.packed_weight, PackedWeightTransform):
+        raise TypeError("kernel candidate packed_weight must be a PackedWeightTransform")
+      if self.geometry is None: raise ValueError("packed-weight candidates require explicit kernel tile geometry")
 
 @dataclass(frozen=True)
 class KernelInfo:

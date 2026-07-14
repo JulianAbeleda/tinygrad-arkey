@@ -190,6 +190,21 @@ class TestAMDISAIntegerCastGate(unittest.TestCase):
     self.assertIn("v_cvt_f32_u32_e32", mns)
     self.assertIn("global_store_b32", mns)
 
+  def test_char_to_float_sign_extends_then_converts(self):
+    ren = AMDISARenderer(Target.parse("AMD:ISA:gfx1100"))
+    a = Tensor.empty(8, dtype=dtypes.char)
+    lin = a.cast(dtypes.float32).contiguous().schedule_linear()
+    ast = [u for u in lin.toposort() if u.op is Ops.SINK][0]
+    prg = to_program(ast, ren)
+    lin_uop = [u for u in prg.src if u.op is Ops.LINEAR][0]
+    mns = [str(u.arg).split("(", 1)[0] for u in lin_uop.src if not isinstance(u.arg, tuple)]
+    self.assertIn("global_load_u8", mns)
+    self.assertIn("v_and_b32_e32", mns)
+    self.assertIn("v_xor_b32_e32", mns)
+    self.assertIn("v_add_nc_u32_e32", mns)
+    self.assertIn("v_cvt_f32_i32_e32", mns)
+    self.assertIn("global_store_b32", mns)
+
 
 class TestAMDISAWmmaKReduceGate(unittest.TestCase):
   # B0.K DEV=PYTHON structural gate: a K=64 (4 K-tiles) half matmul must lower to 4 accumulating v_wmma that share ONE

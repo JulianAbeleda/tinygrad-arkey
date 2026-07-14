@@ -9,7 +9,7 @@ from extra.qk import pure_search_guard
 from extra.qk import prefill_graph_gemm_route
 from extra.qk.runtime_specs import (
   ANCHOR_SINGLE_BUFFER_CANDIDATE_HASH, FULL_KERNEL_CANDIDATE_SCHEMA, ActivationQuantSpec, GeneratedCandidate,
-  QuantizedTensorSpec, RuntimeOpSpec, FullKernelCandidateSet, FullKernelCandidateSetEntry,
+  CandidateAdmissionFacts, QuantizedTensorSpec, RuntimeOpSpec, FullKernelCandidateSet, FullKernelCandidateSetEntry,
   GFX1100_TWO_BUFFER_STAGE1_CAPABILITY, admit_full_kernel_candidate, admit_full_kernel_candidate_set,
   bind_full_kernel_candidate, full_kernel_candidate_set_from_legacy,
 )
@@ -54,8 +54,10 @@ def test_generated_candidate_round_trip_and_provenance():
 def test_builtin_registry_selects_wmma_and_blocks_unknown():
   op = RuntimeOpSpec("QuantizedLinear", "prefill", "ffn_gate_up", {"M": 512, "N": 17408, "K": 5120},
                      quant_spec("Q4_K").tensor_spec(), activation_spec("Q8_1").activation_spec(),
-                     lowering_strategy="iu8_wmma_grouped_dot")
-  selected = select_generated_candidate(op)
+                     lowering_strategy="iu8_wmma_grouped_dot", target={"backend":"AMD", "arch":"gfx1100", "wave_size":32},
+                     admission=CandidateAdmissionFacts(scheduler_owned=True))
+  assert select_generated_candidate(op).status == "blocked"
+  selected = select_generated_candidate(op, allow_research=True)
   assert selected.status == "selected"
   assert selected.candidate and selected.candidate.candidate_id == "quant_linear_prefill.q4k_int8_wmma_tensor_substrate"
   blocked = builtin_registry().select(RuntimeOpSpec("ActivationFusion", "prefill", "unknown", {},
@@ -67,10 +69,46 @@ def test_builtin_registry_selects_wmma_and_blocks_unknown():
 def test_builtin_registry_selects_wmma_tiled_candidate():
   op = RuntimeOpSpec("QuantizedLinear", "prefill", "ffn_down", {"M": 512, "N": 5120, "K": 17408},
                      quant_spec("Q4_K").tensor_spec(), activation_spec("Q8_1").activation_spec(),
-                     lowering_strategy="iu8_wmma_tiled_grouped_dot")
-  selected = select_generated_candidate(op, preferred=("quant_linear_prefill.q4k_int8_wmma_tiled_substrate",))
+                     lowering_strategy="iu8_wmma_tiled_grouped_dot", target={"backend":"AMD", "arch":"gfx1100", "wave_size":32},
+                     admission=CandidateAdmissionFacts(scheduler_owned=True))
+  selected = select_generated_candidate(op, preferred=("quant_linear_prefill.q4k_int8_wmma_tiled_substrate",), allow_research=True)
   assert selected.status == "selected"
   assert selected.candidate and selected.candidate.route_id == "prefill_q4k_int8_wmma_tiled_research"
+
+
+def test_primitive_selection_uses_target_shape_and_typed_admission_facts():
+  base = dict(family="QuantizedLinear", phase="prefill", role="ffn_down", shape={"M":512, "N":5120, "K":17408},
+              weight=quant_spec("Q6_K").tensor_spec(), activation=activation_spec("fp16").activation_spec(),
+              target={"backend":"AMD", "arch":"gfx1100", "wave_size":32})
+  fused = select_generated_candidate(RuntimeOpSpec(**base, lowering_strategy="fused_dequant_wmma",
+    admission=CandidateAdmissionFacts(scheduler_owned=True, fused_wmma_admitted=True)))
+  assert fused.status == "blocked", "a deferred emitter must never be selected from caller-supplied admission facts"
+  once = select_generated_candidate(RuntimeOpSpec(**base, lowering_strategy="dequant_once_matmul",
+    admission=CandidateAdmissionFacts(memory_budget_bytes=2_000_000, dequant_buffer_bytes=1_000_000,
+                                      scheduler_owned=True, dequant_once_admitted=True)), allow_research=True)
+  assert once.candidate and once.candidate.candidate_id == "quant_linear_prefill.q6k_dequant_once"
+  assert select_generated_candidate(RuntimeOpSpec(**base, lowering_strategy="dequant_once_matmul",
+    admission=CandidateAdmissionFacts(memory_budget_bytes=999_999, dequant_buffer_bytes=1_000_000,
+                                      scheduler_owned=True, dequant_once_admitted=True)), allow_research=True).status == "blocked"
+
+
+def test_shape_constraints_are_alternatives_not_conjunctions():
+  candidate = GeneratedCandidate("c.shapes", "QuantizedLinear", ("Q6_K",), ("fp16",), ("prefill",), ("ffn_down",),
+    "dequant_once_matmul", "machine_authored_generated",
+    shape_constraints=({"M": 256, "N": 1024, "K": 4096}, {"M": 512, "N": 5120, "K": 17408}))
+  op = RuntimeOpSpec("QuantizedLinear", "prefill", "ffn_down", {"M": 512, "N": 5120, "K": 17408},
+                     quant_spec("Q6_K").tensor_spec(), activation_spec("fp16").activation_spec(),
+                     lowering_strategy="dequant_once_matmul")
+  assert candidate.supports(op)
+
+
+def test_direct_packed_is_explicit_lower_priority_rollback_only():
+  op = RuntimeOpSpec("QuantizedLinear", "prefill", "ffn_down", {"M":512, "N":5120, "K":17408},
+                     quant_spec("Q6_K").tensor_spec(), activation_spec("fp16").activation_spec(),
+                     lowering_strategy="packed_dequant_dot")
+  assert select_generated_candidate(op).status == "blocked"
+  selected = select_generated_candidate(op, allow_rollback=True)
+  assert selected.candidate and selected.candidate.candidate_class == "rollback" and selected.candidate.priority == 0
 
 
 def test_builtin_generated_candidates_match_manifest_route_metadata():

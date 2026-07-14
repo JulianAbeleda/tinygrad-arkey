@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TypeAlias
 
-from tinygrad.dtype import AddrSpace, dtypes
+from tinygrad.codegen.opt.packed_weight import PackedWeightTransform
+from tinygrad.dtype import AddrSpace, PtrDType, dtypes
 from tinygrad.uop.ops import AxisType, KernelLDSWindow, KernelTileGeometry, Ops, UOp
 
 _RDNA3_DIMS = (16, 16, 16)
@@ -72,6 +74,20 @@ class PrecontractOperandTemplate:
   row_axis: UOp
   k_axis: UOp
   row_tile_base: UOp
+
+
+@dataclass(frozen=True)
+class PackedPrecontractOperandTemplate:
+  """Packed B source decoded to fp16 at cooperative tile-production coordinates."""
+  role: str
+  source: UOp
+  transform: PackedWeightTransform
+  row_axis: UOp
+  k_axis: UOp
+  row_tile_base: UOp
+
+
+PrecontractOperand: TypeAlias = PrecontractOperandTemplate | PackedPrecontractOperandTemplate
 
 @dataclass(frozen=True)
 class PrecontractThreadAxes:
@@ -154,16 +170,21 @@ def derive_precontract_shape_factors(geometry:KernelTileGeometry, tc) -> Precont
   return PrecontractFactors(sm, sn, *geometry.waves, ks, vectors_per_row, *loads)
 
 
-def validate_precontract_operand_templates(operands:tuple[PrecontractOperandTemplate, ...], *,
+def validate_precontract_operand_templates(operands:tuple[PrecontractOperand, ...], *,
                                            context:str="precontract") -> None:
   """Validate source dtype and live row/K ownership independent of storage."""
   if tuple(x.role for x in operands) != ("A", "B"):
     raise ValueError(f"{context} operands must be exactly ordered A and B")
   for operand in operands:
-    if (operand.row_axis.op is not Ops.RANGE or operand.k_axis.op is not Ops.RANGE or
-        operand.row_axis not in operand.source.backward_slice_with_self or
-        operand.k_axis not in operand.source.backward_slice_with_self or
-        operand.source.dtype.scalar() != dtypes.half):
+    if operand.row_axis.op is not Ops.RANGE or operand.k_axis.op is not Ops.RANGE:
+      raise ValueError(f"{context} {operand.role} template does not retain row/K ownership")
+    if isinstance(operand, PackedPrecontractOperandTemplate):
+      if (operand.role != "B" or not isinstance(operand.source.dtype, PtrDType) or
+          operand.source.ptrdtype.base != operand.transform.storage_dtype):
+        raise ValueError(f"{context} packed template must be a B operand with canonical packed storage dtype")
+    elif (operand.row_axis not in operand.source.backward_slice_with_self or
+          operand.k_axis not in operand.source.backward_slice_with_self or
+          operand.source.dtype.scalar() != dtypes.half):
       raise ValueError(f"{context} {operand.role} template does not retain scalar fp16 row/K ownership")
 
 
@@ -245,7 +266,7 @@ class PrecontractPipelineTemplate:
   geometry: KernelTileGeometry
   tc: object
   allocation: UOp
-  operands: tuple[PrecontractOperandTemplate, ...]
+  operands: tuple[PrecontractOperand, ...]
   threads: PrecontractThreadAxes
   subtile_m: UOp
   subtile_n: UOp
@@ -405,7 +426,7 @@ def wmma_output_owners(geometry:KernelTileGeometry, *, tc) -> tuple[WMMAOutputOw
 
 
 def instantiate_precontract_producer(geometry:KernelTileGeometry, *, tc, allocation:UOp,
-                                     operands:tuple[PrecontractOperandTemplate,...], threads:PrecontractThreadAxes,
+                                     operands:tuple[PrecontractOperand,...], threads:PrecontractThreadAxes,
                                      epoch:UOp, slot:UOp) -> PrecontractProducerInstance:
   factors=derive_precontract_factors(geometry,tc)
   slot_base=slot*(geometry.lds_windows[-1].end//2)
@@ -417,8 +438,10 @@ def instantiate_precontract_producer(geometry:KernelTileGeometry, *, tc, allocat
       linear_vector=thread+row_iteration*geometry.threads
       row,vector=linear_vector//factors.vectors_per_row,linear_vector%factors.vectors_per_row
       logical_k=vector*8
-      values=tuple(operand.source.substitute({operand.row_axis:operand.row_tile_base+row,
-        operand.k_axis:epoch*geometry.tile[2]+logical_k+elem}) for elem in range(8))
+      logical_row = operand.row_tile_base + row
+      values=tuple(operand.transform.dequant(operand.source, logical_row, epoch*geometry.tile[2]+logical_k+elem)
+        if isinstance(operand, PackedPrecontractOperandTemplate) else operand.source.substitute({
+          operand.row_axis:logical_row, operand.k_axis:epoch*geometry.tile[2]+logical_k+elem}) for elem in range(8))
       tag=("kernel_tile_store",operand.role,row_iteration,epoch,slot)
       idx=allocation.index(slot_base+(window.base+row*window.stride_bytes+logical_k*2)//2,dtype=dtypes.half.vec(8)).replace(tag=tag)
       stores.append(idx.store(UOp(Ops.STACK,dtypes.half.vec(8),values)).replace(tag=tag).end())
@@ -443,7 +466,7 @@ def instantiate_precontract_fragments(geometry:KernelTileGeometry, *, tc, alloca
   return PrecontractFragmentInstance(epoch,slot,ready,frags)
 
 def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:UOp,
-                                operands:tuple[PrecontractOperandTemplate, ...], threads:PrecontractThreadAxes,
+                                operands:tuple[PrecontractOperand, ...], threads:PrecontractThreadAxes,
                                 k_axis:PrecontractKAxis, subtile_m:UOp, subtile_n:UOp,
                                 contracts:tuple[PrecontractContractSpec, ...], pipeline_plan=None) -> PrecontractLDSStage:
   """Build an unwired vector cooperative stage while full operand index templates still exist."""
@@ -478,8 +501,10 @@ def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:U
       linear_vector = thread + row_iteration*geometry.threads
       row, vector = linear_vector//factors.vectors_per_row, linear_vector%factors.vectors_per_row
       logical_k = vector * 8
-      values = tuple(operand.source.substitute({operand.row_axis: operand.row_tile_base + row,
-                                                operand.k_axis: k_axis.tile_base + logical_k + elem}) for elem in range(8))
+      logical_row = operand.row_tile_base + row
+      values = tuple(operand.transform.dequant(operand.source, logical_row, k_axis.tile_base + logical_k + elem)
+        if isinstance(operand, PackedPrecontractOperandTemplate) else operand.source.substitute({
+          operand.row_axis: logical_row, operand.k_axis: k_axis.tile_base + logical_k + elem}) for elem in range(8))
       value = UOp(Ops.STACK, dtypes.half.vec(8), values)
       index = slot_base + (window.base + row * window.stride_bytes + logical_k * 2) // 2
       store_tag = ("kernel_tile_store", operand.role, row_iteration)

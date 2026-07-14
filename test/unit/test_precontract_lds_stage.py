@@ -1,13 +1,14 @@
 import pytest
 
 from tinygrad import dtypes
-from tinygrad.codegen.opt.kernel_lds import (PrecontractContractSpec, PrecontractKAxis, PrecontractOperandTemplate,
+from tinygrad.codegen.opt.kernel_lds import (PackedPrecontractOperandTemplate, PrecontractContractSpec, PrecontractKAxis, PrecontractOperandTemplate,
   PrecontractPipelineTemplate, PrecontractThreadAxes, build_precontract_lds_stage, instantiate_precontract_fragments,
   instantiate_precontract_producer)
 from tinygrad.codegen.opt.kernel_pipeline import (KernelStage1FragmentStage, KernelStage1PipelinePlan, KernelStage1ProducerStage,
   Stage1StorageAdapter, build_stage1_uop_graph_with_storage, prove_stage1_uop_graph)
 from tinygrad.codegen.opt.compiler_policies import StoragePolicy
 from tinygrad.codegen.opt.tc import amd_rdna3
+from tinygrad.codegen.opt.packed_weight import PackedWeightTransform
 from tinygrad.dtype import AddrSpace
 from tinygrad.uop.ops import AxisType, KernelLDSWindow, KernelTileGeometry, Ops, UOp
 
@@ -58,6 +59,41 @@ def test_nonzero_row_and_k_tile_bases_survive_producer_templates():
   assert any("524288" in x for x in rendered) and any("1572864" in x for x in rendered)
   owner=next(x for x in stage.producer.backward_slice if x.op is Ops.RANGE and x.arg[0] == 32)
   assert all(owner in x.backward_slice for x in global_loads)
+
+
+@pytest.mark.parametrize("fmt,dtype", (("Q4_K", dtypes.uint32), ("Q6_K", dtypes.uint16)))
+def test_packed_b_template_decodes_directly_into_fp16_lds_stores(fmt, dtype):
+  allocation,ops,threads,kaxis,sm,sn,contracts=_fixture()
+  transform=PackedWeightTransform(fmt,12288,4096)
+  packed=UOp.param(1,dtype.ptr(transform.packed_bytes//dtype.itemsize))
+  packed_b=PackedPrecontractOperandTemplate("B",packed,transform,ops[1].row_axis,ops[1].k_axis,ops[1].row_tile_base)
+  stage=_stage(operands=(ops[0],packed_b))
+  stores=[x for x in stage.producer.backward_slice_with_self if x.op is Ops.STORE]
+  b_window=[x for x in stores if packed in x.src[1].backward_slice_with_self]
+  assert b_window and all(x.src[1].dtype == dtypes.half.vec(8) for x in b_window)
+  assert any(packed in x.backward_slice_with_self for x in b_window)
+  # Packed B is decoded in the producer; no dense fp16 B parameter may appear in its value graph.
+  assert not any(u.op is Ops.PARAM and u is not packed and u.dtype.scalar() == dtypes.half
+                 for x in b_window for u in x.src[1].toposort())
+  owner=next(x for x in stage.producer.backward_slice if x.op is Ops.RANGE and x.arg[0] == 32)
+  assert all(owner in x.src[1].backward_slice_with_self for x in b_window)
+
+
+@pytest.mark.parametrize("fmt,dtype", (("Q4_K", dtypes.uint32), ("Q6_K", dtypes.uint16)))
+def test_packed_b_stage_rewrites_to_rdna3_fp16_wmma_graph(fmt, dtype):
+  from tinygrad.codegen import full_rewrite_to_sink
+  from tinygrad.helpers import Target
+  from tinygrad.renderer.isa.amd import AMDISARenderer
+  _,ops,_,_,_,_,contracts=_fixture(); transform=PackedWeightTransform(fmt,12288,4096)
+  packed=UOp.param(1,dtype.ptr(transform.packed_bytes//dtype.itemsize))
+  stage=_stage(operands=(ops[0],PackedPrecontractOperandTemplate(
+    "B",packed,transform,ops[1].row_axis,ops[1].k_axis,ops[1].row_tile_base)))
+  tc=_tc(); c_axes=((50,2),(51,2),(52,2))
+  wmma_arg=(str(tc),tc.dims,tc.dtype_in,tc.dtype_out,"AMD",tc.threads,(contracts[0].arg,contracts[1].arg,c_axes),())
+  wmma=UOp(Ops.WMMA,dtypes.float.vec(8),(stage.fragment_a,stage.fragment_b,UOp.const(dtypes.float.vec(8),0.0)),wmma_arg)
+  rewritten=full_rewrite_to_sink(UOp.sink(wmma,stage.barrier),AMDISARenderer(Target.parse("AMD:ISA:gfx1100")),optimize=False)
+  assert len([x for x in rewritten.toposort() if x.op is Ops.WMMA]) == 16
+  assert any(x.op is Ops.DEFINE_LOCAL for x in rewritten.toposort())
 
 def test_local4_local2_warp32_b128_store_coverage():
   stage=_stage(); stores=[x for x in stage.producer.backward_slice_with_self if x.op is Ops.STORE]

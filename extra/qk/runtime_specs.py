@@ -13,7 +13,7 @@ QUANT_FORMATS = ("Q4_K", "Q6_K", "fp16", "fp8", "int8", "unknown")
 ACTIVATION_FORMATS = ("fp16", "fp32", "Q8_1", "none")
 LOWERING_STRATEGIES = (
   "packed_dequant_dot", "grouped_int_dot_correction", "iu8_wmma_grouped_dot", "iu8_wmma_tiled_grouped_dot",
-  "online_softmax_flash", "tinygrad_scheduler", "unknown",
+  "dequant_once_matmul", "fused_dequant_wmma", "online_softmax_flash", "tinygrad_scheduler", "unknown",
 )
 PROVENANCE = ("machine_authored_generated", "tinygrad_scheduler_generated", "banned", "unknown")
 GENERATED_PROVENANCE = ("machine_authored_generated", "tinygrad_scheduler_generated")
@@ -399,6 +399,35 @@ class ActivationQuantSpec:
 
 
 @dataclass(frozen=True)
+class CandidateAdmissionFacts:
+  """Runtime facts used only to rank/admit generated primitives, never to bind them."""
+  memory_budget_bytes: int | None = None
+  dequant_buffer_bytes: int | None = None
+  scheduler_owned: bool = False
+  dequant_once_admitted: bool = False
+  fused_wmma_admitted: bool = False
+
+  def __post_init__(self):
+    for name in ("memory_budget_bytes", "dequant_buffer_bytes"):
+      value = getattr(self, name)
+      if value is not None and (not isinstance(value, int) or isinstance(value, bool) or value < 0):
+        raise ValueError(f"{name} must be a non-negative integer or None")
+
+  @property
+  def dequant_buffer_fits(self) -> bool:
+    return (self.memory_budget_bytes is not None and self.dequant_buffer_bytes is not None and
+            self.dequant_buffer_bytes <= self.memory_budget_bytes)
+
+  def to_json(self) -> dict[str, Any]:
+    return {"memory_budget_bytes": self.memory_budget_bytes, "dequant_buffer_bytes": self.dequant_buffer_bytes,
+            "scheduler_owned": self.scheduler_owned, "dequant_once_admitted": self.dequant_once_admitted,
+            "fused_wmma_admitted": self.fused_wmma_admitted}
+
+  @classmethod
+  def from_json(cls, row:dict[str, Any]) -> "CandidateAdmissionFacts": return cls(**row)
+
+
+@dataclass(frozen=True)
 class RuntimeOpSpec:
   family: str
   phase: str
@@ -412,6 +441,7 @@ class RuntimeOpSpec:
   codegen_features: tuple[str, ...] = ()
   profile: str = ""
   target: dict[str, Any] = field(default_factory=dict)
+  admission: CandidateAdmissionFacts = field(default_factory=CandidateAdmissionFacts)
 
   def __post_init__(self):
     _check("family", self.family, OP_FAMILIES)
@@ -424,7 +454,8 @@ class RuntimeOpSpec:
     return {"family": self.family, "phase": self.phase, "role": self.role, "shape": _shape_json(self.shape),
             "weight": self.weight.to_json(), "activation": self.activation.to_json(),
             "lowering_strategy": self.lowering_strategy, "device": self.device, "route_id": self.route_id,
-            "codegen_features": list(self.codegen_features), "profile": self.profile, "target": dict(self.target)}
+            "codegen_features": list(self.codegen_features), "profile": self.profile, "target": dict(self.target),
+            "admission": self.admission.to_json()}
 
   @classmethod
   def from_json(cls, row:dict[str, Any]) -> "RuntimeOpSpec":
@@ -434,7 +465,8 @@ class RuntimeOpSpec:
                lowering_strategy=str(row.get("lowering_strategy", "unknown")),
                device=str(row.get("device", "unknown")), route_id=str(row.get("route_id", "")),
                codegen_features=tuple(str(x) for x in row.get("codegen_features", ())),
-               profile=str(row.get("profile", "")), target=dict(row.get("target", {})))
+               profile=str(row.get("profile", "")), target=dict(row.get("target", {})),
+               admission=CandidateAdmissionFacts.from_json(dict(row.get("admission", {}))))
 
 
 @dataclass(frozen=True)
@@ -450,11 +482,16 @@ class GeneratedCandidate:
   route_id: str = ""
   shape_constraints: tuple[dict[str, Any], ...] = ()
   device_constraints: tuple[str, ...] = ()
+  target_constraints: tuple[dict[str, Any], ...] = ()
   required_codegen_features: tuple[str, ...] = ()
   search_space_id: str = ""
   rollback_behavior: dict[str, str] = field(default_factory=dict)
   authority_gates: tuple[str, ...] = ()
   full_kernel_candidate: dict[str, Any] | None = None
+  candidate_class: str = "performance"
+  lifecycle: str = "candidate"
+  priority: int = 100
+  required_admission_facts: tuple[str, ...] = ()
 
   def __post_init__(self):
     _check("op_family", self.op_family, OP_FAMILIES)
@@ -464,6 +501,14 @@ class GeneratedCandidate:
     for a in self.supported_activation_formats: _check("supported_activation_format", a, ACTIVATION_FORMATS)
     for p in self.phases: _check("phase", p, PHASES)
     for r in self.roles: _check("role", r, ROLES)
+    if self.candidate_class not in ("performance", "rollback"):
+      raise ValueError("candidate_class must be 'performance' or 'rollback'")
+    if self.lifecycle not in ("diagnostic", "candidate", "shipped", "refuted", "deferred"):
+      raise ValueError("lifecycle must be diagnostic, candidate, shipped, refuted, or deferred")
+    if not isinstance(self.priority, int) or isinstance(self.priority, bool): raise ValueError("priority must be an integer")
+    known_facts = {"scheduler_owned", "dequant_once_admitted", "dequant_buffer_fits", "fused_wmma_admitted"}
+    if unknown := set(self.required_admission_facts) - known_facts:
+      raise ValueError(f"unknown required admission facts: {sorted(unknown)!r}")
     if self.full_kernel_candidate is not None:
       try: payload = json.loads(json.dumps(self.full_kernel_candidate, allow_nan=False))
       except (TypeError, ValueError) as exc: raise ValueError(f"full_kernel_candidate must be JSON data: {exc}") from exc
@@ -479,14 +524,17 @@ class GeneratedCandidate:
     return self.full_kernel_candidate is not None
 
   def _registry_json(self) -> dict[str, Any]:
-    return {"candidate_id": self.candidate_id, "op_family": self.op_family,
+    return ({"candidate_id": self.candidate_id, "op_family": self.op_family,
             "supported_quant_formats": list(self.supported_quant_formats),
             "supported_activation_formats": list(self.supported_activation_formats), "phases": list(self.phases),
             "roles": list(self.roles), "lowering_strategy": self.lowering_strategy, "provenance": self.provenance,
             "route_id": self.route_id, "shape_constraints": list(self.shape_constraints),
             "device_constraints": list(self.device_constraints),
+            "target_constraints": list(self.target_constraints),
             "required_codegen_features": list(self.required_codegen_features), "search_space_id": self.search_space_id,
             "rollback_behavior": dict(self.rollback_behavior), "authority_gates": list(self.authority_gates)}
+            | {"candidate_class": self.candidate_class, "lifecycle": self.lifecycle, "priority": self.priority,
+               "required_admission_facts": list(self.required_admission_facts)})
 
   @property
   def canonical_identity(self) -> str:
@@ -507,6 +555,13 @@ class GeneratedCandidate:
     if op.role not in self.roles and "unknown" not in self.roles: return False
     if op.weight.format not in self.supported_quant_formats: return False
     if op.activation.format not in self.supported_activation_formats: return False
+    if self.device_constraints and op.device not in self.device_constraints: return False
+    if self.target_constraints and not any(all(op.target.get(k) == v for k, v in target.items())
+                                           for target in self.target_constraints): return False
+    if self.shape_constraints and not any(all(constraint.get(dim, "*") == "*" or op.shape.get(dim) == constraint[dim]
+                                              for dim in ("M", "N", "K"))
+                                          for constraint in self.shape_constraints): return False
+    if any(not bool(getattr(op.admission, fact)) for fact in self.required_admission_facts): return False
     if self.is_full_kernel_candidate:
       assert self.full_kernel_candidate is not None
       workload, applicability = self.full_kernel_candidate["workload"], self.full_kernel_candidate["applicability"]
@@ -540,11 +595,15 @@ class GeneratedCandidate:
                route_id=str(row.get("route_id", "")),
                shape_constraints=tuple(dict(x) for x in row.get("shape_constraints", ())),
                device_constraints=tuple(row.get("device_constraints", ())),
+               target_constraints=tuple(dict(x) for x in row.get("target_constraints", ())),
                required_codegen_features=tuple(row.get("required_codegen_features", ())),
                search_space_id=str(row.get("search_space_id", "")),
                rollback_behavior=dict(row.get("rollback_behavior", {})),
                authority_gates=tuple(row.get("authority_gates", ())),
-               full_kernel_candidate=None if row.get("full_kernel_candidate") is None else dict(row["full_kernel_candidate"]))
+               full_kernel_candidate=None if row.get("full_kernel_candidate") is None else dict(row["full_kernel_candidate"]),
+               candidate_class=str(row.get("candidate_class", "performance")), lifecycle=str(row.get("lifecycle", "candidate")),
+               priority=int(row.get("priority", 100)),
+               required_admission_facts=tuple(row.get("required_admission_facts", ())))
     if candidate.is_full_kernel_candidate:
       identity = row.get("canonical_identity")
       if not isinstance(identity, str) or identity != candidate.canonical_identity:

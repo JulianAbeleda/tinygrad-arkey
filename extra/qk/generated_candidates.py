@@ -45,6 +45,14 @@ def _authority_gates_from_manifest(route_id:str) -> tuple[str, ...]:
   return tuple(part.strip() for part in gate.split(" + ") if part.strip())
 
 
+def _lifecycle_from_manifest(route_id:str) -> str:
+  status = str(_manifest(route_id).get("status", ""))
+  if status in ("promoted_default", "default_shipped"): return "shipped"
+  if status == "research": return "diagnostic"
+  if status in ("correct_not_fast", "superseded_rollback"): return "refuted"
+  return "deferred"
+
+
 @dataclass(frozen=True)
 class CandidateSelection:
   candidate: GeneratedCandidate | None
@@ -75,14 +83,17 @@ class GeneratedCandidateRegistry:
     return self._candidates[candidate_id]
 
   def select(self, op:RuntimeOpSpec, *, preferred:tuple[str, ...]=(), require_full_kernel:bool=False,
-             required_canonical_identity:str="") -> CandidateSelection:
+             required_canonical_identity:str="", allow_rollback:bool=False, allow_research:bool=False) -> CandidateSelection:
     if require_full_kernel and (len(required_canonical_identity) != 64 or
                                 any(c not in "0123456789abcdef" for c in required_canonical_identity)):
       return CandidateSelection(None, "blocked", "strict full-kernel selection requires a lowercase 64-hex canonical identity")
-    ordered = [self._candidates[cid] for cid in preferred if cid in self._candidates]
-    ordered += [c for c in self.all() if c.candidate_id not in preferred]
+    preference = {cid: index for index, cid in enumerate(preferred)}
+    ordered = sorted(self.all(), key=lambda c: (c.candidate_class == "rollback",
+                                                preference.get(c.candidate_id, len(preference)), -c.priority, c.candidate_id))
     matches = [c for c in ordered if (not require_full_kernel or
-               (c.is_full_kernel_candidate and c.canonical_identity == required_canonical_identity)) and c.supports(op)]
+               (c.is_full_kernel_candidate and c.canonical_identity == required_canonical_identity)) and
+               (allow_rollback or c.candidate_class != "rollback") and
+               (c.lifecycle in ("candidate", "shipped") or (allow_research and c.lifecycle == "diagnostic")) and c.supports(op)]
     if not matches:
       strict = " strict full-kernel" if require_full_kernel else ""
       return CandidateSelection(None, "blocked", f"no{strict} generated candidate supports {op.family}/{op.phase}/{op.role}/{op.weight.format}/{op.activation.format}")
@@ -106,7 +117,8 @@ def _promoted_prefill_candidates() -> tuple[GeneratedCandidate, ...]:
       device_constraints=("AMD:gfx1100:wave32",),
       required_codegen_features=(payload["schedule"]["wmma"]["instruction_family"],),
       search_space_id="prefill_wmma_lds_full_kernel",
-      authority_gates=_authority_gates_from_manifest(policy["route_id"]), full_kernel_candidate=payload)
+      authority_gates=_authority_gates_from_manifest(policy["route_id"]), lifecycle=_lifecycle_from_manifest(policy["route_id"]),
+      full_kernel_candidate=payload)
     if candidate.canonical_identity != identity:
       raise ValueError(f"promoted candidate identity mismatch for role={workload['role']}: "
                        f"artifact={identity}, payload={candidate.canonical_identity}")
@@ -125,7 +137,11 @@ BUILTIN_GENERATED_CANDIDATES: tuple[GeneratedCandidate, ...] = (
     roles=_manifest_roles("prefill_q4k_int8_wmma_generated_research"),
     lowering_strategy="iu8_wmma_grouped_dot", provenance=route_manifest.route_provenance("prefill_q4k_int8_wmma_generated_research"),
     route_id="prefill_q4k_int8_wmma_generated_research", search_space_id="q4k_int8_wmma_prefill",
+    shape_constraints=({"M": 512, "N": "*", "K": "*"},),
+    target_constraints=({"backend": "AMD", "arch": "gfx1100", "wave_size": 32},), priority=300,
+    required_admission_facts=("scheduler_owned",),
     required_codegen_features=("wmma_i32_16x16x16_iu8",),
+    lifecycle=_lifecycle_from_manifest("prefill_q4k_int8_wmma_generated_research"),
     authority_gates=_authority_gates_from_manifest("prefill_q4k_int8_wmma_generated_research")),
   GeneratedCandidate(
     candidate_id="quant_linear_prefill.q4k_int8_wmma_tiled_substrate",
@@ -134,8 +150,50 @@ BUILTIN_GENERATED_CANDIDATES: tuple[GeneratedCandidate, ...] = (
     roles=_manifest_roles("prefill_q4k_int8_wmma_tiled_research"),
     lowering_strategy="iu8_wmma_tiled_grouped_dot", provenance=route_manifest.route_provenance("prefill_q4k_int8_wmma_tiled_research"),
     route_id="prefill_q4k_int8_wmma_tiled_research", search_space_id="q4k_int8_wmma_tiled_prefill",
+    shape_constraints=({"M": 512, "N": "*", "K": "*"},),
+    target_constraints=({"backend": "AMD", "arch": "gfx1100", "wave_size": 32},), priority=400,
+    required_admission_facts=("scheduler_owned",),
     required_codegen_features=("wmma_i32_16x16x16_iu8",),
+    lifecycle=_lifecycle_from_manifest("prefill_q4k_int8_wmma_tiled_research"),
     authority_gates=_authority_gates_from_manifest("prefill_q4k_int8_wmma_tiled_research")),
+  GeneratedCandidate(
+    candidate_id="quant_linear_prefill.q6k_dequant_once", op_family="QuantizedLinear",
+    supported_quant_formats=_manifest_quant("prefill_q6k_direct_generated"), supported_activation_formats=("fp16",),
+    phases=("prefill",), roles=_manifest_roles("prefill_q6k_direct_generated"),
+    lowering_strategy="dequant_once_matmul", provenance=route_manifest.route_provenance("prefill_q6k_direct_generated"),
+    route_id="prefill_q6k_direct_generated", shape_constraints=({"M": 512, "N": "*", "K": "*"},),
+    target_constraints=({"backend": "AMD", "arch": "gfx1100", "wave_size": 32},),
+    priority=300, required_admission_facts=("scheduler_owned", "dequant_once_admitted", "dequant_buffer_fits"),
+    lifecycle="diagnostic",
+    authority_gates=_authority_gates_from_manifest("prefill_q6k_direct_generated")),
+  GeneratedCandidate(
+    candidate_id="quant_linear_prefill.q6k_fused_wmma", op_family="QuantizedLinear",
+    supported_quant_formats=_manifest_quant("prefill_q6k_direct_generated"), supported_activation_formats=("fp16",),
+    phases=("prefill",), roles=_manifest_roles("prefill_q6k_direct_generated"),
+    lowering_strategy="fused_dequant_wmma", provenance=route_manifest.route_provenance("prefill_q6k_direct_generated"),
+    route_id="prefill_q6k_direct_generated", shape_constraints=({"M": 512, "N": "*", "K": "*"},),
+    target_constraints=({"backend": "AMD", "arch": "gfx1100", "wave_size": 32},),
+    priority=400, required_admission_facts=("scheduler_owned", "fused_wmma_admitted"),
+    lifecycle="deferred",
+    authority_gates=_authority_gates_from_manifest("prefill_q6k_direct_generated")),
+  GeneratedCandidate(
+    candidate_id="quant_linear_prefill.q4k_direct_packed_rollback", op_family="QuantizedLinear",
+    supported_quant_formats=_manifest_quant("prefill_q4k_direct_tile4x4_default"), supported_activation_formats=("fp16",),
+    phases=("prefill",), roles=_manifest_roles("prefill_q4k_direct_tile4x4_default"),
+    lowering_strategy="packed_dequant_dot", provenance=route_manifest.route_provenance("prefill_q4k_direct_tile4x4_default"),
+    route_id="prefill_q4k_direct_tile4x4_default", shape_constraints=({"M": 512, "N": "*", "K": "*"},),
+    candidate_class="rollback", priority=0, rollback_behavior={"binding": "explicit_only"},
+    lifecycle=_lifecycle_from_manifest("prefill_q4k_direct_tile4x4_default"),
+    authority_gates=_authority_gates_from_manifest("prefill_q4k_direct_tile4x4_default")),
+  GeneratedCandidate(
+    candidate_id="quant_linear_prefill.q6k_direct_packed_rollback", op_family="QuantizedLinear",
+    supported_quant_formats=_manifest_quant("prefill_q6k_direct_generated"), supported_activation_formats=("fp16",),
+    phases=("prefill",), roles=_manifest_roles("prefill_q6k_direct_generated"),
+    lowering_strategy="packed_dequant_dot", provenance=route_manifest.route_provenance("prefill_q6k_direct_generated"),
+    route_id="prefill_q6k_direct_generated", shape_constraints=({"M": 512, "N": "*", "K": "*"},),
+    candidate_class="rollback", priority=0, rollback_behavior={"binding": "explicit_only"},
+    lifecycle=_lifecycle_from_manifest("prefill_q6k_direct_generated"),
+    authority_gates=_authority_gates_from_manifest("prefill_q6k_direct_generated")),
   GeneratedCandidate(
     candidate_id="quant_linear_decode.q4k_g3_lanemap",
     op_family="QuantizedLinear", supported_quant_formats=_manifest_quant("decode_q4k_g3_generated"),
@@ -143,6 +201,7 @@ BUILTIN_GENERATED_CANDIDATES: tuple[GeneratedCandidate, ...] = (
     roles=_manifest_roles("decode_q4k_g3_generated", extra=("lm_head", "unknown")),
     lowering_strategy="packed_dequant_dot", provenance=route_manifest.route_provenance("decode_q4k_g3_generated"),
     route_id="decode_q4k_g3_generated", search_space_id="q4k_g3_lanemap",
+    lifecycle=_lifecycle_from_manifest("decode_q4k_g3_generated"),
     authority_gates=_authority_gates_from_manifest("decode_q4k_g3_generated")),
   GeneratedCandidate(
     candidate_id="quant_linear_decode.q6k_generated_coop",
@@ -151,6 +210,7 @@ BUILTIN_GENERATED_CANDIDATES: tuple[GeneratedCandidate, ...] = (
     roles=_manifest_roles("decode_q6k_coop_generated", extra=("unknown",)),
     lowering_strategy="packed_dequant_dot", provenance=route_manifest.route_provenance("decode_q6k_coop_generated"),
     route_id="decode_q6k_coop_generated", search_space_id="q6k_generated_coop",
+    lifecycle=_lifecycle_from_manifest("decode_q6k_coop_generated"),
     authority_gates=_authority_gates_from_manifest("decode_q6k_coop_generated")),
   GeneratedCandidate(
     candidate_id="attention_decode.live_split_flash",
@@ -159,6 +219,7 @@ BUILTIN_GENERATED_CANDIDATES: tuple[GeneratedCandidate, ...] = (
     roles=_manifest_roles("decode_flash_live_split_g4_8b_kvboth"), lowering_strategy="online_softmax_flash",
     provenance=route_manifest.route_provenance("decode_flash_live_split_g4_8b_kvboth"),
     route_id="decode_flash_live_split_g4_8b_kvboth", search_space_id="decode_live_split_flash",
+    lifecycle=_lifecycle_from_manifest("decode_flash_live_split_g4_8b_kvboth"),
     authority_gates=_authority_gates_from_manifest("decode_flash_live_split_g4_8b_kvboth")),
 )
 
@@ -168,6 +229,8 @@ def builtin_registry() -> GeneratedCandidateRegistry:
 
 
 def select_generated_candidate(op:RuntimeOpSpec, *, preferred:tuple[str, ...]=(), require_full_kernel:bool=False,
-                               required_canonical_identity:str="") -> CandidateSelection:
+                               required_canonical_identity:str="", allow_rollback:bool=False,
+                               allow_research:bool=False) -> CandidateSelection:
   return builtin_registry().select(op, preferred=preferred, require_full_kernel=require_full_kernel,
-                                   required_canonical_identity=required_canonical_identity)
+                                   required_canonical_identity=required_canonical_identity, allow_rollback=allow_rollback,
+                                   allow_research=allow_research)

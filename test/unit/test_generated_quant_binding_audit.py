@@ -5,7 +5,7 @@ from extra.qk import route_manifest
 
 def test_builtin_generated_candidates_point_at_known_generated_routes():
   rows = builtin_registry().all()
-  assert len(rows) == 9
+  assert len(rows) == 13
   by_id = {r.candidate_id: r for r in rows}
 
   promoted = [r for r in rows if r.route_id == "prefill_wmma_lds_dbuf_generated"]

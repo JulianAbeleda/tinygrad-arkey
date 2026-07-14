@@ -821,6 +821,18 @@ def isel_cast(ctx:IselContext, x:UOp):
                arg=AMDOps.V_AND, tag=_vreg_def(ctx)) if s in (dtypes.uchar, dtypes.ushort) else _tov(ctx, x.src[0])
     as_float = UOp(Ops.INS, dtypes.float32, src=(zext,), arg=AMDOps.V_CVT_U2F, tag=_vreg_def(ctx))
     return as_float if d is dtypes.float32 else UOp(Ops.INS, x.dtype, src=(as_float,), arg=AMDOps.V_CVT_F2H, tag=_vreg_def(ctx))
+  if s in (dtypes.char, dtypes.short) and d in (dtypes.float32, dtypes.half):
+    # gfx11 converts i32 to f32, so make the signed narrow value explicit before conversion. This is also the
+    # canonical path for packed-quant scales/codes: interpreting their byte payload as unsigned would corrupt math.
+    mask, sign = (1 << (s.itemsize * 8)) - 1, 1 << (s.itemsize * 8 - 1)
+    narrowed = UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, x.src[0]), UOp.const(dtypes.int32, mask).rtag()),
+                   arg=AMDOps.V_AND, tag=_vreg_def(ctx))
+    biased = UOp(Ops.INS, dtypes.int32, src=(narrowed, UOp.const(dtypes.int32, sign).rtag()),
+                 arg=AMDOps.V_XOR, tag=_vreg_def(ctx))
+    sext = UOp(Ops.INS, dtypes.int32, src=(biased, UOp.const(dtypes.int32, -sign).rtag()),
+               arg=AMDOps.V_IADD, tag=_vreg_def(ctx))
+    as_float = UOp(Ops.INS, dtypes.float32, src=(sext,), arg=AMDOps.V_CVT_I2F, tag=_vreg_def(ctx))
+    return as_float if d is dtypes.float32 else UOp(Ops.INS, x.dtype, src=(as_float,), arg=AMDOps.V_CVT_F2H, tag=_vreg_def(ctx))
   cvt = {(dtypes.float32, dtypes.half): AMDOps.V_CVT_F2H, (dtypes.half, dtypes.float32): AMDOps.V_CVT_H2F,
          (dtypes.float32, dtypes.int): AMDOps.V_CVT_F2I, (dtypes.int, dtypes.float32): AMDOps.V_CVT_I2F,
          (dtypes.float32, dtypes.uint): AMDOps.V_CVT_F2U, (dtypes.float32, dtypes.ulong): AMDOps.V_CVT_F2U,
