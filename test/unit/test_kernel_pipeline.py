@@ -8,11 +8,8 @@ from tinygrad.uop.ops import AxisType, Ops, UOp
 
 
 class TestKernelStage1PipelinePlan(unittest.TestCase):
-  def test_candidate_policy_bridge_reuses_lds_and_register_contracts(self):
+  def test_candidate_policy_bridge_accepts_typed_lds_contract(self):
     self.assertEqual(pipeline_policy_from_candidate(KernelStage1PipelinePlan(2, 20_480)).storage_kind, "lds")
-    from extra.qk.wmma_pipe_spec import WMMAPipeIR
-    pipe = WMMAPipeIR("attn_qo", (512, 4096, 4096), 2, 8, "targeted_vmcnt")
-    self.assertEqual(pipeline_policy_from_candidate(pipe).storage_kind, "global_register_resident")
     with self.assertRaises(ValueError): pipeline_policy_from_candidate(object())
 
   def test_memory_plan(self):

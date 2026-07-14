@@ -1,104 +1,12 @@
 import pathlib, re
 
-from tinygrad.codegen.opt.extensions import (
-  DEFAULT_CODEGEN_EXTENSION_REGISTRY, EMPTY_DEVECTORIZER_EXTENSION, get_codegen_extension_registry,
-)
-from tinygrad.dtype import AddrSpace, dtypes
-from tinygrad.helpers import getenv
 from tinygrad.renderer.isa.extensions import (
   AMDISARendererExtensionDescriptor, DEFAULT_AMD_ISA_EXTENSION_DESCRIPTORS, get_amd_isa_extension_descriptors,
 )
-from tinygrad.uop.ops import Ops, UOp
-from extra.qk.model_profiles import qwen3_8b_q4k_m_gfx1100_profile
-from extra.qk.codegen_extensions import (
-  PREFILL_AMD_ISA_RENDERER_EXTENSION, PREFILL_DEVECTORIZER_EXTENSION, PREFILL_POSTRANGE_EXTENSION,
-  TRANSITIONAL_PREFILL_PIPE_SHAPE_PROFILE,
-)
+from extra.qk.codegen_extensions import PREFILL_AMD_ISA_RENDERER_EXTENSION
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 ROUTE_IMPORT = re.compile(r"^\s*(?:from|import)\s+extra\.(?:qk|audit|reference)", re.MULTILINE)
-PROFILE_8B = qwen3_8b_q4k_m_gfx1100_profile()
-ATTN_KV_8B = PROFILE_8B.role_shape("attn_kv")
-FFN_GATE_UP_8B = PROFILE_8B.role_shape("ffn_gate_up")
-
-def test_core_codegen_extension_registry_default_is_empty():
-  assert DEFAULT_CODEGEN_EXTENSION_REGISTRY.postrange == ()
-  assert DEFAULT_CODEGEN_EXTENSION_REGISTRY.devectorizer == ()
-
-  uop = UOp(Ops.NOOP)
-  assert not DEFAULT_CODEGEN_EXTENSION_REGISTRY.disables_ptr_group(uop)
-  assert not DEFAULT_CODEGEN_EXTENSION_REGISTRY.preserves_stage_tag(uop)
-  assert not DEFAULT_CODEGEN_EXTENSION_REGISTRY.preserves_wmma_proof_tag(uop)
-
-def test_live_codegen_extension_registry_routes_prefill_extensions_through_adapter():
-  registry = get_codegen_extension_registry()
-  assert registry.postrange == (PREFILL_POSTRANGE_EXTENSION,)
-  assert registry.devectorizer == (PREFILL_DEVECTORIZER_EXTENSION,)
-
-def test_prefill_devectorizer_extension_disables_ptr_group_for_existing_buffer_id_predicate(monkeypatch):
-  for key in ("PREFILL_DBUF_D3A_POST", "PREFILL_TC_LOCAL_STAGE_B_TILEKEY"):
-    monkeypatch.delenv(key, raising=False)
-  getenv.cache_clear()
-
-  a_buf = UOp(Ops.DEFINE_LOCAL, dtypes.half.ptr(2048, AddrSpace.LOCAL), arg=990)
-  b_buf = UOp(Ops.DEFINE_LOCAL, dtypes.half.ptr(2048, AddrSpace.LOCAL), arg=991)
-  other_buf = UOp(Ops.DEFINE_LOCAL, dtypes.half.ptr(2048, AddrSpace.LOCAL), arg=992)
-  reg_buf = UOp(Ops.DEFINE_REG, dtypes.half.ptr(2048, AddrSpace.REG), arg=991)
-
-  registry = get_codegen_extension_registry()
-  assert not registry.disables_ptr_group(a_buf)
-  monkeypatch.setenv("PREFILL_DBUF_D3A_POST", "1")
-  getenv.cache_clear()
-  assert registry.disables_ptr_group(a_buf)
-  assert registry.disables_ptr_group(b_buf)
-  assert not registry.disables_ptr_group(other_buf)
-  assert not registry.disables_ptr_group(reg_buf)
-
-  monkeypatch.delenv("PREFILL_DBUF_D3A_POST", raising=False)
-  monkeypatch.setenv("PREFILL_TC_LOCAL_STAGE_B_TILEKEY", "1")
-  getenv.cache_clear()
-  assert not registry.disables_ptr_group(a_buf)
-  assert registry.disables_ptr_group(b_buf)
-
-def test_prefill_pipe_codegen_shape_profile_names_existing_literals():
-  profile = TRANSITIONAL_PREFILL_PIPE_SHAPE_PROFILE
-  assert profile.name == "qwen_prefill_pipe_codegen_compat"
-  assert profile.pipe_ns == frozenset((ATTN_KV_8B.N, FFN_GATE_UP_8B.K))
-  assert profile.ffn_dim == FFN_GATE_UP_8B.N
-  assert profile.ubatch_m == FFN_GATE_UP_8B.M
-  assert profile.base_red_dim == FFN_GATE_UP_8B.K
-
-def test_prefill_postrange_pipe_local_stage_decisions_use_shape_profile(monkeypatch):
-  class _Range:
-    def __init__(self, dim:int): self.vmax = dim - 1
-
-  monkeypatch.setenv("PREFILL_WMMA_PIPE_PRIMITIVE", "1")
-  monkeypatch.delenv("PREFILL_WMMA_PIPE_ATTN_KV_NO_LOCAL_STAGE", raising=False)
-  getenv.cache_clear()
-
-  ext = PREFILL_POSTRANGE_EXTENSION
-  assert ext.tc_local_stage_pipe_primitive_disabled_for_ranges((_Range(ATTN_KV_8B.N),))
-  assert ext.tc_local_stage_pipe_primitive_disabled_for_ranges((_Range(FFN_GATE_UP_8B.K),))
-  assert not ext.tc_local_stage_pipe_primitive_disabled_for_ranges((_Range(ATTN_KV_8B.N), _Range(FFN_GATE_UP_8B.N)))
-  assert not ext.tc_local_stage_pipe_primitive_disabled_for_ranges((_Range(2048),))
-
-  assert ext.warmstart_pipe_primitive_no_local_stage_key((frozenset((FFN_GATE_UP_8B.M, ATTN_KV_8B.N)), FFN_GATE_UP_8B.K))
-  assert ext.warmstart_pipe_primitive_no_local_stage_key((frozenset((FFN_GATE_UP_8B.M, FFN_GATE_UP_8B.K)), FFN_GATE_UP_8B.N))
-  assert ext.warmstart_pipe_primitive_no_local_stage_key((frozenset((ATTN_KV_8B.N,)), 1))
-  assert not ext.warmstart_pipe_primitive_no_local_stage_key((frozenset((FFN_GATE_UP_8B.M, 2048)), FFN_GATE_UP_8B.K))
-
-  monkeypatch.setenv("PREFILL_WMMA_PIPE_ATTN_KV_NO_LOCAL_STAGE", "0")
-  getenv.cache_clear()
-  assert not ext.tc_local_stage_pipe_primitive_disabled_for_ranges((_Range(ATTN_KV_8B.N),))
-  assert not ext.warmstart_pipe_primitive_no_local_stage_key((frozenset((FFN_GATE_UP_8B.M, ATTN_KV_8B.N)), FFN_GATE_UP_8B.K))
-
-def test_empty_devectorizer_extension_predicates_are_false():
-  uop = UOp(Ops.NOOP)
-  assert EMPTY_DEVECTORIZER_EXTENSION.name == "empty"
-  assert not EMPTY_DEVECTORIZER_EXTENSION.disables_ptr_group(uop)
-  assert not EMPTY_DEVECTORIZER_EXTENSION.preserves_stage_tag(uop)
-  assert not EMPTY_DEVECTORIZER_EXTENSION.preserves_wmma_proof_tag(uop)
-
 def test_default_amd_isa_extension_descriptors_are_empty():
   assert DEFAULT_AMD_ISA_EXTENSION_DESCRIPTORS == ()
   desc = AMDISARendererExtensionDescriptor("future")
@@ -114,7 +22,7 @@ def test_live_amd_isa_extension_descriptors_route_prefill_policy_through_adapter
 
 def test_extension_interfaces_do_not_import_extra_qk():
   offenders = []
-  for rel in ("tinygrad/codegen/opt/extensions.py", "tinygrad/renderer/isa/extensions.py"):
+  for rel in ("tinygrad/renderer/isa/extensions.py",):
     path = ROOT / rel
     if ROUTE_IMPORT.search(path.read_text()):
       offenders.append(rel)

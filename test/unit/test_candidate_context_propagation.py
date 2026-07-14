@@ -16,23 +16,18 @@ def test_typed_candidate_context_survives_sink_kernel_info():
 
 
 def test_warmstart_candidate_state_restores_after_success():
-  old = (postrange._WARMSTART_OPTS, postrange._WARMSTART_CANDIDATE_CONTEXTS,
-         postrange._WARMSTART_LOCAL_STAGE_KEYS, postrange._WARMSTART_LOCAL_STAGE_DENY_KEYS)
-  with postrange.warmstart_candidate_state({("shape", 1): ("opt",)}, {("shape", 1): _ctx()}, {"stage"}, {"deny"}):
+  old = (postrange._WARMSTART_OPTS, postrange._WARMSTART_CANDIDATE_CONTEXTS)
+  with postrange.warmstart_candidate_state({("shape", 1): ("opt",)}, {("shape", 1): _ctx()}):
     assert postrange._WARMSTART_CANDIDATE_CONTEXTS[("shape", 1)].canonical_identity == "a" * 64
-    assert postrange._WARMSTART_LOCAL_STAGE_KEYS == {"stage"}
-  assert (postrange._WARMSTART_OPTS, postrange._WARMSTART_CANDIDATE_CONTEXTS,
-          postrange._WARMSTART_LOCAL_STAGE_KEYS, postrange._WARMSTART_LOCAL_STAGE_DENY_KEYS) == old
+  assert (postrange._WARMSTART_OPTS, postrange._WARMSTART_CANDIDATE_CONTEXTS) == old
 
 
 def test_warmstart_candidate_state_restores_after_exception():
-  old = (postrange._WARMSTART_OPTS, postrange._WARMSTART_CANDIDATE_CONTEXTS,
-         postrange._WARMSTART_LOCAL_STAGE_KEYS, postrange._WARMSTART_LOCAL_STAGE_DENY_KEYS)
+  old = (postrange._WARMSTART_OPTS, postrange._WARMSTART_CANDIDATE_CONTEXTS)
   with pytest.raises(RuntimeError, match="boom"):
     with postrange.warmstart_candidate_state({("shape", 2): ("opt",)}, {("shape", 2): _ctx()}):
       raise RuntimeError("boom")
-  assert (postrange._WARMSTART_OPTS, postrange._WARMSTART_CANDIDATE_CONTEXTS,
-          postrange._WARMSTART_LOCAL_STAGE_KEYS, postrange._WARMSTART_LOCAL_STAGE_DENY_KEYS) == old
+  assert (postrange._WARMSTART_OPTS, postrange._WARMSTART_CANDIDATE_CONTEXTS) == old
 
 
 def test_warmstart_candidate_context_requires_matching_opts():

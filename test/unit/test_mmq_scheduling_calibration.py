@@ -1,6 +1,4 @@
 import pytest
-import json
-from pathlib import Path
 
 from extra.qk.mmq_scheduling_calibration import summarize_scheduling_relationships, validate_scheduling_calibration
 
@@ -27,14 +25,3 @@ def test_validator_forbids_candidate_fitting_and_missing_evidence():
   with pytest.raises(ValueError, match="candidate timing"): validate_scheduling_calibration(artifact)
   artifact.update(candidate_timing_used_for_fit=False, counter_liveness="zero_suspect")
   with pytest.raises(ValueError, match="counters must be live"): validate_scheduling_calibration(artifact)
-
-
-def test_committed_scheduling_calibration_is_generated_binary_bound_and_repeated():
-  path = Path(__file__).resolve().parents[2] / "bench/prefill-14b-mmq-machine-search/scheduling-calibration-v1-20260711.json"
-  artifact = json.loads(path.read_text())
-  validate_scheduling_calibration(artifact)
-  assert artifact["system_snapshot_id"].startswith("sha256:")
-  assert artifact["repetitions"] == 3 and len(artifact["samples"]) == 45
-  assert len({row["binary_sha256"] for row in artifact["samples"]}) == 15
-  assert len(artifact["randomized_orders"]) == 3
-  assert artifact["candidate_timing_used_for_fit"] is False

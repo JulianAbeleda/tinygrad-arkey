@@ -104,12 +104,9 @@ PREFILL_TC_ATTN = bool(_prefill_tc_attn_default())
 # it bound a symbolic start_pos that fails the concrete-int guard so the path never fired. Overturned 2026-06-20
 # (correct concrete-int, same-process interleaved synced A/B). See docs/prefill-branch-b-tc-attention-result-20260620.md.
 # The loop-found per-shape TC schedule (gate-validated; NO BEAM -- BEAM hangs gfx1100). Forced onto the
-# prefill-v2 fp16 matmuls via _WARMSTART_OPTS by shape key. 4x4 is parked on gfx1100 by default because the
-# generated DBUF path hits the VGPR wall; set PREFILL_ALLOW_PARKED_4X4=1 only for explicit diagnostic work.
-def _prefill_allow_parked_4x4() -> bool: return bool(getenv("PREFILL_ALLOW_PARKED_4X4", 0))
-
+# prefill-v2 fp16 matmuls via _WARMSTART_OPTS by shape key. 4x4 is permanently excluded on gfx1100 because the
+# generated path hits the VGPR wall; retired experiments do not remain selectable production modes.
 def _prefill_v2_without_parked_4x4(opts:tuple) -> tuple:
-  if _prefill_allow_parked_4x4(): return opts
   up = {o.axis: o.arg for o in opts if o.op is OptOps.UPCAST}
   if up.get(0) == 4 and up.get(1) == 4:
     return tuple(Opt(o.op, o.axis, 2) if o.op is OptOps.UPCAST and o.axis == 1 else o for o in opts)
@@ -634,14 +631,7 @@ class Transformer:
     # config-fixed so this is computable at init from the (pre-primitive) nn.Linears. A kernel whose key is
     # absent (e.g. a silu-fused gate) keeps the heuristic; a key that applies-then-errors falls back too
     # (postrange.py). NOT set into the global here -- installed only around the prefill-v2 forward (__call__).
-    # Track-1: a frozen offline schedule table (extra/qk/prefill_v2_schedule_search.py) overrides the static
-    # heuristic per shape when present -- it adds the LOCAL opt the heuristic omits (measured up-to-3x on
-    # LOCAL-starved shapes). Absent/unreadable table -> pure static fallback (zero behavior change).
-    try:
-      _table = qk_ops.prefill_v2_load_table()
-    except Exception:
-      _table = {}
-    def _opts(out_f, in_f): return _prefill_v2_without_parked_4x4(_table.get((out_f, in_f)) or _prefill_v2_opts(out_f, in_f))
+    def _opts(out_f, in_f): return _prefill_v2_without_parked_4x4(_prefill_v2_opts(out_f, in_f))
     return {(frozenset({out_f, PREFILL_UBATCH}), in_f): _opts(out_f, in_f)
             for _, out_f, in_f in self._prefill_v2_covered()}
 
@@ -655,14 +645,12 @@ class Transformer:
     est_gb = prefill_v2_realize_bytes([(o, i) for _, o, i in covered]) / 1e9
     budget_gb = getenv("PREFILL_V2_MAX_REALIZE_GB", 18)
     has_direct_packed = any(is_direct_packed_prefill_linear(lin) for lin, _, _ in covered)
-    if not getenv("PREFILL_V2_FORCE_REALIZE", 0) and not prefill_route_wants_resident_fp16(
-        est_gb=est_gb, budget_gb=budget_gb, has_direct_packed=has_direct_packed):
+    if not prefill_route_wants_resident_fp16(est_gb=est_gb, budget_gb=budget_gb, has_direct_packed=has_direct_packed):
       return 0
-    if est_gb > budget_gb and not getenv("PREFILL_V2_FORCE_REALIZE", 0):
+    if est_gb > budget_gb:
       raise RuntimeError(f"PREFILL_V2 would realize ~{est_gb:.1f} GB of fp16 weights (on top of Q4_K decode "
                          f"storage), over the ~{budget_gb} GB budget -- likely OOM. To permit this overlay, raise "
-                         f"PREFILL_V2_MAX_REALIZE_GB, set PREFILL_V2_FORCE_REALIZE=1, use "
-                         f"PREFILL_ROUTE=direct_packed.")
+                         f"PREFILL_V2_MAX_REALIZE_GB or use PREFILL_ROUTE=direct_packed.")
     n = 0
     for lin, _, _ in covered:
       lin._pf16_w = lin.weight.cast(dtypes.float16).contiguous().realize(); n += 1

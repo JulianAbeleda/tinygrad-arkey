@@ -17,9 +17,6 @@ DEFAULT_TARGET_ROUTE_IDS = (
   "prefill_q4k_int8_wmma_generated_research",
   "prefill_q4k_int8_wmma_tiled_research",
 )
-HYBRID_MMQ_ATOM_ROUTE_ID = "prefill_14b_q4k_q8_1_hybrid_mmq_atom"
-
-
 def _representative_q4k_shapes() -> tuple[tuple[str, int, int, int], ...]:
   return q4k_prefill_role_shape_tuples(qwen3_14b_q4k_m_gfx1100_profile())
 
@@ -149,20 +146,11 @@ def _parse_args() -> argparse.Namespace:
   ap = argparse.ArgumentParser(description=__doc__)
   ap.add_argument("--target-route", action="append", default=[],
                   help="target route id; repeatable. Defaults to historical Q4K/Q8_1 WMMA research routes")
-  ap.add_argument("--hybrid-atom-ffn-gate-up", action="store_true",
-                  help="audit the 14B hybrid MMQ atom scaffold for ffn_gate_up only")
   return ap.parse_args()
 
 
 if __name__ == "__main__":
   args = _parse_args()
-  if args.hybrid_atom_ffn_gate_up:
-    prof = qwen3_14b_q4k_m_gfx1100_profile()
-    row = prof.role_shape("ffn_gate_up")
-    out = build(target_route_ids=(HYBRID_MMQ_ATOM_ROUTE_ID,),
-                representative_shapes=((row.role, row.M, row.N, row.K),),
-                scope="14B hybrid MMQ atom route should be explicit via QK route policy for ffn_gate_up only.")
-  else:
-    out = build(target_route_ids=tuple(args.target_route) or DEFAULT_TARGET_ROUTE_IDS)
+  out = build(target_route_ids=tuple(args.target_route) or DEFAULT_TARGET_ROUTE_IDS)
   print(json.dumps(out, indent=2))
   raise SystemExit(0 if not out["classified_blocker"] else 1)

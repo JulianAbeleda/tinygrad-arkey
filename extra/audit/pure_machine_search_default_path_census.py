@@ -82,25 +82,15 @@ CENSUS_OVERLAY = [
     "next_action": "keep promoted; 8B/14B/32B now share one modular structural-class route",
   }),
   # ----- prefill GEMM -----
-  ("prefill_pipe_role_selective_generated", {
-    "shape_guard": "graph-GEMM ubatch=512; spec role_policy: pipe for attn_qo/attn_kv/ffn_down, lds for ffn_gate_up out_f==12288",
-    "writer": "generated",
-    "selector": "BoltBeam_route_policy_or_env_default",
-    "route_guard": "extra/qk/prefill_graph_gemm_route.py route_pf16_graph_gemm -> describe_prefill_schedule + emit_prefill_gemm_from_spec",
-    "kernel_source": "extra/qk/prefill_schedule_spec.py emit_prefill_gemm_from_spec (PrefillGEMMScheduleSpec lowered via the parameterized RDNA3 WMMA schedule generator ref.build_gemm_pipe/build_gemm_lds2 -> prefill_gen_sched_gemm_*)",
-    "authority_artifact": "bench/tg-p4-prefill-generated-schedule/latest.json (TG_P4_PASS_PREFILL_GENERATED_SCHEDULE: generated build present, role policy preserved)",
-    "rollback_flag": "PREFILL_GRAPH_GEMM=0 returns to the scheduler-owned default",
-    "next_action": "keep opt-in until the executing WMMA substrate is generated instead of Ops.INS",
-  }),
   ("prefill_wmma_lds_dbuf_generated", {
     "shape_guard": "gfx1100 pp512 exact candidate set: attn_qo, attn_kv, ffn_down, ffn_gate_up",
     "writer": "tinygrad_generated",
     "selector": "promoted_candidate_set",
-    "route_guard": "tinygrad/llm/model.py default activation -> manifest-promoted candidate-set path; exact candidate admission and four-role census",
+    "route_guard": "tinygrad/llm/model.py default activation -> manifest-promoted candidate set; extra/qk/prefill_graph_gemm_route.py performs exact admission",
     "kernel_source": "ordinary tinygrad Tensor matmul lowered with exact candidate-owned generated WMMA-LDS warmstart context",
     "authority_artifact": "bench/prefill-pure-full-kernel/multirole-buffer2-candidate-set-v1/whole-model-quality.json + whole-prefill-pinned.json",
     "rollback_flag": "PREFILL_GRAPH_GEMM=0 selects the ordinary scheduler rollback",
-    "next_action": "keep promoted while whole-model parity and pinned speed gates remain green; replace only through a newly qualified candidate set",
+    "next_action": "keep promoted while whole-model parity and pinned speed gates remain green; replace only with another qualified generated candidate set",
   }),
   ("prefill_v2_scheduler_matmul_default", {
     "shape_guard": "PREFILL_V2 fp16 resident/chunked matmul outside promoted exact candidate applicability or explicit PREFILL_GRAPH_GEMM=0",
@@ -109,7 +99,7 @@ CENSUS_OVERLAY = [
     "route_guard": "tinygrad/llm/prefill_routes.py fallback path: PREFILL_GRAPH_GEMM=0 or promoted candidate not applicable -> x.cast(float16).linear(w.transpose(), bias)",
     "kernel_source": "ordinary tinygrad graph lowering with model.py warmstart TC opts installed around PREFILL_V2 jit",
     "authority_artifact": "docs/pure-machine-search.md",
-    "rollback_flag": "PREFILL_GRAPH_GEMM=1 opts into prefill_pipe_role_selective_generated raw graph-GEMM research",
+    "rollback_flag": "PREFILL_GRAPH_GEMM=1 returns to the promoted generated candidate set when the exact shape is admitted",
     "next_action": "retain as a pure rollback for unsupported shapes; exclude from generated production candidate selection",
   }),
   ("prefill_q4k_direct_tile4x4_default", {

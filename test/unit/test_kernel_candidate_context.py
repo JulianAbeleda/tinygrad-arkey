@@ -104,20 +104,14 @@ def test_warmstart_candidate_state_restores_profiles_sequentially(monkeypatch):
   old_context, first_context, second_context = (_sink("a" * 64).arg.candidate_context,
                                                 _sink("b" * 64).arg.candidate_context,
                                                 _sink("c" * 64).arg.candidate_context)
-  old_opts, old_contexts, old_local, old_deny = {old_key: ()}, {old_key: old_context}, {old_key}, {old_key}
+  old_opts, old_contexts = {old_key: ()}, {old_key: old_context}
   monkeypatch.setattr(postrange, "_WARMSTART_OPTS", old_opts)
   monkeypatch.setattr(postrange, "_WARMSTART_CANDIDATE_CONTEXTS", old_contexts)
-  monkeypatch.setattr(postrange, "_WARMSTART_LOCAL_STAGE_KEYS", old_local)
-  monkeypatch.setattr(postrange, "_WARMSTART_LOCAL_STAGE_DENY_KEYS", old_deny)
   for key, context in ((first_key, first_context), (second_key, second_context)):
-    with postrange.warmstart_candidate_state({key: ()}, {key: context}, {key}, {key}):
+    with postrange.warmstart_candidate_state({key: ()}, {key: context}):
       assert postrange._WARMSTART_OPTS == {key: ()}
       assert postrange._WARMSTART_CANDIDATE_CONTEXTS == {key: context}
-      assert postrange._WARMSTART_LOCAL_STAGE_KEYS == {key}
-      assert postrange._WARMSTART_LOCAL_STAGE_DENY_KEYS == {key}
-    assert (postrange._WARMSTART_OPTS, postrange._WARMSTART_CANDIDATE_CONTEXTS,
-            postrange._WARMSTART_LOCAL_STAGE_KEYS, postrange._WARMSTART_LOCAL_STAGE_DENY_KEYS) == \
-           (old_opts, old_contexts, old_local, old_deny)
+    assert (postrange._WARMSTART_OPTS, postrange._WARMSTART_CANDIDATE_CONTEXTS) == (old_opts, old_contexts)
 
 
 def test_warmstart_candidate_state_fails_closed_on_context_collision(monkeypatch):

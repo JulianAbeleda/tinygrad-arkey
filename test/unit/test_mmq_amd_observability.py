@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 import pytest
 
@@ -161,27 +160,3 @@ def test_differential_probe_validation_requires_system_identity_and_known_status
   validate_differential_probe(artifact)
   artifact["system_snapshot_id"] = None
   with pytest.raises(ValueError, match="system_snapshot_id"): validate_differential_probe(artifact)
-
-
-def test_committed_dynamic_evidence_is_binary_bound_and_rejects_bad_snapshot():
-  path = Path(__file__).resolve().parents[2] / "bench/prefill-14b-mmq-machine-search/dynamic-evidence-v3-20260711.json"
-  artifact = json.loads(path.read_text())
-  assert artifact["production_dispatch_changed"] is False
-  assert artifact["system_snapshot_id"].startswith("sha256:") and artifact["rejected_system_snapshot_id"].startswith("sha256:")
-  assert artifact["system_fingerprint"]["gpu_uuid"].startswith("GPU-")
-  assert artifact["system_fingerprint"]["gpu_compute_units"] == 96
-  assert {row["binary_sha256"] for row in artifact["candidates"]} == {
-    "4797f09f8961d75db4bff10a71e1c003b458c75c7cd7ec6d27e02476ec23ae43",
-    "3810864792e79b1304dc78dd31c40026c5274f356028476257ae00c54b0acb69",
-  }
-  assert artifact["store_transaction_calibration"]["supporting_samples"] == 24
-
-
-def test_committed_global_load_proxy_is_scoped_and_binary_bound():
-  path = Path(__file__).resolve().parents[2] / "bench/prefill-14b-mmq-machine-search/global-load-proxy-v4-20260711.json"
-  artifact = json.loads(path.read_text())
-  assert artifact["calibration_result"]["status"] == "live"
-  assert artifact["calibration_result"]["fixed_case_request_overhead"] == 4
-  assert artifact["calibration_result"]["supporting_samples"] == 12
-  assert len({point["binary_sha256"] for point in artifact["points"]}) == 6
-  assert all(point["GL2C_MC_RDREQ"][0] - 4 == point["unique_128b_input_lines"] for point in artifact["points"])

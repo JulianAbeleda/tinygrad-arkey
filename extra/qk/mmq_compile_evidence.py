@@ -22,7 +22,7 @@ from extra.qk.mmq_q4k_q8_atom import Q4K_WORDS_PER_BLOCK, _q4k_q8_1_bounded_ds4_
 from extra.qk.mmq_q4k_q8_reference import Q4_K_BLOCK_ELEMS
 
 SHAPE = {"M": 16, "N": 16, "K": 256}
-COMPILER_ENV = ("AMD", "AMD_CC", "AMD_COMGR_SAVE_TEMPS", "AMD_ISA_REG_ACCUM", "COALESCED_LOAD_LOWERING",
+COMPILER_ENV = ("AMD", "AMD_CC", "AMD_COMGR_SAVE_TEMPS", "COALESCED_LOAD_LOWERING",
                 "DEV", "HIPCC", "NOOPT", "REG_STORE_DEVEC", "ROCM_PATH", "SCHED_LIST", "SCHED_UNROLL",
                 "WARP_REDUCE_LOWERING")
 

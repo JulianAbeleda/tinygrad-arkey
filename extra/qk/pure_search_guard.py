@@ -22,7 +22,6 @@ import json
 from typing import Any
 
 from extra.qk.route_manifest import ROUTES, FINAL_DEFAULT_PROVENANCE, default_routes, promoted_prefill_candidate_policy
-from extra.qk.pure_kernel_surface_audit import route_surface_row
 
 def _enabled(env: dict[str, Any], key: str) -> bool:
   return str(env.get(key, "0")).strip().lower() not in ("0", "false", "off", "no", "")
@@ -99,10 +98,18 @@ def _env_route_id(env: dict[str, str], **facts: Any) -> str:
 _PREFILL_GRAPH_GEMM_ENV = {"PREFILL_GRAPH_GEMM": "1"}
 _PREFILL_SCHEDULER_ROLLBACK_ENV = {"PREFILL_GRAPH_GEMM": "0"}
 _PREFILL_CANDIDATE_ROUTE = promoted_prefill_candidate_policy()["route_id"]
+_RETIRED_PREFILL_ROUTE_KEYS = ("PREFILL_GEMM_PROFILE", "PREFILL_WMMA_PIPE_PRIMITIVE", "PREFILL_WMMA_LDS_PRIMITIVE", "PREFILL_DBUF")
 
 def _prefill_policy_env(env: dict[str, Any]) -> dict[str, Any]:
   """Resolve the shipped prefill default from manifest policy without mutating the caller's environment."""
-  if "PREFILL_GRAPH_GEMM" in env: return env
+  retired = [key for key in _RETIRED_PREFILL_ROUTE_KEYS if key in env]
+  if retired: raise ValueError(f"retired prefill route selectors are not supported: {', '.join(retired)}")
+  # GRAPH_GEMM=0 is the sole rollback. GRAPH_GEMM=1 selects the same promoted candidate as the absent-env default;
+  # the retired raw pipe/LDS kernels are no longer selectable. Explicit candidate evidence remains an override.
+  if not _enabled(env, "PREFILL_GRAPH_GEMM") and "PREFILL_GRAPH_GEMM" in env: return env
+  if any(env.get(key) is not None for key in ("BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_JSON", "BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH",
+                                               "BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON", "BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH")):
+    return env
   return {**promoted_prefill_candidate_policy()["runtime_env"], **env}
 
 
@@ -120,8 +127,8 @@ def _prefill_candidate_selected(env: dict[str, Any]) -> bool:
   if payload_text is None and identity is None: return False
   if payload_text is None or identity is None:
     raise ValueError("BoltBeam full-kernel candidate payload and hash must be provided together")
-  if not _enabled(env, "PREFILL_GRAPH_GEMM") or not _enabled(env, "PREFILL_WMMA_LDS_PRIMITIVE"):
-    raise ValueError("BoltBeam full-kernel candidate requires the generated graph-GEMM LDS primitive")
+  if not _enabled(env, "PREFILL_GRAPH_GEMM"):
+    raise ValueError("BoltBeam full-kernel candidate requires the generated graph-GEMM route")
   from extra.qk.prefill_graph_gemm_route import _candidate_registry_from_env
   return _candidate_registry_from_env(env) is not None
 
@@ -146,7 +153,7 @@ HOT_FAMILIES = [
    "rollback_active": lambda e: False},
   {"family": "prefill_gemm",
    "generated": _default_route_id(workload="prefill", quant=["fp16"], roles=["attn_qo", "attn_kv", "ffn_down", "ffn_gate_up"]),
-   "oracle": _env_route_id(_PREFILL_GRAPH_GEMM_ENV, workload="prefill", quant=["fp16", "Q4_K", "Q6_K"]),
+   "oracle": _env_route_id(_PREFILL_SCHEDULER_ROLLBACK_ENV, workload="prefill", quant=["fp16"]),
    "effective": "prefill_gemm"},
   # Q4_K quantized prefill (14B/32B memory-safe default). The direct-packed default is descriptor-owned; the opt-in
   # PREFILL_Q4K_WMMA_FUSED route remains raw-ISA WMMA and is not selected here.
@@ -167,19 +174,7 @@ def _prefill_gemm_effective(env: dict[str, Any]) -> tuple[str, bool]:
   if not _enabled(env, "PREFILL_GRAPH_GEMM"):
     return _env_route_id(_PREFILL_SCHEDULER_ROLLBACK_ENV, workload="prefill", quant=["fp16"],
                          roles=["attn_qo", "attn_kv", "ffn_down", "ffn_gate_up"]), False
-  if str(env.get("PREFILL_GEMM_PROFILE", "auto")).strip().lower() == "hand_asm_lds2":
-    return "prefill_hand_asm_lds2", True
-  if (_enabled(env, "PREFILL_WMMA_PIPE_PRIMITIVE") and _enabled(env, "PREFILL_WMMA_LDS_PRIMITIVE") and
-      _enabled(env, "PREFILL_DBUF")):
-    return _env_route_id({**_PREFILL_GRAPH_GEMM_ENV, "PREFILL_WMMA_PIPE_PRIMITIVE": "1",
-                          "PREFILL_WMMA_LDS_PRIMITIVE": "1", "PREFILL_DBUF": "1"}, workload="prefill", quant=["fp16"]), False
-  if _enabled(env, "PREFILL_WMMA_PIPE_PRIMITIVE"):
-    return _env_route_id({**_PREFILL_GRAPH_GEMM_ENV, "PREFILL_WMMA_PIPE_PRIMITIVE": "1"},
-                         workload="prefill", quant=["fp16"]), False
-  if _enabled(env, "PREFILL_WMMA_LDS_PRIMITIVE") and _enabled(env, "PREFILL_DBUF"):
-    return _env_route_id({**_PREFILL_GRAPH_GEMM_ENV, "PREFILL_WMMA_LDS_PRIMITIVE": "1", "PREFILL_DBUF": "1"},
-                         workload="prefill", quant=["fp16"]), False
-  return _env_route_id(_PREFILL_GRAPH_GEMM_ENV, workload="prefill", quant=["fp16", "Q4_K", "Q6_K"]), True
+  raise RuntimeError("PREFILL_GRAPH_GEMM=1 requires an admitted generated candidate set")
 
 
 def _provenance(rid: str) -> str:
@@ -188,6 +183,12 @@ def _provenance(rid: str) -> str:
 
 def _replacement_scope(rid: str) -> str:
   return str(ROUTES.get(rid, {}).get("replacement_scope", "") or ROUTES.get(rid, {}).get("note", ""))
+
+def _surface(rid:str, provenance:str) -> tuple[str,bool]:
+  if rid == _PREFILL_CANDIDATE_ROUTE: return "compiler_generated_candidate", True
+  if provenance == "tinygrad_scheduler_generated": return "ordinary_tinygrad_graph", True
+  if provenance == "machine_authored_generated": return "generated_kernel", True
+  return provenance or "unknown", False
 
 
 def effective_routes(env: dict[str, Any] | None = None) -> list[dict[str, Any]]:
@@ -201,11 +202,11 @@ def effective_routes(env: dict[str, Any] | None = None) -> list[dict[str, Any]]:
       rolled_back = fam["rollback_active"](e)
       rid = fam["oracle"] if rolled_back else fam["generated"]
     prov = _provenance(rid)
-    surface = route_surface_row(rid)
+    surface_class, strict_pure = _surface(rid, prov)
     row = {"family": fam["family"], "effective_route": rid, "provenance": prov,
-                "surface_class": surface["surface_class"], "strict_pure": surface["strict_pure"],
+                "surface_class": surface_class, "strict_pure": strict_pure,
                 "manifest_pure": prov in FINAL_DEFAULT_PROVENANCE,
-                "rolled_back_to_oracle": rolled_back, "pure": surface["strict_pure"]}
+                "rolled_back_to_oracle": rolled_back, "pure": strict_pure}
     if rid == _PREFILL_CANDIDATE_ROUTE:
       candidate_env = _prefill_policy_env(e)
       if "BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH" in candidate_env:

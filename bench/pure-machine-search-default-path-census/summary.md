@@ -14,7 +14,7 @@ Headline: 6 kernels on the default path are non-tinygrad-generated. 6 are machin
 | decode_q6k_coop_generated | decode | machine_authored_generated | yes | BoltBeam_route_policy_or_env_default | Q6_K | bench/tg-p3-q6k-generated-coop/latest.json | DECODE_Q6K_GENERATED=0 no longer selects a manifest hand-kernel rollback; generated Q6_K decode is the only manifest kernel route |
 | decode_flash_live_split_g4_8b_kvboth | decode | machine_authored_generated | yes | BoltBeam_route_policy_or_env_default | fp16 | bench/tg-p14-amd-recovery-and-pure-attention-landing/phase2_final_result.json | DECODE_LIVE_SPLIT=0 exits the live-split default; no manifest fallback route row remains |
 | decode_flash_block_tile_g5_konly | decode | machine_authored_generated | yes | BoltBeam_route_policy_or_env_default | fp16 | bench/gp-track/gp4_latest.json | DECODE_LIVE_SPLIT=0 exits the live-split default; no manifest fallback route row remains |
-| prefill_v2_scheduler_matmul_default | prefill | tinygrad_scheduler_generated | yes | env_default | Q4_K,Q6_K,fp16 | docs/pure-machine-search.md | PREFILL_GRAPH_GEMM=1 opts into prefill_pipe_role_selective_generated raw graph-GEMM research |
+| prefill_wmma_lds_dbuf_generated | prefill | tinygrad_scheduler_generated | yes | promoted_candidate_set | fp16 | bench/prefill-pure-full-kernel/multirole-buffer2-candidate-set-v1/whole-model-quality.json + whole-prefill-pinned.json | PREFILL_GRAPH_GEMM=0 selects the ordinary scheduler rollback |
 | prefill_q4k_direct_tile4x4_default | prefill | machine_authored_generated | yes | env_default | Q4_K | docs/prefill-lessons-ledger.md | PREFILL_Q4K_DIRECT_SCHEDULE=legacy |
 | prefill_q6k_direct_generated | prefill | machine_authored_generated | yes | env_default | Q6_K | test/unit/test_q6k_prefill_route_spec.py + test/unit/test_llm_prefill_routes.py | PREFILL_Q6K_PACKED_LOAD=0 reaches the legacy non-packed debug path; no manifest default rollback remains |
 
@@ -22,7 +22,7 @@ Headline: 6 kernels on the default path are non-tinygrad-generated. 6 are machin
 
 | route_id | provenance | purity_status | next_action |
 |---|---|---|---|
-| prefill_pipe_role_selective_generated | external_handwritten_kernel | research | keep opt-in until the executing WMMA substrate is generated instead of Ops.INS |
+| prefill_v2_scheduler_matmul_default | tinygrad_scheduler_generated | research | retain as a pure rollback for unsupported shapes; exclude from generated production candidate selection |
 
 ## Strict-purity debt
 
@@ -33,8 +33,8 @@ Headline: 6 kernels on the default path are non-tinygrad-generated. 6 are machin
 - **decode_q6k_coop_generated** (default): tinygrad/llm/decode_routes.py q6k_primitive_linear_call generated branch: getenv('DECODE_Q6K_GENERATED', 1) or QK_ROUTE_POLICY decode_q6k_coop_generated -> emit_q6k_gemv_kernel(spec) fires the coop/partial route; shipped hand kernels short-circuited
 - **decode_flash_live_split_g4_8b_kvboth** (default): tinygrad/llm/decode_routes.py attention live-split branch (structural class B=1,Hd=128,Hkv=8,Hq%Hkv==0): default-on DECODE_LIVE_SPLIT=1 -> FlashDecodeAttentionSpec live-split block tile + fused combine
 - **decode_flash_block_tile_g5_konly** (default): tinygrad/llm/decode_routes.py attention live-split branch (structural class B=1,Hd=128,Hkv=8,Hq%Hkv==0; covers 14B Hq=40/G=5): QK_ROUTE_POLICY selected_route=decode_flash_block_tile_g5_konly if present, else DECODE_LIVE_SPLIT default 1; FlashDecodeAttentionSpec owns staging/geometry/combine
-- **prefill_pipe_role_selective_generated** (fallback): extra/qk/prefill_graph_gemm_route.py route_pf16_graph_gemm -> describe_prefill_schedule + emit_prefill_gemm_from_spec
-- **prefill_v2_scheduler_matmul_default** (default): tinygrad/llm/prefill_routes.py route_prefill_linear default path: PREFILL_GRAPH_GEMM=0 -> x.cast(float16).linear(w.transpose(), bias)
+- **prefill_wmma_lds_dbuf_generated** (default): tinygrad/llm/model.py default activation -> manifest-promoted candidate set; extra/qk/prefill_graph_gemm_route.py performs exact admission
+- **prefill_v2_scheduler_matmul_default** (fallback): tinygrad/llm/prefill_routes.py fallback path: PREFILL_GRAPH_GEMM=0 or promoted candidate not applicable -> x.cast(float16).linear(w.transpose(), bias)
 - **prefill_q4k_direct_tile4x4_default** (default): tinygrad/llm/prefill_routes.py Q4_K direct-packed default -> Q4KPrefillRouteSpec + emit_q4k_packed_prefill_kernel; _direct_packed_opts selects LOCAL:0:16, LOCAL:1:16, UPCAST:0:4, UPCAST:1:4
 - **prefill_q6k_direct_generated** (default): tinygrad/llm/prefill_routes.py Q6_K direct-packed branch: PREFILL_Q6K_PACKED_LOAD default-on -> Q6KPrefillRouteSpec + emit_q6k_packed_prefill_kernel; direct_out for parts==1/PREFILL_DIRECT_OUT=1, otherwise partials
 

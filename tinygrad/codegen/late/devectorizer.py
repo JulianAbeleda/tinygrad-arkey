@@ -7,7 +7,6 @@ from tinygrad.uop.ops import UOp, Ops, UPat, PatternMatcher, GroupOp, identity_e
 from tinygrad.uop.symbolic import uop_given_valid, parse_valid, invalid_gate
 from tinygrad.helpers import getenv, flatten, prod
 from tinygrad.renderer import Renderer
-from tinygrad.codegen.opt.extensions import get_codegen_extension_registry
 
 # ***** image load valid simplification *****
 
@@ -102,8 +101,6 @@ def fold_expanded_index(midx:UOp):
   ret = []
   idxs: list[int|None] = [None]*len(midx.src)
   global_offset = 0
-  if get_codegen_extension_registry().disables_ptr_group(buf):
-    return None
   no_group = getenv("DEVECTORIZE_NO_PTR_GROUP", 0)
   for offsets in offsets_rootsrc.values():
     grouped_offsets = [[x] for x in sorted(offsets.keys())] if no_group else \
@@ -225,9 +222,7 @@ def split_load_store(ctx:Renderer|None, ls:UOp, idx:UOp):
       lidx = buf.index((offset + global_offset).valid(mask), ptr=True)
       if fold_length > 1: lidx = lidx.cast(buf.ptrdtype.base.vec(fold_length).ptr(size=buf_size, addrspace=buf.addrspace))
       if ls.op is Ops.STORE:
-        if getenv("PREFILL_STAGE_PRESERVE_TAGS", 0) and ls.tag is not None: lidx = lidx.replace(tag=ls.tag)
-        ret.append(ls.replace(src=(lidx,ls.src[1].gep(tuple(range(global_offset, global_offset+fold_length))))+ls.src[2:],
-                              tag=ls.tag if getenv("PREFILL_STAGE_PRESERVE_TAGS", 0) else None))
+        ret.append(ls.replace(src=(lidx,ls.src[1].gep(tuple(range(global_offset, global_offset+fold_length))))+ls.src[2:]))
       else: ret.append(ls.replace(src=(lidx,)+ls.src[1:], dtype=ls.dtype.scalar().vec(fold_length)))
       global_offset += fold_length
       break
@@ -321,8 +316,7 @@ devectorize_buf_and_index = PatternMatcher([
 devectorize_alu = PatternMatcher([
   # CAST after AFTER
   (UPat(Ops.CAST, name="c").f(Ops.AFTER, allow_any_len=True, name="a"),
-   lambda c,a: (y if not (getenv("PREFILL_WMMA_AB_PROOF_META", 0) and isinstance(a.tag, tuple) and a.tag and a.tag[0] == "wmma_frag_buffer_proof") else y.replace(tag=a.tag))
-               if (y := c.src[0].after(*a.src[1:]).cast(c.dtype)) is not None else None),
+   lambda c,a: c.src[0].after(*a.src[1:]).cast(c.dtype)),
   # no ALU on vectorized dtypes
   (UPat((*GroupOp.ALU, Ops.CAST, Ops.BITCAST), name="alu"), no_vectorized_alu),
   (UPat(Ops.WMMA, name="wmma"), no_vectorized_wmma),
@@ -330,9 +324,7 @@ devectorize_alu = PatternMatcher([
 
 pm_render = PatternMatcher([
   # preserve AFTER ordering while scalarizing a vector value for rendering
-  (UPat(Ops.AFTER, name="a").f(Ops.GEP, name="gep"),
-   lambda gep,a: (y if not (getenv("PREFILL_WMMA_AB_PROOF_META", 0) and isinstance(a.tag, tuple) and a.tag and a.tag[0] == "wmma_frag_buffer_proof") else y.replace(tag=a.tag))
-                 if (y := a.src[0].gep(gep.arg).after(*a.src[1:])) is not None else None),
+  (UPat(Ops.AFTER, name="a").f(Ops.GEP, name="gep"), lambda gep,a: a.src[0].gep(gep.arg).after(*a.src[1:])),
   # for rendering, we use explicit VECTORIZE
   (UPat(Ops.CONST, name='c'),
    lambda c: UOp(Ops.STACK, c.dtype, (UOp.const(c.dtype.scalar(), c.arg),)*c.dtype.vcount) if c.dtype.vcount > 1 else None),

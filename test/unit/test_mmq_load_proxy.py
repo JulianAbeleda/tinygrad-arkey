@@ -1,6 +1,4 @@
 import pytest
-import json
-from pathlib import Path
 
 from extra.qk.mmq_load_proxy import bounded_mmq_input_line_contract, build_mmq_load_proxy, validate_mmq_load_proxy
 
@@ -34,16 +32,3 @@ def test_load_proxy_rejects_identity_sample_and_floor_failures():
   with pytest.raises(ValueError, match="below semantic"):
     build_mmq_load_proxy(system_snapshot_id="sha256:" + "c" * 64, binaries=BINS,
       samples={"gated_matrix_v0": [57] * 3, "direct_owner_v0": [75] * 3}, counter_liveness_id="x")
-
-
-def test_committed_v5_load_proxy_is_identity_bound_and_does_not_transfer_calibration_offset():
-  path = Path(__file__).resolve().parents[2] / "bench/prefill-14b-mmq-machine-search/mmq-load-proxy-v5-20260711.json"
-  artifact = json.loads(path.read_text())
-  validate_mmq_load_proxy(artifact)
-  assert artifact["system_snapshot_id"].startswith("sha256:")
-  assert artifact["semantic_contract"]["semantic_unique_input_line_floor"] == 58
-  rows = {row["writeback_mode"]: row for row in artifact["candidates"]}
-  assert rows["gated_matrix_v0"]["measured_request_interval"] == [137, 138]
-  assert rows["direct_owner_v0"]["measured_request_interval"] == [75, 76]
-  assert artifact["cross_candidate"]["gated_minus_direct_request_interval"] == [61, 63]
-  assert artifact["calibration_provenance"]["transfer_to_mmq"] is False

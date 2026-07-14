@@ -8,7 +8,6 @@ from tinygrad.helpers import prod, all_same, getenv, dedup, all_int, DEBUG, SPLI
 from tinygrad.helpers import PCONTIG, FLOAT16, OPENPILOT_HACKS, argsort, partition, get_single_element
 from tinygrad.codegen.simplify import pm_flatten_range, pm_reduce_simplify
 from tinygrad.codegen.opt import Opt, KernelOptError
-from tinygrad.codegen.opt.prefill_value_key import PrefillSourceValueKey
 from tinygrad.schedule.indexing import run_rangeify, BufferizeOpts, IndexingContext, apply_movement_op
 from tinygrad.schedule.multi import multi_pm
 from tinygrad.schedule.allreduce import create_allreduce_function
@@ -16,75 +15,6 @@ from tinygrad.schedule.allreduce import create_allreduce_function
 # creation can recurse a lot
 import sys
 sys.setrecursionlimit(10000)
-
-# *** PREFILL_DBUF: generated double-buffered K-loop primitive (Step 1 of the pure-substrate prefill scope) ***
-# Default-off. Everything behind this gate. The primitive has three sub-parts, all gated by the same flag:
-#   1b (storage): the LOCAL bufferize branch allocates NBUF=2 LDS slots and indexes store/read by (k&1).
-#   1c (peel):    an extra UNROLL-by-2 on the K reduce axis, applied in postrange.apply_opts, so the two
-#                 K-copies land in one basic block as intra-body forward AFTER edges (no second END over the
-#                 K-range -> CFGContext never sees the same-range cycle at linearizer.py:162).
-#   1d (waitcnt): NOT here -- it is the AMD-renderer residual (deferred vmcnt drain). Measure 1c first.
-def PREFILL_DBUF() -> int: return getenv("PREFILL_DBUF", 0)
-def PREFILL_DBUF_NBUF() -> int: return getenv("PREFILL_DBUF_NBUF", 2)
-_PREFILL_DBUF_ROTATED_STAGE_LOWERING_AUDIT_ROWS: list[dict] = []
-
-def prefill_dbuf_rotated_stage_owner_fields(tag) -> dict:
-  if not isinstance(tag, tuple) or not tag or tag[0] != "wmma_frag_buffer_proof": return {}
-  out = {"kind": tag[0]}
-  for item in tag[1:]:
-    if isinstance(item, tuple) and len(item) == 2 and isinstance(item[0], str): out[item[0]] = item[1]
-  return out
-
-def prefill_single_buffer_stage_value_key(tag) -> PrefillSourceValueKey|None:
-  """Recognize the exact typed identity carried by an owned, single-buffer prefill STAGE."""
-  if not isinstance(tag, tuple) or not tag or tag[0] != "wmma_frag_buffer_proof": return None
-  items = tag[1:]
-  if not any(isinstance(item, tuple) and item and item[0] == "value_key" for item in items): return None
-  if any(not isinstance(item, tuple) or len(item) != 2 or not isinstance(item[0], str) for item in items):
-    raise KernelOptError("prefill STAGE value identity tag has malformed fields")
-  names = [item[0] for item in items]
-  if len(names) != len(set(names)): raise KernelOptError("prefill STAGE value identity tag has duplicate fields")
-  fields = dict(items)
-  key = fields["value_key"]
-  if not isinstance(key, PrefillSourceValueKey):
-    raise KernelOptError("prefill STAGE value identity must be a PrefillSourceValueKey")
-  if fields.get("role") != key.role or fields.get("nbuf") != 1 or fields.get("owned_stage") != f"{key.role}_IDENTITY":
-    raise KernelOptError("prefill STAGE value identity requires matching owned identity role and nbuf=1")
-  buffer_id = fields.get("lds_buffer_id")
-  if key.buffer_id != ("lds", buffer_id, 0):
-    raise KernelOptError("prefill STAGE value identity LDS buffer does not match its owner tag")
-  return key
-
-def prefill_dbuf_clear_rotated_stage_lowering_audit() -> None:
-  _PREFILL_DBUF_ROTATED_STAGE_LOWERING_AUDIT_ROWS.clear()
-
-def prefill_dbuf_rotated_stage_lowering_audit_rows() -> list[dict]:
-  return list(_PREFILL_DBUF_ROTATED_STAGE_LOWERING_AUDIT_ROWS)
-
-def _prefill_dbuf_owned_b_stage_lowering(ctx:itertools.count, x:UOp, idx:UOp, size:int, rngs:list[UOp], sdtype:PtrDType) -> UOp|None:
-  fields = prefill_dbuf_rotated_stage_owner_fields(x.tag)
-  if not fields or fields.get("role") != "B" or fields.get("owned_stage") != "B_ROTATE": return None
-  missing = [k for k in ("lds_buffer_id", "nbuf", "tile_count", "tile_elems", "lifecycle", "rotation") if fields.get(k) is None]
-  if missing: raise KernelOptError(f"PREFILL_DBUF owned B rotate lowering missing fields: {missing}")
-  if fields.get("lifecycle") != "prologue_body_tail" or fields.get("rotation") != "kr_mod_nbuf":
-    raise KernelOptError("PREFILL_DBUF owned B rotate lowering requires lifecycle=prologue_body_tail and rotation=kr_mod_nbuf")
-  if not isinstance(fields.get("nbuf"), int) or fields["nbuf"] <= 1:
-    raise KernelOptError("PREFILL_DBUF owned B rotate lowering requires integer nbuf > 1")
-  if not isinstance(fields.get("tile_count"), int) or not isinstance(fields.get("tile_elems"), int):
-    raise KernelOptError("PREFILL_DBUF owned B rotate lowering requires concrete tile_count and tile_elems")
-  if prefill_dbuf_reduce_range(dedup(tuple(x.ranges) + tuple(idx.ranges))) is None:
-    raise KernelOptError("PREFILL_DBUF owned B rotate lowering requires a concrete reduce/slot carrier")
-  raise KernelOptError("PREFILL_DBUF owned B rotate lowering reached rangeify hook, but prologue/body/tail materializer is not implemented")
-
-def prefill_dbuf_reduce_range(rngs) -> UOp|None:
-  # pick the K slot-carrier: the innermost (highest axis id) const-even-sized REDUCE/UNROLL range.
-  # fail-closed: symbolic or odd or absent -> None (caller keeps single-buffer behavior).
-  cands = [r for r in rngs if r.op is Ops.RANGE and r.arg[-1] in (AxisType.REDUCE, AxisType.UNROLL, AxisType.GROUP_REDUCE)
-           and r.src[0].op is Ops.CONST and isinstance(r.src[0].arg, int) and (int(r.vmax)+1) % 2 == 0]
-  if getenv("PREFILL_DBUF_REDUCE_RANGE_STRICT", 0):
-    red = [r for r in cands if r.arg[-1] is AxisType.REDUCE]
-    if red: return max(red, key=lambda r: r.arg[0])
-  return max(cands, key=lambda r: r.arg[0]) if cands else None
 
 def add_ranges_to_store(ctx, x):
   if x.src[0]._shape is None or x.src[1]._shape is None or x.src[0].shape == (): return None
@@ -497,23 +427,9 @@ def bufferize_to_store(ctx:itertools.count, x:UOp, idx:UOp, allow_locals=True):
 
   if allow_locals:
     # handle locals
-    # NOTE (PREFILL_DBUF, removed): a branch formerly sat here that enlarged this LDS allocation to size*NBUF slots
-    # for a staged double-buffer tile. It was a functional no-op -- it reserved the extra LDS but the store and the
-    # downstream read still used the SAME idx (no per-slot (k&1) offset), so it only wasted LDS while producing
-    # byte-identical results. The real paired (k&1) store+read indexing lives at the co-located _tc_local_stage_src
-    # site in postrange.py. The dead branch has been deleted; the plain single-slot allocation below is the sole path.
-    if (owned_lowering := _prefill_dbuf_owned_b_stage_lowering(ctx, x, idx, size, rngs, sdtype)) is not None: return owned_lowering
-    value_key = prefill_single_buffer_stage_value_key(x.tag)
-    identity_tag = x.tag if value_key is not None else None
     buf = UOp.placeholder((size,), x.dtype, next(ctx), AddrSpace.LOCAL)
-    if identity_tag is not None: buf = buf.replace(tag=identity_tag)
-    if getenv("PREFILL_STAGE_PRESERVE_TAGS", 0): buf = buf.replace(tag=x.tag)
     store_idx = buf.broadcast(x.src[1].dtype.count).index(idx, dtype=sdtype)
-    if identity_tag is not None: store_idx = store_idx.replace(tag=identity_tag)
-    if getenv("PREFILL_STAGE_PRESERVE_TAGS", 0): store_idx = store_idx.replace(tag=x.tag)
     do_store = store_idx.store(x.src[0])
-    if identity_tag is not None: do_store = do_store.replace(tag=identity_tag)
-    if getenv("PREFILL_STAGE_PRESERVE_TAGS", 0): do_store = do_store.replace(tag=x.tag)
     do_store = do_store.end(*rngs)
     return buf.after(do_store.barrier())
 

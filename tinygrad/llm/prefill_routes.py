@@ -392,12 +392,6 @@ def route_prefill_linear(lin, x:Tensor, *, prefill_graph_gemm:bool) -> Tensor:
   route = prefill_route_policy()
   w = getattr(lin, "_pf16_w", None)
 
-  # Fused Q4_K WMMA prefill (opt-in): packed 4-bit resident weights, in-kernel dequant->fp16-LDS->WMMA. Preferred for
-  # 14B where the fp16 weight copy OOMs; falls through to the packed VALU route if it can't bind the shape.
-  if bool(_env("PREFILL_Q4K_WMMA_FUSED", 0)) and _is_q4k_linear(lin):
-    routed = qk_ops.route_q4k_graph_gemm(lin, x)
-    if routed is not None: return routed
-
   if route == "direct_packed" or (route == "auto" and w is None and is_direct_packed_prefill_linear(lin)):
     routed = route_direct_packed_prefill(lin, x)
     if routed is not None: return routed

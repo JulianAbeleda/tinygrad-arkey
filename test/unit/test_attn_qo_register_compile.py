@@ -2,7 +2,7 @@ import json
 
 from tinygrad import Tensor, dtypes
 from tinygrad.codegen import to_program_cache
-from tinygrad.codegen.opt import postrange
+from tinygrad.codegen.opt import Opt, OptOps, postrange
 from tinygrad.engine.realize import compile_linear
 from tinygrad.helpers import Context, getenv
 from tinygrad.uop.ops import Ops
@@ -10,8 +10,6 @@ from tinygrad.renderer.isa.amd import AMDOps
 
 from test.unit.test_runtime_specs import _single_buffer_anchor_candidate, _strict_full_kernel_candidate
 from extra.qk.runtime_specs import admit_full_kernel_candidate
-from extra.qk.prefill_graph_gemm_route import _candidate_schedule_spec, _primitive_warmstart_key
-from extra.qk.prefill_schedule_spec import describe_prefill_schedule, register_resident_postrange_opts
 
 
 def test_attn_qo_register_prefill_compile_is_cpu_only_and_zero_lds():
@@ -30,12 +28,10 @@ def test_attn_qo_register_prefill_compile_is_cpu_only_and_zero_lds():
   assert admission.pipeline_plan.storage.kind == "global_register_resident"
   assert admission.active_lds_bytes == 0
 
-  spec = describe_prefill_schedule(4096, 4096, role="attn_qo")
-  candidate_spec = _candidate_schedule_spec(spec, admission)
-  key = _primitive_warmstart_key(candidate_spec)
+  key = (frozenset({512, 4096}), 4096)
   old_opts, old_contexts = postrange._WARMSTART_OPTS, postrange._WARMSTART_CANDIDATE_CONTEXTS
   try:
-    postrange._WARMSTART_OPTS = {**(old_opts or {}), key: register_resident_postrange_opts(candidate_spec)}
+    postrange._WARMSTART_OPTS = {**(old_opts or {}), key: (Opt(OptOps.TC, 0, (-1, 2, 1)),)}
     postrange._WARMSTART_CANDIDATE_CONTEXTS = {**(old_contexts or {}), key: admission.context}
     getenv.cache_clear(); to_program_cache.clear()
     with Context(DEV="AMD:ISA:gfx1100"):

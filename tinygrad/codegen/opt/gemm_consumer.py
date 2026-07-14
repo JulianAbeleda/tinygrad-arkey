@@ -164,7 +164,7 @@ class Dot2ConsumerAdapter:
     pair = UOp(Ops.ADD, dtypes.float, tuple(terms))
     if accumulator is not None:
       pair = UOp(Ops.ADD, dtypes.float, (accumulator, pair))
-    from extra.qk.fdot2_lowering import lower_fdot2_add
+    from tinygrad.codegen.experimental import lower_fdot2_add
     lowered = lower_fdot2_add(pair)
     if lowered is None:
       raise ValueError(f"{self.identity} canonical pair was not accepted by fdot2 lowering")

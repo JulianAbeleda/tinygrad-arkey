@@ -31,38 +31,8 @@ from extra.qk.route_manifest import promoted_prefill_candidate_policy
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 ARTIFACT_DIR = ROOT / "bench/prefill-whole-synced"
-PREFILL_WMMA_PIPE_ROUTE = "prefill_wmma_pipe_primitive_generated"
-PREFILL_WMMA_PIPE_LDS_DBUF_ROUTE = "prefill_wmma_pipe_lds_dbuf_primitive_generated"
-PREFILL_WMMA_LDS_DBUF_MIXED_ROUTE = "prefill_wmma_lds_dbuf_primitive_mixed"
-PREFILL_HYBRID_BACKEND_ATOM_ROUTE = "prefill_pipe_role_selective_generated"
-PREFILL_HAND_ASM_LDS2_ROUTE = "prefill_hand_asm_lds2"
 PREFILL_PROMOTED_CANDIDATE_ROUTE = promoted_prefill_candidate_policy()["route_id"]
 PREFILL_GENERATED_DENSE_ROLES = frozenset(("attn_qo", "attn_kv", "ffn_down", "ffn_gate_up"))
-PREFILL_ROLE_ROUTES_PIPE = {
-  "attn_qo": "pipe",
-  "attn_kv": "pipe",
-  "ffn_down": "pipe",
-  "ffn_gate_up": "pipe",
-}
-PREFILL_ROLE_ROUTES_PIPE_LDS_DBUF = {
-  "attn_qo": "pipe",
-  "attn_kv": "generated_pipe_no_local_stage",
-  "ffn_down": "pipe",
-  "ffn_gate_up": "lds_dbuf",
-}
-PREFILL_ROLE_ROUTES_RAW_PIPE_LDS_DBUF = {
-  "attn_qo": "raw_pipe_oracle",
-  "attn_kv": "raw_pipe_oracle",
-  "ffn_down": "raw_pipe_oracle",
-  "ffn_gate_up": "lds_dbuf",
-}
-PREFILL_ROLE_ROUTES_HYBRID_BACKEND_ATOM = {
-  "attn_qo": "raw_pipe_oracle",
-  "attn_kv": "raw_pipe_oracle",
-  "ffn_down": "raw_pipe_oracle",
-  "ffn_gate_up": "raw_lds2_oracle",
-}
-PREFILL_ROLE_ROUTES_HAND_ASM_LDS2 = {role: "raw_lds2_oracle" for role in PREFILL_GENERATED_DENSE_ROLES}
 
 
 def _git_short() -> str:
@@ -98,15 +68,11 @@ def _route_attribution() -> dict[str, Any]:
 @contextmanager
 def _scoped_candidate_compiler_state():
   import tinygrad.codegen.opt.postrange as pr
-  names=("_WARMSTART_OPTS","_WARMSTART_CANDIDATE_CONTEXTS","_WARMSTART_LOCAL_STAGE_KEYS","_WARMSTART_LOCAL_STAGE_DENY_KEYS")
+  names=("_WARMSTART_OPTS","_WARMSTART_CANDIDATE_CONTEXTS")
   saved={name:getattr(pr,name,None) for name in names}
   try: yield
   finally:
     for name,value in saved.items(): setattr(pr,name,value)
-
-
-def _enabled(env: dict[str, Any], key: str) -> bool:
-  return str(env.get(key, "0")).strip().lower() not in ("", "0", "false", "off", "no")
 
 
 # Route provenance -> named measurement regime (F2). The prefill-whole-synced-authority schema is reused for THREE
@@ -204,16 +170,7 @@ def authority_completeness_gate(report: dict[str, Any], *, quality_gate: dict[st
 
 
 def _prefill_role_routes(route_id: str) -> dict[str, str]:
-  if route_id == PREFILL_HAND_ASM_LDS2_ROUTE:
-    return dict(PREFILL_ROLE_ROUTES_HAND_ASM_LDS2)
-  if route_id == PREFILL_HYBRID_BACKEND_ATOM_ROUTE:
-    return dict(PREFILL_ROLE_ROUTES_HYBRID_BACKEND_ATOM)
-  if route_id == PREFILL_WMMA_PIPE_LDS_DBUF_ROUTE:
-    return dict(PREFILL_ROLE_ROUTES_PIPE_LDS_DBUF)
-  if route_id == PREFILL_WMMA_LDS_DBUF_MIXED_ROUTE:
-    return dict(PREFILL_ROLE_ROUTES_RAW_PIPE_LDS_DBUF)
-  if route_id == PREFILL_WMMA_PIPE_ROUTE:
-    return dict(PREFILL_ROLE_ROUTES_PIPE)
+  if route_id == PREFILL_PROMOTED_CANDIDATE_ROUTE: return {role:"generated_lds_buffer2" for role in PREFILL_GENERATED_DENSE_ROLES}
   return {}
 
 
@@ -229,29 +186,13 @@ def route_binding_gate(report: dict[str, Any], required_route: str | None = None
       failures.append(f"required_route={required_route!r} is not reported by effective_routes")
     if selected_route != required_route:
       failures.append(f"prefill_route_family={selected_route!r}, expected {required_route!r}")
-  s10_compiler_primitive_route = selected_route in {PREFILL_WMMA_PIPE_LDS_DBUF_ROUTE, PREFILL_WMMA_LDS_DBUF_MIXED_ROUTE}
-  hybrid_backend_atom_route = selected_route in {PREFILL_HYBRID_BACKEND_ATOM_ROUTE, PREFILL_HAND_ASM_LDS2_ROUTE}
-  expected_pure = False if s10_compiler_primitive_route or hybrid_backend_atom_route else True
-  expected_rollback = True if hybrid_backend_atom_route else False
-  expected_provenance = ("external_handwritten_kernel" if hybrid_backend_atom_route else
-                         "compiler_primitive_spec_owned" if s10_compiler_primitive_route else
-                         "tinygrad_scheduler_generated")
+  expected_pure, expected_rollback, expected_provenance = True, False, "tinygrad_scheduler_generated"
   if route.get("prefill_route_pure") is not expected_pure:
     failures.append(f"prefill_route_pure={route.get('prefill_route_pure')!r}, expected {expected_pure!r}")
   if route.get("prefill_route_rolled_back") is not expected_rollback:
     failures.append(f"prefill_route_rolled_back={route.get('prefill_route_rolled_back')!r}, expected {expected_rollback!r}")
   if route.get("prefill_route_provenance") != expected_provenance:
     failures.append(f"prefill_route_provenance={route.get('prefill_route_provenance')!r}, expected {expected_provenance!r}")
-  lds_dbuf_requested = (
-    _enabled(e, "PREFILL_WMMA_LDS_PRIMITIVE") or
-    _enabled(e, "PREFILL_DBUF") or
-    _enabled(e, "PREFILL_DBUF_NBUF")
-  )
-  if lds_dbuf_requested and selected_route == PREFILL_WMMA_PIPE_ROUTE:
-    failures.append(
-      f"LDS/DBUF flags requested but effective prefill route is still pipe-only {PREFILL_WMMA_PIPE_ROUTE!r}; "
-      f"expected {PREFILL_WMMA_PIPE_LDS_DBUF_ROUTE!r} or {PREFILL_WMMA_LDS_DBUF_MIXED_ROUTE!r} once route identity lands"
-    )
   candidate_set_requested = (selected_route == PREFILL_PROMOTED_CANDIDATE_ROUTE or
                              e.get("BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_JSON") is not None or
                              e.get("BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH") is not None)
@@ -271,9 +212,7 @@ def route_binding_gate(report: dict[str, Any], required_route: str | None = None
   verdict = "PREFILL_ROUTE_BINDING_PASS" if not failures else "PREFILL_ROUTE_BINDING_FAIL"
   return {"schema": "prefill-route-binding-gate.v1", "verdict": verdict, "required_route": required_route,
           "selected_route": selected_route, "effective_routes": sorted(r for r in effective_route_ids if r),
-          "binding_regime": "external_comparator" if hybrid_backend_atom_route else
-                            "spec_owned_hybrid" if s10_compiler_primitive_route else "generated_pure",
-          "lds_dbuf_requested": lds_dbuf_requested, "candidate_set_requested":candidate_set_requested,"failures": failures}
+          "binding_regime": "generated_pure", "candidate_set_requested":candidate_set_requested,"failures": failures}
 
 
 def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,

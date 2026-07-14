@@ -101,7 +101,6 @@ _BACKEND_OWNED = (
     route_local_emitters=(
       "extra/qk/flash_kernels.py",
       "extra/qk/codegen_outer_b_lds_split.py",
-      "extra/qk/asm_scheduler.py",
       "tinygrad/llm/prefill_routes.py",
     ),
     note="When these markers are route-local, the path is non-pure even if marker text appears in backend source.",

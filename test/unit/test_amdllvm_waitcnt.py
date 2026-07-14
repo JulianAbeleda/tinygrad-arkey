@@ -3,13 +3,21 @@ import pytest
 from tinygrad.codegen import full_rewrite_to_sink
 from tinygrad.codegen.opt.compiler_policies import WaitCount
 from tinygrad.dtype import dtypes
-from tinygrad.helpers import Target
+from tinygrad.helpers import Context, Target
 from tinygrad.renderer.llvmir import AMDLLVMRenderer
+from tinygrad.runtime.ops_amd import _amd_renderers
 from tinygrad.uop.ops import Ops, UOp
 
 
 def _wait(count):
   return UOp(Ops.WAIT, dtypes.void, (), count)
+
+
+def test_native_isa_renderer_is_registered_only_for_explicit_target():
+  with Context(DEV="AMD"):
+    assert [x.__name__ for x in _amd_renderers("gfx1100")] == ["HIPRenderer", "AMDLLVMRenderer", "HIPCCRenderer"]
+  with Context(DEV="AMD:ISA"):
+    assert [x.__name__ for x in _amd_renderers("gfx1100")][-1] == "AMDISARenderer"
 
 
 def test_wait_count_is_typed_and_packs_amd_sopp_fields():

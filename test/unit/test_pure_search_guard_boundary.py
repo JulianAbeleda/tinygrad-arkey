@@ -178,19 +178,16 @@ def test_guard_default_families_are_manifest_defaults_with_kernel_binding():
     # a hot default that emits a route-local generated kernel must declare the pattern it binds to; the ordinary
     # tinygrad-graph default (scheduler-owned, no route-local kernel) legitimately has none.
     if r["surface_class"] != "ordinary_tinygrad_graph":
-      assert ROUTES[rid].get("expected_kernels"), f"{rid} has no expected_kernels binding"
+      assert ROUTES[rid].get("expected_kernels") or ROUTES[rid].get("candidate_set_path"), f"{rid} has no kernel binding"
 
 
-def test_prefill_graph_gemm_env_selects_raw_oracle_impure():
+def test_prefill_graph_gemm_env_selects_promoted_generated_candidate():
   gemm = {r["family"]: r for r in guard.effective_routes({"PREFILL_GRAPH_GEMM": "1"})}["prefill_gemm"]
-  assert gemm["effective_route"] == "prefill_pipe_role_selective_generated"
-  assert gemm["rolled_back_to_oracle"] is True and gemm["pure"] is False
-  with pytest.raises(RuntimeError, match="surface=external_raw_or_binary"):
-    guard.assert_pure_machine_search({"PURE_MACHINE_SEARCH_ONLY": "1", "PREFILL_GRAPH_GEMM": "1"})
+  assert gemm["effective_route"] == "prefill_wmma_lds_dbuf_generated"
+  assert gemm["rolled_back_to_oracle"] is False and gemm["pure"] is True
+  guard.assert_pure_machine_search({"PURE_MACHINE_SEARCH_ONLY": "1", "PREFILL_GRAPH_GEMM": "1"})
 
 
-def test_hand_asm_lds2_profile_has_exact_impure_route_identity():
-  gemm = {r["family"]: r for r in guard.effective_routes({
-    "PREFILL_GRAPH_GEMM": "1", "PREFILL_GEMM_PROFILE": "hand_asm_lds2"})}["prefill_gemm"]
-  assert gemm["effective_route"] == "prefill_hand_asm_lds2"
-  assert gemm["rolled_back_to_oracle"] is True and gemm["pure"] is False
+def test_retired_hand_asm_selectors_fail_loud():
+  with pytest.raises(ValueError, match="retired prefill route selectors"):
+    guard.effective_routes({"PREFILL_GRAPH_GEMM": "1", "PREFILL_GEMM_PROFILE": "hand_asm_lds2"})

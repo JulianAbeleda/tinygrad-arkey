@@ -78,10 +78,7 @@ def test_prefill_14b_hybrid_mmq_atom_is_not_live_manifest_or_policy_route(tmp_pa
     assert manifest_row["status"] == "research"
     assert manifest_row["strict_fallback"] is True
   assert PREFILL_14B_Q4K_Q8_1_HYBRID_MMQ_ATOM_ROUTE_ID not in default_routes()
-  if PREFILL_14B_Q4K_Q8_1_HYBRID_MMQ_ATOM_ROUTE_ID in _supported_qk_route_ids():
-    unsupported_match = "fail-closed"
-  else:
-    unsupported_match = "unsupported route"
+  assert PREFILL_14B_Q4K_Q8_1_HYBRID_MMQ_ATOM_ROUTE_ID not in _supported_qk_route_ids()
 
   policy_path = tmp_path / "atom_policy.json"
   policy_path.write_text(json.dumps({
@@ -91,8 +88,8 @@ def test_prefill_14b_hybrid_mmq_atom_is_not_live_manifest_or_policy_route(tmp_pa
       "shape": {"rows": 17408, "cols": 5120},
       "quant": "Q4_K",
       "selected_route": PREFILL_14B_Q4K_Q8_1_HYBRID_MMQ_ATOM_ROUTE_ID,
-      "route_params": {"PREFILL_14B_Q4K_Q8_1_MMQ_ATOM": "1", "PREFILL_ROUTE_STRICT": "1"},
+      "route_params": {},
     }],
   }))
-  with pytest.raises(ValueError, match=unsupported_match):
+  with pytest.raises(ValueError, match="unsupported route"):
     _load_qk_route_policy(str(policy_path))

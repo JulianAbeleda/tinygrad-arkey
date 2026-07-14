@@ -97,23 +97,6 @@ tools set the env flag before spawning a worker; worker/probe code wraps only th
 AMD window with `pinned_peak_from_env()`, records the yielded provenance in JSON, and
 lets the context manager restore `auto` in `finally`.
 
-## Collapsed experiment series
-
-Five sequential series are now parameterized modules (one `VARIANTS` table + N `build_*`).
-A new variant is a **table row + a registry row**, not a new file.
-
-| module | variants | replaced |
-|---|---|---|
-| `asm_scheduler_proofs.py` | `build_inc0..3` | 4 `asm_scheduler_inc*_test.py` |
-| `tg_p9_live_split.py` | `build_live_split/_tile/_combine` | 3 `tg_p9_*_microgate.py` |
-| `decode_physical_tile.py` | `build_p1_crosslane/pall_route/pall_lifecycle/pall_scaling/all_primitives` | 5 `decode_physical_tile_*` |
-| `decode_score_broadcast.py` | 6 `build_*` | 6 score-broadcast gates |
-| `decode_attention_online_state_pv.py` | `build_p8..p15/tg_p10` | 9 online-state files |
-
-Their conclusions + retirement ledger: `docs/qk-gate-series-conclusions.md`. That doc is
-the tracked record (`bench/**` is gitignored scratch) — **bank a verdict there before
-retiring the file that produced it.**
-
 ## Load-bearing invariants (do not "simplify" away)
 
 - **Env ordering is sacred:** `DEV`/`JIT`/`QK_*` before `from tinygrad import ...`. The

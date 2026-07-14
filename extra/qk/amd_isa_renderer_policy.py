@@ -5,7 +5,6 @@ from typing import Any
 from tinygrad.dtype import AddrSpace, PtrDType, dtypes
 from tinygrad.codegen.opt import KernelOptError
 from tinygrad.codegen.opt.prefill_value_key import PrefillSourceValueKey
-from tinygrad.helpers import getenv
 from tinygrad.uop.ops import Ops, UOp
 
 REQUIRED_WMMA_PROOF_FIELDS = ("role", "lds_buffer_id", "dbuf_slot", "k_phase", "logical_row_or_col", "byte_len",
@@ -56,18 +55,7 @@ class PrefillAMDISARendererPolicy:
     except Exception: return None
 
   def wmma_frag_buffer_proof_from_desc(self, desc:Any, role:str, h:Any) -> dict|None:
-    proof = self.wmma_frag_buffer_proof_from_tag(None if desc is None else desc.buf.tag, desc, role)
-    if proof is not None or desc is None or not getenv("PREFILL_WMMA_AB_PROOF_FROM_LDS_DESC", 0): return proof
-    byte_len = 32
-    byte_start = desc.const_bytes
-    ptr_key = h.lds_key_uop(desc.buf)
-    window = (ptr_key, byte_start, byte_start + byte_len)
-    return {
-      "role": role, "lds_buffer_id": ptr_key, "nbuf": None, "dbuf_slot": ("lds_byte_window", window),
-      "k_phase": ("lds_byte_window", window), "logical_row_or_col": (role, byte_start, byte_len),
-      "byte_start": byte_start, "byte_len": byte_len, "producer_epoch": ("lds_write_before_barrier", window),
-      "overwrite_epoch": ("next_write_to_lds_window", window),
-    }
+    return self.wmma_frag_buffer_proof_from_tag(None if desc is None else desc.buf.tag, desc, role)
 
   def wmma_frag_buffer_proof_from_tag(self, tag:Any, desc:Any, role:str) -> dict|None:
     if desc is None: return None
@@ -100,36 +88,7 @@ class PrefillAMDISARendererPolicy:
            self.wmma_frag_buffer_proof_from_tag(idx.src[0].tag, desc, role)
 
   def wmma_frag_store_epoch_proof(self, idx:UOp, desc:Any, role:str, h:Any) -> dict|None:
-    if desc is None or not getenv("PREFILL_WMMA_AB_PROOF_FROM_LDS_STORES", 0): return None
-    base = idx.src[0].src[0] if idx.src[0].op is Ops.AFTER and idx.src[0].src else None
-    barrier = next((s for s in idx.src[0].src[1:] if s.op is Ops.BARRIER), None) if idx.src[0].op is Ops.AFTER else None
-    if base is None or barrier is None: return None
-    byte_start, byte_end = desc.const_bytes, desc.const_bytes + 32
-    producers:list[tuple] = []
-    overlapping:list[tuple[int, int]] = []
-    for st in barrier.toposort():
-      if st.op is not Ops.STORE or len(st.src) < 2: continue
-      sidx = st.src[0].src[0] if st.src[0].op is Ops.CAST and st.src[0].src else st.src[0]
-      if sidx.op is not Ops.INDEX or sidx.addrspace != AddrSpace.LOCAL or len(sidx.src) < 2: continue
-      if h.reg_base(sidx.src[0]) is not desc.buf: continue
-      _sdyn, sconst = h.const_base(sidx.src[1])
-      width = h.uop_byte_width(st.src[1]) or desc.itemsize
-      s0, s1 = desc.base_bytes + sconst * desc.itemsize, desc.base_bytes + sconst * desc.itemsize + width
-      if s1 <= byte_start or s0 >= byte_end: continue
-      overlapping.append((s0, s1))
-      producers.append((h.lds_key_uop(st.src[1]), s0, s1, id(st)))
-    if not producers: return None
-    for b in range(byte_start, byte_end):
-      if sum(1 for s0, s1 in overlapping if s0 <= b < s1) != 1: return None
-    producer_epoch = tuple(sorted(producers, key=lambda x: (x[1], x[2], x[3])))
-    ptr_key = h.lds_key_uop(desc.buf)
-    window = (ptr_key, byte_start, byte_end, producer_epoch)
-    return {
-      "role": role, "lds_buffer_id": ptr_key, "nbuf": None, "dbuf_slot": ("lds_store_epoch", window),
-      "k_phase": ("lds_store_epoch", window), "logical_row_or_col": (role, byte_start, 32),
-      "byte_start": byte_start, "byte_len": 32, "producer_epoch": producer_epoch,
-      "overwrite_epoch": ("next_write_to_lds_window", ptr_key, byte_start, byte_end, id(barrier)),
-    }
+    return None
 
   def wmma_frag_proof_key(self, role:str, carrier:UOp, h:Any) -> tuple|None:
     try: elems = h.wmma_elems(carrier, 16)
@@ -157,24 +116,7 @@ class PrefillAMDISARendererPolicy:
     return tuple((k, proof[k]) for k in REQUIRED_WMMA_PROOF_FIELDS)
 
   def wmma_frag_phase_reuse_key(self, ctx:Any, role:str, carrier:UOp, h:Any) -> tuple|None:
-    if not getenv("PREFILL_WMMA_AB_PHASE_SCOPED_KEY", 0): return None
-    try: elems = h.wmma_elems(carrier, 16)
-    except Exception: return None
-    addrs = [h.wmma_half_addr(e) for e in elems]
-    if any(a is None for a in addrs): return None
-    idx0, ptr0, expr0, c0 = addrs[0]
-    if any(ptr is not ptr0 or expr is not expr0 or c != c0 + i for i, (_idx, ptr, expr, c) in enumerate(addrs)): return None
-    desc = h.decompose_lds_index(ctx, idx0, None) if idx0.addrspace == AddrSpace.LOCAL else None
-    proof = self.wmma_frag_proof_from_elem(elems[0])
-    if proof is None:
-      proof = self.wmma_frag_buffer_proof_from_elem(elems[0], desc, role, h) or self.wmma_frag_buffer_proof_from_desc(desc, role, h)
-    if proof is None or desc is None or proof.get("role") != role: return None
-    if getenv("PREFILL_WMMA_PHASE_EXACT_WINDOW", 0):
-      return (("role", role), ("lds_buffer_id", proof.get("lds_buffer_id")), ("byte_start", desc.const_bytes), ("byte_len", 32))
-    tile_bytes = getenv("PREFILL_WMMA_PHASE_TILE_BYTES_A" if role == "A" else "PREFILL_WMMA_PHASE_TILE_BYTES_B", 128)
-    if tile_bytes <= 0: return None
-    rel = desc.const_bytes - desc.base_bytes
-    return (("role", role), ("lds_buffer_id", proof.get("lds_buffer_id")), ("phase_row_or_col", rel // tile_bytes), ("byte_len", 32))
+    return None
 
   def dbuf_stage_candidate(self, carrier:UOp, h:Any) -> tuple[UOp|None, str]:
     try:

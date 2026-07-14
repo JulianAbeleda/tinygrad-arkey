@@ -1,7 +1,0 @@
-{
-  "schema": "prefill-pure-candidate-static-legality.v1",
-  "canonical_identity": "7e37ad6e13dee573758b3264aa9ec71b0cd91f1ca08e012d279d67300360c2d9",
-  "passed": true,
-  "status": "pass",
-  "commit": "774ab015b85c3663064bb1e89ce2f3aa597761cc"
-}

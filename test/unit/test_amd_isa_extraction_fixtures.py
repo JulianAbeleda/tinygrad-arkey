@@ -195,32 +195,3 @@ class TestAMDISAExtractionFixtures(unittest.TestCase):
     self.assertEqual(by_kind["barrier"]["logical_op"], "BARRIER")
     self.assertEqual(by_kind["ds_load_b128"]["dest_vgpr_range"], [20, 23])
     self.assertEqual(by_kind["ds_store_b128"]["data_vgpr_range"], [11, 14])
-
-  def test_opt_in_proof_manifest_preserves_accumulator_source_identity(self):
-    old = os.environ.get("AMD_ISA_PROOF_MANIFEST")
-    os.environ["AMD_ISA_PROOF_MANIFEST"] = "1"
-    getenv.cache_clear()
-    try:
-      reset_amd_isa_proof_manifest()
-      carrier = UOp(Ops.NOOP, dtypes.float32, arg=("accum", 12345, 6, 9))
-      val = UOp(Ops.INS, dtypes.float32, arg=AMDOps.V_CONST, tag=(Register("v30", 30),))
-      lower_inst(UOp(Ops.INS, dtypes.float32, src=(carrier, UOp.const(dtypes.int32, 9).rtag()),
-                     arg=AMDOps.ACCUM_READ, tag=(Register("v31", 31),)))
-      lower_inst(UOp(Ops.INS, dtypes.void, src=(val, carrier, UOp.const(dtypes.int32, 9).rtag()),
-                     arg=AMDOps.ACCUM_WRITE))
-      rows = amd_isa_proof_manifest()
-    finally:
-      if old is None: os.environ.pop("AMD_ISA_PROOF_MANIFEST", None)
-      else: os.environ["AMD_ISA_PROOF_MANIFEST"] = old
-      getenv.cache_clear()
-
-    read = next(r for r in rows if r["kind"] == "accum_read")
-    write = next(r for r in rows if r["kind"] == "accum_write")
-    self.assertEqual(read["define_reg_id"], 12345)
-    self.assertEqual(read["element"], 6)
-    self.assertEqual(read["source_pin_vgpr"], 9)
-    self.assertEqual(read["dest_vgpr"], 31)
-    self.assertEqual(write["define_reg_id"], 12345)
-    self.assertEqual(write["element"], 6)
-    self.assertEqual(write["dest_pin_vgpr"], 9)
-    self.assertEqual(write["source_vgpr"], 30)

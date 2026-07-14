@@ -1,6 +1,4 @@
 import pytest
-import json
-from pathlib import Path
 
 from extra.qk.mmq_long_chain_calibration import join_long_chain_modes, validate_long_chain_calibration
 
@@ -26,16 +24,3 @@ def test_mode_join_rejects_system_and_binary_mismatch():
   with pytest.raises(ValueError, match="system snapshot"): join_long_chain_modes(auto, profile)
   auto["system_snapshot_id"] = profile["system_snapshot_id"]; auto["cases"][0]["binary_sha256"] = "c" * 64
   with pytest.raises(ValueError, match="binary mismatch"): join_long_chain_modes(auto, profile)
-
-
-def test_committed_long_chain_artifact_preserves_samples_and_compile_blockers():
-  path = Path(__file__).resolve().parents[2] / "bench/prefill-14b-mmq-machine-search/long-chain-calibration-v1-20260711.json"
-  artifact = json.loads(path.read_text())
-  validate_long_chain_calibration(artifact)
-  assert artifact["protocol"]["wall_samples"] == 30
-  assert [row["chain_length"] for row in artifact["joined_cases"]] == [128, 256, 512]
-  assert all(len(row["samples_ms"]) == 30 for mode in artifact["modes"].values() for row in mode["cases"])
-  blocked = {row["chain_length"]: row for row in artifact["requested_long_chains"]}
-  assert blocked[1024]["auto_status"] == "blocked_compile_sigsegv"
-  assert blocked[4096]["auto_status"] == blocked[16384]["auto_status"] == "blocked_compile_timeout"
-  assert artifact["candidate_timing_used_for_fit"] is False

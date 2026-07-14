@@ -2,23 +2,17 @@
 
 UOp -> Ops.INS (real rdna3 Inst) -> assemble_linear, bypassing LLVM. Templated on tinygrad/renderer/isa/x86.py +
 the shared ISARenderer framework; emits rdna3 instructions via tinygrad/renderer/amd/dsl.py + .../rdna3/ins.py;
-assembled by tinygrad/renderer/amd/elf.py:assemble_linear (foundation verified: qk_asm_scheduler_inc0_test).
+assembled by tinygrad/renderer/amd/elf.py:assemble_linear.
 LLVM AMDGPU model used as the map: bench/amd-llvm-backend-model/latest.json.
 
 Inc 0 scope: a trivial elementwise kernel (out[i]=a[i]+b[i]) compiles + runs numerically correct on gfx1100.
 ABI (from LLVM model): s[0:1]=kernarg ptr at entry; v0=workitem id; buffer ptrs s_load'd from kernarg[i*8];
 s_waitcnt drains after memory ops.
 
-EXPERIMENTAL-FLAG INDEX (prefill/machine-search staging plane; ALL default-off):
-  This file accreted ~80 PREFILL_*/AMD_ISA_* getenv knobs from the prefill machine-search research plane. They fall in
-  two classes: (1) real staging knobs that gate an experimental codegen/staging transform (e.g. PREFILL_DBUF*,
-  PREFILL_TC_LOCAL_STAGE*, PREFILL_LDS_PACK*, AMD_ISA_SCHED/WAITCNT*), and
-  (2) pure diagnostic probes that only print/log and cannot change emitted code (the *_DUMP / *_AUDIT / *_PROOF_* knobs).
-  The class-2 probe knobs are being deleted (see docs/prefill-flag-graveyard.md). Several class-1 knobs carry an
-  _UNSAFE suffix (PREFILL_DBUF_LDS_CONST_IMM_UNSAFE, PREFILL_TC_LOCAL_STAGE_A_MULTIDIM_UNSAFE,
-  PREFILL_LDS_PACK_WITHLOCAL_MULTIDIM_UNSAFE) and stay gated behind their documented invariant -- do NOT remove the gate.
-  Collapsing the surviving class-1 reads behind one PrefillStagingSpec descriptor is a scoped follow-up (see the refactor
-  report): the mass consolidation is deferred here to keep the stock (no-flag) renderer path byte-identical.
+The native backend has one production policy: scheduling, B128 WMMA fragment
+loads, low scratch allocation, and dependency-aware waitcnt insertion are
+always enabled. Experimental PREFILL_DBUF/TC_LOCAL_STAGE tuning does not live
+in this renderer.
 """
 from __future__ import annotations
 from typing import NamedTuple
@@ -66,10 +60,6 @@ KARG = Register("s0", 0)                                           # kernarg bas
 SPTR_POOL = tuple(Register(f"s{i}", i) for i in range(6, 40, 2))   # even SGPRs s6..s38 -> 64-bit ptr pairs (s2-s5 = workgroup ids)
 SCNT_POOL = tuple(Register(f"s{i}", i) for i in range(40, 64))     # single SGPRs s40..s63 -> uniform loop counters (Phase B)
 VBASE = tuple(Register(f"v{i}", i) for i in range(256))            # all VGPRs; v0 reserved for packed workitem ids
-ACCUM_PIN_BASE, ACCUM_PIN_TOP = 1, 17                               # RA4: v1..v16 RESERVED (LOW) for loop-carried pinned accumulators.
-# RA4 fix vs RA3: pins placed LOW (v1..v16) not high (v240+). The elf descriptor sizes VGPR to the HIGHEST reg used,
-# so high pins forced ~248 VGPRs -> ctx4096 occupancy collapse (RA3 -18%). Low pins sit under virtual_max (~64) so the
-# descriptor sizes naturally (~64), no VGPR inflation, no post-regalloc renumber. v0 (packed workitem ids) stays reserved.
 TID = Register("v0", 0)                                            # workitem id.x (fixed at entry)
 WGID_S0 = 2                                                        # workgroup id.x lands in s2 (after 2 user SGPRs = kernarg ptr s0:1); .y/.z -> s3/s4
 
@@ -87,7 +77,6 @@ def _n_workitem_dims(ctx:IselContext) -> int:
 # the high [200,238) window (only 16 VGPRs needed, single reused pair) but place the C ACCUMULATORS LOW (see below).
 FRAG_BASE, FRAG_TOP = 200, 238
 LDS_PACK_BASE, LDS_PACK_TOP = 232, 236
-DBUF_D3A_AUDIT_LOG:list[dict] = []
 AMD_ISA_PROOF_MANIFEST:list[dict] = []
 
 def reset_amd_isa_proof_manifest() -> None:
@@ -101,8 +90,6 @@ def _proof_manifest_enabled() -> bool:
 
 def _proof_carrier_meta(u:UOp|None) -> dict:
   if u is None or not isinstance(u.arg, tuple): return {}
-  if u.arg[:1] == ("accum",):
-    return {"carrier_kind": "accum", "define_reg_id": u.arg[1], "element": u.arg[2], "pin_vgpr": u.arg[3]}
   if u.arg[:1] == ("wmma_acc",):
     return {"carrier_kind": "wmma_acc", "define_reg_id": u.arg[1], "subtile": u.arg[2], "element": u.arg[3], "physical_vgpr": u.arg[4]}
   return {}
@@ -232,8 +219,7 @@ def _candidate_register_resident(ctx:IselContext) -> bool:
   return False
 
 def _resident_ab_enabled(ctx:IselContext) -> bool:
-  # The candidate contract is authoritative.  Keep the env flag only for legacy standalone diagnostics.
-  return _candidate_register_resident(ctx) or bool(getenv("PREFILL_WMMA_CHAIN_AB_RESIDENT", 0))
+  return _candidate_register_resident(ctx)
 def _acc_base(ctx:IselContext, key) -> int:
   # LOW C-accumulator allocator (multi-tile only): each distinct `key` (a subtile identity) gets an 8-aligned, contiguous
   # 8-VGPR run from WMMA_ACC_BASE, STABLE across repeat calls. Bump-by-8 keeps every run 8-aligned. Separate dict from
@@ -270,13 +256,7 @@ def _n_ab_frags(ctx:IselContext) -> int:
       if _register_stage_fragment_role(u.src[0]) is not None and _register_stage_fragment_role(u.src[1]) is not None:
         continue
       if _resident_ab_enabled(ctx):
-        if getenv("PREFILL_WMMA_AB_PROOF_KEY", 0):
-          if bool(getenv("PREFILL_WMMA_CHAIN_RESIDENT_A", 1)) and \
-             (akey := (_wmma_frag_phase_reuse_key(ctx, "A", u.src[0]) or _wmma_frag_proof_reuse_key(ctx, "A", u.src[0]))) is not None: As.add(akey)
-          if bool(getenv("PREFILL_WMMA_CHAIN_RESIDENT_B", 1)) and \
-             (bkey := (_wmma_frag_phase_reuse_key(ctx, "B", u.src[1]) or _wmma_frag_proof_reuse_key(ctx, "B", u.src[1]))) is not None: Bs.add(bkey)
-        else:
-          As.add(_wmma_frag_reuse_key(u.src[0])); Bs.add(_wmma_frag_reuse_key(u.src[1]))
+        As.add(_wmma_frag_reuse_key(u.src[0])); Bs.add(_wmma_frag_reuse_key(u.src[1]))
         continue
       c2 = u.src[2]
       if c2.op in (Ops.STACK, Ops.NOOP) and c2.src and c2.src[0].op is Ops.LOAD and c2.src[0].src[0].op is Ops.INDEX \
@@ -301,8 +281,7 @@ def _ab_base(ctx:IselContext, key) -> int|None:
   return d[key]
 
 def _vpool(ctx:IselContext):
-  # reserve v0 (packed workitem ids). RA4: when AMD_ISA_REG_ACCUM, also reserve the LOW pin range v1..v16 for pinned
-  # accumulators (kept OUT of the normal pool so regalloc never assigns a virtual to a pin); virtuals start at v17.
+  # Reserve v0 for packed workitem ids.
   # B0.L5: when a WMMA is present, ALSO exclude the A/B fragment window [FRAG_BASE, FRAG_TOP) so regalloc virtuals never
   # collide with the pinned A/B fragment VGPRs allocated by _frag_base.
   # B0.M: a multi-output-tile WMMA reserves the LOW C-accumulator region [WMMA_ACC_BASE, _acc_top) AND the resident A/B
@@ -310,12 +289,8 @@ def _vpool(ctx:IselContext):
   # the high fragment window [FRAG_BASE, FRAG_TOP) is now entirely FREE for multi-tile (A/B moved LOW next to the
   # accumulators), so it is reclaimed to relieve pressure -> no spill. Single-tile keeps the legacy 3-fragment high
   # window [FRAG_BASE, FRAG_TOP) fully reserved (virtuals [lo, FRAG_BASE)), unchanged.
-  lo = ACCUM_PIN_TOP if getenv("AMD_ISA_REG_ACCUM", 0) else 1
-  def reserve_lds_pack(pool:tuple[Register, ...]) -> tuple[Register, ...]:
-    top = LDS_PACK_TOP if getenv("PREFILL_LDS_PACK_WITHLOCAL_B128", 0) else LDS_PACK_BASE
-    if top == LDS_PACK_BASE: return pool
-    return tuple(r for r in pool if not (LDS_PACK_BASE <= r.index < top))
-  if not _has_wmma(ctx): return reserve_lds_pack(VBASE[lo:])
+  lo = 1
+  if not _has_wmma(ctx): return VBASE[lo:]
   # Compiler-owned sequential register stages occupy a static tail of the
   # reclaimed high fragment window. Keep virtual registers out of that span.
   stage_reserved = tuple(i for lease in _register_stage_leases(ctx).values() for i in range(lease.start, lease.end)) if _c_low(ctx) else ()
@@ -324,9 +299,9 @@ def _vpool(ctx:IselContext):
     # Multi-output WMMA reserves v8.. for C/A/B fragments, but v1..v7 are just alignment padding.
     # Keep them available for short scalar scratch, especially the post-loop store epilogue, so it doesn't have to reuse
     # the high v200+ address/load scratch region immediately after the WMMA loop.
-    pool = VBASE[lo:WMMA_ACC_BASE] + tail if getenv("AMD_ISA_WMMA_LOW_SCRATCH", 1) else tail
-    return reserve_lds_pack(tuple(r for r in pool if r.index not in stage_reserved))
-  return reserve_lds_pack(VBASE[lo:FRAG_BASE])
+    pool = VBASE[lo:WMMA_ACC_BASE] + tail
+    return tuple(r for r in pool if r.index not in stage_reserved)
+  return VBASE[lo:FRAG_BASE]
 
 class AMDOps(FastEnum):
   S_LOAD_PTR = 0; V_OFFSET = 1; GLOBAL_LOAD = 2; V_ADD = 3; V_MUL = 4; V_SUB = 5; GLOBAL_STORE = 6; ENDPGM = 7; MOV = 8
@@ -441,10 +416,6 @@ def _register_stage_leases(ctx:IselContext):
     raise NotImplementedError("AMD:ISA register stage buffers need the low C window (single-output WMMA has no VGPR budget)")
   reserved = [("abi_workitem", 0, 1), ("low_accum_fragments", WMMA_ACC_BASE, _ab_top(ctx)),
               ("raw_ins_reserved", FRAG_TOP, len(VBASE))]
-  # The low WMMA interval already covers v8 upward; add only the disjoint
-  # prefix of the legacy accumulator window when that independent mode is on.
-  if getenv("AMD_ISA_REG_ACCUM", 0): reserved.append(("legacy_accumulators", ACCUM_PIN_BASE, WMMA_ACC_BASE))
-  if getenv("PREFILL_LDS_PACK_WITHLOCAL_B128", 0): reserved.append(("lds_pack", LDS_PACK_BASE, LDS_PACK_TOP))
   try: leases = allocate_amd_stage_buffer_leases(tuple(specs), window=(FRAG_BASE, FRAG_TOP), reserved=tuple(reserved))
   except ValueError as e: raise NotImplementedError(f"AMD:ISA {e}") from e
   ctx._stage_reg_leases = leases
@@ -494,23 +465,6 @@ def _lds_byte_offset(ctx:IselContext, dreg:UOp) -> int:
     per = dreg.dtype.size * dreg.dtype.base.itemsize
     ctx._lds_top = d[dreg] + per * (_n_threads(ctx) if dreg.dtype.addrspace == AddrSpace.REG else 1)
   return d[dreg]
-
-# ---- RA1: loop-carried pinned accumulator (opt-in AMD_ISA_REG_ACCUM). A per-thread DEFINE_REG accumulator ELEMENT with
-# a COMPILE-TIME index becomes ONE reserved physical VGPR (v240+). A SIMD VGPR already holds per-lane values and each
-# warp has wave-private VGPRs -> one VGPR == the full per-(warp,lane) accumulator (NOT one reg per workitem). The pinned
-# reg is referenced as a fixed Reg in lowering and carries no virtual tag, so the single-def linear-scan regalloc never
-# tracks/allocates it (clears the 3 N5A walls without weakening single-def for ordinary vregs). ----
-def _accum_enabled() -> bool: return bool(getenv("AMD_ISA_REG_ACCUM", 0))
-def _accum_pin(ctx:IselContext, dreg:UOp, elem:int):
-  # returns the pinned VGPR index for (accumulator, element), or None if the pool (16 regs) is exhausted -> LDS fallback.
-  d = getattr(ctx, "_accum", None)
-  if d is None: d = ctx._accum = {}
-  k = (id(dreg), elem)
-  if k not in d:
-    nxt = ACCUM_PIN_BASE + len(d)
-    if nxt >= ACCUM_PIN_TOP: return None
-    d[k] = nxt
-  return d[k]
 
 # ---- B0.L5: WMMA fragment VGPR allocator. A bump allocator over the reserved fragment region [FRAG_BASE, FRAG_TOP):
 # each distinct `key` (e.g. an A/B/C fragment identity) gets an `align`-aligned contiguous run of `n` VGPRs, STABLE across
@@ -614,11 +568,6 @@ def isel_index(ctx:IselContext, x:UOp):
       if cbase is None: raise NotImplementedError(f"AMD:ISA WMMA fragment region [{FRAG_BASE},{FRAG_TOP}) exhausted (C accumulator)")
       return UOp(Ops.NOOP, x.dtype, src=(base, UOp.const(dtypes.int32, cbase + elem).rtag()),
                  arg=("wmma_acc", id(dreg), subtile, elem, cbase + elem))   # (order, pin)
-    # RA1 pinned accumulator: per-thread REG accumulator element with a COMPILE-TIME index -> a reserved VGPR carrier.
-    if _accum_enabled() and dreg.dtype.addrspace == AddrSpace.REG and idx.op is Ops.CONST and \
-       (pin := _accum_pin(ctx, dreg, idx.arg)) is not None:
-      return UOp(Ops.NOOP, x.dtype, src=(base, UOp.const(dtypes.int32, pin).rtag()),
-                 arg=("accum", id(dreg), idx.arg, pin))   # (order, pin)
     base_off, isz = _lds_byte_offset(ctx, dreg), base.dtype.base.itemsize
     shift = {1:0,2:1,4:2,8:3}.get(isz, 2)
     addends = []                                                     # runtime (VGPR) byte-offset terms
@@ -626,22 +575,12 @@ def isel_index(ctx:IselContext, x:UOp):
     if dreg.dtype.addrspace == AddrSpace.REG and _n_threads(ctx) > 1:   # per-thread accumulator slot: + tid*per_thread_bytes
       per = dreg.dtype.size * isz
       addends.append(UOp(Ops.INS, dtypes.int32, src=(_tid(ctx), UOp.const(dtypes.int32, per).rtag()), arg=AMDOps.V_IMUL, tag=_vreg_def(ctx)))
-    addr_deps = (base,) if getenv("PREFILL_DBUF_LDS_ADDR_USE_DEP", 0) else ()
+    addr_deps:tuple[UOp, ...] = ()
     idx_for_addr, imm_off = idx, 0
-    # Safe DBUF LDS folding splits INDEX(buf, dyn + const) into address(dyn) plus a byte-valued DS immediate candidate.
-    # The final DS op still rechecks field width/alignment and materializes V_IADD on any unencodable case.
-    unsafe_fold = bool(getenv("PREFILL_DBUF_LDS_CONST_IMM", 0) and getenv("PREFILL_DBUF_LDS_CONST_IMM_UNSAFE", 0))
-    if getenv("PREFILL_DBUF_LDS_CONST_IMM", 0) and not unsafe_fold and \
-       (safe := _safe_lds_const_imm(ctx, x, dreg, idx, base)) is not None:
-      idx_for_addr, imm_off = safe
-      if not getenv("PREFILL_DBUF_LDS_REGION_BASE_SPLIT", 0): const_off = 0
     if idx_for_addr.op is Ops.CONST: const_off += idx_for_addr.arg * isz
     else:
       vidx = _movs2v(ctx, idx_for_addr) if _is_sgpr(idx_for_addr) else idx_for_addr
       addends.append(UOp(Ops.INS, dtypes.int32, src=(vidx, UOp.const(dtypes.int32, shift).rtag()) + addr_deps, arg=AMDOps.V_OFFSET, tag=_vreg_def(ctx)))
-    if unsafe_fold and addends:
-      imm_off = const_off
-      const_off = 0
     if not addends:
       addr = UOp(Ops.INS, dtypes.int32, src=(UOp.const(dtypes.int32, const_off).rtag(),), arg=AMDOps.V_MOVK, tag=_vreg_def(ctx))
     else:
@@ -650,13 +589,6 @@ def isel_index(ctx:IselContext, x:UOp):
       remat_dep = (idx,) if isinstance(idx.tag, tuple) and idx.tag[:1] == ("dbuf_lds_base_remat",) else ()
       if const_off: addr = UOp(Ops.INS, dtypes.int32, src=(addr, UOp.const(dtypes.int32, const_off).rtag()) + addr_deps + remat_dep,
                                arg=AMDOps.V_IADD, tag=_vreg_def(ctx))
-    if getenv("PREFILL_DBUF_LDS_REGION_BASE_MEMO", 0) and imm_off:
-      memo = ctx._lds_region_base_memo = getattr(ctx, "_lds_region_base_memo", {})
-      # The LDS pointer/order carrier may include AFTER dependencies. Keep that identity in the key so a shared address
-      # never skips the dependency chain that keeps the corresponding LDS stage reachable and ordered.
-      mkey = (id(dreg), id(base), _lds_key_uop(idx_for_addr), const_off)
-      if mkey in memo: addr = memo[mkey]
-      else: memo[mkey] = addr
     lds_tag = x.tag
     if lds_tag is None:
       btag_src = base
@@ -684,7 +616,7 @@ def isel_load(ctx:IselContext, x:UOp):
   if idxc.op is Ops.AFTER:
     idxc, dep = idxc.src[0], idxc.src[1:]
   if idxc.op is not Ops.NOOP: return None
-  if idxc.arg in ("accum", "wmma_acc") or (isinstance(idxc.arg, tuple) and idxc.arg[:1] in (("accum",), ("wmma_acc",))):
+  if idxc.arg == "wmma_acc" or (isinstance(idxc.arg, tuple) and idxc.arg[:1] == ("wmma_acc",)):
     # read pinned/fragment accumulator -> v_mov vvirt, v[pin]. src=(order, pin)
     # wmma_acc: this serves the POST-loop read (the in-loop src[2] reads are consumed directly in isel_wmma via the
     # in-place C fragment, so they never reach isel_load). order (src[0]) keeps the END/init chain reachable + ordered.
@@ -720,21 +652,12 @@ def isel_store(ctx:IselContext, a:UOp, b:UOp, x:UOp):
     # (b) ASSIGN store: data is the WMMA D output, already written IN PLACE to v[cbase+i] by v_wmma -> a NOOP passthrough
     # (no memory op). Keeps the WMMA def (b) + the END/range order (a.src[0]) reachable so the loop backedge is preserved.
     return UOp(Ops.NOOP, dtypes.void, src=(_tov(ctx, b), a.src[0]))
-  if a.arg == "accum" or (isinstance(a.arg, tuple) and a.arg[:1] == ("accum",)):
-    # RA1: write pinned accumulator -> v_mov v[pin], vsrc. a.src=(order, pin)
-    return UOp(Ops.INS, dtypes.void, src=(_tov(ctx, b), a.src[0], a.src[1]), arg=AMDOps.ACCUM_WRITE)   # (vsrc, order, pin)
   if isinstance(a.arg, tuple) and a.arg[:1] == ("stage_reg",):
     # Scalar stage stores must have been consumed by the deterministic GROUP
     # pairing pass before instruction selection.
     raise ValueError(f"unpaired register stage store reached instruction selection: {a.arg!r}")
   if a.arg == "lds":                          # LDS store: ds_store_b16 for half-element tiles, else b32 (a.src[0]=addr, a.src[1]=order)
-    if ctx is not None and _n_workitem_dims(ctx) > 1 and str(getenv("PREFILL_TC_LOCAL_STAGE", "")).strip().lower() in ("a", "both", "1", "true", "yes") and \
-       getenv("PREFILL_TC_LOCAL_STAGE_WITH_LOCAL", 0) and not getenv("PREFILL_TC_LOCAL_STAGE_POST", 0) and \
-       not getenv("PREFILL_TC_LOCAL_STAGE_A_MULTIDIM_UNSAFE", 0):
-      raise NotImplementedError("A WITH_LOCAL staging needs a multi-dim LDS key")
     lds_imm = a.src[2].arg if len(a.src) >= 3 else 0
-    if (direct := _withlocal_b128_store(ctx, a, b)) is not None:
-      return direct
     if (bdata := _lds_b128_store_data(ctx, b)) is not None:
       # Fail-closed: require explicit packed VGPR data for DS_STORE_B128.
       addr, lds_imm = _ds_addr_imm(ctx, a.src[0], lds_imm, 16)
@@ -917,8 +840,6 @@ def _lds_b128_store_data(ctx:IselContext|None, u:UOp) -> tuple[UOp, ...]|None:
     return tuple(u.src)
   if u.op is Ops.NOOP and u.dtype.count == 4 and u.dtype.scalar().itemsize == 4 and \
      all(s.op is Ops.INS and s.arg is AMDOps.V_PACK and s.dtype is dtypes.int32 for s in u.src):
-    if ctx is not None and getenv("PREFILL_DBUF_D3A_POST", 0) and getenv("PREFILL_DBUF_D3A_STAGE_B", 1):
-      return tuple(UOp(Ops.INS, dtypes.int32, src=s.src, arg=AMDOps.V_PACK, tag=_pin(LDS_PACK_BASE, i)) for i, s in enumerate(u.src))
     if ctx is not None:
       vals = tuple(v for p in u.src for v in p.src[:2])
       if len(vals) == 8 and (idx := _global_half8_base(vals)) is not None:
@@ -984,7 +905,7 @@ def _ds_imm_fits(imm:int) -> bool:
   return 0 <= imm <= 0xff
 
 def _ds_addr_imm(ctx:IselContext, addr:UOp, imm:int, align:int=1) -> tuple[UOp, int]:
-  if _ds_imm_fits(imm) and (imm % align == 0 or getenv("PREFILL_DBUF_LDS_CONST_IMM_UNSAFE", 0)): return addr, imm
+  if _ds_imm_fits(imm) and imm % align == 0: return addr, imm
   return UOp(Ops.INS, dtypes.int32, src=(addr, UOp.const(dtypes.int32, imm).rtag()), arg=AMDOps.V_IADD, tag=_vreg_def(ctx)), 0
 
 def _safe_lds_const_imm(ctx:IselContext, idx_uop:UOp, dreg:UOp, idx:UOp, order:UOp|None=None) -> tuple[UOp, int]|None:
@@ -992,8 +913,6 @@ def _safe_lds_const_imm(ctx:IselContext, idx_uop:UOp, dreg:UOp, idx:UOp, order:U
   if desc is None or desc.buf is not dreg or desc.dyn is None: return None
   dyn, const_elems = _const_base(idx)
   if dyn is not desc.dyn or desc.const_bytes != desc.base_bytes + const_elems * desc.itemsize: return None
-  if getenv("PREFILL_DBUF_LDS_REGION_BASE_SPLIT", 0):
-    return desc.dyn, desc.const_bytes - desc.base_bytes
   return desc.dyn, desc.const_bytes
 
 def _fold_lds_addr_imm(ctx:IselContext, addr:UOp) -> tuple[UOp, int]:
@@ -1009,40 +928,7 @@ def _fold_lds_addr_imm(ctx:IselContext, addr:UOp) -> tuple[UOp, int]:
   return UOp(Ops.INS, addr.dtype, src=(base, addr.src[1]) + addr.src[2:], arg=AMDOps.V_OFFSET, tag=_vreg_def(ctx)), const << int(addr.src[1].arg)
 
 def _withlocal_b128_store(ctx:IselContext, a:UOp, b:UOp) -> UOp|None:
-  if not getenv("PREFILL_LDS_PACK_WITHLOCAL_B128", 0): return None
-  stage_mode = str(getenv("PREFILL_TC_LOCAL_STAGE", "")).strip().lower()
-  if _n_workitem_dims(ctx) > 1 and stage_mode in ("a", "both", "1", "true", "yes") and \
-     not getenv("PREFILL_LDS_PACK_WITHLOCAL_MULTIDIM_UNSAFE", 0): return None
-  if b.op is not Ops.NOOP or b.dtype.count != 4 or b.dtype.scalar() is not dtypes.half or len(b.src) != 4: return None
-  if (slot := _lds_addr_const_words(a.src[0])) is None: return None
-  slot += _lds_imm_bytes(a) // 2
-  if slot % 8 == 4:
-    return UOp(Ops.NOOP, dtypes.void, src=(a.src[1],))
-  if slot % 8 != 0: return None
-  if not all(s.op is Ops.INS and s.arg is AMDOps.GLOBAL_LOAD and s.dtype is dtypes.half and len(s.src) == 3 for s in b.src): return None
-  off, ptr = b.src[0].src[0], b.src[0].src[1]
-  if any(s.src[0] is not off or s.src[1] is not ptr or s.src[2].op is not Ops.CONST or s.src[2].arg != i*2 for i, s in enumerate(b.src)):
-    return None
-  deps = ()
-  addr = a.src[0]
-  imm = _lds_imm_bytes(a)
-  if getenv("PREFILL_DBUF_LDS_STORE_IMM_FOLD", 0):
-    addr, imm_add = _fold_lds_addr_imm(ctx, addr)
-    imm += imm_add
-  if getenv("PREFILL_DBUF", 0) and getenv("PREFILL_DBUF_LDS_STORE_BASE_SPLIT", 0):
-    addr = _split_store_final_const_add(ctx, addr)
-  if getenv("PREFILL_DBUF_DIRECT_B128_CHAIN", 0):
-    prev = getattr(ctx, "_withlocal_b128_prev", None)
-    deps = (prev,) if prev is not None else ()
-    off = _addr_ins_after_dep(ctx, off, prev)
-    if getenv("PREFILL_DBUF_DIRECT_B128_ADDR_REMAT", 0): addr = _addr_ins_after_dep(ctx, addr, prev)
-  ld = UOp(Ops.INS, dtypes.int32, src=(off, ptr, UOp.const(dtypes.int32, 0).rtag()) + deps,
-           arg=AMDOps.GLOBAL_LOAD_B128, tag=_pin(LDS_PACK_BASE, 0))
-  addr, imm = _ds_addr_imm(ctx, addr, imm, 16)
-  st = UOp(Ops.INS, dtypes.void, src=(addr, ld) + deps + (a.src[1], UOp.const(dtypes.int32, imm).rtag()),
-           arg=AMDOps.DS_STORE_B128)
-  if getenv("PREFILL_DBUF_DIRECT_B128_CHAIN", 0): ctx._withlocal_b128_prev = st
-  return st
+  return None
 
 def _after_load_addr(u:UOp, dep:UOp|None) -> UOp:
   if dep is None: return u
@@ -1059,17 +945,6 @@ def _after_load_addr(u:UOp, dep:UOp|None) -> UOp:
 def _index_after_dep(idx:UOp, dep:UOp|None) -> UOp:
   if dep is None or idx.op is not Ops.INDEX or not idx.src: return idx
   return idx.replace(src=(idx.src[0].after(dep),) + idx.src[1:])
-
-def _split_dbuf_lds_index(idx:UOp, role:str) -> UOp:
-  if not (getenv("PREFILL_DBUF", 0) and getenv("PREFILL_DBUF_LDS_INDEX_SPLIT", 0)): return idx
-  if idx.op is not Ops.INDEX or idx.addrspace != AddrSpace.LOCAL or len(idx.src) < 2: return idx
-  tag = ("dbuf_lds_index_split", role, id(idx), id(idx.src[1]))
-  def clone_expr(x:UOp) -> UOp:
-    if x.op in (Ops.ADD, Ops.MUL, Ops.SHL, Ops.AND):
-      return x.replace(src=tuple(clone_expr(s) for s in x.src), tag=("dbuf_lds_expr_split", role, id(x)))
-    return x
-  expr = clone_expr(idx.src[1])
-  return idx.replace(src=(idx.src[0], expr) + idx.src[2:], tag=tag)
 
 def _addr_ins_after_dep(ctx:IselContext, u:UOp, dep:UOp|None) -> UOp:
   if dep is None or u.op is not Ops.INS or u.arg not in (AMDOps.V_OFFSET, AMDOps.V_IADD): return u
@@ -1184,16 +1059,10 @@ def _wmma_frag_proof_reuse_key(ctx:IselContext, role:str, carrier:UOp) -> tuple|
   policy = _amd_isa_renderer_policy()
   return None if policy is None else policy.wmma_frag_proof_reuse_key(ctx, role, carrier, _amd_isa_policy_helpers())
 
-def _wmma_frag_phase_reuse_key(ctx:IselContext, role:str, carrier:UOp) -> tuple|None:
-  policy = _amd_isa_renderer_policy()
-  return None if policy is None else policy.wmma_frag_phase_reuse_key(ctx, role, carrier, _amd_isa_policy_helpers())
-
 def _wmma_frag_reuse_key(ctx:IselContext|UOp, role:str|None=None, carrier:UOp|None=None, fallback_key=None):
   if carrier is None:
     carrier = ctx  # type: ignore[assignment]
     return id(carrier)
-  if getenv("PREFILL_WMMA_AB_PROOF_KEY", 0):
-    return _wmma_frag_proof_reuse_key(ctx, role, carrier) or (fallback_key if fallback_key is not None else ("no_proof", role, id(carrier)))  # type: ignore[arg-type]
   return id(carrier)
 
 def _wmma_frag_proof_from_elem(e:UOp) -> dict|None:
@@ -1282,37 +1151,25 @@ def _split_store_final_const_add(ctx:IselContext, addr:UOp) -> UOp:
   return UOp(Ops.INS, addr.dtype, src=addr.src, arg=addr.arg, tag=_vreg_def(ctx))
 
 def _frag_b128_loads(ctx:IselContext, E:tuple[UOp, ...], base:int, dep:tuple[UOp,...]=(), role:str="frag") -> tuple[UOp,...]|None:
-  if not getenv("AMD_ISA_WMMA_B128_FRAG", 1): return None
   addrs = [_wmma_half_addr(e) for e in E]
   if any(a is None for a in addrs): return None
   idx0, ptr0, expr0, c0 = addrs[0]
   if any(ptr is not ptr0 or expr is not expr0 or c != c0 + i for i, (_idx, ptr, expr, c) in enumerate(addrs)): return None
   if dep: idx0 = _index_after_dep(idx0, dep[-1])
-  idx0 = _split_dbuf_lds_index(idx0, "load")
-  if getenv("PREFILL_DBUF_LDS_BASE_REMAT", 0) and getenv("PREFILL_DBUF", 0) and isinstance(ptr0.dtype, PtrDType) and \
-     ptr0.dtype.addrspace != AddrSpace.GLOBAL:
-    idx0 = _remat_final_const_add_index(idx0)
   idxc = isel_index(ctx, idx0)
   if idxc is None or idxc.op is not Ops.NOOP or len(idxc.src) not in (2, 3): return None
   if idxc.arg == "lds":
     addr, order = idxc.src[0], idxc.src[1]
     desc = decompose_lds_index(ctx, idx0, order)
     proof = _wmma_frag_buffer_proof_from_elem(E[0], desc, role) or _wmma_frag_buffer_proof_from_desc(desc, role)
-    remat_load_anchor = bool(getenv("PREFILL_DBUF_LDS_RELOAD_ANCHOR", 0))
-    if getenv("PREFILL_DBUF_LDS_BASE_REMAT", 0) and getenv("PREFILL_DBUF", 0) and not remat_load_anchor:
-      addr = _remat_lds_load_addr(ctx, addr, dep[-1] if dep else order, bool(getenv("PREFILL_DBUF_LDS_BASE_REMAT_DEEP", 0)))
     base_imm = idxc.src[2].arg if len(idxc.src) >= 3 and idxc.src[2].op is Ops.CONST else 0
     loads:list[UOp] = []
     active_dep = dep
     for j, imm in enumerate((0, 16)):
-      load_addr = _remat_lds_load_addr(ctx, addr, active_dep[-1] if active_dep else order,
-                                       bool(getenv("PREFILL_DBUF_LDS_BASE_REMAT_DEEP", 0))) \
-        if remat_load_anchor and getenv("PREFILL_DBUF_LDS_BASE_REMAT", 0) and getenv("PREFILL_DBUF", 0) else addr
-      load_addr, ds_imm = _ds_addr_imm(ctx, load_addr, base_imm + imm, 16)
+      load_addr, ds_imm = _ds_addr_imm(ctx, addr, base_imm + imm, 16)
       ld = UOp(Ops.INS, dtypes.int32, src=(load_addr, order, UOp.const(dtypes.int32, ds_imm).rtag()) + active_dep,
                arg=AMDOps.DS_LOAD_B128, tag=_pin(base, j * 4))
       loads.extend([ld] + [UOp(Ops.INS, dtypes.int32, src=(ld,), arg=AMDOps.MOV, tag=_pin(base, j * 4 + i)) for i in range(1, 4)])
-      if getenv("PREFILL_DBUF_LDS_LOAD_SERIAL", 0): active_dep = active_dep + (ld,)
     return tuple(loads)
   ptr, off = idxc.src
   loads:list[UOp] = []
@@ -1403,10 +1260,7 @@ def _pack_frag(ctx:IselContext, carrier:UOp, base:int, dep:tuple[UOp,...]=()) ->
     memo[memo_key] = pk
     return pk
   E = _wmma_elems(carrier, 16)
-  if getenv("PREFILL_DBUF_LDS_LOAD_SERIAL", 0) and (prev := getattr(ctx, "_frag_pack_prev", None)) is not None:
-    dep = dep + (prev,)
   pk = _frag_b128_loads(ctx, E, base, dep, "pack") or tuple(UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, E[2*i]), _tov(ctx, E[2*i+1]))+dep, arg=AMDOps.V_PACK, tag=_pin(base, i)) for i in range(8))
-  if getenv("PREFILL_DBUF_LDS_LOAD_SERIAL", 0): ctx._frag_pack_prev = pk[-1]
   memo[memo_key] = pk
   return pk
 
@@ -1439,12 +1293,13 @@ def _emit_dbuf_stage_store(ctx:IselContext, st:UOp, dep:tuple[UOp,...]) -> tuple
              arg=AMDOps.DS_STORE_B128), "ok"
 
 def _dbuf_d3a_probe_marker(ctx:IselContext, tile:UOp, dep:tuple[UOp,...]) -> tuple[UOp,...]:
-  if not (getenv("PREFILL_DBUF_D3A_POST", 0) and dep): return dep
+  return dep
+  if not dep: return dep
   out = dep
   for role, carrier in (("A", tile.src[0]), ("B", tile.src[1])):
-    if role == "A" and not getenv("PREFILL_DBUF_D3A_STAGE_A", 0):
+    if role == "A":
       continue
-    if role == "B" and not getenv("PREFILL_DBUF_D3A_STAGE_B", 1):
+    if role == "B":
       continue
     cand, _reason = _dbuf_stage_candidate(carrier)
     if cand is None: continue
@@ -1494,12 +1349,11 @@ def _wmma_chain_head_acc(head:UOp):
   return None
 
 def _try_wmma_kmajor_phase(ctx:IselContext, x:UOp):
-  if not (getenv("PREFILL_WMMA_KMAJOR_PHASE", 0) and getenv("PREFILL_WMMA_AB_PROOF_KEY", 0) and
-          getenv("PREFILL_WMMA_AB_PHASE_SCOPED_KEY", 0) and _c_low(ctx)): return None
+  return None
+  if not _c_low(ctx): return None
   memo = ctx._wmma_memo = getattr(ctx, "_wmma_memo", {})
   if x in memo: return memo[x]
   roots = [u for u in ctx.uses if u.op is Ops.WMMA and not any(c.op is Ops.WMMA for c in ctx.uses.get(u, []))]
-  if (expected_roots := getenv("PREFILL_WMMA_KMAJOR_ROOTS", 0)) and len(roots) != expected_roots: return None
   chains = [_wmma_chain_nodes(r) for r in roots]
   if any(len(c) != len(chains[0]) for c in chains): return None
   phases = [list(reversed(c)) for c in chains]
@@ -1514,7 +1368,7 @@ def _try_wmma_kmajor_phase(ctx:IselContext, x:UOp):
     pack_cache:dict[tuple, tuple[UOp, ...]] = {}
     prev_wm:UOp|None = None
     phase_dep = () if prev_phase_last is None else (prev_phase_last,)
-    clustered = bool(getenv("PREFILL_WMMA_CLUSTERED_LDS_CONSUME", 0))
+    clustered = False
     phase_tiles: list[tuple[int, UOp, tuple, tuple, int, int, tuple[UOp, ...]]] = []
     for chain_i, phase in enumerate(phases):
       tile = phase[phase_i]
@@ -1522,7 +1376,7 @@ def _try_wmma_kmajor_phase(ctx:IselContext, x:UOp):
       if akey is None or bkey is None: return None
       abase, bbase = _ab_base(ctx, ("A", akey)), _ab_base(ctx, ("B", bkey))
       if abase is None or bbase is None or cbases[chain_i] is None: return None
-      tile_phase_dep = _dbuf_d3a_probe_marker(ctx, tile, phase_dep) if getenv("PREFILL_WMMA_KMAJOR_D3A_MARKER", 0) and phase_i > 0 else phase_dep
+      tile_phase_dep = phase_dep
       def pack(role:str, carrier:UOp, key:tuple, base:int) -> tuple[UOp, ...]:
         pkey = (role, key, base)
         if pkey not in pack_cache: pack_cache[pkey] = _pack_frag_tile(ctx, carrier, base, tile_phase_dep, role)
@@ -1559,7 +1413,6 @@ def _try_wmma_kmajor_phase(ctx:IselContext, x:UOp):
 def isel_wmma(ctx:IselContext, x:UOp):
   memo = ctx._wmma_memo = getattr(ctx, "_wmma_memo", {})
   if x in memo: return memo[x]
-  if (km := _try_wmma_kmajor_phase(ctx, x)) is not None: return km
   # ROLLED-K path (gate): a default matmul K>16 keeps ONE Ops.WMMA in a RANGE loop whose src[2] is an 8-lane carrier of
   # LOADs from a reduce accumulator DEFINE_REG (NOT a CONST-0 seed, NOT a prior Ops.WMMA). The C fragment is a FIXED,
   # zero-initialised 8-VGPR range (cbase); v_wmma does C+=A*B in place every iteration, so the whole reduction is ONE
@@ -1645,27 +1498,14 @@ def isel_wmma(ctx:IselContext, x:UOp):
     else:                                       # ACCUMULATE: src2 = prior tile's 8 pinned D lanes (== v{cbase..cbase+7})
       cin = list(prev.src)                      #   -> lower_inst reads dbase=v{cbase} for both src2 and vdst (in place)
       dep = (prev.src[0],)                      # WAR guard: reload this tile's shared A/B frags only after the prior matmul
-      dep = _dbuf_d3a_probe_marker(ctx, tile, dep)
     if resident_ab:
-      resident_a = bool(getenv("PREFILL_WMMA_CHAIN_RESIDENT_A", 1))
-      resident_b = bool(getenv("PREFILL_WMMA_CHAIN_RESIDENT_B", 1))
-      if getenv("PREFILL_WMMA_AB_PROOF_KEY", 0):
-        akey = _wmma_frag_phase_reuse_key(ctx, "A", tile.src[0]) or _wmma_frag_proof_reuse_key(ctx, "A", tile.src[0])
-        bkey = _wmma_frag_phase_reuse_key(ctx, "B", tile.src[1]) or _wmma_frag_proof_reuse_key(ctx, "B", tile.src[1])
-        if (resident_a and akey is None) or (resident_b and bkey is None):
-          prev = memo[tile] = _build_wmma_tile(ctx, tile.src[0], tile.src[1], cin, abase, bbase, cbase, dep)
-          continue
-      else:
-        akey, bkey = _wmma_frag_reuse_key(ctx, "A", tile.src[0]), _wmma_frag_reuse_key(ctx, "B", tile.src[1])
-      tabase = _ab_base(ctx, ("A", akey)) if resident_a else abase
-      tbbase = _ab_base(ctx, ("B", bkey)) if resident_b else bbase
+      akey, bkey = _wmma_frag_reuse_key(ctx, "A", tile.src[0]), _wmma_frag_reuse_key(ctx, "B", tile.src[1])
+      tabase, tbbase = _ab_base(ctx, ("A", akey)), _ab_base(ctx, ("B", bkey))
       if cbase is None or tabase is None or tbbase is None:
         raise NotImplementedError(f"AMD:ISA WMMA resident A/B window [{_acc_top(ctx)},{FRAG_BASE}) exhausted (A={tabase} B={tbbase} C={cbase})")
-      if resident_a: _record_resident_wmma_fragment(ctx, "A", tabase)
-      if resident_b: _record_resident_wmma_fragment(ctx, "B", tbbase)
-      resident_dep = dep if getenv("PREFILL_WMMA_RESIDENT_PACK_DEP", 0) else ()
-      apk = _pack_frag(ctx, tile.src[0], tabase, resident_dep) if resident_a else _pack_frag_tile(ctx, tile.src[0], tabase, dep, "A")
-      bpk = _pack_frag(ctx, tile.src[1], tbbase, resident_dep) if resident_b else _pack_frag_tile(ctx, tile.src[1], tbbase, dep, "B")
+      _record_resident_wmma_fragment(ctx, "A", tabase)
+      _record_resident_wmma_fragment(ctx, "B", tbbase)
+      apk, bpk = _pack_frag(ctx, tile.src[0], tabase), _pack_frag(ctx, tile.src[1], tbbase)
       prev = memo[tile] = _build_wmma_from_packs(ctx, apk, bpk, cin, cbase)
     else:
       prev = memo[tile] = _build_wmma_tile(ctx, tile.src[0], tile.src[1], cin, abase, bbase, cbase, dep)
@@ -1837,12 +1677,12 @@ def alloc_vregs(ctx:IselContext, x:UOp):
   return None
 
 def _dbuf_store_addr_seed(x:UOp) -> UOp|None:
-  if not (getenv("PREFILL_DBUF", 0) and getenv("PREFILL_DBUF_GLOBAL_ADDR_INLOOP", 0)): return None
+  return None
   rs = sorted([r for r in x.ranges if r.op is Ops.RANGE and r.arg[-1] is AxisType.REDUCE], key=lambda r: r.arg)
   return rs[0] if rs else None
 
 def _pack_withlocal_lds_stores(x:UOp):
-  if not getenv("PREFILL_LDS_PACK_WITHLOCAL_B128", 0): return None
+  return None
   def fail(reason:str): return None
   if len(x.src) < 2 or len(x.src) % 2 != 0 or not all(st.op is Ops.STORE for st in x.src): return fail("shape")
   infos = [_local_vec4_store_info(st) for st in x.src]
@@ -1875,7 +1715,7 @@ def _store_local_scalar_info(st:UOp):
   return idx, val, gate, base_expr, local_const, stage_tag
 
 def _pack_b_tilekey_lds_stores(x:UOp):
-  if not (getenv("PREFILL_TC_LOCAL_STAGE_B_TILEKEY", 0) and getenv("PREFILL_LDS_PACK_WITHLOCAL_B128", 0)): return None
+  return None
   def fail(reason:str): return None
   if len(x.src) != 16 or not all(g.op is Ops.GROUP and len(g.src) > 0 for g in x.src): return fail("shape")
   infos = [[_store_local_scalar_info(st) for st in g.src] for g in x.src]
@@ -1939,8 +1779,6 @@ def _pair_register_stage_stores(ctx, x:UOp):
 
 pre_isel_matcher = PatternMatcher([
   (UPat(Ops.GROUP, name="x"), _pair_register_stage_stores),
-  (UPat(Ops.GROUP, name="x"), _pack_b_tilekey_lds_stores),
-  (UPat(Ops.GROUP, name="x"), _pack_withlocal_lds_stores),
 ])
 
 # ============================ post-regalloc: build real rdna3 Insts + waitcnts ============================
@@ -2306,7 +2144,7 @@ class AMDISARenderer(ISARenderer):
   def _final_linear(self, lin:UOp) -> UOp:
     insts = list(lin.src)
     policy = lin.arg if isinstance(lin.arg, PreassembledStreamPolicy) else None
-    if not (policy and policy.preserve_instruction_order) and getenv("AMD_ISA_SCHED", 1): insts = self._schedule(insts)
+    if not (policy and policy.preserve_instruction_order): insts = self._schedule(insts)
     proof = lin.arg if isinstance(lin.arg, CompilerCaptureProof) else None
     targeted = proof is not None and proof.wait_policy == "targeted_vmcnt"
     if not (policy and policy.preserve_waitcnt): insts = self._insert_waitcnt(insts, targeted=targeted)
@@ -2489,107 +2327,83 @@ class AMDISARenderer(ISARenderer):
     return out
 
   def _insert_waitcnt(self, uops:list[UOp], *, targeted:bool=False) -> list[UOp]:
-    # Correct CONSUMER-ONLY waitcnt: replaces the conservative drain-after-every-memory-op model. Track regs defined by
-    # outstanding VMEM (vmcnt) and LDS/SMEM (lgkmcnt) loads + whether a store of each class is outstanding. Insert a
-    # single full-drain s_waitcnt(0) only before: a consumer that touches a pending load's reg (RAW/WAR), a ds_load
-    # that may alias a pending LDS store (RMW), s_barrier (LDS visibility), s_endpgm, and every branch (loop-sound:
-    # backedges/exits drain so cross-iteration store->load hazards can't slip past). Labels start a clean block.
-    # Full-drain (simm16=0) is always correct; the count drop comes from batching loads + dropping needless store waits.
-    from tinygrad.helpers import getenv
-    if getenv("AMD_ISA_WAITCNT_CONSERVATIVE", 0):   # baseline (Phase J A/B): drain after every memory op (old model)
-      out: list[UOp] = []
-      for u in uops:
-        out.append(u)
-        if not isinstance(u.arg, tuple) and str(u.arg).split("(", 1)[0].startswith(
-            ("global_load", "global_store", "ds_load", "ds_store", "ds_bpermute", "s_load")):
-          simm16 = self._waitcnt_simm16(0, 0, 0)
-          wait = UOp(Ops.INS, arg=s_waitcnt(simm16=simm16))
-          _proof_record_inst("waitcnt", "WAITCNT", wait.arg, {"simm16": simm16, "reason": "conservative_after_memory"})
-          out.append(wait)
-      return out
-    if targeted or getenv("AMD_ISA_WAITCNT_TARGETED", 0):
-      out = []
-      pend_vm:list[set[int]] = []; pend_lgkm:list[set[int]] = []
-      vm_store = lgkm_store = False
-      def _span(r): return set(range(r.offset, r.offset + r.sz))
-      def _uses(a) -> set[int]:
-        return set().union(*(_span(r) for r in self._inst_regs(a))) if self._inst_regs(a) else set()
-      def _drain(vm:int=0, lgkm:int=0, exp:int=0):
-        nonlocal vm_store, lgkm_store
-        simm16 = self._waitcnt_simm16(vm, lgkm, exp)
-        wait = UOp(Ops.INS, arg=s_waitcnt(simm16=simm16))
-        _proof_record_inst("waitcnt", "WAITCNT", wait.arg, {"simm16": simm16, "vmcnt": vm, "lgkmcnt": lgkm, "expcnt": exp, "reason": "targeted_drain"})
-        out.append(wait)
-        if vm == 0: pend_vm.clear(); vm_store = False
-        if lgkm == 0: pend_lgkm.clear(); lgkm_store = False
-      def _target_wait(uses:set[int], coalesce_vm:bool=False, coalesce_lgkm:bool=False):
-        vdeps = [i for i, d in enumerate(pend_vm) if uses & d]
-        ldeps = [i for i, d in enumerate(pend_lgkm) if uses & d]
-        if not vdeps and not ldeps: return
-        vm = 0 if (coalesce_vm and vdeps) else (len(pend_vm) - max(vdeps) - 1 if vdeps else 63)
-        lgkm = 0 if (coalesce_lgkm and ldeps) else (len(pend_lgkm) - max(ldeps) - 1 if ldeps else 63)
-        simm16 = self._waitcnt_simm16(vm, lgkm, 7)
-        wait = UOp(Ops.INS, arg=s_waitcnt(simm16=simm16))
-        _proof_record_inst("waitcnt", "WAITCNT", wait.arg, {
-          "simm16": simm16, "vmcnt": vm, "lgkmcnt": lgkm, "expcnt": 7,
-          "reason": "targeted_consumer", "consumer_regs": sorted(uses),
-        })
-        out.append(wait)
-        if vdeps: del pend_vm[:(len(pend_vm) if coalesce_vm else max(vdeps)+1)]
-        if ldeps: del pend_lgkm[:(len(pend_lgkm) if coalesce_lgkm else max(ldeps)+1)]
-      for u in uops:
-        a = u.arg
-        if isinstance(a, tuple):
-          if a[0] == "branch" and (pend_vm or pend_lgkm or vm_store or lgkm_store): _drain()
-          out.append(u); continue
-        m = str(a).split("(", 1)[0]
-        uses = _uses(a)
-        if m == "s_barrier" and (lgkm_store or pend_lgkm): _drain(vm=63, lgkm=0, exp=7)
-        elif m == "s_endpgm" and (vm_store or lgkm_store or pend_vm or pend_lgkm): _drain()
-        elif m.startswith("ds_load") and lgkm_store:
-          if not getenv("AMD_ISA_WAITCNT_D3A_SKIP_STORE_LOAD", 0): _drain(vm=63, lgkm=0, exp=7)
-        else:
-          # Scalarized half-fragment paths otherwise emit one partial wait per v_pack. Coalesce those narrow-load
-          # consumers to the default-equivalent VMEM drain; the b128/WMMA route still gets true targeted waits.
-          _target_wait(uses, coalesce_vm=m.startswith("v_pack"),
-                       coalesce_lgkm=m.startswith("v_wmma") and getenv("AMD_ISA_WMMA_CLUSTER_LGKM_WAIT", 0))
-        out.append(u)
-        regs = self._inst_regs(a)
-        if m.startswith("global_load") and regs: pend_vm.append(_span(regs[0]))
-        elif m.startswith(("ds_load", "s_load", "ds_bpermute")) and regs: pend_lgkm.append(_span(regs[0]))
-        elif m.startswith("global_store"): vm_store = True
-        elif m.startswith("ds_store"): lgkm_store = True
-      return out
-    out = []
-    pend_vm:set[int] = set(); pend_lgkm:set[int] = set(); vm_store = lgkm_store = False
+    """Insert dependency-aware waits; compiler proofs opt into precise counter scheduling."""
+    if not targeted: return self._insert_safe_waitcnt(uops)
+    out:list[UOp] = []
+    pend_vm:list[set[int]] = []; pend_lgkm:list[set[int]] = []
+    vm_store = lgkm_store = False
+    def _span(r): return set(range(r.offset, r.offset + r.sz))
+    def _uses(a) -> set[int]:
+      return set().union(*(_span(r) for r in self._inst_regs(a))) if self._inst_regs(a) else set()
+    def _drain(vm:int=0, lgkm:int=0, exp:int=0):
+      nonlocal vm_store, lgkm_store
+      simm16 = self._waitcnt_simm16(vm, lgkm, exp)
+      wait = UOp(Ops.INS, arg=s_waitcnt(simm16=simm16))
+      _proof_record_inst("waitcnt", "WAITCNT", wait.arg, {"simm16": simm16, "vmcnt": vm, "lgkmcnt": lgkm,
+        "expcnt": exp, "reason": "targeted_drain"})
+      out.append(wait)
+      if vm == 0: pend_vm.clear(); vm_store = False
+      if lgkm == 0: pend_lgkm.clear(); lgkm_store = False
+    def _target_wait(uses:set[int], coalesce_vm:bool=False):
+      vdeps = [i for i, d in enumerate(pend_vm) if uses & d]
+      ldeps = [i for i, d in enumerate(pend_lgkm) if uses & d]
+      if not vdeps and not ldeps: return
+      vm = 0 if (coalesce_vm and vdeps) else (len(pend_vm) - max(vdeps) - 1 if vdeps else 63)
+      lgkm = len(pend_lgkm) - max(ldeps) - 1 if ldeps else 63
+      simm16 = self._waitcnt_simm16(vm, lgkm, 7)
+      wait = UOp(Ops.INS, arg=s_waitcnt(simm16=simm16))
+      _proof_record_inst("waitcnt", "WAITCNT", wait.arg, {"simm16": simm16, "vmcnt": vm, "lgkmcnt": lgkm,
+        "expcnt": 7, "reason": "targeted_consumer", "consumer_regs": sorted(uses)})
+      out.append(wait)
+      if vdeps: del pend_vm[:(len(pend_vm) if coalesce_vm else max(vdeps)+1)]
+      if ldeps: del pend_lgkm[:max(ldeps)+1]
+    for u in uops:
+      a = u.arg
+      if isinstance(a, tuple):
+        if a[0] == "branch" and (pend_vm or pend_lgkm or vm_store or lgkm_store): _drain()
+        out.append(u); continue
+      m, uses = str(a).split("(", 1)[0], _uses(a)
+      if m == "s_barrier" and (lgkm_store or pend_lgkm): _drain(vm=63, lgkm=0, exp=7)
+      elif m == "s_endpgm" and (vm_store or lgkm_store or pend_vm or pend_lgkm): _drain()
+      elif m.startswith("ds_load") and lgkm_store: _drain(vm=63, lgkm=0, exp=7)
+      else: _target_wait(uses, coalesce_vm=m.startswith("v_pack"))
+      out.append(u)
+      regs = self._inst_regs(a)
+      if m.startswith("global_load") and regs: pend_vm.append(_span(regs[0]))
+      elif m.startswith(("ds_load", "s_load", "ds_bpermute")) and regs: pend_lgkm.append(_span(regs[0]))
+      elif m.startswith("global_store"): vm_store = True
+      elif m.startswith("ds_store"): lgkm_store = True
+    return out
+
+  def _insert_safe_waitcnt(self, uops:list[UOp]) -> list[UOp]:
+    """Conservative consumer-only policy for ordinary kernels."""
+    out:list[UOp] = []
+    pend_vm:set[int] = set(); pend_lgkm:set[int] = set()
+    vm_store = lgkm_store = False
     def _drain():
       nonlocal vm_store, lgkm_store
       simm16 = self._waitcnt_simm16(0, 0, 0)
       wait = UOp(Ops.INS, arg=s_waitcnt(simm16=simm16))
-      _proof_record_inst("waitcnt", "WAITCNT", wait.arg, {"simm16": simm16, "vmcnt": 0, "lgkmcnt": 0, "expcnt": 0, "reason": "default_drain"})
+      _proof_record_inst("waitcnt", "WAITCNT", wait.arg, {"simm16": simm16, "vmcnt": 0, "lgkmcnt": 0,
+        "expcnt": 0, "reason": "default_drain"})
       out.append(wait)
       pend_vm.clear(); pend_lgkm.clear(); vm_store = lgkm_store = False
     for u in uops:
       a = u.arg
-      if isinstance(a, tuple):                                   # ("label"|"branch", ...) control marker
-        # Drain before EVERY branch (backedge/exit) so a store in iter N completes before iter N+1 reads it
-        # (cross-iteration RMW). Do NOT clear at labels: a value loaded BEFORE a loop (e.g. the kernarg ptr) is
-        # consumed INSIDE it -- that pending must flow across the loop-top label or the in-loop consumer misses its wait.
+      if isinstance(a, tuple):
         if a[0] == "branch" and (pend_vm or pend_lgkm or vm_store or lgkm_store): _drain()
-        out.append(u)
-        continue
+        out.append(u); continue
       m = str(a).split("(", 1)[0]
       offs = {v.offset for v in self._inst_regs(a)}
       need = bool(offs & pend_vm) or bool(offs & pend_lgkm)
       if m == "s_barrier": need = need or lgkm_store or bool(pend_lgkm)
       elif m == "s_endpgm": need = need or vm_store or lgkm_store or bool(pend_vm) or bool(pend_lgkm)
-      elif m.startswith("ds_load") and lgkm_store: need = True    # RMW: a ds_load may alias a pending ds_store
+      elif m.startswith("ds_load") and lgkm_store: need = True
       if need: _drain()
       out.append(u)
       regs = self._inst_regs(a)
-      if m.startswith("global_load"): pend_vm.add(regs[0].offset)
-      elif m.startswith(("ds_load", "s_load", "ds_bpermute")):
-        if regs: pend_lgkm.add(regs[0].offset)
+      if m.startswith("global_load") and regs: pend_vm.add(regs[0].offset)
+      elif m.startswith(("ds_load", "s_load", "ds_bpermute")) and regs: pend_lgkm.add(regs[0].offset)
       elif m.startswith("global_store"): vm_store = True
       elif m.startswith("ds_store"): lgkm_store = True
     return out

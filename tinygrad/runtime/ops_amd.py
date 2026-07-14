@@ -7,7 +7,7 @@ from tinygrad.runtime.support.hcq import HCQCompiled, HCQAllocator, HCQBuffer, H
 from tinygrad.runtime.support.hcq import MMIOInterface, BumpAllocator, hcq_filter_visible_devices, hcq_profile
 from tinygrad.uop.ops import sint
 from tinygrad.device import Compiled, BufferSpec
-from tinygrad.helpers import getenv, round_up, data64_le, DEBUG, PROFILE, ProfileEvent, lo32, hi32, colored, prod, ContextVar, TracingKey
+from tinygrad.helpers import getenv, round_up, data64_le, DEBUG, DEV, PROFILE, ProfileEvent, lo32, hi32, colored, prod, ContextVar, TracingKey
 from tinygrad.helpers import VIZ, ceildiv, unwrap, pluralize
 from tinygrad.renderer.cstyle import HIPRenderer, HIPCCRenderer
 from tinygrad.renderer.llvmir import AMDLLVMRenderer
@@ -973,8 +973,26 @@ class USBIface(PCIIface):
 
 def _mock(iface, name=None): return type(name or f"MOCK{iface.__name__}", (iface,), {})
 
+def _amd_renderers(arch:str):
+  # Native ISA is research tooling, not part of ordinary AMD execution. Keep it behind the explicit DEV=AMD:ISA
+  # surface so DEV=AMD does not import its prefill/debug stack.
+  renderers = [HIPRenderer, AMDLLVMRenderer, HIPCCRenderer]
+  if DEV.target("AMD", arch=arch).renderer == "ISA":
+    from tinygrad.renderer.isa.amd import AMDISARenderer
+    renderers.append(AMDISARenderer)
+  return renderers
+
 class AMDDevice(HCQCompiled):
   ifaces = [KFDIface, PCIIface, USBIface, _mock(KFDIface, "MOCKIface"), _mock(KFDIface), _mock(PCIIface), _mock(USBIface)]
+
+  def _select_renderer(self):
+    # Device instances outlive Context scopes. Register the optional native renderer when it is explicitly selected,
+    # even if this AMD singleton was first opened under ordinary DEV=AMD.
+    target = DEV.target(self.device.split(':')[0], **({"arch": self.arch} if self.arch else {}))
+    if target.renderer == "ISA" and not any(self._renderer_name(r) == "ISA" for r in self.renderers):
+      from tinygrad.renderer.isa.amd import AMDISARenderer
+      self.renderers.append(AMDISARenderer)
+    return super()._select_renderer()
 
   def is_am(self) -> bool: return isinstance(self.iface, (PCIIface, USBIface))
   def is_usb(self) -> bool: return isinstance(self.iface, USBIface)
@@ -1035,8 +1053,7 @@ class AMDDevice(HCQCompiled):
     self.sdma_queues:dict = {}
     self.has_sdma_queue = self.sdma_queue(0) is not None
 
-    from tinygrad.renderer.isa.amd import AMDISARenderer  # opt-in native AMD ISA backend (DEV=AMD:ISA); default unchanged
-    super().__init__(device, AMDAllocator(self), [HIPRenderer, AMDLLVMRenderer, HIPCCRenderer, AMDISARenderer], functools.partial(AMDProgram, self), AMDSignal,
+    super().__init__(device, AMDAllocator(self), _amd_renderers(self.arch), functools.partial(AMDProgram, self), AMDSignal,
                      functools.partial(AMDComputeAQLQueue if self.is_aql else AMDComputeQueue, self),
                      functools.partial(AMDCopyQueue, self, max_copy_size=self.max_copy_size) if self.has_sdma_queue else None,
                      kernargs_size=self.remote_alloc_size(16 << 20, 8 << 10), sigalloc_size=0x100 if self.is_usb() else 0x1000,

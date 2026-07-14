@@ -15,7 +15,6 @@ def qk_route_manifest_attr(name:str): return _attr("extra.qk.route_manifest", na
 
 
 def route_pf16_graph_gemm(*args, **kwargs): return _attr("extra.qk.prefill_graph_gemm_route", "route_pf16_graph_gemm")(*args, **kwargs)
-def route_q4k_graph_gemm(*args, **kwargs): return _attr("extra.qk.prefill_graph_gemm_route", "route_q4k_graph_gemm")(*args, **kwargs)
 
 def q4k_parse_opt(*args, **kwargs): return _attr("extra.qk.quant.q4_k_gemv_primitive", "parse_opt")(*args, **kwargs)
 def q4k_gemm_kernel(*args, **kwargs): return _attr("extra.qk.quant.q4_k_gemv_primitive", "q4k_gemm_kernel")(*args, **kwargs)
@@ -58,5 +57,3 @@ def emit_q6k_packed_prefill_kernel(*args, **kwargs):
 def flash_decode_live_split_block_tile(*args, **kwargs): return _attr("extra.qk.live_split_geometry", "flash_decode_live_split_block_tile")(*args, **kwargs)
 
 def assert_pure_machine_search(*args, **kwargs): return _attr("extra.qk.pure_search_guard", "assert_pure_machine_search")(*args, **kwargs)
-
-def prefill_v2_load_table(*args, **kwargs): return _attr("extra.qk.prefill_v2_schedule_search", "load_table")(*args, **kwargs)

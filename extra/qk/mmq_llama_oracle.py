@@ -154,7 +154,7 @@ def llama_mma_sum_slot_mapping(spec: Q4KQ81MMQTileSpec,
     "slots": tuple(slots),
     "tinygrad_asm_surface": {
       "representable_static_identity": True,
-      "candidate_helper": "AMD_ISA_REG_ACCUM pinned DEFINE_REG element with compile-time index",
+      "candidate_helper": "compiler-owned DEFINE_REG element with compile-time index",
       "bounded_shapes": [{"M": 16, "N": 16, "K": 256}, {"M": 32, "N": 32, "K": 256}],
       "runtime_kernel_probe_status": "blocked_missing_physical_slot_introspection",
       "exact_missing_primitive_or_api": (

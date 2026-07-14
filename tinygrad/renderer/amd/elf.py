@@ -1,6 +1,6 @@
 # minimal amdgpu elf packer
 import ctypes
-from tinygrad.helpers import ceildiv, round_up, getenv
+from tinygrad.helpers import ceildiv, round_up
 from tinygrad.uop.ops import UOp, Ops
 from tinygrad.dtype import AddrSpace
 from tinygrad.runtime.autogen import amdgpu_kd, hsa, libc
@@ -76,26 +76,6 @@ def assemble_linear(prg:UOp, lin:UOp, arch:str) -> bytes:
   # ** scan sink for metadata
   sink, n_bufs, n_vars, lds_size, gids, lids = prg.src[0], 0, 0, 0, set(), set()
   reg_bytes, lid_threads = 0, {}
-  # RL1 (reg-accum LDS reclaim, opt-in AMD_ISA_REG_ACCUM): a DEFINE_REG accumulator routed to PINNED VGPRs no longer
-  # lives in LDS, so it must NOT reserve group-segment bytes. In the FINAL sink (isel NOOP carriers are already
-  # consumed), the pinned accesses are ACCUM_READ/ACCUM_WRITE INS that reference the DEFINE_REG in their src cone;
-  # LDS-backed accesses are DS_LOAD/DS_STORE that reference it. Subtract a DEFINE_REG ONLY if some ACCUM op references
-  # it AND NO DS op does (conservative: any LDS-fallback element keeps the whole buffer). Flag-off => both sets empty
-  # => byte-identical sizing. (str-arg match; no AMDOps import.)
-  reg_accum = getenv("AMD_ISA_REG_ACCUM", 0)
-  pinned_dreg, lds_dreg = set(), set()
-  if reg_accum:
-    def _dregs_in(u, seen):   # DEFINE_REG nodes in u's src cone (bounded: stop at the dreg; thread through AFTER/order)
-      out = []
-      for sr in u.src:
-        if sr.op is Ops.DEFINE_REG: out.append(sr)
-        elif sr.op is Ops.AFTER and sr not in seen: seen.add(sr); out += _dregs_in(sr, seen)
-      return out
-    for u in sink.toposort():
-      if u.op is not Ops.INS: continue
-      a = str(u.arg)
-      if "ACCUM" in a: pinned_dreg.update(_dregs_in(u, set()))
-      elif "DS_LOAD" in a or "DS_STORE" in a: lds_dreg.update(_dregs_in(u, set()))
   for u in sink.toposort():
     if u.op is Ops.PARAM: n_bufs += 1
     elif u.op is Ops.DEFINE_VAR: n_vars += 1
@@ -105,7 +85,6 @@ def assemble_linear(prg:UOp, lin:UOp, arch:str) -> bytes:
     elif u.op in (Ops.DEFINE_LOCAL, Ops.DEFINE_REG):
       nbytes = u.ptrdtype.size * u.ptrdtype.base.itemsize
       if u.ptrdtype.addrspace == AddrSpace.REG:
-        if reg_accum and u in pinned_dreg and u not in lds_dreg: continue   # RL1: fully-pinned accumulator reserves no LDS
         reg_bytes += nbytes
       else: lds_size += nbytes
     elif u.op is Ops.SPECIAL and u.arg.startswith("gidx"): gids.add(int(u.arg[-1]))
