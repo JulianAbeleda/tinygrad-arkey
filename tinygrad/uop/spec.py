@@ -130,6 +130,11 @@ spec_tensor = PatternMatcher([
   (UPat(Ops.SHAPED_WMMA, src=(UPat(), UPat(), UPat())).f(Ops.GEP, name="g"),
    lambda g: g.src[0].src[2].shape is not None and all(0 <= x < g.src[0].src[2].shape[-1] for x in g.arg)),
 
+  # A vector memory read is one value whose lanes may be selected individually.
+  (UPat(Ops.LOAD, name="load").f(Ops.GEP, name="gep"), lambda load,gep:
+   load.dtype.scalar() in dtypes.ints and load.dtype.vcount > 1 and gep.dtype == load.dtype.scalar() and
+   isinstance(gep.arg, tuple) and len(gep.arg) == 1 and type(gep.arg[0]) is int and 0 <= gep.arg[0] < load.dtype.vcount),
+
   # DEVICE
   (UPat(Ops.DEVICE, dtypes.void, (), name="d"), lambda d:
    isinstance(d.arg, str) or (isinstance(d.arg, tuple) and all(isinstance(s, str) for s in d.arg))),
