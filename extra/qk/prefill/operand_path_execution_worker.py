@@ -52,6 +52,10 @@ _PRODUCTION_ADAPTER_LOADERS: dict[str, tuple[str, str]] = {
     "extra.qk.prefill.current_prefill_execution_adapter",
     "register_current_prefill_adapter",
   ),
+  "tinygrad.amd.gfx1100.current_qwen3_8b_decode_q4k_g3.compile_only.v1": (
+    "extra.qk.decode.current_decode_execution_adapter",
+    "register_current_decode_adapter",
+  ),
 }
 
 

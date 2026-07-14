@@ -205,6 +205,50 @@ def verify_decode_full_output(request: CurrentDecodeCompileRequest, artifact: Ma
           "reference_basis": "independent_q4k_dequant_gemv", "identities": dict(artifact["identities"])}
 
 
+_DECODE_ARGUMENT_ORDER = ("output", "words", "x")   # ABI: output(0), packed words(1), fp16 activation(2)
+_RUNTIME_DEVICE = "AMD"
+
+
+def build_current_decode_bundle(*, adapter_id: str, route_id: str, role: str, rows: int, k: int, target: str,
+                                compile_evidence: Mapping[str, Any], device: str,
+                                argument_order: tuple[str, ...], health):
+  """Module-level, spawn-picklable builder: RECOMPILE the exact decode PROGRAM fresh in the child and
+  bind the real guarded runtime. No live UOp crosses the spawn boundary — only picklable scalars."""
+  from extra.qk.prefill.isolated_guarded_executor import build_tinygrad_bundle
+  request = CurrentDecodeCompileRequest(adapter_id=adapter_id, route_id=route_id, role=role, rows=rows, k=k, target=target)
+  program = compile_current_decode_program(request)
+  return build_tinygrad_bundle(program=program, compile_evidence=compile_evidence, device=device,
+                               argument_order=argument_order, health=health)
+
+
+def run_guarded_decode(request: CurrentDecodeCompileRequest, artifact_path: str, *, timeout_s: float = 30.0,
+                       runtime_device: str = _RUNTIME_DEVICE) -> dict[str, Any]:
+  """Dispatch the promoted decode GEMV in a PROCESS-ISOLATED child with a hard timeout, guard buffers,
+  input-immutability, full-output correctness vs the independent reference, and pre/postflight health.
+  Correctness gates timing: any failure yields a truthful terminal outcome, never an auto-retry."""
+  import numpy as np
+  from extra.qk.prefill.guarded_execution import GuardPolicy
+  from extra.qk.prefill.host_safety_canary import make_tiny_health_probe
+  from extra.qk.prefill.isolated_guarded_executor import (ExecutionRequest as GuardedRequest,
+    make_tinygrad_bundle_builder, run_isolated_guarded_execution)
+  artifact = load_immutable_decode_artifact(artifact_path, request)
+  _, compile_evidence = prepare_current_decode_compile(request)
+  builder = make_tinygrad_bundle_builder(build=build_current_decode_bundle, adapter_id=request.adapter_id,
+    route_id=request.route_id, role=request.role, rows=request.rows, k=request.k, target=request.target,
+    compile_evidence={"passed": True, "binary_sha256": compile_evidence["binary_sha256"]}, device=runtime_device,
+    argument_order=_DECODE_ARGUMENT_ORDER, health=_always_true)
+  guarded = GuardedRequest(inputs={"words": artifact["words"], "x": artifact["activation"]},
+    reference=artifact["reference"], policy=GuardPolicy(timeout_seconds=timeout_s, check_inputs_unchanged=True),
+    identity=dict(artifact["identities"]), output_dtype=np.float32)
+  outcome = run_isolated_guarded_execution(builder=builder, request=guarded,
+    health_probe=make_tiny_health_probe(device=runtime_device), timeout_seconds=timeout_s)
+  return outcome.to_dict()
+
+
+def _always_true() -> bool:
+  return True
+
+
 @dataclass(frozen=True)
 class CurrentDecodeExecutionAdapter:
   """Classification + immutable-artifact correctness adapter for the promoted Q4_K G3 decode GEMV.
@@ -228,4 +272,10 @@ class CurrentDecodeExecutionAdapter:
 __all__ = ["ADAPTER_ID", "ROUTE_ID", "TARGET", "CurrentDecodeCompileRequest", "DecodeExecutionBlocker",
            "DecodeExecutionBlocked", "CurrentDecodeExecutionAdapter", "build_current_decode_sink",
            "compile_current_decode_program", "prepare_current_decode_compile",
-           "load_immutable_decode_artifact", "verify_decode_full_output"]
+           "load_immutable_decode_artifact", "verify_decode_full_output",
+           "build_current_decode_bundle", "run_guarded_decode", "register_current_decode_adapter"]
+
+
+def register_current_decode_adapter(registry: Any) -> None:
+  """Explicit registration hook; importing this module does not mutate global worker state or a GPU runtime."""
+  registry.register(ADAPTER_ID, CurrentDecodeExecutionAdapter())

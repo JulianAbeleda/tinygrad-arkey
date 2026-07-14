@@ -109,3 +109,15 @@ def test_prepare_without_artifact_still_blocks():
                                             role="ffn_gate_up", rows=12288, k=4096)
   with pytest.raises(adapter.DecodeExecutionBlocked):
     adapter.CurrentDecodeExecutionAdapter().prepare(req)
+
+
+def test_process_isolated_guarded_dispatch_passes(tmp_path):
+  path, rows, k = _build_immutable_artifact(tmp_path, rows=32, k=1024, seed=13)
+  req = adapter.CurrentDecodeCompileRequest(adapter_id=adapter.ADAPTER_ID, route_id=adapter.ROUTE_ID,
+                                            role="ffn_gate_up", rows=rows, k=k)
+  res = adapter.run_guarded_decode(req, path, timeout_s=90.0)
+  assert res["dispatch_state"] == "completed", res
+  assert res["passed"] and res["health_after"]
+  g = res["guarded"]
+  assert g["finite_output"] and g["numerics_passed"] and g["inputs_unchanged"]
+  assert g["max_abs_error"] is not None
