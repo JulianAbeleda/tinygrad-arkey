@@ -18,6 +18,10 @@ class PrimitiveRouteEntry:
   opts: tuple[str, ...]
   family: str
   kernel_mode: str = "partial"
+  candidate_identity: str | None = None
+  backend_strategy: str | None = None
+  rollback_route: str | None = None
+  provenance_status: str = "default"
 
 
 class ModelRoutePlan:
@@ -86,6 +90,10 @@ def _entry_from_record(record:Any) -> PrimitiveRouteEntry|None:
     module_path = record.get("module_path")
     quant_label = record.get("quant_label")
     role = record.get("role")
+    candidate_identity = record.get("candidate_identity")
+    backend_strategy = record.get("backend_strategy")
+    rollback_route = record.get("rollback_route")
+    provenance_status = record.get("provenance_status", "default")
   else:
     name = getattr(record, "name", getattr(record, "tensor", None))
     typ = getattr(record, "typ", getattr(record, "ggml_type", None))
@@ -94,6 +102,10 @@ def _entry_from_record(record:Any) -> PrimitiveRouteEntry|None:
     module_path = getattr(record, "module_path", None)
     quant_label = getattr(record, "quant_label", None)
     role = getattr(record, "role", None)
+    candidate_identity = getattr(record, "candidate_identity", None)
+    backend_strategy = getattr(record, "backend_strategy", None)
+    rollback_route = getattr(record, "rollback_route", None)
+    provenance_status = getattr(record, "provenance_status", "default")
   if name is None or typ is None: return None
   if (rows is None or cols is None) and dims is not None:
     shape = _shape_from_tensor_info(dims)
@@ -102,10 +114,16 @@ def _entry_from_record(record:Any) -> PrimitiveRouteEntry|None:
   return primitive_route_entry_for_tensor(str(name), int(typ), int(rows), int(cols),
                                           module_path=None if module_path is None else str(module_path),
                                           quant_label=None if quant_label is None else str(quant_label),
-                                          role=None if role is None else str(role))
+                                          role=None if role is None else str(role),
+                                          candidate_identity=None if candidate_identity is None else str(candidate_identity),
+                                          backend_strategy=None if backend_strategy is None else str(backend_strategy),
+                                          rollback_route=None if rollback_route is None else str(rollback_route),
+                                          provenance_status=str(provenance_status))
 
 def primitive_route_entry_for_tensor(name:str, typ:int, rows:int, cols:int, *, module_path:str|None=None,
-                                     quant_label:str|None=None, role:str|None=None) -> PrimitiveRouteEntry|None:
+                                     quant_label:str|None=None, role:str|None=None, candidate_identity:str|None=None,
+                                     backend_strategy:str|None=None, rollback_route:str|None=None,
+                                     provenance_status:str="default") -> PrimitiveRouteEntry|None:
   module_path = module_path or _module_path_from_tensor_name(name)
   role = role or _role_from_module_path(module_path)
   if typ == 12:
@@ -113,13 +131,13 @@ def primitive_route_entry_for_tensor(name:str, typ:int, rows:int, cols:int, *, m
     policy = _primitive_install_default(name, quant_label, role)
     if policy is None: return None
     parts, opts = policy
-    return PrimitiveRouteEntry(name, module_path, quant_label, rows, cols, role, parts, tuple(opts), "q4_k_packed_u32", "partial")
+    return PrimitiveRouteEntry(name, module_path, quant_label, rows, cols, role, parts, tuple(opts), "q4_k_packed_u32", "partial", candidate_identity, backend_strategy, rollback_route, provenance_status)
   if typ == 14:
     quant_label = quant_label or "Q6_K"
     policy = _primitive_install_default(name, quant_label, role)
     if policy is None: return None
     parts, opts = policy
-    return PrimitiveRouteEntry(name, module_path, quant_label, rows, cols, role, parts, tuple(opts), "q6_k_packed_u16", "partial")
+    return PrimitiveRouteEntry(name, module_path, quant_label, rows, cols, role, parts, tuple(opts), "q6_k_packed_u16", "partial", candidate_identity, backend_strategy, rollback_route, provenance_status)
   return None
 
 def build_model_route_plan(meta:dict|None=None, model_facts:Any=None) -> ModelRoutePlan:

@@ -28,6 +28,8 @@ _ACTIVATION_LAYOUT = "q8_1_row_major_mk_scales_per_32"
 _OUTPUT_LAYOUT = "row_major_mn_tile"
 _PARTS_SPLIT_POLICY = "single_k_tile"
 _HAND_SURFACE = "one_parameterized_q4_k_q8_1_mmq_tile_atom"
+_MILESTONES = ("M1_owner_coverage", "M2_q4_q8_staging", "M3_resource_scratch", "M4_distinct_binary",
+               "M5_correctness", "M6_same_session_timing", "M7_no_fallback")
 
 
 @dataclass(frozen=True)
@@ -121,6 +123,8 @@ class Prefill14BHybridMMQAtomDescriptor:
   supported_activation_formats: tuple[str, ...] = ("Q8_1",)
   hand_surface: str = _HAND_SURFACE
   authority_gate: str = "not_implemented"
+  milestone_evidence: dict[str, bool] = field(default_factory=lambda: {name: False for name in _MILESTONES})
+  complete_atom: bool = False
 
   def validate(self) -> None:
     if self.route_id != PREFILL_14B_Q4K_Q8_1_HYBRID_MMQ_ATOM_ROUTE_ID:
@@ -135,6 +139,12 @@ class Prefill14BHybridMMQAtomDescriptor:
       raise ValueError("14B hybrid MMQ atom boundary must not declare a fallback route")
     if not self.strict_fallback:
       raise ValueError("14B hybrid MMQ atom boundary must be strict/fail-closed")
+    if set(self.milestone_evidence) != set(_MILESTONES):
+      raise ValueError("14B hybrid MMQ atom has incomplete M1-M7 evidence metadata")
+    if self.complete_atom and any(value is not True for value in self.milestone_evidence.values()):
+      raise ValueError("14B hybrid MMQ atom cannot promote without complete M1-M7 evidence")
+    if self.complete_atom is not True and self.promoted:
+      raise ValueError("incomplete 14B hybrid MMQ atom cannot promote")
 
   def to_json(self) -> dict[str, Any]:
     self.validate()
@@ -146,6 +156,7 @@ class Prefill14BHybridMMQAtomDescriptor:
       "roles": list(self.roles), "supported_quant_formats": list(self.supported_quant_formats),
       "supported_activation_formats": list(self.supported_activation_formats), "hand_surface": self.hand_surface,
       "authority_gate": self.authority_gate,
+      "milestone_evidence": dict(self.milestone_evidence), "complete_atom": self.complete_atom,
     }
 
 

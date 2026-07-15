@@ -19,7 +19,7 @@ from tinygrad import Tensor, dtypes
 from tinygrad.dtype import AddrSpace
 from tinygrad.uop.ops import AxisType, KernelInfo, Ops, UOp
 
-from extra.qk.amd_warp_reduce import warp_reduce_sum
+from extra.qk.amd_warp_reduce import _STAGE_SLOT, _staged_shfl, warp_reduce_sum
 from extra.qk.layout import Q4K_WORDS_PER_BLOCK, Q4_K_BLOCK_BYTES, Q4_K_BLOCK_ELEMS, Q8_1_BLOCK_ELEMS
 from extra.qk.mmq_atom_boundary import (
   PREFILL_14B_Q4K_Q8_1_HYBRID_MMQ_ATOM_CLASSIFICATION,
@@ -44,6 +44,10 @@ AMD_DS4_DOT4X4_BACKEND_ATOM_ID = "q4k_q8_1_mmq_amd_ds4_dot4x4_atom_v0"
 AMD_DS4_LDS_SKELETON_BACKEND_ATOM_ID = "q4k_q8_1_mmq_amd_ds4_lds_skeleton_atom_v0"
 AMD_DS4_COOP_TILE_BACKEND_ATOM_ID = "q4k_q8_1_mmq_amd_ds4_coop_tile_atom_v0"
 MMQ_WRITEBACK_MODES = ("gated_matrix_v0", "direct_owner_v0")
+# The reduction result is replicated across the warp.  Lane zero is the
+# writeback owner for this bounded atom; the coordinate checks are deliberate
+# fail-closed guards even though normal launch geometry already bounds gidx.
+MMQ_WRITEBACK_OWNER_LANE = 0
 AMD_DS4_COOP_TILE_BLOCKER = (
   "16x16x256 DS4 coop numeric atom emits and passes bounded correctness only after omitting store_owner metadata "
   "from the Tensor custom_kernel graph; attaching tuple owner metadata still fails in "
@@ -51,6 +55,15 @@ AMD_DS4_COOP_TILE_BLOCKER = (
   "and no production route promotion is claimed."
 )
 DS4_ACTIVATION_LAYOUT = Q8_1_MMQ_DS4_LAYOUT
+
+
+def _owner_safe_warp_reduce_sum(val: UOp, lane: UOp, width: int = 32) -> UOp:
+  """Reduce before the lane-0 gate; every cross-lane read must be unconditional."""
+  off = width >> 1
+  while off >= 1:
+    val = val + _staged_shfl(val, off, lane, _STAGE_SLOT)
+    off >>= 1
+  return val
 
 
 @dataclass(frozen=True)
@@ -375,6 +388,8 @@ def _q4k_q8_1_bounded_dot4_kernel(m:int, n:int, k:int, role:str):
     acc = UOp.placeholder((1,), dtypes.float32, 70, addrspace=AddrSpace.REG)
     acc = acc.after(acc[0].store(0.0))
     acc = acc.after(acc[0].store(acc.after(blk)[0] + contrib).end(blk))
+    # direct_owner_v0 gates the store on lane zero.  Stage the reduction's
+    # shuffles so ds_bpermute is completed on every lane before that gate.
     total = warp_reduce_sum(acc[0], lane, 32)
     return out[bb, row].store(total).sink(arg=KernelInfo(name=name, opts_to_apply=()))
 
@@ -580,14 +595,23 @@ def _q4k_q8_1_bounded_ds4_coop_tile_kernel(m:int, n:int, k:int, role:str,
     acc = UOp.placeholder((1,), dtypes.float32, 70, addrspace=AddrSpace.REG)
     acc = acc.after(acc[0].store(0.0))
     acc = acc.after(acc[0].store(acc.after(blk)[0] + contrib).end(blk))
-    total = warp_reduce_sum(acc[0], lane, 32)
+    # direct_owner_v0 gates the store on lane zero.  Stage the reduction's
+    # shuffles so ds_bpermute is completed on every lane before that gate.
+    total = (_owner_safe_warp_reduce_sum(acc[0], lane, 32)
+             if writeback_mode == "direct_owner_v0" else warp_reduce_sum(acc[0], lane, 32))
+    owner_lane = lane.eq(MMQ_WRITEBACK_OWNER_LANE)
+    in_bounds = (bb < m) & (row < n)
     if writeback_mode == "direct_owner_v0":
-      writeback = out[bb, row].store(total)
+      writeback = out[bb, row].store(total, gate=owner_lane & in_bounds)
     else:
       stores = []
       for mi in range(16):
         for ni in range(16):
-          stores.append(out[mi, ni].store(total, gate=bb.eq(mi) & row.eq(ni)))
+          # Retain the matrix-shaped candidate surface for evidence
+          # compatibility, but make each candidate owner-only.  No lane other
+          # than the proven owner can perform a global write.
+          stores.append(out[mi, ni].store(total,
+            gate=owner_lane & in_bounds & bb.eq(mi) & row.eq(ni)))
       writeback = UOp.group(*stores)
     return writeback.sink(arg=KernelInfo(name=f"{name}_{writeback_mode}", opts_to_apply=()))
 

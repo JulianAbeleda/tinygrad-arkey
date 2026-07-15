@@ -29,12 +29,18 @@ from extra.qk.mmq_llama_oracle import llama_mma_writeback_owners
 from extra.qk.mmq_llama_store_probe import lowered_tinygrad_r4_store_owner_trace_rows
 from extra.qk.mmq_owner_coverage import (
   build_mmq_owner_coverage_artifact, observed_stores_from_amd_isa_proof_rows,
+  validate_mmq_owner_coverage_artifact,
 )
 from extra.qk.mmq_q4k_q8_reference import Q8_1_MMQ_DS4_LAYOUT, describe_q4k_q8_1_mmq_tile
 from extra.qk.mmq_staging_evidence import build_mmq_staging_evidence_bundle
 
 
 SCHEMA = "q4k-q8-1-mmq-machine-search.v1"
+MILESTONE_EVIDENCE_SCHEMA = "tinygrad.mmq_milestone_evidence.v1"
+MILESTONE_NAMES = (
+  "M1_owner_coverage", "M2_q4_q8_staging", "M3_resource_scratch",
+  "M4_distinct_binary", "M5_correctness", "M6_same_session_timing", "M7_no_fallback",
+)
 DEFAULT_OUTPUT = pathlib.Path("bench/prefill-14b-mmq-machine-search/search-report.json")
 LLAMA_KERNEL_SOURCES: tuple[dict[str, Any], ...] = (
   {
@@ -333,18 +339,97 @@ BLOCKED_CANDIDATES: tuple[dict[str, Any], ...] = (
 )
 
 
+def evaluate_milestone_evidence(*, owner_coverage: bool = False, q4_q8_staging: bool = False,
+                                resource_scratch: bool = False, distinct_binary: bool = False,
+                                correctness: bool = False, same_session_timing: bool = False,
+                                no_fallback: bool = False, complete_atom: bool = False,
+                                default_route: str = "direct_packed",
+                                production_dispatch_changed: bool = False) -> dict[str, Any]:
+  """Return the promotion contract; missing evidence is deliberately false."""
+  gates = dict(zip(MILESTONE_NAMES, (owner_coverage, q4_q8_staging, resource_scratch,
+                                    distinct_binary, correctness, same_session_timing, no_fallback)))
+  blockers = [name for name, passed in gates.items() if passed is not True]
+  if complete_atom is not True:
+    blockers.append("complete_atom")
+  if default_route != "direct_packed":
+    blockers.append("default_route_must_remain_direct_packed")
+  if production_dispatch_changed is not False:
+    blockers.append("production_dispatch_changed")
+  return {
+    "schema": MILESTONE_EVIDENCE_SCHEMA,
+    "milestones": {name: bool(value) for name, value in gates.items()},
+    "complete_atom": bool(complete_atom),
+    "default_route": default_route,
+    "production_dispatch_changed": production_dispatch_changed,
+    "promotion_eligible": not blockers,
+    "verdict": "PASS" if not blockers else "BLOCKED_FAIL_CLOSED",
+    "blockers": blockers,
+  }
+
+
+def _default_milestone_evidence() -> dict[str, Any]:
+  return evaluate_milestone_evidence()
+
+
+def evaluate_candidate_promotion(*, owner_coverage: dict[str, Any] | None = None,
+                                 cooperative_tile: dict[str, Any] | None = None,
+                                 correctness: bool = False, distinct_binary: bool = False,
+                                 same_session_timing: bool = False, no_fallback: bool = False,
+                                 q4_q8_staging: bool = False, resource_scratch: bool = False,
+                                 default_route: str = "direct_packed",
+                                 production_dispatch_changed: bool = False) -> dict[str, Any]:
+  """Join producer evidence at the guarded boundary; absent evidence blocks."""
+  owner_ok = False
+  owner_blocker = "missing owner coverage evidence"
+  if owner_coverage is not None:
+    try:
+      checked = validate_mmq_owner_coverage_artifact(owner_coverage)
+      owner_ok = checked["status"] == "PASS"
+      owner_blocker = None if owner_ok else checked.get("exact_blocker", "owner coverage did not pass")
+    except (TypeError, ValueError) as exc:
+      owner_blocker = f"invalid owner coverage evidence: {exc}"
+  coop_ok = False
+  coop_blocker = "missing bounded cooperative tile evidence"
+  if cooperative_tile is not None:
+    required_coop_contract = (
+      cooperative_tile.get("status") in ("PASS", "bounded_numeric_pass") and
+      cooperative_tile.get("bounded_only") is True and
+      cooperative_tile.get("production_dispatch_changed") is False and
+      cooperative_tile.get("default_route") == "direct_packed" and
+      cooperative_tile.get("exact_blocker") is None and
+      cooperative_tile.get("distinct_binary_identity") is True and
+      cooperative_tile.get("same_session_timing") is True and
+      cooperative_tile.get("no_fallback") is True
+    )
+    coop_ok = required_coop_contract
+    coop_blocker = None if coop_ok else cooperative_tile.get(
+      "exact_blocker", "cooperative evidence lacks distinct-binary, same-session, or no-fallback proof")
+  result = evaluate_milestone_evidence(
+    owner_coverage=owner_ok, q4_q8_staging=q4_q8_staging, resource_scratch=resource_scratch,
+    distinct_binary=distinct_binary, correctness=correctness, same_session_timing=same_session_timing,
+    no_fallback=no_fallback, default_route=default_route,
+    production_dispatch_changed=production_dispatch_changed,
+  )
+  if owner_blocker is not None: result["blockers"].append(owner_blocker)
+  if coop_blocker is not None: result["blockers"].append(coop_blocker)
+  result["milestones"]["M1_owner_coverage"] = owner_ok
+  result["bounded_cooperative_tile"] = coop_ok
+  result["promotion_eligible"] = not result["blockers"]
+  result["verdict"] = "PASS" if result["promotion_eligible"] else "BLOCKED_FAIL_CLOSED"
+  return result
+
+
 def build_r4_evidence_artifacts() -> dict[str, Any]:
   spec = describe_q4k_q8_1_mmq_tile(role=ROLE, m=16, n=16, k=256, m_tile=16, n_tile=16,
                                     activation_layout=Q8_1_MMQ_DS4_LAYOUT)
   lowered_rows = lowered_tinygrad_r4_store_owner_trace_rows(spec)
   lowered_observed = observed_stores_from_amd_isa_proof_rows(lowered_rows)
+  owner = build_mmq_owner_coverage_artifact(
+      spec, lowered_observed, candidate_id="cooperative_multi_wave_tile",
+      backend="lowered_amd_isa_fragmented_store_owner_manifest")
+  validate_mmq_owner_coverage_artifact(owner)
   return {
-    "owner_coverage": build_mmq_owner_coverage_artifact(
-      spec,
-      lowered_observed,
-      candidate_id="cooperative_multi_wave_tile",
-      backend="lowered_amd_isa_fragmented_store_owner_manifest",
-    ),
+    "owner_coverage": owner,
     "gpu_owner_trace": {
       "schema": "tinygrad.mmq_gpu_owner_trace.v1",
       "candidate_id": "cooperative_multi_wave_tile",
@@ -501,6 +586,9 @@ def build_search_report(*, run: bool = False, warmups: int = 0, rounds: int = 1,
         row["run"] = {"status": "ERROR", "error": str(exc)}
     rows.append(row)
 
+  r4_evidence = build_r4_evidence_artifacts()
+  coop_evidence = coop_tile_blocked_translation_evidence(
+    BoundedMMQConfig(m_tile=16, n_tile=16, k_groups=8, backend=AMD_DS4_COOP_TILE_BACKEND_ID))
   return {
     "schema": SCHEMA,
     "candidate_route_id": CANDIDATE_ROUTE_ID,
@@ -520,7 +608,7 @@ def build_search_report(*, run: bool = False, warmups: int = 0, rounds: int = 1,
     "searchable_components": [row["component"] for row in DONE_COMPONENTS if row["status"] == "done"],
     "searchable_candidates": rows,
     "blocked_candidates": list(BLOCKED_CANDIDATES),
-    "r4_evidence_artifacts": build_r4_evidence_artifacts(),
+    "r4_evidence_artifacts": r4_evidence,
     "r5_geometry_search": build_r5_geometry_search_report(run=False),
     "r5_geometry_search_status": {
       "status": "ready_for_bounded_geometry_search",
@@ -530,6 +618,9 @@ def build_search_report(*, run: bool = False, warmups: int = 0, rounds: int = 1,
     "r6_route_gate_status": build_r6_route_gate_status(),
     "r7_reduction_status": build_r7_reduction_status(),
     "promotion_verdict": "BLOCKED_UNTIL_COOPERATIVE_TILE_WIN",
+    "milestone_evidence": _default_milestone_evidence(),
+    "promotion_gate": evaluate_candidate_promotion(owner_coverage=r4_evidence["owner_coverage"],
+      cooperative_tile=coop_evidence),
   }
 
 

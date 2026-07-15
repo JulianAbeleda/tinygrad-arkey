@@ -292,7 +292,9 @@ def emit_q4k_int8_wmma_prefill_tensor(words:Tensor, xq:Tensor, xscales:Tensor,
       raw = _intdot_matmul(q8_g, q4_g.transpose()).cast(dtypes.float32)
       qsum = q8_g.cast(dtypes.int32).sum(axis=1).cast(dtypes.float32)
       d, dmin, sc, mn = _q4k_group_params_tensor(words3, blk, grp)
-      xscale = xsc2[:, group_idx].cast(dtypes.float32)
+      # Keep scalar scale loads rooted in a materialized contiguous view; this avoids a vector pointer base in the
+      # generated INDEX when the cast and reshape are folded together.
+      xscale = xsc2[:, group_idx].contiguous().cast(dtypes.float32)
       scaled_raw = raw * (d * sc.cast(dtypes.float32)).reshape(1, spec.n)
       scaled_min = qsum.reshape(spec.m, 1) * (dmin * mn.cast(dtypes.float32)).reshape(1, spec.n)
       out = out + xscale.reshape(spec.m, 1) * (scaled_raw - scaled_min)
@@ -335,7 +337,8 @@ def emit_q4k_int8_wmma_tiled_lifecycle_tensor(words:Tensor, xq:Tensor, xscales:T
                      f"tile={spec.m_tile}x{spec.n_tile}")
   words3 = words.reshape(spec.n, spec.k_blocks, Q4K_WORDS_PER_BLOCK)
   xq2 = xq.reshape(spec.m, spec.k)
-  xsc2 = xscales.reshape(spec.m, spec.groups)
+  # Keep the tiled metadata producer scalar-addressed through a flat view.
+  xsc_flat = xscales.reshape(spec.m * spec.groups).contiguous()
   rows = []
   for ms in range(0, spec.m, spec.m_tile):
     cols = []
@@ -354,7 +357,10 @@ def emit_q4k_int8_wmma_tiled_lifecycle_tensor(words:Tensor, xq:Tensor, xscales:T
           raw = _intdot_matmul(q8_g, q4_g.transpose()).cast(dtypes.float32)
           qsum = q8_g.cast(dtypes.int32).sum(axis=1).cast(dtypes.float32)
           d, dmin, sc, mn = _q4k_group_params_tensor(words_tile, blk, grp_in_block)
-          xscale = xsc2[ms:ms + spec.m_tile, group_idx].cast(dtypes.float32)
+          xscale = xsc_flat[ms * spec.groups + group_idx].reshape(1)
+          for row in range(1, spec.m_tile):
+            xscale = xscale.cat(xsc_flat[(ms + row) * spec.groups + group_idx].reshape(1), dim=0)
+          xscale = xscale.cast(dtypes.float32)
           scaled_raw = raw * (d * sc.cast(dtypes.float32)).reshape(1, spec.n_tile)
           scaled_min = qsum.reshape(spec.m_tile, 1) * (dmin * mn.cast(dtypes.float32)).reshape(1, spec.n_tile)
           acc = acc + xscale.reshape(spec.m_tile, 1) * (scaled_raw - scaled_min)

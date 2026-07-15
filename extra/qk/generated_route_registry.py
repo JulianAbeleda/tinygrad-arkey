@@ -20,6 +20,9 @@ class GeneratedRouteDescriptor(TypedDict):
   writer_files: list[str]
   emitter: str
   rollback_route: str | None
+  candidate_identity: str | None
+  backend_strategy: str | None
+  research_only: bool
 
 
 _GENERATION_REGISTRY: tuple[GeneratedRouteDescriptor, ...] = (
@@ -108,6 +111,21 @@ _GENERATION_REGISTRY: tuple[GeneratedRouteDescriptor, ...] = (
     ],
     "emitter": "extra/qk/q4k_prefill_route_spec.py emit_q4k_packed_prefill_kernel",
     "rollback_route": "prefill_q4k_direct_tile4x4_default",
+    "candidate_identity": None,
+    "backend_strategy": None,
+    "research_only": True,
+  },
+  {
+    "route_id": "prefill_14b_q4k_q8_1_hybrid_mmq_atom",
+    "descriptor_artifact": "MMQMachineGeneratedCandidate",
+    "lowering_level": "L3",
+    "owner": "descriptor",
+    "writer_files": ["extra/qk/mmq_machine_search.py", "extra/qk/mmq_bounded_harness.py"],
+    "emitter": "extra/qk/mmq_machine_search.py emit_search_report",
+    "rollback_route": "direct_packed",
+    "candidate_identity": "prefill_14b_q4k_q8_1_hybrid_mmq_atom",
+    "backend_strategy": "q4k_q8_1_mmq_amd_ds4_coop_tile_atom_v0",
+    "research_only": True,
   },
 )
 
@@ -154,6 +172,9 @@ def _sanitize_row(row: GeneratedRouteDescriptor) -> dict[str, Any]:
     "route_attribution": str(manifest.get("route_attribution", "")),
     "required_gates": _required_gates(manifest),
     "rollback_route": row["rollback_route"],
+    "candidate_identity": row.get("candidate_identity"),
+    "backend_strategy": row.get("backend_strategy"),
+    "research_only": bool(row.get("research_only", False)),
   }
 
 

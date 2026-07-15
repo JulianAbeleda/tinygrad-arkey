@@ -287,4 +287,55 @@ def validate_mmq_owner_coverage_artifact(artifact: Any) -> dict[str, Any]:
     raise ValueError("exact_blocker must be present for FAIL or BLOCKED")
   if artifact["status"] == "PASS" and artifact.get("exact_blocker") is not None:
     raise ValueError("exact_blocker must be None when status is PASS")
+
+  expected = artifact.get("expected_stores")
+  if not isinstance(expected, dict) or not isinstance(expected.get("store_count"), int):
+    raise ValueError("expected_stores.store_count must be an integer")
+  expected_count = shape["M"] * shape["N"]
+  if expected["store_count"] != expected_count:
+    raise ValueError(f"expected store count must equal M*N ({expected_count})")
+
+  def check_summary(name: str, summary: Any, required: tuple[str, ...]) -> None:
+    if not isinstance(summary, dict):
+      raise ValueError(f"{name} must be a dict")
+    for key in required:
+      if not isinstance(summary.get(key), int) or summary[key] < 0:
+        raise ValueError(f"{name}.{key} must be a non-negative integer")
+
+  duplicates = artifact.get("duplicate_store_summary")
+  missing = artifact.get("missing_store_summary")
+  check_summary("duplicate_store_summary", duplicates, ("count",))
+  check_summary("missing_store_summary", missing, ("count",))
+  if not isinstance(duplicates.get("stores"), (list, tuple)) or not isinstance(missing.get("stores"), (list, tuple)):
+    raise ValueError("duplicate and missing summaries must contain store lists")
+  if duplicates["count"] != len(duplicates["stores"]):
+    raise ValueError("duplicate_store_summary.count disagrees with stores")
+  if artifact["status"] != "BLOCKED" and missing["count"] != len(missing["stores"]):
+    raise ValueError("missing_store_summary.count disagrees with stores")
+
+  observed = artifact.get("observed_stores")
+  if artifact["status"] == "BLOCKED":
+    if observed is not None:
+      raise ValueError("BLOCKED artifacts must not contain observed_stores")
+    if missing["count"] != expected_count:
+      raise ValueError("BLOCKED artifacts must report every output as missing")
+  else:
+    if not isinstance(observed, dict):
+      raise ValueError("PASS/FAIL artifacts require observed_stores")
+    check_summary("observed_stores", observed, ("store_event_count", "unique_store_count",
+                                                  "duplicate_store_count", "missing_store_count",
+                                                  "out_of_tile_store_count"))
+    if observed["duplicate_store_count"] != duplicates["count"]:
+      raise ValueError("duplicate summary disagrees with observed_stores")
+    if observed["missing_store_count"] != missing["count"]:
+      raise ValueError("missing summary disagrees with observed_stores")
+    if not isinstance(observed.get("stores"), (list, tuple)):
+      raise ValueError("observed_stores.stores must be a store list")
+    if observed["unique_store_count"] != len(observed["stores"]):
+      raise ValueError("observed unique count disagrees with stores")
+    if observed["store_event_count"] < observed["unique_store_count"]:
+      raise ValueError("observed store event count cannot be below unique count")
+    failed = any(observed[key] for key in ("duplicate_store_count", "missing_store_count", "out_of_tile_store_count"))
+    if (artifact["status"] == "PASS") == failed:
+      raise ValueError("status disagrees with observed owner coverage")
   return dict(artifact)

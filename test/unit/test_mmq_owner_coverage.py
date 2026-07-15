@@ -143,3 +143,34 @@ def test_mmq_owner_coverage_passes_lowered_tinygrad_r4_store_owner_trace_rows():
   assert artifact["missing_store_summary"]["count"] == 0
   assert all(row["logical_op"] == "GATED_STORE" for row in rows)
   assert all(row["gated"] is True for row in rows)
+
+
+def test_mmq_owner_coverage_validator_rejects_tampered_counts():
+  spec = _spec()
+  artifact = build_mmq_owner_coverage_artifact(spec, structural_static_store_only_owner_map(spec))
+  artifact["observed_stores"]["unique_store_count"] = 255
+
+  try:
+    validate_mmq_owner_coverage_artifact(artifact)
+  except ValueError as exc:
+    assert "event count cannot be below unique" not in str(exc)
+    assert "disagrees" in str(exc)
+  else:
+    raise AssertionError("tampered observed counts should fail validation")
+
+
+def test_mmq_owner_coverage_validator_rejects_out_of_tile_pass_claim():
+  spec = _spec()
+  stores = list(structural_static_store_only_owner_map(spec))
+  stores[0] = type(stores[0])(m=99, n=99, owner=stores[0].owner)
+  artifact = build_mmq_owner_coverage_artifact(spec, stores)
+  assert artifact["status"] == "FAIL"
+  artifact["status"] = "PASS"
+  artifact["exact_blocker"] = None
+
+  try:
+    validate_mmq_owner_coverage_artifact(artifact)
+  except ValueError as exc:
+    assert "status disagrees" in str(exc)
+  else:
+    raise AssertionError("out-of-tile PASS claim should fail validation")

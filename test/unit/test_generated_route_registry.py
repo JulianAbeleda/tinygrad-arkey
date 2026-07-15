@@ -7,7 +7,8 @@ from extra.qk import route_manifest
 
 SEEDED = ("decode_flash_block_tile_g5_konly", "decode_flash_live_split_g4_8b_kvboth",
           "decode_q4k_g3_generated", "decode_q6k_coop_generated", "prefill_q4k_direct_tile4x4_default",
-          "prefill_q4k_reduce_out_research", "prefill_q6k_direct_generated")
+          "prefill_q4k_reduce_out_research", "prefill_q6k_direct_generated",
+          "prefill_14b_q4k_q8_1_hybrid_mmq_atom")
 REQUIRED_L3_FIELDS = {
   "route_id",
   "descriptor_artifact",
@@ -27,6 +28,9 @@ REQUIRED_L3_FIELDS = {
   "route_attribution",
   "required_gates",
   "rollback_route",
+  "candidate_identity",
+  "backend_strategy",
+  "research_only",
 }
 
 
@@ -107,3 +111,20 @@ def test_rows_and_build_are_json_serializable():
   assert registry.row("decode_q4k_g3_generated")["rollback_route"] is None
   assert set(registry.route_ids()) == set(SEEDED)
   json.dumps(report)
+
+
+def test_mmq_candidate_is_research_only_and_rolls_back_to_direct_packed():
+  row = registry.row("prefill_14b_q4k_q8_1_hybrid_mmq_atom")
+  assert row["manifest_status"] == "research"
+  assert row["manifest_purity_status"] == "research"
+  assert row["research_only"] is True
+  assert row["candidate_identity"] == "prefill_14b_q4k_q8_1_hybrid_mmq_atom"
+  assert row["backend_strategy"] == "q4k_q8_1_mmq_amd_ds4_coop_tile_atom_v0"
+  assert row["rollback_route"] == "direct_packed"
+
+
+def test_promoted_routes_cannot_bind_the_fixed_shape_mmq_atom():
+  atom = "q4k_q8_1_mmq_amd_ds4_coop_tile_atom_v0"
+  promoted = [route_manifest.ROUTES[route_id] for route_id in route_manifest.default_routes()]
+  assert all(atom not in {str(pattern) for pattern in route.get("expected_kernels", ())} for route in promoted)
+  assert route_manifest.ROUTES["prefill_14b_q4k_q8_1_hybrid_mmq_atom"]["research_only"] is True

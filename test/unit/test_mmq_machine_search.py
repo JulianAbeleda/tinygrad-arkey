@@ -5,9 +5,35 @@ from extra.qk.mmq_bounded_harness import (
 )
 from extra.qk.mmq_machine_search import (
   build_r4_evidence_artifacts, build_r5_geometry_search_report, build_r6_route_gate_status,
-  build_r7_reduction_status, build_search_report,
+  build_r7_reduction_status, build_search_report, evaluate_candidate_promotion,
 )
 from extra.qk.mmq_machine_search import build_boltbeam_oracle_trace
+
+
+def test_mmq_promotion_adapter_fails_closed_on_missing_or_invalid_evidence():
+  missing = evaluate_candidate_promotion()
+  assert missing["verdict"] == "BLOCKED_FAIL_CLOSED"
+  assert missing["promotion_eligible"] is False
+  assert "missing owner coverage evidence" in missing["blockers"]
+  invalid = evaluate_candidate_promotion(owner_coverage={"schema": "wrong"})
+  assert invalid["verdict"] == "BLOCKED_FAIL_CLOSED"
+  assert any("invalid owner coverage evidence" in blocker for blocker in invalid["blockers"])
+
+
+def test_mmq_promotion_adapter_rejects_forged_all_true_cooperative_evidence():
+  """PASS must not be reachable from summary booleans without provenance."""
+  owner = build_r4_evidence_artifacts()["owner_coverage"]
+  forged = {
+    "status": "PASS", "bounded_only": True,
+    "production_dispatch_changed": False, "default_route": "direct_packed",
+  }
+  result = evaluate_candidate_promotion(
+    owner_coverage=owner, cooperative_tile=forged,
+    q4_q8_staging=True, resource_scratch=True, distinct_binary=True,
+    correctness=True, same_session_timing=True, no_fallback=True,
+  )
+  assert result["promotion_eligible"] is False
+  assert result["verdict"] == "BLOCKED_FAIL_CLOSED"
 
 
 def test_mmq_machine_search_only_marks_completed_components_searchable():

@@ -296,6 +296,20 @@ ROUTES = {
     "selector": "env_guard",
     "route_attribution": "tinygrad/llm/prefill_routes.py PREFILL_Q4K_REDUCE_OUT=1 -> extra/qk/q4k_prefill_route_spec.py Q4KPrefillRouteSpec(output_layout='reduce_out') + emit_q4k_packed_prefill_kernel.",
     "note": "Default-off primitive correctness fix. It replaces the manual direct-output accumulator recurrence with a real Ops.REDUCE, making GROUP schedules numerically valid: GROUP:0:10 on real 14B ffn_gate rel_rmse ~=1.6e-6 vs the lossless direct path. It is not promoted because clean pp512 is 169.7 tok/s vs 173.6 for the current Q4 tile4x4 manual direct-output default. Use this as the correctness foundation for future grouped/staged combine work."},
+  "prefill_14b_q4k_q8_1_hybrid_mmq_atom": {
+    "workload": "prefill", "profile_id": PROFILE_PREFILL, "status": "research",
+    "roles": ["ffn_gate_up"], "excluded_roles": ["attn_qo", "ffn_down", "attn_kv"], "quant": ["Q4_K"],
+    "shape_guards": [{"M": 512, "N": 17408, "K": 5120, "note": "machine-generated MMQ candidate"}],
+    "env": {}, "rollback": {"route": "direct_packed"}, "baseline_route_id": "direct_packed",
+    "strict_fallback": True, "expected_kernels": ["q4k_q8_1_mmq_amd_ds4_coop_tile_atom_v0"],
+    "forbidden_kernels": [], "authority_gate": "correctness evidence + resource evidence + timing evidence",
+    "promotion_artifacts": [], "purity_status": "research", "provenance": "machine_authored_generated",
+    "selector": "research_descriptor_only", "candidate_identity": "prefill_14b_q4k_q8_1_hybrid_mmq_atom",
+    "backend_strategy": "q4k_q8_1_mmq_amd_ds4_coop_tile_atom_v0", "rollback_route": "direct_packed",
+    "research_only": True,
+    "route_attribution": "extra/qk/mmq_machine_search.py candidate inventory; no tinygrad/llm/prefill_routes.py binding",
+    "note": "Descriptor-only machine-generated MMQ candidate. Promotion is blocked until correctness, resource, and timing evidence are all present; direct_packed remains the rollback/default route.",
+  },
   # prefill_q4k_mmq_direct_out_research (+ the mmq/sdot4 PREFILL_Q4K_Q8 modes) REMOVED 2026-07-06 (no backups):
   # handwritten scalar-sdot4/Q8_1 MMQ prefill kernels deleted (confirmed ~85-237 tok/s dead end). Only the
   # generated int8-WMMA substrate (prefill_q4k_int8_wmma_generated_research) remains selectable via PREFILL_Q4K_Q8.
@@ -446,6 +460,12 @@ def validate_manifest() -> list[str]:
         errors.append(f"{rid}: default route cannot be provenance=rollback_oracle")
       if prov in ("hand_authored_uop_template", "external_handwritten_kernel") and not r.get("replacement_scope"):
         errors.append(f"{rid}: non-pure default provenance={prov} requires replacement_scope")
+    if r.get("research_only"):
+      if r["status"] != "research":
+        errors.append(f"{rid}: research_only route cannot claim final status {r['status']!r}")
+      if not {"correctness evidence", "resource evidence", "timing evidence"}.issubset(
+          {part.strip() for part in str(r.get("authority_gate", "")).split("+")}):
+        errors.append(f"{rid}: research_only route must require correctness/resource/timing evidence")
     # purity_status is derived, not declared: any stored value must equal derive_purity_status(status, provenance).
     if "purity_status" in r:
       expected = derive_purity_status(r["status"], str(prov))

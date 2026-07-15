@@ -161,6 +161,59 @@ def test_q4k_q8_1_mmq_amd_ds4_coop_tile_hash_exists():
   assert AMD_DS4_COOP_TILE_BACKEND_ATOM_ID == "q4k_q8_1_mmq_amd_ds4_coop_tile_atom_v0"
 
 
+def test_q4k_q8_1_mmq_coop_writeback_is_explicitly_owner_only():
+  from extra.qk.mmq_q4k_q8_atom import _q4k_q8_1_bounded_ds4_coop_tile_kernel
+  from tinygrad.uop.ops import UOp
+
+  fn = _q4k_q8_1_bounded_ds4_coop_tile_kernel(16, 16, 256, "test", "gated_matrix_v0")
+  body = repr(fn(UOp.placeholder((16, 16), dtypes.float32, 0),
+                 UOp.placeholder((16 * 1 * 36, ), dtypes.uint32, 1),
+                 UOp.placeholder((16 * 256, ), dtypes.int8, 2),
+                 UOp.placeholder((16 * 2, ), dtypes.float32, 3),
+                 UOp.placeholder((16 * 2, ), dtypes.float32, 4)))
+  assert "gate" in body
+  assert "lidx0" in body
+  assert "gidx0" in body and "gidx1" in body
+
+
+def test_q4k_q8_1_mmq_direct_owner_stages_reduction_before_lane_gate():
+  from extra.qk.mmq_q4k_q8_atom import _q4k_q8_1_bounded_ds4_coop_tile_kernel
+  from tinygrad.uop.ops import UOp
+
+  fn = _q4k_q8_1_bounded_ds4_coop_tile_kernel(16, 16, 256, "test", "direct_owner_v0")
+  body = repr(fn(UOp.placeholder((16, 16), dtypes.float32, 0),
+                 UOp.placeholder((16 * 1 * 36,), dtypes.uint32, 1),
+                 UOp.placeholder((16 * 256,), dtypes.int8, 2),
+                 UOp.placeholder((16 * 2,), dtypes.float32, 3),
+                 UOp.placeholder((16 * 2,), dtypes.float32, 4)))
+  assert "lidx0" in body
+  assert "ds_bpermute" in body
+  assert "90" in body  # staged REG slot used before the divergent owner gate
+
+
+def test_q4k_q8_1_mmq_coop_direct_owner_emits_one_dynamic_global_store():
+  from extra.qk.mmq_q4k_q8_atom import _q4k_q8_1_bounded_ds4_coop_tile_kernel
+  from tinygrad.uop.ops import Ops, UOp
+
+  fn = _q4k_q8_1_bounded_ds4_coop_tile_kernel(16, 16, 256, "test", "direct_owner_v0")
+  body = fn(UOp.placeholder((16, 16), dtypes.float32, 0),
+            UOp.placeholder((16 * 1 * 36,), dtypes.uint32, 1),
+            UOp.placeholder((16 * 256,), dtypes.int8, 2),
+            UOp.placeholder((16 * 2,), dtypes.float32, 3),
+            UOp.placeholder((16 * 2,), dtypes.float32, 4))
+  stores = []
+  seen = set()
+  def visit(u):
+    if id(u) in seen: return
+    seen.add(id(u))
+    if u.op is Ops.STORE: stores.append(u)
+    for child in u.src: visit(child)
+  visit(body)
+  # The direct owner path must not carry the gated matrix's 256 candidate
+  # global-store instructions.
+  assert len(stores) < 16
+
+
 @pytest.mark.parametrize("writeback_mode", ("gated_matrix_v0", "direct_owner_v0"))
 def test_q4k_q8_1_mmq_amd_ds4_coop_tile_matches_reference_when_amd_available(writeback_mode):
   if not _has_amd():
