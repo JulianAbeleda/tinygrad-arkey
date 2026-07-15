@@ -1,6 +1,7 @@
 import pytest
 
-from extra.qk.q4k_q8_mmq_search import SearchPolicy, enumerate_descriptors, replay_descriptors, run_search
+from extra.qk.q4k_q8_mmq_search import (AggregatePolicy, SearchPolicy, enumerate_descriptors,
+                                       evaluate_aggregate_policy, replay_descriptors, run_search)
 
 
 def test_enumerates_stable_generated_axes():
@@ -71,3 +72,23 @@ def test_replay_recovers_verified_descriptor_identity_without_reenumerating_axes
 def test_enumeration_rejects_duplicate_generated_identity():
   with pytest.raises(ValueError, match="duplicate descriptor identities"):
     enumerate_descriptors({"tile": (8, 8)})
+
+
+def test_aggregate_policy_includes_q8_costs_and_requires_every_role():
+  def row(ms):
+    return {"status": "measured", "session_id": "s1", "correctness": {"passed": True},
+            "evidence_gate": {"timing_allowed": True}, "min_ms": ms}
+  policy = AggregatePolicy(required_roles=("q", "kv"), preparation_ms={"q": 1},
+    packing_ms={"q": 2, "kv": 2}, reduction_ms={"kv": 3},
+    direct_preparation_ms={"q": 1, "kv": 1})
+  result = evaluate_aggregate_policy(candidate_rows={"c": {"q": row(2), "kv": row(4)}},
+    direct_packed_rows={"q": {"session_id": "s1", "min_ms": 10},
+                        "kv": {"session_id": "s1", "min_ms": 10}}, policy=policy, session_id="s1")
+  assert result["status"] == "PASS"
+  assert result["winner"]["aggregate_ms"] == 14.0
+  assert result["winner"]["direct_packed_ms"] == 22.0
+
+  incomplete = evaluate_aggregate_policy(candidate_rows={"c": {"q": row(2)}},
+    direct_packed_rows={"q": {"session_id": "s1", "min_ms": 10}}, policy=policy, session_id="s1")
+  assert incomplete["status"] == "NO_AGGREGATE_WINNER"
+  assert "kv: missing evidence" in incomplete["candidates"]["c"]["blockers"]

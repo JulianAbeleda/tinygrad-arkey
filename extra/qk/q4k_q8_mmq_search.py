@@ -15,6 +15,7 @@ from typing import Any, Callable, Mapping, Protocol, Sequence
 
 SCHEMA = "q4k-q8-1-mmq-search.v1"
 DEFAULT_ROUTE = "direct_packed"
+AGGREGATE_POLICY_SCHEMA = "q4k-q8-1-mmq-aggregate-policy.v1"
 
 
 @dataclass(frozen=True)
@@ -41,6 +42,22 @@ class SearchPolicy:
   rounds: int = 5
   default_route: str = DEFAULT_ROUTE
   resource_limits: Mapping[str, int | float] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class AggregatePolicy:
+  """Policy for comparing one candidate across a same-session role set.
+
+  Costs are milliseconds and are deliberately supplied as evidence by the
+  caller (the search layer does not invent packing or reduction schedules).
+  """
+  required_roles: tuple[str, ...]
+  preparation_ms: Mapping[str, float] = field(default_factory=dict)
+  packing_ms: Mapping[str, float] = field(default_factory=dict)
+  reduction_ms: Mapping[str, float] = field(default_factory=dict)
+  direct_preparation_ms: Mapping[str, float] = field(default_factory=dict)
+  direct_packing_ms: Mapping[str, float] = field(default_factory=dict)
+  direct_reduction_ms: Mapping[str, float] = field(default_factory=dict)
 
 
 def enumerate_descriptors(axes: Mapping[str, Sequence[Any]], *, id_prefix: str = "q4k_q8_1_mmq") -> tuple[MMQDescriptor, ...]:
@@ -96,6 +113,64 @@ def _fits(descriptor: MMQDescriptor, limits: Mapping[str, int | float]) -> tuple
 def _timing_ms(row: Mapping[str, Any]) -> float | None:
   value = row.get("min_ms", row.get("candidate_min_ms"))
   return float(value) if isinstance(value, (int, float)) and value > 0 else None
+
+
+def _costs(policy: AggregatePolicy, role: str, *, direct: bool) -> dict[str, float] | None:
+  names = ("preparation_ms", "packing_ms", "reduction_ms")
+  maps = ((policy.direct_preparation_ms, policy.direct_packing_ms, policy.direct_reduction_ms)
+          if direct else (policy.preparation_ms, policy.packing_ms, policy.reduction_ms))
+  result = {}
+  for name, values in zip(names, maps):
+    value = values.get(role, 0.0)
+    if not isinstance(value, (int, float)) or value < 0: return None
+    result[name] = float(value)
+  return result
+
+
+def evaluate_aggregate_policy(*, candidate_rows: Mapping[str, Mapping[str, Any]],
+                              direct_packed_rows: Mapping[str, Mapping[str, Any]],
+                              policy: AggregatePolicy, session_id: str | None = None) -> dict[str, Any]:
+  """Choose an aggregate candidate only when every role is fully evidenced.
+
+  ``candidate_rows`` and ``direct_packed_rows`` are outputs from the same
+  session.  This function is intentionally policy-only: it cannot promote a
+  route or alter an emitter.
+  """
+  roles = tuple(policy.required_roles)
+  if not roles or len(set(roles)) != len(roles):
+    raise ValueError("required_roles must be non-empty and unique")
+  rows = {}
+  eligible = []
+  for candidate_id, candidate in candidate_rows.items():
+    role_rows = candidate.get("roles", candidate) if isinstance(candidate, Mapping) else {}
+    if not isinstance(role_rows, Mapping): role_rows = {}
+    blockers = []
+    total = 0.0
+    direct_total = 0.0
+    for role in roles:
+      row = role_rows.get(role)
+      direct = direct_packed_rows.get(role)
+      if not isinstance(row, Mapping) or not isinstance(direct, Mapping): blockers.append(f"{role}: missing evidence"); continue
+      if session_id is not None and (row.get("session_id") != session_id or direct.get("session_id") != session_id):
+        blockers.append(f"{role}: session identity mismatch"); continue
+      timing, direct_timing = _timing_ms(row), _timing_ms(direct)
+      costs, direct_costs = _costs(policy, role, direct=False), _costs(policy, role, direct=True)
+      gate = row.get("evidence_gate", {})
+      if row.get("status") not in ("measured", "PASS") or row.get("correctness", {}).get("passed") is not True or not isinstance(gate, Mapping) or gate.get("timing_allowed") is not True:
+        blockers.append(f"{role}: incomplete candidate evidence"); continue
+      if timing is None or direct_timing is None or costs is None or direct_costs is None or direct.get("passed", True) is False:
+        blockers.append(f"{role}: incomplete timing/cost evidence"); continue
+      total += timing + sum(costs.values()); direct_total += direct_timing + sum(direct_costs.values())
+    result = {"candidate_id": candidate_id, "status": "BLOCKED" if blockers else "ELIGIBLE",
+              "blockers": blockers, "aggregate_ms": None if blockers else total,
+              "direct_packed_ms": None if blockers else direct_total,
+              "speedup_vs_direct_packed": None if blockers else direct_total / total}
+    rows[candidate_id] = result
+    if not blockers: eligible.append(result)
+  winner = min(eligible, key=lambda x: x["aggregate_ms"], default=None)
+  return {"schema": AGGREGATE_POLICY_SCHEMA, "status": "PASS" if winner else "NO_AGGREGATE_WINNER",
+          "winner": winner, "candidates": rows, "required_roles": roles,
+          "production_dispatch_changed": False}
 
 
 def run_search(*, axes: Mapping[str, Sequence[Any]], session_factory: Callable[[], SearchSession],
