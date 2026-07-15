@@ -391,6 +391,18 @@ UOp verification. No scheduler assumptions were promoted into the descriptor
 path. The remaining beyond-parity owner is a legal generated tile/reuse
 lowering, not another unverified ABI shortcut.
 
+Two further hot-loop probes were closed without promotion. A lane-fragment Q8
+sum ABI was numerically correct and reduced the small-tile producer to about
+`1.78 ms`, but its eight-times-larger sum metadata regressed the exact mixed
+Qwen3-14B smoke from `84 tok/s` to `80 tok/s`; compact full-group sums remain
+the storage contract. A two-output-column wave tile failed the bounded canary
+(`max_abs` approximately `1.33e3`) and measured about `8.63 ms` versus the
+correct one-column tile near `5.1 ms`. Replacing the staged owner reduction
+with direct shuffles also failed correctness (`max_abs` approximately `448`)
+and was slower. These results close the remaining local reuse variants; the
+open owner is a cooperative multi-column tile with a legal LDS/register
+lowering, not another metadata or shuffle substitution.
+
 ## 2026-07-15 role-scoped hybrid search
 
 The research selector now accepts `PREFILL_Q4K_Q8_ROLES`, allowing the
