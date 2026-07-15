@@ -1,7 +1,8 @@
 import numpy as np
 import pytest
 
-from extra.qk.mmq_regression import validate_generated_mmq_abi, vector_pointer_bases, reject_vector_pointer_bases
+from extra.qk.mmq_regression import (validate_generated_mmq_abi, vector_pointer_bases, reject_vector_pointer_bases,
+                                     validate_mmq_candidate_evidence_gate)
 from extra.qk.q4k_q8_mmq_prefill_spec import Q4KQ8MMQPrefillSpec, enumerate_q4k_q8_mmq_candidates
 
 
@@ -66,3 +67,23 @@ def test_vector_pointer_bases_are_rejected_but_wmma_vector_carriers_are_valid():
   # WMMA fragments are intentionally vector-valued carriers, not pointer bases.
   wmma = type("Root", (), {"toposort": lambda self: (Node("WMMA", DType(4)),)})()
   reject_vector_pointer_bases(wmma)
+
+
+def test_candidate_evidence_gate_is_fail_closed_for_timing_and_promotion():
+  evidence = {name: {"passed": True, "status": "PASS"}
+              for name in ("correctness", "guard", "gpu_health", "resources", "identity", "fallback")}
+  assert validate_mmq_candidate_evidence_gate(evidence)["timing_allowed"] is True
+  evidence.pop("identity")
+  decision = validate_mmq_candidate_evidence_gate(evidence)
+  assert decision["timing_allowed"] is False
+  assert decision["promotion_eligible"] is False
+  assert "missing or failed identity evidence" in decision["blockers"]
+
+
+def test_candidate_evidence_gate_requires_explicit_fallback_evidence():
+  evidence = {name: {"passed": True} for name in ("correctness", "guard", "gpu_health", "resources", "identity")}
+  decision = validate_mmq_candidate_evidence_gate(evidence)
+  assert decision["promotion_eligible"] is False
+  assert "missing or failed fallback evidence" in decision["blockers"]
+  evidence["no_fallback"] = True
+  assert validate_mmq_candidate_evidence_gate(evidence)["promotion_eligible"] is True

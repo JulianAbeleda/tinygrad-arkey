@@ -1,4 +1,6 @@
-from extra.qk.q4k_q8_mmq_search import SearchPolicy, enumerate_descriptors, run_search
+import pytest
+
+from extra.qk.q4k_q8_mmq_search import SearchPolicy, enumerate_descriptors, replay_descriptors, run_search
 
 
 def test_enumerates_stable_generated_axes():
@@ -47,3 +49,23 @@ def test_correctness_failure_never_times():
   report = run_search(axes={"x": (1,)}, session_factory=Session)
   assert report["candidates"][0]["status"] == "correctness_failed"
   assert calls == []
+
+
+def test_replay_recovers_verified_descriptor_identity_without_reenumerating_axes():
+  class Session:
+    def prepare(self, descriptor): return descriptor
+    def check_correctness(self, prepared): return {"passed": False}
+
+  report = run_search(axes={"tile": (8, 16)}, session_factory=Session)
+  replayed = replay_descriptors(report)
+  assert [descriptor.canonical() for descriptor in replayed] == [row["descriptor"] for row in report["candidates"]]
+
+  tampered = dict(report)
+  tampered["candidates"] = list(report["candidates"])[::-1]
+  with pytest.raises(ValueError, match="digest mismatch"):
+    replay_descriptors(tampered)
+
+
+def test_enumeration_rejects_duplicate_generated_identity():
+  with pytest.raises(ValueError, match="duplicate descriptor identities"):
+    enumerate_descriptors({"tile": (8, 8)})

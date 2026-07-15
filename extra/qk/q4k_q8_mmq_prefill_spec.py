@@ -6,6 +6,8 @@ from extra.qk.prefill_primitive_spec import PrefillPrimitiveSpec, PrimitiveABI, 
 
 _STAGING = ("register", "lds")
 _WRITEBACK = ("owner", "partials")
+_ACTIVATION_LAYOUT = "q8_1_ds4"
+_TILE_LAYOUTS = ("tokens_k", "rows_k")
 
 @dataclass(frozen=True)
 class Q4KQ8MMQPrefillSpec(PrefillPrimitiveSpec):
@@ -27,6 +29,8 @@ class Q4KQ8MMQPrefillSpec(PrefillPrimitiveSpec):
   def validate(self) -> None:
     super().validate()
     if (self.quant_format, self.activation_format) != ("Q4_K", "Q8_1"): raise ValueError("MMQ requires Q4_K and Q8_1")
+    if self.activation_layout != _ACTIVATION_LAYOUT: raise ValueError(f"MMQ requires activation_layout={_ACTIVATION_LAYOUT!r}")
+    if self.tile_x_layout not in _TILE_LAYOUTS or self.tile_y_layout not in _TILE_LAYOUTS: raise ValueError("unsupported MMQ tile layout")
     if self.k % self.q4k_group_size or self.k % self.q8_block_size: raise ValueError("K violates Q4/Q8 alignment")
     if min(self.tile_m, self.tile_n, self.tile_k, self.accumulator_slots, self.wave_width, self.workgroup_size) <= 0: raise ValueError("tile/resource fields must be positive")
     caps = target_capabilities(self.target)

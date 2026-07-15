@@ -30,3 +30,27 @@ def test_harness_builds_emitted_program_in_child_not_cpu_atom():
   assert "compile_mmq_program" in source
   assert "build_tinygrad_bundle" in source
   assert "run_q4k_q8_1_mmq_bounded_amd_ds4_coop_tile" not in source
+
+
+def test_bounded_coop_diagnoses_duplicate_writers_in_declared_workgroup():
+  """Record the current AMD guard-corruption hazard without changing the atom.
+
+  The harness declares 32x16 threads, while the atom addresses output by
+  gidx0/gidx1 and only uses lidx0.  Consequently each output coordinate has
+  16 local-y lanes, including 16 lane-zero writers.  This is a diagnostic
+  invariant, not a claim that the non-promoted route is safe to use.
+  """
+  from extra.qk.mmq_q4k_q8_atom import _q4k_q8_1_bounded_ds4_coop_tile_kernel
+  from tinygrad.uop.ops import UOp
+  from tinygrad import dtypes
+
+  fn = _q4k_q8_1_bounded_ds4_coop_tile_kernel(16, 16, 256, "diagnostic", "direct_owner_v0")
+  body = repr(fn(UOp.placeholder((16, 16), dtypes.float32, 0),
+                 UOp.placeholder((16 * 36,), dtypes.uint32, 1),
+                 UOp.placeholder((16 * 256,), dtypes.int8, 2),
+                 UOp.placeholder((16 * 2,), dtypes.float32, 3),
+                 UOp.placeholder((16 * 2,), dtypes.float32, 4)))
+  declared_workgroup = (32, 16, 1)
+  assert "gidx0" in body and "gidx1" in body
+  assert "lidx0" in body and "lidx1" not in body
+  assert declared_workgroup[1] == 16

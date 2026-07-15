@@ -1,5 +1,7 @@
 import inspect
+import json
 import numpy as np
+import pytest
 import extra.qk.q4k_q8_mmq_generated_harness as harness
 from extra.qk.q4k_q8_mmq_generated_harness import _coverage, PROVENANCE
 from extra.qk.q4k_q8_mmq_prefill_spec import Q4KQ8MMQPrefillSpec
@@ -21,3 +23,17 @@ def test_generated_child_uses_descriptor_emitter_without_legacy_atom_import():
   assert "emit_q4k_q8_mmq_prefill" in source
   assert "extra.qk.mmq_q4k_q8_atom" not in source
   assert "extra.qk.amdgpu_metadata" in source
+
+def test_bootstrap_rejects_unlowered_launch_metadata(tmp_path):
+  payload = {"spec": {**_spec().to_json(), "launch": {"workgroup_size": 64, "waves": 2}}}
+  path = tmp_path / "bootstrap.json"
+  path.write_text(json.dumps(payload))
+  with pytest.raises(ValueError, match="launch metadata is unsupported"):
+    harness.bootstrap_from_file(path)
+
+def test_bootstrap_rejects_noncanonical_abi(tmp_path):
+  payload = {"spec": {**_spec().to_json(), "abi": {"arguments": ["out"], "dtypes": ["float32"], "output_layout": "tokens_rows"}}}
+  path = tmp_path / "bootstrap.json"
+  path.write_text(json.dumps(payload))
+  with pytest.raises(ValueError, match="ABI is unsupported"):
+    harness.bootstrap_from_file(path)

@@ -16,6 +16,7 @@ from tinygrad import Tensor, dtypes
 from extra.qk.layout import Q4K_WORDS_PER_BLOCK, Q8_1_BLOCK_ELEMS
 from extra.qk.q4k_q8_mmq_emitter import emit_q4k_q8_mmq_prefill
 from extra.qk.q4k_q8_mmq_prefill_spec import Q4KQ8MMQPrefillSpec
+from extra.qk.prefill_primitive_spec import PrimitiveABI
 from extra.qk.prefill.guarded_execution import GuardPolicy
 from extra.qk.prefill.isolated_guarded_executor import (
   ExecutableBundle, ExecutionRequest, build_tinygrad_bundle,
@@ -23,6 +24,22 @@ from extra.qk.prefill.isolated_guarded_executor import (
 )
 
 PROVENANCE = "q4k_q8_mmq_descriptor_emitter_v1"
+
+def _spec_from_json(payload: dict[str, Any]) -> Q4KQ8MMQPrefillSpec:
+  """Rebuild only metadata this lowering actually consumes.
+
+  ABI and launch metadata used to be silently discarded here.  That made a
+  descriptor look accepted even when it described an ABI/launch contract the
+  generated lowering could not honor.
+  """
+  abi = payload.get("abi")
+  if abi is not None and abi != PrimitiveABI().to_json():
+    raise ValueError("bootstrap ABI is unsupported by the generated MMQ lowering")
+  if payload.get("launch") is not None:
+    raise ValueError("bootstrap launch metadata is unsupported; use final PROGRAM geometry")
+  fields = {k: v for k, v in payload.items() if k in Q4KQ8MMQPrefillSpec.__dataclass_fields__}
+  fields.pop("abi", None); fields.pop("launch", None)
+  return Q4KQ8MMQPrefillSpec(**fields)
 
 def bootstrap_from_file(path: str | Path) -> dict[str, Any]:
   """Read a bootstrap descriptor from a file (never from stdin).
@@ -33,9 +50,7 @@ def bootstrap_from_file(path: str | Path) -> dict[str, Any]:
   payload = json.loads(Path(path).read_text())
   if not isinstance(payload, dict) or not isinstance(payload.get("spec"), dict):
     raise ValueError("bootstrap file must contain a spec object")
-  fields = {k: v for k, v in payload["spec"].items() if k in Q4KQ8MMQPrefillSpec.__dataclass_fields__}
-  fields.pop("abi", None); fields.pop("launch", None)
-  spec = Q4KQ8MMQPrefillSpec(**fields); spec.validate()
+  spec = _spec_from_json(payload["spec"]); spec.validate()
   return {"provenance": PROVENANCE, "candidate_identity": spec.canonical_identity(),
           "status": "accepted", "descriptor": spec.to_json()}
 
@@ -55,9 +70,7 @@ def _build_bundle(*, spec_json: dict[str, Any], candidate_id: str | None = None,
   """Child-only: rebuild the graph, compile its PROGRAM, then bind it."""
   # ``to_json`` intentionally expands nested dataclasses and the MMQ namespace;
   # reconstruct the typed spec from its flat dataclass fields only.
-  fields = {k: v for k, v in spec_json.items() if k in Q4KQ8MMQPrefillSpec.__dataclass_fields__}
-  fields.pop("abi", None); fields.pop("launch", None)
-  spec = Q4KQ8MMQPrefillSpec(**fields)
+  spec = _spec_from_json(spec_json)
   words = Tensor.empty(spec.n * spec.k // 256 * Q4K_WORDS_PER_BLOCK, dtype=dtypes.uint32, device=device)
   xq = Tensor.empty(spec.m, spec.k, dtype=dtypes.int8, device=device)
   scales = Tensor.empty(spec.m, spec.k // 32, dtype=dtypes.float32, device=device)
@@ -119,10 +132,7 @@ def main() -> int:
   accepted = bootstrap_from_file(args.bootstrap)
   if not args.dispatch:
     print(json.dumps(accepted, sort_keys=True)); return 0
-  fields = {k: v for k, v in accepted["descriptor"].items()
-            if k in Q4KQ8MMQPrefillSpec.__dataclass_fields__}
-  fields.pop("abi", None); fields.pop("launch", None)
-  spec = Q4KQ8MMQPrefillSpec(**fields)
+  spec = _spec_from_json(accepted["descriptor"])
   words = np.zeros(spec.n * spec.k // 256 * Q4K_WORDS_PER_BLOCK, dtype=np.uint32)
   xq = np.zeros((spec.m, spec.k), dtype=np.int8)
   scales = np.zeros((spec.m, spec.k // 32), dtype=np.float32)

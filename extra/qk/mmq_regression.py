@@ -13,6 +13,43 @@ from extra.qk.mmq_abi import Q4K_Q8_MMQ_ABI
 from extra.qk.layout import Q4K_WORDS_PER_BLOCK, Q4_K_BLOCK_ELEMS, Q8_1_BLOCK_ELEMS
 
 
+MMQ_PROMOTION_EVIDENCE = ("correctness", "guard", "gpu_health", "resources", "identity", "fallback")
+
+
+def validate_mmq_candidate_evidence_gate(evidence: Any) -> dict[str, Any]:
+  """Return the fail-closed timing/promotion decision for one candidate.
+
+  This is intentionally a consumer-side invariant.  Producers may use their
+  existing evidence schemas, but a candidate cannot be timed or promoted from
+  summary booleans unless every independent safety/provenance fact is present.
+  ``fallback`` is satisfied only by explicit evidence that a usable fallback
+  exists, or that no fallback is required.
+  """
+  if not isinstance(evidence, dict):
+    return {"timing_allowed": False, "promotion_eligible": False,
+            "blockers": ["candidate evidence must be a mapping"],
+            "evidence": {name: False for name in MMQ_PROMOTION_EVIDENCE}}
+
+  def passed(value: Any) -> bool:
+    if not isinstance(value, dict) or value.get("passed") is not True:
+      return False
+    status = value.get("status", "PASS")
+    return isinstance(status, str) and status.upper() == "PASS"
+
+  checks = {
+    "correctness": passed(evidence.get("correctness")),
+    "guard": passed(evidence.get("guard")),
+    "gpu_health": passed(evidence.get("gpu_health")),
+    "resources": passed(evidence.get("resources")),
+    "identity": passed(evidence.get("identity")),
+    "fallback": evidence.get("no_fallback") is True or passed(evidence.get("fallback")),
+  }
+  blockers = [f"missing or failed {name} evidence" for name, ok in checks.items() if not ok]
+  allowed = not blockers
+  return {"timing_allowed": allowed, "promotion_eligible": allowed,
+          "blockers": blockers, "evidence": checks}
+
+
 @dataclass(frozen=True)
 class VectorPointerBase:
   index: Any

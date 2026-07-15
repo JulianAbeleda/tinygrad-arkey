@@ -51,7 +51,32 @@ def enumerate_descriptors(axes: Mapping[str, Sequence[Any]], *, id_prefix: str =
     payload = dict(zip(names, values))
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False)
     out.append(MMQDescriptor(f"{id_prefix}.{hashlib.sha256(encoded.encode()).hexdigest()[:16]}", payload))
+  if len({descriptor.candidate_id for descriptor in out}) != len(out):
+    raise ValueError("generated axes contain duplicate descriptor identities")
   return tuple(out)
+
+
+def replay_descriptors(report: Mapping[str, Any]) -> tuple[MMQDescriptor, ...]:
+  """Recover the exact descriptor set from a search artifact, fail closed."""
+  if report.get("schema") != SCHEMA:
+    raise ValueError("unsupported search artifact schema")
+  expected = report.get("artifact_sha256")
+  if not isinstance(expected, str):
+    raise ValueError("search artifact is missing artifact_sha256")
+  unsigned = dict(report)
+  unsigned.pop("artifact_sha256", None)
+  encoded = json.dumps(unsigned, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+  if hashlib.sha256(encoded).hexdigest() != expected:
+    raise ValueError("search artifact digest mismatch")
+  descriptors = []
+  for row in report.get("candidates", ()):
+    descriptor = row.get("descriptor") if isinstance(row, Mapping) else None
+    if not isinstance(descriptor, Mapping) or not isinstance(descriptor.get("candidate_id"), str) or not isinstance(descriptor.get("axes"), Mapping):
+      raise ValueError("search artifact contains an invalid descriptor")
+    descriptors.append(MMQDescriptor(descriptor["candidate_id"], dict(descriptor["axes"])))
+  if len({descriptor.candidate_id for descriptor in descriptors}) != len(descriptors):
+    raise ValueError("search artifact contains duplicate descriptor identities")
+  return tuple(descriptors)
 
 
 def _fits(descriptor: MMQDescriptor, limits: Mapping[str, int | float]) -> tuple[bool, str | None]:

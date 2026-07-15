@@ -128,3 +128,21 @@ def test_promoted_routes_cannot_bind_the_fixed_shape_mmq_atom():
   promoted = [route_manifest.ROUTES[route_id] for route_id in route_manifest.default_routes()]
   assert all(atom not in {str(pattern) for pattern in route.get("expected_kernels", ())} for route in promoted)
   assert route_manifest.ROUTES["prefill_14b_q4k_q8_1_hybrid_mmq_atom"]["research_only"] is True
+
+
+def test_mmq_admission_boundary_keeps_direct_packed_as_default():
+  """A research candidate must not silently become a runtime/default route."""
+  mmq_id = "prefill_14b_q4k_q8_1_hybrid_mmq_atom"
+  mmq = route_manifest.ROUTES[mmq_id]
+
+  assert mmq["status"] == "research"
+  assert mmq["research_only"] is True
+  assert mmq["selector"] == "research_descriptor_only"
+  assert mmq_id not in route_manifest.default_routes()
+  assert "direct_packed" in {
+    mmq["rollback_route"], mmq["rollback"]["route"], mmq["baseline_route_id"]
+  }
+  direct_id = "prefill_q4k_direct_tile4x4_default"
+  assert direct_id in route_manifest.default_routes()
+  assert route_manifest.ROUTES[direct_id]["status"] == "promoted_default"
+  assert route_manifest.ROUTES[direct_id]["baseline_route_id"] == "prefill_q4k_direct_packed_load_direct_out"

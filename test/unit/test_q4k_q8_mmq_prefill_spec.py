@@ -37,3 +37,8 @@ def test_search_rejects_inert_resource_axes_and_uses_gfx1100_wave32():
     make(accumulator_slots=8).validate()
   with pytest.raises(ValueError, match="schedule_options"):
     make(schedule_options=(("staging", "lds"),)).validate()
+
+@pytest.mark.parametrize("field", ["activation_layout", "tile_x_layout", "tile_y_layout"])
+def test_descriptor_rejects_unknown_layout_vocabulary(field):
+  with pytest.raises(ValueError, match="layout"):
+    make(**{field: "arbitrary_layout"}).validate()
