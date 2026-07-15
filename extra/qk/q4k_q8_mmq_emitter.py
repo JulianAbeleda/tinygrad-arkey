@@ -16,6 +16,7 @@ from extra.qk.q4k_q8_mmq_prefill_spec import Q4KQ8MMQPrefillSpec
 from extra.qk.prefill_int8_wmma_spec import (
   Q4KInt8WMMAPrefillSpec, emit_q4k_int8_wmma_prefill_tensor,
   Q4KInt8WMMATiledPrefillSpec, emit_q4k_int8_wmma_tiled_lifecycle_tensor,
+  emit_q4k_int8_wmma_tiled_scheduler_tensor,
 )
 from extra.qk.mmq_logical_vocabulary import MMQCandidate
 
@@ -32,7 +33,7 @@ class MMQEmitterCandidate:
   wmma_m: int
   wmma_n: int
   wmma_k: int
-  lifecycle: Literal["tiled", "group"]
+  lifecycle: Literal["tiled", "group", "scheduler"]
   output_layout: str
   activation_layout: str
   tile_x_layout: str
@@ -44,7 +45,7 @@ class MMQEmitterCandidate:
     self.spec.validate()
     if min(self.wmma_m, self.wmma_n, self.wmma_k) <= 0:
       raise ValueError("candidate WMMA dimensions must be positive")
-    if self.lifecycle not in ("tiled", "group"):
+    if self.lifecycle not in ("tiled", "group", "scheduler"):
       raise ValueError(f"unsupported MMQ lifecycle {self.lifecycle!r}")
     if self.output_layout != self.spec.output_layout:
       raise ValueError("candidate output layout does not match descriptor")
@@ -113,6 +114,13 @@ def emit_q4k_q8_mmq_prefill(words: Tensor, xq: Tensor, xscales: Tensor,
       wmma_m=candidate.wmma_m, wmma_n=candidate.wmma_n, wmma_k=candidate.wmma_k,
       m_tile=spec.tile_m, n_tile=spec.tile_n, group_tile=spec.tile_k // Q8_1_BLOCK_ELEMS)
     return emit_q4k_int8_wmma_tiled_lifecycle_tensor(words.contiguous(), xq.contiguous(),
+                                                       xscales.contiguous(), tiled)
+
+  if candidate.lifecycle == "scheduler":
+    tiled = Q4KInt8WMMATiledPrefillSpec(n=spec.n, k=spec.k, m=spec.m, role=spec.role,
+      wmma_m=candidate.wmma_m, wmma_n=candidate.wmma_n, wmma_k=candidate.wmma_k,
+      m_tile=spec.tile_m, n_tile=spec.tile_n, group_tile=spec.tile_k // Q8_1_BLOCK_ELEMS)
+    return emit_q4k_int8_wmma_tiled_scheduler_tensor(words.contiguous(), xq.contiguous(),
                                                        xscales.contiguous(), tiled)
 
   # Small graph/oracle shapes still use the same generated primitive, without

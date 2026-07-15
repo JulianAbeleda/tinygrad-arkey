@@ -230,3 +230,20 @@ record the machine-generated candidate identity, source/binary identity, final
 resource and launch facts, role policy, rollback route, and reproducible
 end-to-end artifact. Until then, direct-packed remains authoritative and every
 MMQ failure must fail closed to research-only status.
+
+## 2026-07-15 execution update
+
+The shared logical candidate now lowers through the generated emitter, and the
+host MMQ suite passes 350 tests. A real AMD gfx1100 bounded `16x16x256` canary
+is finite and matches the canonical reference with maximum absolute error
+approximately `2.44e-4`.
+
+The first full-role-size `attn_kv` run (`M=512,N=1024,K=5120`) also completes
+with finite output and maximum absolute error approximately `1.46e-3` against
+the CPU reference. This establishes a correctness canary, not a promotion.
+
+The same-session timing comparison currently measures approximately `155.7 ms`
+median for generated scheduler plus Q8 preparation versus `28.8 ms` median for
+direct-packed on that role. The generated path is therefore still below parity
+and the next owning layer is the fused packed Q4_K/Q8_1 tile producer. No MMQ
+route or default changed.

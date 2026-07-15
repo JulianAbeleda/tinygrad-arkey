@@ -9,7 +9,7 @@ SCHEMA = "tinygrad.qk.mixed_quant_14b_evidence.v1"
 REQUIRED = ("status", "run", "hardware", "roles", "prefill_decode", "route_census", "parity", "memory",
             "q8_prep", "gpu_health", "fallbacks", "direct_packed_comparator", "measurement_definition")
 TOP_LEVEL = frozenset(("schema", "research_only", "route_promotion", *REQUIRED))
-ROLES = ("embedding", "attention_qkv", "attention_o", "ffn_gate", "ffn_up", "lm_head")
+ROLES = ("embedding", "attn_qo", "attn_kv", "ffn_gate_up", "ffn_down", "lm_head")
 PHASES = ("prefill", "decode")
 
 
