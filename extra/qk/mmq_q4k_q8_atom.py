@@ -26,6 +26,7 @@ from extra.qk.mmq_atom_boundary import (
   PREFILL_14B_Q4K_Q8_1_HYBRID_MMQ_ATOM_ROUTE_ID,
 )
 from extra.qk.mmq_lifecycle import MMQLifecycleRow, zero_counters
+from extra.qk.mmq_logical_vocabulary import PhysicalMapping
 from extra.qk.mmq_q4k_q8_reference import (
   Q81MMQDS4Activation, Q4KQ81MMQTileSpec, Q8_1_MMQ_DS4_LAYOUT, q4k_q8_1_mmq_tile_reference,
   q8_1_mmq_ds4_from_row_major_reference,
@@ -436,21 +437,38 @@ def _q4k_q8_1_bounded_dot4x4_kernel(m:int, n:int, k:int, role:str):
   return kernel
 
 
-def _q4k_q8_1_bounded_ds4_dot4x4_kernel(m:int, n:int, k:int, role:str):
+def _packed_ds4_mapping(mapping: PhysicalMapping | None = None) -> tuple[PhysicalMapping, int, int, int]:
+  mapping = mapping or PhysicalMapping(32, 32, wmma_shape=(4, 16, 16), lifecycle="packed_ds4")
+  if mapping.lifecycle != "packed_ds4":
+    raise ValueError(f"DS4 packed atom requires lifecycle='packed_ds4', got {mapping.lifecycle!r}")
+  micro_m, micro_n, micro_k = mapping.wmma_shape
+  if mapping.workgroup_size != mapping.wave_size:
+    raise ValueError("DS4 packed atom currently requires one wave per workgroup")
+  if micro_m <= 0 or mapping.wave_size % micro_m:
+    raise ValueError("DS4 packed mapping must divide the wave into output-row subtokens")
+  lane_group_width = mapping.wave_size // micro_m
+  if Q8_1_BLOCK_ELEMS % lane_group_width:
+    raise ValueError("DS4 packed mapping must divide a Q8 group across lane groups")
+  return mapping, micro_m, lane_group_width, Q8_1_BLOCK_ELEMS // lane_group_width
+
+
+def _q4k_q8_1_bounded_ds4_dot4x4_kernel(m:int, n:int, k:int, role:str,
+                                         mapping: PhysicalMapping | None = None):
   if k % Q4_K_BLOCK_ELEMS:
     raise ValueError(f"AMD DS4 dot4x4 MMQ atom requires k to be Q4_K block aligned, got {k}")
-  if m % 4:
-    raise ValueError(f"AMD DS4 dot4x4 MMQ atom requires M to be a multiple of 4, got {m}")
+  mapping, micro_m, lane_group_width, lane_pack = _packed_ds4_mapping(mapping)
+  if m % micro_m:
+    raise ValueError(f"AMD DS4 packed MMQ atom requires M to be a multiple of {micro_m}, got {m}")
   k_blocks = k // Q4_K_BLOCK_ELEMS
   name = f"q4k_q8_1_mmq_ds4_dot4x4_atom_{role}_{m}_{n}_{k}"
 
   def kernel(out: UOp, words: UOp, q8_values: UOp, q8_scales: UOp, q8_sums: UOp) -> UOp:
     row = UOp.special(n, "gidx0")
-    bb4 = UOp.special(m // 4, "gidx1")
-    lane = UOp.special(32, "lidx0")
-    subtok = lane // UOp.const(dtypes.int32, 8)
-    lane4 = lane % UOp.const(dtypes.int32, 8)
-    bb = bb4 * 4 + subtok
+    bb4 = UOp.special(m // micro_m, "gidx1")
+    lane = UOp.special(mapping.wave_size, "lidx0")
+    subtok = lane // UOp.const(dtypes.int32, lane_group_width)
+    lane4 = lane % UOp.const(dtypes.int32, lane_group_width)
+    bb = bb4 * micro_m + subtok
     blk = UOp.range(k_blocks, 0, axis_type=AxisType.REDUCE)
     base = (row * k_blocks + blk) * Q4K_WORDS_PER_BLOCK
     contrib = UOp.const(dtypes.float32, 0.0)
@@ -459,7 +477,7 @@ def _q4k_q8_1_bounded_ds4_dot4x4_kernel(m:int, n:int, k:int, role:str):
       qpack = _q4k_group_qpack_lane4(words, base, grp, lane4)
       ds4_block = blk * 2 + (grp // 4)
       ds4_group = grp % 4
-      q8_idx = (ds4_block * m + bb) * 128 + ds4_group * Q8_1_BLOCK_ELEMS + lane4 * 4
+      q8_idx = (ds4_block * m + bb) * (Q8_1_BLOCK_ELEMS * 4) + ds4_group * Q8_1_BLOCK_ELEMS + lane4 * lane_pack
       meta_idx = (ds4_block * m + bb) * 4 + ds4_group
       xpack = _pack_q8x4(q8_values, q8_idx)
       dot_q = _sudot4(qpack, xpack).cast(dtypes.float32)
@@ -470,7 +488,7 @@ def _q4k_q8_1_bounded_ds4_dot4x4_kernel(m:int, n:int, k:int, role:str):
     acc = UOp.placeholder((1,), dtypes.float32, 70, addrspace=AddrSpace.REG)
     acc = acc.after(acc[0].store(0.0))
     acc = acc.after(acc[0].store(acc.after(blk)[0] + contrib).end(blk))
-    total = warp_reduce_sum(acc[0], lane, 8)
+    total = warp_reduce_sum(acc[0], lane, lane_group_width)
     return out[bb, row].store(total).sink(arg=KernelInfo(name=name, opts_to_apply=()))
 
   return kernel
@@ -823,7 +841,8 @@ def run_q4k_q8_1_mmq_bounded_amd_ds4_warp(q4k_bytes: np.ndarray, ds4: Q81MMQDS4A
 
 
 def run_q4k_q8_1_mmq_bounded_amd_ds4_dot4x4(q4k_bytes: np.ndarray, ds4: Q81MMQDS4Activation, *,
-                                            role: str, device: str = "AMD") -> Q4KQ8MMQAtomResult:
+                                            role: str, device: str = "AMD",
+                                            mapping: PhysicalMapping | None = None) -> Q4KQ8MMQAtomResult:
   q4 = np.asarray(q4k_bytes, dtype=np.uint8)
   if q4.ndim != 3:
     raise ValueError(f"q4k_bytes must have shape [N,K/256,144], got {q4.shape}")
@@ -833,12 +852,13 @@ def run_q4k_q8_1_mmq_bounded_amd_ds4_dot4x4(q4k_bytes: np.ndarray, ds4: Q81MMQDS
   if ds4.spec.k != k:
     raise ValueError(f"DS4 K={ds4.spec.k} does not match Q4_K K={k}")
   m = ds4.spec.m
-  if m % 4:
-    raise ValueError(f"AMD DS4 dot4x4 MMQ atom requires M to be a multiple of 4, got {m}")
+  mapping, micro_m, _, _ = _packed_ds4_mapping(mapping)
+  if m % micro_m:
+    raise ValueError(f"AMD DS4 packed MMQ atom requires M to be a multiple of {micro_m}, got {m}")
   words = Tensor(_as_u32_words(q4), dtype=dtypes.uint32, device=device).realize()
   values_t, scales_t, sums_t = _ds4_tensors(ds4, device)
   out = Tensor.empty(m, n, dtype=dtypes.float32, device=device).custom_kernel(
-    words, values_t, scales_t, sums_t, fxn=_q4k_q8_1_bounded_ds4_dot4x4_kernel(m, n, k, role))[0].realize()
+    words, values_t, scales_t, sums_t, fxn=_q4k_q8_1_bounded_ds4_dot4x4_kernel(m, n, k, role, mapping))[0].realize()
   lifecycle, detail = _staged_ds4_lifecycle_for_spec(
     Q4KQ81MMQTileSpec(role=role, m=m, n=n, k=k, m_tile=m, n_tile=n, activation_layout=Q8_1_MMQ_DS4_LAYOUT))
   detail = {**detail, "backend_stage": "amd_ds4_dot4x4_direct_gpu", "gpu_kernel_emitted": True,

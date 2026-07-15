@@ -140,7 +140,7 @@ class PhysicalMapping:
   def __post_init__(self) -> None:
     if len(self.wmma_shape) != 3 or min(self.wmma_shape) <= 0:
       raise ValueError("WMMA shape must have three positive dimensions")
-    if self.lifecycle not in {"tiled", "group", "scheduler"}:
+    if self.lifecycle not in {"tiled", "group", "scheduler", "packed_ds4"}:
       raise ValueError("unsupported MMQ lifecycle")
 
 

@@ -19,6 +19,13 @@ def test_each_role_contract_is_explicit_and_research_only():
     assert contract.candidate().descriptor.abi["role"] == role
 
 
+def test_each_q4_role_has_a_distinct_packed_ds4_candidate():
+  candidates = [q4_role_contract(role).packed_candidate() for role in Q4_ROLES]
+  assert all(candidate.mapping.lifecycle == "packed_ds4" for candidate in candidates)
+  assert all(candidate.descriptor.q8.sum_operand for candidate in candidates)
+  assert len({candidate.identity() for candidate in candidates}) == len(Q4_ROLES)
+
+
 def test_role_contracts_reject_route_promotion():
   contract = q4_role_contract("ffn_down")
   try:

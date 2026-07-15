@@ -247,3 +247,33 @@ median for generated scheduler plus Q8 preparation versus `28.8 ms` median for
 direct-packed on that role. The generated path is therefore still below parity
 and the next owning layer is the fused packed Q4_K/Q8_1 tile producer. No MMQ
 route or default changed.
+
+The next iteration adds an explicit `packed_ds4` logical candidate. Its mapping
+declares a four-row micro-tile, one wave per workgroup, and supplied Q8 group
+sums; the emitted graph rejects the scheduler candidate and cannot infer this
+ABI. The GPU Q8 producer, transpose, and packed dot graph pass the bounded
+reference gate and remain research-only.
+
+On AMD gfx1100, the packed candidate including GPU Q8 preparation was measured
+in the same session against direct-packed operands on all four Q4 roles:
+
+| role | shape `(M,N,K)` | packed DS4 ms | direct-packed ms | ratio |
+|---|---:|---:|---:|---:|
+| `attn_kv` | `(512,1024,5120)` | 13.1 | 34.2 | 2.6x |
+| `attn_qo` | `(512,5120,5120)` | 12.9 | 127.6 | 9.9x |
+| `ffn_down` | `(512,5120,17408)` | 12.9 | 406.9 | 31.6x |
+| `ffn_gate_up` | `(512,17408,5120)` | 12.9 | 421.6 | 32.6x |
+
+All measured outputs were finite. This is role-level beyond-parity evidence,
+not yet the P4 exact-model result: direct-packed timing still uses its existing
+prepacked operand contract, so the aggregate gate must record preparation and
+route census under one final workload definition before any promotion decision.
+
+The installed `/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf` metadata confirms the
+mixed-quant boundary: `blk.0.attn_k`, `blk.0.attn_q`, `blk.0.attn_output`,
+`blk.0.ffn_gate`, and `blk.0.ffn_up` are Q4_K; `blk.0.attn_v`,
+`blk.0.ffn_down`, and `output.weight` are Q6_K. A real-weight Q4 canary using
+`blk.0.attn_k.weight` (`512x1024x5120`) is finite; the first 16 output rows
+match the DS4 reference with maximum absolute error about `1.05e-5`. The Q6
+vocabulary therefore remains a separate required P4 workstream rather than an
+implicit Q4 fallback.

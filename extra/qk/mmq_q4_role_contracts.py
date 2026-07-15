@@ -14,6 +14,7 @@ from .mmq_logical_vocabulary import (
   MMQCandidate, PhysicalMapping,
 )
 from .model_profiles import QWEN3_14B_Q4_K_M_GFX1100
+from .q4k_q8_mmq_prefill_spec import Q4KQ8MMQPrefillSpec
 
 Q4_ROLES = ("ffn_gate_up", "ffn_down", "attn_qo", "attn_kv")
 
@@ -53,17 +54,14 @@ class Q4RoleContract:
             "route": self.route, "research_only": self.research_only}
 
   def candidate(self) -> MMQCandidate:
-    axes = (Axis("m", self.M, 16), Axis("n", self.N, 16), Axis("k", self.K, 256),
-            Axis("group", f"k/256"), Axis("activation_block", "k/32"))
-    descriptor = LogicalMMQDescriptor(
-      axes=axes,
-      edge_predicates=tuple(EdgePredicate(axis) for axis in self.edge_axes),
-      abi={"role": self.role, "shape": {"M": self.M, "N": self.N, "K": self.K},
-           "weight_layout": self.weight_layout, "activation_layout": self.activation_layout,
-           "output_layout": self.output_layout, "edge_predicates": list(self.edge_axes)},
-    )
-    return MMQCandidate(descriptor, PhysicalMapping(32, 64),
-                        BackendCapability("AMD", "gfx1100", (DotOp.WMMA_I8_I8_I32,), (32,), 256, 64 * 1024))
+    return Q4KQ8MMQPrefillSpec("prefill", "qwen3-14b", self.role, "Q4_K", "Q8_1",
+      self.weight_layout, self.output_layout, self.M, self.N, self.K,
+      activation_layout="q8_1_ds4", tile_x_layout="tokens_k", tile_y_layout="rows_k").logical_candidate()
+
+  def packed_candidate(self) -> MMQCandidate:
+    return Q4KQ8MMQPrefillSpec("prefill", "qwen3-14b", self.role, "Q4_K", "Q8_1",
+      self.weight_layout, self.output_layout, self.M, self.N, self.K,
+      activation_layout="q8_1_ds4", tile_x_layout="tokens_k", tile_y_layout="rows_k").packed_ds4_logical_candidate()
 
 
 Q4_ROLE_CONTRACTS = tuple(

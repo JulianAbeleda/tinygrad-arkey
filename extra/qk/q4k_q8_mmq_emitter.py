@@ -33,7 +33,7 @@ class MMQEmitterCandidate:
   wmma_m: int
   wmma_n: int
   wmma_k: int
-  lifecycle: Literal["tiled", "group", "scheduler"]
+  lifecycle: Literal["tiled", "group", "scheduler", "packed_ds4"]
   output_layout: str
   activation_layout: str
   tile_x_layout: str
@@ -45,7 +45,7 @@ class MMQEmitterCandidate:
     self.spec.validate()
     if min(self.wmma_m, self.wmma_n, self.wmma_k) <= 0:
       raise ValueError("candidate WMMA dimensions must be positive")
-    if self.lifecycle not in ("tiled", "group", "scheduler"):
+    if self.lifecycle not in ("tiled", "group", "scheduler", "packed_ds4"):
       raise ValueError(f"unsupported MMQ lifecycle {self.lifecycle!r}")
     if self.output_layout != self.spec.output_layout:
       raise ValueError("candidate output layout does not match descriptor")
@@ -88,6 +88,8 @@ def emit_q4k_q8_mmq_prefill(words: Tensor, xq: Tensor, xscales: Tensor,
   if not isinstance(candidate, MMQEmitterCandidate):
     raise TypeError("MMQ emitter requires an MMQEmitterCandidate")
   candidate.validate()
+  if candidate.lifecycle == "packed_ds4":
+    raise ValueError("packed_ds4 candidates require emit_q4k_q8_mmq_ds4")
   spec = candidate.spec
   if spec.output_layout != "tokens_rows":
     raise ValueError("MMQ lowering only emits the canonical tokens_rows ABI layout")

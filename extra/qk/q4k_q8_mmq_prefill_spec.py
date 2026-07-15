@@ -1,6 +1,6 @@
 """Machine-search vocabulary for Q4_K x Q8_1 prefill (no kernel emitter)."""
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Iterable
 from extra.qk.prefill_primitive_spec import PrefillPrimitiveSpec, PrimitiveABI, LaunchMetadata, target_capabilities
 from extra.qk.mmq_logical_vocabulary import (
@@ -71,7 +71,8 @@ class Q4KQ8MMQPrefillSpec(PrefillPrimitiveSpec):
       synchronization=Synchronization(scope=SyncScope.NONE),
       ownership=Ownership(),
       edge_predicates=(EdgePredicate("m"), EdgePredicate("n"), EdgePredicate("k")),
-      abi={"output_layout": self.output_layout},
+      abi={"role": self.role, "shape": {"M": self.m, "N": self.n, "K": self.k},
+           "output_layout": self.output_layout},
     )
 
   def logical_candidate(self) -> MMQCandidate:
@@ -81,6 +82,20 @@ class Q4KQ8MMQPrefillSpec(PrefillPrimitiveSpec):
                               wmma_shape=(self.tile_m, self.tile_n, min(self.tile_k, 16)))
     capability = BackendCapability(
       "amd", self.target, supported_ops=(DotOp.WMMA_I8_I8_I32,),
+      wave_sizes=(self.wave_width,),
+      max_workgroup_size=target_capabilities(self.target)["max_workgroup_size"],
+      lds_bytes=64 * 1024)
+    return MMQCandidate(descriptor, mapping, capability)
+
+  def packed_ds4_logical_candidate(self) -> MMQCandidate:
+    """Project the packed DS4 dot candidate into the shared logical contract."""
+    descriptor = replace(self.logical_descriptor(),
+      q8=Q8DS4Semantics(block_elements=self.q8_block_size, sum_policy="supplied", sum_operand=True),
+      operation=Operation(DotOp.DOT_I8_I8_I32))
+    mapping = PhysicalMapping(self.wave_width, self.wave_width,
+                              wmma_shape=(4, self.tile_n, min(self.tile_k, 16)), lifecycle="packed_ds4")
+    capability = BackendCapability(
+      "amd", self.target, supported_ops=(DotOp.DOT_I8_I8_I32,),
       wave_sizes=(self.wave_width,),
       max_workgroup_size=target_capabilities(self.target)["max_workgroup_size"],
       lds_bytes=64 * 1024)
