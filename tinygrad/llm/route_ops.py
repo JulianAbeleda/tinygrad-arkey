@@ -36,7 +36,9 @@ def emit_q4k_int8_wmma_tiled_scheduler_tensor(*args, **kwargs): return _attr("ex
 def q8_1_quantize(*args, **kwargs): return _attr("extra.qk.layout", "q8_1_quantize")(*args, **kwargs)
 def packed_ds4_candidate(*args, **kwargs): return _attr("extra.qk.mmq_ds4_logical_emitter", "packed_ds4_candidate")(*args, **kwargs)
 def packed_row_major_candidate(*args, **kwargs): return _attr("extra.qk.mmq_ds4_logical_emitter", "packed_row_major_candidate")(*args, **kwargs)
+def packed_fused_candidate(*args, **kwargs): return _attr("extra.qk.mmq_ds4_logical_emitter", "packed_fused_candidate")(*args, **kwargs)
 def pack_q8_1_mmq_ds4(*args, **kwargs): return _attr("extra.qk.mmq_ds4_logical_emitter", "pack_q8_1_mmq_ds4")(*args, **kwargs)
+def pack_q8_1_mmq_fused(*args, **kwargs): return _attr("extra.qk.mmq_ds4_logical_emitter", "pack_q8_1_mmq_fused")(*args, **kwargs)
 def emit_q4k_q8_mmq_ds4(*args, **kwargs): return _attr("extra.qk.mmq_ds4_logical_emitter", "emit_q4k_q8_mmq_ds4")(*args, **kwargs)
 def quantize_q4_k(*args, **kwargs): return _attr("extra.qk.quantize", "quantize_q4_k")(*args, **kwargs)
 

@@ -4,7 +4,7 @@ import pytest
 from tinygrad import Tensor, dtypes
 
 from extra.qk.layout import q8_1_quantize
-from extra.qk.mmq_ds4_logical_emitter import pack_q8_1_mmq_ds4, packed_row_major_candidate
+from extra.qk.mmq_ds4_logical_emitter import pack_q8_1_mmq_ds4, pack_q8_1_mmq_fused, packed_fused_candidate, packed_row_major_candidate
 from extra.qk.q4k_q8_mmq_prefill_spec import Q4KQ8MMQPrefillSpec
 
 
@@ -63,6 +63,14 @@ def test_row_major_candidate_declares_storage_and_preserves_flat_shapes():
   candidate = packed_row_major_candidate(16, 16, 256, role="attn_kv")
   assert candidate.descriptor.abi["activation_storage"] == "row_major"
   values, scales, sums = pack_q8_1_mmq_ds4(Tensor.zeros((16, 256)), candidate)
+  assert values.shape == (16 * 256,)
+  assert scales.shape == sums.shape == (16 * 8,)
+
+
+def test_fused_candidate_declares_compact_row_major_metadata():
+  candidate = packed_fused_candidate(16, 16, 256, role="attn_kv")
+  assert candidate.descriptor.abi["activation_storage"] == "row_major"
+  values, scales, sums = pack_q8_1_mmq_fused(Tensor.zeros((16, 256)), candidate)
   assert values.shape == (16 * 256,)
   assert scales.shape == sums.shape == (16 * 8,)
 

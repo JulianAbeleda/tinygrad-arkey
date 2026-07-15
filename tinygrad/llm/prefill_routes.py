@@ -14,7 +14,7 @@ PREFILL_ROUTE_CHOICES = ("auto", "fp16", "direct_packed")
 LM_HEAD_PREFILL_ROUTE_CHOICES = ("lazy", "resident_fp16", "direct_packed")
 # Handwritten sdot4/MMQ/Q8_1-GEMM prefill research modes deleted 2026-07-06 (no backups; dead end ~237 tok/s).
 # Only the generated int8-WMMA parity substrates remain selectable; off-values fall to the direct-packed default.
-Q4K_Q8_CHOICES = ("", "0", "false", "off", "no", "wmma", "wmma_tiled", "packed_ds4", "packed_row_major")
+Q4K_Q8_CHOICES = ("", "0", "false", "off", "no", "wmma", "wmma_tiled", "packed_ds4", "packed_row_major", "packed_fused")
 _MMQ_DS4_LAST_PACKED: tuple[Any, tuple[Tensor, Tensor, Tensor]] | None = None
 
 
@@ -374,15 +374,17 @@ def route_direct_packed_prefill(lin, x:Tensor) -> Tensor | None:
         except NotImplementedError:
           out = qk_ops.emit_q4k_int8_wmma_tiled_scheduler_tensor(words, xq, xscales, tiled_spec)
         return out.reshape(1, spec.m, spec.n)
-      if q8_mode in ("packed_ds4", "packed_row_major"):
-        candidate_factory = qk_ops.packed_row_major_candidate if q8_mode == "packed_row_major" else qk_ops.packed_ds4_candidate
+      if q8_mode in ("packed_ds4", "packed_row_major", "packed_fused"):
+        candidate_factory = (qk_ops.packed_fused_candidate if q8_mode == "packed_fused" else
+                             qk_ops.packed_row_major_candidate if q8_mode == "packed_row_major" else qk_ops.packed_ds4_candidate)
         candidate = candidate_factory(spec.m, spec.n, spec.k, role=role)
         source = x_batch.reshape(spec.m, spec.k)
         cache_key = (getattr(x, "uop", x), spec.m, spec.k, str(x.device))
         if _MMQ_DS4_LAST_PACKED is not None and _MMQ_DS4_LAST_PACKED[0] == cache_key:
           values, scales, sums = _MMQ_DS4_LAST_PACKED[1]
         else:
-          values, scales, sums = qk_ops.pack_q8_1_mmq_ds4(source, candidate)
+          packer = qk_ops.pack_q8_1_mmq_fused if q8_mode == "packed_fused" else qk_ops.pack_q8_1_mmq_ds4
+          values, scales, sums = packer(source, candidate)
           _MMQ_DS4_LAST_PACKED = (cache_key, (values, scales, sums))
         out = qk_ops.emit_q4k_q8_mmq_ds4(words, values, scales, sums, candidate)
         return out.reshape(1, spec.m, spec.n)

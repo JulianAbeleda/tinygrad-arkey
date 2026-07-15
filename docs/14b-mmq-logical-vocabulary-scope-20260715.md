@@ -343,3 +343,18 @@ direct-packed rollback. The local producer improvement therefore did not reach
 parity. It is retained as an isolated research candidate while the next
 performance owner remains a fused/reused Q8 producer plus a multi-output tile
 mapping; no route promotion is implied.
+
+## 2026-07-15 fused producer continuation
+
+The fused producer was extended to a compact metadata ABI with staged
+cross-lane reduction and a single-owner lane-0 store for scales and weighted
+sums. Its bounded output matches the stable row-major producer within
+`3.1e-5`, and the compact producer measures about `3.55 ms` with the packed
+contraction at `5.28 ms` for `(512,512,5120)`.
+
+The same-definition 14B smoke measured `6.14 s` (`83 tok/s`) for this fused
+candidate versus `4.93 s` (`104 tok/s`) for direct-packed. It is the fastest
+MMQ research variant tested in this continuation, but still below parity; the
+selector remains default-off and direct-packed remains authoritative. The
+next beyond-parity owner is now the output-tile/activation-reuse mapping, not
+another unmeasured Q8 sum representation.

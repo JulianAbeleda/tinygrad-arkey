@@ -472,8 +472,8 @@ def packed_ds4_geometry(descriptor: LogicalMMQDescriptor | None = None) -> tuple
 
 def _packed_ds4_storage(descriptor: LogicalMMQDescriptor | None = None) -> str:
   storage = "ds4" if descriptor is None else descriptor.abi.get("activation_storage")
-  if storage not in ("ds4", "row_major"):
-    raise ValueError("DS4 atom requires an explicit ds4 or row_major activation storage")
+  if storage not in ("ds4", "row_major", "row_major_replicated"):
+    raise ValueError("DS4 atom requires a supported activation storage")
   return str(storage)
 
 
@@ -514,6 +514,7 @@ def _q4k_q8_1_bounded_ds4_dot4x4_kernel(m:int, n:int, k:int, role:str,
                 if storage == "ds4" else bb * k + ds4_block * q8_packed_elements + ds4_group * q8_group_elements + lane4 * lane_pack)
       meta_idx = ((ds4_block * m + bb) * q8_groups_per_packed + ds4_group
                   if storage == "ds4" else bb * (k // q8_group_elements) + ds4_block * q8_groups_per_packed + ds4_group)
+      if storage == "row_major_replicated": meta_idx = meta_idx * q8_group_elements
       xpack = _pack_q8x4(q8_values, q8_idx)
       dot_q = _sudot4(qpack, xpack).cast(dtypes.float32)
       scale = q8_scales[meta_idx].cast(dtypes.float32)

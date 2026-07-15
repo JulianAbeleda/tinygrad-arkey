@@ -10,8 +10,10 @@ from __future__ import annotations
 from dataclasses import replace
 
 from tinygrad import Tensor, dtypes
+from tinygrad.uop.ops import KernelInfo, UOp
 
 from extra.qk.layout import q8_1_quantize
+from extra.qk.amd_warp_reduce import _staged_shfl, warp_reduce_max
 from extra.qk.mmq_logical_vocabulary import DotOp, MMQCandidate
 from extra.qk.mmq_q4k_q8_atom import _q4k_q8_1_bounded_ds4_dot4x4_kernel, packed_ds4_geometry
 from extra.qk.q4k_q8_mmq_prefill_spec import Q4KQ8MMQPrefillSpec
@@ -36,8 +38,8 @@ def _validate_candidate(candidate: MMQCandidate) -> tuple[int, int, int]:
     raise ValueError("DS4 MMQ lowering requires supplied Q8 group sums")
   if candidate.capability.backend != "amd" or candidate.mapping.wave_size not in candidate.capability.wave_sizes:
     raise ValueError("candidate capability does not cover the DS4 mapping")
-  if candidate.descriptor.abi.get("activation_storage") not in ("ds4", "row_major"):
-    raise ValueError("DS4 MMQ candidate must declare activation_storage='ds4' or 'row_major'")
+  if candidate.descriptor.abi.get("activation_storage") not in ("ds4", "row_major", "row_major_replicated"):
+    raise ValueError("DS4 MMQ candidate must declare a supported activation storage")
   q4_block_elements, _, _, _, _, q8_packed_elements, q8_group_elements, _, _ = packed_ds4_geometry(candidate.descriptor)
   m, n, k = (_axis_extent(candidate, name) for name in ("m", "n", "k"))
   if k % q4_block_elements or k % q8_packed_elements:
@@ -54,6 +56,13 @@ def packed_ds4_candidate(m: int, n: int, k: int, *, role: str, target: str = "am
 
 def packed_row_major_candidate(m: int, n: int, k: int, *, role: str, target: str = "amd_gfx1100") -> MMQCandidate:
   """Research candidate that preserves Q8 row-major storage through the dot atom."""
+  candidate = packed_ds4_candidate(m, n, k, role=role, target=target)
+  return replace(candidate, descriptor=replace(candidate.descriptor,
+    abi={**candidate.descriptor.abi, "activation_storage": "row_major"}))
+
+
+def packed_fused_candidate(m: int, n: int, k: int, *, role: str, target: str = "amd_gfx1100") -> MMQCandidate:
+  """Research candidate for the fused one-wave row-major Q8 producer."""
   candidate = packed_ds4_candidate(m, n, k, role=role, target=target)
   return replace(candidate, descriptor=replace(candidate.descriptor,
     abi={**candidate.descriptor.abi, "activation_storage": "row_major"}))
@@ -86,6 +95,46 @@ def pack_q8_1_mmq_ds4(x: Tensor, candidate: MMQCandidate) -> tuple[Tensor, Tenso
   return values, scales, sums
 
 
+def _fused_q8_row_major_kernel(blocks: int, group_elements: int, wave_size: int):
+  if wave_size != 32 or group_elements != 32:
+    raise ValueError("fused Q8 producer currently requires the canonical wave32/Q8-32 grammar")
+  def owner_reduce_sum(value: UOp, lane: UOp) -> UOp:
+    offset, slot = wave_size >> 1, 100
+    while offset >= 1:
+      value = value + _staged_shfl(value, offset, lane, slot)
+      offset >>= 1; slot += 1
+    return value
+  def kernel(values: UOp, scales: UOp, sums: UOp, x: UOp) -> UOp:
+    block = UOp.special(blocks, "gidx0")
+    lane = UOp.special(wave_size, "lidx0")
+    idx = block * group_elements + lane
+    value = x[idx].cast(dtypes.float32)
+    amax = warp_reduce_max(value.abs(), lane, wave_size)
+    scale = amax.eq(0).where(UOp.const(dtypes.float32, 1.0), amax / UOp.const(dtypes.float32, 127.0))
+    qvalue = (value / scale).round().maximum(UOp.const(dtypes.float32, -128)).minimum(UOp.const(dtypes.float32, 127)).cast(dtypes.int8)
+    weighted_sum = owner_reduce_sum(qvalue.cast(dtypes.float32) * scale, lane)
+    return UOp.group(values[idx].store(qvalue), scales[block].store(scale, lane.eq(0)), sums[block].store(weighted_sum, lane.eq(0))).sink(
+      arg=KernelInfo(name=f"q8_1_mmq_fused_row_major_{blocks}", opts_to_apply=()))
+  return kernel
+
+
+def pack_q8_1_mmq_fused(x: Tensor, candidate: MMQCandidate) -> tuple[Tensor, Tensor, Tensor]:
+  """Fuse Q8 max/quantization and weighted-sum production into one wave kernel."""
+  m, _, k = _validate_candidate(candidate)
+  if candidate.descriptor.abi.get("activation_storage") != "row_major":
+    raise ValueError("fused Q8 producer requires row_major storage")
+  q8 = candidate.descriptor.q8
+  if tuple(x.shape) != (m, k) or q8.block_elements != 32:
+    raise ValueError(f"fused Q8 producer requires activation shape {(m, k)} and Q8-32 blocks")
+  values = Tensor.empty(m * k, dtype=dtypes.int8, device=x.device)
+  expected_meta = (m * k) // q8.block_elements
+  scales = Tensor.empty(expected_meta, dtype=dtypes.float32, device=x.device)
+  sums = Tensor.empty(expected_meta, dtype=dtypes.float32, device=x.device)
+  outputs = values.custom_kernel(scales, sums, x.reshape(-1).contiguous(),
+    fxn=_fused_q8_row_major_kernel((m * k) // q8.block_elements, q8.block_elements, candidate.mapping.wave_size))
+  return outputs[0], outputs[1], outputs[2]
+
+
 def emit_q4k_q8_mmq_ds4(words: Tensor, q8_values: Tensor, q8_scales: Tensor,
                          q8_sums: Tensor, candidate: MMQCandidate) -> Tensor:
   """Emit one descriptor-shaped packed DS4 output tensor."""
@@ -96,7 +145,8 @@ def emit_q4k_q8_mmq_ds4(words: Tensor, q8_values: Tensor, q8_scales: Tensor,
   if tuple(words.shape) != (expected_words,): raise ValueError(f"words shape must be {(expected_words,)}, got {tuple(words.shape)}")
   if tuple(q8_values.shape) != (m * k,): raise ValueError(f"q8 values must be flat with {m*k} elements")
   expected_meta = (m * k) // q8.block_elements
-  if tuple(q8_scales.shape) != (expected_meta,) or tuple(q8_sums.shape) != (expected_meta,):
+  expected_activation_meta = (m * k,) if candidate.descriptor.abi.get("activation_storage") == "row_major_replicated" else (expected_meta,)
+  if tuple(q8_scales.shape) != expected_activation_meta or tuple(q8_sums.shape) != expected_activation_meta:
     raise ValueError(f"q8 metadata must be flat with {expected_meta} elements")
   if not (words.dtype == dtypes.uint32 and q8_values.dtype == dtypes.int8 and
           q8_scales.dtype == dtypes.float32 and q8_sums.dtype == dtypes.float32):
@@ -109,4 +159,4 @@ def emit_q4k_q8_mmq_ds4(words: Tensor, q8_values: Tensor, q8_scales: Tensor,
     words.contiguous(), q8_values.contiguous(), q8_scales.contiguous(), q8_sums.contiguous(), fxn=fxn)[0]
 
 
-__all__ = ["emit_q4k_q8_mmq_ds4", "pack_q8_1_mmq_ds4", "packed_ds4_candidate", "packed_row_major_candidate"]
+__all__ = ["emit_q4k_q8_mmq_ds4", "pack_q8_1_mmq_ds4", "pack_q8_1_mmq_fused", "packed_ds4_candidate", "packed_row_major_candidate", "packed_fused_candidate"]
