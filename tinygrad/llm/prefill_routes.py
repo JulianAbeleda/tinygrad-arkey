@@ -61,6 +61,13 @@ def prefill_q4k_q8_mode() -> str:
   return mode
 
 
+def prefill_q4k_q8_role_enabled(role: str) -> bool:
+  """Optionally scope an experimental Q4/Q8 lowering to named logical roles."""
+  raw = str(os.environ.get("PREFILL_Q4K_Q8_ROLES", "")).strip()
+  if not raw: return True
+  return role in {item.strip() for item in raw.split(",") if item.strip()}
+
+
 def _is_q4k_linear(lin) -> bool: return hasattr(lin, "q4k_storage") and hasattr(lin, "prefill_packed_weight")
 def _is_q6k_linear(lin) -> bool: return hasattr(lin, "q6k_storage") and hasattr(lin, "prefill_packed_weight")
 def is_direct_packed_prefill_linear(lin) -> bool: return _is_q4k_linear(lin) or _is_q6k_linear(lin)
@@ -346,7 +353,7 @@ def route_direct_packed_prefill(lin, x:Tensor) -> Tensor | None:
       raise RuntimeError("PREFILL_QK_GENERATED_TILE was retired after the generated packed-tile route was refuted; "
                          "use the Q4KPrefillRouteSpec direct-packed default or PREFILL_Q4K_Q8=wmma_tiled research.")
     q8_mode = prefill_q4k_q8_mode()
-    if q8_mode:
+    if q8_mode and prefill_q4k_q8_role_enabled(role):
       words = lin.prefill_packed_weight().to(x.device)
       if q8_mode == "wmma":
         xq, xscales = qk_ops.q8_1_quantize(x_batch.cast(dtypes.float32))

@@ -14,6 +14,7 @@ def clean_prefill_route_env():
                                         "PREFILL_DIRECT_Q4K_PARTS", "PREFILL_DIRECT_Q6K_PARTS",
                                         "PREFILL_DIRECT_FFN_GATE_UP_PARTS", "PREFILL_DIRECT_FFN_DOWN_PARTS",
                                         "PREFILL_Q4K_Q8", "PREFILL_Q4K_REDUCE_OUT", "PREFILL_Q4K_DIRECT_OPTS",
+                                        "PREFILL_Q4K_Q8_ROLES",
                                         "PREFILL_Q4K_DIRECT_EXTRA_OPTS", "PREFILL_Q6K_DIRECT_OPTS",
                                         "PREFILL_Q6K_DIRECT_EXTRA_OPTS", "PREFILL_DIRECT_FFN_GATE_UP_OPTS",
                                         "PREFILL_DIRECT_FFN_GATE_UP_EXTRA_OPTS", "PREFILL_Q4K_DIRECT_SCHEDULE",
@@ -39,6 +40,15 @@ def test_prefill_qk_direct_alias_selects_direct_packed():
   from tinygrad.llm.prefill_routes import prefill_route_policy
   os.environ["PREFILL_QK_DIRECT"] = "1"
   assert prefill_route_policy() == "direct_packed"
+
+
+def test_prefill_q4k_q8_role_filter_is_explicit_and_default_broad():
+  from tinygrad.llm.prefill_routes import prefill_q4k_q8_role_enabled
+  assert prefill_q4k_q8_role_enabled("attn_qo")
+  os.environ["PREFILL_Q4K_Q8_ROLES"] = "attn_qo, ffn_gate_up"
+  assert prefill_q4k_q8_role_enabled("attn_qo")
+  assert prefill_q4k_q8_role_enabled("ffn_gate_up")
+  assert not prefill_q4k_q8_role_enabled("ffn_down")
 
 
 def test_prefill_route_rejects_unknown_policy():

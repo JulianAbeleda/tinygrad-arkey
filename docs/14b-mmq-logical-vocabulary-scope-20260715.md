@@ -390,3 +390,26 @@ standalone UPCAST attempt rejected the generated packed-dot accumulator during
 UOp verification. No scheduler assumptions were promoted into the descriptor
 path. The remaining beyond-parity owner is a legal generated tile/reuse
 lowering, not another unverified ABI shortcut.
+
+## 2026-07-15 role-scoped hybrid search
+
+The research selector now accepts `PREFILL_Q4K_Q8_ROLES`, allowing the
+descriptor lowering to be tested on a named logical role while all other Q4
+roles use the authoritative direct-packed fallback. This makes mixed-route
+comparison explicit without changing the default policy. The exact smoke
+search produced:
+
+| generated roles | tok/s |
+|---|---:|
+| `attn_qo` | 96 |
+| `ffn_gate_up` | 91 |
+| `attn_kv` | 102 |
+| `ffn_down` | 100 |
+| `attn_qo,ffn_gate_up` | 84 |
+| `attn_kv,ffn_gate_up` | 92 |
+
+The direct-packed baseline was `105 tok/s`; no tested role scope crossed
+parity. Cache tracing also showed the existing adjacent-activation reuse is
+effective (`120` attention hits and `80` FFN hits in the smoke), while the
+remaining preparations are distinct activations. A larger cache is therefore
+not the current beyond-parity owner.
