@@ -358,3 +358,12 @@ MMQ research variant tested in this continuation, but still below parity; the
 selector remains default-off and direct-packed remains authoritative. The
 next beyond-parity owner is now the output-tile/activation-reuse mapping, not
 another unmeasured Q8 sum representation.
+
+An output-tile retry was also scoped against the real shape. A four-column
+wave tile is numerically correct at `16x16x256`, but the generated vector-
+accumulator graph trips the tinygrad linearizer backward-slice invariant at
+`512x512x5120`. The retry was removed and remains a codegen blocker, not a
+selectable route. The next implementation must either teach the generated
+lowering a legal shared-reduction/vector-accumulator form or use a different
+tile ownership decomposition; the current one-wave candidate is not claimed
+to be beyond parity.
