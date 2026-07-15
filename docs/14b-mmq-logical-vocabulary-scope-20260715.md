@@ -270,10 +270,17 @@ prepacked operand contract, so the aggregate gate must record preparation and
 route census under one final workload definition before any promotion decision.
 
 The installed `/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf` metadata confirms the
-mixed-quant boundary: `blk.0.attn_k`, `blk.0.attn_q`, `blk.0.attn_output`,
-`blk.0.ffn_gate`, and `blk.0.ffn_up` are Q4_K; `blk.0.attn_v`,
-`blk.0.ffn_down`, and `output.weight` are Q6_K. A real-weight Q4 canary using
-`blk.0.attn_k.weight` (`512x1024x5120`) is finite; the first 16 output rows
-match the DS4 reference with maximum absolute error about `1.05e-5`. The Q6
-vocabulary therefore remains a separate required P4 workstream rather than an
-implicit Q4 fallback.
+mixed-quant boundary: in layer zero, `attn_k`, `attn_q`, `attn_output`,
+`ffn_gate`, and `ffn_up` are Q4_K while `attn_v` and `ffn_down` are Q6_K; the
+inventory also records later-layer transitions and the Q6_K output head. A
+real-weight Q4 canary using `blk.0.attn_k.weight` (`512x1024x5120`) is finite;
+the first 16 output rows match the DS4 reference with maximum absolute error
+about `1.05e-5`. The Q6 vocabulary therefore remains a separate required P4
+workstream rather than an implicit Q4 fallback.
+
+The real mixed tensors also execute through their existing direct Q6 grammar:
+`blk.0.ffn_down.weight` (`512x5120x17408`) is finite at approximately `7.8 ms`
+median on the existing Q6 packed direct-out kernel. A real `blk.0.ffn_gate`
+Q4 run is finite at approximately `12.8 ms` median including DS4 preparation.
+These are component measurements only; the exact mixed model route still lacks
+full output/token parity, decode evidence, and lm-head coverage.

@@ -1,4 +1,5 @@
 import importlib
+from pathlib import Path
 
 import pytest
 
@@ -27,3 +28,11 @@ def test_missing_field_blocks_and_writes_nothing(tmp_path):
 
 def test_hardware_failure_is_fail_closed():
   assert evidence.run_evidence(collect=record, hardware_probe=lambda: {})["status"] == "BLOCKED"
+
+
+def test_installed_qwen3_14b_inventory_keeps_q4_and_q6_roles_distinct():
+  model = Path("/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf")
+  if not model.exists(): pytest.skip("14B model artifact is not installed")
+  inventory = evidence.validate_exact_mixed_quant_inventory(evidence.exact_mixed_quant_inventory(model))
+  assert inventory["roles"]["attn_kv"]["quantizations"] == ["Q4_K", "Q6_K"]
+  assert inventory["roles"]["ffn_down"]["quantizations"] == ["Q4_K", "Q6_K"]
