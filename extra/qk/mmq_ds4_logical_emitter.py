@@ -7,6 +7,8 @@ cost instead of comparing a prepacked fast path with an unpacked route.
 """
 from __future__ import annotations
 
+from dataclasses import replace
+
 from tinygrad import Tensor, dtypes
 
 from extra.qk.layout import q8_1_quantize
@@ -30,10 +32,12 @@ def _validate_candidate(candidate: MMQCandidate) -> tuple[int, int, int]:
     raise ValueError("DS4 MMQ lowering requires lifecycle='packed_ds4'")
   if candidate.descriptor.operation.name != DotOp.DOT_I8_I8_I32:
     raise ValueError("DS4 MMQ lowering requires the declared i8 dot operation")
-  if candidate.mapping.lifecycle == "packed_ds4" and (candidate.descriptor.q8.sum_policy != "supplied" or not candidate.descriptor.q8.sum_operand):
+  if candidate.descriptor.q8.sum_policy != "supplied" or not candidate.descriptor.q8.sum_operand:
     raise ValueError("DS4 MMQ lowering requires supplied Q8 group sums")
   if candidate.capability.backend != "amd" or candidate.mapping.wave_size not in candidate.capability.wave_sizes:
     raise ValueError("candidate capability does not cover the DS4 mapping")
+  if candidate.descriptor.abi.get("activation_storage") not in ("ds4", "row_major"):
+    raise ValueError("DS4 MMQ candidate must declare activation_storage='ds4' or 'row_major'")
   q4_block_elements, _, _, _, _, q8_packed_elements, q8_group_elements, _, _ = packed_ds4_geometry(candidate.descriptor)
   m, n, k = (_axis_extent(candidate, name) for name in ("m", "n", "k"))
   if k % q4_block_elements or k % q8_packed_elements:
@@ -48,6 +52,13 @@ def packed_ds4_candidate(m: int, n: int, k: int, *, role: str, target: str = "am
     "tokens_rows", m, n, k, target=target).packed_ds4_logical_candidate()
 
 
+def packed_row_major_candidate(m: int, n: int, k: int, *, role: str, target: str = "amd_gfx1100") -> MMQCandidate:
+  """Research candidate that preserves Q8 row-major storage through the dot atom."""
+  candidate = packed_ds4_candidate(m, n, k, role=role, target=target)
+  return replace(candidate, descriptor=replace(candidate.descriptor,
+    abi={**candidate.descriptor.abi, "activation_storage": "row_major"}))
+
+
 
 
 def pack_q8_1_mmq_ds4(x: Tensor, candidate: MMQCandidate) -> tuple[Tensor, Tensor, Tensor]:
@@ -60,6 +71,13 @@ def pack_q8_1_mmq_ds4(x: Tensor, candidate: MMQCandidate) -> tuple[Tensor, Tenso
   packed_elements = q8.packed_block_elements
   x_f32 = x.cast(dtypes.float32)
   qvalues, qscales = q8_1_quantize(x_f32)
+  if candidate.descriptor.abi["activation_storage"] == "row_major":
+    values = qvalues.contiguous()
+    scales = qscales.contiguous()
+    weighted = qvalues.reshape(m, k // group_elements, group_elements).cast(dtypes.float32) * \
+      qscales.reshape(m, k // group_elements, 1).expand(m, k // group_elements, group_elements)
+    sums = weighted.sum(axis=2).reshape(-1).contiguous()
+    return values, scales, sums
   values = qvalues.reshape(m, k // packed_elements, groups, group_elements).permute(1, 0, 2, 3).reshape(-1).contiguous()
   scales = qscales.reshape(m, k // packed_elements, groups).permute(1, 0, 2).reshape(-1).contiguous()
   weighted = qvalues.reshape(m, k // packed_elements, groups, group_elements).cast(dtypes.float32) * \
@@ -91,4 +109,4 @@ def emit_q4k_q8_mmq_ds4(words: Tensor, q8_values: Tensor, q8_scales: Tensor,
     words.contiguous(), q8_values.contiguous(), q8_scales.contiguous(), q8_sums.contiguous(), fxn=fxn)[0]
 
 
-__all__ = ["emit_q4k_q8_mmq_ds4", "pack_q8_1_mmq_ds4", "packed_ds4_candidate"]
+__all__ = ["emit_q4k_q8_mmq_ds4", "pack_q8_1_mmq_ds4", "packed_ds4_candidate", "packed_row_major_candidate"]

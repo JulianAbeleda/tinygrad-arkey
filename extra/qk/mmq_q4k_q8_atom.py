@@ -470,11 +470,19 @@ def packed_ds4_geometry(descriptor: LogicalMMQDescriptor | None = None) -> tuple
           q8.packed_block_elements, q8.block_elements, q8.groups_per_packed_block, group_pair_words)
 
 
+def _packed_ds4_storage(descriptor: LogicalMMQDescriptor | None = None) -> str:
+  storage = "ds4" if descriptor is None else descriptor.abi.get("activation_storage")
+  if storage not in ("ds4", "row_major"):
+    raise ValueError("DS4 atom requires an explicit ds4 or row_major activation storage")
+  return str(storage)
+
+
 def _q4k_q8_1_bounded_ds4_dot4x4_kernel(m:int, n:int, k:int, role:str,
                                          mapping: PhysicalMapping | None = None,
                                          descriptor: LogicalMMQDescriptor | None = None):
   (q4_block_elements, q4_packed_words, q4_metadata_words, q4_groups, q4_blocks_per_ds4,
    q8_packed_elements, q8_group_elements, q8_groups_per_packed, group_pair_words) = packed_ds4_geometry(descriptor)
+  storage = _packed_ds4_storage(descriptor)
   if k % q4_block_elements:
     raise ValueError(f"AMD DS4 dot4x4 MMQ atom requires k to be Q4_K block aligned, got {k}")
   mapping, micro_m, lane_group_width, lane_pack = _packed_ds4_mapping(mapping, q8_group_elements)
@@ -502,8 +510,10 @@ def _q4k_q8_1_bounded_ds4_dot4x4_kernel(m:int, n:int, k:int, role:str,
       qpack = _q4k_group_qpack_lane4(words, base, grp, lane4, q4_metadata_words, group_pair_words)
       ds4_block = blk * q4_blocks_per_ds4 + (grp // (q4_groups // q4_blocks_per_ds4))
       ds4_group = grp % q8_groups_per_packed
-      q8_idx = (ds4_block * m + bb) * q8_packed_elements + ds4_group * q8_group_elements + lane4 * lane_pack
-      meta_idx = (ds4_block * m + bb) * q8_groups_per_packed + ds4_group
+      q8_idx = ((ds4_block * m + bb) * q8_packed_elements + ds4_group * q8_group_elements + lane4 * lane_pack
+                if storage == "ds4" else bb * k + ds4_block * q8_packed_elements + ds4_group * q8_group_elements + lane4 * lane_pack)
+      meta_idx = ((ds4_block * m + bb) * q8_groups_per_packed + ds4_group
+                  if storage == "ds4" else bb * (k // q8_group_elements) + ds4_block * q8_groups_per_packed + ds4_group)
       xpack = _pack_q8x4(q8_values, q8_idx)
       dot_q = _sudot4(qpack, xpack).cast(dtypes.float32)
       scale = q8_scales[meta_idx].cast(dtypes.float32)

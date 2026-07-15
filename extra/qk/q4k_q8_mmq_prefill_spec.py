@@ -75,7 +75,7 @@ class Q4KQ8MMQPrefillSpec(PrefillPrimitiveSpec):
            "output_layout": self.output_layout, "weight_layout": self.weight_layout,
            "activation_layout": self.activation_layout, "tile_x_layout": self.tile_x_layout,
            "tile_y_layout": self.tile_y_layout, "staging_strategy": self.staging_strategy,
-           "writeback_strategy": self.writeback_strategy},
+           "writeback_strategy": self.writeback_strategy, "activation_storage": "row_major"},
     )
 
   def logical_candidate(self) -> MMQCandidate:
@@ -95,6 +95,7 @@ class Q4KQ8MMQPrefillSpec(PrefillPrimitiveSpec):
     descriptor = replace(self.logical_descriptor(),
       q8=Q8DS4Semantics(block_elements=self.q8_block_size, sum_policy="supplied", sum_operand=True),
       operation=Operation(DotOp.DOT_I8_I8_I32))
+    descriptor = replace(descriptor, abi={**descriptor.abi, "activation_storage": "ds4"})
     mapping = PhysicalMapping(self.wave_width, self.wave_width,
                               wmma_shape=(4, self.tile_n, min(self.tile_k, 16)), lifecycle="packed_ds4")
     capability = BackendCapability(

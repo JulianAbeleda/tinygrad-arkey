@@ -4,7 +4,7 @@ import pytest
 from tinygrad import Tensor, dtypes
 
 from extra.qk.layout import q8_1_quantize
-from extra.qk.mmq_ds4_logical_emitter import pack_q8_1_mmq_ds4
+from extra.qk.mmq_ds4_logical_emitter import pack_q8_1_mmq_ds4, packed_row_major_candidate
 from extra.qk.q4k_q8_mmq_prefill_spec import Q4KQ8MMQPrefillSpec
 
 
@@ -57,6 +57,14 @@ def test_packed_ds4_packer_rejects_unsupported_descriptor_geometry():
   bad = replace(candidate, descriptor=replace(candidate.descriptor, q4k=bad_q4))
   with pytest.raises(ValueError, match="canonical Q4_K"):
     pack_q8_1_mmq_ds4(Tensor.zeros((16, 256)), bad)
+
+
+def test_row_major_candidate_declares_storage_and_preserves_flat_shapes():
+  candidate = packed_row_major_candidate(16, 16, 256, role="attn_kv")
+  assert candidate.descriptor.abi["activation_storage"] == "row_major"
+  values, scales, sums = pack_q8_1_mmq_ds4(Tensor.zeros((16, 256)), candidate)
+  assert values.shape == (16 * 256,)
+  assert scales.shape == sums.shape == (16 * 8,)
 
 
 def test_packed_ds4_packer_rejects_scheduler_candidate():

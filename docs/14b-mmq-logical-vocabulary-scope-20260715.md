@@ -325,3 +325,21 @@ reference with maximum absolute error `2.44e-4`. This validates the lowering
 contract and producer correctness only; Q8 preparation remains the measured
 whole-model bottleneck, so the route stays research-only and direct-packed
 remains default.
+
+## 2026-07-15 row-major producer continuation
+
+The next bounded optimization keeps the logical DS4 operation and atom but
+declares Q8 activation storage explicitly as `row_major`. This removes the
+values/scales DS4 transpose materializations; the supplied weighted sums remain
+an explicit operand, so the proven minimum-correction algebra is unchanged.
+At a representative `(M,N,K)=(512,512,5120)` shape, preparation decreased
+from about `9.54 ms` to `7.86 ms`, while the contraction remained about `5.2`
+to `5.6 ms`. The row-major candidate is available only through the separate
+`PREFILL_Q4K_Q8=packed_row_major` research selector.
+
+The first same-definition 14B smoke was `6.44 s` (`79 tok/s`) for row-major,
+`6.71 s` (`76 tok/s`) for packed DS4, and `4.93 s` (`104 tok/s`) for the
+direct-packed rollback. The local producer improvement therefore did not reach
+parity. It is retained as an isolated research candidate while the next
+performance owner remains a fused/reused Q8 producer plus a multi-output tile
+mapping; no route promotion is implied.
