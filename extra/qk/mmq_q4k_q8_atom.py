@@ -44,6 +44,7 @@ AMD_DS4_WARP_BACKEND_ATOM_ID = "q4k_q8_1_mmq_amd_ds4_warp_atom_v0"
 AMD_DS4_DOT4X4_BACKEND_ATOM_ID = "q4k_q8_1_mmq_amd_ds4_dot4x4_atom_v0"
 AMD_DS4_LDS_SKELETON_BACKEND_ATOM_ID = "q4k_q8_1_mmq_amd_ds4_lds_skeleton_atom_v0"
 AMD_DS4_COOP_TILE_BACKEND_ATOM_ID = "q4k_q8_1_mmq_amd_ds4_coop_tile_atom_v0"
+AMD_DS4_COOP_128_REUSE_PROBE_ID = "q4k_q8_1_mmq_amd_ds4_coop_128x128_reuse_probe_v0"
 MMQ_WRITEBACK_MODES = ("gated_matrix_v0", "direct_owner_v0")
 # The reduction result is replicated across the warp.  Lane zero is the
 # writeback owner for this bounded atom; the coordinate checks are deliberate
@@ -976,6 +977,21 @@ def run_q4k_q8_1_mmq_bounded_amd_ds4_coop_tile(q4k_bytes: np.ndarray, ds4: Q81MM
             "production_dispatch_changed": False, "default_route": "direct_packed"}
   return Q4KQ8MMQAtomResult(output=out.numpy().astype(np.float32), lifecycle=lifecycle,
                             backend_atom_id=AMD_DS4_COOP_TILE_BACKEND_ATOM_ID, lifecycle_detail=detail)
+
+
+def run_q4k_q8_1_mmq_coop_128_reuse_probe(*, enabled: bool = False) -> dict[str, Any]:
+  """Record the bounded negative result for the llama-sized reuse attempt.
+
+  The function intentionally accepts no tensors: until a multi-wave owner
+  map and compiler resource contract exist, accepting inputs would imply a
+  dispatchable candidate.  ``enabled=True`` is an explicit fail-closed gate.
+  """
+  from extra.qk.mmq_ds4_logical_emitter import cooperative_128_reuse_probe
+  evidence = cooperative_128_reuse_probe(enabled=False)
+  evidence["backend_atom_id"] = AMD_DS4_COOP_128_REUSE_PROBE_ID
+  if enabled:
+    raise RuntimeError("cooperative 128x128 reuse probe is blocked: " + "; ".join(evidence["exact_blockers"]))
+  return evidence
 
 
 def run_q4k_q8_1_mmq_tile_with_lifecycle(q4k_bytes: np.ndarray, xq: np.ndarray, xscales: np.ndarray,
