@@ -34,6 +34,9 @@ def emit_q4k_int8_wmma_tiled_exec_tensor(*args, **kwargs): return _attr("extra.q
 def emit_q4k_int8_wmma_tiled_lifecycle_tensor(*args, **kwargs): return _attr("extra.qk.prefill_int8_wmma_spec", "emit_q4k_int8_wmma_tiled_lifecycle_tensor")(*args, **kwargs)
 def emit_q4k_int8_wmma_tiled_scheduler_tensor(*args, **kwargs): return _attr("extra.qk.prefill_int8_wmma_spec", "emit_q4k_int8_wmma_tiled_scheduler_tensor")(*args, **kwargs)
 def q8_1_quantize(*args, **kwargs): return _attr("extra.qk.layout", "q8_1_quantize")(*args, **kwargs)
+def packed_ds4_candidate(*args, **kwargs): return _attr("extra.qk.mmq_ds4_logical_emitter", "packed_ds4_candidate")(*args, **kwargs)
+def pack_q8_1_mmq_ds4(*args, **kwargs): return _attr("extra.qk.mmq_ds4_logical_emitter", "pack_q8_1_mmq_ds4")(*args, **kwargs)
+def emit_q4k_q8_mmq_ds4(*args, **kwargs): return _attr("extra.qk.mmq_ds4_logical_emitter", "emit_q4k_q8_mmq_ds4")(*args, **kwargs)
 def quantize_q4_k(*args, **kwargs): return _attr("extra.qk.quantize", "quantize_q4_k")(*args, **kwargs)
 
 def should_route_q4k_lane_partition(*args, **kwargs): return _attr("extra.qk.bubblebeam_futuresight", "should_route_q4k_lane_partition")(*args, **kwargs)

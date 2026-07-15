@@ -181,6 +181,15 @@ def test_prefill_q4k_q8_wmma_tiled_flag_is_valid_but_explicit():
   assert prefill_q4k_q8_mode() == "wmma_tiled"
 
 
+def test_prefill_q4k_q8_packed_ds4_flag_is_valid_research_route():
+  from extra.qk.mmq_logical_vocabulary import MMQCandidate
+  from extra.qk.mmq_ds4_logical_emitter import packed_ds4_candidate
+  from tinygrad.llm.prefill_routes import prefill_q4k_q8_mode
+  os.environ["PREFILL_Q4K_Q8"] = "packed_ds4"
+  assert prefill_q4k_q8_mode() == "packed_ds4"
+  assert isinstance(packed_ds4_candidate(16, 16, 256, role="test"), MMQCandidate)
+
+
 def test_prefill_q4k_q8_rejects_unknown_mode():
   from tinygrad.llm.prefill_routes import prefill_q4k_q8_mode
   os.environ["PREFILL_Q4K_Q8"] = "surprise_tensorcore"
@@ -410,6 +419,18 @@ def test_q4_wmma_tiled_large_shape_uses_scheduler_owned_route(monkeypatch):
     q4k_storage=SimpleNamespace(), prefill_packed_weight=lambda: _Q4PrefillWeight()), _LargePrefillTensorStub())
   assert isinstance(out, _PrefillTensorStub)
   assert calls == ["scheduler"]
+
+
+def test_q4_packed_ds4_route_consumes_shared_candidate_and_packer(monkeypatch):
+  from tinygrad.llm import prefill_routes
+  os.environ["PREFILL_Q4K_Q8"] = "packed_ds4"
+  calls = []
+  monkeypatch.setattr(prefill_routes.qk_ops, "packed_ds4_candidate", lambda *args, **kwargs: calls.append(("candidate", args, kwargs)) or "candidate")
+  monkeypatch.setattr(prefill_routes.qk_ops, "pack_q8_1_mmq_ds4", lambda *args, **kwargs: calls.append(("pack", args, kwargs)) or ("values", "scales", "sums"))
+  monkeypatch.setattr(prefill_routes.qk_ops, "emit_q4k_q8_mmq_ds4", lambda *args, **kwargs: calls.append(("emit", args, kwargs)) or _PrefillTensorStub())
+  out = prefill_routes.route_direct_packed_prefill(_q4_prefill_linear(), _PrefillTensorStub())
+  assert isinstance(out, _PrefillTensorStub)
+  assert [entry[0] for entry in calls] == ["candidate", "pack", "emit"]
 
 
 def test_q6_direct_packed_prefill_default_uses_generated_descriptor(monkeypatch):

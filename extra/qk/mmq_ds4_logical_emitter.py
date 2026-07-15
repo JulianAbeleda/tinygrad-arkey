@@ -12,6 +12,7 @@ from tinygrad import Tensor, dtypes
 from extra.qk.layout import Q4K_WORDS_PER_BLOCK, Q4_K_BLOCK_ELEMS, Q8_1_BLOCK_ELEMS, q8_1_quantize
 from extra.qk.mmq_logical_vocabulary import DotOp, MMQCandidate
 from extra.qk.mmq_q4k_q8_atom import _q4k_q8_1_bounded_ds4_dot4x4_kernel
+from extra.qk.q4k_q8_mmq_prefill_spec import Q4KQ8MMQPrefillSpec
 
 
 def _axis_extent(candidate: MMQCandidate, name: str) -> int:
@@ -29,7 +30,7 @@ def _validate_candidate(candidate: MMQCandidate) -> tuple[int, int, int]:
     raise ValueError("DS4 MMQ lowering requires lifecycle='packed_ds4'")
   if candidate.descriptor.operation.name != DotOp.DOT_I8_I8_I32:
     raise ValueError("DS4 MMQ lowering requires the declared i8 dot operation")
-  if candidate.descriptor.q8.sum_policy != "supplied" or not candidate.descriptor.q8.sum_operand:
+  if candidate.mapping.lifecycle == "packed_ds4" and (candidate.descriptor.q8.sum_policy != "supplied" or not candidate.descriptor.q8.sum_operand):
     raise ValueError("DS4 MMQ lowering requires supplied Q8 group sums")
   if candidate.capability.backend != "amd" or candidate.mapping.wave_size not in candidate.capability.wave_sizes:
     raise ValueError("candidate capability does not cover the DS4 mapping")
@@ -39,6 +40,13 @@ def _validate_candidate(candidate: MMQCandidate) -> tuple[int, int, int]:
   if m % candidate.mapping.wmma_shape[0]:
     raise ValueError("DS4 MMQ M must cover whole declared output micro-tiles")
   return m, n, k
+
+
+def packed_ds4_candidate(m: int, n: int, k: int, *, role: str, target: str = "amd_gfx1100") -> MMQCandidate:
+  return Q4KQ8MMQPrefillSpec("prefill", "qwen3-14b", role, "Q4_K", "Q8_1", "q4k",
+    "tokens_rows", m, n, k, target=target).packed_ds4_logical_candidate()
+
+
 
 
 def pack_q8_1_mmq_ds4(x: Tensor, candidate: MMQCandidate) -> tuple[Tensor, Tensor, Tensor]:
@@ -74,4 +82,4 @@ def emit_q4k_q8_mmq_ds4(words: Tensor, q8_values: Tensor, q8_scales: Tensor,
     words.contiguous(), q8_values.contiguous(), q8_scales.contiguous(), q8_sums.contiguous(), fxn=fxn)[0]
 
 
-__all__ = ["emit_q4k_q8_mmq_ds4", "pack_q8_1_mmq_ds4"]
+__all__ = ["emit_q4k_q8_mmq_ds4", "pack_q8_1_mmq_ds4", "packed_ds4_candidate"]

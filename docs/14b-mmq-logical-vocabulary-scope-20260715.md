@@ -284,3 +284,13 @@ median on the existing Q6 packed direct-out kernel. A real `blk.0.ffn_gate`
 Q4 run is finite at approximately `12.8 ms` median including DS4 preparation.
 These are component measurements only; the exact mixed model route still lacks
 full output/token parity, decode evidence, and lm-head coverage.
+
+The new selector is route-bound as `prefill_q4k_packed_ds4_research` and was
+run through the authoritative Qwen3-14B smoke with the existing Q6 route left
+unchanged. The 512-token smoke completed at `10.04 s` (`50.99 tok/s`) versus
+the direct-packed smoke at `9.43 s` (`54.28 tok/s`). This is a valid mixed-route
+execution and route census, but it is below whole-model parity. On the same
+real Q4 tensors, the direct kernel is about `6.1 ms` while packed DS4 including
+Q8 preparation is about `13.2 ms`; the next owning layer is therefore a fused
+Q8 producer with a new physical ownership proof. The opt-in route remains
+default-off and no promotion is claimed.

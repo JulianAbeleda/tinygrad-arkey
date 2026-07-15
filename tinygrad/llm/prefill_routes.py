@@ -14,7 +14,7 @@ PREFILL_ROUTE_CHOICES = ("auto", "fp16", "direct_packed")
 LM_HEAD_PREFILL_ROUTE_CHOICES = ("lazy", "resident_fp16", "direct_packed")
 # Handwritten sdot4/MMQ/Q8_1-GEMM prefill research modes deleted 2026-07-06 (no backups; dead end ~237 tok/s).
 # Only the generated int8-WMMA parity substrates remain selectable; off-values fall to the direct-packed default.
-Q4K_Q8_CHOICES = ("", "0", "false", "off", "no", "wmma", "wmma_tiled")
+Q4K_Q8_CHOICES = ("", "0", "false", "off", "no", "wmma", "wmma_tiled", "packed_ds4")
 
 
 def _env(key:str, default:Any=0) -> Any:
@@ -346,8 +346,8 @@ def route_direct_packed_prefill(lin, x:Tensor) -> Tensor | None:
     q8_mode = prefill_q4k_q8_mode()
     if q8_mode:
       words = lin.prefill_packed_weight().to(x.device)
-      xq, xscales = qk_ops.q8_1_quantize(x_batch.cast(dtypes.float32))
       if q8_mode == "wmma":
+        xq, xscales = qk_ops.q8_1_quantize(x_batch.cast(dtypes.float32))
         wmma_spec = qk_ops.describe_q4k_int8_wmma_prefill(spec.n, spec.k, spec.m, role=role,
                                                           n_tile=max(16, int(_env("PREFILL_Q4K_WMMA_N_TILE", 256))))
         raw_elems = wmma_spec.groups * wmma_spec.m * wmma_spec.n
@@ -361,6 +361,7 @@ def route_direct_packed_prefill(lin, x:Tensor) -> Tensor | None:
         out = qk_ops.emit_q4k_int8_wmma_prefill_tensor(words, xq, xscales, wmma_spec)
         return out.reshape(1, spec.m, spec.n)
       if q8_mode == "wmma_tiled":
+        xq, xscales = qk_ops.q8_1_quantize(x_batch.cast(dtypes.float32))
         tiled_spec = qk_ops.describe_q4k_int8_wmma_tiled_prefill(
           spec.n, spec.k, spec.m, role=role,
           m_tile=max(16, int(_env("PREFILL_Q4K_WMMA_TILED_M_TILE", 16))),
@@ -371,8 +372,13 @@ def route_direct_packed_prefill(lin, x:Tensor) -> Tensor | None:
         except NotImplementedError:
           out = qk_ops.emit_q4k_int8_wmma_tiled_scheduler_tensor(words, xq, xscales, tiled_spec)
         return out.reshape(1, spec.m, spec.n)
+      if q8_mode == "packed_ds4":
+        candidate = qk_ops.packed_ds4_candidate(spec.m, spec.n, spec.k, role=role)
+        values, scales, sums = qk_ops.pack_q8_1_mmq_ds4(x_batch.reshape(spec.m, spec.k), candidate)
+        out = qk_ops.emit_q4k_q8_mmq_ds4(words, values, scales, sums, candidate)
+        return out.reshape(1, spec.m, spec.n)
       raise RuntimeError(f"PREFILL_Q4K_Q8={q8_mode!r} matched no generated route; the handwritten sdot4/MMQ/Q8_1-GEMM "
-                         f"modes were deleted 2026-07-06. Only 'wmma'/'wmma_tiled' (generated) or off-values are valid.")
+                         f"modes were deleted 2026-07-06. Only generated modes or off-values are valid.")
   candidate = select_direct_packed_prefill_candidate(lin, spec)
   if candidate is None: return None
   return candidate.run(lin, x, x_batch, spec)
