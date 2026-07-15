@@ -32,8 +32,9 @@ def _q4k_quant(words:UOp, base:UOp, grp:int, pos:UOp) -> UOp:
   qword = words[base + 4 + (grp//2)*8 + pos//4]
   return qword.rshift((pos%4)*8 + (grp%2)*4).bitwise_and(0xf)
 
-def _q4k_group_qpack_lane4(words:UOp, base:UOp, grp:int, lane4:UOp) -> UOp:
-  qword = words[base + 4 + (grp//2)*8 + lane4]
+def _q4k_group_qpack_lane4(words:UOp, base:UOp, grp:int, lane4:UOp, metadata_words:int=4,
+                           group_pair_words:int=8) -> UOp:
+  qword = words[base + metadata_words + (grp//2)*group_pair_words + lane4]
   return qword.rshift((grp%2)*4).bitwise_and(0x0F0F0F0F)
 
 def _q4k_weight(words:UOp, base:UOp, grp:int, pos:UOp) -> UOp:

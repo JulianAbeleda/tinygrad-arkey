@@ -60,20 +60,31 @@ class EdgePredicate:
 class Q4KDecode:
   block_elements: int = 256
   packed_words: int = 32
+  metadata_words: int = 4
   scale_bits: int = 6
   minimum_bits: int = 6
   nibble_ownership: str = "two_values_per_byte_low_then_high"
+
+  def __post_init__(self) -> None:
+    if self.block_elements <= 0 or self.packed_words <= 0 or self.metadata_words <= 0:
+      raise ValueError("Q4 packed geometry must be positive")
 
 
 @dataclass(frozen=True)
 class Q8DS4Semantics:
   block_elements: int = 32
+  packed_block_elements: int = 128
+  groups_per_packed_block: int = 4
   values_dtype: DType = DType.I8
   scale_dtype: DType = DType.F32
   sum_policy: str = "derived"
   sum_operand: bool = False
 
   def __post_init__(self) -> None:
+    if self.packed_block_elements <= 0 or self.groups_per_packed_block <= 0:
+      raise ValueError("Q8 packed block geometry must be positive")
+    if self.packed_block_elements != self.block_elements * self.groups_per_packed_block:
+      raise ValueError("Q8 packed block must cover its declared groups")
     if self.sum_policy not in {"derived", "supplied"}: raise ValueError("invalid Q8 sum policy")
     if self.sum_policy == "supplied" and not self.sum_operand: raise ValueError("supplied sums must be operands")
 

@@ -26,7 +26,7 @@ from extra.qk.mmq_atom_boundary import (
   PREFILL_14B_Q4K_Q8_1_HYBRID_MMQ_ATOM_ROUTE_ID,
 )
 from extra.qk.mmq_lifecycle import MMQLifecycleRow, zero_counters
-from extra.qk.mmq_logical_vocabulary import PhysicalMapping
+from extra.qk.mmq_logical_vocabulary import LogicalMMQDescriptor, PhysicalMapping, Q4KDecode, Q8DS4Semantics
 from extra.qk.mmq_q4k_q8_reference import (
   Q81MMQDS4Activation, Q4KQ81MMQTileSpec, Q8_1_MMQ_DS4_LAYOUT, q4k_q8_1_mmq_tile_reference,
   q8_1_mmq_ds4_from_row_major_reference,
@@ -437,7 +437,7 @@ def _q4k_q8_1_bounded_dot4x4_kernel(m:int, n:int, k:int, role:str):
   return kernel
 
 
-def _packed_ds4_mapping(mapping: PhysicalMapping | None = None) -> tuple[PhysicalMapping, int, int, int]:
+def _packed_ds4_mapping(mapping: PhysicalMapping | None = None, q8_group_elements: int = Q8_1_BLOCK_ELEMS) -> tuple[PhysicalMapping, int, int, int]:
   mapping = mapping or PhysicalMapping(32, 32, wmma_shape=(4, 16, 16), lifecycle="packed_ds4")
   if mapping.lifecycle != "packed_ds4":
     raise ValueError(f"DS4 packed atom requires lifecycle='packed_ds4', got {mapping.lifecycle!r}")
@@ -447,19 +447,44 @@ def _packed_ds4_mapping(mapping: PhysicalMapping | None = None) -> tuple[Physica
   if micro_m <= 0 or mapping.wave_size % micro_m:
     raise ValueError("DS4 packed mapping must divide the wave into output-row subtokens")
   lane_group_width = mapping.wave_size // micro_m
-  if Q8_1_BLOCK_ELEMS % lane_group_width:
+  if q8_group_elements % lane_group_width:
     raise ValueError("DS4 packed mapping must divide a Q8 group across lane groups")
-  return mapping, micro_m, lane_group_width, Q8_1_BLOCK_ELEMS // lane_group_width
+  return mapping, micro_m, lane_group_width, q8_group_elements // lane_group_width
+
+
+def packed_ds4_geometry(descriptor: LogicalMMQDescriptor | None = None) -> tuple[int, int, int, int, int, int, int, int, int]:
+  q4 = descriptor.q4k if descriptor is not None else Q4KDecode()
+  q8 = descriptor.q8 if descriptor is not None else Q8DS4Semantics()
+  if (q4.block_elements, q4.packed_words, q4.metadata_words) != (Q4_K_BLOCK_ELEMS, 32, 4):
+    raise ValueError("DS4 lowering only supports the canonical Q4_K packed grammar")
+  if (q8.block_elements, q8.packed_block_elements, q8.groups_per_packed_block) != (Q8_1_BLOCK_ELEMS, 128, 4):
+    raise ValueError("DS4 lowering only supports the canonical Q8_1 DS4 packed grammar")
+  if q4.packed_words != q4.block_elements // 8:
+    raise ValueError("Q4_K packed words do not cover the declared nibble payload")
+  q4_groups = q4.block_elements // q8.block_elements
+  q4_blocks_per_ds4 = q4.block_elements // q8.packed_block_elements
+  if q4_groups % q4_blocks_per_ds4 or q4_groups // q4_blocks_per_ds4 != q8.groups_per_packed_block:
+    raise ValueError("Q4_K and Q8 DS4 group geometry is incompatible")
+  group_pair_words = q8.block_elements // 4
+  return (q4.block_elements, q4.packed_words, q4.metadata_words, q4_groups, q4_blocks_per_ds4,
+          q8.packed_block_elements, q8.block_elements, q8.groups_per_packed_block, group_pair_words)
 
 
 def _q4k_q8_1_bounded_ds4_dot4x4_kernel(m:int, n:int, k:int, role:str,
-                                         mapping: PhysicalMapping | None = None):
-  if k % Q4_K_BLOCK_ELEMS:
+                                         mapping: PhysicalMapping | None = None,
+                                         descriptor: LogicalMMQDescriptor | None = None):
+  (q4_block_elements, q4_packed_words, q4_metadata_words, q4_groups, q4_blocks_per_ds4,
+   q8_packed_elements, q8_group_elements, q8_groups_per_packed, group_pair_words) = packed_ds4_geometry(descriptor)
+  if k % q4_block_elements:
     raise ValueError(f"AMD DS4 dot4x4 MMQ atom requires k to be Q4_K block aligned, got {k}")
-  mapping, micro_m, lane_group_width, lane_pack = _packed_ds4_mapping(mapping)
+  mapping, micro_m, lane_group_width, lane_pack = _packed_ds4_mapping(mapping, q8_group_elements)
+  if lane_group_width != group_pair_words:
+    raise ValueError("DS4 mapping lane group must cover one Q4 packed word pair")
+  if q8_groups_per_packed != q4_groups // q4_blocks_per_ds4:
+    raise ValueError("DS4 mapping received inconsistent group geometry")
   if m % micro_m:
     raise ValueError(f"AMD DS4 packed MMQ atom requires M to be a multiple of {micro_m}, got {m}")
-  k_blocks = k // Q4_K_BLOCK_ELEMS
+  k_blocks = k // q4_block_elements
   name = f"q4k_q8_1_mmq_ds4_dot4x4_atom_{role}_{m}_{n}_{k}"
 
   def kernel(out: UOp, words: UOp, q8_values: UOp, q8_scales: UOp, q8_sums: UOp) -> UOp:
@@ -470,15 +495,15 @@ def _q4k_q8_1_bounded_ds4_dot4x4_kernel(m:int, n:int, k:int, role:str,
     lane4 = lane % UOp.const(dtypes.int32, lane_group_width)
     bb = bb4 * micro_m + subtok
     blk = UOp.range(k_blocks, 0, axis_type=AxisType.REDUCE)
-    base = (row * k_blocks + blk) * Q4K_WORDS_PER_BLOCK
+    base = (row * k_blocks + blk) * (q4_metadata_words + q4_packed_words)
     contrib = UOp.const(dtypes.float32, 0.0)
-    for grp in range(8):
+    for grp in range(q4_groups):
       d, dmin, sc, mn = _q4k_group_params(words, base, grp)
-      qpack = _q4k_group_qpack_lane4(words, base, grp, lane4)
-      ds4_block = blk * 2 + (grp // 4)
-      ds4_group = grp % 4
-      q8_idx = (ds4_block * m + bb) * (Q8_1_BLOCK_ELEMS * 4) + ds4_group * Q8_1_BLOCK_ELEMS + lane4 * lane_pack
-      meta_idx = (ds4_block * m + bb) * 4 + ds4_group
+      qpack = _q4k_group_qpack_lane4(words, base, grp, lane4, q4_metadata_words, group_pair_words)
+      ds4_block = blk * q4_blocks_per_ds4 + (grp // (q4_groups // q4_blocks_per_ds4))
+      ds4_group = grp % q8_groups_per_packed
+      q8_idx = (ds4_block * m + bb) * q8_packed_elements + ds4_group * q8_group_elements + lane4 * lane_pack
+      meta_idx = (ds4_block * m + bb) * q8_groups_per_packed + ds4_group
       xpack = _pack_q8x4(q8_values, q8_idx)
       dot_q = _sudot4(qpack, xpack).cast(dtypes.float32)
       scale = q8_scales[meta_idx].cast(dtypes.float32)

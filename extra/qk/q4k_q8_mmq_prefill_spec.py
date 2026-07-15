@@ -72,7 +72,10 @@ class Q4KQ8MMQPrefillSpec(PrefillPrimitiveSpec):
       ownership=Ownership(),
       edge_predicates=(EdgePredicate("m"), EdgePredicate("n"), EdgePredicate("k")),
       abi={"role": self.role, "shape": {"M": self.m, "N": self.n, "K": self.k},
-           "output_layout": self.output_layout},
+           "output_layout": self.output_layout, "weight_layout": self.weight_layout,
+           "activation_layout": self.activation_layout, "tile_x_layout": self.tile_x_layout,
+           "tile_y_layout": self.tile_y_layout, "staging_strategy": self.staging_strategy,
+           "writeback_strategy": self.writeback_strategy},
     )
 
   def logical_candidate(self) -> MMQCandidate:

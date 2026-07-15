@@ -298,3 +298,30 @@ reuses the packed activation for adjacent FFN gate/up consumers; the repeat
 smoke improved to `9.85 s` (`51.96 tok/s`), but remains below the `9.43 s`
 direct-packed smoke. The cache is therefore an aggregate mitigation, not a
 parity result.
+
+## 2026-07-15 descriptor geometry audit update
+
+The packed DS4 lowering now has one shared geometry boundary. Q4 metadata
+words, Q4 packed payload words, Q8 group width, packed DS4 width, groups per
+DS4 block, lane packing, Q4 block strides, Q8 value indices, and metadata
+indices are derived from the logical descriptor before UOp emission. The atom
+rejects non-canonical descriptor grammars rather than silently interpreting
+them with the old `4`/`8`/`32`/`128`/`36` assumptions. The generic emitter also
+requires explicit ABI role, shape, weight/activation layouts, tile layouts,
+staging, and writeback fields; it no longer reconstructs those from backend
+defaults.
+
+The audit found one producer correctness defect: supplied DS4 sums were being
+computed from original FP32 activations while the Q4 minimum correction
+requires weighted dequantized Q8 sums (`q * scale`). The producer now derives
+those sums from the quantized values and scales, and a regression test pins
+that invariant. Unsupported descriptor geometry is covered by a fail-closed
+negative test.
+
+Validation after the cleanup: 77 focused contract/emitter/route tests and 411
+tests across the MMQ/Q4K-Q8/generated-harness slice pass. The descriptor-fed
+AMD gfx1100 `16x16x256` generated canary is finite and matches the CPU
+reference with maximum absolute error `2.44e-4`. This validates the lowering
+contract and producer correctness only; Q8 preparation remains the measured
+whole-model bottleneck, so the route stays research-only and direct-packed
+remains default.

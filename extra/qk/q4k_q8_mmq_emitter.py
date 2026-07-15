@@ -66,14 +66,21 @@ def _from_logical(candidate: MMQCandidate) -> MMQEmitterCandidate:
   if d.operation.name not in candidate.capability.supported_ops:
     raise ValueError("shared MMQ candidate operation is not supported by capability")
   axes = {axis.name: axis for axis in d.axes}
-  role = str(d.abi.get("role", "test"))
-  spec = Q4KQ8MMQPrefillSpec("logical_mmq", "logical", role, "Q4_K", "Q8_1", "q4k",
-    str(d.abi.get("output_layout", "")), axes["m"].extent, axes["n"].extent, axes["k"].extent,
+  required_abi = ("role", "shape", "output_layout", "weight_layout", "activation_layout",
+                  "tile_x_layout", "tile_y_layout", "staging_strategy", "writeback_strategy")
+  if any(key not in d.abi for key in required_abi):
+    raise ValueError("shared MMQ descriptor ABI is missing explicit lowering fields")
+  role = str(d.abi["role"])
+  shape = d.abi["shape"]
+  if shape != {"M": axes["m"].extent, "N": axes["n"].extent, "K": axes["k"].extent}:
+    raise ValueError("shared MMQ descriptor ABI shape disagrees with logical axes")
+  spec = Q4KQ8MMQPrefillSpec("logical_mmq", "logical", role, "Q4_K", "Q8_1", str(d.abi["weight_layout"]),
+    str(d.abi["output_layout"]), axes["m"].extent, axes["n"].extent, axes["k"].extent,
     tile_m=axes["m"].tile, tile_n=axes["n"].tile, tile_k=axes["k"].tile,
     wave_width=mapping.wave_size, workgroup_size=mapping.workgroup_size,
-    activation_layout="q8_1_ds4", tile_x_layout="tokens_k", tile_y_layout="rows_k",
-    staging_strategy="register" if d.staging.activations == d.staging.weights else "lds",
-    writeback_strategy="owner", lds_bytes=0)
+    activation_layout=str(d.abi["activation_layout"]),
+    tile_x_layout=str(d.abi["tile_x_layout"]), tile_y_layout=str(d.abi["tile_y_layout"]),
+    staging_strategy=str(d.abi["staging_strategy"]), writeback_strategy=str(d.abi["writeback_strategy"]), lds_bytes=0)
   wm, wn, wk = mapping.wmma_shape
   return MMQEmitterCandidate(spec, wm, wn, wk, mapping.lifecycle, spec.output_layout,
     spec.activation_layout, spec.tile_x_layout, spec.tile_y_layout,

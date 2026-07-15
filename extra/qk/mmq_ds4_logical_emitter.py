@@ -9,9 +9,9 @@ from __future__ import annotations
 
 from tinygrad import Tensor, dtypes
 
-from extra.qk.layout import Q4K_WORDS_PER_BLOCK, Q4_K_BLOCK_ELEMS, Q8_1_BLOCK_ELEMS, q8_1_quantize
+from extra.qk.layout import q8_1_quantize
 from extra.qk.mmq_logical_vocabulary import DotOp, MMQCandidate
-from extra.qk.mmq_q4k_q8_atom import _q4k_q8_1_bounded_ds4_dot4x4_kernel
+from extra.qk.mmq_q4k_q8_atom import _q4k_q8_1_bounded_ds4_dot4x4_kernel, packed_ds4_geometry
 from extra.qk.q4k_q8_mmq_prefill_spec import Q4KQ8MMQPrefillSpec
 
 
@@ -34,8 +34,9 @@ def _validate_candidate(candidate: MMQCandidate) -> tuple[int, int, int]:
     raise ValueError("DS4 MMQ lowering requires supplied Q8 group sums")
   if candidate.capability.backend != "amd" or candidate.mapping.wave_size not in candidate.capability.wave_sizes:
     raise ValueError("candidate capability does not cover the DS4 mapping")
+  q4_block_elements, _, _, _, _, q8_packed_elements, q8_group_elements, _, _ = packed_ds4_geometry(candidate.descriptor)
   m, n, k = (_axis_extent(candidate, name) for name in ("m", "n", "k"))
-  if k % Q4_K_BLOCK_ELEMS or k % (Q8_1_BLOCK_ELEMS * 4):
+  if k % q4_block_elements or k % q8_packed_elements:
     raise ValueError("DS4 MMQ K must be aligned to Q4_K and Q8 DS4 blocks")
   if m % candidate.mapping.wmma_shape[0]:
     raise ValueError("DS4 MMQ M must cover whole declared output micro-tiles")
@@ -53,11 +54,17 @@ def pack_q8_1_mmq_ds4(x: Tensor, candidate: MMQCandidate) -> tuple[Tensor, Tenso
   """Quantize and transpose row-major activations into the declared DS4 ABI."""
   m, _, k = _validate_candidate(candidate)
   if tuple(x.shape) != (m, k): raise ValueError(f"activation shape must be {(m, k)}, got {tuple(x.shape)}")
+  q8 = candidate.descriptor.q8
+  groups = q8.groups_per_packed_block
+  group_elements = q8.block_elements
+  packed_elements = q8.packed_block_elements
   x_f32 = x.cast(dtypes.float32)
   qvalues, qscales = q8_1_quantize(x_f32)
-  values = qvalues.reshape(m, k // (Q8_1_BLOCK_ELEMS * 4), 4, Q8_1_BLOCK_ELEMS).permute(1, 0, 2, 3).reshape(-1).contiguous()
-  scales = qscales.reshape(m, k // (Q8_1_BLOCK_ELEMS * 4), 4).permute(1, 0, 2).reshape(-1).contiguous()
-  sums = x_f32.reshape(m, k // (Q8_1_BLOCK_ELEMS * 4), 4, Q8_1_BLOCK_ELEMS).sum(axis=3).permute(1, 0, 2).reshape(-1).contiguous()
+  values = qvalues.reshape(m, k // packed_elements, groups, group_elements).permute(1, 0, 2, 3).reshape(-1).contiguous()
+  scales = qscales.reshape(m, k // packed_elements, groups).permute(1, 0, 2).reshape(-1).contiguous()
+  weighted = qvalues.reshape(m, k // packed_elements, groups, group_elements).cast(dtypes.float32) * \
+    qscales.reshape(m, k // packed_elements, groups, 1).expand(m, k // packed_elements, groups, group_elements)
+  sums = weighted.sum(axis=3).permute(1, 0, 2).reshape(-1).contiguous()
   return values, scales, sums
 
 
@@ -65,10 +72,12 @@ def emit_q4k_q8_mmq_ds4(words: Tensor, q8_values: Tensor, q8_scales: Tensor,
                          q8_sums: Tensor, candidate: MMQCandidate) -> Tensor:
   """Emit one descriptor-shaped packed DS4 output tensor."""
   m, n, k = _validate_candidate(candidate)
-  expected_words = n * (k // Q4_K_BLOCK_ELEMS) * Q4K_WORDS_PER_BLOCK
+  q4 = candidate.descriptor.q4k
+  q8 = candidate.descriptor.q8
+  expected_words = n * (k // q4.block_elements) * (q4.metadata_words + q4.packed_words)
   if tuple(words.shape) != (expected_words,): raise ValueError(f"words shape must be {(expected_words,)}, got {tuple(words.shape)}")
   if tuple(q8_values.shape) != (m * k,): raise ValueError(f"q8 values must be flat with {m*k} elements")
-  expected_meta = (m * k) // Q8_1_BLOCK_ELEMS
+  expected_meta = (m * k) // q8.block_elements
   if tuple(q8_scales.shape) != (expected_meta,) or tuple(q8_sums.shape) != (expected_meta,):
     raise ValueError(f"q8 metadata must be flat with {expected_meta} elements")
   if not (words.dtype == dtypes.uint32 and q8_values.dtype == dtypes.int8 and
@@ -77,7 +86,7 @@ def emit_q4k_q8_mmq_ds4(words: Tensor, q8_values: Tensor, q8_scales: Tensor,
   if not (words.device == q8_values.device == q8_scales.device == q8_sums.device):
     raise ValueError("DS4 MMQ operands must be on the same device")
   role = str(candidate.descriptor.abi.get("role", "logical_ds4"))
-  fxn = _q4k_q8_1_bounded_ds4_dot4x4_kernel(m, n, k, role, candidate.mapping)
+  fxn = _q4k_q8_1_bounded_ds4_dot4x4_kernel(m, n, k, role, candidate.mapping, candidate.descriptor)
   return Tensor.empty(m, n, dtype=dtypes.float32, device=words.device).custom_kernel(
     words.contiguous(), q8_values.contiguous(), q8_scales.contiguous(), q8_sums.contiguous(), fxn=fxn)[0]
 

@@ -1,7 +1,9 @@
+from dataclasses import replace
 import numpy as np
 import pytest
 from tinygrad import Tensor, dtypes
 
+from extra.qk.layout import q8_1_quantize
 from extra.qk.mmq_ds4_logical_emitter import pack_q8_1_mmq_ds4
 from extra.qk.q4k_q8_mmq_prefill_spec import Q4KQ8MMQPrefillSpec
 
@@ -31,6 +33,30 @@ def test_q8_ds4_packer_uses_candidate_axes_and_flat_abi():
   assert scales.shape == sums.shape == (16 * 8,)
   assert values.dtype == dtypes.int8
   assert np.isfinite(scales.numpy()).all() and np.isfinite(sums.numpy()).all()
+
+
+def test_q8_ds4_packer_supplies_weighted_dequantized_sums():
+  candidate = _spec().packed_ds4_logical_candidate()
+  x = Tensor(np.random.default_rng(77).standard_normal((16, 256)).astype(np.float32))
+  values, scales, sums = pack_q8_1_mmq_ds4(x, candidate)
+  qvalues, qscales = q8_1_quantize(x.cast(dtypes.float32))
+  q8 = candidate.descriptor.q8
+  expected = (qvalues.reshape(16, 256 // q8.packed_block_elements, q8.groups_per_packed_block, q8.block_elements).cast(dtypes.float32) *
+              qscales.reshape(16, 256 // q8.packed_block_elements, q8.groups_per_packed_block, 1).expand(
+                16, 256 // q8.packed_block_elements, q8.groups_per_packed_block, q8.block_elements)).sum(axis=3).permute(1, 0, 2).reshape(-1)
+  np.testing.assert_allclose(sums.numpy(), expected.numpy(), rtol=0, atol=0)
+  np.testing.assert_array_equal(values.numpy(), qvalues.reshape(16, 256 // q8.packed_block_elements, q8.groups_per_packed_block,
+                                                               q8.block_elements).permute(1, 0, 2, 3).reshape(-1).numpy())
+  np.testing.assert_allclose(scales.numpy(), qscales.reshape(16, 256 // q8.packed_block_elements,
+                                                             q8.groups_per_packed_block).permute(1, 0, 2).reshape(-1).numpy(), rtol=0, atol=0)
+
+
+def test_packed_ds4_packer_rejects_unsupported_descriptor_geometry():
+  candidate = _spec().packed_ds4_logical_candidate()
+  bad_q4 = replace(candidate.descriptor.q4k, metadata_words=3)
+  bad = replace(candidate, descriptor=replace(candidate.descriptor, q4k=bad_q4))
+  with pytest.raises(ValueError, match="canonical Q4_K"):
+    pack_q8_1_mmq_ds4(Tensor.zeros((16, 256)), bad)
 
 
 def test_packed_ds4_packer_rejects_scheduler_candidate():
