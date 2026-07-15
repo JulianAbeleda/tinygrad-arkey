@@ -508,12 +508,14 @@ def _q4k_q8_1_bounded_ds4_dot4x4_kernel(m:int, n:int, k:int, role:str,
     for grp in range(q4_groups):
       d, dmin, sc, mn = _q4k_group_params(words, base, grp)
       qpack = _q4k_group_qpack_lane4(words, base, grp, lane4, q4_metadata_words, group_pair_words)
-      ds4_block = blk * q4_blocks_per_ds4 + (grp // (q4_groups // q4_blocks_per_ds4))
-      ds4_group = grp % q8_groups_per_packed
-      q8_idx = ((ds4_block * m + bb) * q8_packed_elements + ds4_group * q8_group_elements + lane4 * lane_pack
-                if storage == "ds4" else bb * k + ds4_block * q8_packed_elements + ds4_group * q8_group_elements + lane4 * lane_pack)
-      meta_idx = ((ds4_block * m + bb) * q8_groups_per_packed + ds4_group
-                  if storage == "ds4" else bb * (k // q8_group_elements) + ds4_block * q8_groups_per_packed + ds4_group)
+      if storage == "ds4":
+        ds4_block = blk * q4_blocks_per_ds4 + (grp // (q4_groups // q4_blocks_per_ds4))
+        ds4_group = grp % q8_groups_per_packed
+        q8_idx = (ds4_block * m + bb) * q8_packed_elements + ds4_group * q8_group_elements + lane4 * lane_pack
+        meta_idx = (ds4_block * m + bb) * q8_groups_per_packed + ds4_group
+      else:
+        q8_idx = bb * k + blk * q4_block_elements + grp * q8_group_elements + lane4 * lane_pack
+        meta_idx = bb * (k // q8_group_elements) + blk * q4_groups + grp
       if storage == "row_major_replicated": meta_idx = meta_idx * q8_group_elements
       xpack = _pack_q8x4(q8_values, q8_idx)
       dot_q = _sudot4(qpack, xpack).cast(dtypes.float32)
@@ -524,8 +526,8 @@ def _q4k_q8_1_bounded_ds4_dot4x4_kernel(m:int, n:int, k:int, role:str,
     acc = UOp.placeholder((1,), dtypes.float32, 70, addrspace=AddrSpace.REG)
     acc = acc.after(acc[0].store(0.0))
     acc = acc.after(acc[0].store(acc.after(blk)[0] + contrib).end(blk))
-    total = warp_reduce_sum(acc[0], lane, lane_group_width)
-    return out[bb, row].store(total).sink(arg=KernelInfo(name=name, opts_to_apply=()))
+    total = _owner_safe_warp_reduce_sum(acc[0], lane, lane_group_width)
+    return out[bb, row].store(total, lane4.eq(MMQ_WRITEBACK_OWNER_LANE)).sink(arg=KernelInfo(name=name, opts_to_apply=()))
 
   return kernel
 

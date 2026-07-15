@@ -367,3 +367,26 @@ selectable route. The next implementation must either teach the generated
 lowering a legal shared-reduction/vector-accumulator form or use a different
 tile ownership decomposition; the current one-wave candidate is not claimed
 to be beyond parity.
+
+## 2026-07-15 descriptor hot-loop continuation
+
+The row-major atom now selects its activation indices directly from the
+descriptor's Q4 block and Q8 group axes; it no longer constructs DS4 block and
+group remaps on a row-major candidate. The same atom also lowers the declared
+exactly-one-owner writeback contract: subgroup reduction is staged before the
+lane-0 store gate. The row-major and canonical DS4 canaries remain numerically
+identical, with the focused MMQ slice passing.
+
+At `(512,512,5120)`, the warmed row-major contraction moved from about `5.28`
+ms to `5.04` ms before ownership gating; the descriptor-correct owner-gated
+version measured about `5.16` ms. The exact current-tree mixed-quant smoke was
+`6.08 s` (`84 tok/s`) versus `4.87 s` (`105 tok/s`) for direct-packed in the
+same session. The descriptor cleanup is retained, but it remains below parity
+and the route stays default-off.
+
+The scheduler/UPCAST probe was also fail-closed: attaching the direct route's
+local axes to the custom-kernel graph rejected the range contract, and a
+standalone UPCAST attempt rejected the generated packed-dot accumulator during
+UOp verification. No scheduler assumptions were promoted into the descriptor
+path. The remaining beyond-parity owner is a legal generated tile/reuse
+lowering, not another unverified ABI shortcut.
