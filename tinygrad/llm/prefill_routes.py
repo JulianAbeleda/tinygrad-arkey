@@ -15,6 +15,7 @@ LM_HEAD_PREFILL_ROUTE_CHOICES = ("lazy", "resident_fp16", "direct_packed")
 # Handwritten sdot4/MMQ/Q8_1-GEMM prefill research modes deleted 2026-07-06 (no backups; dead end ~237 tok/s).
 # Only the generated int8-WMMA parity substrates remain selectable; off-values fall to the direct-packed default.
 Q4K_Q8_CHOICES = ("", "0", "false", "off", "no", "wmma", "wmma_tiled", "packed_ds4")
+_MMQ_DS4_LAST_PACKED: tuple[Any, tuple[Tensor, Tensor, Tensor]] | None = None
 
 
 def _env(key:str, default:Any=0) -> Any:
@@ -335,6 +336,7 @@ def _direct_packed_spec(lin, x:Tensor) -> PrefillLinearRouteSpec | None:
 
 
 def route_direct_packed_prefill(lin, x:Tensor) -> Tensor | None:
+  global _MMQ_DS4_LAST_PACKED
   spec = _direct_packed_spec(lin, x)
   if spec is None: return None
   x_batch = x[0].cast(dtypes.float16).contiguous()
@@ -374,7 +376,13 @@ def route_direct_packed_prefill(lin, x:Tensor) -> Tensor | None:
         return out.reshape(1, spec.m, spec.n)
       if q8_mode == "packed_ds4":
         candidate = qk_ops.packed_ds4_candidate(spec.m, spec.n, spec.k, role=role)
-        values, scales, sums = qk_ops.pack_q8_1_mmq_ds4(x_batch.reshape(spec.m, spec.k), candidate)
+        source = x_batch.reshape(spec.m, spec.k)
+        cache_key = (getattr(x, "uop", x), spec.m, spec.k, str(x.device))
+        if _MMQ_DS4_LAST_PACKED is not None and _MMQ_DS4_LAST_PACKED[0] == cache_key:
+          values, scales, sums = _MMQ_DS4_LAST_PACKED[1]
+        else:
+          values, scales, sums = qk_ops.pack_q8_1_mmq_ds4(source, candidate)
+          _MMQ_DS4_LAST_PACKED = (cache_key, (values, scales, sums))
         out = qk_ops.emit_q4k_q8_mmq_ds4(words, values, scales, sums, candidate)
         return out.reshape(1, spec.m, spec.n)
       raise RuntimeError(f"PREFILL_Q4K_Q8={q8_mode!r} matched no generated route; the handwritten sdot4/MMQ/Q8_1-GEMM "

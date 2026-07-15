@@ -293,4 +293,8 @@ execution and route census, but it is below whole-model parity. On the same
 real Q4 tensors, the direct kernel is about `6.1 ms` while packed DS4 including
 Q8 preparation is about `13.2 ms`; the next owning layer is therefore a fused
 Q8 producer with a new physical ownership proof. The opt-in route remains
-default-off and no promotion is claimed.
+default-off and no promotion is claimed. A one-entry graph-identity cache
+reuses the packed activation for adjacent FFN gate/up consumers; the repeat
+smoke improved to `9.85 s` (`51.96 tok/s`), but remains below the `9.43 s`
+direct-packed smoke. The cache is therefore an aggregate mitigation, not a
+parity result.

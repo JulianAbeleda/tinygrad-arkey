@@ -433,6 +433,19 @@ def test_q4_packed_ds4_route_consumes_shared_candidate_and_packer(monkeypatch):
   assert [entry[0] for entry in calls] == ["candidate", "pack", "emit"]
 
 
+def test_q4_packed_ds4_reuses_only_the_immediately_shared_activation(monkeypatch):
+  from tinygrad.llm import prefill_routes
+  os.environ["PREFILL_Q4K_Q8"] = "packed_ds4"
+  calls = []
+  monkeypatch.setattr(prefill_routes.qk_ops, "packed_ds4_candidate", lambda *args, **kwargs: "candidate")
+  monkeypatch.setattr(prefill_routes.qk_ops, "pack_q8_1_mmq_ds4", lambda *args, **kwargs: calls.append("pack") or ("values", "scales", "sums"))
+  monkeypatch.setattr(prefill_routes.qk_ops, "emit_q4k_q8_mmq_ds4", lambda *args, **kwargs: _PrefillTensorStub())
+  x = _PrefillTensorStub()
+  prefill_routes.route_direct_packed_prefill(_q4_prefill_linear(), x)
+  prefill_routes.route_direct_packed_prefill(_q4_prefill_linear(), x)
+  assert calls == ["pack"]
+
+
 def test_q6_direct_packed_prefill_default_uses_generated_descriptor(monkeypatch):
   from tinygrad.llm import prefill_routes
 
