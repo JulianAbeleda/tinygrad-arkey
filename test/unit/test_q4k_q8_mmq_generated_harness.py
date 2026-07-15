@@ -3,7 +3,7 @@ import json
 import numpy as np
 import pytest
 import extra.qk.q4k_q8_mmq_generated_harness as harness
-from extra.qk.q4k_q8_mmq_generated_harness import _coverage, PROVENANCE
+from extra.qk.q4k_q8_mmq_generated_harness import _coverage, PROVENANCE, _validate_final_contract
 from extra.qk.q4k_q8_mmq_prefill_spec import Q4KQ8MMQPrefillSpec
 
 def _spec():
@@ -37,3 +37,34 @@ def test_bootstrap_rejects_noncanonical_abi(tmp_path):
   path.write_text(json.dumps(payload))
   with pytest.raises(ValueError, match="ABI is unsupported"):
     harness.bootstrap_from_file(path)
+
+def test_final_contract_never_infers_geometry_without_shared_candidate():
+  with pytest.raises(ValueError, match="shared logical candidate"):
+    _validate_final_contract(_spec(), {"abi": _spec().abi.to_json(),
+      "geometry": {"global_size": [1, 1, 1], "local_size": [64, 1, 1]},
+      "physical_contract": {}}, None)
+
+def test_bootstrap_requires_matching_logical_candidate(tmp_path):
+  payload = {"spec": _spec().to_json()}
+  path = tmp_path / "bootstrap.json"; path.write_text(json.dumps(payload))
+  with pytest.raises(ValueError, match="shared logical candidate"):
+    harness.bootstrap_from_file(path)
+
+def test_bootstrap_rejects_logical_candidate_identity_mismatch(tmp_path):
+  spec = _spec(); logical = spec.logical_candidate()
+  candidate = logical.to_dict()
+  payload = {"spec": spec.to_json(), "logical_candidate": candidate,
+             "candidate_identity": "wrong"}
+  path = tmp_path / "bootstrap.json"; path.write_text(json.dumps(payload))
+  with pytest.raises(ValueError, match="identity mismatch"):
+    harness.bootstrap_from_file(path)
+
+@pytest.mark.parametrize("evidence", [
+  {"abi": _spec().abi.to_json(), "geometry": {"global_size": [1], "local_size": [1]},
+   "physical_contract": {"local_size": [1], "consumed_local_dims": [0], "lane_map": {"lane": "lidx0"},
+     "barriers": [], "owners": [], "expected_outputs": []}},
+])
+def test_final_contract_requires_artifact_identity(evidence):
+  candidate = _spec().logical_candidate()
+  with pytest.raises(ValueError, match="source/binary identity"):
+    _validate_final_contract(_spec(), evidence, candidate)

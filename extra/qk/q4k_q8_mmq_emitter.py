@@ -6,6 +6,9 @@ does not contain a schedule, route, or ISA implementation.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Literal
+
 from tinygrad import Tensor, dtypes
 
 from extra.qk.layout import Q4K_WORDS_PER_BLOCK, Q4_K_BLOCK_ELEMS, Q8_1_BLOCK_ELEMS
@@ -14,12 +17,77 @@ from extra.qk.prefill_int8_wmma_spec import (
   Q4KInt8WMMAPrefillSpec, emit_q4k_int8_wmma_prefill_tensor,
   Q4KInt8WMMATiledPrefillSpec, emit_q4k_int8_wmma_tiled_lifecycle_tensor,
 )
+from extra.qk.mmq_logical_vocabulary import MMQCandidate
+
+
+@dataclass(frozen=True)
+class MMQEmitterCandidate:
+  """The logical-to-generated lowering choices owned by a candidate.
+
+  This is deliberately a small boundary until the shared logical vocabulary
+  lands.  Nothing below the boundary is allowed to infer geometry, layout,
+  staging, or lifecycle from workload shape.
+  """
+  spec: Q4KQ8MMQPrefillSpec
+  wmma_m: int
+  wmma_n: int
+  wmma_k: int
+  lifecycle: Literal["tiled", "group"]
+  output_layout: str
+  activation_layout: str
+  tile_x_layout: str
+  tile_y_layout: str
+  staging_strategy: str
+  writeback_strategy: str
+
+  def validate(self) -> None:
+    self.spec.validate()
+    if min(self.wmma_m, self.wmma_n, self.wmma_k) <= 0:
+      raise ValueError("candidate WMMA dimensions must be positive")
+    if self.lifecycle not in ("tiled", "group"):
+      raise ValueError(f"unsupported MMQ lifecycle {self.lifecycle!r}")
+    if self.output_layout != self.spec.output_layout:
+      raise ValueError("candidate output layout does not match descriptor")
+    if (self.activation_layout, self.tile_x_layout, self.tile_y_layout) != (self.spec.activation_layout, self.spec.tile_x_layout, self.spec.tile_y_layout):
+      raise ValueError("candidate layouts do not match descriptor")
+    if (self.staging_strategy, self.writeback_strategy) != (self.spec.staging_strategy, self.spec.writeback_strategy):
+      raise ValueError("candidate lifecycle policy does not match descriptor")
+    if self.lifecycle == "tiled" and (self.spec.m % self.wmma_m or self.spec.n % self.wmma_n):
+      raise ValueError("candidate shape is not divisible by declared WMMA geometry")
+
+
+def _from_logical(candidate: MMQCandidate) -> MMQEmitterCandidate:
+  d, mapping = candidate.descriptor, candidate.mapping
+  if candidate.capability.backend != "amd" or mapping.wave_size not in candidate.capability.wave_sizes:
+    raise ValueError("shared MMQ candidate capability does not cover its mapping")
+  if candidate.capability.max_workgroup_size is not None and mapping.workgroup_size > candidate.capability.max_workgroup_size:
+    raise ValueError("shared MMQ candidate workgroup exceeds capability")
+  if d.operation.name not in candidate.capability.supported_ops:
+    raise ValueError("shared MMQ candidate operation is not supported by capability")
+  axes = {axis.name: axis for axis in d.axes}
+  role = str(d.abi.get("role", "test"))
+  spec = Q4KQ8MMQPrefillSpec("logical_mmq", "logical", role, "Q4_K", "Q8_1", "q4k",
+    str(d.abi.get("output_layout", "")), axes["m"].extent, axes["n"].extent, axes["k"].extent,
+    tile_m=axes["m"].tile, tile_n=axes["n"].tile, tile_k=axes["k"].tile,
+    wave_width=mapping.wave_size, workgroup_size=mapping.workgroup_size,
+    activation_layout="q8_1_ds4", tile_x_layout="tokens_k", tile_y_layout="rows_k",
+    staging_strategy="register" if d.staging.activations == d.staging.weights else "lds",
+    writeback_strategy="owner", lds_bytes=0)
+  wm, wn, wk = mapping.wmma_shape
+  return MMQEmitterCandidate(spec, wm, wn, wk, mapping.lifecycle, spec.output_layout,
+    spec.activation_layout, spec.tile_x_layout, spec.tile_y_layout,
+    spec.staging_strategy, spec.writeback_strategy)
 
 
 def emit_q4k_q8_mmq_prefill(words: Tensor, xq: Tensor, xscales: Tensor,
-                            spec: Q4KQ8MMQPrefillSpec) -> Tensor:
+                            candidate: MMQCandidate | MMQEmitterCandidate) -> Tensor:
   """Emit the descriptor-shaped graph without compiling or dispatching it."""
-  spec.validate()
+  if isinstance(candidate, MMQCandidate):
+    candidate = _from_logical(candidate)
+  if not isinstance(candidate, MMQEmitterCandidate):
+    raise TypeError("MMQ emitter requires an MMQEmitterCandidate")
+  candidate.validate()
+  spec = candidate.spec
   if spec.output_layout != "tokens_rows":
     raise ValueError("MMQ lowering only emits the canonical tokens_rows ABI layout")
   if any(size % tile for size, tile in ((spec.m, spec.tile_m), (spec.n, spec.tile_n),
@@ -40,8 +108,9 @@ def emit_q4k_q8_mmq_prefill(words: Tensor, xq: Tensor, xscales: Tensor,
 
   # Use the generated tiled lifecycle whenever the candidate describes WMMA
   # tiles.  All tile/group ownership remains data in the translated spec.
-  if spec.m % 16 == 0 and spec.n % 16 == 0 and spec.tile_m % 16 == 0 and spec.tile_n % 16 == 0:
+  if candidate.lifecycle == "tiled":
     tiled = Q4KInt8WMMATiledPrefillSpec(n=spec.n, k=spec.k, m=spec.m, role=spec.role,
+      wmma_m=candidate.wmma_m, wmma_n=candidate.wmma_n, wmma_k=candidate.wmma_k,
       m_tile=spec.tile_m, n_tile=spec.tile_n, group_tile=spec.tile_k // Q8_1_BLOCK_ELEMS)
     return emit_q4k_int8_wmma_tiled_lifecycle_tensor(words.contiguous(), xq.contiguous(),
                                                        xscales.contiguous(), tiled)
@@ -49,10 +118,10 @@ def emit_q4k_q8_mmq_prefill(words: Tensor, xq: Tensor, xscales: Tensor,
   # Small graph/oracle shapes still use the same generated primitive, without
   # inventing a vector pointer base or a backend schedule.
   generated = Q4KInt8WMMAPrefillSpec(n=spec.n, k=spec.k, m=spec.m, role=spec.role,
-                                     wmma_m=spec.m if spec.m < 16 else 16,
-                                     wmma_n=16, wmma_k=16, n_tile=max(16, spec.tile_n))
+                                     wmma_m=candidate.wmma_m, wmma_n=candidate.wmma_n,
+                                     wmma_k=candidate.wmma_k, n_tile=spec.tile_n)
   return emit_q4k_int8_wmma_prefill_tensor(words.contiguous(), xq.contiguous(),
                                            xscales.contiguous(), generated, vectorized=False)
 
 
-__all__ = ["Q4KQ8MMQPrefillSpec", "emit_q4k_q8_mmq_prefill"]
+__all__ = ["MMQEmitterCandidate", "Q4KQ8MMQPrefillSpec", "emit_q4k_q8_mmq_prefill"]

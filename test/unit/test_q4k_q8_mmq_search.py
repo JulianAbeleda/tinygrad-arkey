@@ -19,6 +19,8 @@ def test_rejects_resources_and_runs_correctness_before_timing_in_one_session():
   class Session:
     def prepare(self, descriptor): events.append(("prepare", descriptor.axes)); return descriptor
     def check_correctness(self, prepared): events.append("correctness"); return {"passed": prepared.axes["ok"]}
+    def evidence_gate(self, prepared, correctness):
+      return {"timing_allowed": correctness["passed"], "promotion_eligible": correctness["passed"], "blockers": []}
     def measure(self, prepared, **kwargs):
       events.append("candidate_timing"); return {"min_ms": 2.0}
     def measure_direct_packed(self, **kwargs):

@@ -2,18 +2,20 @@
 from __future__ import annotations
 from dataclasses import dataclass
 import numpy as np
-from extra.qk.layout import Q4K_WORDS_PER_BLOCK, Q4_K_BLOCK_ELEMS, Q8_1_BLOCK_ELEMS
+from extra.qk.layout import Q4K_WORDS_PER_BLOCK, Q4_K_BLOCK_ELEMS, Q8_1_BLOCK_ELEMS, Q8_1_SCALE_DTYPE, Q8_1_SUM_DTYPE
 
 @dataclass(frozen=True)
 class Q4KQ8MMQABI:
   q4_words_per_block: int = Q4K_WORDS_PER_BLOCK
   q8_values_per_block: int = Q8_1_BLOCK_ELEMS
-  q8_scale_dtype: str = "float32"
-  q8_sum_dtype: str = "float32"
-  def validate(self, words: np.ndarray, values: np.ndarray, scales: np.ndarray, sums: np.ndarray, *, k: int, n: int) -> None:
+  q8_scale_dtype: str = Q8_1_SCALE_DTYPE
+  q8_sum_dtype: str = Q8_1_SUM_DTYPE
+  q8_sums_policy: str = "supplied_or_derived"
+  def validate(self, words: np.ndarray, values: np.ndarray, scales: np.ndarray, sums: np.ndarray, *, m: int, n: int, k: int) -> None:
     if not isinstance(k, int) or not isinstance(n, int) or k <= 0 or k % Q4_K_BLOCK_ELEMS: raise ValueError("K must be a positive Q4_K-block-aligned integer")
+    if not isinstance(m, int) or m <= 0: raise ValueError("M must be a positive integer")
     if n <= 0: raise ValueError("N must be a positive integer")
-    blocks = n * (k // Q4_K_BLOCK_ELEMS); groups = n * (k // Q8_1_BLOCK_ELEMS)
+    blocks = n * (k // Q4_K_BLOCK_ELEMS); groups = m * (k // Q8_1_BLOCK_ELEMS)
     expected = ((words, blocks * self.q4_words_per_block, "Q4 ABI requires"),
                 (values, groups * self.q8_values_per_block, "Q8 ABI requires"),
                 (scales, groups, "Q8 ABI requires"), (sums, groups, "Q8 ABI requires"))

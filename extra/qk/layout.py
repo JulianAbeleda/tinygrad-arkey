@@ -11,6 +11,12 @@ from tinygrad.llm.gguf import ggml_data_to_tensor
 from tinygrad.llm.qk_layout import (GGML_Q4_K, GGML_Q6_K, QK_BLOCK_ELEMS, Q4_K_BLOCK_ELEMS, Q4_K_BLOCK_BYTES,
   Q4K_WORDS_PER_BLOCK, Q6_K_BLOCK_ELEMS, Q6_K_BLOCK_BYTES, Q6K_HALFWORDS_PER_BLOCK, Q8_1_BLOCK_ELEMS)
 
+# Canonical Q8_1 logical geometry shared by ABI and reference helpers.
+Q8_1_SCALE_DTYPE = "float32"
+Q8_1_SUM_DTYPE = "float32"
+Q8_1_MMQ_GROUPS_PER_BLOCK = 4
+Q8_1_MMQ_BLOCK_ELEMS = Q8_1_BLOCK_ELEMS * Q8_1_MMQ_GROUPS_PER_BLOCK
+
 _QUANT_BYTES = {GGML_Q4_K: Q4_K_BLOCK_BYTES, GGML_Q6_K: Q6_K_BLOCK_BYTES}
 _FORMAT_NAMES = {GGML_Q4_K: "Q4_K", GGML_Q6_K: "Q6_K"}
 

@@ -4,6 +4,7 @@ import pytest
 from extra.qk.mmq_regression import (validate_generated_mmq_abi, vector_pointer_bases, reject_vector_pointer_bases,
                                      validate_mmq_candidate_evidence_gate)
 from extra.qk.q4k_q8_mmq_prefill_spec import Q4KQ8MMQPrefillSpec, enumerate_q4k_q8_mmq_candidates
+from extra.qk.q4k_q8_mmq_emitter import MMQEmitterCandidate
 
 
 def _spec(**kw):
@@ -12,6 +13,11 @@ def _spec(**kw):
                 m=16, n=32, k=256, tile_m=16, tile_n=16, tile_k=256)
   fields.update(kw)
   return Q4KQ8MMQPrefillSpec(**fields)
+
+def _candidate(spec):
+  return MMQEmitterCandidate(spec, min(spec.m, 16), min(spec.n, 16), 16, "group", spec.output_layout,
+                             spec.activation_layout, spec.tile_x_layout, spec.tile_y_layout,
+                             spec.staging_strategy, spec.writeback_strategy)
 
 
 def test_generated_mmq_abi_is_exact_q4_words_q8_values_scales_and_sums():
@@ -36,7 +42,7 @@ def test_smallest_emitter_graph_exposes_pre_late_vector_pointer_bases():
   from extra.qk.q4k_q8_mmq_emitter import emit_q4k_q8_mmq_prefill
   spec = _spec(m=8, n=16, tile_m=8, tile_n=16)
   out = emit_q4k_q8_mmq_prefill(Tensor.zeros(16 * 36, dtype=dtypes.uint32), Tensor.zeros((8, 256), dtype=dtypes.int8),
-                                Tensor.ones((8, 8), dtype=dtypes.float32), spec)
+                                Tensor.ones((8, 8), dtype=dtypes.float32), _candidate(spec))
   assert out.shape == (8, 16)
 
 

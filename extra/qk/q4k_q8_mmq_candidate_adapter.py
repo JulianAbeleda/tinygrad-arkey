@@ -15,6 +15,7 @@ from extra.qk.q4k_q8_mmq_generated_harness import validate_generated_candidate
 from extra.qk.q4k_q8_mmq_prefill_spec import Q4KQ8MMQPrefillSpec
 from extra.qk.q4k_q8_mmq_search import MMQDescriptor, SearchPolicy, run_search
 from extra.qk.mmq_capability import MMQHardwareCapability, MMQRequest, GFX11_MMQ_CAPABILITY
+from extra.qk.mmq_regression import validate_mmq_candidate_evidence_gate
 
 BLOCKED_FAIL_CLOSED = "BLOCKED_FAIL_CLOSED"
 
@@ -55,9 +56,11 @@ class CandidateSession:
   def check_correctness(self, prepared: Mapping[str, Any]) -> Mapping[str, Any]:
     descriptor, spec = prepared["descriptor"], prepared["spec"]
     try:
+      logical_candidate = spec.logical_candidate()
       evidence = dict(self.validator(self.words, self.xq, self.scales, self.reference, spec,
                                      timeout_seconds=self.timeout_seconds,
-                                     candidate_id=descriptor.candidate_id))
+                                     candidate_id=logical_candidate.identity(),
+                                     logical_candidate=logical_candidate.to_dict()))
     except BaseException as exc:
       return {"passed": False, "verdict": BLOCKED_FAIL_CLOSED,
               "blocker": f"{type(exc).__name__}: {exc}", "candidate_id": descriptor.candidate_id}
@@ -81,6 +84,22 @@ class CandidateSession:
     except BaseException as exc:
       return {"passed": False, "verdict": BLOCKED_FAIL_CLOSED, "min_ms": None,
               "blocker": f"{type(exc).__name__}: {exc}"}
+
+  def evidence_gate(self, prepared: Mapping[str, Any], correctness: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Translate guarded-run evidence into the mandatory pre-timing gate."""
+    guarded = correctness.get("guarded") if isinstance(correctness.get("guarded"), Mapping) else {}
+    compile_evidence = guarded.get("compile_evidence") if isinstance(guarded.get("compile_evidence"), Mapping) else {}
+    identity = {"passed": bool(correctness.get("candidate_identity") and correctness.get("descriptor_identity")
+                                and correctness.get("source_identity") and correctness.get("binary_identity")),
+                "status": "PASS"}
+    resources = {"passed": bool(compile_evidence.get("resources")), "status": "PASS"}
+    guard = {"passed": bool(correctness.get("provenance", {}).get("dispatch_performed")
+                              and guarded.get("full_output_compared")), "status": "PASS"}
+    fallback = {"passed": correctness.get("fallback") is not False, "status": "PASS"}
+    return validate_mmq_candidate_evidence_gate({"correctness": {"passed": correctness.get("passed") is True, "status": "PASS"},
+      "guard": guard, "gpu_health": {"passed": bool(correctness.get("health")), "status": "PASS"},
+      "resources": resources, "identity": identity, "fallback": fallback,
+      "no_fallback": correctness.get("no_fallback") is True})
 
 
 def evaluate_candidates(*, axes: Mapping[str, Any], base_spec: Q4KQ8MMQPrefillSpec,

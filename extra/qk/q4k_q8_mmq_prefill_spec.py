@@ -3,6 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Iterable
 from extra.qk.prefill_primitive_spec import PrefillPrimitiveSpec, PrimitiveABI, LaunchMetadata, target_capabilities
+from extra.qk.mmq_logical_vocabulary import (
+  Axis, BackendCapability, DotOp, EdgePredicate, LogicalMMQDescriptor,
+  MMQCandidate,
+  Operation, Ownership, PhysicalMapping, Q4KDecode, Q8DS4Semantics,
+  Stage, Staging, Synchronization, SyncScope,
+)
 
 _STAGING = ("register", "lds")
 _WRITEBACK = ("owner", "partials")
@@ -20,7 +26,8 @@ class Q4KQ8MMQPrefillSpec(PrefillPrimitiveSpec):
   tile_n: int = 16
   tile_k: int = 256
   wave_width: int = 32
-  workgroup_size: int = 64
+  # Matches the research cooperative probe's (32, 16, 1) topology.
+  workgroup_size: int = 32 * 16
   accumulator_slots: int = 4
   staging_strategy: str = "register"
   writeback_strategy: str = "owner"
@@ -36,7 +43,6 @@ class Q4KQ8MMQPrefillSpec(PrefillPrimitiveSpec):
     caps = target_capabilities(self.target)
     if self.wave_width != caps["wave_width"]: raise ValueError(f"wave width {self.wave_width} is invalid for target {self.target}; expected {caps['wave_width']}")
     if self.workgroup_size > caps["max_workgroup_size"]: raise ValueError("workgroup size exceeds target capability")
-    if self.workgroup_size != 64: raise ValueError("wave/workgroup size is not lowered; only workgroup 64 is supported")
     if self.workgroup_size % self.wave_width or self.workgroup_size // self.wave_width > 16: raise ValueError("invalid wave/workgroup mapping")
     if self.staging_strategy not in _STAGING or self.writeback_strategy not in _WRITEBACK: raise ValueError("unsupported staging/writeback strategy")
     # These are descriptor facts only until a corresponding lowering exists.
@@ -44,10 +50,41 @@ class Q4KQ8MMQPrefillSpec(PrefillPrimitiveSpec):
     if self.staging_strategy != "register": raise ValueError("staging_strategy is not lowered; only register is supported")
     if self.writeback_strategy != "owner": raise ValueError("writeback_strategy is not lowered; only owner is supported")
     if self.abi != PrimitiveABI(): raise ValueError("ABI variant is not lowered; only the canonical MMQ ABI is supported")
-    if self.schedule_options: raise ValueError("schedule_options are not lowered; use the typed MMQ geometry fields")
+    if self.schedule_options: raise ValueError("unsupported schedule_options: MMQ lowering is not implemented")
+    if self.launch is not None and self.launch.workgroup_size != self.workgroup_size:
+      raise ValueError("launch wave/workgroup does not match MMQ workgroup_size")
     if self.tile_k % self.q4k_group_size or self.tile_k % self.q8_block_size: raise ValueError("tile_k violates quantization alignment")
     if self.lds_bytes < 0 or self.lds_bytes > 64 * 1024: raise ValueError("LDS budget exceeded")
     if self.writeback_strategy == "owner" and self.parts != 1: raise ValueError("owner writeback requires parts==1")
+
+  def logical_descriptor(self) -> LogicalMMQDescriptor:
+    """Return the backend-neutral MMQ meaning represented by this candidate."""
+    self.validate()
+    return LogicalMMQDescriptor(
+      axes=(Axis("m", self.m, self.tile_m), Axis("n", self.n, self.tile_n),
+            Axis("k", self.k, self.tile_k), Axis("group", self.k // self.q4k_group_size),
+            Axis("activation_block", self.k // self.q8_block_size)),
+      q4k=Q4KDecode(block_elements=self.q4k_group_size * 8),
+      q8=Q8DS4Semantics(block_elements=self.q8_block_size),
+      operation=Operation(DotOp.WMMA_I8_I8_I32),
+      staging=Staging(weights=Stage.DIRECT, activations=Stage.DIRECT, accumulator=Stage.REGISTERS),
+      synchronization=Synchronization(scope=SyncScope.NONE),
+      ownership=Ownership(),
+      edge_predicates=(EdgePredicate("m"), EdgePredicate("n"), EdgePredicate("k")),
+      abi={"output_layout": self.output_layout},
+    )
+
+  def logical_candidate(self) -> MMQCandidate:
+    """Project this research descriptor into the shared logical contract."""
+    descriptor = self.logical_descriptor()
+    mapping = PhysicalMapping(self.wave_width, self.workgroup_size,
+                              wmma_shape=(self.tile_m, self.tile_n, min(self.tile_k, 16)))
+    capability = BackendCapability(
+      "amd", self.target, supported_ops=(DotOp.WMMA_I8_I8_I32,),
+      wave_sizes=(self.wave_width,),
+      max_workgroup_size=target_capabilities(self.target)["max_workgroup_size"],
+      lds_bytes=64 * 1024)
+    return MMQCandidate(descriptor, mapping, capability)
 
   def to_json(self) -> dict[str, Any]:
     d = super().to_json(); d["mmq"] = {k: getattr(self, k) for k in ("q4k_group_size","q8_block_size","activation_layout","tile_x_layout","tile_y_layout","tile_m","tile_n","tile_k","wave_width","workgroup_size","accumulator_slots","staging_strategy","writeback_strategy","lds_bytes")}; return d

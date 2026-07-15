@@ -53,6 +53,10 @@ def build_q4k_q8_mmq_compile_evidence(spec: Any, program: Any, *, metadata: Mapp
   if not global_size or not local_size: errors.append("program launch geometry unavailable")
   if not function_name: errors.append("program function identity unavailable")
   metadata = dict(metadata) if isinstance(metadata, Mapping) else {}
+  lowering = metadata.get("lowering") or metadata.get("lowering_strategy")
+  backend = metadata.get("backend") or metadata.get("target", {}).get("backend") if isinstance(metadata.get("target"), Mapping) else metadata.get("backend")
+  if not isinstance(lowering, str) or not lowering: errors.append("lowering provenance unavailable")
+  if not isinstance(backend, str) or not backend: errors.append("backend provenance unavailable")
   # Emitters commonly wrap compiler facts under ``resources`` and launch facts
   # under ``launch``.  Flatten only those known containers; retain the original
   # metadata below for provenance.
@@ -75,14 +79,19 @@ def build_q4k_q8_mmq_compile_evidence(spec: Any, program: Any, *, metadata: Mapp
               "binary_sha256": _sha256(binary) if binary is not None else None}
   # Keep the audit vocabulary explicit: these are independent identities, and
   # absent artifacts must never be represented by a route/default identity.
-  candidate_identity = candidate_id or canonical
+  provenance = {"lowering": lowering, "backend": backend,
+                "function_name": function_name, "metadata": _json(metadata)}
+  candidate_identity = {"candidate_id": candidate_id, "descriptor": descriptor,
+                        "descriptor_sha256": canonical, "provenance": provenance,
+                        "lowering": lowering, "backend": backend}
+  if not candidate_id: errors.append("candidate identity unavailable")
   if not candidate_identity: errors.append("candidate identity unavailable")
   if identity["source_sha256"] is None: errors.append("source identity unavailable")
   if identity["binary_sha256"] is None: errors.append("binary identity unavailable")
   abi = descriptor.get("abi") if descriptor else None
   if isinstance(metadata.get("abi"), Mapping): abi = _json(metadata["abi"])
   row = {"schema": SCHEMA, "status": "pass" if not errors else "blocked", "errors": errors,
-         "canonical_identity": canonical, "candidate_id": candidate_identity,
+         "canonical_identity": canonical, "candidate_id": candidate_id,
          "candidate_identity": candidate_identity, "source_identity": identity["source_sha256"],
          "binary_identity": identity["binary_sha256"], "descriptor": descriptor,
          "identity": identity, "function_name": function_name,

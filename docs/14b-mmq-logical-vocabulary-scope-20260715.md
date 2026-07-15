@@ -181,3 +181,52 @@ The scope is complete only when all are true:
 
 If AMD hardware is unavailable, gates 5-7 remain blocked rather than being
 replaced by host-only claims.
+
+## Beyond-parity continuation
+
+The ten gates above establish a valid generated path; they are not the finish
+line. After the first real-AMD canary reaches correctness parity, continue in
+this order:
+
+### P1 — Q4 role coverage
+
+Search and validate independent candidates for `ffn_gate_up`, `ffn_down`,
+`attn_qo`, and `attn_kv`. Each role needs its own full-output correctness,
+physical/resource, identity, and same-session timing evidence. A passing
+`ffn_gate_up` candidate cannot be reused as proof for another role.
+
+### P2 — Q4 aggregate policy
+
+Select one generated policy through the shared route manifest. Measure the
+mixed Q4 route with all required Q8 preparation, packing, reductions, and
+synchronization included. Compare against direct-packed in the same session;
+individual kernel parity is insufficient if aggregate prefill regresses.
+
+### P3 — Q6 vocabulary reuse
+
+Reuse the common axes, staging, ownership, evidence, and route layers for Q6_K,
+but define a separate Q6 decode grammar and reference. Q6 must not materialize
+the full dequantized weight tensor as an unaccounted fallback. Validate Q6 roles
+independently before mixed-quant integration.
+
+### P4 — End-to-end 14B validation
+
+Run the exact mixed-quant Qwen3-14B workload and record prefill tok/s, decode
+tok/s, per-role timings, route census, output/token parity, memory use, Q8
+preparation cost, GPU health, and fallback count. Compare with the authoritative
+direct-packed baseline and the separately defined llama workload measurement.
+
+### P5 — Beyond-parity performance gate
+
+The generated route is beyond parity only when it is reproducibly faster than
+direct-packed on the target role and improves the aggregate 14B prefill result
+under the same measurement definition. Correctness parity, a faster isolated
+contraction that excludes preparation, or a host-only result does not qualify.
+
+### P6 — Promotion and closeout
+
+Only after P1-P5 pass may the route be considered for promotion. Promotion must
+record the machine-generated candidate identity, source/binary identity, final
+resource and launch facts, role policy, rollback route, and reproducible
+end-to-end artifact. Until then, direct-packed remains authoritative and every
+MMQ failure must fail closed to research-only status.

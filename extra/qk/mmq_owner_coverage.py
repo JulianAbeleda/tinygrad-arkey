@@ -161,12 +161,14 @@ def _summarize_store_map(stores: Iterable[ObservedStore], expected_points: set[t
       covered[key] = row
 
   missing = [{"m": m, "n": n} for m, n in sorted(expected_points) if (m, n) not in covered]
+  missing_owner_facts = sum(not store.owner for store in stores)
   return {
     "store_event_count": total,
     "unique_store_count": len(covered),
     "duplicate_store_count": len(duplicates),
     "missing_store_count": len(missing),
     "out_of_tile_store_count": len(out_of_tile),
+    "missing_owner_fact_count": missing_owner_facts,
     "duplicates": duplicates,
     "missing": missing,
     "out_of_tile": out_of_tile,
@@ -225,6 +227,7 @@ def build_mmq_owner_coverage_artifact(
     observed_summary["duplicate_store_count"] != 0 or
     observed_summary["missing_store_count"] != 0 or
     observed_summary["out_of_tile_store_count"] != 0
+    or observed_summary["missing_owner_fact_count"] != 0
   )
   blocker_parts: list[str] = []
   if observed_summary["duplicate_store_count"]:
@@ -233,6 +236,8 @@ def build_mmq_owner_coverage_artifact(
     blocker_parts.append(f"missing_store_count={observed_summary['missing_store_count']}")
   if observed_summary["out_of_tile_store_count"]:
     blocker_parts.append(f"out_of_tile_store_count={observed_summary['out_of_tile_store_count']}")
+  if observed_summary["missing_owner_fact_count"]:
+    blocker_parts.append(f"missing_owner_fact_count={observed_summary['missing_owner_fact_count']}")
 
   return {
     "schema": SCHEMA,
@@ -325,6 +330,8 @@ def validate_mmq_owner_coverage_artifact(artifact: Any) -> dict[str, Any]:
     check_summary("observed_stores", observed, ("store_event_count", "unique_store_count",
                                                   "duplicate_store_count", "missing_store_count",
                                                   "out_of_tile_store_count"))
+    if not isinstance(observed.get("missing_owner_fact_count"), int) or observed["missing_owner_fact_count"] < 0:
+      raise ValueError("observed_stores.missing_owner_fact_count must be a non-negative integer")
     if observed["duplicate_store_count"] != duplicates["count"]:
       raise ValueError("duplicate summary disagrees with observed_stores")
     if observed["missing_store_count"] != missing["count"]:
@@ -335,7 +342,7 @@ def validate_mmq_owner_coverage_artifact(artifact: Any) -> dict[str, Any]:
       raise ValueError("observed unique count disagrees with stores")
     if observed["store_event_count"] < observed["unique_store_count"]:
       raise ValueError("observed store event count cannot be below unique count")
-    failed = any(observed[key] for key in ("duplicate_store_count", "missing_store_count", "out_of_tile_store_count"))
+    failed = any(observed[key] for key in ("duplicate_store_count", "missing_store_count", "out_of_tile_store_count", "missing_owner_fact_count"))
     if (artifact["status"] == "PASS") == failed:
       raise ValueError("status disagrees with observed owner coverage")
   return dict(artifact)

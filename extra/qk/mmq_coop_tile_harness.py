@@ -25,6 +25,7 @@ from extra.qk.prefill.isolated_guarded_executor import (
 )
 from extra.qk.mmq_q4k_q8_reference import Q4KQ81MMQTileSpec
 from tinygrad import Tensor
+from extra.qk.mmq_physical_validation import validate_physical_contract
 
 
 def _health() -> bool:
@@ -57,6 +58,11 @@ def validate_bounded_coop_tile(raw: np.ndarray, ds4: Any, *, timeout_seconds: fl
   # Canonical CPU authority is recorded explicitly and is never called a GPU result.
   reference = q4k_q8_1_mmq_ds4_tile_reference(raw, ds4, spec).astype(np.float32)
   owners = structural_static_store_only_owner_map(spec)
+  physical = validate_physical_contract(local_size=(32, 16, 1), consumed_local_dims=(0,),
+    lane_map={"output_m": "gidx0", "output_n": "gidx1", "lane": "lidx0"},
+    barriers=({"uniform": True, "scope": "workgroup"}, {"uniform": True, "scope": "workgroup"}),
+    owners=({"m": s.m, "n": s.n, "owner": s.owner} for s in owners),
+    expected_outputs=((m, n) for m in range(16) for n in range(16)))
   points = {(x.m, x.n) for x in owners}
   coverage = {"events": len(owners), "unique": len(points), "expected": 256,
               "complete": len(owners) == len(points) == 256 and points == {(m, n) for m in range(16) for n in range(16)}}
@@ -67,6 +73,10 @@ def validate_bounded_coop_tile(raw: np.ndarray, ds4: Any, *, timeout_seconds: fl
   out = run_isolated_guarded_execution(builder=make_tinygrad_bundle_builder(build=_build_emitted_amd_bundle, mode="candidate"),
                                         request=request, health_probe=_health, timeout_seconds=timeout_seconds)
   evidence = out.to_dict()
+  evidence["physical_validation"] = physical
+  if not physical["passed"]:
+    evidence["passed"] = False
+    evidence.setdefault("errors", []).extend(physical["errors"])
   guarded = evidence.get("guarded") or {}
   evidence["reference_authority"] = {"kind": "canonical_cpu", "compared": bool(guarded.get("full_output_compared"))}
   evidence["gpu_kernel_authority"] = {"kind": "emitted_amd_program", "compiled_and_bound": out.dispatch_state not in ("not_attempted", "failed") or bool(guarded.get("dispatch_performed")),
@@ -76,7 +86,9 @@ def validate_bounded_coop_tile(raw: np.ndarray, ds4: Any, *, timeout_seconds: fl
     evidence["passed"] = False
     evidence.setdefault("errors", []).append("GPU correctness requires a dispatched compiled program")
   evidence["owner_coverage"] = coverage
-  evidence["resource_metadata"] = {"lds_bytes": 256, "bounded": True, "program_identity": request.identity["candidate"]}
+  evidence["resource_metadata"] = {"lds_bytes": 256, "bounded": True, "program_identity": request.identity["candidate"],
+                                    "launch_geometry_status": "diagnostic_unvalidated",
+                                    "contradictory_probe": {"status": "FAIL_CLOSED", "reason": "declared workgroup has an unconsumed non-unit local dimension", "diagnostic": True}}
   if out.passed and compare_direct:
     direct = run_q4k_q8_1_mmq_tile_amd(raw, ds4.values, ds4.scales, spec).output
     evidence["direct_packed"] = {"compared": True, "passed": bool(np.allclose(reference, direct, rtol=1e-6, atol=1e-3))}

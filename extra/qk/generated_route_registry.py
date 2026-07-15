@@ -149,10 +149,21 @@ def _required_gates(manifest: dict[str, Any]) -> list[str]:
   gate = str(manifest.get("authority_gate", ""))
   return [part.strip() for part in gate.split(" + ") if part.strip()]
 
+def _validate_registry_evidence(route_id: str, manifest: dict[str, Any]) -> None:
+  """Reject descriptor rows that cannot be audited or admitted safely."""
+  required = ("expected_kernels", "authority_gate", "selector", "route_attribution", "status", "provenance")
+  missing = [key for key in required if not manifest.get(key)]
+  if missing:
+    raise ValueError(f"generated route {route_id!r} has incomplete evidence: missing {', '.join(missing)}")
+  if manifest.get("research_only") and set(_required_gates(manifest)) != {
+      "correctness evidence", "resource evidence", "timing evidence"}:
+    raise ValueError(f"generated route {route_id!r} has incomplete research evidence gates")
+
 
 def _sanitize_row(row: GeneratedRouteDescriptor) -> dict[str, Any]:
   """Return only JSON-safe primitive values."""
   manifest = _manifest(row["route_id"])
+  _validate_registry_evidence(row["route_id"], manifest)
   return {
     "route_id": row["route_id"],
     "descriptor_artifact": row["descriptor_artifact"],

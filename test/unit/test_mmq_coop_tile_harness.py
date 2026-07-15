@@ -23,6 +23,8 @@ def test_bounded_coop_harness_is_fail_closed_without_amd():
   assert evidence["reference_authority"] == {"kind": "canonical_cpu", "compared": False}
   assert evidence["gpu_kernel_authority"]["claimable"] is False
   assert evidence["gpu_kernel_authority"]["dispatch_performed"] is False
+  assert evidence["physical_validation"]["passed"] is False
+  assert any("unused non-unit local dimensions" in e for e in evidence["physical_validation"]["errors"])
 
 
 def test_harness_builds_emitted_program_in_child_not_cpu_atom():

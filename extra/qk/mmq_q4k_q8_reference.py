@@ -15,15 +15,16 @@ import numpy as np
 
 from tinygrad import Tensor
 
-from extra.qk.layout import Q4_K_BLOCK_BYTES, Q4_K_BLOCK_ELEMS, Q8_1_BLOCK_ELEMS, q4_k_reference
+from extra.qk.layout import (Q4_K_BLOCK_BYTES, Q4_K_BLOCK_ELEMS, Q8_1_BLOCK_ELEMS,
+                              Q8_1_MMQ_BLOCK_ELEMS, Q8_1_MMQ_GROUPS_PER_BLOCK, q4_k_reference)
 from extra.qk.q4k_tile_loader import Q4KTileLoadSpec, load_q4k_256_tile
 
 
 Q8_1_MMQ_DS4_LAYOUT = "q8_1_mmq_ds4_transposed_blocks"
 Q8_1_ROW_MAJOR_LAYOUT = "q8_1_row_major_mk_scales_per_32"
 
-Q8_1_MMQ_DS4_BLOCK_ELEMS = 4 * Q8_1_BLOCK_ELEMS
-Q8_1_MMQ_DS4_GROUPS_PER_BLOCK = 4
+Q8_1_MMQ_DS4_BLOCK_ELEMS = Q8_1_MMQ_BLOCK_ELEMS
+Q8_1_MMQ_DS4_GROUPS_PER_BLOCK = Q8_1_MMQ_GROUPS_PER_BLOCK
 Q8_1_MMQ_DS4_VALUES_PER_GROUP = Q8_1_BLOCK_ELEMS
 
 
@@ -428,6 +429,12 @@ def q8_1_mmq_ds4_dequantize_reference(values:np.ndarray, scales:np.ndarray) -> n
   grouped_values = v.reshape(k_blocks, m, Q8_1_MMQ_DS4_GROUPS_PER_BLOCK, Q8_1_MMQ_DS4_VALUES_PER_GROUP)
   deq = grouped_values.astype(np.float32) * s.reshape(k_blocks, m, Q8_1_MMQ_DS4_GROUPS_PER_BLOCK, 1)
   return np.ascontiguousarray(deq.transpose(1, 0, 2, 3).reshape(m, k_blocks * Q8_1_MMQ_DS4_BLOCK_ELEMS))
+
+def q8_1_sums_reference(values:np.ndarray, scales:np.ndarray) -> np.ndarray:
+  """Derive the explicit Q8_1 weighted sums from values and scales."""
+  v, s = _require_q8_1_mmq_ds4_arrays(values, scales)
+  grouped = v.reshape(v.shape[0], v.shape[1], Q8_1_MMQ_GROUPS_PER_BLOCK, Q8_1_BLOCK_ELEMS)
+  return np.ascontiguousarray(grouped.astype(np.float32).sum(axis=3) * s.astype(np.float32))
 
 
 def q4k_q8_1_mmq_tile_reference(q4k_bytes:np.ndarray, xq:np.ndarray, xscales:np.ndarray,

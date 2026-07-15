@@ -32,6 +32,7 @@ class SearchSession(Protocol):
   def check_correctness(self, prepared: Any) -> Mapping[str, Any]: ...
   def measure(self, prepared: Any, *, warmups: int, rounds: int) -> Mapping[str, Any]: ...
   def measure_direct_packed(self, *, warmups: int, rounds: int) -> Mapping[str, Any]: ...
+  def evidence_gate(self, prepared: Any, correctness: Mapping[str, Any]) -> Mapping[str, Any]: ...
 
 
 @dataclass(frozen=True)
@@ -68,6 +69,10 @@ def replay_descriptors(report: Mapping[str, Any]) -> tuple[MMQDescriptor, ...]:
   encoded = json.dumps(unsigned, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
   if hashlib.sha256(encoded).hexdigest() != expected:
     raise ValueError("search artifact digest mismatch")
+  if report.get("production_dispatch_changed") is not False:
+    raise ValueError("search artifact is not research-only")
+  if report.get("status") not in ("PASS", "NO_PASSING_CANDIDATE"):
+    raise ValueError("search artifact has an incomplete status")
   descriptors = []
   for row in report.get("candidates", ()):
     descriptor = row.get("descriptor") if isinstance(row, Mapping) else None
@@ -110,9 +115,25 @@ def run_search(*, axes: Mapping[str, Sequence[Any]], session_factory: Callable[[
       prepared = session.prepare(descriptor)
       correctness = dict(session.check_correctness(prepared))
       row["correctness"] = correctness
-      passed = correctness.get("passed") is True
+      gate_fn = getattr(session, "evidence_gate", None)
+      gate = dict(gate_fn(prepared, correctness)) if callable(gate_fn) else {
+        "timing_allowed": False, "promotion_eligible": False,
+        "blockers": ["complete candidate evidence gate unavailable"],
+      }
+      row["evidence_gate"] = gate
+      # Persist the complete descriptor alongside the provenance returned by
+      # the guarded compile/correctness session.  This is the join key for
+      # every later evidence artifact and makes the report self-describing.
+      row["candidate_identity"] = {
+        "candidate_id": descriptor.candidate_id,
+        "descriptor": descriptor.canonical(),
+        "provenance": correctness.get("provenance", {}),
+      }
+      passed = correctness.get("passed") is True and gate.get("timing_allowed") is True
       if not passed:
-        row.update(status="correctness_failed", blocker="candidate correctness did not pass")
+        row.update(status="correctness_failed" if correctness.get("passed") is not True else "evidence_blocked",
+                   blocker="candidate correctness did not pass" if correctness.get("passed") is not True
+                   else "; ".join(gate.get("blockers", ())) or "candidate evidence gate did not pass")
       else:
         timing = dict(session.measure(prepared, warmups=policy.warmups, rounds=policy.rounds))
         direct = dict(session.measure_direct_packed(warmups=policy.warmups, rounds=policy.rounds))
@@ -140,6 +161,11 @@ def run_search(*, axes: Mapping[str, Sequence[Any]], session_factory: Callable[[
 
 
 def write_artifact(report: Mapping[str, Any], path: str) -> None:
+  # Never persist an artifact that cannot be replayed and whose digest is not
+  # over the exact bytes being written.
+  replay_descriptors(report)
+  if report.get("artifact_sha256") is None:
+    raise ValueError("search artifact is missing artifact_sha256")
   with open(path, "w", encoding="utf-8") as handle:
     json.dump(report, handle, sort_keys=True, indent=2)
     handle.write("\n")

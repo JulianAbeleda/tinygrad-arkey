@@ -1,4 +1,5 @@
 import json
+import pytest
 
 from extra.qk.generated_candidates import builtin_registry
 from extra.qk import generated_route_registry as registry
@@ -146,3 +147,19 @@ def test_mmq_admission_boundary_keeps_direct_packed_as_default():
   assert direct_id in route_manifest.default_routes()
   assert route_manifest.ROUTES[direct_id]["status"] == "promoted_default"
   assert route_manifest.ROUTES[direct_id]["baseline_route_id"] == "prefill_q4k_direct_packed_load_direct_out"
+
+
+def test_existing_8b_routes_and_direct_packed_defaults_are_pinned():
+  assert route_manifest.ROUTES["decode_flash_live_split_g4_8b_kvboth"]["status"] == "promoted_default"
+  assert route_manifest.ROUTES["decode_flash_live_split_g4_8b_kvboth"]["env"] == {}
+  assert route_manifest.ROUTES["prefill_q4k_direct_tile4x4_default"]["env"] == {}
+  assert route_manifest.ROUTES["prefill_q4k_direct_tile4x4_default"]["rollback"] == {
+    "PREFILL_Q4K_DIRECT_SCHEDULE": "legacy"}
+
+
+def test_incomplete_manifest_evidence_cannot_create_registry_entry(monkeypatch):
+  route_id = "prefill_q4k_direct_tile4x4_default"
+  original = route_manifest.ROUTES[route_id]
+  monkeypatch.setitem(route_manifest.ROUTES, route_id, {**original, "authority_gate": ""})
+  with pytest.raises(ValueError, match="incomplete evidence"):
+    registry.row(route_id)

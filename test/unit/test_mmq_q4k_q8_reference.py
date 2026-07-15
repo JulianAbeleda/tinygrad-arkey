@@ -9,6 +9,7 @@ from extra.qk.mmq_q4k_q8_reference import (
   Q8_1_MMQ_DS4_GROUPS_PER_BLOCK, Q8_1_MMQ_DS4_LAYOUT, Q8_1_MMQ_DS4_VALUES_PER_GROUP,
   describe_q4k_q8_1_mmq_tile, q4k_q8_1_mmq_ds4_tile_reference, q4k_q8_1_mmq_tile_reference,
   q8_1_mmq_ds4_dequantize_reference, q8_1_mmq_ds4_from_row_major_reference, q8_1_mmq_ds4_quantize_reference,
+  q8_1_sums_reference,
 )
 from extra.qk.q4k_tile_loader import (
   Q4K_QS_BYTES, Q4K_QS_OFFSET, Q4K_SCALE_MIN_BYTES, Q4K_SCALE_MIN_OFFSET, Q4KTileLoadSpec, load_q4k_256_tile,
@@ -149,6 +150,17 @@ def test_q8_1_mmq_ds4_sums_match_original_fp32_per_32_groups():
 
   np.testing.assert_allclose(sums, ref, rtol=0, atol=0)
   assert np.any(sums != 0.0)
+
+def test_q8_1_derived_sums_are_explicit_and_match_quantized_operands():
+  x = np.random.default_rng(7).standard_normal((2, 128)).astype(np.float32)
+  values, scales, supplied = q8_1_mmq_ds4_quantize_reference(x)
+  derived = q8_1_sums_reference(values, scales)
+  expected = (values.reshape(1, 2, 4, 32).astype(np.float32).sum(axis=3) * scales.astype(np.float32))
+  np.testing.assert_allclose(derived, expected, rtol=0, atol=0)
+  assert not np.array_equal(derived, supplied)  # supplied sums retain pre-quantization semantics
+
+def test_q8_1_derived_sums_reject_bad_shapes():
+  with pytest.raises(ValueError): q8_1_sums_reference(np.zeros((1, 1, 64), np.int8), np.ones((1, 1, 2), np.float32))
 
 
 def test_q8_1_mmq_ds4_spec_requires_128_aligned_k_and_whole_blocks():
