@@ -425,3 +425,18 @@ parity. Cache tracing also showed the existing adjacent-activation reuse is
 effective (`120` attention hits and `80` FFN hits in the smoke), while the
 remaining preparations are distinct activations. A larger cache is therefore
 not the current beyond-parity owner.
+
+## 2026-07-15 horizontal gate/up fusion probe
+
+The model exposes dense FFN gate and up projections as separate Q4 linears even
+though they consume the same normalized activation. The research `packed_fused`
+route now has an opt-in pair lowering: it concatenates the two logical weight
+row spaces, emits one descriptor candidate, and splits the output back into
+gate/up tensors. An isolated AMD pair canary matched two independent contractions
+exactly (`max_abs=0.0`, all finite).
+
+The exact mixed smoke improved from `84 tok/s` to `86 tok/s` with the pair
+lowering enabled for all generated roles, and from the prior `91 tok/s` to
+`93 tok/s` when scoped to `ffn_gate_up`. The fresh same-session direct-packed
+baseline was `103 tok/s`; therefore horizontal fusion is retained as research
+evidence but remains below parity and is not promoted.

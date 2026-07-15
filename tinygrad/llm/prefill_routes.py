@@ -402,6 +402,32 @@ def route_direct_packed_prefill(lin, x:Tensor) -> Tensor | None:
   return candidate.run(lin, x, x_batch, spec)
 
 
+def route_prefill_q4k_gate_up(gate, up, x: Tensor) -> tuple[Tensor, Tensor] | None:
+  """Research-only horizontal Q4/Q8 gate/up contraction for one shared activation."""
+  if prefill_q4k_q8_mode() != "packed_fused": return None
+  if not prefill_q4k_q8_role_enabled("ffn_gate_up"): return None
+  gate_spec, up_spec = _direct_packed_spec(gate, x), _direct_packed_spec(up, x)
+  if gate_spec is None or up_spec is None or (gate_spec.m, gate_spec.k) != (up_spec.m, up_spec.k): return None
+  if gate_spec.n != up_spec.n: return None
+  m, n, k = gate_spec.m, gate_spec.n, gate_spec.k
+  x_batch = x[0].cast(dtypes.float16).contiguous()
+  words_attr = "_prefill_fused_gate_up_words"
+  if not hasattr(gate, words_attr):
+    fused_words = gate.prefill_packed_weight().to(x.device).cat(up.prefill_packed_weight().to(x.device), dim=0).contiguous()
+    setattr(gate, words_attr, fused_words)
+  words = getattr(gate, words_attr)
+  candidate = qk_ops.packed_fused_candidate(m, n * 2, k, role="ffn_gate_up")
+  cache_key = (getattr(x, "uop", x), m, k, str(x.device), "gate_up")
+  global _MMQ_DS4_LAST_PACKED
+  if _MMQ_DS4_LAST_PACKED is not None and _MMQ_DS4_LAST_PACKED[0] == cache_key:
+    values, scales, sums = _MMQ_DS4_LAST_PACKED[1]
+  else:
+    values, scales, sums = qk_ops.pack_q8_1_mmq_fused(x_batch.reshape(m, k), candidate)
+    _MMQ_DS4_LAST_PACKED = (cache_key, (values, scales, sums))
+  out = qk_ops.emit_q4k_q8_mmq_ds4(words, values, scales, sums, candidate).reshape(1, m, n * 2)
+  return out[:, :, :n], out[:, :, n:]
+
+
 def route_prefill_linear(lin, x:Tensor, *, prefill_graph_gemm:bool) -> Tensor:
   route = prefill_route_policy()
   w = getattr(lin, "_pf16_w", None)

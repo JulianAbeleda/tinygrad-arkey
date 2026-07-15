@@ -230,8 +230,12 @@ class FFNBlock:
     if getattr(self, '_prefill_v2', False) and not hasattr(self, 'ffn_gate_exps') and not hasattr(self, 'ffn_gateup'):
       # prefill v2 (dense): fp16 + .contiguous()-isolated matmuls so each is a clean, warmstart-matchable TC
       # kernel (mirrors the gated chained-FFN prefill authority shape). MoE/fused fall through.
-      g = _pf16(self.ffn_gate, x).contiguous()
-      u = _pf16(self.ffn_up, x).contiguous()
+      fused = qk_ops.route_prefill_q4k_gate_up(self.ffn_gate, self.ffn_up, x)
+      if fused is None:
+        g = _pf16(self.ffn_gate, x).contiguous()
+        u = _pf16(self.ffn_up, x).contiguous()
+      else:
+        g, u = (v.contiguous() for v in fused)
       h = (g.silu() * u).contiguous()
       return _pf16(self.ffn_down, h).contiguous()
     if hasattr(self, 'ffn_gate_exps'):
