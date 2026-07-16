@@ -1,8 +1,10 @@
+from types import SimpleNamespace
+
 from extra.qk.prefill_harness import (
   AUTHORITY_START_POSITIONS, AUTHORITY_WHOLE_LENGTHS, DEFAULT_MODEL, SMOKE_START_POSITIONS, SMOKE_WHOLE_LENGTHS,
   csv_ints, prefill_authority_argv, prefill_run_profile, prefill_subprocess_env, resolve_prefill_model_profile,
 )
-from extra.qk import bench
+from extra.qk import bench, prefill_whole_synced
 
 
 def test_prefill_run_profile_defaults():
@@ -65,6 +67,19 @@ def test_prefill_model_profile_selects_14b_direct_packed_defaults():
   run = prefill_run_profile("smoke")
   argv = prefill_authority_argv(prof.default_model, run, model_profile_id=prof.id)
   assert "--model-profile" in argv and prof.id in argv
+
+
+def test_prefill_authority_attributes_the_loaded_runtime_registry(monkeypatch):
+  monkeypatch.setenv("BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH", "stale-profile-artifact.json")
+  fallback = SimpleNamespace(config=SimpleNamespace(prefill_graph_gemm=True), _prefill_graph_gemm_registry=None)
+  assert not prefill_whole_synced._prefill_graph_gemm_enabled(fallback)
+  fallback_env = prefill_whole_synced._runtime_route_env(fallback)
+  assert fallback_env["PREFILL_GRAPH_GEMM"] == "0"
+  assert "BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH" not in fallback_env
+
+  selected = SimpleNamespace(config=SimpleNamespace(prefill_graph_gemm=True), _prefill_graph_gemm_registry=object())
+  assert prefill_whole_synced._prefill_graph_gemm_enabled(selected)
+  assert prefill_whole_synced._runtime_route_env(selected)["PREFILL_GRAPH_GEMM"] == "1"
 
 
 def test_bench_prefill_dispatches_authority(monkeypatch):

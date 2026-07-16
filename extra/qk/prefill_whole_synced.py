@@ -48,13 +48,23 @@ def _dirty_tree() -> bool:
   except Exception: return True
 
 
-def _prefill_graph_gemm_enabled() -> bool:
-  import tinygrad.llm.model as model_mod
-  return bool(model_mod.PREFILL_GRAPH_GEMM)
+def _prefill_graph_gemm_enabled(model) -> bool:
+  return bool(model.config.prefill_graph_gemm and getattr(model, "_prefill_graph_gemm_registry", None) is not None)
 
 
-def _route_attribution() -> dict[str, Any]:
-  routes = effective_routes()
+def _runtime_route_env(model) -> dict[str, Any]:
+  env = dict(os.environ)
+  active = _prefill_graph_gemm_enabled(model)
+  env["PREFILL_GRAPH_GEMM"] = "1" if active else "0"
+  if not active:
+    for key in ("BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_JSON", "BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH",
+                "BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON", "BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH"):
+      env.pop(key, None)
+  return env
+
+
+def _route_attribution(env: dict[str, Any]) -> dict[str, Any]:
+  routes = effective_routes(env)
   prefill_gemm = next((route for route in routes if route.get("family") == "prefill_gemm"), None)
   prefill_q4k = next((route for route in routes if route.get("family") == "prefill_q4k"), None)
   return {
@@ -246,6 +256,7 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
 
   dev = Device["AMD"]
   model, _ = load_model_and_tokenizer(model_path, max_context, seed=20260617)
+  runtime_route_env = _runtime_route_env(model)
   for block in model.blk: block._use_flash, block._prefill_v2 = True, True
   temp = Tensor([0.0])
   chunk = Tensor([[(i * 7) % 1000 for i in range(chunk_n)]], dtype="int32").contiguous()
@@ -284,9 +295,8 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
     return {"min_ms": min(ts), "samples_ms": ts, "clock_pin": pin_prov,
             "profile": profile_range_summary(profile_events)}
 
-  from extra.qk.prefill_graph_gemm_route import (_candidate_registry_from_env, candidate_route_census,
-    finalize_candidate_route_census)
-  candidate_registry=_candidate_registry_from_env(dict(os.environ)); candidate_census=None
+  from extra.qk.prefill_graph_gemm_route import candidate_route_census, finalize_candidate_route_census
+  candidate_registry=getattr(model, "_prefill_graph_gemm_registry", None); candidate_census=None
   with _scoped_candidate_compiler_state():
     if candidate_registry is None: chunk_rows={sp:burst(sp) for sp in start_positions}
     else:
@@ -303,7 +313,7 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
     return ys[i] + (ys[i + 1] - ys[i]) * (s - xs[i]) / (xs[i + 1] - xs[i])
 
   whole = {length: length / sum(interp(s) for s in range(0, length, chunk_n)) * 1e3 for length in whole_lengths}
-  graph_gemm = _prefill_graph_gemm_enabled()
+  graph_gemm = _prefill_graph_gemm_enabled(model)
   if verbose:
     print(f"PREFILL {mode.upper()} (synced, K={K}, warmups={warmups}, rounds={rounds})  "
           f"model={os.path.basename(model_path)}  GRAPH_GEMM={graph_gemm}")
@@ -312,7 +322,7 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
       print(f"  chunk@start_pos={sp:5}: {ms:6.1f}ms ({chunk_n / ms * 1e3:.0f} tok/s)")
     for length, tps in whole.items(): print(f"  WHOLE-PREFILL@{length}: {tps:.0f} tok/s")
 
-  route_attr = _route_attribution()
+  route_attr = _route_attribution(runtime_route_env)
   report = {
     "schema": "prefill-whole-synced-authority.v1",
     "model": model_path,
@@ -359,7 +369,7 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
     report["mode"] = "authority_incomplete"
     report["authority_blocked_reason"] = ("refusing mode:authority; missing required fields: "
                                           + ", ".join(completeness["missing"]))
-  binding_gate = route_binding_gate(report, require_route)
+  binding_gate = route_binding_gate(report, require_route, env=runtime_route_env)
   report["prefill_route_binding_gate"] = binding_gate
   if (require_route or binding_gate["candidate_set_requested"]) and binding_gate["failures"]:
     raise RuntimeError("prefill route binding gate failed: " + "; ".join(binding_gate["failures"]))
