@@ -13,17 +13,10 @@ GGML_QUANT_LABELS = {
 
 @dataclass(frozen=True)
 class TensorFact:
-  name: str
-  module_path: str
-  ggml_type: int
-  rows: int
-  cols: int
-  quant_label: str
-  role: str | None
+  name:str; module_path:str; ggml_type:int; rows:int; cols:int; quant_label:str; role:str|None
 
   @property
-  def shape(self) -> tuple[int, int]:
-    return (self.rows, self.cols)
+  def shape(self) -> tuple[int, int]: return (self.rows, self.cols)
 
   def to_json(self) -> dict[str, Any]:
     return {"name": self.name, "module_path": self.module_path, "ggml_type": self.ggml_type,
@@ -32,16 +25,10 @@ class TensorFact:
 
 @dataclass(frozen=True)
 class ModelFacts:
-  architecture: str
-  hidden_size: int | None
-  intermediate_size: int | None
-  n_heads: int | None
-  n_kv_heads: int | None
-  head_dim: int | None
-  tensors: tuple[TensorFact, ...]
+  architecture:str; hidden_size:int|None; intermediate_size:int|None; n_heads:int|None
+  n_kv_heads:int|None; head_dim:int|None; tensors:tuple[TensorFact, ...]
 
-  def tensors_for_role(self, role: str) -> tuple[TensorFact, ...]:
-    return tuple(t for t in self.tensors if t.role == role)
+  def tensors_for_role(self, role:str) -> tuple[TensorFact, ...]: return tuple(t for t in self.tensors if t.role == role)
 
   def to_json(self) -> dict[str, Any]:
     return {"architecture": self.architecture, "hidden_size": self.hidden_size,
@@ -52,12 +39,7 @@ class ModelFacts:
 
 @dataclass(frozen=True)
 class QwenDenseRoleResolver:
-  architecture: str
-  hidden_size: int | None
-  intermediate_size: int | None
-  n_heads: int | None
-  n_kv_heads: int | None
-  head_dim: int | None
+  architecture:str; hidden_size:int|None; intermediate_size:int|None; n_heads:int|None; n_kv_heads:int|None; head_dim:int|None
 
   @classmethod
   def from_kv(cls, kv: dict[str, Any]) -> "QwenDenseRoleResolver":
@@ -71,14 +53,10 @@ class QwenDenseRoleResolver:
     return cls(arch, hidden_size, intermediate_size, n_heads, n_kv_heads, head_dim)
 
   @property
-  def kv_size(self) -> int | None:
-    if self.n_kv_heads is None or self.head_dim is None: return None
-    return self.n_kv_heads * self.head_dim
+  def kv_size(self) -> int|None: return None if self.n_kv_heads is None or self.head_dim is None else self.n_kv_heads * self.head_dim
 
   @property
-  def q_size(self) -> int | None:
-    if self.n_heads is None or self.head_dim is None: return None
-    return self.n_heads * self.head_dim
+  def q_size(self) -> int|None: return None if self.n_heads is None or self.head_dim is None else self.n_heads * self.head_dim
 
   def resolve(self, name: str, rows: int, cols: int) -> str | None:
     if not self.architecture.startswith("qwen"): return None

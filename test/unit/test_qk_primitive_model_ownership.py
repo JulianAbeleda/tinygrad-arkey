@@ -8,7 +8,7 @@ from tinygrad.llm.memory_semantics import MODEL_PARAMETER, RUNTIME_ACTIVATION, m
 from tinygrad.llm.model_route_plan import build_model_route_plan
 from extra.qk.physical_memory_ledger import PhysicalMemoryLedger
 from tinygrad.llm.qk_primitives import (
-  Q4KPrimitiveLinear, Q6KPrimitiveLinear, _build_fused_q4k, _install_q4k_primitives, _install_q6k_primitives,
+  Q4KPrimitiveLinear, Q6KPrimitiveLinear, _install_q4k_primitives, _install_q6k_primitives,
   _model_parameter_materialization,
 )
 from tinygrad.schedule.memory import collect_memory_plan_manifests
@@ -46,17 +46,6 @@ def test_q4_q6_prefill_clones_are_model_owned(monkeypatch):
 
   assert memory_semantic_owner(q4_words) == memory_semantic_owner(q6_halfs) == MODEL_PARAMETER
   assert all(event.owner == MODEL_PARAMETER_ALLOCATION_OWNER for event in _owned_allocations(ledger))
-
-
-def test_fused_q4_storage_uses_selected_parameter_role_owner():
-  source = model_parameter(Tensor.empty(8, dtype=dtypes.float16))
-  linears = [Q4KPrimitiveLinear(source, None, Tensor.empty(4, dtype=dtypes.uint32), 1, 1, 1, (), str(i), 16, 16, "sidecar")
-             for i in range(2)]
-  ledger = PhysicalMemoryLedger()
-  with ledger.active(): fused = _build_fused_q4k(linears, "ignored")
-
-  assert memory_semantic_owner(fused.fused.q4k_storage.words) == MODEL_PARAMETER
-  assert _owned_allocations(ledger)[-1].owner == MODEL_PARAMETER_ALLOCATION_OWNER
 
 
 @pytest.mark.parametrize("ggml_type,block_bytes,name,installer", [

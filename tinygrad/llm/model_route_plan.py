@@ -1,158 +1,65 @@
 from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import Any, Iterable
 
 @dataclass(frozen=True)
 class PrimitiveRouteEntry:
-  name: str
-  module_path: str
-  quant_label: str
-  rows: int
-  cols: int
-  role: str
-  parts: int
-  opts: tuple[str, ...]
-  family: str
-  kernel_mode: str = "partial"
-  candidate_identity: str | None = None
-  backend_strategy: str | None = None
-  rollback_route: str | None = None
-  provenance_status: str = "default"
-
+  name:str; module_path:str; quant_label:str; rows:int; cols:int; role:str; parts:int; opts:tuple[str, ...]; family:str
+  kernel_mode:str = "partial"
 
 class ModelRoutePlan:
-  def __init__(self, entries:Iterable[PrimitiveRouteEntry]=()):
-    self._entries = {entry.name: entry for entry in entries}
+  def __init__(self, entries:Iterable[PrimitiveRouteEntry]=()): self._entries = {entry.name: entry for entry in entries}
+  def primitive(self, name:str) -> PrimitiveRouteEntry|None: return self._entries.get(name)
+  def __len__(self) -> int: return len(self._entries)
+  def __iter__(self): return iter(self._entries.values())
 
-  def primitive(self, name:str) -> PrimitiveRouteEntry|None:
-    return self._entries.get(name)
-
-  def __len__(self) -> int:
-    return len(self._entries)
-
-  def __iter__(self):
-    return iter(self._entries.values())
-
-
-def _module_path_from_tensor_name(name:str) -> str:
-  return name[:-len(".weight")] if name.endswith(".weight") else name
-
-def _role_from_module_path(module_path:str) -> str:
-  return module_path.rsplit(".", 1)[-1]
-
-def _route_role_family(role:str) -> str:
+def _module_path(name:str) -> str: return name[:-len(".weight")] if name.endswith(".weight") else name
+def _role_family(role:str) -> str:
   if role in ("ffn_gate", "ffn_up", "ffn_gate_up"): return "ffn_gate_up"
-  if role == "ffn_down": return "ffn_down"
+  if role == "ffn_down": return role
   if role in ("attn_q", "attn_output", "attn_qo"): return "attn_qo"
   if role in ("attn_k", "attn_v", "attn_kv"): return "attn_kv"
   if role in ("output", "lm_head"): return "lm_head"
   return role
 
-def _primitive_install_default(name:str, quant_label:str, role:str, rows:int, cols:int) -> tuple[int, tuple[str, ...]]|None:
-  # K-quants are block packed.  This is deliberately a storage/shape fact,
-  # not a model-size or runtime-environment policy.
+def _default(name:str, quant:str, role:str, rows:int, cols:int) -> tuple[int, tuple[str, ...]]|None:
   if rows <= 0 or cols <= 0 or cols % 256: return None
-  role_family = _route_role_family(role)
-  if quant_label == "Q4_K":
-    if role_family == "ffn_gate_up": return 1, ("LOCAL:0:64",)
-    if role_family == "ffn_down": return 4, ("LOCAL:0:32",)
-    if role_family == "attn_qo": return 1, ("LOCAL:0:64",)
-    if role_family == "attn_kv": return 1, ("LOCAL:0:64",)
-  if quant_label == "Q6_K":
-    if role_family == "ffn_down": return 1, ("LOCAL:0:64",)
-    if role_family == "attn_kv" and _role_from_module_path(_module_path_from_tensor_name(name)) == "attn_v":
-      return 4, ("LOCAL:0:32",)
-    if role_family == "lm_head" or name == "output.weight": return 1, ("LOCAL:0:64",)
+  family = _role_family(role)
+  if quant == "Q4_K":
+    if family in ("ffn_gate_up", "attn_qo", "attn_kv"): return 1, ("LOCAL:0:64",)
+    if family == "ffn_down": return 4, ("LOCAL:0:32",)
+  if quant == "Q6_K":
+    if family == "ffn_down" or family == "lm_head" or name == "output.weight": return 1, ("LOCAL:0:64",)
+    if family == "attn_kv" and _module_path(name).rsplit(".", 1)[-1] == "attn_v": return 4, ("LOCAL:0:32",)
   return None
-
-def _shape_from_tensor_info(dims) -> tuple[int, int]|None:
-  if len(dims) != 2: return None
-  rows, cols = tuple(reversed(dims))
-  return int(rows), int(cols)
-
-def _facts_tensor_infos(model_facts:Any) -> Iterable[tuple[str, Any, int, int]]:
-  if model_facts is None: return ()
-  if hasattr(model_facts, "tensor_infos"): return getattr(model_facts, "tensor_infos")
-  if hasattr(model_facts, "tensors"): return getattr(model_facts, "tensors")
-  if isinstance(model_facts, dict): return model_facts.get("tensor_infos", model_facts.get("tensors", ()))
-  return ()
-
-def _entry_from_record(record:Any) -> PrimitiveRouteEntry|None:
-  if isinstance(record, PrimitiveRouteEntry): return record
-  if isinstance(record, dict):
-    name = record.get("name") or record.get("tensor")
-    typ = record.get("typ", record.get("ggml_type"))
-    rows, cols = record.get("rows"), record.get("cols")
-    dims = record.get("dims")
-    module_path = record.get("module_path")
-    quant_label = record.get("quant_label")
-    role = record.get("role")
-    candidate_identity = record.get("candidate_identity")
-    backend_strategy = record.get("backend_strategy")
-    rollback_route = record.get("rollback_route")
-    provenance_status = record.get("provenance_status", "default")
-  else:
-    name = getattr(record, "name", getattr(record, "tensor", None))
-    typ = getattr(record, "typ", getattr(record, "ggml_type", None))
-    rows, cols = getattr(record, "rows", None), getattr(record, "cols", None)
-    dims = getattr(record, "dims", None)
-    module_path = getattr(record, "module_path", None)
-    quant_label = getattr(record, "quant_label", None)
-    role = getattr(record, "role", None)
-    candidate_identity = getattr(record, "candidate_identity", None)
-    backend_strategy = getattr(record, "backend_strategy", None)
-    rollback_route = getattr(record, "rollback_route", None)
-    provenance_status = getattr(record, "provenance_status", "default")
-  if name is None or typ is None: return None
-  if (rows is None or cols is None) and dims is not None:
-    shape = _shape_from_tensor_info(dims)
-    if shape is not None: rows, cols = shape
-  if rows is None or cols is None: return None
-  return primitive_route_entry_for_tensor(str(name), int(typ), int(rows), int(cols),
-                                          module_path=None if module_path is None else str(module_path),
-                                          quant_label=None if quant_label is None else str(quant_label),
-                                          role=None if role is None else str(role),
-                                          candidate_identity=None if candidate_identity is None else str(candidate_identity),
-                                          backend_strategy=None if backend_strategy is None else str(backend_strategy),
-                                          rollback_route=None if rollback_route is None else str(rollback_route),
-                                          provenance_status=str(provenance_status))
 
 def primitive_route_entry_for_tensor(name:str, typ:int, rows:int, cols:int, *, module_path:str|None=None,
-                                     quant_label:str|None=None, role:str|None=None, candidate_identity:str|None=None,
-                                     backend_strategy:str|None=None, rollback_route:str|None=None,
-                                     provenance_status:str="default") -> PrimitiveRouteEntry|None:
-  module_path = module_path or _module_path_from_tensor_name(name)
-  role = role or _role_from_module_path(module_path)
-  if typ == 12:
-    quant_label = quant_label or "Q4_K"
-    policy = _primitive_install_default(name, quant_label, role, rows, cols)
-    if policy is None: return None
-    parts, opts = policy
-    return PrimitiveRouteEntry(name, module_path, quant_label, rows, cols, role, parts, tuple(opts), "q4_k_packed_u32", "partial", candidate_identity, backend_strategy, rollback_route, provenance_status)
-  if typ == 14:
-    quant_label = quant_label or "Q6_K"
-    policy = _primitive_install_default(name, quant_label, role, rows, cols)
-    if policy is None: return None
-    parts, opts = policy
-    return PrimitiveRouteEntry(name, module_path, quant_label, rows, cols, role, parts, tuple(opts), "q6_k_packed_u16", "partial", candidate_identity, backend_strategy, rollback_route, provenance_status)
-  return None
+                                     quant_label:str|None=None, role:str|None=None, **_unused) -> PrimitiveRouteEntry|None:
+  module_path = module_path or _module_path(name); role = role or module_path.rsplit(".", 1)[-1]
+  quant = quant_label or ("Q4_K" if typ == 12 else "Q6_K" if typ == 14 else "")
+  if not quant or (policy := _default(name, quant, role, rows, cols)) is None: return None
+  parts, opts = policy
+  return PrimitiveRouteEntry(name, module_path, quant, rows, cols, role, parts, opts,
+                             "q4_k_packed_u32" if typ == 12 else "q6_k_packed_u16")
+
+def _record_entry(record:Any) -> PrimitiveRouteEntry|None:
+  if isinstance(record, PrimitiveRouteEntry): return record
+  get = record.get if isinstance(record, dict) else lambda key, default=None: getattr(record, key, default)
+  name, typ = get("name", get("tensor")), get("ggml_type", get("typ"))
+  rows, cols, dims = get("rows"), get("cols"), get("dims")
+  if (rows is None or cols is None) and dims is not None and len(dims) == 2: rows, cols = reversed(dims)
+  if name is None or typ is None or rows is None or cols is None: return None
+  return primitive_route_entry_for_tensor(str(name), int(typ), int(rows), int(cols), module_path=get("module_path"),
+                                          quant_label=get("quant_label"), role=get("role"))
 
 def build_model_route_plan(meta:dict|None=None, model_facts:Any=None) -> ModelRoutePlan:
-  entries: list[PrimitiveRouteEntry] = []
-  for record in _facts_tensor_infos(model_facts):
-    if (entry := _entry_from_record(record)) is not None: entries.append(entry)
+  records = getattr(model_facts, "tensors", ()) if model_facts is not None else ()
+  entries = [entry for record in records if (entry := _record_entry(record)) is not None]
   if not entries and meta is not None:
     for name, dims, typ, _off in meta.get("tensor_infos", ()):
-      if not str(name).endswith(".weight"): continue
-      shape = _shape_from_tensor_info(dims)
-      if shape is None: continue
-      if (entry := primitive_route_entry_for_tensor(str(name), int(typ), *shape)) is not None:
+      if str(name).endswith(".weight") and len(dims) == 2 and (entry := primitive_route_entry_for_tensor(str(name), int(typ), int(dims[1]), int(dims[0]))) is not None:
         entries.append(entry)
   return ModelRoutePlan(entries)
 
-
-try:
-  from tinygrad.llm.model_facts import ModelFacts as ModelFacts  # type: ignore
-except Exception:
-  ModelFacts = None  # type: ignore
+try: from tinygrad.llm.model_facts import ModelFacts as ModelFacts
+except Exception: ModelFacts = None
