@@ -9,8 +9,6 @@ from tinygrad.llm.memory_semantics import (prefill_activation as _prefill_activa
 from tinygrad.llm.prefill_route_observer import PrefillRouteAttachment, notify_prefill_route
 from tinygrad.uop.ops import UOp
 
-PREFILL_ROUTE_CHOICES = ("auto", "fp16", "direct_packed")
-LM_HEAD_PREFILL_ROUTE_CHOICES = ("lazy", "resident_fp16", "direct_packed")
 def _mark_tensor_semantic(value, marker):
   # Route unit tests use graphless structural Tensor stubs. Runtime Tensor/UOp
   # results always take the explicit marking path.
@@ -54,33 +52,6 @@ def _attached_production_route(lin, x: Tensor) -> str | None:
   return None
 
 
-def prefill_route_policy(route:str="auto", *, direct_packed:bool=False) -> str:
-  route = str(route).strip().lower()
-  if route == "direct": route = "direct_packed"
-  if direct_packed and route == "auto": route = "direct_packed"
-  if route not in PREFILL_ROUTE_CHOICES:
-    raise ValueError(f"PREFILL_ROUTE must be one of {', '.join(PREFILL_ROUTE_CHOICES)}, got {route!r}")
-  return route
-
-
-def prefill_route_strict(strict:bool=False) -> bool:
-  return bool(strict)
-
-
-def prefill_lm_head_route_policy(route:str="lazy") -> str:
-  """Select how a full-sequence LM head is evaluated during prefill.
-
-  ``lazy`` preserves the ordinary output-linear graph so a downstream
-  ``[:, -1, :]`` can prune the projection to one token. The two explicit
-  full-sequence modes are retained for explicitly described workloads that
-  consume every token's logits.
-  """
-  route = str(route).strip().lower()
-  if route not in LM_HEAD_PREFILL_ROUTE_CHOICES:
-    raise ValueError(f"PREFILL_LM_HEAD_ROUTE must be one of {', '.join(LM_HEAD_PREFILL_ROUTE_CHOICES)}, got {route!r}")
-  return route
-
-
 def _is_q4k_linear(lin) -> bool: return hasattr(lin, "q4k_storage") and hasattr(lin, "prefill_packed_weight")
 def _is_q6k_linear(lin) -> bool: return hasattr(lin, "q6k_storage") and hasattr(lin, "prefill_packed_weight")
 def is_direct_packed_prefill_linear(lin) -> bool: return _is_q4k_linear(lin) or _is_q6k_linear(lin)
@@ -118,13 +89,6 @@ def _direct_packed_opts(lin, spec:"PrefillLinearRouteSpec"):
   else:
     parse = qk_ops.q6k_parse_opt
   return tuple(getattr(lin, "opts", ())) + (parse(f"UPCAST:1:{_direct_packed_b_upcast(spec.m)}"),)
-
-
-def prefill_route_wants_resident_fp16(*, est_gb:float, budget_gb:float, has_direct_packed:bool, route:str="auto") -> bool:
-  route = prefill_route_policy(route)
-  if route == "fp16": return True
-  if route == "direct_packed": return False
-  return not has_direct_packed or est_gb <= budget_gb
 
 
 @dataclass(frozen=True)
