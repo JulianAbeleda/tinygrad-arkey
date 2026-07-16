@@ -3,10 +3,11 @@ from dataclasses import FrozenInstanceError
 import pytest
 
 from tinygrad.dtype import dtypes
-from tinygrad.schedule import memory as memory_mod
-from tinygrad.schedule.memory import collect_memory_plan_manifests, memory_plan_manifest, memory_plan_rewrite
+from extra.qk import schedule_memory_manifest as memory_mod
+from extra.qk.schedule_memory_manifest import collect_memory_plan_manifests, memory_plan_manifest
+from tinygrad.schedule.memory import memory_plan_rewrite
 from tinygrad.callify import AllocCtx, replace_input_buffer
-from tinygrad.schedule.memory import _call_bound_owners
+from extra.qk.schedule_memory_manifest import _call_bound_owners
 from tinygrad.llm.memory_semantics import PREFILL_ACTIVATION, PREFILL_SCRATCH, mark_memory_semantic, memory_semantic_owner
 from tinygrad.uop.ops import Ops, UOp
 

@@ -11,7 +11,7 @@ from tinygrad.llm.qk_primitives import (
   Q4KPrimitiveLinear, Q6KPrimitiveLinear, _install_q4k_primitives, _install_q6k_primitives,
   _model_parameter_materialization,
 )
-from tinygrad.schedule.memory import collect_memory_plan_manifests
+from extra.qk.schedule_memory_manifest import collect_memory_plan_manifests
 from tinygrad.uop.ops import KernelInfo, Ops, UOp
 
 

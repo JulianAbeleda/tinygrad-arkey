@@ -2,8 +2,8 @@ import pytest
 
 from tinygrad.codegen.opt.packed_weight import PackedOperandComponent, PackedOperandRecordTransform, PackedOperandTransform
 from tinygrad.dtype import dtypes
-from tinygrad.uop.ops import (KernelCandidateContext, KernelLDSArenaRegion, KernelLDSRecordComponent, KernelLDSRecordLayout,
-                              KernelLDSWindow, KernelTileGeometry)
+from extra.qk.kernel_vocabulary import (KernelCandidateContext, KernelLDSArenaRegion, KernelLDSRecordComponent, KernelLDSRecordLayout,
+                                        KernelLDSWindow, KernelTileGeometry)
 
 
 def _geometry():

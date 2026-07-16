@@ -614,7 +614,7 @@ def _worker(request: Mapping[str, Any]) -> dict[str, Any]:
     from tinygrad.llm.physical_memory_ledger import AllocationOwner
     from extra.qk.prefill_route_census import collect_prefill_route_census
     from extra.qk.schedule_memory_evidence import schedule_memory_evidence
-    from tinygrad.schedule.memory import collect_memory_plan_manifests
+    from extra.qk.schedule_memory_manifest import collect_memory_plan_manifests
     from extra.qk.memory_adaptive_allocation_observer import AllocationObserver
     profile_start = len(Compiled.profile_events)
     workload = request["workload"]

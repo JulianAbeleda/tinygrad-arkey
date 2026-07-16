@@ -20,29 +20,6 @@ def _can_plan(b:UOp, held_bufs:set[UOp]) -> bool:
 LaneKey = tuple[str, int]
 _memory_manifest_collectors:ContextVar[tuple] = ContextVar("memory_manifest_collectors", default=())
 
-# Research evidence stays out of the production scheduler and is loaded only by explicit evidence API use.
-def collect_memory_plan_manifests(*args, **kwargs):
-  from extra.qk.schedule_memory_manifest import collect_memory_plan_manifests as collect
-  return collect(*args, **kwargs)
-
-def memory_plan_manifest(*args, **kwargs):
-  from extra.qk.schedule_memory_manifest import memory_plan_manifest as manifest
-  return manifest(*args, **kwargs)
-
-def _memory_plan_manifest(*args, **kwargs):
-  from extra.qk.schedule_memory_manifest import _memory_plan_manifest as manifest
-  return manifest(*args, **kwargs)
-
-def _call_bound_owners(*args, **kwargs):
-  from extra.qk.schedule_memory_manifest import _call_bound_owners as owners
-  return owners(*args, **kwargs)
-
-def __getattr__(name):
-  if name.startswith("ScheduleMemory"):
-    from extra.qk import schedule_memory_manifest
-    return getattr(schedule_memory_manifest, name)
-  raise AttributeError(name)
-
 def memory_plan_rewrite(linear:UOp, held_bufs:set[UOp]|None=None) -> UOp:
   collectors = _memory_manifest_collectors.get()
   if NO_MEMORY_PLANNER and not collectors: return linear

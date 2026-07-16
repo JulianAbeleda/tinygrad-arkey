@@ -1106,14 +1106,6 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
     kernel = fxn(*placeholders).call(*contig_srcs, grad_fxn=grad_fxn)
     return [s.after(kernel) for s in contig_srcs]
 
-def __getattr__(name:str):
-  # Compatibility for research tooling that historically imported qk vocabulary from this core module.
-  if name in {"KernelLDSWindow", "KernelLDSComponentWindow", "KernelLDSRecordComponent", "KernelLDSRecordLayout",
-              "KernelLDSArenaRegion", "KernelTileGeometry", "KernelCandidateContext"}:
-    from extra.qk import kernel_vocabulary
-    return getattr(kernel_vocabulary, name)
-  raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
 class RegisterResidentAccumulator(NamedTuple): op: Ops
 
 @dataclass(frozen=True)

@@ -67,7 +67,6 @@ def collect_memory_plan_manifests(on_manifest:Callable[[ScheduleMemoryManifest],
   manifests:list[ScheduleMemoryManifest] = []
   if on_manifest is not None and not callable(on_manifest): raise TypeError("on_manifest must be callable")
   def collect(linear:UOp, held_bufs:set[UOp], rewritten_arenas:dict[LaneKey, UOp]|None) -> None:
-    from tinygrad.schedule.memory import _memory_plan_manifest
     manifest = _memory_plan_manifest(linear, _make_plan(linear, held_bufs), rewritten_arenas)
     # The callback runs synchronously before the rewritten schedule can dispatch, allowing evidence consumers to
     # bind the exact backing UOps while preserving the list-returning inspection API.
