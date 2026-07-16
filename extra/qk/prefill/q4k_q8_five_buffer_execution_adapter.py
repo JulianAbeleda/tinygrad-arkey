@@ -109,7 +109,7 @@ def prepare_q4k_q8_five_buffer_pipeline_compile(payload: dict[str, Any], canonic
     "mmq_source_sha256": evidence["source_sha256"], "mmq_binary_sha256": evidence["binary_sha256"],
     "producer_source_sha256": producer_source_sha, "producer_binary_sha256": producer_binary_sha,
   }, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-  if any(getattr(program.src[0].arg, "candidate_context", None) is not pipeline.admission.context
+  if any(getattr(program.src[0].arg, "candidate_context", None) != pipeline.admission.context
          for program in (pipeline.producer, pipeline.mmq)):
     raise ValueError("pipeline PROGRAM admission context drift")
   evidence.update(program_count=2, producer_source_sha256=producer_source_sha,

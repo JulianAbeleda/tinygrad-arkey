@@ -188,6 +188,9 @@ def test_static_pipeline_compile_evidence_binds_both_programs_to_one_identity(mo
   assert contract["producer_resource_summary"] == evidence["producer_resource_summary"]
   assert contract["pipeline_binary_sha256"] == evidence["pipeline_binary_sha256"]
   assert contract["execution_input_format"] == evidence["execution_input_format"]
+  repeated, repeated_evidence = adapter.prepare_q4k_q8_five_buffer_pipeline_compile(entry.payload, entry.canonical_identity)
+  assert repeated.admission.context == pipeline.admission.context
+  assert repeated_evidence["pipeline_binary_sha256"] == evidence["pipeline_binary_sha256"]
 
 
 def test_static_compile_evidence_binds_exact_zero_resource_code_object_and_role(monkeypatch):
