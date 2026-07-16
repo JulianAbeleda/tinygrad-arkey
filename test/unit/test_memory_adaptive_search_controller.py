@@ -5,9 +5,17 @@ import pytest
 from extra.qk.memory_adaptive_candidate_catalog import CandidateSpec
 import extra.qk.memory_adaptive_search_controller as controller
 from extra.qk.memory_adaptive_search_controller import SelectedModelScan, _run_controller_with_seam, main, run_controller
+from extra.qk.memory_adaptive_transport import SelectedModelScan as TransportSelectedModelScan
 from tinygrad.llm.device_facts import DeviceCapabilities, DeviceFacts, ProbeRecord
 from tinygrad.llm.prefill_memory_plan import ByteLifetime, ByteTerm, Strategy
 from extra.qk.memory_adaptive_allocation_observer import EXACT_MEMORY_KEYS, make_memory_facts
+
+
+def test_selected_model_scan_public_import_is_transport_identity_and_positional():
+  assert SelectedModelScan is TransportSelectedModelScan
+  values = ({"content_hash": "x"}, {"rows": []}, (), {"prompt_tokens": 1}, {"git": "abc"})
+  scan = SelectedModelScan(*values)
+  assert tuple(getattr(scan, field) for field in scan.__dataclass_fields__) == values
 
 
 def _device(free=900):

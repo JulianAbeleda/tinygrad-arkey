@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import argparse, json, os, pathlib, re, sys, tempfile
 from dataclasses import replace
-from dataclasses import dataclass
 from typing import Any, Mapping, Protocol, Sequence, runtime_checkable
 
 if __package__ in (None, ""):
@@ -26,6 +25,7 @@ from extra.qk.memory_adaptive_candidate_catalog import CandidateSpec, build_cand
 from extra.qk.memory_adaptive_evidence_runner import CandidateArtifacts, EvidenceAdapter
 from extra.qk.memory_adaptive_allocation_observer import validate_memory_facts
 from extra.qk.memory_adaptive_policy import canonical_json
+from extra.qk.memory_adaptive_transport import SelectedModelScan
 from tinygrad.llm.admission import scanned_device_memory_budget
 from tinygrad.llm.device_facts import DeviceFacts, scan_device_facts
 from extra.qk.memory_adaptive_device_facts import MemoryReservePolicy
@@ -33,17 +33,6 @@ from tinygrad.llm.prefill_memory_plan import ByteLifetime, ByteTerm, Strategy
 from extra.qk.prefill_workload_plan import LiveMemoryFacts, PrefillRequest, plan_prefill_workload
 
 SCHEMA = "tinygrad.memory_adaptive_search_controller.v1"
-
-
-@dataclass(frozen=True)
-class SelectedModelScan:
-  """Exact facts discovered from the model selected by the user."""
-  facts: Mapping[str, Any]
-  inventory: Mapping[str, Any]
-  base_terms: Sequence[ByteTerm]
-  workload: Mapping[str, Any]
-  compiler_runtime_revision: Mapping[str, Any]
-
 
 @runtime_checkable
 class ProductionWholeModelSeam(Protocol):

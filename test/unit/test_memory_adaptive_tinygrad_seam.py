@@ -2,7 +2,7 @@ import gc, json, weakref
 import pytest
 from types import SimpleNamespace
 
-from extra.qk.memory_adaptive_search_controller import SelectedModelScan
+from extra.qk.memory_adaptive_transport import SelectedModelScan
 from extra.qk.memory_adaptive_allocation_observer import SCHEMA as CHECKPOINT_OBSERVER_SCHEMA
 from extra.qk.memory_adaptive_tinygrad_seam import (TinygradWholeModelSeam, _compiled_resource_artifact,
   _bind_manifest_physical_owners, _drain_manifest_rows, _failed_artifacts, _reconcile_memory_authorities,

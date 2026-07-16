@@ -18,7 +18,7 @@ if __package__ in (None, ""):
   sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
 from extra.qk.memory_adaptive_candidate_catalog import CandidateSpec, inventory_invocation_ids
-from extra.qk.memory_adaptive_search_controller import SelectedModelScan
+from extra.qk.memory_adaptive_transport import SelectedModelScan
 from extra.qk.memory_adaptive_allocation_observer import (SCHEMA as CHECKPOINT_OBSERVER_SCHEMA,
   derive_memory_facts, validate_memory_facts)
 from tinygrad.llm.prefill_memory_plan import ByteLifetime, ByteTerm, Strategy
