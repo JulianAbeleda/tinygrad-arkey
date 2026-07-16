@@ -4,7 +4,7 @@ from dataclasses import replace
 import itertools
 from tinygrad.helpers import DISABLE_FAST_IDIV, TRANSCENDENTAL, SPEC, DEBUG, VIZ, IMAGE, NOOPT, EMULATED_DTYPES, NOLOCALS, USE_TC, getenv
 from tinygrad.helpers import ALLOW_TF32, TracingKey, Context, panic
-from tinygrad.uop.ops import PatternMatcher, graph_rewrite, UOp, pm_lower_index_dtype, pm_unbind, Ops, UPat, track_rewrites, KernelInfo, ProgramInfo, GroupOp
+from tinygrad.uop.ops import PatternMatcher, graph_rewrite, UOp, pm_lower_index_dtype, Ops, UPat, track_rewrites, KernelInfo, ProgramInfo, GroupOp
 from tinygrad.uop.ops import ParamArg
 from tinygrad.uop.render import pyrender
 from tinygrad.uop.spec import type_verify, spec_tensor, spec_program
@@ -74,11 +74,6 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   if (_u:=getenv("SCHED_UNROLL")) > 1 and ren.target.device == "AMD":
     # recurrence-aware loop-unroll primitive (default-off codegen scheduling capability)
     ast = cg_extras.unroll_recurrence(ast, _u)
-  if (_kb:=getenv("DECODE_OUTER_B_SPLIT")) > 1 and ren.target.device == "AMD":
-    # outer-b independent split-combine primitive: split the serial block loop into K independent LDS-staged
-    # online-softmax partitions + flash combine (default-off, declines unrecognized structure). See
-    # extra/qk/codegen_outer_b_lds_split.py + docs/decode-attention-outer-b-lds-split-combine-scope-20260627.md.
-    ast = cg_extras.outer_b_split(ast, _kb)
   if SPEC: type_verify(ast, spec_tensor)
 
   # preprocess
@@ -106,7 +101,7 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
 
   # opt-in (COALESCED_LOAD_LOWERING): predicate-driven promotion of unit-stride load axes to UPCAST so the
   # existing expander+devectorizer vectorize the load (codegen realization of the layout-IR OptOps.COALESCE).
-  # Pairs with REG_STORE_DEVEC (fired below) to keep accumulator stores scalar. See
+  # The shared register-store lowering keeps accumulator stores scalar. See
   # extra/qk/coalesced_load_lowering.py + docs/decode-coalesced-load-primitive-scope-20260626.md.
   if getenv("COALESCED_LOAD_LOWERING") and ren.target.device == "AMD":
     sink = cg_extras.coalesce_loads(sink)
@@ -158,7 +153,7 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
                        ctx=ren, name="devectorize")
   if ren.target.device == "AMD":
     sink = graph_rewrite(sink, pm_distinct_reg_store_devec, name="distinct reg store devec")
-  if (getenv("REG_STORE_DEVEC") or getenv("COALESCED_LOAD_LOWERING")) and ren.target.device == "AMD":
+  if getenv("COALESCED_LOAD_LOWERING") and ren.target.device == "AMD":
     sink = graph_rewrite(sink, cg_extras.reg_store_devec_pm(), name="reg store devec")
   if getenv("V_DOT2_LOWERING") and ren.target.device == "AMD":
     sink = graph_rewrite(sink, cg_extras.fdot2_pm(), name="fdot2 lowering")
@@ -191,9 +186,6 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   if ren.new_style:
     sink = graph_rewrite(sink, pm_index_is_shrink, name="index is shrink")
     sink = graph_rewrite(sink, pm_remove_vec_dtypes, name="transform to new style")
-
-  if getenv("CODEGEN_UNBIND_BEFORE_RENDER", 0):
-    sink = graph_rewrite(sink, pm_unbind, ctx={}, name="unbind runtime vars before program render")
 
   # this was the linearizer
   sink = graph_rewrite(sink, pm_add_control_flow, ctx=CFGContext(sink), name="add control flow", bottom_up=True)
@@ -363,7 +355,7 @@ def _lower_cache_table() -> str:
 to_program_cache: dict[tuple, UOp] = {}
 def to_program(ast:UOp, renderer:Renderer) -> UOp:
   config = (NOOPT, EMULATED_DTYPES, NOLOCALS, USE_TC, IMAGE, DISABLE_FAST_IDIV, TRANSCENDENTAL, ALLOW_TF32)
-  key = (ast.key, type(renderer), renderer.target, *[x.value for x in config], getenv("WARP_REDUCE_LOWERING"), getenv("V_DOT2_LOWERING"), getenv("REG_STORE_DEVEC"), getenv("SCHED_UNROLL"), getenv("SCHED_LIST"), getenv("COALESCED_LOAD_LOWERING"), getenv("DECODE_FAST_EXP2"), getenv("DECODE_OUTER_B_SPLIT"))
+  key = (ast.key, type(renderer), renderer.target, *[x.value for x in config], getenv("WARP_REDUCE_LOWERING"), getenv("V_DOT2_LOWERING"), getenv("SCHED_UNROLL"), getenv("SCHED_LIST"), getenv("COALESCED_LOAD_LOWERING"), getenv("DECODE_FAST_EXP2"))
   if (prg:=to_program_cache.get(key)) is not None: return prg
   _dk = None
   if LOWER_DISK_CACHE:
