@@ -1,4 +1,5 @@
 import copy
+import json
 
 import pytest
 
@@ -49,7 +50,8 @@ def test_cooperative_preserves_exact_five_buffer_abi_but_has_distinct_canonical_
   source = _payload((256, 256, 512))
   cooperative = derive_q4k_q8_1_cooperative_five_buffer_candidate(source)
   direct = derive_q4k_q8_1_five_buffer_candidate(source)
-  assert cooperative.payload["kernel_abi"] == direct.payload["kernel_abi"] == q4k_q8_1_five_buffer_abi_plan()
+  assert json.loads(json.dumps(cooperative.payload["kernel_abi"])) == \
+         json.loads(json.dumps(direct.payload["kernel_abi"])) == q4k_q8_1_five_buffer_abi_plan()
   assert cooperative.canonical_identity != direct.canonical_identity
   assert direct.payload["schedule"]["family"] == Q4K_Q8_1_DIRECT_SCHEDULE_FAMILY
   assert full_kernel_candidate_capability(direct.payload) is GFX1100_Q4K_Q8_FIVE_BUFFER_CAPABILITY

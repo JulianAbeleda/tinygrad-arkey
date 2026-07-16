@@ -429,7 +429,8 @@ def admit_full_kernel_candidate(payload:dict[str, Any], canonical_identity:str, 
   # authoritative and are validated below.
   if storage_kind == "global_register_resident" and capability is GFX1100_SINGLE_BUFFER_CAPABILITY:
     capability = GFX1100_REGISTER_RESIDENT_CAPABILITY
-  if storage_kind == "direct_global" and capability is GFX1100_SINGLE_BUFFER_CAPABILITY:
+  if schedule.get("family") in (Q4K_Q8_1_DIRECT_SCHEDULE_FAMILY, Q4K_Q8_1_COOPERATIVE_SCHEDULE_FAMILY) and \
+     capability is GFX1100_SINGLE_BUFFER_CAPABILITY:
     capability = full_kernel_candidate_capability(normalized)
   target_id = f"{target['backend']}:{target['arch']}:wave{target['wave_size']}"
   # Profile is retained in legacy payloads and call signatures solely as provenance.
