@@ -13,7 +13,8 @@ import statistics, time
 from tinygrad import Tensor, dtypes
 from tinygrad.uop.ops import KernelInfo, UOp
 
-from extra.qk.layout import Q8_1_BLOCK_ELEMS, q8_1_quantize
+from extra.qk.layout import (Q8_1_BLOCK_ELEMS, Q8_1_MMQ_BLOCK_ELEMS, Q8_1_MMQ_GROUPS_PER_BLOCK,
+                             q8_1_quantize)
 from extra.qk.amd_warp_reduce import _staged_shfl, warp_reduce_max
 
 
@@ -26,6 +27,59 @@ LLAMA_DS4_SUM_ORIGINAL_FP_SOURCE_ANCHORS = (
   "quantize.cu:quantize_mmq_q8_1<MMQ_Q8_1_DS_LAYOUT_DS4>:make_half2(d, sum)",
   "mmq.cuh:block_q8_1_mmq::ds4 (scale, original-fp partial sum)",
 )
+
+PHYSICAL_DS4_LAYOUT = "q8_1_mmq_ds4_transposed_blocks"
+
+
+@dataclass(frozen=True)
+class PhysicalDS4Q8ActivationSpec:
+  """Model-independent physical Q8_1 DS4 producer descriptor."""
+  m: int
+  k: int
+  layout: str = PHYSICAL_DS4_LAYOUT
+  block_elems: int = Q8_1_MMQ_BLOCK_ELEMS
+  groups_per_block: int = Q8_1_MMQ_GROUPS_PER_BLOCK
+  group_elems: int = Q8_1_BLOCK_ELEMS
+  wave_size: int = 32
+  value_dtype: str = "int8"
+  metadata_dtype: str = "float32"
+  sum_semantics: str = "sum_original_fp"
+
+  @property
+  def blocks(self) -> int: return self.k // self.block_elems
+  @property
+  def waves(self) -> int: return self.blocks * self.m * self.groups_per_block
+  @property
+  def values_shape(self) -> tuple[int, int, int]: return self.blocks, self.m, self.block_elems
+  @property
+  def metadata_shape(self) -> tuple[int, int, int]: return self.blocks, self.m, self.groups_per_block
+
+  def validate(self) -> None:
+    if self.m <= 0 or self.k <= 0: raise ValueError("physical DS4 M and K must be positive")
+    if self.layout != PHYSICAL_DS4_LAYOUT: raise ValueError(f"unsupported physical DS4 layout {self.layout!r}")
+    if (self.block_elems, self.groups_per_block, self.group_elems) != \
+       (Q8_1_MMQ_BLOCK_ELEMS, Q8_1_MMQ_GROUPS_PER_BLOCK, Q8_1_BLOCK_ELEMS) or self.wave_size != 32:
+      raise ValueError("physical DS4 producer requires centralized Q8_1 MMQ geometry and wave32")
+    if self.block_elems != self.groups_per_block * self.group_elems:
+      raise ValueError("physical DS4 group geometry does not cover a packed block")
+    if self.k % self.block_elems: raise ValueError(f"physical DS4 K must be a multiple of {self.block_elems}")
+    if self.value_dtype != "int8" or self.metadata_dtype != "float32":
+      raise ValueError("physical DS4 output dtypes must be int8/float32")
+    if self.sum_semantics != "sum_original_fp": raise ValueError("physical DS4 sums must use sum_original_fp")
+
+  def logical_owner(self, wave: int) -> tuple[int, int, int]:
+    if not 0 <= wave < self.waves: raise IndexError("wave outside physical DS4 output")
+    return (wave // (self.m * self.groups_per_block),
+            (wave // self.groups_per_block) % self.m, wave % self.groups_per_block)
+
+  def source_index(self, block: int, row: int, group: int, lane: int) -> int:
+    return row * self.k + block * self.block_elems + group * self.group_elems + lane
+
+  def value_index(self, block: int, row: int, group: int, lane: int) -> int:
+    return (block * self.m + row) * self.block_elems + group * self.group_elems + lane
+
+  def metadata_index(self, block: int, row: int, group: int) -> int:
+    return (block * self.m + row) * self.groups_per_block + group
 
 
 @dataclass(frozen=True)
@@ -68,27 +122,70 @@ class Q4KQ8ActivationProducer:
     return Q4KQ8ActivationTile(values, scales, sums)
 
 
+def _warp_reduce_sum(value: UOp, lane: UOp, wave_size: int = Q8_1_BLOCK_ELEMS) -> UOp:
+  offset, slot = wave_size >> 1, 100
+  while offset:
+    value = value + _staged_shfl(value, offset, lane, slot)
+    offset >>= 1; slot += 1
+  return value
+
+
 def _sum_original_fp_kernel(groups: int, group_elems: int):
-  if group_elems != 32: raise ValueError("sum_original_fp kernel requires 32-value groups")
-  def reduce_sum(value: UOp, lane: UOp) -> UOp:
-    offset, slot = 16, 100
-    while offset:
-      value = value + _staged_shfl(value, offset, lane, slot)
-      offset >>= 1; slot += 1
-    return value
+  if group_elems != Q8_1_BLOCK_ELEMS:
+    raise ValueError(f"sum_original_fp kernel requires {Q8_1_BLOCK_ELEMS}-value groups")
   def kernel(values: UOp, scales: UOp, sums_original_fp: UOp, source: UOp) -> UOp:
     group, lane = UOp.special(groups, "gidx0"), UOp.special(group_elems, "lidx0")
     idx = group * group_elems + lane
     value = source[idx].cast(dtypes.float32)
-    amax, sum_original_fp = warp_reduce_max(value.abs(), lane, group_elems), reduce_sum(value, lane)
+    amax, sum_original_fp = warp_reduce_max(value.abs(), lane, group_elems), _warp_reduce_sum(value, lane, group_elems)
     scale = amax.eq(0).where(UOp.const(dtypes.float32, 1.0), amax / UOp.const(dtypes.float32, 127.0))
     qvalue = (value / scale).round().maximum(UOp.const(dtypes.float32, -128)).minimum(
       UOp.const(dtypes.float32, 127)).cast(dtypes.int8)
     owner = lane.eq(0)
     return UOp.group(values[idx].store(qvalue), scales[group].store(scale, owner),
                      sums_original_fp[group].store(sum_original_fp, owner)).sink(
-      arg=KernelInfo(name=f"q4k_q8_sum_original_fp_{groups}x32", opts_to_apply=()))
+      arg=KernelInfo(name=f"q4k_q8_sum_original_fp_{groups}x{Q8_1_BLOCK_ELEMS}", opts_to_apply=()))
   return kernel
+
+
+def emit_physical_ds4_q8_1_kernel(spec: PhysicalDS4Q8ActivationSpec):
+  """Return a generic UOp emitter that directly owns physical DS4 output indices."""
+  spec.validate()
+  def kernel(values: UOp, scales: UOp, sums_original_fp: UOp, source: UOp) -> UOp:
+    wave, lane = UOp.special(spec.waves, "gidx0"), UOp.special(spec.wave_size, "lidx0")
+    group, row = wave % spec.groups_per_block, (wave // spec.groups_per_block) % spec.m
+    block = wave // (spec.m * spec.groups_per_block)
+    source_idx = row * spec.k + block * spec.block_elems + group * spec.group_elems + lane
+    value_idx = (block * spec.m + row) * spec.block_elems + group * spec.group_elems + lane
+    metadata_idx = (block * spec.m + row) * spec.groups_per_block + group
+    value = source[source_idx].cast(dtypes.float32)
+    amax = warp_reduce_max(value.abs(), lane, spec.wave_size)
+    sum_original_fp = _warp_reduce_sum(value, lane, spec.wave_size)
+    scale = amax.eq(0).where(UOp.const(dtypes.float32, 1.0), amax / UOp.const(dtypes.float32, 127.0))
+    qvalue = (value / scale).round().maximum(UOp.const(dtypes.float32, -128)).minimum(
+      UOp.const(dtypes.float32, 127)).cast(dtypes.int8)
+    owner = lane.eq(0)
+    return UOp.group(values[value_idx].store(qvalue), scales[metadata_idx].store(scale, owner),
+                     sums_original_fp[metadata_idx].store(sum_original_fp, owner)).sink(
+      arg=KernelInfo(name=f"q8_1_physical_ds4_{spec.m}x{spec.k}", opts_to_apply=()))
+  return kernel
+
+
+def produce_physical_ds4_q8_1(activation: Tensor, spec: PhysicalDS4Q8ActivationSpec | None = None
+                              ) -> Q4KQ8ActivationTile:
+  """Materialize row-major fp32 ``[M,K]`` directly as physical DS4 buffers once."""
+  if len(activation.shape) != 2: raise ValueError(f"activation must be rank 2, got {activation.shape}")
+  if activation.dtype != dtypes.float32: raise TypeError("physical DS4 source must be float32")
+  m, k = map(int, activation.shape)
+  spec = PhysicalDS4Q8ActivationSpec(m, k) if spec is None else spec
+  spec.validate()
+  if (spec.m, spec.k) != (m, k): raise ValueError(f"descriptor shape {(spec.m, spec.k)} does not match {(m, k)}")
+  values = Tensor.empty(m*k, dtype=dtypes.int8, device=activation.device)
+  scales = Tensor.empty(spec.waves, dtype=dtypes.float32, device=activation.device)
+  sums = Tensor.empty(spec.waves, dtype=dtypes.float32, device=activation.device)
+  outputs = values.custom_kernel(scales, sums, activation.reshape(-1), fxn=emit_physical_ds4_q8_1_kernel(spec))
+  return Q4KQ8ActivationTile(outputs[0].reshape(spec.values_shape), outputs[1].reshape(spec.metadata_shape),
+                             outputs[2].reshape(spec.metadata_shape))
 
 
 class LlamaDS4Q8ActivationSumOriginalFPProducer:
@@ -115,7 +212,7 @@ class LlamaDS4Q8ActivationSumOriginalFPProducer:
 
   @property
   def operands_sum_original_fp(self) -> tuple[Tensor, Tensor, Tensor]:
-    """Row-major ``[M,K]``, ``[M,K/32]``, ``[M,K/32]`` backing tensors."""
+    """Row-major values and per-Q8_1-group metadata backing tensors."""
     return self.values, self.scales, self.sums_original_fp
 
   def tile_sum_original_fp(self, m0: int, m_tile: int, k0: int = 0,
@@ -127,16 +224,16 @@ class LlamaDS4Q8ActivationSumOriginalFPProducer:
       raise ValueError("activation tile K bounds must be Q8_1-block aligned")
     first, count = k0 // self.block_elems, k_tile // self.block_elems
     values = self.values.reshape(self.m, self.k)[m0:m0+m_tile, k0:k0+k_tile]
-    scales = self.scales.reshape(self.m, self.k//32)[m0:m0+m_tile, first:first+count]
-    sums = self.sums_original_fp.reshape(self.m, self.k//32)[m0:m0+m_tile, first:first+count]
+    scales = self.scales.reshape(self.m, self.k//Q8_1_BLOCK_ELEMS)[m0:m0+m_tile, first:first+count]
+    sums = self.sums_original_fp.reshape(self.m, self.k//Q8_1_BLOCK_ELEMS)[m0:m0+m_tile, first:first+count]
     return Q4KQ8ActivationTile(values, scales, sums)
 
   def source_anchored_ds4_sum_original_fp_operands(self) -> tuple[Tensor, Tensor, Tensor]:
-    """Llama DS4 views: ``[K/128,M,128]`` values and ``[K/128,M,4]`` metadata."""
-    blocks = self.k // 128
-    values = self.values.reshape(self.m, blocks, 128).permute(1, 0, 2)
-    scales = self.scales.reshape(self.m, blocks, 4).permute(1, 0, 2)
-    sums = self.sums_original_fp.reshape(self.m, blocks, 4).permute(1, 0, 2)
+    """Logical block-major views over row-major backing; use the physical producer for direct storage."""
+    blocks = self.k // Q8_1_MMQ_BLOCK_ELEMS
+    values = self.values.reshape(self.m, blocks, Q8_1_MMQ_BLOCK_ELEMS).permute(1, 0, 2)
+    scales = self.scales.reshape(self.m, blocks, Q8_1_MMQ_GROUPS_PER_BLOCK).permute(1, 0, 2)
+    sums = self.sums_original_fp.reshape(self.m, blocks, Q8_1_MMQ_GROUPS_PER_BLOCK).permute(1, 0, 2)
     return values, scales, sums
 
 
@@ -187,4 +284,6 @@ def emit_q4k_with_reusable_q8_producer(words: Tensor, activation: Tensor, spec):
 __all__ = ["Q4KQ8ActivationTile", "Q4KQ8ActivationProducer", "produce_q4k_q8_1_activation",
   "emit_q4k_with_reusable_q8_producer", "Q4KQ8ActivationSumSemantics",
   "LLAMA_DS4_SUM_ORIGINAL_FP_SOURCE_ANCHORS", "LlamaDS4Q8ActivationSumOriginalFPProducer",
-  "produce_llama_ds4_q8_activation_sum_original_fp", "benchmark_llama_ds4_q8_activation_sum_original_fp"]
+  "produce_llama_ds4_q8_activation_sum_original_fp", "benchmark_llama_ds4_q8_activation_sum_original_fp",
+  "PHYSICAL_DS4_LAYOUT", "PhysicalDS4Q8ActivationSpec", "emit_physical_ds4_q8_1_kernel",
+  "produce_physical_ds4_q8_1"]
