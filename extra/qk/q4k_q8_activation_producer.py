@@ -15,7 +15,7 @@ from tinygrad.uop.ops import KernelInfo, UOp
 
 from extra.qk.layout import (Q8_1_BLOCK_ELEMS, Q8_1_MMQ_BLOCK_ELEMS, Q8_1_MMQ_GROUPS_PER_BLOCK,
                              q8_1_quantize)
-from extra.qk.amd_warp_reduce import _staged_shfl, warp_reduce_max
+from extra.qk.amd_warp_reduce import _staged_shfl, warp_reduce_max, warp_reduce_max_native_vgpr, warp_reduce_sum
 
 
 class Q4KQ8ActivationSumSemantics(Enum):
@@ -30,6 +30,8 @@ LLAMA_DS4_SUM_ORIGINAL_FP_SOURCE_ANCHORS = (
 
 PHYSICAL_DS4_LAYOUT = "q8_1_mmq_ds4_transposed_blocks"
 PHYSICAL_DS4_ZERO_GROUP_SCALE_POLICY = "unit_for_zero"
+PORTABLE_STAGED_WAVE_REDUCE = "portable_staged"
+AMD_NATIVE_VGPR_WAVE_REDUCE = "amd_native_vgpr"
 
 
 @dataclass(frozen=True)
@@ -51,6 +53,7 @@ class PhysicalDS4Q8ActivationSpec:
   metadata_dtype: str = "float32"
   sum_semantics: str = "sum_original_fp"
   zero_group_scale_policy: str = PHYSICAL_DS4_ZERO_GROUP_SCALE_POLICY
+  wave_reduce_lowering: str = PORTABLE_STAGED_WAVE_REDUCE
 
   @property
   def blocks(self) -> int: return self.k // self.block_elems
@@ -75,6 +78,8 @@ class PhysicalDS4Q8ActivationSpec:
     if self.sum_semantics != "sum_original_fp": raise ValueError("physical DS4 sums must use sum_original_fp")
     if self.zero_group_scale_policy != PHYSICAL_DS4_ZERO_GROUP_SCALE_POLICY:
       raise ValueError("physical DS4 zero-group scale policy must be unit_for_zero")
+    if self.wave_reduce_lowering not in (PORTABLE_STAGED_WAVE_REDUCE, AMD_NATIVE_VGPR_WAVE_REDUCE):
+      raise ValueError("physical DS4 wave reduction lowering is unsupported")
 
   def logical_owner(self, wave: int) -> tuple[int, int, int]:
     if not 0 <= wave < self.waves: raise IndexError("wave outside physical DS4 output")
@@ -172,8 +177,9 @@ def emit_physical_ds4_q8_1_kernel(spec: PhysicalDS4Q8ActivationSpec):
     value_idx = (block * spec.m + row) * spec.block_elems + group * spec.group_elems + lane
     metadata_idx = (block * spec.m + row) * spec.groups_per_block + group
     value = source[source_idx].cast(dtypes.float32)
-    amax = warp_reduce_max(value.abs(), lane, spec.wave_size)
-    sum_original_fp = _warp_reduce_sum(value, lane, spec.wave_size)
+    native = spec.wave_reduce_lowering == AMD_NATIVE_VGPR_WAVE_REDUCE
+    amax = (warp_reduce_max_native_vgpr if native else warp_reduce_max)(value.abs(), lane, spec.wave_size)
+    sum_original_fp = (warp_reduce_sum if native else _warp_reduce_sum)(value, lane, spec.wave_size)
     scale = amax.eq(0).where(UOp.const(dtypes.float32, 1.0), amax / UOp.const(dtypes.float32, 127.0))
     qvalue = (value / scale).round().maximum(UOp.const(dtypes.float32, -128)).minimum(
       UOp.const(dtypes.float32, 127)).cast(dtypes.int8)

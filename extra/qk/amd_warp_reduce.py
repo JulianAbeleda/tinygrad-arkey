@@ -39,6 +39,13 @@ def warp_reduce_max(val:UOp, lane:UOp, width:int = WARP, slot_base:int = _STAGE_
     val = val.maximum(_staged_shfl(val, off, lane, slot)); off >>= 1; slot += 1
   return val   # every lane holds the width-wide max
 
+def warp_reduce_max_native_vgpr(val:UOp, lane:UOp, width:int = WARP) -> UOp:
+  """Native AMD form: ds_bpermute already materializes an unconditional VGPR result."""
+  off = width >> 1
+  while off >= 1:
+    val = val.maximum(warp_shfl_xor(val, off, lane)); off >>= 1
+  return val
+
 def warp_reduce_sum(val:UOp, lane:UOp, width:int = WARP) -> UOp:
   off = width >> 1
   while off >= 1:

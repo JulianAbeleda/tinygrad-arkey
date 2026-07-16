@@ -9,7 +9,8 @@ from tinygrad.uop.ops import Ops
 from extra.qk.layout import Q8_1_MMQ_BLOCK_ELEMS, Q8_1_MMQ_GROUPS_PER_BLOCK
 from extra.qk.mmq_q4k_q8_reference import q8_1_mmq_ds4_quantize_reference
 from extra.qk.q4k_q8_activation_producer import (
-  PHYSICAL_DS4_LAYOUT, PHYSICAL_DS4_ZERO_GROUP_SCALE_POLICY,
+  AMD_NATIVE_VGPR_WAVE_REDUCE, PHYSICAL_DS4_LAYOUT, PHYSICAL_DS4_ZERO_GROUP_SCALE_POLICY,
+  PORTABLE_STAGED_WAVE_REDUCE,
   PhysicalDS4Q8ActivationSpec, produce_physical_ds4_q8_1)
 
 
@@ -18,6 +19,7 @@ def test_physical_ds4_descriptor_is_frozen_and_validates_exact_grammar():
   spec.validate()
   assert spec.layout == PHYSICAL_DS4_LAYOUT
   assert spec.zero_group_scale_policy == PHYSICAL_DS4_ZERO_GROUP_SCALE_POLICY == "unit_for_zero"
+  assert spec.wave_reduce_lowering == PORTABLE_STAGED_WAVE_REDUCE
   assert spec.values_shape == (2, 3, Q8_1_MMQ_BLOCK_ELEMS)
   assert spec.metadata_shape == (2, 3, Q8_1_MMQ_GROUPS_PER_BLOCK)
   assert spec.waves == 24
@@ -27,6 +29,9 @@ def test_physical_ds4_descriptor_is_frozen_and_validates_exact_grammar():
     with pytest.raises(ValueError): bad.validate()
   with pytest.raises(ValueError, match="zero-group scale policy"):
     replace(spec, zero_group_scale_policy="zero_for_zero").validate()
+  replace(spec, wave_reduce_lowering=AMD_NATIVE_VGPR_WAVE_REDUCE).validate()
+  with pytest.raises(ValueError, match="wave reduction lowering"):
+    replace(spec, wave_reduce_lowering="model_specific").validate()
 
 
 def test_physical_zero_group_policy_matches_split_reference_contract():

@@ -3,6 +3,7 @@ import os
 import numpy as np
 import pytest
 
+from extra.qk.q4k_q8_activation_producer import AMD_NATIVE_VGPR_WAVE_REDUCE
 from extra.qk.prefill import q4k_q8_five_buffer_pipeline as pipe
 from extra.qk.prefill.q4k_q8_five_buffer_artifact import build_q4k_q8_five_buffer_artifact
 from extra.qk.prefill.q4k_q8_five_buffer_compile_adapter import AMD_ISA_TARGET
@@ -22,6 +23,7 @@ def test_static_pipeline_builds_two_programs_with_shared_context():
   assert producer_sink.arg.candidate_context is admission.context
   assert producer_sink.arg.candidate_context.canonical_identity == entry.canonical_identity
   assert (spec.m, spec.k) == (256, 4096)
+  assert spec.wave_reduce_lowering == AMD_NATIVE_VGPR_WAVE_REDUCE
   assert {u.arg.slot for u in mmq_sink.toposort() if u.op is Ops.PARAM} == {0, 1, 2, 3, 4}
 
 

@@ -6,11 +6,12 @@ and its context is attached to both the activation producer and MMQ PROGRAM.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import os
 from typing import Any
 
-from extra.qk.q4k_q8_activation_producer import PhysicalDS4Q8ActivationSpec, emit_physical_ds4_q8_1_kernel
+from extra.qk.q4k_q8_activation_producer import (AMD_NATIVE_VGPR_WAVE_REDUCE, PORTABLE_STAGED_WAVE_REDUCE,
+  PhysicalDS4Q8ActivationSpec, emit_physical_ds4_q8_1_kernel)
 from extra.qk.prefill.q4k_q8_five_buffer_compile_adapter import (
   AMD_ISA_TARGET, admitted_buffer_descriptors, build_q4k_q8_five_buffer_sink,
 )
@@ -66,7 +67,7 @@ def build_physical_ds4_q8_producer(admission):
   """Build the producer sink, using only the admitted workload M/K geometry."""
   workload = full_kernel_workload(admission.normalized_payload)
   m, _, k = workload.shape
-  spec = PhysicalDS4Q8ActivationSpec(m, k)
+  spec = PhysicalDS4Q8ActivationSpec(m, k, wave_reduce_lowering=AMD_NATIVE_VGPR_WAVE_REDUCE)
   spec.validate()
   from tinygrad import dtypes
   from tinygrad.uop.ops import KernelInfo, UOp
@@ -102,8 +103,9 @@ def build_q4k_q8_five_buffer_execution(payload: dict[str, Any], canonical_identi
     raise ValueError(f"source must be flat float32{(spec.m * spec.k,)}")
   if q4_packed_words.device != source.device: raise ValueError("pipeline inputs must share one device")
 
+  runtime_spec = replace(spec, wave_reduce_lowering=PORTABLE_STAGED_WAVE_REDUCE)
   def producer(values, scales, sums, activation):
-    sink = emit_physical_ds4_q8_1_kernel(spec)(values, scales, sums, activation)
+    sink = emit_physical_ds4_q8_1_kernel(runtime_spec)(values, scales, sums, activation)
     return sink.replace(arg=producer_sink.arg)
 
   value_desc, scale_desc, sum_desc = (descriptors[name] for name in
