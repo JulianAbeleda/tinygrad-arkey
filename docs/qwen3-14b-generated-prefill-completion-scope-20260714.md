@@ -1,6 +1,7 @@
 # Qwen3-14B generated-prefill completion scope
 
 Date: 2026-07-14
+Last reconciled: 2026-07-16
 
 ## Objective
 
@@ -15,6 +16,51 @@ quant format + operation role + M/N/K + layouts + target capability + memory bud
 
 Model profile names may select input facts and benchmark fixtures. They may not select compiler lowering, transport,
 schedule, or promotion state.
+
+## Current execution authority: phases 3 through 7
+
+This section is the current progress ledger and ordering authority for the work before autoscan. It supersedes stale
+progress percentages or checklist state elsewhere in this document; the detailed phase requirements below remain the
+normative implementation gates.
+
+The automatic device/model/VRAM scan, memory admission, fitting-model overlay selection, and safe non-fitting
+direct-packed fallback are already connected. They are feasibility planning, not the performance autoscan. The next
+objective is to produce and manually prove one complete faster non-fitting policy before any machine-selected
+promotion is enabled.
+
+| Phase | Current state | Remaining gate |
+|---|---|---|
+| 3 — Q4_K role completion | Incomplete | One generated Q4 policy must cover every required 14B Q4 invocation, including activation preparation, full K, ownership, tails, final binary/resource proof, full-role correctness, and whole-primitive timing without hidden dense dequantization. |
+| 4 — Q6_K role completion | Fallback path available | The explicit direct-packed Q6 fallback must be represented and timed under the same policy contract. A faster generated Q6 candidate is required only if measured Q6 share blocks the whole-policy target. |
+| 5 — Central candidate policy | Partial | One immutable policy must select an exact qualified candidate or declared rollback for every discovered six-row invocation. Missing evidence, identity drift, or unknown workload must fail closed. |
+| 6 — Mixed-route 14B integration | Not complete | The exact policy must execute manually end to end with admission, isolated compile/resource evidence, role and model correctness, route census, memory reconciliation, GPU health, decode regression, and one-change direct-packed rollback. |
+| 7 — Parity and promotion | Not complete | The same immutable revision must pass the matched multi-context llama comparison and the statistical promotion gates below. |
+
+The dependency order is strict:
+
+```text
+Phase 3 Q4 completion
+  -> Phase 4 fallback/strategy qualification
+  -> Phase 5 complete six-row policy
+  -> Phase 6 manual end-to-end proof
+  -> Phase 7 parity/beyond-parity proof
+  -> performance autoscan
+  -> post-proof pruning and restoration of the 30,000-line authored budget
+```
+
+Phase 6 may begin incrementally while individual Phase 3 rows are being validated, but it cannot close until every
+selected invocation has one exact binding or declared fallback. Phase 7 timing cannot authorize a route unless Phase
+6 proves that the intended binaries actually executed and that correctness, memory, resource, health, and decode gates
+passed on the same candidate revision.
+
+The Phase 7 authority matrix is whole-prefill synchronized tokens per second at prompt/context lengths 512, 1,024,
+2,048, and 4,096. Llama and tinygrad run sequentially in at least three alternating, pinned-clock sessions with raw
+samples retained. No accepted context may fall below 98% of llama, every declared context median must exceed llama,
+the paired aggregate 95% lower confidence bound must exceed 1.00, and the aggregate geometric-mean target is at least
+105%. Kernel TFLOP/s, role timing, roofline data, and Boltbeam traces are attribution evidence, not promotion authority.
+
+Autoscan remains a subsequent phase. It may enumerate, gate, measure, cache, and bind policies only after the complete
+manual policy passes Phase 7. Until then, the ordinary non-fitting automatic route remains direct packed.
 
 ## Definition of 100%
 
