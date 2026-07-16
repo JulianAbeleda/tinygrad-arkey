@@ -18,14 +18,15 @@ from tinygrad.llm.prefill_policy import (
   prefill_policy_uses_overlay, prefill_v2_validate_ubatch, select_prefill_runtime_policy,
 )
 from tinygrad.llm.prefill_routes import is_direct_packed_prefill_linear, route_prefill_linear
-from tinygrad.llm.prefill_route_census import PrefillRouteAttachment, prefill_forward_scope, record_prefill_route
+from tinygrad.llm.prefill_route_observer import PrefillRouteAttachment, prefill_route_scope, notify_prefill_route
 from tinygrad.llm.qk_primitives import (
   QKConfig, QKPrimitiveBudget, Q4KPrimitiveLinear, Q4KPrimitiveRegistry, Q6KPrimitiveLinear,
   _demote_q6k_to_q4, _install_q4k_fusions, _install_q4k_primitives, _install_q6k_primitives, _qk_storage_summary,
   qk_primitive_eligibility_from_device_facts,
 )
 from tinygrad.llm.model_facts import model_facts_from_gguf_metadata
-from tinygrad.llm.memory_adaptive_authority import resolve_memory_adaptive_policy
+from tinygrad.llm.memory_adaptive_authority import (adapt_cached_memory_policy, decode_candidate_set,
+                                                     resolve_memory_adaptive_policy, validate_memory_evidence)
 from tinygrad.llm.memory_semantics import (KV_CACHE, MODEL_PARAMETER, PREFILL_OUTPUT, RUNTIME_INPUT, RUNTIME_OUTPUT,
                                            RUNTIME_PERSISTENT, bind_memory_semantic_owner, kv_cache, materialize_runtime_input,
                                            runtime_input_materialization,
@@ -156,8 +157,7 @@ def select_memory_adaptive_runtime_policy(*, kv:dict, meta:dict, device_facts, u
     # opened inventory, workload, and immutable load-entry DeviceFacts scan.
     source = resolve_memory_adaptive_policy(selected_model_source)
     if source is not None:
-      from extra.qk.memory_adaptive_runtime_collector import collect_runtime_policy
-      selected = collect_runtime_policy(request, source)
+      selected = adapt_cached_memory_policy(request, source)
   if selected is None:
     return immutable_prefill_policy({"strategy": "DIRECT_PACKED_FALLBACK", "candidate_id": "direct-packed-baseline",
       "routes": _selected_inventory_routes(inventory, "direct-packed-baseline"),
@@ -182,8 +182,7 @@ def select_memory_adaptive_runtime_policy(*, kv:dict, meta:dict, device_facts, u
   memory_facts = policy.get("memory_facts")
   bundle = None
   if memory_facts is not None or policy.get("memory_fact_evidence") is not None:
-    from extra.qk.memory_adaptive_allocation_observer import validate_memory_facts
-    bundle = validate_memory_facts(policy.get("memory_fact_evidence"), candidate_id=policy["candidate_id"])
+    bundle = validate_memory_evidence(policy.get("memory_fact_evidence"), candidate_id=policy["candidate_id"])
     if bundle is None or memory_facts != bundle["facts"]:
       raise ValueError("memory-adaptive policy memory_facts are not bound to complete measured evidence")
   if prefill_policy_strategy(policy) != "DIRECT_PACKED_FALLBACK" and bundle is None and not trial:
@@ -223,9 +222,7 @@ def _graph_gemm_registry(policy):
   graph = policy.get("graph_gemm") if policy is not None else None
   candidate_set = graph.get("candidate_set") if isinstance(graph, dict) else None
   if not isinstance(candidate_set, dict): return None
-  try:
-    from extra.qk.runtime_specs import FullKernelCandidateSet, admit_full_kernel_candidate_set
-    return admit_full_kernel_candidate_set(FullKernelCandidateSet.from_json(candidate_set))
+  try: return decode_candidate_set(candidate_set)
   except (KeyError, TypeError, ValueError): return None
 
 def _graph_gemm_binding(policy, registry, role:str, shape:tuple[int, int, int], device_facts):
@@ -941,7 +938,7 @@ class Transformer:
     if self._lm_head_wants_pf16(): return _prefill_semantic(_prefill, prefill_output, _pf16(self.output, x).contiguous())
     # The lazy LM head is still the selected output tensor's actual runtime invocation.  Record it before Tensor's
     # downstream final-token pruning; the prefill-forward context prevents the same call during decode from counting.
-    record_prefill_route(self.output)
+    notify_prefill_route(self.output)
     return _prefill_semantic(_prefill, prefill_output, self.output(x))
 
   def forward(self, tokens:Tensor, start_pos:int|UOp, temperature:Tensor) -> Tensor:
@@ -987,12 +984,12 @@ class Transformer:
       jit = (self.prefill_v2_jit if is_prefill_v2 else self.prefill_jit) if is_prefill else \
             (self.rollout_jit_flash if use_flash else self.rollout_jit)
     if not is_prefill_v2:
-      with prefill_forward_scope(is_prefill): return jit(tokens, start_pos, temperature)
+      with prefill_route_scope(is_prefill): return jit(tokens, start_pos, temperature)
     # contain the ambient codegen power: install the warmstart table ONLY around the prefill-v2 forward (it's
     # consulted at kernel-compile time, i.e. this jit's first call), then restore -- decode/other paths never
     # see a populated _WARMSTART_OPTS even within this process.
     import tinygrad.codegen.opt.postrange as pr
-    with prefill_forward_scope(True), pr.warmstart_candidate_state(self._pf16_warmstart):
+    with prefill_route_scope(True), pr.warmstart_candidate_state(self._pf16_warmstart):
       return jit(tokens, start_pos, temperature)
 
   @staticmethod

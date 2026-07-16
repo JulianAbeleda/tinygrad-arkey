@@ -6,12 +6,8 @@ from tinygrad import Tensor, dtypes
 from tinygrad.llm import route_ops as qk_ops
 from tinygrad.llm.memory_semantics import (mark_candidate_workspace, prefill_activation as _prefill_activation,
   prefill_output as _prefill_output, prefill_scratch as _prefill_scratch)
-from tinygrad.llm.prefill_route_census import PrefillRouteAttachment, record_prefill_route
+from tinygrad.llm.prefill_route_observer import PrefillRouteAttachment, notify_prefill_route
 from tinygrad.uop.ops import UOp
-
-activation_spec = qk_ops.qk_quant_specs_attr("activation_spec")
-quant_spec = qk_ops.qk_quant_specs_attr("quant_spec")
-RuntimeOpSpec = qk_ops.qk_runtime_specs_attr("RuntimeOpSpec")
 
 PREFILL_ROUTE_CHOICES = ("auto", "fp16", "direct_packed")
 LM_HEAD_PREFILL_ROUTE_CHOICES = ("lazy", "resident_fp16", "direct_packed")
@@ -29,6 +25,7 @@ class PrefillResearchRouteConfig:
   cooperative_candidate: Mapping[str, Any] | None = None
   cooperative_evidence: Mapping[str, Any] | None = None
   cooperative_enabled: bool = False
+  cooperative_runner: Any | None = None
   generated_tile: bool = False
   wmma_n_tile: int = 256
   wmma_max_raw_elems: int = 64 * 1024 * 1024
@@ -190,23 +187,6 @@ def _cooperative_q4k_binding(lin, spec: "PrefillLinearRouteSpec", *, candidate: 
   return candidate
 
 
-def _run_cooperative_q4k(candidate: dict[str, Any], lin, x_batch: Tensor,
-                         spec: "PrefillLinearRouteSpec", x: Tensor) -> Tensor | None:
-  """Run an admitted fused-Q4 candidate; callers retain direct-packed rollback."""
-  workload = candidate.get("workload", {})
-  descriptor = candidate.get("descriptor", {})
-  if workload.get("shape") != {"M": spec.m, "N": spec.n, "K": spec.k}: return None
-  from extra.qk.mmq_ds4_logical_emitter import packed_fused_candidate
-  # Descriptor geometry is identity evidence, not an unchecked constructor
-  # override; the logical emitter owns its validated tile contract.
-  if {descriptor.get(k) for k in ("m_tile", "n_tile", "k_tile")} - {None, 16, 256}: return None
-  fused = packed_fused_candidate(spec.m, spec.n, spec.k, role=spec.role)
-  words = lin.prefill_packed_weight().to(x.device)
-  values, scales, sums = qk_ops.pack_q8_1_mmq_fused(x_batch.reshape(spec.m, spec.k), fused)
-  out = qk_ops.emit_q4k_q8_mmq_ds4(words, values, scales, sums, fused)
-  return prefill_output(out.reshape(1, spec.m, spec.n))
-
-
 def prefill_route_policy(route:str="auto", *, direct_packed:bool=False) -> str:
   route = str(route).strip().lower()
   if route == "direct": route = "direct_packed"
@@ -325,16 +305,6 @@ class PrefillLinearRouteSpec:
   @property
   def q6k_kernel_prefix(self) -> str:
     return f"prefill_{self.quant.lower()}_direct_packed_load_gemm"
-
-  def runtime_op_spec(self, *, activation_format:str="fp16", lowering_strategy:str="packed_dequant_dot",
-                      device:str="unknown") -> RuntimeOpSpec:
-    qfmt = "Q4_K" if self.quant == "q4k" else "Q6_K" if self.quant == "q6k" else "unknown"
-    role = self.role if self.role else "unknown"
-    return RuntimeOpSpec("QuantizedLinear", "prefill", role, {"M": self.m, "N": self.n, "K": self.k},
-                         quant_spec(qfmt).tensor_spec(), activation_spec(activation_format).activation_spec(),
-                         lowering_strategy=lowering_strategy, device=device,
-                         route_id=f"prefill_{self.quant}_{self.route}")
-
 
 @dataclass(frozen=True)
 class DirectPackedPrefillRequest:
@@ -487,7 +457,7 @@ def _run_direct_packed_baseline(lin, x:Tensor, spec:PrefillLinearRouteSpec) -> T
   candidate = select_direct_packed_prefill_candidate(lin, spec)
   if candidate is None: return None
   out = candidate.run(lin, x, x_batch, spec)
-  record_prefill_route(lin)
+  notify_prefill_route(lin)
   return out
 
 
@@ -512,9 +482,9 @@ def route_direct_packed_prefill_research(lin, x:Tensor, *, config:PrefillResearc
     # The ordinary generated/direct route below remains the rollback.
     cooperative = _cooperative_q4k_binding(lin, spec, candidate=config.cooperative_candidate,
                                             evidence=config.cooperative_evidence, enabled=config.cooperative_enabled)
-    if cooperative is not None:
-      fused = _run_cooperative_q4k(cooperative, lin, x_batch, spec, x)
-      if fused is not None: record_prefill_route(lin); return fused
+    if cooperative is not None and callable(config.cooperative_runner):
+      fused = config.cooperative_runner(cooperative, lin, x_batch, spec, x)
+      if fused is not None: notify_prefill_route(lin); return fused
     if config.generated_tile:
       raise RuntimeError("PREFILL_QK_GENERATED_TILE was retired after the generated packed-tile route was refuted; "
                          "use the Q4KPrefillRouteSpec direct-packed default or PREFILL_Q4K_Q8=wmma_tiled research.")
@@ -535,7 +505,7 @@ def route_direct_packed_prefill_research(lin, x:Tensor, *, config:PrefillResearc
                              f"needs the next fused/tiled generated emitter, not many Tensor matmul graph fragments. "
                              f"Set PREFILL_Q4K_WMMA_ALLOW_GRAPH_EXPLOSION=1 only for debugging.")
         out = qk_ops.emit_q4k_int8_wmma_prefill_tensor(words, xq, xscales, wmma_spec)
-        record_prefill_route(lin); return prefill_output(out.reshape(1, spec.m, spec.n))
+        notify_prefill_route(lin); return prefill_output(out.reshape(1, spec.m, spec.n))
       if q8_mode == "wmma_tiled":
         xq, xscales = qk_ops.q8_1_quantize(x_batch.cast(dtypes.float32))
         tiled_spec = qk_ops.describe_q4k_int8_wmma_tiled_prefill(
@@ -546,7 +516,7 @@ def route_direct_packed_prefill_research(lin, x:Tensor, *, config:PrefillResearc
           out = qk_ops.emit_q4k_int8_wmma_tiled_prefill_tensor(words, xq, xscales, tiled_spec)
         except NotImplementedError:
           out = qk_ops.emit_q4k_int8_wmma_tiled_scheduler_tensor(words, xq, xscales, tiled_spec)
-        record_prefill_route(lin); return prefill_output(out.reshape(1, spec.m, spec.n))
+        notify_prefill_route(lin); return prefill_output(out.reshape(1, spec.m, spec.n))
       if q8_mode in ("packed_ds4", "packed_row_major", "packed_fused"):
         candidate_factory = (qk_ops.packed_fused_candidate if q8_mode == "packed_fused" else
                              qk_ops.packed_row_major_candidate if q8_mode == "packed_row_major" else qk_ops.packed_ds4_candidate)
@@ -560,7 +530,7 @@ def route_direct_packed_prefill_research(lin, x:Tensor, *, config:PrefillResearc
           values, scales, sums = (_candidate_workspace_if_attached(value, lin) for value in packer(source, candidate))
           _MMQ_DS4_LAST_PACKED = (cache_key, (values, scales, sums))
         out = qk_ops.emit_q4k_q8_mmq_ds4(words, values, scales, sums, candidate)
-        record_prefill_route(lin); return prefill_output(out.reshape(1, spec.m, spec.n))
+        notify_prefill_route(lin); return prefill_output(out.reshape(1, spec.m, spec.n))
       raise RuntimeError(f"PREFILL_Q4K_Q8={q8_mode!r} matched no generated route; the handwritten sdot4/MMQ/Q8_1-GEMM "
                          f"modes were deleted 2026-07-06. Only generated modes or off-values are valid.")
   return _run_direct_packed_baseline(lin, x, spec)
@@ -597,7 +567,7 @@ def route_prefill_q4k_gate_up_research(gate, up, x: Tensor, *,
                             for value in qk_ops.pack_q8_1_mmq_fused(x_batch.reshape(m, k), candidate))
     _MMQ_DS4_LAST_PACKED = (cache_key, (values, scales, sums))
   out = prefill_output(qk_ops.emit_q4k_q8_mmq_ds4(words, values, scales, sums, candidate).reshape(1, m, n * 2))
-  record_prefill_route(gate); record_prefill_route(up)
+  notify_prefill_route(gate); notify_prefill_route(up)
   return out[:, :, :n], out[:, :, n:]
 
 
@@ -611,9 +581,9 @@ def route_prefill_linear(lin, x:Tensor, *, prefill_graph_gemm:bool) -> Tensor:
 
   if route == "fp16" and prefill_graph_gemm and w is not None:
     routed = qk_ops.route_pf16_graph_gemm(lin, x)
-    if routed is not None: record_prefill_route(lin); return routed
+    if routed is not None: notify_prefill_route(lin); return routed
   if w is None: w = lin.weight.cast(dtypes.float16)
   b = getattr(lin, "bias", None)
   out = x.cast(dtypes.float16).linear(w.transpose(), b.cast(dtypes.float16) if b is not None else None)
-  record_prefill_route(lin)
+  notify_prefill_route(lin)
   return out

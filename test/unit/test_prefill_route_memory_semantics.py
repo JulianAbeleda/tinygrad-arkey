@@ -3,7 +3,7 @@ from pathlib import Path
 
 from tinygrad import Tensor
 from tinygrad.llm.memory_semantics import (MemorySemanticClass, PREFILL_ACTIVATION, memory_semantic_owner)
-from tinygrad.llm.prefill_route_census import PrefillRouteAttachment
+from tinygrad.llm.prefill_route_observer import PrefillRouteAttachment
 from tinygrad.llm import prefill_routes
 
 

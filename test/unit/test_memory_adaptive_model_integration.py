@@ -6,6 +6,7 @@ import pytest
 import tinygrad.llm.model as model_module
 from tinygrad.llm.device_facts import DeviceCapabilities, DeviceFacts, ProbeRecord
 from extra.qk.memory_adaptive_allocation_observer import make_memory_facts
+from extra.qk.memory_adaptive_runtime_collector import install_model_adapters
 from tinygrad.llm.model import (Transformer, _graph_gemm_binding, _memory_adaptive_measurement_authority,
   derive_selected_gguf_prefill_inventory, select_memory_adaptive_runtime_policy)
 
@@ -13,6 +14,8 @@ from tinygrad.llm.model import (Transformer, _graph_gemm_binding, _memory_adapti
 def device_facts(free=24_000_000_000):
   probe = ProbeRecord("injected", "2026-07-15T00:00:00+00:00")
   return DeviceFacts("AMD", "AMD", "gfx1100", 24_000_000_000, free, DeviceCapabilities(wave_size=32), probe, probe)
+
+install_model_adapters()
 
 
 def metadata():
@@ -102,6 +105,8 @@ def test_selected_model_source_invokes_internal_authority_then_exact_runtime_col
             "policy": {"strategy": "DIRECT_PACKED_FALLBACK", "candidate_id": "cached-direct",
                        "routes": {row["invocation_id"]: "cached-direct" for row in request["inventory"]["rows"]}}}
   monkeypatch.setattr(runtime_collector, "collect_runtime_policy", collect)
+  from tinygrad.llm.memory_adaptive_authority import register_memory_adaptive_adapters
+  register_memory_adaptive_adapters(policy_adapter=collect)
   policy = select_memory_adaptive_runtime_policy(kv=kv, meta=meta, device_facts=device_facts(),
                                                   selected_model_source="/chosen.gguf")
   assert policy["candidate_id"] == "cached-direct"

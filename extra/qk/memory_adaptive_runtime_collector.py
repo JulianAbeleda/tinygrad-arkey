@@ -124,3 +124,15 @@ def make_file_policy_collector(path: str | pathlib.Path, **pins: Any):
 
 
 __all__ = ["REQUEST_SCHEMA", "collect_runtime_policy", "make_policy_collector", "make_file_policy_collector"]
+
+def _decode_candidate_set(value):
+  from extra.qk.runtime_specs import FullKernelCandidateSet, admit_full_kernel_candidate_set
+  return admit_full_kernel_candidate_set(FullKernelCandidateSet.from_json(value))
+
+def install_model_adapters() -> None:
+  from tinygrad.llm.memory_adaptive_authority import register_memory_adaptive_adapters
+  register_memory_adaptive_adapters(policy_adapter=collect_runtime_policy, evidence_validator=validate_memory_facts,
+                                    candidate_set_decoder=_decode_candidate_set)
+
+install_model_adapters()
+__all__.append("install_model_adapters")

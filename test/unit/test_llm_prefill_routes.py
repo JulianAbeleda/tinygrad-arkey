@@ -304,15 +304,16 @@ def test_prefill_q4k_q8_rejects_unknown_mode():
 
 
 def test_direct_packed_route_spec_exports_runtime_op_spec():
+  from extra.qk.prefill_route_adapter import runtime_op_spec
   from tinygrad.llm.prefill_routes import PrefillLinearRouteSpec
-  q4 = PrefillLinearRouteSpec("direct_packed", "q4k", "ffn_gate_up", 512, 17408, 5120).runtime_op_spec()
+  q4 = runtime_op_spec(PrefillLinearRouteSpec("direct_packed", "q4k", "ffn_gate_up", 512, 17408, 5120))
   assert q4.family == "QuantizedLinear"
   assert q4.phase == "prefill"
   assert q4.role == "ffn_gate_up"
   assert q4.weight.format == "Q4_K"
   assert q4.activation.format == "fp16"
   assert q4.shape == {"M": 512, "N": 17408, "K": 5120}
-  q6 = PrefillLinearRouteSpec("direct_packed", "q6k", "", 512, 5120, 17408).runtime_op_spec()
+  q6 = runtime_op_spec(PrefillLinearRouteSpec("direct_packed", "q6k", "", 512, 5120, 17408))
   assert q6.role == "unknown"
   assert q6.weight.format == "Q6_K"
 
@@ -345,7 +346,7 @@ class _PrefillTensorStub:
 
 def test_production_route_ignores_environment_when_attachment_selects_exact_baseline(monkeypatch):
   from tinygrad.llm import prefill_routes
-  from tinygrad.llm.prefill_route_census import PrefillRouteAttachment
+  from tinygrad.llm.prefill_route_observer import PrefillRouteAttachment
   lin = _q4_prefill_linear()
   lin._prefill_route_attachment = PrefillRouteAttachment(
     "blk.0", "direct_packed", "weight", {"candidate_id": "direct_packed"}, {"backend": "CPU"})
@@ -356,7 +357,7 @@ def test_production_route_ignores_environment_when_attachment_selects_exact_base
 
 def test_production_route_missing_or_mismatched_attachment_fails_closed(monkeypatch):
   from tinygrad.llm import prefill_routes
-  from tinygrad.llm.prefill_route_census import PrefillRouteAttachment
+  from tinygrad.llm.prefill_route_observer import PrefillRouteAttachment
   x, lin = _PrefillTensorStub(), _q4_prefill_linear()
   assert prefill_routes._attached_production_route(lin, x) is None
   lin._prefill_route_attachment = PrefillRouteAttachment(
@@ -398,7 +399,7 @@ def _q6_prefill_linear(parts=1):
 
 
 def _attached_direct_baseline(lin):
-  from tinygrad.llm.prefill_route_census import PrefillRouteAttachment
+  from tinygrad.llm.prefill_route_observer import PrefillRouteAttachment
   lin._prefill_route_attachment = PrefillRouteAttachment(
     "invocation", "direct-packed-baseline", lin.name,
     {"candidate_id": "direct-packed-baseline", "strategy": "DIRECT_PACKED_FALLBACK"}, {"backend": "CPU"})

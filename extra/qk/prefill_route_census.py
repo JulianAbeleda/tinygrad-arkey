@@ -1,21 +1,13 @@
-"""Context-local, fail-closed census of selected GGUF prefill linear routes."""
+"""Measurement-only census of selected GGUF prefill route dispatch."""
 from __future__ import annotations
 
 from collections import Counter
 from contextlib import contextmanager
-from contextvars import ContextVar
-from dataclasses import dataclass
 from typing import Iterator, Mapping, Sequence
 
-CENSUS_SCHEMA = "tinygrad.prefill_route_census.v1"
+from tinygrad.llm.prefill_route_observer import PrefillRouteAttachment, observe_prefill_routes, prefill_route_scope
 
-@dataclass(frozen=True)
-class PrefillRouteAttachment:
-  invocation_id: str
-  route_id: str
-  tensor_identity: str
-  selected_policy: object
-  scanned_target_facts: object
+CENSUS_SCHEMA = "tinygrad.prefill_route_census.v1"
 
 class PrefillRouteCensus:
   def __init__(self, required_invocations: Sequence[str], expected_counts: Mapping[str, int] | None = None):
@@ -27,12 +19,14 @@ class PrefillRouteCensus:
       raise ValueError("expected prefill counts must exactly cover required invocation_ids with positive integers")
     self._counts, self._rows, self._errors = Counter(), {}, []
 
-  def record(self, attachment: PrefillRouteAttachment) -> None:
+  def record(self, linear: object) -> None:
+    attachment = getattr(linear, "_prefill_route_attachment", None)
+    if not isinstance(attachment, PrefillRouteAttachment):
+      self._errors.append("runtime prefill linear has no exact selected-inventory attachment"); return
     invocation_id = attachment.invocation_id
     if invocation_id not in self.expected: self._errors.append(f"unexpected invocation_id {invocation_id!r}"); return
     row = {"invocation_id": invocation_id, "route_id": attachment.route_id, "tensor_identity": attachment.tensor_identity}
-    if invocation_id in self._rows and self._rows[invocation_id] != row:
-      self._errors.append(f"inconsistent duplicate row for {invocation_id!r}")
+    if invocation_id in self._rows and self._rows[invocation_id] != row: self._errors.append(f"inconsistent duplicate row for {invocation_id!r}")
     self._rows[invocation_id] = row; self._counts[invocation_id] += 1
     if self._counts[invocation_id] > self.expected[invocation_id]:
       self._errors.append(f"duplicate invocation_id {invocation_id!r}: expected {self.expected[invocation_id]}, observed {self._counts[invocation_id]}")
@@ -49,28 +43,9 @@ class PrefillRouteCensus:
             "required_invocations": list(self.required), "covered_invocations": [x["invocation_id"] for x in rows], "rows": rows,
             **({"blocker": "; ".join(errors)} if errors else {})}
 
-_ACTIVE_CENSUS: ContextVar[PrefillRouteCensus | None] = ContextVar("tinygrad_prefill_route_census", default=None)
-_PREFILL_FORWARD: ContextVar[bool] = ContextVar("tinygrad_prefill_forward", default=False)
-
 @contextmanager
 def collect_prefill_route_census(required_invocations: Sequence[str], expected_counts: Mapping[str, int] | None = None) -> Iterator[PrefillRouteCensus]:
-  census = PrefillRouteCensus(required_invocations, expected_counts); token = _ACTIVE_CENSUS.set(census)
-  try: yield census
-  finally: _ACTIVE_CENSUS.reset(token)
+  census = PrefillRouteCensus(required_invocations, expected_counts)
+  with observe_prefill_routes(census.record), prefill_route_scope(True): yield census
 
-@contextmanager
-def prefill_forward_scope(enabled: bool = True) -> Iterator[None]:
-  token = _PREFILL_FORWARD.set(bool(enabled))
-  try: yield
-  finally: _PREFILL_FORWARD.reset(token)
-
-def record_prefill_route(lin) -> None:
-  census = _ACTIVE_CENSUS.get()
-  if census is None or not _PREFILL_FORWARD.get(): return
-  attachment = getattr(lin, "_prefill_route_attachment", None)
-  if not isinstance(attachment, PrefillRouteAttachment):
-    census._errors.append("runtime prefill linear has no exact selected-inventory attachment"); return
-  census.record(attachment)
-
-__all__ = ["CENSUS_SCHEMA", "PrefillRouteAttachment", "PrefillRouteCensus", "collect_prefill_route_census",
-           "prefill_forward_scope", "record_prefill_route"]
+__all__ = ["CENSUS_SCHEMA", "PrefillRouteCensus", "collect_prefill_route_census"]

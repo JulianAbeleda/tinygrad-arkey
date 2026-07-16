@@ -15,6 +15,31 @@ from pathlib import Path
 from typing import Any, Callable, Mapping
 
 SCHEMA = "tinygrad.memory_adaptive_runtime_authority.v1"
+_runtime_policy_adapter: Callable[[Mapping[str, Any], Mapping[str, Any]], Mapping[str, Any] | None] | None = None
+_memory_evidence_validator: Callable[..., Mapping[str, Any] | None] | None = None
+_candidate_set_decoder: Callable[[Mapping[str, Any]], object | None] | None = None
+
+def register_memory_adaptive_adapters(*, policy_adapter=None, evidence_validator=None, candidate_set_decoder=None) -> None:
+  """Install optional policy-data decoders without coupling the model to their package."""
+  global _runtime_policy_adapter, _memory_evidence_validator, _candidate_set_decoder
+  if policy_adapter is not None:
+    if not callable(policy_adapter): raise TypeError("policy adapter must be callable")
+    _runtime_policy_adapter = policy_adapter
+  if evidence_validator is not None:
+    if not callable(evidence_validator): raise TypeError("evidence validator must be callable")
+    _memory_evidence_validator = evidence_validator
+  if candidate_set_decoder is not None:
+    if not callable(candidate_set_decoder): raise TypeError("candidate-set decoder must be callable")
+    _candidate_set_decoder = candidate_set_decoder
+
+def adapt_cached_memory_policy(request: Mapping[str, Any], source: Mapping[str, Any]) -> Mapping[str, Any] | None:
+  return None if _runtime_policy_adapter is None else _runtime_policy_adapter(request, source)
+
+def validate_memory_evidence(evidence, *, candidate_id: str):
+  return None if _memory_evidence_validator is None else _memory_evidence_validator(evidence, candidate_id=candidate_id)
+
+def decode_candidate_set(candidate_set: Mapping[str, Any]):
+  return None if _candidate_set_decoder is None else _candidate_set_decoder(candidate_set)
 
 
 def _cache_path(selected_model_source: str) -> Path:
@@ -87,17 +112,5 @@ def resolve_memory_adaptive_policy(selected_model_source: str) -> Mapping[str, A
     return None
 
 
-def refresh_memory_adaptive_policy(selected_model_source: str, *, min_samples: int = 3) -> Mapping[str, Any] | None:
-  """Explicitly run machine search and persist only a completed selection."""
-  if not isinstance(selected_model_source, str) or not selected_model_source: return None
-  from extra.qk.memory_adaptive_search_controller import run_controller
-  path = _cache_path(selected_model_source)
-  cache = _read(path)
-  raw = run_controller(model_path=selected_model_source, cache_record=cache, min_samples=min_samples)
-  resolved = _resolve_for_test(selected_model_source, runner=lambda **_: raw, cache=cache)
-  if resolved is not None: _write(path, resolved["cache_record"])
-  return resolved
-
-search_memory_adaptive_policy = refresh_memory_adaptive_policy
-
-__all__ = ["SCHEMA", "resolve_memory_adaptive_policy", "refresh_memory_adaptive_policy", "search_memory_adaptive_policy"]
+__all__ = ["SCHEMA", "resolve_memory_adaptive_policy", "register_memory_adaptive_adapters", "adapt_cached_memory_policy",
+           "validate_memory_evidence", "decode_candidate_set"]

@@ -3,8 +3,8 @@ from types import SimpleNamespace
 import pytest
 
 from tinygrad.llm.model import _attach_selected_prefill_inventory
-from tinygrad.llm.prefill_route_census import (PrefillRouteAttachment, collect_prefill_route_census,
-                                                prefill_forward_scope, record_prefill_route)
+from tinygrad.llm.prefill_route_observer import PrefillRouteAttachment, notify_prefill_route
+from extra.qk.prefill_route_census import collect_prefill_route_census
 
 def _attachment(invocation_id, route_id, tensor_identity=None):
   return PrefillRouteAttachment(invocation_id, route_id, tensor_identity or invocation_id, {"route": route_id}, {"target": "scan"})
@@ -13,18 +13,18 @@ def test_all_selected_policy_route_classes_are_censused_exactly():
   routes = {"direct": "direct-packed", "overlay": "resident-overlay", "graph": "graph-gemm",
             "bounded": "bounded-packed-tiles", "fallback": "direct-packed-fallback"}
   linears = [SimpleNamespace(_prefill_route_attachment=_attachment(key, route)) for key, route in routes.items()]
-  with collect_prefill_route_census(tuple(routes)) as census, prefill_forward_scope():
-    for linear in linears: record_prefill_route(linear)
+  with collect_prefill_route_census(tuple(routes)) as census:
+    for linear in linears: notify_prefill_route(linear)
   artifact = census.artifact()
   assert artifact["status"] == "PASS" and artifact["complete"] is True
   assert {row["invocation_id"]: row["route_id"] for row in artifact["rows"]} == routes
   assert all(row["call_count"] == row["expected_call_count"] == 1 for row in artifact["rows"])
 
 def test_missing_duplicate_and_unexpected_rows_fail_closed():
-  with collect_prefill_route_census(("a", "b")) as census, prefill_forward_scope():
-    record_prefill_route(SimpleNamespace(_prefill_route_attachment=_attachment("a", "route-a")))
-    record_prefill_route(SimpleNamespace(_prefill_route_attachment=_attachment("a", "route-a")))
-    record_prefill_route(SimpleNamespace(_prefill_route_attachment=_attachment("unexpected", "route-x")))
+  with collect_prefill_route_census(("a", "b")) as census:
+    notify_prefill_route(SimpleNamespace(_prefill_route_attachment=_attachment("a", "route-a")))
+    notify_prefill_route(SimpleNamespace(_prefill_route_attachment=_attachment("a", "route-a")))
+    notify_prefill_route(SimpleNamespace(_prefill_route_attachment=_attachment("unexpected", "route-x")))
   artifact = census.artifact()
   assert artifact["status"] == "FAIL" and artifact["complete"] is False
   assert "duplicate invocation_id" in artifact["blocker"]
@@ -33,11 +33,10 @@ def test_missing_duplicate_and_unexpected_rows_fail_closed():
 
 def test_decode_or_out_of_scope_calls_do_not_pollute_prefill_census():
   linear = SimpleNamespace(_prefill_route_attachment=_attachment("a", "route-a"))
+  from tinygrad.llm.prefill_route_observer import prefill_route_scope
   with collect_prefill_route_census(("a",)) as census:
-    record_prefill_route(linear)
-    with prefill_forward_scope(False): record_prefill_route(linear)
-    with prefill_forward_scope(True): record_prefill_route(linear)
-    record_prefill_route(linear)
+    with prefill_route_scope(False): notify_prefill_route(linear)
+    notify_prefill_route(linear)
   assert census.artifact()["rows"][0]["call_count"] == 1
 
 def test_inventory_attachment_uses_exact_tensor_identity_and_preserves_authorities():
@@ -59,8 +58,8 @@ def test_fixed_runtime_row_is_attached_and_required_by_full_census():
            "fixed_route_id": "fixed-ggml-linear"}]
   routes = {"controlled": "overlay", "fixed": "fixed-ggml-linear"}
   _attach_selected_prefill_inventory(model, {"rows": rows}, {"routes": routes}, object())
-  with collect_prefill_route_census(tuple(routes)) as census, prefill_forward_scope():
-    record_prefill_route(controlled); record_prefill_route(output)
+  with collect_prefill_route_census(tuple(routes)) as census:
+    notify_prefill_route(controlled); notify_prefill_route(output)
   artifact = census.artifact()
   assert artifact["complete"] is True
   assert {row["invocation_id"]: row["route_id"] for row in artifact["rows"]} == routes

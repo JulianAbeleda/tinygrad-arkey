@@ -2,8 +2,8 @@ import inspect, json
 import pytest
 
 import tinygrad.llm.memory_adaptive_authority as authority
-from tinygrad.llm.memory_adaptive_authority import (_resolve_for_test, refresh_memory_adaptive_policy,
-  resolve_memory_adaptive_policy)
+from tinygrad.llm.memory_adaptive_authority import _resolve_for_test, resolve_memory_adaptive_policy
+from extra.qk.memory_adaptive_authority import refresh_memory_adaptive_policy
 
 
 def selected(policy, candidate="overlay"):
@@ -59,7 +59,7 @@ def test_normal_resolution_is_read_only_and_does_not_import_controller(tmp_path,
 
 def test_explicit_refresh_runs_controller_and_persists(tmp_path, monkeypatch):
   cache = tmp_path / "policy.json"
-  monkeypatch.setattr(authority, "_cache_path", lambda _: cache)
+  monkeypatch.setattr("extra.qk.memory_adaptive_authority._cache_path", lambda _: cache)
   result = selected({"strategy": "FULL_RESIDENT_OVERLAY"})
   monkeypatch.setattr("extra.qk.memory_adaptive_search_controller.run_controller", lambda **kwargs: result)
   assert refresh_memory_adaptive_policy("model.gguf") == result

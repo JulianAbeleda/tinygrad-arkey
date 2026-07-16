@@ -586,7 +586,7 @@ def _worker(request: Mapping[str, Any]) -> dict[str, Any]:
     from tinygrad.llm.model import Transformer, _memory_adaptive_measurement_authority, precompute_freqs_cis
     clear_model_caches = precompute_freqs_cis.cache_clear
     from tinygrad.llm.physical_memory_ledger import AllocationOwner, PhysicalMemoryLedger, allocation_phase
-    from tinygrad.llm.prefill_route_census import collect_prefill_route_census
+    from extra.qk.prefill_route_census import collect_prefill_route_census
     from tinygrad.llm.schedule_memory_evidence import schedule_memory_evidence
     from tinygrad.schedule.memory import collect_memory_plan_manifests
     from extra.qk.memory_adaptive_allocation_observer import AllocationObserver
