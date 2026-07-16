@@ -2,12 +2,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, TypeAlias
+from typing import Callable, TypeAlias, TYPE_CHECKING
 
 from tinygrad.codegen.opt.packed_weight import PackedWeightTransform
 from tinygrad.dtype import AddrSpace, DType, PtrDType, dtypes
-from tinygrad.uop.ops import (AxisType, KernelLDSArenaRegion, KernelLDSComponentWindow, KernelLDSWindow, KernelTileGeometry,
-                              Ops, UOp)
+from tinygrad.uop.ops import AxisType, Ops, UOp
+if TYPE_CHECKING: from tinygrad.uop.ops import KernelLDSWindow, KernelTileGeometry
 
 _RDNA3_DIMS = (16, 16, 16)
 _RDNA3_ELEMENTS = (16, 16, 8)
@@ -34,12 +34,6 @@ def validate_rdna3_wmma_descriptor(tc) -> None:
   except (AttributeError, AssertionError, TypeError, ValueError) as exc:
     raise ValueError("RDNA3 WMMA descriptor remaps are unavailable or invalid") from exc
   if remaps != _RDNA3_REMAPS: raise ValueError("RDNA3 WMMA descriptor remaps drifted")
-
-
-
-
-
-
 
 
 def contract_symbolic_upcast(value:UOp, axis:UOp) -> UOp:
@@ -92,11 +86,6 @@ class PackedPrecontractOperandTemplate:
 
 PrecontractOperand: TypeAlias = PrecontractOperandTemplate | PackedPrecontractOperandTemplate
 
-
-
-
-
-
 @dataclass(frozen=True)
 class PrecontractThreadAxes:
   wave_m: UOp
@@ -131,37 +120,6 @@ class PrecontractLDSStage:
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 @dataclass(frozen=True)
 class PrecontractProducerInstance:
   epoch: UOp
@@ -185,6 +143,77 @@ class PrecontractFactors:
   vectors_per_row: int
   loads_a: int
   loads_b: int
+
+
+@dataclass(frozen=True)
+class PrecontractCandidateContract:
+  """Single owner of tensor-core candidate geometry, storage, operand, and CONTRACT assembly."""
+  context: object; tc: object
+  factors: PrecontractFactors; register_mode: bool
+
+  @property
+  def pipeline(self): return getattr(self.context, "pipeline", None)
+
+  @classmethod
+  def create(cls, context:object, tc) -> PrecontractCandidateContract:
+    geometry = getattr(context, "geometry", None)
+    if geometry is None: raise ValueError("precontract candidate requires explicit geometry")
+    pipeline = getattr(context, "pipeline", None)
+    register_hint = getattr(getattr(pipeline, "storage", None), "kind", None) == "global_register_resident"
+    factors = derive_precontract_shape_factors(geometry, tc) if register_hint else derive_precontract_factors(geometry, tc)
+    register_mode = False
+    if pipeline is not None:
+      from tinygrad.codegen.opt.kernel_pipeline import pipeline_policy_from_candidate
+      policy = pipeline_policy_from_candidate(pipeline)
+      if policy.storage_kind != "lds":
+        coverage = getattr(pipeline, "wait_coverage", None)
+        if coverage is None or not coverage.passed: raise ValueError("register-resident candidate lacks proven wait dependency coverage")
+      register_mode = policy.storage_kind == "global_register_resident"
+      if register_mode != register_hint: raise ValueError("candidate storage policy disagrees with geometry contract")
+    return cls(context, tc, factors, register_mode)
+
+  def assemble(self, *, in0:UOp, in1:UOp, original_axes:tuple[UOp, UOp, UOp], outer_n:UOp, outer_m:UOp,
+               wave_m:UOp, wave_n:UOp, lane:UOp, tc_upcast_axes:tuple[tuple[tuple[int, int], ...], ...],
+               range_by_id:dict[int, UOp], allocation_id:Callable[[], int]|None
+               ) -> tuple[tuple[PrecontractOperand, ...], PrecontractThreadAxes, tuple[PrecontractContractSpec, ...], UOp|None]:
+    geometry, tc = self.context.geometry, self.tc
+    contracts = []
+    for operand_idx, role in enumerate(("A", "B")):
+      axes = tuple(range_by_id[a] for a, size in tc_upcast_axes[operand_idx] if size == 2)
+      if len(axes) != 4: raise ValueError(f"candidate {role} contract does not have four binary axes")
+      element = ((axes[0]*2+axes[1])*2+axes[2])*2+axes[3]
+      contracts.append(PrecontractContractSpec(role, axes, tc_upcast_axes[operand_idx], element,
+                                               tuple(tc.lane_map.remaps()[operand_idx].items())))
+    contracts = tuple(contracts)
+    validate_precontract_contracts(tc, contracts, context="candidate", mismatch="does not match actual descriptor operand mapping")
+
+    # Preserve descriptor, allocation, then operand UOp creation order: linearization tie-breaks follow graph insertion order.
+    allocation = None
+    if not self.register_mode:
+      total_bytes = geometry.lds_windows[-1].end if self.pipeline is None else self.pipeline.active_lds_bytes
+      if allocation_id is None: raise ValueError("LDS candidate requires an allocation ID owner")
+      tag = ("kernel_tile_lds", geometry) if self.pipeline is None else ("kernel_tile_lds", geometry, self.pipeline)
+      allocation = UOp.placeholder((total_bytes//tc.dtype_in.itemsize,), tc.dtype_in, allocation_id(), addrspace=AddrSpace.LOCAL).replace(tag=tag)
+
+    operand_a = PrecontractOperandTemplate("A", in0, original_axes[1], original_axes[2], outer_m*geometry.tile[0])
+    packed_weight = getattr(self.context, "packed_weight", None)
+    if packed_weight is None:
+      operand_b:PrecontractOperand = PrecontractOperandTemplate("B", in1, original_axes[0], original_axes[2], outer_n*geometry.tile[1])
+    else:
+      if self.register_mode: raise ValueError("packed-weight candidate requires LDS tile storage")
+      if (original_axes[0].vmax+1, original_axes[2].vmax+1) != (packed_weight.rows, packed_weight.k): raise ValueError(
+        "packed-weight candidate row/K ownership does not match admitted transform")
+      packed_params = [u for u in in1.toposort() if u.op is Ops.PARAM and isinstance(u.dtype, PtrDType) and
+                       u.ptrdtype.base == packed_weight.storage_dtype]
+      if len(packed_params) != 1: raise ValueError(f"packed-weight B carrier must reach exactly one canonical packed PARAM, found {len(packed_params)}")
+      if getattr(packed_params[0].arg, "slot", packed_params[0].arg) != 2: raise ValueError(
+        f"packed-weight B carrier must own ABI slot 2, got PARAM {packed_params[0].arg!r}")
+      if any(u.op is Ops.PARAM and isinstance(u.dtype, PtrDType) and u.ptrdtype.base == dtypes.half for u in in1.toposort()): raise ValueError(
+        "packed-weight B carrier unexpectedly reaches a dense fp16 PARAM")
+      operand_b = PackedPrecontractOperandTemplate("B", packed_params[0], packed_weight, original_axes[0], original_axes[2], outer_n*geometry.tile[1])
+    operands:tuple[PrecontractOperand, ...] = (operand_a, operand_b)
+    validate_precontract_operand_templates(operands, dtype_in=tc.dtype_in, context="candidate")
+    return operands, PrecontractThreadAxes(wave_m, wave_n, lane), contracts, allocation
 
 
 def derive_precontract_shape_factors(geometry:KernelTileGeometry, tc) -> PrecontractFactors:

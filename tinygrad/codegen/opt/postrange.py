@@ -5,7 +5,7 @@ from typing import cast
 from tinygrad.uop.ops import Ops, UOp, UPat, PatternMatcher, KernelInfo, graph_rewrite, AxisType, ssimplify, GroupOp, remove_all_tags
 from tinygrad.uop.ops import axis_letters, axis_colors, axis_to_pos
 from tinygrad.device import Buffer
-from tinygrad.dtype import dtypes, AddrSpace, PtrDType
+from tinygrad.dtype import dtypes
 from tinygrad.helpers import colored, getenv, DEBUG, NOOPT, argsort, round_up, prod, merge_dicts, get_single_element, flatten
 from tinygrad.helpers import ALLOW_TF32, count
 from tinygrad.codegen.opt import Opt, OptOps, KernelOptError, check
@@ -369,20 +369,16 @@ class Scheduler:
             axes[2], new_range = self.shift_to(axes[2], amt, AxisType.UNROLL)
             ne.append(new_range)
 
-          candidate_axes = None
+          candidate_axes = candidate_contract = None
           if candidate_geometry is not None:
             # Consume the complete exact candidate while the original scalar A/B templates are still available.
-            from tinygrad.codegen.opt.kernel_lds import derive_precontract_factors, derive_precontract_shape_factors
-            candidate_pipeline = getattr(self.ast.arg.candidate_context, "pipeline", None)
-            register_candidate = getattr(getattr(candidate_pipeline, "storage", None), "kind", None) == "global_register_resident"
-            try: factors = (derive_precontract_shape_factors(candidate_geometry, tc) if register_candidate else
-                            derive_precontract_factors(candidate_geometry, tc))
+            from tinygrad.codegen.opt.kernel_lds import PrecontractCandidateContract
+            try: candidate_contract = PrecontractCandidateContract.create(self.ast.arg.candidate_context, tc)
             except ValueError as exc: raise KernelOptError(str(exc)) from exc
+            factors = candidate_contract.factors
             axes[0], subtile_n = self.shift_to(axes[0], factors.subtiles_n, AxisType.UPCAST)
             axes[1], subtile_m = self.shift_to(axes[1], factors.subtiles_m, AxisType.UPCAST)
-            # Wave-private register schedules have no cross-wave axis.  A
-            # constant encodes that ownership without creating a size-one
-            # RANGE, which shift_to intentionally does not support.
+            # A constant gives wave-private schedules cross-wave ownership without an unsupported size-one RANGE.
             if factors.waves_m == 1: wave_m = UOp.const(dtypes.weakint, 0)
             else: axes[1], wave_m = self.shift_to(axes[1], factors.waves_m, AxisType.LOCAL)
             if factors.waves_n == 1: wave_n = UOp.const(dtypes.weakint, 0)
@@ -407,70 +403,21 @@ class Scheduler:
             tc_upcast_axes = tuple([tuple([(self.rngs[a].arg[0], sz) for a,sz in v]) for v in tc_upcast_axes])
             tc_reduce_axes = tuple([self.rngs[a].arg[0] for a in tc_reduce_axes])
 
-            # construct the op
-            # TODO: remove tc_upcast_axes from the arg
-            # do the reduce_axes always disappear? i think they don't
-            # they need to be moved into the WMMA srcs
+            # TODO: remove tc_upcast_axes from the WMMA arg once reduce axes are always consumed.
             wmma_arg = (str(tc), tc.dims, tc.dtype_in, tc.dtype_out, self.ren.target.device, tc.threads, tc_upcast_axes, ()) #, tc_reduce_axes)
             if candidate_axes is not None:
-              from tinygrad.codegen.opt.kernel_lds import (PackedPrecontractOperandTemplate, PrecontractContractSpec,
-                PrecontractKAxis, PrecontractOperandTemplate, PrecontractThreadAxes, build_precontract_lds_stage)
+              from tinygrad.codegen.opt.kernel_lds import PrecontractKAxis, build_precontract_lds_stage
               subtile_m, subtile_n, wave_m, wave_n, k_substep, outer_n, outer_m, outer_k, lane = candidate_axes
               range_by_id = {r.arg[0]:r for r in self.rngs}
-              contracts = []
-              for operand_idx, role in enumerate(("A", "B")):
-                contract_axes = tuple(range_by_id[a] for a,sz in tc_upcast_axes[operand_idx] if sz == 2)
-                if len(contract_axes) != 4: raise KernelOptError(f"candidate {role} contract does not have four binary axes")
-                element = ((contract_axes[0]*2+contract_axes[1])*2+contract_axes[2])*2+contract_axes[3]
-                contracts.append(PrecontractContractSpec(role, contract_axes, tc_upcast_axes[operand_idx], element,
-                  tuple(tc.lane_map.remaps()[operand_idx].items())))
-              candidate_pipeline = getattr(self.ast.arg.candidate_context, "pipeline", None)
-              candidate_policy = None
-              if candidate_pipeline is not None:
-                from tinygrad.codegen.opt.kernel_pipeline import pipeline_policy_from_candidate
-                try: candidate_policy = pipeline_policy_from_candidate(candidate_pipeline)
-                except (TypeError, ValueError) as exc: raise KernelOptError(str(exc)) from exc
-                if candidate_policy.storage_kind != "lds":
-                  coverage = getattr(candidate_pipeline, "wait_coverage", None)
-                  if coverage is None or not coverage.passed:
-                    raise KernelOptError("register-resident candidate lacks proven wait dependency coverage")
-              register_mode = candidate_policy is not None and candidate_policy.storage_kind == "global_register_resident"
-              candidate_lds_id = _candidate_lds_buffer_id(self) if not register_mode else None
-              allocation = None
-              if not register_mode:
-                allocation = UOp.placeholder((candidate_geometry.lds_windows[-1].end//tc.dtype_in.itemsize,), tc.dtype_in, candidate_lds_id,
-                                               addrspace=AddrSpace.LOCAL).replace(tag=("kernel_tile_lds", candidate_geometry))
-              if candidate_pipeline is not None and not register_mode:
-                allocation = UOp.placeholder((candidate_pipeline.active_lds_bytes//tc.dtype_in.itemsize,), tc.dtype_in, candidate_lds_id,
-                                               addrspace=AddrSpace.LOCAL).replace(tag=("kernel_tile_lds", candidate_geometry, candidate_pipeline))
-              operand_a=PrecontractOperandTemplate("A",in0,original_axes[1],original_axes[2],outer_m*candidate_geometry.tile[0])
-              packed_weight=getattr(self.ast.arg.candidate_context,"packed_weight",None)
-              if packed_weight is None:
-                operand_b=PrecontractOperandTemplate("B",in1,original_axes[0],original_axes[2],outer_n*candidate_geometry.tile[1])
-              else:
-                if register_mode: raise KernelOptError("packed-weight candidate requires LDS tile storage")
-                if (original_axes[0].vmax+1,original_axes[2].vmax+1) != (packed_weight.rows,packed_weight.k):
-                  raise KernelOptError("packed-weight candidate row/K ownership does not match admitted transform")
-                packed_params=[u for u in in1.toposort() if u.op is Ops.PARAM and isinstance(u.dtype,PtrDType) and
-                               u.ptrdtype.base == packed_weight.storage_dtype]
-                if len(packed_params) != 1:
-                  raise KernelOptError(f"packed-weight B carrier must reach exactly one canonical packed PARAM, found {len(packed_params)}")
-                if getattr(packed_params[0].arg, "slot", packed_params[0].arg) != 2:
-                  raise KernelOptError(f"packed-weight B carrier must own ABI slot 2, got PARAM {packed_params[0].arg!r}")
-                if any(u.op is Ops.PARAM and isinstance(u.dtype,PtrDType) and u.ptrdtype.base == dtypes.half
-                       for u in in1.toposort()):
-                  raise KernelOptError("packed-weight B carrier unexpectedly reaches a dense fp16 PARAM")
-                operand_b=PackedPrecontractOperandTemplate("B",packed_params[0],packed_weight,original_axes[0],
-                  original_axes[2],outer_n*candidate_geometry.tile[1])
-              operands=(operand_a,operand_b)
-              thread_axes=PrecontractThreadAxes(wave_m,wave_n,lane)
+              try: operands, thread_axes, contracts, allocation = candidate_contract.assemble(
+                in0=in0, in1=in1, original_axes=original_axes, outer_n=outer_n, outer_m=outer_m, wave_m=wave_m, wave_n=wave_n, lane=lane,
+                tc_upcast_axes=tc_upcast_axes, range_by_id=range_by_id, allocation_id=None if candidate_contract.register_mode else lambda: _candidate_lds_buffer_id(self))
+              except (TypeError, ValueError) as exc: raise KernelOptError(str(exc)) from exc
+              factors, candidate_pipeline, register_mode = candidate_contract.factors, candidate_contract.pipeline, candidate_contract.register_mode
               pipeline_tc_uop = None
               if register_mode:
-                # A register-resident candidate is a direct global/L2 -> WMMA lowering. Preserve the ordinary tensor-core
-                # operand and output-axis contracts here: the staged register graph stores all eight output subtiles in a
-                # flat vec64 accumulator and consequently loses their M/N ownership before the epilogue. It also models
-                # A and B row fragments as K substeps, which feeds A/A and B/B pairs to WMMA. The ordinary CONTRACT inputs
-                # already lower to VGPR fragments without LDS and retain the exact TC lane/subtile mapping.
+                # Direct global/L2 -> WMMA keeps ordinary CONTRACT inputs: the staged register graph flattens output-subtile
+                # ownership and models row fragments as K substeps, while these inputs retain exact lane/subtile mapping.
                 wmma_srcs = [
                   UOp(Ops.CONTRACT, dtype=srcs[0].dtype.vec(tc.elements_per_thread[0]), src=(srcs[0],), arg=tc_upcast_axes[0], tag=1),
                   UOp(Ops.CONTRACT, dtype=srcs[1].dtype.vec(tc.elements_per_thread[1]), src=(srcs[1],), arg=tc_upcast_axes[1], tag=1),
