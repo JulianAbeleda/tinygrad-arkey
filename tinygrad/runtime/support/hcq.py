@@ -653,3 +653,7 @@ class HCQAllocator(HCQAllocatorBase, Generic[HCQDeviceType]):
       unwrap(dest_dev.hw_compute_queue_t)().wait(src_dev.timeline_signal, src_dev.timeline_value - 1) \
                                            .wait(dest_dev.timeline_signal, dest_dev.timeline_value - 1) \
                                            .signal(dest_dev.timeline_signal, dest_dev.next_timeline()).submit(dest_dev)
+
+class HCQInterfaceAllocator(HCQAllocator[HCQDeviceType], Generic[HCQDeviceType]):
+  def _do_free(self, opaque:HCQBuffer, options:BufferSpec|None=None): self.dev.iface.free(opaque)
+  def _map(self, buf:HCQBuffer): return self.dev.iface.map(buf.base)

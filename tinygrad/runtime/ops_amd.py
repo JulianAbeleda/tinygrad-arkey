@@ -3,7 +3,7 @@ from typing import cast
 import os, ctypes, struct, hashlib, functools, importlib, mmap, errno, array, contextlib, sys, weakref, itertools, collections, atexit, time
 assert sys.platform != 'win32'
 from dataclasses import dataclass
-from tinygrad.runtime.support.hcq import HCQCompiled, HCQAllocator, HCQBuffer, HWQueue, CLikeArgsState, HCQSignal, HCQProgram, FileIOInterface
+from tinygrad.runtime.support.hcq import HCQCompiled, HCQInterfaceAllocator, HCQBuffer, HWQueue, CLikeArgsState, HCQSignal, HCQProgram, FileIOInterface
 from tinygrad.runtime.support.hcq import MMIOInterface, BumpAllocator, hcq_filter_visible_devices, hcq_profile
 from tinygrad.uop.ops import sint
 from tinygrad.device import Compiled, BufferSpec
@@ -654,17 +654,13 @@ class AMDProgram(HCQProgram):
                                                      bool((SQTT_ITRACE_SE_MASK.value >> se) & 1), self.dev.prof_exec_counter)]
     return res
 
-class AMDAllocator(HCQAllocator['AMDDevice']):
+class AMDAllocator(HCQInterfaceAllocator['AMDDevice']):
   def __init__(self, dev:AMDDevice):
     super().__init__(dev, copy_bufs=getattr(dev.iface, 'copy_bufs', None), max_copyout_size=0x1000 if dev.is_usb() else None,
                      supports_copy_from_disk=dev.has_sdma_queue, supports_transfer=dev.has_sdma_queue and not dev.is_usb())
 
   def _alloc(self, size:int, options:BufferSpec) -> HCQBuffer:
     return self.dev.iface.alloc(size, host=options.host, uncached=options.uncached, cpu_access=options.cpu_access or not self.dev.has_sdma_queue)
-
-  def _do_free(self, opaque, options:BufferSpec): self.dev.iface.free(opaque)
-
-  def _map(self, buf:HCQBuffer): return self.dev.iface.map(buf._base if buf._base is not None else buf)
 
   def _copyout(self, dest:memoryview, src:HCQBuffer):
     if not self.dev.is_usb(): return super()._copyout(dest, src)

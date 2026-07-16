@@ -3,7 +3,7 @@ import os, ctypes, contextlib, re, functools, mmap, struct, array, sys, weakref
 assert sys.platform != 'win32'
 from typing import cast
 from dataclasses import dataclass
-from tinygrad.runtime.support.hcq import HCQCompiled, HCQAllocator, HCQBuffer, HWQueue, CLikeArgsState, HCQProgram, HCQSignal, BumpAllocator
+from tinygrad.runtime.support.hcq import HCQCompiled, HCQInterfaceAllocator, HCQBuffer, HWQueue, CLikeArgsState, HCQProgram, HCQSignal, BumpAllocator
 from tinygrad.runtime.support.hcq import MMIOInterface, FileIOInterface, hcq_filter_visible_devices, hcq_profile
 from tinygrad.uop.ops import sint
 from tinygrad.device import Compiled, BufferSpec
@@ -336,13 +336,9 @@ class NVProgram(HCQProgram['NVDevice']):
         Compiled.profile_events += [ProfilePMAEvent(self.dev.device, self.name, pma_blob, self.dev.prof_exec_counter)]
     return res
 
-class NVAllocator(HCQAllocator['NVDevice']):
+class NVAllocator(HCQInterfaceAllocator['NVDevice']):
   def _alloc(self, size:int, options:BufferSpec) -> HCQBuffer:
     return self.dev.iface.alloc(size, cpu_access=options.cpu_access, host=options.host)
-
-  def _do_free(self, opaque:HCQBuffer, options:BufferSpec): self.dev.iface.free(opaque)
-
-  def _map(self, buf:HCQBuffer): return self.dev.iface.map(buf._base if buf._base is not None else buf)
 
   def _encode_decode(self, bufout:HCQBuffer, bufin:HCQBuffer, desc_buf:HCQBuffer, hist:list[HCQBuffer], shape:tuple[int,...], frame_pos:int):
     assert all(h.va_addr % 0x100 == 0 for h in hist + [bufin, bufout, desc_buf]), "all buffers must be 0x100 aligned"
