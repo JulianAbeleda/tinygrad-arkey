@@ -14,7 +14,7 @@ from typing import Any, Iterable
 from tinygrad.codegen.opt.packed_weight import PackedWeightTransform
 from tinygrad.llm.model_facts import ModelFacts, TensorFact, model_facts_from_gguf_metadata
 from extra.qk.runtime_specs import (FullKernelCandidateSet, admit_full_kernel_candidate_set,
-  derive_packed_weight_candidate, rebind_full_kernel_workload)
+  derive_packed_weight_candidate, derive_q4k_q8_1_five_buffer_candidate, rebind_full_kernel_workload)
 
 INVENTORY_SCHEMA = "qk.packed_prefill_workload_inventory.v1"
 CANDIDATE_INVENTORY_SCHEMA = "qk.packed_prefill_candidate_inventory.v1"
@@ -219,7 +219,8 @@ def generate_candidate_inventory(inventory: dict[str, Any], templates: dict[str,
     template = templates.get(row["role"])
     if template is None: raise ValueError(f"unknown schedule-template mapping for role {row['role']!r}")
     rebound = rebind_full_kernel_workload(template, profile=inventory_identity, role=row["role"], shape=shape, target=target)
-    entry = derive_packed_weight_candidate(rebound.to_json()["payload"], row["quant_format"])
+    entry = derive_q4k_q8_1_five_buffer_candidate(rebound.to_json()["payload"]) if row["quant_format"] == "Q4_K" else \
+      derive_packed_weight_candidate(rebound.to_json()["payload"], row["quant_format"])
     workload = entry.payload["workload"]
     if tuple(workload["shape"][x] for x in ("m", "n", "k")) != shape:
       raise ValueError(f"candidate/tensor shape mismatch for {key!r}")

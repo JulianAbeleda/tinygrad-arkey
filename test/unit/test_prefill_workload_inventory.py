@@ -103,6 +103,10 @@ def test_exact_mixed_inventory_and_canonical_candidate_sets_are_admitted():
   artifact = generate_candidate_inventory(inventory, _templates())
   assert artifact["schema"] == CANDIDATE_INVENTORY_SCHEMA
   assert {q:len(s["entries"]) for q,s in artifact["candidate_sets"].items()} == {"Q4_K":4, "Q6_K":2}
+  assert all("kernel_abi" in x["payload"] and "operand_sources" not in x["payload"]
+             for x in artifact["candidate_sets"]["Q4_K"]["entries"])
+  assert all(x["payload"]["operand_sources"]["b"]["quant_format"] == "Q6_K" and "kernel_abi" not in x["payload"]
+             for x in artifact["candidate_sets"]["Q6_K"]["entries"])
   assert len({x["canonical_identity"] for x in artifact["bindings"]}) == 6
   assert artifact["inventory_identity"] == inventory["inventory_identity"]
   assert all(x["inventory_key"]["inventory_identity"] == inventory["inventory_identity"] for x in artifact["bindings"])
