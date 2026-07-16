@@ -195,6 +195,24 @@ class MMQCandidate:
     return "mmq-" + hashlib.sha256(encoded).hexdigest()
 
 
+def packed_ds4_geometry(descriptor: LogicalMMQDescriptor | None = None) -> tuple[int, int, int, int, int, int, int, int, int]:
+  q4 = descriptor.q4k if descriptor is not None else Q4KDecode()
+  q8 = descriptor.q8 if descriptor is not None else Q8DS4Semantics()
+  if (q4.block_elements, q4.packed_words, q4.metadata_words) != (256, 32, 4):
+    raise ValueError("DS4 lowering only supports the canonical Q4_K packed grammar")
+  if (q8.block_elements, q8.packed_block_elements, q8.groups_per_packed_block) != (32, 128, 4):
+    raise ValueError("DS4 lowering only supports the canonical Q8_1 DS4 packed grammar")
+  if q4.packed_words != q4.block_elements // 8:
+    raise ValueError("Q4_K packed words do not cover the declared nibble payload")
+  q4_groups = q4.block_elements // q8.block_elements
+  q4_blocks_per_ds4 = q4.block_elements // q8.packed_block_elements
+  if q4_groups % q4_blocks_per_ds4 or q4_groups // q4_blocks_per_ds4 != q8.groups_per_packed_block:
+    raise ValueError("Q4_K and Q8 DS4 group geometry is incompatible")
+  group_pair_words = q8.block_elements // 4
+  return (q4.block_elements, q4.packed_words, q4.metadata_words, q4_groups, q4_blocks_per_ds4,
+          q8.packed_block_elements, q8.block_elements, q8.groups_per_packed_block, group_pair_words)
+
+
 def _jsonable(value: Any) -> Any:
   if isinstance(value, Enum): return value.value
   if isinstance(value, Mapping): return {str(k): _jsonable(v) for k, v in value.items()}
@@ -203,4 +221,4 @@ def _jsonable(value: Any) -> Any:
   return value
 
 
-__all__ = ["VOCABULARY_VERSION", "Axis", "BackendCapability", "DType", "DotOp", "EdgePredicate", "LogicalMMQDescriptor", "MMQCandidate", "Ownership", "PhysicalMapping", "Q4KDecode", "Q8DS4Semantics", "Stage", "Staging", "Synchronization", "SyncScope"]
+__all__ = ["VOCABULARY_VERSION", "Axis", "BackendCapability", "DType", "DotOp", "EdgePredicate", "LogicalMMQDescriptor", "MMQCandidate", "Ownership", "PhysicalMapping", "Q4KDecode", "Q8DS4Semantics", "Stage", "Staging", "Synchronization", "SyncScope", "packed_ds4_geometry"]

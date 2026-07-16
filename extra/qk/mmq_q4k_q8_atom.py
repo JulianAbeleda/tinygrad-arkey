@@ -26,7 +26,8 @@ from extra.qk.mmq_atom_boundary import (
   PREFILL_14B_Q4K_Q8_1_HYBRID_MMQ_ATOM_ROUTE_ID,
 )
 from extra.qk.mmq_lifecycle import MMQLifecycleRow, zero_counters
-from extra.qk.mmq_logical_vocabulary import LogicalMMQDescriptor, PhysicalMapping, Q4KDecode, Q8DS4Semantics
+from extra.qk.mmq_ds4_probe_contract import cooperative_128_reuse_evidence
+from extra.qk.mmq_logical_vocabulary import LogicalMMQDescriptor, PhysicalMapping, packed_ds4_geometry
 from extra.qk.mmq_q4k_q8_reference import (
   Q81MMQDS4Activation, Q4KQ81MMQTileSpec, Q8_1_MMQ_DS4_LAYOUT, q4k_q8_1_mmq_tile_reference,
   q8_1_mmq_ds4_from_row_major_reference,
@@ -451,24 +452,6 @@ def _packed_ds4_mapping(mapping: PhysicalMapping | None = None, q8_group_element
   if q8_group_elements % lane_group_width:
     raise ValueError("DS4 packed mapping must divide a Q8 group across lane groups")
   return mapping, micro_m, lane_group_width, q8_group_elements // lane_group_width
-
-
-def packed_ds4_geometry(descriptor: LogicalMMQDescriptor | None = None) -> tuple[int, int, int, int, int, int, int, int, int]:
-  q4 = descriptor.q4k if descriptor is not None else Q4KDecode()
-  q8 = descriptor.q8 if descriptor is not None else Q8DS4Semantics()
-  if (q4.block_elements, q4.packed_words, q4.metadata_words) != (Q4_K_BLOCK_ELEMS, 32, 4):
-    raise ValueError("DS4 lowering only supports the canonical Q4_K packed grammar")
-  if (q8.block_elements, q8.packed_block_elements, q8.groups_per_packed_block) != (Q8_1_BLOCK_ELEMS, 128, 4):
-    raise ValueError("DS4 lowering only supports the canonical Q8_1 DS4 packed grammar")
-  if q4.packed_words != q4.block_elements // 8:
-    raise ValueError("Q4_K packed words do not cover the declared nibble payload")
-  q4_groups = q4.block_elements // q8.block_elements
-  q4_blocks_per_ds4 = q4.block_elements // q8.packed_block_elements
-  if q4_groups % q4_blocks_per_ds4 or q4_groups // q4_blocks_per_ds4 != q8.groups_per_packed_block:
-    raise ValueError("Q4_K and Q8 DS4 group geometry is incompatible")
-  group_pair_words = q8.block_elements // 4
-  return (q4.block_elements, q4.packed_words, q4.metadata_words, q4_groups, q4_blocks_per_ds4,
-          q8.packed_block_elements, q8.block_elements, q8.groups_per_packed_block, group_pair_words)
 
 
 def _packed_ds4_storage(descriptor: LogicalMMQDescriptor | None = None) -> str:
@@ -986,8 +969,7 @@ def run_q4k_q8_1_mmq_coop_128_reuse_probe(*, enabled: bool = False) -> dict[str,
   map and compiler resource contract exist, accepting inputs would imply a
   dispatchable candidate.  ``enabled=True`` is an explicit fail-closed gate.
   """
-  from extra.qk.mmq_ds4_logical_emitter import cooperative_128_reuse_probe
-  evidence = cooperative_128_reuse_probe(enabled=False)
+  evidence = cooperative_128_reuse_evidence()
   evidence["backend_atom_id"] = AMD_DS4_COOP_128_REUSE_PROBE_ID
   if enabled:
     raise RuntimeError("cooperative 128x128 reuse probe is blocked: " + "; ".join(evidence["exact_blockers"]))

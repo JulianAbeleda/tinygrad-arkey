@@ -14,12 +14,10 @@ from tinygrad.uop.ops import KernelInfo, UOp
 
 from extra.qk.layout import q8_1_quantize
 from extra.qk.amd_warp_reduce import _staged_shfl, warp_reduce_max
-from extra.qk.mmq_logical_vocabulary import DotOp, MMQCandidate
-from extra.qk.mmq_q4k_q8_atom import _q4k_q8_1_bounded_ds4_dot4x4_kernel, packed_ds4_geometry
+from extra.qk.mmq_ds4_probe_contract import cooperative_128_reuse_evidence
+from extra.qk.mmq_logical_vocabulary import DotOp, MMQCandidate, packed_ds4_geometry
+from extra.qk.mmq_q4k_q8_atom import _q4k_q8_1_bounded_ds4_dot4x4_kernel
 from extra.qk.q4k_q8_mmq_prefill_spec import Q4KQ8MMQPrefillSpec
-
-COOP_128_REUSE_PROBE_ID = "q4k_q8_ds4_coop_128x128_k256_reuse_v0"
-
 
 def _axis_extent(candidate: MMQCandidate, name: str) -> int:
   for axis in candidate.descriptor.axes:
@@ -168,25 +166,10 @@ def cooperative_128_reuse_probe(*, enabled: bool = False) -> dict:
   atom has no multi-wave owner map or resource-qualified 128x128 lowering, so
   dispatching it would turn a shape probe into unsupported kernel evidence.
   """
-  evidence = {
-    "probe_id": COOP_128_REUSE_PROBE_ID, "status": "BLOCKED_FAIL_CLOSED",
-    "default_off": True, "research_only": True,
-    "candidate": {"tile": [128, 128, 256], "activation_reuse_panels": 8,
-                   "lifecycle": "cooperative_multi_wave"},
-    "compile": {"status": "NOT_RUN", "binary_identity": None},
-    "correctness": {"status": "NOT_RUN", "full_output": False},
-    "performance": {"status": "NOT_RUN", "same_session": False},
-    "production_dispatch_changed": False, "rollback_route": "direct-packed",
-    "exact_blockers": [
-      "current DS4 cooperative atom rejects shape: bounded to 16x16x256",
-      "current mapping requires one wave per workgroup; 128x128 needs multi-wave ownership",
-      "emitted store_owner metadata is absent (observed 0; expected 16384 output owners)",
-      "no compiler/resource evidence for LDS, VGPR, occupancy, or scratch at 128x128",
-    ],
-  }
+  evidence = cooperative_128_reuse_evidence()
   if enabled:
     raise RuntimeError("; ".join(evidence["exact_blockers"]))
   return evidence
 
 
-__all__ = ["COOP_128_REUSE_PROBE_ID", "cooperative_128_reuse_probe", "emit_q4k_q8_mmq_ds4", "pack_q8_1_mmq_ds4", "pack_q8_1_mmq_fused", "packed_ds4_candidate", "packed_row_major_candidate", "packed_fused_candidate"]
+__all__ = ["cooperative_128_reuse_probe", "emit_q4k_q8_mmq_ds4", "pack_q8_1_mmq_ds4", "pack_q8_1_mmq_fused", "packed_ds4_candidate", "packed_row_major_candidate", "packed_fused_candidate"]
