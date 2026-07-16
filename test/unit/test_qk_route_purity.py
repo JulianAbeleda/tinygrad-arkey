@@ -54,6 +54,12 @@ def test_route_policy_import_does_not_eagerly_import_qk_manifest():
   assert out == "False"
 
 
+def test_route_policy_has_no_module_global_binding_api():
+  from tinygrad.llm import route_policy
+  assert not hasattr(route_policy, "set_qk_route_policy")
+  assert not hasattr(route_policy, "has_qk_route_policy")
+
+
 def test_qk_route_policy_supported_ids_include_manifest_defaults():
   from extra.qk.route_manifest import default_routes
   from tinygrad.llm import route_policy
