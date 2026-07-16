@@ -9,7 +9,7 @@ from tinygrad.llm.physical_memory_ledger import allocation_owner, bind_allocatio
 from tinygrad.llm import route_ops as qk_ops
 from tinygrad.llm.decode_routes import q4k_primitive_linear_call, q6k_primitive_linear_call
 from tinygrad.llm.route_policy import _qk_generated_policy_entry
-from tinygrad.llm.model_route_plan import ModelRoutePlan, build_model_route_plan, primitive_route_entry_for_tensor
+from tinygrad.llm.model_route_plan import ModelRoutePlan, build_model_route_plan
 
 @dataclass(frozen=True)
 class QKPrimitiveEligibility:
@@ -120,39 +120,6 @@ class Q4KPrimitiveLinear:
   def __call__(self, x:Tensor) -> Tensor:
     return q4k_primitive_linear_call(self, x, self._fallback, self.eligibility.eligible)
 
-class Q4KFusedLinear:
-  # B1 horizontal-fusion probe: one Q4_K GEMV over concatenated sibling weight rows (q/k/v or gate/up),
-  # then split. Decode-only (uses the fused primitive when decode_enabled); prefill falls back to the
-  # separate originals (whose own decode_enabled=False routes them to the dense path).
-  def __init__(self, fused:Q4KPrimitiveLinear, originals:list[Q4KPrimitiveLinear], splits:list[int]):
-    self.fused, self.originals, self.splits = fused, originals, splits
-  def __call__(self, x:Tensor) -> list[Tensor]:
-    if self.fused.decode_enabled:
-      out = self.fused(x)  # (1,1,sum)
-      res, c = [], 0
-      for s in self.splits: res.append(out[..., c:c+s]); c += s
-      return res
-    return [l(x) for l in self.originals]
-
-def _build_fused_q4k(linears:list[Q4KPrimitiveLinear], tag:str) -> Q4KFusedLinear:
-  words = _model_parameter_materialization(linears[0].weight,
-    linears[0].q4k_storage.words.cat(*[l.q4k_storage.words for l in linears[1:]], dim=0).contiguous())
-  out_features, in_features, q4_bytes = sum(l.out_features for l in linears), linears[0].in_features, words.numel()*4
-  fused = Q4KPrimitiveLinear(None, None, words, out_features, in_features, 1, linears[0].opts,
-                             f"fused_{tag}", q4_bytes, q4_bytes, "sidecar", 0, 0, eligibility=linears[0].eligibility)
-  return Q4KFusedLinear(fused, linears, [l.out_features for l in linears])
-
-def _install_q4k_fusions(model) -> None:
-  # gated by Q4K_FUSE: fuse q/k/v->attn_qkv and gate/up->ffn_gateup on each dense block; register the
-  # fused primitives so decode_enabled gets toggled per step.
-  for block in getattr(model, "blk", []):
-    if all(isinstance(getattr(block, n, None), Q4KPrimitiveLinear) for n in ("attn_q", "attn_k", "attn_v")):
-      block.attn_qkv = _build_fused_q4k([block.attn_q, block.attn_k, block.attn_v], "qkv")
-      model._q4k_linears.linears.append(block.attn_qkv.fused)
-    if all(isinstance(getattr(block, n, None), Q4KPrimitiveLinear) for n in ("ffn_gate", "ffn_up")):
-      block.ffn_gateup = _build_fused_q4k([block.ffn_gate, block.ffn_up], "gateup")
-      model._q4k_linears.linears.append(block.ffn_gateup.fused)
-
 class Q6KPrimitiveLinear:
   def __init__(self, weight:Tensor, bias:Tensor|None, halfs:Tensor, out_features:int, in_features:int, parts:int, opts:tuple,
                name:str, source_bytes:int, persistent_bytes:int, storage_mode:str,
@@ -209,9 +176,6 @@ class QKConfig:
   q6_storage_mode: str
   policy_debug: bool
   storage_debug: bool
-  demote_q6k_ffndown: bool
-  demote_targets: tuple[str, ...]
-  fuse_q4k: bool
 
   def __post_init__(self):
     if self.storage_mode not in ("sidecar", "q4_ondemand", "shared"):
@@ -439,28 +403,3 @@ def _install_q6k_primitives(model, gguf:pathlib.Path, meta:dict, generated_polic
           f"runtime_cap_bytes={cap} runtime_cap_used_bytes={budget.used_bytes} storage_mode={storage_mode}")
     if installed: print(f"Q6K_PRIMITIVE_DEBUG installed_linears {installed_s}{more_s}")
   return installed
-
-def _demote_q6k_to_q4(model, linears:list, targets:tuple[str, ...]) -> list:
-  # B3: re-quantize over-provisioned Q6_K tensors to Q4_K (offline quantizer; ffn_down measured ~free
-  # quality, fewer per-token bytes -> an operating point llama.cpp's fixed Q4_K_M doesn't offer). `targets`
-  # is a tuple of tensor-name substrings (e.g. ("ffn_down","attn_v")) selected by the demotion search;
-  # each demoted tensor's (parts, opts) reuse the model route plan's Q4_K defaults.
-  out = []
-  for lin in linears:
-    if isinstance(lin, Q6KPrimitiveLinear) and any(t in lin.name for t in targets):
-      route_entry = primitive_route_entry_for_tensor(lin.name, 12, lin.out_features, lin.in_features,
-                                                     role=getattr(lin, "route_role", ""))
-      if route_entry is None: raise ValueError(f"no Q4_K demotion route for {lin.name}")
-      parts, opt_strs = route_entry.parts, route_entry.opts
-      opts = tuple(qk_ops.q4k_parse_opt(x) for x in opt_strs)
-      words = _model_parameter_materialization(lin.weight,
-        Tensor(qk_ops.quantize_q4_k(lin.weight.numpy())).to(None).contiguous())
-      q4_bytes = lin.out_features * lin.in_features // 256 * 144
-      q4 = Q4KPrimitiveLinear(lin.weight, lin.bias, words, lin.out_features, lin.in_features, parts, opts,
-                              lin.name, q4_bytes, q4_bytes, "sidecar", route_role=getattr(lin, "route_role", ""),
-                              eligibility=lin.eligibility)
-      _set_module_at(model, lin.name[:-len(".weight")], q4)
-      out.append(q4)
-    else:
-      out.append(lin)
-  return out

@@ -21,7 +21,7 @@ from tinygrad.llm.prefill_routes import is_direct_packed_prefill_linear, route_p
 from tinygrad.llm.prefill_route_observer import PrefillRouteAttachment, prefill_route_scope, notify_prefill_route
 from tinygrad.llm.qk_primitives import (
   QKConfig, QKPrimitiveBudget, Q4KPrimitiveLinear, Q4KPrimitiveRegistry, Q6KPrimitiveLinear,
-  _demote_q6k_to_q4, _install_q4k_fusions, _install_q4k_primitives, _install_q6k_primitives, _qk_storage_summary,
+  _install_q4k_primitives, _install_q6k_primitives, _qk_storage_summary,
   qk_primitive_eligibility_from_device_facts,
 )
 from tinygrad.llm.model_facts import model_facts_from_gguf_metadata
@@ -1195,7 +1195,7 @@ class Transformer:
       route_plan = build_model_route_plan(q4k_meta, model_facts)
       # The production candidate views the selected GGUF backing directly;
       # it never creates an unchecked model-sized sidecar.
-      qk_cfg = QKConfig(False, None, "shared", "shared", False, False, False, (), False)
+      qk_cfg = QKConfig(False, None, "shared", "shared", False, False)
       primitive_linears = []
       primitive_budget = QKPrimitiveBudget(qk_cfg.max_storage_bytes, qk_cfg.generated_policy_strict)
       q4_storage_mode, q6_storage_mode = qk_cfg.storage_mode, qk_cfg.q6_storage_mode
@@ -1214,14 +1214,7 @@ class Transformer:
               f"runtime_cap_used_bytes={primitive_budget.used_bytes} by_kind={by_kind_s} by_mode={by_mode_s} "
               f"requested_storage_mode={q4_storage_mode} q4_effective_storage_mode={q4_storage_mode} "
               f"q6_effective_storage_mode={q6_storage_mode}")
-      if primitive_linears and qk_cfg.demote_targets:  # B3: requant over-provisioned Q6 tensors -> Q4 (searched set)
-        primitive_linears = _demote_q6k_to_q4(model, primitive_linears, qk_cfg.demote_targets)
       if primitive_linears: model._q4k_linears = Q4KPrimitiveRegistry(primitive_linears)
-      if primitive_linears and qk_cfg.fuse_q4k:  # B1 horizontal-fusion probe -- REFUTED, experimental only
-        import sys as _sys
-        print("WARNING: Q4K_FUSE is REFUTED (qk-gemv-final-mile-20260617.md): ~-18% decode + prefill fallback "
-              "broken on T>32. Enabled only for experiments; do NOT use for shipped benchmarks.", file=_sys.stderr)
-        _install_q4k_fusions(model)
     if _runtime_inventory is not None:
       _attach_selected_prefill_inventory(model, _runtime_inventory, _runtime_policy, _device_facts)
     # NOTE: without this contiguous, it unpacks the weights from the model every time. we shouldn't need this, but for now it's faster

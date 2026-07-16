@@ -1,4 +1,4 @@
-from tinygrad.llm.cooperative_mmq_gate import (
+from extra.qk.cooperative_mmq_gate import (
   COOPERATIVE_MMQ_ROUTE, ROLLBACK_ROUTE, admit_cooperative_mmq, canonical_candidate_identity,
 )
 

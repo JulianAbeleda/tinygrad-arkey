@@ -12,6 +12,7 @@ from tinygrad.llm.qk_primitives import (
   _install_q4k_primitives, _install_q6k_primitives, Q4KPrimitiveLinear, Q6KPrimitiveLinear,
   QKConfig, QKPrimitiveBudget, QKPrimitiveEligibility, qk_primitive_eligibility_from_device_facts,
 )
+from tinygrad.llm import qk_primitives
 
 
 QWEN3_LIKE_PROFILES = (
@@ -189,7 +190,7 @@ def test_explicit_qk_config_and_install_are_immune_to_environment(tmp_path, monk
   gguf.write_bytes(bytes((256 * 256) // 256 * 144))
   meta = {"data_start": 0, "tensor_infos": [("blk.0.ffn_gate.weight", (256, 256), 12, 0)]}
   plan = build_model_route_plan(meta)
-  cfg = QKConfig(False, None, "sidecar", "sidecar", False, False, False, (), False)
+  cfg = QKConfig(False, None, "sidecar", "sidecar", False, False)
   monkeypatch.setenv("QK_PRIMITIVE_STORAGE", "q4_ondemand")
   monkeypatch.setenv("QK_PRIMITIVE_MAX_STORAGE_MB", "0")
   monkeypatch.setenv("Q4K_PRIMITIVE_DEBUG", "1")
@@ -206,7 +207,14 @@ def test_explicit_qk_config_and_install_are_immune_to_environment(tmp_path, monk
 
 def test_qk_config_rejects_inconsistent_derived_storage_mode():
   with pytest.raises(ValueError, match="q6_storage_mode"):
-    QKConfig(False, None, "shared", "sidecar", False, False, False, (), False)
+    QKConfig(False, None, "shared", "sidecar", False, False)
+
+
+def test_research_qk_mutation_apis_are_not_in_budgeted_core():
+  assert not hasattr(qk_primitives, "Q4KFusedLinear")
+  assert not hasattr(qk_primitives, "_install_q4k_fusions")
+  assert not hasattr(qk_primitives, "_demote_q6k_to_q4")
+  assert not {"demote_q6k_ffndown", "demote_targets", "fuse_q4k"} & QKConfig.__dataclass_fields__.keys()
 
 
 def test_q4k_install_snapshots_load_entry_device_facts(tmp_path):

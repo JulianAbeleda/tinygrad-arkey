@@ -23,7 +23,7 @@ PRODUCTION_MODULES = (
   "tinygrad/llm/memory_semantics.py", "tinygrad/llm/model_facts.py", "tinygrad/llm/model_route_plan.py",
   "tinygrad/llm/prefill_memory_plan.py", "tinygrad/llm/prefill_route_census.py",
   "tinygrad/llm/prefill_policy.py", "tinygrad/llm/prefill_routes.py", "tinygrad/llm/prefill_workload_plan.py",
-  "tinygrad/llm/qk_primitives.py", "tinygrad/llm/route_policy.py", "tinygrad/llm/cooperative_mmq_gate.py",
+  "tinygrad/llm/qk_primitives.py", "tinygrad/llm/route_policy.py",
   "tinygrad/llm/physical_memory_ledger.py", "tinygrad/llm/schedule_memory_evidence.py",
   "extra/qk/memory_adaptive_allocation_observer.py", "extra/qk/memory_adaptive_autoscan.py",
   "extra/qk/memory_adaptive_boundary_gate.py", "extra/qk/memory_adaptive_candidate_catalog.py",
