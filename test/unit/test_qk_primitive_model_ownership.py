@@ -46,6 +46,7 @@ def test_q4_q6_prefill_clones_are_model_owned(monkeypatch):
 
   assert memory_semantic_owner(q4_words) == memory_semantic_owner(q6_halfs) == MODEL_PARAMETER
   assert all(event.owner == MODEL_PARAMETER_ALLOCATION_OWNER for event in _owned_allocations(ledger))
+  assert not hasattr(q4.q4k_storage, "__dict__") and not hasattr(q6.q6k_storage, "__dict__")
 
 
 @pytest.mark.parametrize("ggml_type,block_bytes,name,installer", [

@@ -54,19 +54,26 @@ def _model_parameter_materialization(source:Tensor|None, derived:Tensor) -> Tens
   bind_allocation_owner(derived.uop.buffer, owner)
   return derived
 
-class Q4KPrimitiveStorage:
-  __slots__ = ("words", "source_bytes", "persistent_bytes", "shared_bytes", "nonpersistent_bytes", "mode")
-  def __init__(self, words:Tensor, source_bytes:int, persistent_bytes:int, mode:str,
+class _QKPrimitiveStorage:
+  __slots__ = ("packed", "source_bytes", "persistent_bytes", "shared_bytes", "nonpersistent_bytes", "mode")
+  def __init__(self, packed:Tensor, source_bytes:int, persistent_bytes:int, mode:str,
                shared_bytes:int=0, nonpersistent_bytes:int=0):
-    self.words, self.source_bytes, self.persistent_bytes = words, source_bytes, persistent_bytes
+    self.packed, self.source_bytes, self.persistent_bytes = packed, source_bytes, persistent_bytes
     self.shared_bytes, self.nonpersistent_bytes, self.mode = shared_bytes, nonpersistent_bytes, mode
 
-class Q6KPrimitiveStorage:
-  __slots__ = ("halfs", "source_bytes", "persistent_bytes", "shared_bytes", "nonpersistent_bytes", "mode")
-  def __init__(self, halfs:Tensor, source_bytes:int, persistent_bytes:int, mode:str,
-               shared_bytes:int=0, nonpersistent_bytes:int=0):
-    self.halfs, self.source_bytes, self.persistent_bytes = halfs, source_bytes, persistent_bytes
-    self.shared_bytes, self.nonpersistent_bytes, self.mode = shared_bytes, nonpersistent_bytes, mode
+class Q4KPrimitiveStorage(_QKPrimitiveStorage):
+  __slots__ = ()
+  @property
+  def words(self) -> Tensor: return self.packed
+  @words.setter
+  def words(self, value:Tensor) -> None: self.packed = value
+
+class Q6KPrimitiveStorage(_QKPrimitiveStorage):
+  __slots__ = ()
+  @property
+  def halfs(self) -> Tensor: return self.packed
+  @halfs.setter
+  def halfs(self, value:Tensor) -> None: self.packed = value
 
 class QKPrimitiveBudget:
   __slots__ = ("cap_bytes", "used_bytes", "strict")
@@ -87,64 +94,56 @@ class Q4KPrimitiveRegistry:
   __slots__ = ("linears",)
   def __init__(self, linears:list[Q4KPrimitiveLinear|Q6KPrimitiveLinear]|None=None): self.linears = linears or []
 
-class Q4KPrimitiveLinear:
+class _QKPrimitiveLinear:
+  _storage_attr = ""
+  _prefill_attr = ""
+  _ggml_type = -1
+  def _init_common(self, weight:Tensor, bias:Tensor|None, packed:Tensor, out_features:int, in_features:int, parts:int, opts:tuple,
+                   name:str, storage, route_role:str, eligibility:QKPrimitiveEligibility|None):
+    self.weight, self.bias = weight, bias
+    _model_parameter_alias(weight, packed)
+    setattr(self, self._storage_attr, storage)
+    self.out_features, self.in_features, self.parts, self.opts, self.name = out_features, in_features, parts, opts, name
+    self.route_role = route_role
+    self.eligibility = eligibility or QKPrimitiveEligibility()
+    self.decode_enabled = False
+
+  def _fallback(self, x:Tensor) -> Tensor:
+    return x.linear(self.weight.transpose(), self.bias)
+
+  def prefill_packed_weight(self) -> Tensor:
+    storage = getattr(self, self._storage_attr)
+    if storage.mode in ("sidecar", "shared"): return storage.packed
+    if not hasattr(self, self._prefill_attr): setattr(self, self._prefill_attr, _model_parameter_materialization(self.weight, storage.packed.clone()))
+    return getattr(self, self._prefill_attr)
+
+  def prefill_fp16_weight(self) -> Tensor:
+    raw = getattr(self, self._storage_attr).packed.bitcast(dtypes.uint8).reshape(-1)
+    return _model_parameter_materialization(self.weight, ggml_data_to_tensor(raw, self.out_features * self.in_features, self._ggml_type).reshape(
+      self.out_features, self.in_features).cast(dtypes.float16).contiguous())
+
+class Q4KPrimitiveLinear(_QKPrimitiveLinear):
+  _storage_attr, _prefill_attr, _ggml_type = "q4k_storage", "_prefill_q4k_words", 12
   def __init__(self, weight:Tensor, bias:Tensor|None, words:Tensor, out_features:int, in_features:int, parts:int, opts:tuple,
                name:str, source_bytes:int, persistent_bytes:int, storage_mode:str,
                shared_bytes:int=0, nonpersistent_bytes:int=0, kernel_mode:str="partial", route_role:str="",
                eligibility:QKPrimitiveEligibility|None=None):
     if kernel_mode not in ("partial", "direct_out"): raise ValueError(f"unsupported Q4_K primitive kernel mode {kernel_mode!r}")
     if kernel_mode == "direct_out" and parts != 1: raise ValueError("Q4_K direct_out primitive requires parts=1")
-    self.weight, self.bias = weight, bias
-    _model_parameter_alias(weight, words)
-    self.q4k_storage = Q4KPrimitiveStorage(words, source_bytes, persistent_bytes, storage_mode, shared_bytes, nonpersistent_bytes)
-    self.out_features, self.in_features, self.parts, self.opts, self.name = out_features, in_features, parts, opts, name
+    self._init_common(weight, bias, words, out_features, in_features, parts, opts, name,
+      Q4KPrimitiveStorage(words, source_bytes, persistent_bytes, storage_mode, shared_bytes, nonpersistent_bytes), route_role, eligibility)
     self.kernel_mode = kernel_mode
-    self.route_role = route_role
-    self.eligibility = eligibility or QKPrimitiveEligibility()
-    self.decode_enabled = False
-
-  def _fallback(self, x:Tensor) -> Tensor:
-    return x.linear(self.weight.transpose(), self.bias)
-
-  def prefill_packed_weight(self) -> Tensor:
-    if self.q4k_storage.mode in ("sidecar", "shared"): return self.q4k_storage.words
-    if not hasattr(self, "_prefill_q4k_words"):
-      self._prefill_q4k_words = _model_parameter_materialization(self.weight, self.q4k_storage.words.clone())
-    return self._prefill_q4k_words
-
-  def prefill_fp16_weight(self) -> Tensor:
-    raw = self.q4k_storage.words.bitcast(dtypes.uint8).reshape(-1)
-    return _model_parameter_materialization(self.weight, ggml_data_to_tensor(raw, self.out_features * self.in_features, 12).reshape(
-      self.out_features, self.in_features).cast(dtypes.float16).contiguous())
 
   def __call__(self, x:Tensor) -> Tensor:
     return q4k_primitive_linear_call(self, x, self._fallback, self.eligibility.eligible)
 
-class Q6KPrimitiveLinear:
+class Q6KPrimitiveLinear(_QKPrimitiveLinear):
+  _storage_attr, _prefill_attr, _ggml_type = "q6k_storage", "_prefill_q6k_halfs", 14
   def __init__(self, weight:Tensor, bias:Tensor|None, halfs:Tensor, out_features:int, in_features:int, parts:int, opts:tuple,
                name:str, source_bytes:int, persistent_bytes:int, storage_mode:str,
                shared_bytes:int=0, nonpersistent_bytes:int=0, route_role:str="", eligibility:QKPrimitiveEligibility|None=None):
-    self.weight, self.bias = weight, bias
-    _model_parameter_alias(weight, halfs)
-    self.q6k_storage = Q6KPrimitiveStorage(halfs, source_bytes, persistent_bytes, storage_mode, shared_bytes, nonpersistent_bytes)
-    self.out_features, self.in_features, self.parts, self.opts, self.name = out_features, in_features, parts, opts, name
-    self.route_role = route_role
-    self.eligibility = eligibility or QKPrimitiveEligibility()
-    self.decode_enabled = False
-
-  def _fallback(self, x:Tensor) -> Tensor:
-    return x.linear(self.weight.transpose(), self.bias)
-
-  def prefill_packed_weight(self) -> Tensor:
-    if self.q6k_storage.mode in ("sidecar", "shared"): return self.q6k_storage.halfs
-    if not hasattr(self, "_prefill_q6k_halfs"):
-      self._prefill_q6k_halfs = _model_parameter_materialization(self.weight, self.q6k_storage.halfs.clone())
-    return self._prefill_q6k_halfs
-
-  def prefill_fp16_weight(self) -> Tensor:
-    raw = self.q6k_storage.halfs.bitcast(dtypes.uint8).reshape(-1)
-    return _model_parameter_materialization(self.weight, ggml_data_to_tensor(raw, self.out_features * self.in_features, 14).reshape(
-      self.out_features, self.in_features).cast(dtypes.float16).contiguous())
+    self._init_common(weight, bias, halfs, out_features, in_features, parts, opts, name,
+      Q6KPrimitiveStorage(halfs, source_bytes, persistent_bytes, storage_mode, shared_bytes, nonpersistent_bytes), route_role, eligibility)
 
   def __call__(self, x:Tensor) -> Tensor:
     return q6k_primitive_linear_call(self, x, self._fallback, self.eligibility.eligible)
@@ -224,182 +223,106 @@ def _set_module_at(root, path:str, value) -> None:
   if isinstance(parent, list) and attr.isdigit(): parent[int(attr)] = value
   else: setattr(parent, attr, value)
 
+@dataclass(frozen=True)
+class _QKInstallChoice:
+  module_path: str; parts: int; opt_specs: tuple; route_role: str
+  kernel_mode: str = "partial"
+
+@dataclass(frozen=True)
+class _QKInstallSpec:
+  ggml_type: int; label: str; not_kind_counter: str; dtype: object; block_bytes: int
+  generated_policy: object; route_choice: object; parse_opt: object; make_linear: object; installed_detail: object
+  allowed_storage_modes: tuple[str, ...]
+
+def _route_choice(label:str, route_plan:ModelRoutePlan|None, name:str, rows:int, cols:int,
+                  skipped:collections.Counter[str], q4:bool=False) -> _QKInstallChoice|None:
+  if route_plan is None or (entry := route_plan.primitive(name)) is None: skipped["policy_fallback"] += 1; return None
+  if entry.quant_label != label or entry.rows != rows or entry.cols != cols: skipped["policy_unsupported"] += 1; return None
+  return _QKInstallChoice(entry.module_path, entry.parts, entry.opts, entry.role, entry.kernel_mode if q4 else "partial")
+
+def _q4_route_choice(route_plan, name, rows, cols, skipped): return _route_choice("Q4_K", route_plan, name, rows, cols, skipped, True)
+def _q6_route_choice(route_plan, name, rows, cols, skipped): return _route_choice("Q6_K", route_plan, name, rows, cols, skipped)
+
+def _generated_choice(policy:dict, typ:int, rows:int, cols:int, name:str, skipped:collections.Counter[str], families:set[str]):
+  if (entry := _qk_generated_policy_entry(policy, typ, rows, cols, name)) is None: skipped["policy_missing"] += 1; return None
+  if entry["winner"] == "fused_graph": skipped["policy_fused"] += 1; return None
+  if entry["family"] not in families: skipped["policy_unsupported"] += 1; return None
+  return entry
+
+def _q4_generated_choice(policy, typ, rows, cols, name, skipped):
+  if (entry := _generated_choice(policy, typ, rows, cols, name, skipped, {"q4_k_packed_u32", "q4_k_packed_u32_direct"})) is None: return None
+  mode = "direct_out" if entry["family"] == "q4_k_packed_u32_direct" or entry.get("reduction") == "direct_out" else "partial"
+  if mode == "direct_out" and entry["parts"] != 1: skipped["policy_invalid_direct_parts"] += 1; return None
+  return _QKInstallChoice(name[:-len(".weight")], entry["parts"], entry["opts"], "", mode)
+
+def _q6_generated_choice(policy, typ, rows, cols, name, skipped):
+  if (entry := _generated_choice(policy, typ, rows, cols, name, skipped, {"q6_k_packed_u16"})) is None: return None
+  return _QKInstallChoice(name[:-len(".weight")], entry["parts"], entry["opts"], "")
+
+def _make_q4(module, packed, rows, cols, choice, opts, name, sizes, storage_mode, eligibility):
+  return Q4KPrimitiveLinear(module.weight, module.bias, packed, rows, cols, choice.parts, opts, name, sizes[0], sizes[1], storage_mode, sizes[2], sizes[3], kernel_mode=choice.kernel_mode, route_role=choice.route_role, eligibility=eligibility)
+
+def _make_q6(module, packed, rows, cols, choice, opts, name, sizes, storage_mode, eligibility):
+  return Q6KPrimitiveLinear(module.weight, module.bias, packed, rows, cols, choice.parts, opts, name, sizes[0], sizes[1], storage_mode, sizes[2], sizes[3], route_role=choice.route_role, eligibility=eligibility)
+
+def _q4_detail(x): return f"{x.name}:mode={x.kernel_mode}:parts={x.parts}:opts={[str(o) for o in x.opts]}"
+def _q6_detail(x): return f"{x.name}:parts={x.parts}:opts={[str(o) for o in x.opts]}"
+
+_Q4_INSTALL_SPEC = _QKInstallSpec(12, "Q4_K", "not_q4_k", dtypes.uint32, 144, _q4_generated_choice, _q4_route_choice,
+  qk_ops.q4k_parse_opt, _make_q4, _q4_detail, ("sidecar", "q4_ondemand", "shared"))
+_Q6_INSTALL_SPEC = _QKInstallSpec(14, "Q6_K", "not_q6_k", dtypes.uint16, 210, _q6_generated_choice, _q6_route_choice,
+  qk_ops.q6k_parse_opt, _make_q6, _q6_detail, ("sidecar", "shared"))
+
+def _install_qk_primitives(model, gguf:pathlib.Path, meta:dict, spec:_QKInstallSpec, generated_policy:dict|None, budget:QKPrimitiveBudget|None,
+                           storage_mode:str, route_plan:ModelRoutePlan|None, device_facts:object|None, debug:bool):
+  if storage_mode not in spec.allowed_storage_modes: raise ValueError(f"unsupported {spec.label} primitive storage mode {storage_mode!r}")
+  raw, installed, skipped = Tensor(gguf, dtype=spec.dtype), [], collections.Counter()
+  budget, eligibility = budget or QKPrimitiveBudget(), qk_primitive_eligibility_from_device_facts(device_facts)
+  if generated_policy is None and route_plan is None: route_plan = build_model_route_plan(meta)
+  for name, dims, typ, off in meta["tensor_infos"]:
+    if typ != spec.ggml_type: skipped[spec.not_kind_counter] += 1; continue
+    if len(dims) != 2: skipped["not_2d"] += 1; continue
+    if not name.endswith(".weight"): skipped["not_weight"] += 1; continue
+    rows, cols = tuple(reversed(dims))
+    choice = (spec.route_choice(route_plan, name, rows, cols, skipped) if generated_policy is None else
+              spec.generated_policy(generated_policy, typ, rows, cols, name, skipped))
+    if choice is None: continue
+    byte_start = meta["data_start"] + off
+    if byte_start % spec.dtype.itemsize != 0: skipped["misaligned"] += 1; continue
+    try: module = _module_at(model, choice.module_path)
+    except (AttributeError, IndexError, ValueError): skipped["missing_module"] += 1; continue
+    if not hasattr(module, "weight"): skipped["missing_weight"] += 1; continue
+    if getattr(module, "bias", None) is not None: skipped["bias"] += 1; continue
+    source_bytes = prod(dims) // 256 * spec.block_bytes
+    persistent_bytes = source_bytes if storage_mode == "sidecar" else 0
+    if not budget.reserve(name, persistent_bytes, spec.label): skipped["runtime_storage_cap"] += 1; continue
+    if storage_mode == "shared": packed, shared_bytes = _shared_packed_view(meta, byte_start, source_bytes, spec.dtype), source_bytes
+    else:
+      source = raw[byte_start//spec.dtype.itemsize:byte_start//spec.dtype.itemsize+source_bytes//spec.dtype.itemsize]
+      packed = source.contiguous() if storage_mode == "q4_ondemand" else _model_parameter_materialization(module.weight, source.to(None).contiguous())
+      shared_bytes = 0
+    sizes = (source_bytes, persistent_bytes, shared_bytes, source_bytes if storage_mode == "q4_ondemand" else 0)
+    linear = spec.make_linear(module, packed, rows, cols, choice, tuple(spec.parse_opt(x) for x in choice.opt_specs), name, sizes, storage_mode, eligibility)
+    _set_module_at(model, choice.module_path, linear)
+    installed.append(linear)
+  if debug:
+    skipped_s = " ".join(f"{k}={v}" for k, v in sorted(skipped.items()))
+    summary, cap = _qk_storage_summary(installed), -1 if budget.cap_bytes is None else budget.cap_bytes
+    print(f"{spec.label.replace('_', '')}_PRIMITIVE_DEBUG installed={len(installed)} skipped_total={sum(skipped.values())} {skipped_s} "
+          f"source_bytes={summary['source_bytes']} storage_bytes={summary['persistent_bytes']} shared_bytes={summary['shared_bytes']} "
+          f"nonpersistent_bytes={summary['nonpersistent_bytes']} runtime_cap_bytes={cap} runtime_cap_used_bytes={budget.used_bytes} storage_mode={storage_mode}")
+    if installed: print(f"{spec.label.replace('_', '')}_PRIMITIVE_DEBUG installed_linears {' '.join(spec.installed_detail(x) for x in installed[:8])}"
+                        f"{f' ...+{len(installed)-8}' if len(installed) > 8 else ''}")
+  return installed
+
 def _install_q4k_primitives(model, gguf:pathlib.Path, meta:dict, generated_policy:dict|None=None,
                             budget:QKPrimitiveBudget|None=None, storage_mode:str="sidecar",
                             route_plan:ModelRoutePlan|None=None, device_facts:object|None=None,
                             debug:bool=False) -> list[Q4KPrimitiveLinear]:
-  supported_generated_families = {"q4_k_packed_u32", "q4_k_packed_u32_direct"}
-  if storage_mode not in ("sidecar", "q4_ondemand", "shared"):
-    raise ValueError(f"unsupported QK primitive storage mode {storage_mode!r}")
-  raw_words = Tensor(gguf, dtype=dtypes.uint32)
-  installed: list[Q4KPrimitiveLinear] = []
-  skipped: collections.Counter[str] = collections.Counter()
-  budget = budget or QKPrimitiveBudget()
-  eligibility = qk_primitive_eligibility_from_device_facts(device_facts)
-  if generated_policy is None and route_plan is None: route_plan = build_model_route_plan(meta)
-  for name, dims, typ, off in meta["tensor_infos"]:
-    if typ != 12:
-      skipped["not_q4_k"] += 1
-      continue
-    if len(dims) != 2:
-      skipped["not_2d"] += 1
-      continue
-    if not name.endswith(".weight"):
-      skipped["not_weight"] += 1
-      continue
-    rows, cols = tuple(reversed(dims))
-    if generated_policy is None:
-      if route_plan is None or (route_entry := route_plan.primitive(name)) is None:
-        skipped["policy_fallback"] += 1
-        continue
-      if route_entry.quant_label != "Q4_K" or route_entry.rows != rows or route_entry.cols != cols:
-        skipped["policy_unsupported"] += 1
-        continue
-      parts, opt_specs = route_entry.parts, route_entry.opts
-      kernel_mode = route_entry.kernel_mode
-      route_role = route_entry.role
-    else:
-      if (policy_entry := _qk_generated_policy_entry(generated_policy, typ, rows, cols, name)) is None:
-        skipped["policy_missing"] += 1
-        continue
-      if policy_entry["winner"] == "fused_graph":
-        skipped["policy_fused"] += 1
-        continue
-      if policy_entry["family"] not in supported_generated_families:
-        skipped["policy_unsupported"] += 1
-        continue
-      parts, opt_specs = policy_entry["parts"], policy_entry["opts"]
-      kernel_mode = "direct_out" if policy_entry["family"] == "q4_k_packed_u32_direct" or policy_entry.get("reduction") == "direct_out" else "partial"
-      route_role = ""
-      if kernel_mode == "direct_out" and parts != 1:
-        skipped["policy_invalid_direct_parts"] += 1
-        continue
-    byte_start = meta["data_start"] + off
-    if byte_start % 4 != 0:
-      skipped["misaligned"] += 1
-      continue
-    module_path = name[:-len(".weight")] if generated_policy is not None else route_entry.module_path
-    try: module = _module_at(model, module_path)
-    except (AttributeError, IndexError, ValueError):
-      skipped["missing_module"] += 1
-      continue
-    if not hasattr(module, "weight"):
-      skipped["missing_weight"] += 1
-      continue
-    if getattr(module, "bias", None) is not None:
-      skipped["bias"] += 1
-      continue
-    q4_bytes = prod(dims) // 256 * 144
-    persistent_bytes = q4_bytes if storage_mode == "sidecar" else 0
-    if not budget.reserve(name, persistent_bytes, "Q4_K"):
-      skipped["runtime_storage_cap"] += 1
-      continue
-    source = raw_words[byte_start//4:byte_start//4+q4_bytes//4]
-    if storage_mode == "shared":
-      words, shared_bytes, nonpersistent_bytes = _shared_packed_view(meta, byte_start, q4_bytes, dtypes.uint32), q4_bytes, 0
-    else:
-      words = source.contiguous() if storage_mode == "q4_ondemand" else _model_parameter_materialization(module.weight, source.to(None).contiguous())
-      shared_bytes, nonpersistent_bytes = 0, q4_bytes if storage_mode == "q4_ondemand" else 0
-    q4k_linear = Q4KPrimitiveLinear(module.weight, module.bias, words, rows, cols, parts, tuple(qk_ops.q4k_parse_opt(x) for x in opt_specs), name,
-                                    q4_bytes, persistent_bytes, storage_mode, shared_bytes, nonpersistent_bytes,
-                                    kernel_mode=kernel_mode, route_role=route_role, eligibility=eligibility)
-    _set_module_at(model, module_path, q4k_linear)
-    installed.append(q4k_linear)
-  if debug:
-    skipped_s = " ".join(f"{k}={v}" for k, v in sorted(skipped.items()))
-    installed_s = " ".join(f"{x.name}:mode={x.kernel_mode}:parts={x.parts}:opts={[str(o) for o in x.opts]}" for x in installed[:8])
-    more_s = f" ...+{len(installed)-8}" if len(installed) > 8 else ""
-    summary = _qk_storage_summary(installed)
-    cap = -1 if budget.cap_bytes is None else budget.cap_bytes
-    print(f"Q4K_PRIMITIVE_DEBUG installed={len(installed)} skipped_total={sum(skipped.values())} {skipped_s} "
-          f"source_bytes={summary['source_bytes']} storage_bytes={summary['persistent_bytes']} "
-          f"shared_bytes={summary['shared_bytes']} nonpersistent_bytes={summary['nonpersistent_bytes']} "
-          f"runtime_cap_bytes={cap} runtime_cap_used_bytes={budget.used_bytes} storage_mode={storage_mode}")
-    if installed: print(f"Q4K_PRIMITIVE_DEBUG installed_linears {installed_s}{more_s}")
-  return installed
+  return _install_qk_primitives(model, gguf, meta, _Q4_INSTALL_SPEC, generated_policy, budget, storage_mode, route_plan, device_facts, debug)
 
 def _install_q6k_primitives(model, gguf:pathlib.Path, meta:dict, generated_policy:dict|None=None,
                             budget:QKPrimitiveBudget|None=None, storage_mode:str="sidecar",
                             route_plan:ModelRoutePlan|None=None, device_facts:object|None=None,
                             debug:bool=False) -> list[Q6KPrimitiveLinear]:
-  if storage_mode not in ("sidecar", "shared"):
-    raise ValueError(f"unsupported Q6_K primitive storage mode {storage_mode!r}")
-  raw_halfs = Tensor(gguf, dtype=dtypes.uint16)
-  installed: list[Q6KPrimitiveLinear] = []
-  skipped: collections.Counter[str] = collections.Counter()
-  budget = budget or QKPrimitiveBudget()
-  eligibility = qk_primitive_eligibility_from_device_facts(device_facts)
-  if generated_policy is None and route_plan is None: route_plan = build_model_route_plan(meta)
-  for name, dims, typ, off in meta["tensor_infos"]:
-    if typ != 14:
-      skipped["not_q6_k"] += 1
-      continue
-    if len(dims) != 2:
-      skipped["not_2d"] += 1
-      continue
-    if not name.endswith(".weight"):
-      skipped["not_weight"] += 1
-      continue
-    rows, cols = tuple(reversed(dims))
-    if generated_policy is None:
-      if route_plan is None or (route_entry := route_plan.primitive(name)) is None:
-        skipped["policy_fallback"] += 1
-        continue
-      if route_entry.quant_label != "Q6_K" or route_entry.rows != rows or route_entry.cols != cols:
-        skipped["policy_unsupported"] += 1
-        continue
-      parts, opt_specs = route_entry.parts, route_entry.opts
-      route_role = route_entry.role
-    else:
-      if (policy_entry := _qk_generated_policy_entry(generated_policy, typ, rows, cols, name)) is None:
-        skipped["policy_missing"] += 1
-        continue
-      if policy_entry["winner"] == "fused_graph":
-        skipped["policy_fused"] += 1
-        continue
-      if policy_entry["family"] != "q6_k_packed_u16":
-        skipped["policy_unsupported"] += 1
-        continue
-      parts, opt_specs = policy_entry["parts"], policy_entry["opts"]
-      route_role = ""
-    byte_start = meta["data_start"] + off
-    if byte_start % 2 != 0:
-      skipped["misaligned"] += 1
-      continue
-    module_path = name[:-len(".weight")] if generated_policy is not None else route_entry.module_path
-    try: module = _module_at(model, module_path)
-    except (AttributeError, IndexError, ValueError):
-      skipped["missing_module"] += 1
-      continue
-    if not hasattr(module, "weight"):
-      skipped["missing_weight"] += 1
-      continue
-    if getattr(module, "bias", None) is not None:
-      skipped["bias"] += 1
-      continue
-    q6_bytes = prod(dims) // 256 * 210
-    persistent_bytes = 0 if storage_mode == "shared" else q6_bytes
-    if not budget.reserve(name, persistent_bytes, "Q6_K"):
-      skipped["runtime_storage_cap"] += 1
-      continue
-    if storage_mode == "shared":
-      halfs, shared_bytes = _shared_packed_view(meta, byte_start, q6_bytes, dtypes.uint16), q6_bytes
-    else:
-      halfs, shared_bytes = _model_parameter_materialization(module.weight,
-        raw_halfs[byte_start//2:byte_start//2+q6_bytes//2].to(None).contiguous()), 0
-    q6k_linear = Q6KPrimitiveLinear(module.weight, module.bias, halfs, rows, cols, parts, tuple(qk_ops.q6k_parse_opt(x) for x in opt_specs), name,
-                                    q6_bytes, persistent_bytes, storage_mode, shared_bytes, 0, route_role=route_role, eligibility=eligibility)
-    _set_module_at(model, module_path, q6k_linear)
-    installed.append(q6k_linear)
-  if debug:
-    skipped_s = " ".join(f"{k}={v}" for k, v in sorted(skipped.items()))
-    installed_s = " ".join(f"{x.name}:parts={x.parts}:opts={[str(o) for o in x.opts]}" for x in installed[:8])
-    more_s = f" ...+{len(installed)-8}" if len(installed) > 8 else ""
-    summary = _qk_storage_summary(installed)
-    cap = -1 if budget.cap_bytes is None else budget.cap_bytes
-    print(f"Q6K_PRIMITIVE_DEBUG installed={len(installed)} skipped_total={sum(skipped.values())} {skipped_s} "
-          f"source_bytes={summary['source_bytes']} storage_bytes={summary['persistent_bytes']} "
-          f"shared_bytes={summary['shared_bytes']} nonpersistent_bytes={summary['nonpersistent_bytes']} "
-          f"runtime_cap_bytes={cap} runtime_cap_used_bytes={budget.used_bytes} storage_mode={storage_mode}")
-    if installed: print(f"Q6K_PRIMITIVE_DEBUG installed_linears {installed_s}{more_s}")
-  return installed
+  return _install_qk_primitives(model, gguf, meta, _Q6_INSTALL_SPEC, generated_policy, budget, storage_mode, route_plan, device_facts, debug)
