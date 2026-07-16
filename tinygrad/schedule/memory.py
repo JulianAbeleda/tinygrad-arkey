@@ -159,7 +159,7 @@ def _buffer_identity(b:UOp) -> str:
   return f"buffer:{b.key.hex()}"
 
 def _semantic_owner(b:UOp) -> Any:
-  from tinygrad.llm.memory_semantics import memory_semantic_owner
+  from tinygrad.uop.ops import memory_semantic_owner
   if (owner:=memory_semantic_owner(b)) is not None: return owner
   # Read-only compatibility for manifests produced by callers that predate the
   # explicit vocabulary. New annotations never use tag (callify owns it).
@@ -248,7 +248,7 @@ def _memory_plan_manifest(linear:UOp, plan:_MemoryPlan, rewritten_arenas:dict[La
     source_owners = {explicit_owners.get(source, "unknown") for source in sources}
     source_owners.discard("unknown")
     if len(source_owners) == 1: explicit_owners[dest] = source_owners.pop()
-  from tinygrad.llm.memory_semantics import (MemorySemanticOwner, MemorySemanticClass, PREFILL_SCRATCH, RUNTIME_SCRATCH)
+  from tinygrad.uop import MemorySemanticOwner, MemorySemanticClass, PREFILL_SCRATCH, RUNTIME_SCRATCH
   # A replay can read a previous phase's output as its input (prefill sample ->
   # decode feedback).  Only output buffers written by this schedule establish
   # the current execution phase; read-only historical outputs cannot make the

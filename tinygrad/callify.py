@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field, replace
 from tinygrad.dtype import dtypes, AddrSpace, PtrDType, ImageDType
-from tinygrad.uop.ops import AxisType, UOp, UPat, PatternMatcher, Ops, GroupOp, ScheduleHints, graph_rewrite, track_rewrites
+from tinygrad.uop.ops import (AxisType, UOp, UPat, PatternMatcher, Ops, GroupOp, ScheduleHints, bind_memory_semantic_owner,
+                             memory_semantic_owner, propagate_memory_semantic, graph_rewrite, track_rewrites)
+from tinygrad.uop import MemorySemanticOwner
 from tinygrad.helpers import VIZ, pluralize, all_int
 
 @dataclass
@@ -64,7 +66,6 @@ def replace_contig_with_store_after(u:UOp):
   # that input is structurally owned (not merely computed from owned data),
   # put the same owner on the exact written destination.  This covers the
   # CONTIGUOUS(MEMORY_SEMANTIC(shared packed view)) inserted by custom_kernel.
-  from tinygrad.llm.memory_semantics import memory_semantic_owner
   owner = memory_semantic_owner(u.src[0])
   dest = UOp(Ops.MEMORY_SEMANTIC, buf.dtype, (buf,), owner) if owner is not None else buf
   return buf.after(dest.store(u.src[0], arg=store_arg)).rtag(u.tag)
@@ -208,7 +209,6 @@ def finalize_after(ctx:AllocCtx, x:UOp):
   for t in x.tag:
     original_uop: UOp = ctx.uop_list[t]
     replacement = replace_uop.shrink_to(original_uop.shape)
-    from tinygrad.llm.memory_semantics import propagate_memory_semantic
     ctx.buffer_map[original_uop] = propagate_memory_semantic(original_uop, replacement)
   return ret
 
@@ -221,19 +221,6 @@ def replace_input_buffer(ctx:AllocCtx, b:UOp):
   # they are not concrete allocation identities.  Keep ownership on the
   # original call argument and do not attach a process-global alias here.
   return replacement
-
-def _bind_call_output_store(ctx:dict[int, object], store:UOp, dest:UOp) -> UOp|None:
-  if dest.op is Ops.MEMORY_SEMANTIC: return None
-  target = dest.buf_uop
-  if target.op is not Ops.PARAM or not hasattr(target.arg, "slot"): return None
-  owner = ctx.get(target.arg.slot)
-  if owner is None: return None
-  marked = UOp(Ops.MEMORY_SEMANTIC, dest.dtype, (dest,), owner)
-  return store.replace(src=(marked, *store.src[1:]))
-
-pm_bind_call_output_store = PatternMatcher([
-  (UPat(Ops.STORE, src=(UPat(name="dest"), UPat()), name="store"), _bind_call_output_store),
-])
 
 pm_finalize_call = PatternMatcher([
   (UPat(Ops.AFTER, name="x"), finalize_after),
@@ -319,7 +306,6 @@ def transform_to_call(big_sink:UOp) -> tuple[UOp, dict[UOp, UOp]]:
   # CallInfo is local to this invocation; normalized PARAMs remain owner-free.
   output_slots = {}
   for original, output in zip(original_outputs, rewritten_outputs):
-    from tinygrad.llm.memory_semantics import MemorySemanticOwner, memory_semantic_owner
     # pm_semantic_materialization deliberately consumes a top-level carrier
     # while constructing the concrete AFTER+STORE. The requested result is
     # still the authority for that new allocation, so consult both sides of
@@ -351,7 +337,6 @@ def transform_to_call(big_sink:UOp) -> tuple[UOp, dict[UOp, UOp]]:
   for original, rewritten in zip(original_outputs, rewritten_outputs):
     mapped = ctx.buffer_map.get(rewritten, ctx.buffer_map.get(rewritten.src[0]) if rewritten.op is Ops.MEMORY_SEMANTIC else None)
     if mapped is not None:
-      from tinygrad.llm.memory_semantics import bind_memory_semantic_owner, memory_semantic_owner
       if (owner := memory_semantic_owner(original)) is not None:
         bind_memory_semantic_owner(mapped.buf_uop, owner)
       # Tensor.realize must receive the same bare view/buffer as an unmarked

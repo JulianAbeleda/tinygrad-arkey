@@ -3,7 +3,7 @@ from typing import Any, Callable, cast, TYPE_CHECKING, Type, Sequence, Iterable,
 import sys, time, functools, itertools, math, operator, hashlib, os, types, pickle, pathlib, inspect, weakref, collections, struct
 from dataclasses import dataclass
 from enum import Enum, auto
-from tinygrad.uop import Ops, GroupOp
+from tinygrad.uop import Ops, GroupOp, MemorySemanticOwner
 from tinygrad.dtype import ConstType, ImageDType, dtypes, DType, DTypeLike, to_dtype, truncate, PtrDType, least_upper_dtype, Invalid, AddrSpace
 from tinygrad.dtype import ConstFloat, PyConst, storage_fmt_for_dtype, to_storage_scalar, from_storage_scalar
 from tinygrad.device import Buffer, MultiBuffer, canonicalize_device
@@ -1453,6 +1453,39 @@ class CallInfo:
   def __repr__(self):
     gf = id(self.grad_fxn) if self.grad_fxn else None
     return f"CallInfo({gf}, {self.metadata}, {repr(self.name)}, {self.precompile}, {self.precompile_backward}, {self.memory_semantic_slots})"
+
+# Allocation ownership is side metadata except while an explicit tensor-graph
+# carrier is awaiting scheduler consumption. Keeping the weak binding here
+# lets generic compiler code preserve it without importing an application.
+_memory_semantic_owners:weakref.WeakKeyDictionary[UOp, MemorySemanticOwner] = weakref.WeakKeyDictionary()
+
+def _semantic_uop(value:Any) -> UOp:
+  uop = value if isinstance(value, UOp) else getattr(value, "uop", None)
+  if not isinstance(uop, UOp): raise TypeError("memory semantics can only mark a Tensor or UOp result")
+  return uop
+
+def bind_memory_semantic_owner(value:Any, owner:MemorySemanticOwner) -> None:
+  uop = _semantic_uop(value)
+  existing = memory_semantic_owner(uop)
+  if existing is not None and existing != owner: raise ValueError(f"allocation already has semantic owner {existing!r}")
+  _memory_semantic_owners[uop] = owner
+
+def memory_semantic_owner(value:Any) -> MemorySemanticOwner|None:
+  uop, seen = _semantic_uop(value), set()
+  while uop not in seen:
+    seen.add(uop)
+    if (owner := _memory_semantic_owners.get(uop)) is not None: return owner
+    if uop.op is Ops.MEMORY_SEMANTIC: return uop.arg if isinstance(uop.arg, MemorySemanticOwner) else None
+    if len(uop.src) and uop.op in GroupOp.Movement | {Ops.CAST, Ops.BITCAST, Ops.CONTIGUOUS, Ops.STAGE, Ops.AFTER}: uop = uop.src[0]
+    else: break
+  return None
+
+def propagate_memory_semantic(source:UOp, target:UOp) -> UOp:
+  owner = memory_semantic_owner(source)
+  if owner is None: return target
+  if (other := memory_semantic_owner(target)) is not None and other != owner:
+    raise ValueError(f"conflicting explicit semantic owners: {owner!r} and {other!r}")
+  return target if target.op is Ops.MEMORY_SEMANTIC else UOp(Ops.MEMORY_SEMANTIC, target.dtype, (target,), owner)
 
 # ******** ops in python ********
 

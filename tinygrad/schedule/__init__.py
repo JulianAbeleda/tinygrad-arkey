@@ -1,7 +1,7 @@
 import time, inspect
 from dataclasses import replace
 from collections import deque
-from tinygrad.uop.ops import UOp, Ops, UOpMetaClass, track_rewrites, graph_rewrite, gate_kernel_sink, KernelInfo
+from tinygrad.uop.ops import UOp, Ops, UOpMetaClass, track_rewrites, graph_rewrite, gate_kernel_sink, KernelInfo, memory_semantic_owner
 from tinygrad.uop.spec import type_verify, spec_tensor
 from tinygrad.helpers import DEBUG, cpu_profile, TracingKey, SPEC, pluralize, SCACHE, BASEDIR, partition, getenv
 
@@ -60,7 +60,6 @@ def create_schedule(sched_sink:UOp) -> UOp:
       else:
         k = rk.src[0] if rk.op is Ops.END else rk
         assert k.op is Ops.CALL, f"unexpected op in queue: {k.op}"
-        from tinygrad.llm.memory_semantics import memory_semantic_owner
         function, buf_uops = k.src[0], []
         semantic_slots = dict(getattr(function.arg, "memory_semantic_slots", ()))
         semantic_slots.update(getattr(k.arg, "memory_semantic_slots", ()))
@@ -142,7 +141,6 @@ def _resolve_linear_call(linear_call:UOp) -> UOp:
   outer_slots = dict(getattr(linear_call.src[0].arg, "memory_semantic_slots", ()))
   outer_slots.update(getattr(linear_call.arg, "memory_semantic_slots", ()))
   owned_bases:dict[UOp, object] = {}
-  from tinygrad.llm.memory_semantics import memory_semantic_owner
   # Persistent buffers carry allocation ownership directly. Transfer every
   # concrete side binding through the cached LINEAR's PARAM indirection.
   for arg in linear_call.src[1:]:

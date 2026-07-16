@@ -1,5 +1,6 @@
 # flake8: noqa: E702
 # allow semicolons to put multiple ops on one line
+from dataclasses import dataclass
 from enum import auto, IntEnum, Enum
 
 # wrapper around IntEnum that preserves Enum.__str__ and makes auto() unique across all FastEnum subclasses
@@ -8,6 +9,41 @@ class FastEnum(IntEnum):
   def __repr__(x): return str(x)
   @staticmethod
   def _generate_next_value_(_, __, ___, last_values): return 1 + max([0, *last_values, *[max(c) for c in FastEnum.__subclasses__()]])
+
+class MemorySemanticClass(str, Enum):
+  MODEL_PARAMETER = "model_parameter"
+  KV_CACHE = "kv_cache"
+  RUNTIME_PERSISTENT = "runtime_persistent"
+  RUNTIME_INPUT = "runtime_input"
+  RUNTIME_ACTIVATION = "runtime_activation"
+  RUNTIME_OUTPUT = "runtime_output"
+  RUNTIME_SCRATCH = "runtime_scratch"
+  PREFILL_ACTIVATION = "prefill_activation"
+  PREFILL_OUTPUT = "prefill_output"
+  PREFILL_SCRATCH = "prefill_scratch"
+  CANDIDATE_WORKSPACE = "candidate_workspace"
+
+@dataclass(frozen=True)
+class MemorySemanticOwner:
+  """Immutable allocation-role metadata understood by generic scheduling machinery."""
+  semantic_class: MemorySemanticClass
+  candidate_id: str|None = None
+
+  def __post_init__(self):
+    if self.semantic_class is MemorySemanticClass.CANDIDATE_WORKSPACE:
+      if not isinstance(self.candidate_id, str) or not self.candidate_id: raise ValueError("candidate_workspace requires a non-empty candidate_id")
+    elif self.candidate_id is not None: raise ValueError(f"{self.semantic_class.value} does not accept a candidate_id")
+
+MODEL_PARAMETER = MemorySemanticOwner(MemorySemanticClass.MODEL_PARAMETER)
+KV_CACHE = MemorySemanticOwner(MemorySemanticClass.KV_CACHE)
+RUNTIME_PERSISTENT = MemorySemanticOwner(MemorySemanticClass.RUNTIME_PERSISTENT)
+RUNTIME_INPUT = MemorySemanticOwner(MemorySemanticClass.RUNTIME_INPUT)
+RUNTIME_ACTIVATION = MemorySemanticOwner(MemorySemanticClass.RUNTIME_ACTIVATION)
+RUNTIME_OUTPUT = MemorySemanticOwner(MemorySemanticClass.RUNTIME_OUTPUT)
+RUNTIME_SCRATCH = MemorySemanticOwner(MemorySemanticClass.RUNTIME_SCRATCH)
+PREFILL_ACTIVATION = MemorySemanticOwner(MemorySemanticClass.PREFILL_ACTIVATION)
+PREFILL_OUTPUT = MemorySemanticOwner(MemorySemanticClass.PREFILL_OUTPUT)
+PREFILL_SCRATCH = MemorySemanticOwner(MemorySemanticClass.PREFILL_SCRATCH)
 
 # the order of these Ops controls the order of the toposort
 class Ops(FastEnum):

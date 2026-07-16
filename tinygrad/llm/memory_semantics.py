@@ -4,60 +4,17 @@ This module deliberately keeps the annotation outside ``UOp.tag``: tags are a
 compiler-internal scratch channel (notably used by callify).  An annotation is
 therefore meaningful only when explicitly attached or propagated as an alias.
 """
-from dataclasses import dataclass
-from enum import Enum
-import weakref
 from typing import Any
-from tinygrad.uop.ops import GroupOp, UOp
+from tinygrad.uop.ops import UOp, bind_memory_semantic_owner, memory_semantic_owner, propagate_memory_semantic
 from tinygrad.uop import Ops
+from tinygrad.uop import (MemorySemanticClass, MemorySemanticOwner, MODEL_PARAMETER, KV_CACHE, RUNTIME_PERSISTENT, RUNTIME_INPUT,
+                          RUNTIME_ACTIVATION, RUNTIME_OUTPUT, RUNTIME_SCRATCH, PREFILL_ACTIVATION, PREFILL_OUTPUT, PREFILL_SCRATCH)
 
-class MemorySemanticClass(str, Enum):
-  MODEL_PARAMETER = "model_parameter"
-  KV_CACHE = "kv_cache"
-  RUNTIME_PERSISTENT = "runtime_persistent"
-  RUNTIME_INPUT = "runtime_input"
-  RUNTIME_ACTIVATION = "runtime_activation"
-  RUNTIME_OUTPUT = "runtime_output"
-  RUNTIME_SCRATCH = "runtime_scratch"
-  PREFILL_ACTIVATION = "prefill_activation"
-  PREFILL_OUTPUT = "prefill_output"
-  PREFILL_SCRATCH = "prefill_scratch"
-  CANDIDATE_WORKSPACE = "candidate_workspace"
-
-@dataclass(frozen=True)
-class MemorySemanticOwner:
-  semantic_class: MemorySemanticClass
-  candidate_id: str|None = None
-
-  def __post_init__(self):
-    if self.semantic_class is MemorySemanticClass.CANDIDATE_WORKSPACE:
-      if not isinstance(self.candidate_id, str) or not self.candidate_id: raise ValueError("candidate_workspace requires a non-empty candidate_id")
-    elif self.candidate_id is not None: raise ValueError(f"{self.semantic_class.value} does not accept a candidate_id")
-
-MODEL_PARAMETER = MemorySemanticOwner(MemorySemanticClass.MODEL_PARAMETER)
-KV_CACHE = MemorySemanticOwner(MemorySemanticClass.KV_CACHE)
-RUNTIME_PERSISTENT = MemorySemanticOwner(MemorySemanticClass.RUNTIME_PERSISTENT)
-RUNTIME_INPUT = MemorySemanticOwner(MemorySemanticClass.RUNTIME_INPUT)
-RUNTIME_ACTIVATION = MemorySemanticOwner(MemorySemanticClass.RUNTIME_ACTIVATION)
-RUNTIME_OUTPUT = MemorySemanticOwner(MemorySemanticClass.RUNTIME_OUTPUT)
-RUNTIME_SCRATCH = MemorySemanticOwner(MemorySemanticClass.RUNTIME_SCRATCH)
-PREFILL_ACTIVATION = MemorySemanticOwner(MemorySemanticClass.PREFILL_ACTIVATION)
-PREFILL_OUTPUT = MemorySemanticOwner(MemorySemanticClass.PREFILL_OUTPUT)
-PREFILL_SCRATCH = MemorySemanticOwner(MemorySemanticClass.PREFILL_SCRATCH)
-_source_owners:weakref.WeakKeyDictionary[UOp, MemorySemanticOwner] = weakref.WeakKeyDictionary()
 
 # UOps are interned and identity-hashable. The Tensor/JIT graph itself keeps every
 # live mark alive; weak tables prevent completed searches from retaining graphs.
 def candidate_workspace(candidate_id:str) -> MemorySemanticOwner:
   return MemorySemanticOwner(MemorySemanticClass.CANDIDATE_WORKSPACE, candidate_id)
-
-def bind_memory_semantic_owner(value:Any, owner:MemorySemanticOwner) -> None:
-  """Bind ownership to a concrete allocation identity without changing its graph."""
-  uop = _uop(value)
-  existing = memory_semantic_owner(uop)
-  if existing is not None and existing != owner:
-    raise ValueError(f"allocation already has semantic owner {existing!r}")
-  _source_owners[uop] = owner
 
 def _uop(value:Any) -> UOp:
   uop = value if isinstance(value, UOp) else getattr(value, "uop", None)
@@ -93,7 +50,7 @@ def runtime_input_materialization(value:Any) -> Any:
     existing = memory_semantic_owner(source)
     if existing is not None and existing != RUNTIME_INPUT:
       raise ValueError(f"runtime input materialization contains conflicting source owner {existing!r}")
-    if existing is None: _source_owners[source] = RUNTIME_INPUT
+    if existing is None: bind_memory_semantic_owner(source, RUNTIME_INPUT)
   return mark_memory_semantic(value, RUNTIME_INPUT)
 def materialize_runtime_input(value:Any) -> Any:
   """Realize a complete request-input graph and bind its final Buffer too."""
@@ -109,22 +66,3 @@ def prefill_activation(value:Any) -> Any: return mark_memory_semantic(value, PRE
 def prefill_output(value:Any) -> Any: return mark_memory_semantic(value, PREFILL_OUTPUT)
 def prefill_scratch(value:Any) -> Any: return mark_memory_semantic(value, PREFILL_SCRATCH)
 def mark_candidate_workspace(value:Any, candidate_id:str) -> Any: return mark_memory_semantic(value, candidate_workspace(candidate_id))
-
-def propagate_memory_semantic(source:UOp, target:UOp) -> UOp:
-  """Declare that *target* is the concrete allocation identity of *source*."""
-  owner = memory_semantic_owner(source)
-  if owner is None: return target
-  if (other := memory_semantic_owner(target)) is not None and other != owner:
-    raise ValueError(f"conflicting explicit semantic owners: {owner!r} and {other!r}")
-  return target if target.op is Ops.MEMORY_SEMANTIC else UOp(Ops.MEMORY_SEMANTIC, target.dtype, (target,), owner)
-
-def memory_semantic_owner(value:Any) -> MemorySemanticOwner|None:
-  uop, seen = _uop(value), set()
-  while uop not in seen:
-    seen.add(uop)
-    if (source_owner := _source_owners.get(uop)) is not None: return source_owner
-    if uop.op is Ops.MEMORY_SEMANTIC: return uop.arg if isinstance(uop.arg, MemorySemanticOwner) else None
-    if len(uop.src) and uop.op in GroupOp.Movement | {Ops.CAST, Ops.BITCAST, Ops.CONTIGUOUS, Ops.STAGE, Ops.AFTER}:
-      uop = uop.src[0]
-    else: break
-  return None

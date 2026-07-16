@@ -586,7 +586,7 @@ def split_store(x:UOp) -> UOp|None:
   # removing the scheduler-only carrier. A carrier directly feeding a STORE
   # owns that STORE's destination; a carrier consumed by arithmetic owns the
   # concrete indexed input it wraps. Conflicts deliberately remain unclaimed.
-  from tinygrad.llm.memory_semantics import MemorySemanticOwner
+  from tinygrad.uop import MemorySemanticOwner
   topo = ret.toposort()
   parents:dict[UOp, list[UOp]] = {}
   for node in topo:
