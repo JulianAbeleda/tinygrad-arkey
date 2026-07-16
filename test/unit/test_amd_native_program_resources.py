@@ -8,6 +8,8 @@ from extra.qk.prefill.amd_native_program_resources import amd_native_program_res
 from extra.qk.prefill.q4k_q8_five_buffer_pipeline import compile_q4k_q8_five_buffer_pipeline
 from test.unit.test_q4k_q8_five_buffer_execution_adapter import _entry
 from tinygrad.renderer.amd.elf import descriptor_register_counts, kernel_descriptor_from_elf
+from tinygrad.renderer.isa import CompilerCaptureProof
+from tinygrad.renderer.isa.amd import AMDISARenderer
 from tinygrad.runtime.support.elf import elf_loader
 from tinygrad.uop.ops import Ops, UOp
 
@@ -37,6 +39,18 @@ def test_both_pipeline_programs_use_native_final_authorities_without_external_to
     assert resources["scratch_spill_proof"] == {"amdisarenderer_spill_construction": "hard_error",
       "pre_and_final_linear_scratch_spill_instructions": "absent", "private_segment_fixed_size": 0,
       "private_segment_properties": "disabled", "byte_identical_reassembly": True}
+
+
+def test_proof_bearing_program_reassembles_with_its_compiler_projection(monkeypatch):
+  program = _programs()[1]
+  proof = program.src[2].arg
+  assert isinstance(proof, CompilerCaptureProof)
+  seen = []
+  original = AMDISARenderer._assembly_program
+  monkeypatch.setattr(AMDISARenderer, "_assembly_program", staticmethod(
+    lambda prg, supplied: (seen.append(supplied), original(prg, supplied))[1]))
+  amd_native_program_resources(program, target="AMD:ISA:gfx1100")
+  assert seen == [proof]
 
 
 @pytest.mark.parametrize("mutation, match", (

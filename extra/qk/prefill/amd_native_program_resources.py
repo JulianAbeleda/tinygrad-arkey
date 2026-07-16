@@ -6,6 +6,7 @@ from math import prod
 from typing import Any
 
 from tinygrad.renderer.amd.dsl import FixedBitField, Reg
+from tinygrad.renderer.isa import CompilerCaptureProof
 from tinygrad.uop.ops import Ops, ProgramInfo, UOp
 
 
@@ -107,7 +108,11 @@ def amd_native_program_resources(program: UOp, *, target: str) -> dict[str, Any]
     private_rsrc = int(descriptor.compute_pgm_rsrc2) & amdgpu_kd.COMPUTE_PGM_RSRC2_ENABLE_PRIVATE_SEGMENT
     if int(descriptor.private_segment_fixed_size) != 0 or private_properties or private_rsrc:
       _reject("ELF descriptor enables a private/scratch segment")
-    if assemble_linear(renderer._assembly_program(program, None), final_linear, arch) != binary:
+    # Match AMDISARenderer.asm exactly.  Proof-bearing streams project compiler-owned register storage out of the
+    # assembly PROGRAM metadata; reassembling them with proof=None can produce a different descriptor/ELF even though
+    # the final instruction stream is identical.
+    proof = linear.arg if isinstance(linear.arg, CompilerCaptureProof) else None
+    if assemble_linear(renderer._assembly_program(program, proof), final_linear, arch) != binary:
       _reject("final LINEAR does not reassemble to the supplied ELF")
   except ValueError:
     raise
