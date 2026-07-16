@@ -96,18 +96,7 @@ def _direct_packed_b_upcast(m:int) -> int:
 
 
 def _direct_packed_role(lin, spec:"PrefillLinearRouteSpec") -> str:
-  role = spec.role
-  if role: return role
-  for attr in ("route_role", "role"):
-    role = str(getattr(lin, attr, ""))
-    if role: return role
-  name = str(getattr(lin, "name", ""))
-  if any(x in name for x in ("ffn_gate", "ffn_up")): return "ffn_gate_up"
-  if "ffn_down" in name: return "ffn_down"
-  if any(x in name for x in ("attn_q", "attn_output")): return "attn_qo"
-  if any(x in name for x in ("attn_k", "attn_v")): return "attn_kv"
-  if name == "output.weight" or name.rsplit(".", 1)[-1] == "output": return "lm_head"
-  return ""
+  return spec.role or _direct_packed_module_role(lin)
 
 
 def _direct_packed_parts(lin, spec:"PrefillLinearRouteSpec") -> int:
@@ -160,62 +149,60 @@ class PrefillLinearRouteSpec:
     return f"prefill_{self.quant.lower()}_direct_packed_load_gemm"
 
 @dataclass(frozen=True)
-class DirectPackedPrefillCandidate:
+class DirectPackedPrefillFormat:
   quant: str
+  describe_op: str
+  emit_op: str
+
+  def describe(self, lin, spec:PrefillLinearRouteSpec, *, parts:int, output_layout:str, opts):
+    return getattr(qk_ops, self.describe_op)(spec.n, spec.k, spec.m, role=_direct_packed_role(lin, spec),
+      parts=parts, output_layout=output_layout, opts=opts)
+
+  def emit(self, route_spec):
+    return getattr(qk_ops, self.emit_op)(route_spec)
+
+
+@dataclass(frozen=True)
+class DirectPackedPrefillCandidate:
+  format: DirectPackedPrefillFormat
+
+  @property
+  def quant(self) -> str: return self.format.quant
 
   def matches(self, lin, spec:PrefillLinearRouteSpec) -> bool:
     return spec.quant == self.quant
 
   def run(self, lin, x:Tensor, x_batch:Tensor, spec:PrefillLinearRouteSpec) -> Tensor | None:
-    raise NotImplementedError
+    return _execute_direct_packed_prefill(self.format, lin, x, x_batch, spec)
 
-
-@dataclass(frozen=True)
 class Q4KDirectPackedPrefillCandidate(DirectPackedPrefillCandidate):
-  quant: str = "q4k"
+  def __init__(self): super().__init__(DirectPackedPrefillFormat(
+    "q4k", "describe_q4k_packed_prefill_generated", "emit_q4k_packed_prefill_kernel"))
 
-  def run(self, lin, x:Tensor, x_batch:Tensor, spec:PrefillLinearRouteSpec) -> Tensor | None:
-    words = lin.prefill_packed_weight().to(x.device)
-    parts = _direct_packed_parts(lin, spec)
-    partials = prefill_scratch(Tensor.empty(spec.n, spec.m, parts, dtype=dtypes.float32, device=x.device))
-    opts = _direct_packed_opts(lin, spec)
-    output_layout = "direct_out" if parts == 1 else "partials"
-    q4_spec = qk_ops.describe_q4k_packed_prefill_generated(spec.n, spec.k, spec.m,
-                                                           role=_direct_packed_role(lin, spec), parts=parts,
-                                                           output_layout=output_layout, opts=opts)
-    if output_layout == "direct_out":
-      out = prefill_output(Tensor.empty(spec.m, spec.n, dtype=dtypes.float32, device=x.device).custom_kernel(
-        words, x_batch.reshape(spec.m * spec.k), fxn=qk_ops.emit_q4k_packed_prefill_kernel(q4_spec))[0])
-      return prefill_output(out.reshape(1, spec.m, spec.n))
-    out = prefill_scratch(partials.custom_kernel(words, x_batch.reshape(spec.m * spec.k),
-      fxn=qk_ops.emit_q4k_packed_prefill_kernel(q4_spec))[0])
-    return prefill_output(out.sum(axis=2).transpose(0, 1).reshape(1, spec.m, spec.n))
-
-
-@dataclass(frozen=True)
 class Q6KDirectPackedPrefillCandidate(DirectPackedPrefillCandidate):
-  quant: str = "q6k"
+  def __init__(self): super().__init__(DirectPackedPrefillFormat(
+    "q6k", "describe_q6k_packed_prefill", "emit_q6k_packed_prefill_kernel"))
 
-  def run(self, lin, x:Tensor, x_batch:Tensor, spec:PrefillLinearRouteSpec) -> Tensor | None:
-    halfs = lin.prefill_packed_weight().to(x.device)
-    parts = _direct_packed_parts(lin, spec)
-    partials = prefill_scratch(Tensor.empty(spec.n, spec.m, parts, dtype=dtypes.float32, device=x.device))
-    opts = _direct_packed_opts(lin, spec)
-    output_layout = "direct_out" if parts == 1 else "partials"
-    q6_spec = qk_ops.describe_q6k_packed_prefill(spec.n, spec.k, spec.m, role=_direct_packed_role(lin, spec),
-                                                 parts=parts, output_layout=output_layout, opts=opts)
-    if output_layout == "direct_out":
-      out = prefill_output(Tensor.empty(spec.m, spec.n, dtype=dtypes.float32, device=x.device).custom_kernel(
-        halfs, x_batch.reshape(spec.m * spec.k), fxn=qk_ops.emit_q6k_packed_prefill_kernel(q6_spec))[0])
-      return prefill_output(out.reshape(1, spec.m, spec.n))
-    out = prefill_scratch(partials.custom_kernel(halfs, x_batch.reshape(spec.m * spec.k),
-      fxn=qk_ops.emit_q6k_packed_prefill_kernel(q6_spec))[0])
-    return prefill_output(out.sum(axis=2).transpose(0, 1).reshape(1, spec.m, spec.n))
+
+def _execute_direct_packed_prefill(format:DirectPackedPrefillFormat, lin, x:Tensor, x_batch:Tensor,
+                                    spec:PrefillLinearRouteSpec) -> Tensor:
+  packed_weight = lin.prefill_packed_weight().to(x.device)
+  parts = _direct_packed_parts(lin, spec)
+  output_layout = "direct_out" if parts == 1 else "partials"
+  route_spec = format.describe(lin, spec, parts=parts, output_layout=output_layout, opts=_direct_packed_opts(lin, spec))
+  kernel = format.emit(route_spec)
+  activation = x_batch.reshape(spec.m * spec.k)
+  if output_layout == "direct_out":
+    out = prefill_output(Tensor.empty(spec.m, spec.n, dtype=dtypes.float32, device=x.device).custom_kernel(
+      packed_weight, activation, fxn=kernel)[0])
+    return prefill_output(out.reshape(1, spec.m, spec.n))
+  partials = prefill_scratch(Tensor.empty(spec.n, spec.m, parts, dtype=dtypes.float32, device=x.device))
+  out = prefill_scratch(partials.custom_kernel(packed_weight, activation, fxn=kernel)[0])
+  return prefill_output(out.sum(axis=2).transpose(0, 1).reshape(1, spec.m, spec.n))
 
 
 DIRECT_PACKED_PREFILL_CANDIDATES: tuple[DirectPackedPrefillCandidate, ...] = (
-  Q4KDirectPackedPrefillCandidate(),
-  Q6KDirectPackedPrefillCandidate(),
+  Q4KDirectPackedPrefillCandidate(), Q6KDirectPackedPrefillCandidate(),
 )
 
 
