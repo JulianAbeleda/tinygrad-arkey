@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from tinygrad.uop.ops import KernelLDSWindow, KernelTileGeometry
+from extra.qk.kernel_vocabulary import KernelLDSWindow, KernelTileGeometry
 
 from extra.qk.layout import Q4K_WORDS_PER_BLOCK, Q4_K_BLOCK_ELEMS, Q8_1_BLOCK_ELEMS
 
