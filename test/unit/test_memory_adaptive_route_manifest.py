@@ -1,4 +1,6 @@
 import copy
+import hashlib
+import json
 
 import pytest
 
@@ -30,6 +32,14 @@ def candidate_set(profile="old_8b_benchmark_label"):
         "shape": {"m": 512, "n": 4096, "k": 4096}, "target": TARGET},
       "applicability": {"profiles": [profile], "exact_shape": True}, "schedule": {"tile": [128, 128, 32]},
     }}]}
+
+def fallback(workload, route_id="direct_packed", evidence=None):
+  evidence = evidence or {"schema":"qk.direct_packed_qualification.v1", "status":"qualified", "binary":"q6-baseline"}
+  semantic = lambda value: json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("ascii")
+  evidence_identity = "fallback_evidence:sha256:" + hashlib.sha256(semantic(evidence)).hexdigest()
+  content = {"workload":workload, "route_id":route_id, "evidence_identity":evidence_identity}
+  return {**content, "evidence":evidence,
+          "fallback_identity":"fallback:sha256:" + hashlib.sha256(semantic(content)).hexdigest()}
 
 
 def test_model_and_profile_renames_are_provenance_only():
@@ -96,6 +106,68 @@ def test_exact_structural_lookup_and_route_id_alias():
   assert found is not None
   assert found["candidate_identity"] == "candidate-attn-qo"
   assert found["selected_route"] in found["route_aliases"] == ["prefill_wmma_lds_dbuf_generated"]
+
+
+def test_mixed_policy_covers_exact_inventory_with_identity_qualified_fallback():
+  inv, candidates = inventory(), candidate_set()
+  q6 = {"phase":"prefill", "role":"attn_kv", "quant_format":"Q6_K",
+        "shape":{"m":512, "n":1024, "k":5120}, "target":TARGET}
+  inv["rows"].append({**q6, "tensor_identities":["blk.0.attn_k.weight"], "call_count":1,
+                      "layout":{"packed":"ggml_k_blocks", "block_elems":256, "block_bytes":210}})
+  cap = {**CAPABILITY, "quant_formats":["Q4_K", "Q6_K"]}
+  candidates["fallbacks"] = [fallback(q6)]
+  rows = canonical_policy_rows(inv, cap, candidates)
+  assert [row["binding_kind"] for row in rows] == ["candidate", "fallback"]
+  assert rows[1]["selected_route"] == "direct_packed"
+  assert rows[1]["fallback_identity"].startswith("fallback:sha256:")
+  assert "candidate_identity" not in rows[1]
+
+
+def test_exact_six_row_mixed_policy_has_one_binding_per_discovered_row():
+  specs = (("ffn_gate_up", "Q4_K", 17408, 5120), ("attn_qo", "Q4_K", 5120, 5120),
+           ("ffn_down", "Q4_K", 5120, 17408), ("attn_kv", "Q4_K", 1024, 5120),
+           ("ffn_down", "Q6_K", 5120, 17408), ("attn_kv", "Q6_K", 1024, 5120))
+  rows, entries, fallbacks = [], [], []
+  for index, (role, quant, n, k) in enumerate(specs):
+    workload = {"phase":"prefill", "role":role, "quant_format":quant,
+                "shape":{"m":512, "n":n, "k":k}, "target":TARGET}
+    rows.append({**workload, "tensor_identities":[f"tensor.{index}"], "call_count":1,
+                 "layout":{"packed":"ggml_k_blocks", "block_elems":256,
+                           "block_bytes":144 if quant == "Q4_K" else 210}})
+    if quant == "Q4_K": entries.append({"canonical_identity":f"candidate-{index}", "payload":{"workload":workload}})
+    else: fallbacks.append(fallback(workload))
+  inv = {"schema":"test.inventory.v1", "rows":rows}
+  candidates = {"schema":"boltbeam.full_kernel_candidate_set.v1", "entries":entries, "fallbacks":fallbacks}
+  cap = {**CAPABILITY, "quant_formats":["Q4_K", "Q6_K"]}
+  policy = canonical_policy_rows(inv, cap, candidates)
+  assert len(policy) == 6
+  assert [row["binding_kind"] for row in policy].count("candidate") == 4
+  assert [row["binding_kind"] for row in policy].count("fallback") == 2
+  assert all(row["selected_route"] == "direct_packed" for row in policy if row["quant"] == "Q6_K")
+
+
+@pytest.mark.parametrize(("mutation", "match"), [
+  (lambda row: row.pop("evidence"), "requires route and evidence"),
+  (lambda row: row["evidence"].__setitem__("status", "measured"), "evidence is not qualified"),
+  (lambda row: row.__setitem__("evidence_identity", "fallback_evidence:sha256:stale"), "evidence identity mismatch"),
+  (lambda row: row.__setitem__("fallback_identity", "fallback:sha256:stale"), "fallback identity mismatch"),
+])
+def test_declared_fallback_rejects_missing_evidence_and_identity_drift(mutation, match):
+  q6 = {"phase":"prefill", "role":"attn_kv", "quant_format":"Q6_K",
+        "shape":{"m":512, "n":1024, "k":5120}, "target":TARGET}
+  row = fallback(q6)
+  mutation(row)
+  with pytest.raises(ValueError, match=match):
+    canonical_candidate_set_identity({"schema":"boltbeam.full_kernel_candidate_set.v1", "entries":[], "fallbacks":[row]})
+
+
+def test_candidate_and_fallback_cannot_both_bind_one_inventory_row():
+  candidates = candidate_set()
+  workload = copy.deepcopy(candidates["entries"][0]["payload"]["workload"])
+  workload.pop("profile")
+  candidates["fallbacks"] = [fallback(workload)]
+  with pytest.raises(ValueError, match="ambiguous candidate/fallback binding"):
+    canonical_policy_rows(inventory(), CAPABILITY, candidates)
 
 
 @pytest.mark.parametrize(("field", "value"), [

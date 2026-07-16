@@ -534,12 +534,32 @@ def canonical_inventory_identity(inventory: Mapping) -> str:
 def canonical_candidate_set_identity(candidate_set: Mapping) -> str:
   """Canonical candidate-set identity. Legacy profile fields are ignored, while payload and target facts remain exact."""
   entries = candidate_set.get("entries")
-  if not isinstance(entries, list) or not entries: raise ValueError("candidate set requires non-empty entries")
+  fallbacks = candidate_set.get("fallbacks", [])
+  if not isinstance(entries, list) or not isinstance(fallbacks, list) or not entries and not fallbacks:
+    raise ValueError("candidate set requires candidate entries or declared fallbacks")
   canonical = []
   for entry in entries:
     if not isinstance(entry, Mapping) or not isinstance(entry.get("payload"), Mapping): raise ValueError("malformed candidate entry")
     canonical.append({"canonical_identity": entry.get("canonical_identity"), "payload": entry["payload"]})
-  return _identity("candidate_set", sorted(canonical, key=_semantic_json))
+  if not fallbacks: return _identity("candidate_set", sorted(canonical, key=_semantic_json))
+  declared = [_validated_fallback(row) for row in fallbacks]
+  return _identity("candidate_set", {"entries":sorted(canonical, key=_semantic_json),
+                                     "fallbacks":sorted(declared, key=_semantic_json)})
+
+def _validated_fallback(row: Mapping) -> dict:
+  """Validate one exact, evidence-bearing rollback declaration and return its semantic content."""
+  if not isinstance(row, Mapping) or not isinstance(row.get("workload"), Mapping):
+    raise ValueError("malformed declared fallback")
+  route_id, evidence = row.get("route_id"), row.get("evidence")
+  if not isinstance(route_id, str) or not route_id or not isinstance(evidence, Mapping) or not evidence:
+    raise ValueError("declared fallback requires route and evidence")
+  if evidence.get("status") != "qualified": raise ValueError("declared fallback evidence is not qualified")
+  evidence_identity = _identity("fallback_evidence", evidence)
+  if row.get("evidence_identity") != evidence_identity: raise ValueError("declared fallback evidence identity mismatch")
+  content = {"workload":row["workload"], "route_id":route_id, "evidence_identity":evidence_identity}
+  fallback_identity = _identity("fallback", content)
+  if row.get("fallback_identity") != fallback_identity: raise ValueError("declared fallback identity mismatch")
+  return {**content, "fallback_identity":fallback_identity}
 
 def canonical_policy_rows(inventory: Mapping, capability: Mapping, candidate_set: Mapping, *,
                           route_id: str = "prefill_wmma_lds_dbuf_generated") -> tuple[dict, ...]:
@@ -555,6 +575,15 @@ def canonical_policy_rows(inventory: Mapping, capability: Mapping, candidate_set
            _semantic_json(_target(workload.get("target"))))
     if key in candidates: raise ValueError(f"duplicate structural candidate {key!r}")
     candidates[key] = entry
+  fallbacks = {}
+  for raw in candidate_set.get("fallbacks", []):
+    fallback = _validated_fallback(raw)
+    workload = fallback["workload"]
+    key = (workload.get("phase", "prefill"), workload.get("role"),
+           workload.get("quant_format", workload.get("quant")), _shape(workload),
+           _semantic_json(_target(workload.get("target"))))
+    if key in candidates or key in fallbacks: raise ValueError(f"ambiguous candidate/fallback binding {key!r}")
+    fallbacks[key] = fallback
   rows = []
   for inv in inv_rows:
     if _semantic_json(inv["target"]) != _semantic_json(capability_target):
@@ -565,12 +594,18 @@ def canonical_policy_rows(inventory: Mapping, capability: Mapping, candidate_set
       raise ValueError("inventory phase/quant is outside the scanned capability contract")
     key = (inv["phase"], inv["role"], inv["quant"], _shape(inv), _semantic_json(inv["target"]))
     entry = candidates.get(key)
-    if entry is None: raise ValueError(f"candidate set does not cover exact inventory row {key[:4]!r}")
+    fallback = fallbacks.get(key)
+    if entry is None and fallback is None: raise ValueError(f"candidate set does not cover exact inventory row {key[:4]!r}")
+    binding = ({"binding_kind":"candidate", "candidate_identity":entry.get("canonical_identity"),
+                "selected_route":route_id, "route_aliases":[route_id]} if entry is not None else
+               {"binding_kind":"fallback", "fallback_identity":fallback["fallback_identity"],
+                "fallback_evidence_identity":fallback["evidence_identity"],
+                "selected_route":fallback["route_id"], "route_aliases":[fallback["route_id"]]})
     rows.append({"phase": inv["phase"], "role": inv["role"], "quant": inv["quant"], "shape": inv["shape"],
       "target": inv["target"], "capability_identity": cap_id, "inventory_identity": inv_id,
-      "candidate_set_identity": set_id, "candidate_identity": entry.get("canonical_identity"),
-      "selected_route": route_id, "route_aliases": [route_id]})
-  if len(candidates) != len(rows): raise ValueError("candidate set contains rows outside the exact inventory")
+      "candidate_set_identity": set_id, **binding})
+  if len(candidates) + len(fallbacks) != len(rows):
+    raise ValueError("candidate set contains rows outside the exact inventory")
   return tuple(rows)
 
 def lookup_policy_row(policy_rows, *, phase: str, role: str, quant: str, shape, target: Mapping,
