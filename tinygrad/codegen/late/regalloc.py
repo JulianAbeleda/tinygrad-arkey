@@ -6,6 +6,15 @@ from tinygrad.dtype import dtypes, PtrDType
 
 PSEUDO_OPS = {Ops.CONST, Ops.NOOP, Ops.AFTER, Ops.BARRIER, Ops.WAIT, Ops.GROUP}
 
+PURE_ADDR_INS = {"V_AND", "V_IMUL", "V_IADD", "V_OFFSET", "V_LSHR"}
+PURE_ADDR_ROOT_INS = PURE_ADDR_INS | {"WG_ID", "WI_ID", "MOV_S2V"}
+ADDR_USER_INS = PURE_ADDR_INS | {"DS_LOAD", "DS_STORE", "DS_LOAD_B128", "DS_STORE_B128", "DS_STORE_B64", "GATED_STORE", "GATED_STORE_B128", "GATED_STORE_B64",
+                                  "GLOBAL_LOAD", "GLOBAL_LOAD_B128", "GLOBAL_STORE"}
+
+def _ins_name(u:UOp) -> str: return str(u.arg).split(".", 1)[-1]
+def _pure_addr_def(u:UOp) -> bool: return u.dtype in dtypes.ints and (u.op is Ops.SPECIAL or (u.op is Ops.INS and _ins_name(u) in PURE_ADDR_ROOT_INS))
+def _addr_user(u:UOp) -> bool: return (u.op is Ops.INS and _ins_name(u) in ADDR_USER_INS) or (u.op is Ops.END and not getenv("REGALLOC_ADDR_REMAT_NO_END", 0))
+
 def _register_defs(u:UOp) -> tuple[Register, ...]:
   return u.tag if isinstance(u.tag, tuple) and u.tag and all(isinstance(v, Register) for v in u.tag) else ()
 
@@ -99,8 +108,6 @@ class LinearScanRegallocContext:
         if isinstance(v, FixedRegisterUse): continue
         if isinstance(v, Register): lr.setdefault(v, []).insert(0, len(uops) - 1 - i)
       for v in defs:
-        if getenv("REGALLOC_NO_LOOP_EXTEND_ADDR", 0) and u.op is Ops.INS and str(u.arg).split(".", 1)[-1] in {"V_OFFSET", "V_IADD"}:
-          continue
         if v in lr and (n:=max((lr[rng][-1] for rng in ranges if lr[rng][0] <= lr[v][-1] < lr[rng][-1]), default=None)): lr[v].append(n)
       if u.op is Ops.RANGE: ranges.append(u.reg)
 
@@ -228,26 +235,16 @@ class LinearScanRegallocContext:
       return reg
 
     def can_remat(v:Register, i:int) -> bool:
-      if not getenv("REGALLOC_ADDR_REMAT", 0): return False
       d, u = self.vdef(v), uops[i]
-      dop, uop = str(d.arg).split(".", 1)[-1], str(u.arg).split(".", 1)[-1]
-      pure_addr = {"V_AND", "V_IMUL", "V_IADD", "V_OFFSET", "V_LSHR"}
-      pure_addr_roots = pure_addr | {"WG_ID", "WI_ID", "MOV_S2V"}
-      addr_users = pure_addr | {"DS_LOAD", "DS_STORE", "DS_LOAD_B128", "DS_STORE_B128", "DS_STORE_B64",
-                                "GATED_STORE", "GATED_STORE_B128", "GATED_STORE_B64",
-                                "GLOBAL_LOAD", "GLOBAL_LOAD_B128", "GLOBAL_STORE"}
-      pure_def = (d.op is Ops.INS and dop in pure_addr_roots and d.dtype in dtypes.ints) or d.op is Ops.SPECIAL
-      return pure_def and ((u.op is Ops.INS and uop in addr_users) or (u.op is Ops.END and not getenv("REGALLOC_ADDR_REMAT_NO_END", 0)))
+      return getenv("REGALLOC_ADDR_REMAT", 0) and _pure_addr_def(d) and _addr_user(u)
 
     def remat_addr_def(v:Register) -> bool:
-      if not getenv("REGALLOC_ADDR_REMAT", 0): return False
       d = self.vdef(v)
-      dop = str(d.arg).split(".", 1)[-1]
-      return d.op is Ops.SPECIAL or (d.dtype in dtypes.ints and d.op is Ops.INS and dop in {"V_AND", "V_IMUL", "V_IADD", "V_OFFSET", "V_LSHR", "WG_ID", "WI_ID", "MOV_S2V"})
+      return getenv("REGALLOC_ADDR_REMAT", 0) and _pure_addr_def(d)
 
     # assign register to spilled virtual and record load to be emitted before current uop, also assign it a stack slot
     def fill(v:Register, i:int, cons:tuple[Register, ...]|None=None, emit_remat_before=False) -> Register:
-      if can_remat(v, i) or (getenv("REGALLOC_ADDR_REMAT", 0) and self.vdef(v).op is Ops.SPECIAL):
+      if can_remat(v, i) or emit_remat_before and ren.is_rematerializable(self.vdef(v)) or (getenv("REGALLOC_ADDR_REMAT", 0) and self.vdef(v).op is Ops.SPECIAL):
         pinned:list[Register] = []
         for s in self.vdef(v).src:
           if not isinstance(sv:=s.reg, Register): continue
