@@ -4,6 +4,10 @@ Date: 2026-07-15
 Status: implementation scope
 Primary architecture: `docs/prefill-memory-fit-architecture-20260715.md`
 
+Validated follow-up: `docs/automatic-prefill-route-planner-repair-scope-20260716.md` supersedes any interpretation
+that `prefill_graph_gemm` or another route Boolean may remain an execution authority. It records the live 8B/14B
+admission experiment, bounded GPU proof, current authority leaks, migration order, and updated completion gates.
+
 ## Objective
 
 The user explicitly selects the model to load. Replace model-name/profile-driven execution-route selection with a
