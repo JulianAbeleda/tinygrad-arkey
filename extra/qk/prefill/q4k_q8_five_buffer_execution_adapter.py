@@ -64,29 +64,28 @@ def _compile_evidence(program, admission, target: str) -> dict[str, Any]:
   abi_digest = _abi_digest(descriptors)
   binary = next((u.arg for u in program.src if u.op.name == "BINARY" and isinstance(u.arg, bytes)), None)
   if binary is None: raise ValueError("final static PROGRAM binary is unavailable")
-  from extra.qk.mmq_compile_evidence import parse_amdgpu_metadata
-  from tinygrad.renderer.amd.elf import descriptor_register_counts, kernel_descriptor_from_elf
-  metadata = parse_amdgpu_metadata(binary)
-  descriptor = kernel_descriptor_from_elf(binary)
-  allocated_vgpr, allocated_sgpr = descriptor_register_counts(descriptor, is_cdna=False)
-  descriptor_lds = int(descriptor.group_segment_fixed_size)
-  if descriptor_lds != admission.active_lds_bytes or metadata["lds_bytes"] != descriptor_lds:
+  from extra.qk.prefill.amd_native_program_resources import amd_native_program_resources
+  native_resources = amd_native_program_resources(program, target=target)
+  descriptor_lds = native_resources["lds_bytes"]
+  if descriptor_lds != admission.active_lds_bytes:
     raise ValueError("final code-object LDS differs from admitted active LDS")
-  if metadata["wavefront_size"] != 32: raise ValueError("final code-object wavefront differs from admitted wave32")
-  if any(metadata[field] != 0 for field in ("scratch_bytes", "vgpr_spills", "sgpr_spills")):
+  if native_resources["wavefront_size"] != 32: raise ValueError("final code-object wavefront differs from admitted wave32")
+  if any(native_resources[field] != 0 for field in ("scratch_bytes", "vgpr_spills", "sgpr_spills")):
     raise ValueError("final code object unexpectedly uses scratch or spills")
   local_size, global_size = getattr(program.arg, "local_size", None), getattr(program.arg, "global_size", None)
   if not isinstance(local_size, tuple) or prod(local_size) != schedule["threads"]:
     raise ValueError("final PROGRAM workgroup differs from admitted threads")
   resources = {"schema": "tinygrad.amd.final_resource_summary.v1", "stage": "final_program",
-    "authority": "final_code_object_metadata_descriptor_and_program_launch", "vgpr": metadata["vgpr"],
-    "allocated_vgpr": allocated_vgpr, "sgpr": metadata["sgpr"], "allocated_sgpr": allocated_sgpr,
+    "authority": "native_final_elf_descriptor_linear_and_program_launch", "vgpr": native_resources["vgpr"],
+    "allocated_vgpr": native_resources["allocated_vgpr"], "sgpr": native_resources["sgpr"],
+    "allocated_sgpr": native_resources["allocated_sgpr"],
     "lds_bytes": descriptor_lds, "admitted_active_lds_bytes": admission.active_lds_bytes,
-    "scratch_bytes": metadata["scratch_bytes"], "vgpr_spills": metadata["vgpr_spills"],
-    "sgpr_spills": metadata["sgpr_spills"], "workgroup": list(local_size),
+    "scratch_bytes": native_resources["scratch_bytes"], "vgpr_spills": native_resources["vgpr_spills"],
+    "sgpr_spills": native_resources["sgpr_spills"], "workgroup": list(local_size),
     "workgroup_threads": prod(local_size), "grid": list(global_size) if global_size else None,
-    "wavefront_size": metadata["wavefront_size"], "source_sha256": source_sha,
-    "binary_sha256": binary_sha, "canonical_identity": admission.canonical_identity, "target": "gfx1100"}
+    "wavefront_size": native_resources["wavefront_size"], "source_sha256": source_sha,
+    "binary_sha256": binary_sha, "canonical_identity": admission.canonical_identity, "target": "gfx1100",
+    "native_resource_evidence": native_resources}
   evidence.update(source_sha256=source_sha, binary_sha256=binary_sha, target_id="amd_gfx1100",
     target="gfx1100", compile_target=target, canonical_identity=admission.canonical_identity,
     candidate_digest=admission.canonical_identity, abi_digest=abi_digest,

@@ -165,14 +165,10 @@ def test_registration_is_explicit_and_unique():
 
 
 def test_static_pipeline_compile_evidence_binds_both_programs_to_one_identity(monkeypatch):
-  from extra.qk import mmq_compile_evidence
-  from tinygrad.renderer.amd import elf
-  class Descriptor: group_segment_fixed_size = 0
-  monkeypatch.setattr(mmq_compile_evidence, "parse_amdgpu_metadata", lambda _binary: {
-    "vgpr": 48, "sgpr": 8, "lds_bytes": 0, "scratch_bytes": 0, "vgpr_spills": 0,
-    "sgpr_spills": 0, "wavefront_size": 32})
-  monkeypatch.setattr(elf, "kernel_descriptor_from_elf", lambda _binary: Descriptor())
-  monkeypatch.setattr(elf, "descriptor_register_counts", lambda _desc, **_kwargs: (48, None))
+  from extra.qk.prefill import amd_native_program_resources as native
+  monkeypatch.setattr(native, "amd_native_program_resources", lambda _program, **_kwargs: {
+    "vgpr": 48, "allocated_vgpr": 48, "sgpr": 8, "allocated_sgpr": None, "lds_bytes": 0,
+    "scratch_bytes": 0, "vgpr_spills": 0, "sgpr_spills": 0, "wavefront_size": 32})
   entry = _entry((32, 16, 256), role="attn_kv")
   pipeline, evidence = adapter.prepare_q4k_q8_five_buffer_pipeline_compile(entry.payload, entry.canonical_identity)
   assert evidence["program_count"] == 2 and evidence["execution_input_format"] == "fp32_activation"
@@ -195,19 +191,15 @@ def test_static_pipeline_compile_evidence_binds_both_programs_to_one_identity(mo
 
 
 def test_static_compile_evidence_binds_exact_zero_resource_code_object_and_role(monkeypatch):
-  from extra.qk import mmq_compile_evidence
-  from tinygrad.renderer.amd import elf
-  class Descriptor: group_segment_fixed_size = 0
-  monkeypatch.setattr(mmq_compile_evidence, "parse_amdgpu_metadata", lambda _binary: {
-    "vgpr": 48, "sgpr": 8, "lds_bytes": 0, "scratch_bytes": 0, "vgpr_spills": 0,
-    "sgpr_spills": 0, "wavefront_size": 32})
-  monkeypatch.setattr(elf, "kernel_descriptor_from_elf", lambda _binary: Descriptor())
-  monkeypatch.setattr(elf, "descriptor_register_counts", lambda _desc, **_kwargs: (48, None))
+  from extra.qk.prefill import amd_native_program_resources as native
+  monkeypatch.setattr(native, "amd_native_program_resources", lambda _program, **_kwargs: {
+    "vgpr": 48, "allocated_vgpr": 48, "sgpr": 8, "allocated_sgpr": None, "lds_bytes": 0,
+    "scratch_bytes": 0, "vgpr_spills": 0, "sgpr_spills": 0, "wavefront_size": 32})
   entry = _entry((16, 16, 256), role="attn_kv")
   _, evidence = adapter.prepare_q4k_q8_five_buffer_compile(entry.payload, entry.canonical_identity)
   resources = evidence["resource_summary"]
   assert evidence["surface"]["role"] == "attn_kv"
-  assert resources["authority"] == "final_code_object_metadata_descriptor_and_program_launch"
+  assert resources["authority"] == "native_final_elf_descriptor_linear_and_program_launch"
   assert resources["lds_bytes"] == resources["admitted_active_lds_bytes"] == 0
   assert resources["scratch_bytes"] == resources["vgpr_spills"] == resources["sgpr_spills"] == 0
   assert resources["wavefront_size"] == 32 and resources["workgroup_threads"] == 32
