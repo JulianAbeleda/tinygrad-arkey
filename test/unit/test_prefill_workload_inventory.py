@@ -5,7 +5,7 @@ import pytest
 
 from tinygrad.llm.model_facts import model_facts_from_gguf_metadata
 from extra.qk.prefill.workload_inventory import (CANDIDATE_INVENTORY_SCHEMA, MeasuredRow,
-  build_workload_inventory, generate_candidate_inventory)
+  build_workload_inventory, generate_candidate_inventory, project_runtime_prefill_inventory)
 from extra.qk.runtime_specs import FullKernelCandidateSet, admit_full_kernel_candidate_set
 
 
@@ -33,6 +33,65 @@ ROWS = tuple(MeasuredRow(role, quant, 512, n, k) for role, quant, n, k in (
 def _templates():
   artifact = json.loads(Path("bench/prefill-pure-full-kernel/multirole-buffer2-candidate-set-v1/candidate-set.json").read_text())
   return {x["payload"]["workload"]["role"]:x["payload"] for x in artifact["entries"]}
+
+
+def _runtime_inventory():
+  import hashlib
+  def invocation(tensor, role, quant, n, k, *, controlled=True, source=None):
+    semantic = {"tensor_identity":tensor, "role":role, "quant_format":quant, "candidate_controlled":controlled,
+                "shape":{"m":512 if controlled else 1, "n":n, "k":k}}
+    if source is not None: semantic["source_tensor_identity"] = source
+    if not controlled: semantic["fixed_route_id"] = "fixed-ggml-linear"
+    identity = "invocation:sha256:" + hashlib.sha256(json.dumps(semantic, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    return {**semantic, "invocation_id":identity}
+  rows = [invocation("blk.0.ffn_down.weight", "ffn_down", "Q4_K", 5120, 17408),
+          invocation("blk.1.ffn_down.weight", "ffn_down", "Q6_K", 5120, 17408),
+          invocation("output.weight", "lm_head", "Q6_K", 151936, 4096, controlled=False,
+                     source="token_embd.weight")]
+  rows.sort(key=lambda x: x["invocation_id"])
+  identity = hashlib.sha256(json.dumps(rows, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+  return {"schema":"tinygrad.model_runtime_prefill_inventory.v2", "inventory_identity":identity, "rows":rows}
+
+
+def test_runtime_projection_is_lossless_quant_partitioned_and_keeps_fixed_lm_head():
+  parent = _runtime_inventory()
+  out = project_runtime_prefill_inventory(parent)
+  assert out["parent_inventory_identity"] == parent["inventory_identity"]
+  assert [(x["role"], x["quant_format"], x["call_count"]) for x in out["rows"]] == \
+         [("ffn_down", "Q4_K", 1), ("ffn_down", "Q6_K", 1)]
+  assert [x["invocations"][0] for x in out["rows"]] + out["fixed_obligations"] == \
+         sorted(parent["rows"], key=lambda x: (x["candidate_controlled"] is False, x["quant_format"]))
+  assert out["fixed_obligations"][0]["role"] == "lm_head"
+  assert generate_candidate_inventory(out, _templates())["inventory_identity"] == out["inventory_identity"]
+
+
+@pytest.mark.parametrize("mutate,match", [
+  (lambda x: x.pop("inventory_identity"), "missing parent"),
+  (lambda x: x.__setitem__("inventory_identity", "stale"), "parent inventory identity mismatch"),
+  (lambda x: x["rows"][0].__setitem__("invocation_id", "stale"), "parent inventory identity mismatch"),
+  (lambda x: x["rows"].append(dict(x["rows"][0])), "parent inventory identity mismatch"),
+])
+def test_runtime_projection_fails_closed_on_identity_faults(mutate, match):
+  parent = _runtime_inventory(); mutate(parent)
+  with pytest.raises(ValueError, match=match): project_runtime_prefill_inventory(parent)
+
+
+@pytest.mark.parametrize("duplicate,match", [("invocation", "duplicate invocation"), ("source", "duplicate source")])
+def test_runtime_projection_rejects_duplicate_identities_with_rehashed_parent(duplicate, match):
+  import hashlib
+  parent = _runtime_inventory()
+  if duplicate == "invocation": parent["rows"].append(dict(parent["rows"][0]))
+  else:
+    candidates = [x for x in parent["rows"] if x["candidate_controlled"]]
+    row = candidates[1]
+    semantic = {**{k:v for k,v in row.items() if k != "invocation_id"},
+                "source_tensor_identity":candidates[0].get("source_tensor_identity", candidates[0]["tensor_identity"])}
+    row.clear(); row.update(semantic, invocation_id="invocation:sha256:" +
+      hashlib.sha256(json.dumps(semantic, sort_keys=True, separators=(",", ":")).encode()).hexdigest())
+  parent["rows"].sort(key=lambda x: x["invocation_id"])
+  parent["inventory_identity"] = hashlib.sha256(json.dumps(parent["rows"], sort_keys=True,
+    separators=(",", ":")).encode()).hexdigest()
+  with pytest.raises(ValueError, match=match): project_runtime_prefill_inventory(parent)
 
 
 def test_exact_mixed_inventory_and_canonical_candidate_sets_are_admitted():

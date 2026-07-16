@@ -19,6 +19,7 @@ from extra.qk.runtime_specs import (FullKernelCandidateSet, admit_full_kernel_ca
 INVENTORY_SCHEMA = "qk.packed_prefill_workload_inventory.v1"
 CANDIDATE_INVENTORY_SCHEMA = "qk.packed_prefill_candidate_inventory.v1"
 SUPPORTED_FORMATS = ("Q4_K", "Q6_K")
+RUNTIME_INVENTORY_SCHEMA = "tinygrad.model_runtime_prefill_inventory.v2"
 
 
 @dataclass(frozen=True, order=True)
@@ -57,6 +58,81 @@ def _canonical_inventory_identity(rows: list[dict[str, Any]]) -> str:
     x["shape"]["m"], x["shape"]["n"], x["shape"]["k"])), sort_keys=True, separators=(",", ":"),
     ensure_ascii=True, allow_nan=False).encode("ascii")
   return hashlib.sha256(encoded).hexdigest()
+
+
+def _canonical_json_hash(value: Any) -> str:
+  return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"),
+    ensure_ascii=True, allow_nan=False).encode("ascii")).hexdigest()
+
+
+def _projected_inventory_identity(inventory: dict[str, Any]) -> str:
+  return _canonical_json_hash({key:inventory[key] for key in ("parent_inventory_identity", "rows", "fixed_obligations")})
+
+
+def project_runtime_prefill_inventory(parent: dict[str, Any]) -> dict[str, Any]:
+  """Losslessly group the selected-model v2 invocation inventory for candidate construction.
+
+  The parent remains authoritative: exact invocation semantics are retained in each
+  group (or fixed obligation), and no ModelFacts/profile/measured-row facts are used.
+  """
+  if parent.get("schema") != RUNTIME_INVENTORY_SCHEMA or not isinstance(parent.get("rows"), list):
+    raise ValueError("unsupported runtime prefill inventory schema")
+  parent_identity = parent.get("inventory_identity")
+  if not isinstance(parent_identity, str) or not parent_identity: raise ValueError("missing parent inventory identity")
+  rows = parent["rows"]
+  if parent_identity != _canonical_json_hash(sorted(rows, key=lambda x: x.get("invocation_id", ""))):
+    raise ValueError("parent inventory identity mismatch")
+
+  seen_invocations, seen_tensors, seen_sources = set(), set(), set()
+  grouped: dict[tuple[str, str, str, int, int, int], list[dict[str, Any]]] = {}
+  fixed = []
+  for raw in rows:
+    if not isinstance(raw, dict): raise ValueError("malformed runtime inventory row")
+    row = dict(raw)
+    invocation_id, tensor_identity = row.get("invocation_id"), row.get("tensor_identity")
+    if not isinstance(invocation_id, str) or not invocation_id or not isinstance(tensor_identity, str) or not tensor_identity:
+      raise ValueError("missing invocation/source tensor identity")
+    semantic = {key:value for key,value in row.items() if key != "invocation_id"}
+    if invocation_id != "invocation:sha256:" + _canonical_json_hash(semantic):
+      raise ValueError("invocation identity mismatch")
+    source_identity = row.get("source_tensor_identity", tensor_identity)
+    if not isinstance(source_identity, str) or not source_identity: raise ValueError("missing invocation/source tensor identity")
+    if invocation_id in seen_invocations: raise ValueError("duplicate invocation identity")
+    if tensor_identity in seen_tensors: raise ValueError("duplicate tensor identity")
+    if source_identity in seen_sources: raise ValueError("duplicate source tensor identity")
+    seen_invocations.add(invocation_id); seen_tensors.add(tensor_identity); seen_sources.add(source_identity)
+    try:
+      phase, role, quant = row.get("phase", "prefill"), row["role"], row["quant_format"]
+      shape = tuple(row["shape"][x] for x in ("m", "n", "k"))
+    except (KeyError, TypeError): raise ValueError("malformed runtime inventory row") from None
+    if not all(isinstance(x, str) and x for x in (phase, role, quant)) or \
+       not all(isinstance(x, int) and x > 0 for x in shape): raise ValueError("malformed runtime inventory row")
+    controlled = row.get("candidate_controlled")
+    if controlled is True:
+      if quant not in SUPPORTED_FORMATS: raise ValueError(f"unsupported packed format {quant!r}")
+      if "fixed_route_id" in row: raise ValueError("candidate invocation has fixed call semantics")
+      grouped.setdefault((phase, role, quant, *shape), []).append(row)
+    elif controlled is False:
+      if not isinstance(row.get("fixed_route_id"), str) or not row["fixed_route_id"]:
+        raise ValueError("fixed invocation lacks fixed call semantics")
+      fixed.append(row)
+    else: raise ValueError("missing candidate call semantics")
+
+  projected = []
+  for (phase, role, quant, m, n, k), invocations in sorted(grouped.items()):
+    invocations.sort(key=lambda x: x["invocation_id"])
+    transform = PackedWeightTransform(quant, n, k)
+    projected.append({"phase":phase, "role":role, "quant_format":quant, "shape":{"m":m, "n":n, "k":k},
+      "layout":{"logical":"transposed_row_major", "packed":"ggml_k_blocks",
+                "block_elems":transform.block_elems, "block_bytes":transform.block_bytes},
+      "tensor_identities":[x["tensor_identity"] for x in invocations],
+      "source_tensor_identities":[x.get("source_tensor_identity", x["tensor_identity"]) for x in invocations],
+      "invocation_ids":[x["invocation_id"] for x in invocations], "invocations":invocations,
+      "call_count":len(invocations), "source_bytes":len(invocations) * transform.packed_bytes,
+      "logical_flop":len(invocations) * 2 * m * n * k, "memory_lifetime":"model_resident"})
+  fixed.sort(key=lambda x: x["invocation_id"])
+  semantic = {"parent_inventory_identity":parent_identity, "rows":projected, "fixed_obligations":fixed}
+  return {"schema":INVENTORY_SCHEMA, **semantic, "inventory_identity":_canonical_json_hash(semantic)}
 
 
 def build_workload_inventory(facts: ModelFacts, measured_rows: Iterable[MeasuredRow | dict[str, Any]], *,
@@ -119,7 +195,8 @@ def generate_candidate_inventory(inventory: dict[str, Any], templates: dict[str,
   """
   if inventory.get("schema") != INVENTORY_SCHEMA or not isinstance(inventory.get("rows"), list):
     raise ValueError("unsupported workload inventory schema")
-  inventory_identity = _canonical_inventory_identity(inventory["rows"])
+  inventory_identity = _projected_inventory_identity(inventory) if "parent_inventory_identity" in inventory else \
+    _canonical_inventory_identity(inventory["rows"])
   # v1 artifacts had only a profile. They remain readable, but all newly generated
   # bindings derive their semantic namespace from exact inventory content.
   recorded_identity = inventory.get("inventory_identity")
