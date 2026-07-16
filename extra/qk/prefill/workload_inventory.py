@@ -6,6 +6,7 @@ construction/admission is delegated to runtime_specs, including packed geometry.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 import json
 from pathlib import Path
 from typing import Any, Iterable
@@ -41,14 +42,34 @@ def _measured_row(row: MeasuredRow | dict[str, Any]) -> MeasuredRow:
   return out
 
 
+def _canonical_inventory_identity(rows: list[dict[str, Any]]) -> str:
+  """Digest only exact routed tensor content; labels and paths are provenance."""
+  canonical = []
+  for row in rows:
+    try:
+      shape = {x: row["shape"][x] for x in ("m", "n", "k")}
+      layout = {x: row["layout"][x] for x in ("logical", "packed", "block_elems", "block_bytes")}
+      canonical.append({"role": row["role"], "quant_format": row["quant_format"], "shape": shape,
+        "layout": layout, "tensor_identities": sorted(row["tensor_identities"]), "call_count": row["call_count"],
+        "source_bytes": row["source_bytes"]})
+    except (KeyError, TypeError) as exc: raise ValueError("malformed workload inventory row") from exc
+  encoded = json.dumps(sorted(canonical, key=lambda x: (x["role"], x["quant_format"],
+    x["shape"]["m"], x["shape"]["n"], x["shape"]["k"])), sort_keys=True, separators=(",", ":"),
+    ensure_ascii=True, allow_nan=False).encode("ascii")
+  return hashlib.sha256(encoded).hexdigest()
+
+
 def build_workload_inventory(facts: ModelFacts, measured_rows: Iterable[MeasuredRow | dict[str, Any]], *,
-                             profile: str, memory_lifetime: str = "model_resident") -> dict[str, Any]:
+                             profile: str | None = None, model_path: str | None = None,
+                             memory_lifetime: str = "model_resident") -> dict[str, Any]:
   """Reconcile measured rows with exact tensor facts, failing closed on ambiguity."""
   measured = tuple(_measured_row(x) for x in measured_rows)
   if len({x.key for x in measured}) != len(measured): raise ValueError("duplicate measured workload mapping")
   unsupported = sorted({x.quant_format for x in measured if x.quant_format not in SUPPORTED_FORMATS})
   if unsupported: raise ValueError(f"unsupported packed formats {unsupported!r}")
-  if not profile or not memory_lifetime: raise ValueError("profile and memory_lifetime must be non-empty")
+  if profile is not None and (not isinstance(profile, str) or not profile): raise ValueError("profile must be non-empty")
+  if model_path is not None and (not isinstance(model_path, str) or not model_path): raise ValueError("model_path must be non-empty")
+  if not memory_lifetime: raise ValueError("memory_lifetime must be non-empty")
 
   grouped: dict[tuple[str, str, int, int], list[TensorFact]] = {}
   for tensor in facts.tensors:
@@ -77,12 +98,16 @@ def build_workload_inventory(facts: ModelFacts, measured_rows: Iterable[Measured
       "logical_flop": len(tensors) * 2 * expected.m * expected.n * expected.k,
       "memory_lifetime": memory_lifetime,
     })
-  return {"schema": INVENTORY_SCHEMA, "profile": profile, "rows": rows}
+  out = {"schema": INVENTORY_SCHEMA, "inventory_identity": _canonical_inventory_identity(rows), "rows": rows}
+  provenance = {key:value for key,value in (("profile", profile), ("model_path", model_path)) if value is not None}
+  if provenance: out["provenance"] = provenance
+  return out
 
 
 def inventory_from_gguf_metadata(kv: dict[str, Any], meta: dict[str, Any], measured_rows: Iterable[MeasuredRow | dict[str, Any]],
-                                 *, profile: str) -> dict[str, Any]:
-  return build_workload_inventory(model_facts_from_gguf_metadata(kv, meta), measured_rows, profile=profile)
+                                 *, profile: str | None = None, model_path: str | None = None) -> dict[str, Any]:
+  return build_workload_inventory(model_facts_from_gguf_metadata(kv, meta), measured_rows,
+    profile=profile, model_path=model_path)
 
 
 def generate_candidate_inventory(inventory: dict[str, Any], templates: dict[str, dict[str, Any]], *,
@@ -94,6 +119,12 @@ def generate_candidate_inventory(inventory: dict[str, Any], templates: dict[str,
   """
   if inventory.get("schema") != INVENTORY_SCHEMA or not isinstance(inventory.get("rows"), list):
     raise ValueError("unsupported workload inventory schema")
+  inventory_identity = _canonical_inventory_identity(inventory["rows"])
+  # v1 artifacts had only a profile. They remain readable, but all newly generated
+  # bindings derive their semantic namespace from exact inventory content.
+  recorded_identity = inventory.get("inventory_identity")
+  if recorded_identity is not None and recorded_identity != inventory_identity:
+    raise ValueError("workload inventory identity mismatch")
   by_quant: dict[str, list[Any]] = {}
   seen: set[tuple[str, str, int, int, int]] = set()
   rows = []
@@ -110,20 +141,24 @@ def generate_candidate_inventory(inventory: dict[str, Any], templates: dict[str,
       raise ValueError(f"candidate/tensor shape mismatch for {key!r}")
     template = templates.get(row["role"])
     if template is None: raise ValueError(f"unknown schedule-template mapping for role {row['role']!r}")
-    rebound = rebind_full_kernel_workload(template, profile=inventory["profile"], role=row["role"], shape=shape, target=target)
+    rebound = rebind_full_kernel_workload(template, profile=inventory_identity, role=row["role"], shape=shape, target=target)
     entry = derive_packed_weight_candidate(rebound.to_json()["payload"], row["quant_format"])
     workload = entry.payload["workload"]
     if tuple(workload["shape"][x] for x in ("m", "n", "k")) != shape:
       raise ValueError(f"candidate/tensor shape mismatch for {key!r}")
     by_quant.setdefault(row["quant_format"], []).append(entry)
-    rows.append({"inventory_key": list(key), "canonical_identity": entry.canonical_identity})
+    rows.append({"inventory_key": {"inventory_identity": inventory_identity, "role": row["role"],
+      "quant_format": row["quant_format"], "shape": dict(row["shape"]),
+      "packed_abi": {x:row["layout"][x] for x in ("logical", "packed", "block_elems", "block_bytes")},
+      "tensor_identities": sorted(row["tensor_identities"]), "call_count": row["call_count"],
+      "source_bytes": row["source_bytes"]}, "canonical_identity": entry.canonical_identity})
 
   candidate_sets = {}
   for quant, entries in sorted(by_quant.items()):
     candidate_set = FullKernelCandidateSet(tuple(entries))
     admit_full_kernel_candidate_set(candidate_set)
     candidate_sets[quant] = candidate_set.to_json()
-  return {"schema": CANDIDATE_INVENTORY_SCHEMA, "inventory": inventory,
+  return {"schema": CANDIDATE_INVENTORY_SCHEMA, "inventory_identity": inventory_identity, "inventory": inventory,
           "candidate_sets": candidate_sets, "bindings": rows}
 
 

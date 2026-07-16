@@ -286,7 +286,7 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
 
   from extra.qk.prefill_graph_gemm_route import (_candidate_registry_from_env, candidate_route_census,
     finalize_candidate_route_census)
-  candidate_registry=_candidate_registry_from_env(); candidate_census=None
+  candidate_registry=_candidate_registry_from_env(dict(os.environ)); candidate_census=None
   with _scoped_candidate_compiler_state():
     if candidate_registry is None: chunk_rows={sp:burst(sp) for sp in start_positions}
     else:

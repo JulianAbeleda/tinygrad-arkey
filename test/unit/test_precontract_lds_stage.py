@@ -82,6 +82,18 @@ def test_packed_b_template_decodes_directly_into_fp16_lds_stores(fmt, dtype):
   assert all(x.src[1].op is Ops.STACK and len(x.src[1].src) == 8 for x in b_window)
   assert all(len([u for u in x.src[1].toposort() if u.op is Ops.LOAD and packed in u.backward_slice_with_self]) < 8*6 for x in b_window)
 
+def test_q4_packed_b_template_fails_closed_on_detached_domain_or_partial_carrier():
+  allocation,ops,threads,kaxis,sm,sn,contracts=_fixture()
+  transform=PackedWeightTransform("Q4_K",12288,4096)
+  packed=UOp.param(1,dtypes.uint32.ptr(transform.packed_bytes//4))
+  with pytest.raises(ValueError, match="row/K ownership"):
+    _stage(operands=(ops[0], PackedPrecontractOperandTemplate("B", packed, transform,
+      UOp.range(12287, 90, AxisType.LOOP), ops[1].k_axis, ops[1].row_tile_base)))
+  short=UOp.param(1,dtypes.uint32.ptr(transform.packed_bytes//4-1))
+  with pytest.raises(ValueError, match="exactly cover"):
+    _stage(operands=(ops[0], PackedPrecontractOperandTemplate("B", short, transform,
+      ops[1].row_axis, ops[1].k_axis, ops[1].row_tile_base)))
+
 
 @pytest.mark.parametrize("fmt,dtype", (("Q4_K", dtypes.uint32), ("Q6_K", dtypes.uint16)))
 def test_packed_b_stage_rewrites_to_rdna3_fp16_wmma_graph(fmt, dtype):

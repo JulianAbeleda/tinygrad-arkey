@@ -1,8 +1,11 @@
 import pytest
+from dataclasses import replace
 from tinygrad import Tensor, dtypes
 from tinygrad.uop.ops import KernelInfo, Ops
 
-from extra.qk.q4k_q8_mmq_emitter import MMQEmitterCandidate, Q4KQ8MMQPrefillSpec, emit_q4k_q8_mmq_prefill
+from extra.qk.q4k_q8_mmq_emitter import (MMQEmitterCandidate, Q4KQ8MMQPrefillSpec,
+  Q4K_COOPERATIVE_LOWERING_CONTRACT, audit_q4k_cooperative_lowering,
+  Q4K_MULTI_WAVE_PLAN, emit_q4k_q8_mmq_prefill)
 
 
 def _candidate(spec, *, lifecycle="group", wmma=(16, 16, 16), **overrides):
@@ -57,6 +60,41 @@ def test_mmq_emitter_consumes_declared_lifecycle_and_geometry():
                                 Tensor.empty((16, 256), dtype=dtypes.int8),
                                 Tensor.empty((16, 8), dtype=dtypes.float32), candidate)
   assert out.shape == (16, 16)
+
+
+def test_q4_multi_wave_contract_is_explicitly_fail_closed():
+  spec = Q4KQ8MMQPrefillSpec("test", "test", "test", "Q4_K", "Q8_1", "q4k", "tokens_rows",
+                             m=16, n=16, k=256, tile_m=16, tile_n=16, tile_k=256)
+  logical = spec.logical_candidate()
+  audit = audit_q4k_cooperative_lowering(logical)
+  assert audit["contract"] == Q4K_COOPERATIVE_LOWERING_CONTRACT
+  assert audit["waves"] == 16 and not audit["implemented"]
+  assert audit["plan"] == Q4K_MULTI_WAVE_PLAN
+  assert audit["plan"].wave_coordinates == "wave_id = m_tile_id * n_tiles + n_tile_id"
+  assert audit["plan"].store_ownership.endswith("exactly once")
+  assert set(audit["missing"]) == {"logical_axes", "tile_wave_owner", "k_block_schedule",
+    "quant_loads", "lds_staging", "barriers", "activation_reuse", "stores"}
+  with pytest.raises(ValueError, match=Q4K_COOPERATIVE_LOWERING_CONTRACT):
+    emit_q4k_q8_mmq_prefill(Tensor.empty(16 * 36, dtype=dtypes.uint32),
+                            Tensor.empty((16, 256), dtype=dtypes.int8),
+                            Tensor.empty((16, 8), dtype=dtypes.float32), logical)
+
+
+def test_q4_multi_wave_audit_rejects_partial_wave_mapping():
+  spec = Q4KQ8MMQPrefillSpec("test", "test", "test", "Q4_K", "Q8_1", "q4k", "tokens_rows",
+                             m=16, n=16, k=256, tile_m=16, tile_n=16, tile_k=256)
+  logical = spec.logical_candidate()
+  with pytest.raises(ValueError, match="whole waves"):
+    audit_q4k_cooperative_lowering(replace(logical, mapping=replace(logical.mapping, workgroup_size=33)))
+
+
+def test_q4_multi_wave_shape_contract_reports_all_logical_owners():
+  spec = Q4KQ8MMQPrefillSpec("test", "test", "test", "Q4_K", "Q8_1", "q4k", "tokens_rows",
+                             m=32, n=48, k=512, tile_m=16, tile_n=16, tile_k=256)
+  audit = audit_q4k_cooperative_lowering(spec.logical_candidate())
+  assert audit["waves"] == 16
+  assert audit["plan"].logical_axes == ("m", "n", "k", "group", "activation_block")
+  assert "all groups" in audit["plan"].k_group_schedule
 
 
 def test_mmq_emitter_rejects_unlowered_candidate_mapping():

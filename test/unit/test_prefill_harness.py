@@ -106,3 +106,4 @@ def test_bench_decode_dispatches_authority(monkeypatch):
   assert args[0] == "DECODE W==D"
   assert args[1][:3] == ["extra/qk/decode_runtime_overhead.py", "--model", DEFAULT_MODEL]
   assert "--ckpts" in args[1] and "128" in args[1]
+  assert "--out" in args[1] and "--reps" in args[1]

@@ -20,12 +20,38 @@ def _packed_q6k(n:int, k:int) -> Tensor:
 
 def test_q6k_wmma_prefill_spec_is_typed_and_bounded():
   spec = describe_q6k_wmma_prefill(16, 32, 256, role="ffn_down")
-  assert spec.to_json()["bounds"] == {"m": 32, "n": 32, "k": 512}
+  assert spec.to_json()["bounds"] == {"m": 512, "n": 4096, "k": 12288}
   assert spec.packed_bytes == 32 * Q6_K_BLOCK_BYTES
   with pytest.raises(ValueError, match="exceeds bounded maximum"):
-    describe_q6k_wmma_prefill(16, 48, 256, role="ffn_down")
+    describe_q6k_wmma_prefill(16, 8192, 256, role="ffn_down")
   with pytest.raises(ValueError, match="unsupported role"):
     describe_q6k_wmma_prefill(16, 16, 256, role="model_specific")  # type: ignore[arg-type]
+
+
+def test_q6k_wmma_admits_real_14b_ffn_down_role_shape():
+  spec = describe_q6k_wmma_prefill(512, 4096, 12288, role="ffn_down")
+  assert spec.admission()["admitted"] is True
+  assert spec.packed_bytes == 4096 * 12288 // 256 * Q6_K_BLOCK_BYTES
+  assert spec.to_json()["stage_boundary"] == "Q6_K bytes -> fp16 weights -> WMMA"
+
+
+def test_q6k_wmma_admission_is_staged_and_explicitly_corrected():
+  spec = describe_q6k_wmma_prefill(16, 16, 256)
+  gate = spec.admission()
+  assert gate["admitted"] is True
+  assert gate["route"] == "staged_dequant_then_fp16_wmma"
+  assert gate["quant_correction"] == "d * scale_i8 * (code_u6 - 32)"
+  assert spec.to_json()["stage_boundary"] == "Q6_K bytes -> fp16 weights -> WMMA"
+  assert spec.admission(fused=True)["admitted"] is False
+  assert any("no legal gfx1100 WMMA lowering" in e for e in spec.admission(fused=True)["errors"])
+
+
+def test_q6k_wmma_rejects_unknown_target_before_dispatch():
+  spec = describe_q6k_wmma_prefill(16, 16, 256)
+  bad = spec.__class__(m=16, n=16, k=256, role="test", target="amd_unknown")
+  assert bad.admission()["admitted"] is False
+  with pytest.raises(ValueError, match="admission failed"):
+    emit_q6k_wmma_prefill(_packed_q6k(16, 256), Tensor.empty(16, 256, dtype=dtypes.float16), bad)
 
 
 def test_q6k_wmma_prefill_bounded_correctness():

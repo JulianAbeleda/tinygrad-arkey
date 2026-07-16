@@ -42,6 +42,11 @@ def type_verify(ast:UOp|list[UOp], check_spec:PatternMatcher):
         if DEBUG >= 3: print_uops(lst)
         raise RuntimeError(f"UOp verification failed at {i} on {u.op} {u.dtype} {len(u.src)} {[(x.op, x.dtype, x.arg) for x in u.src]} {u.arg}")
 
+def validate_scalar_gep(gep:UOp, src:UOp):
+  """Validate the canonical scalar lane extraction from a vector value."""
+  return gep.dtype == src.dtype.scalar() and src.dtype.vcount > 1 and isinstance(gep.arg, tuple) and len(gep.arg) == 1 and \
+    type(gep.arg[0]) is int and 0 <= gep.arg[0] < src.dtype.vcount
+
 # ***** new specs *****
 
 # these ops can be used in the tensor graph and programs
@@ -87,7 +92,8 @@ spec_shared = PatternMatcher([
 
   # AFTER on Movement Op, PARAM, BUFFER, CONTIGUOUS, or another AFTER
   (UPat(Ops.AFTER, src=(UPat(GroupOp.Movement.union({Ops.PARAM, Ops.BUFFER, Ops.CONTIGUOUS, Ops.DEFINE_REG, Ops.DEFINE_LOCAL, Ops.AFTER, Ops.MULTI,
-                                                     Ops.BITCAST, Ops.INS, Ops.STACK, Ops.INDEX, Ops.LOAD, Ops.WAIT, Ops.WMMA})),),
+                                                     Ops.BITCAST, Ops.INS, Ops.STACK, Ops.INDEX, Ops.LOAD, Ops.WAIT, Ops.WMMA,
+                                                     Ops.MEMORY_SEMANTIC})),),
         allow_any_len=True), lambda: True),
 
   # CUSTOM (inline and non inline)
@@ -120,10 +126,17 @@ spec_shared = PatternMatcher([
 
   # WMMA has a <a, b, acc>
   (UPat(Ops.WMMA, src=(UPat(), UPat(), UPat()), name="x"), lambda x: isinstance(x.arg, tuple) and len(x.arg) == 8),
+
+  # WMMA returns a vector value. GEP is the backend-independent vocabulary for extracting one result lane.
+  (UPat(Ops.WMMA, name="wmma").f(Ops.GEP, name="gep"), lambda gep,wmma: validate_scalar_gep(gep, wmma)),
 ])
 
 # these ops can exist in tensor but not programs. example: movement
 spec_tensor = PatternMatcher([
+  (UPat(Ops.MEMORY_SEMANTIC, src=(UPat(),), name="m"), lambda m:
+   m.dtype == m.src[0].dtype and m.arg.__class__.__name__ == "MemorySemanticOwner" and
+   getattr(m.arg, "__dataclass_params__", None) is not None and
+   isinstance(getattr(getattr(m.arg, "semantic_class", None), "value", None), str)),
   # SHAPED_WMMA <a_frag, b_frag, acc_frag>, arg=(dims, device, threads); tensor-graph only
   # (lowered to Ops.WMMA by lower_shaped_wmma during rangeify, so it never reaches the program graph).
   (UPat(Ops.SHAPED_WMMA, src=(UPat(), UPat(), UPat()), name="x"), lambda x: isinstance(x.arg, tuple) and len(x.arg) == 3),
@@ -132,8 +145,7 @@ spec_tensor = PatternMatcher([
 
   # A vector memory read is one value whose lanes may be selected individually.
   (UPat(Ops.LOAD, name="load").f(Ops.GEP, name="gep"), lambda load,gep:
-   load.dtype.scalar() in dtypes.ints and load.dtype.vcount > 1 and gep.dtype == load.dtype.scalar() and
-   isinstance(gep.arg, tuple) and len(gep.arg) == 1 and type(gep.arg[0]) is int and 0 <= gep.arg[0] < load.dtype.vcount),
+   load.dtype.scalar() in dtypes.ints and validate_scalar_gep(gep, load)),
 
   # DEVICE
   (UPat(Ops.DEVICE, dtypes.void, (), name="d"), lambda d:
@@ -213,6 +225,7 @@ spec_tensor = PatternMatcher([
 
 # these ops can exist in programs but not the tensor spec. example: LOAD
 spec_program = PatternMatcher([
+  (UPat(Ops.MEMORY_SEMANTIC), lambda: False),
   # weakint is not allowed in programs
   (UPat(GroupOp.All, dtypes.weakint), lambda: False),
 

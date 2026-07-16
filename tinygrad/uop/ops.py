@@ -236,7 +236,7 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
         if self.src[0].op is Ops.NOOP: return self.marg
 
       # hacks for NOOP
-      case Ops.NOOP:
+      case Ops.NOOP | Ops.MEMORY_SEMANTIC:
         return self.src[0]._shape if len(self.src) >= 1 else None
 
       case Ops.GETTUPLE:
@@ -681,6 +681,7 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
 
   @property
   def base(self) -> UOp:
+    if self.op is Ops.MEMORY_SEMANTIC: return self.src[0].base
     if self.op in GroupOp.Movement: return self.src[0].base
     if self.op is Ops.MULTI: return self.src[0].base  # MULTI is really a VIEW
     if self.op is Ops.DETACH: return self.src[0].base  # DETACH can't change base
@@ -688,6 +689,7 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
 
   @property
   def multibase(self) -> UOp:
+    if self.op is Ops.MEMORY_SEMANTIC: return self.src[0].multibase
     if self.op in GroupOp.Movement: return self.src[0].base
     if self.op is Ops.DETACH: return self.src[0].base  # DETACH can't change base
     return self
@@ -843,7 +845,7 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
 
   @property
   def buffer(self) -> Buffer|MultiBuffer:
-    if self.op in {Ops.CONTIGUOUS, Ops.RESHAPE, Ops.DETACH, Ops.AFTER}: return self.src[0].buffer
+    if self.op in {Ops.CONTIGUOUS, Ops.RESHAPE, Ops.DETACH, Ops.AFTER, Ops.MEMORY_SEMANTIC}: return self.src[0].buffer
     # this buffer can process disk tensors and simple movement ops
     if self is not self.base:
       buf = self.base.buffer
@@ -1095,7 +1097,11 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
     body = self if self.op is Ops.TUPLE else UOp.maketuple(self)
     return UOp(Ops.FUNCTION, dtypes.void, (body,)+srcs, CallInfo(grad_fxn, metadata, name, precompile, precompile_backward))
   def custom_kernel(*srcs:UOp, fxn:Callable, grad_fxn:Callable|None=None) -> list[UOp]:
-    contig_srcs = tuple(x.contiguous() if x.op is not Ops.AFTER else x for x in srcs)
+    # MEMORY_SEMANTIC is transparent to physical layout. Preserve an already
+    # concrete buffer/view argument so ownership metadata does not force a
+    # redundant materialization before an opaque kernel.
+    contig_srcs = tuple(x if x.op is Ops.AFTER or (x.op is Ops.MEMORY_SEMANTIC and x.src[0].has_buffer_identity())
+                        else x.contiguous() for x in srcs)
     placeholders = [UOp.placeholder_like(s, slot=i) for i,s in enumerate(contig_srcs)]
     kernel = fxn(*placeholders).call(*contig_srcs, grad_fxn=grad_fxn)
     return [s.after(kernel) for s in contig_srcs]
@@ -1116,6 +1122,134 @@ class KernelLDSWindow:
     if self.base % 16 or self.end % 16 or self.stride_bytes % 16:
       raise ValueError("kernel LDS window interval and stride must be b128 aligned")
 
+
+@dataclass(frozen=True)
+class KernelLDSComponentWindow:
+  """A named typed view nested within one legacy A/B LDS arena window."""
+  role: str
+  component: str
+  dtype: DType
+  base: int
+  end: int
+  alignment: int
+  stride_bytes: int | None = None
+
+  def __post_init__(self):
+    if self.role not in ("A", "B"): raise ValueError(f"kernel LDS component role must be A or B, got {self.role!r}")
+    if not isinstance(self.component, str) or not self.component or not self.component.isidentifier():
+      raise ValueError(f"kernel LDS component name must be a non-empty identifier, got {self.component!r}")
+    if not isinstance(self.dtype, DType): raise TypeError("kernel LDS component dtype must be a DType")
+    for name, value in (("base", self.base), ("end", self.end), ("alignment", self.alignment)):
+      if not isinstance(value, int) or isinstance(value, bool): raise ValueError(f"kernel LDS component {name} must be an int")
+    if self.base < 0 or self.end <= self.base: raise ValueError("kernel LDS component must have a non-empty non-negative interval")
+    if self.alignment <= 0 or self.alignment & (self.alignment - 1):
+      raise ValueError("kernel LDS component alignment must be a positive power of two")
+    if self.alignment < self.dtype.itemsize or self.base % self.alignment:
+      raise ValueError("kernel LDS component base must satisfy dtype alignment")
+    if (self.end - self.base) % self.dtype.itemsize:
+      raise ValueError("kernel LDS component interval must contain whole dtype values")
+    if self.stride_bytes is not None and (not isinstance(self.stride_bytes, int) or isinstance(self.stride_bytes, bool) or
+                                          self.stride_bytes <= 0 or self.stride_bytes % self.alignment):
+      raise ValueError("kernel LDS component stride_bytes must be positive and satisfy alignment when present")
+
+  @property
+  def size_bytes(self) -> int: return self.end - self.base
+
+  @property
+  def elements(self) -> int: return self.size_bytes // self.dtype.itemsize
+
+
+@dataclass(frozen=True)
+class KernelLDSRecordComponent:
+  """One typed component slice within every row of an interleaved LDS record."""
+  component: str
+  dtype: DType
+  offset_bytes: int
+  size_bytes: int
+  alignment: int
+
+  def __post_init__(self):
+    if not isinstance(self.component, str) or not self.component or not self.component.isidentifier():
+      raise ValueError(f"kernel LDS record component name must be a non-empty identifier, got {self.component!r}")
+    if not isinstance(self.dtype, DType): raise TypeError("kernel LDS record component dtype must be a DType")
+    for name, value in (("offset_bytes", self.offset_bytes), ("size_bytes", self.size_bytes), ("alignment", self.alignment)):
+      if not isinstance(value, int) or isinstance(value, bool): raise ValueError(f"kernel LDS record component {name} must be an int")
+    if self.offset_bytes < 0 or self.size_bytes <= 0: raise ValueError("kernel LDS record component slice must be non-empty and non-negative")
+    if self.alignment <= 0 or self.alignment & (self.alignment-1):
+      raise ValueError("kernel LDS record component alignment must be a positive power of two")
+    if self.alignment < self.dtype.itemsize or self.offset_bytes % self.alignment:
+      raise ValueError("kernel LDS record component offset must satisfy dtype alignment")
+    if self.size_bytes % self.dtype.itemsize:
+      raise ValueError("kernel LDS record component slice must contain whole dtype values")
+
+  @property
+  def end_bytes(self) -> int: return self.offset_bytes + self.size_bytes
+
+
+@dataclass(frozen=True)
+class KernelLDSRecordLayout:
+  """A bounded array of interleaved records occupying one LDS arena region."""
+  rows: int
+  stride_bytes: int
+  components: tuple[KernelLDSRecordComponent, ...]
+
+  def __post_init__(self):
+    if not isinstance(self.rows, int) or isinstance(self.rows, bool) or self.rows <= 0:
+      raise ValueError("kernel LDS record rows must be a positive int")
+    if not isinstance(self.stride_bytes, int) or isinstance(self.stride_bytes, bool) or self.stride_bytes <= 0:
+      raise ValueError("kernel LDS record stride_bytes must be a positive int")
+    if not isinstance(self.components, tuple) or not self.components or not all(isinstance(x, KernelLDSRecordComponent) for x in self.components):
+      raise ValueError("kernel LDS record components must be a non-empty tuple of KernelLDSRecordComponent values")
+    if len({x.component for x in self.components}) != len(self.components): raise ValueError("duplicate kernel LDS record component")
+    cursor = 0
+    for component in sorted(self.components, key=lambda x: (x.offset_bytes, x.end_bytes)):
+      if component.offset_bytes < cursor: raise ValueError("kernel LDS record component slices overlap")
+      if component.offset_bytes > cursor: raise ValueError("kernel LDS record component slices have a gap")
+      cursor = component.end_bytes
+    if cursor != self.stride_bytes: raise ValueError("kernel LDS record components do not exactly cover stride_bytes")
+
+  @property
+  def size_bytes(self) -> int: return self.rows * self.stride_bytes
+
+  def component(self, component:str) -> KernelLDSRecordComponent:
+    try: return next(x for x in self.components if x.component == component)
+    except StopIteration as exc: raise KeyError(component) from exc
+
+  def row_slice(self, row:int, component:str|None=None) -> tuple[int, int]:
+    if not isinstance(row, int) or isinstance(row, bool) or not 0 <= row < self.rows: raise IndexError(f"record row {row!r} is out of bounds")
+    base = row * self.stride_bytes
+    if component is None: return base, base+self.stride_bytes
+    view = self.component(component)
+    return base+view.offset_bytes, base+view.end_bytes
+
+
+@dataclass(frozen=True)
+class KernelLDSArenaRegion:
+  """A persistent named interval in an LDS arena, optionally interpreted as records."""
+  name: str
+  base: int
+  end: int
+  alignment: int = 16
+  records: KernelLDSRecordLayout|None = None
+
+  def __post_init__(self):
+    if not isinstance(self.name, str) or not self.name or not self.name.isidentifier():
+      raise ValueError(f"kernel LDS arena region name must be a non-empty identifier, got {self.name!r}")
+    for name, value in (("base", self.base), ("end", self.end), ("alignment", self.alignment)):
+      if not isinstance(value, int) or isinstance(value, bool): raise ValueError(f"kernel LDS arena region {name} must be an int")
+    if self.base < 0 or self.end <= self.base: raise ValueError("kernel LDS arena region must have a non-empty non-negative interval")
+    if self.alignment <= 0 or self.alignment & (self.alignment-1) or self.base % self.alignment:
+      raise ValueError("kernel LDS arena region base must satisfy a positive power-of-two alignment")
+    if self.records is not None and not isinstance(self.records, KernelLDSRecordLayout): raise TypeError("records must be a KernelLDSRecordLayout")
+    if self.records is not None and self.records.size_bytes != self.end-self.base:
+      raise ValueError("kernel LDS arena region bounds do not match record layout size")
+
+  def row_slice(self, row:int, component:str|None=None) -> tuple[int, int]:
+    if self.records is None: raise TypeError("kernel LDS arena region has no record layout")
+    start, end = self.records.row_slice(row, component)
+    return self.base+start, self.base+end
+
+
 @dataclass(frozen=True)
 class KernelTileGeometry:
   tile: tuple[int, int, int]
@@ -1123,6 +1257,8 @@ class KernelTileGeometry:
   threads: int
   wave_size: int
   lds_windows: tuple[KernelLDSWindow, ...]
+  lds_components: tuple[KernelLDSComponentWindow, ...] = ()
+  lds_regions: tuple[KernelLDSArenaRegion, ...] = ()
 
   def __post_init__(self):
     if not isinstance(self.tile, tuple) or len(self.tile) != 3 or \
@@ -1139,10 +1275,57 @@ class KernelTileGeometry:
       raise ValueError("kernel tile geometry waves do not account for threads")
     if not isinstance(self.lds_windows, tuple) or not all(isinstance(w, KernelLDSWindow) for w in self.lds_windows):
       raise ValueError("kernel tile geometry lds_windows must contain frozen KernelLDSWindow values")
-    if tuple(w.role for w in self.lds_windows) != ("A", "B"):
-      raise ValueError("kernel tile geometry requires exactly ordered A and B LDS windows")
-    if self.lds_windows[0].base != 0 or self.lds_windows[0].end != self.lds_windows[1].base:
-      raise ValueError("kernel tile geometry LDS windows must be contiguous from byte zero")
+    # Physical arena order is independent of logical operand role.  Some
+    # kernels (including llama's gfx1100 MMQ oracle) place B before A in LDS.
+    if len(self.lds_windows) != 2 or {w.role for w in self.lds_windows} != {"A", "B"}:
+      raise ValueError("kernel tile geometry requires exactly one A and one B LDS window")
+    if self.lds_windows[0].end != self.lds_windows[1].base:
+      raise ValueError("kernel tile geometry LDS windows must be contiguous")
+    if not isinstance(self.lds_components, tuple) or not all(isinstance(w, KernelLDSComponentWindow) for w in self.lds_components):
+      raise ValueError("kernel tile geometry lds_components must contain frozen KernelLDSComponentWindow values")
+    parents = {w.role: w for w in self.lds_windows}
+    keys: set[tuple[str, str]] = set()
+    for component in self.lds_components:
+      key = (component.role, component.component)
+      if key in keys: raise ValueError(f"duplicate kernel LDS component {key!r}")
+      keys.add(key)
+      parent = parents[component.role]
+      if component.base < parent.base or component.end > parent.end:
+        raise ValueError(f"kernel LDS component {key!r} is outside its {component.role} window bounds")
+    ordered = sorted(self.lds_components, key=lambda x: (x.base, x.end))
+    for left, right in zip(ordered, ordered[1:]):
+      if right.base < left.end:
+        raise ValueError(f"kernel LDS components {(left.role, left.component)!r} and {(right.role, right.component)!r} overlap")
+    if not isinstance(self.lds_regions, tuple) or not all(isinstance(x, KernelLDSArenaRegion) for x in self.lds_regions):
+      raise ValueError("kernel tile geometry lds_regions must contain frozen KernelLDSArenaRegion values")
+    if not self.lds_regions:
+      if self.lds_windows[0].base != 0: raise ValueError("kernel tile geometry LDS windows must be contiguous from byte zero")
+    else:
+      if len({x.name for x in self.lds_regions}) != len(self.lds_regions): raise ValueError("duplicate kernel LDS arena region")
+      cursor = 0
+      for region in self.lds_regions:
+        if region.base < cursor: raise ValueError("kernel LDS arena regions overlap")
+        if region.base > cursor: raise ValueError("kernel LDS arena regions have a gap")
+        cursor = region.end
+      if cursor != self.lds_windows[-1].end: raise ValueError("kernel LDS arena regions do not exactly cover the LDS arena")
+      for window in self.lds_windows:
+        if not any(region.base == window.base and region.end == window.end for region in self.lds_regions):
+          raise ValueError(f"kernel LDS {window.role} window must exactly match an arena region")
+
+  @property
+  def lds_bytes(self) -> int: return max(x.end for x in self.lds_windows)
+
+  def lds_component(self, role:str, component:str) -> KernelLDSComponentWindow:
+    try: return next(x for x in self.lds_components if (x.role, x.component) == (role, component))
+    except StopIteration as exc: raise KeyError((role, component)) from exc
+
+  def lds_component_views(self, role:str) -> tuple[KernelLDSComponentWindow, ...]:
+    if role not in ("A", "B"): raise ValueError(f"kernel LDS component role must be A or B, got {role!r}")
+    return tuple(x for x in self.lds_components if x.role == role)
+
+  def lds_region(self, name:str) -> KernelLDSArenaRegion:
+    try: return next(x for x in self.lds_regions if x.name == name)
+    except StopIteration as exc: raise KeyError(name) from exc
 
 @dataclass(frozen=True)
 class KernelCandidateContext:
@@ -1151,18 +1334,29 @@ class KernelCandidateContext:
   geometry: KernelTileGeometry|None = None
   pipeline: Any|None = None
   packed_weight: Any|None = None
+  packed_operand_a: Any|None = None
+  packed_operand_b: Any|None = None
 
   def __post_init__(self):
     if self.schema_version != "boltbeam.full_kernel_candidate.v1":
       raise ValueError(f"unsupported kernel candidate context schema {self.schema_version!r}")
     if len(self.canonical_identity) != 64 or any(c not in "0123456789abcdef" for c in self.canonical_identity):
       raise ValueError("kernel candidate canonical_identity must be a lowercase SHA-256 hex digest")
-    if self.packed_weight is not None:
+    if self.packed_weight is not None or self.packed_operand_a is not None or self.packed_operand_b is not None:
       # Keep the graph-level context independent from a quant package import at module load time. The concrete value
       # remains typed and validated at construction, while ordinary dense candidates retain an empty context.
-      from tinygrad.codegen.opt.packed_weight import PackedWeightTransform
-      if not isinstance(self.packed_weight, PackedWeightTransform):
+      from tinygrad.codegen.opt.packed_weight import PackedOperandRecordTransform, PackedOperandTransform, PackedWeightTransform
+      if self.packed_weight is not None and not isinstance(self.packed_weight, PackedWeightTransform):
         raise TypeError("kernel candidate packed_weight must be a PackedWeightTransform")
+      valid = (PackedOperandRecordTransform, PackedOperandTransform, PackedWeightTransform)
+      if self.packed_operand_a is not None and not isinstance(self.packed_operand_a, valid):
+        raise TypeError("kernel candidate packed_operand_a must be a packed operand transform")
+      if self.packed_operand_b is not None and not isinstance(self.packed_operand_b, valid):
+        raise TypeError("kernel candidate packed_operand_b must be a packed operand transform")
+      if self.packed_weight is not None and self.packed_operand_b is not None and self.packed_weight != self.packed_operand_b:
+        raise ValueError("packed_weight and packed_operand_b describe different B transforms")
+      if self.packed_weight is not None and self.packed_operand_b is None:
+        object.__setattr__(self, "packed_operand_b", self.packed_weight)
       if self.geometry is None: raise ValueError("packed-weight candidates require explicit kernel tile geometry")
 
 @dataclass(frozen=True)
@@ -1174,6 +1368,9 @@ class KernelInfo:
   opts_to_apply: tuple|None = None
   estimates: Estimates|None = None
   candidate_context: KernelCandidateContext|None = None
+  # Exact CALL parameter slots whose concrete allocations inherit a scheduler
+  # memory owner. Values are immutable vocabulary objects, never UOp identities.
+  memory_semantic_slots: tuple[tuple[int, Any], ...] = tuple()
   @property
   def function_name(self): return to_function_name(self.name)
 
@@ -1249,11 +1446,13 @@ class CallInfo:
   name: str|None = None
   precompile: bool = False
   precompile_backward: bool = False
+  memory_semantic_slots: tuple[tuple[int, Any], ...] = ()
   # grad_fxn can't be pickled, but metadata can
-  def __reduce__(self): return (CallInfo, (None, self.metadata, self.name, self.precompile, self.precompile_backward))
+  def __reduce__(self):
+    return (CallInfo, (None, self.metadata, self.name, self.precompile, self.precompile_backward, self.memory_semantic_slots))
   def __repr__(self):
     gf = id(self.grad_fxn) if self.grad_fxn else None
-    return f"CallInfo({gf}, {self.metadata}, {repr(self.name)}, {self.precompile}, {self.precompile_backward})"
+    return f"CallInfo({gf}, {self.metadata}, {repr(self.name)}, {self.precompile}, {self.precompile_backward}, {self.memory_semantic_slots})"
 
 # ******** ops in python ********
 
@@ -1742,6 +1941,11 @@ def sint_to_uop(x:sint, dtype=dtypes.weakint) -> UOp: return UOp.const(dtype, x)
 def to_max_shape(shape:tuple[sint, ...]) -> tuple[int, ...]: return tuple(int(x.vmax) if isinstance(x, UOp) else x for x in shape)
 
 def select_dtype(u): return (dtypes.long if u.overflows(dtypes.int32) else dtypes.int).vec(u.dtype.count)
+def _flatten_concatenated_index(x:UOp, buf:UOp) -> UOp|None:
+  # Consecutive tensor INDEX operations concatenate additive offsets. Images
+  # are the sole two-coordinate pointer form and retain their coordinates.
+  if len(x.src) <= 2 or isinstance(buf.dtype, ImageDType): return None
+  return x.replace(src=(buf, functools.reduce(operator.add, x.src[1:])))
 pm_lower_index_dtype = PatternMatcher([
   # There are no Unary ops at this point in symbolic, those are introduced later
   (UPat(GroupOp.Binary, name="u", src=(UPat.var("x").cast(dtypes.weakint), UPat.var("y").cast(dtypes.weakint))), lambda u,x,y:
@@ -1758,6 +1962,7 @@ pm_lower_index_dtype = PatternMatcher([
   (UPat(Ops.DEFINE_VAR, dtype=dtypes.weakint, name="u"), lambda u: u.replace(dtype=dtypes.int).cast(dtypes.weakint)),
   (UPat(Ops.BIND, src=(UPat.var("var").cast(dtypes.weakint), UPat.cvar("val").cast(dtypes.weakint))),
     lambda var,val: var.bind(val).cast(dtypes.weakint)),
+  (UPat(Ops.INDEX, src=(UPat.var("buf"), UPat(), UPat()), allow_any_len=True, name="x"), _flatten_concatenated_index),
   # remove hanging casts
   (UPat(Ops.INDEX, src=(UPat.var("buf"), UPat.var("idx", dtypes.ints).cast()),), lambda buf,idx: buf.index(idx, ptr=True)),
   (UPat(Ops.INDEX, src=(UPat.var("buf"), UPat.var("gate").where(UPat.var("idx", dtypes.ints).cast(), UPat(Ops.CONST, arg=Invalid)))),
@@ -1770,6 +1975,12 @@ pm_lower_index_dtype = PatternMatcher([
                         UPat.var("gate").where(UPat.var("idx_x", dtypes.ints).cast(), UPat(Ops.CONST, arg=Invalid)))),
    lambda buf,idx_x,idx_y,gate: buf.index(gate.where(idx_y, idx_y.const_like(Invalid)),
                                           gate.where(idx_x, idx_x.const_like(Invalid)), ptr=True)),
+  # Normalize any remaining direct weak-index casts after concatenated offsets
+  # have been flattened to one concrete address expression.
+  (UPat(Ops.INDEX, src=(UPat.var("buf"), UPat()), allow_any_len=True, name="x"),
+   lambda x,buf: x.replace(src=(buf, *(s.src[0] if s.op is Ops.CAST and s.dtype == dtypes.weakint and
+                                       s.src[0].dtype in dtypes.ints else s for s in x.src[1:])))
+   if any(s.op is Ops.CAST and s.dtype == dtypes.weakint and s.src[0].dtype in dtypes.ints for s in x.src[1:]) else None),
   (UPat((Ops.SINK, Ops.NOOP, Ops.END), name="n"),
    lambda n: n.replace(src=tuple(s.src[0] if s.op is Ops.CAST and s.dtype == dtypes.weakint else s for s in n.src))),
 ])

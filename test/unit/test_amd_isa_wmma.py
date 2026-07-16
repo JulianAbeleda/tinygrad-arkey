@@ -13,6 +13,11 @@ from tinygrad.codegen.late.devectorizer import load_store_folding
 from tinygrad.renderer.amd.dsl import Reg
 
 class TestAMDISAWmmaCarrierNormalization(unittest.TestCase):
+  def test_register_pressure_fails_closed_without_spill_abi(self):
+    renderer = AMDISARenderer(Target.parse("AMD:ISA:gfx1100"))
+    with self.assertRaisesRegex(NotImplementedError, "spill-free VGPR/SGPR budget"):
+      renderer.stack_pointer()
+
   def test_scalarized_wmma_lane_stack_recovers_previous_vector(self):
     base = UOp(Ops.WMMA, dtypes.float.vec(8), src=(), arg=())
     carrier = UOp(Ops.STACK, dtypes.float.vec(8), tuple(base.gep((i,)) for i in range(8)))

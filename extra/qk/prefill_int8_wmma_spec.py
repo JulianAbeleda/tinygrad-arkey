@@ -11,8 +11,10 @@ from typing import Any
 
 from tinygrad import Tensor, dtypes
 from tinygrad.codegen.opt import Opt, OptOps
+from tinygrad.codegen.opt.kernel_pipeline import (SchedulerOutputTileLoop, build_scheduler_output_tile_loop,
+                                                   build_scheduler_output_tile_owner)
 from tinygrad.helpers import getenv
-from tinygrad.uop.ops import ScheduleHints
+from tinygrad.uop.ops import Ops, ScheduleHints, UOp
 
 from extra.qk.layout import Q4K_WORDS_PER_BLOCK, Q4_K_BLOCK_ELEMS, Q8_1_BLOCK_ELEMS
 
@@ -129,7 +131,7 @@ class Q4KInt8WMMATiledPrefillSpec:
       raise ValueError(f"group_tile={self.group_tile} exceeds groups={self.groups}")
     if self.output_layout != "direct":
       raise ValueError(f"unsupported output_layout={self.output_layout!r}")
-    if self.implementation != "direct_tiled_wmma_v0":
+    if self.implementation not in ("direct_tiled_wmma_v0", "integrated_loop"):
       raise ValueError(f"unsupported implementation={self.implementation!r}")
 
   def to_json(self) -> dict[str, Any]:
@@ -230,6 +232,55 @@ def _q4k_all_group_params_tensor(words3:Tensor, spec:Q4KInt8WMMAPrefillSpec) -> 
   sc = sc_groups[0].cat(*sc_groups[1:], dim=2).reshape(spec.n, spec.groups)
   mn = mn_groups[0].cat(*mn_groups[1:], dim=2).reshape(spec.n, spec.groups)
   return d, dmin, sc, mn
+
+
+def _admit_scheduler_output_tile_loop(spec:Q4KInt8WMMATiledPrefillSpec) -> SchedulerOutputTileLoop:
+  """Lower the scheduler-owned output domain as compiler ranges.
+
+  This is deliberately a small compiler contract: the callback is invoked once,
+  so M/N/group tile counts cannot turn into host-side graph replication.  The
+  returned plan is also used as the fail-closed boundary for the fused emitter.
+  """
+  try:
+    plans = tuple(SchedulerOutputTileLoop(count, loop_id=9300 + axis)
+                  for axis, count in enumerate((spec.m // spec.m_tile,
+                                                spec.n // spec.n_tile,
+                                                (spec.groups + spec.group_tile - 1) // spec.group_tile)))
+    marker = UOp(Ops.NOOP, dtypes.float, ())
+    lowered = marker
+    for plan in reversed(plans):
+      lowered = build_scheduler_output_tile_loop(plan, lambda _tile, body=lowered: body)
+    ranges = [u for u in lowered.toposort() if u.op is Ops.RANGE]
+    if {u.arg[0] for u in ranges} != {p.loop_id for p in plans}:
+      raise RuntimeError("scheduler M/N/group ranges were not retained by lowering")
+    return plans[0]
+  except Exception as e:
+    raise NotImplementedError(f"Q4_K scheduler output-tile loop lowering failed closed: {e}") from e
+
+
+def _prove_integrated_loop_dynamic_owner(spec:Q4KInt8WMMATiledPrefillSpec) -> None:
+  """Prove only the bounded integrated owner backed by the real Q4 decoder.
+
+  The full role route is intentionally not admitted here: the fused owner has
+  evidence only for one packed-Q4 16x16x256 tile.  Building the actual owner
+  also keeps this gate coupled to packed-word decode and indexed writeback,
+  rather than to a marker-only loop.
+  """
+  if (spec.m, spec.n, spec.k, spec.m_tile, spec.n_tile, spec.group_tile) != (16, 16, 256, 16, 16, 1):
+    raise NotImplementedError("integrated_loop is fail-closed outside the bounded packed-Q4 owner tile")
+  from extra.qk.q4k_fused_mmq import FusedQ4KMMQTileSpec, build_fused_q4k_mmq_dynamic_owner
+  fused = FusedQ4KMMQTileSpec()
+  try:
+    graph = build_fused_q4k_mmq_dynamic_owner(
+      Tensor.empty(2 * fused.words_shape[0], dtype=dtypes.uint32),
+      Tensor.empty(2 * fused.xq_shape[0] * fused.xq_shape[1], dtype=dtypes.int8),
+      Tensor.empty(2 * fused.xscales_shape[0] * fused.xscales_shape[1], dtype=dtypes.float32),
+      Tensor.empty(2 * fused.m * fused.n, dtype=dtypes.float32), loop_id=9400)
+    ops = {u.op for u in graph.toposort()}
+    if not {Ops.RANGE, Ops.INDEX, Ops.STORE, Ops.SHR, Ops.AND}.issubset(ops):
+      raise RuntimeError("packed-Q4 decode or dynamic writeback was optimized out")
+  except Exception as e:
+    raise NotImplementedError(f"integrated_loop packed-Q4 owner proof failed: {e}") from e
 
 
 def emit_q4k_int8_wmma_prefill_tensor(words:Tensor, xq:Tensor, xscales:Tensor,
@@ -381,16 +432,81 @@ def emit_q4k_int8_wmma_tiled_exec_tensor(words:Tensor, xq:Tensor, xscales:Tensor
 
 
 def emit_q4k_int8_wmma_tiled_scheduler_tensor(words:Tensor, xq:Tensor, xscales:Tensor,
-                                               spec:Q4KInt8WMMATiledPrefillSpec) -> Tensor:
+                                               spec:Q4KInt8WMMATiledPrefillSpec, *,
+                                               _staged_subtile:bool=False) -> Tensor:
   """Full-shape generated contraction with scheduler-owned M/N/group axes.
 
   The typed schedule hint keeps the inner int8 dot, packed-Q4 decode, and outer scale/group reduction in one named
   kernel. Q8 packing remains a bounded prerequisite; the forbidden global ``[groups,M,N]`` RAW buffer is eliminated.
   """
   spec.validate()
-  wmma_spec = Q4KInt8WMMAPrefillSpec(n=spec.n, k=spec.k, m=spec.m, role=spec.role,
-    group_elems=spec.group_elems, wmma_m=spec.wmma_m, wmma_n=spec.wmma_n, wmma_k=spec.wmma_k,
-    n_tile=spec.n, target=spec.target)
-  wmma_spec.validate()
-  return emit_q4k_int8_wmma_prefill_tensor(words, xq, xscales, wmma_spec, vectorized=True, scheduler_owned=True,
-                                           schedule_name=spec.kernel_name)
+  if spec.implementation == "integrated_loop":
+    _prove_integrated_loop_dynamic_owner(spec)
+  _admit_scheduler_output_tile_loop(spec)
+  if spec.m == spec.m_tile and spec.n == spec.n_tile and spec.group_tile == spec.groups:
+    wmma_spec = Q4KInt8WMMAPrefillSpec(n=spec.n, k=spec.k, m=spec.m, role=spec.role,
+      group_elems=spec.group_elems, wmma_m=spec.wmma_m, wmma_n=spec.wmma_n, wmma_k=spec.wmma_k,
+      n_tile=spec.n, target=spec.target)
+    return emit_q4k_int8_wmma_prefill_tensor(words, xq, xscales, wmma_spec, vectorized=True,
+                                             scheduler_owned=True, schedule_name=spec.kernel_name)
+  # A scheduler-owned full-N contraction keeps every output fragment live while the group
+  # reduction is lowered.  That is harmless for the bounded probes, but makes the intended
+  # 128x128x256 shape exceed the VGPR budget.  Stage N here, before entering the scheduler-owned
+  # contraction, so each generated program owns only one output subtile.  This is deliberately
+  # fail-closed for an unstaged large shape: no compile evidence may silently turn the old
+  # monolithic graph back on.
+  if spec.n >= 128 and spec.n_tile >= spec.n and not _staged_subtile:
+    raise NotImplementedError("scheduler-owned Q4_K WMMA requires compile-backed output subtiles for N>=128")
+  if spec.n > spec.n_tile:
+    if spec.n % spec.n_tile:
+      raise ValueError(f"staged n={spec.n} must be an exact multiple of n_tile={spec.n_tile}")
+    words3 = words.reshape(spec.n, spec.k_blocks, Q4K_WORDS_PER_BLOCK)
+    staged = []
+    for ns in range(0, spec.n, spec.n_tile):
+      sub_n = min(spec.n_tile, spec.n - ns)
+      sub_spec = Q4KInt8WMMATiledPrefillSpec(
+        n=sub_n, k=spec.k, m=spec.m, role=f"{spec.role}_n{ns}" if spec.role else f"n{ns}",
+        group_elems=spec.group_elems, wmma_m=spec.wmma_m, wmma_n=spec.wmma_n, wmma_k=spec.wmma_k,
+        m_tile=spec.m_tile, n_tile=sub_n, group_tile=spec.group_tile, output_layout=spec.output_layout,
+        target=spec.target, implementation=spec.implementation)
+      sub_words = words3[ns:ns + sub_n].contiguous().reshape(sub_n * spec.k_blocks * Q4K_WORDS_PER_BLOCK)
+      staged.append(emit_q4k_int8_wmma_tiled_scheduler_tensor(sub_words, xq, xscales, sub_spec,
+                                                               _staged_subtile=True))
+    return staged[0].cat(*staged[1:], dim=1).contiguous()
+  # Keep the scheduler-owned axes explicit.  In particular, do not call the
+  # vectorized emitter here: its convenient [groups,M,N] RAW is precisely the
+  # graph boundary this route is intended to avoid.  A group batch is packed
+  # into [group_tile, tile_m, tile_n], so one scheduled contraction owns all
+  # groups in that batch while its maximum live RAW remains bounded.
+  words3, xq2 = words.reshape(spec.n, spec.k_blocks, Q4K_WORDS_PER_BLOCK), xq.reshape(spec.m, spec.k)
+  xsc_flat = xscales.reshape(spec.m * spec.groups).contiguous()
+  rows = []
+  for ms in range(0, spec.m, spec.m_tile):
+    cols = []
+    for ns in range(0, spec.n, spec.n_tile):
+      words_tile = words3[ns:ns + spec.n_tile].contiguous()
+      acc = Tensor.zeros(spec.m_tile, spec.n_tile, dtype=dtypes.float32, device=xq.device)
+      for gs in range(0, spec.groups, spec.group_tile):
+        q4_parts, q8_parts, coeff_parts, min_parts, scale_parts = [], [], [], [], []
+        for group_idx in range(gs, min(gs + spec.group_tile, spec.groups)):
+          blk, grp = divmod(group_idx, spec.groups_per_block)
+          q4_parts.append(_q4k_group_codes_tensor(words_tile, blk, grp))
+          q8 = xq2[ms:ms + spec.m_tile, group_idx * spec.group_elems:(group_idx + 1) * spec.group_elems].contiguous()
+          q8_parts.append(q8)
+          d, dmin, sc, mn = _q4k_group_params_tensor(words_tile, blk, grp)
+          coeff_parts.append((d * sc.cast(dtypes.float32)).reshape(1, spec.n_tile))
+          min_parts.append((dmin * mn.cast(dtypes.float32)).reshape(1, spec.n_tile))
+          vals = [xsc_flat[(ms + row) * spec.groups + group_idx].reshape(1) for row in range(spec.m_tile)]
+          scale_parts.append(vals[0].cat(*vals[1:], dim=0).reshape(spec.m_tile, 1))
+        q4_b = q4_parts[0].cat(*q4_parts[1:], dim=0).reshape(-1, spec.n_tile, spec.group_elems)
+        q8_b = q8_parts[0].cat(*q8_parts[1:], dim=0).reshape(-1, spec.m_tile, spec.group_elems)
+        raw = _intdot_matmul(q8_b, q4_b.permute(0, 2, 1)).cast(dtypes.float32).contiguous(arg=ScheduleHints(
+          pcontig=3, opts_to_apply=(Opt(OptOps.TC, 0, (-1, 2, 1)),), name=spec.kernel_name))
+        qsum = q8_b.cast(dtypes.int32).sum(axis=2).cast(dtypes.float32)
+        coeff = coeff_parts[0].cat(*coeff_parts[1:], dim=0).reshape(-1, 1, spec.n_tile)
+        mins = min_parts[0].cat(*min_parts[1:], dim=0).reshape(-1, 1, spec.n_tile)
+        scales = scale_parts[0].cat(*scale_parts[1:], dim=1).permute(1, 0).reshape(-1, spec.m_tile, 1)
+        acc = acc + (scales * (raw * coeff - qsum.reshape(-1, spec.m_tile, 1) * mins)).sum(axis=0)
+      cols.append(acc.contiguous())
+    rows.append(cols[0].cat(*cols[1:], dim=1).contiguous())
+  return rows[0].cat(*rows[1:], dim=0).contiguous()

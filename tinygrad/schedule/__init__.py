@@ -1,4 +1,5 @@
 import time, inspect
+from dataclasses import replace
 from collections import deque
 from tinygrad.uop.ops import UOp, Ops, UOpMetaClass, track_rewrites, graph_rewrite, gate_kernel_sink, KernelInfo
 from tinygrad.uop.spec import type_verify, spec_tensor
@@ -59,8 +60,37 @@ def create_schedule(sched_sink:UOp) -> UOp:
       else:
         k = rk.src[0] if rk.op is Ops.END else rk
         assert k.op is Ops.CALL, f"unexpected op in queue: {k.op}"
-        buf_uops = tuple(_unwrap_src(s).buf_uop for s in k.src[1:] if s.op is not Ops.BIND)
-        linearized.append(k.src[0].call(*buf_uops, metadata=k.arg.metadata))
+        from tinygrad.llm.memory_semantics import memory_semantic_owner
+        function, buf_uops = k.src[0], []
+        semantic_slots = dict(getattr(function.arg, "memory_semantic_slots", ()))
+        semantic_slots.update(getattr(k.arg, "memory_semantic_slots", ()))
+        for s in (x for x in k.src[1:] if x.op is not Ops.BIND):
+          owner = memory_semantic_owner(s)
+          source = _unwrap_src(s)
+          bare = source.buf_uop
+          if owner is not None:
+            slot = len(buf_uops)
+            # A side-bound concrete allocation is the invocation's physical
+            # identity authority. It overrides value-role metadata that may
+            # have reached the same STORE slot through lowering (for example a
+            # scratch quantization payload written into persistent KV cache).
+            semantic_slots[slot] = owner
+          buf_uops.append(bare)
+        # COPY preserves the logical role of its payload unless the destination
+        # has a separately explicit owner. This is operation semantics, not a
+        # device/size/phase inference, and covers parser/runtime copies whose
+        # destination buffer is introduced only by lowering.
+        if function.op is Ops.COPY and 0 not in semantic_slots and 1 in semantic_slots:
+          semantic_slots[0] = semantic_slots[1]
+        if semantic_slots and isinstance(function.arg, KernelInfo):
+          function = function.replace(arg=replace(function.arg, memory_semantic_slots=tuple(sorted(semantic_slots.items()))))
+        # Ownership is invocation metadata, not an executable value-path UOp.
+        # Concrete call arguments stay byte-for-byte identical to an unmarked
+        # schedule so ownership cannot perturb fusion, graphing, or dispatch.
+        call = function.call(*buf_uops, metadata=k.arg.metadata)
+        if semantic_slots and not isinstance(function.arg, KernelInfo):
+          call = call.replace(arg=replace(call.arg, memory_semantic_slots=tuple(sorted(semantic_slots.items()))))
+        linearized.append(call)
       for x in children.get(rk, []):
         in_degree[x] -= 1
         if in_degree[x] == 0: queue.append(x)
@@ -82,10 +112,62 @@ pm_post_sched_cache = PatternMatcher([
   (UPat(Ops.BUFFER, src=(UPat(Ops.LUNIQUE), UPat(Ops.DEVICE)), name="b"), create_new_buffer),
 ])
 
+def _bind_resolved_call_ownership(ctx:dict[UOp, object], call:UOp) -> UOp|None:
+  slots = dict(getattr(call.arg, "memory_semantic_slots", ()))
+  changed = False
+  for slot, arg in enumerate(call.src[1:]):
+    try: owner = ctx.get(_unwrap_src(arg).buf_uop)
+    except RuntimeError: continue
+    if owner is None: continue
+    if slot in slots and slots[slot] != owner:
+      raise ValueError(f"conflicting semantic owners for resolved CALL argument slot {slot}")
+    if slots.get(slot) != owner: slots[slot], changed = owner, True
+  return call.replace(arg=replace(call.arg, memory_semantic_slots=tuple(sorted(slots.items())))) if changed else None
+
+pm_bind_resolved_call_ownership = PatternMatcher([
+  (UPat(Ops.CALL, name="call", allow_any_len=True), _bind_resolved_call_ownership),
+])
+
+def _resolve_linear_call(linear_call:UOp) -> UOp:
+  """Resolve one cached LINEAR invocation and retain its output ownership.
+
+  Callify records requested-output owners on the outer invocation.  Flattening
+  that LINEAR used to discard its CallInfo, so transfer each owned concrete
+  argument to every resolved inner CALL slot that references the same buffer.
+  The transfer remains invocation-local and never annotates normalized PARAMs
+  or executable argument UOps.
+  """
+  resolved = graph_rewrite(linear_call.src[0], pm_post_sched_cache, ctx=({}, linear_call.src[1:]),
+                           walk=True, name="params to buffers")
+  outer_slots = dict(getattr(linear_call.src[0].arg, "memory_semantic_slots", ()))
+  outer_slots.update(getattr(linear_call.arg, "memory_semantic_slots", ()))
+  owned_bases:dict[UOp, object] = {}
+  from tinygrad.llm.memory_semantics import memory_semantic_owner
+  # Persistent buffers carry allocation ownership directly. Transfer every
+  # concrete side binding through the cached LINEAR's PARAM indirection.
+  for arg in linear_call.src[1:]:
+    if (owner := memory_semantic_owner(arg)) is None: continue
+    try: base = _unwrap_src(arg).buf_uop
+    except RuntimeError: continue
+    if base in owned_bases and owned_bases[base] != owner:
+      raise ValueError("conflicting semantic owners for concrete LINEAR argument")
+    owned_bases[base] = owner
+  for slot, owner in outer_slots.items():
+    if slot >= len(linear_call.src)-1: continue
+    arg = linear_call.src[slot+1]
+    try: base = _unwrap_src(arg).buf_uop
+    except RuntimeError: continue
+    if base in owned_bases and owned_bases[base] != owner:
+      raise ValueError(f"conflicting semantic owners for resolved LINEAR argument slot {slot}")
+    owned_bases[base] = owner
+  if not owned_bases: return resolved
+
+  return graph_rewrite(resolved, pm_bind_resolved_call_ownership, ctx=owned_bases,
+                       name="bind resolved call ownership")
+
 pm_resolve_linear_call = PatternMatcher([
   # call LINEAR is resolved here
-  (UPat(Ops.CALL, src=(UPat(Ops.LINEAR),), name="linear_call", allow_any_len=True), lambda linear_call:
-   graph_rewrite(linear_call.src[0], pm_post_sched_cache, ctx=({}, linear_call.src[1:]), walk=True, name="params to buffers")),
+  (UPat(Ops.CALL, src=(UPat(Ops.LINEAR),), name="linear_call", allow_any_len=True), _resolve_linear_call),
 ])+pm_flatten_linear
 
 schedule_cache: dict[bytes, UOp] = {}

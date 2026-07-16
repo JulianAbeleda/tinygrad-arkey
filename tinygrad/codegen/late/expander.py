@@ -96,7 +96,11 @@ def do_expand(root:UOp):
       new_arg = (0,)*expand_sz
     else:
       new_arg = tuple(range(root.arg[0], new_srcs[0].dtype.count, new_srcs[0].dtype.count // expand_sz))
-  nsrc = UOp(root.op, root.dtype.scalar().vec(root.dtype.count*expand_sz), tuple(new_srcs), new_arg)
+  # STACK's children are individual lanes. After expansion each child can itself
+  # carry multiple lanes, in which case concatenation preserves those child lane
+  # boundaries without constructing an invalid STACK-of-vectors.
+  expanded_op = Ops.VCAT if root.op is Ops.STACK and all(x.dtype.count > 1 for x in new_srcs) else root.op
+  nsrc = UOp(expanded_op, root.dtype.scalar().vec(root.dtype.count*expand_sz), tuple(new_srcs), new_arg)
   return UOp(Ops.UNROLL, root.dtype, (nsrc,), expand_args)
 
 def do_contract(con:UOp):

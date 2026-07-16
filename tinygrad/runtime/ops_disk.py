@@ -1,6 +1,6 @@
-import os, sys, mmap, io, ctypes, contextlib, pathlib
+import os, sys, mmap, io, ctypes, contextlib, pathlib, time
 from typing import Generator, Callable
-from tinygrad.helpers import OSX, round_up
+from tinygrad.helpers import OSX, round_up, getenv
 from tinygrad.device import Compiled, Allocator
 with contextlib.suppress(ImportError):
   import _posixshmem
@@ -96,14 +96,30 @@ class DiskAllocator(Allocator):
       dest[:] = src._buf()
 
   def _copyout_sharded(self, src:DiskBuffer, size:int, _get_free_buf:Callable, seg_len:int,
-                       use_ioring:bool=True) -> Generator[tuple[int, int, int, int], None, None]:
+                       use_ioring:bool=True, wait_info:Callable[[], str]|None=None,
+                       timeout_ms:int|None=None) -> Generator[tuple[int, int, int, int], None, None]:
     fd_offset = src.offset - (minor_offset := src.offset % mmap.PAGESIZE)
     processed_reqs_cnt, copied_in, next_read_offset, total_copy_size = 0, 0, 0, round_up(size + minor_offset, mmap.PAGESIZE)
+    timeout_ms = getenv("HCQDEV_WAIT_TIMEOUT_MS", 30000) if timeout_ms is None else timeout_ms
+    if timeout_ms < 0: raise ValueError("disk staging timeout must be non-negative")
+    staging_wait_start:float|None = None
+
+    def get_free_buf():
+      nonlocal staging_wait_start
+      if (copy_batch := _get_free_buf()) is not None:
+        staging_wait_start = None
+        return copy_batch
+      if staging_wait_start is None: staging_wait_start = time.perf_counter()
+      if (time.perf_counter() - staging_wait_start) * 1000 >= timeout_ms:
+        detail = wait_info() if wait_info is not None else "staging buffer unavailable"
+        raise RuntimeError(f"DISK copy staging wait timeout: {timeout_ms} ms ({detail})")
+      time.sleep(0)  # yield while retaining io_uring completion polling and sub-millisecond responsiveness
+      return None
 
     if not hasattr(DiskDevice, 'io_uring') or not use_ioring:
       local_buf = memoryview(bytearray(seg_len))
       for off in range(0, total_copy_size, seg_len):
-        while (copy_batch := _get_free_buf()) is None: pass
+        while (copy_batch := get_free_buf()) is None: pass
         read_size = min(seg_len, total_copy_size - off, src.device.size - fd_offset - off)
         self._copyout(local_buf[:read_size], DiskBuffer(src.device, read_size, fd_offset + off))
         copy_batch[0].view(size=read_size)[:] = local_buf[:read_size]
@@ -114,7 +130,7 @@ class DiskAllocator(Allocator):
 
     reqs: list[tuple[int, int, int, int]] = []
     while next_read_offset < total_copy_size or len(reqs) != processed_reqs_cnt:
-      if next_read_offset < total_copy_size and (copy_batch := _get_free_buf()) is not None:
+      if next_read_offset < total_copy_size and (copy_batch := get_free_buf()) is not None:
         # Prepare sqe
         sqe_index = (tail:=DiskDevice.io_uring.sq.ktail[0]) & DiskDevice.io_uring.sq.kring_mask[0]
         sqe = DiskDevice.io_uring.sq.sqes[sqe_index]

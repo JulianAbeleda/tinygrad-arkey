@@ -11,6 +11,7 @@ import os
 import pathlib
 import subprocess
 import sys
+import time
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -49,6 +50,8 @@ def main(argv: list[str] | None = None) -> int:
   ap.add_argument("--decode-ckpts", default=None, help="comma-separated decode checkpoint contexts")
   ap.add_argument("--decode-nmeas", type=int, default=None, help="override decode measurements per context")
   ap.add_argument("--decode-max-context", type=int, default=None, help="override decode model max_context")
+  ap.add_argument("--decode-reps", type=int, default=5, help="independent fixed-depth repetitions")
+  ap.add_argument("--decode-out", default=None, help="decode artifact path (default: unique per invocation)")
   add_clock_pin_arg(ap)
   args = ap.parse_args(argv)
 
@@ -67,7 +70,10 @@ def main(argv: list[str] | None = None) -> int:
   if args.decode or both:
     profile = decode_run_profile(ckpts=decode_csv_ints(args.decode_ckpts) if args.decode_ckpts else None,
                                  max_context=args.decode_max_context, nmeas=args.decode_nmeas)
-    rc = _run("DECODE W==D", decode_authority_argv(args.model, profile), decode_subprocess_env(args.model)) or rc
+    decode_out = args.decode_out or str(ROOT / "bench" / "qk-decode-runtime-overhead" /
+                                        f"run-{time.time_ns()}-{os.getpid()}.json")
+    rc = _run("DECODE W==D", decode_authority_argv(args.model, profile, out_path=decode_out, reps=args.decode_reps),
+              decode_subprocess_env(args.model)) or rc
   return rc
 
 

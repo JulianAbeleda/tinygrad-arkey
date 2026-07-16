@@ -29,6 +29,8 @@ class Ops(FastEnum):
 
   # uops that aren't rendered
   NOOP = auto(); REWRITE_ERROR = auto()
+  # Value-preserving ownership carrier consumed by the scheduler before codegen.
+  MEMORY_SEMANTIC = auto()
   # FUNCTION has a TUPLE body and is gradient-able; CALL is an opaque kernel invocation
   PARAM = auto(); FUNCTION = auto(); CALL = auto()
 

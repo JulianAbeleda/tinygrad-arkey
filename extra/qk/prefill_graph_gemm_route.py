@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from contextvars import ContextVar
-import json, os, pathlib
+import json, pathlib
+from collections.abc import Mapping
 from typing import Any
 
 from tinygrad import Tensor, dtypes
@@ -11,7 +12,6 @@ _FULL_KERNEL_CANDIDATE_JSON_ENV = "BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON"
 _FULL_KERNEL_CANDIDATE_HASH_ENV = "BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH"
 _FULL_KERNEL_CANDIDATE_SET_JSON_ENV = "BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_JSON"
 _FULL_KERNEL_CANDIDATE_SET_PATH_ENV = "BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH"
-_PURE_REGISTER_COMPILE_ARTIFACT_JSON_ENV = "BOLTBEAM_PURE_REGISTER_COMPILE_ARTIFACT_JSON"
 _CANDIDATE_ROUTE_CENSUS:ContextVar[dict[str,Any]|None]=ContextVar("candidate_route_census",default=None)
 
 def _candidate_env_requested(env: dict[str, Any]) -> bool:
@@ -40,11 +40,14 @@ def _candidate_route_row(admission) -> dict[str,Any]:
           "target":{"backend":target["backend"],"arch":target["arch"],"wave_size":target["wave_size"]},
           "canonical_identity":admission.canonical_identity}
 
+def _structural_route_key(row:dict[str,Any]) -> tuple[Any,...]:
+  shape,target=row["shape"],row["target"]
+  return (row["role"],shape["m"],shape["n"],shape["k"],target["backend"],target["arch"],target["wave_size"])
+
 def _record_candidate_route(admission) -> None:
   collector=_CANDIDATE_ROUTE_CENSUS.get()
   if collector is None: return
-  row=_candidate_route_row(admission); shape,target=row["shape"],row["target"]
-  key=(row["profile"],row["role"],shape["m"],shape["n"],shape["k"],target["backend"],target["arch"],target["wave_size"])
+  row=_candidate_route_row(admission); key=_structural_route_key(row)
   prior=collector["selected"].get(key)
   if prior is not None and prior["canonical_identity"] != row["canonical_identity"]:
     raise RuntimeError(f"candidate route census identity drift for {key!r}")
@@ -52,7 +55,7 @@ def _record_candidate_route(admission) -> None:
 
 def finalize_candidate_route_census(collector:dict[str,Any],registry) -> dict[str,Any]:
   enabled_roles = {admission.normalized_payload["workload"]["role"] for admission in registry.admissions}
-  expected={entry.exact_key:{**_candidate_route_row(admission),"bindings":0}
+  expected={_structural_route_key(_candidate_route_row(admission)):{**_candidate_route_row(admission),"bindings":0}
             for entry,admission in zip(registry.candidate_set.entries,registry.admissions)
             if admission.normalized_payload["workload"]["role"] in enabled_roles}
   selected=dict(collector["selected"]); missing=[expected[k] for k in sorted(expected.keys()-selected.keys())]
@@ -64,8 +67,13 @@ def finalize_candidate_route_census(collector:dict[str,Any],registry) -> dict[st
           "expected_entry_count":len(expected),"selected_entry_count":len(selected),
           "selected":[selected[k] for k in sorted(selected)],"missing":missing,"unexpected":unexpected,"identity_mismatches":mismatched}
 
-def _candidate_registry_from_env(env:dict[str,Any]|None=None):
-  env=_candidate_policy_env(os.environ if env is None else env)
+def _candidate_registry_from_env(env:dict[str,Any]):
+  """Load an offline candidate registry from an explicit tool configuration.
+
+  Runtime admission uses exact policy attachments and never calls this loader.
+  The historical name is retained for research-tool compatibility.
+  """
+  env=_candidate_policy_env(env)
   set_text,set_path=env.get(_FULL_KERNEL_CANDIDATE_SET_JSON_ENV),env.get(_FULL_KERNEL_CANDIDATE_SET_PATH_ENV)
   payload_text,identity=env.get(_FULL_KERNEL_CANDIDATE_JSON_ENV),env.get(_FULL_KERNEL_CANDIDATE_HASH_ENV)
   if set_text is not None and set_path is not None: raise ValueError("candidate set JSON and path are mutually exclusive")
@@ -87,28 +95,53 @@ def _candidate_registry_from_env(env:dict[str,Any]|None=None):
   return admit_full_kernel_candidate_set(full_kernel_candidate_set_from_legacy(payload,str(identity)))
 
 
-def _install_candidate_matmul(x,w,out_f,in_f,admission):
+def _install_candidate_matmul(x,w,out_f,in_f,admission,compile_artifact:Mapping[str,Any]|None=None):
   from extra.qk.runtime_specs import candidate_storage_kind
   register_route = candidate_storage_kind(admission.normalized_payload) == "global_register_resident"
   if register_route:
-    artifact_text = os.environ.get(_PURE_REGISTER_COMPILE_ARTIFACT_JSON_ENV)
-    try: artifact = json.loads(artifact_text) if artifact_text is not None else None
-    except json.JSONDecodeError as exc: raise ValueError(f"{_PURE_REGISTER_COMPILE_ARTIFACT_JSON_ENV} is not valid JSON: {exc}") from exc
     workload = admission.normalized_payload["workload"]
     from extra.qk.prefill.pure_register_evaluation_gate import runtime_compile_resource_eligibility
-    eligibility = runtime_compile_resource_eligibility({"canonical_identity": admission.canonical_identity}, artifact,
-      profile=workload["profile"], role=workload["role"], shape=(512,out_f,in_f), target=workload["target"])
+    eligibility = runtime_compile_resource_eligibility({"canonical_identity": admission.canonical_identity}, compile_artifact,
+      role=workload["role"], shape=(int(workload["shape"]["m"]),out_f,in_f), target=workload["target"])
     if not eligibility["passed"]: return None
   from tinygrad.codegen.opt import Opt, OptOps
   import tinygrad.codegen.opt.postrange as pr
-  key=(frozenset({512,out_f}),in_f)
+  m = int(x.shape[-2])
+  key=(frozenset({m,out_f}),in_f)
   existing=(pr._WARMSTART_CANDIDATE_CONTEXTS or {}).get(key)
   if existing is not None and existing.canonical_identity != admission.canonical_identity:
     raise ValueError(f"candidate warmstart key collision for {key!r}")
   pr._WARMSTART_OPTS={**(pr._WARMSTART_OPTS or {}),key:(Opt(OptOps.TC,0,(-1,2,1)),)}
   pr._WARMSTART_CANDIDATE_CONTEXTS={**(pr._WARMSTART_CANDIDATE_CONTEXTS or {}),key:admission.context}
-  a=x.reshape(512,in_f).cast(dtypes.float16).contiguous(); bt=w.cast(dtypes.float16).contiguous()
+  a=x.reshape(m,in_f).cast(dtypes.float16).contiguous(); bt=w.cast(dtypes.float16).contiguous()
   return (a @ bt.transpose()).reshape(*x.shape[:-1],out_f)
+
+def _attached_candidate_admission(lin, role:str, shape:tuple[int,int,int]):
+  """Resolve an exact policy attachment. Model/profile names are provenance and are intentionally not consulted."""
+  binding=getattr(lin,"_prefill_graph_gemm_binding",None)
+  if not isinstance(binding,dict): return None
+  registry,policy,facts=binding.get("candidate_registry"),binding.get("selected_policy"),binding.get("scanned_target_facts")
+  inventory_identity,candidate_set_identity=binding.get("inventory_identity"),binding.get("candidate_set_identity")
+  if registry is None or not isinstance(policy,dict) or not isinstance(facts,dict): return None
+  if not all(isinstance(x,str) and x for x in (inventory_identity,candidate_set_identity)): return None
+  target=facts.get("target",facts)
+  if not isinstance(target,dict) or not all(k in target for k in ("backend","arch","wave_size")): return None
+  target={k:target[k] for k in ("backend","arch","wave_size")}
+  expected_shape={"m":shape[0],"n":shape[1],"k":shape[2]}
+  if policy.get("role") != role or policy.get("shape") != expected_shape or policy.get("target") != target: return None
+  if policy.get("inventory_identity") != inventory_identity or policy.get("candidate_set_identity") != candidate_set_identity: return None
+  identity=policy.get("candidate_identity")
+  if not isinstance(identity,str) or not identity: return None
+  try:
+    from extra.qk.route_manifest import canonical_candidate_set_identity
+    if canonical_candidate_set_identity(registry.candidate_set.to_json()) != candidate_set_identity: return None
+  except (AttributeError,TypeError,ValueError): return None
+  matches=[]
+  for admission in registry.admissions:
+    row=_candidate_route_row(admission)
+    if (_structural_route_key(row) == (role,*shape,target["backend"],target["arch"],target["wave_size"]) and
+        admission.canonical_identity == identity): matches.append(admission)
+  return matches[0] if len(matches) == 1 else None
 
 
 def route_pf16_graph_gemm(lin, x: Tensor, w: Tensor | None = None) -> Tensor | None:
@@ -117,26 +150,23 @@ def route_pf16_graph_gemm(lin, x: Tensor, w: Tensor | None = None) -> Tensor | N
   # dequant scratch across blocks instead of pinning resident `lin._pf16_w` for every block.
   # NOTE: the gfx1100 arch restriction for default-on lives in model.PREFILL_GRAPH_GEMM (computed once at import);
   # it is NOT checked here because Device[...] access is disallowed during JIT capture (ALLOW_DEVICE_USAGE). The
-  # T==512 / tile-divisible / bias / role guards below restrict to the validated dense prefill shapes; everything
+  # Candidate admission below restricts to validated dense prefill shapes; everything
   # else silently falls back to the normal PREFILL_V2 matmul.
   if w is None: w = getattr(lin, "_pf16_w", None)
   b = getattr(lin, "bias", None)
   if w is None or b is not None or x.ndim < 2: return None
   if not isinstance(x.shape[-2], int) or not isinstance(x.shape[-1], int): return None
-  if x.shape[-2] != 512: return None
+  m = x.shape[-2]
   out_f, in_f = w.shape
   if in_f != x.shape[-1]: return None
   role = getattr(lin, "_prefill_graph_role", None)
-  registry=_candidate_registry_from_env()
-  profile=getattr(lin,"_prefill_model_profile",None) or os.environ.get("BOLTBEAM_MODEL_PROFILE")
-  if profile is None and registry is not None:
-    # Backward-compatible data-derived default for a single-profile artifact; never bake a model ID into dispatch.
-    profiles={entry.exact_key[0] for entry in registry.candidate_set.entries}
-    if len(profiles) == 1: profile=next(iter(profiles))
-  target={"backend":"AMD","arch":"gfx1100","wave_size":32}
-  admission=None if registry is None or role is None or profile is None else registry.get(profile,role,(512,out_f,in_f),target)
+  # Model/runtime policy owns this attachment after scanning the actual target and selecting an exact inventory row.
+  # Environment/profile artifact loaders above remain available to offline tooling, but never establish admission here.
+  admission=None if role is None else _attached_candidate_admission(lin,role,(m,out_f,in_f))
   if admission is not None:
-    result = _install_candidate_matmul(x,w,out_f,in_f,admission)
+    binding=getattr(lin,"_prefill_graph_gemm_binding",{})
+    compile_artifact=binding.get("compile_artifact") if isinstance(binding,dict) else None
+    result = _install_candidate_matmul(x,w,out_f,in_f,admission,compile_artifact)
     if result is None: return None
     setattr(lin,"_prefill_full_kernel_candidate_identity",admission.canonical_identity)
     _record_candidate_route(admission)

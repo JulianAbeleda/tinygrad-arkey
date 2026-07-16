@@ -44,6 +44,7 @@ class _FakeTransformer:
   logits = Transformer.logits
 
   def __init__(self, *, prefill_v2:bool, output_is_direct_packed:bool):
+    self.config = SimpleNamespace(lm_head_route="lazy")
     self.blk = [_FakeBlock(prefill_v2)]
     self.output = _FakeOutputLinear(output_is_direct_packed)
     self.output_norm = lambda x: x
@@ -63,6 +64,7 @@ def _install_stubs(monkeypatch):
     return _PF16Result(lin, x)
 
   monkeypatch.setattr(model_mod, "_pf16", fake_pf16)
+  monkeypatch.setattr(model_mod, "_prefill_semantic", lambda _enabled, _mark, value, _runtime_mark=None: value)
   monkeypatch.setattr(model_mod, "is_direct_packed_prefill_linear", lambda lin: bool(getattr(lin, "_is_direct_packed", False)))
   return calls
 
@@ -79,9 +81,9 @@ def test_logits_keeps_lm_head_lazy_by_default_for_t512_prefill_v2_batch(monkeypa
 
 
 def test_logits_routes_lm_head_through_pf16_when_full_sequence_route_is_explicit(monkeypatch):
-  monkeypatch.setenv("PREFILL_LM_HEAD_ROUTE", "resident_fp16")
   calls = _install_stubs(monkeypatch)
   fake = _FakeTransformer(prefill_v2=True, output_is_direct_packed=True)
+  fake.config.lm_head_route = "resident_fp16"
   tokens = SimpleNamespace(shape=(1, 512))
 
   out = fake.logits(tokens, 0)

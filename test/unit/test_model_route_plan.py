@@ -1,12 +1,17 @@
 from types import SimpleNamespace
 import ast
 import pathlib
+import pytest
 
 from tinygrad import Tensor, dtypes
 from tinygrad.llm import route_policy
+from tinygrad.llm.device_facts import DeviceCapabilities, DeviceFacts, ProbeRecord
 from tinygrad.llm.model_facts import model_facts_from_gguf_metadata
-from tinygrad.llm.model_route_plan import build_model_route_plan
-from tinygrad.llm.qk_primitives import _install_q4k_primitives, _install_q6k_primitives, Q4KPrimitiveLinear, Q6KPrimitiveLinear
+from tinygrad.llm.model_route_plan import build_model_route_plan, primitive_route_entry_for_tensor
+from tinygrad.llm.qk_primitives import (
+  _install_q4k_primitives, _install_q6k_primitives, Q4KPrimitiveLinear, Q6KPrimitiveLinear,
+  QKConfig, QKPrimitiveBudget, QKPrimitiveEligibility, qk_primitive_eligibility_from_device_facts,
+)
 
 
 QWEN3_LIKE_PROFILES = (
@@ -85,6 +90,23 @@ def test_model_facts_route_plan_sets_q4_q6_defaults_from_tensor_facts_for_qwen3_
       assert entry.quant_label == ("Q4_K" if typ == 12 else "Q6_K")
 
 
+def test_route_plan_is_independent_of_legacy_environment_switches(monkeypatch):
+  meta = _meta_for_profile(QWEN3_LIKE_PROFILES[0])
+  monkeypatch.setenv("DECODE_ROUTE_ATTN_K", "0")
+  monkeypatch.setenv("DECODE_ROUTE_ATTN_V", "0")
+  monkeypatch.setenv("Q6K_COVER_MORE", "0")
+  disabled = build_model_route_plan(meta)
+  monkeypatch.setenv("DECODE_ROUTE_ATTN_K", "1")
+  monkeypatch.setenv("DECODE_ROUTE_ATTN_V", "1")
+  monkeypatch.setenv("Q6K_COVER_MORE", "1")
+  enabled = build_model_route_plan(meta)
+  assert list(disabled) == list(enabled)
+
+
+def test_route_plan_rejects_non_block_aligned_quant_shape():
+  assert primitive_route_entry_for_tensor("blk.0.ffn_down.weight", 12, 256, 255) is None
+
+
 def _linear(rows, cols):
   return SimpleNamespace(weight=Tensor.empty(rows, cols, dtype=dtypes.float16), bias=None)
 
@@ -94,6 +116,57 @@ def _install_model():
     ffn_gate=_linear(256, 256),
     ffn_down=_linear(256, 256),
   )])
+
+
+def _device_facts(*, backend="AMD", architecture="gfx1100", wave_size=32):
+  probe = ProbeRecord("test", "2026-07-15T00:00:00+00:00")
+  return DeviceFacts("AMD:0", backend, architecture, None, None, DeviceCapabilities(wave_size=wave_size), probe, probe)
+
+
+def test_qk_eligibility_requires_exact_structural_device_facts_match():
+  assert qk_primitive_eligibility_from_device_facts(_device_facts()).eligible
+  assert not qk_primitive_eligibility_from_device_facts(_device_facts(backend="amd")).eligible
+  assert not qk_primitive_eligibility_from_device_facts(_device_facts(architecture="gfx1100:sramecc+")).eligible
+  assert not qk_primitive_eligibility_from_device_facts(_device_facts(wave_size=64)).eligible
+  assert not qk_primitive_eligibility_from_device_facts(None).eligible
+
+
+def test_isolated_qk_construction_accepts_structural_eligibility_fixture():
+  eligibility = QKPrimitiveEligibility("AMD", "gfx1100", 32)
+  linear = Q4KPrimitiveLinear(None, None, Tensor.empty(8, dtype=dtypes.uint32), 1, 1, 1, (), "q4", 32, 0, "shared",
+                              eligibility=eligibility)
+  assert linear.eligibility is eligibility
+  assert linear.eligibility.eligible
+
+
+def test_q4k_shared_prefill_packed_weight_reuses_resident_view(monkeypatch):
+  monkeypatch.delenv("PREFILL_PACKED_STREAM", raising=False)
+  words = Tensor.empty(8, dtype=dtypes.uint32)
+  linear = Q4KPrimitiveLinear(None, None, words, 1, 1, 1, (), "q4", 32, 0, "shared", shared_bytes=32)
+
+  assert linear.prefill_packed_weight() is words
+  assert linear.prefill_packed_weight() is linear.q4k_storage.words
+  assert not hasattr(linear, "_prefill_q4k_words")
+
+
+def test_q6k_shared_prefill_packed_weight_reuses_resident_view(monkeypatch):
+  monkeypatch.delenv("PREFILL_PACKED_STREAM", raising=False)
+  halfs = Tensor.empty(8, dtype=dtypes.uint16)
+  linear = Q6KPrimitiveLinear(None, None, halfs, 1, 1, 1, (), "q6", 16, 0, "shared", shared_bytes=16)
+
+  assert linear.prefill_packed_weight() is halfs
+  assert linear.prefill_packed_weight() is linear.q6k_storage.halfs
+  assert not hasattr(linear, "_prefill_q6k_halfs")
+
+
+def test_q4k_ondemand_prefill_packed_weight_remains_distinct_and_cached(monkeypatch):
+  monkeypatch.delenv("PREFILL_PACKED_STREAM", raising=False)
+  words = Tensor.empty(8, dtype=dtypes.uint32)
+  linear = Q4KPrimitiveLinear(None, None, words, 1, 1, 1, (), "q4", 32, 0, "q4_ondemand", nonpersistent_bytes=32)
+
+  packed = linear.prefill_packed_weight()
+  assert packed is not words
+  assert linear.prefill_packed_weight() is packed
 
 
 def test_q4k_install_uses_route_plan_without_direct_policy_call(tmp_path, monkeypatch):
@@ -108,6 +181,44 @@ def test_q4k_install_uses_route_plan_without_direct_policy_call(tmp_path, monkey
   assert len(installed) == 1
   assert isinstance(installed[0], Q4KPrimitiveLinear)
   assert installed[0].parts == 1
+  assert not installed[0].eligibility.eligible
+
+
+def test_explicit_qk_config_and_install_are_immune_to_environment(tmp_path, monkeypatch, capsys):
+  gguf = tmp_path / "q4.bin"
+  gguf.write_bytes(bytes((256 * 256) // 256 * 144))
+  meta = {"data_start": 0, "tensor_infos": [("blk.0.ffn_gate.weight", (256, 256), 12, 0)]}
+  plan = build_model_route_plan(meta)
+  cfg = QKConfig(False, None, "sidecar", "sidecar", False, False, False, (), False)
+  monkeypatch.setenv("QK_PRIMITIVE_STORAGE", "q4_ondemand")
+  monkeypatch.setenv("QK_PRIMITIVE_MAX_STORAGE_MB", "0")
+  monkeypatch.setenv("Q4K_PRIMITIVE_DEBUG", "1")
+
+  installed = _install_q4k_primitives(_install_model(), gguf, meta, route_plan=plan,
+                                      budget=QKPrimitiveBudget(cfg.max_storage_bytes, cfg.generated_policy_strict),
+                                      storage_mode=cfg.storage_mode)
+
+  assert len(installed) == 1
+  assert installed[0].q4k_storage.mode == "sidecar"
+  assert installed[0].q4k_storage.persistent_bytes > 0
+  assert capsys.readouterr().out == ""
+
+
+def test_qk_config_rejects_inconsistent_derived_storage_mode():
+  with pytest.raises(ValueError, match="q6_storage_mode"):
+    QKConfig(False, None, "shared", "sidecar", False, False, False, (), False)
+
+
+def test_q4k_install_snapshots_load_entry_device_facts(tmp_path):
+  gguf = tmp_path / "q4.bin"
+  gguf.write_bytes(bytes((256 * 256) // 256 * 144))
+  meta = {"data_start": 0, "tensor_infos": [("blk.0.ffn_gate.weight", (256, 256), 12, 0)]}
+
+  installed = _install_q4k_primitives(_install_model(), gguf, meta, route_plan=build_model_route_plan(meta),
+                                      device_facts=_device_facts())
+
+  assert installed[0].eligibility == QKPrimitiveEligibility("AMD", "gfx1100", 32)
+  assert installed[0].eligibility.eligible
 
 
 def test_q6k_install_uses_route_plan_without_direct_policy_call(tmp_path, monkeypatch):

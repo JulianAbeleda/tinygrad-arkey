@@ -1,6 +1,7 @@
 import pytest
 
 from extra.qk.q6k_coop_tile_probe import Q6KCoopTileProbe, run_q6k_coop_tile_probe
+from extra.qk.q6k_coop_contract import Q6KCoopContract
 
 
 def test_q6_coop_probe_is_default_off_and_has_resource_evidence():
@@ -27,3 +28,16 @@ def test_q6_coop_enabled_mode_fails_closed():
 def test_q6_coop_rejects_unbounded_geometry():
   with pytest.raises(ValueError, match="bounded"):
     Q6KCoopTileProbe(tile_m=32).validate()
+
+
+def test_q6_coop_contract_is_explicit_and_fail_closed():
+  contract = Q6KCoopContract()
+  payload = contract.to_json()
+  assert payload["q8_1"]["sum_per_32"] is True
+  assert "q6_zero_point_sum_correction" in payload["required_facts"]
+  assert "final-program resource artifact missing" in payload["admission_errors"]
+  assert "matrix-core/Tensile lowering proof missing" in payload["admission_errors"]
+
+def test_q6_coop_contract_rejects_unverified_mapping():
+  with pytest.raises(ValueError, match="wave/workgroup"):
+    Q6KCoopContract(wave_size=64).to_json()

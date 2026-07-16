@@ -9,7 +9,9 @@ def candidate():
 
 
 def evidence(c):
-  return {name: {"passed": True} for name in ("compile", "correctness", "guard", "resources")} | {
+  return {name: {"passed": True} for name in ("compile", "correctness", "guard", "resources",
+                                                "dynamic_owner_compile", "dynamic_owner_correctness",
+                                                "dynamic_owner_instruction")} | {
     "candidate_identity": canonical_candidate_identity(c), "fallback_used": False,
   }
 
@@ -35,6 +37,14 @@ def test_identity_or_correctness_failure_is_fail_closed():
   assert decision.status == "blocked" and decision.route == ROLLBACK_ROUTE
   assert "candidate identity mismatch" in decision.blockers
   assert "full-output correctness gate not passed" in decision.blockers
+
+
+def test_dynamic_owner_evidence_is_required_before_execution():
+  c = candidate(); ev = evidence(c)
+  del ev["dynamic_owner_instruction"]
+  decision = admit_cooperative_mmq(candidate=c, evidence=ev, enabled=True)
+  assert not decision.admitted and decision.route == ROLLBACK_ROUTE
+  assert "dynamic-owner instruction evidence not passed" in decision.blockers
 
 
 def test_missing_candidate_and_fallback_claim_are_blocked():

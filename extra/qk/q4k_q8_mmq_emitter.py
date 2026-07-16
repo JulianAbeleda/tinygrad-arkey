@@ -20,6 +20,63 @@ from extra.qk.prefill_int8_wmma_spec import (
 )
 from extra.qk.mmq_logical_vocabulary import MMQCandidate
 
+Q4K_COOPERATIVE_LOWERING_CONTRACT = "q4k-cooperative-mmq-lowering-v1"
+
+
+@dataclass(frozen=True)
+class Q4KMultiWaveOwnershipPlan:
+  """Typed contract for the cooperative lowering this emitter cannot express yet.
+
+  M/N tiles are owned by waves; K is never split between waves, so each wave
+  accumulates all groups before its one store.  This is the smallest legal
+  ownership plan once Tensor has workgroup IDs, LDS, and barriers.
+  """
+  logical_axes: tuple[str, ...] = ("m", "n", "k", "group", "activation_block")
+  wave_coordinates: str = "wave_id = m_tile_id * n_tiles + n_tile_id"
+  k_group_schedule: str = "for k_block, group in lexicographic_order; every wave owns all groups"
+  quant_load_ownership: str = "lane l loads Q4_K words/scales at l + wave_size*i, bounds checked"
+  lds_ownership: str = "unsupported: no typed workgroup LDS allocation/producer contract"
+  synchronization: str = "unsupported: no typed workgroup barrier contract"
+  activation_lifetime: str = "wave-local for one (m_tile,n_tile), reused across groups"
+  store_ownership: str = "wave owning (m_tile,n_tile) stores each output element exactly once"
+
+  def validate(self) -> None:
+    if self.logical_axes != ("m", "n", "k", "group", "activation_block"):
+      raise ValueError("Q4 multi-wave contract has incomplete logical axes")
+    if not self.wave_coordinates or not self.k_group_schedule or not self.quant_load_ownership:
+      raise ValueError("Q4 multi-wave contract must define wave and quant scheduling")
+    if not self.store_ownership.endswith("exactly once"):
+      raise ValueError("Q4 multi-wave contract must define unique stores")
+
+
+Q4K_MULTI_WAVE_PLAN = Q4KMultiWaveOwnershipPlan()
+
+
+def audit_q4k_cooperative_lowering(candidate: MMQCandidate) -> dict[str, object]:
+  """Return the facts a real multi-wave Q4 lowering must provide.
+
+  The current Tensor emitter has no representation for these facts.  Keep
+  this check at the shared-candidate boundary so a descriptor cannot be
+  mistaken for a lowered cooperative kernel.
+  """
+  mapping = candidate.mapping
+  if mapping.wave_size <= 0 or mapping.workgroup_size <= 0:
+    raise ValueError("Q4 multi-wave mapping requires positive wave/workgroup sizes")
+  if mapping.workgroup_size % mapping.wave_size:
+    raise ValueError("Q4 multi-wave mapping workgroup must contain whole waves")
+  waves = mapping.workgroup_size // mapping.wave_size
+  Q4K_MULTI_WAVE_PLAN.validate()
+  missing = {"logical_axes": Q4K_MULTI_WAVE_PLAN.logical_axes,
+    "tile_wave_owner": Q4K_MULTI_WAVE_PLAN.wave_coordinates,
+    "k_block_schedule": Q4K_MULTI_WAVE_PLAN.k_group_schedule,
+    "quant_loads": Q4K_MULTI_WAVE_PLAN.quant_load_ownership,
+    "lds_staging": Q4K_MULTI_WAVE_PLAN.lds_ownership, "barriers": Q4K_MULTI_WAVE_PLAN.synchronization,
+    "activation_reuse": Q4K_MULTI_WAVE_PLAN.activation_lifetime, "stores": Q4K_MULTI_WAVE_PLAN.store_ownership}
+  return {"contract": Q4K_COOPERATIVE_LOWERING_CONTRACT, "wave_size": mapping.wave_size,
+          "workgroup_size": mapping.workgroup_size, "waves": waves,
+          "implemented": False, "missing": missing,
+          "plan": Q4K_MULTI_WAVE_PLAN, "reason": "compiler Tensor lowering has no multi-wave Q4 ownership/LDS contract"}
+
 
 @dataclass(frozen=True)
 class MMQEmitterCandidate:
@@ -65,6 +122,10 @@ def _from_logical(candidate: MMQCandidate) -> MMQEmitterCandidate:
     raise ValueError("shared MMQ candidate workgroup exceeds capability")
   if d.operation.name not in candidate.capability.supported_ops:
     raise ValueError("shared MMQ candidate operation is not supported by capability")
+  audit = audit_q4k_cooperative_lowering(candidate)
+  if audit["waves"] > 1:
+    raise ValueError(f"{Q4K_COOPERATIVE_LOWERING_CONTRACT} blocked: "
+                     "multi-wave lowering is unavailable; missing " + ", ".join(audit["missing"]))
   axes = {axis.name: axis for axis in d.axes}
   required_abi = ("role", "shape", "output_layout", "weight_layout", "activation_layout",
                   "tile_x_layout", "tile_y_layout", "staging_strategy", "writeback_strategy")
@@ -141,4 +202,6 @@ def emit_q4k_q8_mmq_prefill(words: Tensor, xq: Tensor, xscales: Tensor,
                                            xscales.contiguous(), generated, vectorized=False)
 
 
-__all__ = ["MMQEmitterCandidate", "Q4KQ8MMQPrefillSpec", "emit_q4k_q8_mmq_prefill"]
+__all__ = ["MMQEmitterCandidate", "Q4KQ8MMQPrefillSpec", "Q4KMultiWaveOwnershipPlan",
+           "Q4K_MULTI_WAVE_PLAN", "Q4K_COOPERATIVE_LOWERING_CONTRACT", "audit_q4k_cooperative_lowering",
+           "emit_q4k_q8_mmq_prefill"]

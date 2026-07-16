@@ -99,6 +99,14 @@ def test_runtime_register_warmstart_accepts_valid_exact_compile_resource_evidenc
   assert row["canonical_identity"] == IDENTITY and row["binary_sha256"] == BINARY
 
 
+def test_runtime_register_warmstart_profile_is_provenance_only():
+  binding = _runtime_binding()
+  artifact = _compile(runtime_binding={**binding, "profile": "renamed evidence fixture"})
+  row = runtime_compile_resource_eligibility({"canonical_identity": IDENTITY}, artifact,
+    profile="different legacy caller label", role=binding["role"], shape=(512,4096,4096), target=binding["target"])
+  assert row["passed"] is True
+
+
 def test_lds_candidate_is_not_admitted_as_register_compile():
   artifact = _compile(pipeline={"storage_kind": "lds", "lds_bytes": 20480})
   row = compile_only({"canonical_identity": IDENTITY}, artifact)

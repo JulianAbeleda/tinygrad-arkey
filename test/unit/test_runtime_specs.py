@@ -203,7 +203,7 @@ def test_strict_full_kernel_candidate_identity_round_trip_and_tamper_rejection()
   candidate = _strict_full_kernel_candidate()
   row = candidate.to_json()
   assert row["full_kernel_candidate"]["schema_version"] == FULL_KERNEL_CANDIDATE_SCHEMA
-  assert row["canonical_identity"] == "56ab6f662cb52bca958b92cdbffac790784a29047c9a1f4dc1e0e9a8b6d6da3d"
+  assert row["canonical_identity"] == "f6f7b6cc27a670010416805d6dba95bdd35c08549b95073ffdc4374303c58cb0"
   context = candidate.kernel_candidate_context()
   assert (context.schema_version, context.canonical_identity) == (FULL_KERNEL_CANDIDATE_SCHEMA, row["canonical_identity"])
   assert GeneratedCandidate.from_json(row) == candidate
@@ -393,11 +393,11 @@ def test_register_candidate_route_selects_typed_install_without_lds(monkeypatch)
   payload["schedule"]["wmma"]["fragment_layout"] = "rdna3_wmma_f32_16x16x16_f16_register_static"
   for operand in ("a", "b"): payload["schedule"]["cooperative_load"][operand]["lane_mapping"] = "wave_contiguous_b128"
   candidate = _strict_full_kernel_candidate(full_kernel_candidate=payload)
-  monkeypatch.setenv("BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON", json.dumps(payload))
-  monkeypatch.setenv("BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH", candidate.canonical_identity)
+  candidate_config = {"BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON": json.dumps(payload),
+                      "BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH": candidate.canonical_identity}
   seen = {}
 
-  def capture(_x, _w, _out_f, _in_f, admission):
+  def capture(_x, _w, _out_f, _in_f, admission, _compile_artifact):
     seen["storage"] = admission.context.pipeline.storage.kind
     seen["lds"] = admission.active_lds_bytes
     return "register_install"
@@ -410,6 +410,16 @@ def test_register_candidate_route_selects_typed_install_without_lds(monkeypatch)
     shape = (4096, 4096)
   class Lin: pass
   lin = Lin(); lin._pf16_w = FakeWeight(); lin.bias = None; lin._prefill_graph_role = "attn_qo"
+  registry = prefill_graph_gemm_route._candidate_registry_from_env(candidate_config)
+  admission = registry.admissions[0]
+  workload = admission.normalized_payload["workload"]
+  set_identity = route_manifest.canonical_candidate_set_identity(registry.candidate_set.to_json())
+  inventory_identity = "inventory:sha256:" + "a"*64
+  lin._prefill_graph_gemm_binding = {"candidate_registry": registry, "inventory_identity": inventory_identity,
+    "candidate_set_identity": set_identity, "scanned_target_facts": {"target": workload["target"]},
+    "selected_policy": {"role": workload["role"], "shape": workload["shape"], "target": workload["target"],
+      "inventory_identity": inventory_identity, "candidate_set_identity": set_identity,
+      "candidate_identity": admission.canonical_identity}}
   assert prefill_graph_gemm_route.route_pf16_graph_gemm(lin, Fake()) == "register_install"
   assert seen == {"storage": "global_register_resident", "lds": 0}
 
@@ -511,12 +521,26 @@ def test_four_role_8b_candidate_set_admits_and_exactly_indexes():
   target={"backend":"AMD","arch":"gfx1100","wave_size":32}
   assert len(registry.exact_index) == 4
   for entry in entries:
-    profile,role,m,n,k,*_=entry.exact_key
-    admission=registry.get(profile,role,(m,n,k),target)
+    role,m,n,k,*_=entry.exact_key
+    admission=registry.get(role,(m,n,k),target)
     assert admission is not None and admission.canonical_identity == entry.canonical_identity
     assert admission.active_lds_bytes == 40960
-  assert registry.get(entries[0].exact_key[0],"attn_kv",(512,2048,4096),target) is None
+  assert registry.get("attn_kv",(512,2048,4096),target) is None
+  assert registry.legacy_get("renamed-profile", "ffn_gate_up", (512,12288,4096), target) is not None
   with pytest.raises(TypeError,match="immutable"): entries[0].payload["workload"]["role"]="other"
+
+def test_profile_rename_preserves_semantic_identity_and_duplicate_admission_fails_closed():
+  entry=_buffer2_set_entry("attn_qo",(512,4096,4096))
+  renamed=entry.to_json()["payload"]
+  renamed["workload"]["profile"]="same-content-new-evidence-name"
+  renamed["applicability"]["profiles"]=["same-content-new-evidence-name"]
+  legacy_identity=hashlib.sha256(json.dumps(renamed,sort_keys=True,separators=(",",":"),ensure_ascii=True).encode("ascii")).hexdigest()
+  renamed_entry=FullKernelCandidateSetEntry(legacy_identity,renamed)
+  assert renamed_entry.canonical_identity == entry.canonical_identity
+  assert renamed_entry.exact_key == entry.exact_key
+  assert renamed_entry.legacy_exact_key != entry.legacy_exact_key
+  with pytest.raises(ValueError,match="duplicate_exact_key"):
+    admit_full_kernel_candidate_set(FullKernelCandidateSet((entry,renamed_entry)))
 
 def test_candidate_set_rejects_duplicate_exact_key_identity_mismatch_and_weak_collision():
   entry=_buffer2_set_entry("attn_qo",(512,4096,4096))

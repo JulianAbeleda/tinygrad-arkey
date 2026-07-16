@@ -30,7 +30,7 @@ def test_qk_route_manifest_purity_debt_is_explicit():
   assert report["verdict"] == "TINYGRAD_DEFAULT_PURITY_PASS"
   assert route_provenance("decode_q4k_g3_generated") == "machine_authored_generated"
   assert route_provenance("decode_flash_block_tile_g5_konly") == "machine_authored_generated"
-  assert route_provenance("decode_flash_live_split_g4_8b_kvboth") == "machine_authored_generated"
+  assert route_provenance("decode_flash_live_split_g4_kvboth") == "machine_authored_generated"
   # TG-P3: Q6_K default is now the generated route; no manifest hand-kernel rollback remains.
   assert route_provenance("decode_q6k_coop_generated") == "machine_authored_generated"
   assert route_provenance("prefill_q6k_direct_generated") == "machine_authored_generated"
@@ -94,7 +94,7 @@ def test_qk_route_policy_selects_8b_live_split_by_shape(tmp_path):
       "role": "flash_attention_v_access",
       "shape": {"B": 1, "Hq": 32, "Hkv": 8, "Hd": 128},
       "quant": "fp16",
-      "selected_route": "decode_flash_live_split_g4_8b_kvboth",
+      "selected_route": "decode_flash_live_split_g4_kvboth",
       "status": "promoted",
       "route_params": {"DECODE_LIVE_SPLIT": "1"},
       "rollback": {"DECODE_LIVE_SPLIT": "0"},
@@ -103,8 +103,8 @@ def test_qk_route_policy_selects_8b_live_split_by_shape(tmp_path):
   policy = _load_qk_route_policy(str(policy_path))
   _set_qk_route_policy(policy)
   try:
-    assert _qk_route_policy_selected("decode_flash_live_split_g4_8b_kvboth", {"B": 1, "Hq": 32, "Hkv": 8, "Hd": 128})
-    assert not _qk_route_policy_selected("decode_flash_live_split_g4_8b_kvboth", {"B": 1, "Hq": 40, "Hkv": 8, "Hd": 128})
+    assert _qk_route_policy_selected("decode_flash_live_split_g4_kvboth", {"B": 1, "Hq": 32, "Hkv": 8, "Hd": 128})
+    assert not _qk_route_policy_selected("decode_flash_live_split_g4_kvboth", {"B": 1, "Hq": 40, "Hkv": 8, "Hd": 128})
   finally:
     _set_qk_route_policy(None)
 

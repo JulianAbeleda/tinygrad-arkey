@@ -2,9 +2,24 @@ import unittest
 from dataclasses import replace
 
 from tinygrad.codegen.opt.kernel_pipeline import (KernelStage1LifecycleEvent, KernelStage1PipelinePlan,
-  build_stage1_uop_graph, pipeline_policy_from_candidate, prove_stage1_lifecycle, prove_stage1_uop_graph, stage1_lifecycle_events)
+  build_stage1_uop_graph, pipeline_policy_from_candidate, prove_stage1_lifecycle, prove_stage1_uop_graph, stage1_lifecycle_events,
+  validate_scheduler_tile_loop_pressure)
 from tinygrad import dtypes
 from tinygrad.uop.ops import AxisType, Ops, UOp
+
+
+class TestSchedulerTileLoopPressure(unittest.TestCase):
+  def test_fused_loop_reuses_fixed_fragment_footprint(self):
+    validate_scheduler_tile_loop_pressure(resident_accumulator_vgprs=128, resident_fragment_vgprs=64)
+
+  def test_rejects_widening_residency_past_pinned_budget(self):
+    with self.assertRaisesRegex(ValueError, "requires 193 pinned VGPRs"):
+      validate_scheduler_tile_loop_pressure(resident_accumulator_vgprs=129, resident_fragment_vgprs=64)
+
+  def test_budget_override_cannot_change_stage1_contract(self):
+    with self.assertRaisesRegex(ValueError, "pinned at 192"):
+      validate_scheduler_tile_loop_pressure(resident_accumulator_vgprs=64, resident_fragment_vgprs=64,
+                                            pinned_vgpr_budget=256)
 
 
 class TestKernelStage1PipelinePlan(unittest.TestCase):
@@ -132,6 +147,16 @@ class TestKernelStage1SyntheticUOps(unittest.TestCase):
       self.assertEqual(self.body_calls,8); graphs.append(g)
     self.assertEqual([g.accumulator_reg.ptrdtype.size for g in graphs],[64,64,64])
     self.assertEqual([len([u for u in g.sink.toposort() if u.op is Ops.RANGE]) for g in graphs],[1,1,1])
+
+  def test_sink_does_not_keep_prologue_readiness_alive_as_a_sibling(self):
+    self.body_calls=0
+    graph=build_stage1_uop_graph(KernelStage1PipelinePlan(2,20480),3,self._produce,self._fragments,self._wmma)
+    # The body fragments and next producer already carry readiness through
+    # their lifecycle edges.  A sink sibling would extend the prologue token
+    # lifetime without adding ordering, and can inhibit stage reclamation.
+    self.assertNotIn(graph.prologue.ready, graph.sink.src)
+    self.assertTrue(any(graph.prologue.ready in u.backward_slice_with_self for u in graph.drain))
+    self.assertTrue(prove_stage1_uop_graph(graph).passed)
 
   def test_heterogeneous_effect_group_is_shape_erased(self):
     a=UOp.placeholder((128,),dtypes.float,9700,addrspace=__import__('tinygrad.dtype',fromlist=['AddrSpace']).AddrSpace.REG)

@@ -64,7 +64,7 @@ An explicit `--max_context N` is still admission-checked and auto-upgrades throu
 # each in an isolated subprocess with the correct env. This is the ONLY sanctioned way to report throughput.
 DEV=AMD JIT=1 PYTHONPATH=. .venv/bin/python extra/qk/bench.py --model /path/to/Qwen3-8B-Q4_K_M.gguf
 #   --prefill  : prefill authority only (extra/qk/prefill_whole_synced.py, synced graph-GEMM pp@L)
-#   --decode   : decode authority only (extra/qk/decode_runtime_overhead.py, W==D synced min-of-K)
+#   --decode   : genuine fixed-depth decode (exact prompt prefill, production generate route, repeated medians)
 ```
 
 **Do not roll your own throughput harness, and never report a `model.generate` TTFT number** — TTFT understates prefill by ~3× (it folds in generate's Python overhead + sampling + host jitter). If you need a route/purity check instead of a number, start with:

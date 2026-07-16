@@ -19,6 +19,8 @@ from extra.qk.layout import GGML_Q6_K, Q6_K_BLOCK_BYTES, Q6_K_BLOCK_ELEMS, q6_k_
 
 Q6KPrefillRole = Literal["attn_qo", "attn_kv", "ffn_gate_up", "ffn_down", "lm_head", "test"]
 _ROLES = ("attn_qo", "attn_kv", "ffn_gate_up", "ffn_down", "lm_head", "test")
+Q6K_WMMA_ROUTE = "staged_dequant_then_fp16_wmma"
+Q6K_ZERO_POINT = 32
 
 
 @dataclass(frozen=True)
@@ -28,9 +30,12 @@ class Q6KPrefillWMMASpec:
   n: int
   k: int
   role: Q6KPrefillRole
-  max_m: int = 32
-  max_n: int = 32
-  max_k: int = 512
+  # The bounded contract is one real 14B Q6_K role, not a toy tile.  WMMA
+  # still tiles the ordinary fp16 contraction; these are the authority shape
+  # limits for ffn_down (M=512, N=4096, K=12288).
+  max_m: int = 512
+  max_n: int = 4096
+  max_k: int = 12288
   target: str = "amd_gfx1100"
   implementation: str = "dequant_once_fp16_matmul_v0"
 
@@ -49,9 +54,23 @@ class Q6KPrefillWMMASpec:
       raise ValueError(f"shape {(self.m, self.n, self.k)} exceeds bounded maximum {(self.max_m, self.max_n, self.max_k)}")
     if self.implementation != "dequant_once_fp16_matmul_v0": raise ValueError(f"unsupported implementation={self.implementation!r}")
 
+  def admission(self, *, fused: bool = False, lowering_proof: bool = True) -> dict[str, Any]:
+    """Return the Q6-only dispatch gate; estimates never admit a fused route."""
+    self.validate()
+    errors = []
+    if self.target != "amd_gfx1100": errors.append("no Q6 WMMA capability record for target")
+    if fused: errors.append("Q6 packed operands have no legal gfx1100 WMMA lowering")
+    if not lowering_proof: errors.append("staged fp16 WMMA lowering proof missing")
+    return {"admitted": not errors, "route": Q6K_WMMA_ROUTE, "errors": errors,
+            "quant_correction": "d * scale_i8 * (code_u6 - 32)", "zero_point": Q6K_ZERO_POINT,
+            "stage_boundary": "Q6_K bytes -> fp16 weights -> WMMA"}
+
   def to_json(self) -> dict[str, Any]:
     return {"m": self.m, "n": self.n, "k": self.k, "role": self.role, "target": self.target,
-            "implementation": self.implementation, "packed_bytes": self.packed_bytes, "kernel_name": self.kernel_name,
+            "implementation": self.implementation, "route": Q6K_WMMA_ROUTE,
+            "quant_correction": "d * scale_i8 * (code_u6 - 32)", "zero_point": Q6K_ZERO_POINT,
+            "stage_boundary": "Q6_K bytes -> fp16 weights -> WMMA",
+            "packed_bytes": self.packed_bytes, "kernel_name": self.kernel_name,
             "bounds": {"m": self.max_m, "n": self.max_n, "k": self.max_k}}
 
 
@@ -64,6 +83,8 @@ def describe_q6k_wmma_prefill(m:int, n:int, k:int, *, role:Q6KPrefillRole="test"
 def emit_q6k_wmma_prefill(packed:Tensor, x:Tensor, spec:Q6KPrefillWMMASpec) -> Tensor:
   """Return fp32 [M,N]; packed is the canonical byte stream and x is fp16-compatible [M,K]."""
   spec.validate()
+  admission = spec.admission()
+  if not admission["admitted"]: raise ValueError("Q6 WMMA admission failed: " + "; ".join(admission["errors"]))
   if packed.dtype != dtypes.uint8 or packed.numel() != spec.packed_bytes:
     raise ValueError(f"packed must be uint8[{spec.packed_bytes}], got dtype={packed.dtype} shape={packed.shape}")
   if x.shape != (spec.m, spec.k): raise ValueError(f"x must have shape {(spec.m, spec.k)}, got {x.shape}")

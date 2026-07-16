@@ -211,16 +211,17 @@ def final_resources(compile: dict[str, Any] | None) -> dict[str, Any]:
 
 
 def runtime_compile_resource_eligibility(candidate: dict[str, Any] | None, artifact: dict[str, Any] | None, *,
-                                         profile: str, role: str, shape: tuple[int, int, int],
+                                         profile: str | None = None, role: str, shape: tuple[int, int, int],
                                          target: dict[str, Any]) -> dict[str, Any]:
-  """Default-closed runtime join for register warmstart installation; never launches a kernel."""
+  """Default-closed structural runtime join; ``profile`` is legacy provenance only."""
   compiled = compile_only(candidate, artifact)
   resources = final_resources(compiled)
   errors = [*compiled["errors"], *resources["errors"]]
   binding = artifact.get("runtime_binding") if isinstance(artifact, dict) else None
-  expected = {"profile": profile, "role": role, "shape": {"m": shape[0], "n": shape[1], "k": shape[2]}, "target": target}
+  expected = {"role": role, "shape": {"m": shape[0], "n": shape[1], "k": shape[2]}, "target": target}
   if not isinstance(binding, dict): errors.append("compile artifact lacks exact runtime binding")
-  elif binding != expected: errors.append("compile artifact runtime binding is not an exact workload/target match")
+  elif {key:binding.get(key) for key in expected} != expected:
+    errors.append("compile artifact runtime binding is not an exact workload/target match")
   candidate_identity = _identity(candidate)
   if candidate_identity is None or _identity(compiled) != candidate_identity:
     errors.append("runtime candidate/compile identity join failed")

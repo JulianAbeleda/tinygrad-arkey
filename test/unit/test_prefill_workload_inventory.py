@@ -45,6 +45,41 @@ def test_exact_mixed_inventory_and_canonical_candidate_sets_are_admitted():
   assert artifact["schema"] == CANDIDATE_INVENTORY_SCHEMA
   assert {q:len(s["entries"]) for q,s in artifact["candidate_sets"].items()} == {"Q4_K":4, "Q6_K":2}
   assert len({x["canonical_identity"] for x in artifact["bindings"]}) == 6
+  assert artifact["inventory_identity"] == inventory["inventory_identity"]
+  assert all(x["inventory_key"]["inventory_identity"] == inventory["inventory_identity"] for x in artifact["bindings"])
+
+
+def test_inventory_identity_ignores_optional_provenance_and_model_rename():
+  plain = build_workload_inventory(_facts(), ROWS)
+  named = build_workload_inventory(_facts(), ROWS, profile="benchmark-label", model_path="renamed/model.gguf")
+  assert plain["inventory_identity"] == named["inventory_identity"]
+  assert named["provenance"] == {"profile":"benchmark-label", "model_path":"renamed/model.gguf"}
+  assert generate_candidate_inventory(plain, _templates())["bindings"] == \
+         generate_candidate_inventory(named, _templates())["bindings"]
+
+
+@pytest.mark.parametrize("mutate", [
+  lambda row: row["tensor_identities"].__setitem__(0, "renamed.tensor"),
+  lambda row: row.__setitem__("quant_format", "Q6_K"),
+  lambda row: row["shape"].__setitem__("m", 256),
+  lambda row: row.__setitem__("call_count", row["call_count"] + 1),
+  lambda row: row.__setitem__("source_bytes", row["source_bytes"] + 1),
+  lambda row: row["layout"].__setitem__("block_bytes", row["layout"]["block_bytes"] + 1),
+])
+def test_exact_tensor_inventory_mutation_invalidates_identity(mutate):
+  inventory = build_workload_inventory(_facts(), ROWS)
+  mutate(inventory["rows"][0])
+  with pytest.raises(ValueError, match="inventory identity mismatch"):
+    generate_candidate_inventory(inventory, _templates())
+
+
+def test_legacy_profile_only_inventory_is_read_with_content_identity():
+  inventory = build_workload_inventory(_facts(), ROWS, profile="legacy-label")
+  legacy = {"schema":inventory["schema"], "profile":"legacy-label", "rows":inventory["rows"]}
+  artifact = generate_candidate_inventory(legacy, _templates())
+  assert artifact["inventory_identity"] == inventory["inventory_identity"]
+  assert all(x["payload"]["workload"]["profile"] == inventory["inventory_identity"]
+             for candidate_set in artifact["candidate_sets"].values() for x in candidate_set["entries"])
 
 
 @pytest.mark.parametrize("mutation,match", [
@@ -59,8 +94,10 @@ def test_inventory_fails_closed_on_duplicate_unknown_and_unsupported(mutation, m
 def test_candidate_generation_rejects_duplicate_exact_key_and_tensor_shape_mismatch():
   inventory = build_workload_inventory(_facts(), ROWS, profile="fixture")
   duplicate = {**inventory, "rows":inventory["rows"] + inventory["rows"][:1]}
+  duplicate.pop("inventory_identity")  # legacy input still reaches structural duplicate admission
   with pytest.raises(ValueError, match="duplicate exact inventory key"): generate_candidate_inventory(duplicate, _templates())
   mismatch = json.loads(json.dumps(inventory))
+  mismatch.pop("inventory_identity")
   mismatch["rows"][0]["shape"]["n"] = 5120
   # No role-specific branch repairs inconsistent tensor evidence; rebinding eventually fails admission.
   with pytest.raises(ValueError, match="candidate/tensor shape mismatch"): generate_candidate_inventory(mismatch, _templates())
@@ -69,6 +106,7 @@ def test_candidate_generation_rejects_duplicate_exact_key_and_tensor_shape_misma
 def test_runtime_warmstart_collision_fails_closed_within_quant_partition():
   inventory = build_workload_inventory(_facts(), ROWS, profile="fixture")
   collision = json.loads(json.dumps(inventory))
+  collision.pop("inventory_identity")
   collision["rows"][1]["shape"] = dict(collision["rows"][0]["shape"])
   collision["rows"][1]["source_bytes"] = collision["rows"][0]["source_bytes"]
   collision["rows"][1]["logical_flop"] = collision["rows"][0]["logical_flop"]

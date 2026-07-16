@@ -65,6 +65,17 @@ def test_qwen3_14b_like_metadata_uses_config_shape_without_model_size_label():
   ]
 
 
+def test_qwen_attention_qo_roles_use_scanned_head_geometry_when_not_square():
+  kv = _qwen_kv(2560, 9728, 32)
+  facts = model_facts_from_gguf_metadata(kv, {"tensor_infos": [
+    ("blk.0.attn_q.weight", (2560, 4096), 12, 0),
+    ("blk.0.attn_output.weight", (4096, 2560), 12, 1),
+  ]})
+  assert [(t.role, t.shape) for t in facts.tensors] == [
+    ("attn_qo", (4096, 2560)), ("attn_qo", (2560, 4096)),
+  ]
+
+
 def test_qwen_resolver_rejects_name_matches_with_wrong_config_shape():
   facts = model_facts_from_gguf_metadata(_qwen_kv(4096, 12288, 32), {
     "tensor_infos": [("blk.0.ffn_gate.weight", (4096, 17408), 12, 0)]

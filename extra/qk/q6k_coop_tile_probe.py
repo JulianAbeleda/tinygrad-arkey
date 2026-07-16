@@ -13,6 +13,7 @@ from typing import Any
 import numpy as np
 
 from extra.qk.q6k_mmq_vocabulary import Q6K_BLOCK_BYTES, q6k_weight
+from extra.qk.q6k_coop_contract import Q6KCoopContract
 
 SCHEMA = "tinygrad.q6k.coop_tile_probe.v1"
 PROBE_ID = "q6k_q8_1_mmq_coop_m16_n16_k256_v0"
@@ -40,9 +41,12 @@ class Q6KCoopTileProbe:
     # Q6 q/scales/d plus Q8 values/scale/sum staged for one K tile.
     q6_stage = self.tile_n * (128 + 64 + 16 + 2)
     q8_stage = self.tile_m * (self.tile_k + (self.tile_k // 32) * 8)
+    contract = Q6KCoopContract(tile_m=self.tile_m, tile_n=self.tile_n, tile_k=self.tile_k,
+                                wave_size=self.wave_size, workgroup_size=self.workgroup_size)
     return {"status": "MODEL_ONLY", "q6_stage_bytes": q6_stage,
             "q8_stage_bytes": q8_stage, "lds_bytes_estimate": q6_stage + q8_stage,
-            "scratch_bytes": "UNKNOWN", "vgpr": "UNKNOWN", "source": "bounded_formula"}
+            "scratch_bytes": "UNKNOWN", "vgpr": "UNKNOWN", "source": "bounded_formula",
+            "contract": contract.to_json()}
 
   def evidence(self, *, run_correctness: bool = False) -> dict[str, Any]:
     self.validate()

@@ -1,19 +1,58 @@
 from __future__ import annotations
 import collections, pathlib
 from dataclasses import dataclass
-from tinygrad import Tensor, UOp, dtypes, getenv, Device
+from tinygrad import Tensor, UOp, dtypes
 from tinygrad.helpers import prod
-from tinygrad.llm.gguf import ggml_data_to_tensor
+from tinygrad.llm.gguf import MODEL_PARAMETER_ALLOCATION_OWNER, ggml_data_to_tensor
+from tinygrad.llm.memory_semantics import MODEL_PARAMETER, memory_semantic_owner, model_parameter
+from tinygrad.llm.physical_memory_ledger import allocation_owner, bind_allocation_owner
 from tinygrad.llm import route_ops as qk_ops
 from tinygrad.llm.decode_routes import q4k_primitive_linear_call, q6k_primitive_linear_call
 from tinygrad.llm.route_policy import _qk_generated_policy_entry
 from tinygrad.llm.model_route_plan import ModelRoutePlan, build_model_route_plan, primitive_route_entry_for_tensor
 
+@dataclass(frozen=True)
+class QKPrimitiveEligibility:
+  """Structural target facts retained by an installed AMD gfx1100 primitive."""
+  backend: str|None = None
+  architecture: str|None = None
+  wave_size: int|None = None
 
-def _qk_amd_gfx1100_arch_ok() -> bool:
-  try: return Device.DEFAULT == "AMD" and "gfx1100" in str(getattr(Device["AMD"], "arch", ""))
-  except Exception: return False
-QK_AMD_GFX1100_ARCH_OK = _qk_amd_gfx1100_arch_ok()
+  @property
+  def eligible(self) -> bool:
+    return (self.backend, self.architecture, self.wave_size) == ("AMD", "gfx1100", 32)
+
+def qk_primitive_eligibility_from_device_facts(device_facts:object|None) -> QKPrimitiveEligibility:
+  """Copy only immutable candidate-relevant fields from the load-entry DeviceFacts scan."""
+  if device_facts is None: return QKPrimitiveEligibility()
+  capabilities = getattr(device_facts, "capabilities", None)
+  return QKPrimitiveEligibility(getattr(device_facts, "backend", None), getattr(device_facts, "architecture", None),
+                                getattr(capabilities, "wave_size", None))
+
+def _model_parameter_alias(source:Tensor|None, derived:Tensor) -> Tensor:
+  """Attach model ownership to derived storage which already aliases a backing."""
+  source = derived if source is None else source  # permits isolated primitive test doubles
+  if memory_semantic_owner(source) is None: model_parameter(source)
+  if memory_semantic_owner(source) != MODEL_PARAMETER:
+    raise ValueError("packed model storage source must have MODEL_PARAMETER semantics")
+  model_parameter(derived)
+  try: bind_allocation_owner(derived.uop.buffer, MODEL_PARAMETER_ALLOCATION_OWNER)
+  except AssertionError: pass
+  return derived
+
+def _model_parameter_materialization(source:Tensor|None, derived:Tensor) -> Tensor:
+  """Materialize storage derived from a selected parameter with model ownership.
+
+  The caller supplies the parameter by semantic role.  Ownership deliberately does
+  not depend on tensor names, geometry, byte count, device, or route tier.
+  """
+  _model_parameter_alias(source, derived)
+  owner = MODEL_PARAMETER_ALLOCATION_OWNER
+  with allocation_owner(kind=owner.kind, lifetime=owner.lifetime, candidate_id=owner.candidate_id,
+                        semantic_owner_id=owner.semantic_owner_id):
+    derived.realize()
+  bind_allocation_owner(derived.uop.buffer, owner)
+  return derived
 
 class Q4KPrimitiveStorage:
   __slots__ = ("words", "source_bytes", "persistent_bytes", "shared_bytes", "nonpersistent_bytes", "mode")
@@ -51,32 +90,35 @@ class Q4KPrimitiveRegistry:
 class Q4KPrimitiveLinear:
   def __init__(self, weight:Tensor, bias:Tensor|None, words:Tensor, out_features:int, in_features:int, parts:int, opts:tuple,
                name:str, source_bytes:int, persistent_bytes:int, storage_mode:str,
-               shared_bytes:int=0, nonpersistent_bytes:int=0, kernel_mode:str="partial", route_role:str=""):
+               shared_bytes:int=0, nonpersistent_bytes:int=0, kernel_mode:str="partial", route_role:str="",
+               eligibility:QKPrimitiveEligibility|None=None):
     if kernel_mode not in ("partial", "direct_out"): raise ValueError(f"unsupported Q4_K primitive kernel mode {kernel_mode!r}")
     if kernel_mode == "direct_out" and parts != 1: raise ValueError("Q4_K direct_out primitive requires parts=1")
     self.weight, self.bias = weight, bias
+    _model_parameter_alias(weight, words)
     self.q4k_storage = Q4KPrimitiveStorage(words, source_bytes, persistent_bytes, storage_mode, shared_bytes, nonpersistent_bytes)
     self.out_features, self.in_features, self.parts, self.opts, self.name = out_features, in_features, parts, opts, name
     self.kernel_mode = kernel_mode
     self.route_role = route_role
+    self.eligibility = eligibility or QKPrimitiveEligibility()
     self.decode_enabled = False
 
   def _fallback(self, x:Tensor) -> Tensor:
     return x.linear(self.weight.transpose(), self.bias)
 
   def prefill_packed_weight(self) -> Tensor:
-    if self.q4k_storage.mode == "sidecar" or bool(getenv("PREFILL_PACKED_STREAM", 0)): return self.q4k_storage.words
+    if self.q4k_storage.mode in ("sidecar", "shared"): return self.q4k_storage.words
     if not hasattr(self, "_prefill_q4k_words"):
-      self._prefill_q4k_words = self.q4k_storage.words.clone().realize()
+      self._prefill_q4k_words = _model_parameter_materialization(self.weight, self.q4k_storage.words.clone())
     return self._prefill_q4k_words
 
   def prefill_fp16_weight(self) -> Tensor:
     raw = self.q4k_storage.words.bitcast(dtypes.uint8).reshape(-1)
-    return ggml_data_to_tensor(raw, self.out_features * self.in_features, 12).reshape(
-      self.out_features, self.in_features).cast(dtypes.float16).contiguous()
+    return _model_parameter_materialization(self.weight, ggml_data_to_tensor(raw, self.out_features * self.in_features, 12).reshape(
+      self.out_features, self.in_features).cast(dtypes.float16).contiguous())
 
   def __call__(self, x:Tensor) -> Tensor:
-    return q4k_primitive_linear_call(self, x, self._fallback, QK_AMD_GFX1100_ARCH_OK)
+    return q4k_primitive_linear_call(self, x, self._fallback, self.eligibility.eligible)
 
 class Q4KFusedLinear:
   # B1 horizontal-fusion probe: one Q4_K GEMV over concatenated sibling weight rows (q/k/v or gate/up),
@@ -93,10 +135,11 @@ class Q4KFusedLinear:
     return [l(x) for l in self.originals]
 
 def _build_fused_q4k(linears:list[Q4KPrimitiveLinear], tag:str) -> Q4KFusedLinear:
-  words = linears[0].q4k_storage.words.cat(*[l.q4k_storage.words for l in linears[1:]], dim=0).contiguous().realize()
+  words = _model_parameter_materialization(linears[0].weight,
+    linears[0].q4k_storage.words.cat(*[l.q4k_storage.words for l in linears[1:]], dim=0).contiguous())
   out_features, in_features, q4_bytes = sum(l.out_features for l in linears), linears[0].in_features, words.numel()*4
   fused = Q4KPrimitiveLinear(None, None, words, out_features, in_features, 1, linears[0].opts,
-                             f"fused_{tag}", q4_bytes, q4_bytes, "sidecar", 0, 0)
+                             f"fused_{tag}", q4_bytes, q4_bytes, "sidecar", 0, 0, eligibility=linears[0].eligibility)
   return Q4KFusedLinear(fused, linears, [l.out_features for l in linears])
 
 def _install_q4k_fusions(model) -> None:
@@ -113,42 +156,31 @@ def _install_q4k_fusions(model) -> None:
 class Q6KPrimitiveLinear:
   def __init__(self, weight:Tensor, bias:Tensor|None, halfs:Tensor, out_features:int, in_features:int, parts:int, opts:tuple,
                name:str, source_bytes:int, persistent_bytes:int, storage_mode:str,
-               shared_bytes:int=0, nonpersistent_bytes:int=0, route_role:str=""):
+               shared_bytes:int=0, nonpersistent_bytes:int=0, route_role:str="", eligibility:QKPrimitiveEligibility|None=None):
     self.weight, self.bias = weight, bias
+    _model_parameter_alias(weight, halfs)
     self.q6k_storage = Q6KPrimitiveStorage(halfs, source_bytes, persistent_bytes, storage_mode, shared_bytes, nonpersistent_bytes)
     self.out_features, self.in_features, self.parts, self.opts, self.name = out_features, in_features, parts, opts, name
     self.route_role = route_role
+    self.eligibility = eligibility or QKPrimitiveEligibility()
     self.decode_enabled = False
 
   def _fallback(self, x:Tensor) -> Tensor:
     return x.linear(self.weight.transpose(), self.bias)
 
   def prefill_packed_weight(self) -> Tensor:
-    if self.q6k_storage.mode == "sidecar" or bool(getenv("PREFILL_PACKED_STREAM", 0)): return self.q6k_storage.halfs
+    if self.q6k_storage.mode in ("sidecar", "shared"): return self.q6k_storage.halfs
     if not hasattr(self, "_prefill_q6k_halfs"):
-      self._prefill_q6k_halfs = self.q6k_storage.halfs.clone().realize()
+      self._prefill_q6k_halfs = _model_parameter_materialization(self.weight, self.q6k_storage.halfs.clone())
     return self._prefill_q6k_halfs
 
   def prefill_fp16_weight(self) -> Tensor:
     raw = self.q6k_storage.halfs.bitcast(dtypes.uint8).reshape(-1)
-    return ggml_data_to_tensor(raw, self.out_features * self.in_features, 14).reshape(
-      self.out_features, self.in_features).cast(dtypes.float16).contiguous()
+    return _model_parameter_materialization(self.weight, ggml_data_to_tensor(raw, self.out_features * self.in_features, 14).reshape(
+      self.out_features, self.in_features).cast(dtypes.float16).contiguous())
 
   def __call__(self, x:Tensor) -> Tensor:
-    return q6k_primitive_linear_call(self, x, self._fallback, QK_AMD_GFX1100_ARCH_OK)
-
-def _qk_storage_cap_from_env() -> int|None:
-  raw = getenv("QK_PRIMITIVE_MAX_STORAGE_MB", "")
-  if raw == "": return None
-  cap = int(float(raw) * 1024 * 1024)
-  if cap < 0: raise ValueError(f"QK_PRIMITIVE_MAX_STORAGE_MB must be non-negative, got {raw!r}")
-  return cap
-
-def _qk_storage_mode_from_env(default:str="sidecar") -> str:
-  mode = getenv("QK_PRIMITIVE_STORAGE", default)
-  if mode not in ("sidecar", "q4_ondemand", "shared"):
-    raise ValueError(f"QK_PRIMITIVE_STORAGE must be sidecar, q4_ondemand, or shared, got {mode!r}")
-  return mode
+    return q6k_primitive_linear_call(self, x, self._fallback, self.eligibility.eligible)
 
 def _q6k_effective_storage_mode(requested_mode:str) -> str:
   # q4_ondemand is a Q4_K-only experiment. Q6_K stays persistent unless storage is shared.
@@ -158,10 +190,7 @@ def _q6k_effective_storage_mode(requested_mode:str) -> str:
 
 @dataclass(frozen=True)
 class QKConfig:
-  """Single authority for the QK primitive *install* config read from the environment
-  inside `Transformer.from_gguf` once primitives are active (i.e. the flags consumed
-  under `if q4k_meta is not None`). Centralizes the reads + validation that were
-  scattered as `getenv` calls so invalid QK runtime config is rejected in one place.
+  """Explicit QK primitive install configuration.
 
   Scope is deliberately the install config, not everything QK-shaped:
   - Activation gating (`Q4K_PRIMITIVE`/`Q6K_PRIMITIVE`/`QK_GENERATED_POLICY`) stays at
@@ -171,9 +200,9 @@ class QKConfig:
     `FLASH_DECODE`/`FLASH_L`) are read per-call at their own sites; folding them here
     would change when they are read.
 
-  Built via `from_env(storage_default=...)` at the top of the active-primitive block,
-  so every field is read exactly when the original scattered reads were (when the block
-  is entered) -- a behaviour-preserving centralization."""
+  Production callers must construct this value from their already-selected runtime
+  policy, budget, route plan, and device facts. Environment parsing belongs in a
+  separate research/configuration layer and is intentionally not provided here."""
   generated_policy_strict: bool
   max_storage_bytes: int | None
   storage_mode: str
@@ -184,29 +213,11 @@ class QKConfig:
   demote_targets: tuple[str, ...]
   fuse_q4k: bool
 
-  @staticmethod
-  def from_env(*, storage_default:str) -> "QKConfig":
-    # Read order mirrors the original sites: cap + strict (QKPrimitiveBudget), then the
-    # validated storage mode, then the debug/probe flags -- so a first-raise on invalid
-    # input lands on the same variable as before.
-    max_storage_bytes = _qk_storage_cap_from_env()
-    generated_policy_strict = bool(getenv("QK_GENERATED_POLICY_STRICT", 0))
-    storage_mode = _qk_storage_mode_from_env(storage_default)
-    # B3: per-tensor Q6->Q4 demotion. QK_DEMOTE_TENSORS (comma-sep name substrings) generalizes the
-    # single-tensor Q6K_DEMOTE_FFNDOWN flag; the flag stays as the ffn_down shortcut for back-compat.
-    demote_q6k_ffndown = bool(getenv("Q6K_DEMOTE_FFNDOWN"))
-    explicit = tuple(t for t in getenv("QK_DEMOTE_TENSORS", "").replace(" ", "").split(",") if t)
-    demote_targets = explicit or (("ffn_down",) if demote_q6k_ffndown else ())
-    return QKConfig(
-      generated_policy_strict=generated_policy_strict,
-      max_storage_bytes=max_storage_bytes,
-      storage_mode=storage_mode,
-      q6_storage_mode=_q6k_effective_storage_mode(storage_mode),
-      policy_debug=bool(getenv("QK_GENERATED_POLICY_DEBUG", 0)),
-      storage_debug=bool(getenv("QK_GENERATED_POLICY_DEBUG", getenv("Q4K_PRIMITIVE_DEBUG", getenv("Q6K_PRIMITIVE_DEBUG", 0)))),
-      demote_q6k_ffndown=demote_q6k_ffndown,
-      demote_targets=demote_targets,
-      fuse_q4k=bool(getenv("Q4K_FUSE")))
+  def __post_init__(self):
+    if self.storage_mode not in ("sidecar", "q4_ondemand", "shared"):
+      raise ValueError(f"unsupported QK primitive storage mode {self.storage_mode!r}")
+    if self.q6_storage_mode != _q6k_effective_storage_mode(self.storage_mode):
+      raise ValueError("q6_storage_mode must match the explicit storage_mode")
 
 def _qk_storage_summary(linears:list[Q4KPrimitiveLinear|Q6KPrimitiveLinear]) -> dict:
   by_kind: collections.Counter[str] = collections.Counter()
@@ -251,14 +262,17 @@ def _set_module_at(root, path:str, value) -> None:
 
 def _install_q4k_primitives(model, gguf:pathlib.Path, meta:dict, generated_policy:dict|None=None,
                             budget:QKPrimitiveBudget|None=None, storage_mode:str="sidecar",
-                            route_plan:ModelRoutePlan|None=None) -> list[Q4KPrimitiveLinear]:
+                            route_plan:ModelRoutePlan|None=None, device_facts:object|None=None,
+                            debug:bool=False) -> list[Q4KPrimitiveLinear]:
   supported_generated_families = {"q4_k_packed_u32", "q4_k_packed_u32_direct"}
+  if storage_mode not in ("sidecar", "q4_ondemand", "shared"):
+    raise ValueError(f"unsupported QK primitive storage mode {storage_mode!r}")
   raw_words = Tensor(gguf, dtype=dtypes.uint32)
   installed: list[Q4KPrimitiveLinear] = []
   skipped: collections.Counter[str] = collections.Counter()
   budget = budget or QKPrimitiveBudget()
+  eligibility = qk_primitive_eligibility_from_device_facts(device_facts)
   if generated_policy is None and route_plan is None: route_plan = build_model_route_plan(meta)
-  debug = bool(getenv("Q4K_PRIMITIVE_DEBUG", getenv("QK_GENERATED_POLICY_DEBUG", 0)))
   for name, dims, typ, off in meta["tensor_infos"]:
     if typ != 12:
       skipped["not_q4_k"] += 1
@@ -320,11 +334,11 @@ def _install_q4k_primitives(model, gguf:pathlib.Path, meta:dict, generated_polic
     if storage_mode == "shared":
       words, shared_bytes, nonpersistent_bytes = _shared_packed_view(meta, byte_start, q4_bytes, dtypes.uint32), q4_bytes, 0
     else:
-      words = source.contiguous() if storage_mode == "q4_ondemand" else source.to(None).contiguous().realize()
+      words = source.contiguous() if storage_mode == "q4_ondemand" else _model_parameter_materialization(module.weight, source.to(None).contiguous())
       shared_bytes, nonpersistent_bytes = 0, q4_bytes if storage_mode == "q4_ondemand" else 0
     q4k_linear = Q4KPrimitiveLinear(module.weight, module.bias, words, rows, cols, parts, tuple(qk_ops.q4k_parse_opt(x) for x in opt_specs), name,
                                     q4_bytes, persistent_bytes, storage_mode, shared_bytes, nonpersistent_bytes,
-                                    kernel_mode=kernel_mode, route_role=route_role)
+                                    kernel_mode=kernel_mode, route_role=route_role, eligibility=eligibility)
     _set_module_at(model, module_path, q4k_linear)
     installed.append(q4k_linear)
   if debug:
@@ -342,13 +356,16 @@ def _install_q4k_primitives(model, gguf:pathlib.Path, meta:dict, generated_polic
 
 def _install_q6k_primitives(model, gguf:pathlib.Path, meta:dict, generated_policy:dict|None=None,
                             budget:QKPrimitiveBudget|None=None, storage_mode:str="sidecar",
-                            route_plan:ModelRoutePlan|None=None) -> list[Q6KPrimitiveLinear]:
+                            route_plan:ModelRoutePlan|None=None, device_facts:object|None=None,
+                            debug:bool=False) -> list[Q6KPrimitiveLinear]:
+  if storage_mode not in ("sidecar", "shared"):
+    raise ValueError(f"unsupported Q6_K primitive storage mode {storage_mode!r}")
   raw_halfs = Tensor(gguf, dtype=dtypes.uint16)
   installed: list[Q6KPrimitiveLinear] = []
   skipped: collections.Counter[str] = collections.Counter()
   budget = budget or QKPrimitiveBudget()
+  eligibility = qk_primitive_eligibility_from_device_facts(device_facts)
   if generated_policy is None and route_plan is None: route_plan = build_model_route_plan(meta)
-  debug = bool(getenv("Q6K_PRIMITIVE_DEBUG", getenv("Q4K_PRIMITIVE_DEBUG", getenv("QK_GENERATED_POLICY_DEBUG", 0))))
   for name, dims, typ, off in meta["tensor_infos"]:
     if typ != 14:
       skipped["not_q6_k"] += 1
@@ -404,9 +421,10 @@ def _install_q6k_primitives(model, gguf:pathlib.Path, meta:dict, generated_polic
     if storage_mode == "shared":
       halfs, shared_bytes = _shared_packed_view(meta, byte_start, q6_bytes, dtypes.uint16), q6_bytes
     else:
-      halfs, shared_bytes = raw_halfs[byte_start//2:byte_start//2+q6_bytes//2].to(None).contiguous().realize(), 0
+      halfs, shared_bytes = _model_parameter_materialization(module.weight,
+        raw_halfs[byte_start//2:byte_start//2+q6_bytes//2].to(None).contiguous()), 0
     q6k_linear = Q6KPrimitiveLinear(module.weight, module.bias, halfs, rows, cols, parts, tuple(qk_ops.q6k_parse_opt(x) for x in opt_specs), name,
-                                    q6_bytes, persistent_bytes, storage_mode, shared_bytes, 0, route_role=route_role)
+                                    q6_bytes, persistent_bytes, storage_mode, shared_bytes, 0, route_role=route_role, eligibility=eligibility)
     _set_module_at(model, module_path, q6k_linear)
     installed.append(q6k_linear)
   if debug:
@@ -435,10 +453,12 @@ def _demote_q6k_to_q4(model, linears:list, targets:tuple[str, ...]) -> list:
       if route_entry is None: raise ValueError(f"no Q4_K demotion route for {lin.name}")
       parts, opt_strs = route_entry.parts, route_entry.opts
       opts = tuple(qk_ops.q4k_parse_opt(x) for x in opt_strs)
-      words = Tensor(qk_ops.quantize_q4_k(lin.weight.numpy())).to(None).contiguous().realize()
+      words = _model_parameter_materialization(lin.weight,
+        Tensor(qk_ops.quantize_q4_k(lin.weight.numpy())).to(None).contiguous())
       q4_bytes = lin.out_features * lin.in_features // 256 * 144
       q4 = Q4KPrimitiveLinear(lin.weight, lin.bias, words, lin.out_features, lin.in_features, parts, opts,
-                              lin.name, q4_bytes, q4_bytes, "sidecar", route_role=getattr(lin, "route_role", ""))
+                              lin.name, q4_bytes, q4_bytes, "sidecar", route_role=getattr(lin, "route_role", ""),
+                              eligibility=lin.eligibility)
       _set_module_at(model, lin.name[:-len(".weight")], q4)
       out.append(q4)
     else:

@@ -21,7 +21,9 @@ Token-identity / speed-equivalence proof: bench/amd-isa-backend-g3-weight-promot
 (AMD_ISA_G3_PROMOTION_PASS_SPEED_EQUIVALENT; lag -0.13..+0.41% across ctx 512-4096; token_match + route_clean all ctx).
 """
 from __future__ import annotations
-import json, os, pathlib
+import hashlib, json, pathlib
+from collections.abc import Mapping
+from types import MappingProxyType
 
 PROFILE_DECODE = "qwen3_8b_q4_k_m_gfx1100_decode"
 PROFILE_DECODE_LARGE = "qwen3_14b_32b_q4_k_m_gfx1100_decode"
@@ -118,7 +120,7 @@ ROUTES = {
   # ---------------- decode attention ----------------
   # Retired handwritten HIP owned split row REMOVED 2026-07-06 (no backups): tile + combine
   # tile + combine; its route_attribution target no longer exists in the code (model.py branch removed).
-  "decode_flash_live_split_g4_8b_kvboth": {
+  "decode_flash_live_split_g4_kvboth": {
     "workload": "decode", "profile_id": PROFILE_DECODE, "status": "promoted_default",
     "roles": ["attention_tile", "attention_combine"], "excluded_roles": [],
     "quant": ["fp16"],
@@ -337,7 +339,7 @@ ROUTES = {
     "selector": "env_guard",
     "route_attribution": "tinygrad/llm/prefill_routes.py PREFILL_Q4K_REDUCE_OUT=1 -> extra/qk/q4k_prefill_route_spec.py Q4KPrefillRouteSpec(output_layout='reduce_out') + emit_q4k_packed_prefill_kernel.",
     "note": "Default-off primitive correctness fix. It replaces the manual direct-output accumulator recurrence with a real Ops.REDUCE, making GROUP schedules numerically valid: GROUP:0:10 on real 14B ffn_gate rel_rmse ~=1.6e-6 vs the lossless direct path. It is not promoted because clean pp512 is 169.7 tok/s vs 173.6 for the current Q4 tile4x4 manual direct-output default. Use this as the correctness foundation for future grouped/staged combine work."},
-  "prefill_14b_q4k_q8_1_hybrid_mmq_atom": {
+  "prefill_q4k_q8_1_hybrid_mmq_atom": {
     "workload": "prefill", "profile_id": PROFILE_PREFILL, "status": "research",
     "roles": ["ffn_gate_up"], "excluded_roles": ["attn_qo", "ffn_down", "attn_kv"], "quant": ["Q4_K"],
     "shape_guards": [{"M": 512, "N": 17408, "K": 5120, "note": "machine-generated MMQ candidate"}],
@@ -345,7 +347,7 @@ ROUTES = {
     "strict_fallback": True, "expected_kernels": ["q4k_q8_1_mmq_amd_ds4_coop_tile_atom_v0"],
     "forbidden_kernels": [], "authority_gate": "correctness evidence + resource evidence + timing evidence",
     "promotion_artifacts": [], "purity_status": "research", "provenance": "machine_authored_generated",
-    "selector": "research_descriptor_only", "candidate_identity": "prefill_14b_q4k_q8_1_hybrid_mmq_atom",
+    "selector": "research_descriptor_only", "candidate_identity": "prefill_q4k_q8_1_hybrid_mmq_atom",
     "backend_strategy": "q4k_q8_1_mmq_amd_ds4_coop_tile_atom_v0", "rollback_route": "direct_packed",
     "research_only": True,
     "route_attribution": "extra/qk/mmq_machine_search.py candidate inventory; no tinygrad/llm/prefill_routes.py binding",
@@ -371,15 +373,15 @@ REFUTED = [
    "citation": "docs/prefill-lessons-ledger.md", "route_id": "prefill_q4k_direct_tile4x4_default"},
   {"axis": "attention_combine_fused_lifecycle", "domain": "attention", "disposition": "exhausted/low-leverage (combine overlaps in-graph; fused is codegen-walled)",
    "citation": "docs/decode-two-kernel-problem-audit-result-20260625.md"},
-  {"axis": "g5_block_tile_8b_as_default", "domain": "attention", "disposition": "correct_not_fast: token-identical + route-bound but 87.6% of owned @ctx512 / 95.6% @ctx4096 (TG-P5)",
-   "citation": "bench/tg-p5-attention-generated-default/latest.json", "route_id": "decode_flash_block_tile_g5_8b_refuted"},
-  {"axis": "g5_block_tile_8b_L_geometry", "domain": "attention", "disposition": "refuted: L=128 is the geometry optimum (87.7%/95.9%); larger L monotonically worse (69%/75.6% at L=576, occupancy-starved) -- the generated route needs ~36 splits for parallelism so it over-launches at low ctx (TG-P8.2)",
+  {"axis": "g5_block_tile_as_default", "compatibility_aliases": ("g5_block_tile_8b_as_default",), "domain": "attention", "disposition": "correct_not_fast: token-identical + route-bound but 87.6% of owned @ctx512 / 95.6% @ctx4096 (TG-P5)",
+   "citation": "bench/tg-p5-attention-generated-default/latest.json", "legacy_route_id": "decode_flash_block_tile_g5_8b_refuted"},
+  {"axis": "g5_block_tile_L_geometry", "compatibility_aliases": ("g5_block_tile_8b_L_geometry",), "domain": "attention", "disposition": "refuted: L=128 is the geometry optimum (87.7%/95.9%); larger L monotonically worse (69%/75.6% at L=576, occupancy-starved) -- the generated route needs ~36 splits for parallelism so it over-launches at low ctx (TG-P8.2)",
    "citation": "bench/tg-p8-generated-8b-attention-parity/geometry_search.json"},
-  {"axis": "g5_block_tile_8b_combine_lifecycle_cap", "domain": "attention", "disposition": "blocking: the generated 3-kernel gmax+combine lifecycle is 556us/fwd (83% of the ctx4096 attention delta) vs owned's fused 224us -> BINDING cap at ctx4096 (95.9%); a perfect tile saves only 112us. Combine COLLAPSE is refuted (guardrail #3); reopen only with a NEW non-collapse coordination primitive (TG-P8.1/P8.2)",
+  {"axis": "g5_block_tile_combine_lifecycle_cap", "compatibility_aliases": ("g5_block_tile_8b_combine_lifecycle_cap",), "domain": "attention", "disposition": "blocking: the generated 3-kernel gmax+combine lifecycle is 556us/fwd (83% of the ctx4096 attention delta) vs owned's fused 224us -> BINDING cap at ctx4096 (95.9%); a perfect tile saves only 112us. Combine COLLAPSE is refuted (guardrail #3); reopen only with a NEW non-collapse coordination primitive (TG-P8.1/P8.2)",
    "citation": "bench/tg-p8-generated-8b-attention-parity/latest.json"},
-  {"axis": "live_split_geometry_8b_tile", "domain": "attention", "disposition": "SOLVED/PROMOTED: live-context split geometry (fixed S, per=ceildiv(Tc,S)) is expressible in generated UOp; the live-split route plus KV_BOTH staging and fused combine is now the 8B generated default. extra/qk/live_split_geometry.py",
+  {"axis": "live_split_geometry_tile", "compatibility_aliases": ("live_split_geometry_8b_tile",), "domain": "attention", "disposition": "SOLVED/PROMOTED: live-context split geometry (fixed S, per=ceildiv(Tc,S)) is expressible in generated UOp; the live-split route plus KV_BOTH staging and fused combine is now the 8B generated default. extra/qk/live_split_geometry.py",
    "citation": "bench/tg-p9-pure-attention-primitive-route/live_split_tile_microgate.json"},
-  {"axis": "split_preserving_lse_combine_8b", "domain": "attention", "disposition": "EMITTER_BLOCKED (TG-P9.4): a split-preserving generated combine (de-dup the per-d fexp / fuse gmax without collapsing Hq*S or Hq*Hd) mis-vectorizes the reduction-accumulator REG to a non-assignable make_float4(...) store; REG_STORE_DEVEC=1 compiles but NaNs. The ctx4096 556us combine cap cannot be removed in current AMD codegen. Reopen: a codegen fix keeping the reduction-accumulator REG scalar for a multi-reduce/weight-sharing combine.",
+  {"axis": "split_preserving_lse_combine", "compatibility_aliases": ("split_preserving_lse_combine_8b",), "domain": "attention", "disposition": "EMITTER_BLOCKED (TG-P9.4): a split-preserving generated combine (de-dup the per-d fexp / fuse gmax without collapsing Hq*S or Hq*Hd) mis-vectorizes the reduction-accumulator REG to a non-assignable make_float4(...) store; REG_STORE_DEVEC=1 compiles but NaNs. The ctx4096 556us combine cap cannot be removed in current AMD codegen. Reopen: a codegen fix keeping the reduction-accumulator REG scalar for a multi-reduce/weight-sharing combine.",
    "citation": "bench/tg-p9-pure-attention-primitive-route/combine_microgate.json"},
 ]
 
@@ -396,9 +398,48 @@ DEFERRED_CAPABILITIES = [
 ]
 
 # ---- tiny helpers (no side effects unless you call apply_route) ----
-def route(route_id: str) -> dict:
-  if route_id not in ROUTES: raise KeyError(f"unknown route_id {route_id!r}; known: {sorted(ROUTES)}")
-  return ROUTES[route_id]
+ROUTE_COMPATIBILITY_ALIASES = (
+  {"canonical_route_id": "decode_flash_live_split_g4_kvboth",
+   "compatibility_aliases": ("decode_flash_live_split_g4_8b_kvboth",)},
+  {"canonical_route_id": "prefill_q4k_q8_1_hybrid_mmq_atom",
+   "compatibility_aliases": ("prefill_14b_q4k_q8_1_hybrid_mmq_atom",)},
+)
+
+def _route_alias_map() -> dict[str, str]:
+  return {alias: row["canonical_route_id"] for row in ROUTE_COMPATIBILITY_ALIASES
+          for alias in row["compatibility_aliases"]}
+
+class _CanonicalRouteTable(dict):
+  """Canonical keys with exact legacy reads for old artifact/registry consumers."""
+  def __contains__(self, route_id) -> bool:
+    return dict.__contains__(self, route_id) or route_id in _route_alias_map()
+  def __getitem__(self, route_id):
+    return dict.__getitem__(self, _route_alias_map().get(route_id, route_id))
+  def get(self, route_id, default=None):
+    try: return self[route_id]
+    except KeyError: return default
+
+ROUTES = _CanonicalRouteTable(ROUTES)
+
+def immutable_route_registry():
+  """Return an immutable manifest snapshot for explicit selector/admission use."""
+  def freeze(value):
+    if isinstance(value, dict): return MappingProxyType({k: freeze(v) for k, v in value.items()})
+    if isinstance(value, (list, tuple)): return tuple(freeze(v) for v in value)
+    return value
+  return freeze(dict(ROUTES))
+
+def canonical_route_id(route_id: str, registry: Mapping|None = None) -> str:
+  """Resolve one complete legacy spelling. Prefix, case-folded, and partial matches are intentionally unsupported."""
+  aliases = _route_alias_map()
+  registry = immutable_route_registry() if registry is None else registry
+  if route_id in registry: return route_id
+  if route_id in aliases: return aliases[route_id]
+  raise KeyError(f"unknown route_id {route_id!r}; known: {sorted((*registry, *aliases))}")
+
+def route(route_id: str, registry: Mapping|None = None) -> dict:
+  registry = immutable_route_registry() if registry is None else registry
+  return registry[canonical_route_id(route_id, registry)]
 
 def route_env(route_id: str) -> dict:
   """The env vars to SET to force this route onto the active path ({} means it is the shipped default)."""
@@ -407,6 +448,141 @@ def route_env(route_id: str) -> dict:
 def rollback_env(route_id: str) -> dict:
   """The env vars that leave this route for its rollback target ({} means it IS a rollback target)."""
   return dict(route(route_id).get("rollback", {}))
+
+# Semantic policy identity deliberately excludes benchmark/model labels.  Legacy artifacts may still carry those
+# labels, but they are exposed only as provenance by promoted_prefill_candidate_policy().
+_PROVENANCE_KEYS = frozenset(("profile", "profile_id", "profiles", "model", "model_id", "model_name",
+                              "model_path", "filename", "size_label", "model_size"))
+
+def _semantic_json(value) -> str:
+  def clean(x):
+    if isinstance(x, Mapping):
+      return {str(k):clean(v) for k,v in sorted(x.items(), key=lambda item: str(item[0]))
+              if str(k).lower().replace("-", "_") not in _PROVENANCE_KEYS}
+    if isinstance(x, (list, tuple)): return [clean(v) for v in x]
+    if x is None or isinstance(x, (str, bool, int, float)): return x
+    raise TypeError(f"semantic identity requires JSON values, got {type(x).__name__}")
+  return json.dumps(clean(value), sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False)
+
+def _identity(namespace: str, value) -> str:
+  return f"{namespace}:sha256:" + hashlib.sha256(_semantic_json(value).encode("ascii")).hexdigest()
+
+def canonical_capability_identity(capability: Mapping) -> str:
+  """Identity of the complete scanned target/route capability contract; labels never participate."""
+  if not isinstance(capability, Mapping) or not capability: raise ValueError("capability must be a non-empty mapping")
+  _target(capability.get("target"))
+  return _identity("capability", capability)
+
+def _target(value) -> dict:
+  if not isinstance(value, Mapping): raise ValueError("exact scanned target facts are required")
+  try: out = {"backend": str(value["backend"]), "arch": str(value["arch"]), "wave_size": int(value["wave_size"])}
+  except (KeyError, TypeError, ValueError): raise ValueError("target requires backend/arch/wave_size scanner facts") from None
+  if not out["backend"] or not out["arch"] or out["wave_size"] <= 0:
+    raise ValueError("target requires backend/arch/wave_size scanner facts")
+  # Preserve additional scanned geometry/resource facts as material identity inputs.
+  return {**value, **out}
+
+def _shape(row: Mapping) -> tuple[int, int, int]:
+  shape = row.get("shape", row)
+  try: out = tuple(int(shape.get(lo, shape.get(lo.upper()))) for lo in ("m", "n", "k"))
+  except (AttributeError, TypeError, ValueError): raise ValueError("policy row requires exact positive M/N/K") from None
+  if any(v <= 0 for v in out): raise ValueError("policy row requires exact positive M/N/K")
+  return out  # type: ignore[return-value]
+
+def _inventory_rows(inventory: Mapping) -> list[dict]:
+  rows = inventory.get("rows")
+  if not isinstance(rows, list) or not rows: raise ValueError("inventory requires non-empty rows")
+  out = []
+  for row in rows:
+    if not isinstance(row, Mapping): raise ValueError("malformed inventory row")
+    phase, role = row.get("phase", "prefill"), row.get("role")
+    quant = row.get("quant_format", row.get("quant"))
+    if not all(isinstance(x, str) and x for x in (phase, role, quant)): raise ValueError("inventory row lacks phase/role/quant")
+    target = _target(row.get("target", inventory.get("target")))
+    out.append({"phase": phase, "role": role, "quant": quant, "shape": dict(zip(("m", "n", "k"), _shape(row))),
+                "target": target, "tensor_identities": sorted(row.get("tensor_identities", ())),
+                "packed_abi": row.get("packed_abi", row.get("layout")), "call_count": row.get("call_count")})
+  return out
+
+def canonical_inventory_identity(inventory: Mapping) -> str:
+  """Canonical identity of exact routed inventory content, independent of model/profile spelling."""
+  rows = sorted(_inventory_rows(inventory), key=lambda r: (r["phase"], r["role"], r["quant"], *r["shape"].values()))
+  derived = _identity("inventory", rows)
+  recorded = inventory.get("inventory_identity")
+  if recorded is not None:
+    if not isinstance(recorded, str) or not recorded: raise ValueError("invalid inventory identity")
+    if recorded.startswith("inventory:sha256:") and recorded != derived:
+      raise ValueError("inventory identity mismatch")
+    # Validate the un-namespaced identity emitted by prefill.workload_inventory without making its profile provenance
+    # or model path semantic. The manifest identity additionally includes phase and scanned target facts.
+    if inventory.get("schema") == "qk.packed_prefill_workload_inventory.v1":
+      legacy_rows = []
+      try:
+        for row in inventory["rows"]:
+          legacy_rows.append({"role": row["role"], "quant_format": row["quant_format"],
+            "shape": {x:row["shape"][x] for x in ("m", "n", "k")},
+            "layout": {x:row["layout"][x] for x in ("logical", "packed", "block_elems", "block_bytes")},
+            "tensor_identities": sorted(row["tensor_identities"]), "call_count": row["call_count"],
+            "source_bytes": row["source_bytes"]})
+      except (KeyError, TypeError): raise ValueError("malformed workload inventory row") from None
+      legacy_rows.sort(key=lambda x: (x["role"], x["quant_format"], x["shape"]["m"], x["shape"]["n"], x["shape"]["k"]))
+      expected = hashlib.sha256(json.dumps(legacy_rows, sort_keys=True, separators=(",", ":"),
+        ensure_ascii=True, allow_nan=False).encode("ascii")).hexdigest()
+      if recorded != expected: raise ValueError("inventory identity mismatch")
+  return derived
+
+def canonical_candidate_set_identity(candidate_set: Mapping) -> str:
+  """Canonical candidate-set identity. Legacy profile fields are ignored, while payload and target facts remain exact."""
+  entries = candidate_set.get("entries")
+  if not isinstance(entries, list) or not entries: raise ValueError("candidate set requires non-empty entries")
+  canonical = []
+  for entry in entries:
+    if not isinstance(entry, Mapping) or not isinstance(entry.get("payload"), Mapping): raise ValueError("malformed candidate entry")
+    canonical.append({"canonical_identity": entry.get("canonical_identity"), "payload": entry["payload"]})
+  return _identity("candidate_set", sorted(canonical, key=_semantic_json))
+
+def canonical_policy_rows(inventory: Mapping, capability: Mapping, candidate_set: Mapping, *,
+                          route_id: str = "prefill_wmma_lds_dbuf_generated") -> tuple[dict, ...]:
+  """Bind candidates to exact inventory/capability facts. Missing, duplicate, or mismatched coverage fails closed."""
+  inv_rows, cap_id = _inventory_rows(inventory), canonical_capability_identity(capability)
+  capability_target = _target(capability["target"])
+  inv_id, set_id = canonical_inventory_identity(inventory), canonical_candidate_set_identity(candidate_set)
+  candidates = {}
+  for entry in candidate_set["entries"]:
+    workload = entry["payload"].get("workload", {})
+    key = (workload.get("phase", "prefill"), workload.get("role"),
+           workload.get("quant_format", workload.get("quant", workload.get("dtypes", {}).get("b"))), _shape(workload),
+           _semantic_json(_target(workload.get("target"))))
+    if key in candidates: raise ValueError(f"duplicate structural candidate {key!r}")
+    candidates[key] = entry
+  rows = []
+  for inv in inv_rows:
+    if _semantic_json(inv["target"]) != _semantic_json(capability_target):
+      raise ValueError("inventory target does not match scanned capability target")
+    supported_phases = capability.get("phases", (capability.get("phase"),))
+    supported_quants = capability.get("quant_formats", (capability.get("quant_format"), capability.get("quant")))
+    if inv["phase"] not in supported_phases or inv["quant"] not in supported_quants:
+      raise ValueError("inventory phase/quant is outside the scanned capability contract")
+    key = (inv["phase"], inv["role"], inv["quant"], _shape(inv), _semantic_json(inv["target"]))
+    entry = candidates.get(key)
+    if entry is None: raise ValueError(f"candidate set does not cover exact inventory row {key[:4]!r}")
+    rows.append({"phase": inv["phase"], "role": inv["role"], "quant": inv["quant"], "shape": inv["shape"],
+      "target": inv["target"], "capability_identity": cap_id, "inventory_identity": inv_id,
+      "candidate_set_identity": set_id, "candidate_identity": entry.get("canonical_identity"),
+      "selected_route": route_id, "route_aliases": [route_id]})
+  if len(candidates) != len(rows): raise ValueError("candidate set contains rows outside the exact inventory")
+  return tuple(rows)
+
+def lookup_policy_row(policy_rows, *, phase: str, role: str, quant: str, shape, target: Mapping,
+                      capability_identity: str, inventory_identity: str, candidate_set_identity: str) -> dict | None:
+  """Exact structural lookup. No wildcard, profile, status, or default-on fallback is permitted."""
+  wanted = (phase, role, quant, _shape({"shape": shape}), _semantic_json(_target(target)), capability_identity,
+            inventory_identity, candidate_set_identity)
+  matches = [row for row in policy_rows if (row.get("phase"), row.get("role"), row.get("quant"), _shape(row),
+    _semantic_json(row.get("target", {})), row.get("capability_identity"), row.get("inventory_identity"),
+    row.get("candidate_set_identity")) == wanted]
+  if len(matches) > 1: raise ValueError("ambiguous exact manifest policy lookup")
+  return dict(matches[0]) if matches else None
 
 def promoted_prefill_candidate_policy() -> dict:
   """Return the single promoted full-kernel candidate policy consumed by runtime and search selection.
@@ -434,7 +610,11 @@ def promoted_prefill_candidate_policy() -> dict:
   if artifact_roles != set(roles):
     raise RuntimeError(f"promoted prefill candidate artifact roles drifted from policy: {sorted(artifact_roles)!r} vs {roles!r}")
   return {
-    "route_id": route_id, "candidate_set_path": str(path), "candidate_profiles": profiles, "candidate_roles": roles,
+    "route_id": route_id, "route_aliases": (route_id,), "candidate_set_path": str(path),
+    "candidate_set_identity": canonical_candidate_set_identity(artifact),
+    # Compatibility artifact metadata only. It is intentionally not a semantic support predicate.
+    "candidate_profiles": profiles, "provenance_profiles": profiles, "candidate_roles": roles,
+    "semantic_policy_rows": (),
     "runtime_env": {
       "PREFILL_GRAPH_GEMM": "1",
       "BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH": str(path),
@@ -442,19 +622,29 @@ def promoted_prefill_candidate_policy() -> dict:
   }
 
 def promoted_prefill_candidate_supports_profile(profile_id: str) -> bool:
-  """Whether the promoted exact candidate artifact owns any workload for this model profile."""
-  return profile_id in promoted_prefill_candidate_policy()["candidate_profiles"]
+  """Deprecated provenance-only query. A profile can never establish runtime semantic support."""
+  if not isinstance(profile_id, str): raise TypeError("profile_id must be a string")
+  return False
+
+def promoted_prefill_candidate_policy_rows(inventory: Mapping, capability: Mapping) -> tuple[dict, ...]:
+  """Read the legacy promoted artifact and bind it to caller-supplied exact semantic facts."""
+  policy = promoted_prefill_candidate_policy()
+  artifact = json.loads(pathlib.Path(policy["candidate_set_path"]).read_text())
+  return canonical_policy_rows(inventory, capability, artifact, route_id=policy["route_id"])
 
 def apply_route(route_id: str, env: dict | None = None) -> dict:
-  """Materialize a route's env onto a copy of `env` (default: a copy of os.environ). Returns the new env; does NOT
-  mutate os.environ unless you pass it explicitly. strict_fallback routes set QK_STRICT_FALLBACK=1 (fail-loud)."""
-  out = dict(os.environ if env is None else env)
+  """Materialize a research route onto an explicit configuration copy.
+
+  No ambient process configuration is consulted. ``strict_fallback`` routes
+  set ``QK_STRICT_FALLBACK=1`` (fail-loud).
+  """
+  out = dict({} if env is None else env)
   out.update({k: str(v) for k, v in route_env(route_id).items()})
   if route(route_id).get("strict_fallback"): out.setdefault("QK_STRICT_FALLBACK", "1")
   return out
 
 def is_refuted(axis: str) -> bool:
-  return any(r["axis"] == axis for r in REFUTED)
+  return any(r["axis"] == axis or axis in r.get("compatibility_aliases", ()) for r in REFUTED)
 
 def default_routes() -> list[str]:
   """Routes on the live default path (promoted generated default OR owned shipped default)."""

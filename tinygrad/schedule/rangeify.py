@@ -40,10 +40,19 @@ pm_store_ranges = PatternMatcher([
   (UPat(Ops.STORE, name="x"), add_ranges_to_store),
 ])
 
+def _index_memory_semantic(m:UOp, idx:UOp) -> UOp:
+  inner = idx.replace(src=(m.src[0],)+idx.src[1:])
+  return m.replace(dtype=idx.dtype, src=(inner,))
+
 pm_syntactic_sugar = PatternMatcher([
   # INDEX on ptr INDEX concats them
   (UPat(Ops.INDEX, name="i1").f(Ops.INDEX, name="i2", allow_any_len=True),
    lambda i1,i2: i2.replace(src=i1.src+i2.src[1:]) if isinstance(i1.dtype, PtrDType) and not isinstance(i2.dtype, PtrDType) else None),
+  # MEMORY_SEMANTIC is a scheduler annotation around one exact value, not an
+  # elementwise operand. Keep it around the indexed access so view lowering
+  # still sees and flattens the original source geometry.
+  (UPat(Ops.MEMORY_SEMANTIC, name="m").f(Ops.INDEX, name="idx", allow_any_len=True),
+   _index_memory_semantic),
   # early rangeify
   (UPat(Ops.INDEX, src=(UPat(GroupOp.Elementwise | {Ops.CONST}, name="x"),), allow_any_len=True, name="idx"),
    lambda idx,x: x.replace(src=tuple([s.index(*idx.src[1:]) for s in x.src]))),
@@ -573,14 +582,56 @@ def split_store(x:UOp) -> UOp|None:
     x = x.replace(arg=None) if x.op is Ops.STORE else x.replace(src=(x.src[0].replace(arg=None),)+x.src[1:])
   ret = graph_rewrite(x, to_define_global+pm_flatten_range+rangeify_codegen, ctx=lctx, name="kernel split", bottom_up=True)
 
+  # Transfer structural value ownership to exact kernel parameter slots before
+  # removing the scheduler-only carrier. A carrier directly feeding a STORE
+  # owns that STORE's destination; a carrier consumed by arithmetic owns the
+  # concrete indexed input it wraps. Conflicts deliberately remain unclaimed.
+  from tinygrad.llm.memory_semantics import MemorySemanticOwner
+  topo = ret.toposort()
+  parents:dict[UOp, list[UOp]] = {}
+  for node in topo:
+    for src in node.src: parents.setdefault(src, []).append(node)
+  slot_owners:dict[int, MemorySemanticOwner] = {}
+  conflicts:set[int] = set()
+  passthrough = {Ops.CAST, Ops.BITCAST, Ops.RESHAPE, Ops.GEP, Ops.UNROLL, Ops.CONTRACT, Ops.LOAD}
+  for carrier in (u for u in topo if u.op is Ops.MEMORY_SEMANTIC and isinstance(u.arg, MemorySemanticOwner)):
+    cur = carrier
+    while len(parents.get(cur, ())) == 1 and parents[cur][0].op in passthrough: cur = parents[cur][0]
+    # A carrier may sit directly on the indexed PARAM or may be separated from
+    # it by lowering-only passthrough nodes. Resolve both ends of that exact
+    # path; never walk through arithmetic where ownership would describe a new
+    # value rather than this allocation.
+    targets = []
+    for endpoint in (carrier.src[0], cur):
+      if endpoint.op not in {Ops.PARAM, Ops.BUFFER, Ops.INDEX, Ops.LOAD, Ops.CAST, Ops.BITCAST, Ops.RESHAPE, Ops.GEP}: continue
+      try: target = endpoint.buf_uop
+      except RuntimeError: continue
+      if target not in targets: targets.append(target)
+    for target in targets:
+      if target.op is not Ops.PARAM or not hasattr(target.arg, "slot"): continue
+      slot = target.arg.slot
+      if slot in slot_owners and slot_owners[slot] != carrier.arg: conflicts.add(slot)
+      else: slot_owners[slot] = carrier.arg
+  for slot in conflicts: slot_owners.pop(slot, None)
+  ret = graph_rewrite(ret, PatternMatcher([
+    (UPat(Ops.MEMORY_SEMANTIC, src=(UPat(),), name="m"), lambda m: m.src[0]),
+  ]), name="consume memory semantic carriers")
+
   # SINK requires all buffers on the same device, but COPY/SLICE are cross-device or special hardware ops
   if ret.op is Ops.STORE: stored = ret.src[1]
   elif ret.op is Ops.END and ret.src[0].op is Ops.STORE: stored = ret.src[0].src[1]
   else: raise RuntimeError(f"unknown kernel type {ret.op}")
   if stored.op in {Ops.COPY, Ops.SLICE}: ret = stored.replace(src=stored.src + ret.ended_ranges)
-  else: ret = ret.sink(arg=KernelInfo(name=lctx.name or "test", opts_to_apply=lctx.opts))
+  else: ret = ret.sink(arg=KernelInfo(name=lctx.name or "test", opts_to_apply=lctx.opts,
+                                      memory_semantic_slots=tuple(sorted(slot_owners.items()))))
 
   kernel = ret.call(*lctx.map.values(), *lctx.vars.keys())
+  # COPY/SLICE are executable programs too, but unlike SINK kernels they do
+  # not carry KernelInfo. Keep their exact parameter ownership on this CALL;
+  # CallInfo is invocation-local and therefore cannot contaminate cache-normalized
+  # PARAMs or a later call with different concrete owners.
+  if ret.op in {Ops.COPY, Ops.SLICE} and slot_owners:
+    kernel = kernel.replace(arg=replace(kernel.arg, memory_semantic_slots=tuple(sorted(slot_owners.items()))))
   if ret.op is Ops.SINK and not all_same([x.device for x in kernel.src[1:] if x.op is not Ops.BIND]):
     raise RuntimeError(f"all buffers must be on the same device: {tuple(b.buf_uop for b in kernel.src[1:])}")
   return kernel

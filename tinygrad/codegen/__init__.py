@@ -25,7 +25,7 @@ from tinygrad.codegen.late.gater import pm_move_gates_from_index
 from tinygrad.codegen.simplify import pm_simplify_ranges, pm_flatten_range, pm_split_ranges, pm_load_collapse
 from tinygrad.schedule.rangeify import pm_add_buffers_local, rangeify_codegen, pm_mops, pm_syntactic_sugar, pm_store_ranges
 from tinygrad.codegen.late.linearizer import CFGContext, pm_split_ends, pm_add_control_flow, linearize
-from tinygrad.codegen.late.regalloc import LinearScanRegallocContext, pm_regalloc_rewrite
+from tinygrad.codegen.late.regalloc import LinearScanRegallocContext, pm_regalloc_rewrite, pressure_schedule
 
 # Register carriers must not re-run the generic GEP-pushing fixed point after
 # register-index expansion: side-effecting store GEPs become GROUPs under a
@@ -236,6 +236,10 @@ def do_linearize(ctx:Renderer, prg:UOp, sink:UOp) -> UOp:
   selection_proof = sink.tag if isinstance(sink.tag, CompilerCaptureProof) else None
   final_regalloc_proof = None
   if isinstance(ctx, ISARenderer):
+    # Order compiler-owned reusable register leases while their structural
+    # dependencies are still present.  Backend pre-allocation cleanup may then
+    # erase zero-code order operands without erasing the resulting lifetimes.
+    lst = pressure_schedule(lst)
     if ctx.pre_regalloc_matcher is not None: lst = line_rewrite(lst, ctx.pre_regalloc_matcher, PreRegAllocContext())
     regalloc_ctx = LinearScanRegallocContext(lst, ctx)
     lst = line_rewrite(lst, pm_regalloc_rewrite, regalloc_ctx)

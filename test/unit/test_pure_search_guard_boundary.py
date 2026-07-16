@@ -5,10 +5,8 @@ dispatcher: it drives tinygrad/llm/decode_routes.py (and the model.py prefill de
 
   1. under the shipped DEFAULT env each hot family selects the generated/pure route the manifest declares (so the guard's
      "all pure by default" claim is grounded in what the selector actually does), and
-  2. each `env:{}` shipped-default route's runtime getenv default truly fires by default -- so a flipped getenv default in
-     decode_routes.py / model.py (e.g. BUBBLEBEAM_FUTURESIGHT -> 0, DECODE_LIVE_SPLIT -> 0, PREFILL_GRAPH_GEMM -> 1) makes
-     this suite fail instead of silently diverging from the manifest, and
-  3. the guard's decode rollback predicates agree with the real selector's rollback env.
+  2. production decode selection is invariant under benchmark/research environment overrides, and
+  3. the non-production guard may still model those overrides without controlling ordinary model execution.
 
 The route functions build lazy Tensors on CPU (no realize, no GPU) so selection is observable without executing kernels:
 if the generated branch is taken the provided `fallback` is NOT called; a de-selected route calls fallback or fails loud.
@@ -29,7 +27,7 @@ from extra.qk.route_manifest import ROUTES, default_routes
 
 @contextlib.contextmanager
 def env(**overrides):
-  """Apply env overrides (value None deletes the key), clear the getenv cache so decode_routes sees them, then restore."""
+  """Apply benchmark/test overrides, clear the getenv cache, then restore."""
   saved = {k: os.environ.get(k) for k in overrides}
   for k, v in overrides.items():
     if v is None: os.environ.pop(k, None)
@@ -44,7 +42,7 @@ def env(**overrides):
     getenv.cache_clear()
 
 
-# Env keys the hot decode selectors read; cleared to a pristine default for each drive.
+# Legacy benchmark/research keys; production decode route selection must not read these.
 _DECODE_KEYS = dict(BUBBLEBEAM_FUTURESIGHT=None, Q4K_GEMV_SCHEDULER=None, DECODE_Q4K_G3_ANYSHAPE=None,
                     DECODE_Q4K_INKERNEL_COMBINE_KV=None, DECODE_Q4K_SPLIT_K_KV=None, DECODE_Q6K_GENERATED=None,
                     DECODE_LIVE_SPLIT=None)
@@ -85,7 +83,7 @@ def _drive_attention(monkeypatch, **overrides):
     return Tensor.empty(32, 128, dtype=dtypes.float32, device="CPU")
   monkeypatch.setattr(route_ops, "flash_decode_live_split_block_tile", sentinel)
   B, Hq, Hkv, Hd, MAXC = 1, 32, 8, 128, 4096  # 8B G=4 live-split shape
-  q = Tensor.empty(B, Hq, Hd, dtype=dtypes.float16, device="CPU")
+  q = SimpleNamespace(device="AMD", reshape=lambda *_shape: Tensor.empty(Hq, Hd, dtype=dtypes.float16, device="CPU"))
   kv = Tensor.empty(2, MAXC, Hkv, Hd, dtype=dtypes.float16, device="CPU")
   sp = UOp.variable("start_pos", 0, MAXC - 1).bind(100)
   raised = None
@@ -118,28 +116,34 @@ def test_real_attention_default_selects_live_split(monkeypatch):
   selected, raised = _drive_attention(monkeypatch)
   assert selected is True and raised is None  # generated live-split emitter reached
   attn = {r["family"]: r for r in guard.effective_routes({})}["decode_attention"]
-  assert attn["effective_route"] == "decode_flash_live_split_g4_8b_kvboth"
+  assert attn["effective_route"] == "decode_flash_live_split_g4_kvboth"
   assert attn["rolled_back_to_oracle"] is False and attn["pure"] is True
 
 
 def test_prefill_default_is_promoted_generated_candidate_set():
-  # model.py enables graph-GEMM only for the supported target; the manifest policy then supplies exact generated
-  # candidates without selecting the raw graph-GEMM oracle.
+  # The selected immutable policy consumes scanned facts; importing model.py does not open a target.
+  facts = SimpleNamespace(backend="AMD", architecture="gfx1100")
+  base = {"strategy": "DIRECT_PACKED_FALLBACK", "candidate_id": "baseline", "routes": {}}
   with env(PREFILL_GRAPH_GEMM=None):
-    assert model._prefill_graph_gemm_default() == 1
+    selected = model.select_prefill_runtime_policy(base, scanned_device_facts=facts, workload_reuse=False)
+    assert selected["prefill_graph_gemm"] is True
   gemm = {r["family"]: r for r in guard.effective_routes({})}["prefill_gemm"]
   assert gemm["effective_route"] == "prefill_wmma_lds_dbuf_generated"
   assert len(gemm["candidate_set_identities"]) == 4
   assert gemm["rolled_back_to_oracle"] is False and gemm["pure"] is True
   with env(PREFILL_GRAPH_GEMM="0"):
-    assert model._prefill_graph_gemm_default() == 0
+    selected = model.select_prefill_runtime_policy(base, scanned_device_facts=facts, workload_reuse=False,
+                                                    graph_gemm_override=False)
+    assert selected["prefill_graph_gemm"] is False
 
 
-def test_prefill_default_is_scoped_by_promoted_candidate_profile():
-  with env(PREFILL_GRAPH_GEMM=None, BOLTBEAM_MODEL_PROFILE="qwen3_8b_q4k_m_gfx1100"):
-    assert model._prefill_graph_gemm_default() == 1
-  with env(PREFILL_GRAPH_GEMM=None, BOLTBEAM_MODEL_PROFILE="qwen3_14b_q4k_m_gfx1100"):
-    assert model._prefill_graph_gemm_default() == 0
+def test_prefill_default_is_scoped_only_by_scanned_target_facts():
+  base = {"strategy": "DIRECT_PACKED_FALLBACK", "candidate_id": "baseline", "routes": {}}
+  supported = model.select_prefill_runtime_policy(base, scanned_device_facts=SimpleNamespace(backend="AMD", architecture="gfx1100"),
+                                                   workload_reuse=False)
+  unsupported = model.select_prefill_runtime_policy(base, scanned_device_facts=SimpleNamespace(backend="AMD", architecture="gfx1200"),
+                                                     workload_reuse=False)
+  assert supported["prefill_graph_gemm"] is True and unsupported["prefill_graph_gemm"] is False
 
 
 def test_prefill_q4k_research_selector_is_manifest_attributed():
@@ -150,7 +154,7 @@ def test_prefill_q4k_research_selector_is_manifest_attributed():
   assert selected["provenance"] == "machine_authored_generated" and selected["pure"] is True
 
 
-# ---- (2) F2: a flipped getenv DEFAULT de-selects the shipped route and this suite catches it ----
+# ---- (2) benchmark/research overrides do not control production decode ----
 
 def test_shipped_default_getenv_values_keep_generated_routes_on():
   # These are the runtime getenv DEFAULTS the guard encodes in _env_flag. Pin them against the values the REAL selector
@@ -165,19 +169,18 @@ def test_shipped_default_getenv_values_keep_generated_routes_on():
   assert _drive_q6k() is False
 
 
-def test_real_q4k_rollback_env_deselects_generated_matches_guard():
-  # BUBBLEBEAM_FUTURESIGHT=0 and Q4K_GEMV_SCHEDULER=1 both leave the generated route in the real selector...
-  assert _drive_q4k(BUBBLEBEAM_FUTURESIGHT="0") is True   # fallback (ordinary graph) taken
-  assert _drive_q4k(Q4K_GEMV_SCHEDULER="1") is True
-  # ...and the guard's rollback predicate agrees (still pure: the fall-off is the ordinary tinygrad graph)
+def test_q4k_research_rollback_env_is_not_a_production_selector():
+  assert _drive_q4k(BUBBLEBEAM_FUTURESIGHT="0") is False
+  assert _drive_q4k(Q4K_GEMV_SCHEDULER="1") is False
+  # The benchmark-only guard remains able to describe historical rollback experiments.
   assert guard._decode_q4k_rolled_back({"BUBBLEBEAM_FUTURESIGHT": "0"}) is True
   assert guard._decode_q4k_rolled_back({"Q4K_GEMV_SCHEDULER": "1"}) is True
   assert guard._decode_q4k_rolled_back({}) is False
 
 
-def test_real_attention_rollback_env_deselects_live_split_matches_guard(monkeypatch):
+def test_attention_research_rollback_env_is_not_a_production_selector(monkeypatch):
   selected, raised = _drive_attention(monkeypatch, DECODE_LIVE_SPLIT="0")
-  assert selected is False and raised is not None and "live-split" in raised  # de-selected -> fail loud, no hand fallback
+  assert selected is True and raised is None
   assert guard._decode_attention_rolled_back({"DECODE_LIVE_SPLIT": "0"}) is True
   assert guard._decode_attention_rolled_back({}) is False
 

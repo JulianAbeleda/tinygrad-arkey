@@ -2,8 +2,47 @@ import itertools
 from tinygrad.codegen.opt import Opt, OptOps, KernelOptError
 from tinygrad.helpers import getenv, DEBUG, prod, NOLOCALS, TC_OPT, TC_SELECT, USE_TC, IMAGE
 from tinygrad.dtype import PtrDType, ImageDType
-from tinygrad.uop.ops import Ops, resolve, AxisType
+from tinygrad.uop.ops import Ops, resolve, AxisType, GroupOp
 from tinygrad.codegen.opt.postrange import Scheduler
+from tinygrad.codegen.opt.kernel_pipeline import validate_scheduler_tile_loop_pressure
+
+# Expanded accumulator lanes are not the whole live set: indexing, input
+# fragments, masks and writeback need short-lived carriers too.  Keep that
+# headroom in the scheduler admission decision so an otherwise legal output
+# tile cannot consume the complete spill-free pool.  This is deliberately a
+# target-independent pressure unit estimate; renderers remain authoritative
+# for final physical resources.
+SCHEDULER_TRANSIENT_VGPR_RESERVE = 128
+
+def _pressure_admits(*, accumulators:int, fragments:int=0, transient_reserve:int=SCHEDULER_TRANSIENT_VGPR_RESERVE) -> bool:
+  try:
+    validate_scheduler_tile_loop_pressure(resident_accumulator_vgprs=accumulators,
+      resident_fragment_vgprs=fragments, transient_vgpr_reserve=transient_reserve)
+    return True
+  except ValueError:
+    return False
+
+def _epilogue_transient_reserve(k:Scheduler) -> int:
+  """Pressure reserve from fused ALU consumers of a reduction result."""
+  if k.reduceop is None: return SCHEDULER_TRANSIENT_VGPR_RESERVE
+  fused_alu = sum(u is not k.reduceop and u.op in GroupOp.ALU and k.reduceop in u.backward_slice for u in k.ast.toposort())
+  return min(PINNED_SCHEDULE_RESERVE_MAX, SCHEDULER_TRANSIENT_VGPR_RESERVE + fused_alu*8)
+
+PINNED_SCHEDULE_RESERVE_MAX = 160
+
+def bounded_reduction_unroll(upcast_lanes:int, reduction_size:int, choices:tuple[int, ...]) -> int|None:
+  """Largest requested reduction split admitted with the resident output tile.
+
+  A zero return is represented by ``reduction_size``: UNROLL(..., 0) fully
+  expands the axis.  The estimate is intentionally based only on expansion
+  residency, so symbolic and concrete kernels take the same path.
+  """
+  if any(not isinstance(x, int) or isinstance(x, bool) or x <= 0 for x in (upcast_lanes, reduction_size)):
+    raise ValueError("schedule pressure dimensions must be positive ints")
+  for choice in choices:
+    if choice <= 0 or reduction_size % choice: continue
+    if _pressure_admits(accumulators=upcast_lanes*choice): return choice
+  return None
 
 def hand_coded_optimizations(k:Scheduler) -> Scheduler:
   # first try the tensor cores
@@ -35,14 +74,26 @@ def hand_coded_optimizations(k:Scheduler) -> Scheduler:
       pass
     if good_tc_opt:
       if rngs is not None:
+        tc_output_lanes = tk.tensor_core.elements_per_thread[2]
+        tc_fragment_lanes = sum(tk.tensor_core.elements_per_thread[:2])
+        transient_reserve = _epilogue_transient_reserve(k)
+        # The intrinsic's minimum carrier set is itself optional.  If a fused
+        # epilogue leaves no bounded transient headroom, retain the reduction
+        # loop and let the generic scheduler tile it.
+        if not _pressure_admits(accumulators=tc_output_lanes, fragments=tc_fragment_lanes,
+                                transient_reserve=transient_reserve):
+          good_tc_opt = False
         for tc_dim in [1,0]: # attempt to upcast M and N
           szs = [sz for sz in [5,4,3,2] if rngs[tc_dim].src[0].divides(sz) is not None]
+          szs = [sz for sz in szs if good_tc_opt and _pressure_admits(accumulators=tc_output_lanes*sz,
+            fragments=tc_fragment_lanes, transient_reserve=transient_reserve)]
           if szs:
             # set it to the replaced range
             rngs[tc_dim] = tk.apply_opt(Opt(OptOps.UPCAST, tk.rngs.index(rngs[tc_dim]), szs[0]))[0]
+            tc_output_lanes *= szs[0]
         if (szs := [sz for sz in [4,2] if rngs[0].src[0].divides(sz) is not None]): # attempt to local N
           tk.apply_opt(Opt(OptOps.LOCAL, tk.rngs.index(rngs[0]), szs[0]))
-      return tk
+      if good_tc_opt: return tk
 
   # make a copy so it does not mutate the input
   k = k.copy()
@@ -171,9 +222,11 @@ def hand_coded_optimizations(k:Scheduler) -> Scheduler:
   try:
     if k.unrollable_dims and (k.upcast_size() <= 4 or not k.axes_of(AxisType.UNROLL)) and (k.upcast_size() < 64):
       if (s:=k.full_shape[k.unrollable_dims[-1]]) <= 32:
-        k.apply_opt(Opt(OptOps.UNROLL, len(k.unrollable_dims)-1, 0))
+        unroll = bounded_reduction_unroll(k.upcast_size(), s, tuple(x for x in (s,16,8,4,2) if x <= s))
+        if unroll is not None: k.apply_opt(Opt(OptOps.UNROLL, len(k.unrollable_dims)-1, 0 if unroll == s else unroll))
         # if it's small, upcast a second reduce dimension too
-        if k.unrollable_dims and s <= 3 and k.full_shape[k.unrollable_dims[-1]] <= 3:
+        if unroll is not None and k.unrollable_dims and s <= 3 and k.full_shape[k.unrollable_dims[-1]] <= 3 and \
+           _pressure_admits(accumulators=k.upcast_size()*k.full_shape[k.unrollable_dims[-1]]):
           k.apply_opt(Opt(OptOps.UNROLL, len(k.unrollable_dims)-1, 0))
       else:
         for splits in [4]:

@@ -98,6 +98,8 @@ class MultiBuffer:
 
 class Buffer:
   profile_events:list[ProfileEvent] = []
+  # Installed only by tinygrad.llm.physical_memory_ledger while its context is active.
+  _physical_allocation_ledger:Any = None
   def __init__(self, device:str, size:int, dtype:DType, opaque:Any=None, options:BufferSpec|None=None, initial_value:bytes|None=None,
                uop_refcount=0, base:Buffer|None=None, offset:int=0, preallocate=False):
     assert isinstance(dtype, DType) and not isinstance(dtype, PtrDType)
@@ -136,7 +138,11 @@ class Buffer:
       elif self._base is not None:
         assert hasattr(allocator, "_offset"), "offset function required for view"
         self._bufs[device] = allocator._offset(self._base.get_buf(device), self.nbytes, self.offset)
-      else: self._bufs[device] = allocator._map(self.ensure_allocated()._buf)
+        if Buffer._physical_allocation_ledger is not None: Buffer._physical_allocation_ledger._allocate_view(self, device)
+      else:
+        self._bufs[device] = allocator._map(self.ensure_allocated()._buf)
+        if Buffer._physical_allocation_ledger is not None:
+          Buffer._physical_allocation_ledger._allocate_base(self.base, device, self.nbytes, mapped=True)
     return self._bufs[device]
   def ensure_allocated(self) -> Buffer: return self.allocate() if not self.is_initialized() else self
   def allocate(self, opaque=None, external_ptr=None) -> Buffer:
@@ -152,8 +158,11 @@ class Buffer:
       self._base.allocated_views += 1
       assert hasattr(self.allocator, "_offset"), "offset function required for view"
       self._bufs[self.device] = self.allocator._offset(self.base._buf, self.nbytes, self.offset)
+      if Buffer._physical_allocation_ledger is not None: Buffer._physical_allocation_ledger._allocate_view(self, self.device)
     else:
       self._bufs[self.device] = opaque if opaque is not None else self.allocator.alloc(self.nbytes, self.options)
+      if Buffer._physical_allocation_ledger is not None and opaque is None and (self.options is None or self.options.external_ptr is None):
+        Buffer._physical_allocation_ledger._allocate_base(self, self.device, self.nbytes)
       if not self.device.startswith("DISK") and (self.options is None or self.options.external_ptr is None):
         GlobalCounters.mem_used += self.nbytes
         GlobalCounters.mem_used_per_device[self.device] += self.nbytes
@@ -168,9 +177,15 @@ class Buffer:
         GlobalCounters.mem_used_per_device[self.device] -= self.nbytes
       if PROFILE: Buffer.profile_events.append(ProfilePointEvent(self.device, "free", self.trace_num))
       for dev, mb in self._bufs.items():
-        if dev != self.device: Device[dev].allocator._unmap(mb)
+        if dev != self.device:
+          Device[dev].allocator._unmap(mb)
+          if Buffer._physical_allocation_ledger is not None: Buffer._physical_allocation_ledger._free_base(self, dev)
       self.allocator.free(self._buf, self.nbytes, self.options)
-    elif self._base is not None: self._base.allocated_views -= 1
+      if Buffer._physical_allocation_ledger is not None: Buffer._physical_allocation_ledger._free_base(self, self.device)
+    elif self._base is not None:
+      self._base.allocated_views -= 1
+      if Buffer._physical_allocation_ledger is not None:
+        for dev in self._bufs: Buffer._physical_allocation_ledger._free_view(self, dev)
     self._bufs.clear()
   def __reduce__(self):
     buf = None

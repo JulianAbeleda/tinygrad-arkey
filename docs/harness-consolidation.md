@@ -12,8 +12,10 @@ it measures nothing itself — to the two sanctioned authorities:
 - **prefill** → `extra/qk/prefill_whole_synced.py :: prefill_authority()` — warmed TinyJit at a
   concrete start_pos, synced burst (`dev.synchronize` before+after), min-over-K → pure
   prefill-kernel tok/s. Never `model.generate` TTFT (understates prefill ~3×).
-- **decode** → `extra/qk/decode_runtime_overhead.py` — clean W==D per-token wall (TinyJit replay +
-  `.item()` readback, synced, NMEAS=40).
+- **decode** → `extra/qk/decode_runtime_overhead.py` — genuine fixed-depth authority. Every repetition
+  resets request state, prefills the exact prompt through production `model.generate`, and then measures
+  warmed production decode with one `.item()` readback per token. The no-item D run is diagnostic only;
+  it is never called a ceiling or subtracted from W when D is slower.
 
 `DEV=AMD PYTHONPATH=. python extra/qk/bench.py --model <gguf> [--prefill|--decode]`. See memory
 `prefill-bench-authority-not-ttft`. Per-kernel A/B harnesses should keep using their existing local
@@ -27,8 +29,9 @@ inside `prefill_whole_synced.py`.
 
 **Decode process policy** lives in `extra/qk/decode_harness.py`. It owns checkpoint contexts,
 measurement count, max-context validation, subprocess env, and child argv construction.
-`bench.py` and `decode_runtime_overhead.py` both consume that module; the W==D timing method itself
-remains inside `decode_runtime_overhead.py`.
+`bench.py` and `decode_runtime_overhead.py` both consume that module. Every child receives an explicit,
+unique output path; artifacts are versioned and atomically replaced, so consumers cannot read a stale
+shared `result.json`.
 
 ## Harness jobs, one owner each (target)
 
@@ -121,8 +124,9 @@ and are stable; migrating their timing is nice-to-have, and it edits gate module
 `decode_score_broadcast`, `decode_physical_tile`, `attention_reopen_gate`, `q6k_generated_coop_gate`,
 `decode_hotloop_schedule_diff`.
 
-**Do NOT touch `decode_runtime_overhead.py`** — its W==D loop is the decode *authority* (part of
-`bench.py`'s contract); its methodology is load-bearing, not a clone to dedup.
+**Do not clone `decode_runtime_overhead.py`** — its genuine fixed-depth loop is the decode *authority*
+(part of `bench.py`'s contract). Methodology changes require semantic prompt-state evidence and a
+versioned artifact migration, not a parallel harness.
 
 Verify per file: run old vs new on the GPU, confirm the reported median is within the old
 `spread_pct`. Commit in batches of ~5.
@@ -165,5 +169,5 @@ scaffolding from the removed rollout harnesses (same generation as `generate_one
   consolidation becomes an active task.
 - Do not "consolidate" the 3 JSON writers (`probe_io` / `gate_registry` / `eval_common.write_json`) —
   their newline/sort differences are intentional byte-parity constraints (each docstring explains).
-- Do not touch `bench.py` / `prefill_whole_synced` / `decode_runtime_overhead` methodology — they are
-  the authorities `bench.py` dispatches to.
+- Do not create parallel `bench.py` / prefill / decode methodologies. They are the authorities
+  `bench.py` dispatches to; change them only with matched validation and an artifact-version migration.

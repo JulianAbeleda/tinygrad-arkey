@@ -44,6 +44,24 @@ def test_group_readiness_is_not_wrapped_in_void_unroll():
   group = UOp.group(unroll)
   assert do_expand(group) is None
 
+def test_stack_expansion_concatenates_vector_children():
+  axis = ((12, 4),)
+  children = tuple(UOp(Ops.UNROLL, dtypes.float, (UOp.const(dtypes.float.vec(4), (i,)*4),), axis) for i in range(2))
+  expanded = do_expand(UOp(Ops.STACK, dtypes.float.vec(2), children))
+  assert expanded is not None and expanded.op is Ops.UNROLL and expanded.arg == axis
+  carrier = expanded.src[0]
+  assert carrier.op is Ops.VCAT and carrier.dtype == dtypes.float.vec(8)
+  assert carrier.src == tuple(x.src[0] for x in children)
+
+def test_stack_expansion_keeps_scalar_children_as_stack():
+  axis = ((13, 1),)
+  children = tuple(UOp(Ops.UNROLL, dtypes.float, (UOp.const(dtypes.float, i),), axis) for i in range(2))
+  expanded = do_expand(UOp(Ops.STACK, dtypes.float.vec(2), children))
+  assert expanded is not None and expanded.op is Ops.UNROLL and expanded.arg == axis
+  carrier = expanded.src[0]
+  assert carrier.op is Ops.STACK and carrier.dtype == dtypes.float.vec(2)
+  assert carrier.src == tuple(x.src[0] for x in children)
+
 
 def _expanded_pipeline_accumulator(axis_ids,m=2,n=4,group=True):
   sm=UOp.range(m,axis_ids[0],AxisType.UPCAST); sn=UOp.range(n,axis_ids[1],AxisType.UPCAST)

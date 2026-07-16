@@ -1,0 +1,116 @@
+from extra.qk.memory_adaptive_candidate_catalog import CandidateSpec, build_candidate_catalog, inventory_invocation_ids
+from extra.qk.memory_adaptive_evidence_runner import CandidateArtifacts, EvidenceAdapter, make_evidence_runner
+from tinygrad.llm.prefill_memory_plan import Strategy
+
+
+INVENTORY = {"rows": [{"invocation_id": "q", "role": "attention", "shape": [1, 2, 3]},
+                      {"invocation_id": "f", "role": "ffn", "shape": [1, 4, 3]}]}
+
+
+def test_catalog_contains_only_complete_structurally_available_policies():
+  specs = [
+    CandidateSpec("overlay", Strategy.FULL_RESIDENT_OVERLAY, ("q", "f"), target_requirements={"backend": "AMD"}),
+    CandidateSpec("partial-bounded", Strategy.BOUNDED_PACKED_TILES, ("q",)),
+    CandidateSpec("unproved-bounded", Strategy.BOUNDED_PACKED_TILES, ("q", "f"), evidence_available=False),
+    CandidateSpec("direct", Strategy.DIRECT_PACKED_FALLBACK, ("q", "f")),
+  ]
+  catalog = build_candidate_catalog(selected_model_inventory=INVENTORY, target_capabilities={"backend": "AMD"}, candidate_specs=specs)
+  assert [x.candidate_id for x in catalog] == ["direct", "overlay"]
+  assert all(set(x.memory.required_invocations) == set(x.memory.covered_invocations) for x in catalog)
+
+
+def test_exact_scanned_architecture_and_geometry_are_structural_constraints():
+  specs = [CandidateSpec("wave32", Strategy.DIRECT_PACKED_FALLBACK, ("q", "f"),
+    target_requirements={"architecture": "gfx1100", "capabilities": {"wave_size": 32}},
+    policy={"profile_id": "evidence-only", "geometry": [128, 128, 256]})]
+  assert not build_candidate_catalog(selected_model_inventory=INVENTORY,
+    target_capabilities={"architecture": "gfx1200", "capabilities": {"wave_size": 32}}, candidate_specs=specs)
+  catalog = build_candidate_catalog(selected_model_inventory=INVENTORY,
+    target_capabilities={"architecture": "gfx1100", "capabilities": {"wave_size": 32}}, candidate_specs=specs)
+  assert catalog[0].policy_record()["geometry"] == [128, 128, 256]
+  assert "profile_id" not in catalog[0].policy_record()
+
+
+def test_catalog_uses_semantic_inventory_not_provenance_labels():
+  a = inventory_invocation_ids({"profile": "old", "rows": [{"role": "ffn", "shape": [1, 2, 3]}]})
+  b = inventory_invocation_ids({"profile": "new", "rows": [{"role": "ffn", "shape": [1, 2, 3]}]})
+  assert a == b
+
+
+def test_intrinsic_size_fact_is_semantic_not_confused_with_size_label():
+  catalog = build_candidate_catalog(selected_model_inventory=INVENTORY, target_capabilities={}, candidate_specs=[
+    CandidateSpec("direct", Strategy.DIRECT_PACKED_FALLBACK, ("q", "f"),
+                  policy={"tile": {"size": 128}, "size_label": "14B"})])
+  assert catalog[0].policy["tile"]["size"] == 128
+  assert "size_label" not in catalog[0].policy
+
+
+def test_complete_policy_can_bind_different_routes_per_inventory_row():
+  catalog = build_candidate_catalog(selected_model_inventory=INVENTORY, target_capabilities={}, candidate_specs=[
+    CandidateSpec("mixed-policy", Strategy.BOUNDED_PACKED_TILES, ("q", "f"),
+                  policy={"routes": {"q": "q4-bounded", "f": "q6-direct-fallback"}})])
+  assert catalog[0].policy["routes"] == {"q": "q4-bounded", "f": "q6-direct-fallback"}
+
+
+def test_per_row_route_policy_fails_closed_on_partial_or_empty_bindings():
+  for routes in ({"q": "q4-bounded"}, {"q": "q4-bounded", "f": ""}):
+    try:
+      build_candidate_catalog(selected_model_inventory=INVENTORY, target_capabilities={}, candidate_specs=[
+        CandidateSpec("bad", Strategy.BOUNDED_PACKED_TILES, ("q", "f"), policy={"routes": routes})])
+    except ValueError: pass
+    else: raise AssertionError("incomplete per-row route policy must fail closed")
+
+
+def test_candidate_spec_publishes_exact_kernel_m_facts():
+  spec = CandidateSpec("m-facts", Strategy.DIRECT_PACKED_FALLBACK, ("q", "f"),
+    full_m_values=(256, 512), tail_m_values=(44,), correctness_m_values=(44, 256, 512),
+    remainder_mappings=({"logical_m": 32, "physical_m": 512},),
+    invocation_bytes=({"m": 44, "activation_bytes": 88, "scratch_bytes": 44},
+                      {"m": 256, "activation_bytes": 512, "scratch_bytes": 256},
+                      {"m": 512, "activation_bytes": 1024, "scratch_bytes": 512}))
+  capability = spec.kernel_capability()
+  assert capability.full_m_values == (256, 512)
+  assert capability.remainder_mappings[0].physical_m == 512
+  assert capability.invocation_bytes[-1].peak_bytes == 1536
+
+
+def _candidate():
+  return build_candidate_catalog(selected_model_inventory=INVENTORY, target_capabilities={},
+    candidate_specs=[CandidateSpec("direct", Strategy.DIRECT_PACKED_FALLBACK, ("q", "f"))])[0]
+
+
+def _artifacts():
+  phases = {"phases": [
+    {"phase": "compile", "status": "passed", "evidence": {"binary_sha256": "abc"}},
+    {"phase": "execution", "status": "passed", "evidence": {"dispatch_state": "completed",
+      "health": {"preflight": True, "postflight": True, "device_fault": False}}},
+    {"phase": "correctness", "status": "passed", "evidence": {"full_output_compared": True,
+      "numerical_passed": True, "finite_output": True, "inputs_unchanged": True}},
+  ]}
+  return CandidateArtifacts(phases, {"passed": True},
+    {"status": "PASS", "complete": True, "covered_invocations": ["q", "f"]},
+    {"scope": "end_to_end", "metric": "tok_s", "samples": [10.0, 10.1, 9.9]})
+
+
+def test_adapter_translates_existing_artifacts_to_strict_autoscan_schema():
+  proof = EvidenceAdapter().translate(_candidate(), _artifacts())
+  assert all(proof[x]["status"] == "PASS" for x in ("compile", "correctness", "resource", "gpu_health", "route_census"))
+  assert proof["route_census"]["complete"] is True
+  assert proof["end_to_end_timing"]["scope"] == "end_to_end"
+
+
+def test_adapter_rejects_incomplete_census_and_never_promotes_kernel_timing():
+  artifacts = _artifacts()
+  bad = CandidateArtifacts(artifacts.execution, artifacts.resource,
+    {"status": "PASS", "complete": True, "covered_invocations": ["q"]},
+    {"scope": "kernel", "metric": "tok_s", "samples": [1000.0]})
+  proof = EvidenceAdapter().translate(_candidate(), bad)
+  assert proof["route_census"] == {"status": "FAIL", "artifact": bad.route_census, "complete": False}
+  assert proof["end_to_end_timing"]["samples"] == []
+
+
+def test_runner_is_injected_and_does_not_execute_by_itself():
+  calls = []
+  runner = make_evidence_runner(lambda candidate: calls.append(candidate.candidate_id) or _artifacts())
+  assert runner(_candidate())["correctness"]["status"] == "PASS"
+  assert calls == ["direct"]

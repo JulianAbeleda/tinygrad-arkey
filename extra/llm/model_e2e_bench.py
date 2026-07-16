@@ -13,10 +13,11 @@ Usage:
       --out bench/models/qwen/data/amd-gfx1100/qwen3-8b.json
 """
 from __future__ import annotations
-import os, sys, json, time, argparse, pathlib, subprocess
+import os, sys, json, time, argparse, pathlib, subprocess, hashlib
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
+from tinygrad import Tensor, nn
 from tinygrad.helpers import getenv, GlobalCounters, fetch, Context, DEBUG
-from tinygrad.llm.model import Transformer
+from tinygrad.llm.model import Transformer, TransformerConfig
 import tinygrad.llm.model as _M
 from tinygrad.llm.cli import SimpleTokenizer, models as BUILTIN, _quant_from_name, _device_target
 
@@ -32,14 +33,52 @@ def repro_band(samples):
   spread_pct = round((hi - lo) / median * 100, 2) if median else None
   return {"median": median, "min": lo, "max": hi, "spread_pct": spread_pct}
 
+def qualify_decode_correctness(n_tokens:int=4) -> dict:
+  """Qualify feedback/KV-cache JIT semantics against a full-prefix greedy oracle before timing.
+
+  This deliberately uses a tiny deterministic model on CPU: the contract under test is the generic Transformer
+  feedback/cache graph, not a model-specific token fixture. Rebuilding the oracle model for every prefix prevents
+  stale cache state from making the reference share the exact failure mode being tested. Two independent generate
+  requests then prove both initial capture and replay input binding.
+  """
+  if n_tokens < 2: raise ValueError("decode correctness qualification requires at least two tokens")
+  config = TransformerConfig(num_blocks=1, dim=8, hidden_dim=16, n_heads=2, n_kv_heads=1, norm_eps=1e-5,
+    vocab_size=32, head_dim=4, rope_theta=10001.0, rope_dim=4, v_head_dim=4, max_context=8)
+
+  def set_phase(model:Transformer, prefill:bool) -> None:
+    for block in model.blk:
+      block._is_prefill, block._prefill_v2 = prefill, False
+      block._use_flash, block._ring_full = False, False
+
+  with Context(DEV="CPU", JIT=1):
+    Tensor.manual_seed(123)
+    source = Transformer(config)
+    state = nn.state.get_state_dict(source)
+    model = Transformer(config)
+    nn.state.load_state_dict(model, state, verbose=False)
+    prompt, prefix, expected = [1, 2, 3], [1, 2, 3], []
+    for _ in range(n_tokens):
+      oracle = Transformer(config)
+      nn.state.load_state_dict(oracle, state, verbose=False)
+      set_phase(oracle, True)
+      token = int(oracle.logits(Tensor([prefix]), 0)[:, -1, :].argmax(-1).item())
+      expected.append(token)
+      prefix.append(token)
+    replays = [[token for _, token in zip(range(n_tokens), model.generate(prompt.copy(), chunk_size=3, temperature=0.0))]
+               for _ in range(2)]
+  if any(got != expected for got in replays):
+    raise RuntimeError(f"decode correctness qualification failed: full-prefix oracle {expected}, JIT replays {replays}")
+  return {"passed": True, "authority": "tiny shared-weight full-prefix greedy oracle vs two independent generate JIT replays",
+          "prompt_token_ids": prompt, "n_tokens": n_tokens, "oracle_token_ids": expected, "jit_replay_token_ids": replays}
+
 def measure_decode(model, n_tokens:int, skip:int):
   seed = 0
   gen = model.generate([seed])
-  per_tok_us, per_tok_mem = [], []
+  per_tok_us, per_tok_mem, generated = [], [], []
   for _ in range(n_tokens):
     GlobalCounters.reset()
     t0 = time.perf_counter_ns()
-    next(gen)
+    generated.append(int(next(gen)))
     dt = time.perf_counter_ns() - t0
     per_tok_us.append(dt / 1e3)
     per_tok_mem.append(GlobalCounters.global_mem)
@@ -56,13 +95,15 @@ def measure_decode(model, n_tokens:int, skip:int):
                 "min": round(1e6 / band["max"], 2) if band["max"] else None,
                 "max": round(1e6 / band["min"], 2) if band["min"] else None,
                 "spread_pct": band["spread_pct"]}
+  token_bytes = ",".join(map(str, generated)).encode()
   return {"n_measured": len(steady_us), "skipped": skip, "tok_s": band_tok_s, "gb_s": decode_gb_s,
-          "per_token_us_band": band}
+          "per_token_us_band": band, "token_evidence": {"count": len(generated),
+          "sha256": hashlib.sha256(token_bytes).hexdigest(), "first_token_ids": generated[:16]}}
 
 def measure_prefill(model, n_prompt:int):
   # time-to-first-token for an n_prompt-token prompt = prefill time; pp = n_prompt / ttft
   try:
-    if getattr(model, "_cached_tokens", None): model._cached_tokens = []   # force full prefill (no prefix reuse)
+    model.reset_generation_state()  # force a complete independent prompt, including recurrent state
     prompt = [(i % 1000) + 1 for i in range(n_prompt)]
     gen = model.generate(prompt)
     t0 = time.perf_counter_ns()
@@ -89,7 +130,6 @@ def main():
   tok = SimpleTokenizer.from_gguf_kv(kv)
   load_s = time.perf_counter() - t_load0
 
-  import tinygrad.nn as nn
   params = sum(x.numel() for x in nn.state.get_parameters(model))
 
   # warmup: capture the JIT before measuring (clean W==D requires warm kernels). DEBUG forced to 0 so kernel
@@ -98,6 +138,7 @@ def main():
     for _ in range(2): list(zip(range(2), model.generate([0])))
   vram_bytes = GlobalCounters.mem_used
 
+  decode_correctness = qualify_decode_correctness()
   prefill = measure_prefill(model, args.prefill) if args.prefill else None
   decode = measure_decode(model, args.decode_tokens, args.warmup_skip)
 
@@ -112,9 +153,10 @@ def main():
     "vram_used_bytes": vram_bytes,
     "vram_used_gb": round(vram_bytes / 1e9, 2),
     "load_s": round(load_s, 2),
+    "decode_correctness": decode_correctness,
     "decode": decode,
     "prefill": prefill,
-    "timing_authority": "clean W==D model.generate, PROFILE=0, auto clock (HARNESS_GUIDE.md)",
+    "timing_authority": "correctness-qualified clean W==D model.generate, PROFILE=0, auto clock (HARNESS_GUIDE.md)",
     "provenance": {
       "command": "python " + " ".join(sys.argv),
       "git_commit": _git("rev-parse", "--short", "HEAD"),

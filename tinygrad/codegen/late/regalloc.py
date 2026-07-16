@@ -6,6 +6,74 @@ from tinygrad.dtype import dtypes, PtrDType
 
 PSEUDO_OPS = {Ops.CONST, Ops.NOOP, Ops.AFTER, Ops.BARRIER, Ops.WAIT, Ops.GROUP}
 
+def _register_defs(u:UOp) -> tuple[Register, ...]:
+  return u.tag if isinstance(u.tag, tuple) and u.tag and all(isinstance(v, Register) for v in u.tag) else ()
+
+def _pressure_schedule_block(block:list[UOp]) -> list[UOp]:
+  """Topologically order a straight-line block by promptly consuming newly ready values."""
+  if len(block) < 3: return block
+  bset, pos = set(block), {u:i for i,u in enumerate(block)}
+  deps = {u:tuple(s for s in dict.fromkeys(u.src) if s in bset) for u in block}
+  indeg = {u:len(deps[u]) for u in block}
+  consumers:dict[UOp,list[UOp]] = {u:[] for u in block}
+  for u in block:
+    for s in deps[u]: consumers[s].append(u)
+  remaining = {u:len(consumers[u]) for u in block}
+  ready = {u for u in block if indeg[u] == 0}
+  ready_generation = {u:0 for u in ready}
+  generation = 0
+  out:list[UOp] = []
+
+  def width(u:UOp) -> int:
+    return sum(v.span.count for v in _register_defs(u) if not isinstance(v, FixedRegisterUse))
+  def score(u:UOp):
+    released = sum(width(s) for s in deps[u] if remaining[s] == 1)
+    added = width(u)
+    unlocked = sum(indeg[c] == 1 for c in consumers[u])
+    # Newly enabled consumers come first.  This follows a conversion into its
+    # FP32 arithmetic before opening an independent producer tree; release
+    # balance and original order make deterministic pressure-aware tie-breaks.
+    return (ready_generation[u], released-added, released, -added, unlocked, -pos[u])
+
+  while ready:
+    u = max(ready, key=score)
+    ready.remove(u); out.append(u)
+    for s in deps[u]: remaining[s] -= 1
+    generation += 1
+    for c in consumers[u]:
+      indeg[c] -= 1
+      if indeg[c] == 0:
+        ready.add(c); ready_generation[c] = generation
+  return out if len(out) == len(block) else block
+
+def pressure_schedule(uops:list[UOp]) -> list[UOp]:
+  """Shorten structural register lifetimes before linear-scan allocation.
+
+  This activates only when instruction selection has issued multiple virtual
+  definitions constrained to the same physical register.  Such definitions
+  encode a compiler-owned reusable lease; scheduling their consumers promptly
+  is required for that lease to remain spill-free.  The pass is shape- and
+  backend-independent and emits a topological permutation of each basic block.
+  """
+  constrained:dict[tuple[tuple[int, ...], int, int],int] = {}
+  for u in uops:
+    for v in _register_defs(u):
+      if isinstance(v, FixedRegisterUse) or len(v.cons) >= 8: continue
+      key = (tuple(r.index for r in v.cons), v.span.count, v.span.alignment)
+      constrained[key] = constrained.get(key, 0) + 1
+  if not any(n > 1 for n in constrained.values()): return uops
+
+  structural = {Ops.RANGE, Ops.END, Ops.IF, Ops.ENDIF, Ops.BARRIER, Ops.WAIT,
+                Ops.DEFINE_REG, Ops.DEFINE_LOCAL, Ops.DEFINE_VAR, Ops.PARAM, Ops.SINK}
+  out:list[UOp] = []; block:list[UOp] = []
+  for u in uops:
+    if u.op in structural:
+      if block: out.extend(_pressure_schedule_block(block)); block = []
+      out.append(u)
+    else: block.append(u)
+  if block: out.extend(_pressure_schedule_block(block))
+  return out if len(out) == len(uops) and set(out) == set(uops) else uops
+
 class LinearScanRegallocContext:
   # returns the uop that defines the virtual register
   def vdef(self, v:Register) -> UOp: return self.uops[self.live_range[v][0]]

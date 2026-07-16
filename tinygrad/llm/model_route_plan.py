@@ -3,9 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Iterable
 
-from tinygrad import getenv
-
-
 @dataclass(frozen=True)
 class PrimitiveRouteEntry:
   name: str
@@ -52,20 +49,21 @@ def _route_role_family(role:str) -> str:
   if role in ("output", "lm_head"): return "lm_head"
   return role
 
-def _primitive_install_default(name:str, quant_label:str, role:str) -> tuple[int, tuple[str, ...]]|None:
+def _primitive_install_default(name:str, quant_label:str, role:str, rows:int, cols:int) -> tuple[int, tuple[str, ...]]|None:
+  # K-quants are block packed.  This is deliberately a storage/shape fact,
+  # not a model-size or runtime-environment policy.
+  if rows <= 0 or cols <= 0 or cols % 256: return None
   role_family = _route_role_family(role)
-  module_leaf = _role_from_module_path(_module_path_from_tensor_name(name))
   if quant_label == "Q4_K":
     if role_family == "ffn_gate_up": return 1, ("LOCAL:0:64",)
     if role_family == "ffn_down": return 4, ("LOCAL:0:32",)
     if role_family == "attn_qo": return 1, ("LOCAL:0:64",)
-    if module_leaf == "attn_k" and getenv("DECODE_ROUTE_ATTN_K", 1): return 1, ("LOCAL:0:64",)
-    if module_leaf == "attn_v" and getenv("DECODE_ROUTE_ATTN_V", 1): return 1, ("LOCAL:0:64",)
+    if role_family == "attn_kv": return 1, ("LOCAL:0:64",)
   if quant_label == "Q6_K":
     if role_family == "ffn_down": return 1, ("LOCAL:0:64",)
-    if getenv("Q6K_COVER_MORE", 1):
-      if module_leaf == "attn_v": return 4, ("LOCAL:0:32",)
-      if role_family == "lm_head" or name == "output.weight": return 1, ("LOCAL:0:64",)
+    if role_family == "attn_kv" and _role_from_module_path(_module_path_from_tensor_name(name)) == "attn_v":
+      return 4, ("LOCAL:0:32",)
+    if role_family == "lm_head" or name == "output.weight": return 1, ("LOCAL:0:64",)
   return None
 
 def _shape_from_tensor_info(dims) -> tuple[int, int]|None:
@@ -128,13 +126,13 @@ def primitive_route_entry_for_tensor(name:str, typ:int, rows:int, cols:int, *, m
   role = role or _role_from_module_path(module_path)
   if typ == 12:
     quant_label = quant_label or "Q4_K"
-    policy = _primitive_install_default(name, quant_label, role)
+    policy = _primitive_install_default(name, quant_label, role, rows, cols)
     if policy is None: return None
     parts, opts = policy
     return PrimitiveRouteEntry(name, module_path, quant_label, rows, cols, role, parts, tuple(opts), "q4_k_packed_u32", "partial", candidate_identity, backend_strategy, rollback_route, provenance_status)
   if typ == 14:
     quant_label = quant_label or "Q6_K"
-    policy = _primitive_install_default(name, quant_label, role)
+    policy = _primitive_install_default(name, quant_label, role, rows, cols)
     if policy is None: return None
     parts, opts = policy
     return PrimitiveRouteEntry(name, module_path, quant_label, rows, cols, role, parts, tuple(opts), "q6_k_packed_u16", "partial", candidate_identity, backend_strategy, rollback_route, provenance_status)

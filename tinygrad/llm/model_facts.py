@@ -75,13 +75,19 @@ class QwenDenseRoleResolver:
     if self.n_kv_heads is None or self.head_dim is None: return None
     return self.n_kv_heads * self.head_dim
 
+  @property
+  def q_size(self) -> int | None:
+    if self.n_heads is None or self.head_dim is None: return None
+    return self.n_heads * self.head_dim
+
   def resolve(self, name: str, rows: int, cols: int) -> str | None:
     if not self.architecture.startswith("qwen"): return None
     leaf = name.rsplit(".", 2)[-2:] if "." in name else [name]
     suffix = ".".join(leaf)
     if suffix in ("ffn_gate.weight", "ffn_up.weight"): return self._if_shape(rows, cols, self.intermediate_size, self.hidden_size, "ffn_gate_up")
     if suffix == "ffn_down.weight": return self._if_shape(rows, cols, self.hidden_size, self.intermediate_size, "ffn_down")
-    if suffix in ("attn_q.weight", "attn_output.weight"): return self._if_shape(rows, cols, self.hidden_size, self.hidden_size, "attn_qo")
+    if suffix == "attn_q.weight": return self._if_shape(rows, cols, self.q_size, self.hidden_size, "attn_qo")
+    if suffix == "attn_output.weight": return self._if_shape(rows, cols, self.hidden_size, self.q_size, "attn_qo")
     if suffix in ("attn_k.weight", "attn_v.weight"): return self._if_shape(rows, cols, self.kv_size, self.hidden_size, "attn_kv")
     if suffix == "output.weight" or name.endswith("lm_head.weight"): return self._if_shape(rows, cols, None, self.hidden_size, "lm_head")
     return None

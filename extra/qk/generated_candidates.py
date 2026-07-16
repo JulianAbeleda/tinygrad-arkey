@@ -119,7 +119,7 @@ def _promoted_prefill_candidates() -> tuple[GeneratedCandidate, ...]:
       search_space_id="prefill_wmma_lds_full_kernel",
       authority_gates=_authority_gates_from_manifest(policy["route_id"]), lifecycle=_lifecycle_from_manifest(policy["route_id"]),
       full_kernel_candidate=payload)
-    if candidate.canonical_identity != identity:
+    if identity not in (candidate.canonical_identity, candidate.legacy_identity_alias):
       raise ValueError(f"promoted candidate identity mismatch for role={workload['role']}: "
                        f"artifact={identity}, payload={candidate.canonical_identity}")
     out.append(candidate)

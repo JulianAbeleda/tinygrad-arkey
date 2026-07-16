@@ -1,76 +1,434 @@
 {
   "bindings": [
     {
-      "canonical_identity": "bd7ac8af0ada97e02ebd4780ae1e1dc13370bcf32144494fc15b583c0d567c1a",
-      "inventory_key": [
-        "ffn_gate_up",
-        "Q4_K",
-        512,
-        17408,
-        5120
-      ]
+      "canonical_identity": "a5af4acf7d01249e88aaa13f10e27c07e1335e7cbec74c245afb3be1439dcfe1",
+      "inventory_key": {
+        "call_count": 80,
+        "inventory_identity": "c189e4bd9b89c73f734f3f6cd75f0f99267eaa8775d60dce7431bdfc7befb3d1",
+        "packed_abi": {
+          "block_bytes": 144,
+          "block_elems": 256,
+          "logical": "transposed_row_major",
+          "packed": "ggml_k_blocks"
+        },
+        "quant_format": "Q4_K",
+        "role": "ffn_gate_up",
+        "shape": {
+          "k": 5120,
+          "m": 512,
+          "n": 17408
+        },
+        "source_bytes": 4010803200,
+        "tensor_identities": [
+          "blk.0.ffn_gate.weight",
+          "blk.0.ffn_up.weight",
+          "blk.1.ffn_gate.weight",
+          "blk.1.ffn_up.weight",
+          "blk.10.ffn_gate.weight",
+          "blk.10.ffn_up.weight",
+          "blk.11.ffn_gate.weight",
+          "blk.11.ffn_up.weight",
+          "blk.12.ffn_gate.weight",
+          "blk.12.ffn_up.weight",
+          "blk.13.ffn_gate.weight",
+          "blk.13.ffn_up.weight",
+          "blk.14.ffn_gate.weight",
+          "blk.14.ffn_up.weight",
+          "blk.15.ffn_gate.weight",
+          "blk.15.ffn_up.weight",
+          "blk.16.ffn_gate.weight",
+          "blk.16.ffn_up.weight",
+          "blk.17.ffn_gate.weight",
+          "blk.17.ffn_up.weight",
+          "blk.18.ffn_gate.weight",
+          "blk.18.ffn_up.weight",
+          "blk.19.ffn_gate.weight",
+          "blk.19.ffn_up.weight",
+          "blk.2.ffn_gate.weight",
+          "blk.2.ffn_up.weight",
+          "blk.20.ffn_gate.weight",
+          "blk.20.ffn_up.weight",
+          "blk.21.ffn_gate.weight",
+          "blk.21.ffn_up.weight",
+          "blk.22.ffn_gate.weight",
+          "blk.22.ffn_up.weight",
+          "blk.23.ffn_gate.weight",
+          "blk.23.ffn_up.weight",
+          "blk.24.ffn_gate.weight",
+          "blk.24.ffn_up.weight",
+          "blk.25.ffn_gate.weight",
+          "blk.25.ffn_up.weight",
+          "blk.26.ffn_gate.weight",
+          "blk.26.ffn_up.weight",
+          "blk.27.ffn_gate.weight",
+          "blk.27.ffn_up.weight",
+          "blk.28.ffn_gate.weight",
+          "blk.28.ffn_up.weight",
+          "blk.29.ffn_gate.weight",
+          "blk.29.ffn_up.weight",
+          "blk.3.ffn_gate.weight",
+          "blk.3.ffn_up.weight",
+          "blk.30.ffn_gate.weight",
+          "blk.30.ffn_up.weight",
+          "blk.31.ffn_gate.weight",
+          "blk.31.ffn_up.weight",
+          "blk.32.ffn_gate.weight",
+          "blk.32.ffn_up.weight",
+          "blk.33.ffn_gate.weight",
+          "blk.33.ffn_up.weight",
+          "blk.34.ffn_gate.weight",
+          "blk.34.ffn_up.weight",
+          "blk.35.ffn_gate.weight",
+          "blk.35.ffn_up.weight",
+          "blk.36.ffn_gate.weight",
+          "blk.36.ffn_up.weight",
+          "blk.37.ffn_gate.weight",
+          "blk.37.ffn_up.weight",
+          "blk.38.ffn_gate.weight",
+          "blk.38.ffn_up.weight",
+          "blk.39.ffn_gate.weight",
+          "blk.39.ffn_up.weight",
+          "blk.4.ffn_gate.weight",
+          "blk.4.ffn_up.weight",
+          "blk.5.ffn_gate.weight",
+          "blk.5.ffn_up.weight",
+          "blk.6.ffn_gate.weight",
+          "blk.6.ffn_up.weight",
+          "blk.7.ffn_gate.weight",
+          "blk.7.ffn_up.weight",
+          "blk.8.ffn_gate.weight",
+          "blk.8.ffn_up.weight",
+          "blk.9.ffn_gate.weight",
+          "blk.9.ffn_up.weight"
+        ]
+      }
     },
     {
-      "canonical_identity": "61077f63b5f7ec3f34f5b191a5456a2c487496ea9df2e1e8142fbe1489b2faa9",
-      "inventory_key": [
-        "attn_qo",
-        "Q4_K",
-        512,
-        5120,
-        5120
-      ]
+      "canonical_identity": "7229a431491caf467450cc6a3db5159e8a1f8a22e406bde615510a3703249c8e",
+      "inventory_key": {
+        "call_count": 80,
+        "inventory_identity": "c189e4bd9b89c73f734f3f6cd75f0f99267eaa8775d60dce7431bdfc7befb3d1",
+        "packed_abi": {
+          "block_bytes": 144,
+          "block_elems": 256,
+          "logical": "transposed_row_major",
+          "packed": "ggml_k_blocks"
+        },
+        "quant_format": "Q4_K",
+        "role": "attn_qo",
+        "shape": {
+          "k": 5120,
+          "m": 512,
+          "n": 5120
+        },
+        "source_bytes": 1179648000,
+        "tensor_identities": [
+          "blk.0.attn_output.weight",
+          "blk.0.attn_q.weight",
+          "blk.1.attn_output.weight",
+          "blk.1.attn_q.weight",
+          "blk.10.attn_output.weight",
+          "blk.10.attn_q.weight",
+          "blk.11.attn_output.weight",
+          "blk.11.attn_q.weight",
+          "blk.12.attn_output.weight",
+          "blk.12.attn_q.weight",
+          "blk.13.attn_output.weight",
+          "blk.13.attn_q.weight",
+          "blk.14.attn_output.weight",
+          "blk.14.attn_q.weight",
+          "blk.15.attn_output.weight",
+          "blk.15.attn_q.weight",
+          "blk.16.attn_output.weight",
+          "blk.16.attn_q.weight",
+          "blk.17.attn_output.weight",
+          "blk.17.attn_q.weight",
+          "blk.18.attn_output.weight",
+          "blk.18.attn_q.weight",
+          "blk.19.attn_output.weight",
+          "blk.19.attn_q.weight",
+          "blk.2.attn_output.weight",
+          "blk.2.attn_q.weight",
+          "blk.20.attn_output.weight",
+          "blk.20.attn_q.weight",
+          "blk.21.attn_output.weight",
+          "blk.21.attn_q.weight",
+          "blk.22.attn_output.weight",
+          "blk.22.attn_q.weight",
+          "blk.23.attn_output.weight",
+          "blk.23.attn_q.weight",
+          "blk.24.attn_output.weight",
+          "blk.24.attn_q.weight",
+          "blk.25.attn_output.weight",
+          "blk.25.attn_q.weight",
+          "blk.26.attn_output.weight",
+          "blk.26.attn_q.weight",
+          "blk.27.attn_output.weight",
+          "blk.27.attn_q.weight",
+          "blk.28.attn_output.weight",
+          "blk.28.attn_q.weight",
+          "blk.29.attn_output.weight",
+          "blk.29.attn_q.weight",
+          "blk.3.attn_output.weight",
+          "blk.3.attn_q.weight",
+          "blk.30.attn_output.weight",
+          "blk.30.attn_q.weight",
+          "blk.31.attn_output.weight",
+          "blk.31.attn_q.weight",
+          "blk.32.attn_output.weight",
+          "blk.32.attn_q.weight",
+          "blk.33.attn_output.weight",
+          "blk.33.attn_q.weight",
+          "blk.34.attn_output.weight",
+          "blk.34.attn_q.weight",
+          "blk.35.attn_output.weight",
+          "blk.35.attn_q.weight",
+          "blk.36.attn_output.weight",
+          "blk.36.attn_q.weight",
+          "blk.37.attn_output.weight",
+          "blk.37.attn_q.weight",
+          "blk.38.attn_output.weight",
+          "blk.38.attn_q.weight",
+          "blk.39.attn_output.weight",
+          "blk.39.attn_q.weight",
+          "blk.4.attn_output.weight",
+          "blk.4.attn_q.weight",
+          "blk.5.attn_output.weight",
+          "blk.5.attn_q.weight",
+          "blk.6.attn_output.weight",
+          "blk.6.attn_q.weight",
+          "blk.7.attn_output.weight",
+          "blk.7.attn_q.weight",
+          "blk.8.attn_output.weight",
+          "blk.8.attn_q.weight",
+          "blk.9.attn_output.weight",
+          "blk.9.attn_q.weight"
+        ]
+      }
     },
     {
-      "canonical_identity": "ddd0d8cd57a53531be27e70076dcec9f9ab5b5682b0f11158216c2939e71f912",
-      "inventory_key": [
-        "ffn_down",
-        "Q4_K",
-        512,
-        5120,
-        17408
-      ]
+      "canonical_identity": "a0675fcdd6f7d4fd8086d853ea6480dd7a620c6ddc01817f473d0b734549729c",
+      "inventory_key": {
+        "call_count": 20,
+        "inventory_identity": "c189e4bd9b89c73f734f3f6cd75f0f99267eaa8775d60dce7431bdfc7befb3d1",
+        "packed_abi": {
+          "block_bytes": 144,
+          "block_elems": 256,
+          "logical": "transposed_row_major",
+          "packed": "ggml_k_blocks"
+        },
+        "quant_format": "Q4_K",
+        "role": "ffn_down",
+        "shape": {
+          "k": 17408,
+          "m": 512,
+          "n": 5120
+        },
+        "source_bytes": 1002700800,
+        "tensor_identities": [
+          "blk.11.ffn_down.weight",
+          "blk.12.ffn_down.weight",
+          "blk.14.ffn_down.weight",
+          "blk.15.ffn_down.weight",
+          "blk.17.ffn_down.weight",
+          "blk.18.ffn_down.weight",
+          "blk.20.ffn_down.weight",
+          "blk.21.ffn_down.weight",
+          "blk.23.ffn_down.weight",
+          "blk.24.ffn_down.weight",
+          "blk.26.ffn_down.weight",
+          "blk.27.ffn_down.weight",
+          "blk.29.ffn_down.weight",
+          "blk.30.ffn_down.weight",
+          "blk.32.ffn_down.weight",
+          "blk.33.ffn_down.weight",
+          "blk.5.ffn_down.weight",
+          "blk.6.ffn_down.weight",
+          "blk.8.ffn_down.weight",
+          "blk.9.ffn_down.weight"
+        ]
+      }
     },
     {
-      "canonical_identity": "19cf4c3302980bd87275eb1cf2f1eb7ba3a2a5d566ebb229423d2afd57045e9f",
-      "inventory_key": [
-        "attn_kv",
-        "Q4_K",
-        512,
-        1024,
-        5120
-      ]
+      "canonical_identity": "7dee80c5d49987f7d713c0a5a8d9270d4fec191a6306c17f70816c35cdfff329",
+      "inventory_key": {
+        "call_count": 60,
+        "inventory_identity": "c189e4bd9b89c73f734f3f6cd75f0f99267eaa8775d60dce7431bdfc7befb3d1",
+        "packed_abi": {
+          "block_bytes": 144,
+          "block_elems": 256,
+          "logical": "transposed_row_major",
+          "packed": "ggml_k_blocks"
+        },
+        "quant_format": "Q4_K",
+        "role": "attn_kv",
+        "shape": {
+          "k": 5120,
+          "m": 512,
+          "n": 1024
+        },
+        "source_bytes": 176947200,
+        "tensor_identities": [
+          "blk.0.attn_k.weight",
+          "blk.1.attn_k.weight",
+          "blk.10.attn_k.weight",
+          "blk.11.attn_k.weight",
+          "blk.11.attn_v.weight",
+          "blk.12.attn_k.weight",
+          "blk.12.attn_v.weight",
+          "blk.13.attn_k.weight",
+          "blk.14.attn_k.weight",
+          "blk.14.attn_v.weight",
+          "blk.15.attn_k.weight",
+          "blk.15.attn_v.weight",
+          "blk.16.attn_k.weight",
+          "blk.17.attn_k.weight",
+          "blk.17.attn_v.weight",
+          "blk.18.attn_k.weight",
+          "blk.18.attn_v.weight",
+          "blk.19.attn_k.weight",
+          "blk.2.attn_k.weight",
+          "blk.20.attn_k.weight",
+          "blk.20.attn_v.weight",
+          "blk.21.attn_k.weight",
+          "blk.21.attn_v.weight",
+          "blk.22.attn_k.weight",
+          "blk.23.attn_k.weight",
+          "blk.23.attn_v.weight",
+          "blk.24.attn_k.weight",
+          "blk.24.attn_v.weight",
+          "blk.25.attn_k.weight",
+          "blk.26.attn_k.weight",
+          "blk.26.attn_v.weight",
+          "blk.27.attn_k.weight",
+          "blk.27.attn_v.weight",
+          "blk.28.attn_k.weight",
+          "blk.29.attn_k.weight",
+          "blk.29.attn_v.weight",
+          "blk.3.attn_k.weight",
+          "blk.30.attn_k.weight",
+          "blk.30.attn_v.weight",
+          "blk.31.attn_k.weight",
+          "blk.32.attn_k.weight",
+          "blk.32.attn_v.weight",
+          "blk.33.attn_k.weight",
+          "blk.33.attn_v.weight",
+          "blk.34.attn_k.weight",
+          "blk.35.attn_k.weight",
+          "blk.36.attn_k.weight",
+          "blk.37.attn_k.weight",
+          "blk.38.attn_k.weight",
+          "blk.39.attn_k.weight",
+          "blk.4.attn_k.weight",
+          "blk.5.attn_k.weight",
+          "blk.5.attn_v.weight",
+          "blk.6.attn_k.weight",
+          "blk.6.attn_v.weight",
+          "blk.7.attn_k.weight",
+          "blk.8.attn_k.weight",
+          "blk.8.attn_v.weight",
+          "blk.9.attn_k.weight",
+          "blk.9.attn_v.weight"
+        ]
+      }
     },
     {
-      "canonical_identity": "5b1a9a22b5bfc81c1aee1c486d86b583eae5e0e64d3fe86b6e20efab9cb55fa2",
-      "inventory_key": [
-        "ffn_down",
-        "Q6_K",
-        512,
-        5120,
-        17408
-      ]
+      "canonical_identity": "811e68be02b3ab8a0f3cd710ee69d7bb7710c6ee4c5e93330bd84f190b0ec176",
+      "inventory_key": {
+        "call_count": 20,
+        "inventory_identity": "c189e4bd9b89c73f734f3f6cd75f0f99267eaa8775d60dce7431bdfc7befb3d1",
+        "packed_abi": {
+          "block_bytes": 210,
+          "block_elems": 256,
+          "logical": "transposed_row_major",
+          "packed": "ggml_k_blocks"
+        },
+        "quant_format": "Q6_K",
+        "role": "ffn_down",
+        "shape": {
+          "k": 17408,
+          "m": 512,
+          "n": 5120
+        },
+        "source_bytes": 1462272000,
+        "tensor_identities": [
+          "blk.0.ffn_down.weight",
+          "blk.1.ffn_down.weight",
+          "blk.10.ffn_down.weight",
+          "blk.13.ffn_down.weight",
+          "blk.16.ffn_down.weight",
+          "blk.19.ffn_down.weight",
+          "blk.2.ffn_down.weight",
+          "blk.22.ffn_down.weight",
+          "blk.25.ffn_down.weight",
+          "blk.28.ffn_down.weight",
+          "blk.3.ffn_down.weight",
+          "blk.31.ffn_down.weight",
+          "blk.34.ffn_down.weight",
+          "blk.35.ffn_down.weight",
+          "blk.36.ffn_down.weight",
+          "blk.37.ffn_down.weight",
+          "blk.38.ffn_down.weight",
+          "blk.39.ffn_down.weight",
+          "blk.4.ffn_down.weight",
+          "blk.7.ffn_down.weight"
+        ]
+      }
     },
     {
-      "canonical_identity": "e2a43a4b2751b3b4b7185b539b803ff0847dcb2359e4359fa9bc2fe7cd026c60",
-      "inventory_key": [
-        "attn_kv",
-        "Q6_K",
-        512,
-        1024,
-        5120
-      ]
+      "canonical_identity": "63fd66828fe31c4752e916c33baddb3c88d6d42aa34e036d380ddb1ef8c50137",
+      "inventory_key": {
+        "call_count": 20,
+        "inventory_identity": "c189e4bd9b89c73f734f3f6cd75f0f99267eaa8775d60dce7431bdfc7befb3d1",
+        "packed_abi": {
+          "block_bytes": 210,
+          "block_elems": 256,
+          "logical": "transposed_row_major",
+          "packed": "ggml_k_blocks"
+        },
+        "quant_format": "Q6_K",
+        "role": "attn_kv",
+        "shape": {
+          "k": 5120,
+          "m": 512,
+          "n": 1024
+        },
+        "source_bytes": 86016000,
+        "tensor_identities": [
+          "blk.0.attn_v.weight",
+          "blk.1.attn_v.weight",
+          "blk.10.attn_v.weight",
+          "blk.13.attn_v.weight",
+          "blk.16.attn_v.weight",
+          "blk.19.attn_v.weight",
+          "blk.2.attn_v.weight",
+          "blk.22.attn_v.weight",
+          "blk.25.attn_v.weight",
+          "blk.28.attn_v.weight",
+          "blk.3.attn_v.weight",
+          "blk.31.attn_v.weight",
+          "blk.34.attn_v.weight",
+          "blk.35.attn_v.weight",
+          "blk.36.attn_v.weight",
+          "blk.37.attn_v.weight",
+          "blk.38.attn_v.weight",
+          "blk.39.attn_v.weight",
+          "blk.4.attn_v.weight",
+          "blk.7.attn_v.weight"
+        ]
+      }
     }
   ],
   "candidate_sets": {
     "Q4_K": {
       "entries": [
         {
-          "canonical_identity": "bd7ac8af0ada97e02ebd4780ae1e1dc13370bcf32144494fc15b583c0d567c1a",
+          "canonical_identity": "a5af4acf7d01249e88aaa13f10e27c07e1335e7cbec74c245afb3be1439dcfe1",
           "payload": {
             "applicability": {
               "exact_shape": true,
               "profiles": [
-                "qwen3_14b_q4k_m_gfx1100"
+                "c189e4bd9b89c73f734f3f6cd75f0f99267eaa8775d60dce7431bdfc7befb3d1"
               ],
               "roles": [
                 "ffn_gate_up"
@@ -218,7 +576,7 @@
                 "b": "transposed_row_major",
                 "c": "row_major"
               },
-              "profile": "qwen3_14b_q4k_m_gfx1100",
+              "profile": "c189e4bd9b89c73f734f3f6cd75f0f99267eaa8775d60dce7431bdfc7befb3d1",
               "role": "ffn_gate_up",
               "shape": {
                 "k": 5120,
@@ -234,12 +592,12 @@
           }
         },
         {
-          "canonical_identity": "61077f63b5f7ec3f34f5b191a5456a2c487496ea9df2e1e8142fbe1489b2faa9",
+          "canonical_identity": "7229a431491caf467450cc6a3db5159e8a1f8a22e406bde615510a3703249c8e",
           "payload": {
             "applicability": {
               "exact_shape": true,
               "profiles": [
-                "qwen3_14b_q4k_m_gfx1100"
+                "c189e4bd9b89c73f734f3f6cd75f0f99267eaa8775d60dce7431bdfc7befb3d1"
               ],
               "roles": [
                 "attn_qo"
@@ -387,7 +745,7 @@
                 "b": "transposed_row_major",
                 "c": "row_major"
               },
-              "profile": "qwen3_14b_q4k_m_gfx1100",
+              "profile": "c189e4bd9b89c73f734f3f6cd75f0f99267eaa8775d60dce7431bdfc7befb3d1",
               "role": "attn_qo",
               "shape": {
                 "k": 5120,
@@ -403,12 +761,12 @@
           }
         },
         {
-          "canonical_identity": "ddd0d8cd57a53531be27e70076dcec9f9ab5b5682b0f11158216c2939e71f912",
+          "canonical_identity": "a0675fcdd6f7d4fd8086d853ea6480dd7a620c6ddc01817f473d0b734549729c",
           "payload": {
             "applicability": {
               "exact_shape": true,
               "profiles": [
-                "qwen3_14b_q4k_m_gfx1100"
+                "c189e4bd9b89c73f734f3f6cd75f0f99267eaa8775d60dce7431bdfc7befb3d1"
               ],
               "roles": [
                 "ffn_down"
@@ -556,7 +914,7 @@
                 "b": "transposed_row_major",
                 "c": "row_major"
               },
-              "profile": "qwen3_14b_q4k_m_gfx1100",
+              "profile": "c189e4bd9b89c73f734f3f6cd75f0f99267eaa8775d60dce7431bdfc7befb3d1",
               "role": "ffn_down",
               "shape": {
                 "k": 17408,
@@ -572,12 +930,12 @@
           }
         },
         {
-          "canonical_identity": "19cf4c3302980bd87275eb1cf2f1eb7ba3a2a5d566ebb229423d2afd57045e9f",
+          "canonical_identity": "7dee80c5d49987f7d713c0a5a8d9270d4fec191a6306c17f70816c35cdfff329",
           "payload": {
             "applicability": {
               "exact_shape": true,
               "profiles": [
-                "qwen3_14b_q4k_m_gfx1100"
+                "c189e4bd9b89c73f734f3f6cd75f0f99267eaa8775d60dce7431bdfc7befb3d1"
               ],
               "roles": [
                 "attn_kv"
@@ -725,7 +1083,7 @@
                 "b": "transposed_row_major",
                 "c": "row_major"
               },
-              "profile": "qwen3_14b_q4k_m_gfx1100",
+              "profile": "c189e4bd9b89c73f734f3f6cd75f0f99267eaa8775d60dce7431bdfc7befb3d1",
               "role": "attn_kv",
               "shape": {
                 "k": 5120,
@@ -746,12 +1104,12 @@
     "Q6_K": {
       "entries": [
         {
-          "canonical_identity": "5b1a9a22b5bfc81c1aee1c486d86b583eae5e0e64d3fe86b6e20efab9cb55fa2",
+          "canonical_identity": "811e68be02b3ab8a0f3cd710ee69d7bb7710c6ee4c5e93330bd84f190b0ec176",
           "payload": {
             "applicability": {
               "exact_shape": true,
               "profiles": [
-                "qwen3_14b_q4k_m_gfx1100"
+                "c189e4bd9b89c73f734f3f6cd75f0f99267eaa8775d60dce7431bdfc7befb3d1"
               ],
               "roles": [
                 "ffn_down"
@@ -899,7 +1257,7 @@
                 "b": "transposed_row_major",
                 "c": "row_major"
               },
-              "profile": "qwen3_14b_q4k_m_gfx1100",
+              "profile": "c189e4bd9b89c73f734f3f6cd75f0f99267eaa8775d60dce7431bdfc7befb3d1",
               "role": "ffn_down",
               "shape": {
                 "k": 17408,
@@ -915,12 +1273,12 @@
           }
         },
         {
-          "canonical_identity": "e2a43a4b2751b3b4b7185b539b803ff0847dcb2359e4359fa9bc2fe7cd026c60",
+          "canonical_identity": "63fd66828fe31c4752e916c33baddb3c88d6d42aa34e036d380ddb1ef8c50137",
           "payload": {
             "applicability": {
               "exact_shape": true,
               "profiles": [
-                "qwen3_14b_q4k_m_gfx1100"
+                "c189e4bd9b89c73f734f3f6cd75f0f99267eaa8775d60dce7431bdfc7befb3d1"
               ],
               "roles": [
                 "attn_kv"
@@ -1068,7 +1426,7 @@
                 "b": "transposed_row_major",
                 "c": "row_major"
               },
-              "profile": "qwen3_14b_q4k_m_gfx1100",
+              "profile": "c189e4bd9b89c73f734f3f6cd75f0f99267eaa8775d60dce7431bdfc7befb3d1",
               "role": "attn_kv",
               "shape": {
                 "k": 5120,
@@ -1499,5 +1857,6 @@
     ],
     "schema": "qk.packed_prefill_workload_inventory.v1"
   },
+  "inventory_identity": "c189e4bd9b89c73f734f3f6cd75f0f99267eaa8775d60dce7431bdfc7befb3d1",
   "schema": "qk.packed_prefill_candidate_inventory.v1"
 }

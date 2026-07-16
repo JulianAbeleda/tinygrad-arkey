@@ -6,6 +6,7 @@ from tinygrad.dtype import AddrSpace, PtrDType, dtypes
 from tinygrad.codegen.opt import KernelOptError
 from tinygrad.codegen.opt.prefill_value_key import PrefillSourceValueKey
 from tinygrad.uop.ops import Ops, UOp
+from extra.qk.mmq_llama_record_producers import RecordProducerInstanceWitness
 
 REQUIRED_WMMA_PROOF_FIELDS = ("role", "lds_buffer_id", "dbuf_slot", "k_phase", "logical_row_or_col", "byte_len",
                               "producer_epoch", "overwrite_epoch")
@@ -88,7 +89,128 @@ class PrefillAMDISARendererPolicy:
            self.wmma_frag_buffer_proof_from_tag(idx.src[0].tag, desc, role)
 
   def wmma_frag_store_epoch_proof(self, idx:UOp, desc:Any, role:str, h:Any) -> dict|None:
-    return None
+    """Derive the fragment contract from the staged record that feeds ``idx``.
+
+    The store tag is only a provenance witness; identity is taken from the
+    structural LDS base and the byte address.  Do not accept a tag unless the
+    index's dependency graph contains exactly one matching stage record.
+    """
+    if desc is None or idx.op is not Ops.INDEX or not idx.src: return None
+    if idx.addrspace != AddrSpace.LOCAL: return None
+    try: lds_id = h.lds_key_uop(desc.buf)
+    except Exception: return None
+    if role == "B":
+      # Q8 staging is a vector copy expressed as four scalar STOREs.  The
+      # constant part of those addresses names the four lanes, while the typed
+      # destination_vector coordinate names the complete record extent.  Prove
+      # membership from those native values, then choose the latest visible
+      # producer epoch from dependency order.  In particular, do not use the
+      # descriptive STORE tag to authorize this composed half-record carrier.
+      groups:dict[tuple, list[tuple[int, UOp, RecordProducerInstanceWitness]]] = {}
+      order = {u: n for n, u in enumerate(idx.toposort())}
+      for u in order:
+        if u.op is not Ops.STORE or not isinstance(u.arg, RecordProducerInstanceWitness): continue
+        w = u.arg
+        if w.role != role or w.schema != "llama-q8-ds4-producer-instance.v1": continue
+        st_idx = u.src[0].src[0] if u.src[0].op is Ops.CAST else u.src[0]
+        if st_idx.op is not Ops.INDEX or st_idx.addrspace != AddrSpace.LOCAL: continue
+        try:
+          if h.lds_key_uop(h.reg_base(st_idx.src[0])) != lds_id: continue
+          _base, c = h.const_base(st_idx.src[1])
+          st_bytes = c * st_idx.src[0].dtype.base.itemsize
+        except Exception: continue
+        key = (w.role, w.field, w.phase, w.slot, w.iteration, w.schema,
+               w.source_row, w.source_k, w.destination_row, w.destination_vector)
+        groups.setdefault(key, []).append((st_bytes, u, w))
+      candidates = []
+      for lanes in groups.values():
+        lanes.sort(key=lambda x: x[0])
+        starts = [x[0] for x in lanes]
+        w = lanes[0][2]
+        if w.field != "qs" or len(starts) < 2 or starts != list(range(starts[0], starts[0]+len(starts))): continue
+        try: vector_count = int(w.destination_vector.vmax) - int(w.destination_vector.vmin) + 1
+        except Exception: continue
+        if vector_count <= 0: continue
+        record_bytes = vector_count * len(starts)
+        if starts[0] <= desc.const_bytes and desc.const_bytes + 16 <= starts[0] + record_bytes:
+          candidates.append(lanes)
+      if not candidates: return None
+      # Multiple epochs can be visible through an effect chain.  A legal
+      # overwrite has a unique latest producer group in that native chain.
+      latest = max(candidates, key=lambda lanes: max(order[x[1]] for x in lanes))
+      latest_closure = set().union(*(x[1].backward_slice_with_self for x in latest))
+      if any(any(x[1] not in latest_closure for x in lanes) for lanes in candidates if lanes is not latest): return None
+      w = latest[0][2]
+      return {"role": role, "lds_buffer_id": lds_id,
+        "dbuf_slot": w.slot, "k_phase": ("stage_epoch", w.phase, w.slot),
+        "logical_row_or_col": (role, desc.const_bytes), "byte_start": desc.const_bytes,
+        "byte_len": 16, "producer_epoch": ("stage", lds_id, w.phase, w.slot),
+        "overwrite_epoch": ("stage", lds_id, w.phase, w.slot, "next"),
+        "field": w.field, "iteration": w.iteration, "schema": w.schema}
+    matches = []
+    stores = []
+    for u in idx.toposort():
+      tag = u.tag
+      if u.op is not Ops.STORE or not (isinstance(tag, tuple) and tag[:1] == ("hierarchical_record_store",)):
+        continue
+      # hierarchical_record_store(role, region, phase, slot, schema)
+      if len(tag) != 6 or tag[1] != role or not isinstance(tag[4], int): continue
+      st_idx = u.src[0].src[0] if u.src[0].op is Ops.CAST else u.src[0]
+      if st_idx.op is not Ops.INDEX or st_idx.addrspace != AddrSpace.LOCAL: continue
+      try: st_buf = h.reg_base(st_idx.src[0])
+      except Exception: continue
+      if h.lds_key_uop(st_buf) != lds_id: continue
+      try:
+        _base, _c = h.const_base(st_idx.src[1])
+        st_bytes = _c * st_idx.src[0].dtype.base.itemsize
+      except Exception: continue
+      # A producer tag identifies a class of stores only.  Accept a Q8 B
+      # store as an epoch witness only when its value dependency contains
+      # exactly one typed, coordinate-bearing producer instance.
+      witnesses = (u.arg,) if isinstance(u.arg, RecordProducerInstanceWitness) else ()
+      if tag[1] == "B":
+        if len(witnesses) != 1: continue
+        w = witnesses[0]
+        if (w.role, w.field, w.phase, w.slot, w.iteration, w.schema) != (tag[1], tag[2], tag[3], tag[4], tag[4], "llama-q8-ds4-producer-instance.v1"):
+          continue
+      stores.append((tag, st_bytes, u))
+    # A/B records are emitted as scalar stores, while the WMMA carrier reads
+    # a fragment-sized window inside the record.  Normalize that representation
+    # using the structural distance to the next record in the same phase.
+    for tag, st_bytes, store in stores:
+      peers = sorted(x[1] for x in stores if x[0][3] == tag[3] and x[0][1] == tag[1])
+      following = [x for x in peers if x > st_bytes]
+      span = following[0] - st_bytes if following else 0
+      # The carrier's first half is the coordinate anchor.  The remaining
+      # lanes may cross scalar record boundaries; wmma_frag_proof_reuse_key
+      # separately proves their exact contiguous address chain.
+      if span <= 0 or not (st_bytes <= desc.const_bytes < st_bytes + span): continue
+      matches.append((tag, st_bytes, store, span))
+    if len(matches) != 1: return None
+    tag, st_bytes, store, span = matches[0]
+    # Require the staged producer to be in the load's dependency closure; the
+    # address match alone is not a proof of visibility or store ordering.
+    if store not in idx.toposort(): return None
+    witness_nodes = []
+    if role == "B":
+      witness_nodes = (store.arg,) if isinstance(store.arg, RecordProducerInstanceWitness) else ()
+      if len(witness_nodes) != 1 or witness_nodes[0].schema != "llama-q8-ds4-producer-instance.v1": return None
+    # The stage record's slot is the epoch witness; the load address is the
+    # coordinate witness.  The next record boundary is the non-overlap witness.
+    slot = tag[4]
+    if role == "B":
+      field, iteration, schema = witness_nodes[0].field, witness_nodes[0].iteration, witness_nodes[0].schema
+    else:
+      # Q4 A records do not carry the Q8 producer-instance witness. Their
+      # hierarchical store tag is already structurally matched above and is
+      # the exact field/phase/slot/schema authority for this staged record.
+      field, iteration, schema = tag[2], slot, tag[5]
+    return {"role": role, "lds_buffer_id": lds_id,
+      "dbuf_slot": slot, "k_phase": ("stage_epoch", tag[3], slot),
+      "logical_row_or_col": (role, desc.const_bytes), "byte_start": desc.const_bytes,
+      "byte_len": 4, "producer_epoch": ("stage", lds_id, tag[3], slot),
+      "overwrite_epoch": ("stage", lds_id, tag[3], slot, "next"),
+      "field": field, "iteration": iteration, "schema": schema}
 
   def wmma_frag_proof_key(self, role:str, carrier:UOp, h:Any) -> tuple|None:
     try: elems = h.wmma_elems(carrier, 16)
@@ -97,8 +219,21 @@ class PrefillAMDISARendererPolicy:
     if any(p is None for p in proofs): return None
     p0 = proofs[0]
     if p0.get("role") != role or any(p0.get(k) is None for k in REQUIRED_WMMA_PROOF_FIELDS): return None
-    if any(p != p0 for p in proofs[1:]): return None
-    return tuple((k, p0[k]) for k in REQUIRED_WMMA_PROOF_FIELDS)
+    # Producer coordinates identify the four scalar records, not four
+    # fragments.  Normalize them to one 16-byte carrier only after proving
+    # that all lanes share the epoch and typed producer identity.
+    identity = ("role", "lds_buffer_id", "dbuf_slot", "k_phase", "producer_epoch", "overwrite_epoch",
+                "field", "iteration", "schema")
+    if any(any(p.get(k) is None for k in ("field", "iteration", "schema")) for p in proofs): return None
+    if any(tuple(p.get(k) for k in identity) != tuple(p0.get(k) for k in identity) for p in proofs): return None
+    starts = [p.get("byte_start") for p in proofs]
+    if any(not isinstance(x, int) or p.get("byte_len") != 4 for x, p in zip(starts, proofs)): return None
+    counts = {x: starts.count(x) for x in set(starts)}
+    if len(counts) != 4 or sorted(counts.values()) != [4, 4, 4, 4]: return None
+    base = min(counts)
+    if sorted(counts) != [base, base+4, base+8, base+12]: return None
+    normalized = dict(p0, logical_row_or_col=(role, base), byte_len=16)
+    return tuple((k, normalized[k]) for k in REQUIRED_WMMA_PROOF_FIELDS)
 
   def wmma_frag_proof_reuse_key(self, ctx:Any, role:str, carrier:UOp, h:Any) -> tuple|None:
     try: elems = h.wmma_elems(carrier, 16)

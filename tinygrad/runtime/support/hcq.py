@@ -600,6 +600,10 @@ class HCQAllocator(HCQAllocatorBase, Generic[HCQDeviceType]):
         self.b_timeline[self.b_next] = self.dev.timeline_value - 1
 
   def copy_from_disk(self, dest:HCQBuffer, src, size):
+    def _wait_info():
+      next_buf = (self.b_next + 1) % len(self.b)
+      return f"buffer={next_buf}, required timeline={self.b_timeline[next_buf]}, current signal={self.dev.timeline_signal.value}"
+
     def _get_temp_buf():
       # Check if the next buffer is safe to be used (its signal has passed) and reserve it.
       if self.b_timeline[(self.b_next + 1) % len(self.b)] <= self.dev.timeline_signal.value:
@@ -611,7 +615,7 @@ class HCQAllocator(HCQAllocatorBase, Generic[HCQDeviceType]):
     with hcq_profile(self.dev, queue_type=self.dev.hw_copy_queue_t, desc=TracingKey(f"DISK -> {self.dev.device}", ret=size), enabled=PROFILE,
                      dev_suff="SDMA:0"):
       for (batch_info, dst_off, src_off, copy_size) in src.device.allocator._copyout_sharded(src, size, _get_temp_buf, seg_len=self.b[0].size,
-                                                                                             use_ioring=type(self.b[0].cpu_view()) is MMIOInterface):
+          use_ioring=type(self.b[0].cpu_view()) is MMIOInterface, wait_info=_wait_info):
         self.dev.hw_copy_queue_t().wait(self.dev.timeline_signal, self.dev.timeline_value - 1) \
                                   .copy(dest.offset(dst_off), self.b[batch_info[1]].offset(src_off), copy_size) \
                                   .signal(self.dev.timeline_signal, self.dev.next_timeline()).submit(self.dev)

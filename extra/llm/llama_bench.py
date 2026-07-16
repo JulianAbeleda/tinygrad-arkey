@@ -8,7 +8,9 @@ the binary path and the json contract live once. Callers pass only their workloa
 `-m/-ngl/-r/-o json` are standardized here. No GPU / tinygrad dependency.
 """
 from __future__ import annotations
-import json, subprocess
+import json, os, pathlib, statistics, subprocess, tempfile
+
+ARTIFACT_VERSION = 2
 
 # The llama-bench binary (was hardcoded 3x under three different constant names).
 LLAMA_BENCH_BIN = "/home/ubuntu/env/llama.cpp/build/bin/llama-bench"
@@ -32,3 +34,39 @@ def llama_pp_row(rows) -> dict | None:
 def llama_tg_rows(rows) -> list[dict]:
   """The token-generation (decode, tg) rows (>=1; a matched-depth run returns one per -d depth)."""
   return [r for r in rows if r.get("n_gen") and not r.get("n_prompt")]
+
+def atomic_write_json(path:str | pathlib.Path, value:dict) -> None:
+  """Write an artifact without exposing a partial JSON file to readers."""
+  path = pathlib.Path(path)
+  path.parent.mkdir(parents=True, exist_ok=True)
+  fd, tmp = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+  try:
+    with os.fdopen(fd, "w") as f:
+      json.dump(value, f, indent=2)
+      f.write("\n")
+      f.flush()
+      os.fsync(f.fileno())
+    os.replace(tmp, path)
+  except BaseException:
+    try: os.unlink(tmp)
+    except FileNotFoundError: pass
+    raise
+
+def model_identity(model:str | pathlib.Path) -> dict:
+  path = pathlib.Path(model).expanduser().resolve()
+  stat = path.stat()
+  return {"path": str(path), "filename": path.name, "size_bytes": stat.st_size, "mtime_ns": stat.st_mtime_ns}
+
+def row_samples(row:dict) -> list[float]:
+  """Return llama-bench's individual throughput samples (the stable JSON key is samples_ts)."""
+  samples = row.get("samples_ts")
+  if not isinstance(samples, list) or not samples:
+    raise ValueError("llama-bench row has no raw per-rep samples_ts")
+  return [float(x) for x in samples]
+
+def summarize_row(row:dict, reps:int) -> dict:
+  samples = row_samples(row)
+  if len(samples) != reps:
+    raise ValueError(f"llama-bench returned {len(samples)} samples, expected {reps}")
+  return {"median_tok_s": round(statistics.median(samples), 2), "raw_tok_s": samples,
+          "mean_tok_s": round(float(row["avg_ts"]), 2), "stddev_tok_s": round(float(row["stddev_ts"]), 2)}

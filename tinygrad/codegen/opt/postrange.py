@@ -9,6 +9,7 @@ from tinygrad.dtype import dtypes, AddrSpace, PtrDType
 from tinygrad.helpers import colored, getenv, DEBUG, NOOPT, argsort, round_up, prod, merge_dicts, get_single_element, flatten
 from tinygrad.helpers import ALLOW_TF32, count
 from tinygrad.codegen.opt import Opt, OptOps, KernelOptError, check
+from tinygrad.codegen.opt.kernel_pipeline import validate_scheduler_tile_loop_pressure
 from tinygrad.codegen.simplify import pm_flatten_range
 from tinygrad.renderer import Renderer
 
@@ -107,6 +108,76 @@ class Scheduler:
   def axes_of(self, *axis_type:AxisType) -> list[int]: return [i for i,t in enumerate(self.axis_types) if t in axis_type]
 
   def upcast_size(self): return prod(self.full_shape[a] for a in self.axes_of(AxisType.UPCAST, AxisType.UNROLL))
+
+  def bound_expanded_reduction_pressure(self, transient_vgpr_reserve:int=128) -> None:
+    """Retain loops when output/reduction expansion widens a complex reduction body.
+
+    This is the final admission seam for schedules already encoded in the AST
+    (for example rangeify or warm-start schedules), which bypass the heuristic
+    candidate checks.  Pressure is expressed in target-independent carrier
+    units: each independently indexed reduction stream is live for every
+    expanded output/reduction lane.  A bounded output tile loop is preferred
+    over shrinking reduction ILP: the loop reuses one admitted carrier set
+    while its inner output pair retains contiguous writeback vectorization.
+    """
+    # Tensor-core schedules already pass the dedicated fragment/epilogue
+    # admission in the heuristic.  Their UNROLL axes encode intrinsic carrier
+    # topology and cannot be retagged as scalar reduction loops here.
+    if self.reduceop is None or hasattr(self, "tensor_core"): return
+    reduction_ranges = set(self.ranges_of(AxisType.REDUCE, AxisType.UNROLL, AxisType.GROUP_REDUCE))
+    # Multi-axis contractions already carry explicit nested loop/staging
+    # structure.  This pass owns flat reductions whose one loop plus one
+    # expanded inner axis otherwise become one wide straight-line body.
+    if len(reduction_ranges) > 2: return
+    streams = sum(u.op is Ops.INDEX and bool(u.src[1].ranges.keys() & reduction_ranges)
+                  for u in self.reduceop.backward_slice)
+    if streams <= 0: return
+
+    def admitted() -> bool:
+      output_lanes = prod(int(r.vmax+1) for r in self.ranges_of(AxisType.UPCAST))
+      reduction_lanes = prod(int(r.vmax+1) for r in self.ranges_of(AxisType.UNROLL))
+      try:
+        validate_scheduler_tile_loop_pressure(resident_accumulator_vgprs=output_lanes*reduction_lanes*streams,
+          resident_fragment_vgprs=0, transient_vgpr_reserve=transient_vgpr_reserve)
+        return True
+      except ValueError:
+        return False
+
+    while not admitted():
+      if DEBUG >= 4:
+        print(f"SCHEDULER PRESSURE: streams={streams} shape={self.shape_str()} sizes={self.full_shape}")
+      owned_loop = None
+      if upcast := self.ranges_of(AxisType.UPCAST):
+        axis = max(upcast, key=lambda x: int(x.vmax+1))
+        if int(axis.vmax+1) > 2 and int(axis.vmax+1) % 2 == 0:
+          inner = UOp.range(2, next(self.opt_range), AxisType.UPCAST)
+          owned_loop = axis.replace(src=(axis.src[0]//2,), arg=axis.arg[:-1]+(AxisType.LOOP,))
+          replacement = owned_loop*2 + inner
+        else:
+          replacement = owned_loop = axis.replace(arg=axis.arg[:-1]+(AxisType.LOOP,))
+      elif unrolled := self.ranges_of(AxisType.UNROLL):
+        axis = max(unrolled, key=lambda x: int(x.vmax+1))
+        if int(axis.vmax+1) > 2 and int(axis.vmax+1) % 2 == 0:
+          # Keep a bounded inner pair for ILP and carry the remaining factor
+          # with a real reduction loop.  This is the inverse of a partial
+          # UNROLL and avoids needlessly scalarizing the entire contraction.
+          inner = UOp.range(2, next(self.opt_range), AxisType.UNROLL)
+          outer = axis.replace(src=(axis.src[0]//2,), arg=axis.arg[:-1]+(AxisType.REDUCE,))
+          replacement = outer*2 + inner
+        else:
+          replacement = axis.replace(arg=axis.arg[:-1]+(AxisType.REDUCE,))
+      else: break
+      self.ast = self.ast.substitute({axis:replacement}, name="bound expanded reduction pressure")
+      if owned_loop is not None:
+        # UPCAST ranges have no structural END because they were previously
+        # expanded.  A scheduler-owned output loop must close every affected
+        # root explicitly or the renderer emits an unterminated loop nest. If
+        # the root already closes output ranges, add this owner to the same END
+        # group so the standard END splitter establishes their canonical nest.
+        def close_output_loop(root:UOp) -> UOp:
+          if owned_loop not in root.backward_slice_with_self or owned_loop in root.ended_ranges: return root
+          return root.replace(src=root.src+(owned_loop,)) if root.op is Ops.END else root.end(owned_loop)
+        self.ast = self.ast.replace(src=tuple(close_output_loop(x) for x in self.ast.src))
 
   # copied from kernel.py
   @property
@@ -367,10 +438,10 @@ class Scheduler:
               candidate_lds_id = _candidate_lds_buffer_id(self) if not register_mode else None
               allocation = None
               if not register_mode:
-                allocation = UOp.placeholder((candidate_geometry.lds_windows[-1].end//2,), dtypes.half, candidate_lds_id,
+                allocation = UOp.placeholder((candidate_geometry.lds_windows[-1].end//tc.dtype_in.itemsize,), tc.dtype_in, candidate_lds_id,
                                                addrspace=AddrSpace.LOCAL).replace(tag=("kernel_tile_lds", candidate_geometry))
               if candidate_pipeline is not None and not register_mode:
-                allocation = UOp.placeholder((candidate_pipeline.active_lds_bytes//2,), dtypes.half, candidate_lds_id,
+                allocation = UOp.placeholder((candidate_pipeline.active_lds_bytes//tc.dtype_in.itemsize,), tc.dtype_in, candidate_lds_id,
                                                addrspace=AddrSpace.LOCAL).replace(tag=("kernel_tile_lds", candidate_geometry, candidate_pipeline))
               operand_a=PrecontractOperandTemplate("A",in0,original_axes[1],original_axes[2],outer_m*candidate_geometry.tile[0])
               packed_weight=getattr(self.ast.arg.candidate_context,"packed_weight",None)
@@ -443,7 +514,8 @@ class Scheduler:
                 graph=build_stage1_uop_graph_with_storage(storage_adapter, pipeline_plan, outer_k.vmax+1, _wmma, subtile_count=1,
                   accumulator_elements=factors.subtiles_m*factors.subtiles_n*8,
                   accumulator_offset=(subtile_m*factors.subtiles_n+subtile_n)*8,
-                  accumulator_contract=(c_elem,tc_upcast_axes[2]),body_range_id=next(self.opt_range),accumulator_id=next(self.opt_range))
+                  accumulator_contract=(c_elem,tc_upcast_axes[2]),body_range_id=next(self.opt_range),accumulator_id=next(self.opt_range),
+                  accumulator_dtype=tc.dtype_out)
                 proof=prove_stage1_uop_graph(graph)
                 if not proof.passed: raise KernelOptError("buffer2 lifecycle UOp proof failed: "+"; ".join(proof.errors))
                 pipeline_tc_uop=UOp(Ops.UNROLL,tc.dtype_out,(graph.drain[0],),arg=tc_upcast_axes[2],tag=1)
@@ -570,4 +642,5 @@ def apply_opts(ast:UOp, ren:Renderer) -> UOp:
     # NOTE: hand_coded_optimizations doesn't support multiblock opts yet
     if not any(u.op is Ops.STAGE for u in ast.backward_slice):
       k = hand_coded_optimizations(k)
+  k.bound_expanded_reduction_pressure()
   return k.get_optimized_ast(name_override=ast.arg.name if ast.arg is not None and ast.arg.name != "test" else None)

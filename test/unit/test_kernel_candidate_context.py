@@ -69,7 +69,7 @@ def test_unsupported_or_malformed_candidate_context_fails_closed():
   (lambda: KernelTileGeometry((128, 128, 32), (4, 0), 256, 32, _geometry().lds_windows), "two positive"),
   (lambda: KernelTileGeometry((128, 128, 32), (4, 2), 32, 32, _geometry().lds_windows), "account for threads"),
   (lambda: KernelTileGeometry((128, 128, 32), (4, 2), 256, 32,
-    (KernelLDSWindow("B", 0, 10240, 80), KernelLDSWindow("A", 10240, 20480, 80))), "ordered A and B"),
+    (KernelLDSWindow("B", 0, 10240, 80), KernelLDSWindow("B", 10240, 20480, 80))), "one A and one B"),
   (lambda: KernelTileGeometry((128, 128, 32), (4, 2), 256, 32, (object(), object())), "frozen KernelLDSWindow"),
   (lambda: KernelTileGeometry((128, 128, 32), (4, 2), 256, 32,
     (KernelLDSWindow("A", 16, 10240, 80), KernelLDSWindow("B", 10240, 20480, 80))), "contiguous from byte zero"),

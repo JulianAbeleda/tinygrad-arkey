@@ -20,7 +20,7 @@ GENERATED_PROVENANCE = ("machine_authored_generated", "tinygrad_scheduler_genera
 FULL_KERNEL_CANDIDATE_SCHEMA = "boltbeam.full_kernel_candidate.v1"
 FULL_KERNEL_CANDIDATE_SET_SCHEMA = "boltbeam.full_kernel_candidate_set.v1"
 PACKED_SCALAR_DECODER_VERSION = "ggml_k_quant_v1"
-ANCHOR_SINGLE_BUFFER_CANDIDATE_HASH = "81c27275d1aad1bb8147c5c5cdaa8000e9375e81f3d085b49d62064a731313d6"
+ANCHOR_SINGLE_BUFFER_CANDIDATE_HASH = "579b909f9d9b3ed89eab2129fca41baaa35c94b8eab040ccb0cbcee7a340fa0c"
 
 class FullKernelAdmissionError(ValueError):
   def __init__(self, code:str, message:str): self.code = code; super().__init__(f"{code}: {message}")
@@ -78,7 +78,8 @@ class FullKernelAdmission:
   capability: FullKernelCapability
   context: Any
 
-FullKernelExactKey = tuple[str, str, int, int, int, str, str, int]
+FullKernelExactKey = tuple[str, int, int, int, str, str, int]
+LegacyFullKernelExactKey = tuple[str, str, int, int, int, str, str, int]
 FullKernelWarmstartKey = tuple[frozenset[int], int]
 
 @dataclass(frozen=True)
@@ -95,7 +96,12 @@ class FullKernelWorkload:
 
   @property
   def exact_key(self) -> FullKernelExactKey:
-    return (self.profile, self.role, *self.shape, self.target["backend"], self.target["arch"], self.target["wave_size"])
+    return (self.role, *self.shape, self.target["backend"], self.target["arch"], self.target["wave_size"])
+
+  @property
+  def legacy_exact_key(self) -> LegacyFullKernelExactKey:
+    """Profile-bearing lookup alias for legacy artifacts; never a semantic key."""
+    return (self.profile, *self.exact_key)
 
 
 def full_kernel_workload(payload:dict[str,Any]) -> FullKernelWorkload:
@@ -125,8 +131,19 @@ def _freeze_json(value:Any) -> Any:
   if isinstance(value,list): return tuple(_freeze_json(v) for v in value)
   return value
 
-def _canonical_full_kernel_identity(payload:dict[str,Any]) -> str:
+def _semantic_full_kernel_payload(payload:dict[str,Any]) -> dict[str,Any]:
+  """Strip provenance-only profile labels from otherwise exact candidate content."""
+  semantic = json.loads(json.dumps(payload, allow_nan=False))
+  semantic.get("workload", {}).pop("profile", None)
+  semantic.get("applicability", {}).pop("profiles", None)
+  return semantic
+
+def _legacy_full_kernel_identity(payload:dict[str,Any]) -> str:
   encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False).encode("ascii")
+  return hashlib.sha256(encoded).hexdigest()
+
+def _canonical_full_kernel_identity(payload:dict[str,Any]) -> str:
+  encoded = json.dumps(_semantic_full_kernel_payload(payload), sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False).encode("ascii")
   return hashlib.sha256(encoded).hexdigest()
 
 def _full_kernel_exact_key(payload:dict[str,Any]) -> FullKernelExactKey:
@@ -144,12 +161,18 @@ class FullKernelCandidateSetEntry:
   def __post_init__(self) -> None:
     try: payload=json.loads(json.dumps(self.payload,allow_nan=False))
     except (TypeError,ValueError) as exc: raise FullKernelAdmissionError("payload_json",str(exc)) from exc
-    if self.canonical_identity != _canonical_full_kernel_identity(payload):
+    semantic_identity, legacy_identity = _canonical_full_kernel_identity(payload), _legacy_full_kernel_identity(payload)
+    if self.canonical_identity not in (semantic_identity, legacy_identity):
       raise FullKernelAdmissionError("identity_mismatch","candidate-set entry identity differs from canonical payload")
+    object.__setattr__(self,"canonical_identity",semantic_identity)
     object.__setattr__(self,"payload",_freeze_json(payload))
 
   @property
   def exact_key(self) -> FullKernelExactKey: return _full_kernel_exact_key(self.payload)
+  @property
+  def legacy_exact_key(self) -> LegacyFullKernelExactKey: return full_kernel_workload(self.payload).legacy_exact_key
+  @property
+  def legacy_identity_alias(self) -> str: return _legacy_full_kernel_identity(self.payload)
   @property
   def warmstart_key(self) -> FullKernelWarmstartKey: return _full_kernel_warmstart_key(self.payload)
   def to_json(self) -> dict[str,Any]:
@@ -238,14 +261,19 @@ class AdmittedFullKernelCandidateSet:
       exact[key]=admission; weak[entry.warmstart_key]=(key,entry.canonical_identity)
     object.__setattr__(self,"exact_index",MappingProxyType(exact))
 
-  def get(self,profile:str,role:str,shape:tuple[int,int,int],target:dict[str,Any]) -> FullKernelAdmission|None:
-    return self.exact_index.get((profile,role,*shape,target["backend"],target["arch"],target["wave_size"]))
+  def get(self,role:str,shape:tuple[int,int,int],target:dict[str,Any]) -> FullKernelAdmission|None:
+    return self.exact_index.get((role,*shape,target["backend"],target["arch"],target["wave_size"]))
+
+  def legacy_get(self,profile:str,role:str,shape:tuple[int,int,int],target:dict[str,Any]) -> FullKernelAdmission|None:
+    """Read a profile-bearing legacy binding without making profile a selector."""
+    del profile
+    return self.get(role,shape,target)
 
 def admit_full_kernel_candidate_set(candidate_set:FullKernelCandidateSet) -> AdmittedFullKernelCandidateSet:
   admissions=[]
   for entry in candidate_set.entries:
-    profile,role,m,n,k,backend,arch,wave_size=entry.exact_key
-    admissions.append(admit_full_kernel_candidate(entry.payload,entry.canonical_identity,profile=profile,role=role,
+    role,m,n,k,backend,arch,wave_size=entry.exact_key
+    admissions.append(admit_full_kernel_candidate(entry.payload,entry.canonical_identity,profile=full_kernel_workload(entry.payload).profile,role=role,
       shape=(m,n,k),target={"backend":backend,"arch":arch,"wave_size":wave_size},
       capability=full_kernel_candidate_capability(entry.payload)))
   return AdmittedFullKernelCandidateSet(candidate_set,tuple(admissions))
@@ -261,9 +289,9 @@ def admit_full_kernel_candidate(payload:dict[str, Any], canonical_identity:str, 
   except (TypeError, ValueError) as exc: raise FullKernelAdmissionError("payload_json", str(exc)) from exc
   try: _validate_full_kernel_payload(normalized)
   except ValueError as exc: raise FullKernelAdmissionError("payload_schema", str(exc)) from exc
-  encoded = json.dumps(normalized, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False).encode("ascii")
-  actual_identity = hashlib.sha256(encoded).hexdigest()
-  if canonical_identity != actual_identity: raise FullKernelAdmissionError("identity_mismatch", "canonical SHA-256 differs from payload")
+  actual_identity = _canonical_full_kernel_identity(normalized)
+  if canonical_identity not in (actual_identity, _legacy_full_kernel_identity(normalized)):
+    raise FullKernelAdmissionError("identity_mismatch", "canonical SHA-256 differs from semantic payload or its legacy alias")
   workload,schedule,applicability = normalized["workload"],normalized["schedule"],normalized["applicability"]
   storage_kind = candidate_storage_kind(normalized)
   # Preserve the public default while resolving the register transport to its
@@ -272,7 +300,7 @@ def admit_full_kernel_candidate(payload:dict[str, Any], canonical_identity:str, 
   if storage_kind == "global_register_resident" and capability is GFX1100_SINGLE_BUFFER_CAPABILITY:
     capability = GFX1100_REGISTER_RESIDENT_CAPABILITY
   target_id = f"{target['backend']}:{target['arch']}:wave{target['wave_size']}"
-  if workload["profile"] != profile or profile not in applicability["profiles"]: raise FullKernelAdmissionError("workload_profile", "profile is not exact/applicable")
+  # Profile is retained in legacy payloads and call signatures solely as provenance.
   if workload["role"] != role or role not in applicability["roles"]: raise FullKernelAdmissionError("workload_role", "role is not exact/applicable")
   if tuple(workload["shape"][x] for x in ("m","n","k")) != shape or not applicability["exact_shape"]:
     raise FullKernelAdmissionError("workload_shape", "shape is not exact")
@@ -665,9 +693,12 @@ class GeneratedCandidate:
   @property
   def canonical_identity(self) -> str:
     if not self.is_full_kernel_candidate: return ""
-    encoded = json.dumps(self.full_kernel_candidate, sort_keys=True, separators=(",", ":"),
-                         ensure_ascii=True, allow_nan=False).encode("ascii")
-    return hashlib.sha256(encoded).hexdigest()
+    return _canonical_full_kernel_identity(self.full_kernel_candidate)
+
+  @property
+  def legacy_identity_alias(self) -> str:
+    if not self.is_full_kernel_candidate: return ""
+    return _legacy_full_kernel_identity(self.full_kernel_candidate)
 
   def kernel_candidate_context(self):
     if not self.is_full_kernel_candidate: raise ValueError("legacy candidate has no full-kernel candidate context")
@@ -695,7 +726,6 @@ class GeneratedCandidate:
       except KeyError: return False
       shape = workload["shape"]
       if op_shape != (shape["m"], shape["n"], shape["k"]): return False
-      if op.profile != workload["profile"] or op.profile not in applicability["profiles"]: return False
       if op.role != workload["role"] or op.role not in applicability["roles"]: return False
       if op.target != workload["target"]: return False
       target = workload["target"]
@@ -732,6 +762,7 @@ class GeneratedCandidate:
                required_admission_facts=tuple(row.get("required_admission_facts", ())))
     if candidate.is_full_kernel_candidate:
       identity = row.get("canonical_identity")
-      if not isinstance(identity, str) or identity != candidate.canonical_identity:
+      aliases = (candidate.canonical_identity, _legacy_full_kernel_identity(candidate.full_kernel_candidate))
+      if not isinstance(identity, str) or identity not in aliases:
         raise ValueError("strict full-kernel candidate canonical_identity is missing or does not match canonical payload")
     return candidate

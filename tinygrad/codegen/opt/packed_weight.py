@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Literal, TypeAlias
 
-from tinygrad.dtype import dtypes
+from tinygrad.dtype import DType, dtypes
 from tinygrad.uop.ops import Ops, UOp
 
 from tinygrad.llm.qk_layout import (Q4K_WORDS_PER_BLOCK, Q4_K_BLOCK_BYTES, Q4_K_BLOCK_ELEMS,
@@ -12,6 +12,93 @@ from tinygrad.llm.qk_layout import (Q4K_WORDS_PER_BLOCK, Q4_K_BLOCK_BYTES, Q4_K_
 PackedFormat: TypeAlias = Literal["Q4_K", "Q6_K"]
 ScalarIndex: TypeAlias = int | UOp
 LoadSource: TypeAlias = UOp | Callable[[ScalarIndex], UOp]
+
+
+@dataclass(frozen=True)
+class PackedOperandComponent:
+  """One named, typed byte range produced or consumed by a packed operand transform."""
+  name: str
+  dtype: DType
+  offset_bytes: int
+  size_bytes: int
+  layout: str = "contiguous"
+  stride_bytes: int | None = None
+  alignment: int = 1
+
+  def __post_init__(self) -> None:
+    if not isinstance(self.name, str) or not self.name or not self.name.isidentifier():
+      raise ValueError(f"packed component name must be a non-empty identifier, got {self.name!r}")
+    if not isinstance(self.dtype, DType): raise TypeError("packed component dtype must be a DType")
+    if not isinstance(self.layout, str) or not self.layout: raise ValueError("packed component layout must be a non-empty string")
+    if not isinstance(self.offset_bytes, int) or isinstance(self.offset_bytes, bool) or self.offset_bytes < 0:
+      raise ValueError("packed component offset_bytes must be non-negative")
+    for field, value in (("size_bytes", self.size_bytes), ("alignment", self.alignment)):
+      if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+        raise ValueError(f"packed component {field} must be positive")
+    if self.stride_bytes is not None and (not isinstance(self.stride_bytes, int) or isinstance(self.stride_bytes, bool) or self.stride_bytes <= 0):
+      raise ValueError("packed component stride_bytes must be positive when present")
+    if self.offset_bytes % self.alignment: raise ValueError("packed component offset_bytes must satisfy alignment")
+    if self.size_bytes % self.dtype.itemsize: raise ValueError("packed component size_bytes must contain whole dtype values")
+
+  @property
+  def end_bytes(self) -> int: return self.offset_bytes + self.size_bytes
+
+  @property
+  def identity(self) -> tuple[str, str, int, int, str, int|None, int]:
+    return (self.name, self.dtype.name, self.offset_bytes, self.size_bytes, self.layout, self.stride_bytes, self.alignment)
+
+  def to_json(self) -> dict[str, str|int|None]:
+    return dict(zip(("name", "dtype", "offset_bytes", "size_bytes", "layout", "stride_bytes", "alignment"), self.identity))
+
+
+@dataclass(frozen=True)
+class PackedOperandTransform:
+  """Generic packed-operand vocabulary; lowering is deliberately owned elsewhere."""
+  name: str
+  components: tuple[PackedOperandComponent, ...]
+
+  def __post_init__(self) -> None:
+    if not isinstance(self.name, str) or not self.name: raise ValueError("packed transform name must be a non-empty string")
+    if not isinstance(self.components, tuple) or not self.components or not all(isinstance(x, PackedOperandComponent) for x in self.components):
+      raise TypeError("packed transform components must be a non-empty tuple of PackedOperandComponent values")
+    names: set[str] = set()
+    for component in self.components:
+      if component.name in names: raise ValueError(f"duplicate packed component name {component.name!r}")
+      names.add(component.name)
+    ordered = sorted(self.components, key=lambda x: (x.offset_bytes, x.end_bytes))
+    for left, right in zip(ordered, ordered[1:]):
+      if right.offset_bytes < left.end_bytes:
+        raise ValueError(f"packed components {left.name!r} and {right.name!r} overlap")
+
+  @property
+  def identity(self) -> tuple[str, tuple[tuple[str, str, int, int, str, int|None, int], ...]]:
+    return self.name, tuple(x.identity for x in self.components)
+
+  def component(self, name:str) -> PackedOperandComponent:
+    try: return next(x for x in self.components if x.name == name)
+    except StopIteration as exc: raise KeyError(name) from exc
+
+  def to_json(self) -> dict[str, object]:
+    return {"name": self.name, "components": tuple(x.to_json() for x in self.components)}
+
+
+@dataclass(frozen=True)
+class PackedOperandRecordTransform:
+  """Generic source-record to produced-record transform vocabulary."""
+  name: str
+  source: PackedOperandTransform
+  produced: PackedOperandTransform
+
+  def __post_init__(self) -> None:
+    if not isinstance(self.name, str) or not self.name: raise ValueError("record transform name must be a non-empty string")
+    if not isinstance(self.source, PackedOperandTransform) or not isinstance(self.produced, PackedOperandTransform):
+      raise TypeError("record transform source and produced must be PackedOperandTransform values")
+
+  @property
+  def identity(self) -> tuple[str, tuple, tuple]: return self.name, self.source.identity, self.produced.identity
+
+  def to_json(self) -> dict[str, object]:
+    return {"name": self.name, "source": self.source.to_json(), "produced": self.produced.to_json()}
 
 
 @dataclass(frozen=True)

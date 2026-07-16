@@ -6,21 +6,82 @@ Date: 2026-07-14
 
 Target: AMD gfx1100, Qwen3-14B prefill
 
+## 2026-07-15 correction: oracle first, search second
+
+The llama.cpp gfx1100 MMQ implementation is an executable structural oracle,
+not merely a timing comparator.  The first generated candidate must therefore
+be an exact descriptor translation of the selected llama kernel.  Machine
+search starts from that descriptor and may vary it only after structural,
+numeric, resource, and timing evidence exists for the translation.
+
+For Qwen3-14B at `M=512`, the pinned oracle descriptor is:
+
+```text
+output tile:       128 x 128
+workgroup:         8 wave32 waves / 256 threads
+K epoch:           256 values
+LDS:               57,856 bytes
+  ids:                512 bytes
+  Q8_1 DS4 panel:  18,432 bytes
+  decoded Q4_K:    38,912 bytes (76 int32 per row)
+Q8 metadata:       half2(scale, sum_original_fp) per 32 values
+dot:               RDNA3 signed-A/signed-B iu8 WMMA -> int32
+dot lifecycle:     8 scale groups of K=32; 2 K=16 WMMAs per group
+accumulation:      reset int32 per K=32, immediately correct into persistent fp32
+synchronization:   four uniform workgroup barriers per K epoch
+writeback:         wave-owned 16 x 16 accumulator fragments
+stream-k:          disabled on gfx1100; conventional XY tiling
+source revision:   llama.cpp ac4cddeb0dbd778f650bf568f6f08344a06abe3a
+```
+
+The exact 14B grids are `8x4` (`attn_kv`), `40x4` (`attn_qo`),
+`40x4` (`ffn_down`), and `136x4` (`ffn_gate_up`), with no M/N/K
+tails.  A candidate with different tile, workgroup, LDS, DS4, K-lifecycle,
+or writeback facts is a search variant, not an oracle-equivalent translation.
+
+This corrects the earlier wording that could be read as requiring the search
+to rediscover llama's schedule.  The prohibition is against a hidden,
+unattributed handwritten production route.  It does not prohibit a replayable,
+source-anchored oracle descriptor emitted through generic tinygrad vocabulary.
+
 ## Decision
 
-The MMQ effort is realigned to the same machine-search principles used by the
-successful 8B generated routes.
+The MMQ effort uses the same evidence and promotion lifecycle as the successful
+8B generated routes, seeded by the exact llama oracle descriptor above.
 
-No handwritten kernel schedule may become a production or promoted route.
+No hidden or unattributed handwritten kernel schedule may become a production
+or promoted route.
 
 Human-authored code may define the legal Q4_K/Q8_1 operation grammar, the
-correctness reference, compiler lowering rules, and safety constraints. The
-machine must generate, compile, validate, benchmark, and select the schedule
-that becomes a route candidate.
+correctness reference, compiler lowering rules, safety constraints, and the
+source-anchored oracle descriptor. The machine must emit, compile, validate,
+benchmark, and select the schedule that becomes a route candidate.
 
 The current bounded UOp atom remains a research probe only. It is not the final
 implementation and must not be promoted by adding more hand-selected geometry
-or route logic around it.
+or route logic around it. In particular, its 16x16 one-wave topology is not a
+substitute for translating the pinned 128x128 eight-wave oracle descriptor.
+
+### Translation rule
+
+The oracle owns every fact up to the first parity candidate. Search is not
+allowed to rediscover or approximate those facts. A mnemonic match or numeric
+match is insufficient: the candidate must also reproduce the exact record
+layout, role lifetimes, synchronization, per-scale-group recurrence, and
+writeback ownership.
+
+The generic compiler vocabulary must not silently normalize the oracle into a
+different layout. In particular, llama's LDS panels are interleaved records:
+
+```text
+Q8 row, stride 144:  ds[0:16], qs[16:144]
+Q4 row, stride 304:  qs[0:256], dm[256:288], padding[288:304]
+```
+
+A component staging model that lays out all codes first and all metadata later
+is useful compiler infrastructure, but it is not oracle-equivalent. Likewise,
+the packed Q4 global 144-byte block and the decoded 304-byte LDS row are two
+different transforms and must be represented as such.
 
 ## Objective
 

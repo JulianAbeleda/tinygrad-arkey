@@ -310,7 +310,7 @@ class RuntimeState:
   def clear_prefix_cache(self) -> dict:
     if self.loaded and getattr(self.model, "_cached_tokens", None):
       n = len(self.model._cached_tokens)
-      self.model._cached_tokens = []
+      self.model.reset_generation_state()
       return {"prefix_cache_cleared": True, "cleared_tokens": n}
     return {"prefix_cache_cleared": False, "cleared_tokens": 0}
 
@@ -613,20 +613,6 @@ def main():
   model_id = args.model if args.model in models else pathlib.Path(args.model).stem
   file_sizes = [y.nbytes() for y in UOp.sink(*[x.uop for x in nn.state.get_parameters(model)]).toposort() if y.op is Ops.BUFFER]
   print(f"using model \"{model_name}\" with {sum(file_sizes):,} bytes and {sum(x.numel() for x in nn.state.get_parameters(model)):,} params")
-
-  # Prefill profile hint (informational; see docs/prefill-default-policy-evaluation-result-20260620.md). The default
-  # path is universal but slow for long prompts; recommend the fast path when it would fit / for servers.
-  if not _M.PREFILL_V2 and "PREFILL_V2" not in os.environ:
-    _vram = _M.detect_total_vram_bytes()
-    if _vram and _vram >= 23e9:
-      print("  hint: large GPU detected — set PREFILL_V2=auto (or =1) for ~5-15x faster prefill on long prompts "
-            "(~+14GB VRAM for 8B). Add PREFILL_SERVER_PROFILE=1 for the server/long-prompt profile.")
-    else:
-      print("  hint: prefill uses the universal (slow for long prompts) path. PREFILL_V2=1 is faster but needs "
-            "~+14GB VRAM (8B); PREFILL_V2=auto enables it only where it fits.")
-  elif args.serve and not _M.PREFILL_CONCRETE_KV and "PREFILL_CONCRETE_KV" not in os.environ:
-    print("  hint: serving — set PREFILL_SERVER_PROFILE=1 (or PREFILL_CONCRETE_KV=1) to precompile concrete prefill "
-          "jits at load for the best warm/per-request prefill.")
 
   # get tokenizer
   tok = SimpleTokenizer.from_gguf_kv(kv)

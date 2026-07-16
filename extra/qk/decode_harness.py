@@ -15,6 +15,7 @@ DEFAULT_MODEL = "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf"
 DEFAULT_CKPTS = (128, 512, 1024, 4096)
 DEFAULT_MAX_CONTEXT = 4608
 DEFAULT_NMEAS = 40
+DEFAULT_REPS = 5
 
 
 @dataclass(frozen=True)
@@ -27,7 +28,7 @@ class DecodeRunProfile:
     if not self.ckpts: raise ValueError("decode ckpts must be non-empty")
     if self.max_context <= 1: raise ValueError("decode max_context must be greater than 1")
     if self.nmeas < 1: raise ValueError("decode nmeas must be positive")
-    if any(c < 0 for c in self.ckpts): raise ValueError("decode ckpts must be non-negative")
+    if any(c <= 0 for c in self.ckpts): raise ValueError("fixed decode depths must be positive")
     if max(self.ckpts) >= self.max_context:
       raise ValueError(f"max decode ckpt {max(self.ckpts)} must be < max_context {self.max_context}")
     if max(self.ckpts) + self.nmeas >= self.max_context:
@@ -51,11 +52,14 @@ def decode_run_profile(*, ckpts: tuple[int, ...] | None = None, max_context: int
   return prof
 
 
-def decode_authority_argv(model_path: str, profile: DecodeRunProfile) -> list[str]:
+def decode_authority_argv(model_path: str, profile: DecodeRunProfile, *, out_path: str|pathlib.Path,
+                          reps:int=DEFAULT_REPS) -> list[str]:
   profile.validate()
+  if reps < 1: raise ValueError("decode reps must be positive")
   return ["extra/qk/decode_runtime_overhead.py", "--model", model_path,
           "--ckpts", ",".join(str(x) for x in profile.ckpts),
-          "--max-context", str(profile.max_context), "--nmeas", str(profile.nmeas)]
+          "--max-context", str(profile.max_context), "--nmeas", str(profile.nmeas),
+          "--reps", str(reps), "--out", str(out_path)]
 
 
 def decode_subprocess_env(model_path: str, extra: dict | None = None) -> dict[str, str]:

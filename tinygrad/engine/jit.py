@@ -4,7 +4,7 @@ from tinygrad.tensor import Tensor
 from tinygrad.helpers import flatten, merge_dicts, DEBUG, getenv, JIT, JIT_BATCH_SIZE, dedup, pluralize, VIZ, Metadata
 from tinygrad.device import Buffer, Compiled, Device, MultiBuffer
 from tinygrad.dtype import DType, dtypes
-from tinygrad.uop.ops import UOp, PatternMatcher, Variable, sym_infer, Ops, buffers, track_rewrites, graph_rewrite
+from tinygrad.uop.ops import UOp, UPat, PatternMatcher, Variable, sym_infer, Ops, buffers, track_rewrites, graph_rewrite
 from tinygrad.engine.realize import capturing, Estimates, compile_linear, run_linear, graph_cache, estimate_uop, get_runtime
 from tinygrad.engine.realize import unwrap_multi, resolve_params, get_call_arg_uops, get_call_outs_ins
 from tinygrad.schedule.memory import memory_plan_rewrite, _collect_bufs
@@ -92,6 +92,10 @@ def jit_lower(linear:UOp, held_bufs:set[UOp], input_uops:list[UOp]) -> UOp:
 
 class GraphException(Exception): pass
 class JitError(Exception): pass
+
+pm_jit_input_metadata = PatternMatcher([
+  (UPat(Ops.MEMORY_SEMANTIC, src=(UPat(),), name="m"), lambda m: m.src[0]),
+])
 
 def _check_no_non_tensor_return(ret):
   if ret is None or isinstance(ret, Tensor): return
@@ -255,7 +259,12 @@ def _prepare_jit_inputs(args, kwargs):
   # collect buffer UOps (including MultiBuffer)
   input_buf_uops: list[UOp] = [u.base for u in input_uops if u.base.realized is not None]
   if len(set(input_buf_uops)) != len(input_buf_uops): raise JitError("duplicate inputs to JIT")
-  inputs = [(*(u.substitute({u.base:UOp(Ops.NOOP)}, extra_pm=mop_cleanup).unbind_all()), u.dtype, u.device) for u in input_uops]
+  # Semantic ownership describes the concrete allocation at each invocation, not
+  # the shape/device contract used to reuse compiled JIT programs. Keep the real
+  # input UOps above for call binding, but erase the tensor-only carrier from the
+  # structural signature just like the substituted buffer identity.
+  inputs = [(*(graph_rewrite(u.substitute({u.base:UOp(Ops.NOOP)}, extra_pm=mop_cleanup), pm_jit_input_metadata).unbind_all()), u.dtype, u.device)
+            for u in input_uops]
   _var_vals = merge_dicts([x[1] for x in inputs] + [dict(v.unbind() for v in (args + tuple(kwargs.values())) if isinstance(v, UOp))])
   var_vals = {k.expr:v for k,v in _var_vals.items()}
   expected_input_info = [(x[0], tuple(sorted(x[1].keys(), key=lambda v: v.expr)), x[2], x[3]) for x in inputs]

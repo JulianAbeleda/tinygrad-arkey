@@ -10,7 +10,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import json
-import os
 from typing import Any, Mapping
 
 COOPERATIVE_MMQ_SCHEMA = "tinygrad.cooperative_mmq_gate.v1"
@@ -49,15 +48,13 @@ def _passed(evidence: Mapping[str, Any], name: str) -> bool:
 
 def admit_cooperative_mmq(*, candidate: Mapping[str, Any] | None,
                          evidence: Mapping[str, Any] | None,
-                         enabled: bool | None = None) -> CooperativeMMQDecision:
+                         enabled: bool = False) -> CooperativeMMQDecision:
   """Admit only a complete, identity-bound, correctness-gated candidate.
 
-  ``enabled`` is explicit for tests; production callers default to the
-  opt-in ``PREFILL_COOPERATIVE_MMQ=1`` switch.  This function never selects a
-  fallback candidate on behalf of the caller.
+  ``enabled`` is an explicit decision supplied by the selected runtime policy.
+  This function never reads ambient configuration or selects a fallback
+  candidate on behalf of the caller.
   """
-  if enabled is None:
-    enabled = os.environ.get("PREFILL_COOPERATIVE_MMQ", "0").strip().lower() in {"1", "true", "yes", "on"}
   if not enabled:
     return CooperativeMMQDecision("default_off", ROLLBACK_ROUTE, blockers=("cooperative MMQ is opt-in",))
   if candidate is None:
@@ -77,6 +74,10 @@ def admit_cooperative_mmq(*, candidate: Mapping[str, Any] | None,
     blockers.append("compile gate not passed")
   if not _passed(evidence, "correctness"):
     blockers.append("full-output correctness gate not passed")
+  for name, label in (("dynamic_owner_compile", "dynamic-owner compile gate"),
+                      ("dynamic_owner_correctness", "dynamic-owner correctness gate"),
+                      ("dynamic_owner_instruction", "dynamic-owner instruction evidence")):
+    if not _passed(evidence, name): blockers.append(f"{label} not passed")
   if not _passed(evidence, "guard"):
     blockers.append("guard gate not passed")
   if not _passed(evidence, "resources"):

@@ -5,6 +5,23 @@ from tinygrad.tensor import Tensor
 from tinygrad.dtype import dtypes
 from tinygrad.helpers import getenv, prod, round_up
 from tinygrad.nn.state import TensorIO
+from tinygrad.llm.memory_semantics import MODEL_PARAMETER, model_parameter
+from tinygrad.llm.physical_memory_ledger import AllocationOwner, allocation_owner, bind_allocation_owner
+
+# One selected GGUF backing allocation can supply many named (and tied) model
+# tensors.  Its ownership is therefore the semantic role of the backing, not a
+# tensor name, path, allocation size, or device identity.
+MODEL_PARAMETER_ALLOCATION_OWNER = AllocationOwner(MODEL_PARAMETER.semantic_class.value, "model")
+
+def _model_parameter_backing(tensor:Tensor) -> Tensor:
+  """Mark and physically bind the concrete storage root of selected model data."""
+  model_parameter(tensor)
+  # A lazy COPY has no Buffer until scheduling materializes its destination.
+  # The narrowly scoped allocation owner below covers that first allocation;
+  # once realized, this persistent binding covers the backing's lifetime.
+  try: bind_allocation_owner(tensor.uop.buffer, MODEL_PARAMETER_ALLOCATION_OWNER)
+  except AssertionError: pass
+  return tensor
 
 # ggml packs each iq grid entry as N bytes (N=4 for uint32 grids, N=8 for uint64 grids) in a single word. See ggml-common.h.
 @functools.lru_cache(None)
@@ -132,7 +149,16 @@ read_uint32, read_int32, read_uint64, read_int64 = readers[4], readers[5], reade
 
 def _gguf_parse(tensor: Tensor, include_metadata:bool=False) -> tuple[dict, dict[str, Tensor]]|tuple[dict, dict[str, Tensor], dict]:
   # TODO: remove the need for copy to default device
-  tensor = tensor.to(None).realize()
+  # Ownership must cross the selected GGUF/DISK -> compute-device COPY before
+  # realization.  Attaching it to state_dict views after this function returns
+  # is too late: the whole-file destination root has already been allocated and
+  # its copy schedule has already been emitted.
+  _model_parameter_backing(tensor)
+  tensor = _model_parameter_backing(tensor.to(None))
+  with allocation_owner(kind=MODEL_PARAMETER_ALLOCATION_OWNER.kind, lifetime=MODEL_PARAMETER_ALLOCATION_OWNER.lifetime,
+                        semantic_owner_id=MODEL_PARAMETER_ALLOCATION_OWNER.semantic_owner_id):
+    tensor.realize()
+  _model_parameter_backing(tensor)
   r = io.BufferedReader(TensorIO(tensor), 1_000_000)
   magic, version, n_tensors, n_kv = r.read(4), read_int32(r), read_int64(r), read_int64(r)
   if magic != b"GGUF" or version not in [2, 3]: raise ValueError("Invalid GGUF format!")
