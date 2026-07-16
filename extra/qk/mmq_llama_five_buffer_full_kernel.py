@@ -86,7 +86,9 @@ def _full_grid_sink(m:int, n:int, k:int) -> UOp:
   assert final is not None
   plan = llama_mmq_candidate_plan()
   desc = WMMAWritebackDescriptor(plan.geometry, plan.tensor_core, dtypes.float, 8,
-    WMMAWritebackLayout("row", "col", n), None, True)
+    # Oracle A rows are Q4/N and B rows are Q8/M, so row-major output[M,N]
+    # is col * N + row in the tensor-core coordinate vocabulary.
+    WMMAWritebackLayout("col", "row", n), None, True)
   writeback = build_wmma_writeback(WMMAWritebackProof.prove(desc), destination=output,
     accumulators=_accumulator_vectors(previous, final.stage.subtile_n), wave_m=wave_m, wave_n=wave_n, lane=lane)
   # Exact aligned tiles need no predicates: grid origins are folded into the row-major destination base.
@@ -94,9 +96,10 @@ def _full_grid_sink(m:int, n:int, k:int) -> UOp:
   prior = None
   for store in writeback.stores:
     pointer = output.index(tile_base + store.src[0].src[1], ptr=True)
-    value = store.src[1]
+    value = UOp(Ops.BITCAST, store.src[1].dtype, (store.src[1],))
     if prior is not None:
       pointer = pointer.after(prior)
+      value = value.after(prior)
     prior = pointer.store(value).replace(tag=store.tag)
   assert prior is not None
   closed = prior.end(*prior.ranges)

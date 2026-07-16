@@ -41,8 +41,11 @@ def test_source_identity_writeback_vocabulary_and_no_dense_tensor_or_forbidden_t
   kernel = full.build_llama_five_buffer_full_kernel(128, 128, 256)
   assert kernel.source_commit == LLAMA_SOURCE_COMMIT
   assert kernel.proof_graph.candidate_identity == llama_mmq_candidate_plan().identity()
-  assert len([x for x in kernel.sink.toposort() if x.op is Ops.STORE and isinstance(x.tag, tuple) and
-              x.tag[:1] == ("wmma_writeback",)]) == 64
+  stores = [x for x in kernel.sink.toposort() if x.op is Ops.STORE and isinstance(x.tag, tuple) and
+            x.tag[:1] == ("wmma_writeback",)]
+  assert len(stores) == 64 and {x.tag[-1] for x in stores} == {"col"}
+  for previous, current in zip(stores, stores[1:]):
+    assert previous in current.src[0].backward_slice and previous in current.src[1].backward_slice
   assert not any(name.startswith(("dense", "dequant")) for name, _, _ in kernel.proof_graph.allocated_shapes)
   source = inspect.getsource(full).lower()
   assert all(word not in source for word in ("model", "profile", "exact_shape", "getenv", "device scan", "autoscan", "route"))
