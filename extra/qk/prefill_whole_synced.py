@@ -49,17 +49,17 @@ def _dirty_tree() -> bool:
 
 
 def _prefill_graph_gemm_enabled(model) -> bool:
-  return bool(model.config.prefill_graph_gemm and getattr(model, "_prefill_graph_gemm_registry", None) is not None)
+  return getattr(model, "_prefill_graph_gemm_registry", None) is not None
 
 
 def _runtime_route_env(model) -> dict[str, Any]:
   env = dict(os.environ)
-  active = _prefill_graph_gemm_enabled(model)
-  env["PREFILL_GRAPH_GEMM"] = "1" if active else "0"
-  if not active:
-    for key in ("BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_JSON", "BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH",
-                "BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON", "BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH"):
-      env.pop(key, None)
+  for key in ("BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_JSON", "BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH",
+              "BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON", "BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH"):
+    env.pop(key, None)
+  if (registry := getattr(model, "_prefill_graph_gemm_registry", None)) is not None:
+    env["BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_JSON"] = json.dumps(registry.candidate_set.to_json(), sort_keys=True,
+                                                                  separators=(",", ":"))
   return env
 
 
@@ -334,8 +334,8 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
     "device_profile": {str(k): row.get("profile", profile_range_summary([])) for k, row in chunk_rows.items()},
     "whole_tok_s": {str(k): round(v, 2) for k, v in whole.items()},
     "graph_gemm": graph_gemm,
-    "prefill_v2": os.environ.get("PREFILL_V2", ""),
-    "prefill_route": os.environ.get("PREFILL_ROUTE", "auto"),
+    "prefill_v2": bool(model.config.prefill_v2),
+    "prefill_route": model.prefill_policy.get("strategy", "unknown"),
     "K": K,
     "warmups": warmups,
     "rounds": rounds,

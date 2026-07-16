@@ -7,7 +7,7 @@ import tinygrad.llm.model as model_module
 from tinygrad.llm.device_facts import DeviceCapabilities, DeviceFacts, ProbeRecord
 from extra.qk.memory_adaptive_allocation_observer import make_memory_facts
 from extra.qk.memory_adaptive_runtime_collector import install_model_adapters
-from tinygrad.llm.model import (Transformer, _graph_gemm_binding, _memory_adaptive_measurement_authority,
+from tinygrad.llm.model import (Transformer, TransformerConfig, _graph_gemm_binding, _memory_adaptive_measurement_authority,
   derive_selected_gguf_prefill_inventory, select_memory_adaptive_runtime_policy)
 
 
@@ -29,6 +29,10 @@ def metadata():
 def metadata_with_fixed_lm_head():
   kv, meta = metadata()
   return kv, {"tensor_infos": [*meta["tensor_infos"], ("output.weight", (8, 32), 1, 0)]}
+
+def metadata_with_quantized_lm_head():
+  kv, meta = metadata()
+  return kv, {"tensor_infos": [*meta["tensor_infos"], ("output.weight", (8, 32), 14, 0)]}
 
 def select_with_collector(kv, meta, collector, facts=None):
   facts = device_facts() if facts is None else facts
@@ -67,6 +71,13 @@ def test_inventory_includes_fixed_lm_head_with_truthful_geometry_and_route():
   assert lm_head["shape"] == {"m": 1, "n": 32, "k": 8}
   policy = select_memory_adaptive_runtime_policy(kv=kv, meta=meta, device_facts=device_facts())
   assert policy["routes"][lm_head["invocation_id"]] == lm_head["fixed_route_id"]
+
+def test_quantized_lm_head_remains_fixed_final_token_work_not_pp512_candidate_work():
+  kv, meta = metadata_with_quantized_lm_head()
+  lm_head = next(row for row in derive_selected_gguf_prefill_inventory(kv, meta)["rows"] if row["role"] == "lm_head")
+  assert lm_head["quant_format"] == "Q6_K" and lm_head["candidate_controlled"] is False
+  assert lm_head["fixed_route_id"] == "fixed-ggml-linear"
+  assert lm_head["shape"] == {"m":1, "n":32, "k":8}
 
 def test_inventory_materializes_tied_embedding_as_fixed_runtime_lm_head():
   kv, _ = metadata()
@@ -182,12 +193,21 @@ def test_relevant_linears_receive_the_single_scanned_device_facts_object():
   facts = device_facts()
   weight = SimpleNamespace(shape=(16, 8))
   tr = object.__new__(Transformer)
-  tr.config = SimpleNamespace(prefill_policy=None, prefill_graph_gemm=False, prefill_device_facts=facts)
+  tr.config = SimpleNamespace(prefill_policy=None, prefill_device_facts=facts)
   tr._prefill_graph_gemm_registry = None
   tr.blk = [SimpleNamespace(ffn_gate=SimpleNamespace(weight=weight))]
   tr.output = None
   linear = next(tr._prefill_v2_covered())[0]
   assert linear._prefill_device_facts is facts
+
+def test_transformer_owns_selected_graph_registry_used_for_linear_bindings(monkeypatch):
+  registry = object()
+  monkeypatch.setattr(model_module, "_graph_gemm_registry", lambda policy: registry)
+  config = TransformerConfig(num_blocks=0, dim=8, hidden_dim=16, n_heads=2, n_kv_heads=1, norm_eps=1e-5,
+    vocab_size=32, head_dim=4, rope_theta=10000, rope_dim=4, v_head_dim=4, max_context=32,
+    prefill_policy={"graph_gemm":{}})
+  tr = Transformer(config)
+  assert tr._prefill_graph_gemm_registry is registry
 
 
 def test_graph_binding_requires_one_exact_selected_policy_row():

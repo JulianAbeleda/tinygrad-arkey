@@ -124,7 +124,7 @@ def test_qk_route_policy_accepts_promoted_pure_prefill_candidate_route(tmp_path)
       "selected_route": "prefill_wmma_lds_dbuf_generated",
       "status": "promoted",
       "route_params": {},
-      "rollback": {"PREFILL_GRAPH_GEMM": "0"},
+      "rollback": {},
     }],
   }))
   policy = _load_policy(policy_path)

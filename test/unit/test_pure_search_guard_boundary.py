@@ -22,7 +22,7 @@ import tinygrad.llm.decode_routes as dr
 from tinygrad.llm import route_ops
 import tinygrad.llm.model as model
 from extra.qk import pure_search_guard as guard
-from extra.qk.route_manifest import ROUTES, default_routes
+from extra.qk.route_manifest import ROUTES, default_routes, promoted_prefill_candidate_policy
 
 
 @contextlib.contextmanager
@@ -120,30 +120,31 @@ def test_real_attention_default_selects_live_split(monkeypatch):
   assert attn["rolled_back_to_oracle"] is False and attn["pure"] is True
 
 
-def test_prefill_default_is_promoted_generated_candidate_set():
-  # The selected immutable policy consumes scanned facts; importing model.py does not open a target.
+def test_prefill_policy_has_no_graph_gemm_boolean_selector():
   facts = SimpleNamespace(backend="AMD", architecture="gfx1100")
   base = {"strategy": "DIRECT_PACKED_FALLBACK", "candidate_id": "baseline", "routes": {}}
-  with env(PREFILL_GRAPH_GEMM=None):
-    selected = model.select_prefill_runtime_policy(base, scanned_device_facts=facts, workload_reuse=False)
-    assert selected["prefill_graph_gemm"] is True
-  gemm = {r["family"]: r for r in guard.effective_routes({})}["prefill_gemm"]
+  for value in (None, "0", "1"):
+    with env(PREFILL_GRAPH_GEMM=value):
+      selected = model.select_prefill_runtime_policy(base, scanned_device_facts=facts, workload_reuse=False)
+      assert "prefill_graph_gemm" not in selected
+  bound = {**base, "strategy":"FULL_RESIDENT_OVERLAY", "graph_gemm":{"candidate_set":{}, "policy_rows":[{}]}}
+  selected = model.select_prefill_runtime_policy(bound, scanned_device_facts=facts, workload_reuse=False)
+  assert "prefill_graph_gemm" not in selected
+  candidate_path = promoted_prefill_candidate_policy()["candidate_set_path"]
+  gemm = {r["family"]: r for r in guard.effective_routes(
+    {"BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH":candidate_path})}["prefill_gemm"]
   assert gemm["effective_route"] == "prefill_wmma_lds_dbuf_generated"
   assert len(gemm["candidate_set_identities"]) == 4
   assert gemm["rolled_back_to_oracle"] is False and gemm["pure"] is True
-  with env(PREFILL_GRAPH_GEMM="0"):
-    selected = model.select_prefill_runtime_policy(base, scanned_device_facts=facts, workload_reuse=False,
-                                                    graph_gemm_override=False)
-    assert selected["prefill_graph_gemm"] is False
 
 
-def test_prefill_default_is_scoped_only_by_scanned_target_facts():
+def test_scanned_target_support_never_adds_a_graph_gemm_selector():
   base = {"strategy": "DIRECT_PACKED_FALLBACK", "candidate_id": "baseline", "routes": {}}
   supported = model.select_prefill_runtime_policy(base, scanned_device_facts=SimpleNamespace(backend="AMD", architecture="gfx1100"),
                                                    workload_reuse=False)
   unsupported = model.select_prefill_runtime_policy(base, scanned_device_facts=SimpleNamespace(backend="AMD", architecture="gfx1200"),
                                                      workload_reuse=False)
-  assert supported["prefill_graph_gemm"] is True and unsupported["prefill_graph_gemm"] is False
+  assert "prefill_graph_gemm" not in supported and "prefill_graph_gemm" not in unsupported
 
 
 def test_prefill_q4k_research_selector_is_manifest_attributed():
@@ -159,7 +160,7 @@ def test_prefill_q4k_research_selector_is_manifest_attributed():
 def test_shipped_default_getenv_values_keep_generated_routes_on():
   # These are the runtime getenv DEFAULTS the guard encodes in _env_flag. Pin them against the values the REAL selector
   # observes under a pristine env, so flipping the source default (decode_routes.py / model.py) fails here.
-  with env(**_DECODE_KEYS, PREFILL_GRAPH_GEMM=None):
+  with env(**_DECODE_KEYS):
     assert getenv("BUBBLEBEAM_FUTURESIGHT", 1) == 1
     assert getenv("DECODE_LIVE_SPLIT", 1) == 1
   assert guard._env_flag({}, "BUBBLEBEAM_FUTURESIGHT", 1) is True
@@ -192,20 +193,22 @@ def test_guard_default_families_are_manifest_defaults_with_kernel_binding():
   for r in guard.effective_routes({}):
     rid = r["effective_route"]
     assert rid in ROUTES, rid
-    assert rid in defaults, f"{rid} is not a manifest default route"
+    if r["family"] != "prefill_gemm": assert rid in defaults, f"{rid} is not a manifest default route"
+    else: assert rid == "prefill_v2_scheduler_matmul_default"
     # a hot default that emits a route-local generated kernel must declare the pattern it binds to; the ordinary
     # tinygrad-graph default (scheduler-owned, no route-local kernel) legitimately has none.
     if r["surface_class"] != "ordinary_tinygrad_graph":
       assert ROUTES[rid].get("expected_kernels") or ROUTES[rid].get("candidate_set_path"), f"{rid} has no kernel binding"
 
 
-def test_prefill_graph_gemm_env_selects_promoted_generated_candidate():
-  gemm = {r["family"]: r for r in guard.effective_routes({"PREFILL_GRAPH_GEMM": "1"})}["prefill_gemm"]
+def test_explicit_candidate_artifact_is_attributed_without_a_route_flag():
+  candidate_env = {"BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH":promoted_prefill_candidate_policy()["candidate_set_path"]}
+  gemm = {r["family"]: r for r in guard.effective_routes(candidate_env)}["prefill_gemm"]
   assert gemm["effective_route"] == "prefill_wmma_lds_dbuf_generated"
   assert gemm["rolled_back_to_oracle"] is False and gemm["pure"] is True
-  guard.assert_pure_machine_search({"PURE_MACHINE_SEARCH_ONLY": "1", "PREFILL_GRAPH_GEMM": "1"})
+  guard.assert_pure_machine_search({"PURE_MACHINE_SEARCH_ONLY": "1", **candidate_env})
 
 
 def test_retired_hand_asm_selectors_fail_loud():
   with pytest.raises(ValueError, match="retired prefill route selectors"):
-    guard.effective_routes({"PREFILL_GRAPH_GEMM": "1", "PREFILL_GEMM_PROFILE": "hand_asm_lds2"})
+    guard.effective_routes({"PREFILL_GEMM_PROFILE": "hand_asm_lds2"})

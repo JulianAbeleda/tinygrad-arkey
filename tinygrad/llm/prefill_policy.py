@@ -3,27 +3,26 @@ import json
 from types import MappingProxyType
 from typing import Any, Mapping
 
-_PREFILL_V2_VALIDATED_UBATCH = (512,)
+_CONCRETE_PREFILL_VALIDATED_M = (512,)
 
 def prefill_plan_uses_overlay(serialized_plan:str|None) -> bool:
   if serialized_plan is None: return False
   return json.loads(serialized_plan).get("decision") == "FULL_RESIDENT_OVERLAY"
 
 _EXECUTING_STRATEGIES = frozenset(("FULL_RESIDENT_OVERLAY", "BOUNDED_PACKED_TILES", "DIRECT_PACKED_FALLBACK"))
-_PROMOTED_PREFILL_TARGET_REQUIREMENTS = {"backend": "AMD", "architecture": "gfx1100"}
+_TC_ATTN_TARGET_REQUIREMENTS = {"backend": "AMD", "architecture": "gfx1100"}
 
 def _requirements_met(requirements:Mapping[str, Any], scanned_device_facts:Any) -> bool:
   """Match an exact candidate target contract against the one load-entry scan."""
   return all(getattr(scanned_device_facts, name, None) == expected for name, expected in requirements.items())
 
 def select_prefill_runtime_policy(value:Mapping[str, Any], *, scanned_device_facts:Any, workload_reuse:bool,
-                                  graph_gemm_override:bool|None=None, tc_attn_override:bool|None=None) -> Mapping[str, Any]:
-  """Add size/name-independent workload and target applicability facts, then freeze the load policy."""
-  target_default = _requirements_met(_PROMOTED_PREFILL_TARGET_REQUIREMENTS, scanned_device_facts)
+                                  tc_attn_override:bool|None=None) -> Mapping[str, Any]:
+  """Add derived runtime diagnostics without granting them route authority."""
+  target_default = _requirements_met(_TC_ATTN_TARGET_REQUIREMENTS, scanned_device_facts)
   selected = dict(value)
   selected["routes"] = dict(selected["routes"])
   selected.update({"workload_reuse": bool(workload_reuse),
-                   "prefill_graph_gemm": target_default if graph_gemm_override is None else graph_gemm_override,
                    "prefill_tc_attn": target_default if tc_attn_override is None else tc_attn_override})
   return immutable_prefill_policy(selected)
 
@@ -50,15 +49,15 @@ def prefill_policy_uses_overlay(policy:Mapping[str, Any]|None) -> bool:
 
 def prefill_concrete_kv_auto_decision(workload_reuse:bool, prefill_v2_on:bool) -> tuple[bool, str]:
   # Precompile pays off only when the caller declares that generated workload will be reused.
-  if not prefill_v2_on: return (False, "PREFILL_V2 off -> concrete-KV moot, OFF")
-  if workload_reuse: return (True, "workload reuse + PREFILL_V2 on -> precompile concrete jits, ON")
-  return (False, "no workload reuse (one-shot assumed) -> OFF; set PREFILL_SERVER_PROFILE=1 or PREFILL_CONCRETE_KV=1")
+  if not prefill_v2_on: return (False, "selected prefill representation is off -> concrete-KV moot")
+  if workload_reuse: return (True, "workload reuse + concrete prefill representation -> precompile concrete jits")
+  return (False, "one-shot workload -> no concrete-KV precompile")
 
 def prefill_v2_validate_ubatch(ubatch:int) -> None:
-  if ubatch not in _PREFILL_V2_VALIDATED_UBATCH:
-    raise ValueError(f"PREFILL_V2 only validates PREFILL_UBATCH in {_PREFILL_V2_VALIDATED_UBATCH} (got {ubatch}); "
+  if ubatch not in _CONCRETE_PREFILL_VALIDATED_M:
+    raise ValueError(f"concrete prefill validates physical M in {_CONCRETE_PREFILL_VALIDATED_M} (got {ubatch}); "
                      f"the warmstart TC schedule is shape-specific. Re-measure per-shape opts for {ubatch} first "
-                     f"and add it to _PREFILL_V2_VALIDATED_UBATCH.")
+                     f"and add it to _CONCRETE_PREFILL_VALIDATED_M.")
 
 def prefill_v2_realize_bytes(shapes:list[tuple[int,int]]) -> int:
   return sum(o * i for o, i in shapes) * 2

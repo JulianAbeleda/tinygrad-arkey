@@ -466,8 +466,7 @@ def test_bind_rejects_self_consistent_hash_with_false_emitted_descriptor(mutatio
 
 def test_exact_anchor_candidate_selects_truthful_pure_research_route():
   candidate = _single_buffer_anchor_candidate()
-  env = {"PREFILL_GRAPH_GEMM": "1",
-         "BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON": json.dumps(candidate.full_kernel_candidate),
+  env = {"BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON": json.dumps(candidate.full_kernel_candidate),
          "BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH": candidate.canonical_identity}
   row = {x["family"]: x for x in pure_search_guard.effective_routes(env)}["prefill_gemm"]
   assert row["effective_route"] == "prefill_wmma_lds_dbuf_generated"
@@ -489,19 +488,18 @@ def test_dynamic_second_supported_candidate_admits_and_joins_route_identity():
   assert admission.geometry.tile == (64,64,32) and admission.active_lds_bytes == 10240
   assert (admission.plan.subtiles_m, admission.plan.subtiles_n, admission.plan.k_substeps) == (2,2,2)
   assert admission.canonical_identity != ANCHOR_SINGLE_BUFFER_CANDIDATE_HASH
-  env = {"PREFILL_GRAPH_GEMM":"1",
-    "BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON":json.dumps(payload),"BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH":candidate.canonical_identity}
+  env = {"BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON":json.dumps(payload),
+    "BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH":candidate.canonical_identity}
   row = {x["family"]:x for x in pure_search_guard.effective_routes(env)}["prefill_gemm"]
   assert row["candidate_identity"] == candidate.canonical_identity
 
 
-def test_candidate_route_selector_fails_closed_and_promoted_set_is_default():
+def test_candidate_route_selector_fails_closed_and_absent_artifact_is_scheduler_fallback():
   default = {x["family"]: x for x in pure_search_guard.effective_routes({})}["prefill_gemm"]
-  assert default["effective_route"] == "prefill_wmma_lds_dbuf_generated"
-  assert len(default["candidate_set_identities"]) == 4
+  assert default["effective_route"] == "prefill_v2_scheduler_matmul_default"
+  assert "candidate_set_identities" not in default
   candidate = _single_buffer_anchor_candidate()
-  base = {"PREFILL_GRAPH_GEMM": "1",
-          "BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON": json.dumps(candidate.full_kernel_candidate)}
+  base = {"BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON": json.dumps(candidate.full_kernel_candidate)}
   with pytest.raises(ValueError, match="provided together"): pure_search_guard.effective_routes(base)
   with pytest.raises(ValueError, match="identity_mismatch"):
     pure_search_guard.effective_routes({**base, "BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH": "0" * 64})
@@ -574,6 +572,5 @@ def test_candidate_set_json_path_and_legacy_environment_loaders(tmp_path):
 def test_pure_guard_accepts_exact_non_gate_legacy_candidate():
   entry=_buffer2_set_entry("attn_qo",(512,4096,4096))
   env={"BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON":json.dumps(entry.payload),
-       "BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH":entry.canonical_identity,
-       "PREFILL_GRAPH_GEMM":"1"}
+       "BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH":entry.canonical_identity}
   assert pure_search_guard._prefill_candidate_selected(env)

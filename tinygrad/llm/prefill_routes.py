@@ -260,7 +260,7 @@ def route_direct_packed_prefill(lin, x:Tensor) -> Tensor | None:
   return None if spec is None else _run_direct_packed_baseline(lin, x, spec)
 
 
-def route_prefill_linear(lin, x:Tensor, *, prefill_graph_gemm:bool) -> Tensor:
+def route_prefill_linear(lin, x:Tensor) -> Tensor:
   route = _attached_production_route(lin, x)
   w = getattr(lin, "_pf16_w", None)
 
@@ -268,7 +268,8 @@ def route_prefill_linear(lin, x:Tensor, *, prefill_graph_gemm:bool) -> Tensor:
     routed = route_direct_packed_prefill(lin, x)
     if routed is not None: return routed
 
-  if route == "fp16" and prefill_graph_gemm and w is not None:
+  # Exact binding presence is the only Graph-GEMM execution authority.
+  if route == "fp16" and getattr(lin, "_prefill_graph_gemm_binding", None) is not None and w is not None:
     routed = qk_ops.route_pf16_graph_gemm(lin, x)
     if routed is not None: notify_prefill_route(lin); return routed
   if w is None: w = lin.weight.cast(dtypes.float16)

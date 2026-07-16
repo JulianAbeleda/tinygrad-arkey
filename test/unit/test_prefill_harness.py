@@ -46,24 +46,19 @@ def test_prefill_csv_and_argv_are_canonical():
   assert "--whole-lengths" in argv and "512" in argv
 
 
-def test_prefill_subprocess_env_is_import_light_policy():
+def test_prefill_subprocess_env_contains_no_route_selectors():
   env = prefill_subprocess_env({"DEV": "AMD"})
-  assert env["PREFILL_V2"] == "1"
-  assert env["BOLTBEAM_MODEL_PROFILE"] == "qwen3_8b_q4k_m_gfx1100"
-  assert env["PREFILL_GRAPH_GEMM"] == "1"
   assert env["DEV"] == "AMD"
   assert "PYTHONPATH" in env
+  assert all(key not in env for key in ("PREFILL_V2", "BOLTBEAM_MODEL_PROFILE", "PREFILL_GRAPH_GEMM"))
 
 
-def test_prefill_model_profile_selects_14b_direct_packed_defaults():
+def test_prefill_model_profile_only_selects_the_14b_fixture():
   prof = resolve_prefill_model_profile(model_path="/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf")
   assert prof.id == "qwen3_14b_q4k_m_gfx1100"
   env = prefill_subprocess_env(model_profile_id="14b")
-  assert env["PREFILL_V2"] == "1"
-  assert env["PREFILL_ROUTE"] == "direct_packed"
-  assert env["PREFILL_PACKED_STREAM"] == "1"
-  assert env["PREFILL_GRAPH_GEMM"] == "0"
-  assert env["ALLOW_DEVICE_USAGE"] == "1"
+  assert all(key not in env for key in ("PREFILL_V2", "PREFILL_ROUTE", "PREFILL_PACKED_STREAM",
+                                         "PREFILL_GRAPH_GEMM", "BOLTBEAM_MODEL_PROFILE"))
   run = prefill_run_profile("smoke")
   argv = prefill_authority_argv(prof.default_model, run, model_profile_id=prof.id)
   assert "--model-profile" in argv and prof.id in argv
@@ -71,15 +66,15 @@ def test_prefill_model_profile_selects_14b_direct_packed_defaults():
 
 def test_prefill_authority_attributes_the_loaded_runtime_registry(monkeypatch):
   monkeypatch.setenv("BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH", "stale-profile-artifact.json")
-  fallback = SimpleNamespace(config=SimpleNamespace(prefill_graph_gemm=True), _prefill_graph_gemm_registry=None)
+  fallback = SimpleNamespace(_prefill_graph_gemm_registry=None)
   assert not prefill_whole_synced._prefill_graph_gemm_enabled(fallback)
   fallback_env = prefill_whole_synced._runtime_route_env(fallback)
-  assert fallback_env["PREFILL_GRAPH_GEMM"] == "0"
   assert "BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH" not in fallback_env
 
-  selected = SimpleNamespace(config=SimpleNamespace(prefill_graph_gemm=True), _prefill_graph_gemm_registry=object())
+  candidate_set = SimpleNamespace(to_json=lambda:{"schema":"boltbeam.full_kernel_candidate_set.v1", "entries":[]})
+  selected = SimpleNamespace(_prefill_graph_gemm_registry=SimpleNamespace(candidate_set=candidate_set))
   assert prefill_whole_synced._prefill_graph_gemm_enabled(selected)
-  assert prefill_whole_synced._runtime_route_env(selected)["PREFILL_GRAPH_GEMM"] == "1"
+  assert "BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_JSON" in prefill_whole_synced._runtime_route_env(selected)
 
 
 def test_bench_prefill_dispatches_authority(monkeypatch):
@@ -104,9 +99,7 @@ def test_bench_prefill_dispatches_14b_profile(monkeypatch):
   assert rc == 0
   args, kwargs = calls[0]
   assert "--model-profile" in args[1] and "qwen3_14b_q4k_m_gfx1100" in args[1]
-  assert args[2]["PREFILL_ROUTE"] == "direct_packed"
-  assert args[2]["BOLTBEAM_MODEL_PROFILE"] == "qwen3_14b_q4k_m_gfx1100"
-  assert args[2]["PREFILL_GRAPH_GEMM"] == "0"
+  assert all(key not in args[2] for key in ("PREFILL_ROUTE", "BOLTBEAM_MODEL_PROFILE", "PREFILL_GRAPH_GEMM"))
   assert kwargs["label"] == "smoke:qwen3_14b_q4k_m_gfx1100"
 
 

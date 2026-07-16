@@ -12,6 +12,10 @@ def qk_runtime_specs_attr(name:str): return _attr("extra.qk.runtime_specs", name
 def qk_quant_specs_attr(name:str): return _attr("extra.qk.quant_specs", name)
 def qk_generated_candidates_attr(name:str): return _attr("extra.qk.generated_candidates", name)
 def qk_route_manifest_attr(name:str): return _attr("extra.qk.route_manifest", name)
+def automatic_promoted_prefill_graph_policy(*args, **kwargs):
+  return _attr("extra.qk.route_manifest", "automatic_promoted_prefill_graph_policy")(*args, **kwargs)
+def install_memory_adaptive_model_adapters():
+  return _attr("extra.qk.memory_adaptive_runtime_collector", "install_model_adapters")()
 
 
 def route_pf16_graph_gemm(*args, **kwargs): return _attr("extra.qk.prefill_graph_gemm_route", "route_pf16_graph_gemm")(*args, **kwargs)

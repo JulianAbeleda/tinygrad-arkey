@@ -91,26 +91,15 @@ def _default_route_id(**facts: Any) -> str:
   return _single_route_id(default_only=True, env={}, **facts)
 
 
-def _env_route_id(env: dict[str, str], **facts: Any) -> str:
-  return _single_route_id(env=env, **facts)
-
-
-_PREFILL_GRAPH_GEMM_ENV = {"PREFILL_GRAPH_GEMM": "1"}
-_PREFILL_SCHEDULER_ROLLBACK_ENV = {"PREFILL_GRAPH_GEMM": "0"}
 _PREFILL_CANDIDATE_ROUTE = promoted_prefill_candidate_policy()["route_id"]
+_PREFILL_SCHEDULER_FALLBACK_ROUTE = "prefill_v2_scheduler_matmul_default"
 _RETIRED_PREFILL_ROUTE_KEYS = ("PREFILL_GEMM_PROFILE", "PREFILL_WMMA_PIPE_PRIMITIVE", "PREFILL_WMMA_LDS_PRIMITIVE", "PREFILL_DBUF")
 
 def _prefill_policy_env(env: dict[str, Any]) -> dict[str, Any]:
-  """Resolve the shipped prefill default from manifest policy without mutating the caller's environment."""
+  """Reject retired selectors without turning diagnostics into route authority."""
   retired = [key for key in _RETIRED_PREFILL_ROUTE_KEYS if key in env]
   if retired: raise ValueError(f"retired prefill route selectors are not supported: {', '.join(retired)}")
-  # GRAPH_GEMM=0 is the sole rollback. GRAPH_GEMM=1 selects the same promoted candidate as the absent-env default;
-  # the retired raw pipe/LDS kernels are no longer selectable. Explicit candidate evidence remains an override.
-  if not _enabled(env, "PREFILL_GRAPH_GEMM") and "PREFILL_GRAPH_GEMM" in env: return env
-  if any(env.get(key) is not None for key in ("BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_JSON", "BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH",
-                                               "BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON", "BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH")):
-    return env
-  return {**promoted_prefill_candidate_policy()["runtime_env"], **env}
+  return env
 
 
 def _prefill_candidate_selected(env: dict[str, Any]) -> bool:
@@ -118,8 +107,6 @@ def _prefill_candidate_selected(env: dict[str, Any]) -> bool:
   set_requested = env.get("BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_JSON") is not None or \
                   env.get("BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH") is not None
   if set_requested:
-    if not _enabled(env,"PREFILL_GRAPH_GEMM"):
-      raise ValueError("BoltBeam full-kernel candidate set requires the graph-GEMM route")
     from extra.qk.prefill_graph_gemm_route import _candidate_registry_from_env
     return _candidate_registry_from_env(env) is not None
   payload_text = env.get("BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON")
@@ -127,8 +114,6 @@ def _prefill_candidate_selected(env: dict[str, Any]) -> bool:
   if payload_text is None and identity is None: return False
   if payload_text is None or identity is None:
     raise ValueError("BoltBeam full-kernel candidate payload and hash must be provided together")
-  if not _enabled(env, "PREFILL_GRAPH_GEMM"):
-    raise ValueError("BoltBeam full-kernel candidate requires the generated graph-GEMM route")
   from extra.qk.prefill_graph_gemm_route import _candidate_registry_from_env
   return _candidate_registry_from_env(env) is not None
 
@@ -153,7 +138,7 @@ HOT_FAMILIES = [
    "rollback_active": lambda e: False},
   {"family": "prefill_gemm",
    "generated": _default_route_id(workload="prefill", quant=["fp16"], roles=["attn_qo", "attn_kv", "ffn_down", "ffn_gate_up"]),
-   "oracle": _env_route_id(_PREFILL_SCHEDULER_ROLLBACK_ENV, workload="prefill", quant=["fp16"]),
+   "oracle": _PREFILL_SCHEDULER_FALLBACK_ROUTE,
    "effective": "prefill_gemm"},
   # Q4_K quantized prefill (14B/32B memory-safe default). The direct-packed default is descriptor-owned; the opt-in
   # PREFILL_Q4K_WMMA_FUSED route remains raw-ISA WMMA and is not selected here.
@@ -171,10 +156,7 @@ HOT_FAMILIES = [
 def _prefill_gemm_effective(env: dict[str, Any]) -> tuple[str, bool]:
   env = _prefill_policy_env(env)
   if _prefill_candidate_selected(env): return _PREFILL_CANDIDATE_ROUTE, False
-  if not _enabled(env, "PREFILL_GRAPH_GEMM"):
-    return _env_route_id(_PREFILL_SCHEDULER_ROLLBACK_ENV, workload="prefill", quant=["fp16"],
-                         roles=["attn_qo", "attn_kv", "ffn_down", "ffn_gate_up"]), False
-  raise RuntimeError("PREFILL_GRAPH_GEMM=1 requires an admitted generated candidate set")
+  return _PREFILL_SCHEDULER_FALLBACK_ROUTE, False
 
 
 def _prefill_q4k_effective(env: dict[str, Any]) -> tuple[str, bool]:

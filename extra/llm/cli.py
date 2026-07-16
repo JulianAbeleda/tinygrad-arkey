@@ -6,7 +6,6 @@ from tinygrad.helpers import partition, DEBUG, Timing, GlobalCounters, stderr_lo
 from tinygrad.runtime.support.system import RemotePCIDevice
 from tinygrad.viz.serve import TCPServerWithReuse, HTTPRequestHandler
 from tinygrad.llm.model import Transformer
-import tinygrad.llm.model as _M
 
 def remote_pressure_snapshot() -> dict[str, typing.Any]:
   return {"stats": RemotePCIDevice.stats(), "commands": RemotePCIDevice.command_stats()}
@@ -322,7 +321,8 @@ class RuntimeState:
       "max_context": self.max_context, "kv_cache_tokens": self.max_context,
       "cached_prefix_tokens": m["last_cached_prefix_tokens"],
       "backend": self.backend, "target": self.target,
-      "prefill_v2": bool(_M.PREFILL_V2), "prefill_concrete_kv": bool(_M.PREFILL_CONCRETE_KV),
+      "prefill_v2": bool(getattr(getattr(self.model, "config", None), "prefill_v2", False)),
+      "prefill_concrete_kv": bool(getattr(getattr(self.model, "config", None), "prefill_concrete_kv", False)),
       "warmup_done": self.warmup_done, "last_warmup_s": self.last_warmup_s,
       "last_warmup_compiles": self.last_warmup_compiles,
       "busy": self.gen_lock.locked(), "load_count": self.load_count, "request_count": self.request_count,

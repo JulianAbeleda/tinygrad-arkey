@@ -437,7 +437,7 @@ def test_production_attachment_ignores_all_research_route_env(monkeypatch):
                       lambda *_args, **kwargs: calls.append(kwargs["output_layout"]) or SimpleNamespace(output_layout=kwargs["output_layout"]))
   monkeypatch.setattr(prefill_routes.qk_ops, "emit_q4k_packed_prefill_kernel", lambda spec: ("baseline", spec.output_layout))
   out = prefill_routes.route_prefill_linear(
-    _attached_direct_baseline(_q4_prefill_linear()), _PrefillTensorStub(), prefill_graph_gemm=True)
+    _attached_direct_baseline(_q4_prefill_linear()), _PrefillTensorStub())
   assert isinstance(out, _PrefillTensorStub)
   assert calls == ["direct_out"]
 

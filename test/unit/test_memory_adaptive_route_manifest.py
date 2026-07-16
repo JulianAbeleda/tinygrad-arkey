@@ -4,7 +4,7 @@ import pytest
 
 from extra.qk.route_manifest import (canonical_candidate_set_identity, canonical_capability_identity,
   canonical_inventory_identity, canonical_policy_rows, canonical_route_id, lookup_policy_row,
-  promoted_prefill_candidate_policy, promoted_prefill_candidate_supports_profile, route,
+  automatic_promoted_prefill_graph_policy, promoted_prefill_candidate_policy, route,
   immutable_route_registry)
 
 
@@ -40,13 +40,39 @@ def test_model_and_profile_renames_are_provenance_only():
   assert canonical_policy_rows(inv_a, CAPABILITY, set_a) == canonical_policy_rows(inv_b, CAPABILITY, set_b)
 
 
-def test_profile_alone_never_claims_promoted_support_but_legacy_artifact_is_readable():
+def test_profiles_are_provenance_only_and_legacy_artifact_is_readable():
   policy = promoted_prefill_candidate_policy()
   assert policy["candidate_profiles"] == policy["provenance_profiles"]
   assert policy["candidate_set_identity"].startswith("candidate_set:sha256:")
   assert policy["semantic_policy_rows"] == ()
-  assert not promoted_prefill_candidate_supports_profile(policy["candidate_profiles"][0])
-  assert not promoted_prefill_candidate_supports_profile("unknown-profile")
+
+def test_automatic_promoted_policy_binds_normalized_exact_runtime_inventory():
+  shapes = {"attn_qo":(4096, 4096), "attn_kv":(1024, 4096),
+            "ffn_down":(4096, 12288), "ffn_gate_up":(12288, 4096)}
+  rows = []
+  for i, (role, (n, k)) in enumerate(shapes.items()):
+    rows.append({"invocation_id":f"inv-{i}", "tensor_identity":f"blk.0.{role}.weight", "role":role,
+                 "quant_format":"Q4_K", "candidate_controlled":True, "shape":{"m":512, "n":n, "k":k}})
+  rows.append({"invocation_id":"lm", "tensor_identity":"output.weight", "role":"lm_head", "quant_format":"Q6_K",
+               "candidate_controlled":False, "fixed_route_id":"fixed-ggml-linear", "shape":{"m":1, "n":151936, "k":4096}})
+  inv = {"schema":"runtime", "inventory_identity":"selected-content", "rows":rows}
+  facts = {"backend":"AMD", "architecture":"gfx1100", "capabilities":{"wave_size":32}}
+  policy = automatic_promoted_prefill_graph_policy(inv, facts)
+  assert policy is not None and policy["strategy"] == "FULL_RESIDENT_OVERLAY"
+  assert policy["routes"]["lm"] == "fixed-ggml-linear"
+  assert set(policy["routes"].values()) == {"prefill_wmma_lds_dbuf_generated", "fixed-ggml-linear"}
+  assert len(policy["graph_gemm"]["policy_rows"]) == 4
+  normalized = policy["graph_gemm"]["candidate_set"]
+  assert policy["graph_gemm"]["candidate_set_identity"] == canonical_candidate_set_identity(normalized)
+
+def test_automatic_promoted_policy_rejects_wrong_shape_or_target_without_profile_logic():
+  base = {"schema":"runtime", "inventory_identity":"selected-content", "rows":[
+    {"invocation_id":"q", "tensor_identity":"blk.0.attn_q.weight", "role":"attn_qo", "quant_format":"Q4_K",
+     "candidate_controlled":True, "shape":{"m":512, "n":4096, "k":4096}}]}
+  assert automatic_promoted_prefill_graph_policy(base,
+    {"backend":"AMD", "architecture":"gfx1200", "capabilities":{"wave_size":32}}) is None
+  assert automatic_promoted_prefill_graph_policy(base,
+    {"backend":"AMD", "architecture":"gfx1100", "capabilities":{"wave_size":32}}) is None
 
 
 def test_route_alias_resolution_is_exact_and_preserves_legacy_reads():

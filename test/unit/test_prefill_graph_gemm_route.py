@@ -4,6 +4,8 @@ import pytest
 
 from extra.qk import prefill_graph_gemm_route as route
 from extra.qk.route_manifest import canonical_candidate_set_identity
+from tinygrad import Tensor, dtypes
+from tinygrad.llm.memory_semantics import model_parameter
 
 
 def test_prefill_v2_covered_linears_are_role_tagged():
@@ -11,7 +13,7 @@ def test_prefill_v2_covered_linears_are_role_tagged():
   class Weight:
     def __init__(self, shape): self.shape = shape
   tr = object.__new__(Transformer)
-  tr.config = SimpleNamespace(prefill_policy=None, prefill_graph_gemm=False, prefill_ubatch=512,
+  tr.config = SimpleNamespace(prefill_policy=None, prefill_ubatch=512,
                               prefill_device_facts=None, lm_head_route="lazy")
   tr.blk = [SimpleNamespace(
     attn_q=SimpleNamespace(weight=Weight((4096,4096))), attn_k=SimpleNamespace(weight=Weight((1024,4096))),
@@ -33,7 +35,7 @@ def test_prefill_lm_head_route_controls_resident_realize():
     def __init__(self, shape): self.shape = shape
   def build(policy):
     tr = object.__new__(Transformer); tr.blk = [SimpleNamespace()]
-    tr.config = SimpleNamespace(prefill_policy=None, prefill_graph_gemm=False, prefill_ubatch=512,
+    tr.config = SimpleNamespace(prefill_policy=None, prefill_ubatch=512,
                                 prefill_device_facts=None, lm_head_route=policy)
     tr.output = SimpleNamespace(weight=Weight((151936,4096)), q6k_storage=object(), prefill_packed_weight=lambda:None,
                                 name="output.weight")
@@ -47,6 +49,14 @@ class CandidateTensor:
   def __init__(self,shape): self.shape=shape; self.device="CPU"
   @property
   def ndim(self): return len(self.shape)
+
+
+def test_candidate_operand_reuses_semantic_resident_buffer():
+  concrete = model_parameter(Tensor.empty(16, dtype=dtypes.float16, device="CPU").realize())
+  assert concrete.uop.op.name == "MEMORY_SEMANTIC"
+  assert route._contiguous_candidate_operand(concrete).uop is concrete.uop
+  lazy = model_parameter((Tensor.empty(16, dtype=dtypes.float16, device="CPU") + 1))
+  assert route._contiguous_candidate_operand(lazy).uop.op.name == "CONTIGUOUS"
 
 
 @pytest.mark.parametrize(("role","shape"),(
@@ -91,12 +101,6 @@ def test_candidate_selector_passes_runtime_m_to_exact_admission(monkeypatch):
   admission=_admission("attn_qo",4096,4096,"1"*64); registry=_registry((admission,))
   lin=SimpleNamespace(_prefill_graph_role="attn_qo",bias=None,_prefill_graph_gemm_binding=_binding(registry,admission))
   assert route.route_pf16_graph_gemm(lin,CandidateTensor((1,256,4096)),w=CandidateTensor((4096,4096))) is None
-
-
-def test_promoted_policy_applies_for_absent_or_explicit_on_and_zero_rolls_back():
-  absent=route._candidate_policy_env({}); explicit=route._candidate_policy_env({"PREFILL_GRAPH_GEMM":"1"})
-  assert absent["BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH"] == explicit["BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH"]
-  assert route._candidate_policy_env({"PREFILL_GRAPH_GEMM":"0"}) == {"PREFILL_GRAPH_GEMM":"0"}
 
 
 def _admission(role,n,k,identity):

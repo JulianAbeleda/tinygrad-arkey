@@ -3,7 +3,7 @@
 
 This module is import-light: no tinygrad import and no GPU access. It owns the
 profiles and subprocess shape for whole-prefill timing so callers do not clone
-smoke/authority defaults or PREFILL_V2 env setup.
+smoke/authority defaults. Runtime route selection belongs to the loaded plan.
 """
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ from dataclasses import dataclass
 import pathlib
 
 from extra.qk.model_profiles import MODEL_PROFILES, ModelProfile, profile_by_id, profile_from_model_path
-from extra.qk.route_manifest import promoted_prefill_candidate_policy
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
@@ -61,19 +60,14 @@ class PrefillModelHarnessProfile:
 
   @property
   def env(self) -> dict[str, str]:
-    # Profiles select only which committed artifact the authority harness loads for route census. Runtime support is
-    # still established later from exact target, inventory, candidate-set, role, and shape identities.
-    graph_gemm = "1" if self.id in promoted_prefill_candidate_policy()["provenance_profiles"] else "0"
-    return {"PREFILL_V2": "1", "BOLTBEAM_MODEL_PROFILE": self.id, "PREFILL_GRAPH_GEMM": graph_gemm,
-            **self.env_overrides}
+    return dict(self.env_overrides)
 
 
 MODEL_HARNESS_PROFILE_ROWS = (
   PrefillModelHarnessProfile(profile_by_id("qwen3_8b_q4k_m_gfx1100"), DEFAULT_MODEL, {},
-                             "8B fp16/PREFILL_V2 authority path"),
+                             "8B automatic prefill authority path"),
   PrefillModelHarnessProfile(profile_by_id("qwen3_14b_q4k_m_gfx1100"), "/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf",
-    {"PREFILL_ROUTE":"direct_packed", "PREFILL_PACKED_STREAM":"1", "ALLOW_DEVICE_USAGE":"1"},
-    "14B memory-safe direct-packed authority baseline"),
+    {}, "14B automatic memory-safe authority path"),
 )
 if {row.id for row in MODEL_HARNESS_PROFILE_ROWS} != {profile.id for profile in MODEL_PROFILES}:
   raise ValueError("every model profile must have exactly one prefill harness record")

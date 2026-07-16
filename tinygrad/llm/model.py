@@ -18,6 +18,7 @@ from tinygrad.llm.prefill_policy import (
   prefill_policy_uses_overlay, prefill_v2_validate_ubatch, select_prefill_runtime_policy,
 )
 from tinygrad.llm.prefill_routes import is_direct_packed_prefill_linear, route_prefill_linear
+from tinygrad.llm.prefill_memory_plan import Strategy
 from tinygrad.llm.prefill_route_observer import PrefillRouteAttachment, prefill_route_scope, notify_prefill_route
 from tinygrad.llm.qk_primitives import (
   QKConfig, QKPrimitiveBudget, Q4KPrimitiveLinear, Q4KPrimitiveRegistry, Q6KPrimitiveLinear,
@@ -102,10 +103,13 @@ def derive_selected_gguf_prefill_inventory(kv:dict, meta:dict, ubatch:int=512) -
   rows = []
   for tensor in facts.tensors:
     if tensor.role is None: continue
-    candidate_controlled = tensor.quant_label in ("Q4_K", "Q6_K")
+    # Generation consumes only the final token's output projection.  The
+    # pp512 dense candidate set therefore cannot own LM-head merely because
+    # its source tensor is quantized; keep it on the explicit fixed lazy route.
+    candidate_controlled = tensor.quant_label in ("Q4_K", "Q6_K") and tensor.role != "lm_head"
     # The lazy lm-head projection is physically M=1 after final-token pruning. Other selected prefill linears
     # execute at the concrete ubatch. Fixed rows remain census obligations, but are outside candidate geometry.
-    physical_m = 1 if tensor.role == "lm_head" and not candidate_controlled else ubatch
+    physical_m = 1 if tensor.role == "lm_head" else ubatch
     semantic = {"tensor_identity": tensor.name, "role": tensor.role, "quant_format": tensor.quant_label,
                 "candidate_controlled": candidate_controlled,
                 "shape": {"m": physical_m, "n": tensor.rows, "k": tensor.cols}}
@@ -252,47 +256,7 @@ def _graph_gemm_binding(policy, registry, role:str, shape:tuple[int, int, int], 
           "candidate_set_identity": candidate_set_identity, "scanned_target_facts": {"target": target},
           "selected_policy": row, "compile_artifact": compile_artifact}
 
-# Prefill v2 (opt-in, default off; decode 100% untouched when off). Concrete-ubatch fp16 prefill that lets
-# tensor cores apply + the loop-found TC schedule warm-start in. See docs/amd-decode-prefill-v2-gate-20260616.md.
-# Costs ~fp16-covered-weight-size extra VRAM (it coexists with the Q4_K decode storage; ~+14GB for 8B) -> OOMs
-# small cards. `PREFILL_V2=auto` resolves on/off from detected VRAM in from_gguf (see prefill_v2_auto_decision +
-# docs/prefill-default-policy-evaluation-result-20260620.md). Explicit 0/1 always wins.
-PREFILL_V2 = False
 PREFILL_UBATCH = 512
-# Phase-3 routing fix (default ON under PREFILL_V2): route a sub-UBATCH prompt remainder through ONE shifted
-# prefill-v2 chunk instead of the slow 32-token symbolic fallback. PREFILL_REMAINDER_FIX=0 reverts. See
-# docs/prefill-route-schedule-result-20260620.md.
-PREFILL_REMAINDER_FIX = True
-# Generated graph GEMM (within PREFILL_V2): the manifest-promoted gfx1100 pp512 candidate set is default-on for its
-# exact four dense roles. The manifest owns promotion and supplies the complete runtime environment; this module only
-# checks target applicability from the load-entry DeviceFacts scan. Explicit 0/1 remains an override.
-PREFILL_GRAPH_GEMM = False
-
-# Concrete-KV prefill (opt-in, default off): pass a CONCRETE start_pos per prefill chunk so KV=start_pos+T is
-# concrete -> the attention's reduce tiles/TC fires (symbolic KV blocks it). ~1.24x e2e, byte-identical. Cost: a
-# separate concrete prefill jit per distinct start_pos (0,512,...), precompiled at load -> best WARM/server prefill
-# but a load-time precompile tax that loses for cold one-shot short prompts. `PREFILL_CONCRETE_KV=auto` enables it
-# only under the server profile (see prefill_concrete_kv_auto_decision). See
-# docs/prefill-default-policy-evaluation-result-20260620.md, docs/prefill-concrete-kv-policy-result-20260620.md.
-# PREFILL_SERVER_PROFILE=1 is a convenience: serve >1 generation / long prompts -> implies PREFILL_V2=auto (if V2
-# unset) + concrete-KV on (when V2 ends up on). One-shot short prompts must NOT set it.
-# Legacy environment spelling retained for compatibility. Internally this is only a workload-reuse intent.
-PREFILL_WORKLOAD_REUSE = False
-PREFILL_CONCRETE_KV = False
-# P2: explicit TC attention (Q@Kᵀ TC + fp16 scores + softmax + P@V TC, GQA broadcast) for prefill on CONCRETE KV
-# (the only regime where the concrete-shape tensor core fires; symbolic KV blocked it -> 0.79x in-model). Needs
-# PREFILL_CONCRETE_KV. Research, dNLL-gated. See docs/prefill-concrete-kv-build-scope-20260619.md.
-# DEFAULT-ON on its validated target, selected from the load-entry facts before JIT capture. Only active under
-# PREFILL_V2; the route's isinstance(start_pos,int) guard keeps
-# it to CONCRETE chunks (start_pos=0 by default), the only validated regime. Set PREFILL_TC_ATTN=0/1 to override.
-# Concrete first chunk: cuts attention ~18%->~5%, reproducible ~1.16x whole-forward, BYTE-IDENTICAL (rel_RMSE 0.0,
-# dNLL 0.0, greedy-exact, 3 sessions). A FUSION win, NOT tensor cores (WMMA does not fire; no warmstart TC-opt for
-# attention shapes, no BEAM). See docs/prefill-branch-b-tc-attention-result-20260620.md.
-PREFILL_TC_ATTN = False
-# HISTORY: the earlier env `PREFILL_TC_ATTENTION` probe reported ~0.8x "REFUTED in-model" -- that was a BROKEN
-# harness: it set the typo'd env `PREFILL_TC_ATTENTION` (model reads PREFILL_TC_ATTN) so both arms ran SDPA, AND
-# it bound a symbolic start_pos that fails the concrete-int guard so the path never fired. Overturned 2026-06-20
-# (correct concrete-int, same-process interleaved synced A/B). See docs/prefill-branch-b-tc-attention-result-20260620.md.
 # The loop-found per-shape TC schedule (gate-validated; NO BEAM -- BEAM hangs gfx1100). Forced onto the
 # prefill-v2 fp16 matmuls via _WARMSTART_OPTS by shape key. 4x4 is permanently excluded on gfx1100 because the
 # generated path hits the VGPR wall; retired experiments do not remain selectable production modes.
@@ -312,7 +276,7 @@ def _prefill_v2_opts(out_f:int, in_f:int) -> tuple:
                                          Opt(OptOps.UNROLL, 0, 8)))
 
 def _pf16(lin, x:Tensor) -> Tensor:
-  return route_prefill_linear(lin, x, prefill_graph_gemm=bool(getattr(lin, "_prefill_graph_gemm", False)))
+  return route_prefill_linear(lin, x)
 
 def _prefill_semantic(enabled:bool, mark, value:Tensor) -> Tensor:
   """Attach the same logical value role in either prefill or runtime/decode."""
@@ -397,7 +361,6 @@ class TransformerConfig:
   prefill_policy: object|None = None     # immutable measured policy, or truthful direct-packed baseline
   prefill_device_facts: object|None = None  # the single immutable load-entry DeviceFacts scan
   exact_memory_plan: ExactSelectedModelPlan|None = None  # selected-GGUF ledger and admission decision
-  prefill_graph_gemm: bool = False       # selected once from the immutable candidate policy
   prefill_tc_attn: bool = False          # selected once from the immutable candidate policy
   prefill_v2: bool = False               # concrete candidate binding, never a module-global switch
   prefill_ubatch: int = 512              # candidate-local physical M
@@ -807,6 +770,10 @@ class Transformer:
     self.output = nn.Linear(config.dim, config.vocab_size, bias=False)
     self.max_context = config.max_context
     self.config = config
+    # Transformer owns attachment construction and benchmark census, so the
+    # normalized selected registry must live at this level. Per-block copies
+    # are not consulted when bindings are attached to covered linears.
+    self._prefill_graph_gemm_registry = _graph_gemm_registry(config.prefill_policy)
     self.has_recurrent_block = any(isinstance(b, GatedDeltaNetBlock) for b in self.blk)
     self._cached_tokens: list[int] = []
     self._q4k_linears = Q4KPrimitiveRegistry()
@@ -819,7 +786,7 @@ class Transformer:
     self.rollout_jit_ring_full = TinyJit(self.forward_ring)   # ring FULL phase (ctx>=N): read [0:N], wrapped write slot + gathered freqs
     # The selected prefill candidate gets a separate concrete-M capture.
     self.prefill_v2_jit = TinyJit(self.forward)
-    self.prefill_v2_jits: dict = {}   # concrete-KV: one prefill jit per concrete start_pos (PREFILL_CONCRETE_KV)
+    self.prefill_v2_jits: dict = {}   # concrete-KV: one prefill jit per concrete start_pos
     # prefill v2 warmstart table is built here but installed into the global codegen knob ONLY for the duration
     # of the prefill-v2 forward (see __call__), to contain that ambient power rather than leave it set process-wide.
     self._pf16_warmstart:dict|None = None
@@ -857,7 +824,6 @@ class Transformer:
         lin = getattr(block, n, None)
         if lin is None or getattr(lin, "weight", None) is None: continue
         setattr(lin, "_prefill_selected_strategy", prefill_policy_strategy(self.config.prefill_policy))
-        setattr(lin, "_prefill_graph_gemm", self.config.prefill_graph_gemm)
         device_facts = getattr(self.config, "prefill_device_facts", None)
         setattr(lin, "_prefill_device_facts", device_facts)
         if not getattr(lin, "name", ""): setattr(lin, "name", n)
@@ -894,7 +860,7 @@ class Transformer:
     # Realize a clean fp16 weight per covered linear (cached as `_pf16_w`, read by _pf16). The primitives' lazy
     # Q4_K/Q6_K->fp16 dequant graph, used raw, fuses into the matmul -> ~3% peak (no TC win); a realized fp16
     # buffer makes the prefill-v2 matmul a real TC GEMM (~13x prefill on 8B). COST: ~fp16-model-size extra VRAM
-    # (it coexists with the Q4_K decode storage). Gated/opt-in; called at the end of from_gguf when PREFILL_V2.
+    # (it coexists with the Q4_K decode storage). Called only for the selected full-overlay representation.
     # Environment limits are diagnostics only. The immutable load plan is the safety authority and cannot be bypassed.
     policy = getattr(self.config, "prefill_policy", None)
     if policy is None:
@@ -908,12 +874,12 @@ class Transformer:
     return n
 
   def precompile_concrete_prefill_jits(self) -> int:
-    # Increment 0 ship: with PREFILL_CONCRETE_KV, every prefill chunk runs through a per-start_pos CONCRETE jit
+    # With selected concrete-KV reuse, every prefill chunk runs through a per-start_pos concrete jit
     # (-> the fusion attention path, 1.7-4.4x/chunk faster than the symbolic chunk). Those jits compile on first
     # use (~5s each), so a COLD long prompt pays the tax inline. Precompiling them ONCE at load (here) moves the
     # tax to load time, so every generation -- including the first -- is warm. Bounded: ceil(max_context/UBATCH)
     # jits. Safe to leave the dummy KV behind: a fresh model's first generation starts at start_pos=0 and
-    # overwrites the cache in chunk order before any position is read. gfx1100/PREFILL_V2/PREFILL_CONCRETE_KV only.
+    # overwrites the cache in chunk order before any position is read.
     if not (self.config.prefill_v2 and self.config.prefill_concrete_kv): return 0
     ubatch = self.config.prefill_ubatch
     temp = materialize_runtime_input(Tensor([0.0]).contiguous())
@@ -1027,11 +993,48 @@ class Transformer:
     if not isinstance(gguf, Tensor):
       _admit_kv, _admit_meta = gguf_load_metadata(gguf)
       _runtime_inventory = derive_selected_gguf_prefill_inventory(_admit_kv, _admit_meta, _prefill_ubatch)
+      # Adapter activation is an explicit production-load action. Importing
+      # the collector module remains side-effect free.
+      qk_ops.install_memory_adaptive_model_adapters()
       _runtime_policy = select_memory_adaptive_runtime_policy(kv=_admit_kv, meta=_admit_meta,
                                                                device_facts=_device_facts, ubatch=_prefill_ubatch,
                                                                selected_model_source=str(pathlib.Path(gguf).expanduser().resolve()))
+      _automatic_overlay_policy = None
+      if prefill_policy_strategy(_runtime_policy) == "DIRECT_PACKED_FALLBACK" and _runtime_policy.get("measured") is False:
+        _automatic_overlay_policy = qk_ops.automatic_promoted_prefill_graph_policy(
+          _runtime_inventory, _device_facts.planning_snapshot())
       _overlay_request = prefill_policy_uses_overlay(_runtime_policy)
       _admit_arch = _admit_kv["general.architecture"]
+      _q4_bytes = selected_gguf_backing_bytes(gguf, _device_facts.capabilities.global_allocation_granularity)
+      if _q4_bytes is None:
+        raise RuntimeError(f"{_admit_arch}: selected-GGUF backing allocation is unknown from the selected path and scanned allocation granularity")
+      _est_fp16 = sum(prod(dims) * 2 for name, dims, _, _ in _admit_meta["tensor_infos"] if any(name.endswith(s) for s in _cov))
+      _admission_inputs = AdmissionInputs.from_model_metadata(_requested_max_context, _admit_kv,
+        free_vram=_device_facts.free_vram_bytes, q4_bytes=_q4_bytes, est_fp16=_est_fp16,
+        prefill_ubatch=_prefill_ubatch, v2_on=_automatic_overlay_policy is not None or _overlay_request is not False, resident_fp16_admit=False,
+        model_label=f"{_admit_arch} selected GGUF", stream=str(stream), kv_quant_supported=True,
+        live_split_s=FLASH_DECODE_CANDIDATE.split_size)
+      if _automatic_overlay_policy is not None:
+        # First enumerate from the same workload/context facts without forcing
+        # a route.  Only an admitted full-overlay candidate may consume the
+        # retained promoted performance policy.
+        _candidate_plan, _candidate_memory_plan, _ = plan_selected_model_memory(
+          _admission_inputs, _device_facts, direct_packed_supported=True, overlay_requested=None)
+        if Strategy.FULL_RESIDENT_OVERLAY in _candidate_memory_plan.feasible_strategies:
+          _overlay_request = True
+          _plan, _memory_plan, _effective_strategy = plan_selected_model_memory(
+            _admission_inputs, _device_facts, direct_packed_supported=True, overlay_requested=True)
+          selected = dict(_automatic_overlay_policy)
+          selected["memory_plan"] = json.loads(_plan.prefill_memory_plan)
+          _runtime_policy = immutable_prefill_policy(selected)
+        else:
+          _overlay_request = False
+          _plan, _memory_plan, _effective_strategy = plan_selected_model_memory(
+            _admission_inputs, _device_facts, direct_packed_supported=True, overlay_requested=False)
+      else:
+        _plan, _memory_plan, _effective_strategy = plan_selected_model_memory(_admission_inputs,
+          _device_facts, direct_packed_supported=True, overlay_requested=_overlay_request)
+
       _provided_route_memory = _runtime_policy.get("memory_facts")
       if _provided_route_memory is not None and not isinstance(_provided_route_memory, dict):
         raise ValueError("prefill policy memory_facts must be a mapping when present")
@@ -1039,23 +1042,13 @@ class Transformer:
       if _route_memory and any(_route_memory.get(key) is None for key in _EXACT_ROUTE_MEMORY_KEYS):
         raise ValueError("prefill policy contains partial memory_facts; exact allocation evidence must be complete")
       if (prefill_policy_strategy(_runtime_policy) != "DIRECT_PACKED_FALLBACK" and not _route_memory and
+          _runtime_policy.get("selection_authority") != "promoted_exact_candidate" and
           _MEMORY_ADAPTIVE_MEASUREMENT_AUTHORITY.get() is None):
         raise ValueError("accelerated prefill policy cannot bypass exact memory admission")
       if isinstance(_runtime_policy.get("memory_fact_evidence"), dict):
         _route_memory["provenance"] = json.dumps(_runtime_policy["memory_fact_evidence"]["provenance"],
                                                    sort_keys=True, separators=(",", ":"))
       _route_memory["candidate_id"] = _runtime_policy["candidate_id"]
-      _q4_bytes = selected_gguf_backing_bytes(gguf, _device_facts.capabilities.global_allocation_granularity)
-      if _q4_bytes is None:
-        raise RuntimeError(f"{_admit_arch}: selected-GGUF backing allocation is unknown from the selected path and scanned allocation granularity")
-      _est_fp16 = sum(prod(dims) * 2 for name, dims, _, _ in _admit_meta["tensor_infos"] if any(name.endswith(s) for s in _cov))
-      _admission_inputs = AdmissionInputs.from_model_metadata(_requested_max_context, _admit_kv,
-        free_vram=_device_facts.free_vram_bytes, q4_bytes=_q4_bytes, est_fp16=_est_fp16,
-        prefill_ubatch=_prefill_ubatch, v2_on=_overlay_request is not False, resident_fp16_admit=False,
-        model_label=f"{_admit_arch} selected GGUF", stream=str(stream), kv_quant_supported=True,
-        live_split_s=FLASH_DECODE_CANDIDATE.split_size)
-      _plan, _memory_plan, _effective_strategy = plan_selected_model_memory(_admission_inputs,
-        _device_facts, direct_packed_supported=True, overlay_requested=_overlay_request)
       _v2_on = prefill_policy_strategy(_runtime_policy) in ("FULL_RESIDENT_OVERLAY", "BOUNDED_PACKED_TILES", "DIRECT_PACKED_FALLBACK")
       max_context, _kv_quant = _plan.max_context, _plan.kv_quant
       _admit = dict(_plan.report)
@@ -1121,9 +1114,6 @@ class Transformer:
 
     _runtime_policy = select_prefill_runtime_policy(_runtime_policy, scanned_device_facts=_device_facts,
       workload_reuse=_workload_reuse)
-    if _runtime_policy["prefill_graph_gemm"]:
-      # Candidate artifacts are validated only after the scanned target contract selects their applicability.
-      qk_ops.qk_route_manifest_attr("promoted_prefill_candidate_policy")()
     _workload_reuse = bool(_runtime_policy.get("workload_reuse", False))
     _concrete_kv, _ = prefill_concrete_kv_auto_decision(_workload_reuse, _v2_on)
     _flash_decode = FLASH_DECODE_CANDIDATE.bind(1, n_heads, n_kv_heads, head_dim,
@@ -1166,7 +1156,7 @@ class Transformer:
       expert_bias=f"blk.{kv.get(f'{arch}.leading_dense_block_count', 0)}.exp_probs_b.bias" in state_dict,
       admit=_admit, prefill_memory_plan=_plan.prefill_memory_plan, prefill_policy=_runtime_policy,
       prefill_device_facts=_device_facts, exact_memory_plan=_exact_memory_plan,
-      prefill_graph_gemm=bool(_runtime_policy["prefill_graph_gemm"]), prefill_tc_attn=bool(_runtime_policy["prefill_tc_attn"]),
+      prefill_tc_attn=bool(_runtime_policy["prefill_tc_attn"]),
       prefill_v2=_v2_on, prefill_ubatch=_prefill_ubatch, prefill_concrete_kv=_concrete_kv,
       prefill_remainder_fix=True, prefill_workload_reuse=_workload_reuse, flash_decode=_flash_decode, lm_head_route="lazy",
       kv_quant=_kv_quant, ring=_ring_admitted)
@@ -1215,7 +1205,7 @@ class Transformer:
       Tensor.realize(*params)
     # prefill v2 (opt-in): realize fp16 weights now that primitives are installed (shapes/dequant graphs ready)
     if config.prefill_v2: model.realize_prefill_v2_weights()
-    # Increment 0 ship: with PREFILL_CONCRETE_KV, precompile the per-start_pos concrete prefill jits at load so the
+    # For selected concrete-KV reuse, precompile the per-start_pos concrete prefill jits at load so the
     # ~5s/jit compile tax is paid once here, not inline on a cold prompt -> every generation is warm.
     if config.prefill_v2 and config.prefill_concrete_kv: model.precompile_concrete_prefill_jits()
     return model, kv
@@ -1299,7 +1289,7 @@ class Transformer:
         # dim must be concrete for tensor cores). remaining>=UBATCH => start_pos<prompt_len so we slice from t.
         # concrete start_pos -> KV=start_pos+T concrete -> attention TC fires (the validated 1.24x, byte-identical).
         # Default ON for the FIRST chunk (start_pos==0): one cached concrete jit, no multi-chunk compile cost.
-        # PREFILL_CONCRETE_KV=1 forces it for ALL chunks (K jits, pays off only when cached / for prompt<=512).
+        # Workload reuse selects concrete capture for all chunks (K jits, paid back by repeated requests).
         use_concrete = (start_pos == 0) or self.config.prefill_concrete_kv
         sp, ntv = (start_pos if use_concrete else v_start_pos.bind(start_pos)), ubatch
         out = self(t[:, sp:sp+ubatch], sp, temp, use_flash=False).realize()

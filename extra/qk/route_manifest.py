@@ -170,20 +170,20 @@ ROUTES = {
     "workload": "prefill", "profile_id": PROFILE_PREFILL, "status": "superseded_rollback",
     "roles": ["attn_qo", "attn_kv", "ffn_down", "ffn_gate_up"], "excluded_roles": [],
     "quant": ["Q4_K", "Q6_K", "fp16"],
-    "shape_guards": [{"M": 512, "N": "*", "K": "*", "note": "ordinary PREFILL_V2 fp16 matmul under warmstart TC opts"}],
-    "env": {"PREFILL_GRAPH_GEMM": "0"},
+    "shape_guards": [{"M": 512, "N": "*", "K": "*", "note": "ordinary concrete fp16 matmul under selected warmstart opts"}],
+    "env": {},
     "rollback": {},
     "strict_fallback": True,
     "expected_kernels": [],
     "forbidden_kernels": ["prefill_gen_sched_gemm_* (on the default path)", "Ops.INS"],
-    "authority_gate": "tinygrad/llm/model.py PREFILL_GRAPH_GEMM default",
+    "authority_gate": "absence of an exact selected Graph-GEMM binding",
     "promotion_artifacts": ["docs/pure-machine-search.md"],
     "purity_status": "research",
     "provenance": "tinygrad_scheduler_generated",
     "replacement_scope": "",
-    "selector": "env_default",
-    "route_attribution": "tinygrad/llm/prefill_routes.py route_prefill_linear default path: PREFILL_GRAPH_GEMM=0 -> x.cast(float16).linear(w.transpose(), bias) inside PREFILL_V2, with model.py installing warmstart TC opts around the prefill jit.",
-    "note": "Pure scheduler rollback for unsupported shapes and explicit PREFILL_GRAPH_GEMM=0. It was superseded for the exact gfx1100 pp512 four-role workload by the correctness-gated generated WMMA-LDS candidate set."},
+    "selector": "planner_fallback",
+    "route_attribution": "tinygrad/llm/prefill_routes.py ordinary fp16 fallback when no exact Graph-GEMM binding is attached.",
+    "note": "Pure scheduler fallback for unsupported or memory-inadmissible exact workloads."},
   "prefill_wmma_lds_dbuf_generated": {
     "workload": "prefill", "profile_id": PROFILE_PREFILL, "status": "promoted_default",
     "roles": ["attn_qo", "attn_kv", "ffn_down", "ffn_gate_up"], "excluded_roles": [], "quant": ["fp16"],
@@ -193,7 +193,7 @@ ROUTES = {
       {"role": "ffn_down", "M": 512, "N": 4096, "K": 12288, "primitive": "generated_lds_buffer2"},
       {"role": "ffn_gate_up", "M": 512, "N": 12288, "K": 4096, "primitive": "generated_lds_buffer2"}],
     "env": {},
-    "rollback": {"PREFILL_GRAPH_GEMM": "0"},
+    "rollback": {},
     "strict_fallback": True, "expected_kernels": [],
     "forbidden_kernels": ["extra/qk/prefill/wmma.py instruction-list emitter", "Ops.INS",
                           "prefill_gen_sched_gemm_* raw schedule substrate"],
@@ -615,22 +615,78 @@ def promoted_prefill_candidate_policy() -> dict:
     # Compatibility artifact metadata only. It is intentionally not a semantic support predicate.
     "candidate_profiles": profiles, "provenance_profiles": profiles, "candidate_roles": roles,
     "semantic_policy_rows": (),
-    "runtime_env": {
-      "PREFILL_GRAPH_GEMM": "1",
-      "BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH": str(path),
-    },
   }
-
-def promoted_prefill_candidate_supports_profile(profile_id: str) -> bool:
-  """Deprecated provenance-only query. A profile can never establish runtime semantic support."""
-  if not isinstance(profile_id, str): raise TypeError("profile_id must be a string")
-  return False
 
 def promoted_prefill_candidate_policy_rows(inventory: Mapping, capability: Mapping) -> tuple[dict, ...]:
   """Read the legacy promoted artifact and bind it to caller-supplied exact semantic facts."""
   policy = promoted_prefill_candidate_policy()
   artifact = json.loads(pathlib.Path(policy["candidate_set_path"]).read_text())
   return canonical_policy_rows(inventory, capability, artifact, route_id=policy["route_id"])
+
+def automatic_promoted_prefill_graph_policy(inventory: Mapping, scanned_device_facts: Mapping) -> dict | None:
+  """Bind the retained promoted FP16 candidate to one exact runtime inventory.
+
+  This function only establishes structural eligibility.  The model loader must
+  still memory-admit the complete overlay before selecting the returned policy.
+  Legacy artifact hashes are normalized by ``FullKernelCandidateSet`` before a
+  new candidate-set identity is formed, so runtime never compares a normalized
+  registry against a stale legacy set identity.
+  """
+  rows = inventory.get("rows") if isinstance(inventory, Mapping) else None
+  capabilities = scanned_device_facts.get("capabilities") if isinstance(scanned_device_facts, Mapping) else None
+  if not isinstance(rows, list) or not isinstance(capabilities, Mapping): return None
+  target = {"backend": scanned_device_facts.get("backend"), "arch": scanned_device_facts.get("architecture"),
+            "wave_size": capabilities.get("wave_size")}
+  inventory_identity = inventory.get("inventory_identity")
+  if not isinstance(inventory_identity, str) or not inventory_identity: return None
+
+  from extra.qk.runtime_specs import FullKernelCandidateSet, admit_full_kernel_candidate_set
+  promoted = promoted_prefill_candidate_policy()
+  raw = json.loads(pathlib.Path(promoted["candidate_set_path"]).read_text())
+  try: registry = admit_full_kernel_candidate_set(FullKernelCandidateSet.from_json(raw))
+  except (KeyError, TypeError, ValueError): return None
+  candidate_set = registry.candidate_set.to_json()
+  candidate_set_identity = canonical_candidate_set_identity(candidate_set)
+  target_keys = ("backend", "arch", "wave_size")
+  candidate_targets = {tuple(workload["target"][key] for key in target_keys)
+                       for admission in registry.admissions
+                       for workload in (admission.normalized_payload["workload"],)}
+  if tuple(target[key] for key in target_keys) not in candidate_targets: return None
+
+  controlled = [row for row in rows if isinstance(row, Mapping) and row.get("candidate_controlled") is True]
+  if not controlled: return None
+  bindings = {}
+  for row in controlled:
+    role, shape = row.get("role"), row.get("shape")
+    if not isinstance(role, str) or not isinstance(shape, Mapping): return None
+    try: exact_shape = tuple(shape[x] for x in ("m", "n", "k"))
+    except KeyError: return None
+    if any(not isinstance(x, int) or isinstance(x, bool) or x <= 0 for x in exact_shape): return None
+    admission = registry.get(role, exact_shape, target)
+    if admission is None: return None
+    key = (role, *exact_shape)
+    prior = bindings.get(key)
+    if prior is not None and prior.canonical_identity != admission.canonical_identity: return None
+    bindings[key] = admission
+  registry_keys = {(a.normalized_payload["workload"]["role"],
+                    *(a.normalized_payload["workload"]["shape"][x] for x in ("m", "n", "k")))
+                   for a in registry.admissions}
+  if set(bindings) != registry_keys: return None
+
+  route_id = promoted["route_id"]
+  policy_rows = [{"phase":"prefill", "role":role, "quant":"fp16",
+                  "shape":dict(zip(("m", "n", "k"), (m, n, k))), "target":target,
+                  "inventory_identity":inventory_identity, "candidate_set_identity":candidate_set_identity,
+                  "candidate_identity":bindings[(role, m, n, k)].canonical_identity,
+                  "selected_route":route_id, "route_aliases":[route_id]}
+                 for role, m, n, k in sorted(bindings)]
+  routes = {row["invocation_id"]:(route_id if row.get("candidate_controlled") is True else row["fixed_route_id"])
+            for row in rows}
+  return {"strategy":"FULL_RESIDENT_OVERLAY", "candidate_id":route_id, "routes":routes,
+          "inventory_identity":inventory_identity, "provenance":"retained promoted candidate + live exact-fact admission",
+          "measured":True, "selection_authority":"promoted_exact_candidate",
+          "graph_gemm":{"candidate_set":candidate_set, "candidate_set_identity":candidate_set_identity,
+                        "policy_rows":policy_rows, "compile_artifacts":{}}}
 
 def apply_route(route_id: str, env: dict | None = None) -> dict:
   """Materialize a research route onto an explicit configuration copy.

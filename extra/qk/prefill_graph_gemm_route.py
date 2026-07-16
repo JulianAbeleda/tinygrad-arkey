@@ -7,25 +7,13 @@ from collections.abc import Mapping
 from typing import Any
 
 from tinygrad import Tensor, dtypes
+from tinygrad.uop.ops import Ops
 
 _FULL_KERNEL_CANDIDATE_JSON_ENV = "BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON"
 _FULL_KERNEL_CANDIDATE_HASH_ENV = "BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH"
 _FULL_KERNEL_CANDIDATE_SET_JSON_ENV = "BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_JSON"
 _FULL_KERNEL_CANDIDATE_SET_PATH_ENV = "BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH"
 _CANDIDATE_ROUTE_CENSUS:ContextVar[dict[str,Any]|None]=ContextVar("candidate_route_census",default=None)
-
-def _candidate_env_requested(env: dict[str, Any]) -> bool:
-  return any(key in env for key in (_FULL_KERNEL_CANDIDATE_JSON_ENV, _FULL_KERNEL_CANDIDATE_HASH_ENV,
-                                     _FULL_KERNEL_CANDIDATE_SET_JSON_ENV, _FULL_KERNEL_CANDIDATE_SET_PATH_ENV))
-
-def _promoted_candidate_policy_selected(env: dict[str, Any]) -> bool:
-  raw = str(env.get("PREFILL_GRAPH_GEMM", "1")).strip().lower()
-  return raw not in ("", "0", "false", "off", "no") and not _candidate_env_requested(env)
-
-def _candidate_policy_env(env: dict[str, Any]) -> dict[str, Any]:
-  if not _promoted_candidate_policy_selected(env): return env
-  from extra.qk.route_manifest import promoted_prefill_candidate_policy
-  return {**promoted_prefill_candidate_policy()["runtime_env"], **env}
 
 @contextmanager
 def candidate_route_census():
@@ -73,7 +61,6 @@ def _candidate_registry_from_env(env:dict[str,Any]):
   Runtime admission uses exact policy attachments and never calls this loader.
   The historical name is retained for research-tool compatibility.
   """
-  env=_candidate_policy_env(env)
   set_text,set_path=env.get(_FULL_KERNEL_CANDIDATE_SET_JSON_ENV),env.get(_FULL_KERNEL_CANDIDATE_SET_PATH_ENV)
   payload_text,identity=env.get(_FULL_KERNEL_CANDIDATE_JSON_ENV),env.get(_FULL_KERNEL_CANDIDATE_HASH_ENV)
   if set_text is not None and set_path is not None: raise ValueError("candidate set JSON and path are mutually exclusive")
@@ -95,6 +82,10 @@ def _candidate_registry_from_env(env:dict[str,Any]):
   return admit_full_kernel_candidate_set(full_kernel_candidate_set_from_legacy(payload,str(identity)))
 
 
+def _contiguous_candidate_operand(value:Tensor) -> Tensor:
+  """Keep semantic metadata around an already concrete allocation without copying it."""
+  return value if value.uop.op is Ops.MEMORY_SEMANTIC and value.uop.src[0].has_buffer_identity() else value.contiguous()
+
 def _install_candidate_matmul(x,w,out_f,in_f,admission,compile_artifact:Mapping[str,Any]|None=None):
   from extra.qk.runtime_specs import candidate_storage_kind
   register_route = candidate_storage_kind(admission.normalized_payload) == "global_register_resident"
@@ -113,7 +104,8 @@ def _install_candidate_matmul(x,w,out_f,in_f,admission,compile_artifact:Mapping[
     raise ValueError(f"candidate warmstart key collision for {key!r}")
   pr._WARMSTART_OPTS={**(pr._WARMSTART_OPTS or {}),key:(Opt(OptOps.TC,0,(-1,2,1)),)}
   pr._WARMSTART_CANDIDATE_CONTEXTS={**(pr._WARMSTART_CANDIDATE_CONTEXTS or {}),key:admission.context}
-  a=x.reshape(m,in_f).cast(dtypes.float16).contiguous(); bt=w.cast(dtypes.float16).contiguous()
+  a=x.reshape(m,in_f).cast(dtypes.float16).contiguous()
+  bt=_contiguous_candidate_operand(w.cast(dtypes.float16))
   return (a @ bt.transpose()).reshape(*x.shape[:-1],out_f)
 
 def _attached_candidate_admission(lin, role:str, shape:tuple[int,int,int]):
@@ -148,10 +140,9 @@ def route_pf16_graph_gemm(lin, x: Tensor, w: Tensor | None = None) -> Tensor | N
   # `w` (optional): an explicit fp16 weight to GEMM against. Callers may pass an unstored
   # `lin.weight.cast(fp16).contiguous()` from inside a layer-sized TinyJit, so replay reuses the graph-owned fp16
   # dequant scratch across blocks instead of pinning resident `lin._pf16_w` for every block.
-  # NOTE: the gfx1100 arch restriction for default-on lives in model.PREFILL_GRAPH_GEMM (computed once at import);
-  # it is NOT checked here because Device[...] access is disallowed during JIT capture (ALLOW_DEVICE_USAGE). The
-  # Candidate admission below restricts to validated dense prefill shapes; everything
-  # else silently falls back to the normal PREFILL_V2 matmul.
+  # Target, memory, and exact workload checks are completed before this JIT
+  # dispatch and carried by the attached candidate binding. Device access is
+  # deliberately not repeated during capture.
   if w is None: w = getattr(lin, "_pf16_w", None)
   b = getattr(lin, "bias", None)
   if w is None or b is not None or x.ndim < 2: return None

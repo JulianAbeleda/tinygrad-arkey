@@ -18,7 +18,6 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 from tinygrad import Tensor, nn
 from tinygrad.helpers import getenv, GlobalCounters, fetch, Context, DEBUG
 from tinygrad.llm.model import Transformer, TransformerConfig
-import tinygrad.llm.model as _M
 from extra.llm.cli import SimpleTokenizer, models as BUILTIN, _quant_from_name, _device_target
 
 def _git(*args):
@@ -165,7 +164,7 @@ def main():
       "target": _device_target(),
       "perf_state": "auto clock (not pinned)",
       "warmups": "2x2-token generate JIT capture",
-      "env": {"PREFILL_V2": bool(_M.PREFILL_V2), "PREFILL_CONCRETE_KV": bool(_M.PREFILL_CONCRETE_KV),
+      "env": {"prefill_v2": bool(model.config.prefill_v2), "prefill_concrete_kv": bool(model.config.prefill_concrete_kv),
               "Q4K_PRIMITIVE": getenv("Q4K_PRIMITIVE", 1), "Q6K_PRIMITIVE": getenv("Q6K_PRIMITIVE", 1),
               "HALF": getenv("HALF", 1)},
     },

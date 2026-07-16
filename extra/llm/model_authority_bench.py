@@ -127,7 +127,7 @@ def main():
                    "route_by_context": {str(r["ctx"]): r["route"] for r in dec["rows"]}},
       "llama_cpp": llama["tool"] | {"kv": {"ctk": args.ctk, "ctv": args.ctv}, "fa": args.fa, "ngl": args.ngl}},
     "timing_authority": "clean W==D qk_decode_runtime_overhead (TinyJit, synced, NMEAS=40, fixed ctx, shipped flash threshold)",
-    "note": "decode compared to llama.cpp tg128 at MATCHED depth (-d). Prefill authority (tuned PREFILL_V2 path) is "
+    "note": "decode compared to llama.cpp tg128 at MATCHED depth (-d). Prefill authority (selected concrete path) is "
             "recorded separately where measured (8B: qk_prefill_authority_refresh); llama prefill is pp512.",
   }
   outp = pathlib.Path(args.out)
