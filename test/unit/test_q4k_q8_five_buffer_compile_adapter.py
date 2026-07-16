@@ -1,7 +1,8 @@
 import pytest
 
 from extra.qk.prefill.q4k_q8_five_buffer_compile_adapter import (AMD_ISA_TARGET,
-  admit_q4k_q8_five_buffer_compile, build_q4k_q8_five_buffer_sink, compile_q4k_q8_five_buffer_program)
+  admitted_buffer_descriptors, admit_q4k_q8_five_buffer_compile, build_q4k_q8_five_buffer_sink,
+  compile_q4k_q8_five_buffer_program)
 from extra.qk.runtime_specs import FULL_KERNEL_CANDIDATE_SCHEMA, derive_packed_weight_candidate, derive_q4k_q8_1_five_buffer_candidate
 from tinygrad import dtypes
 from tinygrad.uop.ops import Ops
@@ -46,6 +47,14 @@ def test_cpu_structural_bridge_binds_exact_identity_and_five_buffer_abi():
   assert len([u for u in sink.toposort() if u.op is Ops.STORE]) == 1
   assert {u.arg.slot:u.dtype.base for u in sink.toposort() if u.op is Ops.PARAM} == {
     0:dtypes.float32, 1:dtypes.uint32, 2:dtypes.int8, 3:dtypes.float32, 4:dtypes.float32}
+  descriptors = admitted_buffer_descriptors(admission)
+  assert tuple((x.slot, x.name, x.direction, x.storage_dtype) for x in descriptors) == (
+    (0, "output", "out", "float32"), (1, "q4_packed_words", "in", "uint32"),
+    (2, "q8_ds4_values", "in", "int8"), (3, "q8_scales", "in", "float32"),
+    (4, "q8_weighted_sums", "in", "float32"))
+  assert descriptors[0].logical_shape == descriptors[0].flat_shape == (256, 256)
+  assert descriptors[1].logical_shape == (256, 16, 36) and descriptors[1].flat_shape == (147456,)
+  with pytest.raises(Exception): descriptors[0].name = "changed"
 
 
 def test_bridge_fails_closed_on_legacy_tail_identity_and_target_drift():

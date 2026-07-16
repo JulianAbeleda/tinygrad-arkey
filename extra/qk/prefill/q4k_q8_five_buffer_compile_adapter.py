@@ -1,6 +1,7 @@
 """Compile-only bridge from an admitted Q4_K/Q8_1 five-buffer payload to its UOp emitter."""
 from __future__ import annotations
 
+from dataclasses import dataclass
 from math import prod
 import os
 from typing import Any, Mapping
@@ -9,6 +10,18 @@ from extra.qk.runtime_specs import (Q4K_Q8_1_FIVE_BUFFER_ABI, admit_full_kernel_
   full_kernel_candidate_capability, full_kernel_workload)
 
 AMD_ISA_TARGET = "AMD:ISA:gfx1100"
+
+
+@dataclass(frozen=True)
+class AdmittedBufferDescriptor:
+  """One immutable, admission-derived ABI argument description."""
+  slot: int
+  name: str
+  logical_shape: tuple[int, ...]
+  flat_shape: tuple[int, ...]
+  storage_dtype: str
+  dtype: Any
+  direction: str
 
 
 def _immutable_json(value:Any) -> bool:
@@ -53,7 +66,10 @@ def _extent(expr:tuple, workload:Mapping[str,int], geometry:Mapping[str,int]) ->
   return value
 
 
-def _ordered_buffers(admission, dtypes):
+def admitted_buffer_descriptors(admission, dtypes=None) -> tuple[AdmittedBufferDescriptor, ...]:
+  """Resolve the exact ordered buffer ABI solely from an admitted operand plan."""
+  if dtypes is None:
+    from tinygrad import dtypes
   plan, workload = admission.operand_plan, full_kernel_workload(admission.normalized_payload)
   dimensions = dict(zip(("m", "n", "k"), workload.shape))
   rows = []
@@ -61,13 +77,19 @@ def _ordered_buffers(admission, dtypes):
     axes, expressions = descriptor["logical_axes"], descriptor["axis_extents"]
     if len(axes) != len(expressions) or len(set(axes)) != len(axes): raise ValueError(f"ABI buffer {name!r} has invalid logical axes")
     logical_shape = tuple(_extent(expr, dimensions, plan["block_geometry"]) for expr in expressions)
-    shape = logical_shape if descriptor["access"] == "logical" else (prod(logical_shape),)
-    dtype = getattr(dtypes, descriptor["storage_dtype"], None)
+    flat_shape = logical_shape if descriptor["access"] == "logical" else (prod(logical_shape),)
+    storage_dtype = descriptor["storage_dtype"]
+    dtype = getattr(dtypes, storage_dtype, None)
     if dtype is None: raise ValueError(f"ABI buffer {name!r} has unknown storage dtype")
-    rows.append((descriptor["abi_slot"], descriptor["direction"], dtype, shape))
-  rows.sort(key=lambda row:row[0])
-  if [row[0] for row in rows] != list(range(len(rows))): raise ValueError("ABI slots must be unique and contiguous from zero")
+    rows.append(AdmittedBufferDescriptor(descriptor["abi_slot"], name, logical_shape, flat_shape,
+                                          storage_dtype, dtype, descriptor["direction"]))
+  rows.sort(key=lambda row:row.slot)
+  if [row.slot for row in rows] != list(range(len(rows))): raise ValueError("ABI slots must be unique and contiguous from zero")
   return tuple(rows)
+
+
+def _ordered_buffers(admission, dtypes):
+  return tuple((row.slot, row.direction, row.dtype, row.flat_shape) for row in admitted_buffer_descriptors(admission, dtypes))
 
 
 def build_q4k_q8_five_buffer_sink(payload:dict[str, Any], canonical_identity:str):
@@ -122,5 +144,5 @@ def compile_q4k_q8_five_buffer_program(payload:dict[str, Any], canonical_identit
   return program, admission
 
 
-__all__ = ["AMD_ISA_TARGET", "admit_q4k_q8_five_buffer_compile",
+__all__ = ["AMD_ISA_TARGET", "AdmittedBufferDescriptor", "admitted_buffer_descriptors", "admit_q4k_q8_five_buffer_compile",
   "build_q4k_q8_five_buffer_sink", "compile_q4k_q8_five_buffer_program"]
