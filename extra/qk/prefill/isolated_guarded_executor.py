@@ -10,7 +10,7 @@ This module composes the four grounded pieces of the arc into ONE entry point:
   * :class:`tinygrad.runtime.bridge.ExecutableHandle` -- the single PROGRAM-geometry
     dispatch path (constructed by the child, never the parent);
   * the canonical typed dispatch states in
-    :mod:`tinygrad.runtime.execution_bridge_contracts`.
+    :mod:`extra.qk.prefill.execution_bridge_contracts`.
 
 P0-2 (dangerous execution must not be caller-owned).  The PARENT function
 :func:`run_isolated_guarded_execution` constructs NO live GPU runtime.  It only
@@ -44,7 +44,7 @@ import numpy as np
 
 from extra.qk.prefill.guarded_execution import (GuardedExecutionHooks, GuardPolicy,
                                                 make_tinygrad_executable_hooks, run_guarded_execution)
-from tinygrad.runtime.execution_bridge_contracts import DISPATCH_STATES, dispatch_state
+from extra.qk.prefill.execution_bridge_contracts import DISPATCH_STATES, dispatch_state
 from tinygrad.runtime.process_isolated import IsolatedResult, run_isolated
 
 SCHEMA = "isolated-guarded-executor.v1"

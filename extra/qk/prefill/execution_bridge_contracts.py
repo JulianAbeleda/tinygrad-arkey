@@ -1,4 +1,4 @@
-"""Hardware-independent, serializable execution-bridge contracts."""
+"""Research-only, hardware-independent, serializable execution-bridge contracts."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field, fields

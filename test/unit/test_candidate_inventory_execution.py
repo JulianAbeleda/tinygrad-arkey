@@ -5,7 +5,7 @@ import pytest
 from extra.qk.prefill import candidate_inventory_execution as driver
 from extra.qk.prefill.workload_inventory import CANDIDATE_INVENTORY_SCHEMA, INVENTORY_SCHEMA
 from extra.qk.runtime_specs import FULL_KERNEL_CANDIDATE_SET_SCHEMA
-from tinygrad.runtime.execution_bridge_contracts import ExecutionResult, PhaseResult
+from extra.qk.prefill.execution_bridge_contracts import ExecutionResult, PhaseResult
 
 
 def _entry(profile, role, quant, shape, marker):

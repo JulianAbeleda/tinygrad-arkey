@@ -15,7 +15,7 @@ from extra.qk.prefill.packed_wmma_correctness_canary import build_artifact
 from extra.qk.prefill.workload_inventory import CANDIDATE_INVENTORY_SCHEMA, INVENTORY_SCHEMA
 from extra.qk.runtime_specs import (FullKernelCandidateSet, capability_transport,
   full_kernel_candidate_capability, full_kernel_workload)
-from tinygrad.runtime.execution_bridge_contracts import (CorrectnessProtocol, ExecutionRequest,
+from extra.qk.prefill.execution_bridge_contracts import (CorrectnessProtocol, ExecutionRequest,
   GuardProtocol, TimingProtocol, TransportPlan, canonical_digest)
 
 OUTPUT_SCHEMA = "qk.packed_prefill_candidate_inventory_execution.v1"

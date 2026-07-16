@@ -1,7 +1,7 @@
 import pytest
 from types import SimpleNamespace
 
-from tinygrad.runtime.execution_bridge_contracts import TransportPlan
+from extra.qk.prefill.execution_bridge_contracts import TransportPlan
 from tinygrad.uop.ops import Ops, ProgramInfo, UOp
 from extra.qk.prefill.transport_execution_authority import (
   _TRANSPORT_VALIDATORS, TransportValidation, register_transport_validator, validate_transport)

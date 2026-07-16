@@ -14,7 +14,7 @@ from typing import Any, Callable, Mapping, Protocol
 from extra.qk.prefill.guarded_execution import GuardPolicy
 from extra.qk.prefill.isolated_guarded_executor import (ExecutionRequest as GuardedRequest,
   IsolatedExecutionResult, run_isolated_guarded_execution)
-from tinygrad.runtime.execution_bridge_contracts import (ExecutionRequest, ExecutionResult, PhaseResult,
+from extra.qk.prefill.execution_bridge_contracts import (ExecutionRequest, ExecutionResult, PhaseResult,
   TypedError, UnsupportedOutcome)
 
 PROTOCOL = "tinygrad.operand_path_execution_worker.v1"

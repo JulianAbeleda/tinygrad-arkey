@@ -9,7 +9,7 @@ from extra.qk.route_manifest import promoted_prefill_candidate_policy
 from extra.qk.runtime_specs import derive_packed_weight_candidate
 from extra.qk.model_profiles import MODEL_PROFILES, prefill_role_shapes
 from extra.qk.prefill.packed_wmma_correctness_canary import candidate_payload
-from tinygrad.runtime.execution_bridge_contracts import ExecutionRequest, TransportPlan
+from extra.qk.prefill.execution_bridge_contracts import ExecutionRequest, TransportPlan
 from tinygrad.uop.ops import Ops
 
 

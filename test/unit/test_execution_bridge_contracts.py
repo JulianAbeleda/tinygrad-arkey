@@ -1,7 +1,7 @@
 import json
 import pytest
 
-from tinygrad.runtime.execution_bridge_contracts import (
+from extra.qk.prefill.execution_bridge_contracts import (
   ArtifactRequest, CompileArtifactMetadata, CorrectnessProtocol, CounterGroupRequest, DispatchEvidence, DISPATCH_STATES,
   ExecutionRequest, ExecutionResult, GuardProtocol, PhaseResult, SafetyAdmission, SemanticOperandPlan, SemanticScheduleIdentity,
   TimingProtocol, TransportPlan, TypedError, UnsupportedOutcome, WorkloadIdentity, dispatch_state, reject_synthetic,

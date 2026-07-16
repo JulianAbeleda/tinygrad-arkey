@@ -37,7 +37,7 @@ from extra.qk.prefill.guarded_execution import GuardPolicy
 from extra.qk.prefill.isolated_guarded_executor import (ExecutableBundle, ExecutionRequest, IsolatedExecutionResult,
                                                         build_tinygrad_bundle, make_tinygrad_bundle_builder,
                                                         run_isolated_guarded_execution)
-from tinygrad.runtime.execution_bridge_contracts import dispatch_state
+from extra.qk.prefill.execution_bridge_contracts import dispatch_state
 from tinygrad.runtime.process_isolated import run_isolated
 
 SCHEMA = "host-safety-canary.v1"

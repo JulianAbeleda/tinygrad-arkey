@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from tinygrad.runtime.execution_bridge_contracts import TransportPlan
+from extra.qk.prefill.execution_bridge_contracts import TransportPlan
 from tinygrad.uop.ops import Ops, UOp
 
 

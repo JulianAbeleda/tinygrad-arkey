@@ -22,7 +22,7 @@ from extra.qk.prefill.operand_path_execution_worker import PreparedExecution
 from extra.qk.mmq_epoch_manifest_export import DEFAULT_MAX_ROWS, build_amd_isa_proof_manifest_bundle
 from extra.qk.runtime_specs import (admit_full_kernel_candidate, capability_transport, full_kernel_candidate_capability,
                                     full_kernel_workload)
-from tinygrad.runtime.execution_bridge_contracts import ExecutionRequest
+from extra.qk.prefill.execution_bridge_contracts import ExecutionRequest
 
 ADAPTER_ID = "tinygrad.amd.gfx1100.current_prefill.v1"
 # ProgramInfo.globals=(0,1,2), outs=(0,), ins=(1,2): output, A, B.
