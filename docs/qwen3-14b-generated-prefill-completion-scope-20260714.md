@@ -59,6 +59,12 @@ samples retained. No accepted context may fall below 98% of llama, every declare
 the paired aggregate 95% lower confidence bound must exceed 1.00, and the aggregate geometric-mean target is at least
 105%. Kernel TFLOP/s, role timing, roofline data, and Boltbeam traces are attribution evidence, not promotion authority.
 
+After each matched llama/tinygrad end-to-end comparison, any missed context or aggregate target triggers a Boltbeam
+timing pass on the exact tinygrad candidate revision and workload. The trace must reconcile the observed whole-prefill
+wall into candidate roles, activation preparation/dequantization, attention, launch/synchronization, and residual work,
+then compare that decomposition with the matched llama timing artifact. Optimization resumes from the largest measured
+gap; a projected role speedup or stale trace cannot replace a fresh end-to-end rerun.
+
 Autoscan remains a subsequent phase. It may enumerate, gate, measure, cache, and bind policies only after the complete
 manual policy passes Phase 7. Until then, the ordinary non-fitting automatic route remains direct packed.
 
@@ -378,6 +384,24 @@ Protocol:
 - Use the same pp512 workload, model bytes, clock policy, warmup, sample count, and host synchronization.
 - Report median, spread, and all individual samples.
 - Re-profile the candidate after timing; do not project from stale role shares.
+
+Post-comparison Boltbeam attribution is mandatory whenever any declared context fails to beat llama or the aggregate
+geometric mean is below 105%:
+
+- trace the exact candidate identity, binary identities, model content, context, clock policy, compiler/runtime
+  revision, and route census used by the matched end-to-end session;
+- capture pp512 plus every context that misses its gate, without changing policy or measurement semantics between the
+  authority run and attribution run;
+- map launches back to the Phase 6 census and separate Q4/Q6 kernels, activation packing or dequantization, attention,
+  synchronization, launch overhead, memory movement, and non-GEMM residual work;
+- retain final ISA/resource/occupancy and roofline evidence for the dominant tinygrad costs, alongside the matched
+  llama phase/kernel timing artifact;
+- reconcile the summed attributed time with synchronized whole-prefill wall time and record any unattributed gap
+  explicitly instead of assigning it to a guessed kernel;
+- emit a ranked tax ledger naming the largest measured deltas, owning layer, proposed controlled experiment, and
+  acceptance/rejection result;
+- after each accepted optimization, rerun correctness/resource/health gates and the matched end-to-end protocol before
+  updating the comparison. Boltbeam timing alone cannot promote a candidate.
 
 Decisions:
 
