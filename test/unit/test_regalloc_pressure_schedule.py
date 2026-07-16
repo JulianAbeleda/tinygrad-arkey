@@ -97,6 +97,22 @@ class TestPressureSchedule(unittest.TestCase):
     self.assertLessEqual(new_peak, old_peak)
     self.assertEqual(new_distance, 1)
 
+  def test_amd_localizes_hardware_id_root_for_every_memory_effect(self):
+    ctx = IselContext(UOp.sink())
+    special = UOp(Ops.SPECIAL, dtypes.int32, arg="gidx0", tag=(ctx.vreg(VBASE[1:]),))
+    root = UOp(Ops.INS, dtypes.int32, (special,), AMDOps.WG_ID, tag=(ctx.vreg(VBASE[1:]),))
+    shifted = UOp(Ops.INS, dtypes.int32, (root, UOp.const(dtypes.int32, 4).rtag()), AMDOps.V_LSHR,
+                  tag=(ctx.vreg(VBASE[1:]),))
+    address = UOp(Ops.INS, dtypes.int32, (shifted, UOp.const(dtypes.int32, 4).rtag()), AMDOps.V_IMUL,
+                  tag=(ctx.vreg(VBASE[1:]),))
+    memories = tuple(UOp(Ops.INS, dtypes.void,
+      (address, UOp.const(dtypes.uint64, 0).rtag(), UOp.const(dtypes.int32, i).rtag()), AMDOps.GLOBAL_STORE) for i in range(3))
+    localized = _localize_memory_address_recipes(ctx, UOp.sink(*memories))
+    self.assertIsNotNone(localized)
+    stores = [u for u in localized.toposort() if u.op is Ops.INS and u.arg is AMDOps.GLOBAL_STORE]
+    roots = [next(u for u in store.src[0].toposort() if u.op is Ops.INS and u.arg is AMDOps.WG_ID) for store in stores]
+    self.assertEqual(len(set(roots)), len(stores))
+
 
 if __name__ == "__main__":
   unittest.main()
