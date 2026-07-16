@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Mapping
 from tinygrad.llm.device_facts import DeviceFacts
 from tinygrad.llm.gguf_memory_scan import CandidateWorkspace, GGUFMemoryScan, RuntimeGeometry, scan_selected_gguf_memory
@@ -11,12 +11,7 @@ from tinygrad.llm.memory_ledger import (AllocationProvenance, ExactMemoryDecisio
 AUTO_MAX_CONTEXT = "auto"
 
 def scanned_device_memory_budget(facts:DeviceFacts) -> ScannedMemoryBudget:
-  """Derive a conservative budget only from the live device scan.
-
-  The already-occupied device bytes are retained again as a dynamic disturbance reserve, rounded to the allocator's
-  observed granularity.  This avoids pretending a fixed percentage or named hardware class is a fact.  If any
-  required observation is unavailable, admission stays unknown and fails closed.
-  """
+  """Live free VRAM minus an observed, allocator-aligned disturbance reserve."""
   total, free = facts.total_vram_bytes, facts.free_vram_bytes
   alignment = facts.capabilities.global_allocation_granularity
   reserve = None
@@ -105,13 +100,7 @@ def _resolve_max_context_admission(requested, trained_ctx:int, scanned_budget:Sc
                                   kv_per_tok:int, prefill_per_tok:int, flash_scratch_bytes:int,
                                   model_label:str, kv_quant_supported:bool=False, scale_per_tok:int=0,
                                   stream:str="auto", ring_supported:bool=False) -> tuple[int, bool, dict]:
-  """Resolve context from candidate-local byte capacity.
-
-  Exact candidates must fit the requested context (or trained context in auto
-  mode).  A ring candidate is feasible when its scanned fp16 window is
-  positive and in-distribution; it has no policy minimum.  Explicit context is
-  never rescued by a smaller lossy ring window.
-  """
+  """Resolve exact context, or an auto-only lossy ring, from scanned capacity."""
   is_auto = requested is None or requested == AUTO_MAX_CONTEXT
   ring_ok = ring_supported and stream != "off"
   free_bytes, budget = scanned_budget.free_bytes, scanned_budget.admitted_bytes
@@ -191,13 +180,7 @@ def _resolve_max_context_admission(requested, trained_ctx:int, scanned_budget:Sc
 
 def plan_selected_model_memory(inp:AdmissionInputs, facts:DeviceFacts, *, direct_packed_supported:bool,
                                overlay_requested:bool|None=None) -> tuple[AdmissionPlan, PrefillMemoryPlan, Strategy]:
-  """Joint context/KV/overlay admission for one user-selected GGUF.
-
-  ``overlay_requested=None`` is auto mode. It reports every safe strategy but deliberately keeps the packed baseline
-  until a measured policy selects among multiple feasible strategies. An explicit request restricts the candidate set,
-  but still passes through the same byte and coverage checks.
-  """
-  # The reserve is derived from the same live GPU scan as total/free VRAM; it is not a fixed card-size policy.
+  """Compatibility context/strategy plan; exact production admission uses the selected-model ledger above."""
   scanned_budget = scanned_device_memory_budget(facts)
   reserve = scanned_budget.reserve_bytes
   device = DeviceMemoryFacts(facts.total_vram_bytes, facts.free_vram_bytes,
@@ -205,10 +188,7 @@ def plan_selected_model_memory(inp:AdmissionInputs, facts:DeviceFacts, *, direct
              "align_up(total_vram_bytes - free_vram_bytes, scanned_allocator_granularity)",
              ByteLifetime.SAFETY_RESERVE), facts.memory_probe.source)
   explicit_overlay = overlay_requested is True
-  # Compatibility context arithmetic consumes the admitted byte value as its full budget (fraction 1.0 below would be
-  # equivalent).  Passing the reconstructed free value avoids subtracting a second hidden reserve in the prefill plan.
-  ctx_inp = AdmissionInputs(**{**inp.__dict__, "free_vram": facts.free_vram_bytes,
-    "resident_fp16_admit": explicit_overlay})
+  ctx_inp = replace(inp, free_vram=facts.free_vram_bytes, resident_fp16_admit=explicit_overlay)
   context = _plan_context_admission(ctx_inp, scanned_budget)
   scale_per_tok = 2 * inp.n_kv_heads * 2 * inp.num_blocks if context.kv_quant else 0
   kv_bytes = (context.kv_per_tok // (2 if context.kv_quant else 1) + scale_per_tok) * context.max_context
@@ -235,7 +215,6 @@ def plan_selected_model_memory(inp:AdmissionInputs, facts:DeviceFacts, *, direct
   effective = (Strategy.FULL_RESIDENT_OVERLAY if memory_plan.decision is Strategy.FULL_RESIDENT_OVERLAY else
                Strategy.DIRECT_PACKED_FALLBACK)
   if effective not in memory_plan.feasible_strategies:
-    # No hidden fallback: this can only occur when auto has one overlay-only feasible result.
     effective = memory_plan.feasible_strategies[0]
   report = {**context.report, "prefill_memory_strategy": effective.value,
             "prefill_memory_feasible": [x.value for x in memory_plan.feasible_strategies],
