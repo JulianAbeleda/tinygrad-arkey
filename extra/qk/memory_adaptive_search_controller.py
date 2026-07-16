@@ -21,7 +21,7 @@ if __package__ in (None, ""):
   sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
 from extra.qk.memory_adaptive_autoscan import autoscan_selected_model
-from extra.qk.memory_adaptive_candidate_catalog import CandidateSpec, build_candidate_catalog
+from extra.qk.memory_adaptive_candidate_catalog import CandidateSpec, build_candidate_catalog, derive_workload_policy_identity
 from extra.qk.memory_adaptive_evidence_runner import CandidateArtifacts, EvidenceAdapter
 from extra.qk.memory_adaptive_allocation_observer import validate_memory_facts
 from extra.qk.memory_adaptive_policy import canonical_json
@@ -187,8 +187,10 @@ def _run_controller_with_seam(*, model_path: str, seam: ProductionWholeModelSeam
       memory = replace(policy.memory, candidate_id=machine_id,
                        memory_terms=(*policy.memory.memory_terms, workload_term))
       choice_record = choice.to_dict()
+      identity = derive_workload_policy_identity(base_whole_policy_identity=policy.whole_policy_identity,
+        workload_choice=choice_record, workload_memory_term=workload_term)
       catalog.append(type(policy)(memory, {**policy.policy, "candidate_id": machine_id,
-        "policy_candidate_id": policy.candidate_id, "workload_choice": choice_record}))
+        "policy_candidate_id": policy.candidate_id, "workload_choice": choice_record, "whole_policy_identity": identity}))
   catalog = tuple(catalog)
   if not catalog:
     return _refuse("no complete policy+M workload choice has exact correctness, remainder coverage, and per-M bytes")

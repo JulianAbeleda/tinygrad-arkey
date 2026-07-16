@@ -92,6 +92,15 @@ def test_complete_feasible_policies_run_baseline_first_and_cache_exact_facts():
   assert second["from_cache"] and seam.calls == []
 
 
+def test_workload_expansion_has_distinct_semantic_identities_in_policy_and_cache():
+  result = _run_controller_with_seam(model_path="chosen.gguf", seam=Seam())
+  candidates = result["cache_record"]["result"]["canonical_inputs"]["candidates"]
+  fast = {x["candidate_id"]: x for x in candidates if x["policy_candidate_id"] == "fast"}
+  assert set(fast) == {"fast:M16", "fast:M32"}
+  assert fast["fast:M16"]["whole_policy_identity"] != fast["fast:M32"]["whole_policy_identity"]
+  assert all(x["whole_policy_identity"].startswith("whole-policy:sha256:") for x in fast.values())
+
+
 def test_accelerated_candidate_without_complete_measured_facts_is_rejected():
   seam = Seam()
   seam.collect_whole_model_artifacts = lambda path, model, candidate, samples: _artifacts(

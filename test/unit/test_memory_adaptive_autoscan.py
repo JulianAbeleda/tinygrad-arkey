@@ -1,5 +1,7 @@
 import copy
 
+import pytest
+
 from extra.qk.memory_adaptive_autoscan import AutoscanCandidate, autoscan_selected_model
 from tinygrad.llm.device_facts import DeviceCapabilities, DeviceFacts, ProbeRecord
 from tinygrad.llm.prefill_memory_plan import (ByteLifetime, ByteTerm, CandidateMemoryCoverage, Strategy)
@@ -71,3 +73,10 @@ def test_unknown_device_memory_refuses_without_execution():
   values = args(); values["device_facts"] = device(None)
   result = autoscan_selected_model(**values, evidence_runner=lambda c: (_ for _ in ()).throw(AssertionError("runner called")))
   assert result["decision"] == "REFUSE"
+
+
+def test_whole_policy_identity_is_read_only_and_derived_from_policy():
+  value = candidate("baseline", Strategy.DIRECT_PACKED_FALLBACK, 10)
+  value.policy["whole_policy_identity"] = "whole-policy:sha256:test"
+  assert value.whole_policy_identity == "whole-policy:sha256:test"
+  with pytest.raises(AttributeError): value.whole_policy_identity = "forged"

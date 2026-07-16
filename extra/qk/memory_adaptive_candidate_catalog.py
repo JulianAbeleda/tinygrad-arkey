@@ -17,6 +17,7 @@ from extra.qk.prefill_workload_plan import CandidateKernelCapability, Invocation
 
 SCHEMA = "tinygrad.memory_adaptive_candidate_catalog.v1"
 IDENTITY_DOMAIN = "tinygrad.memory_adaptive.whole_policy_identity.v1"
+WORKLOAD_IDENTITY_DOMAIN = "tinygrad.memory_adaptive.whole_policy_identity.workload_expansion.v1"
 _SELF_ROUTE_SENTINEL = ("tinygrad.memory_adaptive.route.self.v1",)
 _FORBIDDEN = frozenset(("profile", "profile_id", "model_name", "model_path", "filename", "size_label",
                         "model_size_label"))
@@ -119,6 +120,24 @@ def derive_whole_policy_identity(*, inventory_identity: str, routes: Mapping[str
   return "whole-policy:sha256:" + hashlib.sha256(encoded).hexdigest()
 
 
+def derive_workload_policy_identity(*, base_whole_policy_identity: str, workload_choice: Mapping[str, Any],
+                                    workload_memory_term: ByteTerm) -> str:
+  """Bind a canonical base policy to one workload expansion, excluding only its operational alias."""
+  if not isinstance(base_whole_policy_identity, str) or not base_whole_policy_identity:
+    raise ValueError("base_whole_policy_identity must be a non-empty string")
+  if not isinstance(workload_choice, Mapping): raise TypeError("workload_choice must be a mapping")
+  if not isinstance(workload_memory_term, ByteTerm): raise TypeError("workload_memory_term must be a ByteTerm")
+  semantic_choice = {key: value for key, value in workload_choice.items() if key not in ("candidate_id", "machine_candidate_id")}
+  payload = {
+    "domain": WORKLOAD_IDENTITY_DOMAIN,
+    "base_whole_policy_identity": base_whole_policy_identity,
+    "workload_choice": _semantic(semantic_choice),
+    "workload_memory_term": _semantic(workload_memory_term.to_dict()),
+  }
+  encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False).encode()
+  return "whole-policy:sha256:" + hashlib.sha256(encoded).hexdigest()
+
+
 @dataclass(frozen=True)
 class CandidateSpec:
   """A producer-published complete-policy offer; coverage is exact, not inferred."""
@@ -209,10 +228,10 @@ def build_candidate_catalog(*, selected_model_inventory: Mapping[str, Any], targ
               "whole_policy_identity": identity}
     out.append(AutoscanCandidate(memory, policy))
   if len({x.candidate_id for x in out}) != len(out): raise ValueError("candidate_id values must be unique")
-  if len({x.policy["whole_policy_identity"] for x in out}) != len(out):
+  if len({x.whole_policy_identity for x in out}) != len(out):
     raise ValueError("whole_policy_identity values must be unique")
   return tuple(sorted(out, key=lambda x: (x.memory.strategy.value, x.candidate_id)))
 
 
-__all__ = ["SCHEMA", "IDENTITY_DOMAIN", "CandidateSpec", "build_candidate_catalog", "derive_whole_policy_identity",
-           "inventory_invocation_ids"]
+__all__ = ["SCHEMA", "IDENTITY_DOMAIN", "WORKLOAD_IDENTITY_DOMAIN", "CandidateSpec", "build_candidate_catalog",
+           "derive_whole_policy_identity", "derive_workload_policy_identity", "inventory_invocation_ids"]

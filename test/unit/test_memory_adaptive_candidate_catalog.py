@@ -1,4 +1,5 @@
-from extra.qk.memory_adaptive_candidate_catalog import CandidateSpec, build_candidate_catalog, inventory_invocation_ids
+from extra.qk.memory_adaptive_candidate_catalog import (CandidateSpec, build_candidate_catalog, derive_workload_policy_identity,
+                                                         inventory_invocation_ids)
 from extra.qk.memory_adaptive_evidence_runner import CandidateArtifacts, EvidenceAdapter, make_evidence_runner
 from tinygrad.llm.prefill_memory_plan import Strategy
 
@@ -73,6 +74,21 @@ def test_default_self_routes_ignore_operational_candidate_alias():
   assert first.policy["routes"] == {"q": "alias-a", "f": "alias-a"}
   assert second.policy["routes"] == {"q": "alias-b", "f": "alias-b"}
   assert first.policy["whole_policy_identity"] == second.policy["whole_policy_identity"]
+
+
+def test_workload_identity_binds_choice_and_exact_term_but_not_alias():
+  from tinygrad.llm.prefill_memory_plan import ByteLifetime, ByteTerm
+  term16 = ByteTerm("prefill peak M=16", 12, "exact bytes", "activation + scratch", ByteLifetime.CANDIDATE_WORKSPACE)
+  term32 = ByteTerm("prefill peak M=32", 24, "exact bytes", "activation + scratch", ByteLifetime.CANDIDATE_WORKSPACE)
+  choice = {"candidate_id": "alias-a", "full_m": 16, "peak_incremental_bytes": 12, "feasible": True}
+  identity = derive_workload_policy_identity(base_whole_policy_identity="whole-policy:sha256:base",
+    workload_choice=choice, workload_memory_term=term16)
+  assert identity == derive_workload_policy_identity(base_whole_policy_identity="whole-policy:sha256:base",
+    workload_choice={**choice, "candidate_id": "alias-b"}, workload_memory_term=term16)
+  assert identity != derive_workload_policy_identity(base_whole_policy_identity="whole-policy:sha256:base",
+    workload_choice={**choice, "full_m": 32}, workload_memory_term=term16)
+  assert identity != derive_workload_policy_identity(base_whole_policy_identity="whole-policy:sha256:base",
+    workload_choice=choice, workload_memory_term=term32)
 
 
 def test_changing_a_non_self_route_mutates_whole_policy_identity():

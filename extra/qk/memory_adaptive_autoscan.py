@@ -34,6 +34,12 @@ class AutoscanCandidate:
   @property
   def candidate_id(self) -> str: return self.memory.candidate_id
 
+  @property
+  def whole_policy_identity(self) -> str:
+    value = self.policy.get("whole_policy_identity")
+    if not isinstance(value, str) or not value: raise ValueError("policy whole_policy_identity must be a non-empty string")
+    return value
+
   def policy_record(self) -> dict[str, Any]:
     # Strategy is structural and therefore material even when callers omit it.
     return {**dict(self.policy), "candidate_id": self.candidate_id, "strategy": self.memory.strategy.value}
