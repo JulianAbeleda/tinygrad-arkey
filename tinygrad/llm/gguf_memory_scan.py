@@ -106,25 +106,6 @@ def _payload_bytes(shape:tuple[int, ...], ggml_type:int) -> int | None:
   return None
 
 
-def selected_gguf_resident_bytes(meta:Mapping, allocation_alignment:int|None, *, resident_copies:int=1) -> int | None:
-  """Return packed device residency derived from the selected GGUF tensor table.
-
-  This is deliberately a content/capability calculation, not a model-size estimate: every tensor payload is decoded
-  from its GGML type and shape, then rounded to the allocation granularity reported by the opened device.  Unknown
-  formats or an unavailable device granularity remain unknown rather than falling back to file size or a tier label.
-  """
-  if allocation_alignment is None: return None
-  if not isinstance(allocation_alignment, int) or isinstance(allocation_alignment, bool) or allocation_alignment <= 0:
-    raise ValueError("allocation_alignment must be a positive integer or None")
-  if not isinstance(resident_copies, int) or isinstance(resident_copies, bool) or resident_copies <= 0:
-    raise ValueError("resident_copies must be a positive integer")
-  total = 0
-  for name, dims, typ, _off in meta.get("tensor_infos", ()):
-    if (payload := _payload_bytes(tuple(dims), typ)) is None: return None
-    total += ((payload + allocation_alignment - 1) // allocation_alignment) * allocation_alignment * resident_copies
-  return total
-
-
 def selected_gguf_backing_bytes(model_path:str|Path, allocation_alignment:int|None) -> int | None:
   """Exact allocation size of tinygrad's path-based whole-file GGUF backing buffer."""
   if allocation_alignment is None: return None
@@ -192,10 +173,5 @@ def scan_selected_gguf_memory(model_path:str|Path, geometry:RuntimeGeometry, can
   return GGUFMemoryScan(path, SelectedModelMemoryLedger(tuple(allocations)), spans, kv)
 
 
-def build_selected_model_memory_ledger(*args, **kwargs) -> SelectedModelMemoryLedger:
-  return scan_selected_gguf_memory(*args, **kwargs).ledger
-
-
 __all__ = ["CandidateWorkspace", "GGUFMemoryScan", "RuntimeGeometry", "TensorPayloadSpan",
-           "build_selected_model_memory_ledger", "scan_selected_gguf_memory", "selected_gguf_backing_bytes",
-           "selected_gguf_resident_bytes"]
+           "scan_selected_gguf_memory", "selected_gguf_backing_bytes"]

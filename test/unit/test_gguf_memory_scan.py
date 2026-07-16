@@ -2,8 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from tinygrad.llm.gguf_memory_scan import (CandidateWorkspace, RuntimeGeometry,
-  build_selected_model_memory_ledger, scan_selected_gguf_memory, selected_gguf_backing_bytes, selected_gguf_resident_bytes)
+from tinygrad.llm.gguf_memory_scan import CandidateWorkspace, RuntimeGeometry, scan_selected_gguf_memory, selected_gguf_backing_bytes
 from tinygrad.llm.memory_ledger import AllocationKind, ScannedMemoryBudget, AllocationProvenance
 
 
@@ -21,20 +20,6 @@ def _geometry(**overrides):
                 peak_prefill_activation_bytes=12, peak_prefill_output_bytes=13, peak_prefill_scratch_bytes=14)
   values.update(overrides)
   return RuntimeGeometry(**values)
-
-
-def test_selected_residency_comes_from_tensor_payloads_and_scanned_allocator_granularity():
-  _kv, meta = _metadata(None)
-  # q4=288 -> 320 after 64-byte allocation rounding; f16=64. This intentionally excludes GGUF headers/padding.
-  assert selected_gguf_resident_bytes(meta, 64) == 384
-  assert selected_gguf_resident_bytes(meta, 64, resident_copies=2) == 768
-
-
-def test_selected_residency_does_not_guess_an_unknown_device_or_format():
-  _kv, meta = _metadata(None)
-  assert selected_gguf_resident_bytes(meta, None) is None
-  unknown = {**meta, "tensor_infos": [("future", (16, 16), 999, 0)]}
-  assert selected_gguf_resident_bytes(unknown, 64) is None
 
 
 def test_path_loader_backing_uses_one_allocator_aligned_whole_file(tmp_path):
@@ -58,8 +43,8 @@ def test_builds_tensor_spans_and_all_runtime_classes_from_injected_metadata(tmp_
 
 
 def test_unknown_alignment_copy_and_runtime_facts_fail_closed(tmp_path):
-  ledger = build_selected_model_memory_ledger(tmp_path/"chosen.gguf", _geometry(batch_size=None, runtime_persistent_bytes=None),
-    [CandidateWorkspace("direct", None, "backend did not report workspace")], metadata_loader=_metadata, file_size=512)
+  ledger = scan_selected_gguf_memory(tmp_path/"chosen.gguf", _geometry(batch_size=None, runtime_persistent_bytes=None),
+    [CandidateWorkspace("direct", None, "backend did not report workspace")], metadata_loader=_metadata, file_size=512).ledger
   tensors = [x for x in ledger.allocations if x.kind is AllocationKind.GGUF_TENSOR]
   assert all(x.alignment is None and x.copies is None and x.bytes is None for x in tensors)
   decision = ledger.decide(ScannedMemoryBudget(10_000, 0, AllocationProvenance("test", "known budget")), "direct")

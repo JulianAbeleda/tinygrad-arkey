@@ -12,7 +12,8 @@ from tinygrad.llm.memory_semantics import MemorySemanticClass, MemorySemanticOwn
 from tinygrad.llm.prefill_memory_plan import ByteLifetime, ByteTerm, CandidateMemoryCoverage, Strategy
 from extra.qk.memory_adaptive_autoscan import AutoscanCandidate
 from tinygrad import UOp, dtypes
-from tinygrad.llm.physical_memory_ledger import AllocationOwner, PhysicalMemoryLedger
+from extra.qk.physical_memory_ledger import PhysicalMemoryLedger
+from tinygrad.llm.physical_memory_ledger import AllocationOwner
 from tinygrad.schedule.memory import ScheduleMemoryArena, ScheduleMemoryBuffer, ScheduleMemoryManifest
 
 

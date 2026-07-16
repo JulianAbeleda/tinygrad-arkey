@@ -4,7 +4,7 @@ from tinygrad import Tensor, dtypes
 from tinygrad.llm.model import (
   TransformerBlock, _GGUF_TENSOR_OWNER, _KV_CACHE_OWNER, _RUNTIME_PERSISTENT_OWNER, _bind_state_dict_owners,
 )
-from tinygrad.llm.physical_memory_ledger import PhysicalMemoryLedger
+from extra.qk.physical_memory_ledger import PhysicalMemoryLedger
 
 
 def _allocation_owner(tensor:Tensor):

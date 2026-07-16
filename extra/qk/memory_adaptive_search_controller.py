@@ -27,9 +27,10 @@ from extra.qk.memory_adaptive_evidence_runner import CandidateArtifacts, Evidenc
 from extra.qk.memory_adaptive_allocation_observer import validate_memory_facts
 from extra.qk.memory_adaptive_policy import canonical_json
 from tinygrad.llm.admission import scanned_device_memory_budget
-from tinygrad.llm.device_facts import DeviceFacts, MemoryReservePolicy, scan_device_facts
+from tinygrad.llm.device_facts import DeviceFacts, scan_device_facts
+from extra.qk.memory_adaptive_device_facts import MemoryReservePolicy
 from tinygrad.llm.prefill_memory_plan import ByteLifetime, ByteTerm, Strategy
-from tinygrad.llm.prefill_workload_plan import LiveMemoryFacts, PrefillRequest, plan_prefill_workload
+from extra.qk.prefill_workload_plan import LiveMemoryFacts, PrefillRequest, plan_prefill_workload
 
 SCHEMA = "tinygrad.memory_adaptive_search_controller.v1"
 

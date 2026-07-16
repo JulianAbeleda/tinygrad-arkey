@@ -1,6 +1,6 @@
 from dataclasses import replace
 
-from tinygrad.llm.schedule_memory_evidence import schedule_memory_evidence
+from extra.qk.schedule_memory_evidence import schedule_memory_evidence
 from tinygrad.llm.memory_semantics import (KV_CACHE, MODEL_PARAMETER, RUNTIME_INPUT, RUNTIME_PERSISTENT,
                                             MemorySemanticClass, MemorySemanticOwner)
 from tinygrad.schedule.memory import ScheduleMemoryArena, ScheduleMemoryBuffer, ScheduleMemoryIndex, ScheduleMemoryManifest

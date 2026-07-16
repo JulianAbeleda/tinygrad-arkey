@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from tinygrad.llm.prefill_workload_plan import (CandidateKernelCapability, InvocationBytes, LiveMemoryFacts,
+from extra.qk.prefill_workload_plan import (CandidateKernelCapability, InvocationBytes, LiveMemoryFacts,
                                                  PrefillRequest, RemainderMapping, plan_prefill_workload)
 
 

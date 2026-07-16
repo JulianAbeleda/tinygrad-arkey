@@ -6,7 +6,7 @@ from tinygrad.llm.memory_semantics import (MemorySemanticClass, PREFILL_ACTIVATI
   prefill_scratch, runtime_activation, runtime_input, runtime_output,
   runtime_persistent, runtime_scratch)
 from tinygrad.schedule.memory import collect_memory_plan_manifests
-from tinygrad.llm.schedule_memory_evidence import schedule_memory_evidence
+from extra.qk.schedule_memory_evidence import schedule_memory_evidence
 from tinygrad.uop.ops import Ops, UOp
 from tinygrad.uop.spec import spec_program, spec_tensor, type_verify
 

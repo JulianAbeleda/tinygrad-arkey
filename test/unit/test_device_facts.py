@@ -1,8 +1,8 @@
 from datetime import datetime, timezone
 import json
 
-from tinygrad.llm.device_facts import (_parse_rocminfo_gpu_capabilities, MemoryReservePolicy, DeviceFacts,
-                                       calculate_admissible_budget, scan_device_facts)
+from tinygrad.llm.device_facts import _parse_rocminfo_gpu_capabilities, DeviceFacts, scan_device_facts
+from extra.qk.memory_adaptive_device_facts import MemoryReservePolicy, calculate_admissible_budget
 
 
 NOW = datetime(2026, 7, 15, 12, 0, tzinfo=timezone.utc)

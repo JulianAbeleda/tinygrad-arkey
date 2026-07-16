@@ -13,7 +13,7 @@ from typing import Any, Iterable, Mapping, Sequence
 
 from extra.qk.memory_adaptive_autoscan import AutoscanCandidate
 from tinygrad.llm.prefill_memory_plan import ByteLifetime, ByteTerm, CandidateMemoryCoverage, Strategy
-from tinygrad.llm.prefill_workload_plan import CandidateKernelCapability, InvocationBytes, RemainderMapping
+from extra.qk.prefill_workload_plan import CandidateKernelCapability, InvocationBytes, RemainderMapping
 
 SCHEMA = "tinygrad.memory_adaptive_candidate_catalog.v1"
 _FORBIDDEN = frozenset(("profile", "profile_id", "model_name", "model_path", "filename", "size_label",

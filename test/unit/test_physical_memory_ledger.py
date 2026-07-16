@@ -7,8 +7,8 @@ import json
 import pytest
 
 from tinygrad import Tensor, UOp
-from tinygrad.llm.physical_memory_ledger import (AllocationOwner, PhysicalMemoryLedger, allocation_owner,
-  allocation_owner_from_semantic, allocation_phase, bind_allocation_owner)
+from extra.qk.physical_memory_ledger import PhysicalMemoryLedger, allocation_phase
+from tinygrad.llm.physical_memory_ledger import (AllocationOwner, allocation_owner, allocation_owner_from_semantic, bind_allocation_owner)
 from tinygrad.llm.memory_semantics import (MODEL_PARAMETER, PREFILL_SCRATCH, RUNTIME_OUTPUT, candidate_workspace)
 from tinygrad.uop.ops import buffers
 

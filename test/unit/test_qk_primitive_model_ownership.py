@@ -6,7 +6,7 @@ from tinygrad import Tensor, dtypes
 from tinygrad.llm.gguf import MODEL_PARAMETER_ALLOCATION_OWNER, gguf_load_with_metadata
 from tinygrad.llm.memory_semantics import MODEL_PARAMETER, RUNTIME_ACTIVATION, mark_memory_semantic, memory_semantic_owner, model_parameter
 from tinygrad.llm.model_route_plan import build_model_route_plan
-from tinygrad.llm.physical_memory_ledger import PhysicalMemoryLedger
+from extra.qk.physical_memory_ledger import PhysicalMemoryLedger
 from tinygrad.llm.qk_primitives import (
   Q4KPrimitiveLinear, Q6KPrimitiveLinear, _build_fused_q4k, _install_q4k_primitives, _install_q6k_primitives,
   _model_parameter_materialization,

@@ -11,7 +11,8 @@ from dataclasses import dataclass
 from typing import Any, Callable, Mapping, Sequence
 
 from extra.qk.memory_adaptive_policy import cache_matches, make_cache_record, select_policy
-from tinygrad.llm.device_facts import DeviceFacts, MemoryReservePolicy, calculate_admissible_budget, scan_device_facts
+from tinygrad.llm.device_facts import DeviceFacts, scan_device_facts
+from extra.qk.memory_adaptive_device_facts import MemoryReservePolicy, calculate_admissible_budget
 from tinygrad.llm.prefill_memory_plan import (ByteLifetime, ByteTerm, CandidateMemoryCoverage, DeviceMemoryFacts,
                                                PrefillMemoryPlan, Strategy, plan_prefill_memory)
 
