@@ -22,6 +22,8 @@ FULL_KERNEL_CANDIDATE_SET_SCHEMA = "boltbeam.full_kernel_candidate_set.v1"
 PACKED_SCALAR_DECODER_VERSION = "ggml_k_quant_v1"
 Q4K_Q8_1_FIVE_BUFFER_ABI = "q4k_q8_1_five_buffer_v1"
 Q4K_Q8_1_EMITTER_FAMILY = "q4k_q8_1_mmq"
+Q4K_Q8_1_DIRECT_SCHEDULE_FAMILY = "q4k_q8_1_direct_global_v1"
+Q4K_Q8_1_COOPERATIVE_SCHEDULE_FAMILY = "q4k_q8_1_cooperative_lds_v1"
 ANCHOR_SINGLE_BUFFER_CANDIDATE_HASH = "579b909f9d9b3ed89eab2129fca41baaa35c94b8eab040ccb0cbcee7a340fa0c"
 
 class FullKernelAdmissionError(ValueError):
@@ -51,6 +53,10 @@ GFX1100_Q4K_Q8_FIVE_BUFFER_CAPABILITY = FullKernelCapability(
   capability_id="amd.gfx1100.prefill.q4k_q8.direct_physical_ds4.v1", max_lds_bytes=0,
   buffer_count=0, stage_count=0, vector_bytes=16, instruction_family="wmma_i32_16x16x16_iu8",
   fragment_layout="rdna3_wave32_signed_i8_direct_global", transport="direct_global")
+GFX1100_Q4K_Q8_COOPERATIVE_CAPABILITY = FullKernelCapability(
+  capability_id="amd.gfx1100.prefill.q4k_q8.cooperative_lds.v1", buffer_count=1, stage_count=1,
+  instruction_family="wmma_i32_16x16x16_iu8", fragment_layout="rdna3_wave32_signed_i8_cooperative_lds",
+  transport="lds")
 
 @dataclass(frozen=True)
 class Q4KQ8FiveBufferEmitterPlan:
@@ -63,9 +69,24 @@ class Q4KQ8FiveBufferEmitterPlan:
   activation_layout: str = "q8_1_mmq_ds4_transposed_blocks"
   tail_policy: str = "aligned_only_no_tails"
 
+@dataclass(frozen=True)
+class Q4KQ8CooperativePlan:
+  tile: tuple[int,int,int] = (128,128,32)
+  waves: tuple[int,int] = (4,2)
+  wave_size: int = 32
+  threads: int = 256
+  transport: str = "lds"
+  buffer_count: int = 1
+  stage_count: int = 1
+  active_lds_bytes: int = 12288
+  instruction_family: str = "wmma_i32_16x16x16_iu8"
+  outer_grid: tuple[int,int,int] = (1,1,1)
+
 def candidate_storage_kind(payload: dict[str, Any]) -> str:
   """Resolve typed stage storage while keeping legacy payloads on LDS."""
-  if payload.get("kernel_abi", {}).get("family") == Q4K_Q8_1_FIVE_BUFFER_ABI: return "direct_global"
+  family = payload.get("schedule", {}).get("family")
+  if family == Q4K_Q8_1_DIRECT_SCHEDULE_FAMILY: return "direct_global"
+  if family == Q4K_Q8_1_COOPERATIVE_SCHEDULE_FAMILY: return "lds"
   residency = payload.get("schedule", {}).get("residency", {}) if isinstance(payload, dict) else {}
   resident = residency.get("resident", ()) if isinstance(residency, dict) else ()
   return "global_register_resident" if isinstance(resident, (list, tuple)) and "stage_ab_register" in resident else "lds"
@@ -81,7 +102,9 @@ def capability_transport(capability: "FullKernelCapability") -> str:
 
 def full_kernel_candidate_capability(payload:dict[str,Any]) -> "FullKernelCapability":
   """Resolve the frozen hardware capability from typed schedule facts in one place."""
-  if payload.get("kernel_abi", {}).get("family") == Q4K_Q8_1_FIVE_BUFFER_ABI: return GFX1100_Q4K_Q8_FIVE_BUFFER_CAPABILITY
+  family = payload.get("schedule", {}).get("family")
+  if family == Q4K_Q8_1_COOPERATIVE_SCHEDULE_FAMILY: return GFX1100_Q4K_Q8_COOPERATIVE_CAPABILITY
+  if family == Q4K_Q8_1_DIRECT_SCHEDULE_FAMILY: return GFX1100_Q4K_Q8_FIVE_BUFFER_CAPABILITY
   if candidate_storage_kind(payload) == "global_register_resident": return GFX1100_REGISTER_RESIDENT_CAPABILITY
   pipeline = payload.get("schedule", {}).get("pipeline", {})
   return GFX1100_TWO_BUFFER_STAGE1_CAPABILITY if \
@@ -259,7 +282,7 @@ def q4k_q8_1_five_buffer_abi_plan() -> dict[str,Any]:
 
 def _q4k_q8_1_direct_emitter_schedule() -> dict[str,Any]:
   """Exact model-independent schedule facts of the physical-DS4 direct UOp emitter."""
-  return {"variant":"q4k_q8_1_physical_ds4_direct_v1",
+  return {"family":Q4K_Q8_1_DIRECT_SCHEDULE_FAMILY, "variant":"q4k_q8_1_physical_ds4_direct_v1",
     "tile":{"m":16,"n":16,"k":256}, "waves":{"m":1,"n":1}, "threads":32,
     "transport":"direct_global", "lane_ownership":"rdna3_wave32_direct_wmma_output_tile",
     "operands":{"q4_packed_words":{"source":"global","alignment":16},
@@ -282,6 +305,28 @@ def derive_q4k_q8_1_five_buffer_candidate(payload:dict[str,Any]) -> FullKernelCa
   normalized["workload"]["layout"] = {"a":"physical_ds4","b":"q4_k_packed_words","c":"tokens_rows"}
   normalized["schedule"] = _q4k_q8_1_direct_emitter_schedule()
   normalized["static_constraints"] = {"max_lds_bytes":0,"max_vgpr_per_thread":256,"allow_spill":False}
+  _validate_full_kernel_payload(normalized)
+  return FullKernelCandidateSetEntry(_canonical_full_kernel_identity(normalized), normalized)
+
+def _q4k_q8_1_cooperative_schedule() -> dict[str,Any]:
+  return {"family":Q4K_Q8_1_COOPERATIVE_SCHEDULE_FAMILY, "tile":{"m":128,"n":128,"k":32},
+    "waves":{"m":4,"n":2}, "wave_size":32, "threads":256, "transport":"lds",
+    "lds":{"active_bytes":12288,"max_bytes":65536,"slots":1,"pipeline":"sequential"},
+    "pipeline":{"buffer_count":1,"stage_count":1,"overlap":False},
+    "wmma":{"instruction_family":"wmma_i32_16x16x16_iu8","input_dtype":"int8","signed":True,
+      "fragment_layout":"rdna3_wave32_signed_i8_cooperative_lds"},
+    "outer_grid":{"m":"ceil_div(workload.m,128)","n":"ceil_div(workload.n,128)","k":1},
+    "tail_policy":"masked_mn_k_block_aligned"}
+
+def derive_q4k_q8_1_cooperative_five_buffer_candidate(payload:dict[str,Any]) -> FullKernelCandidateSetEntry:
+  """Derive the distinct cooperative-LDS candidate without changing the legacy direct emitter identity."""
+  normalized = json.loads(json.dumps(payload, allow_nan=False))
+  if "operand_sources" in normalized: raise ValueError("five-buffer ABI is ambiguous with operand_sources")
+  normalized["kernel_abi"] = q4k_q8_1_five_buffer_abi_plan()
+  normalized["workload"]["dtypes"] = {"a":"Q8_1","b":"Q4_K","c":"fp32","accumulator":"int32_fp32"}
+  normalized["workload"]["layout"] = {"a":"physical_ds4","b":"q4_k_packed_words","c":"tokens_rows"}
+  normalized["schedule"] = _q4k_q8_1_cooperative_schedule()
+  normalized["static_constraints"] = {"max_lds_bytes":65536,"max_vgpr_per_thread":256,"allow_spill":False}
   _validate_full_kernel_payload(normalized)
   return FullKernelCandidateSetEntry(_canonical_full_kernel_identity(normalized), normalized)
 
@@ -385,7 +430,7 @@ def admit_full_kernel_candidate(payload:dict[str, Any], canonical_identity:str, 
   if storage_kind == "global_register_resident" and capability is GFX1100_SINGLE_BUFFER_CAPABILITY:
     capability = GFX1100_REGISTER_RESIDENT_CAPABILITY
   if storage_kind == "direct_global" and capability is GFX1100_SINGLE_BUFFER_CAPABILITY:
-    capability = GFX1100_Q4K_Q8_FIVE_BUFFER_CAPABILITY
+    capability = full_kernel_candidate_capability(normalized)
   target_id = f"{target['backend']}:{target['arch']}:wave{target['wave_size']}"
   # Profile is retained in legacy payloads and call signatures solely as provenance.
   if workload["role"] != role or role not in applicability["roles"]: raise FullKernelAdmissionError("workload_role", "role is not exact/applicable")
@@ -395,6 +440,23 @@ def admit_full_kernel_candidate(payload:dict[str, Any], canonical_identity:str, 
   if target != {"backend":capability.backend,"arch":capability.arch,"wave_size":capability.wave_size}:
     raise FullKernelAdmissionError("capability_target", "target is outside frozen capability")
   if "kernel_abi" in normalized:
+    if schedule.get("family") == Q4K_Q8_1_COOPERATIVE_SCHEDULE_FAMILY:
+      if capability is not GFX1100_Q4K_Q8_COOPERATIVE_CAPABILITY:
+        raise FullKernelAdmissionError("capability_five_buffer", "cooperative five-buffer ABI requires its typed LDS capability")
+      if target["wave_size"] != 32 or schedule["wave_size"] != 32:
+        raise FullKernelAdmissionError("capability_wave", "cooperative five-buffer candidate requires wave32")
+      if shape[2] % 256:
+        raise FullKernelAdmissionError("geometry_k", "cooperative five-buffer K must be Q4_K-block aligned")
+      active_lds = schedule["lds"]["active_bytes"]
+      if active_lds <= 0 or active_lds > 65536 or active_lds > normalized["static_constraints"]["max_lds_bytes"]:
+        raise FullKernelAdmissionError("capability_lds", "active LDS must be positive and within the declared 64 KiB limit")
+      plan = Q4KQ8CooperativePlan(active_lds_bytes=active_lds,
+        outer_grid=((shape[1]+127)//128,(shape[0]+127)//128,1))
+      from extra.qk.kernel_vocabulary import KernelCandidateContext
+      context = KernelCandidateContext(schema_version=normalized["schema_version"], canonical_identity=actual_identity,
+        geometry=None, pipeline=plan)
+      return FullKernelAdmission(actual_identity,normalized,None,plan,plan,active_lds,capability,context,
+                                 _freeze_json(normalized["kernel_abi"]))
     if capability is not GFX1100_Q4K_Q8_FIVE_BUFFER_CAPABILITY:
       raise FullKernelAdmissionError("capability_five_buffer", "five-buffer ABI requires its typed direct-global capability")
     if any(shape[i] % (16,16,256)[i] for i in range(3)):
@@ -577,10 +639,13 @@ def _validate_full_kernel_payload(payload:dict[str, Any]) -> None:
       raise ValueError("five-buffer workload dtypes must describe Q8_1, Q4_K, fp32 output, and int32/fp32 accumulation")
     if workload["layout"] != {"a":"physical_ds4","b":"q4_k_packed_words","c":"tokens_rows"}:
       raise ValueError("five-buffer workload layouts must describe physical DS4, packed Q4_K words, and token-row output")
-    if payload["schedule"] != _q4k_q8_1_direct_emitter_schedule():
-      raise ValueError("five-buffer schedule must exactly describe the direct-global wave32 signed-i8 WMMA emitter with zero LDS and no tails")
-    if payload["static_constraints"] != {"max_lds_bytes":0,"max_vgpr_per_thread":256,"allow_spill":False}:
-      raise ValueError("five-buffer resources must require zero LDS, bounded VGPRs, and no spills")
+    cooperative = payload["schedule"].get("family") == Q4K_Q8_1_COOPERATIVE_SCHEDULE_FAMILY
+    expected_schedule = _q4k_q8_1_cooperative_schedule() if cooperative else _q4k_q8_1_direct_emitter_schedule()
+    if payload["schedule"] != expected_schedule:
+      raise ValueError("five-buffer schedule must exactly describe a retained explicit schedule family")
+    expected_lds = 65536 if cooperative else 0
+    if payload["static_constraints"] != {"max_lds_bytes":expected_lds,"max_vgpr_per_thread":256,"allow_spill":False}:
+      raise ValueError("five-buffer resources do not match the explicit schedule family")
     applicability = payload["applicability"]
     _strict_keys(applicability, {"exact_shape", "profiles", "roles", "targets"}, "applicability")
     if applicability["exact_shape"] is not True: raise ValueError("full-kernel applicability.exact_shape must be true")
