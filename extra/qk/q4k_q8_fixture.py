@@ -18,7 +18,7 @@ ACTIVATION_LAYOUT_MMQ_DS4 = "mmq_ds4"
 
 __all__ = (
   "ACTIVATION_LAYOUT_ROW_MAJOR", "ACTIVATION_LAYOUT_MMQ_DS4", "Q8ActivationInputs",
-  "make_finite_q4k_bytes", "make_q8_activation_inputs", "q8_mmq_ds4_from_row_major",
+  "make_finite_q4k_bytes", "make_q8_activation_inputs", "q4k_dequantize_selected_positions", "q8_mmq_ds4_from_row_major",
 )
 
 
@@ -82,3 +82,40 @@ def make_finite_q4k_bytes(n:int, k:int, seed:int) -> np.ndarray:
   raw[:, 0:2] = (rng.standard_normal(nblocks).astype(np.float32) * 0.05).astype(np.float16).view(np.uint8).reshape(nblocks, 2)
   raw[:, 2:4] = (rng.standard_normal(nblocks).astype(np.float32) * 0.05).astype(np.float16).view(np.uint8).reshape(nblocks, 2)
   return raw.reshape(n, k // Q4_K_BLOCK_ELEMS, Q4_K_BLOCK_BYTES)
+
+
+def q4k_dequantize_selected_positions(q4k_bytes:np.ndarray, positions:np.ndarray) -> np.ndarray:
+  """Vectorized Q4_K dequantization at selected K positions for every N row.
+
+  Returns fp32 ``[N, len(positions)]``.  The input must have the canonical
+  ``[N, K/256, 144]`` shape; repeated and unsorted positions are supported.
+  """
+  raw = np.asarray(q4k_bytes)
+  if raw.dtype != np.uint8 or raw.ndim != 3 or raw.shape[2] != Q4_K_BLOCK_BYTES:
+    raise ValueError(f"q4k_bytes must be uint8 [N,K/256,{Q4_K_BLOCK_BYTES}], got {raw.dtype} {raw.shape}")
+  n, blocks, _ = raw.shape
+  if n <= 0 or blocks <= 0: raise ValueError("Q4_K dimensions must be positive")
+  selected = np.asarray(positions)
+  if selected.ndim != 1 or selected.dtype.kind not in "iu":
+    raise ValueError(f"positions must be a rank-1 integer array, got {selected.dtype} {selected.shape}")
+  pos = selected.astype(np.int64, copy=False)
+  k = blocks * Q4_K_BLOCK_ELEMS
+  if np.any(pos < 0) or np.any(pos >= k): raise ValueError(f"positions must be in [0,{k})")
+  if pos.size == 0: return np.empty((n, 0), dtype=np.float32)
+
+  block_idx, within = np.divmod(pos, Q4_K_BLOCK_ELEMS)
+  group, group_pos = np.divmod(within, Q8_1_BLOCK_ELEMS)
+  chosen = np.ascontiguousarray(raw)[:, block_idx, :]
+  d = chosen[:, :, 0:2].copy().view("<f2").reshape(n, -1).astype(np.float32)
+  dmin = chosen[:, :, 2:4].copy().view("<f2").reshape(n, -1).astype(np.float32)
+  meta = chosen[:, :, 4:16]
+  low_idx = group % 4
+  high = meta[:, np.arange(pos.size), 8 + low_idx]
+  scale_code = np.where(group < 4, meta[:, np.arange(pos.size), low_idx] & 63,
+                        (high & 15) | ((meta[:, np.arange(pos.size), low_idx] >> 6) << 4))
+  min_code = np.where(group < 4, meta[:, np.arange(pos.size), 4 + low_idx] & 63,
+                      (high >> 4) | ((meta[:, np.arange(pos.size), 4 + low_idx] >> 6) << 4))
+  packed_idx = 16 + (group // 2) * Q8_1_BLOCK_ELEMS + group_pos
+  packed = chosen[:, np.arange(pos.size), packed_idx]
+  q = np.where(group % 2 == 0, packed & 15, packed >> 4).astype(np.float32)
+  return (q * d * scale_code.astype(np.float32) - dmin * min_code.astype(np.float32)).astype(np.float32)
