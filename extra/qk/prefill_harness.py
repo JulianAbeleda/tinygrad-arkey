@@ -11,7 +11,7 @@ from dataclasses import dataclass
 import pathlib
 
 from extra.qk.model_profiles import MODEL_PROFILES, ModelProfile, profile_by_id, profile_from_model_path
-from extra.qk.route_manifest import promoted_prefill_candidate_supports_profile
+from extra.qk.route_manifest import promoted_prefill_candidate_policy
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
@@ -61,8 +61,9 @@ class PrefillModelHarnessProfile:
 
   @property
   def env(self) -> dict[str, str]:
-    # Exact generated candidates are enabled from their artifact applicability, never from a model-size branch.
-    graph_gemm = "1" if promoted_prefill_candidate_supports_profile(self.id) else "0"
+    # Profiles select only which committed artifact the authority harness loads for route census. Runtime support is
+    # still established later from exact target, inventory, candidate-set, role, and shape identities.
+    graph_gemm = "1" if self.id in promoted_prefill_candidate_policy()["provenance_profiles"] else "0"
     return {"PREFILL_V2": "1", "BOLTBEAM_MODEL_PROFILE": self.id, "PREFILL_GRAPH_GEMM": graph_gemm,
             **self.env_overrides}
 
