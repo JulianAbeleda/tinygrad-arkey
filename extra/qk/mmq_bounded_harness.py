@@ -24,11 +24,15 @@ if str(ROOT) not in sys.path:
 
 from tinygrad import Tensor, dtypes
 
-from extra.qk.layout import Q4_K_BLOCK_BYTES, Q4_K_BLOCK_ELEMS, Q8_1_BLOCK_ELEMS, q8_1_dequantize, q8_1_quantize
+from extra.qk.layout import Q4_K_BLOCK_ELEMS, Q8_1_BLOCK_ELEMS, q8_1_dequantize
+from extra.qk.q4k_q8_fixture import (
+  ACTIVATION_LAYOUT_MMQ_DS4, ACTIVATION_LAYOUT_ROW_MAJOR, Q8ActivationInputs, make_finite_q4k_bytes,
+  make_q8_activation_inputs,
+)
 from extra.qk.mmq_q4k_q8_reference import (
-  Q81MMQDS4Activation, Q81MMQDS4ActivationSpec, Q4KQ81MMQTileSpec, Q8_1_MMQ_DS4_BLOCK_ELEMS,
+  Q4KQ81MMQTileSpec, Q8_1_MMQ_DS4_BLOCK_ELEMS,
   Q8_1_MMQ_DS4_GROUPS_PER_BLOCK, Q8_1_MMQ_DS4_LAYOUT, Q8_1_ROW_MAJOR_LAYOUT, describe_q4k_q8_1_mmq_tile,
-  q4k_q8_1_mmq_ds4_tile_reference, q4k_q8_1_mmq_tile_reference, q8_1_mmq_ds4_quantize_reference,
+  q4k_q8_1_mmq_ds4_tile_reference, q4k_q8_1_mmq_tile_reference,
 )
 from extra.qk.mmq_llama_oracle import (
   LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID, llama_mmq_source_policy, run_llama_mmq_coop_tile_oracle,
@@ -50,8 +54,6 @@ AMD_DS4_WARP_BACKEND_ID = "q4k_q8_1_mmq_amd_ds4_warp_atom_v0"
 AMD_DS4_DOT4X4_BACKEND_ID = "q4k_q8_1_mmq_amd_ds4_dot4x4_atom_v0"
 AMD_DS4_LDS_SKELETON_BACKEND_ID = "q4k_q8_1_mmq_amd_ds4_lds_skeleton_atom_v0"
 AMD_DS4_COOP_TILE_BACKEND_ID = "q4k_q8_1_mmq_amd_ds4_coop_tile_atom_v0"
-ACTIVATION_LAYOUT_ROW_MAJOR = "row_major_q8_1"
-ACTIVATION_LAYOUT_MMQ_DS4 = "mmq_ds4"
 LLAMA_MMQ_GEOMETRY = {"mmq_x": 128, "mmq_y": 128, "iter_k": 256, "nwarps": 8}
 MMQ_DS4_BLOCK_ELEMS = Q8_1_MMQ_DS4_BLOCK_ELEMS
 MMQ_DS4_GROUPS_PER_BLOCK = Q8_1_MMQ_DS4_GROUPS_PER_BLOCK
@@ -131,68 +133,6 @@ def candidate_metadata(config: BoundedMMQConfig | None = None) -> dict[str, Any]
     "tile": {"M": cfg.m_tile, "N": cfg.n_tile, "K_groups": cfg.k_groups},
     "writeback_mode": cfg.writeback_mode if cfg.backend == AMD_DS4_COOP_TILE_BACKEND_ID else None,
   }
-
-
-@dataclass(frozen=True)
-class Q8ActivationInputs:
-  source_values: np.ndarray
-  row_values: np.ndarray
-  row_scales: np.ndarray
-  q8_values: np.ndarray
-  q8_scales: np.ndarray
-  q8_sums: np.ndarray | None
-  activation_layout_source: str
-  ds4_activation: Q81MMQDS4Activation | None = None
-
-  @property
-  def q8_values_shape(self) -> list[int]:
-    return list(self.q8_values.shape)
-
-  @property
-  def q8_scales_shape(self) -> list[int]:
-    return list(self.q8_scales.shape)
-
-  @property
-  def q8_sums_shape(self) -> list[int] | None:
-    return None if self.q8_sums is None else list(self.q8_sums.shape)
-
-
-def _q8_mmq_ds4_from_row_major(x:np.ndarray, xq:np.ndarray, xscales:np.ndarray) -> Q8ActivationInputs:
-  m, k = xq.shape
-  if k % MMQ_DS4_BLOCK_ELEMS:
-    raise ValueError(f"k={k} must be MMQ DS4 block aligned")
-  values, scales, sums = q8_1_mmq_ds4_quantize_reference(x)
-  ds4_spec = Q81MMQDS4ActivationSpec(m=m, k=k, m_tile=m)
-  ds4_activation = Q81MMQDS4Activation(values=values, scales=scales, sums=sums, spec=ds4_spec)
-  return Q8ActivationInputs(source_values=x, row_values=xq, row_scales=xscales, q8_values=values, q8_scales=scales,
-                            q8_sums=sums, activation_layout_source="l0_l1_q8_1_mmq_ds4_reference_pack",
-                            ds4_activation=ds4_activation)
-
-
-def _q8_activation_inputs(m:int, k:int, seed:int, activation_layout:str) -> Q8ActivationInputs:
-  rng = np.random.default_rng(seed)
-  x_np = rng.standard_normal((m, k)).astype(np.float32)
-  x = Tensor(x_np).realize()
-  xq, xscales = q8_1_quantize(x.cast(dtypes.float32))
-  row_values = xq.numpy().reshape(m, k)
-  row_scales = xscales.numpy().reshape(m, k // Q8_1_BLOCK_ELEMS)
-  if activation_layout == ACTIVATION_LAYOUT_ROW_MAJOR:
-    return Q8ActivationInputs(source_values=x_np, row_values=row_values, row_scales=row_scales, q8_values=row_values,
-                              q8_scales=row_scales, q8_sums=None,
-                              activation_layout_source="current_row_major_q8_1_reference_pack")
-  if activation_layout == ACTIVATION_LAYOUT_MMQ_DS4:
-    return _q8_mmq_ds4_from_row_major(x_np, row_values, row_scales)
-  raise ValueError(f"unknown activation_layout={activation_layout!r}")
-
-
-def _finite_q4k_bytes(n:int, k:int, seed:int) -> np.ndarray:
-  rng = np.random.default_rng(seed)
-  if k % Q4_K_BLOCK_ELEMS: raise ValueError(f"k={k} must be Q4_K block aligned")
-  nblocks = n * k // Q4_K_BLOCK_ELEMS
-  raw = rng.integers(0, 256, size=(nblocks, Q4_K_BLOCK_BYTES), dtype=np.uint8)
-  raw[:, 0:2] = (rng.standard_normal(nblocks).astype(np.float32) * 0.05).astype(np.float16).view(np.uint8).reshape(nblocks, 2)
-  raw[:, 2:4] = (rng.standard_normal(nblocks).astype(np.float32) * 0.05).astype(np.float16).view(np.uint8).reshape(nblocks, 2)
-  return raw.reshape(n, k // Q4_K_BLOCK_ELEMS, Q4_K_BLOCK_BYTES)
 
 
 def _source_hash() -> str:
@@ -472,11 +412,11 @@ def _fp32_accum_atol(k:int) -> float:
 
 def run_bounded_harness(config: BoundedMMQConfig) -> dict[str, Any]:
   config.validate()
-  q4k_bytes = _finite_q4k_bytes(config.bounded_n, config.bounded_k, config.seed)
+  q4k_bytes = make_finite_q4k_bytes(config.bounded_n, config.bounded_k, config.seed)
   ds4_backends = (STAGED_DS4_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID, AMD_DS4_DOT4X4_BACKEND_ID,
                   AMD_DS4_LDS_SKELETON_BACKEND_ID, AMD_DS4_COOP_TILE_BACKEND_ID, LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID)
   effective_activation_layout = ACTIVATION_LAYOUT_MMQ_DS4 if config.backend in ds4_backends else config.activation_layout
-  activation = _q8_activation_inputs(config.bounded_m, config.bounded_k, config.seed + 1, effective_activation_layout)
+  activation = make_q8_activation_inputs(config.bounded_m, config.bounded_k, config.seed + 1, effective_activation_layout)
   xq, xscales = activation.row_values, activation.row_scales
   staged_ds4 = None
   oracle_tiles: list[dict[str, Any]] = []

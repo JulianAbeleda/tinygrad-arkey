@@ -9,8 +9,8 @@ from typing import Any
 from tinygrad import Tensor, dtypes
 from tinygrad.device import Device
 
-from extra.qk.mmq_bounded_harness import (ACTIVATION_LAYOUT_MMQ_DS4, _finite_q4k_bytes, _q8_activation_inputs,
-                                           run_bounded_harness)
+from extra.qk.mmq_bounded_harness import run_bounded_harness
+from extra.qk.q4k_q8_fixture import ACTIVATION_LAYOUT_MMQ_DS4, make_finite_q4k_bytes, make_q8_activation_inputs
 from extra.qk.mmq_compile_evidence import capture_loaded_mmq_program, compile_mmq_program
 from extra.qk.mmq_experiment import BACKEND, canonical_candidate
 from extra.qk.mmq_q4k_q8_atom import _as_u32_words, _ds4_tensors, _q4k_q8_1_bounded_ds4_coop_tile_kernel
@@ -28,8 +28,8 @@ def run_runtime_followup(writeback_mode:str, *, repeats:tuple[int, ...]=(1, 16, 
   spec = canonical_candidate(writeback_mode, seed=seed)
   compile_start = time.perf_counter(); program = compile_mmq_program(spec); compile_ms = (time.perf_counter()-compile_start)*1e3
   setup_start = time.perf_counter()
-  q4 = _finite_q4k_bytes(16, 256, seed)
-  activation = _q8_activation_inputs(16, 256, seed + 1, ACTIVATION_LAYOUT_MMQ_DS4)
+  q4 = make_finite_q4k_bytes(16, 256, seed)
+  activation = make_q8_activation_inputs(16, 256, seed + 1, ACTIVATION_LAYOUT_MMQ_DS4)
   assert activation.ds4_activation is not None
   words = Tensor(_as_u32_words(q4), dtype=dtypes.uint32, device="AMD").realize()
   values, scales, sums = _ds4_tensors(activation.ds4_activation, "AMD")

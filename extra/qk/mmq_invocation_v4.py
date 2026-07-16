@@ -15,7 +15,7 @@ from tinygrad.device import Device
 from tinygrad.engine.realize import compile_linear
 from tinygrad.uop.ops import KernelInfo, Ops, UOp
 
-from extra.qk.mmq_bounded_harness import ACTIVATION_LAYOUT_MMQ_DS4, _finite_q4k_bytes, _q8_activation_inputs
+from extra.qk.q4k_q8_fixture import ACTIVATION_LAYOUT_MMQ_DS4, make_finite_q4k_bytes, make_q8_activation_inputs
 from extra.qk.mmq_invocation_v1 import _identity
 from extra.qk.mmq_q4k_q8_atom import _as_u32_words
 
@@ -93,7 +93,7 @@ def run_invocation_v4(*,rounds:int=30,warmups:int=5,seed:int=20260711,system_sna
   if warmups<1:raise ValueError("invocation-v4 requires warmups >= 1")
   steps,base_uops=_resolve_steps();admission=_admission(steps)
   if admission["status"]!="admitted":raise RuntimeError("invocation-v4 topology admission failed: "+"; ".join(admission["failure_audit"]))
-  q4=_finite_q4k_bytes(16,256,seed);activation=_q8_activation_inputs(16,256,seed+1,ACTIVATION_LAYOUT_MMQ_DS4);ds4=activation.ds4_activation
+  q4=make_finite_q4k_bytes(16,256,seed);activation=make_q8_activation_inputs(16,256,seed+1,ACTIVATION_LAYOUT_MMQ_DS4);ds4=activation.ds4_activation
   if ds4 is None:raise RuntimeError("DS4 construction failed")
   resident={"words":Tensor(_as_u32_words(q4),dtype=dtypes.uint32,device="AMD").realize(),
     "values":Tensor(np.ascontiguousarray(ds4.values.reshape(-1)),dtype=dtypes.int8,device="AMD").realize(),

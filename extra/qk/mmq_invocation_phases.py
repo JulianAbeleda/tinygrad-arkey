@@ -8,7 +8,7 @@ import numpy as np
 from tinygrad import Tensor,dtypes
 from tinygrad.device import Device
 from tinygrad.codegen import to_program
-from extra.qk.mmq_bounded_harness import ACTIVATION_LAYOUT_MMQ_DS4,_finite_q4k_bytes,_q8_activation_inputs
+from extra.qk.q4k_q8_fixture import ACTIVATION_LAYOUT_MMQ_DS4,make_finite_q4k_bytes,make_q8_activation_inputs
 from extra.qk.mmq_compile_evidence import build_mmq_sink,capture_loaded_mmq_program,compile_mmq_program
 from extra.qk.mmq_experiment import canonical_candidate
 from extra.qk.mmq_q4k_q8_atom import (_as_u32_words,_q4k_q8_1_bounded_ds4_coop_tile_kernel,
@@ -55,7 +55,7 @@ def _one(mode,q4,ds4,program,runtime,prebuilt_sink,overhead_ns):
 
 def run_invocation_phase_probe(*,rounds=30,warmups=3,seed=20260711,system_snapshot_id:str):
   if rounds<30:raise ValueError("phase probe requires at least 30 samples per mode")
-  overhead=_clock_overhead();q4=_finite_q4k_bytes(16,256,seed);activation=_q8_activation_inputs(16,256,seed+1,ACTIVATION_LAYOUT_MMQ_DS4);ds4=activation.ds4_activation;assert ds4
+  overhead=_clock_overhead();q4=make_finite_q4k_bytes(16,256,seed);activation=make_q8_activation_inputs(16,256,seed+1,ACTIVATION_LAYOUT_MMQ_DS4);ds4=activation.ds4_activation;assert ds4
   state={};
   for mode in ("gated_matrix_v0","direct_owner_v0"):
     spec=canonical_candidate(mode,seed=seed);prg=compile_mmq_program(spec)

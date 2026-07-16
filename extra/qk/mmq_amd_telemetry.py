@@ -142,10 +142,10 @@ def run_interleaved_mmq_clock_probe(*, rounds: int, seed: int, system_snapshot_i
   from tinygrad import Tensor, dtypes
   from tinygrad.device import Compiled, Device
   from extra.qk.mmq_amd_pmc import _decode_event
-  from extra.qk.mmq_bounded_harness import ACTIVATION_LAYOUT_MMQ_DS4, _finite_q4k_bytes, _q8_activation_inputs
+  from extra.qk.q4k_q8_fixture import ACTIVATION_LAYOUT_MMQ_DS4, make_finite_q4k_bytes, make_q8_activation_inputs
   from extra.qk.mmq_q4k_q8_atom import _as_u32_words, _ds4_tensors, _q4k_q8_1_bounded_ds4_coop_tile_kernel
-  q4 = _finite_q4k_bytes(16, 256, seed)
-  activation = _q8_activation_inputs(16, 256, seed + 1, ACTIVATION_LAYOUT_MMQ_DS4)
+  q4 = make_finite_q4k_bytes(16, 256, seed)
+  activation = make_q8_activation_inputs(16, 256, seed + 1, ACTIVATION_LAYOUT_MMQ_DS4)
   assert activation.ds4_activation is not None
   words = Tensor(_as_u32_words(q4), dtype=dtypes.uint32, device="AMD").realize()
   values, scales, sums = _ds4_tensors(activation.ds4_activation, "AMD")

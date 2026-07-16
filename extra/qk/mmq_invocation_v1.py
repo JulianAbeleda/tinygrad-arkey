@@ -14,7 +14,7 @@ from tinygrad.device import Device
 from tinygrad.engine.realize import compile_linear, get_runtime
 from tinygrad.uop.ops import KernelInfo, UOp
 
-from extra.qk.mmq_bounded_harness import ACTIVATION_LAYOUT_MMQ_DS4, _finite_q4k_bytes, _q8_activation_inputs
+from extra.qk.q4k_q8_fixture import ACTIVATION_LAYOUT_MMQ_DS4, make_finite_q4k_bytes, make_q8_activation_inputs
 from extra.qk.mmq_compile_evidence import analyze_final_isa, disassemble_amdgpu
 from extra.qk.mmq_q4k_q8_atom import _as_u32_words, _staged_ds4_lifecycle_for_spec
 from extra.qk.mmq_q4k_q8_reference import Q4KQ81MMQTileSpec, Q8_1_MMQ_DS4_LAYOUT
@@ -115,8 +115,8 @@ def run_invocation_v1(*, rounds:int=30, warmups:int=5, seed:int=20260711,
                       system_snapshot_id:str | None=None) -> dict[str, Any]:
   if rounds < 30: raise ValueError("invocation-v1 requires rounds >= 30")
   if warmups < 1: raise ValueError("invocation-v1 requires warmups >= 1")
-  q4 = _finite_q4k_bytes(16, 256, seed)
-  activation = _q8_activation_inputs(16, 256, seed + 1, ACTIVATION_LAYOUT_MMQ_DS4)
+  q4 = make_finite_q4k_bytes(16, 256, seed)
+  activation = make_q8_activation_inputs(16, 256, seed + 1, ACTIVATION_LAYOUT_MMQ_DS4)
   ds4 = activation.ds4_activation
   if ds4 is None: raise RuntimeError("DS4 construction failed")
   state = {sites: _prepare_point(sites, q4, ds4) for sites in POINTS}

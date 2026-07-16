@@ -11,7 +11,7 @@ from tinygrad.codegen import to_program
 from tinygrad.device import Device
 from tinygrad.engine.realize import compile_linear
 from tinygrad.uop.ops import KernelInfo,Ops,UOp
-from extra.qk.mmq_bounded_harness import ACTIVATION_LAYOUT_MMQ_DS4,_finite_q4k_bytes,_q8_activation_inputs
+from extra.qk.q4k_q8_fixture import ACTIVATION_LAYOUT_MMQ_DS4,make_finite_q4k_bytes,make_q8_activation_inputs
 from extra.qk.mmq_invocation_v1 import _identity
 from extra.qk.mmq_q4k_q8_atom import _as_u32_words
 
@@ -99,7 +99,7 @@ def run_probe(*,rounds=30,warmups=5,seed=20260711,system_snapshot_id=None):
   if rounds<30:raise ValueError("scaffolding probe requires rounds >= 30")
   steps,total=_resolve_steps();admission=topology_admission(steps)
   if admission["status"]!="admitted":raise RuntimeError("full histogram admission failed: "+"; ".join(admission["failure_audit"]))
-  q4=_finite_q4k_bytes(16,256,seed);ds4=_q8_activation_inputs(16,256,seed+1,ACTIVATION_LAYOUT_MMQ_DS4).ds4_activation;assert ds4
+  q4=make_finite_q4k_bytes(16,256,seed);ds4=make_q8_activation_inputs(16,256,seed+1,ACTIVATION_LAYOUT_MMQ_DS4).ds4_activation;assert ds4
   resident=[Tensor(_as_u32_words(q4),dtype=dtypes.uint32,device="AMD").realize(),Tensor(np.ascontiguousarray(ds4.values.reshape(-1)),dtype=dtypes.int8,device="AMD").realize(),Tensor(np.ascontiguousarray(ds4.scales.reshape(-1)),dtype=dtypes.float32,device="AMD").realize(),Tensor(np.ascontiguousarray(ds4.sums.reshape(-1)),dtype=dtypes.float32,device="AMD").realize()]
   state={}
   for point in SCAFFOLD_POINTS:

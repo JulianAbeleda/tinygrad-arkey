@@ -1,6 +1,6 @@
 import numpy as np
 
-from extra.qk.mmq_bounded_harness import _finite_q4k_bytes, _q8_activation_inputs, ACTIVATION_LAYOUT_MMQ_DS4
+from extra.qk.q4k_q8_fixture import ACTIVATION_LAYOUT_MMQ_DS4, make_finite_q4k_bytes, make_q8_activation_inputs
 from extra.qk.mmq_llama_oracle import (
   LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID, LlamaMMQOracleGeometry, llama_mma_writeback_coverage,
   llama_mma_writeback_owners, llama_mma_sum_slot_mapping, llama_mmq_source_policy, run_llama_mmq_coop_tile_oracle,
@@ -90,8 +90,8 @@ def test_llama_mmq_sum_slot_mapping_probe_matches_writeback_owner_fragments():
 
 def test_llama_mmq_oracle_matches_ds4_reference_for_bounded_tile():
   m, n, k = 16, 16, 256
-  q4k = _finite_q4k_bytes(n, k, seed=20260721)
-  activation = _q8_activation_inputs(m, k, seed=20260722, activation_layout=ACTIVATION_LAYOUT_MMQ_DS4)
+  q4k = make_finite_q4k_bytes(n, k, seed=20260721)
+  activation = make_q8_activation_inputs(m, k, seed=20260722, activation_layout=ACTIVATION_LAYOUT_MMQ_DS4)
   assert activation.ds4_activation is not None
   spec = describe_q4k_q8_1_mmq_tile(role="ffn_gate_up", m=m, n=n, k=k, m_tile=m, n_tile=n,
                                     activation_layout=Q8_1_MMQ_DS4_LAYOUT)
