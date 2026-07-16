@@ -13,7 +13,8 @@ from tinygrad.dtype import AddrSpace, PtrDType
 from tinygrad.uop.ops import AxisType, UOp
 
 from extra.qk.mmq_llama_candidate_plan import llama_mmq_candidate_plan
-from extra.qk.mmq_llama_record_producers import build_q4_k_record_template, build_q8_ds4_record_template
+from extra.qk.mmq_llama_record_producers import (build_q4_k_record_template, build_q8_ds4_record_template,
+  build_split_q8_ds4_record_template)
 
 
 def _contracts(tc) -> tuple[PrecontractContractSpec, PrecontractContractSpec]:
@@ -57,4 +58,36 @@ def build_llama_oracle_epoch_stage(q4_source: UOp, q8_source: UOp, *, q4_word_of
   return stage
 
 
-__all__ = ["build_llama_oracle_epoch_stage"]
+def build_llama_oracle_epoch_stage_five_buffer(q4_words: UOp, values: UOp, scales: UOp, sums: UOp, *,
+                                                q4_word_offset:UOp|int=0, values_offset:UOp|int=0,
+                                                scales_offset:UOp|int=0, sums_offset:UOp|int=0
+                                                ) -> HierarchicalPackedRecordStage:
+  """Build the same exact epoch while adapting split five-buffer Q8 inputs."""
+  if not isinstance(q4_words.dtype, PtrDType) or q4_words.dtype.base != dtypes.uint32 or q4_words.dtype.size < 128*36:
+    raise TypeError("Q4 source must cover 128 physical uint32[36] blocks")
+  offsets = []
+  for offset in (q4_word_offset, values_offset, scales_offset, sums_offset):
+    offsets.append(offset if isinstance(offset, UOp) else UOp.const(dtypes.weakint, offset))
+  q4_words, values, scales, sums = (source.index(offset, ptr=True) for source, offset in
+    zip((q4_words, values, scales, sums), offsets))
+  plan = llama_mmq_candidate_plan()
+  geometry, tc = plan.geometry, plan.tensor_core
+  row_a, k_a = UOp.range(128, 1800, AxisType.LOOP), UOp.range(256, 1801, AxisType.REDUCE)
+  row_b, k_b = UOp.range(128, 1802, AxisType.LOOP), UOp.range(256, 1803, AxisType.REDUCE)
+  zero = UOp.const(dtypes.weakint, 0)
+  templates = (build_q4_k_record_template("A", q4_words, row_a, k_a, zero),
+               build_split_q8_ds4_record_template("B", values, scales, sums, row_b, k_b, zero))
+  threads = PrecontractThreadAxes(UOp.range(8, 1804, AxisType.LOCAL), UOp.range(1, 1805, AxisType.LOCAL),
+                                  UOp.range(32, -1, AxisType.WARP))
+  subtile_m, subtile_n = UOp.range(1, 1806, AxisType.UPCAST), UOp.range(8, 1807, AxisType.UPCAST)
+  allocation = UOp.placeholder((geometry.lds_bytes,), dtypes.uint8, 1808, addrspace=AddrSpace.LOCAL)
+  descriptor = HierarchicalPackedRecordStageDescriptor(plan.lifecycle, 256, 128, 32)
+  stage = build_hierarchical_packed_record_stage(geometry, allocation=allocation, descriptor=descriptor,
+    templates=templates, regions=(PackedRecordLDSRegionBinding("A", "q4"), PackedRecordLDSRegionBinding("B", "q8")),
+    threads=threads, subtile_m=subtile_m, subtile_n=subtile_n, tc=tc, contracts=_contracts(tc))
+  proof = prove_hierarchical_packed_record_stage(stage)
+  if not proof.passed: raise ValueError("invalid exact llama five-buffer epoch stage: " + "; ".join(proof.errors))
+  return stage
+
+
+__all__ = ["build_llama_oracle_epoch_stage", "build_llama_oracle_epoch_stage_five_buffer"]

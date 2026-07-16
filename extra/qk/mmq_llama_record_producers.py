@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from extra.qk.kernel_lds import (PackedRecordCooperativeSchedule, PackedRecordCooperativeStore,
   PackedRecordFieldProducer, PackedRecordOperandTemplate, PackedRecordSource, PrecontractThreadAxes)
 from tinygrad.codegen.opt.packed_weight import PackedOperandComponent, PackedOperandRecordTransform, PackedOperandTransform
-from tinygrad.dtype import dtypes
+from tinygrad.dtype import PtrDType, dtypes
 from tinygrad.uop.ops import Ops, UOp
 
 from extra.qk.mmq_llama_packed_operands import Q4_K_DECODED_LDS_ROW, Q8_1_DS4_ROW
@@ -72,6 +72,13 @@ Q8_DS4_GLOBAL_RECORD = PackedOperandTransform("llama.q8_1.ds4.global_record.type
   PackedOperandComponent("qs", dtypes.int8, 16, 128, "int8[128]", 128, 16),
 ))
 Q8_DS4_RECORD_COPY = PackedOperandRecordTransform("llama.q8_1.ds4.record_copy.v1", Q8_DS4_GLOBAL_RECORD, Q8_1_DS4_ROW)
+Q8_DS4_SPLIT_GLOBAL_RECORD = PackedOperandTransform("llama.q8_1.ds4.split_global_record.typed.v1", (
+  PackedOperandComponent("values", dtypes.int8, 0, 128, "int8[128]", 128, 16),
+  PackedOperandComponent("scales", dtypes.float32, 128, 16, "float[4]", 16, 4),
+  PackedOperandComponent("sums", dtypes.float32, 144, 16, "float[4]", 16, 4),
+))
+Q8_DS4_SPLIT_RECORD_ADAPTER = PackedOperandRecordTransform(
+  "llama.q8_1.ds4.split_to_lds.v1", Q8_DS4_SPLIT_GLOBAL_RECORD, Q8_1_DS4_ROW)
 
 Q4_K_UINT32_BLOCK = PackedOperandTransform("llama.q4_k.global_block.uint32x36.v1", (
   PackedOperandComponent("record", dtypes.uint32, 0, 144, "block_q4_K_uint32x36", 144, 16),
@@ -96,6 +103,25 @@ def _q8_copy(dtype, field_offset_bytes: int):
     element_base = byte_base//dtype.itemsize
     return _stack(dtype, tuple(source.index(element_base+i, dtype=dtype).load() for i in range(width)))
   return produce
+
+
+def _q8_split_qs(sources: tuple[UOp, ...], row: UOp, k: UOp, width: int) -> UOp:
+  """Copy split DS4 values from physical ``[K/128, M, 128]`` storage."""
+  source, record, field_element = sources[0], k//128, k%128
+  element_base = (record*128+row)*128+field_element
+  return _stack(dtypes.int8, tuple(source.index(element_base+i).load() for i in range(width)))
+
+
+def _q8_split_ds(sources: tuple[UOp, ...], row: UOp, k: UOp, width: int) -> UOp:
+  """Rebuild DS4 half2(scale, original sum) pairs from split fp32 metadata."""
+  if width != 2: raise ValueError("split Q8 DS4 metadata producer requires one half2")
+  scales, sums, record = sources[0], sources[1], k//128
+  group = (k%128)//2
+  element = (record*128+row)*4+group
+  # These casts are intentionally independent: llama stores each fp32 operand
+  # into its own half lane before constructing half2(scale, original sum).
+  return _stack(dtypes.half, (scales.index(element).load().cast(dtypes.half),
+                              sums.index(element).load().cast(dtypes.half)))
 
 
 def q4_k_qs_record_callback(sources: tuple[UOp, ...], row: UOp, k: UOp, width: int) -> UOp:
@@ -214,6 +240,26 @@ def build_q8_ds4_record_template(role: str, record_source: UOp, row_axis: UOp, k
     (), "qs", row_axis, k_axis, row_tile_base, dtypes.char, LLAMA_Q8_DS4_COOPERATIVE_SCHEDULE)
 
 
+def build_split_q8_ds4_record_template(role: str, values_source: UOp, scales_source: UOp, sums_source: UOp,
+                                       row_axis: UOp, k_axis: UOp, row_tile_base: UOp, *,
+                                       source_layout: str = "Q8_1_MMQ_DS4_SPLIT",
+                                       sum_semantics: str = "sum_original_fp") -> PackedRecordOperandTemplate:
+  """Adapt split five-buffer Q8 arrays to the existing interleaved Q8_1 DS4 LDS row."""
+  if source_layout != "Q8_1_MMQ_DS4_SPLIT": raise ValueError("split Q8 record producer requires Q8_1_MMQ_DS4_SPLIT source layout")
+  if sum_semantics != "sum_original_fp": raise ValueError("split Q8 DS4 record producer requires sum_original_fp semantic")
+  required = (("values", values_source, dtypes.int8, 2*128*128),
+              ("scales", scales_source, dtypes.float32, 2*128*4),
+              ("sums", sums_source, dtypes.float32, 2*128*4))
+  for name, source, dtype, size in required:
+    if not isinstance(source.dtype, PtrDType) or source.dtype.base != dtype or source.dtype.size < size:
+      raise TypeError(f"split Q8 {name} source must cover physical {dtype.name}[{size}] storage")
+  return PackedRecordOperandTemplate(role, Q8_DS4_SPLIT_RECORD_ADAPTER,
+    (PackedRecordSource("values", values_source), PackedRecordSource("scales", scales_source), PackedRecordSource("sums", sums_source)),
+    (PackedRecordFieldProducer("ds", ("scales", "sums"), _q8_split_ds, vector_bytes=4),
+     PackedRecordFieldProducer("qs", ("values",), _q8_split_qs, vector_bytes=4)),
+    (), "qs", row_axis, k_axis, row_tile_base, dtypes.char, LLAMA_Q8_DS4_COOPERATIVE_SCHEDULE)
+
+
 def build_q4_k_record_template(role: str, source: UOp, row_axis: UOp, k_axis: UOp,
                                row_tile_base: UOp, *, source_layout: str = "Q4_K_UINT32X36",
                                decode_semantics: str = "llama_load_tiles_q4_K") -> PackedRecordOperandTemplate:
@@ -228,12 +274,14 @@ def build_q4_k_record_template(role: str, source: UOp, row_axis: UOp, k_axis: UO
 
 # Explicit llama names plus short generic-template-friendly names.
 build_llama_q8_ds4_record_template = build_q8_ds4_record_template
+build_llama_split_q8_ds4_record_template = build_split_q8_ds4_record_template
 build_llama_q4_k_record_template = build_q4_k_record_template
 
 __all__ = ["LLAMA_Q4_K_COOPERATIVE_SCHEDULE", "LLAMA_Q8_DS4_COOPERATIVE_SCHEDULE",
   "Q4_K_RECORD_DECODE", "Q4_K_UINT32_BLOCK", "Q8_DS4_GLOBAL_RECORD", "Q8_DS4_RECORD_COPY",
+  "Q8_DS4_SPLIT_GLOBAL_RECORD", "Q8_DS4_SPLIT_RECORD_ADAPTER",
   "SOURCE_ANCHORS", "RecordProducerInstanceWitness", "is_record_producer_instance_dependency",
   "record_producer_instance_value", "record_producer_instance_witnesses",
-  "build_q4_k_record_template", "build_q8_ds4_record_template",
-  "build_llama_q4_k_record_template", "build_llama_q8_ds4_record_template",
+  "build_q4_k_record_template", "build_q8_ds4_record_template", "build_split_q8_ds4_record_template",
+  "build_llama_q4_k_record_template", "build_llama_q8_ds4_record_template", "build_llama_split_q8_ds4_record_template",
   "q4_k_dm_record_callback", "q4_k_qs_record_callback"]
