@@ -10,10 +10,11 @@ from extra.qk import prefill_graph_gemm_route
 from extra.qk.runtime_specs import (
   ANCHOR_SINGLE_BUFFER_CANDIDATE_HASH, FULL_KERNEL_CANDIDATE_SCHEMA, PACKED_SCALAR_DECODER_VERSION, ActivationQuantSpec, GeneratedCandidate,
   CandidateAdmissionFacts, QuantizedTensorSpec, RuntimeOpSpec, FullKernelCandidateSet, FullKernelCandidateSetEntry,
-  GFX1100_TWO_BUFFER_STAGE1_CAPABILITY, admit_full_kernel_candidate, admit_full_kernel_candidate_set, derive_packed_weight_candidate,
+  GFX1100_Q4K_Q8_FIVE_BUFFER_CAPABILITY, GFX1100_TWO_BUFFER_STAGE1_CAPABILITY, Q4KQ8FiveBufferEmitterPlan,
+  admit_full_kernel_candidate, admit_full_kernel_candidate_set, capability_transport, derive_packed_weight_candidate,
   derive_q4k_q8_1_five_buffer_candidate,
   bind_full_kernel_candidate, full_kernel_candidate_set_from_legacy, full_kernel_candidate_capability,
-  full_kernel_workload, rebind_full_kernel_workload,
+  full_kernel_workload, q4k_q8_1_five_buffer_abi_plan, rebind_full_kernel_workload,
 )
 
 
@@ -258,23 +259,74 @@ def test_q4k_q8_1_five_buffer_candidate_cpu_roundtrip_and_context():
   assert payload is not None
   entry = derive_q4k_q8_1_five_buffer_candidate(payload)
   abi = entry.payload["kernel_abi"]
-  assert [(x["abi_slot"], x["dtype"]) for x in abi["buffers"].values()] == \
-         [(0,"fp32"),(1,"uint32"),(2,"int8"),(3,"float32"),(4,"float32")]
+  assert entry.to_json()["payload"]["kernel_abi"] == q4k_q8_1_five_buffer_abi_plan()
+  assert [(x["abi_slot"], x["storage_dtype"]) for x in abi["buffers"].values()] == \
+         [(0,"float32"),(1,"uint32"),(2,"int8"),(3,"float32"),(4,"float32")]
   assert abi["buffers"]["q8_ds4_values"]["signed"] is True
+  assert {name:row["logical_axes"] for name,row in abi["buffers"].items()} == {
+    "output":("m","n"),"q4_packed_words":("n","q4_blocks","q4_words"),
+    "q8_ds4_values":("ds4_blocks","m","ds4_block_elems"),
+    "q8_scales":("ds4_blocks","m","q8_groups_per_ds4_block"),
+    "q8_weighted_sums":("ds4_blocks","m","q8_groups_per_ds4_block")}
+  assert {name:row["access"] for name,row in abi["buffers"].items()} == {
+    "output":"logical","q4_packed_words":"flat","q8_ds4_values":"flat","q8_scales":"flat","q8_weighted_sums":"flat"}
   assert FullKernelCandidateSetEntry(entry.canonical_identity, entry.to_json()["payload"]) == entry
   admission = admit_full_kernel_candidate(entry.payload, entry.canonical_identity,
     profile="qwen3_8b_q4k_m_gfx1100", role="ffn_gate_up", shape=(512,12288,4096),
     target={"backend":"AMD","arch":"gfx1100","wave_size":32})
+  assert admission.capability is GFX1100_Q4K_Q8_FIVE_BUFFER_CAPABILITY
+  assert capability_transport(admission.capability) == "direct_global"
+  assert admission.active_lds_bytes == 0 and admission.geometry is None
+  assert admission.plan == admission.pipeline_plan == admission.context.pipeline == Q4KQ8FiveBufferEmitterPlan()
+  assert admission.context.geometry is None
   assert admission.context.packed_weight is None and admission.context.packed_operand_b is None
   assert admission.operand_plan == abi
+  assert entry.payload["workload"]["dtypes"] == {"a":"Q8_1","b":"Q4_K","c":"fp32","accumulator":"int32_fp32"}
+  assert entry.payload["workload"]["layout"] == {"a":"physical_ds4","b":"q4_k_packed_words","c":"tokens_rows"}
+  assert "fp16" not in json.dumps(entry.payload)
+  schedule = entry.payload["schedule"]
+  assert (schedule["tile"], schedule["waves"], schedule["threads"]) == \
+         ({"m":16,"n":16,"k":256},{"m":1,"n":1},32)
+  assert schedule["variant"] == "q4k_q8_1_physical_ds4_direct_v1"
+  assert schedule["transport"] == "direct_global" and schedule["lds_bytes"] == 0
+  assert schedule["pipeline"] == {"buffer_count":0,"stage_count":0}
+  assert schedule["tail_policy"] == "aligned_only_no_tails"
+  assert schedule["compile_environment"] == {"REGALLOC_END_NO_SOURCE_LIVE":1,"REGALLOC_NO_LOOP_EXTEND_ADDR":1,"REGALLOC_ADDR_REMAT":1}
+  assert schedule["operands"]["q8_ds4_values"] == {"source":"global","alignment":16,"signed":True}
+  assert schedule["wmma"]["instruction_family"] == "wmma_i32_16x16x16_iu8"
+  assert schedule["wmma"]["instruction_family"] == admission.capability.instruction_family == admission.plan.instruction_family
+  assert schedule["wmma"]["fragment_layout"] == admission.capability.fragment_layout
+  assert schedule["threads"] == admission.plan.threads == admission.capability.wave_size
+  assert entry.payload["static_constraints"]["max_lds_bytes"] == 0
   with pytest.raises(TypeError, match="immutable"): admission.operand_plan["quant_format"] = "Q6_K"
+  with pytest.raises(ValueError, match="typed direct-global capability"):
+    admit_full_kernel_candidate(entry.payload, entry.canonical_identity, profile="unused", role="ffn_gate_up",
+      shape=(512,12288,4096), target={"backend":"AMD","arch":"gfx1100","wave_size":32},
+      capability=GFX1100_TWO_BUFFER_STAGE1_CAPABILITY)
+
+def test_q4k_q8_1_five_buffer_direct_schedule_is_canonical_and_identity_bound():
+  base = _single_buffer_anchor_candidate().full_kernel_candidate
+  entry = derive_q4k_q8_1_five_buffer_candidate(base)
+  inherited = json.loads(json.dumps(base)); inherited["schedule"]["threads"] = 128
+  assert derive_q4k_q8_1_five_buffer_candidate(inherited) == entry
+  mutated = entry.to_json()["payload"]
+  mutated["workload"]["shape"]["m"] *= 2
+  rebound = derive_q4k_q8_1_five_buffer_candidate(mutated)
+  assert rebound.canonical_identity != entry.canonical_identity
+  with pytest.raises(ValueError, match="identity_mismatch"):
+    admit_full_kernel_candidate(rebound.payload, entry.canonical_identity, profile="unused", role="ffn_gate_up",
+      shape=(1024,12288,4096), target={"backend":"AMD","arch":"gfx1100","wave_size":32})
+  schedule_drift = entry.to_json()["payload"]
+  schedule_drift["schedule"]["threads"] = 64
+  with pytest.raises(ValueError, match="five-buffer schedule"):
+    _strict_full_kernel_candidate(full_kernel_candidate=schedule_drift)
 
 @pytest.mark.parametrize("mutation", (
   lambda a: a["buffers"]["output"].update(abi_slot=1),
-  lambda a: a["buffers"]["q4_packed_words"].update(dtype="uint16"),
+  lambda a: a["buffers"]["q4_packed_words"].update(storage_dtype="uint16"),
   lambda a: a["buffers"]["q8_ds4_values"].update(signed=False),
   lambda a: a["buffers"]["q8_scales"].update(abi_slot=4),
-  lambda a: a["buffers"]["q8_weighted_sums"].update(dtype="float16"),
+  lambda a: a["buffers"]["q8_weighted_sums"].update(storage_dtype="float16"),
   lambda a: a.update(quant_format="Q6_K"),
   lambda a: a.update(activation_layout="dense"),
   lambda a: a["block_geometry"].update(q8_ds4_block_elems=32),

@@ -39,16 +39,33 @@ class FullKernelCapability:
   vector_bytes: int = 16
   instruction_family: str = "wmma_f32_16x16x16_f16"
   fragment_layout: str = "rdna3_wmma_f32_16x16x16_f16_lds2_static"
+  transport: str = "lds"
 
 GFX1100_SINGLE_BUFFER_CAPABILITY = FullKernelCapability()
 GFX1100_TWO_BUFFER_STAGE1_CAPABILITY = FullKernelCapability(
   capability_id="amd.gfx1100.prefill.wmma_lds.two_buffer_stage1.v1", buffer_count=2, stage_count=1)
 GFX1100_REGISTER_RESIDENT_CAPABILITY = FullKernelCapability(
   capability_id="amd.gfx1100.prefill.wmma_register.two_stage.v1", buffer_count=1, stage_count=2,
-  fragment_layout="rdna3_wmma_f32_16x16x16_f16_register_static")
+  fragment_layout="rdna3_wmma_f32_16x16x16_f16_register_static", transport="direct_l2")
+GFX1100_Q4K_Q8_FIVE_BUFFER_CAPABILITY = FullKernelCapability(
+  capability_id="amd.gfx1100.prefill.q4k_q8.direct_physical_ds4.v1", max_lds_bytes=0,
+  buffer_count=0, stage_count=0, vector_bytes=16, instruction_family="wmma_i32_16x16x16_iu8",
+  fragment_layout="rdna3_wave32_signed_i8_direct_global", transport="direct_global")
+
+@dataclass(frozen=True)
+class Q4KQ8FiveBufferEmitterPlan:
+  tile: tuple[int,int,int] = (16,16,256)
+  waves: tuple[int,int] = (1,1)
+  threads: int = 32
+  transport: str = "direct_global"
+  active_lds_bytes: int = 0
+  instruction_family: str = "wmma_i32_16x16x16_iu8"
+  activation_layout: str = "q8_1_mmq_ds4_transposed_blocks"
+  tail_policy: str = "aligned_only_no_tails"
 
 def candidate_storage_kind(payload: dict[str, Any]) -> str:
   """Resolve typed stage storage while keeping legacy payloads on LDS."""
+  if payload.get("kernel_abi", {}).get("family") == Q4K_Q8_1_FIVE_BUFFER_ABI: return "direct_global"
   residency = payload.get("schedule", {}).get("residency", {}) if isinstance(payload, dict) else {}
   resident = residency.get("resident", ()) if isinstance(residency, dict) else ()
   return "global_register_resident" if isinstance(resident, (list, tuple)) and "stage_ab_register" in resident else "lds"
@@ -58,12 +75,13 @@ def capability_transport(capability: "FullKernelCapability") -> str:
 
   The transport is read from the typed capability lattice element, never
   inferred from residency marker strings.  Register-resident admission is the
-  direct-L2 transport; every other admitted capability is LDS.
+  direct-L2 transport; the five-buffer physical-DS4 capability is direct-global.
   """
-  return "direct_l2" if capability.capability_id == GFX1100_REGISTER_RESIDENT_CAPABILITY.capability_id else "lds"
+  return capability.transport
 
 def full_kernel_candidate_capability(payload:dict[str,Any]) -> "FullKernelCapability":
   """Resolve the frozen hardware capability from typed schedule facts in one place."""
+  if payload.get("kernel_abi", {}).get("family") == Q4K_Q8_1_FIVE_BUFFER_ABI: return GFX1100_Q4K_Q8_FIVE_BUFFER_CAPABILITY
   if candidate_storage_kind(payload) == "global_register_resident": return GFX1100_REGISTER_RESIDENT_CAPABILITY
   pipeline = payload.get("schedule", {}).get("pipeline", {})
   return GFX1100_TWO_BUFFER_STAGE1_CAPABILITY if \
@@ -203,7 +221,8 @@ def derive_packed_weight_candidate(payload:dict[str,Any], quant_format:str) -> F
   identity = _canonical_full_kernel_identity(normalized)
   return FullKernelCandidateSetEntry(identity, normalized)
 
-def _q4k_q8_1_five_buffer_plan() -> dict[str,Any]:
+def q4k_q8_1_five_buffer_abi_plan() -> dict[str,Any]:
+  """Return the canonical JSON ABI descriptor consumed by admission and compile adapters."""
   from extra.qk.layout import (Q4K_WORDS_PER_BLOCK, Q4_K_BLOCK_ELEMS, Q8_1_BLOCK_ELEMS,
                                Q8_1_MMQ_BLOCK_ELEMS, Q8_1_MMQ_GROUPS_PER_BLOCK)
   from extra.qk.mmq_q4k_q8_reference import Q8_1_MMQ_DS4_LAYOUT
@@ -212,15 +231,51 @@ def _q4k_q8_1_five_buffer_plan() -> dict[str,Any]:
     "block_geometry":{"q4_block_elems":Q4_K_BLOCK_ELEMS, "q4_words_per_block":Q4K_WORDS_PER_BLOCK,
       "q8_group_elems":Q8_1_BLOCK_ELEMS, "q8_ds4_block_elems":Q8_1_MMQ_BLOCK_ELEMS,
       "q8_groups_per_ds4_block":Q8_1_MMQ_GROUPS_PER_BLOCK},
-    "buffers":{"output":{"abi_slot":0, "dtype":"fp32"}, "q4_packed_words":{"abi_slot":1, "dtype":"uint32"},
-      "q8_ds4_values":{"abi_slot":2, "dtype":"int8", "signed":True},
-      "q8_scales":{"abi_slot":3, "dtype":"float32"}, "q8_weighted_sums":{"abi_slot":4, "dtype":"float32"}}}
+    "buffers":{
+      "output":{"abi_slot":0,"direction":"out","storage_dtype":"float32","logical_axes":["m","n"],
+        "axis_extents":[["workload","m"],["workload","n"]],"access":"logical"},
+      "q4_packed_words":{"abi_slot":1,"direction":"in","storage_dtype":"uint32",
+        "logical_axes":["n","q4_blocks","q4_words"],"axis_extents":[["workload","n"],
+          ["quotient",["workload","k"],["block_geometry","q4_block_elems"]],
+          ["block_geometry","q4_words_per_block"]],"access":"flat"},
+      "q8_ds4_values":{"abi_slot":2,"direction":"in","storage_dtype":"int8","signed":True,
+        "logical_axes":["ds4_blocks","m","ds4_block_elems"],"axis_extents":[
+          ["quotient",["workload","k"],["block_geometry","q8_ds4_block_elems"]],
+          ["workload","m"],["block_geometry","q8_ds4_block_elems"]],"access":"flat"},
+      "q8_scales":{"abi_slot":3,"direction":"in","storage_dtype":"float32",
+        "logical_axes":["ds4_blocks","m","q8_groups_per_ds4_block"],"axis_extents":[
+          ["quotient",["workload","k"],["block_geometry","q8_ds4_block_elems"]],
+          ["workload","m"],["block_geometry","q8_groups_per_ds4_block"]],"access":"flat"},
+      "q8_weighted_sums":{"abi_slot":4,"direction":"in","storage_dtype":"float32",
+        "logical_axes":["ds4_blocks","m","q8_groups_per_ds4_block"],"axis_extents":[
+          ["quotient",["workload","k"],["block_geometry","q8_ds4_block_elems"]],
+          ["workload","m"],["block_geometry","q8_groups_per_ds4_block"]],"access":"flat"}}}
+
+def _q4k_q8_1_direct_emitter_schedule() -> dict[str,Any]:
+  """Exact model-independent schedule facts of the physical-DS4 direct UOp emitter."""
+  return {"variant":"q4k_q8_1_physical_ds4_direct_v1",
+    "tile":{"m":16,"n":16,"k":256}, "waves":{"m":1,"n":1}, "threads":32,
+    "transport":"direct_global", "lane_ownership":"rdna3_wave32_direct_wmma_output_tile",
+    "operands":{"q4_packed_words":{"source":"global","alignment":16},
+      "q8_ds4_values":{"source":"global","alignment":16,"signed":True},
+      "q8_scales":{"source":"global","alignment":4},"q8_weighted_sums":{"source":"global","alignment":4}},
+    "lds_bytes":0, "pipeline":{"buffer_count":0,"stage_count":0},
+    "wmma":{"instruction_family":"wmma_i32_16x16x16_iu8","fragment_layout":"rdna3_wave32_signed_i8_direct_global",
+      "accumulator_ownership":"int32_group_dot_fp32_scale_min_correction"},
+    "epilogue":{"lane_mapping":"wmma_accumulator_scalar_f32","vector_width":1},
+    "tail_policy":"aligned_only_no_tails",
+    "compile_environment":{"REGALLOC_END_NO_SOURCE_LIVE":1,"REGALLOC_NO_LOOP_EXTEND_ADDR":1,"REGALLOC_ADDR_REMAT":1},
+    "numerical_mode":"signed_i8_dot_int32_fp32_scale_min_correction"}
 
 def derive_q4k_q8_1_five_buffer_candidate(payload:dict[str,Any]) -> FullKernelCandidateSetEntry:
   """Retain the model-independent Q4_K/Q8_1 DS4 full-kernel ABI in a v1 candidate."""
   normalized = json.loads(json.dumps(payload, allow_nan=False))
   if "operand_sources" in normalized: raise ValueError("five-buffer ABI is ambiguous with operand_sources")
-  normalized["kernel_abi"] = _q4k_q8_1_five_buffer_plan()
+  normalized["kernel_abi"] = q4k_q8_1_five_buffer_abi_plan()
+  normalized["workload"]["dtypes"] = {"a":"Q8_1","b":"Q4_K","c":"fp32","accumulator":"int32_fp32"}
+  normalized["workload"]["layout"] = {"a":"physical_ds4","b":"q4_k_packed_words","c":"tokens_rows"}
+  normalized["schedule"] = _q4k_q8_1_direct_emitter_schedule()
+  normalized["static_constraints"] = {"max_lds_bytes":0,"max_vgpr_per_thread":256,"allow_spill":False}
   _validate_full_kernel_payload(normalized)
   return FullKernelCandidateSetEntry(_canonical_full_kernel_identity(normalized), normalized)
 
@@ -323,6 +378,8 @@ def admit_full_kernel_candidate(payload:dict[str, Any], canonical_identity:str, 
   # authoritative and are validated below.
   if storage_kind == "global_register_resident" and capability is GFX1100_SINGLE_BUFFER_CAPABILITY:
     capability = GFX1100_REGISTER_RESIDENT_CAPABILITY
+  if storage_kind == "direct_global" and capability is GFX1100_SINGLE_BUFFER_CAPABILITY:
+    capability = GFX1100_Q4K_Q8_FIVE_BUFFER_CAPABILITY
   target_id = f"{target['backend']}:{target['arch']}:wave{target['wave_size']}"
   # Profile is retained in legacy payloads and call signatures solely as provenance.
   if workload["role"] != role or role not in applicability["roles"]: raise FullKernelAdmissionError("workload_role", "role is not exact/applicable")
@@ -331,6 +388,17 @@ def admit_full_kernel_candidate(payload:dict[str, Any], canonical_identity:str, 
   if workload["target"] != target or target_id not in applicability["targets"]: raise FullKernelAdmissionError("workload_target", "target is not exact/applicable")
   if target != {"backend":capability.backend,"arch":capability.arch,"wave_size":capability.wave_size}:
     raise FullKernelAdmissionError("capability_target", "target is outside frozen capability")
+  if "kernel_abi" in normalized:
+    if capability is not GFX1100_Q4K_Q8_FIVE_BUFFER_CAPABILITY:
+      raise FullKernelAdmissionError("capability_five_buffer", "five-buffer ABI requires its typed direct-global capability")
+    if any(shape[i] % (16,16,256)[i] for i in range(3)):
+      raise FullKernelAdmissionError("geometry_divisibility", "direct five-buffer workload is not 16x16x256 aligned (no tails)")
+    direct_plan = Q4KQ8FiveBufferEmitterPlan()
+    from tinygrad.uop.ops import KernelCandidateContext
+    context = KernelCandidateContext(schema_version=normalized["schema_version"], canonical_identity=actual_identity,
+      geometry=None, pipeline=direct_plan)
+    operand_plan = _freeze_json(normalized["kernel_abi"])
+    return FullKernelAdmission(actual_identity,normalized,None,direct_plan,direct_plan,0,capability,context,operand_plan)
   if workload["dtypes"] != {"a":"fp16","b":"fp16","c":"fp16","accumulator":"fp32"}:
     raise FullKernelAdmissionError("capability_dtype", "only fp16/fp32 accumulation is supported")
   if storage_kind == "global_register_resident":
@@ -460,8 +528,9 @@ def _validate_full_kernel_payload(payload:dict[str, Any]) -> None:
 
   if "operand_sources" in payload and "kernel_abi" in payload:
     raise ValueError("full-kernel candidate cannot combine kernel_abi with operand_sources")
+  direct_five_buffer = "kernel_abi" in payload
   if "kernel_abi" in payload:
-    if payload["kernel_abi"] != _q4k_q8_1_five_buffer_plan():
+    if payload["kernel_abi"] != q4k_q8_1_five_buffer_abi_plan():
       raise ValueError("kernel_abi must exactly describe the retained Q4_K/Q8_1 five-buffer format, slots, dtypes, layouts, geometry, and emitter family")
 
   if "operand_sources" in payload:
@@ -496,6 +565,24 @@ def _validate_full_kernel_payload(payload:dict[str, Any]) -> None:
       if (transform.rows, transform.k) != (workload["shape"]["n"], workload["shape"]["k"]):
         raise ValueError("packed operand_sources.b rows/k must exactly match workload N/K")
     else: raise ValueError("operand_sources.b kind must be dense or packed_scalar_decoder")
+
+  if direct_five_buffer:
+    if workload["dtypes"] != {"a":"Q8_1","b":"Q4_K","c":"fp32","accumulator":"int32_fp32"}:
+      raise ValueError("five-buffer workload dtypes must describe Q8_1, Q4_K, fp32 output, and int32/fp32 accumulation")
+    if workload["layout"] != {"a":"physical_ds4","b":"q4_k_packed_words","c":"tokens_rows"}:
+      raise ValueError("five-buffer workload layouts must describe physical DS4, packed Q4_K words, and token-row output")
+    if payload["schedule"] != _q4k_q8_1_direct_emitter_schedule():
+      raise ValueError("five-buffer schedule must exactly describe the direct-global wave32 signed-i8 WMMA emitter with zero LDS and no tails")
+    if payload["static_constraints"] != {"max_lds_bytes":0,"max_vgpr_per_thread":256,"allow_spill":False}:
+      raise ValueError("five-buffer resources must require zero LDS, bounded VGPRs, and no spills")
+    applicability = payload["applicability"]
+    _strict_keys(applicability, {"exact_shape", "profiles", "roles", "targets"}, "applicability")
+    if applicability["exact_shape"] is not True: raise ValueError("full-kernel applicability.exact_shape must be true")
+    for key in ("profiles", "roles", "targets"):
+      values = applicability[key]
+      if not isinstance(values, list) or not values or any(not isinstance(x, str) or not x for x in values):
+        raise ValueError(f"applicability.{key} must be a non-empty list of strings")
+    return
 
   schedule = payload["schedule"]
   schedule_groups = {"tile", "waves", "threads", "lane_ownership", "cooperative_load", "lds", "pipeline", "wmma",
