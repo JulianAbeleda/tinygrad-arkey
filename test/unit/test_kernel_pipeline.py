@@ -1,9 +1,11 @@
 import unittest
 from dataclasses import replace
 
-from tinygrad.codegen.opt.kernel_pipeline import (KernelStage1LifecycleEvent, KernelStage1PipelinePlan,
-  build_stage1_uop_graph, pipeline_policy_from_candidate, prove_stage1_lifecycle, prove_stage1_uop_graph, stage1_lifecycle_events,
+from tinygrad.codegen.opt.kernel_pipeline import (KernelStage1PipelinePlan,
+  build_stage1_uop_graph, pipeline_policy_from_candidate,
   validate_scheduler_tile_loop_pressure)
+from extra.qk.kernel_pipeline_proof import (KernelStage1LifecycleEvent, prove_stage1_lifecycle, prove_stage1_uop_graph,
+  stage1_lifecycle_events)
 from tinygrad import dtypes
 from tinygrad.uop.ops import AxisType, Ops, UOp
 

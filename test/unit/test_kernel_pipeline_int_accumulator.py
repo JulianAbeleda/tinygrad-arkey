@@ -4,7 +4,8 @@ from dataclasses import replace
 from tinygrad import dtypes
 from tinygrad.codegen.opt.kernel_pipeline import (KernelStage1FragmentStage, KernelStage1PipelinePlan,
   KernelStage1ProducerStage, Stage1StorageAdapter, build_stage1_uop_graph, build_stage1_uop_graph_with_storage,
-  prove_stage1_uop_graph, storage_policy_from_stage1)
+  storage_policy_from_stage1)
+from extra.qk.kernel_pipeline_proof import prove_stage1_uop_graph
 from tinygrad.uop.ops import Ops, UOp
 
 

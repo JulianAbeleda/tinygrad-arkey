@@ -1,4 +1,4 @@
-"""Typed plans and ownership proofs for staged kernel pipelines."""
+"""Typed plans and executable graph construction for staged kernel pipelines."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -8,8 +8,6 @@ from tinygrad.codegen.opt.compiler_policies import PipelinePolicy, StoragePolicy
 from tinygrad.dtype import AddrSpace, DType, dtypes
 from tinygrad.uop.ops import AxisType, Ops, UOp
 
-PipelinePhase = Literal["prologue", "body", "drain"]
-PipelineOp = Literal["produce", "ready", "consume", "release"]
 # The Q4 scheduler owns the output-tile loop, but WMMA fragments are a physical
 # resource.  Keep this limit here (at the compiler boundary) rather than in a
 # route selector or renderer so all scheduler-owned consumers get the same
@@ -118,24 +116,6 @@ def pipeline_policy_from_candidate(pipeline: object) -> PipelinePolicy:
 
 
 @dataclass(frozen=True)
-class KernelStage1LifecycleEvent:
-  phase: PipelinePhase
-  op: PipelineOp
-  epoch: int
-  slot: int
-  role: str | None = None
-
-
-@dataclass(frozen=True)
-class KernelStage1LifecycleProof:
-  passed: bool
-  errors: tuple[str, ...]
-  produced: tuple[tuple[str, int, int], ...]
-  consumed: tuple[tuple[str, int, int], ...]
-  released_slots: tuple[tuple[int, int], ...]
-
-
-@dataclass(frozen=True)
 class KernelStage1ProducerStage:
   epoch: UOp
   slot: UOp
@@ -168,108 +148,8 @@ class KernelStage1UOpGraph:
   drain_fragments: KernelStage1FragmentStage
   drain: tuple[UOp, ...]
   subtile_count: int
-  events: tuple[KernelStage1LifecycleEvent, ...]
   body_readiness: Literal["legacy", "matching", "sequential"] = "legacy"
   accumulator_dtype: DType = dtypes.float
-
-
-@dataclass(frozen=True)
-class KernelStage1UOpProof:
-  passed: bool
-  errors: tuple[str, ...]
-  lifecycle: KernelStage1LifecycleProof
-
-
-def stage1_lifecycle_events(plan:KernelStage1PipelinePlan, k_tiles:int) -> tuple[KernelStage1LifecycleEvent, ...]:
-  """Build the canonical lifecycle. Buffer-2 fills the alternate slot before consuming the current one."""
-  if not isinstance(k_tiles, int) or isinstance(k_tiles, bool) or k_tiles <= 0: raise ValueError("k_tiles must be a positive int")
-  events:list[KernelStage1LifecycleEvent] = []
-
-  def produce(epoch:int, phase:PipelinePhase) -> None:
-    slot = plan.slot_for_epoch(epoch)
-    events.extend(KernelStage1LifecycleEvent(phase, "produce", epoch, slot, role) for role in plan.roles)
-    events.append(KernelStage1LifecycleEvent(phase, "ready", epoch, slot))
-
-  def consume(epoch:int, phase:PipelinePhase) -> None:
-    slot = plan.slot_for_epoch(epoch)
-    events.extend(KernelStage1LifecycleEvent(phase, "consume", epoch, slot, role) for role in plan.roles)
-    events.append(KernelStage1LifecycleEvent(phase, "release", epoch, slot))
-
-  produce(0, "prologue")
-  for epoch in range(k_tiles-1):
-    if plan.buffer_count == 2: produce(epoch+1, "body")
-    consume(epoch, "body")
-    if plan.buffer_count == 1: produce(epoch+1, "body")
-  consume(k_tiles-1, "drain")
-  return tuple(events)
-
-
-def prove_stage1_lifecycle(plan:KernelStage1PipelinePlan, k_tiles:int,
-                           events:tuple[KernelStage1LifecycleEvent, ...]) -> KernelStage1LifecycleProof:
-  """Independently prove slot ownership, readiness, exact consumption, and complete drain."""
-  if not isinstance(k_tiles, int) or isinstance(k_tiles, bool) or k_tiles <= 0: raise ValueError("k_tiles must be a positive int")
-  errors:list[str] = []
-  live:dict[int, dict[str, int]] = {}
-  ready:set[tuple[int, int]] = set()
-  produced:set[tuple[str, int, int]] = set()
-  consumed:set[tuple[str, int, int]] = set()
-  released:list[tuple[int, int]] = []
-
-  for index,event in enumerate(events):
-    where = f"event {index}"
-    if event.phase not in ("prologue", "body", "drain") or event.op not in ("produce", "ready", "consume", "release"):
-      errors.append(f"{where}: invalid phase or operation")
-      continue
-    if not isinstance(event.epoch, int) or isinstance(event.epoch, bool) or not 0 <= event.epoch < k_tiles:
-      errors.append(f"{where}: epoch {event.epoch!r} is out of range")
-      continue
-    expected_slot = plan.slot_for_epoch(event.epoch)
-    if event.slot != expected_slot:
-      errors.append(f"{where}: epoch {event.epoch} must use slot {expected_slot}, got {event.slot}")
-      continue
-    key = (event.epoch, event.slot)
-    slot_live = live.setdefault(event.slot, {})
-    if event.op in ("produce", "consume") and event.role not in plan.roles:
-      errors.append(f"{where}: {event.op} requires role A or B")
-      continue
-    if event.op in ("ready", "release") and event.role is not None:
-      errors.append(f"{where}: {event.op} must not name a role")
-      continue
-    if event.op == "produce":
-      assert event.role is not None
-      owner = slot_live.get(event.role)
-      if owner is not None: errors.append(f"{where}: overwrite hazard: slot {event.slot} role {event.role} still owns epoch {owner}")
-      item = (event.role, event.epoch, event.slot)
-      if item in produced: errors.append(f"{where}: duplicate producer for {item}")
-      else: produced.add(item)
-      if owner is None: slot_live[event.role] = event.epoch
-    elif event.op == "ready":
-      missing = tuple(role for role in plan.roles if slot_live.get(role) != event.epoch)
-      if missing: errors.append(f"{where}: epoch {event.epoch} ready before roles {missing} were produced")
-      elif key in ready: errors.append(f"{where}: duplicate ready for epoch {event.epoch} slot {event.slot}")
-      else: ready.add(key)
-    elif event.op == "consume":
-      assert event.role is not None
-      item = (event.role, event.epoch, event.slot)
-      if key not in ready: errors.append(f"{where}: consume before epoch {event.epoch} is ready")
-      if slot_live.get(event.role) != event.epoch:
-        errors.append(f"{where}: slot {event.slot} role {event.role} does not own epoch {event.epoch}")
-      if item in consumed: errors.append(f"{where}: duplicate consumer for {item}")
-      else: consumed.add(item)
-    else:
-      missing = tuple(role for role in plan.roles if (role, event.epoch, event.slot) not in consumed)
-      if missing: errors.append(f"{where}: release before roles {missing} consumed epoch {event.epoch}")
-      else:
-        ready.discard(key)
-        live.pop(event.slot, None)
-        released.append(key)
-
-  expected = {(role, epoch, plan.slot_for_epoch(epoch)) for epoch in range(k_tiles) for role in plan.roles}
-  for item in sorted(expected-produced): errors.append(f"missing producer for {item}")
-  for item in sorted(expected-consumed): errors.append(f"missing consumer for {item}")
-  if live: errors.append(f"live slots remain after drain: {tuple(sorted((slot, tuple(sorted(owners.items()))) for slot,owners in live.items()))}")
-  if ready: errors.append(f"ready epochs remain after drain: {tuple(sorted(ready))}")
-  return KernelStage1LifecycleProof(not errors, tuple(errors), tuple(sorted(produced)), tuple(sorted(consumed)), tuple(released))
 
 
 def build_stage1_uop_graph(plan:KernelStage1PipelinePlan, k_tiles:int,
@@ -292,14 +172,13 @@ def build_stage1_uop_graph(plan:KernelStage1PipelinePlan, k_tiles:int,
       raise ValueError(f"mixed accumulator dtypes: expected {accumulator_vec_dtype}, got {value.dtype}")
     return value
 
-  events = stage1_lifecycle_events(plan,k_tiles)
   zero,last=UOp.const(dtypes.weakint,0),UOp.const(dtypes.weakint,k_tiles-1)
   prologue=produce(zero,zero,None)
   if k_tiles == 1:
     frag=fragments(last,zero,prologue.ready)
     drain=tuple(accumulate(frag,UOp.const(accumulator_vec_dtype,0),i) for i in range(subtile_count))
     return KernelStage1UOpGraph(plan,k_tiles,UOp.sink(*drain),drain,None,None,None,None,None,
-      prologue,None,None,frag,drain,subtile_count,events,body_readiness,accumulator_dtype)
+      prologue,None,None,frag,drain,subtile_count,body_readiness,accumulator_dtype)
   rng=UOp.range(k_tiles-1,body_range_id,AxisType.REDUCE)
   # gfx1100 has no indirect VGPR addressing. A sequential register schedule
   # therefore carries a compile-time slot zero through the whole K loop.
@@ -362,7 +241,7 @@ def build_stage1_uop_graph(plan:KernelStage1PipelinePlan, k_tiles:int,
     drain.append(accumulate(drain_frag,acc,i))
   drain=tuple(drain)
   return KernelStage1UOpGraph(plan,k_tiles,UOp.sink(*drain,end),drain,reg,init,rng,end,join,
-    prologue,body_prod,body_frag,drain_frag,drain,subtile_count,events,body_readiness,accumulator_dtype)
+    prologue,body_prod,body_frag,drain_frag,drain,subtile_count,body_readiness,accumulator_dtype)
 
 
 def build_stage1_uop_graph_with_storage(adapter: Stage1StorageAdapter, plan: KernelStage1PipelinePlan, k_tiles: int,
@@ -394,8 +273,9 @@ def build_stage1_uop_graph_with_storage(adapter: Stage1StorageAdapter, plan: Ker
     accumulator_contract=accumulator_contract, body_range_id=body_range_id, accumulator_id=accumulator_id,
     body_readiness=mode, accumulator_dtype=accumulator_dtype)
 
-def prove_stage1_uop_graph(graph:KernelStage1UOpGraph) -> KernelStage1UOpProof:
-  lifecycle=prove_stage1_lifecycle(graph.plan,graph.k_tiles,graph.events); errors=list(lifecycle.errors)
+def validate_stage1_uop_graph(graph:KernelStage1UOpGraph) -> tuple[str, ...]:
+  """Return structural errors that must reject a stage-1 production candidate."""
+  errors:list[str] = []
   if not isinstance(graph.accumulator_dtype, DType) or graph.accumulator_dtype.count != 1:
     errors.append("accumulator dtype metadata must be scalar")
     accumulator_vec_dtype = None
@@ -451,4 +331,4 @@ def prove_stage1_uop_graph(graph:KernelStage1UOpGraph) -> KernelStage1UOpProof:
         errors.append(f"drain lacks {accumulator_vec_dtype} accumulator read after END")
       if out.dtype != accumulator_vec_dtype: errors.append("drain result has mixed accumulator dtype")
   if any(u.op is Ops.REDUCE for u in topo): errors.append("forbidden Ops.REDUCE")
-  return KernelStage1UOpProof(not errors,tuple(errors),lifecycle)
+  return tuple(errors)

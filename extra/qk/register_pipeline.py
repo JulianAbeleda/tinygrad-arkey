@@ -14,9 +14,9 @@ from tinygrad.codegen.opt.gemm_consumer import WMMA_CONSUMER
 from tinygrad.codegen.opt.kernel_lds import (PrecontractContractSpec, PrecontractOperandTemplate,
   derive_precontract_shape_factors, validate_precontract_carriers, validate_precontract_contracts,
   validate_precontract_operand_templates, validate_precontract_wmma_abi)
-from tinygrad.codegen.opt.kernel_pipeline import (KernelStage1FragmentStage, KernelStage1LifecycleEvent,
-  KernelStage1LifecycleProof, KernelStage1ProducerStage, Stage1StorageAdapter, prove_stage1_lifecycle,
-  stage1_lifecycle_events)
+from tinygrad.codegen.opt.kernel_pipeline import KernelStage1FragmentStage, KernelStage1ProducerStage, Stage1StorageAdapter
+from extra.qk.kernel_pipeline_proof import (KernelStage1LifecycleEvent, KernelStage1LifecycleProof,
+  prove_stage1_lifecycle, stage1_lifecycle_events)
 from tinygrad.codegen.opt.register_contracts import LogicalRegisterTile
 from tinygrad.dtype import AddrSpace, dtypes
 from tinygrad.uop.ops import AxisType, KernelLDSWindow, KernelTileGeometry, Ops, UOp

@@ -3,8 +3,8 @@ import pytest
 from tinygrad import dtypes
 from tinygrad.codegen.opt.compiler_policies import StoragePolicy
 from tinygrad.codegen.opt.kernel_lds import PrecontractContractSpec, PrecontractOperandTemplate
-from tinygrad.codegen.opt.kernel_pipeline import (KernelStage1PipelinePlan, build_stage1_uop_graph_with_storage,
-  prove_stage1_uop_graph)
+from tinygrad.codegen.opt.kernel_pipeline import KernelStage1PipelinePlan, build_stage1_uop_graph_with_storage
+from extra.qk.kernel_pipeline_proof import prove_stage1_uop_graph
 from extra.qk.register_pipeline import (RegisterLogicalStagePlan, RegisterPipeTemplate,
   RegisterStorageAdapter, prove_register_graph_no_lds, prove_register_lifecycle, register_geometry)
 from tinygrad.codegen.opt.tc import amd_rdna3

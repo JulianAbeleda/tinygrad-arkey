@@ -5,7 +5,8 @@ from tinygrad.codegen.opt.kernel_lds import (PackedPrecontractOperandTemplate, P
   PrecontractPipelineTemplate, PrecontractThreadAxes, build_precontract_lds_stage, instantiate_precontract_fragments,
   instantiate_precontract_producer)
 from tinygrad.codegen.opt.kernel_pipeline import (KernelStage1FragmentStage, KernelStage1PipelinePlan, KernelStage1ProducerStage,
-  Stage1StorageAdapter, build_stage1_uop_graph_with_storage, prove_stage1_uop_graph)
+  Stage1StorageAdapter, build_stage1_uop_graph_with_storage)
+from extra.qk.kernel_pipeline_proof import prove_stage1_uop_graph
 from tinygrad.codegen.opt.compiler_policies import StoragePolicy
 from tinygrad.codegen.opt.tc import amd_rdna3
 from tinygrad.codegen.opt.packed_weight import PackedWeightTransform

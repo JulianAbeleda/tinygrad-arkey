@@ -478,7 +478,7 @@ class Scheduler:
               if candidate_pipeline is not None and not register_mode:
                 from tinygrad.codegen.opt.kernel_lds import PrecontractPipelineTemplate
                 from tinygrad.codegen.opt.kernel_pipeline import (KernelStage1FragmentStage, KernelStage1ProducerStage,
-                  Stage1StorageAdapter, build_stage1_uop_graph_with_storage, prove_stage1_uop_graph,
+                  Stage1StorageAdapter, build_stage1_uop_graph_with_storage, validate_stage1_uop_graph,
                   storage_policy_from_stage1)
                 template=PrecontractPipelineTemplate(candidate_geometry,tc,allocation,operands,thread_axes,
                   subtile_m,subtile_n,tuple(contracts),candidate_pipeline)
@@ -516,8 +516,8 @@ class Scheduler:
                   accumulator_offset=(subtile_m*factors.subtiles_n+subtile_n)*8,
                   accumulator_contract=(c_elem,tc_upcast_axes[2]),body_range_id=next(self.opt_range),accumulator_id=next(self.opt_range),
                   accumulator_dtype=tc.dtype_out)
-                proof=prove_stage1_uop_graph(graph)
-                if not proof.passed: raise KernelOptError("buffer2 lifecycle UOp proof failed: "+"; ".join(proof.errors))
+                if errors := validate_stage1_uop_graph(graph):
+                  raise KernelOptError("buffer2 lifecycle UOp validation failed: "+"; ".join(errors))
                 pipeline_tc_uop=UOp(Ops.UNROLL,tc.dtype_out,(graph.drain[0],),arg=tc_upcast_axes[2],tag=1)
               elif not register_mode:
                 stage = build_precontract_lds_stage(candidate_geometry, tc=tc, allocation=allocation, operands=operands,
