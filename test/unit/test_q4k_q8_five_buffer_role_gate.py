@@ -18,11 +18,13 @@ def _fake_compiler(payload, identity):
   class Program: pass
   arg, kernel, program = Arg(), Kernel(), Program()
   arg.candidate_context = admission.context; kernel.arg = arg; program.src = [kernel]
+  workload = admission.normalized_payload["workload"]["shape"]
+  tile = admission.normalized_payload["schedule"]["tile"]
   evidence = {"passed": True, "canonical_identity": identity, "abi_digest": "a" * 64,
     "abi": {"argument_order": ["output", "q4_packed_words", "q8_ds4_values", "q8_scales", "q8_weighted_sums"]},
     "resource_summary": {"lds_bytes": 0, "scratch_bytes": 0, "vgpr_spills": 0, "sgpr_spills": 0,
       "vgpr": 32, "sgpr": 16, "workgroup": [32, 1, 1], "workgroup_threads": 32,
-      "grid": [2, 3, 1], "wavefront_size": 32}}
+      "grid": [workload["n"] // tile["n"], workload["m"] // tile["m"], 1], "wavefront_size": 32}}
   return program, evidence
 
 
@@ -40,7 +42,12 @@ def test_gate_exposes_identity_launch_and_resource_evidence_without_allocating()
   assert [row["role"] for row in report["rows"]] == ["attn_kv", "attn_qo", "ffn_down", "ffn_gate_up"]
   for row in report["rows"]:
     assert row["compile_status"] == "pass" and row["canonical_identity"] == row["context_identity"]
-    assert len(row["abi_identity"]) == 64 and row["workgroup"] == [32, 1, 1] and row["grid"] == [2, 3, 1]
+    assert len(row["abi_identity"]) == 64 and row["workgroup"] == [32, 1, 1]
+    assert row["grid"] == [row["N"] // 16, row["M"] // 16, 1]
+    assert row["coverage"] == {"tile": {"m": 16, "n": 16, "k": 256},
+      "output_tiles": [row["N"] // 16, row["M"] // 16], "owned_output_tiles": row["M"] * row["N"] // 256,
+      "k_tiles": row["K"] // 256, "lane_ownership": "rdna3_wave32_direct_wmma_output_tile",
+      "tail_policy": "aligned_only_no_tails"}
     assert {x: row["resources"][x] for x in ("lds_bytes", "scratch_bytes", "vgpr_spills", "sgpr_spills")} == \
            {"lds_bytes": 0, "scratch_bytes": 0, "vgpr_spills": 0, "sgpr_spills": 0}
 
@@ -59,6 +66,17 @@ def test_compiler_blocker_is_distinct_from_gate_contract_failure():
   assert report["blockers"][0]["compile_status"] == "blocked"
   assert report["blockers"][1]["compile_status"] == "fail"
   assert len(report["rows"]) == 4  # one blocker never truncates remaining role evidence
+
+
+@pytest.mark.parametrize("grid_delta", (-1, 1))
+def test_final_outer_grid_must_own_every_output_tile_exactly_once(grid_delta):
+  def compiler(payload, identity):
+    program, evidence = _fake_compiler(payload, identity)
+    evidence["resource_summary"]["grid"][0] += grid_delta
+    return program, evidence
+  report = build_role_gate(_inventory(), compiler=compiler)
+  assert not report["passed"] and len(report["blockers"]) == 4
+  assert all("does not exactly own output tiles" in row["error"] for row in report["blockers"])
 
 
 @pytest.mark.parametrize("mutation", ["missing_binding", "identity_drift"])

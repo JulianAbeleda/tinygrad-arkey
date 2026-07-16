@@ -66,6 +66,14 @@ def admitted_q4k_non_fitting_roles(artifact: Mapping[str, Any]):
 
 def _validated_row(entry, admission, program, evidence: Mapping[str, Any]) -> dict[str, Any]:
   workload = full_kernel_workload(admission.normalized_payload)
+  schedule = admission.normalized_payload["schedule"]
+  tile = schedule["tile"]
+  if schedule["lane_ownership"] != "rdna3_wave32_direct_wmma_output_tile":
+    raise _fail("admitted lane ownership is not the direct one-wave output tile contract")
+  if schedule["tail_policy"] != "aligned_only_no_tails":
+    raise _fail("admitted tail policy is not aligned-only")
+  if any(extent % tile[axis] for extent, axis in zip(workload.shape, ("m", "n", "k"))):
+    raise _fail("aligned-only workload has an uncovered M/N/K tail")
   if evidence.get("passed") is not True: raise _fail("compile evidence did not pass")
   identity = admission.canonical_identity
   if evidence.get("canonical_identity") != identity: raise _fail("compile/admission context identity drift")
@@ -89,12 +97,18 @@ def _validated_row(entry, admission, program, evidence: Mapping[str, Any]) -> di
     raise _fail("workgroup differs from admission")
   if not isinstance(grid, list) or not grid or any(type(x) is not int or x <= 0 for x in grid):
     raise _fail("grid evidence is invalid")
+  expected_grid = [workload.shape[1] // tile["n"], workload.shape[0] // tile["m"], 1]
+  if grid != expected_grid:
+    raise _fail(f"final outer grid {grid!r} does not exactly own output tiles {expected_grid!r}")
   if resources["lds_bytes"] != admission.active_lds_bytes or any(resources[x] != 0 for x in
       ("scratch_bytes", "vgpr_spills", "sgpr_spills")):
     raise _fail("LDS/scratch/spill evidence violates admission")
   return {"role": workload.role, "M": workload.shape[0], "N": workload.shape[1], "K": workload.shape[2],
     "compile_status": "pass", "canonical_identity": identity, "context_identity": context.canonical_identity,
     "abi_identity": abi_identity, "abi": dict(abi), "workgroup": workgroup, "grid": grid,
+    "coverage": {"tile": dict(tile), "output_tiles": expected_grid[:2],
+      "owned_output_tiles": expected_grid[0] * expected_grid[1], "k_tiles": workload.shape[2] // tile["k"],
+      "lane_ownership": schedule["lane_ownership"], "tail_policy": schedule["tail_policy"]},
     "resources": {key: resources[key] for key in ("lds_bytes", "scratch_bytes", "vgpr_spills", "sgpr_spills",
       "vgpr", "sgpr", "workgroup_threads", "wavefront_size") if key in resources}}
 
