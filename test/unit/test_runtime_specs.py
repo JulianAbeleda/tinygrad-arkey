@@ -11,6 +11,7 @@ from extra.qk.runtime_specs import (
   ANCHOR_SINGLE_BUFFER_CANDIDATE_HASH, FULL_KERNEL_CANDIDATE_SCHEMA, PACKED_SCALAR_DECODER_VERSION, ActivationQuantSpec, GeneratedCandidate,
   CandidateAdmissionFacts, QuantizedTensorSpec, RuntimeOpSpec, FullKernelCandidateSet, FullKernelCandidateSetEntry,
   GFX1100_TWO_BUFFER_STAGE1_CAPABILITY, admit_full_kernel_candidate, admit_full_kernel_candidate_set, derive_packed_weight_candidate,
+  derive_q4k_q8_1_five_buffer_candidate,
   bind_full_kernel_candidate, full_kernel_candidate_set_from_legacy, full_kernel_candidate_capability,
   full_kernel_workload, rebind_full_kernel_workload,
 )
@@ -251,6 +252,50 @@ def test_derive_packed_weight_candidate_is_canonical_and_geometry_owned(quant_fo
   assert (b["quant_format"], b["storage_dtype"], b["rows"], b["k"], b["block_bytes"]) == \
          (quant_format, storage_dtype, 12288, 4096, block_bytes)
   assert FullKernelCandidateSetEntry(entry.canonical_identity, entry.to_json()["payload"]) == entry
+
+def test_q4k_q8_1_five_buffer_candidate_cpu_roundtrip_and_context():
+  payload = _single_buffer_anchor_candidate().full_kernel_candidate
+  assert payload is not None
+  entry = derive_q4k_q8_1_five_buffer_candidate(payload)
+  abi = entry.payload["kernel_abi"]
+  assert [(x["abi_slot"], x["dtype"]) for x in abi["buffers"].values()] == \
+         [(0,"fp32"),(1,"uint32"),(2,"int8"),(3,"float32"),(4,"float32")]
+  assert abi["buffers"]["q8_ds4_values"]["signed"] is True
+  assert FullKernelCandidateSetEntry(entry.canonical_identity, entry.to_json()["payload"]) == entry
+  admission = admit_full_kernel_candidate(entry.payload, entry.canonical_identity,
+    profile="qwen3_8b_q4k_m_gfx1100", role="ffn_gate_up", shape=(512,12288,4096),
+    target={"backend":"AMD","arch":"gfx1100","wave_size":32})
+  assert admission.context.packed_weight is None and admission.context.packed_operand_b is None
+  assert admission.operand_plan == abi
+  with pytest.raises(TypeError, match="immutable"): admission.operand_plan["quant_format"] = "Q6_K"
+
+@pytest.mark.parametrize("mutation", (
+  lambda a: a["buffers"]["output"].update(abi_slot=1),
+  lambda a: a["buffers"]["q4_packed_words"].update(dtype="uint16"),
+  lambda a: a["buffers"]["q8_ds4_values"].update(signed=False),
+  lambda a: a["buffers"]["q8_scales"].update(abi_slot=4),
+  lambda a: a["buffers"]["q8_weighted_sums"].update(dtype="float16"),
+  lambda a: a.update(quant_format="Q6_K"),
+  lambda a: a.update(activation_layout="dense"),
+  lambda a: a["block_geometry"].update(q8_ds4_block_elems=32),
+  lambda a: a.update(output_layout="packed"),
+  lambda a: a.update(emitter_family="q6k_packed"),
+))
+def test_q4k_q8_1_five_buffer_candidate_rejects_tamper_and_q6(mutation):
+  entry = derive_q4k_q8_1_five_buffer_candidate(_single_buffer_anchor_candidate().full_kernel_candidate)
+  payload = entry.to_json()["payload"]
+  mutation(payload["kernel_abi"])
+  with pytest.raises(ValueError, match="kernel_abi"):
+    _strict_full_kernel_candidate(full_kernel_candidate=payload)
+
+def test_q4k_q8_1_five_buffer_rejects_dense_or_packed_b_ambiguity_and_preserves_legacy():
+  payload = _single_buffer_anchor_candidate().full_kernel_candidate
+  entry = derive_q4k_q8_1_five_buffer_candidate(payload)
+  ambiguous = entry.to_json()["payload"]
+  ambiguous["operand_sources"] = _operand_sources_b("dense")
+  with pytest.raises(ValueError, match="cannot combine"):
+    _strict_full_kernel_candidate(full_kernel_candidate=ambiguous)
+  assert GeneratedCandidate.from_json(_single_buffer_anchor_candidate().to_json()) == _single_buffer_anchor_candidate()
 
 
 def test_schedule_template_rebinds_to_typed_workload_without_model_logic():

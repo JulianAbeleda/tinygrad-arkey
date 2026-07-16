@@ -20,6 +20,8 @@ GENERATED_PROVENANCE = ("machine_authored_generated", "tinygrad_scheduler_genera
 FULL_KERNEL_CANDIDATE_SCHEMA = "boltbeam.full_kernel_candidate.v1"
 FULL_KERNEL_CANDIDATE_SET_SCHEMA = "boltbeam.full_kernel_candidate_set.v1"
 PACKED_SCALAR_DECODER_VERSION = "ggml_k_quant_v1"
+Q4K_Q8_1_FIVE_BUFFER_ABI = "q4k_q8_1_five_buffer_v1"
+Q4K_Q8_1_EMITTER_FAMILY = "q4k_q8_1_mmq"
 ANCHOR_SINGLE_BUFFER_CANDIDATE_HASH = "579b909f9d9b3ed89eab2129fca41baaa35c94b8eab040ccb0cbcee7a340fa0c"
 
 class FullKernelAdmissionError(ValueError):
@@ -77,6 +79,7 @@ class FullKernelAdmission:
   active_lds_bytes: int
   capability: FullKernelCapability
   context: Any
+  operand_plan: Any = None
 
 FullKernelExactKey = tuple[str, int, int, int, str, str, int]
 LegacyFullKernelExactKey = tuple[str, str, int, int, int, str, str, int]
@@ -199,6 +202,27 @@ def derive_packed_weight_candidate(payload:dict[str,Any], quant_format:str) -> F
          "block_bytes":transform.block_bytes, "decoder_version":PACKED_SCALAR_DECODER_VERSION}}
   identity = _canonical_full_kernel_identity(normalized)
   return FullKernelCandidateSetEntry(identity, normalized)
+
+def _q4k_q8_1_five_buffer_plan() -> dict[str,Any]:
+  from extra.qk.layout import (Q4K_WORDS_PER_BLOCK, Q4_K_BLOCK_ELEMS, Q8_1_BLOCK_ELEMS,
+                               Q8_1_MMQ_BLOCK_ELEMS, Q8_1_MMQ_GROUPS_PER_BLOCK)
+  from extra.qk.mmq_q4k_q8_reference import Q8_1_MMQ_DS4_LAYOUT
+  return {"family":Q4K_Q8_1_FIVE_BUFFER_ABI, "quant_format":"Q4_K", "activation_format":"Q8_1",
+    "activation_layout":Q8_1_MMQ_DS4_LAYOUT, "output_layout":"tokens_rows", "emitter_family":Q4K_Q8_1_EMITTER_FAMILY,
+    "block_geometry":{"q4_block_elems":Q4_K_BLOCK_ELEMS, "q4_words_per_block":Q4K_WORDS_PER_BLOCK,
+      "q8_group_elems":Q8_1_BLOCK_ELEMS, "q8_ds4_block_elems":Q8_1_MMQ_BLOCK_ELEMS,
+      "q8_groups_per_ds4_block":Q8_1_MMQ_GROUPS_PER_BLOCK},
+    "buffers":{"output":{"abi_slot":0, "dtype":"fp32"}, "q4_packed_words":{"abi_slot":1, "dtype":"uint32"},
+      "q8_ds4_values":{"abi_slot":2, "dtype":"int8", "signed":True},
+      "q8_scales":{"abi_slot":3, "dtype":"float32"}, "q8_weighted_sums":{"abi_slot":4, "dtype":"float32"}}}
+
+def derive_q4k_q8_1_five_buffer_candidate(payload:dict[str,Any]) -> FullKernelCandidateSetEntry:
+  """Retain the model-independent Q4_K/Q8_1 DS4 full-kernel ABI in a v1 candidate."""
+  normalized = json.loads(json.dumps(payload, allow_nan=False))
+  if "operand_sources" in normalized: raise ValueError("five-buffer ABI is ambiguous with operand_sources")
+  normalized["kernel_abi"] = _q4k_q8_1_five_buffer_plan()
+  _validate_full_kernel_payload(normalized)
+  return FullKernelCandidateSetEntry(_canonical_full_kernel_identity(normalized), normalized)
 
 
 def rebind_full_kernel_workload(payload:dict[str,Any], *, profile:str, role:str, shape:tuple[int,int,int],
@@ -369,7 +393,8 @@ def admit_full_kernel_candidate(payload:dict[str, Any], canonical_identity:str, 
   context = KernelCandidateContext(schema_version=normalized["schema_version"], canonical_identity=actual_identity, geometry=geometry,
     pipeline=pipeline_plan if (capability.buffer_count > 1 or storage_kind == "global_register_resident") else None,
     packed_weight=packed_weight)
-  return FullKernelAdmission(actual_identity,normalized,geometry,plan,pipeline_plan,active_lds,capability,context)
+  operand_plan = _freeze_json(normalized["kernel_abi"]) if "kernel_abi" in normalized else None
+  return FullKernelAdmission(actual_identity,normalized,geometry,plan,pipeline_plan,active_lds,capability,context,operand_plan)
 
 
 def bind_full_kernel_candidate(payload:dict[str, Any], canonical_identity:str, *, profile:str, role:str,
@@ -415,7 +440,7 @@ def _nonempty_str(value:Any, label:str) -> None:
 def _validate_full_kernel_payload(payload:dict[str, Any]) -> None:
   required = {"schema_version", "workload", "schedule", "static_constraints", "applicability"}
   if not isinstance(payload, dict): raise ValueError("full_kernel_candidate must be an object")
-  missing, unknown = required - set(payload), set(payload) - required - {"operand_sources"}
+  missing, unknown = required - set(payload), set(payload) - required - {"operand_sources", "kernel_abi"}
   if missing: raise ValueError(f"full_kernel_candidate missing fields {sorted(missing)}")
   if unknown: raise ValueError(f"full_kernel_candidate has unknown fields {sorted(unknown)}")
   if payload["schema_version"] != FULL_KERNEL_CANDIDATE_SCHEMA:
@@ -432,6 +457,12 @@ def _validate_full_kernel_payload(payload:dict[str, Any]) -> None:
     for key, value in workload[group].items(): _nonempty_str(value, f"workload.{group}.{key}")
   for key in ("backend", "arch"): _nonempty_str(workload["target"][key], f"workload.target.{key}")
   _positive_int(workload["target"]["wave_size"], "workload.target.wave_size")
+
+  if "operand_sources" in payload and "kernel_abi" in payload:
+    raise ValueError("full-kernel candidate cannot combine kernel_abi with operand_sources")
+  if "kernel_abi" in payload:
+    if payload["kernel_abi"] != _q4k_q8_1_five_buffer_plan():
+      raise ValueError("kernel_abi must exactly describe the retained Q4_K/Q8_1 five-buffer format, slots, dtypes, layouts, geometry, and emitter family")
 
   if "operand_sources" in payload:
     sources = payload["operand_sources"]
