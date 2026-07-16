@@ -37,13 +37,18 @@ def linearize(sink:UOp) -> list[UOp]:
   # number the uops in "ideal" order
   try:
     ordered = sorted(lst, key=lambda x: priorities[x]+(x.tuplize if TUPLE_ORDER else ()))
-  except TypeError:
+  except (TypeError, AssertionError) as e:
+    # Comparing UOp metadata can produce a vector bool UOp, which Python then
+    # tries to coerce to bool while ordering the key tuples.
+    if isinstance(e, AssertionError) and not (str(e).startswith("eval with wrong dtype UOp(Ops.CMPLT, dtypes.bool.vec(") or
+                                               str(e).startswith("eval with wrong dtype bool.vec(")): raise
     # Some backend-owned metadata is intentionally heterogeneous (for example
     # a stage marker tuple beside a value-less NOOP).  Preserve the normal
     # structural order and only canonicalize incomparable metadata on retry.
     def _stable(v):
       # Only metadata and the node header are needed to break the failed
       # comparison.  Avoid recursively repr'ing the entire UOp DAG here.
+      if isinstance(v, UOp): return ("UOp", v.op.value, type(v.dtype).__name__, repr(v.dtype), type(v.arg).__name__)
       if isinstance(v, tuple): return ("tuple", len(v), tuple(_stable(y) for y in v[:4]))
       return (type(v).__name__, repr(v))
     def _stable_uop(u):
