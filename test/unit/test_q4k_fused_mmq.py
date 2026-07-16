@@ -1,9 +1,9 @@
 import pytest
 from tinygrad import Tensor, dtypes
 
-from extra.qk.q4k_fused_mmq import (FUSED_Q4K_MMQ_CONTRACT, QWEN3_14B_FUSED_ROLE_SHAPES,
-  FusedQ4KMMQTileSpec, emit_fused_q4k_mmq_tile, fused_q4k_mmq_admitted)
-from extra.qk.q4k_fused_mmq import build_fused_q4k_mmq_dynamic_owner
+from extra.qk.q4k_fused_mmq import emit_fused_q4k_mmq_tile, fused_q4k_mmq_admitted
+from extra.qk.q4k_fused_mmq_contract import FUSED_Q4K_MMQ_CONTRACT, QWEN3_14B_FUSED_ROLE_SHAPES, FusedQ4KMMQTileSpec
+from extra.qk.prefill_int8_wmma_spec import build_fused_q4k_mmq_dynamic_owner
 from tinygrad.uop.ops import Ops
 
 

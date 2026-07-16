@@ -17,6 +17,8 @@ from tinygrad.helpers import getenv
 from tinygrad.uop.ops import Ops, ScheduleHints, UOp
 
 from extra.qk.layout import Q4K_WORDS_PER_BLOCK, Q4_K_BLOCK_ELEMS, Q8_1_BLOCK_ELEMS
+from extra.qk.dynamic_tile_owner import dynamic_store, own_dynamic_tiles
+from extra.qk.q4k_fused_mmq_contract import FusedQ4KMMQTileSpec
 
 
 @dataclass(frozen=True)
@@ -258,6 +260,34 @@ def _admit_scheduler_output_tile_loop(spec:Q4KInt8WMMATiledPrefillSpec) -> Sched
     raise NotImplementedError(f"Q4_K scheduler output-tile loop lowering failed closed: {e}") from e
 
 
+def build_fused_q4k_mmq_dynamic_owner(words: Tensor, xq: Tensor, xscales: Tensor,
+                                       output: Tensor, *, tile_count: int = 2,
+                                       loop_id: int = 9600) -> UOp:
+  """Emit one scheduler-owned graph for bounded packed-Q4 output tiles."""
+  fused = FusedQ4KMMQTileSpec()
+  fused.validate()
+  expected = (fused.words_shape[0], fused.xq_shape[0] * fused.xq_shape[1],
+              fused.xscales_shape[0] * fused.xscales_shape[1], fused.m * fused.n)
+  if tuple(words.shape) != (tile_count * expected[0],) or tuple(xq.shape) != (tile_count * expected[1],) \
+      or tuple(xscales.shape) != (tile_count * expected[2],) or tuple(output.shape) != (tile_count * expected[3],):
+    raise ValueError("dynamic fused-Q4 owner expects one flat backing store per tile")
+  if words.device != xq.device or words.device != xscales.device or words.device != output.device:
+    raise ValueError("dynamic fused-Q4 owner operands must share a device")
+  lowered = Q4KInt8WMMATiledPrefillSpec(n=fused.n, k=fused.k, m=fused.m,
+    wmma_m=16, wmma_n=16, wmma_k=16, m_tile=fused.m_tile, n_tile=fused.n_tile, group_tile=fused.group_tile,
+    role="fused_q4k_mmq", implementation="direct_tiled_wmma_v0")
+  plan = SchedulerOutputTileLoop(tile_count, loop_id=loop_id)
+  try:
+    return own_dynamic_tiles(plan, words, xq, xscales, output,
+      weight_rows=expected[0], activation_rows=expected[1], scale_rows=expected[2], output_rows=expected[3], row_width=1,
+      weight_stride=expected[0], activation_stride=expected[1], scale_stride=expected[2], output_stride=expected[3],
+      body=lambda tile: dynamic_store(output, tile.output_indices,
+        emit_q4k_int8_wmma_tiled_scheduler_tensor(tile.weights, tile.activation.reshape(fused.xq_shape),
+                                                   tile.scales.reshape(fused.xscales_shape), lowered).reshape(-1)))
+  except (NotImplementedError, ValueError, TypeError, RuntimeError) as e:
+    raise NotImplementedError(f"dynamic fused-Q4 indexing cannot lower: {e}") from e
+
+
 def _prove_integrated_loop_dynamic_owner(spec:Q4KInt8WMMATiledPrefillSpec) -> None:
   """Prove only the bounded integrated owner backed by the real Q4 decoder.
 
@@ -268,7 +298,6 @@ def _prove_integrated_loop_dynamic_owner(spec:Q4KInt8WMMATiledPrefillSpec) -> No
   """
   if (spec.m, spec.n, spec.k, spec.m_tile, spec.n_tile, spec.group_tile) != (16, 16, 256, 16, 16, 1):
     raise NotImplementedError("integrated_loop is fail-closed outside the bounded packed-Q4 owner tile")
-  from extra.qk.q4k_fused_mmq import FusedQ4KMMQTileSpec, build_fused_q4k_mmq_dynamic_owner
   fused = FusedQ4KMMQTileSpec()
   try:
     graph = build_fused_q4k_mmq_dynamic_owner(
