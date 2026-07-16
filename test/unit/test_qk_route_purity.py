@@ -3,8 +3,8 @@ import json, subprocess, sys
 import pytest
 
 from extra.qk.route_manifest import default_purity_report, route_provenance, validate_manifest
-from tinygrad.llm.model import (_load_qk_route_policy, _qk_route_policy_selected, _set_qk_route_policy,
-                                _qk_route_policy_selects_q4k_g3, _qk_route_policy_selects_q6k_generated)
+from tinygrad.llm.route_policy import (_load_qk_route_policy, _qk_route_policy_selected, _set_qk_route_policy,
+                                       _qk_route_policy_selects_q4k_g3, _qk_route_policy_selects_q6k_generated)
 
 
 def _write_q4k_g3_policy(tmp_path, rows):
