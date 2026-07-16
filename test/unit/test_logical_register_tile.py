@@ -1,7 +1,7 @@
 import pytest
 
 from tinygrad import dtypes
-from tinygrad.codegen.opt.register_contracts import LogicalRegisterTile
+from extra.qk.logical_register_tile import LogicalRegisterTile
 
 
 def test_logical_register_tile_is_backend_neutral_and_stable():

@@ -4,7 +4,7 @@ from typing import Any
 
 from tinygrad.dtype import AddrSpace, PtrDType, dtypes
 from tinygrad.codegen.opt import KernelOptError
-from tinygrad.codegen.opt.prefill_value_key import PrefillSourceValueKey
+from extra.qk.prefill_value_key import PrefillSourceValueKey
 from tinygrad.uop.ops import Ops, UOp
 from extra.qk.mmq_llama_record_producers import RecordProducerInstanceWitness
 

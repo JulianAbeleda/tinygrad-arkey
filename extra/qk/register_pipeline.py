@@ -17,7 +17,7 @@ from tinygrad.codegen.opt.kernel_lds import (PrecontractContractSpec, Precontrac
 from tinygrad.codegen.opt.kernel_pipeline import KernelStage1FragmentStage, KernelStage1ProducerStage, Stage1StorageAdapter
 from extra.qk.kernel_pipeline_proof import (KernelStage1LifecycleEvent, KernelStage1LifecycleProof,
   prove_stage1_lifecycle, stage1_lifecycle_events)
-from tinygrad.codegen.opt.register_contracts import LogicalRegisterTile
+from extra.qk.logical_register_tile import LogicalRegisterTile
 from tinygrad.dtype import AddrSpace, dtypes
 from tinygrad.uop.ops import AxisType, KernelLDSWindow, KernelTileGeometry, Ops, UOp
 from tinygrad.renderer.isa.amd_register_allocator import AMDStageBufferSpec
