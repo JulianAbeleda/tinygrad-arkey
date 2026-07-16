@@ -365,7 +365,6 @@ class TransformerConfig:
   prefill_v2: bool = False               # concrete candidate binding, never a module-global switch
   prefill_ubatch: int = 512              # candidate-local physical M
   prefill_concrete_kv: bool = False      # workload/candidate policy decision
-  prefill_remainder_fix: bool = True     # declared candidate tail capability
   prefill_workload_reuse: bool = False
   flash_decode: bool = False             # exact target/shape candidate binding
   lm_head_route: str = "lazy"           # explicit workload semantics; generate consumes only the final token
@@ -1158,7 +1157,7 @@ class Transformer:
       prefill_device_facts=_device_facts, exact_memory_plan=_exact_memory_plan,
       prefill_tc_attn=bool(_runtime_policy["prefill_tc_attn"]),
       prefill_v2=_v2_on, prefill_ubatch=_prefill_ubatch, prefill_concrete_kv=_concrete_kv,
-      prefill_remainder_fix=True, prefill_workload_reuse=_workload_reuse, flash_decode=_flash_decode, lm_head_route="lazy",
+      prefill_workload_reuse=_workload_reuse, flash_decode=_flash_decode, lm_head_route="lazy",
       kv_quant=_kv_quant, ring=_ring_admitted)
     # FAST_EMPTY_INIT: every weight is REPLACED by load_state_dict below, so building the ~254 random init graphs
     # (nn.Linear Tensor.uniform / nn.Embedding glorot_uniform) is wasted work (~2.3s of the load, per profiling).
@@ -1293,7 +1292,7 @@ class Transformer:
         use_concrete = (start_pos == 0) or self.config.prefill_concrete_kv
         sp, ntv = (start_pos if use_concrete else v_start_pos.bind(start_pos)), ubatch
         out = self(t[:, sp:sp+ubatch], sp, temp, use_flash=False).realize()
-      elif self.config.prefill_remainder_fix and self.config.prefill_v2 and start_pos < prompt_len and prompt_len >= ubatch:
+      elif self.config.prefill_v2 and start_pos < prompt_len and prompt_len >= ubatch:
         # Phase-3 fix: a sub-UBATCH PROMPT remainder would otherwise fall to many slow 32-token symbolic calls
         # (the fallback trap). Instead process the LAST PREFILL_UBATCH tokens as ONE prefill-v2 chunk by shifting
         # the window back so it ENDS exactly at prompt_len -> all-real tokens (no padding), last position is

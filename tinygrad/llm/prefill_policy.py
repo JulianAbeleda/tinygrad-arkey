@@ -5,10 +5,6 @@ from typing import Any, Mapping
 
 _CONCRETE_PREFILL_VALIDATED_M = (512,)
 
-def prefill_plan_uses_overlay(serialized_plan:str|None) -> bool:
-  if serialized_plan is None: return False
-  return json.loads(serialized_plan).get("decision") == "FULL_RESIDENT_OVERLAY"
-
 _EXECUTING_STRATEGIES = frozenset(("FULL_RESIDENT_OVERLAY", "BOUNDED_PACKED_TILES", "DIRECT_PACKED_FALLBACK"))
 _TC_ATTN_TARGET_REQUIREMENTS = {"backend": "AMD", "architecture": "gfx1100"}
 
@@ -58,6 +54,3 @@ def prefill_v2_validate_ubatch(ubatch:int) -> None:
     raise ValueError(f"concrete prefill validates physical M in {_CONCRETE_PREFILL_VALIDATED_M} (got {ubatch}); "
                      f"the warmstart TC schedule is shape-specific. Re-measure per-shape opts for {ubatch} first "
                      f"and add it to _CONCRETE_PREFILL_VALIDATED_M.")
-
-def prefill_v2_realize_bytes(shapes:list[tuple[int,int]]) -> int:
-  return sum(o * i for o, i in shapes) * 2
