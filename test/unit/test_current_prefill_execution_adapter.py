@@ -34,6 +34,7 @@ def _request(entry, **compiler_changes):
 
 def test_adapter_prepares_exact_promoted_attn_qo_as_spawn_safe_bundle_without_gpu(monkeypatch):
   entry = _candidate()
+  canonical = adapter.admit_current_prefill(entry["payload"], entry["canonical_identity"]).canonical_identity
   arrays = ({"a": np.ones((2, 2), dtype=np.float16), "b": np.ones((2, 2), dtype=np.float16)},
             np.ones((2, 2), dtype=np.float16))
   monkeypatch.setattr(adapter, "_arrays", lambda *_: arrays)
@@ -46,15 +47,31 @@ def test_adapter_prepares_exact_promoted_attn_qo_as_spawn_safe_bundle_without_gp
                       "binary_sha256": "b" * 64, "canonical_identity": identity}
 
   prepared = adapter.CurrentPrefillAdapter(compile_prepare=fake_compile).prepare(_request(entry))
-  assert compile_calls == [(entry["payload"], entry["canonical_identity"], "AMD")]
-  assert prepared.compile_evidence["canonical_identity"] == entry["canonical_identity"]
+  assert compile_calls == [(entry["payload"], canonical, "AMD")]
+  assert prepared.compile_evidence["canonical_identity"] == canonical
   assert prepared.output_dtype == np.float16
   assert prepared.health_probe is not None and prepared.health_probe.device == "AMD"
   restored = pickle.loads(pickle.dumps(prepared.builder))
   assert restored.build is adapter.build_current_prefill_bundle
-  assert restored.kwargs["canonical_identity"] == entry["canonical_identity"]
+  assert restored.kwargs["canonical_identity"] == canonical
   assert restored.kwargs["compile_device"] == "AMD"
   assert restored.kwargs["runtime_device"] == "AMD"
+
+
+def test_adapter_normalizes_legacy_identity_to_admission_canonical_identity(monkeypatch):
+  entry = _candidate()
+  admission = adapter.admit_current_prefill(entry["payload"], entry["canonical_identity"])
+  assert admission.canonical_identity != entry["canonical_identity"]
+  monkeypatch.setattr(adapter, "_arrays", lambda *_: ({"a": np.ones(2)}, np.ones(2)))
+  monkeypatch.setattr(adapter, "_input_artifact_identities", lambda *_: {
+    "input_artifact_sha256": "i" * 64, "reference_sha256": "r" * 64})
+  calls = []
+  def fake_compile(payload, identity, *, device):
+    calls.append(identity)
+    return object(), {"passed": True, "canonical_identity": identity}
+  prepared = adapter.CurrentPrefillAdapter(compile_prepare=fake_compile).prepare(_request(entry))
+  assert calls == [admission.canonical_identity]
+  assert prepared.builder.kwargs["canonical_identity"] == prepared.compile_evidence["canonical_identity"] == admission.canonical_identity
 
 
 def test_adapter_reuses_admission_and_rejects_identity_or_typed_transport_drift(monkeypatch):
@@ -100,13 +117,14 @@ def test_registration_is_explicit_and_has_no_route_name_fallback():
 
 def test_spawn_child_requires_contract_and_rejects_normalized_identity_drift_before_bundle(monkeypatch):
   entry = _candidate()
-  base = {"passed": True, "canonical_identity": entry["canonical_identity"], "source_sha256": "a" * 64,
+  canonical = adapter.admit_current_prefill(entry["payload"], entry["canonical_identity"]).canonical_identity
+  base = {"passed": True, "canonical_identity": canonical, "source_sha256": "a" * 64,
           "binary_sha256": "b" * 64, "target": "gfx1100", "compile_target": "AMD"}
   with pytest.raises(ValueError, match="contract is missing"):
     adapter.build_current_prefill_bundle(payload=entry["payload"], canonical_identity=entry["canonical_identity"],
                                          compile_evidence=base)
   base["child_recompile_binary_identity_contract"] = {"enabled": True,
-    "reject_sha256_mismatch_before_dispatch": True, "canonical_identity": entry["canonical_identity"],
+    "reject_sha256_mismatch_before_dispatch": True, "canonical_identity": canonical,
     "source_sha256": "a" * 64, "binary_sha256": "b" * 64, "target": "gfx1100",
     "compile_target": "AMD"}
   monkeypatch.setattr(adapter, "prepare_current_prefill_compile", lambda *_args, **_kwargs:
@@ -147,19 +165,20 @@ def test_packed_input_artifact_binds_exact_slot2_storage_contract(tmp_path, quan
 
 def test_promoted_attn_qo_compile_only_produces_one_bound_final_program_and_proof_resources():
   entry = _candidate()
+  canonical = adapter.admit_current_prefill(entry["payload"], entry["canonical_identity"]).canonical_identity
   program, evidence = adapter.prepare_current_prefill_compile(
     entry["payload"], entry["canonical_identity"], device="AMD")
 
   assert program.op is Ops.PROGRAM
-  assert getattr(program.src[0].arg.candidate_context, "canonical_identity", None) == entry["canonical_identity"]
+  assert getattr(program.src[0].arg.candidate_context, "canonical_identity", None) == canonical
   assert evidence["passed"] is True
-  assert evidence["canonical_identity"] == entry["canonical_identity"]
+  assert evidence["canonical_identity"] == canonical
   assert evidence["capture"] == {"mode": "compile_only", "dispatch_permitted": False,
                                   "resource_authority": "compiled_program_descriptor"}
-  assert evidence["final_isa_manifest"]["candidate_id"] == entry["canonical_identity"]
+  assert evidence["final_isa_manifest"]["candidate_id"] == canonical
   assert evidence["final_isa_manifest"]["abi_metadata"]["argument_order"] == ["output", "a", "b"]
   assert evidence["final_isa_manifest"]["ownership_metadata"]["semantic_operands"][1]["operand_id"] == "A"
-  assert evidence["resource_summary"]["canonical_identity"] == entry["canonical_identity"]
+  assert evidence["resource_summary"]["canonical_identity"] == canonical
   assert evidence["resource_summary"]["lds_bytes"] == evidence["resource_summary"]["admitted_active_lds_bytes"] == 40960
   assert evidence["resource_summary"]["vgpr"] == 188
   assert evidence["resource_summary"]["allocated_vgpr"] == 248

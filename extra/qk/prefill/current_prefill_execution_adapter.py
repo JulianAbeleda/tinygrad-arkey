@@ -46,6 +46,7 @@ def admit_current_prefill(payload: dict[str, Any], canonical_identity: str):
 def compile_current_prefill_program(payload: dict[str, Any], canonical_identity: str, *, device: str):
   """Compile the admitted current Tensor GEMM; never allocate runtime buffers or dispatch."""
   admission = admit_current_prefill(payload, canonical_identity)
+  canonical_identity = admission.canonical_identity
   m, n, k = full_kernel_workload(admission.normalized_payload).shape
   from tinygrad import Tensor, dtypes
   from tinygrad.codegen import to_program_cache
@@ -89,6 +90,7 @@ def prepare_current_prefill_compile(payload: dict[str, Any], canonical_identity:
   except Exception as exc:
     raise ValueError(f"required final_isa_manifest/resource_summary unavailable: final compile failed ({type(exc).__name__}: {exc})") from exc
   schedule = admission.normalized_payload["schedule"]
+  canonical_identity = admission.canonical_identity
   workload = full_kernel_workload(admission.normalized_payload)
   transform = admission.context.packed_weight
   evidence = compile_transport_evidence(program, transport=capability_transport(admission.capability),
@@ -209,6 +211,7 @@ def build_current_prefill_bundle(*, payload: dict[str, Any], canonical_identity:
                                  compile_evidence: Mapping[str, Any], compile_device: str = _COMPILE_DEVICE,
                                  runtime_device: str = _RUNTIME_DEVICE) -> ExecutableBundle:
   """Spawn-child entry point: recompile, verify identity, then construct runtime hooks."""
+  canonical_identity = admit_current_prefill(payload, canonical_identity).canonical_identity
   contract = compile_evidence.get("child_recompile_binary_identity_contract")
   if not isinstance(contract, Mapping) or contract.get("enabled") is not True or \
      contract.get("reject_sha256_mismatch_before_dispatch") is not True:
@@ -270,10 +273,11 @@ class CurrentPrefillAdapter:
     if not isinstance(payload, dict) or not isinstance(identity, str):
       raise ValueError("compiler_context requires candidate_payload and canonical_identity")
     admission = admit_current_prefill(payload, identity)
+    identity = admission.canonical_identity
     declared = capability_transport(admission.capability)
     if request.transport_plan.transport != declared:
       raise ValueError(f"typed transport {request.transport_plan.transport!r} does not match admitted {declared!r}")
-    inputs, reference = _arrays(str(context.get("input_npz", "")), full_kernel_workload(payload).shape,
+    inputs, reference = _arrays(str(context.get("input_npz", "")), full_kernel_workload(admission.normalized_payload).shape,
                                 admission.context.packed_weight)
     _, evidence = self.compile_prepare(payload, identity, device=_COMPILE_DEVICE)
     evidence = dict(evidence)
