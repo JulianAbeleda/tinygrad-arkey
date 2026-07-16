@@ -1784,15 +1784,20 @@ def _localize_memory_address_recipes(ctx:IselContext, x:UOp):
                 AMDOps.GLOBAL_LOAD_B128_GENERIC, AMDOps.GLOBAL_STORE, AMDOps.GATED_STORE_B128,
                 AMDOps.DS_LOAD, AMDOps.DS_LOAD_B128, AMDOps.DS_STORE, AMDOps.DS_STORE_B128}
   address_ops = {AMDOps.V_OFFSET, AMDOps.V_IADD, AMDOps.V_IMUL, AMDOps.V_AND}
-  def clone_address(u:UOp, memo:dict[UOp,UOp]) -> UOp:
+  def clone_address(u:UOp, memo:dict[UOp,UOp], continuation:tuple[UOp, ...]) -> UOp:
     if u in memo: return memo[u]
     if u.op is not Ops.INS or u.arg not in address_ops: return u
-    src = tuple(clone_address(s, memo) for s in u.src)
+    src = tuple(clone_address(s, memo, continuation) for s in u.src)
+    # A cloned leaf otherwise has only the original early index inputs, so topological
+    # linearization is free to emit every private recipe before the memory operation's
+    # other prerequisites.  Put the whole tree behind those prerequisites at its leaves;
+    # this is an ordering dependency only and leaves the selected address operands intact.
+    if not any(s.op is Ops.INS and s.arg in address_ops for s in u.src): src += continuation
     cons = u.tag[0].cons if isinstance(u.tag, tuple) and len(u.tag) == 1 and isinstance(u.tag[0], Register) else _vpool(ctx)
     return memo.setdefault(u, u.replace(src=src, tag=(ctx.vreg(cons),)))
   subs:dict[UOp,UOp] = {}
   for mem in (u for u in x.toposort() if u.op is Ops.INS and u.arg in memory_ops and u.src):
-    address = clone_address(mem.src[0], {})
+    address = clone_address(mem.src[0], {}, tuple(dict.fromkeys(mem.src[1:])))
     if address is not mem.src[0]: subs[mem] = mem.replace(src=(address,) + mem.src[1:])
   ctx._addresses_localized = True
   return x.substitute(subs) if subs else None
