@@ -31,9 +31,9 @@ name-grep was uninformative:
 ```
 
 The kernel is memory-bound at ~11 GB/s because it re-dequantizes the full
-151936x4096 Q6_K weight in-kernel every call. Numerics were already proven
-(`extra/qk/lm_head_prefill_m512_correctness.py`: max_abs=2.44e-02 PASS at
-M=512,N=151936,K=4096).
+151936x4096 Q6_K weight in-kernel every call. Numerics were already proven by
+the bounded correctness run (max_abs=2.44e-02 PASS at M=512,N=151936,K=4096);
+that one-off probe has since been removed after the result was banked here.
 
 ## Conclusions
 
