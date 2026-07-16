@@ -1,7 +1,7 @@
 # Non-fitting prefill: foundation, llama-surpass, autoscan, and prune scope
 
 Date: 2026-07-16  
-Status: implementation scope; no route promotion authorized  
+Status: implementation scope; execution stops before autoscan; no route promotion authorized
 Applies to: prefill policies that cannot retain a complete dense FP16 weight overlay inside the admitted device-memory budget
 
 ## Decision and ordering authority
@@ -20,13 +20,14 @@ reuse and ownership consolidation
   -> reachability-backed repository prune
   -> whole-prefill tok/s optimization
   -> statistically credible llama.cpp surpass
-  -> autoscan integration
+  -> stop and record the result before autoscan
   -> final maintainability and regression closeout
 ```
 
-Autoscan is explicitly deferred. The user continues to select the model, and the non-fitting route remains an explicit
-candidate/research policy until the complete route surpasses llama.cpp under the benchmark contract in this document.
-Before that gate, automatic production selection must retain the proven safe baseline.
+Autoscan is explicitly outside this execution. The user continues to select the model, and the non-fitting route remains
+an explicit candidate/research policy while the complete route is built and measured. Even after the route surpasses
+llama.cpp under this benchmark contract, work stops and records the result before any automatic selector is implemented.
+Automatic production selection retains the proven safe baseline throughout this scope.
 
 Repository pruning is also ordered. Small consolidation repairs needed to establish a single foundation happen first.
 Broad deletion and organizational cleanup begin immediately after the retained route, evidence, and rollback boundaries
@@ -42,8 +43,8 @@ evidence still needed to diagnose the route, or optimizing on top of transitiona
    exact direct-packed fallback, and the fixed final-token LM head behavior.
 4. Optimize measured synchronized whole-prefill token throughput until the complete policy credibly surpasses the
    matched llama.cpp policy.
-5. Only after that result, connect live GPU/model scanning, candidate measurement, caching, and automatic selection.
-6. Once the foundation and promotion artifacts are frozen, remove dead, superseded, duplicate, and script-bound code so
+5. Stop after recording that result; leave live automatic selection for a separately authorized continuation.
+6. Once the foundation artifacts are frozen, remove dead, superseded, duplicate, and script-bound code so
    the retained path has clear ownership and is maintainable.
 
 ## Explicit non-goals
@@ -584,11 +585,12 @@ Gate: all benchmark and surpass requirements in this document pass on one immuta
 Commit rule: each accepted optimization is its own correctness-tested commit; generated evidence follows in a separate
 commit when large or run-volatile.
 
-### F9 — Conditional autoscan and machine selection
+### F9 — Reserved future autoscan phase; not authorized in this execution
 
-This phase is unauthorized until F8 passes. If F8 does not pass, F9 is not implemented.
+This phase is not implemented in this execution, including when F8 passes. It is retained here only as the contract for
+a separately authorized future continuation. F8 closeout must leave automatic selection disabled.
 
-Deliverables after authorization:
+Future deliverables after separate authorization:
 
 - scan selected model content/inventory, current GPU capabilities, live memory, allocator granularity, and requested
   context/workload;
@@ -624,7 +626,7 @@ Required matrix:
 - direct packed, bounded/hybrid, and refusal outcomes under synthetic memory budgets;
 - Q4_K, Q6_K, mixed policy, and fixed LM-head semantics;
 - cold explicit candidate execution and rollback;
-- if F9 is authorized: cold autoscan, cache hit, stale cache, interrupted search, and health failure;
+- autoscan hold-point proof: automatic selection remains disabled and no scan/cache execution path is introduced;
 - full-output/model correctness, immutable inputs, output guards, GPU health, exact route census, final binary/resources,
   planned/measured memory, and synchronized prefill tok/s;
 - fixed-depth decode correctness and declared throughput non-regression;
@@ -702,14 +704,13 @@ deletes a shared contract or registry entry while another worker is migrating it
 - [ ] Correctness, ownership, synchronization, binary, resource, staging, health, memory, and route-census gates pass.
 - [ ] The complete policy executes manually end to end with direct-packed rollback.
 
-### Performance and autoscan complete
+### Performance terminal point
 
 - [ ] Fresh matched llama artifacts exist for the declared context matrix.
 - [ ] The complete policy satisfies the statistical llama-surpass definition.
 - [ ] Decode remains correct and within its declared non-regression band.
-- [ ] Only then, autoscan is authorized and implemented.
-- [ ] Cold scan, exact cache hit, stale cache, interrupted search, and fallback behavior pass.
-- [ ] User model selection remains explicit; hardware/memory/workload facts select only among proven policies.
+- [ ] Autoscan remains disabled and unimplemented at the end of this execution.
+- [ ] The surpass result, manual policy, rollback, and future autoscan prerequisites are recorded for separate review.
 
 ### Prune and maintainability complete
 
@@ -723,6 +724,6 @@ deletes a shared contract or registry entry while another worker is migrating it
 - [ ] Focused tests, broad relevant tests, compileall, import probes, route census, benchmark authority, and `sz.py` pass.
 - [ ] The final architecture, benchmark decision, rollback, and prune ledger are documented.
 
-Until the foundation gate passes, the bounded route is a research candidate. Until the llama-surpass gate passes,
-autoscan is not authorized. Until the retained route and evidence are frozen, broad repository pruning is not
-authorized. Direct packed remains the safe non-fitting baseline throughout.
+Until the foundation gate passes, the bounded route is a research candidate. This execution stops after the
+llama-surpass gate and does not implement autoscan. Until the retained route and evidence are frozen, broad repository
+pruning is not authorized. Direct packed remains the safe automatic non-fitting baseline throughout.
