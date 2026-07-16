@@ -2,6 +2,7 @@ import os
 from types import SimpleNamespace
 
 import pytest
+from extra.qk import prefill_research_routes as research_routes
 
 
 @pytest.fixture(autouse=True)
@@ -48,7 +49,7 @@ def test_prefill_qk_direct_alias_selects_direct_packed():
 
 
 def test_prefill_q4k_q8_role_filter_is_explicit_and_default_broad():
-  from tinygrad.llm.prefill_routes import prefill_q4k_q8_role_enabled
+  from extra.qk.prefill_research_routes import prefill_q4k_q8_role_enabled
   assert prefill_q4k_q8_role_enabled("attn_qo")
   roles = frozenset(("attn_qo", "ffn_gate_up"))
   assert prefill_q4k_q8_role_enabled("attn_qo", roles)
@@ -148,25 +149,27 @@ def test_direct_packed_q4_opts_override_and_extra():
 
 
 def test_prefill_q4k_q8_legacy_gemm_flag_is_rejected():
-  from tinygrad.llm.prefill_routes import prefill_q4k_q8_mode
+  from extra.qk.prefill_research_routes import prefill_q4k_q8_mode
   with pytest.raises(ValueError, match="PREFILL_Q4K_Q8"):
     prefill_q4k_q8_mode("1")
 
 
 def test_prefill_q4k_q8_wmma_flag_is_valid_route_env():
-  from tinygrad.llm.prefill_routes import prefill_q4k_q8_mode, prefill_route_policy
+  from extra.qk.prefill_research_routes import prefill_q4k_q8_mode
+  from tinygrad.llm.prefill_routes import prefill_route_policy
   assert prefill_route_policy() == "auto"
   assert prefill_q4k_q8_mode("wmma") == "wmma"
 
 
 def test_prefill_q4k_q8_mmq_direct_flag_is_rejected():
-  from tinygrad.llm.prefill_routes import prefill_q4k_q8_mode
+  from extra.qk.prefill_research_routes import prefill_q4k_q8_mode
   with pytest.raises(ValueError, match="PREFILL_Q4K_Q8"):
     prefill_q4k_q8_mode("mmq_direct")
 
 
 def test_prefill_q4k_q8_wmma_tiled_flag_is_valid_but_explicit():
-  from tinygrad.llm.prefill_routes import prefill_q4k_q8_mode, prefill_route_policy
+  from extra.qk.prefill_research_routes import prefill_q4k_q8_mode
+  from tinygrad.llm.prefill_routes import prefill_route_policy
   assert prefill_route_policy() == "auto"
   assert prefill_q4k_q8_mode("wmma_tiled") == "wmma_tiled"
 
@@ -181,7 +184,7 @@ def _cooperative_workload(*, role="attn_qo", shape=None, profile=None):
 
 
 def _cooperative_bundle(*, role="attn_qo", shape=None, profile=None):
-  from tinygrad.llm.cooperative_mmq_gate import canonical_candidate_identity
+  from extra.qk.cooperative_mmq_gate import canonical_candidate_identity
   workload = _cooperative_workload(role=role, shape=shape, profile=profile)
   candidate = {"route_id": workload["route_id"], "provenance": "research", "rollback_route": "direct_packed",
                "descriptor": {"m_tile": 16, "n_tile": 16, "k_tile": 256}, "workload": workload}
@@ -205,7 +208,7 @@ def test_cooperative_q4k_binding_is_blocked_without_proven_emitter(monkeypatch):
   spec = prefill_routes.PrefillLinearRouteSpec("direct_packed", "q4k", "attn_qo", 512, 4096, 4096)
   candidate, evidence = _cooperative_bundle()
   evidence["emitter_proven"] = False
-  assert prefill_routes._cooperative_q4k_binding(
+  assert research_routes._cooperative_q4k_binding(
     _cooperative_linear(), spec, candidate=candidate, evidence=evidence, enabled=True) is None
 
 
@@ -213,7 +216,7 @@ def test_cooperative_q4k_binding_requires_exact_runtime_shape(monkeypatch):
   from tinygrad.llm import prefill_routes
   candidate, evidence = _cooperative_bundle()
   spec = prefill_routes.PrefillLinearRouteSpec("direct_packed", "q4k", "attn_qo", 256, 4096, 4096)
-  assert prefill_routes._cooperative_q4k_binding(
+  assert research_routes._cooperative_q4k_binding(
     _cooperative_linear(), spec, candidate=candidate, evidence=evidence, enabled=True) is None
 
 
@@ -222,7 +225,7 @@ def test_cooperative_q4k_binding_rejects_nested_fallback_for_generated_loop(monk
   spec = prefill_routes.PrefillLinearRouteSpec("direct_packed", "q4k", "ffn_down", 512, 4096, 4096)
   candidate, evidence = _cooperative_bundle(role="ffn_down")
   evidence["fallback"] = {"used": True, "policy": "fail_closed"}
-  assert prefill_routes._cooperative_q4k_binding(
+  assert research_routes._cooperative_q4k_binding(
     _cooperative_linear(), spec, candidate=candidate, evidence=evidence, enabled=True) is None
 
 
@@ -230,7 +233,7 @@ def test_cooperative_q4k_binding_rejects_non_object_evidence(monkeypatch):
   from tinygrad.llm import prefill_routes
   spec = prefill_routes.PrefillLinearRouteSpec("direct_packed", "q4k", "attn_qo", 512, 4096, 4096)
   for candidate, evidence in ((None, {}), ([], {}), ({}, None), ({}, [])):
-    assert prefill_routes._cooperative_q4k_binding(
+    assert research_routes._cooperative_q4k_binding(
       _cooperative_linear(), spec, candidate=candidate, evidence=evidence, enabled=True) is None
 
 
@@ -238,7 +241,7 @@ def test_cooperative_q4k_binding_without_profile_is_structurally_bound(monkeypat
   from tinygrad.llm import prefill_routes
   candidate, evidence = _cooperative_bundle()
   spec = prefill_routes.PrefillLinearRouteSpec("direct_packed", "q4k", "attn_qo", 512, 4096, 4096)
-  assert prefill_routes._cooperative_q4k_binding(
+  assert research_routes._cooperative_q4k_binding(
     _cooperative_linear(), spec, candidate=candidate, evidence=evidence, enabled=True) == candidate
 
 
@@ -246,7 +249,7 @@ def test_cooperative_q4k_binding_fails_closed_without_attached_scanned_facts(mon
   from tinygrad.llm import prefill_routes
   candidate, evidence = _cooperative_bundle()
   spec = prefill_routes.PrefillLinearRouteSpec("direct_packed", "q4k", "attn_qo", 512, 4096, 4096)
-  assert prefill_routes._cooperative_q4k_binding(
+  assert research_routes._cooperative_q4k_binding(
     SimpleNamespace(), spec, candidate=candidate, evidence=evidence, enabled=True) is None
 
 
@@ -258,22 +261,22 @@ def test_cooperative_q4k_binding_compares_candidate_target_to_device_facts(monke
   spec = prefill_routes.PrefillLinearRouteSpec("direct_packed", "q4k", "attn_qo", 512, 4096, 4096)
   matching = DeviceFacts("AMD:0", "AMD", "gfx1100", None, None, DeviceCapabilities(wave_size=32), probe, probe)
   wrong_wave = DeviceFacts("AMD:0", "AMD", "gfx1100", None, None, DeviceCapabilities(wave_size=64), probe, probe)
-  assert prefill_routes._cooperative_q4k_binding(
+  assert research_routes._cooperative_q4k_binding(
     SimpleNamespace(_prefill_device_facts=matching), spec, candidate=candidate, evidence=evidence, enabled=True) == candidate
-  assert prefill_routes._cooperative_q4k_binding(
+  assert research_routes._cooperative_q4k_binding(
     SimpleNamespace(_prefill_device_facts=wrong_wave), spec, candidate=candidate, evidence=evidence, enabled=True) is None
 
 
 def test_wrong_profile_and_model_rename_provenance_do_not_block_structural_match():
   from tinygrad.llm import prefill_routes
-  from tinygrad.llm.cooperative_mmq_gate import canonical_candidate_identity
+  from extra.qk.cooperative_mmq_gate import canonical_candidate_identity
   spec = prefill_routes.PrefillLinearRouteSpec("direct_packed", "q4k", "attn_qo", 512, 4096, 4096)
   candidate, evidence = _cooperative_bundle(profile="wrong-profile")
   candidate["workload"]["model_path"] = "/models/renamed-copy.gguf"
   evidence["workload"]["profile"] = "different-wrong-profile"
   evidence["workload"]["model_path"] = "/evidence/original-name.gguf"
   evidence["candidate_identity"] = canonical_candidate_identity(candidate)
-  assert prefill_routes._cooperative_evidence_matches(_cooperative_linear(), spec, candidate, evidence)
+  assert research_routes._cooperative_evidence_matches(_cooperative_linear(), spec, candidate, evidence)
 
 
 @pytest.mark.parametrize("field,bad", [
@@ -286,19 +289,19 @@ def test_wrong_profile_cannot_authorize_structural_mismatch(field, bad):
   spec = prefill_routes.PrefillLinearRouteSpec("direct_packed", "q4k", "attn_qo", 512, 4096, 4096)
   candidate, evidence = _cooperative_bundle(profile="formerly-compatible-profile")
   candidate["workload"][field] = bad
-  assert not prefill_routes._cooperative_evidence_matches(_cooperative_linear(), spec, candidate, evidence)
+  assert not research_routes._cooperative_evidence_matches(_cooperative_linear(), spec, candidate, evidence)
 
 
 def test_prefill_q4k_q8_packed_ds4_flag_is_valid_research_route():
   from extra.qk.mmq_logical_vocabulary import MMQCandidate
   from extra.qk.mmq_ds4_logical_emitter import packed_ds4_candidate
-  from tinygrad.llm.prefill_routes import prefill_q4k_q8_mode
+  from extra.qk.prefill_research_routes import prefill_q4k_q8_mode
   assert prefill_q4k_q8_mode("packed_ds4") == "packed_ds4"
   assert isinstance(packed_ds4_candidate(16, 16, 256, role="test"), MMQCandidate)
 
 
 def test_prefill_q4k_q8_rejects_unknown_mode():
-  from tinygrad.llm.prefill_routes import prefill_q4k_q8_mode
+  from extra.qk.prefill_research_routes import prefill_q4k_q8_mode
   with pytest.raises(ValueError, match="PREFILL_Q4K_Q8"):
     prefill_q4k_q8_mode("surprise_tensorcore")
 
@@ -407,7 +410,7 @@ def _attached_direct_baseline(lin):
 
 
 def _research_config(**kwargs):
-  from tinygrad.llm.prefill_routes import PrefillResearchRouteConfig
+  from extra.qk.prefill_research_routes import PrefillResearchRouteConfig
   return PrefillResearchRouteConfig(**kwargs)
 
 
@@ -425,7 +428,7 @@ def test_production_attachment_ignores_all_research_route_env(monkeypatch):
     "PREFILL_Q4K_WMMA_TILED_GROUP_TILE": "2", "PREFILL_Q6K_WMMA": "1",
   }.items(): monkeypatch.setenv(key, value)
   monkeypatch.setattr(prefill_routes, "Tensor", _TensorFactoryStub)
-  monkeypatch.setattr(prefill_routes, "_cooperative_q4k_binding", lambda *_args: (_ for _ in ()).throw(
+  monkeypatch.setattr(research_routes, "_cooperative_q4k_binding", lambda *_args: (_ for _ in ()).throw(
     AssertionError("production reached cooperative research dispatch")))
   monkeypatch.setattr(prefill_routes.qk_ops, "packed_fused_candidate", lambda *_args, **_kwargs: (_ for _ in ()).throw(
     AssertionError("production reached packed-fused research dispatch")))
@@ -439,17 +442,15 @@ def test_production_attachment_ignores_all_research_route_env(monkeypatch):
   assert calls == ["direct_out"]
 
 
-def test_production_direct_and_gate_up_fail_closed_without_promoted_attachment(monkeypatch):
+def test_production_direct_fails_closed_without_promoted_attachment(monkeypatch):
   from tinygrad.llm import prefill_routes
   monkeypatch.setenv("PREFILL_Q4K_Q8", "packed_fused")
   monkeypatch.setenv("PREFILL_COOPERATIVE_MMQ", "1")
   assert prefill_routes.route_direct_packed_prefill(_q4_prefill_linear(), _PrefillTensorStub()) is None
-  gate, up = _attached_direct_baseline(_q4_prefill_linear()), _attached_direct_baseline(_q4_prefill_linear())
-  assert prefill_routes.route_prefill_q4k_gate_up(gate, up, _PrefillTensorStub()) is None
 
 
 def test_direct_packed_q4_request_facts_are_built_from_fake_module():
-  from tinygrad.llm.prefill_routes import build_direct_packed_prefill_request
+  from extra.qk.prefill_research_routes import build_direct_packed_prefill_request
 
   lin = SimpleNamespace(
     bias=None, in_features=384, out_features=96, parts=1, opts=(), name="custom.layers.7.ffn_gate_proj",
@@ -461,7 +462,7 @@ def test_direct_packed_q4_request_facts_are_built_from_fake_module():
 
 
 def test_direct_packed_q6_shadow_request_facts_are_built_from_fake_module():
-  from tinygrad.llm.prefill_routes import select_direct_packed_prefill_shadow_request
+  from extra.qk.prefill_research_routes import select_direct_packed_prefill_shadow_request
 
   lin = SimpleNamespace(
     bias=object(), in_features=384, out_features=80, parts=1, opts=(), name="toy.block.3.ffn_down",
@@ -473,7 +474,8 @@ def test_direct_packed_q6_shadow_request_facts_are_built_from_fake_module():
 
 
 def test_direct_packed_request_prefers_carried_route_role_over_ambiguous_name():
-  from tinygrad.llm.prefill_routes import PrefillLinearRouteSpec, _direct_packed_role, build_direct_packed_prefill_request
+  from extra.qk.prefill_research_routes import build_direct_packed_prefill_request
+  from tinygrad.llm.prefill_routes import PrefillLinearRouteSpec, _direct_packed_role
 
   lin = SimpleNamespace(
     bias=None, in_features=384, out_features=96, parts=1, opts=(), name="custom.layers.7.attn_k.weight",
@@ -549,7 +551,7 @@ def test_q4_generated_tile_flag_is_retired(monkeypatch):
 
   monkeypatch.setattr(prefill_routes, "Tensor", _TensorFactoryStub)
   with pytest.raises(RuntimeError, match="PREFILL_QK_GENERATED_TILE was retired"):
-    prefill_routes.route_direct_packed_prefill_research(
+    research_routes.route_direct_packed_prefill_research(
       _q4_prefill_linear(), _PrefillTensorStub(), config=_research_config(generated_tile=True))
 
 
@@ -569,7 +571,7 @@ def test_q4_wmma_tiled_small_multitile_uses_scheduler_owned_route(monkeypatch):
 
   monkeypatch.setattr(prefill_routes.qk_ops, "emit_q4k_int8_wmma_tiled_prefill_tensor", one_tile)
   monkeypatch.setattr(prefill_routes.qk_ops, "emit_q4k_int8_wmma_tiled_scheduler_tensor", scheduler)
-  out = prefill_routes.route_direct_packed_prefill_research(SimpleNamespace(
+  out = research_routes.route_direct_packed_prefill_research(SimpleNamespace(
     bias=None, in_features=256, out_features=32, parts=1, opts=(), name="blk.0.ffn_gate.weight",
     q4k_storage=SimpleNamespace(), prefill_packed_weight=lambda: _Q4PrefillWeight()), _PrefillTensorStub(),
     config=_research_config(q4k_q8_mode="wmma_tiled"))
@@ -591,7 +593,7 @@ def test_q4_wmma_tiled_large_shape_uses_scheduler_owned_route(monkeypatch):
     calls.append("scheduler")
     return _PrefillTensorStub()
   monkeypatch.setattr(prefill_routes.qk_ops, "emit_q4k_int8_wmma_tiled_scheduler_tensor", scheduler)
-  out = prefill_routes.route_direct_packed_prefill_research(SimpleNamespace(
+  out = research_routes.route_direct_packed_prefill_research(SimpleNamespace(
     bias=None, in_features=5120, out_features=5120, parts=1, opts=(), name="blk.0.attn_q.weight",
     q4k_storage=SimpleNamespace(), prefill_packed_weight=lambda: _Q4PrefillWeight()), _LargePrefillTensorStub(),
     config=_research_config(q4k_q8_mode="wmma_tiled"))
@@ -605,7 +607,7 @@ def test_q4_packed_ds4_route_consumes_shared_candidate_and_packer(monkeypatch):
   monkeypatch.setattr(prefill_routes.qk_ops, "packed_ds4_candidate", lambda *args, **kwargs: calls.append(("candidate", args, kwargs)) or "candidate")
   monkeypatch.setattr(prefill_routes.qk_ops, "pack_q8_1_mmq_ds4", lambda *args, **kwargs: calls.append(("pack", args, kwargs)) or ("values", "scales", "sums"))
   monkeypatch.setattr(prefill_routes.qk_ops, "emit_q4k_q8_mmq_ds4", lambda *args, **kwargs: calls.append(("emit", args, kwargs)) or _PrefillTensorStub())
-  out = prefill_routes.route_direct_packed_prefill_research(
+  out = research_routes.route_direct_packed_prefill_research(
     _q4_prefill_linear(), _PrefillTensorStub(), config=_research_config(q4k_q8_mode="packed_ds4"))
   assert isinstance(out, _PrefillTensorStub)
   assert [entry[0] for entry in calls] == ["candidate", "pack", "emit"]
@@ -619,8 +621,8 @@ def test_q4_packed_ds4_reuses_only_the_immediately_shared_activation(monkeypatch
   monkeypatch.setattr(prefill_routes.qk_ops, "emit_q4k_q8_mmq_ds4", lambda *args, **kwargs: _PrefillTensorStub())
   x = _PrefillTensorStub()
   config = _research_config(q4k_q8_mode="packed_ds4")
-  prefill_routes.route_direct_packed_prefill_research(_q4_prefill_linear(), x, config=config)
-  prefill_routes.route_direct_packed_prefill_research(_q4_prefill_linear(), x, config=config)
+  research_routes.route_direct_packed_prefill_research(_q4_prefill_linear(), x, config=config)
+  research_routes.route_direct_packed_prefill_research(_q4_prefill_linear(), x, config=config)
   assert calls == ["pack"]
 
 

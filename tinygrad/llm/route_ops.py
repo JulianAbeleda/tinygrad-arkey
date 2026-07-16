@@ -40,7 +40,6 @@ def packed_fused_candidate(*args, **kwargs): return _attr("extra.qk.mmq_ds4_logi
 def pack_q8_1_mmq_ds4(*args, **kwargs): return _attr("extra.qk.mmq_ds4_logical_emitter", "pack_q8_1_mmq_ds4")(*args, **kwargs)
 def pack_q8_1_mmq_fused(*args, **kwargs): return _attr("extra.qk.mmq_ds4_logical_emitter", "pack_q8_1_mmq_fused")(*args, **kwargs)
 def emit_q4k_q8_mmq_ds4(*args, **kwargs): return _attr("extra.qk.mmq_ds4_logical_emitter", "emit_q4k_q8_mmq_ds4")(*args, **kwargs)
-def route_prefill_q4k_gate_up(*args, **kwargs): return _attr("tinygrad.llm.prefill_routes", "route_prefill_q4k_gate_up")(*args, **kwargs)
 def quantize_q4_k(*args, **kwargs): return _attr("extra.qk.quantize", "quantize_q4_k")(*args, **kwargs)
 
 def should_route_q4k_lane_partition(*args, **kwargs): return _attr("extra.qk.bubblebeam_futuresight", "should_route_q4k_lane_partition")(*args, **kwargs)

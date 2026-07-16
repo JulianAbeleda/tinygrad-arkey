@@ -4,37 +4,13 @@ from dataclasses import dataclass
 from typing import Any, Mapping
 from tinygrad import Tensor, dtypes
 from tinygrad.llm import route_ops as qk_ops
-from tinygrad.llm.memory_semantics import (mark_candidate_workspace, prefill_activation as _prefill_activation,
+from tinygrad.llm.memory_semantics import (prefill_activation as _prefill_activation,
   prefill_output as _prefill_output, prefill_scratch as _prefill_scratch)
 from tinygrad.llm.prefill_route_observer import PrefillRouteAttachment, notify_prefill_route
 from tinygrad.uop.ops import UOp
 
 PREFILL_ROUTE_CHOICES = ("auto", "fp16", "direct_packed")
 LM_HEAD_PREFILL_ROUTE_CHOICES = ("lazy", "resident_fp16", "direct_packed")
-# Handwritten sdot4/MMQ/Q8_1-GEMM prefill research modes deleted 2026-07-06 (no backups; dead end ~237 tok/s).
-# Only the generated int8-WMMA parity substrates remain selectable; off-values fall to the direct-packed default.
-Q4K_Q8_CHOICES = ("", "0", "false", "off", "no", "wmma", "wmma_tiled", "packed_ds4", "packed_row_major", "packed_fused")
-_MMQ_DS4_LAST_PACKED: tuple[Any, tuple[Tensor, Tensor, Tensor]] | None = None
-
-
-@dataclass(frozen=True)
-class PrefillResearchRouteConfig:
-  """Explicit test/benchmark configuration; never constructed by production routing."""
-  q4k_q8_mode: str = ""
-  q4k_q8_roles: frozenset[str] | None = None
-  cooperative_candidate: Mapping[str, Any] | None = None
-  cooperative_evidence: Mapping[str, Any] | None = None
-  cooperative_enabled: bool = False
-  cooperative_runner: Any | None = None
-  generated_tile: bool = False
-  wmma_n_tile: int = 256
-  wmma_max_raw_elems: int = 64 * 1024 * 1024
-  wmma_allow_graph_explosion: bool = False
-  wmma_tiled_m_tile: int = 16
-  wmma_tiled_n_tile: int = 16
-  wmma_tiled_group_tile: int = 1
-
-
 def _mark_tensor_semantic(value, marker):
   # Route unit tests use graphless structural Tensor stubs. Runtime Tensor/UOp
   # results always take the explicit marking path.
@@ -44,16 +20,6 @@ def _mark_tensor_semantic(value, marker):
 def prefill_activation(value): return _mark_tensor_semantic(value, _prefill_activation)
 def prefill_output(value): return _mark_tensor_semantic(value, _prefill_output)
 def prefill_scratch(value): return _mark_tensor_semantic(value, _prefill_scratch)
-
-
-def _attached_candidate_id(lin) -> str | None:
-  """Read identity only from the selected structural route attachment."""
-  attachment = getattr(lin, "_prefill_route_attachment", None)
-  if not isinstance(attachment, PrefillRouteAttachment): return None
-  policy = attachment.selected_policy
-  if not isinstance(policy, Mapping): return None
-  candidate_id = policy.get("candidate_id")
-  return candidate_id if isinstance(candidate_id, str) and candidate_id else None
 
 
 def _attached_production_route(lin, x: Tensor) -> str | None:
@@ -88,105 +54,6 @@ def _attached_production_route(lin, x: Tensor) -> str | None:
   return None
 
 
-def _candidate_workspace_if_attached(value: Tensor, lin) -> Tensor:
-  candidate_id = _attached_candidate_id(lin)
-  if candidate_id is None or not (isinstance(value, UOp) or isinstance(getattr(value, "uop", None), UOp)): return value
-  return mark_candidate_workspace(value, candidate_id)
-
-
-def _cooperative_target_matches(lin, required: Any) -> bool:
-  """Match candidate target requirements against facts scanned by the model/policy.
-
-  Attribute contract: model/policy code must attach ``_prefill_device_facts``
-  to each routed linear.  Its value may be a ``DeviceFacts`` instance or its
-  mapping-shaped planning snapshot.  Only target/capability facts participate;
-  model, profile, dimensions, and VRAM facts are deliberately not selectors.
-  """
-  facts = getattr(lin, "_prefill_device_facts", None)
-  if not isinstance(required, dict) or not required or facts is None: return False
-  if hasattr(facts, "planning_snapshot"):
-    facts = facts.planning_snapshot()
-  if not isinstance(facts, dict): return False
-  capabilities = facts.get("capabilities")
-  if not isinstance(capabilities, dict): return False
-  observed = {"backend": facts.get("backend"), "arch": facts.get("architecture", facts.get("arch")),
-              "architecture": facts.get("architecture", facts.get("arch")), **capabilities}
-  allowed = {"backend", "arch", "architecture", "wave_size", "max_workgroup_threads",
-             "max_workgroup_dimensions", "lds_bytes", "lds_allocation_granularity"}
-  for name, value in required.items():
-    if name == "capabilities":
-      if not isinstance(value, dict) or not value: return False
-      if any(key not in allowed or capabilities.get(key) is None or capabilities.get(key) != expected
-             for key, expected in value.items()): return False
-    elif name not in allowed or observed.get(name) is None or observed.get(name) != value:
-      return False
-  return True
-
-
-def _cooperative_evidence_matches(lin, spec: "PrefillLinearRouteSpec", candidate: dict[str, Any],
-                                   evidence: dict[str, Any]) -> bool:
-  """Require generated evidence to identify this exact route workload.
-
-  Profile and model-path fields are optional provenance. Compatibility is
-  determined only by independently repeated structural workload facts.
-  """
-  workload = candidate.get("workload", {})
-  ev_workload = evidence.get("workload", {})
-  if not isinstance(workload, dict) or not isinstance(ev_workload, dict): return False
-  from tinygrad.llm.cooperative_mmq_gate import canonical_candidate_identity
-  if evidence.get("candidate_identity") != canonical_candidate_identity(candidate): return False
-  expected_shape = {"M": spec.m, "N": spec.n, "K": spec.k}
-  route_id = workload.get("route_id", candidate.get("route_id"))
-  if not isinstance(route_id, str) or not route_id.strip(): return False
-  capability = workload.get("capability")
-  if not isinstance(capability, str) or not capability.strip(): return False
-  target = workload.get("target")
-  if not _cooperative_target_matches(lin, target): return False
-  expected = {"phase": "prefill", "role": spec.role, "quant_format": "Q4_K", "shape": expected_shape,
-              "target": target, "capability": capability, "route_id": route_id}
-  # Candidate facts are part of the identity; evidence must independently
-  # repeat them so a containment report cannot be relabeled at admission.
-  for key, value in expected.items():
-    if workload.get(key) != value or ev_workload.get(key, evidence.get(key)) != value: return False
-  # Accept only an explicit no-fallback report.  Some producers use the flat
-  # fields while compile gates use ``fallback.used``; checking only one lets a
-  # dynamic-loop candidate claim generated provenance after silently rolling
-  # back to the ordinary route.
-  fallback = evidence.get("fallback")
-  if evidence.get("fallback_used") is not False: return False
-  if evidence.get("fallback_status") not in ("not_used", "none", False): return False
-  if isinstance(fallback, dict) and fallback.get("used") is not False: return False
-  if fallback is not None and not isinstance(fallback, dict): return False
-  if not isinstance(evidence.get("source_identity"), str) or not evidence["source_identity"].strip(): return False
-  if not isinstance(evidence.get("binary_identity"), str) or not evidence["binary_identity"].strip(): return False
-  return True
-
-
-def _cooperative_q4k_binding(lin, spec: "PrefillLinearRouteSpec", *, candidate: Mapping[str, Any] | None,
-                             evidence: Mapping[str, Any] | None, enabled: bool) -> Any | None:
-  """Return an admitted cooperative candidate, never a contract-only candidate.
-
-  The payload/evidence are intentionally supplied out-of-band by the search
-  runner.  The route remains blocked until a real emitter is exposed through
-  route_ops and the evidence is bound to this exact runtime shape.
-  """
-  if not enabled or spec.quant != "q4k" or not isinstance(candidate, Mapping) or not isinstance(evidence, Mapping): return None
-  candidate, evidence = dict(candidate), dict(evidence)
-  try:
-    from tinygrad.llm.cooperative_mmq_gate import admit_cooperative_mmq
-    decision = admit_cooperative_mmq(candidate=candidate, evidence=evidence, enabled=True)
-  except (KeyError, TypeError, ValueError):
-    return None
-  # JSON being parseable is not evidence.  Keep the runtime boundary
-  # fail-closed for null, list, and scalar payloads before reading fields.
-  if not _cooperative_evidence_matches(lin, spec, candidate, evidence): return None
-  # Contracts and evidence from a probe are not an emitter.  Keep this
-  # binding path dormant until the generated emitter is actually callable.
-  if not decision.admitted or evidence.get("emitter_proven") is not True:
-    return None
-  return candidate
-
-
 def prefill_route_policy(route:str="auto", *, direct_packed:bool=False) -> str:
   route = str(route).strip().lower()
   if route == "direct": route = "direct_packed"
@@ -212,20 +79,6 @@ def prefill_lm_head_route_policy(route:str="lazy") -> str:
   if route not in LM_HEAD_PREFILL_ROUTE_CHOICES:
     raise ValueError(f"PREFILL_LM_HEAD_ROUTE must be one of {', '.join(LM_HEAD_PREFILL_ROUTE_CHOICES)}, got {route!r}")
   return route
-
-
-def prefill_q4k_q8_mode(mode:str="") -> str:
-  mode = str(mode).strip().lower()
-  if mode not in Q4K_Q8_CHOICES:
-    allowed = ", ".join(repr(x) for x in Q4K_Q8_CHOICES if x)
-    raise ValueError(f"PREFILL_Q4K_Q8 must be one of {allowed}, got {mode!r}")
-  if mode in ("", "0", "false", "off", "no"): return ""
-  return mode
-
-
-def prefill_q4k_q8_role_enabled(role: str, roles:frozenset[str]|None=None) -> bool:
-  """Optionally scope an experimental Q4/Q8 lowering to named logical roles."""
-  return roles is None or role in roles
 
 
 def _is_q4k_linear(lin) -> bool: return hasattr(lin, "q4k_storage") and hasattr(lin, "prefill_packed_weight")
@@ -305,22 +158,6 @@ class PrefillLinearRouteSpec:
   @property
   def q6k_kernel_prefix(self) -> str:
     return f"prefill_{self.quant.lower()}_direct_packed_load_gemm"
-
-@dataclass(frozen=True)
-class DirectPackedPrefillRequest:
-  quant: str
-  role: str
-  m: int
-  n: int
-  k: int
-  bias: bool
-  ubatch: int
-
-  @property
-  def route_facts(self) -> dict[str, Any]:
-    return {"quant": self.quant, "role": self.role, "M": self.m, "N": self.n, "K": self.k,
-            "bias": self.bias, "ubatch": self.ubatch}
-
 
 @dataclass(frozen=True)
 class DirectPackedPrefillCandidate:
@@ -409,37 +246,6 @@ def _direct_packed_module_role(lin) -> str:
   return ""
 
 
-def build_direct_packed_prefill_request(lin, x:Tensor | None=None, *, ubatch:int | None=None) -> DirectPackedPrefillRequest | None:
-  quant = _direct_packed_quant(lin)
-  n, k = getattr(lin, "out_features", None), getattr(lin, "in_features", None)
-  if quant == "" or not all(isinstance(v, int) for v in (n, k)): return None
-  requested_ubatch = 512 if ubatch is None else int(ubatch)
-  m = requested_ubatch
-  if x is not None:
-    if len(x.shape) != 3 or x.shape[0] != 1: return None
-    m, x_k = x.shape[-2], x.shape[-1]
-    if not all(isinstance(v, int) for v in (m, x_k)) or x_k != k: return None
-  return DirectPackedPrefillRequest(quant, _direct_packed_module_role(lin), m, n, k,
-                                    getattr(lin, "bias", None) is not None, requested_ubatch)
-
-
-def select_direct_packed_prefill_shadow_request(lin, x:Tensor | None=None, *, ubatch:int | None=None) -> DirectPackedPrefillRequest | None:
-  req = build_direct_packed_prefill_request(lin, x, ubatch=ubatch)
-  if req is None: return None
-  if not _direct_packed_enabled_for(lin, req.quant): return None
-  return req
-
-
-def _direct_packed_spec(lin, x:Tensor) -> PrefillLinearRouteSpec | None:
-  if getattr(lin, "bias", None) is not None or len(x.shape) != 3 or x.shape[0] != 1: return None
-  m, k = x.shape[-2], x.shape[-1]
-  n, in_f = getattr(lin, "out_features", None), getattr(lin, "in_features", None)
-  if not all(isinstance(v, int) for v in (m, k, n, in_f)) or k != in_f: return None
-  quant = "q4k" if _is_q4k_linear(lin) else "q6k" if _is_q6k_linear(lin) else ""
-  if quant == "": return None
-  return PrefillLinearRouteSpec("direct_packed", quant, _direct_packed_module_role(lin), m, n, k)
-
-
 def _attached_direct_packed_spec(lin, x:Tensor) -> PrefillLinearRouteSpec | None:
   """Build the production baseline spec from attachment and structural facts only."""
   if _attached_production_route(lin, x) != "direct_packed": return None
@@ -465,110 +271,6 @@ def route_direct_packed_prefill(lin, x:Tensor) -> Tensor | None:
   """Production direct-packed baseline; attachment is the sole selector."""
   spec = _attached_direct_packed_spec(lin, x)
   return None if spec is None else _run_direct_packed_baseline(lin, x, spec)
-
-
-def route_direct_packed_prefill_research(lin, x:Tensor, *, config:PrefillResearchRouteConfig) -> Tensor | None:
-  """Test/benchmark-only explicit dispatch for historical prefill research routes."""
-  if not isinstance(config, PrefillResearchRouteConfig): raise TypeError("research prefill route requires explicit config")
-  if config.q4k_q8_mode not in Q4K_Q8_CHOICES: raise ValueError(f"invalid research q4k_q8_mode {config.q4k_q8_mode!r}")
-  global _MMQ_DS4_LAST_PACKED
-  spec = _direct_packed_spec(lin, x)
-  if spec is None: return None
-  x_batch = prefill_activation(x[0].cast(dtypes.float16).contiguous())
-  if _is_q4k_linear(lin):
-    role = _direct_packed_role(lin, spec)
-    # Probe the promoted binding at the generated-route boundary.  It is
-    # deliberately a no-op today: no callable cooperative emitter is proven.
-    # The ordinary generated/direct route below remains the rollback.
-    cooperative = _cooperative_q4k_binding(lin, spec, candidate=config.cooperative_candidate,
-                                            evidence=config.cooperative_evidence, enabled=config.cooperative_enabled)
-    if cooperative is not None and callable(config.cooperative_runner):
-      fused = config.cooperative_runner(cooperative, lin, x_batch, spec, x)
-      if fused is not None: notify_prefill_route(lin); return fused
-    if config.generated_tile:
-      raise RuntimeError("PREFILL_QK_GENERATED_TILE was retired after the generated packed-tile route was refuted; "
-                         "use the Q4KPrefillRouteSpec direct-packed default or PREFILL_Q4K_Q8=wmma_tiled research.")
-    q8_mode = config.q4k_q8_mode
-    role_enabled = config.q4k_q8_roles is None or role in config.q4k_q8_roles
-    if q8_mode and role_enabled:
-      words = lin.prefill_packed_weight().to(x.device)
-      if q8_mode == "wmma":
-        xq, xscales = qk_ops.q8_1_quantize(x_batch.cast(dtypes.float32))
-        wmma_spec = qk_ops.describe_q4k_int8_wmma_prefill(spec.n, spec.k, spec.m, role=role,
-                                                          n_tile=max(16, config.wmma_n_tile))
-        raw_elems = wmma_spec.groups * wmma_spec.m * wmma_spec.n
-        raw_limit = config.wmma_max_raw_elems
-        if raw_elems > raw_limit and not config.wmma_allow_graph_explosion:
-          raise RuntimeError(f"PREFILL_Q4K_Q8=wmma Tensor-substrate blocked for full-model shape "
-                             f"role={role or '?'} m={spec.m} n={spec.n} k={spec.k}: RAW groups*m*n={raw_elems} "
-                             f"> limit={raw_limit}. This parity/codegen substrate is correct, but 14B authority "
-                             f"needs the next fused/tiled generated emitter, not many Tensor matmul graph fragments. "
-                             f"Set PREFILL_Q4K_WMMA_ALLOW_GRAPH_EXPLOSION=1 only for debugging.")
-        out = qk_ops.emit_q4k_int8_wmma_prefill_tensor(words, xq, xscales, wmma_spec)
-        notify_prefill_route(lin); return prefill_output(out.reshape(1, spec.m, spec.n))
-      if q8_mode == "wmma_tiled":
-        xq, xscales = qk_ops.q8_1_quantize(x_batch.cast(dtypes.float32))
-        tiled_spec = qk_ops.describe_q4k_int8_wmma_tiled_prefill(
-          spec.n, spec.k, spec.m, role=role,
-          m_tile=max(16, config.wmma_tiled_m_tile), n_tile=max(16, config.wmma_tiled_n_tile),
-          group_tile=max(1, config.wmma_tiled_group_tile))
-        try:
-          out = qk_ops.emit_q4k_int8_wmma_tiled_prefill_tensor(words, xq, xscales, tiled_spec)
-        except NotImplementedError:
-          out = qk_ops.emit_q4k_int8_wmma_tiled_scheduler_tensor(words, xq, xscales, tiled_spec)
-        notify_prefill_route(lin); return prefill_output(out.reshape(1, spec.m, spec.n))
-      if q8_mode in ("packed_ds4", "packed_row_major", "packed_fused"):
-        candidate_factory = (qk_ops.packed_fused_candidate if q8_mode == "packed_fused" else
-                             qk_ops.packed_row_major_candidate if q8_mode == "packed_row_major" else qk_ops.packed_ds4_candidate)
-        candidate = candidate_factory(spec.m, spec.n, spec.k, role=role)
-        source = x_batch.reshape(spec.m, spec.k)
-        cache_key = (getattr(x, "uop", x), spec.m, spec.k, str(x.device))
-        if _MMQ_DS4_LAST_PACKED is not None and _MMQ_DS4_LAST_PACKED[0] == cache_key:
-          values, scales, sums = _MMQ_DS4_LAST_PACKED[1]
-        else:
-          packer = qk_ops.pack_q8_1_mmq_fused if q8_mode == "packed_fused" else qk_ops.pack_q8_1_mmq_ds4
-          values, scales, sums = (_candidate_workspace_if_attached(value, lin) for value in packer(source, candidate))
-          _MMQ_DS4_LAST_PACKED = (cache_key, (values, scales, sums))
-        out = qk_ops.emit_q4k_q8_mmq_ds4(words, values, scales, sums, candidate)
-        notify_prefill_route(lin); return prefill_output(out.reshape(1, spec.m, spec.n))
-      raise RuntimeError(f"PREFILL_Q4K_Q8={q8_mode!r} matched no generated route; the handwritten sdot4/MMQ/Q8_1-GEMM "
-                         f"modes were deleted 2026-07-06. Only generated modes or off-values are valid.")
-  return _run_direct_packed_baseline(lin, x, spec)
-
-
-def route_prefill_q4k_gate_up(gate, up, x: Tensor) -> tuple[Tensor, Tensor] | None:
-  """Production hook: no fused gate/up candidate is currently attachment-promoted."""
-  return None
-
-
-def route_prefill_q4k_gate_up_research(gate, up, x: Tensor, *,
-                                       config:PrefillResearchRouteConfig) -> tuple[Tensor, Tensor] | None:
-  """Test/benchmark-only explicit dispatch for horizontal Q4/Q8 gate/up research."""
-  if not isinstance(config, PrefillResearchRouteConfig): raise TypeError("research prefill route requires explicit config")
-  if config.q4k_q8_mode != "packed_fused": return None
-  if config.q4k_q8_roles is not None and "ffn_gate_up" not in config.q4k_q8_roles: return None
-  gate_spec, up_spec = _direct_packed_spec(gate, x), _direct_packed_spec(up, x)
-  if gate_spec is None or up_spec is None or (gate_spec.m, gate_spec.k) != (up_spec.m, up_spec.k): return None
-  if gate_spec.n != up_spec.n: return None
-  m, n, k = gate_spec.m, gate_spec.n, gate_spec.k
-  x_batch = prefill_activation(x[0].cast(dtypes.float16).contiguous())
-  words_attr = "_prefill_fused_gate_up_words"
-  if not hasattr(gate, words_attr):
-    fused_words = gate.prefill_packed_weight().to(x.device).cat(up.prefill_packed_weight().to(x.device), dim=0).contiguous()
-    setattr(gate, words_attr, fused_words)
-  words = getattr(gate, words_attr)
-  candidate = qk_ops.packed_fused_candidate(m, n * 2, k, role="ffn_gate_up")
-  cache_key = (getattr(x, "uop", x), m, k, str(x.device), "gate_up")
-  global _MMQ_DS4_LAST_PACKED
-  if _MMQ_DS4_LAST_PACKED is not None and _MMQ_DS4_LAST_PACKED[0] == cache_key:
-    values, scales, sums = _MMQ_DS4_LAST_PACKED[1]
-  else:
-    values, scales, sums = (_candidate_workspace_if_attached(value, gate)
-                            for value in qk_ops.pack_q8_1_mmq_fused(x_batch.reshape(m, k), candidate))
-    _MMQ_DS4_LAST_PACKED = (cache_key, (values, scales, sums))
-  out = prefill_output(qk_ops.emit_q4k_q8_mmq_ds4(words, values, scales, sums, candidate).reshape(1, m, n * 2))
-  notify_prefill_route(gate); notify_prefill_route(up)
-  return out[:, :, :n], out[:, :, n:]
 
 
 def route_prefill_linear(lin, x:Tensor, *, prefill_graph_gemm:bool) -> Tensor:
