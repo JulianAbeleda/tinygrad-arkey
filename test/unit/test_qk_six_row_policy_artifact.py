@@ -5,7 +5,7 @@ import pytest
 
 from extra.qk.prefill.q4k_q8_five_buffer_role_gate import build_role_gate
 from extra.qk.prefill.six_row_policy_artifact import (MissingQualificationEvidence, Q6_EVIDENCE_SCHEMA,
-  build_six_row_policy_artifact, missing_qualification_evidence)
+  build_six_row_policy_artifact, load_explicit_evidence, main, missing_qualification_evidence)
 from test.unit.test_q4k_q8_five_buffer_role_gate import _fake_compiler
 
 
@@ -51,3 +51,23 @@ def test_q6_evidence_must_be_canonical_qualified_direct_packed_evidence():
   with pytest.raises(MissingQualificationEvidence) as exc:
     build_six_row_policy_artifact(inventory, q4_evidence=q4, q6_evidence=q6)
   assert len(exc.value.missing) == 1 and exc.value.missing[0].endswith(":direct_packed_qualification")
+
+
+def test_duplicate_or_unrelated_evidence_cannot_fill_exact_rows():
+  inventory = _inventory(); q4 = build_role_gate(inventory, compiler=_fake_compiler); q6 = _q6_evidence(inventory)
+  q4["rows"][1] = copy.deepcopy(q4["rows"][0]); q6[1] = copy.deepcopy(q6[0])
+  missing = missing_qualification_evidence(inventory, q4_evidence=q4, q6_evidence=q6)
+  assert len(missing) == 2 and {item.split(":")[1] for item in missing} == {"attn_qo", "attn_kv"}
+  valid_q4 = build_role_gate(inventory, compiler=_fake_compiler)
+  assert len(missing_qualification_evidence(inventory, q4_evidence=valid_q4, q6_evidence=_q6_evidence(inventory) * 2)) == 2
+
+
+def test_explicit_loader_requires_two_q6_paths_and_cli_writes_artifact(tmp_path):
+  inventory = _inventory(); q4 = build_role_gate(inventory, compiler=_fake_compiler); q6 = _q6_evidence(inventory)
+  paths = [tmp_path / name for name in ("inventory.json", "q4.json", "q6-attn.json", "q6-ffn.json")]
+  for path, value in zip(paths, (inventory, q4, *q6)): path.write_text(json.dumps(value))
+  with pytest.raises(ValueError, match="exactly two"): load_explicit_evidence(paths[1], paths[2:3])
+  output = tmp_path / "policy.json"
+  main([str(paths[0]), "--q4-evidence", str(paths[1]), "--q6-evidence", str(paths[3]), str(paths[2]), "--output", str(output)])
+  artifact = json.loads(output.read_text())
+  assert len(artifact["policy_rows"]) == 6
