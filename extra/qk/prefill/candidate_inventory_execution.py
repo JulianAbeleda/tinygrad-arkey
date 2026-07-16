@@ -13,7 +13,7 @@ from extra.qk.prefill.current_prefill_execution_adapter import (ADAPTER_ID, prep
 from extra.qk.prefill.operand_path_execution_worker import AdapterRegistry, execute as execute_request
 from extra.qk.prefill.packed_wmma_correctness_canary import build_artifact
 from extra.qk.prefill.workload_inventory import CANDIDATE_INVENTORY_SCHEMA, INVENTORY_SCHEMA
-from extra.qk.runtime_specs import (FullKernelCandidateSet, capability_transport,
+from extra.qk.runtime_specs import (FullKernelCandidateSet, FullKernelCandidateSetEntry, capability_transport,
   full_kernel_candidate_capability, full_kernel_workload)
 from extra.qk.prefill.execution_bridge_contracts import (CorrectnessProtocol, ExecutionRequest,
   GuardProtocol, TimingProtocol, TransportPlan, canonical_digest)
@@ -80,7 +80,7 @@ def validate_and_join(artifact: Mapping[str, Any]) -> tuple[JoinedCandidate, ...
     if not isinstance(identity, str) or not identity: raise ValueError("binding canonical identity is malformed")
     binding_by_key[key] = identity
 
-  candidates: dict[tuple[str, str, int, int, int], tuple[str, dict[str, Any]]] = {}
+  candidates: dict[tuple[str, str, int, int, int], FullKernelCandidateSetEntry] = {}
   for quant, raw_set in sets.items():
     if not isinstance(quant, str): raise ValueError("candidate-set quant key is malformed")
     candidate_set = FullKernelCandidateSet.from_json(raw_set)
@@ -92,7 +92,7 @@ def validate_and_join(artifact: Mapping[str, Any]) -> tuple[JoinedCandidate, ...
       if actual_quant != quant: raise ValueError(f"quant partition drift for {entry.canonical_identity}")
       if workload.profile != inventory["profile"]: raise ValueError(f"profile drift for {entry.canonical_identity}")
       if key in candidates: raise ValueError(f"duplicate candidate key {key!r}")
-      candidates[key] = (entry.canonical_identity, entry.to_json()["payload"])
+      candidates[key] = entry
 
   expected = set(rows)
   for label, actual in (("bindings", set(binding_by_key)), ("candidate sets", set(candidates))):
@@ -101,9 +101,11 @@ def validate_and_join(artifact: Mapping[str, Any]) -> tuple[JoinedCandidate, ...
     if missing: raise ValueError(f"missing {label} keys {sorted(missing)!r}")
   joined = []
   for key in order:
-    identity, payload = candidates[key]
-    if binding_by_key[key] != identity: raise ValueError(f"canonical identity drift for {key!r}")
-    joined.append(JoinedCandidate(rows[key][0], key[0], key[1], key[2:], rows[key][1], identity, payload))
+    entry = candidates[key]
+    if binding_by_key[key] not in (entry.canonical_identity, entry.legacy_identity_alias):
+      raise ValueError(f"canonical identity drift for {key!r}")
+    joined.append(JoinedCandidate(rows[key][0], key[0], key[1], key[2:], rows[key][1],
+                                  entry.canonical_identity, entry.to_json()["payload"]))
   return tuple(joined)
 
 

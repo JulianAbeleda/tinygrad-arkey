@@ -4,7 +4,7 @@ import pytest
 
 from extra.qk.prefill import candidate_inventory_execution as driver
 from extra.qk.prefill.workload_inventory import CANDIDATE_INVENTORY_SCHEMA, INVENTORY_SCHEMA
-from extra.qk.runtime_specs import FULL_KERNEL_CANDIDATE_SET_SCHEMA
+from extra.qk.runtime_specs import FULL_KERNEL_CANDIDATE_SET_SCHEMA, FullKernelCandidateSet
 from extra.qk.prefill.execution_bridge_contracts import ExecutionResult, PhaseResult
 
 
@@ -35,11 +35,33 @@ def artifact(profile="generic_profile_not_in_registry"):
 
 
 def test_join_uses_inventory_order_not_partition_or_role_sort_order_and_supports_generic_profile():
-  joined = driver.validate_and_join(artifact())
+  value = artifact()
+  joined = driver.validate_and_join(value)
   assert [(x.role, x.quant_format, x.shape) for x in joined] == [
     ("ffn_down", "Q6_K", (7, 16, 256)), ("attn_qo", "Q4_K", (3, 32, 256)),
     ("attn_qo", "Q6_K", (5, 48, 256))]
   assert all(x.payload["workload"]["profile"] == "generic_profile_not_in_registry" for x in joined)
+  entries = {x.legacy_identity_alias: x.canonical_identity for raw_set in value["candidate_sets"].values()
+             for x in FullKernelCandidateSet.from_json(raw_set).entries}
+  assert all(x.canonical_identity == entries[binding["canonical_identity"]]
+             for x, binding in zip(joined, value["bindings"]))
+
+
+def test_legacy_binding_alias_is_canonicalized_in_request_and_execution_evidence(tmp_path):
+  value = artifact()
+  entry = FullKernelCandidateSet.from_json(value["candidate_sets"]["Q6_K"]).entries[0]
+  assert value["bindings"][0]["canonical_identity"] == entry.legacy_identity_alias
+  assert entry.legacy_identity_alias != entry.canonical_identity
+  joined = driver.validate_and_join(value)
+  assert joined[0].canonical_identity == entry.canonical_identity
+  request = driver.make_request(joined[0], "input.npz", phase="compile-only")
+  assert request.candidate_id == request.comparator_id == entry.canonical_identity
+  assert request.compiler_context["canonical_identity"] == entry.canonical_identity
+  out = driver.run_inventory(value, phase="compile-only", artifact_dir=str(tmp_path),
+    prepare_fn=lambda payload, identity, *, device: (None, {"canonical_identity": identity}))
+  row = out["results"][0]
+  assert row["identity"]["canonical_identity"] == entry.canonical_identity
+  assert row["request"]["candidate_id"] == entry.canonical_identity
 
 
 def test_filters_preserve_inventory_order_and_reject_unknown_values():
