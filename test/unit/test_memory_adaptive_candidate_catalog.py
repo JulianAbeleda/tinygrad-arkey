@@ -3,7 +3,8 @@ from extra.qk.memory_adaptive_evidence_runner import CandidateArtifacts, Evidenc
 from tinygrad.llm.prefill_memory_plan import Strategy
 
 
-INVENTORY = {"rows": [{"invocation_id": "q", "role": "attention", "shape": [1, 2, 3]},
+INVENTORY = {"inventory_identity": "inventory:sha256:" + "a" * 64,
+             "rows": [{"invocation_id": "q", "role": "attention", "shape": [1, 2, 3]},
                       {"invocation_id": "f", "role": "ffn", "shape": [1, 4, 3]}]}
 
 
@@ -32,9 +33,105 @@ def test_exact_scanned_architecture_and_geometry_are_structural_constraints():
 
 
 def test_catalog_uses_semantic_inventory_not_provenance_labels():
-  a = inventory_invocation_ids({"profile": "old", "rows": [{"role": "ffn", "shape": [1, 2, 3]}]})
-  b = inventory_invocation_ids({"profile": "new", "rows": [{"role": "ffn", "shape": [1, 2, 3]}]})
+  a = inventory_invocation_ids({"inventory_identity": "i", "profile": "old", "rows": [{"role": "ffn", "shape": [1, 2, 3]}]})
+  b = inventory_invocation_ids({"inventory_identity": "i", "profile": "new", "rows": [{"role": "ffn", "shape": [1, 2, 3]}]})
   assert a == b
+
+
+def test_catalog_requires_explicit_parent_inventory_identity():
+  try:
+    build_candidate_catalog(selected_model_inventory={"profile": "not-an-identity", "rows": INVENTORY["rows"]},
+      target_capabilities={}, candidate_specs=[])
+  except ValueError as exc: assert "inventory_identity" in str(exc)
+  else: raise AssertionError("model/profile labels must not replace parent inventory identity")
+
+
+def test_whole_policy_identity_ignores_alias_and_declaration_order():
+  terms = ({"name": "unknown", "bytes": None, "lifetime": "prefill_peak", "formula": "measured",
+            "provenance": "allocation proof"},
+           {"name": "workspace", "bytes": 32, "lifetime": "candidate_workspace", "formula": "2 * 16",
+            "provenance": "route contract"})
+  common = dict(strategy=Strategy.BOUNDED_PACKED_TILES, covered_invocations=("q", "f"), memory_terms=terms,
+    target_requirements={"caps": {"wave": 32}}, full_m_values=(512, 256), correctness_m_values=(512, 256),
+    invocation_bytes=({"m": 512, "activation_bytes": None, "scratch_bytes": 8},
+                      {"m": 256, "activation_bytes": 4, "scratch_bytes": None}))
+  first = build_candidate_catalog(selected_model_inventory=INVENTORY, target_capabilities={"caps": {"wave": 32}},
+    candidate_specs=[CandidateSpec("alias-a", policy={"routes": {"q": "rq", "f": "rf"}, "tile": {"n": 8}}, **common)])[0]
+  reordered = {**common, "memory_terms": tuple(reversed(terms)), "full_m_values": (256, 512),
+               "correctness_m_values": (256, 512), "invocation_bytes": tuple(reversed(common["invocation_bytes"]))}
+  second = build_candidate_catalog(selected_model_inventory=INVENTORY, target_capabilities={"caps": {"wave": 32}},
+    candidate_specs=[CandidateSpec("alias-b", policy={"tile": {"n": 8}, "routes": {"f": "rf", "q": "rq"}}, **reordered)])[0]
+  assert first.candidate_id != second.candidate_id
+  assert first.policy["whole_policy_identity"] == second.policy["whole_policy_identity"]
+
+
+def test_default_self_routes_ignore_operational_candidate_alias():
+  def build(alias):
+    return build_candidate_catalog(selected_model_inventory=INVENTORY, target_capabilities={}, candidate_specs=[
+      CandidateSpec(alias, Strategy.DIRECT_PACKED_FALLBACK, ("q", "f"))])[0]
+  first, second = build("alias-a"), build("alias-b")
+  assert first.policy["routes"] == {"q": "alias-a", "f": "alias-a"}
+  assert second.policy["routes"] == {"q": "alias-b", "f": "alias-b"}
+  assert first.policy["whole_policy_identity"] == second.policy["whole_policy_identity"]
+
+
+def test_changing_a_non_self_route_mutates_whole_policy_identity():
+  def build(route):
+    return build_candidate_catalog(selected_model_inventory=INVENTORY, target_capabilities={}, candidate_specs=[
+      CandidateSpec("alias", Strategy.DIRECT_PACKED_FALLBACK, ("q", "f"),
+                    policy={"routes": {"q": "alias", "f": route}})])[0].policy["whole_policy_identity"]
+  assert build("external-a") != build("external-b")
+
+
+def test_whole_policy_identity_mutates_for_each_semantic_slice():
+  base = CandidateSpec("base", Strategy.DIRECT_PACKED_FALLBACK, ("q", "f"),
+    memory_terms=({"name": "workspace", "bytes": None, "lifetime": "prefill_peak", "formula": "observed",
+                  "provenance": "allocator"},), target_requirements={"backend": "AMD"},
+    policy={"routes": {"q": "rq", "f": "rf"}, "tile": 8}, full_m_values=(256,), evidence_available=True)
+  def identity(spec=base, inventory=INVENTORY):
+    return build_candidate_catalog(selected_model_inventory=inventory, target_capabilities={"backend": "AMD"},
+                                   candidate_specs=[spec])[0].policy["whole_policy_identity"]
+  original = identity()
+  mutations = [
+    CandidateSpec("base", Strategy.DIRECT_PACKED_FALLBACK, ("q", "f"), memory_terms=base.memory_terms,
+                  target_requirements=base.target_requirements, policy={"routes": {"q": "changed", "f": "rf"}, "tile": 8}, full_m_values=(256,)),
+    CandidateSpec("base", Strategy.FULL_RESIDENT_OVERLAY, ("q", "f"), memory_terms=base.memory_terms,
+                  target_requirements=base.target_requirements, policy=base.policy, full_m_values=(256,)),
+    CandidateSpec("base", Strategy.DIRECT_PACKED_FALLBACK, ("q", "f"),
+                  memory_terms=({**base.memory_terms[0], "bytes": 1},), target_requirements=base.target_requirements,
+                  policy=base.policy, full_m_values=(256,)),
+    CandidateSpec("base", Strategy.DIRECT_PACKED_FALLBACK, ("q", "f"), memory_terms=base.memory_terms,
+                  target_requirements={"backend": "AMD", "wave": 32}, policy=base.policy, full_m_values=(256,)),
+    CandidateSpec("base", Strategy.DIRECT_PACKED_FALLBACK, ("q", "f"), memory_terms=base.memory_terms,
+                  target_requirements=base.target_requirements, policy={**base.policy, "tile": 16}, full_m_values=(256,)),
+    CandidateSpec("base", Strategy.DIRECT_PACKED_FALLBACK, ("q", "f"), memory_terms=base.memory_terms,
+                  target_requirements=base.target_requirements, policy=base.policy, full_m_values=(512,)),
+    CandidateSpec("base", Strategy.DIRECT_PACKED_FALLBACK, ("q", "f"), memory_terms=base.memory_terms,
+                  target_requirements=base.target_requirements, policy=base.policy, full_m_values=(256,), evidence_available=False),
+  ]
+  targets = ({"backend": "AMD"}, {"backend": "AMD"}, {"backend": "AMD"}, {"backend": "AMD", "wave": 32},
+             {"backend": "AMD"}, {"backend": "AMD"}, {"backend": "AMD"})
+  assert all(build_candidate_catalog(selected_model_inventory=INVENTORY, target_capabilities=target,
+    candidate_specs=[mutation])[0].policy["whole_policy_identity"] != original for mutation, target in zip(mutations, targets))
+  assert identity(inventory={**INVENTORY, "inventory_identity": "inventory:sha256:" + "b" * 64}) != original
+
+
+def test_duplicate_semantic_identity_is_rejected_even_with_unique_aliases():
+  specs = [CandidateSpec(alias, Strategy.DIRECT_PACKED_FALLBACK, ("q", "f"),
+                         policy={"routes": {"q": "same-q", "f": "same-f"}}) for alias in ("a", "b")]
+  try: build_candidate_catalog(selected_model_inventory=INVENTORY, target_capabilities={}, candidate_specs=specs)
+  except ValueError as exc: assert "whole_policy_identity" in str(exc)
+  else: raise AssertionError("duplicate semantic policies must be rejected")
+
+
+def test_producer_cannot_supply_whole_policy_identity():
+  for spec in ({"candidate_id": "bad", "strategy": Strategy.DIRECT_PACKED_FALLBACK,
+                "covered_invocations": ("q", "f"), "whole_policy_identity": "forged"},
+               CandidateSpec("bad", Strategy.DIRECT_PACKED_FALLBACK, ("q", "f"),
+                             policy={"whole_policy_identity": "forged"})):
+    try: build_candidate_catalog(selected_model_inventory=INVENTORY, target_capabilities={}, candidate_specs=[spec])
+    except ValueError as exc: assert "must not supply" in str(exc)
+    else: raise AssertionError("catalog identity must be catalog-owned")
 
 
 def test_intrinsic_size_fact_is_semantic_not_confused_with_size_label():

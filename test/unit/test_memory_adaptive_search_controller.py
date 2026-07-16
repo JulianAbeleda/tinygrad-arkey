@@ -10,10 +10,13 @@ from tinygrad.llm.device_facts import DeviceCapabilities, DeviceFacts, ProbeReco
 from tinygrad.llm.prefill_memory_plan import ByteLifetime, ByteTerm, Strategy
 from extra.qk.memory_adaptive_allocation_observer import EXACT_MEMORY_KEYS, make_memory_facts
 
+INVENTORY_IDENTITY = "inventory:sha256:" + "a" * 64
+
 
 def test_selected_model_scan_public_import_is_transport_identity_and_positional():
   assert SelectedModelScan is TransportSelectedModelScan
-  values = ({"content_hash": "x"}, {"rows": []}, (), {"prompt_tokens": 1}, {"git": "abc"})
+  values = ({"content_hash": "x"}, {"inventory_identity": INVENTORY_IDENTITY, "rows": []},
+            (), {"prompt_tokens": 1}, {"git": "abc"})
   scan = SelectedModelScan(*values)
   assert tuple(getattr(scan, field) for field in scan.__dataclass_fields__) == values
 
@@ -52,7 +55,8 @@ class Seam:
   def __init__(self): self.calls = []
   def scan_selected_model(self, path, device):
     return SelectedModelScan({"content_hash": "sha256:model", "model_name": path},
-      {"rows": [{"invocation_id": "a", "shape": [2, 4]}, {"invocation_id": "b", "shape": [4, 8]}]},
+      {"inventory_identity": INVENTORY_IDENTITY,
+       "rows": [{"invocation_id": "a", "shape": [2, 4]}, {"invocation_id": "b", "shape": [4, 8]}]},
       (ByteTerm("model", 100, "GGUF inventory", "sum tensor bytes", ByteLifetime.PERSISTENT),),
       {"prompt_tokens": 32}, {"git": "abc"})
   def enumerate_candidate_specs(self, model, device):
@@ -171,7 +175,7 @@ def test_requires_three_samples_and_exactly_one_complete_baseline():
 def test_partial_remainder_or_unknown_per_m_bytes_never_reaches_timing():
   seam = Seam()
   seam.scan_selected_model = lambda path, device: SelectedModelScan({"content_hash": "x"},
-    {"rows": [{"invocation_id": "a"}, {"invocation_id": "b"}]},
+    {"inventory_identity": INVENTORY_IDENTITY, "rows": [{"invocation_id": "a"}, {"invocation_id": "b"}]},
     (ByteTerm("model", 100, "scan", "exact", ByteLifetime.PERSISTENT),),
     {"prompt_tokens": 33, "context_tokens": 64}, {"git": "abc"})
   result = _run_controller_with_seam(model_path="chosen.gguf", seam=seam)

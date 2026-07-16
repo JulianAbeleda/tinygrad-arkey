@@ -16,8 +16,11 @@ from tinygrad.llm.prefill_memory_plan import ByteLifetime, ByteTerm, CandidateMe
 from extra.qk.prefill_workload_plan import CandidateKernelCapability, InvocationBytes, RemainderMapping
 
 SCHEMA = "tinygrad.memory_adaptive_candidate_catalog.v1"
+IDENTITY_DOMAIN = "tinygrad.memory_adaptive.whole_policy_identity.v1"
+_SELF_ROUTE_SENTINEL = ("tinygrad.memory_adaptive.route.self.v1",)
 _FORBIDDEN = frozenset(("profile", "profile_id", "model_name", "model_path", "filename", "size_label",
                         "model_size_label"))
+_POLICY_SERIALIZATION_FIELDS = frozenset(("candidate_id", "whole_policy_identity", "catalog_schema", "strategy", "routes"))
 
 
 def _semantic(value: Any) -> Any:
@@ -48,6 +51,13 @@ def inventory_invocation_ids(inventory: Mapping[str, Any]) -> tuple[str, ...]:
   return ids
 
 
+def _inventory_identity(inventory: Mapping[str, Any]) -> str:
+  identity = inventory.get("inventory_identity")
+  if not isinstance(identity, str) or not identity:
+    raise ValueError("selected model inventory requires a non-empty inventory_identity")
+  return identity
+
+
 def _requirements_met(required: Mapping[str, Any], actual: Mapping[str, Any]) -> bool:
   """Recursive exact/subset matcher for published structural target facts."""
   for key, expected in required.items():
@@ -67,6 +77,46 @@ def _term(value: ByteTerm | Mapping[str, Any]) -> ByteTerm:
   try: lifetime = value["lifetime"] if isinstance(value["lifetime"], ByteLifetime) else ByteLifetime(value["lifetime"])
   except (KeyError, ValueError) as exc: raise ValueError("candidate memory term has invalid lifetime") from exc
   return ByteTerm(str(value["name"]), value.get("bytes"), str(value["provenance"]), str(value["formula"]), lifetime)
+
+
+def _sorted_json_rows(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
+  normalized = [dict(_semantic(row)) for row in rows]
+  return sorted(normalized, key=lambda row: json.dumps(row, sort_keys=True, separators=(",", ":"), allow_nan=False))
+
+
+def derive_whole_policy_identity(*, inventory_identity: str, routes: Mapping[str, str], strategy: Strategy,
+                                 memory_terms: Sequence[ByteTerm], target_requirements: Mapping[str, Any],
+                                 semantic_policy: Mapping[str, Any], capability: CandidateKernelCapability,
+                                 structurally_available: bool, evidence_available: bool,
+                                 operational_self_alias: str | None = None) -> str:
+  """Derive identity from validated complete-policy facts, never its operational alias."""
+  policy = {key: value for key, value in semantic_policy.items() if key not in _POLICY_SERIALIZATION_FIELDS}
+  semantic_routes = {key: _SELF_ROUTE_SENTINEL if operational_self_alias is not None and routes[key] == operational_self_alias
+                     else routes[key] for key in sorted(routes)}
+  payload = {
+    "domain": IDENTITY_DOMAIN,
+    "parent_inventory_identity": inventory_identity,
+    "invocation_routes": semantic_routes,
+    "strategy": strategy.value,
+    "memory_terms": _sorted_json_rows(term.to_dict() for term in memory_terms),
+    "target_requirements": _semantic(target_requirements),
+    "semantic_policy": policy,
+    "capability_proof_facts": {
+      "full_m_values": sorted(set(capability.full_m_values)),
+      "tail_m_values": sorted(set(capability.tail_m_values)),
+      "correctness_m_values": sorted(set(capability.correctness_m_values)),
+      "invocation_bytes": _sorted_json_rows({"m": row.m, "activation_bytes": row.activation_bytes,
+                                               "scratch_bytes": row.scratch_bytes}
+                                              for row in capability.invocation_bytes),
+      "remainder_mappings": _sorted_json_rows({"logical_m": row.logical_m, "physical_m": row.physical_m,
+                                                 "minimum_prompt_tokens": row.minimum_prompt_tokens}
+                                                for row in capability.remainder_mappings),
+      "structurally_available": structurally_available,
+    },
+    "evidence_available": evidence_available,
+  }
+  encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False).encode()
+  return "whole-policy:sha256:" + hashlib.sha256(encoded).hexdigest()
 
 
 @dataclass(frozen=True)
@@ -106,6 +156,7 @@ class CandidateSpec:
 def _spec(value: CandidateSpec | Mapping[str, Any]) -> CandidateSpec:
   if isinstance(value, CandidateSpec): return value
   if not isinstance(value, Mapping): raise TypeError("candidate specs must be CandidateSpec values or mappings")
+  if "whole_policy_identity" in value: raise ValueError("candidate producers must not supply whole_policy_identity")
   return CandidateSpec(candidate_id=str(value["candidate_id"]), strategy=Strategy(value["strategy"]),
     covered_invocations=tuple(value.get("covered_invocations", ())), memory_terms=tuple(value.get("memory_terms", ())),
     target_requirements=value.get("target_requirements", {}),
@@ -124,6 +175,7 @@ def build_candidate_catalog(*, selected_model_inventory: Mapping[str, Any], targ
   catalogued unless its producer explicitly says both implementation and
   evidence are available for every required invocation.
   """
+  inventory_identity = _inventory_identity(selected_model_inventory)
   required = inventory_invocation_ids(selected_model_inventory)
   required_set = set(required)
   out = []
@@ -137,6 +189,9 @@ def build_candidate_catalog(*, selected_model_inventory: Mapping[str, Any], targ
     memory = CandidateMemoryCoverage(spec.candidate_id, spec.strategy, tuple(_term(x) for x in spec.memory_terms),
       required, tuple(x for x in required if x in covered), supported=True)
     semantic_policy = _semantic(spec.policy)
+    if not isinstance(semantic_policy, Mapping): raise TypeError("candidate policy must be a mapping")
+    if "whole_policy_identity" in semantic_policy:
+      raise ValueError("candidate producers must not supply whole_policy_identity")
     supplied_routes = semantic_policy.get("routes") if isinstance(semantic_policy, Mapping) else None
     if supplied_routes is None:
       routes = {invocation: spec.candidate_id for invocation in required}
@@ -146,10 +201,18 @@ def build_candidate_catalog(*, selected_model_inventory: Mapping[str, Any], targ
       if any(not isinstance(route_id, str) or not route_id for route_id in supplied_routes.values()):
         raise ValueError(f"{spec.candidate_id} policy route IDs must be non-empty strings")
       routes = {invocation: supplied_routes[invocation] for invocation in required}
-    policy = {**semantic_policy, "candidate_id": spec.candidate_id, "routes": routes, "catalog_schema": SCHEMA}
+    identity = derive_whole_policy_identity(inventory_identity=inventory_identity, routes=routes, strategy=spec.strategy,
+      memory_terms=memory.memory_terms, target_requirements=spec.target_requirements, semantic_policy=semantic_policy,
+      capability=spec.kernel_capability(), structurally_available=spec.structurally_available,
+      evidence_available=spec.evidence_available, operational_self_alias=spec.candidate_id)
+    policy = {**semantic_policy, "candidate_id": spec.candidate_id, "routes": routes, "catalog_schema": SCHEMA,
+              "whole_policy_identity": identity}
     out.append(AutoscanCandidate(memory, policy))
   if len({x.candidate_id for x in out}) != len(out): raise ValueError("candidate_id values must be unique")
+  if len({x.policy["whole_policy_identity"] for x in out}) != len(out):
+    raise ValueError("whole_policy_identity values must be unique")
   return tuple(sorted(out, key=lambda x: (x.memory.strategy.value, x.candidate_id)))
 
 
-__all__ = ["SCHEMA", "CandidateSpec", "build_candidate_catalog", "inventory_invocation_ids"]
+__all__ = ["SCHEMA", "IDENTITY_DOMAIN", "CandidateSpec", "build_candidate_catalog", "derive_whole_policy_identity",
+           "inventory_invocation_ids"]
