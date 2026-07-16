@@ -29,11 +29,17 @@ LLAMA_DS4_SUM_ORIGINAL_FP_SOURCE_ANCHORS = (
 )
 
 PHYSICAL_DS4_LAYOUT = "q8_1_mmq_ds4_transposed_blocks"
+PHYSICAL_DS4_ZERO_GROUP_SCALE_POLICY = "unit_for_zero"
 
 
 @dataclass(frozen=True)
 class PhysicalDS4Q8ActivationSpec:
-  """Model-independent physical Q8_1 DS4 producer descriptor."""
+  """Model-independent physical Q8_1 DS4 producer descriptor.
+
+  This is the split physical DS4 buffer ABI.  It is intentionally not the
+  packed 144-byte llama record ABI: consumers must not infer equivalence or
+  insert a deinterleave step from this descriptor.
+  """
   m: int
   k: int
   layout: str = PHYSICAL_DS4_LAYOUT
@@ -44,6 +50,7 @@ class PhysicalDS4Q8ActivationSpec:
   value_dtype: str = "int8"
   metadata_dtype: str = "float32"
   sum_semantics: str = "sum_original_fp"
+  zero_group_scale_policy: str = PHYSICAL_DS4_ZERO_GROUP_SCALE_POLICY
 
   @property
   def blocks(self) -> int: return self.k // self.block_elems
@@ -66,6 +73,8 @@ class PhysicalDS4Q8ActivationSpec:
     if self.value_dtype != "int8" or self.metadata_dtype != "float32":
       raise ValueError("physical DS4 output dtypes must be int8/float32")
     if self.sum_semantics != "sum_original_fp": raise ValueError("physical DS4 sums must use sum_original_fp")
+    if self.zero_group_scale_policy != PHYSICAL_DS4_ZERO_GROUP_SCALE_POLICY:
+      raise ValueError("physical DS4 zero-group scale policy must be unit_for_zero")
 
   def logical_owner(self, wave: int) -> tuple[int, int, int]:
     if not 0 <= wave < self.waves: raise IndexError("wave outside physical DS4 output")
@@ -149,7 +158,11 @@ def _sum_original_fp_kernel(groups: int, group_elems: int):
 
 
 def emit_physical_ds4_q8_1_kernel(spec: PhysicalDS4Q8ActivationSpec):
-  """Return a generic UOp emitter that directly owns physical DS4 output indices."""
+  """Return a generic UOp emitter for split physical DS4 buffers.
+
+  Zero groups use unit scale (the q8 reference/new split producer policy),
+  unlike the existing packed-record producer's zero-for-zero policy.
+  """
   spec.validate()
   def kernel(values: UOp, scales: UOp, sums_original_fp: UOp, source: UOp) -> UOp:
     wave, lane = UOp.special(spec.waves, "gidx0"), UOp.special(spec.wave_size, "lidx0")
