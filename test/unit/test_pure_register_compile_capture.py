@@ -1,6 +1,6 @@
 import pytest
 
-from tinygrad.codegen.opt.amd_resource_artifact import AMDPhysicalInterval, AMDResourceFacts
+from extra.qk.amd_resource_artifact import AMDPhysicalInterval, AMDResourceFacts
 from extra.qk.prefill.pure_register_compile_capture import (FinalCompileEvidence, capture_compile_only,
   instruction_order_proof)
 from extra.qk.prefill.pure_register_evaluation_gate import REGISTER_STORAGE, compile_only, final_resources

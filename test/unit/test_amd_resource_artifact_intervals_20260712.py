@@ -1,6 +1,6 @@
 import pytest
 
-from tinygrad.codegen.opt.amd_resource_artifact import extract_amd_physical_intervals
+from extra.qk.amd_resource_artifact import extract_amd_physical_intervals
 
 
 class Reg:

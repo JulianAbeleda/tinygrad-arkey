@@ -6,19 +6,169 @@ from typing import Callable, TypeAlias
 
 from extra.qk.kernel_pipeline import (HierarchicalKernelPipelinePlan, HierarchicalLifecycleEvent,
                                       hierarchical_lifecycle_events, prove_hierarchical_lifecycle)
-from tinygrad.codegen.opt.kernel_lds import (CooperativeLDSStore, PackedPrecontractOperandTemplate, PrecontractContractSpec,
+from tinygrad.codegen.opt.kernel_lds import (PackedPrecontractOperandTemplate, PrecontractContractSpec,
   PrecontractFactors, PrecontractFragmentInstance, PrecontractKAxis, PrecontractLDSStage, PrecontractOperand,
-  PrecontractOperandTemplate, PrecontractPipelineTemplate, PrecontractProducerInstance, PrecontractThreadAxes, WMMAFragmentLoad,
-  WMMAOutputOwner, _rdna3_wmma_output_coord, _window, build_precontract_lds_stage, contract_symbolic_upcast,
-  cooperative_lds_padding_offsets, cooperative_lds_stores, derive_precontract_factors, derive_precontract_shape_factors,
-  instantiate_precontract_fragments, instantiate_precontract_producer, lower_symbolic_barrier_dependencies, rdna3_wmma_output_coord,
-  semantic_wave_coords, validate_precontract_carriers, validate_precontract_contracts, validate_precontract_operand_templates,
-  validate_precontract_thread_axes, validate_precontract_wmma_abi, validate_rdna3_wmma_descriptor, wmma_fragment_loads,
-  wmma_output_owners)
+  PrecontractOperandTemplate, PrecontractPipelineTemplate, PrecontractProducerInstance, PrecontractThreadAxes,
+  build_precontract_lds_stage, contract_symbolic_upcast, derive_precontract_factors, derive_precontract_shape_factors,
+  instantiate_precontract_fragments, instantiate_precontract_producer, lower_symbolic_barrier_dependencies,
+  validate_precontract_carriers, validate_precontract_contracts, validate_precontract_operand_templates,
+  validate_precontract_thread_axes, validate_precontract_wmma_abi, validate_rdna3_wmma_descriptor)
 from tinygrad.codegen.opt.packed_weight import PackedOperandRecordTransform, PackedOperandTransform, PackedWeightTransform
 from tinygrad.dtype import AddrSpace, DType, PtrDType, dtypes
 from tinygrad.uop.ops import (AxisType, KernelLDSArenaRegion, KernelLDSComponentWindow, KernelLDSWindow, KernelTileGeometry,
                               Ops, UOp)
+
+@dataclass(frozen=True)
+class CooperativeLDSStore:
+  role: str
+  thread: int
+  iteration: int
+  row: int
+  vector: int
+  byte_offset: int
+  vector_bytes: int
+
+@dataclass(frozen=True)
+class WMMAFragmentLoad:
+  role: str
+  thread: int
+  wave_m: int
+  wave_n: int
+  subtile: int
+  k_substep: int
+  element: int
+  logical_row: int
+  logical_k: int
+  byte_offset: int
+
+@dataclass(frozen=True)
+class WMMAOutputOwner:
+  thread: int
+  wave_m: int
+  wave_n: int
+  subtile_m: int
+  subtile_n: int
+  element: int
+  row: int
+  col: int
+
+def semantic_wave_coords(geometry:KernelTileGeometry, thread:int) -> tuple[int, int, int]:
+  """Return (wave_m, wave_n, lane) using row-major wave ownership."""
+  if not isinstance(thread, int) or isinstance(thread, bool) or not 0 <= thread < geometry.threads:
+    raise ValueError(f"thread must be in [0, {geometry.threads})")
+  wave_id, lane = divmod(thread, geometry.wave_size)
+  wave_m, wave_n = divmod(wave_id, geometry.waves[1])
+  return wave_m, wave_n, lane
+
+
+def _window(geometry:KernelTileGeometry, role:str) -> KernelLDSWindow:
+  if role not in ("A", "B"): raise ValueError(f"cooperative LDS role must be A or B, got {role!r}")
+  return next(w for w in geometry.lds_windows if w.role == role)
+
+
+
+def cooperative_lds_stores(geometry:KernelTileGeometry, role:str, *, element_bytes:int=2,
+                           vector_bytes:int=16) -> tuple[CooperativeLDSStore, ...]:
+  """Elect one thread for every non-padding vector in an A or B tile window."""
+  if not isinstance(element_bytes, int) or isinstance(element_bytes, bool) or element_bytes <= 0:
+    raise ValueError("element_bytes must be a positive int")
+  if not isinstance(vector_bytes, int) or isinstance(vector_bytes, bool) or vector_bytes <= 0:
+    raise ValueError("vector_bytes must be a positive int")
+  window = _window(geometry, role)
+  rows = geometry.tile[0] if role == "A" else geometry.tile[1]
+  row_data_bytes = geometry.tile[2] * element_bytes
+  if row_data_bytes % vector_bytes: raise ValueError("tile K row bytes must be divisible by vector_bytes")
+  if window.stride_bytes < row_data_bytes or window.stride_bytes % vector_bytes:
+    raise ValueError("LDS stride must contain the data row and be vector aligned")
+  if window.end - window.base != rows * window.stride_bytes:
+    raise ValueError("LDS window size must exactly equal rows * stride")
+  vectors_per_row = row_data_bytes // vector_bytes
+  vector_count = rows * vectors_per_row
+  if vector_count % geometry.threads:
+    raise ValueError("cooperative tile vectors must divide evenly across threads")
+  stores = []
+  for linear in range(vector_count):
+    thread, iteration = linear % geometry.threads, linear // geometry.threads
+    row, vector = divmod(linear, vectors_per_row)
+    byte_offset = window.base + row * window.stride_bytes + vector * vector_bytes
+    stores.append(CooperativeLDSStore(role, thread, iteration, row, vector, byte_offset, vector_bytes))
+  return tuple(stores)
+
+
+def cooperative_lds_padding_offsets(geometry:KernelTileGeometry, role:str, *, element_bytes:int=2,
+                                    vector_bytes:int=16) -> tuple[int, ...]:
+  """Return vector-aligned padding slots, which intentionally have no store owner."""
+  window = _window(geometry, role)
+  rows = geometry.tile[0] if role == "A" else geometry.tile[1]
+  row_data_bytes = geometry.tile[2] * element_bytes
+  if row_data_bytes % vector_bytes or window.stride_bytes < row_data_bytes or window.stride_bytes % vector_bytes:
+    raise ValueError("LDS row data and stride must be valid vector-aligned intervals")
+  return tuple(window.base + row * window.stride_bytes + offset
+               for row in range(rows) for offset in range(row_data_bytes, window.stride_bytes, vector_bytes))
+
+
+def _rdna3_wmma_output_coord(lane:int, element:int) -> tuple[int, int]:
+  if not isinstance(lane, int) or isinstance(lane, bool) or not 0 <= lane < 32: raise ValueError("lane must be in [0, 32)")
+  if not isinstance(element, int) or isinstance(element, bool) or not 0 <= element < 8: raise ValueError("element must be in [0, 8)")
+  return lane % 16, lane // 16 + element * 2
+
+def rdna3_wmma_output_coord(lane:int, element:int, *, tc) -> tuple[int, int]:
+  """RDNA3 fp32 16x16x16 output map used by the Python WMMA interpreter."""
+  validate_rdna3_wmma_descriptor(tc)
+  return _rdna3_wmma_output_coord(lane, element)
+
+
+def wmma_fragment_loads(geometry:KernelTileGeometry, role:str, *, tc, element_bytes:int|None=None) -> tuple[WMMAFragmentLoad, ...]:
+  """Enumerate per-wave RDNA3 A/B fragment loads from the staged tile windows."""
+  validate_rdna3_wmma_descriptor(tc)
+  window = _window(geometry, role)
+  if geometry.wave_size != 32 or geometry.tile[2] % 16:
+    raise ValueError("RDNA3 fragment mapping requires wave32 and K divisible by 16")
+  if element_bytes is None: element_bytes = tc.dtype_in.itemsize
+  if element_bytes != tc.dtype_in.itemsize: raise ValueError("RDNA3 fragment element_bytes must match dtype_in")
+  subtiles = geometry.tile[0] // (geometry.waves[0] * 16) if role == "A" else \
+             geometry.tile[1] // (geometry.waves[1] * 16)
+  if subtiles <= 0 or (geometry.tile[0] if role == "A" else geometry.tile[1]) != \
+     subtiles * (geometry.waves[0] if role == "A" else geometry.waves[1]) * 16:
+    raise ValueError("tile extent must divide exactly into wave 16x16 subtiles")
+  loads = []
+  for thread in range(geometry.threads):
+    wave_m, wave_n, lane = semantic_wave_coords(geometry, thread)
+    for subtile in range(subtiles):
+      logical_row = (wave_m * subtiles + subtile) * 16 + lane % 16 if role == "A" else \
+                    (wave_n * subtiles + subtile) * 16 + lane % 16
+      for k_substep in range(geometry.tile[2] // 16):
+        for element in range(16):
+          logical_k = k_substep * 16 + element
+          byte_offset = window.base + logical_row * window.stride_bytes + logical_k * element_bytes
+          if not window.base <= byte_offset or byte_offset + element_bytes > window.end:
+            raise ValueError("RDNA3 fragment load is outside its LDS window")
+          loads.append(WMMAFragmentLoad(role, thread, wave_m, wave_n, subtile, k_substep, element,
+                                        logical_row, logical_k, byte_offset))
+  return tuple(loads)
+
+
+def wmma_output_owners(geometry:KernelTileGeometry, *, tc) -> tuple[WMMAOutputOwner, ...]:
+  """Enumerate RDNA3 output ownership for every wave and its 2-D WMMA subtile grid."""
+  validate_rdna3_wmma_descriptor(tc)
+  if geometry.wave_size != 32: raise ValueError("RDNA3 output mapping requires wave32")
+  subtiles_m = geometry.tile[0] // (geometry.waves[0] * 16)
+  subtiles_n = geometry.tile[1] // (geometry.waves[1] * 16)
+  if (subtiles_m <= 0 or subtiles_n <= 0 or geometry.tile[0] != subtiles_m * geometry.waves[0] * 16 or
+      geometry.tile[1] != subtiles_n * geometry.waves[1] * 16):
+    raise ValueError("output tile must divide exactly into wave 16x16 subtiles")
+  owners = []
+  for thread in range(geometry.threads):
+    wave_m, wave_n, lane = semantic_wave_coords(geometry, thread)
+    for subtile_m in range(subtiles_m):
+      for subtile_n in range(subtiles_n):
+        for element in range(8):
+          local_row, local_col = _rdna3_wmma_output_coord(lane, element)
+          row = (wave_m * subtiles_m + subtile_m) * 16 + local_row
+          col = (wave_n * subtiles_n + subtile_n) * 16 + local_col
+          owners.append(WMMAOutputOwner(thread, wave_m, wave_n, subtile_m, subtile_n, element, row, col))
+  return tuple(owners)
+
 
 
 

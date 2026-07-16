@@ -10,7 +10,7 @@ from dataclasses import dataclass
 import hashlib, re
 from typing import Any, Mapping
 
-from tinygrad.codegen.opt.amd_resource_artifact import (AMDPhysicalInterval, AMDResourceFacts,
+from extra.qk.amd_resource_artifact import (AMDPhysicalInterval, AMDResourceFacts,
   join_amd_resource_artifact)
 
 SCHEMA = "prefill-pure-register-compile.v1"

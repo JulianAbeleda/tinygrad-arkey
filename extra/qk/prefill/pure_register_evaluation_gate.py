@@ -99,7 +99,7 @@ def compile_only(candidate: dict[str, Any] | None, artifact: dict[str, Any] | No
     errors.append("final AMD resource artifact is unavailable")
   else:
     try:
-      from tinygrad.codegen.opt.amd_resource_artifact import AMDResourceArtifact, validate_amd_resource_artifact
+      from extra.qk.amd_resource_artifact import AMDResourceArtifact, validate_amd_resource_artifact
       resource_obj = AMDResourceArtifact.from_json(resource_artifact)
       if resource_obj.target not in ("gfx1100", "AMD:gfx1100"):
         errors.append("final AMD resource artifact target is not gfx1100")

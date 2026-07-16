@@ -1,6 +1,6 @@
 import pytest
 
-from tinygrad.codegen.opt.amd_resource_artifact import (
+from extra.qk.amd_resource_artifact import (
   AMDPhysicalInterval, AMDResourceArtifact, AMDResourceFacts, join_amd_resource_artifact, validate_amd_resource_artifact)
 from tinygrad.codegen.opt.register_contracts import RegisterBank
 

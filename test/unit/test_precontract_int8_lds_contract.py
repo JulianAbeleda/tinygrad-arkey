@@ -3,9 +3,10 @@ from types import SimpleNamespace
 import pytest
 
 from tinygrad import dtypes
+from extra.qk.kernel_lds import wmma_fragment_loads
 from tinygrad.codegen.opt.kernel_lds import (PrecontractContractSpec, PrecontractKAxis, PrecontractOperandTemplate,
   PrecontractThreadAxes, build_precontract_lds_stage, derive_precontract_factors, instantiate_precontract_fragments,
-  validate_precontract_carriers, validate_precontract_wmma_abi, validate_rdna3_wmma_descriptor, wmma_fragment_loads)
+  validate_precontract_carriers, validate_precontract_wmma_abi, validate_rdna3_wmma_descriptor)
 from tinygrad.codegen.opt.tc import amd_rdna3
 from tinygrad.dtype import AddrSpace
 from tinygrad.uop.ops import AxisType, KernelLDSWindow, KernelTileGeometry, Ops, UOp

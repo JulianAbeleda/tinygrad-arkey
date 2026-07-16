@@ -6,7 +6,6 @@ from typing import Literal
 StorageKind = Literal["lds", "global_register_resident"]
 WaitKind = Literal["full_barrier", "targeted_vmcnt"]
 ResourceStage = Literal["host_estimate", "final_program"]
-OperandOwnership = Literal["workgroup_shared", "wave_private"]
 
 @dataclass(frozen=True)
 class StoragePolicy:
@@ -248,77 +247,6 @@ class PipelinePolicy:
     storage = StoragePolicy("global_register_resident")
     return cls(storage, wait or WaitPolicy("targeted_vmcnt", scope="per_stage"),
                resources or ResourcePlan("host_estimate"), stages)
-
-
-@dataclass(frozen=True)
-class GEMMWorkgroupPolicy:
-  """Storage-aware work decomposition, independent of backend lowering.
-
-  Registers are private to one wave, while LDS is shared by a workgroup.  Keep
-  that ownership distinction in the schedule authority instead of asking a
-  transport adapter to reinterpret one geometry after the fact.
-  """
-  tile: tuple[int, int, int]
-  waves: tuple[int, int]
-  threads: int
-  wave_size: int
-  ownership: OperandOwnership
-  reuse: tuple[int, int]
-
-  def __post_init__(self) -> None:
-    if len(self.tile) != 3 or any(not isinstance(x, int) or isinstance(x, bool) or x <= 0 for x in self.tile):
-      raise ValueError("GEMM tile must contain three positive ints")
-    if len(self.waves) != 2 or any(not isinstance(x, int) or isinstance(x, bool) or x <= 0 for x in self.waves):
-      raise ValueError("GEMM waves must contain two positive ints")
-    if self.wave_size not in (32, 64) or self.threads != self.waves[0] * self.waves[1] * self.wave_size:
-      raise ValueError("GEMM threads must equal waves_m*waves_n*wave_size")
-    if self.ownership not in ("workgroup_shared", "wave_private"):
-      raise ValueError("unsupported GEMM operand ownership")
-    if len(self.reuse) != 2 or any(not isinstance(x, int) or isinstance(x, bool) or x <= 0 for x in self.reuse):
-      raise ValueError("GEMM A/B reuse must contain two positive ints")
-    if any(x % 16 for x in self.tile): raise ValueError("WMMA GEMM tile dimensions must be multiples of 16")
-    if self.ownership == "wave_private" and (self.waves != (1, 1) or self.threads != self.wave_size):
-      raise ValueError("wave-private operands require exactly one wave per workgroup")
-
-  @classmethod
-  def register_wave(cls, *, pipe_tm: int = 2, pipe_tn: int = 2, k_steps: int = 2,
-                    wave_size: int = 32) -> "GEMMWorkgroupPolicy":
-    if any(not isinstance(x, int) or isinstance(x, bool) or x <= 0 for x in (pipe_tm, pipe_tn, k_steps)):
-      raise ValueError("register wave factors must be positive ints")
-    return cls((pipe_tm * 16, pipe_tn * 16, k_steps * 16), (1, 1), wave_size, wave_size,
-               "wave_private", (pipe_tn, pipe_tm))
-
-  @classmethod
-  def cooperative_lds(cls, *, tile: tuple[int, int, int], waves: tuple[int, int],
-                      wave_size: int = 32, reuse: tuple[int, int]) -> "GEMMWorkgroupPolicy":
-    return cls(tile, waves, waves[0] * waves[1] * wave_size, wave_size, "workgroup_shared", reuse)
-
-
-@dataclass(frozen=True)
-class GEMMSchedulePolicy:
-  """One public schedule composition shared by all storage transports."""
-  workgroup: GEMMWorkgroupPolicy
-  pipeline: PipelinePolicy
-
-  def __post_init__(self) -> None:
-    if not isinstance(self.workgroup, GEMMWorkgroupPolicy) or not isinstance(self.pipeline, PipelinePolicy):
-      raise ValueError("GEMM schedule requires typed workgroup and pipeline policies")
-    register = self.pipeline.storage_kind == "global_register_resident"
-    if register != (self.workgroup.ownership == "wave_private"):
-      raise ValueError("GEMM storage and operand ownership disagree")
-
-  @classmethod
-  def register_native(cls, *, pipe_tm: int = 2, pipe_tn: int = 2, k_steps: int = 2,
-                      wave_size: int = 32) -> "GEMMSchedulePolicy":
-    return cls(GEMMWorkgroupPolicy.register_wave(pipe_tm=pipe_tm, pipe_tn=pipe_tn,
-      k_steps=k_steps, wave_size=wave_size), PipelinePolicy.register_resident(stages=2))
-
-  @classmethod
-  def lds_cooperative(cls, *, tile: tuple[int, int, int], waves: tuple[int, int], slot_bytes: int,
-                      buffer_count: int = 2, wave_size: int = 32,
-                      reuse: tuple[int, int]) -> "GEMMSchedulePolicy":
-    return cls(GEMMWorkgroupPolicy.cooperative_lds(tile=tile, waves=waves, wave_size=wave_size, reuse=reuse),
-               PipelinePolicy.lds(buffer_count=buffer_count, slot_bytes=slot_bytes, stages=1))
 
 
 def pipeline_policy_for_route(route_family: str, *, buffer_count: int = 1, slot_bytes: int = 0,

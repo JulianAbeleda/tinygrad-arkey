@@ -1,6 +1,6 @@
 import pytest
 from extra.qk.compiler_policies import (PipelinePolicy, StoragePolicy, WaitPolicy, ResourcePlan, RegisterPipePlan,
-  GEMMSchedulePolicy, GEMMWorkgroupPolicy, WaitDependency, amdllvm_wait_dependency, pipeline_policy_for_route,
+  WaitDependency, amdllvm_wait_dependency, pipeline_policy_for_route,
   prove_wait_dependency_coverage)
 from tinygrad.codegen.opt.compiler_policies import wait_count_for_dependency
 
@@ -29,19 +29,6 @@ def test_route_policy_factory_keeps_lds_and_register_storage_interchangeable():
   assert isinstance(lds, PipelinePolicy) and lds.storage_kind == "lds" and lds.resources.lds_bytes == 40960
   assert reg.storage_kind == "global_register_resident" and reg.resources.lds_bytes == 0
   assert reg.logical_stage_count == 2 and reg.wait.kind == "targeted_vmcnt"
-
-def test_gemm_schedule_composes_storage_with_matching_operand_ownership():
-  register = GEMMSchedulePolicy.register_native(pipe_tm=2, pipe_tn=2, k_steps=2)
-  lds = GEMMSchedulePolicy.lds_cooperative(tile=(128, 128, 32), waves=(4, 2), slot_bytes=20480, reuse=(4, 2))
-  assert (register.workgroup.tile, register.workgroup.waves, register.workgroup.threads) == ((32, 32, 32), (1, 1), 32)
-  assert register.workgroup.ownership == "wave_private" and register.pipeline.storage_kind == "global_register_resident"
-  assert (lds.workgroup.tile, lds.workgroup.waves, lds.workgroup.threads) == ((128, 128, 32), (4, 2), 256)
-  assert lds.workgroup.ownership == "workgroup_shared" and lds.pipeline.storage_kind == "lds"
-
-def test_gemm_schedule_rejects_storage_ownership_mismatch():
-  wave = GEMMWorkgroupPolicy.register_wave()
-  with pytest.raises(ValueError, match="storage and operand ownership disagree"):
-    GEMMSchedulePolicy(wave, PipelinePolicy.lds(buffer_count=2, slot_bytes=20480))
 
 def test_wait_dependency_accepts_full_barrier_and_rejects_targeted_amdllvm():
   full = WaitDependency(WaitPolicy("full_barrier"), "produce", "consume", "A")

@@ -3,7 +3,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from tinygrad.codegen.opt.kernel_lds import rdna3_wmma_output_coord, validate_rdna3_wmma_descriptor, wmma_output_owners
+from extra.qk.kernel_lds import rdna3_wmma_output_coord, wmma_output_owners
+from tinygrad.codegen.opt.kernel_lds import validate_rdna3_wmma_descriptor
 from tinygrad.dtype import AddrSpace, DType, PtrDType, dtypes
 from tinygrad.uop.ops import KernelTileGeometry, Ops, UOp
 

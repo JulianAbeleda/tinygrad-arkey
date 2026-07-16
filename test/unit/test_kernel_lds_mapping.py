@@ -2,9 +2,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from tinygrad.codegen.opt.kernel_lds import (cooperative_lds_padding_offsets, cooperative_lds_stores, rdna3_wmma_output_coord,
-                                             derive_precontract_factors, derive_precontract_shape_factors, semantic_wave_coords,
-                                             validate_precontract_carriers, validate_rdna3_wmma_descriptor, wmma_fragment_loads, wmma_output_owners)
+from extra.qk.kernel_lds import (cooperative_lds_padding_offsets, cooperative_lds_stores, rdna3_wmma_output_coord,
+                                 semantic_wave_coords, wmma_fragment_loads, wmma_output_owners)
+from tinygrad.codegen.opt.kernel_lds import (derive_precontract_factors, derive_precontract_shape_factors,
+                                             validate_precontract_carriers, validate_rdna3_wmma_descriptor)
 from tinygrad.codegen.opt.tc import amd_rdna3
 from tinygrad import dtypes
 from tinygrad.uop.ops import KernelLDSWindow, KernelTileGeometry

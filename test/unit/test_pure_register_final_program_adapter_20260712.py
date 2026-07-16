@@ -1,6 +1,6 @@
 import pytest
 
-from tinygrad.codegen.opt.amd_resource_artifact import AMDPhysicalInterval, AMDResourceFacts
+from extra.qk.amd_resource_artifact import AMDPhysicalInterval, AMDResourceFacts
 from extra.qk.prefill.pure_register_compile_capture import capture_final_program_compile_only
 
 
@@ -51,4 +51,3 @@ def test_adapter_rejects_missing_or_untyped_final_facts():
     _capture(_program(descriptor={"authority": "final_code_object_descriptor", "resources": {"vgpr": 232}}))
   with pytest.raises(ValueError, match="typed intervals"):
     _capture(_program(allocator={"authority": "final_regalloc", "intervals": []}))
-
