@@ -1,0 +1,44 @@
+{
+  "blocker": {
+    "message": "native AMD resource evidence rejected: final LINEAR does not reassemble to the supplied ELF",
+    "type": "ValueError"
+  },
+  "command": [
+    "/usr/bin/python3",
+    "/home/ubuntu/tinygrad-arkey/extra/qk/prefill/q4k_q8_phase3_role_harness.py",
+    "--role",
+    "attn_kv",
+    "--m",
+    "512",
+    "--n",
+    "1024",
+    "--k",
+    "5120",
+    "--timeout-ms",
+    "120000",
+    "--warmups",
+    "1",
+    "--rounds",
+    "3",
+    "--output",
+    "bench/prefill-pure-full-kernel/q4k-q8-phase3-attn-kv-512x1024x5120-20260716.json"
+  ],
+  "health_after_blocker": {
+    "command": [
+      "rocm-smi",
+      "--showproductname",
+      "--showmeminfo",
+      "vram",
+      "--showuse",
+      "--showtemp"
+    ],
+    "elapsed_seconds": 0.07215144002111629,
+    "ok": true,
+    "returncode": 0,
+    "stderr": "",
+    "stdout": "\n\n========================= ROCm System Management Interface =========================\n=================================== Temperature ====================================\nGPU[0]\t\t: Temperature (Sensor edge) (C): 38.0\nGPU[0]\t\t: Temperature (Sensor junction) (C): 42.0\nGPU[0]\t\t: Temperature (Sensor memory) (C): 58.0\n====================================================================================\n================================ % time GPU is busy ================================\nGPU[0]\t\t: GPU use (%): 0\n====================================================================================\n=============================== Memory Usage (Bytes) ===============================\nGPU[0]\t\t: VRAM Total Memory (B): 25753026560\nGPU[0]\t\t: VRAM Total Used Memory (B): 269107200\n====================================================================================\n=================================== Product Info ===================================\nGPU[0]\t\t: Card series: \t\tNavi 31 [Radeon RX 7900 XT/7900 XTX/7900M]\nGPU[0]\t\t: Card model: \t\tRX 7900 GRE [XFX]\nGPU[0]\t\t: Card vendor: \t\tAdvanced Micro Devices, Inc. [AMD/ATI]\nGPU[0]\t\t: Card SKU: \t\tD7020100\n====================================================================================\n=============================== End of ROCm SMI Log ================================\n"
+  },
+  "passed": false,
+  "schema": "tinygrad.q4k_q8_phase3_role_evidence.v1",
+  "status": "blocked"
+}
