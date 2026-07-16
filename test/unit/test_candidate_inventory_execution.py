@@ -104,7 +104,28 @@ def test_default_compile_only_is_independent_of_missing_npz(monkeypatch, tmp_pat
   assert out["results"][0]["status"] == "passed" and not any(tmp_path.iterdir())
 
 
-def test_default_execution_registers_one_scoped_production_adapter(monkeypatch, tmp_path):
+def test_default_q4_compile_only_uses_five_buffer_target(monkeypatch, tmp_path):
+  calls = []
+  def compile_prepare(payload, identity, *, target):
+    calls.append((payload, identity, target))
+    assert not any(tmp_path.iterdir())
+    return object(), {"canonical_identity": identity, "compile_target": target}
+  monkeypatch.setattr(driver, "prepare_q4k_q8_five_buffer_compile", compile_prepare)
+  out = driver.run_inventory(artifact(), phase="compile-only", artifact_dir=str(tmp_path),
+    quant_formats=["Q4_K"])
+  assert len(calls) == 1 and calls[0][2] == "AMD:ISA:gfx1100"
+  assert out["results"][0]["status"] == "passed" and not any(tmp_path.iterdir())
+
+
+def test_request_selects_adapter_from_admitted_abi():
+  q4, q6 = driver.validate_and_join(artifact())[1:]
+  q4_request = driver.make_request(q4, "q4.npz", phase="compile-only")
+  q6_request = driver.make_request(q6, "q6.npz", phase="compile-only")
+  assert q4_request.compiler_context["adapter_id"] == driver.FIVE_BUFFER_ADAPTER_ID
+  assert q6_request.compiler_context["adapter_id"] == driver.ADAPTER_ID
+
+
+def test_default_execution_registers_both_scoped_production_adapters(monkeypatch, tmp_path):
   registered, executed = [], []
   def register(registry): registered.append(registry)
   def execute(request, *, registry):
@@ -112,9 +133,11 @@ def test_default_execution_registers_one_scoped_production_adapter(monkeypatch, 
     return ExecutionResult(request.experiment_id, request.candidate_id, request.digest,
       (PhaseResult("correctness", "passed", evidence={"health": {"preflight": True, "postflight": True}}),))
   monkeypatch.setattr(driver, "register_current_prefill_adapter", register)
+  monkeypatch.setattr(driver, "register_q4k_q8_five_buffer_adapter", register)
   monkeypatch.setattr(driver, "execute_request", execute)
   out = driver.run_inventory(artifact(), phase="correctness", artifact_dir=str(tmp_path))
-  assert len(registered) == 1 and len(executed) == 3
+  assert len(registered) == 2 and len(executed) == 3
+  assert registered[0] is registered[1]
   assert all(registry is registered[0] for _, registry in executed)
   assert out["completed_count"] == 3
 

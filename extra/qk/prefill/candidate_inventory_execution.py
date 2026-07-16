@@ -10,11 +10,15 @@ from typing import Any, Callable, Iterable, Mapping
 
 from extra.qk.prefill.current_prefill_execution_adapter import (ADAPTER_ID, prepare_current_prefill_compile,
   register_current_prefill_adapter)
+from extra.qk.prefill.q4k_q8_five_buffer_execution_adapter import (ADAPTER_ID as FIVE_BUFFER_ADAPTER_ID,
+  prepare_q4k_q8_five_buffer_compile, register_q4k_q8_five_buffer_adapter)
+from extra.qk.prefill.q4k_q8_five_buffer_artifact import (build_q4k_q8_five_buffer_artifact,
+  save_q4k_q8_five_buffer_artifact)
 from extra.qk.prefill.operand_path_execution_worker import AdapterRegistry, execute as execute_request
 from extra.qk.prefill.packed_wmma_correctness_canary import build_artifact
 from extra.qk.prefill.workload_inventory import CANDIDATE_INVENTORY_SCHEMA, INVENTORY_SCHEMA
 from extra.qk.runtime_specs import (FullKernelCandidateSet, FullKernelCandidateSetEntry, capability_transport,
-  full_kernel_candidate_capability, full_kernel_workload)
+  Q4K_Q8_1_FIVE_BUFFER_ABI, full_kernel_candidate_capability, full_kernel_workload)
 from extra.qk.prefill.execution_bridge_contracts import (CorrectnessProtocol, ExecutionRequest,
   GuardProtocol, TimingProtocol, TransportPlan, canonical_digest)
 
@@ -149,12 +153,14 @@ def make_request(candidate: JoinedCandidate, input_npz: str, *, phase: str,
   schedule_digest = canonical_digest({"schedule": candidate.payload["schedule"],
     "canonical_identity": candidate.canonical_identity}, "schedule facts")
   transport = capability_transport(full_kernel_candidate_capability(candidate.payload))
+  adapter_id = (FIVE_BUFFER_ADAPTER_ID if candidate.payload.get("kernel_abi", {}).get("family") == Q4K_Q8_1_FIVE_BUFFER_ABI
+                else ADAPTER_ID)
   return ExecutionRequest(experiment_id="sha256:" + canonical_digest({"workload": workload_digest,
       "schedule": schedule_digest, "candidate": candidate.canonical_identity}),
     candidate_id=candidate.canonical_identity, comparator_id=candidate.canonical_identity,
     workload_digest=workload_digest, schedule_digest=schedule_digest,
     transport_plan=TransportPlan(transport, schedule_digest),
-    target_context={"workload": workload_facts}, compiler_context={"adapter_id": ADAPTER_ID,
+    target_context={"workload": workload_facts}, compiler_context={"adapter_id": adapter_id,
       "candidate_payload": candidate.payload, "canonical_identity": candidate.canonical_identity, "input_npz": input_npz},
     candidate_knobs=dict(candidate.payload["schedule"]), fixed_invariants=workload_facts,
     correctness=None if phase == "compile-only" else CorrectnessProtocol("packed_wmma_npz", atol=2e-2, rtol=2e-2),
@@ -171,9 +177,19 @@ def _failed_or_unhealthy(result: Any) -> bool:
   return False
 
 
+def _is_five_buffer(candidate: JoinedCandidate) -> bool:
+  return candidate.payload.get("kernel_abi", {}).get("family") == Q4K_Q8_1_FIVE_BUFFER_ABI
+
+
+def _build_default_input(candidate: JoinedCandidate, path: str) -> Mapping[str, Any]:
+  if _is_five_buffer(candidate):
+    return save_q4k_q8_five_buffer_artifact(path, build_q4k_q8_five_buffer_artifact(*candidate.shape))
+  return build_artifact(candidate.quant_format, path, candidate.shape)
+
+
 def run_inventory(artifact: Mapping[str, Any], *, phase: str, artifact_dir: str,
                   roles: Iterable[str] = (), quant_formats: Iterable[str] = (), timeout_seconds: float = 30.0,
-                  warmups: int = 1, rounds: int = 5, build_fn: Callable[..., Mapping[str, Any]] = build_artifact,
+                  warmups: int = 1, rounds: int = 5, build_fn: Callable[..., Mapping[str, Any]] | None = None,
                   prepare_fn: Callable[..., tuple[Any, Mapping[str, Any]]] | None = None,
                   execute_fn: Callable[[ExecutionRequest], Any] | None = None) -> dict[str, Any]:
   """Run selected candidates serially. Injected functions keep orchestration CPU-testable."""
@@ -185,19 +201,24 @@ def run_inventory(artifact: Mapping[str, Any], *, phase: str, artifact_dir: str,
   if phase in ("correctness", "timing") and executor is None:
     registry = AdapterRegistry()
     register_current_prefill_adapter(registry)
+    register_q4k_q8_five_buffer_adapter(registry)
     executor = lambda request: execute_request(request, registry=registry)
   for candidate in selected:
     path = str(root / f"{candidate.order:04d}-{candidate.canonical_identity}.npz")
     identity = {"inventory_key": list(candidate.inventory_key), "canonical_identity": candidate.canonical_identity}
     if phase == "build-input":
-      value = dict(build_fn(candidate.quant_format, path, candidate.shape))
+      value = dict(build_fn(candidate.quant_format, path, candidate.shape) if build_fn is not None
+                   else _build_default_input(candidate, path))
       outputs.append({"identity": identity, "phase": phase, "status": "passed", "artifact": value})
       continue
     request = make_request(candidate, path, phase=phase, timeout_seconds=timeout_seconds, warmups=warmups, rounds=rounds)
     if phase == "compile-only":
       try:
-        compile_prepare = prepare_fn or prepare_current_prefill_compile
-        _, evidence = compile_prepare(candidate.payload, candidate.canonical_identity, device="AMD")
+        compile_prepare = prepare_fn or (prepare_q4k_q8_five_buffer_compile if _is_five_buffer(candidate)
+                                         else prepare_current_prefill_compile)
+        compile_kwargs = ({"device": "AMD"} if prepare_fn is not None or not _is_five_buffer(candidate)
+                          else {"target": "AMD:ISA:gfx1100"})
+        _, evidence = compile_prepare(candidate.payload, candidate.canonical_identity, **compile_kwargs)
         value = {"compile_evidence": dict(evidence)}
         outputs.append({"identity": identity, "request": request.to_dict(), "phase": phase, "status": "passed", **value})
       except Exception as exc:
