@@ -19,7 +19,7 @@ def load_model_and_tokenizer(model:Any, max_context:int, *, seed:int, adapter:An
   must have configured the environment before calling this.
   """
   from tinygrad import Tensor
-  from tinygrad.llm.cli import SimpleTokenizer
+  from extra.llm.cli import SimpleTokenizer
   from tinygrad.llm.model import Transformer
 
   Tensor.manual_seed(seed)

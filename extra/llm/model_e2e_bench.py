@@ -19,7 +19,7 @@ from tinygrad import Tensor, nn
 from tinygrad.helpers import getenv, GlobalCounters, fetch, Context, DEBUG
 from tinygrad.llm.model import Transformer, TransformerConfig
 import tinygrad.llm.model as _M
-from tinygrad.llm.cli import SimpleTokenizer, models as BUILTIN, _quant_from_name, _device_target
+from extra.llm.cli import SimpleTokenizer, models as BUILTIN, _quant_from_name, _device_target
 
 def _git(*args):
   try: return subprocess.check_output(["git", *args], cwd=pathlib.Path(__file__).resolve().parents[2]).decode().strip()

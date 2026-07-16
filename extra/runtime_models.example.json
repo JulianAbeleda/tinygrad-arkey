@@ -1,5 +1,5 @@
 {
-  "_comment": "Phase R3 example model registry. Copy to ~/.config/tinygrad/runtime_models.json (or point the server at it with --registry / TINYGRAD_RUNTIME_MODELS). Rows here extend or override the built-in aliases in tinygrad/llm/cli.py. 'path' may be a local GGUF file or an https URL (fetched + cached on load).",
+  "_comment": "Phase R3 example model registry. Copy to ~/.config/tinygrad/runtime_models.json (or point the server at it with --registry / TINYGRAD_RUNTIME_MODELS). Rows here extend or override the built-in aliases in extra/llm/cli.py. 'path' may be a local GGUF file or an https URL (fetched + cached on load).",
   "models": [
     {
       "id": "qwen3-8b-q4k",

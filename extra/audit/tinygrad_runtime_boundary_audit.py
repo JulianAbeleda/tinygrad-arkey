@@ -2,7 +2,7 @@
 """Phase R0 boundary audit (see docs/tinygrad-runtime-client-separation-roadmap-20260630.md).
 
 Documents the tinygrad runtime server's boundary surface and checks for runtime/client leakage. It inspects the
-server implementation in tinygrad/llm/cli.py (route literals + RuntimeState capabilities) and, if a server is
+server implementation in extra/llm/cli.py (route literals + RuntimeState capabilities) and, if a server is
 running, probes it live. Writes:
 
   bench/tinygrad-runtime-boundary/latest.json
@@ -13,7 +13,7 @@ Verdicts: R0_PASS_BOUNDARY_PINNED / R0_BLOCKED_SERVER_ENTRYPOINT_AMBIGUOUS
 from __future__ import annotations
 import os, sys, json, inspect, pathlib, argparse, urllib.request, urllib.error
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
-import tinygrad.llm.cli as cli
+import extra.llm.cli as cli
 
 OUT_DIR = pathlib.Path(__file__).resolve().parents[2] / "bench" / "tinygrad-runtime-boundary"
 
@@ -82,7 +82,7 @@ def main():
             else "R0_BLOCKED_SERVER_ENTRYPOINT_AMBIGUOUS"
   result = {
     "verdict": verdict,
-    "entrypoint": "tinygrad/llm/cli.py :: main() --serve (class LLMServer / Handler)",
+    "entrypoint": "extra/llm/cli.py :: main() --serve (class LLMServer / Handler)",
     "present_count": len(present), "total_count": len(audit["checks"]),
     "missing": [c["id"] for c in missing],
     "client_concern_leakage": audit["client_concern_leakage"],

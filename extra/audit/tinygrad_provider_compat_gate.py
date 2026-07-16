@@ -6,7 +6,7 @@ llama.cpp-style tooling) over /v1/* and the proprietary app over /runtime/*. Use
 can run as a plain provider-compat check with no extra deps.
 
 Usage:
-  # against an already-running server (started with: python -m tinygrad.llm.cli --serve 8000 -m <model>)
+  # against an already-running server (started with: python -m tinygrad.llm --serve 8000 -m <model>)
   python extra/audit/tinygrad_provider_compat_gate.py --base-url http://127.0.0.1:8000 --model qwen3:8b
 
   # load/unload checks require a model the registry can resolve (id or --load-path)

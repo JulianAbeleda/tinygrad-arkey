@@ -1,2 +1,2 @@
-from tinygrad.llm.cli import main
+from extra.llm.cli import main
 if __name__ == "__main__": main()
