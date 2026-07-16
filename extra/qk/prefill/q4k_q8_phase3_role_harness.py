@@ -16,7 +16,8 @@ from extra.qk.prefill.q4k_q8_five_buffer_artifact import build_q4k_q8_five_buffe
 from extra.qk.prefill.q4k_q8_five_buffer_execution_adapter import (ADAPTER_ID as PIPELINE_ADAPTER_ID,
   Q4KQ8FiveBufferAdapter, prepare_q4k_q8_five_buffer_pipeline_compile)
 from extra.qk.prefill.q4k_q8_five_buffer_role_gate import admitted_q4k_non_fitting_roles
-from extra.qk.runtime_specs import FullKernelCandidateSet, full_kernel_workload
+from extra.qk.runtime_specs import (FullKernelCandidateSet, capability_transport, full_kernel_candidate_capability,
+  full_kernel_workload)
 
 SCHEMA = "tinygrad.q4k_q8_phase3_role_evidence.v1"
 DEFAULT_INVENTORY = "bench/prefill-pure-full-kernel/qwen3-14b-mixed-quant-candidate-inventory-v1.json"
@@ -69,12 +70,13 @@ def _request(*, candidate_id: str, comparator_id: str, adapter_id: str, entry, i
              input_format: str | None = None) -> ExecutionRequest:
   workload = full_kernel_workload(entry.payload)
   schedule_digest = canonical_digest(entry.payload["schedule"], "schedule")
+  transport = capability_transport(full_kernel_candidate_capability(entry.payload))
   compiler = {"adapter_id": adapter_id, "candidate_payload": entry.payload,
               "canonical_identity": entry.canonical_identity, "input_npz": str(input_npz.resolve())}
   if input_format is not None: compiler["input_format"] = input_format
   return ExecutionRequest(experiment_id="q4k-q8-phase3-role-gate", candidate_id=candidate_id,
     comparator_id=comparator_id, workload_digest=workload_digest, schedule_digest=schedule_digest,
-    transport_plan=TransportPlan("direct_global", schedule_digest),
+    transport_plan=TransportPlan(transport, schedule_digest),
     target_context={"session_id": session_id, "target_id": "AMD:gfx1100:wave32",
       "system_snapshot_id": platform.node(), "workload": {"role": workload.role, "shape": list(workload.shape)}},
     compiler_context=compiler, correctness=CorrectnessProtocol("sparse_selected_position", atol=0.0, rtol=0.0),
