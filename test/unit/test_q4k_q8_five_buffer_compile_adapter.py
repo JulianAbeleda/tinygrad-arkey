@@ -74,7 +74,7 @@ def test_bridge_fails_closed_on_legacy_tail_identity_and_target_drift():
 def _assert_final_program(program, admission):
   assert program.op is Ops.PROGRAM
   assert [u for u in program.toposort() if u.op is Ops.PROGRAM] == [program]
-  assert program.src[0].arg.candidate_context is admission.context
+  assert program.src[0].arg.candidate_context == admission.context
   assert program.src[0].arg.candidate_context.canonical_identity == admission.canonical_identity
   assert program.src[0].arg.candidate_context.geometry is None
   assert program.src[0].arg.candidate_context.pipeline is admission.plan
@@ -91,6 +91,8 @@ def test_amd_isa_compiles_small_multi_grid_to_one_identity_bound_program():
   entry = _entry()
   program, admission = compile_q4k_q8_five_buffer_program(entry.payload, entry.canonical_identity, target=AMD_ISA_TARGET)
   _assert_final_program(program, admission)
+  repeated, repeated_admission = compile_q4k_q8_five_buffer_program(entry.payload, entry.canonical_identity, target=AMD_ISA_TARGET)
+  assert repeated.src[0].arg.candidate_context == repeated_admission.context == admission.context
   assert program.arg.global_size[0] > 1 and program.arg.global_size[1] > 1
 
 

@@ -130,7 +130,7 @@ def compile_q4k_q8_five_buffer_program(payload:dict[str, Any], canonical_identit
   if len(program.src) != 5 or program.src[3].op is not Ops.SOURCE or program.src[4].op is not Ops.BINARY:
     raise RuntimeError("final PROGRAM lost source or binary")
   context = getattr(program.src[0].arg, "candidate_context", None)
-  if context is not admission.context or context.canonical_identity != admission.canonical_identity:
+  if context != admission.context or context.canonical_identity != admission.canonical_identity:
     raise RuntimeError("final PROGRAM candidate identity drift")
   buffers = _ordered_buffers(admission, dtypes)
   params = {u.arg.slot:u.dtype.base for u in program.src[0].toposort() if u.op is Ops.PARAM}
