@@ -5,6 +5,12 @@ The principles file is the reusable, project-neutral scaffold; everything that i
 specific to *this* fork (commit prefixes, portability rules, the AMD env
 invariant, the anti-re-sprawl rule) lives here so the scaffold stays copyable.
 
+## Temporary Authored LOC Budget
+
+The authored-source cap is temporarily 35,000 lines while the 14B autoscan route is implemented and proven end to end. After that proof,
+run another consolidation/pruning pass and restore the 30,000-line cap. This is implementation headroom, not permission to retain dead probes,
+duplicate route authority, or superseded compatibility paths.
+
 ## Commit Prefixes
 
 Every commit carries exactly one owning-subsystem prefix. Allowed prefixes in
