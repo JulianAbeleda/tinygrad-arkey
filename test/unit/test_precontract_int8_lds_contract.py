@@ -9,7 +9,8 @@ from tinygrad.codegen.opt.kernel_lds import (PrecontractContractSpec, Precontrac
   validate_precontract_carriers, validate_precontract_wmma_abi, validate_rdna3_wmma_descriptor)
 from tinygrad.codegen.opt.tc import amd_rdna3
 from tinygrad.dtype import AddrSpace
-from tinygrad.uop.ops import AxisType, KernelLDSWindow, KernelTileGeometry, Ops, UOp
+from tinygrad.uop.ops import AxisType, Ops, UOp
+from extra.qk.kernel_vocabulary import KernelLDSWindow, KernelTileGeometry
 
 
 def _tc(): return next(tc for tc in amd_rdna3 if tc.dtype_in == dtypes.char and tc.dtype_out == dtypes.int)

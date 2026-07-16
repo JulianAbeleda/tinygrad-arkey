@@ -11,7 +11,8 @@ from tinygrad.codegen.opt.compiler_policies import StoragePolicy
 from tinygrad.codegen.opt.tc import amd_rdna3
 from tinygrad.codegen.opt.packed_weight import PackedWeightTransform
 from tinygrad.dtype import AddrSpace
-from tinygrad.uop.ops import AxisType, KernelLDSWindow, KernelTileGeometry, Ops, UOp
+from tinygrad.uop.ops import AxisType, Ops, UOp
+from extra.qk.kernel_vocabulary import KernelLDSWindow, KernelTileGeometry
 
 def _geometry(): return KernelTileGeometry((128,128,32),(4,2),256,32,
   (KernelLDSWindow("A",0,10240,80),KernelLDSWindow("B",10240,20480,80)))

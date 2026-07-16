@@ -5,7 +5,8 @@ import pytest
 
 from tinygrad import Tensor, dtypes
 from tinygrad.codegen.opt.packed_weight import PackedWeightTile, PackedWeightTransform
-from tinygrad.uop.ops import KernelCandidateContext, KernelInfo, KernelLDSWindow, KernelTileGeometry, Ops, UOp
+from tinygrad.uop.ops import KernelInfo, Ops, UOp
+from extra.qk.kernel_vocabulary import KernelCandidateContext, KernelLDSWindow, KernelTileGeometry
 from extra.qk.layout import Q4_K_BLOCK_BYTES, Q6_K_BLOCK_BYTES, q4_k_reference, q6_k_reference
 
 

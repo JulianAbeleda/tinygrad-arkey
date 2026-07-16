@@ -7,7 +7,8 @@ from tinygrad.codegen.opt import Opt, OptOps
 from tinygrad.codegen.opt.kernel_pipeline import KernelStage1PipelinePlan
 from tinygrad.dtype import AddrSpace, dtypes
 from tinygrad.helpers import Target
-from tinygrad.uop.ops import KernelCandidateContext, KernelLDSWindow, KernelTileGeometry, Ops, UOp
+from tinygrad.uop.ops import Ops, UOp
+from extra.qk.kernel_vocabulary import KernelCandidateContext, KernelLDSWindow, KernelTileGeometry
 from tinygrad.codegen.late.devectorizer import split_load_store
 from tinygrad.renderer.isa import IselContext, Register
 from tinygrad.renderer.isa.amd import AMDISARenderer, AMDOps, _frag_b128_loads, _wmma_operand_regs, isel_store

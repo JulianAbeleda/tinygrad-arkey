@@ -3,7 +3,7 @@ import pytest
 from tinygrad.codegen.opt.packed_weight import PackedOperandComponent, PackedOperandTransform, PackedWeightTransform
 from tinygrad.dtype import dtypes
 from extra.qk.kernel_lds import lds_arena_bytes, lds_component_view, lds_component_views
-from tinygrad.uop.ops import KernelCandidateContext, KernelLDSComponentWindow, KernelLDSWindow, KernelTileGeometry
+from extra.qk.kernel_vocabulary import KernelCandidateContext, KernelLDSComponentWindow, KernelLDSWindow, KernelTileGeometry
 
 
 def _geometry():

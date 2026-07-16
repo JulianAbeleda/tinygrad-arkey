@@ -19,8 +19,9 @@ from extra.qk.kernel_pipeline import (DotUpdateRecurrencePlan, HierarchicalKerne
 from extra.qk.kernel_writeback import WMMAWritebackDescriptor, WMMAWritebackLayout, WMMAWritebackProof
 from tinygrad.codegen.opt.packed_weight import PackedOperandComponent, PackedOperandRecordTransform, PackedOperandTransform
 from tinygrad.codegen.opt.tc import amd_rdna3
-from tinygrad.uop.ops import (KernelCandidateContext, KernelLDSArenaRegion, KernelLDSRecordComponent,
-  KernelLDSRecordLayout, KernelLDSWindow, KernelTileGeometry, Ops)
+from tinygrad.uop.ops import Ops
+from extra.qk.kernel_vocabulary import (KernelCandidateContext, KernelLDSArenaRegion, KernelLDSRecordComponent,
+  KernelLDSRecordLayout, KernelLDSWindow, KernelTileGeometry)
 
 PLAN_SCHEMA = "tinygrad.mmq_llama_candidate_plan.v1"
 DESCRIPTOR_ID = "llama.q4_k_q8_1.mmq.amd_mma"

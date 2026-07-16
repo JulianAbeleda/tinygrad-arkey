@@ -5,7 +5,8 @@ from tinygrad.device import Compiler
 from tinygrad.dtype import dtypes
 from tinygrad.renderer import Target
 from tinygrad.runtime.ops_python import PythonRenderer
-from tinygrad.uop.ops import KernelCandidateContext, KernelInfo, KernelLDSWindow, KernelTileGeometry, UOp
+from tinygrad.uop.ops import KernelInfo, UOp
+from extra.qk.kernel_vocabulary import KernelCandidateContext, KernelLDSWindow, KernelTileGeometry
 from tinygrad.codegen.opt import postrange
 
 

@@ -3,7 +3,8 @@ from tinygrad.codegen import to_program, to_program_cache
 from tinygrad.dtype import dtypes
 from tinygrad.renderer import Target
 from tinygrad.runtime.ops_python import PythonRenderer
-from tinygrad.uop.ops import KernelCandidateContext, KernelInfo, UOp
+from tinygrad.uop.ops import KernelInfo, UOp
+from extra.qk.kernel_vocabulary import KernelCandidateContext
 
 
 def _abi_sink(identity):

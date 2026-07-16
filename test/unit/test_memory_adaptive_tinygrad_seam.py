@@ -14,7 +14,7 @@ from extra.qk.memory_adaptive_autoscan import AutoscanCandidate
 from tinygrad import UOp, dtypes
 from extra.qk.physical_memory_ledger import PhysicalMemoryLedger
 from tinygrad.llm.physical_memory_ledger import AllocationOwner
-from tinygrad.schedule.memory import ScheduleMemoryArena, ScheduleMemoryBuffer, ScheduleMemoryManifest
+from extra.qk.schedule_memory_manifest import ScheduleMemoryArena, ScheduleMemoryBuffer, ScheduleMemoryManifest
 
 
 def _model():

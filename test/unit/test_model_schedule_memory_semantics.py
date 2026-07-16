@@ -8,7 +8,7 @@ from tinygrad.llm.memory_semantics import (KV_CACHE, PREFILL_ACTIVATION, PREFILL
                                            memory_semantic_owner, prefill_output)
 from tinygrad.llm.model import (GatedDeltaNetBlock, SSMConfig, Transformer, TransformerBlock, TransformerConfig,
                                 _runtime_input_boundary)
-from tinygrad.schedule.memory import collect_memory_plan_manifests
+from extra.qk.schedule_memory_manifest import collect_memory_plan_manifests
 
 
 def _config(*, kv_quant:bool=False) -> TransformerConfig:

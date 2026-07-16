@@ -7,7 +7,7 @@ from tinygrad import dtypes
 from extra.qk.kernel_pipeline import DotUpdateRecurrencePlan, HierarchicalKernelPipelinePlan
 from extra.qk.kernel_writeback import WMMAWritebackDescriptor
 from tinygrad.codegen.opt.packed_weight import PackedOperandRecordTransform
-from tinygrad.uop.ops import KernelCandidateContext, KernelTileGeometry
+from extra.qk.kernel_vocabulary import KernelCandidateContext, KernelTileGeometry
 
 
 def test_source_anchored_typed_plan_and_formulas():

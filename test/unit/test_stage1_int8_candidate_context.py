@@ -6,7 +6,8 @@ from tinygrad.codegen.opt import Opt, OptOps
 from tinygrad.codegen.opt.kernel_pipeline import KernelStage1PipelinePlan
 from tinygrad.helpers import Target
 from tinygrad.renderer.isa.amd import AMDISARenderer
-from tinygrad.uop.ops import KernelCandidateContext, KernelLDSWindow, KernelTileGeometry, Ops
+from tinygrad.uop.ops import Ops
+from extra.qk.kernel_vocabulary import KernelCandidateContext, KernelLDSWindow, KernelTileGeometry
 
 
 def test_dense_int8_candidate_context_threads_staged_abi_and_accumulator_dtype():

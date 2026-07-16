@@ -8,7 +8,7 @@ from tinygrad.codegen.opt.kernel_lds import (derive_precontract_factors, derive_
                                              validate_precontract_carriers, validate_rdna3_wmma_descriptor)
 from tinygrad.codegen.opt.tc import amd_rdna3
 from tinygrad import dtypes
-from tinygrad.uop.ops import KernelLDSWindow, KernelTileGeometry
+from extra.qk.kernel_vocabulary import KernelLDSWindow, KernelTileGeometry
 
 
 def _geometry():

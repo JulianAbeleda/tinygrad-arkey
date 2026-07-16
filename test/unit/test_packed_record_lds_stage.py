@@ -7,8 +7,9 @@ from extra.qk.kernel_lds import (PackedRecordFieldProducer, PackedRecordLDSRegio
 from tinygrad.codegen.opt.packed_weight import PackedOperandComponent, PackedOperandRecordTransform, PackedOperandTransform
 from tinygrad.codegen.opt.tc import amd_rdna3
 from tinygrad.dtype import AddrSpace
-from tinygrad.uop.ops import (AxisType, KernelLDSArenaRegion, KernelLDSRecordComponent, KernelLDSRecordLayout,
-                              KernelLDSWindow, KernelTileGeometry, Ops, UOp)
+from tinygrad.uop.ops import AxisType, Ops, UOp
+from extra.qk.kernel_vocabulary import (KernelLDSArenaRegion, KernelLDSRecordComponent, KernelLDSRecordLayout,
+  KernelLDSWindow, KernelTileGeometry)
 
 
 def _tc(): return next(tc for tc in amd_rdna3 if tc.dtype_in == dtypes.char and tc.dtype_out == dtypes.int)

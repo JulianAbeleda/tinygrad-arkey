@@ -19,7 +19,8 @@ from extra.qk.kernel_pipeline_proof import (KernelStage1LifecycleEvent, KernelSt
   prove_stage1_lifecycle, stage1_lifecycle_events)
 from extra.qk.logical_register_tile import LogicalRegisterTile
 from tinygrad.dtype import AddrSpace, dtypes
-from tinygrad.uop.ops import AxisType, KernelLDSWindow, KernelTileGeometry, Ops, UOp
+from tinygrad.uop.ops import AxisType, Ops, UOp
+from extra.qk.kernel_vocabulary import KernelLDSWindow, KernelTileGeometry
 from tinygrad.renderer.isa.amd_register_allocator import AMDStageBufferSpec
 
 

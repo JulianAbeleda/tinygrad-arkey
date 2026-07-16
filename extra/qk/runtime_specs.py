@@ -394,7 +394,7 @@ def admit_full_kernel_candidate(payload:dict[str, Any], canonical_identity:str, 
     if any(shape[i] % (16,16,256)[i] for i in range(3)):
       raise FullKernelAdmissionError("geometry_divisibility", "direct five-buffer workload is not 16x16x256 aligned (no tails)")
     direct_plan = Q4KQ8FiveBufferEmitterPlan()
-    from tinygrad.uop.ops import KernelCandidateContext
+    from extra.qk.kernel_vocabulary import KernelCandidateContext
     context = KernelCandidateContext(schema_version=normalized["schema_version"], canonical_identity=actual_identity,
       geometry=None, pipeline=direct_plan)
     operand_plan = _freeze_json(normalized["kernel_abi"])
@@ -420,7 +420,7 @@ def admit_full_kernel_candidate(payload:dict[str, Any], canonical_identity:str, 
   expected_lane_mapping = "wave_contiguous_b128" if storage_kind == "global_register_resident" else "cooperative_row_stride_64_b128"
   if any(schedule["cooperative_load"][r]["lane_mapping"] != expected_lane_mapping for r in ("a","b")):
     raise FullKernelAdmissionError("capability_lane_map", f"{storage_kind} requires {expected_lane_mapping}")
-  from tinygrad.uop.ops import KernelCandidateContext, KernelLDSWindow, KernelTileGeometry
+  from extra.qk.kernel_vocabulary import KernelCandidateContext, KernelLDSWindow, KernelTileGeometry
   # KernelTileGeometry predates non-LDS transport and still carries mandatory
   # compatibility windows. Register admission uses inert aligned sentinels;
   # no register authority is derived from payload LDS layout fields.
@@ -820,7 +820,7 @@ class GeneratedCandidate:
 
   def kernel_candidate_context(self):
     if not self.is_full_kernel_candidate: raise ValueError("legacy candidate has no full-kernel candidate context")
-    from tinygrad.uop.ops import KernelCandidateContext
+    from extra.qk.kernel_vocabulary import KernelCandidateContext
     assert self.full_kernel_candidate is not None
     return KernelCandidateContext(self.full_kernel_candidate["schema_version"], self.canonical_identity)
 

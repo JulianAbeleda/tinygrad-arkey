@@ -1,5 +1,5 @@
 from tinygrad import Tensor, TinyJit
-from tinygrad.schedule.memory import ScheduleMemoryManifest, collect_memory_plan_manifests
+from extra.qk.schedule_memory_manifest import ScheduleMemoryManifest, collect_memory_plan_manifests
 
 
 def test_ordinary_cpu_schedule_collects_only_when_requested():

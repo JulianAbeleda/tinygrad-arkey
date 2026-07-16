@@ -6,7 +6,8 @@ from extra.qk.kernel_lds import (PackedComponentLDSBinding, PackedComponentOpera
 from tinygrad.codegen.opt.packed_weight import PackedOperandComponent, PackedOperandTransform
 from tinygrad.codegen.opt.tc import amd_rdna3
 from tinygrad.dtype import AddrSpace
-from tinygrad.uop.ops import AxisType, KernelLDSComponentWindow, KernelLDSWindow, KernelTileGeometry, Ops, UOp
+from tinygrad.uop.ops import AxisType, Ops, UOp
+from extra.qk.kernel_vocabulary import KernelLDSComponentWindow, KernelLDSWindow, KernelTileGeometry
 
 
 def _tc(): return next(tc for tc in amd_rdna3 if tc.dtype_in == dtypes.char and tc.dtype_out == dtypes.int)

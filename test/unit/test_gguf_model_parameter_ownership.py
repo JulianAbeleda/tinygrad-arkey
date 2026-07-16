@@ -4,7 +4,7 @@ from tinygrad import Device
 from tinygrad.llm.gguf import MODEL_PARAMETER_ALLOCATION_OWNER, gguf_load
 from tinygrad.llm.memory_semantics import MODEL_PARAMETER
 from extra.qk.physical_memory_ledger import PhysicalMemoryLedger
-from tinygrad.schedule.memory import collect_memory_plan_manifests
+from extra.qk.schedule_memory_manifest import collect_memory_plan_manifests
 
 
 def _write_one_tensor_gguf(path) -> None:

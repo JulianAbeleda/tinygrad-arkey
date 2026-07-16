@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from tinygrad.schedule.memory import ScheduleMemoryManifest
+from extra.qk.schedule_memory_manifest import ScheduleMemoryManifest
 
 
 from tinygrad.llm.memory_semantics import MemorySemanticClass

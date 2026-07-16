@@ -15,8 +15,8 @@ from tinygrad.codegen.opt.kernel_lds import (PackedPrecontractOperandTemplate, P
   validate_precontract_thread_axes, validate_precontract_wmma_abi, validate_rdna3_wmma_descriptor)
 from tinygrad.codegen.opt.packed_weight import PackedOperandRecordTransform, PackedOperandTransform, PackedWeightTransform
 from tinygrad.dtype import AddrSpace, DType, PtrDType, dtypes
-from tinygrad.uop.ops import (AxisType, KernelLDSArenaRegion, KernelLDSComponentWindow, KernelLDSWindow, KernelTileGeometry,
-                              Ops, UOp)
+from tinygrad.uop.ops import AxisType, Ops, UOp
+from extra.qk.kernel_vocabulary import KernelLDSArenaRegion, KernelLDSComponentWindow, KernelLDSWindow, KernelTileGeometry
 
 @dataclass(frozen=True)
 class CooperativeLDSStore:

@@ -5,8 +5,9 @@ from extra.qk.kernel_writeback import (WMMAIDsReady, WMMAWritebackDescriptor, WM
   WMMAWritebackProof, WMMAWritebackTileMapping, build_wmma_writeback)
 from tinygrad.codegen.opt.tc import amd_rdna3
 from tinygrad.dtype import AddrSpace
-from tinygrad.uop.ops import (AxisType, KernelLDSArenaRegion, KernelLDSRecordComponent, KernelLDSRecordLayout,
-  KernelLDSWindow, KernelTileGeometry, Ops, UOp)
+from tinygrad.uop.ops import AxisType, Ops, UOp
+from extra.qk.kernel_vocabulary import (KernelLDSArenaRegion, KernelLDSRecordComponent, KernelLDSRecordLayout,
+  KernelLDSWindow, KernelTileGeometry)
 
 
 def _tc(): return next(x for x in amd_rdna3 if x.dtype_in == dtypes.char and x.dtype_out == dtypes.int)

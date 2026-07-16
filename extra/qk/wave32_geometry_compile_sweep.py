@@ -18,7 +18,8 @@ from tinygrad.codegen.opt import Opt, OptOps
 from tinygrad.codegen.opt.kernel_pipeline import KernelStage1PipelinePlan
 from tinygrad.helpers import Target
 from tinygrad.renderer.isa.amd import AMDISARenderer
-from tinygrad.uop.ops import KernelCandidateContext, KernelLDSWindow, KernelTileGeometry, Ops
+from tinygrad.uop.ops import Ops
+from extra.qk.kernel_vocabulary import KernelCandidateContext, KernelLDSWindow, KernelTileGeometry
 
 ROOT = Path(__file__).resolve().parents[2]
 ARTIFACT = ROOT / "bench/wave32-geometry-compile-sweep/latest.json"
