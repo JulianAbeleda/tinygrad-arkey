@@ -49,6 +49,11 @@ def test_q4_q6_prefill_clones_are_model_owned(monkeypatch):
   assert not hasattr(q4.q4k_storage, "__dict__") and not hasattr(q6.q6k_storage, "__dict__")
 
 
+def test_qk_prefill_has_no_dead_fp16_compatibility_surface():
+  assert not hasattr(Q4KPrimitiveLinear, "prefill_fp16_weight")
+  assert not hasattr(Q6KPrimitiveLinear, "prefill_fp16_weight")
+
+
 @pytest.mark.parametrize("ggml_type,block_bytes,name,installer", [
   (12, 144, "blk.0.ffn_gate.weight", _install_q4k_primitives),
   (14, 210, "blk.0.ffn_down.weight", _install_q6k_primitives),

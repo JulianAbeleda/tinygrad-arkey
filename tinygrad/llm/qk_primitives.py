@@ -3,7 +3,7 @@ import collections, pathlib
 from dataclasses import dataclass
 from tinygrad import Tensor, UOp, dtypes
 from tinygrad.helpers import prod
-from tinygrad.llm.gguf import MODEL_PARAMETER_ALLOCATION_OWNER, ggml_data_to_tensor
+from tinygrad.llm.gguf import MODEL_PARAMETER_ALLOCATION_OWNER
 from tinygrad.llm.memory_semantics import MODEL_PARAMETER, memory_semantic_owner, model_parameter
 from tinygrad.llm.physical_memory_ledger import allocation_owner, bind_allocation_owner
 from tinygrad.llm import route_ops as qk_ops
@@ -116,11 +116,6 @@ class _QKPrimitiveLinear:
     if storage.mode in ("sidecar", "shared"): return storage.packed
     if not hasattr(self, self._prefill_attr): setattr(self, self._prefill_attr, _model_parameter_materialization(self.weight, storage.packed.clone()))
     return getattr(self, self._prefill_attr)
-
-  def prefill_fp16_weight(self) -> Tensor:
-    raw = getattr(self, self._storage_attr).packed.bitcast(dtypes.uint8).reshape(-1)
-    return _model_parameter_materialization(self.weight, ggml_data_to_tensor(raw, self.out_features * self.in_features, self._ggml_type).reshape(
-      self.out_features, self.in_features).cast(dtypes.float16).contiguous())
 
 class Q4KPrimitiveLinear(_QKPrimitiveLinear):
   _storage_attr, _prefill_attr, _ggml_type = "q4k_storage", "_prefill_q4k_words", 12
