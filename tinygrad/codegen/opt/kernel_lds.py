@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Callable, TypeAlias, TYPE_CHECKING
 
 from tinygrad.codegen.opt.packed_weight import PackedWeightTransform
-from tinygrad.dtype import AddrSpace, DType, PtrDType, dtypes
+from tinygrad.dtype import AddrSpace, PtrDType, dtypes
 from tinygrad.uop.ops import AxisType, Ops, UOp
 if TYPE_CHECKING: from tinygrad.uop.ops import KernelLDSWindow, KernelTileGeometry
 

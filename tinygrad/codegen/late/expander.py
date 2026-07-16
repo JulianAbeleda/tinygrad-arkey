@@ -1,7 +1,7 @@
 # this converts a lowerer program into a vectorized program
 import functools, itertools
 from tinygrad.dtype import dtypes, PtrDType, AddrSpace
-from tinygrad.helpers import dedup, flatten, all_same, prod, partition, getenv
+from tinygrad.helpers import dedup, flatten, all_same, prod, partition
 from tinygrad.uop.ops import UOp, Ops, UPat, PatternMatcher, GroupOp, RegisterResidentAccumulator, AxisType, range_start
 from tinygrad.schedule.rangeify import BufferizeOpts
 

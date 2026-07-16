@@ -2,11 +2,11 @@ from __future__ import annotations
 import contextlib, math, itertools
 from dataclasses import replace
 from typing import cast
-from tinygrad.uop.ops import Ops, UOp, UPat, PatternMatcher, KernelInfo, graph_rewrite, AxisType, ssimplify, GroupOp, remove_all_tags
+from tinygrad.uop.ops import Ops, UOp, KernelInfo, graph_rewrite, AxisType, ssimplify, GroupOp, remove_all_tags
 from tinygrad.uop.ops import axis_letters, axis_colors, axis_to_pos
 from tinygrad.device import Buffer
 from tinygrad.dtype import dtypes
-from tinygrad.helpers import colored, getenv, DEBUG, NOOPT, argsort, round_up, prod, merge_dicts, get_single_element, flatten
+from tinygrad.helpers import colored, DEBUG, NOOPT, argsort, round_up, prod, merge_dicts, get_single_element, flatten
 from tinygrad.helpers import ALLOW_TF32, count
 from tinygrad.codegen.opt import Opt, OptOps, KernelOptError, check
 from tinygrad.codegen.opt.kernel_pipeline import validate_scheduler_tile_loop_pressure
