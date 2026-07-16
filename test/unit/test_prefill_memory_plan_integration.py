@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from tinygrad.llm.admission import AdmissionInputs, plan_selected_model_memory
+from tinygrad.llm.admission import AdmissionInputs, ContextMemoryTerms, plan_selected_model_memory
 from tinygrad.llm.device_facts import DeviceCapabilities, DeviceFacts, ProbeRecord
 from tinygrad.llm.model import Transformer
 from tinygrad.llm.prefill_memory_plan import Strategy
@@ -21,6 +21,18 @@ def _inputs(**updates):
     prefill_ubatch=512, v2_on=True, resident_fp16_admit=False, model_label="selected-model")
   values.update(updates)
   return AdmissionInputs(**values)
+
+
+def test_metadata_builder_is_the_geometry_owner():
+  kv = {"general.architecture": "unit", "unit.context_length": 8192, "unit.block_count": 34,
+        "unit.nextn_predict_layers": 2, "unit.attention.head_count": 32, "unit.attention.head_count_kv": 8,
+        "unit.embedding_length": 4096, "unit.attention.key_length": 128, "unit.rope.dimension_count": 96}
+  inp = AdmissionInputs.from_model_metadata(2048, kv, free_vram=30_000_000_000, q4_bytes=6_000_000_000,
+    est_fp16=8_000_000_000, prefill_ubatch=512, v2_on=True, resident_fp16_admit=False)
+  assert (inp.trained_ctx, inp.num_blocks, inp.n_heads, inp.n_kv_heads, inp.head_dim, inp.rope_dim) == (8192, 32, 32, 8, 128, 96)
+  terms = ContextMemoryTerms.from_inputs(inp, resident_fp16=False)
+  assert (terms.weights, terms.kv_per_tok, terms.prefill_per_tok, terms.flash_scratch, terms.kv_scale_per_tok) == \
+         (6_000_000_000, 131072, 65536, 798720, 1024)
 
 
 def test_auto_exposes_multiple_feasible_strategies_and_uses_packed_baseline():

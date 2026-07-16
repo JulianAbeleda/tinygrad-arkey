@@ -67,6 +67,31 @@ class AdmissionInputs:
   model_label:str; stream:str="auto"; rope_dim:int|None=None; kv_quant_supported:bool=False
   kv_quant_disabled:bool=False; live_split_s:int=48
 
+  @staticmethod
+  def from_model_metadata(requested:int|str|None, kv:Mapping[str, Any], *, free_vram:int|None, q4_bytes:int,
+                          est_fp16:int, prefill_ubatch:int, v2_on:bool, resident_fp16_admit:bool,
+                          model_label:str|None=None, stream:str="auto", kv_quant_supported:bool=False,
+                          kv_quant_disabled:bool=False, live_split_s:int=48) -> "AdmissionInputs":
+    """Single owner for translating GGUF model metadata into context-admission geometry."""
+    arch = kv["general.architecture"]
+    n_heads, n_kv_heads = kv[f"{arch}.attention.head_count"], kv[f"{arch}.attention.head_count_kv"]
+    head_dim = kv.get(f"{arch}.attention.key_length_mla",
+                      kv.get(f"{arch}.attention.key_length", kv[f"{arch}.embedding_length"] // n_heads))
+    return AdmissionInputs(requested, kv[f"{arch}.context_length"], free_vram, q4_bytes, est_fp16,
+      kv[f"{arch}.block_count"] - kv.get(f"{arch}.nextn_predict_layers", 0), n_heads, n_kv_heads, head_dim, prefill_ubatch,
+      v2_on, resident_fp16_admit, model_label or f"{arch} selected model", stream, kv.get(f"{arch}.rope.dimension_count", head_dim),
+      kv_quant_supported, kv_quant_disabled, live_split_s)
+
+@dataclass(frozen=True)
+class ContextMemoryTerms:
+  weights:int; kv_per_tok:int; prefill_per_tok:int; flash_scratch:int; kv_scale_per_tok:int
+
+  @staticmethod
+  def from_inputs(inp:AdmissionInputs, *, resident_fp16:bool) -> "ContextMemoryTerms":
+    return ContextMemoryTerms(weights=inp.q4_bytes + (inp.est_fp16 if resident_fp16 else 0),
+      kv_per_tok=2 * inp.n_kv_heads * inp.head_dim * 2 * inp.num_blocks, prefill_per_tok=4 * inp.n_heads * inp.prefill_ubatch,
+      flash_scratch=inp.n_heads * inp.live_split_s * (inp.head_dim + 2) * 4, kv_scale_per_tok=2 * inp.n_kv_heads * 2 * inp.num_blocks)
+
 @dataclass(frozen=True)
 class AdmissionPlan:
   max_context:int; kv_quant:bool; report:dict; weights:int; kv_per_tok:int; prefill_per_tok:int
@@ -82,19 +107,15 @@ class _ContextCandidate:
             "bytes_per_token": self.bytes_per_token, "exact_context": self.exact_context,
             "ring_buffer": self.ring_buffer, "supported": supported, "capacity_tokens": max(capacity, 0)}
 
-def _plan_context_admission(inp:AdmissionInputs, budget:ScannedMemoryBudget) -> AdmissionPlan:
-  kv_per_tok = 2 * inp.n_kv_heads * inp.head_dim * 2 * inp.num_blocks
-  weights = inp.q4_bytes + (inp.est_fp16 if inp.resident_fp16_admit else 0)
-  prefill_per_tok = 4 * inp.n_heads * inp.prefill_ubatch
-  flash_scratch = inp.n_heads * inp.live_split_s * (inp.head_dim + 2) * 4
+def _plan_context_admission(inp:AdmissionInputs, budget:ScannedMemoryBudget, terms:ContextMemoryTerms) -> AdmissionPlan:
   kv_quant_shape = inp.head_dim == 128 and inp.n_kv_heads == 8 and inp.n_heads % inp.n_kv_heads == 0; kv_quant_supported = inp.kv_quant_supported and kv_quant_shape and not inp.kv_quant_disabled
   ring_supported = kv_quant_shape and (inp.rope_dim if inp.rope_dim is not None else inp.head_dim) == inp.head_dim
-  scale_per_tok = 2 * inp.n_kv_heads * 2 * inp.num_blocks if kv_quant_supported else 0
+  scale_per_tok = terms.kv_scale_per_tok if kv_quant_supported else 0
   max_context, kv_quant, report = _resolve_max_context_admission(
-    inp.requested, inp.trained_ctx, budget, weights, kv_per_tok, prefill_per_tok, flash_scratch, inp.model_label,
+    inp.requested, inp.trained_ctx, budget, terms.weights, terms.kv_per_tok, terms.prefill_per_tok, terms.flash_scratch, inp.model_label,
     kv_quant_supported=kv_quant_supported, scale_per_tok=scale_per_tok, stream=inp.stream, ring_supported=ring_supported,
   )
-  return AdmissionPlan(max_context, kv_quant, report, weights, kv_per_tok, prefill_per_tok)
+  return AdmissionPlan(max_context, kv_quant, report, terms.weights, terms.kv_per_tok, terms.prefill_per_tok)
 
 def _resolve_max_context_admission(requested, trained_ctx:int, scanned_budget:ScannedMemoryBudget, weights_bytes:int,
                                   kv_per_tok:int, prefill_per_tok:int, flash_scratch_bytes:int,
@@ -180,7 +201,6 @@ def _resolve_max_context_admission(requested, trained_ctx:int, scanned_budget:Sc
 
 def plan_selected_model_memory(inp:AdmissionInputs, facts:DeviceFacts, *, direct_packed_supported:bool,
                                overlay_requested:bool|None=None) -> tuple[AdmissionPlan, PrefillMemoryPlan, Strategy]:
-  """Compatibility context/strategy plan; exact production admission uses the selected-model ledger above."""
   scanned_budget = scanned_device_memory_budget(facts)
   reserve = scanned_budget.reserve_bytes
   device = DeviceMemoryFacts(facts.total_vram_bytes, facts.free_vram_bytes,
@@ -188,17 +208,17 @@ def plan_selected_model_memory(inp:AdmissionInputs, facts:DeviceFacts, *, direct
              "align_up(total_vram_bytes - free_vram_bytes, scanned_allocator_granularity)",
              ByteLifetime.SAFETY_RESERVE), facts.memory_probe.source)
   explicit_overlay = overlay_requested is True
-  ctx_inp = replace(inp, free_vram=facts.free_vram_bytes, resident_fp16_admit=explicit_overlay)
-  context = _plan_context_admission(ctx_inp, scanned_budget)
-  scale_per_tok = 2 * inp.n_kv_heads * 2 * inp.num_blocks if context.kv_quant else 0
-  kv_bytes = (context.kv_per_tok // (2 if context.kv_quant else 1) + scale_per_tok) * context.max_context
+  terms = ContextMemoryTerms.from_inputs(inp, resident_fp16=explicit_overlay)
+  context = _plan_context_admission(replace(inp, free_vram=facts.free_vram_bytes, resident_fp16_admit=explicit_overlay), scanned_budget, terms)
+  scale_per_tok = terms.kv_scale_per_tok if context.kv_quant else 0
+  kv_bytes = (terms.kv_per_tok // (2 if context.kv_quant else 1) + scale_per_tok) * context.max_context
   base = (
     ByteTerm("packed_weights", inp.q4_bytes, "selected GGUF tensor/file inventory", "sum resident packed allocations", ByteLifetime.PERSISTENT),
     ByteTerm("kv_cache", kv_bytes, "transformer geometry and admitted context",
              "kv_bytes_per_token * admitted_context + scale_bytes", ByteLifetime.PERSISTENT),
     ByteTerm("prefill_activations", context.prefill_per_tok * context.max_context, "prefill workload geometry",
              "prefill_bytes_per_token * admitted_context", ByteLifetime.PREFILL_PEAK),
-    ByteTerm("flash_scratch", inp.n_heads * inp.live_split_s * (inp.head_dim + 2) * 4, "decode/prefill attention geometry",
+    ByteTerm("flash_scratch", terms.flash_scratch, "decode/prefill attention geometry",
              "n_heads * live_split_s * (head_dim + 2) * sizeof(float32)", ByteLifetime.PREFILL_PEAK),
   )
   candidates = [CandidateMemoryCoverage("full-resident-overlay", Strategy.FULL_RESIDENT_OVERLAY,

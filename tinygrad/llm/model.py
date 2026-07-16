@@ -1029,12 +1029,6 @@ class Transformer:
                                                                selected_model_source=str(pathlib.Path(gguf).expanduser().resolve()))
       _overlay_request = prefill_policy_uses_overlay(_runtime_policy)
       _admit_arch = _admit_kv["general.architecture"]
-      _admit_n_heads, _admit_n_kv_heads = _admit_kv[f"{_admit_arch}.attention.head_count"], _admit_kv[f"{_admit_arch}.attention.head_count_kv"]
-      _admit_head_dim = _admit_kv.get(f"{_admit_arch}.attention.key_length_mla",
-                                      _admit_kv.get(f"{_admit_arch}.attention.key_length",
-                                                    _admit_kv[f"{_admit_arch}.embedding_length"] // _admit_n_heads))
-      num_blocks = _admit_kv[f"{_admit_arch}.block_count"] - _admit_kv.get(f"{_admit_arch}.nextn_predict_layers", 0)
-      trained_ctx = _admit_kv[f"{_admit_arch}.context_length"]
       _provided_route_memory = _runtime_policy.get("memory_facts")
       if _provided_route_memory is not None and not isinstance(_provided_route_memory, dict):
         raise ValueError("prefill policy memory_facts must be a mapping when present")
@@ -1052,13 +1046,12 @@ class Transformer:
       if _q4_bytes is None:
         raise RuntimeError(f"{_admit_arch}: selected-GGUF backing allocation is unknown from the selected path and scanned allocation granularity")
       _est_fp16 = sum(prod(dims) * 2 for name, dims, _, _ in _admit_meta["tensor_infos"] if any(name.endswith(s) for s in _cov))
-      _admit_rope_dim = _admit_kv.get(f"{_admit_arch}.rope.dimension_count", _admit_head_dim)
-      _stream = str(stream)
-      _plan, _memory_plan, _effective_strategy = plan_selected_model_memory(AdmissionInputs(
-        _requested_max_context, trained_ctx, _device_facts.free_vram_bytes, _q4_bytes, _est_fp16, num_blocks, _admit_n_heads,
-        _admit_n_kv_heads, _admit_head_dim, _prefill_ubatch, _overlay_request is not False, False,
-        f"{_admit_arch} selected GGUF", stream=_stream, rope_dim=_admit_rope_dim, kv_quant_supported=True,
-        kv_quant_disabled=False, live_split_s=FLASH_DECODE_CANDIDATE.split_size),
+      _admission_inputs = AdmissionInputs.from_model_metadata(_requested_max_context, _admit_kv,
+        free_vram=_device_facts.free_vram_bytes, q4_bytes=_q4_bytes, est_fp16=_est_fp16,
+        prefill_ubatch=_prefill_ubatch, v2_on=_overlay_request is not False, resident_fp16_admit=False,
+        model_label=f"{_admit_arch} selected GGUF", stream=str(stream), kv_quant_supported=True,
+        live_split_s=FLASH_DECODE_CANDIDATE.split_size)
+      _plan, _memory_plan, _effective_strategy = plan_selected_model_memory(_admission_inputs,
         _device_facts, direct_packed_supported=True, overlay_requested=_overlay_request)
       _v2_on = prefill_policy_strategy(_runtime_policy) in ("FULL_RESIDENT_OVERLAY", "BOUNDED_PACKED_TILES", "DIRECT_PACKED_FALLBACK")
       max_context, _kv_quant = _plan.max_context, _plan.kv_quant
@@ -1066,7 +1059,8 @@ class Transformer:
       # A completed machine-search record may carry a fully attributed allocation ledger. Apply it only after context
       # and KV representation are resolved. Ordinary direct-packed loading needs no caller-injected hardware facts.
       if all(_route_memory.get(key) is not None for key in _EXACT_ROUTE_MEMORY_KEYS):
-        _geometry = RuntimeGeometry(num_blocks, _admit_n_kv_heads, _admit_head_dim, max_context, _prefill_ubatch,
+        _geometry = RuntimeGeometry(_admission_inputs.num_blocks, _admission_inputs.n_kv_heads,
+          _admission_inputs.head_dim, max_context, _prefill_ubatch,
           batch_size=_route_memory["batch_size"], kv_element_bytes=_route_memory["kv_element_bytes"],
           kv_scale_element_bytes=_route_memory.get("kv_scale_element_bytes"),
           kv_scales_per_token=_route_memory.get("kv_scales_per_token", 0),
@@ -1081,7 +1075,7 @@ class Transformer:
                              f"{'; '.join(_exact_memory_plan.decision.reasons)}")
         _admit["exact_memory_decision"] = json.dumps(_exact_memory_plan.decision.to_dict(), sort_keys=True, separators=(",", ":"))
       _ring_admitted = _admit.get("ring", False)
-      _print_admission(_plan, "(int8)" if _kv_quant else "", f"trained {trained_ctx}, fp16-cap {_admit.get('mc_fp16', '-')}, q8-cap {_admit.get('mc_q8', '-')}")
+      _print_admission(_plan, "(int8)" if _kv_quant else "", f"trained {_admission_inputs.trained_ctx}, fp16-cap {_admit.get('mc_fp16', '-')}, q8-cap {_admit.get('mc_q8', '-')}")
       _admit_resolved = True
     if use_q4k_primitive or use_q6k_primitive:
       kv, state_dict, q4k_meta = gguf_load_with_metadata(gguf)
@@ -1109,19 +1103,18 @@ class Transformer:
     rope_dim = kv.get(f'{arch}.rope.dimension_count', head_dim)
 
     if not _admit_resolved:
-      num_blocks = kv[f'{arch}.block_count'] - kv.get(f'{arch}.nextn_predict_layers', 0)
-      trained_ctx = kv[f'{arch}.context_length']
       _q4_bytes = pathlib.Path(gguf).stat().st_size if not isinstance(gguf, Tensor) else 0
       _est_fp16 = sum(t.numel() * 2 for k, t in state_dict.items() if any(k.endswith(s) for s in _cov))
-      _plan, _memory_plan, _effective_strategy = plan_selected_model_memory(AdmissionInputs(
-        _requested_max_context, trained_ctx, _device_facts.free_vram_bytes, _q4_bytes, _est_fp16, num_blocks, n_heads, n_kv_heads, head_dim,
-        _prefill_ubatch, _overlay_request is not False, False, f"{arch} selected model",
-        stream=str(stream), rope_dim=rope_dim, live_split_s=FLASH_DECODE_CANDIDATE.split_size),
+      _admission_inputs = AdmissionInputs.from_model_metadata(_requested_max_context, kv,
+        free_vram=_device_facts.free_vram_bytes, q4_bytes=_q4_bytes, est_fp16=_est_fp16,
+        prefill_ubatch=_prefill_ubatch, v2_on=_overlay_request is not False, resident_fp16_admit=False,
+        stream=str(stream), live_split_s=FLASH_DECODE_CANDIDATE.split_size)
+      _plan, _memory_plan, _effective_strategy = plan_selected_model_memory(_admission_inputs,
         _device_facts, direct_packed_supported=True, overlay_requested=_overlay_request)
       _v2_on = prefill_policy_strategy(_runtime_policy) in ("FULL_RESIDENT_OVERLAY", "BOUNDED_PACKED_TILES", "DIRECT_PACKED_FALLBACK")
       max_context, _kv_quant, _admit = _plan.max_context, _plan.kv_quant, _plan.report
       _ring_admitted = _admit.get("ring", False)
-      _print_admission(_plan, "", f"trained {trained_ctx}, mem-cap {_admit.get('mc_mem', '-')}")
+      _print_admission(_plan, "", f"trained {_admission_inputs.trained_ctx}, mem-cap {_admit.get('mc_mem', '-')}")
 
     _runtime_policy = select_prefill_runtime_policy(_runtime_policy, scanned_device_facts=_device_facts,
       workload_reuse=_workload_reuse)
