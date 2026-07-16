@@ -2,9 +2,12 @@ import json, subprocess, sys
 
 import pytest
 
-from extra.qk.route_manifest import default_purity_report, route_provenance, validate_manifest
-from tinygrad.llm.route_policy import (_load_qk_route_policy, _qk_route_policy_selected, _set_qk_route_policy,
+from extra.qk.route_manifest import ROUTES, default_purity_report, route_provenance, validate_manifest
+from tinygrad.llm.route_policy import (_load_qk_route_policy, _qk_route_policy_selected,
                                        _qk_route_policy_selects_q4k_g3, _qk_route_policy_selects_q6k_generated)
+
+
+def _load_policy(path): return _load_qk_route_policy(str(path), manifest_registry=ROUTES)
 
 
 def _write_q4k_g3_policy(tmp_path, rows):
@@ -54,7 +57,7 @@ def test_route_policy_import_does_not_eagerly_import_qk_manifest():
 def test_qk_route_policy_supported_ids_include_manifest_defaults():
   from extra.qk.route_manifest import default_routes
   from tinygrad.llm import route_policy
-  assert set(default_routes()) <= route_policy._supported_qk_route_ids()
+  assert set(default_routes()) <= route_policy._supported_qk_route_ids(ROUTES)
 
 
 def test_qk_route_policy_selects_g5_by_shape(tmp_path):
@@ -74,13 +77,9 @@ def test_qk_route_policy_selects_g5_by_shape(tmp_path):
       "rollback": {"DECODE_LIVE_SPLIT": "0"},
     }],
   }))
-  policy = _load_qk_route_policy(str(policy_path))
-  _set_qk_route_policy(policy)
-  try:
-    assert _qk_route_policy_selected("decode_flash_block_tile_g5_konly", {"B": 1, "Hq": 40, "Hkv": 8, "Hd": 128})
-    assert not _qk_route_policy_selected("decode_flash_block_tile_g5_konly", {"B": 1, "Hq": 32, "Hkv": 8, "Hd": 128})
-  finally:
-    _set_qk_route_policy(None)
+  policy = _load_policy(policy_path)
+  assert _qk_route_policy_selected("decode_flash_block_tile_g5_konly", {"B": 1, "Hq": 40, "Hkv": 8, "Hd": 128}, policy=policy)
+  assert not _qk_route_policy_selected("decode_flash_block_tile_g5_konly", {"B": 1, "Hq": 32, "Hkv": 8, "Hd": 128}, policy=policy)
 
 
 def test_qk_route_policy_selects_8b_live_split_by_shape(tmp_path):
@@ -100,13 +99,9 @@ def test_qk_route_policy_selects_8b_live_split_by_shape(tmp_path):
       "rollback": {"DECODE_LIVE_SPLIT": "0"},
     }],
   }))
-  policy = _load_qk_route_policy(str(policy_path))
-  _set_qk_route_policy(policy)
-  try:
-    assert _qk_route_policy_selected("decode_flash_live_split_g4_kvboth", {"B": 1, "Hq": 32, "Hkv": 8, "Hd": 128})
-    assert not _qk_route_policy_selected("decode_flash_live_split_g4_kvboth", {"B": 1, "Hq": 40, "Hkv": 8, "Hd": 128})
-  finally:
-    _set_qk_route_policy(None)
+  policy = _load_policy(policy_path)
+  assert _qk_route_policy_selected("decode_flash_live_split_g4_kvboth", {"B": 1, "Hq": 32, "Hkv": 8, "Hd": 128}, policy=policy)
+  assert not _qk_route_policy_selected("decode_flash_live_split_g4_kvboth", {"B": 1, "Hq": 40, "Hkv": 8, "Hd": 128}, policy=policy)
 
 
 def test_qk_route_policy_accepts_promoted_pure_prefill_candidate_route(tmp_path):
@@ -126,30 +121,25 @@ def test_qk_route_policy_accepts_promoted_pure_prefill_candidate_route(tmp_path)
       "rollback": {"PREFILL_GRAPH_GEMM": "0"},
     }],
   }))
-  policy = _load_qk_route_policy(str(policy_path))
+  policy = _load_policy(policy_path)
   assert policy["prefill_gen"][0]["selected_route"] == "prefill_wmma_lds_dbuf_generated"
 
 
 def test_qk_route_policy_selects_q4k_g3_per_tensor(tmp_path):
   policy_path = _write_q4k_g3_policy(tmp_path, [
     ("ffn_gate_up", 12288, 4096), ("ffn_down", 4096, 12288), ("attn_qo", 4096, 4096)])
-  policy = _load_qk_route_policy(str(policy_path))
+  policy = _load_policy(policy_path)
   assert len(policy["q4k_g3"]) == 3
   assert policy["selected"]["decode_q4k_g3_generated"]["selected_route"] == "decode_q4k_g3_generated"
-  _set_qk_route_policy(policy)
-  try:
-    # per-tensor: each selected tensor's real GEMV dims (out=rows, in=cols) bind G3
-    assert _qk_route_policy_selects_q4k_g3(12288, 4096)   # ffn_gate_up
-    assert _qk_route_policy_selects_q4k_g3(4096, 12288)   # ffn_down
-    assert _qk_route_policy_selects_q4k_g3(4096, 4096)    # attn_qo
-    # a shape the policy did NOT select is not bound (e.g. attn_kv 1024x4096)
-    assert not _qk_route_policy_selects_q4k_g3(1024, 4096)
-  finally:
-    _set_qk_route_policy(None)
+  # per-tensor: each selected tensor's real GEMV dims (out=rows, in=cols) bind G3
+  assert _qk_route_policy_selects_q4k_g3(12288, 4096, policy=policy)   # ffn_gate_up
+  assert _qk_route_policy_selects_q4k_g3(4096, 12288, policy=policy)   # ffn_down
+  assert _qk_route_policy_selects_q4k_g3(4096, 4096, policy=policy)    # attn_qo
+  # a shape the policy did NOT select is not bound (e.g. attn_kv 1024x4096)
+  assert not _qk_route_policy_selects_q4k_g3(1024, 4096, policy=policy)
 
 
 def test_qk_route_policy_selects_nothing_when_absent():
-  _set_qk_route_policy(None)
   assert not _qk_route_policy_selects_q4k_g3(12288, 4096)
   assert not _qk_route_policy_selects_q6k_generated(4096, 12288)
 
@@ -169,16 +159,12 @@ def _write_q6k_gen_policy(tmp_path, rows):
 
 def test_qk_route_policy_selects_q6k_generated_per_tensor(tmp_path):
   policy_path = _write_q6k_gen_policy(tmp_path, [("ffn_down", 4096, 12288), ("lm_head", 151936, 4096)])
-  policy = _load_qk_route_policy(str(policy_path))
+  policy = _load_policy(policy_path)
   assert len(policy["q6k_gen"]) == 2
-  _set_qk_route_policy(policy)
-  try:
-    assert _qk_route_policy_selects_q6k_generated(4096, 12288)     # ffn_down
-    assert _qk_route_policy_selects_q6k_generated(151936, 4096)    # lm_head
-    assert not _qk_route_policy_selects_q6k_generated(1024, 4096)  # not selected
-    assert not _qk_route_policy_selects_q4k_g3(4096, 12288)        # G3 helper stays independent
-  finally:
-    _set_qk_route_policy(None)
+  assert _qk_route_policy_selects_q6k_generated(4096, 12288, policy=policy)     # ffn_down
+  assert _qk_route_policy_selects_q6k_generated(151936, 4096, policy=policy)    # lm_head
+  assert not _qk_route_policy_selects_q6k_generated(1024, 4096, policy=policy)  # not selected
+  assert not _qk_route_policy_selects_q4k_g3(4096, 12288, policy=policy)        # G3 helper stays independent
 
 
 def test_qk_route_policy_rejects_unsupported_q6k_params(tmp_path):
@@ -188,7 +174,7 @@ def test_qk_route_policy_rejects_unsupported_q6k_params(tmp_path):
       "selected_route": "decode_q6k_coop_generated", "shape": {"rows": 4096, "cols": 12288},
       "route_params": {"BUBBLEBEAM_FUTURESIGHT": "1"}}]}))
   with pytest.raises(ValueError, match="unsupported params"):
-    _load_qk_route_policy(str(policy_path))
+    _load_policy(policy_path)
 
 
 def test_qk_route_policy_rejects_unsupported_g3_params(tmp_path):
@@ -198,7 +184,7 @@ def test_qk_route_policy_rejects_unsupported_g3_params(tmp_path):
       "selected_route": "decode_q4k_g3_generated", "shape": {"rows": 4096, "cols": 4096},
       "route_params": {"DECODE_Q4K_G3_ANYSHAPE": "1"}}]}))
   with pytest.raises(ValueError, match="unsupported params"):
-    _load_qk_route_policy(str(policy_path))
+    _load_policy(policy_path)
 
 
 def test_qk_route_policy_rejects_malformed_g3_shape(tmp_path):
@@ -208,7 +194,7 @@ def test_qk_route_policy_rejects_malformed_g3_shape(tmp_path):
       "selected_route": "decode_q4k_g3_generated", "shape": {"Hq": 40, "Hkv": 8},
       "route_params": {"BUBBLEBEAM_FUTURESIGHT": "1"}}]}))
   with pytest.raises(ValueError, match="malformed shape"):
-    _load_qk_route_policy(str(policy_path))
+    _load_policy(policy_path)
 
 
 def test_qk_route_policy_rejects_unsupported_route_id(tmp_path):
@@ -217,4 +203,4 @@ def test_qk_route_policy_rejects_unsupported_route_id(tmp_path):
     "schema": "boltbeam.route_policy.v1", "routes": [{
       "selected_route": "decode_q4k_nonexistent", "shape": {"rows": 4096, "cols": 4096}}]}))
   with pytest.raises(ValueError, match="unsupported route"):
-    _load_qk_route_policy(str(policy_path))
+    _load_policy(policy_path)
