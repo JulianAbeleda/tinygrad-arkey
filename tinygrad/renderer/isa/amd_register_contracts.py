@@ -1,11 +1,15 @@
-"""AMD gfx1100 register reservation descriptor.
-
-The numeric ranges mirror the existing AMD ISA renderer constants, but this
-module is descriptive only; allocator behavior continues to use amd.py.
-"""
+"""AMD gfx1100 register reservation and physical layout descriptor."""
 from __future__ import annotations
 
 from tinygrad.codegen.opt.register_contracts import Lease, RegisterBank, RegisterDescriptor, RegisterRole
+from tinygrad.renderer.isa import Register
+
+
+# Physical gfx1100 layout shared by lowering, allocation, and resource reporting.
+KARG = Register("s0", 0); SPTR_POOL = tuple(Register(f"s{i}", i) for i in range(6, 40, 2))
+SCNT_POOL = tuple(Register(f"s{i}", i) for i in range(40, 64)); VBASE = tuple(Register(f"v{i}", i) for i in range(256))
+TID = Register("v0", 0); WGID_S0 = 2; FRAG_BASE, FRAG_TOP = 200, 238
+LDS_PACK_BASE, LDS_PACK_TOP = 232, 236; WMMA_ACC_BASE = 8
 
 
 def gfx1100_register_descriptor() -> RegisterDescriptor:

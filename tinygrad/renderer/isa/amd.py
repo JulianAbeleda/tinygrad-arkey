@@ -42,6 +42,8 @@ from tinygrad.runtime.autogen.amd.rdna3.ins import (
 from tinygrad.codegen.opt.tc import amd_rdna3
 from tinygrad.renderer.isa.extensions import get_amd_isa_extension_descriptors
 from tinygrad.renderer.isa.amd_register_allocator import AMDStageBufferSpec, allocate_amd_stage_buffer_leases
+from tinygrad.renderer.isa.amd_register_contracts import (KARG, SPTR_POOL, SCNT_POOL, VBASE, TID, WGID_S0,
+  FRAG_BASE, FRAG_TOP, LDS_PACK_BASE, LDS_PACK_TOP, WMMA_ACC_BASE)
 
 
 class PreassembledStreamPolicy(NamedTuple):
@@ -53,16 +55,6 @@ class PreassembledStreamPolicy(NamedTuple):
 def preassembled_linear(insts) -> UOp:
   """Package hand-authored ISA without letting compiler scheduling rewrite it."""
   return UOp(Ops.LINEAR, src=tuple(UOp(Ops.INS, arg=inst) for inst in insts), arg=PreassembledStreamPolicy())
-
-# ---- physical register pools (Register.index -> dsl s[index]/v[index]) ----
-# s0-1 = kernarg ptr (entry), s2-3 = workgroup ids. Pointers are 64-bit = SGPR PAIRS; use even-aligned indices so
-# the framework's single-register allocator never overlaps a pair (Inc 0 uses SGPRs only for pointers).
-KARG = Register("s0", 0)                                           # kernarg base ptr s[0:1] (fixed at entry)
-SPTR_POOL = tuple(Register(f"s{i}", i) for i in range(6, 40, 2))   # even SGPRs s6..s38 -> 64-bit ptr pairs (s2-s5 = workgroup ids)
-SCNT_POOL = tuple(Register(f"s{i}", i) for i in range(40, 64))     # single SGPRs s40..s63 -> uniform loop counters (Phase B)
-VBASE = tuple(Register(f"v{i}", i) for i in range(256))            # all VGPRs; v0 reserved for packed workitem ids
-TID = Register("v0", 0)                                            # workitem id.x (fixed at entry)
-WGID_S0 = 2                                                        # workgroup id.x lands in s2 (after 2 user SGPRs = kernarg ptr s0:1); .y/.z -> s3/s4
 
 def _n_workitem_dims(ctx:IselContext) -> int:
   # number of workitem-id dims used = (max lidx dim + 1), at least 1. NOTE: x/y/z are PACKED into v0 (AMDGPU ABI:
@@ -76,8 +68,6 @@ def _n_workitem_dims(ctx:IselContext) -> int:
 # NOTE (B0.M multi-output-tile): the v>=238 garbage is a RAW-INS-only artifact; the ISA renderer's ELF descriptor auto-
 # sizes VGPR to the highest reg used, so through THIS renderer the real ceiling is OCCUPANCY, not v238. So we keep A/B in
 # the high [200,238) window (only 16 VGPRs needed, single reused pair) but place the C ACCUMULATORS LOW (see below).
-FRAG_BASE, FRAG_TOP = 200, 238
-LDS_PACK_BASE, LDS_PACK_TOP = 232, 236
 _amd_isa_proof_hook = None
 
 def install_amd_isa_proof_hook(hook) -> None:
@@ -116,7 +106,6 @@ class LDSAddr(NamedTuple):
 # the 38-VGPR high fragment window, so the accumulators are placed LOW (8-aligned, from v8) -- mirrors _accum_pin's low
 # rationale (RA4): the descriptor sizes to the highest reg, so LOW pins don't inflate VGPR count the way v240+ would. v0
 # holds packed workitem ids and v1..v7 are the alignment pad (WMMA_ACC_BASE is the first 8-aligned index above v0).
-WMMA_ACC_BASE = 8
 def _has_wmma(ctx:IselContext) -> bool:
   # cache: does this kernel use a WMMA op? (fragment region is only reserved when it does, so non-WMMA kernels keep v200+)
   if (w := getattr(ctx, "_haswmma", None)) is None:
