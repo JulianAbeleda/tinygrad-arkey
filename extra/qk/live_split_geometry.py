@@ -66,42 +66,6 @@ def live_split_coverage_kernel(geo: LiveSplitGeometry, MAXC: int, Tc: UOp):
   return kernel
 
 
-def flash_decode_live_split_block_tile(q, cache_kv, Tc_u, Hd: int, Hq: int, Hkv: int, MAXC: int, S: int,
-                                       staging: str = "K_ONLY", fused_combine: bool = True, kv_scale=None, freqs=None):
-  """TG-P9.2: the generated block-tile flash decode with LIVE-CONTEXT split geometry.
-
-  Identical body to flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel, but the per-split length is the runtime
-  per = ceildiv(Tc, S) (symbolic) instead of a fixed L. S is a FIXED occupancy split count (grid = Hkv x S), so
-  parallelism is preserved while the tile block-work scales with the live context Tc (owned's decomposition). No
-  MAXC over-launch: at ctx512 each split covers ~Tc/S tokens (~1 block) instead of L/TK (~8) blocks.
-
-  Returns out:[Hq, Hd]. gmax/combine reduce over the same S splits (unchanged lifecycle -- the combine cost is
-  addressed separately by TG-P9.3/9.4).
-  """
-  from tinygrad import Tensor, dtypes
-  from extra.qk.flash_decode_attention_spec import describe_flash_decode_attention
-  _F32 = dtypes.float32
-  W2 = Hd + 2
-  q_f = q.reshape(Hq * Hd)
-  # KV-quant long-context tier: when kv_scale is provided, cache_kv is INT8 and the kernel dequantizes in-register
-  # (int8 * fp16 scale) -- no materialized fp16 KV. kv_scale shape [2,1,Hkv,MAXC] fp16. quant=False path unchanged.
-  # rope-at-read (freqs != None): cache_kv holds UN-roped K; the kernel rotates K in-register from `freqs` (cos|sin).
-  _quant = kv_scale is not None
-  _rope = freqs is not None
-  _inputs = (q_f, cache_kv) + ((kv_scale,) if _quant else ()) + ((freqs,) if _rope else ())
-  spec = describe_flash_decode_attention(Hq=Hq, Hd=Hd, Hkv=Hkv, MAXC=MAXC, S=S, staging=staging, quant=_quant, rope=_rope)
-  po = Tensor.empty(Hq * S * W2, dtype=_F32).custom_kernel(
-    *_inputs,
-    fxn=spec.emit_tile(Tc_u))[0]
-  # TG-P14.9: split-preserving fused combine. One kernel replaces the gmax + per-d combine lifecycle and removes the
-  # Hd-fold fexp redundancy (Hq*Hd*S -> Hq*S fexp). (fused_combine is now unconditional; the old two-kernel combine
-  # was removed 2026-07-06.)
-  if not fused_combine:
-    raise ValueError("fused_combine=False is no longer supported for decode live-split routes")
-  out = Tensor.empty(Hq * Hd, dtype=_F32).custom_kernel(po, fxn=spec.emit_combine())[0]
-  return out.reshape(Hq, Hd)
-
-
 def flash_fused_gmax_combine_kernel(Hd: int, Hq: int, S, stride=None):
   """TG-P9.3/9.4: split-preserving fused LSE combine (generated UOp).
 
@@ -160,5 +124,5 @@ def flash_fused_gmax_combine_kernel(Hd: int, Hq: int, S, stride=None):
 
 
 # REMOVED 2026-07-06 (no backups): flash_gm_weights_kernel, flash_weighted_sum_kernel, flash_inline_gm_combine_kernel
-# were research-only combine variants never used by flash_decode_live_split_block_tile (which is unconditionally
+# were research-only combine variants never used by the live-split executor (which is unconditionally
 # fused_combine=True via flash_fused_gmax_combine_kernel above).

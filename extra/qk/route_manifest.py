@@ -139,7 +139,7 @@ ROUTES = {
     "provenance": "machine_authored_generated",
     "replacement_scope": "",
     "selector": "BoltBeam_route_policy_or_env_default",
-    "route_attribution": "tinygrad/llm/decode_routes.py attention live-split branch: B=1,Hq=32,Hkv=8,Hd=128 -> extra/qk/live_split_geometry.py flash_decode_live_split_block_tile -> extra/qk/flash_decode_attention_spec.py FlashDecodeAttentionSpec (FlashDecodeTileSpec + LiveSplitGeometrySpec + FlashCombineSpec).",
+    "route_attribution": "tinygrad/llm/decode_routes.py attention live-split branch: B=1,Hq=32,Hkv=8,Hd=128 -> extra/qk/flash_decode_attention_executor.py flash_decode_live_split_block_tile -> extra/qk/flash_decode_attention_spec.py FlashDecodeAttentionSpec (FlashDecodeTileSpec + LiveSplitGeometrySpec + FlashCombineSpec).",
     "note": "Promoted 8B long-context decode attention replacement. TG-P14 practical roofline closeout: worst-of-3 speed ctx512 98.5% / ctx4096 98.3% of owned, 48/48 deterministic prefilled token parity, route-bound, no hidden fallback. Provenance conversion 2026-07-06: the default binding is now descriptor-owned through FlashDecodeAttentionSpec; no handwritten HIP attention route remains."},
   "decode_flash_block_tile_g5_konly": {
     "workload": "decode", "profile_id": PROFILE_DECODE_LARGE, "status": "promoted_default",
@@ -159,7 +159,7 @@ ROUTES = {
     "provenance": "machine_authored_generated",
     "replacement_scope": "",
     "selector": "BoltBeam_route_policy_or_env_default",
-    "route_attribution": "tinygrad/llm/decode_routes.py flash_decode_attention_route UNIFIED live-split branch (structural class B=1,Hd=128,Hkv=8,Hq%Hkv==0; covers 14B Hq=40/G=5). QK_ROUTE_POLICY selected_route=decode_flash_block_tile_g5_konly if present, else DECODE_LIVE_SPLIT default 1. Binding flows through extra/qk/live_split_geometry.py -> FlashDecodeAttentionSpec.",
+    "route_attribution": "tinygrad/llm/decode_routes.py flash_decode_attention_route UNIFIED live-split branch (structural class B=1,Hd=128,Hkv=8,Hq%Hkv==0; covers 14B Hq=40/G=5). QK_ROUTE_POLICY selected_route=decode_flash_block_tile_g5_konly if present, else DECODE_LIVE_SPLIT default 1. Binding flows through extra/qk/flash_decode_attention_executor.py -> FlashDecodeAttentionSpec.",
     "note": "Promoted 2026-07-03: 14B (Hq=40/Hkv=8/Hd=128) decode now shares the modular live-split route with 8B/32B. Live per-split length ceildiv(Tc,S_occ) is seqlen-bound: 14B decode is flat across max_context (69.24 tok/s @MAXC=1024 vs 69.04 @MAXC=8192, live ctx ~550). W==D token-identical to the generic generated flash reference at 8B/14B/32B. Provenance conversion 2026-07-06: the default binding is descriptor-owned through FlashDecodeAttentionSpec."},
   # decode_flash_block_tile_g5_8b_refuted row REMOVED 2026-07-06 (no backups): historical TG-P5/TG-P8 route; its
   # kernels (flash_state_gmax/flash_state_combine) and route_attribution branch no longer exist.

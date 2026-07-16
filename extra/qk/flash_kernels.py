@@ -1,11 +1,11 @@
 from __future__ import annotations
 from extra.qk.flash_common import _F32, _fexp, _fc, _fki, _ceildiv, Tensor, dtypes, getenv, AddrSpace, AxisType, KernelInfo, Ops, UOp  # noqa: F401
 from extra.qk.kv_load import make_kv_element_loader  # noqa: F401
-"""Generated UOp flash-decode kernel builders. No handwritten kernels here -- pure UOp construction. Only the live default block-tile kernel survives 2026-07-06 scorched-earth cleanup; imported directly by extra/qk/live_split_geometry.py."""
+"""Generated UOp flash-decode kernel builders. No handwritten kernels here -- pure UOp construction."""
 
 # REMOVED 2026-07-06 (no backups): all other flash_kernels.py builders (research/refuted score, PV,
 # combine, and lifecycle variants -- ~32 functions) were deleted as orphans; only the live default
-# tile survives (extra/qk/live_split_geometry.py's flash_decode_live_split_block_tile is the sole caller).
+# tile survives and is emitted through flash_decode_attention_spec.py.
 
 def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv:int, MAXC:int, L:int, S, Tc, staging:str="KV_BOTH", quant:bool=False, rope:bool=False):
   """Block-tiled generated decode candidate.

@@ -65,6 +65,7 @@ def describe_q6k_packed_prefill(*args, **kwargs): return _attr("extra.qk.q6k_pre
 def emit_q6k_packed_prefill_kernel(*args, **kwargs):
   return _attr("extra.qk.q6k_prefill_route_spec", "emit_q6k_packed_prefill_kernel")(*args, **kwargs)
 
-def flash_decode_live_split_block_tile(*args, **kwargs): return _attr("extra.qk.live_split_geometry", "flash_decode_live_split_block_tile")(*args, **kwargs)
+def flash_decode_live_split_block_tile(*args, **kwargs):
+  return _attr("extra.qk.flash_decode_attention_executor", "flash_decode_live_split_block_tile")(*args, **kwargs)
 
 def assert_pure_machine_search(*args, **kwargs): return _attr("extra.qk.pure_search_guard", "assert_pure_machine_search")(*args, **kwargs)
