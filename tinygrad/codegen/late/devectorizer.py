@@ -493,6 +493,15 @@ def _manual_acc_init_width(reg:UOp, sink:UOp) -> int|None:
     if _is_manual_acc_init(reg, u): return u.src[1].dtype.count
   return None
 
+def _reg_lane_stack(base:UOp, dtype:DType) -> UOp:
+  return UOp(Ops.STACK, dtype, tuple(base.index(UOp.const(dtypes.weakint, i)) for i in range(dtype.count)))
+
+def _manual_reduce_lanes(contrib:UOp, op:Ops, width:int) -> list[UOp]:
+  # Manual accumulators are output-major: each output owns one contiguous group of reduction lanes.
+  reduce_width = contrib.dtype.count // width
+  return [functools.reduce(lambda a,b: a.alu(op, b),
+                           [contrib.gep((w*reduce_width+r,)) for r in range(reduce_width)]) for w in range(width)]
+
 def reduce_acc_upcast_fix(sink:UOp) -> UOp|None:
   subs: dict[UOp, UOp] = {}
   wide: dict[UOp, UOp] = {}
@@ -520,7 +529,7 @@ def reduce_acc_upcast_fix(sink:UOp) -> UOp|None:
     czero = UOp.const(dtypes.weakint, 0)
     def _wide_read(*deps:UOp) -> UOp:
       base = reg_wide.after(*deps) if deps else reg_wide
-      return base.index(target_idx) if W == 1 else UOp(Ops.STACK, elem_dt, tuple(base.index(UOp.const(dtypes.weakint, i)) for i in range(W)))
+      return base.index(target_idx) if W == 1 else _reg_lane_stack(base, elem_dt)
     reduce_by_reg[reg] = reduce_range
     # canonical accumulator, matching reduce_to_acc: input ranges on init, single after on read, bare store target.
     # Preserve non-reduce ordering deps from the original after-chain (for example den.after(num_update) in mixed
@@ -538,10 +547,7 @@ def reduce_acc_upcast_fix(sink:UOp) -> UOp|None:
                  if x.op in {Ops.STORE, Ops.END} and x not in reduce_range and not (W > 1 and _is_manual_acc_init(reg, x)))
     read_deps = ((init,) if init is not None else ()) + deps + reduce_range
     read = _wide_read(*read_deps)
-    R = N // W
-    lanes = [functools.reduce(lambda a,b: a.alu(op, b),
-                              [contrib if contrib.dtype.count == 1 else contrib.gep((w*R+r,)) for r in range(R)])
-             for w in range(W)]
+    lanes = [contrib] if contrib.dtype.count == 1 else _manual_reduce_lanes(contrib, op, W)
     hred = lanes[0] if W == 1 else UOp(Ops.STACK, elem_dt, tuple(lanes))
     upd = read.alu(op, hred)
     store_base = reg_wide.after(*deps) if deps else reg_wide
@@ -569,13 +575,17 @@ def reduce_acc_upcast_fix(sink:UOp) -> UOp|None:
     if not any(s.op in {Ops.STORE, Ops.END} for s in after_srcs): continue
     new_after = tuple((subs.get(s, s) if subs else s) for s in after_srcs)
     nr_base = wide[reg].after(*new_after) if new_after else wide[reg]
-    nr = nr_base.index(UOp.const(dtypes.weakint, 0)) if u.dtype.count == 1 else \
-      UOp(Ops.STACK, u.dtype, tuple(nr_base.index(UOp.const(dtypes.weakint, i)) for i in range(u.dtype.count)))
+    nr = nr_base.index(UOp.const(dtypes.weakint, 0)) if u.dtype.count == 1 else _reg_lane_stack(nr_base, u.dtype)
     if nr.dtype == u.dtype: subs[u] = nr
   if not subs: return None
   return sink.substitute(subs, walk=True)
 
 pm_reduce_acc_upcast_fix = PatternMatcher([(UPat(Ops.SINK, name="sink"), reduce_acc_upcast_fix)])
+
+def _distinct_reg_store_indexes(tgt:UOp) -> list[UOp]|None:
+  ptrs = [s.src[0] if s.op is Ops.LOAD else s for s in tgt.src]
+  if not all(p.op is Ops.INDEX and isinstance(p.src[0].dtype, PtrDType) and p.src[0].dtype.addrspace == AddrSpace.REG for p in ptrs): return None
+  return ptrs if len(set(ptrs)) == len(ptrs) else None
 
 def _group_wmma_reg_store(tgt:UOp, val:UOp) -> UOp|None:
   """Recover WMMA output-contract groups from an expanded distinct REG store."""
@@ -584,12 +594,7 @@ def _group_wmma_reg_store(tgt:UOp, val:UOp) -> UOp|None:
   try: width = prod(sz for _axis,sz in wmma.arg[6][2])
   except (IndexError,TypeError,ValueError): return None
   if width <= 1 or len(tgt.src) % width: return None
-  ptrs=[]
-  for p in tgt.src:
-    p=p.src[0] if p.op is Ops.LOAD else p
-    if p.op is not Ops.INDEX or p.src[0].addrspace != AddrSpace.REG or p.src[1].op is not Ops.CONST: return None
-    ptrs.append(p)
-  if len(set(ptrs)) != len(ptrs): return None
+  if (ptrs:=_distinct_reg_store_indexes(tgt)) is None or not all(p.src[1].op is Ops.CONST for p in ptrs): return None
   base=ptrs[0].src[0]
   if any(p.src[0] is not base for p in ptrs): return None
   ordered=sorted(((p.src[1].arg,lane,p) for lane,p in enumerate(ptrs)),key=lambda x:x[0])
@@ -602,12 +607,7 @@ def _group_wmma_reg_store(tgt:UOp, val:UOp) -> UOp|None:
   return UOp.group(*stores)
 
 def _devec_distinct_reg_store(tgt:UOp, val:UOp) -> UOp|None:
-  ptrs: list[UOp] = []
-  for s in tgt.src:
-    idx = s.src[0] if s.op is Ops.LOAD else s
-    if idx.op is not Ops.INDEX or not isinstance(idx.src[0].dtype, PtrDType) or idx.src[0].dtype.addrspace != AddrSpace.REG: return None
-    ptrs.append(idx)
-  if len(set(ptrs)) != len(ptrs): return None
+  if (ptrs:=_distinct_reg_store_indexes(tgt)) is None: return None
   return UOp.group(*[p.store(val.gep(i)) for i,p in enumerate(ptrs)])
 
 def _devec_stack_store(tgt:UOp, val:UOp, gate:UOp|None=None) -> UOp|None:
