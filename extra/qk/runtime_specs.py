@@ -146,6 +146,12 @@ def full_kernel_workload(payload:dict[str,Any]) -> FullKernelWorkload:
 class _FrozenDict(dict):
   def _immutable(self,*_args,**_kwargs): raise TypeError("candidate-set payload is immutable")
   __setitem__=__delitem__=clear=pop=popitem=setdefault=update=_immutable
+  def __reduce__(self): return (_restore_frozen_dict, (tuple(self.items()),))
+
+def _restore_frozen_dict(items):
+  # dict's default pickle reconstruction inserts entries through __setitem__, which is intentionally blocked here.
+  # Reconstruct through the same constructor path used by _freeze_json, then retain the mutation guard.
+  return _FrozenDict(items)
 
 def _freeze_json(value:Any) -> Any:
   if isinstance(value,dict): return _FrozenDict({k:_freeze_json(v) for k,v in value.items()})

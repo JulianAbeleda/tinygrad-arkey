@@ -1,5 +1,5 @@
 import pytest
-import json
+import json, pickle
 import hashlib
 
 from extra.qk.generated_candidates import GeneratedCandidateRegistry, builtin_registry, select_generated_candidate
@@ -623,6 +623,12 @@ def test_four_role_8b_candidate_set_admits_and_exactly_indexes():
   assert registry.get("attn_kv",(512,2048,4096),target) is None
   assert registry.legacy_get("renamed-profile", "ffn_gate_up", (512,12288,4096), target) is not None
   with pytest.raises(TypeError,match="immutable"): entries[0].payload["workload"]["role"]="other"
+
+def test_frozen_candidate_payload_round_trips_across_guarded_spawn():
+  entry = _buffer2_set_entry("attn_qo", (512,4096,4096))
+  restored = pickle.loads(pickle.dumps(entry.payload))
+  assert restored == entry.payload and restored is not entry.payload
+  with pytest.raises(TypeError, match="immutable"): restored["workload"]["role"] = "other"
 
 def test_profile_rename_preserves_semantic_identity_and_duplicate_admission_fails_closed():
   entry=_buffer2_set_entry("attn_qo",(512,4096,4096))
