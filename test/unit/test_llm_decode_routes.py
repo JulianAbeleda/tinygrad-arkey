@@ -8,7 +8,7 @@ import pytest
 from tinygrad import Tensor, UOp
 from tinygrad.uop.ops import Ops
 from tinygrad.llm import decode_routes
-from tinygrad.llm.model import Transformer, _generation_input_slice
+from tinygrad.llm.model import Transformer, _generation_input_slice, _should_use_flash_attention
 
 
 def test_generation_decode_slice_retains_lazy_symbolic_jit_contract():
@@ -20,6 +20,13 @@ def test_generation_decode_slice_retains_lazy_symbolic_jit_contract():
   # lazy view to the same input contract as decode feedback during preparation.
   assert decode.uop.op is Ops.SHRINK and decode.shape[1].vmax == 8
   assert _generation_input_slice(tokens, start, UOp.variable("chunk", 1, 8), 8).shape[1].vmax == 8
+
+
+def test_flash_attention_gate_keeps_forced_decode_route_out_of_prefill():
+  assert not _should_use_flash_attention(None, 0, 512, True)
+  start = UOp.variable("start", 0, 4095).bind(512)
+  assert _should_use_flash_attention(None, start, 1, True)
+  assert _should_use_flash_attention(Tensor.empty(1), 0, 512, False)
 
 
 def test_reset_generation_state_forgets_dense_request_cache():

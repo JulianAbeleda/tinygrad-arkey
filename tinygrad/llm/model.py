@@ -45,6 +45,9 @@ _GGUF_TENSOR_OWNER = MODEL_PARAMETER_ALLOCATION_OWNER
 _KV_CACHE_OWNER = AllocationOwner("kv_cache", "model")
 _RUNTIME_PERSISTENT_OWNER = AllocationOwner("runtime_persistent", "model")
 
+def _should_use_flash_attention(ring_freqs:Tensor|None, start_pos:int|UOp, T:int|UOp, use_flash:bool) -> bool:
+  return ring_freqs is not None or _route_should_use_flash_decode(start_pos, T, use_flash)
+
 def _bind_tensor_owner(tensor:Tensor, owner:AllocationOwner) -> Tensor:
   """Attach semantic ownership to a lazy Tensor's eventual physical base."""
   bind_allocation_owner(tensor.uop.buffer, owner)
@@ -608,7 +611,7 @@ class TransformerBlock(FFNBlock):
     # The model owns two separately captured decode graphs. The immutable
     # candidate binding selects the flash graph upstream; ring decode always
     # uses it because its wrapped write slot is not a logical context length.
-    if _ring_freqs is not None or getattr(self, "_use_flash", False):
+    if _should_use_flash_attention(_ring_freqs, start_pos, T, getattr(self, "_use_flash", False)):
       Hq, Hkv, Hd = self.config.n_heads, self.config.n_kv_heads, self.config.head_dim
       out = flash_decode_attention_route(q, assigned_kv, start_pos, T, B, Hq, Hkv, Hd, self.config.max_context,
                                          kv_scale=assigned_scale, freqs=(_fr if _rope_read else None),
