@@ -34,7 +34,7 @@ from tinygrad.runtime.autogen.amd.rdna3.ins import (
   v_lshl_or_b32,
   v_cvt_f16_f32_e32, v_cvt_f32_f16_e32, v_cvt_i32_f32_e32, v_cvt_f32_i32_e32, v_cvt_f32_u32_e32, v_cvt_u32_f32_e32,
   v_cmp_lt_f32_e32, v_cmp_lt_i32_e32, v_cmp_neq_f32_e32, v_cmp_ne_u32_e32, v_cndmask_b32_e32, s_and_saveexec_b32,
-  ds_store_b16, ds_load_u16, v_exp_f32_e32,
+  ds_store_b16, ds_load_u16, v_exp_f32_e32, v_rcp_f32_e32, v_trunc_f32_e32,
   # Phase-1a: 16-bit global access for fp16 elements (b32 over-reads/writes 2 bytes past the last element -> MMU fault)
   global_load_u8, global_store_b8, global_load_u16, global_store_b16,
   # B0.L7: RDNA3 wave32 tensor-core multiply-accumulate D = A*B + C (fp16 in, fp32 out)
@@ -362,6 +362,8 @@ class AMDOps(FastEnum):
   V_BFE_U32 = 60                         # extract a uint16 lane from a packed wide-load destination dword
   SPAN_LANE = 61                         # zero-code lane view; becomes a NOOP before register allocation
   V_PACK_I8_U8 = 62                      # pack four zero-extended byte carriers into one dword without SSA temporaries
+  V_RCP = 63                             # float32 reciprocal -> v_rcp_f32
+  V_TRUNC = 64                           # truncate float32 toward zero -> v_trunc_f32
 
 def _reg(r:Register): return r  # passthrough; encoding maps index in post_regalloc
 
@@ -830,6 +832,10 @@ def isel_cast(ctx:IselContext, x:UOp):
      d in (dtypes.uchar, dtypes.ushort, dtypes.uint) and d.itemsize < s.itemsize:
     return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]), UOp.const(dtypes.int32, (1 << (d.itemsize * 8)) - 1).rtag()),
                arg=AMDOps.V_AND, tag=_vreg_def(ctx))
+  if s is dtypes.float32 and d is dtypes.char:
+    # VGPR scalar values occupy a dword. v_cvt_i32_f32 supplies the integer value and byte stores/packed consumers
+    # consume its low 8 bits; signed re-widening below explicitly sign-extends those bits when needed.
+    return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]),), arg=AMDOps.V_CVT_F2I, tag=_vreg_def(ctx))
   if s in (dtypes.char, dtypes.short, dtypes.int) and d in (dtypes.short, dtypes.int, dtypes.long) and s.itemsize < d.itemsize:
     mask, sign = (1 << (s.itemsize * 8)) - 1, 1 << (s.itemsize * 8 - 1)
     narrowed = UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, x.src[0]), UOp.const(dtypes.int32, mask).rtag()),
@@ -1895,6 +1901,10 @@ isel_matcher = PatternMatcher([
   # decode-attention primitives injected as CUSTOMI markers (Phase F.2/F.3): cross-lane exchange + packed fp16 dot
   (UPat(Ops.CUSTOMI, name="x"), lambda ctx, x: isel_customi(ctx, x)),
   (UPat(Ops.EXP2, name="x"), lambda ctx, x: UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]),), arg=AMDOps.V_EXP, tag=_vreg_def(ctx))),  # N1A: hardware exp2
+  (UPat(Ops.RECIPROCAL, dtype=dtypes.float32, name="x"),
+   lambda ctx, x: UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]),), arg=AMDOps.V_RCP, tag=_vreg_def(ctx))),
+  (UPat(Ops.TRUNC, dtype=dtypes.float32, name="x"),
+   lambda ctx, x: UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]),), arg=AMDOps.V_TRUNC, tag=_vreg_def(ctx))),
   (UPat.var("a").store(UPat.var("b"), name="x"), isel_store),
   # float elementwise ALU (commutative add/mul); a CONST operand is folded to a literal (e.g. a-b == a + b*-1.0)
   ((UPat(dtype=dtypes.float32) + UPat()).named("x"), lambda ctx, x: _binop(ctx, x, AMDOps.V_ADD)),
@@ -2157,6 +2167,10 @@ def lower_inst(x:UOp):
     return _ins(inst, x.tag)
   if a is AMDOps.V_EXP:                              # Phase N1A: hardware exp2 (2^x) -> one VALU op instead of a polynomial
     return _ins(v_exp_f32_e32(_Vr(x.reg), _Vr(src[0].reg)), x.tag)
+  if a is AMDOps.V_RCP:
+    return _ins(v_rcp_f32_e32(_Vr(x.reg), _Vr(src[0].reg)), x.tag)
+  if a is AMDOps.V_TRUNC:
+    return _ins(v_trunc_f32_e32(_Vr(x.reg), _Vr(src[0].reg)), x.tag)
   if a is AMDOps.MOV_S2V:                           # copy uniform SGPR (loop counter) into a VGPR for address math
     return _ins(v_mov_b32_e32(_Vr(x.reg), _S[src[0].reg.index]), x.tag)
   if a is AMDOps.ACCUM_READ:                        # RA1: read pinned accumulator -> v_mov vvirt, v[pin]. src=(order, pin)
