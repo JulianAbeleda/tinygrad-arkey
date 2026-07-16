@@ -1,7 +1,7 @@
 import pytest
 
 from tinygrad import dtypes
-from tinygrad.codegen.opt.kernel_pipeline import (PINNED_WMMA_VGPR_BUDGET, SchedulerOutputTileLoop,
+from extra.qk.kernel_pipeline import (PINNED_WMMA_VGPR_BUDGET, SchedulerOutputTileLoop,
   build_scheduler_output_tile_loop, build_scheduler_output_tile_owner)
 from tinygrad.codegen.opt.heuristic import bounded_reduction_unroll
 from tinygrad.codegen.opt.postrange import Scheduler

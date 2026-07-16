@@ -1,7 +1,7 @@
 import pytest
 
 from tinygrad import dtypes
-from tinygrad.codegen.opt.kernel_lds import (PackedComponentLDSBinding, PackedComponentOperandTemplate,
+from extra.qk.kernel_lds import (PackedComponentLDSBinding, PackedComponentOperandTemplate,
   PrecontractContractSpec, PrecontractKAxis, PrecontractThreadAxes, build_packed_component_lds_stage)
 from tinygrad.codegen.opt.packed_weight import PackedOperandComponent, PackedOperandTransform
 from tinygrad.codegen.opt.tc import amd_rdna3

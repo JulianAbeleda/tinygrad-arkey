@@ -2,7 +2,7 @@ import unittest
 from dataclasses import replace
 
 from tinygrad import dtypes
-from tinygrad.codegen.opt.kernel_pipeline import (DotUpdateAttachment, DotUpdateRecurrencePlan,
+from extra.qk.kernel_pipeline import (DotUpdateAttachment, DotUpdateRecurrencePlan,
   build_dot_update_recurrence, prove_dot_update_recurrence)
 from tinygrad.uop.ops import Ops, UOp
 

@@ -14,9 +14,9 @@ from extra.qk.mmq_llama_differential import (LLAMA_SOURCE_COMMIT, SCHEMA as STRU
 from extra.qk.mmq_llama_oracle import LLAMA_MMQ_CUH
 from extra.qk.mmq_llama_packed_operands import Q4_K_DECODED_LDS_ROW, Q4_K_GLOBAL_BLOCK, Q8_1_DS4_ROW, SOURCE_ANCHORS
 from tinygrad import dtypes
-from tinygrad.codegen.opt.kernel_pipeline import (DotUpdateRecurrencePlan, HierarchicalKernelPipelinePlan,
+from extra.qk.kernel_pipeline import (DotUpdateRecurrencePlan, HierarchicalKernelPipelinePlan,
   HierarchicalPipelineRole, hierarchical_lifecycle_events)
-from tinygrad.codegen.opt.kernel_writeback import WMMAWritebackDescriptor, WMMAWritebackLayout, WMMAWritebackProof
+from extra.qk.kernel_writeback import WMMAWritebackDescriptor, WMMAWritebackLayout, WMMAWritebackProof
 from tinygrad.codegen.opt.packed_weight import PackedOperandComponent, PackedOperandRecordTransform, PackedOperandTransform
 from tinygrad.codegen.opt.tc import amd_rdna3
 from tinygrad.uop.ops import (KernelCandidateContext, KernelLDSArenaRegion, KernelLDSRecordComponent,

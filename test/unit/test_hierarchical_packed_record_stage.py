@@ -3,12 +3,12 @@ from dataclasses import replace
 import pytest
 
 from tinygrad import dtypes
-from tinygrad.codegen.opt.kernel_lds import (HierarchicalPackedRecordStageDescriptor, PackedRecordFieldProducer,
+from extra.qk.kernel_lds import (HierarchicalPackedRecordStageDescriptor, PackedRecordFieldProducer,
   PackedRecordCooperativeSchedule, PackedRecordCooperativeStore, PackedRecordLDSRegionBinding, PackedRecordOperandTemplate,
   PackedRecordSource, PrecontractContractSpec,
   PrecontractThreadAxes, build_hierarchical_packed_record_stage, contract_symbolic_upcast,
   lower_symbolic_barrier_dependencies, prove_hierarchical_packed_record_stage)
-from tinygrad.codegen.opt.kernel_pipeline import HierarchicalKernelPipelinePlan, HierarchicalPipelineRole
+from extra.qk.kernel_pipeline import HierarchicalKernelPipelinePlan, HierarchicalPipelineRole
 from tinygrad.codegen.opt.packed_weight import PackedOperandComponent, PackedOperandRecordTransform, PackedOperandTransform
 from tinygrad.codegen.opt.tc import amd_rdna3
 from tinygrad.dtype import AddrSpace

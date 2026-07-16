@@ -1,7 +1,7 @@
 from dataclasses import replace
 
 from tinygrad import dtypes
-import tinygrad.codegen.opt.kernel_lds as lds
+import extra.qk.kernel_lds as lds
 from tinygrad.uop.ops import Ops, UOp
 
 import test.unit.test_hierarchical_packed_record_stage as stage_fixture

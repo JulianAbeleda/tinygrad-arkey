@@ -6,7 +6,7 @@ and performance admission remain separate and cannot be inferred from it.
 from __future__ import annotations
 
 from tinygrad import dtypes
-from tinygrad.codegen.opt.kernel_lds import (HierarchicalPackedRecordStage, HierarchicalPackedRecordStageDescriptor,
+from extra.qk.kernel_lds import (HierarchicalPackedRecordStage, HierarchicalPackedRecordStageDescriptor,
   PackedRecordLDSRegionBinding, PrecontractContractSpec, PrecontractThreadAxes,
   build_hierarchical_packed_record_stage, prove_hierarchical_packed_record_stage)
 from tinygrad.dtype import AddrSpace, PtrDType

@@ -1,7 +1,7 @@
 import pytest
 
 from tinygrad import dtypes
-from tinygrad.codegen.opt.kernel_lds import (PackedRecordFieldProducer, PackedRecordLDSRegionBinding,
+from extra.qk.kernel_lds import (PackedRecordFieldProducer, PackedRecordLDSRegionBinding,
   PackedRecordOperandTemplate, PackedRecordSource, PrecontractContractSpec, PrecontractKAxis, PrecontractThreadAxes,
   build_packed_record_lds_stage)
 from tinygrad.codegen.opt.packed_weight import PackedOperandComponent, PackedOperandRecordTransform, PackedOperandTransform

@@ -1,7 +1,7 @@
 import unittest
 
 from tinygrad import Tensor, dtypes
-from tinygrad.codegen.opt.kernel_pipeline import SchedulerOutputTileLoop
+from extra.qk.kernel_pipeline import SchedulerOutputTileLoop
 from tinygrad.uop.ops import Ops, UOp
 from tinygrad.callify import transform_to_call
 from extra.qk.dynamic_tile_owner import dynamic_store, dynamic_tile_views, own_dynamic_tiles

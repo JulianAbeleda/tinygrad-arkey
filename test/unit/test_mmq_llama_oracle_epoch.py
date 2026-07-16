@@ -1,7 +1,7 @@
 import pytest
 
 from tinygrad import dtypes
-from tinygrad.codegen.opt.kernel_lds import prove_hierarchical_packed_record_stage
+from extra.qk.kernel_lds import prove_hierarchical_packed_record_stage
 from tinygrad.uop.ops import Ops, UOp
 
 from extra.qk.mmq_llama_oracle_epoch import build_llama_oracle_epoch_stage

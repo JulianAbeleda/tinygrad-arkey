@@ -6,7 +6,7 @@ does not introduce a Q4 operation or perform floating-point weight dequantizatio
 from __future__ import annotations
 from dataclasses import dataclass
 
-from tinygrad.codegen.opt.kernel_lds import (PackedRecordCooperativeSchedule, PackedRecordCooperativeStore,
+from extra.qk.kernel_lds import (PackedRecordCooperativeSchedule, PackedRecordCooperativeStore,
   PackedRecordFieldProducer, PackedRecordOperandTemplate, PackedRecordSource, PrecontractThreadAxes)
 from tinygrad.codegen.opt.packed_weight import PackedOperandComponent, PackedOperandRecordTransform, PackedOperandTransform
 from tinygrad.dtype import dtypes

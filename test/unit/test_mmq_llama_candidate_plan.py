@@ -4,8 +4,8 @@ from copy import deepcopy
 from extra.qk.mmq_llama_candidate_plan import llama_mmq_candidate_plan
 from extra.qk.mmq_llama_differential import LLAMA_SOURCE_COMMIT, compare_structures, llama_q4k_q8_structural_descriptor
 from tinygrad import dtypes
-from tinygrad.codegen.opt.kernel_pipeline import DotUpdateRecurrencePlan, HierarchicalKernelPipelinePlan
-from tinygrad.codegen.opt.kernel_writeback import WMMAWritebackDescriptor
+from extra.qk.kernel_pipeline import DotUpdateRecurrencePlan, HierarchicalKernelPipelinePlan
+from extra.qk.kernel_writeback import WMMAWritebackDescriptor
 from tinygrad.codegen.opt.packed_weight import PackedOperandRecordTransform
 from tinygrad.uop.ops import KernelCandidateContext, KernelTileGeometry
 

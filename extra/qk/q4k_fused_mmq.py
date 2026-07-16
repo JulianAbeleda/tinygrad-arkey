@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from tinygrad import Tensor, dtypes
-from tinygrad.codegen.opt.kernel_pipeline import SchedulerOutputTileLoop
+from extra.qk.kernel_pipeline import SchedulerOutputTileLoop
 from tinygrad.uop.ops import UOp
 from tinygrad.uop.ops import KernelLDSWindow, KernelTileGeometry
 

@@ -1,7 +1,7 @@
 import unittest
 from dataclasses import FrozenInstanceError, replace
 
-from tinygrad.codegen.opt.kernel_pipeline import (HierarchicalKernelPipelinePlan, HierarchicalLifecycleEvent,
+from extra.qk.kernel_pipeline import (HierarchicalKernelPipelinePlan, HierarchicalLifecycleEvent,
   HierarchicalPipelineRole, hierarchical_lifecycle_events, prove_hierarchical_lifecycle)
 
 

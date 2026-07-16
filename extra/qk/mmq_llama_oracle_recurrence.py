@@ -9,7 +9,7 @@ import ast, inspect, textwrap
 from dataclasses import dataclass
 
 from tinygrad import dtypes
-from tinygrad.codegen.opt.kernel_lds import (HierarchicalPackedRecordGroup, HierarchicalPackedRecordStage,
+from extra.qk.kernel_lds import (HierarchicalPackedRecordGroup, HierarchicalPackedRecordStage,
   validate_precontract_wmma_abi, validate_rdna3_wmma_descriptor)
 from tinygrad.uop.ops import AxisType, Ops, UOp
 

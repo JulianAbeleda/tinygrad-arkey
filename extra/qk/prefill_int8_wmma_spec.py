@@ -11,7 +11,7 @@ from typing import Any
 
 from tinygrad import Tensor, dtypes
 from tinygrad.codegen.opt import Opt, OptOps
-from tinygrad.codegen.opt.kernel_pipeline import (SchedulerOutputTileLoop, build_scheduler_output_tile_loop,
+from extra.qk.kernel_pipeline import (SchedulerOutputTileLoop, build_scheduler_output_tile_loop,
                                                    build_scheduler_output_tile_owner)
 from tinygrad.helpers import getenv
 from tinygrad.uop.ops import Ops, ScheduleHints, UOp

@@ -13,7 +13,7 @@ import traceback
 from pathlib import Path
 
 from tinygrad import Tensor, dtypes
-from tinygrad.codegen.opt.kernel_pipeline import SchedulerOutputTileLoop
+from extra.qk.kernel_pipeline import SchedulerOutputTileLoop
 from tinygrad.device import Device
 from tinygrad.engine.realize import compile_linear, run_linear
 from tinygrad.uop.ops import Ops, UOp

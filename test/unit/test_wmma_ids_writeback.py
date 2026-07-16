@@ -1,7 +1,7 @@
 import pytest
 
 from tinygrad import dtypes
-from tinygrad.codegen.opt.kernel_writeback import (WMMAIDsReady, WMMAWritebackDescriptor, WMMAWritebackLayout,
+from extra.qk.kernel_writeback import (WMMAIDsReady, WMMAWritebackDescriptor, WMMAWritebackLayout,
   WMMAWritebackProof, WMMAWritebackTileMapping, build_wmma_writeback)
 from tinygrad.codegen.opt.tc import amd_rdna3
 from tinygrad.dtype import AddrSpace
