@@ -110,6 +110,7 @@ class PhysicalMemoryEvidence:
 
 
 _phases:contextvars.ContextVar[tuple[str, ...]] = contextvars.ContextVar("physical_allocation_phases", default=())
+_active_ledger:PhysicalMemoryLedger|None = None
 
 
 @contextlib.contextmanager
@@ -165,13 +166,48 @@ class PhysicalMemoryLedger:
 
   @contextlib.contextmanager
   def active(self) -> Iterator[PhysicalMemoryLedger]:
+    global _active_ledger
     from tinygrad.device import Buffer
-    if Buffer._physical_allocation_ledger is not None: raise RuntimeError("a physical allocation ledger is already active")
-    Buffer._physical_allocation_ledger, self._active = self, True
+    if _active_ledger is not None: raise RuntimeError("a physical allocation ledger is already active")
+
+    # Physical allocation evidence is research instrumentation, so install it only
+    # for the measurement window instead of carrying observer state and branches in
+    # Buffer's execution path. Events are emitted after the underlying operation
+    # succeeds, matching the allocation lifetime visible to runtime callers.
+    original_allocate, original_get_buf, original_deallocate = Buffer.allocate, Buffer.get_buf, Buffer.deallocate
+
+    def allocate(buffer, opaque=None, external_ptr=None):
+      ret = original_allocate(buffer, opaque, external_ptr)
+      if buffer._base is not None:
+        self._allocate_view(buffer, buffer.device)
+      elif opaque is None and (buffer.options is None or buffer.options.external_ptr is None):
+        self._allocate_base(buffer, buffer.device, buffer.nbytes)
+      return ret
+
+    def get_buf(buffer, device):
+      already_mapped = device in buffer._bufs
+      ret = original_get_buf(buffer, device)
+      if not already_mapped and device != buffer.device:
+        if buffer._base is not None: self._allocate_view(buffer, device)
+        else: self._allocate_base(buffer.base, device, buffer.nbytes, mapped=True)
+      return ret
+
+    def deallocate(buffer):
+      devices, is_view = tuple(buffer._bufs), buffer._base is not None
+      ret = original_deallocate(buffer)
+      if is_view:
+        for device in devices: self._free_view(buffer, device)
+      else:
+        for device in devices: self._free_base(buffer, device)
+      return ret
+
+    Buffer.allocate, Buffer.get_buf, Buffer.deallocate = allocate, get_buf, deallocate
+    _active_ledger, self._active = self, True
     try: yield self
     finally:
       self._active = False
-      Buffer._physical_allocation_ledger = None
+      _active_ledger = None
+      Buffer.allocate, Buffer.get_buf, Buffer.deallocate = original_allocate, original_get_buf, original_deallocate
       for allocation_id in sorted(self._active_ids): self._issue_once(f"allocation {allocation_id} has no free event")
 
   def _matching_uops(self, buffer) -> tuple[Any, ...]:

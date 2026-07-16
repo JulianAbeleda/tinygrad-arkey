@@ -29,6 +29,16 @@ def test_base_and_view_share_identity_and_view_adds_zero_bytes():
   assert ledger.complete
 
 
+def test_instrumentation_is_scoped_to_active_context_and_rejects_nesting():
+  methods = Buffer.allocate, Buffer.get_buf, Buffer.deallocate
+  outer, inner = PhysicalMemoryLedger(), PhysicalMemoryLedger()
+  with outer.active():
+    assert (Buffer.allocate, Buffer.get_buf, Buffer.deallocate) != methods
+    with pytest.raises(RuntimeError, match="already active"):
+      with inner.active(): pass
+  assert (Buffer.allocate, Buffer.get_buf, Buffer.deallocate) == methods
+
+
 def test_reallocation_gets_new_lifetime_even_when_allocator_cache_reuses_storage():
   ledger, base = PhysicalMemoryLedger(), _buf(nbytes=33)
   with Context(LRU=1), ledger.active(), allocation_owner(kind="scratch", lifetime="step"):
