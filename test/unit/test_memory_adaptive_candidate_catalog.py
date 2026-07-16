@@ -2,6 +2,7 @@ from extra.qk.memory_adaptive_candidate_catalog import (CandidateSpec, build_can
                                                          inventory_invocation_ids)
 from extra.qk.memory_adaptive_evidence_runner import CandidateArtifacts, EvidenceAdapter, make_evidence_runner
 from tinygrad.llm.prefill_memory_plan import Strategy
+import pytest
 
 
 INVENTORY = {"inventory_identity": "inventory:sha256:" + "a" * 64,
@@ -193,6 +194,7 @@ def _candidate():
 
 
 def _artifacts():
+  identity = _candidate().whole_policy_identity
   phases = {"phases": [
     {"phase": "compile", "status": "passed", "evidence": {"binary_sha256": "abc"}},
     {"phase": "execution", "status": "passed", "evidence": {"dispatch_state": "completed",
@@ -201,8 +203,8 @@ def _artifacts():
       "numerical_passed": True, "finite_output": True, "inputs_unchanged": True}},
   ]}
   return CandidateArtifacts(phases, {"passed": True},
-    {"status": "PASS", "complete": True, "covered_invocations": ["q", "f"]},
-    {"scope": "end_to_end", "metric": "tok_s", "samples": [10.0, 10.1, 9.9]})
+    {"status": "PASS", "complete": True, "covered_invocations": ["q", "f"], "whole_policy_identity": identity},
+    {"scope": "end_to_end", "metric": "tok_s", "samples": [10.0, 10.1, 9.9]}, identity)
 
 
 def test_adapter_translates_existing_artifacts_to_strict_autoscan_schema():
@@ -216,10 +218,26 @@ def test_adapter_rejects_incomplete_census_and_never_promotes_kernel_timing():
   artifacts = _artifacts()
   bad = CandidateArtifacts(artifacts.execution, artifacts.resource,
     {"status": "PASS", "complete": True, "covered_invocations": ["q"]},
-    {"scope": "kernel", "metric": "tok_s", "samples": [1000.0]})
+    {"scope": "kernel", "metric": "tok_s", "samples": [1000.0]}, artifacts.whole_policy_identity)
   proof = EvidenceAdapter().translate(_candidate(), bad)
   assert proof["route_census"] == {"status": "FAIL", "artifact": bad.route_census, "complete": False}
   assert proof["end_to_end_timing"]["samples"] == []
+
+
+@pytest.mark.parametrize("identity", [None, "wrong-policy"])
+def test_adapter_fails_every_gate_on_missing_or_mismatched_policy_identity(identity):
+  artifacts = _artifacts()
+  raw = {**artifacts.__dict__, "whole_policy_identity": identity}
+  proof = EvidenceAdapter().translate(_candidate(), raw)
+  assert all(proof[x]["status"] == "FAIL" for x in ("compile", "correctness", "resource", "gpu_health", "route_census"))
+  assert proof["end_to_end_timing"]["samples"] == []
+
+
+def test_adapter_emits_and_binds_matching_policy_identity():
+  candidate = _candidate()
+  proof = EvidenceAdapter().translate(candidate, _artifacts())
+  assert proof["whole_policy_identity"] == candidate.whole_policy_identity
+  assert proof["route_census"]["artifact"]["whole_policy_identity"] == candidate.whole_policy_identity
 
 
 def test_runner_is_injected_and_does_not_execute_by_itself():

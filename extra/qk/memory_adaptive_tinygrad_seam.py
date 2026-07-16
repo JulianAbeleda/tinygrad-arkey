@@ -26,7 +26,7 @@ from extra.qk.prefill_workload_plan import InvocationBytes, RemainderMapping
 from tinygrad.llm.memory_semantics import MemorySemanticOwner, MemorySemanticClass
 
 SCHEMA = "tinygrad.memory_adaptive_tinygrad_seam.v1"
-WORKER_SCHEMA = "tinygrad.memory_adaptive_tinygrad_worker.v1"
+WORKER_SCHEMA = "tinygrad.memory_adaptive_tinygrad_worker.v2"
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 _RESOURCE_ZERO_FIELDS = ("scratch_bytes", "vgpr_spills", "sgpr_spills")
 
@@ -302,7 +302,8 @@ class TinygradWholeModelSeam:
     required = tuple(candidate.memory.required_invocations)
     workload_choice = dict(candidate.policy.get("workload_choice", {}))
     request = {"schema": WORKER_SCHEMA, "model_path": str(pathlib.Path(model_path).expanduser().resolve()),
-      "candidate_id": candidate.candidate_id, "strategy": candidate.memory.strategy.value,
+      "candidate_id": candidate.candidate_id, "whole_policy_identity": candidate.whole_policy_identity,
+      "strategy": candidate.memory.strategy.value,
       "routes": dict(candidate.policy.get("routes", {})), "required_invocations": list(required),
       "inventory": dict(model.inventory), "workload": dict(model.workload), "samples": samples,
       "workload_choice": workload_choice, "lifecycle_phase": "evidence",
@@ -337,6 +338,23 @@ class TinygradWholeModelSeam:
     if isinstance(timing_row.get("run"), Mapping): row["run"] = timing_row["run"]
     row["actual_whole_model_run"] = row.get("actual_whole_model_run") is True and timing_row.get("actual_whole_model_run") is True
     raw_partial = row.get("artifacts") if isinstance(row.get("artifacts"), Mapping) else {}
+    expected_identity = candidate.whole_policy_identity
+    identity_blockers = []
+    for label, output in (("evidence", row), ("PROFILE=0 timing", timing_row)):
+      if output.get("whole_policy_identity") != expected_identity:
+        identity_blockers.append(f"{label} worker whole_policy_identity missing or mismatched")
+    if raw_partial.get("whole_policy_identity") != expected_identity:
+      identity_blockers.append("evidence artifact envelope whole_policy_identity missing or mismatched")
+    census_identity = raw_partial.get("route_census", {})
+    if not isinstance(census_identity, Mapping) or census_identity.get("whole_policy_identity") != expected_identity:
+      identity_blockers.append("route census whole_policy_identity missing or mismatched")
+    if identity_blockers:
+      artifacts = _failed_artifacts(required, identity_blockers)
+      return {"actual_whole_model_run": False, "blockers": identity_blockers, "worker": row.get("run"),
+              "physical_memory_ledger": row.get("physical_memory_ledger"),
+              "schedule_manifests": row.get("schedule_manifests"), "schedule_evidence": row.get("schedule_evidence"),
+              "measured_allocation": row.get("measured_allocation"),
+              "memory_fact_evidence": row.get("memory_fact_evidence"), "artifacts": artifacts}
     measured_allocation = row.get("measured_allocation")
     memory_fact_evidence = row.get("memory_fact_evidence")
     partial, correctness_blockers = self._authorize_correctness(model, candidate, row)
@@ -562,10 +580,15 @@ def _worker(request: Mapping[str, Any]) -> dict[str, Any]:
   before = _health()
   if not before["healthy"]:
     blocker = "GPU health preflight failed"
-    return {"schema": WORKER_SCHEMA, "actual_whole_model_run": False, "blockers": [blocker],
-            "artifacts": _failed_artifacts(request.get("required_invocations", ()), [blocker])}
+    artifacts = _failed_artifacts(request.get("required_invocations", ()), [blocker])
+    artifacts["whole_policy_identity"] = request["whole_policy_identity"]
+    artifacts["route_census"]["whole_policy_identity"] = request["whole_policy_identity"]
+    return {"schema": WORKER_SCHEMA, "whole_policy_identity": request["whole_policy_identity"],
+            "actual_whole_model_run": False, "blockers": [blocker],
+            "artifacts": artifacts}
   required, routes = tuple(request["required_invocations"]), dict(request["routes"])
-  policy = {"strategy": request["strategy"], "candidate_id": request["candidate_id"], "routes": routes,
+  policy = {"strategy": request["strategy"], "candidate_id": request["candidate_id"],
+            "whole_policy_identity": request["whole_policy_identity"], "routes": routes,
             "provenance": SCHEMA, "measured": True}
   def collector(runtime_request):
     if runtime_request.get("inventory") != request["inventory"]: raise ValueError("runtime inventory differs from parent scan")
@@ -626,6 +649,7 @@ def _worker(request: Mapping[str, Any]) -> dict[str, Any]:
       with collect_prefill_route_census(required, {key: expected_calls for key in required}) as census:
         census_gen = model.generate(list(prompt)); next(census_gen)
     route_census = census.artifact()
+    route_census["whole_policy_identity"] = request["whole_policy_identity"]
     if not route_census["complete"]: blockers.append("runtime route census incomplete: " + route_census.get("blocker", "unknown"))
     # Exercise at least the full measured decode span before collecting samples. This is workload-derived (not a
     # model/GPU tier) and prevents a later token position from turning the first measured sample into a compile trial.
@@ -719,19 +743,22 @@ def _worker(request: Mapping[str, Any]) -> dict[str, Any]:
       "full_output_compared": False, "numerical_passed": False, "inputs_unchanged": input_before == input_after,
       "blocker": "awaiting parent baseline comparison"}},
   ]}
-  artifacts = {"execution": execution,
+  artifacts = {"whole_policy_identity": request["whole_policy_identity"], "execution": execution,
     "resource": {**resource, "measured_allocation": allocation},
     "route_census": route_census if route_census is not None else {"status": "FAIL", "complete": False,
+      "whole_policy_identity": request["whole_policy_identity"],
       "covered_invocations": [], "required_invocations": list(required), "blocker": "runtime census forward failed"},
     "end_to_end_timing": {"scope": "end_to_end", "metric": "tok_s", "samples": speeds,
       "authority": "isolated tinygrad Transformer.from_gguf + model.generate"}}
   execution["phases"][1]["evidence"]["measured_allocation"] = allocation
-  return {"schema": WORKER_SCHEMA, "actual_whole_model_run": actual, "blockers": list(dict.fromkeys(blockers)),
+  return {"schema": WORKER_SCHEMA, "whole_policy_identity": request["whole_policy_identity"],
+          "actual_whole_model_run": actual, "blockers": list(dict.fromkeys(blockers)),
           "physical_memory_ledger": allocation.get("physical_ledger"),
           "schedule_manifests": allocation.get("schedule_manifests"),
           "schedule_evidence": allocation.get("schedule_evidence"),
           "measured_allocation": allocation, "artifacts": artifacts,
-          "run": {"candidate_id": request["candidate_id"], "strategy": request["strategy"],
+          "run": {"candidate_id": request["candidate_id"], "whole_policy_identity": request["whole_policy_identity"],
+                  "strategy": request["strategy"],
                   "workload_choice": dict(request.get("workload_choice", {})),
                   "output_token_digests": [hashlib.sha256(json.dumps(x).encode()).hexdigest() for x in outputs],
                   "deterministic_output_evidence": {"schema": "tinygrad.deterministic_full_output.v1",
@@ -745,9 +772,12 @@ def _timing_worker(request: Mapping[str, Any]) -> dict[str, Any]:
   """Run selection timing without profiling, ledgers, manifests, or evidence hooks."""
   if os.environ.get("PROFILE", "0") != "0": raise RuntimeError("timing worker must start with PROFILE=0")
   before = _health()
-  if not before["healthy"]: return {"schema": WORKER_SCHEMA, "actual_whole_model_run": False,
-    "blockers": ["GPU health preflight failed"], "artifacts": {"end_to_end_timing": {"samples": []}}}
+  if not before["healthy"]: return {"schema": WORKER_SCHEMA, "whole_policy_identity": request["whole_policy_identity"],
+    "actual_whole_model_run": False,
+    "blockers": ["GPU health preflight failed"], "artifacts": {
+      "whole_policy_identity": request["whole_policy_identity"], "end_to_end_timing": {"samples": []}}}
   policy = {"strategy": request["strategy"], "candidate_id": request["candidate_id"],
+            "whole_policy_identity": request["whole_policy_identity"],
             "routes": dict(request["routes"]), "provenance": SCHEMA, "measured": True}
   def collector(runtime_request):
     if runtime_request.get("inventory") != request["inventory"]: raise ValueError("runtime inventory differs from parent scan")
@@ -785,11 +815,14 @@ def _timing_worker(request: Mapping[str, Any]) -> dict[str, Any]:
     if tensor_type is not None: tensor_type.manual_seed(tensor_type._seed)
     gc.collect()
   after = _health(); actual = len(outputs) == int(request["samples"]) and after["healthy"]
-  return {"schema": WORKER_SCHEMA, "actual_whole_model_run": actual,
+  return {"schema": WORKER_SCHEMA, "whole_policy_identity": request["whole_policy_identity"],
+    "actual_whole_model_run": actual,
     "blockers": [] if actual else ["clean timing run incomplete"],
-    "artifacts": {"end_to_end_timing": {"scope": "end_to_end", "metric": "tok_s", "samples": speeds,
+    "artifacts": {"whole_policy_identity": request["whole_policy_identity"],
+      "end_to_end_timing": {"scope": "end_to_end", "metric": "tok_s", "samples": speeds,
       "authority": "isolated PROFILE=0 tinygrad Transformer.from_gguf + model.generate"}},
-    "run": {"candidate_id": request["candidate_id"], "strategy": request["strategy"],
+    "run": {"candidate_id": request["candidate_id"], "whole_policy_identity": request["whole_policy_identity"],
+      "strategy": request["strategy"],
       "deterministic_output_evidence": {"schema": "tinygrad.deterministic_full_output.v1",
         "output_kind": "complete_greedy_token_sequence", "outputs": outputs,
         "input_digest_before": input_before, "input_digest_after": input_after},

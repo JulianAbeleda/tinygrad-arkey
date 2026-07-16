@@ -26,6 +26,11 @@ def _model():
     (ByteTerm("model", 1, "test", "exact", ByteLifetime.PERSISTENT),), {"prompt_tokens": 544}, {})
 
 
+def _policy(candidate_id, routes=None):
+  return {"candidate_id": candidate_id, "whole_policy_identity": f"identity:{candidate_id}",
+          **({} if routes is None else {"routes": routes})}
+
+
 def test_manifest_rows_release_backing_uop_before_real_ledger_cleanup():
   ledger = PhysicalMemoryLedger(("CPU",))
   def retained_manifest():
@@ -180,9 +185,11 @@ def test_reconciliation_fails_closed_on_unknown_schedule_semantics_and_mismatch(
 def test_collection_preserves_real_partial_run_and_precise_blockers(monkeypatch):
   seam = TinygradWholeModelSeam()
   candidate = AutoscanCandidate(CandidateMemoryCoverage("direct", Strategy.DIRECT_PACKED_FALLBACK, (), ("i0",), ("i0",)),
-                                {"candidate_id": "direct", "routes": {"i0": "direct"}})
+                                _policy("direct", {"i0": "direct"}))
   worker = {"actual_whole_model_run": True, "blockers": ["missing required artifact: final resource"],
-            "artifacts": {"end_to_end_timing": {"scope": "end_to_end", "metric": "tok_s", "samples": [1, 2, 3]}}}
+            "whole_policy_identity": "identity:direct", "artifacts": {"whole_policy_identity": "identity:direct",
+              "route_census": {"whole_policy_identity": "identity:direct"},
+              "end_to_end_timing": {"scope": "end_to_end", "metric": "tok_s", "samples": [1, 2, 3]}}}
   monkeypatch.setattr("subprocess.run", lambda *a, **kw: SimpleNamespace(returncode=0, stdout=json.dumps(worker)+"\n", stderr=""))
   out = seam.collect_whole_model_artifacts("chosen.gguf", _model(), candidate, samples=3)
   assert out["actual_whole_model_run"] is True
@@ -194,15 +201,19 @@ def test_collection_preserves_real_partial_run_and_precise_blockers(monkeypatch)
 def test_worker_launch_isolated_and_candidate_binding_is_exact(monkeypatch):
   seam = TinygradWholeModelSeam(python="python-test")
   candidate = AutoscanCandidate(CandidateMemoryCoverage("direct", Strategy.DIRECT_PACKED_FALLBACK, (), ("i0",), ("i0",)),
-                                {"candidate_id": "direct", "routes": {"i0": "route.structural"},
+                                {**_policy("direct", {"i0": "route.structural"}),
                                  "workload_choice": {"remainder_m": 32, "remainder_physical_m": 512,
                                                      "total_call_count": 1}})
   seen = []
   def run(cmd, **kwargs):
-    seen.append({"cmd": cmd, "request": json.loads(kwargs["input"]), "timeout": kwargs["timeout"],
+    request = json.loads(kwargs["input"])
+    seen.append({"cmd": cmd, "request": request, "timeout": kwargs["timeout"],
                  "profile": kwargs["env"]["PROFILE"]})
     artifacts = _failed_artifacts(("i0",), ["resource unavailable"])
+    artifacts["whole_policy_identity"] = request["whole_policy_identity"]
+    artifacts["route_census"]["whole_policy_identity"] = request["whole_policy_identity"]
     return SimpleNamespace(returncode=0, stdout=json.dumps({"actual_whole_model_run": True,
+      "whole_policy_identity": request["whole_policy_identity"],
       "blockers": ["resource unavailable"], "artifacts": artifacts})+"\n", stderr="")
   monkeypatch.setattr("subprocess.run", run)
   seam.collect_whole_model_artifacts("chosen.gguf", _model(), candidate, samples=3)
@@ -210,6 +221,7 @@ def test_worker_launch_isolated_and_candidate_binding_is_exact(monkeypatch):
   assert [x["request"]["lifecycle_phase"] for x in seen] == ["evidence", "timing"]
   assert seen[0]["cmd"][-1] == "--worker" and seen[0]["cmd"][0] == "python-test"
   assert seen[0]["request"]["routes"] == {"i0": "route.structural"}
+  assert seen[0]["request"]["whole_policy_identity"] == "identity:direct"
   assert seen[0]["request"]["samples"] == 3
   assert seen[0]["request"]["workload_choice"]["remainder_physical_m"] == 512
   assert seen[0]["request"]["planned_peak_bytes"] == 1
@@ -218,7 +230,7 @@ def test_worker_launch_isolated_and_candidate_binding_is_exact(monkeypatch):
 def test_collection_preserves_boundary_compatible_allocation_and_fails_closed(monkeypatch):
   seam = TinygradWholeModelSeam()
   candidate = AutoscanCandidate(CandidateMemoryCoverage("direct", Strategy.DIRECT_PACKED_FALLBACK, (), ("i0",), ("i0",)),
-                                {"candidate_id": "direct", "routes": {"i0": "direct"}})
+                                _policy("direct", {"i0": "direct"}))
   allocation = {"peak_bytes": 2, "planned_peak_bytes": 1, "allocations": [], "complete": False,
                 "blockers": ["measured peak 2 exceeds planned peak 1"]}
   worker = _worker_row([[1], [1], [1]])
@@ -231,26 +243,47 @@ def test_collection_preserves_boundary_compatible_allocation_and_fails_closed(mo
   assert "measured peak 2 exceeds planned peak 1" in out["blockers"]
 
 
-def _worker_row(outputs):
-  return {"actual_whole_model_run": True, "blockers": ["awaiting parent baseline comparison",
+@pytest.mark.parametrize("worker_identity", [None, "identity:other"])
+def test_parent_rejects_missing_or_mismatched_worker_policy_identity_before_evidence(monkeypatch, worker_identity):
+  seam = TinygradWholeModelSeam()
+  candidate = AutoscanCandidate(CandidateMemoryCoverage("direct", Strategy.DIRECT_PACKED_FALLBACK, (), ("i0",), ("i0",)),
+                                _policy("direct", {"i0": "direct"}))
+  worker = _worker_row([[1], [1], [1]], worker_identity)
+  monkeypatch.setattr("subprocess.run", lambda *a, **kw: SimpleNamespace(returncode=0, stdout=json.dumps(worker)+"\n", stderr=""))
+  out = seam.collect_whole_model_artifacts("chosen.gguf", _model(), candidate, samples=3)
+  assert out["actual_whole_model_run"] is False
+  assert any("whole_policy_identity missing or mismatched" in blocker for blocker in out["blockers"])
+  assert seam._baselines == {}
+  assert all(phase["status"] == "failed" for phase in out["artifacts"]["execution"]["phases"])
+  assert out["artifacts"]["resource"]["status"] == "FAIL"
+  assert out["artifacts"]["route_census"]["status"] == "FAIL"
+
+
+def _worker_row(outputs, identity="identity:direct"):
+  return {"actual_whole_model_run": True, "whole_policy_identity": identity,
+    "blockers": ["awaiting parent baseline comparison",
     "missing required artifact: exact runtime route census for every selected invocation"], "run": {
+      "whole_policy_identity": identity,
       "deterministic_output_evidence": {"outputs": outputs, "input_digest_before": "digest", "input_digest_after": "digest"}},
-    "artifacts": {"execution": {"phases": [
+    "artifacts": {"whole_policy_identity": identity, "execution": {"phases": [
       {"phase": "compile", "status": "passed", "evidence": {}},
       {"phase": "execution", "status": "passed", "evidence": {"dispatch_state": "completed", "health": {}}},
       {"phase": "correctness", "status": "failed", "evidence": {}}]},
-      "resource": {"status": "PASS"}, "route_census": {"status": "FAIL", "complete": False},
+      "resource": {"status": "PASS"}, "route_census": {"status": "FAIL", "complete": False,
+        "whole_policy_identity": identity},
       "end_to_end_timing": {"scope": "end_to_end", "metric": "tok_s", "samples": [1, 1, 1]}}}
 
 
 def test_parent_retains_baseline_and_authorizes_exact_greedy_outputs(monkeypatch):
   seam = TinygradWholeModelSeam()
   baseline = AutoscanCandidate(CandidateMemoryCoverage("base", Strategy.DIRECT_PACKED_FALLBACK, (), ("i0",), ("i0",)),
-                               {"candidate_id": "base", "routes": {}})
+                               _policy("base", {}))
   candidate = AutoscanCandidate(CandidateMemoryCoverage("candidate", Strategy.FULL_RESIDENT_OVERLAY, (), ("i0",), ("i0",)),
-                                {"candidate_id": "candidate", "routes": {}})
-  rows = iter((_worker_row([[4, 5], [4, 5], [4, 5]]), _worker_row([[4, 5], [4, 5], [4, 5]]),
-               _worker_row([[4, 5], [4, 5], [4, 5]]), _worker_row([[4, 5], [4, 5], [4, 5]])))
+                                _policy("candidate", {}))
+  rows = iter((_worker_row([[4, 5], [4, 5], [4, 5]], "identity:base"),
+               _worker_row([[4, 5], [4, 5], [4, 5]], "identity:base"),
+               _worker_row([[4, 5], [4, 5], [4, 5]], "identity:candidate"),
+               _worker_row([[4, 5], [4, 5], [4, 5]], "identity:candidate")))
   monkeypatch.setattr("subprocess.run", lambda *a, **kw: SimpleNamespace(returncode=0, stdout=json.dumps(next(rows))+"\n", stderr=""))
   seam.collect_whole_model_artifacts("chosen.gguf", _model(), baseline, samples=3)
   out = seam.collect_whole_model_artifacts("chosen.gguf", _model(), candidate, samples=3)
@@ -262,9 +295,9 @@ def test_parent_retains_baseline_and_authorizes_exact_greedy_outputs(monkeypatch
 def test_parent_rejects_candidate_output_mismatch_and_input_mutation():
   seam = TinygradWholeModelSeam(); model = _model()
   baseline = AutoscanCandidate(CandidateMemoryCoverage("base", Strategy.DIRECT_PACKED_FALLBACK, (), ("i0",), ("i0",)),
-                               {"candidate_id": "base"})
+                               _policy("base"))
   candidate = AutoscanCandidate(CandidateMemoryCoverage("candidate", Strategy.FULL_RESIDENT_OVERLAY, (), ("i0",), ("i0",)),
-                                {"candidate_id": "candidate"})
+                                _policy("candidate"))
   seam._authorize_correctness(model, baseline, _worker_row([[1], [1], [1]]))
   artifacts, errors = seam._authorize_correctness(model, candidate, _worker_row([[2], [2], [2]]))
   assert "candidate greedy output differs" in errors[0]

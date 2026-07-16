@@ -32,8 +32,9 @@ def _live_scanner(monkeypatch):
   monkeypatch.setattr(controller, "scan_device_facts", lambda: _device())
 
 
-def _artifacts(ids, speed):
+def _artifacts(ids, speed, whole_policy_identity):
   return {"actual_whole_model_run": True, "artifacts": {
+    "whole_policy_identity": whole_policy_identity,
     "execution": {"phases": [
       {"phase": "compile", "status": "passed", "evidence": {}},
       {"phase": "execution", "status": "passed", "evidence": {"dispatch_state": "completed",
@@ -41,7 +42,8 @@ def _artifacts(ids, speed):
       {"phase": "correctness", "status": "passed", "evidence": {"full_output_compared": True,
         "numerical_passed": True, "finite_output": True, "inputs_unchanged": True}}]},
     "resource": {"status": "PASS"},
-    "route_census": {"status": "PASS", "complete": True, "covered_invocations": ids},
+    "route_census": {"status": "PASS", "complete": True, "covered_invocations": ids,
+      "whole_policy_identity": whole_policy_identity},
     "end_to_end_timing": {"scope": "end_to_end", "metric": "tok_s", "samples": [speed]*3}}}
 
 
@@ -74,7 +76,8 @@ class Seam:
               invocation_bytes=({"m": 32, "activation_bytes": 1, "scratch_bytes": 1},))]
   def collect_whole_model_artifacts(self, path, model, candidate, *, samples):
     self.calls.append((candidate.candidate_id, samples))
-    row = _artifacts(list(candidate.memory.required_invocations), 120 if candidate.policy["policy_candidate_id"] == "fast" else 100)
+    row = _artifacts(list(candidate.memory.required_invocations),
+      120 if candidate.policy["policy_candidate_id"] == "fast" else 100, candidate.whole_policy_identity)
     if candidate.memory.strategy is not Strategy.DIRECT_PACKED_FALLBACK: row["memory_fact_evidence"] = _memory(candidate.candidate_id)
     return row
 
@@ -104,7 +107,8 @@ def test_workload_expansion_has_distinct_semantic_identities_in_policy_and_cache
 def test_accelerated_candidate_without_complete_measured_facts_is_rejected():
   seam = Seam()
   seam.collect_whole_model_artifacts = lambda path, model, candidate, samples: _artifacts(
-    list(candidate.memory.required_invocations), 120 if candidate.memory.strategy is not Strategy.DIRECT_PACKED_FALLBACK else 100)
+    list(candidate.memory.required_invocations), 120 if candidate.memory.strategy is not Strategy.DIRECT_PACKED_FALLBACK else 100,
+    candidate.whole_policy_identity)
   result = _run_controller_with_seam(model_path="chosen.gguf", seam=seam)
   assert result["selected_candidate_id"] == "baseline:M32"
 

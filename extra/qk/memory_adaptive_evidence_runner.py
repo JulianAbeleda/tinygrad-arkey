@@ -11,7 +11,7 @@ from typing import Any, Callable, Mapping
 
 from extra.qk.memory_adaptive_autoscan import AutoscanCandidate
 
-SCHEMA = "tinygrad.memory_adaptive_guarded_evidence.v1"
+SCHEMA = "tinygrad.memory_adaptive_guarded_evidence.v2"
 
 
 def _mapping(value: Any) -> Mapping[str, Any]:
@@ -46,6 +46,7 @@ class CandidateArtifacts:
   resource: Any
   route_census: Any
   end_to_end_timing: Any
+  whole_policy_identity: str
   compile: Any | None = None
 
 
@@ -55,6 +56,7 @@ class EvidenceAdapter:
   def translate(self, candidate: AutoscanCandidate, artifacts: CandidateArtifacts | Mapping[str, Any]) -> dict[str, Any]:
     if isinstance(artifacts, Mapping): artifacts = CandidateArtifacts(**artifacts)
     if not isinstance(artifacts, CandidateArtifacts): raise TypeError("collector must return CandidateArtifacts or a mapping")
+    identity_ok = artifacts.whole_policy_identity == candidate.whole_policy_identity
     phases = _phases(artifacts.execution)
     compile_artifact = artifacts.compile if artifacts.compile is not None else phases.get("compile", {})
     compile_row = _mapping(compile_artifact)
@@ -86,7 +88,8 @@ class EvidenceAdapter:
     existing_complete = census.get("schema") == "prefill-candidate-set-route-census.v1" and \
       census.get("passed") is True and census.get("expected_entry_count") == census.get("selected_entry_count") == len(required) and \
       all(census.get(key) == [] for key in ("missing", "unexpected", "identity_mismatches"))
-    census_ok = (census.get("status") in ("PASS", "passed") or census.get("passed") is True) and (explicit_complete or existing_complete)
+    census_ok = identity_ok and census.get("whole_policy_identity") == candidate.whole_policy_identity and \
+      (census.get("status") in ("PASS", "passed") or census.get("passed") is True) and (explicit_complete or existing_complete)
 
     timing = _mapping(artifacts.end_to_end_timing)
     samples = timing.get("samples", timing.get("samples_tok_s"))
@@ -94,11 +97,12 @@ class EvidenceAdapter:
     timing_record = {**dict(timing), "metric": "tok_s", "samples": list(samples)} if timing_ok else \
       {"scope": timing.get("scope"), "metric": timing.get("metric"), "samples": []}
     return {"schema": SCHEMA, "candidate_id": candidate.candidate_id,
-      "compile": _pass(compile_row.get("status") in ("passed", "PASS") or compile_row.get("passed") is True, compile_row),
-      "correctness": _pass(correctness_ok, correctness), "resource": _pass(resource_ok, resource),
-      "gpu_health": _pass(health_ok, execution),
+      "whole_policy_identity": candidate.whole_policy_identity,
+      "compile": _pass(identity_ok and (compile_row.get("status") in ("passed", "PASS") or compile_row.get("passed") is True), compile_row),
+      "correctness": _pass(identity_ok and correctness_ok, correctness), "resource": _pass(identity_ok and resource_ok, resource),
+      "gpu_health": _pass(identity_ok and health_ok, execution),
       "route_census": {**_pass(census_ok, census), "complete": bool(census_ok)},
-      "end_to_end_timing": timing_record}
+      "end_to_end_timing": timing_record if identity_ok else {**timing_record, "samples": []}}
 
 
 ArtifactCollector = Callable[[AutoscanCandidate], CandidateArtifacts | Mapping[str, Any] | None]
