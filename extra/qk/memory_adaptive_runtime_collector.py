@@ -130,9 +130,8 @@ def _decode_candidate_set(value):
   return admit_full_kernel_candidate_set(FullKernelCandidateSet.from_json(value))
 
 def install_model_adapters() -> None:
-  from tinygrad.llm.memory_adaptive_authority import register_memory_adaptive_adapters
-  register_memory_adaptive_adapters(policy_adapter=collect_runtime_policy, evidence_validator=validate_memory_facts,
-                                    candidate_set_decoder=_decode_candidate_set)
+  """Explicit production activation; importing this module has no process-wide effect."""
+  from tinygrad.llm.memory_adaptive_authority import MemoryAdaptiveAdapters, activate_memory_adaptive_adapters
+  activate_memory_adaptive_adapters(MemoryAdaptiveAdapters(collect_runtime_policy, validate_memory_facts, _decode_candidate_set))
 
-install_model_adapters()
 __all__.append("install_model_adapters")

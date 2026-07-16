@@ -580,6 +580,8 @@ def _worker(request: Mapping[str, Any]) -> dict[str, Any]:
   stack = contextlib.ExitStack()
   model = _kv = census_gen = gen = None
   try:
+    from extra.qk.memory_adaptive_runtime_collector import install_model_adapters
+    install_model_adapters()
     from tinygrad import Context, Device, Tensor, TinyJit
     from tinygrad.device import Compiled
     from tinygrad.llm.device_facts import scan_device_facts
@@ -754,6 +756,8 @@ def _timing_worker(request: Mapping[str, Any]) -> dict[str, Any]:
   input_before = input_after = None; model = gen = None
   clear_model_caches = tensor_type = None
   try:
+    from extra.qk.memory_adaptive_runtime_collector import install_model_adapters
+    install_model_adapters()
     from tinygrad import Device, Tensor, TinyJit
     from tinygrad.llm.device_facts import scan_device_facts
     from tinygrad.llm.model import Transformer, _memory_adaptive_measurement_authority, precompute_freqs_cis

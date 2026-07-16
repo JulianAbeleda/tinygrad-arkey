@@ -11,35 +11,52 @@ import hashlib
 import json
 import os
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
 SCHEMA = "tinygrad.memory_adaptive_runtime_authority.v1"
-_runtime_policy_adapter: Callable[[Mapping[str, Any], Mapping[str, Any]], Mapping[str, Any] | None] | None = None
-_memory_evidence_validator: Callable[..., Mapping[str, Any] | None] | None = None
-_candidate_set_decoder: Callable[[Mapping[str, Any]], object | None] | None = None
+
+@dataclass(frozen=True)
+class MemoryAdaptiveAdapters:
+  policy_adapter: Callable[[Mapping[str, Any], Mapping[str, Any]], Mapping[str, Any] | None]
+  evidence_validator: Callable[..., Mapping[str, Any] | None]
+  candidate_set_decoder: Callable[[Mapping[str, Any]], object | None]
+
+  def __post_init__(self) -> None:
+    if not all(callable(x) for x in (self.policy_adapter, self.evidence_validator, self.candidate_set_decoder)):
+      raise TypeError("memory-adaptive adapters must all be callable")
+
+_adapters: MemoryAdaptiveAdapters | None = None
+
+def activate_memory_adaptive_adapters(adapters: MemoryAdaptiveAdapters) -> None:
+  """Explicitly activate one complete production adapter bundle."""
+  if not isinstance(adapters, MemoryAdaptiveAdapters): raise TypeError("expected a MemoryAdaptiveAdapters bundle")
+  global _adapters
+  _adapters = adapters
+
+def memory_adaptive_adapters_active() -> bool: return _adapters is not None
 
 def register_memory_adaptive_adapters(*, policy_adapter=None, evidence_validator=None, candidate_set_decoder=None) -> None:
-  """Install optional policy-data decoders without coupling the model to their package."""
-  global _runtime_policy_adapter, _memory_evidence_validator, _candidate_set_decoder
-  if policy_adapter is not None:
-    if not callable(policy_adapter): raise TypeError("policy adapter must be callable")
-    _runtime_policy_adapter = policy_adapter
-  if evidence_validator is not None:
-    if not callable(evidence_validator): raise TypeError("evidence validator must be callable")
-    _memory_evidence_validator = evidence_validator
-  if candidate_set_decoder is not None:
-    if not callable(candidate_set_decoder): raise TypeError("candidate-set decoder must be callable")
-    _candidate_set_decoder = candidate_set_decoder
+  """Compatibility registration; activation is deliberately all-or-nothing."""
+  current = _adapters
+  values = (policy_adapter or (current.policy_adapter if current else None),
+            evidence_validator or (current.evidence_validator if current else None),
+            candidate_set_decoder or (current.candidate_set_decoder if current else None))
+  if not all(callable(x) for x in values): raise TypeError("registration requires one complete adapter bundle")
+  activate_memory_adaptive_adapters(MemoryAdaptiveAdapters(*values))
 
 def adapt_cached_memory_policy(request: Mapping[str, Any], source: Mapping[str, Any]) -> Mapping[str, Any] | None:
-  return None if _runtime_policy_adapter is None else _runtime_policy_adapter(request, source)
+  if _adapters is None: raise RuntimeError("cached memory-adaptive policy requires explicit adapter activation")
+  return _adapters.policy_adapter(request, source)
 
 def validate_memory_evidence(evidence, *, candidate_id: str):
-  return None if _memory_evidence_validator is None else _memory_evidence_validator(evidence, candidate_id=candidate_id)
+  if _adapters is None: raise RuntimeError("memory-adaptive evidence requires explicit adapter activation")
+  return _adapters.evidence_validator(evidence, candidate_id=candidate_id)
 
 def decode_candidate_set(candidate_set: Mapping[str, Any]):
-  return None if _candidate_set_decoder is None else _candidate_set_decoder(candidate_set)
+  if _adapters is None: raise RuntimeError("memory-adaptive candidate set requires explicit adapter activation")
+  return _adapters.candidate_set_decoder(candidate_set)
 
 
 def _cache_path(selected_model_source: str) -> Path:
@@ -112,5 +129,6 @@ def resolve_memory_adaptive_policy(selected_model_source: str) -> Mapping[str, A
     return None
 
 
-__all__ = ["SCHEMA", "resolve_memory_adaptive_policy", "register_memory_adaptive_adapters", "adapt_cached_memory_policy",
+__all__ = ["SCHEMA", "MemoryAdaptiveAdapters", "activate_memory_adaptive_adapters", "memory_adaptive_adapters_active",
+           "resolve_memory_adaptive_policy", "register_memory_adaptive_adapters", "adapt_cached_memory_policy",
            "validate_memory_evidence", "decode_candidate_set"]

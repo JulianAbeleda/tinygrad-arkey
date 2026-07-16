@@ -1,4 +1,4 @@
-import inspect, json
+import inspect, json, subprocess, sys, textwrap
 import pytest
 
 import tinygrad.llm.memory_adaptive_authority as authority
@@ -70,3 +70,31 @@ def test_refresh_does_not_swallow_process_control(monkeypatch):
   def stop(**kwargs): raise SystemExit(7)
   monkeypatch.setattr("extra.qk.memory_adaptive_search_controller.run_controller", stop)
   with pytest.raises(SystemExit): refresh_memory_adaptive_policy("model.gguf")
+
+
+def test_fresh_process_requires_and_honors_explicit_production_activation():
+  code = textwrap.dedent("""
+    import sys
+    from tinygrad.llm.memory_adaptive_authority import (adapt_cached_memory_policy,
+      memory_adaptive_adapters_active, validate_memory_evidence)
+    assert not memory_adaptive_adapters_active()
+    assert not any(name.startswith('extra.qk') for name in sys.modules)
+    try: adapt_cached_memory_policy({}, {})
+    except RuntimeError as exc: assert 'explicit adapter activation' in str(exc)
+    else: raise AssertionError('inactive cached-policy adaptation silently fell back')
+    from extra.qk.memory_adaptive_runtime_collector import install_model_adapters
+    assert not memory_adaptive_adapters_active(), 'adapter import must not activate production state'
+    install_model_adapters()
+    assert memory_adaptive_adapters_active()
+    from test.unit.test_memory_adaptive_runtime_collector import fixture
+    request, result, cache, _ = fixture()
+    selected = adapt_cached_memory_policy(request, cache)
+    assert selected['decision'] == 'SELECTED'
+    assert selected['policy']['candidate_id'] == result['selected_candidate_id']
+    evidence = selected['policy']['memory_fact_evidence']
+    assert validate_memory_evidence(evidence, candidate_id=selected['policy']['candidate_id']) == evidence
+    from tinygrad.llm.memory_adaptive_authority import decode_candidate_set
+    registry = decode_candidate_set({'schema':'boltbeam.full_kernel_candidate_set.v1', 'entries':[]})
+    assert registry is not None and registry.admissions == ()
+  """)
+  subprocess.run([sys.executable, "-c", code], cwd=str(authority.Path(__file__).parents[2]), check=True)

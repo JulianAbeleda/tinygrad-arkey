@@ -15,7 +15,8 @@ def device_facts(free=24_000_000_000):
   probe = ProbeRecord("injected", "2026-07-15T00:00:00+00:00")
   return DeviceFacts("AMD", "AMD", "gfx1100", 24_000_000_000, free, DeviceCapabilities(wave_size=32), probe, probe)
 
-install_model_adapters()
+@pytest.fixture(autouse=True)
+def _active_production_adapters(): install_model_adapters()
 
 
 def metadata():
