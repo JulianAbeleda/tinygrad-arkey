@@ -37,9 +37,12 @@ class JoinedCandidate:
 
 
 def _key(value: Any, name: str) -> tuple[str, str, int, int, int]:
-  if not isinstance(value, (list, tuple)) or len(value) != 5:
-    raise ValueError(f"{name} must be [role, quant, M, N, K]")
-  role, quant, *shape = value
+  if not isinstance(value, Mapping): raise ValueError(f"{name} must be a mapping")
+  try: role, quant, shape = value["role"], value["quant_format"], value["shape"]
+  except KeyError as exc: raise ValueError(f"{name} is malformed") from exc
+  if not isinstance(shape, Mapping): raise ValueError(f"{name} is malformed")
+  try: shape = [shape[x] for x in ("m", "n", "k")]
+  except KeyError as exc: raise ValueError(f"{name} is malformed") from exc
   if not isinstance(role, str) or not role or not isinstance(quant, str) or not quant or \
      any(not isinstance(x, int) or isinstance(x, bool) or x <= 0 for x in shape):
     raise ValueError(f"{name} is malformed")
@@ -50,19 +53,21 @@ def validate_and_join(artifact: Mapping[str, Any]) -> tuple[JoinedCandidate, ...
   """Validate the complete inventory/binding/partition join and return inventory order."""
   if not isinstance(artifact, Mapping) or artifact.get("schema") != CANDIDATE_INVENTORY_SCHEMA:
     raise ValueError("unsupported candidate inventory schema")
-  if set(artifact) != {"schema", "inventory", "candidate_sets", "bindings"}:
+  if set(artifact) != {"schema", "inventory_identity", "inventory", "candidate_sets", "bindings"}:
     raise ValueError("candidate inventory has unknown or missing top-level fields")
   inventory, sets, bindings = artifact["inventory"], artifact["candidate_sets"], artifact["bindings"]
-  if not isinstance(inventory, Mapping) or inventory.get("schema") != INVENTORY_SCHEMA or \
-     not isinstance(inventory.get("profile"), str) or not inventory["profile"] or \
-     not isinstance(inventory.get("rows"), list) or not isinstance(sets, Mapping) or not isinstance(bindings, list):
+  inventory_identity = artifact.get("inventory_identity")
+  if not isinstance(inventory_identity, str) or not inventory_identity or \
+     not isinstance(inventory, Mapping) or inventory.get("schema") != INVENTORY_SCHEMA or \
+     inventory.get("inventory_identity") != inventory_identity or not isinstance(inventory.get("rows"), list) or \
+     not isinstance(sets, Mapping) or not isinstance(bindings, list):
     raise ValueError("candidate inventory containers are malformed")
 
   rows: dict[tuple[str, str, int, int, int], tuple[int, tuple[str, ...]]] = {}
   order: list[tuple[str, str, int, int, int]] = []
   for idx, row in enumerate(inventory["rows"]):
     try:
-      key = _key((row["role"], row["quant_format"], *(row["shape"][x] for x in ("m", "n", "k"))), "inventory key")
+      key = _key(row, "inventory key")
       identities = tuple(row["tensor_identities"])
     except (KeyError, TypeError) as exc: raise ValueError("malformed inventory row") from exc
     if key in rows: raise ValueError(f"duplicate inventory key {key!r}")
@@ -70,7 +75,7 @@ def validate_and_join(artifact: Mapping[str, Any]) -> tuple[JoinedCandidate, ...
       raise ValueError(f"invalid tensor identities for {key!r}")
     rows[key] = (idx, identities); order.append(key)
 
-  binding_by_key: dict[tuple[str, str, int, int, int], str] = {}
+  binding_by_key: dict[tuple[str, str, int, int, int], tuple[str, Mapping[str, Any]]] = {}
   for binding in bindings:
     if not isinstance(binding, Mapping) or set(binding) != {"inventory_key", "canonical_identity"}:
       raise ValueError("binding has unknown or missing fields")
@@ -78,7 +83,12 @@ def validate_and_join(artifact: Mapping[str, Any]) -> tuple[JoinedCandidate, ...
     identity = binding["canonical_identity"]
     if key in binding_by_key: raise ValueError(f"duplicate binding key {key!r}")
     if not isinstance(identity, str) or not identity: raise ValueError("binding canonical identity is malformed")
-    binding_by_key[key] = identity
+    inventory_key = binding["inventory_key"]
+    if set(inventory_key) != {"inventory_identity", "role", "quant_format", "shape", "packed_abi",
+                              "tensor_identities", "call_count", "source_bytes"} or \
+       inventory_key.get("inventory_identity") != inventory_identity:
+      raise ValueError(f"binding inventory_key is malformed for {key!r}")
+    binding_by_key[key] = (identity, inventory_key)
 
   candidates: dict[tuple[str, str, int, int, int], FullKernelCandidateSetEntry] = {}
   for quant, raw_set in sets.items():
@@ -86,11 +96,11 @@ def validate_and_join(artifact: Mapping[str, Any]) -> tuple[JoinedCandidate, ...
     candidate_set = FullKernelCandidateSet.from_json(raw_set)
     for entry in candidate_set.entries:
       workload = full_kernel_workload(entry.payload)
-      source = entry.payload.get("operand_sources", {}).get("b", {})
-      actual_quant = source.get("quant_format")
+      actual_quant = entry.payload.get("kernel_abi", {}).get("quant_format") if quant == "Q4_K" else \
+        entry.payload.get("operand_sources", {}).get("b", {}).get("quant_format")
       key = (workload.role, quant, *workload.shape)
       if actual_quant != quant: raise ValueError(f"quant partition drift for {entry.canonical_identity}")
-      if workload.profile != inventory["profile"]: raise ValueError(f"profile drift for {entry.canonical_identity}")
+      if workload.profile != inventory_identity: raise ValueError(f"profile drift for {entry.canonical_identity}")
       if key in candidates: raise ValueError(f"duplicate candidate key {key!r}")
       candidates[key] = entry
 
@@ -102,7 +112,15 @@ def validate_and_join(artifact: Mapping[str, Any]) -> tuple[JoinedCandidate, ...
   joined = []
   for key in order:
     entry = candidates[key]
-    if binding_by_key[key] not in (entry.canonical_identity, entry.legacy_identity_alias):
+    binding_identity, bound = binding_by_key[key]
+    row = inventory["rows"][rows[key][0]]
+    expected_bound = {"inventory_identity":inventory_identity, "role":row["role"],
+      "quant_format":row["quant_format"], "shape":row["shape"],
+      "packed_abi":{x:row["layout"][x] for x in ("logical", "packed", "block_elems", "block_bytes")},
+      "tensor_identities":sorted(row["tensor_identities"]), "call_count":row["call_count"],
+      "source_bytes":row["source_bytes"]}
+    if dict(bound) != expected_bound: raise ValueError(f"binding inventory_key drift for {key!r}")
+    if binding_identity != entry.canonical_identity:
       raise ValueError(f"canonical identity drift for {key!r}")
     joined.append(JoinedCandidate(rows[key][0], key[0], key[1], key[2:], rows[key][1],
                                   entry.canonical_identity, entry.to_json()["payload"]))

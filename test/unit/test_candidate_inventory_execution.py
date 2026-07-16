@@ -1,67 +1,50 @@
-import copy, hashlib, json
+import copy, json
+from pathlib import Path
 
 import pytest
 
 from extra.qk.prefill import candidate_inventory_execution as driver
-from extra.qk.prefill.workload_inventory import CANDIDATE_INVENTORY_SCHEMA, INVENTORY_SCHEMA
-from extra.qk.runtime_specs import FULL_KERNEL_CANDIDATE_SET_SCHEMA, FullKernelCandidateSet
+from extra.qk.prefill.workload_inventory import generate_candidate_inventory
 from extra.qk.prefill.execution_bridge_contracts import ExecutionResult, PhaseResult
 
 
-def _entry(profile, role, quant, shape, marker):
-  payload = {"workload": {"profile": profile, "role": role,
-    "shape": dict(zip(("m", "n", "k"), shape)), "target": {"backend": "AMD", "arch": "gfx1100", "wave_size": 32}},
-    "schedule": {"marker": marker, "pipeline": {"buffer_count": 1, "stage_count": 1}},
-    "operand_sources": {"b": {"quant_format": quant}}}
-  identity = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-  return {"canonical_identity": identity, "payload": payload}
-
-
-def artifact(profile="generic_profile_not_in_registry"):
-  specs = [("ffn_down", "Q6_K", (7, 16, 256), "z"),
-           ("attn_qo", "Q4_K", (3, 32, 256), "a"),
-           ("attn_qo", "Q6_K", (5, 48, 256), "b")]
-  rows, bindings, sets = [], [], {}
+def artifact(first_tensor="tensor.z"):
+  specs = [("ffn_down", "Q6_K", (512, 5120, 17408), "z"),
+           ("attn_qo", "Q4_K", (512, 5120, 5120), "a"),
+           ("attn_qo", "Q6_K", (512, 5120, 5120), "b")]
+  rows = []
   for role, quant, shape, marker in specs:
-    entry = _entry(profile, role, quant, shape, marker)
-    key = [role, quant, *shape]
-    rows.append({"role": role, "quant_format": quant, "shape": dict(zip(("m", "n", "k"), shape)),
-                 "tensor_identities": [f"tensor.{marker}"]})
-    bindings.append({"inventory_key": key, "canonical_identity": entry["canonical_identity"]})
-    sets.setdefault(quant, {"schema": FULL_KERNEL_CANDIDATE_SET_SCHEMA, "entries": []})["entries"].append(entry)
-  return {"schema": CANDIDATE_INVENTORY_SCHEMA,
-    "inventory": {"schema": INVENTORY_SCHEMA, "profile": profile, "rows": rows},
-    "candidate_sets": sets, "bindings": bindings}
+    block_bytes = 144 if quant == "Q4_K" else 210
+    rows.append({"role":role, "quant_format":quant, "shape":dict(zip(("m", "n", "k"), shape)),
+      "layout":{"logical":"transposed_row_major", "packed":"ggml_k_blocks", "block_elems":256,
+                "block_bytes":block_bytes}, "tensor_identities":[f"tensor.{marker}"], "call_count":1,
+      "source_bytes":shape[1] * shape[2] // 256 * block_bytes, "logical_flop":2 * shape[0] * shape[1] * shape[2],
+      "memory_lifetime":"model_resident"})
+  rows[0]["tensor_identities"] = [first_tensor]
+  from extra.qk.prefill.workload_inventory import INVENTORY_SCHEMA, _canonical_inventory_identity
+  inventory = {"schema":INVENTORY_SCHEMA, "rows":rows, "inventory_identity":_canonical_inventory_identity(rows)}
+  raw = json.loads(Path("bench/prefill-pure-full-kernel/multirole-buffer2-candidate-set-v1/candidate-set.json").read_text())
+  templates = {x["payload"]["workload"]["role"]:x["payload"] for x in raw["entries"]}
+  return generate_candidate_inventory(inventory, templates)
 
 
-def test_join_uses_inventory_order_not_partition_or_role_sort_order_and_supports_generic_profile():
+def test_join_uses_inventory_order_not_partition_or_role_sort_order():
   value = artifact()
   joined = driver.validate_and_join(value)
   assert [(x.role, x.quant_format, x.shape) for x in joined] == [
-    ("ffn_down", "Q6_K", (7, 16, 256)), ("attn_qo", "Q4_K", (3, 32, 256)),
-    ("attn_qo", "Q6_K", (5, 48, 256))]
-  assert all(x.payload["workload"]["profile"] == "generic_profile_not_in_registry" for x in joined)
-  entries = {x.legacy_identity_alias: x.canonical_identity for raw_set in value["candidate_sets"].values()
-             for x in FullKernelCandidateSet.from_json(raw_set).entries}
-  assert all(x.canonical_identity == entries[binding["canonical_identity"]]
-             for x, binding in zip(joined, value["bindings"]))
+    ("ffn_down", "Q6_K", (512, 5120, 17408)), ("attn_qo", "Q4_K", (512, 5120, 5120)),
+    ("attn_qo", "Q6_K", (512, 5120, 5120))]
+  assert all(x.payload["workload"]["profile"] == value["inventory_identity"] for x in joined)
 
 
-def test_legacy_binding_alias_is_canonicalized_in_request_and_execution_evidence(tmp_path):
+def test_legacy_binding_alias_is_rejected(tmp_path):
   value = artifact()
-  entry = FullKernelCandidateSet.from_json(value["candidate_sets"]["Q6_K"]).entries[0]
-  assert value["bindings"][0]["canonical_identity"] == entry.legacy_identity_alias
-  assert entry.legacy_identity_alias != entry.canonical_identity
-  joined = driver.validate_and_join(value)
-  assert joined[0].canonical_identity == entry.canonical_identity
-  request = driver.make_request(joined[0], "input.npz", phase="compile-only")
-  assert request.candidate_id == request.comparator_id == entry.canonical_identity
-  assert request.compiler_context["canonical_identity"] == entry.canonical_identity
-  out = driver.run_inventory(value, phase="compile-only", artifact_dir=str(tmp_path),
-    prepare_fn=lambda payload, identity, *, device: (None, {"canonical_identity": identity}))
-  row = out["results"][0]
-  assert row["identity"]["canonical_identity"] == entry.canonical_identity
-  assert row["request"]["candidate_id"] == entry.canonical_identity
+  entry = value["candidate_sets"]["Q6_K"]["entries"][0]
+  from extra.qk.runtime_specs import FullKernelCandidateSetEntry
+  parsed = FullKernelCandidateSetEntry(entry["canonical_identity"], entry["payload"])
+  value["bindings"][0]["canonical_identity"] = parsed.legacy_identity_alias
+  assert parsed.legacy_identity_alias != parsed.canonical_identity
+  with pytest.raises(ValueError, match="canonical identity drift"): driver.validate_and_join(value)
 
 
 def test_filters_preserve_inventory_order_and_reject_unknown_values():
@@ -76,8 +59,7 @@ def test_filters_preserve_inventory_order_and_reject_unknown_values():
   (lambda x: x["bindings"].append(copy.deepcopy(x["bindings"][0])), "duplicate binding"),
   (lambda x: x["bindings"][0].update(canonical_identity="0" * 64), "canonical identity drift"),
   (lambda x: x["candidate_sets"]["Q6_K"]["entries"][0]["payload"]["operand_sources"]["b"].update(quant_format="Q4_K"), "identity_mismatch|identity differs"),
-  (lambda x: x["candidate_sets"].update(UNKNOWN={"schema": FULL_KERNEL_CANDIDATE_SET_SCHEMA,
-    "entries": [_entry("generic_profile_not_in_registry", "lm_head", "UNKNOWN", (1, 8, 256), "u")]}), "unknown candidate sets keys"),
+  (lambda x: x["candidate_sets"].update(UNKNOWN=x["candidate_sets"]["Q6_K"]), "quant partition drift"),
 ])
 def test_schema_and_identity_drift_fail_closed(mutation, match):
   value = artifact(); mutation(value)
@@ -154,14 +136,13 @@ def test_build_inputs_is_injected_ordered_and_identity_bound(tmp_path):
     calls.append((quant, shape)); return {"quant_format": quant, "path": path, "shape": list(shape)}
   out = driver.run_inventory(artifact(), phase="build-input", artifact_dir=str(tmp_path),
     roles=["attn_qo"], build_fn=build)
-  assert calls == [("Q4_K", (3, 32, 256)), ("Q6_K", (5, 48, 256))]
+  assert calls == [("Q4_K", (512, 5120, 5120)), ("Q6_K", (512, 5120, 5120))]
   assert [x["identity"]["inventory_key"][1] for x in out["results"]] == ["Q4_K", "Q6_K"]
 
 
 def test_request_digests_change_with_workload_schedule_and_candidate_facts():
   one = driver.validate_and_join(artifact())[0]
   req = driver.make_request(one, "x.npz", phase="correctness")
-  changed = copy.deepcopy(artifact())
-  changed["inventory"]["rows"][0]["tensor_identities"] = ["different.tensor"]
+  changed = artifact("different.tensor")
   req2 = driver.make_request(driver.validate_and_join(changed)[0], "x.npz", phase="correctness")
   assert req.workload_digest != req2.workload_digest and req.experiment_id != req2.experiment_id
