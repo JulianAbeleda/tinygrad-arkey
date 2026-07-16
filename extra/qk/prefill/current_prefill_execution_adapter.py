@@ -82,7 +82,7 @@ def compile_current_prefill_program(payload: dict[str, Any], canonical_identity:
 
 
 def prepare_current_prefill_compile(payload: dict[str, Any], canonical_identity: str, *, device: str = _COMPILE_DEVICE):
-  from tinygrad.renderer.isa.amd import capture_amd_isa_proof_manifest
+  from extra.qk.amd_isa_proof import capture_amd_isa_proof_manifest
   try:
     with capture_amd_isa_proof_manifest(max_rows=DEFAULT_MAX_ROWS) as proof_rows:
       program, admission = compile_current_prefill_program(payload, canonical_identity, device=device)

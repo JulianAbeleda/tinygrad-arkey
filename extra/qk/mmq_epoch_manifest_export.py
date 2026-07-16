@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from typing import Any
 
-from tinygrad.renderer.isa.amd import amd_isa_proof_manifest, reset_amd_isa_proof_manifest
+from extra.qk.amd_isa_proof import amd_isa_proof_manifest, reset_amd_isa_proof_manifest
 
 SCHEMA = "tinygrad.amd_isa_proof_manifest.v1"
 ROW_SCHEMA = "amd-isa-renderer-proof-manifest-row.v1"

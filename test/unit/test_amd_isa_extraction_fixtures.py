@@ -5,8 +5,8 @@ from tinygrad.codegen import to_program, to_program_cache
 from tinygrad.dtype import dtypes
 from tinygrad.helpers import Target, getenv
 from tinygrad.renderer.isa import Register
-from tinygrad.renderer.isa.amd import (AMDISARenderer, AMDOps, amd_isa_operand_path_tag, amd_isa_proof_manifest, lower_inst,
-                                      reset_amd_isa_proof_manifest)
+from tinygrad.renderer.isa.amd import AMDISARenderer, AMDOps, lower_inst
+from extra.qk.amd_isa_proof import amd_isa_operand_path_tag, amd_isa_proof_manifest, reset_amd_isa_proof_manifest
 from tinygrad.uop.ops import Ops, UOp
 
 

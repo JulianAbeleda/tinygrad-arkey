@@ -15,8 +15,6 @@ always enabled. Experimental PREFILL_DBUF/TC_LOCAL_STAGE tuning does not live
 in this renderer.
 """
 from __future__ import annotations
-from contextlib import contextmanager
-from contextvars import ContextVar
 from typing import NamedTuple
 from types import SimpleNamespace
 from tinygrad.uop import FastEnum
@@ -42,7 +40,6 @@ from tinygrad.runtime.autogen.amd.rdna3.ins import (
   # B0.L7: RDNA3 wave32 tensor-core multiply-accumulate D = A*B + C (fp16 in, fp32 out)
   v_wmma_f32_16x16x16_f16, v_wmma_i32_16x16x16_iu8)
 from tinygrad.codegen.opt.tc import amd_rdna3
-from tinygrad.helpers import getenv
 from tinygrad.renderer.isa.extensions import get_amd_isa_extension_descriptors
 from tinygrad.renderer.isa.amd_register_allocator import AMDStageBufferSpec, allocate_amd_stage_buffer_leases
 
@@ -81,134 +78,27 @@ def _n_workitem_dims(ctx:IselContext) -> int:
 # the high [200,238) window (only 16 VGPRs needed, single reused pair) but place the C ACCUMULATORS LOW (see below).
 FRAG_BASE, FRAG_TOP = 200, 238
 LDS_PACK_BASE, LDS_PACK_TOP = 232, 236
-AMD_ISA_PROOF_MANIFEST:list[dict] = []
-_AMD_ISA_PROOF_CAPTURE:ContextVar[tuple[list[dict], int]|None] = ContextVar("amd_isa_proof_capture", default=None)
-AMD_ISA_OPERAND_PATH_TAG = "amd_operand_path"
-AMD_ISA_OPERAND_PATH_FIELDS = frozenset(("operand_id", "source_operand_id", "fetch_group", "cache_policy", "width_bytes",
-                                         "vector_width_bytes", "retained_fragment", "semantic_owner", "semantic_ownership"))
+_amd_isa_proof_hook = None
 
-def reset_amd_isa_proof_manifest() -> None:
-  AMD_ISA_PROOF_MANIFEST.clear()
-
-def amd_isa_proof_manifest() -> tuple[dict, ...]:
-  return tuple(AMD_ISA_PROOF_MANIFEST)
-
-@contextmanager
-def capture_amd_isa_proof_manifest(*, max_rows:int=4096):
-  """Capture proof rows for one compile without changing process environment or global default state."""
-  if not isinstance(max_rows, int) or isinstance(max_rows, bool) or max_rows < 0:
-    raise ValueError("max_rows must be a non-negative integer")
-  rows:list[dict] = []
-  token = _AMD_ISA_PROOF_CAPTURE.set((rows, max_rows))
-  try: yield rows
-  finally: _AMD_ISA_PROOF_CAPTURE.reset(token)
-
-def _proof_manifest_enabled() -> bool:
-  return _AMD_ISA_PROOF_CAPTURE.get() is not None or bool(getenv("AMD_ISA_PROOF_MANIFEST", 0))
-
-def _append_proof_row(row:dict) -> None:
-  if (capture:=_AMD_ISA_PROOF_CAPTURE.get()) is not None:
-    rows, limit = capture
-    if len(rows) >= limit: raise ValueError(f"AMD ISA proof exceeds max_rows={limit}")
-    rows.append(row)
-  else: AMD_ISA_PROOF_MANIFEST.append(row)
-
-def _proof_carrier_meta(u:UOp|None) -> dict:
-  if u is None or not isinstance(u.arg, tuple): return {}
-  if u.arg[:1] == ("wmma_acc",):
-    return {"carrier_kind": "wmma_acc", "define_reg_id": u.arg[1], "subtile": u.arg[2], "element": u.arg[3], "physical_vgpr": u.arg[4]}
-  return {}
-
-def _freeze_operand_path_value(value):
-  if isinstance(value, dict): return frozenset((key, _freeze_operand_path_value(item)) for key, item in value.items())
-  if isinstance(value, list): return tuple(_freeze_operand_path_value(item) for item in value)
-  return value
-
-def _thaw_operand_path_value(value):
-  if isinstance(value, frozenset): return {key: _thaw_operand_path_value(item) for key, item in value}
-  if isinstance(value, tuple): return tuple(_thaw_operand_path_value(item) for item in value)
-  return value
-
-def amd_isa_operand_path_tag(tag, **metadata):
-  """Attach explicit operand-path metadata without displacing an allocator-owned tag payload."""
-  unknown = set(metadata) - AMD_ISA_OPERAND_PATH_FIELDS
-  if unknown: raise ValueError(f"unknown AMD ISA operand-path metadata: {sorted(unknown)}")
-  payload = tuple(sorted((key, _freeze_operand_path_value(value)) for key, value in metadata.items()))
-  return (tag, (AMD_ISA_OPERAND_PATH_TAG, payload)) if not isinstance(tag, tuple) else tag + ((AMD_ISA_OPERAND_PATH_TAG, payload),)
-
-def _proof_operand_path_meta(tag) -> dict:
-  """Decode only the explicit contract. Register identities and route names are deliberately ignored."""
-  candidates = tag if isinstance(tag, tuple) else (tag,)
-  for candidate in candidates:
-    if isinstance(candidate, tuple) and len(candidate) == 2 and candidate[0] == AMD_ISA_OPERAND_PATH_TAG:
-      raw = candidate[1]
-      if isinstance(raw, tuple):
-        try: raw = dict(raw)
-        except (TypeError, ValueError): return {}
-      if not isinstance(raw, dict): return {}
-      return {key: _thaw_operand_path_value(value) for key, value in raw.items() if key in AMD_ISA_OPERAND_PATH_FIELDS}
-    if isinstance(candidate, dict) and AMD_ISA_OPERAND_PATH_TAG in candidate:
-      raw = candidate[AMD_ISA_OPERAND_PATH_TAG]
-      return {key: _thaw_operand_path_value(value) for key, value in raw.items() if key in AMD_ISA_OPERAND_PATH_FIELDS} if isinstance(raw, dict) else {}
-  return {}
-
-def _proof_register_index(value) -> int|None:
-  """Return a concrete physical index, never an object's bound ``index`` method."""
-  index = getattr(getattr(value, "reg", None), "index", None)
-  return index if isinstance(index, int) and not isinstance(index, bool) else None
+def install_amd_isa_proof_hook(hook) -> None:
+  """Research extension point. Production rendering leaves this unset."""
+  global _amd_isa_proof_hook
+  _amd_isa_proof_hook = hook
 
 def _proof_record(kind:str, x:UOp, inst, extra:dict|None=None) -> None:
-  if not _proof_manifest_enabled(): return
-  row = {
-    "schema": "amd-isa-renderer-proof-manifest-row.v1",
-    "kind": kind,
-    "logical_op": x.arg.name if isinstance(x.arg, AMDOps) else str(x.arg),
-    "emitted": str(inst),
-    "dest_reg": _proof_register_index(x),
-    "source_regs": [_proof_register_index(s) for s in x.src],
-    **_proof_operand_path_meta(x.tag),
-  }
-  if extra is not None: row.update(extra)
-  _append_proof_row(row)
+  if _amd_isa_proof_hook is not None: _amd_isa_proof_hook.record(kind, x, inst, extra)
 
 def _proof_record_inst(kind:str, logical_op:str, inst, extra:dict|None=None) -> None:
-  if not _proof_manifest_enabled(): return
-  row = {
-    "schema": "amd-isa-renderer-proof-manifest-row.v1",
-    "kind": kind,
-    "logical_op": logical_op,
-    "emitted": str(inst),
-  }
-  if extra is not None: row.update(extra)
-  _append_proof_row(row)
+  if _amd_isa_proof_hook is not None: _amd_isa_proof_hook.record_inst(kind, logical_op, inst, extra)
 
-def _store_owner_proof_meta(tag) -> dict:
-  if isinstance(tag, frozenset):
-    try: tag = dict(tag)
-    except Exception: pass
-  if isinstance(tag, dict) and "store_owner" in tag:
-    owner = tag["store_owner"]
-    if isinstance(owner, tuple):
-      try: owner = dict(owner)
-      except Exception: pass
-    return {"store_owner": dict(owner)} if isinstance(owner, dict) else {"store_owner": owner}
-  if not (isinstance(tag, tuple) and len(tag) >= 2 and tag[0] == "store_owner"):
-    return {}
-  owner = tag[1]
-  if isinstance(owner, tuple):
-    try: owner = dict(owner)
-    except Exception: pass
-  return {"store_owner": dict(owner)} if isinstance(owner, dict) else {"store_owner": owner}
+def _proof_carrier_meta(u:UOp|None) -> dict:
+  return {} if _amd_isa_proof_hook is None else _amd_isa_proof_hook.carrier_meta(u)
 
 def _store_owner_tag_from_store_arg(x:UOp):
-  if isinstance(x.arg, tuple) and len(x.arg) >= 2 and x.arg[0] == "store_owner":
-    owner = x.arg[1]
-    if isinstance(owner, dict): owner = tuple(sorted(owner.items()))
-    return frozenset((("store_owner", owner),))
-  return x.tag
+  return x.tag if _amd_isa_proof_hook is None else _amd_isa_proof_hook.store_owner_tag(x)
 
 def _store_owner_meta_from_ins(x:UOp) -> dict:
-  return _store_owner_proof_meta(x.tag)
+  return {} if _amd_isa_proof_hook is None else _amd_isa_proof_hook.store_owner_meta(x.tag)
 
 class LDSAddr(NamedTuple):
   buf: UOp

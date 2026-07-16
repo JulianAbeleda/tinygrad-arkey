@@ -196,7 +196,8 @@ def lowered_tinygrad_r4_store_owner_trace_rows(
   from tinygrad.codegen import to_program, to_program_cache
   from tinygrad.dtype import dtypes
   from tinygrad.helpers import Target, getenv
-  from tinygrad.renderer.isa.amd import AMDISARenderer, amd_isa_proof_manifest, reset_amd_isa_proof_manifest
+  from tinygrad.renderer.isa.amd import AMDISARenderer
+  from extra.qk.amd_isa_proof import amd_isa_proof_manifest, reset_amd_isa_proof_manifest
   from tinygrad.uop.ops import KernelInfo, UOp
 
   old = os.environ.get("AMD_ISA_PROOF_MANIFEST")

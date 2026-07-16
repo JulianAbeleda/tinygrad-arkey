@@ -110,7 +110,7 @@ def _resource_summary(program: UOp, request: CurrentDecodeCompileRequest, source
 
 def prepare_current_decode_compile(request: CurrentDecodeCompileRequest) -> tuple[UOp, dict[str, Any]]:
   """Return final binary/source/resource/ISA evidence with dispatch forbidden."""
-  from tinygrad.renderer.isa.amd import capture_amd_isa_proof_manifest
+  from extra.qk.amd_isa_proof import capture_amd_isa_proof_manifest
   with capture_amd_isa_proof_manifest(max_rows=DEFAULT_MAX_ROWS) as proof_rows:
     program = compile_current_decode_program(request)
   source, binary = program.src[3].arg, program.src[4].arg
