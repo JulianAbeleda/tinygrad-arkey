@@ -238,7 +238,11 @@ def emit_q4k_q8_mmq_sum_original_fp_wmma(spec:Q4KQ8MMQSumOriginalFPWMMASpec):
   block-major/padded storage geometry and not a route-policy claim.
   """
   spec.validate()
+  return _emit_q4k_q8_mmq_original_fp(spec, physical_ds4=False)
 
+
+def _emit_q4k_q8_mmq_original_fp(spec:Q4KQ8MMQSumOriginalFPWMMASpec, *, physical_ds4:bool):
+  """Single semantic implementation of the Q4_K/original-fp-sum contraction."""
   def kernel(out:UOp, words:UOp, xq:UOp, xscale:UOp, ds4_y:UOp) -> UOp:
     m, n = UOp.range(spec.m, 0), UOp.range(spec.n, 1)
     grp = UOp.range(spec.k // Q8_1_BLOCK_ELEMS, 2, axis_type=AxisType.REDUCE)
@@ -256,9 +260,11 @@ def emit_q4k_q8_mmq_sum_original_fp_wmma(spec:Q4KQ8MMQSumOriginalFPWMMASpec):
     dmin = scale_word.rshift(16).bitwise_and(0xffff).cast(dtypes.uint16).bitcast(dtypes.float16).cast(dtypes.float32)
     qword = words[base + 4 + (ingrp // 2) * 8 + pos // 4]
     q4 = qword.rshift((pos % 4) * 8 + (ingrp % 2) * 4).bitwise_and(0xf).cast(dtypes.uint8).bitcast(dtypes.int8)
-    q8 = xq[m * spec.k + grp * Q8_1_BLOCK_ELEMS + pos]
+    ds4_block, ds4_group = grp // 4, grp % 4
+    meta_idx = (ds4_block * spec.m + m) * 4 + ds4_group
+    q8 = xq[meta_idx * Q8_1_BLOCK_ELEMS + pos if physical_ds4 else m * spec.k + grp * Q8_1_BLOCK_ELEMS + pos]
     dot = (q4 * q8).cast(dtypes.int32).reduce(pos, arg=Ops.ADD)
-    group_idx = m * (spec.k // Q8_1_BLOCK_ELEMS) + grp
+    group_idx = meta_idx if physical_ds4 else m * (spec.k // Q8_1_BLOCK_ELEMS) + grp
     xs, supplied_sum = xscale[group_idx], ds4_y[group_idx]
     corrected = xs * d * sc.cast(dtypes.float32) * dot.cast(dtypes.float32) - \
                 dmin * mn.cast(dtypes.float32) * supplied_sum
@@ -267,3 +273,34 @@ def emit_q4k_q8_mmq_sum_original_fp_wmma(spec:Q4KQ8MMQSumOriginalFPWMMASpec):
       opts_to_apply=(Opt(OptOps.TC, 0, (-1, 2, 1)),)))
 
   return kernel
+
+
+@dataclass(frozen=True)
+class Q4KQ8MMQRoleSizedWMMASpec(Q4KQ8MMQSumOriginalFPWMMASpec):
+  """Model-independent five-buffer emitter over physical llama MMQ DS4 storage."""
+  activation_layout: str = "q8_1_mmq_ds4_transposed_blocks"
+
+  def validate(self) -> None:
+    if min(self.m, self.n, self.k) <= 0 or self.m % 16 or self.n % 16 or self.k % 256:
+      raise ValueError("role-sized DS4 WMMA requires positive M/N multiples of 16 and K multiple of 256 (no tails)")
+    if self.sum_semantics != "llama_ds4_y_original_fp32_group_sum":
+      raise ValueError("sum semantics must be llama ds4.y original-fp32 group sum; dequantized/derived sums are rejected")
+    if self.activation_layout != "q8_1_mmq_ds4_transposed_blocks":
+      raise ValueError("activation layout must be q8_1_mmq_ds4_transposed_blocks")
+
+  @property
+  def name(self) -> str: return f"q4k_q8_mmq_uop_role_sized_ds4_{self.m}x{self.n}x{self.k}"
+
+
+def describe_q4k_q8_mmq_role_sized_wmma(m:int, n:int, k:int, *,
+                                         sum_semantics:str="llama_ds4_y_original_fp32_group_sum",
+                                         activation_layout:str="q8_1_mmq_ds4_transposed_blocks") -> Q4KQ8MMQRoleSizedWMMASpec:
+  spec = Q4KQ8MMQRoleSizedWMMASpec(m, n, k, sum_semantics, activation_layout)
+  spec.validate()
+  return spec
+
+
+def emit_q4k_q8_mmq_role_sized_wmma(spec:Q4KQ8MMQRoleSizedWMMASpec):
+  """ABI slots: out fp32, Q4 uint32, physical DS4 int8, scales fp32, sums fp32."""
+  spec.validate()
+  return _emit_q4k_q8_mmq_original_fp(spec, physical_ds4=True)

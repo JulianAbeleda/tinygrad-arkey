@@ -12,8 +12,9 @@ from tinygrad.uop.ops import AxisType, KernelInfo, Ops, UOp
 
 from extra.qk.amdgpu_metadata import parse_amdgpu_metadata
 from extra.qk.q4k_q8_mmq_uop import (describe_q4k_q8_mmq_uop, describe_q4k_q8_mmq_wmma,
-  describe_q4k_q8_mmq_sum_original_fp_wmma, describe_q4k_q8_mmq_wide_wmma, emit_q4k_q8_mmq_uop,
-  emit_q4k_q8_mmq_wmma, emit_q4k_q8_mmq_sum_original_fp_wmma, emit_q4k_q8_mmq_wide_wmma,
+  describe_q4k_q8_mmq_sum_original_fp_wmma, describe_q4k_q8_mmq_role_sized_wmma, describe_q4k_q8_mmq_wide_wmma,
+  emit_q4k_q8_mmq_uop, emit_q4k_q8_mmq_wmma, emit_q4k_q8_mmq_sum_original_fp_wmma,
+  emit_q4k_q8_mmq_role_sized_wmma, emit_q4k_q8_mmq_wide_wmma,
   LLAMA_Q4K_Q8_1_DS4_SOURCE_ANCHORS)
 from extra.qk.q4k_q8_mmq_uop_validation import _fixture, independent_packed_byte_reference
 from extra.qk.mmq_q4k_q8_reference import (Q81MMQDS4Activation, Q81MMQDS4ActivationSpec, Q8_1_MMQ_DS4_LAYOUT,
@@ -288,6 +289,13 @@ def _sum_sink(m=16, n=16, k=256):
     UOp.placeholder((m*(k//32),), dtypes.float32, 33), UOp.placeholder((m*(k//32),), dtypes.float32, 34))
 
 
+def _role_sized_sink(m=16, n=16, k=256):
+  spec = describe_q4k_q8_mmq_role_sized_wmma(m, n, k)
+  return emit_q4k_q8_mmq_role_sized_wmma(spec)(UOp.placeholder((m, n), dtypes.float32, 0),
+    UOp.placeholder((n*(k//256)*36,), dtypes.uint32, 1), UOp.placeholder((k//128*m*128,), dtypes.int8, 2),
+    UOp.placeholder((k//128*m*4,), dtypes.float32, 3), UOp.placeholder((k//128*m*4,), dtypes.float32, 4))
+
+
 def _reference_with_original_fp_sum(words, xq, xscale, supplied, *, m, n, k):
   """Independent reference derived from packed bytes plus supplied-sum delta."""
   out = independent_packed_byte_reference(words, xq, xscale, m=m, n=n, k=k)
@@ -343,6 +351,54 @@ def test_sum_original_fp_semantic_split_python():
     Tensor(words, device="PYTHON"), Tensor(xq.reshape(-1), device="PYTHON"), Tensor(xscale.reshape(-1), device="PYTHON"),
     Tensor(supplied.reshape(-1), device="PYTHON"), fxn=python_callback)[0].numpy()
   np.testing.assert_allclose(got, reference, rtol=3e-4, atol=3e-4)
+
+
+def test_role_sized_exact_physical_ds4_layout_python():
+  m = n = 16; k = 512
+  words, _, _ = _fixture(m, n, k)
+  rng = np.random.default_rng(59)
+  values = rng.integers(-8, 9, size=(k//128, m, 128), dtype=np.int8)
+  scales = rng.uniform(0.01, 0.2, size=(k//128, m, 4)).astype(np.float32)
+  # Deliberately differ from a dequantized-int8 sum to pin original-fp semantics.
+  sums = (values.reshape(k//128, m, 4, 32).astype(np.float32).sum(3) * scales +
+          rng.uniform(-0.5, 0.5, size=(k//128, m, 4))).astype(np.float32)
+  ds4 = Q81MMQDS4Activation(values, scales, sums, Q81MMQDS4ActivationSpec(m=m, k=k, m_tile=m))
+  oracle = describe_q4k_q8_1_mmq_tile(role="physical_ds4", m=m, n=n, k=k, m_tile=m, n_tile=n,
+    activation_layout=Q8_1_MMQ_DS4_LAYOUT)
+  reference = q4k_q8_1_mmq_ds4_tile_reference(words.view(np.uint8), ds4, oracle)
+  callback = emit_q4k_q8_mmq_role_sized_wmma(describe_q4k_q8_mmq_role_sized_wmma(m, n, k))
+  def python_callback(*args): return callback(*args).replace(arg=KernelInfo(name="role_sized_python", opts_to_apply=()))
+  got = Tensor.empty(m, n, dtype=dtypes.float32, device="PYTHON").custom_kernel(
+    Tensor(words, device="PYTHON"), Tensor(values.reshape(-1), device="PYTHON"),
+    Tensor(scales.reshape(-1), device="PYTHON"), Tensor(sums.reshape(-1), device="PYTHON"), fxn=python_callback)[0].numpy()
+  np.testing.assert_allclose(got, reference, rtol=3e-4, atol=3e-4)
+
+
+def test_role_sized_amd_isa_program_abi_and_signed_wmma():
+  sink = _role_sized_sink(32, 32, 512)
+  renderer = AMDISARenderer(Target.parse("AMD:ISA:gfx1100"))
+  program = full_rewrite_to_sink(sink, renderer, optimize=True)
+  assert len([u for u in sink.toposort() if u.op is Ops.STORE]) == 1
+  assert {u.arg.slot:u.dtype.base for u in sink.toposort() if u.op is Ops.PARAM} == {
+    0:dtypes.float32, 1:dtypes.uint32, 2:dtypes.int8, 3:dtypes.float32, 4:dtypes.float32}
+  assert program.op is Ops.SINK and program.arg.name == sink.arg.name
+  wmmas = [u for u in program.toposort() if u.op is Ops.WMMA]
+  assert len(wmmas) == 1 and "signed_char_int" in wmmas[0].arg[0]
+
+
+def test_role_sized_real_role_grid_is_structural_only():
+  sink = _role_sized_sink(512, 1024, 5120)
+  renderer = AMDISARenderer(Target.parse("AMD:ISA:gfx1100"))
+  lowered = full_rewrite_to_sink(sink, renderer, optimize=True)
+  assert {u.arg:u.src[0].arg for u in lowered.toposort() if u.op is Ops.SPECIAL} == {"gidx0":64, "lidx0":32, "gidx1":32}
+  assert len([u for u in sink.toposort() if u.op is Ops.STORE]) == 1
+
+
+def test_role_sized_rejects_tails_and_wrong_layout():
+  for shape in ((15, 16, 256), (16, 17, 256), (16, 16, 384)):
+    with pytest.raises(ValueError, match="no tails"): describe_q4k_q8_mmq_role_sized_wmma(*shape)
+  with pytest.raises(ValueError, match="q8_1_mmq_ds4_transposed_blocks"):
+    describe_q4k_q8_mmq_role_sized_wmma(16, 16, 256, activation_layout="q8_1_row_major_mk_scales_per_32")
 
 
 def test_sum_original_fp_one_program_signed_wmma():
