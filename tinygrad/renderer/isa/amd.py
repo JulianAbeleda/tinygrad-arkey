@@ -44,6 +44,8 @@ from tinygrad.renderer.isa.extensions import get_amd_isa_extension_descriptors
 from tinygrad.renderer.isa.amd_register_allocator import AMDStageBufferSpec, allocate_amd_stage_buffer_leases
 from tinygrad.renderer.isa.amd_register_contracts import (KARG, SPTR_POOL, SCNT_POOL, VBASE, TID, WGID_S0,
   FRAG_BASE, FRAG_TOP, LDS_PACK_BASE, LDS_PACK_TOP, WMMA_ACC_BASE)
+from tinygrad.renderer.isa.amd_proof import (install_amd_isa_proof_hook, _proof_record, _proof_record_inst,
+  _proof_carrier_meta, _store_owner_tag_from_store_arg, _store_owner_meta_from_ins)
 
 
 class PreassembledStreamPolicy(NamedTuple):
@@ -68,28 +70,6 @@ def _n_workitem_dims(ctx:IselContext) -> int:
 # NOTE (B0.M multi-output-tile): the v>=238 garbage is a RAW-INS-only artifact; the ISA renderer's ELF descriptor auto-
 # sizes VGPR to the highest reg used, so through THIS renderer the real ceiling is OCCUPANCY, not v238. So we keep A/B in
 # the high [200,238) window (only 16 VGPRs needed, single reused pair) but place the C ACCUMULATORS LOW (see below).
-_amd_isa_proof_hook = None
-
-def install_amd_isa_proof_hook(hook) -> None:
-  """Research extension point. Production rendering leaves this unset."""
-  global _amd_isa_proof_hook
-  _amd_isa_proof_hook = hook
-
-def _proof_record(kind:str, x:UOp, inst, extra:dict|None=None) -> None:
-  if _amd_isa_proof_hook is not None: _amd_isa_proof_hook.record(kind, x, inst, extra)
-
-def _proof_record_inst(kind:str, logical_op:str, inst, extra:dict|None=None) -> None:
-  if _amd_isa_proof_hook is not None: _amd_isa_proof_hook.record_inst(kind, logical_op, inst, extra)
-
-def _proof_carrier_meta(u:UOp|None) -> dict:
-  return {} if _amd_isa_proof_hook is None else _amd_isa_proof_hook.carrier_meta(u)
-
-def _store_owner_tag_from_store_arg(x:UOp):
-  return x.tag if _amd_isa_proof_hook is None else _amd_isa_proof_hook.store_owner_tag(x)
-
-def _store_owner_meta_from_ins(x:UOp) -> dict:
-  return {} if _amd_isa_proof_hook is None else _amd_isa_proof_hook.store_owner_meta(x.tag)
-
 class LDSAddr(NamedTuple):
   buf: UOp
   dyn: UOp|None
