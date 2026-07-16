@@ -206,6 +206,12 @@ class PackedWeightTransform:
   def _load(source:LoadSource, index:ScalarIndex) -> UOp:
     return source(index) if callable(source) else source[index]
 
+  @classmethod
+  def _byte_loader(cls, source:LoadSource, base:ScalarIndex, unit_bytes:int) -> Callable[[ScalarIndex], UOp]:
+    def byte(index:ScalarIndex) -> UOp:
+      return cls._load(source, base + index//unit_bytes).rshift((index%unit_bytes)*8).bitwise_and(0xff)
+    return byte
+
   def _tile_loads(self, source:LoadSource, indices:tuple[ScalarIndex, ...]) -> Callable[[ScalarIndex], UOp]:
     """Cache native units, preserving proven adjacent units as b128/b64 LOADs.
 
@@ -273,7 +279,7 @@ class PackedWeightTransform:
     word0 = self._load(source, base)
     d = word0.bitwise_and(0xffff).cast(dtypes.uint16).bitcast(dtypes.float16).cast(dtypes.float32)
     dmin = word0.rshift(16).bitwise_and(0xffff).cast(dtypes.uint16).bitcast(dtypes.float16).cast(dtypes.float32)
-    def byte(i:ScalarIndex) -> UOp: return self._load(source, base + 1 + i//4).rshift((i%4)*8).bitwise_and(0xff)
+    byte = self._byte_loader(source, base + 1, 4)
     if isinstance(group, int):
       if group < 4: scale, minimum = byte(group).bitwise_and(63), byte(4+group).bitwise_and(63)
       else:
@@ -295,7 +301,7 @@ class PackedWeightTransform:
 
   def _dequant_q6(self, source:LoadSource, base:ScalarIndex, within:ScalarIndex) -> UOp:
     group, pos = within // 16, within % 16
-    def byte(i:ScalarIndex) -> UOp: return self._load(source, base + i//2).rshift((i%2)*8).bitwise_and(0xff)
+    byte = self._byte_loader(source, base, 2)
     half, pgroup = group // 8, group % 8
     ql_shift = 4 if isinstance(pgroup, int) and pgroup >= 4 else 0 if isinstance(pgroup, int) else (pgroup >= 4).where(4, 0)
     ql = byte(half*64 + (pgroup%4)*16 + pos).rshift(ql_shift).bitwise_and(15)
