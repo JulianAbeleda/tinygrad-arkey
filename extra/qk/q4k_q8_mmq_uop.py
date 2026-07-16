@@ -11,7 +11,7 @@ from dataclasses import dataclass
 
 from tinygrad import dtypes
 from tinygrad.codegen.opt import Opt, OptOps
-from tinygrad.uop.ops import AxisType, KernelInfo, Ops, UOp
+from tinygrad.uop.ops import AxisType, KernelInfo, Ops, RegisterResidentAccumulator, UOp
 
 from extra.qk.layout import Q4K_WORDS_PER_BLOCK, Q4_K_BLOCK_ELEMS, Q8_1_BLOCK_ELEMS
 
@@ -269,6 +269,7 @@ def _emit_q4k_q8_mmq_original_fp(spec:Q4KQ8MMQSumOriginalFPWMMASpec, *, physical
     corrected = xs * d * sc.cast(dtypes.float32) * dot.cast(dtypes.float32) - \
                 dmin * mn.cast(dtypes.float32) * supplied_sum
     value = corrected.reduce(grp, arg=Ops.ADD)
+    if physical_ds4: value = value.replace(tag=RegisterResidentAccumulator(Ops.ADD))
     return out[m, n].store(value).end(m, n).sink(arg=KernelInfo(name=spec.name,
       opts_to_apply=(Opt(OptOps.TC, 0, (-1, 2, 1)),)))
 

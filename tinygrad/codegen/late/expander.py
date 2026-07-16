@@ -2,7 +2,7 @@
 import functools, itertools
 from tinygrad.dtype import dtypes, PtrDType, AddrSpace
 from tinygrad.helpers import dedup, flatten, all_same, prod, partition, getenv
-from tinygrad.uop.ops import UOp, Ops, UPat, PatternMatcher, GroupOp, AxisType, range_start
+from tinygrad.uop.ops import UOp, Ops, UPat, PatternMatcher, GroupOp, RegisterResidentAccumulator, AxisType, range_start
 from tinygrad.schedule.rangeify import BufferizeOpts
 
 def _expand_arg_to_idx(args:tuple[tuple[int, int], ...], rpk:dict[int, int]) -> int:
@@ -100,7 +100,7 @@ def do_expand(root:UOp):
   # carry multiple lanes, in which case concatenation preserves those child lane
   # boundaries without constructing an invalid STACK-of-vectors.
   expanded_op = Ops.VCAT if root.op is Ops.STACK and all(x.dtype.count > 1 for x in new_srcs) else root.op
-  nsrc = UOp(expanded_op, root.dtype.scalar().vec(root.dtype.count*expand_sz), tuple(new_srcs), new_arg)
+  nsrc = UOp(expanded_op, root.dtype.scalar().vec(root.dtype.count*expand_sz), tuple(new_srcs), new_arg, tag=root.tag if isinstance(root.tag, RegisterResidentAccumulator) else None)
   return UOp(Ops.UNROLL, root.dtype, (nsrc,), expand_args)
 
 def do_contract(con:UOp):

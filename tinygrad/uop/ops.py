@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Any, Callable, cast, TYPE_CHECKING, Type, Sequence, Iterable, Final, Iterator
+from typing import Any, Callable, cast, TYPE_CHECKING, Type, Sequence, Iterable, Final, Iterator, NamedTuple
 import sys, time, functools, itertools, math, operator, hashlib, os, types, pickle, pathlib, inspect, weakref, collections, struct
 from dataclasses import dataclass
 from enum import Enum, auto
@@ -1113,6 +1113,8 @@ def __getattr__(name:str):
     from extra.qk import kernel_vocabulary
     return getattr(kernel_vocabulary, name)
   raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+class RegisterResidentAccumulator(NamedTuple): op: Ops
 
 @dataclass(frozen=True)
 class KernelInfo:

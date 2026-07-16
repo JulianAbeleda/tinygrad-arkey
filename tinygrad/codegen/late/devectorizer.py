@@ -3,7 +3,7 @@ import functools, itertools
 from collections import defaultdict
 from dataclasses import dataclass
 from tinygrad.dtype import dtypes, ImageDType, DType, AddrSpace, Invalid, PtrDType
-from tinygrad.uop.ops import UOp, Ops, UPat, PatternMatcher, GroupOp, identity_element, AxisType
+from tinygrad.uop.ops import UOp, Ops, UPat, PatternMatcher, GroupOp, RegisterResidentAccumulator, identity_element, AxisType
 from tinygrad.uop.symbolic import uop_given_valid, parse_valid, invalid_gate
 from tinygrad.helpers import getenv, flatten, prod
 from tinygrad.renderer import Renderer
@@ -284,12 +284,13 @@ def no_vectorized_alu(alu:UOp):
   alus = tuple(UOp(alu.op, alu.dtype.scalar(), tuple(s.gep(i) for s in alu.src), alu.arg) for i in range(alu.dtype.vcount))
   return UOp(Ops.STACK, alu.dtype, alus)
 
+def _keep_register_tag(tag) -> bool: return isinstance(tag, RegisterResidentAccumulator) or isinstance(tag, tuple) and tag and tag[0] in ("wmma_frag_buffer_proof", "register_pipe_stage_buffer")
+
 def no_vectorized_buf(buf:UOp):
   # TODO: this fails on regs
   #assert buf.max_numel() == buf.ptrdtype.size
   out = buf.replace(dtype=buf.ptrdtype.base.scalar().ptr(buf.ptrdtype.size*buf.ptrdtype.count, buf.addrspace)).cast(buf.dtype)
-  keep = isinstance(buf.tag, tuple) and buf.tag and buf.tag[0] in ("wmma_frag_buffer_proof", "register_pipe_stage_buffer")
-  return out.replace(tag=buf.tag) if keep else out
+  return out.replace(tag=buf.tag) if _keep_register_tag(buf.tag) else out
 
 def no_vectorized_index(buf:UOp, cast:UOp, idx:UOp, bcast:UOp|None=None):
   cnt = cast.dtype.count
@@ -304,8 +305,7 @@ def no_vectorized_index(buf:UOp, cast:UOp, idx:UOp, bcast:UOp|None=None):
     pairs = [(0, c) for c in range(cnt)]
   idx_lanes, offsets = (tuple(x) for x in zip(*pairs))
   out = buf.broadcast(len(pairs)).index(idx.gep(idx_lanes)*cnt + UOp.const(dtypes.weakint.vec(len(pairs)), offsets), ptr=True)
-  keep = isinstance(buf.tag, tuple) and buf.tag and buf.tag[0] in ("wmma_frag_buffer_proof", "register_pipe_stage_buffer")
-  return out.replace(tag=buf.tag) if keep else out
+  return out.replace(tag=buf.tag) if _keep_register_tag(buf.tag) else out
 
 devectorize_buf_and_index = PatternMatcher([
   (UPat((Ops.DEFINE_LOCAL, Ops.DEFINE_REG), name="buf"), no_vectorized_buf),
@@ -360,7 +360,7 @@ def reduce_to_acc(ctx:ReduceContext, red:UOp):
     ended_ranges = flatten([x.ended_ranges for x in topo if x.op is Ops.END])
     input_ranges = tuple([x for x in topo if x.op is Ops.RANGE and x not in reduce_range and x not in ended_ranges])
     identity = red.const(red.dtype, identity_element(red.arg[0], red.dtype.scalar()))
-    acc = UOp.placeholder((1,), red.dtype, ctx.acc_num, AddrSpace.REG)
+    acc = UOp.placeholder((1,), red.dtype, ctx.acc_num, AddrSpace.REG).replace(tag=red.tag if isinstance(red.tag, RegisterResidentAccumulator) else None)
     acc_init = acc.after(*input_ranges).index(UOp.const(dtypes.weakint, 0)).store(identity)
     lst = [acc.after(acc_init, *reduce_range).index(UOp.const(dtypes.weakint, 0))] + lst  # put acc as the first element
     ctx.acc_num += 1

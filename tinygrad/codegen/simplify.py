@@ -1,6 +1,6 @@
 import itertools
 from typing import Callable
-from tinygrad.uop.ops import UOp, PatternMatcher, UPat, Ops, graph_rewrite, _substitute, range_start, AxisType
+from tinygrad.uop.ops import UOp, PatternMatcher, UPat, Ops, RegisterResidentAccumulator, graph_rewrite, _substitute, range_start, AxisType
 from tinygrad.uop.symbolic import symbolic
 from tinygrad.helpers import partition
 from tinygrad.dtype import dtypes
@@ -111,7 +111,7 @@ pm_reduce_collapse = pm_reduce_unparented + PatternMatcher([
    lambda r,cut,val: cut.maximum(0).minimum(r.src[0]).cast(val.dtype) * val if no_range(val) else None),
   # REDUCE on ADD
   ((UPat.var("x")+UPat.var("y")).reduce(arg=Ops.ADD, allow_any_len=True, name="r"),
-   lambda x,y,r: x.reduce(*r.src[1:], arg=Ops.ADD) + y.reduce(*r.src[1:],arg=Ops.ADD)),
+   lambda x,y,r: None if isinstance(r.tag, RegisterResidentAccumulator) else x.reduce(*r.src[1:], arg=Ops.ADD) + y.reduce(*r.src[1:],arg=Ops.ADD)),
   # AND on WHERE
   ((UPat(Ops.DEFINE_VAR, name="x") & UPat.var("y")).where(UPat.var("c"), 0).reduce(arg=Ops.ADD, allow_any_len=True, name="r"),
     lambda x,y,c,r: y.where(c, 0).reduce(*r.src[1:], arg=Ops.ADD)*x.cast(c.dtype)),

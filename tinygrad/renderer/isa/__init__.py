@@ -1,6 +1,6 @@
 from __future__ import annotations
 import itertools
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from tinygrad.renderer import Renderer
 from tinygrad.uop.ops import PatternMatcher, UOp, Ops, consumer_map_from_toposort
 
@@ -81,6 +81,7 @@ class CompilerCaptureProof:
   sgpr_spills: int|None = None
   lds_bytes: int|None = None
   wait_policy: str|None = None
+  owned_storage: tuple[UOp, ...] = ()
 
   def __post_init__(self):
     if not isinstance(self.leases, tuple) or any(not isinstance(x, CompilerRegisterLease) for x in self.leases):
@@ -89,10 +90,11 @@ class CompilerCaptureProof:
       raise ValueError("compiler capture proof requires A, B, and C ownership")
 
   def finalize_zero_spill(self) -> CompilerCaptureProof:
-    return CompilerCaptureProof(self.leases, "final_regalloc", "post_regalloc", 0, 0, 0, self.lds_bytes, self.wait_policy)
+    return replace(self, authority="final_regalloc", regalloc_status="post_regalloc", scratch_spills=0, vgpr_spills=0, sgpr_spills=0)
 
 class ISARenderer(Renderer):
   pre_isel_matcher: PatternMatcher
+  def is_rematerializable(self, u:UOp) -> bool: return False
   isel_matcher: PatternMatcher
   post_isel_matcher: PatternMatcher|None = None
   pre_regalloc_matcher: PatternMatcher|None = None

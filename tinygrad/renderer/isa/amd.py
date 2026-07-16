@@ -18,7 +18,7 @@ from __future__ import annotations
 from typing import NamedTuple
 from types import SimpleNamespace
 from tinygrad.uop import FastEnum
-from tinygrad.uop.ops import UOp, UPat, PatternMatcher, Ops, AxisType, GroupOp
+from tinygrad.uop.ops import UOp, UPat, PatternMatcher, Ops, AxisType, GroupOp, RegisterResidentAccumulator
 from tinygrad.dtype import dtypes, PtrDType, AddrSpace
 from tinygrad.renderer.isa import (CompilerCaptureProof, CompilerRegisterLease, FixedRegisterUse, ISARenderer,
                                   IselContext, Register, RegisterSpan)
@@ -312,13 +312,13 @@ def _vpool(ctx:IselContext):
   # reclaimed high fragment window. Keep virtual registers out of that span.
   stage_reserved = tuple(i for lease in _register_stage_leases(ctx).values() for i in range(lease.start, lease.end)) if _c_low(ctx) else ()
   if _c_low(ctx):
-    tail = VBASE[max(lo, _ab_top(ctx)):256]
+    tail = VBASE[max(lo, max((base+u.ptrdtype.size for u,base in _fixed_fp32_accumulators(ctx).items()), default=_ab_top(ctx))):256]
     # Multi-output WMMA reserves v8.. for C/A/B fragments, but v1..v7 are just alignment padding.
     # Keep them available for short scalar scratch, especially the post-loop store epilogue, so it doesn't have to reuse
     # the high v200+ address/load scratch region immediately after the WMMA loop.
     pool = VBASE[lo:WMMA_ACC_BASE] + tail
     return tuple(r for r in pool if r.index not in stage_reserved)
-  return VBASE[lo:FRAG_BASE]
+  return tuple(r for r in VBASE[lo:FRAG_BASE] if all(not (base <= r.index < base+dreg.ptrdtype.size) for dreg,base in _fixed_fp32_accumulators(ctx).items()))
 
 class AMDOps(FastEnum):
   S_LOAD_PTR = 0; V_OFFSET = 1; GLOBAL_LOAD = 2; V_ADD = 3; V_MUL = 4; V_SUB = 5; GLOBAL_STORE = 6; ENDPGM = 7; MOV = 8
@@ -394,6 +394,17 @@ def _movs2v(ctx:IselContext, u:UOp) -> UOp:
 def _reg_base(u:UOp) -> UOp:
   while u.op is Ops.AFTER and u.src: u = u.src[0]   # AFTER(DEFINE_REG, ...) chain -> the DEFINE_REG
   return u
+
+def _fixed_fp32_accumulators(ctx:IselContext) -> dict[UOp, int]:
+  if (owned := getattr(ctx, "_fixed_fp32_accumulators", None)) is not None: return owned
+  owned, top = {}, _ab_top(ctx) if _c_low(ctx) else WMMA_ACC_BASE
+  marked = [u for u in ctx.uses if isinstance(u.tag, RegisterResidentAccumulator)]
+  if any(u.tag.op is not Ops.ADD or u.ptrdtype.addrspace != AddrSpace.REG or u.ptrdtype.base != dtypes.float32 for u in marked): raise NotImplementedError("AMD:ISA cannot honor declared register-resident accumulator")
+  for dreg in marked:
+    top = (top + 3) // 4 * 4
+    if top + dreg.ptrdtype.size > FRAG_BASE: raise NotImplementedError("AMD:ISA fixed FP32 accumulator ownership exceeds the VGPR window")
+    owned[dreg] = top; top += dreg.ptrdtype.size
+  ctx._fixed_fp32_accumulators = owned; return owned
 
 def _register_stage_buffer_meta(u:UOp) -> dict|None:
   """Decode the compiler-owned register-stage tag, if present.
@@ -510,13 +521,10 @@ def _frag_base(ctx:IselContext, key, n:int, align:int=1):
 def _record_direct_wmma_fragments(ctx:IselContext, abase:int|None, bbase:int|None, awidth:int=8, bwidth:int=8) -> None:
   """Record the physical A/B pair owned by the direct global/L2 WMMA path."""
   if abase is None or bbase is None: return
-  current = getattr(ctx, "_direct_wmma_fragments", None)
-  pair = {"A": abase, "B": bbase}
-  widths = {"A": awidth, "B": bwidth}
+  current, pair, widths = getattr(ctx, "_direct_wmma_fragments", None), {"A": abase, "B": bbase}, {"A": awidth, "B": bwidth}
   if current is None:
     ctx._direct_wmma_fragments, ctx._direct_wmma_fragment_widths = pair, widths
-  elif current != pair or getattr(ctx, "_direct_wmma_fragment_widths", widths) != widths:
-    ctx._direct_wmma_fragments, ctx._direct_wmma_fragment_widths = {}, {}
+  elif current != pair or getattr(ctx, "_direct_wmma_fragment_widths", widths) != widths: ctx._direct_wmma_fragments, ctx._direct_wmma_fragment_widths = {}, {}
 
 def _record_resident_wmma_fragment(ctx:IselContext, role:str, base:int|None) -> None:
   if base is None: return
@@ -590,12 +598,16 @@ def isel_index(ctx:IselContext, x:UOp):
     # holds a WM*WN grid of 8-lane subtiles; idx (compile-time) selects subtile idx//8 and within-tile lane idx%8. Multi-
     # tile -> a LOW per-subtile 8-run (_acc_base, keyed (id(dreg),subtile)); single-tile -> the legacy high fragment
     # (_frag_base, keyed id(dreg)). isel_wmma keys IDENTICALLY so both agree on each subtile's 8-VGPR range.
-    if _is_wmma_acc(ctx, dreg) and idx.op is Ops.CONST:
+    wmma = _is_wmma_acc(ctx, dreg)
+    if wmma and idx.op is not Ops.CONST: raise NotImplementedError("AMD:ISA WMMA accumulator requires a static index")
+    if wmma:
       subtile, elem = divmod(idx.arg, 8)
       cbase = _acc_base(ctx, (id(dreg), subtile)) if _c_low(ctx) else _frag_base(ctx, id(dreg), 8)
       if cbase is None: raise NotImplementedError(f"AMD:ISA WMMA fragment region [{FRAG_BASE},{FRAG_TOP}) exhausted (C accumulator)")
-      return UOp(Ops.NOOP, x.dtype, src=(base, UOp.const(dtypes.int32, cbase + elem).rtag()),
-                 arg=("wmma_acc", id(dreg), subtile, elem, cbase + elem))   # (order, pin)
+      return UOp(Ops.NOOP, x.dtype, src=(base, UOp.const(dtypes.int32, cbase + elem).rtag()), arg=("wmma_acc", id(dreg), subtile, elem, cbase+elem))
+    fixed = _fixed_fp32_accumulators(ctx)
+    if dreg in fixed and idx.op is not Ops.CONST: raise NotImplementedError("AMD:ISA register-resident accumulator requires a static index")
+    if dreg in fixed: return UOp(Ops.NOOP, x.dtype, src=(base, UOp.const(dtypes.int32, fixed[dreg]+idx.arg).rtag()), arg=("fixed_acc", "add"))
     base_off, isz = _lds_byte_offset(ctx, dreg), base.dtype.base.itemsize
     shift = {1:0,2:1,4:2,8:3}.get(isz, 2)
     addends = []                                                     # runtime (VGPR) byte-offset terms
@@ -681,11 +693,12 @@ def isel_load(ctx:IselContext, x:UOp):
   if idxc.op is Ops.AFTER:
     idxc, dep = idxc.src[0], idxc.src[1:]
   if idxc.op is not Ops.NOOP: return None
-  if idxc.arg == "wmma_acc" or (isinstance(idxc.arg, tuple) and idxc.arg[:1] == ("wmma_acc",)):
+  if idxc.arg == "wmma_acc" or (isinstance(idxc.arg, tuple) and idxc.arg[:1] in (("wmma_acc",), ("fixed_acc",))):
     # read pinned/fragment accumulator -> v_mov vvirt, v[pin]. src=(order, pin)
     # wmma_acc: this serves the POST-loop read (the in-loop src[2] reads are consumed directly in isel_wmma via the
     # in-place C fragment, so they never reach isel_load). order (src[0]) keeps the END/init chain reachable + ordered.
-    return UOp(Ops.INS, x.dtype.scalar(), src=(idxc.src[0], idxc.src[1]), arg=AMDOps.ACCUM_READ, tag=(ctx.vreg(_vpool(ctx)),))
+    meta = (UOp(Ops.NOOP, arg=idxc.arg),) if isinstance(idxc.arg, tuple) and idxc.arg[:1] == ("fixed_acc",) else ()
+    return UOp(Ops.INS, x.dtype.scalar(), src=(idxc.src[0], idxc.src[1])+meta, arg=AMDOps.ACCUM_READ, tag=(ctx.vreg(_vpool(ctx)),))
   if isinstance(idxc.arg, tuple) and idxc.arg[:1] == ("stage_reg",):
     # Static register-stage read. src[0] carries the AFTER/order chain and
     # src[1] is the physical pin, just like the accumulator carrier.
@@ -715,29 +728,32 @@ def isel_store(ctx:IselContext, a:UOp, b:UOp, x:UOp):
   # expands to N scalar global_store_b32 in post_regalloc (offset=lane*itemsize). Single INS (not a NOOP wrapper) so
   # no pseudo-op survives into assemble_linear, and regalloc allocates every lane value as a normal use.
   if a.op is not Ops.NOOP: return None        # a is the address NOOP carrier (base_ptr, byte_offset) or LDS carrier
-  if len(a.src) > 2 and all(s.op is Ops.NOOP and isinstance(s.arg, tuple) and s.arg[:1] == ("wmma_acc",) for s in a.src):
+  if len(a.src) > 2 and all(s.op is Ops.NOOP and isinstance(s.arg, tuple) and s.arg[:1] in (("wmma_acc",), ("fixed_acc",)) for s in a.src):
     # Expanded register stores can retain a STACK of per-lane accumulator addresses. Bottom-up selection turns that
     # STACK into this NOOP carrier; lower each logical lane through the scalar in-place accumulator path instead of
     # misclassifying the address lanes as a global pointer/data tuple.
     vals = b.src if b.op in (Ops.NOOP, Ops.STACK) else ()
     if len(vals) != len(a.src): raise ValueError(f"AMD:ISA accumulator vector store width mismatch {len(a.src)} != {len(vals)}")
     return UOp.group(*(isel_store(ctx, ai, bi, x) for ai, bi in zip(a.src, vals)))
-  if len(a.src) > 2 and all(s.op is Ops.INS and s.arg is AMDOps.ACCUM_READ for s in a.src):
+  if len(a.src) > 1 and all(s.op is Ops.INS and s.arg is AMDOps.ACCUM_READ for s in a.src):
     # ASSIGN's expanded target is a STACK of accumulator LOADs, so bottom-up selection reaches here as ACCUM_READ
     # lanes rather than INDEX carriers. WMMA has already written each destination in place; retain values and ordering
     # only, exactly like the scalar wmma_acc assignment path.
     vals = b.src if b.op in (Ops.NOOP, Ops.STACK) else ()
     if len(vals) != len(a.src): raise ValueError(f"AMD:ISA accumulator assignment width mismatch {len(a.src)} != {len(vals)}")
+    if all(len(ai.src) > 2 and isinstance(ai.src[2].arg, tuple) and ai.src[2].arg[:1] == ("fixed_acc",) for ai in a.src):
+      return UOp.group(*(UOp(Ops.INS, dtypes.void, src=(_tov(ctx, bi), ai.src[0], ai.src[1]), arg=AMDOps.ACCUM_WRITE) for ai, bi in zip(a.src, vals)))
     return UOp.group(*(UOp(Ops.NOOP, dtypes.void, src=(bi, ai.src[0])) for ai, bi in zip(a.src, vals)))
-  if a.arg == "wmma_acc" or (isinstance(a.arg, tuple) and a.arg[:1] == ("wmma_acc",)):
+  if a.arg == "wmma_acc" or (isinstance(a.arg, tuple) and a.arg[:1] in (("wmma_acc",), ("fixed_acc",))):
     # ROLLED-K WMMA accumulator element (a.src=(order, pin==v[cbase+i]))
     # (a) acc_init store: data is CONST 0.0 (gated outside reduce_range -> PRE-loop) -> materialise the C fragment lane to
     # 0 via a pinned V_CONST. No memory op. The span-aware scheduler RAW-edges these inits before the in-place v_wmma.
     if b.op is Ops.CONST:
-      return UOp(Ops.INS, b.dtype, src=(b.rtag(),), arg=AMDOps.V_CONST, tag=_pin(a.src[1].arg, 0))
+      return UOp(Ops.INS, b.dtype, src=(b.rtag(), a.src[0]) if isinstance(a.arg, tuple) and a.arg[:1] == ("fixed_acc",) or b.dtype.scalar() == dtypes.int32 else (b.rtag(),), arg=AMDOps.V_CONST, tag=_pin(a.src[1].arg, 0))
     # (b) ASSIGN store: data is the WMMA D output, already written IN PLACE to v[cbase+i] by v_wmma -> a NOOP passthrough
     # (no memory op). Keeps the WMMA def (b) + the END/range order (a.src[0]) reachable so the loop backedge is preserved.
-    return UOp(Ops.NOOP, dtypes.void, src=(_tov(ctx, b), a.src[0]))
+    return UOp(Ops.NOOP, dtypes.void, src=(_tov(ctx, b), a.src[0])) if a.arg == "wmma_acc" or a.arg[0] == "wmma_acc" else \
+      UOp(Ops.INS, dtypes.void, src=(_tov(ctx, b), a.src[0], a.src[1]), arg=AMDOps.ACCUM_WRITE)
   if isinstance(a.arg, tuple) and a.arg[:1] == ("stage_reg",):
     # Scalar stage stores must have been consumed by the deterministic GROUP
     # pairing pass before instruction selection.
@@ -1639,6 +1655,7 @@ def isel_wmma(ctx:IselContext, x:UOp):
     abase = _frag_base(ctx, (id(dreg), "A"), _wmma_operand_regs(x.src[0])); bbase = _frag_base(ctx, (id(dreg), "B"), _wmma_operand_regs(x.src[1]))
     if cbase is None or abase is None or bbase is None:
       raise NotImplementedError(f"AMD:ISA WMMA fragment region [{FRAG_BASE},{FRAG_TOP}) exhausted (A={abase} B={bbase} C={cbase})")
+    _record_direct_wmma_fragments(ctx, abase, bbase, _wmma_operand_regs(x.src[0]), _wmma_operand_regs(x.src[1]))
     cin = [_fixed_alias(cbase, i, x.dtype.scalar(), after) for i in range(8)]
     return memo.setdefault(x, _build_wmma_tile(ctx, x.src[0], x.src[1], cin, abase, bbase, cbase, ()))
   chain = [x]                                   # outermost .. head
@@ -2175,21 +2192,12 @@ def lower_inst(x:UOp):
     return _ins(v_mov_b32_e32(_Vr(x.reg), _S[src[0].reg.index]), x.tag)
   if a is AMDOps.ACCUM_READ:                        # RA1: read pinned accumulator -> v_mov vvirt, v[pin]. src=(order, pin)
     inst = v_mov_b32_e32(_Vr(x.reg), _V[src[1].arg])
-    _proof_record("accum_read", x, inst, {
-      **_proof_carrier_meta(src[0]),
-      "source_pin_vgpr": src[1].arg,
-      "dest_vgpr": x.reg.index,
-    })
+    _proof_record("accum_read", x, inst, {**_proof_carrier_meta(src[0]), "source_pin_vgpr":src[1].arg, "dest_vgpr":x.reg.index})
     return _ins(inst, x.tag)
   if a is AMDOps.ACCUM_WRITE:                       # RA1: write pinned accumulator <- vsrc -> v_mov v[pin], vsrc. src=(vsrc, order, pin)
     inst = v_mov_b32_e32(_V[src[2].arg], _Vr(src[0].reg))
-    _proof_record("accum_write", x, inst, {
-      **_proof_carrier_meta(src[1]),
-      "dest_pin_vgpr": src[2].arg,
-      "source_vgpr": src[0].reg.index,
-    })
-    w = _ins(inst, x.tag)
-    return (w, [w])
+    _proof_record("accum_write", x, inst, {**_proof_carrier_meta(src[1]), "dest_pin_vgpr":src[2].arg, "source_vgpr":src[0].reg.index})
+    w = _ins(inst, x.tag); return (w, [w])
   if a is AMDOps.STAGE_READ:                         # static register-stage element -> v_mov vvirt, v[pin]
     inst = v_mov_b32_e32(_Vr(x.reg), _V[src[1].arg])
     _proof_record("stage_read", x, inst, {"role": "register_stage", "source_pin_vgpr": src[1].arg,
@@ -2440,6 +2448,7 @@ post_regalloc_matcher = PatternMatcher([
 
 # ============================ the renderer ============================
 class AMDISARenderer(ISARenderer):
+  def is_rematerializable(self, u:UOp) -> bool: return u.op is Ops.INS and u.arg is AMDOps.V_CONST and all(not isinstance(s.reg, Register) for s in u.src)
   device = "AMD"
   has_local = True
   # A 16-byte byte-vector is the native LDS staging unit for iu8 WMMA.
@@ -2477,42 +2486,39 @@ class AMDISARenderer(ISARenderer):
     return "\n".join(lines)
   def capture_selection_proof(self, ctx:IselContext) -> CompilerCaptureProof|None:
     """Freeze allocator-owned A/B stages and C accumulators before lowering discards their identities."""
-    stages = _register_stage_leases(ctx)
-    specs = getattr(ctx, "_stage_reg_specs", {})
-    direct = getattr(ctx, "_direct_wmma_fragments", {})
-    direct_widths = getattr(ctx, "_direct_wmma_fragment_widths", {"A": 8, "B": 8})
-    resident = getattr(ctx, "_resident_wmma_fragments", {})
-    c_leases = sorted(getattr(ctx, "_accfrag", {}).values())
-    stage_owned = set(stages) == {"A", "B"} and set(specs) == {"A", "B"}
-    direct_owned = set(direct) == {"A", "B"}
-    resident_owned = set(resident) == {"A", "B"} and all(resident[role] for role in ("A", "B"))
+    stages, specs = _register_stage_leases(ctx), getattr(ctx, "_stage_reg_specs", {})
+    direct, direct_widths = getattr(ctx, "_direct_wmma_fragments", {}), getattr(ctx, "_direct_wmma_fragment_widths", {"A":8, "B":8})
+    resident, fixed_accumulators = getattr(ctx, "_resident_wmma_fragments", {}), _fixed_fp32_accumulators(ctx)
+    wmma_regs = [u for u in ctx.uses if u.op is Ops.DEFINE_REG and id(u) in _wmma_acc_regs(ctx)]
+    c_leases = set(getattr(ctx, "_accfrag", {}).values()); c_leases.update(x for u in wmma_regs if (x:=getattr(ctx, "_frag", {}).get(id(u))) is not None)
+    stage_owned, direct_owned = set(stages) == set(specs) == {"A","B"}, set(direct) == {"A","B"}
+    resident_owned = set(resident) == {"A","B"} and all(resident[x] for x in ("A","B"))
     if not (stage_owned or direct_owned or resident_owned) or not c_leases: return None
     register_buffers = [u for u in ctx.uses if u.op is Ops.DEFINE_REG and u.ptrdtype.addrspace == AddrSpace.REG]
-    owned_accumulators = _wmma_acc_regs(ctx)
-    if any(_register_stage_buffer_meta(u) is None and id(u) not in owned_accumulators for u in register_buffers): return None
+    owned_regs = tuple(u for u in register_buffers if _register_stage_buffer_meta(u) is not None or id(u) in _wmma_acc_regs(ctx) or u in fixed_accumulators)
+    if len(owned_regs) != len(register_buffers): return None
     if stage_owned:
-      leases = tuple(CompilerRegisterLease(role, "vgpr", stages[role].start, stages[role].end,
-        "register_stage", True, specs[role].slots, ("produce", "wait", "consume", "release")) for role in ("A", "B"))
+      leases = tuple(CompilerRegisterLease(x, "vgpr", stages[x].start, stages[x].end, "register_stage", True, specs[x].slots,
+        ("produce","wait","consume","release")) for x in ("A","B"))
     elif direct_owned:
-      leases = tuple(CompilerRegisterLease(role, "vgpr", direct[role], direct[role]+direct_widths[role],
-        "direct_wmma_fragment", True, 1, ("global_load", "consume", "overwrite")) for role in ("A", "B"))
+      leases = tuple(CompilerRegisterLease(x, "vgpr", direct[x], direct[x]+direct_widths[x], "direct_wmma_fragment", True, 1,
+        ("global_load","consume","overwrite")) for x in ("A","B"))
     else:
-      leases = tuple(CompilerRegisterLease(role, "vgpr", base, base+8,
-        "direct_wmma_fragment", True, 1, ("global_load", "consume", "overwrite"))
-        for role in ("A", "B") for base in sorted(resident[role]))
-    leases += tuple(CompilerRegisterLease("C", "vgpr", base, base+8, "wmma_accumulator", True, 1,
-      ("initialize", "accumulate", "consume", "store")) for base in c_leases)
-    lds_bytes = sum(u.ptrdtype.size * u.ptrdtype.base.itemsize for u in ctx.uses
-                    if u.op is Ops.DEFINE_LOCAL or (u.op is Ops.DEFINE_REG and u.ptrdtype.addrspace != AddrSpace.REG))
-    return CompilerCaptureProof(leases, lds_bytes=lds_bytes, wait_policy="targeted_vmcnt")
+      leases = tuple(CompilerRegisterLease(x, "vgpr", b, b+8, "direct_wmma_fragment", True, 1, ("global_load","consume","overwrite")) for x in ("A","B") for b in sorted(resident[x]))
+    lifetime = ("initialize","accumulate","consume","store")
+    leases += tuple(CompilerRegisterLease("C", "vgpr", b, b+8, "wmma_accumulator", True, 1, lifetime) for b in sorted(c_leases))
+    leases += tuple(CompilerRegisterLease("C", "vgpr", b, b+u.ptrdtype.size, "fixed_fp32_accumulator", True, 1, lifetime) for u,b in fixed_accumulators.items())
+    lds = sum(u.ptrdtype.size*u.ptrdtype.base.itemsize for u in ctx.uses if u.op is Ops.DEFINE_LOCAL or (u.op is Ops.DEFINE_REG and u.ptrdtype.addrspace != AddrSpace.REG))
+    return CompilerCaptureProof(leases, lds_bytes=lds, wait_policy="targeted_vmcnt", owned_storage=owned_regs)
 
   @staticmethod
   def _assembly_program(prg:UOp, proof:CompilerCaptureProof|None) -> UOp:
-    """Project metadata after selection proved all DEFINE_REG storage is fixed A/B/C VGPR state."""
-    if proof is None: return prg
+    """Project only exact DEFINE_REG identities whose fixed VGPR ownership survived regalloc."""
+    if not isinstance(proof, CompilerCaptureProof): return prg
     sink = prg.src[0]
+    owned = set(proof.owned_storage)
     metadata = tuple(u for u in sink.toposort() if u.op in (Ops.PARAM, Ops.DEFINE_VAR, Ops.SPECIAL, Ops.DEFINE_LOCAL) or
-                     (u.op is Ops.DEFINE_REG and u.ptrdtype.addrspace != AddrSpace.REG))
+                     (u.op is Ops.DEFINE_REG and u not in owned))
     return prg.replace(src=(UOp(Ops.SINK, src=metadata, arg=sink.arg),) + prg.src[1:])
 
   def _final_linear(self, lin:UOp) -> UOp:
