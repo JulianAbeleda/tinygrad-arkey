@@ -137,7 +137,9 @@ def compile_q4k_q8_five_buffer_pipeline(payload: dict[str, Any], canonical_ident
   producer = _compile_sink(producer_sink, target=target, compile_environment=environment)
   mmq = _compile_sink(mmq_sink, target=target, compile_environment=environment)
   for program in (producer, mmq):
-    if getattr(program.src[0].arg, "candidate_context", None) is not admission.context:
+    # Lowering caches preserve the equivalent context object from the first compile.  Semantic identity is the frozen
+    # descriptor value/canonical digest, not Python object identity across cache reconstruction.
+    if getattr(program.src[0].arg, "candidate_context", None) != admission.context:
       raise RuntimeError("PROGRAM candidate context drift")
   if tuple(mmq.arg.globals) != (0, 1, 2, 3, 4):
     raise RuntimeError("MMQ five-buffer ABI drift")

@@ -11,6 +11,7 @@ from extra.qk.runtime_specs import derive_q4k_q8_1_five_buffer_candidate
 from test.unit.test_q4k_q8_five_buffer_compile_adapter import _payload
 from tinygrad.uop.ops import Ops
 from tinygrad.codegen import full_rewrite_to_sink
+from tinygrad.codegen import to_program_cache
 from tinygrad.helpers import Target
 from tinygrad.renderer.isa.amd import AMDISARenderer
 from tinygrad import Tensor, dtypes
@@ -25,6 +26,17 @@ def test_static_pipeline_builds_two_programs_with_shared_context():
   assert (spec.m, spec.k) == (256, 4096)
   assert spec.wave_reduce_lowering == AMD_NATIVE_VGPR_WAVE_REDUCE
   assert {u.arg.slot for u in mmq_sink.toposort() if u.op is Ops.PARAM} == {0, 1, 2, 3, 4}
+
+
+def test_static_pipeline_recompile_accepts_equal_cached_candidate_context():
+  to_program_cache.clear()
+  entry = derive_q4k_q8_1_five_buffer_candidate(_payload((16, 16, 256)))
+  first = pipe.compile_q4k_q8_five_buffer_pipeline(entry.payload, entry.canonical_identity)
+  second = pipe.compile_q4k_q8_five_buffer_pipeline(entry.payload, entry.canonical_identity)
+  assert first.admission.context == second.admission.context
+  assert first.admission.context is not second.admission.context
+  assert second.producer.src[0].arg.candidate_context == second.admission.context
+  assert second.mmq.src[0].arg.candidate_context == second.admission.context
 
 
 def test_m256_producer_rangeifies_without_vector_weakint_cast():
