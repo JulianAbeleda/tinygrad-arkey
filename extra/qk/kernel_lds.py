@@ -6,36 +6,22 @@ from typing import Callable, TypeAlias
 
 from extra.qk.kernel_pipeline import (HierarchicalKernelPipelinePlan, HierarchicalLifecycleEvent,
                                       hierarchical_lifecycle_events, prove_hierarchical_lifecycle)
+from tinygrad.codegen.opt.kernel_lds import (CooperativeLDSStore, PackedPrecontractOperandTemplate, PrecontractContractSpec,
+  PrecontractFactors, PrecontractFragmentInstance, PrecontractKAxis, PrecontractLDSStage, PrecontractOperand,
+  PrecontractOperandTemplate, PrecontractPipelineTemplate, PrecontractProducerInstance, PrecontractThreadAxes, WMMAFragmentLoad,
+  WMMAOutputOwner, _rdna3_wmma_output_coord, _window, build_precontract_lds_stage, contract_symbolic_upcast,
+  cooperative_lds_padding_offsets, cooperative_lds_stores, derive_precontract_factors, derive_precontract_shape_factors,
+  instantiate_precontract_fragments, instantiate_precontract_producer, lower_symbolic_barrier_dependencies, rdna3_wmma_output_coord,
+  semantic_wave_coords, validate_precontract_carriers, validate_precontract_contracts, validate_precontract_operand_templates,
+  validate_precontract_thread_axes, validate_precontract_wmma_abi, validate_rdna3_wmma_descriptor, wmma_fragment_loads,
+  wmma_output_owners)
 from tinygrad.codegen.opt.packed_weight import PackedOperandRecordTransform, PackedOperandTransform, PackedWeightTransform
 from tinygrad.dtype import AddrSpace, DType, PtrDType, dtypes
 from tinygrad.uop.ops import (AxisType, KernelLDSArenaRegion, KernelLDSComponentWindow, KernelLDSWindow, KernelTileGeometry,
                               Ops, UOp)
 
-_RDNA3_DIMS = (16, 16, 16)
-_RDNA3_ELEMENTS = (16, 16, 8)
-_RDNA3_OPTS = ("l0", "l0", "l0", "l0", "l1", "u1", "u1", "u1")
-_RDNA3_SWIZZLE = ((('l4', 'u0', 'u1', 'u2', 'l0'), ('r1', 'r2', 'r3'), ('l1', 'l2', 'l3', 'r0')),
-                  (('l0', 'l1', 'l2', 'l3', 'l4'), ('r1', 'r2', 'r3'), ('u0', 'u1', 'u2', 'r0')))
-_RDNA3_REMAPS = ({'l0': 'l4', 'l1': 'u0', 'l2': 'u1', 'l3': 'u2', 'l4': 'l0', 'u0': 'r1', 'u1': 'r2', 'u2': 'r3',
-                   'r0': 'l1', 'r1': 'l2', 'r2': 'l3', 'r3': 'r0'},
-                  {'l0': 'l0', 'l1': 'l1', 'l2': 'l2', 'l3': 'l3', 'l4': 'l4', 'u0': 'r1', 'u1': 'r2', 'u2': 'r3',
-                   'r0': 'u0', 'r1': 'u1', 'r2': 'u2', 'r3': 'r0'})
 
 
-def validate_rdna3_wmma_descriptor(tc) -> None:
-  """Admit only the exact fp16->fp32 and int8->int32 descriptors this mapping proves."""
-  fields = (("dims", _RDNA3_DIMS), ("threads", 32), ("elements_per_thread", _RDNA3_ELEMENTS),
-            ("opts", _RDNA3_OPTS), ("swizzle", _RDNA3_SWIZZLE))
-  for name, expected in fields:
-    if getattr(tc, name, None) != expected: raise ValueError(f"RDNA3 WMMA descriptor {name} drifted")
-  dtype_in, dtype_out = getattr(tc, "dtype_in", None), getattr(tc, "dtype_out", None)
-  if dtype_in not in (dtypes.half, dtypes.char): raise ValueError("RDNA3 WMMA descriptor dtype_in drifted")
-  if dtype_out != (dtypes.float if dtype_in == dtypes.half else dtypes.int):
-    raise ValueError("RDNA3 WMMA descriptor dtype_out drifted")
-  try: remaps = tuple(tc.lane_map.remaps())
-  except (AttributeError, AssertionError, TypeError, ValueError) as exc:
-    raise ValueError("RDNA3 WMMA descriptor remaps are unavailable or invalid") from exc
-  if remaps != _RDNA3_REMAPS: raise ValueError("RDNA3 WMMA descriptor remaps drifted")
 
 
 def lds_arena_bytes(geometry:KernelTileGeometry) -> int:
@@ -52,89 +38,17 @@ def lds_component_views(geometry:KernelTileGeometry, role:str) -> tuple[KernelLD
   return geometry.lds_component_views(role)
 
 
-def contract_symbolic_upcast(value:UOp, axis:UOp) -> UOp:
-  """Materialize one scalar value over its owned UPCAST axis as a legal vector carrier."""
-  if axis.op is not Ops.RANGE or axis.arg[-1] is not AxisType.UPCAST or axis.vmin != 0:
-    raise ValueError("symbolic contraction requires a zero-based UPCAST range")
-  if value.dtype is dtypes.void or value.dtype.count != 1: raise ValueError("symbolic contraction requires a non-void scalar value")
-  if axis not in value.backward_slice_with_self: raise ValueError("symbolic contraction value does not own the requested axis")
-  width = axis.vmax+1
-  return UOp(Ops.CONTRACT, value.dtype.vec(width), (value,), ((axis.arg[0], width),))
 
 
-def lower_symbolic_barrier_dependencies(root:UOp, axis:UOp) -> UOp:
-  """Contract scalar UPCAST values before they cross an effect barrier.
-
-  Effect barriers preserve ordering, but must not retain scalar-shaped values over
-  an upcast axis: those otherwise survive expansion as illegal program UNROLLs.
-  """
-  if axis.op is not Ops.RANGE or axis.arg[-1] is not AxisType.UPCAST or axis.vmin != 0:
-    raise ValueError("symbolic barrier lowering requires a zero-based UPCAST range")
-  lowered: dict[UOp, UOp] = {}
-  for node in root.toposort():
-    src = tuple(lowered[x] for x in node.src)
-    if node.op is Ops.BARRIER:
-      src = tuple(contract_symbolic_upcast(x, axis) if x.dtype is not dtypes.void and x.dtype.count == 1 and
-                  axis in x.backward_slice_with_self else x for x in src)
-    lowered[node] = node if src == node.src else node.replace(src=src)
-  return lowered[root]
 
 
-@dataclass(frozen=True)
-class CooperativeLDSStore:
-  role: str
-  thread: int
-  iteration: int
-  row: int
-  vector: int
-  byte_offset: int
-  vector_bytes: int
-
-@dataclass(frozen=True)
-class WMMAFragmentLoad:
-  role: str
-  thread: int
-  wave_m: int
-  wave_n: int
-  subtile: int
-  k_substep: int
-  element: int
-  logical_row: int
-  logical_k: int
-  byte_offset: int
-
-@dataclass(frozen=True)
-class WMMAOutputOwner:
-  thread: int
-  wave_m: int
-  wave_n: int
-  subtile_m: int
-  subtile_n: int
-  element: int
-  row: int
-  col: int
-
-@dataclass(frozen=True)
-class PrecontractOperandTemplate:
-  role: str
-  source: UOp
-  row_axis: UOp
-  k_axis: UOp
-  row_tile_base: UOp
 
 
-@dataclass(frozen=True)
-class PackedPrecontractOperandTemplate:
-  """Packed B source decoded to fp16 at cooperative tile-production coordinates."""
-  role: str
-  source: UOp
-  transform: PackedWeightTransform
-  row_axis: UOp
-  k_axis: UOp
-  row_tile_base: UOp
 
 
-PrecontractOperand: TypeAlias = PrecontractOperandTemplate | PackedPrecontractOperandTemplate
+
+
+
 
 PackedComponentVectorProducer: TypeAlias = UOp | Callable[[UOp, UOp, UOp, int], UOp]
 
@@ -209,34 +123,9 @@ class PackedComponentOperandTemplate:
   @property
   def bindings(self) -> tuple[PackedComponentLDSBinding, ...]: return (self.value,)+self.sidecars
 
-@dataclass(frozen=True)
-class PrecontractThreadAxes:
-  wave_m: UOp
-  wave_n: UOp
-  lane: UOp
 
-@dataclass(frozen=True)
-class PrecontractKAxis:
-  tile_owner: UOp
-  substep_owner: UOp
-  tile_base: UOp
-  substep: UOp
 
-@dataclass(frozen=True)
-class PrecontractContractSpec:
-  role: str
-  axes: tuple[UOp, ...]
-  arg: tuple[tuple[int, int], ...]
-  element: UOp
-  descriptor_remap: tuple[tuple[str, str], ...]
 
-@dataclass(frozen=True)
-class PrecontractLDSStage:
-  allocation: UOp
-  producer: UOp
-  barrier: UOp
-  fragment_a: UOp
-  fragment_b: UOp
 
 
 @dataclass(frozen=True)
@@ -518,228 +407,26 @@ class HierarchicalPackedRecordStageProof:
   passed: bool
   errors: tuple[str, ...]
 
-@dataclass(frozen=True)
-class PrecontractProducerInstance:
-  epoch: UOp
-  slot: UOp
-  role_nodes: tuple[UOp, UOp]
-
-@dataclass(frozen=True)
-class PrecontractFragmentInstance:
-  epoch: UOp
-  slot: UOp
-  ready: UOp
-  fragments: tuple[UOp, UOp]
-
-@dataclass(frozen=True)
-class PrecontractFactors:
-  subtiles_m: int
-  subtiles_n: int
-  waves_m: int
-  waves_n: int
-  k_substeps: int
-  vectors_per_row: int
-  loads_a: int
-  loads_b: int
 
 
-def derive_precontract_shape_factors(geometry:KernelTileGeometry, tc) -> PrecontractFactors:
-  """Derive WMMA tile factors without consulting any storage allocation.
-
-  This is the shared geometry contract for LDS and register-resident producers.
-  ``derive_precontract_factors`` below adds the LDS-window checks needed by the
-  legacy staged implementation.
-  """
-  validate_rdna3_wmma_descriptor(tc)
-  tm, tn, tk = geometry.tile
-  if (tm % (geometry.waves[0] * tc.dims[1]) or tn % (geometry.waves[1] * tc.dims[0]) or
-      tk % tc.dims[2]):
-    raise ValueError("tile must divide into whole per-wave tensor-core subtiles and K steps")
-  sm = tm // (geometry.waves[0] * tc.dims[1])
-  sn = tn // (geometry.waves[1] * tc.dims[0])
-  ks = tk // tc.dims[2]
-  if ks < 2:
-    raise ValueError("current atomic staging requires at least two tensor-core K steps")
-  vectors_per_row = tk * tc.dtype_in.itemsize // 16
-  if vectors_per_row <= 0 or tk * tc.dtype_in.itemsize % 16:
-    raise ValueError("K row must contain whole b128 vectors")
-  rows = (tm, tn)
-  loads = tuple(row * vectors_per_row // geometry.threads for row in rows)
-  if any(row * vectors_per_row % geometry.threads for row in rows) or any(x <= 0 for x in loads):
-    raise ValueError("operand vectors must divide evenly across cooperative threads")
-  return PrecontractFactors(sm, sn, *geometry.waves, ks, vectors_per_row, *loads)
 
 
-def validate_precontract_operand_templates(operands:tuple[PrecontractOperand, ...], *, dtype_in=dtypes.half,
-                                           context:str="precontract") -> None:
-  """Validate source dtype and live row/K ownership independent of storage."""
-  if tuple(x.role for x in operands) != ("A", "B"):
-    raise ValueError(f"{context} operands must be exactly ordered A and B")
-  for operand in operands:
-    if operand.row_axis.op is not Ops.RANGE or operand.k_axis.op is not Ops.RANGE:
-      raise ValueError(f"{context} {operand.role} template does not retain row/K ownership")
-    if isinstance(operand, PackedPrecontractOperandTemplate):
-      if dtype_in != dtypes.half:
-        raise ValueError(f"{context} packed templates currently produce only scalar fp16 values")
-      if (operand.role != "B" or not isinstance(operand.source.dtype, PtrDType) or
-          operand.source.ptrdtype.base != operand.transform.storage_dtype):
-        raise ValueError(f"{context} packed template must be a B operand with canonical packed storage dtype")
-      # The packed carrier no longer contains the dense source expression, so
-      # these two ranges are the only remaining proof of logical ownership.
-      # Keep the transform and carrier bounds in the same contract as the
-      # producer: accepting a detached/partial domain would silently decode a
-      # different row or read past the packed allocation.
-      if (operand.row_axis.vmax + 1 != operand.transform.rows or
-          operand.k_axis.vmax + 1 != operand.transform.k):
-        raise ValueError(f"{context} packed B row/K ownership does not match the transform")
-      packed_units = operand.transform.packed_bytes // operand.transform.storage_width
-      if operand.source.ptrdtype.size != packed_units:
-        raise ValueError(f"{context} packed B carrier does not exactly cover the transform")
-    elif (operand.row_axis not in operand.source.backward_slice_with_self or
-          operand.k_axis not in operand.source.backward_slice_with_self or
-          operand.source.dtype.scalar() != dtype_in):
-      raise ValueError(f"{context} {operand.role} template does not retain scalar {dtype_in.name} row/K ownership")
 
 
-def validate_precontract_contracts(tc, contracts:tuple[PrecontractContractSpec, ...], *,
-                                   context:str="precontract", mismatch:str="does not match the descriptor") -> None:
-  """Validate A/B CONTRACT axes, folded element identity, and descriptor remaps."""
-  if tuple(c.role for c in contracts) != ("A", "B"):
-    raise ValueError(f"{context} contracts must be exactly ordered A and B")
-  descriptor_remaps = tuple(tuple(x.items()) for x in tc.lane_map.remaps())
-  for operand_idx, contract in enumerate(contracts):
-    folded = ((contract.axes[0] * 2 + contract.axes[1]) * 2 + contract.axes[2]) * 2 + contract.axes[3] \
-      if len(contract.axes) == 4 else None
-    if (len(contract.axes) != 4 or any(a.op is not Ops.RANGE or a.vmax + 1 != 2 for a in contract.axes) or
-        contract.arg != tuple((a.arg[0], 2) for a in contract.axes) or contract.element is not folded or
-        contract.descriptor_remap != descriptor_remaps[operand_idx]):
-      raise ValueError(f"{context} {contract.role} contract {mismatch}")
 
 
-def validate_precontract_carriers(fragment_dtype, accumulator_dtype, *, tc=None, context:str="precontract") -> None:
-  """Validate the stable WMMA fragment and accumulator carrier ABI."""
-  if tc is not None: validate_rdna3_wmma_descriptor(tc)
-  dtype_in, dtype_out, elements = (dtypes.half, dtypes.float, _RDNA3_ELEMENTS) if tc is None else \
-    (tc.dtype_in, tc.dtype_out, tc.elements_per_thread)
-  expected_fragments = (dtype_in.vec(elements[0]), dtype_in.vec(elements[1]))
-  if fragment_dtype not in expected_fragments:
-    raise ValueError(f"{context} fragment carrier must match the tensor-core input carrier")
-  if accumulator_dtype != dtype_out.vec(elements[2]):
-    raise ValueError(f"{context} accumulator carrier must match the tensor-core output carrier")
 
 
-def validate_precontract_wmma_abi(node: UOp, *, context: str = "precontract") -> None:
-  """Validate the WMMA node ABI before a backend/devectorizer sees it.
-
-  The tensor-core matcher accepts two descriptor-sized input fragments and one
-  descriptor-sized accumulator, producing the same output carrier.  The argument carries the corresponding four binary A/B axes and
-  three binary C axes.  Keep this check storage-independent so LDS and
-  register-resident templates cannot drift into different ABI rules.
-  """
-  if not isinstance(node, UOp) or node.op is not Ops.WMMA:
-    raise ValueError(f"{context} WMMA ABI validator requires an Ops.WMMA node")
-  if len(node.src) != 3:
-    raise ValueError(f"{context} WMMA ABI requires A, B, and C inputs")
-  arg = node.arg
-  if not isinstance(arg, tuple) or len(arg) < 8:
-    raise ValueError(f"{context} WMMA descriptor argument is incomplete")
-  try: dims = tuple(arg[1])
-  except (TypeError, ValueError) as exc:
-    raise ValueError(f"{context} WMMA descriptor dimensions are invalid") from exc
-  dtype_in, dtype_out = arg[2], arg[3]
-  if dims != _RDNA3_DIMS or dtype_in not in (dtypes.half, dtypes.char) or \
-     dtype_out != (dtypes.float if dtype_in == dtypes.half else dtypes.int) or arg[5] != 32:
-    raise ValueError(f"{context} WMMA descriptor carrier ABI drifted")
-  expected_a, expected_b = (dtype_in.vec(x) for x in _RDNA3_ELEMENTS[:2])
-  expected_out = dtype_out.vec(_RDNA3_ELEMENTS[2])
-  if node.src[0].dtype != expected_a: raise ValueError(f"{context} A fragment carrier does not match the descriptor")
-  if node.src[1].dtype != expected_b: raise ValueError(f"{context} B fragment carrier does not match the descriptor")
-  if node.src[2].dtype != expected_out: raise ValueError(f"{context} accumulator carrier does not match the descriptor")
-  if node.dtype != expected_out: raise ValueError(f"{context} WMMA result carrier does not match the descriptor")
-  axes = arg[6]
-  if not isinstance(axes, tuple) or len(axes) != 3:
-    raise ValueError(f"{context} WMMA descriptor requires A/B/C axis groups")
-  for role, count, group in (("A", 4, axes[0]), ("B", 4, axes[1]), ("C", 3, axes[2])):
-    if not isinstance(group, tuple) or len(group) != count or any(not isinstance(x, tuple) or len(x) != 2 or x[1] != 2 for x in group):
-      raise ValueError(f"{context} {role} WMMA contract requires {count} binary axes")
 
 
-def validate_precontract_thread_axes(geometry:KernelTileGeometry, factors:PrecontractFactors,
-                                     threads:PrecontractThreadAxes, subtile_m:UOp, subtile_n:UOp,
-                                     *, context:str="precontract") -> None:
-  """Validate live wave/lane and subtile RANGE ownership against tile factors."""
-  if ((threads.wave_m.op, threads.wave_m.vmax + 1, threads.wave_m.arg[-1]) !=
-      (Ops.RANGE, factors.waves_m, AxisType.LOCAL) or
-      (threads.wave_n.op, threads.wave_n.vmax + 1, threads.wave_n.arg[-1]) !=
-      (Ops.RANGE, factors.waves_n, AxisType.LOCAL) or
-      (threads.lane.op, threads.lane.vmax + 1, threads.lane.arg[-1]) !=
-      (Ops.RANGE, geometry.wave_size, AxisType.WARP)):
-    raise ValueError(f"{context} thread axes do not match derived wave geometry")
-  if (subtile_m.op is not Ops.RANGE or subtile_m.vmax + 1 != factors.subtiles_m or
-      subtile_n.op is not Ops.RANGE or subtile_n.vmax + 1 != factors.subtiles_n):
-    raise ValueError(f"{context} subtile axes do not match derived geometry")
-
-@dataclass(frozen=True)
-class PrecontractPipelineTemplate:
-  """Validated immutable inputs for every epoch of a precontract LDS pipeline."""
-  geometry: KernelTileGeometry
-  tc: object
-  allocation: UOp
-  operands: tuple[PrecontractOperand, ...]
-  threads: PrecontractThreadAxes
-  subtile_m: UOp
-  subtile_n: UOp
-  contracts: tuple[PrecontractContractSpec, ...]
-  pipeline_plan: object
-
-  def __post_init__(self) -> None:
-    factors = derive_precontract_factors(self.geometry, self.tc)
-    validate_precontract_operand_templates(self.operands, dtype_in=self.tc.dtype_in, context="precontract pipeline")
-    validate_precontract_thread_axes(self.geometry, factors, self.threads, self.subtile_m, self.subtile_n,
-                                     context="precontract pipeline")
-    validate_precontract_contracts(self.tc, self.contracts, context="precontract pipeline")
-    slot_bytes = self.geometry.lds_windows[-1].end
-    if (getattr(self.pipeline_plan, "slot_bytes", None) != slot_bytes or
-        self.allocation.op is not Ops.DEFINE_LOCAL or self.allocation.ptrdtype.addrspace is not AddrSpace.LOCAL or
-        self.allocation.ptrdtype.base != self.tc.dtype_in or
-        self.allocation.ptrdtype.size*self.tc.dtype_in.itemsize != self.pipeline_plan.active_lds_bytes):
-      raise ValueError("precontract pipeline allocation does not exactly cover its active LDS slots")
-
-  @property
-  def factors(self) -> PrecontractFactors: return derive_precontract_factors(self.geometry, self.tc)
-
-  def producer(self, epoch:UOp, slot:UOp) -> PrecontractProducerInstance:
-    return instantiate_precontract_producer(self.geometry, tc=self.tc, allocation=self.allocation,
-      operands=self.operands, threads=self.threads, epoch=epoch, slot=slot)
-
-  def fragments(self, epoch:UOp, slot:UOp, ready:UOp, k_substep:int) -> PrecontractFragmentInstance:
-    if not 0 <= k_substep < self.factors.k_substeps: raise ValueError("precontract K substep is out of range")
-    return instantiate_precontract_fragments(self.geometry, tc=self.tc, allocation=self.allocation, threads=self.threads,
-      k_substep=UOp.const(dtypes.weakint,k_substep), subtile_m=self.subtile_m, subtile_n=self.subtile_n,
-      contracts=self.contracts, epoch=epoch, slot=slot, ready=ready)
-
-def derive_precontract_factors(geometry:KernelTileGeometry, tc) -> PrecontractFactors:
-  factors = derive_precontract_shape_factors(geometry, tc)
-  tm, tn, tk = geometry.tile
-  rows = (tm, tn)
-  for window,row in zip(geometry.lds_windows, rows):
-    if window.stride_bytes < tk*tc.dtype_in.itemsize or window.end-window.base != row*window.stride_bytes:
-      raise ValueError("LDS windows must exactly cover padded operand rows")
-  return factors
 
 
-def semantic_wave_coords(geometry:KernelTileGeometry, thread:int) -> tuple[int, int, int]:
-  """Return (wave_m, wave_n, lane) using row-major wave ownership."""
-  if not isinstance(thread, int) or isinstance(thread, bool) or not 0 <= thread < geometry.threads:
-    raise ValueError(f"thread must be in [0, {geometry.threads})")
-  wave_id, lane = divmod(thread, geometry.wave_size)
-  wave_m, wave_n = divmod(wave_id, geometry.waves[1])
-  return wave_m, wave_n, lane
 
 
-def _window(geometry:KernelTileGeometry, role:str) -> KernelLDSWindow:
-  if role not in ("A", "B"): raise ValueError(f"cooperative LDS role must be A or B, got {role!r}")
-  return next(w for w in geometry.lds_windows if w.role == role)
+
+
+
+
 
 
 def validate_packed_component_templates(geometry:KernelTileGeometry, tc,
@@ -785,216 +472,19 @@ def validate_packed_component_templates(geometry:KernelTileGeometry, tc,
   return factors
 
 
-def cooperative_lds_stores(geometry:KernelTileGeometry, role:str, *, element_bytes:int=2,
-                           vector_bytes:int=16) -> tuple[CooperativeLDSStore, ...]:
-  """Elect one thread for every non-padding vector in an A or B tile window."""
-  if not isinstance(element_bytes, int) or isinstance(element_bytes, bool) or element_bytes <= 0:
-    raise ValueError("element_bytes must be a positive int")
-  if not isinstance(vector_bytes, int) or isinstance(vector_bytes, bool) or vector_bytes <= 0:
-    raise ValueError("vector_bytes must be a positive int")
-  window = _window(geometry, role)
-  rows = geometry.tile[0] if role == "A" else geometry.tile[1]
-  row_data_bytes = geometry.tile[2] * element_bytes
-  if row_data_bytes % vector_bytes: raise ValueError("tile K row bytes must be divisible by vector_bytes")
-  if window.stride_bytes < row_data_bytes or window.stride_bytes % vector_bytes:
-    raise ValueError("LDS stride must contain the data row and be vector aligned")
-  if window.end - window.base != rows * window.stride_bytes:
-    raise ValueError("LDS window size must exactly equal rows * stride")
-  vectors_per_row = row_data_bytes // vector_bytes
-  vector_count = rows * vectors_per_row
-  if vector_count % geometry.threads:
-    raise ValueError("cooperative tile vectors must divide evenly across threads")
-  stores = []
-  for linear in range(vector_count):
-    thread, iteration = linear % geometry.threads, linear // geometry.threads
-    row, vector = divmod(linear, vectors_per_row)
-    byte_offset = window.base + row * window.stride_bytes + vector * vector_bytes
-    stores.append(CooperativeLDSStore(role, thread, iteration, row, vector, byte_offset, vector_bytes))
-  return tuple(stores)
 
 
-def cooperative_lds_padding_offsets(geometry:KernelTileGeometry, role:str, *, element_bytes:int=2,
-                                    vector_bytes:int=16) -> tuple[int, ...]:
-  """Return vector-aligned padding slots, which intentionally have no store owner."""
-  window = _window(geometry, role)
-  rows = geometry.tile[0] if role == "A" else geometry.tile[1]
-  row_data_bytes = geometry.tile[2] * element_bytes
-  if row_data_bytes % vector_bytes or window.stride_bytes < row_data_bytes or window.stride_bytes % vector_bytes:
-    raise ValueError("LDS row data and stride must be valid vector-aligned intervals")
-  return tuple(window.base + row * window.stride_bytes + offset
-               for row in range(rows) for offset in range(row_data_bytes, window.stride_bytes, vector_bytes))
 
 
-def _rdna3_wmma_output_coord(lane:int, element:int) -> tuple[int, int]:
-  if not isinstance(lane, int) or isinstance(lane, bool) or not 0 <= lane < 32: raise ValueError("lane must be in [0, 32)")
-  if not isinstance(element, int) or isinstance(element, bool) or not 0 <= element < 8: raise ValueError("element must be in [0, 8)")
-  return lane % 16, lane // 16 + element * 2
-
-def rdna3_wmma_output_coord(lane:int, element:int, *, tc) -> tuple[int, int]:
-  """RDNA3 fp32 16x16x16 output map used by the Python WMMA interpreter."""
-  validate_rdna3_wmma_descriptor(tc)
-  return _rdna3_wmma_output_coord(lane, element)
 
 
-def wmma_fragment_loads(geometry:KernelTileGeometry, role:str, *, tc, element_bytes:int|None=None) -> tuple[WMMAFragmentLoad, ...]:
-  """Enumerate per-wave RDNA3 A/B fragment loads from the staged tile windows."""
-  validate_rdna3_wmma_descriptor(tc)
-  window = _window(geometry, role)
-  if geometry.wave_size != 32 or geometry.tile[2] % 16:
-    raise ValueError("RDNA3 fragment mapping requires wave32 and K divisible by 16")
-  if element_bytes is None: element_bytes = tc.dtype_in.itemsize
-  if element_bytes != tc.dtype_in.itemsize: raise ValueError("RDNA3 fragment element_bytes must match dtype_in")
-  subtiles = geometry.tile[0] // (geometry.waves[0] * 16) if role == "A" else \
-             geometry.tile[1] // (geometry.waves[1] * 16)
-  if subtiles <= 0 or (geometry.tile[0] if role == "A" else geometry.tile[1]) != \
-     subtiles * (geometry.waves[0] if role == "A" else geometry.waves[1]) * 16:
-    raise ValueError("tile extent must divide exactly into wave 16x16 subtiles")
-  loads = []
-  for thread in range(geometry.threads):
-    wave_m, wave_n, lane = semantic_wave_coords(geometry, thread)
-    for subtile in range(subtiles):
-      logical_row = (wave_m * subtiles + subtile) * 16 + lane % 16 if role == "A" else \
-                    (wave_n * subtiles + subtile) * 16 + lane % 16
-      for k_substep in range(geometry.tile[2] // 16):
-        for element in range(16):
-          logical_k = k_substep * 16 + element
-          byte_offset = window.base + logical_row * window.stride_bytes + logical_k * element_bytes
-          if not window.base <= byte_offset or byte_offset + element_bytes > window.end:
-            raise ValueError("RDNA3 fragment load is outside its LDS window")
-          loads.append(WMMAFragmentLoad(role, thread, wave_m, wave_n, subtile, k_substep, element,
-                                        logical_row, logical_k, byte_offset))
-  return tuple(loads)
 
 
-def wmma_output_owners(geometry:KernelTileGeometry, *, tc) -> tuple[WMMAOutputOwner, ...]:
-  """Enumerate RDNA3 output ownership for every wave and its 2-D WMMA subtile grid."""
-  validate_rdna3_wmma_descriptor(tc)
-  if geometry.wave_size != 32: raise ValueError("RDNA3 output mapping requires wave32")
-  subtiles_m = geometry.tile[0] // (geometry.waves[0] * 16)
-  subtiles_n = geometry.tile[1] // (geometry.waves[1] * 16)
-  if (subtiles_m <= 0 or subtiles_n <= 0 or geometry.tile[0] != subtiles_m * geometry.waves[0] * 16 or
-      geometry.tile[1] != subtiles_n * geometry.waves[1] * 16):
-    raise ValueError("output tile must divide exactly into wave 16x16 subtiles")
-  owners = []
-  for thread in range(geometry.threads):
-    wave_m, wave_n, lane = semantic_wave_coords(geometry, thread)
-    for subtile_m in range(subtiles_m):
-      for subtile_n in range(subtiles_n):
-        for element in range(8):
-          local_row, local_col = _rdna3_wmma_output_coord(lane, element)
-          row = (wave_m * subtiles_m + subtile_m) * 16 + local_row
-          col = (wave_n * subtiles_n + subtile_n) * 16 + local_col
-          owners.append(WMMAOutputOwner(thread, wave_m, wave_n, subtile_m, subtile_n, element, row, col))
-  return tuple(owners)
 
 
-def instantiate_precontract_producer(geometry:KernelTileGeometry, *, tc, allocation:UOp,
-                                     operands:tuple[PrecontractOperand,...], threads:PrecontractThreadAxes,
-                                     epoch:UOp, slot:UOp) -> PrecontractProducerInstance:
-  factors=derive_precontract_factors(geometry,tc)
-  item_bytes, vector_bytes = tc.dtype_in.itemsize, 16
-  vector_elements = vector_bytes // item_bytes
-  slot_base=slot*(geometry.lds_windows[-1].end//item_bytes)
-  thread=(threads.wave_m*geometry.waves[1]+threads.wave_n)*geometry.wave_size+threads.lane
-  role_nodes=[]
-  for operand in operands:
-    stores=[]; window=_window(geometry,operand.role); loads=factors.loads_a if operand.role == "A" else factors.loads_b
-    for row_iteration in range(loads):
-      linear_vector=thread+row_iteration*geometry.threads
-      row,vector=linear_vector//factors.vectors_per_row,linear_vector%factors.vectors_per_row
-      logical_k=vector*vector_elements
-      logical_row = operand.row_tile_base + row
-      value = operand.transform.dequant_tile(operand.source, logical_row, epoch*geometry.tile[2]+logical_k, vector_elements).value \
-        if isinstance(operand, PackedPrecontractOperandTemplate) else UOp(Ops.STACK,tc.dtype_in.vec(vector_elements),tuple(operand.source.substitute({
-          operand.row_axis:logical_row, operand.k_axis:epoch*geometry.tile[2]+logical_k+elem}) for elem in range(vector_elements)))
-      tag=("kernel_tile_store",operand.role,row_iteration,epoch,slot)
-      idx=allocation.index(slot_base+(window.base+row*window.stride_bytes+logical_k*item_bytes)//item_bytes,
-                           dtype=tc.dtype_in.vec(vector_elements)).replace(tag=tag)
-      stores.append(idx.store(value).replace(tag=tag).end())
-    role_nodes.append(UOp.group(*stores))
-  return PrecontractProducerInstance(epoch,slot,(role_nodes[0],role_nodes[1]))
 
-def instantiate_precontract_fragments(geometry:KernelTileGeometry, *, tc, allocation:UOp, threads:PrecontractThreadAxes,
-                                      k_substep:UOp, subtile_m:UOp, subtile_n:UOp,
-                                      contracts:tuple[PrecontractContractSpec,...], epoch:UOp, slot:UOp,
-                                      ready:UOp) -> PrecontractFragmentInstance:
-  factors=derive_precontract_factors(geometry,tc); item_bytes=tc.dtype_in.itemsize
-  slot_base=slot*(geometry.lds_windows[-1].end//item_bytes)
-  ordered=allocation.after(ready); lane=threads.lane
-  def fragment(role,subtile,wave,subtiles,contract):
-    window=_window(geometry,role); row=(wave*subtiles+subtile)*16+lane%16
-    logical_k=k_substep*tc.dims[2]+contract.element
-    idx=slot_base+(window.base+row*window.stride_bytes+logical_k*item_bytes)//item_bytes
-    semantic=(role,epoch,slot,k_substep,subtile)
-    load=ordered.index(idx,dtype=tc.dtype_in).replace(tag=("kernel_tile_fragment_load",*semantic)).load()
-    operand_idx = 0 if role == "A" else 1
-    return UOp(Ops.CONTRACT,tc.dtype_in.vec(tc.elements_per_thread[operand_idx]),(load,),contract.arg,
-               tag=("kernel_tile_fragment",*semantic))
-  frags=(fragment("A",subtile_m,threads.wave_m,factors.subtiles_m,contracts[0]),
-         fragment("B",subtile_n,threads.wave_n,factors.subtiles_n,contracts[1]))
-  return PrecontractFragmentInstance(epoch,slot,ready,frags)
 
-def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:UOp,
-                                operands:tuple[PrecontractOperand, ...], threads:PrecontractThreadAxes,
-                                k_axis:PrecontractKAxis, subtile_m:UOp, subtile_n:UOp,
-                                contracts:tuple[PrecontractContractSpec, ...], pipeline_plan=None) -> PrecontractLDSStage:
-  """Build an unwired vector cooperative stage while full operand index templates still exist."""
-  factors = derive_precontract_factors(geometry, tc)
-  validate_precontract_operand_templates(operands, dtype_in=tc.dtype_in, context="precontract")
-  for operand in operands:
-    if operand.row_tile_base.dtype.scalar() not in (dtypes.int, dtypes.weakint): raise ValueError("precontract row tile base must be integer")
-  validate_precontract_thread_axes(geometry, factors, threads, subtile_m, subtile_n, context="precontract")
-  if (k_axis.tile_owner.op is not Ops.RANGE or k_axis.tile_owner.arg[-1] is not AxisType.REDUCE or
-      k_axis.tile_owner not in k_axis.tile_base.backward_slice_with_self):
-    raise ValueError("precontract K tile owner must be a live REDUCE range in tile base")
-  if (k_axis.substep_owner.op is not Ops.RANGE or k_axis.substep_owner.arg[-1] is not AxisType.UNROLL or
-      k_axis.substep_owner.vmax+1 != factors.k_substeps or k_axis.substep_owner not in k_axis.substep.backward_slice_with_self):
-    raise ValueError("precontract K substep owner must be a live derived-size UNROLL range in substep")
-  if (subtile_m.op is not Ops.RANGE or subtile_m.vmax+1 != factors.subtiles_m or
-      subtile_n.op is not Ops.RANGE or subtile_n.vmax+1 != factors.subtiles_n):
-    raise ValueError("precontract K/subtile axes are invalid")
-  validate_precontract_contracts(tc, contracts, context="precontract", mismatch="does not match actual descriptor operand mapping")
-  slot_bytes = geometry.lds_windows[-1].end
-  total_bytes = slot_bytes if pipeline_plan is None else pipeline_plan.active_lds_bytes
-  if (allocation.op is not Ops.DEFINE_LOCAL or allocation.ptrdtype.addrspace is not AddrSpace.LOCAL or
-      allocation.ptrdtype.base != tc.dtype_in or allocation.ptrdtype.size * tc.dtype_in.itemsize != total_bytes):
-    raise ValueError("precontract caller allocation must be one exact dtype_in LDS window")
-  item_bytes, vector_bytes = tc.dtype_in.itemsize, 16
-  vector_elements = vector_bytes // item_bytes
-  stores = []
-  slot_base = UOp.const(dtypes.weakint, 0) if pipeline_plan is None else \
-    (k_axis.tile_owner % pipeline_plan.buffer_count) * (slot_bytes // item_bytes)
-  thread = (threads.wave_m * geometry.waves[1] + threads.wave_n) * geometry.wave_size + threads.lane
-  for operand in operands:
-    window = _window(geometry, operand.role)
-    loads = factors.loads_a if operand.role == "A" else factors.loads_b
-    for row_iteration in range(loads):
-      linear_vector = thread + row_iteration*geometry.threads
-      row, vector = linear_vector//factors.vectors_per_row, linear_vector%factors.vectors_per_row
-      logical_k = vector * vector_elements
-      logical_row = operand.row_tile_base + row
-      value = operand.transform.dequant_tile(operand.source, logical_row, k_axis.tile_base + logical_k, vector_elements).value \
-        if isinstance(operand, PackedPrecontractOperandTemplate) else UOp(Ops.STACK, tc.dtype_in.vec(vector_elements), tuple(operand.source.substitute({
-          operand.row_axis: logical_row, operand.k_axis: k_axis.tile_base + logical_k + elem}) for elem in range(vector_elements)))
-      index = slot_base + (window.base + row * window.stride_bytes + logical_k * item_bytes) // item_bytes
-      store_tag = ("kernel_tile_store", operand.role, row_iteration)
-      store_idx = allocation.index(index, dtype=tc.dtype_in.vec(vector_elements)).replace(tag=store_tag)
-      stores.append(store_idx.store(value).replace(tag=store_tag).end())
-  producer = UOp.group(*stores)
-  barrier = UOp.barrier(producer)
-  wave_m, wave_n, lane = threads.wave_m, threads.wave_n, threads.lane
-  ordered = allocation.after(barrier)
-  def _fragment(role:str, subtile:UOp, wave:UOp, subtiles:int, contract:PrecontractContractSpec) -> UOp:
-    window = _window(geometry, role)
-    row = (wave * subtiles + subtile) * 16 + lane % 16
-    logical_k = k_axis.substep * tc.dims[2] + contract.element
-    index = slot_base + (window.base + row * window.stride_bytes + logical_k * item_bytes) // item_bytes
-    load = ordered.index(index, dtype=tc.dtype_in).replace(tag=("kernel_tile_fragment_load", role)).load()
-    operand_idx = 0 if role == "A" else 1
-    return UOp(Ops.CONTRACT, tc.dtype_in.vec(tc.elements_per_thread[operand_idx]), (load,), contract.arg,
-               tag=("kernel_tile_fragment", role))
-  return PrecontractLDSStage(allocation, producer, barrier, _fragment("A", subtile_m, wave_m, factors.subtiles_m, contracts[0]),
-                             _fragment("B", subtile_n, wave_n, factors.subtiles_n, contracts[1]))
+
 
 
 def build_packed_component_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:UOp,
