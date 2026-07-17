@@ -1805,6 +1805,39 @@ def _localize_memory_address_recipes(ctx:IselContext, x:UOp):
   ctx._addresses_localized = True
   return x.substitute(subs) if subs else None
 
+def _selected_wmma_roots(nodes:list[UOp], wmmas:list[UOp]) -> dict[UOp,UOp]|None:
+  """Map selected symbolic roots to the earliest machine WMMA in each marked chain."""
+  wmma_set = set(wmmas)
+  uses:dict[UOp,list[UOp]] = {}
+  for u in nodes:
+    for src in u.src: uses.setdefault(src, []).append(u)
+  markers = [u for u in nodes if u.op is Ops.NOOP and isinstance(u.arg, tuple) and len(u.arg) == 2 and
+             u.arg[0] == "selected_wmma_root" and isinstance(u.arg[1], UOp)]
+  selected_roots:dict[UOp,UOp] = {}
+  symbolic_heads:dict[UOp,UOp] = {}
+  for marker in markers:
+    parents = list(dict.fromkeys(u for u in uses.get(marker, ()) if
+      (u.op is Ops.NOOP and u.src and u.src[0] in wmma_set) or (u in wmma_set)))
+    if len(parents) != 1: return None
+    parent = parents[0]
+    machine = parent.src[0] if parent.op is Ops.NOOP else parent
+    # A strict K32 chain flattens the marked head carrier into the tail machine
+    # WMMA. Walk its unique same-family predecessor dependency back to the head.
+    seen:set[UOp] = set()
+    while True:
+      if machine in seen: return None
+      seen.add(machine)
+      predecessors = list(dict.fromkeys(s for s in machine.src if s in wmma_set and s.arg is machine.arg))
+      if len(predecessors) > 1: return None
+      if not predecessors: break
+      machine = predecessors[0]
+    symbolic = marker.arg[1]
+    if (machine in selected_roots and selected_roots[machine] is not symbolic) or \
+       (symbolic in symbolic_heads and symbolic_heads[symbolic] is not machine): return None
+    selected_roots[machine] = symbolic
+    symbolic_heads[symbolic] = machine
+  return selected_roots
+
 def _serialize_progressive_c_drains(ctx:IselContext, x:UOp):
   """Drain every selected C lane before reusing its proven physical lease."""
   if _progressive_c_assignment(ctx) is None or getattr(ctx, "_progressive_c_serialized", False): return None
@@ -1813,19 +1846,13 @@ def _serialize_progressive_c_drains(ctx:IselContext, x:UOp):
   for u in nodes:
     for src in u.src: uses.setdefault(src, []).append(u)
   wmmas = [u for u in nodes if u.op is Ops.INS and u.arg in (AMDOps.V_WMMA, AMDOps.V_WMMA_I8)]
-  selected_roots:dict[UOp,UOp] = {}
-  for carrier in nodes:
-    if carrier.op is not Ops.NOOP or not carrier.src: continue
-    marker = next((s for s in carrier.src if s.op is Ops.NOOP and isinstance(s.arg, tuple) and
-                   len(s.arg) == 2 and s.arg[0] == "selected_wmma_root" and isinstance(s.arg[1], UOp)), None)
-    machine_root = carrier.src[0]
-    if marker is not None and machine_root in wmmas: selected_roots[machine_root] = marker.arg[1]
+  if (selected_roots := _selected_wmma_roots(nodes, wmmas)) is None: return None
   heads = list(selected_roots)
   if len(heads) < 2: return None
   drain_by_head:dict[UOp,tuple[UOp,...]] = {}
   for head in heads:
     tail = head
-    while len(next_wmmas := [u for u in uses.get(tail, ()) if u.op is Ops.INS and u.arg == tail.arg]) == 1:
+    while len(next_wmmas := list(dict.fromkeys(u for u in uses.get(tail, ()) if u.op is Ops.INS and u.arg == tail.arg))) == 1:
       tail = next_wmmas[0]
     lane_drains = [u for u in uses.get(tail, ()) if u.op is Ops.INS and u.arg in (AMDOps.V_CVT_I2F, AMDOps.V_CVT_U2F)]
     for alias in (u for u in uses.get(tail, ()) if (u.op is Ops.INS and u.arg is AMDOps.MOV) or u.op is Ops.NOOP):
