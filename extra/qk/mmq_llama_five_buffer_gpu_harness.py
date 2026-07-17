@@ -129,7 +129,10 @@ def run_amd_validation(*, timeout_seconds: float = 300.0,
   child_env = dict(os.environ if env is None else env)
   child_env.update({"DEV": "AMD", "PYTHONPATH": str(ROOT) + os.pathsep + child_env.get("PYTHONPATH", "")})
   try:
-    proc = subprocess.run([python, "-m", __name__, "--worker"], cwd=ROOT, env=child_env,
+    # ``__name__`` is ``__main__`` when this file is invoked with ``-m`` and
+    # cannot be resolved by a child interpreter.  Use the importable module
+    # path explicitly so the isolated worker can always start.
+    proc = subprocess.run([python, "-m", "extra.qk.mmq_llama_five_buffer_gpu_harness", "--worker"], cwd=ROOT, env=child_env,
                           text=True, capture_output=True, timeout=timeout_seconds, check=False)
   except subprocess.TimeoutExpired:
     return _blocked("AMD full-grid compile/dispatch timed out", timeout_seconds=timeout_seconds)
@@ -160,4 +163,3 @@ def main() -> int:
 
 if __name__ == "__main__":
   raise SystemExit(main())
-
