@@ -56,17 +56,50 @@ Two traps recorded so they are not re-entered:
 
 ### Next owning problem: full-grid is NOT gated on spills
 
-`compile_llama_five_buffer_full_kernel(build_llama_five_buffer_full_kernel(128,128,256))` now fails **before**
-register allocation, in SPEC type verification:
+The spill gate was only one of the listed full-grid blockers. §13.1 is still closed, and its remaining blockers are
+graph/spec-shaped: `compile_llama_five_buffer_full_kernel(build_llama_five_buffer_full_kernel(128,128,256))` fails
+**before** register allocation, in SPEC type verification. Verify each `BLOCKER` line independently rather than
+assuming the resource one was the last.
+
+Two of these have now been walked. Reproduce with:
+
+```bash
+env PYTHONHASHSEED=0 REGALLOC_ADDR_REMAT=1 REGALLOC_END_NO_SOURCE_LIVE=1 python3 -c "
+from extra.qk.mmq_llama_five_buffer_full_kernel import (build_llama_five_buffer_full_kernel,
+                                                        compile_llama_five_buffer_full_kernel)
+compile_llama_five_buffer_full_kernel(build_llama_five_buffer_full_kernel(128,128,256))"
+```
+
+**Cleared at `e5efb9707`** — `AFTER(ADD, STORE)`. Do not re-diagnose this:
 
 ```text
-RuntimeError: UOp verification failed at 3842 on Ops.AFTER dtypes.float 2
+UOp verification failed at 3842 on Ops.AFTER dtypes.float 2
   [(Ops.ADD, dtypes.float, None), (Ops.STORE, dtypes.void, None)]
 ```
 
-This is the `clears AFTER(CAST(int), STORE)` entry of the full-grid `BLOCKER` list, not a resource defect. The spill
-gate was only one of the listed full-grid blockers. §13.1 is therefore still closed, and its remaining blockers are
-graph/spec-shaped. Verify each `BLOCKER` line independently rather than assuming the resource one was the last.
+The source sink is legal (7,802 nodes; `AFTER` src0 is only `DEFINE_LOCAL`/`INDEX`/`BITCAST`/`STACK`; zero
+`AFTER(ADD, STORE)`). The illegal node is manufactured *during codegen rewriting*: a bare `STACK(float.vec(8))` is
+spec-legal as written but expands away, dropping its effect order onto the scalar FP32 update. Fix was the no-op
+typed BITCAST carrier the bounded release already documents. **Lesson: the source graph being clean does not mean the
+verified graph is; check post-rewrite before blaming the oracle.**
+
+**Current exact victim** — a different verifier blocker, further down:
+
+```text
+UOp verification failed at 3327 on Ops.GEP dtypes.float 1
+  [(Ops.BITCAST, dtypes.float.vec(8), None)] (0,)
+```
+
+Known so far, so it is not re-derived:
+
+- That node **passes `spec_program` in isolation** (`GEP(BITCAST(STACK(float.vec(8))))`, arg `(0,)` -> `True`). So the
+  real node differs in a field `type_verify`'s message does not print. `shape` is the first suspect: `spec.py:244`
+  (`False if x.dtype.count > 1 and (x.dtype.count,) != x.shape`) is shape-sensitive.
+- Note that rule would fire on the vec(8) `BITCAST`, not the `GEP`, so the reported node may not be the guilty one.
+- Method: build the sink, run `full_rewrite_to_sink` with `SPEC=0`, walk the real post-rewrite nodes, and diff the
+  failing node against the synthetic one that passes. Do not reason from the error string alone.
+- **Do not widen `spec_shared`.** It is shared across backends, and the bounded probe proves the graph-side idiom
+  works. Prefer a graph fix at the producer.
 
 Unchanged and still true: the four 16-subtile AMD tests, two `test_current_prefill_execution_adapter` rows, and
 `test_q4k_wmma_tiled_no_hand_scan_is_clean` fail identically at `412d7998f` and at `5982d83c1`. They are historical,
