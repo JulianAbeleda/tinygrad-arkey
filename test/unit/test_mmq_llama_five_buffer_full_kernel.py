@@ -61,14 +61,32 @@ def test_full_grid_orders_each_wmma_behind_the_preceding_lane_drain():
   kernel = full.build_llama_five_buffer_full_kernel(128, 128, 256)
   nodes = list(kernel.sink.toposort())
   releases = [x for x in nodes if x.op is Ops.BARRIER and isinstance(x.tag, tuple) and
-              x.tag[:1] == ("llama_five_buffer_full_grid_epoch_release",)]
+              x.tag[:1] == ("llama_five_buffer_phase_major_group_release",)]
   wmmas = [x for x in nodes if x.op is Ops.WMMA]
-  # Intra-subtile: each K32 group's first WMMA takes its A/B/C through a movement carrier ordered on the preceding lane
-  # drain.  8 subtiles x 8 groups = 64 group heads, minus the 8 per-subtile chain heads with no prior group == 56.
-  # Cross-subtile: each subtile e>0's chain head is ordered behind subtile e-1's drains == 7 more.  56 + 7 == 63.
+  # Each resident phase has 4 groups x 8 subtiles: 3 guarded intra-subtile group heads and 7 guarded cross-subtile
+  # phase heads. The phase transition is carried by the global release and the next producer/publish, not a WMMA guard.
   guarded = [x for x in wmmas if any(s.op is Ops.AFTER for s in x.src)]
-  assert len(wmmas) == 128 and len(releases) == 56 and len(guarded) == 63
-  assert all(any(r in x.backward_slice for r in releases) for x in guarded[:4])
+  assert len(wmmas) == 128 and len(releases) == 48 and len(guarded) == 2*(3*8+7) == 62
+  assert all(any(r in x.backward_slice for r in releases) for x in guarded[1:4])
+
+
+def test_full_grid_stages_each_q8_phase_once_and_releases_all_phase0_subtiles_before_phase1():
+  nodes = list(full.build_llama_five_buffer_full_kernel(128, 128, 256).sink.toposort())
+  producers = [x for x in nodes if isinstance(x.tag, tuple) and x.tag[:1] == ("hierarchical_record_producer",)]
+  publishes = [x for x in nodes if isinstance(x.tag, tuple) and x.tag[:1] == ("llama_oracle_publish",)]
+  assert [x.tag for x in producers] == [
+    ("hierarchical_record_producer", "A", None),
+    ("hierarchical_record_producer", "B", 0),
+    ("hierarchical_record_producer", "B", 1)]
+  assert [x.tag for x in publishes] == [("llama_oracle_publish", 0), ("llama_oracle_publish", 1)]
+  b_stores = [x for x in nodes if x.op is Ops.STORE and isinstance(x.tag, tuple) and len(x.tag) > 1 and x.tag[1] == "B"]
+  assert len(b_stores) == len({x.tag for x in b_stores}) == 36
+  release = next(x for x in nodes if x.tag == ("llama_five_buffer_phase_major_global_release", 0))
+  assert len(release.src) == 64 and all(x.tag[:1] == ("llama_oracle_float_update",) for x in release.src)
+  phase1_producer = next(x for x in producers if x.tag[-1] == 1)
+  phase1_wmmas = [x for x in nodes if x.op is Ops.WMMA and x.tag[1] >= 4]
+  assert release in phase1_producer.backward_slice
+  assert len(phase1_wmmas) == 64 and all(release in x.backward_slice for x in phase1_wmmas)
 
 
 def _has_tag(node:UOp, prefix:tuple) -> bool:

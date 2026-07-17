@@ -16,7 +16,7 @@ from extra.qk.mmq_llama_five_buffer_graph import (FiveBufferEpochOffsets, LlamaF
   build_llama_five_buffer_graph, five_buffer_parameters)
 from extra.qk.mmq_llama_full_kernel import order_wmma_behind_lane_drain
 from extra.qk.mmq_llama_oracle_epoch import build_llama_oracle_epoch_stage_five_buffer
-from extra.qk.mmq_llama_oracle_recurrence import build_llama_oracle_recurrence
+from extra.qk.mmq_llama_oracle_recurrence import LlamaOracleRecurrenceGraph, build_llama_oracle_recurrence
 from extra.qk.mmq_llama_runtime_contract import LLAMA_SOURCE_COMMIT, SOURCE_ANCHORS
 
 
@@ -61,17 +61,60 @@ class LlamaFiveBufferFullKernel:
       (records*facts.m+m0)*128, (records*facts.m+m0)*4, (records*facts.m+m0)*4)
 
 
-def _accumulator_vectors(values:tuple[UOp, ...], subtile:UOp, chain_head:UOp) -> tuple[UOp, ...]:
-  """Transpose eight scalar WMMA lanes x eight oracle subtiles without copying its arithmetic.
+def _phase_order_replacements(recurrence:LlamaOracleRecurrenceGraph, phase_index:int) -> dict[UOp, UOp]:
+  """Order the four K32 groups while one Q8 phase is resident in LDS."""
+  replacements:dict[UOp, UOp] = {}
+  prior_drain:tuple[UOp, ...]|None = None
+  for group in recurrence.phases[phase_index].groups:
+    first = group.wmmas[0]
+    if prior_drain is not None:
+      drain = tuple(x.substitute(replacements) for x in prior_drain)
+      inputs = tuple(UOp(Ops.BITCAST, x.substitute(replacements).dtype,
+                         (x.substitute(replacements),)).after(*drain) for x in first.src)
+      replacements[first] = first.replace(src=inputs)
+    release = UOp(Ops.BARRIER, dtypes.void,
+                  tuple(x.substitute(replacements) for x in group.update)).replace(
+                    tag=("llama_five_buffer_phase_major_group_release", phase_index, group.ordinal))
+    prior_drain = tuple(group.update) + (release,)
+  return replacements
 
-  The eight subtiles share no integer WMMA node (the subtile index only touches the Q4/A operand), so a legal schedule
-  may issue every subtile's WMMA chain before consuming any subtile's drains, holding 8 subtiles x 8 lanes of C carriers
-  co-live.  order_wmma_behind_lane_drain serializes each K32 group *within* a subtile but cannot see across subtiles
-  (it runs before the subtile substitution).  Order each subtile's chain-head WMMA behind the previous subtile's drains
-  so at most one subtile's drains are live at a time.  The chain head reaches every lane of its subtile, so this one
-  edge serializes the whole subtile transitively.  Strictly increasing element index => acyclic.  Same typed no-op
-  BITCAST movement carrier on the WMMA's A/B/C inputs as the intra-subtile ordering: no arithmetic or rounding change.
-  """
+
+def _instantiate_phase_subtiles(recurrence:LlamaOracleRecurrenceGraph, phase_index:int, publish:UOp,
+                                seeds:tuple[tuple[UOp, ...], ...]|None=None) -> tuple[tuple[UOp, ...], ...]:
+  """Instantiate arithmetic/fragments only; the phase producer and publish stay shared."""
+  phase, subtile = recurrence.phases[phase_index], recurrence.stage.subtile_n
+  order = _phase_order_replacements(recurrence, phase_index)
+  ordered_final = tuple(x.substitute(order) for x in phase.groups[-1].update)
+  results:list[tuple[UOp, ...]] = []
+  prior_drains:tuple[UOp, ...]|None = None
+  for element in range(8):
+    substitutions = {subtile: UOp.const(dtypes.weakint, element), phase.publish: publish}
+    if seeds is not None:
+      substitutions.update({old: new for old, new in zip(phase.groups[0].previous, seeds[element])})
+    lanes = tuple(x.substitute(substitutions) for x in ordered_final)
+    if prior_drains is not None:
+      head = phase.groups[0].wmmas[0].substitute(substitutions)
+      guarded = head.replace(src=tuple(UOp(Ops.BITCAST, s.dtype, (s,)).after(*prior_drains) for s in head.src))
+      lanes = tuple(x.substitute({head: guarded}) for x in lanes)
+    results.append(lanes)
+    prior_drains = lanes
+  return tuple(results)
+
+
+def _phase_major_accumulator_vectors(recurrence:LlamaOracleRecurrenceGraph) -> tuple[UOp, ...]:
+  """Expand subtiles phase-major so each Q8 panel is staged and published exactly once."""
+  phase0 = _instantiate_phase_subtiles(recurrence, 0, recurrence.phases[0].publish)
+  phase0_release = UOp(Ops.BARRIER, dtypes.void, tuple(x for lanes in phase0 for x in lanes)).replace(
+    tag=("llama_five_buffer_phase_major_global_release", 0))
+  phase1_producer = recurrence.phases[1].producer.substitute({recurrence.phases[0].release: phase0_release})
+  phase1_publish = UOp.barrier(UOp.group(recurrence.stage.persistent_producer, phase1_producer)).replace(
+    tag=("llama_oracle_publish", 1))
+  phase1 = _instantiate_phase_subtiles(recurrence, 1, phase1_publish, phase0)
+  return tuple(UOp(Ops.STACK, dtypes.float.vec(8), lanes) for lanes in phase1)
+
+
+def _legacy_accumulator_vectors(values:tuple[UOp, ...], subtile:UOp, chain_head:UOp) -> tuple[UOp, ...]:
+  """Retain the existing multi-epoch fallback while the phase-major prototype targets K256."""
   vectors, prior_drains = [], None
   for element in range(8):
     sub = {subtile: UOp.const(dtypes.weakint, element)}
@@ -104,20 +147,22 @@ def _full_grid_sink(m:int, n:int, k:int) -> UOp:
     previous, final = joined, recurrence
     recurrences.append((epoch, recurrence))
   assert final is not None
-  # The oracle keeps the integer WMMA chain and the eight FP32 lane chains as separate algebraic dependencies, so a
-  # legal schedule may issue every WMMA before consuming any C lane and retain all of their drains.  The bounded probe
-  # already orders each K32 WMMA behind the preceding lane drain; the full-grid seam needs the same edges.  Substitute
-  # before _accumulator_vectors so the edges replicate into all eight subtiles.
-  replacements, _ = order_wmma_behind_lane_drain(tuple(recurrences), "llama_five_buffer_full_grid_epoch_release")
-  previous = tuple(x.substitute(replacements) for x in previous)
-  chain_head = recurrences[0][1].groups[0].wmmas[0]
+  if len(recurrences) == 1:
+    accumulators = _phase_major_accumulator_vectors(final)
+  else:
+    # Multi-epoch phase-major state carry is not implemented yet. Retain the existing exact fallback: order each K32
+    # WMMA behind the preceding lane drain before the subtile substitution, then serialize the concrete subtiles.
+    replacements, _ = order_wmma_behind_lane_drain(tuple(recurrences), "llama_five_buffer_full_grid_epoch_release")
+    previous = tuple(x.substitute(replacements) for x in previous)
+    chain_head = recurrences[0][1].groups[0].wmmas[0]
+    accumulators = _legacy_accumulator_vectors(previous, final.stage.subtile_n, chain_head)
   plan = llama_mmq_candidate_plan()
   desc = WMMAWritebackDescriptor(plan.geometry, plan.tensor_core, dtypes.float, 8,
     # Oracle A rows are Q4/N and B rows are Q8/M, so row-major output[M,N]
     # is col * N + row in the tensor-core coordinate vocabulary.
     WMMAWritebackLayout("col", "row", n), None, True)
   writeback = build_wmma_writeback(WMMAWritebackProof.prove(desc), destination=output,
-    accumulators=_accumulator_vectors(previous, final.stage.subtile_n, chain_head), wave_m=wave_m, wave_n=wave_n, lane=lane)
+    accumulators=accumulators, wave_m=wave_m, wave_n=wave_n, lane=lane)
   # Exact aligned tiles need no predicates: grid origins are folded into the row-major destination base.
   tile_base = block_m*128*n + block_n*128
   prior = None
