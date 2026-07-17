@@ -3,8 +3,8 @@ import pytest
 from types import SimpleNamespace
 from tinygrad.renderer.isa.amd import _frag_base, FRAG_BASE, FRAG_TOP, AMDISARenderer
 from tinygrad.renderer.isa.amd import AMDOps, isel_typed_wait, lower_inst
-from tinygrad.renderer.amd.dsl import s, v
-from tinygrad.runtime.autogen.amd.rdna3.ins import global_load_u8, v_mov_b32_e32
+from tinygrad.renderer.amd.dsl import s, v, NULL
+from tinygrad.runtime.autogen.amd.rdna3.ins import global_load_u8, global_store_b32, s_endpgm, v_mov_b32_e32
 from tinygrad.codegen.opt.compiler_policies import WaitCount
 from tinygrad.dtype import dtypes
 from tinygrad.uop.ops import Ops, UOp
@@ -102,6 +102,44 @@ class TestWaitcntSimm16(unittest.TestCase):
     loads = [UOp(Ops.INS, arg=global_load_u8(vdst=v[128+i], addr=v[128+i], saddr=s[6:7])) for i in range(63)]
     out = AMDISARenderer._insert_waitcnt(AMDISARenderer, loads, targeted=True)
     self.assertFalse(any(u.arg.op.name == "S_WAITCNT" for u in out))
+
+  @staticmethod
+  def _store_then_endpgm():
+    return [UOp(Ops.INS, arg=global_store_b32(addr=v[128], data=v[129], saddr=s[6:7], offset=0)),
+            UOp(Ops.INS, arg=s_endpgm(simm16=0))]
+
+  def test_global_store_uses_vscnt_drain_before_endpgm(self):
+    renderer = object.__new__(AMDISARenderer)
+    for targeted in (False, True):
+      with self.subTest(targeted=targeted):
+        out = renderer._insert_waitcnt(self._store_then_endpgm(), targeted=targeted)
+        self.assertEqual([u.arg.op.name for u in out],
+                         ["GLOBAL_STORE_B32", "S_WAITCNT", "S_WAITCNT_VSCNT", "S_ENDPGM"])
+        self.assertEqual(out[1].arg.simm16, AMDISARenderer._waitcnt_simm16(0, 0, 0))
+        self.assertEqual((out[2].arg.sdst, out[2].arg.simm16), (NULL, 0))
+
+  def test_vscnt_zero_encoding_survives_store_end_schedule(self):
+    from tinygrad.runtime.autogen.amd.rdna3.ins import s_waitcnt_vscnt
+    # GFX11 SOPK S_WAITCNT_VSCNT null,0 is 0xbc7c0000 in little-endian byte order.
+    self.assertEqual(s_waitcnt_vscnt(sdst=NULL, simm16=0).to_bytes(), bytes.fromhex("00007cbc"))
+    renderer = object.__new__(AMDISARenderer)
+    stream = self._store_then_endpgm()
+    scheduled = renderer._schedule(stream)
+    self.assertLess([u.arg.op.name for u in scheduled].index("GLOBAL_STORE_B32"),
+                    [u.arg.op.name for u in scheduled].index("S_ENDPGM"))
+    final = renderer._insert_waitcnt(scheduled, targeted=True)
+    self.assertEqual([u.arg.op.name for u in final][-3:], ["S_WAITCNT", "S_WAITCNT_VSCNT", "S_ENDPGM"])
+
+  def test_lds_barrier_does_not_drain_unrelated_vscnt(self):
+    from tinygrad.runtime.autogen.amd.rdna3.ins import ds_store_b32, s_barrier
+    stream = [self._store_then_endpgm()[0],
+              UOp(Ops.INS, arg=ds_store_b32(addr=v[130], data0=v[131], offset0=0)),
+              UOp(Ops.INS, arg=s_barrier(simm16=0))]
+    out = AMDISARenderer._insert_waitcnt(AMDISARenderer, stream, targeted=True)
+    self.assertEqual([u.arg.op.name for u in out],
+                     ["GLOBAL_STORE_B32", "DS_STORE_B32", "S_WAITCNT", "S_BARRIER"])
+    self.assertEqual((out[2].arg.simm16 >> 10) & 0x3f, 63)
+    self.assertEqual((out[2].arg.simm16 >> 4) & 0x3f, 0)
 
 
 if __name__ == "__main__":

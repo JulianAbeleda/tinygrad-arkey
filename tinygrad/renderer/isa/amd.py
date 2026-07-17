@@ -27,7 +27,7 @@ from tinygrad.renderer.amd.dsl import s as _S, v as _V, NULL, VCC, EXEC, Reg, Fi
 from tinygrad.runtime.autogen.amd.rdna3.ins import (
   s_load_b64, s_load_b32, global_load_b32, global_load_b64, global_load_b128, global_store_b32,
   v_add_f32_e32, v_mul_f32_e32, v_sub_f32_e32, v_mul_f16_e32,
-  v_lshlrev_b32_e32, v_mov_b32_e32, v_mul_lo_u32, v_add_nc_u32_e32, v_bfe_u32, s_waitcnt, s_endpgm,
+  v_lshlrev_b32_e32, v_mov_b32_e32, v_mul_lo_u32, v_add_nc_u32_e32, v_bfe_u32, s_waitcnt, s_waitcnt_vscnt, s_endpgm,
   s_mov_b32, s_add_i32, s_cmp_lt_i32, ds_load_u8, ds_load_b32, ds_store_b8, ds_store_b32, ds_store_b64, ds_load_b128, ds_store_b128, s_barrier,
   ds_bpermute_b32, v_dot2_f32_f16,
   # Phase G: full block-tile ALU/control surface
@@ -2479,7 +2479,7 @@ def lower_inst(x:UOp):
         **_store_owner_meta_from_ins(x),
       })
       stores.append(UOp(Ops.INS, arg=inst))
-    return (stores[-1], stores)    # vmcnt drain before endpgm inserted by _insert_waitcnt
+    return (stores[-1], stores)    # VSCNT store drain before endpgm inserted by _insert_waitcnt
   return None
 
 # ---- counted-loop control flow (Phase B). Labels are (kind, counter_index) tuples; resolved to PC-relative simm16
@@ -2809,6 +2809,13 @@ class AMDISARenderer(ISARenderer):
       _proof_record_inst("waitcnt", "WAITCNT", wait.arg, {"simm16": simm16, "vmcnt": vm, "lgkmcnt": lgkm,
         "expcnt": exp, "reason": "targeted_drain"})
       out.append(wait)
+      # GFX11 vector stores retire through VSCNT, not the VMCNT field in s_waitcnt.  A vmcnt(0) at endpgm is
+      # therefore insufficient to publish the kernel's output stores.  The store flag is deliberately drained only
+      # at a full VM drain (branch/endpgm); LDS-only barrier drains leave unrelated global stores outstanding.
+      if vm == 0 and vm_store:
+        vscnt_wait = UOp(Ops.INS, arg=s_waitcnt_vscnt(sdst=NULL, simm16=0))
+        _proof_record_inst("waitcnt", "WAITCNT", vscnt_wait.arg, {"vscnt": 0, "reason": "targeted_store_drain"})
+        out.append(vscnt_wait)
       if vm == 0: pend_vm.clear(); vm_store = False
       if lgkm == 0: pend_lgkm.clear(); lgkm_store = False
     def _target_wait(uses:set[int], coalesce_vm:bool=False):
@@ -2858,6 +2865,10 @@ class AMDISARenderer(ISARenderer):
       _proof_record_inst("waitcnt", "WAITCNT", wait.arg, {"simm16": simm16, "vmcnt": 0, "lgkmcnt": 0,
         "expcnt": 0, "reason": "default_drain"})
       out.append(wait)
+      if vm_store:
+        vscnt_wait = UOp(Ops.INS, arg=s_waitcnt_vscnt(sdst=NULL, simm16=0))
+        _proof_record_inst("waitcnt", "WAITCNT", vscnt_wait.arg, {"vscnt": 0, "reason": "default_store_drain"})
+        out.append(vscnt_wait)
       pend_vm.clear(); pend_lgkm.clear(); vm_store = lgkm_store = False
     for u in uops:
       a = u.arg
