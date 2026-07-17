@@ -272,7 +272,7 @@ def _q4k_q8_1_direct_emitter_schedule() -> dict[str,Any]:
       "accumulator_ownership":"int32_group_dot_fp32_scale_min_correction"},
     "epilogue":{"lane_mapping":"wmma_accumulator_scalar_f32","vector_width":1},
     "tail_policy":"aligned_only_no_tails",
-    "compile_environment":{"REGALLOC_END_NO_SOURCE_LIVE":1,"REGALLOC_ADDR_REMAT":1},
+    "compile_environment":{"REGALLOC_ADDR_REMAT":1},
     "numerical_mode":"signed_i8_dot_int32_fp32_scale_min_correction"}
 
 def derive_q4k_q8_1_five_buffer_candidate(payload:dict[str,Any]) -> FullKernelCandidateSetEntry:

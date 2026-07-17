@@ -291,7 +291,7 @@ def test_q4k_q8_1_five_buffer_candidate_cpu_roundtrip_and_context():
   assert schedule["transport"] == "direct_global" and schedule["lds_bytes"] == 0
   assert schedule["pipeline"] == {"buffer_count":0,"stage_count":0}
   assert schedule["tail_policy"] == "aligned_only_no_tails"
-  assert schedule["compile_environment"] == {"REGALLOC_END_NO_SOURCE_LIVE":1,"REGALLOC_ADDR_REMAT":1}
+  assert schedule["compile_environment"] == {"REGALLOC_ADDR_REMAT":1}
   assert schedule["operands"]["q8_ds4_values"] == {"source":"global","alignment":16,"signed":True}
   assert schedule["wmma"]["instruction_family"] == "wmma_i32_16x16x16_iu8"
   assert schedule["wmma"]["instruction_family"] == admission.capability.instruction_family == admission.plan.instruction_family

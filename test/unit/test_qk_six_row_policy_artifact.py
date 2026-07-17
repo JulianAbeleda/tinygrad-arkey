@@ -25,10 +25,10 @@ def _q6_evidence(inventory):
 def test_current_repository_reports_the_exact_six_missing_evidence_items():
   missing = missing_qualification_evidence(_inventory())
   assert missing == (
-    "Q4_K:attn_kv:25a3cb0145bac1306508eed778eec41eb72c9a77729c981f73bf58199d7e64e6:five_buffer_role_gate",
-    "Q4_K:attn_qo:513ee40319c03b5e0f4d8a239a115c4a3efca23431ccb26c98ede6c2c63efc4c:five_buffer_role_gate",
-    "Q4_K:ffn_down:db5e2872456f952745681815e9f51f766b2ed31f6e6796969de28490fe035721:five_buffer_role_gate",
-    "Q4_K:ffn_gate_up:ef78eefac3d436e794868a40877aaf829e12b443ef8ba191608eb2ec7cb636e2:five_buffer_role_gate",
+    "Q4_K:attn_kv:2bdee937a1d23c3ee747ce2a756bafd4c035478839d7eee326710a4fdcba7f76:five_buffer_role_gate",
+    "Q4_K:attn_qo:771e33f40453c6903ed69ab6b5e8f7b894c5c1d40d3405db8742b546a67b4e58:five_buffer_role_gate",
+    "Q4_K:ffn_down:931073f16c568dcb2c5435625bb660c947c0c4c08a9f1bc1ccaf5df2bb03f9e4:five_buffer_role_gate",
+    "Q4_K:ffn_gate_up:3e367ee04b0aa5db66ecaad085ec9f5ea414a56b8161b406cdefb125378356eb:five_buffer_role_gate",
     "Q6_K:attn_kv:63fd66828fe31c4752e916c33baddb3c88d6d42aa34e036d380ddb1ef8c50137:direct_packed_qualification",
     "Q6_K:ffn_down:811e68be02b3ab8a0f3cd710ee69d7bb7710c6ee4c5e93330bd84f190b0ec176:direct_packed_qualification")
   with pytest.raises(MissingQualificationEvidence) as exc: build_six_row_policy_artifact(_inventory())
