@@ -149,7 +149,13 @@ def wmma_fragment_loads(geometry:KernelTileGeometry, role:str, *, tc, element_by
 
 
 def wmma_output_owners(geometry:KernelTileGeometry, *, tc) -> tuple[WMMAOutputOwner, ...]:
-  """Enumerate RDNA3 output ownership for every wave and its 2-D WMMA subtile grid."""
+  """Enumerate logical A-row/B-column ownership for every RDNA3 WMMA output.
+
+  The interpreter's native c_map tuple is (B coordinate, A coordinate).  The
+  latter varies across the eight per-thread accumulator elements for llama's
+  J-major tile_C; naming those tuple entries row/col silently transposes the
+  source-level operand ownership while still covering a square tile exactly.
+  """
   validate_rdna3_wmma_descriptor(tc)
   if geometry.wave_size != 32: raise ValueError("RDNA3 output mapping requires wave32")
   subtiles_m = geometry.tile[0] // (geometry.waves[0] * 16)
@@ -163,9 +169,9 @@ def wmma_output_owners(geometry:KernelTileGeometry, *, tc) -> tuple[WMMAOutputOw
     for subtile_m in range(subtiles_m):
       for subtile_n in range(subtiles_n):
         for element in range(8):
-          local_row, local_col = _rdna3_wmma_output_coord(lane, element)
-          row = (wave_m * subtiles_m + subtile_m) * 16 + local_row
-          col = (wave_n * subtiles_n + subtile_n) * 16 + local_col
+          local_b, local_a = _rdna3_wmma_output_coord(lane, element)
+          row = (wave_m * subtiles_m + subtile_m) * 16 + local_a
+          col = (wave_n * subtiles_n + subtile_n) * 16 + local_b
           owners.append(WMMAOutputOwner(thread, wave_m, wave_n, subtile_m, subtile_n, element, row, col))
   return tuple(owners)
 

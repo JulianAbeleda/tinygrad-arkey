@@ -157,10 +157,11 @@ def build_wmma_writeback(proof:WMMAWritebackProof, *, destination:UOp, accumulat
     for subtile_n in range(sn):
       acc = accumulators[subtile_m*sn + subtile_n]
       for element in range(8):
-        lr, lc = rdna3_wmma_output_coord(0, element, tc=desc.tc)
-        # lane%16 and lane//16 are the lane-dependent portions of the same authoritative map.
-        row = (wave_m*sm + subtile_m)*16 + lane % 16 + lr
-        col = (wave_n*sn + subtile_n)*16 + lane // 16 + lc
+        local_b, local_a = rdna3_wmma_output_coord(0, element, tc=desc.tc)
+        # The native c_map is (B coordinate, A coordinate).  In the generic
+        # tensor-core vocabulary row is A and col is B.
+        row = (wave_m*sm + subtile_m)*16 + lane // 16 + local_a
+        col = (wave_n*sn + subtile_n)*16 + lane % 16 + local_b
         destination_row = row if mapping is None else mapping.m_offset + row
         destination_col = col if mapping is None else mapping.n_offset + col
         valid = None if mapping is None else (destination_row < mapping.m_extent) & (destination_col < mapping.n_extent)

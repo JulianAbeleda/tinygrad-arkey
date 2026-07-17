@@ -66,6 +66,53 @@ def test_exact_k256_source_pinned_recurrence_and_dependencies(monkeypatch):
   assert prove_llama_oracle_recurrence(graph).passed
 
 
+def test_q4_dm_follows_each_j_major_c_element_and_q8_ds_stays_lane_owned(monkeypatch):
+  graph = _graph(monkeypatch)
+  stage = graph.stage
+  persistent, overwriteable = stage.descriptor.plan.persistent.name, stage.descriptor.plan.overwriteable.name
+  region_names = {x.role:x.region for x in stage.regions}
+  q4, q8 = stage.geometry.lds_region(region_names[persistent]), stage.geometry.lds_region(region_names[overwriteable])
+  assert q4.records is not None and q8.records is not None
+  dm_field = q4.records.component(next(x.field for x in stage.groups[0].sidecars if x.role == persistent))
+  ds_field = q8.records.component(next(x.field for x in stage.groups[0].sidecars if x.role == overwriteable))
+  wave_m, wave_n, lane = stage.threads.wave_m, stage.threads.wave_n, stage.threads.lane
+  subtile_m, subtile_n = stage.subtile_m, stage.subtile_n
+  sm = stage.geometry.tile[0] // (stage.geometry.waves[0]*16)
+  sn = stage.geometry.tile[1] // (stage.geometry.waves[1]*16)
+
+  # Every wave/lane/l combination must load Q4 metadata from tile_C::get_i(l),
+  # not from the fragment row (lane%16).
+  rec = graph.groups[0]
+  for wm in range(stage.geometry.waves[0]):
+    for ln in range(stage.geometry.wave_size):
+      replacements = {wave_m:UOp.const(dtypes.weakint, wm), wave_n:UOp.const(dtypes.weakint, 0),
+                      lane:UOp.const(dtypes.weakint, ln), subtile_m:UOp.const(dtypes.weakint, 0)}
+      for element, dm in enumerate(rec.dm):
+        address = dm.src[0].src[0].src[1].substitute(replacements).simplify()
+        row = (wm*sm)*16 + ln//16 + 2*element
+        expected = q4.base + dm_field.offset_bytes + row*q4.records.stride_bytes
+        assert address.op is Ops.CONST and address.arg == expected
+
+  # Group offsets advance one half2 while row ownership remains unchanged.
+  for rec in graph.groups:
+    offset = rec.k*dm_field.size_bytes//stage.descriptor.outer_k
+    address = rec.dm[0].src[0].src[0].src[1].substitute({
+      wave_m:UOp.const(dtypes.weakint, 0), wave_n:UOp.const(dtypes.weakint, 0),
+      lane:UOp.const(dtypes.weakint, 0), subtile_m:UOp.const(dtypes.weakint, 0)}).simplify()
+    assert address.arg == q4.base + dm_field.offset_bytes + offset
+
+  # Q8 ds is one shared half2 per group/subtile/lane and must not acquire an
+  # output-element dependency from the Q4 correction.
+  assert all(len(rec.dm) == 8 and len({id(x) for x in rec.dm}) == 8 for rec in graph.groups)
+  for st in range(sn):
+    for ln in range(stage.geometry.wave_size):
+      address = graph.groups[0].ds.src[0].src[0].src[1].substitute({
+        wave_m:UOp.const(dtypes.weakint, 0), wave_n:UOp.const(dtypes.weakint, 0),
+        lane:UOp.const(dtypes.weakint, ln), subtile_n:UOp.const(dtypes.weakint, st)}).simplify()
+      expected = q8.base + ds_field.offset_bytes + (st*16+ln%16)*q8.records.stride_bytes
+      assert address.op is Ops.CONST and address.arg == expected
+
+
 def test_fragment_group_substep_and_sidecar_mutations_fail(monkeypatch):
   graph = _graph(monkeypatch)
   bad_fragment = _replace_group(graph, 0, lambda x: replace(x, fragments=((x.fragments[0][1], x.fragments[0][0]), x.fragments[1])))

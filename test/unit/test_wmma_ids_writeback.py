@@ -43,11 +43,41 @@ def test_tile128x128_ids_writeback_has_exact_owner_proof_and_ready_loads():
                              wave_m=axes[0], wave_n=axes[1], lane=axes[2], ids=ids)
   assert len(out.stores) == 64
   loads = [u for u in out.sink.toposort() if u.op is Ops.LOAD]
-  assert len(loads) == 64
+  # IDs select B/col, which is constant across a thread's eight native C
+  # elements.  One IDs load is shared by those eight drains per subtile.
+  assert len(loads) == 8
   assert all(ids.ready in u.backward_slice_with_self for u in loads)
   assert all(len(load.src) == 1 for load in loads)
   assert all(len(store.src) == 2 for store in out.stores)
   assert all(s.src[1].dtype == dtypes.float for s in out.stores)
+
+
+def test_identity_writeback_addresses_match_row_major_j_major_ownership_exhaustively():
+  geometry = _geometry()
+  desc = WMMAWritebackDescriptor(geometry, _tc(), dtypes.float, 8,
+    WMMAWritebackLayout("col", "row", 128), None)
+  proof = WMMAWritebackProof.prove(desc)
+  dst = UOp.placeholder((16384,), dtypes.float, 720)
+  accumulators = tuple(UOp.const(dtypes.float.vec(8), float(i)) for i in range(8))
+  wave_m = UOp.range(8, 721, AxisType.LOCAL)
+  wave_n = UOp.range(1, 722, AxisType.LOCAL)
+  lane_axis = UOp.range(32, 723, AxisType.LOCAL)
+  stores = build_wmma_writeback(proof, destination=dst, accumulators=accumulators,
+    wave_m=wave_m, wave_n=wave_n, lane=lane_axis).stores
+  assert len(stores) == 64
+  by_tag = {store.tag[1:4]:store.src[0].src[1] for store in stores}
+  actual = set()
+  for wave in range(8):
+    for lane in range(32):
+      replacements = {wave_m:UOp.const(dtypes.weakint, wave), wave_n:UOp.const(dtypes.weakint, 0),
+                      lane_axis:UOp.const(dtypes.weakint, lane)}
+      for subtile_n in range(8):
+        for element in range(8):
+          address = by_tag[(0, subtile_n, element)].substitute(replacements).simplify()
+          expected = (subtile_n*16+lane%16)*128 + wave*16+lane//16+2*element
+          assert address.op is Ops.CONST and address.arg == expected
+          actual.add(address.arg)
+  assert actual == set(range(128*128))
 
 
 def test_layout_selects_identified_axis_without_q4_vocabulary():

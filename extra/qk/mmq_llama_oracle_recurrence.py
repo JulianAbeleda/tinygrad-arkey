@@ -28,7 +28,7 @@ class LlamaOracleGroupRecurrence:
   group: int
   k: int
   fragments: tuple[tuple[UOp, UOp], tuple[UOp, UOp]]
-  dm: UOp
+  dm: tuple[UOp, ...]
   ds: UOp
   zero: UOp
   wmmas: tuple[UOp, UOp]
@@ -98,19 +98,43 @@ def _fragment_at(stage:HierarchicalPackedRecordStage, publish:UOp, group:Hierarc
              tag=("llama_oracle_fragment", role, group.phase, group.group, offset))
 
 
-def _sidecars(stage:HierarchicalPackedRecordStage, publish:UOp, group:HierarchicalPackedRecordGroup) -> tuple[UOp, UOp]:
+def _sidecars(stage:HierarchicalPackedRecordStage, publish:UOp,
+              group:HierarchicalPackedRecordGroup) -> tuple[tuple[UOp, ...], UOp]:
   persistent, overwriteable = stage.descriptor.plan.persistent.name, stage.descriptor.plan.overwriteable.name
   ordered = stage.allocation.after(publish)
   dm_side = [x for x in group.sidecars if x.role == persistent and x.value.dtype == dtypes.half.vec(2)]
   ds_side = [x for x in group.sidecars if x.role == overwriteable and x.value.dtype == dtypes.half.vec(2)]
-  def load_half2(sidecar) -> UOp:
+  if len(dm_side) != 1 or len(ds_side) != 1:
+    raise ValueError("each K32 group requires exactly one persistent dm field and one overwriteable ds half2 sidecar")
+
+  def load_half2(role:str, field:str, address:UOp, output_element:int|None=None) -> UOp:
     # Scalar loads stacked into the ABI's half2 avoid an unshaped vector LOAD,
     # which is not a legal full-program UOp.
-    return UOp(Ops.STACK, dtypes.half.vec(2), tuple(ordered.index(sidecar.byte_address+i*2, dtype=dtypes.half).replace(
-      tag=("llama_oracle_sidecar", sidecar.role, sidecar.field, group.phase, group.group, i)).load() for i in range(2)))
-  dm, ds = [load_half2(x) for x in dm_side], [load_half2(x) for x in ds_side]
-  if len(dm) != 1 or len(ds) != 1: raise ValueError("each K32 group requires exactly one persistent dm half2 and one overwriteable ds half2 sidecar")
-  return dm[0], ds[0]
+    return UOp(Ops.STACK, dtypes.half.vec(2), tuple(ordered.index(address+i*2, dtype=dtypes.half).replace(
+      tag=("llama_oracle_sidecar", role, field, group.phase, group.group, output_element, i)).load() for i in range(2)))
+
+  # mmq.cuh indexes tile_x.dm at tile_C::get_i(l): each accumulator
+  # element has a distinct Q4 row.  The generic stage sidecar is fragment-row
+  # owned (lane%16), so derive the J-major C/A row directly from the typed
+  # persistent record layout.  Q8 ds remains B-row/lane owned and constant
+  # across the eight accumulator elements.
+  region_name = next(x.region for x in stage.regions if x.role == persistent)
+  region = stage.geometry.lds_region(region_name)
+  if region.records is None: raise ValueError("persistent sidecar region lacks a record layout")
+  field = region.records.component(dm_side[0].field)
+  group_offset_num = group.persistent_k * field.size_bytes
+  if group_offset_num % stage.descriptor.outer_k:
+    raise ValueError("persistent dm group offset does not divide outer K")
+  group_offset = group_offset_num // stage.descriptor.outer_k
+  subtiles_m, rem = divmod(stage.geometry.tile[0], stage.geometry.waves[0]*16)
+  if rem or subtiles_m <= 0: raise ValueError("persistent dm rows do not divide wave ownership")
+  dms = []
+  for element in range(8):
+    row = (stage.threads.wave_m*subtiles_m+stage.subtile_m)*16 + stage.threads.lane//16 + element*2
+    address = UOp.const(dtypes.weakint, region.base+field.offset_bytes+group_offset)+row*region.records.stride_bytes
+    dms.append(load_half2(persistent, dm_side[0].field, address, element))
+  ds = load_half2(overwriteable, ds_side[0].field, ds_side[0].byte_address)
+  return tuple(dms), ds
 
 
 def _strip_value_ordering(value: UOp) -> UOp:
@@ -181,10 +205,15 @@ def build_llama_oracle_recurrence(stage:HierarchicalPackedRecordStage) -> LlamaO
       second = UOp(Ops.WMMA, dtypes.int.vec(8), (a[1], b[1], first), arg,
                    tag=("llama_oracle_wmma", ordinal, 1, source_group.persistent_k+16))
       # mmq.cuh vec_dot_q8_1_q8_1_mma: sum += dm.x*ds.x*C + dm.y*ds.y.
-      scale = dm.src[0].cast(dtypes.float) * ds.src[0].cast(dtypes.float)
-      bias = dm.src[1].cast(dtypes.float) * ds.src[1].cast(dtypes.float)
-      update = tuple((previous[i] + scale*second.gep(i).cast(dtypes.float) + bias).replace(
-        tag=("llama_oracle_float_update", ordinal, i)) for i in range(8))
+      update = []
+      for i in range(8):
+        scale = dm[i].src[0].cast(dtypes.float) * ds.src[0].cast(dtypes.float)
+        bias = dm[i].src[1].cast(dtypes.float) * ds.src[1].cast(dtypes.float)
+        # Preserve llama's source recurrence and rounding order:
+        # (previous + scale*C) + bias.
+        update.append((previous[i] + scale*second.gep(i).cast(dtypes.float) + bias).replace(
+          tag=("llama_oracle_float_update", ordinal, i)))
+      update = tuple(update)
       records.append(LlamaOracleGroupRecurrence(ordinal, phase_index, source_group.group, source_group.persistent_k,
                                                 ((a[0], b[0]), (a[1], b[1])), dm, ds, zero, (first, second), previous, update))
       previous, ordinal = update, ordinal+1
@@ -234,13 +263,19 @@ def prove_llama_oracle_recurrence(graph:LlamaOracleRecurrenceGraph) -> LlamaOrac
         if node.src[:2] != rec.fragments[si]: errors.append(f"group {ordinal}: fragment wiring mismatch")
         if any(phase.publish not in fragment.backward_slice for fragment in rec.fragments[si]):
           errors.append(f"group {ordinal}: fragments do not consume rewired publish")
-      if phase.publish not in rec.dm.backward_slice or phase.publish not in rec.ds.backward_slice:
+      if not isinstance(rec.dm, tuple) or len(rec.dm) != 8 or any(x.dtype != dtypes.half.vec(2) for x in rec.dm):
+        errors.append(f"group {ordinal}: requires one persistent dm half2 per C element")
+        continue
+      if any(phase.publish not in dm.backward_slice for dm in rec.dm) or phase.publish not in rec.ds.backward_slice:
         errors.append(f"group {ordinal}: sidecars do not consume rewired publish")
       if first.src[2] is not rec.zero or second.src[2] is not first: errors.append(f"group {ordinal}: WMMA chain mismatch")
-      scale = rec.dm.src[0].cast(dtypes.float) * rec.ds.src[0].cast(dtypes.float)
-      bias = rec.dm.src[1].cast(dtypes.float) * rec.ds.src[1].cast(dtypes.float)
-      expected_update = tuple((rec.previous[i] + scale*second.gep(i).cast(dtypes.float) + bias).replace(
-        tag=("llama_oracle_float_update", ordinal, i)) for i in range(8))
+      expected_update = []
+      for i in range(8):
+        scale = rec.dm[i].src[0].cast(dtypes.float) * rec.ds.src[0].cast(dtypes.float)
+        bias = rec.dm[i].src[1].cast(dtypes.float) * rec.ds.src[1].cast(dtypes.float)
+        expected_update.append((rec.previous[i] + scale*second.gep(i).cast(dtypes.float) + bias).replace(
+          tag=("llama_oracle_float_update", ordinal, i)))
+      expected_update = tuple(expected_update)
       if rec.update != expected_update: errors.append(f"group {ordinal}: float recurrence algebra mismatch")
       expected_previous = rec.update
     if phase.groups:

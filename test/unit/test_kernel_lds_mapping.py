@@ -116,6 +116,16 @@ def test_output_ownership_covers_128_square_exactly_once():
   assert {(o.subtile_m, o.subtile_n) for o in owners} == {(m, n) for m in range(2) for n in range(4)}
 
 
+def test_output_ownership_preserves_j_major_a_row_b_col_relationship_exhaustively():
+  geometry = _geometry()
+  subtiles_m = geometry.tile[0] // (geometry.waves[0] * 16)
+  subtiles_n = geometry.tile[1] // (geometry.waves[1] * 16)
+  for owner in wmma_output_owners(geometry, tc=_tc()):
+    _wave_m, _wave_n, lane = semantic_wave_coords(geometry, owner.thread)
+    assert owner.row == (owner.wave_m*subtiles_m+owner.subtile_m)*16 + lane//16 + 2*owner.element
+    assert owner.col == (owner.wave_n*subtiles_n+owner.subtile_n)*16 + lane%16
+
+
 def test_logical_rdna3_formulas_match_core_tensor_descriptor_and_interpreter_map():
   tc = _tc()
   validate_rdna3_wmma_descriptor(tc)
