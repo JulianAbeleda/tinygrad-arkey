@@ -82,6 +82,24 @@ class TestPressureSchedule(unittest.TestCase):
     positions = {u:i for i,u in enumerate(scheduled)}
     self.assertLess(max(positions[u] for u in (*p0[3], *p0[4])), positions[p1[2]])
 
+  def test_finishes_oldest_fanout_before_newer_metadata_generation(self):
+    """Release an older group's lanes before following a newer producer chain."""
+    physical = Register("r", 0)
+    gate = self._ins("group0_ready")
+    metadata_seed = self._ins("metadata_seed", reg=self._wide_v("metadata_seed", physical))
+    inner = tuple(self._ins(f"inner0_{i}", (gate,), self._v(f"inner0_{i}", physical)) for i in range(8))
+    outer = tuple(self._ins(f"outer0_{i}", (x,)) for i,x in enumerate(inner))
+    kickoff = self._ins("group1_kickoff", (gate, metadata_seed))
+    metadata = []
+    previous = kickoff
+    for i in range(8):
+      previous = self._ins(f"metadata1_{i}", (previous,), self._v(f"metadata1_{i}", physical))
+      metadata.append(previous)
+
+    scheduled = pressure_schedule([gate, metadata_seed, kickoff, *metadata, *inner, *outer])
+    positions = {u:i for i,u in enumerate(scheduled)}
+    self.assertLess(max(positions[u] for u in outer), min(positions[u] for u in metadata))
+
   def test_fixed_wide_lease_is_opened_at_its_ready_consumer(self):
     physical = Register("r", 0)
     lease = self._ins("lease", reg=FixedRegisterUse("fixed", 32, _span=RegisterSpan(8, 8)))

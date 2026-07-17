@@ -69,8 +69,8 @@ def _pressure_schedule_block(block:list[UOp]) -> list[UOp]:
     # A physical lease should become visible only when it completes a consumer;
     # otherwise its already-owned register range is needlessly opened early.
     lease_deferred = -lease_width(u) if not unlocked else 0
-    return (lease_deferred, ready_generation[u], net, released, -added,
-            follow_net, follow_release, -follow_added, len(unlocked), -pos[u])
+    return (lease_deferred, net, released, -added, follow_net, follow_release,
+            ready_generation[u], -follow_added, len(unlocked), -pos[u])
 
   while ready:
     u = max(ready, key=score)
