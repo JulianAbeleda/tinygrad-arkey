@@ -155,8 +155,31 @@ def _artifact_evidence(program, metadata_parser) -> tuple[Any, Any, dict[str, An
     "binary_nbytes": len(binary) if isinstance(binary, bytes) else None,
   }
   if isinstance(binary, bytes):
-    try: evidence["resources"] = metadata_parser(binary)
-    except BaseException as exc: evidence["resources_error"] = f"{type(exc).__name__}: {exc}"
+    try:
+      evidence["resources"] = metadata_parser(binary)
+    except BaseException as exc:
+      evidence["resources_error"] = f"{type(exc).__name__}: {exc}"
+      # llvm-readelf/objdump do not accept tinygrad's deliberately minimal ELF,
+      # but the native loader and descriptor parser are the runtime authority.
+      try:
+        from tinygrad.renderer.amd.elf import descriptor_register_counts, kernel_descriptor_from_elf
+        from tinygrad.runtime.autogen import amdgpu_kd
+        desc = kernel_descriptor_from_elf(binary)
+        vgpr, sgpr = descriptor_register_counts(desc, is_cdna=False)
+        wave32 = 1 << amdgpu_kd.KERNEL_CODE_PROPERTY_ENABLE_WAVEFRONT_SIZE32_SHIFT
+        evidence["resources"] = {
+          "authority": "native_elf_descriptor", "vgpr": int(vgpr), "sgpr": sgpr,
+          "lds_bytes": int(desc.group_segment_fixed_size),
+          "scratch_bytes": int(desc.private_segment_fixed_size),
+          "kernarg_bytes": int(desc.kernarg_size),
+          "wavefront_size": 32 if int(desc.kernel_code_properties) & wave32 else 64,
+          "kernel_code_entry_byte_offset": int(desc.kernel_code_entry_byte_offset),
+          "compute_pgm_rsrc1": int(desc.compute_pgm_rsrc1),
+          "compute_pgm_rsrc2": int(desc.compute_pgm_rsrc2),
+          "compute_pgm_rsrc3": int(desc.compute_pgm_rsrc3),
+        }
+      except BaseException as fallback_exc:
+        evidence["resources_fallback_error"] = f"{type(fallback_exc).__name__}: {fallback_exc}"
   return binary, source, evidence
 
 
