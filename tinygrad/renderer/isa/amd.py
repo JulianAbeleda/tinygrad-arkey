@@ -267,6 +267,21 @@ def _ab_base(ctx:IselContext, key, nregs:int=8) -> int|None:
     d[key] = base; ctx._abfrag_top = base + nregs
   return d[key]
 
+def _shared_high_ab_regs(ctx:IselContext) -> tuple[int, ...]:
+  """Physical high A/B lease used by serialized, non-resident WMMA chains."""
+  if _progressive_c_assignment(ctx) is None or _resident_ab_enabled(ctx) or _ab_reserved_regs(ctx): return ()
+  def uses_low_resident_ab(u:UOp) -> bool:
+    c2 = u.src[2]
+    return c2.op in (Ops.STACK, Ops.NOOP) and c2.src and c2.src[0].op is Ops.LOAD and \
+      c2.src[0].src[0].op is Ops.INDEX and \
+      (dr := _reg_base(c2.src[0].src[0].src[0])).op is Ops.DEFINE_REG and dr.dtype.addrspace == AddrSpace.REG
+  wmmas = [u for u in ctx.uses if u.op is Ops.WMMA and not uses_low_resident_ab(u) and
+           not (_register_stage_fragment_role(u.src[0]) == "A" and _register_stage_fragment_role(u.src[1]) == "B")]
+  if not wmmas: return ()
+  width = max(_wmma_operand_regs(u.src[0]) for u in wmmas) + max(_wmma_operand_regs(u.src[1]) for u in wmmas)
+  if FRAG_BASE + width > FRAG_TOP: raise NotImplementedError("AMD:ISA shared high A/B lease exceeds the fragment window")
+  return tuple(range(FRAG_BASE, FRAG_BASE + width))
+
 def _vpool(ctx:IselContext):
   # Reserve v0 for packed workitem ids.
   # B0.L5: when a WMMA is present, ALSO exclude the A/B fragment window [FRAG_BASE, FRAG_TOP) so regalloc virtuals never
@@ -287,7 +302,10 @@ def _vpool(ctx:IselContext):
     # Keep them available for short scalar scratch, especially the post-loop store epilogue, so it doesn't have to reuse
     # the high v200+ address/load scratch region immediately after the WMMA loop.
     pool = VBASE[lo:WMMA_ACC_BASE] + tail
-    return tuple(r for r in pool if r.index not in stage_reserved)
+    # Progressive C reuse still uses a serialized shared A/B pair in the high window. It is not generic scratch merely
+    # because C moved low: every b128 fragment load overwrites the complete physical A/B run.
+    high_ab_reserved = _shared_high_ab_regs(ctx)
+    return tuple(r for r in pool if r.index not in stage_reserved and r.index not in high_ab_reserved)
   return tuple(r for r in VBASE[lo:FRAG_BASE] if all(not (base <= r.index < base+dreg.ptrdtype.size) for dreg,base in _fixed_fp32_accumulators(ctx).items()))
 
 class AMDOps(FastEnum):

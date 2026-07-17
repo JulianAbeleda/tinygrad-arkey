@@ -7,7 +7,8 @@ from tinygrad.codegen.opt import Opt, OptOps
 from tinygrad.helpers import Target, getenv
 from tinygrad.renderer.isa import IselContext, Register
 from tinygrad.renderer.isa.amd import (
-  AMDISARenderer, FRAG_BASE, FRAG_TOP, WMMA_ACC_BASE, _vpool, _acc_top, AMDOps, _wmma_chain_prev, _chain_epilogue_stores, decompose_lds_index, isel_index, isel_store, lower_inst)
+  AMDISARenderer, FRAG_BASE, FRAG_TOP, WMMA_ACC_BASE, _vpool, _acc_top, AMDOps, _wmma_chain_prev,
+  _chain_epilogue_stores, decompose_lds_index, isel_index, isel_store, lower_inst)
 from tinygrad.codegen import full_rewrite_to_sink, to_program, to_program_cache
 from tinygrad.codegen.late.devectorizer import load_store_folding
 from tinygrad.renderer.amd.dsl import Reg
@@ -23,6 +24,18 @@ class TestAMDISAWmmaCarrierNormalization(unittest.TestCase):
     carrier = UOp(Ops.STACK, dtypes.float.vec(8), tuple(base.gep((i,)) for i in range(8)))
     self.assertIs(_wmma_chain_prev(carrier), base)
     self.assertIsNone(_wmma_chain_prev(carrier.replace(src=carrier.src[:-1] + (base.gep((0,)),))))
+
+  def test_low_c_pool_does_not_reclaim_shared_i8_ab_lease(self):
+    a = UOp(Ops.NOOP, dtypes.char.vec(16), tuple(UOp.const(dtypes.char, 0) for _ in range(16)))
+    b = UOp(Ops.NOOP, dtypes.char.vec(16), tuple(UOp.const(dtypes.char, 0) for _ in range(16)))
+    c = UOp(Ops.NOOP, dtypes.int32.vec(8))
+    wmma = UOp(Ops.WMMA, dtypes.int32.vec(8), (a, b, c))
+    ctx = IselContext(UOp.sink(wmma))
+    ctx._ncruns = 2
+    ctx._progressive_c_assignment_cache = ({wmma: 0}, 1)
+    indices = {r.index for r in _vpool(ctx)}
+    self.assertTrue(set(range(200, 208)).isdisjoint(indices))
+    self.assertIn(208, indices)
 
 
 class TestAMDISAEpilogueStoreChaining(unittest.TestCase):
