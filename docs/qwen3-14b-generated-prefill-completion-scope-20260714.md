@@ -149,6 +149,30 @@ cooperative MMQ atoms remain proof substrates only; they are not silently select
 alternative-path agents are currently unavailable because the agent usage budget is exhausted, so no promotion is
 claimed from those agents.
 
+### 2026-07-16 source-pinned llama-oracle checkpoint
+
+The speculative cooperative descriptor has been removed. The current Phase 3 implementation authority is the
+source-pinned llama MMQ structure adapted to the ordinary five-buffer ABI: a `128x128x256` tile, eight waves, 57,856
+bytes of LDS, persistent decoded Q4 data, two K128 Q8 phases, and exact half2 metadata recurrence. The split producer,
+bounded graph, full-grid ownership/writeback seam, and structural correctness tests are connected without a model-name
+or VRAM branch.
+
+The legacy five-buffer route remains a correctness reference rather than a performance candidate. Fresh exact timing
+on Q4 `attn_kv` attributes approximately 0.088 ms to Q8 production and 5.916 ms of a 6.007 ms total to MMQ, so the
+measured tax is inside the contraction kernel. All four Q4 roles are output-correct and report zero final scratch/spill,
+but remain far below the role budgets.
+
+The source-pinned generated oracle does not yet emit a spill-free final binary. Deterministic pre-regalloc evidence
+identifies the first remaining allocation victim as a `DS_LOAD_B128` held from UOp 2289 to its fixed-register
+`V_WMMA_I8` consumer at UOp 2531. Candidate occupancy reaches all 255 slots immediately before that consumer; allowing
+ordinary spilling would create 406 spills and a 1,624-byte stack, so compilation correctly fails closed. Replaying the
+shared-memory load in regalloc is unsafe. The active Phase 3 repair boundary is therefore semantics-preserving
+DS-load-to-WMMA scheduling/lowering that shortens this live range while retaining barrier and fragment-release order.
+
+The next acceptance gate is unchanged: the complete source-pinned bounded oracle must emit with zero scratch/spills,
+then the full-grid kernel must pass correctness and whole-primitive timing. Small proxy kernels or a later first spill
+are diagnostic progress only and cannot close Phase 3.
+
 ## Frozen measurement authority
 
 The current comparator pair is historical but reproducible and must remain immutable until a controlled refresh:
