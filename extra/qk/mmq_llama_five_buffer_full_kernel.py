@@ -14,7 +14,6 @@ from extra.qk.kernel_writeback import (WMMAWritebackDescriptor, WMMAWritebackLay
 from extra.qk.mmq_llama_candidate_plan import llama_mmq_candidate_plan
 from extra.qk.mmq_llama_five_buffer_graph import (FiveBufferEpochOffsets, LlamaFiveBufferGraph,
   build_llama_five_buffer_graph, five_buffer_parameters)
-from extra.qk.mmq_llama_full_kernel import order_wmma_behind_lane_drain
 from extra.qk.mmq_llama_oracle_epoch import build_llama_oracle_epoch_stage_five_buffer
 from extra.qk.mmq_llama_oracle_recurrence import LlamaOracleRecurrenceGraph, build_llama_oracle_recurrence
 from extra.qk.mmq_llama_runtime_contract import LLAMA_SOURCE_COMMIT, SOURCE_ANCHORS
@@ -61,7 +60,7 @@ class LlamaFiveBufferFullKernel:
       (records*facts.m+m0)*128, (records*facts.m+m0)*4, (records*facts.m+m0)*4)
 
 
-def _phase_order_replacements(recurrence:LlamaOracleRecurrenceGraph, phase_index:int) -> dict[UOp, UOp]:
+def _phase_order_replacements(recurrence:LlamaOracleRecurrenceGraph, epoch_index:int, phase_index:int) -> dict[UOp, UOp]:
   """Order the four K32 groups while one Q8 phase is resident in LDS."""
   replacements:dict[UOp, UOp] = {}
   prior_drain:tuple[UOp, ...]|None = None
@@ -74,16 +73,16 @@ def _phase_order_replacements(recurrence:LlamaOracleRecurrenceGraph, phase_index
       replacements[first] = first.replace(src=inputs)
     release = UOp(Ops.BARRIER, dtypes.void,
                   tuple(x.substitute(replacements) for x in group.update)).replace(
-                    tag=("llama_five_buffer_phase_major_group_release", phase_index, group.ordinal))
+                    tag=("llama_five_buffer_phase_major_group_release", epoch_index, phase_index, group.ordinal))
     prior_drain = tuple(group.update) + (release,)
   return replacements
 
 
-def _instantiate_phase_subtiles(recurrence:LlamaOracleRecurrenceGraph, phase_index:int, publish:UOp,
+def _instantiate_phase_subtiles(recurrence:LlamaOracleRecurrenceGraph, epoch_index:int, phase_index:int, publish:UOp,
                                 seeds:tuple[tuple[UOp, ...], ...]|None=None) -> tuple[tuple[UOp, ...], ...]:
   """Instantiate arithmetic/fragments only; the phase producer and publish stay shared."""
   phase, subtile = recurrence.phases[phase_index], recurrence.stage.subtile_n
-  order = _phase_order_replacements(recurrence, phase_index)
+  order = _phase_order_replacements(recurrence, epoch_index, phase_index)
   ordered_final = tuple(x.substitute(order) for x in phase.groups[-1].update)
   results:list[tuple[UOp, ...]] = []
   prior_drains:tuple[UOp, ...]|None = None
@@ -91,41 +90,61 @@ def _instantiate_phase_subtiles(recurrence:LlamaOracleRecurrenceGraph, phase_ind
     substitutions = {subtile: UOp.const(dtypes.weakint, element), phase.publish: publish}
     if seeds is not None:
       substitutions.update({old: new for old, new in zip(phase.groups[0].previous, seeds[element])})
-    lanes = tuple(x.substitute(substitutions) for x in ordered_final)
+    # Carried states contain the preceding epoch's interned recurrence leaves. Single-pass substitution replaces each
+    # current-epoch seed as an opaque state and never walks back into that already-instantiated graph.
+    lanes = tuple(x.substitute(substitutions, walk=True) for x in ordered_final)
     if prior_drains is not None:
-      head = phase.groups[0].wmmas[0].substitute(substitutions)
+      head = phase.groups[0].wmmas[0].substitute(substitutions, walk=True)
       guarded = head.replace(src=tuple(UOp(Ops.BITCAST, s.dtype, (s,)).after(*prior_drains) for s in head.src))
-      lanes = tuple(x.substitute({head: guarded}) for x in lanes)
+      lanes = tuple(x.substitute({head: guarded}, walk=True) for x in lanes)
     results.append(lanes)
     prior_drains = lanes
   return tuple(results)
 
 
-def _phase_major_accumulator_vectors(recurrence:LlamaOracleRecurrenceGraph) -> tuple[UOp, ...]:
-  """Expand subtiles phase-major so each Q8 panel is staged and published exactly once."""
-  phase0 = _instantiate_phase_subtiles(recurrence, 0, recurrence.phases[0].publish)
+def _producer_after_release(producer:UOp, release:UOp) -> UOp:
+  """Order the first LDS write after a collective release; producer-local store order carries the rest."""
+  if producer.op is not Ops.GROUP or not producer.src or any(x.op is not Ops.STORE for x in producer.src):
+    raise ValueError("phase-major staging requires a GROUP of LDS stores")
+  first = producer.src[0]
+  if first.src[0].op is not Ops.INDEX: raise ValueError("phase-major staging store lacks an INDEX address")
+  address = first.src[0]
+  guarded_address = address.replace(src=(address.src[0].after(release),)+address.src[1:])
+  guarded_first = first.replace(src=(guarded_address,)+first.src[1:])
+  return producer.substitute({first: guarded_first}, walk=True)
+
+
+def _phase_major_epoch(recurrence:LlamaOracleRecurrenceGraph, epoch_index:int,
+                       seeds:tuple[tuple[UOp, ...], ...]|None, prior_epoch_release:UOp|None
+                       ) -> tuple[tuple[tuple[UOp, ...], ...], UOp]:
+  """Carry exact FP32 states through one K256 epoch while staging each Q8 phase once."""
+  persistent, phase0_producer = recurrence.stage.persistent_producer, recurrence.phases[0].producer
+  if prior_epoch_release is not None:
+    persistent = _producer_after_release(persistent, prior_epoch_release)
+    phase0_producer = _producer_after_release(phase0_producer, prior_epoch_release)
+  phase0_publish = UOp.barrier(UOp.group(persistent, phase0_producer)).replace(
+    tag=("llama_five_buffer_phase_major_publish", epoch_index, 0))
+  phase0 = _instantiate_phase_subtiles(recurrence, epoch_index, 0, phase0_publish, seeds)
   phase0_release = UOp(Ops.BARRIER, dtypes.void, tuple(x for lanes in phase0 for x in lanes)).replace(
-    tag=("llama_five_buffer_phase_major_global_release", 0))
-  phase1_producer = recurrence.phases[1].producer.substitute({recurrence.phases[0].release: phase0_release})
-  phase1_publish = UOp.barrier(UOp.group(recurrence.stage.persistent_producer, phase1_producer)).replace(
-    tag=("llama_oracle_publish", 1))
-  phase1 = _instantiate_phase_subtiles(recurrence, 1, phase1_publish, phase0)
-  return tuple(UOp(Ops.STACK, dtypes.float.vec(8), lanes) for lanes in phase1)
+    tag=("llama_five_buffer_phase_major_collective_release", epoch_index, 0))
+  phase1_producer = recurrence.phases[1].producer.substitute(
+    {recurrence.phases[0].release: phase0_release}, walk=True)
+  phase1_publish = UOp.barrier(UOp.group(persistent, phase1_producer)).replace(
+    tag=("llama_five_buffer_phase_major_publish", epoch_index, 1))
+  phase1 = _instantiate_phase_subtiles(recurrence, epoch_index, 1, phase1_publish, phase0)
+  epoch_release = UOp(Ops.BARRIER, dtypes.void, tuple(x for lanes in phase1 for x in lanes)).replace(
+    tag=("llama_five_buffer_phase_major_collective_release", epoch_index, 1))
+  return phase1, epoch_release
 
 
-def _legacy_accumulator_vectors(values:tuple[UOp, ...], subtile:UOp, chain_head:UOp) -> tuple[UOp, ...]:
-  """Retain the existing multi-epoch fallback while the phase-major prototype targets K256."""
-  vectors, prior_drains = [], None
-  for element in range(8):
-    sub = {subtile: UOp.const(dtypes.weakint, element)}
-    lanes = tuple(lane.substitute(sub) for lane in values)
-    if prior_drains is not None:
-      head = chain_head.substitute(sub)
-      guarded = head.replace(src=tuple(UOp(Ops.BITCAST, s.dtype, (s,)).after(*prior_drains) for s in head.src))
-      lanes = tuple(lane.substitute({head: guarded}) for lane in lanes)
-    vectors.append(UOp(Ops.STACK, dtypes.float.vec(8), lanes))
-    prior_drains = lanes
-  return tuple(vectors)
+def _phase_major_accumulator_vectors(recurrences:tuple[LlamaOracleRecurrenceGraph, ...]) -> tuple[UOp, ...]:
+  """Carry 8x8 accumulator states exactly across K256 epochs without algebraic epoch joins."""
+  states:tuple[tuple[UOp, ...], ...]|None = None
+  prior_release = None
+  for epoch_index, recurrence in enumerate(recurrences):
+    states, prior_release = _phase_major_epoch(recurrence, epoch_index, states, prior_release)
+  if states is None: raise ValueError("phase-major writeback requires at least one K256 epoch")
+  return tuple(UOp(Ops.STACK, dtypes.float.vec(8), lanes) for lanes in states)
 
 
 def _full_grid_sink(m:int, n:int, k:int) -> UOp:
@@ -133,29 +152,15 @@ def _full_grid_sink(m:int, n:int, k:int) -> UOp:
   output, q4, values, scales, sums = tuple(UOp.param(x.slot, x.dtype.ptr(x.size)) for x in params)
   block_n, block_m, local = UOp.special(n//128, "gidx0"), UOp.special(m//128, "gidx1"), UOp.special(256, "lidx0")
   wave_m, wave_n, lane = local//32, UOp.const(dtypes.weakint, 0), local%32
-  previous = tuple(UOp.const(dtypes.float, 0.0) for _ in range(8))
-  final, recurrences = None, []
+  recurrences = []
   for epoch in range(k//256):
     records = epoch*2
     recurrence = build_llama_oracle_recurrence(build_llama_oracle_epoch_stage_five_buffer(q4, values, scales, sums,
       q4_word_offset=(block_n*128*(k//256)+epoch)*36,
       values_offset=(records*m+block_m*128)*128,
       scales_offset=(records*m+block_m*128)*4, sums_offset=(records*m+block_m*128)*4))
-    exported = recurrence.export_accumulators()
-    joined = tuple(previous[i] + (exported[i]-recurrence.initial[i]) for i in range(8))
-    if final is not None: joined = tuple(x.after(final.consumer_seam) for x in joined)
-    previous, final = joined, recurrence
-    recurrences.append((epoch, recurrence))
-  assert final is not None
-  if len(recurrences) == 1:
-    accumulators = _phase_major_accumulator_vectors(final)
-  else:
-    # Multi-epoch phase-major state carry is not implemented yet. Retain the existing exact fallback: order each K32
-    # WMMA behind the preceding lane drain before the subtile substitution, then serialize the concrete subtiles.
-    replacements, _ = order_wmma_behind_lane_drain(tuple(recurrences), "llama_five_buffer_full_grid_epoch_release")
-    previous = tuple(x.substitute(replacements) for x in previous)
-    chain_head = recurrences[0][1].groups[0].wmmas[0]
-    accumulators = _legacy_accumulator_vectors(previous, final.stage.subtile_n, chain_head)
+    recurrences.append(recurrence)
+  accumulators = _phase_major_accumulator_vectors(tuple(recurrences))
   plan = llama_mmq_candidate_plan()
   desc = WMMAWritebackDescriptor(plan.geometry, plan.tensor_core, dtypes.float, 8,
     # Oracle A rows are Q4/N and B rows are Q8/M, so row-major output[M,N]

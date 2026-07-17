@@ -73,15 +73,18 @@ def test_full_grid_orders_each_wmma_behind_the_preceding_lane_drain():
 def test_full_grid_stages_each_q8_phase_once_and_releases_all_phase0_subtiles_before_phase1():
   nodes = list(full.build_llama_five_buffer_full_kernel(128, 128, 256).sink.toposort())
   producers = [x for x in nodes if isinstance(x.tag, tuple) and x.tag[:1] == ("hierarchical_record_producer",)]
-  publishes = [x for x in nodes if isinstance(x.tag, tuple) and x.tag[:1] == ("llama_oracle_publish",)]
+  publishes = [x for x in nodes if isinstance(x.tag, tuple) and
+               x.tag[:1] == ("llama_five_buffer_phase_major_publish",)]
   assert [x.tag for x in producers] == [
     ("hierarchical_record_producer", "A", None),
     ("hierarchical_record_producer", "B", 0),
     ("hierarchical_record_producer", "B", 1)]
-  assert [x.tag for x in publishes] == [("llama_oracle_publish", 0), ("llama_oracle_publish", 1)]
+  assert [x.tag for x in publishes] == [
+    ("llama_five_buffer_phase_major_publish", 0, 0),
+    ("llama_five_buffer_phase_major_publish", 0, 1)]
   b_stores = [x for x in nodes if x.op is Ops.STORE and isinstance(x.tag, tuple) and len(x.tag) > 1 and x.tag[1] == "B"]
   assert len(b_stores) == len({x.tag for x in b_stores}) == 36
-  release = next(x for x in nodes if x.tag == ("llama_five_buffer_phase_major_global_release", 0))
+  release = next(x for x in nodes if x.tag == ("llama_five_buffer_phase_major_collective_release", 0, 0))
   assert len(release.src) == 64 and all(x.tag[:1] == ("llama_oracle_float_update",) for x in release.src)
   phase1_producer = next(x for x in producers if x.tag[-1] == 1)
   phase1_wmmas = [x for x in nodes if x.op is Ops.WMMA and x.tag[1] >= 4]
@@ -89,39 +92,30 @@ def test_full_grid_stages_each_q8_phase_once_and_releases_all_phase0_subtiles_be
   assert len(phase1_wmmas) == 64 and all(release in x.backward_slice for x in phase1_wmmas)
 
 
-def _has_tag(node:UOp, prefix:tuple) -> bool:
-  return isinstance(node.tag, tuple) and node.tag[:len(prefix)] == prefix
-
-
-def test_full_grid_q8_phase1_overwrite_waits_for_every_phase0_fragment_read():
-  """The Q8 LDS window is shared by all eight subtiles.  Phase 1 may overwrite it only after every phase-0 fragment
-  read, unless that read consumes an explicit phase-0 restage published after the overwrite."""
-  nodes = full.build_llama_five_buffer_full_kernel(128, 128, 256).sink.toposort()
-  phase0_reads = [x for x in nodes if x.op is Ops.LOAD and x.src and
-                  _has_tag(x.src[0], ("llama_oracle_fragment_load", "B", 0))]
-  phase1_overwrites = [x for x in nodes if x.op is Ops.GROUP and
-                       _has_tag(x, ("hierarchical_record_producer", "B", 1))]
-  assert len(phase0_reads) == 8*4*2
-  assert phase1_overwrites
-
-  unsafe = 0
-  for read in phase0_reads:
-    phase0_publishes = [x for x in read.backward_slice if _has_tag(x, ("llama_oracle_publish", 0))]
-    for overwrite in phase1_overwrites:
-      read_before_overwrite = read in overwrite.backward_slice
-      restaged_after_overwrite = any(overwrite in publish.backward_slice for publish in phase0_publishes)
-      unsafe += not (read_before_overwrite or restaged_after_overwrite)
-  assert unsafe == 0, (
-    f"{unsafe} phase-0 Q8 fragment-read/phase-1 overwrite pairs are unordered and have no intervening phase-0 restage")
-
-
-def test_full_grid_stages_each_shared_q8_phase_once_per_epoch():
-  """Subtile expansion consumes one shared Q8 LDS stage; it must not clone either phase's global-to-LDS producer."""
-  nodes = full.build_llama_five_buffer_full_kernel(128, 128, 256).sink.toposort()
-  producers = [[x for x in nodes if x.op is Ops.GROUP and
-                _has_tag(x, ("hierarchical_record_producer", "B", phase))] for phase in range(2)]
-  counts = tuple(map(len, producers))
-  assert counts == (1, 1), f"shared Q8 stage producer counts are {counts}, expected one producer per phase"
+def test_k512_carries_exact_states_and_orders_next_epoch_staging_after_collective_release():
+  nodes = list(full.build_llama_five_buffer_full_kernel(128, 128, 512).sink.toposort())
+  wmmas = [x for x in nodes if x.op is Ops.WMMA]
+  guarded = [x for x in wmmas if any(s.op is Ops.AFTER for s in x.src)]
+  publishes = {x.tag:x for x in nodes if isinstance(x.tag, tuple) and
+               x.tag[:1] == ("llama_five_buffer_phase_major_publish",)}
+  releases = {x.tag:x for x in nodes if isinstance(x.tag, tuple) and
+              x.tag[:1] == ("llama_five_buffer_phase_major_collective_release",)}
+  assert len(wmmas) == 256 and len(guarded) == 2*2*(3*8+7) == 124
+  assert set(publishes) == {
+    ("llama_five_buffer_phase_major_publish", epoch, phase) for epoch in range(2) for phase in range(2)}
+  assert set(releases) == {
+    ("llama_five_buffer_phase_major_collective_release", 0, 0),
+    ("llama_five_buffer_phase_major_collective_release", 0, 1),
+    ("llama_five_buffer_phase_major_collective_release", 1, 0)}
+  assert all(len(release.src) == 64 for release in releases.values())
+  epoch0_final = releases[("llama_five_buffer_phase_major_collective_release", 0, 1)]
+  epoch1_phase0 = releases[("llama_five_buffer_phase_major_collective_release", 1, 0)]
+  # State carry is lane-for-lane dataflow, not an algebraic epoch delta added after two independent recurrences.
+  assert all(prior in current.backward_slice for prior, current in zip(epoch0_final.src, epoch1_phase0.src))
+  epoch1_publish0 = publishes[("llama_five_buffer_phase_major_publish", 1, 0)]
+  assert epoch1_publish0.src[0].op is Ops.GROUP
+  assert len(epoch1_publish0.src[0].src) == 2
+  assert all(epoch0_final in producer.backward_slice for producer in epoch1_publish0.src[0].src)
 
 
 @pytest.mark.parametrize("shape", [(127, 128, 256), (128, 129, 256), (128, 128, 255)])
