@@ -1,5 +1,33 @@
 # Qwen3-14B generated-prefill Claude handoff
 
+## 0.5 Current audit status 2026-07-17 (head `23eaf693b`)
+
+Read this section before the historical status sections below. The repository head is now
+`23eaf693b` (`[amd] reserve serialized high fragment leases`), five commits ahead of
+`origin/master`; the only untracked path at this audit is the in-progress
+`extra/qk/mmq_llama_five_buffer_gpu_harness.py`.
+
+The corrected phase-major graph and allocator lease regression coverage are structurally healthy:
+
+- `PYTHONPATH=. PYTHONHASHSEED=0 pytest -q test/unit/test_mmq_llama_five_buffer_full_kernel.py`: **13 passed**.
+- The focused rematerialization/end-liveness/span suites: **23 passed**.
+- `test/unit/test_amd_isa_wmma.py`: **36 passed, 4 failed**. The four 16-subtile multi-output failures are the
+  same spill-free-gate failures reproduced on the pre-change `423f6ff83` baseline; they are historical and not a
+  regression from `23eaf693b`.
+
+The full K=256 `to_program` path now **emits successfully** under the matched environment
+(`PYTHONHASHSEED=0 REGALLOC_ADDR_REMAT=1 REGALLOC_END_NO_SOURCE_LIVE=1`). Graph/codegen selection reports
+`10,101` UOps and a pre-allocation peak of `312` live virtuals at UOp `5938`; the full allocator run then reports
+`REGALLOC_SPILLS: count=0 stack_size=0`, and `compile_llama_five_buffer_full_kernel` returns
+`emitted=True program=True blocker=''`. The CPU-only compile takes several minutes in the long register-selection
+pass, so this is a valid zero-spill emission result but not a GPU correctness or timing result. The `23eaf693b`
+change reserves the serialized high A/B fragment lease and has a focused unit test; the end-to-end run above is the
+evidence for the full-grid gate.
+
+K=512 exact FP32 state-carry and phase-major lifecycle tests pass structurally. Its actual AMD emission remains
+blocked by the backend VGPR/fragment-lease capacity gate. No shape has been executed on a GPU, numerically compared
+with llama, or performance-measured. Those remain the next acceptance gates.
+
 Date: 2026-07-16  
 Repository: `/home/ubuntu/tinygrad-arkey`  
 Branch: `master`  
@@ -879,4 +907,3 @@ Phase 6, and Phase 7 as described above, then stop before autoscan.
 7. Implement the smallest AMD-local, ownership-derived ordering repair.
 8. Run focused tests, then one exact oracle run.
 9. Keep the patch only if it is semantically safe and materially reduces the 112 residual spills; continue until zero.
-
