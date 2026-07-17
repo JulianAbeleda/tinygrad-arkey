@@ -100,12 +100,14 @@ def _worker() -> dict[str, Any]:
   scales = Tensor(scales_np.reshape(-1), device="AMD").realize()
   sums = Tensor(sums_np.reshape(-1), device="AMD").realize()
   buffers = (out.uop.buffer, q4.uop.buffer, values.uop.buffer, scales.uop.buffer, sums.uop.buffer)
+  # ProgramInfo.globals stores integer indices into the call buffer tuple
+  # (the same convention used by engine.realize.exec_kernel), not PARAM UOps.
   globals_ = tuple(program.arg.globals)
-  if len(globals_) != 5 or any(getattr(g.arg, "slot", None) not in range(5) for g in globals_):
+  if len(globals_) != 5 or any(g not in range(5) for g in globals_):
     return _blocked("AMD PROGRAM global ABI is not the expected five slots",
-                    globals=[getattr(g.arg, "slot", None) for g in globals_])
+                    globals=list(globals_))
   runtime = get_runtime("AMD", program)
-  runtime(*(buffers[g.arg.slot].get_buf("AMD") for g in globals_),
+  runtime(*(buffers[g].get_buf("AMD") for g in globals_),
           global_size=program.arg.global_size, local_size=program.arg.local_size,
           vals=program.arg.vals({}), wait=True)
   got = out.numpy().reshape(m, n)
