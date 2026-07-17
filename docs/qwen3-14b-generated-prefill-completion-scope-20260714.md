@@ -162,12 +162,20 @@ on Q4 `attn_kv` attributes approximately 0.088 ms to Q8 production and 5.916 ms 
 measured tax is inside the contraction kernel. All four Q4 roles are output-correct and report zero final scratch/spill,
 but remain far below the role budgets.
 
-The source-pinned generated oracle does not yet emit a spill-free final binary. Deterministic pre-regalloc evidence
-identifies the first remaining allocation victim as a `DS_LOAD_B128` held from UOp 2289 to its fixed-register
-`V_WMMA_I8` consumer at UOp 2531. Candidate occupancy reaches all 255 slots immediately before that consumer; allowing
-ordinary spilling would create 406 spills and a 1,624-byte stack, so compilation correctly fails closed. Replaying the
-shared-memory load in regalloc is unsafe. The active Phase 3 repair boundary is therefore semantics-preserving
-DS-load-to-WMMA scheduling/lowering that shortens this live range while retaining barrier and fragment-release order.
+The source-pinned generated oracle does not yet emit a spill-free final binary. Generic late-scheduler and liveness
+repairs have localized constrained loads, prioritized immediate release, and removed false `END` body liveness. At the
+current revision the first request is the base carrier of an A `DS_LOAD_B128` fragment constrained to `v200..v203`; its
+companion B fragment is constrained to `v204..v207`, and both feed the same `V_WMMA_I8` consumer. Seven other A/B pairs
+using those exact leases are already live across the same boundary. The next repair is therefore to schedule each
+complete A/B load pair immediately before its matching WMMA, after the preceding pair has been consumed.
+
+The reported 255 candidate-slot count is the union of registers that live virtuals are allowed to occupy, not an
+additive hardware-VGPR requirement. Ordinary one-register values advertise most of the pool. The actionable evidence
+is the assigned constrained-run overlap: multiple four-register A/B leases are open simultaneously even though the
+machine requires only one A pair, one B pair, and the in-place eight-register C/D fragment at each WMMA. Replaying LDS
+loads in regalloc or permitting scratch remains unsafe. Metadata-carrier removal, atomic eight-register WMMA result
+spans, and a vec8 recurrence bundle were tested in isolation and rejected or reverted because none proved lower
+physical pressure without regressions.
 
 The next acceptance gate is unchanged: the complete source-pinned bounded oracle must emit with zero scratch/spills,
 then the full-grid kernel must pass correctness and whole-primitive timing. Small proxy kernels or a later first spill
