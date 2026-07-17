@@ -214,13 +214,29 @@ def split_load_store(ctx:Renderer|None, ls:UOp, idx:UOp):
 
   # split based on the fold lengths
   global_offset = 0
+  # Packed LDS stages use a byte-addressed LOCAL arena (uchar pointer), while
+  # the value being split is expressed in its scalar dtype.  Advancing a half
+  # lane therefore advances two bytes, not one.  Typed pointers already use
+  # their element units, so keep this correction narrowly scoped to byte LOCAL
+  # storage.
+  elem_bytes = (ls.src[1].dtype.scalar().itemsize if ls.op is Ops.STORE else ls.dtype.scalar().itemsize)
+  logical_count = ls.src[1].dtype.count if ls.op is Ops.STORE else ls.dtype.count
+  # The affected producer fields are exactly half2 metadata records.  Keep
+  # larger fragment carriers on their existing packed paths; scalarizing them
+  # here would needlessly multiply the full WMMA kernel.
+  byte_local = buf.addrspace == AddrSpace.LOCAL and buf.dtype.base.itemsize == 1 and elem_bytes > 1 and logical_count == 2
   ret = []
   buf_size = buf.ptrdtype.size if isinstance(buf.dtype, PtrDType) and buf.ptrdtype.size != -1 else buf.max_numel()
   while global_offset < sz:
     # with 1 at the end of the lengths list, this will always hit
     for fold_length in lengths:
       if global_offset+fold_length > sz: continue
-      chunk_offset = offset + global_offset
+      # A byte-backed pointer cannot represent a typed multi-element pointer
+      # cast without changing the carrier width as well.  Scalarize these
+      # mixed-width LOCAL stores; the byte stride correction above then gives
+      # each scalar lane its true address.
+      if byte_local and fold_length > 1: continue
+      chunk_offset = offset + global_offset * elem_bytes if byte_local else offset + global_offset
       if fold_length > 1 and (chunk_offset.vmin < 0 or chunk_offset.vmax + fold_length > buf_size): continue
       lidx = buf.index(chunk_offset.valid(mask), ptr=True)
       if fold_length > 1: lidx = lidx.cast(buf.ptrdtype.base.vec(fold_length).ptr(size=buf_size, addrspace=buf.addrspace))

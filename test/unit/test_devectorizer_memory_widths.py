@@ -64,3 +64,18 @@ def test_generic_vector_chunks_never_cross_buffer_bounds():
   rewritten = split_load_store(_context(), load, load.src[0])
   assert rewritten is not None
   assert all(u.dtype.count == 1 for u in rewritten.toposort() if u.op is Ops.LOAD)
+
+
+def test_byte_backed_local_half_vector_uses_byte_stride_per_lane():
+  # Packed LDS records are allocated as a uchar arena but their metadata
+  # fields are half2.  Splitting the vector must advance by two bytes for the
+  # second lane (the arena index is already a byte offset).
+  buf = UOp.placeholder((1024,), dtypes.uint8, 9, addrspace=AddrSpace.LOCAL)
+  idx = buf.index(UOp.const(dtypes.weakint, 512), dtype=dtypes.half.vec(2))
+  value = UOp(Ops.STACK, dtypes.half.vec(2), (UOp.const(dtypes.half, 1), UOp.const(dtypes.half, 2)))
+  store = idx.store(value)
+  rewritten = split_load_store(_context(), store, store.src[0])
+  stores = [u for u in rewritten.toposort() if u.op is Ops.STORE]
+  assert len(stores) == 2
+  offsets = [s.src[0].src[1].get_idx().src[1].arg for s in stores]
+  assert offsets == [0, 2]
