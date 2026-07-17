@@ -77,8 +77,16 @@ def build_llama_oracle_epoch_stage_five_buffer(q4_words: UOp, values: UOp, scale
   zero = UOp.const(dtypes.weakint, 0)
   templates = (build_q4_k_record_template("A", q4_words, row_a, k_a, zero),
                build_split_q8_ds4_record_template("B", values, scales, sums, row_b, k_b, zero))
-  threads = PrecontractThreadAxes(UOp.range(8, 1804, AxisType.LOCAL), UOp.range(1, 1805, AxisType.LOCAL),
-                                  UOp.range(32, -1, AxisType.WARP))
+  # The generated full-grid kernel has one real 256-thread workgroup.  Keep
+  # the source-pinned dense oracle above range-based, but bind this five-buffer
+  # seam to the hardware local ID so every producer and WMMA fragment is
+  # genuinely lane/wave owned.  A bare AxisType.WARP range is only a serial
+  # loop in a one-workgroup kernel and would duplicate the complete stage per
+  # thread.
+  local = UOp.special(geometry.threads, "lidx0")
+  linear_wave = local // geometry.wave_size
+  threads = PrecontractThreadAxes(linear_wave // geometry.waves[1], linear_wave % geometry.waves[1],
+                                  local % geometry.wave_size)
   subtile_m, subtile_n = UOp.range(1, 1806, AxisType.UPCAST), UOp.range(8, 1807, AxisType.UPCAST)
   allocation = UOp.placeholder((geometry.lds_bytes,), dtypes.uint8, 1808, addrspace=AddrSpace.LOCAL)
   descriptor = HierarchicalPackedRecordStageDescriptor(plan.lifecycle, 256, 128, 32)

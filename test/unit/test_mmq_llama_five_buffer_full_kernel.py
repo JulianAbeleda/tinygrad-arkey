@@ -2,7 +2,7 @@ import inspect
 import pytest
 
 from tinygrad import dtypes
-from tinygrad.uop.ops import Ops, UOp
+from tinygrad.uop.ops import AxisType, Ops, UOp
 
 import extra.qk.mmq_llama_five_buffer_full_kernel as full
 from extra.qk.mmq_llama_candidate_plan import llama_mmq_candidate_plan
@@ -90,6 +90,29 @@ def test_full_grid_stages_each_q8_phase_once_and_releases_all_phase0_subtiles_be
   phase1_wmmas = [x for x in nodes if x.op is Ops.WMMA and x.tag[1] >= 4]
   assert release in phase1_producer.backward_slice
   assert len(phase1_wmmas) == 64 and all(release in x.backward_slice for x in phase1_wmmas)
+
+
+def test_full_grid_stage_uses_hardware_local_axes_not_serial_local_or_warp_ranges():
+  """The one-workgroup proof must map producer/fragment ownership to lidx0.
+
+  A bare LOCAL/WARP RANGE is a scalar loop in the generated 256-thread
+  dispatch.  It duplicates the complete Q4/Q8 stage and gives every lane the
+  same WMMA inputs, which is structurally a different (and invalid) kernel.
+  """
+  kernel = full.build_llama_five_buffer_full_kernel(128, 128, 256)
+  nodes = list(kernel.sink.toposort())
+  lidx0 = next(x for x in nodes if x.op is Ops.SPECIAL and x.arg == "lidx0")
+  assert not [x for x in nodes if x.op is Ops.RANGE and x.arg[-1] in (AxisType.LOCAL, AxisType.WARP)]
+  wmmas = [x for x in nodes if x.op is Ops.WMMA]
+  assert len(wmmas) == 128 and all(lidx0 in x.backward_slice_with_self for x in wmmas)
+  producer_stores = [x for x in nodes if x.op is Ops.STORE and isinstance(x.tag, tuple) and
+                     x.tag[:1] == ("hierarchical_record_store",)]
+  assert producer_stores and all(lidx0 in x.backward_slice_with_self for x in producer_stores)
+  threads = kernel.proof_graph.body.epochs[0].recurrence.stage.threads
+  linear_wave = lidx0 // kernel.topology.wave_size
+  assert threads.wave_m is (linear_wave // kernel.topology.waves[1])
+  assert threads.wave_n is (linear_wave % kernel.topology.waves[1])
+  assert threads.lane is (lidx0 % kernel.topology.wave_size)
 
 
 def test_k512_carries_exact_states_and_orders_next_epoch_staging_after_collective_release():

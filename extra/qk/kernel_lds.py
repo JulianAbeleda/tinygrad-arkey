@@ -909,9 +909,16 @@ def build_hierarchical_packed_record_stage(geometry:KernelTileGeometry, *, alloc
   subtiles_m, rem_m = divmod(geometry.tile[0], geometry.waves[0]*16)
   subtiles_n, rem_n = divmod(geometry.tile[1], geometry.waves[1]*16)
   if rem_m or rem_n or subtiles_m <= 0 or subtiles_n <= 0: raise ValueError("hierarchical tile does not divide wave/subtile ownership")
-  if ((threads.wave_m.op, threads.wave_m.vmax+1, threads.wave_m.arg[-1]) != (Ops.RANGE, geometry.waves[0], AxisType.LOCAL) or
-      (threads.wave_n.op, threads.wave_n.vmax+1, threads.wave_n.arg[-1]) != (Ops.RANGE, geometry.waves[1], AxisType.LOCAL) or
-      (threads.lane.op, threads.lane.vmax+1, threads.lane.arg[-1]) != (Ops.RANGE, geometry.wave_size, AxisType.WARP)):
+  range_axes = all(x.op is Ops.RANGE for x in (threads.wave_m, threads.wave_n, threads.lane)) and (
+    (threads.wave_m.vmax+1, threads.wave_m.arg[-1]) == (geometry.waves[0], AxisType.LOCAL) and
+    (threads.wave_n.vmax+1, threads.wave_n.arg[-1]) == (geometry.waves[1], AxisType.LOCAL) and
+    (threads.lane.vmax+1, threads.lane.arg[-1]) == (geometry.wave_size, AxisType.WARP))
+  local = UOp.special(geometry.threads, "lidx0")
+  linear_wave = local // geometry.wave_size
+  hardware_axes = (threads.wave_m is linear_wave // geometry.waves[1] and
+                   threads.wave_n is linear_wave % geometry.waves[1] and
+                   threads.lane is local % geometry.wave_size)
+  if not (range_axes or hardware_axes):
     raise ValueError("hierarchical record thread axes do not match wave geometry")
   if (subtile_m.op is not Ops.RANGE or subtile_m.vmax+1 != subtiles_m or
       subtile_n.op is not Ops.RANGE or subtile_n.vmax+1 != subtiles_n):
