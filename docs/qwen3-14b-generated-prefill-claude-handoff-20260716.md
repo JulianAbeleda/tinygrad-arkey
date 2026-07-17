@@ -1,0 +1,507 @@
+# Qwen3-14B generated-prefill Claude handoff
+
+Date: 2026-07-16  
+Repository: `/home/ubuntu/tinygrad-arkey`  
+Branch: `master`  
+Handoff revision: `412d7998f` (`[amd] recover propagated progressive C roots`)  
+Remote state at handoff: `master == origin/master`, clean worktree
+
+## 1. Executive state
+
+The project is building a generated tinygrad prefill route for non-fitting quantized models, using Qwen3-14B as the
+proof workload. The immediate goal is generated Q4_K/Q8_1 MMQ parity or better against the frozen llama.cpp comparator.
+The model is selected by the user, but compiler route selection must remain a function of workload and hardware facts,
+never a model-name, fixed-VRAM, or fixed-GPU branch.
+
+The architectural substrate is approximately 90% complete. The full project is approximately 60-65% complete. The
+active blocker is still before GPU performance work: the source-pinned generated oracle does not emit a final
+spill-free AMD binary.
+
+Current exact compiler progress:
+
+| checkpoint | peak live virtuals | spill fallback | stack | first request |
+|---|---:|---:|---:|---:|
+| matched pre-marker baseline | 184 | 525 | 2,100 B | UOp 2532 |
+| carrier marker recovery, `5e9a5c5dc` | 150 | 185 | 740 B | UOp 2532 |
+| propagated marker recovery, `412d7998f` | 158 | 112 | 448 B | UOp 2580 |
+
+Only matched runs under the same environment are comparable. Older reports of 406 spills used a different diagnostic
+environment and should not be numerically compared with the 525/185/112 sequence.
+
+At the current revision:
+
+- Post-selection structure remains 9,481 UOps.
+- The capture sees 128 selected machine WMMA nodes. The source oracle has 16 logical WMMAs; selection/expansion is why
+  both numbers appear in notes. Do not treat 128 as a changed mathematical kernel.
+- All 112 spill requests are `AMDOps.DS_LOAD_B128` base carriers.
+- There are no remaining `V_WMMA_I8` spill requests in the retained exact run.
+- The first residual spill is an A/B fragment pair whose four-VGPR bases are constrained to the shared fragment runs.
+- Compilation still correctly fails closed because AMD scratch spilling is forbidden.
+
+This is meaningful progress, not completion. No new 14B end-to-end or performance claim is authorized yet.
+
+## 2. User intent and non-negotiable constraints
+
+The user wants the work continued through the logical endpoint, but with these boundaries:
+
+1. Stop before performance autoscan. Autoscan is allowed only after a manually selected generated route proves beyond
+   llama parity.
+2. The model remains user-selected. GPU capability, VRAM, memory admission, and eventually candidate choice should be
+   discovered from facts, not flags or hardcoded model/GPU cases.
+3. Do not create an `8B` route and a `14B` route. The architectural distinction is fitting versus non-fitting resource
+   conditions.
+4. Do not permit hidden dense dequantization, scratch spilling, or a handwritten/oracle kernel to satisfy a generated
+   route claim.
+5. Preserve exact llama recurrence ordering and rounding. Do not introduce FMA/MULACC, reassociate
+   `(previous + scale*C) + bias`, or move fp16/fp32 conversion boundaries without a new correctness authority.
+6. Keep commits coherent and small. Hooks are enabled. Push accepted commits to `origin/master`.
+7. Preserve unrelated user changes and stashes. Never rewrite or delete user stashes.
+8. Temporary authored-code budget is 35,000 lines. After parity proof, perform another prune and restore the 30,000-line
+   target. Do not add speculative frameworks when an existing primitive can be reused.
+9. Decode and prefill are separate benchmark authorities. The current work is generated prefill; decode must later pass
+   a regression gate.
+10. GPU may be used now, but do not consume it while another explicitly reported benchmark run owns it. The active
+    compiler reproducer is CPU-only.
+
+## 3. Canonical objective and promotion authority
+
+The canonical scope remains:
+
+- `docs/qwen3-14b-generated-prefill-completion-scope-20260714.md`
+
+The final promotion authority is whole-prefill synchronized tokens/second at prompt/context lengths 512, 1,024, 2,048,
+and 4,096. Llama and tinygrad must run sequentially in at least three alternating pinned-clock sessions with raw samples
+retained.
+
+Required final gates:
+
+- No accepted context below 98% of llama.
+- Every declared context median exceeds llama.
+- Paired aggregate 95% lower confidence bound exceeds 1.00.
+- Aggregate geometric-mean target is at least 105% of llama.
+- Project target is at least 2,000 tok/s.
+- Decode remains correct and within the declared regression tolerance.
+- If any context or aggregate misses, run a fresh Boltbeam timing pass on the exact candidate revision and reconcile
+  candidate roles, activation preparation, attention, launch/synchronization, and residual work.
+
+Kernel TFLOP/s and Boltbeam are attribution evidence, not promotion authority.
+
+## 4. Current phase ledger
+
+| phase | state | closing condition |
+|---|---|---|
+| Scope and architecture | complete | Canonical decision tree and no-model-branch rules are documented. |
+| Six-row evidence and attribution | complete | Four Q4 and two Q6 workload rows are exact and identity-qualified. |
+| Source-pinned oracle foundation | complete | Exact llama structure is adapted to the five-buffer ABI and full-grid seam. |
+| Spill-free generated emission | **in progress** | Complete bounded oracle emits a real AMD program with zero spills/scratch. |
+| Q4/Q6 role policy | blocked on emission | Every row has an exact candidate or declared rollback under one immutable policy. |
+| 14B mixed-route end to end | not started | Correctness, route census, memory/resource proof, GPU health, decode regression. |
+| Matched llama/Boltbeam qualification | not started | Multi-context statistical parity/beyond-parity gates pass. |
+| Autoscan and post-proof prune | deliberately paused | Start only after beyond-parity proof. |
+
+## 5. Target architecture
+
+```text
+loaded GGUF tensor facts + user-selected model
+  -> typed workload inventory
+  -> target capability + memory admission
+  -> candidate identity and exact packed ABI
+  -> Q8 activation producer
+  -> generated Q4_K/Q8_1 MMQ contraction
+  -> resource/correctness evidence
+  -> immutable manual six-row policy
+  -> 14B end-to-end proof
+  -> matched llama comparison + Boltbeam attribution
+  -> only then performance autoscan
+```
+
+The current source-pinned MMQ authority is:
+
+- Tile: `128x128x256`.
+- Eight waves, 256 threads.
+- 57,856 bytes LDS.
+- Persistent decoded Q4 panel.
+- Two K128 Q8 phases.
+- Eight K32 correction groups / sixteen signed i8 WMMAs per K256 epoch.
+- Exact half2 metadata recurrence.
+- Split five-buffer ABI:
+  - slot 0: fp32 output;
+  - slot 1: Q4 packed `uint32`;
+  - slot 2: Q8 values `int8`, physical `[K/128, M, 128]`;
+  - slot 3: Q8 scales `fp32`, physical `[K/128, M, 4]`;
+  - slot 4: Q8 original sums `fp32`, physical `[K/128, M, 4]`.
+
+Scale and sum are independently converted to fp16 only at LDS half2 staging, preserving llama rounding.
+
+## 6. Relevant code map
+
+### Oracle and generated full-grid seam
+
+- `extra/qk/mmq_llama_candidate_plan.py`
+  - Source-pinned physical schedule and identity.
+- `extra/qk/mmq_llama_oracle_epoch.py`
+  - Exact epoch construction.
+- `extra/qk/mmq_llama_oracle_recurrence.py`
+  - Exact K32 recurrence and rounding authority.
+- `extra/qk/mmq_llama_full_kernel.py`
+  - Bounded callback graph and release seams.
+- `extra/qk/mmq_llama_record_producers.py`
+  - Typed producer witnesses.
+- `extra/qk/mmq_llama_five_buffer_graph.py`
+  - Five-buffer composition across epochs.
+- `extra/qk/mmq_llama_five_buffer_full_kernel.py`
+  - Full-grid ownership, dynamic offsets, aligned-tail policy, row-major writeback, fail-closed compilation.
+
+### AMD selection, scheduling, and allocation
+
+- `tinygrad/renderer/isa/amd.py`
+  - `_progressive_c_assignment`: symbolic root path cover.
+  - `_acc_base`: physical C-fragment allocation/reuse.
+  - `_try_wmma_kmajor_phase`: alternate K-major selection path. A conditional chain-major experiment here was proven
+    inactive for the exact workload and reverted; do not assume this function owns the residual path.
+  - `_selected_wmma_roots`: retained at `412d7998f`; recovers one-step carrier markers and propagated multi-step
+    machine-chain markers, walking to the earliest machine head.
+  - `_serialize_progressive_c_drains`: finds each chain tail, collects eight conversion drains, and orders reuse heads.
+  - `_post_isel_structural_lifetimes`: composes store chaining, progressive-C serialization, and address localization.
+  - `_build_wmma_from_packs` / `_build_wmma_tile`: fixed A/B/C machine fragment construction.
+- `tinygrad/codegen/late/regalloc.py`
+  - `pressure_schedule` / `_pressure_schedule_block`: generic pre-regalloc pressure-aware topological ordering.
+  - `LinearScanRegallocContext`: live ranges, rematerialization, spill diagnostics, fail-closed no-spill allocation.
+- `tinygrad/codegen/__init__.py`
+  - Ordering of pressure scheduling, backend cleanup, allocation, and post-regalloc lowering.
+
+### Policy/evidence
+
+- `extra/qk/runtime_specs.py`
+- `extra/qk/prefill/six_row_policy_artifact.py`
+- `extra/qk/prefill/q4k_q8_five_buffer_role_gate.py`
+- `bench/prefill-pure-full-kernel/`
+
+## 7. Current exact blocker
+
+After `412d7998f`, the retained exact run reports:
+
+```text
+REGALLOC_DEBUG: 9481 uops, PEAK 158 live vregs @ uop 5908
+REGALLOC_PRESSURE: spill_request=v0 at=2580
+REGALLOC_SPILLS: count=112 stack_size=448
+```
+
+Peak composition:
+
+```text
+65 GLOBAL_LOAD
+64 V_ADD
+ 8 V_CONST
+ 8 V_CVT_I2F
+ 6 V_IMUL
+ 2 WI_ID
+ 1 ParamArg
+ 1 V_LSHR
+ 1 S_LOAD_PTR
+ 1 lidx0
+ 1 V_IADD
+```
+
+The extra eight `V_CVT_I2F` relative to the 150-virtual checkpoint are intentional: they are the real release frontier
+that now remains live long enough to protect progressive C reuse.
+
+Every one of the 112 fallback spills is a `DS_LOAD_B128` base carrier. The first region has seven future A/B pairs
+opened before their consumers:
+
+```text
+A/B pair ranges begin around UOps 2507..2520
+matching consumers occur at 2580, 2633, 2686, 2739, 2792, 2845, 2898
+```
+
+The hardware meaning is:
+
+- A fragment: four consecutive VGPRs.
+- B fragment: four consecutive VGPRs.
+- C/D accumulator: eight in-place VGPRs.
+- Only one A/B pair should be resident for the active WMMA lease unless a proven double-buffer schedule assigns a
+  distinct physical run.
+
+The allocator representation uses one constrained base definition plus fixed aliases for the remaining fragment lanes.
+Do not replay an LDS load in regalloc: it can violate memory/barrier semantics. Do not allow scratch as a workaround.
+
+The next owning problem is therefore selected A/B fragment lifetime/order: pair each constrained A/B load with its
+actual WMMA consumer, and prevent future pairs using the same physical run from opening until the preceding consumer has
+released that run.
+
+## 8. Required first reproduction
+
+Run from repository root:
+
+```bash
+env \
+  PYTHONHASHSEED=0 \
+  REGALLOC_ADDR_REMAT=1 \
+  REGALLOC_END_NO_SOURCE_LIVE=1 \
+  REGALLOC_DEBUG=1 \
+  REGALLOC_DEBUG_PRESSURE=1 \
+  REGALLOC_DEBUG_SPILLS=1 \
+  python3 -m pytest -q -s \
+  test/unit/test_mmq_llama_full_kernel.py::test_bounded_wave_probe_drains_symbolic_subtiles_without_claiming_a_full_grid
+```
+
+Expected current result:
+
+- Pytest reports `1 passed` because the test currently expects the fail-closed `NotImplementedError`.
+- The diagnostic must report 112 spills and a 448-byte stack.
+- A green pytest alone is **not** success.
+
+When genuine zero-spill emission is achieved, update the bounded test so it no longer expects the spill exception and
+instead asserts a real program/resource proof. Do not change the test early merely to make it fail or pass differently.
+
+Fast structural suite:
+
+```bash
+python3 -m pytest -q \
+  test/unit/test_amd_isa_structural_lifetimes.py \
+  test/unit/test_regalloc_pressure_schedule.py \
+  test/unit/test_regalloc_end_liveness.py
+```
+
+Oracle/full-grid structural suites:
+
+```bash
+python3 -m pytest -q \
+  test/unit/test_mmq_llama_full_kernel.py \
+  test/unit/test_mmq_llama_five_buffer_graph.py \
+  test/unit/test_mmq_llama_five_buffer_full_kernel.py
+```
+
+Avoid launching duplicate exact-oracle processes. Several previous workers accidentally ran two copies, wasting minutes
+and making measurements harder to attribute.
+
+## 9. Next implementation scope
+
+### Step A: prove the selected A/B pair-to-consumer mapping
+
+Before changing scheduling, record for the first spill region:
+
+- each `DS_LOAD_B128` base UOp;
+- its fixed physical base and four-lane fragment range;
+- its unique numeric WMMA consumer;
+- zero-code alias consumers separately;
+- its barrier/AFTER ordering dependencies;
+- the previous and next load pair using the same physical A/B runs.
+
+Do this post-selection and before regalloc cleanup. Remove temporary instrumentation before committing.
+
+The expected result is seven future pairs opened before their seven consumers. If that is not reproduced, stop and
+explain the changed path instead of implementing the plan below from assumption.
+
+### Step B: repair ownership at the AMD selected-lifetime layer
+
+Preferred repair boundary:
+
+- AMD post-selection structural lifetime logic, close to `_serialize_progressive_c_drains` and the selected machine
+  fragment graph; or
+- the exact AMD selector that emits the residual `DS_LOAD_B128` pair, if the pair order is already wrong at creation.
+
+Required invariant:
+
+```text
+previous A/B pair -> matching WMMA consumes pair
+                  -> next A/B pair using same physical run may load
+                  -> next matching WMMA
+```
+
+The ordering must be derived from physical lease identity and actual machine consumers, not from Qwen, 14B, exact
+M/N/K, hardcoded UOp ordinals, or a route flag.
+
+If multiple physical A/B runs truly exist, independent runs may overlap. Only pairs mapped to the same constrained run
+must serialize.
+
+Potential implementation shape:
+
+1. Discover selected `DS_LOAD_B128` definitions and their fixed base constraints.
+2. Follow zero-code fixed aliases but identify the actual machine WMMA consumer.
+3. Group load pairs by the physical A/B lease tuple.
+4. Order consumers using existing symbolic/machine dependencies; fail closed on ambiguity.
+5. Add a zero-code ordering edge from each previous consumer to the next pair's load address/dependency position, while
+   preserving the canonical DS-load operand shape and all barrier dependencies.
+6. Let `pressure_schedule` place the now-ready pair adjacent to its consumer.
+
+Do not add a generic scheduler rule that assumes every unary one-choice instruction is a zero-code alias. That experiment
+was rejected as semantically unsafe. If scheduler lookthrough is needed, use an explicit renderer-owned alias contract.
+
+### Step C: acceptance for the A/B repair
+
+Minimum retained evidence:
+
+- The selected mathematical graph is unchanged.
+- Exact WMMA count is unchanged.
+- A/B load values, addresses, widths, and fixed bases are unchanged.
+- Barriers and release witnesses remain in backward slices.
+- At most one A/B pair per shared physical lease is live at a consumer boundary.
+- Spill count falls materially from 112.
+- No new spill category is introduced.
+- Focused AMD and regalloc tests pass.
+
+Closing evidence for the current phase:
+
+- Zero spills.
+- Zero scratch/stack.
+- Final program emits.
+- Resource proof identifies the executed binary.
+
+If a safe repair reduces 112 to a smaller nonzero value, it may be retained as a coherent generic improvement, but the
+phase remains open and the next exact victim must be reported.
+
+## 10. Do not repeat these rejected paths
+
+| experiment | result | reason not to revive unchanged |
+|---|---|---|
+| speculative 12 KiB cooperative descriptor | removed | The source-pinned llama tile is the authority. |
+| graph-level Q8 packing | ~232 ms on smallest role | Correct algebra, unusable lifecycle/performance. |
+| dequant-once fp16 route | ~4.7 ms on smallest role | Far slower than fused candidate. |
+| metadata-only PARAM/SPECIAL carriers | peak worsened in matched A/B | Cosmetic, not owning pressure. |
+| atomic eight-register WMMA result span | virtual peak fell, physical saturation remained | Broke UOp invariant and hit unsupported multi-register spilling. |
+| vec8 recurrence bundle | reverted | Bundle-side physical improvement was not proven. |
+| generic alias-closure scheduler | spills worsened to 516 | Reduced one overlap but delayed other releases; initial alias inference was also unsafe. |
+| conditional chain-major `_try_wmma_kmajor_phase` | exact metrics unchanged | The real workload did not select that branch; commit `5913c65c4` was reverted by `63b31be2d`. |
+| regalloc replay of `DS_LOAD_B128` | prohibited | Shared-memory loads are not safe rematerialization. |
+| enabling AMD scratch | prohibited | Violates performance/resource contract and hides the compiler defect. |
+
+## 11. Accepted compiler repairs and what they proved
+
+Recent accepted commits, oldest to newest:
+
+- `27a910ed6 [amd] preserve wide fragment release ordering`
+  - Carries completed FP32 release dependencies through selected LDS loads.
+- `272d73af8 [codegen] reduce wide pipeline register pressure`
+  - Generic pressure-aware scheduling.
+- `c05188028 [codegen] rematerialize renderer-safe register fills`
+  - Allows safe V_CONST replay at ordinary uses.
+- `a293391b0 [codegen] localize constrained leases at consumers`
+  - Shrinks a DS-load-to-WMMA distance from 242 UOps to at most 24 in the measured case.
+- `1de98cc7f [codegen] stop END body register liveness`
+  - Removes false completed-body machine liveness; matched peak 184 to 180 in its original comparison.
+- `0d91841d3 [codegen] prioritize pressure release in late scheduling`
+  - Prioritizes immediate release before opening later recurrence generations.
+- `5e9a5c5dc [amd] recover progressive C markers from carriers`
+  - Activates the existing serializer for reachable marked carriers; matched spills 525 to 185.
+- `412d7998f [amd] recover propagated progressive C roots`
+  - Handles multi-step chains whose marked carrier is flattened into a tail machine WMMA; walks to earliest machine
+    head; removes all retained WMMA-result spill requests and reduces spills 185 to 112.
+
+Review these commits before changing the same mechanisms. Preserve their focused invariants.
+
+## 12. Known measurement and test caveats
+
+1. `peak_candidate_slots=255` is a union of registers that live virtuals may occupy, not an additive physical-VGPR
+   requirement. Ordinary scalar values advertise most of the pool. Use assigned constrained-run overlap and spill
+   victims as the actionable evidence.
+2. A fail-closed bounded test currently passes by expecting the failure.
+3. Detailed debug modes alter allocator traversal cost and have produced different absolute spill counts. Compare only
+   matched before/after environments.
+4. `/tmp/mmq_marker_before.json` and `/tmp/mmq_marker_after.json` were useful local captures but are not versioned
+   authorities and may disappear. Reproduce facts from the committed revision.
+5. Four older 16-subtile AMD tests fail historically at the same spill-free gate. They predate the recent scheduler
+   commits. Do not mark them xfail merely to hide the resource defect.
+6. The old ushort-cast test counted every `v_bfe_u32` mnemonic and was fixed by `2ef1174a9` to inspect packed-load-owned
+   extracts only.
+7. Keep llama and tinygrad benchmark runs sequential. Concurrent residency is not an admissible comparison.
+
+## 13. After zero-spill bounded emission
+
+Do not jump directly to autoscan. Execute these phases in order.
+
+### 13.1 Full-grid compile and correctness
+
+- Compile `mmq_llama_five_buffer_full_kernel` for aligned full-grid ownership.
+- Verify row-major writeback remains `col*N + row` for the oracle's A/B orientation.
+- Prove exact five-buffer ABI and launch geometry.
+- Verify final ISA has no scratch/spills and resource allocation is within target limits.
+- Run full-output correctness, immutable input checks, output guards, timeout isolation, and post-dispatch GPU health.
+- Retain the exact candidate identity and binary/ISA proof.
+
+### 13.2 Performance qualification
+
+Fresh Q4 role budgets:
+
+| role | shape MxNxK | current legacy candidate | direct-packed comparator |
+|---|---|---:|---:|
+| `attn_kv` | 512x1024x5120 | ~5.9996 ms | ~0.4571 ms |
+| `attn_qo` | 512x5120x5120 | ~27.927 ms | ~0.920 ms |
+| `ffn_down` | 512x5120x17408 | ~67.731 ms | ~3.107 ms |
+| `ffn_gate_up` | 512x17408x5120 | ~66.872 ms | ~2.762 ms |
+
+Exact `attn_kv` stage attribution:
+
+- Q8 producer: ~0.0875 ms.
+- MMQ: ~5.9160 ms.
+- Total: ~6.0070 ms.
+- About 98.5% of the tax is MMQ, not activation production.
+
+The new oracle must be timed as the whole primitive, including activation preparation. Q4 target is at least 60 aggregate
+logical TFLOP/s unless a newer whole-model role budget proves an equivalent result.
+
+### 13.3 Six-row policy
+
+- Four Q4 rows must bind exact correctness/performance-qualified candidates.
+- Two Q6 rows already have qualified direct-packed fallback evidence:
+  - `attn_kv` max error 0.015625;
+  - `ffn_down` max error 0.015625.
+- Build one immutable six-row manual policy.
+- Missing evidence, identity drift, and unknown workload must fail closed.
+- Keep production promotion false until the full end-to-end gate passes.
+
+### 13.4 Phase 6 end to end
+
+- Execute the manual mixed route on Qwen3-14B.
+- Record route census proving every intended packed role fired.
+- Reconcile memory/admission and final resources.
+- Verify GPU health and output correctness.
+- Run decode correctness/performance regression separately.
+- Prove one-change rollback to direct packed.
+
+### 13.5 Phase 7 parity and Boltbeam
+
+- Run matched llama/tinygrad prefill at contexts 512, 1,024, 2,048, and 4,096.
+- Use at least three alternating pinned-clock sessions.
+- Retain raw samples and immutable revisions.
+- If any gate misses, run Boltbeam immediately on that exact candidate and optimize the largest measured residual.
+- Only after beyond-parity proof may performance autoscan begin.
+
+## 14. Commit and handoff discipline
+
+- Inspect `git status --short --branch` before and after every change.
+- Do not bundle diagnostics, compiler repair, policy identity update, and benchmark artifact into one commit.
+- Remove temporary logging before committing.
+- Run `git diff --check`.
+- Preserve user and unrelated changes.
+- Push accepted commits.
+- If an experiment is ineffective, revert its worktree edits before moving on. Avoid adding a speculative default-off flag
+  merely to preserve a failed experiment.
+- Record exact before/after measurements near the owning scope document when a blocker class changes.
+
+## 15. Definition of this handoff's completion
+
+Claude's immediate assignment is complete only when:
+
+1. The complete source-pinned bounded oracle emits a real program.
+2. Final AMD evidence reports zero spills and zero scratch/stack.
+3. The selected mathematical graph, packed ABI, WMMA family/count, barriers, and rounding authority remain unchanged.
+4. Focused AMD/regalloc tests and the updated bounded emission test pass.
+5. The accepted repair is committed and pushed with an exact evidence note.
+
+That closes only the current compiler-emission gate. Continue through full-grid correctness, performance, six-row policy,
+Phase 6, and Phase 7 as described above, then stop before autoscan.
+
+## 16. Recommended first 90 minutes
+
+1. Read this document and the canonical completion scope.
+2. Inspect `412d7998f`, especially `_selected_wmma_roots` and `_serialize_progressive_c_drains`.
+3. Run the exact reproduction once and confirm 112 `DS_LOAD_B128` spills.
+4. Add temporary post-selection diagnostics for the first seven residual A/B pairs and their seven WMMA consumers.
+5. Determine the exact selector/lifetime function that opens those pairs early. Do not assume `_try_wmma_kmajor_phase`;
+   that path was already changed experimentally with zero effect on the exact workload.
+6. Add a focused structural test expressing one-A/B-pair-per-shared-lease ownership.
+7. Implement the smallest AMD-local, ownership-derived ordering repair.
+8. Run focused tests, then one exact oracle run.
+9. Keep the patch only if it is semantically safe and materially reduces the 112 residual spills; continue until zero.
+
