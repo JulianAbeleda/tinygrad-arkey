@@ -34,15 +34,39 @@ def _pressure_schedule_block(block:list[UOp]) -> list[UOp]:
   out:list[UOp] = []
 
   def width(u:UOp) -> int:
-    return sum(v.span.count for v in _register_defs(u) if not isinstance(v, FixedRegisterUse))
+    # FixedRegisterUse nodes are physical lease carriers rather than allocator
+    # definitions, but their complete span is still occupied until consumed.
+    return sum(v.span.count for v in _register_defs(u))
+  def fixed_width(u:UOp) -> int:
+    return sum(v.span.count for v in _register_defs(u) if isinstance(v, FixedRegisterUse))
+  def release(u:UOp) -> int:
+    return sum(width(s) for s in deps[u] if remaining[s] == 1)
   def score(u:UOp):
-    released = sum(width(s) for s in deps[u] if remaining[s] == 1)
+    released = release(u)
     added = width(u)
-    unlocked = sum(indeg[c] == 1 for c in consumers[u])
+    unlocked = tuple(c for c in consumers[u] if indeg[c] == 1)
+    # Include the full spans released by consumers made ready by this choice.
+    # This recognizes the last fragment feeding a wide operation before that
+    # operation is actually ready, and keeps its conversion/update tail ahead
+    # of unrelated wide producer groups.  One-edge lookahead is intentionally
+    # bounded: later iterations continue the same chain through generation.
+    # Count each definition once when this complete newly-ready group contains
+    # all of its remaining consumers.  Fixed carriers are deliberately only
+    # credited at direct consumption, otherwise defining a lease early would
+    # look pressure-neutral while extending its physical occupation.
+    follow_uses = {s:sum(s in deps[c] for c in unlocked) for c in unlocked for s in deps[c]}
+    follow_release = sum(width(s) for s,n in follow_uses.items() if remaining[s] == n and
+                         not any(isinstance(v, FixedRegisterUse) for v in _register_defs(s)))
+    follow_added = sum(width(c) for c in unlocked)
     # Newly enabled consumers come first.  This follows a conversion into its
     # FP32 arithmetic before opening an independent producer tree; release
     # balance and original order make deterministic pressure-aware tie-breaks.
-    return (ready_generation[u], released-added, released, -added, unlocked, -pos[u])
+    net, follow_net = released-added, follow_release-follow_added
+    # A fixed carrier should become visible only when it completes a consumer;
+    # otherwise its already-owned physical lease is needlessly opened early.
+    fixed_deferred = -fixed_width(u) if not unlocked else 0
+    return (fixed_deferred, ready_generation[u], net, released, -added,
+            follow_net, follow_release, -follow_added, len(unlocked), -pos[u])
 
   while ready:
     u = max(ready, key=score)

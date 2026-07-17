@@ -2,7 +2,7 @@ import unittest
 
 from tinygrad.codegen.late.regalloc import pressure_schedule
 from tinygrad.dtype import dtypes
-from tinygrad.renderer.isa import Register
+from tinygrad.renderer.isa import FixedRegisterUse, Register, RegisterSpan
 from tinygrad.renderer.isa import IselContext
 from tinygrad.renderer.isa.amd import AMDOps, VBASE, _localize_memory_address_recipes
 from tinygrad.uop.ops import Ops, UOp
@@ -11,6 +11,9 @@ from tinygrad.uop.ops import Ops, UOp
 class TestPressureSchedule(unittest.TestCase):
   def _v(self, name, physical):
     return Register(name, physical.index, _cons=(physical,))
+
+  def _wide_v(self, name, physical, count=8):
+    return Register(name, physical.index, _cons=(physical,), _span=RegisterSpan(count, count))
 
   def _ins(self, name, src=(), reg=None):
     return UOp(Ops.INS, dtypes.int32, src=tuple(src), arg=name, tag=(reg,) if reg else ())
@@ -52,6 +55,45 @@ class TestPressureSchedule(unittest.TestCase):
       return max(sum(pos[u] <= i <= ends[u] for u in block if u.tag) for i in range(len(block)))
 
     self.assertLess(peak(scheduled), peak(original))
+
+  def test_reduces_weighted_peak_for_overlapping_wide_pipelines(self):
+    physical = Register("r", 0)
+    def pipeline(n):
+      a = self._ins(f"load_a{n}", reg=self._wide_v(f"va{n}", physical))
+      b = self._ins(f"load_b{n}", reg=self._wide_v(f"vb{n}", physical))
+      wide = tuple(self._v(f"vw{n}_{i}", physical) for i in range(8))
+      dot = UOp(Ops.INS, dtypes.int32, (a, b), f"dot{n}", tag=wide)
+      converts = tuple(self._ins(f"convert{n}_{i}", (dot,), self._v(f"vc{n}_{i}", physical)) for i in range(8))
+      updates = tuple(self._ins(f"update{n}_{i}", (c,), self._v(f"vu{n}_{i}", physical)) for i,c in enumerate(converts))
+      return a, b, dot, converts, updates
+    p0, p1 = pipeline(0), pipeline(1)
+    original = [p0[0], p0[1], p1[0], p1[1], p0[2], p1[2], *p0[3], *p1[3], *p0[4], *p1[4]]
+    scheduled = pressure_schedule(original)
+
+    def _register_tuple(u):
+      return isinstance(u.tag, tuple) and u.tag and all(isinstance(r, Register) for r in u.tag)
+    def peak(block):
+      pos = {u:i for i,u in enumerate(block)}
+      ends = {u:max((pos[c] for c in block if u in c.src), default=pos[u]) for u in block}
+      return max(sum(sum(r.span.count for r in u.tag) for u in block if _register_tuple(u) and pos[u] <= i <= ends[u])
+                 for i in range(len(block)))
+
+    self.assertLess(peak(scheduled), peak(original))
+    positions = {u:i for i,u in enumerate(scheduled)}
+    self.assertLess(max(positions[u] for u in (*p0[3], *p0[4])), positions[p1[2]])
+
+  def test_fixed_wide_lease_is_opened_at_its_ready_consumer(self):
+    physical = Register("r", 0)
+    lease = self._ins("lease", reg=FixedRegisterUse("fixed", 32, _span=RegisterSpan(8, 8)))
+    first = self._ins("first", reg=self._wide_v("first", physical))
+    ready = self._ins("ready", (first,), self._wide_v("ready", physical))
+    consume = self._ins("consume", (lease, ready), self._wide_v("consume", physical))
+    independent = self._ins("independent", reg=self._wide_v("independent", physical))
+
+    scheduled = pressure_schedule([lease, first, ready, independent, consume])
+    positions = {u:i for i,u in enumerate(scheduled)}
+    self.assertEqual(positions[consume], positions[lease] + 1)
+    self.assertLess(positions[ready], positions[lease])
 
   def test_amd_localized_address_tree_follows_memory_prerequisites(self):
     """Private address recipes must not open before their sole effects are ready."""
