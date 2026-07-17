@@ -155,6 +155,18 @@ class LinearScanRegallocContext:
         if v in lr and (n:=max((lr[rng][-1] for rng in ranges if lr[rng][0] <= lr[v][-1] < lr[rng][-1]), default=None)): lr[v].append(n)
       if u.op is Ops.RANGE: ranges.append(u.reg)
 
+    # Prefer physical registers that are not scarce candidates for constrained
+    # virtuals.  Without this tie-break, broad-pool values take the first free
+    # registers and can occupy an entire restricted sub-pool (for example
+    # scalar fp16 operands on gfx11).  A later short constrained value then
+    # evicts a long-lived broad value despite ample free registers elsewhere.
+    # Weighting by inverse candidate count makes a one-choice lease dominate a
+    # broad virtual while keeping the existing next-use decision authoritative.
+    candidate_pressure: dict[Register, int] = {}
+    for v in lr:
+      weight = 1_000_000 // len(v.cons)
+      for r in v.cons: candidate_pressure[r] = candidate_pressure.get(r, 0) + weight
+
     # REGALLOC_DEBUG: the "no spills" failure is opaque -- it says nothing about WHAT is over the register pool. This
     # traces the peak simultaneously-live virtual count and its composition (categorized by each vreg's defining op),
     # so a spill is diagnosable: too many of one op (e.g. un-serialized fragment packs / store-offsets) points at a
@@ -259,7 +271,9 @@ class LinearScanRegallocContext:
       # otherwise pick the one with the furthest next use. Regs that appear first in cons have priority in case of a tie
       if span == 1:
         reg,vreg = max(((r,occupied.get(r)) for r in cons),
-                      key=lambda rv: -1 if rv[1] in remat_pinned else next((j-i for j in ([] if rv[1] is None else lr[rv[1]]) if j >= i), len(uops)))
+                      key=lambda rv: (-1, 0) if rv[1] in remat_pinned else (
+                        next((j-i for j in ([] if rv[1] is None else lr[rv[1]]) if j >= i), len(uops)),
+                        -candidate_pressure.get(rv[0], 0)))
         if vreg is not None: live.pop(vreg)
         return reg
 
@@ -268,10 +282,11 @@ class LinearScanRegallocContext:
                     all(r.index+j in by_index for j in range(span))]
       if not candidates: raise RuntimeError(f"no {span}-register span aligned to {alignment} in constrained register pool")
       def owners(slots:tuple[Register, ...]) -> tuple[Register, ...]: return tuple(dict.fromkeys(occupied.get(r) for r in slots if r in occupied))
-      def score(candidate:tuple[Register, tuple[Register, ...]]) -> int:
+      def score(candidate:tuple[Register, tuple[Register, ...]]) -> tuple[int, int]:
         evicted = owners(candidate[1])
-        if any(v in remat_pinned for v in evicted): return -1
-        return min((next((j-i for j in lr[v] if j >= i), len(uops)) for v in evicted), default=len(uops))
+        if any(v in remat_pinned for v in evicted): return (-1, 0)
+        return (min((next((j-i for j in lr[v] if j >= i), len(uops)) for v in evicted), default=len(uops)),
+                -sum(candidate_pressure.get(r, 0) for r in candidate[1]))
       reg,slots = max(candidates, key=score)
       evicted = owners(slots)
       if any(v in remat_pinned for v in evicted): raise RuntimeError("no register span available while dependencies are pinned")
