@@ -14,6 +14,8 @@ The corrected phase-major graph and allocator lease regression coverage are stru
 - `test/unit/test_amd_isa_wmma.py`: **36 passed, 4 failed**. The four 16-subtile multi-output failures are the
   same spill-free-gate failures reproduced on the pre-change `423f6ff83` baseline; they are historical and not a
   regression from `23eaf693b`.
+- The new fail-closed GPU harness scaffolding tests: **3 passed**. This validates ABI binding, fixture construction,
+  and timeout behavior only; no GPU dispatch has been run.
 
 The full K=256 `to_program` path now **emits successfully** under the matched environment
 (`PYTHONHASHSEED=0 REGALLOC_ADDR_REMAT=1 REGALLOC_END_NO_SOURCE_LIVE=1`). Graph/codegen selection reports
