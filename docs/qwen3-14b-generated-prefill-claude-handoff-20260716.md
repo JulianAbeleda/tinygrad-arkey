@@ -310,6 +310,77 @@ Because the peak is only ~9-18 over pool and the victims are mixed, the endgame 
 localizations, not one more big ordering edge. Rails unchanged (no reassociation, FMA/MULACC, rounding move, scratch,
 or `spec_shared` widening).
 
+## 0.4 Status update 2026-07-17 (final for this session): 9 spills traced, one dead end burned
+
+No new code commit — this section is diagnosis only. Head is `6f65ef31c`, worktree clean, 5 stashes intact.
+
+### The 9 spills, traced to source (matched env)
+
+Each spill victim's def / srcs / consumer / live-range, mapped to the oracle. **Matched env** — the same env the
+9-spill baseline is defined in. (Do NOT trace under an added `SPILL_TRACE`-style debug flag: it perturbs allocator
+traversal to ~16 spills and reweights the classes. An earlier trace did exactly this and mis-ranked the metadata as
+dominant; the corrected matched-env ranking is below. **Lesson: trace in the SAME env you measure in.**)
+
+| class | count | def <- srcs | consumer | span | what it is |
+|---|---:|---|---|---|---|
+| `V_CVT_I2F` | 3 | `<- V_WMMA_I8` | next chain `V_WMMA_I8` | 17-65 | residual WMMA drain tail |
+| `V_MUL` | 2 | `<- V_CVT_H2F, V_CVT_H2F` | `V_MUL`/`V_ADD` | 63-236 | half2 `scale`/`bias` metadata (`recurrence.py:184-185`) |
+| `GLOBAL_LOAD` | 2 | `<- V_OFFSET, S_LOAD_PTR` | `DS_STORE` | **~9600** | CSE'd Q8 panel, reused across all 8 subtiles' LDS stagings |
+| `V_ADD` | 1 | `<- V_MUL, V_MUL` | `V_ADD` | 262 | recurrence accumulation |
+| `V_CMPLT_I` | 1 (`v315`) | `<- V_AND, V_CONST, V_CONST` | `END` | ~13100 | whole-program lane predicate |
+
+### REFUTED — do not retry: ordering the half2 metadata
+
+The tempting "symmetric twin" move (order each group's `scale`/`bias` metadata behind the prior group's drain, like the
+C-drain fix) **makes it dramatically worse**. Verified by construction (matched env, full-grid 128,128,256):
+
+| variant | peak | spills |
+|---|---:|---:|
+| baseline `6f65ef31c` | 273 | **9** |
+| metadata behind prior drain (new void barriers) | 282 | 27 |
+| metadata behind existing release (barrier-free, minimal edge) | 267 | **74** |
+
+There are 128 metadata muls (8 subtiles x 8 groups x 2). They are *schedulable* (the `dm`/`ds` loads depend only on the
+phase `publish` barrier, not on drains, so `pressure_schedule` — block-local — cannot move them), but they contribute
+only ~6 registers to the peak (273->267) while serializing 128 uniform loads into the tight drain windows explodes
+spills 8x. The metadata is NOT the dominant class and NOT the lever. Cross it off.
+
+### For the next owner (Codex): two honest options, and the recommendation
+
+**The cheap ordering-edge move is exhausted and now fights itself.** The residual is dominated by the `V_CVT_I2F` drain
+tail (3/9) and the two long-span Q8 `GLOBAL_LOAD`s (2/9) — and those loads are span ~9600 *because* the cross-subtile
+serialization (`cd989ad0e`) pins the shared Q8 panel live across all 8 subtiles. More serialization lengthens that
+span. So closing the last 9 is a genuine trade, not another `.after()`:
+
+1. **Grind the spill gate to 0.** Candidate levers, each UNVERIFIED, each needs measure-by-construction:
+   - The Q8 `GLOBAL_LOAD` (biggest single spans): decide whether the panel is re-staged per subtile (redundant DS_STOREs
+     that could share) or genuinely 8 chunks. If shareable, stage once; if not, the tension with serialization is real
+     and may need a re-load-vs-hold decision (registers vs LDS/mem traffic). This is a design call, not a mechanical edge.
+   - `v315`: recompute-at-uses localization (analogous to address remat, cf. `a293391b0`) — one clean register.
+   - The 3 `V_CVT_I2F`: milder cross-subtile edge via the `prior_drains` knob in `_accumulator_vectors` (order behind
+     `e-1`'s CVT frontier, not its full accumulator). Risk: over-constraint blew up the metadata; measure every step.
+   - Peak is only ~9-18 over a 255 pool, so 2-3 small wins plausibly reach 0 — but none are proven and the Q8 one is a
+     design decision.
+2. **Stand up the GPU correctness harness FIRST, before grinding to 0.** This is the RECOMMENDED path. Rationale below.
+
+**Why correctness-first is the better use of effort.** Everything to date is CPU-side compile / register allocation
+(`DEV=PYTHON`, no execution). Zero output has ever been checked against the frozen llama comparator. Closing the spill
+gate proves the kernel *compiles*, not that it is *correct* or *fast* — those are separate, larger, unmeasured gates
+(§13.1 correctness, §13.2 performance = the actual promotion authority). The dominant uncertainty in any ETA is what the
+FIRST GPU run surfaces (writeback layout `col*N+row`, five-buffer ABI offsets, launch geometry) — none of which the spill
+work touches. One correct number collapses far more uncertainty than 9->0 spills. The compile foundation is solid for
+this: clean source graphs, math-neutral ordering edges (op counts identical, rounding boundary untouched), asserted ABI
+in `__post_init__` — so a wrong number will point at the writeback/ABI logic, not at allocator hacks.
+
+**What has NOT been done, so no one over-claims:** never run on GPU; never numerically validated; only the smallest full
+grid (128,128,256) compiled — real roles are 512x1024x5120 up to 512x5120x17408, where more epochs = more `consumer_seam`
+ordering and the aligned-tail/dynamic-offset paths first get exercised; performance entirely unmeasured. The 7 historical
+failing tests (four 16-subtile, two prefill-adapter, one q4k-tiled) still fail identically on a clean tree — verify before
+blaming any change.
+
+Rails unchanged (no reassociation of `(previous + scale*C) + bias`, no FMA/MULACC, no rounding-boundary move, no AMD
+scratch, no `spec_shared` widening, no model/VRAM/GPU/route branching).
+
 ## 1. Executive state
 
 The project is building a generated tinygrad prefill route for non-fitting quantized models, using Qwen3-14B as the
