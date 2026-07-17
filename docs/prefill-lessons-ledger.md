@@ -72,9 +72,20 @@ results.
 
 - **The hand kernel wins purely on WMMA issue density** — it amortizes staging, reduces waits, and avoids per-WMMA
   reloads. That density gap IS the TFLOPS gap. This is the north-star target for the pure-generated transport.
-- **Baselines:** harness-fixed generated 8B pp512 = 2549 tok/s vs hand 4413. The default `DEV=AMD` prefill GEMM is
-  emitted by HIPRenderer with register-resident operands — tinygrad has NO waitcnt/pipelining authority on that path.
-  attn_output out-proj runs at ~16 TFLOPS (~19%) due to its strided A-operand.
+- **Baselines (BOTH NUMBERS BELOW ARE STALE — see `prefill-current-state.md`):** this line historically read
+  "generated 8B pp512 = 2549 tok/s vs hand 4413". Both are superseded:
+  - The `hand 4413` (and `~4099`) figures were **invalid** — leaked LDS geometry launched only 1/16 of the pipe-owned
+    output. Corrected geometry produced parity at only **2095.70 tok/s** (`prefill-current-state.md`,
+    `s9-post-8ab-regression-matrix-20260712.md`). Do not cite 4413 as a hand baseline anywhere.
+  - The generated `2549` is stale: the current shipped generated full-overlay route is pinned at **3561.32 tok/s**
+    (`prefill-current-state.md` @ `8045efcef`), with the planner-repair smoke at 3503–3509 tok/s
+    (`automatic-prefill-route-planner-repair-scope-20260716.md`).
+  - Consequence: on corrected numbers the "hand beats generated" framing in this section title no longer holds for 8B
+    (generated 3561.32 > corrected pipe 2095.70). The *density/TFLOPS* gap above is still a real qualitative target;
+    the specific tok/s pair that motivated it is not. Treat `prefill-current-state.md` as the sole 8B pp512 authority.
+  - Hardware note retained: the default `DEV=AMD` prefill GEMM is emitted by HIPRenderer with register-resident
+    operands — tinygrad has NO waitcnt/pipelining authority on that path; attn_output out-proj runs ~16 TFLOPS (~19%)
+    on its strided A-operand.
 
 ## Quant / int8 (14B Q4_K)
 

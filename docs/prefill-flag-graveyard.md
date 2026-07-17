@@ -8,8 +8,13 @@ so no one re-adds it blind.
 Status legend: `CLASSIFIED` = verdict banked here, removal pending the wrapper build; `REMOVED <sha>` = deleted.
 
 Source: read-only flag classification 2026-07-10 (5-family audit). Route ground truth: hybrid =
-`prefill_pipe_role_selective_generated` (GRAPH_GEMM only, ~4413 pp512); spec-owned =
-`prefill_wmma_pipe_lds_dbuf_primitive_generated` (+PIPE+LDS+DBUF, ~1332, ASM-backed LDS2 lifecycle).
+`prefill_pipe_role_selective_generated` (GRAPH_GEMM only); spec-owned =
+`prefill_wmma_pipe_lds_dbuf_primitive_generated` (+PIPE+LDS+DBUF, ASM-backed LDS2 lifecycle).
+
+> NOTE (stale numbers removed): the `~4413 pp512` hybrid figure once quoted here was **invalid** (leaked LDS geometry
+> ran 1/16 of the output; corrected to 2095.70 tok/s), and the `~1332` spec-owned figure predates the shipped route.
+> Current 8B pp512 authority is `prefill-current-state.md` (3561.32 tok/s). This graveyard's value is the per-flag
+> *verdicts*, not these throughput numbers.
 
 ---
 
