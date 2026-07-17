@@ -62,8 +62,12 @@ class LlamaFiveBufferFullKernel:
 
 def _accumulator_vectors(values:tuple[UOp, ...], subtile:UOp) -> tuple[UOp, ...]:
   """Transpose eight scalar WMMA lanes x eight oracle subtiles without copying its arithmetic."""
-  return tuple(UOp(Ops.STACK, dtypes.float.vec(8),
-    tuple(lane.substitute({subtile: UOp.const(dtypes.weakint, element)}) for lane in values)) for element in range(8))
+  # AFTER is legal on movement values.  A bare STACK is spec-legal as written but codegen expands it away, so an
+  # effect order attached to it lands on the scalar FP32 update underneath -- AFTER(ADD, STORE), which the program
+  # spec rejects.  Carry each vector through the same no-op typed BITCAST the bounded release uses: it survives
+  # expansion as the movement the effect order can hold, and a same-dtype bitcast copies no arithmetic.
+  return tuple(UOp(Ops.BITCAST, dtypes.float.vec(8), (UOp(Ops.STACK, dtypes.float.vec(8),
+    tuple(lane.substitute({subtile: UOp.const(dtypes.weakint, element)}) for lane in values)),)) for element in range(8))
 
 
 def _full_grid_sink(m:int, n:int, k:int) -> UOp:
