@@ -26,6 +26,8 @@ PASS = "MMQ_LLAMA_FIVE_BUFFER_GPU_PASS"
 BLOCKED = "MMQ_LLAMA_FIVE_BUFFER_GPU_BLOCKED"
 ROOT = Path(__file__).resolve().parents[2]
 SHAPE = (128, 128, 256)
+RTOL = 3e-3
+ATOL = 3e-3
 
 
 def _blocked(reason: str, **evidence: Any) -> dict[str, Any]:
@@ -74,6 +76,90 @@ def _buffer_manifest(names, buffers, *, device: str = "AMD") -> dict[str, Any]:
   return {"buffers": rows, "overlap_slots": overlaps}
 
 
+def _json_number(value: Any) -> int | float | str | None:
+  """Return a JSON-safe scalar while preserving non-finite diagnostics."""
+  if value is None: return None
+  value = value.item() if isinstance(value, np.generic) else value
+  if isinstance(value, (int, np.integer)): return int(value)
+  if isinstance(value, (float, np.floating)):
+    if np.isnan(value): return "nan"
+    if np.isposinf(value): return "inf"
+    if np.isneginf(value): return "-inf"
+    return float(value)
+  return str(value)
+
+
+def _numeric_comparison(got: np.ndarray, reference: np.ndarray, *, rtol: float = RTOL,
+                        atol: float = ATOL) -> dict[str, Any]:
+  """Compare output without raising, including finite/non-finite evidence."""
+  got, reference = np.asarray(got), np.asarray(reference)
+  result: dict[str, Any] = {
+    "status": "mismatch", "rtol": float(rtol), "atol": float(atol),
+    "got_shape": list(got.shape), "reference_shape": list(reference.shape),
+    "got_size": int(got.size), "reference_size": int(reference.size),
+  }
+  if got.shape != reference.shape:
+    result.update({"mismatch_count": None, "first_mismatch_index": None,
+                   "first_mismatch_got": None, "first_mismatch_reference": None,
+                   "nan_got": int(np.count_nonzero(np.isnan(got))) if np.issubdtype(got.dtype, np.number) else None,
+                   "nan_reference": int(np.count_nonzero(np.isnan(reference))) if np.issubdtype(reference.dtype, np.number) else None,
+                   "inf_got": int(np.count_nonzero(np.isinf(got))) if np.issubdtype(got.dtype, np.number) else None,
+                   "inf_reference": int(np.count_nonzero(np.isinf(reference))) if np.issubdtype(reference.dtype, np.number) else None,
+                   "joint_finite": 0, "max_abs_error": None, "mean_abs_error": None})
+    return result
+
+  got_num, ref_num = np.issubdtype(got.dtype, np.number), np.issubdtype(reference.dtype, np.number)
+  if not (got_num and ref_num):
+    close = got == reference
+    finite = np.zeros(got.shape, dtype=bool)
+    nan_got = nan_ref = inf_got = inf_ref = None
+  else:
+    close = np.isclose(got, reference, rtol=rtol, atol=atol, equal_nan=False)
+    got_finite, ref_finite = np.isfinite(got), np.isfinite(reference)
+    finite = got_finite & ref_finite
+    nan_got, nan_ref = int(np.count_nonzero(np.isnan(got))), int(np.count_nonzero(np.isnan(reference)))
+    inf_got, inf_ref = int(np.count_nonzero(np.isinf(got))), int(np.count_nonzero(np.isinf(reference)))
+  mismatches = ~close
+  mismatch_count = int(np.count_nonzero(mismatches))
+  first_index = first_got = first_ref = None
+  if mismatch_count:
+    flat = int(np.flatnonzero(mismatches)[0])
+    first_index = [int(x) for x in np.unravel_index(flat, got.shape)]
+    first_got, first_ref = _json_number(got.flat[flat]), _json_number(reference.flat[flat])
+  if got_num and ref_num:
+    errors = np.abs(got[finite] - reference[finite])
+    max_error = _json_number(np.max(errors)) if errors.size else None
+    mean_error = _json_number(np.mean(errors)) if errors.size else None
+    joint_finite = int(np.count_nonzero(finite))
+  else:
+    max_error = mean_error = None
+    joint_finite = 0
+  result.update({
+    "status": "pass" if mismatch_count == 0 else "mismatch", "mismatch_count": mismatch_count,
+    "first_mismatch_index": first_index, "first_mismatch_got": first_got,
+    "first_mismatch_reference": first_ref, "joint_finite": joint_finite,
+    "max_abs_error": max_error, "mean_abs_error": mean_error,
+    "nan_got": nan_got, "nan_reference": nan_ref, "inf_got": inf_got, "inf_reference": inf_ref,
+  })
+  return result
+
+
+def _artifact_evidence(program, metadata_parser) -> tuple[Any, Any, dict[str, Any]]:
+  """Capture source/binary identity and resource metadata before dispatch comparison."""
+  binary = next((u.arg for u in program.src if u.op.name == "BINARY"), None)
+  source = next((u.arg for u in program.src if u.op.name == "SOURCE"), None)
+  evidence: dict[str, Any] = {
+    "source_sha256": hashlib.sha256(source.encode()).hexdigest() if isinstance(source, str) else None,
+    "binary_sha256": hashlib.sha256(binary).hexdigest() if isinstance(binary, bytes) else None,
+    "source_nbytes": len(source.encode()) if isinstance(source, str) else None,
+    "binary_nbytes": len(binary) if isinstance(binary, bytes) else None,
+  }
+  if isinstance(binary, bytes):
+    try: evidence["resources"] = metadata_parser(binary)
+    except BaseException as exc: evidence["resources_error"] = f"{type(exc).__name__}: {exc}"
+  return binary, source, evidence
+
+
 def _worker() -> dict[str, Any]:
   """Compile and dispatch the sole AMD case.  Called only in a child process."""
   from tinygrad import Tensor, dtypes
@@ -110,6 +196,10 @@ def _worker() -> dict[str, Any]:
   if programs != [program]:
     return _blocked("expected exactly one PROGRAM", program_count=len(programs))
 
+  # Capture the exact artifact identity/resources before any runtime work or
+  # numerical comparison, so a mismatch remains reproducible and auditable.
+  binary, source, artifact = _artifact_evidence(program, parse_amdgpu_metadata)
+
   # Materialize all buffers before dispatch.  The sink uses the exact five
   # parameter slots; runtime invocation avoids a second custom_kernel compile.
   device = Device["AMD"]
@@ -126,8 +216,7 @@ def _worker() -> dict[str, Any]:
   if len(globals_) != 5 or any(g not in range(5) for g in globals_):
     return _blocked("AMD PROGRAM global ABI is not the expected five slots",
                     globals=list(globals_), program_global_size=list(program.arg.global_size),
-                    program_local_size=list(program.arg.local_size or ()), **manifest)
-  runtime = get_runtime("AMD", program)
+                    program_local_size=list(program.arg.local_size or ()), **artifact, **manifest)
   dispatch = {"globals": list(globals_), "global_size": list(program.arg.global_size),
               "local_size": list(program.arg.local_size or ()), "vals": list(program.arg.vals({}))}
   # Capture the concrete kernarg allocation used by AMDProgram.__call__.  This
@@ -135,6 +224,11 @@ def _worker() -> dict[str, Any]:
   # returns the same ArgsState, but lets a structured MMU blocker distinguish
   # a bad generated data pointer from a fault while reading the argument block.
   kernarg = {}
+  try:
+    runtime = get_runtime("AMD", program)
+  except BaseException as exc:
+    return _blocked("AMD runtime setup failed", exception=type(exc).__name__, error=str(exc),
+                    dispatch=dispatch, kernarg=kernarg, **artifact, **manifest)
   fill_kernargs = runtime.fill_kernargs
   def capture_kernargs(bufs, vals=()):
     state = fill_kernargs(bufs, vals)
@@ -150,21 +244,23 @@ def _worker() -> dict[str, Any]:
             vals=program.arg.vals({}), wait=True)
   except BaseException as exc:
     return _blocked("AMD dispatch failed", exception=type(exc).__name__, error=str(exc),
-                    dispatch=dispatch, kernarg=kernarg, **manifest)
-  got = out.numpy().reshape(m, n)
-  np.testing.assert_allclose(got, reference, rtol=3e-3, atol=3e-3)
-  binary = next((u.arg for u in program.src if u.op is Ops.BINARY), None)
-  source = next((u.arg for u in program.src if u.op is Ops.SOURCE), None)
-  metadata = parse_amdgpu_metadata(binary) if isinstance(binary, bytes) else None
+                    dispatch=dispatch, kernarg=kernarg, **artifact, **manifest)
+  try:
+    got = out.numpy().reshape(m, n)
+  except BaseException as exc:
+    return _blocked("AMD output read failed", exception=type(exc).__name__, error=str(exc),
+                    dispatch=dispatch, kernarg=kernarg, **artifact, **manifest)
+  comparison = _numeric_comparison(got, reference)
+  evidence = {"dispatch_performed": True, "full_output_compared": True,
+              "global_size": list(program.arg.global_size), "local_size": list(program.arg.local_size),
+              "dispatch": dispatch, "kernarg": kernarg, "comparison": comparison,
+              "comparator_status": comparison["status"],
+              "max_abs_error": comparison["max_abs_error"], "mean_abs_error": comparison["mean_abs_error"],
+              **artifact, **manifest}
+  if comparison["status"] != "pass":
+    return _blocked("numeric output mismatch", **evidence)
   return {"protocol": PROTOCOL, "shape": [m, n, k], "passed": True, "verdict": PASS,
-          "blocker": None, "evidence": {
-            "dispatch_performed": True, "full_output_compared": True,
-            "global_size": list(program.arg.global_size), "local_size": list(program.arg.local_size),
-            "source_sha256": hashlib.sha256(source.encode()).hexdigest() if isinstance(source, str) else None,
-            "binary_sha256": hashlib.sha256(binary).hexdigest() if isinstance(binary, bytes) else None,
-            "resources": metadata, "max_abs_error": float(np.max(np.abs(got-reference))),
-            "mean_abs_error": float(np.mean(np.abs(got-reference))),
-          }}
+          "blocker": None, "evidence": evidence}
 
 
 def run_amd_validation(*, timeout_seconds: float = 300.0,

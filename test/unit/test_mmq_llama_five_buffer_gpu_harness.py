@@ -1,3 +1,4 @@
+import json
 import numpy as np
 
 from tinygrad import dtypes
@@ -5,7 +6,7 @@ from tinygrad.uop.ops import Ops, UOp
 
 from extra.qk.mmq_llama_five_buffer_full_kernel import build_llama_five_buffer_full_kernel
 from extra.qk.mmq_llama_five_buffer_gpu_harness import (_bind_sink, _random_q4_words,
-  run_amd_validation)
+  _numeric_comparison, run_amd_validation)
 
 
 def test_gpu_harness_random_q4_fixture_has_independent_abi_shape():
@@ -32,3 +33,26 @@ def test_gpu_harness_timeout_path_fails_closed_without_gpu_access():
   assert row["verdict"] == "MMQ_LLAMA_FIVE_BUFFER_GPU_BLOCKED"
   assert row["blocker"] == "timeout_seconds must be positive"
 
+
+def test_gpu_harness_numeric_mismatch_is_structured_and_json_safe():
+  got = np.array([[np.nan, 2.0, np.inf], [4.0, 8.0, 0.0]], dtype=np.float32)
+  reference = np.array([[1.0, 2.0, 3.0], [4.0, 7.0, 0.0]], dtype=np.float32)
+  result = _numeric_comparison(got, reference)
+  assert result["status"] == "mismatch"
+  assert result["mismatch_count"] == 3
+  assert result["first_mismatch_index"] == [0, 0]
+  assert result["first_mismatch_got"] == "nan"
+  assert result["first_mismatch_reference"] == 1.0
+  assert result["nan_got"] == 1 and result["inf_got"] == 1
+  assert result["joint_finite"] == 4
+  assert result["max_abs_error"] == 1.0 and result["mean_abs_error"] == 0.25
+  json.dumps(result, allow_nan=False)
+
+
+def test_gpu_harness_numeric_match_reports_comparator_pass():
+  result = _numeric_comparison(np.array([1.0, 2.0], dtype=np.float32),
+                               np.array([1.0, 2.001], dtype=np.float32))
+  assert result["status"] == "pass"
+  assert result["mismatch_count"] == 0
+  assert result["first_mismatch_index"] is None
+  assert result["nan_got"] == result["nan_reference"] == 0
