@@ -356,7 +356,17 @@ class AMDOps(FastEnum):
 
 def _reg(r:Register): return r  # passthrough; encoding maps index in post_regalloc
 
-def _vreg_def(ctx:IselContext): return (ctx.vreg(_vpool(ctx)),)
+def _value_vpool(ctx:IselContext, dtype):
+  pool = _vpool(ctx)
+  # Some gfx11 scalar fp16 operand encodings (notably VOP1 conversions) use
+  # register bit 7 as the high-half selector.  Treating v128..v255 as
+  # independent fp16 VGPRs therefore aliases v0..v127.h and can corrupt a
+  # live dword carrier.
+  # Keep scalar halves in low halves for now, so the ordinary whole-VGPR
+  # allocator sees (and rejects) every collision with a live dword.
+  return tuple(r for r in pool if r.index < 128) if not isinstance(dtype, PtrDType) and dtype.scalar() is dtypes.half else pool
+
+def _vreg_def(ctx:IselContext, dtype=None): return (ctx.vreg(_value_vpool(ctx, dtype) if dtype is not None else _vpool(ctx)),)
 def _sptr_def(ctx:IselContext): return (ctx.vreg(SPTR_POOL),)
 
 def isel_typed_wait(x: UOp) -> UOp:
@@ -687,12 +697,13 @@ def isel_load(ctx:IselContext, x:UOp):
     # wmma_acc: this serves the POST-loop read (the in-loop src[2] reads are consumed directly in isel_wmma via the
     # in-place C fragment, so they never reach isel_load). order (src[0]) keeps the END/init chain reachable + ordered.
     meta = (UOp(Ops.NOOP, arg=idxc.arg),) if isinstance(idxc.arg, tuple) and idxc.arg[:1] == ("fixed_acc",) else ()
-    return UOp(Ops.INS, x.dtype.scalar(), src=(idxc.src[0], idxc.src[1])+meta, arg=AMDOps.ACCUM_READ, tag=(ctx.vreg(_vpool(ctx)),))
+    return UOp(Ops.INS, x.dtype.scalar(), src=(idxc.src[0], idxc.src[1])+meta, arg=AMDOps.ACCUM_READ,
+               tag=(ctx.vreg(_value_vpool(ctx, x.dtype.scalar())),))
   if isinstance(idxc.arg, tuple) and idxc.arg[:1] == ("stage_reg",):
     # Static register-stage read. src[0] carries the AFTER/order chain and
     # src[1] is the physical pin, just like the accumulator carrier.
     return UOp(Ops.INS, x.dtype.scalar(), src=(idxc.src[0], idxc.src[1]), arg=AMDOps.STAGE_READ,
-               tag=(ctx.vreg(_vpool(ctx)),))
+               tag=(ctx.vreg(_value_vpool(ctx, x.dtype.scalar())),))
   if idxc.arg == "lds":                      # LDS load(s) from carrier address VGPR; src[1]=ordering dependency
     isz, n = x.dtype.scalar().itemsize, x.dtype.count
     base_imm = 0 if len(idxc.src) < 3 else idxc.src[2].arg
@@ -703,13 +714,13 @@ def isel_load(ctx:IselContext, x:UOp):
       addr = idxc.src[0] if imm == 0 else UOp(Ops.INS, dtypes.int32,
         src=(idxc.src[0], UOp.const(dtypes.int32, imm).rtag()), arg=AMDOps.V_IADD, tag=_vreg_def(ctx))
       loads.append(UOp(Ops.INS, x.dtype.scalar(), src=(addr, idxc.src[1]) + dep + (() if meta is None else (meta,)),
-                       arg=AMDOps.DS_LOAD, tag=(ctx.vreg(_vpool(ctx)),)))
+                       arg=AMDOps.DS_LOAD, tag=(ctx.vreg(_value_vpool(ctx, x.dtype.scalar())),)))
     return loads[0] if n == 1 else UOp(Ops.NOOP, x.dtype, src=tuple(loads))
   if (wide := _ordinary_integer_wide_load(ctx, x, idxc, dep)) is not None: return wide
   base, off = idxc.src[0], idxc.src[1]
   isz, n = x.dtype.scalar().itemsize, x.dtype.count
   loads = tuple(UOp(Ops.INS, x.dtype.scalar(), src=(off, base, UOp.const(dtypes.int32, l*isz).rtag()) + dep,
-                    arg=AMDOps.GLOBAL_LOAD, tag=(ctx.vreg(_vpool(ctx)),)) for l in range(n))
+                    arg=AMDOps.GLOBAL_LOAD, tag=(ctx.vreg(_value_vpool(ctx, x.dtype.scalar())),)) for l in range(n))
   return loads[0] if n == 1 else UOp(Ops.NOOP, x.dtype, src=loads)
 
 def isel_store(ctx:IselContext, a:UOp, b:UOp, x:UOp):
@@ -759,7 +770,7 @@ def isel_store(ctx:IselContext, a:UOp, b:UOp, x:UOp):
     if byte_carrier and b.dtype.count != 1:
       raise NotImplementedError(f"AMD:ISA unsupported or unaligned byte LDS store {b.dtype}; expected an aligned 16-byte carrier")
     esz = b.dtype.itemsize                    # element width from the value's dtype (KNOWN here; lowered INS srcs are void)
-    if b.op is Ops.CONST: b = UOp(Ops.INS, b.dtype, src=(b.rtag(),), arg=AMDOps.V_CONST, tag=_vreg_def(ctx))  # e.g. acc init 0.0
+    if b.op is Ops.CONST: b = UOp(Ops.INS, b.dtype, src=(b.rtag(),), arg=AMDOps.V_CONST, tag=_vreg_def(ctx, b.dtype))  # e.g. acc init 0.0
     addr = a.src[0] if lds_imm == 0 else UOp(Ops.INS, dtypes.int32, src=(a.src[0], UOp.const(dtypes.int32, lds_imm).rtag()), arg=AMDOps.V_IADD, tag=_vreg_def(ctx))
     meta = _prefill_source_value_metadata(a.tag, x.tag)
     return UOp(Ops.INS, dtypes.void, src=(addr, b, a.src[1], UOp.const(dtypes.int32, esz).rtag()) +
@@ -775,7 +786,7 @@ def isel_store(ctx:IselContext, a:UOp, b:UOp, x:UOp):
 
 def _tov(ctx:IselContext, u:UOp):
   # ensure an operand is in a VGPR: CONST -> v_mov, RANGE loop counter (SGPR) -> v_mov s->v, else already an INS VGPR
-  if u.op is Ops.CONST: return UOp(Ops.INS, u.dtype, src=(u.rtag(),), arg=AMDOps.V_CONST, tag=_vreg_def(ctx))
+  if u.op is Ops.CONST: return UOp(Ops.INS, u.dtype, src=(u.rtag(),), arg=AMDOps.V_CONST, tag=_vreg_def(ctx, u.dtype))
   if _is_sgpr(u): return _movs2v(ctx, u)
   return u
 
@@ -811,13 +822,13 @@ def isel_customi(ctx:IselContext, x:UOp):
       return UOp(Ops.INS, dtypes.int32, src=(u.src[0], u.src[1]), arg=AMDOps.V_PACK, tag=_vreg_def(ctx))
     return _tov(ctx, u)
   if "fdot2" in arg:        # src=(acc, a, b); a/b may be packed b32 (F.3 marker) or half2 carriers (tile builtin)
-    return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]), pack(x.src[1]), pack(x.src[2])), arg=AMDOps.V_DOT2, tag=_vreg_def(ctx))
+    return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]), pack(x.src[1]), pack(x.src[2])), arg=AMDOps.V_DOT2, tag=_vreg_def(ctx, x.dtype))
   if "exp2" in arg:         # Phase N1A: __builtin_amdgcn_exp2f({0}) -> hardware v_exp_f32 (2^x), no VALU polynomial
-    return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]),), arg=AMDOps.V_EXP, tag=_vreg_def(ctx))
+    return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]),), arg=AMDOps.V_EXP, tag=_vreg_def(ctx, x.dtype))
   if "ds_bpermute" in arg:  # tile builtin: src=(data, addr) -> ds_bpermute_b32(addr, data)
-    return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[1]), _tov(ctx, x.src[0])), arg=AMDOps.DS_BPERMUTE, tag=_vreg_def(ctx))
+    return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[1]), _tov(ctx, x.src[0])), arg=AMDOps.DS_BPERMUTE, tag=_vreg_def(ctx, x.dtype))
   if arg == "bpermute":     # F.2 marker: src=(addr, data)
-    return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]), _tov(ctx, x.src[1])), arg=AMDOps.DS_BPERMUTE, tag=_vreg_def(ctx))
+    return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]), _tov(ctx, x.src[1])), arg=AMDOps.DS_BPERMUTE, tag=_vreg_def(ctx, x.dtype))
   raise NotImplementedError(f"AMD:ISA CUSTOMI unmapped arg: {arg[:70]}")
 
 # ---- Phase G ALU/control isel ----
@@ -840,14 +851,14 @@ def isel_cast(ctx:IselContext, x:UOp):
   if s is dtypes.float32 and d is dtypes.char:
     # VGPR scalar values occupy a dword. v_cvt_i32_f32 supplies the integer value and byte stores/packed consumers
     # consume its low 8 bits; signed re-widening below explicitly sign-extends those bits when needed.
-    return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]),), arg=AMDOps.V_CVT_F2I, tag=_vreg_def(ctx))
+    return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]),), arg=AMDOps.V_CVT_F2I, tag=_vreg_def(ctx, x.dtype))
   if s in (dtypes.char, dtypes.short, dtypes.int) and d in (dtypes.short, dtypes.int, dtypes.long) and s.itemsize < d.itemsize:
     mask, sign = (1 << (s.itemsize * 8)) - 1, 1 << (s.itemsize * 8 - 1)
     narrowed = UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, x.src[0]), UOp.const(dtypes.int32, mask).rtag()),
                    arg=AMDOps.V_AND, tag=_vreg_def(ctx))
     biased = UOp(Ops.INS, dtypes.int32, src=(narrowed, UOp.const(dtypes.int32, sign).rtag()),
                  arg=AMDOps.V_XOR, tag=_vreg_def(ctx))
-    return UOp(Ops.INS, x.dtype, src=(biased, UOp.const(dtypes.int32, -sign).rtag()), arg=AMDOps.V_IADD, tag=_vreg_def(ctx))
+    return UOp(Ops.INS, x.dtype, src=(biased, UOp.const(dtypes.int32, -sign).rtag()), arg=AMDOps.V_IADD, tag=_vreg_def(ctx, x.dtype))
   if (s, d) == (dtypes.ulong, dtypes.uint):
     return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]), UOp.const(dtypes.int32, (1 << 32) - 1).rtag()),
                arg=AMDOps.V_AND, tag=_vreg_def(ctx))
@@ -855,7 +866,7 @@ def isel_cast(ctx:IselContext, x:UOp):
     zext = UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, x.src[0]), UOp.const(dtypes.int32, (1 << (s.itemsize * 8)) - 1).rtag()),
                arg=AMDOps.V_AND, tag=_vreg_def(ctx)) if s in (dtypes.uchar, dtypes.ushort) else _tov(ctx, x.src[0])
     as_float = UOp(Ops.INS, dtypes.float32, src=(zext,), arg=AMDOps.V_CVT_U2F, tag=_vreg_def(ctx))
-    return as_float if d is dtypes.float32 else UOp(Ops.INS, x.dtype, src=(as_float,), arg=AMDOps.V_CVT_F2H, tag=_vreg_def(ctx))
+    return as_float if d is dtypes.float32 else UOp(Ops.INS, x.dtype, src=(as_float,), arg=AMDOps.V_CVT_F2H, tag=_vreg_def(ctx, x.dtype))
   if s in (dtypes.char, dtypes.short) and d in (dtypes.float32, dtypes.half):
     # gfx11 converts i32 to f32, so make the signed narrow value explicit before conversion. This is also the
     # canonical path for packed-quant scales/codes: interpreting their byte payload as unsigned would corrupt math.
@@ -867,22 +878,23 @@ def isel_cast(ctx:IselContext, x:UOp):
     sext = UOp(Ops.INS, dtypes.int32, src=(biased, UOp.const(dtypes.int32, -sign).rtag()),
                arg=AMDOps.V_IADD, tag=_vreg_def(ctx))
     as_float = UOp(Ops.INS, dtypes.float32, src=(sext,), arg=AMDOps.V_CVT_I2F, tag=_vreg_def(ctx))
-    return as_float if d is dtypes.float32 else UOp(Ops.INS, x.dtype, src=(as_float,), arg=AMDOps.V_CVT_F2H, tag=_vreg_def(ctx))
+    return as_float if d is dtypes.float32 else UOp(Ops.INS, x.dtype, src=(as_float,), arg=AMDOps.V_CVT_F2H, tag=_vreg_def(ctx, x.dtype))
   cvt = {(dtypes.float32, dtypes.half): AMDOps.V_CVT_F2H, (dtypes.half, dtypes.float32): AMDOps.V_CVT_H2F,
          (dtypes.float32, dtypes.int): AMDOps.V_CVT_F2I, (dtypes.int, dtypes.float32): AMDOps.V_CVT_I2F,
          (dtypes.float32, dtypes.uint): AMDOps.V_CVT_F2U, (dtypes.float32, dtypes.ulong): AMDOps.V_CVT_F2U,
          (dtypes.bool, dtypes.float32): AMDOps.V_CVT_I2F}.get((s, d))
   if cvt is None: raise NotImplementedError(f"AMD:ISA CAST {s} -> {d} unsupported")
-  return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]),), arg=cvt, tag=_vreg_def(ctx))
+  return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]),), arg=cvt, tag=_vreg_def(ctx, x.dtype))
 
 def isel_cmp(ctx:IselContext, x:UOp, ne:bool):
   flt = x.src[0].dtype.scalar() in dtypes.floats
   op = (AMDOps.V_CMPNE_F if flt else AMDOps.V_CMPNE_I) if ne else (AMDOps.V_CMPLT_F if flt else AMDOps.V_CMPLT_I)
   one = UOp(Ops.INS, dtypes.int32, src=(UOp.const(dtypes.int32, 1).rtag(),), arg=AMDOps.V_CONST, tag=_vreg_def(ctx))
-  return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]), _tov(ctx, x.src[1]), one), arg=op, tag=_vreg_def(ctx))
+  return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]), _tov(ctx, x.src[1]), one), arg=op, tag=_vreg_def(ctx, x.dtype))
 
 def isel_where(ctx:IselContext, x:UOp):  # cond(0/1) ? t : f
-  return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]), _tov(ctx, x.src[1]), _tov(ctx, x.src[2])), arg=AMDOps.V_WHERE, tag=_vreg_def(ctx))
+  return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]), _tov(ctx, x.src[1]), _tov(ctx, x.src[2])), arg=AMDOps.V_WHERE,
+             tag=_vreg_def(ctx, x.dtype))
 
 def _const_int_value(u:UOp) -> int|None:
   while u.op in (Ops.CAST, Ops.BITCAST) and u.src: u = u.src[0]
@@ -1814,7 +1826,7 @@ def _localize_memory_address_recipes(ctx:IselContext, x:UOp):
     # low ten workitem-id bits that the multidimensional path uses.
     if u.arg is AMDOps.MOV and isinstance(u.tag, tuple) and len(u.tag) == 1 and u.tag[0].cons == (TID,):
       wi_src = (src[0], UOp.const(dtypes.int32, 0).rtag()) + src[1:]
-      return memo.setdefault(u, UOp(Ops.INS, u.dtype, wi_src, AMDOps.WI_ID, tag=_vreg_def(ctx)))
+      return memo.setdefault(u, UOp(Ops.INS, u.dtype, wi_src, AMDOps.WI_ID, tag=_vreg_def(ctx, u.dtype)))
     cons = u.tag[0].cons if isinstance(u.tag, tuple) and len(u.tag) == 1 and isinstance(u.tag[0], Register) else _vpool(ctx)
     return memo.setdefault(u, u.replace(src=src, tag=(ctx.vreg(cons),)))
   subs:dict[UOp,UOp] = {}
@@ -1961,11 +1973,11 @@ isel_matcher = PatternMatcher([
   (UPat(Ops.DEFINE_LOCAL, name="x"), lambda x: x.replace(op=Ops.DEFINE_REG) if x.op is Ops.DEFINE_LOCAL else None),
   # decode-attention primitives injected as CUSTOMI markers (Phase F.2/F.3): cross-lane exchange + packed fp16 dot
   (UPat(Ops.CUSTOMI, name="x"), lambda ctx, x: isel_customi(ctx, x)),
-  (UPat(Ops.EXP2, name="x"), lambda ctx, x: UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]),), arg=AMDOps.V_EXP, tag=_vreg_def(ctx))),  # N1A: hardware exp2
+  (UPat(Ops.EXP2, name="x"), lambda ctx, x: UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]),), arg=AMDOps.V_EXP, tag=_vreg_def(ctx, x.dtype))),  # N1A: hardware exp2
   (UPat(Ops.RECIPROCAL, dtype=dtypes.float32, name="x"),
-   lambda ctx, x: UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]),), arg=AMDOps.V_RCP, tag=_vreg_def(ctx))),
+   lambda ctx, x: UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]),), arg=AMDOps.V_RCP, tag=_vreg_def(ctx, x.dtype))),
   (UPat(Ops.TRUNC, dtype=dtypes.float32, name="x"),
-   lambda ctx, x: UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]),), arg=AMDOps.V_TRUNC, tag=_vreg_def(ctx))),
+   lambda ctx, x: UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]),), arg=AMDOps.V_TRUNC, tag=_vreg_def(ctx, x.dtype))),
   (UPat.var("a").store(UPat.var("b"), name="x"), isel_store),
   # float elementwise ALU (commutative add/mul); a CONST operand is folded to a literal (e.g. a-b == a + b*-1.0)
   ((UPat(dtype=dtypes.float32) + UPat()).named("x"), lambda ctx, x: _binop(ctx, x, AMDOps.V_ADD)),
@@ -2053,7 +2065,7 @@ def alloc_vregs(ctx:IselContext, x:UOp):
   if isinstance(x.tag, tuple) and x.tag[0]._cons: return None             # already a constrained vreg
   if isinstance(x.tag, tuple): return x.replace(tag=(ctx.vreg(x.tag),))   # physical (TID) -> constrained vreg
   if x.tag is None:
-    return x.replace(tag=(ctx.vreg(SPTR_POOL if isinstance(x.dtype, PtrDType) else _vpool(ctx)),))
+    return x.replace(tag=(ctx.vreg(SPTR_POOL if isinstance(x.dtype, PtrDType) else _value_vpool(ctx, x.dtype)),))
   return None
 
 def _dbuf_store_addr_seed(x:UOp) -> UOp|None:

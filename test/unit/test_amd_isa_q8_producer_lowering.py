@@ -5,10 +5,11 @@ import pytest
 
 from tinygrad import Tensor, dtypes
 from tinygrad.codegen import to_program, to_program_cache
+from tinygrad.codegen.late.regalloc import LinearScanRegallocContext
 from tinygrad.helpers import Context, Target
 from tinygrad.renderer.isa import IselContext, Register
 from tinygrad.renderer.amd.elf import kernel_descriptor_from_elf
-from tinygrad.renderer.isa.amd import AMDISARenderer, AMDOps, isel_cast, isel_matcher, lower_inst
+from tinygrad.renderer.isa.amd import AMDISARenderer, AMDOps, VBASE, isel_cast, isel_matcher, lower_inst
 from tinygrad.uop.ops import Ops, UOp
 
 from extra.qk.mmq_q4k_q8_reference import q8_1_mmq_ds4_quantize_reference
@@ -48,6 +49,27 @@ def test_float32_to_signed_int8_selects_i32_conversion_and_encodes():
   encoded = lower_inst(physical)
   assert str(encoded.arg).startswith("v_cvt_i32_f32_e32")
   assert encoded.arg.to_bytes()
+
+
+def test_scalar_half_allocation_cannot_alias_a_live_dword_vgpr():
+  ctx = IselContext(UOp.sink())
+  address = UOp(Ops.INS, dtypes.int32, (UOp.const(dtypes.int32, 0).rtag(),), AMDOps.V_MOVK,
+                tag=(ctx.vreg(VBASE[1:]),))
+  source = UOp(Ops.INS, dtypes.float32, (UOp.const(dtypes.float32, 2.0).rtag(),), AMDOps.V_CONST,
+               tag=(ctx.vreg(VBASE[1:]),))
+  half = isel_cast(ctx, UOp(Ops.CAST, dtypes.half, (source,)))
+  assert half.reg.cons and max(r.index for r in half.reg.cons) < 128
+  restored = isel_cast(ctx, UOp(Ops.CAST, dtypes.float32, (half,)))
+  # Keep the dword address live across the fp16 definition and use.
+  final = UOp(Ops.INS, dtypes.int32, (address, restored), AMDOps.V_IADD, tag=(ctx.vreg(VBASE[1:]),))
+  uops = list(UOp.sink(final).toposort())
+  regalloc = LinearScanRegallocContext(uops, _renderer())
+
+  address_reg = regalloc.reals[uops.index(address)][address.reg]
+  half_reg = regalloc.reals[uops.index(half)][half.reg]
+  assert half_reg.index < 128
+  assert address_reg.index != half_reg.index
+  assert not regalloc.spills
 
 
 def test_reciprocal_and_signed_int8_cast_survive_regalloc_without_spills():
@@ -112,6 +134,11 @@ def test_half_multiply_selects_and_encodes_gfx1100_native_v_mul_f16():
   assert selected.dtype is dtypes.half                      # never widened to fp32
   assert selected.arg is not AMDOps.V_MUL                    # V_MUL lowers to v_mul_f32_e32
   assert not any(u.op is Ops.MUL for u in selected.toposort())
+  allocated = isel_matcher.rewrite(selected, ctx)
+  assert allocated.reg.cons and max(r.index for r in allocated.reg.cons) < 128
+
+  selected_where = isel_matcher.rewrite(UOp(Ops.WHERE, dtypes.half, (UOp.const(dtypes.bool, True), a, b)), ctx)
+  assert selected_where.reg.cons and max(r.index for r in selected_where.reg.cons) < 128
 
   physical = selected.replace(src=(a.replace(tag=(Register("v1", 1),)), b.replace(tag=(Register("v2", 2),))),
                               tag=(Register("v3", 3),))
