@@ -56,7 +56,9 @@ Two traps recorded so they are not re-entered:
 
 ### Next owning problem: full-grid is NOT gated on spills
 
-The spill gate was only one of the listed full-grid blockers. §13.1 is still closed, and its remaining blockers are
+**Superseded by §0.1: both SPEC gates are now closed and full-grid reaches regalloc. The GEP/AFTER diagnosis below is
+wrong about the verifier and is retained only as history.** The spill gate was only one of the listed full-grid
+blockers. §13.1 was still closed at that point, and its remaining blockers were
 graph/spec-shaped: `compile_llama_five_buffer_full_kernel(build_llama_five_buffer_full_kernel(128,128,256))` fails
 **before** register allocation, in SPEC type verification. Verify each `BLOCKER` line independently rather than
 assuming the resource one was the last.
@@ -104,6 +106,83 @@ Known so far, so it is not re-derived:
 Unchanged and still true: the four 16-subtile AMD tests, two `test_current_prefill_execution_adapter` rows, and
 `test_q4k_wmma_tiled_no_hand_scan_is_clean` fail identically at `412d7998f` and at `5982d83c1`. They are historical,
 not regressions. Do not xfail them.
+
+## 0.1 Status update 2026-07-17 (later): both SPEC gates CLOSED, full-grid reaches regalloc
+
+Accepted and pushed: `4b153b8e9 [qk][mmq] order full-grid stores through the pointer, not a no-op value bitcast`.
+
+The §13.1 verifier blocker is closed. It was **one** defect seen through two different verifiers, not two:
+
+- `_full_grid_sink` built `value = UOp(Ops.BITCAST, store.src[1].dtype, (store.src[1],))` — a BITCAST to the dtype it
+  already has. Codegen folds that no-op away and the `.after()` it carried lands on the scalar FP32 update, so
+  `spec_program` rejected `AFTER(ADD, STORE)` at `codegen/__init__.py:196`.
+- `e5efb9707` read that as a missing movement carrier and wrapped the accumulator vectors in a typed BITCAST. That
+  stopped the AFTER only by keeping a `vec(8)` alive across the writeback, which blocks the `GEP(STACK, i) -> src[i]`
+  fold and left 64 `GEP(BITCAST(...))` in the **source** sink — rejected by `spec_tensor` at `codegen/__init__.py:77`.
+
+**The two error strings came from two different `type_verify` call sites.** `spec_tensor` has no general GEP rule (only
+GEP over `WMMA`/`SHAPED_WMMA`/`LOAD`, `spec.py:131,143,147`); the general rule at `spec.py:250` is `spec_program`-only.
+The handoff's "that node passes `spec_program` in isolation" was true and irrelevant — it was never checked against
+`spec_tensor`. **Always confirm WHICH verifier failed before diagnosing the node.** `shape` was never involved.
+
+Fix: revert the accumulator carrier and drop the value-side edge. The pointer's `INDEX` is a real movement value and
+already totally orders the 64 stores. No arithmetic, rounding, or ABI change.
+
+### Current exact blocker: full-grid register pressure (genuinely resource-shaped)
+
+Matched env (`PYTHONHASHSEED=0 REGALLOC_ADDR_REMAT=1 REGALLOC_END_NO_SOURCE_LIVE=1` + `REGALLOC_DEBUG`/`_PRESSURE`/`_SPILLS`):
+
+```text
+REGALLOC_DEBUG: 13547 uops, PEAK 452 live vregs @ uop 5147, pool=255
+REGALLOC_PRESSURE: spill_request=v0 at=3014 pool=255
+REGALLOC_SPILLS: count=96 stack_size=381
+```
+
+Spill victims: 80 `V_CVT_I2F`, 11 `V_MUL`, 4 `V_ADD`, 1 `V_CMPLT_I`. Peak composition: 184 `V_CVT_I2F`, 129 `V_IMUL`,
+64 `GLOBAL_LOAD`, then a thin tail. Bounded oracle is unregressed at `4b153b8e9`: 9,481 UOps, peak 158 @ 5908, 0 spills,
+0 stack.
+
+The decisive measurement — **the full-grid math is identical to the bounded probe**:
+
+| metric | bounded | full-grid (128,128,256) |
+|---|---:|---:|
+| `v_wmma_i32_16x16x16_iu8` | 128 | 128 |
+| `ds_load_b128` | 256 | 256 |
+| total UOps | 9,481 | 13,547 |
+| peak live vregs | **158** | **452** |
+| `V_CVT_I2F` live at peak | **8** | **184** |
+
+Same WMMA and LDS counts, same 512 total `V_CVT_I2F`. Full-grid adds 4,066 UOps and 64 `GLOBAL_STORE` (at 11,568..13,543).
+So the extra 294 live virtuals are **not** new math — they come from the writeback seam.
+
+All 184 drains live at the peak are defined in UOps 2,841..5,321 and every one is consumed by a `V_MUL` at 5,930..8,935.
+The `V_MUL`/`V_ADD` pairs there are the exact serial recurrence (`previous + scale*C`), consumed one term at a time, so
+each drain is held for thousands of UOps waiting its turn. WMMAs are not all hoisted first (they span 2,818..13,089) —
+the pile-up is local to that region.
+
+**Leading hypothesis, NOT yet confirmed — verify before acting.** `_accumulator_vectors` transposes eight scalar WMMA
+lanes across eight oracle subtiles (vector `e` = `STACK(lane_0..lane_7)` with `subtile -> e`). That transposition
+requires all eight subtiles' drains co-live to assemble any one vector, whereas the bounded probe drains each subtile
+independently and keeps only 8 `V_CVT_I2F` live. Note 184 != 64, so the transposition alone does not obviously account
+for the whole peak — do not assume it is the only contributor.
+
+Next probe: map each of the 184 peak-live `V_CVT_I2F` back to its subtile/lane and its consuming `V_MUL`, and check
+whether the co-liveness is forced by the transposition or is a scheduling choice `pressure_schedule` could undo.
+
+**Rails for this blocker:** the recurrence order and rounding are fixed authority — do not reassociate
+`(previous + scale*C) + bias` or introduce FMA/MULACC to shorten the chain. Do not enable AMD scratch.
+
+### Measurement caveat (new, important)
+
+Full-grid spill/peak numbers are **environment-sensitive and load-sensitive**:
+
+- with `REGALLOC_DEBUG_PRESSURE=1`: 452 @ 5147 / 96 spills / 381 B — reproduced 2/2.
+- without it: 465 @ 5355 / 95 spills / 377 B — reproduced 3/3.
+- one early run under concurrent load reported 444 @ 5098 / 85 spills. Same env as the 452 run, different result.
+
+Each environment is self-consistent when the machine is otherwise idle, but the load-dependent outlier is unexplained
+and was not chased. **Run the full-grid reproducer on an idle machine and compare only matched environments.** The
+bounded oracle is deterministic (9,481 / 158 @ 5908 / 0) and is the trustworthy comparator.
 
 ## 1. Executive state
 
