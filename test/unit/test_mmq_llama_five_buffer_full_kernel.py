@@ -71,6 +71,41 @@ def test_full_grid_orders_each_wmma_behind_the_preceding_lane_drain():
   assert all(any(r in x.backward_slice for r in releases) for x in guarded[:4])
 
 
+def _has_tag(node:UOp, prefix:tuple) -> bool:
+  return isinstance(node.tag, tuple) and node.tag[:len(prefix)] == prefix
+
+
+def test_full_grid_q8_phase1_overwrite_waits_for_every_phase0_fragment_read():
+  """The Q8 LDS window is shared by all eight subtiles.  Phase 1 may overwrite it only after every phase-0 fragment
+  read, unless that read consumes an explicit phase-0 restage published after the overwrite."""
+  nodes = full.build_llama_five_buffer_full_kernel(128, 128, 256).sink.toposort()
+  phase0_reads = [x for x in nodes if x.op is Ops.LOAD and x.src and
+                  _has_tag(x.src[0], ("llama_oracle_fragment_load", "B", 0))]
+  phase1_overwrites = [x for x in nodes if x.op is Ops.GROUP and
+                       _has_tag(x, ("hierarchical_record_producer", "B", 1))]
+  assert len(phase0_reads) == 8*4*2
+  assert phase1_overwrites
+
+  unsafe = 0
+  for read in phase0_reads:
+    phase0_publishes = [x for x in read.backward_slice if _has_tag(x, ("llama_oracle_publish", 0))]
+    for overwrite in phase1_overwrites:
+      read_before_overwrite = read in overwrite.backward_slice
+      restaged_after_overwrite = any(overwrite in publish.backward_slice for publish in phase0_publishes)
+      unsafe += not (read_before_overwrite or restaged_after_overwrite)
+  assert unsafe == 0, (
+    f"{unsafe} phase-0 Q8 fragment-read/phase-1 overwrite pairs are unordered and have no intervening phase-0 restage")
+
+
+def test_full_grid_stages_each_shared_q8_phase_once_per_epoch():
+  """Subtile expansion consumes one shared Q8 LDS stage; it must not clone either phase's global-to-LDS producer."""
+  nodes = full.build_llama_five_buffer_full_kernel(128, 128, 256).sink.toposort()
+  producers = [[x for x in nodes if x.op is Ops.GROUP and
+                _has_tag(x, ("hierarchical_record_producer", "B", phase))] for phase in range(2)]
+  counts = tuple(map(len, producers))
+  assert counts == (1, 1), f"shared Q8 stage producer counts are {counts}, expected one producer per phase"
+
+
 @pytest.mark.parametrize("shape", [(127, 128, 256), (128, 129, 256), (128, 128, 255)])
 def test_unaligned_or_non_epoch_shapes_fail_closed(shape):
   with pytest.raises(ValueError): full.build_llama_five_buffer_full_kernel(*shape)
