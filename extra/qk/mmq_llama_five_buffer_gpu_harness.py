@@ -130,13 +130,24 @@ def _worker() -> dict[str, Any]:
   runtime = get_runtime("AMD", program)
   dispatch = {"globals": list(globals_), "global_size": list(program.arg.global_size),
               "local_size": list(program.arg.local_size or ()), "vals": list(program.arg.vals({}))}
+  # Capture the concrete kernarg allocation used by AMDProgram.__call__.  This
+  # is diagnostic-only: the wrapper delegates to the normal allocator and
+  # returns the same ArgsState, but lets a structured MMU blocker distinguish
+  # a bad generated data pointer from a fault while reading the argument block.
+  kernarg = {}
+  fill_kernargs = runtime.fill_kernargs
+  def capture_kernargs(bufs, vals=()):
+    state = fill_kernargs(bufs, vals)
+    kernarg.update({"va_addr": int(state.buf.va_addr), "size": int(state.buf.size)})
+    return state
+  runtime.fill_kernargs = capture_kernargs
   try:
     runtime(*(buffers[g].get_buf("AMD") for g in globals_),
             global_size=program.arg.global_size, local_size=program.arg.local_size,
             vals=program.arg.vals({}), wait=True)
   except BaseException as exc:
     return _blocked("AMD dispatch failed", exception=type(exc).__name__, error=str(exc),
-                    dispatch=dispatch, **manifest)
+                    dispatch=dispatch, kernarg=kernarg, **manifest)
   got = out.numpy().reshape(m, n)
   np.testing.assert_allclose(got, reference, rtol=3e-3, atol=3e-3)
   binary = next((u.arg for u in program.src if u.op is Ops.BINARY), None)
