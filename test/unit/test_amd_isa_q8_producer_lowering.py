@@ -7,9 +7,11 @@ from tinygrad import Tensor, dtypes
 from tinygrad.codegen import to_program, to_program_cache
 from tinygrad.codegen.late.regalloc import LinearScanRegallocContext
 from tinygrad.helpers import Context, Target
+from tinygrad.renderer.amd.dsl import v as amd_v
 from tinygrad.renderer.isa import IselContext, Register
 from tinygrad.renderer.amd.elf import kernel_descriptor_from_elf
 from tinygrad.renderer.isa.amd import AMDISARenderer, AMDOps, VBASE, isel_cast, isel_matcher, lower_inst
+from tinygrad.runtime.autogen.amd.rdna3.ins import v_cvt_f16_f32_e32
 from tinygrad.uop.ops import Ops, UOp
 
 from extra.qk.mmq_q4k_q8_reference import q8_1_mmq_ds4_quantize_reference
@@ -70,6 +72,32 @@ def test_scalar_half_allocation_cannot_alias_a_live_dword_vgpr():
   assert half_reg.index < 128
   assert address_reg.index != half_reg.index
   assert not regalloc.spills
+
+
+def test_scalar_half_restriction_does_not_remove_real_high_dword_vgprs():
+  ctx = IselContext(UOp.sink())
+  # These are independent physical resources: scalar-half v114.l and whole
+  # dword v242.  Only the scalar-half candidate pool is restricted.
+  high_dword = UOp(Ops.INS, dtypes.int32, (UOp.const(dtypes.int32, 7).rtag(),), AMDOps.V_MOVK,
+                   tag=(ctx.vreg((VBASE[242],)),))
+  half = UOp(Ops.INS, dtypes.half, (UOp.const(dtypes.half, 1.0).rtag(),), AMDOps.V_CONST,
+             tag=(ctx.vreg((VBASE[114],)),))
+  final = UOp(Ops.INS, dtypes.int32, (high_dword, half), AMDOps.V_IADD, tag=(ctx.vreg((VBASE[243],)),))
+  uops = list(UOp.sink(final).toposort())
+  regalloc = LinearScanRegallocContext(uops, _renderer())
+
+  assert regalloc.reals[uops.index(high_dword)][high_dword.reg].index == 242
+  assert regalloc.reals[uops.index(half)][half.reg].index == 114
+  assert not regalloc.spills
+
+
+def test_gfx11_f16_vop_destination_bit7_is_a_half_selector_not_vgpr128():
+  # The DSL's explicit high-half spelling and raw encoded destination 128+i
+  # produce the same VOP1 bits.  A dtype-only allocator therefore cannot
+  # interpret candidate 242 as both real v242 and v114.h.
+  explicit_high = v_cvt_f16_f32_e32(amd_v[114].h, amd_v[1])
+  encoded_bit7 = v_cvt_f16_f32_e32(amd_v[242], amd_v[1])
+  assert explicit_high.to_bytes() == encoded_bit7.to_bytes()
 
 
 def test_reciprocal_and_signed_int8_cast_survive_regalloc_without_spills():

@@ -358,12 +358,16 @@ def _reg(r:Register): return r  # passthrough; encoding maps index in post_regal
 
 def _value_vpool(ctx:IselContext, dtype):
   pool = _vpool(ctx)
-  # Some gfx11 scalar fp16 operand encodings (notably VOP1 conversions) use
-  # register bit 7 as the high-half selector.  Treating v128..v255 as
-  # independent fp16 VGPRs therefore aliases v0..v127.h and can corrupt a
-  # live dword carrier.
-  # Keep scalar halves in low halves for now, so the ordinary whole-VGPR
-  # allocator sees (and rejects) every collision with a live dword.
+  # gfx11 register numbers are operand-view dependent.  For an 8-bit scalar
+  # fp16 VOP destination, encoded 128+i means v[i].h; for b32 and memory
+  # operands, register 128+i is the independent physical v[128+i].  The
+  # generic Register model does not carry that operand view, and a high-half
+  # value cannot safely retain one encoding through every current consumer
+  # (for example VOP1 src0 and DS data operands do not interpret it alike).
+  #
+  # Keep scalar halves in low halves until selection has explicit lane views.
+  # This restriction is deliberately local to scalar-half values: dword
+  # values retain the complete physical pool, including legal v128..v255.
   return tuple(r for r in pool if r.index < 128) if not isinstance(dtype, PtrDType) and dtype.scalar() is dtypes.half else pool
 
 def _vreg_def(ctx:IselContext, dtype=None): return (ctx.vreg(_value_vpool(ctx, dtype) if dtype is not None else _vpool(ctx)),)
