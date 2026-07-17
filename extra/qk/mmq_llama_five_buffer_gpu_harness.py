@@ -138,12 +138,13 @@ def run_amd_validation(*, timeout_seconds: float = 300.0,
     return _blocked("AMD full-grid compile/dispatch timed out", timeout_seconds=timeout_seconds)
   except OSError as exc:
     return _blocked(f"AMD worker could not start: {exc}")
-  if proc.returncode != 0:
-    return _blocked("AMD worker failed", returncode=proc.returncode, stderr=proc.stderr[-4000:])
   try:
     row = json.loads(proc.stdout.splitlines()[-1])
   except (json.JSONDecodeError, IndexError) as exc:
-    return _blocked(f"AMD worker returned invalid JSON: {exc}", stdout=proc.stdout[-4000:], stderr=proc.stderr[-2000:])
+    return _blocked("AMD worker failed" if proc.returncode else f"AMD worker returned invalid JSON: {exc}",
+                    returncode=proc.returncode, stdout=proc.stdout[-4000:], stderr=proc.stderr[-2000:])
+  # The worker intentionally exits nonzero for a structured BLOCKED verdict;
+  # preserve that evidence instead of replacing it with a generic failure.
   return row
 
 
