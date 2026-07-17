@@ -141,6 +141,9 @@ def _worker() -> dict[str, Any]:
     kernarg.update({"va_addr": int(state.buf.va_addr), "size": int(state.buf.size)})
     return state
   runtime.fill_kernargs = capture_kernargs
+  dispatch.update({"program_va": int(runtime.lib_gpu.va_addr),
+                   "program_entry": int(runtime.prog_addr),
+                   "program_descriptor": int(runtime.aql_prog_addr)})
   try:
     runtime(*(buffers[g].get_buf("AMD") for g in globals_),
             global_size=program.arg.global_size, local_size=program.arg.local_size,
