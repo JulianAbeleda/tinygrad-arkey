@@ -1519,13 +1519,6 @@ def _wmma_chain_head_acc(head:UOp):
     return dreg, subtile, c2.src[0].src[0].src[0]
   return None
 
-def _wmma_kmajor_order(cbases:list[int], nphases:int) -> list[tuple[int,int]]:
-  """Keep independent C leases phase-major, but finish a shared lease before handing it to its next logical chain."""
-  if len(set(cbases)) == len(cbases): return [(chain_i, phase_i) for phase_i in range(nphases) for chain_i in range(len(cbases))]
-  groups:dict[int,list[int]] = {}
-  for chain_i, cbase in enumerate(cbases): groups.setdefault(cbase, []).append(chain_i)
-  return [(chain_i, phase_i) for group in groups.values() for chain_i in group for phase_i in range(nphases)]
-
 def _try_wmma_kmajor_phase(ctx:IselContext, x:UOp):
   if not _c_low(ctx): return None
   memo = ctx._wmma_memo = getattr(ctx, "_wmma_memo", {})
@@ -1540,35 +1533,6 @@ def _try_wmma_kmajor_phase(ctx:IselContext, x:UOp):
   cbases = [_acc_base(ctx, (id(ha[0]), ha[1])) for ha in head_accs]
   cins = [[UOp(Ops.INS, dtypes.float32, src=(ha[2],), arg=AMDOps.MOV, tag=_pin(cbase, i)) for i in range(8)]
           for ha, cbase in zip(head_accs, cbases)]
-  # The historical phase-major traversal is part of deterministic emission for ordinary, uniquely-owned C fragments.
-  # Only physical ownership can select the alternate topology: each chain sharing a C lease must reach its tail before
-  # the next chain initializes/uses that lease.  A/B packs remain cached by their proven physical content and base.
-  if len(set(cbases)) != len(cbases):
-    pack_cache:dict[tuple, tuple[UOp, ...]] = {}
-    chain_markers:dict[int,UOp] = {}
-    chain_wm:dict[int,UOp] = {}
-    for chain_i, phase_i in _wmma_kmajor_order(cbases, len(phases[0])):
-      tile = phases[chain_i][phase_i]
-      akey, bkey = _wmma_frag_proof_reuse_key(ctx, "A", tile.src[0]), _wmma_frag_proof_reuse_key(ctx, "B", tile.src[1])
-      if akey is None or bkey is None: return None
-      aw, bw = _wmma_operand_regs(tile.src[0]), _wmma_operand_regs(tile.src[1])
-      abase, bbase = _ab_base(ctx, ("A", akey), aw), _ab_base(ctx, ("B", bkey), bw)
-      if abase is None or bbase is None or cbases[chain_i] is None: return None
-      pack_dep = (() if phase_i == 0 else (chain_wm[chain_i], chain_markers[chain_i]))
-      def pack(role:str, carrier:UOp, key:tuple, base:int) -> tuple[UOp, ...]:
-        pkey = (role, key, base)
-        if pkey not in pack_cache: pack_cache[pkey] = _pack_frag_tile(ctx, carrier, base, pack_dep, role)
-        return pack_cache[pkey]
-      apk, bpk = pack("A", tile.src[0], akey, abase), pack("B", tile.src[1], bkey, bbase)
-      out = _build_wmma_from_packs(ctx, apk, bpk, cins[chain_i], cbases[chain_i], pack_dep)
-      cins[chain_i] = list(out.src[:8])
-      if phase_i == 0:
-        marker = UOp(Ops.NOOP, dtypes.void, arg=("selected_wmma_root", roots[chain_i]))
-        out = out.replace(src=out.src + (marker,))
-        chain_markers[chain_i] = out
-      memo[tile] = out
-      chain_wm[chain_i] = out.src[0]
-    return memo.get(x)
   prev_phase_last:UOp|None = None
   for phase_i in range(len(phases[0])):
     pack_cache:dict[tuple, tuple[UOp, ...]] = {}
@@ -1861,7 +1825,7 @@ def _serialize_progressive_c_drains(ctx:IselContext, x:UOp):
   drain_by_head:dict[UOp,tuple[UOp,...]] = {}
   for head in heads:
     tail = head
-    while len(next_wmmas := list(dict.fromkeys(u for u in uses.get(tail, ()) if u.op is Ops.INS and u.arg == tail.arg))) == 1:
+    while len(next_wmmas := [u for u in uses.get(tail, ()) if u.op is Ops.INS and u.arg == tail.arg]) == 1:
       tail = next_wmmas[0]
     lane_drains = [u for u in uses.get(tail, ()) if u.op is Ops.INS and u.arg in (AMDOps.V_CVT_I2F, AMDOps.V_CVT_U2F)]
     for alias in (u for u in uses.get(tail, ()) if (u.op is Ops.INS and u.arg is AMDOps.MOV) or u.op is Ops.NOOP):
@@ -1874,8 +1838,8 @@ def _serialize_progressive_c_drains(ctx:IselContext, x:UOp):
   # selection, so adding an edge along its linear extension cannot form a
   # cycle even when several symbolic roots expand into independent subtiles.
   head_set = set(drain_by_head)
-  dependencies = {h:{candidate for candidate, symbolic in selected_roots.items() if candidate is not h and
-                     (candidate in h.backward_slice or symbolic in selected_roots[h].backward_slice)} for h in head_set}
+  dependencies = {h:{candidate for candidate, symbolic in selected_roots.items()
+                     if candidate is not h and symbolic in selected_roots[h].backward_slice} for h in head_set}
   ordered_heads:list[UOp] = []
   remaining = set(head_set)
   while remaining:
