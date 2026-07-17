@@ -46,6 +46,8 @@ they are refuted — see `prefill-current-state.md`.)
 - `q6k-lm-head-prefill-authority-20260712.md` - **authority for valid lm_head measurement** (whole-prefill harness only).
 - `q6k-staged-wmma-role-boundary-20260715.md` - which Q6_K roles the staged WMMA path is admitted for.
 - `wave32-geometry-compile-sweep-20260715.md` - compile-only WMMA geometry validation tool.
+- `pure-pipe-policy-centralization-20260712.md` - compiler policy boundary (`tinygrad.codegen.opt.compiler_policies`).
+- `pipe-transport-abi-inventory-20260712.md` - pipe-transport insertion chain (rangeify SINK -> transport).
 
 ## Measurement regime
 
@@ -63,21 +65,21 @@ they are refuted — see `prefill-current-state.md`.)
 
 - `quickstart.md`, `env_vars.md`, `dtypes.md`, `nn.md` - upstream tinygrad reference docs, still useful for the fork.
 
-## Retained refutations / historical results
+## Hardware
 
-These are outdated but hold a refutation or measurement worth keeping until its lesson is durably in the knowledge base
-(`/home/ubuntu/knowledge_base`). Do not cite their numbers as current. Candidates for the next prune once their lessons
-are confirmed rescued:
+- `egpu-usb4-link-keepalive.md` - USB4/Thunderbolt eGPU idle link-drop root cause + keepalive fix. Referenced by
+  `extra/remote/amd_power_cycle.py`. OPEN: the fix may not be ported into the current tree — verify before trusting.
 
-- `8b-prefill-lifecycle-compression-audit-20260709.md` - density gap (12.51 vs ~58 TFLOPS) + slot-only LDS suppression NaN trap.
-- `owned-tile-buffer-identity-kv-read-result-20260623.md` - decode +18.7% from real-KV read; root cause was materializing SLICE, not purity.
-- `split-kv-economics-audit-result-20260621.md` / `b4-split-kv-combine-tax-result-20260621.md` - combine-tax dominates; latency- not bandwidth-bound.
-- `decode-vector-flash-tile-realigned-result-20260621.md` - whole-decode W==D win below gate despite standalone 1.08x.
-- `lane-a-lm-head-packed-refutation-20260712.md` - packed Q6_K lm_head is a prefill regression (+87ms).
-- `q4-q4-owner-comparison-20260715.md` - sudot4 beats WMMA only on a tiny bounded tile, not whole-linear.
-- `ctx512-device-time-attribution-20260712.md` / `hcq-graph-profile-attribution-20260712.md` - device-time attribution caveats.
-- `pure-baseline-vs-exact-candidate-kernel-only-20260712.md` / `pure-two-buffer-whole-prefill-benchmark-20260712.md` - kernel-only vs whole-model scoping caveats.
-- `14b-mmq-r4-r7-theory-matrix-20260710.md`, `14b-role-measurement-owner-20260715.md`, `handoff-14b-mmq-boltbeam-tinygrad-20260711.md`, `qwen3-14b-integrated-loop-compile-gate-20260715.md`, `role-baseline-14b-q4km.md`, `s9-regression-ab-blocker-20260712.md`, `s9-resource-gate-boundary-20260712.md`, `amd-dynamic-tile-owner-validation-20260715.md`, `q4k-fused-q4-role-sweep-20260715.md`, `q4k-packed-q4-symbolic-loop-validation-20260715.md`, `q4k-q6k-prefill-path-alignment-audit-20260715.md`, `pure-pipe-policy-centralization-20260712.md`, `pipe-transport-abi-inventory-20260712.md`, `prefill-harness-profile-generalization-20260710.md`, `primitive-space-learning-loop-lora-first-result-20260623.md`, `egpu-usb4-link-keepalive.md`, `bubblebeam-futuresight-terminology-20260625.md` - see each doc's header for its retained lesson.
+## Pruned closed campaigns (2026-07-17)
+
+25 closed result/probe logs were removed to git history in the doc prune. Their **transferable** lessons were first
+rescued into the knowledge base (`/home/ubuntu/knowledge_base`, commit `cb78bbc`): counterfactual/refuted numbers must
+be labelled at every citation; late-stage destructive suppression is invalid once identity is gone; scheduling cannot
+manufacture overlap construction never created; resource gates fail closed on missing facts; AMD regalloc/occupancy is
+ours because the toolchain doesn't hide it; matched evidence classes or "faster" doesn't transfer; a positional rewrite
+pass corrupts silently on a skipped element. Project-specific measurements from those docs (decode +18.7% real-KV,
++87ms packed lm_head regression, the 12.51-vs-58 TFLOPS density gap, split-KV combine-tax, etc.) remain in git history —
+recover the doc by name if a specific number is needed again.
 
 ## Authorities
 
