@@ -95,6 +95,25 @@ class TestPressureSchedule(unittest.TestCase):
     self.assertEqual(positions[consume], positions[lease] + 1)
     self.assertLess(positions[ready], positions[lease])
 
+  def test_single_choice_load_lease_waits_for_consumer_prerequisites(self):
+    """An early-ready physical fragment stays local to its sole consumer."""
+    fragment = Register("fragment", 200)
+    addr = self._ins("addr")
+    order = self._ins("order")
+    release = self._ins("release")
+    load = self._ins("load", (addr, order, release), self._wide_v("loaded", fragment, 4))
+    other0 = self._ins("other0")
+    other1 = self._ins("other1", (other0,))
+    other2 = self._ins("other2", (other1,))
+    consume = self._ins("matrix", (load, other2), self._wide_v("result", Register("result", 8)))
+    tail = self._ins("reuse_fragment", (consume,), self._wide_v("reused", fragment, 4))
+
+    scheduled = pressure_schedule([addr, order, release, load, other0, other1, other2, consume, tail])
+    positions = {u:i for i,u in enumerate(scheduled)}
+    self.assertEqual(positions[consume], positions[load] + 1)
+    self.assertLess(positions[other2], positions[load])
+    self.assertLess(max(positions[x] for x in (addr, order, release)), positions[load])
+
   def test_amd_localized_address_tree_follows_memory_prerequisites(self):
     """Private address recipes must not open before their sole effects are ready."""
     ctx = IselContext(UOp.sink())

@@ -37,8 +37,12 @@ def _pressure_schedule_block(block:list[UOp]) -> list[UOp]:
     # FixedRegisterUse nodes are physical lease carriers rather than allocator
     # definitions, but their complete span is still occupied until consumed.
     return sum(v.span.count for v in _register_defs(u))
-  def fixed_width(u:UOp) -> int:
-    return sum(v.span.count for v in _register_defs(u) if isinstance(v, FixedRegisterUse))
+  def lease_width(u:UOp) -> int:
+    # A one-choice constrained definition owns a physical lease just as surely
+    # as a FixedRegisterUse carrier.  Keep it closed until this definition can
+    # make a consumer ready; opening it earlier only lengthens physical
+    # occupation (notably for wide memory fragments feeding matrix operations).
+    return sum(v.span.count for v in _register_defs(u) if isinstance(v, FixedRegisterUse) or len(v.cons) == 1)
   def release(u:UOp) -> int:
     return sum(width(s) for s in deps[u] if remaining[s] == 1)
   def score(u:UOp):
@@ -62,10 +66,10 @@ def _pressure_schedule_block(block:list[UOp]) -> list[UOp]:
     # FP32 arithmetic before opening an independent producer tree; release
     # balance and original order make deterministic pressure-aware tie-breaks.
     net, follow_net = released-added, follow_release-follow_added
-    # A fixed carrier should become visible only when it completes a consumer;
-    # otherwise its already-owned physical lease is needlessly opened early.
-    fixed_deferred = -fixed_width(u) if not unlocked else 0
-    return (fixed_deferred, ready_generation[u], net, released, -added,
+    # A physical lease should become visible only when it completes a consumer;
+    # otherwise its already-owned register range is needlessly opened early.
+    lease_deferred = -lease_width(u) if not unlocked else 0
+    return (lease_deferred, ready_generation[u], net, released, -added,
             follow_net, follow_release, -follow_added, len(unlocked), -pos[u])
 
   while ready:
