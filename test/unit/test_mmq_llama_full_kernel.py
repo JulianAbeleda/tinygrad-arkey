@@ -105,9 +105,21 @@ def test_bounded_wave_probe_drains_symbolic_subtiles_without_claiming_a_full_gri
     assert any(dep.op is Ops.BARRIER and dep.tag[:1] == ("llama_full_kernel_bounded_epoch_release",)
                for dep in current.src[0].backward_slice)
   to_program_cache.clear()
+  # The bounded oracle now emits a real spill-free program: chain-head A/B loads are guarded on the previous chain's
+  # release frontier (they share one physical A/B run), and the half2 metadata recurrence selects native v_mul_f16.
+  prg = to_program(sink, AMDISARenderer(Target.parse("AMD:ISA:gfx1100")))
+  linear = next(u for u in prg.src if u.op is Ops.LINEAR)
+  insts = [u.arg for u in linear.src if not isinstance(u.arg, tuple)]
+  assert insts and all(inst.to_bytes() for inst in insts)          # a real, encodable program
+  mnemonics = [str(inst).split("(", 1)[0] for inst in insts]
+  # the selected mathematical kernel is unchanged: same WMMA family/count, same A/B fragment loads
+  assert sum(m == "v_wmma_i32_16x16x16_iu8" for m in mnemonics) == 128
+  assert sum(m == "ds_load_b128" for m in mnemonics) == 256
+  # fp16 rounding boundary preserved: the metadata recurrence multiplies natively, never widened to fp32
+  assert sum(m == "v_mul_f16_e32" for m in mnemonics) == 12
+  # AMD scratch spilling is forbidden; the resource proof is that no scratch/spill traffic exists at all
+  assert not any("scratch" in m or m.startswith("buffer_") for m in mnemonics)
   # This remains a bounded wave probe. Its compiler outcome must not set any full-grid claim.
-  with pytest.raises(NotImplementedError, match="AMD:ISA register pressure exceeds the spill-free VGPR/SGPR budget"):
-    to_program(sink, AMDISARenderer(Target.parse("AMD:ISA:gfx1100")))
   assert not graph.emitted and not graph.routed and graph.custom_kernel is None
 
 
@@ -141,8 +153,9 @@ def test_q8_b_typed_witness_survives_to_instruction_selection_proof(monkeypatch)
   sink = scheduler_valid_callback_sink(bounded_final_release(graph, UOp.param(2, dtypes.float.ptr(64))),
                                        name="mmq_llama_b_witness_isel_probe")
   to_program_cache.clear()
-  with pytest.raises(NotImplementedError, match="AMD:ISA register pressure exceeds the spill-free VGPR/SGPR budget"):
-    to_program(sink, AMDISARenderer(Target.parse("AMD:ISA:gfx1100")))
+  # The witness is what this proves; selection now runs through to a real spill-free program rather than failing
+  # closed on register pressure, so observe it across a completed compile.
+  to_program(sink, AMDISARenderer(Target.parse("AMD:ISA:gfx1100")))
   assert observed and any(offset == 544 and witnesses and proof is not None for offset, witnesses, proof in observed)
 
 

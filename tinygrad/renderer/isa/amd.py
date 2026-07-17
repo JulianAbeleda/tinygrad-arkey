@@ -1884,7 +1884,21 @@ def _serialize_progressive_c_drains(ctx:IselContext, x:UOp):
     # FP32 update nodes can compose into a cycle because those updates also
     # carry cross-subtile recurrence inputs; the conversions themselves have
     # consumed every fixed C lane and are sufficient for physical reuse.
-    subs[head] = head.replace(src=head.src + drain_by_head[previous_head])
+    release = drain_by_head[previous_head]
+    # Accumulate tiles WAR-guard the shared high A/B pair on the prior matmul,
+    # but a chain head has no prior tile and so carries no A/B guard at all.
+    # Every chain reloads the SAME physical A/B run, so an unguarded head pair
+    # is free to open while earlier chains still own that run.  Ordering the
+    # head alone is not enough: its DS_LOAD_B128 operands carry no release edge
+    # and float ahead of it.  Guard the loads themselves on the same proven
+    # release frontier, so each head pair opens only once the previous chain
+    # has freed the run it is constrained to.
+    ab_loads = [s for s in head.src if s.op is Ops.INS and s.arg is AMDOps.DS_LOAD_B128]
+    # A shared load would be reachable from another consumer, so replacing it
+    # here would duplicate a shared-memory read instead of ordering it.
+    if any(len(dict.fromkeys(uses.get(ld, ()))) != 1 for ld in ab_loads): return None
+    guarded = {ld:ld.replace(src=ld.src + release) for ld in ab_loads}
+    subs[head] = head.replace(src=tuple(guarded.get(s, s) for s in head.src) + release)
   ctx._progressive_c_serialized = True
   return x.substitute(subs)
 

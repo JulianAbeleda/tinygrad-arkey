@@ -132,3 +132,53 @@ def test_progressive_c_marker_recovery_fails_closed_on_ambiguous_predecessors():
   ambiguous = UOp(Ops.INS, dtypes.float32, (first, second, marker), AMDOps.V_WMMA, tag=(_vreg("v8", 8),))
   nodes = UOp.sink(ambiguous).toposort()
   assert amd._selected_wmma_roots(nodes, [first, second, ambiguous]) is None
+
+
+def test_chain_head_ab_loads_are_guarded_on_the_previous_chain_release(monkeypatch):
+  # Accumulate tiles WAR-guard the shared high A/B pair on the prior matmul, but a chain head has no prior tile and
+  # so carries no A/B guard.  Every chain reloads the SAME physical A/B run, so unguarded head pairs open while an
+  # earlier chain still owns that run.  Ordering the head WMMA alone is not enough: its DS_LOAD_B128 operands carry
+  # no release edge and float ahead of it.  The loads themselves must be guarded.
+  symbolic0 = UOp(Ops.WMMA, dtypes.float32.vec(8), src=())
+  symbolic1 = UOp(Ops.WMMA, dtypes.float32.vec(8), src=(symbolic0,))
+  def chain(root, base, abase):
+    addr = UOp(Ops.INS, dtypes.int32, arg=AMDOps.MOV, tag=(_vreg(f"v{base}", base),))
+    # lane-0 constrained base defs on the SHARED physical A/B run + zero-code fixed aliases for lanes 1..3
+    loads = tuple(UOp(Ops.INS, dtypes.int32, (addr,), AMDOps.DS_LOAD_B128, tag=(_vreg(f"v{abase+4*j}", abase+4*j),))
+                  for j in range(2))
+    rest = tuple(UOp(Ops.INS, dtypes.int32, arg=AMDOps.MOV, tag=(_vreg(f"v{base+8+i}", base+8+i),)) for i in range(22))
+    head = UOp(Ops.INS, dtypes.float32, loads + rest, AMDOps.V_WMMA, tag=(_vreg("v8", 8),))
+    marker = UOp(Ops.NOOP, dtypes.void, arg=("selected_wmma_root", root))
+    marked = UOp(Ops.NOOP, dtypes.float32.vec(8), src=(head,) + tuple(
+      UOp(Ops.INS, dtypes.float32, (head,), AMDOps.MOV, tag=(_vreg(f"v{8+i}", 8+i),)) for i in range(1, 8)) + (marker,))
+    tail = UOp(Ops.INS, dtypes.float32, marked.src + (head,), AMDOps.V_WMMA, tag=(_vreg("v8", 8),))
+    aliases = (tail,) + tuple(UOp(Ops.INS, dtypes.float32, (tail,), AMDOps.MOV,
+      tag=(_vreg(f"v{8+i}", 8+i),)) for i in range(1, 8))
+    drains = tuple(UOp(Ops.INS, dtypes.float32, (alias,), AMDOps.V_CVT_I2F,
+      tag=(_vreg(f"v{base+64+i}", base+64+i),)) for i, alias in enumerate(aliases))
+    return head, loads, drains
+  # both chains reload the SAME physical A/B run (abase identical) -- they MUST serialize
+  head0, loads0, drains0 = chain(symbolic0, 32, 200)
+  head1, loads1, drains1 = chain(symbolic1, 128, 200)
+  graph = UOp.sink(*drains0, *drains1)
+
+  monkeypatch.setattr(amd, "_progressive_c_assignment", lambda ctx: ({symbolic0:0, symbolic1:0}, 1))
+  serialized = amd._serialize_progressive_c_drains(SimpleNamespace(), graph)
+  assert serialized is not None
+  nodes = list(serialized.toposort())
+  assert len(nodes) == len(set(nodes))
+
+  guarded = [u for u in nodes if u.op is Ops.INS and u.arg is AMDOps.DS_LOAD_B128 and set(drains0).issubset(u.src)]
+  assert len(guarded) == 2                                        # the later chain head's A/B pair, both guarded
+  for ld in guarded:
+    assert ld.src[0].arg is AMDOps.MOV                            # original address operand preserved, still first
+    assert tuple(ld.src[len(ld.src)-len(drains0):]) == drains0    # release frontier appended as ordering deps
+    assert isinstance(ld.tag, tuple) and ld.tag[0].index in (200, 204)   # physical A/B constraint unchanged
+  # the earlier chain's own pair must NOT be guarded on its own release
+  assert not any(set(drains0).issubset(u.src) for u in nodes
+                 if u.op is Ops.INS and u.arg is AMDOps.DS_LOAD_B128 and u.tag == loads0[0].tag and u in loads0)
+
+  linear = pressure_schedule(nodes)
+  # every load of the shared run opens only after the previous chain has released it
+  for ld in guarded:
+    assert max(linear.index(d) for d in drains0) < linear.index(ld)
