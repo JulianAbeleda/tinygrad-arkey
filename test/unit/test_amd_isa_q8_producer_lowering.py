@@ -10,8 +10,8 @@ from tinygrad.helpers import Context, Target
 from tinygrad.renderer.amd.dsl import v as amd_v
 from tinygrad.renderer.isa import IselContext, Register
 from tinygrad.renderer.amd.elf import kernel_descriptor_from_elf
-from tinygrad.renderer.isa.amd import AMDISARenderer, AMDOps, VBASE, isel_cast, isel_matcher, lower_inst
-from tinygrad.runtime.autogen.amd.rdna3.ins import v_cvt_f16_f32_e32
+from tinygrad.renderer.isa.amd import AMDISARenderer, AMDOps, VBASE, isel_bitcast, isel_cast, isel_matcher, lower_inst
+from tinygrad.runtime.autogen.amd.rdna3.ins import v_cvt_f16_f32_e32, v_pack_b32_f16
 from tinygrad.uop.ops import Ops, UOp
 
 from extra.qk.mmq_q4k_q8_reference import q8_1_mmq_ds4_quantize_reference
@@ -98,6 +98,29 @@ def test_gfx11_f16_vop_destination_bit7_is_a_half_selector_not_vgpr128():
   explicit_high = v_cvt_f16_f32_e32(amd_v[114].h, amd_v[1])
   encoded_bit7 = v_cvt_f16_f32_e32(amd_v[242], amd_v[1])
   assert explicit_high.to_bytes() == encoded_bit7.to_bytes()
+
+
+def test_uint16_bitcast_to_half_canonicalizes_a_high_physical_source():
+  ctx = IselContext(UOp.sink())
+  raw = UOp(Ops.INS, dtypes.uint16, arg=AMDOps.V_AND, tag=(ctx.vreg((VBASE[132],)),))
+  selected = isel_bitcast(ctx, UOp(Ops.BITCAST, dtypes.half, (raw,)))
+  assert selected.arg is AMDOps.V_HALF_CANON and selected.dtype is dtypes.half
+  assert selected.src == (raw,)
+  assert selected.reg.cons and max(r.index for r in selected.reg.cons) < 128
+
+  physical = selected.replace(src=(raw.replace(tag=(Register("v132", 132),)),), tag=(Register("v5", 5),))
+  encoded = lower_inst(physical)
+  assert str(encoded.arg) == "v_mov_b32_e32(v[5], v[132])"
+  assert encoded.arg.to_bytes()
+
+
+def test_vpack_has_explicit_half_selectors_and_keeps_full_physical_sources():
+  # V_PACK is VOP3: its 9-bit source fields still name all 256 physical
+  # VGPRs, while op_sel independently chooses a high half.  It is therefore
+  # unlike scalar-f16 VOP1/VOP2 and needs no raw-register canonicalization.
+  physical_high_register = v_pack_b32_f16(amd_v[1], amd_v[132], amd_v[2])
+  explicit_high_half = v_pack_b32_f16(amd_v[1], amd_v[4].h, amd_v[2])
+  assert physical_high_register.to_bytes() != explicit_high_half.to_bytes()
 
 
 def test_reciprocal_and_signed_int8_cast_survive_regalloc_without_spills():

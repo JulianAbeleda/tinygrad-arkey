@@ -353,6 +353,7 @@ class AMDOps(FastEnum):
   V_RCP = 63                             # float32 reciprocal -> v_rcp_f32
   V_TRUNC = 64                           # truncate float32 toward zero -> v_trunc_f32
   V_MUL_F16 = 65                         # native fp16 multiply -> v_mul_f16_e32; one rounding per metadata lane
+  V_HALF_CANON = 66                      # b32 copy into a low VGPR before scalar-f16 VOP consumption
 
 def _reg(r:Register): return r  # passthrough; encoding maps index in post_regalloc
 
@@ -889,6 +890,19 @@ def isel_cast(ctx:IselContext, x:UOp):
          (dtypes.bool, dtypes.float32): AMDOps.V_CVT_I2F}.get((s, d))
   if cvt is None: raise NotImplementedError(f"AMD:ISA CAST {s} -> {d} unsupported")
   return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]),), arg=cvt, tag=_vreg_def(ctx, x.dtype))
+
+def isel_bitcast(ctx:IselContext, x:UOp):
+  source = x.src[0]
+  # gfx11 scalar-f16 VOP e32 operands encode bit 7 as the half selector:
+  # register number 128+i means v[i].h, not physical v[128+i].  A raw
+  # uint16 carrier can legally live in physical v128..v255 until BITCAST
+  # erases its type, so passthrough would silently reinterpret the wrong
+  # register in V_CVT_H2F/V_MUL_F16.  Canonicalize only this boundary with a
+  # b32 copy into the scalar-half pool; integer/memory uses keep all 256 VGPRs.
+  if x.dtype is dtypes.half and source.dtype.scalar() is not dtypes.half:
+    return UOp(Ops.INS, dtypes.half, src=(_tov(ctx, source),), arg=AMDOps.V_HALF_CANON,
+               tag=_vreg_def(ctx, dtypes.half))
+  return source
 
 def isel_cmp(ctx:IselContext, x:UOp, ne:bool):
   flt = x.src[0].dtype.scalar() in dtypes.floats
@@ -1952,7 +1966,7 @@ isel_matcher = PatternMatcher([
   (UPat(Ops.DEFINE_VAR, name="x"), isel_var),
   (UPat(Ops.SPECIAL, name="x"), isel_special),
   (UPat(Ops.CAST, name="x"), lambda ctx, x: isel_cast(ctx, x)),
-  (UPat(Ops.BITCAST, name="x"), lambda x: x.src[0]),   # same VGPR bits -> passthrough (int<->float reinterpret)
+  (UPat(Ops.BITCAST, name="x"), isel_bitcast),
   (UPat(Ops.INDEX, name="x"), isel_index),
   (UPat(Ops.LOAD, name="x"), isel_load),
   (UPat(Ops.GEP, name="x"), isel_gep),
@@ -2407,6 +2421,7 @@ def lower_inst(x:UOp):
     return _ins(v_lshrrev_b32_e32(_Vr(x.reg), shift, _Vr(src[0].reg)), x.tag)
   if a is AMDOps.V_CVT_F2H: return _ins(v_cvt_f16_f32_e32(_Vr(x.reg), _Vr(src[0].reg)), x.tag)
   if a is AMDOps.V_CVT_H2F: return _ins(v_cvt_f32_f16_e32(_Vr(x.reg), _Vr(src[0].reg)), x.tag)
+  if a is AMDOps.V_HALF_CANON: return _ins(v_mov_b32_e32(_Vr(x.reg), _Vr(src[0].reg)), x.tag)
   if a is AMDOps.V_CVT_F2I: return _ins(v_cvt_i32_f32_e32(_Vr(x.reg), _Vr(src[0].reg)), x.tag)
   if a is AMDOps.V_CVT_I2F: return _ins(v_cvt_f32_i32_e32(_Vr(x.reg), _Vr(src[0].reg)), x.tag)
   if a is AMDOps.V_CVT_U2F: return _ins(v_cvt_f32_u32_e32(_Vr(x.reg), _Vr(src[0].reg)), x.tag)
