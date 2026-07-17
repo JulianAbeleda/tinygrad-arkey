@@ -65,7 +65,8 @@ def scalar_writeback_lane(graph:"LlamaFullKernelGraph", slot:int, lane:int) -> U
   return scalar
 
 
-def _bounded_accumulator_drain(graph:"LlamaFullKernelGraph") -> tuple[UOp, ...]:
+def order_wmma_behind_lane_drain(epochs:tuple[tuple[int, LlamaOracleRecurrenceGraph], ...],
+                                 tag_prefix:str) -> tuple[dict[UOp, UOp], UOp|None]:
   """Order each K32 WMMA behind the preceding FP32 lane drain.
 
   The recurrence deliberately keeps the integer WMMA chain and the eight FP32
@@ -73,15 +74,21 @@ def _bounded_accumulator_drain(graph:"LlamaFullKernelGraph") -> tuple[UOp, ...]:
   ordering, a legal topological schedule issues all 16 WMMAs before consuming
   any C lanes, retaining every C carrier (and its address calculation) until
   the end.  Put the ordering on the next fragment's structural LDS base so
-  each complete vec8 result is drained into the bounded FP32 accumulators
-  before the following fragment may be consumed.  The address path is used
-  because the WMMA C input must remain the renderer's exact constant carrier.
+  each complete vec8 result is drained into the FP32 accumulators before the
+  following fragment may be consumed.  The address path is used because the
+  WMMA C input must remain the renderer's exact constant carrier.
+
+  Returns the WMMA replacements and the last release.  Both the bounded probe
+  and the full-grid seam need this ordering: it is a property of the oracle
+  recurrence, not of either destination.  Callers substitute the replacements
+  into whichever accumulator expressions they own.  ``epochs`` is (ordinal,
+  recurrence) so the tags stay stable per caller.
   """
   replacements:dict[UOp, UOp] = {}
   prior_drain:tuple[UOp, ...]|None = None
   final_release:UOp|None = None
-  for epoch in graph.body.epochs:
-    for group in epoch.recurrence.groups:
+  for ordinal, recurrence in epochs:
+    for group in recurrence.groups:
       first = group.wmmas[0]
       if prior_drain is not None:
         drain = tuple(x.substitute(replacements) for x in prior_drain)
@@ -97,12 +104,19 @@ def _bounded_accumulator_drain(graph:"LlamaFullKernelGraph") -> tuple[UOp, ...]:
         replacements[first] = first.replace(src=(inputs[0], inputs[1], seed))
       release = UOp(Ops.BARRIER, dtypes.void,
                     tuple(x.substitute(replacements) for x in group.update)).replace(
-                      tag=("llama_full_kernel_bounded_epoch_release", epoch.ordinal, group.ordinal))
+                      tag=(tag_prefix, ordinal, group.ordinal))
       # Keep the scalar updates as explicit dependencies in addition to the
       # tagged release marker; this preserves the oracle's recurrence witness
       # for structural consumers while the barrier supplies the lifetime seam.
       prior_drain = tuple(group.update) + (release,)
       final_release = release
+  return replacements, final_release
+
+
+def _bounded_accumulator_drain(graph:"LlamaFullKernelGraph") -> tuple[UOp, ...]:
+  """Drain the bounded probe's own accumulators behind the shared WMMA ordering."""
+  replacements, final_release = order_wmma_behind_lane_drain(
+    tuple((epoch.ordinal, epoch.recurrence) for epoch in graph.body.epochs), "llama_full_kernel_bounded_epoch_release")
   result = tuple(x.substitute(replacements) for x in graph.body.epochs[-1].accumulators)
   if final_release is not None:
     result = tuple(UOp(Ops.BITCAST, x.dtype, (x,)).after(final_release) for x in result)

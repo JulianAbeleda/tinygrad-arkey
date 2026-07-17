@@ -55,6 +55,21 @@ def test_source_identity_writeback_vocabulary_and_no_dense_tensor_or_forbidden_t
   assert all(word not in source for word in ("model", "profile", "exact_shape", "getenv", "device scan", "autoscan", "route"))
 
 
+def test_full_grid_orders_each_wmma_behind_the_preceding_lane_drain():
+  """The oracle keeps the integer WMMA chain and the eight FP32 lane chains as separate algebraic dependencies, so
+  without these edges a legal schedule issues every WMMA before consuming any C lane and retains all 184 drains."""
+  kernel = full.build_llama_five_buffer_full_kernel(128, 128, 256)
+  nodes = list(kernel.sink.toposort())
+  releases = [x for x in nodes if x.op is Ops.BARRIER and isinstance(x.tag, tuple) and
+              x.tag[:1] == ("llama_five_buffer_full_grid_epoch_release",)]
+  wmmas = [x for x in nodes if x.op is Ops.WMMA]
+  # Each K32 group's first WMMA takes its A/B/C through a movement carrier ordered on the preceding lane drain.  Only
+  # the eight chain heads (one per subtile) have no prior drain, so 64 group heads - 8 chain heads == 56 are guarded.
+  guarded = [x for x in wmmas if any(s.op is Ops.AFTER for s in x.src)]
+  assert len(wmmas) == 128 and len(releases) == 56 and len(guarded) == 56
+  assert all(any(r in x.backward_slice for r in releases) for x in guarded[:4])
+
+
 @pytest.mark.parametrize("shape", [(127, 128, 256), (128, 129, 256), (128, 128, 255)])
 def test_unaligned_or_non_epoch_shapes_fail_closed(shape):
   with pytest.raises(ValueError): full.build_llama_five_buffer_full_kernel(*shape)

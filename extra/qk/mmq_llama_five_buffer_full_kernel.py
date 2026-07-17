@@ -14,6 +14,7 @@ from extra.qk.kernel_writeback import (WMMAWritebackDescriptor, WMMAWritebackLay
 from extra.qk.mmq_llama_candidate_plan import llama_mmq_candidate_plan
 from extra.qk.mmq_llama_five_buffer_graph import (FiveBufferEpochOffsets, LlamaFiveBufferGraph,
   build_llama_five_buffer_graph, five_buffer_parameters)
+from extra.qk.mmq_llama_full_kernel import order_wmma_behind_lane_drain
 from extra.qk.mmq_llama_oracle_epoch import build_llama_oracle_epoch_stage_five_buffer
 from extra.qk.mmq_llama_oracle_recurrence import build_llama_oracle_recurrence
 from extra.qk.mmq_llama_runtime_contract import LLAMA_SOURCE_COMMIT, SOURCE_ANCHORS
@@ -72,7 +73,7 @@ def _full_grid_sink(m:int, n:int, k:int) -> UOp:
   block_n, block_m, local = UOp.special(n//128, "gidx0"), UOp.special(m//128, "gidx1"), UOp.special(256, "lidx0")
   wave_m, wave_n, lane = local//32, UOp.const(dtypes.weakint, 0), local%32
   previous = tuple(UOp.const(dtypes.float, 0.0) for _ in range(8))
-  final = None
+  final, recurrences = None, []
   for epoch in range(k//256):
     records = epoch*2
     recurrence = build_llama_oracle_recurrence(build_llama_oracle_epoch_stage_five_buffer(q4, values, scales, sums,
@@ -83,7 +84,14 @@ def _full_grid_sink(m:int, n:int, k:int) -> UOp:
     joined = tuple(previous[i] + (exported[i]-recurrence.initial[i]) for i in range(8))
     if final is not None: joined = tuple(x.after(final.consumer_seam) for x in joined)
     previous, final = joined, recurrence
+    recurrences.append((epoch, recurrence))
   assert final is not None
+  # The oracle keeps the integer WMMA chain and the eight FP32 lane chains as separate algebraic dependencies, so a
+  # legal schedule may issue every WMMA before consuming any C lane and retain all of their drains.  The bounded probe
+  # already orders each K32 WMMA behind the preceding lane drain; the full-grid seam needs the same edges.  Substitute
+  # before _accumulator_vectors so the edges replicate into all eight subtiles.
+  replacements, _ = order_wmma_behind_lane_drain(tuple(recurrences), "llama_five_buffer_full_grid_epoch_release")
+  previous = tuple(x.substitute(replacements) for x in previous)
   plan = llama_mmq_candidate_plan()
   desc = WMMAWritebackDescriptor(plan.geometry, plan.tensor_core, dtypes.float, 8,
     # Oracle A rows are Q4/N and B rows are Q8/M, so row-major output[M,N]
