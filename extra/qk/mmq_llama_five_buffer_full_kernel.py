@@ -62,12 +62,8 @@ class LlamaFiveBufferFullKernel:
 
 def _accumulator_vectors(values:tuple[UOp, ...], subtile:UOp) -> tuple[UOp, ...]:
   """Transpose eight scalar WMMA lanes x eight oracle subtiles without copying its arithmetic."""
-  # AFTER is legal on movement values.  A bare STACK is spec-legal as written but codegen expands it away, so an
-  # effect order attached to it lands on the scalar FP32 update underneath -- AFTER(ADD, STORE), which the program
-  # spec rejects.  Carry each vector through the same no-op typed BITCAST the bounded release uses: it survives
-  # expansion as the movement the effect order can hold, and a same-dtype bitcast copies no arithmetic.
-  return tuple(UOp(Ops.BITCAST, dtypes.float.vec(8), (UOp(Ops.STACK, dtypes.float.vec(8),
-    tuple(lane.substitute({subtile: UOp.const(dtypes.weakint, element)}) for lane in values)),)) for element in range(8))
+  return tuple(UOp(Ops.STACK, dtypes.float.vec(8),
+    tuple(lane.substitute({subtile: UOp.const(dtypes.weakint, element)}) for lane in values)) for element in range(8))
 
 
 def _full_grid_sink(m:int, n:int, k:int) -> UOp:
@@ -100,10 +96,11 @@ def _full_grid_sink(m:int, n:int, k:int) -> UOp:
   prior = None
   for store in writeback.stores:
     pointer = output.index(tile_base + store.src[0].src[1], ptr=True)
-    value = UOp(Ops.BITCAST, store.src[1].dtype, (store.src[1],))
-    if prior is not None:
-      pointer = pointer.after(prior)
-      value = value.after(prior)
+    # Order the stores through the pointer only.  A same-dtype BITCAST on the value is a no-op that codegen folds
+    # away, so an effect order hung on it lands on the scalar FP32 update underneath -- AFTER(ADD, STORE), which
+    # spec_program rejects.  The pointer's INDEX is a real movement value and carries the order to the sink.
+    value = store.src[1]
+    if prior is not None: pointer = pointer.after(prior)
     prior = pointer.store(value).replace(tag=store.tag)
   assert prior is not None
   closed = prior.end(*prior.ranges)

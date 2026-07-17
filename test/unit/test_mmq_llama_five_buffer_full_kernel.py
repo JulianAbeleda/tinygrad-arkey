@@ -44,8 +44,12 @@ def test_source_identity_writeback_vocabulary_and_no_dense_tensor_or_forbidden_t
   stores = [x for x in kernel.sink.toposort() if x.op is Ops.STORE and isinstance(x.tag, tuple) and
             x.tag[:1] == ("wmma_writeback",)]
   assert len(stores) == 64 and {x.tag[-1] for x in stores} == {"col"}
+  # The pointer's INDEX is a real movement value and carries the total store order to the sink.  The value side must
+  # not carry a redundant same-dtype BITCAST: codegen folds that no-op away and drops the effect order onto the
+  # scalar FP32 update underneath, which spec_program rejects as AFTER(ADD, STORE).
   for previous, current in zip(stores, stores[1:]):
-    assert previous in current.src[0].backward_slice and previous in current.src[1].backward_slice
+    assert previous in current.src[0].backward_slice
+    assert not (current.src[1].op is Ops.BITCAST and current.src[1].dtype == current.src[1].src[0].dtype)
   assert not any(name.startswith(("dense", "dequant")) for name, _, _ in kernel.proof_graph.allocated_shapes)
   source = inspect.getsource(full).lower()
   assert all(word not in source for word in ("model", "profile", "exact_shape", "getenv", "device scan", "autoscan", "route"))
