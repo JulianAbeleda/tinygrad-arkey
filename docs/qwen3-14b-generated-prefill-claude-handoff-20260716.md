@@ -1,11 +1,11 @@
 # Qwen3-14B generated-prefill Claude handoff
 
-## 0.5 Current audit status 2026-07-17 (head `23eaf693b`)
+## 0.5 Current audit status 2026-07-17 (head `e814531d3`)
 
 Read this section before the historical status sections below. The repository head is now
-`23eaf693b` (`[amd] reserve serialized high fragment leases`), five commits ahead of
-`origin/master`; the only untracked path at this audit is the in-progress
-`extra/qk/mmq_llama_five_buffer_gpu_harness.py`.
+`e814531d3` (`[test][qk] add fail-closed full-grid GPU validation harness`), seven commits ahead of
+`origin/master`; the worktree is clean. This includes the allocator lease fix at `23eaf693b` and the new
+fail-closed harness under `extra/qk/mmq_llama_five_buffer_gpu_harness.py`.
 
 The corrected phase-major graph and allocator lease regression coverage are structurally healthy:
 
