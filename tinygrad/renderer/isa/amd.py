@@ -2497,7 +2497,9 @@ post_regalloc_matcher = PatternMatcher([
 
 # ============================ the renderer ============================
 class AMDISARenderer(ISARenderer):
-  def is_rematerializable(self, u:UOp) -> bool: return u.op is Ops.INS and u.arg is AMDOps.V_CONST and all(not isinstance(s.reg, Register) for s in u.src)
+  def is_rematerializable(self, u:UOp) -> bool:
+    return u.op is Ops.INS and (u.arg in (AMDOps.V_CMPLT_F, AMDOps.V_CMPLT_I, AMDOps.V_CMPNE_F, AMDOps.V_CMPNE_I) or
+                                u.arg is AMDOps.V_CONST and all(not isinstance(s.reg, Register) for s in u.src))
   device = "AMD"
   has_local = True
   # A 16-byte byte-vector is the native LDS staging unit for iu8 WMMA.

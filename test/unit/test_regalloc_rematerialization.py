@@ -1,6 +1,8 @@
 from tinygrad.codegen.late.regalloc import LinearScanRegallocContext
 from tinygrad.dtype import dtypes
+from tinygrad.helpers import Target
 from tinygrad.renderer.isa import ISARenderer, Register
+from tinygrad.renderer.isa.amd import AMDISARenderer, AMDOps
 from tinygrad.uop.ops import Ops, UOp
 
 
@@ -14,6 +16,10 @@ def _def(v:Register, arg:str) -> UOp:
 
 def _use(*src:UOp) -> UOp:
   return UOp(Ops.INS, dtypes.int32, src=src, arg="use")
+
+
+def _amd_def(v:Register, op:AMDOps, *src:UOp, dtype=dtypes.int32) -> UOp:
+  return UOp(Ops.INS, dtype, src=src, arg=op, tag=(v,))
 
 
 def test_renderer_rematerializable_value_avoids_stack_at_ordinary_use():
@@ -58,3 +64,44 @@ def test_renderer_rematerialization_is_safe_inside_loop_and_at_backedge():
   assert (4, const) in ctx.remats
   assert (7, const) in ctx.remats
   assert ctx.remat_before[7] == [const]
+
+
+def test_amd_pure_compare_rematerializes_with_dependencies_at_ordinary_use():
+  physical = tuple(Register(f"r{i}", i) for i in range(4))
+  inputs = tuple(Register(f"input{i}", 10+i, physical) for i in range(3))
+  predicate = Register("predicate", 13, physical)
+  temporaries = tuple(Register(f"temporary{i}", 20+i, physical) for i in range(4))
+  idefs = tuple(_amd_def(v, AMDOps.V_CONST, UOp.const(dtypes.int32, i).rtag()) for i,v in enumerate(inputs))
+  compare = _amd_def(predicate, AMDOps.V_CMPLT_I, *idefs)
+  tdefs = tuple(_def(v, "compute") for v in temporaries)
+  use = _use(compare)
+
+  ctx = LinearScanRegallocContext([*idefs, compare, *tdefs, _use(*tdefs), use],
+                                   AMDISARenderer(Target.parse("AMD:ISA:gfx1100")))
+
+  assert not ctx.spills and ctx.stack_size == 0
+  assert (9, predicate) in ctx.remats
+  assert all((9, v) in ctx.remats for v in inputs)
+  remat, before = ctx.remat(predicate, 9)
+  assert before[-1] is remat and remat.arg is AMDOps.V_CMPLT_I
+  assert tuple(before[:-1]) == remat.src
+
+
+def test_amd_pure_compare_rematerializes_at_loop_backedge():
+  physical = tuple(Register(f"r{i}", i) for i in range(5))
+  inputs = tuple(Register(f"input{i}", 10+i, (physical[i],)) for i in range(3))
+  predicate = Register("predicate", 13, (physical[3],))
+  temporary = Register("temporary", 14, (physical[3],))
+  range_reg = Register("range", 15, (physical[4],))
+  idefs = tuple(_amd_def(v, AMDOps.V_CONST, UOp.const(dtypes.int32, i).rtag()) for i,v in enumerate(inputs))
+  compare = _amd_def(predicate, AMDOps.V_CMPNE_I, *idefs)
+  rng = UOp(Ops.RANGE, dtypes.int32, src=(UOp.const(dtypes.int32, 0), UOp.const(dtypes.int32, 4)), tag=(range_reg,))
+  tdef = _def(temporary, "compute")
+  end = UOp(Ops.END, dtypes.void, src=(rng,))
+
+  ctx = LinearScanRegallocContext([*idefs, compare, rng, _use(compare), tdef, _use(tdef), end],
+                                   AMDISARenderer(Target.parse("AMD:ISA:gfx1100")))
+
+  assert not ctx.spills and ctx.stack_size == 0
+  assert (8, predicate) in ctx.remats
+  assert ctx.remat_before[8] == [predicate]
