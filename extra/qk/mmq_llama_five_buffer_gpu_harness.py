@@ -55,6 +55,25 @@ def _bind_sink(sink, args):
   return sink.substitute(dict(zip(params, args)), walk=True)
 
 
+def _buffer_manifest(names, buffers, *, device: str = "AMD") -> dict[str, Any]:
+  """Describe concrete argument mappings without reading or mutating device memory."""
+  rows = []
+  for slot, (name, buf) in enumerate(zip(names, buffers)):
+    handle = buf.get_buf(device)
+    va = getattr(handle, "va_addr", None)
+    rows.append({"slot": slot, "name": name, "dtype": str(buf.dtype), "elements": int(buf.size),
+                 "nbytes": int(buf.nbytes), "va_addr": int(va) if va is not None else None,
+                 "va_end": int(va + buf.nbytes) if va is not None else None})
+  overlaps = []
+  for i, left in enumerate(rows):
+    if left["va_addr"] is None: continue
+    for right in rows[i+1:]:
+      if right["va_addr"] is None: continue
+      if left["va_addr"] < right["va_end"] and right["va_addr"] < left["va_end"]:
+        overlaps.append((left["slot"], right["slot"]))
+  return {"buffers": rows, "overlap_slots": overlaps}
+
+
 def _worker() -> dict[str, Any]:
   """Compile and dispatch the sole AMD case.  Called only in a child process."""
   from tinygrad import Tensor, dtypes
@@ -100,16 +119,24 @@ def _worker() -> dict[str, Any]:
   scales = Tensor(scales_np.reshape(-1), device="AMD").realize()
   sums = Tensor(sums_np.reshape(-1), device="AMD").realize()
   buffers = (out.uop.buffer, q4.uop.buffer, values.uop.buffer, scales.uop.buffer, sums.uop.buffer)
+  manifest = _buffer_manifest(("output", "q4", "q8_values", "q8_scales", "q8_original_sums"), buffers)
   # ProgramInfo.globals stores integer indices into the call buffer tuple
   # (the same convention used by engine.realize.exec_kernel), not PARAM UOps.
   globals_ = tuple(program.arg.globals)
   if len(globals_) != 5 or any(g not in range(5) for g in globals_):
     return _blocked("AMD PROGRAM global ABI is not the expected five slots",
-                    globals=list(globals_))
+                    globals=list(globals_), program_global_size=list(program.arg.global_size),
+                    program_local_size=list(program.arg.local_size or ()), **manifest)
   runtime = get_runtime("AMD", program)
-  runtime(*(buffers[g].get_buf("AMD") for g in globals_),
-          global_size=program.arg.global_size, local_size=program.arg.local_size,
-          vals=program.arg.vals({}), wait=True)
+  dispatch = {"globals": list(globals_), "global_size": list(program.arg.global_size),
+              "local_size": list(program.arg.local_size or ()), "vals": list(program.arg.vals({}))}
+  try:
+    runtime(*(buffers[g].get_buf("AMD") for g in globals_),
+            global_size=program.arg.global_size, local_size=program.arg.local_size,
+            vals=program.arg.vals({}), wait=True)
+  except BaseException as exc:
+    return _blocked("AMD dispatch failed", exception=type(exc).__name__, error=str(exc),
+                    dispatch=dispatch, **manifest)
   got = out.numpy().reshape(m, n)
   np.testing.assert_allclose(got, reference, rtol=3e-3, atol=3e-3)
   binary = next((u.arg for u in program.src if u.op is Ops.BINARY), None)
