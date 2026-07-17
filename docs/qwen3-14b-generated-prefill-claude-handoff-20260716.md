@@ -1,9 +1,9 @@
 # Qwen3-14B generated-prefill Claude handoff
 
-## 0.5 Current audit status 2026-07-17 (head `5d599fb17`)
+## 0.5 Current audit status 2026-07-17 (head `7b863aaec`)
 
 Read this section before the historical status sections below. The repository head is now
-`5d599fb17` (`[test][qk] preserve structured GPU blocker evidence`), ten commits ahead of
+`7b863aaec` (`[test][qk] honor ProgramInfo global buffer indices`), twelve commits ahead of
 `origin/master`; the worktree is clean. This includes the allocator lease fix at `23eaf693b` and the new
 fail-closed harness under `extra/qk/mmq_llama_five_buffer_gpu_harness.py`.
 
@@ -14,9 +14,9 @@ The corrected phase-major graph and allocator lease regression coverage are stru
 - `test/unit/test_amd_isa_wmma.py`: **36 passed, 4 failed**. The four 16-subtile multi-output failures are the
   same spill-free-gate failures reproduced on the pre-change `423f6ff83` baseline; they are historical and not a
   regression from `23eaf693b`.
-- The new fail-closed GPU harness scaffolding tests: **3 passed**. This validates ABI binding, fixture construction,
-  and timeout behavior only; no numerical GPU verdict was captured. (The parser now preserves structured worker
-  blockers rather than replacing them with a generic nonzero-exit error.)
+- The new fail-closed GPU harness tests: **3 passed**. A matched-environment run reached a real AMD dispatch but
+  synchronization reported `MMU fault: 0x7F8827C51000 | NotPresent=1`; no numerical verdict was captured. The harness
+  preserves this structured blocker rather than treating it as a pass.
 
 The full K=256 `to_program` path now **emits successfully** under the matched environment
 (`PYTHONHASHSEED=0 REGALLOC_ADDR_REMAT=1 REGALLOC_END_NO_SOURCE_LIVE=1`). Graph/codegen selection reports
@@ -29,8 +29,9 @@ evidence for the full-grid gate.
 
 K=512 exact FP32 state-carry and phase-major lifecycle tests pass structurally. Its exact compile fails before
 regalloc in `_register_stage_leases`: 128 independent C roots request low-accumulator leases `[v8, v1032)`, over
-the 256-VGPR file, because epoch-aware A/B fragment provenance is not yet proven. No shape has been executed on a
-GPU, numerically compared with llama, or performance-measured. Those remain the next acceptance gates.
+the 256-VGPR file, because epoch-aware A/B fragment provenance is not yet proven. K=256 has since been launched on
+the AMD device, but synchronization reported an MMU `NotPresent=1` fault before output comparison. No shape has been
+numerically compared with llama or performance-measured; the dispatch fault is the next acceptance gate.
 
 Date: 2026-07-16  
 Repository: `/home/ubuntu/tinygrad-arkey`  
