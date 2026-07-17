@@ -258,6 +258,58 @@ Two candidate next moves, in order:
 Rails unchanged: no reassociation of `(previous + scale*C) + bias`, no FMA/MULACC, no rounding-boundary move, no AMD
 scratch, no `spec_shared` widening.
 
+## 0.3 Status update 2026-07-17 (later still): cross-subtile serialization, 9 spills left
+
+Accepted and pushed: `cd989ad0e [qk][mmq] serialize full-grid subtiles behind the preceding subtile's drains`.
+
+§0.2's residual-64 note was right: the binding pressure after the intra-subtile fix was **cross-subtile** C-carrier
+co-liveness. The eight subtiles share no integer WMMA node (the subtile index only touches the Q4/A operand), so a
+legal schedule still issued all eight WMMA chains before consuming any subtile's drains — 8 subtiles x 8 lanes co-live.
+`order_wmma_behind_lane_drain` runs *before* the subtile substitution and cannot see across subtiles.
+
+Fix: `_accumulator_vectors` now takes the epoch-0/group-0 chain head and, per substituted element `e>0`, orders `e`'s
+chain head behind element `e-1`'s eight drains. The chain head reaches every lane of its subtile (second WMMA takes
+first as its accumulator input, every lane chains through `second.gep(i)`), so one edge serializes the whole subtile.
+Strictly increasing element index => acyclic (verified by a cycle-detecting toposort in review).
+
+| metric | before | after |
+|---|---:|---:|
+| `V_CVT_I2F` live at peak | 64 | **8** |
+| peak live vregs | 372 | **273** |
+| spills | 54 | **9** |
+| stack | 213 B | **29 B** |
+
+`V_CVT_I2F` at peak (8) now equals the bounded probe. Selected math unchanged (128 `V_WMMA_I8`, 256 `DS_LOAD_B128`,
+512 `V_CVT_I2F`, 640 `V_MUL`, 960 `V_ADD`, 64 `GLOBAL_STORE`); op-count diff vs parent is only +21 `AFTER` (7x3) and
++9 `BITCAST`. Bounded oracle byte-identical (9,481 / 158 @ 5908 / 0 / 0). A Fable review audited math-neutrality, cycle
+safety, per-subtile reach, and the substitution-target liveness — all SAFE with direct evidence.
+
+**Method note that keeps paying off:** for these three full-grid repairs, the diagnosis that held was always (a) show the
+would-be fixing layer *cannot legally act* — `pressure_schedule` is block-local (`regalloc.py:103-111`) — and (b) prove
+non-forcedness *by construction* by adding the edge and measuring. Reason from the string and you get the 132-`V_IMUL`
+red herring; the `V_IMUL` are fully rematerialized by `REGALLOC_ADDR_REMAT` and cost 0 spills.
+
+### Current exact blocker: residual 9 spills, mixed mechanism
+
+Matched env: `PEAK 273 @ 4384`, 9 spills / 29 B. The 9 victims are **3 `V_CVT_I2F`, 2 `GLOBAL_LOAD`, 2 `V_MUL`, 1
+`V_ADD`, 1 `V_CMPLT_I`** — no longer a single class, so no single edge will close it. Peak composition is now `128
+V_IMUL` (remat, 0 spills) + `64 GLOBAL_LOAD` + a thin tail; real physical demand is ~264-273 against a 255 pool, i.e.
+only ~9-18 over. Candidate probes, unverified:
+
+- **`v315` (`V_CMPLT_I`, range 563..13656)** is a whole-program integer predicate reused across every epoch/load, so it
+  is live end to end and independent of the drains (it survived both drain fixes). It originates in the cooperative DS4
+  panel-staging lane map, not the writeback. A recompute-at-uses localization (analogous to the address remat, cf.
+  `a293391b0`) is the natural fix for this one register. Low individual payoff but clean.
+- **The 2 `GLOBAL_LOAD` + 2 `V_MUL` + 1 `V_ADD`** sit near the peak at ~4384; inspect their ranges with
+  `REGALLOC_DEBUG_DETAIL` and check whether a localization or a small ordering nudge frees them.
+- **The 3 residual `V_CVT_I2F`** are the tail of the drain serialization; a milder cross-subtile edge (order behind
+  `e-1`'s CVT frontier rather than its full accumulator — the `prior_drains` knob in `_accumulator_vectors`) might trade
+  the last few without over-constraining. Try this only if the cheaper localizations above do not reach zero.
+
+Because the peak is only ~9-18 over pool and the victims are mixed, the endgame is likely two or three small
+localizations, not one more big ordering edge. Rails unchanged (no reassociation, FMA/MULACC, rounding move, scratch,
+or `spec_shared` widening).
+
 ## 1. Executive state
 
 The project is building a generated tinygrad prefill route for non-fitting quantized models, using Qwen3-14B as the
