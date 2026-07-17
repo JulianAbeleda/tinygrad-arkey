@@ -1813,11 +1813,13 @@ def _serialize_progressive_c_drains(ctx:IselContext, x:UOp):
   for u in nodes:
     for src in u.src: uses.setdefault(src, []).append(u)
   wmmas = [u for u in nodes if u.op is Ops.INS and u.arg in (AMDOps.V_WMMA, AMDOps.V_WMMA_I8)]
-  def source_root(u:UOp) -> UOp|None:
-    marker = next((s for s in u.src if s.op is Ops.NOOP and isinstance(s.arg, tuple) and
+  selected_roots:dict[UOp,UOp] = {}
+  for carrier in nodes:
+    if carrier.op is not Ops.NOOP or not carrier.src: continue
+    marker = next((s for s in carrier.src if s.op is Ops.NOOP and isinstance(s.arg, tuple) and
                    len(s.arg) == 2 and s.arg[0] == "selected_wmma_root" and isinstance(s.arg[1], UOp)), None)
-    return None if marker is None else marker.arg[1]
-  selected_roots = {u:root for u in wmmas if (root := source_root(u)) is not None}
+    machine_root = carrier.src[0]
+    if marker is not None and machine_root in wmmas: selected_roots[machine_root] = marker.arg[1]
   heads = list(selected_roots)
   if len(heads) < 2: return None
   drain_by_head:dict[UOp,tuple[UOp,...]] = {}
@@ -1836,7 +1838,8 @@ def _serialize_progressive_c_drains(ctx:IselContext, x:UOp):
   # selection, so adding an edge along its linear extension cannot form a
   # cycle even when several symbolic roots expand into independent subtiles.
   head_set = set(drain_by_head)
-  dependencies = {h:(set().union(*(set(u.backward_slice) for u in drain_by_head[h])) & head_set) - {h} for h in head_set}
+  dependencies = {h:{candidate for candidate, symbolic in selected_roots.items()
+                     if candidate is not h and symbolic in selected_roots[h].backward_slice} for h in head_set}
   ordered_heads:list[UOp] = []
   remaining = set(head_set)
   while remaining:

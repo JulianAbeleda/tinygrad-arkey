@@ -1,7 +1,10 @@
+from types import SimpleNamespace
+
 from tinygrad import dtypes
 from tinygrad.codegen import line_rewrite
 from tinygrad.codegen.late.regalloc import pressure_schedule
 from tinygrad.renderer.isa import Register
+from tinygrad.renderer.isa import amd
 from tinygrad.renderer.isa.amd import AMDOps, lower_inst, pre_regalloc_matcher
 from tinygrad.uop.ops import Ops, UOp
 
@@ -42,3 +45,33 @@ def test_wide_fragment_release_order_survives_pre_regalloc_cleanup():
   inst, waits = lower_inst(selected)
   assert waits == [inst]
   assert "ds_load_b128(v[200:203], v[5]" in str(inst.arg)
+
+
+def test_progressive_c_marked_carriers_serialize_all_lane_drains(monkeypatch):
+  symbolic0 = UOp(Ops.WMMA, dtypes.float32.vec(8), src=())
+  symbolic1 = UOp(Ops.WMMA, dtypes.float32.vec(8), src=(symbolic0,))
+  operands0 = tuple(UOp(Ops.INS, dtypes.int32, arg=AMDOps.MOV, tag=(_vreg(f"v{64+i}", 64+i),)) for i in range(24))
+  operands1 = tuple(UOp(Ops.INS, dtypes.int32, arg=AMDOps.MOV, tag=(_vreg(f"v{128+i}", 128+i),)) for i in range(24))
+  def marked(root, operands):
+    machine = UOp(Ops.INS, dtypes.float32, operands, AMDOps.V_WMMA, tag=(_vreg("v8", 8),))
+    marker = UOp(Ops.NOOP, dtypes.void, arg=("selected_wmma_root", root))
+    carrier = UOp(Ops.NOOP, dtypes.float32.vec(8), src=(machine,) + tuple(
+      UOp(Ops.INS, dtypes.float32, (machine,), AMDOps.MOV, tag=(_vreg(f"v{8+i}", 8+i),)) for i in range(1, 8)) + (marker,))
+    drains = tuple(UOp(Ops.INS, dtypes.float32, (carrier,), AMDOps.V_CVT_I2F,
+                       tag=(_vreg(f"v{96+i+(16 if root is symbolic1 else 0)}", 96+i+(16 if root is symbolic1 else 0)),)) for i in range(8))
+    return machine, carrier, drains
+  machine0, carrier0, drains0 = marked(symbolic0, operands0)
+  machine1, carrier1, drains1 = marked(symbolic1, operands1)
+  monkeypatch.setattr(amd, "_progressive_c_assignment", lambda ctx: ({symbolic0:0, symbolic1:0}, 1))
+  serialized = amd._serialize_progressive_c_drains(SimpleNamespace(), UOp.sink(*drains0, *drains1))
+  assert serialized is not None
+  selected = [u for u in serialized.toposort() if u.op is Ops.INS and u.arg is AMDOps.V_WMMA]
+  assert len(selected) == 2
+  second = next(u for u in selected if set(drains0).issubset(u.src))
+  assert second.src[:24] == operands1 and second.src[24:] == drains0
+  linear = pressure_schedule(list(serialized.toposort()))
+  assert max(linear.index(x) for x in drains0) < linear.index(second)
+  cleaned = line_rewrite(linear, pre_regalloc_matcher)
+  cleaned_second = next(u for u in cleaned if u is second)
+  assert cleaned_second.src[:24] == operands1 and cleaned_second.src[24:] == drains0
+  assert "v_wmma_f32_16x16x16_f16" in str(lower_inst(cleaned_second).arg)
