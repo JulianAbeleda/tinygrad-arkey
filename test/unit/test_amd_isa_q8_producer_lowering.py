@@ -95,3 +95,43 @@ def test_physical_ds4_native_amd_correctness_matrix(case):
   np.testing.assert_array_equal(got_values, ref_values)
   np.testing.assert_allclose(got_scales, ref_scales, rtol=1e-6, atol=1e-7)
   np.testing.assert_allclose(got_sums, ref_sums, rtol=1e-6, atol=2e-5)
+
+
+def test_half_multiply_selects_and_encodes_gfx1100_native_v_mul_f16():
+  # The pinned llama Q4 metadata recurrence multiplies scale/sum as half2 (record producers: base * code.cast(half)),
+  # so the parent MUL is a genuine fp16 multiply.  Without a typed rule it survived isel unselected, which desynced
+  # the positional regalloc rewrite rather than reporting itself.  Selection must stay fp16: no fp32 widening.
+  ctx = IselContext(UOp.sink())
+  a = UOp(Ops.INS, dtypes.half, arg=AMDOps.V_CONST, tag=(ctx.vreg((Register("v1", 1),)),))
+  b = UOp(Ops.INS, dtypes.half, arg=AMDOps.V_CONST, tag=(ctx.vreg((Register("v2", 2),)),))
+  source = UOp(Ops.MUL, dtypes.half, (a, b))
+  assert all(s.dtype is dtypes.half for s in source.src) and source.dtype is dtypes.half
+
+  selected = isel_matcher.rewrite(source, ctx)
+  assert selected is not None and selected.arg is AMDOps.V_MUL_F16
+  assert selected.dtype is dtypes.half                      # never widened to fp32
+  assert selected.arg is not AMDOps.V_MUL                    # V_MUL lowers to v_mul_f32_e32
+  assert not any(u.op is Ops.MUL for u in selected.toposort())
+
+  physical = selected.replace(src=(a.replace(tag=(Register("v1", 1),)), b.replace(tag=(Register("v2", 2),))),
+                              tag=(Register("v3", 3),))
+  encoded = lower_inst(physical)
+  assert str(encoded.arg).startswith("v_mul_f16_e32")        # native fp16 multiply, one rounding per lane
+  assert encoded.arg.to_bytes()
+
+
+def test_half_multiply_by_a_constant_encodes_a_16_bit_literal_not_an_fp32_pattern():
+  # gfx11 VOP f16 literals carry the value in the LOW 16 bits.  Encoding a Python float (the fp32 path used by
+  # v_mul_f32_e32) puts an fp32 bit pattern there, so the hardware reads a silently wrong constant: 0.3f decodes as
+  # -0.0027h.  Only inline constants (0.0/1.0) survive that bug, which is why it hides behind "the program encodes".
+  import struct
+  ctx = IselContext(UOp.sink())
+  a = UOp(Ops.INS, dtypes.half, arg=AMDOps.V_CONST, tag=(ctx.vreg((Register("v1", 1),)),))
+  selected = isel_matcher.rewrite(UOp(Ops.MUL, dtypes.half, (a, UOp.const(dtypes.half, 0.3))), ctx)
+  assert selected is not None and selected.arg is AMDOps.V_MUL_F16
+
+  physical = selected.replace(src=(a.replace(tag=(Register("v1", 1),)), selected.src[1]), tag=(Register("v2", 2),))
+  encoded = lower_inst(physical)
+  raw = encoded.arg.to_bytes()
+  assert str(encoded.arg).startswith("v_mul_f16_e32") and len(raw) == 8   # 4-byte inst + 4-byte literal dword
+  assert struct.unpack("<e", raw[4:6])[0] == struct.unpack("<e", struct.pack("<e", 0.3))[0]

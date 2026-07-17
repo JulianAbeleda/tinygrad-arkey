@@ -15,6 +15,7 @@ always enabled. Experimental PREFILL_DBUF/TC_LOCAL_STAGE tuning does not live
 in this renderer.
 """
 from __future__ import annotations
+import struct
 from typing import NamedTuple
 from types import SimpleNamespace
 from tinygrad.uop import FastEnum
@@ -25,7 +26,7 @@ from tinygrad.renderer.isa import (CompilerCaptureProof, CompilerRegisterLease, 
 from tinygrad.renderer.amd.dsl import s as _S, v as _V, NULL, VCC, EXEC, Reg, FixedBitField
 from tinygrad.runtime.autogen.amd.rdna3.ins import (
   s_load_b64, s_load_b32, global_load_b32, global_load_b64, global_load_b128, global_store_b32,
-  v_add_f32_e32, v_mul_f32_e32, v_sub_f32_e32,
+  v_add_f32_e32, v_mul_f32_e32, v_sub_f32_e32, v_mul_f16_e32,
   v_lshlrev_b32_e32, v_mov_b32_e32, v_mul_lo_u32, v_add_nc_u32_e32, v_bfe_u32, s_waitcnt, s_endpgm,
   s_mov_b32, s_add_i32, s_cmp_lt_i32, ds_load_u8, ds_load_b32, ds_store_b8, ds_store_b32, ds_store_b64, ds_load_b128, ds_store_b128, s_barrier,
   ds_bpermute_b32, v_dot2_f32_f16,
@@ -333,6 +334,7 @@ class AMDOps(FastEnum):
   V_PACK_I8_U8 = 62                      # pack four zero-extended byte carriers into one dword without SSA temporaries
   V_RCP = 63                             # float32 reciprocal -> v_rcp_f32
   V_TRUNC = 64                           # truncate float32 toward zero -> v_trunc_f32
+  V_MUL_F16 = 65                         # native fp16 multiply -> v_mul_f16_e32; one rounding per metadata lane
 
 def _reg(r:Register): return r  # passthrough; encoding maps index in post_regalloc
 
@@ -1936,6 +1938,10 @@ isel_matcher = PatternMatcher([
   # float elementwise ALU (commutative add/mul); a CONST operand is folded to a literal (e.g. a-b == a + b*-1.0)
   ((UPat(dtype=dtypes.float32) + UPat()).named("x"), lambda ctx, x: _binop(ctx, x, AMDOps.V_ADD)),
   ((UPat(dtype=dtypes.float32) * UPat()).named("x"), lambda ctx, x: _binop(ctx, x, AMDOps.V_MUL)),
+  # The pinned llama source multiplies Q4 metadata as half2, so the scale/sum recurrence carries a genuine fp16
+  # multiply.  Widening it to fp32 (or folding it into v_dot2/FMA) would move the rounding boundary the recurrence
+  # authority pins, so select the native scalar f16 multiply and keep one independent rounding per metadata lane.
+  (UPat(Ops.MUL, dtype=dtypes.half, name="x"), lambda ctx, x: _binop(ctx, x, AMDOps.V_MUL_F16)),
   # integer index arithmetic (Inc 1): address math derived from SPECIAL/workitem id -> u32 VALU. v_lshlrev for the
   # byte scale stays in isel_index. Both share _binop: everything is in VGPRs (v0=workitem id), CONST -> immediate.
   (UPat(Ops.MUL, dtype=dtypes.ints, name="x"), lambda ctx, x: _binop(ctx, x, AMDOps.V_IMUL)),
@@ -2144,6 +2150,14 @@ def _vop2_f(mk, x:UOp, src):
   if src[1].op is Ops.CONST: return mk(_Vr(x.reg), float(src[1].arg), _Vr(src[0].reg))
   return mk(_Vr(x.reg), _Vr(src[0].reg), _Vr(src[1].reg))
 
+def _vop2_h(mk, x:UOp, src):
+  # fp16 VOP2: same operand shape as _vop2_f, but the literal is 16-bit.  Passing a Python float here would encode an
+  # fp32 bit pattern, of which gfx11 reads only the low 16 bits -- silently the wrong constant (0.3f -> -0.0027h).
+  # Inline constants (0.0, 1.0, ...) survive either way; anything else does not.  Emit the fp16 bit pattern instead.
+  if src[1].op is Ops.CONST:
+    return mk(_Vr(x.reg), struct.unpack("<H", struct.pack("<e", float(src[1].arg)))[0], _Vr(src[0].reg))
+  return mk(_Vr(x.reg), _Vr(src[0].reg), _Vr(src[1].reg))
+
 def lower_inst(x:UOp):
   a = x.arg
   if not isinstance(a, AMDOps): return None
@@ -2321,6 +2335,7 @@ def lower_inst(x:UOp):
   # float VOP2 (add/mul): src0 may be a 32-bit float literal, vsrc1 must be a VGPR -> a CONST operand goes in src0.
   if a is AMDOps.V_ADD: return _ins(_vop2_f(v_add_f32_e32, x, src), x.tag)
   if a is AMDOps.V_MUL: return _ins(_vop2_f(v_mul_f32_e32, x, src), x.tag)
+  if a is AMDOps.V_MUL_F16: return _ins(_vop2_h(v_mul_f16_e32, x, src), x.tag)
   if a is AMDOps.V_SUB: return _ins(v_sub_f32_e32(_Vr(x.reg), _Vr(src[0].reg), _Vr(src[1].reg)), x.tag)
   if a is AMDOps.V_IMUL:                            # u32 mul (VOP3); src1 may be a reg or an integer immediate
     o1 = src[1].arg if src[1].op is Ops.CONST else _Vr(src[1].reg)
