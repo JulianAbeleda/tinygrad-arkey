@@ -2703,7 +2703,9 @@ class AMDISARenderer(ISARenderer):
   # the full-drain used by _insert_waitcnt. ----
   @staticmethod
   def _waitcnt_simm16(vm:int=63, lgkm:int=63, exp:int=7) -> int:
-    return ((vm & 0x3F) << 10) | ((lgkm & 0x3F) << 4) | (exp & 0x7)
+    if not (0 <= vm <= 63 and 0 <= lgkm <= 63 and 0 <= exp <= 7):
+      raise ValueError(f"AMD waitcnt field out of range: vm={vm}, lgkm={lgkm}, exp={exp}")
+    return (vm << 10) | (lgkm << 4) | exp
 
   # ---- Phase K: legality-preserving list scheduler (latency-hiding). Reorders within basic blocks only. ----
   @staticmethod
@@ -2828,6 +2830,10 @@ class AMDISARenderer(ISARenderer):
         if a[0] == "branch" and (pend_vm or pend_lgkm or vm_store or lgkm_store): _drain()
         out.append(u); continue
       m, uses = str(a).split("(", 1)[0], _uses(a)
+      # GFX11 vmcnt has a 6-bit field.  Do not let a compiler score bracket grow past the 63 operations the
+      # instruction can represent: masking a larger targeted age in _waitcnt_simm16 aliases it to an unrelated
+      # smaller threshold.  Large generated staging bursts can exceed the field before their first consumer.
+      if m.startswith("global_load") and len(pend_vm) >= 63: _drain(vm=0, lgkm=63, exp=7)
       if m == "s_barrier" and (lgkm_store or pend_lgkm): _drain(vm=63, lgkm=0, exp=7)
       elif m == "s_endpgm" and (vm_store or lgkm_store or pend_vm or pend_lgkm): _drain()
       elif m.startswith("ds_load") and lgkm_store: _drain(vm=63, lgkm=0, exp=7)

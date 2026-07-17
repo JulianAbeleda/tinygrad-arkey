@@ -1,7 +1,10 @@
 import unittest
+import pytest
 from types import SimpleNamespace
 from tinygrad.renderer.isa.amd import _frag_base, FRAG_BASE, FRAG_TOP, AMDISARenderer
 from tinygrad.renderer.isa.amd import AMDOps, isel_typed_wait, lower_inst
+from tinygrad.renderer.amd.dsl import s, v
+from tinygrad.runtime.autogen.amd.rdna3.ins import global_load_u8, v_mov_b32_e32
 from tinygrad.codegen.opt.compiler_policies import WaitCount
 from tinygrad.dtype import dtypes
 from tinygrad.uop.ops import Ops, UOp
@@ -74,6 +77,10 @@ class TestWaitcntSimm16(unittest.TestCase):
     # the value the rerouted _insert_waitcnt sites use must equal the old literal simm16=0.
     self.assertEqual(AMDISARenderer._waitcnt_simm16(0, 0, 0), 0)
 
+  def test_unrepresentable_wait_does_not_silently_wrap(self):
+    with pytest.raises(ValueError, match="waitcnt field out of range"):
+      AMDISARenderer._waitcnt_simm16(vm=64)
+
   def test_typed_wait_reaches_native_s_waitcnt(self):
     wait = UOp(Ops.WAIT, dtypes.void, (), WaitCount(vmcnt=8))
     lowered = isel_typed_wait(wait)
@@ -81,6 +88,20 @@ class TestWaitcntSimm16(unittest.TestCase):
     self.assertIs(lowered.arg, AMDOps.TYPED_WAIT)
     inst, _ = lower_inst(lowered)
     self.assertEqual(inst.arg.simm16, WaitCount(vmcnt=8).simm16)
+
+  def test_targeted_wait_drains_before_vmcnt_score_overflow(self):
+    # A generated Q8 staging burst can issue more than 63 independent VMEM loads before its first consumer.  The
+    # 6-bit vmcnt field cannot represent that score bracket; it must be drained instead of wrapping modulo 64.
+    loads = [UOp(Ops.INS, arg=global_load_u8(vdst=v[128+i], addr=v[128+i], saddr=s[6:7])) for i in range(64)]
+    out = AMDISARenderer._insert_waitcnt(AMDISARenderer, loads, targeted=True)
+    waits = [(i, u.arg.simm16) for i,u in enumerate(out) if u.arg.op.name == "S_WAITCNT"]
+    self.assertEqual(waits, [(63, AMDISARenderer._waitcnt_simm16(vm=0, lgkm=63, exp=7))])
+    self.assertIs(out[64].arg, loads[63].arg)
+
+  def test_targeted_wait_does_not_drain_a_representable_vmcnt_bracket(self):
+    loads = [UOp(Ops.INS, arg=global_load_u8(vdst=v[128+i], addr=v[128+i], saddr=s[6:7])) for i in range(63)]
+    out = AMDISARenderer._insert_waitcnt(AMDISARenderer, loads, targeted=True)
+    self.assertFalse(any(u.arg.op.name == "S_WAITCNT" for u in out))
 
 
 if __name__ == "__main__":
