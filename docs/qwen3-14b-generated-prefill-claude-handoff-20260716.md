@@ -160,7 +160,8 @@ The `V_MUL`/`V_ADD` pairs there are the exact serial recurrence (`previous + sca
 each drain is held for thousands of UOps waiting its turn. WMMAs are not all hoisted first (they span 2,818..13,089) —
 the pile-up is local to that region.
 
-**Leading hypothesis, NOT yet confirmed — verify before acting.** `_accumulator_vectors` transposes eight scalar WMMA
+**REFUTED at `8124ddaa9` — see §0.2. The real cause was a missing ordering edge in the full-grid producer, and
+`_accumulator_vectors` is not a contributor at all. Retained only as history; do not revive.** Leading hypothesis: `_accumulator_vectors` transposes eight scalar WMMA
 lanes across eight oracle subtiles (vector `e` = `STACK(lane_0..lane_7)` with `subtile -> e`). That transposition
 requires all eight subtiles' drains co-live to assemble any one vector, whereas the bounded probe drains each subtile
 independently and keeps only 8 `V_CVT_I2F` live. Note 184 != 64, so the transposition alone does not obviously account
@@ -183,6 +184,79 @@ Full-grid spill/peak numbers are **environment-sensitive and load-sensitive**:
 Each environment is self-consistent when the machine is otherwise idle, but the load-dependent outlier is unexplained
 and was not chased. **Run the full-grid reproducer on an idle machine and compare only matched environments.** The
 bounded oracle is deterministic (9,481 / 158 @ 5908 / 0) and is the trustworthy comparator.
+
+## 0.2 Status update 2026-07-17 (later still): drain ordering applied, blocker moves to the writeback
+
+Accepted and pushed: `8124ddaa9 [qk][mmq] order full-grid WMMAs behind the preceding lane drain`.
+
+§0.1's hypothesis (`_accumulator_vectors` transposition) was **wrong and is now refuted twice over**. Do not revive it:
+
+1. `_accumulator_vectors` groups by subtile, **not across** subtiles: `vector[e] = STACK([lane[l].substitute(subtile -> e)
+   for l in range(8)])` substitutes the *same* `e` into every lane. Assembling one vector needs one subtile's eight
+   **lanes**, never all eight subtiles. Measured: `vector[e]`'s weakint consts are `[e]` only.
+2. It is structurally inert regardless. `build_wmma_writeback` immediately GEPs each lane back out and
+   `GEP(STACK, i) -> src[i]` folds, so the STACK never reaches the machine graph. Measured: `GEP(vector[3], 5)` is
+   already `Ops.ADD` and is *identical* to `lanes[5].substitute(subtile -> 3)`.
+
+**The real cause was a missing ordering edge in the full-grid producer.** The oracle keeps the integer WMMA chain and
+the eight FP32 lane chains as separate algebraic dependencies, so a legal schedule issues every WMMA before consuming
+any C lane. `_bounded_accumulator_drain`'s docstring in `extra/qk/mmq_llama_full_kernel.py` has named this exact
+failure all along — the bounded probe has carried the edge for a long time and the full-grid seam simply never got it.
+
+Two facts that discriminated **forced dataflow** from **scheduling choice**, and are worth reusing as a method:
+
+- `pressure_schedule` provably *could not* fix it: it is block-local (`regalloc.py:103-111` splits blocks at
+  `BARRIER`/`RANGE`/`END`), the drains were defined in blocks `(2685,4217)`/`(5070,5474)` while their `V_MUL` consumers
+  lived in blocks `(5915,6060)`..`(8845,8990)`, with `BARRIER`s between. Barrier indices are identical in its input and
+  output — it permutes only *within* blocks and had no legal hoist available.
+- But it was not dataflow-forced either, proved by construction: adding the edge changed nothing but the order.
+
+The repair extracts `order_wmma_behind_lane_drain(epochs, tag_prefix)` from `_bounded_accumulator_drain` and applies it
+in `_full_grid_sink` before `_accumulator_vectors` substitutes, so edges replicate into all eight subtiles.
+
+| metric | before | after |
+|---|---:|---:|
+| `V_CVT_I2F` live at peak | 184 | **64** |
+| peak live vregs | 465 | **372** |
+| spills | 95 | **54** |
+| stack | 377 B | **213 B** |
+
+Selected math unchanged (128 `V_WMMA_I8`, 256 `DS_LOAD_B128`, 512 `V_CVT_I2F`, 640 `V_MUL`, 960 `V_ADD`, 64
+`GLOBAL_STORE` — identical to pre-repair). Bounded oracle byte-identical (9,481 / 158 @ 5908 / 0 / 0). All 54 focused
+tests pass. `test_full_grid_orders_each_wmma_behind_the_preceding_lane_drain` locks the invariant and was confirmed to
+fail with the producer fix stashed.
+
+### Current exact blocker: writeback address math and load lifetimes
+
+54 spills still fail closed, so §13.1 stays open, and **the owning problem has moved**. Peak composition inverts:
+
+```text
+REGALLOC_DEBUG: 13659 uops, PEAK 372 live vregs @ uop 5049
+  132  V_IMUL
+   64  GLOBAL_LOAD
+   64  V_ADD
+   64  V_CVT_I2F
+```
+
+`V_IMUL` (132) + `GLOBAL_LOAD` (64) now dominate, not the drains. Spill victims are still mostly `V_CVT_I2F` (the
+residual 64 = 8 subtiles x 8 lanes), plus one long-lived `V_CMPLT_I` (v315, range 563..13656 — a whole-program
+predicate worth its own look).
+
+Two candidate next moves, in order:
+
+1. **The 132 `V_IMUL` and 64 `GLOBAL_LOAD` at the peak** are the writeback/grid address math. This is the largest
+   contributor and is untouched by any repair so far. Start here; `a293391b0 [codegen] localize constrained leases at
+   consumers` is the precedent for shrinking def-to-use distance on address carriers.
+2. **The residual 64 drains are cross-subtile co-liveness** the per-subtile edge does not cover. Ordering subtile `e`'s
+   WMMAs after subtile `e-1`'s updates needs edges injected *post*-substitution. **Unverified and risky:**
+   `amd.py:1883-1886` explicitly warns that ordering on FP32 update nodes "can compose into a cycle". Extending
+   `_serialize_progressive_c_drains` from the CVT release frontier to the update frontier is the natural candidate —
+   note that serializer **does fire** on full-grid (128 machine WMMAs, 64 selected roots, 63 edges applied); it orders
+   chain heads on the CVT frontier, which frees the C lease but does not force the FP32 consumer. It is insufficient,
+   not absent. Do not re-diagnose it as a bail-out.
+
+Rails unchanged: no reassociation of `(previous + scale*C) + bias`, no FMA/MULACC, no rounding-boundary move, no AMD
+scratch, no `spec_shared` widening.
 
 ## 1. Executive state
 
