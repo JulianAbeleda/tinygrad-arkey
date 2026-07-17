@@ -61,10 +61,28 @@ class LlamaFiveBufferFullKernel:
       (records*facts.m+m0)*128, (records*facts.m+m0)*4, (records*facts.m+m0)*4)
 
 
-def _accumulator_vectors(values:tuple[UOp, ...], subtile:UOp) -> tuple[UOp, ...]:
-  """Transpose eight scalar WMMA lanes x eight oracle subtiles without copying its arithmetic."""
-  return tuple(UOp(Ops.STACK, dtypes.float.vec(8),
-    tuple(lane.substitute({subtile: UOp.const(dtypes.weakint, element)}) for lane in values)) for element in range(8))
+def _accumulator_vectors(values:tuple[UOp, ...], subtile:UOp, chain_head:UOp) -> tuple[UOp, ...]:
+  """Transpose eight scalar WMMA lanes x eight oracle subtiles without copying its arithmetic.
+
+  The eight subtiles share no integer WMMA node (the subtile index only touches the Q4/A operand), so a legal schedule
+  may issue every subtile's WMMA chain before consuming any subtile's drains, holding 8 subtiles x 8 lanes of C carriers
+  co-live.  order_wmma_behind_lane_drain serializes each K32 group *within* a subtile but cannot see across subtiles
+  (it runs before the subtile substitution).  Order each subtile's chain-head WMMA behind the previous subtile's drains
+  so at most one subtile's drains are live at a time.  The chain head reaches every lane of its subtile, so this one
+  edge serializes the whole subtile transitively.  Strictly increasing element index => acyclic.  Same typed no-op
+  BITCAST movement carrier on the WMMA's A/B/C inputs as the intra-subtile ordering: no arithmetic or rounding change.
+  """
+  vectors, prior_drains = [], None
+  for element in range(8):
+    sub = {subtile: UOp.const(dtypes.weakint, element)}
+    lanes = tuple(lane.substitute(sub) for lane in values)
+    if prior_drains is not None:
+      head = chain_head.substitute(sub)
+      guarded = head.replace(src=tuple(UOp(Ops.BITCAST, s.dtype, (s,)).after(*prior_drains) for s in head.src))
+      lanes = tuple(lane.substitute({head: guarded}) for lane in lanes)
+    vectors.append(UOp(Ops.STACK, dtypes.float.vec(8), lanes))
+    prior_drains = lanes
+  return tuple(vectors)
 
 
 def _full_grid_sink(m:int, n:int, k:int) -> UOp:
@@ -92,13 +110,14 @@ def _full_grid_sink(m:int, n:int, k:int) -> UOp:
   # before _accumulator_vectors so the edges replicate into all eight subtiles.
   replacements, _ = order_wmma_behind_lane_drain(tuple(recurrences), "llama_five_buffer_full_grid_epoch_release")
   previous = tuple(x.substitute(replacements) for x in previous)
+  chain_head = recurrences[0][1].groups[0].wmmas[0]
   plan = llama_mmq_candidate_plan()
   desc = WMMAWritebackDescriptor(plan.geometry, plan.tensor_core, dtypes.float, 8,
     # Oracle A rows are Q4/N and B rows are Q8/M, so row-major output[M,N]
     # is col * N + row in the tensor-core coordinate vocabulary.
     WMMAWritebackLayout("col", "row", n), None, True)
   writeback = build_wmma_writeback(WMMAWritebackProof.prove(desc), destination=output,
-    accumulators=_accumulator_vectors(previous, final.stage.subtile_n), wave_m=wave_m, wave_n=wave_n, lane=lane)
+    accumulators=_accumulator_vectors(previous, final.stage.subtile_n, chain_head), wave_m=wave_m, wave_n=wave_n, lane=lane)
   # Exact aligned tiles need no predicates: grid origins are folded into the row-major destination base.
   tile_base = block_m*128*n + block_n*128
   prior = None

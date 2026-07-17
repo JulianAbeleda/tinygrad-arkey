@@ -63,10 +63,11 @@ def test_full_grid_orders_each_wmma_behind_the_preceding_lane_drain():
   releases = [x for x in nodes if x.op is Ops.BARRIER and isinstance(x.tag, tuple) and
               x.tag[:1] == ("llama_five_buffer_full_grid_epoch_release",)]
   wmmas = [x for x in nodes if x.op is Ops.WMMA]
-  # Each K32 group's first WMMA takes its A/B/C through a movement carrier ordered on the preceding lane drain.  Only
-  # the eight chain heads (one per subtile) have no prior drain, so 64 group heads - 8 chain heads == 56 are guarded.
+  # Intra-subtile: each K32 group's first WMMA takes its A/B/C through a movement carrier ordered on the preceding lane
+  # drain.  8 subtiles x 8 groups = 64 group heads, minus the 8 per-subtile chain heads with no prior group == 56.
+  # Cross-subtile: each subtile e>0's chain head is ordered behind subtile e-1's drains == 7 more.  56 + 7 == 63.
   guarded = [x for x in wmmas if any(s.op is Ops.AFTER for s in x.src)]
-  assert len(wmmas) == 128 and len(releases) == 56 and len(guarded) == 56
+  assert len(wmmas) == 128 and len(releases) == 56 and len(guarded) == 63
   assert all(any(r in x.backward_slice for r in releases) for x in guarded[:4])
 
 
