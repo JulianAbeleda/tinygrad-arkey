@@ -1,4 +1,4 @@
-import itertools, os, unittest
+import itertools, os, re, unittest
 from dataclasses import replace
 from tinygrad import Tensor
 from tinygrad.uop.ops import Ops, UOp, graph_rewrite
@@ -190,9 +190,15 @@ class TestAMDISAIntegerCastGate(unittest.TestCase):
     ast = [u for u in lin.toposort() if u.op is Ops.SINK][0]
     prg = to_program(ast, ren)
     lin_uop = [u for u in prg.src if u.op is Ops.LINEAR][0]
-    mns = [str(u.arg).split("(", 1)[0] for u in lin_uop.src if not isinstance(u.arg, tuple)]
+    asm = [str(u.arg) for u in lin_uop.src if not isinstance(u.arg, tuple)]
+    mns = [line.split("(", 1)[0] for line in asm]
     self.assertEqual(mns.count("global_load_b64"), 1)
-    self.assertEqual(mns.count("v_bfe_u32"), 4)
+    load = next(line for line in asm if line.startswith("global_load_b64"))
+    base, end = map(int, re.search(r"v\[(\d+):(\d+)\]", load).groups())
+    self.assertEqual(end - base + 1, 2)
+    extracts = [tuple(map(int, match.groups())) for line in asm if line.startswith("v_bfe_u32")
+                if (match := re.search(r"v_bfe_u32\(v\[\d+\], v\[(\d+)\], (\d+), 16\)", line)) and base <= int(match.group(1)) <= end]
+    self.assertEqual(sorted(extracts), [(base+word, half*16) for word in range(2) for half in range(2)])
     self.assertEqual(mns.count("v_and_b32_e32"), 4)
     self.assertEqual(mns.count("global_store_b32"), 4)
 
