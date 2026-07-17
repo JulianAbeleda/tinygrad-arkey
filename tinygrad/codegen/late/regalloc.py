@@ -131,7 +131,10 @@ class LinearScanRegallocContext:
       # are tuples too, but only an all-Register tuple denotes physical
       # register definitions for liveness/allocation.
       defs = u.tag if isinstance(u.tag, tuple) and all(isinstance(v, Register) for v in u.tag) else ()
-      src_regs = tuple(s.reg for s in dedup(u.src) if not (u.op is Ops.END and getenv("REGALLOC_END_NO_SOURCE_LIVE", 0) and s.op is not Ops.RANGE))
+      # END's completed body is an ordering dependency, not a machine operand.  The
+      # loop counter is the sole exception: backend lowering consumes the RANGE at
+      # the backedge (for example AMD END(STORE, RANGE) reads src[1].reg).
+      src_regs = tuple(s.reg for s in dedup(u.src) if u.op is not Ops.END or s.op is Ops.RANGE)
       for v in defs + src_regs:
         if isinstance(v, FixedRegisterUse): continue
         if isinstance(v, Register): lr.setdefault(v, []).insert(0, len(uops) - 1 - i)
