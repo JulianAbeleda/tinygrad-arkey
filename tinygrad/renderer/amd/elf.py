@@ -100,6 +100,7 @@ def assemble_linear(prg:UOp, lin:UOp, arch:str) -> bytes:
   padding_inst = (s_nop_cdna(0) if is_cdna else s_code_end()).to_bytes()
   text = code_bytes + padding_inst * ((hsa.AMD_ISA_ALIGN_BYTES - len(code_bytes) % hsa.AMD_ISA_ALIGN_BYTES) % hsa.AMD_ISA_ALIGN_BYTES)
   text_offset = round_up(ctypes.sizeof(libc.Elf64_Ehdr), hsa.AMD_ISA_ALIGN_BYTES)
+  rodata_offset = round_up(text_offset + len(text), hsa.AMD_KERNEL_CODE_ALIGN_BYTES)
 
   # ** pack kernel descriptor (rodata)
   # CDNA: total VGPRs = regular VGPRs + AccVGPRs, each rounded to granularity of 4
@@ -112,7 +113,9 @@ def assemble_linear(prg:UOp, lin:UOp, arch:str) -> bytes:
   desc = amdgpu_kd.llvm_amdhsa_kernel_descriptor_t()
   desc.group_segment_fixed_size = lds_size
   desc.kernarg_size = n_bufs * 8 + n_vars * 4
-  desc.kernel_code_entry_byte_offset = -len(text)
+  # The entry is relative to the descriptor, not to the end of the text.  The
+  # section-alignment gap between .text and .rodata must therefore be included.
+  desc.kernel_code_entry_byte_offset = text_offset - rodata_offset
 
   # https://llvm.org/docs/AMDGPUUsage.html#amdgpu-amdhsa-compute-pgm-rsrc1-gfx6-gfx12-table
   # NOTE: CU mode is the default
@@ -141,7 +144,7 @@ def assemble_linear(prg:UOp, lin:UOp, arch:str) -> bytes:
     sh_names.append(len(strtab))
     strtab += name.encode("ascii") + b"\x00"
 
-  rodata_offset = round_up(text_offset + (text_size := len(text)), hsa.AMD_KERNEL_CODE_ALIGN_BYTES)
+  text_size = len(text)
   strtab_offset = rodata_offset + (rodata_size := len(rodata))
   shdr_offset   = strtab_offset + (strtab_size := len(strtab))
 
