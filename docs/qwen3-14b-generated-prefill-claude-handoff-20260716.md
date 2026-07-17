@@ -1,9 +1,9 @@
 # Qwen3-14B generated-prefill Claude handoff
 
-## 0.5 Current audit status 2026-07-17 (head `e814531d3`)
+## 0.5 Current audit status 2026-07-17 (head `5d599fb17`)
 
 Read this section before the historical status sections below. The repository head is now
-`e814531d3` (`[test][qk] add fail-closed full-grid GPU validation harness`), seven commits ahead of
+`5d599fb17` (`[test][qk] preserve structured GPU blocker evidence`), ten commits ahead of
 `origin/master`; the worktree is clean. This includes the allocator lease fix at `23eaf693b` and the new
 fail-closed harness under `extra/qk/mmq_llama_five_buffer_gpu_harness.py`.
 
@@ -15,7 +15,8 @@ The corrected phase-major graph and allocator lease regression coverage are stru
   same spill-free-gate failures reproduced on the pre-change `423f6ff83` baseline; they are historical and not a
   regression from `23eaf693b`.
 - The new fail-closed GPU harness scaffolding tests: **3 passed**. This validates ABI binding, fixture construction,
-  and timeout behavior only; no GPU dispatch has been run.
+  and timeout behavior only; no numerical GPU verdict was captured. (The parser now preserves structured worker
+  blockers rather than replacing them with a generic nonzero-exit error.)
 
 The full K=256 `to_program` path now **emits successfully** under the matched environment
 (`PYTHONHASHSEED=0 REGALLOC_ADDR_REMAT=1 REGALLOC_END_NO_SOURCE_LIVE=1`). Graph/codegen selection reports
@@ -26,9 +27,10 @@ pass, so this is a valid zero-spill emission result but not a GPU correctness or
 change reserves the serialized high A/B fragment lease and has a focused unit test; the end-to-end run above is the
 evidence for the full-grid gate.
 
-K=512 exact FP32 state-carry and phase-major lifecycle tests pass structurally. Its actual AMD emission remains
-blocked by the backend VGPR/fragment-lease capacity gate. No shape has been executed on a GPU, numerically compared
-with llama, or performance-measured. Those remain the next acceptance gates.
+K=512 exact FP32 state-carry and phase-major lifecycle tests pass structurally. Its exact compile fails before
+regalloc in `_register_stage_leases`: 128 independent C roots request low-accumulator leases `[v8, v1032)`, over
+the 256-VGPR file, because epoch-aware A/B fragment provenance is not yet proven. No shape has been executed on a
+GPU, numerically compared with llama, or performance-measured. Those remain the next acceptance gates.
 
 Date: 2026-07-16  
 Repository: `/home/ubuntu/tinygrad-arkey`  
