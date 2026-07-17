@@ -1933,7 +1933,17 @@ def _strip_linear_order_deps(x:UOp):
   nx = None
   if x.arg in (AMDOps.GLOBAL_LOAD, AMDOps.GLOBAL_LOAD_B64, AMDOps.GLOBAL_LOAD_B128_GENERIC) and len(x.src) > 3: nx = x.replace(src=x.src[:3])
   elif x.arg is AMDOps.DS_LOAD and len(x.src) > 2: nx = x.replace(src=x.src[:2])
-  elif x.arg is AMDOps.DS_LOAD_B128 and len(x.src) > 3: nx = x.replace(src=x.src[:3])
+  elif x.arg is AMDOps.DS_LOAD_B128 and len(x.src) > 3:
+    # A staged wide fragment may carry the preceding group's completed FP32
+    # updates after its three ISA operands.  Keep that native value order on
+    # the current, localized address value: pressure scheduling then sees the
+    # whole produce -> WMMA -> convert -> update boundary, while lowering still
+    # receives the canonical three-operand DS instruction.  Do not preserve
+    # arbitrary extras (in particular old address recipes).
+    release = tuple(s for s in x.src[3:] if s.dtype is dtypes.float32 and s.op is Ops.INS and any(
+      u.op is Ops.INS and u.arg in (AMDOps.V_CVT_I2F, AMDOps.V_CVT_U2F) for u in s.backward_slice_with_self))
+    addr = x.src[0].after(*release) if release else x.src[0]
+    nx = x.replace(src=(addr,) + x.src[1:3])
   elif x.arg is AMDOps.DS_STORE and len(x.src) > 4: nx = x.replace(src=x.src[:4])
   elif x.arg is AMDOps.DS_STORE_B128 and len(x.src) > 7: nx = x.replace(src=x.src[:5] + x.src[-2:])
   elif x.arg is AMDOps.GATED_STORE_B128 and len(x.src) > 8: nx = x.replace(src=x.src[:6] + x.src[-2:])
