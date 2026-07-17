@@ -75,8 +75,8 @@ results.
 - **Baselines (BOTH NUMBERS BELOW ARE STALE — see `prefill-current-state.md`):** this line historically read
   "generated 8B pp512 = 2549 tok/s vs hand 4413". Both are superseded:
   - The `hand 4413` (and `~4099`) figures were **invalid** — leaked LDS geometry launched only 1/16 of the pipe-owned
-    output. Corrected geometry produced parity at only **2095.70 tok/s** (`prefill-current-state.md`,
-    `s9-post-8ab-regression-matrix-20260712.md`). Do not cite 4413 as a hand baseline anywhere.
+    output. Corrected geometry produced parity at only **2095.70 tok/s** (`prefill-current-state.md`; the detailed
+    bisection matrix that first found the 1/16-tile bug is in git history). Do not cite 4413 as a hand baseline.
   - The generated `2549` is stale: the current shipped generated full-overlay route is pinned at **3561.32 tok/s**
     (`prefill-current-state.md` @ `8045efcef`), with the planner-repair smoke at 3503–3509 tok/s
     (`automatic-prefill-route-planner-repair-scope-20260716.md`).

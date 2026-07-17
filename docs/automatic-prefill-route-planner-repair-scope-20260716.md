@@ -3,7 +3,7 @@
 Date: 2026-07-16
 Status: validated implementation scope
 Parent architecture: `docs/prefill-memory-fit-architecture-20260715.md`
-Parent generalization scope: `docs/memory-adaptive-prefill-generalization-scope-20260715.md`
+Parent generalization scope: `memory-adaptive-prefill-generalization-scope-20260715.md` (pruned — this doc superseded it; see git history)
 
 ## Implemented 8B bridge and validation
 
