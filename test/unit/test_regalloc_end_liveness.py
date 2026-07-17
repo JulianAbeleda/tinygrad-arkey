@@ -22,3 +22,20 @@ def test_end_keeps_only_range_machine_operand_live():
   assert store in release.src and release in end.src  # release and loop ordering remain structural dependencies
   assert ctx.live_range[body_reg] == [1, 2]  # the real store consumer, not END
   assert ctx.live_range[range_reg] == [0, 4]  # the backedge counter remains live through END
+
+
+def test_unselected_op_is_named_instead_of_desyncing_the_rewrite_index():
+  # regalloc_rewrite pairs each visited uop with uops[next(ctx.idx)] BY POSITION.  An op with no ISA selection rule
+  # is never visited, so every later index silently shifts by one and surfaces as a KeyError on an unrelated vreg.
+  # Report the unselected op itself: a missing lowering rule is a backend defect, not a register-allocation one.
+  import pytest
+  a = UOp(Ops.INS, dtypes.half, arg="a", tag=(Register("r0", 0),))
+  b = UOp(Ops.INS, dtypes.half, arg="b", tag=(Register("r1", 1),))
+  unselected = UOp(Ops.MUL, dtypes.half, (a, b))
+  with pytest.raises(RuntimeError, match="without an ISA selection rule"):
+    LinearScanRegallocContext([a, b, unselected], DummyRenderer("TEST"))
+
+
+def test_fully_selected_program_passes_the_positional_integrity_check():
+  a = UOp(Ops.INS, dtypes.half, arg="a", tag=(Register("r0", 0),))
+  LinearScanRegallocContext([a, UOp(Ops.SINK, dtypes.void, (a,))], DummyRenderer("TEST"))

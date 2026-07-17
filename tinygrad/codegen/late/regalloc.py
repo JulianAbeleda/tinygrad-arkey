@@ -111,12 +111,25 @@ def pressure_schedule(uops:list[UOp]) -> list[UOp]:
   if block: out.extend(_pressure_schedule_block(block))
   return out if len(out) == len(uops) and set(out) == set(uops) else uops
 
+# The ops regalloc_rewrite can visit.  pm_regalloc_rewrite matches exactly these; the positional-integrity check in
+# LinearScanRegallocContext requires every uop to be one of them (SINK is terminal, so it can shift nothing after it).
+REGALLOC_REWRITE_OPS = {Ops.INS, Ops.RANGE, Ops.END, Ops.DEFINE_REG, Ops.DEFINE_LOCAL, Ops.PARAM, Ops.DEFINE_VAR,
+                        Ops.SPECIAL} | PSEUDO_OPS
+
 class LinearScanRegallocContext:
   # returns the uop that defines the virtual register
   def vdef(self, v:Register) -> UOp: return self.uops[self.live_range[v][0]]
   def __init__(self, uops:list[UOp], ren:ISARenderer):
     self.uops = uops
     self.ren = ren
+    # regalloc_rewrite pairs each visited uop with uops[next(self.idx)] BY POSITION, so it is only correct if the
+    # rewrite visits every entry of this list.  An op with no ISA selection rule is never visited, silently shifts
+    # every later index by one, and surfaces as an unrelated KeyError on some innocent downstream vreg.  Name the
+    # unselected op here instead: a missing lowering rule is a backend defect, not a register-allocation one.
+    if unsel := [(i, u.op, u.dtype) for i, u in enumerate(uops) if u.op not in REGALLOC_REWRITE_OPS and u.op is not Ops.SINK]:
+      i, op, dt = unsel[0]
+      raise RuntimeError(f"{ren.__class__.__name__}: {len(unsel)} uop(s) reached register allocation without an ISA "
+                         f"selection rule; first is {op} ({dt}) at index {i}. Add a lowering rule for it.")
     self.idx = itertools.count()
     # the label associated with each loop NOTE: this is only used post regalloc and should be removed
     self.loop_label: dict[UOp, str] = {}
@@ -473,6 +486,5 @@ def regalloc_rewrite(ctx:LinearScanRegallocContext, x:UOp):
   return nx, before + [nx] + after
 
 pm_regalloc_rewrite = PatternMatcher([
-  (UPat({Ops.INS, Ops.RANGE, Ops.END, Ops.DEFINE_REG, Ops.DEFINE_LOCAL, Ops.PARAM, Ops.DEFINE_VAR, Ops.SPECIAL} | PSEUDO_OPS, name="x"),
-   regalloc_rewrite),
+  (UPat(REGALLOC_REWRITE_OPS, name="x"), regalloc_rewrite),
 ])
