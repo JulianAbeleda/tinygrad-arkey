@@ -60,7 +60,7 @@ def _worker() -> dict[str, Any]:
   from tinygrad import Tensor, dtypes
   from tinygrad.codegen import to_program
   from tinygrad.device import Device
-  from tinygrad.engine.realize import runtime_cache
+  from tinygrad.engine.realize import get_runtime
   from tinygrad.renderer.isa.amd import AMDISARenderer
   from tinygrad.helpers import Target
   from tinygrad.uop.ops import Ops
@@ -99,12 +99,15 @@ def _worker() -> dict[str, Any]:
   values = Tensor(values_np.reshape(-1), device="AMD").realize()
   scales = Tensor(scales_np.reshape(-1), device="AMD").realize()
   sums = Tensor(sums_np.reshape(-1), device="AMD").realize()
-  args = (out.uop.buffer._buf, q4.uop.buffer._buf, values.uop.buffer._buf,
-          scales.uop.buffer._buf, sums.uop.buffer._buf)
-  runtime = runtime_cache.get((program.key, "AMD"))
-  if runtime is None:
-    return _blocked("AMD runtime cache has no compiled PROGRAM", program_key=program.key.hex())
-  runtime(*args, global_size=program.arg.global_size, local_size=program.arg.local_size, wait=True)
+  buffers = (out.uop.buffer, q4.uop.buffer, values.uop.buffer, scales.uop.buffer, sums.uop.buffer)
+  globals_ = tuple(program.arg.globals)
+  if len(globals_) != 5 or any(getattr(g.arg, "slot", None) not in range(5) for g in globals_):
+    return _blocked("AMD PROGRAM global ABI is not the expected five slots",
+                    globals=[getattr(g.arg, "slot", None) for g in globals_])
+  runtime = get_runtime("AMD", program)
+  runtime(*(buffers[g.arg.slot].get_buf("AMD") for g in globals_),
+          global_size=program.arg.global_size, local_size=program.arg.local_size,
+          vals=program.arg.vals({}), wait=True)
   got = out.numpy().reshape(m, n)
   np.testing.assert_allclose(got, reference, rtol=3e-3, atol=3e-3)
   binary = next((u.arg for u in program.src if u.op is Ops.BINARY), None)
