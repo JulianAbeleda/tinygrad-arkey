@@ -6,6 +6,72 @@ Branch: `master`
 Handoff revision: `412d7998f` (`[amd] recover propagated progressive C roots`)  
 Remote state at handoff: `master == origin/master`, clean worktree
 
+## 0. Status update 2026-07-17: bounded emission gate CLOSED
+
+The §15 assignment (spill-free bounded emission) is complete and pushed. Sections 1, 4 and 7 below describe the
+pre-`5982d83c1` state and are retained for history; read this section first.
+
+Accepted commits, oldest to newest:
+
+- `8a8ffc6ae [amd] select native fp16 multiply for half2 metadata`
+- `00a79b247 [codegen] fail fast on ops that reach regalloc unselected`
+- `5982d83c1 [amd] guard chain-head A/B loads on the previous chain release`
+
+The 112 spills were **two** stacked blockers, which is why the single-blocker framing in §7 misleads:
+
+1. **A/B chain-head lifetime.** A multi-output-tile kernel has one chain per subtile and every chain reloads the same
+   physical high A/B pair (`ab_key = "wmma_ab"`, `amd.py`). Accumulate tiles WAR-guard that shared run
+   (`dep = (prev.src[0],)`); a chain head has no prior tile and takes only `_wmma_carrier_order_deps(tile.src[2])`, so
+   eight heads opened simultaneously onto one capacity-1 run. `_serialize_progressive_c_drains` already ordered each
+   head WMMA after the previous chain's release frontier, but the head's `DS_LOAD_B128` operands carried no such edge
+   and floated ahead of it: the ordering edge was on the wrong node. Guarding the loads closed it.
+2. **Missing typed half-MUL selection.** isel selected `MUL` for float32 and ints only, so the half2 metadata
+   recurrence's genuine fp16 multiply survived unselected. Its children lowered to raw-bit machine ops, leaving a
+   mixed `ushort x half` node. Post-isel this *looks* like malformed oracle algebra; it is not. Both source graphs are
+   clean (bounded 3,239 nodes / 346 MULs, full-grid 7,802 / 966, zero mixed-dtype). Do not "fix" it upstream.
+
+Exact bounded oracle, matched environment (`PYTHONHASHSEED=0 REGALLOC_ADDR_REMAT=1 REGALLOC_END_NO_SOURCE_LIVE=1`):
+
+| metric | at `412d7998f` | at `5982d83c1` |
+|---|---:|---:|
+| spill requests | 112 (`v0` at 2580) | **0** |
+| stack | 448 B | **0** |
+| emitted instructions | none (fail-closed) | **8,287, all encodable** |
+| `v_wmma_i32_16x16x16_iu8` | 128 | **128** |
+| `ds_load_b128` | 256 | **256** |
+| `v_mul_f16_e32` | 0 (unselected) | **12** |
+| post-selection UOps / peak live | 9,481 / 158 @ 5908 | **9,481 / 158 @ 5908** |
+
+No scratch or buffer traffic. The bounded probe still sets no full-grid claim.
+
+Two traps recorded so they are not re-entered:
+
+- **`regalloc_rewrite` indexes `ctx.uops` BY POSITION** via `i = next(ctx.idx)`. Any op with no ISA rule is never
+  visited, shifts every later index by one, and surfaces as a `KeyError` on an unrelated vreg — the allocator blaming
+  itself for a backend gap. `00a79b247` makes this fail fast and name the op. If you see a mystery `KeyError` in
+  regalloc, suspect selection first.
+- **gfx11 VOP f16 literals live in the low 16 bits.** `_vop2_f`'s `float()` path encodes an fp32 pattern
+  (`0.3f -> -0.0027h`). Inline constants survive it and everything still encodes, so "the program encodes" does not
+  prove literal correctness. `_vop2_h` owns the fp16 path.
+
+### Next owning problem: full-grid is NOT gated on spills
+
+`compile_llama_five_buffer_full_kernel(build_llama_five_buffer_full_kernel(128,128,256))` now fails **before**
+register allocation, in SPEC type verification:
+
+```text
+RuntimeError: UOp verification failed at 3842 on Ops.AFTER dtypes.float 2
+  [(Ops.ADD, dtypes.float, None), (Ops.STORE, dtypes.void, None)]
+```
+
+This is the `clears AFTER(CAST(int), STORE)` entry of the full-grid `BLOCKER` list, not a resource defect. The spill
+gate was only one of the listed full-grid blockers. §13.1 is therefore still closed, and its remaining blockers are
+graph/spec-shaped. Verify each `BLOCKER` line independently rather than assuming the resource one was the last.
+
+Unchanged and still true: the four 16-subtile AMD tests, two `test_current_prefill_execution_adapter` rows, and
+`test_q4k_wmma_tiled_no_hand_scan_is_clean` fail identically at `412d7998f` and at `5982d83c1`. They are historical,
+not regressions. Do not xfail them.
+
 ## 1. Executive state
 
 The project is building a generated tinygrad prefill route for non-fitting quantized models, using Qwen3-14B as the
