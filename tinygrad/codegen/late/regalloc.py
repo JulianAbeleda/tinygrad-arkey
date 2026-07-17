@@ -268,7 +268,7 @@ class LinearScanRegallocContext:
 
     # assign register to spilled virtual and record load to be emitted before current uop, also assign it a stack slot
     def fill(v:Register, i:int, cons:tuple[Register, ...]|None=None, emit_remat_before=False) -> Register:
-      if can_remat(v, i) or emit_remat_before and ren.is_rematerializable(self.vdef(v)) or (getenv("REGALLOC_ADDR_REMAT", 0) and self.vdef(v).op is Ops.SPECIAL):
+      if can_remat(v, i) or ren.is_rematerializable(self.vdef(v)) or (getenv("REGALLOC_ADDR_REMAT", 0) and self.vdef(v).op is Ops.SPECIAL):
         pinned:list[Register] = []
         for s in self.vdef(v).src:
           if not isinstance(sv:=s.reg, Register): continue
