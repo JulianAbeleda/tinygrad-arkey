@@ -664,6 +664,24 @@ has an `accumulate=True` form that folds FP32 accumulation into the target write
 CPU-only first. If it remains spill/scratch free with the same ownership/ABI, it is the preferred next bounded GPU
 probe because it removes both the separate elementwise kernel and per-epoch readback lifecycle.
 
+That safer adapter is now implemented and its first escalation result is mixed, so R6/R7 remain closed. The
+`accumulate=True` target program emits with 256 VGPR, 57,856 B LDS, zero scratch/spills, the same five-buffer ABI and
+136x4x1 / 256x1x1 grid, and exactly 64 additional global loads plus 64 FP32 vector adds at writeback. The opt-in
+`target_in_place_fp32_add` harness zeros one persistent output, reuses it across K epochs, performs no external add
+and no intermediate readback, and now fail-closes on unhealthy preflight, timeout fault logs, or unhealthy postflight.
+The independent epoch orchestrator also records deterministic fixture hashes and per-epoch health attestations for
+later strict evidence composition. These changes are pushed in `b133d99de`.
+
+The isolated one-epoch GPU gate passed the full 512x17408 output with 0/8,912,896 mismatches, no non-finite values,
+maximum absolute error 1.2207e-4, stable fixed-VA GPU-SDMA metadata staging, clean kernel logs, and healthy pre/post
+tiny-add probes (`docs/target-role-in-kernel-accum-prefix-1-20260718.json`). The three-epoch escalation was stopped on
+its first target launch: an SQC instruction fault was followed about 30 seconds later by a gfxhub page fault, MES
+queue-removal failure, and GPU reset. The post-reset health probe passed
+(`docs/target-role-in-kernel-accum-prefix-3-20260718.json`). Both attempts compiled the exact same source
+`beed14d6…` and binary `78eefc23…`, so this is not a spill regression or a cross-compile variant. Do not run the
+20-epoch gate yet. The active blocker is now intermittent AMD executable/queue lifecycle behavior across isolated
+target attempts; audit code upload, entry-point lifetime, and launch state before another target dispatch.
+
 ## 1. Executive state
 
 The project is building a generated tinygrad prefill route for non-fitting quantized models, using Qwen3-14B as the
