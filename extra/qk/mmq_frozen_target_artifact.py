@@ -94,9 +94,27 @@ def _default_compile_once() -> Any:
   return compile_target_program(accumulate=True)
 
 
-def _default_disassemble(binary: bytes) -> tuple[str, str]:
-  from extra.qk.mmq_compile_evidence import disassemble_amdgpu
-  return disassemble_amdgpu(binary)
+def _program_disassembly(program: UOp, binary: bytes) -> tuple[str, str]:
+  """Recreate the renderer's final typed stream and bind it byte-for-byte to the HSACO."""
+  from tinygrad.helpers import Target
+  from tinygrad.renderer.amd.elf import assemble_linear
+  from tinygrad.renderer.isa.amd import AMDISARenderer
+  from tinygrad.runtime.support.elf import elf_loader
+
+  target = program.src[1].arg
+  if not isinstance(target, str) or not target.startswith("AMD:ISA:"):
+    raise ValueError("frozen target PROGRAM is not an AMD:ISA program")
+  renderer = AMDISARenderer(Target.parse(target))
+  final_linear = renderer._final_linear(program.src[2])
+  proof = program.src[2].arg
+  assembly_program = renderer._assembly_program(program, proof)
+  rebuilt = assemble_linear(assembly_program, final_linear, renderer.target.arch)
+  if rebuilt != binary: raise ValueError("renderer final stream does not reproduce retained HSACO")
+  _, sections, _ = elf_loader(binary)
+  text = next((section for section in sections if section.name == ".text"), None)
+  if text is None: raise ValueError("retained HSACO has no .text section")
+  disassembly = renderer._final_disassembly(final_linear, start_pc=int(text.header.sh_addr))
+  return disassembly, "renderer-final-stream-byte-reassembled"
 
 
 def _validate_program(program: Any) -> UOp:
@@ -134,7 +152,7 @@ def _write_archive(directory: Path, archive: Path) -> None:
 
 def produce_frozen_target_artifact(output_dir: str | Path, *, archive: str | Path | None = None,
                                    compile_once: Callable[[], Any] = _default_compile_once,
-                                   disassemble: Callable[[bytes], tuple[str, str]] = _default_disassemble,
+                                   disassemble: Callable[[bytes], tuple[str, str]] | None = None,
                                    fixture_builder: Callable[[], dict[str, Any]] = deterministic_fixture_identity
                                    ) -> dict[str, Any]:
   """Compile exactly once and atomically produce a self-validating CPU-only bundle."""
@@ -151,7 +169,8 @@ def produce_frozen_target_artifact(output_dir: str | Path, *, archive: str | Pat
         raise RuntimeError(getattr(compiled, "blocker", None) or "target accumulate K=256 program did not emit")
       program = _validate_program(compiled.program)
     binary, source, shared_artifacts = _program_payload(program)
-    disassembly, disassembly_tool = disassemble(binary)
+    disassembly, disassembly_tool = (
+      _program_disassembly(program, binary) if disassemble is None else disassemble(binary))
     if not isinstance(disassembly, str) or not disassembly.strip():
       raise ValueError("AMDGPU disassembly is empty")
     fixture = fixture_builder()

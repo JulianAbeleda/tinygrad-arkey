@@ -2661,22 +2661,32 @@ class AMDISARenderer(ISARenderer):
     if not (policy and policy.preserve_waitcnt): insts = self._insert_waitcnt(insts, targeted=targeted)
     return lin.replace(src=tuple(self._resolve_labels(insts)))
   @staticmethod
-  def _final_disassembly(lin:UOp) -> str:
+  def _final_disassembly(lin:UOp, *, start_pc:int|None=None) -> str:
     """Render the exact typed instruction objects which are serialized into the code object."""
-    lines = []
+    lines, pc = [], start_pc
     for u in lin.src:
       inst = u.arg
       mnemonic = inst.op.name.lower() if hasattr(inst, "op") else type(inst).__name__.lower()
       if mnemonic == "s_waitcnt":
         simm = int(inst.simm16)
-        lines.append(f"s_waitcnt vmcnt({(simm >> 10) & 0x3f}) lgkmcnt({(simm >> 4) & 0x3f}) expcnt({simm & 7})")
-        continue
-      operands = []
-      for name, field in inst._fields:
-        if name == "op" or isinstance(field, FixedBitField): continue
-        value = getattr(inst, name)
-        operands.append(value.fmt(upper=False) if isinstance(value, Reg) else str(value))
-      lines.append(mnemonic + ((" " + ", ".join(operands)) if operands else ""))
+        line = f"s_waitcnt vmcnt({(simm >> 10) & 0x3f}) lgkmcnt({(simm >> 4) & 0x3f}) expcnt({simm & 7})"
+      else:
+        operands = []
+        for name, field in inst._fields:
+          if name == "op" or isinstance(field, FixedBitField): continue
+          value = getattr(inst, name)
+          if name == "simm16" and mnemonic.startswith(("s_branch", "s_cbranch")):
+            value = int(value) & 0xffff
+            value = value - 0x10000 if value & 0x8000 else value
+          operands.append(value.fmt(upper=False) if isinstance(value, Reg) else str(value))
+        line = mnemonic + ((" " + ", ".join(operands)) if operands else "")
+      if pc is not None:
+        encoded = inst.to_bytes()
+        words = " ".join(f"{int.from_bytes(encoded[offset:offset+4], 'little'):08X}"
+                         for offset in range(0, len(encoded), 4))
+        line += f" // {pc:016x}: {words}"
+        pc += len(encoded)
+      lines.append(line)
     return "\n".join(lines)
   def _resolve_labels(self, insts:list[UOp]) -> list[UOp]:
     from tinygrad.renderer.amd.elf import resolve_symbolic_control_flow

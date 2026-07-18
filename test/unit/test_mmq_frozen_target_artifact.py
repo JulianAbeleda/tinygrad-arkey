@@ -7,7 +7,9 @@ from types import SimpleNamespace
 import pytest
 
 from tinygrad.renderer.amd.elf import assemble_linear
-from tinygrad.runtime.autogen.amd.rdna3.ins import s_endpgm
+from tinygrad.renderer.amd.dsl import s
+from tinygrad.renderer.isa.amd import AMDISARenderer
+from tinygrad.runtime.autogen.amd.rdna3.ins import s_branch, s_endpgm, s_mov_b32
 from tinygrad.uop.ops import Ops, ProgramInfo, UOp
 
 from extra.qk import mmq_frozen_target_artifact as frozen
@@ -42,6 +44,17 @@ def _disassembly() -> tuple[str, str]:
   return "s_endpgm // 0000000000000100: BFB00000\ns_code_end // 0000000000000104: BF9F0000\n", "cpu-test-objdump"
 
 
+def test_final_stream_disassembly_sign_extends_backedges_and_advances_by_encoded_size():
+  linear = UOp(Ops.LINEAR, src=tuple(UOp(Ops.INS, arg=inst) for inst in (
+    s_branch(simm16=0xffff), s_mov_b32(s[0], 0x12345678), s_endpgm())))
+  lines = AMDISARenderer._final_disassembly(linear, start_pc=0x100).splitlines()
+  assert lines == [
+    "s_branch -1 // 0000000000000100: BFA0FFFF",
+    "s_mov_b32 s0, lit, 305419896 // 0000000000000104: BE8000FF 12345678",
+    "s_endpgm 0 // 000000000000010c: BFB00000",
+  ]
+
+
 def test_frozen_target_producer_compiles_once_and_loads_without_recompile(tmp_path: Path):
   calls = []
   def compile_once():
@@ -50,14 +63,13 @@ def test_frozen_target_producer_compiles_once_and_loads_without_recompile(tmp_pa
 
   output, archive = tmp_path / "bundle", tmp_path / "bundle.tar"
   manifest = frozen.produce_frozen_target_artifact(
-    output, archive=archive, compile_once=compile_once,
-    disassemble=lambda binary: ("s_endpgm // 100: BFB00000\n", "cpu-test-objdump"),
-    fixture_builder=_fixture)
+    output, archive=archive, compile_once=compile_once, fixture_builder=_fixture)
   assert calls == ["compile"]
   assert manifest["compile_calls"] == 1
   assert manifest["accumulate"] is True
   assert manifest["accumulation"] == frozen.ACCUMULATION
   assert manifest["gpu_runtime_initialized"] is False and manifest["gpu_dispatch_performed"] is False
+  assert manifest["artifacts"]["disassembly_tool"] == "renderer-final-stream-byte-reassembled"
 
   directory_loaded = frozen.load_frozen_target_artifact(output)
   archive_loaded = frozen.load_frozen_target_artifact(archive)
@@ -70,6 +82,8 @@ def test_frozen_target_producer_compiles_once_and_loads_without_recompile(tmp_pa
   assert directory_loaded.manifest["program"]["target"] == "AMD:ISA:gfx1100"
   assert [row["slot"] for row in directory_loaded.manifest["program"]["abi"]] == list(range(5))
   assert isinstance(directory_loaded.manifest["compiler_environment"], dict)
+  assert directory_loaded.disassembly.startswith("s_endpgm 0 // 0000000000000100: BFB00000")
+  assert frozen.audit_frozen_target_artifact(output)["passed"] is True
 
 
 def test_frozen_target_loader_rejects_retained_hsaco_tampering(tmp_path: Path):
