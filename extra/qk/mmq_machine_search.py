@@ -680,12 +680,20 @@ def build_full_grid_k_tiled_dispatch_plan(shape: dict[str, Any]) -> dict[str, An
       "exact_blocker": "vgpr lease exceeds virtual pool",
       "implication": "K must be split into 256-wide launches with explicit output accumulation",
     },
-    "k_tiled_accumulate_probe": {
+    "per_store_accumulate_sink_probe": {
       "status": "BLOCKED_TIMEOUT", "timeout_seconds": 360,
-      "exact_blocker": "overwrite/accumulate two-launch probe exceeded hard compile deadline before structured output",
-      "next_action": "reduce accumulate sink or compile once per adapter shape before any route admission",
+      "exact_blocker": "overwrite/accumulate two-launch per-store LOAD+ADD sink exceeded hard compile deadline before structured output",
+      "next_action": "use fresh partial outputs and tinygrad elementwise accumulation",
     },
-    "exact_blocker": "adapter, repack, K-epoch accumulation, and fallback census are not implemented",
+    "k_tiled_accumulate_probe": {
+      "status": "PASS_BOUNDED", "shape": {"M": 128, "N": 128, "K": 512},
+      "k_epoch_launches": 2, "mismatch_count": 0, "max_abs_error": 2.44140625e-4,
+      "accumulation": "tinygrad_elementwise_add",
+      "resources": {"vgpr": 256, "lds_bytes": 57856, "scratch_bytes": 0, "wavefront_size": 32},
+      "converted_slice": "K_epoch_accumulation",
+      "exact_blocker": "bounded two-epoch proof only; production role tiling/repack/fallback census remain absent",
+    },
+    "exact_blocker": "production role adapter, Q4/DS4 repack, output scatter, and negative-role/fallback census are not implemented; bounded K-epoch accumulation is proven",
   }
 
 
@@ -695,8 +703,8 @@ def build_r7_reduction_status() -> dict[str, Any]:
       "source_component": "cooperative tile loop",
       "source": "mmq.cuh:mul_mat_q_process_tile",
       "status": "blocked_translation",
-      "next_action": "implement emitted cooperative numeric tile; current owner trace is proof-only",
-      "blocking_evidence": "full-grid R5 proof is one 128x128x256 tile; monolithic K=512 compile fails vgpr lease exceeds virtual pool, so the 14B role requires K-tiled dispatch",
+      "next_action": "promote bounded elementwise K-epoch adapter into a production-shape repack/dispatch harness; current owner trace is still proof-only",
+      "blocking_evidence": "bounded 128x128x512 elementwise K-epoch proof passes, but monolithic K=512 fails vgpr lease exceeds virtual pool and 14B repack/dispatch is absent",
     },
     {
       "source_component": "Q4_K tile_x staging",

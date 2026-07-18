@@ -414,48 +414,50 @@ def run_full_grid_k_tiled_probe(*, warmups: int = 1, rounds: int = 1) -> dict[st
   words_np = _random_q4_words(n, k, 20260719)
   source_np = np.random.default_rng(20260720).standard_normal((m, k), dtype=np.float32)
   values_np, scales_np, sums_np = q8_1_mmq_ds4_quantize_reference(source_np)
-  kernels = []
-  for epoch in range(k // 256):
-    kernel = build_llama_five_buffer_full_kernel(128, 128, 256, accumulate=epoch > 0)
-    compiled = compile_llama_five_buffer_full_kernel(kernel)
-    if not compiled.emitted or compiled.program is None:
-      return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_k_tiled_probe.v1", "status": "BLOCKED",
-              "shape": [m, n, k], "exact_blocker": compiled.blocker or "K-tiled kernel did not emit",
-              "epoch": epoch}
-    kernels.append(compiled)
-  out = Tensor.empty(m * n, dtype=dtypes.float32, device="AMD").realize()
+  # Compile one spill-free overwrite kernel and use fresh partial output for
+  # each K epoch.  Accumulation is deliberately delegated to tinygrad's
+  # elementwise path; this avoids a second full-grid sink with a global LOAD
+  # on every WMMA store (which itself is allocator-bound).
+  compiled = compile_llama_five_buffer_full_kernel(build_llama_five_buffer_full_kernel(128, 128, 256))
+  if not compiled.emitted or compiled.program is None:
+    return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_k_tiled_probe.v1", "status": "BLOCKED",
+            "shape": [m, n, k], "exact_blocker": compiled.blocker or "K-tiled kernel did not emit"}
+  program = compiled.program
   artifacts, launch_samples = [], []
-  calls = []
-  for epoch, kernel in enumerate(kernels):
-    program = kernel.program
-    assert program is not None
-    q4_chunk = np.ascontiguousarray(words_np.view(np.uint8).reshape(n, k // 256, 144)[:, epoch:epoch+1, :].reshape(-1).view(np.uint32))
-    values_chunk = np.ascontiguousarray(values_np[epoch*2:(epoch+1)*2].reshape(-1))
-    scales_chunk = np.ascontiguousarray(scales_np[epoch*2:(epoch+1)*2].reshape(-1))
-    sums_chunk = np.ascontiguousarray(sums_np[epoch*2:(epoch+1)*2].reshape(-1))
-    q4 = Tensor(q4_chunk, device="AMD").realize()
-    values = Tensor(values_chunk, device="AMD").realize()
-    scales = Tensor(scales_chunk, device="AMD").realize()
-    sums = Tensor(sums_chunk, device="AMD").realize()
-    buffers = (out.uop.buffer, q4.uop.buffer, values.uop.buffer, scales.uop.buffer, sums.uop.buffer)
-    runtime = get_runtime("AMD", program)
-    args = tuple(buffers[g].get_buf("AMD") for g in program.arg.globals)
-    def call():
+  def run_epochs(*, timed: bool = False):
+    accum = Tensor.zeros(m * n, dtype=dtypes.float32, device="AMD").realize()
+    elapsed = 0.0
+    for epoch in range(k // 256):
+      partial = Tensor.empty(m * n, dtype=dtypes.float32, device="AMD").realize()
+      q4_chunk = np.ascontiguousarray(words_np.view(np.uint8).reshape(n, k // 256, 144)[:, epoch:epoch+1, :].reshape(-1).view(np.uint32))
+      values_chunk = np.ascontiguousarray(values_np[epoch*2:(epoch+1)*2].reshape(-1))
+      scales_chunk = np.ascontiguousarray(scales_np[epoch*2:(epoch+1)*2].reshape(-1))
+      sums_chunk = np.ascontiguousarray(sums_np[epoch*2:(epoch+1)*2].reshape(-1))
+      q4 = Tensor(q4_chunk, device="AMD").realize()
+      values = Tensor(values_chunk, device="AMD").realize()
+      scales = Tensor(scales_chunk, device="AMD").realize()
+      sums = Tensor(sums_chunk, device="AMD").realize()
+      buffers = (partial.uop.buffer, q4.uop.buffer, values.uop.buffer, scales.uop.buffer, sums.uop.buffer)
+      runtime = get_runtime("AMD", program)
+      args = tuple(buffers[g].get_buf("AMD") for g in program.arg.globals)
+      t0 = time.perf_counter()
       runtime(*args, global_size=program.arg.global_size, local_size=program.arg.local_size,
               vals=program.arg.vals({}), wait=True)
-    calls.append(call)
-    binary, source, artifact = _artifact_evidence(program, parse_amdgpu_metadata)
-    artifacts.append({"epoch": epoch, "accumulate": epoch > 0, **artifact,
-                      "backend_id": FULL_GRID_BACKEND_ID,
+      accum = (accum + partial).realize()
+      elapsed += (time.perf_counter() - t0) * 1000.0
+    return accum, elapsed
+
+  binary, source, artifact = _artifact_evidence(program, parse_amdgpu_metadata)
+  for epoch in range(k // 256):
+    artifacts.append({"epoch": epoch, **artifact, "backend_id": FULL_GRID_BACKEND_ID,
+                      "accumulation": "tinygrad_elementwise_add",
                       "distinct_binary_identity": isinstance(binary, bytes) and isinstance(source, str)})
-  # Cache both launch paths before timing.  Each round runs both K epochs in
-  # order, so correctness observes the same accumulation lifecycle as timing.
   for _ in range(max(1, warmups)):
-    for call in calls: call()
+    run_epochs()
   for _ in range(rounds):
-    t0 = time.perf_counter()
-    for call in calls: call()
-    launch_samples.append((time.perf_counter() - t0) * 1000.0)
+    _, elapsed = run_epochs(timed=True)
+    launch_samples.append(elapsed)
+  accum, _ = run_epochs()
   scales_ref = scales_np.astype(np.float16).astype(np.float32)
   sums_ref = sums_np.astype(np.float16).astype(np.float32)
   ds4 = Q81MMQDS4Activation(values_np, scales_ref, sums_ref,
@@ -463,7 +465,7 @@ def run_full_grid_k_tiled_probe(*, warmups: int = 1, rounds: int = 1) -> dict[st
   ref_spec = Q4KQ81MMQTileSpec(role="full_grid_k_tiled_probe", m=m, n=n, k=k,
     m_tile=m, n_tile=n, activation_layout=Q8_1_MMQ_DS4_LAYOUT)
   reference = q4k_q8_1_mmq_ds4_tile_reference(words_np.view(np.uint8), ds4, ref_spec)
-  comparison = _numeric_comparison(out.numpy().reshape(m, n), reference)
+  comparison = _numeric_comparison(accum.numpy().reshape(m, n), reference)
   passed = comparison["status"] == "pass"
   return {
     "schema": "tinygrad.mmq_q4k_q8_1_full_grid_k_tiled_probe.v1", "status": "PASS" if passed else "BLOCKED",
@@ -472,7 +474,8 @@ def run_full_grid_k_tiled_probe(*, warmups: int = 1, rounds: int = 1) -> dict[st
     "correctness": {"status": "PASS" if passed else "BLOCKED", "comparison": comparison,
                      "authority": "same_session_fp16_rounded_ds4_reference"},
     "timing": {"samples_ms": launch_samples, "min_ms": min(launch_samples),
-                "median_ms": float(np.median(launch_samples)), "k_epoch_launches": len(calls)},
+                "median_ms": float(np.median(launch_samples)), "k_epoch_launches": k // 256,
+                "accumulation": "tinygrad_elementwise_add"},
     "artifacts": artifacts, "distinct_binary_identity": all(x["distinct_binary_identity"] for x in artifacts),
     "same_session_timing": True, "no_fallback": True,
   }

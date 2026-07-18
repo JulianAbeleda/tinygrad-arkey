@@ -294,6 +294,13 @@ def test_mmq_r5_full_grid_win_is_ranked_as_emitted_but_not_promoted():
   artifact = build_r6_role_shape_integration_artifact(report)
   assert artifact["shape_matches"] is False
   assert "128x128x256" in artifact["exact_blocker"]
+  assert artifact["tile_plan"]["launch_count"] == 4 * 136 * 20
+  assert artifact["tile_plan"]["requires_k_epoch_accumulate"] is True
+  assert artifact["tile_plan"]["monolithic_k512_compile"]["status"] == "BLOCKED"
+  assert "vgpr lease" in artifact["tile_plan"]["monolithic_k512_compile"]["exact_blocker"]
+  assert artifact["tile_plan"]["per_store_accumulate_sink_probe"]["status"] == "BLOCKED_TIMEOUT"
+  assert artifact["tile_plan"]["k_tiled_accumulate_probe"]["status"] == "PASS_BOUNDED"
+  assert artifact["tile_plan"]["k_tiled_accumulate_probe"]["mismatch_count"] == 0
 
 
 def test_mmq_r5_emitted_win_survives_oracle_speed_rank():
@@ -309,11 +316,6 @@ def test_mmq_r5_emitted_win_survives_oracle_speed_rank():
   assert report["emitted_backend_win"] is True
   assert report["promotion_verdict"] == "R5_COOP_WIN_READY_FOR_R6"
   assert build_r6_route_gate_status(report)["status"] == "BLOCKED_ROLE_SHAPE_INTEGRATION"
-  assert artifact["tile_plan"]["launch_count"] == 4 * 136 * 20
-  assert artifact["tile_plan"]["requires_k_epoch_accumulate"] is True
-  assert artifact["tile_plan"]["monolithic_k512_compile"]["status"] == "BLOCKED"
-  assert "vgpr lease" in artifact["tile_plan"]["monolithic_k512_compile"]["exact_blocker"]
-  assert artifact["tile_plan"]["k_tiled_accumulate_probe"]["status"] == "BLOCKED_TIMEOUT"
 
 
 def test_mmq_full_grid_tile_plan_rejects_unaligned_shapes_fail_closed():

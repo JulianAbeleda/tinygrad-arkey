@@ -414,6 +414,32 @@ blaming any change.
 Rails unchanged (no reassociation of `(previous + scale*C) + bias`, no FMA/MULACC, no rounding-boundary move, no AMD
 scratch, no `spec_shared` widening, no model/VRAM/GPU/route branching).
 
+## 0.5 Status update 2026-07-17 (Codex): full-grid GPU proof, R5 win, R6/R7 fail-closed
+
+The recommended correctness-first path now has a concrete bounded result. Commits `472ca6da9`, `72e58d322`,
+`ef9fb08c8`, `e78551257`, `f6fa66b96`, `76b721184`, `1b7748e26`, and `1a26a721a` are pushed on `master`.
+
+* The emitted full-grid 128x128x256 PROGRAM passed an in-process AMD probe: 0/16,384 output mismatches against the
+  fp16-rounded Q8 DS4 oracle, max absolute error 3.05e-5, mean 1.12e-8. Resource evidence is vgpr=256, LDS=57,856,
+  scratch=0, wave32, with distinct source/binary hashes. This is the `q4k_q8_1_mmq_amd_isa_full_grid_v0` backend.
+* Same-session timing on identical quantized inputs is full-grid 0.287 ms minimum versus direct-packed 8.980 ms
+  minimum (about 31.2x minimum speedup). This is R5 bounded evidence only; it is not a production route claim.
+* R5 ranking now recognizes an emitted full-grid win even when the oracle row ranks faster. `promotion_eligible` stays
+  false and R6 remains `BLOCKED_ROLE_SHAPE_INTEGRATION`; no role was changed and direct-packed remains default.
+* The exact R6 target is `ffn_gate_up` 512x17408x5120. The probe covers only 128x128x256. The route-shape artifact
+  records 4x136x20 = 10,880 required K-tiled launches, Q4/DS4 repacking, K-epoch accumulation, and output scatter.
+* A monolithic K=512 compile is concretely blocked by `NotImplementedError: vgpr lease exceeds virtual pool`. An
+  explicit per-store LOAD+ADD accumulation sink was prototyped, but its two-launch 128x128x512 probe exceeded the hard
+  six-minute compile deadline with no structured result. The safe follow-up delegates accumulation to tinygrad
+  elementwise add over fresh partial outputs and **passes** the bounded 128x128x512 proof: 0/16,384 mismatches,
+  max abs 2.44e-4, vgpr=256, LDS=57,856, scratch=0. This is adapter evidence only; production repack, 10,880-launch
+  scheduling, role census, and no-hidden-fallback proof remain absent. R7 rows carry both the per-store timeout and
+  the bounded elementwise result instead of claiming source-clone conversion.
+
+The through-line is unchanged: the first real GPU result collapsed more uncertainty than further spill grinding, but
+the 31x bounded win is not evidence for a 14B route. Never run a production role on this candidate until the K-tiled
+adapter has exact numerical evidence, resource/health evidence, negative-role tests, and a no-hidden-fallback census.
+
 ## 1. Executive state
 
 The project is building a generated tinygrad prefill route for non-fitting quantized models, using Qwen3-14B as the
