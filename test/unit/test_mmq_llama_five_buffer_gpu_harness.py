@@ -11,17 +11,21 @@ from tinygrad.uop.ops import Ops, UOp
 
 from extra.qk.mmq_exact_role_spec import exact_role_spec
 from extra.qk.mmq_llama_five_buffer_full_kernel import build_llama_five_buffer_full_kernel
-from extra.qk.mmq_llama_five_buffer_gpu_harness import (TARGET_IN_PLACE_ACCUMULATION, _accumulate_target_role_epoch,
+from extra.qk.mmq_llama_five_buffer_gpu_harness import (FrozenRuntimePreconstructionError,
+  TARGET_IN_PLACE_ACCUMULATION, _accumulate_target_role_epoch,
   _aql_packet_census_from_exception,
   _pm4_dispatch_census_from_exception,
   _aql_target_program_identity, _audit_target_aql_kernargs,
   _bind_sink, _dispatch_with_runtime_evidence, _numeric_comparison, _pack_q4_epochs_contiguous,
   _decode_aql_kernel_dispatch_packet, _load_frozen_execution_binding, _random_q4_words, _runtime_identity_evidence,
+  _dispatch_error_runtime_reuse_evidence,
   _fixed_base_ordinal_reference_operands, _fixed_base_ordinal_sequence_reference_operands,
   _fixed_base_prefix_reference_operands,
   _frozen_program_set_ordinal_sequence_target_identities, _frozen_program_set_ordinal_target_identity,
   _frozen_program_set_target_identities,
   _producer_oracle_diagnostic, _producer_probe_status,
+  _crosscheck_preconstructed_dispatch_runtimes,
+  _preconstruct_frozen_program_runtimes,
   _realize_outputs_together, _realize_with_aql_packet_census, _realize_with_pm4_dispatch_census,
   _retained_producer_tensors,
   _scheduler_prefix_two_launches,
@@ -571,6 +575,189 @@ def test_v2_fixed_base_target_identities_are_binary_exact_ordered_and_distinct(p
     _frozen_program_set_target_identities(duplicate, prefix_epochs)
 
 
+def _fake_runtime_preconstruction_family(count=3, corrupt=None):
+  from tinygrad.engine.realize import runtime_cache
+  programs = tuple(SimpleNamespace(key=bytes([epoch+1])*32) for epoch in range(count))
+  binaries = tuple(f"binary-{epoch}".encode() for epoch in range(count))
+  identities = tuple({
+    "function_name": "target",
+    "binary_sha256": hashlib.sha256(binary).hexdigest(),
+  } for binary in binaries)
+  keys = tuple(program.key.hex() for program in programs)
+  dev = SimpleNamespace(
+    timeline_value=10, timeline_signal=SimpleNamespace(value=9),
+    prof_exec_counter=7)
+  seen = []
+
+  def resolve(device, program):
+    epoch = programs.index(program)
+    seen.append(epoch)
+    base = 0x100000 + epoch*0x4000
+    if corrupt == "overlap" and epoch == 1: base = 0x100800
+    runtime = SimpleNamespace(
+      dev=dev, name="target",
+      lib=b"wrong" if corrupt == "binary" and epoch == 1 else binaries[epoch],
+      lib_gpu=SimpleNamespace(va_addr=base, size=0x2000),
+      prog_addr=(base-4 if corrupt == "entry" and epoch == 1 else base+0x100),
+      aql_prog_addr=base+0x180)
+    runtime_cache[(program.key, device)] = \
+      object() if corrupt == "cache" and epoch == 1 else runtime
+    dev.timeline_value += 1
+    dev.timeline_signal.value = dev.timeline_value - 1
+    return runtime
+  return programs, keys, identities, dev, seen, resolve
+
+
+def test_v2_runtime_preconstruction_uses_exact_get_runtime_cache_and_code_lifetimes():
+  from tinygrad.engine.realize import runtime_cache
+  programs, keys, identities, dev, seen, resolve = _fake_runtime_preconstruction_family()
+  with patch.dict(runtime_cache, {}, clear=True), \
+       patch("tinygrad.device.Device", {"AMD": dev}), \
+       patch("tinygrad.engine.realize.get_runtime", side_effect=resolve) as get_runtime:
+    evidence = _preconstruct_frozen_program_runtimes(programs, keys, identities)
+  assert seen == [0, 1, 2]
+  assert [call.args for call in get_runtime.call_args_list] == [
+    ("AMD", program) for program in programs]
+  assert evidence["status"] == "PASS" and evidence["all_checks_pass"] is True
+  assert evidence["no_compute_dispatch_during_preconstruction"] is True
+  assert evidence["runtime_cache_retains_code_allocations"] is True
+  assert evidence["prof_exec_counter_before"] == evidence["prof_exec_counter_after"] == 7
+  assert evidence["timeline_before"]["timeline_value"] == 10
+  assert evidence["timeline_after"]["timeline_value"] == 13
+  assert [row["epoch"] for row in evidence["runtimes"]] == [0, 1, 2]
+  assert all(row["all_checks_pass"] for row in evidence["runtimes"])
+  assert len({row["runtime_object_id"] for row in evidence["runtimes"]}) == 3
+
+
+@pytest.mark.parametrize(("corrupt", "failed_check"), [
+  ("binary", "runtime_identity_matches_retained_binary"),
+  ("cache", "runtime_cache_exact_program_binding"),
+  ("overlap", "program_library_disjoint_from_prior"),
+  ("entry", "program_entry_in_library_range"),
+])
+def test_v2_runtime_preconstruction_fails_closed_with_partial_evidence(corrupt, failed_check):
+  from tinygrad.engine.realize import runtime_cache
+  programs, keys, identities, dev, seen, resolve = \
+    _fake_runtime_preconstruction_family(corrupt=corrupt)
+  with patch.dict(runtime_cache, {}, clear=True), \
+       patch("tinygrad.device.Device", {"AMD": dev}), \
+       patch("tinygrad.engine.realize.get_runtime", side_effect=resolve), \
+       pytest.raises(FrozenRuntimePreconstructionError) as caught:
+    _preconstruct_frozen_program_runtimes(programs, keys, identities)
+  evidence = caught.value.runtime_preconstruction
+  assert evidence["status"] == "POST_GET_RUNTIME_AUDIT_ERROR"
+  assert evidence["failure_boundary"] == "lifecycle_audit_after_get_runtime_return"
+  assert evidence["all_checks_pass"] is False and seen == [0, 1]
+  assert evidence["runtimes"][-1]["checks"][failed_check] is False
+  assert evidence["runtimes"][-1]["all_checks_pass"] is False
+
+
+def test_v2_runtime_preconstruction_rejects_polluted_cache_before_get_runtime():
+  from tinygrad.engine.realize import runtime_cache
+  programs, keys, identities, dev, seen, resolve = _fake_runtime_preconstruction_family()
+  with patch.dict(runtime_cache, {(programs[0].key, "AMD"): object()}, clear=True), \
+       patch("tinygrad.device.Device", {"AMD": dev}), \
+       patch("tinygrad.engine.realize.get_runtime", side_effect=resolve) as get_runtime, \
+       pytest.raises(FrozenRuntimePreconstructionError) as caught:
+    _preconstruct_frozen_program_runtimes(programs, keys, identities)
+  get_runtime.assert_not_called()
+  assert seen == []
+  assert caught.value.runtime_preconstruction["status"] == "REJECTED_PREEXISTING_CACHE"
+  assert caught.value.runtime_preconstruction["preexisting_program_keys"] == [keys[0]]
+
+
+def test_v2_runtime_preconstruction_records_third_attempt_before_get_runtime_raises():
+  from tinygrad.engine.realize import runtime_cache
+  programs, keys, identities, dev, seen, resolve = _fake_runtime_preconstruction_family()
+
+  def fail_third(device, program):
+    if program is programs[2]:
+      seen.append(2)
+      raise RuntimeError("third runtime construction failed")
+    return resolve(device, program)
+
+  with patch.dict(runtime_cache, {}, clear=True), \
+       patch("tinygrad.device.Device", {"AMD": dev}), \
+       patch("tinygrad.engine.realize.get_runtime", side_effect=fail_third), \
+       pytest.raises(FrozenRuntimePreconstructionError) as caught:
+    _preconstruct_frozen_program_runtimes(programs, keys, identities)
+  evidence = caught.value.runtime_preconstruction
+  assert evidence["status"] == "GET_RUNTIME_ERROR"
+  assert evidence["failure_boundary"] == "get_runtime_call_raised_before_return"
+  assert [attempt["epoch"] for attempt in evidence["attempts"]] == [0, 1, 2]
+  failed = evidence["failed_attempt"]
+  assert failed["epoch"] == 2 and failed["program_key"] == keys[2]
+  assert failed["expected_program_identity"] == identities[2]
+  assert failed["get_runtime_begin"]["timeline_value"] == 12
+  assert failed["get_runtime_returned"] is False
+  assert len(evidence["runtimes"]) == 2
+
+
+def test_v2_dispatch_runtime_crosscheck_rejects_ordered_object_identity_drift():
+  preconstruction = {
+    "enabled": True,
+    "runtimes": [
+      {"program_key": "1"*64, "runtime_object_id": 101},
+      {"program_key": "2"*64, "runtime_object_id": 202},
+      {"program_key": "3"*64, "runtime_object_id": 303},
+    ],
+  }
+  exact = {"calls": [
+    {"program_key": "1"*64, "runtime_lifecycle": {"runtime_object_id": 101}},
+    {"program_key": "2"*64, "runtime_lifecycle": {"runtime_object_id": 202}},
+    {"program_key": "3"*64, "runtime_lifecycle": {"runtime_object_id": 303}},
+  ]}
+  passed = _crosscheck_preconstructed_dispatch_runtimes(preconstruction, exact)
+  assert passed["status"] == "PASS" and passed["all_checks_pass"] is True
+
+  drifted = {"calls": [*exact["calls"][:2], {
+    "program_key": "3"*64, "runtime_lifecycle": {"runtime_object_id": 404}}]}
+  rejected = _crosscheck_preconstructed_dispatch_runtimes(preconstruction, drifted)
+  assert rejected["status"] == "MISMATCH" and rejected["all_checks_pass"] is False
+  assert rejected["checks"]["ordered_program_keys_match"] is True
+  assert rejected["checks"]["ordered_runtime_object_ids_match"] is False
+
+
+def test_v2_dispatch_runtime_crosscheck_preserves_matching_partial_dispatch_evidence():
+  preconstruction = {
+    "enabled": True,
+    "runtimes": [
+      {"program_key": "1"*64, "runtime_object_id": 101},
+      {"program_key": "2"*64, "runtime_object_id": 202},
+      {"program_key": "3"*64, "runtime_object_id": 303},
+    ],
+  }
+  partial = {"calls": [
+    {"program_key": "1"*64, "runtime_lifecycle": {"runtime_object_id": 101}},
+    {"program_key": "2"*64, "runtime_lifecycle": {"runtime_object_id": 202}},
+  ]}
+  evidence = _crosscheck_preconstructed_dispatch_runtimes(preconstruction, partial)
+  assert evidence["status"] == "INCOMPLETE" and evidence["all_checks_pass"] is False
+  assert evidence["checks"]["observed_dispatch_prefix_reuses_preconstructed_runtimes"] is True
+  assert evidence["dispatch_runtime_object_ids"] == [101, 202]
+
+
+def test_v2_dispatch_exception_recovers_partial_runtime_reuse_without_unbound_state():
+  preconstruction = {
+    "enabled": True,
+    "runtimes": [
+      {"program_key": "1"*64, "runtime_object_id": 101},
+      {"program_key": "2"*64, "runtime_object_id": 202},
+      {"program_key": "3"*64, "runtime_object_id": 303},
+    ],
+  }
+  partial = {"calls": [
+    {"program_key": "1"*64, "runtime_lifecycle": {"runtime_object_id": 101}},
+    {"program_key": "2"*64, "runtime_lifecycle": {"runtime_object_id": 202}},
+  ]}
+  exc = RuntimeError("realization failed")
+  exc.pm4_dispatch_census = partial
+  recovered, crosscheck = _dispatch_error_runtime_reuse_evidence(preconstruction, exc)
+  assert recovered == partial
+  assert crosscheck["status"] == "INCOMPLETE"
+  assert crosscheck["dispatch_runtime_object_ids"] == [101, 202]
+
+
 def test_v2_fixed_base_ordinal_identity_selects_only_exact_retained_binary():
   programs = tuple(SimpleNamespace(arg=SimpleNamespace(function_name="target")) for _ in range(4))
   binaries = tuple(f"epoch-{epoch}".encode() for epoch in range(4))
@@ -620,6 +807,23 @@ def test_v2_fixed_base_isolated_reuses_health_aql_and_exact_prefix(tmp_path, rol
   code = run.call_args.args[0][2]
   assert "run_frozen_epoch_program_set_prefix_probe" in code
   assert f"prefix_epochs={prefix_epochs}" in code and f"exact_role_spec({role!r}" in code
+  assert "preconstruct_runtimes=False" in code
+
+
+def test_v2_fixed_base_isolated_forwards_runtime_preconstruction_opt_in(tmp_path):
+  class _Proc:
+    returncode = 0
+    stdout = '{"schema":"tinygrad.mmq_frozen_epoch_program_set_prefix_probe.v2","status":"PASS","runtime_preconstruction":{"enabled":true,"status":"PASS"}}\n'
+    stderr = ""
+  with patch("extra.qk.mmq_llama_five_buffer_gpu_harness.subprocess.run", return_value=_Proc()) as run, \
+       patch("extra.qk.mmq_target_epoch_orchestrator.read_kernel_log_since", return_value=""), \
+       patch("extra.qk.mmq_target_epoch_orchestrator.spawned_tiny_health_probe", return_value=True):
+    result = run_frozen_epoch_program_set_prefix_probe_isolated(
+      frozen_bundle=tmp_path / "frozen-v2", prefix_epochs=3,
+      preconstruct_runtimes=True, timeout_seconds=1)
+  assert result["status"] == "PASS"
+  assert result["runtime_preconstruction"] == {"enabled": True, "status": "PASS"}
+  assert "preconstruct_runtimes=True" in run.call_args.args[0][2]
 
 
 @pytest.mark.parametrize(("role", "epoch"), [("attn_kv", 2), ("ffn_down", 67)])
@@ -679,6 +883,18 @@ def test_v2_fixed_base_rejects_bad_prefix_before_health_or_gpu(tmp_path):
   run.assert_not_called()
   assert bad_prefix["status"] == "BLOCKED" and "(1, 2, 3, 20)" in bad_prefix["exact_blocker"]
   assert not_full_for_role["status"] == "BLOCKED" and "(1, 2, 3, 68)" in not_full_for_role["exact_blocker"]
+
+
+def test_v2_fixed_base_rejects_non_bool_runtime_preconstruction_before_health_or_gpu(tmp_path):
+  with patch("extra.qk.mmq_target_epoch_orchestrator.spawned_tiny_health_probe") as health, \
+       patch("extra.qk.mmq_llama_five_buffer_gpu_harness.subprocess.run") as run:
+    result = run_frozen_epoch_program_set_prefix_probe_isolated(
+      frozen_bundle=tmp_path / "frozen", prefix_epochs=3,
+      preconstruct_runtimes=1)
+  health.assert_not_called()
+  run.assert_not_called()
+  assert result["status"] == "BLOCKED"
+  assert result["exact_blocker"] == "preconstruct_runtimes must be a bool"
 
 
 def test_v2_fixed_base_ordinal_rejects_bad_epoch_before_health_or_gpu(tmp_path):
@@ -769,6 +985,7 @@ def test_v2_fixed_base_cli_accepts_dynamic_full_role_epoch_count(monkeypatch, ca
   monkeypatch.setattr("sys.argv", [
     "mmq_llama_five_buffer_gpu_harness",
     "--scheduler-v2-fixed-base-prefix-epochs", "68",
+    "--scheduler-v2-fixed-base-preconstruct-runtimes",
     "--target-role-name", "ffn_down",
     "--target-role-frozen-bundle", str(bundle),
   ])
@@ -778,6 +995,7 @@ def test_v2_fixed_base_cli_accepts_dynamic_full_role_epoch_count(monkeypatch, ca
     assert main() == 0
   assert probe.call_args.kwargs["role_spec"].role == "ffn_down"
   assert probe.call_args.kwargs["prefix_epochs"] == 68
+  assert probe.call_args.kwargs["preconstruct_runtimes"] is True
   assert json.loads(capsys.readouterr().out)["status"] == "PASS"
 
 

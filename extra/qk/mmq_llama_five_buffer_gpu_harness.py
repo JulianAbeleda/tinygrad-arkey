@@ -1469,6 +1469,7 @@ def _realize_with_aql_packet_census(output: Any, expected_vas: list[list[int]] |
           "header", "barrier", "acquire_fence_scope", "release_fence_scope",
           "system_fence_scope", "kernel_object", "kernarg_address")},
         "program_identity": built["program_identity"], "expected_program_identity": expected_identity,
+        "program_key": expected_program_key,
         "kernarg_qwords": kernarg_qwords, "expected_vas": expected_row,
         "argument_buffers": built["argument_buffers"],
         "runtime_lifecycle": built["runtime_lifecycle"],
@@ -2092,6 +2093,263 @@ def _frozen_program_set_target_identities(binding: Any, prefix_epochs: int) -> t
   return identities
 
 
+class FrozenRuntimePreconstructionError(RuntimeError):
+  """Fail-closed wrapper retaining partial exact-runtime preconstruction evidence."""
+  def __init__(self, message: str, evidence: Mapping[str, Any]):
+    super().__init__(message)
+    self.runtime_preconstruction = dict(evidence)
+
+
+def _runtime_preconstruction_device_snapshot(dev: Any) -> dict[str, int | None]:
+  """Read lifecycle counters without submitting work or manufacturing a queue."""
+  signal = getattr(dev, "timeline_signal", None)
+  try: signal_value = int(signal.value) if signal is not None else None
+  except BaseException: signal_value = None
+  return {
+    "timeline_value": int(getattr(dev, "timeline_value"))
+      if isinstance(getattr(dev, "timeline_value", None), int) else None,
+    "signal_value": signal_value,
+    "prof_exec_counter": int(getattr(dev, "prof_exec_counter"))
+      if isinstance(getattr(dev, "prof_exec_counter", None), int) else None,
+  }
+
+
+def _preconstruct_frozen_program_runtimes(
+    programs: tuple[Any, ...], program_keys: tuple[str, ...],
+    target_identities: tuple[Mapping[str, Any], ...], *, device: str = "AMD",
+    ) -> dict[str, Any]:
+  """Construct exact cached runtimes before realization through ``get_runtime``.
+
+  This is a diagnostic lifecycle discriminator, not a launcher. AMDProgram
+  remains responsible for native code allocation/upload/synchronization, and
+  the scheduler later resolves the same objects from the ordinary runtime
+  cache before submitting the unchanged PROGRAM chain.
+  """
+  count = len(programs)
+  if count <= 0 or len(program_keys) != count or len(target_identities) != count:
+    raise ValueError("runtime preconstruction requires equally sized nonempty PROGRAM identity sequences")
+  if any(not isinstance(key, str) or len(key) != 64 for key in program_keys):
+    raise ValueError("runtime preconstruction requires exact hexadecimal PROGRAM keys")
+  identities = tuple(dict(identity) for identity in target_identities)
+  if any(identity.get("function_name") in (None, "") or
+         identity.get("binary_sha256") in (None, "") for identity in identities):
+    raise ValueError("runtime preconstruction requires complete binary identities")
+  if len(set(program_keys)) != count or len({
+      (identity["function_name"], identity["binary_sha256"]) for identity in identities
+  }) != count:
+    raise ValueError("runtime preconstruction requires distinct ordered PROGRAM identities")
+  if any(getattr(program, "key", b"").hex() != key
+         for program, key in zip(programs, program_keys)):
+    raise ValueError("runtime preconstruction PROGRAM keys differ from the retained sequence")
+
+  from tinygrad.device import Device
+  from tinygrad.engine.realize import get_runtime, runtime_cache
+  dev = Device[device]
+  records: list[dict[str, Any]] = []
+  attempts: list[dict[str, Any]] = []
+  before = _runtime_preconstruction_device_snapshot(dev)
+
+  def snapshot(status: str, error: BaseException | None = None) -> dict[str, Any]:
+    after = _runtime_preconstruction_device_snapshot(dev)
+    result = {
+      "enabled": True, "status": status, "device": device, "count": count,
+      "ordered_program_keys": list(program_keys),
+      "timeline_before": dict(before), "timeline_after": after,
+      "prof_exec_counter_before": before["prof_exec_counter"],
+      "prof_exec_counter_after": after["prof_exec_counter"],
+      "no_compute_dispatch_during_preconstruction":
+        before["prof_exec_counter"] == after["prof_exec_counter"],
+      "runtime_cache_retains_code_allocations": all(
+        runtime_cache.get((program.key, device)) is record["_runtime"]
+        for program, record in zip(programs[:len(records)], records)),
+      "attempts": [dict(attempt) for attempt in attempts],
+      "runtimes": [{key: value for key, value in record.items() if key != "_runtime"}
+                   for record in records],
+    }
+    result["all_checks_pass"] = (
+      len(records) == count and
+      result["no_compute_dispatch_during_preconstruction"] and
+      result["runtime_cache_retains_code_allocations"] and
+      all(record["all_checks_pass"] for record in records))
+    if error is not None:
+      result.update({"exception": type(error).__name__, "error": str(error)})
+    return result
+
+  preexisting = [key for program, key in zip(programs, program_keys)
+                 if (program.key, device) in runtime_cache]
+  if preexisting:
+    evidence = snapshot("REJECTED_PREEXISTING_CACHE")
+    evidence["preexisting_program_keys"] = preexisting
+    raise FrozenRuntimePreconstructionError(
+      "selected runtime cache entries existed before explicit preconstruction", evidence)
+
+  prior_ranges: list[tuple[int, int]] = []
+  prior_runtime_ids: list[int] = []
+  previous_timeline = before
+  for epoch, (program, program_key, expected_identity) in enumerate(
+      zip(programs, program_keys, identities)):
+    attempt = {
+      "epoch": epoch, "program_key": program_key,
+      "expected_program_identity": dict(expected_identity),
+      "get_runtime_begin": _runtime_preconstruction_device_snapshot(dev),
+      "get_runtime_returned": False,
+    }
+    attempts.append(attempt)
+    try:
+      runtime = get_runtime(device, program)
+    except BaseException as exc:
+      attempt.update({
+        "get_runtime_exception": type(exc).__name__,
+        "get_runtime_error": str(exc),
+      })
+      evidence = snapshot("GET_RUNTIME_ERROR", exc)
+      evidence.update({
+        "failure_boundary": "get_runtime_call_raised_before_return",
+        "failed_attempt": dict(attempt),
+      })
+      raise FrozenRuntimePreconstructionError(str(exc), evidence) from exc
+    attempt["get_runtime_returned"] = True
+    attempt["get_runtime_end"] = _runtime_preconstruction_device_snapshot(dev)
+    try:
+      lib = getattr(runtime, "lib_gpu", None)
+      lib_va, lib_nbytes = int(getattr(lib, "va_addr", 0)), int(getattr(lib, "size", 0))
+      lib_end = lib_va + lib_nbytes
+      entry_va = int(getattr(runtime, "prog_addr", 0))
+      descriptor_va = int(getattr(runtime, "aql_prog_addr", 0))
+      runtime_identity = _aql_target_program_identity(runtime)
+      cache_bindings = [{
+        "program_key": key[0].hex(), "device": key[1],
+      } for key, cached in runtime_cache.items() if cached is runtime]
+      after_runtime = _runtime_preconstruction_device_snapshot(dev)
+      checks = {
+        "program_key_matches_retained_sequence": program.key.hex() == program_key,
+        "runtime_identity_matches_retained_binary": runtime_identity == expected_identity,
+        "runtime_cache_exact_program_binding":
+          cache_bindings == [{"program_key": program_key, "device": device}],
+        "runtime_object_distinct_from_prior":
+          id(runtime) not in prior_runtime_ids,
+        "program_library_range_nonempty": lib_va > 0 and lib_nbytes > 0,
+        "program_library_disjoint_from_prior":
+          all(lib_end <= start or lib_va >= end for start, end in prior_ranges),
+        "program_entry_in_library_range": lib_va <= entry_va < lib_end,
+        "program_descriptor_in_library_range": lib_va <= descriptor_va < lib_end,
+        "timeline_did_not_regress":
+          previous_timeline["timeline_value"] is not None and
+          after_runtime["timeline_value"] is not None and
+          after_runtime["timeline_value"] >= previous_timeline["timeline_value"],
+        "device_timeline_drained_after_runtime_init":
+          after_runtime["timeline_value"] is not None and
+          after_runtime["signal_value"] == after_runtime["timeline_value"] - 1,
+        "no_compute_dispatch_during_runtime_init":
+          after_runtime["prof_exec_counter"] == before["prof_exec_counter"],
+      }
+      record = {
+        "epoch": epoch, "program_key": program_key,
+        "program_identity": runtime_identity,
+        "expected_program_identity": expected_identity,
+        "runtime_object_id": id(runtime),
+        "program_library_va": lib_va, "program_library_nbytes": lib_nbytes,
+        "program_entry_va": entry_va, "program_entry_offset": entry_va-lib_va,
+        "program_descriptor_va": descriptor_va,
+        "program_descriptor_offset": descriptor_va-lib_va,
+        "runtime_cache_bindings": cache_bindings,
+        "timeline_after_runtime_init": after_runtime,
+        "checks": checks, "all_checks_pass": all(checks.values()),
+        "_runtime": runtime,
+      }
+      records.append(record)
+      if not record["all_checks_pass"]:
+        raise RuntimeError("exact runtime preconstruction lifecycle audit failed")
+      prior_ranges.append((lib_va, lib_end))
+      prior_runtime_ids.append(id(runtime))
+      previous_timeline = after_runtime
+    except BaseException as exc:
+      evidence = snapshot("POST_GET_RUNTIME_AUDIT_ERROR", exc)
+      evidence.update({
+        "failure_boundary": "lifecycle_audit_after_get_runtime_return",
+        "failed_attempt": dict(attempt),
+      })
+      raise FrozenRuntimePreconstructionError(str(exc), evidence) from exc
+
+  evidence = snapshot("PASS")
+  if not evidence["all_checks_pass"]:
+    raise FrozenRuntimePreconstructionError(
+      "runtime preconstruction did not retain the exact selected runtime family", evidence)
+  return evidence
+
+
+def _crosscheck_preconstructed_dispatch_runtimes(
+    runtime_preconstruction: Mapping[str, Any],
+    dispatch_census: Mapping[str, Any] | None,
+    ) -> dict[str, Any]:
+  """Prove scheduler dispatch reused preconstructed runtime objects in order."""
+  if runtime_preconstruction.get("enabled") is not True:
+    return {
+      "enabled": False, "status": "NOT_REQUESTED",
+      "all_checks_pass": True,
+    }
+  expected_rows = runtime_preconstruction.get("runtimes")
+  calls = dispatch_census.get("calls") if isinstance(dispatch_census, Mapping) else None
+  if not isinstance(expected_rows, list) or not isinstance(calls, list):
+    return {
+      "enabled": True, "status": "INCOMPLETE",
+      "expected_runtime_object_ids": [],
+      "dispatch_runtime_object_ids": [],
+      "checks": {
+        "preconstruction_runtime_rows_available": isinstance(expected_rows, list),
+        "dispatch_call_rows_available": isinstance(calls, list),
+        "dispatch_count_matches_preconstruction": False,
+        "ordered_runtime_object_ids_match": False,
+      },
+      "all_checks_pass": False,
+    }
+  expected_ids = [row.get("runtime_object_id") for row in expected_rows
+                  if isinstance(row, Mapping)]
+  expected_keys = [row.get("program_key") for row in expected_rows
+                   if isinstance(row, Mapping)]
+  dispatch_ids, dispatch_keys = [], []
+  complete_dispatch_rows = True
+  for call in calls:
+    lifecycle = call.get("runtime_lifecycle") if isinstance(call, Mapping) else None
+    runtime_id = lifecycle.get("runtime_object_id") if isinstance(lifecycle, Mapping) else None
+    program_key = call.get("program_key") if isinstance(call, Mapping) else None
+    dispatch_ids.append(runtime_id)
+    dispatch_keys.append(program_key)
+    complete_dispatch_rows &= runtime_id is not None and program_key is not None
+  checks = {
+    "preconstruction_runtime_rows_available":
+      len(expected_ids) == len(expected_rows) and
+      all(runtime_id is not None for runtime_id in expected_ids),
+    "dispatch_call_rows_available": complete_dispatch_rows,
+    "dispatch_count_matches_preconstruction": len(dispatch_ids) == len(expected_ids),
+    "ordered_program_keys_match": dispatch_keys == expected_keys,
+    "ordered_runtime_object_ids_match": dispatch_ids == expected_ids,
+    "observed_dispatch_prefix_reuses_preconstructed_runtimes":
+      dispatch_ids == expected_ids[:len(dispatch_ids)] and
+      dispatch_keys == expected_keys[:len(dispatch_keys)],
+  }
+  passed = all(checks.values())
+  return {
+    "enabled": True,
+    "status": "PASS" if passed else (
+      "INCOMPLETE" if checks["observed_dispatch_prefix_reuses_preconstructed_runtimes"] else "MISMATCH"),
+    "expected_runtime_object_ids": expected_ids,
+    "dispatch_runtime_object_ids": dispatch_ids,
+    "expected_program_keys": expected_keys,
+    "dispatch_program_keys": dispatch_keys,
+    "checks": checks, "all_checks_pass": passed,
+  }
+
+
+def _dispatch_error_runtime_reuse_evidence(
+    runtime_preconstruction: Mapping[str, Any], exc: BaseException,
+    ) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+  """Recover partial queue census and runtime reuse evidence from a failed realization."""
+  packet_census = _amd_dispatch_census_from_exception(exc)
+  return packet_census, _crosscheck_preconstructed_dispatch_runtimes(
+    runtime_preconstruction, packet_census)
+
+
 def _frozen_program_set_ordinal_target_identity(binding: Any, epoch: int) -> dict[str, str]:
   """Derive one exact runtime identity without changing the family order."""
   programs, binaries = binding.artifact.programs, binding.artifact.binaries
@@ -2556,9 +2814,11 @@ def run_frozen_epoch_program_set_ordinal_sequence_probe(
 
 def run_frozen_epoch_program_set_prefix_probe(
     *, role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC, frozen_bundle: str | Path,
-    prefix_epochs: int) -> dict[str, Any]:
+    prefix_epochs: int, preconstruct_runtimes: bool = False) -> dict[str, Any]:
   """Run a frozen v2 fixed-base scheduler prefix with one full-role producer."""
   schema = "tinygrad.mmq_frozen_epoch_program_set_prefix_probe.v2"
+  if not isinstance(preconstruct_runtimes, bool):
+    raise ValueError("preconstruct_runtimes must be a bool")
   role_spec = admit_exact_role_spec(role_spec)
   prefix_epochs = _validate_v2_fixed_base_prefix_epochs(role_spec, prefix_epochs)
 
@@ -2633,6 +2893,34 @@ def run_frozen_epoch_program_set_prefix_probe(
     "retained_as_companion_realization_outputs": True,
   })
 
+  runtime_preconstruction: dict[str, Any] = {
+    "enabled": False, "status": "NOT_REQUESTED", "count": 0,
+  }
+  if preconstruct_runtimes:
+    try:
+      runtime_preconstruction = _preconstruct_frozen_program_runtimes(
+        tuple(selected_programs), tuple(binding.program_keys[:prefix_epochs]),
+        target_identities)
+    except BaseException as exc:
+      partial = getattr(exc, "runtime_preconstruction", None)
+      return {
+        "schema": schema, "status": "BLOCKED",
+        "exact_blocker": "frozen v2 exact runtime preconstruction failed before realization",
+        "exception": type(exc).__name__, "error": str(exc),
+        "research_only": True, "production_dispatch_changed": False,
+        "default_route": "direct_packed", "role": role_spec.role,
+        "shape": list(role_spec.shape), "prefix_epochs": prefix_epochs,
+        "graph": graph_evidence, "target_program_identities": target_identities,
+        "runtime_preconstruction": dict(partial) if isinstance(partial, Mapping) else {
+          "enabled": True, "status": "PRECONSTRUCTION_ERROR",
+          "exception": type(exc).__name__, "error": str(exc),
+        },
+        "family_identity": binding.family_identity,
+        "frozen_bundle": str(Path(frozen_bundle).resolve()),
+        "compile_performed": False, "requires_recompile": False,
+        "hip_used": False, "no_fallback": True,
+      }
+
   dispatch_census_key = "aql_packet_census" if bool(getattr(Device["AMD"], "is_aql", False)) \
     else "pm4_dispatch_census"
   try:
@@ -2645,16 +2933,38 @@ def run_frozen_epoch_program_set_prefix_probe(
       require_all_five_vas_fixed=True, require_all_five_vas_distinct=True,
       retained_outputs=retained_outputs)
   except BaseException as exc:
-    packet_census = _amd_dispatch_census_from_exception(exc)
+    packet_census, runtime_reuse_crosscheck = \
+      _dispatch_error_runtime_reuse_evidence(runtime_preconstruction, exc)
     return {
       "schema": schema, "status": "BLOCKED",
-      "exact_blocker": "frozen v2 fixed-base target dispatch rejected before doorbell",
+      "exact_blocker": "frozen v2 fixed-base realization failed during or after audited target dispatch",
       "exception": type(exc).__name__, "error": str(exc),
       "research_only": True, "production_dispatch_changed": False,
       "default_route": "direct_packed", "role": role_spec.role,
       "shape": list(role_spec.shape), "prefix_epochs": prefix_epochs,
       "graph": graph_evidence, "target_program_identities": target_identities,
+      "runtime_preconstruction": runtime_preconstruction,
+      "runtime_reuse_crosscheck": runtime_reuse_crosscheck,
       **({"dispatch": {dispatch_census_key: packet_census}} if packet_census is not None else {}),
+      "family_identity": binding.family_identity,
+      "frozen_bundle": str(Path(frozen_bundle).resolve()),
+      "compile_performed": False, "requires_recompile": False,
+      "hip_used": False, "no_fallback": True,
+    }
+
+  runtime_reuse_crosscheck = _crosscheck_preconstructed_dispatch_runtimes(
+    runtime_preconstruction, packet_census)
+  if not runtime_reuse_crosscheck["all_checks_pass"]:
+    return {
+      "schema": schema, "status": "BLOCKED",
+      "exact_blocker": "frozen v2 dispatch did not reuse preconstructed runtimes in exact order",
+      "research_only": True, "production_dispatch_changed": False,
+      "default_route": "direct_packed", "role": role_spec.role,
+      "shape": list(role_spec.shape), "prefix_epochs": prefix_epochs,
+      "graph": graph_evidence, "target_program_identities": target_identities,
+      "runtime_preconstruction": runtime_preconstruction,
+      "runtime_reuse_crosscheck": runtime_reuse_crosscheck,
+      "dispatch": {dispatch_census_key: packet_census},
       "family_identity": binding.family_identity,
       "frozen_bundle": str(Path(frozen_bundle).resolve()),
       "compile_performed": False, "requires_recompile": False,
@@ -2692,7 +3002,8 @@ def run_frozen_epoch_program_set_prefix_probe(
     "default_route": "direct_packed", "role": role_spec.role,
     "shape": list(role_spec.shape), "prefix_epochs": prefix_epochs,
     "producer": "extra.qk.q4k_q8_activation_producer.produce_physical_ds4_q8_1_tensor",
-    "graph": graph_evidence,
+    "graph": graph_evidence, "runtime_preconstruction": runtime_preconstruction,
+    "runtime_reuse_crosscheck": runtime_reuse_crosscheck,
     "dispatch": {
       "launcher": "tinygrad_scheduler", "mode": "static_offset_program_chain",
       "count": prefix_epochs, "program_keys": list(binding.program_keys[:prefix_epochs]),
@@ -2863,11 +3174,14 @@ def run_frozen_scheduler_producer_prefix_probe_isolated(
 
 def run_frozen_epoch_program_set_prefix_probe_isolated(
     *, role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC, frozen_bundle: str | Path,
-    prefix_epochs: int, timeout_seconds: float = 180.0,
+    prefix_epochs: int, preconstruct_runtimes: bool = False,
+    timeout_seconds: float = 180.0,
     child_env_overrides: Mapping[str, str] | None = None) -> dict[str, Any]:
   """Run the v2 fixed-base prefix in the existing health-guarded child flow."""
   schema = "tinygrad.mmq_frozen_epoch_program_set_prefix_probe.v2"
   try:
+    if not isinstance(preconstruct_runtimes, bool):
+      raise ValueError("preconstruct_runtimes must be a bool")
     role_spec = admit_exact_role_spec(role_spec)
     prefix_epochs = _validate_v2_fixed_base_prefix_epochs(role_spec, prefix_epochs)
     env_overrides = _validated_child_env_overrides(child_env_overrides)
@@ -2894,7 +3208,8 @@ def run_frozen_epoch_program_set_prefix_probe_isolated(
     "import json; from extra.qk.mmq_exact_role_spec import exact_role_spec; "
     "from extra.qk.mmq_llama_five_buffer_gpu_harness import run_frozen_epoch_program_set_prefix_probe; "
     f"print(json.dumps(run_frozen_epoch_program_set_prefix_probe(role_spec={role_expr}, "
-    f"frozen_bundle={bundle_arg}, prefix_epochs={prefix_epochs})), flush=True)")
+    f"frozen_bundle={bundle_arg}, prefix_epochs={prefix_epochs}, "
+    f"preconstruct_runtimes={preconstruct_runtimes!r})), flush=True)")
   started = time.time()
   try:
     proc = subprocess.run([sys.executable, "-c", code], cwd=ROOT, env=child_env,
@@ -3360,12 +3675,18 @@ def main() -> int:
                       help="run a 1/2-epoch frozen scheduler prefix with the real physical Q8 producer")
   parser.add_argument("--scheduler-v2-fixed-base-prefix-epochs", type=int,
                       help="run a 1/2/3-epoch or admitted-full-role frozen v2 static-offset prefix")
+  parser.add_argument("--scheduler-v2-fixed-base-preconstruct-runtimes", action="store_true",
+                      help="preconstruct/cache the selected exact runtimes before the v2 prefix realization")
   parser.add_argument("--scheduler-v2-fixed-base-ordinal", type=int,
                       help="run one research-only frozen v2 static-offset ordinal")
   parser.add_argument("--scheduler-v2-fixed-base-ordinal-sequence", type=int, nargs=2,
                       metavar=("FIRST", "SECOND"),
                       help="run exactly two increasing research-only frozen v2 static-offset ordinals")
   args = parser.parse_args()
+  if args.scheduler_v2_fixed_base_preconstruct_runtimes and \
+     args.scheduler_v2_fixed_base_prefix_epochs is None:
+    parser.error("--scheduler-v2-fixed-base-preconstruct-runtimes requires "
+                 "--scheduler-v2-fixed-base-prefix-epochs")
   if args.scheduler_v2_fixed_base_ordinal_sequence is not None:
     if args.target_role_frozen_bundle is None:
       parser.error("--scheduler-v2-fixed-base-ordinal-sequence requires --target-role-frozen-bundle")
@@ -3405,6 +3726,7 @@ def main() -> int:
     row = run_frozen_epoch_program_set_prefix_probe_isolated(
       role_spec=role_spec, frozen_bundle=args.target_role_frozen_bundle,
       prefix_epochs=args.scheduler_v2_fixed_base_prefix_epochs,
+      preconstruct_runtimes=args.scheduler_v2_fixed_base_preconstruct_runtimes,
       timeout_seconds=args.target_role_timeout,
       child_env_overrides={"AMD_AQL": args.target_role_amd_aql}
         if args.target_role_amd_aql is not None else None)
