@@ -202,7 +202,15 @@ def _worker() -> dict[str, Any]:
   words_np = _random_q4_words(n, k, 20260717)
   source_np = np.random.default_rng(20260718).standard_normal((m, k), dtype=np.float32)
   values_np, scales_np, sums_np = q8_1_mmq_ds4_quantize_reference(source_np)
-  ds4 = Q81MMQDS4Activation(values_np, scales_np, sums_np,
+  # llama's MMQ producer packs ``make_half2(d, sum)`` into the staged DS4
+  # records.  The ABI buffers remain fp32, but the consumer observes the
+  # fp16-rounded metadata after its half2 LDS round-trip.  Build the oracle
+  # from that same representation; comparing against the pre-rounding fp32
+  # arrays would report deterministic arithmetic differences (and falsely
+  # block an otherwise exact kernel).
+  scales_ref = scales_np.astype(np.float16).astype(np.float32)
+  sums_ref = sums_np.astype(np.float16).astype(np.float32)
+  ds4 = Q81MMQDS4Activation(values_np, scales_ref, sums_ref,
     Q81MMQDS4ActivationSpec(m=m, k=k, m_tile=m))
   ref_spec = Q4KQ81MMQTileSpec(role="five_buffer_gpu_probe", m=m, n=n, k=k,
     m_tile=m, n_tile=n, activation_layout=Q8_1_MMQ_DS4_LAYOUT)

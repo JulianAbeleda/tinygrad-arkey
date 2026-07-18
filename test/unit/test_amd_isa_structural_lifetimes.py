@@ -34,9 +34,13 @@ def test_wide_fragment_release_order_survives_pre_regalloc_cleanup():
   cleaned = line_rewrite(linear, pre_regalloc_matcher)
   selected = next(x for x in cleaned if x.op is Ops.INS and x.arg is AMDOps.DS_LOAD_B128 and x.src[2].arg == 16)
 
-  assert len(selected.src) == 3 and selected.src[0].op is Ops.AFTER
-  assert selected.src[0].src[0] is addr1
-  assert set(selected.src[0].src[1:]) == set(updates)
+  # Keep the canonical address operand in slot zero.  Release dependencies are
+  # carried as extra scheduling-only operands; wrapping the address in AFTER
+  # hides a virtual V_OFFSET root from regalloc and can silently resolve it to
+  # the ABI workitem-id register (v0).
+  assert selected.src[0] is addr1
+  assert len(selected.src) == 3 + len(updates)
+  assert set(selected.src[3:]) == set(updates)
   assert stale not in selected.backward_slice_with_self
   assert max(cleaned.index(x) for x in updates) < cleaned.index(selected)
 
@@ -45,6 +49,28 @@ def test_wide_fragment_release_order_survives_pre_regalloc_cleanup():
   inst, waits = lower_inst(selected)
   assert waits == [inst]
   assert "ds_load_b128(v[200:203], v[5]" in str(inst.arg)
+
+
+def test_virtual_b128_address_is_not_wrapped_by_release_order_cleanup():
+  """The pre-regalloc cleanup must preserve a dynamic LDS address carrier."""
+  # A virtual address producer stands in for the V_OFFSET expression emitted
+  # by fragment indexing.  This used to be wrapped in AFTER(...), whose
+  # synthetic alias was later assigned v0 during lowering.
+  addr = UOp(Ops.INS, dtypes.int32, arg=AMDOps.V_IADD,
+             tag=(_vreg("v900", 900),))
+  release_src = UOp(Ops.INS, dtypes.int32, arg=AMDOps.MOV,
+                    tag=(_vreg("v901", 901),))
+  release = UOp(Ops.INS, dtypes.float32, (release_src,), AMDOps.V_CVT_I2F,
+                tag=(_vreg("v902", 902),))
+  load = UOp(Ops.INS, dtypes.int32,
+             (addr, UOp(Ops.NOOP, dtypes.void), UOp.const(dtypes.int32, 0).rtag(),
+              release), AMDOps.DS_LOAD_B128, tag=(_vreg("v903", 903),))
+  linear = pressure_schedule(list(UOp.sink(load).toposort()))
+  cleaned = line_rewrite(linear, pre_regalloc_matcher)
+  selected = next(x for x in cleaned if x.op is Ops.INS and x.arg is AMDOps.DS_LOAD_B128)
+  assert selected.src[0] is addr
+  assert selected.src[0].op is Ops.INS and selected.src[0].arg is AMDOps.V_IADD
+  assert len(selected.src) == 4 and selected.src[3] is release
 
 
 def test_progressive_c_marked_carriers_serialize_all_lane_drains(monkeypatch):

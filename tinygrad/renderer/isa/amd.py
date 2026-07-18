@@ -2040,8 +2040,14 @@ def _strip_linear_order_deps(x:UOp):
     # arbitrary extras (in particular old address recipes).
     release = tuple(s for s in x.src[3:] if s.dtype is dtypes.float32 and s.op is Ops.INS and any(
       u.op is Ops.INS and u.arg in (AMDOps.V_CVT_I2F, AMDOps.V_CVT_U2F) for u in s.backward_slice_with_self))
-    addr = x.src[0].after(*release) if release else x.src[0]
-    nx = x.replace(src=(addr,) + x.src[1:3])
+    # Keep the selected address as the first canonical operand.  Wrapping a
+    # virtual V_OFFSET in AFTER here hides that address definition from the
+    # linear regalloc rewrite; the nested carrier then retains its virtual
+    # tag and lower_inst resolves it as ABI v0.  The release frontier remains
+    # an explicit ordering source after the three ISA operands and is ignored
+    # by lower_inst, so pressure scheduling still sees the dependency while
+    # the address gets its normal physical VGPR assignment.
+    nx = x.replace(src=x.src[:3] + release)
   elif x.arg is AMDOps.DS_STORE and len(x.src) > 4: nx = x.replace(src=x.src[:4])
   elif x.arg is AMDOps.DS_STORE_B128 and len(x.src) > 7: nx = x.replace(src=x.src[:5] + x.src[-2:])
   elif x.arg is AMDOps.GATED_STORE_B128 and len(x.src) > 8: nx = x.replace(src=x.src[:6] + x.src[-2:])
@@ -2316,6 +2322,16 @@ def lower_inst(x:UOp):
     _proof_record("ds_store", x, st.arg, {"itemsize": src[3].arg, "addr_vgpr": src[0].reg.index, "data_vgpr": src[1].reg.index})
     return (st, [st])
   if a is AMDOps.DS_LOAD_B128:
+    # A wide fragment load must always carry an explicit LDS byte-address
+    # carrier.  Omitting it encodes VGPR v0 (the ABI workitem id), which is
+    # never a valid fragment address and silently reads unrelated LDS bytes.
+    # Keep this fail-closed at the ISA boundary while debugging guarded WMMA
+    # heads; otherwise the renderer emits a numerically plausible but wrong
+    # kernel for constant fixtures.
+    if src[0].reg.index == 0:
+      carrier = src[0]
+      while carrier.op is Ops.AFTER and carrier.src: carrier = carrier.src[0]
+      raise NotImplementedError(f"AMD:ISA DS_LOAD_B128 lost its LDS address carrier (v0/workitem-id), tag={x.tag!r}, source={src[0].op.name}:{src[0].arg!r}, root={carrier.op.name}:{carrier.arg!r}, root_src={carrier.src!r}")
     ld = _ins(ds_load_b128(vdst=_V[x.reg.index:x.reg.index+3], addr=_Vr(src[0].reg), offset0=src[2].arg), x.tag)
     _proof_record("ds_load_b128", x, ld.arg, {
       "dest_vgpr_range": [x.reg.index, x.reg.index + 3],
