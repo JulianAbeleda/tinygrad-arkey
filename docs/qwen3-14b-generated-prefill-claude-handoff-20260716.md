@@ -577,6 +577,14 @@ in 0.692 ms and reports 0/8,912,896 mismatches, max absolute error 1.2207e-4, wi
 reproduce after correcting the Q4 layout. Next isolate repeated target launches without accumulation, then add the
 GPU accumulator only after that target-only prefix remains healthy.
 
+A corrected four-launch target-only prefix completes all four GPU submissions without a queue fault (timeline signals
+30 through 33), but the final epoch-3 output is not exact: 19,139/8,912,896 mismatches, first at `[48,1280]`, max
+absolute error 222.53. There is no accumulation and only one final readback, so this is a repeated-target/preloaded-view
+numeric defect rather than the old driver reset. Evidence is
+`docs/target-preloaded-target-only-epochs-0-3-20260718.json`. The next discriminator is epoch 3 alone from the same
+full corrected preload: a pass means prior launches are required to trigger the defect; a failure means the nonzero
+preloaded view is still wrong.
+
 ## 1. Executive state
 
 The project is building a generated tinygrad prefill route for non-fitting quantized models, using Qwen3-14B as the
