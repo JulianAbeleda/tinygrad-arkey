@@ -1,0 +1,208 @@
+{
+  "schema": "tinygrad.mmq_q4k_q8_1.attn_kv_role_closeout.v1",
+  "status": "CLOSED_MEASURED_FALLBACK",
+  "production_promotion": false,
+  "role": "attn_kv",
+  "quant": "Q4_K",
+  "shape": [
+    512,
+    1024,
+    5120
+  ],
+  "program_shape": [
+    512,
+    1024,
+    256
+  ],
+  "fixes": [
+    {
+      "revision": "d3c605890",
+      "summary": "stage all epoch inputs at fixed addresses",
+      "evidenced_effect": "PM4 same-process prefix 3 and full 20 epochs pass with fixed Q4, Q8-value, scale, and sum staging VAs"
+    },
+    {
+      "revision": "6216e9e4e",
+      "summary": "publish AQL packet headers last",
+      "evidenced_effect": "the retained pre-fix AQL prefix-3 failure is replaced by passing post-fix AQL prefix-3 and full-20 results"
+    }
+  ],
+  "frozen_program": {
+    "bundle": "docs/artifacts/qwen3-14b-prefill-attn-kv-frozen-20260718",
+    "program_key": "d6f891d8e75be25990890bae6788c455690c7b021d3a5bac323eb540f00e0e0d",
+    "source_sha256": "050a2fcecabf2c8562439f5bdff8c4e3e4b545d1806ba3232ae0d308568df80f",
+    "binary_sha256": "399a2edb0fa953f756349f3c81f46dca9f6ee3905d992644a8f272fcc95d942f",
+    "serialized_program_sha256": "030a26144d46fe27efcfe92fb85c26f1edc28eee35fdf1136cf8800434030ea3",
+    "fixture_sha256": "43ebde16be8bfe5640f1c43f8ecb82d6617a519d760a79364ddb019dde503a60",
+    "compile_performed_by_consumers": false,
+    "requires_recompile": false
+  },
+  "resources": {
+    "authority": "native_elf_descriptor",
+    "vgpr": 256,
+    "lds_bytes": 57856,
+    "scratch_bytes": 0,
+    "wavefront_size": 32,
+    "kernarg_bytes": 40,
+    "global_size": [
+      8,
+      4,
+      1
+    ],
+    "local_size": [
+      256,
+      1,
+      1
+    ],
+    "five_buffer_abi": true
+  },
+  "raw_artifacts": [
+    {
+      "path": "docs/qwen3-14b-prefill-attn-kv-fixed-va-prefix-3-pm4-20260718.json",
+      "sha256": "5e83a05bf5420631ebc37a66357f179e77caa25b0e5c049c0581c49610b1f298",
+      "runtime_revision": "d3c605890",
+      "queue_mode": "PM4",
+      "launches": 3,
+      "status": "PASS",
+      "correctness": {
+        "checked_values": 524288,
+        "mismatch_count": 0,
+        "max_abs_error": 0.00048828125
+      },
+      "health_before": true,
+      "health_after": true,
+      "kernel_faults": []
+    },
+    {
+      "path": "docs/qwen3-14b-prefill-attn-kv-fixed-va-20epoch-pm4-20260718.json",
+      "sha256": "3091ed0424013bdc50e287efd9b2ddd1e3d4cc3b27f928ee292afd1d95b50e9b",
+      "runtime_revision": "d3c605890",
+      "queue_mode": "PM4",
+      "launches": 20,
+      "status": "PASS",
+      "correctness": {
+        "checked_values": 524288,
+        "mismatch_count": 0,
+        "max_abs_error": 0.002685546875
+      },
+      "health_before": true,
+      "health_after": true,
+      "kernel_faults": [],
+      "timing": {
+        "samples_ms": [
+          74.58446017699316
+        ],
+        "reported_ms": 74.58446017699316,
+        "scope": "cold isolated full-role run",
+        "sample_count": 1,
+        "performance_claim": false
+      }
+    },
+    {
+      "path": "docs/qwen3-14b-prefill-attn-kv-fixed-va-prefix-3-aql-20260718.json",
+      "sha256": "2a426c607a96ce9778942c236223f798bf356e85d5183329577b3e23646d8a2b",
+      "runtime_revision": "d3c605890",
+      "queue_mode": "AQL",
+      "launches_submitted": 3,
+      "completed_epochs": 2,
+      "status": "BLOCKED",
+      "exact_blocker": "AMD kernel fault/reset marker observed",
+      "historical_pre_header_last_fix": true,
+      "fault_classification": "SQ memory-violation and gfxhub page-fault/reset evidence; the retained log does not prove instruction-page or instruction-fetch failure"
+    },
+    {
+      "path": "docs/qwen3-14b-prefill-attn-kv-fixed-va-prefix-3-aql-header-last-20260718.json",
+      "sha256": "afb0c367c247f34e9aea625853984a83781e5216c26d3407d1e94120a6f13c0b",
+      "runtime_revision": "6216e9e4e",
+      "queue_mode": "AQL",
+      "launches": 3,
+      "status": "PASS",
+      "correctness": {
+        "checked_values": 524288,
+        "mismatch_count": 0,
+        "max_abs_error": 0.00048828125
+      },
+      "health_before": true,
+      "health_after": true,
+      "kernel_faults": []
+    },
+    {
+      "path": "docs/qwen3-14b-prefill-attn-kv-fixed-va-20epoch-aql-header-last-20260718.json",
+      "sha256": "5ad4163bda75f334120fc5b13b6eac01e230e1d29f764609a53255f4d4578d87",
+      "runtime_revision": "6216e9e4e",
+      "queue_mode": "AQL",
+      "launches": 20,
+      "status": "PASS",
+      "correctness": {
+        "checked_values": 524288,
+        "mismatch_count": 0,
+        "max_abs_error": 0.002685546875
+      },
+      "health_before": true,
+      "health_after": true,
+      "kernel_faults": [],
+      "timing": {
+        "samples_ms": [
+          19.601495820097625
+        ],
+        "reported_ms": 19.601495820097625,
+        "scope": "cold isolated full-role run",
+        "sample_count": 1,
+        "performance_claim": false
+      }
+    }
+  ],
+  "technical_closeout": {
+    "pm4_prefix_3": "PASS",
+    "pm4_full_20": "PASS",
+    "aql_prefix_3_before_header_last": "BLOCKED",
+    "aql_prefix_3_after_header_last": "PASS",
+    "aql_full_20_after_header_last": "PASS",
+    "full_20_correctness": {
+      "mismatch_count": 0,
+      "checked_values_per_mode": 524288,
+      "max_abs_error": 0.002685546875,
+      "finite_output": true
+    },
+    "full_20_health": {
+      "pm4_preflight": true,
+      "pm4_postflight": true,
+      "aql_preflight": true,
+      "aql_postflight": true,
+      "kernel_faults": []
+    }
+  },
+  "performance_decision": {
+    "generated_candidate": {
+      "AQL_full_20_ms": 19.601495820097625,
+      "PM4_full_20_ms": 74.58446017699316,
+      "methodology": "cold isolated one-sample observations",
+      "sample_count_per_mode": 1,
+      "statistical_claim": false,
+      "matched_benchmark_claim": false
+    },
+    "retained_direct_packed_baseline": {
+      "ms": 7.89,
+      "source": "docs/qwen3-14b-generated-prefill-completion-scope-20260714.md#frozen-measurement-authority",
+      "role": "attn_kv",
+      "quant": "Q4_K"
+    },
+    "generated_candidate_beats_retained_baseline": false,
+    "decision": "REJECT_GENERATED_CANDIDATE_KEEP_DIRECT_PACKED",
+    "production_promotion": false
+  },
+  "retained_policy_row": {
+    "policy": "docs/qwen3-14b-prefill-six-row-research-policy-20260718.json",
+    "policy_artifact_identity": "qk_exact_six_row_policy:sha256:800ad8a2047b0efd69d81afc45f387af7c71a038e141e73ec7c855bebe44814e",
+    "binding_kind": "fallback",
+    "selected_route": "direct_packed",
+    "fallback_identity": "fallback:sha256:e77147b9b68ae129b055331ff1b8a1da52649d469febbc47402f919ded843e73",
+    "fallback_evidence_identity": "fallback_evidence:sha256:4fb7a9c4bbbe45afb72a74585738bd23cbbfc22aea05bc2ead0b6199d137e2a2",
+    "changed": false
+  },
+  "phase_3": {
+    "attn_kv": "RESOLVED_AS_MEASURED_DIRECT_PACKED_FALLBACK",
+    "remaining_q4_rows": [],
+    "all_q4_role_closeout": "docs/qwen3-14b-prefill-q4-role-closeout-20260718.json",
+    "phase_complete": true
+  }
+}

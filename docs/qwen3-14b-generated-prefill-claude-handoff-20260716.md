@@ -1,6 +1,74 @@
 # Qwen3-14B generated-prefill Claude handoff
 
-## 1.0 Current status 2026-07-18: research policy connected; repeated `attn_kv` dispatch blocks Phase 3
+## 1.1 Current status 2026-07-18: all Q4 roles resolved; Phase 3 complete
+
+Read this section first. It supersedes §1.0 and the chronological diagnostics below.
+
+The `attn_kv` Q4 role no longer owns a correctness, resource, health, or repeated-dispatch blocker:
+
+- `d3c605890` stages every changing epoch input—Q4, Q8 values, scales, and sums—through persistent fixed VAs. PM4
+  prefix 3 and full 20 epochs pass.
+- The AQL prefix-3 result before the queue fix remains `BLOCKED` after two completed epochs.
+- `6216e9e4e` fixes AQL publication ordering by writing the packet header last. Post-fix AQL prefix 3 and full 20
+  epochs pass.
+- Both full-20 runs reuse the frozen PROGRAM without compilation or fallback. They use fixed-VA GPU-SDMA staging,
+  one in-place FP32 accumulator, no intermediate readback or external accumulation add, `VGPR=256`, `LDS=57,856 B`,
+  and zero scratch. PM4 and AQL each compare 524,288 final values with zero mismatches and maximum absolute error
+  `0.002685546875`; their fault windows are empty and pre/post health canaries pass.
+
+The exact five raw artifacts and their hashes are composed in
+`docs/qwen3-14b-prefill-attn-kv-role-closeout-20260718.json`. The historical AQL failure must be described precisely:
+the retained `sq_intr type 2` evidence is an SQ memory violation followed by a gfxhub page fault and reset sequence.
+The log does not establish an instruction-page or instruction-fetch fault.
+
+Correctness does not promote this candidate. The only full-role generated timings are cold isolated one-sample
+observations: AQL `19.601495820097625 ms` and PM4 `74.58446017699316 ms`. Neither beats the retained direct-packed
+`attn_kv` baseline of `7.89 ms`. Do not call either sample a stable median, matched benchmark, or statistical result.
+The honest decision is:
+
+```text
+attn_kv_q4_generated_candidate=REJECTED
+attn_kv_q4_role_resolution=MEASURED_DIRECT_PACKED_FALLBACK
+attn_kv_q4_selected_route=direct_packed
+attn_kv_q4_policy_row_changed=false
+production_promotion=false
+```
+
+The same shared N5120 binary (`e66d0b8c…`) now has exact role evidence for the other two Q4 rows:
+
+- `attn_qo`: PM4 prefix 1, prefix 3, and full 20 pass. The full result has 0/2,621,440 mismatches, maximum absolute
+  error `0.00341796875`, clean logs, healthy pre/post canaries, and a single cold isolated timing of
+  `76.49636000860482 ms` versus the retained direct-packed `11.41 ms`.
+- `ffn_down`: PM4 prefix 1, prefix 3, and full 68 pass. The donor remains explicitly `attn_qo`; the distinct
+  `ffn_down` execution fixture is validated for 68 epochs. The full result has 0/2,621,440 mismatches, maximum
+  absolute error `0.01123046875` within tolerance, clean logs, healthy pre/post canaries, and a single cold isolated
+  timing of `114.26727805519477 ms` versus the retained direct-packed `11.76 ms`.
+
+Neither timing is a matched, warmed, repeated, or statistical claim. Both generated candidates are rejected; their
+existing direct-packed policy rows remain unchanged. The all-role composition is
+`docs/qwen3-14b-prefill-q4-role-closeout-20260718.json`.
+
+Authoritative phase state:
+
+| Phase | State |
+|---|---|
+| 3 — Q4_K role completion | Complete: all four generated roles measured for correctness/resources/health; `ffn_gate_up` selected and the other three retained as measured direct-packed fallbacks. |
+| 4 — Q6_K role completion | Complete for the declared two-row direct-packed fallback strategy. |
+| 5 — Central candidate policy | Complete at the default-off research boundary; the immutable policy remains unchanged. |
+| 6 — Mixed-route 14B integration | Open. |
+| 7 — Parity and promotion | Open. |
+
+Next run Phase 6 whole-model mixed-route correctness, genuine execution census, memory reconciliation, GPU health,
+decode regression, and rollback proof using the unchanged immutable policy. No HIP launcher, model/GPU-name branch,
+or further work on a rejected generated role is justified unless exact whole-policy attribution explicitly reopens it.
+
+There is no project progress percentage. The phase ledger in
+`docs/qwen3-14b-generated-prefill-completion-scope-20260714.md` is the authority.
+
+## Historical 1.0 status 2026-07-18: repeated `attn_kv` dispatch blocked Phase 3
+
+This section predates fixed staging for every input, the PM4 full-20 pass, AQL header-last publication, the AQL
+full-20 pass, and the measured direct-packed fallback decision in §1.1.
 
 Read this section first. It supersedes §0.9 and the chronological diagnostics below.
 
@@ -637,10 +705,11 @@ repeats the failure at signal 32/current 31). Thus allocator reuse, per-epoch SD
 elementwise accumulation choice have each been isolated without producing a full-target pass. The blocker artifact is
 recorded as 'target-role-20epoch-preloaded.json'; it is not correctness or promotion evidence.
 
-Kernel logs for the controlled sync attempt also show an amdgpu SQC instruction page fault followed by MES queue
-removal failure and a GPU reset (the HCQ timeout is therefore a driver-visible health failure, not merely a Python
-deadline). Earlier overlapping child experiments can leave stale queues, so this log is treated as health evidence
-only and does not identify a mathematical kernel bug.
+Kernel logs for the controlled sync attempt show SQ memory-violation and gfxhub page-fault evidence followed by MES
+queue-removal failure and a GPU reset (the HCQ timeout is therefore a driver-visible health failure, not merely a
+Python deadline). The retained fields do not establish an instruction-page or instruction-fetch fault. Earlier
+overlapping child experiments can leave stale queues, so this log is treated as health evidence only and does not
+identify a mathematical kernel bug.
 
 The machine-search schema now accepts a target-role artifact only when it independently proves the exact role/shape,
 all 20 K epochs with full-N dispatch, GPU-side FP32 accumulation, preloaded/persistent buffers, zero-mismatch finite
@@ -779,9 +848,10 @@ same-process target-role harness, preserve the D2D copies in timing/evidence, an
 
 The first strict integration attempt exposed a second, independent runtime boundary and was stopped. Exact timeline
 mapping showed epoch-0 metadata SDMA copies and target MMQ completed through signal 33; the separate
-`(accum + partial).realize()` launch requested signal 34, triggered SQC instruction faults, timed out, and ultimately
-caused a gfxhub instruction-page fault and GPU reset. The reset recovered and the independent tiny-add health probe
-passed. A one-epoch host-accumulation control then passed exactly with clean logs and stable metadata VAs
+`(accum + partial).realize()` launch requested signal 34, triggered SQ memory-violation evidence, timed out, and was
+followed by a gfxhub page fault and GPU reset. The retained log does not identify an instruction-page or
+instruction-fetch fault. The reset recovered and the independent tiny-add health probe passed. A one-epoch
+host-accumulation control then passed exactly with clean logs and stable metadata VAs
 (`docs/target-role-stable-metadata-host-prefix-1-20260718.json`), proving target + SDMA + full readback can be healthy.
 A three-epoch host-accumulation run passed epoch 0 exactly but faulted during epoch 1 before its check, with the wrapper
 capturing the SQC/page-fault/reset markers and stopping (`docs/target-role-stable-metadata-host-prefix-3-20260718.json`).
@@ -805,7 +875,7 @@ later strict evidence composition. These changes are pushed in `b133d99de`.
 The isolated one-epoch GPU gate passed the full 512x17408 output with 0/8,912,896 mismatches, no non-finite values,
 maximum absolute error 1.2207e-4, stable fixed-VA GPU-SDMA metadata staging, clean kernel logs, and healthy pre/post
 tiny-add probes (`docs/target-role-in-kernel-accum-prefix-1-20260718.json`). The three-epoch escalation was stopped on
-its first target launch: an SQC instruction fault was followed about 30 seconds later by a gfxhub page fault, MES
+its first target launch: SQ memory-violation evidence was followed about 30 seconds later by a gfxhub page fault, MES
 queue-removal failure, and GPU reset. The post-reset health probe passed
 (`docs/target-role-in-kernel-accum-prefix-3-20260718.json`). Both attempts compiled the exact same source
 `beed14d6…` and binary `78eefc23…`, so this is not a spill regression or a cross-compile variant. Do not run the

@@ -1,0 +1,206 @@
+{
+  "schema": "tinygrad.qwen3_14b_prefill_q4_role_closeout.v1",
+  "status": "PHASE_3_COMPLETE",
+  "production_promotion": false,
+  "policy_changed": false,
+  "policy": {
+    "path": "docs/qwen3-14b-prefill-six-row-research-policy-20260718.json",
+    "sha256": "8ce1f435a58eedfa50c5736c09ecde68ad2a411530e849940a67adcb09740091",
+    "artifact_identity": "qk_exact_six_row_policy:sha256:800ad8a2047b0efd69d81afc45f387af7c71a038e141e73ec7c855bebe44814e",
+    "status": "research_only"
+  },
+  "common_generated_resources": {
+    "vgpr": 256,
+    "lds_bytes": 57856,
+    "scratch_bytes": 0,
+    "wavefront_size": 32,
+    "kernarg_bytes": 40,
+    "five_buffer_abi": true,
+    "accumulation": "target_in_place_fp32_add",
+    "stable_all_input_fixed_va_gpu_sdma": true,
+    "intermediate_readback": false,
+    "external_accumulation_add": false
+  },
+  "roles": [
+    {
+      "role": "ffn_gate_up",
+      "shape": [
+        512,
+        17408,
+        5120
+      ],
+      "generated_evidence": {
+        "path": "docs/qwen3-14b-prefill-mmq-one-role-evidence-20260718.json",
+        "sha256": "36a03bc3c2bd451968792bf924878e3e00bc9c11e9eee1f4d041d0531cb42044",
+        "full_role_correctness": "PASS",
+        "resource": "PASS",
+        "health": "PASS"
+      },
+      "performance": {
+        "generated_median_ms": 0.277502,
+        "generated_min_ms": 0.269477,
+        "direct_packed_median_ms": 9.351988,
+        "direct_packed_min_ms": 9.349303,
+        "methodology": "retained same-session three-round role evidence"
+      },
+      "decision": "SELECT_GENERATED_RESEARCH_CANDIDATE",
+      "policy_binding_kind": "candidate",
+      "selected_route": "q4k_q8_five_buffer_research",
+      "candidate_identity": "3e367ee04b0aa5db66ecaad085ec9f5ea414a56b8161b406cdefb125378356eb"
+    },
+    {
+      "role": "attn_kv",
+      "shape": [
+        512,
+        1024,
+        5120
+      ],
+      "generated_evidence": {
+        "path": "docs/qwen3-14b-prefill-attn-kv-role-closeout-20260718.json",
+        "sha256": "a01be2e32038a1a70242217fce6ad17cf1b1a472c0b47594d984d6fca3ce83ed",
+        "full_role_correctness": "PASS_PM4_AND_AQL",
+        "resource": "PASS",
+        "health": "PASS"
+      },
+      "performance": {
+        "generated_best_observed_ms": 19.601495820097625,
+        "generated_best_mode": "AQL",
+        "direct_packed_baseline_ms": 7.89,
+        "methodology_limit": "generated result is one cold isolated sample; no matched/statistical claim"
+      },
+      "decision": "REJECT_GENERATED_CANDIDATE_KEEP_DIRECT_PACKED",
+      "policy_binding_kind": "fallback",
+      "selected_route": "direct_packed",
+      "fallback_identity": "fallback:sha256:e77147b9b68ae129b055331ff1b8a1da52649d469febbc47402f919ded843e73",
+      "fallback_evidence_identity": "fallback_evidence:sha256:4fb7a9c4bbbe45afb72a74585738bd23cbbfc22aea05bc2ead0b6199d137e2a2"
+    },
+    {
+      "role": "attn_qo",
+      "shape": [
+        512,
+        5120,
+        5120
+      ],
+      "program": {
+        "artifact_role": "attn_qo",
+        "execution_role": "attn_qo",
+        "program_key": "431ae3050ced05413d174f7318e2abc378eea9c4acb04a099441e4edb6c77264",
+        "source_sha256": "bb333f1f6c36df8da4cb4c218aca35efa38f67fb10e873d12dda591eef1c68f8",
+        "binary_sha256": "e66d0b8cc5242393b6f4cded7c8dd2d6c0d234271be6ac294d353c83ebc03be8"
+      },
+      "raw_artifacts": [
+        {
+          "path": "docs/qwen3-14b-prefill-attn-qo-fixed-va-prefix-1-pm4-20260718.json",
+          "sha256": "2b17ddf140aa31af55071680c826d96586b53e7d5d57b9ad11c2d77f22e20d11",
+          "launches": 1,
+          "status": "PASS"
+        },
+        {
+          "path": "docs/qwen3-14b-prefill-attn-qo-fixed-va-prefix-3-pm4-20260718.json",
+          "sha256": "5b545e373a3b7fee2c8a436d60a1e15eac0a5dbe9fe9c4fedd17d154853b4780",
+          "launches": 3,
+          "status": "PASS"
+        },
+        {
+          "path": "docs/qwen3-14b-prefill-attn-qo-fixed-va-20epoch-pm4-20260718.json",
+          "sha256": "c532a1677557054018cfca6462b41612ab53dc8ab9351c547e5ca382754a2833",
+          "launches": 20,
+          "status": "PASS"
+        }
+      ],
+      "full_role_result": {
+        "checked_values": 2621440,
+        "mismatch_count": 0,
+        "max_abs_error": 0.00341796875,
+        "health_before": true,
+        "health_after": true,
+        "kernel_faults": [],
+        "resource": "PASS"
+      },
+      "performance": {
+        "generated_ms": 76.49636000860482,
+        "direct_packed_baseline_ms": 11.41,
+        "methodology_limit": "generated result is one cold isolated sample; no matched/statistical claim"
+      },
+      "decision": "REJECT_GENERATED_CANDIDATE_KEEP_DIRECT_PACKED",
+      "policy_binding_kind": "fallback",
+      "selected_route": "direct_packed",
+      "fallback_identity": "fallback:sha256:6b8b0c16a9bfa333bee14c702c09ccaa8ff2b76aea1017537e05cc28f4a4f139",
+      "fallback_evidence_identity": "fallback_evidence:sha256:085e87475ae3991821fded011ec779a37c65816e1bf6fed19d9f4d3747e6d644"
+    },
+    {
+      "role": "ffn_down",
+      "shape": [
+        512,
+        5120,
+        17408
+      ],
+      "program": {
+        "artifact_role": "attn_qo",
+        "execution_role": "ffn_down",
+        "fixture_relationship": "distinct_full_role_shared_program_geometry",
+        "artifact_fixture_equals_execution_fixture": false,
+        "execution_fixture_canonical_sha256": "6e4b3cd1c6b33723f94d912767f911728f3375c448eed5094b497c5496be636a",
+        "program_key": "431ae3050ced05413d174f7318e2abc378eea9c4acb04a099441e4edb6c77264",
+        "source_sha256": "bb333f1f6c36df8da4cb4c218aca35efa38f67fb10e873d12dda591eef1c68f8",
+        "binary_sha256": "e66d0b8cc5242393b6f4cded7c8dd2d6c0d234271be6ac294d353c83ebc03be8"
+      },
+      "raw_artifacts": [
+        {
+          "path": "docs/qwen3-14b-prefill-ffn-down-q4-fixed-va-prefix-1-pm4-20260718.json",
+          "sha256": "0c95af70caaaee455d7045ec1345c74d3769b7777af222418b6b172cb3f0c21e",
+          "launches": 1,
+          "status": "PASS"
+        },
+        {
+          "path": "docs/qwen3-14b-prefill-ffn-down-q4-fixed-va-prefix-3-pm4-20260718.json",
+          "sha256": "c7227e982de542fb7180439e69f3bef1a38c17592a6dffeaaf9aff944e411d6c",
+          "launches": 3,
+          "status": "PASS"
+        },
+        {
+          "path": "docs/qwen3-14b-prefill-ffn-down-q4-fixed-va-68epoch-pm4-20260718.json",
+          "sha256": "aaf82c3e3ce1f1b55f3e1ead9f657c18e3830eca9c8b6d03bbc55c4a5b3be3ef",
+          "launches": 68,
+          "status": "PASS"
+        }
+      ],
+      "full_role_result": {
+        "checked_values": 2621440,
+        "mismatch_count": 0,
+        "max_abs_error": 0.01123046875,
+        "within_declared_tolerance": true,
+        "health_before": true,
+        "health_after": true,
+        "kernel_faults": [],
+        "resource": "PASS"
+      },
+      "performance": {
+        "generated_ms": 114.26727805519477,
+        "direct_packed_baseline_ms": 11.76,
+        "methodology_limit": "generated result is one cold isolated sample; no matched/statistical claim"
+      },
+      "decision": "REJECT_GENERATED_CANDIDATE_KEEP_DIRECT_PACKED",
+      "policy_binding_kind": "fallback",
+      "selected_route": "direct_packed",
+      "fallback_identity": "fallback:sha256:711e195c353ef77345063794e800bddf0f6409d41efe8e9933fd650abbe5c1be",
+      "fallback_evidence_identity": "fallback_evidence:sha256:f80bc7d7b903a96c702b06a5160f21ef7c8c26583401046862203bd6ff41726b"
+    }
+  ],
+  "phase_3": {
+    "all_four_generated_roles_correctness_measured": true,
+    "all_four_generated_roles_resources_measured": true,
+    "all_four_generated_roles_health_measured": true,
+    "selected_generated_roles": [
+      "ffn_gate_up"
+    ],
+    "measured_direct_packed_fallbacks": [
+      "attn_kv",
+      "attn_qo",
+      "ffn_down"
+    ],
+    "complete": true
+  },
+  "next_phase": "PHASE_6_MIXED_ROUTE_14B_INTEGRATION",
+  "performance_authority_caveat": "Cold isolated one-sample role timings for attn_kv, attn_qo, and ffn_down are rejection evidence only; they are not matched or statistical promotion evidence."
+}

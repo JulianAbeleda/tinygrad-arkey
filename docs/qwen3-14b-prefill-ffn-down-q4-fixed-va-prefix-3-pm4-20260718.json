@@ -1,0 +1,629 @@
+{
+  "accumulation": "target_in_place_fp32_add",
+  "artifacts": {
+    "accumulation": "target_in_place_fp32_add",
+    "backend_id": "q4k_q8_1_mmq_amd_isa_full_grid_v0",
+    "binary_nbytes": 77463,
+    "binary_sha256": "e66d0b8cc5242393b6f4cded7c8dd2d6c0d234271be6ac294d353c83ebc03be8",
+    "compile_performed": false,
+    "distinct_binary_identity": true,
+    "frozen_bundle": {
+      "artifact_fixture_equals_execution_fixture": false,
+      "artifact_fixture_schema": "tinygrad.mmq_q4k_q8_1_target_fixture.v1",
+      "artifact_fixture_sha256": "a0af1ede30514f8fe51a617a63ada13e640ea937eea41a950ad5e9473da883f5",
+      "artifact_full_role_shape": [
+        512,
+        5120,
+        5120
+      ],
+      "artifact_role": "attn_qo",
+      "compile_performed": false,
+      "execution_fixture_canonical_sha256": "6e4b3cd1c6b33723f94d912767f911728f3375c448eed5094b497c5496be636a",
+      "execution_fixture_schema": "tinygrad.mmq_q4k_q8_1_target_fixture.v1",
+      "execution_full_role_shape": [
+        512,
+        5120,
+        17408
+      ],
+      "execution_role": "ffn_down",
+      "fixture_relationship": "distinct_full_role_shared_program_geometry",
+      "fixture_schema": "tinygrad.mmq_q4k_q8_1_target_fixture.v1",
+      "fixture_sha256": "a0af1ede30514f8fe51a617a63ada13e640ea937eea41a950ad5e9473da883f5",
+      "manifest_schema": "tinygrad.mmq_q4k_q8_1.frozen_target_artifact.v1",
+      "path": "/home/ubuntu/tinygrad-arkey/docs/artifacts/qwen3-14b-prefill-n5120-frozen-20260718",
+      "program_grid": [
+        40,
+        4,
+        1
+      ],
+      "program_key": "431ae3050ced05413d174f7318e2abc378eea9c4acb04a099441e4edb6c77264",
+      "program_shape": [
+        512,
+        5120,
+        256
+      ],
+      "relationship": "distinct_full_role_shared_program_geometry",
+      "requires_recompile": false,
+      "serialized_program_sha256": "14e677121603bebb9deff1303e926b44d45a80e6892c1ff0f8a603e7f7a03e4c",
+      "shared_program_geometry": true,
+      "state": "FROZEN"
+    },
+    "no_fallback": true,
+    "requires_recompile": false,
+    "resources": {
+      "authority": "native_elf_descriptor",
+      "compute_pgm_rsrc1": 1085014047,
+      "compute_pgm_rsrc2": 388,
+      "compute_pgm_rsrc3": 0,
+      "kernarg_bytes": 40,
+      "kernel_code_entry_byte_offset": -76928,
+      "lds_bytes": 57856,
+      "scratch_bytes": 0,
+      "sgpr": null,
+      "vgpr": 256,
+      "wavefront_size": 32
+    },
+    "resources_error": "CalledProcessError: Command '('/opt/rocm/llvm/bin/llvm-readelf', '--notes', '/tmp/tmpptmjq45e.hsaco')' returned non-zero exit status 1.",
+    "same_session_timing": true,
+    "source_nbytes": 485496,
+    "source_sha256": "bb333f1f6c36df8da4cb4c218aca35efa38f67fb10e873d12dda591eef1c68f8"
+  },
+  "bounded_only": true,
+  "child_env_overrides": {
+    "AMD_AQL": "0"
+  },
+  "compile_performed": false,
+  "correctness": {
+    "authority": "same_session_fp16_rounded_ds4_reference",
+    "comparison": {
+      "atol": 0.003,
+      "first_mismatch_got": null,
+      "first_mismatch_index": null,
+      "first_mismatch_reference": null,
+      "got_shape": [
+        512,
+        5120
+      ],
+      "got_size": 2621440,
+      "inf_got": 0,
+      "inf_reference": 0,
+      "joint_finite": 2621440,
+      "max_abs_error": 0.0006103515625,
+      "mean_abs_error": 1.9987443010904826e-05,
+      "mismatch_count": 0,
+      "nan_got": 0,
+      "nan_reference": 0,
+      "reference_shape": [
+        512,
+        5120
+      ],
+      "reference_size": 2621440,
+      "rtol": 0.003,
+      "status": "pass"
+    },
+    "status": "PASS"
+  },
+  "default_route": "direct_packed",
+  "distinct_binary_identity": true,
+  "epoch_staging": {
+    "bytes_per_epoch": 868352,
+    "fixed_va": true,
+    "mode": "all_inputs_fixed_va_gpu_sdma",
+    "per_epoch_vas": [
+      {
+        "epoch": 0,
+        "source_q4_va": 133610476863488,
+        "source_values_va": 133610467950592,
+        "stage_q4_va": 133610921086976,
+        "stage_values_va": 133610920955904
+      },
+      {
+        "epoch": 1,
+        "source_q4_va": 133610477600768,
+        "source_values_va": 133610468081664,
+        "stage_q4_va": 133610921086976,
+        "stage_values_va": 133610920955904
+      },
+      {
+        "epoch": 2,
+        "source_q4_va": 133610478338048,
+        "source_values_va": 133610468212736,
+        "stage_q4_va": 133610921086976,
+        "stage_values_va": 133610920955904
+      }
+    ],
+    "source_preloaded": true,
+    "transfer": "gpu_sdma"
+  },
+  "exact_blocker": null,
+  "execution_fixture": {
+    "repack": {
+      "q4_epoch_major_dtype": "uint32",
+      "q4_epoch_major_elements": 12533760,
+      "q4_epoch_major_layout": "q4_k_bytes[k_epoch, n, 144]",
+      "q4_epoch_major_sha256": "e524e9110d2f6c1bb3845e1da4a0ede78f5d225e8828407ab85cf4bf6902ec33",
+      "q4_layout": "q4_k_bytes[n, k_epoch, 144]",
+      "q4_sha256": "a7c38ad9065bc88697675b4c31f82fe0393b5923a223faec4e3e6c7fdb82ef01",
+      "q8_layout": "q8_ds4[epoch, m, groups]",
+      "q8_scales_sha256": "9a2a6f44b13482538c23b26648a0faa9db10900e11c4992c464185a1a9b8f323",
+      "q8_sums_sha256": "0506c66583b9c5fdc82cf3ccab03bdb7bd5718213f9d84e32c80b151930fcc3d",
+      "q8_values_sha256": "f7651d87ecd5ec7e70d221cbb2b650bf160b2491b0c5b69859b9dfbf5666bd65"
+    },
+    "role": "ffn_down",
+    "schema": "tinygrad.mmq_q4k_q8_1_target_fixture.v1",
+    "seeds": {
+      "q4": 20260721,
+      "q8_source": 20260722
+    },
+    "shape": [
+      512,
+      5120,
+      17408
+    ],
+    "source_sha256": "da04e596698b83c108e31dd5d40c77aa1950b857f8c0d10a1125068c25bc00fe",
+    "total_epochs": 68
+  },
+  "fixture_roles": {
+    "artifact_fixture_equals_execution_fixture": false,
+    "artifact_full_role_shape": [
+      512,
+      5120,
+      5120
+    ],
+    "artifact_role": "attn_qo",
+    "execution_fixture_canonical_sha256": "6e4b3cd1c6b33723f94d912767f911728f3375c448eed5094b497c5496be636a",
+    "execution_fixture_schema": "tinygrad.mmq_q4k_q8_1_target_fixture.v1",
+    "execution_full_role_shape": [
+      512,
+      5120,
+      17408
+    ],
+    "execution_role": "ffn_down",
+    "relationship": "distinct_full_role_shared_program_geometry"
+  },
+  "health_after": true,
+  "health_before": true,
+  "health_mode": {
+    "after": true,
+    "amd_aql_env": "0",
+    "before": true
+  },
+  "kernel_faults": [],
+  "metadata_staging": {
+    "fixed_va": true,
+    "mode": "fixed_va_gpu_sdma",
+    "per_epoch_vas": [
+      {
+        "epoch": 0,
+        "source_scales_va": 133610905309184,
+        "source_sums_va": 133610716135424,
+        "stage_scales_va": 133611654295552,
+        "stage_sums_va": 133611652497408
+      },
+      {
+        "epoch": 1,
+        "source_scales_va": 133610905325568,
+        "source_sums_va": 133610716151808,
+        "stage_scales_va": 133611654295552,
+        "stage_sums_va": 133611652497408
+      },
+      {
+        "epoch": 2,
+        "source_scales_va": 133610905341952,
+        "source_sums_va": 133610716168192,
+        "stage_scales_va": 133611654295552,
+        "stage_sums_va": 133611652497408
+      }
+    ],
+    "source_preloaded": true,
+    "transfer": "gpu_sdma"
+  },
+  "mode_health_after": true,
+  "mode_health_before": true,
+  "no_fallback": true,
+  "production_dispatch_changed": false,
+  "reduction": {
+    "owned_components": [
+      "cooperative tile loop",
+      "Q4_K tile_x staging",
+      "Q8_1 tile_y two-panel lifecycle"
+    ],
+    "source_anchors": [
+      "mmq.cuh:mul_mat_q_process_tile",
+      "mmq.cuh:load_tiles_q4_K"
+    ],
+    "source_revision": "ac4cddeb0dbd778f650bf568f6f08344a06abe3a"
+  },
+  "repack": {
+    "q4_epoch_major_dtype": "uint32",
+    "q4_epoch_major_elements": 12533760,
+    "q4_epoch_major_layout": "q4_k_bytes[k_epoch, n, 144]",
+    "q4_epoch_major_sha256": "e524e9110d2f6c1bb3845e1da4a0ede78f5d225e8828407ab85cf4bf6902ec33",
+    "q4_layout": "q4_k_bytes[n, k_epoch, 144]",
+    "q4_sha256": "a7c38ad9065bc88697675b4c31f82fe0393b5923a223faec4e3e6c7fdb82ef01",
+    "q8_layout": "q8_ds4[epoch, m, groups]",
+    "q8_scales_sha256": "9a2a6f44b13482538c23b26648a0faa9db10900e11c4992c464185a1a9b8f323",
+    "q8_sums_sha256": "0506c66583b9c5fdc82cf3ccab03bdb7bd5718213f9d84e32c80b151930fcc3d",
+    "q8_values_sha256": "f7651d87ecd5ec7e70d221cbb2b650bf160b2491b0c5b69859b9dfbf5666bd65"
+  },
+  "requires_recompile": false,
+  "role": "ffn_down",
+  "runtime_evidence": {
+    "amd_aql_effective": false,
+    "amd_aql_env": "0",
+    "binary_sha256": "e66d0b8cc5242393b6f4cded7c8dd2d6c0d234271be6ac294d353c83ebc03be8",
+    "descriptor_va": 133610920955264,
+    "entry_va": 133610920878336,
+    "external_accumulation_add": false,
+    "intermediate_readback": false,
+    "launch_count": 3,
+    "launches": [
+      {
+        "arguments": [
+          {
+            "base_nbytes": 10485760,
+            "base_va": 133610455695360,
+            "call_index": 0,
+            "name": "output",
+            "nbytes": 10485760,
+            "offset_bytes": 0,
+            "slot": 0,
+            "va": 133610455695360,
+            "va_matches_base_offset": true
+          },
+          {
+            "base_nbytes": 737280,
+            "base_va": 133610921086976,
+            "call_index": 1,
+            "name": "q4",
+            "nbytes": 737280,
+            "offset_bytes": 0,
+            "slot": 1,
+            "va": 133610921086976,
+            "va_matches_base_offset": true
+          },
+          {
+            "base_nbytes": 131072,
+            "base_va": 133610920955904,
+            "call_index": 2,
+            "name": "q8_values",
+            "nbytes": 131072,
+            "offset_bytes": 0,
+            "slot": 2,
+            "va": 133610920955904,
+            "va_matches_base_offset": true
+          },
+          {
+            "base_nbytes": 16384,
+            "base_va": 133611654295552,
+            "call_index": 3,
+            "name": "q8_scales",
+            "nbytes": 16384,
+            "offset_bytes": 0,
+            "slot": 3,
+            "va": 133611654295552,
+            "va_matches_base_offset": true
+          },
+          {
+            "base_nbytes": 16384,
+            "base_va": 133611652497408,
+            "call_index": 4,
+            "name": "q8_original_sums",
+            "nbytes": 16384,
+            "offset_bytes": 0,
+            "slot": 4,
+            "va": 133611652497408,
+            "va_matches_base_offset": true
+          }
+        ],
+        "epoch": 0,
+        "global_size": [
+          40,
+          4,
+          1
+        ],
+        "kernarg": {
+          "bound_pointer_words": [
+            133610455695360,
+            133610921086976,
+            133610920955904,
+            133611654295552,
+            133611652497408
+          ],
+          "pointer_words": [
+            133610455695360,
+            133610921086976,
+            133610920955904,
+            133611654295552,
+            133611652497408
+          ],
+          "pointer_words_match_bound": true,
+          "size": 40,
+          "va": 133610552164352
+        },
+        "local_size": [
+          256,
+          1,
+          1
+        ],
+        "n0": 0,
+        "n1": 5120,
+        "tile_count": 40
+      },
+      {
+        "arguments": [
+          {
+            "base_nbytes": 10485760,
+            "base_va": 133610455695360,
+            "call_index": 0,
+            "name": "output",
+            "nbytes": 10485760,
+            "offset_bytes": 0,
+            "slot": 0,
+            "va": 133610455695360,
+            "va_matches_base_offset": true
+          },
+          {
+            "base_nbytes": 737280,
+            "base_va": 133610921086976,
+            "call_index": 1,
+            "name": "q4",
+            "nbytes": 737280,
+            "offset_bytes": 0,
+            "slot": 1,
+            "va": 133610921086976,
+            "va_matches_base_offset": true
+          },
+          {
+            "base_nbytes": 131072,
+            "base_va": 133610920955904,
+            "call_index": 2,
+            "name": "q8_values",
+            "nbytes": 131072,
+            "offset_bytes": 0,
+            "slot": 2,
+            "va": 133610920955904,
+            "va_matches_base_offset": true
+          },
+          {
+            "base_nbytes": 16384,
+            "base_va": 133611654295552,
+            "call_index": 3,
+            "name": "q8_scales",
+            "nbytes": 16384,
+            "offset_bytes": 0,
+            "slot": 3,
+            "va": 133611654295552,
+            "va_matches_base_offset": true
+          },
+          {
+            "base_nbytes": 16384,
+            "base_va": 133611652497408,
+            "call_index": 4,
+            "name": "q8_original_sums",
+            "nbytes": 16384,
+            "offset_bytes": 0,
+            "slot": 4,
+            "va": 133611652497408,
+            "va_matches_base_offset": true
+          }
+        ],
+        "epoch": 1,
+        "global_size": [
+          40,
+          4,
+          1
+        ],
+        "kernarg": {
+          "bound_pointer_words": [
+            133610455695360,
+            133610921086976,
+            133610920955904,
+            133611654295552,
+            133611652497408
+          ],
+          "pointer_words": [
+            133610455695360,
+            133610921086976,
+            133610920955904,
+            133611654295552,
+            133611652497408
+          ],
+          "pointer_words_match_bound": true,
+          "size": 40,
+          "va": 133610552164392
+        },
+        "local_size": [
+          256,
+          1,
+          1
+        ],
+        "n0": 0,
+        "n1": 5120,
+        "tile_count": 40
+      },
+      {
+        "arguments": [
+          {
+            "base_nbytes": 10485760,
+            "base_va": 133610455695360,
+            "call_index": 0,
+            "name": "output",
+            "nbytes": 10485760,
+            "offset_bytes": 0,
+            "slot": 0,
+            "va": 133610455695360,
+            "va_matches_base_offset": true
+          },
+          {
+            "base_nbytes": 737280,
+            "base_va": 133610921086976,
+            "call_index": 1,
+            "name": "q4",
+            "nbytes": 737280,
+            "offset_bytes": 0,
+            "slot": 1,
+            "va": 133610921086976,
+            "va_matches_base_offset": true
+          },
+          {
+            "base_nbytes": 131072,
+            "base_va": 133610920955904,
+            "call_index": 2,
+            "name": "q8_values",
+            "nbytes": 131072,
+            "offset_bytes": 0,
+            "slot": 2,
+            "va": 133610920955904,
+            "va_matches_base_offset": true
+          },
+          {
+            "base_nbytes": 16384,
+            "base_va": 133611654295552,
+            "call_index": 3,
+            "name": "q8_scales",
+            "nbytes": 16384,
+            "offset_bytes": 0,
+            "slot": 3,
+            "va": 133611654295552,
+            "va_matches_base_offset": true
+          },
+          {
+            "base_nbytes": 16384,
+            "base_va": 133611652497408,
+            "call_index": 4,
+            "name": "q8_original_sums",
+            "nbytes": 16384,
+            "offset_bytes": 0,
+            "slot": 4,
+            "va": 133611652497408,
+            "va_matches_base_offset": true
+          }
+        ],
+        "epoch": 2,
+        "global_size": [
+          40,
+          4,
+          1
+        ],
+        "kernarg": {
+          "bound_pointer_words": [
+            133610455695360,
+            133610921086976,
+            133610920955904,
+            133611654295552,
+            133611652497408
+          ],
+          "pointer_words": [
+            133610455695360,
+            133610921086976,
+            133610920955904,
+            133611654295552,
+            133611652497408
+          ],
+          "pointer_words_match_bound": true,
+          "size": 40,
+          "va": 133610552164432
+        },
+        "local_size": [
+          256,
+          1,
+          1
+        ],
+        "n0": 0,
+        "n1": 5120,
+        "tile_count": 40
+      }
+    ],
+    "lib_nbytes": 77824,
+    "lib_va": 133610920878080,
+    "program_va": 133610920878336,
+    "queue_class": "tinygrad.runtime.ops_amd.AMDComputeQueue",
+    "queue_mode": "PM4",
+    "runtime_class": "tinygrad.runtime.ops_amd.AMDProgram"
+  },
+  "same_session_timing": true,
+  "schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1",
+  "shape": [
+    512,
+    5120,
+    17408
+  ],
+  "status": "PASS",
+  "timing": {
+    "accumulation": "target_in_place_fp32_add",
+    "epoch_checks": [],
+    "epoch_staging": {
+      "bytes_per_epoch": 868352,
+      "fixed_va": true,
+      "mode": "all_inputs_fixed_va_gpu_sdma",
+      "per_epoch_vas": [
+        {
+          "epoch": 0,
+          "source_q4_va": 133610476863488,
+          "source_values_va": 133610467950592,
+          "stage_q4_va": 133610921086976,
+          "stage_values_va": 133610920955904
+        },
+        {
+          "epoch": 1,
+          "source_q4_va": 133610477600768,
+          "source_values_va": 133610468081664,
+          "stage_q4_va": 133610921086976,
+          "stage_values_va": 133610920955904
+        },
+        {
+          "epoch": 2,
+          "source_q4_va": 133610478338048,
+          "source_values_va": 133610468212736,
+          "stage_q4_va": 133610921086976,
+          "stage_values_va": 133610920955904
+        }
+      ],
+      "source_preloaded": true,
+      "transfer": "gpu_sdma"
+    },
+    "k_epoch_launches": 3,
+    "median_ms": 12.697830039542168,
+    "metadata_staging": {
+      "fixed_va": true,
+      "mode": "fixed_va_gpu_sdma",
+      "per_epoch_vas": [
+        {
+          "epoch": 0,
+          "source_scales_va": 133610905309184,
+          "source_sums_va": 133610716135424,
+          "stage_scales_va": 133611654295552,
+          "stage_sums_va": 133611652497408
+        },
+        {
+          "epoch": 1,
+          "source_scales_va": 133610905325568,
+          "source_sums_va": 133610716151808,
+          "stage_scales_va": 133611654295552,
+          "stage_sums_va": 133611652497408
+        },
+        {
+          "epoch": 2,
+          "source_scales_va": 133610905341952,
+          "source_sums_va": 133610716168192,
+          "stage_scales_va": 133611654295552,
+          "stage_sums_va": 133611652497408
+        }
+      ],
+      "source_preloaded": true,
+      "transfer": "gpu_sdma"
+    },
+    "min_ms": 12.697830039542168,
+    "n_chunk_tiles": 40,
+    "persistent_buffers": true,
+    "preloaded_epochs": true,
+    "samples_ms": [
+      12.697830039542168
+    ],
+    "stable_epoch_staging": true,
+    "stable_metadata_staging": true,
+    "sync_each_epoch": false,
+    "total_k_epoch_launches": 68
+  }
+}

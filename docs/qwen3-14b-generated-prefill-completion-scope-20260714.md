@@ -30,7 +30,7 @@ promotion is enabled.
 
 | Phase | Current state | Remaining gate |
 |---|---|---|
-| 3 — Q4_K role completion | Incomplete. `ffn_gate_up` is evidence-qualified. Exact frozen `attn_kv` and shared-N5120 PROGRAM artifacts now exist; fresh-process `attn_kv` epochs 0, 1, and 2 each pass, but both PM4 and AQL fault entering the third same-process dispatch. | Resolve or safely contain the repeated-dispatch lifecycle blocker, then complete full-role correctness/resource/health/timing for `attn_kv`, `attn_qo`, and Q4 `ffn_down`. Fresh single-epoch passes are diagnostic, not role qualification. |
+| 3 — Q4_K role completion | Complete for the retained research policy. All four generated roles have full-role correctness/resource/health measurements. `ffn_gate_up` remains selected; `attn_kv`, `attn_qo`, and Q4 `ffn_down` are measured direct-packed fallbacks because their generated cold isolated samples do not beat the retained baselines. | Proceed to Phase 6. Reopen a rejected generated role only if exact whole-policy attribution shows that its fallback blocks the target. |
 | 4 — Q6_K role completion | Complete for the declared fallback strategy. Both exact direct-packed Q6 rows (`attn_kv` and `ffn_down`) are qualified and timed under the retained policy contract. | No generated Q6 route is required unless measured whole-policy attribution shows the qualified fallbacks miss the target. |
 | 5 — Central candidate policy | Complete at the default-off research boundary. The immutable six-row policy, host selector, exact frozen candidate/fallback binding, fail-closed unknown/drift handling, and actual execution-census surface are implemented. `production_promotion=false`. | Exercise the retained policy in Phase 6. The implemented census surface is not a substitute for a successful whole-model live census. |
 | 6 — Mixed-route 14B integration | Not complete. The live research route remains explicit/default-off; no production route changed. | The exact policy must execute manually end to end with admission, isolated compile/resource evidence, role and model correctness, genuine execution census, memory reconciliation, GPU health, decode regression, and one-change direct-packed rollback. |
@@ -95,7 +95,64 @@ Anything less is a diagnostic or candidate result, not a shipped 14B completion.
 
 ## Current position
 
-### 2026-07-18 reconciled research-policy and `attn_kv` checkpoint
+### 2026-07-18 Phase 3 all-Q4 role closeout
+
+The `attn_kv` Q4 row is resolved as a measured fallback; it is not a generated-candidate promotion.
+`docs/qwen3-14b-prefill-attn-kv-role-closeout-20260718.json` composes the exact five retained raw artifacts:
+
+- Commit `d3c605890` stages Q4, Q8 values, scales, and sums through fixed VAs. The resulting PM4 prefix-3 and full-20
+  runs pass.
+- The pre-fix AQL prefix-3 failure is retained as evidence. Its log proves an SQ memory violation plus gfxhub
+  page-fault/MES-removal/reset sequence; it does not prove an instruction-page or instruction-fetch fault.
+- Commit `6216e9e4e` publishes AQL packet headers last. Post-fix AQL prefix-3 and full-20 runs pass.
+- Both full-20 modes use the exact frozen PROGRAM, 20 in-place accumulation launches, fixed-VA GPU-SDMA staging for
+  all inputs, no intermediate readback/external add/recompile/fallback, `VGPR=256`, `LDS=57,856 B`, and
+  `scratch=0`. Each checks all 524,288 final values with zero mismatches, maximum absolute error
+  `0.002685546875`, clean fault windows, and healthy pre/post canaries.
+
+The performance result is deliberately weaker than the correctness result. Each full-20 timing is one cold isolated
+sample: AQL `19.601495820097625 ms`, PM4 `74.58446017699316 ms`. Neither beats the retained direct-packed
+`attn_kv` baseline of `7.89 ms`. These are not matched, warmed, repeated, or statistical timing claims. They are
+sufficient only for the fail-closed decision to reject this generated candidate and retain the existing immutable
+policy row:
+
+```text
+attn_kv_q4_generated_candidate=REJECTED
+attn_kv_q4_selected_route=direct_packed
+attn_kv_q4_policy_row_changed=false
+production_promotion=false
+```
+
+The shared N5120 PROGRAM then closes the other two Q4 roles:
+
+- `attn_qo` PM4 prefixes 1 and 3 and the full 20 epochs pass. The full run checks 2,621,440 values with zero
+  mismatches, maximum absolute error `0.00341796875`, clean kernel logs, healthy pre/post canaries, and the same
+  `VGPR=256`, `LDS=57,856 B`, zero-scratch resources. Its only generated full-role timing is one cold isolated sample
+  at `76.49636000860482 ms`, slower than the retained `11.41 ms` direct-packed baseline.
+- Q4 `ffn_down` reuses the exact N5120 PROGRAM binary while retaining the `attn_qo` donor fixture separately and
+  validating a distinct 68-epoch execution fixture. PM4 prefixes 1 and 3 and the full 68 epochs pass. The full run
+  checks 2,621,440 values with zero mismatches; maximum absolute error `0.01123046875` is within the declared
+  tolerance, kernel logs are clean, pre/post canaries pass, and resources remain unchanged. Its only generated
+  full-role timing is one cold isolated sample at `114.26727805519477 ms`, slower than the retained `11.76 ms`
+  direct-packed baseline.
+
+These samples are rejection evidence, not matched/statistical performance authority. The immutable policy already
+selects direct packed for both roles, so it does not change. The compact composition
+`docs/qwen3-14b-prefill-q4-role-closeout-20260718.json` records all four Q4 decisions and exact evidence hashes.
+
+```text
+phase_3_complete=true
+selected_generated_roles=ffn_gate_up
+measured_direct_packed_fallbacks=attn_kv,attn_qo,ffn_down
+production_promotion=false
+```
+
+The next owning work is Phase 6 mixed-route 14B integration, not more Phase 3 role qualification.
+
+### Historical 2026-07-18 reconciled research-policy and `attn_kv` checkpoint
+
+This checkpoint predates the fixed-all-input-VA PM4 passes, AQL header-last publication fix, full-20 AQL pass, and
+measured fallback decision above.
 
 Phase 4 and the research implementation portion of Phase 5 are now complete:
 
@@ -110,7 +167,7 @@ Phase 4 and the research implementation portion of Phase 5 are now complete:
   binding validates PROGRAM ABI/grid/key/source/binary identity and keeps donor artifact fixtures distinct from
   execution-role fixtures.
 
-Phase 3 remains open. `docs/qwen3-14b-prefill-attn-kv-fresh-epoch-isolation-20260718.json` retains the compact
+At this checkpoint Phase 3 remained open. `docs/qwen3-14b-prefill-attn-kv-fresh-epoch-isolation-20260718.json` retains the compact
 fresh-process result: PM4 epochs 0, 1, and 2 each pass one isolated target dispatch with zero mismatches, clean fault
 windows, and healthy pre/post canaries. This rules out a deterministic bad epoch or bad epoch offset for those three
 epochs. It does not prove repeated dispatch. In

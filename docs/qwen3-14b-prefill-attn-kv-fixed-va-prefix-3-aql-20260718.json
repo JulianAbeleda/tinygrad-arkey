@@ -1,0 +1,532 @@
+{
+  "accumulation": "target_in_place_fp32_add",
+  "artifacts": {
+    "accumulation": "target_in_place_fp32_add",
+    "backend_id": "q4k_q8_1_mmq_amd_isa_full_grid_v0",
+    "binary_nbytes": 77399,
+    "binary_sha256": "399a2edb0fa953f756349f3c81f46dca9f6ee3905d992644a8f272fcc95d942f",
+    "compile_performed": false,
+    "distinct_binary_identity": true,
+    "frozen_bundle": {
+      "artifact_fixture_equals_execution_fixture": true,
+      "artifact_fixture_schema": "tinygrad.mmq_q4k_q8_1_target_fixture.v1",
+      "artifact_fixture_sha256": "43ebde16be8bfe5640f1c43f8ecb82d6617a519d760a79364ddb019dde503a60",
+      "artifact_full_role_shape": [
+        512,
+        1024,
+        5120
+      ],
+      "artifact_role": "attn_kv",
+      "compile_performed": false,
+      "execution_fixture_canonical_sha256": "ace7b1ea5b0c6e40d6ca6a89e07bcc542808aad9cb07eeda968b406394836d2f",
+      "execution_fixture_schema": "tinygrad.mmq_q4k_q8_1_target_fixture.v1",
+      "execution_full_role_shape": [
+        512,
+        1024,
+        5120
+      ],
+      "execution_role": "attn_kv",
+      "fixture_relationship": "same_role_exact_fixture",
+      "fixture_schema": "tinygrad.mmq_q4k_q8_1_target_fixture.v1",
+      "fixture_sha256": "43ebde16be8bfe5640f1c43f8ecb82d6617a519d760a79364ddb019dde503a60",
+      "manifest_schema": "tinygrad.mmq_q4k_q8_1.frozen_target_artifact.v1",
+      "path": "/home/ubuntu/tinygrad-arkey/docs/artifacts/qwen3-14b-prefill-attn-kv-frozen-20260718",
+      "program_grid": [
+        8,
+        4,
+        1
+      ],
+      "program_key": "d6f891d8e75be25990890bae6788c455690c7b021d3a5bac323eb540f00e0e0d",
+      "program_shape": [
+        512,
+        1024,
+        256
+      ],
+      "relationship": "same_role_exact_fixture",
+      "requires_recompile": false,
+      "serialized_program_sha256": "030a26144d46fe27efcfe92fb85c26f1edc28eee35fdf1136cf8800434030ea3",
+      "shared_program_geometry": true,
+      "state": "FROZEN"
+    },
+    "no_fallback": true,
+    "requires_recompile": false,
+    "resources": {
+      "authority": "native_elf_descriptor",
+      "compute_pgm_rsrc1": 1085014047,
+      "compute_pgm_rsrc2": 388,
+      "compute_pgm_rsrc3": 0,
+      "kernarg_bytes": 40,
+      "kernel_code_entry_byte_offset": -76864,
+      "lds_bytes": 57856,
+      "scratch_bytes": 0,
+      "sgpr": null,
+      "vgpr": 256,
+      "wavefront_size": 32
+    },
+    "resources_error": "CalledProcessError: Command '('/opt/rocm/llvm/bin/llvm-readelf', '--notes', '/tmp/tmp2uvnvzq1.hsaco')' returned non-zero exit status 1.",
+    "source_nbytes": 485514,
+    "source_sha256": "050a2fcecabf2c8562439f5bdff8c4e3e4b545d1806ba3232ae0d308568df80f"
+  },
+  "bounded_only": true,
+  "child_env_overrides": {
+    "AMD_AQL": "1"
+  },
+  "compile_performed": false,
+  "completed_epochs": 2,
+  "default_route": "direct_packed",
+  "epoch_checks": [],
+  "epoch_staging": {
+    "bytes_per_epoch": 278528,
+    "fixed_va": true,
+    "mode": "all_inputs_fixed_va_gpu_sdma",
+    "per_epoch_vas": [
+      {
+        "epoch": 0,
+        "source_q4_va": 126424508989440,
+        "source_values_va": 126424506368000,
+        "stage_q4_va": 126424776941568,
+        "stage_values_va": 126424762204160
+      },
+      {
+        "epoch": 1,
+        "source_q4_va": 126424509136896,
+        "source_values_va": 126424506499072,
+        "stage_q4_va": 126424776941568,
+        "stage_values_va": 126424762204160
+      },
+      {
+        "epoch": 2,
+        "source_q4_va": 126424509284352,
+        "source_values_va": 126424506630144,
+        "stage_q4_va": 126424776941568,
+        "stage_values_va": 126424762204160
+      }
+    ],
+    "source_preloaded": true,
+    "transfer": "gpu_sdma"
+  },
+  "error": "",
+  "exact_blocker": "AMD kernel fault/reset marker observed",
+  "exception": "RuntimeError",
+  "execution_fixture": {
+    "repack": {
+      "q4_epoch_major_dtype": "uint32",
+      "q4_epoch_major_elements": 737280,
+      "q4_epoch_major_layout": "q4_k_bytes[k_epoch, n, 144]",
+      "q4_epoch_major_sha256": "6a1c40b009fdda36f0e780e17fc667a60fc53186c2ed0d5d598a3ee7d70aa454",
+      "q4_layout": "q4_k_bytes[n, k_epoch, 144]",
+      "q4_sha256": "ec21d06acdfdcc92fa8a4cb5a6b985234d8067e27fe3f2cba24c097cac98e51d",
+      "q8_layout": "q8_ds4[epoch, m, groups]",
+      "q8_scales_sha256": "ce542cb5c0c77c5dbdaa1c44753e16815f9ac66b82458022179dc0b56f614211",
+      "q8_sums_sha256": "c6755f8eb0e77c62ace4bd94f7a908ad0a5d01d21a87febc7954200c63d53aad",
+      "q8_values_sha256": "b4ba6549584528a1281d4fe6e521a50722987fb36cd7e8154b8d5f9eb44f246c"
+    },
+    "role": "attn_kv",
+    "schema": "tinygrad.mmq_q4k_q8_1_target_fixture.v1",
+    "seeds": {
+      "q4": 20260721,
+      "q8_source": 20260722
+    },
+    "shape": [
+      512,
+      1024,
+      5120
+    ],
+    "source_sha256": "15f53a5325a5cca16e9b6ba050af4250fbd59d3673a59ee0124b045b2842c717",
+    "total_epochs": 20
+  },
+  "fixture_roles": {
+    "artifact_fixture_equals_execution_fixture": true,
+    "artifact_full_role_shape": [
+      512,
+      1024,
+      5120
+    ],
+    "artifact_role": "attn_kv",
+    "execution_fixture_canonical_sha256": "ace7b1ea5b0c6e40d6ca6a89e07bcc542808aad9cb07eeda968b406394836d2f",
+    "execution_fixture_schema": "tinygrad.mmq_q4k_q8_1_target_fixture.v1",
+    "execution_full_role_shape": [
+      512,
+      1024,
+      5120
+    ],
+    "execution_role": "attn_kv",
+    "relationship": "same_role_exact_fixture"
+  },
+  "health_after": true,
+  "health_before": true,
+  "health_mode": {
+    "after": true,
+    "amd_aql_env": "1",
+    "before": true
+  },
+  "kernel_faults": [
+    "[494749.985600] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: sq_intr: error, detail 0x00000000, type 2, sh 1, priv 1, wave_id 3, simd_id 0, wgp_id 0",
+    "[494749.985608] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: sq_intr: error, detail 0x00000000, type 2, sh 1, priv 1, wave_id 3, simd_id 0, wgp_id 0",
+    "[494749.985611] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: sq_intr: error, detail 0x00000000, type 2, sh 1, priv 1, wave_id 3, simd_id 0, wgp_id 0",
+    "[494780.413533] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: sq_intr: error, detail 0x00000000, type 2, sh 1, priv 1, wave_id 3, simd_id 0, wgp_id 0",
+    "[494780.413541] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: [gfxhub] page fault (src_id:0 ring:88 vmid:8 pasid:32774)",
+    "[494782.413659] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: MES failed to respond to msg=REMOVE_QUEUE",
+    "[494782.413666] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: MES might be in unrecoverable state, issue a GPU reset",
+    "[494782.413685] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: GPU reset begin!. Source:  3"
+  ],
+  "metadata_staging": {
+    "fixed_va": true,
+    "mode": "fixed_va_gpu_sdma",
+    "per_epoch_vas": [
+      {
+        "epoch": 0,
+        "source_scales_va": 126424777416704,
+        "source_sums_va": 126424777089024,
+        "stage_scales_va": 126425490628608,
+        "stage_sums_va": 126425460645888
+      },
+      {
+        "epoch": 1,
+        "source_scales_va": 126424777433088,
+        "source_sums_va": 126424777105408,
+        "stage_scales_va": 126425490628608,
+        "stage_sums_va": 126425460645888
+      },
+      {
+        "epoch": 2,
+        "source_scales_va": 126424777449472,
+        "source_sums_va": 126424777121792,
+        "stage_scales_va": 126425490628608,
+        "stage_sums_va": 126425460645888
+      }
+    ],
+    "source_preloaded": true,
+    "transfer": "gpu_sdma"
+  },
+  "mode_health_after": true,
+  "mode_health_before": true,
+  "production_dispatch_changed": false,
+  "reduction": {
+    "owned_components": [
+      "cooperative tile loop",
+      "Q4_K tile_x staging",
+      "Q8_1 tile_y two-panel lifecycle"
+    ],
+    "source_anchors": [
+      "mmq.cuh:mul_mat_q_process_tile",
+      "mmq.cuh:load_tiles_q4_K"
+    ],
+    "source_revision": "ac4cddeb0dbd778f650bf568f6f08344a06abe3a"
+  },
+  "repack": {
+    "q4_epoch_major_dtype": "uint32",
+    "q4_epoch_major_elements": 737280,
+    "q4_epoch_major_layout": "q4_k_bytes[k_epoch, n, 144]",
+    "q4_epoch_major_sha256": "6a1c40b009fdda36f0e780e17fc667a60fc53186c2ed0d5d598a3ee7d70aa454",
+    "q4_layout": "q4_k_bytes[n, k_epoch, 144]",
+    "q4_sha256": "ec21d06acdfdcc92fa8a4cb5a6b985234d8067e27fe3f2cba24c097cac98e51d",
+    "q8_layout": "q8_ds4[epoch, m, groups]",
+    "q8_scales_sha256": "ce542cb5c0c77c5dbdaa1c44753e16815f9ac66b82458022179dc0b56f614211",
+    "q8_sums_sha256": "c6755f8eb0e77c62ace4bd94f7a908ad0a5d01d21a87febc7954200c63d53aad",
+    "q8_values_sha256": "b4ba6549584528a1281d4fe6e521a50722987fb36cd7e8154b8d5f9eb44f246c"
+  },
+  "requires_recompile": false,
+  "role": "attn_kv",
+  "runtime_evidence": {
+    "amd_aql_effective": true,
+    "amd_aql_env": "1",
+    "binary_sha256": "399a2edb0fa953f756349f3c81f46dca9f6ee3905d992644a8f272fcc95d942f",
+    "descriptor_va": 126424776940864,
+    "entry_va": 126424776864000,
+    "external_accumulation_add": false,
+    "intermediate_readback": false,
+    "launch_count": 3,
+    "launches": [
+      {
+        "arguments": [
+          {
+            "base_nbytes": 2097152,
+            "base_va": 126424503549952,
+            "call_index": 0,
+            "name": "output",
+            "nbytes": 2097152,
+            "offset_bytes": 0,
+            "slot": 0,
+            "va": 126424503549952,
+            "va_matches_base_offset": true
+          },
+          {
+            "base_nbytes": 147456,
+            "base_va": 126424776941568,
+            "call_index": 1,
+            "name": "q4",
+            "nbytes": 147456,
+            "offset_bytes": 0,
+            "slot": 1,
+            "va": 126424776941568,
+            "va_matches_base_offset": true
+          },
+          {
+            "base_nbytes": 131072,
+            "base_va": 126424762204160,
+            "call_index": 2,
+            "name": "q8_values",
+            "nbytes": 131072,
+            "offset_bytes": 0,
+            "slot": 2,
+            "va": 126424762204160,
+            "va_matches_base_offset": true
+          },
+          {
+            "base_nbytes": 16384,
+            "base_va": 126425490628608,
+            "call_index": 3,
+            "name": "q8_scales",
+            "nbytes": 16384,
+            "offset_bytes": 0,
+            "slot": 3,
+            "va": 126425490628608,
+            "va_matches_base_offset": true
+          },
+          {
+            "base_nbytes": 16384,
+            "base_va": 126425460645888,
+            "call_index": 4,
+            "name": "q8_original_sums",
+            "nbytes": 16384,
+            "offset_bytes": 0,
+            "slot": 4,
+            "va": 126425460645888,
+            "va_matches_base_offset": true
+          }
+        ],
+        "epoch": 0,
+        "global_size": [
+          8,
+          4,
+          1
+        ],
+        "kernarg": {
+          "bound_pointer_words": [
+            126424503549952,
+            126424776941568,
+            126424762204160,
+            126425490628608,
+            126425460645888
+          ],
+          "pointer_words": [
+            126424503549952,
+            126424776941568,
+            126424762204160,
+            126425490628608,
+            126425460645888
+          ],
+          "pointer_words_match_bound": true,
+          "size": 40,
+          "va": 126424537104384
+        },
+        "local_size": [
+          256,
+          1,
+          1
+        ],
+        "n0": 0,
+        "n1": 1024,
+        "tile_count": 8
+      },
+      {
+        "arguments": [
+          {
+            "base_nbytes": 2097152,
+            "base_va": 126424503549952,
+            "call_index": 0,
+            "name": "output",
+            "nbytes": 2097152,
+            "offset_bytes": 0,
+            "slot": 0,
+            "va": 126424503549952,
+            "va_matches_base_offset": true
+          },
+          {
+            "base_nbytes": 147456,
+            "base_va": 126424776941568,
+            "call_index": 1,
+            "name": "q4",
+            "nbytes": 147456,
+            "offset_bytes": 0,
+            "slot": 1,
+            "va": 126424776941568,
+            "va_matches_base_offset": true
+          },
+          {
+            "base_nbytes": 131072,
+            "base_va": 126424762204160,
+            "call_index": 2,
+            "name": "q8_values",
+            "nbytes": 131072,
+            "offset_bytes": 0,
+            "slot": 2,
+            "va": 126424762204160,
+            "va_matches_base_offset": true
+          },
+          {
+            "base_nbytes": 16384,
+            "base_va": 126425490628608,
+            "call_index": 3,
+            "name": "q8_scales",
+            "nbytes": 16384,
+            "offset_bytes": 0,
+            "slot": 3,
+            "va": 126425490628608,
+            "va_matches_base_offset": true
+          },
+          {
+            "base_nbytes": 16384,
+            "base_va": 126425460645888,
+            "call_index": 4,
+            "name": "q8_original_sums",
+            "nbytes": 16384,
+            "offset_bytes": 0,
+            "slot": 4,
+            "va": 126425460645888,
+            "va_matches_base_offset": true
+          }
+        ],
+        "epoch": 1,
+        "global_size": [
+          8,
+          4,
+          1
+        ],
+        "kernarg": {
+          "bound_pointer_words": [
+            126424503549952,
+            126424776941568,
+            126424762204160,
+            126425490628608,
+            126425460645888
+          ],
+          "pointer_words": [
+            126424503549952,
+            126424776941568,
+            126424762204160,
+            126425490628608,
+            126425460645888
+          ],
+          "pointer_words_match_bound": true,
+          "size": 40,
+          "va": 126424537104424
+        },
+        "local_size": [
+          256,
+          1,
+          1
+        ],
+        "n0": 0,
+        "n1": 1024,
+        "tile_count": 8
+      },
+      {
+        "arguments": [
+          {
+            "base_nbytes": 2097152,
+            "base_va": 126424503549952,
+            "call_index": 0,
+            "name": "output",
+            "nbytes": 2097152,
+            "offset_bytes": 0,
+            "slot": 0,
+            "va": 126424503549952,
+            "va_matches_base_offset": true
+          },
+          {
+            "base_nbytes": 147456,
+            "base_va": 126424776941568,
+            "call_index": 1,
+            "name": "q4",
+            "nbytes": 147456,
+            "offset_bytes": 0,
+            "slot": 1,
+            "va": 126424776941568,
+            "va_matches_base_offset": true
+          },
+          {
+            "base_nbytes": 131072,
+            "base_va": 126424762204160,
+            "call_index": 2,
+            "name": "q8_values",
+            "nbytes": 131072,
+            "offset_bytes": 0,
+            "slot": 2,
+            "va": 126424762204160,
+            "va_matches_base_offset": true
+          },
+          {
+            "base_nbytes": 16384,
+            "base_va": 126425490628608,
+            "call_index": 3,
+            "name": "q8_scales",
+            "nbytes": 16384,
+            "offset_bytes": 0,
+            "slot": 3,
+            "va": 126425490628608,
+            "va_matches_base_offset": true
+          },
+          {
+            "base_nbytes": 16384,
+            "base_va": 126425460645888,
+            "call_index": 4,
+            "name": "q8_original_sums",
+            "nbytes": 16384,
+            "offset_bytes": 0,
+            "slot": 4,
+            "va": 126425460645888,
+            "va_matches_base_offset": true
+          }
+        ],
+        "epoch": 2,
+        "global_size": [
+          8,
+          4,
+          1
+        ],
+        "kernarg": {
+          "bound_pointer_words": [
+            126424503549952,
+            126424776941568,
+            126424762204160,
+            126425490628608,
+            126425460645888
+          ],
+          "pointer_words": [
+            126424503549952,
+            126424776941568,
+            126424762204160,
+            126425490628608,
+            126425460645888
+          ],
+          "pointer_words_match_bound": true,
+          "size": 40,
+          "va": 126424537104464
+        },
+        "local_size": [
+          256,
+          1,
+          1
+        ],
+        "n0": 0,
+        "n1": 1024,
+        "tile_count": 8
+      }
+    ],
+    "lib_nbytes": 77824,
+    "lib_va": 126424776863744,
+    "program_va": 126424776864000,
+    "queue_class": "tinygrad.runtime.ops_amd.AMDComputeAQLQueue",
+    "queue_mode": "AQL",
+    "runtime_class": "tinygrad.runtime.ops_amd.AMDProgram"
+  },
+  "schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1",
+  "shape": [
+    512,
+    1024,
+    5120
+  ],
+  "status": "BLOCKED"
+}
