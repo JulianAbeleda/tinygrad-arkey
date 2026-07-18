@@ -562,6 +562,14 @@ byte-identical to `q4_blocks[:,epoch,:]`. This explains the earlier massive mism
 preloaded-input path. The driver fault still needs a clean retest after the corrected layout; the old fault artifact
 must not be treated as evidence against the corrected adapter.
 
+The corrected exact-buffer runtime-init canary also passes without invoking the target kernel. It preloads the full
+epoch-major Q4 and Q8 buffers plus the device-zero accumulator, reaching timeline signal 30; constructs/uploads the
+exact target PROGRAM, reaching signal 31; and runs only a tiny health add, reaching signal 36. The child and
+independent postflight health probe pass, with no kernel-log fault. Evidence is
+`docs/target-preloaded-runtime-init-canary-20260718.json`. This rules out the corrected bulk input layout,
+allocation/copy, accumulator initialization, and target code upload. The next boundary is one full-N target launch
+from a corrected epoch view, followed by its independent epoch oracle comparison.
+
 ## 1. Executive state
 
 The project is building a generated tinygrad prefill route for non-fitting quantized models, using Qwen3-14B as the
