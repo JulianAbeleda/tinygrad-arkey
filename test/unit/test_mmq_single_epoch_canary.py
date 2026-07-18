@@ -20,6 +20,7 @@ def _child_pass():
 def _runner_pass(callback, *, args=(), timeout_seconds=0, start_method=None, **kwargs):
   assert callback is canary._run_epoch_worker
   assert Path(args[0]).name == "target.pkl" and args[1:3] == (0, 1)
+  assert args[5] is False
   assert start_method == "spawn" and timeout_seconds > 0
   return IsolatedResult("passed", _child_pass())
 
@@ -62,6 +63,21 @@ def test_same_process_prefix_passes_range_and_dispatch_count_to_child():
   assert out["status"] == "PASS" and out["epoch_start"] == 2 and out["epoch_count"] == 3
   assert out["target_dispatches"] == 3
   assert calls == [(2, 3)]
+
+
+def test_fresh_output_mode_is_forwarded_and_marked():
+  calls: list[bool] = []
+  def runner(callback, *, args=(), **kwargs):
+    calls.append(bool(args[5]))
+    return IsolatedResult("passed", {"passed": True, "comparison": {"status": "pass"}, "target_dispatches": 2,
+                                     "output_mode": "fresh_held", "output_count": 2})
+  out = canary.run_single_epoch_canary(
+    epoch_start=0, epoch_count=2, fresh_output_each_launch=True, compile_fn=_compile,
+    runner=runner, fault_reader=lambda _: "", health_probe=lambda: True,
+  )
+  assert out["status"] == "PASS" and out["output_mode"] == "fresh_held"
+  assert out["fresh_output_each_launch"] is True and out["target_dispatches"] == 2
+  assert calls == [True]
 
 
 def test_timeout_fails_closed_without_health_retry():

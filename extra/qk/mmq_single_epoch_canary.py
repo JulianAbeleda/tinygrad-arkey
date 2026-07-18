@@ -87,7 +87,8 @@ def _buffer_record(name: str, tensor: Any, device: str) -> dict[str, Any]:
 
 
 def _run_epoch_worker(program_path: str, epoch_start: int, epoch_count: int = 1, device: str = DEVICE,
-                      runtime_timeout_ms: int = DEFAULT_RUNTIME_TIMEOUT_MS) -> dict[str, Any]:
+                      runtime_timeout_ms: int = DEFAULT_RUNTIME_TIMEOUT_MS,
+                      fresh_output_each_launch: bool = False) -> dict[str, Any]:
   """Child-only persistent-preload target prefix and final oracle comparison."""
   from tinygrad import Tensor, dtypes
   from tinygrad.engine.realize import get_runtime
@@ -111,8 +112,11 @@ def _run_epoch_worker(program_path: str, epoch_start: int, epoch_count: int = 1,
   checkpoints: dict[str, dict[str, int | None]] = {"start": _timeline_snapshot(device)}
   # Match strict target harness partial allocation: output is not host-zeroed
   # (the full-N target dispatch writes every element), avoiding an extra SDMA
-  # copy that would obscure the preload/runtime lifecycle.
+  # copy that would obscure the preload/runtime lifecycle. Allocate the first
+  # output in the same order in both modes; fresh mode then retains it and
+  # allocates a new held output only before each subsequent launch.
   output = Tensor.empty(m * n, dtype=dtypes.float32, device=device).realize()
+  held_outputs: list[Any] = [output] if fresh_output_each_launch else []
   q4_tensor = Tensor(q4_packed, dtype=dtypes.uint32, device=device).realize()
   values_tensor = Tensor(values, dtype=dtypes.int8, device=device).realize()
   scales_tensor = Tensor(scales, dtype=dtypes.float32, device=device).realize()
@@ -123,7 +127,10 @@ def _run_epoch_worker(program_path: str, epoch_start: int, epoch_count: int = 1,
   dispatches: list[dict[str, Any]] = []
   gpu_ms_total = 0.0
   completed_epochs: list[int] = []
-  for epoch in range(epoch_start, epoch_start + epoch_count):
+  for ordinal, epoch in enumerate(range(epoch_start, epoch_start + epoch_count)):
+    if fresh_output_each_launch and ordinal:
+      output = Tensor.empty(m * n, dtype=dtypes.float32, device=device).realize()
+      held_outputs.append(output)
     q4_view = q4_tensor.uop.buffer.view(n * 36, dtypes.uint32, epoch * n * 36 * dtypes.uint32.itemsize)
     values_view = values_tensor.uop.buffer.view(2 * m * 128, dtypes.int8,
                                                  epoch * 2 * m * 128 * dtypes.int8.itemsize)
@@ -160,8 +167,12 @@ def _run_epoch_worker(program_path: str, epoch_start: int, epoch_count: int = 1,
           "epoch_start": epoch_start, "epoch_count": epoch_count, "completed_epochs": completed_epochs,
           "shape": [m, n, 256], "comparison": comparison, "gpu_ms": gpu_ms_total,
           "target_dispatches": epoch_count, "dispatches": dispatches,
-          "timeline": checkpoints, "buffers": [_buffer_record("output", output, device),
-            _buffer_record("q4_preloaded", q4_tensor, device), _buffer_record("q8_values", values_tensor, device),
+          "timeline": checkpoints, "output_mode": "fresh_held" if fresh_output_each_launch else "persistent",
+          "output_count": len(held_outputs) if fresh_output_each_launch else 1,
+          "output_buffers": [_buffer_record(f"output_{i}", tensor, device)
+                             for i, tensor in enumerate(held_outputs if fresh_output_each_launch else [output])],
+          "buffers": [_buffer_record("q4_preloaded", q4_tensor, device),
+            _buffer_record("q8_values", values_tensor, device),
             _buffer_record("q8_scales", scales_tensor, device), _buffer_record("q8_sums", sums_tensor, device)],
           "input_hashes": {"q4_epoch_major": _hash_array(q4_packed), "values": _hash_array(values),
                            "scales": _hash_array(scales), "sums": _hash_array(sums)},
@@ -184,6 +195,7 @@ def _default_health_probe() -> bool:
 
 def run_single_epoch_canary(*, epoch: int = DEFAULT_EPOCH, epoch_start: int | None = None,
                             epoch_count: int = 1, output_path: str | Path | None = None,
+                            fresh_output_each_launch: bool = False,
                             compile_fn: Callable[[str | Path], tuple[str, dict[str, Any]]] | None = None,
                             device: str = DEVICE, timeout_seconds: float = DEFAULT_CHILD_TIMEOUT_SECONDS,
                             runtime_timeout_ms: int = DEFAULT_RUNTIME_TIMEOUT_MS,
@@ -202,6 +214,8 @@ def run_single_epoch_canary(*, epoch: int = DEFAULT_EPOCH, epoch_start: int | No
   base: dict[str, Any] = {"schema": SCHEMA, "diagnostic_only": True, "promotion_eligible": False,
     "production_dispatch_changed": False, "no_fallback": True, "target_dispatches": epoch_count,
     "epoch": epoch_start + epoch_count - 1, "epoch_start": epoch_start, "epoch_count": epoch_count,
+    "fresh_output_each_launch": bool(fresh_output_each_launch),
+    "output_mode": "fresh_held" if fresh_output_each_launch else "persistent",
     "kernel_faults": [], "compile": None, "child": None, "health_after": None}
   with tempfile.TemporaryDirectory(prefix="tinygrad-mmq-single-epoch-") as temp_dir:
     try: artifact_path, evidence = compile_fn(temp_dir)
@@ -210,7 +224,8 @@ def run_single_epoch_canary(*, epoch: int = DEFAULT_EPOCH, epoch_start: int | No
                 "exact_blocker": f"parent compile failed: {type(exc).__name__}: {exc}"}
       return _write_result(result, output_path)
     base["compile"] = evidence
-    isolated = runner(_run_epoch_worker, args=(artifact_path, epoch_start, epoch_count, device, runtime_timeout_ms),
+    isolated = runner(_run_epoch_worker, args=(artifact_path, epoch_start, epoch_count, device, runtime_timeout_ms,
+                                               bool(fresh_output_each_launch)),
                       timeout_seconds=float(timeout_seconds), start_method="spawn")
     base["child_status"], base["child_error"] = isolated.status, isolated.error
     if isolated.status == "passed" and isinstance(isolated.result, dict): base["child"] = isolated.result
@@ -252,10 +267,13 @@ def main(argv: list[str] | None = None) -> int:
                       help="legacy alias for --epoch-start when no prefix is requested")
   parser.add_argument("--epoch-start", type=int, default=None)
   parser.add_argument("--epoch-count", type=int, default=1)
+  parser.add_argument("--fresh-output-each-launch", action="store_true",
+                      help="allocate and retain a distinct output for each target launch")
   parser.add_argument("--output", type=Path)
   args = parser.parse_args(argv)
   result = run_single_epoch_canary(epoch=args.epoch, epoch_start=args.epoch_start,
-                                   epoch_count=args.epoch_count, output_path=args.output)
+                                   epoch_count=args.epoch_count, output_path=args.output,
+                                   fresh_output_each_launch=args.fresh_output_each_launch)
   print(json.dumps(result, sort_keys=True))
   return 0 if result.get("passed") else 1
 
