@@ -12,7 +12,8 @@ from extra.qk.mmq_exact_role_spec import exact_role_spec
 from extra.qk.mmq_llama_five_buffer_full_kernel import build_llama_five_buffer_full_kernel
 from extra.qk.mmq_llama_five_buffer_gpu_harness import (TARGET_IN_PLACE_ACCUMULATION, _accumulate_target_role_epoch,
   _bind_sink, _dispatch_with_runtime_evidence, _numeric_comparison, _pack_q4_epochs_contiguous,
-  _random_q4_words, _runtime_identity_evidence, _validate_frozen_fixture, _validated_child_env_overrides,
+  _load_frozen_execution_binding, _random_q4_words, _runtime_identity_evidence,
+  _validate_frozen_execution_fixture, _validate_frozen_fixture, _validated_child_env_overrides,
   _zero_persistent_target_output,
   run_amd_validation, run_full_grid_target_role_probe, run_full_grid_target_role_probe_isolated)
 
@@ -134,21 +135,37 @@ def test_target_role_frozen_bundle_replaces_compile_and_fails_closed_on_identity
   assert row["compile_performed"] is False and row["requires_recompile"] is False
 
 
-def test_target_role_frozen_bundle_rejects_shared_program_with_wrong_full_role(monkeypatch):
-  from extra.qk import mmq_frozen_target_artifact as frozen
-  from extra.qk import mmq_llama_five_buffer_full_kernel as full_kernel
+def test_target_role_frozen_bundle_separates_qo_donor_from_down_execution_fixture_without_gpu():
   qo, down = exact_role_spec("attn_qo"), exact_role_spec("ffn_down")
-  compile_program = Mock(side_effect=AssertionError("must not compile"))
-  monkeypatch.setattr(full_kernel, "compile_llama_five_buffer_full_kernel", compile_program)
-  monkeypatch.setattr(frozen, "load_frozen_target_artifact", lambda path: SimpleNamespace(
-    manifest={"schema": frozen.SCHEMA, "state": "FROZEN", "accumulation": frozen.ACCUMULATION, "accumulate": True,
-              "shape": list(qo.program.shape), "full_role_shape": list(qo.shape)},
-    program=object(), fixture={"role": qo.role, "shape": list(qo.shape)}))
-  row = run_full_grid_target_role_probe(
-    role_spec=down, in_kernel_accumulate=True, persistent_buffers=True, frozen_bundle="/cpu-only/qo.tar")
-  compile_program.assert_not_called()
-  assert row["status"] == "BLOCKED" and row["exact_blocker"] == "frozen target bundle validation failed"
-  assert "shape identity changed" in row["error"]
+  donor_fixture = {"schema": "fixture.v1", "role": qo.role, "shape": list(qo.shape)}
+  artifact = SimpleNamespace(
+    manifest={"schema": "frozen.v1", "state": "FROZEN",
+              "artifacts": {"serialized_program_sha256": "program-sha"},
+              "files": {"fixture.json": {"sha256": "donor-fixture-sha"}}},
+    fixture=donor_fixture)
+  binding = SimpleNamespace(
+    artifact=artifact, artifact_role_spec=qo, role_spec=down,
+    program_key="shared-program-key", shared_program_geometry=True)
+  calls = []
+  loaded, identity = _load_frozen_execution_binding(
+    down, "/cpu-only/qo.tar",
+    binding_loader=lambda role, path: calls.append((role, path)) or binding)
+  assert loaded is binding and calls == [(down, "/cpu-only/qo.tar")]
+  assert identity["artifact_role"] == "attn_qo"
+  assert identity["artifact_full_role_shape"] == list(qo.shape)
+  assert identity["execution_role"] == "ffn_down"
+  assert identity["execution_full_role_shape"] == list(down.shape)
+  assert identity["fixture_sha256"] == identity["artifact_fixture_sha256"] == "donor-fixture-sha"
+  assert identity["fixture_relationship"] == "distinct_full_role_shared_program_geometry"
+
+  execution_fixture = {"schema": "fixture.v1", "role": down.role, "shape": list(down.shape),
+                       "total_epochs": down.epochs}
+  roles = _validate_frozen_execution_fixture(binding, execution_fixture, dict(execution_fixture))
+  assert roles["artifact_fixture_equals_execution_fixture"] is False
+  assert roles["artifact_role"] == "attn_qo" and roles["execution_role"] == "ffn_down"
+  assert roles["relationship"] == "distinct_full_role_shared_program_geometry"
+  with pytest.raises(ValueError, match="differs from frozen bundle"):
+    _validate_frozen_execution_fixture(binding, execution_fixture, {**execution_fixture, "total_epochs": 20})
 
 
 def test_target_role_runtime_evidence_captures_views_kernarg_words_and_launch_count():

@@ -336,6 +336,59 @@ def _validate_frozen_fixture(expected: Mapping[str, Any], actual: Mapping[str, A
   if dict(expected) != dict(actual): raise ValueError("runtime fixture differs from frozen bundle")
 
 
+def _load_frozen_execution_binding(role_spec: ExactRoleSpec, frozen_bundle: str | Path, *,
+                                   binding_loader=None):
+  """Bind an admitted execution role to a reusable frozen PROGRAM, CPU-only."""
+  if binding_loader is None:
+    from extra.qk.prefill.frozen_exact_role_runtime import load_frozen_exact_role_binding
+    binding_loader = load_frozen_exact_role_binding
+  binding = binding_loader(role_spec, frozen_bundle)
+  artifact, artifact_spec = binding.artifact, binding.artifact_role_spec
+  manifest = artifact.manifest
+  from extra.qk.mmq_frozen_target_artifact import FILE_NAMES as FROZEN_FILE_NAMES
+  artifact_fixture_sha = manifest["files"][FROZEN_FILE_NAMES["fixture"]]["sha256"]
+  relationship = ("same_role_exact_fixture" if artifact_spec == role_spec
+                  else "distinct_full_role_shared_program_geometry")
+  identity = {
+    "path": str(Path(frozen_bundle).resolve()), "manifest_schema": manifest["schema"],
+    "state": manifest["state"], "program_key": binding.program_key,
+    # Compatibility fields continue to mean the retained artifact fixture.
+    "fixture_schema": artifact.fixture.get("schema"), "fixture_sha256": artifact_fixture_sha,
+    "serialized_program_sha256": manifest["artifacts"]["serialized_program_sha256"],
+    "compile_performed": False, "requires_recompile": False,
+    # Never conflate the PROGRAM donor's role fixture with the role being run.
+    "artifact_role": artifact_spec.role, "artifact_full_role_shape": list(artifact_spec.shape),
+    "artifact_fixture_schema": artifact.fixture.get("schema"),
+    "artifact_fixture_sha256": artifact_fixture_sha,
+    "execution_role": role_spec.role, "execution_full_role_shape": list(role_spec.shape),
+    "program_shape": list(role_spec.program.shape), "program_grid": list(role_spec.program.grid),
+    "shared_program_geometry": binding.shared_program_geometry,
+    "fixture_relationship": relationship,
+  }
+  return binding, identity
+
+
+def _validate_frozen_execution_fixture(binding, runtime_fixture: Mapping[str, Any],
+                                       canonical_execution_fixture: Mapping[str, Any]) -> dict[str, Any]:
+  """Validate the execution fixture without relabeling a distinct donor fixture."""
+  _validate_frozen_fixture(canonical_execution_fixture, runtime_fixture)
+  same_role = binding.artifact_role_spec == binding.role_spec
+  if same_role: _validate_frozen_fixture(binding.artifact.fixture, runtime_fixture)
+  encoded = json.dumps(dict(runtime_fixture), sort_keys=True, separators=(",", ":"),
+                       allow_nan=False).encode()
+  return {
+    "artifact_role": binding.artifact_role_spec.role,
+    "artifact_full_role_shape": list(binding.artifact_role_spec.shape),
+    "execution_role": binding.role_spec.role,
+    "execution_full_role_shape": list(binding.role_spec.shape),
+    "relationship": ("same_role_exact_fixture" if same_role
+                     else "distinct_full_role_shared_program_geometry"),
+    "artifact_fixture_equals_execution_fixture": same_role,
+    "execution_fixture_schema": runtime_fixture.get("schema"),
+    "execution_fixture_canonical_sha256": hashlib.sha256(encoded).hexdigest(),
+  }
+
+
 def _worker() -> dict[str, Any]:
   """Compile and dispatch the sole AMD case.  Called only in a child process."""
   from tinygrad import Tensor, dtypes
@@ -719,32 +772,15 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
   accumulation_mode = (TARGET_IN_PLACE_ACCUMULATION if in_kernel_accumulate else
                        "host_fp32_add" if host_accumulate else "tinygrad_elementwise_add")
   frozen_identity: dict[str, Any] | None = None
+  frozen_binding = None
+  execution_fixture_identity: dict[str, Any] | None = None
+  fixture_roles: dict[str, Any] | None = None
   if frozen_bundle is not None:
     try:
-      from extra.qk.mmq_frozen_target_artifact import (ACCUMULATION as FROZEN_ACCUMULATION,
-        FILE_NAMES as FROZEN_FILE_NAMES, SCHEMA as FROZEN_SCHEMA, load_frozen_target_artifact)
-      loaded = load_frozen_target_artifact(frozen_bundle)
+      frozen_binding, frozen_identity = _load_frozen_execution_binding(role_spec, frozen_bundle)
+      loaded = frozen_binding.artifact
       manifest = loaded.manifest
-      if manifest.get("schema") != FROZEN_SCHEMA or manifest.get("state") != "FROZEN":
-        raise ValueError("frozen target manifest identity changed")
-      if manifest.get("accumulation") != FROZEN_ACCUMULATION or manifest.get("accumulate") is not True:
-        raise ValueError("frozen target is not the in-place accumulation PROGRAM")
-      if tuple(manifest.get("shape", ())) != role_spec.program.shape or \
-         tuple(manifest.get("full_role_shape", ())) != role_spec.shape or \
-         tuple(loaded.fixture.get("shape", ())) != role_spec.shape or \
-         loaded.fixture.get("role", role_spec.role) != role_spec.role:
-        raise ValueError("frozen target shape identity changed")
       program = loaded.program
-      frozen_identity = {
-        "path": str(Path(frozen_bundle).resolve()), "manifest_schema": manifest["schema"],
-        "state": manifest["state"], "program_key": program.key.hex(),
-        "fixture_schema": loaded.fixture.get("schema"), "compile_performed": False,
-        "requires_recompile": False,
-        "serialized_program_sha256": manifest["artifacts"]["serialized_program_sha256"],
-        # The loader already validated this retained-byte inventory. Reuse its
-        # authority instead of inventing a second JSON canonicalization.
-        "fixture_sha256": manifest["files"][FROZEN_FILE_NAMES["fixture"]]["sha256"],
-      }
     except BaseException as exc:
       return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
               **role_identity, "exact_blocker": "frozen target bundle validation failed",
@@ -789,19 +825,23 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
       "q4_epoch_major_elements": int(q4_epoch_major.size),
     })
   if frozen_identity is not None:
-    from extra.qk.mmq_target_epoch_orchestrator import FIXTURE_SCHEMA
-    fixture_identity = {
+    from extra.qk.mmq_target_epoch_orchestrator import FIXTURE_SCHEMA, target_fixture_evidence
+    execution_fixture_identity = {
       "schema": FIXTURE_SCHEMA, "role": role_spec.role, "shape": [m, n, k],
       "total_epochs": total_epochs, "seeds": {"q4": 20260721, "q8_source": 20260722},
       "repack": repack_evidence,
       "source_sha256": hashlib.sha256(np.ascontiguousarray(source_np).tobytes()).hexdigest(),
     }
-    try: _validate_frozen_fixture(loaded.fixture, fixture_identity)
+    try:
+      fixture_roles = _validate_frozen_execution_fixture(
+        frozen_binding, execution_fixture_identity, target_fixture_evidence(role_spec=role_spec))
+      frozen_identity.update(fixture_roles)
     except ValueError:
       return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
-              **role_identity, "exact_blocker": "runtime fixture differs from frozen bundle",
+              **role_identity, "exact_blocker": "runtime execution fixture validation failed",
               "accumulation": accumulation_mode, "artifacts": artifact,
-              "runtime_fixture": fixture_identity, "compile_performed": False, "requires_recompile": False}
+              "execution_fixture": execution_fixture_identity,
+              "compile_performed": False, "requires_recompile": False}
   reduction_evidence = {
     "source_revision": "ac4cddeb0dbd778f650bf568f6f08344a06abe3a",
     "owned_components": ["cooperative tile loop", "Q4_K tile_x staging", "Q8_1 tile_y two-panel lifecycle"],
@@ -989,6 +1029,7 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
             "accumulation": accumulation_mode,
             "repack": repack_evidence, "reduction": reduction_evidence,
             "metadata_staging": metadata_staging, "runtime_evidence": runtime_evidence,
+            "execution_fixture": execution_fixture_identity, "fixture_roles": fixture_roles,
             "compile_performed": frozen_bundle is None, "requires_recompile": frozen_bundle is None}
   compare_k = epoch_limit * 256
   compare_words = q4_blocks[:, epoch_start:epoch_start+epoch_limit, :].reshape(-1).view(np.uint8)
@@ -1027,6 +1068,7 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
           "same_session_timing": True, "no_fallback": True,
           "repack": repack_evidence, "reduction": reduction_evidence,
           "metadata_staging": metadata_staging, "runtime_evidence": runtime_evidence,
+          "execution_fixture": execution_fixture_identity, "fixture_roles": fixture_roles,
           "compile_performed": frozen_bundle is None, "requires_recompile": frozen_bundle is None}
 
 

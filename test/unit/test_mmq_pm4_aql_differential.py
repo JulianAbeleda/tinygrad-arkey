@@ -196,6 +196,14 @@ def test_differential_shared_qo_down_program_retains_distinct_full_role_and_mism
   qo_artifact, down_artifact = _artifact(qo), _artifact(down)
   assert qo_artifact.manifest["program"] == down_artifact.manifest["program"]
   assert qo_artifact.manifest["full_role_shape"] != down_artifact.manifest["full_role_shape"]
+  shared_identity = differential._frozen_identity(qo_artifact, down)
+  assert shared_identity["role"] == shared_identity["artifact_role"] == "attn_qo"
+  assert shared_identity["artifact_full_role_shape"] == list(qo.shape)
+  assert shared_identity["execution_role"] == "ffn_down"
+  assert shared_identity["execution_full_role_shape"] == list(down.shape)
+  assert shared_identity["shared_program_geometry"] is True
+  assert shared_identity["fixture_relationship"] == "distinct_full_role_shared_program_geometry"
+  assert shared_identity["fixture_sha256"] == shared_identity["artifact_fixture_sha256"]
   calls = []
   result = differential.run_pm4_aql_frozen_differential(
     tmp_path / "down", role_spec=qo, runner=lambda **kwargs: calls.append(kwargs),

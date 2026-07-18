@@ -67,7 +67,8 @@ def _artifact_role_spec(artifact: FrozenTargetArtifact) -> ExactRoleSpec:
 
 def _frozen_identity(artifact: FrozenTargetArtifact, role_spec: ExactRoleSpec | None = None) -> dict[str, Any]:
   manifest, fixture = artifact.manifest, artifact.fixture
-  spec = _artifact_role_spec(artifact) if role_spec is None else role_spec
+  artifact_spec = _artifact_role_spec(artifact)
+  execution_spec = artifact_spec if role_spec is None else role_spec
   program = manifest["program"]
   artifacts = manifest["artifacts"]
   return {
@@ -80,9 +81,18 @@ def _frozen_identity(artifact: FrozenTargetArtifact, role_spec: ExactRoleSpec | 
     "serialized_program_sha256": artifacts["serialized_program_sha256"],
     "fixture_schema": fixture["schema"],
     "fixture_sha256": manifest["files"][FILE_NAMES["fixture"]]["sha256"],
-    "role": spec.role, "full_role_shape": list(spec.shape),
-    "program_shape": list(spec.program.shape), "program_grid": list(spec.program.grid),
-    "total_epochs": spec.epochs,
+    # Compatibility fields identify the frozen artifact/donor, never a
+    # potentially distinct role that happens to share its PROGRAM geometry.
+    "role": artifact_spec.role, "full_role_shape": list(artifact_spec.shape),
+    "artifact_role": artifact_spec.role, "artifact_full_role_shape": list(artifact_spec.shape),
+    "artifact_fixture_schema": fixture["schema"],
+    "artifact_fixture_sha256": manifest["files"][FILE_NAMES["fixture"]]["sha256"],
+    "execution_role": execution_spec.role, "execution_full_role_shape": list(execution_spec.shape),
+    "shared_program_geometry": execution_spec.program == artifact_spec.program,
+    "fixture_relationship": ("same_role_exact_fixture" if execution_spec == artifact_spec
+                             else "distinct_full_role_shared_program_geometry"),
+    "program_shape": list(execution_spec.program.shape), "program_grid": list(execution_spec.program.grid),
+    "total_epochs": execution_spec.epochs,
   }
 
 
