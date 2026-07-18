@@ -630,6 +630,23 @@ the next safe step is to distinguish changing metadata pointers from changing me
 then repair only the evidenced metadata load/publish seam. Do not revive broad half2 ordering: the earlier matched
 compiler experiment worsened spills from 9 to 74.
 
+The pointer/content discriminator is now matched on one compiled PROGRAM, removing cross-process compiler-variant
+ambiguity. All four fresh workers loaded serialized artifact `d9e9eadd…` / binary `26a67539…`. Both changing-address
+modes fail on launch three: views into the full preloaded arrays leave 20,219 mismatches, and distinct preloaded
+one-epoch allocations leave 21,223. Both fixed-address modes pass with 0/8,912,896 mismatches and max absolute error
+1.2207e-4: synchronous host refresh, and the production-shaped path that copies from the full preloaded GPU arrays
+into one persistent fixed-VA metadata slot using GPU SDMA. The Q4 and Q8-value inputs remain fixed throughout.
+Evidence is `docs/target-matched-binary-metadata-storage-bisect-d2d-20260718.json`; the earlier
+`target-fixed-address-metadata-refresh-20260718.json` and `target-dedicated-preloaded-metadata-20260718.json` are
+retained only as unmatched precursors because their binaries differed. An independent postflight tiny-add health
+probe passed and the kernel log contained no fault/reset marker.
+
+This falsifies stale metadata contents and the speculative LDS-ordering repair as the observed cause. The safe adapter
+contract is now: preload all epoch metadata on the GPU, copy the selected epoch into persistent one-epoch scale/sum
+staging allocations, and bind those same two VAs to every target launch. Next integrate that lifecycle into the strict
+same-process target-role harness, preserve the D2D copies in timing/evidence, and rerun a three-epoch prefix before the
+20-epoch R6/R7 gate.
+
 ## 1. Executive state
 
 The project is building a generated tinygrad prefill route for non-fitting quantized models, using Qwen3-14B as the

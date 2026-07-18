@@ -1,0 +1,788 @@
+{
+  "default_route": "direct_packed",
+  "diagnostic_complete": true,
+  "diagnostic_only": true,
+  "exact_blocker": "preloaded_views: metadata storage mode numerical comparison failed; dedicated_preloaded: metadata storage mode numerical comparison failed",
+  "modes": [
+    {
+      "child": {
+        "buffers": [
+          {
+            "elements": 12533760,
+            "name": "q4_preloaded",
+            "nbytes": 50135040,
+            "va_addr": 127951102668800
+          },
+          {
+            "elements": 2621440,
+            "name": "q8_values",
+            "nbytes": 2621440,
+            "va_addr": 127951200321536
+          },
+          {
+            "elements": 81920,
+            "name": "q8_scales",
+            "nbytes": 327680,
+            "va_addr": 127952155770880
+          },
+          {
+            "elements": 81920,
+            "name": "q8_sums",
+            "nbytes": 327680,
+            "va_addr": 127951453347840
+          }
+        ],
+        "comparison": {
+          "atol": 0.003,
+          "first_mismatch_got": -134.60867309570312,
+          "first_mismatch_index": [
+            56,
+            128
+          ],
+          "first_mismatch_reference": -156.90438842773438,
+          "got_shape": [
+            512,
+            17408
+          ],
+          "got_size": 8912896,
+          "inf_got": 0,
+          "inf_reference": 0,
+          "joint_finite": 8912896,
+          "max_abs_error": 151.09625244140625,
+          "mean_abs_error": 0.04580866917967796,
+          "mismatch_count": 20219,
+          "nan_got": 0,
+          "nan_reference": 0,
+          "reference_shape": [
+            512,
+            17408
+          ],
+          "reference_size": 8912896,
+          "rtol": 0.003,
+          "status": "mismatch"
+        },
+        "completed_epochs": [
+          0,
+          0,
+          0
+        ],
+        "dispatches": [
+          {
+            "q4_epoch": 0,
+            "q8_epoch": 0,
+            "q8_metadata_epoch": 0,
+            "q8_values_epoch": 0,
+            "scales_epoch_sha256": "97b43d0724bbcad099e68ab14922ebb257a1e70ba58c887492d8f63af0a3225a",
+            "scales_va_addr": 127952155770880,
+            "sums_epoch_sha256": "5454d063df410881af656aa2cf1b6315744db1bea7c93de128e65ca46face39d",
+            "sums_va_addr": 127951453347840,
+            "timeline": {
+              "signal_value": 30,
+              "timeline_value": 31
+            }
+          },
+          {
+            "q4_epoch": 0,
+            "q8_epoch": 0,
+            "q8_metadata_epoch": 1,
+            "q8_values_epoch": 0,
+            "scales_epoch_sha256": "02958d853a7e0bafac0c4442ab062ef24f261ad90bcb526b013f1f64f38e2c8e",
+            "scales_va_addr": 127952155787264,
+            "sums_epoch_sha256": "7f7e6c71cd120ddfdfc6ca4ac2e5e62a9303fa1f33fd4b1d85436329481480e7",
+            "sums_va_addr": 127951453364224,
+            "timeline": {
+              "signal_value": 31,
+              "timeline_value": 32
+            }
+          },
+          {
+            "q4_epoch": 0,
+            "q8_epoch": 0,
+            "q8_metadata_epoch": 2,
+            "q8_values_epoch": 0,
+            "scales_epoch_sha256": "7145c1fab7eb41232d98e1bfab149a435c385c9e0fc1d1ae37e417f034773e51",
+            "scales_va_addr": 127952155803648,
+            "sums_epoch_sha256": "aedc866d52aa24616bfa8e938b85e8d6f85c0863ff977965887a32f768e28a19",
+            "sums_va_addr": 127951453380608,
+            "timeline": {
+              "signal_value": 32,
+              "timeline_value": 33
+            }
+          }
+        ],
+        "elapsed_seconds": 6.173284808988683,
+        "epoch": 0,
+        "epoch_count": 3,
+        "epoch_sequence": [
+          0,
+          0,
+          0
+        ],
+        "epoch_start": 0,
+        "gpu_ms": 2.0549999999999997,
+        "input_hashes": {
+          "q4_epoch_major": "e2185c11d2ba48ee0184153cfe472a5e2c1d1617c4bcaf0797368809f28aacda",
+          "scales": "ce542cb5c0c77c5dbdaa1c44753e16815f9ac66b82458022179dc0b56f614211",
+          "sums": "c6755f8eb0e77c62ace4bd94f7a908ad0a5d01d21a87febc7954200c63d53aad",
+          "values": "b4ba6549584528a1281d4fe6e521a50722987fb36cd7e8154b8d5f9eb44f246c"
+        },
+        "metadata_storage_mode": "preloaded_views",
+        "no_fallback": true,
+        "output_buffers": [
+          {
+            "elements": 8912896,
+            "name": "output_0",
+            "nbytes": 35651584,
+            "va_addr": 127951158902784
+          }
+        ],
+        "output_count": 1,
+        "output_initialization": "empty_full_target_partial",
+        "output_mode": "persistent",
+        "passed": false,
+        "q4_epoch_sequence": [
+          0,
+          0,
+          0
+        ],
+        "q8_epoch_sequence": [
+          0,
+          0,
+          0
+        ],
+        "q8_metadata_epoch_sequence": [
+          0,
+          1,
+          2
+        ],
+        "q8_values_epoch_sequence": [
+          0,
+          0,
+          0
+        ],
+        "schema": "tinygrad.mmq_q4k_q8_1.single_epoch_canary.v1.child",
+        "shape": [
+          512,
+          17408,
+          256
+        ],
+        "status": "BLOCKED",
+        "target_dispatches": 3,
+        "timeline": {
+          "after_preload": {
+            "signal_value": 27,
+            "timeline_value": 29
+          },
+          "start": {
+            "signal_value": 0,
+            "timeline_value": 1
+          }
+        }
+      },
+      "contract_valid": true,
+      "elapsed_seconds": 6.803522722970229,
+      "exact_blocker": "metadata storage mode numerical comparison failed",
+      "isolated_error": null,
+      "isolated_status": "passed",
+      "metadata_storage_mode": "preloaded_views",
+      "passed": false,
+      "same_serialized_artifact": true,
+      "status": "BLOCKED",
+      "stderr_tail": "",
+      "stdout_tail": "",
+      "worker_serialized_program_sha256": "d9e9eadd976e6d4a5bef206792e19b88aea16a222563dacdb0e9114ecfd44a4c"
+    },
+    {
+      "child": {
+        "buffers": [
+          {
+            "elements": 12533760,
+            "name": "q4_preloaded",
+            "nbytes": 50135040,
+            "va_addr": 134782069895168
+          },
+          {
+            "elements": 2621440,
+            "name": "q8_values",
+            "nbytes": 2621440,
+            "va_addr": 134782167547904
+          },
+          {
+            "elements": 81920,
+            "name": "q8_scales",
+            "nbytes": 327680,
+            "va_addr": 134782421622784
+          },
+          {
+            "elements": 81920,
+            "name": "q8_sums",
+            "nbytes": 327680,
+            "va_addr": 134782411730944
+          }
+        ],
+        "comparison": {
+          "atol": 0.003,
+          "first_mismatch_got": -89.67489624023438,
+          "first_mismatch_index": [
+            48,
+            512
+          ],
+          "first_mismatch_reference": -91.29594421386719,
+          "got_shape": [
+            512,
+            17408
+          ],
+          "got_size": 8912896,
+          "inf_got": 0,
+          "inf_reference": 0,
+          "joint_finite": 8912896,
+          "max_abs_error": 259.9294738769531,
+          "mean_abs_error": 0.04918942227959633,
+          "mismatch_count": 21223,
+          "nan_got": 0,
+          "nan_reference": 0,
+          "reference_shape": [
+            512,
+            17408
+          ],
+          "reference_size": 8912896,
+          "rtol": 0.003,
+          "status": "mismatch"
+        },
+        "completed_epochs": [
+          0,
+          0,
+          0
+        ],
+        "dispatches": [
+          {
+            "q4_epoch": 0,
+            "q8_epoch": 0,
+            "q8_metadata_epoch": 0,
+            "q8_values_epoch": 0,
+            "scales_epoch_sha256": "97b43d0724bbcad099e68ab14922ebb257a1e70ba58c887492d8f63af0a3225a",
+            "scales_va_addr": 134783178194944,
+            "sums_epoch_sha256": "5454d063df410881af656aa2cf1b6315744db1bea7c93de128e65ca46face39d",
+            "sums_va_addr": 134783171297280,
+            "timeline": {
+              "signal_value": 36,
+              "timeline_value": 37
+            }
+          },
+          {
+            "q4_epoch": 0,
+            "q8_epoch": 0,
+            "q8_metadata_epoch": 1,
+            "q8_values_epoch": 0,
+            "scales_epoch_sha256": "02958d853a7e0bafac0c4442ab062ef24f261ad90bcb526b013f1f64f38e2c8e",
+            "scales_va_addr": 134783159668736,
+            "sums_epoch_sha256": "7f7e6c71cd120ddfdfc6ca4ac2e5e62a9303fa1f33fd4b1d85436329481480e7",
+            "sums_va_addr": 134783159652352,
+            "timeline": {
+              "signal_value": 37,
+              "timeline_value": 38
+            }
+          },
+          {
+            "q4_epoch": 0,
+            "q8_epoch": 0,
+            "q8_metadata_epoch": 2,
+            "q8_values_epoch": 0,
+            "scales_epoch_sha256": "7145c1fab7eb41232d98e1bfab149a435c385c9e0fc1d1ae37e417f034773e51",
+            "scales_va_addr": 134783159635968,
+            "sums_epoch_sha256": "aedc866d52aa24616bfa8e938b85e8d6f85c0863ff977965887a32f768e28a19",
+            "sums_va_addr": 134783159619584,
+            "timeline": {
+              "signal_value": 38,
+              "timeline_value": 39
+            }
+          }
+        ],
+        "elapsed_seconds": 6.00128136301646,
+        "epoch": 0,
+        "epoch_count": 3,
+        "epoch_sequence": [
+          0,
+          0,
+          0
+        ],
+        "epoch_start": 0,
+        "gpu_ms": 2.0686400000000003,
+        "input_hashes": {
+          "q4_epoch_major": "e2185c11d2ba48ee0184153cfe472a5e2c1d1617c4bcaf0797368809f28aacda",
+          "scales": "ce542cb5c0c77c5dbdaa1c44753e16815f9ac66b82458022179dc0b56f614211",
+          "sums": "c6755f8eb0e77c62ace4bd94f7a908ad0a5d01d21a87febc7954200c63d53aad",
+          "values": "b4ba6549584528a1281d4fe6e521a50722987fb36cd7e8154b8d5f9eb44f246c"
+        },
+        "metadata_storage_mode": "dedicated_preloaded",
+        "no_fallback": true,
+        "output_buffers": [
+          {
+            "elements": 8912896,
+            "name": "output_0",
+            "nbytes": 35651584,
+            "va_addr": 134782126129152
+          }
+        ],
+        "output_count": 1,
+        "output_initialization": "empty_full_target_partial",
+        "output_mode": "persistent",
+        "passed": false,
+        "q4_epoch_sequence": [
+          0,
+          0,
+          0
+        ],
+        "q8_epoch_sequence": [
+          0,
+          0,
+          0
+        ],
+        "q8_metadata_epoch_sequence": [
+          0,
+          1,
+          2
+        ],
+        "q8_values_epoch_sequence": [
+          0,
+          0,
+          0
+        ],
+        "schema": "tinygrad.mmq_q4k_q8_1.single_epoch_canary.v1.child",
+        "shape": [
+          512,
+          17408,
+          256
+        ],
+        "status": "BLOCKED",
+        "target_dispatches": 3,
+        "timeline": {
+          "after_preload": {
+            "signal_value": 33,
+            "timeline_value": 35
+          },
+          "start": {
+            "signal_value": 0,
+            "timeline_value": 1
+          }
+        }
+      },
+      "contract_valid": true,
+      "elapsed_seconds": 6.600766262970865,
+      "exact_blocker": "metadata storage mode numerical comparison failed",
+      "isolated_error": null,
+      "isolated_status": "passed",
+      "metadata_storage_mode": "dedicated_preloaded",
+      "passed": false,
+      "same_serialized_artifact": true,
+      "status": "BLOCKED",
+      "stderr_tail": "",
+      "stdout_tail": "",
+      "worker_serialized_program_sha256": "d9e9eadd976e6d4a5bef206792e19b88aea16a222563dacdb0e9114ecfd44a4c"
+    },
+    {
+      "child": {
+        "buffers": [
+          {
+            "elements": 12533760,
+            "name": "q4_preloaded",
+            "nbytes": 50135040,
+            "va_addr": 132804891766784
+          },
+          {
+            "elements": 2621440,
+            "name": "q8_values",
+            "nbytes": 2621440,
+            "va_addr": 132804989419520
+          },
+          {
+            "elements": 81920,
+            "name": "q8_scales",
+            "nbytes": 327680,
+            "va_addr": 132805233602560
+          },
+          {
+            "elements": 81920,
+            "name": "q8_sums",
+            "nbytes": 327680,
+            "va_addr": 132805233274880
+          }
+        ],
+        "comparison": {
+          "atol": 0.003,
+          "first_mismatch_got": null,
+          "first_mismatch_index": null,
+          "first_mismatch_reference": null,
+          "got_shape": [
+            512,
+            17408
+          ],
+          "got_size": 8912896,
+          "inf_got": 0,
+          "inf_reference": 0,
+          "joint_finite": 8912896,
+          "max_abs_error": 0.0001220703125,
+          "mean_abs_error": 1.2009182093208892e-08,
+          "mismatch_count": 0,
+          "nan_got": 0,
+          "nan_reference": 0,
+          "reference_shape": [
+            512,
+            17408
+          ],
+          "reference_size": 8912896,
+          "rtol": 0.003,
+          "status": "pass"
+        },
+        "completed_epochs": [
+          0,
+          0,
+          0
+        ],
+        "dispatches": [
+          {
+            "q4_epoch": 0,
+            "q8_epoch": 0,
+            "q8_metadata_epoch": 0,
+            "q8_values_epoch": 0,
+            "scales_epoch_sha256": "97b43d0724bbcad099e68ab14922ebb257a1e70ba58c887492d8f63af0a3225a",
+            "scales_va_addr": 132806000128000,
+            "sums_epoch_sha256": "5454d063df410881af656aa2cf1b6315744db1bea7c93de128e65ca46face39d",
+            "sums_va_addr": 132805981470720,
+            "timeline": {
+              "signal_value": 32,
+              "timeline_value": 33
+            }
+          },
+          {
+            "q4_epoch": 0,
+            "q8_epoch": 0,
+            "q8_metadata_epoch": 1,
+            "q8_values_epoch": 0,
+            "scales_epoch_sha256": "02958d853a7e0bafac0c4442ab062ef24f261ad90bcb526b013f1f64f38e2c8e",
+            "scales_va_addr": 132806000128000,
+            "sums_epoch_sha256": "7f7e6c71cd120ddfdfc6ca4ac2e5e62a9303fa1f33fd4b1d85436329481480e7",
+            "sums_va_addr": 132805981470720,
+            "timeline": {
+              "signal_value": 35,
+              "timeline_value": 36
+            }
+          },
+          {
+            "q4_epoch": 0,
+            "q8_epoch": 0,
+            "q8_metadata_epoch": 2,
+            "q8_values_epoch": 0,
+            "scales_epoch_sha256": "7145c1fab7eb41232d98e1bfab149a435c385c9e0fc1d1ae37e417f034773e51",
+            "scales_va_addr": 132806000128000,
+            "sums_epoch_sha256": "aedc866d52aa24616bfa8e938b85e8d6f85c0863ff977965887a32f768e28a19",
+            "sums_va_addr": 132805981470720,
+            "timeline": {
+              "signal_value": 38,
+              "timeline_value": 39
+            }
+          }
+        ],
+        "elapsed_seconds": 6.139163143991027,
+        "epoch": 0,
+        "epoch_count": 3,
+        "epoch_sequence": [
+          0,
+          0,
+          0
+        ],
+        "epoch_start": 0,
+        "gpu_ms": 2.0618,
+        "input_hashes": {
+          "q4_epoch_major": "e2185c11d2ba48ee0184153cfe472a5e2c1d1617c4bcaf0797368809f28aacda",
+          "scales": "ce542cb5c0c77c5dbdaa1c44753e16815f9ac66b82458022179dc0b56f614211",
+          "sums": "c6755f8eb0e77c62ace4bd94f7a908ad0a5d01d21a87febc7954200c63d53aad",
+          "values": "b4ba6549584528a1281d4fe6e521a50722987fb36cd7e8154b8d5f9eb44f246c"
+        },
+        "metadata_storage_mode": "fixed_refreshed",
+        "no_fallback": true,
+        "output_buffers": [
+          {
+            "elements": 8912896,
+            "name": "output_0",
+            "nbytes": 35651584,
+            "va_addr": 132804950097920
+          }
+        ],
+        "output_count": 1,
+        "output_initialization": "empty_full_target_partial",
+        "output_mode": "persistent",
+        "passed": true,
+        "q4_epoch_sequence": [
+          0,
+          0,
+          0
+        ],
+        "q8_epoch_sequence": [
+          0,
+          0,
+          0
+        ],
+        "q8_metadata_epoch_sequence": [
+          0,
+          1,
+          2
+        ],
+        "q8_values_epoch_sequence": [
+          0,
+          0,
+          0
+        ],
+        "schema": "tinygrad.mmq_q4k_q8_1.single_epoch_canary.v1.child",
+        "shape": [
+          512,
+          17408,
+          256
+        ],
+        "status": "PASS",
+        "target_dispatches": 3,
+        "timeline": {
+          "after_preload": {
+            "signal_value": 28,
+            "timeline_value": 29
+          },
+          "start": {
+            "signal_value": 0,
+            "timeline_value": 1
+          }
+        }
+      },
+      "contract_valid": true,
+      "elapsed_seconds": 6.761546003981493,
+      "exact_blocker": null,
+      "isolated_error": null,
+      "isolated_status": "passed",
+      "metadata_storage_mode": "fixed_refreshed",
+      "passed": true,
+      "same_serialized_artifact": true,
+      "status": "PASS",
+      "stderr_tail": "",
+      "stdout_tail": "",
+      "worker_serialized_program_sha256": "d9e9eadd976e6d4a5bef206792e19b88aea16a222563dacdb0e9114ecfd44a4c"
+    },
+    {
+      "child": {
+        "buffers": [
+          {
+            "elements": 12533760,
+            "name": "q4_preloaded",
+            "nbytes": 50135040,
+            "va_addr": 134722680647680
+          },
+          {
+            "elements": 2621440,
+            "name": "q8_values",
+            "nbytes": 2621440,
+            "va_addr": 134722778300416
+          },
+          {
+            "elements": 81920,
+            "name": "q8_scales",
+            "nbytes": 327680,
+            "va_addr": 134723032375296
+          },
+          {
+            "elements": 81920,
+            "name": "q8_sums",
+            "nbytes": 327680,
+            "va_addr": 134723022483456
+          }
+        ],
+        "comparison": {
+          "atol": 0.003,
+          "first_mismatch_got": null,
+          "first_mismatch_index": null,
+          "first_mismatch_reference": null,
+          "got_shape": [
+            512,
+            17408
+          ],
+          "got_size": 8912896,
+          "inf_got": 0,
+          "inf_reference": 0,
+          "joint_finite": 8912896,
+          "max_abs_error": 0.0001220703125,
+          "mean_abs_error": 1.2009182093208892e-08,
+          "mismatch_count": 0,
+          "nan_got": 0,
+          "nan_reference": 0,
+          "reference_shape": [
+            512,
+            17408
+          ],
+          "reference_size": 8912896,
+          "rtol": 0.003,
+          "status": "pass"
+        },
+        "completed_epochs": [
+          0,
+          0,
+          0
+        ],
+        "dispatches": [
+          {
+            "q4_epoch": 0,
+            "q8_epoch": 0,
+            "q8_metadata_epoch": 0,
+            "q8_values_epoch": 0,
+            "scales_epoch_sha256": "97b43d0724bbcad099e68ab14922ebb257a1e70ba58c887492d8f63af0a3225a",
+            "scales_va_addr": 134723789590528,
+            "sums_epoch_sha256": "5454d063df410881af656aa2cf1b6315744db1bea7c93de128e65ca46face39d",
+            "sums_va_addr": 134723778035712,
+            "timeline": {
+              "signal_value": 32,
+              "timeline_value": 33
+            }
+          },
+          {
+            "q4_epoch": 0,
+            "q8_epoch": 0,
+            "q8_metadata_epoch": 1,
+            "q8_values_epoch": 0,
+            "scales_epoch_sha256": "02958d853a7e0bafac0c4442ab062ef24f261ad90bcb526b013f1f64f38e2c8e",
+            "scales_va_addr": 134723789590528,
+            "sums_epoch_sha256": "7f7e6c71cd120ddfdfc6ca4ac2e5e62a9303fa1f33fd4b1d85436329481480e7",
+            "sums_va_addr": 134723778035712,
+            "timeline": {
+              "signal_value": 35,
+              "timeline_value": 36
+            }
+          },
+          {
+            "q4_epoch": 0,
+            "q8_epoch": 0,
+            "q8_metadata_epoch": 2,
+            "q8_values_epoch": 0,
+            "scales_epoch_sha256": "7145c1fab7eb41232d98e1bfab149a435c385c9e0fc1d1ae37e417f034773e51",
+            "scales_va_addr": 134723789590528,
+            "sums_epoch_sha256": "aedc866d52aa24616bfa8e938b85e8d6f85c0863ff977965887a32f768e28a19",
+            "sums_va_addr": 134723778035712,
+            "timeline": {
+              "signal_value": 38,
+              "timeline_value": 39
+            }
+          }
+        ],
+        "elapsed_seconds": 6.0072705849888735,
+        "epoch": 0,
+        "epoch_count": 3,
+        "epoch_sequence": [
+          0,
+          0,
+          0
+        ],
+        "epoch_start": 0,
+        "gpu_ms": 2.06012,
+        "input_hashes": {
+          "q4_epoch_major": "e2185c11d2ba48ee0184153cfe472a5e2c1d1617c4bcaf0797368809f28aacda",
+          "scales": "ce542cb5c0c77c5dbdaa1c44753e16815f9ac66b82458022179dc0b56f614211",
+          "sums": "c6755f8eb0e77c62ace4bd94f7a908ad0a5d01d21a87febc7954200c63d53aad",
+          "values": "b4ba6549584528a1281d4fe6e521a50722987fb36cd7e8154b8d5f9eb44f246c"
+        },
+        "metadata_storage_mode": "fixed_device_refreshed",
+        "no_fallback": true,
+        "output_buffers": [
+          {
+            "elements": 8912896,
+            "name": "output_0",
+            "nbytes": 35651584,
+            "va_addr": 134722736881664
+          }
+        ],
+        "output_count": 1,
+        "output_initialization": "empty_full_target_partial",
+        "output_mode": "persistent",
+        "passed": true,
+        "q4_epoch_sequence": [
+          0,
+          0,
+          0
+        ],
+        "q8_epoch_sequence": [
+          0,
+          0,
+          0
+        ],
+        "q8_metadata_epoch_sequence": [
+          0,
+          1,
+          2
+        ],
+        "q8_values_epoch_sequence": [
+          0,
+          0,
+          0
+        ],
+        "schema": "tinygrad.mmq_q4k_q8_1.single_epoch_canary.v1.child",
+        "shape": [
+          512,
+          17408,
+          256
+        ],
+        "status": "PASS",
+        "target_dispatches": 3,
+        "timeline": {
+          "after_preload": {
+            "signal_value": 28,
+            "timeline_value": 29
+          },
+          "start": {
+            "signal_value": 0,
+            "timeline_value": 1
+          }
+        }
+      },
+      "contract_valid": true,
+      "elapsed_seconds": 6.613718880980741,
+      "exact_blocker": null,
+      "isolated_error": null,
+      "isolated_status": "passed",
+      "metadata_storage_mode": "fixed_device_refreshed",
+      "passed": true,
+      "same_serialized_artifact": true,
+      "status": "PASS",
+      "stderr_tail": "",
+      "stdout_tail": "",
+      "worker_serialized_program_sha256": "d9e9eadd976e6d4a5bef206792e19b88aea16a222563dacdb0e9114ecfd44a4c"
+    }
+  ],
+  "no_fallback": true,
+  "passed": false,
+  "production_dispatch_changed": false,
+  "program_identity": {
+    "binary_sha256": "26a67539bc6a19cd18455844e4d97ffa62e372433f5cee1a9cae1d3e85359096",
+    "serialized_program_sha256": "d9e9eadd976e6d4a5bef206792e19b88aea16a222563dacdb0e9114ecfd44a4c",
+    "source_sha256": "cd79bca8592c5bc2a4c420729ef8e527627c1f6206b4fdb895ebdff26574e2c8"
+  },
+  "promotion_eligible": false,
+  "same_serialized_artifact": true,
+  "schema": "tinygrad.mmq_q4k_q8_1.metadata_storage_bisect.v1",
+  "sequence": {
+    "q4": [
+      0,
+      0,
+      0
+    ],
+    "q8": [
+      0,
+      0,
+      0
+    ],
+    "q8_metadata": [
+      0,
+      1,
+      2
+    ],
+    "q8_values": [
+      0,
+      0,
+      0
+    ]
+  },
+  "status": "BLOCKED"
+}
