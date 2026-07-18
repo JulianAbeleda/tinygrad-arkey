@@ -506,6 +506,11 @@ repeats the failure at signal 32/current 31). Thus allocator reuse, per-epoch SD
 elementwise accumulation choice have each been isolated without producing a full-target pass. The blocker artifact is
 recorded as 'target-role-20epoch-preloaded.json'; it is not correctness or promotion evidence.
 
+Kernel logs for the controlled sync attempt also show an amdgpu SQC instruction page fault followed by MES queue
+removal failure and a GPU reset (the HCQ timeout is therefore a driver-visible health failure, not merely a Python
+deadline). Earlier overlapping child experiments can leave stale queues, so this log is treated as health evidence
+only and does not identify a mathematical kernel bug.
+
 The machine-search schema now accepts a target-role artifact only when it independently proves the exact role/shape,
 all 20 K epochs with full-N dispatch, GPU-side FP32 accumulation, preloaded/persistent buffers, zero-mismatch finite
 output, Q4/Q8 repack identities, resource/source/binary identity, same-session timing, and no hidden fallback.
