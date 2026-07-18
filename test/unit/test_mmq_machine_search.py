@@ -300,6 +300,8 @@ def test_mmq_r5_full_grid_win_is_ranked_as_emitted_but_not_promoted():
   assert artifact["tile_plan"]["requires_k_epoch_accumulate"] is True
   assert artifact["tile_plan"]["requires_output_tile_scatter"] is False
   assert artifact["tile_plan"]["target_shape_k256_compile"]["status"] == "PASS_EMITTED"
+  assert artifact["tile_plan"]["reduced_grid_256_probe"]["status"] == "BLOCKED_NUMERIC"
+  assert artifact["tile_plan"]["reduced_grid_256_probe"]["mismatch_count"] == 65425
   assert artifact["tile_plan"]["monolithic_k512_compile"]["status"] == "BLOCKED"
   assert "vgpr lease" in artifact["tile_plan"]["monolithic_k512_compile"]["exact_blocker"]
   assert artifact["tile_plan"]["per_store_accumulate_sink_probe"]["status"] == "BLOCKED_TIMEOUT"

@@ -716,6 +716,15 @@ def build_full_grid_k_tiled_dispatch_plan(shape: dict[str, Any]) -> dict[str, An
       "binary_sha256": "21908e0bff83e5b7f7d4796cfb8a15d377d20ebfa7cefc63117607c5f03d0143",
       "exact_blocker": "target-shape GPU dispatch/correctness and 20-epoch accumulation evidence are still absent",
     },
+    "reduced_grid_256_probe": {
+      "status": "BLOCKED_NUMERIC", "shape": {"M": 256, "N": 256, "K": 256},
+      "mismatch_count": 65425, "output_size": 65536,
+      "max_abs_error": 840.8983764648438, "mean_abs_error": 120.01234436035156,
+      "timing_ms": 7.6224,
+      "resources": {"vgpr": 256, "lds_bytes": 57856, "scratch_bytes": 0, "wavefront_size": 32},
+      "binary_sha256": "03fc97ef67921c2a5546e1fa709101426c42d028a7ceabad96f4656914f762d2",
+      "exact_blocker": "single-grid 128x128 passes but 2x2 M/N grid has writeback/address mismatches; target dispatch is not numerically admissible",
+    },
     "per_store_accumulate_sink_probe": {
       "status": "BLOCKED_TIMEOUT", "timeout_seconds": 360,
       "exact_blocker": "overwrite/accumulate two-launch per-store LOAD+ADD sink exceeded hard compile deadline before structured output",

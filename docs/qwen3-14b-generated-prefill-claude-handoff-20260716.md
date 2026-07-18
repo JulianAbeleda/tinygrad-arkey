@@ -443,6 +443,10 @@ are pushed on `master`.
 * The lazy owner manifest now lets the actual 14B shape `(512,17408,256)` build and emit one K-epoch PROGRAM in
   182.23s: vgpr=256, LDS=57,856, scratch=0, owner count 8,912,896, source SHA `b8923985…`, binary SHA
   `21908e0b…`. This closes the target-shape compile/resource slice, not the 20-epoch GPU correctness/health gate.
+  A reduced 256x256x256 one-epoch dispatch then exposed the next blocker: 65,425/65,536 mismatches (max abs 840.9)
+  despite the same zero-scratch resources; 128x128 remains the only numerically passing grid. The target 20-epoch
+  run also hit an HCQ wait timeout (signal 9 not set, current 8). Treat this as a grid-scaling address/writeback
+  defect, not a promotion or GPU-health pass.
 
 The through-line is unchanged: the first real GPU result collapsed more uncertainty than further spill grinding, but
 the 31x bounded win is not evidence for a 14B route. Never run a production role on this candidate until the K-tiled
