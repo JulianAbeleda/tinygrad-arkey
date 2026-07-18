@@ -417,7 +417,8 @@ scratch, no `spec_shared` widening, no model/VRAM/GPU/route branching).
 ## 0.5 Status update 2026-07-17 (Codex): full-grid GPU proof, R5 win, R6/R7 fail-closed
 
 The recommended correctness-first path now has a concrete bounded result. Commits `472ca6da9`, `72e58d322`,
-`ef9fb08c8`, `e78551257`, `f6fa66b96`, `76b721184`, `1b7748e26`, and `1a26a721a` are pushed on `master`.
+`ef9fb08c8`, `e78551257`, `f6fa66b96`, `76b721184`, `1b7748e26`, `1a26a721a`, `2643551d4`, and `48c11957d`
+are pushed on `master`.
 
 * The emitted full-grid 128x128x256 PROGRAM passed an in-process AMD probe: 0/16,384 output mismatches against the
   fp16-rounded Q8 DS4 oracle, max absolute error 3.05e-5, mean 1.12e-8. Resource evidence is vgpr=256, LDS=57,856,
