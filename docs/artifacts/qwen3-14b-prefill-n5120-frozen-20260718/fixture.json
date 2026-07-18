@@ -1,0 +1,27 @@
+{
+  "repack": {
+    "q4_epoch_major_dtype": "uint32",
+    "q4_epoch_major_elements": 3686400,
+    "q4_epoch_major_layout": "q4_k_bytes[k_epoch, n, 144]",
+    "q4_epoch_major_sha256": "0e8136829ba8b2e6fa0b174bd996ee15aac7ab262a837a3f96eb23a10b64112e",
+    "q4_layout": "q4_k_bytes[n, k_epoch, 144]",
+    "q4_sha256": "ff58d40af9f3dcafe31aabe7fd8e4d4486bf65508a74ecd09791615351ef51b0",
+    "q8_layout": "q8_ds4[epoch, m, groups]",
+    "q8_scales_sha256": "ce542cb5c0c77c5dbdaa1c44753e16815f9ac66b82458022179dc0b56f614211",
+    "q8_sums_sha256": "c6755f8eb0e77c62ace4bd94f7a908ad0a5d01d21a87febc7954200c63d53aad",
+    "q8_values_sha256": "b4ba6549584528a1281d4fe6e521a50722987fb36cd7e8154b8d5f9eb44f246c"
+  },
+  "role": "attn_qo",
+  "schema": "tinygrad.mmq_q4k_q8_1_target_fixture.v1",
+  "seeds": {
+    "q4": 20260721,
+    "q8_source": 20260722
+  },
+  "shape": [
+    512,
+    5120,
+    5120
+  ],
+  "source_sha256": "15f53a5325a5cca16e9b6ba050af4250fbd59d3673a59ee0124b045b2842c717",
+  "total_epochs": 20
+}
