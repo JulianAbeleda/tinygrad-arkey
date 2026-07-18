@@ -48,7 +48,8 @@ def test_source_identity_writeback_vocabulary_and_no_dense_tensor_or_forbidden_t
   # not carry a redundant same-dtype BITCAST: codegen folds that no-op away and drops the effect order onto the
   # scalar FP32 update underneath, which spec_program rejects as AFTER(ADD, STORE).
   for previous, current in zip(stores, stores[1:]):
-    assert previous in current.src[0].backward_slice
+    assert previous in current.backward_slice
+    assert previous not in current.src[0].backward_slice
     assert not (current.src[1].op is Ops.BITCAST and current.src[1].dtype == current.src[1].src[0].dtype)
   assert not any(name.startswith(("dense", "dequant")) for name, _, _ in kernel.proof_graph.allocated_shapes)
   source = inspect.getsource(full).lower()

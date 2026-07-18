@@ -187,8 +187,8 @@ def _full_grid_sink(m:int, n:int, k:int, *, accumulate: bool = False) -> UOp:
   for store in writeback.stores:
     # Keep the canonical INDEX address free of AFTER wrappers. Ordering on an
     # address can be stripped by AMD's linear-dependency pass (turning a
-    # dynamic tile address into v0); carry ordering on the STORE pointer, while
-    # a K-tiled accumulation LOAD is ordered separately.
+    # dynamic tile address into v0); carry ordering on the STORE node itself,
+    # while a K-tiled accumulation LOAD is ordered separately.
     base_pointer = output.index(tile_base + store.src[0].src[1], ptr=True)
     pointer = base_pointer
     value = store.src[1]
@@ -199,8 +199,14 @@ def _full_grid_sink(m:int, n:int, k:int, *, accumulate: bool = False) -> UOp:
       prior_value = base_pointer.load()
       if prior is not None: prior_value = prior_value.after(prior)
       value = prior_value.cast(dtypes.float) + value
-    if prior is not None: pointer = pointer.after(prior)
-    prior = pointer.store(value).replace(tag=store.tag)
+    # STORE-after-STORE is rejected by spec_program.  Carry the dependency on
+    # a non-foldable cross-dtype movement value instead: the ordered uint view
+    # is immediately bitcast back before the canonical INDEX STORE.
+    if prior is not None:
+      ordered_value = UOp(Ops.BITCAST, dtypes.uint.vec(value.dtype.count), (value,)).after(prior)
+      value = UOp(Ops.BITCAST, value.dtype, (ordered_value,))
+    current_store = pointer.store(value).replace(tag=store.tag)
+    prior = current_store
   assert prior is not None
   closed = prior.end(*prior.ranges)
   sink = UOp(Ops.SINK, dtypes.void, (closed,), KernelInfo(name="mmq_llama_five_buffer_full_grid_accumulate" if accumulate else "mmq_llama_five_buffer_full_grid", opts_to_apply=()))
