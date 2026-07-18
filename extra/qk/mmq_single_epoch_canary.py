@@ -29,6 +29,7 @@ TOTAL_EPOCHS = TARGET_SHAPE[2] // 256
 DEFAULT_EPOCH = 0
 DEFAULT_CHILD_TIMEOUT_SECONDS = 120.0
 DEFAULT_RUNTIME_TIMEOUT_MS = 30_000
+METADATA_STORAGE_MODES = ("preloaded_views", "dedicated_preloaded", "fixed_refreshed")
 _GPU_FAULT_MARKERS = (
   "sq_intr", "page fault", "sqc instruction", "mes failed", "gpu reset",
   "device wedged", "vram is lost", "ring gfx timeout",
@@ -124,7 +125,8 @@ def _run_epoch_worker(program_path: str, epoch_start: int, epoch_count: int = 1,
                       q4_epoch_sequence: tuple[int, ...] | None = None,
                       q8_epoch_sequence: tuple[int, ...] | None = None,
                       q8_values_epoch_sequence: tuple[int, ...] | None = None,
-                      q8_metadata_epoch_sequence: tuple[int, ...] | None = None) -> dict[str, Any]:
+                      q8_metadata_epoch_sequence: tuple[int, ...] | None = None,
+                      metadata_storage_mode: str = "preloaded_views") -> dict[str, Any]:
   """Child-only persistent-preload target prefix and final oracle comparison."""
   from tinygrad import Tensor, dtypes
   from tinygrad.engine.realize import get_runtime
@@ -139,6 +141,8 @@ def _run_epoch_worker(program_path: str, epoch_start: int, epoch_count: int = 1,
     q4_epoch_sequence=q4_epoch_sequence, q8_epoch_sequence=q8_epoch_sequence,
     q8_values_epoch_sequence=q8_values_epoch_sequence,
     q8_metadata_epoch_sequence=q8_metadata_epoch_sequence)
+  if metadata_storage_mode not in METADATA_STORAGE_MODES:
+    raise ValueError(f"metadata_storage_mode must be one of {METADATA_STORAGE_MODES}")
   epoch_start, epoch_count = q4_epochs[0], len(q4_epochs)
   if not isinstance(runtime_timeout_ms, int) or runtime_timeout_ms <= 0: raise ValueError("runtime timeout must be positive")
   started = time.perf_counter()
@@ -160,6 +164,19 @@ def _run_epoch_worker(program_path: str, epoch_start: int, epoch_count: int = 1,
   values_tensor = Tensor(values, dtype=dtypes.int8, device=device).realize()
   scales_tensor = Tensor(scales, dtype=dtypes.float32, device=device).realize()
   sums_tensor = Tensor(sums, dtype=dtypes.float32, device=device).realize()
+  dedicated_scales: list[Any] = []
+  dedicated_sums: list[Any] = []
+  fixed_scales = fixed_sums = None
+  if metadata_storage_mode == "dedicated_preloaded":
+    for metadata_epoch in q8_metadata_epochs:
+      first, last = metadata_epoch * 2 * m * 4, (metadata_epoch + 1) * 2 * m * 4
+      dedicated_scales.append(Tensor(np.ascontiguousarray(scales[first:last]), dtype=dtypes.float32, device=device).realize())
+      dedicated_sums.append(Tensor(np.ascontiguousarray(sums[first:last]), dtype=dtypes.float32, device=device).realize())
+  elif metadata_storage_mode == "fixed_refreshed":
+    fixed_scales = Tensor.empty(2 * m * 4, dtype=dtypes.float32, device=device).realize()
+    fixed_sums = Tensor.empty(2 * m * 4, dtype=dtypes.float32, device=device).realize()
+    fixed_scales.uop.buffer.get_buf(device)
+    fixed_sums.uop.buffer.get_buf(device)
   checkpoints["after_preload"] = _timeline_snapshot(device)
 
   runtime = get_runtime(device, program)
@@ -174,18 +191,37 @@ def _run_epoch_worker(program_path: str, epoch_start: int, epoch_count: int = 1,
     q4_view = q4_tensor.uop.buffer.view(n * 36, dtypes.uint32, q4_epoch * n * 36 * dtypes.uint32.itemsize)
     values_view = values_tensor.uop.buffer.view(2 * m * 128, dtypes.int8,
                                                  q8_values_epoch * 2 * m * 128 * dtypes.int8.itemsize)
-    scales_view = scales_tensor.uop.buffer.view(2 * m * 4, dtypes.float32,
-                                                 q8_metadata_epoch * 2 * m * 4 * dtypes.float32.itemsize)
-    sums_view = sums_tensor.uop.buffer.view(2 * m * 4, dtypes.float32,
-                                             q8_metadata_epoch * 2 * m * 4 * dtypes.float32.itemsize)
-    args = tuple((output.uop.buffer, q4_view, values_view, scales_view, sums_view)[slot].get_buf(device)
-                 for slot in program.arg.globals)
+    if metadata_storage_mode == "preloaded_views":
+      scales_view = scales_tensor.uop.buffer.view(2 * m * 4, dtypes.float32,
+                                                   q8_metadata_epoch * 2 * m * 4 * dtypes.float32.itemsize)
+      sums_view = sums_tensor.uop.buffer.view(2 * m * 4, dtypes.float32,
+                                               q8_metadata_epoch * 2 * m * 4 * dtypes.float32.itemsize)
+    elif metadata_storage_mode == "dedicated_preloaded":
+      scales_view, sums_view = dedicated_scales[ordinal].uop.buffer, dedicated_sums[ordinal].uop.buffer
+    else:
+      assert fixed_scales is not None and fixed_sums is not None
+      first, last = q8_metadata_epoch * 2 * m * 4, (q8_metadata_epoch + 1) * 2 * m * 4
+      fixed_scales.uop.buffer.copyin(memoryview(np.ascontiguousarray(scales[first:last])))
+      fixed_sums.uop.buffer.copyin(memoryview(np.ascontiguousarray(sums[first:last])))
+      # Buffer.copyin enqueues SDMA. Drain it before the target so this mode
+      # changes only metadata contents at fixed VAs, never upload visibility.
+      from tinygrad.device import Device
+      Device[device].synchronize()
+      scales_view, sums_view = fixed_scales.uop.buffer, fixed_sums.uop.buffer
+    bound_buffers = (output.uop.buffer, q4_view, values_view, scales_view, sums_view)
+    args = tuple(bound_buffers[slot].get_buf(device) for slot in program.arg.globals)
     gpu_seconds = runtime(*args, global_size=(n // 128, m // 128, 1), local_size=program.arg.local_size,
                           vals=program.arg.vals({}), wait=True, timeout=runtime_timeout_ms)
     gpu_ms_total += float(gpu_seconds) * 1000.0 if gpu_seconds is not None else 0.0
     completed_epochs.append(q4_epoch)
     dispatches.append({"q4_epoch": q4_epoch, "q8_epoch": q8_epoch,
                        "q8_values_epoch": q8_values_epoch, "q8_metadata_epoch": q8_metadata_epoch,
+                       "scales_va_addr": int(getattr(scales_view.get_buf(device), "va_addr")),
+                       "sums_va_addr": int(getattr(sums_view.get_buf(device), "va_addr")),
+                       "scales_epoch_sha256": _hash_array(
+                         scales[q8_metadata_epoch * 2 * m * 4:(q8_metadata_epoch + 1) * 2 * m * 4]),
+                       "sums_epoch_sha256": _hash_array(
+                         sums[q8_metadata_epoch * 2 * m * 4:(q8_metadata_epoch + 1) * 2 * m * 4]),
                        "timeline": _timeline_snapshot(device)})
   got = output.numpy().reshape(m, n)
 
@@ -224,6 +260,7 @@ def _run_epoch_worker(program_path: str, epoch_start: int, epoch_count: int = 1,
             _buffer_record("q8_scales", scales_tensor, device), _buffer_record("q8_sums", sums_tensor, device)],
           "input_hashes": {"q4_epoch_major": _hash_array(q4_packed), "values": _hash_array(values),
                            "scales": _hash_array(scales), "sums": _hash_array(sums)},
+          "metadata_storage_mode": metadata_storage_mode,
           "output_initialization": "empty_full_target_partial",
           "no_fallback": True, "elapsed_seconds": time.perf_counter() - started}
 
@@ -249,6 +286,7 @@ def run_single_epoch_canary(*, epoch: int = DEFAULT_EPOCH, epoch_start: int | No
                             q8_epoch_sequence: tuple[int, ...] | list[int] | None = None,
                             q8_values_epoch_sequence: tuple[int, ...] | list[int] | None = None,
                             q8_metadata_epoch_sequence: tuple[int, ...] | list[int] | None = None,
+                            metadata_storage_mode: str = "preloaded_views",
                             compile_fn: Callable[[str | Path], tuple[str, dict[str, Any]]] | None = None,
                             device: str = DEVICE, timeout_seconds: float = DEFAULT_CHILD_TIMEOUT_SECONDS,
                             runtime_timeout_ms: int = DEFAULT_RUNTIME_TIMEOUT_MS,
@@ -264,6 +302,8 @@ def run_single_epoch_canary(*, epoch: int = DEFAULT_EPOCH, epoch_start: int | No
   sequence = tuple(epoch_sequence) if epoch_sequence is not None else None
   epoch_start, epoch_count = q4_sequence[0], len(q4_sequence)
   if timeout_seconds <= 0 or runtime_timeout_ms <= 0: raise ValueError("timeouts must be positive")
+  if metadata_storage_mode not in METADATA_STORAGE_MODES:
+    raise ValueError(f"metadata_storage_mode must be one of {METADATA_STORAGE_MODES}")
   if compile_fn is None:
     from extra.qk.mmq_target_epoch_orchestrator import compile_target_program_artifact
     compile_fn = compile_target_program_artifact
@@ -276,6 +316,7 @@ def run_single_epoch_canary(*, epoch: int = DEFAULT_EPOCH, epoch_start: int | No
     "q8_epoch_sequence": list(q8_sequence),
     "q8_values_epoch_sequence": list(q8_values_sequence),
     "q8_metadata_epoch_sequence": list(q8_metadata_sequence),
+    "metadata_storage_mode": metadata_storage_mode,
     "fresh_output_each_launch": bool(fresh_output_each_launch),
     "output_mode": "fresh_held" if fresh_output_each_launch else "persistent",
     "kernel_faults": [], "compile": None, "child": None, "health_after": None}
@@ -291,7 +332,8 @@ def run_single_epoch_canary(*, epoch: int = DEFAULT_EPOCH, epoch_start: int | No
                                                tuple(q4_sequence) if q4_epoch_sequence is not None else None,
                                                tuple(q8_sequence) if q8_epoch_sequence is not None else None,
                                                tuple(q8_values_sequence) if q8_values_epoch_sequence is not None else None,
-                                               tuple(q8_metadata_sequence) if q8_metadata_epoch_sequence is not None else None),
+                                               tuple(q8_metadata_sequence) if q8_metadata_epoch_sequence is not None else None,
+                                               metadata_storage_mode),
                       timeout_seconds=float(timeout_seconds), start_method="spawn")
     base["child_status"], base["child_error"] = isolated.status, isolated.error
     if isolated.status == "passed" and isinstance(isolated.result, dict): base["child"] = isolated.result
@@ -343,6 +385,8 @@ def main(argv: list[str] | None = None) -> int:
                       help="comma-separated Q8 values epoch indices")
   parser.add_argument("--q8-metadata-epoch-sequence", type=str, default=None,
                       help="comma-separated Q8 metadata epoch indices")
+  parser.add_argument("--metadata-storage-mode", choices=METADATA_STORAGE_MODES, default="preloaded_views",
+                      help="diagnostic Q8 scale/sum allocation lifecycle")
   parser.add_argument("--fresh-output-each-launch", action="store_true",
                       help="allocate and retain a distinct output for each target launch")
   parser.add_argument("--output", type=Path)
@@ -364,7 +408,8 @@ def main(argv: list[str] | None = None) -> int:
                                    epoch_sequence=sequence, q4_epoch_sequence=q4_sequence,
                                    q8_epoch_sequence=q8_sequence,
                                    q8_values_epoch_sequence=q8_values_sequence,
-                                   q8_metadata_epoch_sequence=q8_metadata_sequence)
+                                   q8_metadata_epoch_sequence=q8_metadata_sequence,
+                                   metadata_storage_mode=args.metadata_storage_mode)
   print(json.dumps(result, sort_keys=True))
   return 0 if result.get("passed") else 1
 
@@ -372,4 +417,5 @@ def main(argv: list[str] | None = None) -> int:
 if __name__ == "__main__": raise SystemExit(main())
 
 
-__all__ = ["SCHEMA", "TARGET_SHAPE", "TOTAL_EPOCHS", "parse_kernel_faults", "run_single_epoch_canary"]
+__all__ = ["METADATA_STORAGE_MODES", "SCHEMA", "TARGET_SHAPE", "TOTAL_EPOCHS",
+           "parse_kernel_faults", "run_single_epoch_canary"]

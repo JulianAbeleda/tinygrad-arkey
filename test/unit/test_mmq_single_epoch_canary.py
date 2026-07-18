@@ -90,7 +90,7 @@ def test_epoch_sequence_overrides_range_and_is_forwarded():
     runner=runner, fault_reader=lambda _: "", health_probe=lambda: True,
   )
   assert out["status"] == "PASS" and out["epoch_sequence"] == [19, 0, 7]
-  assert calls == [(19, 3, "AMD", 30_000, False, (19, 0, 7), None, None, None, None)]
+  assert calls == [(19, 3, "AMD", 30_000, False, (19, 0, 7), None, None, None, None, "preloaded_views")]
 
 
 def test_timeout_fails_closed_without_health_retry():
@@ -151,7 +151,7 @@ def test_independent_q4_q8_sequences_mix_and_forward():
   )
   assert out["status"] == "PASS" and out["q4_epoch_sequence"] == [19, 0]
   assert out["q8_epoch_sequence"] == [1, 7]
-  assert calls == [(None, (19, 0), (1, 7), None, None)]
+  assert calls == [(None, (19, 0), (1, 7), None, None, "preloaded_views")]
 
 
 def test_independent_sequence_lengths_must_match():
@@ -173,4 +173,21 @@ def test_independent_q8_values_metadata_sequences_forward():
   assert out["status"] == "PASS"
   assert out["q8_values_epoch_sequence"] == [4, 5]
   assert out["q8_metadata_epoch_sequence"] == [6, 7]
-  assert calls == [((0, 1), (2, 3), (4, 5), (6, 7))]
+  assert calls == [((0, 1), (2, 3), (4, 5), (6, 7), "preloaded_views")]
+
+
+def test_metadata_storage_mode_is_forwarded_and_fail_closed():
+  calls: list[str] = []
+  def runner(callback, *, args=(), **kwargs):
+    calls.append(args[-1])
+    return IsolatedResult("passed", {"passed": True, "comparison": {"status": "pass"}, "target_dispatches": 3})
+  out = canary.run_single_epoch_canary(
+    q4_epoch_sequence=(0, 0, 0), q8_epoch_sequence=(0, 0, 0), q8_values_epoch_sequence=(0, 0, 0),
+    q8_metadata_epoch_sequence=(0, 1, 2), metadata_storage_mode="fixed_refreshed",
+    compile_fn=_compile, runner=runner, fault_reader=lambda _: "", health_probe=lambda: True,
+  )
+  assert out["status"] == "PASS" and out["metadata_storage_mode"] == "fixed_refreshed"
+  assert calls == ["fixed_refreshed"]
+  try: canary.run_single_epoch_canary(metadata_storage_mode="unknown", compile_fn=_compile)
+  except ValueError as exc: assert "metadata_storage_mode" in str(exc)
+  else: raise AssertionError("unknown metadata storage mode must fail closed")
