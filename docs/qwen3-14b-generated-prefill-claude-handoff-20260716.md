@@ -472,9 +472,11 @@ Fresh native probes after both fixes are exact and remain fail-closed:
 The exact target-role (`ffn_gate_up`, `512x17408x5120`) compile still emits with zero scratch/spills, but its 20-epoch
 GPU dispatch has not yet produced a structured correctness result. The default 30-second HCQ wait was insufficient;
 an extended-wait run drove the GPU for roughly 14 minutes and then the amdgpu driver reset the device (`GPU reset
-succeeded; device wedged, but recovered through reset`) before the child could emit JSON. Treat this as a target
-workload health/scale blocker, not a correctness pass: R6 role integration and production route promotion remain
-blocked until a bounded target run completes without a GPU reset and reports numerical comparison/resource evidence.
+succeeded; device wedged, but recovered through reset`) before the child could emit JSON. A subsequent one-epoch
+diagnostic also exceeded a 600-second outer deadline, with amdgpu `sq_intr` errors recorded in the kernel log. Treat
+this as a target workload health/scale blocker, not a correctness pass: R6 role integration and production route
+promotion remain blocked until a bounded target run completes without a GPU reset/error and reports numerical
+comparison/resource evidence.
 
 ## 1. Executive state
 

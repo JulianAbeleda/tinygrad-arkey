@@ -509,7 +509,8 @@ def run_full_grid_k_tiled_probe_isolated(*, timeout_seconds: float = 360.0,
   return result
 
 
-def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1) -> dict[str, Any]:
+def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
+                                    epoch_limit: int | None = None) -> dict[str, Any]:
   """Run the emitted K=256 program across the exact 14B ffn_gate_up shape.
 
   This remains bounded evidence: each epoch writes a fresh full-role partial
@@ -531,6 +532,9 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1) -> dic
     q8_1_mmq_ds4_quantize_reference,
   )
   m, n, k = TARGET_ROLE_PROBE_SHAPE
+  total_epochs = k // 256
+  if epoch_limit is None: epoch_limit = total_epochs
+  if not 0 < epoch_limit <= total_epochs: raise ValueError(f"epoch_limit must be in [1,{total_epochs}]")
   words_np = _random_q4_words(n, k, 20260721)
   source_np = np.random.default_rng(20260722).standard_normal((m, k), dtype=np.float32)
   values_np, scales_np, sums_np = q8_1_mmq_ds4_quantize_reference(source_np)
@@ -546,7 +550,7 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1) -> dic
     nonlocal completed_epochs
     accum = Tensor.zeros(m * n, dtype=dtypes.float32, device="AMD").realize()
     elapsed = 0.0
-    for epoch in range(k // 256):
+    for epoch in range(epoch_limit):
       partial = Tensor.empty(m * n, dtype=dtypes.float32, device="AMD").realize()
       q4 = Tensor(np.ascontiguousarray(q4_blocks[:, epoch:epoch+1, :].reshape(-1).view(np.uint32)), device="AMD").realize()
       values = Tensor(np.ascontiguousarray(values_np[epoch*2:(epoch+1)*2].reshape(-1)), device="AMD").realize()
@@ -589,7 +593,8 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1) -> dic
           "correctness": {"status": "PASS" if passed else "BLOCKED", "comparison": comparison,
                            "authority": "same_session_fp16_rounded_ds4_reference"},
           "timing": {"samples_ms": samples, "min_ms": min(samples), "median_ms": float(np.median(samples)),
-                     "k_epoch_launches": k // 256, "accumulation": "tinygrad_elementwise_add"},
+                     "k_epoch_launches": epoch_limit, "total_k_epoch_launches": total_epochs,
+                     "accumulation": "tinygrad_elementwise_add"},
           "artifacts": {**artifact, "backend_id": FULL_GRID_BACKEND_ID,
                         "distinct_binary_identity": isinstance(binary, bytes) and isinstance(source, str),
                         "no_fallback": True, "same_session_timing": True},
@@ -598,19 +603,22 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1) -> dic
 
 
 def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
-                                              warmups: int = 0, rounds: int = 1) -> dict[str, Any]:
+                                              warmups: int = 0, rounds: int = 1,
+                                              epoch_limit: int | None = None) -> dict[str, Any]:
   if timeout_seconds <= 0: return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1",
                                   "status": "BLOCKED", "exact_blocker": "timeout_seconds must be positive"}
   child_env = dict(os.environ)
   child_env.update({"DEV": "AMD", "PYTHONPATH": str(ROOT) + os.pathsep + child_env.get("PYTHONPATH", "")})
   code = ("import json; from extra.qk.mmq_llama_five_buffer_gpu_harness import run_full_grid_target_role_probe; "
-          f"print(json.dumps(run_full_grid_target_role_probe(warmups={int(warmups)}, rounds={int(rounds)})))")
+          f"print(json.dumps(run_full_grid_target_role_probe(warmups={int(warmups)}, rounds={int(rounds)}, "
+          f"epoch_limit={repr(epoch_limit)})))")
   try:
     proc = subprocess.run([sys.executable, "-c", code], cwd=ROOT, env=child_env,
                           text=True, capture_output=True, timeout=timeout_seconds, check=False)
   except subprocess.TimeoutExpired:
     return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
-            "exact_blocker": "target-role compile/20-epoch dispatch timed out", "timeout_seconds": timeout_seconds}
+            "exact_blocker": f"target-role compile/{epoch_limit if epoch_limit is not None else 'full'}-epoch dispatch timed out",
+            "timeout_seconds": timeout_seconds}
   try: result = json.loads(proc.stdout.strip().splitlines()[-1])
   except (IndexError, json.JSONDecodeError):
     return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
