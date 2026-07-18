@@ -73,6 +73,10 @@ def test_target_role_stable_epoch_staging_requires_stable_metadata_before_gpu():
   with pytest.raises(ValueError, match="requires stable_metadata_staging"):
     run_full_grid_target_role_probe(stable_epoch_staging=True, preloaded_epochs=True)
 
+def test_target_role_async_epochs_require_safe_fixed_va_contract_before_gpu():
+  with pytest.raises(ValueError, match="asynchronous epoch dispatch requires"):
+    run_full_grid_target_role_probe(wait_each_dispatch=False)
+
 
 def test_target_role_in_place_mode_fails_closed_before_gpu_for_unsafe_options():
   with pytest.raises(ValueError, match="requires persistent_buffers"):
@@ -263,13 +267,16 @@ def test_target_role_isolated_wrapper_propagates_stable_metadata_flag():
     result = run_full_grid_target_role_probe_isolated(timeout_seconds=1, preloaded_epochs=True,
                                                        stable_metadata_staging=True,
                                                        stable_epoch_staging=True,
-                                                       in_kernel_accumulate=True)
+                                                       persistent_buffers=True,
+                                                       in_kernel_accumulate=True,
+                                                       wait_each_dispatch=False)
   assert result["status"] == "BLOCKED"
   assert result["kernel_faults"] == [] and result["health_after"] is True
   code = run.call_args.args[0][2]
   assert "stable_metadata_staging=True" in code
   assert "stable_epoch_staging=True" in code
   assert "in_kernel_accumulate=True" in code
+  assert "wait_each_dispatch=False" in code
 
 
 def test_target_role_isolated_wrapper_propagates_admitted_role_to_child():

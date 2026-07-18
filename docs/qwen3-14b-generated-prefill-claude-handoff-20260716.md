@@ -1,8 +1,50 @@
 # Qwen3-14B generated-prefill Claude handoff
 
-## 1.1 Current status 2026-07-18: all Q4 roles resolved; Phase 3 complete
+## 1.2 Current status 2026-07-18: all Q4 roles measured; no generated performance winner
 
-Read this section first. It supersedes §1.0 and the chronological diagnostics below.
+Read this section first. It corrects the performance accounting in §1.1 and §0.9.
+
+All four generated Q4 roles have exact full-role correctness/resource/health evidence, but none beats direct packed.
+The earlier `ffn_gate_up` selection was based on an invalid comparison:
+
+- `0.277502 ms` is one emitted K=256 epoch, one twentieth of the K=5120 role.
+- `9.351988 ms` is the complete K=5120 direct-packed role.
+- The comparable generated 20-epoch measurements are `42.8822620306164 ms` with synchronized AQL,
+  `27.07601070869714 ms` with queued AQL plus a final synchronization, and `41.86103114625439 ms` with PM4.
+- All exact runs pass 8,912,896 values with zero mismatches and maximum absolute error `0.00341796875`, but even the
+  best observed exact generated route is `2.895x` slower than direct packed.
+
+The frozen route remains valuable as a correctness-qualified integration diagnostic. The immutable six-row research
+artifact remains unchanged for identity/binding/census work, but it is not a performance-qualified policy and its
+`ffn_gate_up` row is not a performance selection.
+
+```text
+phase_3_measurements_complete=true
+selected_generated_roles=
+integration_only_policy_candidate_roles=ffn_gate_up
+performance_rejected_generated_roles=ffn_gate_up,attn_kv,attn_qo,ffn_down
+performance_qualified_policy=false
+production_promotion=false
+default_route=direct_packed
+```
+
+Authoritative phase state:
+
+| Phase | State |
+|---|---|
+| 3 — Q4_K role completion | Measurement closeout complete; no generated performance winner. |
+| 4 — Q6_K role completion | Complete for the declared two-row direct-packed fallback strategy. |
+| 5 — Central candidate policy | Integration machinery complete; performance-qualified policy open. |
+| 6 — Mixed-route 14B integration | Open; the current six-row route is diagnostic only. |
+| 7 — Parity and promotion | Open and ineligible until a performance-qualified policy passes Phase 6. |
+
+Continue to reuse tinygrad's five-buffer emitter, frozen artifacts, and PM4/AQL runtime. Do not add a HIP launcher.
+The two useful tracks are now: diagnose the live integration seam, and search for a candidate that wins under
+comparable full-role timing. Only the latter can supply a promotion policy.
+
+## Historical 1.1 status 2026-07-18: all Q4 roles resolved
+
+This section predates the full-role performance-accounting correction in §1.2.
 
 The `attn_kv` Q4 role no longer owns a correctness, resource, health, or repeated-dispatch blocker:
 
@@ -52,15 +94,14 @@ Authoritative phase state:
 
 | Phase | State |
 |---|---|
-| 3 — Q4_K role completion | Complete: all four generated roles measured for correctness/resources/health; `ffn_gate_up` selected and the other three retained as measured direct-packed fallbacks. |
+| 3 — Q4_K role completion | Historical conclusion, corrected by §1.2: all four generated roles were measured, but `ffn_gate_up` was not a comparable performance winner. |
 | 4 — Q6_K role completion | Complete for the declared two-row direct-packed fallback strategy. |
 | 5 — Central candidate policy | Complete at the default-off research boundary; the immutable policy remains unchanged. |
 | 6 — Mixed-route 14B integration | Open. |
 | 7 — Parity and promotion | Open. |
 
-Next run Phase 6 whole-model mixed-route correctness, genuine execution census, memory reconciliation, GPU health,
-decode regression, and rollback proof using the unchanged immutable policy. No HIP launcher, model/GPU-name branch,
-or further work on a rejected generated role is justified unless exact whole-policy attribution explicitly reopens it.
+Phase 6 integration diagnostics may use the unchanged immutable artifact, but the current performance work must search
+for a faster generated candidate. No HIP launcher or model/GPU-name branch is justified.
 
 There is no project progress percentage. The phase ledger in
 `docs/qwen3-14b-generated-prefill-completion-scope-20260714.md` is the authority.
@@ -107,7 +148,7 @@ Authoritative phase state:
 
 | Phase | State |
 |---|---|
-| 3 — Q4_K role completion | Open: `ffn_gate_up` qualified; `attn_kv` repeated-dispatch blocked; `attn_qo` and Q4 `ffn_down` still require full qualification. |
+| 3 — Q4_K role completion | Historical state: `ffn_gate_up` correctness-qualified but not yet comparably performance-measured; `attn_kv` repeated-dispatch blocked; `attn_qo` and Q4 `ffn_down` still required full qualification. |
 | 4 — Q6_K role completion | Complete for the declared two-row direct-packed fallback strategy. |
 | 5 — Central candidate policy | Complete at the default-off research boundary: immutable six-row policy, exact binding, and execution-census implementation exist. |
 | 6 — Mixed-route 14B integration | Open: no successful whole-model policy execution/census, memory reconciliation, health, or decode proof. |
@@ -142,20 +183,21 @@ Read this section first. The current pushed implementation/evidence head before 
 `e4a940384`. The old spill, MMU-fault, executable-lifecycle, and “do not run 20 epochs” statements in the chronological
 sections below are superseded.
 
-The exact Q4_K/Q8_1 `ffn_gate_up` role at `M=512, N=17408, K=5120` is now evidence-ready to implement a research
-opt-in. It is not bound to a live route and is not production-promoted:
+At this checkpoint, the exact Q4_K/Q8_1 `ffn_gate_up` role at `M=512, N=17408, K=5120` appeared evidence-ready to
+implement a research opt-in. The later full-role accounting in §1.2 rejected that performance conclusion:
 
 - `docs/qwen3-14b-prefill-r5-geometry-20260718.json` is a retained, same-session
   `q4k-q8-1-mmq-r5-geometry-search.v1` report. Its emitted full-grid row passed all 16,384 outputs with zero
   mismatches and maximum absolute error `3.0517578125e-5`. Three measured rounds gave candidate median/min
-  `0.277502/0.269477 ms` versus direct-packed `9.351988/9.349303 ms`; the min-time speedup is `34.694x`.
-  The row retains both sample sets, exact source/binary hashes, native resources (`VGPR=256`, `LDS=57,856 B`,
-  `scratch=0`), distinct binary identity, same-session timing, and no-fallback evidence.
+  `0.277502/0.269477 ms` for one K=256 epoch. Comparing that with full-K=5120 direct-packed
+  `9.351988/9.349303 ms` was invalid; the historical `34.694x` label is not a speedup claim. The row still retains
+  useful source/binary hashes, native resources (`VGPR=256`, `LDS=57,856 B`, `scratch=0`), and correctness evidence.
 - `docs/qwen3-14b-prefill-target-frozen-20epoch-pm4-20260718.json` proves the exact full role with one frozen binary,
   20 same-process PM4 launches, in-kernel FP32 accumulation, persistent/preloaded inputs, stable fixed-VA GPU-SDMA
   metadata, and no intermediate readback, external add, recompile, or fallback. All 8,912,896 final outputs match
   under the declared tolerance with zero mismatches; maximum absolute error is `0.00341796875`. Health and fault
-  checks pass.
+  checks pass. Comparable later measurements are `41.861031 ms` PM4, `42.882262 ms` synchronized AQL, and
+  `27.076011 ms` queued AQL, all slower than the `9.351988 ms` direct-packed role.
 - `docs/target-epoch-safe-all-attested-20260718.json` independently proves every K=256 epoch in fresh processes:
   zero mismatches across 178,257,920 individually checked values, maximum absolute error `1.220703125e-4`, pinned
   fixture/source identity, and clean per-epoch health.

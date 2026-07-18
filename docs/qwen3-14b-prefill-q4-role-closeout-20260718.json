@@ -1,13 +1,15 @@
 {
-  "schema": "tinygrad.qwen3_14b_prefill_q4_role_closeout.v1",
-  "status": "PHASE_3_COMPLETE",
+  "schema": "tinygrad.qwen3_14b_prefill_q4_role_closeout.v2",
+  "status": "PHASE_3_MEASUREMENTS_COMPLETE_NO_PERFORMANCE_WINNER",
   "production_promotion": false,
   "policy_changed": false,
   "policy": {
     "path": "docs/qwen3-14b-prefill-six-row-research-policy-20260718.json",
     "sha256": "8ce1f435a58eedfa50c5736c09ecde68ad2a411530e849940a67adcb09740091",
     "artifact_identity": "qk_exact_six_row_policy:sha256:800ad8a2047b0efd69d81afc45f387af7c71a038e141e73ec7c855bebe44814e",
-    "status": "research_only"
+    "status": "research_only",
+    "integration_only": true,
+    "performance_qualified": false
   },
   "common_generated_resources": {
     "vgpr": 256,
@@ -37,15 +39,53 @@
         "health": "PASS"
       },
       "performance": {
-        "generated_median_ms": 0.277502,
-        "generated_min_ms": 0.269477,
-        "direct_packed_median_ms": 9.351988,
-        "direct_packed_min_ms": 9.349303,
-        "methodology": "retained same-session three-round role evidence"
+        "invalid_comparison_retained_for_audit": {
+          "generated_single_epoch_k": 256,
+          "generated_single_epoch_median_ms": 0.277502,
+          "generated_single_epoch_min_ms": 0.269477,
+          "direct_packed_full_role_k": 5120,
+          "direct_packed_full_role_median_ms": 9.351988,
+          "direct_packed_full_role_min_ms": 9.349303,
+          "comparable": false,
+          "reason": "the generated timing covers one of 20 K=256 epochs while direct packed covers the complete K=5120 role"
+        },
+        "exact_full_role": {
+          "k": 5120,
+          "epoch_launches": 20,
+          "direct_packed_median_ms": 9.351988,
+          "generated_aql_header_last_ms": 42.8822620306164,
+          "generated_aql_queued_ms": 27.07601070869714,
+          "generated_pm4_ms": 41.86103114625439,
+          "best_generated_over_direct_ratio": 2.8952144408971803,
+          "performance_winner": false,
+          "methodology_limit": "each exact generated result is one isolated full-role sample; sufficient to reject a win, not to make a statistical promotion claim"
+        }
       },
-      "decision": "SELECT_GENERATED_RESEARCH_CANDIDATE",
+      "full_role_performance_artifacts": [
+        {
+          "path": "docs/qwen3-14b-prefill-ffn-gate-up-fixed-va-20epoch-aql-header-last-20260718.json",
+          "sha256": "439f8448029ba62cd3da29fc33f54a82a09c2d8515c7136e057bd526ba1b434c",
+          "status": "PASS",
+          "milliseconds": 42.8822620306164
+        },
+        {
+          "path": "docs/qwen3-14b-prefill-ffn-gate-up-fixed-va-20epoch-aql-async-20260718.json",
+          "sha256": "501bdab9342843e62547fd58a6b63d760933010fcc48a9cd1aa08a2395f3d423",
+          "status": "PASS",
+          "milliseconds": 27.07601070869714
+        },
+        {
+          "path": "docs/qwen3-14b-prefill-target-frozen-20epoch-pm4-20260718.json",
+          "sha256": "1a94d8a1f2c7332cacff45c0781823f098c29876e22948e7175a25262e043755",
+          "status": "PASS",
+          "milliseconds": 41.86103114625439
+        }
+      ],
+      "decision": "REJECT_GENERATED_CANDIDATE_FOR_PERFORMANCE",
       "policy_binding_kind": "candidate",
       "selected_route": "q4k_q8_five_buffer_research",
+      "policy_binding_scope": "integration_only_historical_artifact",
+      "performance_qualified": false,
       "candidate_identity": "3e367ee04b0aa5db66ecaad085ec9f5ea414a56b8161b406cdefb125378356eb"
     },
     {
@@ -191,16 +231,30 @@
     "all_four_generated_roles_correctness_measured": true,
     "all_four_generated_roles_resources_measured": true,
     "all_four_generated_roles_health_measured": true,
-    "selected_generated_roles": [
-      "ffn_gate_up"
-    ],
-    "measured_direct_packed_fallbacks": [
+    "selected_generated_roles": [],
+    "performance_rejected_generated_roles": [
+      "ffn_gate_up",
       "attn_kv",
       "attn_qo",
       "ffn_down"
     ],
-    "complete": true
+    "integration_only_policy_candidate_roles": [
+      "ffn_gate_up"
+    ],
+    "integration_policy_direct_packed_fallbacks": [
+      "attn_kv",
+      "attn_qo",
+      "ffn_down"
+    ],
+    "production_direct_packed_roles": [
+      "ffn_gate_up",
+      "attn_kv",
+      "attn_qo",
+      "ffn_down"
+    ],
+    "complete": true,
+    "performance_policy_ready": false
   },
-  "next_phase": "PHASE_6_MIXED_ROUTE_14B_INTEGRATION",
-  "performance_authority_caveat": "Cold isolated one-sample role timings for attn_kv, attn_qo, and ffn_down are rejection evidence only; they are not matched or statistical promotion evidence."
+  "next_phase": "GENERATE_A_PERFORMANCE_WINNER_WHILE_PHASE_6_REMAINS_AN_INTEGRATION_DIAGNOSTIC",
+  "performance_authority_caveat": "The 0.277502 ms ffn_gate_up sample covers one K=256 epoch and is incomparable with the 9.351988 ms full-K direct-packed role. Exact 20-epoch generated samples are 42.882262 ms synchronized AQL, 27.076011 ms queued AQL, and 41.861031 ms PM4, so all four measured generated Q4 roles lose to direct packed. No generated role is performance-qualified; production_promotion=false."
 }

@@ -3,9 +3,11 @@ from __future__ import annotations
 import hashlib
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 
-from tinygrad import dtypes
+from tinygrad import Tensor, dtypes
+from tinygrad.llm.qk_primitives import _shared_packed_view
 from tinygrad.uop.ops import Ops, ProgramInfo, UOp
 
 from extra.qk.mmq_exact_role_spec import ExactRoleSpec, exact_role_spec
@@ -191,6 +193,24 @@ def test_exact_k256_dispatch_count_grid_abi_and_stable_five_buffers():
   for name in adapter.ABI_NAMES[1:]:
     destinations = [id(dst) for staged_name, _, dst, _ in boundary.stages if staged_name == name]
     assert len(destinations) == role_spec.epochs and len(set(destinations)) == 1
+
+
+def test_q4_epoch_gather_preserves_shared_gguf_n_major_words_and_nonzero_backing_offset():
+  # Production Q4 primitives are views into the selected whole-GGUF backing,
+  # not standalone packed arrays. Exercise both the nonzero backing offset and
+  # the strided [N, epoch, 36] gather which the synthetic role fixture does not.
+  role_spec = ExactRoleSpec("shared-layout-probe", 128, 128, 512, "0" * 64)
+  words = np.arange(role_spec.n * role_spec.epochs * adapter.Q4_WORDS_PER_EPOCH_ROW, dtype=np.uint32)
+  prefix = 64
+  raw = Tensor(np.concatenate((np.full(prefix, 0xA5, dtype=np.uint8), words.view(np.uint8)))).realize()
+  packed = _shared_packed_view(
+    {"raw_tensor": raw}, prefix, words.nbytes, dtypes.uint32)
+
+  assert packed.uop.buffer.offset == prefix
+  for epoch in range(role_spec.epochs):
+    got = adapter._q4_epoch(packed, role_spec, epoch).numpy()
+    expected = words.reshape(role_spec.n, role_spec.epochs, adapter.Q4_WORDS_PER_EPOCH_ROW)[:, epoch, :].reshape(-1)
+    np.testing.assert_array_equal(got, expected)
 
 
 def test_shared_n5120_frozen_program_is_accepted_for_qo_and_down_with_k_bounded_staging():

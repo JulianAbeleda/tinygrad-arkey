@@ -276,7 +276,7 @@ def _launch_buffer_evidence(names: tuple[str, ...], buffers: tuple[Any, ...],
 def _dispatch_with_runtime_evidence(runtime: Any, buffers: tuple[Any, ...], globals_: tuple[int, ...],
                                     *, global_size: tuple[int, int, int], local_size: tuple[int, int, int] | None,
                                     vals: tuple[Any, ...], runtime_evidence: dict[str, Any],
-                                    context: Mapping[str, Any]) -> Any:
+                                    context: Mapping[str, Any], wait: bool = True) -> Any:
   """Invoke the normal runtime once while recording its real kernarg allocation."""
   launch = {
     **dict(context), "global_size": list(global_size), "local_size": list(local_size or ()),
@@ -296,7 +296,7 @@ def _dispatch_with_runtime_evidence(runtime: Any, buffers: tuple[Any, ...], glob
 
   runtime.fill_kernargs = capture_kernargs
   try:
-    result = runtime(*args, global_size=global_size, local_size=local_size, vals=vals, wait=True)
+    result = runtime(*args, global_size=global_size, local_size=local_size, vals=vals, wait=wait)
   finally:
     if had_instance_fill: runtime.fill_kernargs = prior_instance_fill
     else: delattr(runtime, "fill_kernargs")
@@ -725,6 +725,7 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
                                     sync_each_epoch: bool = False,
                                     stable_metadata_staging: bool = False,
                                     stable_epoch_staging: bool = False,
+                                    wait_each_dispatch: bool = True,
                                     frozen_bundle: str | Path | None = None) -> dict[str, Any]:
   """Run the emitted K=256 program across one admitted exact 14B Q4 role.
 
@@ -741,6 +742,11 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
     raise ValueError("stable_metadata_staging requires preloaded_epochs")
   if stable_epoch_staging and not stable_metadata_staging:
     raise ValueError("stable_epoch_staging requires stable_metadata_staging")
+  if not wait_each_dispatch and not (
+      in_kernel_accumulate and persistent_buffers and preloaded_epochs and
+      stable_metadata_staging and stable_epoch_staging and not per_epoch_check):
+    raise ValueError("asynchronous epoch dispatch requires in-place accumulation, persistent preloaded buffers, "
+                     "all-input fixed-VA staging, and no intermediate readback")
   if in_kernel_accumulate and host_accumulate:
     raise ValueError("in_kernel_accumulate and host_accumulate are mutually exclusive")
   if in_kernel_accumulate and per_epoch_check:
@@ -1045,7 +1051,8 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
           runtime, buffers, tuple(program.arg.globals),
           global_size=(tile_count, m//128, 1), local_size=program.arg.local_size,
           vals=tuple(program.arg.vals({})), runtime_evidence=runtime_evidence,
-          context={"epoch": epoch, "n0": n0, "n1": n1, "tile_count": tile_count})
+          context={"epoch": epoch, "n0": n0, "n1": n1, "tile_count": tile_count},
+          wait=wait_each_dispatch)
       partial_host = partial.numpy() if per_epoch_check else None
       accum, accum_host = _accumulate_target_role_epoch(
         partial, accum, accum_host, partial_host, mode=accumulation_mode)
@@ -1064,6 +1071,14 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
         Device["AMD"].synchronize()
       elapsed += (time.perf_counter() - t0) * 1000.0
       completed_epochs += 1
+    if not wait_each_dispatch:
+      # The asynchronous mode measures the complete submitted epoch chain,
+      # not merely host enqueue latency. Same-device SDMA/compute timeline
+      # dependencies protect each fixed staging buffer until its prior
+      # consumer completes; this final drain is the sole host synchronization.
+      t0 = time.perf_counter()
+      Device["AMD"].synchronize()
+      elapsed += (time.perf_counter() - t0) * 1000.0
     return (accum_host if host_accumulate else accum), elapsed
   try:
     for _ in range(warmups): run_epochs()
@@ -1110,6 +1125,7 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
                      "persistent_buffers": persistent_buffers,
                      "preloaded_epochs": preloaded_epochs,
                      "sync_each_epoch": sync_each_epoch,
+                     "wait_each_dispatch": wait_each_dispatch,
                      "stable_metadata_staging": stable_metadata_staging,
                      "stable_epoch_staging": stable_epoch_staging,
                      "metadata_staging": metadata_staging, "epoch_staging": epoch_staging,
@@ -1141,6 +1157,7 @@ def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
                                               sync_each_epoch: bool = False,
                                               stable_metadata_staging: bool = False,
                                               stable_epoch_staging: bool = False,
+                                              wait_each_dispatch: bool = True,
                                               frozen_bundle: str | Path | None = None,
                                               child_env_overrides: Mapping[str, str] | None = None) -> dict[str, Any]:
   try: role_spec = admit_exact_role_spec(role_spec)
@@ -1163,6 +1180,12 @@ def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
   if stable_epoch_staging and not stable_metadata_staging:
     return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
             **role_identity, "exact_blocker": "stable_epoch_staging requires stable_metadata_staging"}
+  if not wait_each_dispatch and not (
+      in_kernel_accumulate and persistent_buffers and preloaded_epochs and
+      stable_metadata_staging and stable_epoch_staging and not per_epoch_check):
+    return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
+            **role_identity, "exact_blocker": "asynchronous epoch dispatch requires in-place accumulation, "
+            "persistent preloaded buffers, all-input fixed-VA staging, and no intermediate readback"}
   if frozen_bundle is not None and not in_kernel_accumulate:
     return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
             **role_identity, "exact_blocker": "frozen target bundle requires in_kernel_accumulate",
@@ -1198,6 +1221,7 @@ def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
           f"persistent_buffers={bool(persistent_buffers)}, preloaded_epochs={bool(preloaded_epochs)}, "
           f"sync_each_epoch={bool(sync_each_epoch)}, stable_metadata_staging={bool(stable_metadata_staging)}, "
           f"stable_epoch_staging={bool(stable_epoch_staging)}, "
+          f"wait_each_dispatch={bool(wait_each_dispatch)}, "
           f"frozen_bundle={frozen_arg})), flush=True)")
   started = time.time()
   try:
@@ -1358,6 +1382,7 @@ def main() -> int:
   parser.add_argument("--target-role-preloaded", action="store_true")
   parser.add_argument("--target-role-stable-metadata", action="store_true")
   parser.add_argument("--target-role-stable-epochs", action="store_true")
+  parser.add_argument("--target-role-no-wait-each-dispatch", action="store_true")
   parser.add_argument("--target-role-host-accumulate", action="store_true")
   parser.add_argument("--target-role-in-kernel-accumulate", action="store_true")
   parser.add_argument("--target-role-frozen-bundle", type=Path)
@@ -1375,6 +1400,7 @@ def main() -> int:
       persistent_buffers=args.target_role_persistent, preloaded_epochs=args.target_role_preloaded,
       stable_metadata_staging=args.target_role_stable_metadata,
       stable_epoch_staging=args.target_role_stable_epochs,
+      wait_each_dispatch=not args.target_role_no_wait_each_dispatch,
       frozen_bundle=args.target_role_frozen_bundle,
       child_env_overrides={"AMD_AQL": args.target_role_amd_aql} if args.target_role_amd_aql is not None else None,
     )

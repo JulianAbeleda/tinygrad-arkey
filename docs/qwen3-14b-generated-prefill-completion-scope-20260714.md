@@ -30,18 +30,19 @@ promotion is enabled.
 
 | Phase | Current state | Remaining gate |
 |---|---|---|
-| 3 — Q4_K role completion | Complete for the retained research policy. All four generated roles have full-role correctness/resource/health measurements. `ffn_gate_up` remains selected; `attn_kv`, `attn_qo`, and Q4 `ffn_down` are measured direct-packed fallbacks because their generated cold isolated samples do not beat the retained baselines. | Proceed to Phase 6. Reopen a rejected generated role only if exact whole-policy attribution shows that its fallback blocks the target. |
+| 3 — Q4_K role completion | Measurement closeout is complete: all four generated roles have full-role correctness/resource/health measurements, and none is a performance winner. The earlier `ffn_gate_up` selection compared one K=256 epoch (`0.277502 ms`) with a full-K=5120 direct-packed role (`9.351988 ms`) and is invalid. Exact generated full-role samples are `42.882262 ms` synchronized AQL, `27.076011 ms` queued AQL, and `41.861031 ms` PM4. | Search for a generated candidate that beats direct packed. The frozen `ffn_gate_up` route may remain available only as an integration diagnostic. |
 | 4 — Q6_K role completion | Complete for the declared fallback strategy. Both exact direct-packed Q6 rows (`attn_kv` and `ffn_down`) are qualified and timed under the retained policy contract. | No generated Q6 route is required unless measured whole-policy attribution shows the qualified fallbacks miss the target. |
-| 5 — Central candidate policy | Complete at the default-off research boundary. The immutable six-row policy, host selector, exact frozen candidate/fallback binding, fail-closed unknown/drift handling, and actual execution-census surface are implemented. `production_promotion=false`. | Exercise the retained policy in Phase 6. The implemented census surface is not a substitute for a successful whole-model live census. |
-| 6 — Mixed-route 14B integration | Not complete. The live research route remains explicit/default-off; no production route changed. | The exact policy must execute manually end to end with admission, isolated compile/resource evidence, role and model correctness, genuine execution census, memory reconciliation, GPU health, decode regression, and one-change direct-packed rollback. |
+| 5 — Central candidate policy | The default-off policy machinery is implemented, but the retained immutable six-row artifact is integration-only and is not a performance-qualified policy. It binds the now-rejected `ffn_gate_up` candidate so the live seam and census can be exercised; `production_promotion=false`. | Build a new immutable policy only after at least one comparable full-role generated candidate wins. |
+| 6 — Mixed-route 14B integration | Not complete. The live research route remains explicit/default-off; no production route changed. Its current policy is an integration diagnostic, not a promotion candidate. | Diagnose the live-model route and complete correctness/census/memory/health/decode/rollback proof, but do not advance it to Phase 7 unless the bound candidate is also performance-qualified. |
 | 7 — Parity and promotion | Not complete | The same immutable revision must pass the matched multi-context llama comparison and the statistical promotion gates below. |
 
 The dependency order is strict:
 
 ```text
-Phase 3 Q4 completion
+Phase 3 Q4 measurement closeout
+  -> comparable full-role generated performance winner
   -> Phase 4 fallback/strategy qualification
-  -> Phase 5 complete six-row policy
+  -> Phase 5 performance-qualified six-row policy
   -> Phase 6 manual end-to-end proof
   -> Phase 7 parity/beyond-parity proof
   -> performance autoscan
@@ -95,7 +96,29 @@ Anything less is a diagnostic or candidate result, not a shipped 14B completion.
 
 ## Current position
 
-### 2026-07-18 Phase 3 all-Q4 role closeout
+### 2026-07-18 Phase 3 all-Q4 measurement closeout
+
+All four generated Q4 roles are correctness/resource/health measured, but none is a performance winner. The earlier
+`ffn_gate_up` selection was an accounting error: the emitted `0.277502 ms` sample is one K=256 epoch, whereas the
+`9.351988 ms` direct-packed comparator covers the complete K=5120 role. The exact generated role requires 20 epochs.
+It passes all 8,912,896 values with zero mismatches and maximum absolute error `0.00341796875`, but measures
+`42.8822620306164 ms` with synchronized AQL dispatch, `27.07601070869714 ms` with queued AQL dispatch plus final
+synchronization, and `41.86103114625439 ms` with PM4. Even the best observed exact route is `2.895x` slower than the
+direct-packed median. Those are isolated rejection samples, not statistical promotion evidence.
+
+Therefore:
+
+```text
+phase_3_measurements_complete=true
+selected_generated_roles=
+performance_rejected_generated_roles=ffn_gate_up,attn_kv,attn_qo,ffn_down
+six_row_policy_scope=integration_only
+performance_qualified_policy=false
+production_promotion=false
+```
+
+The immutable six-row research artifact is retained unchanged for integration diagnostics and identity plumbing. Its
+candidate binding must not be described as a performance selection.
 
 The `attn_kv` Q4 row is resolved as a measured fallback; it is not a generated-candidate promotion.
 `docs/qwen3-14b-prefill-attn-kv-role-closeout-20260718.json` composes the exact five retained raw artifacts:
@@ -140,14 +163,8 @@ These samples are rejection evidence, not matched/statistical performance author
 selects direct packed for both roles, so it does not change. The compact composition
 `docs/qwen3-14b-prefill-q4-role-closeout-20260718.json` records all four Q4 decisions and exact evidence hashes.
 
-```text
-phase_3_complete=true
-selected_generated_roles=ffn_gate_up
-measured_direct_packed_fallbacks=attn_kv,attn_qo,ffn_down
-production_promotion=false
-```
-
-The next owning work is Phase 6 mixed-route 14B integration, not more Phase 3 role qualification.
+The next owning performance work is a generated candidate that wins under comparable full-role timing. Phase 6 may
+continue in parallel as an integration diagnostic, but the retained route cannot become a promotion candidate.
 
 ### Historical 2026-07-18 reconciled research-policy and `attn_kv` checkpoint
 
@@ -195,16 +212,18 @@ There is no project progress percentage. Phase gates are the authority.
 This checkpoint predates the completed Q6 fallback rows, immutable policy, live research binding/census implementation,
 and the retained `attn_kv` frozen/fresh-process evidence above.
 
-Project Phase 3 has advanced, but remains incomplete. The exact Q4_K/Q8_1 `ffn_gate_up`
-`512x17408x5120` role is evidence-ready to implement a research opt-in:
+Project Phase 3 had advanced, but remained incomplete at this historical checkpoint. The exact Q4_K/Q8_1
+`ffn_gate_up` `512x17408x5120` role appeared evidence-ready to implement a research opt-in:
 
 - The retained R5 artifact, `docs/qwen3-14b-prefill-r5-geometry-20260718.json`, records a zero-mismatch emitted
-  full-grid result and three same-session timing rounds. Candidate median/min is `0.277502/0.269477 ms` versus
-  direct-packed `9.351988/9.349303 ms`, a `34.694x` min-time speedup. Exact source/binary identity, native
-  `VGPR=256`, `LDS=57,856 B`, `scratch=0`, timing samples, and no-fallback evidence are retained.
+  full-grid result and three same-session timing rounds. Its candidate median/min
+  `0.277502/0.269477 ms` covers only one K=256 epoch and is not comparable with the recorded full-K=5120
+  direct-packed `9.351988/9.349303 ms`. The historical `34.694x` label is invalid. Exact source/binary identity,
+  native `VGPR=256`, `LDS=57,856 B`, `scratch=0`, timing samples, and no-fallback evidence are still useful.
 - The strict frozen-PM4 full-role artifact covers all 20 K epochs in one process with in-kernel FP32 accumulation,
   stable fixed-VA GPU-SDMA metadata, no intermediate readback/external add/recompile/fallback, and zero mismatches
-  across 8,912,896 outputs.
+  across 8,912,896 outputs. Later exact full-role timing (`41.861031 ms` PM4, `42.882262 ms` synchronized AQL,
+  and `27.076011 ms` queued AQL) rejected the generated route against the `9.351988 ms` direct-packed comparator.
 - The independent fresh-process all-epoch artifact checks 178,257,920 epoch outputs with zero mismatches and clean
   per-epoch health.
 - `docs/qwen3-14b-prefill-mmq-one-role-evidence-20260718.json` composes those proofs. Its verdict is
@@ -616,18 +635,16 @@ invalidate correctness, final ISA/resource evidence, controlled A/B timing, or w
 
 ## Immediate execution order
 
-1. Implement and bind the evidence-qualified `ffn_gate_up` research opt-in through the live generic
-   registry/admission/runtime path. Run a live negative-role and no-hidden-fallback census.
-2. Qualify the remaining three Q4 roles (`attn_qo`, Q4 `ffn_down`, `attn_kv`) with exact full-role
-   correctness/resource/health evidence and whole-primitive timing.
-3. Qualify and policy the two direct-packed Q6 fallbacks (`attn_kv`, Q6 `ffn_down`) using the existing Q6 tooling.
-   Pursue faster generated Q6 only if measured share requires it.
-4. Emit one immutable six-row policy with exact identities, fail-closed unknown/drift behavior, and one-change
-   direct-packed rollback.
-5. Run Phase 6 whole-model manual mixed-route memory reconciliation, route census, correctness/output/token checks,
-   GPU health, and decode correctness/performance regression.
-6. Run Phase 7 matched llama/tinygrad contexts 512/1024/2048/4096 in at least three alternating pinned sessions and
+1. Retain the current immutable six-row policy only as an integration diagnostic. Continue the bounded live-route
+   fault/census investigation without treating its `ffn_gate_up` binding as a performance selection.
+2. Use the existing machine-search, five-buffer emitter, frozen-artifact, and tinygrad PM4/AQL runtime stack to search
+   for a generated candidate that beats direct packed under comparable full-K role timing.
+3. Rebuild a performance-qualified immutable policy only after the winning candidate has exact full-role correctness,
+   resources, health, identity, and repeated timing evidence.
+4. Run Phase 6 whole-model manual mixed-route memory reconciliation, route census, correctness/output/token checks,
+   GPU health, and decode correctness/performance regression on that exact policy.
+5. Run Phase 7 matched llama/tinygrad contexts 512/1024/2048/4096 in at least three alternating pinned sessions and
    apply the statistical gates. If a gate misses, use Boltbeam only on that exact candidate revision/session.
-7. Only after all preceding gates pass, promote production; then enable performance autoscan.
+6. Only after all preceding gates pass, promote production; then enable performance autoscan.
 
-Until step 7, production dispatch remains unchanged and direct-packed remains the default.
+Until step 6, production dispatch remains unchanged and direct-packed remains the default.
