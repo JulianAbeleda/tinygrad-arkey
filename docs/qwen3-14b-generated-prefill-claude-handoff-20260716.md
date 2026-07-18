@@ -488,6 +488,31 @@ An additional host-FP32-accumulation diagnostic lets two epochs complete without
 reports 9,031 mismatches (max error 141.8), so it is not a promotion substitute; epoch 0 and epoch 1 run alone are
 each exact. This narrows the remaining defect to sequential multi-epoch/chunk state or resource lifecycle.
 
+## 0.7 Status update 2026-07-18: target lifecycle isolation and fail-closed role schema
+
+The target-role harness now has bounded lifecycle controls that do not alter the generated program or route policy:
+one full-N dispatch per K=256 epoch ('n_chunk_tiles=136'), persistent output/input buffers, preloaded all-epoch
+Q4/Q8 inputs, optional per-epoch numerical checks, and an explicit device-synchronize diagnostic. The exact target
+shape is still 'ffn_gate_up' (512,17408,5120).
+
+The one- and two-epoch full-N controls are exact: the persistent two-epoch run reports 0/8,912,896 mismatches,
+both epoch checks pass, max absolute error 3.662e-4, and resources vgpr=256, LDS=57,856, scratch=0.
+This separates the earlier N-chunk failure from arithmetic and proves the preloaded view/repack path for a bounded
+prefix.
+
+The required 20-epoch target run remains a health blocker. It fails before structured result serialization at the HCQ
+timeline (signal 30/current 29 with preloaded inputs and no host per-epoch copies; the explicit synchronize variant
+repeats the failure at signal 32/current 31). Thus allocator reuse, per-epoch SDMA copies, host checks, and the
+elementwise accumulation choice have each been isolated without producing a full-target pass. The blocker artifact is
+recorded as 'target-role-20epoch-preloaded.json'; it is not correctness or promotion evidence.
+
+The machine-search schema now accepts a target-role artifact only when it independently proves the exact role/shape,
+all 20 K epochs with full-N dispatch, GPU-side FP32 accumulation, preloaded/persistent buffers, zero-mismatch finite
+output, Q4/Q8 repack identities, resource/source/binary identity, same-session timing, and no hidden fallback.
+R6 remains fail-closed until that artifact exists; R7 can only mark the three exercised source components as owned
+atoms when the same measured target artifact carries source-revision/ownership evidence. Existing defaults remain
+production_dispatch_changed=false and direct_packed.
+
 ## 1. Executive state
 
 The project is building a generated tinygrad prefill route for non-fitting quantized models, using Qwen3-14B as the

@@ -354,6 +354,53 @@ def test_mmq_r6_and_r7_statuses_fail_closed_until_coop_win():
   assert all(row.get("blocking_evidence") for row in r7["remaining_rows"])
 
 
+def test_mmq_r6_target_role_gate_requires_measured_full_shape_evidence():
+  """A role boolean or R5 win cannot forge the 14B target-role admission."""
+  r5 = build_r5_geometry_search_report(run=True, runner=lambda config: {
+    "status": "PASS", "correctness": {"status": "PASS"},
+    "timing": {"min_ms": 1.0, "direct_packed": {"min_ms": 10.0}},
+  })
+  target = {
+    "schema": "q4k-q8-1-mmq-r6-target-role-evidence.v1", "status": "PASS",
+    "role": "ffn_gate_up", "shape": [512, 17408, 5120], "production_dispatch_changed": False,
+    "no_fallback": True,
+    "repack": {"q4_sha256": "a" * 64, "q8_values_sha256": "b" * 64,
+               "q8_scales_sha256": "c" * 64, "q8_sums_sha256": "d" * 64,
+               "q4_layout": "q4_k_bytes[n, k_epoch, 144]", "q8_layout": "q8_ds4[epoch, m, groups]"},
+    "correctness": {"status": "PASS", "comparison": {
+      "status": "pass", "mismatch_count": 0, "nan_got": 0, "nan_reference": 0,
+      "inf_got": 0, "inf_reference": 0, "joint_finite": 8912896, "got_size": 8912896,
+    }},
+    "timing": {"samples_ms": [60.0], "k_epoch_launches": 20, "total_k_epoch_launches": 20,
+               "n_chunk_tiles": 136, "accumulation": "tinygrad_elementwise_add", "persistent_buffers": True,
+               "preloaded_epochs": True,
+               "epoch_checks": [{"epoch": i, "status": "pass", "mismatch_count": 0} for i in range(20)]},
+    "artifacts": {"resources": {"vgpr": 256, "lds_bytes": 57856, "scratch_bytes": 0},
+                  "distinct_binary_identity": True, "same_session_timing": True, "no_fallback": True},
+  }
+  gate = build_r6_route_gate_status(r5, target_evidence=target)
+  assert gate["status"] == "READY_FOR_ONE_ROLE_OPT_IN"
+  assert gate["required_evidence"]["target_role_gpu_evidence"] is True
+  assert gate["role_shape_integration"]["target_shape_matches"] is True
+
+  forged = {**target, "correctness": {"status": "PASS", "comparison": {
+    "status": "pass", "mismatch_count": 0, "nan_got": 0, "nan_reference": 0,
+    "inf_got": 0, "inf_reference": 0, "joint_finite": 0, "got_size": 8912896,
+  }}}
+  blocked = build_r6_route_gate_status(r5, target_evidence=forged)
+  assert blocked["status"] == "BLOCKED_ROLE_SHAPE_INTEGRATION"
+  assert blocked["required_evidence"]["target_role_gpu_evidence"] is False
+
+  target_with_reduction = {**target, "reduction": {
+    "source_revision": "ac4cddeb0dbd778f650bf568f6f08344a06abe3a",
+    "owned_components": ["cooperative tile loop", "Q4_K tile_x staging", "Q8_1 tile_y two-panel lifecycle"],
+  }}
+  r7 = build_r7_reduction_status(target_with_reduction)
+  assert r7["status"] == "PASS_TARGET_ROLE_REDUCTION"
+  assert r7["remaining_rows"] == []
+  assert all(row["status"] == "owned_atom" for row in r7["converted_rows"])
+
+
 def test_mmq_machine_search_runner_receives_bounded_configs():
   seen = []
 

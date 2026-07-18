@@ -514,7 +514,10 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
                                     n_chunk_tiles: int | None = None,
                                     epoch_start: int = 0,
                                     host_accumulate: bool = False,
-                                    per_epoch_check: bool = False) -> dict[str, Any]:
+                                    per_epoch_check: bool = False,
+                                    persistent_buffers: bool = False,
+                                    preloaded_epochs: bool = False,
+                                    sync_each_epoch: bool = False) -> dict[str, Any]:
   """Run the emitted K=256 program across the exact 14B ffn_gate_up shape.
 
   This remains bounded evidence: each epoch writes a fresh full-role partial
@@ -543,6 +546,7 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
   total_n_tiles = n // 128
   if n_chunk_tiles is None: n_chunk_tiles = total_n_tiles
   if not 0 < n_chunk_tiles <= total_n_tiles: raise ValueError(f"n_chunk_tiles must be in [1,{total_n_tiles}]")
+  if preloaded_epochs: persistent_buffers = True
   words_np = _random_q4_words(n, k, 20260721)
   source_np = np.random.default_rng(20260722).standard_normal((m, k), dtype=np.float32)
   values_np, scales_np, sums_np = q8_1_mmq_ds4_quantize_reference(source_np)
@@ -553,45 +557,118 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
   program = compiled.program
   binary, source, artifact = _artifact_evidence(program, parse_amdgpu_metadata)
   q4_blocks = words_np.view(np.uint8).reshape(n, k // 256, 144)
+  repack_evidence = {
+    "q4_sha256": hashlib.sha256(q4_blocks.tobytes()).hexdigest(),
+    "q4_layout": "q4_k_bytes[n, k_epoch, 144]",
+    "q8_values_sha256": hashlib.sha256(values_np.tobytes()).hexdigest(),
+    "q8_scales_sha256": hashlib.sha256(scales_np.tobytes()).hexdigest(),
+    "q8_sums_sha256": hashlib.sha256(sums_np.tobytes()).hexdigest(),
+    "q8_layout": "q8_ds4[epoch, m, groups]",
+  }
+  reduction_evidence = {
+    "source_revision": "ac4cddeb0dbd778f650bf568f6f08344a06abe3a",
+    "owned_components": ["cooperative tile loop", "Q4_K tile_x staging", "Q8_1 tile_y two-panel lifecycle"],
+    "source_anchors": ["mmq.cuh:mul_mat_q_process_tile", "mmq.cuh:load_tiles_q4_K"],
+  }
   completed_epochs = 0
   epoch_checks = []
+  # Optional lifecycle diagnostic: keep one allocation for every dispatch
+  # argument and refresh its contents between epochs.  This deliberately
+  # removes allocator address reuse from the target-health experiment; it does
+  # not alter the generated program or route policy.
+  persistent_partial = persistent_q4 = persistent_values = persistent_scales = persistent_sums = None
+
+  def copyin_buffer(tensor, array) -> None:
+    # Buffer.copyin is synchronous host-to-device staging for HCQ allocators;
+    # copy the entire persistent allocation so no stale tail can be observed.
+    buf = tensor.uop.buffer
+    buf.get_buf("AMD")  # Tensor.realize materializes the UOp, but allocation is lazy.
+    buf.copyin(memoryview(np.ascontiguousarray(array)))
+
+  if persistent_buffers:
+    persistent_partial = Tensor.empty(m * n, dtype=dtypes.float32, device="AMD").realize()
+    q4_capacity = (n * (k // 256) * 36) if preloaded_epochs else n_chunk_tiles * 128 * 36
+    persistent_q4 = Tensor.empty(q4_capacity, dtype=dtypes.uint32, device="AMD").realize()
+    value_records = (k // 128) if preloaded_epochs else 2
+    persistent_values = Tensor.empty(value_records * m * 128, dtype=dtypes.int8, device="AMD").realize()
+    persistent_scales = Tensor.empty(value_records * m * 4, dtype=dtypes.float32, device="AMD").realize()
+    persistent_sums = Tensor.empty(value_records * m * 4, dtype=dtypes.float32, device="AMD").realize()
+    if preloaded_epochs:
+      copyin_buffer(persistent_q4, words_np.view(np.uint8).reshape(-1).view(np.uint32))
+      copyin_buffer(persistent_values, values_np.reshape(-1))
+      copyin_buffer(persistent_scales, scales_np.reshape(-1))
+      copyin_buffer(persistent_sums, sums_np.reshape(-1))
+
   def run_epochs(*, timed: bool = False):
     nonlocal completed_epochs
     accum = None if host_accumulate else Tensor.zeros(m * n, dtype=dtypes.float32, device="AMD").realize()
     accum_host = np.zeros(m * n, dtype=np.float32) if host_accumulate else None
     elapsed = 0.0
     for epoch in range(epoch_start, epoch_start + epoch_limit):
-      partial = Tensor.empty(m * n, dtype=dtypes.float32, device="AMD").realize()
-      values = Tensor(np.ascontiguousarray(values_np[epoch*2:(epoch+1)*2].reshape(-1)), device="AMD").realize()
-      scales = Tensor(np.ascontiguousarray(scales_np[epoch*2:(epoch+1)*2].reshape(-1)), device="AMD").realize()
-      sums = Tensor(np.ascontiguousarray(sums_np[epoch*2:(epoch+1)*2].reshape(-1)), device="AMD").realize()
+      partial = persistent_partial if persistent_buffers else Tensor.empty(m * n, dtype=dtypes.float32, device="AMD").realize()
+      if persistent_buffers:
+        if not preloaded_epochs:
+          copyin_buffer(persistent_values, values_np[epoch*2:(epoch+1)*2].reshape(-1))
+          copyin_buffer(persistent_scales, scales_np[epoch*2:(epoch+1)*2].reshape(-1))
+          copyin_buffer(persistent_sums, sums_np[epoch*2:(epoch+1)*2].reshape(-1))
+      else:
+        values = Tensor(np.ascontiguousarray(values_np[epoch*2:(epoch+1)*2].reshape(-1)), device="AMD").realize()
+        scales = Tensor(np.ascontiguousarray(scales_np[epoch*2:(epoch+1)*2].reshape(-1)), device="AMD").realize()
+        sums = Tensor(np.ascontiguousarray(sums_np[epoch*2:(epoch+1)*2].reshape(-1)), device="AMD").realize()
       t0 = time.perf_counter()
       for n0 in range(0, n, n_chunk_tiles*128):
         n1 = min(n, n0 + n_chunk_tiles*128)
         tile_count = (n1 - n0) // 128
         q4_chunk = np.ascontiguousarray(q4_blocks[n0:n1, epoch:epoch+1, :].reshape(-1).view(np.uint32))
-        q4 = Tensor(q4_chunk, device="AMD").realize()
+        if persistent_buffers:
+          if preloaded_epochs:
+            q4 = persistent_q4.uop.buffer.view(q4_chunk.size, dtypes.uint32,
+              (epoch * n * 36 + n0 * 36) * dtypes.uint32.itemsize)
+          else:
+            q4_storage = np.zeros(n_chunk_tiles * 128 * 36, dtype=np.uint32)
+            q4_storage[:q4_chunk.size] = q4_chunk
+            copyin_buffer(persistent_q4, q4_storage)
         # Buffer views shift the destination and Q4 tile origins without changing
         # the compiled full-N stride; gidx0 then ranges only over this bounded chunk.
         out_view = partial.uop.buffer.view(m*n - n0, dtypes.float32, n0*dtypes.float32.itemsize)
-        buffers = (out_view, q4.uop.buffer, values.uop.buffer, scales.uop.buffer, sums.uop.buffer)
+        if persistent_buffers:
+          if preloaded_epochs:
+            values = persistent_values.uop.buffer.view(2*m*128, dtypes.int8,
+              epoch * 2 * m * 128 * dtypes.int8.itemsize)
+            scales = persistent_scales.uop.buffer.view(2*m*4, dtypes.float32,
+              epoch * 2 * m * 4 * dtypes.float32.itemsize)
+            sums = persistent_sums.uop.buffer.view(2*m*4, dtypes.float32,
+              epoch * 2 * m * 4 * dtypes.float32.itemsize)
+            buffers = (out_view, q4, values, scales, sums)
+          else:
+            buffers = (out_view, persistent_q4.uop.buffer, persistent_values.uop.buffer,
+                       persistent_scales.uop.buffer, persistent_sums.uop.buffer)
+        else:
+          buffers = (out_view, q4.uop.buffer, values.uop.buffer, scales.uop.buffer, sums.uop.buffer)
         runtime = get_runtime("AMD", program)
         args = tuple(buffers[g].get_buf("AMD") for g in program.arg.globals)
         runtime(*args, global_size=(tile_count, m//128, 1), local_size=program.arg.local_size,
                 vals=program.arg.vals({}), wait=True)
+      partial_host = partial.numpy() if per_epoch_check else None
       if host_accumulate:
-        partial_host = partial.numpy()
+        if partial_host is None: partial_host = partial.numpy()
         accum_host += partial_host
-        if per_epoch_check:
-          ep_scales = scales_np[epoch*2:(epoch+1)*2].astype(np.float16).astype(np.float32)
-          ep_sums = sums_np[epoch*2:(epoch+1)*2].astype(np.float16).astype(np.float32)
-          ep_ds4 = Q81MMQDS4Activation(values_np[epoch*2:(epoch+1)*2], ep_scales, ep_sums,
-            Q81MMQDS4ActivationSpec(m=m, k=256, m_tile=m))
-          ep_spec = Q4KQ81MMQTileSpec(role="target_epoch_check", m=m, n=n, k=256,
-            m_tile=m, n_tile=n, activation_layout=Q8_1_MMQ_DS4_LAYOUT)
-          ep_ref = q4k_q8_1_mmq_ds4_tile_reference(q4_blocks[:, epoch:epoch+1, :].reshape(-1).view(np.uint8), ep_ds4, ep_spec)
-          epoch_checks.append({"epoch": epoch, **_numeric_comparison(partial_host.reshape(m, n), ep_ref)})
-      else: accum = (accum + partial).realize()
+      else:
+        accum = (accum + partial).realize()
+      if per_epoch_check:
+        ep_scales = scales_np[epoch*2:(epoch+1)*2].astype(np.float16).astype(np.float32)
+        ep_sums = sums_np[epoch*2:(epoch+1)*2].astype(np.float16).astype(np.float32)
+        ep_ds4 = Q81MMQDS4Activation(values_np[epoch*2:(epoch+1)*2], ep_scales, ep_sums,
+          Q81MMQDS4ActivationSpec(m=m, k=256, m_tile=m))
+        ep_spec = Q4KQ81MMQTileSpec(role="target_epoch_check", m=m, n=n, k=256,
+          m_tile=m, n_tile=n, activation_layout=Q8_1_MMQ_DS4_LAYOUT)
+        ep_ref = q4k_q8_1_mmq_ds4_tile_reference(q4_blocks[:, epoch:epoch+1, :].reshape(-1).view(np.uint8), ep_ds4, ep_spec)
+        epoch_checks.append({"epoch": epoch, **_numeric_comparison(partial_host.reshape(m, n), ep_ref)})
+      if sync_each_epoch:
+        # Optional lifecycle diagnostic: force the backend queue to drain at
+        # the epoch boundary. This does not alter the generated kernel/route.
+        from tinygrad.device import Device
+        Device["AMD"].synchronize()
       elapsed += (time.perf_counter() - t0) * 1000.0
       completed_epochs += 1
     return (accum_host if host_accumulate else accum), elapsed
@@ -607,7 +684,8 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
             "exception": type(exc).__name__, "error": str(exc), "completed_epochs": completed_epochs,
             "artifacts": {**artifact, "backend_id": FULL_GRID_BACKEND_ID,
                           "distinct_binary_identity": isinstance(binary, bytes) and isinstance(source, str),
-            "no_fallback": True}, "epoch_checks": epoch_checks}
+            "no_fallback": True}, "epoch_checks": epoch_checks,
+            "repack": repack_evidence, "reduction": reduction_evidence}
   compare_k = epoch_limit * 256
   compare_words = q4_blocks[:, epoch_start:epoch_start+epoch_limit, :].reshape(-1).view(np.uint8)
   compare_values = values_np[epoch_start*2:(epoch_start+epoch_limit)*2]
@@ -630,12 +708,16 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
                      "k_epoch_launches": epoch_limit, "total_k_epoch_launches": total_epochs,
                      "n_chunk_tiles": n_chunk_tiles,
                      "accumulation": "host_fp32_add" if host_accumulate else "tinygrad_elementwise_add",
+                     "persistent_buffers": persistent_buffers,
+                     "preloaded_epochs": preloaded_epochs,
+                     "sync_each_epoch": sync_each_epoch,
                      "epoch_checks": epoch_checks},
           "artifacts": {**artifact, "backend_id": FULL_GRID_BACKEND_ID,
                         "distinct_binary_identity": isinstance(binary, bytes) and isinstance(source, str),
                         "no_fallback": True, "same_session_timing": True},
           "distinct_binary_identity": isinstance(binary, bytes) and isinstance(source, str),
-          "same_session_timing": True, "no_fallback": True}
+          "same_session_timing": True, "no_fallback": True,
+          "repack": repack_evidence, "reduction": reduction_evidence}
 
 
 def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
@@ -644,7 +726,10 @@ def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
                                               n_chunk_tiles: int | None = None,
                                               epoch_start: int = 0,
                                               host_accumulate: bool = False,
-                                              per_epoch_check: bool = False) -> dict[str, Any]:
+                                              per_epoch_check: bool = False,
+                                              persistent_buffers: bool = False,
+                                              preloaded_epochs: bool = False,
+                                              sync_each_epoch: bool = False) -> dict[str, Any]:
   if timeout_seconds <= 0: return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1",
                                   "status": "BLOCKED", "exact_blocker": "timeout_seconds must be positive"}
   child_env = dict(os.environ)
@@ -652,7 +737,9 @@ def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
   code = ("import json; from extra.qk.mmq_llama_five_buffer_gpu_harness import run_full_grid_target_role_probe; "
           f"print(json.dumps(run_full_grid_target_role_probe(warmups={int(warmups)}, rounds={int(rounds)}, "
           f"epoch_limit={repr(epoch_limit)}, n_chunk_tiles={repr(n_chunk_tiles)}, epoch_start={int(epoch_start)}, "
-          f"host_accumulate={bool(host_accumulate)}, per_epoch_check={bool(per_epoch_check)})))")
+          f"host_accumulate={bool(host_accumulate)}, per_epoch_check={bool(per_epoch_check)}, "
+          f"persistent_buffers={bool(persistent_buffers)}, preloaded_epochs={bool(preloaded_epochs)}, "
+          f"sync_each_epoch={bool(sync_each_epoch)})), flush=True)")
   try:
     proc = subprocess.run([sys.executable, "-c", code], cwd=ROOT, env=child_env,
                           text=True, capture_output=True, timeout=timeout_seconds, check=False)
@@ -664,7 +751,11 @@ def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
   except (IndexError, json.JSONDecodeError):
     return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
             "exact_blocker": "target-role child returned no structured result", "returncode": proc.returncode,
-            "stderr_tail": proc.stderr[-1000:]}
+            "stderr_tail": proc.stderr[-1000:],
+            "diagnostic": {"epoch_limit": epoch_limit, "n_chunk_tiles": n_chunk_tiles,
+                           "epoch_start": epoch_start, "host_accumulate": host_accumulate,
+                           "per_epoch_check": per_epoch_check, "persistent_buffers": persistent_buffers,
+                           "preloaded_epochs": preloaded_epochs, "sync_each_epoch": sync_each_epoch}}
   if proc.returncode != 0 and result.get("status") == "PASS":
     result.update({"status": "BLOCKED", "exact_blocker": "target-role child exited non-zero", "returncode": proc.returncode})
   return result

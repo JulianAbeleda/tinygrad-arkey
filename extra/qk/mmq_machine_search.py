@@ -48,6 +48,7 @@ FULL_GPU_PROBE_ROUTE_ID = "prefill_q4k_q8_1_hybrid_mmq_atom"
 FULL_GPU_PROBE_ROLE = "ffn_gate_up"
 FULL_GRID_R5_SHAPE = {"M": 128, "N": 128, "K": 256}
 R6_TARGET_ROLE_SHAPE = {"role": "ffn_gate_up", "M": 512, "N": 17408, "K": 5120}
+R6_TARGET_EVIDENCE_SCHEMA = "q4k-q8-1-mmq-r6-target-role-evidence.v1"
 LLAMA_KERNEL_SOURCES: tuple[dict[str, Any], ...] = (
   {
     "component": "mmq_route_and_launch",
@@ -592,12 +593,82 @@ def build_r5_geometry_search_report(
   }
 
 
-def build_r6_route_gate_status(r5_report: dict[str, Any] | None = None) -> dict[str, Any]:
+def _validate_r6_target_role_evidence(target_evidence: dict[str, Any] | None) -> dict[str, Any]:
+  """Validate measured target-role evidence without trusting summary booleans.
+
+  R6 is intentionally stricter than the bounded R5 ranking.  A target probe
+  must identify the exact role/shape, cover all K=256 epochs, report numeric
+  correctness and resources, and prove that it did not silently use the
+  direct-packed fallback.  Missing or malformed evidence remains blocked.
+  """
+  if not isinstance(target_evidence, dict):
+    return {"schema": R6_TARGET_EVIDENCE_SCHEMA, "status": "BLOCKED",
+            "exact_blocker": "target-role GPU evidence is missing"}
+  shape_ok = (target_evidence.get("role") == R6_TARGET_ROLE_SHAPE["role"] and
+              target_evidence.get("shape") == [R6_TARGET_ROLE_SHAPE[k] for k in ("M", "N", "K")])
+  correctness = target_evidence.get("correctness")
+  comparison = correctness.get("comparison") if isinstance(correctness, dict) else None
+  numeric_ok = (isinstance(correctness, dict) and correctness.get("status") == "PASS" and
+                isinstance(comparison, dict) and comparison.get("status") == "pass" and
+                comparison.get("mismatch_count") == 0 and
+                comparison.get("nan_got") == 0 and comparison.get("nan_reference") == 0 and
+                comparison.get("inf_got") == 0 and comparison.get("inf_reference") == 0 and
+                comparison.get("joint_finite") == comparison.get("got_size"))
+  timing = target_evidence.get("timing")
+  epoch_checks = timing.get("epoch_checks") if isinstance(timing, dict) else None
+  timing_ok = (isinstance(timing, dict) and timing.get("k_epoch_launches") == R6_TARGET_ROLE_SHAPE["K"] // 256 and
+               timing.get("total_k_epoch_launches") == R6_TARGET_ROLE_SHAPE["K"] // 256 and
+               timing.get("n_chunk_tiles") == R6_TARGET_ROLE_SHAPE["N"] // 128 and
+               timing.get("accumulation") == "tinygrad_elementwise_add" and
+               timing.get("persistent_buffers") is True and
+               timing.get("preloaded_epochs") is True and
+               isinstance(timing.get("samples_ms"), list) and len(timing["samples_ms"]) > 0 and
+               all(isinstance(v, (int, float)) and v >= 0 for v in timing["samples_ms"]) and
+               isinstance(epoch_checks, list) and len(epoch_checks) == R6_TARGET_ROLE_SHAPE["K"] // 256 and
+               all(isinstance(row, dict) and row.get("status") == "pass" and row.get("mismatch_count") == 0
+                   for row in epoch_checks))
+  artifacts = target_evidence.get("artifacts")
+  resources = artifacts.get("resources") if isinstance(artifacts, dict) else None
+  resource_ok = (isinstance(artifacts, dict) and isinstance(resources, dict) and
+                 all(isinstance(resources.get(k), int) and resources[k] >= 0 for k in ("vgpr", "lds_bytes", "scratch_bytes")) and
+                 resources.get("scratch_bytes") == 0 and
+                 artifacts.get("distinct_binary_identity") is True and
+                 artifacts.get("same_session_timing") is True)
+  repack = target_evidence.get("repack")
+  repack_ok = (isinstance(repack, dict) and
+               all(isinstance(repack.get(key), str) and len(repack[key]) >= 16
+                   for key in ("q4_sha256", "q8_values_sha256", "q8_scales_sha256", "q8_sums_sha256")) and
+               repack.get("q4_layout") == "q4_k_bytes[n, k_epoch, 144]" and
+               repack.get("q8_layout") == "q8_ds4[epoch, m, groups]")
+  fallback_ok = (target_evidence.get("no_fallback") is True and
+                 isinstance(artifacts, dict) and artifacts.get("no_fallback") is True and
+                 target_evidence.get("production_dispatch_changed") is False)
+  checks = {"exact_role_shape": shape_ok, "numeric_correctness": numeric_ok,
+            "all_k_epochs": timing_ok, "resource_artifact": resource_ok,
+            "repack_identity": repack_ok, "no_hidden_fallback": fallback_ok}
+  missing = [name for name, passed in checks.items() if not passed]
+  return {"schema": R6_TARGET_EVIDENCE_SCHEMA, "status": "PASS" if not missing else "BLOCKED",
+          "checks": checks, "exact_blocker": None if not missing else "target evidence missing/failed: " + ", ".join(missing)}
+
+
+def build_r6_route_gate_status(r5_report: dict[str, Any] | None = None,
+                               target_evidence: dict[str, Any] | None = None) -> dict[str, Any]:
   r5 = r5_report or build_r5_geometry_search_report(run=False)
-  ready = r5.get("promotion_verdict") == "R5_COOP_WIN_READY_FOR_R6" and r5.get("role_shape_integration") is True
-  role_blocked = r5.get("emitted_backend_win") is True and not ready
-  shape_artifact = build_r6_role_shape_integration_artifact(r5)
+  target_status = _validate_r6_target_role_evidence(target_evidence)
+  shape_artifact = build_r6_role_shape_integration_artifact(r5, target_evidence=target_evidence)
   smoke = build_r6_negative_role_fallback_smoke_artifact()
+  ready = (r5.get("promotion_verdict") == "R5_COOP_WIN_READY_FOR_R6" and
+           r5.get("emitted_backend_win") is True and shape_artifact.get("status") == "PASS" and
+           smoke.get("status") == "PASS")
+  role_blocked = r5.get("emitted_backend_win") is True and not ready
+  required_evidence = {
+    "bounded_coop_candidate_win": r5.get("emitted_backend_win") is True and r5.get("promotion_verdict") == "R5_COOP_WIN_READY_FOR_R6",
+    "ffn_gate_up_only": smoke["ffn_gate_up_only"],
+    "negative_role_tests": smoke["negative_role_tests"],
+    "no_hidden_direct_packed_fallback": smoke["no_hidden_direct_packed_fallback"],
+  }
+  if target_evidence is not None:
+    required_evidence["target_role_gpu_evidence"] = target_status["status"] == "PASS"
   return {
     "schema": "q4k-q8-1-mmq-r6-route-gate-status.v1",
     "status": "READY_FOR_ONE_ROLE_OPT_IN" if ready else ("BLOCKED_ROLE_SHAPE_INTEGRATION" if role_blocked else "BLOCKED_NO_BOUNDED_COOP_WIN"),
@@ -605,13 +676,9 @@ def build_r6_route_gate_status(r5_report: dict[str, Any] | None = None) -> dict[
     "quant": QUANT,
     "default_route": "direct_packed",
     "production_dispatch_changed": False,
-    "required_evidence": {
-      "bounded_coop_candidate_win": r5.get("emitted_backend_win") is True and r5.get("promotion_verdict") == "R5_COOP_WIN_READY_FOR_R6",
-      "ffn_gate_up_only": smoke["ffn_gate_up_only"],
-      "negative_role_tests": smoke["negative_role_tests"],
-      "no_hidden_direct_packed_fallback": smoke["no_hidden_direct_packed_fallback"],
-    },
+    "required_evidence": required_evidence,
     "role_shape_integration": shape_artifact,
+    "target_role_evidence": target_status,
     "negative_role_fallback_smoke": smoke,
     "exact_blocker": None if ready else ("R6 route binding is illegal until the bounded winner is integrated for a production role and shape" if role_blocked else "R6 route binding is illegal until R5 reports an emitted cooperative backend win"),
   }
@@ -643,7 +710,8 @@ def build_r6_negative_role_fallback_smoke_artifact() -> dict[str, Any]:
   }
 
 
-def build_r6_role_shape_integration_artifact(r5_report: dict[str, Any] | None = None) -> dict[str, Any]:
+def build_r6_role_shape_integration_artifact(r5_report: dict[str, Any] | None = None,
+                                             *, target_evidence: dict[str, Any] | None = None) -> dict[str, Any]:
   """Record the exact shape/role gap before any one-role route opt-in.
 
   The emitted probe is a numerically passing bounded kernel, but it covers a
@@ -658,19 +726,31 @@ def build_r6_role_shape_integration_artifact(r5_report: dict[str, Any] | None = 
   candidate_shape = None if winner_row is None else winner_row.get("shape")
   shape_matches = candidate_shape == {k: R6_TARGET_ROLE_SHAPE[k] for k in ("M", "N", "K")}
   tile_plan = build_full_grid_k_tiled_dispatch_plan(R6_TARGET_ROLE_SHAPE)
+  target_status = _validate_r6_target_role_evidence(target_evidence)
+  target_shape_matches = target_status.get("checks", {}).get("exact_role_shape") is True
+  target_ok = target_status["status"] == "PASS"
+  smoke = build_r6_negative_role_fallback_smoke_artifact()
+  # The R5 candidate is the 128x128x256 kernel; R6 admission is an adapter
+  # claim over the exact role shape, so the target probe—not equality with the
+  # R5 microkernel shape—proves this dimension.
+  role_ready = target_shape_matches and target_ok and smoke.get("status") == "PASS"
   return {
     "schema": "q4k-q8-1-mmq-r6-role-shape-integration.v1",
-    "status": "PASS" if shape_matches and r5.get("role_shape_integration") is True else "BLOCKED",
+    "status": "PASS" if role_ready else "BLOCKED",
     "candidate_id": winner,
     "candidate_shape": candidate_shape,
     "target": dict(R6_TARGET_ROLE_SHAPE),
     "shape_matches": shape_matches,
+    "target_shape_matches": target_shape_matches,
     "role_scope": ["ffn_gate_up"],
-    "negative_role_tests": False,
-    "no_hidden_direct_packed_fallback": False,
+    "negative_role_tests": smoke.get("negative_role_tests") is True,
+    "no_hidden_direct_packed_fallback": smoke.get("no_hidden_direct_packed_fallback") is True,
+    "negative_role_fallback_smoke": smoke,
+    "target_role_evidence": target_status,
     "tile_plan": tile_plan,
     "production_dispatch_changed": False,
-    "exact_blocker": None if shape_matches else "full-grid probe shape is bounded 128x128x256; no 14B ffn_gate_up multi-tile adapter exists",
+    "exact_blocker": None if role_ready else ("full-grid probe shape is bounded 128x128x256; no 14B ffn_gate_up multi-tile adapter exists"
+      if not target_shape_matches else target_status["exact_blocker"] or "target role evidence is not admitted"),
   }
 
 
@@ -742,7 +822,7 @@ def build_full_grid_k_tiled_dispatch_plan(shape: dict[str, Any]) -> dict[str, An
   }
 
 
-def build_r7_reduction_status() -> dict[str, Any]:
+def build_r7_reduction_status(target_evidence: dict[str, Any] | None = None) -> dict[str, Any]:
   rows = [
     {
       "source_component": "cooperative tile loop",
@@ -766,18 +846,36 @@ def build_r7_reduction_status() -> dict[str, Any]:
       "blocking_evidence": "Q8_1 two-panel lifecycle and fallback census are absent for the 14B role route",
     },
   ]
+  target_status = _validate_r6_target_role_evidence(target_evidence)
+  reduction = target_evidence.get("reduction") if isinstance(target_evidence, dict) else None
+  owned = (isinstance(reduction, dict) and reduction.get("source_revision") and
+           isinstance(reduction.get("owned_components"), list) and
+           {row["source_component"] for row in rows}.issubset(set(reduction["owned_components"])))
+  if target_status["status"] == "PASS" and owned:
+    converted = [{**row, "status": "owned_atom", "blocking_evidence": None,
+                  "evidence": {"target_role_probe": True, "source_revision": reduction["source_revision"]}}
+                for row in rows]
+    return {
+      "schema": "q4k-q8-1-mmq-r7-reduction-status.v1", "status": "PASS_TARGET_ROLE_REDUCTION",
+      "production_dispatch_changed": False, "remaining_rows": [], "converted_rows": converted,
+      "target_role_evidence": target_status, "exact_blocker": None,
+    }
+  blocker = target_status["exact_blocker"] if target_status["status"] != "PASS" else "target reduction/source ownership evidence is missing"
   return {
     "schema": "q4k-q8-1-mmq-r7-reduction-status.v1",
     "status": "BLOCKED_REMAINING_SOURCE_CLONE_ROWS",
     "production_dispatch_changed": False,
     "remaining_rows": rows,
-    "exact_blocker": "remaining clone-backed rows require the emitted cooperative numeric tile before route binding",
+    "target_role_evidence": target_status,
+    "exact_blocker": blocker,
   }
 
 
 def build_search_report(*, run: bool = False, warmups: int = 0, rounds: int = 1,
                         runner: Callable[[BoundedMMQConfig], dict[str, Any]] = run_bounded_harness,
-                        full_gpu_probe: dict[str, Any] | None = None) -> dict[str, Any]:
+                        full_gpu_probe: dict[str, Any] | None = None,
+                        target_role_probe: dict[str, Any] | None = None,
+                        r5_evidence: dict[str, Any] | None = None) -> dict[str, Any]:
   rows = []
   for candidate in SEARCHABLE_CANDIDATES:
     row = candidate.to_json()
@@ -798,6 +896,24 @@ def build_search_report(*, run: bool = False, warmups: int = 0, rounds: int = 1,
   r4_evidence = build_r4_evidence_artifacts()
   coop_evidence = coop_tile_blocked_translation_evidence(
     BoundedMMQConfig(m_tile=16, n_tile=16, k_groups=8, backend=AMD_DS4_COOP_TILE_BACKEND_ID))
+  r5_report = r5_evidence or build_r5_geometry_search_report(run=False)
+  r6_status = build_r6_route_gate_status(r5_report, target_evidence=target_role_probe)
+  r7_status = build_r7_reduction_status(target_role_probe)
+  role_candidate = {
+    "candidate_id": FULL_GPU_PROBE_CANDIDATE_ID,
+    "backend": FULL_GRID_BACKEND_ID,
+    "role": FULL_GPU_PROBE_ROLE,
+    "shape": dict(R6_TARGET_ROLE_SHAPE),
+    "status": "promotable" if r6_status["status"] == "READY_FOR_ONE_ROLE_OPT_IN" and
+              r7_status["status"] == "PASS_TARGET_ROLE_REDUCTION" else "evidence_only",
+    "promotion_eligible": r6_status["status"] == "READY_FOR_ONE_ROLE_OPT_IN" and
+                          r7_status["status"] == "PASS_TARGET_ROLE_REDUCTION",
+    "default_route": "direct_packed",
+    "production_dispatch_changed": False,
+    "r6_route_gate_status": r6_status["status"],
+    "r7_reduction_status": r7_status["status"],
+    "evidence": target_role_probe,
+  }
   return {
     "schema": SCHEMA,
     "candidate_route_id": CANDIDATE_ROUTE_ID,
@@ -818,18 +934,20 @@ def build_search_report(*, run: bool = False, warmups: int = 0, rounds: int = 1,
     "searchable_candidates": rows,
     "blocked_candidates": list(BLOCKED_CANDIDATES),
     "r4_evidence_artifacts": r4_evidence,
-    "r5_geometry_search": build_r5_geometry_search_report(run=False),
+    "r5_geometry_search": r5_report,
     "r5_geometry_search_status": {
       "status": "ready_for_bounded_geometry_search",
       "reason": "R4 lowered owner trace, staging evidence, and R5 bounded coop numeric correctness pass; R6 remains blocked until R5 reports a same-session coop speed win",
       "required_r4_evidence": ["owner_coverage:PASS", "staging_sum_slots:PASS", "gpu_owner_trace:PASS"],
     },
-    "r6_route_gate_status": build_r6_route_gate_status(),
-    "r7_reduction_status": build_r7_reduction_status(),
+    "r6_route_gate_status": r6_status,
+    "r7_reduction_status": r7_status,
+    "role_candidates": [role_candidate],
     # Optional because the base machine search is compile/evidence-only.  When
     # supplied, this joins the exact GPU artifact without changing the default
     # route or making the incomplete probe promotable.
     "full_gpu_probe_candidate": None if full_gpu_probe is None else build_full_gpu_probe_candidate(full_gpu_probe),
+    "target_role_probe": target_role_probe,
     "promotion_verdict": "BLOCKED_UNTIL_COOPERATIVE_TILE_WIN",
     "milestone_evidence": _default_milestone_evidence(),
     "promotion_gate": evaluate_candidate_promotion(owner_coverage=r4_evidence["owner_coverage"],
