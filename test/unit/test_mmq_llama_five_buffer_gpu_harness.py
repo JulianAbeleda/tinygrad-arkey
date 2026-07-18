@@ -66,12 +66,15 @@ def test_target_role_stable_metadata_staging_requires_preloaded_sources():
 def test_target_role_isolated_wrapper_propagates_stable_metadata_flag():
   class _Proc:
     returncode = 0
-    stdout = '{"status":"BLOCKED"}\n'
+    stdout = '{"status":"BLOCKED"}\nlate shutdown diagnostic\n'
     stderr = ""
-  with patch("extra.qk.mmq_llama_five_buffer_gpu_harness.subprocess.run", return_value=_Proc()) as run:
+  with patch("extra.qk.mmq_llama_five_buffer_gpu_harness.subprocess.run", return_value=_Proc()) as run, \
+       patch("extra.qk.mmq_target_epoch_orchestrator.read_kernel_log_since", return_value=""), \
+       patch("extra.qk.mmq_target_epoch_orchestrator.spawned_tiny_health_probe", return_value=True):
     result = run_full_grid_target_role_probe_isolated(timeout_seconds=1, preloaded_epochs=True,
                                                        stable_metadata_staging=True)
   assert result["status"] == "BLOCKED"
+  assert result["kernel_faults"] == [] and result["health_after"] is True
   code = run.call_args.args[0][2]
   assert "stable_metadata_staging=True" in code
 

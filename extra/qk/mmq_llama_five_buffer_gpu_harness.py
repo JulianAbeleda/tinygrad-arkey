@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import time
 from typing import Any
 
 import numpy as np
@@ -802,6 +803,7 @@ def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
                                               stable_metadata_staging: bool = False) -> dict[str, Any]:
   if timeout_seconds <= 0: return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1",
                                   "status": "BLOCKED", "exact_blocker": "timeout_seconds must be positive"}
+  started = time.time()
   child_env = dict(os.environ)
   child_env.update({"DEV": "AMD", "PYTHONPATH": str(ROOT) + os.pathsep + child_env.get("PYTHONPATH", "")})
   code = ("import json; from extra.qk.mmq_llama_five_buffer_gpu_harness import run_full_grid_target_role_probe; "
@@ -817,16 +819,33 @@ def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
     return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
             "exact_blocker": f"target-role compile/{epoch_limit if epoch_limit is not None else 'full'}-epoch dispatch timed out",
             "timeout_seconds": timeout_seconds}
-  try: result = json.loads(proc.stdout.strip().splitlines()[-1])
-  except (IndexError, json.JSONDecodeError):
+  result = None
+  for line in reversed(proc.stdout.strip().splitlines()):
+    try: candidate = json.loads(line)
+    except json.JSONDecodeError: continue
+    if isinstance(candidate, dict):
+      result = candidate
+      break
+  from extra.qk.mmq_target_epoch_orchestrator import parse_kernel_faults, read_kernel_log_since, spawned_tiny_health_probe
+  try: kernel_faults = parse_kernel_faults(read_kernel_log_since(started))
+  except BaseException as exc: kernel_faults = [f"kernel-log scan failed: {type(exc).__name__}: {exc}"]
+  try: health_after = bool(spawned_tiny_health_probe())
+  except BaseException: health_after = False
+  if result is None:
     return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
             "exact_blocker": "target-role child returned no structured result", "returncode": proc.returncode,
-            "stderr_tail": proc.stderr[-1000:],
+            "stdout_tail": proc.stdout[-2000:], "stderr_tail": proc.stderr[-2000:],
+            "kernel_faults": kernel_faults, "health_after": health_after,
             "diagnostic": {"epoch_limit": epoch_limit, "n_chunk_tiles": n_chunk_tiles,
                            "epoch_start": epoch_start, "host_accumulate": host_accumulate,
                            "per_epoch_check": per_epoch_check, "persistent_buffers": persistent_buffers,
                            "preloaded_epochs": preloaded_epochs, "sync_each_epoch": sync_each_epoch,
                            "stable_metadata_staging": stable_metadata_staging}}
+  result["kernel_faults"], result["health_after"] = kernel_faults, health_after
+  if kernel_faults:
+    result.update({"status": "BLOCKED", "exact_blocker": "AMD kernel fault/reset marker observed"})
+  elif not health_after:
+    result.update({"status": "BLOCKED", "exact_blocker": "post-run GPU health probe failed"})
   if proc.returncode != 0 and result.get("status") == "PASS":
     result.update({"status": "BLOCKED", "exact_blocker": "target-role child exited non-zero", "returncode": proc.returncode})
   return result
