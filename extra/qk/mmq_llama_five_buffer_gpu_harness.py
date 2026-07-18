@@ -21,6 +21,9 @@ from typing import Any, Mapping
 
 import numpy as np
 
+from extra.qk.mmq_exact_role_spec import (
+  DEFAULT_EXACT_ROLE_SPEC, DEFAULT_INVENTORY, ExactRoleSpec, admit_exact_role_spec, exact_role_spec,
+)
 
 PROTOCOL = "tinygrad.mmq_llama_five_buffer_gpu_harness.v1"
 PASS = "MMQ_LLAMA_FIVE_BUFFER_GPU_PASS"
@@ -29,7 +32,7 @@ FULL_GRID_BACKEND_ID = "q4k_q8_1_mmq_amd_isa_full_grid_v0"
 ROOT = Path(__file__).resolve().parents[2]
 SHAPE = (128, 128, 256)
 K_TILED_PROBE_SHAPE = (128, 128, 512)
-TARGET_ROLE_PROBE_SHAPE = (512, 17408, 5120)
+TARGET_ROLE_PROBE_SHAPE = DEFAULT_EXACT_ROLE_SPEC.shape
 RTOL = 3e-3
 ATOL = 3e-3
 TARGET_IN_PLACE_ACCUMULATION = "target_in_place_fp32_add"
@@ -657,6 +660,7 @@ def run_full_grid_k_tiled_probe_isolated(*, timeout_seconds: float = 360.0,
 
 
 def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
+                                    role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC,
                                     epoch_limit: int | None = None,
                                     n_chunk_tiles: int | None = None,
                                     epoch_start: int = 0,
@@ -668,7 +672,7 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
                                     sync_each_epoch: bool = False,
                                     stable_metadata_staging: bool = False,
                                     frozen_bundle: str | Path | None = None) -> dict[str, Any]:
-  """Run the emitted K=256 program across the exact 14B ffn_gate_up shape.
+  """Run the emitted K=256 program across one admitted exact 14B Q4 role.
 
   By default each epoch writes a full-role partial and tinygrad performs the
   FP32 elementwise accumulation.  The opt-in target in-place mode instead
@@ -677,6 +681,7 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
   with no direct fallback.  Route admission still requires the surrounding
   role/health census.
   """
+  role_spec = admit_exact_role_spec(role_spec)
   if warmups < 0 or rounds <= 0: raise ValueError("warmups must be non-negative and rounds must be positive")
   if stable_metadata_staging and not preloaded_epochs:
     raise ValueError("stable_metadata_staging requires preloaded_epochs")
@@ -701,8 +706,9 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
     Q8_1_MMQ_DS4_LAYOUT, q4k_q8_1_mmq_ds4_tile_reference,
     q8_1_mmq_ds4_quantize_reference,
   )
-  m, n, k = TARGET_ROLE_PROBE_SHAPE
-  total_epochs = k // 256
+  m, n, k = role_spec.shape
+  role_identity = {"role": role_spec.role, "shape": [m, n, k]}
+  total_epochs = role_spec.epochs
   if not 0 <= epoch_start < total_epochs: raise ValueError(f"epoch_start must be in [0,{total_epochs-1}]")
   if epoch_limit is None: epoch_limit = total_epochs - epoch_start
   if not 0 < epoch_limit <= total_epochs - epoch_start: raise ValueError(f"epoch_limit must be in [1,{total_epochs-epoch_start}]")
@@ -716,16 +722,17 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
   if frozen_bundle is not None:
     try:
       from extra.qk.mmq_frozen_target_artifact import (ACCUMULATION as FROZEN_ACCUMULATION,
-        FILE_NAMES as FROZEN_FILE_NAMES, FULL_ROLE_SHAPE as FROZEN_FULL_ROLE_SHAPE, SCHEMA as FROZEN_SCHEMA,
-        TARGET_SHAPE as FROZEN_TARGET_SHAPE, load_frozen_target_artifact)
+        FILE_NAMES as FROZEN_FILE_NAMES, SCHEMA as FROZEN_SCHEMA, load_frozen_target_artifact)
       loaded = load_frozen_target_artifact(frozen_bundle)
       manifest = loaded.manifest
       if manifest.get("schema") != FROZEN_SCHEMA or manifest.get("state") != "FROZEN":
         raise ValueError("frozen target manifest identity changed")
       if manifest.get("accumulation") != FROZEN_ACCUMULATION or manifest.get("accumulate") is not True:
         raise ValueError("frozen target is not the in-place accumulation PROGRAM")
-      if tuple(manifest.get("shape", ())) != tuple(FROZEN_TARGET_SHAPE) or \
-         tuple(manifest.get("full_role_shape", ())) != tuple(FROZEN_FULL_ROLE_SHAPE):
+      if tuple(manifest.get("shape", ())) != role_spec.program.shape or \
+         tuple(manifest.get("full_role_shape", ())) != role_spec.shape or \
+         tuple(loaded.fixture.get("shape", ())) != role_spec.shape or \
+         loaded.fixture.get("role", role_spec.role) != role_spec.role:
         raise ValueError("frozen target shape identity changed")
       program = loaded.program
       frozen_identity = {
@@ -740,15 +747,15 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
       }
     except BaseException as exc:
       return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
-              "shape": [m, n, k], "exact_blocker": "frozen target bundle validation failed",
+              **role_identity, "exact_blocker": "frozen target bundle validation failed",
               "exception": type(exc).__name__, "error": str(exc), "accumulation": accumulation_mode,
               "compile_performed": False, "requires_recompile": False}
   else:
     compiled = compile_llama_five_buffer_full_kernel(
-      build_llama_five_buffer_full_kernel(m, n, 256, accumulate=in_kernel_accumulate))
+      build_llama_five_buffer_full_kernel(*role_spec.program.shape, accumulate=in_kernel_accumulate))
     if not compiled.emitted or compiled.program is None:
       return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
-              "shape": [m, n, k], "exact_blocker": compiled.blocker or "target role K=256 program did not emit",
+              **role_identity, "exact_blocker": compiled.blocker or "target role K=256 program did not emit",
               "accumulation": accumulation_mode}
     program = compiled.program
   words_np = _random_q4_words(n, k, 20260721)
@@ -760,7 +767,7 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
     if artifact.get("binary_sha256") != loaded.manifest.get("artifacts", {}).get("binary_sha256") or \
        artifact.get("source_sha256") != loaded.manifest.get("artifacts", {}).get("source_sha256"):
       return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
-              "shape": [m, n, k], "exact_blocker": "loaded PROGRAM identity differs from frozen manifest",
+              **role_identity, "exact_blocker": "loaded PROGRAM identity differs from frozen manifest",
               "accumulation": accumulation_mode, "artifacts": artifact,
               "compile_performed": False, "requires_recompile": False}
     artifact["frozen_bundle"] = frozen_identity
@@ -784,7 +791,7 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
   if frozen_identity is not None:
     from extra.qk.mmq_target_epoch_orchestrator import FIXTURE_SCHEMA
     fixture_identity = {
-      "schema": FIXTURE_SCHEMA, "role": "ffn_gate_up", "shape": [m, n, k],
+      "schema": FIXTURE_SCHEMA, "role": role_spec.role, "shape": [m, n, k],
       "total_epochs": total_epochs, "seeds": {"q4": 20260721, "q8_source": 20260722},
       "repack": repack_evidence,
       "source_sha256": hashlib.sha256(np.ascontiguousarray(source_np).tobytes()).hexdigest(),
@@ -792,7 +799,7 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
     try: _validate_frozen_fixture(loaded.fixture, fixture_identity)
     except ValueError:
       return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
-              "shape": [m, n, k], "exact_blocker": "runtime fixture differs from frozen bundle",
+              **role_identity, "exact_blocker": "runtime fixture differs from frozen bundle",
               "accumulation": accumulation_mode, "artifacts": artifact,
               "runtime_fixture": fixture_identity, "compile_performed": False, "requires_recompile": False}
   reduction_evidence = {
@@ -972,7 +979,7 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
     for _ in range(rounds): accum, elapsed = run_epochs(timed=True); samples.append(elapsed)
   except BaseException as exc:
     return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
-            "shape": [m, n, k], "role": "ffn_gate_up", "bounded_only": True,
+            "shape": [m, n, k], "role": role_spec.role, "bounded_only": True,
             "production_dispatch_changed": False, "default_route": "direct_packed",
             "exact_blocker": "target-role GPU dispatch failed or timed out",
             "exception": type(exc).__name__, "error": str(exc), "completed_epochs": completed_epochs,
@@ -996,7 +1003,7 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
   comparison = _numeric_comparison((accum if host_accumulate else accum.numpy()).reshape(m, n), reference)
   passed = comparison["status"] == "pass"
   return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "PASS" if passed else "BLOCKED",
-          "shape": [m, n, k], "role": "ffn_gate_up", "bounded_only": True,
+          "shape": [m, n, k], "role": role_spec.role, "bounded_only": True,
           "production_dispatch_changed": False, "default_route": "direct_packed",
           "accumulation": accumulation_mode,
           "exact_blocker": None if passed else "numeric output mismatch",
@@ -1024,6 +1031,7 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
 
 
 def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
+                                              role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC,
                                               warmups: int = 0, rounds: int = 1,
                                               epoch_limit: int | None = None,
                                               n_chunk_tiles: int | None = None,
@@ -1037,25 +1045,31 @@ def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
                                               stable_metadata_staging: bool = False,
                                               frozen_bundle: str | Path | None = None,
                                               child_env_overrides: Mapping[str, str] | None = None) -> dict[str, Any]:
+  try: role_spec = admit_exact_role_spec(role_spec)
+  except (TypeError, ValueError) as exc:
+    return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
+            "exact_blocker": f"exact role admission failed: {exc}"}
+  role_identity = {"role": role_spec.role, "shape": list(role_spec.shape)}
   if timeout_seconds <= 0: return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1",
-                                  "status": "BLOCKED", "exact_blocker": "timeout_seconds must be positive"}
+                                  "status": "BLOCKED", **role_identity,
+                                  "exact_blocker": "timeout_seconds must be positive"}
   if in_kernel_accumulate and host_accumulate:
     return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
-            "exact_blocker": "in_kernel_accumulate and host_accumulate are mutually exclusive"}
+            **role_identity, "exact_blocker": "in_kernel_accumulate and host_accumulate are mutually exclusive"}
   if in_kernel_accumulate and per_epoch_check:
     return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
-            "exact_blocker": "per_epoch_check is unsafe with in_kernel_accumulate because it performs intermediate readback"}
+            **role_identity, "exact_blocker": "per_epoch_check is unsafe with in_kernel_accumulate because it performs intermediate readback"}
   if in_kernel_accumulate and not (persistent_buffers or preloaded_epochs):
     return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
-            "exact_blocker": "in_kernel_accumulate requires persistent_buffers"}
+            **role_identity, "exact_blocker": "in_kernel_accumulate requires persistent_buffers"}
   if frozen_bundle is not None and not in_kernel_accumulate:
     return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
-            "exact_blocker": "frozen target bundle requires in_kernel_accumulate",
+            **role_identity, "exact_blocker": "frozen target bundle requires in_kernel_accumulate",
             "compile_performed": False, "requires_recompile": False}
   try: env_overrides = _validated_child_env_overrides(child_env_overrides)
   except ValueError as exc:
     return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
-            "exact_blocker": str(exc)}
+            **role_identity, "exact_blocker": str(exc)}
   health_overrides = dict(env_overrides)
   from extra.qk.mmq_target_epoch_orchestrator import parse_kernel_faults, read_kernel_log_since, spawned_tiny_health_probe
   try: health_before = bool(spawned_tiny_health_probe(health_overrides or None))
@@ -1065,15 +1079,18 @@ def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
                  "before": mode_health_before, "after": None}
   if not health_before or not mode_health_before:
     return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
-            "exact_blocker": "pre-run GPU health probe failed", "health_before": health_before,
+            **role_identity, "exact_blocker": "pre-run GPU health probe failed", "health_before": health_before,
             "mode_health_before": mode_health_before, "health_mode": health_mode,
             "child_env_overrides": env_overrides}
   child_env = dict(os.environ)
   child_env.update({"DEV": "AMD", "PYTHONPATH": str(ROOT) + os.pathsep + child_env.get("PYTHONPATH", "")})
   child_env.update(env_overrides)
   frozen_arg = repr(str(Path(frozen_bundle).resolve())) if frozen_bundle is not None else "None"
-  code = ("import json; from extra.qk.mmq_llama_five_buffer_gpu_harness import run_full_grid_target_role_probe; "
+  role_expr = f"exact_role_spec({role_spec.role!r}, shape={role_spec.shape!r})"
+  code = ("import json; from extra.qk.mmq_exact_role_spec import exact_role_spec; "
+          "from extra.qk.mmq_llama_five_buffer_gpu_harness import run_full_grid_target_role_probe; "
           f"print(json.dumps(run_full_grid_target_role_probe(warmups={int(warmups)}, rounds={int(rounds)}, "
+          f"role_spec={role_expr}, "
           f"epoch_limit={repr(epoch_limit)}, n_chunk_tiles={repr(n_chunk_tiles)}, epoch_start={int(epoch_start)}, "
           f"host_accumulate={bool(host_accumulate)}, in_kernel_accumulate={bool(in_kernel_accumulate)}, "
           f"per_epoch_check={bool(per_epoch_check)}, "
@@ -1098,7 +1115,7 @@ def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
             "health_after": health_after, "mode_health_after": mode_health_after,
             "health_mode": health_mode, "child_env_overrides": env_overrides,
             "compile_performed": False if frozen_bundle is not None else None,
-            "requires_recompile": False if frozen_bundle is not None else None}
+            "requires_recompile": False if frozen_bundle is not None else None, **role_identity}
   result = None
   for line in reversed(proc.stdout.strip().splitlines()):
     try: candidate = json.loads(line)
@@ -1125,6 +1142,7 @@ def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
                            "per_epoch_check": per_epoch_check, "persistent_buffers": persistent_buffers,
                            "preloaded_epochs": preloaded_epochs, "sync_each_epoch": sync_each_epoch,
                            "stable_metadata_staging": stable_metadata_staging,
+                           "role": role_spec.role, "shape": list(role_spec.shape),
                            "frozen_bundle": str(Path(frozen_bundle).resolve()) if frozen_bundle is not None else None}}
   result.update({"kernel_faults": kernel_faults, "health_before": health_before, "health_after": health_after,
                  "mode_health_before": mode_health_before, "mode_health_after": mode_health_after,
@@ -1227,6 +1245,8 @@ def main() -> int:
   parser.add_argument("--worker", action="store_true")
   parser.add_argument("--target-role", action="store_true",
                       help="run the isolated exact Qwen3 target-role probe")
+  parser.add_argument("--target-role-inventory", type=Path, default=DEFAULT_INVENTORY)
+  parser.add_argument("--target-role-name", default=DEFAULT_EXACT_ROLE_SPEC.role)
   parser.add_argument("--target-role-epochs", type=int, default=None)
   parser.add_argument("--target-role-output", type=Path)
   parser.add_argument("--target-role-timeout", type=float, default=900.0)
@@ -1240,9 +1260,11 @@ def main() -> int:
   parser.add_argument("--target-role-amd-aql", choices=("0", "1"))
   args = parser.parse_args()
   if args.target_role:
+    role_spec = exact_role_spec(args.target_role_name, inventory=args.target_role_inventory)
     row = run_full_grid_target_role_probe_isolated(
+      role_spec=role_spec,
       timeout_seconds=args.target_role_timeout, warmups=0, rounds=1,
-      epoch_limit=args.target_role_epochs, n_chunk_tiles=TARGET_ROLE_PROBE_SHAPE[1] // 128,
+      epoch_limit=args.target_role_epochs, n_chunk_tiles=role_spec.program.grid[0],
       host_accumulate=args.target_role_host_accumulate,
       in_kernel_accumulate=args.target_role_in_kernel_accumulate,
       per_epoch_check=args.target_role_per_epoch_check,

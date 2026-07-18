@@ -1,12 +1,14 @@
 import json
 import numpy as np
 import pytest
+from dataclasses import replace
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from tinygrad import dtypes
 from tinygrad.uop.ops import Ops, UOp
 
+from extra.qk.mmq_exact_role_spec import exact_role_spec
 from extra.qk.mmq_llama_five_buffer_full_kernel import build_llama_five_buffer_full_kernel
 from extra.qk.mmq_llama_five_buffer_gpu_harness import (TARGET_IN_PLACE_ACCUMULATION, _accumulate_target_role_epoch,
   _bind_sink, _dispatch_with_runtime_evidence, _numeric_comparison, _pack_q4_epochs_contiguous,
@@ -91,6 +93,31 @@ def test_target_role_in_place_mode_compiles_accumulating_sink_without_gpu(monkey
   assert row["accumulation"] == TARGET_IN_PLACE_ACCUMULATION
 
 
+@pytest.mark.parametrize("role,program_shape", [
+  ("attn_kv", (512, 1024, 256)), ("attn_qo", (512, 5120, 256)), ("ffn_down", (512, 5120, 256))])
+def test_target_role_probe_derives_program_geometry_from_admitted_role_without_gpu(monkeypatch, role, program_shape):
+  from extra.qk import mmq_llama_five_buffer_full_kernel as full_kernel
+  role_spec, built = exact_role_spec(role), []
+  monkeypatch.setattr(full_kernel, "build_llama_five_buffer_full_kernel",
+                      lambda m, n, k, *, accumulate=False:
+                      built.append((m, n, k, accumulate)) or object())
+  monkeypatch.setattr(full_kernel, "compile_llama_five_buffer_full_kernel",
+                      lambda kernel: SimpleNamespace(emitted=False, program=None, blocker="cpu-test-stop"))
+  row = run_full_grid_target_role_probe(role_spec=role_spec, in_kernel_accumulate=True, persistent_buffers=True)
+  assert built == [(*program_shape, True)]
+  assert row["shape"] == list(role_spec.shape) and row["exact_blocker"] == "cpu-test-stop"
+
+
+def test_target_role_probe_rejects_noncanonical_role_spec_before_health_or_compile():
+  kv = exact_role_spec("attn_kv")
+  forged = replace(kv, candidate_canonical_identity="0" * 64)
+  with patch("extra.qk.mmq_target_epoch_orchestrator.spawned_tiny_health_probe") as health, \
+       patch("extra.qk.mmq_llama_five_buffer_full_kernel.compile_llama_five_buffer_full_kernel") as compile_program:
+    row = run_full_grid_target_role_probe_isolated(role_spec=forged, timeout_seconds=1)
+  health.assert_not_called(); compile_program.assert_not_called()
+  assert row["status"] == "BLOCKED" and "exact role admission failed" in row["exact_blocker"]
+
+
 def test_target_role_frozen_bundle_replaces_compile_and_fails_closed_on_identity(monkeypatch):
   from extra.qk import mmq_frozen_target_artifact as frozen
   from extra.qk import mmq_llama_five_buffer_full_kernel as full_kernel
@@ -105,6 +132,23 @@ def test_target_role_frozen_bundle_replaces_compile_and_fails_closed_on_identity
   assert row["status"] == "BLOCKED"
   assert row["exact_blocker"] == "frozen target bundle validation failed"
   assert row["compile_performed"] is False and row["requires_recompile"] is False
+
+
+def test_target_role_frozen_bundle_rejects_shared_program_with_wrong_full_role(monkeypatch):
+  from extra.qk import mmq_frozen_target_artifact as frozen
+  from extra.qk import mmq_llama_five_buffer_full_kernel as full_kernel
+  qo, down = exact_role_spec("attn_qo"), exact_role_spec("ffn_down")
+  compile_program = Mock(side_effect=AssertionError("must not compile"))
+  monkeypatch.setattr(full_kernel, "compile_llama_five_buffer_full_kernel", compile_program)
+  monkeypatch.setattr(frozen, "load_frozen_target_artifact", lambda path: SimpleNamespace(
+    manifest={"schema": frozen.SCHEMA, "state": "FROZEN", "accumulation": frozen.ACCUMULATION, "accumulate": True,
+              "shape": list(qo.program.shape), "full_role_shape": list(qo.shape)},
+    program=object(), fixture={"role": qo.role, "shape": list(qo.shape)}))
+  row = run_full_grid_target_role_probe(
+    role_spec=down, in_kernel_accumulate=True, persistent_buffers=True, frozen_bundle="/cpu-only/qo.tar")
+  compile_program.assert_not_called()
+  assert row["status"] == "BLOCKED" and row["exact_blocker"] == "frozen target bundle validation failed"
+  assert "shape identity changed" in row["error"]
 
 
 def test_target_role_runtime_evidence_captures_views_kernarg_words_and_launch_count():
@@ -202,6 +246,20 @@ def test_target_role_isolated_wrapper_propagates_stable_metadata_flag():
   code = run.call_args.args[0][2]
   assert "stable_metadata_staging=True" in code
   assert "in_kernel_accumulate=True" in code
+
+
+def test_target_role_isolated_wrapper_propagates_admitted_role_to_child():
+  class _Proc:
+    returncode = 0
+    stdout = '{"status":"BLOCKED"}\n'
+    stderr = ""
+  role_spec = exact_role_spec("attn_kv")
+  with patch("extra.qk.mmq_llama_five_buffer_gpu_harness.subprocess.run", return_value=_Proc()) as run, \
+       patch("extra.qk.mmq_target_epoch_orchestrator.read_kernel_log_since", return_value=""), \
+       patch("extra.qk.mmq_target_epoch_orchestrator.spawned_tiny_health_probe", return_value=True):
+    run_full_grid_target_role_probe_isolated(role_spec=role_spec, timeout_seconds=1)
+  code = run.call_args.args[0][2]
+  assert "exact_role_spec('attn_kv', shape=(512, 1024, 5120))" in code
 
 
 def test_target_role_isolated_wrapper_propagates_frozen_bundle_and_narrow_aql_env(tmp_path):

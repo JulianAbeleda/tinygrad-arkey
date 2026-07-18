@@ -93,8 +93,17 @@ def exact_role_spec_from_shape(shape: tuple[int, int, int], *,
   return matches[0]
 
 
+def admit_exact_role_spec(role_spec: ExactRoleSpec, *,
+                          inventory: str | Path | Mapping[str, Any] = DEFAULT_INVENTORY) -> ExactRoleSpec:
+  if not isinstance(role_spec, ExactRoleSpec): raise TypeError("expected ExactRoleSpec")
+  admitted = exact_role_spec(role_spec.role, shape=role_spec.shape, inventory=inventory)
+  if role_spec != admitted: raise ValueError("exact role spec differs from canonical admitted five-buffer candidate")
+  return admitted
+
+
 DEFAULT_EXACT_ROLE_SPEC = exact_role_spec("ffn_gate_up")
 
 
 __all__ = ["DEFAULT_EXACT_ROLE_SPEC", "DEFAULT_INVENTORY", "EPOCH_K", "ExactProgramGeometry", "ExactRoleSpec",
-           "exact_role_spec", "exact_role_spec_for_shape", "exact_role_spec_from_shape", "load_exact_role_specs"]
+           "admit_exact_role_spec", "exact_role_spec", "exact_role_spec_for_shape", "exact_role_spec_from_shape",
+           "load_exact_role_specs"]

@@ -17,11 +17,14 @@ from typing import Any, Callable, Mapping, MutableMapping
 from extra.qk.mmq_frozen_target_artifact import (
   ACCUMULATION, FILE_NAMES, FrozenTargetArtifact, load_frozen_target_artifact,
 )
+from extra.qk.mmq_exact_role_spec import (
+  DEFAULT_EXACT_ROLE_SPEC, ExactRoleSpec, admit_exact_role_spec, exact_role_spec_from_shape,
+)
 
 
 SCHEMA = "tinygrad.mmq_q4k_q8_1.pm4_aql_frozen_differential.v1"
 EPOCH_PREFIXES = (1, 3)
-N_CHUNK_TILES = 136
+N_CHUNK_TILES = DEFAULT_EXACT_ROLE_SPEC.program.grid[0]
 MODE_VALUES = (("pm4", "0"), ("aql", "1"))
 SHARED_LAYER_CAVEAT = (
   "PM4 and AQL are not wholly independent implementations: they share the "
@@ -49,8 +52,22 @@ def _environment_identity(environ: Mapping[str, str]) -> str:
   return _canonical_sha256(sorted((key, value) for key, value in environ.items() if key != "AMD_AQL"))
 
 
-def _frozen_identity(artifact: FrozenTargetArtifact) -> dict[str, Any]:
+def _artifact_role_spec(artifact: FrozenTargetArtifact) -> ExactRoleSpec:
   manifest, fixture = artifact.manifest, artifact.fixture
+  spec = exact_role_spec_from_shape(tuple(manifest.get("full_role_shape", ())))
+  if tuple(manifest.get("shape", ())) != spec.program.shape:
+    raise ValueError("frozen program geometry differs from admitted full role")
+  if tuple(fixture.get("shape", ())) != spec.shape or fixture.get("role", spec.role) != spec.role:
+    raise ValueError("frozen fixture role/shape differs from admitted full role")
+  program = manifest.get("program", {})
+  if tuple(program.get("global_size", ())) != spec.program.grid:
+    raise ValueError("frozen program grid differs from admitted program geometry")
+  return spec
+
+
+def _frozen_identity(artifact: FrozenTargetArtifact, role_spec: ExactRoleSpec | None = None) -> dict[str, Any]:
+  manifest, fixture = artifact.manifest, artifact.fixture
+  spec = _artifact_role_spec(artifact) if role_spec is None else role_spec
   program = manifest["program"]
   artifacts = manifest["artifacts"]
   return {
@@ -63,6 +80,9 @@ def _frozen_identity(artifact: FrozenTargetArtifact) -> dict[str, Any]:
     "serialized_program_sha256": artifacts["serialized_program_sha256"],
     "fixture_schema": fixture["schema"],
     "fixture_sha256": manifest["files"][FILE_NAMES["fixture"]]["sha256"],
+    "role": spec.role, "full_role_shape": list(spec.shape),
+    "program_shape": list(spec.program.shape), "program_grid": list(spec.program.grid),
+    "total_epochs": spec.epochs,
   }
 
 
@@ -81,7 +101,7 @@ def _mapping(value: Any) -> Mapping[str, Any]:
 
 
 def _validate_frozen_run(result: Any, *, mode: str, amd_aql: str, epoch_prefix: int,
-                         expected: Mapping[str, Any]) -> list[str]:
+                         expected: Mapping[str, Any], role_spec: ExactRoleSpec) -> list[str]:
   errors: list[str] = []
   if not isinstance(result, dict): return ["isolated runner returned no structured result"]
   artifacts = _mapping(result.get("artifacts"))
@@ -91,8 +111,11 @@ def _validate_frozen_run(result: Any, *, mode: str, amd_aql: str, epoch_prefix: 
   frozen = _mapping(artifacts.get("frozen_bundle"))
   runtime = _mapping(result.get("runtime_evidence"))
   health_mode = _mapping(result.get("health_mode"))
+  launches = runtime.get("launches")
 
   if result.get("status") != "PASS": errors.append(f"target status is {result.get('status')!r}")
+  if result.get("role") != role_spec.role or tuple(result.get("shape", ())) != role_spec.shape:
+    errors.append("target role/shape differs from admitted frozen role")
   if correctness.get("status") != "PASS" or comparison.get("status") != "pass":
     errors.append("numeric correctness did not pass")
   if result.get("kernel_faults") != []: errors.append("kernel fault/reset evidence is nonempty")
@@ -111,6 +134,10 @@ def _validate_frozen_run(result: Any, *, mode: str, amd_aql: str, epoch_prefix: 
     errors.append("stable metadata staging was not attested")
   if timing.get("k_epoch_launches") != epoch_prefix:
     errors.append("launch count differs from requested epoch prefix")
+  if timing.get("total_k_epoch_launches") != role_spec.epochs:
+    errors.append("full-role epoch count differs from admitted role")
+  if timing.get("n_chunk_tiles") != role_spec.program.grid[0]:
+    errors.append("N chunk count differs from admitted program grid")
   if timing.get("epoch_checks") not in ([], ()):
     errors.append("intermediate epoch readback was observed")
   if artifacts.get("no_fallback") is not True or result.get("no_fallback") is not True:
@@ -134,6 +161,9 @@ def _validate_frozen_run(result: Any, *, mode: str, amd_aql: str, epoch_prefix: 
     errors.append(f"runtime queue mode is not {expected_mode}")
   if runtime.get("launch_count") != epoch_prefix:
     errors.append("runtime launch evidence differs from epoch prefix")
+  if not isinstance(launches, list) or len(launches) != epoch_prefix or any(
+      not isinstance(row, Mapping) or tuple(row.get("global_size", ())) != role_spec.program.grid for row in launches):
+    errors.append("runtime launch grid evidence differs from admitted program geometry")
   if runtime.get("intermediate_readback") is not False:
     errors.append("runtime did not attest absence of intermediate readback")
   if runtime.get("external_accumulation_add") is not False:
@@ -156,6 +186,7 @@ def _classification(mode_rows: list[dict[str, Any]]) -> str:
 
 
 def run_pm4_aql_frozen_differential(bundle_path: str | Path, *, timeout_seconds: float = 900.0,
+                                     role_spec: ExactRoleSpec | None = None,
                                      runner: Runner | None = None,
                                      loader: Loader = load_frozen_target_artifact,
                                      environ: MutableMapping[str, str] | None = None) -> dict[str, Any]:
@@ -169,7 +200,11 @@ def run_pm4_aql_frozen_differential(bundle_path: str | Path, *, timeout_seconds:
   path = Path(bundle_path).expanduser().resolve()
   try:
     artifact = loader(path)  # The sole CPU-only validation/load boundary.
-    identity = _frozen_identity(artifact)
+    artifact_spec = _artifact_role_spec(artifact)
+    selected_spec = artifact_spec if role_spec is None else admit_exact_role_spec(role_spec)
+    if selected_spec != artifact_spec:
+      raise ValueError("requested exact role differs from frozen bundle")
+    identity = _frozen_identity(artifact, selected_spec)
   except BaseException as exc:
     return _blocked(f"frozen bundle validation failed: {type(exc).__name__}: {exc}")
   manifest = artifact.manifest
@@ -186,7 +221,7 @@ def run_pm4_aql_frozen_differential(bundle_path: str | Path, *, timeout_seconds:
   } for mode, amd_aql in MODE_VALUES]
   common_kwargs = {
     "timeout_seconds": timeout_seconds, "warmups": 0, "rounds": 1,
-    "n_chunk_tiles": N_CHUNK_TILES, "epoch_start": 0,
+    "role_spec": selected_spec, "n_chunk_tiles": selected_spec.program.grid[0], "epoch_start": 0,
     "host_accumulate": False, "in_kernel_accumulate": True, "per_epoch_check": False,
     "persistent_buffers": True, "preloaded_epochs": True, "sync_each_epoch": False,
     "stable_metadata_staging": True, "frozen_bundle": str(path),
@@ -211,7 +246,7 @@ def run_pm4_aql_frozen_differential(bundle_path: str | Path, *, timeout_seconds:
       except BaseException as exc:
         result = {"status": "BLOCKED", "exact_blocker": f"isolated runner raised {type(exc).__name__}: {exc}"}
       errors = _validate_frozen_run(result, mode=mode, amd_aql=amd_aql,
-                                    epoch_prefix=prefix, expected=identity)
+                                    epoch_prefix=prefix, expected=identity, role_spec=selected_spec)
       row["attempts"].append({
         "epoch_prefix": prefix, "status": "PASS" if not errors else "BLOCKED",
         "validation_errors": errors, "result": result,
@@ -245,6 +280,7 @@ def run_pm4_aql_frozen_differential(bundle_path: str | Path, *, timeout_seconds:
     "schema": SCHEMA, "status": "PASS" if passed else "BLOCKED", "passed": passed,
     "exact_blocker": None if passed else "PM4/AQL frozen differential did not pass all prefixes",
     "bundle": identity, "bundle_validations": 1, "compile_performed": False,
+    "role": selected_spec.role, "shape": list(selected_spec.shape),
     "epoch_prefixes": list(EPOCH_PREFIXES), "base_environment_sha256": base_env,
     "intentional_environment_difference": {"key": "AMD_AQL", "pm4": "0", "aql": "1"},
     "forced_lifecycle": {

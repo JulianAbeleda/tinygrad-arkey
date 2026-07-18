@@ -3,17 +3,23 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from extra.qk import mmq_pm4_aql_differential as differential
+from extra.qk.mmq_exact_role_spec import DEFAULT_EXACT_ROLE_SPEC, ExactRoleSpec, exact_role_spec
 from extra.qk.mmq_frozen_target_artifact import ACCUMULATION
 
 
-def _artifact():
-  fixture = {"schema": "fixture.v1", "q4": {"sha256": "q4"}, "q8": {"sha256": "q8"}}
+def _artifact(role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC):
+  fixture = {"schema": "fixture.v1", "role": role_spec.role, "shape": list(role_spec.shape),
+             "q4": {"sha256": "q4"}, "q8": {"sha256": "q8"}}
   manifest = {
     "schema": "frozen.v1", "state": "FROZEN", "compile_calls": 1,
     "accumulate": True, "accumulation": ACCUMULATION,
+    "shape": list(role_spec.program.shape), "full_role_shape": list(role_spec.shape),
     "consumer": {"requires_recompile": False},
-    "program": {"key": "program-key", "function": "target"},
+    "program": {"key": f"program-{role_spec.m}x{role_spec.n}x256", "function": "target",
+                "global_size": list(role_spec.program.grid)},
     "files": {"fixture.json": {"sha256": "fixture-file-sha", "nbytes": 1}},
     "artifacts": {
       "source_sha256": "source-sha", "binary_sha256": "binary-sha",
@@ -24,18 +30,21 @@ def _artifact():
 
 
 def _passing_result(artifact, kwargs):
-  expected = differential._frozen_identity(artifact)
+  role_spec = kwargs["role_spec"]
+  expected = differential._frozen_identity(artifact, role_spec)
   prefix = kwargs["epoch_limit"]
   amd_aql = kwargs["child_env_overrides"]["AMD_AQL"]
   return {
-    "status": "PASS", "accumulation": ACCUMULATION, "no_fallback": True,
+    "status": "PASS", "role": role_spec.role, "shape": list(role_spec.shape),
+    "accumulation": ACCUMULATION, "no_fallback": True,
     "health_before": True, "health_after": True,
     "health_mode": {"amd_aql_env": amd_aql, "before": True, "after": True},
     "kernel_faults": [],
     "correctness": {"status": "PASS", "comparison": {"status": "pass", "mismatch_count": 0}},
     "timing": {
       "persistent_buffers": True, "preloaded_epochs": True, "stable_metadata_staging": True,
-      "k_epoch_launches": prefix, "epoch_checks": [],
+      "k_epoch_launches": prefix, "total_k_epoch_launches": role_spec.epochs,
+      "n_chunk_tiles": role_spec.program.grid[0], "epoch_checks": [],
     },
     "artifacts": {
       "source_sha256": expected["source_sha256"], "binary_sha256": expected["binary_sha256"],
@@ -48,6 +57,7 @@ def _passing_result(artifact, kwargs):
       "amd_aql_env": amd_aql, "amd_aql_effective": amd_aql == "1",
       "queue_mode": "AQL" if amd_aql == "1" else "PM4",
       "launch_count": prefix, "intermediate_readback": False, "external_accumulation_add": False,
+      "launches": [{"global_size": list(role_spec.program.grid)} for _ in range(prefix)],
     },
   }
 
@@ -77,6 +87,7 @@ def test_differential_loads_once_and_reuses_isolated_probe_with_only_aql_env_dif
   assert all(call["in_kernel_accumulate"] and call["persistent_buffers"] and call["preloaded_epochs"]
              and call["stable_metadata_staging"] for call, _ in calls)
   assert all(not call["host_accumulate"] and not call["per_epoch_check"] for call, _ in calls)
+  assert all(call["role_spec"] == DEFAULT_EXACT_ROLE_SPEC and call["n_chunk_tiles"] == 136 for call, _ in calls)
   assert environ == {"KEEP": "same", "AMD_AQL": "caller-value"}
 
 
@@ -163,3 +174,31 @@ def test_differential_numeric_failure_is_fail_closed_and_stops_prefix_escalation
   assert result["status"] == "BLOCKED"
   assert all(any("numeric correctness" in error for error in mode["attempts"][0]["validation_errors"])
              for mode in result["modes"])
+
+
+@pytest.mark.parametrize("role,grid,epochs", [
+  ("attn_kv", (8, 4, 1), 20), ("attn_qo", (40, 4, 1), 20), ("ffn_down", (40, 4, 1), 68)])
+def test_differential_derives_role_grid_chunks_and_epochs_from_frozen_spec(tmp_path: Path, role, grid, epochs):
+  role_spec, calls = exact_role_spec(role), []
+  artifact = _artifact(role_spec)
+  def runner(**kwargs):
+    calls.append(kwargs)
+    return _passing_result(artifact, kwargs)
+  result = differential.run_pm4_aql_frozen_differential(
+    tmp_path / role, runner=runner, loader=lambda _: artifact, environ={})
+  assert result["status"] == "PASS" and result["role"] == role and result["shape"] == list(role_spec.shape)
+  assert result["bundle"]["program_grid"] == list(grid) and result["bundle"]["total_epochs"] == epochs
+  assert all(call["role_spec"] == role_spec and call["n_chunk_tiles"] == grid[0] for call in calls)
+
+
+def test_differential_shared_qo_down_program_retains_distinct_full_role_and_mismatch_fails_closed(tmp_path: Path):
+  qo, down = exact_role_spec("attn_qo"), exact_role_spec("ffn_down")
+  qo_artifact, down_artifact = _artifact(qo), _artifact(down)
+  assert qo_artifact.manifest["program"] == down_artifact.manifest["program"]
+  assert qo_artifact.manifest["full_role_shape"] != down_artifact.manifest["full_role_shape"]
+  calls = []
+  result = differential.run_pm4_aql_frozen_differential(
+    tmp_path / "down", role_spec=qo, runner=lambda **kwargs: calls.append(kwargs),
+    loader=lambda _: down_artifact, environ={})
+  assert result["status"] == "BLOCKED" and "requested exact role differs" in result["exact_blocker"]
+  assert calls == []
