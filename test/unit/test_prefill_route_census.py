@@ -3,8 +3,9 @@ from types import SimpleNamespace
 import pytest
 
 from tinygrad.llm.model import _attach_selected_prefill_inventory
-from tinygrad.llm.prefill_route_observer import PrefillRouteAttachment, notify_prefill_route
-from extra.qk.prefill_route_census import collect_prefill_route_census
+from tinygrad.llm.prefill_route_observer import (PrefillRouteAttachment, PrefillRouteExecution,
+  notify_prefill_route, notify_prefill_route_execution)
+from extra.qk.prefill_route_census import collect_prefill_route_census, collect_prefill_route_execution_census
 
 def _attachment(invocation_id, route_id, tensor_identity=None):
   return PrefillRouteAttachment(invocation_id, route_id, tensor_identity or invocation_id, {"route": route_id}, {"target": "scan"})
@@ -74,3 +75,68 @@ def test_inventory_attachment_fails_for_missing_duplicate_or_policy_mismatch():
                                        {"routes": {"i": "route"}}, object())
   with pytest.raises(ValueError, match="duplicate selected"):
     _attach_selected_prefill_inventory(model, {"rows": [row, row]}, {"routes": {"i": "route"}}, object())
+
+def _execution(invocation_id, route_id, candidate="candidate-a", program="binary:abc", fallback=False, reason=None):
+  return PrefillRouteExecution(invocation_id, route_id, candidate, program, fallback, reason)
+
+def test_actual_execution_census_records_exact_candidate_program_and_fallback():
+  first = SimpleNamespace(_prefill_route_attachment=_attachment("a", "route-a", "a.weight"))
+  second = SimpleNamespace(_prefill_route_attachment=_attachment("b", "route-b", "b.weight"))
+  with collect_prefill_route_execution_census(
+      ("a", "b"), expected_candidate_counts={"candidate-a": 2}, expected_fallback_count=1) as census:
+    notify_prefill_route_execution(first, _execution("a", "route-a"))
+    notify_prefill_route_execution(second, _execution(
+      "b", "route-b", program="binary:def", fallback=True, reason="guard rejected optimized program"))
+  artifact = census.artifact()
+  assert artifact["status"] == "PASS" and artifact["complete"] is True
+  assert artifact["observed_candidate_counts"] == {"candidate-a": 2}
+  assert artifact["observed_fallback_counts"] == {"used": 1, "not_used": 1}
+  rows = {row["invocation_id"]: row for row in artifact["rows"]}
+  assert rows["a"]["attached_route_id"] == rows["a"]["executed_route_id"] == "route-a"
+  assert rows["a"]["candidate_identity"] == "candidate-a" and rows["a"]["program_identity"] == "binary:abc"
+  assert rows["b"]["fallback_used"] is True and rows["b"]["fallback_reason"] == "guard rejected optimized program"
+
+def test_actual_execution_census_fails_on_duplicate_unexpected_and_count_drift():
+  linear = SimpleNamespace(_prefill_route_attachment=_attachment("a", "route-a"))
+  with collect_prefill_route_execution_census(
+      ("a", "b"), expected_candidate_counts={"candidate-a": 2}, expected_fallback_count=0) as census:
+    notify_prefill_route_execution(linear, _execution("a", "route-a"))
+    notify_prefill_route_execution(linear, _execution("a", "route-a"))
+    unexpected = SimpleNamespace(_prefill_route_attachment=_attachment("x", "route-x"))
+    notify_prefill_route_execution(unexpected, _execution("x", "route-x", candidate="candidate-x"))
+  artifact = census.artifact()
+  assert artifact["status"] == "FAIL" and artifact["complete"] is False
+  assert "duplicate execution invocation_id" in artifact["blocker"]
+  assert "unexpected execution invocation_id" in artifact["blocker"]
+  assert "unexpected execution candidate_identity" in artifact["blocker"]
+  assert "missing execution invocation_ids" in artifact["blocker"]
+  assert "candidate execution counts differ" in artifact["blocker"]
+
+@pytest.mark.parametrize("event, blocker", [
+  (_execution("other", "route-a"), "attachment-vs-execution invocation mismatch"),
+  (_execution("a", "other-route"), "attachment-vs-execution route mismatch"),
+  (_execution("a", "route-a", fallback=True), "fallback execution requires a non-empty reason"),
+  (_execution("a", "route-a", reason="not actually a fallback"), "non-fallback execution must not report a fallback reason"),
+])
+def test_actual_execution_census_rejects_attachment_mismatch_and_invalid_fallback(event, blocker):
+  linear = SimpleNamespace(_prefill_route_attachment=_attachment("a", "route-a"))
+  with collect_prefill_route_execution_census(
+      ("a",), expected_candidate_counts={"candidate-a": 1}, expected_fallback_count=int(event.fallback_used)) as census:
+    notify_prefill_route_execution(linear, event)
+  artifact = census.artifact()
+  assert artifact["status"] == "FAIL" and blocker in artifact["blocker"]
+
+def test_actual_execution_census_is_context_local_and_requires_exact_expectations():
+  linear = SimpleNamespace(_prefill_route_attachment=_attachment("a", "route-a"))
+  from tinygrad.llm.prefill_route_observer import prefill_route_scope
+  with collect_prefill_route_execution_census(
+      ("a",), expected_candidate_counts={"candidate-a": 1}, expected_fallback_count=0) as census:
+    with prefill_route_scope(False): notify_prefill_route_execution(linear, _execution("a", "route-a"))
+    notify_prefill_route_execution(linear, _execution("a", "route-a"))
+  assert census.artifact()["rows"][0]["execution_count"] == 1
+  with pytest.raises(ValueError, match="equal total expected"):
+    collect_prefill_route_execution_census(
+      ("a",), expected_candidate_counts={"candidate-a": 2}, expected_fallback_count=0).__enter__()
+  with pytest.raises(ValueError, match="within total expected"):
+    collect_prefill_route_execution_census(
+      ("a",), expected_candidate_counts={"candidate-a": 1}, expected_fallback_count=2).__enter__()
