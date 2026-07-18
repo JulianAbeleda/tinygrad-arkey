@@ -682,6 +682,43 @@ queue-removal failure, and GPU reset. The post-reset health probe passed
 20-epoch gate yet. The active blocker is now intermittent AMD executable/queue lifecycle behavior across isolated
 target attempts; audit code upload, entry-point lifetime, and launch state before another target dispatch.
 
+### Revised completion plan: freeze one binary and separate ISA from the launcher
+
+Public AMD/ROCm history makes this a known fault class rather than a reason to resume broad spill or metadata search.
+AMD's KFD architect has documented Tinygrad reproductions involving low-level queue/synchronization behavior and Navi3
+MES recovery, while public ROCm reports contain the same `sq_intr` type-2, page-fault, queue-removal, and reset
+sequence. The exact root cause here is still unproven. In particular, the current tinygrad PM4 path already emits an
+`ACQUIRE_MEM` instruction-cache invalidation before dispatch, so an extra blind cache flush is not an evidenced fix.
+
+The remaining work must proceed in this order:
+
+1. Compile once and retain one launcher-neutral artifact: HSACO bytes, serialized PROGRAM, generated source, ELF
+   descriptor/resources, ABI/grid/local shape, deterministic fixture hashes, and disassembly. Never compare two fresh
+   compiles when diagnosing this fault.
+2. Audit that frozen binary CPU-only for image/section bounds, descriptor and entry-point arithmetic, branch targets,
+   termination, unexpected indirect control flow, and instruction encodings.
+3. Build two isolated launchers over the exact same HSACO and five buffers: tinygrad's direct PM4/KFD path and the
+   standard ROCr/HSA or HIP module path. Neither launcher may recompile or silently fall back.
+4. Record program/code-object VA, entry address, all five buffer VAs/sizes/offsets, kernarg VA and pointer words,
+   runtime identity, launch count, kernel-log window, timeout result, post-run tiny-health result, and any available
+   wave PC or amdgpu coredump reference.
+5. Run a fail-closed matched matrix: one launch under each launcher, then three launches under each launcher. Stop at
+   the first numeric mismatch, non-finite output, SQC/page-fault/MES/reset marker, timeout, or failed health probe.
+6. Classify before editing:
+   - both launchers fail: repair generated ISA/control flow or kernel synchronization;
+   - only tinygrad PM4 fails: repair its program-upload/queue/dispatch contract;
+   - only repeated launches fail: repair executable, address, or queue lifetime;
+   - outcome follows VA/entry changes: repair allocation/mapping lifetime.
+7. Implement only the evidenced fix and retain a focused regression test. Do not tune spills, revive the rejected
+   half2 ordering experiment, add model/GPU-name branches, or treat a recovered reset as a pass.
+8. Reuse one passing frozen artifact for strict 1 -> 3 -> 20 same-process target escalation with stable GPU-SDMA
+   metadata staging and in-place FP32 accumulation, no intermediate readback, exact final oracle comparison, clean
+   fault logs, and healthy pre/post canaries.
+9. Regenerate the all-20 independent epoch artifact with fixture and per-epoch health attestations, compose it with the
+   strict same-process artifact, and require both for R6.
+10. Pass R6/R7 and the negative-role/direct-packed fallback checks, then update the one-role opt-in/promotion artifact,
+    commit and push all retained evidence, and only then claim completion.
+
 ## 1. Executive state
 
 The project is building a generated tinygrad prefill route for non-fitting quantized models, using Qwen3-14B as the
@@ -951,7 +988,10 @@ python3 -m pytest -q \
 Avoid launching duplicate exact-oracle processes. Several previous workers accidentally ran two copies, wasting minutes
 and making measurements harder to attribute.
 
-## 9. Next implementation scope
+## 9. Historical spill-repair scope (completed and superseded)
+
+This section records the earlier spill investigation for provenance. Its A/B lifetime work reached zero-scratch
+emission and is no longer the owning plan. The revised launcher-neutral completion plan above controls current work.
 
 ### Step A: prove the selected A/B pair-to-consumer mapping
 
