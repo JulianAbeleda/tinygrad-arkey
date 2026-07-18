@@ -86,9 +86,9 @@ def _buffer_record(name: str, tensor: Any, device: str) -> dict[str, Any]:
           "va_addr": int(va) if va is not None else None}
 
 
-def _run_epoch_worker(program_path: str, epoch: int, device: str = DEVICE,
+def _run_epoch_worker(program_path: str, epoch_start: int, epoch_count: int = 1, device: str = DEVICE,
                       runtime_timeout_ms: int = DEFAULT_RUNTIME_TIMEOUT_MS) -> dict[str, Any]:
-  """Child-only exact one-epoch dispatch and independent oracle comparison."""
+  """Child-only persistent-preload target prefix and final oracle comparison."""
   from tinygrad import Tensor, dtypes
   from tinygrad.engine.realize import get_runtime
   from tinygrad.uop.ops import Ops
@@ -97,7 +97,9 @@ def _run_epoch_worker(program_path: str, epoch: int, device: str = DEVICE,
     Q8_1_MMQ_DS4_LAYOUT, q4k_q8_1_mmq_ds4_tile_reference,
   )
 
-  if not 0 <= epoch < TOTAL_EPOCHS: raise ValueError(f"epoch must be in [0,{TOTAL_EPOCHS - 1}]")
+  if not isinstance(epoch_count, int) or epoch_count <= 0: raise ValueError("epoch_count must be positive")
+  if not 0 <= epoch_start < TOTAL_EPOCHS or epoch_start + epoch_count > TOTAL_EPOCHS:
+    raise ValueError(f"epoch range must fit [0,{TOTAL_EPOCHS - 1}]")
   if not isinstance(runtime_timeout_ms, int) or runtime_timeout_ms <= 0: raise ValueError("runtime timeout must be positive")
   started = time.perf_counter()
   with Path(program_path).open("rb") as handle: program = pickle.load(handle)
@@ -117,23 +119,30 @@ def _run_epoch_worker(program_path: str, epoch: int, device: str = DEVICE,
   sums_tensor = Tensor(sums, dtype=dtypes.float32, device=device).realize()
   checkpoints["after_preload"] = _timeline_snapshot(device)
 
-  q4_view = q4_tensor.uop.buffer.view(n * 36, dtypes.uint32, epoch * n * 36 * dtypes.uint32.itemsize)
-  values_view = values_tensor.uop.buffer.view(2 * m * 128, dtypes.int8,
-                                               epoch * 2 * m * 128 * dtypes.int8.itemsize)
-  scales_view = scales_tensor.uop.buffer.view(2 * m * 4, dtypes.float32,
-                                               epoch * 2 * m * 4 * dtypes.float32.itemsize)
-  sums_view = sums_tensor.uop.buffer.view(2 * m * 4, dtypes.float32,
-                                           epoch * 2 * m * 4 * dtypes.float32.itemsize)
   runtime = get_runtime(device, program)
-  args = tuple((output.uop.buffer, q4_view, values_view, scales_view, sums_view)[slot].get_buf(device)
-               for slot in program.arg.globals)
-  gpu_seconds = runtime(*args, global_size=(n // 128, m // 128, 1), local_size=program.arg.local_size,
-                        vals=program.arg.vals({}), wait=True, timeout=runtime_timeout_ms)
-  checkpoints["after_target_dispatch"] = _timeline_snapshot(device)
+  dispatches: list[dict[str, Any]] = []
+  gpu_ms_total = 0.0
+  completed_epochs: list[int] = []
+  for epoch in range(epoch_start, epoch_start + epoch_count):
+    q4_view = q4_tensor.uop.buffer.view(n * 36, dtypes.uint32, epoch * n * 36 * dtypes.uint32.itemsize)
+    values_view = values_tensor.uop.buffer.view(2 * m * 128, dtypes.int8,
+                                                 epoch * 2 * m * 128 * dtypes.int8.itemsize)
+    scales_view = scales_tensor.uop.buffer.view(2 * m * 4, dtypes.float32,
+                                                 epoch * 2 * m * 4 * dtypes.float32.itemsize)
+    sums_view = sums_tensor.uop.buffer.view(2 * m * 4, dtypes.float32,
+                                             epoch * 2 * m * 4 * dtypes.float32.itemsize)
+    args = tuple((output.uop.buffer, q4_view, values_view, scales_view, sums_view)[slot].get_buf(device)
+                 for slot in program.arg.globals)
+    gpu_seconds = runtime(*args, global_size=(n // 128, m // 128, 1), local_size=program.arg.local_size,
+                          vals=program.arg.vals({}), wait=True, timeout=runtime_timeout_ms)
+    gpu_ms_total += float(gpu_seconds) * 1000.0 if gpu_seconds is not None else 0.0
+    completed_epochs.append(epoch)
+    dispatches.append({"epoch": epoch, "timeline": _timeline_snapshot(device)})
   got = output.numpy().reshape(m, n)
 
   # Recreate the independent oracle from the same deterministic arrays, with
   # FP16-rounded metadata exactly as the target harness uses.
+  epoch = epoch_start + epoch_count - 1
   q4_bytes = q4_packed.view(np.uint8).reshape(TOTAL_EPOCHS, n, 144)[epoch].reshape(-1)
   ep_values = values.reshape(TOTAL_EPOCHS * 2, m, 128)[epoch * 2:(epoch + 1) * 2]
   ep_scales = scales.reshape(TOTAL_EPOCHS * 2, m, 4)[epoch * 2:(epoch + 1) * 2]
@@ -147,15 +156,17 @@ def _run_epoch_worker(program_path: str, epoch: int, device: str = DEVICE,
   from extra.qk.mmq_llama_five_buffer_gpu_harness import _numeric_comparison
   comparison = _numeric_comparison(got, reference)
   return {"schema": f"{SCHEMA}.child", "status": "PASS" if comparison["status"] == "pass" else "BLOCKED",
-          "passed": comparison["status"] == "pass", "epoch": epoch, "shape": [m, n, 256],
-          "comparison": comparison, "gpu_ms": float(gpu_seconds) * 1000.0 if gpu_seconds is not None else None,
+          "passed": comparison["status"] == "pass", "epoch": epoch,
+          "epoch_start": epoch_start, "epoch_count": epoch_count, "completed_epochs": completed_epochs,
+          "shape": [m, n, 256], "comparison": comparison, "gpu_ms": gpu_ms_total,
+          "target_dispatches": epoch_count, "dispatches": dispatches,
           "timeline": checkpoints, "buffers": [_buffer_record("output", output, device),
             _buffer_record("q4_preloaded", q4_tensor, device), _buffer_record("q8_values", values_tensor, device),
             _buffer_record("q8_scales", scales_tensor, device), _buffer_record("q8_sums", sums_tensor, device)],
           "input_hashes": {"q4_epoch_major": _hash_array(q4_packed), "values": _hash_array(values),
                            "scales": _hash_array(scales), "sums": _hash_array(sums)},
           "output_initialization": "empty_full_target_partial",
-          "no_fallback": True, "target_dispatches": 1, "elapsed_seconds": time.perf_counter() - started}
+          "no_fallback": True, "elapsed_seconds": time.perf_counter() - started}
 
 
 def _default_fault_reader(since_timestamp: float) -> str:
@@ -171,22 +182,27 @@ def _default_health_probe() -> bool:
   return spawned_tiny_health_probe()
 
 
-def run_single_epoch_canary(*, epoch: int = DEFAULT_EPOCH, output_path: str | Path | None = None,
+def run_single_epoch_canary(*, epoch: int = DEFAULT_EPOCH, epoch_start: int | None = None,
+                            epoch_count: int = 1, output_path: str | Path | None = None,
                             compile_fn: Callable[[str | Path], tuple[str, dict[str, Any]]] | None = None,
                             device: str = DEVICE, timeout_seconds: float = DEFAULT_CHILD_TIMEOUT_SECONDS,
                             runtime_timeout_ms: int = DEFAULT_RUNTIME_TIMEOUT_MS,
                             runner: Callable[..., IsolatedResult] = run_isolated,
                             fault_reader: Callable[[float], str] = _default_fault_reader,
                             health_probe: Callable[[], bool] | None = _default_health_probe) -> dict[str, Any]:
-  if not 0 <= epoch < TOTAL_EPOCHS: raise ValueError(f"epoch must be in [0,{TOTAL_EPOCHS - 1}]")
+  if epoch_start is None: epoch_start = epoch
+  if not isinstance(epoch_count, int) or epoch_count <= 0: raise ValueError("epoch_count must be positive")
+  if not 0 <= epoch_start < TOTAL_EPOCHS or epoch_start + epoch_count > TOTAL_EPOCHS:
+    raise ValueError(f"epoch range must fit [0,{TOTAL_EPOCHS - 1}]")
   if timeout_seconds <= 0 or runtime_timeout_ms <= 0: raise ValueError("timeouts must be positive")
   if compile_fn is None:
     from extra.qk.mmq_target_epoch_orchestrator import compile_target_program_artifact
     compile_fn = compile_target_program_artifact
   started = time.time()
   base: dict[str, Any] = {"schema": SCHEMA, "diagnostic_only": True, "promotion_eligible": False,
-    "production_dispatch_changed": False, "no_fallback": True, "target_dispatches": 1,
-    "epoch": epoch, "kernel_faults": [], "compile": None, "child": None, "health_after": None}
+    "production_dispatch_changed": False, "no_fallback": True, "target_dispatches": epoch_count,
+    "epoch": epoch_start + epoch_count - 1, "epoch_start": epoch_start, "epoch_count": epoch_count,
+    "kernel_faults": [], "compile": None, "child": None, "health_after": None}
   with tempfile.TemporaryDirectory(prefix="tinygrad-mmq-single-epoch-") as temp_dir:
     try: artifact_path, evidence = compile_fn(temp_dir)
     except BaseException as exc:
@@ -194,7 +210,7 @@ def run_single_epoch_canary(*, epoch: int = DEFAULT_EPOCH, output_path: str | Pa
                 "exact_blocker": f"parent compile failed: {type(exc).__name__}: {exc}"}
       return _write_result(result, output_path)
     base["compile"] = evidence
-    isolated = runner(_run_epoch_worker, args=(artifact_path, epoch, device, runtime_timeout_ms),
+    isolated = runner(_run_epoch_worker, args=(artifact_path, epoch_start, epoch_count, device, runtime_timeout_ms),
                       timeout_seconds=float(timeout_seconds), start_method="spawn")
     base["child_status"], base["child_error"] = isolated.status, isolated.error
     if isolated.status == "passed" and isinstance(isolated.result, dict): base["child"] = isolated.result
@@ -232,10 +248,14 @@ def _write_result(result: dict[str, Any], output_path: str | Path | None) -> dic
 
 def main(argv: list[str] | None = None) -> int:
   parser = argparse.ArgumentParser(description="diagnostic one-shot exact Qwen3 target epoch canary")
-  parser.add_argument("--epoch", type=int, default=DEFAULT_EPOCH)
+  parser.add_argument("--epoch", type=int, default=DEFAULT_EPOCH,
+                      help="legacy alias for --epoch-start when no prefix is requested")
+  parser.add_argument("--epoch-start", type=int, default=None)
+  parser.add_argument("--epoch-count", type=int, default=1)
   parser.add_argument("--output", type=Path)
   args = parser.parse_args(argv)
-  result = run_single_epoch_canary(epoch=args.epoch, output_path=args.output)
+  result = run_single_epoch_canary(epoch=args.epoch, epoch_start=args.epoch_start,
+                                   epoch_count=args.epoch_count, output_path=args.output)
   print(json.dumps(result, sort_keys=True))
   return 0 if result.get("passed") else 1
 

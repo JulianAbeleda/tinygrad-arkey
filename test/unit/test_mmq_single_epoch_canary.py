@@ -19,7 +19,7 @@ def _child_pass():
 
 def _runner_pass(callback, *, args=(), timeout_seconds=0, start_method=None, **kwargs):
   assert callback is canary._run_epoch_worker
-  assert Path(args[0]).name == "target.pkl" and args[1] == 0
+  assert Path(args[0]).name == "target.pkl" and args[1:3] == (0, 1)
   assert start_method == "spawn" and timeout_seconds > 0
   return IsolatedResult("passed", _child_pass())
 
@@ -50,6 +50,20 @@ def test_success_runs_one_epoch_and_health_once():
   assert out["promotion_eligible"] is False and calls == [1]
 
 
+def test_same_process_prefix_passes_range_and_dispatch_count_to_child():
+  calls: list[tuple] = []
+  def runner(callback, *, args=(), **kwargs):
+    calls.append(args[1:3])
+    return IsolatedResult("passed", {"passed": True, "comparison": {"status": "pass"}, "target_dispatches": 3})
+  out = canary.run_single_epoch_canary(
+    epoch_start=2, epoch_count=3, compile_fn=_compile, runner=runner,
+    fault_reader=lambda _: "", health_probe=lambda: True,
+  )
+  assert out["status"] == "PASS" and out["epoch_start"] == 2 and out["epoch_count"] == 3
+  assert out["target_dispatches"] == 3
+  assert calls == [(2, 3)]
+
+
 def test_timeout_fails_closed_without_health_retry():
   calls: list[int] = []
   def runner(*args, **kwargs): return IsolatedResult("timed_out", error="deadline", timed_out=True)
@@ -75,4 +89,13 @@ def test_invalid_epoch_never_compiles():
   try: canary.run_single_epoch_canary(epoch=canary.TOTAL_EPOCHS, compile_fn=compile_fn)
   except ValueError: pass
   else: raise AssertionError("invalid epoch must raise")
+  assert calls == []
+
+
+def test_invalid_prefix_count_never_compiles():
+  calls: list[int] = []
+  def compile_fn(_): calls.append(1); raise AssertionError("must not compile")
+  try: canary.run_single_epoch_canary(epoch_start=19, epoch_count=2, compile_fn=compile_fn)
+  except ValueError: pass
+  else: raise AssertionError("out-of-range prefix must raise")
   assert calls == []
