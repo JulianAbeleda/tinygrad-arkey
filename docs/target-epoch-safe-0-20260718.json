@@ -1,0 +1,124 @@
+{
+  "aggregate_sha256": "edf8d8f4ca0d550ac096c96e2dda7bc73de4d91faafeae116f3cc483f9ec2b3f",
+  "aggregate_shape": [
+    512,
+    17408
+  ],
+  "aggregate_sum": -11171024.497142315,
+  "completed_epochs": [
+    0
+  ],
+  "coverage": {
+    "complete_target": false,
+    "target_epochs": 20,
+    "verified_epochs": [
+      0
+    ],
+    "verified_k": 256
+  },
+  "default_route": "direct_packed",
+  "diagnostic_only": true,
+  "epoch_results": [
+    {
+      "comparison": {
+        "atol": 0.003,
+        "first_mismatch_got": null,
+        "first_mismatch_index": null,
+        "first_mismatch_reference": null,
+        "got_shape": [
+          512,
+          17408
+        ],
+        "got_size": 8912896,
+        "inf_got": 0,
+        "inf_reference": 0,
+        "joint_finite": 8912896,
+        "max_abs_error": 0.0001220703125,
+        "mean_abs_error": 1.7926890194530642e-08,
+        "mismatch_count": 0,
+        "nan_got": 0,
+        "nan_reference": 0,
+        "reference_shape": [
+          512,
+          17408
+        ],
+        "reference_size": 8912896,
+        "rtol": 0.003,
+        "status": "pass"
+      },
+      "elapsed_seconds": 6.060484591987915,
+      "epoch": 0,
+      "gpu_ms": 0.6904,
+      "no_fallback": true,
+      "output_sha256": "edf8d8f4ca0d550ac096c96e2dda7bc73de4d91faafeae116f3cc483f9ec2b3f",
+      "passed": true,
+      "schema": "tinygrad.mmq_q4k_q8_1_target_epoch_orchestrator.v1.epoch",
+      "shape": [
+        512,
+        17408,
+        256
+      ],
+      "status": "PASS"
+    }
+  ],
+  "failed_epoch": null,
+  "kernel_faults": [],
+  "no_fallback": true,
+  "passed": true,
+  "preflight_health": true,
+  "production_dispatch_changed": false,
+  "program": {
+    "backend_id": "q4k_q8_1_mmq_amd_isa_full_grid_v0",
+    "binary_nbytes": 69655,
+    "binary_sha256": "ac98255099fc6ae4b66fb764bbc7adc70131dd617311005e0106e6e2ef90b6bb",
+    "compile_only_parent": true,
+    "distinct_binary_identity": true,
+    "no_fallback": true,
+    "program_global_size": [
+      136,
+      4,
+      1
+    ],
+    "program_globals": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "program_local_size": [
+      256,
+      1,
+      1
+    ],
+    "resources": {
+      "authority": "native_elf_descriptor",
+      "compute_pgm_rsrc1": 1085014047,
+      "compute_pgm_rsrc2": 388,
+      "compute_pgm_rsrc3": 0,
+      "kernarg_bytes": 40,
+      "kernel_code_entry_byte_offset": -69120,
+      "lds_bytes": 57856,
+      "scratch_bytes": 0,
+      "sgpr": null,
+      "vgpr": 256,
+      "wavefront_size": 32
+    },
+    "resources_error": "CalledProcessError: Command '('/opt/rocm/llvm/bin/llvm-readelf', '--notes', '/tmp/tmp8kr5pcvn.hsaco')' returned non-zero exit status 1.",
+    "serialized_program_nbytes": 8264127,
+    "serialized_program_sha256": "bc8842b2c55f24c91324025794690bd5732562b0a3e516145e931f695334c1f4",
+    "source_nbytes": 437281,
+    "source_revision": "ac4cddeb0dbd778f650bf568f6f08344a06abe3a",
+    "source_sha256": "977f459abe9ff1685f0b6a244e0717ab84af293be1539cca67cfc8d85cad3512"
+  },
+  "promotion_eligible": false,
+  "role": "ffn_gate_up",
+  "schema": "tinygrad.mmq_q4k_q8_1_target_epoch_orchestrator.v1",
+  "shape": [
+    512,
+    17408,
+    5120
+  ],
+  "status": "PASS",
+  "stop_reason": null
+}
