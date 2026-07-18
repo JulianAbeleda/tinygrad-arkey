@@ -511,7 +511,9 @@ def run_full_grid_k_tiled_probe_isolated(*, timeout_seconds: float = 360.0,
 
 def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
                                     epoch_limit: int | None = None,
-                                    n_chunk_tiles: int | None = None) -> dict[str, Any]:
+                                    n_chunk_tiles: int | None = None,
+                                    epoch_start: int = 0,
+                                    host_accumulate: bool = False) -> dict[str, Any]:
   """Run the emitted K=256 program across the exact 14B ffn_gate_up shape.
 
   This remains bounded evidence: each epoch writes a fresh full-role partial
@@ -534,8 +536,9 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
   )
   m, n, k = TARGET_ROLE_PROBE_SHAPE
   total_epochs = k // 256
-  if epoch_limit is None: epoch_limit = total_epochs
-  if not 0 < epoch_limit <= total_epochs: raise ValueError(f"epoch_limit must be in [1,{total_epochs}]")
+  if not 0 <= epoch_start < total_epochs: raise ValueError(f"epoch_start must be in [0,{total_epochs-1}]")
+  if epoch_limit is None: epoch_limit = total_epochs - epoch_start
+  if not 0 < epoch_limit <= total_epochs - epoch_start: raise ValueError(f"epoch_limit must be in [1,{total_epochs-epoch_start}]")
   total_n_tiles = n // 128
   if n_chunk_tiles is None: n_chunk_tiles = total_n_tiles
   if not 0 < n_chunk_tiles <= total_n_tiles: raise ValueError(f"n_chunk_tiles must be in [1,{total_n_tiles}]")
@@ -552,9 +555,10 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
   completed_epochs = 0
   def run_epochs(*, timed: bool = False):
     nonlocal completed_epochs
-    accum = Tensor.zeros(m * n, dtype=dtypes.float32, device="AMD").realize()
+    accum = None if host_accumulate else Tensor.zeros(m * n, dtype=dtypes.float32, device="AMD").realize()
+    accum_host = np.zeros(m * n, dtype=np.float32) if host_accumulate else None
     elapsed = 0.0
-    for epoch in range(epoch_limit):
+    for epoch in range(epoch_start, epoch_start + epoch_limit):
       partial = Tensor.empty(m * n, dtype=dtypes.float32, device="AMD").realize()
       values = Tensor(np.ascontiguousarray(values_np[epoch*2:(epoch+1)*2].reshape(-1)), device="AMD").realize()
       scales = Tensor(np.ascontiguousarray(scales_np[epoch*2:(epoch+1)*2].reshape(-1)), device="AMD").realize()
@@ -573,10 +577,11 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
         args = tuple(buffers[g].get_buf("AMD") for g in program.arg.globals)
         runtime(*args, global_size=(tile_count, m//128, 1), local_size=program.arg.local_size,
                 vals=program.arg.vals({}), wait=True)
-      accum = (accum + partial).realize()
+      if host_accumulate: accum_host += partial.numpy()
+      else: accum = (accum + partial).realize()
       elapsed += (time.perf_counter() - t0) * 1000.0
       completed_epochs += 1
-    return accum, elapsed
+    return (accum_host if host_accumulate else accum), elapsed
   try:
     for _ in range(warmups): run_epochs()
     samples = []
@@ -591,16 +596,16 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
                           "distinct_binary_identity": isinstance(binary, bytes) and isinstance(source, str),
                           "no_fallback": True}}
   compare_k = epoch_limit * 256
-  compare_words = q4_blocks[:, :epoch_limit, :].reshape(-1).view(np.uint8)
-  compare_values = values_np[:epoch_limit*2]
-  compare_scales = scales_np[:epoch_limit*2]
-  compare_sums = sums_np[:epoch_limit*2]
+  compare_words = q4_blocks[:, epoch_start:epoch_start+epoch_limit, :].reshape(-1).view(np.uint8)
+  compare_values = values_np[epoch_start*2:(epoch_start+epoch_limit)*2]
+  compare_scales = scales_np[epoch_start*2:(epoch_start+epoch_limit)*2]
+  compare_sums = sums_np[epoch_start*2:(epoch_start+epoch_limit)*2]
   scales_ref, sums_ref = compare_scales.astype(np.float16).astype(np.float32), compare_sums.astype(np.float16).astype(np.float32)
   ds4 = Q81MMQDS4Activation(compare_values, scales_ref, sums_ref, Q81MMQDS4ActivationSpec(m=m, k=compare_k, m_tile=m))
   spec = Q4KQ81MMQTileSpec(role="full_grid_target_role_probe", m=m, n=n, k=compare_k,
     m_tile=m, n_tile=n, activation_layout=Q8_1_MMQ_DS4_LAYOUT)
   reference = q4k_q8_1_mmq_ds4_tile_reference(compare_words, ds4, spec)
-  comparison = _numeric_comparison(accum.numpy().reshape(m, n), reference)
+  comparison = _numeric_comparison((accum if host_accumulate else accum.numpy()).reshape(m, n), reference)
   passed = comparison["status"] == "pass"
   return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "PASS" if passed else "BLOCKED",
           "shape": [m, n, k], "role": "ffn_gate_up", "bounded_only": True,
@@ -622,14 +627,17 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
 def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
                                               warmups: int = 0, rounds: int = 1,
                                               epoch_limit: int | None = None,
-                                              n_chunk_tiles: int | None = None) -> dict[str, Any]:
+                                              n_chunk_tiles: int | None = None,
+                                              epoch_start: int = 0,
+                                              host_accumulate: bool = False) -> dict[str, Any]:
   if timeout_seconds <= 0: return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1",
                                   "status": "BLOCKED", "exact_blocker": "timeout_seconds must be positive"}
   child_env = dict(os.environ)
   child_env.update({"DEV": "AMD", "PYTHONPATH": str(ROOT) + os.pathsep + child_env.get("PYTHONPATH", "")})
   code = ("import json; from extra.qk.mmq_llama_five_buffer_gpu_harness import run_full_grid_target_role_probe; "
           f"print(json.dumps(run_full_grid_target_role_probe(warmups={int(warmups)}, rounds={int(rounds)}, "
-          f"epoch_limit={repr(epoch_limit)}, n_chunk_tiles={repr(n_chunk_tiles)})))")
+          f"epoch_limit={repr(epoch_limit)}, n_chunk_tiles={repr(n_chunk_tiles)}, epoch_start={int(epoch_start)}, "
+          f"host_accumulate={bool(host_accumulate)})))")
   try:
     proc = subprocess.run([sys.executable, "-c", code], cwd=ROOT, env=child_env,
                           text=True, capture_output=True, timeout=timeout_seconds, check=False)

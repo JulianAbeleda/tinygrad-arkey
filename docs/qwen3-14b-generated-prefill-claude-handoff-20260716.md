@@ -484,6 +484,10 @@ views and target geometry are numerically sound. A two-epoch run with the same 1
 HCQ timeout (the second epoch did not signal); the full 20-epoch run has the same health failure. One-tile chunks
 subsequently produced an MMU `NotPresent` fault. Chunking is diagnostic only and is not promoted.
 
+An additional host-FP32-accumulation diagnostic lets two epochs complete without the GPU elementwise-add launch, but
+reports 9,031 mismatches (max error 141.8), so it is not a promotion substitute; epoch 0 and epoch 1 run alone are
+each exact. This narrows the remaining defect to sequential multi-epoch/chunk state or resource lifecycle.
+
 ## 1. Executive state
 
 The project is building a generated tinygrad prefill route for non-fitting quantized models, using Qwen3-14B as the
