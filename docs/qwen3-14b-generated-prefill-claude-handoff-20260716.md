@@ -453,6 +453,27 @@ The through-line is unchanged: the first real GPU result collapsed more uncertai
 the 31x bounded win is not evidence for a 14B route. Never run a production role on this candidate until the K-tiled
 adapter has exact numerical evidence, resource/health evidence, negative-role tests, and a no-hidden-fallback census.
 
+## 0.6 Status update 2026-07-18: multi-grid address defect repaired
+
+The reduced-grid blocker was isolated to the split Q8 producer, not WMMA writeback or workgroup dispatch. Its K-record
+address callbacks assumed a fixed 128-row record stride. For `M>128`, K-record 1 therefore read the preceding rows;
+the first real multi-grid run exposed this as 65,425/65,536 mismatches. Commit `a3ae968a9` derives the full M stride
+from the physical five-buffer allocation, with a focused `M=256` producer test. Commit `e70398880` separately fixes
+AMD's packed workgroup-ID SGPR mapping (`gidx1`-only uses s2) and records the ABI regression test; this converted the
+earlier M-only MMU fault into a structured numeric result.
+
+Fresh native probes after both fixes are exact and remain fail-closed:
+
+- `M=256,N=128,K=256`, global size `[1,2,1]`: 0/32,768 mismatches, max error 6.1e-5.
+- `M=256,N=256,K=256`, global size `[2,2,1]`: 0/65,536 mismatches, max error 6.1e-5 across all four tiles.
+- The bounded R5 `128x128x256` probe remains exact (0/16,384) and measures roughly 32–33x versus direct-packed in the
+  same session; current source/binary hashes are retained in the machine-search artifact output.
+
+The exact target-role (`ffn_gate_up`, `512x17408x5120`) compile still emits with zero scratch/spills, but its 20-epoch
+GPU dispatch has not yet produced a structured result: the prior attempt hit HCQ's default 30-second wait. An extended
+wait validation is in progress; until it returns with correctness and health evidence, R6 role integration and
+production route promotion remain blocked.
+
 ## 1. Executive state
 
 The project is building a generated tinygrad prefill route for non-fitting quantized models, using Qwen3-14B as the
