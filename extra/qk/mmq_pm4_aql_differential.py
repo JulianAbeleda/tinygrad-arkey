@@ -121,6 +121,8 @@ def _validate_frozen_run(result: Any, *, mode: str, amd_aql: str, epoch_prefix: 
   frozen = _mapping(artifacts.get("frozen_bundle"))
   runtime = _mapping(result.get("runtime_evidence"))
   health_mode = _mapping(result.get("health_mode"))
+  epoch_staging = _mapping(timing.get("epoch_staging"))
+  epoch_staging_rows = epoch_staging.get("per_epoch_vas")
   launches = runtime.get("launches")
 
   if result.get("status") != "PASS": errors.append(f"target status is {result.get('status')!r}")
@@ -142,6 +144,23 @@ def _validate_frozen_run(result: Any, *, mode: str, amd_aql: str, epoch_prefix: 
     errors.append("persistent preloaded buffer lifecycle was not attested")
   if timing.get("stable_metadata_staging") is not True:
     errors.append("stable metadata staging was not attested")
+  if timing.get("stable_epoch_staging") is not True:
+    errors.append("stable all-input epoch staging was not attested")
+  if epoch_staging.get("mode") != "all_inputs_fixed_va_gpu_sdma" or \
+     epoch_staging.get("fixed_va") is not True or epoch_staging.get("transfer") != "gpu_sdma":
+    errors.append("fixed-VA Q4/Q8-value staging contract was not attested")
+  if not isinstance(epoch_staging_rows, list) or len(epoch_staging_rows) != epoch_prefix:
+    errors.append("fixed-VA Q4/Q8-value staging rows differ from requested prefix")
+  elif any(not isinstance(row, Mapping) or row.get("epoch") != index or
+           any(not isinstance(row.get(key), int) or row[key] <= 0 for key in
+               ("source_q4_va", "source_values_va", "stage_q4_va", "stage_values_va"))
+           for index, row in enumerate(epoch_staging_rows)):
+    errors.append("fixed-VA Q4/Q8-value staging row is malformed")
+  elif len({row["stage_q4_va"] for row in epoch_staging_rows}) != 1 or \
+       len({row["stage_values_va"] for row in epoch_staging_rows}) != 1:
+    errors.append("Q4/Q8-value stage address changed across epochs")
+  if result.get("epoch_staging") != epoch_staging:
+    errors.append("top-level and timing epoch staging evidence differ")
   if timing.get("k_epoch_launches") != epoch_prefix:
     errors.append("launch count differs from requested epoch prefix")
   if timing.get("total_k_epoch_launches") != role_spec.epochs:
@@ -234,7 +253,7 @@ def run_pm4_aql_frozen_differential(bundle_path: str | Path, *, timeout_seconds:
     "role_spec": selected_spec, "n_chunk_tiles": selected_spec.program.grid[0], "epoch_start": 0,
     "host_accumulate": False, "in_kernel_accumulate": True, "per_epoch_check": False,
     "persistent_buffers": True, "preloaded_epochs": True, "sync_each_epoch": False,
-    "stable_metadata_staging": True, "frozen_bundle": str(path),
+    "stable_metadata_staging": True, "stable_epoch_staging": True, "frozen_bundle": str(path),
   }
   escalation_stop_reason = None
   unsafe_stop = False
@@ -295,7 +314,7 @@ def run_pm4_aql_frozen_differential(bundle_path: str | Path, *, timeout_seconds:
     "intentional_environment_difference": {"key": "AMD_AQL", "pm4": "0", "aql": "1"},
     "forced_lifecycle": {
       "in_kernel_accumulate": True, "persistent_buffers": True, "preloaded_epochs": True,
-      "stable_metadata_staging": True, "per_epoch_check": False,
+      "stable_metadata_staging": True, "stable_epoch_staging": True, "per_epoch_check": False,
       "intermediate_readback": False, "external_accumulation_add": False,
     },
     "sequence_policy": "prefix-major: PM4-1,AQL-1; PM4-3,AQL-3 only after a matched clean prefix",

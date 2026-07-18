@@ -69,6 +69,11 @@ def test_target_role_stable_metadata_staging_requires_preloaded_sources():
     run_full_grid_target_role_probe(stable_metadata_staging=True, preloaded_epochs=False)
 
 
+def test_target_role_stable_epoch_staging_requires_stable_metadata_before_gpu():
+  with pytest.raises(ValueError, match="requires stable_metadata_staging"):
+    run_full_grid_target_role_probe(stable_epoch_staging=True, preloaded_epochs=True)
+
+
 def test_target_role_in_place_mode_fails_closed_before_gpu_for_unsafe_options():
   with pytest.raises(ValueError, match="requires persistent_buffers"):
     run_full_grid_target_role_probe(in_kernel_accumulate=True)
@@ -257,11 +262,13 @@ def test_target_role_isolated_wrapper_propagates_stable_metadata_flag():
        patch("extra.qk.mmq_target_epoch_orchestrator.spawned_tiny_health_probe", return_value=True):
     result = run_full_grid_target_role_probe_isolated(timeout_seconds=1, preloaded_epochs=True,
                                                        stable_metadata_staging=True,
+                                                       stable_epoch_staging=True,
                                                        in_kernel_accumulate=True)
   assert result["status"] == "BLOCKED"
   assert result["kernel_faults"] == [] and result["health_after"] is True
   code = run.call_args.args[0][2]
   assert "stable_metadata_staging=True" in code
+  assert "stable_epoch_staging=True" in code
   assert "in_kernel_accumulate=True" in code
 
 

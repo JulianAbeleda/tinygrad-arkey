@@ -34,6 +34,15 @@ def _passing_result(artifact, kwargs):
   expected = differential._frozen_identity(artifact, role_spec)
   prefix = kwargs["epoch_limit"]
   amd_aql = kwargs["child_env_overrides"]["AMD_AQL"]
+  epoch_staging_rows = [{
+    "epoch": epoch, "source_q4_va": 0x1000 + epoch * 0x100,
+    "source_values_va": 0x2000 + epoch * 0x100,
+    "stage_q4_va": 0x3000, "stage_values_va": 0x4000,
+  } for epoch in range(prefix)]
+  epoch_staging = {
+    "mode": "all_inputs_fixed_va_gpu_sdma", "fixed_va": True, "transfer": "gpu_sdma",
+    "per_epoch_vas": epoch_staging_rows,
+  }
   return {
     "status": "PASS", "role": role_spec.role, "shape": list(role_spec.shape),
     "accumulation": ACCUMULATION, "no_fallback": True,
@@ -43,6 +52,7 @@ def _passing_result(artifact, kwargs):
     "correctness": {"status": "PASS", "comparison": {"status": "pass", "mismatch_count": 0}},
     "timing": {
       "persistent_buffers": True, "preloaded_epochs": True, "stable_metadata_staging": True,
+      "stable_epoch_staging": True, "epoch_staging": epoch_staging,
       "k_epoch_launches": prefix, "total_k_epoch_launches": role_spec.epochs,
       "n_chunk_tiles": role_spec.program.grid[0], "epoch_checks": [],
     },
@@ -59,6 +69,7 @@ def _passing_result(artifact, kwargs):
       "launch_count": prefix, "intermediate_readback": False, "external_accumulation_add": False,
       "launches": [{"global_size": list(role_spec.program.grid)} for _ in range(prefix)],
     },
+    "epoch_staging": epoch_staging,
   }
 
 
@@ -85,7 +96,7 @@ def test_differential_loads_once_and_reuses_isolated_probe_with_only_aql_env_dif
   assert all(snapshot == {"KEEP": "same", "AMD_AQL": "caller-value"} for _, snapshot in calls)
   assert all(call["frozen_bundle"] == str((tmp_path / "bundle").resolve()) for call, _ in calls)
   assert all(call["in_kernel_accumulate"] and call["persistent_buffers"] and call["preloaded_epochs"]
-             and call["stable_metadata_staging"] for call, _ in calls)
+             and call["stable_metadata_staging"] and call["stable_epoch_staging"] for call, _ in calls)
   assert all(not call["host_accumulate"] and not call["per_epoch_check"] for call, _ in calls)
   assert all(call["role_spec"] == DEFAULT_EXACT_ROLE_SPEC and call["n_chunk_tiles"] == 136 for call, _ in calls)
   assert environ == {"KEEP": "same", "AMD_AQL": "caller-value"}
