@@ -17,7 +17,7 @@ from pathlib import Path
 import subprocess
 import sys
 import time
-from typing import Any
+from typing import Any, Mapping
 
 import numpy as np
 
@@ -33,6 +33,7 @@ TARGET_ROLE_PROBE_SHAPE = (512, 17408, 5120)
 RTOL = 3e-3
 ATOL = 3e-3
 TARGET_IN_PLACE_ACCUMULATION = "target_in_place_fp32_add"
+_TARGET_BUFFER_NAMES = ("output", "q4", "q8_values", "q8_scales", "q8_original_sums")
 
 
 def _blocked(reason: str, **evidence: Any) -> dict[str, Any]:
@@ -215,6 +216,121 @@ def _artifact_evidence(program, metadata_parser) -> tuple[Any, Any, dict[str, An
       except BaseException as fallback_exc:
         evidence["resources_fallback_error"] = f"{type(fallback_exc).__name__}: {fallback_exc}"
   return binary, source, evidence
+
+
+def _callable_class_name(value: Any) -> str:
+  """Return the underlying class/function identity for a possibly-partial factory."""
+  value = getattr(value, "func", value)
+  typ = value if isinstance(value, type) else type(value)
+  return f"{typ.__module__}.{typ.__qualname__}"
+
+
+def _runtime_identity_evidence(device: Any, runtime: Any, binary_sha256: str | None) -> dict[str, Any]:
+  """Describe the exact tinygrad AMD runtime/queue and uploaded program addresses."""
+  lib = getattr(runtime, "lib_gpu", None)
+  lib_va = getattr(lib, "va_addr", None)
+  return {
+    "amd_aql_env": os.environ.get("AMD_AQL"),
+    "amd_aql_effective": bool(getattr(device, "is_aql", False)),
+    "queue_mode": "AQL" if bool(getattr(device, "is_aql", False)) else "PM4",
+    "queue_class": _callable_class_name(getattr(device, "hw_compute_queue_t", None)),
+    "runtime_class": f"{type(runtime).__module__}.{type(runtime).__qualname__}",
+    "binary_sha256": binary_sha256,
+    "lib_va": int(lib_va) if lib_va is not None else None,
+    "lib_nbytes": int(getattr(lib, "size", 0)) if lib is not None else None,
+    # AMDProgram's executable entry and AQL descriptor are separate addresses
+    # within the uploaded library image. Keep explicit names and compatibility
+    # aliases so fault reports cannot confuse either with the allocation base.
+    "program_va": int(getattr(runtime, "prog_addr")) if hasattr(runtime, "prog_addr") else None,
+    "entry_va": int(getattr(runtime, "prog_addr")) if hasattr(runtime, "prog_addr") else None,
+    "descriptor_va": int(getattr(runtime, "aql_prog_addr")) if hasattr(runtime, "aql_prog_addr") else None,
+    "launch_count": 0,
+    "launches": [],
+  }
+
+
+def _launch_buffer_evidence(names: tuple[str, ...], buffers: tuple[Any, ...],
+                            globals_: tuple[int, ...]) -> list[dict[str, Any]]:
+  """Map each runtime argument back to its tinygrad base allocation and view."""
+  rows: list[dict[str, Any]] = []
+  for call_index, slot in enumerate(globals_):
+    buf = buffers[slot]
+    handle, base = buf.get_buf("AMD"), buf.base
+    base_handle = base.get_buf("AMD")
+    view_va, base_va = getattr(handle, "va_addr", None), getattr(base_handle, "va_addr", None)
+    offset = int(getattr(buf, "offset", 0))
+    rows.append({
+      "call_index": call_index, "slot": int(slot), "name": names[slot],
+      "va": int(view_va) if view_va is not None else None,
+      "base_va": int(base_va) if base_va is not None else None,
+      "offset_bytes": offset, "nbytes": int(buf.nbytes), "base_nbytes": int(base.nbytes),
+      "va_matches_base_offset": (int(view_va) == int(base_va) + offset)
+        if view_va is not None and base_va is not None else None,
+    })
+  return rows
+
+
+def _dispatch_with_runtime_evidence(runtime: Any, buffers: tuple[Any, ...], globals_: tuple[int, ...],
+                                    *, global_size: tuple[int, int, int], local_size: tuple[int, int, int] | None,
+                                    vals: tuple[Any, ...], runtime_evidence: dict[str, Any],
+                                    context: Mapping[str, Any]) -> Any:
+  """Invoke the normal runtime once while recording its real kernarg allocation."""
+  launch = {
+    **dict(context), "global_size": list(global_size), "local_size": list(local_size or ()),
+    "arguments": _launch_buffer_evidence(_TARGET_BUFFER_NAMES, buffers, globals_),
+  }
+  args = tuple(buffers[g].get_buf("AMD") for g in globals_)
+  had_instance_fill = "fill_kernargs" in getattr(runtime, "__dict__", {})
+  prior_instance_fill = getattr(runtime, "__dict__", {}).get("fill_kernargs")
+  original_fill = runtime.fill_kernargs
+  captured: dict[str, Any] = {}
+
+  def capture_kernargs(bufs, values=(), kernargs=None):
+    state = original_fill(bufs, values, kernargs)
+    captured["state"] = state
+    captured["bound_pointer_words"] = [int(getattr(buf, "va_addr")) for buf in state.bufs[:5]]
+    return state
+
+  runtime.fill_kernargs = capture_kernargs
+  try:
+    result = runtime(*args, global_size=global_size, local_size=local_size, vals=vals, wait=True)
+  finally:
+    if had_instance_fill: runtime.fill_kernargs = prior_instance_fill
+    else: delattr(runtime, "fill_kernargs")
+    state = captured.get("state")
+    if state is not None:
+      launch["kernarg"] = {
+        "va": int(state.buf.va_addr), "size": int(state.buf.size),
+        "bound_pointer_words": captured.get("bound_pointer_words"),
+      }
+      try:
+        pointer_words = list(state.buf.cpu_view().view(size=5 * 8, fmt="Q"))
+        launch["kernarg"]["pointer_words"] = [int(x) for x in pointer_words]
+        launch["kernarg"]["pointer_words_match_bound"] = (
+          launch["kernarg"]["pointer_words"] == launch["kernarg"]["bound_pointer_words"])
+      except BaseException as exc:
+        launch["kernarg"]["pointer_words"] = None
+        launch["kernarg"]["pointer_words_read_error"] = f"{type(exc).__name__}: {exc}"
+    else:
+      launch["kernarg"] = None
+    runtime_evidence["launches"].append(launch)
+    runtime_evidence["launch_count"] = len(runtime_evidence["launches"])
+  return result
+
+
+def _validated_child_env_overrides(overrides: Mapping[str, str] | None) -> dict[str, str]:
+  """Keep the differential surface deliberately limited to PM4 versus AQL."""
+  normalized = {} if overrides is None else {str(k): str(v) for k, v in overrides.items()}
+  if set(normalized) - {"AMD_AQL"}:
+    raise ValueError("child_env_overrides only permits AMD_AQL")
+  if "AMD_AQL" in normalized and normalized["AMD_AQL"] not in {"0", "1"}:
+    raise ValueError("AMD_AQL child override must be '0' or '1'")
+  return normalized
+
+
+def _validate_frozen_fixture(expected: Mapping[str, Any], actual: Mapping[str, Any]) -> None:
+  """Fail closed unless every deterministic fixture field/hash is identical."""
+  if dict(expected) != dict(actual): raise ValueError("runtime fixture differs from frozen bundle")
 
 
 def _worker() -> dict[str, Any]:
@@ -550,7 +666,8 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
                                     persistent_buffers: bool = False,
                                     preloaded_epochs: bool = False,
                                     sync_each_epoch: bool = False,
-                                    stable_metadata_staging: bool = False) -> dict[str, Any]:
+                                    stable_metadata_staging: bool = False,
+                                    frozen_bundle: str | Path | None = None) -> dict[str, Any]:
   """Run the emitted K=256 program across the exact 14B ffn_gate_up shape.
 
   By default each epoch writes a full-role partial and tinygrad performs the
@@ -569,6 +686,8 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
     raise ValueError("per_epoch_check is unsafe with in_kernel_accumulate because it performs intermediate readback")
   if in_kernel_accumulate and not (persistent_buffers or preloaded_epochs):
     raise ValueError("in_kernel_accumulate requires persistent_buffers")
+  if frozen_bundle is not None and not in_kernel_accumulate:
+    raise ValueError("frozen target bundle requires in_kernel_accumulate")
   import time
   from tinygrad import Tensor, dtypes
   from tinygrad.device import Device
@@ -593,18 +712,60 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
   if preloaded_epochs: persistent_buffers = True
   accumulation_mode = (TARGET_IN_PLACE_ACCUMULATION if in_kernel_accumulate else
                        "host_fp32_add" if host_accumulate else "tinygrad_elementwise_add")
-  compiled = compile_llama_five_buffer_full_kernel(
-    build_llama_five_buffer_full_kernel(m, n, 256, accumulate=in_kernel_accumulate))
-  if not compiled.emitted or compiled.program is None:
-    return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
-            "shape": [m, n, k], "exact_blocker": compiled.blocker or "target role K=256 program did not emit",
-            "accumulation": accumulation_mode}
-  program = compiled.program
+  frozen_identity: dict[str, Any] | None = None
+  if frozen_bundle is not None:
+    try:
+      from extra.qk.mmq_frozen_target_artifact import (ACCUMULATION as FROZEN_ACCUMULATION,
+        FILE_NAMES as FROZEN_FILE_NAMES, FULL_ROLE_SHAPE as FROZEN_FULL_ROLE_SHAPE, SCHEMA as FROZEN_SCHEMA,
+        TARGET_SHAPE as FROZEN_TARGET_SHAPE, load_frozen_target_artifact)
+      loaded = load_frozen_target_artifact(frozen_bundle)
+      manifest = loaded.manifest
+      if manifest.get("schema") != FROZEN_SCHEMA or manifest.get("state") != "FROZEN":
+        raise ValueError("frozen target manifest identity changed")
+      if manifest.get("accumulation") != FROZEN_ACCUMULATION or manifest.get("accumulate") is not True:
+        raise ValueError("frozen target is not the in-place accumulation PROGRAM")
+      if tuple(manifest.get("shape", ())) != tuple(FROZEN_TARGET_SHAPE) or \
+         tuple(manifest.get("full_role_shape", ())) != tuple(FROZEN_FULL_ROLE_SHAPE):
+        raise ValueError("frozen target shape identity changed")
+      program = loaded.program
+      frozen_identity = {
+        "path": str(Path(frozen_bundle).resolve()), "manifest_schema": manifest["schema"],
+        "state": manifest["state"], "program_key": program.key.hex(),
+        "fixture_schema": loaded.fixture.get("schema"), "compile_performed": False,
+        "requires_recompile": False,
+        "serialized_program_sha256": manifest["artifacts"]["serialized_program_sha256"],
+        # The loader already validated this retained-byte inventory. Reuse its
+        # authority instead of inventing a second JSON canonicalization.
+        "fixture_sha256": manifest["files"][FROZEN_FILE_NAMES["fixture"]]["sha256"],
+      }
+    except BaseException as exc:
+      return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
+              "shape": [m, n, k], "exact_blocker": "frozen target bundle validation failed",
+              "exception": type(exc).__name__, "error": str(exc), "accumulation": accumulation_mode,
+              "compile_performed": False, "requires_recompile": False}
+  else:
+    compiled = compile_llama_five_buffer_full_kernel(
+      build_llama_five_buffer_full_kernel(m, n, 256, accumulate=in_kernel_accumulate))
+    if not compiled.emitted or compiled.program is None:
+      return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
+              "shape": [m, n, k], "exact_blocker": compiled.blocker or "target role K=256 program did not emit",
+              "accumulation": accumulation_mode}
+    program = compiled.program
   words_np = _random_q4_words(n, k, 20260721)
   source_np = np.random.default_rng(20260722).standard_normal((m, k), dtype=np.float32)
   values_np, scales_np, sums_np = q8_1_mmq_ds4_quantize_reference(source_np)
   binary, source, artifact = _artifact_evidence(program, parse_amdgpu_metadata)
+  artifact.update({"compile_performed": frozen_bundle is None, "requires_recompile": frozen_bundle is None})
+  if frozen_identity is not None:
+    if artifact.get("binary_sha256") != loaded.manifest.get("artifacts", {}).get("binary_sha256") or \
+       artifact.get("source_sha256") != loaded.manifest.get("artifacts", {}).get("source_sha256"):
+      return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
+              "shape": [m, n, k], "exact_blocker": "loaded PROGRAM identity differs from frozen manifest",
+              "accumulation": accumulation_mode, "artifacts": artifact,
+              "compile_performed": False, "requires_recompile": False}
+    artifact["frozen_bundle"] = frozen_identity
   q4_blocks = words_np.view(np.uint8).reshape(n, k // 256, 144)
+  q4_epoch_major = _pack_q4_epochs_contiguous(q4_blocks) if preloaded_epochs or frozen_identity is not None else None
   repack_evidence = {
     "q4_sha256": hashlib.sha256(q4_blocks.tobytes()).hexdigest(),
     "q4_layout": "q4_k_bytes[n, k_epoch, 144]",
@@ -613,6 +774,27 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
     "q8_sums_sha256": hashlib.sha256(sums_np.tobytes()).hexdigest(),
     "q8_layout": "q8_ds4[epoch, m, groups]",
   }
+  if q4_epoch_major is not None:
+    repack_evidence.update({
+      "q4_epoch_major_sha256": hashlib.sha256(q4_epoch_major.tobytes()).hexdigest(),
+      "q4_epoch_major_layout": "q4_k_bytes[k_epoch, n, 144]",
+      "q4_epoch_major_dtype": str(q4_epoch_major.dtype),
+      "q4_epoch_major_elements": int(q4_epoch_major.size),
+    })
+  if frozen_identity is not None:
+    from extra.qk.mmq_target_epoch_orchestrator import FIXTURE_SCHEMA
+    fixture_identity = {
+      "schema": FIXTURE_SCHEMA, "role": "ffn_gate_up", "shape": [m, n, k],
+      "total_epochs": total_epochs, "seeds": {"q4": 20260721, "q8_source": 20260722},
+      "repack": repack_evidence,
+      "source_sha256": hashlib.sha256(np.ascontiguousarray(source_np).tobytes()).hexdigest(),
+    }
+    try: _validate_frozen_fixture(loaded.fixture, fixture_identity)
+    except ValueError:
+      return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
+              "shape": [m, n, k], "exact_blocker": "runtime fixture differs from frozen bundle",
+              "accumulation": accumulation_mode, "artifacts": artifact,
+              "runtime_fixture": fixture_identity, "compile_performed": False, "requires_recompile": False}
   reduction_evidence = {
     "source_revision": "ac4cddeb0dbd778f650bf568f6f08344a06abe3a",
     "owned_components": ["cooperative tile loop", "Q4_K tile_x staging", "Q8_1 tile_y two-panel lifecycle"],
@@ -634,6 +816,7 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
     "fixed_va": bool(stable_metadata_staging),
     "per_epoch_vas": [],
   }
+  runtime_evidence: dict[str, Any] | None = None
 
   def copyin_buffer(tensor, array) -> None:
     # Buffer.copyin is synchronous host-to-device staging for HCQ allocators;
@@ -660,13 +843,14 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
       # shift only one contiguous base, so preload epoch-major storage instead
       # of incorrectly treating the original N-major flattening as contiguous
       # [epoch, N, 144].
-      copyin_buffer(persistent_q4, _pack_q4_epochs_contiguous(q4_blocks))
+      if q4_epoch_major is None: raise RuntimeError("preloaded Q4 epoch-major storage was not prepared")
+      copyin_buffer(persistent_q4, q4_epoch_major)
       copyin_buffer(persistent_values, values_np.reshape(-1))
       copyin_buffer(persistent_scales, scales_np.reshape(-1))
       copyin_buffer(persistent_sums, sums_np.reshape(-1))
 
   def run_epochs(*, timed: bool = False):
-    nonlocal completed_epochs
+    nonlocal completed_epochs, runtime_evidence
     if in_kernel_accumulate:
       accum = _zero_persistent_target_output(persistent_partial, target_output_zero, copyin_buffer)
     else:
@@ -752,9 +936,17 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
         else:
           buffers = (out_view, q4.uop.buffer, values.uop.buffer, scales.uop.buffer, sums.uop.buffer)
         runtime = get_runtime("AMD", program)
-        args = tuple(buffers[g].get_buf("AMD") for g in program.arg.globals)
-        runtime(*args, global_size=(tile_count, m//128, 1), local_size=program.arg.local_size,
-                vals=program.arg.vals({}), wait=True)
+        if runtime_evidence is None:
+          runtime_evidence = _runtime_identity_evidence(Device["AMD"], runtime, artifact.get("binary_sha256"))
+          runtime_evidence.update({
+            "intermediate_readback": bool(per_epoch_check),
+            "external_accumulation_add": accumulation_mode != TARGET_IN_PLACE_ACCUMULATION,
+          })
+        _dispatch_with_runtime_evidence(
+          runtime, buffers, tuple(program.arg.globals),
+          global_size=(tile_count, m//128, 1), local_size=program.arg.local_size,
+          vals=tuple(program.arg.vals({})), runtime_evidence=runtime_evidence,
+          context={"epoch": epoch, "n0": n0, "n1": n1, "tile_count": tile_count})
       partial_host = partial.numpy() if per_epoch_check else None
       accum, accum_host = _accumulate_target_role_epoch(
         partial, accum, accum_host, partial_host, mode=accumulation_mode)
@@ -789,7 +981,8 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
             "no_fallback": True, "accumulation": accumulation_mode}, "epoch_checks": epoch_checks,
             "accumulation": accumulation_mode,
             "repack": repack_evidence, "reduction": reduction_evidence,
-            "metadata_staging": metadata_staging}
+            "metadata_staging": metadata_staging, "runtime_evidence": runtime_evidence,
+            "compile_performed": frozen_bundle is None, "requires_recompile": frozen_bundle is None}
   compare_k = epoch_limit * 256
   compare_words = q4_blocks[:, epoch_start:epoch_start+epoch_limit, :].reshape(-1).view(np.uint8)
   compare_values = values_np[epoch_start*2:(epoch_start+epoch_limit)*2]
@@ -826,7 +1019,8 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
           "distinct_binary_identity": isinstance(binary, bytes) and isinstance(source, str),
           "same_session_timing": True, "no_fallback": True,
           "repack": repack_evidence, "reduction": reduction_evidence,
-          "metadata_staging": metadata_staging}
+          "metadata_staging": metadata_staging, "runtime_evidence": runtime_evidence,
+          "compile_performed": frozen_bundle is None, "requires_recompile": frozen_bundle is None}
 
 
 def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
@@ -840,7 +1034,9 @@ def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
                                               persistent_buffers: bool = False,
                                               preloaded_epochs: bool = False,
                                               sync_each_epoch: bool = False,
-                                              stable_metadata_staging: bool = False) -> dict[str, Any]:
+                                              stable_metadata_staging: bool = False,
+                                              frozen_bundle: str | Path | None = None,
+                                              child_env_overrides: Mapping[str, str] | None = None) -> dict[str, Any]:
   if timeout_seconds <= 0: return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1",
                                   "status": "BLOCKED", "exact_blocker": "timeout_seconds must be positive"}
   if in_kernel_accumulate and host_accumulate:
@@ -852,21 +1048,38 @@ def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
   if in_kernel_accumulate and not (persistent_buffers or preloaded_epochs):
     return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
             "exact_blocker": "in_kernel_accumulate requires persistent_buffers"}
-  from extra.qk.mmq_target_epoch_orchestrator import parse_kernel_faults, read_kernel_log_since, spawned_tiny_health_probe
-  try: health_before = bool(spawned_tiny_health_probe())
-  except BaseException: health_before = False
-  if not health_before:
+  if frozen_bundle is not None and not in_kernel_accumulate:
     return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
-            "exact_blocker": "pre-run GPU health probe failed", "health_before": False}
+            "exact_blocker": "frozen target bundle requires in_kernel_accumulate",
+            "compile_performed": False, "requires_recompile": False}
+  try: env_overrides = _validated_child_env_overrides(child_env_overrides)
+  except ValueError as exc:
+    return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
+            "exact_blocker": str(exc)}
+  health_overrides = dict(env_overrides)
+  from extra.qk.mmq_target_epoch_orchestrator import parse_kernel_faults, read_kernel_log_since, spawned_tiny_health_probe
+  try: health_before = bool(spawned_tiny_health_probe(health_overrides or None))
+  except BaseException: health_before = False
+  mode_health_before = health_before
+  health_mode = {"amd_aql_env": health_overrides.get("AMD_AQL"),
+                 "before": mode_health_before, "after": None}
+  if not health_before or not mode_health_before:
+    return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
+            "exact_blocker": "pre-run GPU health probe failed", "health_before": health_before,
+            "mode_health_before": mode_health_before, "health_mode": health_mode,
+            "child_env_overrides": env_overrides}
   child_env = dict(os.environ)
   child_env.update({"DEV": "AMD", "PYTHONPATH": str(ROOT) + os.pathsep + child_env.get("PYTHONPATH", "")})
+  child_env.update(env_overrides)
+  frozen_arg = repr(str(Path(frozen_bundle).resolve())) if frozen_bundle is not None else "None"
   code = ("import json; from extra.qk.mmq_llama_five_buffer_gpu_harness import run_full_grid_target_role_probe; "
           f"print(json.dumps(run_full_grid_target_role_probe(warmups={int(warmups)}, rounds={int(rounds)}, "
           f"epoch_limit={repr(epoch_limit)}, n_chunk_tiles={repr(n_chunk_tiles)}, epoch_start={int(epoch_start)}, "
           f"host_accumulate={bool(host_accumulate)}, in_kernel_accumulate={bool(in_kernel_accumulate)}, "
           f"per_epoch_check={bool(per_epoch_check)}, "
           f"persistent_buffers={bool(persistent_buffers)}, preloaded_epochs={bool(preloaded_epochs)}, "
-          f"sync_each_epoch={bool(sync_each_epoch)}, stable_metadata_staging={bool(stable_metadata_staging)})), flush=True)")
+          f"sync_each_epoch={bool(sync_each_epoch)}, stable_metadata_staging={bool(stable_metadata_staging)}, "
+          f"frozen_bundle={frozen_arg})), flush=True)")
   started = time.time()
   try:
     proc = subprocess.run([sys.executable, "-c", code], cwd=ROOT, env=child_env,
@@ -874,12 +1087,18 @@ def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
   except subprocess.TimeoutExpired:
     try: kernel_faults = parse_kernel_faults(read_kernel_log_since(started))
     except BaseException as exc: kernel_faults = [f"kernel-log scan failed: {type(exc).__name__}: {exc}"]
-    try: health_after = bool(spawned_tiny_health_probe())
+    try: health_after = bool(spawned_tiny_health_probe(health_overrides or None))
     except BaseException: health_after = False
+    mode_health_after = health_after
+    health_mode["after"] = mode_health_after
     return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
             "exact_blocker": f"target-role compile/{epoch_limit if epoch_limit is not None else 'full'}-epoch dispatch timed out",
             "timeout_seconds": timeout_seconds, "timeout": True, "health_before": health_before,
-            "kernel_faults": kernel_faults, "health_after": health_after}
+            "mode_health_before": mode_health_before, "kernel_faults": kernel_faults,
+            "health_after": health_after, "mode_health_after": mode_health_after,
+            "health_mode": health_mode, "child_env_overrides": env_overrides,
+            "compile_performed": False if frozen_bundle is not None else None,
+            "requires_recompile": False if frozen_bundle is not None else None}
   result = None
   for line in reversed(proc.stdout.strip().splitlines()):
     try: candidate = json.loads(line)
@@ -889,23 +1108,30 @@ def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
       break
   try: kernel_faults = parse_kernel_faults(read_kernel_log_since(started))
   except BaseException as exc: kernel_faults = [f"kernel-log scan failed: {type(exc).__name__}: {exc}"]
-  try: health_after = bool(spawned_tiny_health_probe())
+  try: health_after = bool(spawned_tiny_health_probe(health_overrides or None))
   except BaseException: health_after = False
+  mode_health_after = health_after
+  health_mode["after"] = mode_health_after
   if result is None:
     return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
             "exact_blocker": "target-role child returned no structured result", "returncode": proc.returncode,
             "stdout_tail": proc.stdout[-2000:], "stderr_tail": proc.stderr[-2000:],
             "kernel_faults": kernel_faults, "health_before": health_before, "health_after": health_after,
+            "mode_health_before": mode_health_before, "mode_health_after": mode_health_after,
+            "health_mode": health_mode, "child_env_overrides": env_overrides,
             "diagnostic": {"epoch_limit": epoch_limit, "n_chunk_tiles": n_chunk_tiles,
                            "epoch_start": epoch_start, "host_accumulate": host_accumulate,
                            "in_kernel_accumulate": in_kernel_accumulate,
                            "per_epoch_check": per_epoch_check, "persistent_buffers": persistent_buffers,
                            "preloaded_epochs": preloaded_epochs, "sync_each_epoch": sync_each_epoch,
-                           "stable_metadata_staging": stable_metadata_staging}}
-  result["kernel_faults"], result["health_before"], result["health_after"] = kernel_faults, health_before, health_after
+                           "stable_metadata_staging": stable_metadata_staging,
+                           "frozen_bundle": str(Path(frozen_bundle).resolve()) if frozen_bundle is not None else None}}
+  result.update({"kernel_faults": kernel_faults, "health_before": health_before, "health_after": health_after,
+                 "mode_health_before": mode_health_before, "mode_health_after": mode_health_after,
+                 "health_mode": health_mode, "child_env_overrides": env_overrides})
   if kernel_faults:
     result.update({"status": "BLOCKED", "exact_blocker": "AMD kernel fault/reset marker observed"})
-  elif not health_after:
+  elif not health_after or not mode_health_after:
     result.update({"status": "BLOCKED", "exact_blocker": "post-run GPU health probe failed"})
   if proc.returncode != 0 and result.get("status") == "PASS":
     result.update({"status": "BLOCKED", "exact_blocker": "target-role child exited non-zero", "returncode": proc.returncode})
@@ -1010,6 +1236,8 @@ def main() -> int:
   parser.add_argument("--target-role-stable-metadata", action="store_true")
   parser.add_argument("--target-role-host-accumulate", action="store_true")
   parser.add_argument("--target-role-in-kernel-accumulate", action="store_true")
+  parser.add_argument("--target-role-frozen-bundle", type=Path)
+  parser.add_argument("--target-role-amd-aql", choices=("0", "1"))
   args = parser.parse_args()
   if args.target_role:
     row = run_full_grid_target_role_probe_isolated(
@@ -1020,6 +1248,8 @@ def main() -> int:
       per_epoch_check=args.target_role_per_epoch_check,
       persistent_buffers=args.target_role_persistent, preloaded_epochs=args.target_role_preloaded,
       stable_metadata_staging=args.target_role_stable_metadata,
+      frozen_bundle=args.target_role_frozen_bundle,
+      child_env_overrides={"AMD_AQL": args.target_role_amd_aql} if args.target_role_amd_aql is not None else None,
     )
     encoded = json.dumps(row, indent=2, sort_keys=True)
     if args.target_role_output is not None:

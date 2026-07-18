@@ -2,14 +2,16 @@ import json
 import numpy as np
 import pytest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from tinygrad import dtypes
 from tinygrad.uop.ops import Ops, UOp
 
 from extra.qk.mmq_llama_five_buffer_full_kernel import build_llama_five_buffer_full_kernel
 from extra.qk.mmq_llama_five_buffer_gpu_harness import (TARGET_IN_PLACE_ACCUMULATION, _accumulate_target_role_epoch,
-  _bind_sink, _numeric_comparison, _pack_q4_epochs_contiguous, _random_q4_words, _zero_persistent_target_output,
+  _bind_sink, _dispatch_with_runtime_evidence, _numeric_comparison, _pack_q4_epochs_contiguous,
+  _random_q4_words, _runtime_identity_evidence, _validate_frozen_fixture, _validated_child_env_overrides,
+  _zero_persistent_target_output,
   run_amd_validation, run_full_grid_target_role_probe, run_full_grid_target_role_probe_isolated)
 
 
@@ -89,6 +91,84 @@ def test_target_role_in_place_mode_compiles_accumulating_sink_without_gpu(monkey
   assert row["accumulation"] == TARGET_IN_PLACE_ACCUMULATION
 
 
+def test_target_role_frozen_bundle_replaces_compile_and_fails_closed_on_identity(monkeypatch):
+  from extra.qk import mmq_frozen_target_artifact as frozen
+  from extra.qk import mmq_llama_five_buffer_full_kernel as full_kernel
+  compile_program = Mock(side_effect=AssertionError("must not compile"))
+  monkeypatch.setattr(full_kernel, "compile_llama_five_buffer_full_kernel", compile_program)
+  monkeypatch.setattr(frozen, "load_frozen_target_artifact", lambda path: SimpleNamespace(
+    manifest={"schema": frozen.SCHEMA, "state": "FROZEN", "accumulation": "wrong", "accumulate": True},
+    program=object(), fixture={}))
+  row = run_full_grid_target_role_probe(
+    in_kernel_accumulate=True, persistent_buffers=True, frozen_bundle="/cpu-only/frozen.tar")
+  compile_program.assert_not_called()
+  assert row["status"] == "BLOCKED"
+  assert row["exact_blocker"] == "frozen target bundle validation failed"
+  assert row["compile_performed"] is False and row["requires_recompile"] is False
+
+
+def test_target_role_runtime_evidence_captures_views_kernarg_words_and_launch_count():
+  class Handle:
+    def __init__(self, va, size): self.va_addr, self.size = va, size
+  class Buffer:
+    def __init__(self, va, size, *, base=None, offset=0):
+      self._handle, self.nbytes, self.offset = Handle(va, size), size, offset
+      self._base = self if base is None else base
+    @property
+    def base(self): return self._base
+    def get_buf(self, device): return self._handle
+  bases = [Buffer(0x1000 + i*0x1000, 0x800) for i in range(5)]
+  buffers = tuple(Buffer(base._handle.va_addr + 0x40, 0x100, base=base, offset=0x40) for base in bases)
+  words = [buf.get_buf("AMD").va_addr for buf in buffers]
+  class View:
+    def view(self, **kwargs): return words
+  class Kernarg:
+    va_addr, size = 0x9000, 40
+    def cpu_view(self): return View()
+  class State:
+    buf, bufs = Kernarg(), tuple(buf.get_buf("AMD") for buf in buffers)
+  class Runtime:
+    def fill_kernargs(self, bufs, vals=(), kernargs=None): return State()
+    def __call__(self, *args, global_size, local_size, vals, wait):
+      self.fill_kernargs(args, vals)
+      return 1.0
+  evidence = {"launches": [], "launch_count": 0}
+  _dispatch_with_runtime_evidence(
+    Runtime(), buffers, tuple(range(5)), global_size=(136, 4, 1), local_size=(256, 1, 1),
+    vals=(), runtime_evidence=evidence, context={"epoch": 2})
+  assert evidence["launch_count"] == 1
+  launch = evidence["launches"][0]
+  assert launch["epoch"] == 2 and len(launch["arguments"]) == 5
+  assert all(row["va_matches_base_offset"] for row in launch["arguments"])
+  assert launch["kernarg"]["va"] == 0x9000
+  assert launch["kernarg"]["pointer_words"] == words
+  assert launch["kernarg"]["pointer_words_match_bound"] is True
+
+
+def test_target_role_runtime_identity_distinguishes_pm4_from_aql(monkeypatch):
+  class Queue: pass
+  class Device:
+    is_aql, hw_compute_queue_t = True, Queue
+  runtime = SimpleNamespace(lib_gpu=SimpleNamespace(va_addr=0x100000, size=0x2000),
+                            prog_addr=0x100400, aql_prog_addr=0x100100)
+  monkeypatch.setenv("AMD_AQL", "1")
+  row = _runtime_identity_evidence(Device(), runtime, "a" * 64)
+  assert row["amd_aql_env"] == "1" and row["amd_aql_effective"] is True
+  assert row["queue_mode"] == "AQL" and row["queue_class"].endswith(".Queue")
+  assert row["lib_va"] == 0x100000 and row["entry_va"] == 0x100400
+  assert row["descriptor_va"] == 0x100100 and row["binary_sha256"] == "a" * 64
+
+
+def test_target_role_frozen_fixture_validation_requires_exact_complete_identity():
+  fixture = {"schema": "fixture.v1", "repack": {"q4_sha256": "a" * 64},
+             "seeds": {"q4": 1}, "total_epochs": 20}
+  _validate_frozen_fixture(fixture, json.loads(json.dumps(fixture)))
+  changed = json.loads(json.dumps(fixture))
+  changed["repack"]["q4_sha256"] = "b" * 64
+  with pytest.raises(ValueError, match="differs from frozen bundle"):
+    _validate_frozen_fixture(fixture, changed)
+
+
 def test_target_role_in_place_sequence_zeros_same_output_and_epoch_step_has_no_hidden_op():
   output, copied = object(), []
   zeros = np.zeros(8, dtype=np.float32)
@@ -122,6 +202,34 @@ def test_target_role_isolated_wrapper_propagates_stable_metadata_flag():
   code = run.call_args.args[0][2]
   assert "stable_metadata_staging=True" in code
   assert "in_kernel_accumulate=True" in code
+
+
+def test_target_role_isolated_wrapper_propagates_frozen_bundle_and_narrow_aql_env(tmp_path):
+  class _Proc:
+    returncode = 0
+    stdout = '{"status":"BLOCKED","compile_performed":false,"requires_recompile":false}\n'
+    stderr = ""
+  bundle = tmp_path / "frozen target.tar"
+  with patch("extra.qk.mmq_llama_five_buffer_gpu_harness.subprocess.run", return_value=_Proc()) as run, \
+       patch("extra.qk.mmq_target_epoch_orchestrator.read_kernel_log_since", return_value=""), \
+       patch("extra.qk.mmq_target_epoch_orchestrator.spawned_tiny_health_probe", return_value=True):
+    result = run_full_grid_target_role_probe_isolated(
+      timeout_seconds=1, in_kernel_accumulate=True, persistent_buffers=True,
+      frozen_bundle=bundle, child_env_overrides={"AMD_AQL": "0"})
+  assert result["child_env_overrides"] == {"AMD_AQL": "0"}
+  assert result["mode_health_before"] is True and result["mode_health_after"] is True
+  assert result["health_mode"] == {"amd_aql_env": "0", "before": True, "after": True}
+  assert run.call_args.kwargs["env"]["AMD_AQL"] == "0"
+  code = run.call_args.args[0][2]
+  assert f"frozen_bundle={str(bundle.resolve())!r}" in code
+
+
+def test_target_role_isolated_wrapper_rejects_broad_or_invalid_env_overrides():
+  assert _validated_child_env_overrides({"AMD_AQL": "0"}) == {"AMD_AQL": "0"}
+  with pytest.raises(ValueError, match="only permits AMD_AQL"):
+    _validated_child_env_overrides({"PATH": "/tmp"})
+  with pytest.raises(ValueError, match="must be '0' or '1'"):
+    _validated_child_env_overrides({"AMD_AQL": "yes"})
 
 
 def test_target_role_isolated_wrapper_blocks_before_target_when_preflight_is_unhealthy():
