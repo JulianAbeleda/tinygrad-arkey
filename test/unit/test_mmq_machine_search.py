@@ -233,11 +233,13 @@ def test_mmq_r5_geometry_search_ranks_non_promotable_existing_atoms_with_fake_ru
   assert report["schema"] == "q4k-q8-1-mmq-r5-geometry-search.v1"
   assert report["status"] == "PASS_NON_PROMOTABLE"
   assert report["promotion_eligible"] is False
-  assert report["promotion_verdict"] == "NO_PROMOTION_WITHOUT_BOUNDED_COOP_WIN"
+  assert report["promotion_verdict"] == "R5_COOP_WIN_READY_FOR_R6"
+  assert report["emitted_backend_win"] is True
+  assert report["role_shape_integration"] is False
   assert report["best_candidate_id"] == "r5_llama_coop_oracle_16x16"
   assert report["ranking"][0]["speedup_vs_direct_packed"] == 10.0
   assert report["ranking"][0]["promotion_eligible"] is False
-  assert "no emitted cooperative MMQ tile candidate" in report["exact_blocker"]
+  assert "role/shape integration" in report["exact_blocker"]
 
 
 def test_mmq_r5_includes_distinct_full_grid_candidate_and_keeps_r6_fail_closed():
@@ -292,8 +294,26 @@ def test_mmq_r5_full_grid_win_is_ranked_as_emitted_but_not_promoted():
   artifact = build_r6_role_shape_integration_artifact(report)
   assert artifact["shape_matches"] is False
   assert "128x128x256" in artifact["exact_blocker"]
+
+
+def test_mmq_r5_emitted_win_survives_oracle_speed_rank():
+  own_ms = {c.candidate_id: 8.0 for c in R5_GEOMETRY_CANDIDATES}
+  own_ms.update({"r5_full_grid_128x128": 0.5, "r5_llama_coop_oracle_16x16": 0.1})
+  def fake_runner(config: BoundedMMQConfig):
+    own = own_ms[next(c.candidate_id for c in R5_GEOMETRY_CANDIDATES if c.backend == config.backend)]
+    return {"status": "PASS", "correctness": {"status": "PASS"},
+            "timing": {"min_ms": own, "direct_packed": {"min_ms": 10.0}}}
+
+  report = build_r5_geometry_search_report(run=True, runner=fake_runner)
+  assert report["best_candidate_id"] == "r5_llama_coop_oracle_16x16"
+  assert report["emitted_backend_win"] is True
+  assert report["promotion_verdict"] == "R5_COOP_WIN_READY_FOR_R6"
+  assert build_r6_route_gate_status(report)["status"] == "BLOCKED_ROLE_SHAPE_INTEGRATION"
   assert artifact["tile_plan"]["launch_count"] == 4 * 136 * 20
   assert artifact["tile_plan"]["requires_k_epoch_accumulate"] is True
+  assert artifact["tile_plan"]["monolithic_k512_compile"]["status"] == "BLOCKED"
+  assert "vgpr lease" in artifact["tile_plan"]["monolithic_k512_compile"]["exact_blocker"]
+  assert artifact["tile_plan"]["k_tiled_accumulate_probe"]["status"] == "BLOCKED_TIMEOUT"
 
 
 def test_mmq_full_grid_tile_plan_rejects_unaligned_shapes_fail_closed():

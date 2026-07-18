@@ -571,7 +571,10 @@ def build_r5_geometry_search_report(
   # A full-grid PASS is an emitted cooperative/backend win for R5 ranking,
   # even though it is not yet eligible for route promotion.  R6 separately
   # requires role/shape integration, so this distinction stays fail-closed.
-  emitted_win = best is not None and best["backend"] in (AMD_DS4_COOP_TILE_BACKEND_ID, FULL_GRID_BACKEND_ID) and (best.get("speedup_vs_direct_packed") or 0) > 1.0
+  emitted_rows = [row for row in rows if row.get("status") == "PASS" and
+                  row.get("backend") in (AMD_DS4_COOP_TILE_BACKEND_ID, FULL_GRID_BACKEND_ID)]
+  best_emitted = max(emitted_rows, key=lambda row: float(row.get("speedup_vs_direct_packed") or 0.0), default=None)
+  emitted_win = best_emitted is not None and (best_emitted.get("speedup_vs_direct_packed") or 0) > 1.0
   coop_winner = emitted_win
   role_shape_integration = False
   return {
@@ -672,6 +675,16 @@ def build_full_grid_k_tiled_dispatch_plan(shape: dict[str, Any]) -> dict[str, An
     "requires_k_epoch_accumulate": k_epochs > 1,
     "requires_output_tile_scatter": True,
     "production_dispatch_changed": False,
+    "monolithic_k512_compile": {
+      "status": "BLOCKED", "exception": "NotImplementedError",
+      "exact_blocker": "vgpr lease exceeds virtual pool",
+      "implication": "K must be split into 256-wide launches with explicit output accumulation",
+    },
+    "k_tiled_accumulate_probe": {
+      "status": "BLOCKED_TIMEOUT", "timeout_seconds": 360,
+      "exact_blocker": "overwrite/accumulate two-launch probe exceeded hard compile deadline before structured output",
+      "next_action": "reduce accumulate sink or compile once per adapter shape before any route admission",
+    },
     "exact_blocker": "adapter, repack, K-epoch accumulation, and fallback census are not implemented",
   }
 
@@ -683,7 +696,7 @@ def build_r7_reduction_status() -> dict[str, Any]:
       "source": "mmq.cuh:mul_mat_q_process_tile",
       "status": "blocked_translation",
       "next_action": "implement emitted cooperative numeric tile; current owner trace is proof-only",
-      "blocking_evidence": "full-grid R5 proof is one 128x128x256 tile; 14B role requires tiled 512x17408x5120 dispatch",
+      "blocking_evidence": "full-grid R5 proof is one 128x128x256 tile; monolithic K=512 compile fails vgpr lease exceeds virtual pool, so the 14B role requires K-tiled dispatch",
     },
     {
       "source_component": "Q4_K tile_x staging",

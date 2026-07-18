@@ -27,6 +27,7 @@ BLOCKED = "MMQ_LLAMA_FIVE_BUFFER_GPU_BLOCKED"
 FULL_GRID_BACKEND_ID = "q4k_q8_1_mmq_amd_isa_full_grid_v0"
 ROOT = Path(__file__).resolve().parents[2]
 SHAPE = (128, 128, 256)
+K_TILED_PROBE_SHAPE = (128, 128, 512)
 RTOL = 3e-3
 ATOL = 3e-3
 
@@ -386,6 +387,122 @@ def run_full_grid_r5_benchmark(*, warmups: int = 0, rounds: int = 1) -> dict[str
     "resources": artifact.get("resources"),
     "same_session_timing": True, "no_fallback": True,
   }
+
+
+def run_full_grid_k_tiled_probe(*, warmups: int = 1, rounds: int = 1) -> dict[str, Any]:
+  """Prove two K=256 launches accumulate exactly for a 128x128x512 tile.
+
+  This is an R7 adapter probe only.  The first launch uses the existing
+  full-grid sink; the second uses its explicit ``accumulate`` variant and
+  loads prior FP32 output before each owner store.  Inputs are repacked to
+  tile-local Q4/Q8 buffers exactly as a production K-tiler would need to do.
+  """
+  if warmups < 0 or rounds <= 0: raise ValueError("warmups must be non-negative and rounds must be positive")
+  import time
+  from tinygrad import Tensor, dtypes
+  from tinygrad.engine.realize import get_runtime
+  from extra.qk.amdgpu_metadata import parse_amdgpu_metadata
+  from extra.qk.mmq_llama_five_buffer_full_kernel import (
+    build_llama_five_buffer_full_kernel, compile_llama_five_buffer_full_kernel,
+  )
+  from extra.qk.mmq_q4k_q8_reference import (
+    Q81MMQDS4Activation, Q81MMQDS4ActivationSpec, Q4KQ81MMQTileSpec,
+    Q8_1_MMQ_DS4_LAYOUT, q4k_q8_1_mmq_ds4_tile_reference,
+    q8_1_mmq_ds4_quantize_reference,
+  )
+  m, n, k = K_TILED_PROBE_SHAPE
+  words_np = _random_q4_words(n, k, 20260719)
+  source_np = np.random.default_rng(20260720).standard_normal((m, k), dtype=np.float32)
+  values_np, scales_np, sums_np = q8_1_mmq_ds4_quantize_reference(source_np)
+  kernels = []
+  for epoch in range(k // 256):
+    kernel = build_llama_five_buffer_full_kernel(128, 128, 256, accumulate=epoch > 0)
+    compiled = compile_llama_five_buffer_full_kernel(kernel)
+    if not compiled.emitted or compiled.program is None:
+      return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_k_tiled_probe.v1", "status": "BLOCKED",
+              "shape": [m, n, k], "exact_blocker": compiled.blocker or "K-tiled kernel did not emit",
+              "epoch": epoch}
+    kernels.append(compiled)
+  out = Tensor.empty(m * n, dtype=dtypes.float32, device="AMD").realize()
+  artifacts, launch_samples = [], []
+  calls = []
+  for epoch, kernel in enumerate(kernels):
+    program = kernel.program
+    assert program is not None
+    q4_chunk = np.ascontiguousarray(words_np.view(np.uint8).reshape(n, k // 256, 144)[:, epoch:epoch+1, :].reshape(-1).view(np.uint32))
+    values_chunk = np.ascontiguousarray(values_np[epoch*2:(epoch+1)*2].reshape(-1))
+    scales_chunk = np.ascontiguousarray(scales_np[epoch*2:(epoch+1)*2].reshape(-1))
+    sums_chunk = np.ascontiguousarray(sums_np[epoch*2:(epoch+1)*2].reshape(-1))
+    q4 = Tensor(q4_chunk, device="AMD").realize()
+    values = Tensor(values_chunk, device="AMD").realize()
+    scales = Tensor(scales_chunk, device="AMD").realize()
+    sums = Tensor(sums_chunk, device="AMD").realize()
+    buffers = (out.uop.buffer, q4.uop.buffer, values.uop.buffer, scales.uop.buffer, sums.uop.buffer)
+    runtime = get_runtime("AMD", program)
+    args = tuple(buffers[g].get_buf("AMD") for g in program.arg.globals)
+    def call():
+      runtime(*args, global_size=program.arg.global_size, local_size=program.arg.local_size,
+              vals=program.arg.vals({}), wait=True)
+    calls.append(call)
+    binary, source, artifact = _artifact_evidence(program, parse_amdgpu_metadata)
+    artifacts.append({"epoch": epoch, "accumulate": epoch > 0, **artifact,
+                      "backend_id": FULL_GRID_BACKEND_ID,
+                      "distinct_binary_identity": isinstance(binary, bytes) and isinstance(source, str)})
+  # Cache both launch paths before timing.  Each round runs both K epochs in
+  # order, so correctness observes the same accumulation lifecycle as timing.
+  for _ in range(max(1, warmups)):
+    for call in calls: call()
+  for _ in range(rounds):
+    t0 = time.perf_counter()
+    for call in calls: call()
+    launch_samples.append((time.perf_counter() - t0) * 1000.0)
+  scales_ref = scales_np.astype(np.float16).astype(np.float32)
+  sums_ref = sums_np.astype(np.float16).astype(np.float32)
+  ds4 = Q81MMQDS4Activation(values_np, scales_ref, sums_ref,
+    Q81MMQDS4ActivationSpec(m=m, k=k, m_tile=m))
+  ref_spec = Q4KQ81MMQTileSpec(role="full_grid_k_tiled_probe", m=m, n=n, k=k,
+    m_tile=m, n_tile=n, activation_layout=Q8_1_MMQ_DS4_LAYOUT)
+  reference = q4k_q8_1_mmq_ds4_tile_reference(words_np.view(np.uint8), ds4, ref_spec)
+  comparison = _numeric_comparison(out.numpy().reshape(m, n), reference)
+  passed = comparison["status"] == "pass"
+  return {
+    "schema": "tinygrad.mmq_q4k_q8_1_full_grid_k_tiled_probe.v1", "status": "PASS" if passed else "BLOCKED",
+    "shape": [m, n, k], "bounded_only": True, "production_dispatch_changed": False,
+    "default_route": "direct_packed", "exact_blocker": None if passed else "numeric output mismatch",
+    "correctness": {"status": "PASS" if passed else "BLOCKED", "comparison": comparison,
+                     "authority": "same_session_fp16_rounded_ds4_reference"},
+    "timing": {"samples_ms": launch_samples, "min_ms": min(launch_samples),
+                "median_ms": float(np.median(launch_samples)), "k_epoch_launches": len(calls)},
+    "artifacts": artifacts, "distinct_binary_identity": all(x["distinct_binary_identity"] for x in artifacts),
+    "same_session_timing": True, "no_fallback": True,
+  }
+
+
+def run_full_grid_k_tiled_probe_isolated(*, timeout_seconds: float = 360.0,
+                                          warmups: int = 1, rounds: int = 1) -> dict[str, Any]:
+  """Run the K-tiled probe behind a hard child-process deadline."""
+  if timeout_seconds <= 0: return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_k_tiled_probe.v1",
+                                  "status": "BLOCKED", "exact_blocker": "timeout_seconds must be positive"}
+  child_env = dict(os.environ)
+  child_env.update({"DEV": "AMD", "PYTHONPATH": str(ROOT) + os.pathsep + child_env.get("PYTHONPATH", "")})
+  code = ("import json; from extra.qk.mmq_llama_five_buffer_gpu_harness import run_full_grid_k_tiled_probe; "
+          f"print(json.dumps(run_full_grid_k_tiled_probe(warmups={int(warmups)}, rounds={int(rounds)})))")
+  try:
+    proc = subprocess.run([sys.executable, "-c", code], cwd=ROOT, env=child_env,
+                          text=True, capture_output=True, timeout=timeout_seconds, check=False)
+  except subprocess.TimeoutExpired:
+    return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_k_tiled_probe.v1", "status": "BLOCKED",
+            "exact_blocker": "K-tiled overwrite/accumulate compile timed out",
+            "timeout_seconds": timeout_seconds}
+  try:
+    result = json.loads(proc.stdout.strip().splitlines()[-1])
+  except (IndexError, json.JSONDecodeError):
+    return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_k_tiled_probe.v1", "status": "BLOCKED",
+            "exact_blocker": "K-tiled child returned no structured result", "returncode": proc.returncode,
+            "stderr_tail": proc.stderr[-1000:]}
+  if proc.returncode != 0 and result.get("status") == "PASS":
+    result.update({"status": "BLOCKED", "exact_blocker": "K-tiled child exited non-zero", "returncode": proc.returncode})
+  return result
 
 
 def run_amd_validation(*, timeout_seconds: float = 300.0,

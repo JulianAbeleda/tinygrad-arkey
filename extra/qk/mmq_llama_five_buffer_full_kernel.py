@@ -147,7 +147,7 @@ def _phase_major_accumulator_vectors(recurrences:tuple[LlamaOracleRecurrenceGrap
   return tuple(UOp(Ops.STACK, dtypes.float.vec(8), lanes) for lanes in states)
 
 
-def _full_grid_sink(m:int, n:int, k:int) -> UOp:
+def _full_grid_sink(m:int, n:int, k:int, *, accumulate: bool = False) -> UOp:
   params = five_buffer_parameters(m, n, k)
   output, q4, values, scales, sums = tuple(UOp.param(x.slot, x.dtype.ptr(x.size)) for x in params)
   block_n, block_m, local = UOp.special(n//128, "gidx0"), UOp.special(m//128, "gidx1"), UOp.special(256, "lidx0")
@@ -172,27 +172,36 @@ def _full_grid_sink(m:int, n:int, k:int) -> UOp:
   tile_base = block_m*128*n + block_n*128
   prior = None
   for store in writeback.stores:
-    pointer = output.index(tile_base + store.src[0].src[1], ptr=True)
-    # Order the stores through the pointer only.  A same-dtype BITCAST on the value is a no-op that codegen folds
-    # away, so an effect order hung on it lands on the scalar FP32 update underneath -- AFTER(ADD, STORE), which
-    # spec_program rejects.  The pointer's INDEX is a real movement value and carries the order to the sink.
+    # Keep the canonical INDEX address free of AFTER wrappers. Ordering on an
+    # address can be stripped by AMD's linear-dependency pass (turning a
+    # dynamic tile address into v0); carry ordering on the STORE pointer, while
+    # a K-tiled accumulation LOAD is ordered separately.
+    base_pointer = output.index(tile_base + store.src[0].src[1], ptr=True)
+    pointer = base_pointer
     value = store.src[1]
+    if accumulate:
+      # K-tiled adapters launch this 256-wide kernel repeatedly.  The first
+      # epoch overwrites output; subsequent epochs add into the prior FP32
+      # tile in-place while preserving the same owner/order proof.
+      prior_value = base_pointer.load()
+      if prior is not None: prior_value = prior_value.after(prior)
+      value = prior_value.cast(dtypes.float) + value
     if prior is not None: pointer = pointer.after(prior)
     prior = pointer.store(value).replace(tag=store.tag)
   assert prior is not None
   closed = prior.end(*prior.ranges)
-  sink = UOp(Ops.SINK, dtypes.void, (closed,), KernelInfo(name="mmq_llama_five_buffer_full_grid", opts_to_apply=()))
+  sink = UOp(Ops.SINK, dtypes.void, (closed,), KernelInfo(name="mmq_llama_five_buffer_full_grid_accumulate" if accumulate else "mmq_llama_five_buffer_full_grid", opts_to_apply=()))
   if sink.ranges: raise ValueError("full-grid callback ranges leaked past stores")
   return sink
 
 
-def build_llama_five_buffer_full_kernel(m:int, n:int, k:int) -> LlamaFiveBufferFullKernel:
+def build_llama_five_buffer_full_kernel(m:int, n:int, k:int, *, accumulate: bool = False) -> LlamaFiveBufferFullKernel:
   if m % 128 or n % 128: raise ValueError("M and N must be divisible by 128; this milestone has no tails")
   proof = build_llama_five_buffer_graph(m, n, k)
   topology = FullGridTopology((n//128, m//128, 1))
   local = {(r, c) for r in range(128) for c in range(128)}
   owners = frozenset((tm*128+r, tn*128+c) for tm in range(m//128) for tn in range(n//128) for r, c in local)
-  return LlamaFiveBufferFullKernel(proof, topology, _full_grid_sink(m, n, k), owners,
+  return LlamaFiveBufferFullKernel(proof, topology, _full_grid_sink(m, n, k, accumulate=accumulate), owners,
     LLAMA_SOURCE_COMMIT, tuple(sorted(SOURCE_ANCHORS.items())))
 
 
