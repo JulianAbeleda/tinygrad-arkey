@@ -1,0 +1,236 @@
+{
+  "child": {
+    "buffers": [
+      {
+        "elements": 12533760,
+        "name": "q4_preloaded",
+        "nbytes": 50135040,
+        "va_addr": 138555806838784
+      },
+      {
+        "elements": 2621440,
+        "name": "q8_values",
+        "nbytes": 2621440,
+        "va_addr": 138555904491520
+      },
+      {
+        "elements": 81920,
+        "name": "q8_scales",
+        "nbytes": 327680,
+        "va_addr": 138556184125440
+      },
+      {
+        "elements": 81920,
+        "name": "q8_sums",
+        "nbytes": 327680,
+        "va_addr": 138556183797760
+      }
+    ],
+    "comparison": {
+      "atol": 0.003,
+      "first_mismatch_got": -100.54183959960938,
+      "first_mismatch_index": [
+        48,
+        0
+      ],
+      "first_mismatch_reference": -85.03069305419922,
+      "got_shape": [
+        512,
+        17408
+      ],
+      "got_size": 8912896,
+      "inf_got": 0,
+      "inf_reference": 0,
+      "joint_finite": 8912896,
+      "max_abs_error": 193.17636108398438,
+      "mean_abs_error": 0.055307287722826004,
+      "mismatch_count": 18203,
+      "nan_got": 0,
+      "nan_reference": 0,
+      "reference_shape": [
+        512,
+        17408
+      ],
+      "reference_size": 8912896,
+      "rtol": 0.003,
+      "status": "mismatch"
+    },
+    "completed_epochs": [
+      0,
+      0,
+      0
+    ],
+    "dispatches": [
+      {
+        "q4_epoch": 0,
+        "q8_epoch": 0,
+        "timeline": {
+          "signal_value": 30,
+          "timeline_value": 31
+        }
+      },
+      {
+        "q4_epoch": 0,
+        "q8_epoch": 1,
+        "timeline": {
+          "signal_value": 31,
+          "timeline_value": 32
+        }
+      },
+      {
+        "q4_epoch": 0,
+        "q8_epoch": 2,
+        "timeline": {
+          "signal_value": 32,
+          "timeline_value": 33
+        }
+      }
+    ],
+    "elapsed_seconds": 5.969843550992664,
+    "epoch": 0,
+    "epoch_count": 3,
+    "epoch_sequence": [
+      0,
+      0,
+      0
+    ],
+    "epoch_start": 0,
+    "gpu_ms": 2.26556,
+    "input_hashes": {
+      "q4_epoch_major": "e2185c11d2ba48ee0184153cfe472a5e2c1d1617c4bcaf0797368809f28aacda",
+      "scales": "ce542cb5c0c77c5dbdaa1c44753e16815f9ac66b82458022179dc0b56f614211",
+      "sums": "c6755f8eb0e77c62ace4bd94f7a908ad0a5d01d21a87febc7954200c63d53aad",
+      "values": "b4ba6549584528a1281d4fe6e521a50722987fb36cd7e8154b8d5f9eb44f246c"
+    },
+    "no_fallback": true,
+    "output_buffers": [
+      {
+        "elements": 8912896,
+        "name": "output_0",
+        "nbytes": 35651584,
+        "va_addr": 138555863072768
+      },
+      {
+        "elements": 8912896,
+        "name": "output_1",
+        "nbytes": 35651584,
+        "va_addr": 138555770798080
+      },
+      {
+        "elements": 8912896,
+        "name": "output_2",
+        "nbytes": 35651584,
+        "va_addr": 138555735146496
+      }
+    ],
+    "output_count": 3,
+    "output_initialization": "empty_full_target_partial",
+    "output_mode": "fresh_held",
+    "passed": false,
+    "q4_epoch_sequence": [
+      0,
+      0,
+      0
+    ],
+    "q8_epoch_sequence": [
+      0,
+      1,
+      2
+    ],
+    "schema": "tinygrad.mmq_q4k_q8_1.single_epoch_canary.v1.child",
+    "shape": [
+      512,
+      17408,
+      256
+    ],
+    "status": "BLOCKED",
+    "target_dispatches": 3,
+    "timeline": {
+      "after_preload": {
+        "signal_value": 27,
+        "timeline_value": 29
+      },
+      "start": {
+        "signal_value": 0,
+        "timeline_value": 1
+      }
+    }
+  },
+  "child_error": null,
+  "child_status": "passed",
+  "compile": {
+    "backend_id": "q4k_q8_1_mmq_amd_isa_full_grid_v0",
+    "binary_nbytes": 69655,
+    "binary_sha256": "6037457068b81558ee7dea0ce0e83992c648a37b61e97fde7a57dc6dd70d3b24",
+    "compile_only_parent": true,
+    "distinct_binary_identity": true,
+    "no_fallback": true,
+    "program_global_size": [
+      136,
+      4,
+      1
+    ],
+    "program_globals": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "program_local_size": [
+      256,
+      1,
+      1
+    ],
+    "resources": {
+      "authority": "native_elf_descriptor",
+      "compute_pgm_rsrc1": 1085014047,
+      "compute_pgm_rsrc2": 388,
+      "compute_pgm_rsrc3": 0,
+      "kernarg_bytes": 40,
+      "kernel_code_entry_byte_offset": -69120,
+      "lds_bytes": 57856,
+      "scratch_bytes": 0,
+      "sgpr": null,
+      "vgpr": 256,
+      "wavefront_size": 32
+    },
+    "resources_error": "CalledProcessError: Command '('/opt/rocm/llvm/bin/llvm-readelf', '--notes', '/tmp/tmpqal3bbx7.hsaco')' returned non-zero exit status 1.",
+    "serialized_program_nbytes": 8267203,
+    "serialized_program_sha256": "9fcc431fc7be416aa734dca2778a0c3ee4617cd738655067d4af1495e08c2734",
+    "source_nbytes": 437165,
+    "source_revision": "ac4cddeb0dbd778f650bf568f6f08344a06abe3a",
+    "source_sha256": "9ebd7462a0d8939f09172a461047a01459d6650affb6f5800c0d7356e91528e5"
+  },
+  "diagnostic_only": true,
+  "epoch": 0,
+  "epoch_count": 3,
+  "epoch_sequence": [
+    0,
+    0,
+    0
+  ],
+  "epoch_start": 0,
+  "exact_blocker": "target sequence final numerical comparison failed",
+  "fresh_output_each_launch": true,
+  "health_after": null,
+  "kernel_faults": [],
+  "no_fallback": true,
+  "output_mode": "fresh_held",
+  "passed": false,
+  "production_dispatch_changed": false,
+  "promotion_eligible": false,
+  "q4_epoch_sequence": [
+    0,
+    0,
+    0
+  ],
+  "q8_epoch_sequence": [
+    0,
+    1,
+    2
+  ],
+  "schema": "tinygrad.mmq_q4k_q8_1.single_epoch_canary.v1",
+  "status": "BLOCKED",
+  "target_dispatches": 3
+}

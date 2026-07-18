@@ -613,6 +613,13 @@ and output allocation are therefore healthy when inputs stay unchanged; corrupti
 The next split changes Q4 epochs while holding Q8 fixed, then changes Q8 while holding Q4 fixed, to identify which LDS
 producer lifecycle can observe stale prior-launch data.
 
+The split identifies Q8 unambiguously. Q4 `[0,1,2]` with Q8 fixed at 0 passes the third fresh output exactly; Q4 fixed
+at 0 with Q8 `[0,1,2]` produces 18,203 mismatches (first `[48,0]`, max absolute error 193.18). All target signals
+complete and the kernel log stays clean. Evidence is `docs/target-preloaded-q4-change-q8-fixed-20260718.json` and
+`docs/target-preloaded-q4-fixed-q8-change-20260718.json`. The repeated-launch stale state is in the Q8 staging side,
+not Q4, output reuse, runtime count, or queue health. Next split Q8 values from Q8 scale/sum metadata to choose the
+exact LDS producer subpath before editing ordering.
+
 ## 1. Executive state
 
 The project is building a generated tinygrad prefill route for non-fitting quantized models, using Qwen3-14B as the
