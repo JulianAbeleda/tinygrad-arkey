@@ -63,8 +63,10 @@ def _hash_array(value: np.ndarray) -> str:
 def _normalise_epoch_sequences(*, epoch_start: int, epoch_count: int,
                                 epoch_sequence: tuple[int, ...] | list[int] | None = None,
                                 q4_epoch_sequence: tuple[int, ...] | list[int] | None = None,
-                                q8_epoch_sequence: tuple[int, ...] | list[int] | None = None
-                                ) -> tuple[tuple[int, ...], tuple[int, ...]]:
+                                q8_epoch_sequence: tuple[int, ...] | list[int] | None = None,
+                                q8_values_epoch_sequence: tuple[int, ...] | list[int] | None = None,
+                                q8_metadata_epoch_sequence: tuple[int, ...] | list[int] | None = None
+                                ) -> tuple[tuple[int, ...], tuple[int, ...], tuple[int, ...], tuple[int, ...]]:
   if epoch_sequence is None:
     if not isinstance(epoch_count, int) or epoch_count <= 0:
       raise ValueError("epoch_count must be positive")
@@ -77,11 +79,16 @@ def _normalise_epoch_sequences(*, epoch_start: int, epoch_count: int,
       raise ValueError(f"epoch_sequence must be nonempty and use epochs in [0,{TOTAL_EPOCHS - 1}]")
   q4 = tuple(q4_epoch_sequence) if q4_epoch_sequence is not None else base
   q8 = tuple(q8_epoch_sequence) if q8_epoch_sequence is not None else base
-  for name, seq in (("q4_epoch_sequence", q4), ("q8_epoch_sequence", q8)):
+  q8_values = tuple(q8_values_epoch_sequence) if q8_values_epoch_sequence is not None else q8
+  q8_metadata = tuple(q8_metadata_epoch_sequence) if q8_metadata_epoch_sequence is not None else q8
+  for name, seq in (("q4_epoch_sequence", q4), ("q8_epoch_sequence", q8),
+                    ("q8_values_epoch_sequence", q8_values),
+                    ("q8_metadata_epoch_sequence", q8_metadata)):
     if not seq or any(not isinstance(e, int) or not 0 <= e < TOTAL_EPOCHS for e in seq):
       raise ValueError(f"{name} must be nonempty and use epochs in [0,{TOTAL_EPOCHS - 1}]")
-  if len(q4) != len(q8): raise ValueError("q4_epoch_sequence and q8_epoch_sequence must have equal lengths")
-  return q4, q8
+  if len({len(q4), len(q8), len(q8_values), len(q8_metadata)}) != 1:
+    raise ValueError("all epoch sequences must have equal lengths")
+  return q4, q8, q8_values, q8_metadata
 
 
 def _make_inputs() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -115,7 +122,9 @@ def _run_epoch_worker(program_path: str, epoch_start: int, epoch_count: int = 1,
                       fresh_output_each_launch: bool = False,
                       epoch_sequence: tuple[int, ...] | None = None,
                       q4_epoch_sequence: tuple[int, ...] | None = None,
-                      q8_epoch_sequence: tuple[int, ...] | None = None) -> dict[str, Any]:
+                      q8_epoch_sequence: tuple[int, ...] | None = None,
+                      q8_values_epoch_sequence: tuple[int, ...] | None = None,
+                      q8_metadata_epoch_sequence: tuple[int, ...] | None = None) -> dict[str, Any]:
   """Child-only persistent-preload target prefix and final oracle comparison."""
   from tinygrad import Tensor, dtypes
   from tinygrad.engine.realize import get_runtime
@@ -125,10 +134,11 @@ def _run_epoch_worker(program_path: str, epoch_start: int, epoch_count: int = 1,
     Q8_1_MMQ_DS4_LAYOUT, q4k_q8_1_mmq_ds4_tile_reference,
   )
 
-  q4_epochs, q8_epochs = _normalise_epoch_sequences(epoch_start=epoch_start, epoch_count=epoch_count,
-                                                    epoch_sequence=epoch_sequence,
-                                                    q4_epoch_sequence=q4_epoch_sequence,
-                                                    q8_epoch_sequence=q8_epoch_sequence)
+  q4_epochs, q8_epochs, q8_values_epochs, q8_metadata_epochs = _normalise_epoch_sequences(
+    epoch_start=epoch_start, epoch_count=epoch_count, epoch_sequence=epoch_sequence,
+    q4_epoch_sequence=q4_epoch_sequence, q8_epoch_sequence=q8_epoch_sequence,
+    q8_values_epoch_sequence=q8_values_epoch_sequence,
+    q8_metadata_epoch_sequence=q8_metadata_epoch_sequence)
   epoch_start, epoch_count = q4_epochs[0], len(q4_epochs)
   if not isinstance(runtime_timeout_ms, int) or runtime_timeout_ms <= 0: raise ValueError("runtime timeout must be positive")
   started = time.perf_counter()
@@ -156,33 +166,37 @@ def _run_epoch_worker(program_path: str, epoch_start: int, epoch_count: int = 1,
   dispatches: list[dict[str, Any]] = []
   gpu_ms_total = 0.0
   completed_epochs: list[int] = []
-  for ordinal, (q4_epoch, q8_epoch) in enumerate(zip(q4_epochs, q8_epochs)):
+  for ordinal, (q4_epoch, q8_epoch, q8_values_epoch, q8_metadata_epoch) in enumerate(
+      zip(q4_epochs, q8_epochs, q8_values_epochs, q8_metadata_epochs)):
     if fresh_output_each_launch and ordinal:
       output = Tensor.empty(m * n, dtype=dtypes.float32, device=device).realize()
       held_outputs.append(output)
     q4_view = q4_tensor.uop.buffer.view(n * 36, dtypes.uint32, q4_epoch * n * 36 * dtypes.uint32.itemsize)
     values_view = values_tensor.uop.buffer.view(2 * m * 128, dtypes.int8,
-                                                 q8_epoch * 2 * m * 128 * dtypes.int8.itemsize)
+                                                 q8_values_epoch * 2 * m * 128 * dtypes.int8.itemsize)
     scales_view = scales_tensor.uop.buffer.view(2 * m * 4, dtypes.float32,
-                                                 q8_epoch * 2 * m * 4 * dtypes.float32.itemsize)
+                                                 q8_metadata_epoch * 2 * m * 4 * dtypes.float32.itemsize)
     sums_view = sums_tensor.uop.buffer.view(2 * m * 4, dtypes.float32,
-                                             q8_epoch * 2 * m * 4 * dtypes.float32.itemsize)
+                                             q8_metadata_epoch * 2 * m * 4 * dtypes.float32.itemsize)
     args = tuple((output.uop.buffer, q4_view, values_view, scales_view, sums_view)[slot].get_buf(device)
                  for slot in program.arg.globals)
     gpu_seconds = runtime(*args, global_size=(n // 128, m // 128, 1), local_size=program.arg.local_size,
                           vals=program.arg.vals({}), wait=True, timeout=runtime_timeout_ms)
     gpu_ms_total += float(gpu_seconds) * 1000.0 if gpu_seconds is not None else 0.0
     completed_epochs.append(q4_epoch)
-    dispatches.append({"q4_epoch": q4_epoch, "q8_epoch": q8_epoch, "timeline": _timeline_snapshot(device)})
+    dispatches.append({"q4_epoch": q4_epoch, "q8_epoch": q8_epoch,
+                       "q8_values_epoch": q8_values_epoch, "q8_metadata_epoch": q8_metadata_epoch,
+                       "timeline": _timeline_snapshot(device)})
   got = output.numpy().reshape(m, n)
 
   # Recreate the independent oracle from the same deterministic arrays, with
   # FP16-rounded metadata exactly as the target harness uses.
   q4_final, q8_final = q4_epochs[-1], q8_epochs[-1]
+  q8_values_final, q8_metadata_final = q8_values_epochs[-1], q8_metadata_epochs[-1]
   q4_bytes = q4_packed.view(np.uint8).reshape(TOTAL_EPOCHS, n, 144)[q4_final].reshape(-1)
-  ep_values = values.reshape(TOTAL_EPOCHS * 2, m, 128)[q8_final * 2:(q8_final + 1) * 2]
-  ep_scales = scales.reshape(TOTAL_EPOCHS * 2, m, 4)[q8_final * 2:(q8_final + 1) * 2]
-  ep_sums = sums.reshape(TOTAL_EPOCHS * 2, m, 4)[q8_final * 2:(q8_final + 1) * 2]
+  ep_values = values.reshape(TOTAL_EPOCHS * 2, m, 128)[q8_values_final * 2:(q8_values_final + 1) * 2]
+  ep_scales = scales.reshape(TOTAL_EPOCHS * 2, m, 4)[q8_metadata_final * 2:(q8_metadata_final + 1) * 2]
+  ep_sums = sums.reshape(TOTAL_EPOCHS * 2, m, 4)[q8_metadata_final * 2:(q8_metadata_final + 1) * 2]
   ds4 = Q81MMQDS4Activation(ep_values, ep_scales.astype(np.float16).astype(np.float32),
                             ep_sums.astype(np.float16).astype(np.float32),
                             Q81MMQDS4ActivationSpec(m=m, k=256, m_tile=m))
@@ -196,6 +210,8 @@ def _run_epoch_worker(program_path: str, epoch_start: int, epoch_count: int = 1,
           "epoch_start": epoch_start, "epoch_count": epoch_count,
           "epoch_sequence": list(q4_epochs), "q4_epoch_sequence": list(q4_epochs),
           "q8_epoch_sequence": list(q8_epochs),
+          "q8_values_epoch_sequence": list(q8_values_epochs),
+          "q8_metadata_epoch_sequence": list(q8_metadata_epochs),
           "completed_epochs": completed_epochs,
           "shape": [m, n, 256], "comparison": comparison, "gpu_ms": gpu_ms_total,
           "target_dispatches": epoch_count, "dispatches": dispatches,
@@ -231,6 +247,8 @@ def run_single_epoch_canary(*, epoch: int = DEFAULT_EPOCH, epoch_start: int | No
                             epoch_sequence: tuple[int, ...] | list[int] | None = None,
                             q4_epoch_sequence: tuple[int, ...] | list[int] | None = None,
                             q8_epoch_sequence: tuple[int, ...] | list[int] | None = None,
+                            q8_values_epoch_sequence: tuple[int, ...] | list[int] | None = None,
+                            q8_metadata_epoch_sequence: tuple[int, ...] | list[int] | None = None,
                             compile_fn: Callable[[str | Path], tuple[str, dict[str, Any]]] | None = None,
                             device: str = DEVICE, timeout_seconds: float = DEFAULT_CHILD_TIMEOUT_SECONDS,
                             runtime_timeout_ms: int = DEFAULT_RUNTIME_TIMEOUT_MS,
@@ -238,9 +256,11 @@ def run_single_epoch_canary(*, epoch: int = DEFAULT_EPOCH, epoch_start: int | No
                             fault_reader: Callable[[float], str] = _default_fault_reader,
                             health_probe: Callable[[], bool] | None = _default_health_probe) -> dict[str, Any]:
   if epoch_start is None: epoch_start = epoch
-  q4_sequence, q8_sequence = _normalise_epoch_sequences(
+  q4_sequence, q8_sequence, q8_values_sequence, q8_metadata_sequence = _normalise_epoch_sequences(
     epoch_start=epoch_start, epoch_count=epoch_count, epoch_sequence=epoch_sequence,
-    q4_epoch_sequence=q4_epoch_sequence, q8_epoch_sequence=q8_epoch_sequence)
+    q4_epoch_sequence=q4_epoch_sequence, q8_epoch_sequence=q8_epoch_sequence,
+    q8_values_epoch_sequence=q8_values_epoch_sequence,
+    q8_metadata_epoch_sequence=q8_metadata_epoch_sequence)
   sequence = tuple(epoch_sequence) if epoch_sequence is not None else None
   epoch_start, epoch_count = q4_sequence[0], len(q4_sequence)
   if timeout_seconds <= 0 or runtime_timeout_ms <= 0: raise ValueError("timeouts must be positive")
@@ -254,6 +274,8 @@ def run_single_epoch_canary(*, epoch: int = DEFAULT_EPOCH, epoch_start: int | No
     "epoch_start": epoch_start, "epoch_count": epoch_count,
     "epoch_sequence": list(q4_sequence), "q4_epoch_sequence": list(q4_sequence),
     "q8_epoch_sequence": list(q8_sequence),
+    "q8_values_epoch_sequence": list(q8_values_sequence),
+    "q8_metadata_epoch_sequence": list(q8_metadata_sequence),
     "fresh_output_each_launch": bool(fresh_output_each_launch),
     "output_mode": "fresh_held" if fresh_output_each_launch else "persistent",
     "kernel_faults": [], "compile": None, "child": None, "health_after": None}
@@ -267,7 +289,9 @@ def run_single_epoch_canary(*, epoch: int = DEFAULT_EPOCH, epoch_start: int | No
     isolated = runner(_run_epoch_worker, args=(artifact_path, epoch_start, epoch_count, device, runtime_timeout_ms,
                                                bool(fresh_output_each_launch), sequence,
                                                tuple(q4_sequence) if q4_epoch_sequence is not None else None,
-                                               tuple(q8_sequence) if q8_epoch_sequence is not None else None),
+                                               tuple(q8_sequence) if q8_epoch_sequence is not None else None,
+                                               tuple(q8_values_sequence) if q8_values_epoch_sequence is not None else None,
+                                               tuple(q8_metadata_sequence) if q8_metadata_epoch_sequence is not None else None),
                       timeout_seconds=float(timeout_seconds), start_method="spawn")
     base["child_status"], base["child_error"] = isolated.status, isolated.error
     if isolated.status == "passed" and isinstance(isolated.result, dict): base["child"] = isolated.result
@@ -315,6 +339,10 @@ def main(argv: list[str] | None = None) -> int:
                       help="comma-separated Q4 epoch indices; overrides Q4 side only")
   parser.add_argument("--q8-epoch-sequence", type=str, default=None,
                       help="comma-separated Q8 epoch indices; overrides Q8 side only")
+  parser.add_argument("--q8-values-epoch-sequence", type=str, default=None,
+                      help="comma-separated Q8 values epoch indices")
+  parser.add_argument("--q8-metadata-epoch-sequence", type=str, default=None,
+                      help="comma-separated Q8 metadata epoch indices")
   parser.add_argument("--fresh-output-each-launch", action="store_true",
                       help="allocate and retain a distinct output for each target launch")
   parser.add_argument("--output", type=Path)
@@ -326,13 +354,17 @@ def main(argv: list[str] | None = None) -> int:
     sequence = parse_sequence(args.epoch_sequence)
     q4_sequence = parse_sequence(args.q4_epoch_sequence)
     q8_sequence = parse_sequence(args.q8_epoch_sequence)
+    q8_values_sequence = parse_sequence(args.q8_values_epoch_sequence)
+    q8_metadata_sequence = parse_sequence(args.q8_metadata_epoch_sequence)
   except ValueError as exc:
     parser.error(f"invalid epoch sequence: {exc}")
   result = run_single_epoch_canary(epoch=args.epoch, epoch_start=args.epoch_start,
                                    epoch_count=args.epoch_count, output_path=args.output,
                                    fresh_output_each_launch=args.fresh_output_each_launch,
                                    epoch_sequence=sequence, q4_epoch_sequence=q4_sequence,
-                                   q8_epoch_sequence=q8_sequence)
+                                   q8_epoch_sequence=q8_sequence,
+                                   q8_values_epoch_sequence=q8_values_sequence,
+                                   q8_metadata_epoch_sequence=q8_metadata_sequence)
   print(json.dumps(result, sort_keys=True))
   return 0 if result.get("passed") else 1
 
