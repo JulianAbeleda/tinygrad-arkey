@@ -1,6 +1,74 @@
 # Qwen3-14B generated-prefill Claude handoff
 
-## 0.9 Current status 2026-07-18: one exact role evidence-ready; production still blocked
+## 1.0 Current status 2026-07-18: research policy connected; repeated `attn_kv` dispatch blocks Phase 3
+
+Read this section first. It supersedes §0.9 and the chronological diagnostics below.
+
+The project is not waiting on spill reduction, Q6 fallback tooling, policy serialization, a HIP launcher, or a live
+research adapter:
+
+- Both exact direct-packed Q6 fallback rows are qualified and timed:
+  `docs/qwen3-14b-prefill-q6-attn-kv-qualification-20260718.json` and
+  `docs/qwen3-14b-prefill-q6-ffn-down-qualification-20260718.json`.
+- `docs/qwen3-14b-prefill-six-row-research-policy-20260718.json` is the retained immutable six-row policy. It is
+  `research_only` with `production_promotion=false`.
+- The exact policy selector, runtime attachments, frozen candidate execution, declared direct-packed fallbacks, and
+  actual execution-census events are connected through the explicit/default-off research route. Unknown workload,
+  missing bundle/program authority, attachment drift, candidate identity drift, and candidate runtime failure all
+  fail closed.
+- Exact frozen PROGRAM bundles exist for `attn_kv` `(512,1024,256)` and the shared N5120 geometry
+  `(512,5120,256)`. The strict harness reuses the authoritative frozen-role binding and tinygrad's existing
+  `get_runtime("AMD", program)` PM4/AQL paths. It does not emit, recompile, or launch through HIP.
+- Shared N5120 PROGRAM reuse does not relabel its donor fixture: artifact/donor role and execution role are recorded
+  separately, and an `ffn_down` execution gets its own deterministic 68-epoch fixture.
+
+The active blocker is now narrow and retained:
+
+- `docs/qwen3-14b-prefill-attn-kv-fresh-epoch-isolation-20260718.json` records three PM4 fresh-process probes over the
+  same frozen artifact. Epochs 0, 1, and 2 each pass exactly one target dispatch with zero mismatches across 524,288
+  values, clean kernel-fault windows, and healthy pre/post canaries. Their maximum absolute errors are respectively
+  `6.103515625e-5`, `6.103515625e-5`, and `1.220703125e-4`.
+- `docs/qwen3-14b-prefill-attn-kv-pm4-aql-differential-20260718.json` records the counterevidence. PM4 and AQL both
+  pass a one-epoch prefix. In a three-epoch same-process prefix, both complete two epochs and fault entering the third
+  dispatch, followed by SQC memory-violation, gfxhub page-fault, MES queue-removal failure, and reset evidence.
+- Because both launch modes fail at the same repeated-dispatch boundary while epochs 0/1/2 pass separately, this is
+  not evidence of one deterministic bad epoch, an epoch-2 numerical defect, or a PM4-only packet bug. The precise
+  shared runtime/kernel/resource-state cause remains unproven. Do not present the inference as a root-cause fix.
+
+Authoritative phase state:
+
+| Phase | State |
+|---|---|
+| 3 — Q4_K role completion | Open: `ffn_gate_up` qualified; `attn_kv` repeated-dispatch blocked; `attn_qo` and Q4 `ffn_down` still require full qualification. |
+| 4 — Q6_K role completion | Complete for the declared two-row direct-packed fallback strategy. |
+| 5 — Central candidate policy | Complete at the default-off research boundary: immutable six-row policy, exact binding, and execution-census implementation exist. |
+| 6 — Mixed-route 14B integration | Open: no successful whole-model policy execution/census, memory reconciliation, health, or decode proof. |
+| 7 — Parity and promotion | Open: no matched multi-context promotion run for this policy. |
+
+```text
+immutable_six_row_policy=true
+exact_research_route_binding_implemented=true
+actual_execution_census_implemented=true
+exact_research_route_default_off=true
+whole_model_live_census_performed=false
+production_promotion=false
+production_dispatch_changed=false
+default_route=direct_packed
+```
+
+Next work should reuse the frozen PROGRAM and existing tinygrad runtime/harness boundaries. Audit the repeated-dispatch
+lifecycle CPU-side, implement only an evidenced lifecycle correction or fail-closed safe execution strategy, then
+repeat the bounded `1 -> 3` health/correctness escalation before any longer run. Only after `attn_kv` is stable should
+the remaining Q4 roles and Phase 6/7 gates proceed. Do not add a HIP launcher, regenerate the frozen binary merely to
+compare launchers, revive the spill-ordering dead end, or claim promotion from fresh single-epoch passes.
+
+There is no project progress percentage. The phase ledger in
+`docs/qwen3-14b-generated-prefill-completion-scope-20260714.md` is the authority.
+
+## Historical 0.9 status 2026-07-18: one exact role evidence-ready
+
+This section predates the Q6 fallback qualifications, immutable six-row policy, live default-off research
+binding/census, frozen `attn_kv` artifact, and repeated-dispatch differential recorded in §1.0.
 
 Read this section first. The current pushed implementation/evidence head before this documentation update is
 `e4a940384`. The old spill, MMU-fault, executable-lifecycle, and “do not run 20 epochs” statements in the chronological

@@ -30,10 +30,10 @@ promotion is enabled.
 
 | Phase | Current state | Remaining gate |
 |---|---|---|
-| 3 — Q4_K role completion | One of four roles evidence-qualified (`ffn_gate_up`) | Qualify `attn_qo`, Q4 `ffn_down`, and `attn_kv`, then prove aggregate role timing. Each needs exact full-role correctness/resource/health evidence without hidden dense dequantization. |
-| 4 — Q6_K role completion | Fallback path available; qualification incomplete | Qualify and time the two direct-packed Q6 fallback rows under the same policy contract. A faster generated Q6 candidate is required only if measured Q6 share blocks the whole-policy target. |
-| 5 — Central candidate policy | Partial; joined one-role evidence exists | Implement the generic one-role research opt-in and live census, then emit one immutable six-row policy selecting an exact qualified candidate or declared rollback for every row. Missing evidence, identity drift, or unknown workload must fail closed. |
-| 6 — Mixed-route 14B integration | Not complete | The exact policy must execute manually end to end with admission, isolated compile/resource evidence, role and model correctness, route census, memory reconciliation, GPU health, decode regression, and one-change direct-packed rollback. |
+| 3 — Q4_K role completion | Incomplete. `ffn_gate_up` is evidence-qualified. Exact frozen `attn_kv` and shared-N5120 PROGRAM artifacts now exist; fresh-process `attn_kv` epochs 0, 1, and 2 each pass, but both PM4 and AQL fault entering the third same-process dispatch. | Resolve or safely contain the repeated-dispatch lifecycle blocker, then complete full-role correctness/resource/health/timing for `attn_kv`, `attn_qo`, and Q4 `ffn_down`. Fresh single-epoch passes are diagnostic, not role qualification. |
+| 4 — Q6_K role completion | Complete for the declared fallback strategy. Both exact direct-packed Q6 rows (`attn_kv` and `ffn_down`) are qualified and timed under the retained policy contract. | No generated Q6 route is required unless measured whole-policy attribution shows the qualified fallbacks miss the target. |
+| 5 — Central candidate policy | Complete at the default-off research boundary. The immutable six-row policy, host selector, exact frozen candidate/fallback binding, fail-closed unknown/drift handling, and actual execution-census surface are implemented. `production_promotion=false`. | Exercise the retained policy in Phase 6. The implemented census surface is not a substitute for a successful whole-model live census. |
+| 6 — Mixed-route 14B integration | Not complete. The live research route remains explicit/default-off; no production route changed. | The exact policy must execute manually end to end with admission, isolated compile/resource evidence, role and model correctness, genuine execution census, memory reconciliation, GPU health, decode regression, and one-change direct-packed rollback. |
 | 7 — Parity and promotion | Not complete | The same immutable revision must pass the matched multi-context llama comparison and the statistical promotion gates below. |
 
 The dependency order is strict:
@@ -95,7 +95,48 @@ Anything less is a diagnostic or candidate result, not a shipped 14B completion.
 
 ## Current position
 
-### 2026-07-18 one-role evidence checkpoint
+### 2026-07-18 reconciled research-policy and `attn_kv` checkpoint
+
+Phase 4 and the research implementation portion of Phase 5 are now complete:
+
+- `docs/qwen3-14b-prefill-q6-attn-kv-qualification-20260718.json` and
+  `docs/qwen3-14b-prefill-q6-ffn-down-qualification-20260718.json` qualify the two declared direct-packed Q6 fallback
+  rows.
+- `docs/qwen3-14b-prefill-six-row-research-policy-20260718.json` is the immutable six-row, research-only policy.
+  Its exact selector, runtime attachment, candidate/fallback dispatch, and actual execution-census plumbing are
+  implemented and default-off. Unknown workloads, missing authority, identity drift, and candidate failure do not
+  silently fall back.
+- Exact frozen artifacts now exist for `attn_kv` and the shared `(512,5120,256)` PROGRAM geometry. The frozen runtime
+  binding validates PROGRAM ABI/grid/key/source/binary identity and keeps donor artifact fixtures distinct from
+  execution-role fixtures.
+
+Phase 3 remains open. `docs/qwen3-14b-prefill-attn-kv-fresh-epoch-isolation-20260718.json` retains the compact
+fresh-process result: PM4 epochs 0, 1, and 2 each pass one isolated target dispatch with zero mismatches, clean fault
+windows, and healthy pre/post canaries. This rules out a deterministic bad epoch or bad epoch offset for those three
+epochs. It does not prove repeated dispatch. In
+`docs/qwen3-14b-prefill-attn-kv-pm4-aql-differential-20260718.json`, both PM4 and AQL pass prefix 1, then both complete
+two epochs and fault entering the third same-process dispatch with SQC/memory-violation, page-fault, MES-removal, and
+reset evidence. The shared failure across launch modes is the immediate Q4 qualification blocker.
+
+The current route boundary is:
+
+```text
+immutable_six_row_policy=true
+exact_research_route_binding_implemented=true
+actual_execution_census_implemented=true
+exact_research_route_default_off=true
+whole_model_live_census_performed=false
+production_promotion=false
+production_dispatch_changed=false
+default_route=direct_packed
+```
+
+There is no project progress percentage. Phase gates are the authority.
+
+### Historical 2026-07-18 one-role evidence checkpoint
+
+This checkpoint predates the completed Q6 fallback rows, immutable policy, live research binding/census implementation,
+and the retained `attn_kv` frozen/fresh-process evidence above.
 
 Project Phase 3 has advanced, but remains incomplete. The exact Q4_K/Q8_1 `ffn_gate_up`
 `512x17408x5120` role is evidence-ready to implement a research opt-in:
@@ -146,10 +187,10 @@ not build or require a HIP launcher.
 ### Not completed
 
 - Three required Q4 roles remain unqualified: `attn_qo`, Q4 `ffn_down`, and `attn_kv`.
-- The two direct-packed Q6 fallback rows remain to be qualified and timed under the final policy contract.
-- The one-role candidate is still `research_descriptor_only`; no live generic binding or runtime negative-role and
-  no-hidden-fallback census exists.
-- No immutable identity-qualified policy covers all six observed 14B role/quant rows.
+- The repeated-dispatch `attn_kv` fault blocks its full-role qualification even though isolated epochs 0, 1, and 2
+  pass individually.
+- The immutable policy and default-off live research binding/census implementation exist, but their Phase 6
+  whole-model execution and genuine live census have not passed.
 - The profile's family quant label does not encode the exact mixed Q4_K/Q6_K tensor inventory. Exact quant must come
   from loaded tensor facts.
 - Whole-model mixed-route correctness, memory reconciliation, route census, health, decode regression, and matched

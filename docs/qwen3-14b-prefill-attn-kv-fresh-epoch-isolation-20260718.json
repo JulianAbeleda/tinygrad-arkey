@@ -1,0 +1,173 @@
+{
+  "schema": "tinygrad.mmq_q4k_q8_1.fresh_epoch_isolation.v1",
+  "status": "PASS",
+  "diagnostic_only": true,
+  "production_promotion": false,
+  "role": "attn_kv",
+  "full_role_shape": [
+    512,
+    1024,
+    5120
+  ],
+  "program_shape": [
+    512,
+    1024,
+    256
+  ],
+  "execution": {
+    "queue_mode": "PM4",
+    "AMD_AQL": "0",
+    "process_policy": "one fresh isolated child per epoch row",
+    "target_dispatches_per_process": 1,
+    "in_kernel_accumulation": true,
+    "persistent_buffers": true,
+    "preloaded_epochs": true,
+    "stable_metadata_staging": true,
+    "n_chunk_tiles": 8,
+    "no_recompile": true
+  },
+  "frozen_bundle": {
+    "path": "docs/artifacts/qwen3-14b-prefill-attn-kv-frozen-20260718",
+    "program_key": "d6f891d8e75be25990890bae6788c455690c7b021d3a5bac323eb540f00e0e0d",
+    "source_sha256": "050a2fcecabf2c8562439f5bdff8c4e3e4b545d1806ba3232ae0d308568df80f",
+    "binary_sha256": "399a2edb0fa953f756349f3c81f46dca9f6ee3905d992644a8f272fcc95d942f",
+    "serialized_program_sha256": "030a26144d46fe27efcfe92fb85c26f1edc28eee35fdf1136cf8800434030ea3",
+    "fixture_sha256": "43ebde16be8bfe5640f1c43f8ecb82d6617a519d760a79364ddb019dde503a60"
+  },
+  "fixture_repack": {
+    "q4_sha256": "ec21d06acdfdcc92fa8a4cb5a6b985234d8067e27fe3f2cba24c097cac98e51d",
+    "q4_epoch_major_sha256": "6a1c40b009fdda36f0e780e17fc667a60fc53186c2ed0d5d598a3ee7d70aa454",
+    "q8_values_sha256": "b4ba6549584528a1281d4fe6e521a50722987fb36cd7e8154b8d5f9eb44f246c",
+    "q8_scales_sha256": "ce542cb5c0c77c5dbdaa1c44753e16815f9ac66b82458022179dc0b56f614211",
+    "q8_sums_sha256": "c6755f8eb0e77c62ace4bd94f7a908ad0a5d01d21a87febc7954200c63d53aad"
+  },
+  "epochs": [
+    {
+      "epoch": 0,
+      "status": "PASS",
+      "runtime_launch_count": 1,
+      "launch_epoch": [
+        0
+      ],
+      "health_before": true,
+      "health_after": true,
+      "mode_health_before": true,
+      "mode_health_after": true,
+      "kernel_faults": [],
+      "comparison": {
+        "status": "pass",
+        "got_size": 524288,
+        "reference_size": 524288,
+        "joint_finite": 524288,
+        "nan_got": 0,
+        "nan_reference": 0,
+        "inf_got": 0,
+        "inf_reference": 0,
+        "mismatch_count": 0,
+        "max_abs_error": 0.00006103515625,
+        "mean_abs_error": 1.7258571460843086e-08,
+        "rtol": 0.003,
+        "atol": 0.003
+      },
+      "provenance": {
+        "kind": "retained_document",
+        "path": "docs/qwen3-14b-prefill-attn-kv-pm4-aql-differential-20260718.json",
+        "json_path": "$.modes[0].attempts[0].result"
+      }
+    },
+    {
+      "epoch": 1,
+      "status": "PASS",
+      "runtime_launch_count": 1,
+      "launch_epoch": [
+        1
+      ],
+      "health_before": true,
+      "health_after": true,
+      "mode_health_before": true,
+      "mode_health_after": true,
+      "kernel_faults": [],
+      "comparison": {
+        "status": "pass",
+        "got_size": 524288,
+        "reference_size": 524288,
+        "joint_finite": 524288,
+        "nan_got": 0,
+        "nan_reference": 0,
+        "inf_got": 0,
+        "inf_reference": 0,
+        "mismatch_count": 0,
+        "max_abs_error": 0.00006103515625,
+        "mean_abs_error": 1.1710653780028224e-08,
+        "rtol": 0.003,
+        "atol": 0.003
+      },
+      "provenance": {
+        "kind": "captured_session_log",
+        "session": "rollout-2026-07-17T12-15-32-019f70dc-973e-7a92-9644-0e23ffec39b0.jsonl",
+        "captured_at": "2026-07-18T17:03:20.032Z",
+        "call_id": "call_jp504SSN1c9TuUjj5dKZpGTJ"
+      }
+    },
+    {
+      "epoch": 2,
+      "status": "PASS",
+      "runtime_launch_count": 1,
+      "launch_epoch": [
+        2
+      ],
+      "health_before": true,
+      "health_after": true,
+      "mode_health_before": true,
+      "mode_health_after": true,
+      "kernel_faults": [],
+      "comparison": {
+        "status": "pass",
+        "got_size": 524288,
+        "reference_size": 524288,
+        "joint_finite": 524288,
+        "nan_got": 0,
+        "nan_reference": 0,
+        "inf_got": 0,
+        "inf_reference": 0,
+        "mismatch_count": 0,
+        "max_abs_error": 0.0001220703125,
+        "mean_abs_error": 2.276647137477994e-08,
+        "rtol": 0.003,
+        "atol": 0.003
+      },
+      "provenance": {
+        "kind": "captured_session_log",
+        "session": "rollout-2026-07-17T12-15-32-019f70dc-973e-7a92-9644-0e23ffec39b0.jsonl",
+        "captured_at": "2026-07-18T17:03:40.002Z",
+        "call_id": "call_l2oSn89Y0KQj4Mw701se8XC8"
+      }
+    }
+  ],
+  "conclusion": {
+    "all_selected_epochs_pass_in_fresh_processes": true,
+    "selected_epochs": [
+      0,
+      1,
+      2
+    ],
+    "total_checked_values": 1572864,
+    "total_mismatches": 0,
+    "same_process_repeated_dispatch_proven": false,
+    "production_promotion": false
+  },
+  "same_process_counterevidence": {
+    "path": "docs/qwen3-14b-prefill-attn-kv-pm4-aql-differential-20260718.json",
+    "classification": "BOTH_MODES_FAILED_SHARED_OR_KERNEL_LAYER",
+    "pm4_prefix_3": {
+      "status": "BLOCKED",
+      "completed_epochs": 2,
+      "exact_blocker": "AMD kernel fault/reset marker observed"
+    },
+    "aql_prefix_3": {
+      "status": "BLOCKED",
+      "completed_epochs": 2,
+      "exact_blocker": "AMD kernel fault/reset marker observed"
+    }
+  }
+}
