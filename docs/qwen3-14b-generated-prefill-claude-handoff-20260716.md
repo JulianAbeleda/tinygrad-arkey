@@ -418,7 +418,7 @@ scratch, no `spec_shared` widening, no model/VRAM/GPU/route branching).
 
 The recommended correctness-first path now has a concrete bounded result. Commits `472ca6da9`, `72e58d322`,
 `ef9fb08c8`, `e78551257`, `f6fa66b96`, `76b721184`, `1b7748e26`, `1a26a721a`, `2643551d4`, `48c11957d`, and
-`661aea564`
+`661aea564`, `fea30a7ee`, `1b525a2a5`, `1b7b249cd`, `1c01325de`, `26edaa8f2`, and `78101b7c9`
 are pushed on `master`.
 
 * The emitted full-grid 128x128x256 PROGRAM passed an in-process AMD probe: 0/16,384 output mismatches against the
@@ -446,7 +446,8 @@ are pushed on `master`.
   A reduced 256x256x256 one-epoch dispatch then exposed the next blocker: 65,425/65,536 mismatches (max abs 840.9)
   despite the same zero-scratch resources; 128x128 remains the only numerically passing grid. The target 20-epoch
   run also hit an HCQ wait timeout (signal 9 not set, current 8). Treat this as a grid-scaling address/writeback
-  defect, not a promotion or GPU-health pass.
+  defect, not a promotion or GPU-health pass. The diagnostic launch is explicitly `global_size=[2,2,1]`,
+  `local_size=[256,1,1]`; all four 128x128 tiles fail, so the issue is not isolated to a nonzero tile origin.
 
 The through-line is unchanged: the first real GPU result collapsed more uncertainty than further spill grinding, but
 the 31x bounded win is not evidence for a 14B route. Never run a production role on this candidate until the K-tiled
