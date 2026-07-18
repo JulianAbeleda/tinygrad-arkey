@@ -1181,10 +1181,46 @@ def _aql_target_program_identity(prg: Any) -> dict[str, Any]:
   }
 
 
+def _aql_runtime_lifecycle_evidence(prg: Any, args_state: Any) -> dict[str, Any]:
+  """Audit uploaded code-object and kernarg allocation ranges without changing either."""
+  from tinygrad.engine.realize import runtime_cache
+  lib, kernarg = getattr(prg, "lib_gpu", None), args_state.buf
+  lib_va, lib_nbytes = int(getattr(lib, "va_addr", 0)), int(getattr(lib, "size", 0))
+  entry_va, descriptor_va = int(getattr(prg, "prog_addr", 0)), int(getattr(prg, "aql_prog_addr", 0))
+  kernarg_va, kernarg_nbytes = int(kernarg.va_addr), int(kernarg.size)
+  kernarg_payload_nbytes = int(getattr(prg, "kernargs_segment_size", 0))
+  lib_end, kernarg_end = lib_va + lib_nbytes, kernarg_va + kernarg_nbytes
+  argument_ranges = [(int(buf.va_addr), int(buf.va_addr)+int(buf.size)) for buf in args_state.bufs]
+  cache_bindings = [{
+    "program_key": key[0].hex(), "device": key[1],
+  } for key, runtime in runtime_cache.items() if runtime is prg]
+  checks = {
+    "program_library_range_nonempty": lib_va > 0 and lib_nbytes > 0,
+    "program_entry_in_library_range": lib_va <= entry_va < lib_end,
+    "program_descriptor_in_library_range": lib_va <= descriptor_va < lib_end,
+    "kernarg_payload_exactly_40_bytes": kernarg_payload_nbytes == 40,
+    "kernarg_allocation_matches_payload": kernarg_nbytes == kernarg_payload_nbytes,
+    "kernarg_64_byte_aligned": kernarg_va > 0 and kernarg_va % 64 == 0,
+    "kernarg_does_not_overlap_program_library": kernarg_end <= lib_va or kernarg_va >= lib_end,
+    "kernarg_does_not_overlap_argument_buffers":
+      all(kernarg_end <= start or kernarg_va >= end for start, end in argument_ranges),
+  }
+  return {
+    "runtime_object_id": id(prg), "runtime_cache_bindings": cache_bindings,
+    "program_library_va": lib_va, "program_library_nbytes": lib_nbytes,
+    "program_entry_va": entry_va, "program_entry_offset": entry_va-lib_va,
+    "program_descriptor_va": descriptor_va, "program_descriptor_offset": descriptor_va-lib_va,
+    "kernarg_va": kernarg_va, "kernarg_allocation_nbytes": kernarg_nbytes,
+    "kernarg_payload_nbytes": kernarg_payload_nbytes, "checks": checks,
+    "all_checks_pass": all(checks.values()),
+  }
+
+
 def _audit_target_aql_kernargs(qwords: list[int], prior_qwords: list[list[int]], *,
                                expected_vas: list[int] | None,
                                require_fixed_scale_va: bool,
-                               require_all_five_vas_fixed: bool = False) -> dict[str, bool]:
+                               require_all_five_vas_fixed: bool = False,
+                               require_all_five_vas_distinct: bool = False) -> dict[str, bool]:
   """Validate the five target pointers before its containing doorbell is rung."""
   if len(qwords) != 5: raise ValueError("target AQL census requires exactly five kernarg Qwords")
   checks = {
@@ -1193,6 +1229,7 @@ def _audit_target_aql_kernargs(qwords: list[int], prior_qwords: list[list[int]],
     "output_va_fixed": not prior_qwords or qwords[0] == prior_qwords[0][0],
     "q8_scale_va_fixed": not require_fixed_scale_va or not prior_qwords or qwords[3] == prior_qwords[0][3],
     "all_five_vas_fixed": not require_all_five_vas_fixed or not prior_qwords or qwords == prior_qwords[0],
+    "all_five_vas_distinct": not require_all_five_vas_distinct or len(set(qwords)) == 5,
   }
   return checks
 
@@ -1224,9 +1261,12 @@ def _retained_producer_tensors(produced_tiles: list[Any]) -> tuple[Any, ...]:
 def _realize_with_aql_packet_census(output: Any, expected_vas: list[list[int]] | None = None, *,
                                     target_program_identity: Mapping[str, Any] | None = None,
                                     target_program_identities: tuple[Mapping[str, Any], ...] | None = None,
+                                    target_program_keys: tuple[str, ...] | None = None,
                                     target_dispatch_count: int | None = None,
                                     require_fixed_scale_va: bool = False,
                                     require_all_five_vas_fixed: bool = False,
+                                    require_all_five_vas_distinct: bool = False,
+                                    require_runtime_lifecycle: bool = False,
                                     retained_outputs: tuple[Any, ...] = ()) -> dict[str, Any]:
   """Realize while auditing target AQL packet/kernargs before each doorbell.
 
@@ -1270,6 +1310,12 @@ def _realize_with_aql_packet_census(output: Any, expected_vas: list[list[int]] |
     raise ValueError("AQL target census requires a positive target dispatch count")
   if expected_vas is not None and len(expected_vas) != target_dispatch_count:
     raise ValueError("AQL target census expected VA rows differ from target dispatch count")
+  if target_program_keys is not None and (
+      len(target_program_keys) != target_dispatch_count or
+      any(not isinstance(key, str) or len(key) != 64 for key in target_program_keys)):
+    raise ValueError("AQL target census PROGRAM keys differ from the target dispatch sequence")
+  if require_runtime_lifecycle and target_program_keys is None:
+    raise ValueError("AQL runtime lifecycle census requires exact PROGRAM keys")
 
   from tinygrad.runtime import ops_amd
   constructed, published, calls = [], [], []
@@ -1287,6 +1333,8 @@ def _realize_with_aql_packet_census(output: Any, expected_vas: list[list[int]] |
       "kernarg_qwords": list(row["kernarg_qwords"]),
       "expected_vas": None if row["expected_vas"] is None else list(row["expected_vas"]),
       "argument_buffers": [dict(argument) for argument in row["argument_buffers"]],
+      "runtime_lifecycle": {
+        **row["runtime_lifecycle"], "checks": dict(row["runtime_lifecycle"]["checks"])},
       "checks": dict(row["checks"]),
     } for row in calls]
     result = {
@@ -1295,11 +1343,14 @@ def _realize_with_aql_packet_census(output: Any, expected_vas: list[list[int]] |
       "target_program_identity": dict(target_program_identity) if target_program_identity is not None else None,
       "target_program_identities": [dict(identity) for identity in normalized_identities]
         if target_program_identities is not None else None,
+      "target_program_keys": list(target_program_keys) if target_program_keys is not None else None,
       "target_call_count": len(copied_calls),
       "accepted_target_call_count": sum(row["accepted_before_doorbell"] for row in copied_calls),
       "non_target_kernel_dispatch_count": non_target_kernel_dispatch_count,
       "compute_doorbell_count": compute_doorbell_count, "require_fixed_scale_va": require_fixed_scale_va,
       "require_all_five_vas_fixed": require_all_five_vas_fixed,
+      "require_all_five_vas_distinct": require_all_five_vas_distinct,
+      "require_runtime_lifecycle": require_runtime_lifecycle,
       "retained_companion_output_count": len(retained_outputs),
       "pending_constructed_dispatch_count": len(constructed),
       "pending_published_packet_count": len(published),
@@ -1321,6 +1372,7 @@ def _realize_with_aql_packet_census(output: Any, expected_vas: list[list[int]] |
       "argument_buffers": [{
         "slot": slot, "va": int(buf.va_addr), "size": int(buf.size),
       } for slot, buf in enumerate(args_state.bufs)],
+      "runtime_lifecycle": _aql_runtime_lifecycle_evidence(prg, args_state),
       "program_identity": _aql_target_program_identity(prg),
     })
     return result
@@ -1360,6 +1412,14 @@ def _realize_with_aql_packet_census(output: Any, expected_vas: list[list[int]] |
       expected_row = None if expected_vas is None else expected_vas[call_index]
       expected_identity = (None if normalized_identities is None else
                            normalized_identities[call_index] if ordered_identity_sequence else normalized_identities[0])
+      expected_program_key = None if target_program_keys is None else target_program_keys[call_index]
+      lifecycle = built["runtime_lifecycle"]
+      kernarg_start, kernarg_end = lifecycle["kernarg_va"], \
+        lifecycle["kernarg_va"] + lifecycle["kernarg_allocation_nbytes"]
+      prior_kernarg_ranges = [
+        (row["runtime_lifecycle"]["kernarg_va"],
+         row["runtime_lifecycle"]["kernarg_va"] + row["runtime_lifecycle"]["kernarg_allocation_nbytes"])
+        for row in calls]
       checks = {
         "barrier": packet["barrier"] is True,
         "acquire_system_fence": packet["acquire_fence_scope"] == packet["system_fence_scope"],
@@ -1370,10 +1430,21 @@ def _realize_with_aql_packet_census(output: Any, expected_vas: list[list[int]] |
         "five_constructed_buffer_vas_distinct": len(set(argument_vas)) == 5,
         "ordered_program_identity_matches": expected_identity is None or
           built["program_identity"] == expected_identity,
+        **({
+          **lifecycle["checks"],
+          "runtime_cache_exact_program_binding":
+            lifecycle["runtime_cache_bindings"] == [{
+              "program_key": expected_program_key, "device": "AMD"}],
+          "runtime_object_distinct_from_prior_targets":
+            all(lifecycle["runtime_object_id"] != row["runtime_lifecycle"]["runtime_object_id"] for row in calls),
+          "kernarg_disjoint_from_prior_target_records":
+            all(kernarg_end <= start or kernarg_start >= end for start, end in prior_kernarg_ranges),
+        } if require_runtime_lifecycle else {}),
         **_audit_target_aql_kernargs(
           kernarg_qwords, [row["kernarg_qwords"] for row in calls],
           expected_vas=expected_row, require_fixed_scale_va=require_fixed_scale_va,
-          require_all_five_vas_fixed=require_all_five_vas_fixed),
+          require_all_five_vas_fixed=require_all_five_vas_fixed,
+          require_all_five_vas_distinct=require_all_five_vas_distinct),
       }
       accepted_before_doorbell = all(checks.values())
       calls.append({
@@ -1383,6 +1454,7 @@ def _realize_with_aql_packet_census(output: Any, expected_vas: list[list[int]] |
         "program_identity": built["program_identity"], "expected_program_identity": expected_identity,
         "kernarg_qwords": kernarg_qwords, "expected_vas": expected_row,
         "argument_buffers": built["argument_buffers"],
+        "runtime_lifecycle": built["runtime_lifecycle"],
         "checks": checks, "all_checks_pass": accepted_before_doorbell,
         "accepted_before_doorbell": accepted_before_doorbell,
       })
@@ -1788,6 +1860,15 @@ def _frozen_program_set_ordinal_target_identity(binding: Any, epoch: int) -> dic
   return identity
 
 
+def _frozen_program_set_ordinal_sequence_target_identities(
+    binding: Any, epochs: tuple[int, int]) -> tuple[dict[str, str], dict[str, str]]:
+  """Derive exact ordered identities for two selected family ordinals."""
+  identities = tuple(_frozen_program_set_ordinal_target_identity(binding, epoch) for epoch in epochs)
+  if len({(row["function_name"], row["binary_sha256"]) for row in identities}) != 2:
+    raise ValueError("frozen v2 ordinal sequence target identities are not distinct")
+  return identities[0], identities[1]
+
+
 def _fixed_base_prefix_reference_operands(q4_blocks: np.ndarray, values: np.ndarray,
                                           scales: np.ndarray, sums: np.ndarray,
                                           prefix_epochs: int
@@ -1839,6 +1920,33 @@ def _fixed_base_ordinal_reference_operands(q4_blocks: np.ndarray, values: np.nda
   )
 
 
+def _fixed_base_ordinal_sequence_reference_operands(
+    q4_blocks: np.ndarray, values: np.ndarray, scales: np.ndarray, sums: np.ndarray,
+    epochs: tuple[int, int]) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+  """Concatenate exactly two selected static-offset ordinals for the reference."""
+  if not isinstance(q4_blocks, np.ndarray) or q4_blocks.ndim != 3 or \
+     q4_blocks.dtype != np.uint8 or q4_blocks.shape[2] != 144:
+    raise ValueError("fixed-base ordinal sequence requires uint8 Q4 blocks shaped [N,epochs,144]")
+  if not isinstance(epochs, tuple) or len(epochs) != 2 or \
+     any(not isinstance(epoch, int) or isinstance(epoch, bool) for epoch in epochs) or \
+     not 0 <= epochs[0] < epochs[1] < q4_blocks.shape[1]:
+    raise ValueError("fixed-base reference requires exactly two strictly increasing ordinals")
+  if any(not isinstance(value, np.ndarray) or value.ndim != 3
+         for value in (values, scales, sums)):
+    raise ValueError("fixed-base ordinal sequence requires rank-three retained DS4 arrays")
+  if values.shape[0] != q4_blocks.shape[1] * 2 or \
+     scales.shape[0] != values.shape[0] or sums.shape != scales.shape:
+    raise ValueError("retained full-role DS4 arrays differ from the Q4 epoch extent")
+  records = tuple(record for epoch in epochs for record in (epoch*2, epoch*2+1))
+  return (
+    np.ascontiguousarray(np.concatenate(
+      [q4_blocks[:, epoch:epoch+1, :] for epoch in epochs], axis=1)).reshape(-1),
+    np.ascontiguousarray(values[list(records)]),
+    np.ascontiguousarray(scales[list(records)]),
+    np.ascontiguousarray(sums[list(records)]),
+  )
+
+
 def _validate_v2_fixed_base_prefix_epochs(role_spec: ExactRoleSpec, prefix_epochs: int) -> int:
   """Admit bounded diagnostic prefixes plus the role's complete epoch count."""
   allowed = tuple(sorted({1, 2, 3, role_spec.epochs}))
@@ -1853,6 +1961,20 @@ def _validate_v2_fixed_base_ordinal(role_spec: ExactRoleSpec, epoch: int) -> int
     raise ValueError(
       f"frozen v2 GPU probe epoch must be in [0,{role_spec.epochs}) for role {role_spec.role!r}")
   return epoch
+
+
+def _validate_v2_fixed_base_ordinal_sequence(
+    role_spec: ExactRoleSpec, epochs: tuple[int, int] | list[int]) -> tuple[int, int]:
+  """Admit exactly two increasing research ordinals, independent of prefix admission."""
+  if not isinstance(epochs, (tuple, list)) or len(epochs) != 2 or \
+     any(not isinstance(epoch, int) or isinstance(epoch, bool) for epoch in epochs):
+    raise ValueError("frozen v2 ordinal sequence requires exactly two integer ordinals")
+  selected = (epochs[0], epochs[1])
+  if not 0 <= selected[0] < selected[1] < role_spec.epochs:
+    raise ValueError(
+      f"frozen v2 ordinal sequence must be strictly increasing within [0,{role_spec.epochs}) "
+      f"for role {role_spec.role!r}")
+  return selected
 
 
 def run_frozen_epoch_program_set_ordinal_probe(
@@ -1997,6 +2119,177 @@ def run_frozen_epoch_program_set_ordinal_probe(
       "status": "PASS" if passed else "CONSUMER_MISMATCH",
       "comparison": consumer_comparison,
       "authority": "same_session_retained_full_role_producer_bytes_with_exact_static_offset_ordinal_and_fp16_metadata_roundtrip",
+    },
+    "producer_diagnostic": {
+      **producer_diagnostic,
+      "source_oracle": "extra.qk.mmq_q4k_q8_reference.q8_1_mmq_ds4_quantize_reference",
+    },
+    "family_identity": binding.family_identity,
+    "frozen_bundle": str(Path(frozen_bundle).resolve()),
+    "compile_performed": False, "requires_recompile": False,
+    "hip_used": False, "no_fallback": True,
+  }
+
+
+def run_frozen_epoch_program_set_ordinal_sequence_probe(
+    *, role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC, frozen_bundle: str | Path,
+    epochs: tuple[int, int] | list[int]) -> dict[str, Any]:
+  """Run exactly two selected frozen v2 ordinals over one fixed five-buffer ABI."""
+  schema = "tinygrad.mmq_frozen_epoch_program_set_ordinal_sequence_probe.v2"
+  role_spec = admit_exact_role_spec(role_spec)
+  epochs = _validate_v2_fixed_base_ordinal_sequence(role_spec, epochs)
+
+  from tinygrad import Tensor, dtypes
+  from tinygrad.device import Device
+  from tinygrad.engine.realize import get_call_arg_uops
+  from tinygrad.uop.ops import Ops
+  from extra.qk.mmq_frozen_epoch_program_set import load_frozen_epoch_program_set_binding
+  from extra.qk.mmq_q4k_q8_reference import (
+    Q81MMQDS4Activation, Q81MMQDS4ActivationSpec, Q4KQ81MMQTileSpec,
+    Q8_1_MMQ_DS4_LAYOUT, q4k_q8_1_mmq_ds4_tile_reference,
+    q8_1_mmq_ds4_quantize_reference,
+  )
+  from extra.qk.q4k_q8_activation_producer import (
+    PhysicalDS4Q8ActivationSpec, produce_physical_ds4_q8_1_tensor,
+  )
+
+  binding = load_frozen_epoch_program_set_binding(role_spec, frozen_bundle)
+  if len(binding.program_keys) != role_spec.epochs:
+    raise RuntimeError("frozen v2 ordinal sequence requires the complete admitted PROGRAM family")
+  programs = tuple(binding.artifact.programs[epoch] for epoch in epochs)
+  variant_rows = tuple(binding.artifact.manifest["variants"][epoch] for epoch in epochs)
+  for epoch, program, row in zip(epochs, programs, variant_rows):
+    if program.key.hex() != binding.program_keys[epoch] or \
+       row["epoch"] != epoch or row["program_key"] != binding.program_keys[epoch]:
+      raise RuntimeError("frozen v2 ordinal sequence differs from its admitted family positions")
+  target_identities = _frozen_program_set_ordinal_sequence_target_identities(binding, epochs)
+  m, n, k = role_spec.shape
+  words_np = _random_q4_words(n, k, 20260721)
+  activation_np = np.random.default_rng(20260722).standard_normal(
+    (m, k), dtype=np.float32).astype(np.float16)
+  packed_weight = Tensor(words_np, dtype=dtypes.uint32, device="AMD")
+  activation = Tensor(activation_np, dtype=dtypes.float16, device="AMD")
+  tile = produce_physical_ds4_q8_1_tensor(
+    activation.cast(dtypes.float32).contiguous(),
+    PhysicalDS4Q8ActivationSpec(m, k))
+
+  output_seed = activation.flatten()[:1].cast(dtypes.float32)
+  zero = output_seed._apply_uop(lambda u: u.mul(0)).expand(m*n)
+  zeroed_output = Tensor.empty(m*n, dtype=dtypes.float32, device="AMD")
+  zeroed_output.assign(zero)
+  fixed_inputs = (packed_weight, tile.values, tile.scales, tile.sums)
+  output = zeroed_output
+  for program in programs:
+    output = output.custom_kernel(
+      *fixed_inputs, fxn=lambda *_buffers, program=program: program)[0]
+
+  family_calls = [node for node in output.uop.toposort()
+                  if node.op is Ops.CALL and node.src[0] in binding.artifact.programs]
+  if [call.src[0] for call in family_calls] != list(programs):
+    raise RuntimeError("frozen v2 ordinal sequence did not retain its exact ordered PROGRAMs")
+  arguments = [get_call_arg_uops(call) for call in family_calls]
+  if len(arguments) != 2 or any(len(row) != 5 for row in arguments):
+    raise RuntimeError("frozen v2 ordinal sequence lost its two-call five-buffer ABI")
+  if arguments[0][0].buf_uop is not zeroed_output.uop.buf_uop:
+    raise RuntimeError("frozen v2 ordinal sequence lost its explicitly zeroed output allocation")
+  if any(arguments[0][slot].buf_uop is not row[slot].buf_uop
+         for row in arguments for slot in range(5)):
+    raise RuntimeError("frozen v2 ordinal sequence changed a buffer identity between calls")
+  if family_calls[0] not in arguments[1][0].toposort():
+    raise RuntimeError("frozen v2 ordinal sequence lost its slot-zero ordering chain")
+  graph_evidence = {
+    "program_calls": 2, "expected_program_calls": 2,
+    "selected_epochs": list(epochs),
+    "selected_program_keys": [binding.program_keys[epoch] for epoch in epochs],
+    "selected_sink_keys": [row["sink_key"] for row in variant_rows],
+    "selected_offsets": [dict(row["offsets"]) for row in variant_rows],
+    "exact_ordered_ordinal_sequence": True, "five_buffer_abi": True,
+    "all_calls_share_buffer_identity": True,
+    "distinct_concrete_buffer_vas_deferred_to_aql_census": True,
+    "slot0_ordered": True, "initial_output_zeroed": True,
+    "buffer_uop_keys": [value.buf_uop.key.hex() for value in arguments[0]],
+    "full_role_producer_calls": 1,
+  }
+  retained_outputs = _retained_producer_tensors([tile])
+  graph_evidence.update({
+    "retained_producer_tensor_count": len(retained_outputs),
+    "retained_producer_tensor_names": ["values", "scales", "sums"],
+    "retained_as_companion_realization_outputs": True,
+  })
+
+  if not bool(getattr(Device["AMD"], "is_aql", False)):
+    raise RuntimeError("frozen v2 ordinal sequence GPU probe requires AMD_AQL=1")
+  try:
+    packet_census = _realize_with_aql_packet_census(
+      output, target_program_identities=target_identities,
+      require_all_five_vas_fixed=True, require_all_five_vas_distinct=True,
+      require_runtime_lifecycle=True,
+      target_program_keys=tuple(binding.program_keys[epoch] for epoch in epochs),
+      retained_outputs=retained_outputs)
+  except BaseException as exc:
+    packet_census = _aql_packet_census_from_exception(exc)
+    return {
+      "schema": schema, "status": "BLOCKED",
+      "exact_blocker": "frozen v2 ordinal sequence target dispatch failed",
+      "exception": type(exc).__name__, "error": str(exc),
+      "research_only": True, "production_dispatch_changed": False,
+      "production_scheduler_used": False, "scheduler_prefix_semantics_changed": False,
+      "default_route": "direct_packed", "role": role_spec.role,
+      "shape": list(role_spec.shape), "epochs": list(epochs),
+      "graph": graph_evidence, "target_program_identities": target_identities,
+      **({"dispatch": {"aql_packet_census": packet_census}} if packet_census is not None else {}),
+      "family_identity": binding.family_identity,
+      "frozen_bundle": str(Path(frozen_bundle).resolve()),
+      "compile_performed": False, "requires_recompile": False,
+      "hip_used": False, "no_fallback": True,
+    }
+
+  actual_values, actual_scales, actual_sums = \
+    tile.values.numpy(), tile.scales.numpy(), tile.sums.numpy()
+  q4_blocks = words_np.view(np.uint8).reshape(n, role_spec.epochs, 144)
+  q4_selected, values_selected, scales_selected, sums_selected = \
+    _fixed_base_ordinal_sequence_reference_operands(
+      q4_blocks, actual_values, actual_scales, actual_sums, epochs)
+  ref_spec = Q4KQ81MMQTileSpec(
+    role="frozen_epoch_program_set_ordinal_sequence", m=m, n=n, k=512,
+    m_tile=m, n_tile=n, activation_layout=Q8_1_MMQ_DS4_LAYOUT)
+  actual_ds4 = Q81MMQDS4Activation(
+    values_selected, scales_selected.astype(np.float16).astype(np.float32),
+    sums_selected.astype(np.float16).astype(np.float32),
+    Q81MMQDS4ActivationSpec(m=m, k=512, m_tile=m))
+  consumer_reference = q4k_q8_1_mmq_ds4_tile_reference(
+    q4_selected, actual_ds4, ref_spec)
+  consumer_comparison = _numeric_comparison(
+    output.numpy().reshape(m, n), consumer_reference)
+
+  oracle_values, oracle_scales, oracle_sums = q8_1_mmq_ds4_quantize_reference(
+    activation_np.astype(np.float32))
+  producer_diagnostic = _producer_oracle_diagnostic(
+    actual_values, actual_scales, actual_sums,
+    oracle_values, oracle_scales, oracle_sums)
+  passed = consumer_comparison["status"] == "pass"
+  return {
+    "schema": schema, "status": "PASS" if passed else "CONSUMER_MISMATCH",
+    "exact_blocker": None if passed else
+      "ordinal sequence output differs from the exact selected retained-byte reference",
+    "research_only": True, "production_dispatch_changed": False,
+    "production_scheduler_used": False, "scheduler_prefix_semantics_changed": False,
+    "default_route": "direct_packed", "role": role_spec.role,
+    "shape": list(role_spec.shape), "epochs": list(epochs),
+    "producer": "extra.qk.q4k_q8_activation_producer.produce_physical_ds4_q8_1_tensor",
+    "graph": graph_evidence,
+    "dispatch": {
+      "launcher": "tinygrad_scheduler", "mode": "two_static_offset_program_ordinals",
+      "count": 2, "epochs": list(epochs),
+      "program_keys": [binding.program_keys[epoch] for epoch in epochs],
+      "target_program_identities": target_identities,
+      "all_five_vas_fixed": True, "all_five_vas_distinct": True,
+      "aql_packet_census": packet_census,
+    },
+    "correctness": {
+      "status": "PASS" if passed else "CONSUMER_MISMATCH",
+      "comparison": consumer_comparison,
+      "authority": "same_session_retained_full_role_producer_bytes_with_exact_two_ordinal_selection_and_fp16_metadata_roundtrip",
     },
     "producer_diagnostic": {
       **producer_diagnostic,
@@ -2481,6 +2774,91 @@ def run_frozen_epoch_program_set_ordinal_probe_isolated(
   return result
 
 
+def run_frozen_epoch_program_set_ordinal_sequence_probe_isolated(
+    *, role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC, frozen_bundle: str | Path,
+    epochs: tuple[int, int] | list[int], timeout_seconds: float = 180.0,
+    child_env_overrides: Mapping[str, str] | None = None) -> dict[str, Any]:
+  """Run two selected v2 ordinals in a fresh, health-guarded child."""
+  schema = "tinygrad.mmq_frozen_epoch_program_set_ordinal_sequence_probe.v2"
+  try:
+    role_spec = admit_exact_role_spec(role_spec)
+    epochs = _validate_v2_fixed_base_ordinal_sequence(role_spec, epochs)
+    env_overrides = _validated_child_env_overrides(child_env_overrides)
+    if env_overrides.get("AMD_AQL", "1") != "1":
+      raise ValueError("frozen v2 ordinal sequence GPU probe requires AMD_AQL=1")
+    env_overrides["AMD_AQL"] = "1"
+  except (TypeError, ValueError) as exc:
+    return {"schema": schema, "status": "BLOCKED", "exact_blocker": str(exc)}
+  if timeout_seconds <= 0:
+    return {"schema": schema, "status": "BLOCKED", "exact_blocker": "timeout_seconds must be positive"}
+  from extra.qk.mmq_target_epoch_orchestrator import parse_kernel_faults, read_kernel_log_since, spawned_tiny_health_probe
+  try: health_before = bool(spawned_tiny_health_probe(env_overrides))
+  except BaseException: health_before = False
+  if not health_before:
+    return {
+      "schema": schema, "status": "BLOCKED", "exact_blocker": "pre-run GPU health probe failed",
+      "health_before": False, "child_env_overrides": env_overrides,
+    }
+
+  child_env = dict(os.environ)
+  child_env.update({"DEV": "AMD", "PYTHONPATH": str(ROOT) + os.pathsep + child_env.get("PYTHONPATH", "")})
+  child_env.update(env_overrides)
+  role_expr = f"exact_role_spec({role_spec.role!r}, shape={role_spec.shape!r})"
+  bundle_arg = repr(str(Path(frozen_bundle).resolve()))
+  code = (
+    "import json; from extra.qk.mmq_exact_role_spec import exact_role_spec; "
+    "from extra.qk.mmq_llama_five_buffer_gpu_harness import "
+    "run_frozen_epoch_program_set_ordinal_sequence_probe; "
+    f"print(json.dumps(run_frozen_epoch_program_set_ordinal_sequence_probe(role_spec={role_expr}, "
+    f"frozen_bundle={bundle_arg}, epochs={epochs!r})), flush=True)")
+  started = time.time()
+  try:
+    proc = subprocess.run([sys.executable, "-c", code], cwd=ROOT, env=child_env,
+                          text=True, capture_output=True, timeout=timeout_seconds, check=False)
+  except subprocess.TimeoutExpired:
+    proc = None
+  try: kernel_faults = parse_kernel_faults(read_kernel_log_since(started))
+  except BaseException as exc: kernel_faults = [f"kernel-log scan failed: {type(exc).__name__}: {exc}"]
+  try: health_after = bool(spawned_tiny_health_probe(env_overrides))
+  except BaseException: health_after = False
+  if proc is None:
+    return {
+      "schema": schema, "status": "BLOCKED",
+      "exact_blocker": "frozen v2 ordinal sequence child timed out",
+      "timeout": True, "timeout_seconds": timeout_seconds,
+      "health_before": health_before, "health_after": health_after,
+      "kernel_faults": kernel_faults, "child_env_overrides": env_overrides,
+    }
+  result = None
+  for line in reversed(proc.stdout.strip().splitlines()):
+    try: candidate = json.loads(line)
+    except json.JSONDecodeError: continue
+    if isinstance(candidate, dict):
+      result = candidate
+      break
+  if result is None:
+    result = {
+      "schema": schema, "status": "BLOCKED",
+      "exact_blocker": "frozen v2 ordinal sequence child returned no structured result",
+      "returncode": proc.returncode, "stdout_tail": proc.stdout[-2000:],
+      "stderr_tail": proc.stderr[-2000:],
+    }
+  result.update({
+    "health_before": health_before, "health_after": health_after,
+    "kernel_faults": kernel_faults, "child_env_overrides": env_overrides,
+  })
+  if kernel_faults:
+    result.update({"status": "BLOCKED", "exact_blocker": "AMD kernel fault/reset marker observed"})
+  elif not health_after:
+    result.update({"status": "BLOCKED", "exact_blocker": "post-run GPU health probe failed"})
+  elif proc.returncode != 0 and result.get("status") == "PASS":
+    result.update({
+      "status": "BLOCKED", "exact_blocker": "frozen v2 ordinal sequence child exited non-zero",
+      "returncode": proc.returncode,
+    })
+  return result
+
+
 def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
                                               role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC,
                                               warmups: int = 0, rounds: int = 1,
@@ -2735,7 +3113,26 @@ def main() -> int:
                       help="run a 1/2/3-epoch or admitted-full-role frozen v2 static-offset prefix")
   parser.add_argument("--scheduler-v2-fixed-base-ordinal", type=int,
                       help="run one research-only frozen v2 static-offset ordinal")
+  parser.add_argument("--scheduler-v2-fixed-base-ordinal-sequence", type=int, nargs=2,
+                      metavar=("FIRST", "SECOND"),
+                      help="run exactly two increasing research-only frozen v2 static-offset ordinals")
   args = parser.parse_args()
+  if args.scheduler_v2_fixed_base_ordinal_sequence is not None:
+    if args.target_role_frozen_bundle is None:
+      parser.error("--scheduler-v2-fixed-base-ordinal-sequence requires --target-role-frozen-bundle")
+    role_spec = exact_role_spec(args.target_role_name, inventory=args.target_role_inventory)
+    row = run_frozen_epoch_program_set_ordinal_sequence_probe_isolated(
+      role_spec=role_spec, frozen_bundle=args.target_role_frozen_bundle,
+      epochs=args.scheduler_v2_fixed_base_ordinal_sequence,
+      timeout_seconds=args.target_role_timeout,
+      child_env_overrides={"AMD_AQL": args.target_role_amd_aql}
+        if args.target_role_amd_aql is not None else None)
+    encoded = json.dumps(row, indent=2, sort_keys=True)
+    if args.target_role_output is not None:
+      args.target_role_output.parent.mkdir(parents=True, exist_ok=True)
+      args.target_role_output.write_text(encoded + "\n")
+    print(encoded)
+    return 0 if row.get("status") == "PASS" else 1
   if args.scheduler_v2_fixed_base_ordinal is not None:
     if args.target_role_frozen_bundle is None:
       parser.error("--scheduler-v2-fixed-base-ordinal requires --target-role-frozen-bundle")

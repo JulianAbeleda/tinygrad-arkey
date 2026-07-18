@@ -16,16 +16,20 @@ from extra.qk.mmq_llama_five_buffer_gpu_harness import (TARGET_IN_PLACE_ACCUMULA
   _aql_target_program_identity, _audit_target_aql_kernargs,
   _bind_sink, _dispatch_with_runtime_evidence, _numeric_comparison, _pack_q4_epochs_contiguous,
   _decode_aql_kernel_dispatch_packet, _load_frozen_execution_binding, _random_q4_words, _runtime_identity_evidence,
-  _fixed_base_ordinal_reference_operands, _fixed_base_prefix_reference_operands,
-  _frozen_program_set_ordinal_target_identity, _frozen_program_set_target_identities,
+  _fixed_base_ordinal_reference_operands, _fixed_base_ordinal_sequence_reference_operands,
+  _fixed_base_prefix_reference_operands,
+  _frozen_program_set_ordinal_sequence_target_identities, _frozen_program_set_ordinal_target_identity,
+  _frozen_program_set_target_identities,
   _producer_oracle_diagnostic, _producer_probe_status,
   _realize_outputs_together, _realize_with_aql_packet_census, _retained_producer_tensors,
   _scheduler_prefix_two_launches,
-  _validate_v2_fixed_base_ordinal, _validate_v2_fixed_base_prefix_epochs,
+  _validate_v2_fixed_base_ordinal, _validate_v2_fixed_base_ordinal_sequence,
+  _validate_v2_fixed_base_prefix_epochs,
   _validate_frozen_execution_fixture, _validate_frozen_fixture, _validated_child_env_overrides,
   _zero_persistent_target_output,
   main, run_amd_validation, run_frozen_scheduler_prefix_two_probe_isolated,
   run_frozen_epoch_program_set_ordinal_probe_isolated,
+  run_frozen_epoch_program_set_ordinal_sequence_probe_isolated,
   run_frozen_epoch_program_set_prefix_probe_isolated,
   run_frozen_scheduler_producer_prefix_probe_isolated,
   run_full_grid_target_role_probe, run_full_grid_target_role_probe_isolated)
@@ -160,7 +164,8 @@ def test_aql_target_census_identity_and_five_qword_scale_contract_are_cpu_testab
     second, [first], expected_vas=None, require_fixed_scale_va=True)
   assert checks == {
     "five_qwords_nonzero": True, "five_qwords_match_expected_vas": True,
-    "output_va_fixed": True, "q8_scale_va_fixed": True, "all_five_vas_fixed": True}
+    "output_va_fixed": True, "q8_scale_va_fixed": True, "all_five_vas_fixed": True,
+    "all_five_vas_distinct": True}
   zero = _audit_target_aql_kernargs(
     [0x1000, 0, 0x3100, 0x4000, 0x5100], [first],
     expected_vas=None, require_fixed_scale_va=True)
@@ -179,6 +184,11 @@ def test_aql_target_census_identity_and_five_qword_scale_contract_are_cpu_testab
       expected_vas=None, require_fixed_scale_va=False, require_all_five_vas_fixed=True)
     assert full_role_fixed["five_qwords_nonzero"] is True
     assert full_role_fixed["all_five_vas_fixed"] is True
+  aliased = _audit_target_aql_kernargs(
+    [0x1000, 0x2000, 0x3000, 0x4000, 0x4000], [],
+    expected_vas=None, require_fixed_scale_va=False,
+    require_all_five_vas_distinct=True)
+  assert aliased["all_five_vas_distinct"] is False
   with pytest.raises(ValueError, match="exactly five"):
     _audit_target_aql_kernargs([1, 2], [], expected_vas=None, require_fixed_scale_va=True)
 
@@ -213,8 +223,14 @@ def test_aql_packet_census_retains_accepted_packet_and_kernargs_when_doorbell_fa
     bufs=tuple(SimpleNamespace(va_addr=va, size=size)
                for va, size in zip(argument_vas, argument_sizes)))
   program = SimpleNamespace(
-    name="target", lib=b"target binary", aql_prog_addr=descriptor_va)
+    name="target", lib=b"target binary",
+    lib_gpu=SimpleNamespace(va_addr=0x800000, size=0x20000),
+    prog_addr=0x804000, aql_prog_addr=descriptor_va,
+    kernargs_segment_size=40)
   identity = _aql_target_program_identity(program)
+  program_key = "ab" * 32
+  from tinygrad.engine.realize import runtime_cache
+  monkeypatch.setitem(runtime_cache, (bytes.fromhex(program_key), "AMD"), program)
 
   class Slot:
     def __init__(self): self.data = bytearray(64)
@@ -241,7 +257,8 @@ def test_aql_packet_census_retains_accepted_packet_and_kernargs_when_doorbell_fa
   with pytest.raises(RuntimeError, match="simulated post-audit MMU fault") as raised:
     _realize_with_aql_packet_census(
       Output(), target_program_identities=(identity,),
-      require_all_five_vas_fixed=True)
+      target_program_keys=(program_key,), require_all_five_vas_fixed=True,
+      require_runtime_lifecycle=True)
   census = _aql_packet_census_from_exception(raised.value)
   assert census is not None
   assert census["status"] == "REALIZATION_ERROR"
@@ -256,6 +273,18 @@ def test_aql_packet_census_retains_accepted_packet_and_kernargs_when_doorbell_fa
   assert call["program_identity"] == call["expected_program_identity"] == identity
   assert call["kernel_object"] == descriptor_va and call["kernarg_address"] == kernarg_va
   assert call["kernarg_qwords"] == argument_vas
+  lifecycle = call["runtime_lifecycle"]
+  assert lifecycle["program_library_va"] == 0x800000
+  assert lifecycle["program_library_nbytes"] == 0x20000
+  assert lifecycle["program_entry_va"] == 0x804000
+  assert lifecycle["program_entry_offset"] == 0x4000
+  assert lifecycle["program_descriptor_va"] == descriptor_va
+  assert lifecycle["program_descriptor_offset"] == descriptor_va - 0x800000
+  assert lifecycle["runtime_cache_bindings"] == [{"program_key": program_key, "device": "AMD"}]
+  assert lifecycle["kernarg_va"] == kernarg_va
+  assert lifecycle["kernarg_payload_nbytes"] == lifecycle["kernarg_allocation_nbytes"] == 40
+  assert lifecycle["all_checks_pass"] is True
+  assert all(lifecycle["checks"].values())
   assert call["argument_buffers"] == [
     {"slot": slot, "va": va, "size": size}
     for slot, (va, size) in enumerate(zip(argument_vas, argument_sizes))]
@@ -407,6 +436,25 @@ def test_v2_fixed_base_ordinal_reference_slices_one_exact_static_offset():
       _fixed_base_ordinal_reference_operands(q4, values, scales, sums, invalid)
 
 
+def test_v2_fixed_base_ordinal_sequence_reference_concatenates_exact_selected_epochs():
+  q4 = np.arange(3 * 5 * 144, dtype=np.uint8).reshape(3, 5, 144)
+  values = np.arange(10 * 2 * 128, dtype=np.int16).astype(np.int8).reshape(10, 2, 128)
+  scales = np.arange(10 * 2 * 4, dtype=np.float32).reshape(10, 2, 4)
+  sums = scales + 1000
+  q4_selected, values_selected, scales_selected, sums_selected = \
+    _fixed_base_ordinal_sequence_reference_operands(q4, values, scales, sums, (1, 3))
+  np.testing.assert_array_equal(
+    q4_selected, np.concatenate([q4[:, 1:2, :], q4[:, 3:4, :]], axis=1).reshape(-1))
+  np.testing.assert_array_equal(values_selected, values[[2, 3, 6, 7]])
+  np.testing.assert_array_equal(scales_selected, scales[[2, 3, 6, 7]])
+  np.testing.assert_array_equal(sums_selected, sums[[2, 3, 6, 7]])
+  assert all(value.flags.c_contiguous
+             for value in (q4_selected, values_selected, scales_selected, sums_selected))
+  for invalid in ((1, 1), (3, 1), (-1, 1), (1, 5)):
+    with pytest.raises(ValueError, match="strictly increasing ordinals"):
+      _fixed_base_ordinal_sequence_reference_operands(q4, values, scales, sums, invalid)
+
+
 @pytest.mark.parametrize("prefix_epochs", [3, 20, 68])
 def test_v2_fixed_base_target_identities_are_binary_exact_ordered_and_distinct(prefix_epochs):
   programs = tuple(SimpleNamespace(arg=SimpleNamespace(function_name="target")) for _ in range(prefix_epochs))
@@ -436,6 +484,19 @@ def test_v2_fixed_base_ordinal_identity_selects_only_exact_retained_binary():
   for invalid in (-1, 4, True):
     with pytest.raises(ValueError, match="outside the complete retained PROGRAM family"):
       _frozen_program_set_ordinal_target_identity(binding, invalid)
+
+
+def test_v2_fixed_base_ordinal_sequence_identities_preserve_selected_order():
+  programs = tuple(SimpleNamespace(arg=SimpleNamespace(function_name="target")) for _ in range(4))
+  binaries = tuple(f"epoch-{epoch}".encode() for epoch in range(4))
+  binding = SimpleNamespace(artifact=SimpleNamespace(programs=programs, binaries=binaries))
+  identities = _frozen_program_set_ordinal_sequence_target_identities(binding, (1, 2))
+  assert [row["binary_sha256"] for row in identities] == [
+    hashlib.sha256(b"epoch-1").hexdigest(), hashlib.sha256(b"epoch-2").hexdigest()]
+  duplicate = SimpleNamespace(artifact=SimpleNamespace(
+    programs=programs, binaries=(b"epoch-0", b"same", b"same", b"epoch-3")))
+  with pytest.raises(ValueError, match="not distinct"):
+    _frozen_program_set_ordinal_sequence_target_identities(duplicate, (1, 2))
 
 
 @pytest.mark.parametrize(("role", "prefix_epochs"), [
@@ -486,6 +547,28 @@ def test_v2_fixed_base_ordinal_isolated_reuses_health_aql_and_exact_epoch(tmp_pa
   assert f"epoch={epoch}" in code and f"exact_role_spec({role!r}" in code
 
 
+def test_v2_fixed_base_ordinal_sequence_isolated_reuses_health_aql_and_exact_order(tmp_path):
+  class _Proc:
+    returncode = 0
+    stdout = '{"schema":"tinygrad.mmq_frozen_epoch_program_set_ordinal_sequence_probe.v2","status":"PASS","scheduler_prefix_semantics_changed":false}\n'
+    stderr = ""
+  bundle = tmp_path / "frozen-v2"
+  with patch("extra.qk.mmq_llama_five_buffer_gpu_harness.subprocess.run", return_value=_Proc()) as run, \
+       patch("extra.qk.mmq_target_epoch_orchestrator.read_kernel_log_since", return_value=""), \
+       patch("extra.qk.mmq_target_epoch_orchestrator.spawned_tiny_health_probe", return_value=True) as health:
+    result = run_frozen_epoch_program_set_ordinal_sequence_probe_isolated(
+      role_spec=exact_role_spec("attn_kv"), frozen_bundle=bundle,
+      epochs=[1, 2], timeout_seconds=1)
+  assert result["status"] == "PASS" and result["scheduler_prefix_semantics_changed"] is False
+  assert result["health_before"] is result["health_after"] is True
+  assert result["child_env_overrides"] == {"AMD_AQL": "1"}
+  assert run.call_args.kwargs["env"]["AMD_AQL"] == "1"
+  assert health.call_args_list[0].args[0] == {"AMD_AQL": "1"}
+  code = run.call_args.args[0][2]
+  assert "run_frozen_epoch_program_set_ordinal_sequence_probe" in code
+  assert "epochs=(1, 2)" in code and "exact_role_spec('attn_kv'" in code
+
+
 def test_v2_fixed_base_rejects_bad_prefix_or_pm4_before_health_or_gpu(tmp_path):
   with patch("extra.qk.mmq_target_epoch_orchestrator.spawned_tiny_health_probe") as health, \
        patch("extra.qk.mmq_llama_five_buffer_gpu_harness.subprocess.run") as run:
@@ -521,6 +604,23 @@ def test_v2_fixed_base_ordinal_rejects_bad_epoch_or_pm4_before_health_or_gpu(tmp
   assert pm4["status"] == "BLOCKED" and "requires AMD_AQL=1" in pm4["exact_blocker"]
 
 
+def test_v2_fixed_base_ordinal_sequence_rejects_bad_selection_or_pm4_before_gpu(tmp_path):
+  with patch("extra.qk.mmq_target_epoch_orchestrator.spawned_tiny_health_probe") as health, \
+       patch("extra.qk.mmq_llama_five_buffer_gpu_harness.subprocess.run") as run:
+    duplicate = run_frozen_epoch_program_set_ordinal_sequence_probe_isolated(
+      frozen_bundle=tmp_path / "frozen", epochs=(1, 1))
+    reversed_order = run_frozen_epoch_program_set_ordinal_sequence_probe_isolated(
+      frozen_bundle=tmp_path / "frozen", epochs=(2, 1))
+    pm4 = run_frozen_epoch_program_set_ordinal_sequence_probe_isolated(
+      frozen_bundle=tmp_path / "frozen", epochs=(1, 2),
+      child_env_overrides={"AMD_AQL": "0"})
+  health.assert_not_called()
+  run.assert_not_called()
+  assert duplicate["status"] == "BLOCKED" and "strictly increasing" in duplicate["exact_blocker"]
+  assert reversed_order["status"] == "BLOCKED" and "strictly increasing" in reversed_order["exact_blocker"]
+  assert pm4["status"] == "BLOCKED" and "requires AMD_AQL=1" in pm4["exact_blocker"]
+
+
 def test_v2_fixed_base_prefix_admission_uses_dynamic_full_role_epoch_count():
   attn, down = exact_role_spec("attn_kv"), exact_role_spec("ffn_down")
   assert [_validate_v2_fixed_base_prefix_epochs(attn, value) for value in (1, 2, 3, 20)] == [1, 2, 3, 20]
@@ -537,6 +637,19 @@ def test_v2_fixed_base_ordinal_admission_uses_dynamic_full_role_epoch_count():
   for role_spec, invalid in ((attn, -1), (attn, 20), (down, 68), (down, True)):
     with pytest.raises(ValueError, match="epoch must be in"):
       _validate_v2_fixed_base_ordinal(role_spec, invalid)
+
+
+def test_v2_fixed_base_ordinal_sequence_admission_is_two_and_strictly_increasing():
+  attn, down = exact_role_spec("attn_kv"), exact_role_spec("ffn_down")
+  assert _validate_v2_fixed_base_ordinal_sequence(attn, [1, 2]) == (1, 2)
+  assert _validate_v2_fixed_base_ordinal_sequence(down, (1, 67)) == (1, 67)
+  for role_spec, invalid in (
+      (attn, ()), (attn, (1,)), (attn, (1, 2, 3)), (attn, (1, True))):
+    with pytest.raises(ValueError, match="exactly two integer ordinals"):
+      _validate_v2_fixed_base_ordinal_sequence(role_spec, invalid)
+  for invalid in ((-1, 1), (1, 1), (2, 1), (1, 20)):
+    with pytest.raises(ValueError, match="strictly increasing"):
+      _validate_v2_fixed_base_ordinal_sequence(attn, invalid)
 
 
 def test_v2_fixed_base_cli_accepts_dynamic_full_role_epoch_count(monkeypatch, capsys, tmp_path):
@@ -570,6 +683,23 @@ def test_v2_fixed_base_ordinal_cli_dispatches_research_only_probe(monkeypatch, c
     assert main() == 0
   assert probe.call_args.kwargs["role_spec"].role == "attn_kv"
   assert probe.call_args.kwargs["epoch"] == 2
+  assert json.loads(capsys.readouterr().out)["scheduler_prefix_semantics_changed"] is False
+
+
+def test_v2_fixed_base_ordinal_sequence_cli_dispatches_exact_selection(monkeypatch, capsys, tmp_path):
+  bundle = tmp_path / "frozen-v2"
+  monkeypatch.setattr("sys.argv", [
+    "mmq_llama_five_buffer_gpu_harness",
+    "--scheduler-v2-fixed-base-ordinal-sequence", "1", "2",
+    "--target-role-name", "attn_kv",
+    "--target-role-frozen-bundle", str(bundle),
+  ])
+  with patch(
+      "extra.qk.mmq_llama_five_buffer_gpu_harness.run_frozen_epoch_program_set_ordinal_sequence_probe_isolated",
+      return_value={"status": "PASS", "scheduler_prefix_semantics_changed": False}) as probe:
+    assert main() == 0
+  assert probe.call_args.kwargs["role_spec"].role == "attn_kv"
+  assert probe.call_args.kwargs["epochs"] == [1, 2]
   assert json.loads(capsys.readouterr().out)["scheduler_prefix_semantics_changed"] is False
 
 
