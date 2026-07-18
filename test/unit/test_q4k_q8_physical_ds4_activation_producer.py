@@ -11,7 +11,7 @@ from extra.qk.mmq_q4k_q8_reference import q8_1_mmq_ds4_quantize_reference
 from extra.qk.q4k_q8_activation_producer import (
   AMD_NATIVE_VGPR_WAVE_REDUCE, PHYSICAL_DS4_LAYOUT, PHYSICAL_DS4_ZERO_GROUP_SCALE_POLICY,
   PORTABLE_STAGED_WAVE_REDUCE,
-  PhysicalDS4Q8ActivationSpec, produce_physical_ds4_q8_1)
+  PhysicalDS4Q8ActivationSpec, produce_physical_ds4_q8_1, produce_physical_ds4_q8_1_tensor)
 
 
 def test_physical_ds4_descriptor_is_frozen_and_validates_exact_grammar():
@@ -64,6 +64,15 @@ def test_physical_indices_have_one_wave_lane_owner_and_match_reference_layout():
     for lane in range(spec.group_elems):
       vi = spec.value_index(block, row, group, lane)
       assert ref_values.reshape(-1)[vi] == ref_values[block, row, group * spec.group_elems + lane]
+
+
+def test_scheduler_tensor_producer_matches_original_fp_ds4_reference():
+  source = np.random.default_rng(20260722).standard_normal((3, 256), dtype=np.float32)
+  ref_values, ref_scales, ref_sums = q8_1_mmq_ds4_quantize_reference(source)
+  output = produce_physical_ds4_q8_1_tensor(Tensor(source))
+  np.testing.assert_array_equal(output.values.numpy(), ref_values)
+  np.testing.assert_allclose(output.scales.numpy(), ref_scales, rtol=1e-6, atol=1e-7)
+  np.testing.assert_allclose(output.sums.numpy(), ref_sums, rtol=1e-6, atol=2e-5)
 
 
 def _producer_sink(m=2, k=Q8_1_MMQ_BLOCK_ELEMS):

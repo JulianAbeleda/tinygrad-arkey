@@ -207,6 +207,35 @@ def produce_physical_ds4_q8_1(activation: Tensor, spec: PhysicalDS4Q8ActivationS
                              outputs[2].reshape(spec.metadata_shape))
 
 
+def produce_physical_ds4_q8_1_tensor(activation: Tensor, spec: PhysicalDS4Q8ActivationSpec | None = None
+                                     ) -> Q4KQ8ActivationTile:
+  """Build the physical DS4 ABI from ordinary scheduler-visible Tensor ops.
+
+  ``produce_physical_ds4_q8_1`` remains the single custom-kernel/AMD:ISA
+  compile seam. Its portable staged reduction is not used as an ordinary
+  AMD/HIP model-runtime kernel.
+  """
+  if len(activation.shape) != 2: raise ValueError(f"activation must be rank 2, got {activation.shape}")
+  if activation.dtype != dtypes.float32: raise TypeError("physical DS4 source must be float32")
+  m, k = map(int, activation.shape)
+  spec = PhysicalDS4Q8ActivationSpec(m, k) if spec is None else spec
+  spec.validate()
+  if (spec.m, spec.k) != (m, k): raise ValueError(f"descriptor shape {(spec.m, spec.k)} does not match {(m, k)}")
+  if spec.wave_reduce_lowering != PORTABLE_STAGED_WAVE_REDUCE:
+    raise ValueError("scheduler-visible Tensor producer does not accept an AMD:ISA wave-reduction lowering")
+
+  qvalues, qscales = q8_1_quantize(activation, spec.group_elems)
+  values = qvalues.reshape(m, spec.blocks, spec.groups_per_block, spec.group_elems).permute(
+    1, 0, 2, 3).reshape(spec.values_shape).contiguous()
+  scales = qscales.reshape(m, spec.blocks, spec.groups_per_block).permute(
+    1, 0, 2).reshape(spec.metadata_shape).contiguous()
+  # The llama five-buffer ABI carries the original-fp group sum, not the
+  # dequantized q8 sum used by the logical DS4 research candidate.
+  sums = activation.reshape(m, spec.blocks, spec.groups_per_block, spec.group_elems).sum(axis=3).permute(
+    1, 0, 2).reshape(spec.metadata_shape).contiguous()
+  return Q4KQ8ActivationTile(values, scales, sums)
+
+
 class LlamaDS4Q8ActivationSumOriginalFPProducer:
   """One-materialization row-major Q8 producer for llama's source-anchored DS4 sum ABI."""
   sum_semantics = Q4KQ8ActivationSumSemantics.SUM_ORIGINAL_FP
@@ -305,4 +334,4 @@ __all__ = ["Q4KQ8ActivationTile", "Q4KQ8ActivationProducer", "produce_q4k_q8_1_a
   "LLAMA_DS4_SUM_ORIGINAL_FP_SOURCE_ANCHORS", "LlamaDS4Q8ActivationSumOriginalFPProducer",
   "produce_llama_ds4_q8_activation_sum_original_fp", "benchmark_llama_ds4_q8_activation_sum_original_fp",
   "PHYSICAL_DS4_LAYOUT", "PhysicalDS4Q8ActivationSpec", "emit_physical_ds4_q8_1_kernel",
-  "produce_physical_ds4_q8_1"]
+  "produce_physical_ds4_q8_1", "produce_physical_ds4_q8_1_tensor"]
