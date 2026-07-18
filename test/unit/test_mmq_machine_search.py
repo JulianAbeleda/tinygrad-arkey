@@ -296,8 +296,10 @@ def test_mmq_r5_full_grid_win_is_ranked_as_emitted_but_not_promoted():
   artifact = build_r6_role_shape_integration_artifact(report)
   assert artifact["shape_matches"] is False
   assert "128x128x256" in artifact["exact_blocker"]
-  assert artifact["tile_plan"]["launch_count"] == 4 * 136 * 20
+  assert artifact["tile_plan"]["launch_count"] == 20
   assert artifact["tile_plan"]["requires_k_epoch_accumulate"] is True
+  assert artifact["tile_plan"]["requires_output_tile_scatter"] is False
+  assert artifact["tile_plan"]["target_shape_k256_compile"]["status"] == "PASS_EMITTED"
   assert artifact["tile_plan"]["monolithic_k512_compile"]["status"] == "BLOCKED"
   assert "vgpr lease" in artifact["tile_plan"]["monolithic_k512_compile"]["exact_blocker"]
   assert artifact["tile_plan"]["per_store_accumulate_sink_probe"]["status"] == "BLOCKED_TIMEOUT"

@@ -33,11 +33,24 @@ class FullGridTopology:
 
 
 @dataclass(frozen=True)
+class FullGridOwnerCoordinates:
+  """Lazy ownership manifest for large M/N grids (avoids multi-million tuple sets)."""
+  m: int
+  n: int
+
+  def __len__(self) -> int: return self.m * self.n
+  def __contains__(self, coordinate: object) -> bool:
+    return (isinstance(coordinate, tuple) and len(coordinate) == 2 and
+            all(isinstance(x, int) for x in coordinate) and
+            0 <= coordinate[0] < self.m and 0 <= coordinate[1] < self.n)
+
+
+@dataclass(frozen=True)
 class LlamaFiveBufferFullKernel:
   proof_graph: LlamaFiveBufferGraph
   topology: FullGridTopology
   sink: UOp
-  owner_coordinates: frozenset[tuple[int, int]]
+  owner_coordinates: frozenset[tuple[int, int]] | FullGridOwnerCoordinates
   source_commit: str
   source_anchors: tuple[tuple[str, str], ...]
   blocker: str = RESOURCE_BLOCKER
@@ -200,7 +213,8 @@ def build_llama_five_buffer_full_kernel(m:int, n:int, k:int, *, accumulate: bool
   proof = build_llama_five_buffer_graph(m, n, k)
   topology = FullGridTopology((n//128, m//128, 1))
   local = {(r, c) for r in range(128) for c in range(128)}
-  owners = frozenset((tm*128+r, tn*128+c) for tm in range(m//128) for tn in range(n//128) for r, c in local)
+  owners = (frozenset((tm*128+r, tn*128+c) for tm in range(m//128) for tn in range(n//128) for r, c in local)
+            if m*n <= 1_000_000 else FullGridOwnerCoordinates(m, n))
   return LlamaFiveBufferFullKernel(proof, topology, _full_grid_sink(m, n, k, accumulate=accumulate), owners,
     LLAMA_SOURCE_COMMIT, tuple(sorted(SOURCE_ANCHORS.items())))
 
@@ -215,5 +229,5 @@ def compile_llama_five_buffer_full_kernel(kernel:LlamaFiveBufferFullKernel, targ
   return replace(kernel, program=program, emitted=True, blocker="")
 
 
-__all__ = ["RESOURCE_BLOCKER", "SCHEMA", "FullGridTopology", "LlamaFiveBufferFullKernel",
+__all__ = ["RESOURCE_BLOCKER", "SCHEMA", "FullGridTopology", "FullGridOwnerCoordinates", "LlamaFiveBufferFullKernel",
   "build_llama_five_buffer_full_kernel", "compile_llama_five_buffer_full_kernel"]

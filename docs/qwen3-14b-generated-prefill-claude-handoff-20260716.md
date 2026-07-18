@@ -429,16 +429,20 @@ are pushed on `master`.
 * R5 ranking now recognizes an emitted full-grid win even when the oracle row ranks faster. `promotion_eligible` stays
   false and R6 remains `BLOCKED_ROLE_SHAPE_INTEGRATION`; no role was changed and direct-packed remains default.
 * The exact R6 target is `ffn_gate_up` 512x17408x5120. The probe covers only 128x128x256. The route-shape artifact
-  records 4x136x20 = 10,880 required K-tiled launches, Q4/DS4 repacking, K-epoch accumulation, and output scatter.
+  records 20 required K-epoch launches over the full 4x136 M/N grid, plus Q4/DS4 repacking and accumulation (the
+  full-grid sink already owns/scatters all M/N tiles in each launch).
   A manifest-scoped smoke artifact now passes the negative-role (`attn_qo`, `ffn_down`, `attn_kv`) and direct-packed
   rollback/default checks; these subgates are true, but they do not substitute for target-shape execution.
 * A monolithic K=512 compile is concretely blocked by `NotImplementedError: vgpr lease exceeds virtual pool`. An
   explicit per-store LOAD+ADD accumulation sink was prototyped, but its two-launch 128x128x512 probe exceeded the hard
   six-minute compile deadline with no structured result. The safe follow-up delegates accumulation to tinygrad
   elementwise add over fresh partial outputs and **passes** the bounded 128x128x512 proof: 0/16,384 mismatches,
-  max abs 2.44e-4, vgpr=256, LDS=57,856, scratch=0. This is adapter evidence only; production repack, 10,880-launch
+  max abs 2.44e-4, vgpr=256, LDS=57,856, scratch=0. This is adapter evidence only; production repack, 20-launch
   scheduling, role census, and no-hidden-fallback proof remain absent. R7 rows carry both the per-store timeout and
   the bounded elementwise result instead of claiming source-clone conversion.
+* The lazy owner manifest now lets the actual 14B shape `(512,17408,256)` build and emit one K-epoch PROGRAM in
+  182.23s: vgpr=256, LDS=57,856, scratch=0, owner count 8,912,896, source SHA `b8923985…`, binary SHA
+  `21908e0b…`. This closes the target-shape compile/resource slice, not the 20-epoch GPU correctness/health gate.
 
 The through-line is unchanged: the first real GPU result collapsed more uncertainty than further spill grinding, but
 the 31x bounded win is not evidence for a 14B route. Never run a production role on this candidate until the K-tiled

@@ -677,12 +677,11 @@ def build_r6_role_shape_integration_artifact(r5_report: dict[str, Any] | None = 
 def build_full_grid_k_tiled_dispatch_plan(shape: dict[str, Any]) -> dict[str, Any]:
   """Plan (without dispatch) how the bounded full-grid kernel would cover a role.
 
-  This is an executable shape audit, not a route selector.  The 128x128x256
-  kernel can cover the 14B role only as 10,880 launches (4 M tiles × 136 N
-  tiles × 20 K epochs).  Since its ABI expects tile-local packed buffers and
-  overwrites output, every K epoch needs Q4/DS4 repacking plus an accumulation
-  step.  Naming those obligations gives R7 a concrete conversion target while
-  keeping runtime admission blocked.
+  This is an executable shape audit, not a route selector. The full-grid
+  kernel covers all 4x136 M/N tiles in one launch; the 14B role therefore needs
+  20 K-epoch launches. Each epoch needs Q4/DS4 repacking plus accumulation.
+  Naming those obligations gives R7 a concrete conversion target while keeping
+  runtime admission blocked.
   """
   if not isinstance(shape, dict): raise TypeError("shape must be a mapping")
   try: m, n, k = (int(shape[key]) for key in ("M", "N", "K"))
@@ -693,7 +692,7 @@ def build_full_grid_k_tiled_dispatch_plan(shape: dict[str, Any]) -> dict[str, An
             "shape": {"M": m, "N": n, "K": k},
             "exact_blocker": "role dimensions must be multiples of bounded M/N=128 and K=256"}
   m_tiles, n_tiles, k_epochs = m // 128, n // 128, k // 256
-  launches = m_tiles * n_tiles * k_epochs
+  launches = k_epochs
   return {
     "schema": "q4k-q8-1-mmq-full-grid-tile-plan.v1", "status": "PLANNED",
     "shape": {"M": m, "N": n, "K": k}, "kernel_shape": dict(FULL_GRID_R5_SHAPE),
@@ -701,12 +700,21 @@ def build_full_grid_k_tiled_dispatch_plan(shape: dict[str, Any]) -> dict[str, An
     "launch_count": launches, "source_layout": "full_role_buffers",
     "requires_q4_repack": True, "requires_q8_ds4_repack": True,
     "requires_k_epoch_accumulate": k_epochs > 1,
-    "requires_output_tile_scatter": True,
+    "requires_output_tile_scatter": False,
     "production_dispatch_changed": False,
     "monolithic_k512_compile": {
       "status": "BLOCKED", "exception": "NotImplementedError",
       "exact_blocker": "vgpr lease exceeds virtual pool",
       "implication": "K must be split into 256-wide launches with explicit output accumulation",
+    },
+    "target_shape_k256_compile": {
+      "status": "PASS_EMITTED", "shape": {"M": 512, "N": 17408, "K": 256},
+      "owner_manifest": "FullGridOwnerCoordinates", "owner_count": 8912896,
+      "compile_seconds": 182.23,
+      "resources": {"vgpr": 256, "lds_bytes": 57856, "scratch_bytes": 0, "wavefront_size": 32},
+      "source_sha256": "b89239852bfaca2709e93a425a40c45e774bd61cd07189f7d3867c40f06fb196",
+      "binary_sha256": "21908e0bff83e5b7f7d4796cfb8a15d377d20ebfa7cefc63117607c5f03d0143",
+      "exact_blocker": "target-shape GPU dispatch/correctness and 20-epoch accumulation evidence are still absent",
     },
     "per_store_accumulate_sink_probe": {
       "status": "BLOCKED_TIMEOUT", "timeout_seconds": 360,
@@ -721,7 +729,7 @@ def build_full_grid_k_tiled_dispatch_plan(shape: dict[str, Any]) -> dict[str, An
       "converted_slice": "K_epoch_accumulation",
       "exact_blocker": "bounded two-epoch proof only; production role tiling/repack/fallback census remain absent",
     },
-    "exact_blocker": "production role adapter, Q4/DS4 repack, output scatter, and negative-role/fallback census are not implemented; bounded K-epoch accumulation is proven",
+    "exact_blocker": "production role adapter, Q4/DS4 repack, and negative-role/fallback census are not implemented; bounded K-epoch accumulation is proven",
   }
 
 
