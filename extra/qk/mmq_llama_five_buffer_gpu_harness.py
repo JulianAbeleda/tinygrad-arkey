@@ -733,7 +733,6 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
       if sync_each_epoch:
         # Optional lifecycle diagnostic: force the backend queue to drain at
         # the epoch boundary. This does not alter the generated kernel/route.
-        from tinygrad.device import Device
         Device["AMD"].synchronize()
       elapsed += (time.perf_counter() - t0) * 1000.0
       completed_epochs += 1
