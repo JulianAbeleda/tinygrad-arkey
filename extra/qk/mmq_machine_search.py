@@ -46,6 +46,8 @@ DEFAULT_OUTPUT = pathlib.Path("bench/prefill-14b-mmq-machine-search/search-repor
 FULL_GPU_PROBE_CANDIDATE_ID = "prefill_14b_q4k_q8_1_hybrid_mmq_atom"
 FULL_GPU_PROBE_ROUTE_ID = "prefill_q4k_q8_1_hybrid_mmq_atom"
 FULL_GPU_PROBE_ROLE = "ffn_gate_up"
+FULL_GRID_R5_SHAPE = {"M": 128, "N": 128, "K": 256}
+R6_TARGET_ROLE_SHAPE = {"role": "ffn_gate_up", "M": 512, "N": 17408, "K": 5120}
 LLAMA_KERNEL_SOURCES: tuple[dict[str, Any], ...] = (
   {
     "component": "mmq_route_and_launch",
@@ -591,6 +593,7 @@ def build_r6_route_gate_status(r5_report: dict[str, Any] | None = None) -> dict[
   r5 = r5_report or build_r5_geometry_search_report(run=False)
   ready = r5.get("promotion_verdict") == "R5_COOP_WIN_READY_FOR_R6" and r5.get("role_shape_integration") is True
   role_blocked = r5.get("emitted_backend_win") is True and not ready
+  shape_artifact = build_r6_role_shape_integration_artifact(r5)
   return {
     "schema": "q4k-q8-1-mmq-r6-route-gate-status.v1",
     "status": "READY_FOR_ONE_ROLE_OPT_IN" if ready else ("BLOCKED_ROLE_SHAPE_INTEGRATION" if role_blocked else "BLOCKED_NO_BOUNDED_COOP_WIN"),
@@ -604,7 +607,37 @@ def build_r6_route_gate_status(r5_report: dict[str, Any] | None = None) -> dict[
       "negative_role_tests": False,
       "no_hidden_direct_packed_fallback": False,
     },
+    "role_shape_integration": shape_artifact,
     "exact_blocker": None if ready else ("R6 route binding is illegal until the bounded winner is integrated for a production role and shape" if role_blocked else "R6 route binding is illegal until R5 reports an emitted cooperative backend win"),
+  }
+
+
+def build_r6_role_shape_integration_artifact(r5_report: dict[str, Any] | None = None) -> dict[str, Any]:
+  """Record the exact shape/role gap before any one-role route opt-in.
+
+  The emitted probe is a numerically passing bounded kernel, but it covers a
+  single 128x128x256 tile.  The first proposed production role is the 14B
+  ffn_gate_up GEMM (512x17408x5120), which needs a tiled multi-dispatch
+  adapter and negative-role/fallback census.  Keeping this artifact explicit
+  prevents a winning microbenchmark from being mistaken for route coverage.
+  """
+  r5 = r5_report or build_r5_geometry_search_report(run=False)
+  winner = r5.get("best_candidate_id")
+  winner_row = next((row for row in r5.get("ranking", ()) if row.get("candidate_id") == winner), None)
+  candidate_shape = None if winner_row is None else winner_row.get("shape")
+  shape_matches = candidate_shape == {k: R6_TARGET_ROLE_SHAPE[k] for k in ("M", "N", "K")}
+  return {
+    "schema": "q4k-q8-1-mmq-r6-role-shape-integration.v1",
+    "status": "PASS" if shape_matches and r5.get("role_shape_integration") is True else "BLOCKED",
+    "candidate_id": winner,
+    "candidate_shape": candidate_shape,
+    "target": dict(R6_TARGET_ROLE_SHAPE),
+    "shape_matches": shape_matches,
+    "role_scope": ["ffn_gate_up"],
+    "negative_role_tests": False,
+    "no_hidden_direct_packed_fallback": False,
+    "production_dispatch_changed": False,
+    "exact_blocker": None if shape_matches else "full-grid probe shape is bounded 128x128x256; no 14B ffn_gate_up multi-tile adapter exists",
   }
 
 
@@ -615,18 +648,21 @@ def build_r7_reduction_status() -> dict[str, Any]:
       "source": "mmq.cuh:mul_mat_q_process_tile",
       "status": "blocked_translation",
       "next_action": "implement emitted cooperative numeric tile; current owner trace is proof-only",
+      "blocking_evidence": "full-grid R5 proof is one 128x128x256 tile; 14B role requires tiled 512x17408x5120 dispatch",
     },
     {
       "source_component": "Q4_K tile_x staging",
       "source": "mmq.cuh:load_tiles_q4_K",
       "status": "oracle_backed_not_converted",
       "next_action": "translate bounded tile_x staging after cooperative numeric skeleton exists",
+      "blocking_evidence": "Q4_K staging has no production-shape launch/ownership adapter beyond the bounded probe",
     },
     {
       "source_component": "Q8_1 tile_y two-panel lifecycle",
       "source": "mmq.cuh:mul_mat_q_process_tile",
       "status": "partially_converted",
       "next_action": "existing DS4 LDS skeleton stages values once; llama two-panel lifecycle still unconverted",
+      "blocking_evidence": "Q8_1 two-panel lifecycle and fallback census are absent for the 14B role route",
     },
   ]
   return {

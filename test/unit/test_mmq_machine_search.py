@@ -7,7 +7,7 @@ from extra.qk.mmq_bounded_harness import (
 from extra.qk.mmq_machine_search import (
   build_r4_evidence_artifacts, build_r5_geometry_search_report, build_r6_route_gate_status,
   build_r7_reduction_status, build_search_report, build_full_gpu_probe_candidate, evaluate_candidate_promotion,
-  R5_GEOMETRY_CANDIDATES,
+  R5_GEOMETRY_CANDIDATES, build_r6_role_shape_integration_artifact,
 )
 from extra.qk.mmq_machine_search import build_boltbeam_oracle_trace
 
@@ -248,11 +248,25 @@ def test_mmq_r5_includes_distinct_full_grid_candidate_and_keeps_r6_fail_closed()
   assert full["promotion_eligible"] is False
 
   synthetic = {**report, "status": "PASS_NON_PROMOTABLE", "emitted_backend_win": True,
-               "promotion_verdict": "R5_EMITTED_FULL_GRID_WIN_ROLE_SHAPE_BLOCKED",
+               "promotion_verdict": "R5_COOP_WIN_READY_FOR_R6",
                "role_shape_integration": False}
   r6 = build_r6_route_gate_status(synthetic)
   assert r6["status"] == "BLOCKED_ROLE_SHAPE_INTEGRATION"
   assert r6["production_dispatch_changed"] is False
+  assert r6["required_evidence"]["ffn_gate_up_only"] is False
+  assert r6["required_evidence"]["negative_role_tests"] is False
+  assert r6["required_evidence"]["no_hidden_direct_packed_fallback"] is False
+  assert r6["role_shape_integration"]["status"] == "BLOCKED"
+  assert r6["role_shape_integration"]["target"] == {"role": "ffn_gate_up", "M": 512, "N": 17408, "K": 5120}
+  # An emitted full-grid win must not imply any of the one-role route gates:
+  # integration, negative-role coverage, and fallback exclusion are separate
+  # evidence obligations and remain fail-closed until actually measured.
+  assert r6["required_evidence"] == {
+    "bounded_coop_candidate_win": False,
+    "ffn_gate_up_only": False,
+    "negative_role_tests": False,
+    "no_hidden_direct_packed_fallback": False,
+  }
 
 
 def test_mmq_r5_full_grid_win_is_ranked_as_emitted_but_not_promoted():
@@ -275,6 +289,10 @@ def test_mmq_r5_full_grid_win_is_ranked_as_emitted_but_not_promoted():
   r6 = build_r6_route_gate_status(report)
   assert r6["status"] == "BLOCKED_ROLE_SHAPE_INTEGRATION"
 
+  artifact = build_r6_role_shape_integration_artifact(report)
+  assert artifact["shape_matches"] is False
+  assert "128x128x256" in artifact["exact_blocker"]
+
 
 def test_mmq_r6_and_r7_statuses_fail_closed_until_coop_win():
   r5 = build_r5_geometry_search_report(run=False)
@@ -288,6 +306,7 @@ def test_mmq_r6_and_r7_statuses_fail_closed_until_coop_win():
   assert r7["status"] == "BLOCKED_REMAINING_SOURCE_CLONE_ROWS"
   assert len(r7["remaining_rows"]) >= 3
   assert all(row["status"] for row in r7["remaining_rows"])
+  assert all(row.get("blocking_evidence") for row in r7["remaining_rows"])
 
 
 def test_mmq_machine_search_runner_receives_bounded_configs():
