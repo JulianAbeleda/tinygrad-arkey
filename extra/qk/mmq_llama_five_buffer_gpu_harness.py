@@ -525,7 +525,8 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
                                     per_epoch_check: bool = False,
                                     persistent_buffers: bool = False,
                                     preloaded_epochs: bool = False,
-                                    sync_each_epoch: bool = False) -> dict[str, Any]:
+                                    sync_each_epoch: bool = False,
+                                    stable_metadata_staging: bool = False) -> dict[str, Any]:
   """Run the emitted K=256 program across the exact 14B ffn_gate_up shape.
 
   This remains bounded evidence: each epoch writes a fresh full-role partial
@@ -534,8 +535,11 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
   requires the surrounding role/health census.
   """
   if warmups < 0 or rounds <= 0: raise ValueError("warmups must be non-negative and rounds must be positive")
+  if stable_metadata_staging and not preloaded_epochs:
+    raise ValueError("stable_metadata_staging requires preloaded_epochs")
   import time
   from tinygrad import Tensor, dtypes
+  from tinygrad.device import Device
   from tinygrad.engine.realize import get_runtime
   from extra.qk.amdgpu_metadata import parse_amdgpu_metadata
   from extra.qk.mmq_llama_five_buffer_full_kernel import (
@@ -585,6 +589,14 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
   # removes allocator address reuse from the target-health experiment; it does
   # not alter the generated program or route policy.
   persistent_partial = persistent_q4 = persistent_values = persistent_scales = persistent_sums = None
+  persistent_scales_stage = persistent_sums_stage = None
+  metadata_staging = {
+    "mode": "fixed_va_gpu_sdma" if stable_metadata_staging else "preloaded_views",
+    "source_preloaded": bool(preloaded_epochs),
+    "transfer": "gpu_sdma" if stable_metadata_staging else None,
+    "fixed_va": bool(stable_metadata_staging),
+    "per_epoch_vas": [],
+  }
 
   def copyin_buffer(tensor, array) -> None:
     # Buffer.copyin is synchronous host-to-device staging for HCQ allocators;
@@ -601,6 +613,11 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
     persistent_values = Tensor.empty(value_records * m * 128, dtype=dtypes.int8, device="AMD").realize()
     persistent_scales = Tensor.empty(value_records * m * 4, dtype=dtypes.float32, device="AMD").realize()
     persistent_sums = Tensor.empty(value_records * m * 4, dtype=dtypes.float32, device="AMD").realize()
+    if stable_metadata_staging:
+      # Keep full preloaded sources for the epoch sequence, but bind the
+      # kernel to one stable one-epoch metadata allocation refreshed by SDMA.
+      persistent_scales_stage = Tensor.empty(2 * m * 4, dtype=dtypes.float32, device="AMD").realize()
+      persistent_sums_stage = Tensor.empty(2 * m * 4, dtype=dtypes.float32, device="AMD").realize()
     if preloaded_epochs:
       # ``_random_q4_words`` is N-major: [N, epoch, 144]. A Buffer view can
       # shift only one contiguous base, so preload epoch-major storage instead
@@ -628,6 +645,39 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
         scales = Tensor(np.ascontiguousarray(scales_np[epoch*2:(epoch+1)*2].reshape(-1)), device="AMD").realize()
         sums = Tensor(np.ascontiguousarray(sums_np[epoch*2:(epoch+1)*2].reshape(-1)), device="AMD").realize()
       t0 = time.perf_counter()
+      if stable_metadata_staging:
+        if persistent_scales_stage is None or persistent_sums_stage is None or persistent_scales is None or persistent_sums is None:
+          raise RuntimeError("stable metadata staging buffers were not allocated")
+        dev = Device["AMD"]
+        allocator = dev.allocator
+        src_scales = persistent_scales.uop.buffer.view(2*m*4, dtypes.float32,
+          epoch * 2 * m * 4 * dtypes.float32.itemsize)
+        src_sums = persistent_sums.uop.buffer.view(2*m*4, dtypes.float32,
+          epoch * 2 * m * 4 * dtypes.float32.itemsize)
+        dst_scales = persistent_scales_stage.uop.buffer.get_buf("AMD")
+        dst_sums = persistent_sums_stage.uop.buffer.get_buf("AMD")
+        src_scales_buf = src_scales.get_buf("AMD")
+        src_sums_buf = src_sums.get_buf("AMD")
+        if dev.hw_copy_queue_t is None or not hasattr(allocator, "_transfer"):
+          raise RuntimeError("stable metadata staging requires an AMD SDMA transfer queue")
+        # _transfer enqueues SDMA and signals the device timeline; the
+        # subsequent HCQ compute launch waits on that timeline before reading.
+        allocator._transfer(dst_scales, src_scales_buf, src_scales.nbytes, src_dev=dev, dest_dev=dev)
+        allocator._transfer(dst_sums, src_sums_buf, src_sums.nbytes, src_dev=dev, dest_dev=dev)
+        stage_scales_va, stage_sums_va = int(dst_scales.va_addr), int(dst_sums.va_addr)
+        if metadata_staging["per_epoch_vas"] and (
+            stage_scales_va != metadata_staging["per_epoch_vas"][0]["stage_scales_va"] or
+            stage_sums_va != metadata_staging["per_epoch_vas"][0]["stage_sums_va"]):
+          raise RuntimeError("stable metadata staging VA changed across epochs")
+        entry = {
+          "epoch": epoch,
+          "source_scales_va": int(src_scales_buf.va_addr),
+          "source_sums_va": int(src_sums_buf.va_addr),
+          "stage_scales_va": stage_scales_va,
+          "stage_sums_va": stage_sums_va,
+        }
+        if not any(x["epoch"] == epoch for x in metadata_staging["per_epoch_vas"]):
+          metadata_staging["per_epoch_vas"].append(entry)
       for n0 in range(0, n, n_chunk_tiles*128):
         n1 = min(n, n0 + n_chunk_tiles*128)
         tile_count = (n1 - n0) // 128
@@ -647,10 +697,14 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
           if preloaded_epochs:
             values = persistent_values.uop.buffer.view(2*m*128, dtypes.int8,
               epoch * 2 * m * 128 * dtypes.int8.itemsize)
-            scales = persistent_scales.uop.buffer.view(2*m*4, dtypes.float32,
-              epoch * 2 * m * 4 * dtypes.float32.itemsize)
-            sums = persistent_sums.uop.buffer.view(2*m*4, dtypes.float32,
-              epoch * 2 * m * 4 * dtypes.float32.itemsize)
+            if stable_metadata_staging:
+              scales = persistent_scales_stage.uop.buffer
+              sums = persistent_sums_stage.uop.buffer
+            else:
+              scales = persistent_scales.uop.buffer.view(2*m*4, dtypes.float32,
+                epoch * 2 * m * 4 * dtypes.float32.itemsize)
+              sums = persistent_sums.uop.buffer.view(2*m*4, dtypes.float32,
+                epoch * 2 * m * 4 * dtypes.float32.itemsize)
             buffers = (out_view, q4, values, scales, sums)
           else:
             buffers = (out_view, persistent_q4.uop.buffer, persistent_values.uop.buffer,
@@ -697,7 +751,8 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
             "artifacts": {**artifact, "backend_id": FULL_GRID_BACKEND_ID,
                           "distinct_binary_identity": isinstance(binary, bytes) and isinstance(source, str),
             "no_fallback": True}, "epoch_checks": epoch_checks,
-            "repack": repack_evidence, "reduction": reduction_evidence}
+            "repack": repack_evidence, "reduction": reduction_evidence,
+            "metadata_staging": metadata_staging}
   compare_k = epoch_limit * 256
   compare_words = q4_blocks[:, epoch_start:epoch_start+epoch_limit, :].reshape(-1).view(np.uint8)
   compare_values = values_np[epoch_start*2:(epoch_start+epoch_limit)*2]
@@ -723,13 +778,16 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
                      "persistent_buffers": persistent_buffers,
                      "preloaded_epochs": preloaded_epochs,
                      "sync_each_epoch": sync_each_epoch,
+                     "stable_metadata_staging": stable_metadata_staging,
+                     "metadata_staging": metadata_staging,
                      "epoch_checks": epoch_checks},
           "artifacts": {**artifact, "backend_id": FULL_GRID_BACKEND_ID,
                         "distinct_binary_identity": isinstance(binary, bytes) and isinstance(source, str),
                         "no_fallback": True, "same_session_timing": True},
           "distinct_binary_identity": isinstance(binary, bytes) and isinstance(source, str),
           "same_session_timing": True, "no_fallback": True,
-          "repack": repack_evidence, "reduction": reduction_evidence}
+          "repack": repack_evidence, "reduction": reduction_evidence,
+          "metadata_staging": metadata_staging}
 
 
 def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
@@ -741,7 +799,8 @@ def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
                                               per_epoch_check: bool = False,
                                               persistent_buffers: bool = False,
                                               preloaded_epochs: bool = False,
-                                              sync_each_epoch: bool = False) -> dict[str, Any]:
+                                              sync_each_epoch: bool = False,
+                                              stable_metadata_staging: bool = False) -> dict[str, Any]:
   if timeout_seconds <= 0: return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1",
                                   "status": "BLOCKED", "exact_blocker": "timeout_seconds must be positive"}
   child_env = dict(os.environ)
@@ -751,7 +810,7 @@ def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
           f"epoch_limit={repr(epoch_limit)}, n_chunk_tiles={repr(n_chunk_tiles)}, epoch_start={int(epoch_start)}, "
           f"host_accumulate={bool(host_accumulate)}, per_epoch_check={bool(per_epoch_check)}, "
           f"persistent_buffers={bool(persistent_buffers)}, preloaded_epochs={bool(preloaded_epochs)}, "
-          f"sync_each_epoch={bool(sync_each_epoch)})), flush=True)")
+          f"sync_each_epoch={bool(sync_each_epoch)}, stable_metadata_staging={bool(stable_metadata_staging)})), flush=True)")
   try:
     proc = subprocess.run([sys.executable, "-c", code], cwd=ROOT, env=child_env,
                           text=True, capture_output=True, timeout=timeout_seconds, check=False)
@@ -767,7 +826,8 @@ def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
             "diagnostic": {"epoch_limit": epoch_limit, "n_chunk_tiles": n_chunk_tiles,
                            "epoch_start": epoch_start, "host_accumulate": host_accumulate,
                            "per_epoch_check": per_epoch_check, "persistent_buffers": persistent_buffers,
-                           "preloaded_epochs": preloaded_epochs, "sync_each_epoch": sync_each_epoch}}
+                           "preloaded_epochs": preloaded_epochs, "sync_each_epoch": sync_each_epoch,
+                           "stable_metadata_staging": stable_metadata_staging}}
   if proc.returncode != 0 and result.get("status") == "PASS":
     result.update({"status": "BLOCKED", "exact_blocker": "target-role child exited non-zero", "returncode": proc.returncode})
   return result

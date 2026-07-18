@@ -1,12 +1,15 @@
 import json
 import numpy as np
+import pytest
+from unittest.mock import patch
 
 from tinygrad import dtypes
 from tinygrad.uop.ops import Ops, UOp
 
 from extra.qk.mmq_llama_five_buffer_full_kernel import build_llama_five_buffer_full_kernel
 from extra.qk.mmq_llama_five_buffer_gpu_harness import (_bind_sink, _pack_q4_epochs_contiguous, _random_q4_words,
-  _numeric_comparison, run_amd_validation)
+  _numeric_comparison, run_amd_validation, run_full_grid_target_role_probe,
+  run_full_grid_target_role_probe_isolated)
 
 
 def test_gpu_harness_random_q4_fixture_has_independent_abi_shape():
@@ -51,6 +54,26 @@ def test_gpu_harness_timeout_path_fails_closed_without_gpu_access():
   assert row["passed"] is False
   assert row["verdict"] == "MMQ_LLAMA_FIVE_BUFFER_GPU_BLOCKED"
   assert row["blocker"] == "timeout_seconds must be positive"
+
+
+def test_target_role_stable_metadata_staging_requires_preloaded_sources():
+  # This guard executes before runtime construction and keeps the fixed-VA
+  # SDMA path from silently falling back to per-launch host allocations.
+  with pytest.raises(ValueError, match="requires preloaded_epochs"):
+    run_full_grid_target_role_probe(stable_metadata_staging=True, preloaded_epochs=False)
+
+
+def test_target_role_isolated_wrapper_propagates_stable_metadata_flag():
+  class _Proc:
+    returncode = 0
+    stdout = '{"status":"BLOCKED"}\n'
+    stderr = ""
+  with patch("extra.qk.mmq_llama_five_buffer_gpu_harness.subprocess.run", return_value=_Proc()) as run:
+    result = run_full_grid_target_role_probe_isolated(timeout_seconds=1, preloaded_epochs=True,
+                                                       stable_metadata_staging=True)
+  assert result["status"] == "BLOCKED"
+  code = run.call_args.args[0][2]
+  assert "stable_metadata_staging=True" in code
 
 
 def test_gpu_harness_numeric_mismatch_is_structured_and_json_safe():
