@@ -1745,17 +1745,21 @@ def _fixed_base_prefix_reference_operands(q4_blocks: np.ndarray, values: np.ndar
   )
 
 
+def _validate_v2_fixed_base_prefix_epochs(role_spec: ExactRoleSpec, prefix_epochs: int) -> int:
+  """Admit bounded diagnostic prefixes plus the role's complete epoch count."""
+  allowed = tuple(sorted({1, 2, 3, role_spec.epochs}))
+  if not isinstance(prefix_epochs, int) or isinstance(prefix_epochs, bool) or prefix_epochs not in allowed:
+    raise ValueError(f"frozen v2 GPU probe prefix_epochs must be one of {allowed} for role {role_spec.role!r}")
+  return prefix_epochs
+
+
 def run_frozen_epoch_program_set_prefix_probe(
     *, role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC, frozen_bundle: str | Path,
     prefix_epochs: int) -> dict[str, Any]:
   """Run a frozen v2 fixed-base scheduler prefix with one full-role producer."""
   schema = "tinygrad.mmq_frozen_epoch_program_set_prefix_probe.v2"
   role_spec = admit_exact_role_spec(role_spec)
-  if not isinstance(prefix_epochs, int) or isinstance(prefix_epochs, bool) or \
-     prefix_epochs not in (1, 2):
-    raise ValueError("frozen v2 GPU probe prefix_epochs must be 1 or 2")
-  if prefix_epochs > role_spec.epochs:
-    raise ValueError("frozen v2 GPU probe prefix exceeds the admitted role")
+  prefix_epochs = _validate_v2_fixed_base_prefix_epochs(role_spec, prefix_epochs)
 
   from types import SimpleNamespace
   from tinygrad import Tensor, dtypes
@@ -2059,8 +2063,7 @@ def run_frozen_epoch_program_set_prefix_probe_isolated(
   schema = "tinygrad.mmq_frozen_epoch_program_set_prefix_probe.v2"
   try:
     role_spec = admit_exact_role_spec(role_spec)
-    if not isinstance(prefix_epochs, int) or isinstance(prefix_epochs, bool) or prefix_epochs not in (1, 2):
-      raise ValueError("frozen v2 GPU probe prefix_epochs must be 1 or 2")
+    prefix_epochs = _validate_v2_fixed_base_prefix_epochs(role_spec, prefix_epochs)
     env_overrides = _validated_child_env_overrides(child_env_overrides)
     if env_overrides.get("AMD_AQL", "1") != "1":
       raise ValueError("frozen v2 fixed-base GPU probe requires AMD_AQL=1")
@@ -2386,8 +2389,8 @@ def main() -> int:
                       help="with changed mode, change only this input ABI slot (default: all)")
   parser.add_argument("--scheduler-producer-prefix-epochs", type=int, choices=(1, 2),
                       help="run a 1/2-epoch frozen scheduler prefix with the real physical Q8 producer")
-  parser.add_argument("--scheduler-v2-fixed-base-prefix-epochs", type=int, choices=(1, 2),
-                      help="run a 1/2-epoch frozen v2 static-offset prefix with one full-role Q8 producer")
+  parser.add_argument("--scheduler-v2-fixed-base-prefix-epochs", type=int,
+                      help="run a 1/2/3-epoch or admitted-full-role frozen v2 static-offset prefix")
   args = parser.parse_args()
   if args.scheduler_v2_fixed_base_prefix_epochs is not None:
     if args.target_role_frozen_bundle is None:

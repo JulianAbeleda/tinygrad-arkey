@@ -1,3 +1,4 @@
+import hashlib
 import json
 import numpy as np
 import pytest
@@ -18,9 +19,10 @@ from extra.qk.mmq_llama_five_buffer_gpu_harness import (TARGET_IN_PLACE_ACCUMULA
   _producer_oracle_diagnostic, _producer_probe_status,
   _realize_outputs_together, _retained_producer_tensors,
   _scheduler_prefix_two_launches,
+  _validate_v2_fixed_base_prefix_epochs,
   _validate_frozen_execution_fixture, _validate_frozen_fixture, _validated_child_env_overrides,
   _zero_persistent_target_output,
-  run_amd_validation, run_frozen_scheduler_prefix_two_probe_isolated,
+  main, run_amd_validation, run_frozen_scheduler_prefix_two_probe_isolated,
   run_frozen_epoch_program_set_prefix_probe_isolated,
   run_frozen_scheduler_producer_prefix_probe_isolated,
   run_full_grid_target_role_probe, run_full_grid_target_role_probe_isolated)
@@ -168,6 +170,12 @@ def test_aql_target_census_identity_and_five_qword_scale_contract_are_cpu_testab
     [0x1000, 0x2100, 0x3000, 0x4000, 0x5000], [first],
     expected_vas=None, require_fixed_scale_va=False, require_all_five_vas_fixed=True)
   assert moved_input["all_five_vas_fixed"] is False
+  for prior_call_count in (2, 19, 67):
+    full_role_fixed = _audit_target_aql_kernargs(
+      first.copy(), [first.copy() for _ in range(prior_call_count)],
+      expected_vas=None, require_fixed_scale_va=False, require_all_five_vas_fixed=True)
+    assert full_role_fixed["five_qwords_nonzero"] is True
+    assert full_role_fixed["all_five_vas_fixed"] is True
   with pytest.raises(ValueError, match="exactly five"):
     _audit_target_aql_kernargs([1, 2], [], expected_vas=None, require_fixed_scale_va=True)
 
@@ -282,34 +290,44 @@ def test_scheduler_producer_prefix_rejects_bad_limit_before_health_or_gpu(tmp_pa
   assert result["status"] == "BLOCKED" and "must be 1 or 2" in result["exact_blocker"]
 
 
-def test_v2_fixed_base_prefix_reference_slices_static_offsets_from_full_buffers():
+@pytest.mark.parametrize("prefix_epochs", [3, 4])
+def test_v2_fixed_base_prefix_reference_slices_static_offsets_from_full_buffers(prefix_epochs):
   q4 = np.arange(3 * 4 * 144, dtype=np.uint8).reshape(3, 4, 144)
   values = np.arange(8 * 2 * 128, dtype=np.int16).astype(np.int8).reshape(8, 2, 128)
   scales = np.arange(8 * 2 * 4, dtype=np.float32).reshape(8, 2, 4)
   sums = scales + 1000
   q4_prefix, values_prefix, scales_prefix, sums_prefix = \
-    _fixed_base_prefix_reference_operands(q4, values, scales, sums, 2)
-  np.testing.assert_array_equal(q4_prefix, np.ascontiguousarray(q4[:, :2, :]).reshape(-1))
-  np.testing.assert_array_equal(values_prefix, values[:4])
-  np.testing.assert_array_equal(scales_prefix, scales[:4])
-  np.testing.assert_array_equal(sums_prefix, sums[:4])
+    _fixed_base_prefix_reference_operands(q4, values, scales, sums, prefix_epochs)
+  records = prefix_epochs * 2
+  np.testing.assert_array_equal(q4_prefix, np.ascontiguousarray(q4[:, :prefix_epochs, :]).reshape(-1))
+  np.testing.assert_array_equal(values_prefix, values[:records])
+  np.testing.assert_array_equal(scales_prefix, scales[:records])
+  np.testing.assert_array_equal(sums_prefix, sums[:records])
   assert all(value.flags.c_contiguous for value in (q4_prefix, values_prefix, scales_prefix, sums_prefix))
 
 
-def test_v2_fixed_base_target_identities_are_binary_exact_ordered_and_distinct():
-  programs = tuple(SimpleNamespace(arg=SimpleNamespace(function_name="target")) for _ in range(2))
+@pytest.mark.parametrize("prefix_epochs", [3, 20, 68])
+def test_v2_fixed_base_target_identities_are_binary_exact_ordered_and_distinct(prefix_epochs):
+  programs = tuple(SimpleNamespace(arg=SimpleNamespace(function_name="target")) for _ in range(prefix_epochs))
+  binaries = tuple(f"epoch-{epoch}".encode() for epoch in range(prefix_epochs))
   binding = SimpleNamespace(artifact=SimpleNamespace(
-    programs=programs, binaries=(b"epoch-zero", b"epoch-one")))
-  identities = _frozen_program_set_target_identities(binding, 2)
-  assert [row["function_name"] for row in identities] == ["target", "target"]
-  assert identities[0]["binary_sha256"] != identities[1]["binary_sha256"]
+    programs=programs, binaries=binaries))
+  identities = _frozen_program_set_target_identities(binding, prefix_epochs)
+  assert [row["function_name"] for row in identities] == ["target"] * prefix_epochs
+  assert [row["binary_sha256"] for row in identities] == [
+    hashlib.sha256(binary).hexdigest() for binary in binaries]
+  assert len({row["binary_sha256"] for row in identities[:3]}) == 3
+  assert len({row["binary_sha256"] for row in identities}) == prefix_epochs
   duplicate = SimpleNamespace(artifact=SimpleNamespace(
-    programs=programs, binaries=(b"same", b"same")))
+    programs=programs, binaries=binaries[:-1] + (binaries[-2],)))
   with pytest.raises(ValueError, match="not distinct"):
-    _frozen_program_set_target_identities(duplicate, 2)
+    _frozen_program_set_target_identities(duplicate, prefix_epochs)
 
 
-def test_v2_fixed_base_isolated_reuses_health_aql_and_exact_prefix(tmp_path):
+@pytest.mark.parametrize(("role", "prefix_epochs"), [
+  ("attn_kv", 3), ("attn_kv", 20), ("ffn_down", 68),
+])
+def test_v2_fixed_base_isolated_reuses_health_aql_and_exact_prefix(tmp_path, role, prefix_epochs):
   class _Proc:
     returncode = 0
     stdout = '{"schema":"tinygrad.mmq_frozen_epoch_program_set_prefix_probe.v2","status":"PASS"}\n'
@@ -319,8 +337,8 @@ def test_v2_fixed_base_isolated_reuses_health_aql_and_exact_prefix(tmp_path):
        patch("extra.qk.mmq_target_epoch_orchestrator.read_kernel_log_since", return_value=""), \
        patch("extra.qk.mmq_target_epoch_orchestrator.spawned_tiny_health_probe", return_value=True) as health:
     result = run_frozen_epoch_program_set_prefix_probe_isolated(
-      role_spec=exact_role_spec("attn_kv"), frozen_bundle=bundle,
-      prefix_epochs=2, timeout_seconds=1)
+      role_spec=exact_role_spec(role), frozen_bundle=bundle,
+      prefix_epochs=prefix_epochs, timeout_seconds=1)
   assert result["status"] == "PASS"
   assert result["health_before"] is result["health_after"] is True
   assert result["child_env_overrides"] == {"AMD_AQL": "1"}
@@ -328,21 +346,51 @@ def test_v2_fixed_base_isolated_reuses_health_aql_and_exact_prefix(tmp_path):
   assert health.call_args_list[0].args[0] == {"AMD_AQL": "1"}
   code = run.call_args.args[0][2]
   assert "run_frozen_epoch_program_set_prefix_probe" in code
-  assert "prefix_epochs=2" in code and "exact_role_spec('attn_kv'" in code
+  assert f"prefix_epochs={prefix_epochs}" in code and f"exact_role_spec({role!r}" in code
 
 
 def test_v2_fixed_base_rejects_bad_prefix_or_pm4_before_health_or_gpu(tmp_path):
   with patch("extra.qk.mmq_target_epoch_orchestrator.spawned_tiny_health_probe") as health, \
        patch("extra.qk.mmq_llama_five_buffer_gpu_harness.subprocess.run") as run:
     bad_prefix = run_frozen_epoch_program_set_prefix_probe_isolated(
-      frozen_bundle=tmp_path / "frozen", prefix_epochs=3)
+      frozen_bundle=tmp_path / "frozen", prefix_epochs=4)
+    not_full_for_role = run_frozen_epoch_program_set_prefix_probe_isolated(
+      role_spec=exact_role_spec("ffn_down"),
+      frozen_bundle=tmp_path / "frozen", prefix_epochs=20)
     pm4 = run_frozen_epoch_program_set_prefix_probe_isolated(
       frozen_bundle=tmp_path / "frozen", prefix_epochs=1,
       child_env_overrides={"AMD_AQL": "0"})
   health.assert_not_called()
   run.assert_not_called()
-  assert bad_prefix["status"] == "BLOCKED" and "must be 1 or 2" in bad_prefix["exact_blocker"]
+  assert bad_prefix["status"] == "BLOCKED" and "(1, 2, 3, 20)" in bad_prefix["exact_blocker"]
+  assert not_full_for_role["status"] == "BLOCKED" and "(1, 2, 3, 68)" in not_full_for_role["exact_blocker"]
   assert pm4["status"] == "BLOCKED" and "requires AMD_AQL=1" in pm4["exact_blocker"]
+
+
+def test_v2_fixed_base_prefix_admission_uses_dynamic_full_role_epoch_count():
+  attn, down = exact_role_spec("attn_kv"), exact_role_spec("ffn_down")
+  assert [_validate_v2_fixed_base_prefix_epochs(attn, value) for value in (1, 2, 3, 20)] == [1, 2, 3, 20]
+  assert [_validate_v2_fixed_base_prefix_epochs(down, value) for value in (1, 2, 3, 68)] == [1, 2, 3, 68]
+  for role_spec, invalid in ((attn, 4), (attn, 68), (down, 4), (down, 20), (down, True)):
+    with pytest.raises(ValueError, match="prefix_epochs must be one of"):
+      _validate_v2_fixed_base_prefix_epochs(role_spec, invalid)
+
+
+def test_v2_fixed_base_cli_accepts_dynamic_full_role_epoch_count(monkeypatch, capsys, tmp_path):
+  bundle = tmp_path / "frozen-v2"
+  monkeypatch.setattr("sys.argv", [
+    "mmq_llama_five_buffer_gpu_harness",
+    "--scheduler-v2-fixed-base-prefix-epochs", "68",
+    "--target-role-name", "ffn_down",
+    "--target-role-frozen-bundle", str(bundle),
+  ])
+  with patch(
+      "extra.qk.mmq_llama_five_buffer_gpu_harness.run_frozen_epoch_program_set_prefix_probe_isolated",
+      return_value={"status": "PASS"}) as probe:
+    assert main() == 0
+  assert probe.call_args.kwargs["role_spec"].role == "ffn_down"
+  assert probe.call_args.kwargs["prefix_epochs"] == 68
+  assert json.loads(capsys.readouterr().out)["status"] == "PASS"
 
 
 def test_target_role_in_place_mode_fails_closed_before_gpu_for_unsafe_options():
