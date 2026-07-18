@@ -1,0 +1,97 @@
+{
+  "schema": "tinygrad.qwen3_14b_prefill_frozen_live_lifecycle_isolation.v1",
+  "status": "BLOCKED_EAGER_ROUTE_RETIRED",
+  "date": "2026-07-18",
+  "target": {
+    "backend": "AMD",
+    "architecture": "gfx1100",
+    "queue_mode": "AQL",
+    "model": "/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf",
+    "role": "ffn_gate_up",
+    "shape": [
+      512,
+      17408,
+      5120
+    ]
+  },
+  "production_control": {
+    "route": "direct_packed",
+    "result": "PASS",
+    "artifact": {
+      "path": "docs/qwen3-14b-prefill-direct-packed-smoke-aql-20260718.json",
+      "sha256": "f32cf920a848a1509818aa550fcb11bca76b3f9278628023ac40f808f2acb552"
+    },
+    "profile": {
+      "mode": "smoke",
+      "K": 1,
+      "warmups": 0,
+      "rounds": 1,
+      "start_positions": [
+        0
+      ],
+      "whole_lengths": [
+        512
+      ]
+    },
+    "chunk_ms": 8022.5546,
+    "whole_prefill_tok_s": 63.82,
+    "gpu_health_after": "PASS"
+  },
+  "eager_route_failures": [
+    {
+      "scope": "whole_model_first_candidate",
+      "result": "MMU_FAULT",
+      "fault_va": "0x0",
+      "kernel_log_time": "2026-07-18T13:51:49-04:00",
+      "recovery": "automatic mode1 reset succeeded",
+      "attribution_limit": "the wait=True frozen dispatch was the first host synchronization after asynchronous output zero and Tensor.assign staging, so the traceback alone did not identify the faulting submission"
+    },
+    {
+      "scope": "isolated_real_gguf_weight_and_standalone_activation",
+      "result": "MMU_FAULT",
+      "fault_va_reported_by_tinygrad": "0xFD400000000",
+      "kernel_log_time": "2026-07-18T14:01:08-04:00",
+      "recovery": "device returned idle with normal VRAM and temperature after process isolation",
+      "attribution_limit": "the same asynchronous preparation chain still preceded the frozen wait"
+    }
+  ],
+  "isolation_results": [
+    {
+      "probe": "real shared-GGUF Q4 epoch-0 gather",
+      "result": "PASS",
+      "packed_backing_offset_bytes": 1191562624,
+      "packed_view_nbytes": 50135040,
+      "gather_elements": 626688,
+      "note": "the nonzero-offset N-major [N,K/256,36] view gathered correctly on the GPU"
+    },
+    {
+      "probe": "drained pre-dispatch preparation",
+      "result": "PASS",
+      "checkpoints": [
+        "output_zero",
+        "q4_gather_and_stage",
+        "q8_values_produce_and_stage",
+        "q8_scales_produce_and_stage",
+        "q8_sums_produce_and_stage"
+      ],
+      "note": "no frozen PROGRAM was dispatched"
+    },
+    {
+      "probe": "drained real-weight frozen epoch 0",
+      "result": "PASS",
+      "all_five_buffer_vas_nonzero": true,
+      "preparation_synchronized_before_dispatch": true,
+      "frozen_dispatches": 1,
+      "note": "the same frozen binary passed after every preparation submission was drained"
+    }
+  ],
+  "conclusion": {
+    "q4_layout_refuted_as_root_cause": true,
+    "frozen_binary_refuted_as_unconditionally_faulting": true,
+    "unsafe_boundary": "eager AMDProgram submitted immediately behind lazy Tensor.assign preparation",
+    "action": "retire the eager whole-model bridge and represent the already-frozen PROGRAM as scheduler-owned custom_kernel calls chained across K256 epochs",
+    "hip_launcher_required": false,
+    "new_kernel_emitter_required": false,
+    "production_promotion": false
+  }
+}
