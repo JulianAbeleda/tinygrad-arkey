@@ -1197,6 +1197,18 @@ def _audit_target_aql_kernargs(qwords: list[int], prior_qwords: list[list[int]],
   return checks
 
 
+class AQLPacketCensusRealizationError(RuntimeError):
+  """Fallback wrapper when an underlying exception cannot carry census evidence."""
+  def __init__(self, message: str, packet_census: Mapping[str, Any]):
+    super().__init__(message)
+    self.aql_packet_census = dict(packet_census)
+
+
+def _aql_packet_census_from_exception(exc: BaseException) -> dict[str, Any] | None:
+  census = getattr(exc, "aql_packet_census", None)
+  return dict(census) if isinstance(census, Mapping) else None
+
+
 def _realize_outputs_together(output: Any, retained_outputs: tuple[Any, ...]) -> None:
   """Keep diagnostic companions live by making them outputs of one realization."""
   output.realize(*retained_outputs)
@@ -1266,12 +1278,49 @@ def _realize_with_aql_packet_census(output: Any, expected_vas: list[list[int]] |
   original_publish = ops_amd._publish_aql_packet
   original_doorbell = ops_amd.AMDQueueDesc.signal_doorbell
 
+  def snapshot(status: str, exc: BaseException | None = None) -> dict[str, Any]:
+    copied_calls = [{
+      **row,
+      "program_identity": dict(row["program_identity"]),
+      "expected_program_identity": None if row["expected_program_identity"] is None
+        else dict(row["expected_program_identity"]),
+      "kernarg_qwords": list(row["kernarg_qwords"]),
+      "expected_vas": None if row["expected_vas"] is None else list(row["expected_vas"]),
+      "argument_buffers": [dict(argument) for argument in row["argument_buffers"]],
+      "checks": dict(row["checks"]),
+    } for row in calls]
+    result = {
+      "enabled": True, "status": status,
+      "capture_point": "ring_slot_after_header_last_publication_and_kernargs_before_doorbell",
+      "target_program_identity": dict(target_program_identity) if target_program_identity is not None else None,
+      "target_program_identities": [dict(identity) for identity in normalized_identities]
+        if target_program_identities is not None else None,
+      "target_call_count": len(copied_calls),
+      "accepted_target_call_count": sum(row["accepted_before_doorbell"] for row in copied_calls),
+      "non_target_kernel_dispatch_count": non_target_kernel_dispatch_count,
+      "compute_doorbell_count": compute_doorbell_count, "require_fixed_scale_va": require_fixed_scale_va,
+      "require_all_five_vas_fixed": require_all_five_vas_fixed,
+      "retained_companion_output_count": len(retained_outputs),
+      "pending_constructed_dispatch_count": len(constructed),
+      "pending_published_packet_count": len(published),
+      "call_count": len(copied_calls), "calls": copied_calls,
+    }
+    if exc is not None:
+      result.update({
+        "realization_exception": type(exc).__name__, "realization_error": str(exc),
+        "all_accepted_target_calls_pass": all(row["all_checks_pass"] for row in copied_calls),
+      })
+    return result
+
   def audited_exec(queue: Any, prg: Any, args_state: Any, global_size: tuple[Any, ...],
                    local_size: tuple[Any, ...]) -> Any:
     result = original_exec(queue, prg, args_state, global_size, local_size)
     constructed.append({
       "kernel_object": int(prg.aql_prog_addr), "kernarg_address": int(args_state.buf.va_addr),
       "kernarg_buffer": args_state.buf,
+      "argument_buffers": [{
+        "slot": slot, "va": int(buf.va_addr), "size": int(buf.size),
+      } for slot, buf in enumerate(args_state.bufs)],
       "program_identity": _aql_target_program_identity(prg),
     })
     return result
@@ -1307,6 +1356,7 @@ def _realize_with_aql_packet_census(output: Any, expected_vas: list[list[int]] |
         raise RuntimeError("AQL packet census observed more target dispatches than expected")
       kernarg_qwords = [int(value) for value in
                         built["kernarg_buffer"].cpu_view().view(size=40, fmt='Q')[:5]]
+      argument_vas = [row["va"] for row in built["argument_buffers"]]
       expected_row = None if expected_vas is None else expected_vas[call_index]
       expected_identity = (None if normalized_identities is None else
                            normalized_identities[call_index] if ordered_identity_sequence else normalized_identities[0])
@@ -1316,6 +1366,7 @@ def _realize_with_aql_packet_census(output: Any, expected_vas: list[list[int]] |
         "release_system_fence": packet["release_fence_scope"] == packet["system_fence_scope"],
         "kernel_object_matches_constructed": packet["kernel_object"] == built["kernel_object"],
         "kernarg_address_matches_constructed": packet["kernarg_address"] == built["kernarg_address"],
+        "five_qwords_match_constructed_buffers": kernarg_qwords == argument_vas,
         "ordered_program_identity_matches": expected_identity is None or
           built["program_identity"] == expected_identity,
         **_audit_target_aql_kernargs(
@@ -1323,15 +1374,18 @@ def _realize_with_aql_packet_census(output: Any, expected_vas: list[list[int]] |
           expected_vas=expected_row, require_fixed_scale_va=require_fixed_scale_va,
           require_all_five_vas_fixed=require_all_five_vas_fixed),
       }
+      accepted_before_doorbell = all(checks.values())
       calls.append({
         "call": call_index, **{key: packet[key] for key in (
           "header", "barrier", "acquire_fence_scope", "release_fence_scope",
           "system_fence_scope", "kernel_object", "kernarg_address")},
         "program_identity": built["program_identity"], "expected_program_identity": expected_identity,
         "kernarg_qwords": kernarg_qwords, "expected_vas": expected_row,
-        "checks": checks, "all_checks_pass": all(checks.values()),
+        "argument_buffers": built["argument_buffers"],
+        "checks": checks, "all_checks_pass": accepted_before_doorbell,
+        "accepted_before_doorbell": accepted_before_doorbell,
       })
-      if not all(checks.values()):
+      if not accepted_before_doorbell:
         raise RuntimeError("AQL target packet census rejected dispatch before doorbell")
     published.clear()
     constructed.clear()
@@ -1341,25 +1395,21 @@ def _realize_with_aql_packet_census(output: Any, expected_vas: list[list[int]] |
   ops_amd._publish_aql_packet = audited_publish
   ops_amd.AMDQueueDesc.signal_doorbell = audited_doorbell
   try:
-    _realize_outputs_together(output, retained_outputs)
+    try:
+      _realize_outputs_together(output, retained_outputs)
+    except BaseException as exc:
+      census = snapshot("REALIZATION_ERROR", exc)
+      try: setattr(exc, "aql_packet_census", census)
+      except (AttributeError, TypeError):
+        raise AQLPacketCensusRealizationError(str(exc), census) from exc
+      raise
   finally:
     ops_amd.AMDComputeAQLQueue.exec = original_exec
     ops_amd._publish_aql_packet = original_publish
     ops_amd.AMDQueueDesc.signal_doorbell = original_doorbell
   if published or constructed or len(calls) != target_dispatch_count:
     raise RuntimeError("AQL packet census did not close the exact target dispatch count")
-  return {
-    "enabled": True, "status": "PASS",
-    "capture_point": "ring_slot_after_header_last_publication_and_kernargs_before_doorbell",
-    "target_program_identity": dict(target_program_identity) if target_program_identity is not None else None,
-    "target_program_identities": [dict(identity) for identity in normalized_identities]
-      if target_program_identities is not None else None,
-    "target_call_count": len(calls), "non_target_kernel_dispatch_count": non_target_kernel_dispatch_count,
-    "compute_doorbell_count": compute_doorbell_count, "require_fixed_scale_va": require_fixed_scale_va,
-    "require_all_five_vas_fixed": require_all_five_vas_fixed,
-    "retained_companion_output_count": len(retained_outputs),
-    "call_count": len(calls), "calls": calls,
-  }
+  return snapshot("PASS")
 
 
 def _scheduler_prefix_two_launches(address_mode: str, epoch_inputs: tuple[tuple[Any, ...], tuple[Any, ...]],
@@ -1629,6 +1679,7 @@ def run_frozen_scheduler_producer_prefix_probe(*, role_spec: ExactRoleSpec = DEF
       target_dispatch_count=epoch_limit, require_fixed_scale_va=True,
       retained_outputs=retained_outputs)
   except BaseException as exc:
+    packet_census = _aql_packet_census_from_exception(exc)
     return {
       "schema": "tinygrad.mmq_frozen_scheduler_producer_prefix_probe.v1",
       "status": "BLOCKED", "exact_blocker": "producer-backed target dispatch rejected before doorbell",
@@ -1637,6 +1688,7 @@ def run_frozen_scheduler_producer_prefix_probe(*, role_spec: ExactRoleSpec = DEF
       "role": role_spec.role, "shape": list(role_spec.shape), "epoch_limit": epoch_limit,
       "producer": "extra.qk.q4k_q8_activation_producer.produce_physical_ds4_q8_1_tensor",
       "graph": graph_evidence, "target_program_identity": target_identity,
+      **({"dispatch": {"aql_packet_census": packet_census}} if packet_census is not None else {}),
       "frozen_bundle": frozen_identity, "compile_performed": False, "requires_recompile": False,
       "hip_used": False, "no_fallback": True,
     }
@@ -1719,6 +1771,22 @@ def _frozen_program_set_target_identities(binding: Any, prefix_epochs: int) -> t
   return identities
 
 
+def _frozen_program_set_ordinal_target_identity(binding: Any, epoch: int) -> dict[str, str]:
+  """Derive one exact runtime identity without changing the family order."""
+  programs, binaries = binding.artifact.programs, binding.artifact.binaries
+  if not isinstance(epoch, int) or isinstance(epoch, bool) or not 0 <= epoch < len(programs) or \
+     len(programs) != len(binaries):
+    raise ValueError("frozen v2 ordinal is outside the complete retained PROGRAM family")
+  program, binary = programs[epoch], binaries[epoch]
+  identity = {
+    "function_name": program.arg.function_name,
+    "binary_sha256": hashlib.sha256(binary).hexdigest(),
+  }
+  if not identity["function_name"] or not identity["binary_sha256"]:
+    raise ValueError("frozen v2 ordinal contains an incomplete runtime identity")
+  return identity
+
+
 def _fixed_base_prefix_reference_operands(q4_blocks: np.ndarray, values: np.ndarray,
                                           scales: np.ndarray, sums: np.ndarray,
                                           prefix_epochs: int
@@ -1745,12 +1813,200 @@ def _fixed_base_prefix_reference_operands(q4_blocks: np.ndarray, values: np.ndar
   )
 
 
+def _fixed_base_ordinal_reference_operands(q4_blocks: np.ndarray, values: np.ndarray,
+                                           scales: np.ndarray, sums: np.ndarray,
+                                           epoch: int
+                                           ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+  """Slice one static-offset ordinal from retained full-role fixed-base buffers."""
+  if not isinstance(q4_blocks, np.ndarray) or q4_blocks.ndim != 3 or \
+     q4_blocks.dtype != np.uint8 or q4_blocks.shape[2] != 144:
+    raise ValueError("fixed-base ordinal requires uint8 Q4 blocks shaped [N,epochs,144]")
+  if not isinstance(epoch, int) or isinstance(epoch, bool) or not 0 <= epoch < q4_blocks.shape[1]:
+    raise ValueError("fixed-base reference ordinal is outside the Q4 epoch extent")
+  if any(not isinstance(value, np.ndarray) or value.ndim != 3
+         for value in (values, scales, sums)):
+    raise ValueError("fixed-base ordinal requires rank-three retained DS4 arrays")
+  if values.shape[0] != q4_blocks.shape[1] * 2 or \
+     scales.shape[0] != values.shape[0] or sums.shape != scales.shape:
+    raise ValueError("retained full-role DS4 arrays differ from the Q4 epoch extent")
+  record = epoch * 2
+  return (
+    np.ascontiguousarray(q4_blocks[:, epoch:epoch+1, :]).reshape(-1),
+    np.ascontiguousarray(values[record:record+2]),
+    np.ascontiguousarray(scales[record:record+2]),
+    np.ascontiguousarray(sums[record:record+2]),
+  )
+
+
 def _validate_v2_fixed_base_prefix_epochs(role_spec: ExactRoleSpec, prefix_epochs: int) -> int:
   """Admit bounded diagnostic prefixes plus the role's complete epoch count."""
   allowed = tuple(sorted({1, 2, 3, role_spec.epochs}))
   if not isinstance(prefix_epochs, int) or isinstance(prefix_epochs, bool) or prefix_epochs not in allowed:
     raise ValueError(f"frozen v2 GPU probe prefix_epochs must be one of {allowed} for role {role_spec.role!r}")
   return prefix_epochs
+
+
+def _validate_v2_fixed_base_ordinal(role_spec: ExactRoleSpec, epoch: int) -> int:
+  """Admit one diagnostic ordinal without weakening contiguous-prefix admission."""
+  if not isinstance(epoch, int) or isinstance(epoch, bool) or not 0 <= epoch < role_spec.epochs:
+    raise ValueError(
+      f"frozen v2 GPU probe epoch must be in [0,{role_spec.epochs}) for role {role_spec.role!r}")
+  return epoch
+
+
+def run_frozen_epoch_program_set_ordinal_probe(
+    *, role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC, frozen_bundle: str | Path,
+    epoch: int) -> dict[str, Any]:
+  """Run one frozen v2 ordinal against full-role fixed-base producer buffers."""
+  schema = "tinygrad.mmq_frozen_epoch_program_set_ordinal_probe.v2"
+  role_spec = admit_exact_role_spec(role_spec)
+  epoch = _validate_v2_fixed_base_ordinal(role_spec, epoch)
+
+  from tinygrad import Tensor, dtypes
+  from tinygrad.device import Device
+  from tinygrad.engine.realize import get_call_arg_uops
+  from tinygrad.uop.ops import Ops
+  from extra.qk.mmq_frozen_epoch_program_set import load_frozen_epoch_program_set_binding
+  from extra.qk.mmq_q4k_q8_reference import (
+    Q81MMQDS4Activation, Q81MMQDS4ActivationSpec, Q4KQ81MMQTileSpec,
+    Q8_1_MMQ_DS4_LAYOUT, q4k_q8_1_mmq_ds4_tile_reference,
+    q8_1_mmq_ds4_quantize_reference,
+  )
+  from extra.qk.q4k_q8_activation_producer import (
+    PhysicalDS4Q8ActivationSpec, produce_physical_ds4_q8_1_tensor,
+  )
+
+  binding = load_frozen_epoch_program_set_binding(role_spec, frozen_bundle)
+  if len(binding.program_keys) != role_spec.epochs:
+    raise RuntimeError("frozen v2 ordinal probe requires the complete admitted PROGRAM family")
+  program = binding.artifact.programs[epoch]
+  if program.key.hex() != binding.program_keys[epoch]:
+    raise RuntimeError("frozen v2 ordinal PROGRAM key differs from its admitted family position")
+  variant_row = binding.artifact.manifest["variants"][epoch]
+  if variant_row["epoch"] != epoch or variant_row["program_key"] != binding.program_keys[epoch]:
+    raise RuntimeError("frozen v2 ordinal manifest differs from its admitted family position")
+  target_identity = _frozen_program_set_ordinal_target_identity(binding, epoch)
+  m, n, k = role_spec.shape
+  words_np = _random_q4_words(n, k, 20260721)
+  activation_np = np.random.default_rng(20260722).standard_normal(
+    (m, k), dtype=np.float32).astype(np.float16)
+  packed_weight = Tensor(words_np, dtype=dtypes.uint32, device="AMD")
+  activation = Tensor(activation_np, dtype=dtypes.float16, device="AMD")
+  tile = produce_physical_ds4_q8_1_tensor(
+    activation.cast(dtypes.float32).contiguous(),
+    PhysicalDS4Q8ActivationSpec(m, k))
+
+  output_seed = activation.flatten()[:1].cast(dtypes.float32)
+  zero = output_seed._apply_uop(lambda u: u.mul(0)).expand(m*n)
+  zeroed_output = Tensor.empty(m*n, dtype=dtypes.float32, device="AMD")
+  zeroed_output.assign(zero)
+  fixed_inputs = (packed_weight, tile.values, tile.scales, tile.sums)
+  output = zeroed_output.custom_kernel(
+    *fixed_inputs, fxn=lambda *_buffers, program=program: program)[0]
+
+  family_calls = [node for node in output.uop.toposort()
+                  if node.op is Ops.CALL and node.src[0] in binding.artifact.programs]
+  if len(family_calls) != 1 or family_calls[0].src[0] is not program:
+    raise RuntimeError("frozen v2 ordinal graph did not retain exactly its selected PROGRAM")
+  arguments = get_call_arg_uops(family_calls[0])
+  if len(arguments) != 5:
+    raise RuntimeError("frozen v2 ordinal graph lost the five-buffer ABI")
+  if arguments[0].buf_uop is not zeroed_output.uop.buf_uop:
+    raise RuntimeError("frozen v2 ordinal graph lost its explicitly zeroed output allocation")
+  if len({id(value.buf_uop) for value in arguments}) != 5:
+    raise RuntimeError("frozen v2 ordinal graph aliased distinct ABI buffer roles")
+  graph_evidence = {
+    "program_calls": 1, "expected_program_calls": 1,
+    "selected_epoch": epoch, "selected_program_key": binding.program_keys[epoch],
+    "selected_sink_key": variant_row["sink_key"], "selected_offsets": dict(variant_row["offsets"]),
+    "single_program_ordinal": True, "five_buffer_abi": True,
+    "distinct_buffer_roles": True, "initial_output_zeroed": True,
+    "buffer_uop_keys": [value.buf_uop.key.hex() for value in arguments],
+    "full_role_producer_calls": 1,
+  }
+  retained_outputs = _retained_producer_tensors([tile])
+  graph_evidence.update({
+    "retained_producer_tensor_count": len(retained_outputs),
+    "retained_producer_tensor_names": ["values", "scales", "sums"],
+    "retained_as_companion_realization_outputs": True,
+  })
+
+  if not bool(getattr(Device["AMD"], "is_aql", False)):
+    raise RuntimeError("frozen v2 ordinal GPU probe requires AMD_AQL=1")
+  try:
+    packet_census = _realize_with_aql_packet_census(
+      output, target_program_identities=(target_identity,),
+      require_all_five_vas_fixed=True, retained_outputs=retained_outputs)
+  except BaseException as exc:
+    packet_census = _aql_packet_census_from_exception(exc)
+    return {
+      "schema": schema, "status": "BLOCKED",
+      "exact_blocker": "frozen v2 ordinal target dispatch failed",
+      "exception": type(exc).__name__, "error": str(exc),
+      "research_only": True, "production_dispatch_changed": False,
+      "production_scheduler_used": False, "scheduler_prefix_semantics_changed": False,
+      "default_route": "direct_packed", "role": role_spec.role,
+      "shape": list(role_spec.shape), "epoch": epoch,
+      "graph": graph_evidence, "target_program_identity": target_identity,
+      **({"dispatch": {"aql_packet_census": packet_census}} if packet_census is not None else {}),
+      "family_identity": binding.family_identity,
+      "frozen_bundle": str(Path(frozen_bundle).resolve()),
+      "compile_performed": False, "requires_recompile": False,
+      "hip_used": False, "no_fallback": True,
+    }
+
+  actual_values, actual_scales, actual_sums = \
+    tile.values.numpy(), tile.scales.numpy(), tile.sums.numpy()
+  q4_blocks = words_np.view(np.uint8).reshape(n, role_spec.epochs, 144)
+  q4_epoch, values_epoch, scales_epoch, sums_epoch = _fixed_base_ordinal_reference_operands(
+    q4_blocks, actual_values, actual_scales, actual_sums, epoch)
+  ref_spec = Q4KQ81MMQTileSpec(
+    role="frozen_epoch_program_set_ordinal", m=m, n=n, k=256,
+    m_tile=m, n_tile=n, activation_layout=Q8_1_MMQ_DS4_LAYOUT)
+  actual_ds4 = Q81MMQDS4Activation(
+    values_epoch, scales_epoch.astype(np.float16).astype(np.float32),
+    sums_epoch.astype(np.float16).astype(np.float32),
+    Q81MMQDS4ActivationSpec(m=m, k=256, m_tile=m))
+  consumer_reference = q4k_q8_1_mmq_ds4_tile_reference(q4_epoch, actual_ds4, ref_spec)
+  consumer_comparison = _numeric_comparison(
+    output.numpy().reshape(m, n), consumer_reference)
+
+  oracle_values, oracle_scales, oracle_sums = q8_1_mmq_ds4_quantize_reference(
+    activation_np.astype(np.float32))
+  producer_diagnostic = _producer_oracle_diagnostic(
+    actual_values, actual_scales, actual_sums,
+    oracle_values, oracle_scales, oracle_sums)
+  passed = consumer_comparison["status"] == "pass"
+  return {
+    "schema": schema, "status": "PASS" if passed else "CONSUMER_MISMATCH",
+    "exact_blocker": None if passed else
+      "ordinal output differs from reference built from retained full-role producer bytes",
+    "research_only": True, "production_dispatch_changed": False,
+    "production_scheduler_used": False, "scheduler_prefix_semantics_changed": False,
+    "default_route": "direct_packed", "role": role_spec.role,
+    "shape": list(role_spec.shape), "epoch": epoch,
+    "producer": "extra.qk.q4k_q8_activation_producer.produce_physical_ds4_q8_1_tensor",
+    "graph": graph_evidence,
+    "dispatch": {
+      "launcher": "tinygrad_scheduler", "mode": "single_static_offset_program_ordinal",
+      "count": 1, "epoch": epoch, "program_key": binding.program_keys[epoch],
+      "target_program_identity": target_identity,
+      "aql_packet_census": packet_census,
+    },
+    "correctness": {
+      "status": "PASS" if passed else "CONSUMER_MISMATCH",
+      "comparison": consumer_comparison,
+      "authority": "same_session_retained_full_role_producer_bytes_with_exact_static_offset_ordinal_and_fp16_metadata_roundtrip",
+    },
+    "producer_diagnostic": {
+      **producer_diagnostic,
+      "source_oracle": "extra.qk.mmq_q4k_q8_reference.q8_1_mmq_ds4_quantize_reference",
+    },
+    "family_identity": binding.family_identity,
+    "frozen_bundle": str(Path(frozen_bundle).resolve()),
+    "compile_performed": False, "requires_recompile": False,
+    "hip_used": False, "no_fallback": True,
+  }
 
 
 def run_frozen_epoch_program_set_prefix_probe(
@@ -1841,6 +2097,7 @@ def run_frozen_epoch_program_set_prefix_probe(
       output, target_program_identities=target_identities,
       require_all_five_vas_fixed=True, retained_outputs=retained_outputs)
   except BaseException as exc:
+    packet_census = _aql_packet_census_from_exception(exc)
     return {
       "schema": schema, "status": "BLOCKED",
       "exact_blocker": "frozen v2 fixed-base target dispatch rejected before doorbell",
@@ -1849,6 +2106,7 @@ def run_frozen_epoch_program_set_prefix_probe(
       "default_route": "direct_packed", "role": role_spec.role,
       "shape": list(role_spec.shape), "prefix_epochs": prefix_epochs,
       "graph": graph_evidence, "target_program_identities": target_identities,
+      **({"dispatch": {"aql_packet_census": packet_census}} if packet_census is not None else {}),
       "family_identity": binding.family_identity,
       "frozen_bundle": str(Path(frozen_bundle).resolve()),
       "compile_performed": False, "requires_recompile": False,
@@ -2139,6 +2397,90 @@ def run_frozen_epoch_program_set_prefix_probe_isolated(
   return result
 
 
+def run_frozen_epoch_program_set_ordinal_probe_isolated(
+    *, role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC, frozen_bundle: str | Path,
+    epoch: int, timeout_seconds: float = 180.0,
+    child_env_overrides: Mapping[str, str] | None = None) -> dict[str, Any]:
+  """Run one v2 fixed-base ordinal in a fresh, health-guarded child."""
+  schema = "tinygrad.mmq_frozen_epoch_program_set_ordinal_probe.v2"
+  try:
+    role_spec = admit_exact_role_spec(role_spec)
+    epoch = _validate_v2_fixed_base_ordinal(role_spec, epoch)
+    env_overrides = _validated_child_env_overrides(child_env_overrides)
+    if env_overrides.get("AMD_AQL", "1") != "1":
+      raise ValueError("frozen v2 ordinal GPU probe requires AMD_AQL=1")
+    env_overrides["AMD_AQL"] = "1"
+  except (TypeError, ValueError) as exc:
+    return {"schema": schema, "status": "BLOCKED", "exact_blocker": str(exc)}
+  if timeout_seconds <= 0:
+    return {"schema": schema, "status": "BLOCKED", "exact_blocker": "timeout_seconds must be positive"}
+  from extra.qk.mmq_target_epoch_orchestrator import parse_kernel_faults, read_kernel_log_since, spawned_tiny_health_probe
+  try: health_before = bool(spawned_tiny_health_probe(env_overrides))
+  except BaseException: health_before = False
+  if not health_before:
+    return {
+      "schema": schema, "status": "BLOCKED", "exact_blocker": "pre-run GPU health probe failed",
+      "health_before": False, "child_env_overrides": env_overrides,
+    }
+
+  child_env = dict(os.environ)
+  child_env.update({"DEV": "AMD", "PYTHONPATH": str(ROOT) + os.pathsep + child_env.get("PYTHONPATH", "")})
+  child_env.update(env_overrides)
+  role_expr = f"exact_role_spec({role_spec.role!r}, shape={role_spec.shape!r})"
+  bundle_arg = repr(str(Path(frozen_bundle).resolve()))
+  code = (
+    "import json; from extra.qk.mmq_exact_role_spec import exact_role_spec; "
+    "from extra.qk.mmq_llama_five_buffer_gpu_harness import run_frozen_epoch_program_set_ordinal_probe; "
+    f"print(json.dumps(run_frozen_epoch_program_set_ordinal_probe(role_spec={role_expr}, "
+    f"frozen_bundle={bundle_arg}, epoch={epoch})), flush=True)")
+  started = time.time()
+  try:
+    proc = subprocess.run([sys.executable, "-c", code], cwd=ROOT, env=child_env,
+                          text=True, capture_output=True, timeout=timeout_seconds, check=False)
+  except subprocess.TimeoutExpired:
+    proc = None
+  try: kernel_faults = parse_kernel_faults(read_kernel_log_since(started))
+  except BaseException as exc: kernel_faults = [f"kernel-log scan failed: {type(exc).__name__}: {exc}"]
+  try: health_after = bool(spawned_tiny_health_probe(env_overrides))
+  except BaseException: health_after = False
+  if proc is None:
+    return {
+      "schema": schema, "status": "BLOCKED",
+      "exact_blocker": "frozen v2 ordinal child timed out",
+      "timeout": True, "timeout_seconds": timeout_seconds,
+      "health_before": health_before, "health_after": health_after,
+      "kernel_faults": kernel_faults, "child_env_overrides": env_overrides,
+    }
+  result = None
+  for line in reversed(proc.stdout.strip().splitlines()):
+    try: candidate = json.loads(line)
+    except json.JSONDecodeError: continue
+    if isinstance(candidate, dict):
+      result = candidate
+      break
+  if result is None:
+    result = {
+      "schema": schema, "status": "BLOCKED",
+      "exact_blocker": "frozen v2 ordinal child returned no structured result",
+      "returncode": proc.returncode, "stdout_tail": proc.stdout[-2000:],
+      "stderr_tail": proc.stderr[-2000:],
+    }
+  result.update({
+    "health_before": health_before, "health_after": health_after,
+    "kernel_faults": kernel_faults, "child_env_overrides": env_overrides,
+  })
+  if kernel_faults:
+    result.update({"status": "BLOCKED", "exact_blocker": "AMD kernel fault/reset marker observed"})
+  elif not health_after:
+    result.update({"status": "BLOCKED", "exact_blocker": "post-run GPU health probe failed"})
+  elif proc.returncode != 0 and result.get("status") == "PASS":
+    result.update({
+      "status": "BLOCKED", "exact_blocker": "frozen v2 ordinal child exited non-zero",
+      "returncode": proc.returncode,
+    })
+  return result
+
+
 def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
                                               role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC,
                                               warmups: int = 0, rounds: int = 1,
@@ -2391,7 +2733,25 @@ def main() -> int:
                       help="run a 1/2-epoch frozen scheduler prefix with the real physical Q8 producer")
   parser.add_argument("--scheduler-v2-fixed-base-prefix-epochs", type=int,
                       help="run a 1/2/3-epoch or admitted-full-role frozen v2 static-offset prefix")
+  parser.add_argument("--scheduler-v2-fixed-base-ordinal", type=int,
+                      help="run one research-only frozen v2 static-offset ordinal")
   args = parser.parse_args()
+  if args.scheduler_v2_fixed_base_ordinal is not None:
+    if args.target_role_frozen_bundle is None:
+      parser.error("--scheduler-v2-fixed-base-ordinal requires --target-role-frozen-bundle")
+    role_spec = exact_role_spec(args.target_role_name, inventory=args.target_role_inventory)
+    row = run_frozen_epoch_program_set_ordinal_probe_isolated(
+      role_spec=role_spec, frozen_bundle=args.target_role_frozen_bundle,
+      epoch=args.scheduler_v2_fixed_base_ordinal,
+      timeout_seconds=args.target_role_timeout,
+      child_env_overrides={"AMD_AQL": args.target_role_amd_aql}
+        if args.target_role_amd_aql is not None else None)
+    encoded = json.dumps(row, indent=2, sort_keys=True)
+    if args.target_role_output is not None:
+      args.target_role_output.parent.mkdir(parents=True, exist_ok=True)
+      args.target_role_output.write_text(encoded + "\n")
+    print(encoded)
+    return 0 if row.get("status") == "PASS" else 1
   if args.scheduler_v2_fixed_base_prefix_epochs is not None:
     if args.target_role_frozen_bundle is None:
       parser.error("--scheduler-v2-fixed-base-prefix-epochs requires --target-role-frozen-bundle")

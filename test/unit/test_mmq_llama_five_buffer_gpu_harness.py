@@ -12,17 +12,20 @@ from tinygrad.uop.ops import Ops, UOp
 from extra.qk.mmq_exact_role_spec import exact_role_spec
 from extra.qk.mmq_llama_five_buffer_full_kernel import build_llama_five_buffer_full_kernel
 from extra.qk.mmq_llama_five_buffer_gpu_harness import (TARGET_IN_PLACE_ACCUMULATION, _accumulate_target_role_epoch,
+  _aql_packet_census_from_exception,
   _aql_target_program_identity, _audit_target_aql_kernargs,
   _bind_sink, _dispatch_with_runtime_evidence, _numeric_comparison, _pack_q4_epochs_contiguous,
   _decode_aql_kernel_dispatch_packet, _load_frozen_execution_binding, _random_q4_words, _runtime_identity_evidence,
-  _fixed_base_prefix_reference_operands, _frozen_program_set_target_identities,
+  _fixed_base_ordinal_reference_operands, _fixed_base_prefix_reference_operands,
+  _frozen_program_set_ordinal_target_identity, _frozen_program_set_target_identities,
   _producer_oracle_diagnostic, _producer_probe_status,
-  _realize_outputs_together, _retained_producer_tensors,
+  _realize_outputs_together, _realize_with_aql_packet_census, _retained_producer_tensors,
   _scheduler_prefix_two_launches,
-  _validate_v2_fixed_base_prefix_epochs,
+  _validate_v2_fixed_base_ordinal, _validate_v2_fixed_base_prefix_epochs,
   _validate_frozen_execution_fixture, _validate_frozen_fixture, _validated_child_env_overrides,
   _zero_persistent_target_output,
   main, run_amd_validation, run_frozen_scheduler_prefix_two_probe_isolated,
+  run_frozen_epoch_program_set_ordinal_probe_isolated,
   run_frozen_epoch_program_set_prefix_probe_isolated,
   run_frozen_scheduler_producer_prefix_probe_isolated,
   run_full_grid_target_role_probe, run_full_grid_target_role_probe_isolated)
@@ -180,6 +183,86 @@ def test_aql_target_census_identity_and_five_qword_scale_contract_are_cpu_testab
     _audit_target_aql_kernargs([1, 2], [], expected_vas=None, require_fixed_scale_va=True)
 
 
+def test_aql_packet_census_retains_accepted_packet_and_kernargs_when_doorbell_faults(monkeypatch):
+  import ctypes
+  from tinygrad.device import Device
+  from tinygrad.runtime import ops_amd
+  from tinygrad.runtime.autogen import hsa
+
+  descriptor_va, kernarg_va = 0x810000, 0x910000
+  argument_vas = [0x100000 + slot*0x20000 for slot in range(5)]
+  argument_sizes = [0x10000 + slot*0x1000 for slot in range(5)]
+  desc, queue = object(), object()
+
+  class FakeDevice:
+    is_aql = True
+    def compute_queue_desc(self, index):
+      assert index == 0
+      return desc
+  dev = FakeDevice()
+  monkeypatch.setattr(type(Device), "__getitem__", lambda self, key: dev)
+
+  class View:
+    def __init__(self, values): self.values = values
+    def view(self, **kwargs): return self.values
+  class Kernarg:
+    va_addr, size = kernarg_va, 40
+    def cpu_view(self): return View(argument_vas)
+  args_state = SimpleNamespace(
+    buf=Kernarg(),
+    bufs=tuple(SimpleNamespace(va_addr=va, size=size)
+               for va, size in zip(argument_vas, argument_sizes)))
+  program = SimpleNamespace(
+    name="target", lib=b"target binary", aql_prog_addr=descriptor_va)
+  identity = _aql_target_program_identity(program)
+
+  class Slot:
+    def __init__(self): self.data = bytearray(64)
+    def view(self, **kwargs): return memoryview(self.data)
+  slot = Slot()
+  packet = bytes(hsa.hsa_kernel_dispatch_packet_t(
+    header=ops_amd.AQL_HDR | (hsa.HSA_PACKET_TYPE_KERNEL_DISPATCH << hsa.HSA_PACKET_HEADER_TYPE),
+    kernel_object=descriptor_va, kernarg_address=ctypes.c_void_p(kernarg_va)))
+
+  monkeypatch.setattr(ops_amd.AMDComputeAQLQueue, "exec",
+                      lambda self, prg, state, global_size, local_size: self)
+  monkeypatch.setattr(ops_amd, "_publish_aql_packet",
+                      lambda target, payload: target.data.__setitem__(slice(None), payload))
+  def faulting_doorbell(self, doorbell_dev, doorbell_value=None):
+    raise RuntimeError("simulated post-audit MMU fault")
+  monkeypatch.setattr(ops_amd.AMDQueueDesc, "signal_doorbell", faulting_doorbell)
+
+  class Output:
+    def realize(self, *retained):
+      ops_amd.AMDComputeAQLQueue.exec(queue, program, args_state, (1, 1, 1), (1, 1, 1))
+      ops_amd._publish_aql_packet(slot, packet)
+      ops_amd.AMDQueueDesc.signal_doorbell(desc, dev)
+
+  with pytest.raises(RuntimeError, match="simulated post-audit MMU fault") as raised:
+    _realize_with_aql_packet_census(
+      Output(), target_program_identities=(identity,),
+      require_all_five_vas_fixed=True)
+  census = _aql_packet_census_from_exception(raised.value)
+  assert census is not None
+  assert census["status"] == "REALIZATION_ERROR"
+  assert census["realization_exception"] == "RuntimeError"
+  assert census["realization_error"] == "simulated post-audit MMU fault"
+  assert census["compute_doorbell_count"] == 1
+  assert census["accepted_target_call_count"] == census["call_count"] == 1
+  assert census["pending_constructed_dispatch_count"] == 0
+  assert census["pending_published_packet_count"] == 0
+  call = census["calls"][0]
+  assert call["accepted_before_doorbell"] is True and call["all_checks_pass"] is True
+  assert call["program_identity"] == call["expected_program_identity"] == identity
+  assert call["kernel_object"] == descriptor_va and call["kernarg_address"] == kernarg_va
+  assert call["kernarg_qwords"] == argument_vas
+  assert call["argument_buffers"] == [
+    {"slot": slot, "va": va, "size": size}
+    for slot, (va, size) in enumerate(zip(argument_vas, argument_sizes))]
+  assert call["checks"]["five_qwords_match_constructed_buffers"] is True
+  assert census["all_accepted_target_calls_pass"] is True
+
+
 def test_scheduler_producer_diagnostic_reports_qvalues_metadata_and_target_half_rounding():
   values = np.array([[[1, -2, 3]]], dtype=np.int8)
   scales = np.array([[[0.125]]], dtype=np.float32)
@@ -306,6 +389,23 @@ def test_v2_fixed_base_prefix_reference_slices_static_offsets_from_full_buffers(
   assert all(value.flags.c_contiguous for value in (q4_prefix, values_prefix, scales_prefix, sums_prefix))
 
 
+def test_v2_fixed_base_ordinal_reference_slices_one_exact_static_offset():
+  q4 = np.arange(3 * 4 * 144, dtype=np.uint8).reshape(3, 4, 144)
+  values = np.arange(8 * 2 * 128, dtype=np.int16).astype(np.int8).reshape(8, 2, 128)
+  scales = np.arange(8 * 2 * 4, dtype=np.float32).reshape(8, 2, 4)
+  sums = scales + 1000
+  q4_epoch, values_epoch, scales_epoch, sums_epoch = \
+    _fixed_base_ordinal_reference_operands(q4, values, scales, sums, 2)
+  np.testing.assert_array_equal(q4_epoch, np.ascontiguousarray(q4[:, 2:3, :]).reshape(-1))
+  np.testing.assert_array_equal(values_epoch, values[4:6])
+  np.testing.assert_array_equal(scales_epoch, scales[4:6])
+  np.testing.assert_array_equal(sums_epoch, sums[4:6])
+  assert all(value.flags.c_contiguous for value in (q4_epoch, values_epoch, scales_epoch, sums_epoch))
+  for invalid in (-1, 4, True):
+    with pytest.raises(ValueError, match="outside the Q4 epoch extent"):
+      _fixed_base_ordinal_reference_operands(q4, values, scales, sums, invalid)
+
+
 @pytest.mark.parametrize("prefix_epochs", [3, 20, 68])
 def test_v2_fixed_base_target_identities_are_binary_exact_ordered_and_distinct(prefix_epochs):
   programs = tuple(SimpleNamespace(arg=SimpleNamespace(function_name="target")) for _ in range(prefix_epochs))
@@ -322,6 +422,19 @@ def test_v2_fixed_base_target_identities_are_binary_exact_ordered_and_distinct(p
     programs=programs, binaries=binaries[:-1] + (binaries[-2],)))
   with pytest.raises(ValueError, match="not distinct"):
     _frozen_program_set_target_identities(duplicate, prefix_epochs)
+
+
+def test_v2_fixed_base_ordinal_identity_selects_only_exact_retained_binary():
+  programs = tuple(SimpleNamespace(arg=SimpleNamespace(function_name="target")) for _ in range(4))
+  binaries = tuple(f"epoch-{epoch}".encode() for epoch in range(4))
+  binding = SimpleNamespace(artifact=SimpleNamespace(programs=programs, binaries=binaries))
+  assert _frozen_program_set_ordinal_target_identity(binding, 2) == {
+    "function_name": "target",
+    "binary_sha256": hashlib.sha256(b"epoch-2").hexdigest(),
+  }
+  for invalid in (-1, 4, True):
+    with pytest.raises(ValueError, match="outside the complete retained PROGRAM family"):
+      _frozen_program_set_ordinal_target_identity(binding, invalid)
 
 
 @pytest.mark.parametrize(("role", "prefix_epochs"), [
@@ -349,6 +462,29 @@ def test_v2_fixed_base_isolated_reuses_health_aql_and_exact_prefix(tmp_path, rol
   assert f"prefix_epochs={prefix_epochs}" in code and f"exact_role_spec({role!r}" in code
 
 
+@pytest.mark.parametrize(("role", "epoch"), [("attn_kv", 2), ("ffn_down", 67)])
+def test_v2_fixed_base_ordinal_isolated_reuses_health_aql_and_exact_epoch(tmp_path, role, epoch):
+  class _Proc:
+    returncode = 0
+    stdout = '{"schema":"tinygrad.mmq_frozen_epoch_program_set_ordinal_probe.v2","status":"PASS","scheduler_prefix_semantics_changed":false}\n'
+    stderr = ""
+  bundle = tmp_path / "frozen-v2"
+  with patch("extra.qk.mmq_llama_five_buffer_gpu_harness.subprocess.run", return_value=_Proc()) as run, \
+       patch("extra.qk.mmq_target_epoch_orchestrator.read_kernel_log_since", return_value=""), \
+       patch("extra.qk.mmq_target_epoch_orchestrator.spawned_tiny_health_probe", return_value=True) as health:
+    result = run_frozen_epoch_program_set_ordinal_probe_isolated(
+      role_spec=exact_role_spec(role), frozen_bundle=bundle,
+      epoch=epoch, timeout_seconds=1)
+  assert result["status"] == "PASS" and result["scheduler_prefix_semantics_changed"] is False
+  assert result["health_before"] is result["health_after"] is True
+  assert result["child_env_overrides"] == {"AMD_AQL": "1"}
+  assert run.call_args.kwargs["env"]["AMD_AQL"] == "1"
+  assert health.call_args_list[0].args[0] == {"AMD_AQL": "1"}
+  code = run.call_args.args[0][2]
+  assert "run_frozen_epoch_program_set_ordinal_probe" in code
+  assert f"epoch={epoch}" in code and f"exact_role_spec({role!r}" in code
+
+
 def test_v2_fixed_base_rejects_bad_prefix_or_pm4_before_health_or_gpu(tmp_path):
   with patch("extra.qk.mmq_target_epoch_orchestrator.spawned_tiny_health_probe") as health, \
        patch("extra.qk.mmq_llama_five_buffer_gpu_harness.subprocess.run") as run:
@@ -367,6 +503,23 @@ def test_v2_fixed_base_rejects_bad_prefix_or_pm4_before_health_or_gpu(tmp_path):
   assert pm4["status"] == "BLOCKED" and "requires AMD_AQL=1" in pm4["exact_blocker"]
 
 
+def test_v2_fixed_base_ordinal_rejects_bad_epoch_or_pm4_before_health_or_gpu(tmp_path):
+  with patch("extra.qk.mmq_target_epoch_orchestrator.spawned_tiny_health_probe") as health, \
+       patch("extra.qk.mmq_llama_five_buffer_gpu_harness.subprocess.run") as run:
+    negative = run_frozen_epoch_program_set_ordinal_probe_isolated(
+      frozen_bundle=tmp_path / "frozen", epoch=-1)
+    at_extent = run_frozen_epoch_program_set_ordinal_probe_isolated(
+      frozen_bundle=tmp_path / "frozen", epoch=20)
+    pm4 = run_frozen_epoch_program_set_ordinal_probe_isolated(
+      frozen_bundle=tmp_path / "frozen", epoch=2,
+      child_env_overrides={"AMD_AQL": "0"})
+  health.assert_not_called()
+  run.assert_not_called()
+  assert negative["status"] == "BLOCKED" and "must be in [0,20)" in negative["exact_blocker"]
+  assert at_extent["status"] == "BLOCKED" and "must be in [0,20)" in at_extent["exact_blocker"]
+  assert pm4["status"] == "BLOCKED" and "requires AMD_AQL=1" in pm4["exact_blocker"]
+
+
 def test_v2_fixed_base_prefix_admission_uses_dynamic_full_role_epoch_count():
   attn, down = exact_role_spec("attn_kv"), exact_role_spec("ffn_down")
   assert [_validate_v2_fixed_base_prefix_epochs(attn, value) for value in (1, 2, 3, 20)] == [1, 2, 3, 20]
@@ -374,6 +527,15 @@ def test_v2_fixed_base_prefix_admission_uses_dynamic_full_role_epoch_count():
   for role_spec, invalid in ((attn, 4), (attn, 68), (down, 4), (down, 20), (down, True)):
     with pytest.raises(ValueError, match="prefix_epochs must be one of"):
       _validate_v2_fixed_base_prefix_epochs(role_spec, invalid)
+
+
+def test_v2_fixed_base_ordinal_admission_uses_dynamic_full_role_epoch_count():
+  attn, down = exact_role_spec("attn_kv"), exact_role_spec("ffn_down")
+  assert [_validate_v2_fixed_base_ordinal(attn, value) for value in (0, 2, 19)] == [0, 2, 19]
+  assert [_validate_v2_fixed_base_ordinal(down, value) for value in (0, 2, 67)] == [0, 2, 67]
+  for role_spec, invalid in ((attn, -1), (attn, 20), (down, 68), (down, True)):
+    with pytest.raises(ValueError, match="epoch must be in"):
+      _validate_v2_fixed_base_ordinal(role_spec, invalid)
 
 
 def test_v2_fixed_base_cli_accepts_dynamic_full_role_epoch_count(monkeypatch, capsys, tmp_path):
@@ -391,6 +553,23 @@ def test_v2_fixed_base_cli_accepts_dynamic_full_role_epoch_count(monkeypatch, ca
   assert probe.call_args.kwargs["role_spec"].role == "ffn_down"
   assert probe.call_args.kwargs["prefix_epochs"] == 68
   assert json.loads(capsys.readouterr().out)["status"] == "PASS"
+
+
+def test_v2_fixed_base_ordinal_cli_dispatches_research_only_probe(monkeypatch, capsys, tmp_path):
+  bundle = tmp_path / "frozen-v2"
+  monkeypatch.setattr("sys.argv", [
+    "mmq_llama_five_buffer_gpu_harness",
+    "--scheduler-v2-fixed-base-ordinal", "2",
+    "--target-role-name", "attn_kv",
+    "--target-role-frozen-bundle", str(bundle),
+  ])
+  with patch(
+      "extra.qk.mmq_llama_five_buffer_gpu_harness.run_frozen_epoch_program_set_ordinal_probe_isolated",
+      return_value={"status": "PASS", "scheduler_prefix_semantics_changed": False}) as probe:
+    assert main() == 0
+  assert probe.call_args.kwargs["role_spec"].role == "attn_kv"
+  assert probe.call_args.kwargs["epoch"] == 2
+  assert json.loads(capsys.readouterr().out)["scheduler_prefix_semantics_changed"] is False
 
 
 def test_target_role_in_place_mode_fails_closed_before_gpu_for_unsafe_options():
