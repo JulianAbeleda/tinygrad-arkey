@@ -42,6 +42,9 @@ MILESTONE_NAMES = (
   "M4_distinct_binary", "M5_correctness", "M6_same_session_timing", "M7_no_fallback",
 )
 DEFAULT_OUTPUT = pathlib.Path("bench/prefill-14b-mmq-machine-search/search-report.json")
+FULL_GPU_PROBE_CANDIDATE_ID = "prefill_14b_q4k_q8_1_hybrid_mmq_atom"
+FULL_GPU_PROBE_ROUTE_ID = "prefill_q4k_q8_1_hybrid_mmq_atom"
+FULL_GPU_PROBE_ROLE = "ffn_gate_up"
 LLAMA_KERNEL_SOURCES: tuple[dict[str, Any], ...] = (
   {
     "component": "mmq_route_and_launch",
@@ -448,6 +451,47 @@ def build_r4_evidence_artifacts() -> dict[str, Any]:
       shape={"M": 16, "N": 16, "K": 256},
       notes="R4 structural staging evidence plus R5 bounded numeric PASS; route promotion still blocks on same-session coop speed win and unified production binding",
     ),
+  }
+
+
+def build_full_gpu_probe_candidate(probe: dict[str, Any], *, r4_evidence: dict[str, Any] | None = None) -> dict[str, Any]:
+  """Adapt the full-grid GPU probe into the candidate evidence schema.
+
+  This is deliberately an evidence join, not an admission or route selector.
+  The probe proves the emitted 128x128x256 kernel's dispatch, artifact identity,
+  resources, and numerical output.  R4 owner/staging artifacts are joined for
+  M1/M2, while M6 (same-session timing) and M7 (route/no-fallback census) stay
+  false until the production-sized candidate is integrated.  Keeping those
+  gates explicit prevents a passing probe from becoming a promotion claim.
+  """
+  if not isinstance(probe, dict): raise TypeError("probe must be a mapping")
+  evidence = probe.get("evidence")
+  if not isinstance(evidence, dict): evidence = {}
+  r4 = build_r4_evidence_artifacts() if r4_evidence is None else r4_evidence
+  owner = r4.get("owner_coverage") if isinstance(r4, dict) else None
+  staging = r4.get("staging_sum_slots") if isinstance(r4, dict) else None
+  owner_ok = isinstance(owner, dict) and owner.get("status") == "PASS" and owner.get("production_dispatch_changed") is False
+  staging_ok = isinstance(staging, dict) and staging.get("status") == "PASS" and staging.get("production_dispatch_changed") is False
+  resources = evidence.get("resources") if isinstance(evidence.get("resources"), dict) else {}
+  resource_ok = resources.get("scratch_bytes") == 0 and resources.get("vgpr") is not None
+  distinct_ok = all(isinstance(evidence.get(k), str) and len(evidence[k]) == 64 for k in ("source_sha256", "binary_sha256"))
+  comparison = evidence.get("comparison") if isinstance(evidence.get("comparison"), dict) else {}
+  correctness_ok = probe.get("passed") is True and comparison.get("status") == "pass" and comparison.get("mismatch_count") == 0
+  milestones = {"M1": owner_ok, "M2": staging_ok, "M3": resource_ok, "M4": distinct_ok,
+                "M5": correctness_ok, "M6": False, "M7": False}
+  admission_payload = {
+    "candidate_id": FULL_GPU_PROBE_CANDIDATE_ID, "route_id": FULL_GPU_PROBE_ROUTE_ID,
+    "role": FULL_GPU_PROBE_ROLE, "quant_format": "Q4_K", "activation_format": "Q8_1",
+    "evidence": milestones,
+  }
+  canonical_identity = hashlib.sha256(json.dumps(admission_payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+  return {
+    **admission_payload, "canonical_identity": canonical_identity,
+    "promotion_eligible": False, "complete_atom": False,
+    "default_route": "direct_packed", "production_dispatch_changed": False,
+    "probe": probe, "owner_coverage": owner, "staging_sum_slots": staging,
+    "resource_evidence": resources,
+    "exact_blocker": "M6 same-session timing and M7 route/no-fallback evidence are not present; complete_atom is false",
   }
 
 

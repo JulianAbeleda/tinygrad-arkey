@@ -5,7 +5,7 @@ from extra.qk.mmq_bounded_harness import (
 )
 from extra.qk.mmq_machine_search import (
   build_r4_evidence_artifacts, build_r5_geometry_search_report, build_r6_route_gate_status,
-  build_r7_reduction_status, build_search_report, evaluate_candidate_promotion,
+  build_r7_reduction_status, build_search_report, build_full_gpu_probe_candidate, evaluate_candidate_promotion,
 )
 from extra.qk.mmq_machine_search import build_boltbeam_oracle_trace
 
@@ -152,6 +152,34 @@ def test_mmq_r4_evidence_artifacts_are_transfer_shaped_and_non_promoting():
   assert artifacts["gpu_owner_trace"]["production_dispatch_changed"] is False
   assert artifacts["staging_sum_slots"]["evidence_kind"] == "staging_sum_slots"
   assert artifacts["staging_sum_slots"]["status"] == "PASS"
+
+
+def test_full_gpu_probe_joins_candidate_identity_but_stays_non_promotable():
+  r4 = build_r4_evidence_artifacts()
+  probe = {
+    "protocol": "tinygrad.mmq_llama_five_buffer_gpu_harness.v1",
+    "shape": [128, 128, 256], "passed": True,
+    "verdict": "MMQ_LLAMA_FIVE_BUFFER_GPU_PASS",
+    "evidence": {
+      "source_sha256": "a" * 64, "binary_sha256": "b" * 64,
+      "resources": {"vgpr": 256, "scratch_bytes": 0, "lds_bytes": 57856},
+      "comparison": {"status": "pass", "mismatch_count": 0},
+    },
+  }
+  candidate = build_full_gpu_probe_candidate(probe, r4_evidence=r4)
+  assert candidate["candidate_id"] == "prefill_14b_q4k_q8_1_hybrid_mmq_atom"
+  assert candidate["route_id"] == "prefill_q4k_q8_1_hybrid_mmq_atom"
+  assert candidate["role"] == "ffn_gate_up"
+  assert candidate["quant_format"] == "Q4_K" and candidate["activation_format"] == "Q8_1"
+  assert candidate["evidence"] == {"M1": True, "M2": True, "M3": True, "M4": True,
+                                    "M5": True, "M6": False, "M7": False}
+  assert len(candidate["canonical_identity"]) == 64
+  assert candidate["owner_coverage"] is r4["owner_coverage"]
+  assert candidate["staging_sum_slots"] is r4["staging_sum_slots"]
+  assert candidate["complete_atom"] is False
+  assert candidate["promotion_eligible"] is False
+  assert candidate["default_route"] == "direct_packed"
+  assert candidate["production_dispatch_changed"] is False
 
 
 def test_mmq_r5_geometry_search_ranks_non_promotable_existing_atoms_with_fake_runner():
