@@ -1,0 +1,1474 @@
+{
+  "candidate_identity": "811e68be02b3ab8a0f3cd710ee69d7bb7710c6ee4c5e93330bd84f190b0ec176",
+  "canonical_identity": "811e68be02b3ab8a0f3cd710ee69d7bb7710c6ee4c5e93330bd84f190b0ec176",
+  "fixture": {
+    "coefficients_sha256": "47352584a0867532563699a3bc6139cacdfc07f7be12921336f619bbc46d4863",
+    "coverage": "all_256_within_block_positions_twice",
+    "seed": 20260718,
+    "selected_positions_sha256": "7b2134d541a7cc1f803776d822503e62552caee365fca1bf22b425eb3e78a725"
+  },
+  "health": {
+    "after": {
+      "command": [
+        "rocm-smi",
+        "--showproductname",
+        "--showmeminfo",
+        "vram",
+        "--showuse",
+        "--showtemp"
+      ],
+      "elapsed_seconds": 0.06837941100820899,
+      "ok": true,
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "\n\n========================= ROCm System Management Interface =========================\n=================================== Temperature ====================================\nGPU[0]\t\t: Temperature (Sensor edge) (C): 41.0\nGPU[0]\t\t: Temperature (Sensor junction) (C): 44.0\nGPU[0]\t\t: Temperature (Sensor memory) (C): 60.0\n====================================================================================\n================================ % time GPU is busy ================================\nGPU[0]\t\t: GPU use (%): 0\n====================================================================================\n=============================== Memory Usage (Bytes) ===============================\nGPU[0]\t\t: VRAM Total Memory (B): 25753026560\nGPU[0]\t\t: VRAM Total Used Memory (B): 269148160\n====================================================================================\n=================================== Product Info ===================================\nGPU[0]\t\t: Card series: \t\tNavi 31 [Radeon RX 7900 XT/7900 XTX/7900M]\nGPU[0]\t\t: Card model: \t\tRX 7900 GRE [XFX]\nGPU[0]\t\t: Card vendor: \t\tAdvanced Micro Devices, Inc. [AMD/ATI]\nGPU[0]\t\t: Card SKU: \t\tD7020100\n====================================================================================\n=============================== End of ROCm SMI Log ================================\n"
+    },
+    "before": {
+      "command": [
+        "rocm-smi",
+        "--showproductname",
+        "--showmeminfo",
+        "vram",
+        "--showuse",
+        "--showtemp"
+      ],
+      "elapsed_seconds": 0.06795762199908495,
+      "ok": true,
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "\n\n========================= ROCm System Management Interface =========================\n=================================== Temperature ====================================\nGPU[0]\t\t: Temperature (Sensor edge) (C): 41.0\nGPU[0]\t\t: Temperature (Sensor junction) (C): 44.0\nGPU[0]\t\t: Temperature (Sensor memory) (C): 60.0\n====================================================================================\n================================ % time GPU is busy ================================\nGPU[0]\t\t: GPU use (%): 0\n====================================================================================\n=============================== Memory Usage (Bytes) ===============================\nGPU[0]\t\t: VRAM Total Memory (B): 25753026560\nGPU[0]\t\t: VRAM Total Used Memory (B): 180826112\n====================================================================================\n=================================== Product Info ===================================\nGPU[0]\t\t: Card series: \t\tNavi 31 [Radeon RX 7900 XT/7900 XTX/7900M]\nGPU[0]\t\t: Card model: \t\tRX 7900 GRE [XFX]\nGPU[0]\t\t: Card vendor: \t\tAdvanced Micro Devices, Inc. [AMD/ATI]\nGPU[0]\t\t: Card SKU: \t\tD7020100\n====================================================================================\n=============================== End of ROCm SMI Log ================================\n"
+    }
+  },
+  "measurement_definition": {
+    "performance_claim": false,
+    "rounds": 3,
+    "scope": "full role output",
+    "statistic": "median",
+    "warmups": 1
+  },
+  "qualification_identity": "q6_direct_packed:sha256:e7b628b39119004ad0e14ee8541be4af71a93d7fbc052fca3b3767a4e7f81aba",
+  "result": {
+    "candidate_id": "811e68be02b3ab8a0f3cd710ee69d7bb7710c6ee4c5e93330bd84f190b0ec176",
+    "experiment_id": "q6-direct-packed-qualification",
+    "extensions": {
+      "identity": {
+        "session_id": "q6-fallback-ffn_down-seed20260718",
+        "system_snapshot_id": "ubuntu-dualboot",
+        "target_id": "AMD:gfx1100:wave32"
+      },
+      "workload": {
+        "role": "ffn_down",
+        "shape": [
+          512,
+          5120,
+          17408
+        ]
+      }
+    },
+    "phases": [
+      {
+        "error": null,
+        "evidence": {
+          "artifacts": {
+            "final_isa": {
+              "status": "satisfied"
+            },
+            "final_isa_manifest": {
+              "attributed_rows": 25,
+              "missing": [
+                "double_buffered_lds_window_binding",
+                "lds_store_data_provenance",
+                "wmma_source_fragment_provenance"
+              ],
+              "status": "partial",
+              "unknown_rows": 83
+            },
+            "resource_summary": {
+              "status": "satisfied",
+              "unavailable_fields": []
+            }
+          },
+          "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+          "canonical_identity": "811e68be02b3ab8a0f3cd710ee69d7bb7710c6ee4c5e93330bd84f190b0ec176",
+          "capture": {
+            "dispatch_permitted": false,
+            "mode": "compile_only",
+            "resource_authority": "compiled_program_descriptor"
+          },
+          "child_recompile_binary_identity_contract": {
+            "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+            "canonical_identity": "811e68be02b3ab8a0f3cd710ee69d7bb7710c6ee4c5e93330bd84f190b0ec176",
+            "compile_target": "AMD",
+            "enabled": true,
+            "reject_sha256_mismatch_before_dispatch": true,
+            "source_sha256": "ea0a6f9cece3158eb8c38904f4dbd84a7f12234e410f7ab185b685a04f76543c",
+            "target": "gfx1100"
+          },
+          "compile_target": "AMD",
+          "compiled_device": "AMD",
+          "errors": [],
+          "executed_binary_matches_compile": true,
+          "final_isa": {
+            "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+            "instruction_count": 964,
+            "schema": "tinygrad.amd.final_isa.v1",
+            "sha256": "12b02867b66e4041de1c2aa8b5db5389b465b8d80e5f37ddbf3811a730622555",
+            "tool": "/opt/rocm/llvm/bin/llvm-objdump: AMD LLVM version 22.0.0git"
+          },
+          "final_isa_manifest": {
+            "abi_metadata": {
+              "argument_order": [
+                "output",
+                "a",
+                "b"
+              ],
+              "globals": [
+                0,
+                1,
+                2
+              ],
+              "inputs": [
+                1,
+                2
+              ],
+              "outputs": [
+                0
+              ]
+            },
+            "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+            "candidate_id": "811e68be02b3ab8a0f3cd710ee69d7bb7710c6ee4c5e93330bd84f190b0ec176",
+            "digest_metadata": {
+              "canonical_identity": "811e68be02b3ab8a0f3cd710ee69d7bb7710c6ee4c5e93330bd84f190b0ec176"
+            },
+            "kernel_name": "E_4_40_32_4_2_2_2_2_4_2_543_2_8940d6c6e442d3d0612a0e53b30fc8f36baa84d53717d414de865e966aa4556c",
+            "ownership_metadata": {
+              "semantic_operands": [
+                {
+                  "abi_argument": "output",
+                  "abi_index": 0,
+                  "operand_id": "C",
+                  "semantic_role": "output"
+                },
+                {
+                  "abi_argument": "a",
+                  "abi_index": 1,
+                  "operand_id": "A",
+                  "semantic_role": "lhs_activation"
+                },
+                {
+                  "abi_argument": "b",
+                  "abi_index": 2,
+                  "decoder_version": "ggml_k_quant_v1",
+                  "operand_id": "B",
+                  "packed_bytes": 73113600,
+                  "quant_format": "Q6_K",
+                  "representation": "packed_scalar_decoder",
+                  "semantic_role": "rhs_weight",
+                  "storage_dtype": "uint16"
+                }
+              ]
+            },
+            "rows": [],
+            "schema": "tinygrad.amd_isa_proof_manifest.v1",
+            "source_sha256": "ea0a6f9cece3158eb8c38904f4dbd84a7f12234e410f7ab185b685a04f76543c"
+          },
+          "input_identity": "sha256:a5e200a93127d4043125123150fad57da6b9e0c3f2da6d1948d6740d2d8a53cb",
+          "input_identity_detail": {
+            "algorithm": "sha256",
+            "input_artifact_sha256": "a5e200a93127d4043125123150fad57da6b9e0c3f2da6d1948d6740d2d8a53cb",
+            "reference_identity_basis": "dtype_shape_and_c_contiguous_bytes",
+            "reference_sha256": "848b943b02b5f50901872047a9382a7a7f76877d01c88eaa07883773fa92b021",
+            "schema": "tinygrad.execution_input_identity.v1"
+          },
+          "isa_structure": {
+            "attributed_row_count": 25,
+            "counts": {
+              "barrier": 2,
+              "ds_load": 48,
+              "ds_store": 8,
+              "global_load": 20,
+              "global_store": 64,
+              "scratch": 0,
+              "wait": 34,
+              "wmma": 32
+            },
+            "missing_evidence": [
+              "double_buffered_lds_window_binding",
+              "lds_store_data_provenance",
+              "wmma_source_fragment_provenance"
+            ],
+            "operand_ownership_authority": "abi_dataflow_v1",
+            "operand_ownership_binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+            "operand_paths": [
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "fetch_group": "b:global",
+                "kind": "global_load",
+                "operand_id": "B",
+                "pc": 6420,
+                "row_index": 41,
+                "semantic_ownership": "abi_dataflow",
+                "source_operand_id": "B"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "fetch_group": "b:global",
+                "kind": "global_load",
+                "operand_id": "B",
+                "pc": 6428,
+                "row_index": 42,
+                "semantic_ownership": "abi_dataflow",
+                "source_operand_id": "B"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "fetch_group": "b:global",
+                "kind": "global_load",
+                "operand_id": "B",
+                "pc": 6436,
+                "row_index": 43,
+                "semantic_ownership": "abi_dataflow",
+                "source_operand_id": "B"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "fetch_group": "b:global",
+                "kind": "global_load",
+                "operand_id": "B",
+                "pc": 6444,
+                "row_index": 44,
+                "semantic_ownership": "abi_dataflow",
+                "source_operand_id": "B"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "fetch_group": "b:global",
+                "kind": "global_load",
+                "operand_id": "B",
+                "pc": 6452,
+                "row_index": 45,
+                "semantic_ownership": "abi_dataflow",
+                "source_operand_id": "B"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "fetch_group": "b:global",
+                "kind": "global_load",
+                "operand_id": "B",
+                "pc": 6460,
+                "row_index": 46,
+                "semantic_ownership": "abi_dataflow",
+                "source_operand_id": "B"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "fetch_group": "b:global",
+                "kind": "global_load",
+                "operand_id": "B",
+                "pc": 6496,
+                "row_index": 51,
+                "semantic_ownership": "abi_dataflow",
+                "source_operand_id": "B"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "fetch_group": "b:global",
+                "kind": "global_load",
+                "operand_id": "B",
+                "pc": 6504,
+                "row_index": 52,
+                "semantic_ownership": "abi_dataflow",
+                "source_operand_id": "B"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "fetch_group": "a:global",
+                "kind": "global_load",
+                "operand_id": "A",
+                "pc": 6676,
+                "row_index": 82,
+                "semantic_ownership": "abi_dataflow",
+                "source_operand_id": "A"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "fetch_group": "a:global",
+                "kind": "global_load",
+                "operand_id": "A",
+                "pc": 6684,
+                "row_index": 83,
+                "semantic_ownership": "abi_dataflow",
+                "source_operand_id": "A"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "fetch_group": "a:lds@5120",
+                "kind": "lds_store",
+                "operand_id": "A",
+                "pc": 7844,
+                "row_index": 286,
+                "semantic_ownership": "abi_dataflow",
+                "source_operand_id": "A"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "fetch_group": "a:lds@0",
+                "kind": "lds_store",
+                "operand_id": "A",
+                "pc": 7856,
+                "row_index": 288,
+                "semantic_ownership": "abi_dataflow",
+                "source_operand_id": "A"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_store",
+                "missing": "lds_store_data_provenance",
+                "operand_id": "unknown",
+                "pc": 7864,
+                "row_index": 289,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_store",
+                "missing": "lds_store_data_provenance",
+                "operand_id": "unknown",
+                "pc": 7872,
+                "row_index": 290,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "fetch_group": "a:global",
+                "kind": "global_load",
+                "operand_id": "A",
+                "pc": 7984,
+                "row_index": 312,
+                "semantic_ownership": "abi_dataflow",
+                "source_operand_id": "A"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "fetch_group": "b:global",
+                "kind": "global_load",
+                "operand_id": "B",
+                "pc": 8140,
+                "row_index": 333,
+                "semantic_ownership": "abi_dataflow",
+                "source_operand_id": "B"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "fetch_group": "b:global",
+                "kind": "global_load",
+                "operand_id": "B",
+                "pc": 8220,
+                "row_index": 343,
+                "semantic_ownership": "abi_dataflow",
+                "source_operand_id": "B"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "fetch_group": "b:global",
+                "kind": "global_load",
+                "operand_id": "B",
+                "pc": 8228,
+                "row_index": 344,
+                "semantic_ownership": "abi_dataflow",
+                "source_operand_id": "B"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "fetch_group": "b:global",
+                "kind": "global_load",
+                "operand_id": "B",
+                "pc": 8236,
+                "row_index": 345,
+                "semantic_ownership": "abi_dataflow",
+                "source_operand_id": "B"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "fetch_group": "b:global",
+                "kind": "global_load",
+                "operand_id": "B",
+                "pc": 8244,
+                "row_index": 346,
+                "semantic_ownership": "abi_dataflow",
+                "source_operand_id": "B"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "fetch_group": "b:global",
+                "kind": "global_load",
+                "operand_id": "B",
+                "pc": 8252,
+                "row_index": 347,
+                "semantic_ownership": "abi_dataflow",
+                "source_operand_id": "B"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "fetch_group": "b:global",
+                "kind": "global_load",
+                "operand_id": "B",
+                "pc": 8260,
+                "row_index": 348,
+                "semantic_ownership": "abi_dataflow",
+                "source_operand_id": "B"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "fetch_group": "b:global",
+                "kind": "global_load",
+                "operand_id": "B",
+                "pc": 8268,
+                "row_index": 349,
+                "semantic_ownership": "abi_dataflow",
+                "source_operand_id": "B"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "fetch_group": "a:global",
+                "kind": "global_load",
+                "operand_id": "A",
+                "pc": 8276,
+                "row_index": 350,
+                "semantic_ownership": "abi_dataflow",
+                "source_operand_id": "A"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "fetch_group": "a:lds@0",
+                "kind": "lds_load",
+                "operand_id": "A",
+                "pc": 8316,
+                "row_index": 358,
+                "semantic_ownership": "abi_dataflow",
+                "source_operand_id": "A"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 8324,
+                "row_index": 359,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 8332,
+                "row_index": 360,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 8340,
+                "row_index": 361,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 8348,
+                "row_index": 362,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 8356,
+                "row_index": 363,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 8364,
+                "row_index": 364,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 8372,
+                "row_index": 365,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 8380,
+                "row_index": 366,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 8388,
+                "row_index": 367,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 8396,
+                "row_index": 368,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 8404,
+                "row_index": 369,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 8412,
+                "row_index": 370,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 8420,
+                "row_index": 371,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 8428,
+                "row_index": 372,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 8436,
+                "row_index": 373,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 8444,
+                "row_index": 374,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 8452,
+                "row_index": 375,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 8460,
+                "row_index": 376,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 8468,
+                "row_index": 377,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 8476,
+                "row_index": 378,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 8484,
+                "row_index": 379,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 8492,
+                "row_index": 380,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 8500,
+                "row_index": 381,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "wmma",
+                "missing": "wmma_source_fragment_provenance",
+                "operand_id": "unknown",
+                "pc": 8520,
+                "row_index": 385,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "wmma",
+                "missing": "wmma_source_fragment_provenance",
+                "operand_id": "unknown",
+                "pc": 8528,
+                "row_index": 386,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "wmma",
+                "missing": "wmma_source_fragment_provenance",
+                "operand_id": "unknown",
+                "pc": 8540,
+                "row_index": 388,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "wmma",
+                "missing": "wmma_source_fragment_provenance",
+                "operand_id": "unknown",
+                "pc": 8548,
+                "row_index": 389,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "wmma",
+                "missing": "wmma_source_fragment_provenance",
+                "operand_id": "unknown",
+                "pc": 8560,
+                "row_index": 391,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "wmma",
+                "missing": "wmma_source_fragment_provenance",
+                "operand_id": "unknown",
+                "pc": 8568,
+                "row_index": 392,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "wmma",
+                "missing": "wmma_source_fragment_provenance",
+                "operand_id": "unknown",
+                "pc": 8580,
+                "row_index": 394,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "wmma",
+                "missing": "wmma_source_fragment_provenance",
+                "operand_id": "unknown",
+                "pc": 8588,
+                "row_index": 395,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "wmma",
+                "missing": "wmma_source_fragment_provenance",
+                "operand_id": "unknown",
+                "pc": 8600,
+                "row_index": 397,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "wmma",
+                "missing": "wmma_source_fragment_provenance",
+                "operand_id": "unknown",
+                "pc": 8612,
+                "row_index": 399,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "wmma",
+                "missing": "wmma_source_fragment_provenance",
+                "operand_id": "unknown",
+                "pc": 8624,
+                "row_index": 401,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "wmma",
+                "missing": "wmma_source_fragment_provenance",
+                "operand_id": "unknown",
+                "pc": 8636,
+                "row_index": 403,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "wmma",
+                "missing": "wmma_source_fragment_provenance",
+                "operand_id": "unknown",
+                "pc": 8648,
+                "row_index": 405,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "wmma",
+                "missing": "wmma_source_fragment_provenance",
+                "operand_id": "unknown",
+                "pc": 8656,
+                "row_index": 406,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "wmma",
+                "missing": "wmma_source_fragment_provenance",
+                "operand_id": "unknown",
+                "pc": 8664,
+                "row_index": 407,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "wmma",
+                "missing": "wmma_source_fragment_provenance",
+                "operand_id": "unknown",
+                "pc": 8672,
+                "row_index": 408,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "fetch_group": "a:lds@5120",
+                "kind": "lds_store",
+                "operand_id": "A",
+                "pc": 8708,
+                "row_index": 414,
+                "semantic_ownership": "abi_dataflow",
+                "source_operand_id": "A"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "fetch_group": "a:lds@0",
+                "kind": "lds_store",
+                "operand_id": "A",
+                "pc": 8716,
+                "row_index": 415,
+                "semantic_ownership": "abi_dataflow",
+                "source_operand_id": "A"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_store",
+                "missing": "lds_store_data_provenance",
+                "operand_id": "unknown",
+                "pc": 9760,
+                "row_index": 620,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_store",
+                "missing": "lds_store_data_provenance",
+                "operand_id": "unknown",
+                "pc": 9768,
+                "row_index": 621,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 9792,
+                "row_index": 626,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 9800,
+                "row_index": 627,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 9808,
+                "row_index": 628,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 9816,
+                "row_index": 629,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 9824,
+                "row_index": 630,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 9832,
+                "row_index": 631,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 9840,
+                "row_index": 632,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 9848,
+                "row_index": 633,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 9856,
+                "row_index": 634,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 9864,
+                "row_index": 635,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 9872,
+                "row_index": 636,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 9880,
+                "row_index": 637,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 9888,
+                "row_index": 638,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 9896,
+                "row_index": 639,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 9904,
+                "row_index": 640,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 9912,
+                "row_index": 641,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 9920,
+                "row_index": 642,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 9928,
+                "row_index": 643,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 9936,
+                "row_index": 644,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 9944,
+                "row_index": 645,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 9952,
+                "row_index": 646,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 9960,
+                "row_index": 647,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "wmma",
+                "missing": "wmma_source_fragment_provenance",
+                "operand_id": "unknown",
+                "pc": 9996,
+                "row_index": 653,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 10004,
+                "row_index": 654,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "lds_load",
+                "missing": "double_buffered_lds_window_binding",
+                "operand_id": "unknown",
+                "pc": 10012,
+                "row_index": 655,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "wmma",
+                "missing": "wmma_source_fragment_provenance",
+                "operand_id": "unknown",
+                "pc": 10048,
+                "row_index": 660,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "wmma",
+                "missing": "wmma_source_fragment_provenance",
+                "operand_id": "unknown",
+                "pc": 10056,
+                "row_index": 661,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "wmma",
+                "missing": "wmma_source_fragment_provenance",
+                "operand_id": "unknown",
+                "pc": 10068,
+                "row_index": 663,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "wmma",
+                "missing": "wmma_source_fragment_provenance",
+                "operand_id": "unknown",
+                "pc": 10080,
+                "row_index": 665,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "wmma",
+                "missing": "wmma_source_fragment_provenance",
+                "operand_id": "unknown",
+                "pc": 10096,
+                "row_index": 667,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "wmma",
+                "missing": "wmma_source_fragment_provenance",
+                "operand_id": "unknown",
+                "pc": 10108,
+                "row_index": 669,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "wmma",
+                "missing": "wmma_source_fragment_provenance",
+                "operand_id": "unknown",
+                "pc": 10124,
+                "row_index": 672,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "wmma",
+                "missing": "wmma_source_fragment_provenance",
+                "operand_id": "unknown",
+                "pc": 10392,
+                "row_index": 713,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "wmma",
+                "missing": "wmma_source_fragment_provenance",
+                "operand_id": "unknown",
+                "pc": 10412,
+                "row_index": 716,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "wmma",
+                "missing": "wmma_source_fragment_provenance",
+                "operand_id": "unknown",
+                "pc": 10512,
+                "row_index": 730,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "wmma",
+                "missing": "wmma_source_fragment_provenance",
+                "operand_id": "unknown",
+                "pc": 10520,
+                "row_index": 731,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "wmma",
+                "missing": "wmma_source_fragment_provenance",
+                "operand_id": "unknown",
+                "pc": 10548,
+                "row_index": 736,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "wmma",
+                "missing": "wmma_source_fragment_provenance",
+                "operand_id": "unknown",
+                "pc": 10572,
+                "row_index": 739,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "wmma",
+                "missing": "wmma_source_fragment_provenance",
+                "operand_id": "unknown",
+                "pc": 10584,
+                "row_index": 741,
+                "semantic_ownership": "unknown"
+              },
+              {
+                "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+                "kind": "wmma",
+                "missing": "wmma_source_fragment_provenance",
+                "operand_id": "unknown",
+                "pc": 10604,
+                "row_index": 744,
+                "semantic_ownership": "unknown"
+              }
+            ],
+            "row_count": 964,
+            "schema": "tinygrad.amd_isa_structure_summary.v1",
+            "unknown_row_count": 83
+          },
+          "packed_wmma_compile_gate": {
+            "blocked": false,
+            "candidate_id": "811e68be02b3ab8a0f3cd710ee69d7bb7710c6ee4c5e93330bd84f190b0ec176",
+            "contraction_program": "E_4_40_32_4_2_2_2_2_4_2_543_2_8940d6c6e442d3d0612a0e53b30fc8f36baa84d53717d414de865e966aa4556c",
+            "passed": true,
+            "quant_format": "Q6_K",
+            "reasons": [],
+            "schema": "packed-wmma-compile-gate.v1",
+            "status": "pass"
+          },
+          "passed": true,
+          "program": {
+            "abi": "amdgpu_kernel",
+            "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+            "name": "E_4_40_32_4_2_2_2_2_4_2_543_2_8940d6c6e442d3d0612a0e53b30fc8f36baa84d53717d414de865e966aa4556c",
+            "source_sha256": "ea0a6f9cece3158eb8c38904f4dbd84a7f12234e410f7ab185b685a04f76543c",
+            "target": "AMD"
+          },
+          "reference_identity": "sha256:848b943b02b5f50901872047a9382a7a7f76877d01c88eaa07883773fa92b021",
+          "resource_summary": {
+            "admitted_active_lds_bytes": 40960,
+            "allocated_vgpr": 248,
+            "authority": "final_code_object_metadata_descriptor_and_program_launch",
+            "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+            "canonical_identity": "811e68be02b3ab8a0f3cd710ee69d7bb7710c6ee4c5e93330bd84f190b0ec176",
+            "compiled_device": "AMD",
+            "grid": [
+              40,
+              4,
+              1
+            ],
+            "lds_bytes": 40960,
+            "schema": "tinygrad.amd.final_resource_summary.v1",
+            "scratch_bytes": 0,
+            "sgpr": 18,
+            "sgpr_spills": 0,
+            "source_sha256": "ea0a6f9cece3158eb8c38904f4dbd84a7f12234e410f7ab185b685a04f76543c",
+            "stage": "final_program",
+            "target": "gfx1100",
+            "vgpr": 198,
+            "vgpr_spills": 0,
+            "wavefront_size": 32,
+            "workgroup": [
+              32,
+              4,
+              2
+            ],
+            "workgroup_threads": 256
+          },
+          "runtime_binding": {
+            "dtypes": {
+              "a": "fp16",
+              "accumulator": "fp32",
+              "b": "fp16",
+              "c": "fp16"
+            },
+            "layout": {
+              "a": "row_major",
+              "b": "transposed_row_major",
+              "c": "row_major"
+            },
+            "profile": "c189e4bd9b89c73f734f3f6cd75f0f99267eaa8775d60dce7431bdfc7befb3d1",
+            "role": "ffn_down",
+            "shape": {
+              "k": 17408,
+              "m": 512,
+              "n": 5120
+            },
+            "target": {
+              "arch": "gfx1100",
+              "backend": "AMD",
+              "wave_size": 32
+            }
+          },
+          "schedule": {
+            "lds_bytes": 40960,
+            "pipeline": {
+              "buffer_count": 2,
+              "epoch_graph": [
+                {
+                  "barrier": "before_fragment_load",
+                  "consume": [
+                    "a",
+                    "b"
+                  ],
+                  "epoch": "body",
+                  "produce": [
+                    "a",
+                    "b"
+                  ],
+                  "slot": 0,
+                  "wait": [
+                    "global",
+                    "lds"
+                  ]
+                }
+              ],
+              "stage_count": 1
+            },
+            "threads": 256,
+            "tile": {
+              "k": 32,
+              "m": 128,
+              "n": 128
+            }
+          },
+          "schema": "prefill-transport-compile.v1",
+          "source_sha256": "ea0a6f9cece3158eb8c38904f4dbd84a7f12234e410f7ab185b685a04f76543c",
+          "surface": {
+            "consumer": "packed_dequant_wmma",
+            "role": "ffn_down",
+            "source_kind": "tinygrad_scheduler"
+          },
+          "target": "gfx1100",
+          "target_id": "amd_gfx1100",
+          "transport": "lds"
+        },
+        "identity": {
+          "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+          "canonical_identity": "811e68be02b3ab8a0f3cd710ee69d7bb7710c6ee4c5e93330bd84f190b0ec176",
+          "input_identity": "sha256:a5e200a93127d4043125123150fad57da6b9e0c3f2da6d1948d6740d2d8a53cb",
+          "reference_identity": "sha256:848b943b02b5f50901872047a9382a7a7f76877d01c88eaa07883773fa92b021",
+          "source_sha256": "ea0a6f9cece3158eb8c38904f4dbd84a7f12234e410f7ab185b685a04f76543c",
+          "target_id": "amd_gfx1100"
+        },
+        "phase": "compile",
+        "schema": "execution_bridge.phase_result.v1",
+        "status": "passed",
+        "unsupported": []
+      },
+      {
+        "error": null,
+        "evidence": {
+          "dispatch_state": "completed",
+          "executed_binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+          "guarded": {
+            "atol": 0.02,
+            "device_fault": false,
+            "device_healthy_after": true,
+            "device_healthy_before": true,
+            "dispatch_performed": true,
+            "elapsed_seconds": 0.0032848,
+            "errors": [],
+            "finite_max": 20.4375,
+            "finite_min": -18.875,
+            "finite_output": true,
+            "full_output_compared": true,
+            "guards_intact": true,
+            "identity": {
+              "candidate_id": "811e68be02b3ab8a0f3cd710ee69d7bb7710c6ee4c5e93330bd84f190b0ec176",
+              "experiment_id": "q6-direct-packed-qualification",
+              "request_digest": "dfad106bcc4c34c3d15ab69976fd7e8e3546687075fb11b65e0ead002a90032d",
+              "schedule_digest": "0051d953ecf311a6aca75c478c0ef6e66e1bdf15efa30925bb24977df9b04405"
+            },
+            "inf_fraction": 0.0,
+            "inputs_unchanged": true,
+            "max_abs_error": 0.015625,
+            "nan_fraction": 0.0,
+            "nonconstant_inputs": true,
+            "numerics_passed": true,
+            "output_shape": [
+              512,
+              5120
+            ],
+            "passed": true,
+            "rtol": 0.002,
+            "schema": "guarded-execution.v1",
+            "status": "passed"
+          },
+          "health": {
+            "device_fault": false,
+            "postflight": true,
+            "preflight": true,
+            "timeout_contained": false
+          }
+        },
+        "identity": {
+          "binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+          "candidate_id": "811e68be02b3ab8a0f3cd710ee69d7bb7710c6ee4c5e93330bd84f190b0ec176",
+          "canonical_identity": "811e68be02b3ab8a0f3cd710ee69d7bb7710c6ee4c5e93330bd84f190b0ec176",
+          "executed_binary_sha256": "03f65caef520f24c5d309d133f3b1a7e1c4d129acf5e5f3634828beea08bec9b",
+          "experiment_id": "q6-direct-packed-qualification",
+          "input_identity": "sha256:a5e200a93127d4043125123150fad57da6b9e0c3f2da6d1948d6740d2d8a53cb",
+          "reference_identity": "sha256:848b943b02b5f50901872047a9382a7a7f76877d01c88eaa07883773fa92b021",
+          "request_digest": "dfad106bcc4c34c3d15ab69976fd7e8e3546687075fb11b65e0ead002a90032d",
+          "schedule_digest": "0051d953ecf311a6aca75c478c0ef6e66e1bdf15efa30925bb24977df9b04405",
+          "session_id": "q6-fallback-ffn_down-seed20260718",
+          "source_sha256": "ea0a6f9cece3158eb8c38904f4dbd84a7f12234e410f7ab185b685a04f76543c",
+          "target_id": "amd_gfx1100"
+        },
+        "phase": "execution",
+        "schema": "execution_bridge.phase_result.v1",
+        "status": "passed",
+        "unsupported": []
+      },
+      {
+        "error": null,
+        "evidence": {
+          "element_count": 2621440,
+          "finite_max": 20.4375,
+          "finite_min": -18.875,
+          "finite_output": true,
+          "full_output_compared": true,
+          "inf_fraction": 0.0,
+          "inputs_unchanged": true,
+          "max_error": 0.015625,
+          "nan_fraction": 0.0,
+          "numerical_passed": true,
+          "scope": "full_gemm",
+          "tolerance_abs": 0.02,
+          "tolerance_rel": 0.002
+        },
+        "identity": {
+          "candidate_id": "811e68be02b3ab8a0f3cd710ee69d7bb7710c6ee4c5e93330bd84f190b0ec176",
+          "experiment_id": "q6-direct-packed-qualification",
+          "request_digest": "dfad106bcc4c34c3d15ab69976fd7e8e3546687075fb11b65e0ead002a90032d",
+          "schedule_digest": "0051d953ecf311a6aca75c478c0ef6e66e1bdf15efa30925bb24977df9b04405"
+        },
+        "phase": "correctness",
+        "schema": "execution_bridge.phase_result.v1",
+        "status": "passed",
+        "unsupported": []
+      },
+      {
+        "error": null,
+        "evidence": {
+          "inclusion": "kernel_only",
+          "noise_threshold": 0.0,
+          "repetitions": 3,
+          "samples": [
+            0.0033164,
+            0.0033621199999999997,
+            0.00328488
+          ],
+          "scope": "kernel",
+          "statistic": "median",
+          "sync": "guarded_dispatch",
+          "units": "s",
+          "value": 0.0033164,
+          "warmups": 1
+        },
+        "identity": {},
+        "phase": "timing",
+        "schema": "execution_bridge.phase_result.v1",
+        "status": "passed",
+        "unsupported": []
+      }
+    ],
+    "request_digest": "dfad106bcc4c34c3d15ab69976fd7e8e3546687075fb11b65e0ead002a90032d",
+    "schema": "execution_bridge.result.v1"
+  },
+  "route_id": "direct_packed",
+  "schema": "tinygrad.q6_direct_packed_qualification.v1",
+  "status": "qualified",
+  "workload": {
+    "phase": "prefill",
+    "quant_format": "Q6_K",
+    "role": "ffn_down",
+    "shape": {
+      "k": 17408,
+      "m": 512,
+      "n": 5120
+    },
+    "target": {
+      "arch": "gfx1100",
+      "backend": "AMD",
+      "wave_size": 32
+    }
+  }
+}
