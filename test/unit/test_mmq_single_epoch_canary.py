@@ -80,6 +80,19 @@ def test_fresh_output_mode_is_forwarded_and_marked():
   assert calls == [True]
 
 
+def test_epoch_sequence_overrides_range_and_is_forwarded():
+  calls: list[tuple] = []
+  def runner(callback, *, args=(), **kwargs):
+    calls.append(args[1:])
+    return IsolatedResult("passed", {"passed": True, "comparison": {"status": "pass"}, "target_dispatches": 3})
+  out = canary.run_single_epoch_canary(
+    epoch_start=0, epoch_count=1, epoch_sequence=(19, 0, 7), compile_fn=_compile,
+    runner=runner, fault_reader=lambda _: "", health_probe=lambda: True,
+  )
+  assert out["status"] == "PASS" and out["epoch_sequence"] == [19, 0, 7]
+  assert calls == [(19, 3, "AMD", 30_000, False, (19, 0, 7))]
+
+
 def test_timeout_fails_closed_without_health_retry():
   calls: list[int] = []
   def runner(*args, **kwargs): return IsolatedResult("timed_out", error="deadline", timed_out=True)
@@ -114,4 +127,14 @@ def test_invalid_prefix_count_never_compiles():
   try: canary.run_single_epoch_canary(epoch_start=19, epoch_count=2, compile_fn=compile_fn)
   except ValueError: pass
   else: raise AssertionError("out-of-range prefix must raise")
+  assert calls == []
+
+
+def test_invalid_epoch_sequence_never_compiles():
+  calls: list[int] = []
+  def compile_fn(_): calls.append(1); raise AssertionError("must not compile")
+  for sequence in ((), (0, 20)):
+    try: canary.run_single_epoch_canary(epoch_sequence=sequence, compile_fn=compile_fn)
+    except ValueError: pass
+    else: raise AssertionError("invalid sequence must raise")
   assert calls == []

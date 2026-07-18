@@ -88,7 +88,8 @@ def _buffer_record(name: str, tensor: Any, device: str) -> dict[str, Any]:
 
 def _run_epoch_worker(program_path: str, epoch_start: int, epoch_count: int = 1, device: str = DEVICE,
                       runtime_timeout_ms: int = DEFAULT_RUNTIME_TIMEOUT_MS,
-                      fresh_output_each_launch: bool = False) -> dict[str, Any]:
+                      fresh_output_each_launch: bool = False,
+                      epoch_sequence: tuple[int, ...] | None = None) -> dict[str, Any]:
   """Child-only persistent-preload target prefix and final oracle comparison."""
   from tinygrad import Tensor, dtypes
   from tinygrad.engine.realize import get_runtime
@@ -98,9 +99,16 @@ def _run_epoch_worker(program_path: str, epoch_start: int, epoch_count: int = 1,
     Q8_1_MMQ_DS4_LAYOUT, q4k_q8_1_mmq_ds4_tile_reference,
   )
 
-  if not isinstance(epoch_count, int) or epoch_count <= 0: raise ValueError("epoch_count must be positive")
-  if not 0 <= epoch_start < TOTAL_EPOCHS or epoch_start + epoch_count > TOTAL_EPOCHS:
-    raise ValueError(f"epoch range must fit [0,{TOTAL_EPOCHS - 1}]")
+  if epoch_sequence is None:
+    if not isinstance(epoch_count, int) or epoch_count <= 0: raise ValueError("epoch_count must be positive")
+    if not 0 <= epoch_start < TOTAL_EPOCHS or epoch_start + epoch_count > TOTAL_EPOCHS:
+      raise ValueError(f"epoch range must fit [0,{TOTAL_EPOCHS - 1}]")
+    epochs = tuple(range(epoch_start, epoch_start + epoch_count))
+  else:
+    if not epoch_sequence or any(not isinstance(e, int) or not 0 <= e < TOTAL_EPOCHS for e in epoch_sequence):
+      raise ValueError(f"epoch_sequence must be nonempty and use epochs in [0,{TOTAL_EPOCHS - 1}]")
+    epochs = tuple(epoch_sequence)
+    epoch_start, epoch_count = epochs[0], len(epochs)
   if not isinstance(runtime_timeout_ms, int) or runtime_timeout_ms <= 0: raise ValueError("runtime timeout must be positive")
   started = time.perf_counter()
   with Path(program_path).open("rb") as handle: program = pickle.load(handle)
@@ -112,9 +120,9 @@ def _run_epoch_worker(program_path: str, epoch_start: int, epoch_count: int = 1,
   checkpoints: dict[str, dict[str, int | None]] = {"start": _timeline_snapshot(device)}
   # Match strict target harness partial allocation: output is not host-zeroed
   # (the full-N target dispatch writes every element), avoiding an extra SDMA
-  # copy that would obscure the preload/runtime lifecycle. Allocate the first
-  # output in the same order in both modes; fresh mode then retains it and
-  # allocates a new held output only before each subsequent launch.
+  # copy that would obscure the preload/runtime lifecycle. Keep the first
+  # output's allocation order identical in both modes, then retain it and add
+  # fresh held outputs only for subsequent launches in fresh mode.
   output = Tensor.empty(m * n, dtype=dtypes.float32, device=device).realize()
   held_outputs: list[Any] = [output] if fresh_output_each_launch else []
   q4_tensor = Tensor(q4_packed, dtype=dtypes.uint32, device=device).realize()
@@ -127,7 +135,7 @@ def _run_epoch_worker(program_path: str, epoch_start: int, epoch_count: int = 1,
   dispatches: list[dict[str, Any]] = []
   gpu_ms_total = 0.0
   completed_epochs: list[int] = []
-  for ordinal, epoch in enumerate(range(epoch_start, epoch_start + epoch_count)):
+  for ordinal, epoch in enumerate(epochs):
     if fresh_output_each_launch and ordinal:
       output = Tensor.empty(m * n, dtype=dtypes.float32, device=device).realize()
       held_outputs.append(output)
@@ -149,7 +157,7 @@ def _run_epoch_worker(program_path: str, epoch_start: int, epoch_count: int = 1,
 
   # Recreate the independent oracle from the same deterministic arrays, with
   # FP16-rounded metadata exactly as the target harness uses.
-  epoch = epoch_start + epoch_count - 1
+  epoch = epochs[-1]
   q4_bytes = q4_packed.view(np.uint8).reshape(TOTAL_EPOCHS, n, 144)[epoch].reshape(-1)
   ep_values = values.reshape(TOTAL_EPOCHS * 2, m, 128)[epoch * 2:(epoch + 1) * 2]
   ep_scales = scales.reshape(TOTAL_EPOCHS * 2, m, 4)[epoch * 2:(epoch + 1) * 2]
@@ -164,7 +172,8 @@ def _run_epoch_worker(program_path: str, epoch_start: int, epoch_count: int = 1,
   comparison = _numeric_comparison(got, reference)
   return {"schema": f"{SCHEMA}.child", "status": "PASS" if comparison["status"] == "pass" else "BLOCKED",
           "passed": comparison["status"] == "pass", "epoch": epoch,
-          "epoch_start": epoch_start, "epoch_count": epoch_count, "completed_epochs": completed_epochs,
+          "epoch_start": epoch_start, "epoch_count": epoch_count, "epoch_sequence": list(epochs),
+          "completed_epochs": completed_epochs,
           "shape": [m, n, 256], "comparison": comparison, "gpu_ms": gpu_ms_total,
           "target_dispatches": epoch_count, "dispatches": dispatches,
           "timeline": checkpoints, "output_mode": "fresh_held" if fresh_output_each_launch else "persistent",
@@ -196,16 +205,24 @@ def _default_health_probe() -> bool:
 def run_single_epoch_canary(*, epoch: int = DEFAULT_EPOCH, epoch_start: int | None = None,
                             epoch_count: int = 1, output_path: str | Path | None = None,
                             fresh_output_each_launch: bool = False,
+                            epoch_sequence: tuple[int, ...] | list[int] | None = None,
                             compile_fn: Callable[[str | Path], tuple[str, dict[str, Any]]] | None = None,
                             device: str = DEVICE, timeout_seconds: float = DEFAULT_CHILD_TIMEOUT_SECONDS,
                             runtime_timeout_ms: int = DEFAULT_RUNTIME_TIMEOUT_MS,
                             runner: Callable[..., IsolatedResult] = run_isolated,
                             fault_reader: Callable[[float], str] = _default_fault_reader,
                             health_probe: Callable[[], bool] | None = _default_health_probe) -> dict[str, Any]:
-  if epoch_start is None: epoch_start = epoch
-  if not isinstance(epoch_count, int) or epoch_count <= 0: raise ValueError("epoch_count must be positive")
-  if not 0 <= epoch_start < TOTAL_EPOCHS or epoch_start + epoch_count > TOTAL_EPOCHS:
-    raise ValueError(f"epoch range must fit [0,{TOTAL_EPOCHS - 1}]")
+  if epoch_sequence is not None:
+    if not epoch_sequence or any(not isinstance(e, int) or not 0 <= e < TOTAL_EPOCHS for e in epoch_sequence):
+      raise ValueError(f"epoch_sequence must be nonempty and use epochs in [0,{TOTAL_EPOCHS - 1}]")
+    sequence = tuple(epoch_sequence)
+    epoch_start, epoch_count = sequence[0], len(sequence)
+  else:
+    if epoch_start is None: epoch_start = epoch
+    if not isinstance(epoch_count, int) or epoch_count <= 0: raise ValueError("epoch_count must be positive")
+    if not 0 <= epoch_start < TOTAL_EPOCHS or epoch_start + epoch_count > TOTAL_EPOCHS:
+      raise ValueError(f"epoch range must fit [0,{TOTAL_EPOCHS - 1}]")
+    sequence = None
   if timeout_seconds <= 0 or runtime_timeout_ms <= 0: raise ValueError("timeouts must be positive")
   if compile_fn is None:
     from extra.qk.mmq_target_epoch_orchestrator import compile_target_program_artifact
@@ -213,7 +230,9 @@ def run_single_epoch_canary(*, epoch: int = DEFAULT_EPOCH, epoch_start: int | No
   started = time.time()
   base: dict[str, Any] = {"schema": SCHEMA, "diagnostic_only": True, "promotion_eligible": False,
     "production_dispatch_changed": False, "no_fallback": True, "target_dispatches": epoch_count,
-    "epoch": epoch_start + epoch_count - 1, "epoch_start": epoch_start, "epoch_count": epoch_count,
+    "epoch": (sequence[-1] if sequence is not None else epoch_start + epoch_count - 1),
+    "epoch_start": epoch_start, "epoch_count": epoch_count,
+    "epoch_sequence": list(sequence) if sequence is not None else list(range(epoch_start, epoch_start + epoch_count)),
     "fresh_output_each_launch": bool(fresh_output_each_launch),
     "output_mode": "fresh_held" if fresh_output_each_launch else "persistent",
     "kernel_faults": [], "compile": None, "child": None, "health_after": None}
@@ -225,7 +244,7 @@ def run_single_epoch_canary(*, epoch: int = DEFAULT_EPOCH, epoch_start: int | No
       return _write_result(result, output_path)
     base["compile"] = evidence
     isolated = runner(_run_epoch_worker, args=(artifact_path, epoch_start, epoch_count, device, runtime_timeout_ms,
-                                               bool(fresh_output_each_launch)),
+                                               bool(fresh_output_each_launch), sequence),
                       timeout_seconds=float(timeout_seconds), start_method="spawn")
     base["child_status"], base["child_error"] = isolated.status, isolated.error
     if isolated.status == "passed" and isinstance(isolated.result, dict): base["child"] = isolated.result
@@ -267,13 +286,20 @@ def main(argv: list[str] | None = None) -> int:
                       help="legacy alias for --epoch-start when no prefix is requested")
   parser.add_argument("--epoch-start", type=int, default=None)
   parser.add_argument("--epoch-count", type=int, default=1)
+  parser.add_argument("--epoch-sequence", type=str, default=None,
+                      help="comma-separated epoch indices; overrides --epoch-start/--epoch-count")
   parser.add_argument("--fresh-output-each-launch", action="store_true",
                       help="allocate and retain a distinct output for each target launch")
   parser.add_argument("--output", type=Path)
   args = parser.parse_args(argv)
+  try:
+    sequence = None if args.epoch_sequence is None else tuple(int(part.strip()) for part in args.epoch_sequence.split(",") if part.strip())
+  except ValueError as exc:
+    parser.error(f"invalid --epoch-sequence: {exc}")
   result = run_single_epoch_canary(epoch=args.epoch, epoch_start=args.epoch_start,
                                    epoch_count=args.epoch_count, output_path=args.output,
-                                   fresh_output_each_launch=args.fresh_output_each_launch)
+                                   fresh_output_each_launch=args.fresh_output_each_launch,
+                                   epoch_sequence=sequence)
   print(json.dumps(result, sort_keys=True))
   return 0 if result.get("passed") else 1
 
