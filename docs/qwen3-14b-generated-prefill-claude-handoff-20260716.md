@@ -480,8 +480,9 @@ comparison/resource evidence.
 
 The harness now supports bounded N-tile chunking. The exact target shape with one K epoch and 16-N-tile chunks passes
 0/8,912,896 mismatches (max error 1.22e-4) in 3.38 seconds of same-session GPU time, proving the chunked address
-views and target geometry are numerically sound. The full 20-epoch chunked run still hit a 600-second HCQ timeout;
-one-tile chunks subsequently produced an MMU `NotPresent` fault. Chunking is diagnostic only and is not promoted.
+views and target geometry are numerically sound. A two-epoch run with the same 16-tile chunks also hit a 600-second
+HCQ timeout (the second epoch did not signal); the full 20-epoch run has the same health failure. One-tile chunks
+subsequently produced an MMU `NotPresent` fault. Chunking is diagnostic only and is not promoted.
 
 ## 1. Executive state
 
