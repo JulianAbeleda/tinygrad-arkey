@@ -1,0 +1,195 @@
+{
+  "best_candidate_id": "r5_llama_coop_oracle_16x16",
+  "default_route": "direct_packed",
+  "emitted_backend_win": true,
+  "exact_blocker": "emitted backend win awaits production role/shape integration",
+  "production_dispatch_changed": false,
+  "promotion_eligible": false,
+  "promotion_verdict": "R5_COOP_WIN_READY_FOR_R6",
+  "ranking": [
+    {
+      "backend": "llama_mmq_q4k_q8_1_coop_tile_oracle",
+      "candidate_id": "r5_llama_coop_oracle_16x16",
+      "correctness": {
+        "atol": 0.001,
+        "max_abs": 0.0,
+        "tiles": 1
+      },
+      "exact_blocker": null,
+      "production_dispatch_changed": false,
+      "promotion_eligible": false,
+      "reason": "numeric/ownership oracle only; no emitted AMD candidate",
+      "search_class": "llama_structure_oracle",
+      "shape": {
+        "K": 256,
+        "M": 16,
+        "N": 16
+      },
+      "speedup_vs_direct_packed": 38.1970777555635,
+      "status": "PASS",
+      "timing": {
+        "comparator_status": "measured",
+        "direct_packed_min_ms": 9.034527000039816,
+        "min_ms": 0.23652403615415096
+      }
+    },
+    {
+      "backend": "q4k_q8_1_mmq_amd_isa_full_grid_v0",
+      "candidate_id": "r5_full_grid_128x128",
+      "correctness": {
+        "authority": "full_grid_r5_same_session_reference",
+        "comparison": {
+          "atol": 0.003,
+          "first_mismatch_got": null,
+          "first_mismatch_index": null,
+          "first_mismatch_reference": null,
+          "got_shape": [
+            128,
+            128
+          ],
+          "got_size": 16384,
+          "inf_got": 0,
+          "inf_reference": 0,
+          "joint_finite": 16384,
+          "max_abs_error": 3.0517578125e-05,
+          "mean_abs_error": 1.1175870895385742e-08,
+          "mismatch_count": 0,
+          "nan_got": 0,
+          "nan_reference": 0,
+          "reference_shape": [
+            128,
+            128
+          ],
+          "reference_size": 16384,
+          "rtol": 0.003,
+          "status": "pass"
+        },
+        "status": "PASS"
+      },
+      "exact_blocker": null,
+      "production_dispatch_changed": false,
+      "promotion_eligible": false,
+      "reason": "emitted 128x128x256 full-grid GPU probe; bounded timing/correctness evidence only, no production role or shape integration",
+      "search_class": "bounded_geometry_emitted_full_grid",
+      "shape": {
+        "K": 256,
+        "M": 128,
+        "N": 128
+      },
+      "speedup_vs_direct_packed": 33.210641677360734,
+      "status": "PASS",
+      "timing": {
+        "comparator_status": "pass",
+        "direct_packed_min_ms": 9.327474981546402,
+        "min_ms": 0.28085801750421524
+      }
+    },
+    {
+      "backend": "q4k_q8_1_mmq_amd_ds4_lds_skeleton_atom_v0",
+      "candidate_id": "r5_ds4_lds_skeleton_4x5",
+      "correctness": {
+        "atol": 0.001,
+        "max_abs": 9.1552734375e-05,
+        "tiles": 1
+      },
+      "exact_blocker": null,
+      "production_dispatch_changed": false,
+      "promotion_eligible": false,
+      "reason": "existing LDS-staged DS4 skeleton geometry probe; not llama cooperative tile",
+      "search_class": "bounded_geometry_existing_atom",
+      "shape": {
+        "K": 256,
+        "M": 4,
+        "N": 5
+      },
+      "speedup_vs_direct_packed": 1.2083554034541775,
+      "status": "PASS",
+      "timing": {
+        "comparator_status": "measured",
+        "direct_packed_min_ms": 8.871169004123658,
+        "min_ms": 7.34152301447466
+      }
+    },
+    {
+      "backend": "q4k_q8_1_mmq_amd_ds4_warp_atom_v0",
+      "candidate_id": "r5_ds4_warp_4x5",
+      "correctness": {
+        "atol": 0.001,
+        "max_abs": 9.1552734375e-05,
+        "tiles": 1
+      },
+      "exact_blocker": null,
+      "production_dispatch_changed": false,
+      "promotion_eligible": false,
+      "reason": "existing DS4 warp atom geometry probe; not llama cooperative tile",
+      "search_class": "bounded_geometry_existing_atom",
+      "shape": {
+        "K": 256,
+        "M": 4,
+        "N": 5
+      },
+      "speedup_vs_direct_packed": 1.2014540547305446,
+      "status": "PASS",
+      "timing": {
+        "comparator_status": "measured",
+        "direct_packed_min_ms": 8.940189029090106,
+        "min_ms": 7.44114100234583
+      }
+    },
+    {
+      "backend": "q4k_q8_1_mmq_amd_ds4_dot4x4_atom_v0",
+      "candidate_id": "r5_ds4_dot4x4_8x7",
+      "correctness": {
+        "atol": 0.001,
+        "max_abs": 6.103515625e-05,
+        "tiles": 1
+      },
+      "exact_blocker": null,
+      "production_dispatch_changed": false,
+      "promotion_eligible": false,
+      "reason": "existing DS4 dot4x4 geometry probe; not llama cooperative tile",
+      "search_class": "bounded_geometry_existing_atom",
+      "shape": {
+        "K": 256,
+        "M": 8,
+        "N": 7
+      },
+      "speedup_vs_direct_packed": 1.127272746268563,
+      "status": "PASS",
+      "timing": {
+        "comparator_status": "measured",
+        "direct_packed_min_ms": 9.169399971142411,
+        "min_ms": 8.134144998621196
+      }
+    },
+    {
+      "backend": "q4k_q8_1_mmq_amd_ds4_coop_tile_atom_v0",
+      "candidate_id": "r5_ds4_coop_tile_16x16",
+      "correctness": {
+        "atol": 0.001,
+        "max_abs": 0.0001220703125,
+        "tiles": 1
+      },
+      "exact_blocker": null,
+      "production_dispatch_changed": false,
+      "promotion_eligible": false,
+      "reason": "bounded coop numeric atom; promotion only if it beats direct_packed in the same R5 report",
+      "search_class": "bounded_geometry_emitted_coop_atom",
+      "shape": {
+        "K": 256,
+        "M": 16,
+        "N": 16
+      },
+      "speedup_vs_direct_packed": 0.4567720789888489,
+      "status": "PASS",
+      "timing": {
+        "comparator_status": "measured",
+        "direct_packed_min_ms": 9.106452984269708,
+        "min_ms": 19.936535973101854
+      }
+    }
+  ],
+  "role_shape_integration": false,
+  "schema": "q4k-q8-1-mmq-r5-geometry-search.v1",
+  "status": "PASS_NON_PROMOTABLE"
+}
