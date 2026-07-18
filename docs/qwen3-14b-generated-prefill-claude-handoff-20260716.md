@@ -591,6 +591,13 @@ Epoch 3 alone from the identical full corrected preload passes 0/8,912,896 misma
 mismatch requires earlier launches in the same process. Narrow the first failing transition with two- and, only if
 needed, three-launch target-only prefixes before changing accumulation or route policy.
 
+The transition is now bounded: epochs 0→1 pass with 0 mismatches at epoch 1, while epochs 0→1→2 complete all timeline
+signals but leave epoch 2 with 24,277 mismatches (first `[48,384]`, max absolute error 202.38). Evidence is
+`docs/target-preloaded-target-only-epochs-0-1-20260718.json` and
+`docs/target-preloaded-target-only-epochs-0-2-20260718.json`. With no accumulation, no intermediate readback, and no
+queue fault, launch 3 is the first failing same-process transition. Next compare persistent output reuse against
+fresh, held output buffers per launch while keeping the runtime and preloaded inputs identical.
+
 ## 1. Executive state
 
 The project is building a generated tinygrad prefill route for non-fitting quantized models, using Qwen3-14B as the
