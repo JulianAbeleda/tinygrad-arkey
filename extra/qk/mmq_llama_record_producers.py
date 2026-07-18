@@ -105,34 +105,38 @@ def _q8_copy(dtype, field_offset_bytes: int):
   return produce
 
 
-def _q8_split_qs(sources: tuple[UOp, ...], row: UOp, k: UOp, width: int) -> UOp:
+def _q8_split_qs(sources: tuple[UOp, ...], row: UOp, k: UOp, width: int,
+                 *, record_rows: int | None = None) -> UOp:
   """Copy split DS4 values from physical ``[K/128, M, 128]`` storage."""
   source, record, field_element = sources[0], k//128, k%128
-  # The record stride is the full activation row count, not the fixed 128-row
-  # tile width.  Infer M from the physical [K/128, M, 128] allocation carried
-  # by this source pointer; this keeps multi-tile M>128 launches from reading
-  # the preceding K record's rows.
-  if source.dtype.size % (2*128): raise ValueError("split Q8 values storage is not [2, M, 128]")
-  row_stride = source.dtype.size // (2*128)
-  element_base = (record*row_stride+row)*128+field_element
+  # Compact K256 callers carry exactly two records and can infer M from the
+  # pointer. Full-role fixed-base callers must supply M explicitly: pointer
+  # size alone cannot distinguish [2,M,128] from [K/128,M,128].
+  if record_rows is None:
+    if source.dtype.size % (2*128): raise ValueError("split Q8 values storage is not [2, M, 128]")
+    record_rows = source.dtype.size // (2*128)
+  element_base = (record*record_rows+row)*128+field_element
   return _stack(dtypes.int8, tuple(source.index(element_base+i).load() for i in range(width)))
 
 
-def _q8_split_ds(sources: tuple[UOp, ...], row: UOp, k: UOp, width: int) -> UOp:
+def _q8_split_ds(sources: tuple[UOp, ...], row: UOp, k: UOp, width: int,
+                 *, record_rows: int | None = None) -> UOp:
   """Rebuild DS4 half2(scale, original sum) pairs from split fp32 metadata."""
   if width != 2: raise ValueError("split Q8 DS4 metadata producer requires one half2")
   scales, sums, record = sources[0], sources[1], k//128
-  if scales.dtype.size % (2*4) or sums.dtype.size % (2*4): raise ValueError("split Q8 metadata storage is not [2, M, 4]")
-  row_stride = scales.dtype.size // (2*4)
+  if record_rows is None:
+    if scales.dtype.size % (2*4) or sums.dtype.size % (2*4): raise ValueError("split Q8 metadata storage is not [2, M, 4]")
+    record_rows = scales.dtype.size // (2*4)
   group = (k%128)//2
-  element = (record*row_stride+row)*4+group
+  element = (record*record_rows+row)*4+group
   # These casts are intentionally independent: llama stores each fp32 operand
   # into its own half lane before constructing half2(scale, original sum).
   return _stack(dtypes.half, (scales.index(element).load().cast(dtypes.half),
                               sums.index(element).load().cast(dtypes.half)))
 
 
-def q4_k_qs_record_callback(sources: tuple[UOp, ...], row: UOp, k: UOp, width: int) -> UOp:
+def q4_k_qs_record_callback(sources: tuple[UOp, ...], row: UOp, k: UOp, width: int,
+                            *, row_stride_words: int = 36) -> UOp:
   """Inverse destination map of the two x_qs stores in load_tiles_q4_K."""
   source = sources[0]
   vals = []
@@ -140,38 +144,41 @@ def q4_k_qs_record_callback(sources: tuple[UOp, ...], row: UOp, k: UOp, width: i
     dst = k+i
     txi = (dst//16)*8 + dst%8
     high = (dst%16)//8
-    word = source.index(row*36 + 4 + txi).load()
+    word = source.index(row*row_stride_words + 4 + txi).load()
     vals.append(((word >> (high*4)) & UOp.const(dtypes.uint32, 0x0f0f0f0f)).cast(dtypes.int32))
   return _stack(dtypes.int32, tuple(vals))
 
 
-def _packed_byte(source: UOp, row: UOp, byte: UOp|int) -> UOp:
+def _packed_byte(source: UOp, row: UOp, byte: UOp|int, row_stride_words: int = 36) -> UOp:
   word, lane = byte//4, byte%4
-  return (source.index(row*36 + word).load() >> (lane*8)) & UOp.const(dtypes.uint32, 0xff)
+  return (source.index(row*row_stride_words + word).load() >> (lane*8)) & UOp.const(dtypes.uint32, 0xff)
 
 
-def _scale_or_min(source: UOp, row: UOp, group: UOp, minimum: bool) -> UOp:
+def _scale_or_min(source: UOp, row: UOp, group: UOp, minimum: bool,
+                  row_stride_words: int = 36) -> UOp:
   """Scalar spelling of unpack_scales_q45_K's exact packed six-bit ABI."""
   lo = group % 4
-  direct = _packed_byte(source, row, 4 + lo + (4 if minimum else 0)) & UOp.const(dtypes.uint32, 0x3f)
-  packed = _packed_byte(source, row, 12 + lo)
+  direct = _packed_byte(source, row, 4 + lo + (4 if minimum else 0), row_stride_words) & UOp.const(dtypes.uint32, 0x3f)
+  packed = _packed_byte(source, row, 12 + lo, row_stride_words)
   low4 = (packed >> (4 if minimum else 0)) & UOp.const(dtypes.uint32, 0x0f)
-  upper_src = _packed_byte(source, row, 8 + lo if minimum else 4 + lo)
+  upper_src = _packed_byte(source, row, 8 + lo if minimum else 4 + lo, row_stride_words)
   extended = low4 | ((upper_src >> 6) << 4)
   return (group < 4).where(direct, extended)
 
 
-def q4_k_dm_record_callback(sources: tuple[UOp, ...], row: UOp, k: UOp, width: int) -> UOp:
+def q4_k_dm_record_callback(sources: tuple[UOp, ...], row: UOp, k: UOp, width: int,
+                            *, row_stride_words: int = 36) -> UOp:
   """Produce half[16] = eight half2(d*scale, -dmin*minimum) correction pairs."""
   source = sources[0]
-  dm_word = source.index(row*36).load()
+  dm_word = source.index(row*row_stride_words).load()
   d = (dm_word & UOp.const(dtypes.uint32, 0xffff)).cast(dtypes.uint16).bitcast(dtypes.half)
   dmin = (dm_word >> 16).cast(dtypes.uint16).bitcast(dtypes.half)
   vals = []
   for i in range(width):
     half_index, group = k+i, (k+i)//2
     is_min = half_index % 2
-    scale, minimum = _scale_or_min(source, row, group, False), _scale_or_min(source, row, group, True)
+    scale, minimum = (_scale_or_min(source, row, group, False, row_stride_words),
+                      _scale_or_min(source, row, group, True, row_stride_words))
     if isinstance(is_min, UOp):
       code, base = is_min.cast(dtypes.bool).where(minimum, scale), is_min.cast(dtypes.bool).where(-dmin, d)
     else:
@@ -202,29 +209,35 @@ def _linear_q8_ds4_schedule(template: PackedRecordOperandTemplate, threads: Prec
   return tuple(stores)
 
 
-def _q4_k_oracle_schedule(template: PackedRecordOperandTemplate, threads: PrecontractThreadAxes,
-                          source_k: int) -> tuple[PackedRecordCooperativeStore, ...]:
-  """Exact wave-row payload fanout and paired-lane metadata ownership from load_tiles_q4_K."""
-  source, base_k, stores = template.source("record"), UOp.const(dtypes.weakint, source_k), []
-  # wave/threadIdx.y owns rows wave+8*i; lane is txi and one source word fans out to two decoded int32 destinations.
-  for iteration in range(16):
-    row = threads.wave_m+iteration*8
+def _q4_k_oracle_schedule_for_stride(row_stride_words: int):
+  def schedule(template: PackedRecordOperandTemplate, threads: PrecontractThreadAxes,
+               source_k: int) -> tuple[PackedRecordCooperativeStore, ...]:
+    """Exact wave-row payload fanout and paired-lane metadata ownership from load_tiles_q4_K."""
+    source, base_k, stores = template.source("record"), UOp.const(dtypes.weakint, source_k), []
+    # wave/threadIdx.y owns rows wave+8*i; lane is txi and one source word fans out to two decoded int32 destinations.
+    for iteration in range(16):
+      row = threads.wave_m+iteration*8
+      logical_row = template.row_tile_base+row
+      word = source.index(logical_row*row_stride_words+4+base_k//8+threads.lane).load()
+      for high in range(2):
+        value = _stack(dtypes.int32, (((word >> (high*4)) & UOp.const(dtypes.uint32, 0x0f0f0f0f)).cast(dtypes.int32),))
+        vector = 16*(threads.lane//8)+threads.lane%8+high*8
+        stores.append(PackedRecordCooperativeStore("qs", iteration*2+high, logical_row, base_k+threads.lane,
+                                                    row, vector, value))
+    # Each pair of lanes owns one row; ksc selects groups 0..3 or 4..7 and emits four exact half2 corrections.
+    row, ksc = threads.wave_m*16+threads.lane//2, threads.lane%2
     logical_row = template.row_tile_base+row
-    word = source.index(logical_row*36+4+base_k//8+threads.lane).load()
-    for high in range(2):
-      value = _stack(dtypes.int32, (((word >> (high*4)) & UOp.const(dtypes.uint32, 0x0f0f0f0f)).cast(dtypes.int32),))
-      vector = 16*(threads.lane//8)+threads.lane%8+high*8
-      stores.append(PackedRecordCooperativeStore("qs", iteration*2+high, logical_row, base_k+threads.lane,
-                                                  row, vector, value))
-  # Each pair of lanes owns one row; ksc selects groups 0..3 or 4..7 and emits four exact half2 corrections.
-  row, ksc = threads.wave_m*16+threads.lane//2, threads.lane%2
-  logical_row = template.row_tile_base+row
-  for lane_group in range(4):
-    group = 4*ksc+lane_group
-    logical_k = base_k+group*2
-    value = q4_k_dm_record_callback((source,), logical_row, logical_k, 2)
-    stores.append(PackedRecordCooperativeStore("dm", lane_group, logical_row, logical_k, row, group, value))
-  return tuple(stores)
+    for lane_group in range(4):
+      group = 4*ksc+lane_group
+      logical_k = base_k+group*2
+      value = q4_k_dm_record_callback((source,), logical_row, logical_k, 2,
+                                      row_stride_words=row_stride_words)
+      stores.append(PackedRecordCooperativeStore("dm", lane_group, logical_row, logical_k, row, group, value))
+    return tuple(stores)
+  return schedule
+
+
+_q4_k_oracle_schedule = _q4_k_oracle_schedule_for_stride(36)
 
 
 LLAMA_Q4_K_COOPERATIVE_SCHEDULE = PackedRecordCooperativeSchedule(
@@ -251,33 +264,51 @@ def build_q8_ds4_record_template(role: str, record_source: UOp, row_axis: UOp, k
 def build_split_q8_ds4_record_template(role: str, values_source: UOp, scales_source: UOp, sums_source: UOp,
                                        row_axis: UOp, k_axis: UOp, row_tile_base: UOp, *,
                                        source_layout: str = "Q8_1_MMQ_DS4_SPLIT",
-                                       sum_semantics: str = "sum_original_fp") -> PackedRecordOperandTemplate:
+                                       sum_semantics: str = "sum_original_fp",
+                                       record_rows: int | None = None) -> PackedRecordOperandTemplate:
   """Adapt split five-buffer Q8 arrays to the existing interleaved Q8_1 DS4 LDS row."""
   if source_layout != "Q8_1_MMQ_DS4_SPLIT": raise ValueError("split Q8 record producer requires Q8_1_MMQ_DS4_SPLIT source layout")
   if sum_semantics != "sum_original_fp": raise ValueError("split Q8 DS4 record producer requires sum_original_fp semantic")
-  required = (("values", values_source, dtypes.int8, 2*128*128),
-              ("scales", scales_source, dtypes.float32, 2*128*4),
-              ("sums", sums_source, dtypes.float32, 2*128*4))
+  if record_rows is not None and (not isinstance(record_rows, int) or isinstance(record_rows, bool) or record_rows <= 0):
+    raise ValueError("split Q8 record row count must be a positive integer")
+  rows = 128 if record_rows is None else record_rows
+  required = (("values", values_source, dtypes.int8, 2*rows*128),
+              ("scales", scales_source, dtypes.float32, 2*rows*4),
+              ("sums", sums_source, dtypes.float32, 2*rows*4))
   for name, source, dtype, size in required:
     if not isinstance(source.dtype, PtrDType) or source.dtype.base != dtype or source.dtype.size < size:
       raise TypeError(f"split Q8 {name} source must cover physical {dtype.name}[{size}] storage")
   return PackedRecordOperandTemplate(role, Q8_DS4_SPLIT_RECORD_ADAPTER,
     (PackedRecordSource("values", values_source), PackedRecordSource("scales", scales_source), PackedRecordSource("sums", sums_source)),
-    (PackedRecordFieldProducer("ds", ("scales", "sums"), _q8_split_ds, vector_bytes=4),
-     PackedRecordFieldProducer("qs", ("values",), _q8_split_qs, vector_bytes=4)),
+    (PackedRecordFieldProducer("ds", ("scales", "sums"),
+      lambda sources, row, k, width: _q8_split_ds(sources, row, k, width, record_rows=record_rows), vector_bytes=4),
+     PackedRecordFieldProducer("qs", ("values",),
+      lambda sources, row, k, width: _q8_split_qs(sources, row, k, width, record_rows=record_rows), vector_bytes=4)),
     (), "qs", row_axis, k_axis, row_tile_base, dtypes.char, LLAMA_Q8_DS4_COOPERATIVE_SCHEDULE)
 
 
 def build_q4_k_record_template(role: str, source: UOp, row_axis: UOp, k_axis: UOp,
                                row_tile_base: UOp, *, source_layout: str = "Q4_K_UINT32X36",
-                               decode_semantics: str = "llama_load_tiles_q4_K") -> PackedRecordOperandTemplate:
+                               decode_semantics: str = "llama_load_tiles_q4_K",
+                               row_stride_words: int = 36) -> PackedRecordOperandTemplate:
   if source_layout != "Q4_K_UINT32X36": raise ValueError("Q4 record producer requires packed Q4_K uint32x36 source layout")
   if decode_semantics != "llama_load_tiles_q4_K": raise ValueError("Q4 record producer requires llama load_tiles_q4_K semantic")
   if source.dtype.base != dtypes.uint32: raise TypeError("Q4_K source must be physical uint32[36] blocks")
+  if not isinstance(row_stride_words, int) or isinstance(row_stride_words, bool) or row_stride_words < 36:
+    raise ValueError("Q4_K row stride must be at least 36 uint32 words")
+  if source.dtype.size < 128*row_stride_words:
+    raise TypeError("Q4_K source does not cover 128 rows at the declared physical stride")
+  schedule = LLAMA_Q4_K_COOPERATIVE_SCHEDULE if row_stride_words == 36 else PackedRecordCooperativeSchedule(
+    f"llama-load-tiles-q4-k-wave-row-stride-{row_stride_words}-v1",
+    _q4_k_oracle_schedule_for_stride(row_stride_words), ("wave_m", "lane"))
   return PackedRecordOperandTemplate(role, Q4_K_RECORD_DECODE, (PackedRecordSource("record", source),),
-    (PackedRecordFieldProducer("qs", ("record",), q4_k_qs_record_callback, vector_bytes=4),
-     PackedRecordFieldProducer("dm", ("record",), q4_k_dm_record_callback, vector_bytes=4)),
-    ("padding",), "qs", row_axis, k_axis, row_tile_base, dtypes.char, LLAMA_Q4_K_COOPERATIVE_SCHEDULE)
+    (PackedRecordFieldProducer("qs", ("record",),
+      lambda sources, row, k, width: q4_k_qs_record_callback(
+        sources, row, k, width, row_stride_words=row_stride_words), vector_bytes=4),
+     PackedRecordFieldProducer("dm", ("record",),
+      lambda sources, row, k, width: q4_k_dm_record_callback(
+        sources, row, k, width, row_stride_words=row_stride_words), vector_bytes=4)),
+    ("padding",), "qs", row_axis, k_axis, row_tile_base, dtypes.char, schedule)
 
 
 # Explicit llama names plus short generic-template-friendly names.

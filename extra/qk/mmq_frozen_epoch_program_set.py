@@ -21,6 +21,7 @@ import tempfile
 from typing import Any, Callable, Mapping
 
 from tinygrad import dtypes
+from tinygrad.dtype import PtrDType
 from tinygrad.uop.ops import Ops, UOp
 
 from extra.qk.mmq_exact_role_spec import (
@@ -81,6 +82,31 @@ def _expected_abi(role_spec: ExactRoleSpec) -> tuple[dict[str, Any], ...]:
   } for parameter in five_buffer_parameters(*role_spec.shape))
 
 
+def _expected_physical_layout(role_spec: ExactRoleSpec) -> dict[str, Any]:
+  return {
+    "q4": {
+      "shape": ["N", "epochs", 36],
+      "epoch_base_words": 36,
+      "row_stride_words": role_spec.epochs * 36,
+    },
+    "q8_values": {
+      "shape": ["K/128", "M", 128],
+      "epoch_records": 2,
+      "record_stride_elements": role_spec.m * 128,
+    },
+    "q8_scales": {
+      "shape": ["K/128", "M", 4],
+      "epoch_records": 2,
+      "record_stride_elements": role_spec.m * 4,
+    },
+    "q8_original_sums": {
+      "shape": ["K/128", "M", 4],
+      "epoch_records": 2,
+      "record_stride_elements": role_spec.m * 4,
+    },
+  }
+
+
 def _program_payload(program: UOp) -> tuple[bytes, str]:
   binaries = [node.arg for node in program.src if node.op is Ops.BINARY]
   sources = [node.arg for node in program.src if node.op is Ops.SOURCE]
@@ -131,12 +157,118 @@ def _sink_offsets(sink: UOp) -> dict[str, int]:
   return {name: offsets[slot] for slot, name in enumerate(ABI_NAMES[1:], start=1)}
 
 
+def _peel_pointer_address(address: UOp) -> tuple[UOp, UOp | None] | None:
+  offsets, cursor = [], address
+  while True:
+    if cursor.op is Ops.INDEX:
+      if len(cursor.src) < 2: return None
+      offsets.append(cursor.src[1])
+      cursor = cursor.src[0]
+      continue
+    if cursor.op is Ops.AFTER and isinstance(cursor.dtype, PtrDType):
+      if not cursor.src: return cursor, None
+      cursor = cursor.src[0]
+      continue
+    break
+  if not offsets: return cursor, None
+  total = offsets[0]
+  for offset in offsets[1:]: total = total + offset
+  return cursor, total
+
+
+def _effective_param_index(address: UOp) -> tuple[int, UOp] | None:
+  peeled = _peel_pointer_address(address)
+  if peeled is None: return None
+  cursor, total = peeled
+  if cursor.op is not Ops.PARAM or total is None: return None
+  return int(cursor.arg.slot), total
+
+
+def _special_inference_expression(value: UOp) -> UOp:
+  replacements = {
+    node: UOp.variable(str(node.arg), int(node.vmin), int(node.vmax))
+    for node in value.toposort() if node.op is Ops.SPECIAL
+  }
+  return value.substitute(replacements).simplify()
+
+
+def _effective_address_counter(values: list[UOp], coordinates: tuple[dict[str, int], ...]
+                               ) -> dict[int, int]:
+  counts: dict[int, int] = {}
+  prepared = tuple(_special_inference_expression(value) for value in values)
+  try:
+    for coordinate in coordinates:
+      for value in prepared:
+        address = int(value.sym_infer(coordinate))
+        counts[address] = counts.get(address, 0) + 1
+  except (KeyError, TypeError, ValueError) as exc:
+    raise ValueError(f"epoch sink LOAD address cannot be evaluated over the admitted grid: {exc}") from exc
+  return counts
+
+
+def _endpoints(count: int) -> tuple[int, ...]:
+  if count <= 0: raise ValueError("admitted grid extent must be positive")
+  return tuple(sorted({0, count-1}))
+
+
+def _validate_sink_physical_strides(sink: UOp, role_spec: ExactRoleSpec, epoch: int) -> None:
+  effective: dict[int, list[UOp]] = {slot: [] for slot in range(1, 5)}
+  for node in sink.toposort():
+    if node.op is not Ops.LOAD: continue
+    peeled = _peel_pointer_address(node.src[0])
+    terminal = node.src[0] if peeled is None else peeled[0]
+    flattened = _effective_param_index(node.src[0])
+    terminal_input_slots = {
+      int(value.arg.slot) for value in terminal.toposort()
+      if value.op is Ops.PARAM and int(value.arg.slot) in effective
+    }
+    if terminal_input_slots and flattened is None:
+      raise ValueError("epoch sink contains an unsupported global input LOAD pointer chain")
+    if flattened is not None and flattened[0] in effective:
+      if terminal_input_slots != {flattened[0]}:
+        raise ValueError("epoch sink global input LOAD address mixes ABI slots")
+      effective[flattened[0]].append(flattened[1])
+
+  local_ids = tuple(range(256))
+  n_tiles, m_tiles = role_spec.n//128, role_spec.m//128
+  q4_coordinates = tuple(
+    {"lidx0": local, "gidx0": tile_n, "gidx1": 0}
+    for tile_n in _endpoints(n_tiles) for local in local_ids)
+  q4_actual = _effective_address_counter(effective[1], q4_coordinates)
+  q4_expected: dict[int, int] = {}
+  word_multiplicity = (8, 32, 32, 16) + (2,)*32
+  for tile_n in _endpoints(n_tiles):
+    base = (tile_n*128*role_spec.epochs+epoch)*36
+    for row in range(128):
+      for word, multiplicity in enumerate(word_multiplicity):
+        q4_expected[base+row*role_spec.epochs*36+word] = multiplicity
+  if q4_actual != q4_expected:
+    raise ValueError("epoch sink Q4 LOAD coverage does not match the admitted full-role physical layout")
+
+  q8_coordinates = tuple(
+    {"lidx0": local, "gidx0": 0, "gidx1": tile_m}
+    for tile_m in _endpoints(m_tiles) for local in local_ids)
+  expected_geometry = {2: 128, 3: 4, 4: 4}
+  for slot, width in expected_geometry.items():
+    actual = _effective_address_counter(effective[slot], q8_coordinates)
+    expected: dict[int, int] = {}
+    for tile_m in _endpoints(m_tiles):
+      base = (epoch*2*role_spec.m+tile_m*128)*width
+      for phase in range(2):
+        for row in range(128):
+          for element in range(width):
+            expected[base+(phase*role_spec.m+row)*width+element] = 1
+    if actual != expected:
+      raise ValueError(f"epoch sink {ABI_NAMES[slot]} LOAD coverage does not match the admitted full-role physical layout")
+
+
 def _validate_sink(sink: Any, role_spec: ExactRoleSpec, epoch: int) -> UOp:
   if not isinstance(sink, UOp) or sink.op is not Ops.SINK:
     raise ValueError("epoch variant does not retain its pre-lowering sink")
   _graph_abi(sink, role_spec, authority="sink")
   if _sink_offsets(sink) != _offset_row(_expected_offsets(role_spec, epoch)):
     raise ValueError("epoch sink compile-time offsets differ from its ordinal")
+  _validate_sink_physical_strides(sink, role_spec, epoch)
   return sink
 
 
@@ -240,6 +372,7 @@ def produce_frozen_epoch_program_set(output_dir: str | Path, *,
     family_identity = _sha256(_json_bytes({
       "role": role_spec.role, "shape": list(role_spec.shape),
       "candidate_identity": role_spec.candidate_canonical_identity,
+      "physical_layout": _expected_physical_layout(role_spec),
       "sink_keys": sink_keys, "program_keys": keys,
     }))
     manifest = {
@@ -255,6 +388,7 @@ def produce_frozen_epoch_program_set(output_dir: str | Path, *,
         "function": FUNCTION_NAME, "device": PROGRAM_DEVICE, "compile_target": AMD_ISA_TARGET,
         "globals": list(range(5)), "global_size": list(role_spec.program.grid),
         "local_size": list(LOCAL_SIZE), "abi": list(_expected_abi(role_spec)),
+        "physical_layout": _expected_physical_layout(role_spec),
       },
       "compiler_boundary": {
         "authority": "producer_same_session_emitted_family_variant",
@@ -310,6 +444,7 @@ def load_frozen_epoch_program_set(path: str | Path, *,
     "function": FUNCTION_NAME, "device": PROGRAM_DEVICE, "compile_target": AMD_ISA_TARGET,
     "globals": list(range(5)), "global_size": list(role_spec.program.grid),
     "local_size": list(LOCAL_SIZE), "abi": list(_expected_abi(role_spec)),
+    "physical_layout": _expected_physical_layout(role_spec),
   }
   if manifest.get("shared_program") != expected_shared:
     raise ValueError("v2 shared full-role ABI or launch identity changed")
@@ -370,6 +505,7 @@ def load_frozen_epoch_program_set(path: str | Path, *,
   expected_identity = _sha256(_json_bytes({
     "role": role_spec.role, "shape": list(role_spec.shape),
     "candidate_identity": role_spec.candidate_canonical_identity,
+    "physical_layout": _expected_physical_layout(role_spec),
     "sink_keys": sink_keys, "program_keys": keys,
   }))
   if manifest.get("family_identity") != expected_identity:

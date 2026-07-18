@@ -88,3 +88,35 @@ def test_split_q8_producer_uses_full_m_record_stride():
   ds = split.fields[0].producer((split.source("scales"), split.source("sums")), UOp.const(dtypes.weakint, r), UOp.const(dtypes.weakint, kk), 2)
   assert eval_uop(ds.gep(0).bitcast(dtypes.uint16), [(dtypes.float32, scales.reshape(-1).tolist())]) == np.asarray(scales[1, r, 3], dtype=np.float16).view(np.uint16).item()
   assert eval_uop(ds.gep(1).bitcast(dtypes.uint16), [(dtypes.float32, sums.reshape(-1).tolist())]) == np.asarray(sums[1, r, 3], dtype=np.float16).view(np.uint16).item()
+
+
+@pytest.mark.parametrize("epoch", [0, 19])
+def test_split_q8_full_role_explicit_stride_selects_adjacent_records(epoch):
+  records, m = 40, 128
+  row, k, zero = _axes()
+  values_root = UOp.param(0, dtypes.int8.ptr(records*m*128))
+  scales_root = UOp.param(1, dtypes.float32.ptr(records*m*4))
+  sums_root = UOp.param(2, dtypes.float32.ptr(records*m*4))
+  record0 = epoch * 2
+  split = build_split_q8_ds4_record_template(
+    "B", values_root.index(UOp.const(dtypes.weakint, record0*m*128), ptr=True),
+    scales_root.index(UOp.const(dtypes.weakint, record0*m*4), ptr=True),
+    sums_root.index(UOp.const(dtypes.weakint, record0*m*4), ptr=True),
+    row, k, zero, record_rows=m)
+  values = np.arange(records*m*128, dtype=np.int32).astype(np.int8)
+  scales = np.arange(records*m*4, dtype=np.float32)
+  sums = scales + 10000
+  r = 2
+  for phase in (0, 1):
+    kk = UOp.const(dtypes.weakint, phase*128+7)
+    qs = split.fields[1].producer((split.source("values"),), UOp.const(dtypes.weakint, r), kk, 4)
+    start = ((record0+phase)*m+r)*128+7
+    assert [eval_uop(qs.gep(i), [(dtypes.int8, values.tolist())]) for i in range(4)] == \
+      values[start:start+4].tolist()
+    ds = split.fields[0].producer(
+      (split.source("scales"), split.source("sums")), UOp.const(dtypes.weakint, r), kk, 2)
+    metadata = ((record0+phase)*m+r)*4+3
+    assert eval_uop(ds.gep(0).bitcast(dtypes.uint16), [(dtypes.float32, scales.tolist())]) == \
+      np.asarray(scales[metadata], dtype=np.float16).view(np.uint16).item()
+    assert eval_uop(ds.gep(1).bitcast(dtypes.uint16), [(dtypes.float32, sums.tolist())]) == \
+      np.asarray(sums[metadata], dtype=np.float16).view(np.uint16).item()

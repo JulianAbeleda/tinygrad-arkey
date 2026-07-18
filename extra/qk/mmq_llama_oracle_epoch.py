@@ -60,11 +60,18 @@ def build_llama_oracle_epoch_stage(q4_source: UOp, q8_source: UOp, *, q4_word_of
 
 def build_llama_oracle_epoch_stage_five_buffer(q4_words: UOp, values: UOp, scales: UOp, sums: UOp, *,
                                                 q4_word_offset:UOp|int=0, values_offset:UOp|int=0,
-                                                scales_offset:UOp|int=0, sums_offset:UOp|int=0
+                                                scales_offset:UOp|int=0, sums_offset:UOp|int=0,
+                                                q4_row_stride_words:int=36,
+                                                q8_record_rows:int|None=None,
                                                 ) -> HierarchicalPackedRecordStage:
   """Build the same exact epoch while adapting split five-buffer Q8 inputs."""
   if not isinstance(q4_words.dtype, PtrDType) or q4_words.dtype.base != dtypes.uint32 or q4_words.dtype.size < 128*36:
     raise TypeError("Q4 source must cover 128 physical uint32[36] blocks")
+  if not isinstance(q4_row_stride_words, int) or isinstance(q4_row_stride_words, bool) or q4_row_stride_words < 36:
+    raise ValueError("Q4 source row stride must be at least 36 uint32 words")
+  if q8_record_rows is not None and \
+     (not isinstance(q8_record_rows, int) or isinstance(q8_record_rows, bool) or q8_record_rows <= 0):
+    raise ValueError("split Q8 record row count must be a positive integer")
   offsets = []
   for offset in (q4_word_offset, values_offset, scales_offset, sums_offset):
     offsets.append(offset if isinstance(offset, UOp) else UOp.const(dtypes.weakint, offset))
@@ -75,8 +82,10 @@ def build_llama_oracle_epoch_stage_five_buffer(q4_words: UOp, values: UOp, scale
   row_a, k_a = UOp.range(128, 1800, AxisType.LOOP), UOp.range(256, 1801, AxisType.REDUCE)
   row_b, k_b = UOp.range(128, 1802, AxisType.LOOP), UOp.range(256, 1803, AxisType.REDUCE)
   zero = UOp.const(dtypes.weakint, 0)
-  templates = (build_q4_k_record_template("A", q4_words, row_a, k_a, zero),
-               build_split_q8_ds4_record_template("B", values, scales, sums, row_b, k_b, zero))
+  templates = (build_q4_k_record_template(
+                 "A", q4_words, row_a, k_a, zero, row_stride_words=q4_row_stride_words),
+               build_split_q8_ds4_record_template(
+                 "B", values, scales, sums, row_b, k_b, zero, record_rows=q8_record_rows))
   # The generated full-grid kernel has one real 256-thread workgroup.  Keep
   # the source-pinned dense oracle above range-based, but bind this five-buffer
   # seam to the hardware local ID so every producer and WMMA fragment is

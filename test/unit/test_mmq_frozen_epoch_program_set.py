@@ -22,7 +22,7 @@ from extra.qk.mmq_llama_five_buffer_graph import five_buffer_parameters
 from extra.qk.mmq_llama_runtime_contract import LLAMA_SOURCE_COMMIT
 
 
-def _sink(role_spec: ExactRoleSpec, encoded_epoch: int) -> UOp:
+def _sink(role_spec: ExactRoleSpec, encoded_epoch: int, *, compact_strides: bool = False) -> UOp:
   parameters = five_buffer_parameters(*role_spec.shape)
   params = tuple(UOp.param(parameter.slot, parameter.dtype.ptr(parameter.size)) for parameter in parameters)
   records = encoded_epoch * 2
@@ -30,8 +30,45 @@ def _sink(role_spec: ExactRoleSpec, encoded_epoch: int) -> UOp:
     0, encoded_epoch * 36, records * role_spec.m * 128,
     records * role_spec.m * 4, records * role_spec.m * 4,
   )
-  return UOp(Ops.SINK, src=tuple(param.index(UOp.const(dtypes.weakint, offset), ptr=True)
-                                 for param, offset in zip(params, offsets)))
+  block_n = UOp.special(role_spec.n//128, "gidx0")
+  block_m = UOp.special(role_spec.m//128, "gidx1")
+  dynamic_offsets = (
+    UOp.const(dtypes.weakint, offsets[0]),
+    (block_n*128*role_spec.epochs+encoded_epoch)*36,
+    (records*role_spec.m+block_m*128)*128,
+    (records*role_spec.m+block_m*128)*4,
+    (records*role_spec.m+block_m*128)*4,
+  )
+  bases = tuple(param.index(offset, ptr=True) for param, offset in zip(params, dynamic_offsets))
+  q4_stride = 36 if compact_strides else role_spec.epochs * 36
+  q8_value_stride = (role_spec.epochs*role_spec.m*128
+                     if compact_strides else role_spec.m*128)
+  q8_metadata_stride = (role_spec.epochs*role_spec.m*4
+                        if compact_strides else role_spec.m*4)
+  local = UOp.special(256, "lidx0")
+  q4_loads = []
+  for phase in range(2):
+    for iteration in range(16):
+      row, word = local//32+iteration*8, local%32+4
+      q4_loads.append(bases[1].index(row*q4_stride+word).load().replace(
+        tag=("fake_q4_qs", phase, iteration)))
+  for word, copies in ((0, 4), (1, 16), (2, 16), (3, 8)):
+    for copy in range(copies):
+      q4_loads.append(bases[1].index((local//2)*q4_stride+word).load().replace(
+        tag=("fake_q4_metadata", word, copy)))
+  value_loads = tuple(
+    bases[2].index(phase*q8_value_stride+(local+iteration*256)//32*128+
+                   (local+iteration*256)%32*4+element).load()
+    for phase in range(2) for iteration in range(16) for element in range(4))
+  scale_loads = tuple(
+    bases[3].index(phase*q8_metadata_stride+(local+iteration*256)//4*4+
+                   (local+iteration*256)%4).load()
+    for phase in range(2) for iteration in range(2))
+  sum_loads = tuple(
+    bases[4].index(phase*q8_metadata_stride+(local+iteration*256)//4*4+
+                   (local+iteration*256)%4).load()
+    for phase in range(2) for iteration in range(2))
+  return UOp(Ops.SINK, src=(bases[0], *q4_loads, *value_loads, *scale_loads, *sum_loads))
 
 
 def _program(role_spec: ExactRoleSpec, epoch: int) -> UOp:
@@ -50,7 +87,8 @@ def _program(role_spec: ExactRoleSpec, epoch: int) -> UOp:
   ))
 
 
-def _family(role_spec: ExactRoleSpec, *, wrong_program_epoch: tuple[int, int] | None = None
+def _family(role_spec: ExactRoleSpec, *, wrong_program_epoch: tuple[int, int] | None = None,
+            compact_stride_epoch: int | None = None
             ) -> LlamaFiveBufferEpochOffsetFamily:
   parameters = five_buffer_parameters(*role_spec.shape)
   proof = SimpleNamespace(
@@ -62,7 +100,8 @@ def _family(role_spec: ExactRoleSpec, *, wrong_program_epoch: tuple[int, int] | 
   variants = []
   for epoch in range(role_spec.epochs):
     encoded = wrong_program_epoch[1] if wrong_program_epoch and wrong_program_epoch[0] == epoch else epoch
-    sink, program = _sink(role_spec, encoded), _program(role_spec, epoch)
+    sink = _sink(role_spec, encoded, compact_strides=compact_stride_epoch == epoch)
+    program = _program(role_spec, epoch)
     variants.append(LlamaFiveBufferFullKernel(
       proof, topology, sink, owners, LLAMA_SOURCE_COMMIT, tuple(),
       epoch_offset=epoch, blocker="", program=program, emitted=True,
@@ -100,6 +139,8 @@ def test_v2_program_set_roundtrips_all_epochs_without_compile_or_runtime(tmp_pat
   assert [row["offsets"]["q4"] for row in manifest["variants"]] == [epoch * 36 for epoch in range(20)]
   assert [row["elements"] for row in manifest["shared_program"]["abi"]] == [
     parameter.size for parameter in five_buffer_parameters(*role_spec.shape)]
+  assert manifest["shared_program"]["physical_layout"]["q4"]["row_stride_words"] == 20*36
+  assert manifest["shared_program"]["physical_layout"]["q8_values"]["record_stride_elements"] == role_spec.m*128
 
   directory = frozen_v2.load_frozen_epoch_program_set(output)
   archived = frozen_v2.load_frozen_epoch_program_set(archive)
@@ -131,6 +172,38 @@ def test_v2_producer_rejects_sink_whose_structural_offset_differs_from_ordinal(t
       tmp_path / "bad-offset", role_spec=role_spec,
       build_once=lambda: _family(role_spec, wrong_program_epoch=(7, 8)))
   assert not (tmp_path / "bad-offset").exists()
+
+
+def test_v2_producer_rejects_compact_stride_sink_with_correct_epoch_bases(tmp_path: Path):
+  role_spec = exact_role_spec("ffn_gate_up")
+  with pytest.raises(ValueError, match="Q4 LOAD coverage"):
+    frozen_v2.produce_frozen_epoch_program_set(
+      tmp_path / "compact-strides", role_spec=role_spec,
+      build_once=lambda: _family(role_spec, compact_stride_epoch=7))
+  assert not (tmp_path / "compact-strides").exists()
+
+
+def test_v2_producer_rejects_uncaptured_input_pointer_chain_and_dropped_load(tmp_path: Path):
+  role_spec = exact_role_spec("ffn_gate_up")
+  family = _family(role_spec)
+  sink = family.variants[0].sink
+  q8_load = next(node for node in sink.toposort()
+                 if node.op is Ops.LOAD and frozen_v2._effective_param_index(node.src[0])[0] == 2)
+  unsupported = UOp(Ops.BITCAST, q8_load.src[0].dtype, (q8_load.src[0],))
+  bad_load = q8_load.replace(src=(unsupported,))
+  bad_sink = sink.substitute({q8_load: bad_load}, walk=True)
+  bad_variant = replace(family.variants[0], sink=bad_sink)
+  bad_family = replace(family, variants=(bad_variant, *family.variants[1:]))
+  with pytest.raises(ValueError, match="unsupported global input LOAD pointer chain"):
+    frozen_v2.produce_frozen_epoch_program_set(
+      tmp_path / "unsupported-pointer", role_spec=role_spec, build_once=lambda: bad_family)
+
+  dropped_sink = sink.replace(src=tuple(node for node in sink.src if node is not q8_load))
+  dropped_variant = replace(family.variants[0], sink=dropped_sink)
+  dropped_family = replace(family, variants=(dropped_variant, *family.variants[1:]))
+  with pytest.raises(ValueError, match="q8_values LOAD coverage"):
+    frozen_v2.produce_frozen_epoch_program_set(
+      tmp_path / "dropped-load", role_spec=role_spec, build_once=lambda: dropped_family)
 
 
 def test_v2_rejects_variant_grid_and_shared_full_role_abi_drift(tmp_path: Path):

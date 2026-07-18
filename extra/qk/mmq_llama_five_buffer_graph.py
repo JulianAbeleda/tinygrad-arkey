@@ -119,7 +119,8 @@ def build_llama_five_buffer_graph(m:int, n:int, k:int, *, tile_m:int=0, tile_n:i
     offsets = _offsets(facts, tile_m, tile_n, ordinal)
     stage = build_llama_oracle_epoch_stage_five_buffer(sources[1], sources[2], sources[3], sources[4],
       q4_word_offset=offsets.q4, values_offset=offsets.values,
-      scales_offset=offsets.scales, sums_offset=offsets.sums)
+      scales_offset=offsets.scales, sums_offset=offsets.sums,
+      q4_row_stride_words=(facts.k//256)*36, q8_record_rows=facts.m)
     recurrence = build_llama_oracle_recurrence(stage)
     exported = recurrence.export_accumulators()
     accumulators = tuple((previous[lane] + (value-recurrence.initial[lane])).replace(

@@ -94,6 +94,25 @@ def test_q4_callbacks_match_independent_source_formula_random(seed):
   np.testing.assert_array_equal(actual_dm.view(np.uint16), expected_dm.view(np.uint16))
 
 
+@pytest.mark.parametrize("epoch", [0, 19])
+def test_q4_full_role_explicit_row_stride_selects_same_epoch_next_row(epoch):
+  epochs, rows = 20, 128
+  row_axis, k_axis, zero = _axes()
+  root = UOp.param(0, dtypes.uint32.ptr(rows*epochs*36))
+  template = build_q4_k_record_template(
+    "A", root.index(UOp.const(dtypes.weakint, epoch*36), ptr=True), row_axis, k_axis, zero,
+    row_stride_words=epochs*36)
+  words = np.zeros(rows*epochs*36, dtype=np.uint32)
+  expected_index = (epochs+epoch)*36+4
+  compact_wrong_index = epoch*36+36+4
+  words[expected_index] = np.uint32(0x01010101)
+  words[compact_wrong_index] = np.uint32(0x02020202)
+  value = template.fields[0].producer(
+    (template.source("record"),), UOp.const(dtypes.weakint, 1),
+    UOp.const(dtypes.weakint, 0), 1)
+  assert eval_uop(value.gep(0), [(dtypes.uint32, words.tolist())]) == 0x01010101
+
+
 @pytest.mark.parametrize("fill", [0x00000000, 0xffffffff, 0xaaaaaaaa, 0x55555555])
 def test_q4_callbacks_adversarial_payload_and_six_bit_codes(fill):
   block = np.full(36, fill, dtype=np.uint32)

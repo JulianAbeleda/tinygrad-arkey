@@ -202,7 +202,8 @@ def _full_grid_sink(m:int, n:int, k:int, *, accumulate: bool = False, epoch_offs
     recurrence = build_llama_oracle_recurrence(build_llama_oracle_epoch_stage_five_buffer(q4, values, scales, sums,
       q4_word_offset=(block_n*128*(k//256)+epoch)*36,
       values_offset=(records*m+block_m*128)*128,
-      scales_offset=(records*m+block_m*128)*4, sums_offset=(records*m+block_m*128)*4))
+      scales_offset=(records*m+block_m*128)*4, sums_offset=(records*m+block_m*128)*4,
+      q4_row_stride_words=(k//256)*36, q8_record_rows=m))
     recurrences.append(recurrence)
   accumulators = _phase_major_accumulator_vectors(tuple(recurrences))
   plan = llama_mmq_candidate_plan()
