@@ -108,7 +108,13 @@ def _q8_copy(dtype, field_offset_bytes: int):
 def _q8_split_qs(sources: tuple[UOp, ...], row: UOp, k: UOp, width: int) -> UOp:
   """Copy split DS4 values from physical ``[K/128, M, 128]`` storage."""
   source, record, field_element = sources[0], k//128, k%128
-  element_base = (record*128+row)*128+field_element
+  # The record stride is the full activation row count, not the fixed 128-row
+  # tile width.  Infer M from the physical [K/128, M, 128] allocation carried
+  # by this source pointer; this keeps multi-tile M>128 launches from reading
+  # the preceding K record's rows.
+  if source.dtype.size % (2*128): raise ValueError("split Q8 values storage is not [2, M, 128]")
+  row_stride = source.dtype.size // (2*128)
+  element_base = (record*row_stride+row)*128+field_element
   return _stack(dtypes.int8, tuple(source.index(element_base+i).load() for i in range(width)))
 
 
@@ -116,8 +122,10 @@ def _q8_split_ds(sources: tuple[UOp, ...], row: UOp, k: UOp, width: int) -> UOp:
   """Rebuild DS4 half2(scale, original sum) pairs from split fp32 metadata."""
   if width != 2: raise ValueError("split Q8 DS4 metadata producer requires one half2")
   scales, sums, record = sources[0], sources[1], k//128
+  if scales.dtype.size % (2*4) or sums.dtype.size % (2*4): raise ValueError("split Q8 metadata storage is not [2, M, 4]")
+  row_stride = scales.dtype.size // (2*4)
   group = (k%128)//2
-  element = (record*128+row)*4+group
+  element = (record*row_stride+row)*4+group
   # These casts are intentionally independent: llama stores each fp32 operand
   # into its own half lane before constructing half2(scale, original sum).
   return _stack(dtypes.half, (scales.index(element).load().cast(dtypes.half),

@@ -72,3 +72,19 @@ def test_split_builder_rejects_wrong_dtype_size_layout_and_sum_semantics():
     args = list(good)
     args[(0 if match == "values" else 1 if match == "scales" else 2)] = bad
     with pytest.raises(TypeError, match=match): build_split_q8_ds4_record_template("B", *args, row, k, zero)
+
+
+def test_split_q8_producer_uses_full_m_record_stride():
+  row, k, zero = _axes()
+  split = build_split_q8_ds4_record_template("B", UOp.param(0, dtypes.int8.ptr(2*256*128)),
+    UOp.param(1, dtypes.float32.ptr(2*256*4)), UOp.param(2, dtypes.float32.ptr(2*256*4)), row, k, zero)
+  values = np.arange(2*256*128, dtype=np.int8).reshape(2, 256, 128)
+  scales = np.arange(2*256*4, dtype=np.float32).reshape(2, 256, 4)
+  sums = (100000 + np.arange(2*256*4, dtype=np.float32)).reshape(2, 256, 4)
+  inputs = [(dtypes.int8, values.reshape(-1).tolist())]
+  r, kk = 17, 128 + 7
+  qs = split.fields[1].producer((split.source("values"),), UOp.const(dtypes.weakint, r), UOp.const(dtypes.weakint, kk), 4)
+  assert [eval_uop(qs.gep(i), inputs) for i in range(4)] == values[1, r, 7:11].tolist()
+  ds = split.fields[0].producer((split.source("scales"), split.source("sums")), UOp.const(dtypes.weakint, r), UOp.const(dtypes.weakint, kk), 2)
+  assert eval_uop(ds.gep(0).bitcast(dtypes.uint16), [(dtypes.float32, scales.reshape(-1).tolist())]) == np.asarray(scales[1, r, 3], dtype=np.float16).view(np.uint16).item()
+  assert eval_uop(ds.gep(1).bitcast(dtypes.uint16), [(dtypes.float32, sums.reshape(-1).tolist())]) == np.asarray(sums[1, r, 3], dtype=np.float16).view(np.uint16).item()
