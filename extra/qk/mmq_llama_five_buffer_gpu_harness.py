@@ -1246,6 +1246,23 @@ def _aql_packet_census_from_exception(exc: BaseException) -> dict[str, Any] | No
   return dict(census) if isinstance(census, Mapping) else None
 
 
+class PM4DispatchCensusRealizationError(RuntimeError):
+  """Fallback wrapper when an underlying exception cannot carry PM4 evidence."""
+  def __init__(self, message: str, dispatch_census: Mapping[str, Any]):
+    super().__init__(message)
+    self.pm4_dispatch_census = dict(dispatch_census)
+
+
+def _pm4_dispatch_census_from_exception(exc: BaseException) -> dict[str, Any] | None:
+  census = getattr(exc, "pm4_dispatch_census", None)
+  return dict(census) if isinstance(census, Mapping) else None
+
+
+def _amd_dispatch_census_from_exception(exc: BaseException) -> dict[str, Any] | None:
+  """Recover partial evidence from either native tinygrad AMD queue mode."""
+  return _aql_packet_census_from_exception(exc) or _pm4_dispatch_census_from_exception(exc)
+
+
 def _realize_outputs_together(output: Any, retained_outputs: tuple[Any, ...]) -> None:
   """Keep diagnostic companions live by making them outputs of one realization."""
   output.realize(*retained_outputs)
@@ -1483,6 +1500,237 @@ def _realize_with_aql_packet_census(output: Any, expected_vas: list[list[int]] |
   if published or constructed or len(calls) != target_dispatch_count:
     raise RuntimeError("AQL packet census did not close the exact target dispatch count")
   return snapshot("PASS")
+
+
+def _realize_with_pm4_dispatch_census(
+    output: Any, *, target_program_identities: tuple[Mapping[str, Any], ...],
+    target_program_keys: tuple[str, ...],
+    target_launch_dims: tuple[tuple[tuple[int, ...], tuple[int, ...]], ...],
+    require_all_five_vas_fixed: bool = False,
+    require_all_five_vas_distinct: bool = False,
+    retained_outputs: tuple[Any, ...] = ()) -> dict[str, Any]:
+  """Realize through tinygrad PM4 while auditing every target before its doorbell.
+
+  This observes the existing AMDComputeQueue path; it does not manufacture,
+  submit, or reinterpret a second launcher. The exact PM4 dwords are retained
+  by count and hash, while AMDProgram and CLikeArgsState remain the authority
+  for the executable entry and five-pointer ABI.
+  """
+  from tinygrad.device import Device
+  dev = Device["AMD"]
+  if bool(getattr(dev, "is_aql", False)):
+    _realize_outputs_together(output, retained_outputs)
+    return {"enabled": False, "status": "NOT_APPLICABLE", "reason": "target queue is AQL",
+            "retained_companion_output_count": len(retained_outputs)}
+  identities = tuple(dict(identity) for identity in target_program_identities)
+  count = len(identities)
+  if count <= 0 or any(identity.get("function_name") in (None, "") or
+                       identity.get("binary_sha256") in (None, "") for identity in identities):
+    raise ValueError("PM4 dispatch census requires complete ordered target identities")
+  if len({(row["function_name"], row["binary_sha256"]) for row in identities}) != count:
+    raise ValueError("PM4 dispatch census ordered target identities must be distinct")
+  if len(target_program_keys) != count or any(
+      not isinstance(key, str) or len(key) != 64 for key in target_program_keys):
+    raise ValueError("PM4 dispatch census PROGRAM keys differ from the target sequence")
+  if len(target_launch_dims) != count or any(
+      len(row) != 2 or len(row[0]) != 3 or len(row[1]) != 3 or
+      any(not isinstance(value, int) or isinstance(value, bool) or value <= 0
+          for dims in row for value in dims)
+      for row in target_launch_dims):
+    raise ValueError("PM4 dispatch census launch dimensions differ from the target sequence")
+
+  from tinygrad.runtime import ops_amd
+  pending: dict[int, dict[str, Any]] = {}
+  calls: list[dict[str, Any]] = []
+  non_target_exec_count = non_target_submit_count = compute_submit_count = 0
+  target_function_names = {identity["function_name"] for identity in identities}
+  original_exec = ops_amd.AMDComputeQueue.exec
+  original_submit = ops_amd.AMDComputeQueue._submit
+
+  def snapshot(status: str, exc: BaseException | None = None) -> dict[str, Any]:
+    copied_calls = [{
+      **row,
+      "program_identity": dict(row["program_identity"]),
+      "expected_program_identity": dict(row["expected_program_identity"]),
+      "kernarg_qwords": list(row["kernarg_qwords"]),
+      "argument_buffers": [dict(argument) for argument in row["argument_buffers"]],
+      "runtime_lifecycle": {
+        **row["runtime_lifecycle"], "checks": dict(row["runtime_lifecycle"]["checks"])},
+      "global_size": list(row["global_size"]), "local_size": list(row["local_size"]),
+      "expected_global_size": list(row["expected_global_size"]),
+      "expected_local_size": list(row["expected_local_size"]),
+      "checks": dict(row["checks"]),
+    } for row in calls]
+    result = {
+      "enabled": True, "status": status, "queue_mode": "PM4",
+      "capture_point": "AMDComputeQueue._submit_after_complete_command_construction_before_ring_copy_and_doorbell",
+      "queue_contract": "HCQProgram_wait_memory_barrier_exec_signal_submit",
+      "target_program_identities": [dict(identity) for identity in identities],
+      "target_program_keys": list(target_program_keys),
+      "target_call_count": len(copied_calls),
+      "accepted_target_call_count": sum(row["accepted_before_doorbell"] for row in copied_calls),
+      "non_target_exec_count": non_target_exec_count,
+      "non_target_submit_count": non_target_submit_count,
+      "compute_submit_count": compute_submit_count,
+      "require_all_five_vas_fixed": require_all_five_vas_fixed,
+      "require_all_five_vas_distinct": require_all_five_vas_distinct,
+      "retained_companion_output_count": len(retained_outputs),
+      "pending_target_queue_count": len(pending),
+      "call_count": len(copied_calls), "calls": copied_calls,
+    }
+    if exc is not None:
+      result.update({
+        "realization_exception": type(exc).__name__, "realization_error": str(exc),
+        "all_accepted_target_calls_pass": all(row["all_checks_pass"] for row in copied_calls),
+      })
+    return result
+
+  def audited_exec(queue: Any, prg: Any, args_state: Any, global_size: tuple[Any, ...],
+                   local_size: tuple[Any, ...]) -> Any:
+    nonlocal non_target_exec_count
+    before_exec_dword_count = len(queue._q)
+    result = original_exec(queue, prg, args_state, global_size, local_size)
+    identity = _aql_target_program_identity(prg)
+    if identity.get("function_name") not in target_function_names:
+      non_target_exec_count += 1
+      return result
+    if id(queue) in pending:
+      raise RuntimeError("PM4 dispatch census found multiple target execs in one queue")
+    pending[id(queue)] = {
+      "queue": queue, "program": prg, "args_state": args_state,
+      "program_identity": identity,
+      "argument_buffers": [{
+        "slot": slot, "va": int(buf.va_addr), "size": int(buf.size),
+      } for slot, buf in enumerate(args_state.bufs)],
+      "runtime_lifecycle": _aql_runtime_lifecycle_evidence(prg, args_state),
+      "global_size": tuple(int(value) for value in global_size),
+      "local_size": tuple(int(value) for value in local_size),
+      "before_exec_dword_count": before_exec_dword_count,
+      "after_exec_dword_count": len(queue._q),
+    }
+    return result
+
+  def audited_submit(queue: Any, submit_dev: Any) -> Any:
+    nonlocal non_target_submit_count, compute_submit_count
+    built = pending.pop(id(queue), None)
+    if built is None:
+      non_target_submit_count += 1
+      return original_submit(queue, submit_dev)
+    compute_submit_count += 1
+    call_index = len(calls)
+    if call_index >= count:
+      raise RuntimeError("PM4 dispatch census observed more target submits than expected")
+    expected_identity = identities[call_index]
+    expected_program_key = target_program_keys[call_index]
+    expected_global, expected_local = target_launch_dims[call_index]
+    args_state, lifecycle = built["args_state"], built["runtime_lifecycle"]
+    kernarg_qwords = [
+      int(value) for value in args_state.buf.cpu_view().view(size=40, fmt='Q')[:5]]
+    argument_vas = [row["va"] for row in built["argument_buffers"]]
+    kernarg_start = lifecycle["kernarg_va"]
+    kernarg_end = kernarg_start + lifecycle["kernarg_allocation_nbytes"]
+    prior_ranges = [
+      (row["runtime_lifecycle"]["kernarg_va"],
+       row["runtime_lifecycle"]["kernarg_va"] + row["runtime_lifecycle"]["kernarg_allocation_nbytes"])
+      for row in calls]
+    command_words = list(queue._q)
+    concrete_command_words = all(
+      isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= 0xffffffff
+      for value in command_words)
+    command_bytes = b"".join(
+      int(value).to_bytes(4, "little") for value in command_words) if concrete_command_words else b""
+    checks = {
+      "queue_class_is_native_pm4": type(queue) is ops_amd.AMDComputeQueue,
+      "queue_device_matches_submit_device": queue.dev is submit_dev is dev,
+      "device_reports_pm4": not bool(getattr(submit_dev, "is_aql", False)),
+      "ordered_program_identity_matches": built["program_identity"] == expected_identity,
+      **lifecycle["checks"],
+      "runtime_cache_exact_program_binding":
+        lifecycle["runtime_cache_bindings"] == [{
+          "program_key": expected_program_key, "device": "AMD"}],
+      "runtime_object_distinct_from_prior_targets":
+        all(lifecycle["runtime_object_id"] != row["runtime_lifecycle"]["runtime_object_id"]
+            for row in calls),
+      "kernarg_disjoint_from_prior_target_records":
+        all(kernarg_end <= start or kernarg_start >= end for start, end in prior_ranges),
+      "five_qwords_match_constructed_buffers": kernarg_qwords == argument_vas,
+      "five_constructed_buffer_vas_distinct": len(set(argument_vas)) == 5,
+      "dispatch_dimensions_match":
+        built["global_size"] == expected_global and built["local_size"] == expected_local,
+      "wait_and_barrier_commands_precede_exec": built["before_exec_dword_count"] > 0,
+      "exec_appended_pm4_commands":
+        built["after_exec_dword_count"] > built["before_exec_dword_count"],
+      "signal_commands_follow_exec": len(command_words) > built["after_exec_dword_count"],
+      "pm4_command_words_concrete": concrete_command_words,
+      "pm4_command_stream_nonempty": bool(command_bytes),
+      **_audit_target_aql_kernargs(
+        kernarg_qwords, [row["kernarg_qwords"] for row in calls],
+        expected_vas=None, require_fixed_scale_va=False,
+        require_all_five_vas_fixed=require_all_five_vas_fixed,
+        require_all_five_vas_distinct=require_all_five_vas_distinct),
+    }
+    accepted = all(checks.values())
+    calls.append({
+      "call": call_index, "program_identity": built["program_identity"],
+      "expected_program_identity": expected_identity,
+      "program_key": expected_program_key,
+      "kernarg_qwords": kernarg_qwords,
+      "argument_buffers": built["argument_buffers"],
+      "runtime_lifecycle": lifecycle,
+      "global_size": built["global_size"], "local_size": built["local_size"],
+      "expected_global_size": expected_global, "expected_local_size": expected_local,
+      "pm4_dword_count": len(command_words),
+      "pm4_sha256": hashlib.sha256(command_bytes).hexdigest() if command_bytes else None,
+      "before_exec_dword_count": built["before_exec_dword_count"],
+      "after_exec_dword_count": built["after_exec_dword_count"],
+      "checks": checks, "all_checks_pass": accepted,
+      "accepted_before_doorbell": accepted,
+    })
+    if not accepted:
+      raise RuntimeError("PM4 target dispatch census rejected submit before doorbell")
+    return original_submit(queue, submit_dev)
+
+  ops_amd.AMDComputeQueue.exec = audited_exec
+  ops_amd.AMDComputeQueue._submit = audited_submit
+  try:
+    try:
+      _realize_outputs_together(output, retained_outputs)
+    except BaseException as exc:
+      census = snapshot("REALIZATION_ERROR", exc)
+      try: setattr(exc, "pm4_dispatch_census", census)
+      except (AttributeError, TypeError):
+        raise PM4DispatchCensusRealizationError(str(exc), census) from exc
+      raise
+  finally:
+    ops_amd.AMDComputeQueue.exec = original_exec
+    ops_amd.AMDComputeQueue._submit = original_submit
+  if pending or len(calls) != count:
+    raise RuntimeError("PM4 dispatch census did not close the exact target dispatch count")
+  return snapshot("PASS")
+
+
+def _realize_with_amd_dispatch_census(
+    output: Any, *, target_program_identities: tuple[Mapping[str, Any], ...],
+    target_program_keys: tuple[str, ...],
+    target_launch_dims: tuple[tuple[tuple[int, ...], tuple[int, ...]], ...],
+    require_all_five_vas_fixed: bool = False,
+    require_all_five_vas_distinct: bool = False,
+    retained_outputs: tuple[Any, ...] = ()) -> dict[str, Any]:
+  """Select the existing tinygrad AMD queue without changing dispatch semantics."""
+  from tinygrad.device import Device
+  if bool(getattr(Device["AMD"], "is_aql", False)):
+    return _realize_with_aql_packet_census(
+      output, target_program_identities=target_program_identities,
+      target_program_keys=target_program_keys, require_runtime_lifecycle=True,
+      require_all_five_vas_fixed=require_all_five_vas_fixed,
+      require_all_five_vas_distinct=require_all_five_vas_distinct,
+      retained_outputs=retained_outputs)
+  return _realize_with_pm4_dispatch_census(
+    output, target_program_identities=target_program_identities,
+    target_program_keys=target_program_keys, target_launch_dims=target_launch_dims,
+    require_all_five_vas_fixed=require_all_five_vas_fixed,
+    require_all_five_vas_distinct=require_all_five_vas_distinct,
+    retained_outputs=retained_outputs)
 
 
 def _scheduler_prefix_two_launches(address_mode: str, epoch_inputs: tuple[tuple[Any, ...], tuple[Any, ...]],
@@ -2041,7 +2289,7 @@ def run_frozen_epoch_program_set_ordinal_probe(
     "selected_epoch": epoch, "selected_program_key": binding.program_keys[epoch],
     "selected_sink_key": variant_row["sink_key"], "selected_offsets": dict(variant_row["offsets"]),
     "single_program_ordinal": True, "five_buffer_abi": True,
-    "distinct_concrete_buffer_vas_deferred_to_aql_census": True,
+    "distinct_concrete_buffer_vas_deferred_to_dispatch_census": True,
     "initial_output_zeroed": True,
     "buffer_uop_keys": [value.buf_uop.key.hex() for value in arguments],
     "full_role_producer_calls": 1,
@@ -2053,14 +2301,17 @@ def run_frozen_epoch_program_set_ordinal_probe(
     "retained_as_companion_realization_outputs": True,
   })
 
-  if not bool(getattr(Device["AMD"], "is_aql", False)):
-    raise RuntimeError("frozen v2 ordinal GPU probe requires AMD_AQL=1")
+  dispatch_census_key = "aql_packet_census" if bool(getattr(Device["AMD"], "is_aql", False)) \
+    else "pm4_dispatch_census"
   try:
-    packet_census = _realize_with_aql_packet_census(
+    packet_census = _realize_with_amd_dispatch_census(
       output, target_program_identities=(target_identity,),
-      require_all_five_vas_fixed=True, retained_outputs=retained_outputs)
+      target_program_keys=(binding.program_keys[epoch],),
+      target_launch_dims=((tuple(program.arg.global_size), tuple(program.arg.local_size)),),
+      require_all_five_vas_fixed=True, require_all_five_vas_distinct=True,
+      retained_outputs=retained_outputs)
   except BaseException as exc:
-    packet_census = _aql_packet_census_from_exception(exc)
+    packet_census = _amd_dispatch_census_from_exception(exc)
     return {
       "schema": schema, "status": "BLOCKED",
       "exact_blocker": "frozen v2 ordinal target dispatch failed",
@@ -2070,7 +2321,7 @@ def run_frozen_epoch_program_set_ordinal_probe(
       "default_route": "direct_packed", "role": role_spec.role,
       "shape": list(role_spec.shape), "epoch": epoch,
       "graph": graph_evidence, "target_program_identity": target_identity,
-      **({"dispatch": {"aql_packet_census": packet_census}} if packet_census is not None else {}),
+      **({"dispatch": {dispatch_census_key: packet_census}} if packet_census is not None else {}),
       "family_identity": binding.family_identity,
       "frozen_bundle": str(Path(frozen_bundle).resolve()),
       "compile_performed": False, "requires_recompile": False,
@@ -2113,7 +2364,7 @@ def run_frozen_epoch_program_set_ordinal_probe(
       "launcher": "tinygrad_scheduler", "mode": "single_static_offset_program_ordinal",
       "count": 1, "epoch": epoch, "program_key": binding.program_keys[epoch],
       "target_program_identity": target_identity,
-      "aql_packet_census": packet_census,
+      dispatch_census_key: packet_census,
     },
     "correctness": {
       "status": "PASS" if passed else "CONSUMER_MISMATCH",
@@ -2205,7 +2456,7 @@ def run_frozen_epoch_program_set_ordinal_sequence_probe(
     "selected_offsets": [dict(row["offsets"]) for row in variant_rows],
     "exact_ordered_ordinal_sequence": True, "five_buffer_abi": True,
     "all_calls_share_buffer_identity": True,
-    "distinct_concrete_buffer_vas_deferred_to_aql_census": True,
+    "distinct_concrete_buffer_vas_deferred_to_dispatch_census": True,
     "slot0_ordered": True, "initial_output_zeroed": True,
     "buffer_uop_keys": [value.buf_uop.key.hex() for value in arguments[0]],
     "full_role_producer_calls": 1,
@@ -2217,17 +2468,18 @@ def run_frozen_epoch_program_set_ordinal_sequence_probe(
     "retained_as_companion_realization_outputs": True,
   })
 
-  if not bool(getattr(Device["AMD"], "is_aql", False)):
-    raise RuntimeError("frozen v2 ordinal sequence GPU probe requires AMD_AQL=1")
+  dispatch_census_key = "aql_packet_census" if bool(getattr(Device["AMD"], "is_aql", False)) \
+    else "pm4_dispatch_census"
   try:
-    packet_census = _realize_with_aql_packet_census(
+    packet_census = _realize_with_amd_dispatch_census(
       output, target_program_identities=target_identities,
+      target_launch_dims=tuple(
+        (tuple(program.arg.global_size), tuple(program.arg.local_size)) for program in programs),
       require_all_five_vas_fixed=True, require_all_five_vas_distinct=True,
-      require_runtime_lifecycle=True,
       target_program_keys=tuple(binding.program_keys[epoch] for epoch in epochs),
       retained_outputs=retained_outputs)
   except BaseException as exc:
-    packet_census = _aql_packet_census_from_exception(exc)
+    packet_census = _amd_dispatch_census_from_exception(exc)
     return {
       "schema": schema, "status": "BLOCKED",
       "exact_blocker": "frozen v2 ordinal sequence target dispatch failed",
@@ -2237,7 +2489,7 @@ def run_frozen_epoch_program_set_ordinal_sequence_probe(
       "default_route": "direct_packed", "role": role_spec.role,
       "shape": list(role_spec.shape), "epochs": list(epochs),
       "graph": graph_evidence, "target_program_identities": target_identities,
-      **({"dispatch": {"aql_packet_census": packet_census}} if packet_census is not None else {}),
+      **({"dispatch": {dispatch_census_key: packet_census}} if packet_census is not None else {}),
       "family_identity": binding.family_identity,
       "frozen_bundle": str(Path(frozen_bundle).resolve()),
       "compile_performed": False, "requires_recompile": False,
@@ -2284,7 +2536,7 @@ def run_frozen_epoch_program_set_ordinal_sequence_probe(
       "program_keys": [binding.program_keys[epoch] for epoch in epochs],
       "target_program_identities": target_identities,
       "all_five_vas_fixed": True, "all_five_vas_distinct": True,
-      "aql_packet_census": packet_census,
+      dispatch_census_key: packet_census,
     },
     "correctness": {
       "status": "PASS" if passed else "CONSUMER_MISMATCH",
@@ -2381,16 +2633,19 @@ def run_frozen_epoch_program_set_prefix_probe(
     "retained_as_companion_realization_outputs": True,
   })
 
-  # Ordered target-binary and exact five-pointer validation exists only on
-  # tinygrad's AQL queue. Refuse to dispatch this safety probe on PM4.
-  if not bool(getattr(Device["AMD"], "is_aql", False)):
-    raise RuntimeError("frozen v2 fixed-base GPU probe requires AMD_AQL=1")
+  dispatch_census_key = "aql_packet_census" if bool(getattr(Device["AMD"], "is_aql", False)) \
+    else "pm4_dispatch_census"
   try:
-    packet_census = _realize_with_aql_packet_census(
+    packet_census = _realize_with_amd_dispatch_census(
       output, target_program_identities=target_identities,
-      require_all_five_vas_fixed=True, retained_outputs=retained_outputs)
+      target_program_keys=tuple(binding.program_keys[:prefix_epochs]),
+      target_launch_dims=tuple(
+        (tuple(program.arg.global_size), tuple(program.arg.local_size))
+        for program in selected_programs),
+      require_all_five_vas_fixed=True, require_all_five_vas_distinct=True,
+      retained_outputs=retained_outputs)
   except BaseException as exc:
-    packet_census = _aql_packet_census_from_exception(exc)
+    packet_census = _amd_dispatch_census_from_exception(exc)
     return {
       "schema": schema, "status": "BLOCKED",
       "exact_blocker": "frozen v2 fixed-base target dispatch rejected before doorbell",
@@ -2399,7 +2654,7 @@ def run_frozen_epoch_program_set_prefix_probe(
       "default_route": "direct_packed", "role": role_spec.role,
       "shape": list(role_spec.shape), "prefix_epochs": prefix_epochs,
       "graph": graph_evidence, "target_program_identities": target_identities,
-      **({"dispatch": {"aql_packet_census": packet_census}} if packet_census is not None else {}),
+      **({"dispatch": {dispatch_census_key: packet_census}} if packet_census is not None else {}),
       "family_identity": binding.family_identity,
       "frozen_bundle": str(Path(frozen_bundle).resolve()),
       "compile_performed": False, "requires_recompile": False,
@@ -2442,7 +2697,7 @@ def run_frozen_epoch_program_set_prefix_probe(
       "launcher": "tinygrad_scheduler", "mode": "static_offset_program_chain",
       "count": prefix_epochs, "program_keys": list(binding.program_keys[:prefix_epochs]),
       "target_program_identities": target_identities,
-      "aql_packet_census": packet_census,
+      dispatch_census_key: packet_census,
     },
     "correctness": {
       "status": "PASS" if passed else "CONSUMER_MISMATCH",
@@ -2616,9 +2871,7 @@ def run_frozen_epoch_program_set_prefix_probe_isolated(
     role_spec = admit_exact_role_spec(role_spec)
     prefix_epochs = _validate_v2_fixed_base_prefix_epochs(role_spec, prefix_epochs)
     env_overrides = _validated_child_env_overrides(child_env_overrides)
-    if env_overrides.get("AMD_AQL", "1") != "1":
-      raise ValueError("frozen v2 fixed-base GPU probe requires AMD_AQL=1")
-    env_overrides["AMD_AQL"] = "1"
+    env_overrides.setdefault("AMD_AQL", "1")
   except (TypeError, ValueError) as exc:
     return {"schema": schema, "status": "BLOCKED", "exact_blocker": str(exc)}
   if timeout_seconds <= 0:
@@ -2700,9 +2953,7 @@ def run_frozen_epoch_program_set_ordinal_probe_isolated(
     role_spec = admit_exact_role_spec(role_spec)
     epoch = _validate_v2_fixed_base_ordinal(role_spec, epoch)
     env_overrides = _validated_child_env_overrides(child_env_overrides)
-    if env_overrides.get("AMD_AQL", "1") != "1":
-      raise ValueError("frozen v2 ordinal GPU probe requires AMD_AQL=1")
-    env_overrides["AMD_AQL"] = "1"
+    env_overrides.setdefault("AMD_AQL", "1")
   except (TypeError, ValueError) as exc:
     return {"schema": schema, "status": "BLOCKED", "exact_blocker": str(exc)}
   if timeout_seconds <= 0:
@@ -2784,9 +3035,7 @@ def run_frozen_epoch_program_set_ordinal_sequence_probe_isolated(
     role_spec = admit_exact_role_spec(role_spec)
     epochs = _validate_v2_fixed_base_ordinal_sequence(role_spec, epochs)
     env_overrides = _validated_child_env_overrides(child_env_overrides)
-    if env_overrides.get("AMD_AQL", "1") != "1":
-      raise ValueError("frozen v2 ordinal sequence GPU probe requires AMD_AQL=1")
-    env_overrides["AMD_AQL"] = "1"
+    env_overrides.setdefault("AMD_AQL", "1")
   except (TypeError, ValueError) as exc:
     return {"schema": schema, "status": "BLOCKED", "exact_blocker": str(exc)}
   if timeout_seconds <= 0:
