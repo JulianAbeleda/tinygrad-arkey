@@ -606,7 +606,7 @@ def build_r6_route_gate_status(r5_report: dict[str, Any] | None = None) -> dict[
     "default_route": "direct_packed",
     "production_dispatch_changed": False,
     "required_evidence": {
-      "bounded_coop_candidate_win": ready,
+      "bounded_coop_candidate_win": r5.get("emitted_backend_win") is True and r5.get("promotion_verdict") == "R5_COOP_WIN_READY_FOR_R6",
       "ffn_gate_up_only": smoke["ffn_gate_up_only"],
       "negative_role_tests": smoke["negative_role_tests"],
       "no_hidden_direct_packed_fallback": smoke["no_hidden_direct_packed_fallback"],

@@ -265,7 +265,7 @@ def test_mmq_r5_includes_distinct_full_grid_candidate_and_keeps_r6_fail_closed()
   # integration, negative-role coverage, and fallback exclusion are separate
   # evidence obligations and remain fail-closed until actually measured.
   assert r6["required_evidence"] == {
-    "bounded_coop_candidate_win": False,
+    "bounded_coop_candidate_win": True,
     "ffn_gate_up_only": True,
     "negative_role_tests": True,
     "no_hidden_direct_packed_fallback": True,
