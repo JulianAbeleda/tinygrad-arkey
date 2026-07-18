@@ -10,9 +10,12 @@ from pathlib import Path
 
 import numpy as np
 
+from tinygrad.uop.ops import Ops, ProgramInfo, UOp
+
+from extra.qk import mmq_llama_five_buffer_full_kernel as full_kernel
 from extra.qk.mmq_target_epoch_orchestrator import (
-  ATTESTATION_SCHEMA, FIXTURE_SCHEMA, orchestrate_epoch_sweep, parse_kernel_faults,
-  target_fixture_evidence,
+  ATTESTATION_SCHEMA, FIXTURE_SCHEMA, compile_target_program, orchestrate_epoch_sweep, parse_kernel_faults,
+  spawned_tiny_health_probe, target_fixture_evidence,
 )
 
 
@@ -56,6 +59,34 @@ def _assert_diagnostic_only(out: dict) -> None:
   assert out["promotion_eligible"] is False
   assert out["production_dispatch_changed"] is False
   assert out["diagnostic_only"] is True
+
+
+def test_shared_cpu_compile_helper_forwards_accumulation_mode(monkeypatch):
+  program = UOp(Ops.PROGRAM, src=(UOp(Ops.SINK),), arg=ProgramInfo(
+    name="mock_target", global_size=(1, 1, 1), local_size=(1, 1, 1), globals=tuple(range(5))))
+  calls = []
+  monkeypatch.setattr(full_kernel, "build_llama_five_buffer_full_kernel",
+                      lambda m, n, k, *, accumulate=False: calls.append((m, n, k, accumulate)) or "kernel")
+  monkeypatch.setattr(full_kernel, "compile_llama_five_buffer_full_kernel",
+                      lambda kernel: type("Compiled", (), {"emitted": True, "program": program, "blocker": None})())
+  assert compile_target_program(accumulate=True) is program
+  assert calls == [(512, 17_408, 256, True)]
+
+
+def test_spawned_health_probe_passes_validated_queue_mode_into_fresh_child(monkeypatch):
+  from tinygrad.runtime.process_isolated import IsolatedResult
+  seen = {}
+  def fake_run(callback, *, args, timeout_seconds, start_method):
+    seen.update(callback=callback, args=args, timeout_seconds=timeout_seconds, start_method=start_method)
+    return IsolatedResult("passed", result=True)
+  monkeypatch.setattr("tinygrad.runtime.process_isolated.run_isolated", fake_run)
+  assert spawned_tiny_health_probe({"AMD_AQL": "1"}) is True
+  assert seen["args"] == ({"AMD_AQL": "1"},)
+  assert seen["start_method"] == "spawn"
+  with __import__("pytest").raises(ValueError, match="only permit AMD_AQL"):
+    spawned_tiny_health_probe({"UNRELATED": "1"})
+  with __import__("pytest").raises(ValueError, match="must be '0' or '1'"):
+    spawned_tiny_health_probe({"AMD_AQL": "yes"})
 
 
 def test_parse_kernel_faults_finds_only_relevant_gpu_health_markers():
@@ -115,6 +146,10 @@ def test_fixture_identity_is_deterministic_and_layout_bound():
   assert first["shape"] == [512, 17408, 5120]
   assert first["total_epochs"] == 20
   assert first["repack"]["q4_layout"] == "q4_k_bytes[n, k_epoch, 144]"
+  assert first["repack"]["q4_epoch_major_layout"] == "q4_k_bytes[k_epoch, n, 144]"
+  assert len(first["repack"]["q4_epoch_major_sha256"]) == 64
+  assert first["repack"]["q4_epoch_major_dtype"] == "uint32"
+  assert first["repack"]["q4_epoch_major_elements"] == 12_533_760
   assert first["repack"]["q8_layout"] == "q8_ds4[epoch, m, groups]"
 
 

@@ -29,13 +29,13 @@ import pickle
 import subprocess
 import tempfile
 import time
-from typing import Any, Callable, Iterable
+from typing import Any, Callable, Iterable, Mapping
 
 import numpy as np
 
 from extra.qk.mmq_llama_five_buffer_gpu_harness import (
   ATOL, FULL_GRID_BACKEND_ID, RTOL, TARGET_ROLE_PROBE_SHAPE, _artifact_evidence,
-  _numeric_comparison, _random_q4_words,
+  _numeric_comparison, _pack_q4_epochs_contiguous, _random_q4_words,
 )
 
 
@@ -79,28 +79,48 @@ def read_kernel_log_since(since_timestamp: float) -> str:
   return proc.stdout
 
 
-def compile_target_program_artifact(temp_dir: str | Path) -> tuple[str, dict[str, Any]]:
-  """Compile the target K=256 PROGRAM CPU-side and serialize it for spawn workers."""
+def compile_target_program(*, accumulate: bool = False) -> Any:
+  """Compile and validate the generated target K=256 PROGRAM without a runtime.
+
+  This is the single CPU-only compile boundary shared by the diagnostic epoch
+  orchestrator and durable frozen-artifact producer.
+  """
   from tinygrad.uop.ops import Ops
-  from extra.qk.amdgpu_metadata import parse_amdgpu_metadata
   from extra.qk.mmq_llama_five_buffer_full_kernel import (
     build_llama_five_buffer_full_kernel, compile_llama_five_buffer_full_kernel,
   )
-  from extra.qk.mmq_llama_runtime_contract import LLAMA_SOURCE_COMMIT
 
   m, n, _ = TARGET_ROLE_PROBE_SHAPE
-  compiled = compile_llama_five_buffer_full_kernel(build_llama_five_buffer_full_kernel(m, n, 256))
+  compiled = compile_llama_five_buffer_full_kernel(
+    build_llama_five_buffer_full_kernel(m, n, 256, accumulate=accumulate))
   if not compiled.emitted or compiled.program is None:
-    raise RuntimeError(compiled.blocker or "target K=256 program did not emit")
+    mode = "accumulate" if accumulate else "overwrite"
+    raise RuntimeError(compiled.blocker or f"target K=256 {mode} program did not emit")
   program = compiled.program
   if program.op is not Ops.PROGRAM: raise RuntimeError(f"compile result is not PROGRAM: {program.op}")
   programs = [u for u in program.toposort() if u.op is Ops.PROGRAM]
   if programs != [program]: raise RuntimeError(f"expected one closed PROGRAM, found {len(programs)}")
   if tuple(program.arg.globals) != tuple(range(5)):
     raise RuntimeError(f"target PROGRAM ABI changed: globals={program.arg.globals}")
+  return program
+
+
+def target_program_artifact_evidence(program: Any) -> tuple[bytes, str, dict[str, Any]]:
+  """Reuse the harness's source/binary/resource capture for a target PROGRAM."""
+  from extra.qk.amdgpu_metadata import parse_amdgpu_metadata
+
   binary, source, evidence = _artifact_evidence(program, parse_amdgpu_metadata)
   if not isinstance(binary, bytes) or not isinstance(source, str):
     raise RuntimeError("compiled PROGRAM lacks distinct source/binary identity")
+  return binary, source, evidence
+
+
+def compile_target_program_artifact(temp_dir: str | Path) -> tuple[str, dict[str, Any]]:
+  """Compile the overwrite target CPU-side and serialize it for spawn workers."""
+  from extra.qk.mmq_llama_runtime_contract import LLAMA_SOURCE_COMMIT
+
+  program = compile_target_program(accumulate=False)
+  binary, source, evidence = target_program_artifact_evidence(program)
 
   path = Path(temp_dir) / "target_k256_program.pkl"
   with path.open("wb") as handle:
@@ -169,16 +189,21 @@ def target_fixture_evidence() -> dict[str, Any]:
   source = np.random.default_rng(20260722).standard_normal((m, k), dtype=np.float32)
   values, scales, sums = q8_1_mmq_ds4_quantize_reference(source)
   q4_blocks = words.view(np.uint8).reshape(n, TOTAL_EPOCHS, 144)
+  q4_epoch_major = _pack_q4_epochs_contiguous(q4_blocks)
   return {
     "schema": FIXTURE_SCHEMA,
     "role": "ffn_gate_up", "shape": [m, n, k], "total_epochs": TOTAL_EPOCHS,
     "seeds": {"q4": 20260721, "q8_source": 20260722},
     "repack": {
       "q4_sha256": hashlib.sha256(np.ascontiguousarray(q4_blocks).tobytes()).hexdigest(),
+      "q4_epoch_major_sha256": hashlib.sha256(q4_epoch_major.tobytes()).hexdigest(),
       "q8_values_sha256": hashlib.sha256(np.ascontiguousarray(values).tobytes()).hexdigest(),
       "q8_scales_sha256": hashlib.sha256(np.ascontiguousarray(scales).tobytes()).hexdigest(),
       "q8_sums_sha256": hashlib.sha256(np.ascontiguousarray(sums).tobytes()).hexdigest(),
       "q4_layout": "q4_k_bytes[n, k_epoch, 144]",
+      "q4_epoch_major_layout": "q4_k_bytes[k_epoch, n, 144]",
+      "q4_epoch_major_dtype": str(q4_epoch_major.dtype),
+      "q4_epoch_major_elements": int(q4_epoch_major.size),
       "q8_layout": "q8_ds4[epoch, m, groups]",
     },
     "source_sha256": hashlib.sha256(np.ascontiguousarray(source).tobytes()).hexdigest(),
@@ -245,12 +270,22 @@ def run_isolated_target_epoch(program_path: str, output_path: str, epoch: int,
   return isolated.result
 
 
-def spawned_tiny_health_probe() -> bool:
-  """Run the independent tiny-add health canary in a fresh process."""
+def _run_tiny_health_probe_with_env(env_overrides: dict[str, str]) -> bool:
+  """Spawn-child entry: select the queue mode before the AMD device exists."""
   from extra.qk.prefill.host_safety_canary import make_tiny_health_probe
+  os.environ.update(env_overrides)
+  return bool(make_tiny_health_probe()())
+
+
+def spawned_tiny_health_probe(env_overrides: Mapping[str, str] | None = None) -> bool:
+  """Run the independent tiny-add health canary in a fresh, mode-specific process."""
   from tinygrad.runtime.process_isolated import run_isolated
+  overrides = {} if env_overrides is None else {str(key): str(value) for key, value in env_overrides.items()}
+  if set(overrides) - {"AMD_AQL"}: raise ValueError("health env overrides only permit AMD_AQL")
+  if "AMD_AQL" in overrides and overrides["AMD_AQL"] not in {"0", "1"}:
+    raise ValueError("AMD_AQL health override must be '0' or '1'")
   result = run_isolated(
-    make_tiny_health_probe(), timeout_seconds=10.0, start_method="spawn",
+    _run_tiny_health_probe_with_env, args=(overrides,), timeout_seconds=10.0, start_method="spawn",
   )
   return bool(result.status == "passed" and result.result is True)
 
@@ -433,8 +468,8 @@ if __name__ == "__main__": raise SystemExit(main())
 
 
 __all__ = [
-  "SCHEMA", "ATTESTATION_SCHEMA", "FIXTURE_SCHEMA", "TOTAL_EPOCHS", "compile_target_program_artifact",
-  "target_fixture_evidence", "orchestrate_epoch_sweep",
+  "SCHEMA", "ATTESTATION_SCHEMA", "FIXTURE_SCHEMA", "TOTAL_EPOCHS", "compile_target_program",
+  "compile_target_program_artifact", "target_program_artifact_evidence", "target_fixture_evidence", "orchestrate_epoch_sweep",
   "parse_kernel_faults", "read_kernel_log_since", "run_isolated_target_epoch",
   "spawned_tiny_health_probe",
 ]
