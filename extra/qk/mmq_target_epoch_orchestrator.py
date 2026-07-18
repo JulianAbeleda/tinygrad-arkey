@@ -12,6 +12,11 @@ partial is admitted to the host aggregate only after:
 This deliberately is not promotion evidence.  Process-per-epoch execution
 isolates queue lifetime and diagnoses all 20 K epochs safely; the strict R6
 same-process health gate remains separate.
+
+The v1 top-level record is extended additively with a deterministic fixture
+identity and an ``epoch_health`` attestation.  The nested attestation and
+fixture schemas are versioned independently so existing v1 readers can ignore
+the extra audit fields while R6 can require them explicitly.
 """
 from __future__ import annotations
 
@@ -35,6 +40,8 @@ from extra.qk.mmq_llama_five_buffer_gpu_harness import (
 
 
 SCHEMA = "tinygrad.mmq_q4k_q8_1_target_epoch_orchestrator.v1"
+ATTESTATION_SCHEMA = "tinygrad.mmq_q4k_q8_1_target_epoch_attestation.v1"
+FIXTURE_SCHEMA = "tinygrad.mmq_q4k_q8_1_target_fixture.v1"
 TOTAL_EPOCHS = TARGET_ROLE_PROBE_SHAPE[2] // 256
 DEFAULT_WORKER_TIMEOUT_SECONDS = 120.0
 DEFAULT_RUNTIME_TIMEOUT_MS = 30_000
@@ -148,6 +155,36 @@ def _target_epoch_inputs(epoch: int) -> tuple[np.ndarray, np.ndarray, np.ndarray
   return q4_epoch, values_epoch, scales_epoch, sums_epoch, reference
 
 
+def target_fixture_evidence() -> dict[str, Any]:
+  """Return deterministic input/repack identity shared with the strict target harness.
+
+  This is CPU-only and intentionally records byte hashes of the complete
+  epoch-major Q4/Q8 sources.  The epoch orchestrator's overwrite binaries may
+  differ from an in-place accumulator binary, but both must bind this fixture.
+  """
+  from extra.qk.mmq_q4k_q8_reference import q8_1_mmq_ds4_quantize_reference
+
+  m, n, k = TARGET_ROLE_PROBE_SHAPE
+  words = _random_q4_words(n, k, 20260721)
+  source = np.random.default_rng(20260722).standard_normal((m, k), dtype=np.float32)
+  values, scales, sums = q8_1_mmq_ds4_quantize_reference(source)
+  q4_blocks = words.view(np.uint8).reshape(n, TOTAL_EPOCHS, 144)
+  return {
+    "schema": FIXTURE_SCHEMA,
+    "role": "ffn_gate_up", "shape": [m, n, k], "total_epochs": TOTAL_EPOCHS,
+    "seeds": {"q4": 20260721, "q8_source": 20260722},
+    "repack": {
+      "q4_sha256": hashlib.sha256(np.ascontiguousarray(q4_blocks).tobytes()).hexdigest(),
+      "q8_values_sha256": hashlib.sha256(np.ascontiguousarray(values).tobytes()).hexdigest(),
+      "q8_scales_sha256": hashlib.sha256(np.ascontiguousarray(scales).tobytes()).hexdigest(),
+      "q8_sums_sha256": hashlib.sha256(np.ascontiguousarray(sums).tobytes()).hexdigest(),
+      "q4_layout": "q4_k_bytes[n, k_epoch, 144]",
+      "q8_layout": "q8_ds4[epoch, m, groups]",
+    },
+    "source_sha256": hashlib.sha256(np.ascontiguousarray(source).tobytes()).hexdigest(),
+  }
+
+
 def _run_target_epoch_worker(program_path: str, output_path: str, epoch: int,
                              runtime_timeout_ms: int = DEFAULT_RUNTIME_TIMEOUT_MS) -> dict[str, Any]:
   """Load and dispatch exactly one target epoch in a fresh spawned process."""
@@ -231,7 +268,9 @@ def _base_result(program_evidence: dict[str, Any] | None = None) -> dict[str, An
     "production_dispatch_changed": False, "default_route": "direct_packed",
     "completed_epochs": [], "failed_epoch": None, "stop_reason": None,
     "kernel_faults": [], "epoch_results": [], "program": program_evidence or {},
-    "no_fallback": True,
+    "no_fallback": True, "fixture": None, "epoch_health": [],
+    "health_attestation": {"schema": ATTESTATION_SCHEMA, "preflight_passed": None,
+                            "epochs": [], "status": "BLOCKED"},
   }
 
 
@@ -259,60 +298,99 @@ def orchestrate_epoch_sweep(
       out["stop_reason"] = f"program compile/serialization failed: {type(exc).__name__}: {exc}"
       return out
     out = _base_result(program_evidence)
+    out["fixture"] = target_fixture_evidence()
+
+    def finish() -> dict[str, Any]:
+      health = out["health_attestation"]
+      health["epochs"] = list(out["epoch_health"])
+      health["all_post_epoch_healthy"] = bool(
+        health.get("preflight_passed") is True and
+        all(row.get("post_health") is True for row in out["epoch_health"]))
+      health["all_kernel_faults_clear"] = not out["kernel_faults"] and all(
+        not row.get("kernel_faults") for row in out["epoch_health"])
+      health["status"] = "PASS" if (
+        health.get("preflight_passed") is True and
+        health["all_post_epoch_healthy"] and health["all_kernel_faults_clear"] and
+        len(out["epoch_health"]) == len(out["completed_epochs"]) == len(epochs)
+      ) else "BLOCKED"
+      return out
+
     try: preflight = health_probe()
     except BaseException as exc:
       out["stop_reason"] = f"preflight health probe failed: {type(exc).__name__}: {exc}"
-      return out
+      return finish()
     out["preflight_health"] = _health_passed(preflight)
+    out["health_attestation"]["preflight_passed"] = out["preflight_health"]
     if not out["preflight_health"]:
       out["stop_reason"] = "preflight GPU health canary failed"
-      return out
+      return finish()
 
     aggregate = np.zeros(expected_partial_shape, dtype=np.float32)
     for epoch in epochs:
       output_path = str(Path(temp_dir) / f"epoch_{epoch:02d}.npy")
       epoch_started = time.time()
+      attestation = {
+        "epoch": epoch, "worker_passed": None, "kernel_faults": [],
+        "kernel_log_checked": False, "post_health": None, "post_health_checked": False,
+        "partial_verified": False,
+        "status": "BLOCKED", "stop_stage": None,
+      }
+      out["epoch_health"].append(attestation)
       try: result = epoch_runner(artifact_path, output_path, epoch)
       except BaseException as exc:
         result = {"passed": False, "epoch": epoch, "status": "BLOCKED",
                   "exact_blocker": f"{type(exc).__name__}: {exc}"}
       out["epoch_results"].append(result)
+      attestation["worker_passed"] = bool(isinstance(result, dict) and result.get("passed"))
       if not isinstance(result, dict) or not result.get("passed"):
+        attestation["stop_stage"] = "worker"
         out["failed_epoch"] = epoch
         out["stop_reason"] = f"epoch {epoch} worker or numerical comparison failed"
-        return out
+        return finish()
 
       try: faults = parse_kernel_faults(fault_reader(epoch_started))
       except BaseException as exc:
+        attestation["stop_stage"] = "kernel_log"
         out["failed_epoch"] = epoch
         out["stop_reason"] = f"kernel health log unavailable after epoch {epoch}: {type(exc).__name__}: {exc}"
-        return out
+        return finish()
+      attestation["kernel_log_checked"] = True
+      attestation["kernel_faults"] = list(faults)
       if faults:
+        attestation["stop_stage"] = "kernel_fault"
         out["failed_epoch"] = epoch
         out["kernel_faults"].extend(faults)
         out["stop_reason"] = f"kernel health fault detected after epoch {epoch}"
-        return out
+        return finish()
 
       try: post_health = health_probe()
       except BaseException as exc:
+        attestation["stop_stage"] = "post_health"
         out["failed_epoch"] = epoch
         out["stop_reason"] = f"post-epoch health probe failed after epoch {epoch}: {type(exc).__name__}: {exc}"
-        return out
-      if not _health_passed(post_health):
+        return finish()
+      attestation["post_health_checked"] = True
+      attestation["post_health"] = _health_passed(post_health)
+      if not attestation["post_health"]:
+        attestation["stop_stage"] = "post_health"
         out["failed_epoch"] = epoch
         out["stop_reason"] = f"post-epoch GPU health canary failed after epoch {epoch}"
-        return out
+        return finish()
 
       try:
         partial = np.load(output_path, allow_pickle=False)
       except BaseException as exc:
+        attestation["stop_stage"] = "partial_load"
         out["failed_epoch"] = epoch
         out["stop_reason"] = f"verified epoch {epoch} partial could not be loaded: {type(exc).__name__}: {exc}"
-        return out
+        return finish()
       if partial.shape != expected_partial_shape or partial.dtype != np.float32 or not np.all(np.isfinite(partial)):
+        attestation["stop_stage"] = "partial_validation"
         out["failed_epoch"] = epoch
         out["stop_reason"] = f"verified epoch {epoch} partial has invalid shape/dtype/finiteness"
-        return out
+        return finish()
+      attestation["partial_verified"] = True
+      attestation["status"] = "PASS"
       aggregate += partial
       out["completed_epochs"].append(epoch)
 
@@ -324,7 +402,7 @@ def orchestrate_epoch_sweep(
       "coverage": {"verified_epochs": list(epochs), "verified_k": 256*len(epochs),
                    "target_epochs": TOTAL_EPOCHS, "complete_target": set(epochs) == set(range(TOTAL_EPOCHS))},
     })
-    return out
+    return finish()
 
 
 def _parse_epochs(value: str) -> tuple[int, ...]:
@@ -355,7 +433,8 @@ if __name__ == "__main__": raise SystemExit(main())
 
 
 __all__ = [
-  "SCHEMA", "TOTAL_EPOCHS", "compile_target_program_artifact", "orchestrate_epoch_sweep",
+  "SCHEMA", "ATTESTATION_SCHEMA", "FIXTURE_SCHEMA", "TOTAL_EPOCHS", "compile_target_program_artifact",
+  "target_fixture_evidence", "orchestrate_epoch_sweep",
   "parse_kernel_faults", "read_kernel_log_since", "run_isolated_target_epoch",
   "spawned_tiny_health_probe",
 ]

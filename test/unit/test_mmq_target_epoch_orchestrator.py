@@ -10,7 +10,10 @@ from pathlib import Path
 
 import numpy as np
 
-from extra.qk.mmq_target_epoch_orchestrator import orchestrate_epoch_sweep, parse_kernel_faults
+from extra.qk.mmq_target_epoch_orchestrator import (
+  ATTESTATION_SCHEMA, FIXTURE_SCHEMA, orchestrate_epoch_sweep, parse_kernel_faults,
+  target_fixture_evidence,
+)
 
 
 def _compile_artifact(temp_dir: str | Path) -> tuple[str, dict]:
@@ -91,7 +94,28 @@ def test_all_pass_runs_epochs_in_order_aggregates_fp32_and_is_never_promotable()
   # 1 + 2 + 3 in every cell; expose a small deterministic witness in evidence.
   assert out["aggregate_sum"] == 36.0
   assert len(out["aggregate_sha256"]) == 64
+  assert out["fixture"]["schema"] == FIXTURE_SCHEMA
+  assert all(len(out["fixture"]["repack"][key]) == 64 for key in
+             ("q4_sha256", "q8_values_sha256", "q8_scales_sha256", "q8_sums_sha256"))
+  assert out["health_attestation"]["schema"] == ATTESTATION_SCHEMA
+  assert out["health_attestation"]["status"] == "PASS"
+  assert out["health_attestation"]["all_post_epoch_healthy"] is True
+  assert out["health_attestation"]["all_kernel_faults_clear"] is True
+  assert [row["epoch"] for row in out["epoch_health"]] == [0, 1, 2]
+  assert all(row["status"] == "PASS" and row["post_health"] is True and
+             row["partial_verified"] is True and row["kernel_log_checked"] is True and
+             row["post_health_checked"] is True for row in out["epoch_health"])
   _assert_diagnostic_only(out)
+
+
+def test_fixture_identity_is_deterministic_and_layout_bound():
+  first, second = target_fixture_evidence(), target_fixture_evidence()
+  assert first == second
+  assert first["schema"] == FIXTURE_SCHEMA
+  assert first["shape"] == [512, 17408, 5120]
+  assert first["total_epochs"] == 20
+  assert first["repack"]["q4_layout"] == "q4_k_bytes[n, k_epoch, 144]"
+  assert first["repack"]["q8_layout"] == "q8_ds4[epoch, m, groups]"
 
 
 def test_epoch_failure_stops_before_later_epochs_and_keeps_only_verified_partials():
@@ -110,6 +134,10 @@ def test_epoch_failure_stops_before_later_epochs_and_keeps_only_verified_partial
   assert calls == [0, 1]
   assert out["completed_epochs"] == [0]
   assert out["failed_epoch"] == 1
+  assert out["epoch_health"][0]["status"] == "PASS"
+  assert out["epoch_health"][1]["stop_stage"] == "worker"
+  assert out["epoch_health"][1]["worker_passed"] is False
+  assert out["health_attestation"]["status"] == "BLOCKED"
   assert "epoch" in out["stop_reason"].lower()
   _assert_diagnostic_only(out)
 
@@ -136,6 +164,9 @@ def test_kernel_fault_invalidates_current_epoch_and_stops_immediately():
   assert out["completed_epochs"] == []
   assert out["failed_epoch"] == 0
   assert out["kernel_faults"] and "sq_intr" in out["kernel_faults"][0]
+  assert out["epoch_health"][0]["stop_stage"] == "kernel_fault"
+  assert out["epoch_health"][0]["kernel_faults"]
+  assert out["health_attestation"]["all_kernel_faults_clear"] is False
   assert "kernel" in out["stop_reason"].lower()
   _assert_diagnostic_only(out)
 
@@ -157,5 +188,7 @@ def test_health_canary_failure_invalidates_current_epoch_and_stops_immediately()
   assert health_calls == [True, True, False]
   assert out["completed_epochs"] == [0]
   assert out["failed_epoch"] == 1
+  assert out["epoch_health"][1]["stop_stage"] == "post_health"
+  assert out["epoch_health"][1]["post_health"] is False
   assert "health" in out["stop_reason"].lower()
   _assert_diagnostic_only(out)

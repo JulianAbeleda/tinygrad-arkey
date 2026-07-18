@@ -32,6 +32,7 @@ K_TILED_PROBE_SHAPE = (128, 128, 512)
 TARGET_ROLE_PROBE_SHAPE = (512, 17408, 5120)
 RTOL = 3e-3
 ATOL = 3e-3
+TARGET_IN_PLACE_ACCUMULATION = "target_in_place_fp32_add"
 
 
 def _blocked(reason: str, **evidence: Any) -> dict[str, Any]:
@@ -99,6 +100,27 @@ def _json_number(value: Any) -> int | float | str | None:
     if np.isneginf(value): return "-inf"
     return float(value)
   return str(value)
+
+
+def _zero_persistent_target_output(output: Any, zero_values: np.ndarray, copyin) -> Any:
+  """Zero and return the one output allocation shared by every K epoch."""
+  if output is None: raise RuntimeError("target in-place accumulation requires a persistent output")
+  copyin(output, zero_values)
+  return output
+
+
+def _accumulate_target_role_epoch(partial: Any, accum: Any, accum_host: Any,
+                                  partial_host: Any, *, mode: str) -> tuple[Any, Any]:
+  """Advance one epoch without hiding a readback or a second accumulation kernel."""
+  if mode == TARGET_IN_PLACE_ACCUMULATION:
+    # ``partial`` is the persistent output and the target kernel has already
+    # loaded/added/stored it in place.  Do not read it or launch another op.
+    return partial, accum_host
+  if mode == "host_fp32_add":
+    if partial_host is None: partial_host = partial.numpy()
+    accum_host += partial_host
+    return accum, accum_host
+  return (accum + partial).realize(), accum_host
 
 
 def _numeric_comparison(got: np.ndarray, reference: np.ndarray, *, rtol: float = RTOL,
@@ -523,6 +545,7 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
                                     n_chunk_tiles: int | None = None,
                                     epoch_start: int = 0,
                                     host_accumulate: bool = False,
+                                    in_kernel_accumulate: bool = False,
                                     per_epoch_check: bool = False,
                                     persistent_buffers: bool = False,
                                     preloaded_epochs: bool = False,
@@ -530,14 +553,22 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
                                     stable_metadata_staging: bool = False) -> dict[str, Any]:
   """Run the emitted K=256 program across the exact 14B ffn_gate_up shape.
 
-  This remains bounded evidence: each epoch writes a fresh full-role partial
-  and tinygrad performs the FP32 elementwise accumulation.  The final oracle
-  comparison is full output, with no direct fallback.  Route admission still
-  requires the surrounding role/health census.
+  By default each epoch writes a full-role partial and tinygrad performs the
+  FP32 elementwise accumulation.  The opt-in target in-place mode instead
+  binds one zeroed persistent output to every epoch and performs no external
+  add or intermediate readback.  The final oracle comparison is full output,
+  with no direct fallback.  Route admission still requires the surrounding
+  role/health census.
   """
   if warmups < 0 or rounds <= 0: raise ValueError("warmups must be non-negative and rounds must be positive")
   if stable_metadata_staging and not preloaded_epochs:
     raise ValueError("stable_metadata_staging requires preloaded_epochs")
+  if in_kernel_accumulate and host_accumulate:
+    raise ValueError("in_kernel_accumulate and host_accumulate are mutually exclusive")
+  if in_kernel_accumulate and per_epoch_check:
+    raise ValueError("per_epoch_check is unsafe with in_kernel_accumulate because it performs intermediate readback")
+  if in_kernel_accumulate and not (persistent_buffers or preloaded_epochs):
+    raise ValueError("in_kernel_accumulate requires persistent_buffers")
   import time
   from tinygrad import Tensor, dtypes
   from tinygrad.device import Device
@@ -560,14 +591,18 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
   if n_chunk_tiles is None: n_chunk_tiles = total_n_tiles
   if not 0 < n_chunk_tiles <= total_n_tiles: raise ValueError(f"n_chunk_tiles must be in [1,{total_n_tiles}]")
   if preloaded_epochs: persistent_buffers = True
+  accumulation_mode = (TARGET_IN_PLACE_ACCUMULATION if in_kernel_accumulate else
+                       "host_fp32_add" if host_accumulate else "tinygrad_elementwise_add")
+  compiled = compile_llama_five_buffer_full_kernel(
+    build_llama_five_buffer_full_kernel(m, n, 256, accumulate=in_kernel_accumulate))
+  if not compiled.emitted or compiled.program is None:
+    return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
+            "shape": [m, n, k], "exact_blocker": compiled.blocker or "target role K=256 program did not emit",
+            "accumulation": accumulation_mode}
+  program = compiled.program
   words_np = _random_q4_words(n, k, 20260721)
   source_np = np.random.default_rng(20260722).standard_normal((m, k), dtype=np.float32)
   values_np, scales_np, sums_np = q8_1_mmq_ds4_quantize_reference(source_np)
-  compiled = compile_llama_five_buffer_full_kernel(build_llama_five_buffer_full_kernel(m, n, 256))
-  if not compiled.emitted or compiled.program is None:
-    return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
-            "shape": [m, n, k], "exact_blocker": compiled.blocker or "target role K=256 program did not emit"}
-  program = compiled.program
   binary, source, artifact = _artifact_evidence(program, parse_amdgpu_metadata)
   q4_blocks = words_np.view(np.uint8).reshape(n, k // 256, 144)
   repack_evidence = {
@@ -591,6 +626,7 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
   # not alter the generated program or route policy.
   persistent_partial = persistent_q4 = persistent_values = persistent_scales = persistent_sums = None
   persistent_scales_stage = persistent_sums_stage = None
+  target_output_zero = np.zeros(m * n, dtype=np.float32) if in_kernel_accumulate else None
   metadata_staging = {
     "mode": "fixed_va_gpu_sdma" if stable_metadata_staging else "preloaded_views",
     "source_preloaded": bool(preloaded_epochs),
@@ -631,7 +667,10 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
 
   def run_epochs(*, timed: bool = False):
     nonlocal completed_epochs
-    accum = None if host_accumulate else Tensor.zeros(m * n, dtype=dtypes.float32, device="AMD").realize()
+    if in_kernel_accumulate:
+      accum = _zero_persistent_target_output(persistent_partial, target_output_zero, copyin_buffer)
+    else:
+      accum = None if host_accumulate else Tensor.zeros(m * n, dtype=dtypes.float32, device="AMD").realize()
     accum_host = np.zeros(m * n, dtype=np.float32) if host_accumulate else None
     elapsed = 0.0
     for epoch in range(epoch_start, epoch_start + epoch_limit):
@@ -717,11 +756,8 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
         runtime(*args, global_size=(tile_count, m//128, 1), local_size=program.arg.local_size,
                 vals=program.arg.vals({}), wait=True)
       partial_host = partial.numpy() if per_epoch_check else None
-      if host_accumulate:
-        if partial_host is None: partial_host = partial.numpy()
-        accum_host += partial_host
-      else:
-        accum = (accum + partial).realize()
+      accum, accum_host = _accumulate_target_role_epoch(
+        partial, accum, accum_host, partial_host, mode=accumulation_mode)
       if per_epoch_check:
         ep_scales = scales_np[epoch*2:(epoch+1)*2].astype(np.float16).astype(np.float32)
         ep_sums = sums_np[epoch*2:(epoch+1)*2].astype(np.float16).astype(np.float32)
@@ -750,7 +786,8 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
             "exception": type(exc).__name__, "error": str(exc), "completed_epochs": completed_epochs,
             "artifacts": {**artifact, "backend_id": FULL_GRID_BACKEND_ID,
                           "distinct_binary_identity": isinstance(binary, bytes) and isinstance(source, str),
-            "no_fallback": True}, "epoch_checks": epoch_checks,
+            "no_fallback": True, "accumulation": accumulation_mode}, "epoch_checks": epoch_checks,
+            "accumulation": accumulation_mode,
             "repack": repack_evidence, "reduction": reduction_evidence,
             "metadata_staging": metadata_staging}
   compare_k = epoch_limit * 256
@@ -768,13 +805,14 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
   return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "PASS" if passed else "BLOCKED",
           "shape": [m, n, k], "role": "ffn_gate_up", "bounded_only": True,
           "production_dispatch_changed": False, "default_route": "direct_packed",
+          "accumulation": accumulation_mode,
           "exact_blocker": None if passed else "numeric output mismatch",
           "correctness": {"status": "PASS" if passed else "BLOCKED", "comparison": comparison,
                            "authority": "same_session_fp16_rounded_ds4_reference"},
           "timing": {"samples_ms": samples, "min_ms": min(samples), "median_ms": float(np.median(samples)),
                      "k_epoch_launches": epoch_limit, "total_k_epoch_launches": total_epochs,
                      "n_chunk_tiles": n_chunk_tiles,
-                     "accumulation": "host_fp32_add" if host_accumulate else "tinygrad_elementwise_add",
+                     "accumulation": accumulation_mode,
                      "persistent_buffers": persistent_buffers,
                      "preloaded_epochs": preloaded_epochs,
                      "sync_each_epoch": sync_each_epoch,
@@ -783,7 +821,8 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
                      "epoch_checks": epoch_checks},
           "artifacts": {**artifact, "backend_id": FULL_GRID_BACKEND_ID,
                         "distinct_binary_identity": isinstance(binary, bytes) and isinstance(source, str),
-                        "no_fallback": True, "same_session_timing": True},
+                        "no_fallback": True, "same_session_timing": True,
+                        "accumulation": accumulation_mode},
           "distinct_binary_identity": isinstance(binary, bytes) and isinstance(source, str),
           "same_session_timing": True, "no_fallback": True,
           "repack": repack_evidence, "reduction": reduction_evidence,
@@ -796,6 +835,7 @@ def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
                                               n_chunk_tiles: int | None = None,
                                               epoch_start: int = 0,
                                               host_accumulate: bool = False,
+                                              in_kernel_accumulate: bool = False,
                                               per_epoch_check: bool = False,
                                               persistent_buffers: bool = False,
                                               preloaded_epochs: bool = False,
@@ -803,22 +843,43 @@ def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
                                               stable_metadata_staging: bool = False) -> dict[str, Any]:
   if timeout_seconds <= 0: return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1",
                                   "status": "BLOCKED", "exact_blocker": "timeout_seconds must be positive"}
-  started = time.time()
+  if in_kernel_accumulate and host_accumulate:
+    return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
+            "exact_blocker": "in_kernel_accumulate and host_accumulate are mutually exclusive"}
+  if in_kernel_accumulate and per_epoch_check:
+    return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
+            "exact_blocker": "per_epoch_check is unsafe with in_kernel_accumulate because it performs intermediate readback"}
+  if in_kernel_accumulate and not (persistent_buffers or preloaded_epochs):
+    return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
+            "exact_blocker": "in_kernel_accumulate requires persistent_buffers"}
+  from extra.qk.mmq_target_epoch_orchestrator import parse_kernel_faults, read_kernel_log_since, spawned_tiny_health_probe
+  try: health_before = bool(spawned_tiny_health_probe())
+  except BaseException: health_before = False
+  if not health_before:
+    return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
+            "exact_blocker": "pre-run GPU health probe failed", "health_before": False}
   child_env = dict(os.environ)
   child_env.update({"DEV": "AMD", "PYTHONPATH": str(ROOT) + os.pathsep + child_env.get("PYTHONPATH", "")})
   code = ("import json; from extra.qk.mmq_llama_five_buffer_gpu_harness import run_full_grid_target_role_probe; "
           f"print(json.dumps(run_full_grid_target_role_probe(warmups={int(warmups)}, rounds={int(rounds)}, "
           f"epoch_limit={repr(epoch_limit)}, n_chunk_tiles={repr(n_chunk_tiles)}, epoch_start={int(epoch_start)}, "
-          f"host_accumulate={bool(host_accumulate)}, per_epoch_check={bool(per_epoch_check)}, "
+          f"host_accumulate={bool(host_accumulate)}, in_kernel_accumulate={bool(in_kernel_accumulate)}, "
+          f"per_epoch_check={bool(per_epoch_check)}, "
           f"persistent_buffers={bool(persistent_buffers)}, preloaded_epochs={bool(preloaded_epochs)}, "
           f"sync_each_epoch={bool(sync_each_epoch)}, stable_metadata_staging={bool(stable_metadata_staging)})), flush=True)")
+  started = time.time()
   try:
     proc = subprocess.run([sys.executable, "-c", code], cwd=ROOT, env=child_env,
                           text=True, capture_output=True, timeout=timeout_seconds, check=False)
   except subprocess.TimeoutExpired:
+    try: kernel_faults = parse_kernel_faults(read_kernel_log_since(started))
+    except BaseException as exc: kernel_faults = [f"kernel-log scan failed: {type(exc).__name__}: {exc}"]
+    try: health_after = bool(spawned_tiny_health_probe())
+    except BaseException: health_after = False
     return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
             "exact_blocker": f"target-role compile/{epoch_limit if epoch_limit is not None else 'full'}-epoch dispatch timed out",
-            "timeout_seconds": timeout_seconds}
+            "timeout_seconds": timeout_seconds, "timeout": True, "health_before": health_before,
+            "kernel_faults": kernel_faults, "health_after": health_after}
   result = None
   for line in reversed(proc.stdout.strip().splitlines()):
     try: candidate = json.loads(line)
@@ -826,7 +887,6 @@ def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
     if isinstance(candidate, dict):
       result = candidate
       break
-  from extra.qk.mmq_target_epoch_orchestrator import parse_kernel_faults, read_kernel_log_since, spawned_tiny_health_probe
   try: kernel_faults = parse_kernel_faults(read_kernel_log_since(started))
   except BaseException as exc: kernel_faults = [f"kernel-log scan failed: {type(exc).__name__}: {exc}"]
   try: health_after = bool(spawned_tiny_health_probe())
@@ -835,13 +895,14 @@ def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
     return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
             "exact_blocker": "target-role child returned no structured result", "returncode": proc.returncode,
             "stdout_tail": proc.stdout[-2000:], "stderr_tail": proc.stderr[-2000:],
-            "kernel_faults": kernel_faults, "health_after": health_after,
+            "kernel_faults": kernel_faults, "health_before": health_before, "health_after": health_after,
             "diagnostic": {"epoch_limit": epoch_limit, "n_chunk_tiles": n_chunk_tiles,
                            "epoch_start": epoch_start, "host_accumulate": host_accumulate,
+                           "in_kernel_accumulate": in_kernel_accumulate,
                            "per_epoch_check": per_epoch_check, "persistent_buffers": persistent_buffers,
                            "preloaded_epochs": preloaded_epochs, "sync_each_epoch": sync_each_epoch,
                            "stable_metadata_staging": stable_metadata_staging}}
-  result["kernel_faults"], result["health_after"] = kernel_faults, health_after
+  result["kernel_faults"], result["health_before"], result["health_after"] = kernel_faults, health_before, health_after
   if kernel_faults:
     result.update({"status": "BLOCKED", "exact_blocker": "AMD kernel fault/reset marker observed"})
   elif not health_after:
@@ -948,12 +1009,15 @@ def main() -> int:
   parser.add_argument("--target-role-preloaded", action="store_true")
   parser.add_argument("--target-role-stable-metadata", action="store_true")
   parser.add_argument("--target-role-host-accumulate", action="store_true")
+  parser.add_argument("--target-role-in-kernel-accumulate", action="store_true")
   args = parser.parse_args()
   if args.target_role:
     row = run_full_grid_target_role_probe_isolated(
       timeout_seconds=args.target_role_timeout, warmups=0, rounds=1,
       epoch_limit=args.target_role_epochs, n_chunk_tiles=TARGET_ROLE_PROBE_SHAPE[1] // 128,
-      host_accumulate=args.target_role_host_accumulate, per_epoch_check=args.target_role_per_epoch_check,
+      host_accumulate=args.target_role_host_accumulate,
+      in_kernel_accumulate=args.target_role_in_kernel_accumulate,
+      per_epoch_check=args.target_role_per_epoch_check,
       persistent_buffers=args.target_role_persistent, preloaded_epochs=args.target_role_preloaded,
       stable_metadata_staging=args.target_role_stable_metadata,
     )
