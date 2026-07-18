@@ -518,6 +518,32 @@ R6 remains fail-closed until that artifact exists; R7 can only mark the three ex
 atoms when the same measured target artifact carries source-revision/ownership evidence. Existing defaults remain
 production_dispatch_changed=false and direct_packed.
 
+## 0.8 Status update 2026-07-18: all target epochs exact under fresh-process isolation
+
+Commit `68d57d9e4` adds a fail-closed process-per-epoch diagnostic. It compiles the exact target K=256 PROGRAM once on
+the CPU, serializes it, and loads it in one fresh spawned AMD process per epoch. A partial is admitted to the host
+aggregate only after its independent DS4 oracle comparison passes, the epoch's kernel-log window contains no AMD
+fault/reset marker, and a known-safe tiny add passes in another fresh spawned process. The harness is permanently
+marked `diagnostic_only=true`, `promotion_eligible=false`, `production_dispatch_changed=false`, with direct-packed
+still the default.
+
+The complete exact-role sweep now passes:
+
+- Shape/role: `ffn_gate_up` `(512,17408,5120)`, all 20 K=256 epochs, full grid `[136,4,1]`.
+- Every epoch reports 0/8,912,896 mismatches, for 0 mismatches across 178,257,920 individually checked values.
+- All outputs/references are finite. Maximum absolute error over the 20 epoch comparisons is 1.2207e-4.
+- Kernel times range from 0.690 to 0.705 ms (13.958 ms summed); total worker time including deterministic input/oracle
+  generation and readback is 122.06 seconds.
+- Every epoch passed its post-dispatch health canary and kernel-log check; no `sq_intr`, page fault, MES failure, reset,
+  wedged-device, or VRAM-loss marker was observed.
+- The measured program remains vgpr=256, LDS=57,856, scratch=0, wave32, with distinct source/binary identities.
+
+The full evidence is `docs/target-epoch-safe-all-20260718.json`. This proves there is no bad K epoch and strongly
+localizes the earlier four-plus-launch failure to same-process repeated-launch/input-buffer/queue lifecycle, not MMQ
+arithmetic or a target-grid address defect. It does **not** close R6: the sweep uses fresh processes and host
+aggregation, while the strict gate still requires one healthy same-process 20-launch adapter with preloaded/persistent
+buffers, GPU-side FP32 accumulation, final full-K oracle comparison, same-session timing, and no hidden fallback.
+
 ## 1. Executive state
 
 The project is building a generated tinygrad prefill route for non-fitting quantized models, using Qwen3-14B as the
