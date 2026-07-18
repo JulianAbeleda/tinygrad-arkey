@@ -44,8 +44,9 @@ class HCQGraph(MultiGraphRunner):
     kernargs_size: dict[Compiled, int] = collections.defaultdict(int)
     for runtime in self.runtimes:
       if runtime is None: continue
-      kernargs_size[runtime.dev] += round_up(runtime.kernargs_alloc_size, 16)
-    self.kernargs_bufs: dict[Compiled, HCQBuffer] = {d:d.allocator._alloc(max(sz, 1), BufferSpec(cpu_access=True)) for d,sz in kernargs_size.items()}
+      kernargs_size[runtime.dev] += round_up(runtime.kernargs_alloc_size, runtime.kernargs_alignment)
+    self.kernargs_bufs: dict[Compiled, HCQBuffer] = {
+      d:d.allocator._alloc(max(sz, 1), d.kernargs_buffer_spec) for d,sz in kernargs_size.items()}
 
     # Fill initial arguments.
     self.ji_args: dict[int, HCQArgsState] = {}
@@ -53,7 +54,8 @@ class HCQGraph(MultiGraphRunner):
     kargs_alloc: dict[Compiled, BumpAllocator] = {dev:BumpAllocator(buf.size) for dev,buf in self.kernargs_bufs.items()}
     for j, runtime in enumerate(self.runtimes):
       if runtime is None: continue
-      argsbuf = self.kernargs_bufs[runtime.dev].offset(kargs_alloc[runtime.dev].alloc(runtime.kernargs_alloc_size, 16))
+      argsbuf = self.kernargs_bufs[runtime.dev].offset(
+        kargs_alloc[runtime.dev].alloc(runtime.kernargs_alloc_size, runtime.kernargs_alignment))
       self.ji_args[j] = runtime.fill_kernargs(self.hcq_bufs[j], self.calls[j][1].arg.vars, argsbuf)
 
     # Schedule Dependencies.

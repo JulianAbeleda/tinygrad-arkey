@@ -332,8 +332,10 @@ class CLikeArgsState(HCQArgsState[ProgramType]):
     self.bind_sints_to_buf(*cast(tuple[sint, ...], vals), buf=self.buf, fmt='I', offset=len(prefix or []) * 4 + len(bufs) * 8)
 
 class HCQProgram(Generic[HCQDeviceType]):
-  def __init__(self, args_state_t:Type[HCQArgsState], dev:HCQDeviceType, name:str, kernargs_alloc_size:int, lib:bytes|None=None, base:int|None=None):
-    self.args_state_t, self.dev, self.name, self.kernargs_alloc_size = args_state_t, dev, name, kernargs_alloc_size
+  def __init__(self, args_state_t:Type[HCQArgsState], dev:HCQDeviceType, name:str, kernargs_alloc_size:int,
+               kernargs_alignment:int=16, lib:bytes|None=None, base:int|None=None):
+    self.args_state_t, self.dev, self.name = args_state_t, dev, name
+    self.kernargs_alloc_size, self.kernargs_alignment = kernargs_alloc_size, kernargs_alignment
     self.prof_prg_counter = next(self.dev.prof_prg_counter)
     if PROFILE: Compiled.profile_events += [ProfileProgramEvent(dev.device, name, lib, base, self.prof_prg_counter)]
 
@@ -350,7 +352,8 @@ class HCQProgram(Generic[HCQDeviceType]):
     Returns:
       Arguments state with the given buffers and values set for the program.
     """
-    argsbuf = kernargs or self.dev.kernargs_buf.offset(offset=self.dev.kernargs_offset_allocator.alloc(self.kernargs_alloc_size, 8),
+    argsbuf = kernargs or self.dev.kernargs_buf.offset(
+      offset=self.dev.kernargs_offset_allocator.alloc(self.kernargs_alloc_size, self.kernargs_alignment),
                                                        size=self.kernargs_alloc_size)
     return self.args_state_t(argsbuf, self, bufs, vals=vals)
 
@@ -399,6 +402,7 @@ class HCQCompiled(Compiled, Generic[SignalType]):
 
   def __init__(self, device:str, allocator:HCQAllocatorBase, compilers:list[type[Renderer]], runtime, signal_t:Type[SignalType]|None=None,
                comp_queue_t:Callable[..., HWQueue]|None=None, copy_queue_t:Callable[..., HWQueue]|None=None, kernargs_size=(16 << 20),
+               kernargs_buffer_spec:BufferSpec=BufferSpec(cpu_access=True),
                sigalloc_size=0x1000, can_recover:bool=False, arch=None):
     self.device_id:int = int(device.split(":")[1]) if ":" in device else 0
 
@@ -423,7 +427,8 @@ class HCQCompiled(Compiled, Generic[SignalType]):
       self.timeline_signal, self._shadow_timeline_signal = self.new_signal(value=0, is_timeline=True), self.new_signal(value=0, is_timeline=True)
 
     if comp_queue_t is not None:
-      self.kernargs_buf:HCQBuffer = self.allocator.alloc(kernargs_size, BufferSpec(cpu_access=True))
+      self.kernargs_buffer_spec = kernargs_buffer_spec
+      self.kernargs_buf:HCQBuffer = self.allocator.alloc(kernargs_size, self.kernargs_buffer_spec)
       self.kernargs_offset_allocator:BumpAllocator = BumpAllocator(self.kernargs_buf.size, wrap=True)
 
     self.can_recover = can_recover # Whether the device can recover from faults or timeouts

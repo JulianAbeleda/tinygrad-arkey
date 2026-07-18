@@ -31,6 +31,7 @@ WAIT_REG_MEM_FUNCTION_NEQ = 4 # !=
 WAIT_REG_MEM_FUNCTION_GEQ = 5 # >=
 AQL_HDR = (1 << hsa.HSA_PACKET_HEADER_BARRIER) | (hsa.HSA_FENCE_SCOPE_SYSTEM << hsa.HSA_PACKET_HEADER_SCACQUIRE_FENCE_SCOPE) \
         | (hsa.HSA_FENCE_SCOPE_SYSTEM << hsa.HSA_PACKET_HEADER_SCRELEASE_FENCE_SCOPE)
+AMD_KERNARGS_BUFFER_SPEC = BufferSpec(cpu_access=True, uncached=True)
 
 def _publish_aql_packet(slot:MMIOInterface, packet:bytes) -> None:
   """Publish one complete AQL packet by making its valid header visible last."""
@@ -630,8 +631,11 @@ class AMDProgram(HCQProgram):
 
     if dev.sqtt_enabled: self.libhash: tuple[int, int] = struct.unpack('<Q', hashlib.md5(self.lib).digest()[:8])*2
 
-    super().__init__(CLikeArgsState, self.dev, self.name, kernargs_alloc_size=self.kernargs_segment_size+additional_alloc_sz, lib=self.lib,
-                     base=self.lib_gpu.va_addr)
+    # KERNARG memory is fine-grained and at least 16-byte aligned by ABI. Keep
+    # asynchronous records on separate cache lines as an additional guard
+    # against a partially visible pointer tuple.
+    super().__init__(CLikeArgsState, self.dev, self.name, kernargs_alloc_size=self.kernargs_segment_size+additional_alloc_sz,
+                     kernargs_alignment=64, lib=self.lib, base=self.lib_gpu.va_addr)
     weakref.finalize(self, self._fini, self.dev, self.lib_gpu, buf_spec)
 
   def __call__(self, *bufs, global_size:tuple[int,int,int]=(1,1,1), local_size:tuple[int,int,int]=(1,1,1), vals:tuple[int|None, ...]=(),
@@ -1064,7 +1068,9 @@ class AMDDevice(HCQCompiled):
     super().__init__(device, AMDAllocator(self), _amd_renderers(self.arch), functools.partial(AMDProgram, self), AMDSignal,
                      functools.partial(AMDComputeAQLQueue if self.is_aql else AMDComputeQueue, self),
                      functools.partial(AMDCopyQueue, self, max_copy_size=self.max_copy_size) if self.has_sdma_queue else None,
-                     kernargs_size=self.remote_alloc_size(16 << 20, 8 << 10), sigalloc_size=0x100 if self.is_usb() else 0x1000,
+                     kernargs_size=self.remote_alloc_size(16 << 20, 8 << 10),
+                     kernargs_buffer_spec=AMD_KERNARGS_BUFFER_SPEC,
+                     sigalloc_size=0x100 if self.is_usb() else 0x1000,
                      can_recover=self.is_am(), arch=self.arch)
 
     # Scratch setup
