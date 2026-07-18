@@ -1,0 +1,198 @@
+{
+  "child": {
+    "buffers": [
+      {
+        "elements": 12533760,
+        "name": "q4_preloaded",
+        "nbytes": 50135040,
+        "va_addr": 138685008179200
+      },
+      {
+        "elements": 2621440,
+        "name": "q8_values",
+        "nbytes": 2621440,
+        "va_addr": 138685105831936
+      },
+      {
+        "elements": 81920,
+        "name": "q8_scales",
+        "nbytes": 327680,
+        "va_addr": 138685384417280
+      },
+      {
+        "elements": 81920,
+        "name": "q8_sums",
+        "nbytes": 327680,
+        "va_addr": 138685384089600
+      }
+    ],
+    "comparison": {
+      "atol": 0.003,
+      "first_mismatch_got": null,
+      "first_mismatch_index": null,
+      "first_mismatch_reference": null,
+      "got_shape": [
+        512,
+        17408
+      ],
+      "got_size": 8912896,
+      "inf_got": 0,
+      "inf_reference": 0,
+      "joint_finite": 8912896,
+      "max_abs_error": 0.0001220703125,
+      "mean_abs_error": 1.7926890194530642e-08,
+      "mismatch_count": 0,
+      "nan_got": 0,
+      "nan_reference": 0,
+      "reference_shape": [
+        512,
+        17408
+      ],
+      "reference_size": 8912896,
+      "rtol": 0.003,
+      "status": "pass"
+    },
+    "completed_epochs": [
+      0,
+      0,
+      0
+    ],
+    "dispatches": [
+      {
+        "epoch": 0,
+        "timeline": {
+          "signal_value": 30,
+          "timeline_value": 31
+        }
+      },
+      {
+        "epoch": 0,
+        "timeline": {
+          "signal_value": 31,
+          "timeline_value": 32
+        }
+      },
+      {
+        "epoch": 0,
+        "timeline": {
+          "signal_value": 32,
+          "timeline_value": 33
+        }
+      }
+    ],
+    "elapsed_seconds": 5.99273943802109,
+    "epoch": 0,
+    "epoch_count": 3,
+    "epoch_sequence": [
+      0,
+      0,
+      0
+    ],
+    "epoch_start": 0,
+    "gpu_ms": 2.04536,
+    "input_hashes": {
+      "q4_epoch_major": "e2185c11d2ba48ee0184153cfe472a5e2c1d1617c4bcaf0797368809f28aacda",
+      "scales": "ce542cb5c0c77c5dbdaa1c44753e16815f9ac66b82458022179dc0b56f614211",
+      "sums": "c6755f8eb0e77c62ace4bd94f7a908ad0a5d01d21a87febc7954200c63d53aad",
+      "values": "b4ba6549584528a1281d4fe6e521a50722987fb36cd7e8154b8d5f9eb44f246c"
+    },
+    "no_fallback": true,
+    "output_buffers": [
+      {
+        "elements": 8912896,
+        "name": "output_0",
+        "nbytes": 35651584,
+        "va_addr": 138685064413184
+      }
+    ],
+    "output_count": 1,
+    "output_initialization": "empty_full_target_partial",
+    "output_mode": "persistent",
+    "passed": true,
+    "schema": "tinygrad.mmq_q4k_q8_1.single_epoch_canary.v1.child",
+    "shape": [
+      512,
+      17408,
+      256
+    ],
+    "status": "PASS",
+    "target_dispatches": 3,
+    "timeline": {
+      "after_preload": {
+        "signal_value": 27,
+        "timeline_value": 29
+      },
+      "start": {
+        "signal_value": 0,
+        "timeline_value": 1
+      }
+    }
+  },
+  "child_error": null,
+  "child_status": "passed",
+  "compile": {
+    "backend_id": "q4k_q8_1_mmq_amd_isa_full_grid_v0",
+    "binary_nbytes": 69655,
+    "binary_sha256": "36e232b66fe1789a47cf84200d1fe26abdfa51fc4a9ba5af6dc22ab1a769e18a",
+    "compile_only_parent": true,
+    "distinct_binary_identity": true,
+    "no_fallback": true,
+    "program_global_size": [
+      136,
+      4,
+      1
+    ],
+    "program_globals": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "program_local_size": [
+      256,
+      1,
+      1
+    ],
+    "resources": {
+      "authority": "native_elf_descriptor",
+      "compute_pgm_rsrc1": 1085014047,
+      "compute_pgm_rsrc2": 388,
+      "compute_pgm_rsrc3": 0,
+      "kernarg_bytes": 40,
+      "kernel_code_entry_byte_offset": -69120,
+      "lds_bytes": 57856,
+      "scratch_bytes": 0,
+      "sgpr": null,
+      "vgpr": 256,
+      "wavefront_size": 32
+    },
+    "resources_error": "CalledProcessError: Command '('/opt/rocm/llvm/bin/llvm-readelf', '--notes', '/tmp/tmpzuwjg751.hsaco')' returned non-zero exit status 1.",
+    "serialized_program_nbytes": 8272847,
+    "serialized_program_sha256": "7d32a0a29c2b70346710bf82dea5b1e1169949b9dc54bc602481f241eb073f49",
+    "source_nbytes": 437165,
+    "source_revision": "ac4cddeb0dbd778f650bf568f6f08344a06abe3a",
+    "source_sha256": "ed32df6ab9fc77d1a0fa67208ae876d134264646c15a71b3cc3b0610cf2c19db"
+  },
+  "diagnostic_only": true,
+  "epoch": 0,
+  "epoch_count": 3,
+  "epoch_sequence": [
+    0,
+    0,
+    0
+  ],
+  "epoch_start": 0,
+  "exact_blocker": null,
+  "fresh_output_each_launch": false,
+  "health_after": true,
+  "kernel_faults": [],
+  "no_fallback": true,
+  "output_mode": "persistent",
+  "passed": true,
+  "production_dispatch_changed": false,
+  "promotion_eligible": false,
+  "schema": "tinygrad.mmq_q4k_q8_1.single_epoch_canary.v1",
+  "status": "PASS",
+  "target_dispatches": 3
+}

@@ -605,6 +605,14 @@ and the kernel log remains clean. Evidence is
 repeat one exact epoch three times (`[0,0,0]`) to distinguish repeated invocation state from changing buffer-view
 kernargs.
 
+Both persistent- and fresh-output `[0,0,0]` sequences pass exactly on launch 3, including a final uninitialized fresh
+output that cannot be masked by stale correct output values. Evidence is
+`docs/target-preloaded-target-only-sequence-0-0-0-20260718.json` and
+`docs/target-preloaded-target-only-fresh-sequence-0-0-0-20260718.json`. Repeated invocation count, cached runtime,
+and output allocation are therefore healthy when inputs stay unchanged; corruption requires epoch input/view changes.
+The next split changes Q4 epochs while holding Q8 fixed, then changes Q8 while holding Q4 fixed, to identify which LDS
+producer lifecycle can observe stale prior-launch data.
+
 ## 1. Executive state
 
 The project is building a generated tinygrad prefill route for non-fitting quantized models, using Qwen3-14B as the
