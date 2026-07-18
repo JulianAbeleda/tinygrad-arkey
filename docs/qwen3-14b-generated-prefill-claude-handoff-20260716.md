@@ -620,6 +620,16 @@ complete and the kernel log stays clean. Evidence is `docs/target-preloaded-q4-c
 not Q4, output reuse, runtime count, or queue health. Next split Q8 values from Q8 scale/sum metadata to choose the
 exact LDS producer subpath before editing ordering.
 
+That final split localizes the corruption to Q8 scale/sum metadata. With Q4 and metadata fixed at epoch 0, changing
+only Q8 values through `[0,1,2]` passes the third fresh output with 0/8,912,896 mismatches and max absolute error
+1.2207e-4. With Q4 and values fixed at epoch 0, changing only scale/sum metadata through `[0,1,2]` completes timeline
+signals 30–32 without a kernel fault but leaves 18,224 mismatches (first `[48,640]`, max absolute error 229.44).
+Evidence is `docs/target-preloaded-q8-values-change-metadata-fixed-20260718.json` and
+`docs/target-preloaded-q8-values-fixed-metadata-change-20260718.json`. This is diagnostic evidence, not promotion:
+the next safe step is to distinguish changing metadata pointers from changing metadata contents at a fixed address,
+then repair only the evidenced metadata load/publish seam. Do not revive broad half2 ordering: the earlier matched
+compiler experiment worsened spills from 9 to 74.
+
 ## 1. Executive state
 
 The project is building a generated tinygrad prefill route for non-fitting quantized models, using Qwen3-14B as the
