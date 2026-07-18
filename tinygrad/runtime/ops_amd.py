@@ -32,6 +32,18 @@ WAIT_REG_MEM_FUNCTION_GEQ = 5 # >=
 AQL_HDR = (1 << hsa.HSA_PACKET_HEADER_BARRIER) | (hsa.HSA_FENCE_SCOPE_SYSTEM << hsa.HSA_PACKET_HEADER_SCACQUIRE_FENCE_SCOPE) \
         | (hsa.HSA_FENCE_SCOPE_SYSTEM << hsa.HSA_PACKET_HEADER_SCRELEASE_FENCE_SCOPE)
 
+def _publish_aql_packet(slot:MMIOInterface, packet:bytes) -> None:
+  """Publish one complete AQL packet by making its valid header visible last."""
+  if len(packet) != 64 or slot.nbytes != 64: raise ValueError("AQL packets and slots must be exactly 64 bytes")
+  # HSA requires the packet payload to be visible before the first 32 bits
+  # publish its kind. Invalidate a reused slot, fill the body, then pair the
+  # naturally aligned 32-bit header/setup store with a release fence.
+  header_setup = int.from_bytes(packet[:4], "little")
+  slot.view(size=4, fmt='I')[0] = hsa.HSA_PACKET_TYPE_INVALID << hsa.HSA_PACKET_HEADER_TYPE
+  slot.view(offset=4, size=60, fmt='B')[:] = packet[4:]
+  System.memory_barrier()
+  slot.view(size=4, fmt='I')[0] = header_setup
+
 @dataclass(frozen=True)
 class ProfileSQTTEvent(ProfileEvent): device:str; kern:int; se:int; blob:bytes; itrace:bool; exec_tag:int # noqa: E702
 
@@ -467,13 +479,13 @@ class AMDComputeAQLQueue(AMDComputeQueue):
   def _submit(self, dev:AMDDevice):
     cq = dev.compute_queue_desc(self.queue_idx)
     cmds = self._cmds if dev == self.binded_device else self._prep_aql(self._q, dev.pm4_ibs.offset(dev.pm4_ib_alloc.alloc(len(self._q) * 4, 16)))
-    aql_bytes = b''.join(bytes(c) if isinstance(c, hsa.hsa_kernel_dispatch_packet_t) else c for c in cmds)
+    packets = [bytes(c) if isinstance(c, hsa.hsa_kernel_dispatch_packet_t) else c for c in cmds]
 
-    assert len(aql_bytes) < cq.ring.nbytes, "submit is too large for the queue"
-    cp_bytes = min(len(aql_bytes), (cq.ring.nbytes - (cq.put_value * 64) % cq.ring.nbytes))
-    cq.ring.view(offset=(cq.put_value * 64) % cq.ring.nbytes, fmt='B')[:cp_bytes] = aql_bytes[:cp_bytes]
-    if (tail_bytes:=(len(aql_bytes) - cp_bytes)) > 0: cq.ring.view(offset=0, fmt='B')[:tail_bytes] = aql_bytes[cp_bytes:]
-    cq.put_value += len(aql_bytes) // 64
+    assert len(packets) * 64 < cq.ring.nbytes, "submit is too large for the queue"
+    for packet in packets:
+      offset = (cq.put_value * 64) % cq.ring.nbytes
+      _publish_aql_packet(cq.ring.view(offset=offset, size=64, fmt='B'), packet)
+      cq.put_value += 1
     cq.signal_doorbell(dev, doorbell_value=cq.put_value-1)
 
 class AMDCopyQueue(HWQueue):
