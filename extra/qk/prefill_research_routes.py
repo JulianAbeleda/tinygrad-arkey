@@ -8,8 +8,9 @@ from tinygrad import Tensor, dtypes
 from tinygrad.llm import route_ops as qk_ops
 from extra.qk.cooperative_mmq_gate import admit_cooperative_mmq, canonical_candidate_identity
 from extra.qk.mmq_exact_role_spec import DEFAULT_INVENTORY, ExactRoleSpec, exact_role_spec
-from extra.qk.prefill.frozen_exact_role_runtime import (
-  run_frozen_exact_q4k_research, validate_frozen_execution_evidence,
+from extra.qk.prefill.frozen_exact_role_runtime import FrozenExactRoleBinding, validate_frozen_execution_evidence
+from extra.qk.prefill.frozen_exact_role_scheduler import (
+  SCHEDULE_EVIDENCE_SCHEMA, build_frozen_exact_q4k_schedule, validate_frozen_schedule_evidence,
 )
 from extra.qk.prefill.six_row_research_selector import (
   GROUPS, RETAINED_POLICY_IDENTITY, TARGET, ExactSixRowResearchSelector, ResearchPolicyBlocked,
@@ -26,6 +27,9 @@ from tinygrad.uop.ops import UOp
 
 Q4K_Q8_CHOICES = ("", "0", "false", "off", "no", "wmma", "wmma_tiled", "packed_ds4", "packed_row_major", "packed_fused")
 _MMQ_DS4_LAST_PACKED: tuple[Any, tuple[Tensor, Tensor, Tensor]] | None = None
+# Preserve the benchmark route's injectable seam while changing its default
+# implementation from eager AMDProgram dispatch to a lazy scheduler graph.
+run_frozen_exact_q4k_research = build_frozen_exact_q4k_schedule
 
 @dataclass(frozen=True)
 class ExactResearchRouteAuthority:
@@ -35,6 +39,7 @@ class ExactResearchRouteAuthority:
   frozen_bundles: Mapping[str, str | Path]
   fallback_program_identities: Mapping[str, str]
   inventory: str | Path | Mapping[str, Any] = DEFAULT_INVENTORY
+  frozen_bindings: Mapping[str, FrozenExactRoleBinding] | None = None
 
 @dataclass(frozen=True)
 class PrefillResearchRouteConfig:
@@ -155,6 +160,7 @@ class _ExactResearchDispatch:
   fallback_program_identity: str | None
   role_spec: ExactRoleSpec | None
   inventory: str | Path | Mapping[str, Any]
+  frozen_binding: FrozenExactRoleBinding | None = None
 
 def _exact_research_dispatch(lin, spec:PrefillLinearRouteSpec,
                              config:PrefillResearchRouteConfig) -> _ExactResearchDispatch | None:
@@ -189,7 +195,9 @@ def _exact_research_dispatch(lin, spec:PrefillLinearRouteSpec,
     role_spec = exact_role_spec(spec.role, shape=(spec.m, spec.n, spec.k), inventory=authority.inventory)
     if role_spec.candidate_canonical_identity != selection.binding_identity:
       raise ResearchPolicyBlocked("frozen role identity differs from selected policy candidate")
-    return _ExactResearchDispatch(selection, attachment, bundle, None, role_spec, authority.inventory)
+    binding = authority.frozen_bindings.get(selection.binding_identity) \
+      if isinstance(authority.frozen_bindings, Mapping) else None
+    return _ExactResearchDispatch(selection, attachment, bundle, None, role_spec, authority.inventory, binding)
   if selection.binding_kind == "fallback":
     program_identity = authority.fallback_program_identities.get(selection.binding_identity)
     if not isinstance(program_identity, str) or not program_identity:
@@ -208,7 +216,10 @@ def _notify_exact_execution(lin, dispatch:_ExactResearchDispatch, *, program_ide
   else:
     if dispatch.role_spec is None:
       raise RuntimeError("exact frozen candidate has no admitted role spec")
-    execution_evidence = validate_frozen_execution_evidence(execution_evidence, dispatch.role_spec)
+    execution_evidence = (
+      validate_frozen_schedule_evidence(execution_evidence, dispatch.role_spec)
+      if isinstance(execution_evidence, Mapping) and execution_evidence.get("schema") == SCHEDULE_EVIDENCE_SCHEMA
+      else validate_frozen_execution_evidence(execution_evidence, dispatch.role_spec))
   notify_prefill_route_execution(lin, PrefillRouteExecution(
     dispatch.attachment.invocation_id, dispatch.selection.route_id, dispatch.selection.binding_identity,
     program_identity, fallback_used, fallback_reason, execution_evidence))
@@ -235,7 +246,7 @@ def route_direct_packed_prefill_research(lin, x:Tensor, *, config:PrefillResearc
     run = run_frozen_exact_q4k_research(
       lin, x_batch.reshape(spec.m, spec.k), role_spec=exact_dispatch.role_spec,
       frozen_bundle=exact_dispatch.frozen_bundle, enabled=True,
-      inventory=exact_dispatch.inventory)
+      inventory=exact_dispatch.inventory, binding=exact_dispatch.frozen_binding)
     if run is None or run.output is None:
       raise RuntimeError("selected exact frozen candidate returned no runtime result")
     if run.binding.candidate_identity != exact_dispatch.selection.binding_identity or \

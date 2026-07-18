@@ -91,10 +91,9 @@ def _scoped_candidate_compiler_state():
 def _research_non_jit_prefill_call(model, tokens, start_pos: int, temperature, *, logits_only: bool):
   """Execute one truthful research call without TinyJit replay.
 
-  The frozen candidate dispatches its native AMDProgram eagerly, outside the
-  scheduler capture stream. Calling model.__call__ would therefore capture
-  downstream consumers but not the candidate dispatch and could replay stale
-  output. This direct forward is intentionally limited to the smoke gate.
+  The frozen candidate is now a scheduler-owned PROGRAM chain. This direct
+  forward remains intentionally limited to the smoke gate until a separate
+  whole-model TinyJit replay run validates capture and repeated-call outputs.
   """
   from tinygrad.llm.prefill_route_observer import prefill_route_scope
   for q4k_linear in model._q4k_linears.linears: q4k_linear.decode_enabled = False

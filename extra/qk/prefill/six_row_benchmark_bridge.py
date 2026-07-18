@@ -70,6 +70,7 @@ def build_exact_research_authority(*, policy_path: str | Path,
     if not path.exists():
       raise ResearchPolicyBlocked(f"frozen bundle for {identity!r} does not exist: {path}")
     normalized_bundles[identity] = path
+  frozen_bindings = {}
   for group in GROUPS:
     if group.expected_binding_identity not in candidate_ids: continue
     role_spec = exact_role_spec(
@@ -78,10 +79,11 @@ def build_exact_research_authority(*, policy_path: str | Path,
       role_spec, normalized_bundles[group.expected_binding_identity], inventory=inventory_value)
     if binding.candidate_identity != group.expected_binding_identity:
       raise ResearchPolicyBlocked("frozen bundle candidate identity differs from retained policy")
+    frozen_bindings[group.expected_binding_identity] = binding
   if any(not isinstance(value, str) or not value for value in fallback_program_identities.values()):
     raise ResearchPolicyBlocked("declared fallback program identities must be non-empty strings")
   return ExactResearchRouteAuthority(policy, dict(TARGET), normalized_bundles,
-                                     dict(fallback_program_identities), inventory_value)
+                                     dict(fallback_program_identities), inventory_value, frozen_bindings)
 
 
 def _inventory_rows(authority: ExactResearchRouteAuthority) -> tuple[dict[str, Any], ...]:
@@ -195,8 +197,9 @@ def research_bridge_summary(authority: ExactResearchRouteAuthority) -> dict[str,
     "frozen_bundles": {identity: str(path) for identity, path in authority.frozen_bundles.items()},
     "declared_fallback_program_identities": dict(authority.fallback_program_identities),
     "intended_calls": sum(group.expected_calls for group in GROUPS),
+    "scheduler_owned_candidate_graph": True,
     "tinyjit_replay_authority": False,
-    "performance_note": "eager one-shot route integration only; retained candidate is not a whole-model performance winner",
+    "performance_note": "scheduler-owned route integration only; TinyJit replay and a whole-model performance win remain unproven",
   }
 
 

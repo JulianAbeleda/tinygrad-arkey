@@ -54,6 +54,7 @@ def test_authority_is_exact_and_missing_or_duplicate_cli_authority_fails_closed(
   authority = _authority()
   assert authority.policy["artifact_identity"] == RETAINED_POLICY_IDENTITY
   assert authority.frozen_bundles[CANDIDATE] == BUNDLE.resolve()
+  assert authority.frozen_bindings[CANDIDATE].candidate_identity == CANDIDATE
   with pytest.raises(ResearchPolicyBlocked, match="fallback program"):
     build_exact_research_authority(
       policy_path=POLICY, frozen_bundles={CANDIDATE:BUNDLE},
