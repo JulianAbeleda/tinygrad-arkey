@@ -66,6 +66,19 @@ def _n_workitem_dims(ctx:IselContext) -> int:
     lids = {int(str(u.arg)[-1]) for u in ctx.uses if u.op is Ops.SPECIAL and str(u.arg).startswith("lidx")}
     ctx._n_lid = n = (max(lids) + 1) if lids else 1
   return n
+
+def _workgroup_sgpr_index(ctx:IselContext, dim:int) -> int:
+  """Return the packed architected SGPR carrying workgroup-id ``dim``.
+
+  AMD's COMPUTE_PGM_RSRC2 workgroup-id enables are a packed set: only the
+  dimensions whose enable bits are set consume system SGPRs, in x/y/z order.
+  Thus a kernel using gidx1 without gidx0 receives Y in s2 (not s3), while a
+  kernel using both receives X=s2 and Y=s3.  Keep this mapping in lockstep
+  with elf.py's descriptor scan rather than assuming absolute dimension IDs.
+  """
+  dims = {int(str(u.arg)[-1]) for u in ctx.uses if u.op is Ops.SPECIAL and str(u.arg).startswith("gidx")}
+  if dim not in dims: raise ValueError(f"AMD:ISA workgroup dimension gidx{dim} was not present in the descriptor scan")
+  return WGID_S0 + sum(d < dim for d in dims)
 # B0.L5: WMMA A/B/C fragments live in the reserved high VGPR window v200..v237. FRAG_TOP is EXCLUSIVE so a fragment of 8
 # regs based at 230 uses v230..v237 (base+7 == 237): v>=238 is the raw-INS garbage trap (see gfx1100 raw-INS asm gotchas).
 # NOTE (B0.M multi-output-tile): the v>=238 garbage is a RAW-INS-only artifact; the ISA renderer's ELF descriptor auto-
@@ -560,8 +573,10 @@ def isel_var(ctx:IselContext, x:UOp):
 def isel_special(ctx:IselContext, x:UOp):
   # Inc 3: multi-dim ids. workitem-id lidx{d} -> v{d} (fixed at entry; rsrc2 ENABLE_VGPR_WORKITEM_ID = max lidx dim).
   #   MOV-into-v{d} that lowers to nothing so consumers read v{d}; _vpool reserves v0..v(ndim-1) so they aren't reused.
-  # workgroup-id gidx{d} -> s{2+d} (system SGPRs after the 2 user SGPRs = kernarg ptr s0:1; descriptor enable bits set by
-  #   elf.py scanning the sink for gidx* SPECIALs). Lowered to v_mov VGPR <- s{2+d} so index math stays VGPR-only.
+  # workgroup-id gidx{d} -> packed system SGPR (after the 2 user SGPRs = kernarg
+  #   ptr s0:1; only enabled dimensions consume slots, in x/y/z order; see
+  #   _workgroup_sgpr_index and elf.py's descriptor enable-bit scan). Lowered to
+  #   v_mov VGPR <- that SGPR so index math stays VGPR-only.
   # The SPECIAL node is KEPT reachable (retagged, ignored src) so the elf.py descriptor scan sees every id dim used.
   # Only x/y/z (dim 0/1/2) exist on gfx1100 -> fail loudly for any higher dim rather than mis-map.
   if isinstance(x.tag, tuple): return None
@@ -574,7 +589,7 @@ def isel_special(ctx:IselContext, x:UOp):
     # workitem-id dim+range -- it must agree with the renderer's _n_threads (which reads ctx.uses, pre-isel).
     if _n_workitem_dims(ctx) == 1: return x.ins(AMDOps.MOV, src=(keep,), tag=(TID,))
     return x.ins(AMDOps.WI_ID, src=(keep, UOp.const(dtypes.int32, d*10).rtag()), tag=_vreg_def(ctx))
-  if kind == "gidx": return x.ins(AMDOps.WG_ID, src=(keep, UOp.const(dtypes.int32, WGID_S0 + d).rtag()), tag=_vreg_def(ctx))
+  if kind == "gidx": return x.ins(AMDOps.WG_ID, src=(keep, UOp.const(dtypes.int32, _workgroup_sgpr_index(ctx, d)).rtag()), tag=_vreg_def(ctx))
   raise NotImplementedError(f"AMD:ISA: unsupported SPECIAL {x.arg!r} (expected lidx*/gidx*)")
 
 def isel_index(ctx:IselContext, x:UOp):

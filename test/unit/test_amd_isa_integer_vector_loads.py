@@ -8,8 +8,15 @@ from tinygrad.dtype import AddrSpace, dtypes
 from tinygrad.helpers import Target
 from tinygrad.renderer.isa import IselContext, PreRegAllocContext, RegisterSpan
 from tinygrad.renderer.isa.amd import (AMDISARenderer, AMDOps, SPTR_POOL, VBASE, isel_index, isel_load,
-                                      post_regalloc_matcher, pre_regalloc_matcher)
+                                      post_regalloc_matcher, pre_regalloc_matcher, _workgroup_sgpr_index)
 from tinygrad.uop.ops import Ops, UOp
+
+
+@pytest.mark.parametrize("dims,expected", (((0,), (2,)), ((1,), (2,)), ((0, 1), (2, 3))))
+def test_workgroup_id_system_sgprs_are_packed_by_enabled_dimension(dims, expected):
+  specials = tuple(UOp.special(2, f"gidx{d}") for d in dims)
+  ctx = IselContext(UOp.sink(*specials))
+  assert tuple(_workgroup_sgpr_index(ctx, d) for d in dims) == expected
 
 
 def _select_global_load(dtype, index:int=0):
