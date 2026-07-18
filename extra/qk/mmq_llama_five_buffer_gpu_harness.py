@@ -513,7 +513,8 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
                                     epoch_limit: int | None = None,
                                     n_chunk_tiles: int | None = None,
                                     epoch_start: int = 0,
-                                    host_accumulate: bool = False) -> dict[str, Any]:
+                                    host_accumulate: bool = False,
+                                    per_epoch_check: bool = False) -> dict[str, Any]:
   """Run the emitted K=256 program across the exact 14B ffn_gate_up shape.
 
   This remains bounded evidence: each epoch writes a fresh full-role partial
@@ -553,6 +554,7 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
   binary, source, artifact = _artifact_evidence(program, parse_amdgpu_metadata)
   q4_blocks = words_np.view(np.uint8).reshape(n, k // 256, 144)
   completed_epochs = 0
+  epoch_checks = []
   def run_epochs(*, timed: bool = False):
     nonlocal completed_epochs
     accum = None if host_accumulate else Tensor.zeros(m * n, dtype=dtypes.float32, device="AMD").realize()
@@ -577,7 +579,18 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
         args = tuple(buffers[g].get_buf("AMD") for g in program.arg.globals)
         runtime(*args, global_size=(tile_count, m//128, 1), local_size=program.arg.local_size,
                 vals=program.arg.vals({}), wait=True)
-      if host_accumulate: accum_host += partial.numpy()
+      if host_accumulate:
+        partial_host = partial.numpy()
+        accum_host += partial_host
+        if per_epoch_check:
+          ep_scales = scales_np[epoch*2:(epoch+1)*2].astype(np.float16).astype(np.float32)
+          ep_sums = sums_np[epoch*2:(epoch+1)*2].astype(np.float16).astype(np.float32)
+          ep_ds4 = Q81MMQDS4Activation(values_np[epoch*2:(epoch+1)*2], ep_scales, ep_sums,
+            Q81MMQDS4ActivationSpec(m=m, k=256, m_tile=m))
+          ep_spec = Q4KQ81MMQTileSpec(role="target_epoch_check", m=m, n=n, k=256,
+            m_tile=m, n_tile=n, activation_layout=Q8_1_MMQ_DS4_LAYOUT)
+          ep_ref = q4k_q8_1_mmq_ds4_tile_reference(q4_blocks[:, epoch:epoch+1, :].reshape(-1).view(np.uint8), ep_ds4, ep_spec)
+          epoch_checks.append({"epoch": epoch, **_numeric_comparison(partial_host.reshape(m, n), ep_ref)})
       else: accum = (accum + partial).realize()
       elapsed += (time.perf_counter() - t0) * 1000.0
       completed_epochs += 1
@@ -594,7 +607,7 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
             "exception": type(exc).__name__, "error": str(exc), "completed_epochs": completed_epochs,
             "artifacts": {**artifact, "backend_id": FULL_GRID_BACKEND_ID,
                           "distinct_binary_identity": isinstance(binary, bytes) and isinstance(source, str),
-                          "no_fallback": True}}
+            "no_fallback": True}, "epoch_checks": epoch_checks}
   compare_k = epoch_limit * 256
   compare_words = q4_blocks[:, epoch_start:epoch_start+epoch_limit, :].reshape(-1).view(np.uint8)
   compare_values = values_np[epoch_start*2:(epoch_start+epoch_limit)*2]
@@ -616,7 +629,8 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
           "timing": {"samples_ms": samples, "min_ms": min(samples), "median_ms": float(np.median(samples)),
                      "k_epoch_launches": epoch_limit, "total_k_epoch_launches": total_epochs,
                      "n_chunk_tiles": n_chunk_tiles,
-                     "accumulation": "tinygrad_elementwise_add"},
+                     "accumulation": "host_fp32_add" if host_accumulate else "tinygrad_elementwise_add",
+                     "epoch_checks": epoch_checks},
           "artifacts": {**artifact, "backend_id": FULL_GRID_BACKEND_ID,
                         "distinct_binary_identity": isinstance(binary, bytes) and isinstance(source, str),
                         "no_fallback": True, "same_session_timing": True},
@@ -629,7 +643,8 @@ def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
                                               epoch_limit: int | None = None,
                                               n_chunk_tiles: int | None = None,
                                               epoch_start: int = 0,
-                                              host_accumulate: bool = False) -> dict[str, Any]:
+                                              host_accumulate: bool = False,
+                                              per_epoch_check: bool = False) -> dict[str, Any]:
   if timeout_seconds <= 0: return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1",
                                   "status": "BLOCKED", "exact_blocker": "timeout_seconds must be positive"}
   child_env = dict(os.environ)
@@ -637,7 +652,7 @@ def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
   code = ("import json; from extra.qk.mmq_llama_five_buffer_gpu_harness import run_full_grid_target_role_probe; "
           f"print(json.dumps(run_full_grid_target_role_probe(warmups={int(warmups)}, rounds={int(rounds)}, "
           f"epoch_limit={repr(epoch_limit)}, n_chunk_tiles={repr(n_chunk_tiles)}, epoch_start={int(epoch_start)}, "
-          f"host_accumulate={bool(host_accumulate)})))")
+          f"host_accumulate={bool(host_accumulate)}, per_epoch_check={bool(per_epoch_check)})))")
   try:
     proc = subprocess.run([sys.executable, "-c", code], cwd=ROOT, env=child_env,
                           text=True, capture_output=True, timeout=timeout_seconds, check=False)
