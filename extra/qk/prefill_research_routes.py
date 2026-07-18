@@ -2,18 +2,37 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Mapping
 from tinygrad import Tensor, dtypes
 from tinygrad.llm import route_ops as qk_ops
 from extra.qk.cooperative_mmq_gate import admit_cooperative_mmq, canonical_candidate_identity
+from extra.qk.mmq_exact_role_spec import DEFAULT_INVENTORY, ExactRoleSpec, exact_role_spec
+from extra.qk.prefill.frozen_exact_role_runtime import run_frozen_exact_q4k_research
+from extra.qk.prefill.six_row_research_selector import (
+  GROUPS, RETAINED_POLICY_IDENTITY, TARGET, ExactSixRowResearchSelector, ResearchPolicyBlocked,
+  ResearchSelection, ResearchWorkload,
+)
 from tinygrad.llm.memory_semantics import mark_candidate_workspace
 from tinygrad.llm.prefill_routes import (PrefillLinearRouteSpec, _direct_packed_enabled_for, _direct_packed_module_role,
   _direct_packed_quant, _direct_packed_role, _is_q4k_linear, _is_q6k_linear, _run_direct_packed_baseline,
   notify_prefill_route, prefill_activation, prefill_output)
+from tinygrad.llm.prefill_route_observer import (
+  PrefillRouteAttachment, PrefillRouteExecution, notify_prefill_route_execution,
+)
 from tinygrad.uop.ops import UOp
 
 Q4K_Q8_CHOICES = ("", "0", "false", "off", "no", "wmma", "wmma_tiled", "packed_ds4", "packed_row_major", "packed_fused")
 _MMQ_DS4_LAST_PACKED: tuple[Any, tuple[Tensor, Tensor, Tensor]] | None = None
+
+@dataclass(frozen=True)
+class ExactResearchRouteAuthority:
+  """All host-side authority required to opt into the immutable six-row route."""
+  policy: Mapping[str, Any]
+  target: Mapping[str, Any]
+  frozen_bundles: Mapping[str, str | Path]
+  fallback_program_identities: Mapping[str, str]
+  inventory: str | Path | Mapping[str, Any] = DEFAULT_INVENTORY
 
 @dataclass(frozen=True)
 class PrefillResearchRouteConfig:
@@ -30,6 +49,8 @@ class PrefillResearchRouteConfig:
   wmma_tiled_m_tile: int = 16
   wmma_tiled_n_tile: int = 16
   wmma_tiled_group_tile: int = 1
+  exact_policy_enabled: bool = False
+  exact_authority: ExactResearchRouteAuthority | None = None
 
 @dataclass(frozen=True)
 class DirectPackedPrefillRequest:
@@ -124,13 +145,101 @@ def _direct_packed_spec(lin, x:Tensor) -> PrefillLinearRouteSpec|None:
   quant = "q4k" if _is_q4k_linear(lin) else "q6k" if _is_q6k_linear(lin) else ""
   return None if not quant else PrefillLinearRouteSpec("direct_packed", quant, "", m, n, k)
 
+@dataclass(frozen=True)
+class _ExactResearchDispatch:
+  selection: ResearchSelection
+  attachment: PrefillRouteAttachment
+  frozen_bundle: str | Path | None
+  fallback_program_identity: str | None
+  role_spec: ExactRoleSpec | None
+  inventory: str | Path | Mapping[str, Any]
+
+def _exact_research_dispatch(lin, spec:PrefillLinearRouteSpec,
+                             config:PrefillResearchRouteConfig) -> _ExactResearchDispatch | None:
+  """Select an exact route using host facts only, before activation Tensor work."""
+  if not config.exact_policy_enabled: return None
+  authority = config.exact_authority
+  if not isinstance(authority, ExactResearchRouteAuthority):
+    raise ResearchPolicyBlocked("enabled exact research route requires explicit policy/bundle authority")
+  if dict(authority.target) != TARGET:
+    raise ResearchPolicyBlocked("exact research target authority differs from retained AMD gfx1100 wave32 target")
+  quant = "Q4_K" if spec.quant == "q4k" else "Q6_K" if spec.quant == "q6k" else ""
+  workload = ResearchWorkload("prefill", quant, spec.role, spec.m, spec.n, spec.k,
+                              TARGET["backend"], TARGET["arch"], TARGET["wave_size"])
+  groups = [group for group in GROUPS if group.workload.key == workload.key]
+  if len(groups) != 1: raise ResearchPolicyBlocked("unknown exact research workload; no fallback is implied")
+  attachment = getattr(lin, "_prefill_route_attachment", None)
+  if not isinstance(attachment, PrefillRouteAttachment):
+    raise ResearchPolicyBlocked("exact research route requires an exact runtime attachment")
+  group = groups[0]
+  selection = ExactSixRowResearchSelector(authority.policy, enabled=True).select(
+    attachment.invocation_id, workload, expected_binding_identity=group.expected_binding_identity)
+  if attachment.route_id != selection.route_id:
+    raise ResearchPolicyBlocked("runtime attachment route differs from selected exact research route")
+  attached_policy = attachment.selected_policy
+  if not isinstance(attached_policy, Mapping) or attached_policy.get("artifact_identity") != RETAINED_POLICY_IDENTITY or \
+     attached_policy.get("binding_identity") != selection.binding_identity:
+    raise ResearchPolicyBlocked("runtime attachment policy differs from selected exact research binding")
+  if selection.binding_kind == "candidate":
+    bundle = authority.frozen_bundles.get(selection.binding_identity)
+    if not isinstance(bundle, (str, Path)) or not str(bundle):
+      raise ResearchPolicyBlocked("selected exact candidate has no frozen bundle authority")
+    role_spec = exact_role_spec(spec.role, shape=(spec.m, spec.n, spec.k), inventory=authority.inventory)
+    if role_spec.candidate_canonical_identity != selection.binding_identity:
+      raise ResearchPolicyBlocked("frozen role identity differs from selected policy candidate")
+    return _ExactResearchDispatch(selection, attachment, bundle, None, role_spec, authority.inventory)
+  if selection.binding_kind == "fallback":
+    program_identity = authority.fallback_program_identities.get(selection.binding_identity)
+    if not isinstance(program_identity, str) or not program_identity:
+      raise ResearchPolicyBlocked("selected direct_packed fallback has no program identity authority")
+    return _ExactResearchDispatch(selection, attachment, None, program_identity, None, authority.inventory)
+  raise ResearchPolicyBlocked(f"unsupported exact research binding kind {selection.binding_kind!r}")
+
+def _notify_exact_execution(lin, dispatch:_ExactResearchDispatch, *, program_identity:str,
+                            fallback_used:bool, fallback_reason:str|None) -> None:
+  if not isinstance(program_identity, str) or not program_identity:
+    raise RuntimeError("exact research execution has no program identity")
+  notify_prefill_route_execution(lin, PrefillRouteExecution(
+    dispatch.attachment.invocation_id, dispatch.selection.route_id, dispatch.selection.binding_identity,
+    program_identity, fallback_used, fallback_reason))
+
 def route_direct_packed_prefill_research(lin, x:Tensor, *, config:PrefillResearchRouteConfig) -> Tensor|None:
   if not isinstance(config, PrefillResearchRouteConfig): raise TypeError("research prefill route requires explicit config")
   if config.q4k_q8_mode not in Q4K_Q8_CHOICES: raise ValueError(f"invalid research q4k_q8_mode {config.q4k_q8_mode!r}")
   global _MMQ_DS4_LAST_PACKED
-  if (spec := _direct_packed_spec(lin, x)) is None: return None
+  if (spec := _direct_packed_spec(lin, x)) is None:
+    if config.exact_policy_enabled:
+      raise ResearchPolicyBlocked("enabled exact research route does not match a bias-free Q4_K/Q6_K prefill linear")
+    return None
   spec = PrefillLinearRouteSpec(spec.route, spec.quant, _direct_packed_role(lin, spec), spec.m, spec.n, spec.k)
+  exact_dispatch = _exact_research_dispatch(lin, spec, config)
+  if exact_dispatch is not None and exact_dispatch.selection.binding_kind == "fallback":
+    out = _run_direct_packed_baseline(lin, x, spec)
+    if out is None: raise RuntimeError("selected exact direct_packed fallback produced no output")
+    _notify_exact_execution(lin, exact_dispatch, program_identity=exact_dispatch.fallback_program_identity,
+                            fallback_used=True,
+                            fallback_reason="retained exact six-row policy selected direct_packed fallback")
+    return out
   x_batch = prefill_activation(x[0].cast(dtypes.float16).contiguous())
+  if exact_dispatch is not None:
+    run = run_frozen_exact_q4k_research(
+      lin, x_batch.reshape(spec.m, spec.k), role_spec=exact_dispatch.role_spec,
+      frozen_bundle=exact_dispatch.frozen_bundle, enabled=True,
+      inventory=exact_dispatch.inventory)
+    if run is None or run.output is None:
+      raise RuntimeError("selected exact frozen candidate returned no runtime result")
+    if run.binding.candidate_identity != exact_dispatch.selection.binding_identity or \
+       run.binding.role_spec != exact_dispatch.role_spec or \
+       run.evidence.get("candidate_identity") != exact_dispatch.selection.binding_identity or \
+       run.evidence.get("program_key") != run.binding.program_key or \
+       run.evidence.get("shape") != list(exact_dispatch.role_spec.shape) or \
+       run.evidence.get("program_shape") != list(exact_dispatch.role_spec.program.shape) or \
+       not isinstance(run.binding.program_key, str) or not run.binding.program_key:
+      raise RuntimeError("selected exact frozen candidate runtime identity drifted")
+    notify_prefill_route(lin)
+    _notify_exact_execution(lin, exact_dispatch, program_identity=run.binding.program_key,
+                            fallback_used=False, fallback_reason=None)
+    return prefill_output(run.output)
   if _is_q4k_linear(lin):
     cooperative = _cooperative_q4k_binding(lin, spec, candidate=config.cooperative_candidate,
                                             evidence=config.cooperative_evidence, enabled=config.cooperative_enabled)
@@ -186,6 +295,6 @@ def route_prefill_q4k_gate_up_research(gate, up, x:Tensor, *, config:PrefillRese
   notify_prefill_route(gate); notify_prefill_route(up)
   return out[:, :, :n], out[:, :, n:]
 
-__all__ = ["PrefillResearchRouteConfig", "DirectPackedPrefillRequest", "build_direct_packed_prefill_request",
+__all__ = ["ExactResearchRouteAuthority", "PrefillResearchRouteConfig", "DirectPackedPrefillRequest", "build_direct_packed_prefill_request",
            "select_direct_packed_prefill_shadow_request", "prefill_q4k_q8_mode", "prefill_q4k_q8_role_enabled",
            "route_direct_packed_prefill_research", "route_prefill_q4k_gate_up_research"]
