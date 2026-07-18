@@ -7,6 +7,7 @@ from extra.qk.mmq_bounded_harness import (
 from extra.qk.mmq_machine_search import (
   build_r4_evidence_artifacts, build_r5_geometry_search_report, build_r6_route_gate_status,
   build_r7_reduction_status, build_search_report, build_full_gpu_probe_candidate, evaluate_candidate_promotion,
+  R5_GEOMETRY_CANDIDATES,
 )
 from extra.qk.mmq_machine_search import build_boltbeam_oracle_trace
 
@@ -252,6 +253,27 @@ def test_mmq_r5_includes_distinct_full_grid_candidate_and_keeps_r6_fail_closed()
   r6 = build_r6_route_gate_status(synthetic)
   assert r6["status"] == "BLOCKED_ROLE_SHAPE_INTEGRATION"
   assert r6["production_dispatch_changed"] is False
+
+
+def test_mmq_r5_full_grid_win_is_ranked_as_emitted_but_not_promoted():
+  own_ms = {
+    "r5_ds4_warp_4x5": 8.0, "r5_ds4_dot4x4_8x7": 7.0,
+    "r5_ds4_lds_skeleton_4x5": 9.0, "r5_ds4_coop_tile_16x16": 6.0,
+    "r5_llama_coop_oracle_16x16": 2.0, "r5_full_grid_128x128": 1.0,
+  }
+  def fake_runner(config: BoundedMMQConfig):
+    own = own_ms[next(c.candidate_id for c in R5_GEOMETRY_CANDIDATES if c.backend == config.backend)]
+    return {"status": "PASS", "correctness": {"status": "PASS"},
+            "timing": {"min_ms": own, "direct_packed": {"min_ms": 10.0}}}
+
+  report = build_r5_geometry_search_report(run=True, runner=fake_runner)
+  assert report["best_candidate_id"] == "r5_full_grid_128x128"
+  assert report["emitted_backend_win"] is True
+  assert report["promotion_verdict"] == "R5_COOP_WIN_READY_FOR_R6"
+  assert report["promotion_eligible"] is False
+  assert report["role_shape_integration"] is False
+  r6 = build_r6_route_gate_status(report)
+  assert r6["status"] == "BLOCKED_ROLE_SHAPE_INTEGRATION"
 
 
 def test_mmq_r6_and_r7_statuses_fail_closed_until_coop_win():

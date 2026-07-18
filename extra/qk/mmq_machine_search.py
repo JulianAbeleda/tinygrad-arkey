@@ -566,20 +566,24 @@ def build_r5_geometry_search_report(
 
   ranked = _ranked_r5_rows(rows)
   best = ranked[0] if ranked and ranked[0].get("status") == "PASS" else None
+  # A full-grid PASS is an emitted cooperative/backend win for R5 ranking,
+  # even though it is not yet eligible for route promotion.  R6 separately
+  # requires role/shape integration, so this distinction stays fail-closed.
   emitted_win = best is not None and best["backend"] in (AMD_DS4_COOP_TILE_BACKEND_ID, FULL_GRID_BACKEND_ID) and (best.get("speedup_vs_direct_packed") or 0) > 1.0
-  coop_winner = best is not None and best["backend"] == AMD_DS4_COOP_TILE_BACKEND_ID and (best.get("speedup_vs_direct_packed") or 0) > 1.0
+  coop_winner = emitted_win
+  role_shape_integration = False
   return {
     "schema": "q4k-q8-1-mmq-r5-geometry-search.v1",
     "status": "PASS_NON_PROMOTABLE" if best is not None else ("NOT_RUN" if not run else "BLOCKED"),
     "production_dispatch_changed": False,
     "default_route": "direct_packed",
-    "promotion_eligible": bool(coop_winner),
+    "promotion_eligible": bool(coop_winner and role_shape_integration),
     "emitted_backend_win": bool(emitted_win),
-    "role_shape_integration": False,
-    "promotion_verdict": "R5_COOP_WIN_READY_FOR_R6" if coop_winner else ("R5_EMITTED_FULL_GRID_WIN_ROLE_SHAPE_BLOCKED" if emitted_win else "NO_PROMOTION_WITHOUT_BOUNDED_COOP_WIN"),
+    "role_shape_integration": role_shape_integration,
+    "promotion_verdict": "R5_COOP_WIN_READY_FOR_R6" if coop_winner else "NO_PROMOTION_WITHOUT_BOUNDED_COOP_WIN",
     "ranking": ranked,
     "best_candidate_id": None if best is None else best["candidate_id"],
-    "exact_blocker": None if coop_winner else ("full-grid candidate has a bounded win but no production role/shape integration" if emitted_win else "no emitted cooperative MMQ tile candidate has a bounded same-session win"),
+    "exact_blocker": (None if role_shape_integration else "emitted backend win awaits production role/shape integration") if coop_winner else "no emitted cooperative MMQ tile candidate has a bounded same-session win",
   }
 
 
