@@ -920,7 +920,30 @@ def run_amd_validation(*, timeout_seconds: float = 300.0,
 def main() -> int:
   parser = argparse.ArgumentParser()
   parser.add_argument("--worker", action="store_true")
+  parser.add_argument("--target-role", action="store_true",
+                      help="run the isolated exact Qwen3 target-role probe")
+  parser.add_argument("--target-role-epochs", type=int, default=None)
+  parser.add_argument("--target-role-output", type=Path)
+  parser.add_argument("--target-role-timeout", type=float, default=900.0)
+  parser.add_argument("--target-role-per-epoch-check", action="store_true")
+  parser.add_argument("--target-role-persistent", action="store_true")
+  parser.add_argument("--target-role-preloaded", action="store_true")
+  parser.add_argument("--target-role-stable-metadata", action="store_true")
   args = parser.parse_args()
+  if args.target_role:
+    row = run_full_grid_target_role_probe_isolated(
+      timeout_seconds=args.target_role_timeout, warmups=0, rounds=1,
+      epoch_limit=args.target_role_epochs, n_chunk_tiles=TARGET_ROLE_PROBE_SHAPE[1] // 128,
+      host_accumulate=False, per_epoch_check=args.target_role_per_epoch_check,
+      persistent_buffers=args.target_role_persistent, preloaded_epochs=args.target_role_preloaded,
+      stable_metadata_staging=args.target_role_stable_metadata,
+    )
+    encoded = json.dumps(row, indent=2, sort_keys=True)
+    if args.target_role_output is not None:
+      args.target_role_output.parent.mkdir(parents=True, exist_ok=True)
+      args.target_role_output.write_text(encoded + "\n")
+    print(encoded)
+    return 0 if row.get("status") == "PASS" else 1
   if not args.worker:
     print(json.dumps(run_amd_validation(), indent=2, sort_keys=True))
     return 0
