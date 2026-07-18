@@ -54,6 +54,7 @@ AMD_DS4_WARP_BACKEND_ID = "q4k_q8_1_mmq_amd_ds4_warp_atom_v0"
 AMD_DS4_DOT4X4_BACKEND_ID = "q4k_q8_1_mmq_amd_ds4_dot4x4_atom_v0"
 AMD_DS4_LDS_SKELETON_BACKEND_ID = "q4k_q8_1_mmq_amd_ds4_lds_skeleton_atom_v0"
 AMD_DS4_COOP_TILE_BACKEND_ID = "q4k_q8_1_mmq_amd_ds4_coop_tile_atom_v0"
+FULL_GRID_BACKEND_ID = "q4k_q8_1_mmq_amd_isa_full_grid_v0"
 LLAMA_MMQ_GEOMETRY = {"mmq_x": 128, "mmq_y": 128, "iter_k": 256, "nwarps": 8}
 MMQ_DS4_BLOCK_ELEMS = Q8_1_MMQ_DS4_BLOCK_ELEMS
 MMQ_DS4_GROUPS_PER_BLOCK = Q8_1_MMQ_DS4_GROUPS_PER_BLOCK
@@ -73,7 +74,7 @@ class BoundedMMQConfig:
   warmups: int = 0
   rounds: int = 1
   seed: int = 20260710
-  backend: Literal["reference", "atom", "amd", "amd_warp", "amd_warp_batched", "amd_dot4_batched", "amd_dot4x4_batched", "direct_packed", "q4k_q8_1_mmq_amd_staged_ds4_atom_v0", "q4k_q8_1_mmq_amd_ds4_warp_atom_v0", "q4k_q8_1_mmq_amd_ds4_dot4x4_atom_v0", "q4k_q8_1_mmq_amd_ds4_lds_skeleton_atom_v0", "q4k_q8_1_mmq_amd_ds4_coop_tile_atom_v0", "llama_mmq_q4k_q8_1_coop_tile_oracle"] = "reference"
+  backend: Literal["reference", "atom", "amd", "amd_warp", "amd_warp_batched", "amd_dot4_batched", "amd_dot4x4_batched", "direct_packed", "q4k_q8_1_mmq_amd_staged_ds4_atom_v0", "q4k_q8_1_mmq_amd_ds4_warp_atom_v0", "q4k_q8_1_mmq_amd_ds4_dot4x4_atom_v0", "q4k_q8_1_mmq_amd_ds4_lds_skeleton_atom_v0", "q4k_q8_1_mmq_amd_ds4_coop_tile_atom_v0", "q4k_q8_1_mmq_amd_isa_full_grid_v0", "llama_mmq_q4k_q8_1_coop_tile_oracle"] = "reference"
   activation_layout: Literal["row_major_q8_1", "mmq_ds4"] = ACTIVATION_LAYOUT_ROW_MAJOR
   measure_direct_packed: bool = False
   writeback_mode: Literal["gated_matrix_v0", "direct_owner_v0"] = "gated_matrix_v0"
@@ -91,7 +92,7 @@ class BoundedMMQConfig:
     return self.k_groups * Q8_1_BLOCK_ELEMS
 
   def validate(self) -> None:
-    if self.backend not in ("reference", "atom", "amd", "amd_warp", "amd_warp_batched", "amd_dot4_batched", "amd_dot4x4_batched", "direct_packed", STAGED_DS4_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID, AMD_DS4_DOT4X4_BACKEND_ID, AMD_DS4_LDS_SKELETON_BACKEND_ID, AMD_DS4_COOP_TILE_BACKEND_ID, LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID):
+    if self.backend not in ("reference", "atom", "amd", "amd_warp", "amd_warp_batched", "amd_dot4_batched", "amd_dot4x4_batched", "direct_packed", STAGED_DS4_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID, AMD_DS4_DOT4X4_BACKEND_ID, AMD_DS4_LDS_SKELETON_BACKEND_ID, AMD_DS4_COOP_TILE_BACKEND_ID, FULL_GRID_BACKEND_ID, LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID):
       raise ValueError(f"unknown backend={self.backend!r}")
     if self.activation_layout not in (ACTIVATION_LAYOUT_ROW_MAJOR, ACTIVATION_LAYOUT_MMQ_DS4):
       raise ValueError(f"unknown activation_layout={self.activation_layout!r}")
@@ -113,7 +114,7 @@ class BoundedMMQConfig:
 def candidate_metadata(config: BoundedMMQConfig | None = None) -> dict[str, Any]:
   cfg = config or BoundedMMQConfig()
   cfg.validate()
-  activation_layout = ACTIVATION_LAYOUT_MMQ_DS4 if cfg.backend in (STAGED_DS4_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID, AMD_DS4_DOT4X4_BACKEND_ID, AMD_DS4_LDS_SKELETON_BACKEND_ID, AMD_DS4_COOP_TILE_BACKEND_ID, LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID) else cfg.activation_layout
+  activation_layout = ACTIVATION_LAYOUT_MMQ_DS4 if cfg.backend in (STAGED_DS4_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID, AMD_DS4_DOT4X4_BACKEND_ID, AMD_DS4_LDS_SKELETON_BACKEND_ID, AMD_DS4_COOP_TILE_BACKEND_ID, FULL_GRID_BACKEND_ID, LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID) else cfg.activation_layout
   return {
     "role": ROLE,
     "M": M,
@@ -127,7 +128,7 @@ def candidate_metadata(config: BoundedMMQConfig | None = None) -> dict[str, Any]
     "comparator_id": COMPARATOR_ID,
     "rollback": COMPARATOR_ID,
     "backend": cfg.backend,
-    "backend_atom_id": cfg.backend if cfg.backend in (STAGED_DS4_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID, AMD_DS4_DOT4X4_BACKEND_ID, AMD_DS4_LDS_SKELETON_BACKEND_ID, AMD_DS4_COOP_TILE_BACKEND_ID, LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID) else None,
+    "backend_atom_id": cfg.backend if cfg.backend in (STAGED_DS4_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID, AMD_DS4_DOT4X4_BACKEND_ID, AMD_DS4_LDS_SKELETON_BACKEND_ID, AMD_DS4_COOP_TILE_BACKEND_ID, FULL_GRID_BACKEND_ID, LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID) else None,
     "activation_layout": activation_layout,
     "bounded_shape": {"M": cfg.bounded_m, "N": cfg.bounded_n, "K": cfg.bounded_k},
     "tile": {"M": cfg.m_tile, "N": cfg.n_tile, "K_groups": cfg.k_groups},

@@ -20,11 +20,12 @@ if __package__ in (None, ""):
 
 from extra.qk.mmq_bounded_harness import (
   ACTIVATION_LAYOUT_MMQ_DS4, ACTIVATION_LAYOUT_ROW_MAJOR, AMD_DS4_DOT4X4_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID,
-  AMD_DS4_COOP_TILE_BACKEND_ID, AMD_DS4_LDS_SKELETON_BACKEND_ID, BoundedMMQConfig, CANDIDATE_ROUTE_ID,
+  AMD_DS4_COOP_TILE_BACKEND_ID, AMD_DS4_LDS_SKELETON_BACKEND_ID, FULL_GRID_BACKEND_ID, BoundedMMQConfig, CANDIDATE_ROUTE_ID,
   COMPARATOR_ID, LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID, LLAMA_MMQ_GEOMETRY, PUBLIC_LABEL, QUANT, ROLE,
   STAGED_DS4_BACKEND_ID,
   candidate_metadata, coop_tile_blocked_translation_evidence, run_bounded_harness,
 )
+from extra.qk.mmq_llama_five_buffer_gpu_harness import run_full_grid_r5_benchmark
 from extra.qk.mmq_llama_oracle import llama_mma_writeback_owners
 from extra.qk.mmq_llama_store_probe import lowered_tinygrad_r4_store_owner_trace_rows
 from extra.qk.mmq_owner_coverage import (
@@ -327,6 +328,18 @@ R5_GEOMETRY_CANDIDATES: tuple[MMQSearchCandidate, ...] = (
     m_tile=16,
     n_tile=16,
   ),
+  MMQSearchCandidate(
+    candidate_id="r5_full_grid_128x128",
+    backend=FULL_GRID_BACKEND_ID,
+    activation_layout=ACTIVATION_LAYOUT_MMQ_DS4,
+    status="r5_candidate",
+    search_class="bounded_geometry_emitted_full_grid",
+    promotion_eligible=False,
+    reason="emitted 128x128x256 full-grid GPU probe; bounded timing/correctness evidence only, no production role or shape integration",
+    m_tile=128,
+    n_tile=128,
+    k_groups=8,
+  ),
 )
 
 BLOCKED_CANDIDATES: tuple[dict[str, Any], ...] = (
@@ -523,7 +536,13 @@ def build_r5_geometry_search_report(
     }
     if run:
       try:
-        result = runner(cfg)
+        # The full-grid candidate is emitted by a different kernel builder and
+        # ABI than the bounded atom runner.  Only invoke it on the real default
+        # runner; injected test runners still receive every bounded config so
+        # ranking tests remain deterministic and side-effect free.
+        result = (run_full_grid_r5_benchmark(warmups=warmups, rounds=rounds)
+                  if candidate.backend == FULL_GRID_BACKEND_ID and runner is run_bounded_harness
+                  else runner(cfg))
         direct = result["timing"].get("direct_packed")
         direct_min = None if direct is None else direct.get("min_ms")
         cand_min = result["timing"].get("min_ms")
@@ -537,7 +556,7 @@ def build_r5_geometry_search_report(
             "comparator_status": result["timing"].get("comparator_status"),
           },
           "speedup_vs_direct_packed": speedup,
-          "exact_blocker": None if result["status"] == "PASS" else "bounded correctness failed",
+          "exact_blocker": result.get("exact_blocker") if result["status"] != "PASS" else None,
         })
       except Exception as exc:
         row.update({"status": "BLOCKED", "exact_blocker": str(exc), "speedup_vs_direct_packed": None})
@@ -547,6 +566,7 @@ def build_r5_geometry_search_report(
 
   ranked = _ranked_r5_rows(rows)
   best = ranked[0] if ranked and ranked[0].get("status") == "PASS" else None
+  emitted_win = best is not None and best["backend"] in (AMD_DS4_COOP_TILE_BACKEND_ID, FULL_GRID_BACKEND_ID) and (best.get("speedup_vs_direct_packed") or 0) > 1.0
   coop_winner = best is not None and best["backend"] == AMD_DS4_COOP_TILE_BACKEND_ID and (best.get("speedup_vs_direct_packed") or 0) > 1.0
   return {
     "schema": "q4k-q8-1-mmq-r5-geometry-search.v1",
@@ -554,19 +574,22 @@ def build_r5_geometry_search_report(
     "production_dispatch_changed": False,
     "default_route": "direct_packed",
     "promotion_eligible": bool(coop_winner),
-    "promotion_verdict": "R5_COOP_WIN_READY_FOR_R6" if coop_winner else "NO_PROMOTION_WITHOUT_BOUNDED_COOP_WIN",
+    "emitted_backend_win": bool(emitted_win),
+    "role_shape_integration": False,
+    "promotion_verdict": "R5_COOP_WIN_READY_FOR_R6" if coop_winner else ("R5_EMITTED_FULL_GRID_WIN_ROLE_SHAPE_BLOCKED" if emitted_win else "NO_PROMOTION_WITHOUT_BOUNDED_COOP_WIN"),
     "ranking": ranked,
     "best_candidate_id": None if best is None else best["candidate_id"],
-    "exact_blocker": None if coop_winner else "no emitted cooperative MMQ tile candidate has a bounded same-session win",
+    "exact_blocker": None if coop_winner else ("full-grid candidate has a bounded win but no production role/shape integration" if emitted_win else "no emitted cooperative MMQ tile candidate has a bounded same-session win"),
   }
 
 
 def build_r6_route_gate_status(r5_report: dict[str, Any] | None = None) -> dict[str, Any]:
   r5 = r5_report or build_r5_geometry_search_report(run=False)
-  ready = r5.get("promotion_verdict") == "R5_COOP_WIN_READY_FOR_R6"
+  ready = r5.get("promotion_verdict") == "R5_COOP_WIN_READY_FOR_R6" and r5.get("role_shape_integration") is True
+  role_blocked = r5.get("emitted_backend_win") is True and not ready
   return {
     "schema": "q4k-q8-1-mmq-r6-route-gate-status.v1",
-    "status": "READY_FOR_ONE_ROLE_OPT_IN" if ready else "BLOCKED_NO_BOUNDED_COOP_WIN",
+    "status": "READY_FOR_ONE_ROLE_OPT_IN" if ready else ("BLOCKED_ROLE_SHAPE_INTEGRATION" if role_blocked else "BLOCKED_NO_BOUNDED_COOP_WIN"),
     "role": ROLE,
     "quant": QUANT,
     "default_route": "direct_packed",
@@ -577,7 +600,7 @@ def build_r6_route_gate_status(r5_report: dict[str, Any] | None = None) -> dict[
       "negative_role_tests": False,
       "no_hidden_direct_packed_fallback": False,
     },
-    "exact_blocker": None if ready else "R6 route binding is illegal until R5 reports an emitted cooperative backend win",
+    "exact_blocker": None if ready else ("R6 route binding is illegal until the bounded winner is integrated for a production role and shape" if role_blocked else "R6 route binding is illegal until R5 reports an emitted cooperative backend win"),
   }
 
 

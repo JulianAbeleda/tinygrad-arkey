@@ -24,6 +24,7 @@ import numpy as np
 PROTOCOL = "tinygrad.mmq_llama_five_buffer_gpu_harness.v1"
 PASS = "MMQ_LLAMA_FIVE_BUFFER_GPU_PASS"
 BLOCKED = "MMQ_LLAMA_FIVE_BUFFER_GPU_BLOCKED"
+FULL_GRID_BACKEND_ID = "q4k_q8_1_mmq_amd_isa_full_grid_v0"
 ROOT = Path(__file__).resolve().parents[2]
 SHAPE = (128, 128, 256)
 RTOL = 3e-3
@@ -292,6 +293,99 @@ def _worker() -> dict[str, Any]:
     return _blocked("numeric output mismatch", **evidence)
   return {"protocol": PROTOCOL, "shape": [m, n, k], "passed": True, "verdict": PASS,
           "blocker": None, "evidence": evidence}
+
+
+def run_full_grid_r5_benchmark(*, warmups: int = 0, rounds: int = 1) -> dict[str, Any]:
+  """Run the emitted 128x128x256 probe against direct-packed in one session.
+
+  This is intentionally a bounded R5 experiment, not a production route.  It
+  reuses one compiled full-grid PROGRAM and the same deterministic Q4/Q8
+  buffers for warmups and rounds; direct-packed is timed after its own warmup
+  on those same logical inputs.  The result carries source/binary/resource
+  identity so machine-search can rank it without changing route selection.
+  """
+  if warmups < 0 or rounds <= 0: raise ValueError("warmups must be non-negative and rounds must be positive")
+  import time
+  from tinygrad import Tensor, dtypes
+  from tinygrad.device import Device
+  from tinygrad.engine.realize import get_runtime
+  from extra.qk.amdgpu_metadata import parse_amdgpu_metadata
+  from extra.qk.mmq_llama_five_buffer_full_kernel import (
+    build_llama_five_buffer_full_kernel, compile_llama_five_buffer_full_kernel,
+  )
+  from extra.qk.mmq_q4k_q8_reference import (
+    Q81MMQDS4Activation, Q81MMQDS4ActivationSpec, Q4KQ81MMQTileSpec,
+    Q8_1_MMQ_DS4_LAYOUT, q4k_q8_1_mmq_ds4_tile_reference,
+    q8_1_mmq_ds4_quantize_reference,
+  )
+  from extra.qk.mmq_bounded_harness import _run_direct_packed
+  m, n, k = SHAPE
+  words_np = _random_q4_words(n, k, 20260717)
+  source_np = np.random.default_rng(20260718).standard_normal((m, k), dtype=np.float32)
+  values_np, scales_np, sums_np = q8_1_mmq_ds4_quantize_reference(source_np)
+  kernel = build_llama_five_buffer_full_kernel(m, n, k)
+  compiled = compile_llama_five_buffer_full_kernel(kernel)
+  if not compiled.emitted or compiled.program is None:
+    return {"status": "BLOCKED", "exact_blocker": compiled.blocker or "full-grid compile did not emit PROGRAM"}
+  program = compiled.program
+  binary, source, artifact = _artifact_evidence(program, parse_amdgpu_metadata)
+  out = Tensor.empty(m * n, dtype=dtypes.float32, device="AMD").realize()
+  q4 = Tensor(words_np, device="AMD").realize()
+  values = Tensor(values_np.reshape(-1), device="AMD").realize()
+  scales = Tensor(scales_np.reshape(-1), device="AMD").realize()
+  sums = Tensor(sums_np.reshape(-1), device="AMD").realize()
+  buffers = (out.uop.buffer, q4.uop.buffer, values.uop.buffer, scales.uop.buffer, sums.uop.buffer)
+  runtime = get_runtime("AMD", program)
+  args = tuple(buffers[g].get_buf("AMD") for g in program.arg.globals)
+  def full_call():
+    runtime(*args, global_size=program.arg.global_size, local_size=program.arg.local_size,
+            vals=program.arg.vals({}), wait=True)
+  # Always perform one untimed call to compile/cache any runtime launch path;
+  # callers may request additional warmups, but timing must not include setup.
+  for _ in range(max(1, warmups)): full_call()
+  full_samples = []
+  for _ in range(rounds):
+    t0 = time.perf_counter(); full_call(); full_samples.append((time.perf_counter() - t0) * 1000.0)
+  # Convert the exact DS4 values/scales to the row-major direct-packed ABI.
+  xq = values_np.transpose(1, 0, 2).reshape(m, k)
+  xscales = scales_np.transpose(1, 0, 2).reshape(m, k // 32)
+  q4_bytes = words_np.view(np.uint8).reshape(n, k // 256, 144)
+  for _ in range(max(1, warmups)): _run_direct_packed(q4_bytes, xq, xscales)
+  direct_samples = []
+  for _ in range(rounds):
+    t0 = time.perf_counter(); _run_direct_packed(q4_bytes, xq, xscales); direct_samples.append((time.perf_counter() - t0) * 1000.0)
+  # Use the same fp16 metadata round-trip as the authoritative worker.  The
+  # benchmark is therefore independently useful evidence: correctness is not
+  # inferred from a separate subprocess or from the direct comparator timing.
+  scales_ref = scales_np.astype(np.float16).astype(np.float32)
+  sums_ref = sums_np.astype(np.float16).astype(np.float32)
+  ds4 = Q81MMQDS4Activation(values_np, scales_ref, sums_ref,
+    Q81MMQDS4ActivationSpec(m=m, k=k, m_tile=m))
+  ref_spec = Q4KQ81MMQTileSpec(role="full_grid_r5", m=m, n=n, k=k,
+    m_tile=m, n_tile=n, activation_layout=Q8_1_MMQ_DS4_LAYOUT)
+  reference = q4k_q8_1_mmq_ds4_tile_reference(words_np.view(np.uint8), ds4, ref_spec)
+  got = out.numpy().reshape(m, n)
+  comparison = _numeric_comparison(got, reference)
+  correct = comparison["status"] == "pass"
+  return {
+    "status": "PASS" if correct else "BLOCKED", "bounded_only": True,
+    "production_dispatch_changed": False, "default_route": "direct_packed",
+    "exact_blocker": None if correct else "numeric output mismatch",
+    "correctness": {"status": "PASS" if correct else "BLOCKED",
+                     "authority": "full_grid_r5_same_session_reference",
+                     "comparison": comparison},
+    "timing": {"min_ms": min(full_samples), "median_ms": float(np.median(full_samples)), "samples_ms": full_samples,
+                "comparator_status": comparison["status"],
+                "direct_packed": {"status": "measured", "min_ms": min(direct_samples),
+                                  "median_ms": float(np.median(direct_samples)), "samples_ms": direct_samples}},
+    "artifacts": {**artifact, "backend_id": FULL_GRID_BACKEND_ID,
+                   "distinct_binary_identity": isinstance(binary, bytes) and isinstance(source, str),
+                   "same_session_timing": True, "no_fallback": True},
+    "distinct_binary_identity": isinstance(binary, bytes) and isinstance(source, str),
+    "source_sha256": artifact.get("source_sha256"), "binary_sha256": artifact.get("binary_sha256"),
+    "resources": artifact.get("resources"),
+    "same_session_timing": True, "no_fallback": True,
+  }
 
 
 def run_amd_validation(*, timeout_seconds: float = 300.0,

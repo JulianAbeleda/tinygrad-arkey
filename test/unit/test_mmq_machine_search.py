@@ -1,6 +1,7 @@
 from extra.qk.mmq_bounded_harness import (
   ACTIVATION_LAYOUT_MMQ_DS4, AMD_DS4_COOP_TILE_BACKEND_ID, AMD_DS4_DOT4X4_BACKEND_ID,
-  AMD_DS4_LDS_SKELETON_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID, LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID,
+  AMD_DS4_LDS_SKELETON_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID, FULL_GRID_BACKEND_ID,
+  LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID,
   BoundedMMQConfig,
 )
 from extra.qk.mmq_machine_search import (
@@ -210,6 +211,7 @@ def test_mmq_r5_geometry_search_ranks_non_promotable_existing_atoms_with_fake_ru
       AMD_DS4_WARP_BACKEND_ID: 8.0,
       AMD_DS4_DOT4X4_BACKEND_ID: 6.0,
       AMD_DS4_LDS_SKELETON_BACKEND_ID: 20.0,
+      FULL_GRID_BACKEND_ID: 5.0,
       LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID: 1.0,
     }[config.backend]
     return {
@@ -235,6 +237,21 @@ def test_mmq_r5_geometry_search_ranks_non_promotable_existing_atoms_with_fake_ru
   assert report["ranking"][0]["speedup_vs_direct_packed"] == 10.0
   assert report["ranking"][0]["promotion_eligible"] is False
   assert "no emitted cooperative MMQ tile candidate" in report["exact_blocker"]
+
+
+def test_mmq_r5_includes_distinct_full_grid_candidate_and_keeps_r6_fail_closed():
+  report = build_r5_geometry_search_report(run=False)
+  full = next(row for row in report["ranking"] if row["backend"] == FULL_GRID_BACKEND_ID)
+  assert full["candidate_id"] == "r5_full_grid_128x128"
+  assert full["shape"] == {"M": 128, "N": 128, "K": 256}
+  assert full["promotion_eligible"] is False
+
+  synthetic = {**report, "status": "PASS_NON_PROMOTABLE", "emitted_backend_win": True,
+               "promotion_verdict": "R5_EMITTED_FULL_GRID_WIN_ROLE_SHAPE_BLOCKED",
+               "role_shape_integration": False}
+  r6 = build_r6_route_gate_status(synthetic)
+  assert r6["status"] == "BLOCKED_ROLE_SHAPE_INTEGRATION"
+  assert r6["production_dispatch_changed"] is False
 
 
 def test_mmq_r6_and_r7_statuses_fail_closed_until_coop_win():
