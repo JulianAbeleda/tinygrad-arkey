@@ -1143,6 +1143,335 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
           "compile_performed": frozen_bundle is None, "requires_recompile": frozen_bundle is None}
 
 
+_SCHEDULER_PREFIX_INPUT_NAMES = ("q4", "q8_values", "q8_scales", "q8_sums")
+_SCHEDULER_PREFIX_CHANGE_SLOTS = (*_SCHEDULER_PREFIX_INPUT_NAMES, "all_except_q8_scales", "all")
+
+
+def _decode_aql_kernel_dispatch_packet(packet: bytes) -> dict[str, Any]:
+  """Decode the safety-critical fields of one concrete 64-byte AQL packet."""
+  if len(packet) != 64: raise ValueError("AQL packet census requires exactly 64 bytes")
+  import ctypes
+  from tinygrad.runtime.autogen import hsa
+  header = int.from_bytes(packet[:2], "little")
+  field = lambda shift, width: (header >> shift) & ((1 << width) - 1)
+  packet_type = field(hsa.HSA_PACKET_HEADER_TYPE, hsa.HSA_PACKET_HEADER_WIDTH_TYPE)
+  if packet_type != hsa.HSA_PACKET_TYPE_KERNEL_DISPATCH:
+    return {"packet_type": packet_type, "kernel_dispatch": False}
+  decoded = hsa.hsa_kernel_dispatch_packet_t.from_buffer_copy(packet)
+  return {
+    "packet_type": packet_type, "kernel_dispatch": True, "header": header,
+    "barrier": bool(field(hsa.HSA_PACKET_HEADER_BARRIER, hsa.HSA_PACKET_HEADER_WIDTH_BARRIER)),
+    "acquire_fence_scope": field(hsa.HSA_PACKET_HEADER_SCACQUIRE_FENCE_SCOPE,
+                                 hsa.HSA_PACKET_HEADER_WIDTH_SCACQUIRE_FENCE_SCOPE),
+    "release_fence_scope": field(hsa.HSA_PACKET_HEADER_SCRELEASE_FENCE_SCOPE,
+                                 hsa.HSA_PACKET_HEADER_WIDTH_SCRELEASE_FENCE_SCOPE),
+    "system_fence_scope": hsa.HSA_FENCE_SCOPE_SYSTEM,
+    "kernel_object": int(decoded.kernel_object),
+    "kernarg_address": int(ctypes.cast(decoded.kernarg_address, ctypes.c_void_p).value or 0),
+  }
+
+
+def _realize_with_aql_packet_census(output: Any, expected_vas: list[list[int]]) -> dict[str, Any]:
+  """Realize while auditing actual AQL packet/kernarg bytes before each doorbell."""
+  from tinygrad.device import Device
+  dev = Device["AMD"]
+  if not bool(getattr(dev, "is_aql", False)):
+    output.realize()
+    return {"enabled": False, "status": "NOT_APPLICABLE", "reason": "target queue is PM4"}
+
+  from tinygrad.runtime import ops_amd
+  constructed, published, calls = [], [], []
+  original_exec = ops_amd.AMDComputeAQLQueue.exec
+  original_publish = ops_amd._publish_aql_packet
+  original_doorbell = ops_amd.AMDQueueDesc.signal_doorbell
+
+  def audited_exec(queue: Any, prg: Any, args_state: Any, global_size: tuple[Any, ...],
+                   local_size: tuple[Any, ...]) -> Any:
+    result = original_exec(queue, prg, args_state, global_size, local_size)
+    constructed.append({
+      "kernel_object": int(prg.aql_prog_addr), "kernarg_address": int(args_state.buf.va_addr),
+      "kernarg_buffer": args_state.buf,
+    })
+    return result
+
+  def audited_publish(slot: Any, packet: bytes) -> None:
+    original_publish(slot, packet)
+    published_packet = bytes(slot.view(size=64, fmt='B')[:])
+    if published_packet != packet:
+      raise RuntimeError("AQL packet census found ring bytes differ from the packet published")
+    published.append(published_packet)
+
+  def audited_doorbell(queue_desc: Any, doorbell_dev: Any, doorbell_value: int | None = None) -> Any:
+    # AMDQueueDesc is shared by compute and SDMA queues. Only the default AQL
+    # compute ring contains packets observed by audited_exec/audited_publish.
+    if queue_desc is not doorbell_dev.compute_queue_desc(0):
+      return original_doorbell(queue_desc, doorbell_dev, doorbell_value)
+    kernel_packets = [row for packet in published
+                      if (row:=_decode_aql_kernel_dispatch_packet(packet))["kernel_dispatch"]]
+    if len(kernel_packets) != len(constructed) or not kernel_packets:
+      raise RuntimeError("AQL packet census did not find one published kernel packet per constructed dispatch")
+    for packet, built in zip(kernel_packets, constructed):
+      call_index = len(calls)
+      if call_index >= len(expected_vas):
+        raise RuntimeError("AQL packet census observed more kernel dispatches than scheduler calls")
+      kernarg_qwords = [int(value) for value in
+                        built["kernarg_buffer"].cpu_view().view(size=40, fmt='Q')[:5]]
+      checks = {
+        "barrier": packet["barrier"] is True,
+        "acquire_system_fence": packet["acquire_fence_scope"] == packet["system_fence_scope"],
+        "release_system_fence": packet["release_fence_scope"] == packet["system_fence_scope"],
+        "kernel_object_matches_constructed": packet["kernel_object"] == built["kernel_object"],
+        "kernarg_address_matches_constructed": packet["kernarg_address"] == built["kernarg_address"],
+        "five_qwords_match_expected_vas": kernarg_qwords == expected_vas[call_index],
+      }
+      calls.append({
+        "call": call_index, **{key: packet[key] for key in (
+          "header", "barrier", "acquire_fence_scope", "release_fence_scope",
+          "system_fence_scope", "kernel_object", "kernarg_address")},
+        "kernarg_qwords": kernarg_qwords, "expected_vas": expected_vas[call_index],
+        "checks": checks, "all_checks_pass": all(checks.values()),
+      })
+      if not all(checks.values()):
+        raise RuntimeError("AQL packet census rejected dispatch before doorbell")
+    published.clear()
+    constructed.clear()
+    return original_doorbell(queue_desc, doorbell_dev, doorbell_value)
+
+  ops_amd.AMDComputeAQLQueue.exec = audited_exec
+  ops_amd._publish_aql_packet = audited_publish
+  ops_amd.AMDQueueDesc.signal_doorbell = audited_doorbell
+  try:
+    output.realize()
+  finally:
+    ops_amd.AMDComputeAQLQueue.exec = original_exec
+    ops_amd._publish_aql_packet = original_publish
+    ops_amd.AMDQueueDesc.signal_doorbell = original_doorbell
+  if published or constructed or len(calls) != len(expected_vas):
+    raise RuntimeError("AQL packet census did not close exactly one doorbell boundary per scheduler call")
+  return {
+    "enabled": True, "status": "PASS",
+    "capture_point": "ring_slot_after_header_last_publication_and_kernargs_before_doorbell",
+    "call_count": len(calls), "calls": calls,
+  }
+
+
+def _scheduler_prefix_two_launches(address_mode: str, epoch_inputs: tuple[tuple[Any, ...], tuple[Any, ...]],
+                                   change_slot: str = "all") -> tuple[tuple[Any, ...], tuple[Any, ...]]:
+  """Choose the two exact scheduler calls without manufacturing a launcher."""
+  if address_mode not in ("same", "changed"):
+    raise ValueError("scheduler prefix-two address_mode must be 'same' or 'changed'")
+  if change_slot not in _SCHEDULER_PREFIX_CHANGE_SLOTS:
+    raise ValueError(f"scheduler prefix-two change_slot must be one of {_SCHEDULER_PREFIX_CHANGE_SLOTS}")
+  if address_mode == "same" and change_slot != "all":
+    raise ValueError("scheduler prefix-two same mode does not accept a per-slot change")
+  if len(epoch_inputs) != 2 or any(len(row) != 4 for row in epoch_inputs):
+    raise ValueError("scheduler prefix-two requires two complete four-input epochs")
+  first, second = epoch_inputs
+  if len({id(value) for value in first}) != 4 or len({id(value) for value in second}) != 4:
+    raise ValueError("each scheduler prefix epoch requires four distinct input tensors")
+  if any(left is right for left, right in zip(first, second)):
+    raise ValueError("scheduler prefix epochs must own distinct input tensors")
+  if address_mode == "same": return first, first
+  changed = (set(_SCHEDULER_PREFIX_INPUT_NAMES) if change_slot == "all" else
+             set(_SCHEDULER_PREFIX_INPUT_NAMES) - {"q8_scales"} if change_slot == "all_except_q8_scales" else
+             {change_slot})
+  return first, tuple(second[index] if name in changed else first[index]
+                      for index, name in enumerate(_SCHEDULER_PREFIX_INPUT_NAMES))
+
+
+def run_frozen_scheduler_prefix_two_probe(*, role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC,
+                                          frozen_bundle: str | Path,
+                                          address_mode: str,
+                                          change_slot: str = "all") -> dict[str, Any]:
+  """Dispatch the frozen PROGRAM twice through the normal tinygrad scheduler.
+
+  This is the producer-free counterpart to the existing fixed-VA target-role
+  probe. All five ABI tensors are populated and realized before the two-call
+  ``custom_kernel`` graph is built. ``same`` reuses epoch zero's four inputs.
+  ``changed`` binds epoch one for either one selected input slot or all inputs,
+  retaining epoch zero for every unselected input. Slot zero is the same
+  in-place output allocation and its AFTER edge orders call 2.
+  """
+  role_spec = admit_exact_role_spec(role_spec)
+  if role_spec.epochs < 2: raise ValueError("scheduler prefix-two requires at least two K256 epochs")
+
+  from tinygrad import Tensor
+  from tinygrad.device import Device
+  from tinygrad.engine.realize import get_call_arg_uops
+  from tinygrad.uop.ops import Ops
+  from extra.qk.mmq_q4k_q8_reference import (
+    Q81MMQDS4Activation, Q81MMQDS4ActivationSpec, Q4KQ81MMQTileSpec,
+    Q8_1_MMQ_DS4_LAYOUT, q4k_q8_1_mmq_ds4_tile_reference,
+    q8_1_mmq_ds4_quantize_reference,
+  )
+
+  binding, frozen_identity = _load_frozen_execution_binding(role_spec, frozen_bundle)
+  program = binding.artifact.program
+  m, n, k = role_spec.shape
+  words_np = _random_q4_words(n, k, 20260721)
+  source_np = np.random.default_rng(20260722).standard_normal((m, k), dtype=np.float32)
+  values_np, scales_np, sums_np = q8_1_mmq_ds4_quantize_reference(source_np)
+  q4_blocks = words_np.view(np.uint8).reshape(n, role_spec.epochs, 144)
+
+  epoch_tensors = []
+  for epoch in range(2):
+    q4_np = np.ascontiguousarray(q4_blocks[:, epoch:epoch+1, :].reshape(-1).view(np.uint32))
+    epoch_tensors.append((
+      Tensor(q4_np, device="AMD").realize(),
+      Tensor(np.ascontiguousarray(values_np[epoch*2:(epoch+1)*2].reshape(-1)), device="AMD").realize(),
+      Tensor(np.ascontiguousarray(scales_np[epoch*2:(epoch+1)*2].reshape(-1)), device="AMD").realize(),
+      Tensor(np.ascontiguousarray(sums_np[epoch*2:(epoch+1)*2].reshape(-1)), device="AMD").realize(),
+    ))
+  output_seed = Tensor(np.zeros(m * n, dtype=np.float32), device="AMD").realize()
+  Device["AMD"].synchronize()
+  launches = _scheduler_prefix_two_launches(address_mode, tuple(epoch_tensors), change_slot)
+
+  def tensor_va(tensor: Any) -> int:
+    return int(tensor.uop.buffer.get_buf("AMD").va_addr)
+
+  launch_evidence = []
+  output = output_seed
+  for call_index, inputs in enumerate(launches):
+    vas = [tensor_va(output_seed), *(tensor_va(value) for value in inputs)]
+    input_source_epochs = [int(value is epoch_tensors[1][slot]) for slot, value in enumerate(inputs)]
+    launch_evidence.append({
+      "call": call_index, "input_source_epochs": input_source_epochs,
+      "vas": vas,
+      "arguments": [{"slot": slot, "name": name, "va": va,
+                     **({"source_epoch": input_source_epochs[slot-1]} if slot else {})}
+                    for slot, (name, va) in enumerate(zip(_TARGET_BUFFER_NAMES, vas))],
+    })
+    output = output.custom_kernel(
+      *inputs, fxn=lambda *_buffers, program=program: program)[0]
+
+  same_slots = [left == right for left, right in
+                zip(launch_evidence[0]["vas"], launch_evidence[1]["vas"])]
+  changed = set() if address_mode == "same" else (
+    set(_SCHEDULER_PREFIX_INPUT_NAMES) if change_slot == "all" else
+    set(_SCHEDULER_PREFIX_INPUT_NAMES) - {"q8_scales"} if change_slot == "all_except_q8_scales" else
+    {change_slot})
+  expected_same_slots = [True, *(name not in changed for name in _SCHEDULER_PREFIX_INPUT_NAMES)]
+  if same_slots != expected_same_slots:
+    raise RuntimeError("scheduler prefix-two concrete VA relationship differs from requested mode")
+  calls = [u for u in output.uop.toposort() if u.op is Ops.CALL and u.src[0].op is Ops.PROGRAM]
+  if len(calls) != 2 or any(len(get_call_arg_uops(call)) != 5 for call in calls) or \
+     calls[0] not in get_call_arg_uops(calls[1])[0].toposort():
+    raise RuntimeError("scheduler prefix-two did not retain two ordered five-buffer PROGRAM calls")
+
+  packet_census = _realize_with_aql_packet_census(output, [row["vas"] for row in launch_evidence])
+  reference = np.zeros((m, n), dtype=np.float32)
+  reference_input_source_epochs = []
+  for inputs in launches:
+    source_epochs = [int(value is epoch_tensors[1][slot]) for slot, value in enumerate(inputs)]
+    reference_input_source_epochs.append(source_epochs)
+    q4_epoch, values_epoch, scales_epoch, sums_epoch = source_epochs
+    ep_scales = scales_np[scales_epoch*2:(scales_epoch+1)*2].astype(np.float16).astype(np.float32)
+    ep_sums = sums_np[sums_epoch*2:(sums_epoch+1)*2].astype(np.float16).astype(np.float32)
+    ep_ds4 = Q81MMQDS4Activation(
+      values_np[values_epoch*2:(values_epoch+1)*2], ep_scales, ep_sums,
+      Q81MMQDS4ActivationSpec(m=m, k=256, m_tile=m))
+    ep_spec = Q4KQ81MMQTileSpec(
+      role="frozen_scheduler_prefix_two", m=m, n=n, k=256, m_tile=m, n_tile=n,
+      activation_layout=Q8_1_MMQ_DS4_LAYOUT)
+    reference += q4k_q8_1_mmq_ds4_tile_reference(
+      np.ascontiguousarray(q4_blocks[:, q4_epoch:q4_epoch+1, :]).reshape(-1), ep_ds4, ep_spec)
+  comparison = _numeric_comparison(output.numpy().reshape(m, n), reference)
+  passed = comparison["status"] == "pass"
+  return {
+    "schema": "tinygrad.mmq_frozen_scheduler_prefix_two_probe.v1",
+    "status": "PASS" if passed else "BLOCKED", "exact_blocker": None if passed else "numeric output mismatch",
+    "research_only": True, "production_dispatch_changed": False, "default_route": "direct_packed",
+    "role": role_spec.role, "shape": list(role_spec.shape), "prefix_epochs": [0, 1],
+    "address_mode": address_mode, "change_slot": change_slot,
+    "reference_input_source_epochs": reference_input_source_epochs,
+    "dispatch": {
+      "launcher": "tinygrad_scheduler", "mode": "lazy_ops_program_chain", "count": 2,
+      "program_key": binding.program_key, "all_five_tensors_realized_before_graph_build": True,
+      "program_calls_in_graph": len(calls), "slot_va_equal_between_calls": same_slots,
+      "expected_slot_va_equal_between_calls": expected_same_slots, "launches": launch_evidence,
+      "aql_packet_census": packet_census,
+    },
+    "correctness": {"status": "PASS" if passed else "BLOCKED", "comparison": comparison,
+                    "authority": "same_session_fp16_rounded_ds4_reference"},
+    "frozen_bundle": frozen_identity, "compile_performed": False, "requires_recompile": False,
+    "hip_used": False, "no_fallback": True,
+  }
+
+
+def run_frozen_scheduler_prefix_two_probe_isolated(*, role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC,
+                                                   frozen_bundle: str | Path,
+                                                   address_mode: str,
+                                                   change_slot: str = "all",
+                                                   timeout_seconds: float = 180.0,
+                                                   child_env_overrides: Mapping[str, str] | None = None
+                                                   ) -> dict[str, Any]:
+  """Run the scheduler prefix-two diagnostic in a fresh, health-guarded child."""
+  try:
+    role_spec = admit_exact_role_spec(role_spec)
+    marker0, marker1 = tuple(object() for _ in range(4)), tuple(object() for _ in range(4))
+    _scheduler_prefix_two_launches(address_mode, (marker0, marker1), change_slot)
+    env_overrides = _validated_child_env_overrides(child_env_overrides)
+  except (TypeError, ValueError) as exc:
+    return {"schema": "tinygrad.mmq_frozen_scheduler_prefix_two_probe.v1", "status": "BLOCKED",
+            "exact_blocker": str(exc)}
+  if timeout_seconds <= 0:
+    return {"schema": "tinygrad.mmq_frozen_scheduler_prefix_two_probe.v1", "status": "BLOCKED",
+            "exact_blocker": "timeout_seconds must be positive"}
+  from extra.qk.mmq_target_epoch_orchestrator import parse_kernel_faults, read_kernel_log_since, spawned_tiny_health_probe
+  try: health_before = bool(spawned_tiny_health_probe(env_overrides or None))
+  except BaseException: health_before = False
+  if not health_before:
+    return {"schema": "tinygrad.mmq_frozen_scheduler_prefix_two_probe.v1", "status": "BLOCKED",
+            "exact_blocker": "pre-run GPU health probe failed", "health_before": False,
+            "child_env_overrides": env_overrides}
+  child_env = dict(os.environ)
+  child_env.update({"DEV": "AMD", "PYTHONPATH": str(ROOT) + os.pathsep + child_env.get("PYTHONPATH", "")})
+  child_env.update(env_overrides)
+  role_expr = f"exact_role_spec({role_spec.role!r}, shape={role_spec.shape!r})"
+  bundle_arg = repr(str(Path(frozen_bundle).resolve()))
+  code = (
+    "import json; from extra.qk.mmq_exact_role_spec import exact_role_spec; "
+    "from extra.qk.mmq_llama_five_buffer_gpu_harness import run_frozen_scheduler_prefix_two_probe; "
+    f"print(json.dumps(run_frozen_scheduler_prefix_two_probe(role_spec={role_expr}, "
+    f"frozen_bundle={bundle_arg}, address_mode={address_mode!r}, change_slot={change_slot!r})), flush=True)")
+  started = time.time()
+  try:
+    proc = subprocess.run([sys.executable, "-c", code], cwd=ROOT, env=child_env,
+                          text=True, capture_output=True, timeout=timeout_seconds, check=False)
+  except subprocess.TimeoutExpired:
+    proc = None
+  try: kernel_faults = parse_kernel_faults(read_kernel_log_since(started))
+  except BaseException as exc: kernel_faults = [f"kernel-log scan failed: {type(exc).__name__}: {exc}"]
+  try: health_after = bool(spawned_tiny_health_probe(env_overrides or None))
+  except BaseException: health_after = False
+  if proc is None:
+    return {"schema": "tinygrad.mmq_frozen_scheduler_prefix_two_probe.v1", "status": "BLOCKED",
+            "exact_blocker": "scheduler prefix-two child timed out", "timeout": True,
+            "timeout_seconds": timeout_seconds, "health_before": health_before, "health_after": health_after,
+            "kernel_faults": kernel_faults, "child_env_overrides": env_overrides}
+  result = None
+  for line in reversed(proc.stdout.strip().splitlines()):
+    try: candidate = json.loads(line)
+    except json.JSONDecodeError: continue
+    if isinstance(candidate, dict):
+      result = candidate
+      break
+  if result is None:
+    result = {"schema": "tinygrad.mmq_frozen_scheduler_prefix_two_probe.v1", "status": "BLOCKED",
+              "exact_blocker": "scheduler prefix-two child returned no structured result",
+              "returncode": proc.returncode, "stdout_tail": proc.stdout[-2000:], "stderr_tail": proc.stderr[-2000:]}
+  result.update({"health_before": health_before, "health_after": health_after,
+                 "kernel_faults": kernel_faults, "child_env_overrides": env_overrides})
+  if kernel_faults:
+    result.update({"status": "BLOCKED", "exact_blocker": "AMD kernel fault/reset marker observed"})
+  elif not health_after:
+    result.update({"status": "BLOCKED", "exact_blocker": "post-run GPU health probe failed"})
+  elif proc.returncode != 0 and result.get("status") == "PASS":
+    result.update({"status": "BLOCKED", "exact_blocker": "scheduler prefix-two child exited non-zero",
+                   "returncode": proc.returncode})
+  return result
+
+
 def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
                                               role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC,
                                               warmups: int = 0, rounds: int = 1,
@@ -1387,7 +1716,26 @@ def main() -> int:
   parser.add_argument("--target-role-in-kernel-accumulate", action="store_true")
   parser.add_argument("--target-role-frozen-bundle", type=Path)
   parser.add_argument("--target-role-amd-aql", choices=("0", "1"))
+  parser.add_argument("--scheduler-prefix-two", choices=("same", "changed"),
+                      help="run two scheduler-owned frozen PROGRAM calls with same or changed input VAs")
+  parser.add_argument("--scheduler-prefix-two-change-slot", choices=_SCHEDULER_PREFIX_CHANGE_SLOTS, default="all",
+                      help="with changed mode, change only this input ABI slot (default: all)")
   args = parser.parse_args()
+  if args.scheduler_prefix_two:
+    if args.target_role_frozen_bundle is None:
+      parser.error("--scheduler-prefix-two requires --target-role-frozen-bundle")
+    role_spec = exact_role_spec(args.target_role_name, inventory=args.target_role_inventory)
+    row = run_frozen_scheduler_prefix_two_probe_isolated(
+      role_spec=role_spec, frozen_bundle=args.target_role_frozen_bundle,
+      address_mode=args.scheduler_prefix_two, change_slot=args.scheduler_prefix_two_change_slot,
+      timeout_seconds=args.target_role_timeout,
+      child_env_overrides={"AMD_AQL": args.target_role_amd_aql} if args.target_role_amd_aql is not None else None)
+    encoded = json.dumps(row, indent=2, sort_keys=True)
+    if args.target_role_output is not None:
+      args.target_role_output.parent.mkdir(parents=True, exist_ok=True)
+      args.target_role_output.write_text(encoded + "\n")
+    print(encoded)
+    return 0 if row.get("status") == "PASS" else 1
   if args.target_role:
     role_spec = exact_role_spec(args.target_role_name, inventory=args.target_role_inventory)
     row = run_full_grid_target_role_probe_isolated(

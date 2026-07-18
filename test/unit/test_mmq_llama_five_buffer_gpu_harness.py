@@ -12,10 +12,12 @@ from extra.qk.mmq_exact_role_spec import exact_role_spec
 from extra.qk.mmq_llama_five_buffer_full_kernel import build_llama_five_buffer_full_kernel
 from extra.qk.mmq_llama_five_buffer_gpu_harness import (TARGET_IN_PLACE_ACCUMULATION, _accumulate_target_role_epoch,
   _bind_sink, _dispatch_with_runtime_evidence, _numeric_comparison, _pack_q4_epochs_contiguous,
-  _load_frozen_execution_binding, _random_q4_words, _runtime_identity_evidence,
+  _decode_aql_kernel_dispatch_packet, _load_frozen_execution_binding, _random_q4_words, _runtime_identity_evidence,
+  _scheduler_prefix_two_launches,
   _validate_frozen_execution_fixture, _validate_frozen_fixture, _validated_child_env_overrides,
   _zero_persistent_target_output,
-  run_amd_validation, run_full_grid_target_role_probe, run_full_grid_target_role_probe_isolated)
+  run_amd_validation, run_frozen_scheduler_prefix_two_probe_isolated,
+  run_full_grid_target_role_probe, run_full_grid_target_role_probe_isolated)
 
 
 def test_gpu_harness_random_q4_fixture_has_independent_abi_shape():
@@ -76,6 +78,86 @@ def test_target_role_stable_epoch_staging_requires_stable_metadata_before_gpu():
 def test_target_role_async_epochs_require_safe_fixed_va_contract_before_gpu():
   with pytest.raises(ValueError, match="asynchronous epoch dispatch requires"):
     run_full_grid_target_role_probe(wait_each_dispatch=False)
+
+
+def test_scheduler_prefix_two_address_modes_are_exact_and_producer_free():
+  epoch0, epoch1 = tuple(object() for _ in range(4)), tuple(object() for _ in range(4))
+  same = _scheduler_prefix_two_launches("same", (epoch0, epoch1))
+  changed = _scheduler_prefix_two_launches("changed", (epoch0, epoch1))
+  assert same == (epoch0, epoch0) and same[0] is same[1]
+  assert changed == (epoch0, epoch1) and changed[0] is not changed[1]
+  assert all(left is not right for left, right in zip(*changed))
+  with pytest.raises(ValueError, match="must be 'same' or 'changed'"):
+    _scheduler_prefix_two_launches("mixed", (epoch0, epoch1))
+  with pytest.raises(ValueError, match="distinct input tensors"):
+    _scheduler_prefix_two_launches("changed", (epoch0, epoch0))
+
+
+@pytest.mark.parametrize("change_slot,changed_index", [
+  ("q4", 0), ("q8_values", 1), ("q8_scales", 2), ("q8_sums", 3)])
+def test_scheduler_prefix_two_changes_exactly_one_selected_input_slot(change_slot, changed_index):
+  epoch0, epoch1 = tuple(object() for _ in range(4)), tuple(object() for _ in range(4))
+  first, second = _scheduler_prefix_two_launches("changed", (epoch0, epoch1), change_slot)
+  assert first == epoch0
+  assert [left is right for left, right in zip(first, second)] == [
+    index != changed_index for index in range(4)]
+  assert second[changed_index] is epoch1[changed_index]
+
+
+def test_scheduler_prefix_two_slot_selector_fails_closed():
+  epoch0, epoch1 = tuple(object() for _ in range(4)), tuple(object() for _ in range(4))
+  with pytest.raises(ValueError, match="change_slot must be one of"):
+    _scheduler_prefix_two_launches("changed", (epoch0, epoch1), "output")
+  with pytest.raises(ValueError, match="same mode does not accept"):
+    _scheduler_prefix_two_launches("same", (epoch0, epoch1), "q4")
+
+
+def test_scheduler_prefix_two_can_hold_only_scale_va_fixed():
+  epoch0, epoch1 = tuple(object() for _ in range(4)), tuple(object() for _ in range(4))
+  first, second = _scheduler_prefix_two_launches(
+    "changed", (epoch0, epoch1), "all_except_q8_scales")
+  assert first == epoch0
+  assert [left is right for left, right in zip(first, second)] == [False, False, True, False]
+
+
+def test_scheduler_prefix_two_aql_packet_decoder_reports_exact_dispatch_safety_fields():
+  import ctypes
+  from tinygrad.runtime.autogen import hsa
+  from tinygrad.runtime.ops_amd import AQL_HDR
+  packet = hsa.hsa_kernel_dispatch_packet_t(
+    header=AQL_HDR | (hsa.HSA_PACKET_TYPE_KERNEL_DISPATCH << hsa.HSA_PACKET_HEADER_TYPE),
+    kernel_object=0x1234, kernarg_address=0x5678)
+  row = _decode_aql_kernel_dispatch_packet(bytes(packet))
+  assert row["kernel_dispatch"] is True and row["barrier"] is True
+  assert row["acquire_fence_scope"] == row["release_fence_scope"] == hsa.HSA_FENCE_SCOPE_SYSTEM
+  assert row["kernel_object"] == 0x1234 and row["kernarg_address"] == 0x5678
+  invalid = bytearray(bytes(packet))
+  invalid[:2] = int(hsa.HSA_PACKET_TYPE_INVALID << hsa.HSA_PACKET_HEADER_TYPE).to_bytes(2, "little")
+  assert _decode_aql_kernel_dispatch_packet(bytes(invalid)) == {
+    "packet_type": hsa.HSA_PACKET_TYPE_INVALID, "kernel_dispatch": False}
+  with pytest.raises(ValueError, match="exactly 64 bytes"):
+    _decode_aql_kernel_dispatch_packet(bytes(ctypes.sizeof(packet) - 1))
+
+
+def test_scheduler_prefix_two_isolated_wrapper_reuses_health_guard_and_narrow_aql(tmp_path):
+  class _Proc:
+    returncode = 0
+    stdout = '{"schema":"tinygrad.mmq_frozen_scheduler_prefix_two_probe.v1","status":"PASS"}\n'
+    stderr = ""
+  bundle = tmp_path / "frozen"
+  with patch("extra.qk.mmq_llama_five_buffer_gpu_harness.subprocess.run", return_value=_Proc()) as run, \
+       patch("extra.qk.mmq_target_epoch_orchestrator.read_kernel_log_since", return_value=""), \
+       patch("extra.qk.mmq_target_epoch_orchestrator.spawned_tiny_health_probe", return_value=True):
+    result = run_frozen_scheduler_prefix_two_probe_isolated(
+      role_spec=exact_role_spec("attn_kv"), frozen_bundle=bundle, address_mode="changed",
+      change_slot="q8_scales", timeout_seconds=1, child_env_overrides={"AMD_AQL": "1"})
+  assert result["status"] == "PASS" and result["health_before"] is result["health_after"] is True
+  assert result["child_env_overrides"] == {"AMD_AQL": "1"}
+  assert run.call_args.kwargs["env"]["AMD_AQL"] == "1"
+  code = run.call_args.args[0][2]
+  assert "run_frozen_scheduler_prefix_two_probe" in code
+  assert "address_mode='changed'" in code and "exact_role_spec('attn_kv'" in code
+  assert "change_slot='q8_scales'" in code
 
 
 def test_target_role_in_place_mode_fails_closed_before_gpu_for_unsafe_options():
