@@ -23,6 +23,7 @@ class PrefillRouteExecution:
   program_identity: str
   fallback_used: bool
   fallback_reason: str | None = None
+  execution_evidence: object | None = None
 
 _OBSERVER: ContextVar[Callable[[object], None] | None] = ContextVar("tinygrad_prefill_route_observer", default=None)
 _EXECUTION_OBSERVER: ContextVar[Callable[[object, PrefillRouteExecution], None] | None] = ContextVar(

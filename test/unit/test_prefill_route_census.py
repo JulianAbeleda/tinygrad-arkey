@@ -76,8 +76,8 @@ def test_inventory_attachment_fails_for_missing_duplicate_or_policy_mismatch():
   with pytest.raises(ValueError, match="duplicate selected"):
     _attach_selected_prefill_inventory(model, {"rows": [row, row]}, {"routes": {"i": "route"}}, object())
 
-def _execution(invocation_id, route_id, candidate="candidate-a", program="binary:abc", fallback=False, reason=None):
-  return PrefillRouteExecution(invocation_id, route_id, candidate, program, fallback, reason)
+def _execution(invocation_id, route_id, candidate="candidate-a", program="binary:abc", fallback=False, reason=None, evidence=None):
+  return PrefillRouteExecution(invocation_id, route_id, candidate, program, fallback, reason, evidence)
 
 def test_actual_execution_census_records_exact_candidate_program_and_fallback():
   first = SimpleNamespace(_prefill_route_attachment=_attachment("a", "route-a", "a.weight"))
@@ -95,6 +95,21 @@ def test_actual_execution_census_records_exact_candidate_program_and_fallback():
   assert rows["a"]["attached_route_id"] == rows["a"]["executed_route_id"] == "route-a"
   assert rows["a"]["candidate_identity"] == "candidate-a" and rows["a"]["program_identity"] == "binary:abc"
   assert rows["b"]["fallback_used"] is True and rows["b"]["fallback_reason"] == "guard rejected optimized program"
+
+def test_actual_execution_census_preserves_typed_runtime_evidence_and_rejects_untyped_data():
+  linear = SimpleNamespace(_prefill_route_attachment=_attachment("a", "route-a"))
+  evidence = {"schema": "runtime.v1", "runtime": {"queue_mode": "PM4"}, "staging": {"fixed_va": True}}
+  with collect_prefill_route_execution_census(
+      ("a",), expected_candidate_counts={"candidate-a": 1}, expected_fallback_count=0) as census:
+    notify_prefill_route_execution(linear, _execution("a", "route-a", evidence=evidence))
+  artifact = census.artifact()
+  assert artifact["status"] == "PASS"
+  assert artifact["rows"][0]["execution_evidence"] == evidence
+
+  with collect_prefill_route_execution_census(
+      ("a",), expected_candidate_counts={"candidate-a": 1}, expected_fallback_count=0) as census:
+    notify_prefill_route_execution(linear, _execution("a", "route-a", evidence="not-a-mapping"))
+  assert "execution_evidence must be a mapping" in census.artifact()["blocker"]
 
 def test_actual_execution_census_fails_on_duplicate_unexpected_and_count_drift():
   linear = SimpleNamespace(_prefill_route_attachment=_attachment("a", "route-a"))

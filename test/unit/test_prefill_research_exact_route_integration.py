@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from extra.qk import prefill_research_routes as routes
+from extra.qk.prefill.frozen_exact_role_runtime import ABI_NAMES, ABI_DTYPES, EXECUTION_EVIDENCE_SCHEMA
 from extra.qk.prefill.six_row_research_selector import (
   GROUPS, RETAINED_POLICY_IDENTITY, TARGET, ResearchPolicyBlocked, load_retained_policy,
 )
@@ -69,6 +70,31 @@ def _observe(call):
   return output, legacy, executions
 
 
+def _execution_evidence(role_spec):
+  return {
+    "schema": EXECUTION_EVIDENCE_SCHEMA,
+    "runtime": {
+      "device": "AMD", "amd_aql_env": "0", "amd_aql_effective": False, "queue_mode": "PM4",
+      "queue_class": "tinygrad.runtime.ops_amd.AMDComputeQueue",
+      "runtime_class": "tinygrad.runtime.ops_amd.AMDProgram",
+    },
+    "staging": {
+      "mode": "all_inputs_fixed_va_tinygrad_assign", "fixed_va": True,
+      "persistent_buffers": True, "synchronized_before_overwrite": True,
+      "transfer": "tinygrad_runtime_lowering",
+      "inputs": [
+        {"slot": slot, "name": name, "va": 0x100000 + slot * 0x10000,
+         "nbytes": elements * dtype.itemsize, "allocation_nbytes": elements * dtype.itemsize}
+        for slot, (name, elements, dtype) in enumerate(
+          zip(ABI_NAMES[1:], role_spec.program.abi_elements[1:], ABI_DTYPES[1:]), start=1)
+      ],
+    },
+    "dispatch": {
+      "mode": "eager_native_runtime", "count": role_spec.epochs, "tinyjit_replay_captured": False,
+    },
+  }
+
+
 def test_exact_candidate_runs_frozen_adapter_and_emits_legacy_and_actual_identity(monkeypatch):
   group, output, calls = GROUPS[0], object(), []
   lin = _linear(group)
@@ -79,7 +105,8 @@ def test_exact_candidate_runs_frozen_adapter_and_emits_legacy_and_actual_identit
       output=output, binding=SimpleNamespace(
         candidate_identity=identity, program_key="program-key:exact", role_spec=role_spec),
       evidence={"candidate_identity":identity, "program_key":"program-key:exact",
-                "shape":list(role_spec.shape), "program_shape":list(role_spec.program.shape)})
+                "shape":list(role_spec.shape), "program_shape":list(role_spec.program.shape),
+                "execution":_execution_evidence(role_spec)})
   monkeypatch.setattr(routes, "run_frozen_exact_q4k_research", frozen_runner)
   monkeypatch.setattr(routes, "_run_direct_packed_baseline",
                       lambda *_args: (_ for _ in ()).throw(AssertionError("candidate silently fell back")))
@@ -96,6 +123,10 @@ def test_exact_candidate_runs_frozen_adapter_and_emits_legacy_and_actual_identit
   assert event.candidate_identity == group.expected_binding_identity
   assert event.program_identity == "program-key:exact"
   assert event.fallback_used is False and event.fallback_reason is None
+  assert event.execution_evidence["runtime"]["queue_mode"] == "PM4"
+  assert event.execution_evidence["staging"]["fixed_va"] is True
+  assert event.execution_evidence["dispatch"]["count"] == group.workload.k // 256
+  assert event.execution_evidence["dispatch"]["tinyjit_replay_captured"] is False
 
 
 @pytest.mark.parametrize("group", [_group("attn_qo"), _group("attn_kv", "Q6_K")])

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
+import os
 from math import prod
 from pathlib import Path
 from typing import Any, Callable, Mapping, Protocol
@@ -31,6 +32,7 @@ from extra.qk.q4k_q8_activation_producer import (
 
 
 ADAPTER_SCHEMA = "tinygrad.prefill_frozen_exact_role_runtime.v1"
+EXECUTION_EVIDENCE_SCHEMA = "tinygrad.prefill_frozen_exact_execution.v1"
 LOCAL_SIZE = (256, 1, 1)
 Q4_WORDS_PER_EPOCH_ROW = 36
 ABI_NAMES = ("output", "q4", "q8_values", "q8_scales", "q8_original_sums")
@@ -157,8 +159,15 @@ class FrozenRuntimeBoundary(Protocol):
   def zero(self, output: Any) -> None: ...
   def stage(self, destination: Any, source: Any, *, name: str, epoch: int) -> None: ...
   def create_runtime(self, program: UOp) -> Any: ...
+  def execution_evidence(self, runtime: Any, buffers: tuple[Any, ...]) -> Mapping[str, Any]: ...
   def dispatch(self, runtime: Any, buffers: tuple[Any, ...], *, program: UOp, epoch: int) -> None: ...
   def finish(self, output: Any, shape: tuple[int, int, int]) -> Any: ...
+
+
+def _callable_class_name(value: Any) -> str:
+  value = getattr(value, "func", value)
+  typ = value if isinstance(value, type) else type(value)
+  return f"{typ.__module__}.{typ.__qualname__}"
 
 
 class TinygradFrozenRuntimeBoundary:
@@ -180,6 +189,35 @@ class TinygradFrozenRuntimeBoundary:
     from tinygrad.engine.realize import get_runtime
     return get_runtime(self.device, program)
 
+  def execution_evidence(self, runtime: Any, buffers: tuple[Tensor, ...]) -> Mapping[str, Any]:
+    dev = getattr(runtime, "dev", None)
+    if dev is None or getattr(dev, "device", None) != self.device:
+      raise RuntimeError("frozen runtime is not bound to the admitted device")
+    handles = tuple(buffer.uop.buffer.get_buf(self.device) for buffer in buffers)
+    inputs = [{
+      "slot": slot, "name": name, "va": int(handle.va_addr),
+      "nbytes": int(buffer.uop.buffer.nbytes), "allocation_nbytes": int(handle.size),
+    } for slot, (name, buffer, handle) in enumerate(zip(ABI_NAMES[1:], buffers[1:], handles[1:]), start=1)]
+    return {
+      "schema": EXECUTION_EVIDENCE_SCHEMA,
+      "runtime": {
+        "device": self.device,
+        "amd_aql_env": os.environ.get("AMD_AQL"),
+        "amd_aql_effective": bool(getattr(dev, "is_aql", False)),
+        "queue_mode": "AQL" if bool(getattr(dev, "is_aql", False)) else "PM4",
+        "queue_class": _callable_class_name(getattr(dev, "hw_compute_queue_t", None)),
+        "runtime_class": f"{type(runtime).__module__}.{type(runtime).__qualname__}",
+      },
+      "staging": {
+        "mode": "all_inputs_fixed_va_tinygrad_assign",
+        "fixed_va": True,
+        "persistent_buffers": True,
+        "synchronized_before_overwrite": True,
+        "transfer": "tinygrad_runtime_lowering",
+        "inputs": inputs,
+      },
+    }
+
   def dispatch(self, runtime: Any, buffers: tuple[Tensor, ...], *, program: UOp, epoch: int) -> None:
     _ = epoch
     runtime(*(buffer.uop.buffer.get_buf(self.device) for buffer in buffers),
@@ -200,6 +238,44 @@ class FrozenExactRoleRun:
 def _buffer_specs(role_spec: ExactRoleSpec) -> tuple[RuntimeBufferSpec, ...]:
   return tuple(RuntimeBufferSpec(name, elements, dtype) for name, elements, dtype in
                zip(ABI_NAMES, role_spec.program.abi_elements, ABI_DTYPES))
+
+
+def validate_frozen_execution_evidence(evidence: Mapping[str, Any], role_spec: ExactRoleSpec) -> dict[str, Any]:
+  """Validate queue selection and fixed-address input staging for one live frozen execution."""
+  if not isinstance(evidence, Mapping) or evidence.get("schema") != EXECUTION_EVIDENCE_SCHEMA:
+    raise ValueError("frozen execution evidence schema is missing or invalid")
+  runtime, staging, dispatch = evidence.get("runtime"), evidence.get("staging"), evidence.get("dispatch")
+  if not isinstance(runtime, Mapping) or runtime.get("device") != PROGRAM_DEVICE:
+    raise ValueError("frozen execution evidence lacks the admitted AMD runtime")
+  if runtime.get("queue_mode") not in ("PM4", "AQL") or type(runtime.get("amd_aql_effective")) is not bool or \
+     runtime.get("queue_mode") != ("AQL" if runtime.get("amd_aql_effective") else "PM4"):
+    raise ValueError("frozen execution queue mode is missing or inconsistent")
+  if not all(isinstance(runtime.get(key), str) and runtime[key] for key in ("queue_class", "runtime_class")):
+    raise ValueError("frozen execution runtime or queue class identity is missing")
+  if not isinstance(staging, Mapping) or staging.get("mode") != "all_inputs_fixed_va_tinygrad_assign" or \
+     staging.get("fixed_va") is not True or staging.get("persistent_buffers") is not True or \
+     staging.get("synchronized_before_overwrite") is not True or staging.get("transfer") != "tinygrad_runtime_lowering":
+    raise ValueError("frozen execution does not attest synchronized fixed-address input staging")
+  inputs = staging.get("inputs")
+  expected_specs = _buffer_specs(role_spec)[1:]
+  if not isinstance(inputs, list) or len(inputs) != len(expected_specs):
+    raise ValueError("frozen execution fixed-address input inventory is incomplete")
+  for slot, (row, spec) in enumerate(zip(inputs, expected_specs), start=1):
+    if not isinstance(row, Mapping) or row.get("slot") != slot or row.get("name") != spec.name or \
+       type(row.get("va")) is not int or row["va"] <= 0 or row.get("nbytes") != spec.nbytes or \
+       type(row.get("allocation_nbytes")) is not int or row["allocation_nbytes"] < row["nbytes"]:
+      raise ValueError("frozen execution fixed-address input identity differs from the exact ABI")
+  if len({row["va"] for row in inputs}) != len(inputs):
+    raise ValueError("frozen execution input staging addresses are not distinct")
+  if not isinstance(dispatch, Mapping) or dispatch.get("mode") != "eager_native_runtime" or \
+     dispatch.get("count") != role_spec.epochs or dispatch.get("tinyjit_replay_captured") is not False:
+    raise ValueError("frozen execution evidence lacks the exact eager dispatch count and replay boundary")
+  return {
+    "schema": EXECUTION_EVIDENCE_SCHEMA,
+    "runtime": dict(runtime),
+    "staging": {**dict(staging), "inputs": [dict(row) for row in inputs]},
+    "dispatch": dict(dispatch),
+  }
 
 
 def _q4_epoch(packed_weight: Any, role_spec: ExactRoleSpec, epoch: int) -> Any:
@@ -247,6 +323,7 @@ def run_frozen_exact_q4k_research(lin: Any, activation: Any, *, role_spec: Exact
     raise RuntimeError("exact five-buffer ABI requires distinct persistent allocations")
   runtime_boundary.zero(buffers[0])
   runtime = runtime_boundary.create_runtime(binding.artifact.program)
+  execution_evidence = dict(runtime_boundary.execution_evidence(runtime, buffers))
   dispatches = []
   for epoch in range(role_spec.epochs):
     q4 = _q4_epoch(packed_weight, role_spec, epoch)
@@ -256,6 +333,15 @@ def run_frozen_exact_q4k_research(lin: Any, activation: Any, *, role_spec: Exact
     runtime_boundary.dispatch(runtime, buffers, program=binding.artifact.program, epoch=epoch)
     dispatches.append({"epoch": epoch, "global_size": list(role_spec.program.grid),
                        "local_size": list(LOCAL_SIZE), "program_key": binding.program_key})
+  execution_evidence["dispatch"] = {
+    "mode": "eager_native_runtime",
+    "count": len(dispatches),
+    # Native AMDProgram submissions are not scheduler UOps and therefore are
+    # not captured for TinyJit replay.  Any whole-model authority must re-enter
+    # this adapter for each measured prefill.
+    "tinyjit_replay_captured": False,
+  }
+  execution_evidence = validate_frozen_execution_evidence(execution_evidence, role_spec)
 
   staging_specs = specs[1:]
   evidence = {
@@ -269,12 +355,16 @@ def run_frozen_exact_q4k_research(lin: Any, activation: Any, *, role_spec: Exact
     "source_sha256": binding.source_sha256, "binary_sha256": binding.binary_sha256,
     "artifact_role": binding.artifact_role_spec.role,
     "shared_program_geometry": binding.shared_program_geometry,
+    "execution": execution_evidence,
     "dispatch_count": len(dispatches), "expected_dispatch_count": role_spec.epochs, "dispatches": dispatches,
     "abi": [{"slot": slot, "name": spec.name, "elements": spec.elements,
              "dtype": str(spec.dtype), "nbytes": spec.nbytes} for slot, spec in enumerate(specs)],
     "staging": {
       "mode": "stable_one_k256_epoch", "q4_source_layout": "q4_k_words[n, k256_epoch, 36]",
       "q8_layout": "q8_1_mmq_ds4_transposed_blocks", "epoch_k": EPOCH_K,
+      "fixed_va": execution_evidence["staging"]["fixed_va"],
+      "persistent_inputs": execution_evidence["staging"]["inputs"],
+      "transfer": execution_evidence["staging"]["transfer"],
       "elements": sum(spec.elements for spec in staging_specs),
       "bytes": sum(spec.nbytes for spec in staging_specs),
       "depends_on_epoch_count": False,
@@ -284,6 +374,6 @@ def run_frozen_exact_q4k_research(lin: Any, activation: Any, *, role_spec: Exact
   return FrozenExactRoleRun(runtime_boundary.finish(buffers[0], (1, role_spec.m, role_spec.n)), binding, evidence)
 
 
-__all__ = ["ADAPTER_SCHEMA", "FrozenExactRoleBinding", "FrozenExactRoleRun", "FrozenRuntimeBoundary",
+__all__ = ["ADAPTER_SCHEMA", "EXECUTION_EVIDENCE_SCHEMA", "FrozenExactRoleBinding", "FrozenExactRoleRun", "FrozenRuntimeBoundary",
            "RuntimeBufferSpec", "TinygradFrozenRuntimeBoundary", "load_frozen_exact_role_binding",
-           "run_frozen_exact_q4k_research"]
+           "run_frozen_exact_q4k_research", "validate_frozen_execution_evidence"]

@@ -68,6 +68,27 @@ class FakeBoundary:
     self.runtime_programs.append(program)
     return object()
 
+  def execution_evidence(self, runtime, buffers):
+    _ = runtime
+    return {
+      "schema": adapter.EXECUTION_EVIDENCE_SCHEMA,
+      "runtime": {
+        "device": "AMD", "amd_aql_env": "0", "amd_aql_effective": False,
+        "queue_mode": "PM4", "queue_class": "test.FakeQueue", "runtime_class": "test.FakeRuntime",
+      },
+      "staging": {
+        "mode": "all_inputs_fixed_va_tinygrad_assign", "fixed_va": True,
+        "persistent_buffers": True, "synchronized_before_overwrite": True,
+        "transfer": "tinygrad_runtime_lowering",
+        "inputs": [
+          {"slot": slot, "name": name, "va": id(buffer),
+           "nbytes": adapter._elements(buffer) * buffer.dtype.itemsize,
+           "allocation_nbytes": adapter._elements(buffer) * buffer.dtype.itemsize}
+          for slot, (name, buffer) in enumerate(zip(adapter.ABI_NAMES[1:], buffers[1:]), start=1)
+        ],
+      },
+    }
+
   def dispatch(self, runtime, buffers, *, program, epoch):
     self.dispatches.append((runtime, buffers, program, epoch))
 
@@ -162,6 +183,9 @@ def test_exact_k256_dispatch_count_grid_abi_and_stable_five_buffers():
   assert all(row[1] == tuple(x[1] for x in boundary.allocations) for row in boundary.dispatches)
   assert all(dispatch["global_size"] == list(role_spec.program.grid) for dispatch in result.evidence["dispatches"])
   assert [row["elements"] for row in result.evidence["abi"]] == list(role_spec.program.abi_elements)
+  assert result.evidence["execution"]["runtime"]["queue_mode"] == "PM4"
+  assert result.evidence["staging"]["fixed_va"] is True
+  assert [row["name"] for row in result.evidence["staging"]["persistent_inputs"]] == list(adapter.ABI_NAMES[1:])
   assert len(producer_calls) == role_spec.epochs
   assert all(call[0].shape == (role_spec.m, 256) for call in producer_calls)
   for name in adapter.ABI_NAMES[1:]:
@@ -181,7 +205,8 @@ def test_shared_n5120_frozen_program_is_accepted_for_qo_and_down_with_k_bounded_
   assert down_result.evidence["shared_program_geometry"] is True
   assert qo_result.evidence["dispatch_count"] == qo.epochs
   assert down_result.evidence["dispatch_count"] == down.epochs
-  assert qo_result.evidence["staging"] == down_result.evidence["staging"]
+  assert qo_result.evidence["staging"]["mode"] == down_result.evidence["staging"]["mode"]
+  assert qo_result.evidence["staging"]["bytes"] == down_result.evidence["staging"]["bytes"]
   assert down_result.evidence["staging"]["depends_on_epoch_count"] is False
 
 
@@ -207,6 +232,26 @@ def test_fixed_epoch_staging_rejects_unsynchronized_runtime_boundary():
   boundary.synchronized_epoch_dispatch = False
   with pytest.raises(ValueError, match="requires a synchronized epoch dispatch"):
     _run(role_spec, _artifact(role_spec), boundary=boundary)
+
+
+def test_frozen_execution_evidence_rejects_queue_or_fixed_address_drift():
+  role_spec = exact_role_spec("attn_kv")
+  valid = {**FakeBoundary().execution_evidence(object(), tuple(
+    FakeTensor((spec.elements,), spec.dtype) for spec in adapter._buffer_specs(role_spec))),
+    "dispatch": {"mode": "eager_native_runtime", "count": role_spec.epochs, "tinyjit_replay_captured": False}}
+  bad_queue = {**valid, "runtime": {**valid["runtime"], "queue_mode": "AQL"}}
+  with pytest.raises(ValueError, match="queue mode"):
+    adapter.validate_frozen_execution_evidence(bad_queue, role_spec)
+  bad_staging = {**valid, "staging": {**valid["staging"], "fixed_va": False}}
+  with pytest.raises(ValueError, match="fixed-address"):
+    adapter.validate_frozen_execution_evidence(bad_staging, role_spec)
+  duplicate = {**valid, "staging": {**valid["staging"], "inputs": [
+    {**row, "va": valid["staging"]["inputs"][0]["va"]} for row in valid["staging"]["inputs"]]}}
+  with pytest.raises(ValueError, match="not distinct"):
+    adapter.validate_frozen_execution_evidence(duplicate, role_spec)
+  captured = {**valid, "dispatch": {**valid["dispatch"], "tinyjit_replay_captured": True}}
+  with pytest.raises(ValueError, match="replay boundary"):
+    adapter.validate_frozen_execution_evidence(captured, role_spec)
 
 
 def test_native_tinygrad_boundary_waits_for_epoch_before_staging_can_be_overwritten():

@@ -8,7 +8,9 @@ from tinygrad import Tensor, dtypes
 from tinygrad.llm import route_ops as qk_ops
 from extra.qk.cooperative_mmq_gate import admit_cooperative_mmq, canonical_candidate_identity
 from extra.qk.mmq_exact_role_spec import DEFAULT_INVENTORY, ExactRoleSpec, exact_role_spec
-from extra.qk.prefill.frozen_exact_role_runtime import run_frozen_exact_q4k_research
+from extra.qk.prefill.frozen_exact_role_runtime import (
+  run_frozen_exact_q4k_research, validate_frozen_execution_evidence,
+)
 from extra.qk.prefill.six_row_research_selector import (
   GROUPS, RETAINED_POLICY_IDENTITY, TARGET, ExactSixRowResearchSelector, ResearchPolicyBlocked,
   ResearchSelection, ResearchWorkload,
@@ -196,12 +198,20 @@ def _exact_research_dispatch(lin, spec:PrefillLinearRouteSpec,
   raise ResearchPolicyBlocked(f"unsupported exact research binding kind {selection.binding_kind!r}")
 
 def _notify_exact_execution(lin, dispatch:_ExactResearchDispatch, *, program_identity:str,
-                            fallback_used:bool, fallback_reason:str|None) -> None:
+                            fallback_used:bool, fallback_reason:str|None,
+                            execution_evidence:Mapping[str, Any]|None=None) -> None:
   if not isinstance(program_identity, str) or not program_identity:
     raise RuntimeError("exact research execution has no program identity")
+  if fallback_used:
+    if execution_evidence is not None:
+      raise RuntimeError("direct-packed fallback cannot claim frozen execution evidence")
+  else:
+    if dispatch.role_spec is None:
+      raise RuntimeError("exact frozen candidate has no admitted role spec")
+    execution_evidence = validate_frozen_execution_evidence(execution_evidence, dispatch.role_spec)
   notify_prefill_route_execution(lin, PrefillRouteExecution(
     dispatch.attachment.invocation_id, dispatch.selection.route_id, dispatch.selection.binding_identity,
-    program_identity, fallback_used, fallback_reason))
+    program_identity, fallback_used, fallback_reason, execution_evidence))
 
 def route_direct_packed_prefill_research(lin, x:Tensor, *, config:PrefillResearchRouteConfig) -> Tensor|None:
   if not isinstance(config, PrefillResearchRouteConfig): raise TypeError("research prefill route requires explicit config")
@@ -238,7 +248,8 @@ def route_direct_packed_prefill_research(lin, x:Tensor, *, config:PrefillResearc
       raise RuntimeError("selected exact frozen candidate runtime identity drifted")
     notify_prefill_route(lin)
     _notify_exact_execution(lin, exact_dispatch, program_identity=run.binding.program_key,
-                            fallback_used=False, fallback_reason=None)
+                            fallback_used=False, fallback_reason=None,
+                            execution_evidence=run.evidence.get("execution"))
     return prefill_output(run.output)
   if _is_q4k_linear(lin):
     cooperative = _cooperative_q4k_binding(lin, spec, candidate=config.cooperative_candidate,

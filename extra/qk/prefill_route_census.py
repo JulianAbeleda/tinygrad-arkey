@@ -9,7 +9,7 @@ from tinygrad.llm.prefill_route_observer import (PrefillRouteAttachment, Prefill
   observe_prefill_route_executions, observe_prefill_routes, prefill_route_scope)
 
 CENSUS_SCHEMA = "tinygrad.prefill_route_census.v1"
-EXECUTION_CENSUS_SCHEMA = "tinygrad.prefill_route_execution_census.v1"
+EXECUTION_CENSUS_SCHEMA = "tinygrad.prefill_route_execution_census.v2"
 
 class PrefillRouteCensus:
   def __init__(self, required_invocations: Sequence[str], expected_counts: Mapping[str, int] | None = None):
@@ -92,6 +92,8 @@ class PrefillRouteExecutionCensus:
         self._errors.append(f"fallback execution requires a non-empty reason for {execution.invocation_id!r}"); return
     elif execution.fallback_reason is not None:
       self._errors.append(f"non-fallback execution must not report a fallback reason for {execution.invocation_id!r}"); return
+    if execution.execution_evidence is not None and not isinstance(execution.execution_evidence, Mapping):
+      self._errors.append(f"execution_evidence must be a mapping for {execution.invocation_id!r}"); return
 
     invocation_id = execution.invocation_id
     if invocation_id not in self.expected:
@@ -107,7 +109,8 @@ class PrefillRouteExecutionCensus:
     row = {"invocation_id": invocation_id, "attached_route_id": attachment.route_id,
            "executed_route_id": execution.executed_route_id, "tensor_identity": attachment.tensor_identity,
            "candidate_identity": execution.candidate_identity, "program_identity": execution.program_identity,
-           "fallback_used": execution.fallback_used, "fallback_reason": execution.fallback_reason}
+           "fallback_used": execution.fallback_used, "fallback_reason": execution.fallback_reason,
+           "execution_evidence": dict(execution.execution_evidence) if execution.execution_evidence is not None else None}
     if invocation_id in self._rows and self._rows[invocation_id] != row:
       self._errors.append(f"inconsistent duplicate execution row for {invocation_id!r}")
     self._rows[invocation_id] = row
