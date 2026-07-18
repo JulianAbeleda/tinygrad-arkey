@@ -209,10 +209,14 @@ def _linear_q8_ds4_schedule(template: PackedRecordOperandTemplate, threads: Prec
   return tuple(stores)
 
 
-def _q4_k_oracle_schedule_for_stride(row_stride_words: int):
-  def schedule(template: PackedRecordOperandTemplate, threads: PrecontractThreadAxes,
+@dataclass(frozen=True)
+class Q4KOracleSchedule:
+  row_stride_words: int = 36
+
+  def __call__(self, template: PackedRecordOperandTemplate, threads: PrecontractThreadAxes,
                source_k: int) -> tuple[PackedRecordCooperativeStore, ...]:
     """Exact wave-row payload fanout and paired-lane metadata ownership from load_tiles_q4_K."""
+    row_stride_words = self.row_stride_words
     source, base_k, stores = template.source("record"), UOp.const(dtypes.weakint, source_k), []
     # wave/threadIdx.y owns rows wave+8*i; lane is txi and one source word fans out to two decoded int32 destinations.
     for iteration in range(16):
@@ -234,10 +238,43 @@ def _q4_k_oracle_schedule_for_stride(row_stride_words: int):
                                       row_stride_words=row_stride_words)
       stores.append(PackedRecordCooperativeStore("dm", lane_group, logical_row, logical_k, row, group, value))
     return tuple(stores)
-  return schedule
 
 
-_q4_k_oracle_schedule = _q4_k_oracle_schedule_for_stride(36)
+@dataclass(frozen=True)
+class SplitQ8DSProducer:
+  record_rows: int | None = None
+
+  def __call__(self, sources: tuple[UOp, ...], row: UOp, k: UOp, width: int) -> UOp:
+    return _q8_split_ds(sources, row, k, width, record_rows=self.record_rows)
+
+
+@dataclass(frozen=True)
+class SplitQ8QSProducer:
+  record_rows: int | None = None
+
+  def __call__(self, sources: tuple[UOp, ...], row: UOp, k: UOp, width: int) -> UOp:
+    return _q8_split_qs(sources, row, k, width, record_rows=self.record_rows)
+
+
+@dataclass(frozen=True)
+class Q4KQSProducer:
+  row_stride_words: int = 36
+
+  def __call__(self, sources: tuple[UOp, ...], row: UOp, k: UOp, width: int) -> UOp:
+    return q4_k_qs_record_callback(
+      sources, row, k, width, row_stride_words=self.row_stride_words)
+
+
+@dataclass(frozen=True)
+class Q4KDMProducer:
+  row_stride_words: int = 36
+
+  def __call__(self, sources: tuple[UOp, ...], row: UOp, k: UOp, width: int) -> UOp:
+    return q4_k_dm_record_callback(
+      sources, row, k, width, row_stride_words=self.row_stride_words)
+
+
+_q4_k_oracle_schedule = Q4KOracleSchedule()
 
 
 LLAMA_Q4_K_COOPERATIVE_SCHEDULE = PackedRecordCooperativeSchedule(
@@ -280,10 +317,8 @@ def build_split_q8_ds4_record_template(role: str, values_source: UOp, scales_sou
       raise TypeError(f"split Q8 {name} source must cover physical {dtype.name}[{size}] storage")
   return PackedRecordOperandTemplate(role, Q8_DS4_SPLIT_RECORD_ADAPTER,
     (PackedRecordSource("values", values_source), PackedRecordSource("scales", scales_source), PackedRecordSource("sums", sums_source)),
-    (PackedRecordFieldProducer("ds", ("scales", "sums"),
-      lambda sources, row, k, width: _q8_split_ds(sources, row, k, width, record_rows=record_rows), vector_bytes=4),
-     PackedRecordFieldProducer("qs", ("values",),
-      lambda sources, row, k, width: _q8_split_qs(sources, row, k, width, record_rows=record_rows), vector_bytes=4)),
+    (PackedRecordFieldProducer("ds", ("scales", "sums"), SplitQ8DSProducer(record_rows), vector_bytes=4),
+     PackedRecordFieldProducer("qs", ("values",), SplitQ8QSProducer(record_rows), vector_bytes=4)),
     (), "qs", row_axis, k_axis, row_tile_base, dtypes.char, LLAMA_Q8_DS4_COOPERATIVE_SCHEDULE)
 
 
@@ -300,14 +335,10 @@ def build_q4_k_record_template(role: str, source: UOp, row_axis: UOp, k_axis: UO
     raise TypeError("Q4_K source does not cover 128 rows at the declared physical stride")
   schedule = LLAMA_Q4_K_COOPERATIVE_SCHEDULE if row_stride_words == 36 else PackedRecordCooperativeSchedule(
     f"llama-load-tiles-q4-k-wave-row-stride-{row_stride_words}-v1",
-    _q4_k_oracle_schedule_for_stride(row_stride_words), ("wave_m", "lane"))
+    Q4KOracleSchedule(row_stride_words), ("wave_m", "lane"))
   return PackedRecordOperandTemplate(role, Q4_K_RECORD_DECODE, (PackedRecordSource("record", source),),
-    (PackedRecordFieldProducer("qs", ("record",),
-      lambda sources, row, k, width: q4_k_qs_record_callback(
-        sources, row, k, width, row_stride_words=row_stride_words), vector_bytes=4),
-     PackedRecordFieldProducer("dm", ("record",),
-      lambda sources, row, k, width: q4_k_dm_record_callback(
-        sources, row, k, width, row_stride_words=row_stride_words), vector_bytes=4)),
+    (PackedRecordFieldProducer("qs", ("record",), Q4KQSProducer(row_stride_words), vector_bytes=4),
+     PackedRecordFieldProducer("dm", ("record",), Q4KDMProducer(row_stride_words), vector_bytes=4)),
     ("padding",), "qs", row_axis, k_axis, row_tile_base, dtypes.char, schedule)
 
 

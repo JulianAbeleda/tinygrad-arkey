@@ -16,7 +16,7 @@ from extra.qk.mmq_exact_role_spec import ExactRoleSpec, exact_role_spec
 from extra.qk.mmq_frozen_target_artifact import FUNCTION_NAME
 from extra.qk.mmq_llama_five_buffer_full_kernel import (
   FullGridOwnerCoordinates, FullGridTopology, LlamaFiveBufferEpochOffsetFamily,
-  LlamaFiveBufferFullKernel,
+  LlamaFiveBufferFullKernel, build_llama_five_buffer_epoch_offset_family,
 )
 from extra.qk.mmq_llama_five_buffer_graph import five_buffer_parameters
 from extra.qk.mmq_llama_runtime_contract import LLAMA_SOURCE_COMMIT
@@ -204,6 +204,16 @@ def test_v2_producer_rejects_uncaptured_input_pointer_chain_and_dropped_load(tmp
   with pytest.raises(ValueError, match="q8_values LOAD coverage"):
     frozen_v2.produce_frozen_epoch_program_set(
       tmp_path / "dropped-load", role_spec=role_spec, build_once=lambda: dropped_family)
+
+
+def test_corrected_real_full_role_sinks_roundtrip_standard_pickle_and_revalidate_strides():
+  family = build_llama_five_buffer_epoch_offset_family(128, 128, 512)
+  role = SimpleNamespace(epochs=2, m=128, n=128)
+  for epoch in (0, 1):
+    original = family.variants[epoch].sink
+    restored = pickle.loads(pickle.dumps(original, protocol=pickle.HIGHEST_PROTOCOL))
+    assert restored.key == original.key
+    frozen_v2._validate_sink_physical_strides(restored, role, epoch)
 
 
 def test_v2_rejects_variant_grid_and_shared_full_role_abi_drift(tmp_path: Path):
