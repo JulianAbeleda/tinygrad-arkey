@@ -25,7 +25,8 @@ from extra.qk.mmq_bounded_harness import (
   STAGED_DS4_BACKEND_ID,
   candidate_metadata, coop_tile_blocked_translation_evidence, run_bounded_harness,
 )
-from extra.qk.mmq_llama_five_buffer_gpu_harness import run_full_grid_r5_benchmark
+from extra.qk.mmq_llama_five_buffer_gpu_harness import TARGET_IN_PLACE_ACCUMULATION, run_full_grid_r5_benchmark
+from extra.qk.mmq_llama_runtime_contract import LLAMA_SOURCE_COMMIT
 from extra.qk.mmq_llama_oracle import llama_mma_writeback_owners
 from extra.qk.mmq_llama_store_probe import lowered_tinygrad_r4_store_owner_trace_rows
 from extra.qk.mmq_owner_coverage import (
@@ -49,6 +50,8 @@ FULL_GPU_PROBE_ROLE = "ffn_gate_up"
 FULL_GRID_R5_SHAPE = {"M": 128, "N": 128, "K": 256}
 R6_TARGET_ROLE_SHAPE = {"role": "ffn_gate_up", "M": 512, "N": 17408, "K": 5120}
 R6_TARGET_EVIDENCE_SCHEMA = "q4k-q8-1-mmq-r6-target-role-evidence.v1"
+R6_INDEPENDENT_EVIDENCE_SCHEMA = "q4k-q8-1-mmq-r6-independent-epoch-evidence.v1"
+R7_REQUIRED_SOURCE_ANCHORS = ("mmq.cuh:mul_mat_q_process_tile", "mmq.cuh:load_tiles_q4_K")
 LLAMA_KERNEL_SOURCES: tuple[dict[str, Any], ...] = (
   {
     "component": "mmq_route_and_launch",
@@ -604,58 +607,346 @@ def _validate_r6_target_role_evidence(target_evidence: dict[str, Any] | None) ->
   if not isinstance(target_evidence, dict):
     return {"schema": R6_TARGET_EVIDENCE_SCHEMA, "status": "BLOCKED",
             "exact_blocker": "target-role GPU evidence is missing"}
+  def _sha256(value: Any) -> bool:
+    return isinstance(value, str) and len(value) == 64 and all(c in "0123456789abcdef" for c in value)
+
+  def _positive_int(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+  def _nonnegative_int(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+  evidence_identity_ok = (
+    target_evidence.get("schema") == "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1" and
+    target_evidence.get("status") == "PASS" and target_evidence.get("exact_blocker") is None and
+    target_evidence.get("bounded_only") is True and target_evidence.get("default_route") == "direct_packed" and
+    target_evidence.get("production_dispatch_changed") is False)
   shape_ok = (target_evidence.get("role") == R6_TARGET_ROLE_SHAPE["role"] and
               target_evidence.get("shape") == [R6_TARGET_ROLE_SHAPE[k] for k in ("M", "N", "K")])
   correctness = target_evidence.get("correctness")
   comparison = correctness.get("comparison") if isinstance(correctness, dict) else None
   numeric_ok = (isinstance(correctness, dict) and correctness.get("status") == "PASS" and
+                correctness.get("authority") == "same_session_fp16_rounded_ds4_reference" and
                 isinstance(comparison, dict) and comparison.get("status") == "pass" and
                 comparison.get("mismatch_count") == 0 and
                 comparison.get("nan_got") == 0 and comparison.get("nan_reference") == 0 and
                 comparison.get("inf_got") == 0 and comparison.get("inf_reference") == 0 and
-                comparison.get("joint_finite") == comparison.get("got_size"))
+                comparison.get("joint_finite") == comparison.get("got_size") == 512 * 17408 and
+                comparison.get("reference_size") == 512 * 17408 and
+                comparison.get("got_shape") == [512, 17408] and
+                comparison.get("reference_shape") == [512, 17408])
   timing = target_evidence.get("timing")
   epoch_checks = timing.get("epoch_checks") if isinstance(timing, dict) else None
+  metadata = timing.get("metadata_staging") if isinstance(timing, dict) else None
+  metadata_rows = metadata.get("per_epoch_vas") if isinstance(metadata, dict) else None
+  metadata_ok = (
+    isinstance(metadata, dict) and metadata.get("mode") == "fixed_va_gpu_sdma" and
+    metadata.get("fixed_va") is True and metadata.get("transfer") == "gpu_sdma" and
+    metadata.get("source_preloaded") is True and
+    isinstance(metadata_rows, list) and len(metadata_rows) == R6_TARGET_ROLE_SHAPE["K"] // 256 and
+    [row.get("epoch") for row in metadata_rows if isinstance(row, dict)] ==
+      list(range(R6_TARGET_ROLE_SHAPE["K"] // 256)) and
+    all(all(_positive_int(row.get(key)) for key in
+            ("source_scales_va", "source_sums_va", "stage_scales_va", "stage_sums_va"))
+        for row in metadata_rows if isinstance(row, dict)) and
+    len({row["source_scales_va"] for row in metadata_rows}) == len(metadata_rows) and
+    len({row["source_sums_va"] for row in metadata_rows}) == len(metadata_rows) and
+    len({row["stage_scales_va"] for row in metadata_rows}) == 1 and
+    len({row["stage_sums_va"] for row in metadata_rows}) == 1 and
+    target_evidence.get("metadata_staging") == metadata)
   timing_ok = (isinstance(timing, dict) and timing.get("k_epoch_launches") == R6_TARGET_ROLE_SHAPE["K"] // 256 and
                timing.get("total_k_epoch_launches") == R6_TARGET_ROLE_SHAPE["K"] // 256 and
                timing.get("n_chunk_tiles") == R6_TARGET_ROLE_SHAPE["N"] // 128 and
-               timing.get("accumulation") == "tinygrad_elementwise_add" and
+               timing.get("accumulation") == TARGET_IN_PLACE_ACCUMULATION and
                timing.get("persistent_buffers") is True and
                timing.get("preloaded_epochs") is True and
+               timing.get("stable_metadata_staging") is True and
+               timing.get("sync_each_epoch") is False and
                isinstance(timing.get("samples_ms"), list) and len(timing["samples_ms"]) > 0 and
-               all(isinstance(v, (int, float)) and v >= 0 for v in timing["samples_ms"]) and
-               isinstance(epoch_checks, list) and len(epoch_checks) == R6_TARGET_ROLE_SHAPE["K"] // 256 and
-               all(isinstance(row, dict) and row.get("status") == "pass" and row.get("mismatch_count") == 0
-                   for row in epoch_checks))
+               all(isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 0 for v in timing["samples_ms"]) and
+               epoch_checks == [] and metadata_ok)
   artifacts = target_evidence.get("artifacts")
+  artifacts_map = artifacts if isinstance(artifacts, dict) else {}
   resources = artifacts.get("resources") if isinstance(artifacts, dict) else None
+  frozen = artifacts.get("frozen_bundle") if isinstance(artifacts, dict) else None
+  frozen_ok = (
+    isinstance(frozen, dict) and
+    frozen.get("manifest_schema") == "tinygrad.mmq_q4k_q8_1.frozen_target_artifact.v1" and
+    frozen.get("fixture_schema") == "tinygrad.mmq_q4k_q8_1_target_fixture.v1" and
+    frozen.get("state") == "FROZEN" and
+    all(_sha256(frozen.get(key)) for key in ("program_key", "serialized_program_sha256", "fixture_sha256")) and
+    isinstance(frozen.get("path"), str) and bool(frozen["path"]) and
+    frozen.get("compile_performed") is False and frozen.get("requires_recompile") is False and
+    artifacts.get("compile_performed") is False and artifacts.get("requires_recompile") is False and
+    target_evidence.get("compile_performed") is False and target_evidence.get("requires_recompile") is False)
   resource_ok = (isinstance(artifacts, dict) and isinstance(resources, dict) and
-                 all(isinstance(resources.get(k), int) and resources[k] >= 0 for k in ("vgpr", "lds_bytes", "scratch_bytes")) and
-                 resources.get("scratch_bytes") == 0 and
+                 all(_nonnegative_int(resources.get(k)) for k in ("vgpr", "lds_bytes", "scratch_bytes")) and
+                 _positive_int(resources.get("vgpr")) and _positive_int(resources.get("lds_bytes")) and
+                 resources.get("scratch_bytes") == 0 and resources.get("wavefront_size") == 32 and
+                 resources.get("authority") == "native_elf_descriptor" and
+                 resources.get("kernarg_bytes") == 40 and
+                 artifacts.get("backend_id") == FULL_GRID_BACKEND_ID and
                  artifacts.get("distinct_binary_identity") is True and
-                 artifacts.get("same_session_timing") is True)
+                 artifacts.get("same_session_timing") is True and
+                 target_evidence.get("distinct_binary_identity") is True and
+                 target_evidence.get("same_session_timing") is True and
+                 _sha256(artifacts.get("source_sha256")) and _sha256(artifacts.get("binary_sha256")) and
+                 frozen_ok)
   repack = target_evidence.get("repack")
   repack_ok = (isinstance(repack, dict) and
-               all(isinstance(repack.get(key), str) and len(repack[key]) >= 16
+               all(_sha256(repack.get(key))
                    for key in ("q4_sha256", "q8_values_sha256", "q8_scales_sha256", "q8_sums_sha256")) and
                repack.get("q4_layout") == "q4_k_bytes[n, k_epoch, 144]" and
-               repack.get("q8_layout") == "q8_ds4[epoch, m, groups]")
+               repack.get("q8_layout") == "q8_ds4[epoch, m, groups]" and
+               repack.get("q4_epoch_major_layout") == "q4_k_bytes[k_epoch, n, 144]" and
+               repack.get("q4_epoch_major_dtype") == "uint32" and
+               repack.get("q4_epoch_major_elements") == 20 * 17408 * 144 // 4 and
+               _sha256(repack.get("q4_epoch_major_sha256")))
+
+  runtime = target_evidence.get("runtime_evidence")
+  runtime_map = runtime if isinstance(runtime, dict) else {}
+  launches = runtime.get("launches") if isinstance(runtime, dict) else None
+  runtime_identity_ok = (
+    isinstance(runtime, dict) and runtime.get("launch_count") == 20 and
+    runtime.get("intermediate_readback") is False and runtime.get("external_accumulation_add") is False and
+    runtime.get("binary_sha256") == artifacts_map.get("binary_sha256") and
+    runtime.get("queue_mode") in ("PM4", "AQL") and
+    runtime.get("amd_aql_env") in ("0", "1") and
+    runtime.get("amd_aql_effective") is (runtime.get("amd_aql_env") == "1") and
+    runtime.get("queue_mode") == ("AQL" if runtime.get("amd_aql_env") == "1" else "PM4") and
+    runtime.get("runtime_class") == "tinygrad.runtime.ops_amd.AMDProgram" and
+    runtime.get("queue_class") == ("tinygrad.runtime.ops_amd.AMDComputeAQLQueue"
+                                   if runtime.get("amd_aql_env") == "1"
+                                   else "tinygrad.runtime.ops_amd.AMDComputeQueue") and
+    _positive_int(runtime.get("lib_va")) and _positive_int(runtime.get("lib_nbytes")) and
+    _positive_int(runtime.get("entry_va")) and _positive_int(runtime.get("descriptor_va")) and
+    _positive_int(runtime.get("program_va")) and runtime.get("entry_va") == runtime.get("program_va") and
+    runtime["lib_va"] <= runtime["entry_va"] < runtime["lib_va"] + runtime["lib_nbytes"] and
+    runtime["lib_va"] <= runtime["descriptor_va"] < runtime["lib_va"] + runtime["lib_nbytes"] and
+    target_evidence.get("child_env_overrides") == {"AMD_AQL": runtime.get("amd_aql_env")})
+  launch_rows_ok = metadata_ok and isinstance(launches, list) and len(launches) == 20
+  if launch_rows_ok:
+    expected_names = ("output", "q4", "q8_values", "q8_scales", "q8_original_sums")
+    output_va, q4_base, q8_base = None, None, None
+    stage_scales_va, stage_sums_va = metadata_rows[0]["stage_scales_va"], metadata_rows[0]["stage_sums_va"]
+    for epoch, launch in enumerate(launches):
+      args = launch.get("arguments") if isinstance(launch, dict) else None
+      kernarg = launch.get("kernarg") if isinstance(launch, dict) else None
+      row_ok = (
+        launch.get("epoch") == epoch and launch.get("global_size") == [136, 4, 1] and
+        launch.get("local_size") == [256, 1, 1] and launch.get("n0") == 0 and
+        launch.get("n1") == 17408 and launch.get("tile_count") == 136 and
+        isinstance(args, list) and len(args) == 5 and isinstance(kernarg, dict))
+      if not row_ok:
+        launch_rows_ok = False
+        break
+      for slot, (arg, name) in enumerate(zip(args, expected_names)):
+        if not (isinstance(arg, dict) and arg.get("name") == name and arg.get("slot") == slot and
+                arg.get("call_index") == slot and _positive_int(arg.get("va")) and
+                _positive_int(arg.get("base_va")) and _positive_int(arg.get("nbytes")) and
+                _positive_int(arg.get("base_nbytes")) and _nonnegative_int(arg.get("offset_bytes")) and
+                arg.get("va_matches_base_offset") is True and
+                arg["va"] == arg["base_va"] + arg["offset_bytes"] and
+                arg["offset_bytes"] + arg["nbytes"] <= arg["base_nbytes"]):
+          launch_rows_ok = False
+          break
+      if not launch_rows_ok:
+        break
+      if epoch == 0:
+        output_va, q4_base, q8_base = args[0]["va"], args[1]["base_va"], args[2]["base_va"]
+      launch_rows_ok = (
+        args[0]["va"] == output_va and args[0]["offset_bytes"] == 0 and
+        args[1]["base_va"] == q4_base and args[1]["offset_bytes"] == epoch * args[1]["nbytes"] and
+        args[2]["base_va"] == q8_base and args[2]["offset_bytes"] == epoch * args[2]["nbytes"] and
+        args[3]["va"] == stage_scales_va and args[3]["offset_bytes"] == 0 and
+        args[4]["va"] == stage_sums_va and args[4]["offset_bytes"] == 0 and
+        kernarg.get("size") == 40 and _positive_int(kernarg.get("va")) and
+        kernarg.get("pointer_words") == [arg["va"] for arg in args] and
+        kernarg.get("bound_pointer_words") == [arg["va"] for arg in args] and
+        kernarg.get("pointer_words_match_bound") is True)
+      if not launch_rows_ok:
+        break
+  runtime_ok = runtime_identity_ok and launch_rows_ok
+
+  health_mode = target_evidence.get("health_mode")
+  health_ok = (
+    target_evidence.get("health_before") is True and target_evidence.get("health_after") is True and
+    target_evidence.get("mode_health_before") is True and target_evidence.get("mode_health_after") is True and
+    target_evidence.get("kernel_faults") == [] and isinstance(health_mode, dict) and
+    health_mode.get("before") is True and health_mode.get("after") is True and
+    health_mode.get("amd_aql_env") == runtime_map.get("amd_aql_env"))
   fallback_ok = (target_evidence.get("no_fallback") is True and
                  isinstance(artifacts, dict) and artifacts.get("no_fallback") is True and
+                 target_evidence.get("accumulation") == TARGET_IN_PLACE_ACCUMULATION and
+                 artifacts.get("accumulation") == TARGET_IN_PLACE_ACCUMULATION and
                  target_evidence.get("production_dispatch_changed") is False)
-  checks = {"exact_role_shape": shape_ok, "numeric_correctness": numeric_ok,
+  checks = {"evidence_identity": evidence_identity_ok, "exact_role_shape": shape_ok, "numeric_correctness": numeric_ok,
             "all_k_epochs": timing_ok, "resource_artifact": resource_ok,
-            "repack_identity": repack_ok, "no_hidden_fallback": fallback_ok}
+            "repack_identity": repack_ok, "runtime_dispatch_evidence": runtime_ok,
+            "clean_gpu_health": health_ok, "no_hidden_fallback": fallback_ok}
   missing = [name for name, passed in checks.items() if not passed]
   return {"schema": R6_TARGET_EVIDENCE_SCHEMA, "status": "PASS" if not missing else "BLOCKED",
           "checks": checks, "exact_blocker": None if not missing else "target evidence missing/failed: " + ", ".join(missing)}
 
 
+def _validate_r6_independent_epoch_evidence(independent_evidence: dict[str, Any] | None) -> dict[str, Any]:
+  """Validate the process-per-epoch overwrite proof used beside the strict accumulator proof."""
+  if not isinstance(independent_evidence, dict):
+    return {"schema": R6_INDEPENDENT_EVIDENCE_SCHEMA, "status": "BLOCKED",
+            "exact_blocker": "independent all-epoch GPU evidence is missing"}
+
+  def _sha256(value: Any) -> bool:
+    return isinstance(value, str) and len(value) == 64 and all(c in "0123456789abcdef" for c in value)
+
+  expected_epochs = list(range(R6_TARGET_ROLE_SHAPE["K"] // 256))
+  expected_output_shape = [R6_TARGET_ROLE_SHAPE["M"], R6_TARGET_ROLE_SHAPE["N"]]
+  expected_size = R6_TARGET_ROLE_SHAPE["M"] * R6_TARGET_ROLE_SHAPE["N"]
+  identity_ok = (
+    independent_evidence.get("schema") == "tinygrad.mmq_q4k_q8_1_target_epoch_orchestrator.v1" and
+    independent_evidence.get("status") == "PASS" and independent_evidence.get("passed") is True and
+    independent_evidence.get("diagnostic_only") is True and independent_evidence.get("promotion_eligible") is False and
+    independent_evidence.get("failed_epoch") is None and independent_evidence.get("stop_reason") is None and
+    independent_evidence.get("default_route") == "direct_packed" and
+    independent_evidence.get("production_dispatch_changed") is False)
+  shape_ok = (
+    independent_evidence.get("role") == R6_TARGET_ROLE_SHAPE["role"] and
+    independent_evidence.get("shape") == [R6_TARGET_ROLE_SHAPE[k] for k in ("M", "N", "K")])
+
+  fixture = independent_evidence.get("fixture")
+  repack = fixture.get("repack") if isinstance(fixture, dict) else None
+  fixture_ok = (
+    isinstance(fixture, dict) and fixture.get("schema") == "tinygrad.mmq_q4k_q8_1_target_fixture.v1" and
+    fixture.get("role") == R6_TARGET_ROLE_SHAPE["role"] and
+    fixture.get("shape") == [R6_TARGET_ROLE_SHAPE[k] for k in ("M", "N", "K")] and
+    fixture.get("total_epochs") == len(expected_epochs) and
+    fixture.get("seeds") == {"q4": 20260721, "q8_source": 20260722} and
+    _sha256(fixture.get("source_sha256")) and isinstance(repack, dict) and
+    all(_sha256(repack.get(key)) for key in
+        ("q4_sha256", "q4_epoch_major_sha256", "q8_values_sha256", "q8_scales_sha256", "q8_sums_sha256")) and
+    repack.get("q4_layout") == "q4_k_bytes[n, k_epoch, 144]" and
+    repack.get("q4_epoch_major_layout") == "q4_k_bytes[k_epoch, n, 144]" and
+    repack.get("q4_epoch_major_dtype") == "uint32" and
+    repack.get("q4_epoch_major_elements") == 20 * 17408 * 144 // 4 and
+    repack.get("q8_layout") == "q8_ds4[epoch, m, groups]")
+
+  program = independent_evidence.get("program")
+  program_resources = program.get("resources") if isinstance(program, dict) else None
+  program_ok = (
+    isinstance(program, dict) and program.get("backend_id") == FULL_GRID_BACKEND_ID and
+    program.get("source_revision") == LLAMA_SOURCE_COMMIT and
+    program.get("program_globals") == [0, 1, 2, 3, 4] and
+    program.get("program_global_size") == [136, 4, 1] and program.get("program_local_size") == [256, 1, 1] and
+    program.get("compile_only_parent") is True and program.get("distinct_binary_identity") is True and
+    program.get("no_fallback") is True and
+    isinstance(program_resources, dict) and program_resources.get("authority") == "native_elf_descriptor" and
+    program_resources.get("vgpr") == 256 and program_resources.get("lds_bytes") == 57856 and
+    program_resources.get("scratch_bytes") == 0 and program_resources.get("wavefront_size") == 32 and
+    program_resources.get("kernarg_bytes") == 40 and
+    all(_sha256(program.get(key)) for key in ("source_sha256", "binary_sha256", "serialized_program_sha256")))
+
+  coverage = independent_evidence.get("coverage")
+  coverage_ok = (
+    independent_evidence.get("completed_epochs") == expected_epochs and
+    isinstance(coverage, dict) and coverage.get("verified_epochs") == expected_epochs and
+    coverage.get("verified_k") == R6_TARGET_ROLE_SHAPE["K"] and
+    coverage.get("target_epochs") == len(expected_epochs) and coverage.get("complete_target") is True and
+    independent_evidence.get("aggregate_shape") == expected_output_shape and
+    _sha256(independent_evidence.get("aggregate_sha256")) and
+    isinstance(independent_evidence.get("aggregate_sum"), (int, float)) and
+    not isinstance(independent_evidence.get("aggregate_sum"), bool))
+
+  epoch_results = independent_evidence.get("epoch_results")
+  numerical_ok = isinstance(epoch_results, list) and len(epoch_results) == len(expected_epochs)
+  if numerical_ok:
+    for epoch, row in enumerate(epoch_results):
+      comparison = row.get("comparison") if isinstance(row, dict) else None
+      if not (
+        isinstance(row, dict) and row.get("schema") == "tinygrad.mmq_q4k_q8_1_target_epoch_orchestrator.v1.epoch" and
+        row.get("epoch") == epoch and row.get("shape") == [512, 17408, 256] and
+        row.get("status") == "PASS" and row.get("passed") is True and row.get("no_fallback") is True and
+        _sha256(row.get("output_sha256")) and
+        isinstance(row.get("gpu_ms"), (int, float)) and not isinstance(row.get("gpu_ms"), bool) and row["gpu_ms"] >= 0 and
+        isinstance(comparison, dict) and comparison.get("status") == "pass" and
+        comparison.get("mismatch_count") == 0 and comparison.get("nan_got") == comparison.get("nan_reference") == 0 and
+        comparison.get("inf_got") == comparison.get("inf_reference") == 0 and
+        comparison.get("joint_finite") == comparison.get("got_size") == comparison.get("reference_size") == expected_size and
+        comparison.get("got_shape") == comparison.get("reference_shape") == expected_output_shape):
+        numerical_ok = False
+        break
+
+  health = independent_evidence.get("health_attestation")
+  epoch_health = independent_evidence.get("epoch_health")
+  health_ok = (
+    independent_evidence.get("preflight_health") is True and independent_evidence.get("kernel_faults") == [] and
+    isinstance(health, dict) and health.get("schema") == "tinygrad.mmq_q4k_q8_1_target_epoch_attestation.v1" and
+    health.get("status") == "PASS" and health.get("preflight_passed") is True and
+    health.get("all_post_epoch_healthy") is True and health.get("all_kernel_faults_clear") is True and
+    isinstance(epoch_health, list) and health.get("epochs") == epoch_health and len(epoch_health) == len(expected_epochs))
+  if health_ok:
+    health_ok = all(
+      isinstance(row, dict) and row.get("epoch") == epoch and row.get("status") == "PASS" and
+      row.get("worker_passed") is True and row.get("kernel_log_checked") is True and row.get("kernel_faults") == [] and
+      row.get("post_health_checked") is True and row.get("post_health") is True and
+      row.get("partial_verified") is True and row.get("stop_stage") is None
+      for epoch, row in enumerate(epoch_health))
+
+  fallback_ok = independent_evidence.get("no_fallback") is True and program_ok and numerical_ok
+  checks = {
+    "evidence_identity": identity_ok, "exact_role_shape": shape_ok, "deterministic_fixture": fixture_ok,
+    "pinned_program_source": program_ok, "all_epoch_coverage": coverage_ok,
+    "all_epoch_numerical_correctness": numerical_ok, "all_epoch_clean_health": health_ok,
+    "no_hidden_fallback": fallback_ok,
+  }
+  missing = [name for name, passed in checks.items() if not passed]
+  return {"schema": R6_INDEPENDENT_EVIDENCE_SCHEMA, "status": "PASS" if not missing else "BLOCKED",
+          "checks": checks, "exact_blocker": None if not missing else
+          "independent epoch evidence missing/failed: " + ", ".join(missing)}
+
+
+def _validate_r6_evidence_composition(target_evidence: dict[str, Any] | None,
+                                      independent_evidence: dict[str, Any] | None) -> dict[str, Any]:
+  """Join two independently executed proofs by fixture identity, never by kernel binary."""
+  target_status = _validate_r6_target_role_evidence(target_evidence)
+  independent_status = _validate_r6_independent_epoch_evidence(independent_evidence)
+  target = target_evidence if isinstance(target_evidence, dict) else {}
+  independent = independent_evidence if isinstance(independent_evidence, dict) else {}
+  fixture = independent.get("fixture") if isinstance(independent.get("fixture"), dict) else {}
+  target_frozen = target.get("artifacts", {}).get("frozen_bundle", {}) if isinstance(target.get("artifacts"), dict) else {}
+  canonical_fixture_sha = hashlib.sha256(
+    (json.dumps(fixture, indent=2, sort_keys=True, allow_nan=False) + "\n").encode()).hexdigest()
+  checks = {
+    "strict_target_evidence": target_status["status"] == "PASS",
+    "independent_epoch_evidence": independent_status["status"] == "PASS",
+    "exact_role_shape_join": (
+      target.get("role") == independent.get("role") == R6_TARGET_ROLE_SHAPE["role"] and
+      target.get("shape") == independent.get("shape") == [R6_TARGET_ROLE_SHAPE[k] for k in ("M", "N", "K")]),
+    "fixture_hash_join": target_frozen.get("fixture_sha256") == canonical_fixture_sha,
+    "repack_hash_join": isinstance(target.get("repack"), dict) and target.get("repack") == fixture.get("repack"),
+    "source_revision_join": (
+      target.get("reduction", {}).get("source_revision") == LLAMA_SOURCE_COMMIT and
+      independent.get("program", {}).get("source_revision") == LLAMA_SOURCE_COMMIT),
+  }
+  missing = [name for name, passed in checks.items() if not passed]
+  return {
+    "schema": "q4k-q8-1-mmq-r6-evidence-composition.v1",
+    "status": "PASS" if not missing else "BLOCKED",
+    "checks": checks,
+    "binary_identity_policy": "overwrite and accumulate binaries are independently validated and may differ",
+    "target_binary_sha256": target.get("artifacts", {}).get("binary_sha256") if isinstance(target.get("artifacts"), dict) else None,
+    "independent_binary_sha256": independent.get("program", {}).get("binary_sha256") if isinstance(independent.get("program"), dict) else None,
+    "exact_blocker": None if not missing else "R6 evidence composition missing/failed: " + ", ".join(missing),
+  }
+
+
 def build_r6_route_gate_status(r5_report: dict[str, Any] | None = None,
-                               target_evidence: dict[str, Any] | None = None) -> dict[str, Any]:
+                               target_evidence: dict[str, Any] | None = None,
+                               independent_epoch_evidence: dict[str, Any] | None = None) -> dict[str, Any]:
   r5 = r5_report or build_r5_geometry_search_report(run=False)
   target_status = _validate_r6_target_role_evidence(target_evidence)
-  shape_artifact = build_r6_role_shape_integration_artifact(r5, target_evidence=target_evidence)
+  independent_status = _validate_r6_independent_epoch_evidence(independent_epoch_evidence)
+  composition = _validate_r6_evidence_composition(target_evidence, independent_epoch_evidence)
+  shape_artifact = build_r6_role_shape_integration_artifact(
+    r5, target_evidence=target_evidence, independent_epoch_evidence=independent_epoch_evidence)
   smoke = build_r6_negative_role_fallback_smoke_artifact()
   ready = (r5.get("promotion_verdict") == "R5_COOP_WIN_READY_FOR_R6" and
            r5.get("emitted_backend_win") is True and shape_artifact.get("status") == "PASS" and
@@ -666,9 +957,10 @@ def build_r6_route_gate_status(r5_report: dict[str, Any] | None = None,
     "ffn_gate_up_only": smoke["ffn_gate_up_only"],
     "negative_role_tests": smoke["negative_role_tests"],
     "no_hidden_direct_packed_fallback": smoke["no_hidden_direct_packed_fallback"],
+    "target_role_gpu_evidence": target_status["status"] == "PASS",
+    "independent_epoch_gpu_evidence": independent_status["status"] == "PASS",
+    "evidence_composition": composition["status"] == "PASS",
   }
-  if target_evidence is not None:
-    required_evidence["target_role_gpu_evidence"] = target_status["status"] == "PASS"
   return {
     "schema": "q4k-q8-1-mmq-r6-route-gate-status.v1",
     "status": "READY_FOR_ONE_ROLE_OPT_IN" if ready else ("BLOCKED_ROLE_SHAPE_INTEGRATION" if role_blocked else "BLOCKED_NO_BOUNDED_COOP_WIN"),
@@ -679,6 +971,8 @@ def build_r6_route_gate_status(r5_report: dict[str, Any] | None = None,
     "required_evidence": required_evidence,
     "role_shape_integration": shape_artifact,
     "target_role_evidence": target_status,
+    "independent_epoch_evidence": independent_status,
+    "evidence_composition": composition,
     "negative_role_fallback_smoke": smoke,
     "exact_blocker": None if ready else ("R6 route binding is illegal until the bounded winner is integrated for a production role and shape" if role_blocked else "R6 route binding is illegal until R5 reports an emitted cooperative backend win"),
   }
@@ -711,7 +1005,8 @@ def build_r6_negative_role_fallback_smoke_artifact() -> dict[str, Any]:
 
 
 def build_r6_role_shape_integration_artifact(r5_report: dict[str, Any] | None = None,
-                                             *, target_evidence: dict[str, Any] | None = None) -> dict[str, Any]:
+                                             *, target_evidence: dict[str, Any] | None = None,
+                                             independent_epoch_evidence: dict[str, Any] | None = None) -> dict[str, Any]:
   """Record the exact shape/role gap before any one-role route opt-in.
 
   The emitted probe is a numerically passing bounded kernel, but it covers a
@@ -727,13 +1022,16 @@ def build_r6_role_shape_integration_artifact(r5_report: dict[str, Any] | None = 
   shape_matches = candidate_shape == {k: R6_TARGET_ROLE_SHAPE[k] for k in ("M", "N", "K")}
   tile_plan = build_full_grid_k_tiled_dispatch_plan(R6_TARGET_ROLE_SHAPE)
   target_status = _validate_r6_target_role_evidence(target_evidence)
+  independent_status = _validate_r6_independent_epoch_evidence(independent_epoch_evidence)
+  composition = _validate_r6_evidence_composition(target_evidence, independent_epoch_evidence)
   target_shape_matches = target_status.get("checks", {}).get("exact_role_shape") is True
   target_ok = target_status["status"] == "PASS"
   smoke = build_r6_negative_role_fallback_smoke_artifact()
   # The R5 candidate is the 128x128x256 kernel; R6 admission is an adapter
   # claim over the exact role shape, so the target probe—not equality with the
   # R5 microkernel shape—proves this dimension.
-  role_ready = target_shape_matches and target_ok and smoke.get("status") == "PASS"
+  role_ready = (target_shape_matches and target_ok and independent_status["status"] == "PASS" and
+                composition["status"] == "PASS" and smoke.get("status") == "PASS")
   return {
     "schema": "q4k-q8-1-mmq-r6-role-shape-integration.v1",
     "status": "PASS" if role_ready else "BLOCKED",
@@ -747,10 +1045,13 @@ def build_r6_role_shape_integration_artifact(r5_report: dict[str, Any] | None = 
     "no_hidden_direct_packed_fallback": smoke.get("no_hidden_direct_packed_fallback") is True,
     "negative_role_fallback_smoke": smoke,
     "target_role_evidence": target_status,
+    "independent_epoch_evidence": independent_status,
+    "evidence_composition": composition,
     "tile_plan": tile_plan,
     "production_dispatch_changed": False,
     "exact_blocker": None if role_ready else ("full-grid probe shape is bounded 128x128x256; no 14B ffn_gate_up multi-tile adapter exists"
-      if not target_shape_matches else target_status["exact_blocker"] or "target role evidence is not admitted"),
+      if not target_shape_matches else target_status["exact_blocker"] or independent_status["exact_blocker"] or
+      composition["exact_blocker"] or "target role evidence is not admitted"),
   }
 
 
@@ -848,13 +1149,17 @@ def build_r7_reduction_status(target_evidence: dict[str, Any] | None = None) -> 
   ]
   target_status = _validate_r6_target_role_evidence(target_evidence)
   reduction = target_evidence.get("reduction") if isinstance(target_evidence, dict) else None
-  owned = (isinstance(reduction, dict) and reduction.get("source_revision") and
+  owned = (isinstance(reduction, dict) and reduction.get("source_revision") == LLAMA_SOURCE_COMMIT and
+           reduction.get("source_anchors") == list(R7_REQUIRED_SOURCE_ANCHORS) and
            isinstance(reduction.get("owned_components"), list) and
            {row["source_component"] for row in rows}.issubset(set(reduction["owned_components"])))
   if target_status["status"] == "PASS" and owned:
-    converted = [{**row, "status": "owned_atom", "blocking_evidence": None,
-                  "evidence": {"target_role_probe": True, "source_revision": reduction["source_revision"]}}
-                for row in rows]
+    converted = [
+      {**{key: value for key, value in row.items() if key not in ("next_action", "blocking_evidence")},
+       "status": "owned_atom",
+       "evidence": {"target_role_probe": True, "source_revision": reduction["source_revision"],
+                    "source_anchors": list(reduction["source_anchors"])}}
+      for row in rows]
     return {
       "schema": "q4k-q8-1-mmq-r7-reduction-status.v1", "status": "PASS_TARGET_ROLE_REDUCTION",
       "production_dispatch_changed": False, "remaining_rows": [], "converted_rows": converted,
@@ -875,6 +1180,7 @@ def build_search_report(*, run: bool = False, warmups: int = 0, rounds: int = 1,
                         runner: Callable[[BoundedMMQConfig], dict[str, Any]] = run_bounded_harness,
                         full_gpu_probe: dict[str, Any] | None = None,
                         target_role_probe: dict[str, Any] | None = None,
+                        independent_epoch_evidence: dict[str, Any] | None = None,
                         r5_evidence: dict[str, Any] | None = None) -> dict[str, Any]:
   rows = []
   for candidate in SEARCHABLE_CANDIDATES:
@@ -897,7 +1203,8 @@ def build_search_report(*, run: bool = False, warmups: int = 0, rounds: int = 1,
   coop_evidence = coop_tile_blocked_translation_evidence(
     BoundedMMQConfig(m_tile=16, n_tile=16, k_groups=8, backend=AMD_DS4_COOP_TILE_BACKEND_ID))
   r5_report = r5_evidence or build_r5_geometry_search_report(run=False)
-  r6_status = build_r6_route_gate_status(r5_report, target_evidence=target_role_probe)
+  r6_status = build_r6_route_gate_status(
+    r5_report, target_evidence=target_role_probe, independent_epoch_evidence=independent_epoch_evidence)
   r7_status = build_r7_reduction_status(target_role_probe)
   role_candidate = {
     "candidate_id": FULL_GPU_PROBE_CANDIDATE_ID,
@@ -948,6 +1255,7 @@ def build_search_report(*, run: bool = False, warmups: int = 0, rounds: int = 1,
     # route or making the incomplete probe promotable.
     "full_gpu_probe_candidate": None if full_gpu_probe is None else build_full_gpu_probe_candidate(full_gpu_probe),
     "target_role_probe": target_role_probe,
+    "independent_epoch_evidence": independent_epoch_evidence,
     "promotion_verdict": "BLOCKED_UNTIL_COOPERATIVE_TILE_WIN",
     "milestone_evidence": _default_milestone_evidence(),
     "promotion_gate": evaluate_candidate_promotion(owner_coverage=r4_evidence["owner_coverage"],

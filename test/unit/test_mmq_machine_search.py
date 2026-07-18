@@ -1,3 +1,7 @@
+import copy
+import json
+from pathlib import Path
+
 from extra.qk.mmq_bounded_harness import (
   ACTIVATION_LAYOUT_MMQ_DS4, AMD_DS4_COOP_TILE_BACKEND_ID, AMD_DS4_DOT4X4_BACKEND_ID,
   AMD_DS4_LDS_SKELETON_BACKEND_ID, AMD_DS4_WARP_BACKEND_ID, FULL_GRID_BACKEND_ID,
@@ -269,6 +273,9 @@ def test_mmq_r5_includes_distinct_full_grid_candidate_and_keeps_r6_fail_closed()
     "ffn_gate_up_only": True,
     "negative_role_tests": True,
     "no_hidden_direct_packed_fallback": True,
+    "target_role_gpu_evidence": False,
+    "independent_epoch_gpu_evidence": False,
+    "evidence_composition": False,
   }
   assert r6["negative_role_fallback_smoke"]["status"] == "PASS"
 
@@ -360,45 +367,91 @@ def test_mmq_r6_target_role_gate_requires_measured_full_shape_evidence():
     "status": "PASS", "correctness": {"status": "PASS"},
     "timing": {"min_ms": 1.0, "direct_packed": {"min_ms": 10.0}},
   })
-  target = {
-    "schema": "q4k-q8-1-mmq-r6-target-role-evidence.v1", "status": "PASS",
-    "role": "ffn_gate_up", "shape": [512, 17408, 5120], "production_dispatch_changed": False,
-    "no_fallback": True,
-    "repack": {"q4_sha256": "a" * 64, "q8_values_sha256": "b" * 64,
-               "q8_scales_sha256": "c" * 64, "q8_sums_sha256": "d" * 64,
-               "q4_layout": "q4_k_bytes[n, k_epoch, 144]", "q8_layout": "q8_ds4[epoch, m, groups]"},
-    "correctness": {"status": "PASS", "comparison": {
-      "status": "pass", "mismatch_count": 0, "nan_got": 0, "nan_reference": 0,
-      "inf_got": 0, "inf_reference": 0, "joint_finite": 8912896, "got_size": 8912896,
-    }},
-    "timing": {"samples_ms": [60.0], "k_epoch_launches": 20, "total_k_epoch_launches": 20,
-               "n_chunk_tiles": 136, "accumulation": "tinygrad_elementwise_add", "persistent_buffers": True,
-               "preloaded_epochs": True,
-               "epoch_checks": [{"epoch": i, "status": "pass", "mismatch_count": 0} for i in range(20)]},
-    "artifacts": {"resources": {"vgpr": 256, "lds_bytes": 57856, "scratch_bytes": 0},
-                  "distinct_binary_identity": True, "same_session_timing": True, "no_fallback": True},
-  }
-  gate = build_r6_route_gate_status(r5, target_evidence=target)
+  target = json.loads((Path(__file__).resolve().parents[2] /
+    "docs/qwen3-14b-prefill-target-frozen-20epoch-pm4-20260718.json").read_text())
+  independent = json.loads((Path(__file__).resolve().parents[2] /
+    "docs/target-epoch-safe-all-attested-20260718.json").read_text())
+  missing_independent = build_r6_route_gate_status(r5, target_evidence=target)
+  assert missing_independent["status"] == "BLOCKED_ROLE_SHAPE_INTEGRATION"
+  assert missing_independent["required_evidence"]["target_role_gpu_evidence"] is True
+  assert missing_independent["required_evidence"]["independent_epoch_gpu_evidence"] is False
+  gate = build_r6_route_gate_status(
+    r5, target_evidence=target, independent_epoch_evidence=independent)
   assert gate["status"] == "READY_FOR_ONE_ROLE_OPT_IN"
   assert gate["required_evidence"]["target_role_gpu_evidence"] is True
+  assert gate["required_evidence"]["independent_epoch_gpu_evidence"] is True
+  assert gate["required_evidence"]["evidence_composition"] is True
   assert gate["role_shape_integration"]["target_shape_matches"] is True
 
-  forged = {**target, "correctness": {"status": "PASS", "comparison": {
-    "status": "pass", "mismatch_count": 0, "nan_got": 0, "nan_reference": 0,
-    "inf_got": 0, "inf_reference": 0, "joint_finite": 0, "got_size": 8912896,
-  }}}
-  blocked = build_r6_route_gate_status(r5, target_evidence=forged)
-  assert blocked["status"] == "BLOCKED_ROLE_SHAPE_INTEGRATION"
-  assert blocked["required_evidence"]["target_role_gpu_evidence"] is False
+  # Each retired/unsafe lifecycle can still carry plausible PASS summaries;
+  # admission must derive from the strict details instead.
+  forged_rows = []
+  forged = copy.deepcopy(target)
+  forged["correctness"]["comparison"]["joint_finite"] = 0
+  forged_rows.append(forged)
+  forged = copy.deepcopy(target)
+  forged["accumulation"] = forged["timing"]["accumulation"] = forged["artifacts"]["accumulation"] = "tinygrad_elementwise_add"
+  forged["timing"]["epoch_checks"] = [{"epoch": i, "status": "pass", "mismatch_count": 0} for i in range(20)]
+  forged_rows.append(forged)
+  forged = copy.deepcopy(target)
+  forged["runtime_evidence"]["intermediate_readback"] = True
+  forged_rows.append(forged)
+  forged = copy.deepcopy(target)
+  forged["metadata_staging"]["fixed_va"] = forged["timing"]["metadata_staging"]["fixed_va"] = False
+  forged_rows.append(forged)
+  forged = copy.deepcopy(target)
+  forged["artifacts"]["frozen_bundle"]["compile_performed"] = True
+  forged_rows.append(forged)
+  forged = copy.deepcopy(target)
+  forged["runtime_evidence"]["launches"][7]["kernarg"]["pointer_words"][0] += 4
+  forged_rows.append(forged)
+  forged = copy.deepcopy(target)
+  forged["kernel_faults"] = ["synthetic instruction fault"]
+  forged_rows.append(forged)
+  forged = copy.deepcopy(target)
+  forged["default_route"] = "generated_candidate"
+  forged_rows.append(forged)
+  forged = copy.deepcopy(target)
+  forged["artifacts"]["backend_id"] = "direct_packed"
+  forged_rows.append(forged)
+  forged = copy.deepcopy(target)
+  forged["runtime_evidence"]["binary_sha256"] = "0" * 64
+  forged_rows.append(forged)
+  for forged in forged_rows:
+    blocked = build_r6_route_gate_status(
+      r5, target_evidence=forged, independent_epoch_evidence=independent)
+    assert blocked["status"] == "BLOCKED_ROLE_SHAPE_INTEGRATION"
+    assert blocked["required_evidence"]["target_role_gpu_evidence"] is False
 
-  target_with_reduction = {**target, "reduction": {
-    "source_revision": "ac4cddeb0dbd778f650bf568f6f08344a06abe3a",
-    "owned_components": ["cooperative tile loop", "Q4_K tile_x staging", "Q8_1 tile_y two-panel lifecycle"],
-  }}
-  r7 = build_r7_reduction_status(target_with_reduction)
+  independent_forged_rows = []
+  forged = copy.deepcopy(independent)
+  forged["epoch_results"][12]["comparison"]["mismatch_count"] = 1
+  independent_forged_rows.append(forged)
+  forged = copy.deepcopy(independent)
+  forged["epoch_health"][5]["post_health"] = False
+  forged["health_attestation"]["epochs"][5]["post_health"] = False
+  independent_forged_rows.append(forged)
+  forged = copy.deepcopy(independent)
+  forged["fixture"]["repack"]["q4_epoch_major_sha256"] = "0" * 64
+  independent_forged_rows.append(forged)
+  forged = copy.deepcopy(independent)
+  forged["program"]["source_revision"] = "wrong"
+  independent_forged_rows.append(forged)
+  forged = copy.deepcopy(independent)
+  forged["no_fallback"] = False
+  independent_forged_rows.append(forged)
+  for forged in independent_forged_rows:
+    blocked = build_r6_route_gate_status(
+      r5, target_evidence=target, independent_epoch_evidence=forged)
+    assert blocked["status"] == "BLOCKED_ROLE_SHAPE_INTEGRATION"
+    assert not (blocked["required_evidence"]["independent_epoch_gpu_evidence"] and
+                blocked["required_evidence"]["evidence_composition"])
+
+  r7 = build_r7_reduction_status(target)
   assert r7["status"] == "PASS_TARGET_ROLE_REDUCTION"
   assert r7["remaining_rows"] == []
   assert all(row["status"] == "owned_atom" for row in r7["converted_rows"])
+  assert all("next_action" not in row and "blocking_evidence" not in row for row in r7["converted_rows"])
 
 
 def test_mmq_machine_search_runner_receives_bounded_configs():
