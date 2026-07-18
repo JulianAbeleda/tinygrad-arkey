@@ -1,7 +1,7 @@
 # Qwen3-14B generated-prefill completion scope
 
 Date: 2026-07-14
-Last reconciled: 2026-07-16
+Last reconciled: 2026-07-18
 
 ## Objective
 
@@ -30,9 +30,9 @@ promotion is enabled.
 
 | Phase | Current state | Remaining gate |
 |---|---|---|
-| 3 — Q4_K role completion | Incomplete | One generated Q4 policy must cover every required 14B Q4 invocation, including activation preparation, full K, ownership, tails, final binary/resource proof, full-role correctness, and whole-primitive timing without hidden dense dequantization. |
-| 4 — Q6_K role completion | Fallback path available | The explicit direct-packed Q6 fallback must be represented and timed under the same policy contract. A faster generated Q6 candidate is required only if measured Q6 share blocks the whole-policy target. |
-| 5 — Central candidate policy | Partial | One immutable policy must select an exact qualified candidate or declared rollback for every discovered six-row invocation. Missing evidence, identity drift, or unknown workload must fail closed. |
+| 3 — Q4_K role completion | One of four roles evidence-qualified (`ffn_gate_up`) | Qualify `attn_qo`, Q4 `ffn_down`, and `attn_kv`, then prove aggregate role timing. Each needs exact full-role correctness/resource/health evidence without hidden dense dequantization. |
+| 4 — Q6_K role completion | Fallback path available; qualification incomplete | Qualify and time the two direct-packed Q6 fallback rows under the same policy contract. A faster generated Q6 candidate is required only if measured Q6 share blocks the whole-policy target. |
+| 5 — Central candidate policy | Partial; joined one-role evidence exists | Implement the generic one-role research opt-in and live census, then emit one immutable six-row policy selecting an exact qualified candidate or declared rollback for every row. Missing evidence, identity drift, or unknown workload must fail closed. |
 | 6 — Mixed-route 14B integration | Not complete | The exact policy must execute manually end to end with admission, isolated compile/resource evidence, role and model correctness, route census, memory reconciliation, GPU health, decode regression, and one-change direct-packed rollback. |
 | 7 — Parity and promotion | Not complete | The same immutable revision must pass the matched multi-context llama comparison and the statistical promotion gates below. |
 
@@ -95,6 +95,39 @@ Anything less is a diagnostic or candidate result, not a shipped 14B completion.
 
 ## Current position
 
+### 2026-07-18 one-role evidence checkpoint
+
+Project Phase 3 has advanced, but remains incomplete. The exact Q4_K/Q8_1 `ffn_gate_up`
+`512x17408x5120` role is evidence-ready to implement a research opt-in:
+
+- The retained R5 artifact, `docs/qwen3-14b-prefill-r5-geometry-20260718.json`, records a zero-mismatch emitted
+  full-grid result and three same-session timing rounds. Candidate median/min is `0.277502/0.269477 ms` versus
+  direct-packed `9.351988/9.349303 ms`, a `34.694x` min-time speedup. Exact source/binary identity, native
+  `VGPR=256`, `LDS=57,856 B`, `scratch=0`, timing samples, and no-fallback evidence are retained.
+- The strict frozen-PM4 full-role artifact covers all 20 K epochs in one process with in-kernel FP32 accumulation,
+  stable fixed-VA GPU-SDMA metadata, no intermediate readback/external add/recompile/fallback, and zero mismatches
+  across 8,912,896 outputs.
+- The independent fresh-process all-epoch artifact checks 178,257,920 epoch outputs with zero mismatches and clean
+  per-epoch health.
+- `docs/qwen3-14b-prefill-mmq-one-role-evidence-20260718.json` composes those proofs. Its verdict is
+  `ONE_ROLE_EVIDENCE_READY_PRODUCTION_PROMOTION_BLOCKED`. Machine-search R6 is an evidence gate and machine-search
+  R7 is source-component reduction; neither is project Phase 7.
+
+The current route boundary is:
+
+```text
+research_opt_in_implementation_eligible=true
+one_role_opt_in_eligible=false
+route_binding_implemented=false
+live_route_census_performed=false
+promotion_eligible=false
+production_dispatch_changed=false
+default_route=direct_packed
+```
+
+The frozen artifact work reused the existing tinygrad five-buffer emitter/harness and PM4/AQL launch paths. It did
+not build or require a HIP launcher.
+
 ### Completed substrate
 
 - Q4_K and Q6_K share one `PackedWeightTransform` and `dequant_tile` interface.
@@ -112,19 +145,18 @@ Anything less is a diagnostic or candidate result, not a shipped 14B completion.
 
 ### Not completed
 
-- Real-GPU compile/correctness evidence exists for the packed primitive only at the established 8B `attn_qo` shape.
-- The current fused packed primitive reaches about 19-20 TFLOP/s at that shape, versus roughly 50-70 TFLOP/s practical
-  role targets. Correctness is complete; performance lowering is not.
-- The final shipping ISA still expands packed values through scalar loads and scalar unpack/conversion arithmetic and
-  lands in the 248 allocated-VGPR bucket.
-- No identity-qualified packed candidate set exists for all six observed 14B role/quant rows.
+- Three required Q4 roles remain unqualified: `attn_qo`, Q4 `ffn_down`, and `attn_kv`.
+- The two direct-packed Q6 fallback rows remain to be qualified and timed under the final policy contract.
+- The one-role candidate is still `research_descriptor_only`; no live generic binding or runtime negative-role and
+  no-hidden-fallback census exists.
+- No immutable identity-qualified policy covers all six observed 14B role/quant rows.
 - The profile's family quant label does not encode the exact mixed Q4_K/Q6_K tensor inventory. Exact quant must come
   from loaded tensor facts.
-- No new packed primitive has completed all 14B role correctness, timing, mixed-route integration, or pp512 promotion.
+- Whole-model mixed-route correctness, memory reconciliation, route census, health, decode regression, and matched
+  multi-context performance have not run for the candidate policy.
 - The current 14B default remains the safe direct-packed baseline, not the new primitive.
 
-Weighted status is approximately 35% to the full definition above. The safety/correctness substrate is near complete;
-most remaining weight is primitive efficiency, role coverage, Q6 strategy, and whole-model promotion.
+Do not replace these gates with a progress percentage. The phase ledger above is the authority.
 
 ### 2026-07-14 execution update
 
@@ -145,11 +177,11 @@ Two alternative strategies were also checked on the smallest full Q6/Q4 role (`a
 
 The next owning layer is therefore the fused MMQ-style tile producer: stage/reuse Q4_K and Q8_1 tile data inside one
 bounded kernel lifecycle, then reconnect the existing correctness/admission/evidence path. The current bounded
-cooperative MMQ atoms remain proof substrates only; they are not silently selected by the production route. Delegated
-alternative-path agents are currently unavailable because the agent usage budget is exhausted, so no promotion is
-claimed from those agents.
+cooperative MMQ atoms remain proof substrates only; they are not silently selected by the production route.
 
-### 2026-07-16 source-pinned llama-oracle checkpoint
+### Historical 2026-07-16 source-pinned llama-oracle checkpoint (superseded)
+
+The spill/emission blocker in this historical checkpoint is closed by the 2026-07-18 evidence above.
 
 The speculative cooperative descriptor has been removed. The current Phase 3 implementation authority is the
 source-pinned llama MMQ structure adapted to the ordinary five-buffer ABI: a `128x128x256` tile, eight waves, 57,856
@@ -162,7 +194,7 @@ on Q4 `attn_kv` attributes approximately 0.088 ms to Q8 production and 5.916 ms 
 measured tax is inside the contraction kernel. All four Q4 roles are output-correct and report zero final scratch/spill,
 but remain far below the role budgets.
 
-The source-pinned generated oracle does not yet emit a spill-free final binary. Generic late-scheduler and liveness
+At this historical checkpoint, the source-pinned generated oracle did not yet emit a spill-free final binary. Generic late-scheduler and liveness
 repairs have localized constrained loads, prioritized immediate release, and removed false `END` body liveness. At the
 current revision the first request is the base carrier of an A `DS_LOAD_B128` fragment constrained to `v200..v203`; its
 companion B fragment is constrained to `v204..v207`, and both feed the same `V_WMMA_I8` consumer. Seven other A/B pairs
@@ -486,14 +518,18 @@ invalidate correctness, final ISA/resource evidence, controlled A/B timing, or w
 
 ## Immediate execution order
 
-1. Finish Phase 0 verification and freeze this generalized boundary.
-2. Emit the exact mixed-quant 14B six-row inventory and candidate set.
-3. Implement generic packed wide-load folding and packed conversion/lifetime reduction.
-4. Re-run Q4_K/Q6_K canaries and make the first strategy decision at the 40 TFLOP/s checkpoint.
-5. Complete Q4 role candidates and aggregate gate.
-6. Complete Q6 dequant-once/fused comparison and aggregate gate.
-7. Emit one authorized six-row policy.
-8. Run mixed-route correctness, census, pp512 authority, decode regression, and promotion decision.
+1. Implement and bind the evidence-qualified `ffn_gate_up` research opt-in through the live generic
+   registry/admission/runtime path. Run a live negative-role and no-hidden-fallback census.
+2. Qualify the remaining three Q4 roles (`attn_qo`, Q4 `ffn_down`, `attn_kv`) with exact full-role
+   correctness/resource/health evidence and whole-primitive timing.
+3. Qualify and policy the two direct-packed Q6 fallbacks (`attn_kv`, Q6 `ffn_down`) using the existing Q6 tooling.
+   Pursue faster generated Q6 only if measured share requires it.
+4. Emit one immutable six-row policy with exact identities, fail-closed unknown/drift behavior, and one-change
+   direct-packed rollback.
+5. Run Phase 6 whole-model manual mixed-route memory reconciliation, route census, correctness/output/token checks,
+   GPU health, and decode correctness/performance regression.
+6. Run Phase 7 matched llama/tinygrad contexts 512/1024/2048/4096 in at least three alternating pinned sessions and
+   apply the statistical gates. If a gate misses, use Boltbeam only on that exact candidate revision/session.
+7. Only after all preceding gates pass, promote production; then enable performance autoscan.
 
-This order avoids building six integrations around a correct but currently uncompetitive 20 TFLOP/s primitive, while
-ensuring every optimization contributes to a reusable model-agnostic system.
+Until step 7, production dispatch remains unchanged and direct-packed remains the default.

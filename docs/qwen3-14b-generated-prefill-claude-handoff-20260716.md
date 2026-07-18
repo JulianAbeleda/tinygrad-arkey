@@ -1,8 +1,70 @@
 # Qwen3-14B generated-prefill Claude handoff
 
-## 0.5 Current audit status 2026-07-17 (head `7b863aaec`)
+## 0.9 Current status 2026-07-18: one exact role evidence-ready; production still blocked
 
-Read this section before the historical status sections below. The repository head is now
+Read this section first. The current pushed implementation/evidence head before this documentation update is
+`e4a940384`. The old spill, MMU-fault, executable-lifecycle, and “do not run 20 epochs” statements in the chronological
+sections below are superseded.
+
+The exact Q4_K/Q8_1 `ffn_gate_up` role at `M=512, N=17408, K=5120` is now evidence-ready to implement a research
+opt-in. It is not bound to a live route and is not production-promoted:
+
+- `docs/qwen3-14b-prefill-r5-geometry-20260718.json` is a retained, same-session
+  `q4k-q8-1-mmq-r5-geometry-search.v1` report. Its emitted full-grid row passed all 16,384 outputs with zero
+  mismatches and maximum absolute error `3.0517578125e-5`. Three measured rounds gave candidate median/min
+  `0.277502/0.269477 ms` versus direct-packed `9.351988/9.349303 ms`; the min-time speedup is `34.694x`.
+  The row retains both sample sets, exact source/binary hashes, native resources (`VGPR=256`, `LDS=57,856 B`,
+  `scratch=0`), distinct binary identity, same-session timing, and no-fallback evidence.
+- `docs/qwen3-14b-prefill-target-frozen-20epoch-pm4-20260718.json` proves the exact full role with one frozen binary,
+  20 same-process PM4 launches, in-kernel FP32 accumulation, persistent/preloaded inputs, stable fixed-VA GPU-SDMA
+  metadata, and no intermediate readback, external add, recompile, or fallback. All 8,912,896 final outputs match
+  under the declared tolerance with zero mismatches; maximum absolute error is `0.00341796875`. Health and fault
+  checks pass.
+- `docs/target-epoch-safe-all-attested-20260718.json` independently proves every K=256 epoch in fresh processes:
+  zero mismatches across 178,257,920 individually checked values, maximum absolute error `1.220703125e-4`, pinned
+  fixture/source identity, and clean per-epoch health.
+- `docs/qwen3-14b-prefill-mmq-one-role-evidence-20260718.json` composes the retained R5, strict full-role, and
+  independent epoch evidence. Its top verdict is
+  `ONE_ROLE_EVIDENCE_READY_PRODUCTION_PROMOTION_BLOCKED`; machine-search R6 reports
+  `READY_FOR_ONE_ROLE_OPT_IN` as an evidence gate and machine-search R7 reports `PASS_TARGET_ROLE_REDUCTION`.
+  That R7 label is source-component reduction for this role, not project Phase 7 parity/promotion.
+
+The joined report is deliberately explicit:
+
+```text
+one_role_opt_in_eligible=false
+research_opt_in_implementation_eligible=true
+route_binding_implemented=false
+live_route_census_performed=false
+promotion_eligible=false
+production_dispatch_changed=false
+default_route=direct_packed
+```
+
+No HIP launcher was built or needed. The work reused tinygrad's existing five-buffer emitter/harness and its PM4 and
+AQL launch paths over the same frozen artifact. The frozen static audit, exact PM4/AQL 1- and 3-prefix differential,
+strict 20-launch PM4 proof, and independent all-epoch proof all passed.
+
+This advances project Phase 3 for one of four Q4 roles; it does not close Phase 3. Remaining production order:
+
+1. Implement the one-role research opt-in through the live generic registry/admission/runtime path, then run a live
+   negative-role and no-hidden-fallback census. The manifest row remains `research_descriptor_only` and unbound.
+2. Qualify the remaining Q4 roles: `attn_qo`, Q4 `ffn_down`, and `attn_kv`, including full-role correctness,
+   resource/health evidence, and whole-primitive timing.
+3. Qualify and policy the two direct-packed Q6 fallbacks (`attn_kv` and Q6 `ffn_down`) with the existing Q6 tooling.
+   Pursue a faster generated Q6 route only if measured Q6 share requires it.
+4. Emit one immutable six-row policy with exact identities, admission, fail-closed drift/unknown handling, and
+   one-change direct-packed rollback.
+5. Run project Phase 6 whole-model mixed-route memory reconciliation, route census, correctness/output/token checks,
+   GPU health, and decode correctness/performance regression.
+6. Run project Phase 7 matched llama/tinygrad contexts 512/1024/2048/4096 in at least three alternating pinned
+   sessions and apply the statistical promotion gates. Use Boltbeam attribution only on that exact revision/session
+   if a gate misses.
+7. Only after all gates pass: production promotion, then autoscan.
+
+## Historical 0.5 audit status 2026-07-17 (head `7b863aaec`)
+
+This section is superseded by §0.9 and retained for chronology. At that time, the repository head was
 `7b863aaec` (`[test][qk] honor ProgramInfo global buffer indices`), twelve commits ahead of
 `origin/master`; the worktree is clean. This includes the allocator lease fix at `23eaf693b` and the new
 fail-closed harness under `extra/qk/mmq_llama_five_buffer_gpu_harness.py`.
@@ -682,7 +744,7 @@ queue-removal failure, and GPU reset. The post-reset health probe passed
 20-epoch gate yet. The active blocker is now intermittent AMD executable/queue lifecycle behavior across isolated
 target attempts; audit code upload, entry-point lifetime, and launch state before another target dispatch.
 
-### Revised completion plan: freeze one binary and separate ISA from the launcher
+### Historical revised completion plan: completed with existing tinygrad PM4/AQL launch paths
 
 Public AMD/ROCm history makes this a known fault class rather than a reason to resume broad spill or metadata search.
 AMD's KFD architect has documented Tinygrad reproductions involving low-level queue/synchronization behavior and Navi3
@@ -697,8 +759,8 @@ The remaining work must proceed in this order:
    compiles when diagnosing this fault.
 2. Audit that frozen binary CPU-only for image/section bounds, descriptor and entry-point arithmetic, branch targets,
    termination, unexpected indirect control flow, and instruction encodings.
-3. Build two isolated launchers over the exact same HSACO and five buffers: tinygrad's direct PM4/KFD path and the
-   standard ROCr/HSA or HIP module path. Neither launcher may recompile or silently fall back.
+3. Reuse two existing tinygrad launch paths over the exact same frozen artifact and five buffers: direct PM4/KFD and
+   AQL (`AMD_AQL=1`). No HIP launcher is required. Neither path may recompile or silently fall back.
 4. Record program/code-object VA, entry address, all five buffer VAs/sizes/offsets, kernarg VA and pointer words,
    runtime identity, launch count, kernel-log window, timeout result, post-run tiny-health result, and any available
    wave PC or amdgpu coredump reference.
@@ -726,32 +788,20 @@ proof workload. The immediate goal is generated Q4_K/Q8_1 MMQ parity or better a
 The model is selected by the user, but compiler route selection must remain a function of workload and hardware facts,
 never a model-name, fixed-VRAM, or fixed-GPU branch.
 
-The architectural substrate is approximately 90% complete. The full project is approximately 60-65% complete. The
-active blocker is still before GPU performance work: the source-pinned generated oracle does not emit a final
-spill-free AMD binary.
+Do not use a percentage for the current state; the phase gates are the authority. Spill-free emission, exact frozen
+binary identity, bounded same-session timing, full-role numerical correctness, PM4/AQL prefix equivalence, and two
+complementary 20-epoch correctness proofs are complete for one Q4 `ffn_gate_up` role.
 
-Current exact compiler progress:
+The active blocker is now coverage and integration, not compiler spills:
 
-| checkpoint | peak live virtuals | spill fallback | stack | first request |
-|---|---:|---:|---:|---:|
-| matched pre-marker baseline | 184 | 525 | 2,100 B | UOp 2532 |
-| carrier marker recovery, `5e9a5c5dc` | 150 | 185 | 740 B | UOp 2532 |
-| propagated marker recovery, `412d7998f` | 158 | 112 | 448 B | UOp 2580 |
+- three Q4 roles remain unqualified;
+- two Q6 fallback rows remain outside the final policy contract;
+- the candidate is still a static `research_descriptor_only` row with no live registry/runtime binding or route
+  census;
+- no immutable six-row policy exists;
+- whole-model Phase 6 and matched multi-context Phase 7 have not run.
 
-Only matched runs under the same environment are comparable. Older reports of 406 spills used a different diagnostic
-environment and should not be numerically compared with the 525/185/112 sequence.
-
-At the current revision:
-
-- Post-selection structure remains 9,481 UOps.
-- The capture sees 128 selected machine WMMA nodes. The source oracle has 16 logical WMMAs; selection/expansion is why
-  both numbers appear in notes. Do not treat 128 as a changed mathematical kernel.
-- All 112 spill requests are `AMDOps.DS_LOAD_B128` base carriers.
-- There are no remaining `V_WMMA_I8` spill requests in the retained exact run.
-- The first residual spill is an A/B fragment pair whose four-VGPR bases are constrained to the shared fragment runs.
-- Compilation still correctly fails closed because AMD scratch spilling is forbidden.
-
-This is meaningful progress, not completion. No new 14B end-to-end or performance claim is authorized yet.
+The default remains direct-packed and no production dispatch changed.
 
 ## 2. User intent and non-negotiable constraints
 
@@ -806,8 +856,11 @@ Kernel TFLOP/s and Boltbeam are attribution evidence, not promotion authority.
 | Scope and architecture | complete | Canonical decision tree and no-model-branch rules are documented. |
 | Six-row evidence and attribution | complete | Four Q4 and two Q6 workload rows are exact and identity-qualified. |
 | Source-pinned oracle foundation | complete | Exact llama structure is adapted to the five-buffer ABI and full-grid seam. |
-| Spill-free generated emission | **in progress** | Complete bounded oracle emits a real AMD program with zero spills/scratch. |
-| Q4/Q6 role policy | blocked on emission | Every row has an exact candidate or declared rollback under one immutable policy. |
+| Spill-free generated emission | complete for exact `ffn_gate_up` artifact | Frozen AMD program has zero scratch and exact resource/disassembly evidence. |
+| Q4 role qualification | one of four roles evidence-qualified | Qualify `attn_qo`, Q4 `ffn_down`, and `attn_kv`; then prove aggregate timing. |
+| Q6 fallback qualification | incomplete | Qualify the two direct-packed Q6 rows and decide policy from measured share. |
+| Six-row policy | incomplete | Emit one immutable policy with exact bindings or declared rollback for every row. |
+| One-role live research opt-in | not implemented | Bind generically and pass live negative-role/no-hidden-fallback census. |
 | 14B mixed-route end to end | not started | Correctness, route census, memory/resource proof, GPU health, decode regression. |
 | Matched llama/Boltbeam qualification | not started | Multi-context statistical parity/beyond-parity gates pass. |
 | Autoscan and post-proof prune | deliberately paused | Start only after beyond-parity proof. |
@@ -892,57 +945,19 @@ Scale and sum are independently converted to fp16 only at LDS half2 staging, pre
 
 ## 7. Current exact blocker
 
-After `412d7998f`, the retained exact run reports:
+Compiler spills are no longer the active blocker. One exact `ffn_gate_up` kernel has closed emission, resource,
+correctness, health, bounded timing, and independent/strict epoch evidence.
 
-```text
-REGALLOC_DEBUG: 9481 uops, PEAK 158 live vregs @ uop 5908
-REGALLOC_PRESSURE: spill_request=v0 at=2580
-REGALLOC_SPILLS: count=112 stack_size=448
-```
+The exact blocker to production promotion is incomplete route coverage and integration:
 
-Peak composition:
+1. the one-role candidate has no live generic binding or runtime negative-role/fallback census;
+2. three Q4 roles and two Q6 fallback rows are not qualified under the same final policy contract;
+3. no immutable six-row policy exists;
+4. project Phase 6 whole-model and Phase 7 matched multi-context gates have not run.
 
-```text
-65 GLOBAL_LOAD
-64 V_ADD
- 8 V_CONST
- 8 V_CVT_I2F
- 6 V_IMUL
- 2 WI_ID
- 1 ParamArg
- 1 V_LSHR
- 1 S_LOAD_PTR
- 1 lidx0
- 1 V_IADD
-```
+The allocator traces below this section are retained as historical repair evidence, not current work instructions.
 
-The extra eight `V_CVT_I2F` relative to the 150-virtual checkpoint are intentional: they are the real release frontier
-that now remains live long enough to protect progressive C reuse.
-
-Every one of the 112 fallback spills is a `DS_LOAD_B128` base carrier. The first region has seven future A/B pairs
-opened before their consumers:
-
-```text
-A/B pair ranges begin around UOps 2507..2520
-matching consumers occur at 2580, 2633, 2686, 2739, 2792, 2845, 2898
-```
-
-The hardware meaning is:
-
-- A fragment: four consecutive VGPRs.
-- B fragment: four consecutive VGPRs.
-- C/D accumulator: eight in-place VGPRs.
-- Only one A/B pair should be resident for the active WMMA lease unless a proven double-buffer schedule assigns a
-  distinct physical run.
-
-The allocator representation uses one constrained base definition plus fixed aliases for the remaining fragment lanes.
-Do not replay an LDS load in regalloc: it can violate memory/barrier semantics. Do not allow scratch as a workaround.
-
-The next owning problem is therefore selected A/B fragment lifetime/order: pair each constrained A/B load with its
-actual WMMA consumer, and prevent future pairs using the same physical run from opening until the preceding consumer has
-released that run.
-
-## 8. Required first reproduction
+## 8. Historical spill reproduction (superseded)
 
 Run from repository root:
 
