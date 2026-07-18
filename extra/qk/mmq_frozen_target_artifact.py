@@ -21,6 +21,7 @@ from typing import Any, Callable, Mapping
 
 from tinygrad.uop.ops import Ops, UOp
 
+from extra.qk.mmq_compile_evidence import COMPILER_ENV
 from extra.qk.mmq_target_epoch_orchestrator import (
   FIXTURE_SCHEMA, compile_target_program, target_fixture_evidence, target_program_artifact_evidence,
 )
@@ -167,10 +168,13 @@ def produce_frozen_target_artifact(output_dir: str | Path, *, archive: str | Pat
     manifest = {
       "schema": SCHEMA, "state": "FROZEN", "compile_calls": 1,
       "compile_only_cpu": True, "gpu_runtime_initialized": False, "gpu_dispatch_performed": False,
+      "compiler_environment": {
+        key: os.environ[key] for key in COMPILER_ENV if key in os.environ
+      },
       "backend_id": BACKEND_ID, "accumulation": ACCUMULATION, "accumulate": True,
       "shape": list(TARGET_SHAPE), "full_role_shape": list(FULL_ROLE_SHAPE),
       "program": {
-        "function": program.arg.function_name, "key": program.key.hex(),
+        "function": program.arg.function_name, "key": program.key.hex(), "target": program.src[1].arg,
         "globals": list(program.arg.globals), "global_size": list(program.arg.global_size),
         "local_size": list(program.arg.local_size or ()), "abi": _abi(program),
       },
@@ -229,6 +233,10 @@ def load_frozen_target_artifact(path: str | Path) -> FrozenTargetArtifact:
     raise ValueError("bundle does not contain a frozen target manifest")
   if manifest.get("compile_calls") != 1 or manifest.get("accumulate") is not True:
     raise ValueError("manifest does not attest one accumulate=True compile")
+  compiler_environment = manifest.get("compiler_environment")
+  if not isinstance(compiler_environment, dict) or set(compiler_environment) - set(COMPILER_ENV) or \
+     any(not isinstance(value, str) for value in compiler_environment.values()):
+    raise ValueError("manifest compiler environment is malformed")
   if manifest.get("gpu_runtime_initialized") is not False or manifest.get("gpu_dispatch_performed") is not False:
     raise ValueError("frozen artifact must be produced without GPU runtime or dispatch")
   retained = {name: files[name] for name in FILE_NAMES.values()}
@@ -253,7 +261,7 @@ def load_frozen_target_artifact(path: str | Path) -> FrozenTargetArtifact:
   if manifest.get("fixture") != fixture: raise ValueError("fixture identity differs from manifest")
   program_manifest = manifest.get("program", {})
   if program_manifest != {
-      "function": program.arg.function_name, "key": program.key.hex(),
+      "function": program.arg.function_name, "key": program.key.hex(), "target": program.src[1].arg,
       "globals": list(program.arg.globals), "global_size": list(program.arg.global_size),
       "local_size": list(program.arg.local_size or ()), "abi": _abi(program)}:
     raise ValueError("serialized PROGRAM launch identity differs from manifest")

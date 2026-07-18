@@ -67,7 +67,9 @@ def test_frozen_target_producer_compiles_once_and_loads_without_recompile(tmp_pa
   assert directory_loaded.manifest["program"]["global_size"] == [136, 4, 1]
   assert directory_loaded.manifest["program"]["local_size"] == [256, 1, 1]
   assert directory_loaded.manifest["program"]["function"] == frozen.FUNCTION_NAME
+  assert directory_loaded.manifest["program"]["target"] == "AMD:ISA:gfx1100"
   assert [row["slot"] for row in directory_loaded.manifest["program"]["abi"]] == list(range(5))
+  assert isinstance(directory_loaded.manifest["compiler_environment"], dict)
 
 
 def test_frozen_target_loader_rejects_retained_hsaco_tampering(tmp_path: Path):
