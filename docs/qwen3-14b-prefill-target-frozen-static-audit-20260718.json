@@ -1,0 +1,89 @@
+{
+  "bundle": {
+    "function": "mmq_llama_five_buffer_full_grid_accumulate",
+    "program_key": "a69a68f9fbd7809aea2d4a4db9c6a09dbe6a38cf60abb5867d23d5b060d45192",
+    "schema": "tinygrad.mmq_q4k_q8_1.frozen_target_artifact.v1",
+    "state": "FROZEN"
+  },
+  "findings": [],
+  "identity": {
+    "expected": {
+      "binary_nbytes": 77463,
+      "binary_sha256": "99c7ee0cc249dd6ccb0e285dca679aa352b914c72f4ac045751300a4d6f2c996",
+      "disassembly_nbytes": 914107,
+      "disassembly_sha256": "458c01d1675c83f5f74d96924344f25f1c0d4dcabc3ea78a9ecfb354ee28bf36"
+    },
+    "findings": [],
+    "observed": {
+      "binary_nbytes": 77463,
+      "binary_sha256": "99c7ee0cc249dd6ccb0e285dca679aa352b914c72f4ac045751300a4d6f2c996",
+      "disassembly_nbytes": 914107,
+      "disassembly_sha256": "458c01d1675c83f5f74d96924344f25f1c0d4dcabc3ea78a9ecfb354ee28bf36"
+    },
+    "passed": true
+  },
+  "passed": true,
+  "schema": "tinygrad.mmq_q4k_q8_1.frozen_target_artifact_audit.v1",
+  "static_audit": {
+    "binary_nbytes": 77463,
+    "binary_sha256": "99c7ee0cc249dd6ccb0e285dca679aa352b914c72f4ac045751300a4d6f2c996",
+    "control_flow": {
+      "direct": [],
+      "errors": [],
+      "indirect": [],
+      "indirect_control_flow_flag": false,
+      "status": "PASS"
+    },
+    "disassembly_sha256": "458c01d1675c83f5f74d96924344f25f1c0d4dcabc3ea78a9ecfb354ee28bf36",
+    "findings": [],
+    "instruction_count": 13021,
+    "passed": true,
+    "schema": "tinygrad.amd.hsaco_static_audit.v1",
+    "sections": [
+      {
+        "addr": 256,
+        "align": 0,
+        "index": 0,
+        "name": ".text",
+        "offset": 256,
+        "size": 76888,
+        "type": 1
+      },
+      {
+        "addr": 77184,
+        "align": 0,
+        "index": 1,
+        "name": ".rodata",
+        "offset": 77184,
+        "size": 64,
+        "type": 1
+      },
+      {
+        "addr": 0,
+        "align": 0,
+        "index": 2,
+        "name": ".strtab",
+        "offset": 77248,
+        "size": 23,
+        "type": 3
+      }
+    ],
+    "termination": {
+      "errors": [],
+      "final_endpgm_pc": 76340,
+      "passed": true,
+      "trailing_padding_dwords": 200
+    },
+    "text": {
+      "addr": 256,
+      "align": 0,
+      "index": 0,
+      "name": ".text",
+      "offset": 256,
+      "size": 76888,
+      "type": 1
+    },
+    "verdict": "PASS"
+  },
+  "verdict": "PASS"
+}
