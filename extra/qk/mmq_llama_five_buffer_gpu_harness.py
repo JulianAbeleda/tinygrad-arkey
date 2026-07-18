@@ -621,6 +621,51 @@ def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
   return result
 
 
+def run_full_grid_shape_probe(*, m: int = 256, n: int = 256, k: int = 256) -> dict[str, Any]:
+  """Single-epoch dispatch diagnostic for isolating grid/address failures."""
+  if min(m, n, k) <= 0 or m % 128 or n % 128 or k != 256:
+    return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_shape_probe.v1", "status": "BLOCKED",
+            "exact_blocker": "diagnostic requires M/N multiples of 128 and K=256", "shape": [m, n, k]}
+  import time
+  from tinygrad import Tensor, dtypes
+  from tinygrad.engine.realize import get_runtime
+  from extra.qk.amdgpu_metadata import parse_amdgpu_metadata
+  from extra.qk.mmq_llama_five_buffer_full_kernel import build_llama_five_buffer_full_kernel, compile_llama_five_buffer_full_kernel
+  from extra.qk.mmq_q4k_q8_reference import (Q81MMQDS4Activation, Q81MMQDS4ActivationSpec,
+    Q4KQ81MMQTileSpec, Q8_1_MMQ_DS4_LAYOUT, q4k_q8_1_mmq_ds4_tile_reference, q8_1_mmq_ds4_quantize_reference)
+  words_np = _random_q4_words(n, k, 20260723)
+  source_np = np.random.default_rng(20260724).standard_normal((m, k), dtype=np.float32)
+  values_np, scales_np, sums_np = q8_1_mmq_ds4_quantize_reference(source_np)
+  compiled = compile_llama_five_buffer_full_kernel(build_llama_five_buffer_full_kernel(m, n, k))
+  if not compiled.emitted or compiled.program is None:
+    return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_shape_probe.v1", "status": "BLOCKED",
+            "shape": [m, n, k], "exact_blocker": compiled.blocker or "shape probe did not emit"}
+  program = compiled.program
+  binary, source, artifact = _artifact_evidence(program, parse_amdgpu_metadata)
+  out = Tensor.empty(m*n, dtype=dtypes.float32, device="AMD").realize()
+  q4 = Tensor(words_np, device="AMD").realize()
+  values = Tensor(values_np.reshape(-1), device="AMD").realize()
+  scales = Tensor(scales_np.reshape(-1), device="AMD").realize()
+  sums = Tensor(sums_np.reshape(-1), device="AMD").realize()
+  buffers = (out.uop.buffer, q4.uop.buffer, values.uop.buffer, scales.uop.buffer, sums.uop.buffer)
+  runtime = get_runtime("AMD", program); args = tuple(buffers[g].get_buf("AMD") for g in program.arg.globals)
+  try:
+    t0 = time.perf_counter(); runtime(*args, global_size=program.arg.global_size, local_size=program.arg.local_size,
+                                      vals=program.arg.vals({}), wait=True); elapsed = (time.perf_counter()-t0)*1000
+    scales_ref, sums_ref = scales_np.astype(np.float16).astype(np.float32), sums_np.astype(np.float16).astype(np.float32)
+    ds4 = Q81MMQDS4Activation(values_np, scales_ref, sums_ref, Q81MMQDS4ActivationSpec(m=m, k=k, m_tile=m))
+    spec = Q4KQ81MMQTileSpec(role="full_grid_shape_probe", m=m, n=n, k=k, m_tile=m, n_tile=n, activation_layout=Q8_1_MMQ_DS4_LAYOUT)
+    comparison = _numeric_comparison(out.numpy().reshape(m,n), q4k_q8_1_mmq_ds4_tile_reference(words_np.view(np.uint8), ds4, spec))
+  except BaseException as exc:
+    return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_shape_probe.v1", "status": "BLOCKED", "shape": [m,n,k],
+            "exact_blocker": "shape probe dispatch failed or timed out", "exception": type(exc).__name__, "error": str(exc),
+            "artifacts": {**artifact, "resources": artifact.get("resources"), "backend_id": FULL_GRID_BACKEND_ID}}
+  return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_shape_probe.v1", "status": "PASS" if comparison["status"] == "pass" else "BLOCKED",
+          "shape": [m,n,k], "comparison": comparison, "timing_ms": elapsed, "artifacts": {**artifact,
+          "backend_id": FULL_GRID_BACKEND_ID, "distinct_binary_identity": isinstance(binary, bytes) and isinstance(source, str),
+          "no_fallback": True}}
+
+
 def run_amd_validation(*, timeout_seconds: float = 300.0,
                        python: str = sys.executable,
                        env: dict[str, str] | None = None) -> dict[str, Any]:
