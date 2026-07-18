@@ -1,0 +1,78 @@
+"""CPU-only layout/orchestration tests for the one-shot epoch canary."""
+from __future__ import annotations
+
+from pathlib import Path
+
+from tinygrad.runtime.process_isolated import IsolatedResult
+from extra.qk import mmq_single_epoch_canary as canary
+
+
+def _compile(temp_dir):
+  path = Path(temp_dir) / "target.pkl"
+  path.write_bytes(b"fake-program")
+  return str(path), {"binary_sha256": "cd" * 32, "compile_only_parent": True}
+
+
+def _child_pass():
+  return {"passed": True, "comparison": {"status": "pass"}, "target_dispatches": 1}
+
+
+def _runner_pass(callback, *, args=(), timeout_seconds=0, start_method=None, **kwargs):
+  assert callback is canary._run_epoch_worker
+  assert Path(args[0]).name == "target.pkl" and args[1] == 0
+  assert start_method == "spawn" and timeout_seconds > 0
+  return IsolatedResult("passed", _child_pass())
+
+
+def test_epoch_major_layout_has_contiguous_epoch_slices():
+  import numpy as np
+  from extra.qk.mmq_llama_five_buffer_gpu_harness import _pack_q4_epochs_contiguous
+  blocks = np.arange(3 * 20 * 144, dtype=np.uint8).reshape(3, 20, 144)
+  packed = _pack_q4_epochs_contiguous(blocks).view(np.uint8)
+  for epoch in (0, 1, 19):
+    start, stop = epoch * 3 * 144, (epoch + 1) * 3 * 144
+    assert packed[start:stop].tobytes() == blocks[:, epoch, :].reshape(-1).tobytes()
+
+
+def test_fault_parser_deduplicates():
+  assert canary.parse_kernel_faults("GPU reset\nGPU reset\nquiet") == ["GPU reset"]
+  assert canary.parse_kernel_faults("quiet") == []
+
+
+def test_success_runs_one_epoch_and_health_once():
+  calls: list[int] = []
+  out = canary.run_single_epoch_canary(
+    epoch=0, compile_fn=_compile, timeout_seconds=1, runner=_runner_pass,
+    fault_reader=lambda _: "", health_probe=lambda: calls.append(1) or True,
+  )
+  assert out["status"] == "PASS" and out["passed"] is True
+  assert out["target_dispatches"] == 1 and out["diagnostic_only"] is True
+  assert out["promotion_eligible"] is False and calls == [1]
+
+
+def test_timeout_fails_closed_without_health_retry():
+  calls: list[int] = []
+  def runner(*args, **kwargs): return IsolatedResult("timed_out", error="deadline", timed_out=True)
+  out = canary.run_single_epoch_canary(
+    compile_fn=_compile, runner=runner, fault_reader=lambda _: "",
+    health_probe=lambda: calls.append(1) or True,
+  )
+  assert out["status"] == "BLOCKED" and "deadline" in out["exact_blocker"] and calls == []
+
+
+def test_fault_blocks_before_health():
+  calls: list[int] = []
+  out = canary.run_single_epoch_canary(
+    compile_fn=_compile, runner=_runner_pass,
+    fault_reader=lambda _: "amdgpu: page fault", health_probe=lambda: calls.append(1) or True,
+  )
+  assert out["status"] == "BLOCKED" and out["kernel_faults"] and calls == []
+
+
+def test_invalid_epoch_never_compiles():
+  calls: list[int] = []
+  def compile_fn(_): calls.append(1); raise AssertionError("must not compile")
+  try: canary.run_single_epoch_canary(epoch=canary.TOTAL_EPOCHS, compile_fn=compile_fn)
+  except ValueError: pass
+  else: raise AssertionError("invalid epoch must raise")
+  assert calls == []
