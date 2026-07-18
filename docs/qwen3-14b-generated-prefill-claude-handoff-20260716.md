@@ -647,6 +647,23 @@ staging allocations, and bind those same two VAs to every target launch. Next in
 same-process target-role harness, preserve the D2D copies in timing/evidence, and rerun a three-epoch prefix before the
 20-epoch R6/R7 gate.
 
+The first strict integration attempt exposed a second, independent runtime boundary and was stopped. Exact timeline
+mapping showed epoch-0 metadata SDMA copies and target MMQ completed through signal 33; the separate
+`(accum + partial).realize()` launch requested signal 34, triggered SQC instruction faults, timed out, and ultimately
+caused a gfxhub instruction-page fault and GPU reset. The reset recovered and the independent tiny-add health probe
+passed. A one-epoch host-accumulation control then passed exactly with clean logs and stable metadata VAs
+(`docs/target-role-stable-metadata-host-prefix-1-20260718.json`), proving target + SDMA + full readback can be healthy.
+A three-epoch host-accumulation run passed epoch 0 exactly but faulted during epoch 1 before its check, with the wrapper
+capturing the SQC/page-fault/reset markers and stopping (`docs/target-role-stable-metadata-host-prefix-3-20260718.json`).
+The earlier external-add failure is retained as
+`docs/target-role-stable-metadata-prefix-3-20260718.json`.
+
+Therefore fixed metadata staging closes the numerical corruption but does not yet make the old external-add/intermediate
+readback adapter promotion-safe. Do not run the 20-epoch strict gate from that adapter. The existing full-kernel builder
+has an `accumulate=True` form that folds FP32 accumulation into the target writeback; audit and compile that form
+CPU-only first. If it remains spill/scratch free with the same ownership/ABI, it is the preferred next bounded GPU
+probe because it removes both the separate elementwise kernel and per-epoch readback lifecycle.
+
 ## 1. Executive state
 
 The project is building a generated tinygrad prefill route for non-fitting quantized models, using Qwen3-14B as the

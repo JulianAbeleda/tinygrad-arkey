@@ -1,0 +1,18 @@
+{
+  "diagnostic": {
+    "epoch_limit": 3,
+    "epoch_start": 0,
+    "host_accumulate": false,
+    "n_chunk_tiles": 136,
+    "per_epoch_check": true,
+    "persistent_buffers": true,
+    "preloaded_epochs": true,
+    "stable_metadata_staging": true,
+    "sync_each_epoch": false
+  },
+  "exact_blocker": "target-role child returned no structured result",
+  "returncode": 0,
+  "schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1",
+  "status": "BLOCKED",
+  "stderr_tail": "eout)\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/runtime/support/hcq.py\", line 437, in synchronize\n    if self.error_state is not None: raise self.error_state\n                                     ^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/runtime/support/hcq.py\", line 444, in synchronize\n    try: self.timeline_signal.wait(self.timeline_value - 1, timeout=timeout if timeout is not None and self.can_recover else None)\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/ubuntu/tinygrad-arkey/tinygrad/runtime/support/hcq.py\", line 298, in wait\n    if cur_value < value: raise RuntimeError(f\"Wait timeout: {timeout} ms! (the signal is not set to {value}, but {cur_value})\")\n                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nRuntimeError: Wait timeout: 30000 ms! (the signal is not set to 34, but 33)\n"
+}

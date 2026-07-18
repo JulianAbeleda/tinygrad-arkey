@@ -1,0 +1,167 @@
+{
+  "artifacts": {
+    "backend_id": "q4k_q8_1_mmq_amd_isa_full_grid_v0",
+    "binary_nbytes": 69655,
+    "binary_sha256": "037d4b147cb99b9b7f14ae36aaa2c59680106258ce447a70e2433a571af8fbec",
+    "distinct_binary_identity": true,
+    "no_fallback": true,
+    "resources": {
+      "authority": "native_elf_descriptor",
+      "compute_pgm_rsrc1": 1085014047,
+      "compute_pgm_rsrc2": 388,
+      "compute_pgm_rsrc3": 0,
+      "kernarg_bytes": 40,
+      "kernel_code_entry_byte_offset": -69120,
+      "lds_bytes": 57856,
+      "scratch_bytes": 0,
+      "sgpr": null,
+      "vgpr": 256,
+      "wavefront_size": 32
+    },
+    "resources_error": "CalledProcessError: Command '('/opt/rocm/llvm/bin/llvm-readelf', '--notes', '/tmp/tmp_kvxg4jx.hsaco')' returned non-zero exit status 1.",
+    "same_session_timing": true,
+    "source_nbytes": 437725,
+    "source_sha256": "fa3cf048d072e9af8e4dece7412aa6631c5a93d0307afd1ac13bfe488aa59ed9"
+  },
+  "bounded_only": true,
+  "correctness": {
+    "authority": "same_session_fp16_rounded_ds4_reference",
+    "comparison": {
+      "atol": 0.003,
+      "first_mismatch_got": null,
+      "first_mismatch_index": null,
+      "first_mismatch_reference": null,
+      "got_shape": [
+        512,
+        17408
+      ],
+      "got_size": 8912896,
+      "inf_got": 0,
+      "inf_reference": 0,
+      "joint_finite": 8912896,
+      "max_abs_error": 0.0001220703125,
+      "mean_abs_error": 1.7926890194530642e-08,
+      "mismatch_count": 0,
+      "nan_got": 0,
+      "nan_reference": 0,
+      "reference_shape": [
+        512,
+        17408
+      ],
+      "reference_size": 8912896,
+      "rtol": 0.003,
+      "status": "pass"
+    },
+    "status": "PASS"
+  },
+  "default_route": "direct_packed",
+  "distinct_binary_identity": true,
+  "exact_blocker": null,
+  "health_after": true,
+  "kernel_faults": [],
+  "metadata_staging": {
+    "fixed_va": true,
+    "mode": "fixed_va_gpu_sdma",
+    "per_epoch_vas": [
+      {
+        "epoch": 0,
+        "source_scales_va": 129266775486464,
+        "source_sums_va": 129266480824320,
+        "stage_scales_va": 129267509022720,
+        "stage_sums_va": 129267508789248
+      }
+    ],
+    "source_preloaded": true,
+    "transfer": "gpu_sdma"
+  },
+  "no_fallback": true,
+  "production_dispatch_changed": false,
+  "reduction": {
+    "owned_components": [
+      "cooperative tile loop",
+      "Q4_K tile_x staging",
+      "Q8_1 tile_y two-panel lifecycle"
+    ],
+    "source_anchors": [
+      "mmq.cuh:mul_mat_q_process_tile",
+      "mmq.cuh:load_tiles_q4_K"
+    ],
+    "source_revision": "ac4cddeb0dbd778f650bf568f6f08344a06abe3a"
+  },
+  "repack": {
+    "q4_layout": "q4_k_bytes[n, k_epoch, 144]",
+    "q4_sha256": "a7c38ad9065bc88697675b4c31f82fe0393b5923a223faec4e3e6c7fdb82ef01",
+    "q8_layout": "q8_ds4[epoch, m, groups]",
+    "q8_scales_sha256": "ce542cb5c0c77c5dbdaa1c44753e16815f9ac66b82458022179dc0b56f614211",
+    "q8_sums_sha256": "c6755f8eb0e77c62ace4bd94f7a908ad0a5d01d21a87febc7954200c63d53aad",
+    "q8_values_sha256": "b4ba6549584528a1281d4fe6e521a50722987fb36cd7e8154b8d5f9eb44f246c"
+  },
+  "role": "ffn_gate_up",
+  "same_session_timing": true,
+  "schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1",
+  "shape": [
+    512,
+    17408,
+    5120
+  ],
+  "status": "PASS",
+  "timing": {
+    "accumulation": "host_fp32_add",
+    "epoch_checks": [
+      {
+        "atol": 0.003,
+        "epoch": 0,
+        "first_mismatch_got": null,
+        "first_mismatch_index": null,
+        "first_mismatch_reference": null,
+        "got_shape": [
+          512,
+          17408
+        ],
+        "got_size": 8912896,
+        "inf_got": 0,
+        "inf_reference": 0,
+        "joint_finite": 8912896,
+        "max_abs_error": 0.0001220703125,
+        "mean_abs_error": 1.7926890194530642e-08,
+        "mismatch_count": 0,
+        "nan_got": 0,
+        "nan_reference": 0,
+        "reference_shape": [
+          512,
+          17408
+        ],
+        "reference_size": 8912896,
+        "rtol": 0.003,
+        "status": "pass"
+      }
+    ],
+    "k_epoch_launches": 1,
+    "median_ms": 4660.931078949943,
+    "metadata_staging": {
+      "fixed_va": true,
+      "mode": "fixed_va_gpu_sdma",
+      "per_epoch_vas": [
+        {
+          "epoch": 0,
+          "source_scales_va": 129266775486464,
+          "source_sums_va": 129266480824320,
+          "stage_scales_va": 129267509022720,
+          "stage_sums_va": 129267508789248
+        }
+      ],
+      "source_preloaded": true,
+      "transfer": "gpu_sdma"
+    },
+    "min_ms": 4660.931078949943,
+    "n_chunk_tiles": 136,
+    "persistent_buffers": true,
+    "preloaded_epochs": true,
+    "samples_ms": [
+      4660.931078949943
+    ],
+    "stable_metadata_staging": true,
+    "sync_each_epoch": false,
+    "total_k_epoch_launches": 20
+  }
+}
