@@ -597,6 +597,7 @@ def build_r6_route_gate_status(r5_report: dict[str, Any] | None = None) -> dict[
   ready = r5.get("promotion_verdict") == "R5_COOP_WIN_READY_FOR_R6" and r5.get("role_shape_integration") is True
   role_blocked = r5.get("emitted_backend_win") is True and not ready
   shape_artifact = build_r6_role_shape_integration_artifact(r5)
+  smoke = build_r6_negative_role_fallback_smoke_artifact()
   return {
     "schema": "q4k-q8-1-mmq-r6-route-gate-status.v1",
     "status": "READY_FOR_ONE_ROLE_OPT_IN" if ready else ("BLOCKED_ROLE_SHAPE_INTEGRATION" if role_blocked else "BLOCKED_NO_BOUNDED_COOP_WIN"),
@@ -606,12 +607,39 @@ def build_r6_route_gate_status(r5_report: dict[str, Any] | None = None) -> dict[
     "production_dispatch_changed": False,
     "required_evidence": {
       "bounded_coop_candidate_win": ready,
-      "ffn_gate_up_only": False,
-      "negative_role_tests": False,
-      "no_hidden_direct_packed_fallback": False,
+      "ffn_gate_up_only": smoke["ffn_gate_up_only"],
+      "negative_role_tests": smoke["negative_role_tests"],
+      "no_hidden_direct_packed_fallback": smoke["no_hidden_direct_packed_fallback"],
     },
     "role_shape_integration": shape_artifact,
+    "negative_role_fallback_smoke": smoke,
     "exact_blocker": None if ready else ("R6 route binding is illegal until the bounded winner is integrated for a production role and shape" if role_blocked else "R6 route binding is illegal until R5 reports an emitted cooperative backend win"),
+  }
+
+
+def build_r6_negative_role_fallback_smoke_artifact() -> dict[str, Any]:
+  """Verify descriptor scope and direct-packed rollback without dispatching a role."""
+  from extra.qk.route_manifest import ROUTES
+  candidate = ROUTES.get("prefill_q4k_q8_1_hybrid_mmq_atom", {})
+  default = ROUTES.get("prefill_q4k_direct_tile4x4_default", {})
+  roles = tuple(candidate.get("roles", ()))
+  excluded = tuple(candidate.get("excluded_roles", ()))
+  rejected = ("attn_qo", "ffn_down", "attn_kv")
+  role_scope_ok = roles == ("ffn_gate_up",) and all(role in excluded for role in rejected)
+  rollback = candidate.get("rollback") if isinstance(candidate.get("rollback"), dict) else {}
+  rollback_ok = candidate.get("baseline_route_id") == "direct_packed" and (
+    candidate.get("rollback_route") == "direct_packed" or rollback.get("route") == "direct_packed")
+  default_ok = default.get("status") == "promoted_default" and default.get("baseline_route_id") == "prefill_q4k_direct_packed_load_direct_out"
+  return {
+    "schema": "q4k-q8-1-mmq-r6-negative-role-fallback-smoke.v1",
+    "status": "PASS" if role_scope_ok and rollback_ok and default_ok else "BLOCKED",
+    "ffn_gate_up_only": role_scope_ok, "negative_role_tests": role_scope_ok,
+    "no_hidden_direct_packed_fallback": rollback_ok and default_ok,
+    "accepted_roles": list(roles), "rejected_roles": list(rejected),
+    "candidate_route": "prefill_q4k_q8_1_hybrid_mmq_atom", "rollback_route": "direct_packed",
+    "runtime_default_route": "prefill_q4k_direct_tile4x4_default",
+    "production_dispatch_changed": False,
+    "exact_blocker": None if role_scope_ok and rollback_ok and default_ok else "route manifest scope/rollback drift",
   }
 
 

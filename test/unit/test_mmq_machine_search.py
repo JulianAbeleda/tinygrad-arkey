@@ -8,6 +8,7 @@ from extra.qk.mmq_machine_search import (
   build_r4_evidence_artifacts, build_r5_geometry_search_report, build_r6_route_gate_status,
   build_r7_reduction_status, build_search_report, build_full_gpu_probe_candidate, evaluate_candidate_promotion,
   R5_GEOMETRY_CANDIDATES, build_r6_role_shape_integration_artifact, build_full_grid_k_tiled_dispatch_plan,
+  build_r6_negative_role_fallback_smoke_artifact,
 )
 from extra.qk.mmq_machine_search import build_boltbeam_oracle_trace
 
@@ -255,9 +256,9 @@ def test_mmq_r5_includes_distinct_full_grid_candidate_and_keeps_r6_fail_closed()
   r6 = build_r6_route_gate_status(synthetic)
   assert r6["status"] == "BLOCKED_ROLE_SHAPE_INTEGRATION"
   assert r6["production_dispatch_changed"] is False
-  assert r6["required_evidence"]["ffn_gate_up_only"] is False
-  assert r6["required_evidence"]["negative_role_tests"] is False
-  assert r6["required_evidence"]["no_hidden_direct_packed_fallback"] is False
+  assert r6["required_evidence"]["ffn_gate_up_only"] is True
+  assert r6["required_evidence"]["negative_role_tests"] is True
+  assert r6["required_evidence"]["no_hidden_direct_packed_fallback"] is True
   assert r6["role_shape_integration"]["status"] == "BLOCKED"
   assert r6["role_shape_integration"]["target"] == {"role": "ffn_gate_up", "M": 512, "N": 17408, "K": 5120}
   # An emitted full-grid win must not imply any of the one-role route gates:
@@ -265,10 +266,11 @@ def test_mmq_r5_includes_distinct_full_grid_candidate_and_keeps_r6_fail_closed()
   # evidence obligations and remain fail-closed until actually measured.
   assert r6["required_evidence"] == {
     "bounded_coop_candidate_win": False,
-    "ffn_gate_up_only": False,
-    "negative_role_tests": False,
-    "no_hidden_direct_packed_fallback": False,
+    "ffn_gate_up_only": True,
+    "negative_role_tests": True,
+    "no_hidden_direct_packed_fallback": True,
   }
+  assert r6["negative_role_fallback_smoke"]["status"] == "PASS"
 
 
 def test_mmq_r5_full_grid_win_is_ranked_as_emitted_but_not_promoted():
@@ -322,6 +324,15 @@ def test_mmq_full_grid_tile_plan_rejects_unaligned_shapes_fail_closed():
   blocked = build_full_grid_k_tiled_dispatch_plan({"M": 512, "N": 17408, "K": 5121})
   assert blocked["status"] == "BLOCKED"
   assert "multiples" in blocked["exact_blocker"]
+
+
+def test_mmq_r6_negative_role_smoke_is_manifest_scoped_and_default_off():
+  smoke = build_r6_negative_role_fallback_smoke_artifact()
+  assert smoke["status"] == "PASS"
+  assert smoke["accepted_roles"] == ["ffn_gate_up"]
+  assert set(smoke["rejected_roles"]) == {"attn_qo", "ffn_down", "attn_kv"}
+  assert smoke["rollback_route"] == "direct_packed"
+  assert smoke["production_dispatch_changed"] is False
 
 
 def test_mmq_r6_and_r7_statuses_fail_closed_until_coop_win():

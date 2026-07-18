@@ -428,6 +428,8 @@ The recommended correctness-first path now has a concrete bounded result. Commit
   false and R6 remains `BLOCKED_ROLE_SHAPE_INTEGRATION`; no role was changed and direct-packed remains default.
 * The exact R6 target is `ffn_gate_up` 512x17408x5120. The probe covers only 128x128x256. The route-shape artifact
   records 4x136x20 = 10,880 required K-tiled launches, Q4/DS4 repacking, K-epoch accumulation, and output scatter.
+  A manifest-scoped smoke artifact now passes the negative-role (`attn_qo`, `ffn_down`, `attn_kv`) and direct-packed
+  rollback/default checks; these subgates are true, but they do not substitute for target-shape execution.
 * A monolithic K=512 compile is concretely blocked by `NotImplementedError: vgpr lease exceeds virtual pool`. An
   explicit per-store LOAD+ADD accumulation sink was prototyped, but its two-launch 128x128x512 probe exceeded the hard
   six-minute compile deadline with no structured result. The safe follow-up delegates accumulation to tinygrad
