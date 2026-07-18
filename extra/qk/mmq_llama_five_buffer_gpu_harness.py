@@ -655,13 +655,25 @@ def run_full_grid_shape_probe(*, m: int = 256, n: int = 256, k: int = 256) -> di
     scales_ref, sums_ref = scales_np.astype(np.float16).astype(np.float32), sums_np.astype(np.float16).astype(np.float32)
     ds4 = Q81MMQDS4Activation(values_np, scales_ref, sums_ref, Q81MMQDS4ActivationSpec(m=m, k=k, m_tile=m))
     spec = Q4KQ81MMQTileSpec(role="full_grid_shape_probe", m=m, n=n, k=k, m_tile=m, n_tile=n, activation_layout=Q8_1_MMQ_DS4_LAYOUT)
-    comparison = _numeric_comparison(out.numpy().reshape(m,n), q4k_q8_1_mmq_ds4_tile_reference(words_np.view(np.uint8), ds4, spec))
+    got = out.numpy().reshape(m,n)
+    comparison = _numeric_comparison(got, q4k_q8_1_mmq_ds4_tile_reference(words_np.view(np.uint8), ds4, spec))
+    tile_rows = []
+    for tm in range(m // 128):
+      for tn in range(n // 128):
+        tile_spec = Q4KQ81MMQTileSpec(role="full_grid_shape_probe_tile", m=m, n=n, k=k,
+          m0=tm*128, n0=tn*128, m_tile=128, n_tile=128, activation_layout=Q8_1_MMQ_DS4_LAYOUT)
+        tile_cmp = _numeric_comparison(got[tm*128:(tm+1)*128, tn*128:(tn+1)*128],
+          q4k_q8_1_mmq_ds4_tile_reference(words_np.view(np.uint8), ds4, tile_spec))
+        tile_rows.append({"tile_m": tm, "tile_n": tn, "mismatch_count": tile_cmp["mismatch_count"],
+                          "max_abs_error": tile_cmp["max_abs_error"]})
   except BaseException as exc:
     return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_shape_probe.v1", "status": "BLOCKED", "shape": [m,n,k],
             "exact_blocker": "shape probe dispatch failed or timed out", "exception": type(exc).__name__, "error": str(exc),
             "artifacts": {**artifact, "resources": artifact.get("resources"), "backend_id": FULL_GRID_BACKEND_ID}}
   return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_shape_probe.v1", "status": "PASS" if comparison["status"] == "pass" else "BLOCKED",
-          "shape": [m,n,k], "comparison": comparison, "timing_ms": elapsed, "artifacts": {**artifact,
+          "shape": [m,n,k], "comparison": comparison, "tile_rows": tile_rows,
+          "global_size": list(program.arg.global_size), "local_size": list(program.arg.local_size or ()),
+          "timing_ms": elapsed, "artifacts": {**artifact,
           "backend_id": FULL_GRID_BACKEND_ID, "distinct_binary_identity": isinstance(binary, bytes) and isinstance(source, str),
           "no_fallback": True}}
 
