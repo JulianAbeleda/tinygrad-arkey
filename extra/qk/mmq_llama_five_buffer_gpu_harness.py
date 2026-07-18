@@ -541,7 +541,9 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1) -> dic
   program = compiled.program
   binary, source, artifact = _artifact_evidence(program, parse_amdgpu_metadata)
   q4_blocks = words_np.view(np.uint8).reshape(n, k // 256, 144)
+  completed_epochs = 0
   def run_epochs(*, timed: bool = False):
+    nonlocal completed_epochs
     accum = Tensor.zeros(m * n, dtype=dtypes.float32, device="AMD").realize()
     elapsed = 0.0
     for epoch in range(k // 256):
@@ -558,10 +560,21 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1) -> dic
               vals=program.arg.vals({}), wait=True)
       accum = (accum + partial).realize()
       elapsed += (time.perf_counter() - t0) * 1000.0
+      completed_epochs += 1
     return accum, elapsed
-  for _ in range(warmups): run_epochs()
-  samples = []
-  for _ in range(rounds): accum, elapsed = run_epochs(timed=True); samples.append(elapsed)
+  try:
+    for _ in range(warmups): run_epochs()
+    samples = []
+    for _ in range(rounds): accum, elapsed = run_epochs(timed=True); samples.append(elapsed)
+  except BaseException as exc:
+    return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
+            "shape": [m, n, k], "role": "ffn_gate_up", "bounded_only": True,
+            "production_dispatch_changed": False, "default_route": "direct_packed",
+            "exact_blocker": "target-role GPU dispatch failed or timed out",
+            "exception": type(exc).__name__, "error": str(exc), "completed_epochs": completed_epochs,
+            "artifacts": {**artifact, "backend_id": FULL_GRID_BACKEND_ID,
+                          "distinct_binary_identity": isinstance(binary, bytes) and isinstance(source, str),
+                          "no_fallback": True}}
   scales_ref, sums_ref = scales_np.astype(np.float16).astype(np.float32), sums_np.astype(np.float16).astype(np.float32)
   ds4 = Q81MMQDS4Activation(values_np, scales_ref, sums_ref, Q81MMQDS4ActivationSpec(m=m, k=k, m_tile=m))
   spec = Q4KQ81MMQTileSpec(role="full_grid_target_role_probe", m=m, n=n, k=k,
