@@ -478,6 +478,11 @@ this as a target workload health/scale blocker, not a correctness pass: R6 role 
 promotion remain blocked until a bounded target run completes without a GPU reset/error and reports numerical
 comparison/resource evidence.
 
+The harness now supports bounded N-tile chunking. The exact target shape with one K epoch and 16-N-tile chunks passes
+0/8,912,896 mismatches (max error 1.22e-4) in 3.38 seconds of same-session GPU time, proving the chunked address
+views and target geometry are numerically sound. The full 20-epoch chunked run still hit a 600-second HCQ timeout;
+one-tile chunks subsequently produced an MMU `NotPresent` fault. Chunking is diagnostic only and is not promoted.
+
 ## 1. Executive state
 
 The project is building a generated tinygrad prefill route for non-fitting quantized models, using Qwen3-14B as the
