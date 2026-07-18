@@ -1367,6 +1367,7 @@ def _realize_with_aql_packet_census(output: Any, expected_vas: list[list[int]] |
         "kernel_object_matches_constructed": packet["kernel_object"] == built["kernel_object"],
         "kernarg_address_matches_constructed": packet["kernarg_address"] == built["kernarg_address"],
         "five_qwords_match_constructed_buffers": kernarg_qwords == argument_vas,
+        "five_constructed_buffer_vas_distinct": len(set(argument_vas)) == 5,
         "ordered_program_identity_matches": expected_identity is None or
           built["program_identity"] == expected_identity,
         **_audit_target_aql_kernargs(
@@ -1913,14 +1914,13 @@ def run_frozen_epoch_program_set_ordinal_probe(
     raise RuntimeError("frozen v2 ordinal graph lost the five-buffer ABI")
   if arguments[0].buf_uop is not zeroed_output.uop.buf_uop:
     raise RuntimeError("frozen v2 ordinal graph lost its explicitly zeroed output allocation")
-  if len({id(value.buf_uop) for value in arguments}) != 5:
-    raise RuntimeError("frozen v2 ordinal graph aliased distinct ABI buffer roles")
   graph_evidence = {
     "program_calls": 1, "expected_program_calls": 1,
     "selected_epoch": epoch, "selected_program_key": binding.program_keys[epoch],
     "selected_sink_key": variant_row["sink_key"], "selected_offsets": dict(variant_row["offsets"]),
     "single_program_ordinal": True, "five_buffer_abi": True,
-    "distinct_buffer_roles": True, "initial_output_zeroed": True,
+    "distinct_concrete_buffer_vas_deferred_to_aql_census": True,
+    "initial_output_zeroed": True,
     "buffer_uop_keys": [value.buf_uop.key.hex() for value in arguments],
     "full_role_producer_calls": 1,
   }

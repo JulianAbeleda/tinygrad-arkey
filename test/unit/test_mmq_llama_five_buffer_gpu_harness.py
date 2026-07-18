@@ -260,6 +260,7 @@ def test_aql_packet_census_retains_accepted_packet_and_kernargs_when_doorbell_fa
     {"slot": slot, "va": va, "size": size}
     for slot, (va, size) in enumerate(zip(argument_vas, argument_sizes))]
   assert call["checks"]["five_qwords_match_constructed_buffers"] is True
+  assert call["checks"]["five_constructed_buffer_vas_distinct"] is True
   assert census["all_accepted_target_calls_pass"] is True
 
 
