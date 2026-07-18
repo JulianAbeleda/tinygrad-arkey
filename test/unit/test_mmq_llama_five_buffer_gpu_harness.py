@@ -5,7 +5,7 @@ from tinygrad import dtypes
 from tinygrad.uop.ops import Ops, UOp
 
 from extra.qk.mmq_llama_five_buffer_full_kernel import build_llama_five_buffer_full_kernel
-from extra.qk.mmq_llama_five_buffer_gpu_harness import (_bind_sink, _random_q4_words,
+from extra.qk.mmq_llama_five_buffer_gpu_harness import (_bind_sink, _pack_q4_epochs_contiguous, _random_q4_words,
   _numeric_comparison, run_amd_validation)
 
 
@@ -13,6 +13,25 @@ def test_gpu_harness_random_q4_fixture_has_independent_abi_shape():
   words = _random_q4_words(128, 256, 20260717)
   assert words.dtype == np.uint32 and words.shape == (128 * 36,)
   assert np.isfinite(words.view(np.uint8)).all()
+
+
+def test_gpu_harness_preloaded_q4_pack_makes_each_epoch_a_contiguous_n_slice():
+  blocks = np.arange(4 * 3 * 144, dtype=np.uint8).reshape(4, 3, 144)
+  packed = _pack_q4_epochs_contiguous(blocks).view(np.uint8)
+  epoch_bytes = blocks.shape[0] * blocks.shape[2]
+  for epoch in range(blocks.shape[1]):
+    expected = np.ascontiguousarray(blocks[:, epoch, :]).reshape(-1)
+    assert np.array_equal(packed[epoch*epoch_bytes:(epoch+1)*epoch_bytes], expected)
+  # The original N-major flattening cannot be consumed by one base-offset view.
+  assert not np.array_equal(blocks.reshape(-1)[:epoch_bytes], np.ascontiguousarray(blocks[:, 0, :]).reshape(-1))
+
+
+def test_gpu_harness_preloaded_q4_pack_rejects_layout_drift():
+  for bad in (np.zeros((2, 3, 143), dtype=np.uint8), np.zeros((2, 3, 144), dtype=np.uint32),
+              np.zeros((2, 144), dtype=np.uint8)):
+    try: _pack_q4_epochs_contiguous(bad)
+    except ValueError: pass
+    else: raise AssertionError("invalid Q4 preload layout must fail closed")
 
 
 def test_gpu_harness_binds_exact_five_buffer_slots_without_reauthoring_graph():

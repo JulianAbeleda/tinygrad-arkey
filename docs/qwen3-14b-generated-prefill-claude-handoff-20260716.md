@@ -497,8 +497,9 @@ shape is still 'ffn_gate_up' (512,17408,5120).
 
 The one- and two-epoch full-N controls are exact: the persistent two-epoch run reports 0/8,912,896 mismatches,
 both epoch checks pass, max absolute error 3.662e-4, and resources vgpr=256, LDS=57,856, scratch=0.
-This separates the earlier N-chunk failure from arithmetic and proves the preloaded view/repack path for a bounded
-prefix.
+This separates the earlier N-chunk failure from arithmetic and proves the persistent full-N path for a bounded
+prefix. It did not prove the later all-epoch preloaded Q4 view: that path was subsequently found to flatten
+`[N,epoch,144]` storage while indexing it as contiguous `[epoch,N,144]`.
 
 The required 20-epoch target run remains a health blocker. It fails before structured result serialization at the HCQ
 timeline (signal 30/current 29 with preloaded inputs and no host per-epoch copies; the explicit synchronize variant
@@ -552,6 +553,14 @@ is empty. Evidence is `docs/target-q4-preload-canary-20260718.json`. Therefore n
 timeline value around 30 is sufficient to reproduce the strict-run fault. The next safe discriminator is the exact
 four-buffer preload plus target PROGRAM runtime/code upload with **no target dispatch**, followed only then by a
 bounded target-only same-process launch sequence if runtime construction remains healthy.
+
+Construction-level audit then found and repaired a separate preloaded adapter defect. `_random_q4_words` stores blocks
+as `[N,epoch,144]`; a single `Buffer.view` epoch base requires `[epoch,N,144]` contiguous storage. The old preloaded
+path copied the N-major flattening and advanced `epoch*N*36` words, so it did not point at the requested epoch. The
+preload now explicitly transposes/packs epoch-major storage, with a CPU regression proving that every epoch view is
+byte-identical to `q4_blocks[:,epoch,:]`. This explains the earlier massive mismatches from the experimental
+preloaded-input path. The driver fault still needs a clean retest after the corrected layout; the old fault artifact
+must not be treated as evidence against the corrected adapter.
 
 ## 1. Executive state
 

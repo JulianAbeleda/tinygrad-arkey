@@ -50,6 +50,14 @@ def _random_q4_words(n: int, k: int, seed: int) -> np.ndarray:
   return np.ascontiguousarray(raw.reshape(-1).view(np.uint32))
 
 
+def _pack_q4_epochs_contiguous(q4_blocks: np.ndarray) -> np.ndarray:
+  """Pack ``[N, epoch, 144-byte]`` Q4 blocks for one contiguous view per epoch."""
+  blocks = np.asarray(q4_blocks)
+  if blocks.ndim != 3 or blocks.shape[2] != 144 or blocks.dtype != np.uint8:
+    raise ValueError("Q4 preload requires uint8 blocks shaped [N, epoch, 144]")
+  return np.ascontiguousarray(blocks.transpose(1, 0, 2)).reshape(-1).view(np.uint32)
+
+
 def _bind_sink(sink, args):
   """Replace the five slot parameters in a generated sink with call placeholders."""
   from tinygrad.uop.ops import Ops
@@ -594,7 +602,11 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
     persistent_scales = Tensor.empty(value_records * m * 4, dtype=dtypes.float32, device="AMD").realize()
     persistent_sums = Tensor.empty(value_records * m * 4, dtype=dtypes.float32, device="AMD").realize()
     if preloaded_epochs:
-      copyin_buffer(persistent_q4, words_np.view(np.uint8).reshape(-1).view(np.uint32))
+      # ``_random_q4_words`` is N-major: [N, epoch, 144]. A Buffer view can
+      # shift only one contiguous base, so preload epoch-major storage instead
+      # of incorrectly treating the original N-major flattening as contiguous
+      # [epoch, N, 144].
+      copyin_buffer(persistent_q4, _pack_q4_epochs_contiguous(q4_blocks))
       copyin_buffer(persistent_values, values_np.reshape(-1))
       copyin_buffer(persistent_scales, scales_np.reshape(-1))
       copyin_buffer(persistent_sums, sums_np.reshape(-1))
