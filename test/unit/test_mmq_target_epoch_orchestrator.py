@@ -13,6 +13,7 @@ import numpy as np
 from tinygrad.uop.ops import Ops, ProgramInfo, UOp
 
 from extra.qk import mmq_llama_five_buffer_full_kernel as full_kernel
+from extra.qk.mmq_exact_role_spec import exact_role_spec
 from extra.qk.mmq_target_epoch_orchestrator import (
   ATTESTATION_SCHEMA, FIXTURE_SCHEMA, compile_target_program, orchestrate_epoch_sweep, parse_kernel_faults,
   spawned_tiny_health_probe, target_fixture_evidence,
@@ -156,6 +157,30 @@ def test_fixture_identity_is_deterministic_and_layout_bound():
   assert first["repack"]["q4_epoch_major_dtype"] == "uint32"
   assert first["repack"]["q4_epoch_major_elements"] == 12_533_760
   assert first["repack"]["q8_layout"] == "q8_ds4[epoch, m, groups]"
+
+
+def test_attn_kv_fixture_and_ffn_down_sweep_derive_shape_grid_and_epoch_count(monkeypatch):
+  kv, down = exact_role_spec("attn_kv"), exact_role_spec("ffn_down")
+  fixture = target_fixture_evidence(role_spec=kv)
+  assert fixture["role"] == "attn_kv"
+  assert fixture["shape"] == [512, 1024, 5120]
+  assert fixture["total_epochs"] == 20
+  assert fixture["repack"]["q4_epoch_major_elements"] == 20 * 1024 * 144 // 4
+
+  import extra.qk.mmq_target_epoch_orchestrator as orchestrator
+  monkeypatch.setattr(orchestrator, "target_fixture_evidence",
+                      lambda *, role_spec: {"schema": FIXTURE_SCHEMA, "role": role_spec.role,
+                                            "shape": list(role_spec.shape), "total_epochs": role_spec.epochs})
+  health, _ = _health_sequence(True, True)
+  out = orchestrate_epoch_sweep(
+    role_spec=down, epoch_indices=[67], compile_artifact=_compile_artifact,
+    epoch_runner=_epoch_runner(), health_probe=health, fault_reader=_no_faults,
+    expected_partial_shape=(2, 3))
+  assert out["passed"] is True
+  assert out["role"] == "ffn_down" and out["shape"] == [512, 5120, 17408]
+  assert out["coverage"]["target_epochs"] == 68
+  assert out["coverage"]["verified_epochs"] == [67]
+  assert out["coverage"]["complete_target"] is False
 
 
 def test_epoch_failure_stops_before_later_epochs_and_keeps_only_verified_partials():

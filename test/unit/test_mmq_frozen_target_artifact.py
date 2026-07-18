@@ -13,16 +13,13 @@ from tinygrad.runtime.autogen.amd.rdna3.ins import s_branch, s_endpgm, s_mov_b32
 from tinygrad.uop.ops import Ops, ProgramInfo, UOp
 
 from extra.qk import mmq_frozen_target_artifact as frozen
+from extra.qk.mmq_exact_role_spec import DEFAULT_EXACT_ROLE_SPEC, ExactRoleSpec, exact_role_spec
 
 
-def _program() -> UOp:
-  sizes_dtypes = (
-    (8_912_896, __import__("tinygrad").dtypes.float32),
-    (626_688, __import__("tinygrad").dtypes.uint32),
-    (131_072, __import__("tinygrad").dtypes.int8),
-    (4_096, __import__("tinygrad").dtypes.float32),
-    (4_096, __import__("tinygrad").dtypes.float32),
-  )
+def _program(role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC) -> UOp:
+  tg_dtypes = __import__("tinygrad").dtypes
+  sizes_dtypes = tuple(zip(role_spec.program.abi_elements,
+                           (tg_dtypes.float32, tg_dtypes.uint32, tg_dtypes.int8, tg_dtypes.float32, tg_dtypes.float32)))
   params = tuple(UOp.placeholder((size,), dtype, slot) for slot, (size, dtype) in enumerate(sizes_dtypes))
   sink = UOp(Ops.SINK, src=params)
   linear = UOp(Ops.LINEAR, src=(UOp(Ops.INS, arg=s_endpgm()),))
@@ -30,12 +27,12 @@ def _program() -> UOp:
   binary = assemble_linear(shell, linear, "gfx1100")
   return UOp(Ops.PROGRAM, src=(sink, UOp(Ops.DEVICE, arg="AMD"), linear,
     UOp(Ops.SOURCE, arg="generated source\n"), UOp(Ops.BINARY, arg=binary)),
-    arg=ProgramInfo(name=frozen.FUNCTION_NAME, global_size=(136, 4, 1), local_size=(256, 1, 1),
+    arg=ProgramInfo(name=frozen.FUNCTION_NAME, global_size=role_spec.program.grid, local_size=(256, 1, 1),
                     globals=tuple(range(5))))
 
 
-def _fixture() -> dict:
-  return {"schema": frozen.FIXTURE_SCHEMA, "shape": [512, 17_408, 5_120],
+def _fixture(role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC) -> dict:
+  return {"schema": frozen.FIXTURE_SCHEMA, "role": role_spec.role, "shape": list(role_spec.shape),
           "q4": {"source_sha256": "a" * 64, "epoch_major_sha256": "b" * 64},
           "q8": {"source_sha256": "c" * 64}}
 
@@ -85,6 +82,40 @@ def test_frozen_target_producer_compiles_once_and_loads_without_recompile(tmp_pa
   assert isinstance(directory_loaded.manifest["compiler_environment"], dict)
   assert directory_loaded.disassembly.startswith("s_endpgm 0 // 0000000000000100: BFB00000")
   assert frozen.audit_frozen_target_artifact(output)["passed"] is True
+
+
+def test_frozen_role_geometry_supports_attn_kv_and_shares_attn_qo_ffn_down_program(tmp_path: Path):
+  kv, qo, down = (exact_role_spec(role) for role in ("attn_kv", "attn_qo", "ffn_down"))
+  bundles = {}
+  for role_spec in (kv, qo, down):
+    output = tmp_path / role_spec.role
+    manifest = frozen.produce_frozen_target_artifact(
+      output, role_spec=role_spec,
+      compile_once=lambda spec=role_spec: SimpleNamespace(emitted=True, program=_program(spec), blocker=None),
+      disassemble=lambda binary: ("s_endpgm\n", "cpu-test-objdump"),
+      fixture_builder=lambda spec=role_spec: _fixture(spec))
+    loaded = frozen.load_frozen_target_artifact(output)
+    assert manifest["shape"] == list(role_spec.program.shape)
+    assert manifest["full_role_shape"] == list(role_spec.shape)
+    assert manifest["program"]["global_size"] == list(role_spec.program.grid)
+    assert [row["elements"] for row in manifest["program"]["abi"]] == list(role_spec.program.abi_elements)
+    assert loaded.fixture["role"] == role_spec.role
+    bundles[role_spec.role] = loaded
+  assert bundles["attn_kv"].manifest["program"]["global_size"] == [8, 4, 1]
+  assert bundles["attn_qo"].manifest["program"]["global_size"] == [40, 4, 1]
+  assert bundles["attn_qo"].binary == bundles["ffn_down"].binary
+  assert bundles["attn_qo"].program.key == bundles["ffn_down"].program.key
+  assert bundles["attn_qo"].fixture["shape"] != bundles["ffn_down"].fixture["shape"]
+
+
+def test_frozen_producer_rejects_full_role_fixture_mismatch_even_when_program_geometry_is_shared(tmp_path: Path):
+  qo, down = exact_role_spec("attn_qo"), exact_role_spec("ffn_down")
+  with pytest.raises(ValueError, match="fixture full-role shape differs"):
+    frozen.produce_frozen_target_artifact(
+      tmp_path / "bundle", role_spec=down,
+      compile_once=lambda: SimpleNamespace(emitted=True, program=_program(qo), blocker=None),
+      disassemble=lambda binary: ("s_endpgm\n", "cpu-test-objdump"),
+      fixture_builder=lambda: _fixture(qo))
 
 
 def test_frozen_target_loader_rejects_retained_hsaco_tampering(tmp_path: Path):

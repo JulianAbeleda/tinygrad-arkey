@@ -22,6 +22,10 @@ from typing import Any, Callable, Mapping
 from tinygrad.uop.ops import Ops, UOp
 
 from extra.qk.mmq_compile_evidence import COMPILER_ENV
+from extra.qk.mmq_exact_role_spec import (
+  DEFAULT_EXACT_ROLE_SPEC, DEFAULT_INVENTORY, ExactProgramGeometry, ExactRoleSpec,
+  exact_role_spec, exact_role_spec_from_shape,
+)
 from extra.qk.mmq_llama_five_buffer_full_kernel import AMD_ISA_TARGET
 from extra.qk.mmq_target_epoch_orchestrator import (
   FIXTURE_SCHEMA, compile_target_program, target_fixture_evidence, target_program_artifact_evidence,
@@ -30,8 +34,8 @@ from extra.qk.mmq_target_epoch_orchestrator import (
 
 SCHEMA = "tinygrad.mmq_q4k_q8_1.frozen_target_artifact.v1"
 AUDIT_SCHEMA = "tinygrad.mmq_q4k_q8_1.frozen_target_artifact_audit.v1"
-TARGET_SHAPE = (512, 17_408, 256)
-FULL_ROLE_SHAPE = (512, 17_408, 5_120)
+TARGET_SHAPE = DEFAULT_EXACT_ROLE_SPEC.program.shape
+FULL_ROLE_SHAPE = DEFAULT_EXACT_ROLE_SPEC.shape
 FUNCTION_NAME = "mmq_llama_five_buffer_full_grid_accumulate"
 BACKEND_ID = "q4k_q8_1_mmq_amd_isa_full_grid_v0"
 ACCUMULATION = "target_in_place_fp32_add"
@@ -78,22 +82,30 @@ def _program_payload(program: UOp) -> tuple[bytes, str, dict[str, Any]]:
   }
 
 
-def _abi(program: UOp) -> list[dict[str, Any]]:
+def _expected_abi(geometry: ExactProgramGeometry) -> tuple[dict[str, Any], ...]:
+  names = ("output", "q4", "q8_values", "q8_scales", "q8_original_sums")
+  dtypes = ("float", "uint", "char", "float", "float")
+  return tuple({"slot": slot, "name": name, "dtype": f"dtypes.{dtype}.ptr({elements})", "elements": elements}
+               for slot, (name, dtype, elements) in enumerate(zip(names, dtypes, geometry.abi_elements)))
+
+
+def _abi(program: UOp, geometry: ExactProgramGeometry = DEFAULT_EXACT_ROLE_SPEC.program) -> list[dict[str, Any]]:
   params = sorted({u for u in program.src[0].toposort() if u.op is Ops.PARAM}, key=lambda u: u.arg.slot)
   if [u.arg.slot for u in params] != list(range(5)): raise ValueError("target PROGRAM must expose PARAM slots 0..4")
-  rows = [{"slot": int(u.arg.slot), "name": EXPECTED_ABI[u.arg.slot]["name"],
+  expected = _expected_abi(geometry)
+  rows = [{"slot": int(u.arg.slot), "name": expected[u.arg.slot]["name"],
            "dtype": str(u.dtype), "elements": int(u.max_numel())} for u in params]
-  if tuple(rows) != EXPECTED_ABI: raise ValueError(f"target PROGRAM ABI changed: {rows}")
+  if tuple(rows) != expected: raise ValueError(f"target PROGRAM ABI changed: {rows}")
   return rows
 
 
-def deterministic_fixture_identity() -> dict[str, Any]:
+def deterministic_fixture_identity(*, role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC) -> dict[str, Any]:
   """Return the orchestrator's existing deterministic full-role identity."""
-  return target_fixture_evidence()
+  return target_fixture_evidence(role_spec=role_spec)
 
 
-def _default_compile_once() -> Any:
-  return compile_target_program(accumulate=True, target=AMD_ISA_TARGET)
+def _default_compile_once(role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC) -> Any:
+  return compile_target_program(accumulate=True, target=AMD_ISA_TARGET, role_spec=role_spec)
 
 
 def _program_disassembly(program: UOp, binary: bytes) -> tuple[str, str]:
@@ -118,7 +130,7 @@ def _program_disassembly(program: UOp, binary: bytes) -> tuple[str, str]:
   return disassembly, "renderer-final-stream-byte-reassembled"
 
 
-def _validate_program(program: Any) -> UOp:
+def _validate_program(program: Any, role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC) -> UOp:
   if not isinstance(program, UOp) or program.op is not Ops.PROGRAM:
     raise ValueError("compile result is not a PROGRAM")
   programs = [u for u in program.toposort() if u.op is Ops.PROGRAM]
@@ -126,11 +138,12 @@ def _validate_program(program: Any) -> UOp:
   if program.arg.function_name != FUNCTION_NAME:
     raise ValueError(f"target function changed: {program.arg.function_name}")
   if tuple(program.arg.globals) != tuple(range(5)): raise ValueError(f"target globals changed: {program.arg.globals}")
-  if tuple(program.arg.global_size) != (136, 4, 1): raise ValueError(f"target grid changed: {program.arg.global_size}")
+  if tuple(program.arg.global_size) != role_spec.program.grid:
+    raise ValueError(f"target grid changed: {program.arg.global_size}")
   if tuple(program.arg.local_size or ()) != (256, 1, 1): raise ValueError(f"target local size changed: {program.arg.local_size}")
   if program.src[1].op is not Ops.DEVICE or program.src[1].arg != PROGRAM_DEVICE:
     raise ValueError(f"target PROGRAM device changed: {program.src[1]}")
-  _abi(program)
+  _abi(program, role_spec.program)
   _program_payload(program)
   return program
 
@@ -154,9 +167,10 @@ def _write_archive(directory: Path, archive: Path) -> None:
 
 
 def produce_frozen_target_artifact(output_dir: str | Path, *, archive: str | Path | None = None,
-                                   compile_once: Callable[[], Any] = _default_compile_once,
+                                   role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC,
+                                   compile_once: Callable[[], Any] | None = None,
                                    disassemble: Callable[[bytes], tuple[str, str]] | None = None,
-                                   fixture_builder: Callable[[], dict[str, Any]] = deterministic_fixture_identity
+                                   fixture_builder: Callable[[], dict[str, Any]] | None = None,
                                    ) -> dict[str, Any]:
   """Compile exactly once and atomically produce a self-validating CPU-only bundle."""
   output = Path(output_dir)
@@ -164,21 +178,27 @@ def produce_frozen_target_artifact(output_dir: str | Path, *, archive: str | Pat
   output.parent.mkdir(parents=True, exist_ok=True)
   staging = Path(tempfile.mkdtemp(prefix=f".{output.name}.", dir=output.parent))
   try:
-    compiled = compile_once()  # sole compile invocation owned by this producer
+    selected_compile = compile_once or (lambda: _default_compile_once(role_spec))
+    selected_fixture = fixture_builder or (lambda: deterministic_fixture_identity(role_spec=role_spec))
+    compiled = selected_compile()  # sole compile invocation owned by this producer
     if isinstance(compiled, UOp):
-      program = _validate_program(compiled)
+      program = _validate_program(compiled, role_spec)
     else:
       if not getattr(compiled, "emitted", False) or getattr(compiled, "program", None) is None:
         raise RuntimeError(getattr(compiled, "blocker", None) or "target accumulate K=256 program did not emit")
-      program = _validate_program(compiled.program)
+      program = _validate_program(compiled.program, role_spec)
     binary, source, shared_artifacts = _program_payload(program)
     disassembly, disassembly_tool = (
       _program_disassembly(program, binary) if disassemble is None else disassemble(binary))
     if not isinstance(disassembly, str) or not disassembly.strip():
       raise ValueError("AMDGPU disassembly is empty")
-    fixture = fixture_builder()
+    fixture = selected_fixture()
     if not isinstance(fixture, dict) or fixture.get("schema") != FIXTURE_SCHEMA:
       raise ValueError("fixture builder returned the wrong schema")
+    if tuple(fixture.get("shape", ())) != role_spec.shape:
+      raise ValueError("fixture full-role shape differs from admitted role")
+    if "role" in fixture and fixture["role"] != role_spec.role:
+      raise ValueError("fixture role differs from admitted role")
     serialized = pickle.dumps(program, protocol=pickle.HIGHEST_PROTOCOL)
     files = {
       FILE_NAMES["binary"]: binary,
@@ -194,12 +214,12 @@ def produce_frozen_target_artifact(output_dir: str | Path, *, archive: str | Pat
         key: os.environ[key] for key in COMPILER_ENV if key in os.environ
       },
       "backend_id": BACKEND_ID, "accumulation": ACCUMULATION, "accumulate": True,
-      "shape": list(TARGET_SHAPE), "full_role_shape": list(FULL_ROLE_SHAPE),
+      "shape": list(role_spec.program.shape), "full_role_shape": list(role_spec.shape),
       "program": {
         "function": program.arg.function_name, "key": program.key.hex(),
         "device": program.src[1].arg, "compile_target": AMD_ISA_TARGET,
         "globals": list(program.arg.globals), "global_size": list(program.arg.global_size),
-        "local_size": list(program.arg.local_size or ()), "abi": _abi(program),
+        "local_size": list(program.arg.local_size or ()), "abi": _abi(program, role_spec.program),
       },
       "artifacts": {
         **shared_artifacts,
@@ -264,14 +284,21 @@ def load_frozen_target_artifact(path: str | Path) -> FrozenTargetArtifact:
     raise ValueError("frozen artifact must be produced without GPU runtime or dispatch")
   retained = {name: files[name] for name in FILE_NAMES.values()}
   if manifest.get("files") != _inventory(retained): raise ValueError("retained file inventory identity mismatch")
+  try: role_spec = exact_role_spec_from_shape(tuple(manifest.get("full_role_shape", ())))
+  except (TypeError, ValueError) as exc: raise ValueError(f"frozen full-role shape is not inventory-admitted: {exc}") from exc
+  if tuple(manifest.get("shape", ())) != role_spec.program.shape:
+    raise ValueError("frozen program geometry differs from admitted full role")
   try: program = pickle.loads(files[FILE_NAMES["program"]])
   except BaseException as exc: raise ValueError(f"serialized PROGRAM cannot be loaded: {type(exc).__name__}: {exc}") from exc
-  program = _validate_program(program)
+  program = _validate_program(program, role_spec)
   binary, source, shared_artifacts = _program_payload(program)
   if binary != files[FILE_NAMES["binary"]]: raise ValueError("serialized PROGRAM binary differs from retained HSACO")
   if source.encode() != files[FILE_NAMES["source"]]: raise ValueError("serialized PROGRAM source differs from retained source")
   disassembly = files[FILE_NAMES["disassembly"]].decode()
   fixture = json.loads(files[FILE_NAMES["fixture"]])
+  if tuple(fixture.get("shape", ())) != role_spec.shape or \
+     ("role" in fixture and fixture["role"] != role_spec.role):
+    raise ValueError("fixture role/shape differs from admitted frozen role")
   artifacts = manifest.get("artifacts", {})
   expected_artifacts = {
     **shared_artifacts,
@@ -287,7 +314,7 @@ def load_frozen_target_artifact(path: str | Path) -> FrozenTargetArtifact:
       "function": program.arg.function_name, "key": program.key.hex(),
       "device": program.src[1].arg, "compile_target": AMD_ISA_TARGET,
       "globals": list(program.arg.globals), "global_size": list(program.arg.global_size),
-      "local_size": list(program.arg.local_size or ()), "abi": _abi(program)}:
+      "local_size": list(program.arg.local_size or ()), "abi": _abi(program, role_spec.program)}:
     raise ValueError("serialized PROGRAM launch identity differs from manifest")
   return FrozenTargetArtifact(manifest, program, binary, source, disassembly, fixture)
 
@@ -343,13 +370,16 @@ def main(argv: list[str] | None = None) -> int:
   produce = sub.add_parser("produce", help="compile once and freeze the exact accumulate=True target PROGRAM")
   produce.add_argument("--output-dir", type=Path, required=True)
   produce.add_argument("--archive", type=Path)
+  produce.add_argument("--inventory", type=Path, default=DEFAULT_INVENTORY)
+  produce.add_argument("--role", default=DEFAULT_EXACT_ROLE_SPEC.role)
   verify = sub.add_parser("verify", help="validate and inspect a frozen directory or tar without recompiling")
   verify.add_argument("bundle", type=Path)
   audit = sub.add_parser("audit", help="run the CPU-only static HSACO audit against a frozen bundle")
   audit.add_argument("bundle", type=Path)
   args = parser.parse_args(argv)
   if args.command == "produce":
-    result = produce_frozen_target_artifact(args.output_dir, archive=args.archive)
+    result = produce_frozen_target_artifact(args.output_dir, archive=args.archive,
+                                            role_spec=exact_role_spec(args.role, inventory=args.inventory))
   elif args.command == "verify":
     result = dict(load_frozen_target_artifact(args.bundle).manifest)
   else:

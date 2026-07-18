@@ -34,15 +34,19 @@ from typing import Any, Callable, Iterable, Mapping
 import numpy as np
 
 from extra.qk.mmq_llama_five_buffer_gpu_harness import (
-  ATOL, FULL_GRID_BACKEND_ID, RTOL, TARGET_ROLE_PROBE_SHAPE, _artifact_evidence,
+  ATOL, FULL_GRID_BACKEND_ID, RTOL, _artifact_evidence,
   _numeric_comparison, _pack_q4_epochs_contiguous, _random_q4_words,
+)
+from extra.qk.mmq_exact_role_spec import (
+  DEFAULT_EXACT_ROLE_SPEC, DEFAULT_INVENTORY, ExactRoleSpec, exact_role_spec,
 )
 
 
 SCHEMA = "tinygrad.mmq_q4k_q8_1_target_epoch_orchestrator.v1"
 ATTESTATION_SCHEMA = "tinygrad.mmq_q4k_q8_1_target_epoch_attestation.v1"
 FIXTURE_SCHEMA = "tinygrad.mmq_q4k_q8_1_target_fixture.v1"
-TOTAL_EPOCHS = TARGET_ROLE_PROBE_SHAPE[2] // 256
+TARGET_ROLE_PROBE_SHAPE = DEFAULT_EXACT_ROLE_SPEC.shape
+TOTAL_EPOCHS = DEFAULT_EXACT_ROLE_SPEC.epochs
 DEFAULT_WORKER_TIMEOUT_SECONDS = 120.0
 DEFAULT_RUNTIME_TIMEOUT_MS = 30_000
 _GPU_FAULT_MARKERS = (
@@ -79,7 +83,8 @@ def read_kernel_log_since(since_timestamp: float) -> str:
   return proc.stdout
 
 
-def compile_target_program(*, accumulate: bool = False, target: str | None = None) -> Any:
+def compile_target_program(*, accumulate: bool = False, target: str | None = None,
+                           role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC) -> Any:
   """Compile and validate the generated target K=256 PROGRAM without a runtime.
 
   This is the single CPU-only compile boundary shared by the diagnostic epoch
@@ -90,9 +95,9 @@ def compile_target_program(*, accumulate: bool = False, target: str | None = Non
     AMD_ISA_TARGET, build_llama_five_buffer_full_kernel, compile_llama_five_buffer_full_kernel,
   )
 
-  m, n, _ = TARGET_ROLE_PROBE_SHAPE
+  m, n, epoch_k = role_spec.program.shape
   compiled = compile_llama_five_buffer_full_kernel(
-    build_llama_five_buffer_full_kernel(m, n, 256, accumulate=accumulate),
+    build_llama_five_buffer_full_kernel(m, n, epoch_k, accumulate=accumulate),
     target=AMD_ISA_TARGET if target is None else target)
   if not compiled.emitted or compiled.program is None:
     mode = "accumulate" if accumulate else "overwrite"
@@ -116,11 +121,12 @@ def target_program_artifact_evidence(program: Any) -> tuple[bytes, str, dict[str
   return binary, source, evidence
 
 
-def compile_target_program_artifact(temp_dir: str | Path) -> tuple[str, dict[str, Any]]:
+def compile_target_program_artifact(temp_dir: str | Path, *,
+                                    role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC) -> tuple[str, dict[str, Any]]:
   """Compile the overwrite target CPU-side and serialize it for spawn workers."""
   from extra.qk.mmq_llama_runtime_contract import LLAMA_SOURCE_COMMIT
 
-  program = compile_target_program(accumulate=False)
+  program = compile_target_program(accumulate=False, role_spec=role_spec)
   binary, source, evidence = target_program_artifact_evidence(program)
 
   path = Path(temp_dir) / "target_k256_program.pkl"
@@ -142,7 +148,9 @@ def compile_target_program_artifact(temp_dir: str | Path) -> tuple[str, dict[str
   }
 
 
-def _target_epoch_inputs(epoch: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def _target_epoch_inputs(epoch: int, *,
+                         role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC
+                         ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
   """Regenerate the target harness's deterministic inputs and one epoch oracle."""
   from extra.qk.mmq_q4k_q8_reference import (
     Q81MMQDS4Activation, Q81MMQDS4ActivationSpec, Q4KQ81MMQTileSpec,
@@ -150,12 +158,12 @@ def _target_epoch_inputs(epoch: int) -> tuple[np.ndarray, np.ndarray, np.ndarray
     q8_1_mmq_ds4_quantize_reference,
   )
 
-  if not 0 <= epoch < TOTAL_EPOCHS: raise ValueError(f"epoch must be in [0,{TOTAL_EPOCHS-1}]")
-  m, n, k = TARGET_ROLE_PROBE_SHAPE
+  if not 0 <= epoch < role_spec.epochs: raise ValueError(f"epoch must be in [0,{role_spec.epochs-1}]")
+  m, n, k = role_spec.shape
   words = _random_q4_words(n, k, 20260721)
   source = np.random.default_rng(20260722).standard_normal((m, k), dtype=np.float32)
   values, scales, sums = q8_1_mmq_ds4_quantize_reference(source)
-  q4_blocks = words.view(np.uint8).reshape(n, TOTAL_EPOCHS, 144)
+  q4_blocks = words.view(np.uint8).reshape(n, role_spec.epochs, 144)
   q4_epoch = np.ascontiguousarray(q4_blocks[:, epoch:epoch+1, :].reshape(-1).view(np.uint32))
   values_epoch = np.ascontiguousarray(values[epoch*2:(epoch+1)*2].reshape(-1))
   scales_epoch = np.ascontiguousarray(scales[epoch*2:(epoch+1)*2].reshape(-1))
@@ -176,7 +184,7 @@ def _target_epoch_inputs(epoch: int) -> tuple[np.ndarray, np.ndarray, np.ndarray
   return q4_epoch, values_epoch, scales_epoch, sums_epoch, reference
 
 
-def target_fixture_evidence() -> dict[str, Any]:
+def target_fixture_evidence(*, role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC) -> dict[str, Any]:
   """Return deterministic input/repack identity shared with the strict target harness.
 
   This is CPU-only and intentionally records byte hashes of the complete
@@ -185,15 +193,15 @@ def target_fixture_evidence() -> dict[str, Any]:
   """
   from extra.qk.mmq_q4k_q8_reference import q8_1_mmq_ds4_quantize_reference
 
-  m, n, k = TARGET_ROLE_PROBE_SHAPE
+  m, n, k = role_spec.shape
   words = _random_q4_words(n, k, 20260721)
   source = np.random.default_rng(20260722).standard_normal((m, k), dtype=np.float32)
   values, scales, sums = q8_1_mmq_ds4_quantize_reference(source)
-  q4_blocks = words.view(np.uint8).reshape(n, TOTAL_EPOCHS, 144)
+  q4_blocks = words.view(np.uint8).reshape(n, role_spec.epochs, 144)
   q4_epoch_major = _pack_q4_epochs_contiguous(q4_blocks)
   return {
     "schema": FIXTURE_SCHEMA,
-    "role": "ffn_gate_up", "shape": [m, n, k], "total_epochs": TOTAL_EPOCHS,
+    "role": role_spec.role, "shape": [m, n, k], "total_epochs": role_spec.epochs,
     "seeds": {"q4": 20260721, "q8_source": 20260722},
     "repack": {
       "q4_sha256": hashlib.sha256(np.ascontiguousarray(q4_blocks).tobytes()).hexdigest(),
@@ -212,7 +220,8 @@ def target_fixture_evidence() -> dict[str, Any]:
 
 
 def _run_target_epoch_worker(program_path: str, output_path: str, epoch: int,
-                             runtime_timeout_ms: int = DEFAULT_RUNTIME_TIMEOUT_MS) -> dict[str, Any]:
+                             runtime_timeout_ms: int = DEFAULT_RUNTIME_TIMEOUT_MS,
+                             role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC) -> dict[str, Any]:
   """Load and dispatch exactly one target epoch in a fresh spawned process."""
   from tinygrad import Tensor, dtypes
   from tinygrad.engine.realize import get_runtime
@@ -223,8 +232,8 @@ def _run_target_epoch_worker(program_path: str, output_path: str, epoch: int,
   if program.op is not Ops.PROGRAM: raise RuntimeError("serialized artifact is not a PROGRAM")
   if tuple(program.arg.globals) != tuple(range(5)):
     raise RuntimeError(f"serialized target PROGRAM ABI changed: globals={program.arg.globals}")
-  q4, values, scales, sums, reference = _target_epoch_inputs(epoch)
-  m, n, _ = TARGET_ROLE_PROBE_SHAPE
+  q4, values, scales, sums, reference = _target_epoch_inputs(epoch, role_spec=role_spec)
+  m, n, _ = role_spec.shape
   output = Tensor.empty(m*n, dtype=dtypes.float32, device="AMD").realize()
   q4_tensor = Tensor(q4, device="AMD").realize()
   values_tensor = Tensor(values, device="AMD").realize()
@@ -253,11 +262,12 @@ def _run_target_epoch_worker(program_path: str, output_path: str, epoch: int,
 
 def run_isolated_target_epoch(program_path: str, output_path: str, epoch: int,
                               *, timeout_seconds: float = DEFAULT_WORKER_TIMEOUT_SECONDS,
-                              runtime_timeout_ms: int = DEFAULT_RUNTIME_TIMEOUT_MS) -> dict[str, Any]:
+                              runtime_timeout_ms: int = DEFAULT_RUNTIME_TIMEOUT_MS,
+                              role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC) -> dict[str, Any]:
   """Run one epoch worker under a hard spawned-process deadline."""
   from tinygrad.runtime.process_isolated import run_isolated
   isolated = run_isolated(
-    _run_target_epoch_worker, args=(program_path, output_path, epoch, runtime_timeout_ms),
+    _run_target_epoch_worker, args=(program_path, output_path, epoch, runtime_timeout_ms, role_spec),
     timeout_seconds=timeout_seconds, start_method="spawn",
   )
   if isolated.status != "passed" or not isinstance(isolated.result, dict):
@@ -296,10 +306,11 @@ def _health_passed(value: Any) -> bool:
   return value is True
 
 
-def _base_result(program_evidence: dict[str, Any] | None = None) -> dict[str, Any]:
+def _base_result(program_evidence: dict[str, Any] | None = None, *,
+                 role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC) -> dict[str, Any]:
   return {
     "schema": SCHEMA, "passed": False, "status": "BLOCKED",
-    "shape": list(TARGET_ROLE_PROBE_SHAPE), "role": "ffn_gate_up",
+    "shape": list(role_spec.shape), "role": role_spec.role,
     "diagnostic_only": True, "promotion_eligible": False,
     "production_dispatch_changed": False, "default_route": "direct_packed",
     "completed_epochs": [], "failed_epoch": None, "stop_reason": None,
@@ -313,28 +324,35 @@ def _base_result(program_evidence: dict[str, Any] | None = None) -> dict[str, An
 def orchestrate_epoch_sweep(
   *,
   epoch_indices: Iterable[int],
-  compile_artifact: Callable[[str | Path], tuple[str, dict[str, Any]]] = compile_target_program_artifact,
-  epoch_runner: Callable[[str, str, int], dict[str, Any]] = run_isolated_target_epoch,
+  role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC,
+  compile_artifact: Callable[[str | Path], tuple[str, dict[str, Any]]] | None = None,
+  epoch_runner: Callable[[str, str, int], dict[str, Any]] | None = None,
   health_probe: Callable[[], Any] = spawned_tiny_health_probe,
   fault_reader: Callable[[float], str] = read_kernel_log_since,
-  expected_partial_shape: tuple[int, ...] = TARGET_ROLE_PROBE_SHAPE[:2],
+  expected_partial_shape: tuple[int, ...] | None = None,
 ) -> dict[str, Any]:
   """Run a fail-closed isolated sequence and host-aggregate only verified partials."""
   epochs = tuple(int(x) for x in epoch_indices)
   if not epochs: raise ValueError("at least one epoch is required")
   if len(set(epochs)) != len(epochs): raise ValueError("epoch indices must be unique")
-  if any(not 0 <= epoch < TOTAL_EPOCHS for epoch in epochs):
-    raise ValueError(f"epoch indices must be in [0,{TOTAL_EPOCHS-1}]")
+  if any(not 0 <= epoch < role_spec.epochs for epoch in epochs):
+    raise ValueError(f"epoch indices must be in [0,{role_spec.epochs-1}]")
+  if expected_partial_shape is None: expected_partial_shape = role_spec.shape[:2]
+  selected_compile = compile_artifact or (
+    lambda temp_dir: compile_target_program_artifact(temp_dir, role_spec=role_spec))
+  selected_runner = epoch_runner or (
+    lambda artifact_path, output_path, epoch: run_isolated_target_epoch(
+      artifact_path, output_path, epoch, role_spec=role_spec))
 
   with tempfile.TemporaryDirectory(prefix="tinygrad-mmq-target-epochs-") as temp_dir:
     try:
-      artifact_path, program_evidence = compile_artifact(temp_dir)
+      artifact_path, program_evidence = selected_compile(temp_dir)
     except BaseException as exc:
-      out = _base_result()
+      out = _base_result(role_spec=role_spec)
       out["stop_reason"] = f"program compile/serialization failed: {type(exc).__name__}: {exc}"
       return out
-    out = _base_result(program_evidence)
-    out["fixture"] = target_fixture_evidence()
+    out = _base_result(program_evidence, role_spec=role_spec)
+    out["fixture"] = target_fixture_evidence(role_spec=role_spec)
 
     def finish() -> dict[str, Any]:
       health = out["health_attestation"]
@@ -372,7 +390,7 @@ def orchestrate_epoch_sweep(
         "status": "BLOCKED", "stop_stage": None,
       }
       out["epoch_health"].append(attestation)
-      try: result = epoch_runner(artifact_path, output_path, epoch)
+      try: result = selected_runner(artifact_path, output_path, epoch)
       except BaseException as exc:
         result = {"passed": False, "epoch": epoch, "status": "BLOCKED",
                   "exact_blocker": f"{type(exc).__name__}: {exc}"}
@@ -436,7 +454,8 @@ def orchestrate_epoch_sweep(
       "aggregate_sum": float(np.sum(aggregate, dtype=np.float64)),
       "aggregate_sha256": hashlib.sha256(np.ascontiguousarray(aggregate).tobytes()).hexdigest(),
       "coverage": {"verified_epochs": list(epochs), "verified_k": 256*len(epochs),
-                   "target_epochs": TOTAL_EPOCHS, "complete_target": set(epochs) == set(range(TOTAL_EPOCHS))},
+                   "target_epochs": role_spec.epochs,
+                   "complete_target": set(epochs) == set(range(role_spec.epochs))},
     })
     return finish()
 
@@ -452,11 +471,16 @@ def _parse_epochs(value: str) -> tuple[int, ...]:
 
 def main() -> int:
   parser = argparse.ArgumentParser(description=__doc__)
-  parser.add_argument("--epochs", type=_parse_epochs, default=(0,),
+  parser.add_argument("--inventory", type=Path, default=DEFAULT_INVENTORY)
+  parser.add_argument("--role", default=DEFAULT_EXACT_ROLE_SPEC.role)
+  parser.add_argument("--epochs", default="0",
                       help="comma-separated K=256 epoch indices, or 'all' (default: 0)")
   parser.add_argument("--output", type=Path, help="optional JSON evidence path")
   args = parser.parse_args()
-  result = orchestrate_epoch_sweep(epoch_indices=args.epochs)
+  role_spec = exact_role_spec(args.role, inventory=args.inventory)
+  epochs = tuple(range(role_spec.epochs)) if args.epochs.strip().lower() == "all" else \
+    tuple(int(piece.strip()) for piece in args.epochs.split(",") if piece.strip())
+  result = orchestrate_epoch_sweep(epoch_indices=epochs, role_spec=role_spec)
   encoded = json.dumps(result, indent=2, sort_keys=True)
   if args.output is not None:
     args.output.parent.mkdir(parents=True, exist_ok=True)
