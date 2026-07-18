@@ -108,10 +108,14 @@ def build_frozen_exact_q4k_schedule(lin: Any, activation: Tensor, *, role_spec: 
   # The zero fill and all epoch calls stay lazy. custom_kernel returns slot zero
   # wrapped in AFTER(call); feeding that Tensor into the following epoch is the
   # in-place accumulation ordering edge.
-  # unique_const accepts an explicit device without consulting Device.DEFAULT,
-  # which keeps graph construction valid under @function's ALLOW_DEVICE_USAGE=0.
-  output = Tensor(UOp.unique_const(
-    0.0, shape=(role_spec.m * role_spec.n,), dtype=dtypes.float32, device=PROGRAM_DEVICE)).contiguous()
+  # Derive the zero accumulator from an admitted operand. A shaped
+  # ``UOp.unique_const`` can be inspected as a graph but is not a valid tensor
+  # function when the scheduler lowers it. Build the multiply through
+  # ``_apply_uop`` so its scalar zero does not consult Device.DEFAULT while
+  # @function has ALLOW_DEVICE_USAGE=0; the result retains AMD device lineage
+  # and lowers to the ordinary scheduler-owned zero fill.
+  output_seed = activation.flatten()[:1].cast(dtypes.float32)
+  output = output_seed._apply_uop(lambda u: u.mul(0)).expand(role_spec.m * role_spec.n).contiguous()
   program = binding.artifact.program
   for epoch in range(role_spec.epochs):
     q4 = _require_amd_tensor(_q4_epoch(packed_weight, role_spec, epoch), name=f"Q4 epoch {epoch}")

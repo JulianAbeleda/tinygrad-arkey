@@ -75,6 +75,10 @@ def test_scheduler_builds_exact_lazy_program_chain_without_runtime_or_device_acc
   calls = [u for u in result.output.uop.toposort()
            if u.op is Ops.CALL and u.src[0].op is Ops.PROGRAM]
   assert len(calls) == role_spec.epochs
+  # The accumulator zero must be an ordinary scheduler constant. A shaped
+  # unique CONST with UNIQUE/DEVICE sources survives graph inspection but
+  # fails tensor-function verification during real lowering.
+  assert all(not (u.op is Ops.CONST and len(u.src) != 0) for u in result.output.uop.toposort())
   assert {call.src[0] for call in calls} == {result.binding.artifact.program}
   assert all(len(get_call_arg_uops(call)) == 5 for call in calls)
   assert all(tuple(call.src[0].arg.outs) == (0,) and tuple(call.src[0].arg.ins) == tuple(range(5))
