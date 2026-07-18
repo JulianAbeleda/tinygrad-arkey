@@ -544,6 +544,15 @@ arithmetic or a target-grid address defect. It does **not** close R6: the sweep 
 aggregation, while the strict gate still requires one healthy same-process 20-launch adapter with preloaded/persistent
 buffers, GPU-side FP32 accumulation, final full-K oracle comparison, same-session timing, and no hidden fallback.
 
+The follow-up no-target preload canary also passes. It uploads and byte-round-trips exactly 50,135,040 bytes (the full
+20-epoch Q4 capacity), with a known-safe tiny add between upload and readback. The upload advances the AMD timeline
+cleanly through signal 24, the tiny add/readback through signal 29, and the full readback through signal 53. Payload
+and roundtrip SHA256 are both `879d7bb7…`; the independent post-run health canary passes and the kernel-fault window
+is empty. Evidence is `docs/target-q4-preload-canary-20260718.json`. Therefore neither the large SDMA transfer nor a
+timeline value around 30 is sufficient to reproduce the strict-run fault. The next safe discriminator is the exact
+four-buffer preload plus target PROGRAM runtime/code upload with **no target dispatch**, followed only then by a
+bounded target-only same-process launch sequence if runtime construction remains healthy.
+
 ## 1. Executive state
 
 The project is building a generated tinygrad prefill route for non-fitting quantized models, using Qwen3-14B as the

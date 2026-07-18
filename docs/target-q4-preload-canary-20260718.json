@@ -1,0 +1,50 @@
+{
+  "child": {
+    "buffer_nbytes": 50135040,
+    "buffer_va": 131290477490176,
+    "device": "AMD",
+    "elapsed_seconds": 0.37788189901039004,
+    "nbytes": 50135040,
+    "no_target_dispatch": true,
+    "passed": true,
+    "payload_sha256": "879d7bb7c11606a3ee9e6013feabd5a0d3550972e9c1d359341b02292edc9eb0",
+    "roundtrip_passed": true,
+    "roundtrip_sha256": "879d7bb7c11606a3ee9e6013feabd5a0d3550972e9c1d359341b02292edc9eb0",
+    "schema": "tinygrad.mmq_q4k_q8_1.preloaded_buffer_canary.v1.child",
+    "timeline": {
+      "after_preload": {
+        "signal_value": 24,
+        "timeline_value": 25
+      },
+      "after_readback": {
+        "signal_value": 53,
+        "timeline_value": 54
+      },
+      "after_tiny_add": {
+        "signal_value": 29,
+        "timeline_value": 30
+      },
+      "start": {
+        "signal_value": 0,
+        "timeline_value": 1
+      }
+    },
+    "tiny_add_passed": true,
+    "tiny_size": 256
+  },
+  "child_error": null,
+  "child_status": "passed",
+  "device": "AMD",
+  "diagnostic_only": true,
+  "exact_blocker": null,
+  "health_after": true,
+  "kernel_faults": [],
+  "nbytes": 50135040,
+  "no_target_dispatch": true,
+  "passed": true,
+  "production_dispatch_changed": false,
+  "promotion_eligible": false,
+  "schema": "tinygrad.mmq_q4k_q8_1.preloaded_buffer_canary.v1",
+  "status": "PASS",
+  "tiny_size": 256
+}
