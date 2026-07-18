@@ -570,6 +570,13 @@ independent postflight health probe pass, with no kernel-log fault. Evidence is
 allocation/copy, accumulator initialization, and target code upload. The next boundary is one full-N target launch
 from a corrected epoch view, followed by its independent epoch oracle comparison.
 
+That corrected one-shot boundary passes as well. Epoch 0 dispatches once from the full epoch-major preloaded buffers
+in 0.692 ms and reports 0/8,912,896 mismatches, max absolute error 1.2207e-4, with all values finite. Timeline signal
+30 completes, the kernel-log window is empty, and the independent postflight health canary passes. Evidence is
+`docs/target-preloaded-single-epoch-0-20260718.json`. The old signal-30/current-29 artifact therefore does not
+reproduce after correcting the Q4 layout. Next isolate repeated target launches without accumulation, then add the
+GPU accumulator only after that target-only prefix remains healthy.
+
 ## 1. Executive state
 
 The project is building a generated tinygrad prefill route for non-fitting quantized models, using Qwen3-14B as the
