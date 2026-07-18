@@ -22,6 +22,7 @@ from typing import Any, Callable, Mapping
 from tinygrad.uop.ops import Ops, UOp
 
 from extra.qk.mmq_compile_evidence import COMPILER_ENV
+from extra.qk.mmq_llama_five_buffer_full_kernel import AMD_ISA_TARGET
 from extra.qk.mmq_target_epoch_orchestrator import (
   FIXTURE_SCHEMA, compile_target_program, target_fixture_evidence, target_program_artifact_evidence,
 )
@@ -34,6 +35,7 @@ FULL_ROLE_SHAPE = (512, 17_408, 5_120)
 FUNCTION_NAME = "mmq_llama_five_buffer_full_grid_accumulate"
 BACKEND_ID = "q4k_q8_1_mmq_amd_isa_full_grid_v0"
 ACCUMULATION = "target_in_place_fp32_add"
+PROGRAM_DEVICE = "AMD"
 FILE_NAMES = {
   "binary": "target_accumulate_k256.hsaco",
   "program": "target_accumulate_k256.program.pkl",
@@ -91,7 +93,7 @@ def deterministic_fixture_identity() -> dict[str, Any]:
 
 
 def _default_compile_once() -> Any:
-  return compile_target_program(accumulate=True)
+  return compile_target_program(accumulate=True, target=AMD_ISA_TARGET)
 
 
 def _program_disassembly(program: UOp, binary: bytes) -> tuple[str, str]:
@@ -101,10 +103,9 @@ def _program_disassembly(program: UOp, binary: bytes) -> tuple[str, str]:
   from tinygrad.renderer.isa.amd import AMDISARenderer
   from tinygrad.runtime.support.elf import elf_loader
 
-  target = program.src[1].arg
-  if not isinstance(target, str) or not target.startswith("AMD:ISA:"):
+  if program.src[1].op is not Ops.DEVICE or program.src[1].arg != PROGRAM_DEVICE:
     raise ValueError("frozen target PROGRAM is not an AMD:ISA program")
-  renderer = AMDISARenderer(Target.parse(target))
+  renderer = AMDISARenderer(Target.parse(AMD_ISA_TARGET))
   final_linear = renderer._final_linear(program.src[2])
   proof = program.src[2].arg
   assembly_program = renderer._assembly_program(program, proof)
@@ -127,6 +128,8 @@ def _validate_program(program: Any) -> UOp:
   if tuple(program.arg.globals) != tuple(range(5)): raise ValueError(f"target globals changed: {program.arg.globals}")
   if tuple(program.arg.global_size) != (136, 4, 1): raise ValueError(f"target grid changed: {program.arg.global_size}")
   if tuple(program.arg.local_size or ()) != (256, 1, 1): raise ValueError(f"target local size changed: {program.arg.local_size}")
+  if program.src[1].op is not Ops.DEVICE or program.src[1].arg != PROGRAM_DEVICE:
+    raise ValueError(f"target PROGRAM device changed: {program.src[1]}")
   _abi(program)
   _program_payload(program)
   return program
@@ -193,7 +196,8 @@ def produce_frozen_target_artifact(output_dir: str | Path, *, archive: str | Pat
       "backend_id": BACKEND_ID, "accumulation": ACCUMULATION, "accumulate": True,
       "shape": list(TARGET_SHAPE), "full_role_shape": list(FULL_ROLE_SHAPE),
       "program": {
-        "function": program.arg.function_name, "key": program.key.hex(), "target": program.src[1].arg,
+        "function": program.arg.function_name, "key": program.key.hex(),
+        "device": program.src[1].arg, "compile_target": AMD_ISA_TARGET,
         "globals": list(program.arg.globals), "global_size": list(program.arg.global_size),
         "local_size": list(program.arg.local_size or ()), "abi": _abi(program),
       },
@@ -280,7 +284,8 @@ def load_frozen_target_artifact(path: str | Path) -> FrozenTargetArtifact:
   if manifest.get("fixture") != fixture: raise ValueError("fixture identity differs from manifest")
   program_manifest = manifest.get("program", {})
   if program_manifest != {
-      "function": program.arg.function_name, "key": program.key.hex(), "target": program.src[1].arg,
+      "function": program.arg.function_name, "key": program.key.hex(),
+      "device": program.src[1].arg, "compile_target": AMD_ISA_TARGET,
       "globals": list(program.arg.globals), "global_size": list(program.arg.global_size),
       "local_size": list(program.arg.local_size or ()), "abi": _abi(program)}:
     raise ValueError("serialized PROGRAM launch identity differs from manifest")

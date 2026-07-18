@@ -68,9 +68,14 @@ def test_shared_cpu_compile_helper_forwards_accumulation_mode(monkeypatch):
   monkeypatch.setattr(full_kernel, "build_llama_five_buffer_full_kernel",
                       lambda m, n, k, *, accumulate=False: calls.append((m, n, k, accumulate)) or "kernel")
   monkeypatch.setattr(full_kernel, "compile_llama_five_buffer_full_kernel",
-                      lambda kernel: type("Compiled", (), {"emitted": True, "program": program, "blocker": None})())
+                      lambda kernel, *, target: calls.append(("target", target)) or
+                      type("Compiled", (), {"emitted": True, "program": program, "blocker": None})())
   assert compile_target_program(accumulate=True) is program
-  assert calls == [(512, 17_408, 256, True)]
+  assert compile_target_program(target="AMD:ISA:gfx1200") is program
+  assert calls == [
+    (512, 17_408, 256, True), ("target", full_kernel.AMD_ISA_TARGET),
+    (512, 17_408, 256, False), ("target", "AMD:ISA:gfx1200"),
+  ]
 
 
 def test_spawned_health_probe_passes_validated_queue_mode_into_fresh_child(monkeypatch):

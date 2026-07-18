@@ -79,7 +79,7 @@ def read_kernel_log_since(since_timestamp: float) -> str:
   return proc.stdout
 
 
-def compile_target_program(*, accumulate: bool = False) -> Any:
+def compile_target_program(*, accumulate: bool = False, target: str | None = None) -> Any:
   """Compile and validate the generated target K=256 PROGRAM without a runtime.
 
   This is the single CPU-only compile boundary shared by the diagnostic epoch
@@ -87,12 +87,13 @@ def compile_target_program(*, accumulate: bool = False) -> Any:
   """
   from tinygrad.uop.ops import Ops
   from extra.qk.mmq_llama_five_buffer_full_kernel import (
-    build_llama_five_buffer_full_kernel, compile_llama_five_buffer_full_kernel,
+    AMD_ISA_TARGET, build_llama_five_buffer_full_kernel, compile_llama_five_buffer_full_kernel,
   )
 
   m, n, _ = TARGET_ROLE_PROBE_SHAPE
   compiled = compile_llama_five_buffer_full_kernel(
-    build_llama_five_buffer_full_kernel(m, n, 256, accumulate=accumulate))
+    build_llama_five_buffer_full_kernel(m, n, 256, accumulate=accumulate),
+    target=AMD_ISA_TARGET if target is None else target)
   if not compiled.emitted or compiled.program is None:
     mode = "accumulate" if accumulate else "overwrite"
     raise RuntimeError(compiled.blocker or f"target K=256 {mode} program did not emit")

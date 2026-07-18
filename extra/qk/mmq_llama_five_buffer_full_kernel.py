@@ -17,6 +17,7 @@ from extra.qk.mmq_llama_five_buffer_graph import (FiveBufferEpochOffsets, LlamaF
 from extra.qk.mmq_llama_oracle_epoch import build_llama_oracle_epoch_stage_five_buffer
 from extra.qk.mmq_llama_oracle_recurrence import LlamaOracleRecurrenceGraph, build_llama_oracle_recurrence
 from extra.qk.mmq_llama_runtime_contract import LLAMA_SOURCE_COMMIT, SOURCE_ANCHORS
+from extra.qk.prefill.q4k_q8_five_buffer_compile_adapter import AMD_ISA_TARGET
 
 
 SCHEMA = "tinygrad.mmq_llama_five_buffer_full_kernel.v1"
@@ -219,7 +220,7 @@ def build_llama_five_buffer_full_kernel(m:int, n:int, k:int, *, accumulate: bool
     LLAMA_SOURCE_COMMIT, tuple(sorted(SOURCE_ANCHORS.items())))
 
 
-def compile_llama_five_buffer_full_kernel(kernel:LlamaFiveBufferFullKernel, target:str="AMD:ISA:gfx1100") -> LlamaFiveBufferFullKernel:
+def compile_llama_five_buffer_full_kernel(kernel:LlamaFiveBufferFullKernel, target:str=AMD_ISA_TARGET) -> LlamaFiveBufferFullKernel:
   """Claim emission only after the spill-free compiler accepts the final PROGRAM."""
   if not isinstance(kernel, LlamaFiveBufferFullKernel): raise TypeError("expected full-grid kernel")
   try: program = to_program(kernel.sink, AMDISARenderer(Target.parse(target)))
@@ -229,5 +230,5 @@ def compile_llama_five_buffer_full_kernel(kernel:LlamaFiveBufferFullKernel, targ
   return replace(kernel, program=program, emitted=True, blocker="")
 
 
-__all__ = ["RESOURCE_BLOCKER", "SCHEMA", "FullGridTopology", "FullGridOwnerCoordinates", "LlamaFiveBufferFullKernel",
+__all__ = ["AMD_ISA_TARGET", "RESOURCE_BLOCKER", "SCHEMA", "FullGridTopology", "FullGridOwnerCoordinates", "LlamaFiveBufferFullKernel",
   "build_llama_five_buffer_full_kernel", "compile_llama_five_buffer_full_kernel"]

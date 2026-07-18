@@ -28,7 +28,7 @@ def _program() -> UOp:
   linear = UOp(Ops.LINEAR, src=(UOp(Ops.INS, arg=s_endpgm()),))
   shell = UOp(Ops.PROGRAM, src=(sink,))
   binary = assemble_linear(shell, linear, "gfx1100")
-  return UOp(Ops.PROGRAM, src=(sink, UOp(Ops.DEVICE, arg="AMD:ISA:gfx1100"), linear,
+  return UOp(Ops.PROGRAM, src=(sink, UOp(Ops.DEVICE, arg="AMD"), linear,
     UOp(Ops.SOURCE, arg="generated source\n"), UOp(Ops.BINARY, arg=binary)),
     arg=ProgramInfo(name=frozen.FUNCTION_NAME, global_size=(136, 4, 1), local_size=(256, 1, 1),
                     globals=tuple(range(5))))
@@ -79,7 +79,8 @@ def test_frozen_target_producer_compiles_once_and_loads_without_recompile(tmp_pa
   assert directory_loaded.manifest["program"]["global_size"] == [136, 4, 1]
   assert directory_loaded.manifest["program"]["local_size"] == [256, 1, 1]
   assert directory_loaded.manifest["program"]["function"] == frozen.FUNCTION_NAME
-  assert directory_loaded.manifest["program"]["target"] == "AMD:ISA:gfx1100"
+  assert directory_loaded.manifest["program"]["device"] == "AMD"
+  assert directory_loaded.manifest["program"]["compile_target"] == "AMD:ISA:gfx1100"
   assert [row["slot"] for row in directory_loaded.manifest["program"]["abi"]] == list(range(5))
   assert isinstance(directory_loaded.manifest["compiler_environment"], dict)
   assert directory_loaded.disassembly.startswith("s_endpgm 0 // 0000000000000100: BFB00000")
@@ -94,6 +95,28 @@ def test_frozen_target_loader_rejects_retained_hsaco_tampering(tmp_path: Path):
   binary_path = output / frozen.FILE_NAMES["binary"]
   binary_path.write_bytes(binary_path.read_bytes() + b"tamper")
   with pytest.raises(ValueError, match="inventory identity mismatch"):
+    frozen.load_frozen_target_artifact(output)
+
+
+def test_frozen_target_rejects_program_device_drift(tmp_path: Path):
+  program = _program()
+  changed = program.replace(src=(program.src[0], UOp(Ops.DEVICE, arg="AMD:ISA:gfx1100"), *program.src[2:]))
+  with pytest.raises(ValueError, match="device changed"):
+    frozen.produce_frozen_target_artifact(
+      tmp_path / "bundle", compile_once=lambda: SimpleNamespace(emitted=True, program=changed, blocker=None),
+      disassemble=lambda binary: ("s_endpgm\n", "cpu-test-objdump"), fixture_builder=_fixture)
+
+
+def test_frozen_target_loader_rejects_manifest_compile_target_drift(tmp_path: Path):
+  output = tmp_path / "bundle"
+  frozen.produce_frozen_target_artifact(
+    output, compile_once=lambda: SimpleNamespace(emitted=True, program=_program(), blocker=None),
+    disassemble=lambda binary: ("s_endpgm\n", "cpu-test-objdump"), fixture_builder=_fixture)
+  manifest_path = output / "manifest.json"
+  manifest = json.loads(manifest_path.read_text())
+  manifest["program"]["compile_target"] = "AMD:ISA:gfx1200"
+  manifest_path.write_text(json.dumps(manifest))
+  with pytest.raises(ValueError, match="launch identity differs"):
     frozen.load_frozen_target_artifact(output)
 
 
