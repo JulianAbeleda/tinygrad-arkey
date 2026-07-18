@@ -182,6 +182,27 @@ def test_full_gpu_probe_joins_candidate_identity_but_stays_non_promotable():
   assert candidate["production_dispatch_changed"] is False
 
 
+def test_search_report_wires_optional_full_gpu_probe_without_promotion():
+  probe = {
+    "shape": [128, 128, 256], "passed": True,
+    "evidence": {
+      "source_sha256": "a" * 64, "binary_sha256": "b" * 64,
+      "resources": {"vgpr": 256, "scratch_bytes": 0},
+      "comparison": {"status": "pass", "mismatch_count": 0},
+    },
+  }
+  base = build_search_report()
+  assert base["full_gpu_probe_candidate"] is None
+  report = build_search_report(full_gpu_probe=probe)
+  candidate = report["full_gpu_probe_candidate"]
+  assert candidate is not None
+  assert candidate["candidate_id"] == "prefill_14b_q4k_q8_1_hybrid_mmq_atom"
+  assert candidate["evidence"]["M1"] is True and candidate["evidence"]["M5"] is True
+  assert candidate["evidence"]["M6"] is False and candidate["evidence"]["M7"] is False
+  assert candidate["promotion_eligible"] is False and candidate["complete_atom"] is False
+  assert report["promotion_verdict"] == "BLOCKED_UNTIL_COOPERATIVE_TILE_WIN"
+
+
 def test_mmq_r5_geometry_search_ranks_non_promotable_existing_atoms_with_fake_runner():
   def fake_runner(config: BoundedMMQConfig):
     direct = 10.0

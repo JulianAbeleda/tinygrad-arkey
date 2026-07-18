@@ -612,7 +612,8 @@ def build_r7_reduction_status() -> dict[str, Any]:
 
 
 def build_search_report(*, run: bool = False, warmups: int = 0, rounds: int = 1,
-                        runner: Callable[[BoundedMMQConfig], dict[str, Any]] = run_bounded_harness) -> dict[str, Any]:
+                        runner: Callable[[BoundedMMQConfig], dict[str, Any]] = run_bounded_harness,
+                        full_gpu_probe: dict[str, Any] | None = None) -> dict[str, Any]:
   rows = []
   for candidate in SEARCHABLE_CANDIDATES:
     row = candidate.to_json()
@@ -661,6 +662,10 @@ def build_search_report(*, run: bool = False, warmups: int = 0, rounds: int = 1,
     },
     "r6_route_gate_status": build_r6_route_gate_status(),
     "r7_reduction_status": build_r7_reduction_status(),
+    # Optional because the base machine search is compile/evidence-only.  When
+    # supplied, this joins the exact GPU artifact without changing the default
+    # route or making the incomplete probe promotable.
+    "full_gpu_probe_candidate": None if full_gpu_probe is None else build_full_gpu_probe_candidate(full_gpu_probe),
     "promotion_verdict": "BLOCKED_UNTIL_COOPERATIVE_TILE_WIN",
     "milestone_evidence": _default_milestone_evidence(),
     "promotion_gate": evaluate_candidate_promotion(owner_coverage=r4_evidence["owner_coverage"],
