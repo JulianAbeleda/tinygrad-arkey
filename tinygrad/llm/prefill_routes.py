@@ -1,13 +1,34 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any, Callable, Iterator, Mapping
 from tinygrad import Tensor, dtypes
 from tinygrad.llm import route_ops as qk_ops
 from tinygrad.llm.memory_semantics import (prefill_activation as _prefill_activation,
   prefill_output as _prefill_output, prefill_scratch as _prefill_scratch)
 from tinygrad.llm.prefill_route_observer import PrefillRouteAttachment, notify_prefill_route
 from tinygrad.uop.ops import UOp
+
+_PREFILL_ROUTE_OVERRIDE: ContextVar[Callable[[object, Tensor], Tensor | None] | None] = \
+  ContextVar("tinygrad_prefill_route_override", default=None)
+
+
+@contextmanager
+def prefill_route_override(route: Callable[[object, Tensor], Tensor | None]) -> Iterator[None]:
+  """Install one explicit, context-local route for benchmark/research calls.
+
+  Ordinary model execution never installs this scope and therefore retains the
+  immutable production attachment path below. The override is deliberately a
+  callable rather than an environment switch: the caller must already hold all
+  policy, artifact, and fallback authority, and any exception fails the call.
+  """
+  if not callable(route): raise TypeError("prefill route override must be callable")
+  token = _PREFILL_ROUTE_OVERRIDE.set(route)
+  try: yield
+  finally: _PREFILL_ROUTE_OVERRIDE.reset(token)
+
 
 def _mark_tensor_semantic(value, marker):
   # Route unit tests use graphless structural Tensor stubs. Runtime Tensor/UOp
@@ -225,6 +246,9 @@ def route_direct_packed_prefill(lin, x:Tensor) -> Tensor | None:
 
 
 def route_prefill_linear(lin, x:Tensor) -> Tensor:
+  if (override := _PREFILL_ROUTE_OVERRIDE.get()) is not None:
+    routed = override(lin, x)
+    if routed is not None: return routed
   route = _attached_production_route(lin, x)
   w = getattr(lin, "_pf16_w", None)
 

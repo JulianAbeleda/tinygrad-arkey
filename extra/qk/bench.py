@@ -18,7 +18,7 @@ sys.path.insert(0, str(ROOT))
 
 from extra.qk.prefill_harness import (
   DEFAULT_MODEL_PROFILE, MODEL_HARNESS_ALIASES, MODEL_HARNESS_PROFILES, PREFILL_MODES, csv_ints,
-  prefill_authority_argv, prefill_run_profile,
+  SixRowResearchHarnessConfig, prefill_authority_argv, prefill_run_profile,
   prefill_subprocess_env, resolve_prefill_model_profile,
 )
 from extra.qk.decode_harness import (
@@ -46,7 +46,16 @@ def main(argv: list[str] | None = None) -> int:
   ap.add_argument("--prefill-start-positions", default=None)
   ap.add_argument("--prefill-whole-lengths", default=None)
   ap.add_argument("--prefill-no-artifact", action="store_true", help="do not write prefill-whole-synced/latest.json")
+  ap.add_argument("--prefill-artifact", default="", help="explicit prefill artifact path instead of latest.json")
   ap.add_argument("--prefill-require-route", default="", help="fail unless this exact prefill route is attributed")
+  ap.add_argument("--prefill-six-row-research-policy", default="",
+                  help="explicitly enable the default-off six-row research smoke with this immutable policy")
+  ap.add_argument("--prefill-six-row-research-inventory",
+                  default="bench/prefill-pure-full-kernel/qwen3-14b-mixed-quant-candidate-inventory-v1.json")
+  ap.add_argument("--prefill-six-row-frozen-bundle", action="append", default=[], metavar="IDENTITY=PATH",
+                  help="exact candidate identity to existing frozen bundle; repeat for every candidate binding")
+  ap.add_argument("--prefill-six-row-fallback-program", action="append", default=[], metavar="IDENTITY=PROGRAM",
+                  help="fallback binding to declared direct-packed program identity; repeat for every fallback")
   ap.add_argument("--decode-ckpts", default=None, help="comma-separated decode checkpoint contexts")
   ap.add_argument("--decode-nmeas", type=int, default=None, help="override decode measurements per context")
   ap.add_argument("--decode-max-context", type=int, default=None, help="override decode model max_context")
@@ -63,9 +72,18 @@ def main(argv: list[str] | None = None) -> int:
                                   rounds=args.prefill_rounds,
                                   start_positions=csv_ints(args.prefill_start_positions) if args.prefill_start_positions else None,
                                   whole_lengths=csv_ints(args.prefill_whole_lengths) if args.prefill_whole_lengths else None)
+    six_row_research = None
+    if args.prefill_six_row_research_policy:
+      six_row_research = SixRowResearchHarnessConfig(
+        args.prefill_six_row_research_policy, tuple(args.prefill_six_row_frozen_bundle),
+        tuple(args.prefill_six_row_fallback_program), args.prefill_six_row_research_inventory)
+    elif args.prefill_six_row_frozen_bundle or args.prefill_six_row_fallback_program:
+      ap.error("six-row bundle/fallback declarations require --prefill-six-row-research-policy")
     rc = _run("PREFILL pp@L", prefill_authority_argv(args.model, profile, model_profile_id=model_profile.id, pin_clock=args.pin_clock,
                                                      artifact=not args.prefill_no_artifact,
-                                                     require_route=args.prefill_require_route or None),
+                                                     require_route=args.prefill_require_route or None,
+                                                     six_row_research=six_row_research,
+                                                     artifact_path=args.prefill_artifact or None),
               prefill_subprocess_env(model_profile_id=model_profile.id, model_path=args.model), label=f"{profile.mode}:{model_profile.id}") or rc
   if args.decode or both:
     profile = decode_run_profile(ckpts=decode_csv_ints(args.decode_ckpts) if args.decode_ckpts else None,
