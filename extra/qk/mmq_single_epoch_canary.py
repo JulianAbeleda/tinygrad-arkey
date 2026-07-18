@@ -29,7 +29,7 @@ TOTAL_EPOCHS = TARGET_SHAPE[2] // 256
 DEFAULT_EPOCH = 0
 DEFAULT_CHILD_TIMEOUT_SECONDS = 120.0
 DEFAULT_RUNTIME_TIMEOUT_MS = 30_000
-METADATA_STORAGE_MODES = ("preloaded_views", "dedicated_preloaded", "fixed_refreshed")
+METADATA_STORAGE_MODES = ("preloaded_views", "dedicated_preloaded", "fixed_refreshed", "fixed_device_refreshed")
 _GPU_FAULT_MARKERS = (
   "sq_intr", "page fault", "sqc instruction", "mes failed", "gpu reset",
   "device wedged", "vram is lost", "ring gfx timeout",
@@ -172,7 +172,7 @@ def _run_epoch_worker(program_path: str, epoch_start: int, epoch_count: int = 1,
       first, last = metadata_epoch * 2 * m * 4, (metadata_epoch + 1) * 2 * m * 4
       dedicated_scales.append(Tensor(np.ascontiguousarray(scales[first:last]), dtype=dtypes.float32, device=device).realize())
       dedicated_sums.append(Tensor(np.ascontiguousarray(sums[first:last]), dtype=dtypes.float32, device=device).realize())
-  elif metadata_storage_mode == "fixed_refreshed":
+  elif metadata_storage_mode in ("fixed_refreshed", "fixed_device_refreshed"):
     fixed_scales = Tensor.empty(2 * m * 4, dtype=dtypes.float32, device=device).realize()
     fixed_sums = Tensor.empty(2 * m * 4, dtype=dtypes.float32, device=device).realize()
     fixed_scales.uop.buffer.get_buf(device)
@@ -201,11 +201,21 @@ def _run_epoch_worker(program_path: str, epoch_start: int, epoch_count: int = 1,
     else:
       assert fixed_scales is not None and fixed_sums is not None
       first, last = q8_metadata_epoch * 2 * m * 4, (q8_metadata_epoch + 1) * 2 * m * 4
-      fixed_scales.uop.buffer.copyin(memoryview(np.ascontiguousarray(scales[first:last])))
-      fixed_sums.uop.buffer.copyin(memoryview(np.ascontiguousarray(sums[first:last])))
-      # Buffer.copyin enqueues SDMA. Drain it before the target so this mode
-      # changes only metadata contents at fixed VAs, never upload visibility.
       from tinygrad.device import Device
+      if metadata_storage_mode == "fixed_refreshed":
+        fixed_scales.uop.buffer.copyin(memoryview(np.ascontiguousarray(scales[first:last])))
+        fixed_sums.uop.buffer.copyin(memoryview(np.ascontiguousarray(sums[first:last])))
+      else:
+        dev = Device[device]
+        scales_source = scales_tensor.uop.buffer.view(2 * m * 4, dtypes.float32,
+          q8_metadata_epoch * 2 * m * 4 * dtypes.float32.itemsize)
+        sums_source = sums_tensor.uop.buffer.view(2 * m * 4, dtypes.float32,
+          q8_metadata_epoch * 2 * m * 4 * dtypes.float32.itemsize)
+        nbytes = 2 * m * 4 * dtypes.float32.itemsize
+        dev.allocator._transfer(fixed_scales.uop.buffer.get_buf(device), scales_source.get_buf(device), nbytes, dev, dev)
+        dev.allocator._transfer(fixed_sums.uop.buffer.get_buf(device), sums_source.get_buf(device), nbytes, dev, dev)
+      # Both copy paths enqueue SDMA. Drain it before the target so these
+      # modes change only metadata contents at fixed VAs, never visibility.
       Device[device].synchronize()
       scales_view, sums_view = fixed_scales.uop.buffer, fixed_sums.uop.buffer
     bound_buffers = (output.uop.buffer, q4_view, values_view, scales_view, sums_view)
