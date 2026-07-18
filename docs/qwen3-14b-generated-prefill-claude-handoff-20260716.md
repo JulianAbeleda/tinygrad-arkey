@@ -598,6 +598,13 @@ signals but leave epoch 2 with 24,277 mismatches (first `[48,384]`, max absolute
 queue fault, launch 3 is the first failing same-process transition. Next compare persistent output reuse against
 fresh, held output buffers per launch while keeping the runtime and preloaded inputs identical.
 
+Fresh held outputs do not repair launch 3. With three distinct output allocations retained until final readback, epoch
+2 still has 21,234 mismatches (first `[48,1280]`, max absolute error 204.05), while timeline signals 30–32 complete
+and the kernel log remains clean. Evidence is
+`docs/target-preloaded-target-only-fresh-epochs-0-2-20260718.json`. Output alias/reuse is therefore ruled out. Next
+repeat one exact epoch three times (`[0,0,0]`) to distinguish repeated invocation state from changing buffer-view
+kernargs.
+
 ## 1. Executive state
 
 The project is building a generated tinygrad prefill route for non-fitting quantized models, using Qwen3-14B as the
