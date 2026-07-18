@@ -1,6 +1,9 @@
 import copy
 import json
 from pathlib import Path
+import sys
+
+import pytest
 
 from extra.qk.mmq_bounded_harness import (
   ACTIVATION_LAYOUT_MMQ_DS4, AMD_DS4_COOP_TILE_BACKEND_ID, AMD_DS4_DOT4X4_BACKEND_ID,
@@ -13,6 +16,7 @@ from extra.qk.mmq_machine_search import (
   build_r7_reduction_status, build_search_report, build_full_gpu_probe_candidate, evaluate_candidate_promotion,
   R5_GEOMETRY_CANDIDATES, build_r6_role_shape_integration_artifact, build_full_grid_k_tiled_dispatch_plan,
   build_r6_negative_role_fallback_smoke_artifact,
+  main,
 )
 from extra.qk.mmq_machine_search import build_boltbeam_oracle_trace
 
@@ -258,26 +262,136 @@ def test_mmq_r5_includes_distinct_full_grid_candidate_and_keeps_r6_fail_closed()
                "promotion_verdict": "R5_COOP_WIN_READY_FOR_R6",
                "role_shape_integration": False}
   r6 = build_r6_route_gate_status(synthetic)
-  assert r6["status"] == "BLOCKED_ROLE_SHAPE_INTEGRATION"
+  assert r6["status"] == "BLOCKED_NO_BOUNDED_COOP_WIN"
   assert r6["production_dispatch_changed"] is False
+  assert r6["r5_evidence_validation"]["status"] == "BLOCKED"
+  assert r6["r5_evidence_validation"]["checks"]["measured_emitted_win"] is False
   assert r6["required_evidence"]["ffn_gate_up_only"] is True
-  assert r6["required_evidence"]["negative_role_tests"] is True
-  assert r6["required_evidence"]["no_hidden_direct_packed_fallback"] is True
+  assert r6["required_evidence"]["static_negative_role_scope"] is True
+  assert r6["required_evidence"]["static_direct_packed_rollback"] is True
+  assert r6["required_evidence"]["live_route_census"] is False
   assert r6["role_shape_integration"]["status"] == "BLOCKED"
   assert r6["role_shape_integration"]["target"] == {"role": "ffn_gate_up", "M": 512, "N": 17408, "K": 5120}
   # An emitted full-grid win must not imply any of the one-role route gates:
   # integration, negative-role coverage, and fallback exclusion are separate
   # evidence obligations and remain fail-closed until actually measured.
   assert r6["required_evidence"] == {
-    "bounded_coop_candidate_win": True,
+    "bounded_coop_candidate_win": False,
     "ffn_gate_up_only": True,
-    "negative_role_tests": True,
-    "no_hidden_direct_packed_fallback": True,
+    "static_negative_role_scope": True,
+    "static_direct_packed_rollback": True,
+    "live_route_census": False,
     "target_role_gpu_evidence": False,
     "independent_epoch_gpu_evidence": False,
     "evidence_composition": False,
   }
-  assert r6["negative_role_fallback_smoke"]["status"] == "PASS"
+  assert r6["negative_role_fallback_smoke"]["status"] == "PASS_STATIC_DESCRIPTOR"
+
+
+def test_mmq_joined_report_is_one_role_ready_but_not_production_promotable():
+  root = Path(__file__).resolve().parents[2]
+  r5 = json.loads((root / "docs/qwen3-14b-prefill-r5-geometry-20260718.json").read_text())
+  target = json.loads((root / "docs/qwen3-14b-prefill-target-frozen-20epoch-pm4-20260718.json").read_text())
+  independent = json.loads((root / "docs/target-epoch-safe-all-attested-20260718.json").read_text())
+
+  report = build_search_report(
+    r5_evidence=r5, target_role_probe=target, independent_epoch_evidence=independent)
+
+  assert report["r6_route_gate_status"]["status"] == "READY_FOR_ONE_ROLE_OPT_IN"
+  assert report["r7_reduction_status"]["status"] == "PASS_TARGET_ROLE_REDUCTION"
+  assert report["promotion_verdict"] == "ONE_ROLE_EVIDENCE_READY_PRODUCTION_PROMOTION_BLOCKED"
+  assert report["production_promotion_verdict"] == "BLOCKED"
+  candidate = report["role_candidates"][0]
+  assert candidate["status"] == "one_role_evidence_ready"
+  assert candidate["one_role_opt_in_eligible"] is False
+  assert candidate["research_opt_in_implementation_eligible"] is True
+  assert candidate["route_binding_implemented"] is False
+  assert candidate["promotion_eligible"] is False
+  assert report["production_dispatch_changed"] is False
+  assert report["default_route"] == "direct_packed"
+  assert report["promotion_gate"]["verdict"] == "BLOCKED_FAIL_CLOSED"
+  assert report["promotion_gate"]["scope"] == "full_14b_prefill_production_route"
+  assert report["blocked_candidates"][0]["status"] == "blocked"
+  assert "six-row policy" in report["blocked_candidates"][0]["reason"]
+  assert report["r6_route_gate_status"]["role_shape_integration"]["candidate_id"] == "r5_full_grid_128x128"
+
+  failed_comparison = copy.deepcopy(r5)
+  full_grid = next(row for row in failed_comparison["ranking"] if row["candidate_id"] == "r5_full_grid_128x128")
+  full_grid["correctness"]["comparison"].update({
+    "status": "fail", "mismatch_count": 16384, "joint_finite": 0,
+  })
+  full_grid["timing"]["comparator_status"] = "blocked"
+  blocked = build_search_report(
+    r5_evidence=failed_comparison, target_role_probe=target, independent_epoch_evidence=independent)
+  assert blocked["r6_route_gate_status"]["status"] == "BLOCKED_NO_BOUNDED_COOP_WIN"
+  assert blocked["role_candidates"][0]["one_role_opt_in_eligible"] is False
+
+  nonfinite_timing = copy.deepcopy(r5)
+  full_grid = next(row for row in nonfinite_timing["ranking"] if row["candidate_id"] == "r5_full_grid_128x128")
+  full_grid["timing"]["min_ms"] = float("nan")
+  full_grid["speedup_vs_direct_packed"] = float("nan")
+  blocked = build_search_report(
+    r5_evidence=nonfinite_timing, target_role_probe=target, independent_epoch_evidence=independent)
+  assert blocked["r6_route_gate_status"]["status"] == "BLOCKED_NO_BOUNDED_COOP_WIN"
+
+  malformed_rows = []
+  forged = copy.deepcopy(r5)
+  next(row for row in forged["ranking"] if row["candidate_id"] == "r5_full_grid_128x128")["candidate_id"] = "forged"
+  malformed_rows.append(forged)
+  forged = copy.deepcopy(r5)
+  next(row for row in forged["ranking"] if row["candidate_id"] == "r5_full_grid_128x128")["shape"]["N"] = 256
+  malformed_rows.append(forged)
+  forged = copy.deepcopy(r5)
+  row = next(row for row in forged["ranking"] if row["candidate_id"] == "r5_full_grid_128x128")
+  row["correctness"] = {"status": "PASS"}
+  malformed_rows.append(forged)
+  forged = copy.deepcopy(r5)
+  row = next(row for row in forged["ranking"] if row["candidate_id"] == "r5_full_grid_128x128")
+  row["artifacts"]["binary_sha256"] = None
+  malformed_rows.append(forged)
+  forged = copy.deepcopy(r5)
+  row = next(row for row in forged["ranking"] if row["candidate_id"] == "r5_full_grid_128x128")
+  row["timing"]["direct_packed_min_ms"] = float("inf")
+  malformed_rows.append(forged)
+  for forged in malformed_rows:
+    gate = build_r6_route_gate_status(
+      forged, target_evidence=target, independent_epoch_evidence=independent)
+    assert gate["status"] == "BLOCKED_NO_BOUNDED_COOP_WIN"
+
+
+def test_mmq_cli_loads_joined_evidence_and_rejects_non_object(tmp_path, monkeypatch, capsys):
+  root = Path(__file__).resolve().parents[2]
+  output = tmp_path / "joined.json"
+  monkeypatch.setattr(sys, "argv", [
+    "mmq_machine_search", "--r5-evidence", str(root / "docs/qwen3-14b-prefill-r5-geometry-20260718.json"),
+    "--target-role-probe", str(root / "docs/qwen3-14b-prefill-target-frozen-20epoch-pm4-20260718.json"),
+    "--independent-epoch-evidence", str(root / "docs/target-epoch-safe-all-attested-20260718.json"),
+    "--out", str(output),
+  ])
+  main()
+  capsys.readouterr()
+  report = json.loads(output.read_text())
+  assert report["promotion_verdict"] == "ONE_ROLE_EVIDENCE_READY_PRODUCTION_PROMOTION_BLOCKED"
+  assert report["r6_route_gate_status"]["status"] == "READY_FOR_ONE_ROLE_OPT_IN"
+
+  malformed = tmp_path / "array.json"
+  malformed.write_text("[]\n")
+  monkeypatch.setattr(sys, "argv", ["mmq_machine_search", "--r5-evidence", str(malformed)])
+  with pytest.raises(SystemExit, match="expected a JSON object"):
+    main()
+
+  nonfinite = tmp_path / "nonfinite.json"
+  nonfinite.write_text('{"speedup": NaN}\n')
+  monkeypatch.setattr(sys, "argv", ["mmq_machine_search", "--r5-evidence", str(nonfinite)])
+  with pytest.raises(SystemExit, match="non-finite JSON number"):
+    main()
+
+  monkeypatch.setattr(sys, "argv", [
+    "mmq_machine_search", "--r5-geometry-search", "--r5-evidence",
+    str(root / "docs/qwen3-14b-prefill-r5-geometry-20260718.json"),
+  ])
+  with pytest.raises(SystemExit, match="valid only for the base"):
+    main()
 
 
 def test_mmq_r5_full_grid_win_is_ranked_as_emitted_but_not_promoted():
@@ -288,8 +402,9 @@ def test_mmq_r5_full_grid_win_is_ranked_as_emitted_but_not_promoted():
   }
   def fake_runner(config: BoundedMMQConfig):
     own = own_ms[next(c.candidate_id for c in R5_GEOMETRY_CANDIDATES if c.backend == config.backend)]
-    return {"status": "PASS", "correctness": {"status": "PASS"},
-            "timing": {"min_ms": own, "direct_packed": {"min_ms": 10.0}}}
+    return {"status": "PASS", "correctness": {"max_abs": 0.0, "atol": 0.001, "tiles": 1},
+            "timing": {"min_ms": own, "comparator_status": "measured",
+                       "direct_packed": {"min_ms": 10.0}}}
 
   report = build_r5_geometry_search_report(run=True, runner=fake_runner)
   assert report["best_candidate_id"] == "r5_full_grid_128x128"
@@ -297,10 +412,13 @@ def test_mmq_r5_full_grid_win_is_ranked_as_emitted_but_not_promoted():
   assert report["promotion_verdict"] == "R5_COOP_WIN_READY_FOR_R6"
   assert report["promotion_eligible"] is False
   assert report["role_shape_integration"] is False
-  r6 = build_r6_route_gate_status(report)
+  retained = json.loads((Path(__file__).resolve().parents[2] /
+    "docs/qwen3-14b-prefill-r5-geometry-20260718.json").read_text())
+  r6 = build_r6_route_gate_status(retained)
   assert r6["status"] == "BLOCKED_ROLE_SHAPE_INTEGRATION"
 
-  artifact = build_r6_role_shape_integration_artifact(report)
+  artifact = build_r6_role_shape_integration_artifact(retained)
+  assert artifact["candidate_id"] == "r5_full_grid_128x128"
   assert artifact["shape_matches"] is False
   assert "128x128x256" in artifact["exact_blocker"]
   assert artifact["tile_plan"]["launch_count"] == 20
@@ -321,14 +439,15 @@ def test_mmq_r5_emitted_win_survives_oracle_speed_rank():
   own_ms.update({"r5_full_grid_128x128": 0.5, "r5_llama_coop_oracle_16x16": 0.1})
   def fake_runner(config: BoundedMMQConfig):
     own = own_ms[next(c.candidate_id for c in R5_GEOMETRY_CANDIDATES if c.backend == config.backend)]
-    return {"status": "PASS", "correctness": {"status": "PASS"},
-            "timing": {"min_ms": own, "direct_packed": {"min_ms": 10.0}}}
+    return {"status": "PASS", "correctness": {"max_abs": 0.0, "atol": 0.001, "tiles": 1},
+            "timing": {"min_ms": own, "comparator_status": "measured",
+                       "direct_packed": {"min_ms": 10.0}}}
 
   report = build_r5_geometry_search_report(run=True, runner=fake_runner)
   assert report["best_candidate_id"] == "r5_llama_coop_oracle_16x16"
   assert report["emitted_backend_win"] is True
   assert report["promotion_verdict"] == "R5_COOP_WIN_READY_FOR_R6"
-  assert build_r6_route_gate_status(report)["status"] == "BLOCKED_ROLE_SHAPE_INTEGRATION"
+  assert build_r6_route_gate_status(report)["status"] == "BLOCKED_NO_BOUNDED_COOP_WIN"
 
 
 def test_mmq_full_grid_tile_plan_rejects_unaligned_shapes_fail_closed():
@@ -339,10 +458,14 @@ def test_mmq_full_grid_tile_plan_rejects_unaligned_shapes_fail_closed():
 
 def test_mmq_r6_negative_role_smoke_is_manifest_scoped_and_default_off():
   smoke = build_r6_negative_role_fallback_smoke_artifact()
-  assert smoke["status"] == "PASS"
+  assert smoke["status"] == "PASS_STATIC_DESCRIPTOR"
+  assert smoke["evidence_scope"] == "static_route_manifest_descriptor"
   assert smoke["accepted_roles"] == ["ffn_gate_up"]
   assert set(smoke["rejected_roles"]) == {"attn_qo", "ffn_down", "attn_kv"}
   assert smoke["rollback_route"] == "direct_packed"
+  assert smoke["research_descriptor_unbound"] is True
+  assert smoke["negative_role_tests"] is False
+  assert smoke["live_route_census_performed"] is False
   assert smoke["production_dispatch_changed"] is False
 
 
@@ -363,13 +486,11 @@ def test_mmq_r6_and_r7_statuses_fail_closed_until_coop_win():
 
 def test_mmq_r6_target_role_gate_requires_measured_full_shape_evidence():
   """A role boolean or R5 win cannot forge the 14B target-role admission."""
-  r5 = build_r5_geometry_search_report(run=True, runner=lambda config: {
-    "status": "PASS", "correctness": {"status": "PASS"},
-    "timing": {"min_ms": 1.0, "direct_packed": {"min_ms": 10.0}},
-  })
-  target = json.loads((Path(__file__).resolve().parents[2] /
+  root = Path(__file__).resolve().parents[2]
+  r5 = json.loads((root / "docs/qwen3-14b-prefill-r5-geometry-20260718.json").read_text())
+  target = json.loads((root /
     "docs/qwen3-14b-prefill-target-frozen-20epoch-pm4-20260718.json").read_text())
-  independent = json.loads((Path(__file__).resolve().parents[2] /
+  independent = json.loads((root /
     "docs/target-epoch-safe-all-attested-20260718.json").read_text())
   missing_independent = build_r6_route_gate_status(r5, target_evidence=target)
   assert missing_independent["status"] == "BLOCKED_ROLE_SHAPE_INTEGRATION"

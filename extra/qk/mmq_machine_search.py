@@ -11,6 +11,7 @@ import argparse
 from dataclasses import dataclass
 import hashlib
 import json
+import math
 import pathlib
 import sys
 from typing import Any, Callable
@@ -558,9 +559,16 @@ def build_r5_geometry_search_report(
           "correctness": result["correctness"],
           "timing": {
             "min_ms": cand_min,
+            "median_ms": result["timing"].get("median_ms"),
+            "samples_ms": result["timing"].get("samples_ms"),
             "direct_packed_min_ms": direct_min,
+            "direct_packed": direct,
             "comparator_status": result["timing"].get("comparator_status"),
           },
+          "artifacts": result.get("artifacts"),
+          "distinct_binary_identity": result.get("distinct_binary_identity"),
+          "same_session_timing": result.get("same_session_timing"),
+          "no_fallback": result.get("no_fallback"),
           "speedup_vs_direct_packed": speedup,
           "exact_blocker": result.get("exact_blocker") if result["status"] != "PASS" else None,
         })
@@ -593,6 +601,126 @@ def build_r5_geometry_search_report(
     "ranking": ranked,
     "best_candidate_id": None if best is None else best["candidate_id"],
     "exact_blocker": (None if role_shape_integration else "emitted backend win awaits production role/shape integration") if coop_winner else "no emitted cooperative MMQ tile candidate has a bounded same-session win",
+  }
+
+
+def _validate_r5_evidence(r5_report: dict[str, Any] | None) -> dict[str, Any]:
+  """Validate a retained R5 win from its measured row, not summary booleans."""
+  r5 = r5_report if isinstance(r5_report, dict) else {}
+  ranking = r5.get("ranking")
+  qualifying_rows: list[str] = []
+  if isinstance(ranking, list):
+    for row in ranking:
+      if not isinstance(row, dict) or row.get("status") != "PASS":
+        continue
+      candidate_id, backend, shape = row.get("candidate_id"), row.get("backend"), row.get("shape")
+      expected_identity = {
+        AMD_DS4_COOP_TILE_BACKEND_ID: ("r5_ds4_coop_tile_16x16", {"M": 16, "N": 16, "K": 256}),
+        FULL_GRID_BACKEND_ID: ("r5_full_grid_128x128", dict(FULL_GRID_R5_SHAPE)),
+      }.get(backend)
+      if expected_identity is None or (candidate_id, shape) != expected_identity:
+        continue
+      if row.get("promotion_eligible") is not False or row.get("production_dispatch_changed") is not False:
+        continue
+      timing = row.get("timing")
+      if not isinstance(timing, dict):
+        continue
+      candidate_ms, direct_ms, speedup = (
+        timing.get("min_ms"), timing.get("direct_packed_min_ms"), row.get("speedup_vs_direct_packed"))
+      numeric = (candidate_ms, direct_ms, speedup)
+      if not all(isinstance(value, (int, float)) and not isinstance(value, bool) for value in numeric):
+        continue
+      if not all(math.isfinite(float(value)) for value in numeric):
+        continue
+      if candidate_ms <= 0 or direct_ms <= 0 or speedup <= 1.0:
+        continue
+      expected_speedup = float(direct_ms) / float(candidate_ms)
+      if abs(float(speedup) - expected_speedup) > max(1e-9, abs(expected_speedup) * 1e-9):
+        continue
+      correctness = row.get("correctness")
+      if not isinstance(correctness, dict):
+        continue
+      if backend == FULL_GRID_BACKEND_ID:
+        comparison = correctness.get("comparison")
+        error_values = () if not isinstance(comparison, dict) else tuple(
+          comparison.get(key) for key in ("max_abs_error", "mean_abs_error", "rtol", "atol"))
+        correctness_ok = (
+          timing.get("comparator_status") == "pass" and
+          correctness.get("status") == "PASS" and
+          correctness.get("authority") == "full_grid_r5_same_session_reference" and
+          isinstance(comparison, dict) and comparison.get("status") == "pass" and
+          comparison.get("mismatch_count") == 0 and
+          comparison.get("nan_got") == comparison.get("nan_reference") == 0 and
+          comparison.get("inf_got") == comparison.get("inf_reference") == 0 and
+          comparison.get("joint_finite") == comparison.get("got_size") ==
+            comparison.get("reference_size") == 128 * 128 and
+          comparison.get("got_shape") == comparison.get("reference_shape") == [128, 128] and
+          all(isinstance(value, (int, float)) and not isinstance(value, bool) and
+              math.isfinite(float(value)) and value >= 0 for value in error_values))
+      else:
+        max_abs, atol, tiles = correctness.get("max_abs"), correctness.get("atol"), correctness.get("tiles")
+        correctness_ok = (
+          timing.get("comparator_status") == "measured" and
+          all(isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value))
+              for value in (max_abs, atol)) and
+          0 <= max_abs <= atol and tiles == 1)
+      if backend == FULL_GRID_BACKEND_ID:
+        samples = timing.get("samples_ms")
+        direct = timing.get("direct_packed")
+        direct_samples = direct.get("samples_ms") if isinstance(direct, dict) else None
+        artifacts = row.get("artifacts")
+        resources = artifacts.get("resources") if isinstance(artifacts, dict) else None
+        def _valid_samples(values: Any, expected_min: float) -> bool:
+          return (isinstance(values, list) and bool(values) and
+                  all(isinstance(value, (int, float)) and not isinstance(value, bool) and
+                      math.isfinite(float(value)) and value > 0 for value in values) and
+                  min(values) == expected_min)
+        def _sha256(value: Any) -> bool:
+          return isinstance(value, str) and len(value) == 64 and all(c in "0123456789abcdef" for c in value)
+        provenance_ok = (
+          _valid_samples(samples, candidate_ms) and isinstance(direct, dict) and
+          direct.get("status") == "measured" and direct.get("min_ms") == direct_ms and
+          _valid_samples(direct_samples, direct_ms) and
+          row.get("distinct_binary_identity") is True and row.get("same_session_timing") is True and
+          row.get("no_fallback") is True and isinstance(artifacts, dict) and
+          artifacts.get("backend_id") == FULL_GRID_BACKEND_ID and
+          artifacts.get("distinct_binary_identity") is True and artifacts.get("same_session_timing") is True and
+          artifacts.get("no_fallback") is True and _sha256(artifacts.get("source_sha256")) and
+          _sha256(artifacts.get("binary_sha256")) and isinstance(resources, dict) and
+          isinstance(resources.get("vgpr"), int) and resources.get("vgpr") > 0 and
+          isinstance(resources.get("lds_bytes"), int) and resources.get("lds_bytes") > 0 and
+          resources.get("scratch_bytes") == 0)
+      else:
+        provenance_ok = True
+      if correctness_ok:
+        if provenance_ok:
+          qualifying_rows.append(candidate_id)
+  full_grid_lineage = "r5_full_grid_128x128" in qualifying_rows
+  all_ranking_ids = [row.get("candidate_id") for row in ranking] if isinstance(ranking, list) else []
+  checks = {
+    "schema": r5.get("schema") == "q4k-q8-1-mmq-r5-geometry-search.v1",
+    "non_promotable_status": r5.get("status") == "PASS_NON_PROMOTABLE",
+    "default_route": r5.get("default_route") == "direct_packed",
+    "production_dispatch_unchanged": r5.get("production_dispatch_changed") is False,
+    "not_directly_promotable": (
+      r5.get("promotion_eligible") is False and r5.get("role_shape_integration") is False),
+    "unique_candidate_ids": (
+      bool(all_ranking_ids) and all(isinstance(value, str) and value for value in all_ranking_ids) and
+      len(all_ranking_ids) == len(set(all_ranking_ids))),
+    "measured_emitted_win": bool(qualifying_rows),
+    "target_backend_lineage": full_grid_lineage,
+    "summary_consistent": (
+      r5.get("emitted_backend_win") is bool(qualifying_rows) and
+      r5.get("promotion_verdict") ==
+        ("R5_COOP_WIN_READY_FOR_R6" if qualifying_rows else "NO_PROMOTION_WITHOUT_BOUNDED_COOP_WIN")),
+  }
+  missing = [name for name, passed in checks.items() if not passed]
+  return {
+    "schema": "q4k-q8-1-mmq-r5-retained-evidence-validation.v1",
+    "status": "PASS" if not missing else "BLOCKED",
+    "checks": checks,
+    "qualifying_candidate_ids": qualifying_rows,
+    "exact_blocker": None if not missing else "R5 evidence missing/failed: " + ", ".join(missing),
   }
 
 
@@ -941,22 +1069,23 @@ def _validate_r6_evidence_composition(target_evidence: dict[str, Any] | None,
 def build_r6_route_gate_status(r5_report: dict[str, Any] | None = None,
                                target_evidence: dict[str, Any] | None = None,
                                independent_epoch_evidence: dict[str, Any] | None = None) -> dict[str, Any]:
-  r5 = r5_report or build_r5_geometry_search_report(run=False)
+  r5 = r5_report if r5_report is not None else build_r5_geometry_search_report(run=False)
+  r5_status = _validate_r5_evidence(r5)
   target_status = _validate_r6_target_role_evidence(target_evidence)
   independent_status = _validate_r6_independent_epoch_evidence(independent_epoch_evidence)
   composition = _validate_r6_evidence_composition(target_evidence, independent_epoch_evidence)
   shape_artifact = build_r6_role_shape_integration_artifact(
     r5, target_evidence=target_evidence, independent_epoch_evidence=independent_epoch_evidence)
   smoke = build_r6_negative_role_fallback_smoke_artifact()
-  ready = (r5.get("promotion_verdict") == "R5_COOP_WIN_READY_FOR_R6" and
-           r5.get("emitted_backend_win") is True and shape_artifact.get("status") == "PASS" and
-           smoke.get("status") == "PASS")
-  role_blocked = r5.get("emitted_backend_win") is True and not ready
+  ready = (r5_status["status"] == "PASS" and shape_artifact.get("status") == "PASS" and
+           smoke.get("status") == "PASS_STATIC_DESCRIPTOR")
+  role_blocked = r5_status["status"] == "PASS" and not ready
   required_evidence = {
-    "bounded_coop_candidate_win": r5.get("emitted_backend_win") is True and r5.get("promotion_verdict") == "R5_COOP_WIN_READY_FOR_R6",
+    "bounded_coop_candidate_win": r5_status["status"] == "PASS",
     "ffn_gate_up_only": smoke["ffn_gate_up_only"],
-    "negative_role_tests": smoke["negative_role_tests"],
-    "no_hidden_direct_packed_fallback": smoke["no_hidden_direct_packed_fallback"],
+    "static_negative_role_scope": smoke["static_negative_role_scope"],
+    "static_direct_packed_rollback": smoke["static_direct_packed_rollback"],
+    "live_route_census": False,
     "target_role_gpu_evidence": target_status["status"] == "PASS",
     "independent_epoch_gpu_evidence": independent_status["status"] == "PASS",
     "evidence_composition": composition["status"] == "PASS",
@@ -968,7 +1097,10 @@ def build_r6_route_gate_status(r5_report: dict[str, Any] | None = None,
     "quant": QUANT,
     "default_route": "direct_packed",
     "production_dispatch_changed": False,
+    "route_binding_implemented": False,
+    "live_route_census_performed": False,
     "required_evidence": required_evidence,
+    "r5_evidence_validation": r5_status,
     "role_shape_integration": shape_artifact,
     "target_role_evidence": target_status,
     "independent_epoch_evidence": independent_status,
@@ -979,7 +1111,7 @@ def build_r6_route_gate_status(r5_report: dict[str, Any] | None = None,
 
 
 def build_r6_negative_role_fallback_smoke_artifact() -> dict[str, Any]:
-  """Verify descriptor scope and direct-packed rollback without dispatching a role."""
+  """Verify only static descriptor scope and rollback; this is not a live route census."""
   from extra.qk.route_manifest import ROUTES
   candidate = ROUTES.get("prefill_q4k_q8_1_hybrid_mmq_atom", {})
   default = ROUTES.get("prefill_q4k_direct_tile4x4_default", {})
@@ -991,16 +1123,27 @@ def build_r6_negative_role_fallback_smoke_artifact() -> dict[str, Any]:
   rollback_ok = candidate.get("baseline_route_id") == "direct_packed" and (
     candidate.get("rollback_route") == "direct_packed" or rollback.get("route") == "direct_packed")
   default_ok = default.get("status") == "promoted_default" and default.get("baseline_route_id") == "prefill_q4k_direct_packed_load_direct_out"
+  research_only_ok = (
+    candidate.get("status") == "research" and candidate.get("purity_status") == "research" and
+    candidate.get("selector") == "research_descriptor_only" and candidate.get("research_only") is True and
+    "no tinygrad/llm/prefill_routes.py binding" in candidate.get("route_attribution", ""))
+  passed = role_scope_ok and rollback_ok and default_ok and research_only_ok
   return {
     "schema": "q4k-q8-1-mmq-r6-negative-role-fallback-smoke.v1",
-    "status": "PASS" if role_scope_ok and rollback_ok and default_ok else "BLOCKED",
-    "ffn_gate_up_only": role_scope_ok, "negative_role_tests": role_scope_ok,
-    "no_hidden_direct_packed_fallback": rollback_ok and default_ok,
+    "status": "PASS_STATIC_DESCRIPTOR" if passed else "BLOCKED",
+    "evidence_scope": "static_route_manifest_descriptor",
+    "ffn_gate_up_only": role_scope_ok,
+    "static_negative_role_scope": role_scope_ok,
+    "static_direct_packed_rollback": rollback_ok and default_ok,
+    "research_descriptor_unbound": research_only_ok,
+    "negative_role_tests": False,
+    "no_hidden_direct_packed_fallback": False,
+    "live_route_census_performed": False,
     "accepted_roles": list(roles), "rejected_roles": list(rejected),
     "candidate_route": "prefill_q4k_q8_1_hybrid_mmq_atom", "rollback_route": "direct_packed",
     "runtime_default_route": "prefill_q4k_direct_tile4x4_default",
     "production_dispatch_changed": False,
-    "exact_blocker": None if role_scope_ok and rollback_ok and default_ok else "route manifest scope/rollback drift",
+    "exact_blocker": None if passed else "research descriptor scope/rollback drift",
   }
 
 
@@ -1015,8 +1158,9 @@ def build_r6_role_shape_integration_artifact(r5_report: dict[str, Any] | None = 
   adapter and negative-role/fallback census.  Keeping this artifact explicit
   prevents a winning microbenchmark from being mistaken for route coverage.
   """
-  r5 = r5_report or build_r5_geometry_search_report(run=False)
-  winner = r5.get("best_candidate_id")
+  r5 = r5_report if r5_report is not None else build_r5_geometry_search_report(run=False)
+  r5_status = _validate_r5_evidence(r5)
+  winner = next(iter(r5_status["qualifying_candidate_ids"]), r5.get("best_candidate_id"))
   winner_row = next((row for row in r5.get("ranking", ()) if row.get("candidate_id") == winner), None)
   candidate_shape = None if winner_row is None else winner_row.get("shape")
   shape_matches = candidate_shape == {k: R6_TARGET_ROLE_SHAPE[k] for k in ("M", "N", "K")}
@@ -1030,8 +1174,9 @@ def build_r6_role_shape_integration_artifact(r5_report: dict[str, Any] | None = 
   # The R5 candidate is the 128x128x256 kernel; R6 admission is an adapter
   # claim over the exact role shape, so the target probe—not equality with the
   # R5 microkernel shape—proves this dimension.
-  role_ready = (target_shape_matches and target_ok and independent_status["status"] == "PASS" and
-                composition["status"] == "PASS" and smoke.get("status") == "PASS")
+  role_ready = (r5_status["status"] == "PASS" and target_shape_matches and target_ok and
+                independent_status["status"] == "PASS" and composition["status"] == "PASS" and
+                smoke.get("status") == "PASS_STATIC_DESCRIPTOR")
   return {
     "schema": "q4k-q8-1-mmq-r6-role-shape-integration.v1",
     "status": "PASS" if role_ready else "BLOCKED",
@@ -1041,8 +1186,9 @@ def build_r6_role_shape_integration_artifact(r5_report: dict[str, Any] | None = 
     "shape_matches": shape_matches,
     "target_shape_matches": target_shape_matches,
     "role_scope": ["ffn_gate_up"],
-    "negative_role_tests": smoke.get("negative_role_tests") is True,
-    "no_hidden_direct_packed_fallback": smoke.get("no_hidden_direct_packed_fallback") is True,
+    "static_negative_role_scope": smoke.get("static_negative_role_scope") is True,
+    "static_direct_packed_rollback": smoke.get("static_direct_packed_rollback") is True,
+    "live_route_census_performed": False,
     "negative_role_fallback_smoke": smoke,
     "target_role_evidence": target_status,
     "independent_epoch_evidence": independent_status,
@@ -1202,27 +1348,55 @@ def build_search_report(*, run: bool = False, warmups: int = 0, rounds: int = 1,
   r4_evidence = build_r4_evidence_artifacts()
   coop_evidence = coop_tile_blocked_translation_evidence(
     BoundedMMQConfig(m_tile=16, n_tile=16, k_groups=8, backend=AMD_DS4_COOP_TILE_BACKEND_ID))
-  r5_report = r5_evidence or build_r5_geometry_search_report(run=False)
+  r5_report = r5_evidence if r5_evidence is not None else build_r5_geometry_search_report(run=False)
   r6_status = build_r6_route_gate_status(
     r5_report, target_evidence=target_role_probe, independent_epoch_evidence=independent_epoch_evidence)
   r7_status = build_r7_reduction_status(target_role_probe)
+  r5_ready = r6_status["r5_evidence_validation"]["status"] == "PASS"
+  one_role_evidence_ready = (
+    r6_status["status"] == "READY_FOR_ONE_ROLE_OPT_IN" and
+    r7_status["status"] == "PASS_TARGET_ROLE_REDUCTION")
   role_candidate = {
     "candidate_id": FULL_GPU_PROBE_CANDIDATE_ID,
     "backend": FULL_GRID_BACKEND_ID,
     "role": FULL_GPU_PROBE_ROLE,
     "shape": dict(R6_TARGET_ROLE_SHAPE),
-    "status": "promotable" if r6_status["status"] == "READY_FOR_ONE_ROLE_OPT_IN" and
-              r7_status["status"] == "PASS_TARGET_ROLE_REDUCTION" else "evidence_only",
-    "promotion_eligible": r6_status["status"] == "READY_FOR_ONE_ROLE_OPT_IN" and
-                          r7_status["status"] == "PASS_TARGET_ROLE_REDUCTION",
+    "status": "one_role_evidence_ready" if one_role_evidence_ready else "evidence_only",
+    "one_role_opt_in_eligible": False,
+    "research_opt_in_implementation_eligible": one_role_evidence_ready,
+    "route_binding_implemented": False,
+    "live_route_census_performed": False,
+    "promotion_eligible": False,
     "default_route": "direct_packed",
     "production_dispatch_changed": False,
     "r6_route_gate_status": r6_status["status"],
     "r7_reduction_status": r7_status["status"],
     "evidence": target_role_probe,
   }
+  blocked_candidates = [dict(row) for row in BLOCKED_CANDIDATES]
+  if one_role_evidence_ready:
+    blocked_candidates[0]["reason"] = (
+      "ffn_gate_up evidence is ready to implement a research opt-in, but the live route binding, "
+      "remaining six-row policy, whole-model correctness/memory census, and production rollback proof are absent")
+  promotion_gate = evaluate_candidate_promotion(
+    owner_coverage=r4_evidence["owner_coverage"], cooperative_tile=coop_evidence)
+  promotion_gate.update({
+    "scope": "full_14b_prefill_production_route",
+    "one_role_evidence_ready": one_role_evidence_ready,
+    "exact_blocker": (
+      "one ffn_gate_up role is evidence-ready; full production route admission remains incomplete"
+      if one_role_evidence_ready else
+      "full production route admission remains incomplete"),
+  })
   return {
     "schema": SCHEMA,
+    "status_semantics": {
+      "one_role_evidence_ready": (
+        "the exact ffn_gate_up kernel passed retained R5/R6/R7 evidence; no live route is bound"),
+      "ready_for_one_role_opt_in": (
+        "evidence gate only; implementation plus a live negative-role/fallback census are still required"),
+      "production_promotion": "requires the complete multi-role policy and whole-model gates",
+    },
     "candidate_route_id": CANDIDATE_ROUTE_ID,
     "public_label": PUBLIC_LABEL,
     "comparator_id": COMPARATOR_ID,
@@ -1239,12 +1413,18 @@ def build_search_report(*, run: bool = False, warmups: int = 0, rounds: int = 1,
     "done_components": list(DONE_COMPONENTS),
     "searchable_components": [row["component"] for row in DONE_COMPONENTS if row["status"] == "done"],
     "searchable_candidates": rows,
-    "blocked_candidates": list(BLOCKED_CANDIDATES),
+    "blocked_candidates": blocked_candidates,
     "r4_evidence_artifacts": r4_evidence,
     "r5_geometry_search": r5_report,
     "r5_geometry_search_status": {
-      "status": "ready_for_bounded_geometry_search",
-      "reason": "R4 lowered owner trace, staging evidence, and R5 bounded coop numeric correctness pass; R6 remains blocked until R5 reports a same-session coop speed win",
+      "status": ("complete_for_one_role_evidence" if one_role_evidence_ready else
+                 "emitted_win_ready_for_r6" if r5_ready else "ready_for_bounded_geometry_search"),
+      "reason": (
+        "R5 same-session emitted win and the independent R6/R7 one-role evidence are retained; production promotion remains blocked"
+        if one_role_evidence_ready else
+        "R5 same-session emitted win is retained; R6/R7 role evidence remains required"
+        if r5_ready else
+        "R4 lowered owner trace, staging evidence, and R5 bounded coop numeric correctness pass; R6 remains blocked until R5 reports a same-session coop speed win"),
       "required_r4_evidence": ["owner_coverage:PASS", "staging_sum_slots:PASS", "gpu_owner_trace:PASS"],
     },
     "r6_route_gate_status": r6_status,
@@ -1256,10 +1436,13 @@ def build_search_report(*, run: bool = False, warmups: int = 0, rounds: int = 1,
     "full_gpu_probe_candidate": None if full_gpu_probe is None else build_full_gpu_probe_candidate(full_gpu_probe),
     "target_role_probe": target_role_probe,
     "independent_epoch_evidence": independent_epoch_evidence,
-    "promotion_verdict": "BLOCKED_UNTIL_COOPERATIVE_TILE_WIN",
+    "promotion_verdict": (
+      "ONE_ROLE_EVIDENCE_READY_PRODUCTION_PROMOTION_BLOCKED" if one_role_evidence_ready else
+      "R5_COOP_WIN_READY_FOR_R6" if r5_ready else
+      "BLOCKED_UNTIL_COOPERATIVE_TILE_WIN"),
+    "production_promotion_verdict": "BLOCKED",
     "milestone_evidence": _default_milestone_evidence(),
-    "promotion_gate": evaluate_candidate_promotion(owner_coverage=r4_evidence["owner_coverage"],
-      cooperative_tile=coop_evidence),
+    "promotion_gate": promotion_gate,
   }
 
 
@@ -1357,11 +1540,33 @@ def _parse_args() -> argparse.Namespace:
   ap.add_argument("--bundle-out", type=pathlib.Path, help="atomic experiment bundle output directory")
   ap.add_argument("--experiment-id", help="immutable BoltBeam experiment identity")
   ap.add_argument("--system-snapshot-id", help="closed-system snapshot identity")
+  ap.add_argument("--r5-evidence", type=pathlib.Path,
+                  help="retained q4k-q8-1-mmq-r5-geometry-search.v1 JSON for the base report")
+  ap.add_argument("--target-role-probe", type=pathlib.Path,
+                  help="strict full-role target GPU evidence JSON for the base report")
+  ap.add_argument("--independent-epoch-evidence", type=pathlib.Path,
+                  help="independent process-per-epoch GPU evidence JSON for the base report")
   return ap.parse_args()
+
+
+def _load_json_object(path: pathlib.Path, label: str) -> dict[str, Any]:
+  def _reject_nonfinite(value: str) -> None:
+    raise ValueError(f"non-finite JSON number {value!r} is forbidden")
+  try:
+    value = json.loads(path.read_text(), parse_constant=_reject_nonfinite)
+  except (OSError, json.JSONDecodeError, ValueError) as exc:
+    raise SystemExit(f"{label}: unable to load JSON object from {path}: {exc}") from exc
+  if not isinstance(value, dict):
+    raise SystemExit(f"{label}: expected a JSON object in {path}")
+  return value
 
 
 def main() -> None:
   args = _parse_args()
+  evidence_paths = (args.r5_evidence, args.target_role_probe, args.independent_epoch_evidence)
+  if any(path is not None for path in evidence_paths) and (
+      args.experiment is not None or args.boltbeam_oracle_trace or args.r5_geometry_search):
+    raise SystemExit("evidence inputs are valid only for the base machine-search report")
   if args.experiment is not None:
     if args.bundle_out is None or not args.experiment_id or not args.system_snapshot_id:
       raise SystemExit("--experiment requires --bundle-out, --experiment-id, and --system-snapshot-id")
@@ -1376,8 +1581,14 @@ def main() -> None:
   elif args.r5_geometry_search:
     report = build_r5_geometry_search_report(run=args.run, warmups=args.warmups, rounds=args.rounds)
   else:
-    report = build_search_report(run=args.run, warmups=args.warmups, rounds=args.rounds)
-  text = json.dumps(report, indent=2, sort_keys=True)
+    report = build_search_report(
+      run=args.run, warmups=args.warmups, rounds=args.rounds,
+      r5_evidence=None if args.r5_evidence is None else _load_json_object(args.r5_evidence, "--r5-evidence"),
+      target_role_probe=None if args.target_role_probe is None else
+        _load_json_object(args.target_role_probe, "--target-role-probe"),
+      independent_epoch_evidence=None if args.independent_epoch_evidence is None else
+        _load_json_object(args.independent_epoch_evidence, "--independent-epoch-evidence"))
+  text = json.dumps(report, indent=2, sort_keys=True, allow_nan=False)
   if args.out is not None:
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(text + "\n")

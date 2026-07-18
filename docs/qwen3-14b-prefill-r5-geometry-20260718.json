@@ -8,6 +8,92 @@
   "promotion_verdict": "R5_COOP_WIN_READY_FOR_R6",
   "ranking": [
     {
+      "artifacts": {
+        "amd_dot4_batched_uop_hash": null,
+        "amd_dot4x4_batched_uop_hash": null,
+        "amd_ds4_coop_tile_atom_source_hash": null,
+        "amd_ds4_dot4x4_atom_source_hash": null,
+        "amd_ds4_lds_skeleton_atom_source_hash": null,
+        "amd_ds4_warp_atom_source_hash": null,
+        "amd_uop_hash": null,
+        "amd_warp_batched_uop_hash": null,
+        "amd_warp_uop_hash": null,
+        "atom_source_hash": null,
+        "emitted_binary_hash": null,
+        "harness_source_hash": "2b0c32ba39871b80",
+        "llama_mmq_oracle_source_hash": "a9e047e881f4ab0a",
+        "llama_mmq_oracle_source_policy": {
+          "anchors": [
+            "mul_mat_q_process_tile",
+            "mmq_write_back_mma",
+            "mmq_write_back_dp4a",
+            "load_tiles_q4_K",
+            "extern __shared__ int data_mul_mat_q[]"
+          ],
+          "mode": "translated_structure_oracle_do_not_bind_production",
+          "numeric_oracle": "extra.qk.mmq_q4k_q8_reference.q4k_q8_1_mmq_ds4_tile_reference",
+          "source_clone": "/home/ubuntu/env/llama.cpp/ggml/src/ggml-cuda/mmq.cuh",
+          "vendored_cuda": false
+        },
+        "llama_mmq_oracle_tiles": [
+          {
+            "backend_id": "llama_mmq_q4k_q8_1_coop_tile_oracle",
+            "default_route": "direct_packed",
+            "geometry": {
+              "iter_k": 256,
+              "mmq_x": 128,
+              "mmq_y": 128,
+              "nwarps": 8,
+              "tile_c_i": 16,
+              "tile_c_j": 16,
+              "tile_c_ne": 256,
+              "warp_size": 32
+            },
+            "oracle_only": true,
+            "output_shape": [
+              16,
+              16
+            ],
+            "production_dispatch_changed": false,
+            "source_policy": {
+              "anchors": [
+                "mul_mat_q_process_tile",
+                "mmq_write_back_mma",
+                "mmq_write_back_dp4a",
+                "load_tiles_q4_K",
+                "extern __shared__ int data_mul_mat_q[]"
+              ],
+              "mode": "translated_structure_oracle_do_not_bind_production",
+              "numeric_oracle": "extra.qk.mmq_q4k_q8_reference.q4k_q8_1_mmq_ds4_tile_reference",
+              "source_clone": "/home/ubuntu/env/llama.cpp/ggml/src/ggml-cuda/mmq.cuh",
+              "vendored_cuda": false
+            },
+            "writeback_owner_count": 1,
+            "writeback_owners": [
+              {
+                "m_range": [
+                  0,
+                  16
+                ],
+                "n_range": [
+                  0,
+                  16
+                ],
+                "sum_index_model": "sum[(j0/tile_C::J)*tile_C::ne + l]",
+                "tile_c": {
+                  "I": 16,
+                  "J": 16,
+                  "ne": 256
+                },
+                "warp_id": 0,
+                "writeback_model": "dst[ids_dst[j]*stride + i]"
+              }
+            ]
+          }
+        ],
+        "q4k_tile_loader_source_hash": "362cabc9c921d65c",
+        "staged_ds4_atom_source_hash": null
+      },
       "backend": "llama_mmq_q4k_q8_1_coop_tile_oracle",
       "candidate_id": "r5_llama_coop_oracle_16x16",
       "correctness": {
@@ -15,25 +101,71 @@
         "max_abs": 0.0,
         "tiles": 1
       },
+      "distinct_binary_identity": null,
       "exact_blocker": null,
+      "no_fallback": null,
       "production_dispatch_changed": false,
       "promotion_eligible": false,
       "reason": "numeric/ownership oracle only; no emitted AMD candidate",
+      "same_session_timing": null,
       "search_class": "llama_structure_oracle",
       "shape": {
         "K": 256,
         "M": 16,
         "N": 16
       },
-      "speedup_vs_direct_packed": 38.1970777555635,
+      "speedup_vs_direct_packed": 38.60138674507292,
       "status": "PASS",
       "timing": {
         "comparator_status": "measured",
-        "direct_packed_min_ms": 9.034527000039816,
-        "min_ms": 0.23652403615415096
+        "direct_packed": {
+          "atol": 0.000768,
+          "max_abs_vs_reference": 0.000335693359375,
+          "median_ms": 8.943330030888319,
+          "min_ms": 8.904335962142795,
+          "reference_activation_layout": "row_major_q8_1",
+          "samples_ms": [
+            8.974920026957989,
+            8.943330030888319,
+            8.904335962142795
+          ],
+          "status": "PASS"
+        },
+        "direct_packed_min_ms": 8.904335962142795,
+        "median_ms": 0.23755599977448583,
+        "min_ms": 0.23067399160936475,
+        "samples_ms": [
+          0.27145998319610953,
+          0.23755599977448583,
+          0.23067399160936475
+        ]
       }
     },
     {
+      "artifacts": {
+        "backend_id": "q4k_q8_1_mmq_amd_isa_full_grid_v0",
+        "binary_nbytes": 63767,
+        "binary_sha256": "bcc9ba5cbb2cb4ba2f63dd028d8af8da85d64d71b0a7549609d08d3a17ce4942",
+        "distinct_binary_identity": true,
+        "no_fallback": true,
+        "resources": {
+          "authority": "native_elf_descriptor",
+          "compute_pgm_rsrc1": 1085014047,
+          "compute_pgm_rsrc2": 4,
+          "compute_pgm_rsrc3": 0,
+          "kernarg_bytes": 40,
+          "kernel_code_entry_byte_offset": -63232,
+          "lds_bytes": 57856,
+          "scratch_bytes": 0,
+          "sgpr": null,
+          "vgpr": 256,
+          "wavefront_size": 32
+        },
+        "resources_error": "CalledProcessError: Command '('/opt/rocm/llvm/bin/llvm-readelf', '--notes', '/tmp/tmpo8yb3qj1.hsaco')' returned non-zero exit status 1.",
+        "same_session_timing": true,
+        "source_nbytes": 396536,
+        "source_sha256": "b9942fd4cd6842e9cfc08f54c2d08732f3803559d5ac1f6fcde3d852273e82f7"
+      },
       "backend": "q4k_q8_1_mmq_amd_isa_full_grid_v0",
       "candidate_id": "r5_full_grid_128x128",
       "correctness": {
@@ -66,51 +198,63 @@
         },
         "status": "PASS"
       },
+      "distinct_binary_identity": true,
       "exact_blocker": null,
+      "no_fallback": true,
       "production_dispatch_changed": false,
       "promotion_eligible": false,
       "reason": "emitted 128x128x256 full-grid GPU probe; bounded timing/correctness evidence only, no production role or shape integration",
+      "same_session_timing": true,
       "search_class": "bounded_geometry_emitted_full_grid",
       "shape": {
         "K": 256,
         "M": 128,
         "N": 128
       },
-      "speedup_vs_direct_packed": 33.210641677360734,
+      "speedup_vs_direct_packed": 34.69424937035325,
       "status": "PASS",
       "timing": {
         "comparator_status": "pass",
-        "direct_packed_min_ms": 9.327474981546402,
-        "min_ms": 0.28085801750421524
+        "direct_packed": {
+          "median_ms": 9.351988031994551,
+          "min_ms": 9.349303029011935,
+          "samples_ms": [
+            9.630973043385893,
+            9.351988031994551,
+            9.349303029011935
+          ],
+          "status": "measured"
+        },
+        "direct_packed_min_ms": 9.349303029011935,
+        "median_ms": 0.27750199660658836,
+        "min_ms": 0.26947702281177044,
+        "samples_ms": [
+          0.3901529707945883,
+          0.27750199660658836,
+          0.26947702281177044
+        ]
       }
     },
     {
-      "backend": "q4k_q8_1_mmq_amd_ds4_lds_skeleton_atom_v0",
-      "candidate_id": "r5_ds4_lds_skeleton_4x5",
-      "correctness": {
-        "atol": 0.001,
-        "max_abs": 9.1552734375e-05,
-        "tiles": 1
+      "artifacts": {
+        "amd_dot4_batched_uop_hash": null,
+        "amd_dot4x4_batched_uop_hash": null,
+        "amd_ds4_coop_tile_atom_source_hash": null,
+        "amd_ds4_dot4x4_atom_source_hash": null,
+        "amd_ds4_lds_skeleton_atom_source_hash": null,
+        "amd_ds4_warp_atom_source_hash": "685413a83d3cc177",
+        "amd_uop_hash": null,
+        "amd_warp_batched_uop_hash": null,
+        "amd_warp_uop_hash": null,
+        "atom_source_hash": "5cd608f602a21966",
+        "emitted_binary_hash": null,
+        "harness_source_hash": "2b0c32ba39871b80",
+        "llama_mmq_oracle_source_hash": null,
+        "llama_mmq_oracle_source_policy": null,
+        "llama_mmq_oracle_tiles": null,
+        "q4k_tile_loader_source_hash": "362cabc9c921d65c",
+        "staged_ds4_atom_source_hash": null
       },
-      "exact_blocker": null,
-      "production_dispatch_changed": false,
-      "promotion_eligible": false,
-      "reason": "existing LDS-staged DS4 skeleton geometry probe; not llama cooperative tile",
-      "search_class": "bounded_geometry_existing_atom",
-      "shape": {
-        "K": 256,
-        "M": 4,
-        "N": 5
-      },
-      "speedup_vs_direct_packed": 1.2083554034541775,
-      "status": "PASS",
-      "timing": {
-        "comparator_status": "measured",
-        "direct_packed_min_ms": 8.871169004123658,
-        "min_ms": 7.34152301447466
-      }
-    },
-    {
       "backend": "q4k_q8_1_mmq_amd_ds4_warp_atom_v0",
       "candidate_id": "r5_ds4_warp_4x5",
       "correctness": {
@@ -118,25 +262,133 @@
         "max_abs": 9.1552734375e-05,
         "tiles": 1
       },
+      "distinct_binary_identity": null,
       "exact_blocker": null,
+      "no_fallback": null,
       "production_dispatch_changed": false,
       "promotion_eligible": false,
       "reason": "existing DS4 warp atom geometry probe; not llama cooperative tile",
+      "same_session_timing": null,
       "search_class": "bounded_geometry_existing_atom",
       "shape": {
         "K": 256,
         "M": 4,
         "N": 5
       },
-      "speedup_vs_direct_packed": 1.2014540547305446,
+      "speedup_vs_direct_packed": 1.225148042548081,
       "status": "PASS",
       "timing": {
         "comparator_status": "measured",
-        "direct_packed_min_ms": 8.940189029090106,
-        "min_ms": 7.44114100234583
+        "direct_packed": {
+          "atol": 0.000768,
+          "max_abs_vs_reference": 0.000152587890625,
+          "median_ms": 8.818114991299808,
+          "min_ms": 8.804769022390246,
+          "reference_activation_layout": "row_major_q8_1",
+          "samples_ms": [
+            9.056011971551925,
+            8.818114991299808,
+            8.804769022390246
+          ],
+          "status": "PASS"
+        },
+        "direct_packed_min_ms": 8.804769022390246,
+        "median_ms": 7.288278953637928,
+        "min_ms": 7.186698028817773,
+        "samples_ms": [
+          7.335397007409483,
+          7.288278953637928,
+          7.186698028817773
+        ]
       }
     },
     {
+      "artifacts": {
+        "amd_dot4_batched_uop_hash": null,
+        "amd_dot4x4_batched_uop_hash": null,
+        "amd_ds4_coop_tile_atom_source_hash": null,
+        "amd_ds4_dot4x4_atom_source_hash": null,
+        "amd_ds4_lds_skeleton_atom_source_hash": "1ed4d57d4066e54f",
+        "amd_ds4_warp_atom_source_hash": null,
+        "amd_uop_hash": null,
+        "amd_warp_batched_uop_hash": null,
+        "amd_warp_uop_hash": null,
+        "atom_source_hash": "5cd608f602a21966",
+        "emitted_binary_hash": null,
+        "harness_source_hash": "2b0c32ba39871b80",
+        "llama_mmq_oracle_source_hash": null,
+        "llama_mmq_oracle_source_policy": null,
+        "llama_mmq_oracle_tiles": null,
+        "q4k_tile_loader_source_hash": "362cabc9c921d65c",
+        "staged_ds4_atom_source_hash": null
+      },
+      "backend": "q4k_q8_1_mmq_amd_ds4_lds_skeleton_atom_v0",
+      "candidate_id": "r5_ds4_lds_skeleton_4x5",
+      "correctness": {
+        "atol": 0.001,
+        "max_abs": 9.1552734375e-05,
+        "tiles": 1
+      },
+      "distinct_binary_identity": null,
+      "exact_blocker": null,
+      "no_fallback": null,
+      "production_dispatch_changed": false,
+      "promotion_eligible": false,
+      "reason": "existing LDS-staged DS4 skeleton geometry probe; not llama cooperative tile",
+      "same_session_timing": null,
+      "search_class": "bounded_geometry_existing_atom",
+      "shape": {
+        "K": 256,
+        "M": 4,
+        "N": 5
+      },
+      "speedup_vs_direct_packed": 1.2037692501802182,
+      "status": "PASS",
+      "timing": {
+        "comparator_status": "measured",
+        "direct_packed": {
+          "atol": 0.000768,
+          "max_abs_vs_reference": 0.000152587890625,
+          "median_ms": 8.749815984629095,
+          "min_ms": 8.74028803082183,
+          "reference_activation_layout": "row_major_q8_1",
+          "samples_ms": [
+            8.836338995024562,
+            8.749815984629095,
+            8.74028803082183
+          ],
+          "status": "PASS"
+        },
+        "direct_packed_min_ms": 8.74028803082183,
+        "median_ms": 7.262271014042199,
+        "min_ms": 7.260766986291856,
+        "samples_ms": [
+          7.3565180064179,
+          7.262271014042199,
+          7.260766986291856
+        ]
+      }
+    },
+    {
+      "artifacts": {
+        "amd_dot4_batched_uop_hash": null,
+        "amd_dot4x4_batched_uop_hash": null,
+        "amd_ds4_coop_tile_atom_source_hash": null,
+        "amd_ds4_dot4x4_atom_source_hash": "19f8fbe28c2bb59a",
+        "amd_ds4_lds_skeleton_atom_source_hash": null,
+        "amd_ds4_warp_atom_source_hash": null,
+        "amd_uop_hash": null,
+        "amd_warp_batched_uop_hash": null,
+        "amd_warp_uop_hash": null,
+        "atom_source_hash": "5cd608f602a21966",
+        "emitted_binary_hash": null,
+        "harness_source_hash": "2b0c32ba39871b80",
+        "llama_mmq_oracle_source_hash": null,
+        "llama_mmq_oracle_source_policy": null,
+        "llama_mmq_oracle_tiles": null,
+        "q4k_tile_loader_source_hash": "362cabc9c921d65c",
+        "staged_ds4_atom_source_hash": null
+      },
       "backend": "q4k_q8_1_mmq_amd_ds4_dot4x4_atom_v0",
       "candidate_id": "r5_ds4_dot4x4_8x7",
       "correctness": {
@@ -144,25 +396,66 @@
         "max_abs": 6.103515625e-05,
         "tiles": 1
       },
+      "distinct_binary_identity": null,
       "exact_blocker": null,
+      "no_fallback": null,
       "production_dispatch_changed": false,
       "promotion_eligible": false,
       "reason": "existing DS4 dot4x4 geometry probe; not llama cooperative tile",
+      "same_session_timing": null,
       "search_class": "bounded_geometry_existing_atom",
       "shape": {
         "K": 256,
         "M": 8,
         "N": 7
       },
-      "speedup_vs_direct_packed": 1.127272746268563,
+      "speedup_vs_direct_packed": 1.1349770211346215,
       "status": "PASS",
       "timing": {
         "comparator_status": "measured",
-        "direct_packed_min_ms": 9.169399971142411,
-        "min_ms": 8.134144998621196
+        "direct_packed": {
+          "atol": 0.000768,
+          "max_abs_vs_reference": 0.00018310546875,
+          "median_ms": 9.094203996937722,
+          "min_ms": 9.034861985128373,
+          "reference_activation_layout": "row_major_q8_1",
+          "samples_ms": [
+            9.216985024977475,
+            9.094203996937722,
+            9.034861985128373
+          ],
+          "status": "PASS"
+        },
+        "direct_packed_min_ms": 9.034861985128373,
+        "median_ms": 7.996801054105163,
+        "min_ms": 7.960391987580806,
+        "samples_ms": [
+          8.199382049497217,
+          7.996801054105163,
+          7.960391987580806
+        ]
       }
     },
     {
+      "artifacts": {
+        "amd_dot4_batched_uop_hash": null,
+        "amd_dot4x4_batched_uop_hash": null,
+        "amd_ds4_coop_tile_atom_source_hash": "e16e55e99fe75a72",
+        "amd_ds4_dot4x4_atom_source_hash": null,
+        "amd_ds4_lds_skeleton_atom_source_hash": null,
+        "amd_ds4_warp_atom_source_hash": null,
+        "amd_uop_hash": null,
+        "amd_warp_batched_uop_hash": null,
+        "amd_warp_uop_hash": null,
+        "atom_source_hash": "5cd608f602a21966",
+        "emitted_binary_hash": "e16e55e99fe75a72",
+        "harness_source_hash": "2b0c32ba39871b80",
+        "llama_mmq_oracle_source_hash": null,
+        "llama_mmq_oracle_source_policy": null,
+        "llama_mmq_oracle_tiles": null,
+        "q4k_tile_loader_source_hash": "362cabc9c921d65c",
+        "staged_ds4_atom_source_hash": null
+      },
       "backend": "q4k_q8_1_mmq_amd_ds4_coop_tile_atom_v0",
       "candidate_id": "r5_ds4_coop_tile_16x16",
       "correctness": {
@@ -170,22 +463,44 @@
         "max_abs": 0.0001220703125,
         "tiles": 1
       },
+      "distinct_binary_identity": null,
       "exact_blocker": null,
+      "no_fallback": null,
       "production_dispatch_changed": false,
       "promotion_eligible": false,
       "reason": "bounded coop numeric atom; promotion only if it beats direct_packed in the same R5 report",
+      "same_session_timing": null,
       "search_class": "bounded_geometry_emitted_coop_atom",
       "shape": {
         "K": 256,
         "M": 16,
         "N": 16
       },
-      "speedup_vs_direct_packed": 0.4567720789888489,
+      "speedup_vs_direct_packed": 0.44776008099323916,
       "status": "PASS",
       "timing": {
         "comparator_status": "measured",
-        "direct_packed_min_ms": 9.106452984269708,
-        "min_ms": 19.936535973101854
+        "direct_packed": {
+          "atol": 0.000768,
+          "max_abs_vs_reference": 0.000335693359375,
+          "median_ms": 8.889349002856761,
+          "min_ms": 8.814968983642757,
+          "reference_activation_layout": "row_major_q8_1",
+          "samples_ms": [
+            9.051043016370386,
+            8.814968983642757,
+            8.889349002856761
+          ],
+          "status": "PASS"
+        },
+        "direct_packed_min_ms": 8.814968983642757,
+        "median_ms": 19.712270994205028,
+        "min_ms": 19.68681300058961,
+        "samples_ms": [
+          19.938826968427747,
+          19.712270994205028,
+          19.68681300058961
+        ]
       }
     }
   ],
