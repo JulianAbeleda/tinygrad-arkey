@@ -11,11 +11,14 @@ from dataclasses import dataclass, field
 import hashlib
 import itertools
 import json
+import math
 from typing import Any, Callable, Mapping, Protocol, Sequence
 
 SCHEMA = "q4k-q8-1-mmq-search.v1"
 DEFAULT_ROUTE = "direct_packed"
 AGGREGATE_POLICY_SCHEMA = "q4k-q8-1-mmq-aggregate-policy.v1"
+TIMING_SCOPE_SCHEMA = "q4k-q8-1-mmq-timing-scope.v1"
+TIMING_SCOPES = ("bounded", "full_role")
 
 
 @dataclass(frozen=True)
@@ -42,6 +45,7 @@ class SearchPolicy:
   rounds: int = 5
   default_route: str = DEFAULT_ROUTE
   resource_limits: Mapping[str, int | float] = field(default_factory=dict)
+  required_timing_scope: str = "full_role"
 
 
 @dataclass(frozen=True)
@@ -58,6 +62,7 @@ class AggregatePolicy:
   direct_preparation_ms: Mapping[str, float] = field(default_factory=dict)
   direct_packing_ms: Mapping[str, float] = field(default_factory=dict)
   direct_reduction_ms: Mapping[str, float] = field(default_factory=dict)
+  required_timing_scope: str = "full_role"
 
 
 def enumerate_descriptors(axes: Mapping[str, Sequence[Any]], *, id_prefix: str = "q4k_q8_1_mmq") -> tuple[MMQDescriptor, ...]:
@@ -112,7 +117,40 @@ def _fits(descriptor: MMQDescriptor, limits: Mapping[str, int | float]) -> tuple
 
 def _timing_ms(row: Mapping[str, Any]) -> float | None:
   value = row.get("min_ms", row.get("candidate_min_ms"))
-  return float(value) if isinstance(value, (int, float)) and value > 0 else None
+  return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and value > 0 else None
+
+
+def _timing_scope(row: Mapping[str, Any]) -> dict[str, Any] | None:
+  """Return a canonical measurement scope or reject incomplete work accounting.
+
+  A timing is comparable only when it says what work completed.  In
+  particular, a K=256 epoch and a K=5120 role must carry different ``shape``
+  values even if they happen to use the same emitted program.
+  """
+  scope = row.get("timing_scope")
+  if not isinstance(scope, Mapping) or scope.get("schema") != TIMING_SCOPE_SCHEMA:
+    return None
+  kind, role, shape = scope.get("scope"), scope.get("role"), scope.get("shape")
+  if kind not in TIMING_SCOPES or not isinstance(role, str) or not role:
+    return None
+  if not isinstance(shape, (list, tuple)) or len(shape) != 3 or \
+     any(not isinstance(x, int) or isinstance(x, bool) or x <= 0 for x in shape):
+    return None
+  return {"schema": TIMING_SCOPE_SCHEMA, "scope": kind, "role": role, "shape": list(shape)}
+
+
+def _comparison_gate(candidate: Mapping[str, Any], direct: Mapping[str, Any],
+                     required_scope: str) -> tuple[dict[str, Any] | None, str | None]:
+  if required_scope not in TIMING_SCOPES:
+    raise ValueError(f"required_timing_scope must be one of {TIMING_SCOPES}")
+  candidate_scope, direct_scope = _timing_scope(candidate), _timing_scope(direct)
+  if candidate_scope is None or direct_scope is None:
+    return None, "candidate and direct timing_scope evidence are both required"
+  if candidate_scope != direct_scope:
+    return None, "candidate and direct timing_scope evidence must describe identical completed work"
+  if candidate_scope["scope"] != required_scope:
+    return None, f"timing_scope must be {required_scope!r}"
+  return candidate_scope, None
 
 
 def _costs(policy: AggregatePolicy, role: str, *, direct: bool) -> dict[str, float] | None:
@@ -122,7 +160,7 @@ def _costs(policy: AggregatePolicy, role: str, *, direct: bool) -> dict[str, flo
   result = {}
   for name, values in zip(names, maps):
     value = values.get(role, 0.0)
-    if not isinstance(value, (int, float)) or value < 0: return None
+    if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value) or value < 0: return None
     result[name] = float(value)
   return result
 
@@ -139,6 +177,8 @@ def evaluate_aggregate_policy(*, candidate_rows: Mapping[str, Mapping[str, Any]]
   roles = tuple(policy.required_roles)
   if not roles or len(set(roles)) != len(roles):
     raise ValueError("required_roles must be non-empty and unique")
+  if policy.required_timing_scope not in TIMING_SCOPES:
+    raise ValueError(f"required_timing_scope must be one of {TIMING_SCOPES}")
   rows = {}
   eligible = []
   for candidate_id, candidate in candidate_rows.items():
@@ -155,18 +195,22 @@ def evaluate_aggregate_policy(*, candidate_rows: Mapping[str, Mapping[str, Any]]
         blockers.append(f"{role}: session identity mismatch"); continue
       timing, direct_timing = _timing_ms(row), _timing_ms(direct)
       costs, direct_costs = _costs(policy, role, direct=False), _costs(policy, role, direct=True)
+      timing_scope, timing_scope_blocker = _comparison_gate(row, direct, policy.required_timing_scope)
       gate = row.get("evidence_gate", {})
       if row.get("status") not in ("measured", "PASS") or row.get("correctness", {}).get("passed") is not True or not isinstance(gate, Mapping) or gate.get("timing_allowed") is not True:
         blockers.append(f"{role}: incomplete candidate evidence"); continue
       if timing is None or direct_timing is None or costs is None or direct_costs is None or direct.get("passed", True) is False:
         blockers.append(f"{role}: incomplete timing/cost evidence"); continue
+      if timing_scope is None:
+        blockers.append(f"{role}: {timing_scope_blocker}"); continue
       total += timing + sum(costs.values()); direct_total += direct_timing + sum(direct_costs.values())
-    result = {"candidate_id": candidate_id, "status": "BLOCKED" if blockers else "ELIGIBLE",
+    is_win = not blockers and total < direct_total
+    result = {"candidate_id": candidate_id, "status": "BLOCKED" if blockers else ("WIN" if is_win else "LOSS"),
               "blockers": blockers, "aggregate_ms": None if blockers else total,
               "direct_packed_ms": None if blockers else direct_total,
               "speedup_vs_direct_packed": None if blockers else direct_total / total}
     rows[candidate_id] = result
-    if not blockers: eligible.append(result)
+    if is_win: eligible.append(result)
   winner = min(eligible, key=lambda x: x["aggregate_ms"], default=None)
   return {"schema": AGGREGATE_POLICY_SCHEMA, "status": "PASS" if winner else "NO_AGGREGATE_WINNER",
           "winner": winner, "candidates": rows, "required_roles": roles,
@@ -177,6 +221,8 @@ def run_search(*, axes: Mapping[str, Sequence[Any]], session_factory: Callable[[
                policy: SearchPolicy = SearchPolicy()) -> dict[str, Any]:
   """Run correctness first, then timing, with direct_packed in the same session."""
   if policy.warmups < 0 or policy.rounds < 1: raise ValueError("warmups >= 0 and rounds >= 1 are required")
+  if policy.required_timing_scope not in TIMING_SCOPES:
+    raise ValueError(f"required_timing_scope must be one of {TIMING_SCOPES}")
   descriptors = enumerate_descriptors(axes)
   rows: list[dict[str, Any]] = []
   passing: list[tuple[MMQDescriptor, dict[str, Any]]] = []
@@ -215,21 +261,28 @@ def run_search(*, axes: Mapping[str, Sequence[Any]], session_factory: Callable[[
         row.update(status="measured", timing=timing, direct_packed=direct)
         cand, base = _timing_ms(timing), _timing_ms(direct)
         row["speedup_vs_direct_packed"] = None if cand is None or base is None else base / cand
+        timing_scope, timing_scope_blocker = _comparison_gate(timing, direct, policy.required_timing_scope)
+        row["comparison_gate"] = {"passed": timing_scope is not None, "timing_scope": timing_scope,
+                                  "blocker": timing_scope_blocker}
         # An unavailable/failed timing is evidence of no result, never a PASS.
-        if cand is not None and base is not None and timing.get("passed", True) is not False and direct.get("passed", True) is not False:
-          passing.append((descriptor, row))
+        if cand is not None and base is not None and timing.get("passed", True) is not False and direct.get("passed", True) is not False \
+           and timing_scope is not None:
+          row["performance_status"] = "WIN" if cand < base else "LOSS"
+          if cand < base: passing.append((descriptor, row))
         else:
           row["status"] = "timing_blocked"
-          row["blocker"] = "candidate and direct timing evidence are both required"
+          row["blocker"] = timing_scope_blocker or "candidate and direct timing evidence are both required"
     except Exception as exc:
       row.update(status="blocked", blocker=f"{type(exc).__name__}: {exc}")
     rows.append(row)
   measured = [row for _, row in passing]
   winner = min(measured, key=lambda row: _timing_ms(row["timing"]) or float("inf"), default=None)
   artifact = {"schema": SCHEMA, "default_route": policy.default_route, "production_dispatch_changed": False,
-              "policy": {"warmups": policy.warmups, "rounds": policy.rounds, "resource_limits": dict(policy.resource_limits)},
+              "policy": {"warmups": policy.warmups, "rounds": policy.rounds, "resource_limits": dict(policy.resource_limits),
+                         "required_timing_scope": policy.required_timing_scope},
               "candidates": rows, "winner": winner["descriptor"] if winner else None,
-              "winner_evidence": winner, "status": "PASS" if winner else "NO_PASSING_CANDIDATE"}
+              "winner_evidence": winner, "full_role_performance_qualified": bool(winner and policy.required_timing_scope == "full_role"),
+              "status": "PASS" if winner else "NO_PASSING_CANDIDATE"}
   canonical = json.dumps(artifact, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
   artifact["artifact_sha256"] = hashlib.sha256(canonical).hexdigest()
   return artifact

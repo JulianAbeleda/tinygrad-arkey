@@ -1,4 +1,5 @@
 from extra.qk.q4k_q8_mmq_candidate_adapter import BLOCKED_FAIL_CLOSED, CandidateSession, evaluate_candidates
+from extra.qk.q4k_q8_mmq_search import TIMING_SCOPE_SCHEMA
 from extra.qk.q4k_q8_mmq_prefill_spec import Q4KQ8MMQPrefillSpec
 import numpy as np
 
@@ -16,6 +17,10 @@ def claimable_evidence():
           "provenance": {"dispatch_performed": True}, "guarded": {"full_output_compared": True,
           "compile_evidence": {"resources": {"vgpr": 1}}}, "health": True,
           "fallback": False, "no_fallback": True}
+
+def timing(ms):
+  return {"min_ms": ms, "timing_scope": {"schema": TIMING_SCOPE_SCHEMA, "scope": "full_role",
+    "role": "ffn", "shape": [16, 16, 256]}}
 
 
 def test_adapter_carries_descriptor_identity_and_blocks_unclaimable_harness_result():
@@ -43,8 +48,8 @@ def test_adapter_times_only_a_claimable_amd_result():
     return claimable_evidence()
   report = evaluate_candidates(axes={"tile_m": (16,)}, base_spec=base(), words=words, xq=xq,
     scales=scales, reference=reference, validator=validator,
-    candidate_timer=lambda *a, **k: (events.append("candidate_timing") or {"min_ms": 2.0}),
-    direct_timer=lambda **k: (events.append("direct_timing") or {"min_ms": 3.0}))
+    candidate_timer=lambda *a, **k: (events.append("candidate_timing") or timing(2.0)),
+    direct_timer=lambda **k: (events.append("direct_timing") or timing(3.0)))
   assert report["status"] == "PASS"
   assert events == ["correctness", "candidate_timing", "direct_timing"]
 
