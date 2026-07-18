@@ -90,7 +90,7 @@ def test_epoch_sequence_overrides_range_and_is_forwarded():
     runner=runner, fault_reader=lambda _: "", health_probe=lambda: True,
   )
   assert out["status"] == "PASS" and out["epoch_sequence"] == [19, 0, 7]
-  assert calls == [(19, 3, "AMD", 30_000, False, (19, 0, 7))]
+  assert calls == [(19, 3, "AMD", 30_000, False, (19, 0, 7), None, None)]
 
 
 def test_timeout_fails_closed_without_health_retry():
@@ -138,3 +138,23 @@ def test_invalid_epoch_sequence_never_compiles():
     except ValueError: pass
     else: raise AssertionError("invalid sequence must raise")
   assert calls == []
+
+
+def test_independent_q4_q8_sequences_mix_and_forward():
+  calls: list[tuple] = []
+  def runner(callback, *, args=(), **kwargs):
+    calls.append(args[6:])
+    return IsolatedResult("passed", {"passed": True, "comparison": {"status": "pass"}, "target_dispatches": 2})
+  out = canary.run_single_epoch_canary(
+    q4_epoch_sequence=(19, 0), q8_epoch_sequence=(1, 7), compile_fn=_compile,
+    runner=runner, fault_reader=lambda _: "", health_probe=lambda: True,
+  )
+  assert out["status"] == "PASS" and out["q4_epoch_sequence"] == [19, 0]
+  assert out["q8_epoch_sequence"] == [1, 7]
+  assert calls == [(None, (19, 0), (1, 7))]
+
+
+def test_independent_sequence_lengths_must_match():
+  try: canary.run_single_epoch_canary(q4_epoch_sequence=(0, 1), q8_epoch_sequence=(2,), compile_fn=_compile)
+  except ValueError as exc: assert "equal lengths" in str(exc)
+  else: raise AssertionError("mismatched independent sequences must raise")

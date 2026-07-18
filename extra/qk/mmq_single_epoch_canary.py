@@ -60,6 +60,30 @@ def _hash_array(value: np.ndarray) -> str:
   return hashlib.sha256(np.ascontiguousarray(value).tobytes()).hexdigest()
 
 
+def _normalise_epoch_sequences(*, epoch_start: int, epoch_count: int,
+                                epoch_sequence: tuple[int, ...] | list[int] | None = None,
+                                q4_epoch_sequence: tuple[int, ...] | list[int] | None = None,
+                                q8_epoch_sequence: tuple[int, ...] | list[int] | None = None
+                                ) -> tuple[tuple[int, ...], tuple[int, ...]]:
+  if epoch_sequence is None:
+    if not isinstance(epoch_count, int) or epoch_count <= 0:
+      raise ValueError("epoch_count must be positive")
+    if not 0 <= epoch_start < TOTAL_EPOCHS or epoch_start + epoch_count > TOTAL_EPOCHS:
+      raise ValueError(f"epoch range must fit [0,{TOTAL_EPOCHS - 1}]")
+    base = tuple(range(epoch_start, epoch_start + epoch_count))
+  else:
+    base = tuple(epoch_sequence)
+    if not base or any(not isinstance(e, int) or not 0 <= e < TOTAL_EPOCHS for e in base):
+      raise ValueError(f"epoch_sequence must be nonempty and use epochs in [0,{TOTAL_EPOCHS - 1}]")
+  q4 = tuple(q4_epoch_sequence) if q4_epoch_sequence is not None else base
+  q8 = tuple(q8_epoch_sequence) if q8_epoch_sequence is not None else base
+  for name, seq in (("q4_epoch_sequence", q4), ("q8_epoch_sequence", q8)):
+    if not seq or any(not isinstance(e, int) or not 0 <= e < TOTAL_EPOCHS for e in seq):
+      raise ValueError(f"{name} must be nonempty and use epochs in [0,{TOTAL_EPOCHS - 1}]")
+  if len(q4) != len(q8): raise ValueError("q4_epoch_sequence and q8_epoch_sequence must have equal lengths")
+  return q4, q8
+
+
 def _make_inputs() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
   """Create corrected epoch-major Q4 plus full deterministic Q8."""
   from extra.qk.mmq_llama_five_buffer_gpu_harness import _pack_q4_epochs_contiguous, _random_q4_words
@@ -89,7 +113,9 @@ def _buffer_record(name: str, tensor: Any, device: str) -> dict[str, Any]:
 def _run_epoch_worker(program_path: str, epoch_start: int, epoch_count: int = 1, device: str = DEVICE,
                       runtime_timeout_ms: int = DEFAULT_RUNTIME_TIMEOUT_MS,
                       fresh_output_each_launch: bool = False,
-                      epoch_sequence: tuple[int, ...] | None = None) -> dict[str, Any]:
+                      epoch_sequence: tuple[int, ...] | None = None,
+                      q4_epoch_sequence: tuple[int, ...] | None = None,
+                      q8_epoch_sequence: tuple[int, ...] | None = None) -> dict[str, Any]:
   """Child-only persistent-preload target prefix and final oracle comparison."""
   from tinygrad import Tensor, dtypes
   from tinygrad.engine.realize import get_runtime
@@ -99,16 +125,11 @@ def _run_epoch_worker(program_path: str, epoch_start: int, epoch_count: int = 1,
     Q8_1_MMQ_DS4_LAYOUT, q4k_q8_1_mmq_ds4_tile_reference,
   )
 
-  if epoch_sequence is None:
-    if not isinstance(epoch_count, int) or epoch_count <= 0: raise ValueError("epoch_count must be positive")
-    if not 0 <= epoch_start < TOTAL_EPOCHS or epoch_start + epoch_count > TOTAL_EPOCHS:
-      raise ValueError(f"epoch range must fit [0,{TOTAL_EPOCHS - 1}]")
-    epochs = tuple(range(epoch_start, epoch_start + epoch_count))
-  else:
-    if not epoch_sequence or any(not isinstance(e, int) or not 0 <= e < TOTAL_EPOCHS for e in epoch_sequence):
-      raise ValueError(f"epoch_sequence must be nonempty and use epochs in [0,{TOTAL_EPOCHS - 1}]")
-    epochs = tuple(epoch_sequence)
-    epoch_start, epoch_count = epochs[0], len(epochs)
+  q4_epochs, q8_epochs = _normalise_epoch_sequences(epoch_start=epoch_start, epoch_count=epoch_count,
+                                                    epoch_sequence=epoch_sequence,
+                                                    q4_epoch_sequence=q4_epoch_sequence,
+                                                    q8_epoch_sequence=q8_epoch_sequence)
+  epoch_start, epoch_count = q4_epochs[0], len(q4_epochs)
   if not isinstance(runtime_timeout_ms, int) or runtime_timeout_ms <= 0: raise ValueError("runtime timeout must be positive")
   started = time.perf_counter()
   with Path(program_path).open("rb") as handle: program = pickle.load(handle)
@@ -135,33 +156,33 @@ def _run_epoch_worker(program_path: str, epoch_start: int, epoch_count: int = 1,
   dispatches: list[dict[str, Any]] = []
   gpu_ms_total = 0.0
   completed_epochs: list[int] = []
-  for ordinal, epoch in enumerate(epochs):
+  for ordinal, (q4_epoch, q8_epoch) in enumerate(zip(q4_epochs, q8_epochs)):
     if fresh_output_each_launch and ordinal:
       output = Tensor.empty(m * n, dtype=dtypes.float32, device=device).realize()
       held_outputs.append(output)
-    q4_view = q4_tensor.uop.buffer.view(n * 36, dtypes.uint32, epoch * n * 36 * dtypes.uint32.itemsize)
+    q4_view = q4_tensor.uop.buffer.view(n * 36, dtypes.uint32, q4_epoch * n * 36 * dtypes.uint32.itemsize)
     values_view = values_tensor.uop.buffer.view(2 * m * 128, dtypes.int8,
-                                                 epoch * 2 * m * 128 * dtypes.int8.itemsize)
+                                                 q8_epoch * 2 * m * 128 * dtypes.int8.itemsize)
     scales_view = scales_tensor.uop.buffer.view(2 * m * 4, dtypes.float32,
-                                                 epoch * 2 * m * 4 * dtypes.float32.itemsize)
+                                                 q8_epoch * 2 * m * 4 * dtypes.float32.itemsize)
     sums_view = sums_tensor.uop.buffer.view(2 * m * 4, dtypes.float32,
-                                             epoch * 2 * m * 4 * dtypes.float32.itemsize)
+                                             q8_epoch * 2 * m * 4 * dtypes.float32.itemsize)
     args = tuple((output.uop.buffer, q4_view, values_view, scales_view, sums_view)[slot].get_buf(device)
                  for slot in program.arg.globals)
     gpu_seconds = runtime(*args, global_size=(n // 128, m // 128, 1), local_size=program.arg.local_size,
                           vals=program.arg.vals({}), wait=True, timeout=runtime_timeout_ms)
     gpu_ms_total += float(gpu_seconds) * 1000.0 if gpu_seconds is not None else 0.0
-    completed_epochs.append(epoch)
-    dispatches.append({"epoch": epoch, "timeline": _timeline_snapshot(device)})
+    completed_epochs.append(q4_epoch)
+    dispatches.append({"q4_epoch": q4_epoch, "q8_epoch": q8_epoch, "timeline": _timeline_snapshot(device)})
   got = output.numpy().reshape(m, n)
 
   # Recreate the independent oracle from the same deterministic arrays, with
   # FP16-rounded metadata exactly as the target harness uses.
-  epoch = epochs[-1]
-  q4_bytes = q4_packed.view(np.uint8).reshape(TOTAL_EPOCHS, n, 144)[epoch].reshape(-1)
-  ep_values = values.reshape(TOTAL_EPOCHS * 2, m, 128)[epoch * 2:(epoch + 1) * 2]
-  ep_scales = scales.reshape(TOTAL_EPOCHS * 2, m, 4)[epoch * 2:(epoch + 1) * 2]
-  ep_sums = sums.reshape(TOTAL_EPOCHS * 2, m, 4)[epoch * 2:(epoch + 1) * 2]
+  q4_final, q8_final = q4_epochs[-1], q8_epochs[-1]
+  q4_bytes = q4_packed.view(np.uint8).reshape(TOTAL_EPOCHS, n, 144)[q4_final].reshape(-1)
+  ep_values = values.reshape(TOTAL_EPOCHS * 2, m, 128)[q8_final * 2:(q8_final + 1) * 2]
+  ep_scales = scales.reshape(TOTAL_EPOCHS * 2, m, 4)[q8_final * 2:(q8_final + 1) * 2]
+  ep_sums = sums.reshape(TOTAL_EPOCHS * 2, m, 4)[q8_final * 2:(q8_final + 1) * 2]
   ds4 = Q81MMQDS4Activation(ep_values, ep_scales.astype(np.float16).astype(np.float32),
                             ep_sums.astype(np.float16).astype(np.float32),
                             Q81MMQDS4ActivationSpec(m=m, k=256, m_tile=m))
@@ -171,8 +192,10 @@ def _run_epoch_worker(program_path: str, epoch_start: int, epoch_count: int = 1,
   from extra.qk.mmq_llama_five_buffer_gpu_harness import _numeric_comparison
   comparison = _numeric_comparison(got, reference)
   return {"schema": f"{SCHEMA}.child", "status": "PASS" if comparison["status"] == "pass" else "BLOCKED",
-          "passed": comparison["status"] == "pass", "epoch": epoch,
-          "epoch_start": epoch_start, "epoch_count": epoch_count, "epoch_sequence": list(epochs),
+          "passed": comparison["status"] == "pass", "epoch": q4_final,
+          "epoch_start": epoch_start, "epoch_count": epoch_count,
+          "epoch_sequence": list(q4_epochs), "q4_epoch_sequence": list(q4_epochs),
+          "q8_epoch_sequence": list(q8_epochs),
           "completed_epochs": completed_epochs,
           "shape": [m, n, 256], "comparison": comparison, "gpu_ms": gpu_ms_total,
           "target_dispatches": epoch_count, "dispatches": dispatches,
@@ -206,23 +229,20 @@ def run_single_epoch_canary(*, epoch: int = DEFAULT_EPOCH, epoch_start: int | No
                             epoch_count: int = 1, output_path: str | Path | None = None,
                             fresh_output_each_launch: bool = False,
                             epoch_sequence: tuple[int, ...] | list[int] | None = None,
+                            q4_epoch_sequence: tuple[int, ...] | list[int] | None = None,
+                            q8_epoch_sequence: tuple[int, ...] | list[int] | None = None,
                             compile_fn: Callable[[str | Path], tuple[str, dict[str, Any]]] | None = None,
                             device: str = DEVICE, timeout_seconds: float = DEFAULT_CHILD_TIMEOUT_SECONDS,
                             runtime_timeout_ms: int = DEFAULT_RUNTIME_TIMEOUT_MS,
                             runner: Callable[..., IsolatedResult] = run_isolated,
                             fault_reader: Callable[[float], str] = _default_fault_reader,
                             health_probe: Callable[[], bool] | None = _default_health_probe) -> dict[str, Any]:
-  if epoch_sequence is not None:
-    if not epoch_sequence or any(not isinstance(e, int) or not 0 <= e < TOTAL_EPOCHS for e in epoch_sequence):
-      raise ValueError(f"epoch_sequence must be nonempty and use epochs in [0,{TOTAL_EPOCHS - 1}]")
-    sequence = tuple(epoch_sequence)
-    epoch_start, epoch_count = sequence[0], len(sequence)
-  else:
-    if epoch_start is None: epoch_start = epoch
-    if not isinstance(epoch_count, int) or epoch_count <= 0: raise ValueError("epoch_count must be positive")
-    if not 0 <= epoch_start < TOTAL_EPOCHS or epoch_start + epoch_count > TOTAL_EPOCHS:
-      raise ValueError(f"epoch range must fit [0,{TOTAL_EPOCHS - 1}]")
-    sequence = None
+  if epoch_start is None: epoch_start = epoch
+  q4_sequence, q8_sequence = _normalise_epoch_sequences(
+    epoch_start=epoch_start, epoch_count=epoch_count, epoch_sequence=epoch_sequence,
+    q4_epoch_sequence=q4_epoch_sequence, q8_epoch_sequence=q8_epoch_sequence)
+  sequence = tuple(epoch_sequence) if epoch_sequence is not None else None
+  epoch_start, epoch_count = q4_sequence[0], len(q4_sequence)
   if timeout_seconds <= 0 or runtime_timeout_ms <= 0: raise ValueError("timeouts must be positive")
   if compile_fn is None:
     from extra.qk.mmq_target_epoch_orchestrator import compile_target_program_artifact
@@ -230,9 +250,10 @@ def run_single_epoch_canary(*, epoch: int = DEFAULT_EPOCH, epoch_start: int | No
   started = time.time()
   base: dict[str, Any] = {"schema": SCHEMA, "diagnostic_only": True, "promotion_eligible": False,
     "production_dispatch_changed": False, "no_fallback": True, "target_dispatches": epoch_count,
-    "epoch": (sequence[-1] if sequence is not None else epoch_start + epoch_count - 1),
+    "epoch": q4_sequence[-1],
     "epoch_start": epoch_start, "epoch_count": epoch_count,
-    "epoch_sequence": list(sequence) if sequence is not None else list(range(epoch_start, epoch_start + epoch_count)),
+    "epoch_sequence": list(q4_sequence), "q4_epoch_sequence": list(q4_sequence),
+    "q8_epoch_sequence": list(q8_sequence),
     "fresh_output_each_launch": bool(fresh_output_each_launch),
     "output_mode": "fresh_held" if fresh_output_each_launch else "persistent",
     "kernel_faults": [], "compile": None, "child": None, "health_after": None}
@@ -244,7 +265,9 @@ def run_single_epoch_canary(*, epoch: int = DEFAULT_EPOCH, epoch_start: int | No
       return _write_result(result, output_path)
     base["compile"] = evidence
     isolated = runner(_run_epoch_worker, args=(artifact_path, epoch_start, epoch_count, device, runtime_timeout_ms,
-                                               bool(fresh_output_each_launch), sequence),
+                                               bool(fresh_output_each_launch), sequence,
+                                               tuple(q4_sequence) if q4_epoch_sequence is not None else None,
+                                               tuple(q8_sequence) if q8_epoch_sequence is not None else None),
                       timeout_seconds=float(timeout_seconds), start_method="spawn")
     base["child_status"], base["child_error"] = isolated.status, isolated.error
     if isolated.status == "passed" and isinstance(isolated.result, dict): base["child"] = isolated.result
@@ -260,7 +283,7 @@ def run_single_epoch_canary(*, epoch: int = DEFAULT_EPOCH, epoch_start: int | No
                             "exact_blocker": isolated.error or "epoch child returned no result"}, output_path)
     if not isolated.result.get("passed"):
       return _write_result({**base, "status": "BLOCKED", "passed": False,
-                            "exact_blocker": "single epoch numerical comparison failed"}, output_path)
+                            "exact_blocker": "target sequence final numerical comparison failed"}, output_path)
     if health_probe is not None:
       try: base["health_after"] = bool(health_probe())
       except BaseException as exc:
@@ -288,18 +311,28 @@ def main(argv: list[str] | None = None) -> int:
   parser.add_argument("--epoch-count", type=int, default=1)
   parser.add_argument("--epoch-sequence", type=str, default=None,
                       help="comma-separated epoch indices; overrides --epoch-start/--epoch-count")
+  parser.add_argument("--q4-epoch-sequence", type=str, default=None,
+                      help="comma-separated Q4 epoch indices; overrides Q4 side only")
+  parser.add_argument("--q8-epoch-sequence", type=str, default=None,
+                      help="comma-separated Q8 epoch indices; overrides Q8 side only")
   parser.add_argument("--fresh-output-each-launch", action="store_true",
                       help="allocate and retain a distinct output for each target launch")
   parser.add_argument("--output", type=Path)
   args = parser.parse_args(argv)
+  def parse_sequence(value: str | None) -> tuple[int, ...] | None:
+    if value is None: return None
+    return tuple(int(part.strip()) for part in value.split(",") if part.strip())
   try:
-    sequence = None if args.epoch_sequence is None else tuple(int(part.strip()) for part in args.epoch_sequence.split(",") if part.strip())
+    sequence = parse_sequence(args.epoch_sequence)
+    q4_sequence = parse_sequence(args.q4_epoch_sequence)
+    q8_sequence = parse_sequence(args.q8_epoch_sequence)
   except ValueError as exc:
-    parser.error(f"invalid --epoch-sequence: {exc}")
+    parser.error(f"invalid epoch sequence: {exc}")
   result = run_single_epoch_canary(epoch=args.epoch, epoch_start=args.epoch_start,
                                    epoch_count=args.epoch_count, output_path=args.output,
                                    fresh_output_each_launch=args.fresh_output_each_launch,
-                                   epoch_sequence=sequence)
+                                   epoch_sequence=sequence, q4_epoch_sequence=q4_sequence,
+                                   q8_epoch_sequence=q8_sequence)
   print(json.dumps(result, sort_keys=True))
   return 0 if result.get("passed") else 1
 
