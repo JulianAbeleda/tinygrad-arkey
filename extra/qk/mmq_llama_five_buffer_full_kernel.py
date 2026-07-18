@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from math import prod
+from typing import Any
 
 from tinygrad import dtypes
 from tinygrad.codegen import to_program
@@ -54,6 +56,7 @@ class LlamaFiveBufferFullKernel:
   owner_coordinates: frozenset[tuple[int, int]] | FullGridOwnerCoordinates
   source_commit: str
   source_anchors: tuple[tuple[str, str], ...]
+  epoch_offset: int|None = None
   blocker: str = RESOURCE_BLOCKER
   program: UOp|None = None
   emitted: bool = False
@@ -62,6 +65,8 @@ class LlamaFiveBufferFullKernel:
     if self.source_commit != LLAMA_SOURCE_COMMIT: raise ValueError("source identity drift")
     if self.emitted != (self.program is not None): raise ValueError("emitted must match successful to_program")
     if tuple(x.slot for x in self.proof_graph.parameters) != tuple(range(5)): raise ValueError("ABI must be exactly slots 0..4")
+    if self.epoch_offset is not None and not 0 <= self.epoch_offset < self.proof_graph.facts.k//256:
+      raise ValueError("compile-time epoch offset is outside the full-role buffers")
     if len(self.owner_coordinates) != self.proof_graph.facts.m*self.proof_graph.facts.n:
       raise ValueError("full grid must own every output exactly once")
 
@@ -72,6 +77,29 @@ class LlamaFiveBufferFullKernel:
     m0, n0, records = tile_m*128, tile_n*128, epoch*2
     return FiveBufferEpochOffsets((n0*(facts.k//256)+epoch)*36,
       (records*facts.m+m0)*128, (records*facts.m+m0)*4, (records*facts.m+m0)*4)
+
+
+@dataclass(frozen=True)
+class LlamaFiveBufferEpochOffsetFamily:
+  """One full-role ABI and one compile-time-offset K256 kernel per epoch."""
+  proof_graph: LlamaFiveBufferGraph
+  topology: FullGridTopology
+  variants: tuple[LlamaFiveBufferFullKernel, ...]
+
+  def __post_init__(self) -> None:
+    expected = tuple(range(self.proof_graph.facts.k//256))
+    if tuple(variant.epoch_offset for variant in self.variants) != expected:
+      raise ValueError("epoch-offset family must contain every full-role K256 epoch exactly once")
+    if any(variant.proof_graph is not self.proof_graph or variant.topology != self.topology for variant in self.variants):
+      raise ValueError("epoch-offset variants must share one full-role ABI and topology")
+
+  @property
+  def emitted(self) -> bool: return all(variant.emitted for variant in self.variants)
+
+  @property
+  def programs(self) -> tuple[UOp, ...]:
+    if not self.emitted: raise RuntimeError("epoch-offset family has not emitted every PROGRAM")
+    return tuple(variant.program for variant in self.variants if variant.program is not None)
 
 
 def _phase_order_replacements(recurrence:LlamaOracleRecurrenceGraph, epoch_index:int, phase_index:int) -> dict[UOp, UOp]:
@@ -161,13 +189,15 @@ def _phase_major_accumulator_vectors(recurrences:tuple[LlamaOracleRecurrenceGrap
   return tuple(UOp(Ops.STACK, dtypes.float.vec(8), lanes) for lanes in states)
 
 
-def _full_grid_sink(m:int, n:int, k:int, *, accumulate: bool = False) -> UOp:
+def _full_grid_sink(m:int, n:int, k:int, *, accumulate: bool = False, epoch_offset: int|None = None) -> UOp:
   params = five_buffer_parameters(m, n, k)
   output, q4, values, scales, sums = tuple(UOp.param(x.slot, x.dtype.ptr(x.size)) for x in params)
   block_n, block_m, local = UOp.special(n//128, "gidx0"), UOp.special(m//128, "gidx1"), UOp.special(256, "lidx0")
   wave_m, wave_n, lane = local//32, UOp.const(dtypes.weakint, 0), local%32
+  if epoch_offset is not None and not 0 <= epoch_offset < k//256:
+    raise ValueError("compile-time epoch offset is outside the full-role buffers")
   recurrences = []
-  for epoch in range(k//256):
+  for epoch in range(k//256) if epoch_offset is None else (epoch_offset,):
     records = epoch*2
     recurrence = build_llama_oracle_recurrence(build_llama_oracle_epoch_stage_five_buffer(q4, values, scales, sums,
       q4_word_offset=(block_n*128*(k//256)+epoch)*36,
@@ -220,6 +250,22 @@ def build_llama_five_buffer_full_kernel(m:int, n:int, k:int, *, accumulate: bool
     LLAMA_SOURCE_COMMIT, tuple(sorted(SOURCE_ANCHORS.items())))
 
 
+def build_llama_five_buffer_epoch_offset_family(m:int, n:int, k:int) -> LlamaFiveBufferEpochOffsetFamily:
+  """Build K256 kernels that address one epoch inside the same full-role base buffers."""
+  if m % 128 or n % 128 or k % 256:
+    raise ValueError("epoch-offset family requires aligned M/N and K divisible by 256")
+  proof = build_llama_five_buffer_graph(m, n, k)
+  topology = FullGridTopology((n//128, m//128, 1))
+  local = {(r, c) for r in range(128) for c in range(128)}
+  owners = (frozenset((tm*128+r, tn*128+c) for tm in range(m//128) for tn in range(n//128) for r, c in local)
+            if m*n <= 1_000_000 else FullGridOwnerCoordinates(m, n))
+  variants = tuple(LlamaFiveBufferFullKernel(
+    proof, topology, _full_grid_sink(m, n, k, accumulate=True, epoch_offset=epoch), owners,
+    LLAMA_SOURCE_COMMIT, tuple(sorted(SOURCE_ANCHORS.items())), epoch_offset=epoch)
+    for epoch in range(k//256))
+  return LlamaFiveBufferEpochOffsetFamily(proof, topology, variants)
+
+
 def compile_llama_five_buffer_full_kernel(kernel:LlamaFiveBufferFullKernel, target:str=AMD_ISA_TARGET) -> LlamaFiveBufferFullKernel:
   """Claim emission only after the spill-free compiler accepts the final PROGRAM."""
   if not isinstance(kernel, LlamaFiveBufferFullKernel): raise TypeError("expected full-grid kernel")
@@ -230,5 +276,32 @@ def compile_llama_five_buffer_full_kernel(kernel:LlamaFiveBufferFullKernel, targ
   return replace(kernel, program=program, emitted=True, blocker="")
 
 
+def compile_llama_five_buffer_epoch_offset_family(family:LlamaFiveBufferEpochOffsetFamily,
+                                                  target:str=AMD_ISA_TARGET) -> LlamaFiveBufferEpochOffsetFamily:
+  """Emit every static-offset PROGRAM; compilation remains CPU-only."""
+  if not isinstance(family, LlamaFiveBufferEpochOffsetFamily): raise TypeError("expected epoch-offset family")
+  return replace(family, variants=tuple(compile_llama_five_buffer_full_kernel(variant, target) for variant in family.variants))
+
+
+def bind_llama_five_buffer_epoch_offset_calls(family:LlamaFiveBufferEpochOffsetFamily,
+                                              buffers:tuple[Any, Any, Any, Any, Any],
+                                              *, output_is_zeroed: bool) -> Any:
+  """Bind every emitted variant to the same five full-role buffer identities."""
+  if not isinstance(family, LlamaFiveBufferEpochOffsetFamily): raise TypeError("expected epoch-offset family")
+  if len(buffers) != 5: raise ValueError("epoch-offset family requires exactly five full-role buffers")
+  if output_is_zeroed is not True:
+    raise ValueError("first accumulating epoch requires an explicitly zeroed full-role output")
+  for value, parameter in zip(buffers, family.proof_graph.parameters):
+    shape = getattr(value, "shape", None)
+    if getattr(value, "dtype", None) != parameter.dtype or not isinstance(shape, tuple) or prod(shape) != parameter.size:
+      raise ValueError(f"full-role buffer {parameter.name!r} differs from the family ABI")
+  output, inputs = buffers[0], buffers[1:]
+  for program in family.programs:
+    output = output.custom_kernel(*inputs, fxn=lambda *_args, program=program: program)[0]
+  return output
+
+
 __all__ = ["AMD_ISA_TARGET", "RESOURCE_BLOCKER", "SCHEMA", "FullGridTopology", "FullGridOwnerCoordinates", "LlamaFiveBufferFullKernel",
-  "build_llama_five_buffer_full_kernel", "compile_llama_five_buffer_full_kernel"]
+  "LlamaFiveBufferEpochOffsetFamily", "bind_llama_five_buffer_epoch_offset_calls",
+  "build_llama_five_buffer_epoch_offset_family", "build_llama_five_buffer_full_kernel",
+  "compile_llama_five_buffer_epoch_offset_family", "compile_llama_five_buffer_full_kernel"]

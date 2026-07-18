@@ -1,7 +1,10 @@
+from dataclasses import replace
 import inspect
 import pytest
+from types import SimpleNamespace
 
-from tinygrad import dtypes
+from tinygrad import Tensor, dtypes
+from tinygrad.engine.realize import get_call_arg_uops
 from tinygrad.uop.ops import AxisType, Ops, UOp
 
 import extra.qk.mmq_llama_five_buffer_full_kernel as full
@@ -35,6 +38,94 @@ def test_absolute_split_epoch_offsets_and_fp32_dependencies(k):
   assert offsets.scales == offsets.sums == (epoch*2*256+128)*4
   epochs = kernel.proof_graph.body.epochs
   assert all(epochs[0].accumulators[i] in epochs[1].accumulators[i].backward_slice for i in range(8)) if k == 512 else True
+
+
+def test_epoch_offset_family_uses_full_role_abi_and_one_static_k256_epoch_per_variant():
+  family = full.build_llama_five_buffer_epoch_offset_family(128, 128, 512)
+  assert tuple(variant.epoch_offset for variant in family.variants) == (0, 1)
+  assert all(variant.proof_graph is family.proof_graph for variant in family.variants)
+  assert [parameter.size for parameter in family.proof_graph.parameters] == [
+    128*128, 128*2*36, 4*128*128, 4*128*4, 4*128*4]
+  assert len({variant.sink.key for variant in family.variants}) == 2
+  for variant in family.variants:
+    nodes = variant.sink.toposort()
+    params = sorted({node for node in nodes if node.op is Ops.PARAM}, key=lambda node: node.arg.slot)
+    assert [param.max_numel() for param in params] == [parameter.size for parameter in family.proof_graph.parameters]
+    assert len([node for node in nodes if node.op is Ops.WMMA]) == 128
+    assert {node.tag[1] for node in nodes if node.op is Ops.WMMA} == set(range(8))
+  static_bases = []
+  for variant in family.variants:
+    static_bases.append({
+      node.src[0].arg.slot: node.src[1].render()
+      for node in variant.sink.toposort()
+      if node.op is Ops.INDEX and node.src[0].op is Ops.PARAM and node.src[0].arg.slot in range(1, 5)
+    })
+  assert static_bases == [
+    {1: "0", 2: "0", 3: "0", 4: "0"},
+    {1: "36", 2: "32768", 3: "1024", 4: "1024"},
+  ]
+  assert family.variants[0].epoch_offsets(0, 0, 0) == full.FiveBufferEpochOffsets(0, 0, 0, 0)
+  assert family.variants[1].epoch_offsets(0, 0, 1) == full.FiveBufferEpochOffsets(36, 32768, 1024, 1024)
+
+
+def test_epoch_offset_family_binds_same_five_full_role_buffers_to_every_program(monkeypatch):
+  family = full.build_llama_five_buffer_epoch_offset_family(128, 128, 512)
+  emitted = []
+  def fake_to_program(sink, _renderer):
+    program = UOp(Ops.PROGRAM, dtypes.void, arg=f"epoch-program-{len(emitted)}")
+    emitted.append((sink, program))
+    return program
+  monkeypatch.setattr(full, "to_program", fake_to_program)
+  family = full.compile_llama_five_buffer_epoch_offset_family(family)
+  assert family.emitted and family.programs == tuple(program for _, program in emitted)
+
+  buffers = tuple(Tensor.empty(*parameter.physical_shape, dtype=parameter.dtype, device="AMD")
+                  for parameter in family.proof_graph.parameters)
+  output = full.bind_llama_five_buffer_epoch_offset_calls(family, buffers, output_is_zeroed=True)
+  calls = [node for node in output.uop.toposort() if node.op is Ops.CALL and node.src[0].op is Ops.PROGRAM]
+  assert len(calls) == 2 and [call.src[0] for call in calls] == list(family.programs)
+  arguments = [get_call_arg_uops(call) for call in calls]
+  assert all(len(row) == 5 for row in arguments)
+  assert all(arguments[0][slot].buffer is arguments[1][slot].buffer for slot in range(5))
+  assert calls[0] in arguments[1][0].toposort()
+
+  bad = list(buffers)
+  bad[2] = Tensor.empty(1, dtype=dtypes.int8, device="AMD")
+  with pytest.raises(ValueError, match="q8_values"):
+    full.bind_llama_five_buffer_epoch_offset_calls(family, tuple(bad), output_is_zeroed=True)
+  with pytest.raises(ValueError, match="explicitly zeroed"):
+    full.bind_llama_five_buffer_epoch_offset_calls(family, buffers, output_is_zeroed=False)
+
+
+def test_epoch_offset_binder_keeps_all_twenty_calls_on_the_same_full_role_buffers():
+  m, n, k = 128, 128, 5120
+  proof = SimpleNamespace(facts=SimpleNamespace(m=m, n=n, k=k), parameters=full.five_buffer_parameters(m, n, k))
+  topology = full.FullGridTopology((1, 1, 1))
+  owners = frozenset((row, col) for row in range(m) for col in range(n))
+  variants = tuple(full.LlamaFiveBufferFullKernel(
+    proof, topology, UOp(Ops.SINK, dtypes.void), owners, LLAMA_SOURCE_COMMIT, tuple(),
+    epoch_offset=epoch, blocker="", program=UOp(Ops.PROGRAM, dtypes.void, arg=f"epoch-program-{epoch}"), emitted=True)
+    for epoch in range(20))
+  family = full.LlamaFiveBufferEpochOffsetFamily(proof, topology, variants)
+  buffers = tuple(Tensor.empty(*parameter.physical_shape, dtype=parameter.dtype, device="AMD")
+                  for parameter in proof.parameters)
+  output = full.bind_llama_five_buffer_epoch_offset_calls(family, buffers, output_is_zeroed=True)
+  calls = [node for node in output.uop.toposort() if node.op is Ops.CALL and node.src[0].op is Ops.PROGRAM]
+  assert len(calls) == 20
+  arguments = [get_call_arg_uops(call) for call in calls]
+  assert all(arguments[0][slot].buffer is row[slot].buffer for row in arguments for slot in range(5))
+  assert all(previous in current[0].toposort() for previous, current in zip(calls, arguments[1:]))
+
+
+def test_twentieth_k256_variant_encodes_final_full_role_offsets_in_the_uop_graph():
+  sink = full._full_grid_sink(128, 256, 5120, accumulate=True, epoch_offset=19)
+  bases = {
+    node.src[0].arg.slot: node.src[1].render()
+    for node in sink.toposort()
+    if node.op is Ops.INDEX and node.src[0].op is Ops.PARAM and node.src[0].arg.slot in range(1, 5)
+  }
+  assert bases == {1: "(gidx0*92160+684)", 2: "622592", 3: "19456", 4: "19456"}
+  assert len([node for node in sink.toposort() if node.op is Ops.WMMA]) == 128
 
 
 def test_source_identity_writeback_vocabulary_and_no_dense_tensor_or_forbidden_tables():
