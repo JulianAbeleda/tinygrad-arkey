@@ -53,7 +53,7 @@ def _producer(calls):
   return produce
 
 
-def _build(*, artifact=None):
+def _build(*, artifact=None, fixed_scale_stage=False):
   role_spec = exact_role_spec("ffn_gate_up")
   weight_calls, producer_calls = [], []
   artifact = _scheduler_artifact(role_spec) if artifact is None else artifact
@@ -61,7 +61,8 @@ def _build(*, artifact=None):
     _linear(role_spec, weight_calls),
     Tensor.empty(role_spec.m, role_spec.k, dtype=dtypes.float16, device="AMD"),
     role_spec=role_spec, frozen_bundle="/frozen/exact.tar", enabled=True,
-    artifact_loader=lambda _path: artifact, activation_producer=_producer(producer_calls))
+    artifact_loader=lambda _path: artifact, activation_producer=_producer(producer_calls),
+    fixed_scale_stage=fixed_scale_stage)
   return role_spec, result, weight_calls, producer_calls
 
 
@@ -96,6 +97,18 @@ def test_scheduler_builds_exact_lazy_program_chain_without_runtime_or_device_acc
   assert execution["runtime"]["created_during_graph_build"] is False
   assert execution["runtime"]["gpu_dispatch_during_graph_build"] is False
   assert execution["operands"]["host_fixed_va_staging"] is False
+  assert execution["operands"]["q8_scale_binding"] == "direct_epoch_tensor"
+
+
+def test_fixed_scale_stage_is_explicit_diagnostic_only():
+  _, result, _, _ = _build(fixed_scale_stage=True)
+  calls = [u for u in result.output.uop.toposort()
+           if u.op is Ops.CALL and u.src[0].op is Ops.PROGRAM]
+  for previous, current in zip(calls, calls[1:]):
+    assert get_call_arg_uops(previous)[3].buf_uop is get_call_arg_uops(current)[3].buf_uop
+    assert previous in get_call_arg_uops(current)[3].toposort()
+  assert result.evidence["execution"]["operands"]["q8_scale_binding"] == \
+    "diagnostic_scheduler_owned_fixed_va_assign"
 
 
 @pytest.mark.parametrize("outs,ins", [
@@ -123,6 +136,28 @@ def test_scheduler_is_default_off_before_artifact_or_weight_access():
   assert scheduler.build_frozen_exact_q4k_schedule(
     lin, object(), role_spec=role_spec, frozen_bundle="/missing", enabled=False,
     artifact_loader=lambda _path: (_ for _ in ()).throw(AssertionError("artifact loaded"))) is None
+
+
+def test_scheduler_prefix_limit_is_explicitly_incomplete_and_validated():
+  role_spec = exact_role_spec("ffn_gate_up")
+  result = scheduler.build_frozen_exact_q4k_schedule(
+    _linear(role_spec, []),
+    Tensor.empty(role_spec.m, role_spec.k, dtype=dtypes.float16, device="AMD"),
+    role_spec=role_spec, frozen_bundle="/frozen/exact.tar", enabled=True,
+    artifact_loader=lambda _path: _scheduler_artifact(role_spec),
+    activation_producer=_producer([]), epoch_limit=2)
+  calls = [u for u in result.output.uop.toposort()
+           if u.op is Ops.CALL and u.src[0].op is Ops.PROGRAM]
+  assert len(calls) == result.evidence["dispatch_count"] == 2
+  assert result.evidence["expected_dispatch_count"] == role_spec.epochs
+  assert result.evidence["complete_role"] is False
+  with pytest.raises(ValueError, match="epoch_limit"):
+    scheduler.build_frozen_exact_q4k_schedule(
+      _linear(role_spec, []),
+      Tensor.empty(role_spec.m, role_spec.k, dtype=dtypes.float16, device="AMD"),
+      role_spec=role_spec, frozen_bundle="/frozen/exact.tar", enabled=True,
+      artifact_loader=lambda _path: _scheduler_artifact(role_spec),
+      activation_producer=_producer([]), epoch_limit=0)
 
 
 def test_scheduler_reuses_prevalidated_authority_binding_without_deserializing_bundle_again():

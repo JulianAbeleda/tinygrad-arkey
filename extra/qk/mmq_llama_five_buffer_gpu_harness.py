@@ -1171,16 +1171,97 @@ def _decode_aql_kernel_dispatch_packet(packet: bytes) -> dict[str, Any]:
   }
 
 
-def _realize_with_aql_packet_census(output: Any, expected_vas: list[list[int]]) -> dict[str, Any]:
-  """Realize while auditing actual AQL packet/kernarg bytes before each doorbell."""
+def _aql_target_program_identity(prg: Any) -> dict[str, Any]:
+  """Return the stable runtime identity used to distinguish target from producer kernels."""
+  lib = getattr(prg, "lib", None)
+  return {
+    "function_name": getattr(prg, "name", None),
+    "binary_sha256": hashlib.sha256(bytes(lib)).hexdigest()
+      if isinstance(lib, (bytes, bytearray, memoryview)) else None,
+  }
+
+
+def _audit_target_aql_kernargs(qwords: list[int], prior_qwords: list[list[int]], *,
+                               expected_vas: list[int] | None,
+                               require_fixed_scale_va: bool,
+                               require_all_five_vas_fixed: bool = False) -> dict[str, bool]:
+  """Validate the five target pointers before its containing doorbell is rung."""
+  if len(qwords) != 5: raise ValueError("target AQL census requires exactly five kernarg Qwords")
+  checks = {
+    "five_qwords_nonzero": all(type(value) is int and value > 0 for value in qwords),
+    "five_qwords_match_expected_vas": expected_vas is None or qwords == expected_vas,
+    "output_va_fixed": not prior_qwords or qwords[0] == prior_qwords[0][0],
+    "q8_scale_va_fixed": not require_fixed_scale_va or not prior_qwords or qwords[3] == prior_qwords[0][3],
+    "all_five_vas_fixed": not require_all_five_vas_fixed or not prior_qwords or qwords == prior_qwords[0],
+  }
+  return checks
+
+
+def _realize_outputs_together(output: Any, retained_outputs: tuple[Any, ...]) -> None:
+  """Keep diagnostic companions live by making them outputs of one realization."""
+  output.realize(*retained_outputs)
+
+
+def _retained_producer_tensors(produced_tiles: list[Any]) -> tuple[Any, ...]:
+  retained = tuple(value for tile in produced_tiles for value in (tile.values, tile.scales, tile.sums))
+  if len(retained) != len(produced_tiles) * 3 or len({id(value) for value in retained}) != len(retained):
+    raise RuntimeError("producer diagnostic requires three distinct retained tensors per epoch")
+  return retained
+
+
+def _realize_with_aql_packet_census(output: Any, expected_vas: list[list[int]] | None = None, *,
+                                    target_program_identity: Mapping[str, Any] | None = None,
+                                    target_program_identities: tuple[Mapping[str, Any], ...] | None = None,
+                                    target_dispatch_count: int | None = None,
+                                    require_fixed_scale_va: bool = False,
+                                    require_all_five_vas_fixed: bool = False,
+                                    retained_outputs: tuple[Any, ...] = ()) -> dict[str, Any]:
+  """Realize while auditing target AQL packet/kernargs before each doorbell.
+
+  Producer and scheduler-generated contiguous kernels are inventoried but are
+  not interpreted as five-buffer calls. Only a runtime program matching the
+  frozen target function and binary identity is subject to its ABI checks.
+  """
   from tinygrad.device import Device
   dev = Device["AMD"]
   if not bool(getattr(dev, "is_aql", False)):
-    output.realize()
-    return {"enabled": False, "status": "NOT_APPLICABLE", "reason": "target queue is PM4"}
+    _realize_outputs_together(output, retained_outputs)
+    return {"enabled": False, "status": "NOT_APPLICABLE", "reason": "target queue is PM4",
+            "retained_companion_output_count": len(retained_outputs)}
+  if target_program_identity is not None and target_program_identities is not None:
+    raise ValueError("AQL target census accepts one identity mode")
+  ordered_identity_sequence = target_program_identities is not None
+  if target_program_identities is not None:
+    normalized_identities = tuple(dict(identity) for identity in target_program_identities)
+    if not normalized_identities:
+      raise ValueError("AQL target census ordered identity sequence is empty")
+    target_dispatch_count = len(normalized_identities)
+  elif target_program_identity is not None:
+    normalized_identities = (dict(target_program_identity),)
+  else:
+    normalized_identities = None
+  if normalized_identities is None:
+    if expected_vas is None: raise ValueError("AQL target census requires target program identity")
+    # Compatibility mode for the producer-free probe, whose only kernels are
+    # the exact target calls and whose concrete VAs are known before realize.
+    target_dispatch_count = len(expected_vas)
+  elif any(identity.get("function_name") in (None, "") or identity.get("binary_sha256") in (None, "")
+           for identity in normalized_identities):
+    raise ValueError("AQL target census identity sequence is incomplete")
+  if ordered_identity_sequence and len({
+      (identity["function_name"], identity["binary_sha256"]) for identity in normalized_identities
+  }) != len(normalized_identities):
+    raise ValueError("AQL target census ordered identities must be distinct")
+  if target_dispatch_count is None:
+    target_dispatch_count = len(expected_vas) if expected_vas is not None else None
+  if not isinstance(target_dispatch_count, int) or isinstance(target_dispatch_count, bool) or target_dispatch_count <= 0:
+    raise ValueError("AQL target census requires a positive target dispatch count")
+  if expected_vas is not None and len(expected_vas) != target_dispatch_count:
+    raise ValueError("AQL target census expected VA rows differ from target dispatch count")
 
   from tinygrad.runtime import ops_amd
   constructed, published, calls = [], [], []
+  non_target_kernel_dispatch_count = compute_doorbell_count = 0
   original_exec = ops_amd.AMDComputeAQLQueue.exec
   original_publish = ops_amd._publish_aql_packet
   original_doorbell = ops_amd.AMDQueueDesc.signal_doorbell
@@ -1191,6 +1272,7 @@ def _realize_with_aql_packet_census(output: Any, expected_vas: list[list[int]]) 
     constructed.append({
       "kernel_object": int(prg.aql_prog_addr), "kernarg_address": int(args_state.buf.va_addr),
       "kernarg_buffer": args_state.buf,
+      "program_identity": _aql_target_program_identity(prg),
     })
     return result
 
@@ -1202,37 +1284,55 @@ def _realize_with_aql_packet_census(output: Any, expected_vas: list[list[int]]) 
     published.append(published_packet)
 
   def audited_doorbell(queue_desc: Any, doorbell_dev: Any, doorbell_value: int | None = None) -> Any:
+    nonlocal non_target_kernel_dispatch_count, compute_doorbell_count
     # AMDQueueDesc is shared by compute and SDMA queues. Only the default AQL
     # compute ring contains packets observed by audited_exec/audited_publish.
     if queue_desc is not doorbell_dev.compute_queue_desc(0):
       return original_doorbell(queue_desc, doorbell_dev, doorbell_value)
+    compute_doorbell_count += 1
     kernel_packets = [row for packet in published
                       if (row:=_decode_aql_kernel_dispatch_packet(packet))["kernel_dispatch"]]
-    if len(kernel_packets) != len(constructed) or not kernel_packets:
+    if len(kernel_packets) != len(constructed):
       raise RuntimeError("AQL packet census did not find one published kernel packet per constructed dispatch")
     for packet, built in zip(kernel_packets, constructed):
+      target_function_names = ({identity["function_name"] for identity in normalized_identities}
+                               if normalized_identities is not None else set())
+      is_target = normalized_identities is None or \
+                  built["program_identity"].get("function_name") in target_function_names
+      if not is_target:
+        non_target_kernel_dispatch_count += 1
+        continue
       call_index = len(calls)
-      if call_index >= len(expected_vas):
-        raise RuntimeError("AQL packet census observed more kernel dispatches than scheduler calls")
+      if call_index >= target_dispatch_count:
+        raise RuntimeError("AQL packet census observed more target dispatches than expected")
       kernarg_qwords = [int(value) for value in
                         built["kernarg_buffer"].cpu_view().view(size=40, fmt='Q')[:5]]
+      expected_row = None if expected_vas is None else expected_vas[call_index]
+      expected_identity = (None if normalized_identities is None else
+                           normalized_identities[call_index] if ordered_identity_sequence else normalized_identities[0])
       checks = {
         "barrier": packet["barrier"] is True,
         "acquire_system_fence": packet["acquire_fence_scope"] == packet["system_fence_scope"],
         "release_system_fence": packet["release_fence_scope"] == packet["system_fence_scope"],
         "kernel_object_matches_constructed": packet["kernel_object"] == built["kernel_object"],
         "kernarg_address_matches_constructed": packet["kernarg_address"] == built["kernarg_address"],
-        "five_qwords_match_expected_vas": kernarg_qwords == expected_vas[call_index],
+        "ordered_program_identity_matches": expected_identity is None or
+          built["program_identity"] == expected_identity,
+        **_audit_target_aql_kernargs(
+          kernarg_qwords, [row["kernarg_qwords"] for row in calls],
+          expected_vas=expected_row, require_fixed_scale_va=require_fixed_scale_va,
+          require_all_five_vas_fixed=require_all_five_vas_fixed),
       }
       calls.append({
         "call": call_index, **{key: packet[key] for key in (
           "header", "barrier", "acquire_fence_scope", "release_fence_scope",
           "system_fence_scope", "kernel_object", "kernarg_address")},
-        "kernarg_qwords": kernarg_qwords, "expected_vas": expected_vas[call_index],
+        "program_identity": built["program_identity"], "expected_program_identity": expected_identity,
+        "kernarg_qwords": kernarg_qwords, "expected_vas": expected_row,
         "checks": checks, "all_checks_pass": all(checks.values()),
       })
       if not all(checks.values()):
-        raise RuntimeError("AQL packet census rejected dispatch before doorbell")
+        raise RuntimeError("AQL target packet census rejected dispatch before doorbell")
     published.clear()
     constructed.clear()
     return original_doorbell(queue_desc, doorbell_dev, doorbell_value)
@@ -1241,16 +1341,23 @@ def _realize_with_aql_packet_census(output: Any, expected_vas: list[list[int]]) 
   ops_amd._publish_aql_packet = audited_publish
   ops_amd.AMDQueueDesc.signal_doorbell = audited_doorbell
   try:
-    output.realize()
+    _realize_outputs_together(output, retained_outputs)
   finally:
     ops_amd.AMDComputeAQLQueue.exec = original_exec
     ops_amd._publish_aql_packet = original_publish
     ops_amd.AMDQueueDesc.signal_doorbell = original_doorbell
-  if published or constructed or len(calls) != len(expected_vas):
-    raise RuntimeError("AQL packet census did not close exactly one doorbell boundary per scheduler call")
+  if published or constructed or len(calls) != target_dispatch_count:
+    raise RuntimeError("AQL packet census did not close the exact target dispatch count")
   return {
     "enabled": True, "status": "PASS",
     "capture_point": "ring_slot_after_header_last_publication_and_kernargs_before_doorbell",
+    "target_program_identity": dict(target_program_identity) if target_program_identity is not None else None,
+    "target_program_identities": [dict(identity) for identity in normalized_identities]
+      if target_program_identities is not None else None,
+    "target_call_count": len(calls), "non_target_kernel_dispatch_count": non_target_kernel_dispatch_count,
+    "compute_doorbell_count": compute_doorbell_count, "require_fixed_scale_va": require_fixed_scale_va,
+    "require_all_five_vas_fixed": require_all_five_vas_fixed,
+    "retained_companion_output_count": len(retained_outputs),
     "call_count": len(calls), "calls": calls,
   }
 
@@ -1398,6 +1505,407 @@ def run_frozen_scheduler_prefix_two_probe(*, role_spec: ExactRoleSpec = DEFAULT_
   }
 
 
+def _producer_oracle_diagnostic(actual_values: np.ndarray, actual_scales: np.ndarray, actual_sums: np.ndarray,
+                                oracle_values: np.ndarray, oracle_scales: np.ndarray,
+                                oracle_sums: np.ndarray) -> dict[str, Any]:
+  """Compare the realized scheduler producer with the independent NumPy quantizer."""
+  arrays = (actual_values, actual_scales, actual_sums, oracle_values, oracle_scales, oracle_sums)
+  if any(not isinstance(value, np.ndarray) for value in arrays):
+    raise TypeError("producer diagnostic requires NumPy arrays")
+  if actual_values.shape != oracle_values.shape or actual_scales.shape != oracle_scales.shape or \
+     actual_sums.shape != oracle_sums.shape:
+    raise ValueError("producer diagnostic shapes differ from NumPy oracle")
+  qvalue_mismatch_count = int(np.count_nonzero(actual_values != oracle_values))
+  scale_errors = np.abs(actual_scales.astype(np.float64) - oracle_scales.astype(np.float64))
+  sum_errors = np.abs(actual_sums.astype(np.float64) - oracle_sums.astype(np.float64))
+  actual_scales_half = actual_scales.astype(np.float16)
+  oracle_scales_half = oracle_scales.astype(np.float16)
+  actual_sums_half = actual_sums.astype(np.float16)
+  oracle_sums_half = oracle_sums.astype(np.float16)
+  raw_scale_mismatch_count = int(np.count_nonzero(actual_scales != oracle_scales))
+  raw_sum_mismatch_count = int(np.count_nonzero(actual_sums != oracle_sums))
+  target_half_scale_mismatch_count = int(np.count_nonzero(actual_scales_half != oracle_scales_half))
+  target_half_sum_mismatch_count = int(np.count_nonzero(actual_sums_half != oracle_sums_half))
+  exact = qvalue_mismatch_count == raw_scale_mismatch_count == raw_sum_mismatch_count == 0
+  return {
+    "status": "PASS" if exact else "PRODUCER_ORACLE_ROUNDING_DRIFT",
+    "qvalue_mismatch_count": qvalue_mismatch_count,
+    "raw_scale_mismatch_count": raw_scale_mismatch_count,
+    "raw_sum_mismatch_count": raw_sum_mismatch_count,
+    "max_scale_abs_error": float(np.max(scale_errors)) if scale_errors.size else 0.0,
+    "max_sum_abs_error": float(np.max(sum_errors)) if sum_errors.size else 0.0,
+    "target_half_scale_mismatch_count": target_half_scale_mismatch_count,
+    "target_half_sum_mismatch_count": target_half_sum_mismatch_count,
+    "exact_numpy_oracle_match": exact,
+  }
+
+
+def _producer_probe_status(consumer_comparison_status: str, producer_diagnostic_status: str
+                           ) -> tuple[str, str | None]:
+  if consumer_comparison_status != "pass":
+    return "CONSUMER_MISMATCH", "target output differs from reference built from actual producer bytes"
+  if producer_diagnostic_status != "PASS":
+    return "PRODUCER_ORACLE_ROUNDING_DRIFT", None
+  return "PASS", None
+
+
+def run_frozen_scheduler_producer_prefix_probe(*, role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC,
+                                               frozen_bundle: str | Path,
+                                               epoch_limit: int) -> dict[str, Any]:
+  """Run a 1/2-epoch frozen scheduler prefix with the real physical Q8 producer."""
+  role_spec = admit_exact_role_spec(role_spec)
+  if not isinstance(epoch_limit, int) or isinstance(epoch_limit, bool) or epoch_limit not in (1, 2):
+    raise ValueError("producer-backed scheduler prefix epoch_limit must be 1 or 2")
+  if epoch_limit > role_spec.epochs:
+    raise ValueError("producer-backed scheduler prefix exceeds the admitted role epoch count")
+
+  from types import SimpleNamespace
+  from tinygrad import Tensor, dtypes
+  from tinygrad.engine.realize import get_call_arg_uops
+  from tinygrad.uop.ops import Ops
+  from extra.qk.mmq_q4k_q8_reference import (
+    Q81MMQDS4Activation, Q81MMQDS4ActivationSpec, Q4KQ81MMQTileSpec,
+    Q8_1_MMQ_DS4_LAYOUT, q4k_q8_1_mmq_ds4_tile_reference,
+    q8_1_mmq_ds4_quantize_reference,
+  )
+  from extra.qk.prefill.frozen_exact_role_scheduler import build_frozen_exact_q4k_schedule
+  from extra.qk.q4k_q8_activation_producer import produce_physical_ds4_q8_1_tensor
+
+  binding, frozen_identity = _load_frozen_execution_binding(role_spec, frozen_bundle)
+  m, n, k = role_spec.shape
+  words_np = _random_q4_words(n, k, 20260721)
+  # Model activations arrive as fp16. Preserve that rounding in both the real
+  # producer input and the independent NumPy reference.
+  activation_np = np.random.default_rng(20260722).standard_normal((m, k), dtype=np.float32).astype(np.float16)
+  packed_weight = Tensor(words_np, dtype=dtypes.uint32, device="AMD")
+  activation = Tensor(activation_np, dtype=dtypes.float16, device="AMD")
+  linear = SimpleNamespace(
+    bias=None, out_features=n, in_features=k, q4k_storage=object(),
+    prefill_packed_weight=lambda: packed_weight)
+  produced_tiles = []
+  def capture_producer(source, spec):
+    tile = produce_physical_ds4_q8_1_tensor(source, spec)
+    produced_tiles.append(tile)
+    return tile
+  schedule = build_frozen_exact_q4k_schedule(
+    linear, activation, role_spec=role_spec, frozen_bundle=frozen_bundle,
+    enabled=True, binding=binding, activation_producer=capture_producer,
+    epoch_limit=epoch_limit, fixed_scale_stage=True)
+  if schedule is None: raise RuntimeError("producer-backed frozen scheduler unexpectedly remained disabled")
+  if len(produced_tiles) != epoch_limit:
+    raise RuntimeError("producer-backed scheduler did not expose one physical Q8 tile per target epoch")
+  output = schedule.output
+  program = binding.artifact.program
+  calls = [u for u in output.uop.toposort() if u.op is Ops.CALL and u.src[0] is program]
+  if len(calls) != epoch_limit or any(len(get_call_arg_uops(call)) != 5 for call in calls):
+    raise RuntimeError("producer-backed scheduler prefix lost its exact target call count or ABI")
+  scale_buffer_keys = [get_call_arg_uops(call)[3].buf_uop.key.hex() for call in calls]
+  if len(set(scale_buffer_keys)) != 1:
+    raise RuntimeError("producer-backed scheduler prefix lost its fixed Q8 scale buffer identity")
+  for previous, current in zip(calls, calls[1:]):
+    if previous not in get_call_arg_uops(current)[0].toposort() or \
+       previous not in get_call_arg_uops(current)[3].toposort():
+      raise RuntimeError("producer-backed scheduler prefix lost output or Q8 scale ordering")
+
+  target_identity = {
+    "function_name": program.arg.function_name,
+    "binary_sha256": binding.binary_sha256,
+  }
+  graph_evidence = {
+    "program_calls": len(calls), "expected_program_calls": epoch_limit,
+    "five_buffer_abi": True, "output_after_chain": True,
+    "q8_scale_buffer_keys": scale_buffer_keys,
+    "q8_scale_fixed_buffer_identity": len(set(scale_buffer_keys)) == 1,
+  }
+  retained_outputs = _retained_producer_tensors(produced_tiles)
+  graph_evidence.update({
+    "retained_producer_tensor_count": len(retained_outputs),
+    "retained_producer_tensor_names_per_epoch": ["values", "scales", "sums"],
+    "retained_as_companion_realization_outputs": True,
+  })
+  try:
+    packet_census = _realize_with_aql_packet_census(
+      output, target_program_identity=target_identity,
+      target_dispatch_count=epoch_limit, require_fixed_scale_va=True,
+      retained_outputs=retained_outputs)
+  except BaseException as exc:
+    return {
+      "schema": "tinygrad.mmq_frozen_scheduler_producer_prefix_probe.v1",
+      "status": "BLOCKED", "exact_blocker": "producer-backed target dispatch rejected before doorbell",
+      "exception": type(exc).__name__, "error": str(exc),
+      "research_only": True, "production_dispatch_changed": False, "default_route": "direct_packed",
+      "role": role_spec.role, "shape": list(role_spec.shape), "epoch_limit": epoch_limit,
+      "producer": "extra.qk.q4k_q8_activation_producer.produce_physical_ds4_q8_1_tensor",
+      "graph": graph_evidence, "target_program_identity": target_identity,
+      "frozen_bundle": frozen_identity, "compile_performed": False, "requires_recompile": False,
+      "hip_used": False, "no_fallback": True,
+    }
+
+  q4_blocks = words_np.view(np.uint8).reshape(n, role_spec.epochs, 144)
+  activation_ref = activation_np.astype(np.float32)
+  oracle_values, oracle_scales, oracle_sums = q8_1_mmq_ds4_quantize_reference(
+    activation_ref[:, :epoch_limit*256])
+  actual_values = np.concatenate([tile.values.numpy() for tile in produced_tiles], axis=0)
+  actual_scales = np.concatenate([tile.scales.numpy() for tile in produced_tiles], axis=0)
+  actual_sums = np.concatenate([tile.sums.numpy() for tile in produced_tiles], axis=0)
+  producer_diagnostic = _producer_oracle_diagnostic(
+    actual_values, actual_scales, actual_sums, oracle_values, oracle_scales, oracle_sums)
+
+  q4_prefix = np.ascontiguousarray(q4_blocks[:, :epoch_limit, :]).reshape(-1)
+  ref_spec = Q4KQ81MMQTileSpec(
+    role="frozen_scheduler_producer_prefix", m=m, n=n, k=epoch_limit*256,
+    m_tile=m, n_tile=n, activation_layout=Q8_1_MMQ_DS4_LAYOUT)
+  # Consumer authority: use the exact realized producer bytes. The target
+  # stages metadata through half2, so round only metadata through fp16 here.
+  actual_ds4 = Q81MMQDS4Activation(
+    actual_values,
+    actual_scales.astype(np.float16).astype(np.float32),
+    actual_sums.astype(np.float16).astype(np.float32),
+    Q81MMQDS4ActivationSpec(m=m, k=epoch_limit*256, m_tile=m))
+  consumer_reference = q4k_q8_1_mmq_ds4_tile_reference(q4_prefix, actual_ds4, ref_spec)
+  got = output.numpy().reshape(m, n)
+  consumer_comparison = _numeric_comparison(got, consumer_reference)
+  # Historical/source oracle remains a separate diagnostic. It must not
+  # relabel a correct consumer of the producer's actual bytes as incorrect.
+  oracle_ds4 = Q81MMQDS4Activation(
+    oracle_values,
+    oracle_scales.astype(np.float16).astype(np.float32),
+    oracle_sums.astype(np.float16).astype(np.float32),
+    Q81MMQDS4ActivationSpec(m=m, k=epoch_limit*256, m_tile=m))
+  source_oracle_reference = q4k_q8_1_mmq_ds4_tile_reference(q4_prefix, oracle_ds4, ref_spec)
+  source_oracle_comparison = _numeric_comparison(got, source_oracle_reference)
+  status, blocker = _producer_probe_status(consumer_comparison["status"], producer_diagnostic["status"])
+  return {
+    "schema": "tinygrad.mmq_frozen_scheduler_producer_prefix_probe.v1",
+    "status": status, "exact_blocker": blocker,
+    "research_only": True, "production_dispatch_changed": False, "default_route": "direct_packed",
+    "role": role_spec.role, "shape": list(role_spec.shape), "epoch_limit": epoch_limit,
+    "producer": "extra.qk.q4k_q8_activation_producer.produce_physical_ds4_q8_1_tensor",
+    "graph": graph_evidence,
+    "dispatch": {
+      "launcher": "tinygrad_scheduler", "mode": "lazy_ops_program_chain",
+      "count": epoch_limit, "program_key": binding.program_key,
+      "target_program_identity": target_identity, "aql_packet_census": packet_census,
+    },
+    "correctness": {
+      "status": "PASS" if consumer_comparison["status"] == "pass" else "CONSUMER_MISMATCH",
+      "comparison": consumer_comparison,
+      "authority": "same_session_actual_producer_bytes_with_target_fp16_metadata_roundtrip",
+    },
+    "producer_diagnostic": {
+      **producer_diagnostic,
+      "source_oracle_output_comparison": source_oracle_comparison,
+      "source_oracle": "extra.qk.mmq_q4k_q8_reference.q8_1_mmq_ds4_quantize_reference",
+    },
+    "scheduler_evidence": schedule.evidence,
+    "frozen_bundle": frozen_identity, "compile_performed": False, "requires_recompile": False,
+    "hip_used": False, "no_fallback": True,
+  }
+
+
+def _frozen_program_set_target_identities(binding: Any, prefix_epochs: int) -> tuple[dict[str, str], ...]:
+  """Derive the ordered runtime identities from the exact retained v2 payloads."""
+  programs, binaries = binding.artifact.programs[:prefix_epochs], binding.artifact.binaries[:prefix_epochs]
+  if len(programs) != prefix_epochs or len(binaries) != prefix_epochs:
+    raise ValueError("frozen v2 prefix does not contain all requested program payloads")
+  identities = tuple({
+    "function_name": program.arg.function_name,
+    "binary_sha256": hashlib.sha256(binary).hexdigest(),
+  } for program, binary in zip(programs, binaries))
+  if any(not row["function_name"] or not row["binary_sha256"] for row in identities):
+    raise ValueError("frozen v2 prefix contains an incomplete runtime identity")
+  if len({(row["function_name"], row["binary_sha256"]) for row in identities}) != prefix_epochs:
+    raise ValueError("frozen v2 prefix target identities are not distinct")
+  return identities
+
+
+def _fixed_base_prefix_reference_operands(q4_blocks: np.ndarray, values: np.ndarray,
+                                          scales: np.ndarray, sums: np.ndarray,
+                                          prefix_epochs: int
+                                          ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+  """Slice the static-offset prefix from retained full-role fixed-base buffers."""
+  if not isinstance(q4_blocks, np.ndarray) or q4_blocks.ndim != 3 or \
+     q4_blocks.dtype != np.uint8 or q4_blocks.shape[2] != 144:
+    raise ValueError("fixed-base prefix requires uint8 Q4 blocks shaped [N,epochs,144]")
+  if not isinstance(prefix_epochs, int) or isinstance(prefix_epochs, bool) or \
+     not 1 <= prefix_epochs <= q4_blocks.shape[1]:
+    raise ValueError("fixed-base reference prefix is outside the Q4 epoch extent")
+  if any(not isinstance(value, np.ndarray) or value.ndim != 3
+         for value in (values, scales, sums)):
+    raise ValueError("fixed-base prefix requires rank-three retained DS4 arrays")
+  if values.shape[0] != q4_blocks.shape[1] * 2 or \
+     scales.shape[0] != values.shape[0] or sums.shape != scales.shape:
+    raise ValueError("retained full-role DS4 arrays differ from the Q4 epoch extent")
+  records = prefix_epochs * 2
+  return (
+    np.ascontiguousarray(q4_blocks[:, :prefix_epochs, :]).reshape(-1),
+    np.ascontiguousarray(values[:records]),
+    np.ascontiguousarray(scales[:records]),
+    np.ascontiguousarray(sums[:records]),
+  )
+
+
+def run_frozen_epoch_program_set_prefix_probe(
+    *, role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC, frozen_bundle: str | Path,
+    prefix_epochs: int) -> dict[str, Any]:
+  """Run a frozen v2 fixed-base scheduler prefix with one full-role producer."""
+  schema = "tinygrad.mmq_frozen_epoch_program_set_prefix_probe.v2"
+  role_spec = admit_exact_role_spec(role_spec)
+  if not isinstance(prefix_epochs, int) or isinstance(prefix_epochs, bool) or \
+     prefix_epochs not in (1, 2):
+    raise ValueError("frozen v2 GPU probe prefix_epochs must be 1 or 2")
+  if prefix_epochs > role_spec.epochs:
+    raise ValueError("frozen v2 GPU probe prefix exceeds the admitted role")
+
+  from types import SimpleNamespace
+  from tinygrad import Tensor, dtypes
+  from tinygrad.device import Device
+  from tinygrad.engine.realize import get_call_arg_uops
+  from tinygrad.uop.ops import Ops
+  from extra.qk.mmq_frozen_epoch_program_set import load_frozen_epoch_program_set_binding
+  from extra.qk.mmq_q4k_q8_reference import (
+    Q81MMQDS4Activation, Q81MMQDS4ActivationSpec, Q4KQ81MMQTileSpec,
+    Q8_1_MMQ_DS4_LAYOUT, q4k_q8_1_mmq_ds4_tile_reference,
+    q8_1_mmq_ds4_quantize_reference,
+  )
+  from extra.qk.prefill.frozen_epoch_program_set_scheduler import \
+    build_frozen_epoch_program_set_schedule
+  from extra.qk.q4k_q8_activation_producer import produce_physical_ds4_q8_1_tensor
+
+  binding = load_frozen_epoch_program_set_binding(role_spec, frozen_bundle)
+  target_identities = _frozen_program_set_target_identities(binding, prefix_epochs)
+  m, n, k = role_spec.shape
+  words_np = _random_q4_words(n, k, 20260721)
+  activation_np = np.random.default_rng(20260722).standard_normal(
+    (m, k), dtype=np.float32).astype(np.float16)
+  packed_weight = Tensor(words_np, dtype=dtypes.uint32, device="AMD")
+  activation = Tensor(activation_np, dtype=dtypes.float16, device="AMD")
+  linear = SimpleNamespace(
+    bias=None, out_features=n, in_features=k, q4k_storage=object(),
+    prefill_packed_weight=lambda: packed_weight)
+  produced_tiles = []
+
+  def capture_producer(source: Any, spec: Any) -> Any:
+    tile = produce_physical_ds4_q8_1_tensor(source, spec)
+    produced_tiles.append(tile)
+    return tile
+
+  schedule = build_frozen_epoch_program_set_schedule(
+    linear, activation, role_spec=role_spec, frozen_bundle=frozen_bundle,
+    enabled=True, prefix_epochs=prefix_epochs, binding=binding,
+    activation_producer=capture_producer)
+  if schedule is None: raise RuntimeError("frozen v2 fixed-base scheduler unexpectedly remained disabled")
+  if len(produced_tiles) != 1:
+    raise RuntimeError("frozen v2 fixed-base scheduler did not expose exactly one full-role producer tile")
+
+  output = schedule.output
+  selected_programs = binding.artifact.programs[:prefix_epochs]
+  calls = [node for node in output.uop.toposort()
+           if node.op is Ops.CALL and node.src[0] in selected_programs]
+  if [call.src[0] for call in calls] != list(selected_programs):
+    raise RuntimeError("frozen v2 fixed-base graph lost its exact ordered PROGRAM prefix")
+  arguments = [get_call_arg_uops(call) for call in calls]
+  if any(len(row) != 5 for row in arguments):
+    raise RuntimeError("frozen v2 fixed-base graph lost the five-buffer ABI")
+  if any(arguments[0][slot].buf_uop is not row[slot].buf_uop
+         for row in arguments for slot in range(5)):
+    raise RuntimeError("frozen v2 fixed-base graph changed a buffer identity within the prefix")
+  if any(previous not in current[0].toposort()
+         for previous, current in zip(calls, arguments[1:])):
+    raise RuntimeError("frozen v2 fixed-base graph lost its slot-zero ordering chain")
+  graph_evidence = {
+    "program_calls": len(calls), "expected_program_calls": prefix_epochs,
+    "program_keys": list(binding.program_keys[:prefix_epochs]),
+    "ordered_program_prefix": True, "five_buffer_abi": True,
+    "all_calls_share_buffer_identity": True, "slot0_ordered": True,
+    "buffer_uop_keys": [value.buf_uop.key.hex() for value in arguments[0]],
+    "full_role_producer_calls": len(produced_tiles),
+  }
+  retained_outputs = _retained_producer_tensors(produced_tiles)
+  graph_evidence.update({
+    "retained_producer_tensor_count": len(retained_outputs),
+    "retained_producer_tensor_names": ["values", "scales", "sums"],
+    "retained_as_companion_realization_outputs": True,
+  })
+
+  # Ordered target-binary and exact five-pointer validation exists only on
+  # tinygrad's AQL queue. Refuse to dispatch this safety probe on PM4.
+  if not bool(getattr(Device["AMD"], "is_aql", False)):
+    raise RuntimeError("frozen v2 fixed-base GPU probe requires AMD_AQL=1")
+  try:
+    packet_census = _realize_with_aql_packet_census(
+      output, target_program_identities=target_identities,
+      require_all_five_vas_fixed=True, retained_outputs=retained_outputs)
+  except BaseException as exc:
+    return {
+      "schema": schema, "status": "BLOCKED",
+      "exact_blocker": "frozen v2 fixed-base target dispatch rejected before doorbell",
+      "exception": type(exc).__name__, "error": str(exc),
+      "research_only": True, "production_dispatch_changed": False,
+      "default_route": "direct_packed", "role": role_spec.role,
+      "shape": list(role_spec.shape), "prefix_epochs": prefix_epochs,
+      "graph": graph_evidence, "target_program_identities": target_identities,
+      "family_identity": binding.family_identity,
+      "frozen_bundle": str(Path(frozen_bundle).resolve()),
+      "compile_performed": False, "requires_recompile": False,
+      "hip_used": False, "no_fallback": True,
+    }
+
+  tile = produced_tiles[0]
+  actual_values, actual_scales, actual_sums = \
+    tile.values.numpy(), tile.scales.numpy(), tile.sums.numpy()
+  q4_blocks = words_np.view(np.uint8).reshape(n, role_spec.epochs, 144)
+  q4_prefix, values_prefix, scales_prefix, sums_prefix = _fixed_base_prefix_reference_operands(
+    q4_blocks, actual_values, actual_scales, actual_sums, prefix_epochs)
+  ref_spec = Q4KQ81MMQTileSpec(
+    role="frozen_epoch_program_set_prefix", m=m, n=n, k=prefix_epochs*256,
+    m_tile=m, n_tile=n, activation_layout=Q8_1_MMQ_DS4_LAYOUT)
+  actual_ds4 = Q81MMQDS4Activation(
+    values_prefix, scales_prefix.astype(np.float16).astype(np.float32),
+    sums_prefix.astype(np.float16).astype(np.float32),
+    Q81MMQDS4ActivationSpec(m=m, k=prefix_epochs*256, m_tile=m))
+  consumer_reference = q4k_q8_1_mmq_ds4_tile_reference(q4_prefix, actual_ds4, ref_spec)
+  consumer_comparison = _numeric_comparison(
+    output.numpy().reshape(m, n), consumer_reference)
+
+  oracle_values, oracle_scales, oracle_sums = q8_1_mmq_ds4_quantize_reference(
+    activation_np.astype(np.float32))
+  producer_diagnostic = _producer_oracle_diagnostic(
+    actual_values, actual_scales, actual_sums,
+    oracle_values, oracle_scales, oracle_sums)
+  passed = consumer_comparison["status"] == "pass"
+  return {
+    "schema": schema, "status": "PASS" if passed else "CONSUMER_MISMATCH",
+    "exact_blocker": None if passed else
+      "target output differs from reference built from retained full-role producer bytes",
+    "research_only": True, "production_dispatch_changed": False,
+    "default_route": "direct_packed", "role": role_spec.role,
+    "shape": list(role_spec.shape), "prefix_epochs": prefix_epochs,
+    "producer": "extra.qk.q4k_q8_activation_producer.produce_physical_ds4_q8_1_tensor",
+    "graph": graph_evidence,
+    "dispatch": {
+      "launcher": "tinygrad_scheduler", "mode": "static_offset_program_chain",
+      "count": prefix_epochs, "program_keys": list(binding.program_keys[:prefix_epochs]),
+      "target_program_identities": target_identities,
+      "aql_packet_census": packet_census,
+    },
+    "correctness": {
+      "status": "PASS" if passed else "CONSUMER_MISMATCH",
+      "comparison": consumer_comparison,
+      "authority": "same_session_retained_full_role_producer_bytes_with_static_offset_prefix_and_fp16_metadata_roundtrip",
+    },
+    "producer_diagnostic": {
+      **producer_diagnostic,
+      "source_oracle": "extra.qk.mmq_q4k_q8_reference.q8_1_mmq_ds4_quantize_reference",
+    },
+    "scheduler_evidence": schedule.evidence,
+    "family_identity": binding.family_identity,
+    "frozen_bundle": str(Path(frozen_bundle).resolve()),
+    "compile_performed": False, "requires_recompile": False,
+    "hip_used": False, "no_fallback": True,
+  }
+
+
 def run_frozen_scheduler_prefix_two_probe_isolated(*, role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC,
                                                    frozen_bundle: str | Path,
                                                    address_mode: str,
@@ -1469,6 +1977,162 @@ def run_frozen_scheduler_prefix_two_probe_isolated(*, role_spec: ExactRoleSpec =
   elif proc.returncode != 0 and result.get("status") == "PASS":
     result.update({"status": "BLOCKED", "exact_blocker": "scheduler prefix-two child exited non-zero",
                    "returncode": proc.returncode})
+  return result
+
+
+def run_frozen_scheduler_producer_prefix_probe_isolated(
+    *, role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC, frozen_bundle: str | Path,
+    epoch_limit: int, timeout_seconds: float = 180.0,
+    child_env_overrides: Mapping[str, str] | None = None) -> dict[str, Any]:
+  """Run the real-producer scheduler prefix in a fresh, health-guarded child."""
+  schema = "tinygrad.mmq_frozen_scheduler_producer_prefix_probe.v1"
+  try:
+    role_spec = admit_exact_role_spec(role_spec)
+    if not isinstance(epoch_limit, int) or isinstance(epoch_limit, bool) or epoch_limit not in (1, 2):
+      raise ValueError("producer-backed scheduler prefix epoch_limit must be 1 or 2")
+    env_overrides = _validated_child_env_overrides(child_env_overrides)
+  except (TypeError, ValueError) as exc:
+    return {"schema": schema, "status": "BLOCKED", "exact_blocker": str(exc)}
+  if timeout_seconds <= 0:
+    return {"schema": schema, "status": "BLOCKED", "exact_blocker": "timeout_seconds must be positive"}
+  from extra.qk.mmq_target_epoch_orchestrator import parse_kernel_faults, read_kernel_log_since, spawned_tiny_health_probe
+  try: health_before = bool(spawned_tiny_health_probe(env_overrides or None))
+  except BaseException: health_before = False
+  if not health_before:
+    return {"schema": schema, "status": "BLOCKED", "exact_blocker": "pre-run GPU health probe failed",
+            "health_before": False, "child_env_overrides": env_overrides}
+
+  child_env = dict(os.environ)
+  child_env.update({"DEV": "AMD", "PYTHONPATH": str(ROOT) + os.pathsep + child_env.get("PYTHONPATH", "")})
+  child_env.update(env_overrides)
+  role_expr = f"exact_role_spec({role_spec.role!r}, shape={role_spec.shape!r})"
+  bundle_arg = repr(str(Path(frozen_bundle).resolve()))
+  code = (
+    "import json; from extra.qk.mmq_exact_role_spec import exact_role_spec; "
+    "from extra.qk.mmq_llama_five_buffer_gpu_harness import run_frozen_scheduler_producer_prefix_probe; "
+    f"print(json.dumps(run_frozen_scheduler_producer_prefix_probe(role_spec={role_expr}, "
+    f"frozen_bundle={bundle_arg}, epoch_limit={epoch_limit})), flush=True)")
+  started = time.time()
+  try:
+    proc = subprocess.run([sys.executable, "-c", code], cwd=ROOT, env=child_env,
+                          text=True, capture_output=True, timeout=timeout_seconds, check=False)
+  except subprocess.TimeoutExpired:
+    proc = None
+  try: kernel_faults = parse_kernel_faults(read_kernel_log_since(started))
+  except BaseException as exc: kernel_faults = [f"kernel-log scan failed: {type(exc).__name__}: {exc}"]
+  try: health_after = bool(spawned_tiny_health_probe(env_overrides or None))
+  except BaseException: health_after = False
+  if proc is None:
+    return {"schema": schema, "status": "BLOCKED",
+            "exact_blocker": "producer-backed scheduler prefix child timed out",
+            "timeout": True, "timeout_seconds": timeout_seconds,
+            "health_before": health_before, "health_after": health_after,
+            "kernel_faults": kernel_faults, "child_env_overrides": env_overrides}
+  result = None
+  for line in reversed(proc.stdout.strip().splitlines()):
+    try: candidate = json.loads(line)
+    except json.JSONDecodeError: continue
+    if isinstance(candidate, dict):
+      result = candidate
+      break
+  if result is None:
+    result = {"schema": schema, "status": "BLOCKED",
+              "exact_blocker": "producer-backed scheduler prefix child returned no structured result",
+              "returncode": proc.returncode, "stdout_tail": proc.stdout[-2000:], "stderr_tail": proc.stderr[-2000:]}
+  result.update({"health_before": health_before, "health_after": health_after,
+                 "kernel_faults": kernel_faults, "child_env_overrides": env_overrides})
+  if kernel_faults:
+    result.update({"status": "BLOCKED", "exact_blocker": "AMD kernel fault/reset marker observed"})
+  elif not health_after:
+    result.update({"status": "BLOCKED", "exact_blocker": "post-run GPU health probe failed"})
+  elif proc.returncode != 0 and result.get("status") == "PASS":
+    result.update({"status": "BLOCKED", "exact_blocker": "producer-backed scheduler prefix child exited non-zero",
+                   "returncode": proc.returncode})
+  return result
+
+
+def run_frozen_epoch_program_set_prefix_probe_isolated(
+    *, role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC, frozen_bundle: str | Path,
+    prefix_epochs: int, timeout_seconds: float = 180.0,
+    child_env_overrides: Mapping[str, str] | None = None) -> dict[str, Any]:
+  """Run the v2 fixed-base prefix in the existing health-guarded child flow."""
+  schema = "tinygrad.mmq_frozen_epoch_program_set_prefix_probe.v2"
+  try:
+    role_spec = admit_exact_role_spec(role_spec)
+    if not isinstance(prefix_epochs, int) or isinstance(prefix_epochs, bool) or prefix_epochs not in (1, 2):
+      raise ValueError("frozen v2 GPU probe prefix_epochs must be 1 or 2")
+    env_overrides = _validated_child_env_overrides(child_env_overrides)
+    if env_overrides.get("AMD_AQL", "1") != "1":
+      raise ValueError("frozen v2 fixed-base GPU probe requires AMD_AQL=1")
+    env_overrides["AMD_AQL"] = "1"
+  except (TypeError, ValueError) as exc:
+    return {"schema": schema, "status": "BLOCKED", "exact_blocker": str(exc)}
+  if timeout_seconds <= 0:
+    return {"schema": schema, "status": "BLOCKED", "exact_blocker": "timeout_seconds must be positive"}
+  from extra.qk.mmq_target_epoch_orchestrator import parse_kernel_faults, read_kernel_log_since, spawned_tiny_health_probe
+  try: health_before = bool(spawned_tiny_health_probe(env_overrides))
+  except BaseException: health_before = False
+  if not health_before:
+    return {
+      "schema": schema, "status": "BLOCKED", "exact_blocker": "pre-run GPU health probe failed",
+      "health_before": False, "child_env_overrides": env_overrides,
+    }
+
+  child_env = dict(os.environ)
+  child_env.update({"DEV": "AMD", "PYTHONPATH": str(ROOT) + os.pathsep + child_env.get("PYTHONPATH", "")})
+  child_env.update(env_overrides)
+  role_expr = f"exact_role_spec({role_spec.role!r}, shape={role_spec.shape!r})"
+  bundle_arg = repr(str(Path(frozen_bundle).resolve()))
+  code = (
+    "import json; from extra.qk.mmq_exact_role_spec import exact_role_spec; "
+    "from extra.qk.mmq_llama_five_buffer_gpu_harness import run_frozen_epoch_program_set_prefix_probe; "
+    f"print(json.dumps(run_frozen_epoch_program_set_prefix_probe(role_spec={role_expr}, "
+    f"frozen_bundle={bundle_arg}, prefix_epochs={prefix_epochs})), flush=True)")
+  started = time.time()
+  try:
+    proc = subprocess.run([sys.executable, "-c", code], cwd=ROOT, env=child_env,
+                          text=True, capture_output=True, timeout=timeout_seconds, check=False)
+  except subprocess.TimeoutExpired:
+    proc = None
+  try: kernel_faults = parse_kernel_faults(read_kernel_log_since(started))
+  except BaseException as exc: kernel_faults = [f"kernel-log scan failed: {type(exc).__name__}: {exc}"]
+  try: health_after = bool(spawned_tiny_health_probe(env_overrides))
+  except BaseException: health_after = False
+  if proc is None:
+    return {
+      "schema": schema, "status": "BLOCKED",
+      "exact_blocker": "frozen v2 fixed-base prefix child timed out",
+      "timeout": True, "timeout_seconds": timeout_seconds,
+      "health_before": health_before, "health_after": health_after,
+      "kernel_faults": kernel_faults, "child_env_overrides": env_overrides,
+    }
+  result = None
+  for line in reversed(proc.stdout.strip().splitlines()):
+    try: candidate = json.loads(line)
+    except json.JSONDecodeError: continue
+    if isinstance(candidate, dict):
+      result = candidate
+      break
+  if result is None:
+    result = {
+      "schema": schema, "status": "BLOCKED",
+      "exact_blocker": "frozen v2 fixed-base prefix child returned no structured result",
+      "returncode": proc.returncode, "stdout_tail": proc.stdout[-2000:],
+      "stderr_tail": proc.stderr[-2000:],
+    }
+  result.update({
+    "health_before": health_before, "health_after": health_after,
+    "kernel_faults": kernel_faults, "child_env_overrides": env_overrides,
+  })
+  if kernel_faults:
+    result.update({"status": "BLOCKED", "exact_blocker": "AMD kernel fault/reset marker observed"})
+  elif not health_after:
+    result.update({"status": "BLOCKED", "exact_blocker": "post-run GPU health probe failed"})
+  elif proc.returncode != 0 and result.get("status") == "PASS":
+    result.update({
+      "status": "BLOCKED", "exact_blocker": "frozen v2 fixed-base prefix child exited non-zero",
+      "returncode": proc.returncode,
+    })
   return result
 
 
@@ -1720,7 +2384,41 @@ def main() -> int:
                       help="run two scheduler-owned frozen PROGRAM calls with same or changed input VAs")
   parser.add_argument("--scheduler-prefix-two-change-slot", choices=_SCHEDULER_PREFIX_CHANGE_SLOTS, default="all",
                       help="with changed mode, change only this input ABI slot (default: all)")
+  parser.add_argument("--scheduler-producer-prefix-epochs", type=int, choices=(1, 2),
+                      help="run a 1/2-epoch frozen scheduler prefix with the real physical Q8 producer")
+  parser.add_argument("--scheduler-v2-fixed-base-prefix-epochs", type=int, choices=(1, 2),
+                      help="run a 1/2-epoch frozen v2 static-offset prefix with one full-role Q8 producer")
   args = parser.parse_args()
+  if args.scheduler_v2_fixed_base_prefix_epochs is not None:
+    if args.target_role_frozen_bundle is None:
+      parser.error("--scheduler-v2-fixed-base-prefix-epochs requires --target-role-frozen-bundle")
+    role_spec = exact_role_spec(args.target_role_name, inventory=args.target_role_inventory)
+    row = run_frozen_epoch_program_set_prefix_probe_isolated(
+      role_spec=role_spec, frozen_bundle=args.target_role_frozen_bundle,
+      prefix_epochs=args.scheduler_v2_fixed_base_prefix_epochs,
+      timeout_seconds=args.target_role_timeout,
+      child_env_overrides={"AMD_AQL": args.target_role_amd_aql}
+        if args.target_role_amd_aql is not None else None)
+    encoded = json.dumps(row, indent=2, sort_keys=True)
+    if args.target_role_output is not None:
+      args.target_role_output.parent.mkdir(parents=True, exist_ok=True)
+      args.target_role_output.write_text(encoded + "\n")
+    print(encoded)
+    return 0 if row.get("status") == "PASS" else 1
+  if args.scheduler_producer_prefix_epochs is not None:
+    if args.target_role_frozen_bundle is None:
+      parser.error("--scheduler-producer-prefix-epochs requires --target-role-frozen-bundle")
+    role_spec = exact_role_spec(args.target_role_name, inventory=args.target_role_inventory)
+    row = run_frozen_scheduler_producer_prefix_probe_isolated(
+      role_spec=role_spec, frozen_bundle=args.target_role_frozen_bundle,
+      epoch_limit=args.scheduler_producer_prefix_epochs, timeout_seconds=args.target_role_timeout,
+      child_env_overrides={"AMD_AQL": args.target_role_amd_aql} if args.target_role_amd_aql is not None else None)
+    encoded = json.dumps(row, indent=2, sort_keys=True)
+    if args.target_role_output is not None:
+      args.target_role_output.parent.mkdir(parents=True, exist_ok=True)
+      args.target_role_output.write_text(encoded + "\n")
+    print(encoded)
+    return 0 if row.get("status") == "PASS" else 1
   if args.scheduler_prefix_two:
     if args.target_role_frozen_bundle is None:
       parser.error("--scheduler-prefix-two requires --target-role-frozen-bundle")

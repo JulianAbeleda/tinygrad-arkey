@@ -5,18 +5,24 @@ from dataclasses import replace
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from tinygrad import dtypes
+from tinygrad import Tensor, dtypes
 from tinygrad.uop.ops import Ops, UOp
 
 from extra.qk.mmq_exact_role_spec import exact_role_spec
 from extra.qk.mmq_llama_five_buffer_full_kernel import build_llama_five_buffer_full_kernel
 from extra.qk.mmq_llama_five_buffer_gpu_harness import (TARGET_IN_PLACE_ACCUMULATION, _accumulate_target_role_epoch,
+  _aql_target_program_identity, _audit_target_aql_kernargs,
   _bind_sink, _dispatch_with_runtime_evidence, _numeric_comparison, _pack_q4_epochs_contiguous,
   _decode_aql_kernel_dispatch_packet, _load_frozen_execution_binding, _random_q4_words, _runtime_identity_evidence,
+  _fixed_base_prefix_reference_operands, _frozen_program_set_target_identities,
+  _producer_oracle_diagnostic, _producer_probe_status,
+  _realize_outputs_together, _retained_producer_tensors,
   _scheduler_prefix_two_launches,
   _validate_frozen_execution_fixture, _validate_frozen_fixture, _validated_child_env_overrides,
   _zero_persistent_target_output,
   run_amd_validation, run_frozen_scheduler_prefix_two_probe_isolated,
+  run_frozen_epoch_program_set_prefix_probe_isolated,
+  run_frozen_scheduler_producer_prefix_probe_isolated,
   run_full_grid_target_role_probe, run_full_grid_target_role_probe_isolated)
 
 
@@ -139,6 +145,92 @@ def test_scheduler_prefix_two_aql_packet_decoder_reports_exact_dispatch_safety_f
     _decode_aql_kernel_dispatch_packet(bytes(ctypes.sizeof(packet) - 1))
 
 
+def test_aql_target_census_identity_and_five_qword_scale_contract_are_cpu_testable():
+  program = SimpleNamespace(name="target", lib=b"exact frozen binary")
+  identity = _aql_target_program_identity(program)
+  assert identity["function_name"] == "target" and len(identity["binary_sha256"]) == 64
+  first = [0x1000, 0x2000, 0x3000, 0x4000, 0x5000]
+  second = [0x1000, 0x2100, 0x3100, 0x4000, 0x5100]
+  checks = _audit_target_aql_kernargs(
+    second, [first], expected_vas=None, require_fixed_scale_va=True)
+  assert checks == {
+    "five_qwords_nonzero": True, "five_qwords_match_expected_vas": True,
+    "output_va_fixed": True, "q8_scale_va_fixed": True, "all_five_vas_fixed": True}
+  zero = _audit_target_aql_kernargs(
+    [0x1000, 0, 0x3100, 0x4000, 0x5100], [first],
+    expected_vas=None, require_fixed_scale_va=True)
+  assert zero["five_qwords_nonzero"] is False
+  moved_scale = _audit_target_aql_kernargs(
+    [0x1000, 0x2100, 0x3100, 0x4100, 0x5100], [first],
+    expected_vas=None, require_fixed_scale_va=True)
+  assert moved_scale["q8_scale_va_fixed"] is False
+  moved_input = _audit_target_aql_kernargs(
+    [0x1000, 0x2100, 0x3000, 0x4000, 0x5000], [first],
+    expected_vas=None, require_fixed_scale_va=False, require_all_five_vas_fixed=True)
+  assert moved_input["all_five_vas_fixed"] is False
+  with pytest.raises(ValueError, match="exactly five"):
+    _audit_target_aql_kernargs([1, 2], [], expected_vas=None, require_fixed_scale_va=True)
+
+
+def test_scheduler_producer_diagnostic_reports_qvalues_metadata_and_target_half_rounding():
+  values = np.array([[[1, -2, 3]]], dtype=np.int8)
+  scales = np.array([[[0.125]]], dtype=np.float32)
+  sums = np.array([[[1.5]]], dtype=np.float32)
+  exact = _producer_oracle_diagnostic(values, scales, sums, values.copy(), scales.copy(), sums.copy())
+  assert exact["status"] == "PASS" and exact["qvalue_mismatch_count"] == 0
+  assert exact["max_scale_abs_error"] == exact["max_sum_abs_error"] == 0.0
+
+  actual_values = values.copy(); actual_values[0, 0, 1] = -1
+  actual_scales = scales + np.float32(1e-6)
+  actual_sums = sums + np.float32(1e-5)
+  drift = _producer_oracle_diagnostic(
+    actual_values, actual_scales, actual_sums, values, scales, sums)
+  assert drift["status"] == "PRODUCER_ORACLE_ROUNDING_DRIFT"
+  assert drift["qvalue_mismatch_count"] == 1
+  assert drift["max_scale_abs_error"] > 0 and drift["max_sum_abs_error"] > 0
+  assert drift["target_half_scale_mismatch_count"] == 0
+  assert drift["target_half_sum_mismatch_count"] == 0
+
+
+def test_scheduler_producer_probe_status_keeps_consumer_mismatch_distinct_from_rounding_drift():
+  assert _producer_probe_status("pass", "PASS") == ("PASS", None)
+  assert _producer_probe_status("pass", "PRODUCER_ORACLE_ROUNDING_DRIFT") == (
+    "PRODUCER_ORACLE_ROUNDING_DRIFT", None)
+  status, blocker = _producer_probe_status("mismatch", "PASS")
+  assert status == "CONSUMER_MISMATCH" and "actual producer bytes" in blocker
+
+
+def test_scheduler_producer_diagnostic_tensors_are_companion_outputs_of_one_realize():
+  realized = []
+  class Output:
+    def realize(self, *companions): realized.append(companions)
+  tiles = [
+    SimpleNamespace(values=object(), scales=object(), sums=object()),
+    SimpleNamespace(values=object(), scales=object(), sums=object()),
+  ]
+  retained = _retained_producer_tensors(tiles)
+  assert retained == (
+    tiles[0].values, tiles[0].scales, tiles[0].sums,
+    tiles[1].values, tiles[1].scales, tiles[1].sums)
+  _realize_outputs_together(Output(), retained)
+  assert realized == [retained]
+  reused = object()
+  with pytest.raises(RuntimeError, match="distinct retained tensors"):
+    _retained_producer_tensors([SimpleNamespace(values=reused, scales=reused, sums=object())])
+
+
+def test_companion_realize_keeps_intermediate_allocations_live_for_post_readback():
+  source = Tensor(list(range(8)), device="CPU")
+  first = (source + 1).contiguous()
+  second = (first * 3).contiguous()
+  output = second.sum()
+  _realize_outputs_together(output, (first, second))
+  assert first.uop.has_buffer_identity() and second.uop.has_buffer_identity()
+  assert first.uop.buffer is not second.uop.buffer
+  np.testing.assert_array_equal(first.numpy(), np.arange(1, 9))
+  np.testing.assert_array_equal(second.numpy(), np.arange(1, 9) * 3)
+
+
 def test_scheduler_prefix_two_isolated_wrapper_reuses_health_guard_and_narrow_aql(tmp_path):
   class _Proc:
     returncode = 0
@@ -158,6 +250,99 @@ def test_scheduler_prefix_two_isolated_wrapper_reuses_health_guard_and_narrow_aq
   assert "run_frozen_scheduler_prefix_two_probe" in code
   assert "address_mode='changed'" in code and "exact_role_spec('attn_kv'" in code
   assert "change_slot='q8_scales'" in code
+
+
+def test_scheduler_producer_prefix_isolated_reuses_health_guard_and_exact_epoch_limit(tmp_path):
+  class _Proc:
+    returncode = 0
+    stdout = '{"schema":"tinygrad.mmq_frozen_scheduler_producer_prefix_probe.v1","status":"PASS"}\n'
+    stderr = ""
+  bundle = tmp_path / "frozen"
+  with patch("extra.qk.mmq_llama_five_buffer_gpu_harness.subprocess.run", return_value=_Proc()) as run, \
+       patch("extra.qk.mmq_target_epoch_orchestrator.read_kernel_log_since", return_value=""), \
+       patch("extra.qk.mmq_target_epoch_orchestrator.spawned_tiny_health_probe", return_value=True):
+    result = run_frozen_scheduler_producer_prefix_probe_isolated(
+      role_spec=exact_role_spec("attn_kv"), frozen_bundle=bundle, epoch_limit=2,
+      timeout_seconds=1, child_env_overrides={"AMD_AQL": "1"})
+  assert result["status"] == "PASS" and result["health_before"] is result["health_after"] is True
+  assert result["child_env_overrides"] == {"AMD_AQL": "1"}
+  assert run.call_args.kwargs["env"]["AMD_AQL"] == "1"
+  code = run.call_args.args[0][2]
+  assert "run_frozen_scheduler_producer_prefix_probe" in code
+  assert "epoch_limit=2" in code and "exact_role_spec('attn_kv'" in code
+
+
+def test_scheduler_producer_prefix_rejects_bad_limit_before_health_or_gpu(tmp_path):
+  with patch("extra.qk.mmq_target_epoch_orchestrator.spawned_tiny_health_probe") as health, \
+       patch("extra.qk.mmq_llama_five_buffer_gpu_harness.subprocess.run") as run:
+    result = run_frozen_scheduler_producer_prefix_probe_isolated(
+      frozen_bundle=tmp_path / "frozen", epoch_limit=3)
+  health.assert_not_called()
+  run.assert_not_called()
+  assert result["status"] == "BLOCKED" and "must be 1 or 2" in result["exact_blocker"]
+
+
+def test_v2_fixed_base_prefix_reference_slices_static_offsets_from_full_buffers():
+  q4 = np.arange(3 * 4 * 144, dtype=np.uint8).reshape(3, 4, 144)
+  values = np.arange(8 * 2 * 128, dtype=np.int16).astype(np.int8).reshape(8, 2, 128)
+  scales = np.arange(8 * 2 * 4, dtype=np.float32).reshape(8, 2, 4)
+  sums = scales + 1000
+  q4_prefix, values_prefix, scales_prefix, sums_prefix = \
+    _fixed_base_prefix_reference_operands(q4, values, scales, sums, 2)
+  np.testing.assert_array_equal(q4_prefix, np.ascontiguousarray(q4[:, :2, :]).reshape(-1))
+  np.testing.assert_array_equal(values_prefix, values[:4])
+  np.testing.assert_array_equal(scales_prefix, scales[:4])
+  np.testing.assert_array_equal(sums_prefix, sums[:4])
+  assert all(value.flags.c_contiguous for value in (q4_prefix, values_prefix, scales_prefix, sums_prefix))
+
+
+def test_v2_fixed_base_target_identities_are_binary_exact_ordered_and_distinct():
+  programs = tuple(SimpleNamespace(arg=SimpleNamespace(function_name="target")) for _ in range(2))
+  binding = SimpleNamespace(artifact=SimpleNamespace(
+    programs=programs, binaries=(b"epoch-zero", b"epoch-one")))
+  identities = _frozen_program_set_target_identities(binding, 2)
+  assert [row["function_name"] for row in identities] == ["target", "target"]
+  assert identities[0]["binary_sha256"] != identities[1]["binary_sha256"]
+  duplicate = SimpleNamespace(artifact=SimpleNamespace(
+    programs=programs, binaries=(b"same", b"same")))
+  with pytest.raises(ValueError, match="not distinct"):
+    _frozen_program_set_target_identities(duplicate, 2)
+
+
+def test_v2_fixed_base_isolated_reuses_health_aql_and_exact_prefix(tmp_path):
+  class _Proc:
+    returncode = 0
+    stdout = '{"schema":"tinygrad.mmq_frozen_epoch_program_set_prefix_probe.v2","status":"PASS"}\n'
+    stderr = ""
+  bundle = tmp_path / "frozen-v2"
+  with patch("extra.qk.mmq_llama_five_buffer_gpu_harness.subprocess.run", return_value=_Proc()) as run, \
+       patch("extra.qk.mmq_target_epoch_orchestrator.read_kernel_log_since", return_value=""), \
+       patch("extra.qk.mmq_target_epoch_orchestrator.spawned_tiny_health_probe", return_value=True) as health:
+    result = run_frozen_epoch_program_set_prefix_probe_isolated(
+      role_spec=exact_role_spec("attn_kv"), frozen_bundle=bundle,
+      prefix_epochs=2, timeout_seconds=1)
+  assert result["status"] == "PASS"
+  assert result["health_before"] is result["health_after"] is True
+  assert result["child_env_overrides"] == {"AMD_AQL": "1"}
+  assert run.call_args.kwargs["env"]["AMD_AQL"] == "1"
+  assert health.call_args_list[0].args[0] == {"AMD_AQL": "1"}
+  code = run.call_args.args[0][2]
+  assert "run_frozen_epoch_program_set_prefix_probe" in code
+  assert "prefix_epochs=2" in code and "exact_role_spec('attn_kv'" in code
+
+
+def test_v2_fixed_base_rejects_bad_prefix_or_pm4_before_health_or_gpu(tmp_path):
+  with patch("extra.qk.mmq_target_epoch_orchestrator.spawned_tiny_health_probe") as health, \
+       patch("extra.qk.mmq_llama_five_buffer_gpu_harness.subprocess.run") as run:
+    bad_prefix = run_frozen_epoch_program_set_prefix_probe_isolated(
+      frozen_bundle=tmp_path / "frozen", prefix_epochs=3)
+    pm4 = run_frozen_epoch_program_set_prefix_probe_isolated(
+      frozen_bundle=tmp_path / "frozen", prefix_epochs=1,
+      child_env_overrides={"AMD_AQL": "0"})
+  health.assert_not_called()
+  run.assert_not_called()
+  assert bad_prefix["status"] == "BLOCKED" and "must be 1 or 2" in bad_prefix["exact_blocker"]
+  assert pm4["status"] == "BLOCKED" and "requires AMD_AQL=1" in pm4["exact_blocker"]
 
 
 def test_target_role_in_place_mode_fails_closed_before_gpu_for_unsafe_options():
