@@ -585,6 +585,12 @@ numeric defect rather than the old driver reset. Evidence is
 full corrected preload: a pass means prior launches are required to trigger the defect; a failure means the nonzero
 preloaded view is still wrong.
 
+Epoch 3 alone from the identical full corrected preload passes 0/8,912,896 mismatches (0.704 ms, max absolute error
+1.2207e-4), with a clean kernel log and healthy postflight canary. Evidence is
+`docs/target-preloaded-single-epoch-3-20260718.json`. The nonzero epoch view is therefore correct; the four-launch
+mismatch requires earlier launches in the same process. Narrow the first failing transition with two- and, only if
+needed, three-launch target-only prefixes before changing accumulation or route policy.
+
 ## 1. Executive state
 
 The project is building a generated tinygrad prefill route for non-fitting quantized models, using Qwen3-14B as the
