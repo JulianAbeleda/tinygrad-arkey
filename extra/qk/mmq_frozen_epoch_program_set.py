@@ -1,9 +1,11 @@
 """Frozen v2 artifact for a full-role family of static-offset K256 PROGRAMs.
 
 This schema is deliberately separate from the v1 singular K256 artifact.  It
-retains one PROGRAM/source/binary triple per full-role epoch and validates the
-compile-time input offsets from each serialized PROGRAM's UOp graph without
-constructing a runtime or recompiling.
+retains each variant's pre-lowering sink beside its final PROGRAM/source/binary
+triple. The sink is the structural offset authority; the PROGRAM is the
+executable ABI/payload authority. Their relationship is trusted only because
+the producer receives both from one emitted family variant in the same build
+session. Loading constructs no runtime and performs no recompilation.
 """
 from __future__ import annotations
 
@@ -48,7 +50,8 @@ def _json_bytes(value: Any) -> bytes:
 
 def _variant_files(epoch: int) -> dict[str, str]:
   stem = f"epoch_{epoch:03d}"
-  return {"program": f"{stem}.program.pkl", "source": f"{stem}.source.txt", "binary": f"{stem}.hsaco"}
+  return {"sink": f"{stem}.sink.pkl", "program": f"{stem}.program.pkl",
+          "source": f"{stem}.source.txt", "binary": f"{stem}.hsaco"}
 
 
 def _inventory(files: Mapping[str, bytes]) -> dict[str, dict[str, Any]]:
@@ -88,15 +91,15 @@ def _program_payload(program: UOp) -> tuple[bytes, str]:
   return binaries[0], sources[0]
 
 
-def _program_abi(program: UOp, role_spec: ExactRoleSpec) -> tuple[dict[str, Any], ...]:
-  params = sorted({node for node in program.src[0].toposort() if node.op is Ops.PARAM},
+def _graph_abi(graph: UOp, role_spec: ExactRoleSpec, *, authority: str) -> tuple[dict[str, Any], ...]:
+  params = sorted({node for node in graph.toposort() if node.op is Ops.PARAM},
                   key=lambda node: node.arg.slot)
   expected = _expected_abi(role_spec)
   rows = tuple({
     "slot": int(node.arg.slot), "name": expected[node.arg.slot]["name"],
     "dtype": str(node.dtype), "elements": int(node.max_numel()),
   } for node in params)
-  if rows != expected: raise ValueError("epoch PROGRAM does not expose the shared full-role five-buffer ABI")
+  if rows != expected: raise ValueError(f"epoch {authority} does not expose the shared full-role five-buffer ABI")
   return rows
 
 
@@ -109,26 +112,35 @@ def _constant_tile_zero_offset(value: UOp) -> int:
   if reduced.op is not Ops.CONST or type(reduced.arg) is not int:
     rendered = reduced.render()
     try: return int(rendered)
-    except ValueError as exc: raise ValueError(f"epoch PROGRAM input base is not a constant at tile zero: {rendered}") from exc
+    except ValueError as exc: raise ValueError(f"epoch sink input base is not a constant at tile zero: {rendered}") from exc
   return int(reduced.arg)
 
 
-def _program_offsets(program: UOp) -> dict[str, int]:
+def _sink_offsets(sink: UOp) -> dict[str, int]:
   offsets: dict[int, int] = {}
-  for node in program.src[0].toposort():
+  for node in sink.toposort():
     if node.op is not Ops.INDEX or node.src[0].op is not Ops.PARAM: continue
     slot = int(node.src[0].arg.slot)
     if slot not in range(1, 5): continue
     offset = _constant_tile_zero_offset(node.src[1])
     if slot in offsets and offsets[slot] != offset:
-      raise ValueError(f"epoch PROGRAM has ambiguous direct base offsets for ABI slot {slot}")
+      raise ValueError(f"epoch sink has ambiguous direct base offsets for ABI slot {slot}")
     offsets[slot] = offset
   if set(offsets) != set(range(1, 5)):
-    raise ValueError("epoch PROGRAM lacks one direct base offset for every input ABI slot")
+    raise ValueError("epoch sink lacks one direct base offset for every input ABI slot")
   return {name: offsets[slot] for slot, name in enumerate(ABI_NAMES[1:], start=1)}
 
 
-def _validate_program(program: Any, role_spec: ExactRoleSpec, epoch: int) -> UOp:
+def _validate_sink(sink: Any, role_spec: ExactRoleSpec, epoch: int) -> UOp:
+  if not isinstance(sink, UOp) or sink.op is not Ops.SINK:
+    raise ValueError("epoch variant does not retain its pre-lowering sink")
+  _graph_abi(sink, role_spec, authority="sink")
+  if _sink_offsets(sink) != _offset_row(_expected_offsets(role_spec, epoch)):
+    raise ValueError("epoch sink compile-time offsets differ from its ordinal")
+  return sink
+
+
+def _validate_program(program: Any, role_spec: ExactRoleSpec) -> UOp:
   if not isinstance(program, UOp) or program.op is not Ops.PROGRAM:
     raise ValueError("epoch variant is not an Ops.PROGRAM")
   if [node for node in program.toposort() if node.op is Ops.PROGRAM] != [program]:
@@ -139,10 +151,8 @@ def _validate_program(program: Any, role_spec: ExactRoleSpec, epoch: int) -> UOp
     raise ValueError("epoch PROGRAM grid or local size differs from the admitted role")
   if len(program.src) < 5 or program.src[1].op is not Ops.DEVICE or program.src[1].arg != PROGRAM_DEVICE:
     raise ValueError("epoch PROGRAM is not a native AMD PROGRAM")
-  _program_abi(program, role_spec)
+  _graph_abi(program.src[0], role_spec, authority="PROGRAM")
   _program_payload(program)
-  if _program_offsets(program) != _offset_row(_expected_offsets(role_spec, epoch)):
-    raise ValueError("epoch PROGRAM compile-time offsets differ from its ordinal")
   return program
 
 
@@ -178,6 +188,7 @@ class FrozenEpochProgramSetArtifact:
   programs: tuple[UOp, ...]
   binaries: tuple[bytes, ...]
   sources: tuple[str, ...]
+  sinks: tuple[UOp, ...] = tuple()
 
 
 def produce_frozen_epoch_program_set(output_dir: str | Path, *,
@@ -206,28 +217,30 @@ def produce_frozen_epoch_program_set(output_dir: str | Path, *,
   try:
     retained: dict[str, bytes] = {}
     variants = []
-    for epoch, program in enumerate(family.programs):
-      program = _validate_program(program, role_spec, epoch)
+    for epoch, (variant, program) in enumerate(zip(family.variants, family.programs)):
+      sink = _validate_sink(variant.sink, role_spec, epoch)
+      program = _validate_program(program, role_spec)
       binary, source = _program_payload(program)
+      serialized_sink = pickle.dumps(sink, protocol=pickle.HIGHEST_PROTOCOL)
       serialized = pickle.dumps(program, protocol=pickle.HIGHEST_PROTOCOL)
       names = _variant_files(epoch)
-      files = {"program": serialized, "source": source.encode(), "binary": binary}
+      files = {"sink": serialized_sink, "program": serialized, "source": source.encode(), "binary": binary}
       retained.update({names[kind]: data for kind, data in files.items()})
       variants.append({
         "epoch": epoch, "offsets": _offset_row(_expected_offsets(role_spec, epoch)),
-        "program_key": program.key.hex(), "files": names,
+        "sink_key": sink.key.hex(), "program_key": program.key.hex(), "files": names,
         "artifacts": {
           kind: {"sha256": _sha256(data), "nbytes": len(data)}
           for kind, data in files.items()
         },
       })
-    keys = [row["program_key"] for row in variants]
-    if len(set(keys)) != role_spec.epochs:
-      raise ValueError("epoch PROGRAM keys must be unique across compile-time offsets")
+    sink_keys, keys = [row["sink_key"] for row in variants], [row["program_key"] for row in variants]
+    if len(set(sink_keys)) != role_spec.epochs or len(set(keys)) != role_spec.epochs:
+      raise ValueError("epoch sink and PROGRAM keys must be unique across variants")
     family_identity = _sha256(_json_bytes({
       "role": role_spec.role, "shape": list(role_spec.shape),
       "candidate_identity": role_spec.candidate_canonical_identity,
-      "program_keys": keys,
+      "sink_keys": sink_keys, "program_keys": keys,
     }))
     manifest = {
       "schema": SCHEMA, "state": "FROZEN", "family_builder_calls": 1,
@@ -242,6 +255,12 @@ def produce_frozen_epoch_program_set(output_dir: str | Path, *,
         "function": FUNCTION_NAME, "device": PROGRAM_DEVICE, "compile_target": AMD_ISA_TARGET,
         "globals": list(range(5)), "global_size": list(role_spec.program.grid),
         "local_size": list(LOCAL_SIZE), "abi": list(_expected_abi(role_spec)),
+      },
+      "compiler_boundary": {
+        "authority": "producer_same_session_emitted_family_variant",
+        "offset_authority": "retained_pre_lowering_sink",
+        "executable_authority": "retained_final_program",
+        "final_program_structural_offsets_claimed": False,
       },
       "family_identity": family_identity, "variants": variants,
       "files": _inventory(retained), "archive_format": "ustar",
@@ -294,6 +313,12 @@ def load_frozen_epoch_program_set(path: str | Path, *,
   }
   if manifest.get("shared_program") != expected_shared:
     raise ValueError("v2 shared full-role ABI or launch identity changed")
+  if manifest.get("compiler_boundary") != {
+      "authority": "producer_same_session_emitted_family_variant",
+      "offset_authority": "retained_pre_lowering_sink",
+      "executable_authority": "retained_final_program",
+      "final_program_structural_offsets_claimed": False}:
+    raise ValueError("v2 same-session compiler authority boundary changed")
   consumer = manifest.get("consumer")
   if not isinstance(consumer, Mapping) or consumer.get("requires_recompile") is not False:
     raise ValueError("v2 consumer contract permits recompilation")
@@ -310,7 +335,7 @@ def load_frozen_epoch_program_set(path: str | Path, *,
   if not isinstance(variants, list) or len(variants) != role_spec.epochs:
     raise ValueError("v2 manifest must contain exactly one variant per epoch")
 
-  programs, binaries, sources, keys = [], [], [], []
+  sinks, programs, binaries, sources, sink_keys, keys = [], [], [], [], [], []
   for epoch, row in enumerate(variants):
     names = _variant_files(epoch)
     expected_offsets = _offset_row(_expected_offsets(role_spec, epoch))
@@ -323,26 +348,34 @@ def load_frozen_epoch_program_set(path: str | Path, *,
     }
     if row.get("artifacts") != expected_artifacts:
       raise ValueError("v2 variant artifact hash or size identity mismatch")
+    try: sink = pickle.loads(files[names["sink"]])
+    except BaseException as exc:
+      raise ValueError(f"epoch {epoch} serialized sink cannot be loaded: {type(exc).__name__}: {exc}") from exc
+    sink = _validate_sink(sink, role_spec, epoch)
+    if row.get("sink_key") != sink.key.hex():
+      raise ValueError("serialized epoch sink key differs from the manifest")
     try: program = pickle.loads(files[names["program"]])
     except BaseException as exc:
       raise ValueError(f"epoch {epoch} serialized PROGRAM cannot be loaded: {type(exc).__name__}: {exc}") from exc
-    program = _validate_program(program, role_spec, epoch)
+    program = _validate_program(program, role_spec)
     binary, source = _program_payload(program)
     if binary != files[names["binary"]] or source.encode() != files[names["source"]]:
       raise ValueError("serialized epoch PROGRAM payload differs from retained files")
     if row.get("program_key") != program.key.hex():
       raise ValueError("serialized epoch PROGRAM key differs from the manifest")
-    programs.append(program); binaries.append(binary); sources.append(source); keys.append(program.key.hex())
-  if len(set(keys)) != role_spec.epochs:
-    raise ValueError("v2 epoch PROGRAM keys are not unique")
+    sinks.append(sink); programs.append(program); binaries.append(binary); sources.append(source)
+    sink_keys.append(sink.key.hex()); keys.append(program.key.hex())
+  if len(set(sink_keys)) != role_spec.epochs or len(set(keys)) != role_spec.epochs:
+    raise ValueError("v2 epoch sink or PROGRAM keys are not unique")
   expected_identity = _sha256(_json_bytes({
     "role": role_spec.role, "shape": list(role_spec.shape),
     "candidate_identity": role_spec.candidate_canonical_identity,
-    "program_keys": keys,
+    "sink_keys": sink_keys, "program_keys": keys,
   }))
   if manifest.get("family_identity") != expected_identity:
     raise ValueError("v2 family identity differs from the retained PROGRAM set")
-  return FrozenEpochProgramSetArtifact(manifest, tuple(programs), tuple(binaries), tuple(sources))
+  return FrozenEpochProgramSetArtifact(
+    manifest, tuple(programs), tuple(binaries), tuple(sources), tuple(sinks))
 
 
 @dataclass(frozen=True)

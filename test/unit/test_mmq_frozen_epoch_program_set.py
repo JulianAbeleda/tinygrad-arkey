@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 import json
 from pathlib import Path
+import pickle
 from types import SimpleNamespace
 
 import pytest
@@ -21,8 +22,7 @@ from extra.qk.mmq_llama_five_buffer_graph import five_buffer_parameters
 from extra.qk.mmq_llama_runtime_contract import LLAMA_SOURCE_COMMIT
 
 
-def _program(role_spec: ExactRoleSpec, epoch: int, *, encoded_epoch: int | None = None) -> UOp:
-  encoded_epoch = epoch if encoded_epoch is None else encoded_epoch
+def _sink(role_spec: ExactRoleSpec, encoded_epoch: int) -> UOp:
   parameters = five_buffer_parameters(*role_spec.shape)
   params = tuple(UOp.param(parameter.slot, parameter.dtype.ptr(parameter.size)) for parameter in parameters)
   records = encoded_epoch * 2
@@ -30,10 +30,18 @@ def _program(role_spec: ExactRoleSpec, epoch: int, *, encoded_epoch: int | None 
     0, encoded_epoch * 36, records * role_spec.m * 128,
     records * role_spec.m * 4, records * role_spec.m * 4,
   )
-  sink = UOp(Ops.SINK, src=tuple(param.index(UOp.const(dtypes.weakint, offset), ptr=True)
-                                  for param, offset in zip(params, offsets)))
+  return UOp(Ops.SINK, src=tuple(param.index(UOp.const(dtypes.weakint, offset), ptr=True)
+                                 for param, offset in zip(params, offsets)))
+
+
+def _program(role_spec: ExactRoleSpec, epoch: int) -> UOp:
+  parameters = five_buffer_parameters(*role_spec.shape)
+  params = tuple(UOp.param(parameter.slot, parameter.dtype.ptr(parameter.size)) for parameter in parameters)
+  # Real final PROGRAMs retain the ABI parameters but no PARAM-based INDEX
+  # nodes. Offset authority belongs exclusively to the separately frozen sink.
+  final_sink = UOp(Ops.SINK, src=params)
   return UOp(Ops.PROGRAM, src=(
-    sink, UOp(Ops.DEVICE, arg="AMD"), UOp(Ops.LINEAR),
+    final_sink, UOp(Ops.DEVICE, arg="AMD"), UOp(Ops.LINEAR),
     UOp(Ops.SOURCE, arg=f"generated static epoch {epoch}\n"),
     UOp(Ops.BINARY, arg=f"fake-hsaco-epoch-{epoch}".encode()),
   ), arg=ProgramInfo(
@@ -54,9 +62,9 @@ def _family(role_spec: ExactRoleSpec, *, wrong_program_epoch: tuple[int, int] | 
   variants = []
   for epoch in range(role_spec.epochs):
     encoded = wrong_program_epoch[1] if wrong_program_epoch and wrong_program_epoch[0] == epoch else epoch
-    program = _program(role_spec, epoch, encoded_epoch=encoded)
+    sink, program = _sink(role_spec, encoded), _program(role_spec, epoch)
     variants.append(LlamaFiveBufferFullKernel(
-      proof, topology, program.src[0], owners, LLAMA_SOURCE_COMMIT, tuple(),
+      proof, topology, sink, owners, LLAMA_SOURCE_COMMIT, tuple(),
       epoch_offset=epoch, blocker="", program=program, emitted=True,
     ))
   return LlamaFiveBufferEpochOffsetFamily(proof, topology, tuple(variants))
@@ -79,6 +87,15 @@ def test_v2_program_set_roundtrips_all_epochs_without_compile_or_runtime(tmp_pat
   assert manifest["compile_only_cpu"] is True
   assert manifest["gpu_runtime_initialized"] is manifest["gpu_dispatch_performed"] is False
   assert [row["epoch"] for row in manifest["variants"]] == list(range(20))
+  assert manifest["compiler_boundary"] == {
+    "authority": "producer_same_session_emitted_family_variant",
+    "offset_authority": "retained_pre_lowering_sink",
+    "executable_authority": "retained_final_program",
+    "final_program_structural_offsets_claimed": False,
+  }
+  assert all(not [node for node in program.src[0].toposort()
+                  if node.op is Ops.INDEX and node.src[0].op is Ops.PARAM]
+             for program in _family(role_spec).programs)
   assert len({row["program_key"] for row in manifest["variants"]}) == 20
   assert [row["offsets"]["q4"] for row in manifest["variants"]] == [epoch * 36 for epoch in range(20)]
   assert [row["elements"] for row in manifest["shared_program"]["abi"]] == [
@@ -86,7 +103,9 @@ def test_v2_program_set_roundtrips_all_epochs_without_compile_or_runtime(tmp_pat
 
   directory = frozen_v2.load_frozen_epoch_program_set(output)
   archived = frozen_v2.load_frozen_epoch_program_set(archive)
+  assert len(directory.sinks) == len(archived.sinks) == 20
   assert len(directory.programs) == len(archived.programs) == 20
+  assert tuple(sink.key for sink in directory.sinks) == tuple(sink.key for sink in archived.sinks)
   assert tuple(program.key for program in directory.programs) == tuple(program.key for program in archived.programs)
   assert directory.manifest["family_identity"] == archived.manifest["family_identity"]
   binding = frozen_v2.load_frozen_epoch_program_set_binding(role_spec, output)
@@ -105,9 +124,9 @@ def test_v2_producer_owns_exactly_one_family_builder_call(tmp_path: Path):
   assert calls == ["build"] and manifest["family_builder_calls"] == 1
 
 
-def test_v2_producer_rejects_program_whose_structural_offset_differs_from_ordinal(tmp_path: Path):
+def test_v2_producer_rejects_sink_whose_structural_offset_differs_from_ordinal(tmp_path: Path):
   role_spec = exact_role_spec("ffn_gate_up")
-  with pytest.raises(ValueError, match="compile-time offsets differ"):
+  with pytest.raises(ValueError, match="sink compile-time offsets differ"):
     frozen_v2.produce_frozen_epoch_program_set(
       tmp_path / "bad-offset", role_spec=role_spec,
       build_once=lambda: _family(role_spec, wrong_program_epoch=(7, 8)))
@@ -164,6 +183,37 @@ def test_v2_loader_rejects_retained_payload_and_program_key_tampering(tmp_path: 
   manifest_path.write_text(json.dumps(manifest))
   with pytest.raises(ValueError, match="PROGRAM key differs"):
     frozen_v2.load_frozen_epoch_program_set(output2)
+
+
+def test_v2_loader_rejects_sink_hash_structure_and_key_tampering(tmp_path: Path):
+  role_spec, output, _, _ = _produce(tmp_path / "hash")
+  sink_path = output / "epoch_005.sink.pkl"
+  sink_path.write_bytes(sink_path.read_bytes() + b"tamper")
+  with pytest.raises(ValueError, match="file inventory identity mismatch"):
+    frozen_v2.load_frozen_epoch_program_set(output)
+
+  _, output2, _, _ = _produce(tmp_path / "structure")
+  manifest_path = output2 / "manifest.json"
+  manifest = json.loads(manifest_path.read_text())
+  wrong_sink = _sink(role_spec, 6)
+  wrong_bytes = pickle.dumps(wrong_sink, protocol=pickle.HIGHEST_PROTOCOL)
+  sink_name = "epoch_005.sink.pkl"
+  (output2 / sink_name).write_bytes(wrong_bytes)
+  identity = {"sha256": frozen_v2._sha256(wrong_bytes), "nbytes": len(wrong_bytes)}
+  manifest["files"][sink_name] = identity
+  manifest["variants"][5]["artifacts"]["sink"] = identity
+  manifest["variants"][5]["sink_key"] = wrong_sink.key.hex()
+  manifest_path.write_text(json.dumps(manifest))
+  with pytest.raises(ValueError, match="sink compile-time offsets differ"):
+    frozen_v2.load_frozen_epoch_program_set(output2)
+
+  _, output3, _, _ = _produce(tmp_path / "key")
+  manifest_path = output3 / "manifest.json"
+  manifest = json.loads(manifest_path.read_text())
+  manifest["variants"][5]["sink_key"] = manifest["variants"][6]["sink_key"]
+  manifest_path.write_text(json.dumps(manifest))
+  with pytest.raises(ValueError, match="sink key differs"):
+    frozen_v2.load_frozen_epoch_program_set(output3)
 
 
 def test_v2_binding_fails_closed_on_forged_candidate_identity_before_loading(tmp_path: Path):
