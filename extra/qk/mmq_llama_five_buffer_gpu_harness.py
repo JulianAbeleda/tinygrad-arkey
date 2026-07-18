@@ -947,12 +947,13 @@ def main() -> int:
   parser.add_argument("--target-role-persistent", action="store_true")
   parser.add_argument("--target-role-preloaded", action="store_true")
   parser.add_argument("--target-role-stable-metadata", action="store_true")
+  parser.add_argument("--target-role-host-accumulate", action="store_true")
   args = parser.parse_args()
   if args.target_role:
     row = run_full_grid_target_role_probe_isolated(
       timeout_seconds=args.target_role_timeout, warmups=0, rounds=1,
       epoch_limit=args.target_role_epochs, n_chunk_tiles=TARGET_ROLE_PROBE_SHAPE[1] // 128,
-      host_accumulate=False, per_epoch_check=args.target_role_per_epoch_check,
+      host_accumulate=args.target_role_host_accumulate, per_epoch_check=args.target_role_per_epoch_check,
       persistent_buffers=args.target_role_persistent, preloaded_epochs=args.target_role_preloaded,
       stable_metadata_staging=args.target_role_stable_metadata,
     )
