@@ -1,0 +1,155 @@
+{
+  "accumulate": true,
+  "accumulation": "target_in_place_fp32_add",
+  "archive_format": "ustar",
+  "artifacts": {
+    "binary_nbytes": 77463,
+    "binary_sha256": "99c7ee0cc249dd6ccb0e285dca679aa352b914c72f4ac045751300a4d6f2c996",
+    "disassembly_nbytes": 914107,
+    "disassembly_sha256": "458c01d1675c83f5f74d96924344f25f1c0d4dcabc3ea78a9ecfb354ee28bf36",
+    "disassembly_tool": "renderer-final-stream-byte-reassembled",
+    "resources": {
+      "authority": "native_elf_descriptor",
+      "compute_pgm_rsrc1": 1085014047,
+      "compute_pgm_rsrc2": 388,
+      "compute_pgm_rsrc3": 0,
+      "kernarg_bytes": 40,
+      "kernel_code_entry_byte_offset": -76928,
+      "lds_bytes": 57856,
+      "scratch_bytes": 0,
+      "sgpr": null,
+      "vgpr": 256,
+      "wavefront_size": 32
+    },
+    "serialized_program_nbytes": 8739254,
+    "serialized_program_sha256": "90265d8f7d1d0114313a10281e69035b1846aed634bf7da1cc222fa1ac32ab30",
+    "source_nbytes": 485958,
+    "source_sha256": "880a71573d8ae58fa809a1d5c2c24709f291ffc7bfc03ad6693d4b3499e4326d"
+  },
+  "backend_id": "q4k_q8_1_mmq_amd_isa_full_grid_v0",
+  "compile_calls": 1,
+  "compile_only_cpu": true,
+  "compiler_environment": {},
+  "consumer": {
+    "entrypoint": "load_frozen_target_artifact",
+    "requires_recompile": false
+  },
+  "files": {
+    "fixture.json": {
+      "nbytes": 1009,
+      "sha256": "ed70460f1cce0d6cd8dff187f9055aa567efdfa8b98645d43ec709d92dccba87"
+    },
+    "target_accumulate_k256.hsaco": {
+      "nbytes": 77463,
+      "sha256": "99c7ee0cc249dd6ccb0e285dca679aa352b914c72f4ac045751300a4d6f2c996"
+    },
+    "target_accumulate_k256.isa.txt": {
+      "nbytes": 914107,
+      "sha256": "458c01d1675c83f5f74d96924344f25f1c0d4dcabc3ea78a9ecfb354ee28bf36"
+    },
+    "target_accumulate_k256.program.pkl": {
+      "nbytes": 8739254,
+      "sha256": "90265d8f7d1d0114313a10281e69035b1846aed634bf7da1cc222fa1ac32ab30"
+    },
+    "target_accumulate_k256.source.txt": {
+      "nbytes": 485958,
+      "sha256": "880a71573d8ae58fa809a1d5c2c24709f291ffc7bfc03ad6693d4b3499e4326d"
+    }
+  },
+  "fixture": {
+    "repack": {
+      "q4_epoch_major_dtype": "uint32",
+      "q4_epoch_major_elements": 12533760,
+      "q4_epoch_major_layout": "q4_k_bytes[k_epoch, n, 144]",
+      "q4_epoch_major_sha256": "e2185c11d2ba48ee0184153cfe472a5e2c1d1617c4bcaf0797368809f28aacda",
+      "q4_layout": "q4_k_bytes[n, k_epoch, 144]",
+      "q4_sha256": "a7c38ad9065bc88697675b4c31f82fe0393b5923a223faec4e3e6c7fdb82ef01",
+      "q8_layout": "q8_ds4[epoch, m, groups]",
+      "q8_scales_sha256": "ce542cb5c0c77c5dbdaa1c44753e16815f9ac66b82458022179dc0b56f614211",
+      "q8_sums_sha256": "c6755f8eb0e77c62ace4bd94f7a908ad0a5d01d21a87febc7954200c63d53aad",
+      "q8_values_sha256": "b4ba6549584528a1281d4fe6e521a50722987fb36cd7e8154b8d5f9eb44f246c"
+    },
+    "role": "ffn_gate_up",
+    "schema": "tinygrad.mmq_q4k_q8_1_target_fixture.v1",
+    "seeds": {
+      "q4": 20260721,
+      "q8_source": 20260722
+    },
+    "shape": [
+      512,
+      17408,
+      5120
+    ],
+    "source_sha256": "15f53a5325a5cca16e9b6ba050af4250fbd59d3673a59ee0124b045b2842c717",
+    "total_epochs": 20
+  },
+  "full_role_shape": [
+    512,
+    17408,
+    5120
+  ],
+  "gpu_dispatch_performed": false,
+  "gpu_runtime_initialized": false,
+  "program": {
+    "abi": [
+      {
+        "dtype": "dtypes.float.ptr(8912896)",
+        "elements": 8912896,
+        "name": "output",
+        "slot": 0
+      },
+      {
+        "dtype": "dtypes.uint.ptr(626688)",
+        "elements": 626688,
+        "name": "q4",
+        "slot": 1
+      },
+      {
+        "dtype": "dtypes.char.ptr(131072)",
+        "elements": 131072,
+        "name": "q8_values",
+        "slot": 2
+      },
+      {
+        "dtype": "dtypes.float.ptr(4096)",
+        "elements": 4096,
+        "name": "q8_scales",
+        "slot": 3
+      },
+      {
+        "dtype": "dtypes.float.ptr(4096)",
+        "elements": 4096,
+        "name": "q8_original_sums",
+        "slot": 4
+      }
+    ],
+    "compile_target": "AMD:ISA:gfx1100",
+    "device": "AMD",
+    "function": "mmq_llama_five_buffer_full_grid_accumulate",
+    "global_size": [
+      136,
+      4,
+      1
+    ],
+    "globals": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "key": "a69a68f9fbd7809aea2d4a4db9c6a09dbe6a38cf60abb5867d23d5b060d45192",
+    "local_size": [
+      256,
+      1,
+      1
+    ]
+  },
+  "schema": "tinygrad.mmq_q4k_q8_1.frozen_target_artifact.v1",
+  "shape": [
+    512,
+    17408,
+    256
+  ],
+  "state": "FROZEN"
+}
