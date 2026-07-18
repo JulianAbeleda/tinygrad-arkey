@@ -7,7 +7,7 @@ from extra.qk.mmq_bounded_harness import (
 from extra.qk.mmq_machine_search import (
   build_r4_evidence_artifacts, build_r5_geometry_search_report, build_r6_route_gate_status,
   build_r7_reduction_status, build_search_report, build_full_gpu_probe_candidate, evaluate_candidate_promotion,
-  R5_GEOMETRY_CANDIDATES, build_r6_role_shape_integration_artifact,
+  R5_GEOMETRY_CANDIDATES, build_r6_role_shape_integration_artifact, build_full_grid_k_tiled_dispatch_plan,
 )
 from extra.qk.mmq_machine_search import build_boltbeam_oracle_trace
 
@@ -292,6 +292,14 @@ def test_mmq_r5_full_grid_win_is_ranked_as_emitted_but_not_promoted():
   artifact = build_r6_role_shape_integration_artifact(report)
   assert artifact["shape_matches"] is False
   assert "128x128x256" in artifact["exact_blocker"]
+  assert artifact["tile_plan"]["launch_count"] == 4 * 136 * 20
+  assert artifact["tile_plan"]["requires_k_epoch_accumulate"] is True
+
+
+def test_mmq_full_grid_tile_plan_rejects_unaligned_shapes_fail_closed():
+  blocked = build_full_grid_k_tiled_dispatch_plan({"M": 512, "N": 17408, "K": 5121})
+  assert blocked["status"] == "BLOCKED"
+  assert "multiples" in blocked["exact_blocker"]
 
 
 def test_mmq_r6_and_r7_statuses_fail_closed_until_coop_win():

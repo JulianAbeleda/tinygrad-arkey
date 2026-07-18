@@ -626,6 +626,7 @@ def build_r6_role_shape_integration_artifact(r5_report: dict[str, Any] | None = 
   winner_row = next((row for row in r5.get("ranking", ()) if row.get("candidate_id") == winner), None)
   candidate_shape = None if winner_row is None else winner_row.get("shape")
   shape_matches = candidate_shape == {k: R6_TARGET_ROLE_SHAPE[k] for k in ("M", "N", "K")}
+  tile_plan = build_full_grid_k_tiled_dispatch_plan(R6_TARGET_ROLE_SHAPE)
   return {
     "schema": "q4k-q8-1-mmq-r6-role-shape-integration.v1",
     "status": "PASS" if shape_matches and r5.get("role_shape_integration") is True else "BLOCKED",
@@ -636,8 +637,42 @@ def build_r6_role_shape_integration_artifact(r5_report: dict[str, Any] | None = 
     "role_scope": ["ffn_gate_up"],
     "negative_role_tests": False,
     "no_hidden_direct_packed_fallback": False,
+    "tile_plan": tile_plan,
     "production_dispatch_changed": False,
     "exact_blocker": None if shape_matches else "full-grid probe shape is bounded 128x128x256; no 14B ffn_gate_up multi-tile adapter exists",
+  }
+
+
+def build_full_grid_k_tiled_dispatch_plan(shape: dict[str, Any]) -> dict[str, Any]:
+  """Plan (without dispatch) how the bounded full-grid kernel would cover a role.
+
+  This is an executable shape audit, not a route selector.  The 128x128x256
+  kernel can cover the 14B role only as 10,880 launches (4 M tiles × 136 N
+  tiles × 20 K epochs).  Since its ABI expects tile-local packed buffers and
+  overwrites output, every K epoch needs Q4/DS4 repacking plus an accumulation
+  step.  Naming those obligations gives R7 a concrete conversion target while
+  keeping runtime admission blocked.
+  """
+  if not isinstance(shape, dict): raise TypeError("shape must be a mapping")
+  try: m, n, k = (int(shape[key]) for key in ("M", "N", "K"))
+  except (KeyError, TypeError, ValueError) as exc:
+    raise ValueError("shape must contain integer M/N/K") from exc
+  if min(m, n, k) <= 0 or m % 128 or n % 128 or k % 256:
+    return {"schema": "q4k-q8-1-mmq-full-grid-tile-plan.v1", "status": "BLOCKED",
+            "shape": {"M": m, "N": n, "K": k},
+            "exact_blocker": "role dimensions must be multiples of bounded M/N=128 and K=256"}
+  m_tiles, n_tiles, k_epochs = m // 128, n // 128, k // 256
+  launches = m_tiles * n_tiles * k_epochs
+  return {
+    "schema": "q4k-q8-1-mmq-full-grid-tile-plan.v1", "status": "PLANNED",
+    "shape": {"M": m, "N": n, "K": k}, "kernel_shape": dict(FULL_GRID_R5_SHAPE),
+    "tile_counts": {"M": m_tiles, "N": n_tiles, "K_epochs": k_epochs},
+    "launch_count": launches, "source_layout": "full_role_buffers",
+    "requires_q4_repack": True, "requires_q8_ds4_repack": True,
+    "requires_k_epoch_accumulate": k_epochs > 1,
+    "requires_output_tile_scatter": True,
+    "production_dispatch_changed": False,
+    "exact_blocker": "adapter, repack, K-epoch accumulation, and fallback census are not implemented",
   }
 
 
