@@ -14,21 +14,28 @@ from tinygrad.uop.ops import Ops
 
 from extra.qk.mmq_exact_role_spec import exact_role_spec
 from extra.qk.mmq_frozen_epoch_program_set import (
-  BINDING_SCHEMA, FrozenEpochProgramSetArtifact, FrozenEpochProgramSetBinding, SCHEMA as ARTIFACT_SCHEMA,
+  BINDING_SCHEMA, LEGACY_SCHEMA, FrozenEpochProgramSetArtifact, FrozenEpochProgramSetBinding,
+  SCHEMA as ARTIFACT_SCHEMA,
 )
 from extra.qk.prefill import frozen_epoch_program_set_scheduler as scheduler
 from extra.qk.q4k_q8_activation_producer import Q4KQ8ActivationTile
 from test.unit.test_mmq_frozen_epoch_program_set import _family
 
 
-def _binding(role_spec):
+def _binding(role_spec, *, legacy: bool = False):
   family = _family(role_spec)
   programs = tuple(variant.program.replace(
     arg=replace(variant.program.arg, outs=(0,), ins=tuple(range(5))))
     for variant in family.variants)
   keys = tuple(program.key.hex() for program in programs)
   manifest = {
-    "schema": ARTIFACT_SCHEMA,
+    "schema": LEGACY_SCHEMA if legacy else ARTIFACT_SCHEMA,
+    "c1_certification": ({
+      "gate": "C1", "certified": False, "status": "legacy_v2_missing_generation_provenance",
+      "content_addressed": False,
+    } if legacy else {
+      "gate": "C1", "certified": True, "content_addressed": True,
+    }),
     "role": {"name": role_spec.role, "shape": list(role_spec.shape),
              "candidate_identity": role_spec.candidate_canonical_identity},
     "variants": [{"epoch": epoch, "program_key": key} for epoch, key in enumerate(keys)],
@@ -123,6 +130,37 @@ def test_v2_scheduler_is_default_off_before_binding_or_tensor_access():
     lin, object(), role_spec=role_spec, frozen_bundle="/missing", enabled=False,
     binding_loader=lambda *_args, **_kwargs:
       (_ for _ in ()).throw(AssertionError("binding loaded"))) is None
+
+
+def test_scheduler_default_accepts_loader_validated_legacy_v2_but_strict_rejects_before_weight_touch():
+  role_spec, weight_calls, producer_calls = exact_role_spec("ffn_gate_up"), [], []
+  legacy = _binding(role_spec, legacy=True)
+  loader_calls = []
+  def load_binding(requested, bundle, **kwargs):
+    loader_calls.append((requested, bundle, kwargs))
+    return legacy
+  with Context(ALLOW_DEVICE_USAGE=0):
+    result = scheduler.build_frozen_epoch_program_set_schedule(
+      _linear(role_spec, weight_calls),
+      Tensor.empty(role_spec.m, role_spec.k, dtype=dtypes.float16, device="AMD"),
+      role_spec=role_spec, frozen_bundle="/frozen/legacy-v2.tar", enabled=True,
+      prefix_epochs=1, binding_loader=load_binding, activation_producer=_producer(producer_calls))
+  assert result is not None
+  assert loader_calls == [(role_spec, "/frozen/legacy-v2.tar", {
+    "inventory": scheduler.DEFAULT_INVENTORY})]
+  assert result.binding.artifact.manifest["c1_certification"]["certified"] is False
+  assert weight_calls == ["packed-weight"] and len(producer_calls) == 1
+
+  weight_calls.clear()
+  with pytest.raises(ValueError, match="complete exact epoch family"):
+    scheduler.build_frozen_epoch_program_set_schedule(
+      _linear(role_spec, weight_calls),
+      Tensor.empty(role_spec.m, role_spec.k, dtype=dtypes.float16, device="AMD"),
+      role_spec=role_spec, frozen_bundle="/frozen/legacy-v2.tar", enabled=True,
+      prefix_epochs=1, require_c1=True, binding_loader=load_binding, activation_producer=_producer([]))
+  assert loader_calls[-1] == (role_spec, "/frozen/legacy-v2.tar", {
+    "inventory": scheduler.DEFAULT_INVENTORY, "require_c1": True})
+  assert weight_calls == []
 
 
 def test_v2_scheduler_rejects_forged_role_before_binding_or_weight_touch():

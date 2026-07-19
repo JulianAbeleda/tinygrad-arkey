@@ -1,4 +1,4 @@
-"""Lazy fixed-base scheduler consumer for a frozen v2 epoch PROGRAM set."""
+"""Lazy fixed-base scheduler consumer for a frozen epoch PROGRAM set."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -11,7 +11,7 @@ from tinygrad.uop.ops import Ops, UOp
 
 from extra.qk.mmq_exact_role_spec import DEFAULT_INVENTORY, ExactRoleSpec, admit_exact_role_spec
 from extra.qk.mmq_frozen_epoch_program_set import (
-  BINDING_SCHEMA, SCHEMA as ARTIFACT_SCHEMA, FrozenEpochProgramSetBinding,
+  BINDING_SCHEMA, LEGACY_SCHEMA, SCHEMA as ARTIFACT_SCHEMA, FrozenEpochProgramSetBinding,
   load_frozen_epoch_program_set_binding,
 )
 from extra.qk.mmq_frozen_target_artifact import PROGRAM_DEVICE
@@ -49,12 +49,22 @@ def _require_amd_tensor(value: Any, *, name: str, elements: int | None = None,
   return value
 
 
-def _validate_binding(binding: FrozenEpochProgramSetBinding, role_spec: ExactRoleSpec) -> None:
+def _validate_binding(binding: FrozenEpochProgramSetBinding, role_spec: ExactRoleSpec, *,
+                      require_c1: bool = False) -> None:
   if not isinstance(binding, FrozenEpochProgramSetBinding) or binding.schema != BINDING_SCHEMA:
     raise TypeError("scheduler requires a frozen v2 epoch PROGRAM set binding")
   if binding.role_spec != role_spec or binding.candidate_identity != role_spec.candidate_canonical_identity:
     raise ValueError("frozen v2 binding differs from the requested exact role")
-  if binding.artifact.manifest.get("schema") != ARTIFACT_SCHEMA or \
+  artifact_schema = binding.artifact.manifest.get("schema")
+  certification = binding.artifact.manifest.get("c1_certification")
+  current_c1 = artifact_schema == ARTIFACT_SCHEMA and isinstance(certification, Mapping) and \
+    certification.get("gate") == "C1" and certification.get("certified") is True and \
+    certification.get("content_addressed") is True
+  diagnostic_legacy = artifact_schema == LEGACY_SCHEMA and isinstance(certification, Mapping) and \
+    certification.get("gate") == "C1" and certification.get("certified") is False and \
+    certification.get("status") == "legacy_v2_missing_generation_provenance" and \
+    certification.get("content_addressed") is False
+  if (not current_c1 and (require_c1 or not diagnostic_legacy)) or \
      len(binding.artifact.programs) != role_spec.epochs or len(binding.program_keys) != role_spec.epochs:
     raise ValueError("frozen v2 binding does not contain the complete exact epoch family")
   if tuple(program.key.hex() for program in binding.artifact.programs) != binding.program_keys:
@@ -101,6 +111,7 @@ def build_frozen_epoch_program_set_schedule(
     lin: Any, activation: Tensor, *, role_spec: ExactRoleSpec,
     frozen_bundle: str | Path, enabled: bool = False,
     prefix_epochs: int | None = None,
+    require_c1: bool = False,
     inventory: str | Path | Mapping[str, Any] = DEFAULT_INVENTORY,
     binding: FrozenEpochProgramSetBinding | None = None,
     binding_loader: Callable[..., FrozenEpochProgramSetBinding] = load_frozen_epoch_program_set_binding,
@@ -111,8 +122,9 @@ def build_frozen_epoch_program_set_schedule(
   if not enabled: return None
   role_spec = admit_exact_role_spec(role_spec, inventory=inventory)
   if binding is None:
-    binding = binding_loader(role_spec, frozen_bundle, inventory=inventory)
-  _validate_binding(binding, role_spec)
+    binding = binding_loader(
+      role_spec, frozen_bundle, inventory=inventory, **({"require_c1": True} if require_c1 else {}))
+  _validate_binding(binding, role_spec, require_c1=require_c1)
   if getattr(lin, "bias", None) is not None or getattr(lin, "out_features", None) != role_spec.n or \
      getattr(lin, "in_features", None) != role_spec.k or not hasattr(lin, "q4k_storage") or \
      not callable(getattr(lin, "prefill_packed_weight", None)):
