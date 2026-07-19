@@ -1,0 +1,39 @@
+{
+  "activation": {
+    "candidate_q8_source": "resident_fp16_roundtrip_to_float32",
+    "generation_dtype": "float32",
+    "resident_dtype": "float16",
+    "resident_fp16_sha256": "328c1231fc36b336d0ad78a6dd85822f8b964ca98d6e4fae250cad849528c48b",
+    "resident_shape": [
+      1,
+      512,
+      5120
+    ],
+    "roundtrip_dtype": "float32",
+    "roundtrip_fp32_sha256": "1cfa4bce7749a10257dcb550fd0aac0f4539e783ab7e4e3cde50c4e64e181e5a"
+  },
+  "repack": {
+    "q4_epoch_major_dtype": "uint32",
+    "q4_epoch_major_elements": 12533760,
+    "q4_epoch_major_layout": "q4_k_bytes[k_epoch, n, 144]",
+    "q4_epoch_major_sha256": "e2185c11d2ba48ee0184153cfe472a5e2c1d1617c4bcaf0797368809f28aacda",
+    "q4_layout": "q4_k_bytes[n, k_epoch, 144]",
+    "q4_sha256": "a7c38ad9065bc88697675b4c31f82fe0393b5923a223faec4e3e6c7fdb82ef01",
+    "q8_layout": "q8_ds4_from_fp16_roundtrip[epoch, m, groups]",
+    "q8_scales_sha256": "7686074c57e6b260969d082db5e9fd05877c55a291141aa58231637f9586e353",
+    "q8_sums_sha256": "1b174ef261ca5c8a688f472af3e9a5c05cf3c9fc685b7af2542c131ad2c5b164",
+    "q8_values_sha256": "484a1ebd8463b63170b599f5b597f07f3708ea2dd8c3855a0f0676959c96dde4"
+  },
+  "role": "ffn_gate_up",
+  "schema": "tinygrad.mmq_q4k_q8_1.ffn_gate_up_execution_fixture.v2",
+  "seeds": {
+    "activation_source": 20260722,
+    "q4": 20260721
+  },
+  "shape": [
+    512,
+    17408,
+    5120
+  ],
+  "total_epochs": 20
+}
