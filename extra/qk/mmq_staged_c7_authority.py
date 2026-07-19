@@ -51,6 +51,11 @@ def _identity(value: Any) -> str:
   return "sha256:" + hashlib.sha256(_canonical(value)).hexdigest()
 
 
+def _json_normalized(value: Any) -> Any:
+  """Return the exact JSON transport shape used by persisted evidence."""
+  return json.loads(_canonical(value))
+
+
 def _sha256(path: Path) -> str:
   digest = hashlib.sha256()
   with path.open("rb") as handle:
@@ -168,7 +173,8 @@ def _queue_neutral_hardware(facts: DeviceFacts) -> dict[str, Any]:
       "schema_version", "selected_device", "backend", "architecture",
       "queue_mode", "total_vram_bytes", "capabilities"}:
     raise ValueError("DeviceFacts canonical hardware fields differ from the C7 authority contract")
-  return {key: value for key, value in hardware.items() if key != "queue_mode"}
+  return _json_normalized({
+    key: value for key, value in hardware.items() if key != "queue_mode"})
 
 
 def _scan_worker(selected_device: str, queue_mode: str) -> dict[str, Any]:
@@ -213,7 +219,7 @@ def _normalize_observation(value: Any, queue_mode: str, *,
     value.get("allocator_implementation"),
     f"{queue_mode}.allocator_implementation", verify_sources=verify_sources)
   return {
-    "queue_mode": queue_mode, "facts": facts.to_json(),
+    "queue_mode": queue_mode, "facts": _json_normalized(facts.to_json()),
     "queue_neutral_hardware": _queue_neutral_hardware(facts),
     "allocation_granularity_bytes": granularity,
     "budget": budget_row, "allocator_implementation": implementation,

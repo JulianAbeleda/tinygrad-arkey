@@ -205,5 +205,8 @@ def test_authority_json_is_published_atomically(tmp_path, monkeypatch):
     "extra.qk.mmq_staged_c7_authority.os.replace", replace)
   write_json_atomic(output, _snapshot())
   assert json.loads(output.read_text())["status"] == "PASS"
+  persisted = json.loads(output.read_text())
+  assert validate_staged_c7_authority_snapshot(
+    persisted, verify_current_software=False) == persisted
   assert len(calls) == 1 and calls[0][1] == output
   assert not list(output.parent.glob(f".{output.name}.*.tmp"))
