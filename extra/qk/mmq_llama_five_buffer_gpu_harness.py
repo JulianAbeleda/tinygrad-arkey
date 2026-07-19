@@ -81,6 +81,94 @@ def _validate_attn_qo_single_tile_pointer_bias(
   return requested
 
 
+class SingleTilePointerBiasCarrierError(RuntimeError):
+  """Fail-closed diagnostic rejection with pre-dispatch carrier evidence."""
+  def __init__(self, message: str, carrier_evidence: Mapping[str, Any]):
+    super().__init__(message)
+    self.carrier_evidence = dict(carrier_evidence)
+
+
+def _single_tile_call_carrier(argument: Any) -> tuple[Any, tuple[Any, ...], dict[str, Any]]:
+  """Resolve one physical BUFFER plus already-realized dependency carriers."""
+  from tinygrad.helpers import prod
+  from tinygrad.uop.ops import Ops, memory_semantic_owner
+  current, layers = argument, []
+  while current.op is not Ops.BUFFER:
+    if current.op is Ops.AFTER:
+      layers.append((Ops.AFTER, tuple(current.src[1:])))
+      current = current.src[0]
+    elif current.op is Ops.MEMORY_SEMANTIC and len(current.src) == 1:
+      layers.append((Ops.MEMORY_SEMANTIC, current.arg))
+      current = current.src[0]
+    else:
+      evidence = {
+        "carrier_op": argument.op.name,
+        "accepted_carrier_grammar": ["BUFFER", "AFTER", "MEMORY_SEMANTIC"],
+        "carrier_layers": [op.name for op, _ in layers],
+        "rejected_op": current.op.name,
+        "toposort_ops": [node.op.name for node in argument.toposort()],
+      }
+      raise SingleTilePointerBiasCarrierError(
+        "single-tile pointer-bias diagnostic found an unsupported CALL carrier", evidence)
+  try: physical = argument.buf_uop
+  except BaseException as exc:
+    evidence = {
+      "carrier_op": argument.op.name,
+      "carrier_layers": [op.name for op, _ in layers],
+      "buf_uop_error": f"{type(exc).__name__}: {exc}",
+    }
+    raise SingleTilePointerBiasCarrierError(
+      "single-tile pointer-bias diagnostic could not resolve a physical CALL buffer",
+      evidence) from exc
+  owner = memory_semantic_owner(argument)
+  dependencies = tuple(
+    dependency for op, payload in layers if op is Ops.AFTER for dependency in payload)
+  logical_physical_dtype_equal = argument.dtype == physical.dtype
+  logical_physical_elements_equal = prod(argument.shape) == prod(physical.shape)
+  evidence = {
+    "carrier_op": argument.op.name,
+    "accepted_carrier_grammar": ["BUFFER", "AFTER", "MEMORY_SEMANTIC"],
+    "carrier_layers": [{
+      "op": op.name,
+      **({"dependency_count": len(payload),
+          "dependency_ops": [dependency.op.name for dependency in payload],
+          "dependency_keys": [dependency.key.hex() for dependency in payload]}
+         if op is Ops.AFTER else {"owner": repr(payload)}),
+    } for op, payload in layers],
+    "physical_buf_uop_op": physical.op.name,
+    "physical_buf_uop_key": physical.key.hex(),
+    "physical_buffer_direct": physical.op is Ops.BUFFER,
+    "physical_is_terminal_carrier_buffer": physical is current,
+    "logical_physical_dtype_equal": logical_physical_dtype_equal,
+    "logical_physical_elements_equal": logical_physical_elements_equal,
+    "dependency_count": len(dependencies),
+    "dependency_ops": [dependency.op.name for dependency in dependencies],
+    "dependency_keys": [dependency.key.hex() for dependency in dependencies],
+    "memory_semantic_owner": None if owner is None else repr(owner),
+  }
+  if physical.op is not Ops.BUFFER or physical is not current or \
+     not logical_physical_dtype_equal or not logical_physical_elements_equal:
+    raise SingleTilePointerBiasCarrierError(
+      "single-tile pointer-bias diagnostic requires an extent-equivalent realized physical BUFFER",
+      evidence)
+  return physical, tuple(layers), evidence
+
+
+def _rebase_single_tile_call_carrier(
+    argument: Any, view_uop: Any, layers: tuple[Any, ...]) -> Any:
+  """Retain exact dependency/ownership semantics around a new physical view."""
+  from tinygrad.uop.ops import Ops, UOp, memory_semantic_owner, propagate_memory_semantic
+  rebased = view_uop
+  for op, payload in reversed(layers):
+    if op is Ops.AFTER: rebased = rebased.after(*payload)
+    elif op is Ops.MEMORY_SEMANTIC: rebased = UOp(Ops.MEMORY_SEMANTIC, rebased.dtype, (rebased,), payload)
+    else: raise RuntimeError("single-tile pointer-bias rewrite found an unvalidated carrier layer")
+  rebased = propagate_memory_semantic(argument, rebased)
+  if memory_semantic_owner(rebased) != memory_semantic_owner(argument):
+    raise RuntimeError("single-tile pointer-bias rewrite lost a memory semantic owner")
+  return rebased
+
+
 def _apply_attn_qo_single_tile_pointer_bias_to_target_call(
     output: Any, selected_programs: tuple[Any, ...] | list[Any], tile: int,
     ) -> tuple[Any, dict[str, Any]]:
@@ -88,7 +176,7 @@ def _apply_attn_qo_single_tile_pointer_bias_to_target_call(
   from tinygrad import Tensor, dtypes
   from tinygrad.engine.realize import get_call_arg_uops
   from tinygrad.helpers import prod
-  from tinygrad.uop.ops import Ops, UOp
+  from tinygrad.uop.ops import Ops, UOp, memory_semantic_owner
 
   if tile not in ATTN_QO_SINGLE_TILE_POINTER_BIAS_TILES:
     raise ValueError("single-tile pointer-bias tile is outside the diagnostic allowlist")
@@ -101,14 +189,38 @@ def _apply_attn_qo_single_tile_pointer_bias_to_target_call(
     raise ValueError("single-tile pointer-bias diagnostic requires exact Qo PROGRAM launch dimensions")
   calls = [node for node in output.uop.toposort()
            if node.op is Ops.CALL and node.src[0] is program]
+  non_target_calls_before = tuple(
+    node for node in output.uop.toposort()
+    if node.op is Ops.CALL and node.src[0] is not program)
   if len(calls) != 1:
     raise RuntimeError("single-tile pointer-bias diagnostic did not find exactly one target CALL")
   call = calls[0]
   arguments = get_call_arg_uops(call)
-  if len(arguments) != 5 or any(argument.op is not Ops.BUFFER for argument in arguments):
-    raise RuntimeError("single-tile pointer-bias diagnostic requires five realized direct BUFFER arguments")
+  if len(arguments) != 5:
+    raise SingleTilePointerBiasCarrierError(
+      "single-tile pointer-bias diagnostic requires exactly five CALL arguments",
+      {"argument_count": len(arguments)})
+  resolved = []
+  try:
+    for slot, argument in enumerate(arguments):
+      physical, layers, evidence = _single_tile_call_carrier(argument)
+      resolved.append((physical, layers, {"slot": slot, **evidence}))
+  except SingleTilePointerBiasCarrierError as exc:
+    prior = [row[2] for row in resolved]
+    exc.carrier_evidence = {
+      "schema": "tinygrad.mmq_attn_qo_single_tile_call_carriers.v1",
+      "status": "REJECTED", "accepted_prior_slots": prior,
+      "rejected_slot": len(resolved), "rejection": exc.carrier_evidence,
+    }
+    raise
+  carrier_evidence = {
+    "schema": "tinygrad.mmq_attn_qo_single_tile_call_carriers.v1",
+    "status": "ADMITTED", "rows": [row[2] for row in resolved],
+  }
   if (arguments[0].dtype, arguments[1].dtype) != (dtypes.float32, dtypes.uint32):
-    raise RuntimeError("single-tile pointer-bias diagnostic found an unexpected output/Q4 dtype")
+    raise SingleTilePointerBiasCarrierError(
+      "single-tile pointer-bias diagnostic found an unexpected output/Q4 dtype",
+      carrier_evidence)
 
   byte_offsets = (
     tile * ATTN_QO_OUTPUT_TILE_ROW_NBYTES,
@@ -118,14 +230,17 @@ def _apply_attn_qo_single_tile_pointer_bias_to_target_call(
   biased_arguments = list(arguments)
   for slot in (0, 1):
     argument, byte_offset = arguments[slot], byte_offsets[slot]
+    parent_uop, layers, _ = resolved[slot]
     if byte_offset % argument.dtype.itemsize:
       raise RuntimeError("single-tile pointer bias is not aligned to its argument dtype")
-    element_offset, elements = byte_offset // argument.dtype.itemsize, prod(argument.shape)
+    element_offset, elements = byte_offset // parent_uop.dtype.itemsize, prod(parent_uop.shape)
     if not 0 < element_offset < elements:
       raise RuntimeError("single-tile pointer bias escapes its parent argument")
-    parent_buffer = argument.buffer
-    biased_arguments[slot] = UOp.from_buffer(
-      parent_buffer.view(elements-element_offset, argument.dtype, byte_offset))
+    parent_buffer = parent_uop.buffer
+    view_uop = UOp.from_buffer(
+      parent_buffer.view(elements-element_offset, parent_uop.dtype, byte_offset))
+    biased_arguments[slot] = _rebase_single_tile_call_carrier(
+      argument, view_uop, layers)
   replacement = call.replace(src=(program, *biased_arguments))
   biased_output = Tensor(output.uop.substitute({call: replacement}, walk=True))
   biased_calls = [node for node in biased_output.uop.toposort()
@@ -133,9 +248,35 @@ def _apply_attn_qo_single_tile_pointer_bias_to_target_call(
   if len(biased_calls) != 1:
     raise RuntimeError("single-tile pointer-bias rewrite changed the target CALL count")
   attached = get_call_arg_uops(biased_calls[0])
+  non_target_calls_after = tuple(
+    node for node in biased_output.uop.toposort()
+    if node.op is Ops.CALL and node.src[0] is not program)
+  if non_target_calls_after != non_target_calls_before:
+    raise RuntimeError("single-tile pointer-bias rewrite changed non-target dependency calls")
   if attached[0] is not biased_arguments[0] or attached[1] is not biased_arguments[1] or \
      any(attached[slot] is not arguments[slot] for slot in range(2, 5)):
     raise RuntimeError("single-tile pointer-bias rewrite changed an unauthorized ABI slot")
+  post_carriers = []
+  for slot, argument in enumerate(attached):
+    physical, layers, evidence = _single_tile_call_carrier(argument)
+    post_carriers.append({"slot": slot, **evidence})
+    if slot < 2:
+      before_physical, before_layers, _ = resolved[slot]
+      before_after_layers = tuple(payload for op, payload in before_layers if op is Ops.AFTER)
+      after_layers = tuple(payload for op, payload in layers if op is Ops.AFTER)
+      if after_layers != before_after_layers:
+        raise RuntimeError("single-tile pointer-bias rewrite changed a CALL dependency")
+      if memory_semantic_owner(argument) != memory_semantic_owner(arguments[slot]):
+        raise RuntimeError("single-tile pointer-bias rewrite changed a memory semantic owner")
+      if physical.buffer.base is not before_physical.buffer.base:
+        raise RuntimeError("single-tile pointer-bias rewrite changed a parent allocation")
+  carrier_evidence.update({
+    "status": "PASS", "post_rewrite_rows": post_carriers,
+    "exact_dependencies_preserved": True, "memory_semantic_owners_preserved": True,
+    "non_target_dependency_call_count": len(non_target_calls_after),
+    "non_target_dependency_call_keys": [call.key.hex() for call in non_target_calls_after],
+    "no_dependency_calls_added": True,
+  })
 
   q4_start = byte_offsets[1]
   q4_end = q4_start + ATTN_QO_Q4_TILE_NBYTES
@@ -172,6 +313,7 @@ def _apply_attn_qo_single_tile_pointer_bias_to_target_call(
     "local_size_preserved": True,
     "five_pointer_abi_preserved": len(attached) == 5,
     "biased_slots": [0, 1], "unchanged_slots": [2, 3, 4],
+    "call_carrier_attestation": carrier_evidence,
   }
 
 
@@ -195,17 +337,23 @@ def _attest_attn_qo_single_tile_pointer_views(
       _TARGET_BUFFER_NAMES, arguments, parent_arguments, preparation_allocations, expected_offsets)):
     if parent.get("slot") != slot or parent.get("name") != name:
       raise ValueError("single-tile pointer attestation parent allocation order changed")
-    parent_buffer = parent_argument.buffer
-    view_buffer = argument.buffer
+    parent_uop, parent_layers, parent_carrier = _single_tile_call_carrier(parent_argument)
+    view_uop, view_layers, view_carrier = _single_tile_call_carrier(argument)
+    parent_buffer, view_buffer = parent_uop.buffer, view_uop.buffer
     parent_handle, view_handle = parent_buffer.get_buf("AMD"), view_buffer.get_buf("AMD")
     parent_va, parent_nbytes = int(parent["va"]), int(parent["nbytes"])
     view_va, view_nbytes = int(view_handle.va_addr), int(view_buffer.nbytes)
     checks = {
       "argument_form_exact":
-        argument.op is Ops.BUFFER and (
-          argument is not parent_argument if expected_offset else argument is parent_argument),
-      "parent_argument_direct_buffer": parent_argument.op is Ops.BUFFER,
+        view_uop.op is Ops.BUFFER and (
+          view_uop is not parent_uop if expected_offset else argument is parent_argument),
+      "parent_argument_resolves_direct_buffer": parent_uop.op is Ops.BUFFER,
       "view_shares_parent_allocation": view_buffer.base is parent_buffer.base,
+      "dependencies_preserved":
+        tuple(payload for op, payload in view_layers if op is Ops.AFTER) ==
+        tuple(payload for op, payload in parent_layers if op is Ops.AFTER),
+      "memory_semantic_owner_preserved":
+        view_carrier["memory_semantic_owner"] == parent_carrier["memory_semantic_owner"],
       "parent_va_matches_preparation": int(parent_handle.va_addr) == parent_va,
       "parent_extent_matches_preparation": int(parent_buffer.nbytes) == parent_nbytes,
       "view_offset_exact": int(view_buffer.offset) == expected_offset,
@@ -220,6 +368,7 @@ def _attest_attn_qo_single_tile_pointer_views(
       "expected_offset_bytes": expected_offset,
       "view_va": view_va, "view_nbytes": view_nbytes,
       "view_end_va": view_va+view_nbytes,
+      "parent_carrier": parent_carrier, "view_carrier": view_carrier,
       "checks": checks, "all_checks_pass": all(checks.values()),
     })
   aggregate_checks = {
@@ -3454,8 +3603,32 @@ def run_frozen_epoch_program_set_prefix_probe(
   })
   single_tile_evidence = pointer_view_attestation = None
   if diagnostic_single_tile is not None:
-    output, single_tile_evidence = _apply_attn_qo_single_tile_pointer_bias_to_target_call(
-      output, selected_programs, diagnostic_single_tile)
+    try:
+      output, single_tile_evidence = _apply_attn_qo_single_tile_pointer_bias_to_target_call(
+        output, selected_programs, diagnostic_single_tile)
+    except SingleTilePointerBiasCarrierError as exc:
+      return {
+        "schema": schema, "status": "BLOCKED",
+        "exact_blocker": str(exc),
+        "exception": type(exc).__name__,
+        "research_only": True, "production_dispatch_changed": False,
+        "default_route": "direct_packed", "role": role_spec.role,
+        "shape": list(role_spec.shape), "prefix_epochs": prefix_epochs,
+        "graph": graph_evidence, "target_program_identities": target_identities,
+        "runtime_preconstruction": runtime_preconstruction,
+        "preparation_phase": preparation_phase,
+        "single_tile_pointer_bias_diagnostic": {
+          **single_tile_request, "phase": "call_carrier_admission_before_target_dispatch",
+          "call_carrier_evidence": exc.carrier_evidence,
+        },
+        **({"bounded_global_grid_diagnostic": diagnostic_request}
+           if diagnostic_request is not None else {}),
+        "target_dispatch_attempted": False,
+        "family_identity": binding.family_identity,
+        "frozen_bundle": str(Path(frozen_bundle).resolve()),
+        "compile_performed": False, "requires_recompile": False,
+        "hip_used": False, "no_fallback": True,
+      }
     calls = [node for node in output.uop.toposort()
              if node.op is Ops.CALL and node.src[0] in selected_programs]
     biased_arguments = get_call_arg_uops(calls[0])

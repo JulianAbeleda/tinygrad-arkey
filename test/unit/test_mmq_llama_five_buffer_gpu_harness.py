@@ -18,6 +18,7 @@ from tinygrad.schedule.rangeify import get_kernel_graph
 from extra.qk.mmq_exact_role_spec import exact_role_spec
 from extra.qk.mmq_llama_five_buffer_full_kernel import build_llama_five_buffer_full_kernel
 from extra.qk.mmq_llama_five_buffer_gpu_harness import (FrozenRuntimePreconstructionError,
+  SingleTilePointerBiasCarrierError,
   TARGET_IN_PLACE_ACCUMULATION, _accumulate_target_role_epoch,
   _aql_packet_census_from_exception,
   _pm4_dispatch_census_from_exception,
@@ -1272,17 +1273,159 @@ def test_attn_qo_single_tile_pointer_bias_requires_epoch_zero_exact_qo_program()
     _apply_attn_qo_single_tile_pointer_bias_to_target_call(output, (program,), 8)
 
 
+def test_attn_qo_single_tile_pointer_bias_reports_exact_rejected_carrier_slot():
+  program = _bounded_grid_test_program()
+  tensors = [Tensor.empty(2_000_000, device="AMD") for _ in range(5)]
+  output = tensors[0].custom_kernel(*tensors[1:], fxn=lambda *_: program)[0]
+  call = next(node for node in output.uop.toposort()
+              if node.op is Ops.CALL and node.src[0] is program)
+  arguments = list(get_call_arg_uops(call))
+  arguments[2] = UOp.const(dtypes.int8, 1)
+  malformed = Tensor(output.uop.substitute({
+    call: call.replace(src=(program, *arguments))
+  }, walk=True))
+  with pytest.raises(SingleTilePointerBiasCarrierError) as caught:
+    _apply_attn_qo_single_tile_pointer_bias_to_target_call(
+      malformed, (program,), 11)
+  evidence = caught.value.carrier_evidence
+  assert evidence["status"] == "REJECTED"
+  assert evidence["rejected_slot"] == 2
+  assert [row["slot"] for row in evidence["accepted_prior_slots"]] == [0, 1]
+  assert evidence["rejection"]["carrier_op"] == "CONST"
+  assert evidence["rejection"]["rejected_op"] == "CONST"
+
+
+def test_attn_qo_single_tile_pointer_bias_rejects_offset_bearing_shrink_carrier():
+  program = _bounded_grid_test_program()
+  tensors = [Tensor.empty(2_000_000, device="AMD") for _ in range(5)]
+  output = tensors[0].custom_kernel(*tensors[1:], fxn=lambda *_: program)[0]
+  call = next(node for node in output.uop.toposort()
+              if node.op is Ops.CALL and node.src[0] is program)
+  arguments = list(get_call_arg_uops(call))
+  parent = arguments[0]
+  shrink = Tensor(parent)[16:].uop
+  assert shrink.buf_uop is parent.buf_uop
+  assert shrink.contiguous_view_offset() == 16
+  assert shrink.buf_uop.buffer.offset == 0
+  arguments[0] = shrink
+  malformed = Tensor(output.uop.substitute({
+    call: call.replace(src=(program, *arguments))
+  }, walk=True))
+  with pytest.raises(SingleTilePointerBiasCarrierError) as caught:
+    _apply_attn_qo_single_tile_pointer_bias_to_target_call(
+      malformed, (program,), 11)
+  evidence = caught.value.carrier_evidence
+  assert evidence["rejected_slot"] == 0
+  assert evidence["rejection"]["carrier_op"] == "SHRINK"
+  assert evidence["rejection"]["rejected_op"] == "SHRINK"
+  assert evidence["rejection"]["accepted_carrier_grammar"] == [
+    "BUFFER", "AFTER", "MEMORY_SEMANTIC"]
+
+
+def test_attn_qo_single_tile_pointer_bias_preserves_realized_after_dependencies_and_owner():
+  from tinygrad.uop import PREFILL_OUTPUT
+  from tinygrad.uop.ops import bind_memory_semantic_owner, memory_semantic_owner
+  program = _bounded_grid_test_program()
+  prep_program = _bounded_grid_test_program(binary=b"already-realized-preparation").replace(
+    arg=replace(program.arg, name="preparation", global_size=(1, 1, 1), local_size=(1, 1, 1)))
+  tensors = [
+    Tensor.empty(512 * 5120, dtype=dtypes.float32, device="AMD"),
+    Tensor.empty(5120 * 20 * 36, dtype=dtypes.uint32, device="AMD"),
+    Tensor.empty(1, dtype=dtypes.int8, device="AMD"),
+    Tensor.empty(1, dtype=dtypes.float32, device="AMD"),
+    Tensor.empty(1, dtype=dtypes.float32, device="AMD"),
+  ]
+  ordinary = tensors[0].custom_kernel(*tensors[1:], fxn=lambda *_: program)[0]
+  ordinary_call = next(node for node in ordinary.uop.toposort()
+                       if node.op is Ops.CALL and node.src[0] is program)
+  original_arguments = get_call_arg_uops(ordinary_call)
+  preparation_call = prep_program.call(*original_arguments)
+  carrier_arguments = tuple(argument.after(preparation_call) for argument in original_arguments)
+  bind_memory_semantic_owner(carrier_arguments[0], PREFILL_OUTPUT)
+  carrier_call = ordinary_call.replace(src=(program, *carrier_arguments))
+  carrier_output = Tensor(ordinary.uop.substitute({ordinary_call: carrier_call}, walk=True))
+
+  biased, evidence = _apply_attn_qo_single_tile_pointer_bias_to_target_call(
+    carrier_output, (program,), 11)
+  biased_call = next(node for node in biased.uop.toposort()
+                     if node.op is Ops.CALL and node.src[0] is program)
+  biased_arguments = get_call_arg_uops(biased_call)
+  assert all(preparation_call in argument.toposort() for argument in biased_arguments[:2])
+  assert memory_semantic_owner(biased_arguments[0]) == PREFILL_OUTPUT
+  assert biased_arguments[0].buf_uop.buffer.offset == 11 * 128 * 4
+  assert biased_arguments[1].buf_uop.buffer.offset == 11 * 128 * 20 * 144
+  carriers = evidence["call_carrier_attestation"]
+  assert carriers["exact_dependencies_preserved"] is True
+  assert carriers["memory_semantic_owners_preserved"] is True
+  assert [row["carrier_op"] for row in carriers["rows"][:2]] == ["AFTER", "AFTER"]
+  assert [row["dependency_count"] for row in carriers["rows"][:2]] == [1, 1]
+
+  scheduled = create_schedule(get_kernel_graph(UOp.sink(biased.uop))).src
+  assert [call.src[0] for call in scheduled if call.op is Ops.CALL] == [prep_program, program]
+  scheduled_target = next(call for call in scheduled
+                          if call.op is Ops.CALL and call.src[0] is program)
+  scheduled_arguments = get_call_arg_uops(scheduled_target)
+  assert scheduled_arguments[0].buffer.offset == 11 * 128 * 4
+  assert scheduled_arguments[1].buffer.offset == 11 * 128 * 20 * 144
+  assert dict(scheduled_target.arg.memory_semantic_slots)[0] == PREFILL_OUTPUT
+
+
+def test_attn_qo_single_tile_pointer_bias_preserves_every_nested_after_dependency():
+  program = _bounded_grid_test_program()
+  dep_program_one = _bounded_grid_test_program(binary=b"nested-dependency-one").replace(
+    arg=replace(program.arg, name="dependency_one"))
+  dep_program_two = _bounded_grid_test_program(binary=b"nested-dependency-two").replace(
+    arg=replace(program.arg, name="dependency_two"))
+  tensors = [
+    Tensor.empty(512 * 5120, dtype=dtypes.float32, device="AMD"),
+    Tensor.empty(5120 * 20 * 36, dtype=dtypes.uint32, device="AMD"),
+    Tensor.empty(1, dtype=dtypes.int8, device="AMD"),
+    Tensor.empty(1, dtype=dtypes.float32, device="AMD"),
+    Tensor.empty(1, dtype=dtypes.float32, device="AMD"),
+  ]
+  ordinary = tensors[0].custom_kernel(*tensors[1:], fxn=lambda *_: program)[0]
+  ordinary_call = next(node for node in ordinary.uop.toposort()
+                       if node.op is Ops.CALL and node.src[0] is program)
+  arguments = get_call_arg_uops(ordinary_call)
+  dep_one, dep_two = dep_program_one.call(*arguments), dep_program_two.call(*arguments)
+  nested_arguments = tuple(argument.after(dep_one).after(dep_two) for argument in arguments)
+  nested_call = ordinary_call.replace(src=(program, *nested_arguments))
+  nested_output = Tensor(ordinary.uop.substitute({ordinary_call: nested_call}, walk=True))
+
+  biased, evidence = _apply_attn_qo_single_tile_pointer_bias_to_target_call(
+    nested_output, (program,), 11)
+  biased_call = next(node for node in biased.uop.toposort()
+                     if node.op is Ops.CALL and node.src[0] is program)
+  biased_arguments = get_call_arg_uops(biased_call)
+  assert all(dep_one in argument.toposort() and dep_two in argument.toposort()
+             for argument in biased_arguments[:2])
+  rows = evidence["call_carrier_attestation"]["rows"][:2]
+  assert [row["dependency_count"] for row in rows] == [2, 2]
+  assert all(
+    [layer["dependency_keys"] for layer in row["carrier_layers"] if layer["op"] == "AFTER"] ==
+    [[dep_two.key.hex()], [dep_one.key.hex()]]
+    for row in rows)
+  post_rows = evidence["call_carrier_attestation"]["post_rewrite_rows"][:2]
+  assert all(
+    [layer["dependency_keys"] for layer in row["carrier_layers"] if layer["op"] == "AFTER"] ==
+    [[dep_two.key.hex()], [dep_one.key.hex()]]
+    for row in post_rows)
+
+
 def test_attn_qo_single_tile_pointer_view_attestation_accepts_only_exact_parent_views():
+  from tinygrad.uop.ops import buffers
   class Handle:
     def __init__(self, va, size): self.va_addr, self.size = va, size
   class FakeBuffer:
-    def __init__(self, va, nbytes, *, base=None, offset=0):
-      self.nbytes, self.offset = nbytes, offset
+    def __init__(self, va, nbytes, dtype, *, base=None, offset=0):
+      self.device, self.dtype = "AMD", dtype
+      self.nbytes, self.size, self.offset = nbytes, nbytes//dtype.itemsize, offset
       self.base = self if base is None else base
       self._handle = Handle(va, nbytes)
     def get_buf(self, device):
       assert device == "AMD"
       return self._handle
+    def ref(self, _delta): return self
 
   tile = 11
   parent_nbytes = [512*5120*4, 5120*20*144, 8192, 4096, 4096]
@@ -1290,13 +1433,16 @@ def test_attn_qo_single_tile_pointer_view_attestation_accepts_only_exact_parent_
   parents, arguments, allocations = [], [], []
   offsets = [tile*128*4, tile*128*20*144, 0, 0, 0]
   names = ("output", "q4", "q8_values", "q8_scales", "q8_original_sums")
-  for slot, (name, va, nbytes, offset) in enumerate(zip(names, parent_vas, parent_nbytes, offsets)):
-    parent_buffer = FakeBuffer(va, nbytes)
-    parent = SimpleNamespace(op=Ops.BUFFER, buffer=parent_buffer)
+  dtypes_by_slot = (dtypes.float32, dtypes.uint32, dtypes.int8, dtypes.float32, dtypes.float32)
+  for slot, (name, va, nbytes, offset, dtype) in enumerate(
+      zip(names, parent_vas, parent_nbytes, offsets, dtypes_by_slot)):
+    parent_buffer = FakeBuffer(va, nbytes, dtype)
+    parent = UOp.new_buffer("AMD", parent_buffer.size, dtype)
+    buffers[parent] = parent_buffer
     parents.append(parent)
     if offset:
-      view = FakeBuffer(va+offset, nbytes-offset, base=parent_buffer, offset=offset)
-      arguments.append(SimpleNamespace(op=Ops.BUFFER, buffer=view))
+      view = FakeBuffer(va+offset, nbytes-offset, dtype, base=parent_buffer, offset=offset)
+      arguments.append(UOp.from_buffer(view))
     else:
       arguments.append(parent)
     allocations.append({"slot": slot, "name": name, "va": va, "nbytes": nbytes})
