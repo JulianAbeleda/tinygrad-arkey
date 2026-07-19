@@ -599,6 +599,18 @@ def run_frozen_staged_c7_queue_capture_isolated(
       if probe_validator is None:
         from extra.qk.mmq_frozen_staged_family_execution import _validate_probe_result
         probe_validator = _validate_probe_result
+      # This C7 route inserts the lifecycle observer inside its own isolated
+      # worker, so the worker's direct probe intentionally has no nested
+      # health wrapper.  Bind the outer parent's actual queue request,
+      # pre/post health, and fault window onto that exact probe before applying
+      # the existing guarded-probe validator.
+      raw_probe = {
+        **dict(raw_probe),
+        "health_before": health_before, "health_after": health_after,
+        "mode_health_before": health_before, "mode_health_after": health_after,
+        "child_env_overrides": dict(env_overrides),
+        "kernel_faults": list(faults),
+      }
       probe_validation = dict(probe_validator(
         raw_probe, family, prefix_epochs=role.epochs,
         queue_mode=queue_mode, frozen_bundle=frozen_bundle))

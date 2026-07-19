@@ -357,6 +357,13 @@ def test_isolated_capture_requires_exact_c4_and_parent_health_fault_envelope(fam
     "status": "PASS", "family_identity": family.family_identity,
     "program_key": family.binding.program_key, "queue_mode": "PM4",
   }
+  def validate_probe(raw, _family, **_kwargs):
+    assert raw["health_before"] is raw["health_after"] is True
+    assert raw["mode_health_before"] is raw["mode_health_after"] is True
+    assert raw["child_env_overrides"] == {"AMD_AQL": "0"}
+    assert raw["kernel_faults"] == []
+    return {"status": raw["status"], "validated": True}
+
   result = run_frozen_staged_c7_queue_capture_isolated(
     family=family, queue_mode="PM4", frozen_bundle="/frozen/bundle",
     staged_family_manifest="/frozen/family.json",
@@ -365,7 +372,7 @@ def test_isolated_capture_requires_exact_c4_and_parent_health_fault_envelope(fam
     isolated_runner=runner, health_probe=health,
     fault_collector=lambda _started: ([], {"window": "clean"}),
     canary_validator=lambda value, _family, *, queue_mode: value,
-    probe_validator=lambda raw, _family, **_kwargs: {"status": raw["status"], "validated": True})
+    probe_validator=validate_probe)
   assert result["status"] == "PASS"
   assert result["launched"] is True and result["target_dispatch_attempted"] is True
   assert result["target_dispatch_attempted_authority"] == "passing_child_queue_probe"
@@ -373,6 +380,7 @@ def test_isolated_capture_requires_exact_c4_and_parent_health_fault_envelope(fam
   assert result["health_before"] is result["health_after"] is True
   assert result["kernel_faults"] == []
   assert result["queue_observation"] == observation
+  assert result["raw_probe"]["child_env_overrides"] == {"AMD_AQL": "0"}
   assert result["probe_validation"]["validated"] is True
   assert result["c4_runtime_canary_isolation"] == canary
   assert calls == {"runner": 1, "health": 2}
