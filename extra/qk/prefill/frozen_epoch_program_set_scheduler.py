@@ -11,7 +11,8 @@ from tinygrad.uop.ops import Ops, UOp
 
 from extra.qk.mmq_exact_role_spec import DEFAULT_INVENTORY, ExactRoleSpec, admit_exact_role_spec
 from extra.qk.mmq_frozen_epoch_program_set import (
-  BINDING_SCHEMA, LEGACY_SCHEMA, SCHEMA as ARTIFACT_SCHEMA, FrozenEpochProgramSetBinding,
+  BINDING_SCHEMA, DIAGNOSTIC_REPACK_SCHEMA, LEGACY_SCHEMA, SCHEMA as ARTIFACT_SCHEMA,
+  FrozenEpochProgramSetBinding,
   load_frozen_epoch_program_set_binding,
 )
 from extra.qk.mmq_frozen_target_artifact import PROGRAM_DEVICE
@@ -77,7 +78,11 @@ def _validate_binding(binding: FrozenEpochProgramSetBinding, role_spec: ExactRol
     certification.get("gate") == "C1" and certification.get("certified") is False and \
     certification.get("status") == "legacy_v2_missing_generation_provenance" and \
     certification.get("content_addressed") is False
-  if (not current_c1 and (require_c1 or not diagnostic_legacy)) or \
+  diagnostic_repack = artifact_schema == DIAGNOSTIC_REPACK_SCHEMA and isinstance(certification, Mapping) and \
+    certification.get("gate") == "C1" and certification.get("certified") is False and \
+    certification.get("status") == "diagnostic_repack_non_c1_non_promotion" and \
+    certification.get("content_addressed") is False
+  if (not current_c1 and (require_c1 or not (diagnostic_legacy or diagnostic_repack))) or \
      len(binding.artifact.programs) != role_spec.epochs or len(binding.program_keys) != role_spec.epochs:
     raise ValueError("frozen v2 binding does not contain the complete exact epoch family")
   if tuple(program.key.hex() for program in binding.artifact.programs) != binding.program_keys:

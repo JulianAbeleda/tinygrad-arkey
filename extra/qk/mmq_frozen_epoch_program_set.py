@@ -46,6 +46,9 @@ from extra.qk.mmq_llama_runtime_contract import LLAMA_SOURCE_COMMIT
 
 SCHEMA = "tinygrad.mmq_q4k_q8_1.frozen_epoch_program_set.v3"
 LEGACY_SCHEMA = "tinygrad.mmq_q4k_q8_1.frozen_epoch_program_set.v2"
+DIAGNOSTIC_REPACK_SCHEMA = "tinygrad.mmq_q4k_q8_1.frozen_epoch_program_set.diagnostic_repack.v2"
+DIAGNOSTIC_REPACK_LINEAGE_SCHEMA = "tinygrad.mmq_q4k_q8_1.diagnostic_repack_lineage.v2"
+DIAGNOSTIC_REPACK_SOURCE_MANIFEST = "legacy_manifest.json"
 BINDING_SCHEMA = "tinygrad.prefill_frozen_epoch_program_set_binding.v2"
 PROVENANCE_SCHEMA = "tinygrad.mmq_q4k_q8_1.generation_provenance.v1"
 ROLE_CONTRACT_SCHEMA = "tinygrad.mmq_q4k_q8_1.full_role_contract.v1"
@@ -257,6 +260,211 @@ def _ordered_identities(variants: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def _manifest_content_digest(manifest: Mapping[str, Any]) -> str:
   content = {key: value for key, value in manifest.items() if key not in ("family_identity", "content_address")}
   return _sha256(_json_bytes(content))
+
+
+def _diagnostic_repack_identity(role_spec: ExactRoleSpec, sink_keys: list[str],
+                                program_keys: list[str], lineage: Mapping[str, Any]) -> str:
+  return _sha256(_json_bytes({
+    "schema": DIAGNOSTIC_REPACK_SCHEMA,
+    "role": role_spec.role, "shape": list(role_spec.shape),
+    "candidate_identity": role_spec.candidate_canonical_identity,
+    "physical_layout": _expected_physical_layout(role_spec),
+    "sink_keys": sink_keys, "program_keys": program_keys,
+    "diagnostic_repack": lineage,
+  }))
+
+
+def _legacy_family_identity(role_spec: ExactRoleSpec, sink_keys: list[str],
+                            program_keys: list[str]) -> str:
+  return _sha256(_json_bytes({
+    "role": role_spec.role, "shape": list(role_spec.shape),
+    "candidate_identity": role_spec.candidate_canonical_identity,
+    "physical_layout": _expected_physical_layout(role_spec),
+    "sink_keys": sink_keys, "program_keys": program_keys,
+  }))
+
+
+def _validate_diagnostic_repack(lineage: Any, role_spec: ExactRoleSpec,
+                                variants: list[dict[str, Any]], files: Mapping[str, bytes],
+                                programs: list[UOp], binaries: list[bytes],
+                                sink_keys: list[str], program_keys: list[str]) -> dict[str, Any]:
+  from tinygrad.helpers import Target, round_up
+  from tinygrad.renderer.amd.elf import assemble_linear, kernel_descriptor_from_elf
+  from tinygrad.renderer.isa.amd import AMDISARenderer
+  from tinygrad.runtime.autogen import hsa
+  from tinygrad.runtime.autogen.amd.rdna3.ins import s_code_end, s_endpgm
+  from tinygrad.runtime.support.elf import elf_loader
+
+  def one_section(binary: bytes, name: str):
+    _, sections, relocations = elf_loader(binary)
+    if relocations: raise ValueError("diagnostic repack code object unexpectedly requires relocation")
+    matches = [section for section in sections if section.name == name]
+    if len(matches) != 1: raise ValueError(f"diagnostic repack requires exactly one {name} section")
+    return matches[0]
+
+  if not isinstance(lineage, Mapping) or set(lineage) != {
+      "schema", "purpose", "promotion_eligible", "c1_certified",
+      "source_bundle", "packer", "variants"} or \
+     lineage.get("schema") != DIAGNOSTIC_REPACK_LINEAGE_SCHEMA or \
+     lineage.get("purpose") != "isolated_guarded_code_end_repack" or \
+     lineage.get("promotion_eligible") is not False or lineage.get("c1_certified") is not False:
+    raise ValueError("diagnostic repack lineage schema or admission flags are malformed")
+  source = lineage.get("source_bundle")
+  if not isinstance(source, Mapping) or set(source) != {
+      "schema", "family_identity", "manifest_file", "manifest_sha256", "manifest_nbytes"} or \
+     source.get("schema") != LEGACY_SCHEMA or source.get("manifest_file") != DIAGNOSTIC_REPACK_SOURCE_MANIFEST or \
+     any(not isinstance(source.get(key), str) or re.fullmatch(r"[0-9a-f]{64}", source[key]) is None
+         for key in ("family_identity", "manifest_sha256")) or \
+     type(source.get("manifest_nbytes")) is not int or source["manifest_nbytes"] <= 0:
+    raise ValueError("diagnostic repack source-bundle lineage is malformed")
+  source_manifest_bytes = files.get(DIAGNOSTIC_REPACK_SOURCE_MANIFEST)
+  if not isinstance(source_manifest_bytes, bytes) or \
+     source["manifest_sha256"] != _sha256(source_manifest_bytes) or \
+     source["manifest_nbytes"] != len(source_manifest_bytes):
+    raise ValueError("diagnostic repack retained legacy manifest identity differs from lineage")
+  try: source_manifest = json.loads(source_manifest_bytes)
+  except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+    raise ValueError(f"diagnostic repack retained legacy manifest is invalid: {exc}") from exc
+  if source_manifest.get("schema") != LEGACY_SCHEMA or source_manifest.get("state") != "FROZEN" or \
+     source_manifest.get("family_identity") != source["family_identity"] or \
+     source_manifest.get("role") != {
+       "name": role_spec.role, "shape": list(role_spec.shape), "epochs": role_spec.epochs,
+       "candidate_identity": role_spec.candidate_canonical_identity,
+     } or source_manifest.get("shared_program") != {
+       "function": FUNCTION_NAME, "device": PROGRAM_DEVICE, "compile_target": AMD_ISA_TARGET,
+       "globals": list(range(5)), "global_size": list(role_spec.program.grid),
+       "local_size": list(LOCAL_SIZE), "abi": list(_expected_abi(role_spec)),
+       "physical_layout": _expected_physical_layout(role_spec),
+     }:
+    raise ValueError("diagnostic repack retained legacy manifest contract is malformed")
+  source_variants, source_inventory = source_manifest.get("variants"), source_manifest.get("files")
+  if not isinstance(source_variants, list) or len(source_variants) != role_spec.epochs or \
+     not isinstance(source_inventory, Mapping):
+    raise ValueError("diagnostic repack retained legacy manifest family is incomplete")
+  packer = lineage.get("packer")
+  if not isinstance(packer, Mapping) or set(packer) != {
+      "compile_target", "arch", "authority", "source_revision", "source_files"} or \
+     packer.get("compile_target") != AMD_ISA_TARGET or packer.get("arch") != "gfx1100" or \
+     packer.get("authority") != "current_renderer_reassembly_of_retained_final_linear":
+    raise ValueError("diagnostic repack packer lineage is malformed")
+  revision, source_files = packer.get("source_revision"), packer.get("source_files")
+  if not isinstance(revision, Mapping) or set(revision) != {"vcs", "commit", "tree"} or \
+     revision.get("vcs") != "git" or any(
+       not isinstance(revision.get(key), str) or re.fullmatch(r"[0-9a-f]{40,64}", revision[key]) is None
+       for key in ("commit", "tree")):
+    raise ValueError("diagnostic repack source revision is malformed")
+  if not isinstance(source_files, Mapping) or set(source_files) != {
+      "diagnostic_repacker", "elf_packer", "isa_renderer"} or \
+     any(not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{64}", value) is None
+         for value in source_files.values()):
+    raise ValueError("diagnostic repack source-file identity is malformed")
+
+  rows = lineage.get("variants")
+  if not isinstance(rows, list) or len(rows) != role_spec.epochs:
+    raise ValueError("diagnostic repack lineage must cover the exact epoch family")
+  for epoch, (row, variant) in enumerate(zip(rows, variants)):
+    if not isinstance(row, Mapping) or set(row) != {
+        "epoch", "source", "final_stream", "output", "padding"} or row.get("epoch") != epoch:
+      raise ValueError("diagnostic repack variant lineage is malformed")
+    source_row, stream, output, padding = (
+      row.get("source"), row.get("final_stream"), row.get("output"), row.get("padding"))
+    if not isinstance(source_row, Mapping) or set(source_row) != {
+        "program_key", "binary_file", "binary_sha256", "binary_nbytes"} or \
+       source_row.get("binary_file") != f"epoch_{epoch:03d}.legacy.hsaco" or \
+       any(not isinstance(source_row.get(key), str) or re.fullmatch(r"[0-9a-f]{64}", source_row[key]) is None
+           for key in ("program_key", "binary_sha256")) or \
+       type(source_row.get("binary_nbytes")) is not int or source_row["binary_nbytes"] <= 0:
+      raise ValueError("diagnostic repack source variant identity is malformed")
+    if not isinstance(stream, Mapping) or set(stream) != {
+        "sha256", "nbytes", "instruction_count", "preserved_byte_for_byte"} or \
+       not isinstance(stream.get("sha256"), str) or re.fullmatch(r"[0-9a-f]{64}", stream["sha256"]) is None or \
+       any(type(stream.get(key)) is not int or stream[key] <= 0 for key in ("nbytes", "instruction_count")) or \
+       stream.get("preserved_byte_for_byte") is not True:
+      raise ValueError("diagnostic repack final-stream identity is malformed")
+    expected_binary = variant["artifacts"]["binary"]
+    if not isinstance(output, Mapping) or set(output) != {
+        "program_key", "binary_sha256", "binary_nbytes", "current_packer_reassembly"} or \
+       output.get("program_key") != variant["program_key"] or \
+       output.get("binary_sha256") != expected_binary["sha256"] or \
+       output.get("binary_nbytes") != expected_binary["nbytes"] or \
+       output.get("current_packer_reassembly") is not True:
+      raise ValueError("diagnostic repack output variant identity differs from retained artifacts")
+    if not isinstance(padding, Mapping) or padding != {
+        "instruction": "s_code_end", "cache_line_bytes": 128,
+        "guard_cache_lines": 3, "padding_nbytes": padding.get("padding_nbytes")
+      } or type(padding.get("padding_nbytes")) is not int or padding["padding_nbytes"] < 384 or \
+       padding["padding_nbytes"] % 4:
+      raise ValueError("diagnostic repack padding evidence is malformed")
+
+    program, binary = programs[epoch], binaries[epoch]
+    if len(program.src) != 5 or tuple(node.op for node in program.src) != (
+        Ops.SINK, Ops.DEVICE, Ops.LINEAR, Ops.SOURCE, Ops.BINARY):
+      raise ValueError("diagnostic repack PROGRAM does not retain the exact five-node executable boundary")
+    renderer = AMDISARenderer(Target.parse(AMD_ISA_TARGET))
+    final_linear = renderer._final_linear(program.src[2])
+    instructions = tuple(node.arg for node in final_linear.src)
+    if not instructions or instructions[-1].to_bytes() != s_endpgm().to_bytes():
+      raise ValueError("diagnostic repack final stream does not terminate in s_endpgm")
+    code = b"".join(instruction.to_bytes() for instruction in instructions)
+    if stream != {
+        "sha256": _sha256(code), "nbytes": len(code),
+        "instruction_count": len(instructions), "preserved_byte_for_byte": True,
+      }:
+      raise ValueError("diagnostic repack declared final stream differs from retained PROGRAM")
+    padding_instruction = s_code_end().to_bytes()
+    expected_padding_nbytes = round_up(len(code), 128)-len(code)+3*128
+    new_text = one_section(binary, ".text")
+    if padding["padding_nbytes"] != expected_padding_nbytes or \
+       new_text.content != code + padding_instruction * (expected_padding_nbytes//len(padding_instruction)):
+      raise ValueError("diagnostic repack new .text differs from exact final stream plus gfx11 guard")
+    assembly_program = renderer._assembly_program(program, program.src[2].arg)
+    if assemble_linear(assembly_program, final_linear, renderer.target.arch) != binary:
+      raise ValueError("diagnostic repack current packer reassembly differs from retained binary")
+
+    old_binary = files.get(source_row["binary_file"])
+    if not isinstance(old_binary, bytes) or source_row["binary_sha256"] != _sha256(old_binary) or \
+       source_row["binary_nbytes"] != len(old_binary):
+      raise ValueError("diagnostic repack retained legacy binary identity differs from lineage")
+    legacy_padding_copies = (
+      hsa.AMD_ISA_ALIGN_BYTES-len(code) % hsa.AMD_ISA_ALIGN_BYTES
+    ) % hsa.AMD_ISA_ALIGN_BYTES
+    old_text = one_section(old_binary, ".text")
+    if old_text.content != code + padding_instruction * legacy_padding_copies:
+      raise ValueError("diagnostic repack legacy .text differs from the authoritative final stream")
+    old_program = program.replace(src=program.src[:4] + (UOp(Ops.BINARY, arg=old_binary),))
+    old_key = old_program.key.hex()
+    if old_key != source_row["program_key"]:
+      raise ValueError("diagnostic repack reconstructed legacy PROGRAM key differs from lineage")
+
+    source_variant = source_variants[epoch]
+    source_names = _variant_files(epoch)
+    if not isinstance(source_variant, Mapping) or source_variant.get("epoch") != epoch or \
+       source_variant.get("offsets") != variant["offsets"] or source_variant.get("sink_key") != sink_keys[epoch] or \
+       source_variant.get("program_key") != old_key or source_variant.get("files") != source_names:
+      raise ValueError("diagnostic repack retained legacy variant identity is malformed")
+    for kind, name in source_names.items():
+      if kind == "program": continue
+      actual = (
+        files[name] if kind in ("sink", "source") else old_binary)
+      identity = {"sha256": _sha256(actual), "nbytes": len(actual)}
+      if source_variant.get("artifacts", {}).get(kind) != identity or source_inventory.get(name) != identity:
+        raise ValueError("diagnostic repack retained legacy artifact identity differs from source manifest")
+
+    old_desc, new_desc = kernel_descriptor_from_elf(old_binary), kernel_descriptor_from_elf(binary)
+    old_rodata, new_rodata = one_section(old_binary, ".rodata"), one_section(binary, ".rodata")
+    if int(old_desc.kernel_code_entry_byte_offset) != int(old_text.header.sh_addr)-int(old_rodata.header.sh_addr) or \
+       int(new_desc.kernel_code_entry_byte_offset) != int(new_text.header.sh_addr)-int(new_rodata.header.sh_addr):
+      raise ValueError("diagnostic repack kernel entry offset differs from its ELF section layout")
+    old_desc.kernel_code_entry_byte_offset = new_desc.kernel_code_entry_byte_offset = 0
+    if bytes(old_desc) != bytes(new_desc):
+      raise ValueError("diagnostic repack changed kernel descriptor fields beyond entry offset")
+
+  old_keys = [row["source"]["program_key"] for row in rows]
+  if source["family_identity"] != _legacy_family_identity(role_spec, sink_keys, old_keys):
+    raise ValueError("diagnostic repack retained legacy family identity does not reconstruct")
+  try: return json.loads(_json_bytes(lineage))
+  except (TypeError, ValueError) as exc:
+    raise ValueError(f"diagnostic repack lineage is not canonical JSON: {exc}") from exc
 
 
 def _program_payload(program: UOp) -> tuple[bytes, str]:
@@ -587,10 +795,12 @@ def load_frozen_epoch_program_set(path: str | Path, *,
   if "manifest.json" not in files: raise ValueError("bundle does not contain a frozen-family manifest")
   try: manifest = json.loads(files["manifest.json"])
   except (UnicodeDecodeError, json.JSONDecodeError) as exc: raise ValueError(f"invalid manifest JSON: {exc}") from exc
-  legacy = manifest.get("schema") == LEGACY_SCHEMA
+  schema = manifest.get("schema")
+  diagnostic_repack = schema == DIAGNOSTIC_REPACK_SCHEMA
+  legacy = schema in (LEGACY_SCHEMA, DIAGNOSTIC_REPACK_SCHEMA)
   if require_c1 and legacy:
     raise ValueError("legacy v2 frozen epoch bundle is C1-uncertified and must be regenerated for promotion")
-  if manifest.get("schema") not in (SCHEMA, LEGACY_SCHEMA) or manifest.get("state") != "FROZEN":
+  if schema not in (SCHEMA, LEGACY_SCHEMA, DIAGNOSTIC_REPACK_SCHEMA) or manifest.get("state") != "FROZEN":
     raise ValueError("bundle does not contain a frozen epoch program set")
   common_fields = {
     "schema", "state", "family_builder_calls", "variant_count", "compile_only_cpu",
@@ -598,9 +808,9 @@ def load_frozen_epoch_program_set(path: str | Path, *,
     "accumulate", "role", "shared_program", "compiler_boundary", "family_identity",
     "variants", "files", "archive_format", "consumer",
   }
-  version_fields = set() if legacy else {
-    "generation_provenance", "c1_certification", "role_contract", "ordered_identities", "content_address",
-  }
+  version_fields = (
+    {"diagnostic_repack"} if diagnostic_repack else set() if legacy else
+    {"generation_provenance", "c1_certification", "role_contract", "ordered_identities", "content_address"})
   if set(manifest) != common_fields | version_fields:
     raise ValueError("frozen family manifest fields differ from its versioned schema")
   if not legacy:
@@ -620,7 +830,8 @@ def load_frozen_epoch_program_set(path: str | Path, *,
   if dict(role) != expected_role: raise ValueError("v2 manifest role identity differs from admission")
   if not legacy and manifest.get("role_contract") != _role_contract(role_spec):
     raise ValueError("frozen family role contract differs from exact admission")
-  if manifest.get("family_builder_calls") != 1 or manifest.get("variant_count") != role_spec.epochs:
+  expected_builder_calls = 0 if diagnostic_repack else 1
+  if manifest.get("family_builder_calls") != expected_builder_calls or manifest.get("variant_count") != role_spec.epochs:
     raise ValueError("v2 manifest builder census differs from the exact epoch family")
   if manifest.get("compile_only_cpu") is not True or manifest.get("gpu_runtime_initialized") is not False or \
      manifest.get("gpu_dispatch_performed") is not False:
@@ -636,11 +847,18 @@ def load_frozen_epoch_program_set(path: str | Path, *,
   }
   if manifest.get("shared_program") != expected_shared:
     raise ValueError("v2 shared full-role ABI or launch identity changed")
-  if manifest.get("compiler_boundary") != {
-      "authority": "producer_same_session_emitted_family_variant",
-      "offset_authority": "retained_pre_lowering_sink",
-      "executable_authority": "retained_final_program",
-      "final_program_structural_offsets_claimed": False}:
+  expected_compiler_boundary = ({
+    "authority": "diagnostic_repack_of_retained_legacy_family",
+    "offset_authority": "unchanged_retained_pre_lowering_sink",
+    "executable_authority": "current_packer_reassembly_of_retained_final_linear",
+    "final_program_structural_offsets_claimed": False,
+  } if diagnostic_repack else {
+    "authority": "producer_same_session_emitted_family_variant",
+    "offset_authority": "retained_pre_lowering_sink",
+    "executable_authority": "retained_final_program",
+    "final_program_structural_offsets_claimed": False,
+  })
+  if manifest.get("compiler_boundary") != expected_compiler_boundary:
     raise ValueError("v2 same-session compiler authority boundary changed")
   consumer = manifest.get("consumer")
   if consumer != {"requires_recompile": False, "entrypoint": "load_frozen_epoch_program_set"}:
@@ -651,6 +869,11 @@ def load_frozen_epoch_program_set(path: str | Path, *,
   expected_names = {
     name for epoch in range(role_spec.epochs) for name in _variant_files(epoch).values()
   }
+  if diagnostic_repack:
+    expected_names |= {
+      DIAGNOSTIC_REPACK_SOURCE_MANIFEST,
+      *(f"epoch_{epoch:03d}.legacy.hsaco" for epoch in range(role_spec.epochs)),
+    }
   if set(files) != {"manifest.json", *expected_names}:
     raise ValueError("v2 bundle file set differs from the exact epoch family")
   retained = {name: files[name] for name in expected_names}
@@ -692,13 +915,13 @@ def load_frozen_epoch_program_set(path: str | Path, *,
     sink_keys.append(sink.key.hex()); keys.append(program.key.hex())
   if len(set(sink_keys)) != role_spec.epochs or len(set(keys)) != role_spec.epochs:
     raise ValueError("v2 epoch sink or PROGRAM keys are not unique")
-  if legacy:
-    expected_identity = _sha256(_json_bytes({
-      "role": role_spec.role, "shape": list(role_spec.shape),
-      "candidate_identity": role_spec.candidate_canonical_identity,
-      "physical_layout": _expected_physical_layout(role_spec),
-      "sink_keys": sink_keys, "program_keys": keys,
-    }))
+  if diagnostic_repack:
+    lineage = _validate_diagnostic_repack(
+      manifest.get("diagnostic_repack"), role_spec, variants, files,
+      programs, binaries, sink_keys, keys)
+    expected_identity = _diagnostic_repack_identity(role_spec, sink_keys, keys, lineage)
+  elif legacy:
+    expected_identity = _legacy_family_identity(role_spec, sink_keys, keys)
   else:
     if manifest.get("ordered_identities") != _ordered_identities(variants):
       raise ValueError("frozen family ordered sink/PROGRAM/payload identities changed")
@@ -710,7 +933,9 @@ def load_frozen_epoch_program_set(path: str | Path, *,
   loaded_manifest = dict(manifest)
   if legacy:
     loaded_manifest["c1_certification"] = {
-      "gate": "C1", "certified": False, "status": "legacy_v2_missing_generation_provenance",
+      "gate": "C1", "certified": False,
+      "status": ("diagnostic_repack_non_c1_non_promotion" if diagnostic_repack else
+                 "legacy_v2_missing_generation_provenance"),
       "content_addressed": False,
     }
   return FrozenEpochProgramSetArtifact(
@@ -750,7 +975,8 @@ def load_frozen_epoch_program_set_binding(role_spec: ExactRoleSpec, bundle: str 
 
 
 __all__ = [
-  "BINDING_SCHEMA", "CODEGEN_CONTEXT", "CODEGEN_ENV", "FrozenEpochProgramSetArtifact",
+  "BINDING_SCHEMA", "CODEGEN_CONTEXT", "CODEGEN_ENV", "DIAGNOSTIC_REPACK_LINEAGE_SCHEMA",
+  "DIAGNOSTIC_REPACK_SCHEMA", "DIAGNOSTIC_REPACK_SOURCE_MANIFEST", "FrozenEpochProgramSetArtifact",
   "FrozenEpochProgramSetBinding", "LEGACY_SCHEMA", "PROVENANCE_SCHEMA", "ROLE_CONTRACT_SCHEMA", "SCHEMA",
   "collect_generation_provenance",
   "load_frozen_epoch_program_set", "load_frozen_epoch_program_set_binding",
