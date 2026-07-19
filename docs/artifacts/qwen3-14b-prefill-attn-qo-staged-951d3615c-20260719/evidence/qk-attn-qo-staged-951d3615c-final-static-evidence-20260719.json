@@ -1,0 +1,121 @@
+{
+  "claims": {
+    "fresh_process_reproducibility": true,
+    "gpu_execution": false,
+    "gpu_health": false,
+    "numerical_correctness": false,
+    "performance": false,
+    "production_promotion": false,
+    "static_certification": true
+  },
+  "cpu_only": true,
+  "evidence_sha256": "93043297e315ebe837ec9107542a90a393a081d595b2f12b70f5c6880d2c37d0",
+  "gates": {
+    "C1": {
+      "evidence": {
+        "nbytes": 2360,
+        "path": "/tmp/qk-attn-qo-staged-951d3615c-final-20260719-c1-artifact-audit.json",
+        "sha256": "812495e9388edb8e3ccf7725d54f12b7fcfb8edb8c770f6c6dc647cdfbf5d7bb"
+      },
+      "state": "PASS"
+    },
+    "C2": {
+      "evidence": {
+        "nbytes": 1454,
+        "path": "/tmp/qk-attn-qo-staged-951d3615c-final-20260719-c2-native.json",
+        "sha256": "960bf84d8d526288a929747463c774b726c0143a9d7e0aa4e44c82df53fe982d"
+      },
+      "resources": {
+        "allocated_sgpr": null,
+        "allocated_vgpr": 256,
+        "authority": {
+          "sgpr_scratch_spills": "renderer_final_linear",
+          "vgpr_lds_wave": "final_elf_descriptor",
+          "workgroup": "program_info_launch"
+        },
+        "global_size": [
+          40,
+          4,
+          1
+        ],
+        "lds_bytes": 57856,
+        "local_size": [
+          256,
+          1,
+          1
+        ],
+        "max_workgroup_threads": 256,
+        "schema": "tinygrad.amd.native_program_resources.v1",
+        "scratch_bytes": 0,
+        "scratch_spill_proof": {
+          "amdisarenderer_spill_construction": "hard_error",
+          "byte_identical_reassembly": true,
+          "pre_and_final_linear_scratch_spill_instructions": "absent",
+          "private_segment_fixed_size": 0,
+          "private_segment_properties": "disabled"
+        },
+        "sgpr": 16,
+        "sgpr_spills": 0,
+        "target": "gfx1100",
+        "used_vgpr": 256,
+        "vgpr": 256,
+        "vgpr_spills": 0,
+        "wavefront_size": 32,
+        "workgroup_threads": 256
+      },
+      "state": "PASS"
+    },
+    "C3": {
+      "certificate_sha256": "2a538a52186919b000cf70981d601f69349cd00faf1ca9536e26422fae4f7ec2",
+      "child_gates": {
+        "C3": "PASS",
+        "C3a": "PASS",
+        "C3b": "PASS"
+      },
+      "evidence": {
+        "nbytes": 13651,
+        "path": "/tmp/qk-attn-qo-staged-951d3615c-final-20260719-c3-full-memory-certificate.json",
+        "sha256": "b2ca6f17e830294d9b86c6583f77a9e6cda5732e3e0baf343ad21aa1e0de8be5"
+      },
+      "state": "PASS"
+    },
+    "reproducibility": {
+      "evidence": {
+        "nbytes": 10246,
+        "path": "/tmp/qk-attn-qo-staged-951d3615c-final-reproducibility-20260719.json",
+        "sha256": "b8ea0255e7e0540e30546245843fc7e36fbd015d3fd41ee558fecfdf55b1ba30"
+      },
+      "evidence_content_sha256": "34b4ac437635121baf48cdfd77f1f6a19787d5d2a57f6cfdf86b209dc9cb8713",
+      "state": "PASS"
+    }
+  },
+  "identity_binding": {
+    "binary_sha256": "dfb213624287a8dec10f8646d8c16e49651efee8e0ca27c67ff982b0d6b050bf",
+    "program_key": "3f478e6d89a2de467f6b7d1ca18418cdfd0cdb19de05db1d66608e65a5e6475f",
+    "serialized_program_sha256": "5852ae4e929644982036f56059490898a51760eda9fd9dab7bcd59c2b5589596",
+    "serialized_sink_sha256": "a9fdd8c70de148a0c669d4ea361132766357816ef28e48f5ef3f6d80eb330683",
+    "sink_key": "bd77ed89317319ced878964575afdbc59487f23d50240ad7d397d5bd2f9cbe44",
+    "source_sha256": "c8b75dd0cf9905d02d74ca5923154669692b2c1df4dd627980c769c82cc021ef"
+  },
+  "repository_revision": "951d3615c2357d2bb0ef2f4b62339b45ce39597f",
+  "required_next": [
+    "guarded GPU correctness and numerical parity",
+    "GPU health verification",
+    "full-role performance comparison",
+    "promotion decision"
+  ],
+  "role": "attn_qo",
+  "schema": "tinygrad.mmq_q4k_q8_1.frozen_staged_static_evidence.v1",
+  "selected": {
+    "archive": "/tmp/qk-attn-qo-staged-951d3615c-final-r1-20260719-bundle.tar",
+    "bundle": "/tmp/qk-attn-qo-staged-951d3615c-final-r1-20260719-bundle",
+    "family": "/tmp/qk-attn-qo-staged-951d3615c-final-r1-20260719-family.json",
+    "family_identity": "sha256:2cfc30075f8024cee8a927c2c3de2e87eef3db6d83882da69faa0fe0a3cc1e4f"
+  },
+  "shape": [
+    512,
+    5120,
+    5120
+  ],
+  "state": "PASS_STATIC_AND_REPRODUCIBLE"
+}

@@ -1,0 +1,236 @@
+{
+  "comparisons": {
+    "canonical_family_manifest": true,
+    "canonical_manifest": true,
+    "compiler_environment_exact_23_keys": true,
+    "disassembly_bytes": true,
+    "family_identity": true,
+    "hsaco_bytes": true,
+    "lowered_program_key": true,
+    "r1_directory_archive_reload": true,
+    "r2_directory_archive_reload": true,
+    "raw_archive_bytes": true,
+    "raw_family_manifest_bytes": true,
+    "raw_manifest_bytes": true,
+    "retained_sink_key": true,
+    "search_configuration_identity": true,
+    "serialized_program_bytes": true,
+    "serialized_sink_bytes": true,
+    "source_bytes": true
+  },
+  "cpu_only": true,
+  "evidence_sha256": "34b4ac437635121baf48cdfd77f1f6a19787d5d2a57f6cfdf86b209dc9cb8713",
+  "gpu_dispatch_performed": false,
+  "gpu_runtime_initialized": false,
+  "repository": {
+    "dirty": false,
+    "revision": "951d3615c2357d2bb0ef2f4b62339b45ce39597f",
+    "worktree": "/tmp/tinygrad-qo-staged-951d3615c-final"
+  },
+  "role": {
+    "grid": [
+      40,
+      4,
+      1
+    ],
+    "name": "attn_qo",
+    "program_shape": [
+      512,
+      5120,
+      256
+    ],
+    "shape": [
+      512,
+      5120,
+      5120
+    ]
+  },
+  "runs": {
+    "r1": {
+      "archive": {
+        "nbytes": 10414080,
+        "path": "/tmp/qk-attn-qo-staged-951d3615c-final-r1-20260719-bundle.tar",
+        "sha256": "35d52dbd52a4add2ba564ab216617569544e12fa0adf12ddbb830be43ed2ecf3"
+      },
+      "bundle_path": "/tmp/qk-attn-qo-staged-951d3615c-final-r1-20260719-bundle",
+      "compiler_environment": {
+        "ALLOW_HALF8": null,
+        "AMD": null,
+        "AMD_CC": null,
+        "AMD_COMGR_SAVE_TEMPS": null,
+        "COALESCED_LOAD_LOWERING": null,
+        "DECODE_FAST_EXP2": null,
+        "DEV": null,
+        "DEVECTORIZE_NO_PTR_GROUP": null,
+        "HIPCC": null,
+        "NOOPT": null,
+        "PYTHONHASHSEED": "0",
+        "REGALLOC_ADDR_REMAT": "1",
+        "REGALLOC_ADDR_REMAT_END_NO_EMIT": null,
+        "REGALLOC_ADDR_REMAT_NO_END": null,
+        "REG_STORE_DEVEC": null,
+        "ROCM_PATH": null,
+        "SCHED_LIST": null,
+        "SCHED_MODULO": null,
+        "SCHED_MODULO_PROBE": null,
+        "SCHED_UNROLL": null,
+        "UNSAFE_DISABLE_MASK": null,
+        "V_DOT2_LOWERING": null,
+        "WARP_REDUCE_LOWERING": null
+      },
+      "directory_and_archive_load_to_same_program": true,
+      "directory_and_archive_load_to_same_sink": true,
+      "family": {
+        "nbytes": 8090,
+        "path": "/tmp/qk-attn-qo-staged-951d3615c-final-r1-20260719-family.json",
+        "sha256": "ca673be2a2989aa29a184d28d440121e4d1a2bd321de70e676b1b578e76bb322"
+      },
+      "family_canonical_sha256": "c494ba2034619b3ed8ffc8315b8ced8082ad2bdc8b4d45aa56e49dc3db918f3e",
+      "family_identity": "sha256:2cfc30075f8024cee8a927c2c3de2e87eef3db6d83882da69faa0fe0a3cc1e4f",
+      "files": {
+        "fixture.json": {
+          "nbytes": 1003,
+          "path": "/tmp/qk-attn-qo-staged-951d3615c-final-r1-20260719-bundle/fixture.json",
+          "sha256": "a0af1ede30514f8fe51a617a63ada13e640ea937eea41a950ad5e9473da883f5"
+        },
+        "manifest.json": {
+          "nbytes": 5592,
+          "path": "/tmp/qk-attn-qo-staged-951d3615c-final-r1-20260719-bundle/manifest.json",
+          "sha256": "b01494c372250a229b8262af22a7e1f8a8f80fed22fc7b2774d54c237915976c"
+        },
+        "target_accumulate_k256.hsaco": {
+          "nbytes": 77079,
+          "path": "/tmp/qk-attn-qo-staged-951d3615c-final-r1-20260719-bundle/target_accumulate_k256.hsaco",
+          "sha256": "dfb213624287a8dec10f8646d8c16e49651efee8e0ca27c67ff982b0d6b050bf"
+        },
+        "target_accumulate_k256.isa.txt": {
+          "nbytes": 913624,
+          "path": "/tmp/qk-attn-qo-staged-951d3615c-final-r1-20260719-bundle/target_accumulate_k256.isa.txt",
+          "sha256": "655db9b3a7f86fe3f3e0bc8df4528831c6b981ead1b18ebbe51b2d13e88db6ad"
+        },
+        "target_accumulate_k256.program.pkl": {
+          "nbytes": 8709708,
+          "path": "/tmp/qk-attn-qo-staged-951d3615c-final-r1-20260719-bundle/target_accumulate_k256.program.pkl",
+          "sha256": "5852ae4e929644982036f56059490898a51760eda9fd9dab7bcd59c2b5589596"
+        },
+        "target_accumulate_k256.sink.pkl": {
+          "nbytes": 214415,
+          "path": "/tmp/qk-attn-qo-staged-951d3615c-final-r1-20260719-bundle/target_accumulate_k256.sink.pkl",
+          "sha256": "a9fdd8c70de148a0c669d4ea361132766357816ef28e48f5ef3f6d80eb330683"
+        },
+        "target_accumulate_k256.source.txt": {
+          "nbytes": 485546,
+          "path": "/tmp/qk-attn-qo-staged-951d3615c-final-r1-20260719-bundle/target_accumulate_k256.source.txt",
+          "sha256": "c8b75dd0cf9905d02d74ca5923154669692b2c1df4dd627980c769c82cc021ef"
+        }
+      },
+      "lowered_program": {
+        "binary_sha256": "dfb213624287a8dec10f8646d8c16e49651efee8e0ca27c67ff982b0d6b050bf",
+        "disassembly_sha256": "655db9b3a7f86fe3f3e0bc8df4528831c6b981ead1b18ebbe51b2d13e88db6ad",
+        "key": "3f478e6d89a2de467f6b7d1ca18418cdfd0cdb19de05db1d66608e65a5e6475f",
+        "serialized_sha256": "5852ae4e929644982036f56059490898a51760eda9fd9dab7bcd59c2b5589596",
+        "source_sha256": "c8b75dd0cf9905d02d74ca5923154669692b2c1df4dd627980c769c82cc021ef"
+      },
+      "manifest_canonical_sha256": "fd6d791d19e237eb7325ebdc73101e37f9b42cde40b1c0803cbba554b33b61e1",
+      "retained_sink": {
+        "key": "bd77ed89317319ced878964575afdbc59487f23d50240ad7d397d5bd2f9cbe44",
+        "serialized_sha256": "a9fdd8c70de148a0c669d4ea361132766357816ef28e48f5ef3f6d80eb330683"
+      },
+      "search_configuration_identity": "243654b6d8b8ea07ec64d2d1441c88920267eba27b4b9163638a8c876d18cba9"
+    },
+    "r2": {
+      "archive": {
+        "nbytes": 10414080,
+        "path": "/tmp/qk-attn-qo-staged-951d3615c-final-r2-20260719-bundle.tar",
+        "sha256": "35d52dbd52a4add2ba564ab216617569544e12fa0adf12ddbb830be43ed2ecf3"
+      },
+      "bundle_path": "/tmp/qk-attn-qo-staged-951d3615c-final-r2-20260719-bundle",
+      "compiler_environment": {
+        "ALLOW_HALF8": null,
+        "AMD": null,
+        "AMD_CC": null,
+        "AMD_COMGR_SAVE_TEMPS": null,
+        "COALESCED_LOAD_LOWERING": null,
+        "DECODE_FAST_EXP2": null,
+        "DEV": null,
+        "DEVECTORIZE_NO_PTR_GROUP": null,
+        "HIPCC": null,
+        "NOOPT": null,
+        "PYTHONHASHSEED": "0",
+        "REGALLOC_ADDR_REMAT": "1",
+        "REGALLOC_ADDR_REMAT_END_NO_EMIT": null,
+        "REGALLOC_ADDR_REMAT_NO_END": null,
+        "REG_STORE_DEVEC": null,
+        "ROCM_PATH": null,
+        "SCHED_LIST": null,
+        "SCHED_MODULO": null,
+        "SCHED_MODULO_PROBE": null,
+        "SCHED_UNROLL": null,
+        "UNSAFE_DISABLE_MASK": null,
+        "V_DOT2_LOWERING": null,
+        "WARP_REDUCE_LOWERING": null
+      },
+      "directory_and_archive_load_to_same_program": true,
+      "directory_and_archive_load_to_same_sink": true,
+      "family": {
+        "nbytes": 8090,
+        "path": "/tmp/qk-attn-qo-staged-951d3615c-final-r2-20260719-family.json",
+        "sha256": "ca673be2a2989aa29a184d28d440121e4d1a2bd321de70e676b1b578e76bb322"
+      },
+      "family_canonical_sha256": "c494ba2034619b3ed8ffc8315b8ced8082ad2bdc8b4d45aa56e49dc3db918f3e",
+      "family_identity": "sha256:2cfc30075f8024cee8a927c2c3de2e87eef3db6d83882da69faa0fe0a3cc1e4f",
+      "files": {
+        "fixture.json": {
+          "nbytes": 1003,
+          "path": "/tmp/qk-attn-qo-staged-951d3615c-final-r2-20260719-bundle/fixture.json",
+          "sha256": "a0af1ede30514f8fe51a617a63ada13e640ea937eea41a950ad5e9473da883f5"
+        },
+        "manifest.json": {
+          "nbytes": 5592,
+          "path": "/tmp/qk-attn-qo-staged-951d3615c-final-r2-20260719-bundle/manifest.json",
+          "sha256": "b01494c372250a229b8262af22a7e1f8a8f80fed22fc7b2774d54c237915976c"
+        },
+        "target_accumulate_k256.hsaco": {
+          "nbytes": 77079,
+          "path": "/tmp/qk-attn-qo-staged-951d3615c-final-r2-20260719-bundle/target_accumulate_k256.hsaco",
+          "sha256": "dfb213624287a8dec10f8646d8c16e49651efee8e0ca27c67ff982b0d6b050bf"
+        },
+        "target_accumulate_k256.isa.txt": {
+          "nbytes": 913624,
+          "path": "/tmp/qk-attn-qo-staged-951d3615c-final-r2-20260719-bundle/target_accumulate_k256.isa.txt",
+          "sha256": "655db9b3a7f86fe3f3e0bc8df4528831c6b981ead1b18ebbe51b2d13e88db6ad"
+        },
+        "target_accumulate_k256.program.pkl": {
+          "nbytes": 8709708,
+          "path": "/tmp/qk-attn-qo-staged-951d3615c-final-r2-20260719-bundle/target_accumulate_k256.program.pkl",
+          "sha256": "5852ae4e929644982036f56059490898a51760eda9fd9dab7bcd59c2b5589596"
+        },
+        "target_accumulate_k256.sink.pkl": {
+          "nbytes": 214415,
+          "path": "/tmp/qk-attn-qo-staged-951d3615c-final-r2-20260719-bundle/target_accumulate_k256.sink.pkl",
+          "sha256": "a9fdd8c70de148a0c669d4ea361132766357816ef28e48f5ef3f6d80eb330683"
+        },
+        "target_accumulate_k256.source.txt": {
+          "nbytes": 485546,
+          "path": "/tmp/qk-attn-qo-staged-951d3615c-final-r2-20260719-bundle/target_accumulate_k256.source.txt",
+          "sha256": "c8b75dd0cf9905d02d74ca5923154669692b2c1df4dd627980c769c82cc021ef"
+        }
+      },
+      "lowered_program": {
+        "binary_sha256": "dfb213624287a8dec10f8646d8c16e49651efee8e0ca27c67ff982b0d6b050bf",
+        "disassembly_sha256": "655db9b3a7f86fe3f3e0bc8df4528831c6b981ead1b18ebbe51b2d13e88db6ad",
+        "key": "3f478e6d89a2de467f6b7d1ca18418cdfd0cdb19de05db1d66608e65a5e6475f",
+        "serialized_sha256": "5852ae4e929644982036f56059490898a51760eda9fd9dab7bcd59c2b5589596",
+        "source_sha256": "c8b75dd0cf9905d02d74ca5923154669692b2c1df4dd627980c769c82cc021ef"
+      },
+      "manifest_canonical_sha256": "fd6d791d19e237eb7325ebdc73101e37f9b42cde40b1c0803cbba554b33b61e1",
+      "retained_sink": {
+        "key": "bd77ed89317319ced878964575afdbc59487f23d50240ad7d397d5bd2f9cbe44",
+        "serialized_sha256": "a9fdd8c70de148a0c669d4ea361132766357816ef28e48f5ef3f6d80eb330683"
+      },
+      "search_configuration_identity": "243654b6d8b8ea07ec64d2d1441c88920267eba27b4b9163638a8c876d18cba9"
+    }
+  },
+  "schema": "tinygrad.mmq_q4k_q8_1.frozen_staged_reproducibility.v1",
+  "state": "PASS"
+}

@@ -1,0 +1,52 @@
+{
+  "cpu_only": true,
+  "family_identity": "sha256:2cfc30075f8024cee8a927c2c3de2e87eef3db6d83882da69faa0fe0a3cc1e4f",
+  "gate": "C2_native_resources",
+  "program_key": "3f478e6d89a2de467f6b7d1ca18418cdfd0cdb19de05db1d66608e65a5e6475f",
+  "proofs": {
+    "native_final_stream_reassembles_byte_identically": true,
+    "zero_scratch": true,
+    "zero_sgpr_spills": true,
+    "zero_vgpr_spills": true
+  },
+  "resources": {
+    "allocated_sgpr": null,
+    "allocated_vgpr": 256,
+    "authority": {
+      "sgpr_scratch_spills": "renderer_final_linear",
+      "vgpr_lds_wave": "final_elf_descriptor",
+      "workgroup": "program_info_launch"
+    },
+    "global_size": [
+      40,
+      4,
+      1
+    ],
+    "lds_bytes": 57856,
+    "local_size": [
+      256,
+      1,
+      1
+    ],
+    "max_workgroup_threads": 256,
+    "schema": "tinygrad.amd.native_program_resources.v1",
+    "scratch_bytes": 0,
+    "scratch_spill_proof": {
+      "amdisarenderer_spill_construction": "hard_error",
+      "byte_identical_reassembly": true,
+      "pre_and_final_linear_scratch_spill_instructions": "absent",
+      "private_segment_fixed_size": 0,
+      "private_segment_properties": "disabled"
+    },
+    "sgpr": 16,
+    "sgpr_spills": 0,
+    "target": "gfx1100",
+    "used_vgpr": 256,
+    "vgpr": 256,
+    "vgpr_spills": 0,
+    "wavefront_size": 32,
+    "workgroup_threads": 256
+  },
+  "schema": "tinygrad.mmq_q4k_q8_1.frozen_staged_native_resources.v1",
+  "state": "PASS"
+}

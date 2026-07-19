@@ -1,0 +1,306 @@
+{
+  "artifact": {
+    "artifact_full_role_shape": [
+      512,
+      5120,
+      5120
+    ],
+    "artifact_role": "attn_qo",
+    "fixture_sha256": "a0af1ede30514f8fe51a617a63ada13e640ea937eea41a950ad5e9473da883f5",
+    "manifest_sha256": "fd6d791d19e237eb7325ebdc73101e37f9b42cde40b1c0803cbba554b33b61e1",
+    "requires_recompile": false,
+    "schema": "tinygrad.mmq_q4k_q8_1.frozen_target_artifact.v2",
+    "shared_program_geometry": true
+  },
+  "family_identity": "sha256:2cfc30075f8024cee8a927c2c3de2e87eef3db6d83882da69faa0fe0a3cc1e4f",
+  "program": {
+    "abi": [
+      {
+        "direction": "inout",
+        "dtype": "dtypes.float.ptr(2621440)",
+        "elements": 2621440,
+        "name": "output",
+        "nbytes": 10485760,
+        "slot": 0
+      },
+      {
+        "direction": "in",
+        "dtype": "dtypes.uint.ptr(184320)",
+        "elements": 184320,
+        "name": "q4",
+        "nbytes": 737280,
+        "slot": 1
+      },
+      {
+        "direction": "in",
+        "dtype": "dtypes.char.ptr(131072)",
+        "elements": 131072,
+        "name": "q8_values",
+        "nbytes": 131072,
+        "slot": 2
+      },
+      {
+        "direction": "in",
+        "dtype": "dtypes.float.ptr(4096)",
+        "elements": 4096,
+        "name": "q8_scales",
+        "nbytes": 16384,
+        "slot": 3
+      },
+      {
+        "direction": "in",
+        "dtype": "dtypes.float.ptr(4096)",
+        "elements": 4096,
+        "name": "q8_original_sums",
+        "nbytes": 16384,
+        "slot": 4
+      }
+    ],
+    "binary_sha256": "dfb213624287a8dec10f8646d8c16e49651efee8e0ca27c67ff982b0d6b050bf",
+    "compile_target": "AMD:ISA:gfx1100",
+    "device": "AMD",
+    "dispatch_count": 20,
+    "function": "mmq_llama_five_buffer_full_grid_accumulate",
+    "globals": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "grid": [
+      40,
+      4,
+      1
+    ],
+    "key": "3f478e6d89a2de467f6b7d1ca18418cdfd0cdb19de05db1d66608e65a5e6475f",
+    "local_size": [
+      256,
+      1,
+      1
+    ],
+    "program_count": 1,
+    "reuse": "single_compact_k256_program_for_every_epoch",
+    "serialized_program_sha256": "5852ae4e929644982036f56059490898a51760eda9fd9dab7bcd59c2b5589596",
+    "shape": [
+      512,
+      5120,
+      256
+    ],
+    "sink_identity": "bd77ed89317319ced878964575afdbc59487f23d50240ad7d397d5bd2f9cbe44",
+    "source_sha256": "c8b75dd0cf9905d02d74ca5923154669692b2c1df4dd627980c769c82cc021ef"
+  },
+  "provenance": {
+    "compiler": {
+      "environment": {
+        "ALLOW_HALF8": null,
+        "AMD": null,
+        "AMD_CC": null,
+        "AMD_COMGR_SAVE_TEMPS": null,
+        "COALESCED_LOAD_LOWERING": null,
+        "DECODE_FAST_EXP2": null,
+        "DEV": null,
+        "DEVECTORIZE_NO_PTR_GROUP": null,
+        "HIPCC": null,
+        "NOOPT": null,
+        "PYTHONHASHSEED": "0",
+        "REGALLOC_ADDR_REMAT": "1",
+        "REGALLOC_ADDR_REMAT_END_NO_EMIT": null,
+        "REGALLOC_ADDR_REMAT_NO_END": null,
+        "REG_STORE_DEVEC": null,
+        "ROCM_PATH": null,
+        "SCHED_LIST": null,
+        "SCHED_MODULO": null,
+        "SCHED_MODULO_PROBE": null,
+        "SCHED_UNROLL": null,
+        "UNSAFE_DISABLE_MASK": null,
+        "V_DOT2_LOWERING": null,
+        "WARP_REDUCE_LOWERING": null
+      },
+      "target": "AMD:ISA:gfx1100"
+    },
+    "repository": {
+      "dirty": false,
+      "revision": "951d3615c2357d2bb0ef2f4b62339b45ce39597f"
+    },
+    "schema": "tinygrad.mmq_q4k_q8_1.staged_family_provenance.v1",
+    "search": {
+      "candidate_identity": "771e33f40453c6903ed69ab6b5e8f7b894c5c1d40d3405db8742b546a67b4e58",
+      "configuration_identity": "243654b6d8b8ea07ec64d2d1441c88920267eba27b4b9163638a8c876d18cba9",
+      "generator": "extra.qk.mmq_target_epoch_orchestrator.compile_target_kernel+extra.qk.mmq_frozen_target_artifact.produce_frozen_target_artifact",
+      "sink_identity": "bd77ed89317319ced878964575afdbc59487f23d50240ad7d397d5bd2f9cbe44"
+    },
+    "toolchain": {
+      "assembler": "tinygrad.renderer.amd.elf.assemble_linear target=AMD:ISA:gfx1100 file_sha256:ad1895526c44ffd3c00583534f26585ef65525e5bb80f5ad98ef3653e468e027",
+      "python": "CPython 3.12.3 cache=cpython-312 pickle=5",
+      "renderer": "tinygrad.renderer.isa.amd.AMDISARenderer file_sha256:c5c2b031f349ae016e0ac248e49fb589b6285c7965cb2323db308f42b2b3f682"
+    }
+  },
+  "queue_modes": {
+    "certification_inherited": false,
+    "eligible": [
+      "PM4",
+      "AQL"
+    ],
+    "qualification": "separate_per_mode"
+  },
+  "role": {
+    "candidate_identity": "771e33f40453c6903ed69ab6b5e8f7b894c5c1d40d3405db8742b546a67b4e58",
+    "epoch_count": 20,
+    "epoch_k": 256,
+    "name": "attn_qo",
+    "shape": [
+      512,
+      5120,
+      5120
+    ]
+  },
+  "schema": "tinygrad.mmq_q4k_q8_1.frozen_staged_family.v1",
+  "staging": {
+    "epoch_domain": {
+      "count": 20,
+      "start": 0,
+      "stop_exclusive": 20
+    },
+    "epoch_k": 256,
+    "fixed_destination_allocations": true,
+    "inputs": [
+      {
+        "dtype": "dtypes.uint",
+        "mapping": {
+          "copy": "all n,word",
+          "epoch_variable": "e",
+          "source_index": "[n,e,word]",
+          "stage_index": "[n,word]"
+        },
+        "name": "q4",
+        "slot": 1,
+        "source": {
+          "elements": 3686400,
+          "layout": "q4_k_words[n,k256_epoch,36]",
+          "shape": [
+            5120,
+            20,
+            36
+          ]
+        },
+        "stage": {
+          "elements": 184320,
+          "layout": "q4_k_words[n,36]",
+          "shape": [
+            5120,
+            36
+          ]
+        }
+      },
+      {
+        "dtype": "dtypes.char",
+        "mapping": {
+          "copy": "r in [0,2), all m,k",
+          "epoch_variable": "e",
+          "source_index": "[2*e+r,m,k]",
+          "stage_index": "[r,m,k]"
+        },
+        "name": "q8_values",
+        "slot": 2,
+        "source": {
+          "elements": 2621440,
+          "layout": "q8_1_values[2*k256_epoch,m,128]",
+          "shape": [
+            40,
+            512,
+            128
+          ]
+        },
+        "stage": {
+          "elements": 131072,
+          "layout": "q8_1_values[2,m,128]",
+          "shape": [
+            2,
+            512,
+            128
+          ]
+        }
+      },
+      {
+        "dtype": "dtypes.float",
+        "mapping": {
+          "copy": "r in [0,2), all m,g",
+          "epoch_variable": "e",
+          "source_index": "[2*e+r,m,g]",
+          "stage_index": "[r,m,g]"
+        },
+        "name": "q8_scales",
+        "slot": 3,
+        "source": {
+          "elements": 81920,
+          "layout": "q8_1_scales[2*k256_epoch,m,4]",
+          "shape": [
+            40,
+            512,
+            4
+          ]
+        },
+        "stage": {
+          "elements": 4096,
+          "layout": "q8_1_scales[2,m,4]",
+          "shape": [
+            2,
+            512,
+            4
+          ]
+        }
+      },
+      {
+        "dtype": "dtypes.float",
+        "mapping": {
+          "copy": "r in [0,2), all m,g",
+          "epoch_variable": "e",
+          "source_index": "[2*e+r,m,g]",
+          "stage_index": "[r,m,g]"
+        },
+        "name": "q8_original_sums",
+        "slot": 4,
+        "source": {
+          "elements": 81920,
+          "layout": "q8_1_original_sums[2*k256_epoch,m,4]",
+          "shape": [
+            40,
+            512,
+            4
+          ]
+        },
+        "stage": {
+          "elements": 4096,
+          "layout": "q8_1_original_sums[2,m,4]",
+          "shape": [
+            2,
+            512,
+            4
+          ]
+        }
+      }
+    ],
+    "mode": "one_compact_k256_stage_reused_by_ordinal",
+    "output_recurrence": {
+      "final": "output[20]",
+      "initialization": "fp32_zero",
+      "program_effects": {
+        "ins": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ],
+        "outs": [
+          0
+        ]
+      },
+      "slot": 0,
+      "step": "output[e+1]=output[e]+MMQ(q4_stage,q8_values_stage,q8_scales_stage,q8_original_sums_stage)"
+    },
+    "overwrite_requires_prior_target_completion": true
+  },
+  "state": "FROZEN"
+}

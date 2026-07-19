@@ -1,0 +1,389 @@
+{
+  "c3a": {
+    "certificate_sha256": "68e924cc95610c01247696614dd1019854cd5eaee28c42def44901b07355a6d3",
+    "compact_program_shape": [
+      512,
+      5120,
+      256
+    ],
+    "cpu_only": true,
+    "family_identity": "sha256:2cfc30075f8024cee8a927c2c3de2e87eef3db6d83882da69faa0fe0a3cc1e4f",
+    "gate": "C3a_source_sink",
+    "proofs": {
+      "all_logical_input_load_and_output_rmw_addresses_in_bounds": true,
+      "complete_declared_grid_exhaustively_evaluated": true,
+      "output_read_modify_write_complete_once": true,
+      "retained_sink_identity_bound_to_frozen_family": true
+    },
+    "retained_source_sink": {
+      "artifact_schema": "tinygrad.mmq_q4k_q8_1.frozen_target_artifact.v2",
+      "c3a_claimed": true,
+      "evaluated_by_this_c3a_certificate": true,
+      "identity_bound": true,
+      "retained": true,
+      "retention": "RETAINED_AND_IDENTITY_BOUND",
+      "serialized_sink_sha256": "a9fdd8c70de148a0c669d4ea361132766357816ef28e48f5ef3f6d80eb330683",
+      "sink_key": "bd77ed89317319ced878964575afdbc59487f23d50240ad7d397d5bd2f9cbe44"
+    },
+    "role": {
+      "candidate_identity": "771e33f40453c6903ed69ab6b5e8f7b894c5c1d40d3405db8742b546a67b4e58",
+      "epochs": 20,
+      "name": "attn_qo",
+      "shape": [
+        512,
+        5120,
+        5120
+      ]
+    },
+    "schema": "tinygrad.mmq_q4k_q8_1.frozen_staged_source_memory_certificate.v1",
+    "source_sink": {
+      "authority": "retained_pre_lowering_sink",
+      "epoch": 0,
+      "full_grid": [
+        40,
+        4,
+        1
+      ],
+      "local_size": [
+        256,
+        1,
+        1
+      ],
+      "output_read_modify_write_complete_once": true,
+      "rows": [
+        {
+          "accesses": 2621440,
+          "allocation_elements": 2621440,
+          "coverage_sha256": "2bf9bdd28f63a9f86ee6665ba9d10319452ed351c24e5013800c8b8024985fdf",
+          "kind": "load",
+          "max_element": 2621439,
+          "min_element": 0,
+          "name": "output",
+          "slot": 0,
+          "unique_coverage_sha256": "2bf9bdd28f63a9f86ee6665ba9d10319452ed351c24e5013800c8b8024985fdf",
+          "unique_elements": 2621440
+        },
+        {
+          "accesses": 3112960,
+          "allocation_elements": 184320,
+          "coverage_sha256": "2d8080bcc8be481f40bfd6ea5db92081d2b9d8dd2255313e76f10d510cebf483",
+          "kind": "load",
+          "max_element": 184319,
+          "min_element": 0,
+          "name": "q4",
+          "slot": 1,
+          "unique_coverage_sha256": "9823bd1f814dae3ec997673cf6cc1c748632fa2024bf260bc6f7eb0d781525fd",
+          "unique_elements": 184320
+        },
+        {
+          "accesses": 5242880,
+          "allocation_elements": 131072,
+          "coverage_sha256": "aae8b7801786fd1aa64f2961003c738a72aeb7ec1c1bb0dae3691e6d060afd64",
+          "kind": "load",
+          "max_element": 131071,
+          "min_element": 0,
+          "name": "q8_values",
+          "slot": 2,
+          "unique_coverage_sha256": "8b15ec4d1c744f059587915b65dab5c3e191542930ef652f55cf46ffe8aadde0",
+          "unique_elements": 131072
+        },
+        {
+          "accesses": 163840,
+          "allocation_elements": 4096,
+          "coverage_sha256": "7f4414947296cde3bc40f9fcf2cb2c225d496edd9dec6a760d5e6dfa92877bc6",
+          "kind": "load",
+          "max_element": 4095,
+          "min_element": 0,
+          "name": "q8_scales",
+          "slot": 3,
+          "unique_coverage_sha256": "d486b21b5512eca2dc813ada714f3267ea834dbaf37a53c5e12626193dbaca24",
+          "unique_elements": 4096
+        },
+        {
+          "accesses": 163840,
+          "allocation_elements": 4096,
+          "coverage_sha256": "7f4414947296cde3bc40f9fcf2cb2c225d496edd9dec6a760d5e6dfa92877bc6",
+          "kind": "load",
+          "max_element": 4095,
+          "min_element": 0,
+          "name": "q8_original_sums",
+          "slot": 4,
+          "unique_coverage_sha256": "d486b21b5512eca2dc813ada714f3267ea834dbaf37a53c5e12626193dbaca24",
+          "unique_elements": 4096
+        },
+        {
+          "accesses": 2621440,
+          "allocation_elements": 2621440,
+          "coverage_sha256": "2bf9bdd28f63a9f86ee6665ba9d10319452ed351c24e5013800c8b8024985fdf",
+          "kind": "store",
+          "max_element": 2621439,
+          "min_element": 0,
+          "name": "output",
+          "slot": 0,
+          "unique_coverage_sha256": "2bf9bdd28f63a9f86ee6665ba9d10319452ed351c24e5013800c8b8024985fdf",
+          "unique_elements": 2621440
+        }
+      ],
+      "sink_key": "bd77ed89317319ced878964575afdbc59487f23d50240ad7d397d5bd2f9cbe44"
+    },
+    "state": "PASS"
+  },
+  "c3b": {
+    "abi": {
+      "all_allocation_extents_fit_uint32_without_overflow": true,
+      "effects": {
+        "ins": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ],
+        "outs": [
+          0
+        ]
+      },
+      "exact_five_kernarg_slots_dtypes_extents_and_effects": true,
+      "globals": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "kernarg_bytes": 40,
+      "slots": [
+        {
+          "direction": "inout",
+          "dtype": "dtypes.float.ptr(2621440)",
+          "elements": 2621440,
+          "name": "output",
+          "nbytes": 10485760,
+          "slot": 0
+        },
+        {
+          "direction": "in",
+          "dtype": "dtypes.uint.ptr(184320)",
+          "elements": 184320,
+          "name": "q4",
+          "nbytes": 737280,
+          "slot": 1
+        },
+        {
+          "direction": "in",
+          "dtype": "dtypes.char.ptr(131072)",
+          "elements": 131072,
+          "name": "q8_values",
+          "nbytes": 131072,
+          "slot": 2
+        },
+        {
+          "direction": "in",
+          "dtype": "dtypes.float.ptr(4096)",
+          "elements": 4096,
+          "name": "q8_scales",
+          "nbytes": 16384,
+          "slot": 3
+        },
+        {
+          "direction": "in",
+          "dtype": "dtypes.float.ptr(4096)",
+          "elements": 4096,
+          "name": "q8_original_sums",
+          "nbytes": 16384,
+          "slot": 4
+        }
+      ]
+    },
+    "certificate_sha256": "64d469b5f3efea313aac84ddaa9737e62c525ffa99e3eafbb6fd71efd62e5768",
+    "compact_program": {
+      "binary_sha256": "dfb213624287a8dec10f8646d8c16e49651efee8e0ca27c67ff982b0d6b050bf",
+      "dispatch_count": 20,
+      "grid": [
+        40,
+        4,
+        1
+      ],
+      "local_size": [
+        256,
+        1,
+        1
+      ],
+      "native_source_and_binary_match_frozen_program": true,
+      "program_count": 1,
+      "program_key": "3f478e6d89a2de467f6b7d1ca18418cdfd0cdb19de05db1d66608e65a5e6475f",
+      "serialized_program_sha256": "5852ae4e929644982036f56059490898a51760eda9fd9dab7bcd59c2b5589596",
+      "shape": [
+        512,
+        5120,
+        256
+      ],
+      "source_sha256": "c8b75dd0cf9905d02d74ca5923154669692b2c1df4dd627980c769c82cc021ef",
+      "workgroups": 160,
+      "workitems_exhaustively_evaluated": 40960
+    },
+    "cpu_only": true,
+    "family_identity": "sha256:2cfc30075f8024cee8a927c2c3de2e87eef3db6d83882da69faa0fe0a3cc1e4f",
+    "final_native": {
+      "all_native_effective_addresses_within_declared_allocations": true,
+      "all_native_global_bases_resolve_to_five_buffer_kernarg_slots": true,
+      "authority": "retained_final_selected_native_uop_graph",
+      "epoch": 0,
+      "exhaustive_launch_coordinate_count": 40960,
+      "full_grid": [
+        40,
+        4,
+        1
+      ],
+      "global_memory_instruction_lanes": 312,
+      "local_size": [
+        256,
+        1,
+        1
+      ],
+      "native_address_arithmetic": {
+        "all_intermediates_within_uint32_without_overflow_or_wrap": true,
+        "all_leaves_passthroughs_operands_and_results_range_checked_before_memoization": true,
+        "count_semantics": "binary operations and projected address coordinates evaluated in this variant; memoized_node_reuses counts only within one projected expression evaluation",
+        "evaluated_binary_operations": 77566976,
+        "maximum_binary_result": 10485756,
+        "memoized_node_reuses": 11059200,
+        "minimum_binary_result": 0,
+        "projected_address_evaluations": 5873664,
+        "projected_address_evaluations_reused_from_family_cache": 0,
+        "uint32_maximum": 4294967295,
+        "uint32_minimum": 0
+      },
+      "output_read_modify_write_complete_once": true,
+      "program_key": "3f478e6d89a2de467f6b7d1ca18418cdfd0cdb19de05db1d66608e65a5e6475f",
+      "rows": [
+        {
+          "accesses": 2621440,
+          "allocation_elements": 2621440,
+          "coverage_sha256": "2bf9bdd28f63a9f86ee6665ba9d10319452ed351c24e5013800c8b8024985fdf",
+          "kind": "load",
+          "max_element": 2621439,
+          "min_element": 0,
+          "name": "output",
+          "selected_instruction_lanes": 64,
+          "slot": 0,
+          "unique_coverage_sha256": "2bf9bdd28f63a9f86ee6665ba9d10319452ed351c24e5013800c8b8024985fdf",
+          "unique_elements": 2621440
+        },
+        {
+          "accesses": 1966080,
+          "allocation_elements": 184320,
+          "coverage_sha256": "3883db747c0f1f06222e6b429053f18f067a9caff83240da5e032324845b552d",
+          "kind": "load",
+          "max_element": 184319,
+          "min_element": 0,
+          "name": "q4",
+          "selected_instruction_lanes": 48,
+          "slot": 1,
+          "unique_coverage_sha256": "9823bd1f814dae3ec997673cf6cc1c748632fa2024bf260bc6f7eb0d781525fd",
+          "unique_elements": 184320
+        },
+        {
+          "accesses": 5242880,
+          "allocation_elements": 131072,
+          "coverage_sha256": "aae8b7801786fd1aa64f2961003c738a72aeb7ec1c1bb0dae3691e6d060afd64",
+          "kind": "load",
+          "max_element": 131071,
+          "min_element": 0,
+          "name": "q8_values",
+          "selected_instruction_lanes": 128,
+          "slot": 2,
+          "unique_coverage_sha256": "8b15ec4d1c744f059587915b65dab5c3e191542930ef652f55cf46ffe8aadde0",
+          "unique_elements": 131072
+        },
+        {
+          "accesses": 163840,
+          "allocation_elements": 4096,
+          "coverage_sha256": "7f4414947296cde3bc40f9fcf2cb2c225d496edd9dec6a760d5e6dfa92877bc6",
+          "kind": "load",
+          "max_element": 4095,
+          "min_element": 0,
+          "name": "q8_scales",
+          "selected_instruction_lanes": 4,
+          "slot": 3,
+          "unique_coverage_sha256": "d486b21b5512eca2dc813ada714f3267ea834dbaf37a53c5e12626193dbaca24",
+          "unique_elements": 4096
+        },
+        {
+          "accesses": 163840,
+          "allocation_elements": 4096,
+          "coverage_sha256": "7f4414947296cde3bc40f9fcf2cb2c225d496edd9dec6a760d5e6dfa92877bc6",
+          "kind": "load",
+          "max_element": 4095,
+          "min_element": 0,
+          "name": "q8_original_sums",
+          "selected_instruction_lanes": 4,
+          "slot": 4,
+          "unique_coverage_sha256": "d486b21b5512eca2dc813ada714f3267ea834dbaf37a53c5e12626193dbaca24",
+          "unique_elements": 4096
+        },
+        {
+          "accesses": 2621440,
+          "allocation_elements": 2621440,
+          "coverage_sha256": "2bf9bdd28f63a9f86ee6665ba9d10319452ed351c24e5013800c8b8024985fdf",
+          "kind": "store",
+          "max_element": 2621439,
+          "min_element": 0,
+          "name": "output",
+          "selected_instruction_lanes": 64,
+          "slot": 0,
+          "unique_coverage_sha256": "2bf9bdd28f63a9f86ee6665ba9d10319452ed351c24e5013800c8b8024985fdf",
+          "unique_elements": 2621440
+        }
+      ]
+    },
+    "gate": "C3b_final_native",
+    "pre_lowering_source_sink_scope": {
+      "artifact_schema": "tinygrad.mmq_q4k_q8_1.frozen_target_artifact.v2",
+      "c3a_claimed": false,
+      "evaluated_by_this_c3b_certificate": false,
+      "identity_bound": true,
+      "retained": true,
+      "retention": "RETAINED_AND_IDENTITY_BOUND",
+      "serialized_sink_sha256": "a9fdd8c70de148a0c669d4ea361132766357816ef28e48f5ef3f6d80eb330683",
+      "sink_key": "bd77ed89317319ced878964575afdbc59487f23d50240ad7d397d5bd2f9cbe44"
+    },
+    "proofs": {
+      "all_input_load_and_output_rmw_addresses_in_bounds": true,
+      "all_native_address_arithmetic_without_overflow_or_wrap": true,
+      "complete_declared_grid_exhaustively_evaluated": true,
+      "frozen_family_and_program_payload_identity_bound": true
+    },
+    "role": {
+      "candidate_identity": "771e33f40453c6903ed69ab6b5e8f7b894c5c1d40d3405db8742b546a67b4e58",
+      "epochs": 20,
+      "name": "attn_qo",
+      "shape": [
+        512,
+        5120,
+        5120
+      ]
+    },
+    "schema": "tinygrad.mmq_q4k_q8_1.frozen_staged_memory_certificate.v1",
+    "state": "PASS"
+  },
+  "certificate_sha256": "2a538a52186919b000cf70981d601f69349cd00faf1ca9536e26422fae4f7ec2",
+  "cpu_only": true,
+  "family_identity": "sha256:2cfc30075f8024cee8a927c2c3de2e87eef3db6d83882da69faa0fe0a3cc1e4f",
+  "gate": "C3_full",
+  "gates": {
+    "C3": "PASS",
+    "C3a": "PASS",
+    "C3b": "PASS"
+  },
+  "identity_binding": {
+    "binary_sha256": "dfb213624287a8dec10f8646d8c16e49651efee8e0ca27c67ff982b0d6b050bf",
+    "program_key": "3f478e6d89a2de467f6b7d1ca18418cdfd0cdb19de05db1d66608e65a5e6475f",
+    "serialized_program_sha256": "5852ae4e929644982036f56059490898a51760eda9fd9dab7bcd59c2b5589596",
+    "serialized_sink_sha256": "a9fdd8c70de148a0c669d4ea361132766357816ef28e48f5ef3f6d80eb330683",
+    "sink_key": "bd77ed89317319ced878964575afdbc59487f23d50240ad7d397d5bd2f9cbe44",
+    "source_sha256": "c8b75dd0cf9905d02d74ca5923154669692b2c1df4dd627980c769c82cc021ef"
+  },
+  "schema": "tinygrad.mmq_q4k_q8_1.frozen_staged_full_memory_certificate.v1",
+  "state": "PASS"
+}
