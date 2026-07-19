@@ -1,4 +1,5 @@
 import hashlib
+import inspect
 import json
 import numpy as np
 import pytest
@@ -7,6 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from tinygrad import Tensor, dtypes
+from tinygrad.engine.realize import get_call_arg_uops
 from tinygrad.runtime.process_isolated import IsolatedResult
 from tinygrad.uop.ops import (CallInfo, DIAGNOSTIC_LAUNCH_AUTHORITY, DiagnosticCallInfo, Ops, ProgramInfo, UOp,
                               bind_memory_semantic_owner)
@@ -20,6 +22,8 @@ from extra.qk.mmq_llama_five_buffer_gpu_harness import (FrozenRuntimePreconstruc
   _aql_packet_census_from_exception,
   _pm4_dispatch_census_from_exception,
   _aql_target_program_identity, _audit_target_aql_kernargs,
+  _apply_attn_qo_single_tile_pointer_bias_to_target_call,
+  _attest_attn_qo_single_tile_pointer_views,
   _apply_diagnostic_global_grid_to_target_calls,
   _bind_sink, _dispatch_with_runtime_evidence, _exact_zero_comparison,
   _numeric_comparison, _pack_q4_epochs_contiguous,
@@ -39,11 +43,13 @@ from extra.qk.mmq_llama_five_buffer_gpu_harness import (FrozenRuntimePreconstruc
   _validate_v2_fixed_base_ordinal, _validate_v2_fixed_base_ordinal_sequence,
   _validate_v2_fixed_base_prefix_epochs,
   _validate_attn_qo_diagnostic_global_grid,
+  _validate_attn_qo_single_tile_pointer_bias,
   _validate_frozen_execution_fixture, _validate_frozen_fixture, _validated_child_env_overrides,
   _zero_persistent_target_output,
   main, run_amd_validation, run_frozen_scheduler_prefix_two_probe_isolated,
   run_frozen_epoch_program_set_ordinal_probe_isolated,
   run_frozen_epoch_program_set_ordinal_sequence_probe_isolated,
+  run_frozen_epoch_program_set_prefix_probe,
   run_frozen_epoch_program_set_prefix_probe_isolated,
   run_frozen_scheduler_producer_prefix_probe_isolated,
   run_full_grid_target_role_probe, run_full_grid_target_role_probe_isolated)
@@ -393,6 +399,7 @@ def test_pm4_dispatch_census_retains_accepted_submit_and_kernargs_when_doorbell_
       Output(), target_program_identities=(identity,),
       target_program_keys=(program_key,),
       target_launch_dims=(((8, 4, 1), (256, 1, 1)),),
+      expected_vas=[argument_vas],
       require_all_five_vas_fixed=True, require_all_five_vas_distinct=True)
   census = _pm4_dispatch_census_from_exception(raised.value)
   assert census is not None and census["status"] == "REALIZATION_ERROR"
@@ -406,6 +413,8 @@ def test_pm4_dispatch_census_retains_accepted_submit_and_kernargs_when_doorbell_
   assert census["synchronize"] == {"began": False, "returned": False, "failure": None}
   assert call["program_identity"] == call["expected_program_identity"] == identity
   assert call["kernarg_qwords"] == argument_vas
+  assert call["expected_vas"] == argument_vas
+  assert call["checks"]["five_qwords_match_expected_vas"] is True
   assert call["global_size"] == call["expected_global_size"] == [8, 4, 1]
   assert call["local_size"] == call["expected_local_size"] == [256, 1, 1]
   assert call["pm4_dword_count"] == 5 and len(call["pm4_sha256"]) == 64
@@ -1199,6 +1208,110 @@ def test_bounded_grid_rewrites_only_call_and_preserves_frozen_program_identity()
   assert evidence["promotion_eligible"] is evidence["c1_certification_eligible"] is False
 
 
+def test_attn_qo_single_tile_pointer_bias_admission_is_explicit_and_fail_closed():
+  qo, kv = exact_role_spec("attn_qo"), exact_role_spec("attn_kv")
+  assert tuple(_validate_attn_qo_single_tile_pointer_bias(qo, tile)
+               for tile in range(9, 16)) == tuple(range(9, 16))
+  assert _validate_attn_qo_single_tile_pointer_bias(qo, None) is None
+  with pytest.raises(ValueError, match="allowlisted only"):
+    _validate_attn_qo_single_tile_pointer_bias(kv, 11)
+  for invalid in (8, 16, True, 11.0, "11"):
+    with pytest.raises(ValueError):
+      _validate_attn_qo_single_tile_pointer_bias(qo, invalid)
+
+
+@pytest.mark.parametrize("tile, crosses, above", ((9, False, False), (11, True, False), (12, False, True), (15, False, True)))
+def test_attn_qo_single_tile_pointer_bias_rewrites_only_output_and_q4_views(
+    tile, crosses, above):
+  program = _bounded_grid_test_program()
+  tensors = [
+    Tensor.empty(512 * 5120, dtype=dtypes.float32, device="AMD"),
+    Tensor.empty(5120 * 20 * 36, dtype=dtypes.uint32, device="AMD"),
+    Tensor.empty(1, dtype=dtypes.int8, device="AMD"),
+    Tensor.empty(1, dtype=dtypes.float32, device="AMD"),
+    Tensor.empty(1, dtype=dtypes.float32, device="AMD"),
+  ]
+  output = tensors[0].custom_kernel(*tensors[1:], fxn=lambda *_: program)[0]
+  original_call = next(node for node in output.uop.toposort()
+                       if node.op is Ops.CALL and node.src[0] is program)
+  original_arguments = get_call_arg_uops(original_call)
+  biased, evidence = _apply_attn_qo_single_tile_pointer_bias_to_target_call(
+    output, (program,), tile)
+  call = next(node for node in biased.uop.toposort()
+              if node.op is Ops.CALL and node.src[0] is program)
+  arguments = get_call_arg_uops(call)
+  assert arguments[0].op is arguments[1].op is Ops.BUFFER
+  assert arguments[0] is not original_arguments[0] and arguments[1] is not original_arguments[1]
+  assert arguments[0].buffer.base is original_arguments[0].buffer.base
+  assert arguments[1].buffer.base is original_arguments[1].buffer.base
+  assert arguments[0].buffer.offset == tile * 128 * 4
+  assert arguments[1].buffer.offset == tile * 128 * 20 * 144
+  assert all(arguments[slot] is original_arguments[slot] for slot in range(2, 5))
+  assert program.arg.global_size == (40, 4, 1) and program.arg.local_size == (256, 1, 1)
+  assert evidence["q4_tile_window"]["crosses_four_mib"] is crosses
+  assert evidence["q4_tile_window"]["starts_at_or_above_four_mib"] is above
+  assert evidence["promotion_eligible"] is evidence["c1_certification_eligible"] is False
+  assert evidence["program_key_preserved"] is evidence["binary_identity_preserved"] is True
+  scheduled = create_schedule(get_kernel_graph(UOp.sink(biased.uop))).src
+  scheduled_call = next(node for node in scheduled
+                        if node.op is Ops.CALL and node.src[0] is program)
+  scheduled_arguments = get_call_arg_uops(scheduled_call)
+  assert scheduled_arguments[0].buffer.offset == tile * 128 * 4
+  assert scheduled_arguments[1].buffer.offset == tile * 128 * 20 * 144
+  assert scheduled_arguments[0].buffer.base is original_arguments[0].buffer.base
+  assert scheduled_arguments[1].buffer.base is original_arguments[1].buffer.base
+
+
+def test_attn_qo_single_tile_pointer_bias_requires_epoch_zero_exact_qo_program():
+  program = _bounded_grid_test_program()
+  tensors = [Tensor.empty(2_000_000, device="AMD") for _ in range(5)]
+  output = tensors[0].custom_kernel(*tensors[1:], fxn=lambda *_: program)[0]
+  with pytest.raises(ValueError, match="exactly epoch zero"):
+    _apply_attn_qo_single_tile_pointer_bias_to_target_call(output, (program, program), 11)
+  with pytest.raises(ValueError, match="outside"):
+    _apply_attn_qo_single_tile_pointer_bias_to_target_call(output, (program,), 8)
+
+
+def test_attn_qo_single_tile_pointer_view_attestation_accepts_only_exact_parent_views():
+  class Handle:
+    def __init__(self, va, size): self.va_addr, self.size = va, size
+  class FakeBuffer:
+    def __init__(self, va, nbytes, *, base=None, offset=0):
+      self.nbytes, self.offset = nbytes, offset
+      self.base = self if base is None else base
+      self._handle = Handle(va, nbytes)
+    def get_buf(self, device):
+      assert device == "AMD"
+      return self._handle
+
+  tile = 11
+  parent_nbytes = [512*5120*4, 5120*20*144, 8192, 4096, 4096]
+  parent_vas = [0x10000000 + slot*0x2000000 for slot in range(5)]
+  parents, arguments, allocations = [], [], []
+  offsets = [tile*128*4, tile*128*20*144, 0, 0, 0]
+  names = ("output", "q4", "q8_values", "q8_scales", "q8_original_sums")
+  for slot, (name, va, nbytes, offset) in enumerate(zip(names, parent_vas, parent_nbytes, offsets)):
+    parent_buffer = FakeBuffer(va, nbytes)
+    parent = SimpleNamespace(op=Ops.BUFFER, buffer=parent_buffer)
+    parents.append(parent)
+    if offset:
+      view = FakeBuffer(va+offset, nbytes-offset, base=parent_buffer, offset=offset)
+      arguments.append(SimpleNamespace(op=Ops.BUFFER, buffer=view))
+    else:
+      arguments.append(parent)
+    allocations.append({"slot": slot, "name": name, "va": va, "nbytes": nbytes})
+
+  evidence = _attest_attn_qo_single_tile_pointer_views(arguments, parents, allocations, tile)
+  assert evidence["all_checks_pass"] is True
+  assert evidence["checks"]["five_view_vas_distinct"] is True
+  assert evidence["expected_kernarg_vas"] == [
+    parent_vas[slot] + offsets[slot] for slot in range(5)]
+
+  arguments[1].buffer._handle.va_addr += 4
+  with pytest.raises(RuntimeError, match="attestation failed"):
+    _attest_attn_qo_single_tile_pointer_views(arguments, parents, allocations, tile)
+
+
 def test_call_launch_override_is_authorized_bounded_and_ordinary_callinfo_is_unchanged():
   from tinygrad.engine.realize import _kernel_launch_dims
   program = _bounded_grid_test_program()
@@ -1367,6 +1480,62 @@ def test_attn_qo_bounded_grid_isolated_forwards_grid_and_rejects_other_role_befo
   assert missing_preconstruction["status"] == "BLOCKED"
   assert "requires exact runtime preconstruction" in missing_preconstruction["exact_blocker"]
   health.assert_not_called()
+
+
+def test_attn_qo_single_tile_isolated_forces_one_by_four_and_forwards_tile(tmp_path):
+  child = {"schema": "tinygrad.mmq_frozen_epoch_program_set_prefix_probe.v2", "status": "PASS"}
+  with patch("tinygrad.runtime.process_isolated.run_isolated",
+             return_value=IsolatedResult("passed", result=child)) as run, \
+       patch("extra.qk.mmq_target_epoch_orchestrator.collect_kernel_fault_evidence",
+             return_value=([], {})), \
+       patch("extra.qk.mmq_target_epoch_orchestrator.spawned_tiny_health_probe",
+             return_value=True):
+    result = run_frozen_epoch_program_set_prefix_probe_isolated(
+      role_spec=exact_role_spec("attn_qo"), frozen_bundle=tmp_path / "frozen-v3",
+      prefix_epochs=1, preconstruct_runtimes=True,
+      diagnostic_single_tile=11, timeout_seconds=1)
+  assert result["status"] == "PASS"
+  assert run.call_args.kwargs["args"][5] == (1, 4, 1)
+  assert run.call_args.kwargs["args"][6] == 11
+
+  with patch("extra.qk.mmq_target_epoch_orchestrator.spawned_tiny_health_probe") as health:
+    rejected = run_frozen_epoch_program_set_prefix_probe_isolated(
+      role_spec=exact_role_spec("attn_qo"), frozen_bundle=tmp_path / "frozen-v3",
+      prefix_epochs=2, preconstruct_runtimes=True,
+      diagnostic_single_tile=11, timeout_seconds=1)
+  assert rejected["status"] == "BLOCKED" and "exactly prefix epoch one" in rejected["exact_blocker"]
+  health.assert_not_called()
+
+
+def test_single_tile_crosscheck_retains_ordinary_prefix_compatibility_fields():
+  source = inspect.getsource(run_frozen_epoch_program_set_prefix_probe)
+  assert '"expected_vas": prepared_vas' in source
+  assert '"observed_calls_match_prepared_allocations":' in source
+  assert '"expected_kernarg_vas": expected_dispatch_vas' in source
+  assert '"observed_calls_match_expected_kernargs":' in source
+
+
+def test_attn_qo_single_tile_cli_forwards_research_only_request(monkeypatch, capsys, tmp_path):
+  bundle = tmp_path / "frozen-v3"
+  monkeypatch.setattr("sys.argv", [
+    "mmq_llama_five_buffer_gpu_harness",
+    "--scheduler-v2-fixed-base-prefix-epochs", "1",
+    "--scheduler-v2-fixed-base-preconstruct-runtimes",
+    "--scheduler-v2-fixed-base-diagnostic-single-tile", "12",
+    "--target-role-name", "attn_qo",
+    "--target-role-frozen-bundle", str(bundle),
+    "--target-role-amd-aql", "0",
+  ])
+  with patch(
+      "extra.qk.mmq_llama_five_buffer_gpu_harness.run_frozen_epoch_program_set_prefix_probe_isolated",
+      return_value={"status": "PASS", "research_only": True,
+                    "single_tile_pointer_bias_diagnostic": {"promotion_eligible": False}}) as probe:
+    assert main() == 0
+  assert probe.call_args.kwargs["diagnostic_single_tile"] == 12
+  assert probe.call_args.kwargs["diagnostic_global_grid"] is None
+  assert probe.call_args.kwargs["preconstruct_runtimes"] is True
+  assert probe.call_args.kwargs["child_env_overrides"] == {"AMD_AQL": "0"}
+  assert json.loads(capsys.readouterr().out)["single_tile_pointer_bias_diagnostic"]["promotion_eligible"] is False
 
 
 def test_v2_fixed_base_ordinal_cli_dispatches_research_only_probe(monkeypatch, capsys, tmp_path):

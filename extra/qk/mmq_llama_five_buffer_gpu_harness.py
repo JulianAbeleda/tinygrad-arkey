@@ -40,6 +40,9 @@ _TARGET_BUFFER_NAMES = ("output", "q4", "q8_values", "q8_scales", "q8_original_s
 ATTN_QO_DIAGNOSTIC_GLOBAL_GRIDS = (
   (1, 4, 1), (8, 4, 1), (9, 4, 1), (16, 4, 1), (32, 4, 1), (40, 4, 1),
 )
+ATTN_QO_SINGLE_TILE_POINTER_BIAS_TILES = tuple(range(9, 16))
+ATTN_QO_Q4_TILE_NBYTES = 128 * 20 * 144
+ATTN_QO_OUTPUT_TILE_ROW_NBYTES = 128 * 4
 
 
 def _blocked(reason: str, **evidence: Any) -> dict[str, Any]:
@@ -62,6 +65,180 @@ def _validate_attn_qo_diagnostic_global_grid(
     raise ValueError(
       f"bounded attn_qo diagnostic global grid must be one of {ATTN_QO_DIAGNOSTIC_GLOBAL_GRIDS}")
   return grid
+
+
+def _validate_attn_qo_single_tile_pointer_bias(
+    role_spec: ExactRoleSpec, requested: int | None) -> int | None:
+  """Admit only the later Qo tiles needed by the single-workgroup diagnostic."""
+  if requested is None: return None
+  if role_spec.role != "attn_qo":
+    raise ValueError("single-tile pointer-bias diagnostic is allowlisted only for role 'attn_qo'")
+  if not isinstance(requested, int) or isinstance(requested, bool) or \
+     requested not in ATTN_QO_SINGLE_TILE_POINTER_BIAS_TILES:
+    raise ValueError(
+      "attn_qo single-tile pointer bias must be one of "
+      f"{ATTN_QO_SINGLE_TILE_POINTER_BIAS_TILES}")
+  return requested
+
+
+def _apply_attn_qo_single_tile_pointer_bias_to_target_call(
+    output: Any, selected_programs: tuple[Any, ...] | list[Any], tile: int,
+    ) -> tuple[Any, dict[str, Any]]:
+  """Bias only Qo Q4/output CALL pointers while retaining the exact PROGRAM."""
+  from tinygrad import Tensor, dtypes
+  from tinygrad.engine.realize import get_call_arg_uops
+  from tinygrad.helpers import prod
+  from tinygrad.uop.ops import Ops, UOp
+
+  if tile not in ATTN_QO_SINGLE_TILE_POINTER_BIAS_TILES:
+    raise ValueError("single-tile pointer-bias tile is outside the diagnostic allowlist")
+  selected_programs = tuple(selected_programs)
+  if len(selected_programs) != 1:
+    raise ValueError("single-tile pointer-bias diagnostic requires exactly epoch zero")
+  program = selected_programs[0]
+  if tuple(program.arg.global_size) != (40, 4, 1) or \
+     tuple(program.arg.local_size or ()) != (256, 1, 1):
+    raise ValueError("single-tile pointer-bias diagnostic requires exact Qo PROGRAM launch dimensions")
+  calls = [node for node in output.uop.toposort()
+           if node.op is Ops.CALL and node.src[0] is program]
+  if len(calls) != 1:
+    raise RuntimeError("single-tile pointer-bias diagnostic did not find exactly one target CALL")
+  call = calls[0]
+  arguments = get_call_arg_uops(call)
+  if len(arguments) != 5 or any(argument.op is not Ops.BUFFER for argument in arguments):
+    raise RuntimeError("single-tile pointer-bias diagnostic requires five realized direct BUFFER arguments")
+  if (arguments[0].dtype, arguments[1].dtype) != (dtypes.float32, dtypes.uint32):
+    raise RuntimeError("single-tile pointer-bias diagnostic found an unexpected output/Q4 dtype")
+
+  byte_offsets = (
+    tile * ATTN_QO_OUTPUT_TILE_ROW_NBYTES,
+    tile * ATTN_QO_Q4_TILE_NBYTES,
+    0, 0, 0,
+  )
+  biased_arguments = list(arguments)
+  for slot in (0, 1):
+    argument, byte_offset = arguments[slot], byte_offsets[slot]
+    if byte_offset % argument.dtype.itemsize:
+      raise RuntimeError("single-tile pointer bias is not aligned to its argument dtype")
+    element_offset, elements = byte_offset // argument.dtype.itemsize, prod(argument.shape)
+    if not 0 < element_offset < elements:
+      raise RuntimeError("single-tile pointer bias escapes its parent argument")
+    parent_buffer = argument.buffer
+    biased_arguments[slot] = UOp.from_buffer(
+      parent_buffer.view(elements-element_offset, argument.dtype, byte_offset))
+  replacement = call.replace(src=(program, *biased_arguments))
+  biased_output = Tensor(output.uop.substitute({call: replacement}, walk=True))
+  biased_calls = [node for node in biased_output.uop.toposort()
+                  if node.op is Ops.CALL and node.src[0] is program]
+  if len(biased_calls) != 1:
+    raise RuntimeError("single-tile pointer-bias rewrite changed the target CALL count")
+  attached = get_call_arg_uops(biased_calls[0])
+  if attached[0] is not biased_arguments[0] or attached[1] is not biased_arguments[1] or \
+     any(attached[slot] is not arguments[slot] for slot in range(2, 5)):
+    raise RuntimeError("single-tile pointer-bias rewrite changed an unauthorized ABI slot")
+
+  q4_start = byte_offsets[1]
+  q4_end = q4_start + ATTN_QO_Q4_TILE_NBYTES
+  four_mib = 4 * 1024 * 1024
+  return biased_output, {
+    "schema": "tinygrad.mmq_attn_qo_single_tile_pointer_bias.v1",
+    "enabled": True, "research_only": True, "diagnostic_only": True,
+    "production_promotion": False, "promotion_eligible": False,
+    "c1_certification_claimed": False, "c1_certification_eligible": False,
+    "reason": "pointer-biased one-tile fault localization is not full-grid correctness or provenance evidence",
+    "role_allowlist": ["attn_qo"],
+    "allowed_tiles": list(ATTN_QO_SINGLE_TILE_POINTER_BIAS_TILES),
+    "simulated_gidx0_tile": tile,
+    "required_effective_global_grid": [1, 4, 1],
+    "frozen_program_global_grid": [40, 4, 1],
+    "frozen_local_size": [256, 1, 1],
+    "byte_offsets_by_slot": {
+      "output": byte_offsets[0], "q4": byte_offsets[1],
+      "q8_values": 0, "q8_scales": 0, "q8_original_sums": 0,
+    },
+    "q4_tile_window": {
+      "start_byte": q4_start, "end_byte_exclusive": q4_end,
+      "nbytes": ATTN_QO_Q4_TILE_NBYTES,
+      "four_mib_byte": four_mib,
+      "crosses_four_mib": q4_start < four_mib < q4_end,
+      "starts_at_or_above_four_mib": q4_start >= four_mib,
+      "tile_11_crosses_four_mib": tile == 11 and q4_start < four_mib < q4_end,
+      "tile_12_starts_above_four_mib": tile == 12 and q4_start >= four_mib,
+    },
+    "program_object_preserved": biased_calls[0].src[0] is program,
+    "program_key_preserved": biased_calls[0].src[0].key == program.key,
+    "binary_identity_preserved": True,
+    "runtime_identity_preserved": True,
+    "local_size_preserved": True,
+    "five_pointer_abi_preserved": len(attached) == 5,
+    "biased_slots": [0, 1], "unchanged_slots": [2, 3, 4],
+  }
+
+
+def _attest_attn_qo_single_tile_pointer_views(
+    arguments: tuple[Any, ...] | list[Any], parent_arguments: tuple[Any, ...] | list[Any],
+    preparation_allocations: list[Mapping[str, Any]], tile: int,
+    ) -> dict[str, Any]:
+  """Prove that the five diagnostic pointers are exact in-parent allocation views."""
+  from tinygrad.uop.ops import Ops
+  arguments, parent_arguments = tuple(arguments), tuple(parent_arguments)
+  if len(arguments) != 5 or len(parent_arguments) != 5 or len(preparation_allocations) != 5 or \
+     any(not isinstance(row, Mapping) for row in preparation_allocations):
+    raise ValueError("single-tile pointer attestation requires five arguments, parents, and allocations")
+  expected_offsets = (
+    tile * ATTN_QO_OUTPUT_TILE_ROW_NBYTES,
+    tile * ATTN_QO_Q4_TILE_NBYTES,
+    0, 0, 0,
+  )
+  rows = []
+  for slot, (name, argument, parent_argument, parent, expected_offset) in enumerate(zip(
+      _TARGET_BUFFER_NAMES, arguments, parent_arguments, preparation_allocations, expected_offsets)):
+    if parent.get("slot") != slot or parent.get("name") != name:
+      raise ValueError("single-tile pointer attestation parent allocation order changed")
+    parent_buffer = parent_argument.buffer
+    view_buffer = argument.buffer
+    parent_handle, view_handle = parent_buffer.get_buf("AMD"), view_buffer.get_buf("AMD")
+    parent_va, parent_nbytes = int(parent["va"]), int(parent["nbytes"])
+    view_va, view_nbytes = int(view_handle.va_addr), int(view_buffer.nbytes)
+    checks = {
+      "argument_form_exact":
+        argument.op is Ops.BUFFER and (
+          argument is not parent_argument if expected_offset else argument is parent_argument),
+      "parent_argument_direct_buffer": parent_argument.op is Ops.BUFFER,
+      "view_shares_parent_allocation": view_buffer.base is parent_buffer.base,
+      "parent_va_matches_preparation": int(parent_handle.va_addr) == parent_va,
+      "parent_extent_matches_preparation": int(parent_buffer.nbytes) == parent_nbytes,
+      "view_offset_exact": int(view_buffer.offset) == expected_offset,
+      "view_extent_exact": view_nbytes == parent_nbytes-expected_offset,
+      "view_va_exact": view_va == parent_va+expected_offset,
+      "view_starts_within_parent": parent_va <= view_va < parent_va+parent_nbytes,
+      "view_ends_at_parent_end": view_va+view_nbytes == parent_va+parent_nbytes,
+    }
+    rows.append({
+      "slot": slot, "name": name,
+      "parent_va": parent_va, "parent_nbytes": parent_nbytes,
+      "expected_offset_bytes": expected_offset,
+      "view_va": view_va, "view_nbytes": view_nbytes,
+      "view_end_va": view_va+view_nbytes,
+      "checks": checks, "all_checks_pass": all(checks.values()),
+    })
+  aggregate_checks = {
+    "exact_five_rows": len(rows) == 5,
+    "only_output_and_q4_biased":
+      [row["expected_offset_bytes"] > 0 for row in rows] == [True, True, False, False, False],
+    "all_views_in_parent": all(row["all_checks_pass"] for row in rows),
+    "five_view_vas_nonzero": all(row["view_va"] > 0 for row in rows),
+    "five_view_vas_distinct": len({row["view_va"] for row in rows}) == 5,
+  }
+  evidence = {
+    "schema": "tinygrad.mmq_attn_qo_single_tile_pointer_view_attestation.v1",
+    "simulated_gidx0_tile": tile, "rows": rows,
+    "expected_kernarg_vas": [row["view_va"] for row in rows],
+    "checks": aggregate_checks, "all_checks_pass": all(aggregate_checks.values()),
+  }
+  if not evidence["all_checks_pass"]:
+    raise RuntimeError("single-tile pointer view attestation failed")
+  return evidence
 
 
 def _apply_diagnostic_global_grid_to_target_calls(
@@ -1728,6 +1905,7 @@ def _realize_with_pm4_dispatch_census(
     output: Any, *, target_program_identities: tuple[Mapping[str, Any], ...],
     target_program_keys: tuple[str, ...],
     target_launch_dims: tuple[tuple[tuple[int, ...], tuple[int, ...]], ...],
+    expected_vas: list[list[int]] | None = None,
     require_all_five_vas_fixed: bool = False,
     require_all_five_vas_distinct: bool = False,
     retained_outputs: tuple[Any, ...] = ()) -> dict[str, Any]:
@@ -1754,6 +1932,12 @@ def _realize_with_pm4_dispatch_census(
   if len(target_program_keys) != count or any(
       not isinstance(key, str) or len(key) != 64 for key in target_program_keys):
     raise ValueError("PM4 dispatch census PROGRAM keys differ from the target sequence")
+  if expected_vas is not None and (
+      len(expected_vas) != count or any(
+        len(row) != 5 or any(not isinstance(value, int) or isinstance(value, bool) or value <= 0
+                             for value in row)
+        for row in expected_vas)):
+    raise ValueError("PM4 dispatch census expected VA rows differ from the target sequence")
   if len(target_launch_dims) != count or any(
       len(row) != 2 or len(row[0]) != 3 or len(row[1]) != 3 or
       any(not isinstance(value, int) or isinstance(value, bool) or value <= 0
@@ -1790,6 +1974,7 @@ def _realize_with_pm4_dispatch_census(
       "queue_contract": "HCQProgram_wait_memory_barrier_exec_signal_submit",
       "target_program_identities": [dict(identity) for identity in identities],
       "target_program_keys": list(target_program_keys),
+      "target_expected_vas": None if expected_vas is None else [list(row) for row in expected_vas],
       "target_call_count": len(copied_calls),
       "accepted_target_call_count": sum(row["accepted_before_doorbell"] for row in copied_calls),
       "non_target_exec_count": non_target_exec_count,
@@ -1847,6 +2032,7 @@ def _realize_with_pm4_dispatch_census(
     expected_identity = identities[call_index]
     expected_program_key = target_program_keys[call_index]
     expected_global, expected_local = target_launch_dims[call_index]
+    expected_row = None if expected_vas is None else expected_vas[call_index]
     args_state, lifecycle = built["args_state"], built["runtime_lifecycle"]
     kernarg_qwords = [
       int(value) for value in args_state.buf.cpu_view().view(size=40, fmt='Q')[:5]]
@@ -1889,7 +2075,7 @@ def _realize_with_pm4_dispatch_census(
       "pm4_command_stream_nonempty": bool(command_bytes),
       **_audit_target_aql_kernargs(
         kernarg_qwords, [row["kernarg_qwords"] for row in calls],
-        expected_vas=None, require_fixed_scale_va=False,
+        expected_vas=expected_row, require_fixed_scale_va=False,
         require_all_five_vas_fixed=require_all_five_vas_fixed,
         require_all_five_vas_distinct=require_all_five_vas_distinct),
     }
@@ -1899,6 +2085,7 @@ def _realize_with_pm4_dispatch_census(
       "expected_program_identity": expected_identity,
       "program_key": expected_program_key,
       "kernarg_qwords": kernarg_qwords,
+      "expected_vas": expected_row,
       "argument_buffers": built["argument_buffers"],
       "runtime_lifecycle": lifecycle,
       "global_size": built["global_size"], "local_size": built["local_size"],
@@ -1947,6 +2134,7 @@ def _realize_with_amd_dispatch_census(
     output: Any, *, target_program_identities: tuple[Mapping[str, Any], ...],
     target_program_keys: tuple[str, ...],
     target_launch_dims: tuple[tuple[tuple[int, ...], tuple[int, ...]], ...],
+    expected_vas: list[list[int]] | None = None,
     require_all_five_vas_fixed: bool = False,
     require_all_five_vas_distinct: bool = False,
     retained_outputs: tuple[Any, ...] = ()) -> dict[str, Any]:
@@ -1954,7 +2142,7 @@ def _realize_with_amd_dispatch_census(
   from tinygrad.device import Device
   if bool(getattr(Device["AMD"], "is_aql", False)):
     return _realize_with_aql_packet_census(
-      output, target_program_identities=target_program_identities,
+      output, expected_vas=expected_vas, target_program_identities=target_program_identities,
       target_program_keys=target_program_keys, target_launch_dims=target_launch_dims,
       require_runtime_lifecycle=True,
       require_all_five_vas_fixed=require_all_five_vas_fixed,
@@ -1963,6 +2151,7 @@ def _realize_with_amd_dispatch_census(
   return _realize_with_pm4_dispatch_census(
     output, target_program_identities=target_program_identities,
     target_program_keys=target_program_keys, target_launch_dims=target_launch_dims,
+    expected_vas=expected_vas,
     require_all_five_vas_fixed=require_all_five_vas_fixed,
     require_all_five_vas_distinct=require_all_five_vas_distinct,
     retained_outputs=retained_outputs)
@@ -3049,7 +3238,8 @@ def run_frozen_epoch_program_set_ordinal_sequence_probe(
 def run_frozen_epoch_program_set_prefix_probe(
     *, role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC, frozen_bundle: str | Path,
     prefix_epochs: int, preconstruct_runtimes: bool = False,
-    diagnostic_global_grid: tuple[int, int, int] | list[int] | None = None) -> dict[str, Any]:
+    diagnostic_global_grid: tuple[int, int, int] | list[int] | None = None,
+    diagnostic_single_tile: int | None = None) -> dict[str, Any]:
   """Run a frozen v2 fixed-base scheduler prefix with one full-role producer."""
   schema = "tinygrad.mmq_frozen_epoch_program_set_prefix_probe.v2"
   if not isinstance(preconstruct_runtimes, bool):
@@ -3058,6 +3248,15 @@ def run_frozen_epoch_program_set_prefix_probe(
   prefix_epochs = _validate_v2_fixed_base_prefix_epochs(role_spec, prefix_epochs)
   diagnostic_global_grid = _validate_attn_qo_diagnostic_global_grid(
     role_spec, diagnostic_global_grid)
+  diagnostic_single_tile = _validate_attn_qo_single_tile_pointer_bias(
+    role_spec, diagnostic_single_tile)
+  if diagnostic_single_tile is not None:
+    if prefix_epochs != 1:
+      raise ValueError("single-tile pointer-bias diagnostic requires exactly prefix epoch one")
+    if diagnostic_global_grid is None:
+      diagnostic_global_grid = (1, 4, 1)
+    elif diagnostic_global_grid != (1, 4, 1):
+      raise ValueError("single-tile pointer-bias diagnostic requires exact bounded grid (1,4,1)")
   if diagnostic_global_grid is not None and not preconstruct_runtimes:
     raise ValueError("bounded diagnostic global grid requires exact runtime preconstruction")
   diagnostic_request = None if diagnostic_global_grid is None else {
@@ -3068,6 +3267,15 @@ def run_frozen_epoch_program_set_prefix_probe(
     "requested_global_grid": list(diagnostic_global_grid),
     "allowed_global_grid_ladder": [
       list(grid) for grid in ATTN_QO_DIAGNOSTIC_GLOBAL_GRIDS],
+    "phase": "requested_before_runtime_preconstruction_or_gpu_dispatch",
+  }
+  single_tile_request = None if diagnostic_single_tile is None else {
+    "schema": "tinygrad.mmq_attn_qo_single_tile_pointer_bias.v1",
+    "enabled": True, "research_only": True, "diagnostic_only": True,
+    "production_promotion": False, "promotion_eligible": False,
+    "c1_certification_claimed": False, "c1_certification_eligible": False,
+    "simulated_gidx0_tile": diagnostic_single_tile,
+    "required_effective_global_grid": [1, 4, 1],
     "phase": "requested_before_runtime_preconstruction_or_gpu_dispatch",
   }
 
@@ -3087,7 +3295,9 @@ def run_frozen_epoch_program_set_prefix_probe(
   )
   from extra.qk.q4k_q8_activation_producer import produce_physical_ds4_q8_1_tensor
 
-  binding = load_frozen_epoch_program_set_binding(role_spec, frozen_bundle)
+  binding = load_frozen_epoch_program_set_binding(
+    role_spec, frozen_bundle,
+    **({"require_c1": True} if diagnostic_single_tile is not None else {}))
   target_identities = _frozen_program_set_target_identities(binding, prefix_epochs)
   m, n, k = role_spec.shape
   words_np = _random_q4_words(n, k, 20260721)
@@ -3159,6 +3369,8 @@ def run_frozen_epoch_program_set_prefix_probe(
         },
         **({"bounded_global_grid_diagnostic": diagnostic_request}
            if diagnostic_request is not None else {}),
+        **({"single_tile_pointer_bias_diagnostic": single_tile_request}
+           if single_tile_request is not None else {}),
         "family_identity": binding.family_identity,
         "frozen_bundle": str(Path(frozen_bundle).resolve()),
         "compile_performed": False, "requires_recompile": False,
@@ -3182,6 +3394,8 @@ def run_frozen_epoch_program_set_prefix_probe(
       "preparation_phase": partial,
       **({"bounded_global_grid_diagnostic": diagnostic_request}
          if diagnostic_request is not None else {}),
+      **({"single_tile_pointer_bias_diagnostic": single_tile_request}
+         if single_tile_request is not None else {}),
       "family_identity": binding.family_identity,
       "frozen_bundle": str(Path(frozen_bundle).resolve()),
       "compile_performed": False, "requires_recompile": False,
@@ -3204,6 +3418,8 @@ def run_frozen_epoch_program_set_prefix_probe(
       "preparation_phase": preparation_phase,
       **({"bounded_global_grid_diagnostic": diagnostic_request}
          if diagnostic_request is not None else {}),
+      **({"single_tile_pointer_bias_diagnostic": single_tile_request}
+         if single_tile_request is not None else {}),
       "family_identity": binding.family_identity,
       "frozen_bundle": str(Path(frozen_bundle).resolve()),
       "compile_performed": False, "requires_recompile": False,
@@ -3236,6 +3452,30 @@ def run_frozen_epoch_program_set_prefix_probe(
     "attachment_matches_synchronized_preparation": True,
     "attachment_stage": "attached_after_synchronized_preparation",
   })
+  single_tile_evidence = pointer_view_attestation = None
+  if diagnostic_single_tile is not None:
+    output, single_tile_evidence = _apply_attn_qo_single_tile_pointer_bias_to_target_call(
+      output, selected_programs, diagnostic_single_tile)
+    calls = [node for node in output.uop.toposort()
+             if node.op is Ops.CALL and node.src[0] in selected_programs]
+    biased_arguments = get_call_arg_uops(calls[0])
+    pointer_view_attestation = _attest_attn_qo_single_tile_pointer_views(
+      biased_arguments, arguments[0], preparation_phase["allocations"], diagnostic_single_tile)
+    graph_evidence.update({
+      "single_tile_pointer_bias_diagnostic": True,
+      "simulated_gidx0_tile": diagnostic_single_tile,
+      "pointer_rewrite_after_synchronized_preparation": True,
+      "program_nodes_replaced": False,
+      "program_key_preserved": single_tile_evidence["program_key_preserved"],
+      "binary_identities_preserved": single_tile_evidence["binary_identity_preserved"],
+      "runtime_identity_preserved": single_tile_evidence["runtime_identity_preserved"],
+      "local_sizes_preserved": single_tile_evidence["local_size_preserved"],
+      "five_pointer_abi_preserved": single_tile_evidence["five_pointer_abi_preserved"],
+      "view_attestation_passed": pointer_view_attestation["all_checks_pass"],
+      "full_grid_correctness_claimed": False,
+      "c1_certification_claimed": False,
+      "production_promotion": False,
+    })
   bounded_grid_evidence = None
   if diagnostic_global_grid is not None:
     output, bounded_grid_evidence = _apply_diagnostic_global_grid_to_target_calls(
@@ -3260,23 +3500,33 @@ def run_frozen_epoch_program_set_prefix_probe(
   target_launch_dims = tuple(
     (diagnostic_global_grid or tuple(program.arg.global_size), tuple(program.arg.local_size))
     for program in selected_programs)
+  prepared_vas = [row["va"] for row in preparation_phase["allocations"]]
+  expected_dispatch_vas = (
+    pointer_view_attestation["expected_kernarg_vas"]
+    if pointer_view_attestation is not None else prepared_vas)
   try:
     packet_census = _realize_with_amd_dispatch_census(
       output, target_program_identities=target_identities,
       target_program_keys=tuple(binding.program_keys[:prefix_epochs]),
       target_launch_dims=target_launch_dims,
+      expected_vas=[list(expected_dispatch_vas) for _ in selected_programs],
       require_all_five_vas_fixed=True, require_all_five_vas_distinct=True,
       retained_outputs=())
   except BaseException as exc:
     packet_census, runtime_reuse_crosscheck = \
       _dispatch_error_runtime_reuse_evidence(runtime_preconstruction, exc)
-    prepared_vas = [row["va"] for row in preparation_phase["allocations"]]
     observed_calls = packet_census.get("calls", []) if isinstance(packet_census, Mapping) else []
     preparation_dispatch_crosscheck = {
       "expected_vas": prepared_vas,
-      "observed_call_count": len(observed_calls),
       "observed_calls_match_prepared_allocations":
         all(row.get("kernarg_qwords") == prepared_vas for row in observed_calls),
+      "prepared_parent_vas": prepared_vas,
+      "expected_kernarg_vas": expected_dispatch_vas,
+      "expected_pointer_mode":
+        "attested_parent_allocation_views" if pointer_view_attestation is not None else "prepared_parent_bases",
+      "observed_call_count": len(observed_calls),
+      "observed_calls_match_expected_kernargs":
+        all(row.get("kernarg_qwords") == expected_dispatch_vas for row in observed_calls),
     }
     return {
       "schema": schema, "status": "BLOCKED",
@@ -3292,6 +3542,9 @@ def run_frozen_epoch_program_set_prefix_probe(
       "preparation_dispatch_crosscheck": preparation_dispatch_crosscheck,
       **({"bounded_global_grid_diagnostic": bounded_grid_evidence}
          if bounded_grid_evidence is not None else {}),
+      **({"single_tile_pointer_bias_diagnostic": {
+        **single_tile_evidence, "pointer_view_attestation": pointer_view_attestation,
+      }} if single_tile_evidence is not None else {}),
       **({"dispatch": {dispatch_census_key: packet_census}} if packet_census is not None else {}),
       "family_identity": binding.family_identity,
       "frozen_bundle": str(Path(frozen_bundle).resolve()),
@@ -3301,22 +3554,27 @@ def run_frozen_epoch_program_set_prefix_probe(
 
   runtime_reuse_crosscheck = _crosscheck_preconstructed_dispatch_runtimes(
     runtime_preconstruction, packet_census)
-  prepared_vas = [row["va"] for row in preparation_phase["allocations"]]
   observed_calls = packet_census.get("calls", [])
   preparation_dispatch_crosscheck = {
     "expected_vas": prepared_vas,
-    "observed_call_count": len(observed_calls),
-    "expected_call_count": prefix_epochs,
     "observed_calls_match_prepared_allocations":
       all(row.get("kernarg_qwords") == prepared_vas for row in observed_calls),
+    "prepared_parent_vas": prepared_vas,
+    "expected_kernarg_vas": expected_dispatch_vas,
+    "expected_pointer_mode":
+      "attested_parent_allocation_views" if pointer_view_attestation is not None else "prepared_parent_bases",
+    "observed_call_count": len(observed_calls),
+    "expected_call_count": prefix_epochs,
+    "observed_calls_match_expected_kernargs":
+      all(row.get("kernarg_qwords") == expected_dispatch_vas for row in observed_calls),
   }
   preparation_dispatch_crosscheck["all_checks_pass"] = bool(
     len(observed_calls) == prefix_epochs and
-    preparation_dispatch_crosscheck["observed_calls_match_prepared_allocations"])
+    preparation_dispatch_crosscheck["observed_calls_match_expected_kernargs"])
   if not preparation_dispatch_crosscheck["all_checks_pass"]:
     return {
       "schema": schema, "status": "BLOCKED",
-      "exact_blocker": "target kernargs differ from synchronized five-buffer preparation allocations",
+      "exact_blocker": "target kernargs differ from the exact prepared-base or attested-view expectation",
       "research_only": True, "production_dispatch_changed": False,
       "default_route": "direct_packed", "role": role_spec.role,
       "shape": list(role_spec.shape), "prefix_epochs": prefix_epochs,
@@ -3327,6 +3585,9 @@ def run_frozen_epoch_program_set_prefix_probe(
       "preparation_dispatch_crosscheck": preparation_dispatch_crosscheck,
       **({"bounded_global_grid_diagnostic": bounded_grid_evidence}
          if bounded_grid_evidence is not None else {}),
+      **({"single_tile_pointer_bias_diagnostic": {
+        **single_tile_evidence, "pointer_view_attestation": pointer_view_attestation,
+      }} if single_tile_evidence is not None else {}),
       "dispatch": {dispatch_census_key: packet_census},
       "family_identity": binding.family_identity,
       "frozen_bundle": str(Path(frozen_bundle).resolve()),
@@ -3347,6 +3608,9 @@ def run_frozen_epoch_program_set_prefix_probe(
       "preparation_dispatch_crosscheck": preparation_dispatch_crosscheck,
       **({"bounded_global_grid_diagnostic": bounded_grid_evidence}
          if bounded_grid_evidence is not None else {}),
+      **({"single_tile_pointer_bias_diagnostic": {
+        **single_tile_evidence, "pointer_view_attestation": pointer_view_attestation,
+      }} if single_tile_evidence is not None else {}),
       "dispatch": {dispatch_census_key: packet_census},
       "family_identity": binding.family_identity,
       "frozen_bundle": str(Path(frozen_bundle).resolve()),
@@ -3369,7 +3633,13 @@ def run_frozen_epoch_program_set_prefix_probe(
     Q81MMQDS4ActivationSpec(m=m, k=prefix_epochs*256, m_tile=m))
   consumer_reference = q4k_q8_1_mmq_ds4_tile_reference(q4_prefix, actual_ds4, ref_spec)
   got_output = output.numpy().reshape(m, n)
-  if diagnostic_global_grid is None:
+  if diagnostic_single_tile is not None:
+    target_start, target_end = diagnostic_single_tile * 128, (diagnostic_single_tile+1) * 128
+    consumer_comparison = _numeric_comparison(
+      got_output[:, target_start:target_end], consumer_reference[:, target_start:target_end])
+    untouched_comparison = _exact_zero_comparison(np.concatenate(
+      (got_output[:, :target_start], got_output[:, target_end:]), axis=1))
+  elif diagnostic_global_grid is None:
     consumer_comparison = _numeric_comparison(got_output, consumer_reference)
     untouched_comparison = None
   else:
@@ -3402,6 +3672,14 @@ def run_frozen_epoch_program_set_prefix_probe(
       "full_grid_correctness_claimed": False,
       "preconstructed_runtime_reuse_attested": runtime_reuse_crosscheck["all_checks_pass"],
     }} if bounded_grid_evidence is not None else {}),
+    **({"single_tile_pointer_bias_diagnostic": {
+      **single_tile_evidence,
+      "phase": "audited_target_dispatch_completed",
+      "pointer_view_attestation": pointer_view_attestation,
+      "effective_target_launch_dims": [
+        [list(global_size), list(local_size)] for global_size, local_size in target_launch_dims],
+      "preconstructed_runtime_reuse_attested": runtime_reuse_crosscheck["all_checks_pass"],
+    }} if single_tile_evidence is not None else {}),
     "runtime_reuse_crosscheck": runtime_reuse_crosscheck,
     "preparation_phase": preparation_phase,
     "preparation_dispatch_crosscheck": preparation_dispatch_crosscheck,
@@ -3415,6 +3693,12 @@ def run_frozen_epoch_program_set_prefix_probe(
       "status": "PASS" if passed else "CONSUMER_MISMATCH",
       "comparison": consumer_comparison,
       **({"untouched_output_comparison": untouched_comparison,
+          "simulated_gidx0_tile": diagnostic_single_tile,
+          "target_columns": [diagnostic_single_tile * 128, (diagnostic_single_tile+1) * 128],
+          "full_grid_correctness_claimed": False,
+          "authority": "diagnostic_pointer_biased_single_tile_and_exact_zero_all_other_columns"}
+         if diagnostic_single_tile is not None else
+         {"untouched_output_comparison": untouched_comparison,
           "bounded_columns": diagnostic_global_grid[0] * 128,
           "full_grid_correctness_claimed": False,
           "authority": "diagnostic_launched_column_prefix_and_zero_untouched_suffix_only"}
@@ -3581,20 +3865,23 @@ def run_frozen_scheduler_producer_prefix_probe_isolated(
 def _run_frozen_epoch_program_set_prefix_probe_worker(
     role_spec: ExactRoleSpec, frozen_bundle: str, prefix_epochs: int,
     preconstruct_runtimes: bool, child_env_overrides: Mapping[str, str],
-    diagnostic_global_grid: tuple[int, int, int] | None = None) -> dict[str, Any]:
+    diagnostic_global_grid: tuple[int, int, int] | None = None,
+    diagnostic_single_tile: int | None = None) -> dict[str, Any]:
   """Spawn-safe worker; apply the narrow queue env before device creation."""
   os.environ.update(dict(child_env_overrides))
   os.environ["DEV"] = "AMD"
   return run_frozen_epoch_program_set_prefix_probe(
     role_spec=role_spec, frozen_bundle=frozen_bundle, prefix_epochs=prefix_epochs,
     preconstruct_runtimes=preconstruct_runtimes,
-    diagnostic_global_grid=diagnostic_global_grid)
+    diagnostic_global_grid=diagnostic_global_grid,
+    diagnostic_single_tile=diagnostic_single_tile)
 
 
 def run_frozen_epoch_program_set_prefix_probe_isolated(
     *, role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC, frozen_bundle: str | Path,
     prefix_epochs: int, preconstruct_runtimes: bool = False,
     diagnostic_global_grid: tuple[int, int, int] | list[int] | None = None,
+    diagnostic_single_tile: int | None = None,
     timeout_seconds: float = 180.0,
     child_env_overrides: Mapping[str, str] | None = None) -> dict[str, Any]:
   """Run the v2 fixed-base prefix in the existing health-guarded child flow."""
@@ -3606,6 +3893,15 @@ def run_frozen_epoch_program_set_prefix_probe_isolated(
     prefix_epochs = _validate_v2_fixed_base_prefix_epochs(role_spec, prefix_epochs)
     diagnostic_global_grid = _validate_attn_qo_diagnostic_global_grid(
       role_spec, diagnostic_global_grid)
+    diagnostic_single_tile = _validate_attn_qo_single_tile_pointer_bias(
+      role_spec, diagnostic_single_tile)
+    if diagnostic_single_tile is not None:
+      if prefix_epochs != 1:
+        raise ValueError("single-tile pointer-bias diagnostic requires exactly prefix epoch one")
+      if diagnostic_global_grid is None:
+        diagnostic_global_grid = (1, 4, 1)
+      elif diagnostic_global_grid != (1, 4, 1):
+        raise ValueError("single-tile pointer-bias diagnostic requires exact bounded grid (1,4,1)")
     if diagnostic_global_grid is not None and not preconstruct_runtimes:
       raise ValueError("bounded diagnostic global grid requires exact runtime preconstruction")
     env_overrides = _validated_child_env_overrides(child_env_overrides)
@@ -3628,7 +3924,8 @@ def run_frozen_epoch_program_set_prefix_probe_isolated(
   isolated = run_isolated(
     _run_frozen_epoch_program_set_prefix_probe_worker,
     args=(role_spec, str(Path(frozen_bundle).resolve()), prefix_epochs,
-          preconstruct_runtimes, env_overrides, diagnostic_global_grid),
+          preconstruct_runtimes, env_overrides, diagnostic_global_grid,
+          diagnostic_single_tile),
     timeout_seconds=timeout_seconds, start_method="spawn")
   kernel_faults, kernel_fault_evidence = collect_kernel_fault_evidence(started)
   try: health_after = bool(spawned_tiny_health_probe(env_overrides))
@@ -4106,6 +4403,9 @@ def main() -> int:
   parser.add_argument("--scheduler-v2-fixed-base-diagnostic-global-grid", type=int, nargs=3,
                       metavar=("X", "Y", "Z"),
                       help="research-only attn_qo CALL launch grid; never C1/promotion evidence")
+  parser.add_argument("--scheduler-v2-fixed-base-diagnostic-single-tile", type=int,
+                      choices=ATTN_QO_SINGLE_TILE_POINTER_BIAS_TILES,
+                      help="research-only attn_qo 1x4 launch with Q4/output views biased to gidx0 tile 9..15")
   parser.add_argument("--scheduler-v2-fixed-base-ordinal", type=int,
                       help="run one research-only frozen v2 static-offset ordinal")
   parser.add_argument("--scheduler-v2-fixed-base-ordinal-sequence", type=int, nargs=2,
@@ -4124,6 +4424,20 @@ def main() -> int:
      not args.scheduler_v2_fixed_base_preconstruct_runtimes:
     parser.error("--scheduler-v2-fixed-base-diagnostic-global-grid requires "
                  "--scheduler-v2-fixed-base-preconstruct-runtimes")
+  if args.scheduler_v2_fixed_base_diagnostic_single_tile is not None and \
+     args.scheduler_v2_fixed_base_prefix_epochs is None:
+    parser.error("--scheduler-v2-fixed-base-diagnostic-single-tile requires "
+                 "--scheduler-v2-fixed-base-prefix-epochs")
+  if args.scheduler_v2_fixed_base_diagnostic_single_tile is not None and \
+     not args.scheduler_v2_fixed_base_preconstruct_runtimes:
+    parser.error("--scheduler-v2-fixed-base-diagnostic-single-tile requires "
+                 "--scheduler-v2-fixed-base-preconstruct-runtimes")
+  if args.scheduler_v2_fixed_base_diagnostic_single_tile is not None and \
+     args.scheduler_v2_fixed_base_prefix_epochs != 1:
+    parser.error("--scheduler-v2-fixed-base-diagnostic-single-tile requires prefix epoch 1")
+  if args.scheduler_v2_fixed_base_diagnostic_single_tile is not None and \
+     args.scheduler_v2_fixed_base_diagnostic_global_grid not in (None, [1, 4, 1]):
+    parser.error("--scheduler-v2-fixed-base-diagnostic-single-tile requires grid 1 4 1")
   if args.scheduler_v2_fixed_base_ordinal_sequence is not None:
     if args.target_role_frozen_bundle is None:
       parser.error("--scheduler-v2-fixed-base-ordinal-sequence requires --target-role-frozen-bundle")
@@ -4165,6 +4479,7 @@ def main() -> int:
       prefix_epochs=args.scheduler_v2_fixed_base_prefix_epochs,
       preconstruct_runtimes=args.scheduler_v2_fixed_base_preconstruct_runtimes,
       diagnostic_global_grid=args.scheduler_v2_fixed_base_diagnostic_global_grid,
+      diagnostic_single_tile=args.scheduler_v2_fixed_base_diagnostic_single_tile,
       timeout_seconds=args.target_role_timeout,
       child_env_overrides={"AMD_AQL": args.target_role_amd_aql}
         if args.target_role_amd_aql is not None else None)
