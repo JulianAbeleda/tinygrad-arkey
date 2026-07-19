@@ -539,6 +539,33 @@ def test_five_buffer_preparation_preserves_synchronize_failure(monkeypatch):
   assert "producer phase MMU fault" in phase["synchronize"]["failure"]
 
 
+def test_five_buffer_preparation_classifies_pointer_audit_failure_after_synchronize(monkeypatch):
+  from tinygrad.device import Device
+
+  class Buffer:
+    nbytes = 64
+    def get_buf(self, device):
+      assert device == "AMD"
+      raise RuntimeError("pointer audit failed")
+  class FakeOutput:
+    uop = SimpleNamespace(buffer=Buffer())
+    def realize(self, *companions): pass
+  class FakeInput:
+    uop = SimpleNamespace(buffer=Buffer())
+  class FakeDevice:
+    def synchronize(self): pass
+
+  monkeypatch.setattr(type(Device), "__getitem__", lambda self, key: FakeDevice())
+  with pytest.raises(RuntimeError, match="pointer audit failed") as raised:
+    _realize_and_synchronize_five_buffer_preparation(
+      (FakeOutput(), FakeInput(), FakeInput(), FakeInput(), FakeInput()))
+  phase = _preparation_phase_from_exception(raised.value)
+  assert phase is not None and phase["status"] == "ALLOCATION_AUDIT_ERROR"
+  assert phase["target_dispatch_allowed"] is False
+  assert phase["realize"] == {"began": True, "returned": True}
+  assert phase["synchronize"] == {"began": True, "returned": True, "failure": None}
+
+
 def test_companion_realize_keeps_intermediate_allocations_live_for_post_readback():
   source = Tensor(list(range(8)), device="CPU")
   first = (source + 1).contiguous()
@@ -938,6 +965,29 @@ def test_v2_fixed_base_isolated_preserves_typed_census_from_child_failure(tmp_pa
   assert result["status"] == "BLOCKED"
   assert result["dispatch"]["pm4_dispatch_census"] == census
   assert result["isolated_failure_evidence"] == {"pm4_dispatch_census": census}
+
+
+def test_v2_fixed_base_isolated_blocks_abnormal_exit_and_retains_published_result(tmp_path):
+  child = {
+    "schema": "tinygrad.mmq_frozen_epoch_program_set_prefix_probe.v2",
+    "status": "PASS",
+    "preparation_phase": {"status": "PASS"},
+    "dispatch": {"pm4_dispatch_census": {"accepted_target_call_count": 1}},
+  }
+  with patch("tinygrad.runtime.process_isolated.run_isolated",
+             return_value=IsolatedResult(
+               "failed", result=child,
+               error="isolated callback exited abnormally with code -9")), \
+       patch("extra.qk.mmq_target_epoch_orchestrator.read_kernel_log_since", return_value=""), \
+       patch("extra.qk.mmq_target_epoch_orchestrator.spawned_tiny_health_probe", return_value=True):
+    result = run_frozen_epoch_program_set_prefix_probe_isolated(
+      frozen_bundle=tmp_path / "frozen-v2", prefix_epochs=1,
+      child_env_overrides={"AMD_AQL": "0"}, timeout_seconds=1)
+  assert result["status"] == "BLOCKED"
+  assert result["exact_blocker"] == "isolated callback exited abnormally with code -9"
+  assert result["preparation_phase"] == {"status": "PASS"}
+  assert result["dispatch"] == {
+    "pm4_dispatch_census": {"accepted_target_call_count": 1}}
 
 
 @pytest.mark.parametrize(("role", "epoch"), [("attn_kv", 2), ("ffn_down", 67)])

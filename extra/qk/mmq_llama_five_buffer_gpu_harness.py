@@ -1335,8 +1335,10 @@ def _realize_and_synchronize_five_buffer_preparation(
     if phase["synchronize"]["began"] and not phase["synchronize"]["returned"]:
       phase["synchronize"]["failure"] = f"{type(exc).__name__}: {exc}"
     if phase["status"] == "PENDING":
-      phase["status"] = "SYNCHRONIZATION_ERROR" if phase["synchronize"]["began"] \
-        else "REALIZATION_ERROR"
+      phase["status"] = (
+        "REALIZATION_ERROR" if not phase["realize"]["returned"] else
+        "SYNCHRONIZATION_ERROR" if not phase["synchronize"]["returned"] else
+        "ALLOCATION_AUDIT_ERROR")
     try: setattr(exc, "preparation_phase", phase)
     except (AttributeError, TypeError):
       raise FiveBufferPreparationError(str(exc), phase) from exc
@@ -3388,23 +3390,32 @@ def run_frozen_epoch_program_set_prefix_probe_isolated(
   try: health_after = bool(spawned_tiny_health_probe(env_overrides))
   except BaseException: health_after = False
   if isolated.timed_out:
-    return {
+    result = dict(isolated.result) if isinstance(isolated.result, dict) else {
       "schema": schema, "status": "BLOCKED",
+    }
+    result.update({
+      "status": "BLOCKED",
       "exact_blocker": "frozen v2 fixed-base prefix child timed out",
       "timeout": True, "timeout_seconds": timeout_seconds,
       "health_before": health_before, "health_after": health_after,
       "kernel_faults": kernel_faults, "child_env_overrides": env_overrides,
-    }
+    })
+    if isinstance(isolated.evidence, dict):
+      result["isolated_failure_evidence"] = dict(isolated.evidence)
+    return result
   if isolated.status == "passed" and isinstance(isolated.result, dict):
     result = dict(isolated.result)
   else:
-    result = {
+    result = dict(isolated.result) if isinstance(isolated.result, dict) else {
       "schema": schema, "status": "BLOCKED",
+    }
+    result.update({
+      "status": "BLOCKED",
       "exact_blocker": isolated.error or
         "frozen v2 fixed-base prefix child returned no structured result",
       "child_status": isolated.status,
       "stdout_tail": isolated.stdout[-2000:], "stderr_tail": isolated.stderr[-2000:],
-    }
+    })
     if isinstance(isolated.evidence, dict):
       result["isolated_failure_evidence"] = dict(isolated.evidence)
       if "preparation_phase" in isolated.evidence:

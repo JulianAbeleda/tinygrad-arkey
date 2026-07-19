@@ -6,7 +6,7 @@ dispatch anything itself.
 """
 from __future__ import annotations
 
-import contextlib, io, multiprocessing, os, signal, time
+import contextlib, io, multiprocessing, os, queue as queue_module, signal, time
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -92,14 +92,43 @@ def run_isolated(callback: Callable[..., Any], *, args: tuple[Any, ...] = (), kw
   ctx = multiprocessing.get_context(start_method or ("fork" if os.name == "posix" else "spawn"))
   queue = ctx.Queue(maxsize=1)
   proc = ctx.Process(target=_child, args=(queue, callback, tuple(args), kwargs, output_limit), daemon=True)
-  started = time.monotonic(); proc.start(); proc.join(float(timeout_seconds))
+  started = time.monotonic()
+  deadline = started + float(timeout_seconds)
+  proc.start()
+  row = None
+  # Drain the queue while the child is alive. Joining first deadlocks once the
+  # feeder pipe fills because process shutdown waits for that feeder to flush.
+  while row is None and (remaining := deadline - time.monotonic()) > 0:
+    try: row = queue.get(timeout=min(remaining, 0.05))
+    except queue_module.Empty:
+      if not proc.is_alive(): break
+  if row is not None:
+    proc.join(max(0.0, deadline - time.monotonic()))
   elapsed = time.monotonic() - started
   if proc.is_alive():
     _stop_group(proc, terminate_grace_seconds)
-    return IsolatedResult("timed_out", error="isolated callback exceeded hard timeout", elapsed_seconds=elapsed, timed_out=True)
-  try: row = queue.get_nowait()
-  except Exception:
+    return IsolatedResult(
+      "timed_out", result=row.get("result") if isinstance(row, dict) else None,
+      error="isolated callback exceeded hard timeout",
+      stdout=row.get("stdout", "") if isinstance(row, dict) else "",
+      stderr=row.get("stderr", "") if isinstance(row, dict) else "",
+      elapsed_seconds=elapsed, timed_out=True,
+      evidence=row.get("evidence") if isinstance(row, dict) else None)
+  if row is None:
+    # A feeder can finish just after the process exits. Give it the remaining
+    # deadline, if any, without turning a clean short child into a false miss.
+    try: row = queue.get(timeout=max(0.0, deadline - time.monotonic()))
+    except queue_module.Empty:
+      row = None
+  if not isinstance(row, dict):
     return IsolatedResult("failed", error="isolated callback exited without a result", elapsed_seconds=elapsed)
+  if proc.exitcode != 0:
+    return IsolatedResult(
+      "failed", result=row.get("result"),
+      error=f"isolated callback exited abnormally with code {proc.exitcode}",
+      stdout=row.get("stdout", ""), stderr=row.get("stderr", ""),
+      elapsed_seconds=row.get("elapsed_seconds", elapsed),
+      evidence=row.get("evidence"))
   return IsolatedResult(row.get("status", "failed"), row.get("result"), row.get("error"),
                         row.get("stdout", ""), row.get("stderr", ""), row.get("elapsed_seconds", elapsed),
                         evidence=row.get("evidence"))
