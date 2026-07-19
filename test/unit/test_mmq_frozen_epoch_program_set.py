@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 from tinygrad import dtypes
+from tinygrad.helpers import ContextVar
 from tinygrad.uop.ops import Ops, ProgramInfo, UOp
 
 from extra.qk import mmq_frozen_epoch_program_set as frozen_v2
@@ -20,6 +21,30 @@ from extra.qk.mmq_llama_five_buffer_full_kernel import (
 )
 from extra.qk.mmq_llama_five_buffer_graph import five_buffer_parameters
 from extra.qk.mmq_llama_runtime_contract import LLAMA_SOURCE_COMMIT
+
+
+def _generation_provenance() -> dict:
+  toolchain = frozen_v2._toolchain_inputs()
+  return {
+    "schema": frozen_v2.PROVENANCE_SCHEMA,
+    "source_revision": {"vcs": "git", "commit": "a" * 40, "tree": "b" * 40, "clean": True},
+    "toolchain": {
+      "inputs": toolchain,
+      "fingerprint": "sha256:" + frozen_v2._sha256(frozen_v2._json_bytes(toolchain)),
+    },
+    "codegen": {
+      "context": {key: ContextVar._cache[key].value for key in frozen_v2.CODEGEN_CONTEXT},
+      "environment": {
+        key: {"present": False, "value": None}
+        for key in frozen_v2.CODEGEN_ENV
+      },
+    },
+  }
+
+
+def _freeze(*args, **kwargs):
+  kwargs.setdefault("generation_provenance", _generation_provenance())
+  return frozen_v2.produce_frozen_epoch_program_set(*args, **kwargs)
 
 
 def _sink(role_spec: ExactRoleSpec, encoded_epoch: int, *, compact_strides: bool = False) -> UOp:
@@ -113,7 +138,7 @@ def _produce(tmp_path: Path, *, archive: bool = False):
   role_spec = exact_role_spec("ffn_gate_up")
   output = tmp_path / "v2-bundle"
   archive_path = tmp_path / "v2-bundle.tar" if archive else None
-  manifest = frozen_v2.produce_frozen_epoch_program_set(
+  manifest = _freeze(
     output, role_spec=role_spec, build_once=lambda: _family(role_spec), archive=archive_path)
   return role_spec, output, archive_path, manifest
 
@@ -122,6 +147,7 @@ def test_v2_program_set_roundtrips_all_epochs_without_compile_or_runtime(tmp_pat
   role_spec, output, archive, manifest = _produce(tmp_path, archive=True)
   assert archive is not None
   assert manifest["schema"] == frozen_v2.SCHEMA
+  assert manifest["schema"].endswith(".v3")
   assert manifest["family_builder_calls"] == 1 and manifest["variant_count"] == role_spec.epochs == 20
   assert manifest["compile_only_cpu"] is True
   assert manifest["gpu_runtime_initialized"] is manifest["gpu_dispatch_performed"] is False
@@ -141,10 +167,19 @@ def test_v2_program_set_roundtrips_all_epochs_without_compile_or_runtime(tmp_pat
     parameter.size for parameter in five_buffer_parameters(*role_spec.shape)]
   assert manifest["shared_program"]["physical_layout"]["q4"]["row_stride_words"] == 20*36
   assert manifest["shared_program"]["physical_layout"]["q8_values"]["record_stride_elements"] == role_spec.m*128
+  assert manifest["generation_provenance"] == _generation_provenance()
+  assert manifest["role_contract"]["shape"] == {"M": role_spec.m, "N": role_spec.n, "K": role_spec.k}
+  assert manifest["role_contract"]["quantization"] == {
+    "weights": "Q4_K", "activations": "Q8_1", "accumulation": frozen_v2.ACCUMULATION}
+  assert [row["program_key"] for row in manifest["ordered_identities"]] == [
+    row["program_key"] for row in manifest["variants"]]
+  assert manifest["content_address"] == "sha256:" + manifest["family_identity"]
 
   directory = frozen_v2.load_frozen_epoch_program_set(output)
   archived = frozen_v2.load_frozen_epoch_program_set(archive)
+  strict = frozen_v2.load_frozen_epoch_program_set(output, require_c1=True)
   assert len(directory.sinks) == len(archived.sinks) == 20
+  assert strict.manifest["c1_certification"]["certified"] is True
   assert len(directory.programs) == len(archived.programs) == 20
   assert tuple(sink.key for sink in directory.sinks) == tuple(sink.key for sink in archived.sinks)
   assert tuple(program.key for program in directory.programs) == tuple(program.key for program in archived.programs)
@@ -153,6 +188,9 @@ def test_v2_program_set_roundtrips_all_epochs_without_compile_or_runtime(tmp_pat
   assert binding.schema == frozen_v2.BINDING_SCHEMA
   assert binding.family_identity == manifest["family_identity"]
   assert binding.program_keys == tuple(row["program_key"] for row in manifest["variants"])
+  custom = frozen_v2.load_frozen_epoch_program_set_binding(
+    role_spec, output, artifact_loader=lambda _bundle, *, inventory: directory)
+  assert custom.family_identity == binding.family_identity
 
 
 def test_v2_producer_owns_exactly_one_family_builder_call(tmp_path: Path):
@@ -160,15 +198,48 @@ def test_v2_producer_owns_exactly_one_family_builder_call(tmp_path: Path):
   def build_once():
     calls.append("build")
     return _family(role_spec)
-  manifest = frozen_v2.produce_frozen_epoch_program_set(
+  manifest = _freeze(
     tmp_path / "single-build", role_spec=role_spec, build_once=build_once)
   assert calls == ["build"] and manifest["family_builder_calls"] == 1
+
+
+def test_v3_content_address_is_deterministic_for_identical_provenance_and_family(tmp_path: Path):
+  role_spec = exact_role_spec("ffn_gate_up")
+  first = _freeze(tmp_path / "first", role_spec=role_spec, build_once=lambda: _family(role_spec))
+  second = _freeze(tmp_path / "second", role_spec=role_spec, build_once=lambda: _family(role_spec))
+  assert first == second
+  assert first["family_identity"] == frozen_v2._manifest_content_digest(first)
+  assert first["content_address"] == "sha256:" + frozen_v2._manifest_content_digest(first)
+
+
+def test_v3_producer_rejects_incomplete_or_self_inconsistent_provenance(tmp_path: Path):
+  role_spec = exact_role_spec("ffn_gate_up")
+  missing_environment = _generation_provenance()
+  missing_environment["codegen"]["environment"].pop(frozen_v2.CODEGEN_ENV[0])
+  with pytest.raises(ValueError, match="codegen environment is incomplete"):
+    _freeze(tmp_path / "missing-env", role_spec=role_spec, build_once=lambda: _family(role_spec),
+            generation_provenance=missing_environment)
+
+  bad_fingerprint = _generation_provenance()
+  bad_fingerprint["toolchain"]["fingerprint"] = "sha256:" + "0" * 64
+  with pytest.raises(ValueError, match="toolchain fingerprint differs"):
+    _freeze(tmp_path / "bad-toolchain", role_spec=role_spec, build_once=lambda: _family(role_spec),
+            generation_provenance=bad_fingerprint)
+
+
+def test_v3_default_producer_requires_clean_revision_before_build(tmp_path: Path, monkeypatch):
+  role_spec, calls = exact_role_spec("ffn_gate_up"), []
+  monkeypatch.setattr(frozen_v2, "_git_value", lambda *args: " M tinygrad/codegen/__init__.py")
+  with pytest.raises(ValueError, match="requires a clean source worktree"):
+    frozen_v2.produce_frozen_epoch_program_set(
+      tmp_path / "dirty", role_spec=role_spec, build_once=lambda: calls.append("build"))
+  assert calls == []
 
 
 def test_v2_producer_rejects_sink_whose_structural_offset_differs_from_ordinal(tmp_path: Path):
   role_spec = exact_role_spec("ffn_gate_up")
   with pytest.raises(ValueError, match="sink compile-time offsets differ"):
-    frozen_v2.produce_frozen_epoch_program_set(
+    _freeze(
       tmp_path / "bad-offset", role_spec=role_spec,
       build_once=lambda: _family(role_spec, wrong_program_epoch=(7, 8)))
   assert not (tmp_path / "bad-offset").exists()
@@ -177,7 +248,7 @@ def test_v2_producer_rejects_sink_whose_structural_offset_differs_from_ordinal(t
 def test_v2_producer_rejects_compact_stride_sink_with_correct_epoch_bases(tmp_path: Path):
   role_spec = exact_role_spec("ffn_gate_up")
   with pytest.raises(ValueError, match="Q4 LOAD coverage"):
-    frozen_v2.produce_frozen_epoch_program_set(
+    _freeze(
       tmp_path / "compact-strides", role_spec=role_spec,
       build_once=lambda: _family(role_spec, compact_stride_epoch=7))
   assert not (tmp_path / "compact-strides").exists()
@@ -195,14 +266,14 @@ def test_v2_producer_rejects_uncaptured_input_pointer_chain_and_dropped_load(tmp
   bad_variant = replace(family.variants[0], sink=bad_sink)
   bad_family = replace(family, variants=(bad_variant, *family.variants[1:]))
   with pytest.raises(ValueError, match="unsupported global input LOAD pointer chain"):
-    frozen_v2.produce_frozen_epoch_program_set(
+    _freeze(
       tmp_path / "unsupported-pointer", role_spec=role_spec, build_once=lambda: bad_family)
 
   dropped_sink = sink.replace(src=tuple(node for node in sink.src if node is not q8_load))
   dropped_variant = replace(family.variants[0], sink=dropped_sink)
   dropped_family = replace(family, variants=(dropped_variant, *family.variants[1:]))
   with pytest.raises(ValueError, match="q8_values LOAD coverage"):
-    frozen_v2.produce_frozen_epoch_program_set(
+    _freeze(
       tmp_path / "dropped-load", role_spec=role_spec, build_once=lambda: dropped_family)
 
 
@@ -224,7 +295,7 @@ def test_v2_rejects_variant_grid_and_shared_full_role_abi_drift(tmp_path: Path):
   changed_variant = replace(family.variants[4], program=changed_program)
   changed_family = replace(family, variants=family.variants[:4] + (changed_variant,) + family.variants[5:])
   with pytest.raises(ValueError, match="grid or local size"):
-    frozen_v2.produce_frozen_epoch_program_set(
+    _freeze(
       tmp_path / "bad-grid", role_spec=role_spec, build_once=lambda: changed_family)
 
   _, output, _, _ = _produce(tmp_path / "abi")
@@ -306,7 +377,69 @@ def test_v2_binding_fails_closed_on_forged_candidate_identity_before_loading(tmp
     frozen_v2.load_frozen_epoch_program_set_binding(forged, output)
 
 
-def test_v1_schema_remains_distinct_from_v2():
+def test_v3_loader_rejects_role_contract_ordered_identity_and_provenance_tampering(tmp_path: Path):
+  _, output, _, _ = _produce(tmp_path / "role")
+  manifest_path = output / "manifest.json"
+  manifest = json.loads(manifest_path.read_text())
+  manifest["undeclared"] = True
+  manifest_path.write_text(json.dumps(manifest))
+  with pytest.raises(ValueError, match="fields differ from its versioned schema"):
+    frozen_v2.load_frozen_epoch_program_set(output)
+  manifest.pop("undeclared")
+  manifest["role_contract"]["quantization"]["weights"] = "Q6_K"
+  manifest_path.write_text(json.dumps(manifest))
+  with pytest.raises(ValueError, match="role contract differs"):
+    frozen_v2.load_frozen_epoch_program_set(output)
+
+  _, output2, _, _ = _produce(tmp_path / "ordered")
+  manifest_path = output2 / "manifest.json"
+  manifest = json.loads(manifest_path.read_text())
+  manifest["ordered_identities"][0], manifest["ordered_identities"][1] = \
+    manifest["ordered_identities"][1], manifest["ordered_identities"][0]
+  manifest_path.write_text(json.dumps(manifest))
+  with pytest.raises(ValueError, match="ordered sink/PROGRAM/payload identities changed"):
+    frozen_v2.load_frozen_epoch_program_set(output2)
+
+  _, output3, _, _ = _produce(tmp_path / "provenance")
+  manifest_path = output3 / "manifest.json"
+  manifest = json.loads(manifest_path.read_text())
+  manifest["generation_provenance"]["source_revision"]["commit"] = "c" * 40
+  manifest_path.write_text(json.dumps(manifest))
+  with pytest.raises(ValueError, match="content identity differs"):
+    frozen_v2.load_frozen_epoch_program_set(output3)
+
+
+def _downgrade_manifest_to_legacy_v2(manifest: dict) -> dict:
+  legacy = json.loads(json.dumps(manifest))
+  for key in ("generation_provenance", "c1_certification", "role_contract",
+              "ordered_identities", "content_address", "family_identity"):
+    legacy.pop(key)
+  legacy["schema"] = frozen_v2.LEGACY_SCHEMA
+  legacy["family_identity"] = frozen_v2._sha256(frozen_v2._json_bytes({
+    "role": legacy["role"]["name"], "shape": legacy["role"]["shape"],
+    "candidate_identity": legacy["role"]["candidate_identity"],
+    "physical_layout": legacy["shared_program"]["physical_layout"],
+    "sink_keys": [row["sink_key"] for row in legacy["variants"]],
+    "program_keys": [row["program_key"] for row in legacy["variants"]],
+  }))
+  return legacy
+
+
+def test_legacy_v2_schema_remains_loadable_but_is_explicitly_c1_uncertified(tmp_path: Path):
+  _, output, _, _ = _produce(tmp_path)
+  manifest_path = output / "manifest.json"
+  manifest_path.write_text(json.dumps(_downgrade_manifest_to_legacy_v2(json.loads(manifest_path.read_text()))))
+  loaded = frozen_v2.load_frozen_epoch_program_set(output)
+  assert loaded.manifest["schema"] == frozen_v2.LEGACY_SCHEMA
+  assert loaded.manifest["c1_certification"] == {
+    "gate": "C1", "certified": False, "status": "legacy_v2_missing_generation_provenance",
+    "content_addressed": False,
+  }
+  with pytest.raises(ValueError, match="C1-uncertified"):
+    frozen_v2.load_frozen_epoch_program_set(output, require_c1=True)
+
+
+def test_v1_schema_remains_distinct_from_epoch_program_set_v3():
   from extra.qk.mmq_frozen_target_artifact import SCHEMA as V1_SCHEMA
   assert V1_SCHEMA == "tinygrad.mmq_q4k_q8_1.frozen_target_artifact.v1"
-  assert frozen_v2.SCHEMA.endswith(".v2") and frozen_v2.SCHEMA != V1_SCHEMA
+  assert frozen_v2.SCHEMA.endswith(".v3") and frozen_v2.SCHEMA != V1_SCHEMA

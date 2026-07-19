@@ -1,6 +1,7 @@
-"""Frozen v2 artifact for a full-role family of static-offset K256 PROGRAMs.
+"""Frozen full-role family of static-offset K256 PROGRAMs.
 
-This schema is deliberately separate from the v1 singular K256 artifact.  It
+The provenance-complete v3 schema is deliberately separate from both the v1
+singular K256 artifact and legacy v2 epoch families. It
 retains each variant's pre-lowering sink beside its final PROGRAM/source/binary
 triple. The sink is the structural offset authority; the PROGRAM is the
 executable ABI/payload authority. Their relationship is trusted only because
@@ -13,19 +14,25 @@ from dataclasses import dataclass
 import hashlib
 import json
 import os
+import platform
 from pathlib import Path
 import pickle
+import re
 import shutil
+import subprocess
+import sys
 import tarfile
 import tempfile
 from typing import Any, Callable, Mapping
 
 from tinygrad import dtypes
 from tinygrad.dtype import PtrDType
+from tinygrad.helpers import ContextVar
 from tinygrad.uop.ops import Ops, UOp
 
+from extra.qk.mmq_compile_evidence import COMPILER_ENV
 from extra.qk.mmq_exact_role_spec import (
-  DEFAULT_INVENTORY, ExactRoleSpec, admit_exact_role_spec, exact_role_spec,
+  DEFAULT_INVENTORY, EPOCH_K, ExactRoleSpec, admit_exact_role_spec, exact_role_spec,
 )
 from extra.qk.mmq_frozen_target_artifact import (
   ACCUMULATION, BACKEND_ID, FUNCTION_NAME, PROGRAM_DEVICE,
@@ -34,12 +41,26 @@ from extra.qk.mmq_llama_five_buffer_full_kernel import (
   AMD_ISA_TARGET, LlamaFiveBufferEpochOffsetFamily,
 )
 from extra.qk.mmq_llama_five_buffer_graph import FiveBufferEpochOffsets, five_buffer_parameters
+from extra.qk.mmq_llama_runtime_contract import LLAMA_SOURCE_COMMIT
 
 
-SCHEMA = "tinygrad.mmq_q4k_q8_1.frozen_epoch_program_set.v2"
+SCHEMA = "tinygrad.mmq_q4k_q8_1.frozen_epoch_program_set.v3"
+LEGACY_SCHEMA = "tinygrad.mmq_q4k_q8_1.frozen_epoch_program_set.v2"
 BINDING_SCHEMA = "tinygrad.prefill_frozen_epoch_program_set_binding.v2"
+PROVENANCE_SCHEMA = "tinygrad.mmq_q4k_q8_1.generation_provenance.v1"
+ROLE_CONTRACT_SCHEMA = "tinygrad.mmq_q4k_q8_1.full_role_contract.v1"
 LOCAL_SIZE = (256, 1, 1)
 ABI_NAMES = ("output", "q4", "q8_values", "q8_scales", "q8_original_sums")
+REPO_ROOT = Path(__file__).resolve().parents[2]
+CODEGEN_CONTEXT = (
+  "ALLOW_TF32", "DISABLE_FAST_IDIV", "EMULATED_DTYPES", "IMAGE", "NOLOCALS",
+  "NOOPT", "SPEC", "TC", "TC_OPT", "TC_SELECT", "TUPLE_ORDER",
+)
+CODEGEN_ENV = tuple(sorted(set(COMPILER_ENV) | {
+  "ALLOW_HALF8", "DECODE_FAST_EXP2", "DEVECTORIZE_NO_PTR_GROUP",
+  "REGALLOC_ADDR_REMAT", "REGALLOC_ADDR_REMAT_END_NO_EMIT", "REGALLOC_ADDR_REMAT_NO_END",
+  "SCHED_MODULO", "SCHED_MODULO_PROBE", "UNSAFE_DISABLE_MASK", "V_DOT2_LOWERING",
+}))
 
 
 def _sha256(data: bytes) -> str: return hashlib.sha256(data).hexdigest()
@@ -57,6 +78,102 @@ def _variant_files(epoch: int) -> dict[str, str]:
 
 def _inventory(files: Mapping[str, bytes]) -> dict[str, dict[str, Any]]:
   return {name: {"sha256": _sha256(data), "nbytes": len(data)} for name, data in sorted(files.items())}
+
+
+def _toolchain_inputs() -> dict[str, Any]:
+  from tinygrad.codegen import _lower_cache_table
+  return {
+    "python_implementation": platform.python_implementation(),
+    "python_version": platform.python_version(),
+    "python_cache_tag": sys.implementation.cache_tag,
+    "pickle_protocol": pickle.HIGHEST_PROTOCOL,
+    "compile_target": AMD_ISA_TARGET,
+    "program_device": PROGRAM_DEVICE,
+    "renderer": "tinygrad.renderer.isa.amd.AMDISARenderer",
+    "lowering_table": _lower_cache_table(),
+    "generator_schema": SCHEMA,
+  }
+
+
+def _git_value(*args: str) -> str:
+  try:
+    return subprocess.run(("git", *args), cwd=REPO_ROOT, check=True, text=True,
+                          stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout.strip()
+  except (OSError, subprocess.SubprocessError) as exc:
+    raise ValueError(f"cannot establish frozen-family source revision: {exc}") from exc
+
+
+def collect_generation_provenance() -> dict[str, Any]:
+  """Collect a clean, exact source/toolchain/config declaration before generation.
+
+  A dirty checkout is not a reproducible revision. Tests and offline importers may
+  pass an explicit, schema-valid provenance record to the producer, but the
+  default production path only admits a clean git worktree.
+  """
+  status = _git_value("status", "--porcelain", "--untracked-files=all")
+  if status: raise ValueError("frozen-family generation requires a clean source worktree")
+  commit, tree = _git_value("rev-parse", "HEAD"), _git_value("rev-parse", "HEAD^{tree}")
+  toolchain = _toolchain_inputs()
+  context = {
+    key: ContextVar._cache[key].value
+    for key in CODEGEN_CONTEXT
+    if key in ContextVar._cache
+  }
+  missing = set(CODEGEN_CONTEXT) - set(context)
+  if missing: raise ValueError(f"codegen context declaration is unavailable: {sorted(missing)}")
+  environment = {
+    key: {"present": key in os.environ, "value": os.environ.get(key)}
+    for key in CODEGEN_ENV
+  }
+  return {
+    "schema": PROVENANCE_SCHEMA,
+    "source_revision": {"vcs": "git", "commit": commit, "tree": tree, "clean": True},
+    "toolchain": {
+      "inputs": toolchain,
+      "fingerprint": "sha256:" + _sha256(_json_bytes(toolchain)),
+    },
+    "codegen": {"context": context, "environment": environment},
+  }
+
+
+def _validate_generation_provenance(value: Any) -> dict[str, Any]:
+  if not isinstance(value, Mapping) or set(value) != {"schema", "source_revision", "toolchain", "codegen"} or \
+     value.get("schema") != PROVENANCE_SCHEMA:
+    raise ValueError("generation provenance schema or fields are malformed")
+  revision = value.get("source_revision")
+  if not isinstance(revision, Mapping) or set(revision) != {"vcs", "commit", "tree", "clean"} or \
+     revision.get("vcs") != "git" or revision.get("clean") is not True or \
+     any(not isinstance(revision.get(key), str) or re.fullmatch(r"[0-9a-f]{40,64}", revision[key]) is None
+         for key in ("commit", "tree")):
+    raise ValueError("generation provenance source revision is not one clean exact git revision")
+  toolchain = value.get("toolchain")
+  if not isinstance(toolchain, Mapping) or set(toolchain) != {"inputs", "fingerprint"} or \
+     not isinstance(toolchain.get("inputs"), Mapping):
+    raise ValueError("generation provenance toolchain is malformed")
+  expected_toolchain_fields = set(_toolchain_inputs())
+  if set(toolchain["inputs"]) != expected_toolchain_fields or \
+     any(not isinstance(toolchain["inputs"].get(key), (str, int)) or isinstance(toolchain["inputs"].get(key), bool)
+         for key in expected_toolchain_fields):
+    raise ValueError("generation provenance toolchain inputs are incomplete or malformed")
+  expected_fingerprint = "sha256:" + _sha256(_json_bytes(toolchain["inputs"]))
+  if toolchain.get("fingerprint") != expected_fingerprint:
+    raise ValueError("generation provenance toolchain fingerprint differs from its declared inputs")
+  codegen = value.get("codegen")
+  if not isinstance(codegen, Mapping) or set(codegen) != {"context", "environment"}:
+    raise ValueError("generation provenance codegen declaration is malformed")
+  context, environment = codegen.get("context"), codegen.get("environment")
+  if not isinstance(context, Mapping) or set(context) != set(CODEGEN_CONTEXT) or \
+     any(not isinstance(item, (str, int, float, bool)) and item is not None for item in context.values()):
+    raise ValueError("generation provenance effective codegen context is incomplete or malformed")
+  if not isinstance(environment, Mapping) or set(environment) != set(CODEGEN_ENV):
+    raise ValueError("generation provenance codegen environment is incomplete or malformed")
+  for key, row in environment.items():
+    if not isinstance(row, Mapping) or set(row) != {"present", "value"} or not isinstance(row["present"], bool) or \
+       (row["value"] is not None and not isinstance(row["value"], str)) or \
+       (row["present"] != (row["value"] is not None)):
+      raise ValueError(f"generation provenance environment entry {key!r} is malformed")
+  try: return json.loads(_json_bytes(value))
+  except (TypeError, ValueError) as exc: raise ValueError(f"generation provenance is not canonical JSON: {exc}") from exc
 
 
 def _expected_offsets(role_spec: ExactRoleSpec, epoch: int) -> FiveBufferEpochOffsets:
@@ -105,6 +222,40 @@ def _expected_physical_layout(role_spec: ExactRoleSpec) -> dict[str, Any]:
       "record_stride_elements": role_spec.m * 4,
     },
   }
+
+
+def _role_contract(role_spec: ExactRoleSpec) -> dict[str, Any]:
+  return {
+    "schema": ROLE_CONTRACT_SCHEMA,
+    "role": role_spec.role,
+    "shape": {"M": role_spec.m, "N": role_spec.n, "K": role_spec.k},
+    "candidate_identity": role_spec.candidate_canonical_identity,
+    "quantization": {"weights": "Q4_K", "activations": "Q8_1", "accumulation": ACCUMULATION},
+    "epoch": {"K": EPOCH_K, "count": role_spec.epochs, "ordered_ordinals": list(range(role_spec.epochs))},
+    "five_buffer_abi": list(_expected_abi(role_spec)),
+    "physical_layout": _expected_physical_layout(role_spec),
+    "launch": {
+      "function": FUNCTION_NAME, "backend_id": BACKEND_ID, "device": PROGRAM_DEVICE,
+      "compile_target": AMD_ISA_TARGET, "global_size": list(role_spec.program.grid),
+      "local_size": list(LOCAL_SIZE),
+    },
+    "source_contract": {"llama_commit": LLAMA_SOURCE_COMMIT},
+  }
+
+
+def _ordered_identities(variants: list[dict[str, Any]]) -> list[dict[str, Any]]:
+  return [{
+    "epoch": row["epoch"], "sink_key": row["sink_key"], "program_key": row["program_key"],
+    "sink_sha256": row["artifacts"]["sink"]["sha256"],
+    "program_sha256": row["artifacts"]["program"]["sha256"],
+    "source_sha256": row["artifacts"]["source"]["sha256"],
+    "binary_sha256": row["artifacts"]["binary"]["sha256"],
+  } for row in variants]
+
+
+def _manifest_content_digest(manifest: Mapping[str, Any]) -> str:
+  content = {key: value for key, value in manifest.items() if key not in ("family_identity", "content_address")}
+  return _sha256(_json_bytes(content))
 
 
 def _program_payload(program: UOp) -> tuple[bytes, str]:
@@ -327,13 +478,19 @@ def produce_frozen_epoch_program_set(output_dir: str | Path, *,
                                      role_spec: ExactRoleSpec,
                                      build_once: Callable[[], LlamaFiveBufferEpochOffsetFamily],
                                      archive: str | Path | None = None,
-                                     inventory: str | Path | Mapping[str, Any] = DEFAULT_INVENTORY
+                                     inventory: str | Path | Mapping[str, Any] = DEFAULT_INVENTORY,
+                                     generation_provenance: Mapping[str, Any] | None = None,
                                      ) -> dict[str, Any]:
   """Atomically freeze one already-emitted CPU-built epoch PROGRAM family."""
   role_spec = admit_exact_role_spec(role_spec, inventory=inventory)
+  automatic_provenance = generation_provenance is None
+  provenance = _validate_generation_provenance(
+    collect_generation_provenance() if automatic_provenance else generation_provenance)
   family = build_once()
+  if automatic_provenance and _validate_generation_provenance(collect_generation_provenance()) != provenance:
+    raise ValueError("source, toolchain, or codegen configuration changed during frozen-family generation")
   if not isinstance(family, LlamaFiveBufferEpochOffsetFamily) or not family.emitted:
-    raise ValueError("v2 producer requires one fully emitted epoch-offset family")
+    raise ValueError("frozen-family producer requires one fully emitted epoch-offset family")
   if tuple(variant.epoch_offset for variant in family.variants) != tuple(range(role_spec.epochs)):
     raise ValueError("emitted family ordinals differ from the admitted full role")
   if tuple(parameter.size for parameter in family.proof_graph.parameters) != \
@@ -369,21 +526,21 @@ def produce_frozen_epoch_program_set(output_dir: str | Path, *,
     sink_keys, keys = [row["sink_key"] for row in variants], [row["program_key"] for row in variants]
     if len(set(sink_keys)) != role_spec.epochs or len(set(keys)) != role_spec.epochs:
       raise ValueError("epoch sink and PROGRAM keys must be unique across variants")
-    family_identity = _sha256(_json_bytes({
-      "role": role_spec.role, "shape": list(role_spec.shape),
-      "candidate_identity": role_spec.candidate_canonical_identity,
-      "physical_layout": _expected_physical_layout(role_spec),
-      "sink_keys": sink_keys, "program_keys": keys,
-    }))
-    manifest = {
+    manifest: dict[str, Any] = {
       "schema": SCHEMA, "state": "FROZEN", "family_builder_calls": 1,
       "variant_count": role_spec.epochs,
       "compile_only_cpu": True, "gpu_runtime_initialized": False, "gpu_dispatch_performed": False,
+      "generation_provenance": provenance,
+      "c1_certification": {
+        "gate": "C1", "certified": True, "provenance_schema": PROVENANCE_SCHEMA,
+        "content_addressed": True,
+      },
       "backend_id": BACKEND_ID, "accumulation": ACCUMULATION, "accumulate": True,
       "role": {
         "name": role_spec.role, "shape": list(role_spec.shape), "epochs": role_spec.epochs,
         "candidate_identity": role_spec.candidate_canonical_identity,
       },
+      "role_contract": _role_contract(role_spec),
       "shared_program": {
         "function": FUNCTION_NAME, "device": PROGRAM_DEVICE, "compile_target": AMD_ISA_TARGET,
         "globals": list(range(5)), "global_size": list(role_spec.program.grid),
@@ -396,10 +553,12 @@ def produce_frozen_epoch_program_set(output_dir: str | Path, *,
         "executable_authority": "retained_final_program",
         "final_program_structural_offsets_claimed": False,
       },
-      "family_identity": family_identity, "variants": variants,
+      "variants": variants, "ordered_identities": _ordered_identities(variants),
       "files": _inventory(retained), "archive_format": "ustar",
       "consumer": {"requires_recompile": False, "entrypoint": "load_frozen_epoch_program_set"},
     }
+    manifest["family_identity"] = _manifest_content_digest(manifest)
+    manifest["content_address"] = "sha256:" + manifest["family_identity"]
     for name, data in retained.items(): (staging / name).write_bytes(data)
     (staging / "manifest.json").write_bytes(_json_bytes(manifest))
     load_frozen_epoch_program_set(staging, inventory=inventory)
@@ -414,15 +573,41 @@ def produce_frozen_epoch_program_set(output_dir: str | Path, *,
 
 
 def load_frozen_epoch_program_set(path: str | Path, *,
-                                  inventory: str | Path | Mapping[str, Any] = DEFAULT_INVENTORY
+                                  inventory: str | Path | Mapping[str, Any] = DEFAULT_INVENTORY,
+                                  require_c1: bool = False,
                                   ) -> FrozenEpochProgramSetArtifact:
-  """Load and validate a v2 family without compilation, runtime creation, or dispatch."""
+  """Load a v2/v3 family without compilation, runtime creation, or dispatch.
+
+  Legacy v2 remains available for diagnostic replay. Promotion callers set
+  ``require_c1=True`` so missing reproducible provenance fails before payload
+  deserialization.
+  """
   files = _read_bundle(Path(path))
-  if "manifest.json" not in files: raise ValueError("bundle does not contain a v2 manifest")
+  if "manifest.json" not in files: raise ValueError("bundle does not contain a frozen-family manifest")
   try: manifest = json.loads(files["manifest.json"])
   except (UnicodeDecodeError, json.JSONDecodeError) as exc: raise ValueError(f"invalid manifest JSON: {exc}") from exc
-  if manifest.get("schema") != SCHEMA or manifest.get("state") != "FROZEN":
+  legacy = manifest.get("schema") == LEGACY_SCHEMA
+  if require_c1 and legacy:
+    raise ValueError("legacy v2 frozen epoch bundle is C1-uncertified and must be regenerated for promotion")
+  if manifest.get("schema") not in (SCHEMA, LEGACY_SCHEMA) or manifest.get("state") != "FROZEN":
     raise ValueError("bundle does not contain a frozen epoch program set")
+  common_fields = {
+    "schema", "state", "family_builder_calls", "variant_count", "compile_only_cpu",
+    "gpu_runtime_initialized", "gpu_dispatch_performed", "backend_id", "accumulation",
+    "accumulate", "role", "shared_program", "compiler_boundary", "family_identity",
+    "variants", "files", "archive_format", "consumer",
+  }
+  version_fields = set() if legacy else {
+    "generation_provenance", "c1_certification", "role_contract", "ordered_identities", "content_address",
+  }
+  if set(manifest) != common_fields | version_fields:
+    raise ValueError("frozen family manifest fields differ from its versioned schema")
+  if not legacy:
+    _validate_generation_provenance(manifest.get("generation_provenance"))
+    if manifest.get("c1_certification") != {
+        "gate": "C1", "certified": True, "provenance_schema": PROVENANCE_SCHEMA,
+        "content_addressed": True}:
+      raise ValueError("frozen family C1 certification declaration is malformed")
   role = manifest.get("role")
   if not isinstance(role, Mapping):
     raise ValueError("v2 manifest role identity is malformed")
@@ -432,6 +617,8 @@ def load_frozen_epoch_program_set(path: str | Path, *,
     "candidate_identity": role_spec.candidate_canonical_identity,
   }
   if dict(role) != expected_role: raise ValueError("v2 manifest role identity differs from admission")
+  if not legacy and manifest.get("role_contract") != _role_contract(role_spec):
+    raise ValueError("frozen family role contract differs from exact admission")
   if manifest.get("family_builder_calls") != 1 or manifest.get("variant_count") != role_spec.epochs:
     raise ValueError("v2 manifest builder census differs from the exact epoch family")
   if manifest.get("compile_only_cpu") is not True or manifest.get("gpu_runtime_initialized") is not False or \
@@ -455,8 +642,10 @@ def load_frozen_epoch_program_set(path: str | Path, *,
       "final_program_structural_offsets_claimed": False}:
     raise ValueError("v2 same-session compiler authority boundary changed")
   consumer = manifest.get("consumer")
-  if not isinstance(consumer, Mapping) or consumer.get("requires_recompile") is not False:
+  if consumer != {"requires_recompile": False, "entrypoint": "load_frozen_epoch_program_set"}:
     raise ValueError("v2 consumer contract permits recompilation")
+  if manifest.get("archive_format") != "ustar":
+    raise ValueError("frozen family archive format changed")
 
   expected_names = {
     name for epoch in range(role_spec.epochs) for name in _variant_files(epoch).values()
@@ -502,16 +691,29 @@ def load_frozen_epoch_program_set(path: str | Path, *,
     sink_keys.append(sink.key.hex()); keys.append(program.key.hex())
   if len(set(sink_keys)) != role_spec.epochs or len(set(keys)) != role_spec.epochs:
     raise ValueError("v2 epoch sink or PROGRAM keys are not unique")
-  expected_identity = _sha256(_json_bytes({
-    "role": role_spec.role, "shape": list(role_spec.shape),
-    "candidate_identity": role_spec.candidate_canonical_identity,
-    "physical_layout": _expected_physical_layout(role_spec),
-    "sink_keys": sink_keys, "program_keys": keys,
-  }))
+  if legacy:
+    expected_identity = _sha256(_json_bytes({
+      "role": role_spec.role, "shape": list(role_spec.shape),
+      "candidate_identity": role_spec.candidate_canonical_identity,
+      "physical_layout": _expected_physical_layout(role_spec),
+      "sink_keys": sink_keys, "program_keys": keys,
+    }))
+  else:
+    if manifest.get("ordered_identities") != _ordered_identities(variants):
+      raise ValueError("frozen family ordered sink/PROGRAM/payload identities changed")
+    expected_identity = _manifest_content_digest(manifest)
   if manifest.get("family_identity") != expected_identity:
-    raise ValueError("v2 family identity differs from the retained PROGRAM set")
+    raise ValueError("frozen family content identity differs from its manifest and retained files")
+  if not legacy and manifest.get("content_address") != "sha256:" + expected_identity:
+    raise ValueError("frozen family content address differs from its content identity")
+  loaded_manifest = dict(manifest)
+  if legacy:
+    loaded_manifest["c1_certification"] = {
+      "gate": "C1", "certified": False, "status": "legacy_v2_missing_generation_provenance",
+      "content_addressed": False,
+    }
   return FrozenEpochProgramSetArtifact(
-    manifest, tuple(programs), tuple(binaries), tuple(sources), tuple(sinks))
+    loaded_manifest, tuple(programs), tuple(binaries), tuple(sources), tuple(sinks))
 
 
 @dataclass(frozen=True)
@@ -526,12 +728,13 @@ class FrozenEpochProgramSetBinding:
 
 def load_frozen_epoch_program_set_binding(role_spec: ExactRoleSpec, bundle: str | Path, *,
                                           inventory: str | Path | Mapping[str, Any] = DEFAULT_INVENTORY,
+                                          require_c1: bool = False,
                                           artifact_loader: Callable[..., FrozenEpochProgramSetArtifact] =
                                             load_frozen_epoch_program_set
                                           ) -> FrozenEpochProgramSetBinding:
-  """Bind one admitted role to an exact v2 full-role PROGRAM family."""
+  """Bind one admitted role to an exact frozen full-role PROGRAM family."""
   role_spec = admit_exact_role_spec(role_spec, inventory=inventory)
-  artifact = artifact_loader(bundle, inventory=inventory)
+  artifact = artifact_loader(bundle, inventory=inventory, **({"require_c1": True} if require_c1 else {}))
   if not isinstance(artifact, FrozenEpochProgramSetArtifact):
     raise TypeError("v2 artifact loader returned the wrong artifact type")
   role = artifact.manifest["role"]
@@ -546,7 +749,9 @@ def load_frozen_epoch_program_set_binding(role_spec: ExactRoleSpec, bundle: str 
 
 
 __all__ = [
-  "BINDING_SCHEMA", "FrozenEpochProgramSetArtifact", "FrozenEpochProgramSetBinding", "SCHEMA",
+  "BINDING_SCHEMA", "CODEGEN_CONTEXT", "CODEGEN_ENV", "FrozenEpochProgramSetArtifact",
+  "FrozenEpochProgramSetBinding", "LEGACY_SCHEMA", "PROVENANCE_SCHEMA", "ROLE_CONTRACT_SCHEMA", "SCHEMA",
+  "collect_generation_provenance",
   "load_frozen_epoch_program_set", "load_frozen_epoch_program_set_binding",
   "produce_frozen_epoch_program_set",
 ]
