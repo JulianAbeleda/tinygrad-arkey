@@ -29,6 +29,10 @@ ABI_NAMES = ("output", "q4", "q8_values", "q8_scales", "q8_original_sums")
 @dataclass(frozen=True)
 class FrozenEpochProgramSetSchedule:
   output: Tensor
+  # The exact five ABI tensors before any frozen target PROGRAM is attached.
+  # Realizing these together gives diagnostics a producer/output-initialization
+  # phase without manufacturing a second launcher or changing target effects.
+  preparation_outputs: tuple[Tensor, Tensor, Tensor, Tensor, Tensor]
   binding: FrozenEpochProgramSetBinding
   evidence: Mapping[str, Any]
 
@@ -142,6 +146,7 @@ def build_frozen_epoch_program_set_schedule(
   output = Tensor.empty(parameters[0].size, dtype=dtypes.float32, device=PROGRAM_DEVICE)
   output.assign(zero)
   fixed_inputs = (packed_weight, q8_values, q8_scales, q8_sums)
+  preparation_outputs = (output, *fixed_inputs)
   fixed_keys = [output.uop.key.hex(), *(tensor.uop.key.hex() for tensor in fixed_inputs)]
   programs = binding.artifact.programs[:dispatch_count]
   for program in programs:
@@ -179,7 +184,8 @@ def build_frozen_epoch_program_set_schedule(
     "prefix_complete": True, "complete_role": dispatch_count == role_spec.epochs,
     "execution": execution,
   }
-  return FrozenEpochProgramSetSchedule(output.reshape(1, role_spec.m, role_spec.n), binding, evidence)
+  return FrozenEpochProgramSetSchedule(
+    output.reshape(1, role_spec.m, role_spec.n), preparation_outputs, binding, evidence)
 
 
 __all__ = [

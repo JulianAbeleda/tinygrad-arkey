@@ -8,6 +8,13 @@ def _failure_with_census():
   exc.pm4_dispatch_census = {"status": "REALIZATION_ERROR", "accepted_target_call_count": 1,
                              "calls": [{"kernarg_qwords": [1, 2, 3, 4, 5]}]}
   raise exc
+def _failure_with_preparation():
+  exc = RuntimeError("producer synchronize")
+  exc.preparation_phase = {
+    "status": "SYNCHRONIZATION_ERROR",
+    "synchronize": {"began": True, "returned": False},
+  }
+  raise exc
 def _hang():
   import time; time.sleep(10)
 def _no_result():
@@ -26,6 +33,14 @@ def test_isolated_failure_preserves_typed_dispatch_evidence():
   assert failed.evidence == {"pm4_dispatch_census": {
     "status": "REALIZATION_ERROR", "accepted_target_call_count": 1,
     "calls": [{"kernarg_qwords": [1, 2, 3, 4, 5]}]}}
+
+
+def test_isolated_failure_preserves_typed_preparation_evidence():
+  failed = run_isolated(_failure_with_preparation, timeout_seconds=2)
+  assert failed.evidence == {"preparation_phase": {
+    "status": "SYNCHRONIZATION_ERROR",
+    "synchronize": {"began": True, "returned": False},
+  }}
 
 
 def test_isolated_timeout_is_hard_and_fail_closed():

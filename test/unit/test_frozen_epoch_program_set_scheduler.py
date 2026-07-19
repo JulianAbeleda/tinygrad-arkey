@@ -98,6 +98,9 @@ def test_v2_scheduler_prefix_uses_one_producer_and_same_five_buffer_identities(p
   assert all(len(row) == 5 for row in arguments)
   assert all(arguments[0][slot].buf_uop is row[slot].buf_uop
              for row in arguments for slot in range(5))
+  assert len(result.preparation_outputs) == 5
+  assert all(result.preparation_outputs[slot].uop.buf_uop is arguments[0][slot].buf_uop
+             for slot in range(5))
   assert all(previous in current[0].toposort()
              for previous, current in zip(calls, arguments[1:]))
 

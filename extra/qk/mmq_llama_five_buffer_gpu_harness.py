@@ -1268,6 +1268,81 @@ def _realize_outputs_together(output: Any, retained_outputs: tuple[Any, ...]) ->
   output.realize(*retained_outputs)
 
 
+class FiveBufferPreparationError(RuntimeError):
+  """Fallback wrapper when producer/initialization failure cannot carry evidence."""
+  def __init__(self, message: str, preparation_phase: Mapping[str, Any]):
+    super().__init__(message)
+    self.preparation_phase = dict(preparation_phase)
+
+
+def _preparation_phase_from_exception(exc: BaseException) -> dict[str, Any] | None:
+  phase = getattr(exc, "preparation_phase", None)
+  return dict(phase) if isinstance(phase, Mapping) else None
+
+
+def _realize_and_synchronize_five_buffer_preparation(
+    preparation_outputs: tuple[Any, ...]) -> dict[str, Any]:
+  """Finish producer, uploads, and output zeroing before target instrumentation.
+
+  ``preparation_outputs`` are the scheduler's exact five ABI tensors before
+  target PROGRAM attachment. This uses normal Tensor realization and the
+  device's synchronize path; it does not introduce another GPU launcher.
+  """
+  if not isinstance(preparation_outputs, tuple) or len(preparation_outputs) != 5:
+    raise ValueError("five-buffer preparation requires the exact five ABI tensors")
+  from tinygrad.device import Device
+  dev = Device["AMD"]
+  phase = {
+    "status": "PENDING", "phase": "producer_and_output_initialization",
+    "target_dispatch_allowed": False,
+    "realize": {"began": False, "returned": False},
+    "synchronize": {"began": False, "returned": False, "failure": None},
+    "allocations": [],
+  }
+  try:
+    phase["realize"]["began"] = True
+    _realize_outputs_together(preparation_outputs[0], preparation_outputs[1:])
+    phase["realize"]["returned"] = True
+    phase["synchronize"]["began"] = True
+    dev.synchronize()
+    phase["synchronize"]["returned"] = True
+    allocations = []
+    for slot, (name, tensor) in enumerate(zip(_TARGET_BUFFER_NAMES, preparation_outputs)):
+      buffer = tensor.uop.buffer
+      handle = buffer.get_buf("AMD")
+      allocations.append({
+        "slot": slot, "name": name, "va": int(handle.va_addr),
+        "nbytes": int(buffer.nbytes), "allocation_nbytes": int(handle.size),
+      })
+    phase["allocations"] = allocations
+    checks = {
+      "exact_five_slots": len(allocations) == 5,
+      "all_vas_nonzero": all(row["va"] > 0 for row in allocations),
+      "all_vas_distinct": len({row["va"] for row in allocations}) == 5,
+      "all_extents_nonempty": all(row["nbytes"] > 0 for row in allocations),
+      "all_allocations_cover_tensor_extents":
+        all(row["allocation_nbytes"] >= row["nbytes"] for row in allocations),
+    }
+    phase.update({
+      "checks": checks, "all_checks_pass": all(checks.values()),
+      "target_dispatch_allowed": all(checks.values()),
+      "status": "PASS" if all(checks.values()) else "ALLOCATION_REJECTED",
+    })
+    if not phase["target_dispatch_allowed"]:
+      raise RuntimeError("five-buffer preparation allocation audit failed")
+    return phase
+  except BaseException as exc:
+    if phase["synchronize"]["began"] and not phase["synchronize"]["returned"]:
+      phase["synchronize"]["failure"] = f"{type(exc).__name__}: {exc}"
+    if phase["status"] == "PENDING":
+      phase["status"] = "SYNCHRONIZATION_ERROR" if phase["synchronize"]["began"] \
+        else "REALIZATION_ERROR"
+    try: setattr(exc, "preparation_phase", phase)
+    except (AttributeError, TypeError):
+      raise FiveBufferPreparationError(str(exc), phase) from exc
+    raise
+
+
 def _retained_producer_tensors(produced_tiles: list[Any]) -> tuple[Any, ...]:
   retained = tuple(value for tile in produced_tiles for value in (tile.values, tile.scales, tile.sums))
   if len(retained) != len(produced_tiles) * 3 or len({id(value) for value in retained}) != len(retained):
@@ -1337,6 +1412,7 @@ def _realize_with_aql_packet_census(output: Any, expected_vas: list[list[int]] |
   from tinygrad.runtime import ops_amd
   constructed, published, calls = [], [], []
   non_target_kernel_dispatch_count = compute_doorbell_count = 0
+  synchronize = {"began": False, "returned": False, "failure": None}
   original_exec = ops_amd.AMDComputeAQLQueue.exec
   original_publish = ops_amd._publish_aql_packet
   original_doorbell = ops_amd.AMDQueueDesc.signal_doorbell
@@ -1371,6 +1447,7 @@ def _realize_with_aql_packet_census(output: Any, expected_vas: list[list[int]] |
       "retained_companion_output_count": len(retained_outputs),
       "pending_constructed_dispatch_count": len(constructed),
       "pending_published_packet_count": len(published),
+      "synchronize": dict(synchronize),
       "call_count": len(copied_calls), "calls": copied_calls,
     }
     if exc is not None:
@@ -1412,6 +1489,7 @@ def _realize_with_aql_packet_census(output: Any, expected_vas: list[list[int]] |
                       if (row:=_decode_aql_kernel_dispatch_packet(packet))["kernel_dispatch"]]
     if len(kernel_packets) != len(constructed):
       raise RuntimeError("AQL packet census did not find one published kernel packet per constructed dispatch")
+    first_new_call = len(calls)
     for packet, built in zip(kernel_packets, constructed):
       target_function_names = ({identity["function_name"] for identity in normalized_identities}
                                if normalized_identities is not None else set())
@@ -1475,12 +1553,16 @@ def _realize_with_aql_packet_census(output: Any, expected_vas: list[list[int]] |
         "runtime_lifecycle": built["runtime_lifecycle"],
         "checks": checks, "all_checks_pass": accepted_before_doorbell,
         "accepted_before_doorbell": accepted_before_doorbell,
+        "target_exec_observed": True, "submit_began": False, "submit_returned": False,
       })
       if not accepted_before_doorbell:
         raise RuntimeError("AQL target packet census rejected dispatch before doorbell")
     published.clear()
     constructed.clear()
-    return original_doorbell(queue_desc, doorbell_dev, doorbell_value)
+    for row in calls[first_new_call:]: row["submit_began"] = True
+    result = original_doorbell(queue_desc, doorbell_dev, doorbell_value)
+    for row in calls[first_new_call:]: row["submit_returned"] = True
+    return result
 
   ops_amd.AMDComputeAQLQueue.exec = audited_exec
   ops_amd._publish_aql_packet = audited_publish
@@ -1488,8 +1570,14 @@ def _realize_with_aql_packet_census(output: Any, expected_vas: list[list[int]] |
   try:
     try:
       _realize_outputs_together(output, retained_outputs)
+      synchronize["began"] = True
+      dev.synchronize()
+      synchronize["returned"] = True
     except BaseException as exc:
-      census = snapshot("REALIZATION_ERROR", exc)
+      if synchronize["began"] and not synchronize["returned"]:
+        synchronize["failure"] = f"{type(exc).__name__}: {exc}"
+      census = snapshot(
+        "SYNCHRONIZATION_ERROR" if synchronize["began"] else "REALIZATION_ERROR", exc)
       try: setattr(exc, "aql_packet_census", census)
       except (AttributeError, TypeError):
         raise AQLPacketCensusRealizationError(str(exc), census) from exc
@@ -1544,6 +1632,7 @@ def _realize_with_pm4_dispatch_census(
   pending: dict[int, dict[str, Any]] = {}
   calls: list[dict[str, Any]] = []
   non_target_exec_count = non_target_submit_count = compute_submit_count = 0
+  synchronize = {"began": False, "returned": False, "failure": None}
   target_function_names = {identity["function_name"] for identity in identities}
   original_exec = ops_amd.AMDComputeQueue.exec
   original_submit = ops_amd.AMDComputeQueue._submit
@@ -1577,6 +1666,7 @@ def _realize_with_pm4_dispatch_census(
       "require_all_five_vas_distinct": require_all_five_vas_distinct,
       "retained_companion_output_count": len(retained_outputs),
       "pending_target_queue_count": len(pending),
+      "synchronize": dict(synchronize),
       "call_count": len(copied_calls), "calls": copied_calls,
     }
     if exc is not None:
@@ -1686,18 +1776,28 @@ def _realize_with_pm4_dispatch_census(
       "after_exec_dword_count": built["after_exec_dword_count"],
       "checks": checks, "all_checks_pass": accepted,
       "accepted_before_doorbell": accepted,
+      "target_exec_observed": True, "submit_began": False, "submit_returned": False,
     })
     if not accepted:
       raise RuntimeError("PM4 target dispatch census rejected submit before doorbell")
-    return original_submit(queue, submit_dev)
+    calls[-1]["submit_began"] = True
+    result = original_submit(queue, submit_dev)
+    calls[-1]["submit_returned"] = True
+    return result
 
   ops_amd.AMDComputeQueue.exec = audited_exec
   ops_amd.AMDComputeQueue._submit = audited_submit
   try:
     try:
       _realize_outputs_together(output, retained_outputs)
+      synchronize["began"] = True
+      dev.synchronize()
+      synchronize["returned"] = True
     except BaseException as exc:
-      census = snapshot("REALIZATION_ERROR", exc)
+      if synchronize["began"] and not synchronize["returned"]:
+        synchronize["failure"] = f"{type(exc).__name__}: {exc}"
+      census = snapshot(
+        "SYNCHRONIZATION_ERROR" if synchronize["began"] else "REALIZATION_ERROR", exc)
       try: setattr(exc, "pm4_dispatch_census", census)
       except (AttributeError, TypeError):
         raise PM4DispatchCensusRealizationError(str(exc), census) from exc
@@ -2890,7 +2990,8 @@ def run_frozen_epoch_program_set_prefix_probe(
   graph_evidence.update({
     "retained_producer_tensor_count": len(retained_outputs),
     "retained_producer_tensor_names": ["values", "scales", "sums"],
-    "retained_as_companion_realization_outputs": True,
+    "retained_as_companion_realization_outputs": False,
+    "producer_and_output_initialization_phase_separated": True,
   })
 
   runtime_preconstruction: dict[str, Any] = {
@@ -2921,6 +3022,27 @@ def run_frozen_epoch_program_set_prefix_probe(
         "hip_used": False, "no_fallback": True,
       }
 
+  try:
+    preparation_phase = _realize_and_synchronize_five_buffer_preparation(
+      schedule.preparation_outputs)
+  except BaseException as exc:
+    partial = _preparation_phase_from_exception(exc)
+    return {
+      "schema": schema, "status": "BLOCKED",
+      "exact_blocker": "producer/output initialization failed before target dispatch",
+      "exception": type(exc).__name__, "error": str(exc),
+      "research_only": True, "production_dispatch_changed": False,
+      "default_route": "direct_packed", "role": role_spec.role,
+      "shape": list(role_spec.shape), "prefix_epochs": prefix_epochs,
+      "graph": graph_evidence, "target_program_identities": target_identities,
+      "runtime_preconstruction": runtime_preconstruction,
+      "preparation_phase": partial,
+      "family_identity": binding.family_identity,
+      "frozen_bundle": str(Path(frozen_bundle).resolve()),
+      "compile_performed": False, "requires_recompile": False,
+      "hip_used": False, "no_fallback": True,
+    }
+
   dispatch_census_key = "aql_packet_census" if bool(getattr(Device["AMD"], "is_aql", False)) \
     else "pm4_dispatch_census"
   try:
@@ -2931,10 +3053,18 @@ def run_frozen_epoch_program_set_prefix_probe(
         (tuple(program.arg.global_size), tuple(program.arg.local_size))
         for program in selected_programs),
       require_all_five_vas_fixed=True, require_all_five_vas_distinct=True,
-      retained_outputs=retained_outputs)
+      retained_outputs=())
   except BaseException as exc:
     packet_census, runtime_reuse_crosscheck = \
       _dispatch_error_runtime_reuse_evidence(runtime_preconstruction, exc)
+    prepared_vas = [row["va"] for row in preparation_phase["allocations"]]
+    observed_calls = packet_census.get("calls", []) if isinstance(packet_census, Mapping) else []
+    preparation_dispatch_crosscheck = {
+      "expected_vas": prepared_vas,
+      "observed_call_count": len(observed_calls),
+      "observed_calls_match_prepared_allocations":
+        all(row.get("kernarg_qwords") == prepared_vas for row in observed_calls),
+    }
     return {
       "schema": schema, "status": "BLOCKED",
       "exact_blocker": "frozen v2 fixed-base realization failed during or after audited target dispatch",
@@ -2945,6 +3075,8 @@ def run_frozen_epoch_program_set_prefix_probe(
       "graph": graph_evidence, "target_program_identities": target_identities,
       "runtime_preconstruction": runtime_preconstruction,
       "runtime_reuse_crosscheck": runtime_reuse_crosscheck,
+      "preparation_phase": preparation_phase,
+      "preparation_dispatch_crosscheck": preparation_dispatch_crosscheck,
       **({"dispatch": {dispatch_census_key: packet_census}} if packet_census is not None else {}),
       "family_identity": binding.family_identity,
       "frozen_bundle": str(Path(frozen_bundle).resolve()),
@@ -2954,6 +3086,36 @@ def run_frozen_epoch_program_set_prefix_probe(
 
   runtime_reuse_crosscheck = _crosscheck_preconstructed_dispatch_runtimes(
     runtime_preconstruction, packet_census)
+  prepared_vas = [row["va"] for row in preparation_phase["allocations"]]
+  observed_calls = packet_census.get("calls", [])
+  preparation_dispatch_crosscheck = {
+    "expected_vas": prepared_vas,
+    "observed_call_count": len(observed_calls),
+    "expected_call_count": prefix_epochs,
+    "observed_calls_match_prepared_allocations":
+      all(row.get("kernarg_qwords") == prepared_vas for row in observed_calls),
+  }
+  preparation_dispatch_crosscheck["all_checks_pass"] = bool(
+    len(observed_calls) == prefix_epochs and
+    preparation_dispatch_crosscheck["observed_calls_match_prepared_allocations"])
+  if not preparation_dispatch_crosscheck["all_checks_pass"]:
+    return {
+      "schema": schema, "status": "BLOCKED",
+      "exact_blocker": "target kernargs differ from synchronized five-buffer preparation allocations",
+      "research_only": True, "production_dispatch_changed": False,
+      "default_route": "direct_packed", "role": role_spec.role,
+      "shape": list(role_spec.shape), "prefix_epochs": prefix_epochs,
+      "graph": graph_evidence, "target_program_identities": target_identities,
+      "runtime_preconstruction": runtime_preconstruction,
+      "runtime_reuse_crosscheck": runtime_reuse_crosscheck,
+      "preparation_phase": preparation_phase,
+      "preparation_dispatch_crosscheck": preparation_dispatch_crosscheck,
+      "dispatch": {dispatch_census_key: packet_census},
+      "family_identity": binding.family_identity,
+      "frozen_bundle": str(Path(frozen_bundle).resolve()),
+      "compile_performed": False, "requires_recompile": False,
+      "hip_used": False, "no_fallback": True,
+    }
   if not runtime_reuse_crosscheck["all_checks_pass"]:
     return {
       "schema": schema, "status": "BLOCKED",
@@ -2964,6 +3126,8 @@ def run_frozen_epoch_program_set_prefix_probe(
       "graph": graph_evidence, "target_program_identities": target_identities,
       "runtime_preconstruction": runtime_preconstruction,
       "runtime_reuse_crosscheck": runtime_reuse_crosscheck,
+      "preparation_phase": preparation_phase,
+      "preparation_dispatch_crosscheck": preparation_dispatch_crosscheck,
       "dispatch": {dispatch_census_key: packet_census},
       "family_identity": binding.family_identity,
       "frozen_bundle": str(Path(frozen_bundle).resolve()),
@@ -3004,6 +3168,8 @@ def run_frozen_epoch_program_set_prefix_probe(
     "producer": "extra.qk.q4k_q8_activation_producer.produce_physical_ds4_q8_1_tensor",
     "graph": graph_evidence, "runtime_preconstruction": runtime_preconstruction,
     "runtime_reuse_crosscheck": runtime_reuse_crosscheck,
+    "preparation_phase": preparation_phase,
+    "preparation_dispatch_crosscheck": preparation_dispatch_crosscheck,
     "dispatch": {
       "launcher": "tinygrad_scheduler", "mode": "static_offset_program_chain",
       "count": prefix_epochs, "program_keys": list(binding.program_keys[:prefix_epochs]),
@@ -3172,6 +3338,17 @@ def run_frozen_scheduler_producer_prefix_probe_isolated(
   return result
 
 
+def _run_frozen_epoch_program_set_prefix_probe_worker(
+    role_spec: ExactRoleSpec, frozen_bundle: str, prefix_epochs: int,
+    preconstruct_runtimes: bool, child_env_overrides: Mapping[str, str]) -> dict[str, Any]:
+  """Spawn-safe worker; apply the narrow queue env before device creation."""
+  os.environ.update(dict(child_env_overrides))
+  os.environ["DEV"] = "AMD"
+  return run_frozen_epoch_program_set_prefix_probe(
+    role_spec=role_spec, frozen_bundle=frozen_bundle, prefix_epochs=prefix_epochs,
+    preconstruct_runtimes=preconstruct_runtimes)
+
+
 def run_frozen_epoch_program_set_prefix_probe_isolated(
     *, role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC, frozen_bundle: str | Path,
     prefix_epochs: int, preconstruct_runtimes: bool = False,
@@ -3199,28 +3376,18 @@ def run_frozen_epoch_program_set_prefix_probe_isolated(
       "health_before": False, "child_env_overrides": env_overrides,
     }
 
-  child_env = dict(os.environ)
-  child_env.update({"DEV": "AMD", "PYTHONPATH": str(ROOT) + os.pathsep + child_env.get("PYTHONPATH", "")})
-  child_env.update(env_overrides)
-  role_expr = f"exact_role_spec({role_spec.role!r}, shape={role_spec.shape!r})"
-  bundle_arg = repr(str(Path(frozen_bundle).resolve()))
-  code = (
-    "import json; from extra.qk.mmq_exact_role_spec import exact_role_spec; "
-    "from extra.qk.mmq_llama_five_buffer_gpu_harness import run_frozen_epoch_program_set_prefix_probe; "
-    f"print(json.dumps(run_frozen_epoch_program_set_prefix_probe(role_spec={role_expr}, "
-    f"frozen_bundle={bundle_arg}, prefix_epochs={prefix_epochs}, "
-    f"preconstruct_runtimes={preconstruct_runtimes!r})), flush=True)")
+  from tinygrad.runtime.process_isolated import run_isolated
   started = time.time()
-  try:
-    proc = subprocess.run([sys.executable, "-c", code], cwd=ROOT, env=child_env,
-                          text=True, capture_output=True, timeout=timeout_seconds, check=False)
-  except subprocess.TimeoutExpired:
-    proc = None
+  isolated = run_isolated(
+    _run_frozen_epoch_program_set_prefix_probe_worker,
+    args=(role_spec, str(Path(frozen_bundle).resolve()), prefix_epochs,
+          preconstruct_runtimes, env_overrides),
+    timeout_seconds=timeout_seconds, start_method="spawn")
   try: kernel_faults = parse_kernel_faults(read_kernel_log_since(started))
   except BaseException as exc: kernel_faults = [f"kernel-log scan failed: {type(exc).__name__}: {exc}"]
   try: health_after = bool(spawned_tiny_health_probe(env_overrides))
   except BaseException: health_after = False
-  if proc is None:
+  if isolated.timed_out:
     return {
       "schema": schema, "status": "BLOCKED",
       "exact_blocker": "frozen v2 fixed-base prefix child timed out",
@@ -3228,20 +3395,26 @@ def run_frozen_epoch_program_set_prefix_probe_isolated(
       "health_before": health_before, "health_after": health_after,
       "kernel_faults": kernel_faults, "child_env_overrides": env_overrides,
     }
-  result = None
-  for line in reversed(proc.stdout.strip().splitlines()):
-    try: candidate = json.loads(line)
-    except json.JSONDecodeError: continue
-    if isinstance(candidate, dict):
-      result = candidate
-      break
-  if result is None:
+  if isolated.status == "passed" and isinstance(isolated.result, dict):
+    result = dict(isolated.result)
+  else:
     result = {
       "schema": schema, "status": "BLOCKED",
-      "exact_blocker": "frozen v2 fixed-base prefix child returned no structured result",
-      "returncode": proc.returncode, "stdout_tail": proc.stdout[-2000:],
-      "stderr_tail": proc.stderr[-2000:],
+      "exact_blocker": isolated.error or
+        "frozen v2 fixed-base prefix child returned no structured result",
+      "child_status": isolated.status,
+      "stdout_tail": isolated.stdout[-2000:], "stderr_tail": isolated.stderr[-2000:],
     }
+    if isinstance(isolated.evidence, dict):
+      result["isolated_failure_evidence"] = dict(isolated.evidence)
+      if "preparation_phase" in isolated.evidence:
+        result["preparation_phase"] = isolated.evidence["preparation_phase"]
+      if "runtime_preconstruction" in isolated.evidence:
+        result["runtime_preconstruction"] = isolated.evidence["runtime_preconstruction"]
+      census_key = "aql_packet_census" if "aql_packet_census" in isolated.evidence \
+        else "pm4_dispatch_census" if "pm4_dispatch_census" in isolated.evidence else None
+      if census_key is not None:
+        result["dispatch"] = {census_key: isolated.evidence[census_key]}
   result.update({
     "health_before": health_before, "health_after": health_after,
     "kernel_faults": kernel_faults, "child_env_overrides": env_overrides,
@@ -3250,11 +3423,6 @@ def run_frozen_epoch_program_set_prefix_probe_isolated(
     result.update({"status": "BLOCKED", "exact_blocker": "AMD kernel fault/reset marker observed"})
   elif not health_after:
     result.update({"status": "BLOCKED", "exact_blocker": "post-run GPU health probe failed"})
-  elif proc.returncode != 0 and result.get("status") == "PASS":
-    result.update({
-      "status": "BLOCKED", "exact_blocker": "frozen v2 fixed-base prefix child exited non-zero",
-      "returncode": proc.returncode,
-    })
   return result
 
 

@@ -52,7 +52,8 @@ def _child(queue: Any, callback: Callable[..., Any], args: tuple[Any, ...], kwar
     row = {"status": "passed", "result": value, "error": None}
   except BaseException as exc:  # serialize failure; never let the child hang on an exception
     evidence = {}
-    for name in ("pm4_dispatch_census", "aql_packet_census", "runtime_preconstruction"):
+    for name in ("pm4_dispatch_census", "aql_packet_census", "runtime_preconstruction",
+                 "preparation_phase"):
       value = getattr(exc, name, None)
       if isinstance(value, dict): evidence[name] = value
     row = {"status": "failed", "result": None, "error": f"{type(exc).__name__}: {exc}",

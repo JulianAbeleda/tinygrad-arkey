@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from tinygrad import Tensor, dtypes
+from tinygrad.runtime.process_isolated import IsolatedResult
 from tinygrad.uop.ops import Ops, UOp
 
 from extra.qk.mmq_exact_role_spec import exact_role_spec
@@ -26,6 +27,7 @@ from extra.qk.mmq_llama_five_buffer_gpu_harness import (FrozenRuntimePreconstruc
   _producer_oracle_diagnostic, _producer_probe_status,
   _crosscheck_preconstructed_dispatch_runtimes,
   _preconstruct_frozen_program_runtimes,
+  _preparation_phase_from_exception, _realize_and_synchronize_five_buffer_preparation,
   _realize_outputs_together, _realize_with_aql_packet_census, _realize_with_pm4_dispatch_census,
   _retained_producer_tensors,
   _scheduler_prefix_two_launches,
@@ -215,6 +217,7 @@ def test_aql_packet_census_retains_accepted_packet_and_kernargs_when_doorbell_fa
     def compute_queue_desc(self, index):
       assert index == 0
       return desc
+    def synchronize(self): raise RuntimeError("simulated delayed AQL synchronize fault")
   dev = FakeDevice()
   monkeypatch.setattr(type(Device), "__getitem__", lambda self, key: dev)
 
@@ -276,6 +279,9 @@ def test_aql_packet_census_retains_accepted_packet_and_kernargs_when_doorbell_fa
   assert census["pending_published_packet_count"] == 0
   call = census["calls"][0]
   assert call["accepted_before_doorbell"] is True and call["all_checks_pass"] is True
+  assert call["target_exec_observed"] is True
+  assert call["submit_began"] is True and call["submit_returned"] is False
+  assert census["synchronize"] == {"began": False, "returned": False, "failure": None}
   assert call["program_identity"] == call["expected_program_identity"] == identity
   assert call["kernel_object"] == descriptor_va and call["kernarg_address"] == kernarg_va
   assert call["kernarg_qwords"] == argument_vas
@@ -298,6 +304,22 @@ def test_aql_packet_census_retains_accepted_packet_and_kernargs_when_doorbell_fa
   assert call["checks"]["five_constructed_buffer_vas_distinct"] is True
   assert census["all_accepted_target_calls_pass"] is True
 
+  monkeypatch.setattr(
+    ops_amd.AMDQueueDesc, "signal_doorbell",
+    lambda self, doorbell_dev, doorbell_value=None: None)
+  with pytest.raises(RuntimeError, match="simulated delayed AQL synchronize fault") as delayed:
+    _realize_with_aql_packet_census(
+      Output(), target_program_identities=(identity,),
+      target_program_keys=(program_key,), require_all_five_vas_fixed=True,
+      require_runtime_lifecycle=True)
+  delayed_census = _aql_packet_census_from_exception(delayed.value)
+  assert delayed_census is not None and delayed_census["status"] == "SYNCHRONIZATION_ERROR"
+  assert delayed_census["calls"][0]["submit_began"] is True
+  assert delayed_census["calls"][0]["submit_returned"] is True
+  assert delayed_census["synchronize"]["began"] is True
+  assert delayed_census["synchronize"]["returned"] is False
+  assert "simulated delayed AQL synchronize fault" in delayed_census["synchronize"]["failure"]
+
 
 def test_pm4_dispatch_census_retains_accepted_submit_and_kernargs_when_doorbell_faults(monkeypatch):
   from tinygrad.device import Device
@@ -309,6 +331,7 @@ def test_pm4_dispatch_census_retains_accepted_submit_and_kernargs_when_doorbell_
 
   class FakeDevice:
     is_aql = False
+    def synchronize(self): raise RuntimeError("simulated delayed PM4 synchronize fault")
   dev = FakeDevice()
   monkeypatch.setattr(type(Device), "__getitem__", lambda self, key: dev)
 
@@ -363,6 +386,9 @@ def test_pm4_dispatch_census_retains_accepted_submit_and_kernargs_when_doorbell_
   assert census["pending_target_queue_count"] == 0
   call = census["calls"][0]
   assert call["accepted_before_doorbell"] is True and call["all_checks_pass"] is True
+  assert call["target_exec_observed"] is True
+  assert call["submit_began"] is True and call["submit_returned"] is False
+  assert census["synchronize"] == {"began": False, "returned": False, "failure": None}
   assert call["program_identity"] == call["expected_program_identity"] == identity
   assert call["kernarg_qwords"] == argument_vas
   assert call["global_size"] == call["expected_global_size"] == [8, 4, 1]
@@ -393,6 +419,24 @@ def test_pm4_dispatch_census_retains_accepted_submit_and_kernargs_when_doorbell_
   assert rejected_census is not None
   assert rejected_census["accepted_target_call_count"] == 0
   assert rejected_census["calls"][0]["checks"]["ordered_program_identity_matches"] is False
+  assert rejected_census["calls"][0]["submit_began"] is False
+
+  queue._q = [0xc0001000, 0xc0001001]
+  submitted.clear()
+  with pytest.raises(RuntimeError, match="simulated delayed PM4 synchronize fault") as delayed:
+    _realize_with_pm4_dispatch_census(
+      Output(), target_program_identities=(identity,),
+      target_program_keys=(program_key,),
+      target_launch_dims=(((8, 4, 1), (256, 1, 1)),),
+      require_all_five_vas_fixed=True, require_all_five_vas_distinct=True)
+  delayed_census = _pm4_dispatch_census_from_exception(delayed.value)
+  assert submitted == [True]
+  assert delayed_census is not None and delayed_census["status"] == "SYNCHRONIZATION_ERROR"
+  assert delayed_census["calls"][0]["submit_began"] is True
+  assert delayed_census["calls"][0]["submit_returned"] is True
+  assert delayed_census["synchronize"]["began"] is True
+  assert delayed_census["synchronize"]["returned"] is False
+  assert "simulated delayed PM4 synchronize fault" in delayed_census["synchronize"]["failure"]
 
 
 def test_scheduler_producer_diagnostic_reports_qvalues_metadata_and_target_half_rounding():
@@ -440,6 +484,59 @@ def test_scheduler_producer_diagnostic_tensors_are_companion_outputs_of_one_real
   reused = object()
   with pytest.raises(RuntimeError, match="distinct retained tensors"):
     _retained_producer_tensors([SimpleNamespace(values=reused, scales=reused, sums=object())])
+
+
+def test_five_buffer_preparation_realizes_and_synchronizes_before_pointer_audit(monkeypatch):
+  from tinygrad.device import Device
+  events = []
+
+  class Handle:
+    def __init__(self, va, size): self.va_addr, self.size = va, size
+  class Buffer:
+    def __init__(self, va, size):
+      self.nbytes, self.handle = size, Handle(va, size)
+    def get_buf(self, device):
+      assert device == "AMD"
+      events.append(("pointer", self.handle.va_addr))
+      return self.handle
+  class FakeTensor:
+    def __init__(self, slot):
+      self.uop = SimpleNamespace(buffer=Buffer(0x1000 + slot*0x1000, 64 + slot))
+    def realize(self, *companions):
+      events.append(("realize", len(companions)))
+  class FakeDevice:
+    def synchronize(self): events.append(("synchronize",))
+
+  monkeypatch.setattr(type(Device), "__getitem__", lambda self, key: FakeDevice())
+  tensors = tuple(FakeTensor(slot) for slot in range(5))
+  phase = _realize_and_synchronize_five_buffer_preparation(tensors)
+  assert phase["status"] == "PASS" and phase["target_dispatch_allowed"] is True
+  assert phase["realize"] == {"began": True, "returned": True}
+  assert phase["synchronize"] == {"began": True, "returned": True, "failure": None}
+  assert [row["va"] for row in phase["allocations"]] == [
+    0x1000, 0x2000, 0x3000, 0x4000, 0x5000]
+  assert events[:2] == [("realize", 4), ("synchronize",)]
+
+
+def test_five_buffer_preparation_preserves_synchronize_failure(monkeypatch):
+  from tinygrad.device import Device
+
+  class FakeOutput:
+    def realize(self, *companions): pass
+  class FakeDevice:
+    def synchronize(self): raise RuntimeError("producer phase MMU fault")
+
+  monkeypatch.setattr(type(Device), "__getitem__", lambda self, key: FakeDevice())
+  with pytest.raises(RuntimeError, match="producer phase MMU fault") as raised:
+    _realize_and_synchronize_five_buffer_preparation(
+      (FakeOutput(), object(), object(), object(), object()))
+  phase = _preparation_phase_from_exception(raised.value)
+  assert phase is not None and phase["status"] == "SYNCHRONIZATION_ERROR"
+  assert phase["target_dispatch_allowed"] is False
+  assert phase["realize"] == {"began": True, "returned": True}
+  assert phase["synchronize"]["began"] is True
+  assert phase["synchronize"]["returned"] is False
+  assert "producer phase MMU fault" in phase["synchronize"]["failure"]
 
 
 def test_companion_realize_keeps_intermediate_allocations_live_for_post_readback():
@@ -788,12 +885,10 @@ def test_v2_fixed_base_ordinal_sequence_identities_preserve_selected_order():
   ("attn_kv", 3), ("attn_kv", 20), ("ffn_down", 68),
 ])
 def test_v2_fixed_base_isolated_reuses_health_aql_and_exact_prefix(tmp_path, role, prefix_epochs):
-  class _Proc:
-    returncode = 0
-    stdout = '{"schema":"tinygrad.mmq_frozen_epoch_program_set_prefix_probe.v2","status":"PASS"}\n'
-    stderr = ""
   bundle = tmp_path / "frozen-v2"
-  with patch("extra.qk.mmq_llama_five_buffer_gpu_harness.subprocess.run", return_value=_Proc()) as run, \
+  child = {"schema": "tinygrad.mmq_frozen_epoch_program_set_prefix_probe.v2", "status": "PASS"}
+  with patch("tinygrad.runtime.process_isolated.run_isolated",
+             return_value=IsolatedResult("passed", result=child)) as run, \
        patch("extra.qk.mmq_target_epoch_orchestrator.read_kernel_log_since", return_value=""), \
        patch("extra.qk.mmq_target_epoch_orchestrator.spawned_tiny_health_probe", return_value=True) as health:
     result = run_frozen_epoch_program_set_prefix_probe_isolated(
@@ -802,20 +897,18 @@ def test_v2_fixed_base_isolated_reuses_health_aql_and_exact_prefix(tmp_path, rol
   assert result["status"] == "PASS"
   assert result["health_before"] is result["health_after"] is True
   assert result["child_env_overrides"] == {"AMD_AQL": "1"}
-  assert run.call_args.kwargs["env"]["AMD_AQL"] == "1"
   assert health.call_args_list[0].args[0] == {"AMD_AQL": "1"}
-  code = run.call_args.args[0][2]
-  assert "run_frozen_epoch_program_set_prefix_probe" in code
-  assert f"prefix_epochs={prefix_epochs}" in code and f"exact_role_spec({role!r}" in code
-  assert "preconstruct_runtimes=False" in code
+  assert run.call_args.kwargs["start_method"] == "spawn"
+  args = run.call_args.kwargs["args"]
+  assert args[0] == exact_role_spec(role) and args[2] == prefix_epochs
+  assert args[3] is False and args[4] == {"AMD_AQL": "1"}
 
 
 def test_v2_fixed_base_isolated_forwards_runtime_preconstruction_opt_in(tmp_path):
-  class _Proc:
-    returncode = 0
-    stdout = '{"schema":"tinygrad.mmq_frozen_epoch_program_set_prefix_probe.v2","status":"PASS","runtime_preconstruction":{"enabled":true,"status":"PASS"}}\n'
-    stderr = ""
-  with patch("extra.qk.mmq_llama_five_buffer_gpu_harness.subprocess.run", return_value=_Proc()) as run, \
+  child = {"schema": "tinygrad.mmq_frozen_epoch_program_set_prefix_probe.v2", "status": "PASS",
+           "runtime_preconstruction": {"enabled": True, "status": "PASS"}}
+  with patch("tinygrad.runtime.process_isolated.run_isolated",
+             return_value=IsolatedResult("passed", result=child)) as run, \
        patch("extra.qk.mmq_target_epoch_orchestrator.read_kernel_log_since", return_value=""), \
        patch("extra.qk.mmq_target_epoch_orchestrator.spawned_tiny_health_probe", return_value=True):
     result = run_frozen_epoch_program_set_prefix_probe_isolated(
@@ -823,7 +916,28 @@ def test_v2_fixed_base_isolated_forwards_runtime_preconstruction_opt_in(tmp_path
       preconstruct_runtimes=True, timeout_seconds=1)
   assert result["status"] == "PASS"
   assert result["runtime_preconstruction"] == {"enabled": True, "status": "PASS"}
-  assert "preconstruct_runtimes=True" in run.call_args.args[0][2]
+  assert run.call_args.kwargs["args"][3] is True
+
+
+def test_v2_fixed_base_isolated_preserves_typed_census_from_child_failure(tmp_path):
+  census = {
+    "status": "SYNCHRONIZATION_ERROR", "accepted_target_call_count": 1,
+    "calls": [{"kernarg_qwords": [1, 2, 3, 4, 5],
+               "submit_began": True, "submit_returned": True}],
+    "synchronize": {"began": True, "returned": False, "failure": "MMU fault"},
+  }
+  with patch("tinygrad.runtime.process_isolated.run_isolated",
+             return_value=IsolatedResult(
+               "failed", error="RuntimeError: MMU fault",
+               evidence={"pm4_dispatch_census": census})), \
+       patch("extra.qk.mmq_target_epoch_orchestrator.read_kernel_log_since", return_value=""), \
+       patch("extra.qk.mmq_target_epoch_orchestrator.spawned_tiny_health_probe", return_value=True):
+    result = run_frozen_epoch_program_set_prefix_probe_isolated(
+      frozen_bundle=tmp_path / "frozen-v2", prefix_epochs=1,
+      child_env_overrides={"AMD_AQL": "0"}, timeout_seconds=1)
+  assert result["status"] == "BLOCKED"
+  assert result["dispatch"]["pm4_dispatch_census"] == census
+  assert result["isolated_failure_evidence"] == {"pm4_dispatch_census": census}
 
 
 @pytest.mark.parametrize(("role", "epoch"), [("attn_kv", 2), ("ffn_down", 67)])
@@ -930,6 +1044,9 @@ def test_v2_fixed_base_isolated_wrappers_admit_explicit_pm4_with_same_health_bou
     stderr = ""
   bundle = tmp_path / "frozen-v2"
   with patch("extra.qk.mmq_llama_five_buffer_gpu_harness.subprocess.run", return_value=_Proc()) as run, \
+       patch("tinygrad.runtime.process_isolated.run_isolated",
+             return_value=IsolatedResult("passed", result={
+               "status": "PASS", "scheduler_prefix_semantics_changed": False})) as isolated_run, \
        patch("extra.qk.mmq_target_epoch_orchestrator.read_kernel_log_since", return_value=""), \
        patch("extra.qk.mmq_target_epoch_orchestrator.spawned_tiny_health_probe", return_value=True) as health:
     results = (
@@ -946,6 +1063,7 @@ def test_v2_fixed_base_isolated_wrappers_admit_explicit_pm4_with_same_health_bou
   assert all(result["status"] == "PASS" for result in results)
   assert all(result["child_env_overrides"] == {"AMD_AQL": "0"} for result in results)
   assert all(call.kwargs["env"]["AMD_AQL"] == "0" for call in run.call_args_list)
+  assert isolated_run.call_args.kwargs["args"][4] == {"AMD_AQL": "0"}
   assert all(call.args[0] == {"AMD_AQL": "0"} for call in health.call_args_list)
 
 
