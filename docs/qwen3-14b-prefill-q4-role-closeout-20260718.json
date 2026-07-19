@@ -1,6 +1,6 @@
 {
   "schema": "tinygrad.qwen3_14b_prefill_q4_role_closeout.v2",
-  "status": "PHASE_3_MEASUREMENTS_COMPLETE_NO_PERFORMANCE_WINNER",
+  "status": "PHASE_3_MEASUREMENTS_INCOMPLETE_PERFORMANCE_NOT_EVALUATED",
   "production_promotion": false,
   "policy_changed": false,
   "policy": {
@@ -33,32 +33,33 @@
       ],
       "generated_evidence": {
         "path": "docs/qwen3-14b-prefill-mmq-one-role-evidence-20260718.json",
-        "sha256": "36a03bc3c2bd451968792bf924878e3e00bc9c11e9eee1f4d041d0531cb42044",
+        "sha256": "bf68a3428c681ac75b62d9872ba18ee8a2496b4243333204c672d9027ab00402",
         "full_role_correctness": "PASS",
         "resource": "PASS",
         "health": "PASS"
       },
       "performance": {
-        "invalid_comparison_retained_for_audit": {
-          "generated_single_epoch_k": 256,
-          "generated_single_epoch_median_ms": 0.277502,
-          "generated_single_epoch_min_ms": 0.269477,
-          "direct_packed_full_role_k": 5120,
-          "direct_packed_full_role_median_ms": 9.351988,
-          "direct_packed_full_role_min_ms": 9.349303,
+        "bounded_legacy_observations_retained_for_audit": {
+          "shape": [128, 128, 256],
+          "generated_median_ms": 0.277502,
+          "generated_min_ms": 0.269477,
+          "direct_packed_median_ms": 9.351988,
+          "direct_packed_min_ms": 9.349303,
           "comparable": false,
-          "reason": "the generated timing covers one of 20 K=256 epochs while direct packed covers the complete K=5120 role"
+          "comparison_scope": "legacy_mismatched_measurement_definition",
+          "reason": "logical shapes match, but generated times a resident compiled wait=True launch while direct includes tensor construction/conversion, realization, and NumPy readback"
         },
         "exact_full_role": {
+          "status": "UNKNOWN_NOT_EVALUATED",
           "k": 5120,
           "epoch_launches": 20,
-          "direct_packed_median_ms": 9.351988,
+          "direct_packed_median_ms": null,
           "generated_aql_header_last_ms": 42.8822620306164,
           "generated_aql_queued_ms": 27.07601070869714,
           "generated_pm4_ms": 41.86103114625439,
-          "best_generated_over_direct_ratio": 2.8952144408971803,
-          "performance_winner": false,
-          "methodology_limit": "each exact generated result is one isolated full-role sample; sufficient to reject a win, not to make a statistical promotion claim"
+          "best_generated_over_direct_ratio": null,
+          "performance_winner": null,
+          "methodology_limit": "generated complete-role observations exist, but no complete-role direct-packed measurement with identical preparation/allocation/readback/synchronization scope exists"
         }
       },
       "full_role_performance_artifacts": [
@@ -81,7 +82,7 @@
           "milliseconds": 41.86103114625439
         }
       ],
-      "decision": "REJECT_GENERATED_CANDIDATE_FOR_PERFORMANCE",
+      "decision": "DEFER_PERFORMANCE_DECISION_NO_MATCHED_FULL_ROLE_COMPARATOR",
       "policy_binding_kind": "candidate",
       "selected_route": "q4k_q8_five_buffer_research",
       "policy_binding_scope": "integration_only_historical_artifact",
@@ -108,7 +109,7 @@
         "direct_packed_baseline_ms": 7.89,
         "methodology_limit": "generated result is one cold isolated sample; no matched/statistical claim"
       },
-      "decision": "REJECT_GENERATED_CANDIDATE_KEEP_DIRECT_PACKED",
+      "decision": "DEFER_PERFORMANCE_DECISION_LEGACY_MEASUREMENT_DESCRIPTORS",
       "policy_binding_kind": "fallback",
       "selected_route": "direct_packed",
       "fallback_identity": "fallback:sha256:e77147b9b68ae129b055331ff1b8a1da52649d469febbc47402f919ded843e73",
@@ -162,7 +163,7 @@
         "direct_packed_baseline_ms": 11.41,
         "methodology_limit": "generated result is one cold isolated sample; no matched/statistical claim"
       },
-      "decision": "REJECT_GENERATED_CANDIDATE_KEEP_DIRECT_PACKED",
+      "decision": "DEFER_PERFORMANCE_DECISION_LEGACY_MEASUREMENT_DESCRIPTORS",
       "policy_binding_kind": "fallback",
       "selected_route": "direct_packed",
       "fallback_identity": "fallback:sha256:6b8b0c16a9bfa333bee14c702c09ccaa8ff2b76aea1017537e05cc28f4a4f139",
@@ -220,7 +221,7 @@
         "direct_packed_baseline_ms": 11.76,
         "methodology_limit": "generated result is one cold isolated sample; no matched/statistical claim"
       },
-      "decision": "REJECT_GENERATED_CANDIDATE_KEEP_DIRECT_PACKED",
+      "decision": "DEFER_PERFORMANCE_DECISION_LEGACY_MEASUREMENT_DESCRIPTORS",
       "policy_binding_kind": "fallback",
       "selected_route": "direct_packed",
       "fallback_identity": "fallback:sha256:711e195c353ef77345063794e800bddf0f6409d41efe8e9933fd650abbe5c1be",
@@ -232,7 +233,8 @@
     "all_four_generated_roles_resources_measured": true,
     "all_four_generated_roles_health_measured": true,
     "selected_generated_roles": [],
-    "performance_rejected_generated_roles": [
+    "performance_rejected_generated_roles": [],
+    "performance_not_evaluated_generated_roles": [
       "ffn_gate_up",
       "attn_kv",
       "attn_qo",
@@ -252,9 +254,9 @@
       "attn_qo",
       "ffn_down"
     ],
-    "complete": true,
+    "complete": false,
     "performance_policy_ready": false
   },
-  "next_phase": "GENERATE_A_PERFORMANCE_WINNER_WHILE_PHASE_6_REMAINS_AN_INTEGRATION_DIAGNOSTIC",
-  "performance_authority_caveat": "The 0.277502 ms ffn_gate_up sample covers one K=256 epoch and is incomparable with the 9.351988 ms full-K direct-packed role. Exact 20-epoch generated samples are 42.882262 ms synchronized AQL, 27.076011 ms queued AQL, and 41.861031 ms PM4, so all four measured generated Q4 roles lose to direct packed. No generated role is performance-qualified; production_promotion=false."
+  "next_phase": "COLLECT_MATCHED_FULL_ROLE_CANDIDATE_AND_DIRECT_TIMING_BEFORE_ANY_PERFORMANCE_DECISION",
+  "performance_authority_caveat": "The 0.277502 ms generated and 9.351988 ms direct observations both use the bounded 128x128x256 workload, but their measurement definitions differ and cannot establish a speedup. Complete-role generated observations are 42.882262 ms synchronized AQL, 27.076011 ms queued AQL, and 41.861031 ms PM4; no matched complete-role direct-packed observation exists. ffn_gate_up performance is UNKNOWN_NOT_EVALUATED and production_promotion=false."
 }

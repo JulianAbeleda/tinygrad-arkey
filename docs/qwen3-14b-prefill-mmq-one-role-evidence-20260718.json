@@ -5,7 +5,7 @@
       "backend": "not_implemented",
       "candidate_id": "full_14b_prefill_route",
       "promotion_eligible": false,
-      "reason": "ffn_gate_up evidence is ready to implement a research opt-in, but the live route binding, remaining six-row policy, whole-model correctness/memory census, and production rollback proof are absent",
+      "reason": "ffn_gate_up correctness/resource evidence is retained, but performance is not evaluated because no matched complete-role direct-packed comparator exists",
       "search_class": "production_route",
       "status": "blocked"
     }
@@ -13,6 +13,27 @@
   "candidate_route_id": "prefill_14b_q4k_q8_1_hybrid_mmq_atom",
   "comparator_id": "direct_packed",
   "default_route": "direct_packed",
+  "performance_evaluation": {
+    "schema": "q4k-q8-1-mmq-performance-comparability-correction.v2",
+    "status": "UNKNOWN_NOT_EVALUATED",
+    "bounded_observation": {
+      "shape": [128, 128, 256],
+      "generated_median_ms": 0.27750199660658836,
+      "direct_packed_median_ms": 9.351988031994551,
+      "comparison_scope": "legacy_mismatched_measurement_definition",
+      "performance_qualified": false
+    },
+    "complete_role_observations": {
+      "shape": [512, 17408, 5120],
+      "generated_aql_header_last_ms": 42.8822620306164,
+      "generated_aql_queued_ms": 27.07601070869714,
+      "generated_pm4_ms": 41.86103114625439,
+      "matched_direct_packed_ms": null,
+      "performance_winner": null
+    },
+    "reason": "the bounded candidate and direct calls used different measurement boundaries, and the complete-role generated observations have no matched complete-role direct-packed measurement",
+    "supersedes": "historical R5_COOP_WIN_READY_FOR_R6 and generated-vs-direct full-role loss claims"
+  },
   "done_components": [
     {
       "component": "DS4 layout",
@@ -1595,7 +1616,7 @@
     "bounded_cooperative_tile": false,
     "complete_atom": false,
     "default_route": "direct_packed",
-    "exact_blocker": "one ffn_gate_up role is evidence-ready; full production route admission remains incomplete",
+    "exact_blocker": "ffn_gate_up performance is UNKNOWN_NOT_EVALUATED without a matched complete-role direct-packed comparator",
     "milestones": {
       "M1_owner_coverage": true,
       "M2_q4_q8_staging": false,
@@ -1605,14 +1626,14 @@
       "M6_same_session_timing": false,
       "M7_no_fallback": false
     },
-    "one_role_evidence_ready": true,
+    "one_role_evidence_ready": false,
     "production_dispatch_changed": false,
     "promotion_eligible": false,
     "schema": "tinygrad.mmq_milestone_evidence.v1",
     "scope": "full_14b_prefill_production_route",
     "verdict": "BLOCKED_FAIL_CLOSED"
   },
-  "promotion_verdict": "ONE_ROLE_EVIDENCE_READY_PRODUCTION_PROMOTION_BLOCKED",
+  "promotion_verdict": "BLOCKED_UNTIL_COOPERATIVE_TILE_WIN",
   "public_label": "hybrid_machine_search_mmq",
   "r4_evidence_artifacts": {
     "gpu_owner_trace": {
@@ -10451,12 +10472,13 @@
   },
   "r5_geometry_search": {
     "best_candidate_id": "r5_llama_coop_oracle_16x16",
+    "bounded_emitted_backend_win": false,
     "default_route": "direct_packed",
-    "emitted_backend_win": true,
-    "exact_blocker": "emitted backend win awaits production role/shape integration",
+    "emitted_backend_win": false,
+    "exact_blocker": "no emitted cooperative MMQ candidate has an identical-workload exact complete target-role win",
     "production_dispatch_changed": false,
     "promotion_eligible": false,
-    "promotion_verdict": "R5_COOP_WIN_READY_FOR_R6",
+    "promotion_verdict": "NO_PROMOTION_WITHOUT_COMPARABLE_FULL_ROLE_WIN",
     "ranking": [
       {
         "artifacts": {
@@ -10956,17 +10978,17 @@
       }
     ],
     "role_shape_integration": false,
-    "schema": "q4k-q8-1-mmq-r5-geometry-search.v1",
+    "schema": "q4k-q8-1-mmq-r5-geometry-search.v2",
     "status": "PASS_NON_PROMOTABLE"
   },
   "r5_geometry_search_status": {
-    "reason": "R5 same-session emitted win and the independent R6/R7 one-role evidence are retained; production promotion remains blocked",
+    "reason": "R5 correctness/resources are retained; performance is UNKNOWN_NOT_EVALUATED until matched complete-role candidate/direct measurements exist",
     "required_r4_evidence": [
       "owner_coverage:PASS",
       "staging_sum_slots:PASS",
       "gpu_owner_trace:PASS"
     ],
-    "status": "complete_for_one_role_evidence"
+    "status": "blocked_no_comparable_full_role_win"
   },
   "r6_route_gate_status": {
     "default_route": "direct_packed",
@@ -10986,7 +11008,7 @@
       "status": "PASS",
       "target_binary_sha256": "99c7ee0cc249dd6ccb0e285dca679aa352b914c72f4ac045751300a4d6f2c996"
     },
-    "exact_blocker": null,
+    "exact_blocker": "R6 route binding is illegal until R5 reports an identical-workload exact complete target-role win",
     "independent_epoch_evidence": {
       "checks": {
         "all_epoch_clean_health": true,
@@ -11033,24 +11055,23 @@
     "r5_evidence_validation": {
       "checks": {
         "default_route": true,
-        "measured_emitted_win": true,
+        "identical_workload_complete_target_win": false,
+        "measured_emitted_win": false,
         "non_promotable_status": true,
         "not_directly_promotable": true,
         "production_dispatch_unchanged": true,
         "schema": true,
         "summary_consistent": true,
-        "target_backend_lineage": true,
+        "target_backend_lineage": false,
         "unique_candidate_ids": true
       },
-      "exact_blocker": null,
-      "qualifying_candidate_ids": [
-        "r5_full_grid_128x128"
-      ],
-      "schema": "q4k-q8-1-mmq-r5-retained-evidence-validation.v1",
-      "status": "PASS"
+      "exact_blocker": "R5 evidence missing/failed: measured_emitted_win, identical_workload_complete_target_win, target_backend_lineage",
+      "qualifying_candidate_ids": [],
+      "schema": "q4k-q8-1-mmq-r5-retained-evidence-validation.v2",
+      "status": "BLOCKED"
     },
     "required_evidence": {
-      "bounded_coop_candidate_win": true,
+      "comparable_full_role_candidate_win": false,
       "evidence_composition": true,
       "ffn_gate_up_only": true,
       "independent_epoch_gpu_evidence": true,
@@ -11083,7 +11104,7 @@
         "status": "PASS",
         "target_binary_sha256": "99c7ee0cc249dd6ccb0e285dca679aa352b914c72f4ac045751300a4d6f2c996"
       },
-      "exact_blocker": null,
+      "exact_blocker": "target role evidence is not admitted without a comparable complete-role R5 win",
       "independent_epoch_evidence": {
         "checks": {
           "all_epoch_clean_health": true,
@@ -11133,7 +11154,7 @@
       "shape_matches": false,
       "static_direct_packed_rollback": true,
       "static_negative_role_scope": true,
-      "status": "PASS",
+      "status": "BLOCKED",
       "target": {
         "K": 5120,
         "M": 512,
@@ -11260,7 +11281,7 @@
     },
     "route_binding_implemented": false,
     "schema": "q4k-q8-1-mmq-r6-route-gate-status.v1",
-    "status": "READY_FOR_ONE_ROLE_OPT_IN",
+    "status": "BLOCKED_NO_COMPARABLE_FULL_ROLE_WIN",
     "target_role_evidence": {
       "checks": {
         "all_k_epochs": true,
@@ -13646,9 +13667,9 @@
       "one_role_opt_in_eligible": false,
       "production_dispatch_changed": false,
       "promotion_eligible": false,
-      "r6_route_gate_status": "READY_FOR_ONE_ROLE_OPT_IN",
+      "r6_route_gate_status": "BLOCKED_NO_COMPARABLE_FULL_ROLE_WIN",
       "r7_reduction_status": "PASS_TARGET_ROLE_REDUCTION",
-      "research_opt_in_implementation_eligible": true,
+      "research_opt_in_implementation_eligible": false,
       "role": "ffn_gate_up",
       "route_binding_implemented": false,
       "shape": {
@@ -13657,7 +13678,7 @@
         "N": 17408,
         "role": "ffn_gate_up"
       },
-      "status": "one_role_evidence_ready"
+      "status": "evidence_only"
     }
   ],
   "schema": "q4k-q8-1-mmq-machine-search.v1",
@@ -14020,7 +14041,7 @@
     "R5 bounded cooperative numeric atom"
   ],
   "status_semantics": {
-    "one_role_evidence_ready": "the exact ffn_gate_up kernel passed retained R5/R6/R7 evidence; no live route is bound",
+    "performance_unknown": "complete-role generated observations exist, but no matched complete-role direct-packed comparator was measured",
     "production_promotion": "requires the complete multi-role policy and whole-model gates",
     "ready_for_one_role_opt_in": "evidence gate only; implementation plus a live negative-role/fallback census are still required"
   },

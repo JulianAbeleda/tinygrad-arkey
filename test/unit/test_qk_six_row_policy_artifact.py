@@ -38,21 +38,13 @@ def test_current_repository_reports_six_exact_fail_closed_obligations():
   assert exc.value.missing == missing
 
 
-def test_retained_evidence_builds_one_q4_candidate_and_five_explicit_fallbacks():
+def test_retained_evidence_blocks_all_q4_rows_without_comparable_full_role_win():
   inventory = _inventory(); q4, q6 = _evidence()
-  first = build_six_row_policy_artifact(inventory, q4_evidence=q4, q6_evidence=q6)
-  second = build_six_row_policy_artifact(inventory, q4_evidence=q4, q6_evidence=tuple(reversed(q6)))
-  assert first == second and first["status"] == "research_only" and first["production_promotion"] is False
-  assert first["q4_one_role_qualification"]["source_schema"] == Q4_JOINED_EVIDENCE_SCHEMA
-  assert first["q4_one_role_qualification"]["production_promotion"] is False
-  assert len(first["candidate_set"]["entries"]) == 1 and len(first["candidate_set"]["fallbacks"]) == 5
-  rows = {(row["quant"], row["role"]):row for row in first["policy_rows"]}
-  assert len(rows) == 6
-  assert rows[("Q4_K", "ffn_gate_up")]["binding_kind"] == "candidate"
-  assert rows[("Q4_K", "ffn_gate_up")]["selected_route"] == "q4k_q8_five_buffer_research"
-  for key in (("Q4_K", "attn_kv"), ("Q4_K", "attn_qo"), ("Q4_K", "ffn_down"),
-              ("Q6_K", "attn_kv"), ("Q6_K", "ffn_down")):
-    assert rows[key]["binding_kind"] == "fallback" and rows[key]["selected_route"] == "direct_packed"
+  missing = missing_qualification_evidence(inventory, q4_evidence=q4, q6_evidence=q6)
+  assert len(missing) == 4 and all(item.startswith("Q4_K:") for item in missing)
+  with pytest.raises(MissingQualificationEvidence) as exc:
+    build_six_row_policy_artifact(inventory, q4_evidence=q4, q6_evidence=q6)
+  assert exc.value.missing == missing
 
 
 def test_compile_only_q4_role_gate_cannot_qualify_candidate_or_negative_rows():
@@ -82,20 +74,20 @@ def test_q6_evidence_requires_exact_retained_qualification_identity():
   q6[0]["qualification_identity"] += "-forged"
   with pytest.raises(MissingQualificationEvidence) as exc:
     build_six_row_policy_artifact(inventory, q4_evidence=q4, q6_evidence=q6)
-  assert len(exc.value.missing) == 1 and exc.value.missing[0].endswith(":direct_packed_qualification")
+  assert len(exc.value.missing) == 5
+  assert sum(item.endswith(":direct_packed_qualification") for item in exc.value.missing) == 1
 
   _, valid_q6 = _evidence()
   duplicated = [copy.deepcopy(valid_q6[0]), copy.deepcopy(valid_q6[0])]
   missing = missing_qualification_evidence(inventory, q4_evidence=q4, q6_evidence=duplicated)
-  assert len(missing) == 1 and ":ffn_down:" in missing[0]
+  assert len(missing) == 5
+  assert sum(item.startswith("Q6_K:") and ":ffn_down:" in item for item in missing) == 1
 
 
-def test_explicit_loader_requires_two_q6_paths_and_cli_writes_corrected_artifact(tmp_path):
+def test_explicit_loader_requires_two_q6_paths_and_cli_blocks_stale_q4_evidence(tmp_path):
   with pytest.raises(ValueError, match="exactly two"): load_explicit_evidence(Q4_JOINED, Q6_PATHS[:1])
   output = tmp_path / "policy.json"
-  main([str(INVENTORY), "--q4-evidence", str(Q4_JOINED), "--q6-evidence",
-        str(Q6_PATHS[1]), str(Q6_PATHS[0]), "--output", str(output)])
-  artifact = json.loads(output.read_text())
-  assert len(artifact["policy_rows"]) == 6
-  assert sum(row["binding_kind"] == "candidate" for row in artifact["policy_rows"]) == 1
-  assert sum(row["binding_kind"] == "fallback" for row in artifact["policy_rows"]) == 5
+  with pytest.raises(MissingQualificationEvidence):
+    main([str(INVENTORY), "--q4-evidence", str(Q4_JOINED), "--q6-evidence",
+          str(Q6_PATHS[1]), str(Q6_PATHS[0]), "--output", str(output)])
+  assert not output.exists()

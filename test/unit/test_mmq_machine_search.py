@@ -21,6 +21,29 @@ from extra.qk.mmq_machine_search import (
 from extra.qk.mmq_machine_search import build_boltbeam_oracle_trace
 
 
+def _identical_bounded_timing_descriptors(config: BoundedMMQConfig) -> dict:
+  workload = {
+    "role": "bounded_r5_geometry", "M": config.bounded_m, "N": config.bounded_n,
+    "K": config.bounded_k, "k_launches": 1, "complete_role": False,
+    "output_elements": config.bounded_m * config.bounded_n,
+  }
+  measurement_definition = {
+    "preparation_scope": "excluded_prepared_identical_logical_inputs",
+    "allocation_scope": "excluded_persistent_preallocated_buffers",
+    "readback_scope": "excluded_timed_region",
+    "sync_scope": "outer_synchronize_after_complete_role",
+  }
+  return {
+    "comparison_scope": "identical_workload",
+    "candidate_measurement": {
+      "workload": dict(workload), "measurement_definition": dict(measurement_definition),
+    },
+    "direct_packed_measurement": {
+      "workload": dict(workload), "measurement_definition": dict(measurement_definition),
+    },
+  }
+
+
 def test_mmq_promotion_adapter_fails_closed_on_missing_or_invalid_evidence():
   missing = evaluate_candidate_promotion()
   assert missing["verdict"] == "BLOCKED_FAIL_CLOSED"
@@ -63,11 +86,11 @@ def test_mmq_machine_search_only_marks_completed_components_searchable():
   assert report["promotion_verdict"] == "BLOCKED_UNTIL_COOPERATIVE_TILE_WIN"
   assert report["r5_geometry_search_status"] == {
     "status": "ready_for_bounded_geometry_search",
-    "reason": "R4 lowered owner trace, staging evidence, and R5 bounded coop numeric correctness pass; R6 remains blocked until R5 reports a same-session coop speed win",
+    "reason": "R4 lowered owner trace, staging evidence, and R5 bounded correctness pass; R6 remains blocked until R5 reports an identical-workload exact complete target-role win",
     "required_r4_evidence": ["owner_coverage:PASS", "staging_sum_slots:PASS", "gpu_owner_trace:PASS"],
   }
-  assert report["r5_geometry_search"]["promotion_verdict"] == "NO_PROMOTION_WITHOUT_BOUNDED_COOP_WIN"
-  assert report["r6_route_gate_status"]["status"] == "BLOCKED_NO_BOUNDED_COOP_WIN"
+  assert report["r5_geometry_search"]["promotion_verdict"] == "NO_PROMOTION_WITHOUT_COMPARABLE_FULL_ROLE_WIN"
+  assert report["r6_route_gate_status"]["status"] == "BLOCKED_NO_COMPARABLE_FULL_ROLE_WIN"
   assert report["r7_reduction_status"]["status"] == "BLOCKED_REMAINING_SOURCE_CLONE_ROWS"
   assert report["searchable_components"] == [
     "DS4 layout",
@@ -239,16 +262,17 @@ def test_mmq_r5_geometry_search_ranks_non_promotable_existing_atoms_with_fake_ru
 
   report = build_r5_geometry_search_report(run=True, runner=fake_runner)
 
-  assert report["schema"] == "q4k-q8-1-mmq-r5-geometry-search.v1"
+  assert report["schema"] == "q4k-q8-1-mmq-r5-geometry-search.v2"
   assert report["status"] == "PASS_NON_PROMOTABLE"
   assert report["promotion_eligible"] is False
-  assert report["promotion_verdict"] == "R5_COOP_WIN_READY_FOR_R6"
-  assert report["emitted_backend_win"] is True
+  assert report["promotion_verdict"] == "NO_PROMOTION_WITHOUT_COMPARABLE_FULL_ROLE_WIN"
+  assert report["emitted_backend_win"] is False
+  assert report["bounded_emitted_backend_win"] is False
   assert report["role_shape_integration"] is False
   assert report["best_candidate_id"] == "r5_llama_coop_oracle_16x16"
   assert report["ranking"][0]["speedup_vs_direct_packed"] == 10.0
   assert report["ranking"][0]["promotion_eligible"] is False
-  assert "role/shape integration" in report["exact_blocker"]
+  assert "exact complete target-role win" in report["exact_blocker"]
 
 
 def test_mmq_r5_includes_distinct_full_grid_candidate_and_keeps_r6_fail_closed():
@@ -259,10 +283,10 @@ def test_mmq_r5_includes_distinct_full_grid_candidate_and_keeps_r6_fail_closed()
   assert full["promotion_eligible"] is False
 
   synthetic = {**report, "status": "PASS_NON_PROMOTABLE", "emitted_backend_win": True,
-               "promotion_verdict": "R5_COOP_WIN_READY_FOR_R6",
+               "promotion_verdict": "R5_COMPARABLE_FULL_ROLE_WIN_READY_FOR_R6",
                "role_shape_integration": False}
   r6 = build_r6_route_gate_status(synthetic)
-  assert r6["status"] == "BLOCKED_NO_BOUNDED_COOP_WIN"
+  assert r6["status"] == "BLOCKED_NO_COMPARABLE_FULL_ROLE_WIN"
   assert r6["production_dispatch_changed"] is False
   assert r6["r5_evidence_validation"]["status"] == "BLOCKED"
   assert r6["r5_evidence_validation"]["checks"]["measured_emitted_win"] is False
@@ -276,7 +300,7 @@ def test_mmq_r5_includes_distinct_full_grid_candidate_and_keeps_r6_fail_closed()
   # integration, negative-role coverage, and fallback exclusion are separate
   # evidence obligations and remain fail-closed until actually measured.
   assert r6["required_evidence"] == {
-    "bounded_coop_candidate_win": False,
+    "comparable_full_role_candidate_win": False,
     "ffn_gate_up_only": True,
     "static_negative_role_scope": True,
     "static_direct_packed_rollback": True,
@@ -288,23 +312,25 @@ def test_mmq_r5_includes_distinct_full_grid_candidate_and_keeps_r6_fail_closed()
   assert r6["negative_role_fallback_smoke"]["status"] == "PASS_STATIC_DESCRIPTOR"
 
 
-def test_mmq_joined_report_is_one_role_ready_but_not_production_promotable():
+def test_mmq_joined_report_retains_correctness_but_blocks_without_full_role_comparator():
   root = Path(__file__).resolve().parents[2]
   r5 = json.loads((root / "docs/qwen3-14b-prefill-r5-geometry-20260718.json").read_text())
   target = json.loads((root / "docs/qwen3-14b-prefill-target-frozen-20epoch-pm4-20260718.json").read_text())
   independent = json.loads((root / "docs/target-epoch-safe-all-attested-20260718.json").read_text())
+  retained_joined = json.loads((root /
+    "docs/qwen3-14b-prefill-mmq-one-role-evidence-20260718.json").read_text())
 
   report = build_search_report(
     r5_evidence=r5, target_role_probe=target, independent_epoch_evidence=independent)
 
-  assert report["r6_route_gate_status"]["status"] == "READY_FOR_ONE_ROLE_OPT_IN"
+  assert report["r6_route_gate_status"]["status"] == "BLOCKED_NO_COMPARABLE_FULL_ROLE_WIN"
   assert report["r7_reduction_status"]["status"] == "PASS_TARGET_ROLE_REDUCTION"
-  assert report["promotion_verdict"] == "ONE_ROLE_EVIDENCE_READY_PRODUCTION_PROMOTION_BLOCKED"
+  assert report["promotion_verdict"] == "BLOCKED_UNTIL_COOPERATIVE_TILE_WIN"
   assert report["production_promotion_verdict"] == "BLOCKED"
   candidate = report["role_candidates"][0]
-  assert candidate["status"] == "one_role_evidence_ready"
+  assert candidate["status"] == "evidence_only"
   assert candidate["one_role_opt_in_eligible"] is False
-  assert candidate["research_opt_in_implementation_eligible"] is True
+  assert candidate["research_opt_in_implementation_eligible"] is False
   assert candidate["route_binding_implemented"] is False
   assert candidate["promotion_eligible"] is False
   assert report["production_dispatch_changed"] is False
@@ -312,8 +338,12 @@ def test_mmq_joined_report_is_one_role_ready_but_not_production_promotable():
   assert report["promotion_gate"]["verdict"] == "BLOCKED_FAIL_CLOSED"
   assert report["promotion_gate"]["scope"] == "full_14b_prefill_production_route"
   assert report["blocked_candidates"][0]["status"] == "blocked"
-  assert "six-row policy" in report["blocked_candidates"][0]["reason"]
   assert report["r6_route_gate_status"]["role_shape_integration"]["candidate_id"] == "r5_full_grid_128x128"
+  assert retained_joined["promotion_verdict"] == report["promotion_verdict"]
+  assert retained_joined["r6_route_gate_status"]["status"] == report["r6_route_gate_status"]["status"]
+  assert retained_joined["r6_route_gate_status"]["role_shape_integration"]["status"] == \
+    report["r6_route_gate_status"]["role_shape_integration"]["status"]
+  assert retained_joined["role_candidates"][0]["status"] == report["role_candidates"][0]["status"]
 
   failed_comparison = copy.deepcopy(r5)
   full_grid = next(row for row in failed_comparison["ranking"] if row["candidate_id"] == "r5_full_grid_128x128")
@@ -323,7 +353,7 @@ def test_mmq_joined_report_is_one_role_ready_but_not_production_promotable():
   full_grid["timing"]["comparator_status"] = "blocked"
   blocked = build_search_report(
     r5_evidence=failed_comparison, target_role_probe=target, independent_epoch_evidence=independent)
-  assert blocked["r6_route_gate_status"]["status"] == "BLOCKED_NO_BOUNDED_COOP_WIN"
+  assert blocked["r6_route_gate_status"]["status"] == "BLOCKED_NO_COMPARABLE_FULL_ROLE_WIN"
   assert blocked["role_candidates"][0]["one_role_opt_in_eligible"] is False
 
   nonfinite_timing = copy.deepcopy(r5)
@@ -332,7 +362,7 @@ def test_mmq_joined_report_is_one_role_ready_but_not_production_promotable():
   full_grid["speedup_vs_direct_packed"] = float("nan")
   blocked = build_search_report(
     r5_evidence=nonfinite_timing, target_role_probe=target, independent_epoch_evidence=independent)
-  assert blocked["r6_route_gate_status"]["status"] == "BLOCKED_NO_BOUNDED_COOP_WIN"
+  assert blocked["r6_route_gate_status"]["status"] == "BLOCKED_NO_COMPARABLE_FULL_ROLE_WIN"
 
   malformed_rows = []
   forged = copy.deepcopy(r5)
@@ -356,7 +386,80 @@ def test_mmq_joined_report_is_one_role_ready_but_not_production_promotable():
   for forged in malformed_rows:
     gate = build_r6_route_gate_status(
       forged, target_evidence=target, independent_epoch_evidence=independent)
-    assert gate["status"] == "BLOCKED_NO_BOUNDED_COOP_WIN"
+    assert gate["status"] == "BLOCKED_NO_COMPARABLE_FULL_ROLE_WIN"
+
+
+def test_mmq_r5_full_role_comparator_descriptors_fail_closed_on_missing_or_drift():
+  root = Path(__file__).resolve().parents[2]
+  r5 = json.loads((root / "docs/qwen3-14b-prefill-r5-geometry-20260718.json").read_text())
+  target = json.loads((root /
+    "docs/qwen3-14b-prefill-target-frozen-20epoch-pm4-20260718.json").read_text())
+  independent = json.loads((root /
+    "docs/target-epoch-safe-all-attested-20260718.json").read_text())
+  full = next(row for row in r5["ranking"] if row["candidate_id"] == "r5_full_grid_128x128")
+  workload = {
+    "role": "ffn_gate_up", "M": 512, "N": 17408, "K": 5120,
+    "k_launches": 20, "complete_role": True, "output_elements": 512 * 17408,
+  }
+  definition = {
+    "preparation_scope": "excluded_prepared_identical_logical_inputs",
+    "allocation_scope": "excluded_persistent_preallocated_buffers",
+    "readback_scope": "excluded_timed_region",
+    "sync_scope": "outer_synchronize_after_complete_role",
+  }
+  full["timing"].update({
+    "comparison_scope": "identical_workload",
+    "candidate_measurement": {
+      "workload": dict(workload), "measurement_definition": dict(definition),
+    },
+    "direct_packed_measurement": {
+      "workload": dict(workload), "measurement_definition": dict(definition),
+    },
+    "min_ms": 5.0, "samples_ms": [6.0, 5.0], "direct_packed_min_ms": 10.0,
+    "direct_packed": {"status": "measured", "min_ms": 10.0, "samples_ms": [11.0, 10.0]},
+  })
+  full["speedup_vs_direct_packed"] = 2.0
+  r5.update({
+    "emitted_backend_win": True,
+    "bounded_emitted_backend_win": True,
+    "promotion_verdict": "R5_COMPARABLE_FULL_ROLE_WIN_READY_FOR_R6",
+  })
+  admitted = build_r6_route_gate_status(
+    r5, target_evidence=target, independent_epoch_evidence=independent)
+  assert admitted["status"] == "READY_FOR_ONE_ROLE_OPT_IN"
+  assert admitted["r5_evidence_validation"]["checks"]["identical_workload_complete_target_win"] is True
+
+  mutations = []
+  missing = copy.deepcopy(r5)
+  del next(row for row in missing["ranking"] if row["candidate_id"] == "r5_full_grid_128x128")[
+    "timing"]["candidate_measurement"]
+  mutations.append(missing)
+  for path, value in (
+      (("direct_packed_measurement", "workload", "K"), 256),
+      (("direct_packed_measurement", "workload", "k_launches"), 19),
+      (("direct_packed_measurement", "workload", "complete_role"), False),
+      (("direct_packed_measurement", "workload", "output_elements"), 1),
+      (("direct_packed_measurement", "measurement_definition", "readback_scope"), "included_numpy_readback")):
+    drift = copy.deepcopy(r5)
+    timing = next(row for row in drift["ranking"] if row["candidate_id"] == "r5_full_grid_128x128")["timing"]
+    timing[path[0]][path[1]][path[2]] = value
+    mutations.append(drift)
+  wrong_scope = copy.deepcopy(r5)
+  next(row for row in wrong_scope["ranking"] if row["candidate_id"] == "r5_full_grid_128x128")[
+    "timing"]["comparison_scope"] = "legacy_mismatched_measurement_definition"
+  mutations.append(wrong_scope)
+  arbitrary_equal_strings = copy.deepcopy(r5)
+  timing = next(row for row in arbitrary_equal_strings["ranking"] if row[
+    "candidate_id"] == "r5_full_grid_128x128")["timing"]
+  arbitrary_definition = {key: "synthetic_equal_but_unsupported" for key in definition}
+  timing["candidate_measurement"]["measurement_definition"] = dict(arbitrary_definition)
+  timing["direct_packed_measurement"]["measurement_definition"] = dict(arbitrary_definition)
+  mutations.append(arbitrary_equal_strings)
+  for drift in mutations:
+    blocked = build_r6_route_gate_status(
+      drift, target_evidence=target, independent_epoch_evidence=independent)
+    assert blocked["status"] == "BLOCKED_NO_COMPARABLE_FULL_ROLE_WIN"
+    assert blocked["r5_evidence_validation"]["checks"]["identical_workload_complete_target_win"] is False
 
 
 def test_mmq_cli_loads_joined_evidence_and_rejects_non_object(tmp_path, monkeypatch, capsys):
@@ -371,8 +474,8 @@ def test_mmq_cli_loads_joined_evidence_and_rejects_non_object(tmp_path, monkeypa
   main()
   capsys.readouterr()
   report = json.loads(output.read_text())
-  assert report["promotion_verdict"] == "ONE_ROLE_EVIDENCE_READY_PRODUCTION_PROMOTION_BLOCKED"
-  assert report["r6_route_gate_status"]["status"] == "READY_FOR_ONE_ROLE_OPT_IN"
+  assert report["promotion_verdict"] == "BLOCKED_UNTIL_COOPERATIVE_TILE_WIN"
+  assert report["r6_route_gate_status"]["status"] == "BLOCKED_NO_COMPARABLE_FULL_ROLE_WIN"
 
   malformed = tmp_path / "array.json"
   malformed.write_text("[]\n")
@@ -394,7 +497,7 @@ def test_mmq_cli_loads_joined_evidence_and_rejects_non_object(tmp_path, monkeypa
     main()
 
 
-def test_mmq_r5_full_grid_win_is_ranked_as_emitted_but_not_promoted():
+def test_mmq_r5_full_grid_bounded_win_is_ranked_but_cannot_feed_r6():
   own_ms = {
     "r5_ds4_warp_4x5": 8.0, "r5_ds4_dot4x4_8x7": 7.0,
     "r5_ds4_lds_skeleton_4x5": 9.0, "r5_ds4_coop_tile_16x16": 6.0,
@@ -404,18 +507,20 @@ def test_mmq_r5_full_grid_win_is_ranked_as_emitted_but_not_promoted():
     own = own_ms[next(c.candidate_id for c in R5_GEOMETRY_CANDIDATES if c.backend == config.backend)]
     return {"status": "PASS", "correctness": {"max_abs": 0.0, "atol": 0.001, "tiles": 1},
             "timing": {"min_ms": own, "comparator_status": "measured",
-                       "direct_packed": {"min_ms": 10.0}}}
+                       "direct_packed": {"min_ms": 10.0},
+                       **_identical_bounded_timing_descriptors(config)}}
 
   report = build_r5_geometry_search_report(run=True, runner=fake_runner)
   assert report["best_candidate_id"] == "r5_full_grid_128x128"
-  assert report["emitted_backend_win"] is True
-  assert report["promotion_verdict"] == "R5_COOP_WIN_READY_FOR_R6"
+  assert report["emitted_backend_win"] is False
+  assert report["bounded_emitted_backend_win"] is True
+  assert report["promotion_verdict"] == "NO_PROMOTION_WITHOUT_COMPARABLE_FULL_ROLE_WIN"
   assert report["promotion_eligible"] is False
   assert report["role_shape_integration"] is False
   retained = json.loads((Path(__file__).resolve().parents[2] /
     "docs/qwen3-14b-prefill-r5-geometry-20260718.json").read_text())
   r6 = build_r6_route_gate_status(retained)
-  assert r6["status"] == "BLOCKED_ROLE_SHAPE_INTEGRATION"
+  assert r6["status"] == "BLOCKED_NO_COMPARABLE_FULL_ROLE_WIN"
 
   artifact = build_r6_role_shape_integration_artifact(retained)
   assert artifact["candidate_id"] == "r5_full_grid_128x128"
@@ -434,20 +539,22 @@ def test_mmq_r5_full_grid_win_is_ranked_as_emitted_but_not_promoted():
   assert artifact["tile_plan"]["k_tiled_accumulate_probe"]["mismatch_count"] == 0
 
 
-def test_mmq_r5_emitted_win_survives_oracle_speed_rank():
+def test_mmq_r5_bounded_emitted_win_survives_oracle_rank_without_feeding_r6():
   own_ms = {c.candidate_id: 8.0 for c in R5_GEOMETRY_CANDIDATES}
   own_ms.update({"r5_full_grid_128x128": 0.5, "r5_llama_coop_oracle_16x16": 0.1})
   def fake_runner(config: BoundedMMQConfig):
     own = own_ms[next(c.candidate_id for c in R5_GEOMETRY_CANDIDATES if c.backend == config.backend)]
     return {"status": "PASS", "correctness": {"max_abs": 0.0, "atol": 0.001, "tiles": 1},
             "timing": {"min_ms": own, "comparator_status": "measured",
-                       "direct_packed": {"min_ms": 10.0}}}
+                       "direct_packed": {"min_ms": 10.0},
+                       **_identical_bounded_timing_descriptors(config)}}
 
   report = build_r5_geometry_search_report(run=True, runner=fake_runner)
   assert report["best_candidate_id"] == "r5_llama_coop_oracle_16x16"
-  assert report["emitted_backend_win"] is True
-  assert report["promotion_verdict"] == "R5_COOP_WIN_READY_FOR_R6"
-  assert build_r6_route_gate_status(report)["status"] == "BLOCKED_NO_BOUNDED_COOP_WIN"
+  assert report["emitted_backend_win"] is False
+  assert report["bounded_emitted_backend_win"] is True
+  assert report["promotion_verdict"] == "NO_PROMOTION_WITHOUT_COMPARABLE_FULL_ROLE_WIN"
+  assert build_r6_route_gate_status(report)["status"] == "BLOCKED_NO_COMPARABLE_FULL_ROLE_WIN"
 
 
 def test_mmq_full_grid_tile_plan_rejects_unaligned_shapes_fail_closed():
@@ -469,15 +576,15 @@ def test_mmq_r6_negative_role_smoke_is_manifest_scoped_and_default_off():
   assert smoke["production_dispatch_changed"] is False
 
 
-def test_mmq_r6_and_r7_statuses_fail_closed_until_coop_win():
+def test_mmq_r6_and_r7_statuses_fail_closed_until_comparable_full_role_win():
   r5 = build_r5_geometry_search_report(run=False)
   r6 = build_r6_route_gate_status(r5)
   r7 = build_r7_reduction_status()
 
-  assert r6["status"] == "BLOCKED_NO_BOUNDED_COOP_WIN"
-  assert r6["required_evidence"]["bounded_coop_candidate_win"] is False
+  assert r6["status"] == "BLOCKED_NO_COMPARABLE_FULL_ROLE_WIN"
+  assert r6["required_evidence"]["comparable_full_role_candidate_win"] is False
   assert r6["production_dispatch_changed"] is False
-  assert "illegal until R5" in r6["exact_blocker"]
+  assert "identical-workload exact complete target-role win" in r6["exact_blocker"]
   assert r7["status"] == "BLOCKED_REMAINING_SOURCE_CLONE_ROWS"
   assert len(r7["remaining_rows"]) >= 3
   assert all(row["status"] for row in r7["remaining_rows"])
@@ -493,12 +600,12 @@ def test_mmq_r6_target_role_gate_requires_measured_full_shape_evidence():
   independent = json.loads((root /
     "docs/target-epoch-safe-all-attested-20260718.json").read_text())
   missing_independent = build_r6_route_gate_status(r5, target_evidence=target)
-  assert missing_independent["status"] == "BLOCKED_ROLE_SHAPE_INTEGRATION"
+  assert missing_independent["status"] == "BLOCKED_NO_COMPARABLE_FULL_ROLE_WIN"
   assert missing_independent["required_evidence"]["target_role_gpu_evidence"] is True
   assert missing_independent["required_evidence"]["independent_epoch_gpu_evidence"] is False
   gate = build_r6_route_gate_status(
     r5, target_evidence=target, independent_epoch_evidence=independent)
-  assert gate["status"] == "READY_FOR_ONE_ROLE_OPT_IN"
+  assert gate["status"] == "BLOCKED_NO_COMPARABLE_FULL_ROLE_WIN"
   assert gate["required_evidence"]["target_role_gpu_evidence"] is True
   assert gate["required_evidence"]["independent_epoch_gpu_evidence"] is True
   assert gate["required_evidence"]["evidence_composition"] is True
@@ -541,7 +648,7 @@ def test_mmq_r6_target_role_gate_requires_measured_full_shape_evidence():
   for forged in forged_rows:
     blocked = build_r6_route_gate_status(
       r5, target_evidence=forged, independent_epoch_evidence=independent)
-    assert blocked["status"] == "BLOCKED_ROLE_SHAPE_INTEGRATION"
+    assert blocked["status"] == "BLOCKED_NO_COMPARABLE_FULL_ROLE_WIN"
     assert blocked["required_evidence"]["target_role_gpu_evidence"] is False
 
   independent_forged_rows = []
@@ -564,7 +671,7 @@ def test_mmq_r6_target_role_gate_requires_measured_full_shape_evidence():
   for forged in independent_forged_rows:
     blocked = build_r6_route_gate_status(
       r5, target_evidence=target, independent_epoch_evidence=forged)
-    assert blocked["status"] == "BLOCKED_ROLE_SHAPE_INTEGRATION"
+    assert blocked["status"] == "BLOCKED_NO_COMPARABLE_FULL_ROLE_WIN"
     assert not (blocked["required_evidence"]["independent_epoch_gpu_evidence"] and
                 blocked["required_evidence"]["evidence_composition"])
 

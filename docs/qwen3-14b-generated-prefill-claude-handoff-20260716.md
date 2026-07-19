@@ -1,5 +1,34 @@
 # Qwen3-14B generated-prefill Claude handoff
 
+## 1.7 Current status 2026-07-19: `ffn_gate_up` performance is `UNKNOWN_NOT_EVALUATED`
+
+This section supersedes the `ffn_gate_up` performance conclusions in §1.2, §1.1, and §0.9. Source inspection of
+`run_full_grid_r5_benchmark` proves that both retained `0.277502 ms` generated and `9.351988 ms` direct observations
+use `SHAPE=(128,128,256)`; the latter is not a complete `512x17408x5120` role measurement. That bounded pair still
+cannot establish a speedup because its timed regions differ: generated times a precompiled resident
+`runtime(..., wait=True)` launch, while `_run_direct_packed` includes tensor construction/conversion, realization,
+and `.numpy()` readback.
+
+The complete-role generated observations remain useful raw data: `42.882262 ms` synchronized AQL, `27.076011 ms`
+queued AQL, and `41.861031 ms` PM4. No complete-role direct-packed observation with the same preparation,
+allocation, readback, and synchronization definition was retained. Therefore no full-role ratio, win, or loss is
+established. The corrected status is:
+
+```text
+ffn_gate_up_correctness=PASS
+ffn_gate_up_resources=PASS
+ffn_gate_up_performance=UNKNOWN_NOT_EVALUATED
+r5_emitted_backend_win=false
+r6_ready=false
+production_promotion=false
+default_route=direct_packed
+```
+
+`docs/qwen3-14b-prefill-r5-geometry-20260718.json` now carries v2 candidate/comparator workload and measurement
+descriptors and marks the legacy measurements non-comparable. `docs/qwen3-14b-prefill-q4-role-closeout-20260718.json`
+and `docs/qwen3-14b-prefill-mmq-one-role-evidence-20260718.json` retain the raw observations but explicitly supersede
+the historical `R5_COOP_WIN_READY_FOR_R6`, `34.694x`, and `2.895x slower` claims.
+
 ## 1.6 Current status 2026-07-19: exact staged `attn_qo` is transition-disqualified
 
 This section supersedes §1.5 for the exact deterministic staged family. C1-C7 remain passing evidence; the C8
@@ -239,29 +268,28 @@ production_promotion=false
 default_route=direct_packed
 ```
 
-## 1.2 Current status 2026-07-18: all Q4 roles measured; no generated performance winner
+## Historical 1.2 status 2026-07-18: superseded `ffn_gate_up` performance accounting
 
-Read this section first. It corrects the performance accounting in §1.1 and §0.9.
+Do not use this section as current `ffn_gate_up` performance authority; §1.7 supersedes it.
 
-All four generated Q4 roles have exact full-role correctness/resource/health evidence, but none beats direct packed.
-The earlier `ffn_gate_up` selection was based on an invalid comparison:
+All four generated Q4 roles have exact full-role correctness/resource/health evidence. The earlier `ffn_gate_up`
+selection was based on a comparison that §1.7 now proves non-comparable:
 
-- `0.277502 ms` is one emitted K=256 epoch, one twentieth of the K=5120 role.
-- `9.351988 ms` is the complete K=5120 direct-packed role.
-- The comparable generated 20-epoch measurements are `42.8822620306164 ms` with synchronized AQL,
+- `0.277502 ms` and `9.351988 ms` both cover bounded `128x128x256`, but their timed regions differ.
+- Complete-role generated observations are `42.8822620306164 ms` with synchronized AQL,
   `27.07601070869714 ms` with queued AQL plus a final synchronization, and `41.86103114625439 ms` with PM4.
-- All exact runs pass 8,912,896 values with zero mismatches and maximum absolute error `0.00341796875`, but even the
-  best observed exact generated route is `2.895x` slower than direct packed.
+- All exact runs pass 8,912,896 values with zero mismatches and maximum absolute error `0.00341796875`; no matched
+  complete-role direct observation exists, so these measurements establish no performance decision.
 
 The frozen route remains valuable as a correctness-qualified integration diagnostic. The immutable six-row research
 artifact remains unchanged for identity/binding/census work, but it is not a performance-qualified policy and its
 `ffn_gate_up` row is not a performance selection.
 
 ```text
-phase_3_measurements_complete=true
+phase_3_measurements_complete=false
 selected_generated_roles=
 integration_only_policy_candidate_roles=ffn_gate_up
-performance_rejected_generated_roles=ffn_gate_up,attn_kv,attn_qo,ffn_down
+performance_not_evaluated_generated_roles=ffn_gate_up,attn_kv,attn_qo,ffn_down
 performance_qualified_policy=false
 production_promotion=false
 default_route=direct_packed
@@ -423,27 +451,28 @@ Read this section first. The current pushed implementation/evidence head before 
 sections below are superseded.
 
 At this checkpoint, the exact Q4_K/Q8_1 `ffn_gate_up` role at `M=512, N=17408, K=5120` appeared evidence-ready to
-implement a research opt-in. The later full-role accounting in §1.2 rejected that performance conclusion:
+implement a research opt-in. The corrected accounting in §1.7 blocks that conclusion without asserting a win or loss:
 
 - `docs/qwen3-14b-prefill-r5-geometry-20260718.json` is a retained, same-session
-  `q4k-q8-1-mmq-r5-geometry-search.v1` report. Its emitted full-grid row passed all 16,384 outputs with zero
+  `q4k-q8-1-mmq-r5-geometry-search.v2` report. Its emitted full-grid row passed all 16,384 outputs with zero
   mismatches and maximum absolute error `3.0517578125e-5`. Three measured rounds gave candidate median/min
-  `0.277502/0.269477 ms` for one K=256 epoch. Comparing that with full-K=5120 direct-packed
-  `9.351988/9.349303 ms` was invalid; the historical `34.694x` label is not a speedup claim. The row still retains
+  `0.277502/0.269477 ms` for one K=256 epoch. Direct packed also used the bounded `128x128x256` workload, but its
+  `9.351988/9.349303 ms` timed region included preparation/allocation/readback absent from the generated region, so
+  the historical `34.694x` label is not a speedup claim. The row still retains
   useful source/binary hashes, native resources (`VGPR=256`, `LDS=57,856 B`, `scratch=0`), and correctness evidence.
 - `docs/qwen3-14b-prefill-target-frozen-20epoch-pm4-20260718.json` proves the exact full role with one frozen binary,
   20 same-process PM4 launches, in-kernel FP32 accumulation, persistent/preloaded inputs, stable fixed-VA GPU-SDMA
   metadata, and no intermediate readback, external add, recompile, or fallback. All 8,912,896 final outputs match
   under the declared tolerance with zero mismatches; maximum absolute error is `0.00341796875`. Health and fault
-  checks pass. Comparable later measurements are `41.861031 ms` PM4, `42.882262 ms` synchronized AQL, and
-  `27.076011 ms` queued AQL, all slower than the `9.351988 ms` direct-packed role.
+  checks pass. Complete-role generated observations are `41.861031 ms` PM4, `42.882262 ms` synchronized AQL, and
+  `27.076011 ms` queued AQL; no matched complete-role direct-packed observation was retained.
 - `docs/target-epoch-safe-all-attested-20260718.json` independently proves every K=256 epoch in fresh processes:
   zero mismatches across 178,257,920 individually checked values, maximum absolute error `1.220703125e-4`, pinned
   fixture/source identity, and clean per-epoch health.
 - `docs/qwen3-14b-prefill-mmq-one-role-evidence-20260718.json` composes the retained R5, strict full-role, and
   independent epoch evidence. Its top verdict is
-  `ONE_ROLE_EVIDENCE_READY_PRODUCTION_PROMOTION_BLOCKED`; machine-search R6 reports
-  `READY_FOR_ONE_ROLE_OPT_IN` as an evidence gate and machine-search R7 reports `PASS_TARGET_ROLE_REDUCTION`.
+  `BLOCKED_UNTIL_COOPERATIVE_TILE_WIN`; machine-search R6 reports
+  `BLOCKED_NO_COMPARABLE_FULL_ROLE_WIN` and machine-search R7 reports `PASS_TARGET_ROLE_REDUCTION`.
   That R7 label is source-component reduction for this role, not project Phase 7 parity/promotion.
 
 The joined report is deliberately explicit:

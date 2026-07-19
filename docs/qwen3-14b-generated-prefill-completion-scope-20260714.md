@@ -17,6 +17,21 @@ quant format + operation role + M/N/K + layouts + target capability + memory bud
 Model profile names may select input facts and benchmark fixtures. They may not select compiler lowering, transport,
 schedule, or promotion state.
 
+## 2026-07-19 `ffn_gate_up` performance-comparability correction
+
+This correction supersedes every `ffn_gate_up` `34.694x` win, `2.895x` loss, “full-K direct-packed
+`9.351988 ms`,” and Phase-3-complete claim below. Source inspection proves the `9.351988 ms` direct observation used
+the same bounded `128x128x256` logical workload as the `0.277502 ms` generated observation, but the timed regions
+were different: the generated side timed a resident compiled launch, while direct packed included tensor
+construction/conversion, realization, and NumPy readback. The complete-role generated observations
+(`42.882262 ms` synchronized AQL, `27.076011 ms` queued AQL, and `41.861031 ms` PM4) have no matched complete-role
+direct-packed observation.
+
+The current authority is therefore: correctness/resource evidence passes; performance is
+`UNKNOWN_NOT_EVALUATED`; R5 has no comparable emitted win; R6 is not ready; Phase 3 remains incomplete until a
+collector measures candidate and direct packed at the exact complete role with identical workload and preparation,
+allocation, readback, and synchronization descriptors.
+
 ## Current execution authority: phases 3 through 7
 
 This section is the current progress ledger and ordering authority for the work before autoscan. It supersedes stale
@@ -30,7 +45,7 @@ promotion is enabled.
 
 | Phase | Current state | Remaining gate |
 |---|---|---|
-| 3 — Q4_K role completion | Measurement closeout is complete: all four generated roles have full-role correctness/resource/health measurements, and none is a performance winner. The earlier `ffn_gate_up` selection compared one K=256 epoch (`0.277502 ms`) with a full-K=5120 direct-packed role (`9.351988 ms`) and is invalid. Exact generated full-role samples are `42.882262 ms` synchronized AQL, `27.076011 ms` queued AQL, and `41.861031 ms` PM4. | Search for a generated candidate that beats direct packed. The frozen `ffn_gate_up` route may remain available only as an integration diagnostic. |
+| 3 — Q4_K role completion | Incomplete for `ffn_gate_up` performance. Full-role correctness/resource/health evidence exists, but the retained bounded timing uses mismatched measurement boundaries and the exact generated full-role observations have no matched direct-packed comparator. Performance is `UNKNOWN_NOT_EVALUATED`. | Collect candidate and direct-packed full-role timing under identical workload and measurement-definition descriptors; only then decide win/loss. |
 | 4 — Q6_K role completion | Complete for the declared fallback strategy. Both exact direct-packed Q6 rows (`attn_kv` and `ffn_down`) are qualified and timed under the retained policy contract. | No generated Q6 route is required unless measured whole-policy attribution shows the qualified fallbacks miss the target. |
 | 5 — Central candidate policy | The default-off policy machinery is implemented, but the retained immutable six-row artifact is integration-only and is not a performance-qualified policy. It binds the now-rejected `ffn_gate_up` candidate so the live seam and census can be exercised; `production_promotion=false`. | Build a new immutable policy only after at least one comparable full-role generated candidate wins. |
 | 6 — Mixed-route 14B integration | Not complete. The live research route remains explicit/default-off; no production route changed. Its current policy is an integration diagnostic, not a promotion candidate. | Diagnose the live-model route and complete correctness/census/memory/health/decode/rollback proof, but do not advance it to Phase 7 unless the bound candidate is also performance-qualified. |
@@ -98,20 +113,21 @@ Anything less is a diagnostic or candidate result, not a shipped 14B completion.
 
 ### 2026-07-18 Phase 3 all-Q4 measurement closeout
 
-All four generated Q4 roles are correctness/resource/health measured, but none is a performance winner. The earlier
-`ffn_gate_up` selection was an accounting error: the emitted `0.277502 ms` sample is one K=256 epoch, whereas the
-`9.351988 ms` direct-packed comparator covers the complete K=5120 role. The exact generated role requires 20 epochs.
-It passes all 8,912,896 values with zero mismatches and maximum absolute error `0.00341796875`, but measures
+All four generated Q4 roles are correctness/resource/health measured, but `ffn_gate_up` performance is not
+evaluated. Its emitted `0.277502 ms` and direct-packed `9.351988 ms` observations both cover bounded
+`128x128x256`, but their preparation/allocation/readback/synchronization scopes differ. The exact generated role
+requires 20 epochs. It passes all 8,912,896 values with zero mismatches and maximum absolute error `0.00341796875`,
+and its retained raw observations are
 `42.8822620306164 ms` with synchronized AQL dispatch, `27.07601070869714 ms` with queued AQL dispatch plus final
-synchronization, and `41.86103114625439 ms` with PM4. Even the best observed exact route is `2.895x` slower than the
-direct-packed median. Those are isolated rejection samples, not statistical promotion evidence.
+synchronization, and `41.86103114625439 ms` with PM4. No matched exact-role direct-packed observation exists, so
+those samples establish neither a win nor a loss.
 
 Therefore:
 
 ```text
-phase_3_measurements_complete=true
+phase_3_measurements_complete=false
 selected_generated_roles=
-performance_rejected_generated_roles=ffn_gate_up,attn_kv,attn_qo,ffn_down
+performance_not_evaluated_generated_roles=ffn_gate_up
 six_row_policy_scope=integration_only
 performance_qualified_policy=false
 production_promotion=false
@@ -217,17 +233,18 @@ Project Phase 3 had advanced, but remained incomplete at this historical checkpo
 
 - The retained R5 artifact, `docs/qwen3-14b-prefill-r5-geometry-20260718.json`, records a zero-mismatch emitted
   full-grid result and three same-session timing rounds. Its candidate median/min
-  `0.277502/0.269477 ms` covers only one K=256 epoch and is not comparable with the recorded full-K=5120
-  direct-packed `9.351988/9.349303 ms`. The historical `34.694x` label is invalid. Exact source/binary identity,
+  `0.277502/0.269477 ms` and direct-packed `9.351988/9.349303 ms` both cover bounded `128x128x256`, but use
+  different measurement boundaries. The historical `34.694x` label is invalid. Exact source/binary identity,
   native `VGPR=256`, `LDS=57,856 B`, `scratch=0`, timing samples, and no-fallback evidence are still useful.
 - The strict frozen-PM4 full-role artifact covers all 20 K epochs in one process with in-kernel FP32 accumulation,
   stable fixed-VA GPU-SDMA metadata, no intermediate readback/external add/recompile/fallback, and zero mismatches
-  across 8,912,896 outputs. Later exact full-role timing (`41.861031 ms` PM4, `42.882262 ms` synchronized AQL,
-  and `27.076011 ms` queued AQL) rejected the generated route against the `9.351988 ms` direct-packed comparator.
+  across 8,912,896 outputs. Later exact full-role generated observations (`41.861031 ms` PM4, `42.882262 ms`
+  synchronized AQL, and `27.076011 ms` queued AQL) have no matched exact-role direct-packed comparator.
 - The independent fresh-process all-epoch artifact checks 178,257,920 epoch outputs with zero mismatches and clean
   per-epoch health.
-- `docs/qwen3-14b-prefill-mmq-one-role-evidence-20260718.json` composes those proofs. Its verdict is
-  `ONE_ROLE_EVIDENCE_READY_PRODUCTION_PROMOTION_BLOCKED`. Machine-search R6 is an evidence gate and machine-search
+- `docs/qwen3-14b-prefill-mmq-one-role-evidence-20260718.json` composes those proofs. Its corrected verdict is
+  `BLOCKED_UNTIL_COOPERATIVE_TILE_WIN`; machine-search R6 reports
+  `BLOCKED_NO_COMPARABLE_FULL_ROLE_WIN`. Machine-search R6 is an evidence gate and machine-search
   R7 is source-component reduction; neither is project Phase 7.
 
 The current route boundary is:

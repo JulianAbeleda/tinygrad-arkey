@@ -1,11 +1,12 @@
 {
   "best_candidate_id": "r5_llama_coop_oracle_16x16",
+  "bounded_emitted_backend_win": false,
   "default_route": "direct_packed",
-  "emitted_backend_win": true,
-  "exact_blocker": "emitted backend win awaits production role/shape integration",
+  "emitted_backend_win": false,
+  "exact_blocker": "no emitted cooperative MMQ candidate has an identical-workload exact complete target-role win",
   "production_dispatch_changed": false,
   "promotion_eligible": false,
-  "promotion_verdict": "R5_COOP_WIN_READY_FOR_R6",
+  "promotion_verdict": "NO_PROMOTION_WITHOUT_COMPARABLE_FULL_ROLE_WIN",
   "ranking": [
     {
       "artifacts": {
@@ -117,6 +118,8 @@
       "speedup_vs_direct_packed": 38.60138674507292,
       "status": "PASS",
       "timing": {
+        "candidate_measurement": {"measurement_definition": {"allocation_scope": "excluded_persistent_buffers", "preparation_scope": "excluded_prepared_inputs", "readback_scope": "excluded_timed_region", "sync_scope": "runtime_wait_true_each_sample"}, "workload": {"K": 256, "M": 16, "N": 16, "complete_role": false, "k_launches": 1, "output_elements": 256, "role": "bounded_r5_geometry"}},
+        "comparison_scope": "legacy_mismatched_measurement_definition",
         "comparator_status": "measured",
         "direct_packed": {
           "atol": 0.000768,
@@ -131,6 +134,7 @@
           ],
           "status": "PASS"
         },
+        "direct_packed_measurement": {"measurement_definition": {"allocation_scope": "included_tensor_construction_and_realization", "preparation_scope": "included_q4_q8_conversion_and_dequant", "readback_scope": "included_numpy_readback", "sync_scope": "numpy_readback_synchronization"}, "workload": {"K": 256, "M": 16, "N": 16, "complete_role": false, "k_launches": 1, "output_elements": 256, "role": "bounded_r5_geometry"}},
         "direct_packed_min_ms": 8.904335962142795,
         "median_ms": 0.23755599977448583,
         "min_ms": 0.23067399160936475,
@@ -214,6 +218,24 @@
       "speedup_vs_direct_packed": 34.69424937035325,
       "status": "PASS",
       "timing": {
+        "candidate_measurement": {
+          "measurement_definition": {
+            "allocation_scope": "excluded_persistent_buffers",
+            "preparation_scope": "excluded_prepared_inputs",
+            "readback_scope": "excluded_timed_region",
+            "sync_scope": "runtime_wait_true_each_sample"
+          },
+          "workload": {
+            "K": 256,
+            "M": 128,
+            "N": 128,
+            "complete_role": false,
+            "k_launches": 1,
+            "output_elements": 16384,
+            "role": "bounded_r5_geometry"
+          }
+        },
+        "comparison_scope": "legacy_mismatched_measurement_definition",
         "comparator_status": "pass",
         "direct_packed": {
           "median_ms": 9.351988031994551,
@@ -224,6 +246,23 @@
             9.349303029011935
           ],
           "status": "measured"
+        },
+        "direct_packed_measurement": {
+          "measurement_definition": {
+            "allocation_scope": "included_tensor_construction_and_realization",
+            "preparation_scope": "included_q4_q8_conversion_and_dequant",
+            "readback_scope": "included_numpy_readback",
+            "sync_scope": "numpy_readback_synchronization"
+          },
+          "workload": {
+            "K": 256,
+            "M": 128,
+            "N": 128,
+            "complete_role": false,
+            "k_launches": 1,
+            "output_elements": 16384,
+            "role": "bounded_r5_geometry"
+          }
         },
         "direct_packed_min_ms": 9.349303029011935,
         "median_ms": 0.27750199660658836,
@@ -278,6 +317,8 @@
       "speedup_vs_direct_packed": 1.225148042548081,
       "status": "PASS",
       "timing": {
+        "candidate_measurement": {"measurement_definition": {"allocation_scope": "excluded_persistent_buffers", "preparation_scope": "excluded_prepared_inputs", "readback_scope": "excluded_timed_region", "sync_scope": "runtime_wait_true_each_sample"}, "workload": {"K": 256, "M": 4, "N": 5, "complete_role": false, "k_launches": 1, "output_elements": 20, "role": "bounded_r5_geometry"}},
+        "comparison_scope": "legacy_mismatched_measurement_definition",
         "comparator_status": "measured",
         "direct_packed": {
           "atol": 0.000768,
@@ -292,6 +333,7 @@
           ],
           "status": "PASS"
         },
+        "direct_packed_measurement": {"measurement_definition": {"allocation_scope": "included_tensor_construction_and_realization", "preparation_scope": "included_q4_q8_conversion_and_dequant", "readback_scope": "included_numpy_readback", "sync_scope": "numpy_readback_synchronization"}, "workload": {"K": 256, "M": 4, "N": 5, "complete_role": false, "k_launches": 1, "output_elements": 20, "role": "bounded_r5_geometry"}},
         "direct_packed_min_ms": 8.804769022390246,
         "median_ms": 7.288278953637928,
         "min_ms": 7.186698028817773,
@@ -345,6 +387,8 @@
       "speedup_vs_direct_packed": 1.2037692501802182,
       "status": "PASS",
       "timing": {
+        "candidate_measurement": {"measurement_definition": {"allocation_scope": "excluded_persistent_buffers", "preparation_scope": "excluded_prepared_inputs", "readback_scope": "excluded_timed_region", "sync_scope": "runtime_wait_true_each_sample"}, "workload": {"K": 256, "M": 4, "N": 5, "complete_role": false, "k_launches": 1, "output_elements": 20, "role": "bounded_r5_geometry"}},
+        "comparison_scope": "legacy_mismatched_measurement_definition",
         "comparator_status": "measured",
         "direct_packed": {
           "atol": 0.000768,
@@ -359,6 +403,7 @@
           ],
           "status": "PASS"
         },
+        "direct_packed_measurement": {"measurement_definition": {"allocation_scope": "included_tensor_construction_and_realization", "preparation_scope": "included_q4_q8_conversion_and_dequant", "readback_scope": "included_numpy_readback", "sync_scope": "numpy_readback_synchronization"}, "workload": {"K": 256, "M": 4, "N": 5, "complete_role": false, "k_launches": 1, "output_elements": 20, "role": "bounded_r5_geometry"}},
         "direct_packed_min_ms": 8.74028803082183,
         "median_ms": 7.262271014042199,
         "min_ms": 7.260766986291856,
@@ -412,6 +457,8 @@
       "speedup_vs_direct_packed": 1.1349770211346215,
       "status": "PASS",
       "timing": {
+        "candidate_measurement": {"measurement_definition": {"allocation_scope": "excluded_persistent_buffers", "preparation_scope": "excluded_prepared_inputs", "readback_scope": "excluded_timed_region", "sync_scope": "runtime_wait_true_each_sample"}, "workload": {"K": 256, "M": 8, "N": 7, "complete_role": false, "k_launches": 1, "output_elements": 56, "role": "bounded_r5_geometry"}},
+        "comparison_scope": "legacy_mismatched_measurement_definition",
         "comparator_status": "measured",
         "direct_packed": {
           "atol": 0.000768,
@@ -426,6 +473,7 @@
           ],
           "status": "PASS"
         },
+        "direct_packed_measurement": {"measurement_definition": {"allocation_scope": "included_tensor_construction_and_realization", "preparation_scope": "included_q4_q8_conversion_and_dequant", "readback_scope": "included_numpy_readback", "sync_scope": "numpy_readback_synchronization"}, "workload": {"K": 256, "M": 8, "N": 7, "complete_role": false, "k_launches": 1, "output_elements": 56, "role": "bounded_r5_geometry"}},
         "direct_packed_min_ms": 9.034861985128373,
         "median_ms": 7.996801054105163,
         "min_ms": 7.960391987580806,
@@ -479,6 +527,8 @@
       "speedup_vs_direct_packed": 0.44776008099323916,
       "status": "PASS",
       "timing": {
+        "candidate_measurement": {"measurement_definition": {"allocation_scope": "excluded_persistent_buffers", "preparation_scope": "excluded_prepared_inputs", "readback_scope": "excluded_timed_region", "sync_scope": "runtime_wait_true_each_sample"}, "workload": {"K": 256, "M": 16, "N": 16, "complete_role": false, "k_launches": 1, "output_elements": 256, "role": "bounded_r5_geometry"}},
+        "comparison_scope": "legacy_mismatched_measurement_definition",
         "comparator_status": "measured",
         "direct_packed": {
           "atol": 0.000768,
@@ -493,6 +543,7 @@
           ],
           "status": "PASS"
         },
+        "direct_packed_measurement": {"measurement_definition": {"allocation_scope": "included_tensor_construction_and_realization", "preparation_scope": "included_q4_q8_conversion_and_dequant", "readback_scope": "included_numpy_readback", "sync_scope": "numpy_readback_synchronization"}, "workload": {"K": 256, "M": 16, "N": 16, "complete_role": false, "k_launches": 1, "output_elements": 256, "role": "bounded_r5_geometry"}},
         "direct_packed_min_ms": 8.814968983642757,
         "median_ms": 19.712270994205028,
         "min_ms": 19.68681300058961,
@@ -505,6 +556,6 @@
     }
   ],
   "role_shape_integration": false,
-  "schema": "q4k-q8-1-mmq-r5-geometry-search.v1",
+  "schema": "q4k-q8-1-mmq-r5-geometry-search.v2",
   "status": "PASS_NON_PROMOTABLE"
 }
