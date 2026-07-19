@@ -604,12 +604,24 @@ def run_frozen_staged_c7_queue_capture_isolated(
       # health wrapper.  Bind the outer parent's actual queue request,
       # pre/post health, and fault window onto that exact probe before applying
       # the existing guarded-probe validator.
+      outer_guard_keys = {
+        "health_before", "health_after", "mode_health_before", "mode_health_after",
+        "health_mode", "child_env_overrides", "kernel_faults", "kernel_fault_evidence",
+      }
+      if conflicts := sorted(outer_guard_keys.intersection(raw_probe)):
+        raise ValueError(
+          f"direct C7 child supplied parent-owned guard fields: {conflicts!r}")
       raw_probe = {
         **dict(raw_probe),
         "health_before": health_before, "health_after": health_after,
         "mode_health_before": health_before, "mode_health_after": health_after,
+        "health_mode": {
+          "amd_aql_env": env_overrides["AMD_AQL"],
+          "before": health_before, "after": health_after,
+        },
         "child_env_overrides": dict(env_overrides),
         "kernel_faults": list(faults),
+        "kernel_fault_evidence": dict(fault_evidence),
       }
       probe_validation = dict(probe_validator(
         raw_probe, family, prefix_epochs=role.epochs,

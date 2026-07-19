@@ -24,6 +24,7 @@ from extra.qk.mmq_frozen_staged_family import FrozenStagedFamily, load_frozen_st
 from extra.qk.mmq_staged_c7_c8_contract import (
   staged_logical_memory_requirements, validate_staged_c7_memory_ledger,
 )
+from test.unit.test_mmq_frozen_staged_family_execution import _probe_result
 from test.unit.test_mmq_frozen_staged_family import _loader, _produce
 
 
@@ -331,11 +332,17 @@ def test_isolated_capture_requires_exact_c4_and_parent_health_fault_envelope(fam
   monkeypatch.setenv("AMD_AQL", "0")
   authority = _authority()
   observation = _captured_queue(family, "PM4").observation(memory_authority=authority)
+  direct_probe = _probe_result(
+    family, "/frozen/bundle", family.binding.role_spec.epochs, "PM4")
+  for key in (
+      "health_before", "health_after", "mode_health_before", "mode_health_after",
+      "health_mode", "child_env_overrides", "kernel_faults", "kernel_fault_evidence"):
+    direct_probe.pop(key, None)
   child = {
     "schema": "tinygrad.mmq_q4k_q8_1.staged_c7_queue_probe.v1",
     "status": "PASS", "queue_mode": "PM4",
     "family_identity": family.family_identity,
-    "probe": {"status": "PASS"}, "queue_observation": observation,
+    "probe": direct_probe, "queue_observation": observation,
     "target_dispatch_attempted": True, "target_dispatch_count": 20,
   }
   isolated = SimpleNamespace(
@@ -357,11 +364,17 @@ def test_isolated_capture_requires_exact_c4_and_parent_health_fault_envelope(fam
     "status": "PASS", "family_identity": family.family_identity,
     "program_key": family.binding.program_key, "queue_mode": "PM4",
   }
-  def validate_probe(raw, _family, **_kwargs):
+  def validate_probe(raw, _family, **kwargs):
     assert raw["health_before"] is raw["health_after"] is True
     assert raw["mode_health_before"] is raw["mode_health_after"] is True
+    assert raw["health_mode"] == {"amd_aql_env": "0", "before": True, "after": True}
     assert raw["child_env_overrides"] == {"AMD_AQL": "0"}
     assert raw["kernel_faults"] == []
+    assert raw["kernel_fault_evidence"] == {"window": "clean"}
+    assert kwargs == {
+      "prefix_epochs": family.binding.role_spec.epochs,
+      "queue_mode": "PM4", "frozen_bundle": "/frozen/bundle",
+    }
     return {"status": raw["status"], "validated": True}
 
   result = run_frozen_staged_c7_queue_capture_isolated(
@@ -384,6 +397,41 @@ def test_isolated_capture_requires_exact_c4_and_parent_health_fault_envelope(fam
   assert result["probe_validation"]["validated"] is True
   assert result["c4_runtime_canary_isolation"] == canary
   assert calls == {"runner": 1, "health": 2}
+
+  real_validation = run_frozen_staged_c7_queue_capture_isolated(
+    family=family, queue_mode="PM4", frozen_bundle="/frozen/bundle",
+    staged_family_manifest="/frozen/family.json",
+    runtime_canary_isolation=canary, memory_authority=authority,
+    ledger_device="CPU", timeout_seconds=12.0,
+    isolated_runner=lambda *_args, **_kwargs: isolated,
+    health_probe=lambda env: env == {"AMD_AQL": "0"},
+    fault_collector=lambda _started: ([], {"window": "clean"}),
+    canary_validator=lambda value, _family, *, queue_mode: value)
+  assert real_validation["status"] == "PASS"
+  assert all(real_validation["probe_validation"]["checks"].values())
+  assert not set((
+    "health_before", "health_after", "mode_health_before", "mode_health_after",
+    "health_mode", "child_env_overrides", "kernel_faults", "kernel_fault_evidence",
+  )).intersection(real_validation["child_probe"]["probe"])
+
+  poisoned_child = copy.deepcopy(child)
+  poisoned_child["probe"]["health_before"] = False
+  poisoned_isolated = SimpleNamespace(
+    status="passed", timed_out=False, error=None, result=poisoned_child,
+    elapsed_seconds=0.25)
+  poisoned = run_frozen_staged_c7_queue_capture_isolated(
+    family=family, queue_mode="PM4", frozen_bundle="/frozen/bundle",
+    staged_family_manifest="/frozen/family.json",
+    runtime_canary_isolation=canary, memory_authority=authority,
+    ledger_device="CPU", timeout_seconds=12.0,
+    isolated_runner=lambda *_args, **_kwargs: poisoned_isolated,
+    health_probe=lambda env: env == {"AMD_AQL": "0"},
+    fault_collector=lambda _started: ([], {"window": "clean"}),
+    canary_validator=lambda value, _family, *, queue_mode: value,
+    probe_validator=lambda *_args, **_kwargs: pytest.fail("must reject before validation"))
+  assert poisoned["status"] == "BLOCKED"
+  assert "parent-owned guard fields" in poisoned["error"]
+  assert poisoned["child_probe"]["probe"]["health_before"] is False
 
   blocked = run_frozen_staged_c7_queue_capture_isolated(
     family=family, queue_mode="PM4", frozen_bundle="/frozen/bundle",
