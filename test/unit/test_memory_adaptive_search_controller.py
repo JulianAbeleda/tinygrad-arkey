@@ -24,7 +24,8 @@ def test_selected_model_scan_public_import_is_transport_identity_and_positional(
 def _device(free=900):
   probe = ProbeRecord("fake-live-probe", "2026-07-15T00:00:00+00:00")
   return DeviceFacts("AMD:0", "AMD", "gfx-test", 1000, free,
-                     DeviceCapabilities(wave_size=32, global_allocation_granularity=64), probe, probe)
+                     DeviceCapabilities(wave_size=32, global_allocation_granularity=64), probe, probe,
+                     queue_mode="PM4")
 
 
 @pytest.fixture(autouse=True)
@@ -226,7 +227,7 @@ def test_unknown_scanned_allocator_granularity_fails_closed(monkeypatch):
   facts = _device()
   monkeypatch.setattr(controller, "scan_device_facts", lambda: DeviceFacts(facts.selected_device, facts.backend,
     facts.architecture, facts.total_vram_bytes, facts.free_vram_bytes, DeviceCapabilities(wave_size=32),
-    facts.target_probe, facts.memory_probe))
+    facts.target_probe, facts.memory_probe, queue_mode=facts.queue_mode))
   seam = Seam()
   result = _run_controller_with_seam(model_path="chosen.gguf", seam=seam)
   assert result["decision"] == "REFUSE" and "allocator granularity" in result["reason"]

@@ -12,6 +12,7 @@ from typing import Any, Mapping, Sequence
 
 from extra.qk.memory_adaptive_policy import CACHE_SCHEMA, SCHEMA as POLICY_SCHEMA, canonical_json, canonical_search_key
 from extra.qk.memory_adaptive_allocation_observer import validate_memory_facts
+from tinygrad.llm.device_facts import DeviceFactsSchemaError, validate_device_facts_snapshot
 
 REQUEST_SCHEMA = "tinygrad.model_memory_adaptive_request.v1"
 
@@ -55,6 +56,11 @@ def collect_runtime_policy(request: Mapping[str, Any], source: Mapping[str, Any]
     inputs = result.get("canonical_inputs")
     if (result.get("schema") != POLICY_SCHEMA or result.get("decision") != "SELECTED" or
         not isinstance(inputs, Mapping) or inputs.get("schema") != POLICY_SCHEMA): return None
+    try:
+      validate_device_facts_snapshot(device)
+      validate_device_facts_snapshot(inputs.get("gpu_facts"))
+    except DeviceFactsSchemaError:
+      return None
     candidates = inputs.get("candidates")
     revisions = inputs.get("compiler_runtime_revision")
     revision = inputs.get("search_revision")

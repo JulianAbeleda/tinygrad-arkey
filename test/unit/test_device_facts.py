@@ -1,7 +1,13 @@
 from datetime import datetime, timezone
 import json
+from types import SimpleNamespace
 
-from tinygrad.llm.device_facts import _parse_rocminfo_gpu_capabilities, DeviceFacts, scan_device_facts
+import pytest
+
+from tinygrad.llm.device_facts import (
+  _parse_rocminfo_gpu_capabilities, _tinygrad_target_probe, DeviceFacts, MalformedDeviceFactsError,
+  StaleDeviceFactsError, UnsupportedDeviceFactsSchemaError, scan_device_facts,
+)
 from extra.qk.memory_adaptive_device_facts import MemoryReservePolicy, calculate_admissible_budget
 
 
@@ -11,13 +17,15 @@ NOW = datetime(2026, 7, 15, 12, 0, tzinfo=timezone.utc)
 def target(_device):
   return {"backend": "AMD", "architecture": "gfx1100", "wave_size": 32, "max_workgroup_threads": 1024,
           "max_workgroup_dimensions": (1024, 1024, 1024), "lds_bytes": 65536, "lds_allocation_granularity": 512,
-          "provenance": "injected-target"}
+          "queue_mode": "PM4", "provenance": "injected-target"}
 
 
 def test_successful_scan_is_serializable_and_budget_policy_is_separate():
   facts = scan_device_facts("AMD:0", target_probe=target,
     memory_probe=lambda _: {"total_vram_bytes": 30_000, "free_vram_bytes": 20_000, "provenance": "injected-memory"}, clock=lambda: NOW)
   assert facts.state == "ok" and facts.architecture == "gfx1100" and facts.capabilities.wave_size == 32
+  assert facts.schema_version == 2 and facts.queue_mode == "PM4"
+  assert facts.canonical_hardware()["queue_mode"] == "PM4"
   assert facts.target_probe.source == "injected-target" and facts.memory_probe.observed_at == NOW.isoformat()
   assert DeviceFacts.from_json(json.loads(json.dumps(facts.to_json()))) == facts
   budget = calculate_admissible_budget(facts, MemoryReservePolicy(fixed_bytes=1000, fraction_of_total=.1))
@@ -30,6 +38,14 @@ def test_missing_rocm_smi_and_device_data_are_explicit_unknown_or_error():
   assert facts.state == "error" and facts.backend is None and facts.free_vram_bytes is None
   assert facts.target_probe.state == "unknown" and facts.memory_probe.state == "error"
   assert calculate_admissible_budget(facts, MemoryReservePolicy()).state == "error"
+
+
+def test_amd_scan_with_unknown_effective_queue_fails_closed():
+  facts = scan_device_facts(
+    "AMD:0", target_probe=lambda device: {**target(device), "queue_mode": None},
+    memory_probe=lambda _: {"total_vram_bytes": 10000, "free_vram_bytes": 9000}, clock=lambda: NOW)
+  assert facts.queue_mode is None and facts.state == "error"
+  assert any("did not report effective queue mode" in error for error in facts.errors)
 
 
 def test_inconsistent_free_above_total_is_an_error_and_not_admitted():
@@ -57,6 +73,54 @@ def test_planning_snapshot_is_stable_across_observation_time_only():
   second = scan_device_facts("AMD:0", target_probe=target, memory_probe=memory, clock=lambda: later)
   assert first.to_json() != second.to_json()
   assert first.planning_snapshot() == second.planning_snapshot()
+
+
+def test_effective_queue_mode_is_part_of_hardware_planning_and_cache_identity():
+  memory = lambda _: {"total_vram_bytes": 10000, "free_vram_bytes": 9000}
+  pm4 = scan_device_facts("AMD:0", target_probe=target, memory_probe=memory, clock=lambda: NOW)
+  aql = scan_device_facts("AMD:0", target_probe=lambda device: {**target(device), "queue_mode": "AQL"},
+                          memory_probe=memory, clock=lambda: NOW)
+  assert pm4.canonical_hardware_identity != aql.canonical_hardware_identity
+  assert pm4.planning_snapshot()["queue_mode"] == "PM4"
+  assert aql.planning_snapshot()["queue_mode"] == "AQL"
+
+
+def test_deserialization_rejects_v1_and_missing_amd_queue_without_opening_gpu(monkeypatch):
+  facts = scan_device_facts("AMD:0", target_probe=target,
+    memory_probe=lambda _: {"total_vram_bytes": 10000, "free_vram_bytes": 9000}, clock=lambda: NOW)
+  serialized = facts.to_json()
+  opened = []
+  class NoDeviceOpen:
+    def __getitem__(self, key):
+      opened.append(key)
+      raise AssertionError("device opened")
+  monkeypatch.setattr("tinygrad.device.Device", NoDeviceOpen())
+  with pytest.raises(StaleDeviceFactsError, match="reprobe required"):
+    DeviceFacts.from_json({**serialized, "schema_version": 1})
+  with pytest.raises(MalformedDeviceFactsError, match="require effective queue_mode"):
+    DeviceFacts.from_json({key: value for key, value in serialized.items() if key != "queue_mode"})
+  with pytest.raises(UnsupportedDeviceFactsSchemaError, match="unsupported"):
+    DeviceFacts.from_json({**serialized, "schema_version": 99})
+  assert opened == []
+
+
+@pytest.mark.parametrize("is_aql,expected", (
+  (False, "PM4"), (True, "AQL"), (0, "PM4"), (1, "AQL"),
+  (None, None), ("missing", None), ("0", None), (2, None), (0.0, None),
+))
+def test_tinygrad_probe_records_effective_opened_amd_queue(monkeypatch, is_aql, expected):
+  renderer = SimpleNamespace(arch="gfx1100", wave_size=32, max_workgroup_threads=1024,
+                             max_workgroup_dimensions=(1024, 1024, 1024), shared_max=65536,
+                             lds_allocation_granularity=512)
+  queue = {} if is_aql == "missing" else {"is_aql": is_aql}
+  opened = SimpleNamespace(**queue, renderer=renderer, allocator=SimpleNamespace(allocation_granularity=4096))
+  class FakeDevice:
+    def __getitem__(self, key):
+      assert key == "AMD:0"
+      return opened
+  monkeypatch.setattr("tinygrad.device.Device", FakeDevice())
+  monkeypatch.setattr("tinygrad.llm.device_facts.subprocess.run", lambda *args, **kwargs: (_ for _ in ()).throw(FileNotFoundError()))
+  assert _tinygrad_target_probe("AMD:0")["queue_mode"] == expected
 
 
 def test_rocminfo_capabilities_are_selected_by_gpu_ordinal_not_architecture_table():

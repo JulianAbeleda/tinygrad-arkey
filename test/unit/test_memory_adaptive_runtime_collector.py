@@ -5,11 +5,13 @@ from extra.qk.memory_adaptive_runtime_collector import collect_runtime_policy, m
 from extra.qk.memory_adaptive_allocation_observer import EXACT_MEMORY_KEYS, make_memory_facts
 
 
-def fixture():
+def fixture(device_facts=None):
   inventory = {"schema": "tinygrad.model_runtime_prefill_inventory.v1", "inventory_identity": "content-id",
                "rows": [{"invocation_id": "a", "tensor_identity": "blk.0.a.weight"},
                         {"invocation_id": "b", "tensor_identity": "blk.0.b.weight"}]}
-  device = {"device": "AMD:0", "architecture": "gfx", "free_vram_bytes": 123}
+  device = ({"schema_version": 2, "selected_device": "AMD:0", "backend": "AMD",
+             "architecture": "gfx", "queue_mode": "PM4", "free_vram_bytes": 123}
+            if device_facts is None else dict(device_facts))
   request = {"schema": "tinygrad.model_memory_adaptive_request.v1", "inventory": inventory,
              "device_facts": device, "workload": {"prefill_ubatch": 32}}
   candidates = [
@@ -64,6 +66,17 @@ def test_every_runtime_and_search_identity_mismatch_fails_closed():
   assert collect_runtime_policy(request, cache, candidate_set_identity="sha256:stale") is None
   forged = copy.deepcopy(cache); forged["result"]["canonical_inputs"]["candidates"][0]["routes"]["a"] = "changed"
   assert collect_runtime_policy(request, forged) is None
+
+
+def test_matching_v1_or_missing_queue_cache_and_request_are_rejected():
+  current = {"schema_version": 2, "selected_device": "AMD:0", "backend": "AMD",
+             "architecture": "gfx", "queue_mode": "PM4", "free_vram_bytes": 123}
+  current_request, _, current_cache, _ = fixture(current)
+  for stale in ({**current, "schema_version": 1}, {key: value for key, value in current.items() if key != "queue_mode"}):
+    stale_request, _, stale_cache, _ = fixture(stale)
+    assert collect_runtime_policy(stale_request, stale_cache) is None
+    assert collect_runtime_policy(current_request, stale_cache) is None
+    assert collect_runtime_policy(stale_request, current_cache) is None
 
 
 def test_malformed_selected_policy_and_factories_fail_closed(tmp_path):

@@ -6,8 +6,25 @@ import hashlib, json, re, subprocess
 from typing import Any, Callable, Mapping
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+QUEUE_MODES = ("PM4", "AQL")
 Probe = Callable[[str], Mapping[str, Any]]
+
+
+class DeviceFactsSchemaError(ValueError):
+  """Base class for versioned device-facts compatibility failures."""
+
+
+class StaleDeviceFactsError(DeviceFactsSchemaError):
+  """Serialized device facts use the superseded v1 schema and require a fresh probe."""
+
+
+class MalformedDeviceFactsError(DeviceFactsSchemaError):
+  """Current-schema device facts are incomplete or internally invalid."""
+
+
+class UnsupportedDeviceFactsSchemaError(DeviceFactsSchemaError):
+  """Device facts use a schema version this runtime does not understand."""
 
 
 def _optional_int(value: Any) -> int | None:
@@ -63,17 +80,19 @@ class DeviceFacts:
   memory_probe: ProbeRecord
   errors: tuple[str, ...] = ()
   schema_version: int = SCHEMA_VERSION
+  queue_mode: str | None = None
 
   @property
   def state(self) -> str:
     if self.errors or self.target_probe.state == "error" or self.memory_probe.state == "error": return "error"
     required = (self.backend, self.architecture, self.total_vram_bytes, self.free_vram_bytes)
+    if self.backend == "AMD": required = (*required, self.queue_mode)
     return "ok" if all(x is not None for x in required) else "unknown"
 
   def canonical_hardware(self) -> dict[str, Any]:
     """Stable machine facts only: deliberately excludes free VRAM and probe metadata."""
     return {"schema_version": self.schema_version, "selected_device": self.selected_device, "backend": self.backend,
-            "architecture": self.architecture, "total_vram_bytes": self.total_vram_bytes,
+            "architecture": self.architecture, "queue_mode": self.queue_mode, "total_vram_bytes": self.total_vram_bytes,
             "capabilities": self.capabilities.to_json()}
 
   @property
@@ -94,17 +113,39 @@ class DeviceFacts:
 
   def to_json(self) -> dict[str, Any]:
     return {"schema_version": self.schema_version, "selected_device": self.selected_device, "backend": self.backend,
-            "architecture": self.architecture, "total_vram_bytes": self.total_vram_bytes,
+            "architecture": self.architecture, "queue_mode": self.queue_mode,
+            "total_vram_bytes": self.total_vram_bytes,
             "free_vram_bytes": self.free_vram_bytes, "capabilities": self.capabilities.to_json(),
             "target_probe": self.target_probe.to_json(), "memory_probe": self.memory_probe.to_json(), "errors": list(self.errors)}
 
   @classmethod
   def from_json(cls, value: Mapping[str, Any]) -> DeviceFacts:
+    validate_device_facts_snapshot(value)
     return cls(str(value["selected_device"]), value.get("backend"), value.get("architecture"),
                _optional_int(value.get("total_vram_bytes")), _optional_int(value.get("free_vram_bytes")),
                DeviceCapabilities.from_json(value.get("capabilities", {})), ProbeRecord.from_json(value["target_probe"]),
                ProbeRecord.from_json(value["memory_probe"]), tuple(str(x) for x in value.get("errors", ())),
-               int(value.get("schema_version", SCHEMA_VERSION)))
+               int(value["schema_version"]), value.get("queue_mode"))
+
+
+def validate_device_facts_snapshot(value: Mapping[str, Any]) -> dict[str, Any]:
+  """Validate the versioned identity fields of full facts or a planning snapshot without probing a device."""
+  if not isinstance(value, Mapping): raise DeviceFactsSchemaError("device facts must be a mapping")
+  raw_version = value.get("schema_version", 1)
+  if type(raw_version) is not int:
+    raise MalformedDeviceFactsError("device facts schema_version must be an integer")
+  if raw_version == 1:
+    raise StaleDeviceFactsError(
+      f"stale device facts schema_version {raw_version}; expected {SCHEMA_VERSION}; reprobe required")
+  if raw_version != SCHEMA_VERSION:
+    raise UnsupportedDeviceFactsSchemaError(
+      f"unsupported device facts schema_version {raw_version}; expected {SCHEMA_VERSION}")
+  backend, queue_mode = value.get("backend"), value.get("queue_mode")
+  if backend == "AMD" and queue_mode not in QUEUE_MODES:
+    raise MalformedDeviceFactsError("current AMD device facts require effective queue_mode PM4 or AQL")
+  if queue_mode is not None and queue_mode not in QUEUE_MODES:
+    raise MalformedDeviceFactsError(f"current device facts contain invalid queue_mode {queue_mode!r}")
+  return dict(value)
 
 
 def scan_device_facts(selected_device: str | None = None, *, target_probe: Probe | None = None,
@@ -122,8 +163,15 @@ def scan_device_facts(selected_device: str | None = None, *, target_probe: Probe
   caps = DeviceCapabilities.from_json(target.get("capabilities", target))
   backend = target.get("backend")
   architecture = target.get("architecture", target.get("arch"))
+  queue_mode = target.get("queue_mode")
+  if backend == "AMD" and queue_mode not in QUEUE_MODES:
+    errors.append("AMD target probe did not report effective queue mode")
+    queue_mode = None
+  elif queue_mode is not None and queue_mode not in QUEUE_MODES:
+    errors.append(f"invalid target queue mode {queue_mode!r}")
+    queue_mode = None
   return DeviceFacts(device, None if backend is None else str(backend), None if architecture is None else str(architecture),
-                     total, free, caps, target_record, memory_record, tuple(errors))
+                     total, free, caps, target_record, memory_record, tuple(errors), SCHEMA_VERSION, queue_mode)
 
 
 def _run_probe(probe: Probe, device: str, source: str, now: str) -> tuple[Mapping[str, Any], ProbeRecord]:
@@ -145,6 +193,9 @@ def _tinygrad_target_probe(device: str) -> Mapping[str, Any]:
   opened = Device[device]
   renderer = getattr(opened, "renderer", None)
   backend = device.split(":", 1)[0].upper()
+  raw_is_aql = getattr(opened, "is_aql", None)
+  queue_mode = ("AQL" if bool(raw_is_aql) else "PM4") \
+    if backend == "AMD" and type(raw_is_aql) in (bool, int) and raw_is_aql in (0, 1) else None
   arch = next((getattr(obj, name, None) for obj in (opened, renderer) if obj is not None
                for name in ("arch", "architecture") if getattr(obj, name, None) is not None), None)
   # Renderer fields are the compiler's effective limits.  Some renderers do
@@ -171,7 +222,7 @@ def _tinygrad_target_probe(device: str) -> Mapping[str, Any]:
       provenance += " + rocminfo"
     except (FileNotFoundError, subprocess.SubprocessError, ValueError, IndexError):
       pass
-  return {"backend": backend, "architecture": arch, **capabilities, "provenance": provenance}
+  return {"backend": backend, "architecture": arch, "queue_mode": queue_mode, **capabilities, "provenance": provenance}
 
 
 def _parse_rocminfo_gpu_capabilities(output: str, ordinal: int) -> dict[str, Any]:
@@ -221,4 +272,7 @@ def _rocm_smi_memory_probe(device: str) -> Mapping[str, Any]:
 autoscan_device_facts = scan_device_facts
 
 
-__all__ = ["DeviceCapabilities", "DeviceFacts", "ProbeRecord", "autoscan_device_facts", "scan_device_facts"]
+__all__ = ["QUEUE_MODES", "SCHEMA_VERSION", "DeviceCapabilities", "DeviceFacts", "DeviceFactsSchemaError",
+           "MalformedDeviceFactsError", "ProbeRecord", "StaleDeviceFactsError",
+           "UnsupportedDeviceFactsSchemaError", "autoscan_device_facts", "scan_device_facts",
+           "validate_device_facts_snapshot"]

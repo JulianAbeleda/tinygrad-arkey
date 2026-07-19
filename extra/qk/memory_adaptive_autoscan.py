@@ -11,7 +11,9 @@ from dataclasses import dataclass
 from typing import Any, Callable, Mapping, Sequence
 
 from extra.qk.memory_adaptive_policy import cache_matches, make_cache_record, select_policy
-from tinygrad.llm.device_facts import DeviceFacts, scan_device_facts
+from tinygrad.llm.device_facts import (
+  DeviceFacts, DeviceFactsSchemaError, StaleDeviceFactsError, scan_device_facts, validate_device_facts_snapshot,
+)
 from extra.qk.memory_adaptive_device_facts import MemoryReservePolicy, calculate_admissible_budget
 from tinygrad.llm.prefill_memory_plan import (ByteLifetime, ByteTerm, CandidateMemoryCoverage, DeviceMemoryFacts,
                                                PrefillMemoryPlan, Strategy, plan_prefill_memory)
@@ -77,7 +79,16 @@ def _key_args(*, facts: DeviceFacts, model_record: Mapping[str, Any], workload: 
 
 def load_exact_cache(cache_record: Mapping[str, Any] | None, **search_key_args: Any) -> dict[str, Any] | None:
   """Return an exact-key cached policy, or ``None`` for stale/malformed input."""
-  if not isinstance(cache_record, Mapping) or not cache_matches(cache_record, **search_key_args): return None
+  try: validate_device_facts_snapshot(search_key_args.get("gpu_facts"))
+  except DeviceFactsSchemaError: return None
+  if not isinstance(cache_record, Mapping): return None
+  cached_result = cache_record.get("result")
+  cached_inputs = cached_result.get("canonical_inputs") if isinstance(cached_result, Mapping) else None
+  try:
+    validate_device_facts_snapshot(cached_inputs.get("gpu_facts") if isinstance(cached_inputs, Mapping) else None)
+  except DeviceFactsSchemaError:
+    return None
+  if not cache_matches(cache_record, **search_key_args): return None
   result = cache_record.get("result")
   return dict(result) if isinstance(result, Mapping) else None
 
@@ -114,6 +125,13 @@ def autoscan_selected_model(*, selected_model_facts: Mapping[str, Any],
     raise ValueError("baseline_candidate_id must identify a supplied candidate")
   facts = device_facts if device_facts is not None else device_scanner(selected_device=selected_device)
   if not isinstance(facts, DeviceFacts): raise TypeError("device scanner must return DeviceFacts")
+  try:
+    validate_device_facts_snapshot(facts.planning_snapshot())
+  except StaleDeviceFactsError:
+    if device_facts is None: raise
+    facts = device_scanner(selected_device=facts.selected_device)
+    if not isinstance(facts, DeviceFacts): raise TypeError("device reprobe must return DeviceFacts")
+    validate_device_facts_snapshot(facts.planning_snapshot())
   model_record = _model_record(selected_model_facts, selected_model_inventory)
   plan = plan_prefill_memory(device=_planning_device(facts, reserve_policy), base_terms=base_terms,
                              candidates=(x.memory for x in supplied), override=strategy_override)

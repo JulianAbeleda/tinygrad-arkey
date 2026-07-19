@@ -3,7 +3,9 @@ import copy
 import pytest
 
 from extra.qk.memory_adaptive_autoscan import AutoscanCandidate, autoscan_selected_model
-from tinygrad.llm.device_facts import DeviceCapabilities, DeviceFacts, ProbeRecord
+from tinygrad.llm.device_facts import (
+  DeviceCapabilities, DeviceFacts, MalformedDeviceFactsError, ProbeRecord, UnsupportedDeviceFactsSchemaError,
+)
 from tinygrad.llm.prefill_memory_plan import (ByteLifetime, ByteTerm, CandidateMemoryCoverage, Strategy)
 
 
@@ -11,9 +13,10 @@ def term(name, size, lifetime=ByteLifetime.PERSISTENT):
   return ByteTerm(name, size, "selected model inventory", f"sum({name})", lifetime)
 
 
-def device(free):
+def device(free, *, queue_mode="PM4", schema_version=2):
   probe = ProbeRecord("fake", "2026-07-15T00:00:00+00:00")
-  return DeviceFacts("AMD:0", "AMD", "gfx", 1000, free, DeviceCapabilities(wave_size=32), probe, probe)
+  return DeviceFacts("AMD:0", "AMD", "gfx", 1000, free, DeviceCapabilities(wave_size=32), probe, probe,
+                     schema_version=schema_version, queue_mode=queue_mode)
 
 
 def candidate(cid, strategy, workspace):
@@ -54,6 +57,41 @@ def test_rename_is_nonsemantic_and_exact_cache_skips_runner():
   second = autoscan_selected_model(**renamed, cache_record=first["cache_record"],
                                    evidence_runner=lambda c: (_ for _ in ()).throw(AssertionError("runner called")))
   assert second["from_cache"] and second["selected_candidate_id"] == first["selected_candidate_id"]
+
+
+def test_queue_mode_changes_exact_cache_identity_and_runs_search_again():
+  first = autoscan_selected_model(**args(250), evidence_runner=lambda c: proof())
+  changed = args(250); changed["device_facts"] = device(250, queue_mode="AQL")
+  seen = []
+  second = autoscan_selected_model(**changed, cache_record=first["cache_record"],
+                                   evidence_runner=lambda c: seen.append(c.candidate_id) or proof())
+  assert not second["from_cache"] and seen == ["baseline", "overlay"]
+  assert first["cache_record"]["search_key"] != second["cache_record"]["search_key"]
+
+
+def test_supplied_v1_facts_trigger_one_explicit_reprobe_before_cache_or_execution():
+  values = args(250)
+  values["device_facts"] = device(250, queue_mode=None, schema_version=1)
+  scans = []
+  result = autoscan_selected_model(
+    **values, device_scanner=lambda *, selected_device: scans.append(selected_device) or device(250, queue_mode="AQL"),
+    evidence_runner=lambda c: proof())
+  assert scans == ["AMD:0"] and result["decision"] == "SELECTED"
+  assert result["cache_record"]["result"]["canonical_inputs"]["gpu_facts"]["queue_mode"] == "AQL"
+
+
+@pytest.mark.parametrize("facts,error", (
+  (device(250, queue_mode=None, schema_version=2), MalformedDeviceFactsError),
+  (device(250, queue_mode="PM4", schema_version=3), UnsupportedDeviceFactsSchemaError),
+))
+def test_current_malformed_or_future_facts_fail_without_reprobe(facts, error):
+  values = args(250); values["device_facts"] = facts
+  scans = []
+  with pytest.raises(error):
+    autoscan_selected_model(
+      **values, device_scanner=lambda *, selected_device: scans.append(selected_device) or device(250),
+      evidence_runner=lambda c: (_ for _ in ()).throw(AssertionError("runner called")))
+  assert scans == []
 
 
 def test_interruption_returns_only_guarded_safe_baseline_or_refuses():
