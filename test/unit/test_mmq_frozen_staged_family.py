@@ -34,7 +34,8 @@ def _staged_artifact(role_spec: ExactRoleSpec) -> FrozenTargetArtifact:
   manifest["files"] = {"fixture.json": {"sha256": "c" * 64, "nbytes": 1}}
   manifest["artifacts"]["serialized_program_sha256"] = "d" * 64
   return FrozenTargetArtifact(
-    manifest, program, artifact.binary, artifact.source, artifact.disassembly, artifact.fixture)
+    manifest, program, artifact.binary, artifact.source, artifact.disassembly, artifact.fixture,
+    artifact.program.src[0])
 
 
 def _binding(role_spec: ExactRoleSpec, artifact: FrozenTargetArtifact | None = None,

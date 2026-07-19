@@ -15,6 +15,8 @@ from pathlib import Path
 import tempfile
 from typing import Any, Callable, Mapping
 
+from tinygrad.uop.ops import Ops, UOp
+
 from extra.qk.mmq_compile_evidence import COMPILER_ENV
 from extra.qk.mmq_exact_role_spec import DEFAULT_INVENTORY, EPOCH_K, ExactRoleSpec, admit_exact_role_spec
 from extra.qk.mmq_frozen_target_artifact import SCHEMA as TARGET_ARTIFACT_SCHEMA
@@ -57,7 +59,9 @@ def _digest(value: Any, *, label: str, lengths: tuple[int, ...] = (64,)) -> str:
 
 
 def _sink_identity(binding: FrozenExactRoleBinding) -> str:
-  sink = binding.artifact.program.src[0]
+  sink = binding.artifact.sink
+  if not isinstance(sink, UOp) or sink.op is not Ops.SINK:
+    raise ValueError("staged family requires a retained pre-lowering source SINK")
   return sink.key.hex()
 
 

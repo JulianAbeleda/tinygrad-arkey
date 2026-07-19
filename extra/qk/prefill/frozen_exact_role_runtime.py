@@ -23,7 +23,7 @@ from extra.qk.mmq_exact_role_spec import (
   DEFAULT_INVENTORY, EPOCH_K, ExactRoleSpec, exact_role_spec, load_exact_role_specs,
 )
 from extra.qk.mmq_frozen_target_artifact import (
-  ACCUMULATION, BACKEND_ID, FUNCTION_NAME, PROGRAM_DEVICE, SCHEMA, FrozenTargetArtifact,
+  ACCUMULATION, BACKEND_ID, FUNCTION_NAME, LEGACY_SCHEMA, PROGRAM_DEVICE, SCHEMA, FrozenTargetArtifact,
   load_frozen_target_artifact,
 )
 from extra.qk.q4k_q8_activation_producer import (
@@ -90,7 +90,7 @@ def load_frozen_exact_role_binding(role_spec: ExactRoleSpec, frozen_bundle: str 
   if not isinstance(artifact, FrozenTargetArtifact):
     raise TypeError("frozen artifact loader returned the wrong artifact type")
   manifest, program = artifact.manifest, artifact.program
-  if manifest.get("schema") != SCHEMA or manifest.get("state") != "FROZEN":
+  if manifest.get("schema") not in (SCHEMA, LEGACY_SCHEMA) or manifest.get("state") != "FROZEN":
     raise ValueError("runtime artifact is not a frozen target bundle")
   if manifest.get("backend_id") != BACKEND_ID or manifest.get("accumulation") != ACCUMULATION or \
      manifest.get("accumulate") is not True:

@@ -6,16 +6,18 @@ boundary with an injected fake and exercise only the parent-side state machine.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from tinygrad.uop.ops import Ops, ProgramInfo, UOp
 
 from extra.qk import mmq_llama_five_buffer_full_kernel as full_kernel
 from extra.qk.mmq_exact_role_spec import exact_role_spec
 from extra.qk.mmq_target_epoch_orchestrator import (
-  ATTESTATION_SCHEMA, FIXTURE_SCHEMA, collect_kernel_fault_evidence, compile_target_program,
+  ATTESTATION_SCHEMA, FIXTURE_SCHEMA, collect_kernel_fault_evidence, compile_target_kernel, compile_target_program,
   orchestrate_epoch_sweep, parse_kernel_fault_evidence, parse_kernel_faults,
   spawned_tiny_health_probe, target_fixture_evidence,
 )
@@ -64,20 +66,36 @@ def _assert_diagnostic_only(out: dict) -> None:
 
 
 def test_shared_cpu_compile_helper_forwards_accumulation_mode(monkeypatch):
+  source_kernel = full_kernel.build_llama_five_buffer_full_kernel(512, 17_408, 256)
+  sink = source_kernel.sink
   program = UOp(Ops.PROGRAM, src=(UOp(Ops.SINK),), arg=ProgramInfo(
     name="mock_target", global_size=(1, 1, 1), local_size=(1, 1, 1), globals=tuple(range(5))))
   calls = []
   monkeypatch.setattr(full_kernel, "build_llama_five_buffer_full_kernel",
-                      lambda m, n, k, *, accumulate=False: calls.append((m, n, k, accumulate)) or "kernel")
+                      lambda m, n, k, *, accumulate=False: calls.append((m, n, k, accumulate)) or sink)
   monkeypatch.setattr(full_kernel, "compile_llama_five_buffer_full_kernel",
                       lambda kernel, *, target: calls.append(("target", target)) or
-                      type("Compiled", (), {"emitted": True, "program": program, "blocker": None})())
+                      replace(source_kernel, sink=kernel, program=program, emitted=True, blocker=""))
   assert compile_target_program(accumulate=True) is program
   assert compile_target_program(target="AMD:ISA:gfx1200") is program
   assert calls == [
     (512, 17_408, 256, True), ("target", full_kernel.AMD_ISA_TARGET),
     (512, 17_408, 256, False), ("target", "AMD:ISA:gfx1200"),
   ]
+  compiled = compile_target_kernel()
+  assert compiled.sink is sink and compiled.program is program
+
+
+def test_target_compile_module_exposes_no_test_or_private_proof_minter(monkeypatch):
+  monkeypatch.setenv("PYTEST_CURRENT_TEST", "adversary")
+  import extra.qk.mmq_target_epoch_orchestrator as orchestrator
+  assert not hasattr(orchestrator, "_test_only_seal_target_kernel_compile_proof")
+  assert not hasattr(orchestrator, "_seal_target_kernel_compile_proof")
+  assert not hasattr(orchestrator, "_TARGET_KERNEL_COMPILE_SEAL")
+  assert not hasattr(orchestrator, "TargetKernelCompileProof")
+  assert not hasattr(orchestrator, "_build_target_kernel_compile_boundary")
+  with pytest.raises(ImportError):
+    exec("from extra.qk.mmq_target_epoch_orchestrator import _test_only_seal_target_kernel_compile_proof")
 
 
 def test_spawned_health_probe_passes_validated_queue_mode_into_fresh_child(monkeypatch):

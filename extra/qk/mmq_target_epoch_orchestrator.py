@@ -21,6 +21,7 @@ the extra audit fields while R6 can require them explicitly.
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 import hashlib
 import json
 import os
@@ -31,6 +32,7 @@ import subprocess
 import tempfile
 import time
 from typing import Any, Callable, Iterable, Mapping
+import weakref
 
 import numpy as np
 
@@ -175,32 +177,79 @@ def collect_kernel_fault_evidence(
   return parse_kernel_faults(text), parse_kernel_fault_evidence(text)
 
 
+def _build_target_kernel_compile_boundary() -> tuple[Callable[..., Any], Callable[[Any], Any]]:
+  """Create the only authority that may mint a paired target SINK/PROGRAM proof."""
+  issued: dict[int, tuple[weakref.ReferenceType[Any], int, Any, Any, Any]] = {}
+
+  @dataclass(frozen=True)
+  class _TargetKernelCompileProof:
+    kernel: Any
+    sink: Any
+    program: Any
+
+  def validated(value: Any) -> _TargetKernelCompileProof:
+    from extra.qk.mmq_llama_five_buffer_full_kernel import LlamaFiveBufferFullKernel
+    retained = issued.get(id(value))
+    if type(value) is not _TargetKernelCompileProof or retained is None or retained[0]() is not value:
+      raise ValueError("target artifact requires the exact issued compile_target_kernel proof")
+    if retained[1] != os.getpid():
+      issued.pop(id(value), None)
+      raise ValueError("issued target compile proof cannot cross a process boundary")
+    # Validation consumes the authority. A copied or later-mutated proof cannot
+    # be repaired and retried, and the compiler graph is no longer retained.
+    issued.pop(id(value), None)
+    kernel, sink, program = retained[2:]
+    if value.kernel is not kernel or value.sink is not sink or value.program is not program:
+      raise ValueError("issued target compile proof objects changed after compilation")
+    if type(kernel) is not LlamaFiveBufferFullKernel or not kernel.emitted or kernel.program is None:
+      raise ValueError("issued target compile proof does not retain one emitted LlamaFiveBufferFullKernel")
+    if sink is not kernel.sink or program is not kernel.program:
+      raise ValueError("issued target compile proof SINK/PROGRAM pair differs from its emitted kernel")
+    return value
+
+  def compile_kernel(*, accumulate: bool = False, target: str | None = None,
+                     role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC) -> _TargetKernelCompileProof:
+    """Compile and retain one generated target K=256 SINK/PROGRAM pair without a runtime."""
+    from tinygrad.uop.ops import Ops, UOp
+    from extra.qk.mmq_llama_five_buffer_full_kernel import (
+      AMD_ISA_TARGET, build_llama_five_buffer_full_kernel, compile_llama_five_buffer_full_kernel,
+    )
+
+    m, n, epoch_k = role_spec.program.shape
+    compiled = compile_llama_five_buffer_full_kernel(
+      build_llama_five_buffer_full_kernel(m, n, epoch_k, accumulate=accumulate),
+      target=AMD_ISA_TARGET if target is None else target)
+    if not compiled.emitted or compiled.program is None:
+      mode = "accumulate" if accumulate else "overwrite"
+      raise RuntimeError(compiled.blocker or f"target K=256 {mode} program did not emit")
+    program = compiled.program
+    if program.op is not Ops.PROGRAM: raise RuntimeError(f"compile result is not PROGRAM: {program.op}")
+    programs = [u for u in program.toposort() if u.op is Ops.PROGRAM]
+    if programs != [program]: raise RuntimeError(f"expected one closed PROGRAM, found {len(programs)}")
+    if tuple(program.arg.globals) != tuple(range(5)):
+      raise RuntimeError(f"target PROGRAM ABI changed: globals={program.arg.globals}")
+    if not isinstance(compiled.sink, UOp) or compiled.sink.op is not Ops.SINK:
+      raise RuntimeError("target compile result lost its pre-lowering SINK")
+    proof = _TargetKernelCompileProof(compiled, compiled.sink, compiled.program)
+    identity = id(proof)
+    def retire(dead: weakref.ReferenceType[Any]) -> None:
+      retained = issued.get(identity)
+      if retained is not None and retained[0] is dead: issued.pop(identity, None)
+    issued[identity] = (weakref.ref(proof, retire), os.getpid(), compiled, compiled.sink, compiled.program)
+    return proof
+
+  return compile_kernel, validated
+
+
+compile_target_kernel, _validated_target_kernel_compile_proof = _build_target_kernel_compile_boundary()
+del _build_target_kernel_compile_boundary
+
+
 def compile_target_program(*, accumulate: bool = False, target: str | None = None,
                            role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC) -> Any:
-  """Compile and validate the generated target K=256 PROGRAM without a runtime.
-
-  This is the single CPU-only compile boundary shared by the diagnostic epoch
-  orchestrator and durable frozen-artifact producer.
-  """
-  from tinygrad.uop.ops import Ops
-  from extra.qk.mmq_llama_five_buffer_full_kernel import (
-    AMD_ISA_TARGET, build_llama_five_buffer_full_kernel, compile_llama_five_buffer_full_kernel,
-  )
-
-  m, n, epoch_k = role_spec.program.shape
-  compiled = compile_llama_five_buffer_full_kernel(
-    build_llama_five_buffer_full_kernel(m, n, epoch_k, accumulate=accumulate),
-    target=AMD_ISA_TARGET if target is None else target)
-  if not compiled.emitted or compiled.program is None:
-    mode = "accumulate" if accumulate else "overwrite"
-    raise RuntimeError(compiled.blocker or f"target K=256 {mode} program did not emit")
-  program = compiled.program
-  if program.op is not Ops.PROGRAM: raise RuntimeError(f"compile result is not PROGRAM: {program.op}")
-  programs = [u for u in program.toposort() if u.op is Ops.PROGRAM]
-  if programs != [program]: raise RuntimeError(f"expected one closed PROGRAM, found {len(programs)}")
-  if tuple(program.arg.globals) != tuple(range(5)):
-    raise RuntimeError(f"target PROGRAM ABI changed: globals={program.arg.globals}")
-  return program
+  """Compile and validate the generated target K=256 PROGRAM without a runtime."""
+  return compile_target_kernel(
+    accumulate=accumulate, target=target, role_spec=role_spec).program
 
 
 def target_program_artifact_evidence(program: Any) -> tuple[bytes, str, dict[str, Any]]:

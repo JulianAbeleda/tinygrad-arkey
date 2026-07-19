@@ -28,11 +28,13 @@ from extra.qk.mmq_exact_role_spec import (
 )
 from extra.qk.mmq_llama_five_buffer_full_kernel import AMD_ISA_TARGET
 from extra.qk.mmq_target_epoch_orchestrator import (
-  FIXTURE_SCHEMA, compile_target_program, target_fixture_evidence, target_program_artifact_evidence,
+  FIXTURE_SCHEMA, _validated_target_kernel_compile_proof, compile_target_kernel,
+  target_fixture_evidence, target_program_artifact_evidence,
 )
 
 
-SCHEMA = "tinygrad.mmq_q4k_q8_1.frozen_target_artifact.v1"
+SCHEMA = "tinygrad.mmq_q4k_q8_1.frozen_target_artifact.v2"
+LEGACY_SCHEMA = "tinygrad.mmq_q4k_q8_1.frozen_target_artifact.v1"
 AUDIT_SCHEMA = "tinygrad.mmq_q4k_q8_1.frozen_target_artifact_audit.v1"
 TARGET_SHAPE = DEFAULT_EXACT_ROLE_SPEC.program.shape
 FULL_ROLE_SHAPE = DEFAULT_EXACT_ROLE_SPEC.shape
@@ -43,6 +45,7 @@ PROGRAM_DEVICE = "AMD"
 FILE_NAMES = {
   "binary": "target_accumulate_k256.hsaco",
   "program": "target_accumulate_k256.program.pkl",
+  "sink": "target_accumulate_k256.sink.pkl",
   "source": "target_accumulate_k256.source.txt",
   "disassembly": "target_accumulate_k256.isa.txt",
   "fixture": "fixture.json",
@@ -105,7 +108,20 @@ def deterministic_fixture_identity(*, role_spec: ExactRoleSpec = DEFAULT_EXACT_R
 
 
 def _default_compile_once(role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC) -> Any:
-  return compile_target_program(accumulate=True, target=AMD_ISA_TARGET, role_spec=role_spec)
+  return compile_target_kernel(accumulate=True, target=AMD_ISA_TARGET, role_spec=role_spec)
+
+
+def _validate_source_sink(sink: Any, role_spec: ExactRoleSpec) -> UOp:
+  """Validate the retained pre-lowering authority without compiling it."""
+  if not isinstance(sink, UOp) or sink.op is not Ops.SINK:
+    raise ValueError("target compile result lacks a pre-lowering SINK")
+  params = sorted({u for u in sink.toposort() if u.op is Ops.PARAM}, key=lambda u: u.arg.slot)
+  expected = _expected_abi(role_spec.program)
+  observed = [{"slot": int(u.arg.slot), "name": expected[u.arg.slot]["name"],
+               "dtype": str(u.dtype), "elements": int(u.max_numel())} for u in params]
+  if observed != list(expected):
+    raise ValueError("pre-lowering SINK five-buffer ABI changed")
+  return sink
 
 
 def _program_disassembly(program: UOp, binary: bytes) -> tuple[str, str]:
@@ -181,12 +197,9 @@ def produce_frozen_target_artifact(output_dir: str | Path, *, archive: str | Pat
     selected_compile = compile_once or (lambda: _default_compile_once(role_spec))
     selected_fixture = fixture_builder or (lambda: deterministic_fixture_identity(role_spec=role_spec))
     compiled = selected_compile()  # sole compile invocation owned by this producer
-    if isinstance(compiled, UOp):
-      program = _validate_program(compiled, role_spec)
-    else:
-      if not getattr(compiled, "emitted", False) or getattr(compiled, "program", None) is None:
-        raise RuntimeError(getattr(compiled, "blocker", None) or "target accumulate K=256 program did not emit")
-      program = _validate_program(compiled.program, role_spec)
+    proof = _validated_target_kernel_compile_proof(compiled)
+    sink = _validate_source_sink(proof.sink, role_spec)
+    program = _validate_program(proof.program, role_spec)
     binary, source, shared_artifacts = _program_payload(program)
     disassembly, disassembly_tool = (
       _program_disassembly(program, binary) if disassemble is None else disassemble(binary))
@@ -199,10 +212,12 @@ def produce_frozen_target_artifact(output_dir: str | Path, *, archive: str | Pat
       raise ValueError("fixture full-role shape differs from admitted role")
     if "role" in fixture and fixture["role"] != role_spec.role:
       raise ValueError("fixture role differs from admitted role")
+    serialized_sink = pickle.dumps(sink, protocol=pickle.HIGHEST_PROTOCOL)
     serialized = pickle.dumps(program, protocol=pickle.HIGHEST_PROTOCOL)
     files = {
       FILE_NAMES["binary"]: binary,
       FILE_NAMES["program"]: serialized,
+      FILE_NAMES["sink"]: serialized_sink,
       FILE_NAMES["source"]: source.encode(),
       FILE_NAMES["disassembly"]: disassembly.encode(),
       FILE_NAMES["fixture"]: _json_bytes(fixture),
@@ -220,6 +235,12 @@ def produce_frozen_target_artifact(output_dir: str | Path, *, archive: str | Pat
         "device": program.src[1].arg, "compile_target": AMD_ISA_TARGET,
         "globals": list(program.arg.globals), "global_size": list(program.arg.global_size),
         "local_size": list(program.arg.local_size or ()), "abi": _abi(program, role_spec.program),
+      },
+      "source_sink": {
+        "authority": "same_session_pre_lowering_sink_passed_to_compiler",
+        "key": sink.key.hex(),
+        "serialized_sha256": _sha256(serialized_sink),
+        "serialized_nbytes": len(serialized_sink),
       },
       "artifacts": {
         **shared_artifacts,
@@ -252,6 +273,7 @@ class FrozenTargetArtifact:
   source: str
   disassembly: str
   fixture: Mapping[str, Any]
+  sink: UOp | None = None
 
 
 def _read_bundle(path: Path) -> dict[str, bytes]:
@@ -268,12 +290,16 @@ def _read_bundle(path: Path) -> dict[str, bytes]:
 def load_frozen_target_artifact(path: str | Path) -> FrozenTargetArtifact:
   """Load and fully validate a directory or tar bundle without compilation."""
   files = _read_bundle(Path(path))
-  required = {"manifest.json", *FILE_NAMES.values()}
-  if set(files) != required: raise ValueError(f"bundle file set changed: expected {sorted(required)}, got {sorted(files)}")
   try: manifest = json.loads(files["manifest.json"])
+  except KeyError as exc: raise ValueError("bundle has no manifest.json") from exc
   except (UnicodeDecodeError, json.JSONDecodeError) as exc: raise ValueError(f"invalid manifest JSON: {exc}") from exc
-  if manifest.get("schema") != SCHEMA or manifest.get("state") != "FROZEN":
+  schema = manifest.get("schema")
+  if schema not in (SCHEMA, LEGACY_SCHEMA) or manifest.get("state") != "FROZEN":
     raise ValueError("bundle does not contain a frozen target manifest")
+  legacy = schema == LEGACY_SCHEMA
+  retained_names = {name for kind, name in FILE_NAMES.items() if not legacy or kind != "sink"}
+  required = {"manifest.json", *retained_names}
+  if set(files) != required: raise ValueError(f"bundle file set changed: expected {sorted(required)}, got {sorted(files)}")
   if manifest.get("compile_calls") != 1 or manifest.get("accumulate") is not True:
     raise ValueError("manifest does not attest one accumulate=True compile")
   compiler_environment = manifest.get("compiler_environment")
@@ -282,7 +308,7 @@ def load_frozen_target_artifact(path: str | Path) -> FrozenTargetArtifact:
     raise ValueError("manifest compiler environment is malformed")
   if manifest.get("gpu_runtime_initialized") is not False or manifest.get("gpu_dispatch_performed") is not False:
     raise ValueError("frozen artifact must be produced without GPU runtime or dispatch")
-  retained = {name: files[name] for name in FILE_NAMES.values()}
+  retained = {name: files[name] for name in retained_names}
   if manifest.get("files") != _inventory(retained): raise ValueError("retained file inventory identity mismatch")
   try: role_spec = exact_role_spec_from_shape(tuple(manifest.get("full_role_shape", ())))
   except (TypeError, ValueError) as exc: raise ValueError(f"frozen full-role shape is not inventory-admitted: {exc}") from exc
@@ -291,6 +317,22 @@ def load_frozen_target_artifact(path: str | Path) -> FrozenTargetArtifact:
   try: program = pickle.loads(files[FILE_NAMES["program"]])
   except BaseException as exc: raise ValueError(f"serialized PROGRAM cannot be loaded: {type(exc).__name__}: {exc}") from exc
   program = _validate_program(program, role_spec)
+  sink = None
+  if not legacy:
+    try: sink = pickle.loads(files[FILE_NAMES["sink"]])
+    except BaseException as exc:
+      raise ValueError(f"serialized pre-lowering SINK cannot be loaded: {type(exc).__name__}: {exc}") from exc
+    sink = _validate_source_sink(sink, role_spec)
+    serialized_sink = files[FILE_NAMES["sink"]]
+    if manifest.get("source_sink") != {
+        "authority": "same_session_pre_lowering_sink_passed_to_compiler",
+        "key": sink.key.hex(),
+        "serialized_sha256": _sha256(serialized_sink),
+        "serialized_nbytes": len(serialized_sink),
+    }:
+      raise ValueError("pre-lowering SINK identity differs from manifest")
+  elif "source_sink" in manifest:
+    raise ValueError("legacy frozen target artifact cannot claim pre-lowering SINK authority")
   binary, source, shared_artifacts = _program_payload(program)
   if binary != files[FILE_NAMES["binary"]]: raise ValueError("serialized PROGRAM binary differs from retained HSACO")
   if source.encode() != files[FILE_NAMES["source"]]: raise ValueError("serialized PROGRAM source differs from retained source")
@@ -316,7 +358,7 @@ def load_frozen_target_artifact(path: str | Path) -> FrozenTargetArtifact:
       "globals": list(program.arg.globals), "global_size": list(program.arg.global_size),
       "local_size": list(program.arg.local_size or ()), "abi": _abi(program, role_spec.program)}:
     raise ValueError("serialized PROGRAM launch identity differs from manifest")
-  return FrozenTargetArtifact(manifest, program, binary, source, disassembly, fixture)
+  return FrozenTargetArtifact(manifest, program, binary, source, disassembly, fixture, sink)
 
 
 def audit_frozen_target_artifact(path: str | Path) -> dict[str, Any]:
@@ -392,7 +434,7 @@ if __name__ == "__main__": raise SystemExit(main())
 
 
 __all__ = [
-  "ACCUMULATION", "AUDIT_SCHEMA", "FILE_NAMES", "FIXTURE_SCHEMA", "FrozenTargetArtifact", "SCHEMA",
+  "ACCUMULATION", "AUDIT_SCHEMA", "FILE_NAMES", "FIXTURE_SCHEMA", "FrozenTargetArtifact", "LEGACY_SCHEMA", "SCHEMA",
   "audit_frozen_target_artifact", "deterministic_fixture_identity", "load_frozen_target_artifact",
   "produce_frozen_target_artifact",
 ]
