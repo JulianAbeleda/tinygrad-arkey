@@ -2,8 +2,9 @@
 
 Date: 2026-07-18
 
-Status: working method derived from the corrected-v2 `attn_kv` result. This document defines how to reproduce that
-result across roles. It is not a production-promotion claim.
+Status: working method derived from the corrected-v2 `attn_kv` result and the completed `attn_qo` direct-layout
+classification. This document defines how to reproduce the result across roles and how to select a physical-layout
+family when exact diagnostics falsify the first design. It is not a production-promotion claim.
 
 ## 1. Objective
 
@@ -423,7 +424,7 @@ different compact/donor PROGRAM and do not certify the new full-role fixed-strid
 | Role | Observed corrected-v2 milestone | Retrospective or open gaps under the strengthened method |
 |---|---|---|
 | `attn_kv` | Zero-resource family plus native-PM4 prefix-3/full-20 retained-producer correctness and lifecycle result | C0A producer/spec result, C1 provenance/durability, C3 final-native certificate, strengthened C5 phase isolation, internal C4 queue attestation, C7 memory ledger, and C8 performance |
-| `attn_qo` | 20-program family generated; loader/resource audit passes with zero spills; first guarded prefix attempt blocked | C0A, C1 provenance/durability, C3, independent C4, and C5 attribution |
+| `attn_qo` | Provenance-complete 20-program v3 family passes C1-C4; exact direct-layout prefix 1 faults, while bounded grids `1x4`, `8x4`, and `9x4` and isolated tiles 11/12 pass | Direct full-role layout remains blocked at C5; a certification-grade dense staged family, C7 memory admission, and C8 timing remain open |
 | `ffn_gate_up` | No corrected-v2 family certified through this ladder | C1 onward |
 | `ffn_down` | No corrected-v2 family certified through this ladder | C1 onward |
 
@@ -448,48 +449,93 @@ A read-only, non-durable static review found:
 Those facts are not a C3 certificate and do not prove realized pointer payloads or target attribution.
 Producer/output initialization and the frozen target remained asynchronous in the failed run.
 
-## 9. Immediate `attn_qo` application
+## 9. Completed `attn_qo` direct-layout classification
 
-The next attempt must restore the ladder rather than guess at a kernel change.
+The guarded discriminator is complete. It classified the current failure without changing the generated binary,
+relaxing correctness, adding a launcher, or treating a reduced grid as exact-role evidence.
 
-### CPU/mock-only preparation
+### 9.1 Exact bounded-grid results
 
-1. Preserve typed PM4/AQL dispatch evidence when delayed synchronization raises.
-2. Synchronize while dispatch hooks and state are still installed.
-3. Record target exec, submit-began, submit-returned, and synchronize boundaries.
-4. Retain all five kernarg qwords and allocation extents.
-5. Add exhaustive output and final-memory-provenance validation where current validators stop at the source sink.
-6. Mock-test every failure path without using the GPU.
+The provenance-complete v3 family is
+`/tmp/qk-attn-qo-v3-guarded-bundle-20260718`, family identity
+`0bcd84d9c040d70d55be9de0d7b724a8345a93ff36bb85d92490803aec761c1e`. Epoch 0 has PROGRAM key
+`5277afc091f2626a13ab503c4d5a9dc7a4d5a105b82e3c2d36131c937bc17b68` and binary SHA256
+`9d0ce01e11c5fde8fe53a8b82438873d16702a39581e4f9ff0cc3f52ef37be46`.
 
-Commit `3342860ee [runtime] preserve typed evidence from isolated failures` begins item 1 by teaching generic
-`tinygrad.runtime.process_isolated.run_isolated` to serialize typed exception evidence. The frozen-prefix wrapper
-still uses its manual subprocess path and is not yet integrated with this mechanism. The commit does not by itself
-prove phase isolation or repair the GPU fault.
+Research-only bounded-grid execution retained that exact PROGRAM, binary, local size, five-pointer ABI, runtime, and
+full-size allocations. Only the CALL grid was reduced:
 
-### One guarded discriminator
+| Grid | Workgroups | Result | Artifact SHA256 |
+|---:|---:|---|---|
+| `1x4` | 4 | PASS | `/tmp/qk-attn-qo-v3-guarded-c5-grid1x4-retry-20260719.json` — `2d38509a83f440c754cdd0810a6aa98ee20178eea0c0f5b70ad44d6a9e3746ee` |
+| `8x4` | 32 | PASS | `/tmp/qk-attn-qo-v3-guarded-c5-grid8x4-20260719.json` — `b635c83b70e77192de0da487ce8228c0580c286b6191a4ad72350cc4332525f3` |
+| `9x4` | 36 | PASS | `/tmp/qk-attn-qo-v3-guarded-c5-grid9x4-20260719.json` — `a603a262ad503fae4c794ba10e73f70ca2f45afc650aa4f292ab8cd17d4edaad` |
+| `16x4` | 64 | BLOCKED: SQ type-2 memory violation and reset | `/tmp/qk-attn-qo-v3-guarded-c5-grid16x4-20260719.json` — `4aa5519f93e134daaa1c66a0ead7369968b71b04a94642bcf2549a09674af3ac` |
 
-After CPU/mock validation:
+The passing `9x4` result proves that the first Qo-only Q4 tile beyond the complete `attn_kv` allocation is valid in
+execution. Static source/final-native evaluation also proves the full `40x4` address set is in bounds, has no signed
+or 32-bit wrap transition, and uses no `gidx0`-dependent Q8 address.
+
+### 9.2 Individual transition tiles
+
+A second research-only diagnostic fixed the launch at `1x4` and biased exact Q4/output views to simulate one original
+`gidx0` tile. It preserved the original parent allocations, transparent CALL dependency carriers, memory-semantic
+owners, non-target arguments, and pre-doorbell pointer attestations.
+
+- Tile 11, the first tile that crosses 4 MiB relative to the direct Q4 allocation, passes 65,536 target values with
+  zero mismatches; all 2,555,904 non-target output values remain exact zero; health and the kernel-fault window are
+  clean. Artifact:
+  `/tmp/qk-attn-qo-v3-c5-single-tile11-retry2-20260719.json`, SHA256
+  `49e21dd3684fe28b84db396012e7c0ff552a6c1a0753ea8e4b0f23b54e0ea463`.
+- Tile 12, whose Q4 slab begins above that relative 4 MiB boundary, passes the same 65,536-value comparison and exact
+  2,555,904-value untouched-output check with clean health/fault evidence. Artifact:
+  `/tmp/qk-attn-qo-v3-c5-single-tile12-20260719.json`, SHA256
+  `95354f34c19d790334960c747973d84334cb7dbed336bf49ff07981441fa0155`.
+
+These are diagnostic results, not full-grid C5 evidence. They refute an intrinsically invalid tile 11, tile 12, or
+allocation-relative 4 MiB transition as the sufficient cause of the `16x4` fault.
+
+### 9.3 Historical dense-stage control and conclusion
+
+Historical `attn_qo` passed native PM4 at the exact `40x4` grid for all 20 epochs, with zero mismatches across
+2,621,440 outputs, healthy pre/post probes, and the same 256-VGPR, 57,856-byte-LDS, zero-scratch envelope. The retained
+full result is
+[`qwen3-14b-prefill-attn-qo-fixed-va-20epoch-pm4-20260718.json`](qwen3-14b-prefill-attn-qo-fixed-va-20epoch-pm4-20260718.json),
+SHA256 `c532a1677557054018cfca6462b41612ab53dc8ab9351c547e5ca382754a2833`. The CPU comparison is
+`/tmp/qk-attn-qo-historical-fullgrid-control-audit-20260719.json`, SHA256
+`3b7a0720deaacfc5d8c764b83b9cde70ca73e846a6b06539f419605620dfe2dd`.
+
+The decisive physical-contract delta is:
+
+| Contract | Q4 allocation | Row stride | `gidx0` tile stride |
+|---|---:|---:|---:|
+| Historical compact fixed-VA per-epoch stage | 737,280 bytes | 36 `uint32` | 18,432 bytes |
+| Current direct full-role layout | 14,745,600 bytes | 720 `uint32` | 368,640 bytes |
+
+Therefore the failure is aggregate direct-layout behavior: it requires multiple workgroups reading the sparse
+full-role Q4 layout and is not explained by an invalid individual transition tile, static out-of-bounds address, the
+tile recurrence, the local resource envelope, or a generic inability to launch 160 workgroups. The retained evidence
+does not distinguish the remaining dynamic mechanisms—layout-dependent translation, cache/traffic, or runtime
+interaction—and no production decision requires that finer driver-level attribution.
+
+Stop schedule changes, direct-grid widening, and tile-by-tile search for this family. The proof-backed next family is
+a certification-grade dense fixed-VA per-epoch staged contract using the existing tinygrad emitter, scheduler,
+runtime, queue, census, and comparator:
 
 ```text
-producer/output initialization
-  -> synchronize and health check
-  -> capture realized buffers
-  -> one target dispatch under census
-  -> synchronize before removing census
-  -> numerical comparison and health check
+content-addressed staged role contract and PROGRAM
+  -> C1-C4 static/resource/runtime gates
+  -> phase-isolated prefix 1
+  -> prefix 3
+  -> full 20 correctness
+  -> C7 memory admission
+  -> C8 complete-role timing and explicit winner/fallback decision
 ```
 
-Interpretation:
-
-| Observation | Owning category | Next action |
-|---|---|---|
-| Producer phase faults | Producer/initialization lifecycle | Minimize and repair the scheduler-owned operation |
-| Any pointer is zero, misordered, or out of allocation | Allocation/binding | Repair five-buffer realization or kernarg construction |
-| Pointers are valid and target faults | Generated memory semantics | Compare final address provenance; isolate wide-grid/stride-720 tiles |
-| Prefix 1 passes but prefix 3 fails | Repeated lifecycle | Audit target completion, runtime reuse, buffer mutation, and queue ordering |
-| Prefix 3 passes | Full-role escalation | Run all 20 with the same family and evidence contract |
-
-No prefix-3 or full-20 run is authorized by a failed prefix-1 result. A recovered reset proves recovery, not safety.
+The historical staged timing of `76.49636000860482 ms` versus the retained direct-packed `11.41 ms` is a performance
+rejection for that historical executable, not a timing result for a future staged family. It makes C8 a high-risk
+gate and forbids promotion by analogy. The bounded-grid, single-tile, and historical-control results make no
+production-promotion claim.
 
 ## 10. Scaling rules
 
@@ -617,61 +663,63 @@ In parallel, make its existing family and evidence durable, close the strengthen
 gaps, and run a comparable complete-role timing gate. If it loses, record a C8 fallback decision without weakening
 its C6 correctness result.
 
-### 12.5 Resolve `attn_qo` by classification
+### 12.5 Certify `attn_qo` with the selected staged contract
 
-`attn_qo` is the current frontier because it changes grid width while keeping K and the epoch count fixed.
+The direct-layout classification in §9 is complete. The current direct v3 family remains an explicit
+`BLOCKED_AT_C5` result; it is not the base for more schedule or grid search.
 
 Ordered solution:
 
-1. complete the shared failure-retention and phase-isolation mock tests;
-2. complete the final-ISA memory certificate and bundle provenance;
-3. run producer/output initialization alone and synchronize;
-4. if healthy, run one exact full-grid target with all five pointers captured;
-5. if the target faults with valid pointers, isolate the first wide-grid boundary:
-   - compare the already-certified `gidx0=0..7` region with the first newly exercised tile;
-   - use a research-only bounded-grid diagnostic only if the existing manifest/launcher can express it explicitly;
-   - do not relabel that bounded result as exact-role evidence;
-6. repair only the classified owner: producer, binding, final addressing, or repeated lifecycle;
-7. repeat `prefix 1 -> prefix 3 -> full 20`;
-8. run comparable complete-role timing and select generated or fallback.
+1. define a serializable `attn_qo` staged physical contract that keeps the exact role shape, five semantic pointers,
+   `40x4` grid, local size 256, and dense fixed-VA per-epoch Q4 addressing;
+2. content-address the PROGRAM, role binding, ordered 20-epoch staging/dispatch fixture, source revision, and
+   codegen-affecting inputs;
+3. run C1-C3 and the no-target C4 runtime-preconstruction canary before target work;
+4. run phase-isolated prefix 1, then prefix 3, then full 20 under one unchanged evidence contract;
+5. retain D2D/SDMA staging bytes, synchronization, code/runtime allocations, and peak memory in C7;
+6. time the complete staged role, including required copies and synchronization, against the exact direct-packed
+   fallback at C8;
+7. select `CERTIFIED_WIN`, `CERTIFIED_FALLBACK`, or the first explicit blocked gate without weakening the oracle.
 
-Exit artifact:
+Exit artifacts:
 
-- exact corrected-v2 `attn_qo` family;
-- C0-C8 evidence or an explicit failed gate and fallback decision.
+- exact staged `attn_qo` family and execution contract;
+- C0-C8 evidence or an explicit failed gate and fallback decision;
+- the current direct v3 family retained separately as classified C5 failure evidence.
 
 ### 12.6 Certify `ffn_gate_up` as N-scaling
 
-Start its CPU family generation and static audits after the shared provenance format is fixed; this can overlap with
-the `attn_qo` investigation.
+Start its CPU family generation and static audits after the staged provenance/fixture format is fixed; this can
+overlap with `attn_qo` correctness execution.
 
 Ordered solution:
 
-1. generate all 20 exact static-offset programs for `(512,17408,5120)`;
-2. require zero spills/scratch and exhaustive `136x4` memory bounds;
+1. generate or adapt an exact staged execution family for `(512,17408,5120)` with 20 ordered K256 epochs;
+2. require zero spills/scratch and exhaustive `136x4` compact-stage/output memory bounds;
 3. run the no-target runtime-preconstruction canary;
 4. reuse the phase-isolated producer and target path proven by `attn_qo`;
 5. escalate `1 -> 3 -> 20`;
 6. compare the complete 8,912,896-value output under the declared authority;
 7. measure the complete 20-epoch role, including required synchronization and preparation.
 
-If `attn_qo` passes but `ffn_gate_up` fails, the initial search space is intentionally narrow: maximum grid index,
-allocation extent, code/runtime footprint, or workload duration. The tile recurrence and 20-epoch lifecycle remain
-positive controls.
+If staged `attn_qo` passes but staged `ffn_gate_up` fails, the initial search space is intentionally narrow: maximum
+grid index, compact-stage/output allocation extent, code/runtime footprint, or workload duration. The tile recurrence
+and 20-epoch lifecycle remain positive controls.
 
 Exit artifact:
 
-- exact corrected-v2 `ffn_gate_up` C0-C8 result and route decision.
+- exact staged `ffn_gate_up` C0-C8 result and route decision.
 
 ### 12.7 Certify `ffn_down` as epoch-scaling
 
-Do not treat the historical shared-N5120 donor as corrected-v2 proof. Generate the exact 68-program role family.
+Do not treat the historical shared-N5120 donor as current certification proof. Bind the selected staged N5120
+PROGRAM contract to an exact 68-epoch `ffn_down` execution family and fixture.
 
 Ordered solution:
 
-1. generate all 68 static-offset programs for `(512,5120,17408)`;
-2. verify every epoch's Q4/Q8/metadata envelope and binary resource report;
-3. preconstruct all 68 runtimes without target MMQ dispatch;
+1. generate or adapt the staged execution family for `(512,5120,17408)` with all 68 ordered K256 epochs;
+2. verify every epoch's staged Q4/Q8/metadata envelope and the exact PROGRAM resource report;
+3. preconstruct every distinct required runtime without target MMQ dispatch;
 4. use the already-certified `40x4` `attn_qo` geometry as the output-grid control;
 5. escalate `1 -> 3`, then add bounded lifecycle checkpoints before the full 68 if evidence shows a transition
    boundary;
@@ -683,7 +731,7 @@ boundary. Do not assume the ordinal's program is bad until it passes or fails in
 
 Exit artifact:
 
-- exact corrected-v2 `ffn_down` C0-C8 result and route decision.
+- exact staged `ffn_down` C0-C8 result and route decision.
 
 ### 12.8 Work ordering and concurrency
 
@@ -691,10 +739,10 @@ The critical path is:
 
 ```text
 shared observability/provenance
-  -> attn_qo classified prefix 1
-  -> attn_qo full 20
-  -> ffn_gate_up full 20
-  -> ffn_down full 68
+  -> attn_qo direct-layout classification complete
+  -> staged attn_qo C1-C8
+  -> staged ffn_gate_up C1-C8
+  -> staged ffn_down C1-C8
   -> queue-qualified candidate decisions
   -> policy and whole-model gates
 ```

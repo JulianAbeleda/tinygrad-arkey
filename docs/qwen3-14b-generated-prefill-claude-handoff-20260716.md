@@ -1,5 +1,43 @@
 # Qwen3-14B generated-prefill Claude handoff
 
+## 1.4 Current status 2026-07-19: `attn_qo` direct layout classified; staged family is next
+
+Read this section before the older corrected-v2 lifecycle diagnoses. Section 1.2 remains the historical performance
+authority, and `docs/generated-prefill-role-certification-method-20260718.md` is the current prospective
+certification method.
+
+The provenance-complete direct-layout v3 `attn_qo (512,5120,5120)` family passes C1-C4 with zero scratch/spills.
+Its exact epoch-0 PROGRAM and full allocations pass research-only grids `1x4`, `8x4`, and `9x4`, but `16x4` reports
+an SQ type-2 memory violation and reset. Two pointer-biased `1x4` discriminators then isolate the conspicuous
+transition region:
+
+- tile 11 crosses 4 MiB relative to the Q4 allocation and passes all 65,536 target values; the other 2,555,904 output
+  values remain exact zero; health/fault evidence is clean. Artifact
+  `/tmp/qk-attn-qo-v3-c5-single-tile11-retry2-20260719.json`, SHA256
+  `49e21dd3684fe28b84db396012e7c0ff552a6c1a0753ea8e4b0f23b54e0ea463`;
+- tile 12 begins above that boundary and passes the same target and untouched-output checks with clean health/fault
+  evidence. Artifact `/tmp/qk-attn-qo-v3-c5-single-tile12-20260719.json`, SHA256
+  `95354f34c19d790334960c747973d84334cb7dbed336bf49ff07981441fa0155`.
+
+These diagnostics refute an invalid individual tile or the relative 4 MiB crossing as the sufficient cause. The
+failure requires aggregate execution over the sparse direct full-role Q4 layout. Historical compact fixed-VA
+per-epoch Qo already passed exact `40x4`, full 20, with zero mismatches and the same resource envelope. Its retained
+full result is `docs/qwen3-14b-prefill-attn-qo-fixed-va-20epoch-pm4-20260718.json`, SHA256
+`c532a1677557054018cfca6462b41612ab53dc8ab9351c547e5ca382754a2833`.
+
+Stop schedule changes, direct-grid widening, and tile-by-tile search. Build a certification-grade staged family using
+the existing tinygrad emitter/runtime path, run C1-C4, then `prefix 1 -> prefix 3 -> full 20`, followed by C7 memory
+admission and C8 complete-role timing. The historical staged executable measured `76.49636000860482 ms` versus the
+retained direct-packed `11.41 ms`, so it is performance-rejected and supplies no promotion claim for the new family.
+
+```text
+attn_qo_direct_v3_status=BLOCKED_AT_C5
+attn_qo_individual_tiles_11_12=PASS_DIAGNOSTIC_ONLY
+attn_qo_next_family=dense_fixed_va_per_epoch_staged
+production_promotion=false
+default_route=direct_packed
+```
+
 ## 1.3 Current corrected-v2 status 2026-07-18: `attn_kv` native-PM4 lifecycle and full-role correctness pass
 
 Read this section before the historical lifecycle diagnoses below. Section 1.2 remains the performance and promotion
