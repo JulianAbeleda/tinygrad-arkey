@@ -1,0 +1,111 @@
+{
+  "schema": "tinygrad.qwen3_14b_prefill_attn_kv_v2_runtime_preconstruction_closeout.v1",
+  "status": "PASS_CORRECTNESS_ONLY",
+  "date": "2026-07-18",
+  "commit": "8269edefec7ef838488147a3dc616be458357650",
+  "target": {
+    "backend": "AMD",
+    "architecture": "gfx1100",
+    "queue_mode": "PM4",
+    "role": "attn_kv",
+    "shape": [
+      512,
+      1024,
+      5120
+    ]
+  },
+  "frozen_family": {
+    "bundle": "/tmp/qk-attn-v2-stridefix-picklefix-bundle-20260718",
+    "family_identity": "5d862e43cbf924f5d8c9e239a4fbb3d0601517436b03707e9b6f3d5ebc10d38b",
+    "program_count": 20,
+    "distinct_programs": true,
+    "static_offset_epoch_k": 256,
+    "zero_scratch": true,
+    "zero_vgpr_spills": true,
+    "zero_sgpr_spills": true
+  },
+  "failure_localization": {
+    "raw_artifact": "/tmp/qk-attn-v2-stridefix-pm4-prefix3-20260718.json",
+    "raw_sha256": "d6aa8f82e2349fb3f97332fbac411043bc72b8ab88f36b79d48ec6556e2fa0ff",
+    "accepted_target_submissions": 2,
+    "target_0_complete": true,
+    "target_1_submitted_not_complete": true,
+    "target_2_reached_exec": false,
+    "exception_surface": "target-2 get_runtime/AMDProgram construction while synchronizing prior work",
+    "driver_root_cause_proven": false,
+    "epoch_2_deterministically_bad": false,
+    "counterevidence": [
+      {
+        "artifact": "/tmp/qk-attn-v2-stridefix-ordinal2-rerun-20260718.json",
+        "sha256": "960dc1b697d1660afdb30cc87f62833ff1df53000d3bcd368bae5a9872e6b4f0",
+        "status": "PASS"
+      },
+      {
+        "artifact": "/tmp/qk-attn-v2-stridefix-pm4-sequence1-2-20260718.json",
+        "sha256": "defce979611a6fbf0fc769f65942fcb4b9528aea19b5e014082e2e475fd822c9",
+        "status": "PASS"
+      }
+    ]
+  },
+  "no_target_preconstruction_canary": {
+    "artifact": "/tmp/qk-attn-v2-runtime-preconstruction-canary-pm4-20260718.json",
+    "sha256": "66ebea1064a3da034ff5357730c6a071f2c7d6b64807d2ff01f88f98042b3f4c",
+    "status": "PASS",
+    "requested_environment": {
+      "AMD_AQL": "0"
+    },
+    "queue_mode_internally_attested": false,
+    "runtime_count": 20,
+    "target_dispatch_count": 0,
+    "gpu_work_limited_to_code_upload_and_health_probes": true,
+    "compute_dispatch_during_preconstruction": false,
+    "all_lifecycle_checks_pass": true,
+    "kernel_faults": [],
+    "health_before": true,
+    "health_after": true
+  },
+  "prefix_3": {
+    "artifact": "/tmp/qk-attn-v2-stridefix-pm4-preconstruct-prefix3-20260718.json",
+    "sha256": "bd941f37553dee1b4a6bdfced6f0d598ca22638e3f95a64c8042ac4476465233",
+    "status": "PASS",
+    "accepted_target_submissions": 3,
+    "runtime_reuse_crosscheck": "PASS",
+    "compared_values": 524288,
+    "mismatch_count": 0,
+    "max_abs_error": 0.0003662109375,
+    "kernel_faults": [],
+    "health_before": true,
+    "health_after": true
+  },
+  "full_20": {
+    "artifact": "/tmp/qk-attn-v2-stridefix-pm4-preconstruct-full20-20260718.json",
+    "sha256": "fbc7c8a675c4e53cc6896a2b976bc05652b808a254f110adbe64a1844d26e397",
+    "status": "PASS",
+    "accepted_target_submissions": 20,
+    "runtime_reuse_crosscheck": "PASS",
+    "compared_values": 524288,
+    "mismatch_count": 0,
+    "max_abs_error": 0.003173828125,
+    "kernel_faults": [],
+    "health_before": true,
+    "health_after": true
+  },
+  "correctness_authority": {
+    "name": "same_session_retained_full_role_producer_bytes_with_static_offset_prefix_and_fp16_metadata_roundtrip",
+    "whole_model_llama_parity": false,
+    "producer_oracle_rounding_drift": true,
+    "target_half_scale_mismatch_count": 0,
+    "target_half_sum_mismatch_count": 1
+  },
+  "scope": {
+    "research_only": true,
+    "diagnostic_only": true,
+    "performance_measured": false,
+    "queue_mode_admission_implemented": false,
+    "remaining_roles_validated_for_corrected_v2": false,
+    "whole_model_live_census_performed": false,
+    "production_promotion": false,
+    "default_route": "direct_packed",
+    "hip_launcher_used": false
+  }
+}

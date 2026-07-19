@@ -1,5 +1,63 @@
 # Qwen3-14B generated-prefill Claude handoff
 
+## 1.3 Current corrected-v2 status 2026-07-18: `attn_kv` native-PM4 lifecycle and full-role correctness pass
+
+Read this section before the historical lifecycle diagnoses below. Section 1.2 remains the performance and promotion
+authority: this work closes the corrected stride-aware v2 `attn_kv` runtime/correctness blocker, but does not make the
+generated route faster than direct packed or production eligible.
+
+The corrected v2 bundle is
+`/tmp/qk-attn-v2-stridefix-picklefix-bundle-20260718`, family
+`5d862e43cbf924f5d8c9e239a4fbb3d0601517436b03707e9b6f3d5ebc10d38b`. It contains 20 distinct static-offset
+K256 PROGRAMs for `attn_kv (512,1024,5120)`. Every retained binary has zero scratch and zero VGPR/SGPR spills.
+
+The native-PM4 prefix-3 failure was localized more narrowly than the earlier AQL/PM4 description:
+
+- The PM4 census accepted exact target submissions 0 and 1. Target 0 was complete before target 1 could submit.
+- Target 1 faulted asynchronously. Target 2 never reached `AMDComputeQueue.exec` or `_submit`.
+- The exception surfaced in target-2 `get_runtime`: `AMDProgram.__init__` uploads the next code object and synchronizes,
+  which exposed the preceding target fault.
+- Epoch 2 itself is not deterministically bad: the isolated ordinal-2 and ordered `[1,2]` probes pass.
+- This evidence locates where the fault surfaced. It does not prove a driver-level root cause inside the prior target,
+  KFD timeline dependency, or code-object allocation lifecycle.
+
+Commit `8269edefe [qk] preconstruct frozen epoch runtimes` adds a default-off, harness-only discriminator. It calls the
+existing `get_runtime("AMD", program)` cache in exact epoch order before target realization; no HIP launcher or runtime
+core was added. It fails closed on key/binary/cache drift, duplicate or overlapping code allocations, invalid
+entry/descriptor ranges, undrained device timelines, compute dispatch during preconstruction, or failure to reuse the
+same runtime objects during scheduler dispatch. The relevant CPU suite passes 111 tests.
+
+The guarded escalation now passes:
+
+1. Full-family no-target canary: all 20 runtime/code objects construct in a fresh child invoked with `AMD_AQL=0`;
+   target MMQ dispatch count remains zero, all lifecycle checks pass, the kernel-fault window is empty, and pre/post
+   health pass. The artifact does not independently attest queue mode, and code uploads plus health adds still use the
+   GPU.
+2. Preconstructed prefix 3: three exact PM4 submissions and runtime-object reuse checks pass; 0/524,288 output
+   mismatches, maximum absolute error `0.0003662109375`, clean fault window, healthy pre/post probes.
+3. Preconstructed full 20: 20 exact PM4 submissions and runtime-object reuse checks pass; 0/524,288 output mismatches
+   under combined `rtol=atol=0.003`, maximum absolute error `0.003173828125`, clean fault window, healthy pre/post
+   probes.
+
+The comparison authority is the same-session retained full-role producer bytes with the documented FP16 metadata
+round trip. The producer diagnostic still reports oracle-rounding drift: 205 Q-value mismatches, 3,344 raw-scale
+mismatches, 218 raw-sum mismatches, and after target-half rounding zero scale mismatches but one sum mismatch. Therefore
+this is not whole-model llama parity. Timing is unmeasured for this corrected v2 family. Queue-mode admission,
+remaining-role coverage, whole-model memory/correctness, decode regression, and matched performance remain open.
+
+The compact durable composition is
+`docs/qwen3-14b-prefill-attn-kv-v2-runtime-preconstruction-closeout-20260718.json`.
+
+```text
+corrected_v2_attn_kv_spills=0
+corrected_v2_attn_kv_native_pm4_full20=PASS
+corrected_v2_attn_kv_target_mismatches=0/524288
+corrected_v2_attn_kv_performance_measured=false
+whole_model_live_census_performed=false
+production_promotion=false
+default_route=direct_packed
+```
+
 ## 1.2 Current status 2026-07-18: all Q4 roles measured; no generated performance winner
 
 Read this section first. It corrects the performance accounting in §1.1 and §0.9.
