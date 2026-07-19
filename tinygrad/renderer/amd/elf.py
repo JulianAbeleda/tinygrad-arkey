@@ -93,12 +93,26 @@ def assemble_linear(prg:UOp, lin:UOp, arch:str) -> bytes:
   for v in lid_threads.values(): n_threads *= v
   lds_size += reg_bytes * n_threads   # per-thread accumulators
   code_bytes = b"".join(inst.to_bytes() for inst in insts)
+  target_arch = arch
   arch = next(v for k, v in _arch_map.items() if arch.startswith(k))
   is_cdna, is_rdna4 = arch == "cdna", arch == "rdna4"
 
-  # ** pad text to ISA alignment
+  # ** guard the end of text against instruction prefetch
   padding_inst = (s_nop_cdna(0) if is_cdna else s_code_end()).to_bytes()
-  text = code_bytes + padding_inst * ((hsa.AMD_ISA_ALIGN_BYTES - len(code_bytes) % hsa.AMD_ISA_ALIGN_BYTES) % hsa.AMD_ISA_ALIGN_BYTES)
+  if target_arch.startswith("gfx90a"):
+    # LLVM's AMDGPU EmitCodeEnd uses sixteen 64-byte cache lines on gfx90a.
+    padding_nbytes = round_up(len(code_bytes), 64) - len(code_bytes) + 16 * 64
+  elif not is_cdna:
+    # GFX11+ has 128-byte instruction-cache lines; GFX10 has 64-byte lines.
+    # LLVM emits three full lines after aligning the end to support prefetch mode 3.
+    cache_line_size = 128 if target_arch.startswith(("gfx11", "gfx12")) else 64
+    padding_nbytes = round_up(len(code_bytes), cache_line_size) - len(code_bytes) + 3 * cache_line_size
+  else:
+    # Preserve the existing generic CDNA policy while fixing the former
+    # instruction-count/byte-count mixup.
+    padding_nbytes = round_up(len(code_bytes), hsa.AMD_ISA_ALIGN_BYTES) - len(code_bytes)
+  padding_count = padding_nbytes // len(padding_inst)
+  text = code_bytes + padding_inst * padding_count
   text_offset = round_up(ctypes.sizeof(libc.Elf64_Ehdr), hsa.AMD_ISA_ALIGN_BYTES)
   rodata_offset = round_up(text_offset + len(text), hsa.AMD_KERNEL_CODE_ALIGN_BYTES)
 
