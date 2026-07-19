@@ -330,6 +330,7 @@ def _validate_runtime_launches(
 def _validate_probe_result(
     result: Mapping[str, Any], family: FrozenStagedFamily, *, prefix_epochs: int,
     queue_mode: str, frozen_bundle: str | Path,
+    require_guard_evidence: bool = True,
     ) -> dict[str, Any]:
   role_spec, manifest = family.binding.role_spec, family.manifest
   if not isinstance(result, Mapping):
@@ -346,16 +347,24 @@ def _validate_probe_result(
     "compile_performed_false": result.get("compile_performed") is False,
     "requires_recompile_false": result.get("requires_recompile") is False,
     "no_fallback": result.get("no_fallback") is True,
-    "health_before": result.get("health_before") is True,
-    "health_after": result.get("health_after") is True,
-    "mode_health_before": result.get("mode_health_before") is True,
-    "mode_health_after": result.get("mode_health_after") is True,
-    "isolated_child_queue_request_exact":
-      result.get("child_env_overrides") ==
-      {"AMD_AQL": "1" if queue_mode == "AQL" else "0"},
-    "kernel_faults_clean":
-      isinstance(result.get("kernel_faults"), list) and not result["kernel_faults"],
   }
+  if require_guard_evidence:
+    checks.update({
+      "health_before": result.get("health_before") is True,
+      "health_after": result.get("health_after") is True,
+      "mode_health_before": result.get("mode_health_before") is True,
+      "mode_health_after": result.get("mode_health_after") is True,
+      "isolated_child_queue_request_exact":
+        result.get("child_env_overrides") ==
+        {"AMD_AQL": "1" if queue_mode == "AQL" else "0"},
+      "kernel_faults_clean":
+        isinstance(result.get("kernel_faults"), list) and not result["kernel_faults"],
+    })
+  elif any(key in result for key in (
+      "health_before", "health_after", "mode_health_before", "mode_health_after",
+      "child_env_overrides", "kernel_faults", "kernel_fault_evidence")):
+    raise ValueError(
+      "persistent-session direct probe must not supply parent-owned guard evidence")
   correctness = result.get("correctness")
   comparison = correctness.get("comparison") if isinstance(correctness, Mapping) else None
   expected_values = role_spec.m * role_spec.n
@@ -440,6 +449,7 @@ def run_frozen_staged_family_prefix_probe(
     inventory: str | Path | Mapping[str, Any] = DEFAULT_INVENTORY,
     family_loader: Callable[..., FrozenStagedFamily] = load_frozen_staged_family_manifest,
     probe_runner: Callable[..., Mapping[str, Any]] | None = None,
+    persistent_session_parent_containment: bool = False,
     ) -> dict[str, Any]:
   """Run one exact staged prefix through the existing guarded full-grid path."""
   try:
@@ -493,7 +503,8 @@ def run_frozen_staged_family_prefix_probe(
   try:
     validated = _validate_probe_result(
       raw, family, prefix_epochs=prefix_epochs, queue_mode=queue_mode,
-      frozen_bundle=frozen_bundle)
+      frozen_bundle=frozen_bundle,
+      require_guard_evidence=not persistent_session_parent_containment)
   except BaseException as exc:
     return _blocked(
       "guarded staged prefix evidence failed closed",
@@ -515,6 +526,9 @@ def run_frozen_staged_family_prefix_probe(
     "frozen_bundle": str(Path(frozen_bundle).resolve()),
     "staged_family_manifest": str(Path(staged_family_manifest).resolve()),
     "integration_capability": integration_capability,
+    "containment_authority":
+      "persistent_c8_session_parent" if persistent_session_parent_containment
+      else "per_probe_guard_evidence",
     "c4_runtime_canary": canary, "validation": validated,
     "raw_probe": raw, "compile_performed": False,
     "requires_recompile": False, "hip_used": False, "no_fallback": True,

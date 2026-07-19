@@ -541,7 +541,8 @@ def make_frozen_staged_candidate_runner(
       prefix_epochs=role_spec.epochs, queue_mode=queue_mode,
       runtime_canary=runtime_canary_by_queue[queue_mode],
       timeout_seconds=timeout_seconds, inventory=inventory,
-      probe_runner=timing_probe)
+      probe_runner=timing_probe,
+      persistent_session_parent_containment=True)
     if result.get("status") != "PASS" or result.get("family_identity") != family.family_identity:
       raise ValueError(f"{queue_mode} frozen staged timing execution did not pass")
     receipt = result.get("raw_probe", {}).get("c8_timing_receipt")
