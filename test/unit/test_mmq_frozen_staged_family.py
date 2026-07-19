@@ -30,7 +30,7 @@ def _staged_artifact(role_spec: ExactRoleSpec) -> FrozenTargetArtifact:
     "function": program.arg.function_name, "key": program.key.hex(),
     "device": "AMD", "compile_target": "AMD:ISA:gfx1100",
   })
-  manifest["compiler_environment"] = {}
+  manifest["compiler_environment"] = {key: None for key in COMPILER_ENV}
   manifest["files"] = {"fixture.json": {"sha256": "c" * 64, "nbytes": 1}}
   manifest["artifacts"]["serialized_program_sha256"] = "d" * 64
   return FrozenTargetArtifact(
@@ -161,7 +161,9 @@ def test_staged_family_provenance_is_bound_to_retained_compiler_environment():
   role_spec = exact_role_spec("attn_qo")
   artifact = _staged_artifact(role_spec)
   manifest = copy.deepcopy(artifact.manifest)
-  manifest["compiler_environment"] = {"AMD": "artifact-value"}
+  manifest["compiler_environment"] = {key: None for key in COMPILER_ENV} | {
+    "PYTHONHASHSEED": "0", "REGALLOC_ADDR_REMAT": "1",
+  }
   artifact = replace(artifact, manifest=manifest)
   binding = _binding(role_spec, artifact)
   kwargs = {
@@ -172,11 +174,28 @@ def test_staged_family_provenance_is_bound_to_retained_compiler_environment():
     "assembler_toolchain": "assemble_linear test",
   }
   derived = build_staged_family_provenance(binding, **kwargs)
-  assert derived["compiler"]["environment"]["AMD"] == "artifact-value"
-  assert all(derived["compiler"]["environment"][key] is None for key in COMPILER_ENV if key != "AMD")
+  assert derived["compiler"]["environment"]["PYTHONHASHSEED"] == "0"
+  assert derived["compiler"]["environment"]["REGALLOC_ADDR_REMAT"] == "1"
+  assert all(derived["compiler"]["environment"][key] is None for key in COMPILER_ENV
+             if key not in ("PYTHONHASHSEED", "REGALLOC_ADDR_REMAT"))
   with pytest.raises(ValueError, match="compiler environment differs from the frozen artifact"):
     build_staged_family_provenance(
       binding, **kwargs, compiler_environment={key: None for key in COMPILER_ENV})
+
+
+def test_staged_family_blocks_sparse_legacy_artifact_environment():
+  role_spec = exact_role_spec("attn_qo")
+  artifact = _staged_artifact(role_spec)
+  manifest = copy.deepcopy(artifact.manifest)
+  manifest["compiler_environment"] = {}
+  binding = _binding(role_spec, replace(artifact, manifest=manifest))
+  with pytest.raises(ValueError, match="compiler environment is incomplete"):
+    build_staged_family_provenance(
+      binding, repository_revision="a" * 40, repository_dirty=False,
+      search_generator="extra.qk.machine_search.test_generator",
+      search_configuration_identity="b" * 64,
+      python_toolchain="CPython test", renderer_toolchain="AMDISARenderer test",
+      assembler_toolchain="assemble_linear test")
 
 
 def test_staged_family_rejects_injected_binding_payload_drift(tmp_path: Path):

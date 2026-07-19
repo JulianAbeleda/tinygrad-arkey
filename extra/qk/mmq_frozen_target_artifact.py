@@ -211,7 +211,7 @@ def produce_frozen_target_artifact(output_dir: str | Path, *, archive: str | Pat
       "schema": SCHEMA, "state": "FROZEN", "compile_calls": 1,
       "compile_only_cpu": True, "gpu_runtime_initialized": False, "gpu_dispatch_performed": False,
       "compiler_environment": {
-        key: os.environ[key] for key in COMPILER_ENV if key in os.environ
+        key: os.environ.get(key) for key in COMPILER_ENV
       },
       "backend_id": BACKEND_ID, "accumulation": ACCUMULATION, "accumulate": True,
       "shape": list(role_spec.program.shape), "full_role_shape": list(role_spec.shape),
@@ -278,7 +278,7 @@ def load_frozen_target_artifact(path: str | Path) -> FrozenTargetArtifact:
     raise ValueError("manifest does not attest one accumulate=True compile")
   compiler_environment = manifest.get("compiler_environment")
   if not isinstance(compiler_environment, dict) or set(compiler_environment) - set(COMPILER_ENV) or \
-     any(not isinstance(value, str) for value in compiler_environment.values()):
+     any(value is not None and not isinstance(value, str) for value in compiler_environment.values()):
     raise ValueError("manifest compiler environment is malformed")
   if manifest.get("gpu_runtime_initialized") is not False or manifest.get("gpu_dispatch_performed") is not False:
     raise ValueError("frozen artifact must be produced without GPU runtime or dispatch")

@@ -13,6 +13,7 @@ from tinygrad.helpers import ContextVar
 from tinygrad.uop.ops import Ops, ProgramInfo, UOp
 
 from extra.qk import mmq_frozen_epoch_program_set as frozen_v2
+from extra.qk.mmq_compile_evidence import COMPILER_ENV
 from extra.qk.mmq_exact_role_spec import ExactRoleSpec, exact_role_spec
 from extra.qk.mmq_frozen_target_artifact import FUNCTION_NAME
 from extra.qk.mmq_llama_five_buffer_full_kernel import (
@@ -225,6 +226,12 @@ def test_v3_producer_rejects_incomplete_or_self_inconsistent_provenance(tmp_path
   with pytest.raises(ValueError, match="toolchain fingerprint differs"):
     _freeze(tmp_path / "bad-toolchain", role_spec=role_spec, build_once=lambda: _family(role_spec),
             generation_provenance=bad_fingerprint)
+
+
+def test_v3_uses_the_shared_complete_compiler_environment_authority():
+  assert frozen_v2.CODEGEN_ENV is COMPILER_ENV
+  assert {"PYTHONHASHSEED", "REGALLOC_ADDR_REMAT",
+          "REGALLOC_ADDR_REMAT_END_NO_EMIT", "REGALLOC_ADDR_REMAT_NO_END"} <= set(COMPILER_ENV)
 
 
 def test_v3_default_producer_requires_clean_revision_before_build(tmp_path: Path, monkeypatch):

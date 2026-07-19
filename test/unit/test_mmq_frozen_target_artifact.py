@@ -52,7 +52,10 @@ def test_final_stream_disassembly_sign_extends_backedges_and_advances_by_encoded
   ]
 
 
-def test_frozen_target_producer_compiles_once_and_loads_without_recompile(tmp_path: Path):
+def test_frozen_target_producer_compiles_once_and_loads_without_recompile(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+  monkeypatch.setenv("PYTHONHASHSEED", "0")
+  monkeypatch.setenv("REGALLOC_ADDR_REMAT", "1")
   calls = []
   def compile_once():
     calls.append("compile")
@@ -79,7 +82,10 @@ def test_frozen_target_producer_compiles_once_and_loads_without_recompile(tmp_pa
   assert directory_loaded.manifest["program"]["device"] == "AMD"
   assert directory_loaded.manifest["program"]["compile_target"] == "AMD:ISA:gfx1100"
   assert [row["slot"] for row in directory_loaded.manifest["program"]["abi"]] == list(range(5))
-  assert isinstance(directory_loaded.manifest["compiler_environment"], dict)
+  assert directory_loaded.manifest["compiler_environment"]["PYTHONHASHSEED"] == "0"
+  assert directory_loaded.manifest["compiler_environment"]["REGALLOC_ADDR_REMAT"] == "1"
+  assert set(directory_loaded.manifest["compiler_environment"]) == set(frozen.COMPILER_ENV)
+  assert directory_loaded.manifest["compiler_environment"]["SCHED_MODULO"] is None
   assert directory_loaded.disassembly.startswith("s_endpgm 0 // 0000000000000100: BFB00000")
   assert frozen.audit_frozen_target_artifact(output)["passed"] is True
 
@@ -127,6 +133,18 @@ def test_frozen_target_loader_rejects_retained_hsaco_tampering(tmp_path: Path):
   binary_path.write_bytes(binary_path.read_bytes() + b"tamper")
   with pytest.raises(ValueError, match="inventory identity mismatch"):
     frozen.load_frozen_target_artifact(output)
+
+
+def test_frozen_target_loader_retains_sparse_legacy_environment_compatibility(tmp_path: Path):
+  output = tmp_path / "bundle"
+  frozen.produce_frozen_target_artifact(
+    output, compile_once=lambda: SimpleNamespace(emitted=True, program=_program(), blocker=None),
+    disassemble=lambda binary: ("s_endpgm\n", "cpu-test-objdump"), fixture_builder=_fixture)
+  manifest_path = output / "manifest.json"
+  manifest = json.loads(manifest_path.read_text())
+  manifest["compiler_environment"] = {}
+  manifest_path.write_text(json.dumps(manifest))
+  assert frozen.load_frozen_target_artifact(output).manifest["compiler_environment"] == {}
 
 
 def test_frozen_target_rejects_program_device_drift(tmp_path: Path):

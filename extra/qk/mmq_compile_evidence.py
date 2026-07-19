@@ -22,9 +22,17 @@ from extra.qk.mmq_q4k_q8_atom import Q4K_WORDS_PER_BLOCK, _q4k_q8_1_bounded_ds4_
 from extra.qk.mmq_q4k_q8_reference import Q4_K_BLOCK_ELEMS
 
 SHAPE = {"M": 16, "N": 16, "K": 256}
-COMPILER_ENV = ("AMD", "AMD_CC", "AMD_COMGR_SAVE_TEMPS", "COALESCED_LOAD_LOWERING",
-                "DEV", "HIPCC", "NOOPT", "REG_STORE_DEVEC", "ROCM_PATH", "SCHED_LIST", "SCHED_UNROLL",
-                "WARP_REDUCE_LOWERING")
+# Conservative shared declaration of codegen provenance environment inputs for
+# the MMQ compilation paths. Frozen target, staged-family, and epoch-family
+# producers consume this one authority so C1 never relies on divergent lists.
+COMPILER_ENV = (
+  "ALLOW_HALF8", "AMD", "AMD_CC", "AMD_COMGR_SAVE_TEMPS", "COALESCED_LOAD_LOWERING",
+  "DECODE_FAST_EXP2", "DEV", "DEVECTORIZE_NO_PTR_GROUP", "HIPCC", "NOOPT",
+  "PYTHONHASHSEED", "REG_STORE_DEVEC", "REGALLOC_ADDR_REMAT",
+  "REGALLOC_ADDR_REMAT_END_NO_EMIT", "REGALLOC_ADDR_REMAT_NO_END", "ROCM_PATH",
+  "SCHED_LIST", "SCHED_MODULO", "SCHED_MODULO_PROBE", "SCHED_UNROLL",
+  "UNSAFE_DISABLE_MASK", "V_DOT2_LOWERING", "WARP_REDUCE_LOWERING",
+)
 
 
 def _sha256(data:bytes) -> str: return hashlib.sha256(data).hexdigest()

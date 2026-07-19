@@ -63,10 +63,10 @@ def _sink_identity(binding: FrozenExactRoleBinding) -> str:
 
 def _artifact_compiler_environment(binding: FrozenExactRoleBinding) -> dict[str, str | None]:
   retained = binding.artifact.manifest.get("compiler_environment")
-  if not isinstance(retained, Mapping) or set(retained) - set(COMPILER_ENV) or \
-     any(not isinstance(value, str) for value in retained.values()):
-    raise ValueError("frozen artifact compiler environment is malformed")
-  return {key: retained.get(key) for key in COMPILER_ENV}
+  if not isinstance(retained, Mapping) or set(retained) != set(COMPILER_ENV) or \
+     any(value is not None and not isinstance(value, str) for value in retained.values()):
+    raise ValueError("frozen artifact compiler environment is incomplete or malformed")
+  return {key: retained[key] for key in COMPILER_ENV}
 
 
 def build_staged_family_provenance(
