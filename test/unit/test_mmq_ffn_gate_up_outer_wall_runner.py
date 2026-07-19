@@ -10,7 +10,7 @@ from extra.qk.mmq_ffn_gate_up_matched_timing_contract import (
   build_ffn_gate_up_matched_complete_role_timing_contract,
 )
 from extra.qk.mmq_ffn_gate_up_outer_wall_runner import (
-  CANDIDATE_TRACE_SCHEMA, RouteInvocation,
+  CANDIDATE_TRACE_SCHEMA, HostIoCensusViolation, RouteInvocation,
   build_ffn_gate_up_post_sync_execution_attestation,
   run_ffn_gate_up_outer_synchronized_wall as _run_outer,
   seal_ffn_gate_up_effective_queue_attestation,
@@ -532,3 +532,25 @@ def test_post_sync_attestation_is_outside_wall_and_host_io_census_is_enforced():
       authority=authority,
       outer_overrides={
         "host_io_census": census, "attest_post_sync": readback_attest})
+
+
+def test_exception_path_finalizes_census_and_prioritizes_retained_readback():
+  counts = {
+    "readback_count": 0, "copyout_count": 0, "copyout_bytes": 0}
+
+  def census():
+    return {
+      "authority": "instrumented_test_host_io",
+      "provider_identity": "test-host-io-provider", **counts}
+
+  def readback_then_raise():
+    counts.update({
+      "readback_count": 1, "copyout_count": 1, "copyout_bytes": 16})
+    raise RuntimeError("route failed after readback")
+
+  with pytest.raises(HostIoCensusViolation) as raised:
+    _run_candidate(outer_overrides={
+      "host_io_census": census, "invoke_route": readback_then_raise})
+  assert isinstance(raised.value.__cause__, RuntimeError)
+  assert raised.value.evidence["delta"] == {
+    "readback_count": 1, "copyout_count": 1, "copyout_bytes": 16}

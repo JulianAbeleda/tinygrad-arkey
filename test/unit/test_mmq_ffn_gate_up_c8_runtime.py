@@ -297,10 +297,11 @@ def test_direct_objects_receive_exact_resident_fp16_bytes_via_injected_builder(
 def test_outer_wall_route_builders_receive_exact_v2_inputs(tmp_path: Path):
   loaded, fixture, *_ = _load(tmp_path)
   calls = {}
+  shared_activation = object()
 
   def object_builder(role, words, activation, activation_dtype):
-    calls["objects"] = (role, activation_dtype)
-    return DirectPackedObjects("linear", "activation", "spec")
+    calls["objects"] = (role, activation, activation_dtype)
+    return DirectPackedObjects("linear", shared_activation, "spec")
 
   def candidate_route_builder(**kwargs):
     calls["candidate"] = kwargs
@@ -345,7 +346,9 @@ def test_outer_wall_route_builders_receive_exact_v2_inputs(tmp_path: Path):
     callable(routes.direct_packed.invoke)
   assert routes.candidate.realize_output(object()) is None
   assert routes.direct_packed.realize_output(object()) is None
-  assert calls["objects"][1] == "float16"
+  assert calls["objects"][2] == "float16"
+  np.testing.assert_array_equal(
+    calls["objects"][1][0], fixture.resident_fp16_activation)
   candidate_inputs = calls["candidate"]["candidate_inputs"]
   assert isinstance(candidate_inputs, FfnGateUpCandidateInputs)
   assert candidate_inputs.fixture_identity == fixture.fixture_identity
@@ -353,11 +356,7 @@ def test_outer_wall_route_builders_receive_exact_v2_inputs(tmp_path: Path):
   assert candidate_inputs.logical_q4_identity == fixture.logical_q4_identity
   assert candidate_inputs.resident_fp16_activation_identity == \
     fixture.resident_fp16_activation_identity
-  assert candidate_inputs.resident_fp16_activation.dtype == np.float16
-  assert candidate_inputs.resident_fp16_activation.shape == (1, 512, 5120)
-  assert np.shares_memory(
-    candidate_inputs.resident_fp16_activation,
-    fixture.resident_fp16_activation)
+  assert candidate_inputs.resident_fp16_activation is shared_activation
   assert candidate_inputs.q8_producer_semantics == \
     "per_invocation_from_resident_fp16_inside_outer_synchronized_wall"
   assert set(candidate_inputs.q8_reference_sha256) == \
@@ -368,6 +367,9 @@ def test_outer_wall_route_builders_receive_exact_v2_inputs(tmp_path: Path):
     loaded.matched_timing_contract
   assert calls["candidate"]["frozen_bundle"] == loaded.frozen_bundle
   assert calls["direct"]["direct_objects"].linear == "linear"
+  assert calls["direct"]["direct_objects"].activation is shared_activation
+  assert calls["candidate"]["candidate_inputs"].resident_fp16_activation is \
+    calls["direct"]["direct_objects"].activation
   bindings = calls["direct"]["bindings_by_queue"]
   assert bindings["PM4"].input_identity == loaded.fixture.input_identity
   assert bindings["AQL"].input_identity == loaded.fixture.input_identity
@@ -397,7 +399,7 @@ def test_outer_wall_route_builder_omission_blocks_before_object_or_runtime_calls
   assert calls == []
 
 
-def test_legacy_callable_candidate_runner_is_rejected_before_direct_objects(
+def test_legacy_callable_candidate_runner_is_rejected_after_shared_objects_only(
     tmp_path: Path,
     ):
   loaded, *_ = _load(tmp_path)
@@ -405,7 +407,7 @@ def test_legacy_callable_candidate_runner_is_rejected_before_direct_objects(
 
   def object_builder(*args):
     calls.append(("objects", args))
-    raise AssertionError("direct objects must not be built")
+    return DirectPackedObjects("linear", object(), "spec")
 
   def direct_builder(**kwargs):
     calls.append(("direct", kwargs))
@@ -418,7 +420,7 @@ def test_legacy_callable_candidate_runner_is_rejected_before_direct_objects(
       candidate_route_builder=lambda **kwargs: (
         lambda: {"legacy_timing_receipt": True}),
       direct_route_builder=direct_builder)
-  assert calls == []
+  assert [row[0] for row in calls] == ["objects"]
 
 
 def test_typed_output_realizer_rejects_returned_data_and_missing_contract():

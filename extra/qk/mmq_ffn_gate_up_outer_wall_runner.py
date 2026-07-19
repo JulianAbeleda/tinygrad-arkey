@@ -465,29 +465,36 @@ def run_ffn_gate_up_outer_synchronized_wall(
 
   host_io_before = _host_io_snapshot(
     host_io_census(), "host I/O census before")
-  pre_sync()
-  outer_start_ns = _timestamp(clock_ns(), "outer start")
-  invocation = invoke_route()
-  if not isinstance(invocation, RouteInvocation):
-    raise TypeError("invoke_route must return RouteInvocation")
-  route_invoke_end_ns = _timestamp(clock_ns(), "route invoke end")
-  realize_result = realize_output(invocation.output)
-  if realize_result is not None:
-    raise ValueError("realize_output must not return a readback value")
-  output_realize_end_ns = _timestamp(clock_ns(), "output realize end")
-  post_sync()
-  outer_end_ns = _timestamp(clock_ns(), "outer end")
-  checkpoints = (
-    outer_start_ns, route_invoke_end_ns, output_realize_end_ns, outer_end_ns)
-  if any(current <= prior for prior, current in zip(
-      checkpoints, checkpoints[1:])):
-    raise ValueError("outer-wall clock checkpoints must be strictly monotonic")
-  execution_attestation = validate_ffn_gate_up_post_sync_execution_attestation(
-    attest_post_sync(invocation.output, queue_mode),
-    queue_mode=queue_mode, route_id=route_id,
-    executable_identity=executable_identity,
-    input_identity=validated["common_inputs"]["identity"])
-  host_io = _host_io_census(host_io_before, host_io_census())
+  try:
+    pre_sync()
+    outer_start_ns = _timestamp(clock_ns(), "outer start")
+    invocation = invoke_route()
+    if not isinstance(invocation, RouteInvocation):
+      raise TypeError("invoke_route must return RouteInvocation")
+    route_invoke_end_ns = _timestamp(clock_ns(), "route invoke end")
+    realize_result = realize_output(invocation.output)
+    if realize_result is not None:
+      raise ValueError("realize_output must not return a readback value")
+    output_realize_end_ns = _timestamp(clock_ns(), "output realize end")
+    post_sync()
+    outer_end_ns = _timestamp(clock_ns(), "outer end")
+    checkpoints = (
+      outer_start_ns, route_invoke_end_ns, output_realize_end_ns, outer_end_ns)
+    if any(current <= prior for prior, current in zip(
+        checkpoints, checkpoints[1:])):
+      raise ValueError("outer-wall clock checkpoints must be strictly monotonic")
+    execution_attestation = validate_ffn_gate_up_post_sync_execution_attestation(
+      attest_post_sync(invocation.output, queue_mode),
+      queue_mode=queue_mode, route_id=route_id,
+      executable_identity=executable_identity,
+      input_identity=validated["common_inputs"]["identity"])
+    host_io = _host_io_census(host_io_before, host_io_census())
+  except BaseException as original:
+    try:
+      _host_io_census(host_io_before, host_io_census())
+    except BaseException as census_error:
+      raise census_error from original
+    raise
 
   timing = _candidate_timing(
     trace=invocation.candidate_phase_trace,

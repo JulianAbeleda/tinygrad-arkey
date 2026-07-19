@@ -30,8 +30,15 @@ No GPU has executed this new binary. Historical full-role correctness observatio
 C4-C8, mixed-route transition safety, whole-model validation, and promotion remain open. The new matched timing
 contract and persistent PM4/AQL collector require the Q8 producer inside each common outer wall, exclude readback,
 retain raw seeded paired samples, bind live queue/post-sync executable observations plus a host-I/O census,
-and fail closed unless both queues beat the same qualified direct-packed route. The current injected-callback
-captures are explicitly not promotion evidence; the production low-level route builders remain to be connected.
+and fail closed unless both queues beat the same qualified direct-packed route.
+
+The production low-level route layer is now CPU-preflight complete. It reuses the frozen AMD PROGRAM/runtime/fixed-VA
+SDMA path and production direct-packed executor/attestor, shares one resident FP16 activation object across both
+routes, realizes each packed Q4 layout once outside timing, and produces candidate Q8 inside every measured wall.
+Its guarded parent runs PM4 then AQL in separate spawned children and stops on the first fault, reset, health failure,
+timeout, or blocked receipt. Its no-readback census covers `_copyout` through the instantiated tinygrad AMD allocator.
+These unexecuted interfaces remain explicitly ineligible for promotion until new family-bound C4-C7 evidence closes
+and the resulting exact composition passes matched C8.
 
 ## 2026-07-19 `ffn_gate_up` performance-comparability correction
 

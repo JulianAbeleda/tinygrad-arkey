@@ -1,5 +1,50 @@
 # Qwen3-14B generated-prefill Claude handoff
 
+## 1.9 Current status 2026-07-19: production low-level route layer is CPU-preflight complete
+
+The current `ffn_gate_up` family now has a production-faithful route implementation behind the C8 evidence
+interfaces. It reuses tinygrad's frozen PROGRAM loader, AMD runtime cache, fixed-VA buffers, same-device SDMA
+transfer, native dispatch helper, direct-packed executable attestor, spawned child containment, queue health probes,
+and kernel-fault collector. No HIP launcher or second dispatch path was added.
+
+The candidate and direct routes share the exact same resident FP16 activation Tensor object. Candidate epoch-major
+Q4 is uploaded once and retained outside timing; direct N-major packed Q4 is realized once and retained outside
+timing. Every candidate invocation produces physical DS4 Q8 from the shared FP16 Tensor inside its outer wall, zeros
+the persistent FP32 output, performs four ordered fixed-VA transfers and one exact frozen target dispatch for each of
+20 epochs, and retains Q8/output references through post-sync attestation. The attestation checks the runtime object
+and runtime-cache binding, uploaded code range, mutual disjointness and stable VAs for every resident source, full Q8
+source, fixed buffer, and code range, requested and captured kernarg pointer VAs, program/binary identities, queue,
+input, and launch count.
+
+Direct packed calls the production `_run_direct_packed_baseline`; its existing frozen attestor owns output
+realization and observes the actual executable after synchronization. A child-local census wraps the instantiated
+tinygrad AMD allocator's `_copyout`, so any readback/copyout through that allocator during either measured invocation
+blocks the receipt. The guarded parent runs a fresh PM4 child and then a fresh AQL child sequentially, with pre/post
+health and fault capture, and does not attempt AQL after any PM4 timeout, fault, reset, unhealthy state, or blocked
+child.
+
+CPU-only integration and regression coverage passes 184 tests under
+`pytest -q test/unit/test_mmq_ffn_gate_up*.py test/unit/test_mmq_frozen_staged_low_level_session.py test/unit/test_direct_packed_executable_attestor.py`.
+Importing the new modules opens no device. The real frozen bundle also reconstructs the exact pointer-only authority:
+compact shape `512x17408x256`, full shape `512x17408x5120`, 20 dispatches, and PROGRAM key
+`14f2a216a8a7609e8a251fe3869b3fb146fd5d5a8ca0ec468120e0fbcbd54a60`.
+
+This closes implementation preflight, not GPU qualification. The current C8 composition cannot exist until new
+family-bound C4/C6/C7 and direct qualification evidence have been collected. The next execution order is:
+
+```text
+C4 zero-target-dispatch runtime canary on PM4
+  -> C5 candidate prefix 1, then prefix 3 on PM4
+  -> C6 candidate full 20 plus matched direct correctness on PM4
+  -> PM4 transition sequences and joint C7
+  -> repeat the guarded correctness/transition sequence on AQL
+  -> freeze C4/C6/C7/direct qualifications and the matched contract
+  -> only then run paired C8 timing
+```
+
+No GPU was run while building this layer. Numerical correctness, runtime health, transition safety, memory
+admission, performance, whole-model behavior, and promotion remain unknown/open.
+
 ## 1.8 Current status 2026-07-19: new exact `ffn_gate_up` family passes CPU/static C1-C3
 
 This section supersedes any implication that the historical full-role `ffn_gate_up` runtime evidence is already

@@ -236,7 +236,7 @@ class FfnGateUpCandidateInputs:
   role_spec: Any
   words: np.ndarray
   q4_epoch_major: np.ndarray
-  resident_fp16_activation: np.ndarray
+  resident_fp16_activation: Any
   q8_producer_semantics: str
   q8_reference_sha256: Mapping[str, str]
   fixture_identity: str
@@ -774,16 +774,20 @@ def ffn_gate_up_queue_attestation_bindings(
 
 
 def ffn_gate_up_candidate_inputs(
-    loaded: FfnGateUpC8RuntimeConfig,
+    loaded: FfnGateUpC8RuntimeConfig, *,
+    resident_fp16_activation: Any | None = None,
     ) -> FfnGateUpCandidateInputs:
-  """Expose one typed view of the already-validated common v2 input bytes."""
+  """Expose validated references with an optional shared resident GPU object."""
   if not isinstance(loaded, FfnGateUpC8RuntimeConfig):
     raise TypeError("loaded ffn_gate_up runtime config is required")
   fixture = loaded.fixture
+  if resident_fp16_activation is None:
+    resident_fp16_activation = fixture.resident_fp16_activation.reshape(
+      1, M, K)
   return FfnGateUpCandidateInputs(
     role_spec=loaded.family.binding.role_spec,
     words=fixture.words, q4_epoch_major=fixture.q4_epoch_major,
-    resident_fp16_activation=fixture.resident_fp16_activation.reshape(1, M, K),
+    resident_fp16_activation=resident_fp16_activation,
     q8_producer_semantics=
       "per_invocation_from_resident_fp16_inside_outer_synchronized_wall",
     q8_reference_sha256={
@@ -820,7 +824,10 @@ def compose_ffn_gate_up_queue_runners(
       "outer-wall route builders")
   if queue_mode not in QUEUE_MODES:
     raise ValueError(f"queue_mode must be one of {QUEUE_MODES!r}")
-  candidate_inputs = ffn_gate_up_candidate_inputs(loaded)
+  direct_objects = build_ffn_gate_up_direct_packed_objects(
+    loaded, object_builder=object_builder)
+  candidate_inputs = ffn_gate_up_candidate_inputs(
+    loaded, resident_fp16_activation=direct_objects.activation)
   bindings = ffn_gate_up_queue_attestation_bindings(
     loaded, clock_identity=clock_identity)
   shared = {
@@ -840,8 +847,7 @@ def compose_ffn_gate_up_queue_runners(
       "FfnGateUpRouteCallback")
   direct = direct_route_builder(
     **shared,
-    direct_objects=build_ffn_gate_up_direct_packed_objects(
-      loaded, object_builder=object_builder),
+    direct_objects=direct_objects,
     qualification_paths_by_queue=loaded.qualification_paths_by_queue,
     bindings_by_queue=bindings)
   if not isinstance(direct, FfnGateUpRouteCallback):
