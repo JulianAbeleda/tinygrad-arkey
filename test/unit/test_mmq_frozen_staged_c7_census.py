@@ -268,6 +268,46 @@ def test_external_runtime_census_rejects_physical_size_outside_scanned_granulari
     capture.record_external_full_route("code_object", "unaligned", handle)
 
 
+def test_live_c7_preserves_incomplete_physical_reconciliation(family):
+  class Handle:
+    def __init__(self, va, size):
+      self.va_addr, self.size, self.base = va, size, self
+
+  runtime = SimpleNamespace(lib=b"elf", lib_gpu=Handle(0x100000, 4096))
+  device = SimpleNamespace(
+    kernargs_buf=Handle(0x200000, 4096),
+    timeline_signal=SimpleNamespace(base_buf=Handle(0x300000, 4096)),
+    scratch=None, pm4_ibs=None,
+    compute_queues={0: SimpleNamespace(ring=Handle(0x400000, 4096))},
+    sdma_queues={})
+  retained = []
+
+  def incomplete_harness(*, staged_lifecycle_observer):
+    buffer = Buffer("CPU", 4096, dtypes.uint8)
+    with staged_lifecycle_observer.allocation("output", "still_live"):
+      buffer.allocate()
+    staged_lifecycle_observer.begin_route()
+    staged_lifecycle_observer.runtime(runtime, device)
+    staged_lifecycle_observer.launch(
+      runtime, {"kernarg": {"va": device.kernargs_buf.va_addr, "size": 40}})
+    staged_lifecycle_observer.end_route()
+    retained.append(buffer)
+    return {"status": "PASS"}
+
+  with Context(LRU=0):
+    result = capture_frozen_staged_c7_queue_probe(
+      family=family, queue_mode="PM4", ledger_device="CPU",
+      allocation_granularity_bytes=4096, memory_authority=_authority(),
+      probe_kwargs={}, probe_runner=incomplete_harness)
+  assert result["status"] == "BLOCKED"
+  assert result["target_dispatch_attempted"] is True
+  assert result["target_dispatch_count"] == 1
+  assert result["physical_memory_evidence"]["complete"] is False
+  assert any("has no free event" in blocker
+             for blocker in result["physical_memory_evidence"]["blockers"])
+  retained[0].deallocate()
+
+
 def test_isolated_capture_requires_exact_c4_and_parent_health_fault_envelope(family, monkeypatch):
   monkeypatch.setenv("AMD_AQL", "0")
   authority = _authority()
@@ -277,6 +317,7 @@ def test_isolated_capture_requires_exact_c4_and_parent_health_fault_envelope(fam
     "status": "PASS", "queue_mode": "PM4",
     "family_identity": family.family_identity,
     "probe": {"status": "PASS"}, "queue_observation": observation,
+    "target_dispatch_attempted": True, "target_dispatch_count": 20,
   }
   isolated = SimpleNamespace(
     status="passed", timed_out=False, error=None, result=child,

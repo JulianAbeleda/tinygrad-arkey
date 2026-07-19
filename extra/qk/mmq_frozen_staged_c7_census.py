@@ -390,12 +390,32 @@ def capture_frozen_staged_c7_queue_probe(*, family: FrozenStagedFamily, queue_mo
     result = probe_runner(**kwargs, staged_lifecycle_observer=observer)
   if not isinstance(result, Mapping) or result.get("status") != "PASS":
     raise ValueError("frozen staged C7 harness probe did not pass")
-  observation = observer.observation(memory_authority=memory_authority)
+  try:
+    observation = observer.observation(memory_authority=memory_authority)
+  except BaseException as exc:
+    # Preserve the exact physical reconciliation when live evidence fails.
+    # Without this structured child receipt the outer isolation layer can say
+    # only that a child failed, losing the allocation IDs needed to repair C7.
+    physical = capture.physical_evidence().to_json()
+    return {
+      "schema": "tinygrad.mmq_q4k_q8_1.staged_c7_queue_probe.v1",
+      "status": "BLOCKED", "exact_blocker":
+        "frozen staged C7 physical allocation census did not close",
+      "exception": type(exc).__name__, "error": str(exc),
+      "queue_mode": queue_mode, "family_identity": family.family_identity,
+      "probe": dict(result), "queue_observation": None,
+      "physical_memory_evidence": physical,
+      "target_dispatch_attempted": observer._launch_count > 0,
+      "target_dispatch_count": observer._launch_count,
+      "production_dispatch_changed": False,
+    }
   return {
     "schema": "tinygrad.mmq_q4k_q8_1.staged_c7_queue_probe.v1",
     "status": "PASS", "queue_mode": queue_mode,
     "family_identity": family.family_identity,
     "probe": dict(result), "queue_observation": observation,
+    "target_dispatch_attempted": True,
+    "target_dispatch_count": observer._launch_count,
     "production_dispatch_changed": False,
   }
 
@@ -538,7 +558,7 @@ def run_frozen_staged_c7_queue_capture_isolated(
   target_dispatch_attempted: bool | None = \
     True if isinstance(child, Mapping) and \
       child.get("schema") == "tinygrad.mmq_q4k_q8_1.staged_c7_queue_probe.v1" and \
-      child.get("status") == "PASS" else \
+      child.get("target_dispatch_attempted") is True else \
     False if launched is False else None
   blocker = None
   if not health_before: blocker = "isolated C7 queue capture preflight health failed"
@@ -547,15 +567,20 @@ def run_frozen_staged_c7_queue_capture_isolated(
     blocker = child_error or "isolated C7 queue capture child returned no structured result"
   elif faults: blocker = "kernel fault/reset marker observed during isolated C7 queue capture"
   elif not health_after: blocker = "isolated C7 queue capture postflight health failed"
+  elif child.get("status") == "BLOCKED":
+    blocker = child.get("exact_blocker") or "isolated C7 child blocked"
 
   observation, raw_probe, probe_validation = None, None, None
+  if isinstance(child, Mapping):
+    raw_probe = child.get("probe") if isinstance(child.get("probe"), Mapping) else None
+    observation = child.get("queue_observation") \
+      if isinstance(child.get("queue_observation"), Mapping) else None
   if blocker is None:
     try:
       if child.get("schema") != "tinygrad.mmq_q4k_q8_1.staged_c7_queue_probe.v1" or \
          child.get("status") != "PASS" or child.get("queue_mode") != queue_mode or \
          child.get("family_identity") != family.family_identity:
         raise ValueError("isolated C7 child identity or PASS state differs")
-      observation, raw_probe = child.get("queue_observation"), child.get("probe")
       if not isinstance(observation, Mapping) or not isinstance(raw_probe, Mapping):
         raise ValueError("isolated C7 child lacks queue observation or raw probe")
       if observation.get("authority") != dict(memory_authority) or \
@@ -597,6 +622,7 @@ def run_frozen_staged_c7_queue_capture_isolated(
     "health_before": health_before, "health_after": health_after,
     "kernel_faults": faults, "kernel_fault_evidence": fault_evidence,
     "queue_observation": observation, "raw_probe": raw_probe,
+    "child_probe": dict(child) if isinstance(child, Mapping) else None,
     "probe_validation": probe_validation,
     "compile_performed": False, "requires_recompile": False,
     "production_dispatch_changed": False, "no_fallback": True,
