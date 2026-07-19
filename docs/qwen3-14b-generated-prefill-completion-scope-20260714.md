@@ -27,10 +27,12 @@ A new exact compact-K256 staged family was generated from clean revision `3fa4cd
 C2, and exhaustive C3a/C3b. Final resources are 256 VGPRs, 16 SGPRs, 57,856-byte LDS, zero scratch, and zero spills.
 
 No GPU has executed this new binary. Historical full-role correctness observations are not transferable to it.
-C4-C8, mixed-route transition safety, whole-model validation, and promotion remain open. The new matched timing
-contract and persistent PM4/AQL collector require the Q8 producer inside each common outer wall, exclude readback,
-retain raw seeded paired samples, bind live queue/post-sync executable observations plus a host-I/O census,
-and fail closed unless both queues beat the same qualified direct-packed route.
+Guarded PM4 C4 runtime preconstruction now passes at pushed route revision `8cad0c4ba`: the exact frozen runtime was
+loaded with zero target dispatches, clean pre/post health probes, and no kernel-fault marker. AQL C4, C5-C8,
+mixed-route transition safety, whole-model validation, and promotion remain open. The new matched timing contract
+and persistent PM4/AQL collector require the Q8 producer inside each common outer wall, exclude readback, retain raw
+seeded paired samples, bind live queue/post-sync executable observations plus a host-I/O census, and fail closed
+unless both queues beat the same qualified direct-packed route.
 
 The production low-level route layer is now CPU-preflight complete. It reuses the frozen AMD PROGRAM/runtime/fixed-VA
 SDMA path and production direct-packed executor/attestor, shares one resident FP16 activation object across both

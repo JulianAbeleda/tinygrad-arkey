@@ -45,6 +45,10 @@ print(certificate["certificate_sha256"])
 PY
 ```
 
-This is static certification only. C4+ guarded GPU correctness, queue health,
-matched full-role timing, whole-model validation, and production promotion
-remain open and are not claimed.
+The retained PM4 C4 evidence
+`evidence/qk-ffn-gate-up-staged-8cad0c4ba-c4-pm4-20260719.json` subsequently
+passes guarded runtime preconstruction with zero target dispatches, clean
+pre/post health probes, and no kernel-fault marker. This is not numerical
+correctness: AQL C4, all C5+ target execution, matched full-role timing,
+whole-model validation, and production promotion remain open and are not
+claimed.

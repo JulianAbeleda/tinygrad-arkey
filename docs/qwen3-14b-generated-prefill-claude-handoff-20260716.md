@@ -1,5 +1,18 @@
 # Qwen3-14B generated-prefill Claude handoff
 
+## 1.10 Current status 2026-07-19: exact `ffn_gate_up` PM4 C4 passes
+
+After the CPU-preflight route tranche was independently audited and pushed as `8cad0c4ba`, the existing guarded C4
+runner opened the PM4 AMD runtime in a fresh child and loaded the exact frozen `ffn_gate_up` binary. Both parent-owned
+tiny health probes passed, the kernel-journal window was clear, runtime/cache/code-range identity checks passed, and
+the target dispatch count was exactly zero. The evidence is retained at
+`docs/artifacts/qwen3-14b-prefill-ffn-gate-up-staged-3fa4cd619-20260719/evidence/qk-ffn-gate-up-staged-8cad0c4ba-c4-pm4-20260719.json`.
+
+This closes PM4 C4 runtime preconstruction only. The target binary has still never been dispatched, no output has
+been read back or compared, and AQL C4 plus C5-C8 remain open. The next permitted escalation is one guarded PM4
+candidate dispatch for C5 prefix 1; any timeout, health failure, or kernel-fault marker stops the ladder before
+prefix 3, full-role execution, direct-route transitions, or AQL.
+
 ## 1.9 Current status 2026-07-19: production low-level route layer is CPU-preflight complete
 
 The current `ffn_gate_up` family now has a production-faithful route implementation behind the C8 evidence
