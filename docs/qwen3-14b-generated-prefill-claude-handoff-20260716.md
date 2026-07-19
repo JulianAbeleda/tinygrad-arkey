@@ -1,6 +1,6 @@
 # Qwen3-14B generated-prefill Claude handoff
 
-## 1.5 Current status 2026-07-19: deterministic staged `attn_qo` passes PM4 C1-C6
+## 1.5 Current status 2026-07-19: deterministic staged `attn_qo` passes PM4/AQL C1-C6
 
 This section supersedes §1.4 for the selected dense fixed-VA staged family. The direct-layout v3 classification in
 §1.4 remains the negative-control result and must not be reopened.
@@ -29,7 +29,7 @@ C1-C3 pass for that exact family. C2 reports gfx1100 wave32, grid `40x4`, local 
 source and final native address expressions; all five ABI bases, 40,960 launch coordinates, 5,873,664 projected
 addresses, and exact-once output RMW coverage pass.
 
-The isolated PM4 escalation also passes:
+The isolated escalation passes independently under both PM4 and AQL:
 
 1. C4 preconstructs the exact runtime with zero target dispatches, no compile/recompile, exact cache/binary binding,
    clean timeline and fault window, and healthy pre/post probes.
@@ -40,7 +40,7 @@ The isolated PM4 escalation also passes:
 4. C6 full 20 compares all outputs with zero mismatches, maximum absolute error `0.00341796875`; all 20 fixed-VA
    staging and target lifecycle receipts pass, with no fallback, HIP path, fault, reset, or unhealthy post-state.
 
-Current working evidence is:
+The PM4 and AQL C6 results have identical numerical comparisons and lifecycle counts. Current working evidence is:
 
 - static summary `/tmp/qk-attn-qo-staged-951d3615c-final-static-evidence-20260719.json`,
   SHA256 `9d34e25a24e5b207428ed9f5c8f3bd8d60050cc7a940c8d675d0f87e3c26a6b2`;
@@ -51,15 +51,23 @@ Current working evidence is:
   `c81973ff564047bcb2c296a51b836f840ab8219e8a43ce342fcd28835cbf86f6`;
 - C6 `/tmp/qk-attn-qo-staged-951d3615c-final-20260719-c6-pm4-full20.json`,
   SHA256 `7ef898e7efb5562df7c7eb9ee006459348b5f9409e3abc9aaeff73cca73109ad`.
+- AQL C4 `/tmp/qk-attn-qo-staged-951d3615c-final-20260719-c4-aql.json`,
+  SHA256 `847a2eb181e7d07d5500c632a928e200c021139534827ba38dc8eef8df1d3abc`;
+- AQL C5 prefix 1 and 3 SHA256 values
+  `4735454e1d8eb0276df84bd72d26737599c8bf9cfc1bd4212799953be81d3299` and
+  `31bf5ffaa6349aac2be68dac3e5ac895ecc40de93dbdeb6aa51b445afe71cbc4`;
+- AQL C6 `/tmp/qk-attn-qo-staged-951d3615c-final-20260719-c6-aql-full20.json`,
+  SHA256 `ad959b8b218b6c6594431329d1978b619147fde98bb112b2b81bbf4210178fd1`.
 
 These `/tmp` paths are not durable promotion assets. Retain the content-addressed bundle and evidence before final
-promotion. C7 exact memory admission and promotion-grade C8 matched PM4/AQL timing remain open. The single C6
-synchronized PM4 sample is `27.137666009366512 ms`, which is diagnostic only and already suggests this serialized
-staged family will be a correctness-qualified fallback against the retained roughly `9.35 ms` direct-packed
-comparator. Do not make a C8 decision without the required matched warmups and randomized paired rounds.
+promotion. C7 exact memory admission and promotion-grade C8 matched PM4/AQL timing remain open. The C6 synchronized
+samples are `27.137666009366512 ms` under PM4 and `26.153420913033187 ms` under AQL. They are
+diagnostic only and already suggest this serialized staged family will be a correctness-qualified fallback against
+the retained roughly `9.35 ms` direct-packed comparator. Do not make a C8 decision without the required matched
+warmups and randomized paired rounds.
 
 ```text
-attn_qo_staged_c1_c6_pm4=PASS
+attn_qo_staged_c1_c6_pm4_aql=PASS
 attn_qo_staged_c7=OPEN
 attn_qo_staged_c8=OPEN
 production_promotion=false
