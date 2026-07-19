@@ -1319,7 +1319,45 @@ def test_attn_qo_single_tile_pointer_bias_rejects_offset_bearing_shrink_carrier(
   assert evidence["rejection"]["carrier_op"] == "SHRINK"
   assert evidence["rejection"]["rejected_op"] == "SHRINK"
   assert evidence["rejection"]["accepted_carrier_grammar"] == [
-    "BUFFER", "AFTER", "MEMORY_SEMANTIC"]
+    "BUFFER", "AFTER", "MEMORY_SEMANTIC", "storage_equivalent_RESHAPE"]
+
+
+def test_attn_qo_single_tile_pointer_bias_admits_only_storage_equivalent_unchanged_reshape():
+  program = _bounded_grid_test_program()
+  tensors = [
+    Tensor.empty(512 * 5120, dtype=dtypes.float32, device="AMD"),
+    Tensor.empty(5120 * 20 * 36, dtype=dtypes.uint32, device="AMD"),
+    Tensor.empty(128, dtype=dtypes.int8, device="AMD"),
+    Tensor.empty(1, dtype=dtypes.float32, device="AMD"),
+    Tensor.empty(1, dtype=dtypes.float32, device="AMD"),
+  ]
+  output = tensors[0].custom_kernel(*tensors[1:], fxn=lambda *_: program)[0]
+  call = next(node for node in output.uop.toposort()
+              if node.op is Ops.CALL and node.src[0] is program)
+  arguments = list(get_call_arg_uops(call))
+  q8_parent = arguments[2]
+  q8_reshape = Tensor(q8_parent).reshape(16, 8).uop
+  assert q8_reshape.op is Ops.RESHAPE
+  assert q8_reshape.buf_uop is q8_parent.buf_uop
+  assert q8_reshape.buffer is q8_parent.buffer
+  assert q8_reshape.contiguous_view_offset() == 0
+  arguments[2] = q8_reshape
+  reshape_call = call.replace(src=(program, *arguments))
+  reshape_output = Tensor(output.uop.substitute({call: reshape_call}, walk=True))
+
+  biased, evidence = _apply_attn_qo_single_tile_pointer_bias_to_target_call(
+    reshape_output, (program,), 11)
+  biased_call = next(node for node in biased.uop.toposort()
+                     if node.op is Ops.CALL and node.src[0] is program)
+  biased_arguments = get_call_arg_uops(biased_call)
+  assert biased_arguments[2] is q8_reshape
+  row = evidence["call_carrier_attestation"]["rows"][2]
+  assert row["carrier_op"] == "RESHAPE"
+  assert row["accepted_carrier_grammar"] == [
+    "BUFFER", "AFTER", "MEMORY_SEMANTIC", "storage_equivalent_RESHAPE"]
+  assert row["storage_equivalent_reshape_count"] == 1
+  assert row["storage_equivalent_reshape_checks"][0]["all_checks_pass"] is True
+  assert all(row["storage_equivalent_reshape_checks"][0]["checks"].values())
 
 
 def test_attn_qo_single_tile_pointer_bias_preserves_realized_after_dependencies_and_owner():

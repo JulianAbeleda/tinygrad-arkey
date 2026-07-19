@@ -100,10 +100,13 @@ def _single_tile_call_carrier(argument: Any) -> tuple[Any, tuple[Any, ...], dict
     elif current.op is Ops.MEMORY_SEMANTIC and len(current.src) == 1:
       layers.append((Ops.MEMORY_SEMANTIC, current.arg))
       current = current.src[0]
+    elif current.op is Ops.RESHAPE and len(current.src) == 2:
+      layers.append((Ops.RESHAPE, current))
+      current = current.src[0]
     else:
       evidence = {
         "carrier_op": argument.op.name,
-        "accepted_carrier_grammar": ["BUFFER", "AFTER", "MEMORY_SEMANTIC"],
+        "accepted_carrier_grammar": ["BUFFER", "AFTER", "MEMORY_SEMANTIC", "storage_equivalent_RESHAPE"],
         "carrier_layers": [op.name for op, _ in layers],
         "rejected_op": current.op.name,
         "toposort_ops": [node.op.name for node in argument.toposort()],
@@ -123,17 +126,44 @@ def _single_tile_call_carrier(argument: Any) -> tuple[Any, tuple[Any, ...], dict
   owner = memory_semantic_owner(argument)
   dependencies = tuple(
     dependency for op, payload in layers if op is Ops.AFTER for dependency in payload)
+  reshape_checks = []
+  for op, payload in layers:
+    if op is not Ops.RESHAPE: continue
+    reshape_buffer, physical_buffer = payload.buffer, physical.buffer
+    checks = {
+      "logical_dtype_matches_terminal": payload.dtype == physical.dtype,
+      "logical_elements_match_terminal": prod(payload.shape) == prod(physical.shape),
+      "logical_nbytes_match_terminal":
+        prod(payload.shape) * payload.dtype.itemsize == physical_buffer.nbytes,
+      "buffer_object_matches_terminal": reshape_buffer is physical_buffer,
+      "base_allocation_matches_terminal": reshape_buffer.base is physical_buffer.base,
+      "byte_offset_matches_terminal": reshape_buffer.offset == physical_buffer.offset,
+      "buffer_nbytes_match_terminal": reshape_buffer.nbytes == physical_buffer.nbytes,
+      "relative_contiguous_view_offset_zero": payload.contiguous_view_offset() == 0,
+    }
+    reshape_checks.append({
+      "logical_shape": list(payload.shape), "terminal_shape": list(physical.shape),
+      "logical_dtype": str(payload.dtype), "terminal_dtype": str(physical.dtype),
+      "logical_buffer_offset": int(reshape_buffer.offset),
+      "terminal_buffer_offset": int(physical_buffer.offset),
+      "logical_buffer_nbytes": int(reshape_buffer.nbytes),
+      "terminal_buffer_nbytes": int(physical_buffer.nbytes),
+      "checks": checks, "all_checks_pass": all(checks.values()),
+    })
   logical_physical_dtype_equal = argument.dtype == physical.dtype
   logical_physical_elements_equal = prod(argument.shape) == prod(physical.shape)
   evidence = {
     "carrier_op": argument.op.name,
-    "accepted_carrier_grammar": ["BUFFER", "AFTER", "MEMORY_SEMANTIC"],
+    "accepted_carrier_grammar": [
+      "BUFFER", "AFTER", "MEMORY_SEMANTIC", "storage_equivalent_RESHAPE"],
     "carrier_layers": [{
-      "op": op.name,
+        "op": op.name,
       **({"dependency_count": len(payload),
           "dependency_ops": [dependency.op.name for dependency in payload],
           "dependency_keys": [dependency.key.hex() for dependency in payload]}
-         if op is Ops.AFTER else {"owner": repr(payload)}),
+         if op is Ops.AFTER else
+         {"owner": repr(payload)} if op is Ops.MEMORY_SEMANTIC else
+         {"logical_shape": list(payload.shape)}),
     } for op, payload in layers],
     "physical_buf_uop_op": physical.op.name,
     "physical_buf_uop_key": physical.key.hex(),
@@ -141,13 +171,16 @@ def _single_tile_call_carrier(argument: Any) -> tuple[Any, tuple[Any, ...], dict
     "physical_is_terminal_carrier_buffer": physical is current,
     "logical_physical_dtype_equal": logical_physical_dtype_equal,
     "logical_physical_elements_equal": logical_physical_elements_equal,
+    "storage_equivalent_reshape_count": len(reshape_checks),
+    "storage_equivalent_reshape_checks": reshape_checks,
     "dependency_count": len(dependencies),
     "dependency_ops": [dependency.op.name for dependency in dependencies],
     "dependency_keys": [dependency.key.hex() for dependency in dependencies],
     "memory_semantic_owner": None if owner is None else repr(owner),
   }
   if physical.op is not Ops.BUFFER or physical is not current or \
-     not logical_physical_dtype_equal or not logical_physical_elements_equal:
+     not logical_physical_dtype_equal or not logical_physical_elements_equal or \
+     not all(row["all_checks_pass"] for row in reshape_checks):
     raise SingleTilePointerBiasCarrierError(
       "single-tile pointer-bias diagnostic requires an extent-equivalent realized physical BUFFER",
       evidence)
@@ -162,6 +195,14 @@ def _rebase_single_tile_call_carrier(
   for op, payload in reversed(layers):
     if op is Ops.AFTER: rebased = rebased.after(*payload)
     elif op is Ops.MEMORY_SEMANTIC: rebased = UOp(Ops.MEMORY_SEMANTIC, rebased.dtype, (rebased,), payload)
+    elif op is Ops.RESHAPE:
+      from tinygrad.helpers import prod
+      if rebased.dtype != payload.dtype or prod(rebased.shape) != prod(payload.shape):
+        raise SingleTilePointerBiasCarrierError(
+          "single-tile pointer-bias cannot preserve a storage-equivalent RESHAPE on a changed extent",
+          {"reshape_shape": list(payload.shape), "rebased_shape": list(rebased.shape),
+           "reshape_dtype": str(payload.dtype), "rebased_dtype": str(rebased.dtype)})
+      rebased = payload.replace(src=(rebased, *payload.src[1:]))
     else: raise RuntimeError("single-tile pointer-bias rewrite found an unvalidated carrier layer")
   rebased = propagate_memory_semantic(argument, rebased)
   if memory_semantic_owner(rebased) != memory_semantic_owner(argument):
