@@ -17,7 +17,7 @@ from pathlib import Path
 import subprocess
 import sys
 import time
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 import numpy as np
 
@@ -36,6 +36,10 @@ TARGET_ROLE_PROBE_SHAPE = DEFAULT_EXACT_ROLE_SPEC.shape
 RTOL = 3e-3
 ATOL = 3e-3
 TARGET_IN_PLACE_ACCUMULATION = "target_in_place_fp32_add"
+FROZEN_STAGED_PHASE_RECEIPT_SCHEMA = \
+  "tinygrad.mmq_q4k_q8_1.frozen_staged_phase_isolation.v1"
+FROZEN_STAGED_RUNTIME_CANARY_SCHEMA = \
+  "tinygrad.mmq_q4k_q8_1.frozen_staged_runtime_canary.v1"
 _TARGET_BUFFER_NAMES = ("output", "q4", "q8_values", "q8_scales", "q8_original_sums")
 ATTN_QO_DIAGNOSTIC_GLOBAL_GRIDS = (
   (1, 4, 1), (8, 4, 1), (9, 4, 1), (16, 4, 1), (32, 4, 1), (40, 4, 1),
@@ -786,6 +790,276 @@ def _dispatch_with_runtime_evidence(runtime: Any, buffers: tuple[Any, ...], glob
   return result
 
 
+def _frozen_staged_phase_receipts_enabled(
+    *, frozen_bundle: str | Path | None, warmups: int, rounds: int,
+    epoch_start: int, n_chunk_tiles: int, total_n_tiles: int,
+    host_accumulate: bool, in_kernel_accumulate: bool, per_epoch_check: bool,
+    persistent_buffers: bool, preloaded_epochs: bool, sync_each_epoch: bool,
+    stable_metadata_staging: bool, stable_epoch_staging: bool,
+    wait_each_dispatch: bool,
+    ) -> bool:
+  """Recognize only the exact compact staged-family execution contract."""
+  return bool(
+    frozen_bundle is not None and warmups == 0 and rounds == 1 and
+    epoch_start == 0 and n_chunk_tiles == total_n_tiles and
+    not host_accumulate and in_kernel_accumulate and not per_epoch_check and
+    persistent_buffers and preloaded_epochs and sync_each_epoch and
+    stable_metadata_staging and stable_epoch_staging and wait_each_dispatch)
+
+
+def _new_frozen_staged_phase_receipt() -> dict[str, Any]:
+  return {
+    "schema": FROZEN_STAGED_PHASE_RECEIPT_SCHEMA,
+    "preparation": {
+      "phase": "producer_and_output_initialization",
+      "status": "PENDING",
+      "target_dispatch_count": None,
+      "synchronize_returned": False,
+      "target_allowed_only_after_synchronize": True,
+    },
+    "epochs": [],
+  }
+
+
+def _complete_frozen_staged_preparation_receipt(
+    receipt: dict[str, Any], *, target_dispatch_count: int,
+    ) -> None:
+  """Close preparation only after the caller's device synchronize returned."""
+  if target_dispatch_count != 0:
+    raise RuntimeError("frozen staged preparation observed a target dispatch")
+  receipt["preparation"].update({
+    "status": "PASS", "target_dispatch_count": 0,
+    "synchronize_returned": True,
+  })
+
+
+def _append_frozen_staged_epoch_receipt(
+    receipt: dict[str, Any], *, epoch: int, program_key: str,
+    epoch_stage: Mapping[str, Any], metadata_stage: Mapping[str, Any],
+    launch: Mapping[str, Any],
+    ) -> None:
+  """Link four completed fixed-VA stages to one returned native launch."""
+  if receipt["preparation"].get("status") != "PASS":
+    raise RuntimeError("frozen staged target became eligible before preparation completed")
+  if len(receipt["epochs"]) != epoch:
+    raise RuntimeError("frozen staged epoch receipt order changed")
+  if epoch_stage.get("epoch") != epoch or metadata_stage.get("epoch") != epoch or \
+     launch.get("epoch") != epoch:
+    raise RuntimeError("frozen staged receipt epoch identity changed")
+  stage_vas = [
+    epoch_stage.get("stage_q4_va"), epoch_stage.get("stage_values_va"),
+    metadata_stage.get("stage_scales_va"), metadata_stage.get("stage_sums_va"),
+  ]
+  arguments, kernarg = launch.get("arguments"), launch.get("kernarg")
+  if not isinstance(arguments, list) or len(arguments) != 5 or not isinstance(kernarg, Mapping):
+    raise RuntimeError("frozen staged launch lacks its exact five-pointer kernarg receipt")
+  launch_vas = [row.get("va") if isinstance(row, Mapping) else None for row in arguments]
+  kernarg_vas = kernarg.get("pointer_words")
+  checks = {
+    "four_stage_destination_vas_valid":
+      all(type(va) is int and va > 0 for va in stage_vas) and len(set(stage_vas)) == 4,
+    "launch_has_five_distinct_vas":
+      all(type(va) is int and va > 0 for va in launch_vas) and len(set(launch_vas)) == 5,
+    "kernarg_words_match_bound":
+      kernarg.get("pointer_words_match_bound") is True,
+    "stage_destinations_match_launch_arguments":
+      stage_vas == launch_vas[1:],
+    "stage_destinations_match_kernarg":
+      isinstance(kernarg_vas, list) and stage_vas == kernarg_vas[1:],
+  }
+  if not all(checks.values()):
+    failed = sorted(name for name, passed in checks.items() if not passed)
+    raise RuntimeError(
+      f"frozen staged stage/target VA receipt failed checks: {failed!r}")
+  receipt["epochs"].append({
+    "epoch": epoch, "program_key": program_key,
+    "stages": [
+      {"slot": slot, "name": name, "destination_va": va,
+       "completion_returned": True}
+      for slot, name, va in zip(range(1, 5), _TARGET_BUFFER_NAMES[1:], stage_vas)
+    ],
+    "stage_destination_vas_slots_1_4": stage_vas,
+    "target_launch_argument_vas_slots_1_4": launch_vas[1:],
+    "target_kernarg_vas_slots_1_4": kernarg_vas[1:],
+    "stage_destination_vas_match_target_kernargs": True,
+    "stage_completion_returned": True,
+    "target_submitted_after_stage_completion": True,
+    "target_dispatch_returned": True,
+    "target_synchronize_returned": True,
+    "overwrite_allowed_only_after_target_completion": True,
+    "prior_target_completion_epoch": None if epoch == 0 else epoch - 1,
+    "checks": checks, "all_checks_pass": True,
+  })
+
+
+def run_frozen_staged_runtime_preconstruction_canary(
+    *, role_spec: ExactRoleSpec, frozen_bundle: str | Path,
+    staged_family_manifest: str | Path, queue_mode: str,
+    inventory: str | Path | Mapping[str, Any] = DEFAULT_INVENTORY,
+    family_loader: Callable[..., Any] | None = None,
+    runtime_preconstructor: Callable[..., Mapping[str, Any]] | None = None,
+    runtime_attestor: Callable[[Any, Mapping[str, Any]], Mapping[str, Any]] | None = None,
+    health_probe: Callable[[], bool] | None = None,
+    fault_collector: Callable[[float], tuple[list[str], Mapping[str, Any]]] | None = None,
+    ) -> dict[str, Any]:
+  """Preconstruct one compact frozen runtime with zero target submissions.
+
+  This explicit C4 operation is separate from capability discovery.  The
+  default runtime preconstructor is tinygrad's ordinary ``get_runtime`` path;
+  it audits the runtime cache and device timeline without constructing a
+  target Tensor CALL or invoking the runtime.
+  """
+  started = time.time()
+  try:
+    role_spec = admit_exact_role_spec(role_spec, inventory=inventory)
+    if queue_mode not in ("PM4", "AQL"):
+      raise ValueError("queue_mode must be 'PM4' or 'AQL'")
+    expected_env = "1" if queue_mode == "AQL" else "0"
+    if os.environ.get("AMD_AQL") != expected_env:
+      raise ValueError("AMD_AQL environment does not match requested queue_mode")
+    if family_loader is None:
+      from extra.qk.mmq_frozen_staged_family import load_frozen_staged_family_manifest
+      family_loader = load_frozen_staged_family_manifest
+    family = family_loader(
+      staged_family_manifest, role_spec=role_spec, frozen_bundle=frozen_bundle,
+      inventory=inventory)
+    binding = family.binding
+    program = binding.artifact.program
+    if program.key.hex() != binding.program_key:
+      raise ValueError("staged family PROGRAM key differs from its binding")
+    identity = {
+      "function_name": program.arg.function_name,
+      "binary_sha256": binding.binary_sha256,
+    }
+  except BaseException as exc:
+    return {
+      "schema": FROZEN_STAGED_RUNTIME_CANARY_SCHEMA, "status": "BLOCKED",
+      "exact_blocker": "staged runtime canary admission failed",
+      "exception": type(exc).__name__, "error": str(exc),
+      "target_dispatch_count": 0, "compile_performed": False,
+      "requires_recompile": False,
+    }
+
+  if health_probe is None:
+    from extra.qk.mmq_target_epoch_orchestrator import spawned_tiny_health_probe
+    health_probe = lambda: bool(spawned_tiny_health_probe({"AMD_AQL": expected_env}))
+  if fault_collector is None:
+    from extra.qk.mmq_target_epoch_orchestrator import collect_kernel_fault_evidence
+    fault_collector = collect_kernel_fault_evidence
+  if runtime_preconstructor is None:
+    runtime_preconstructor = _preconstruct_frozen_program_runtimes
+  if runtime_attestor is None:
+    def runtime_attestor(program, preconstruction):
+      from tinygrad.device import Device
+      from tinygrad.engine.realize import runtime_cache
+      dev = Device["AMD"]
+      runtime = runtime_cache.get((program.key, "AMD"))
+      return {
+        "runtime": runtime,
+        "amd_aql_effective": bool(getattr(dev, "is_aql", False)),
+        "queue_class": _callable_class_name(getattr(dev, "hw_compute_queue_t", None)),
+        "runtime_class": f"{type(runtime).__module__}.{type(runtime).__qualname__}"
+          if runtime is not None else None,
+        "runtime_cache_binding_exact":
+          runtime is not None and
+          preconstruction.get("runtime_cache_retains_code_allocations") is True,
+      }
+
+  try: health_before = bool(health_probe())
+  except BaseException: health_before = False
+  if not health_before:
+    return {
+      "schema": FROZEN_STAGED_RUNTIME_CANARY_SCHEMA, "status": "BLOCKED",
+      "exact_blocker": "preconstruction health preflight failed",
+      "family_identity": family.family_identity,
+      "program_key": binding.program_key, "binary_sha256": binding.binary_sha256,
+      "queue_mode": queue_mode, "amd_aql_effective": queue_mode == "AQL",
+      "target_dispatch_count": 0, "health_before": False,
+      "compile_performed": False, "requires_recompile": False,
+    }
+
+  try:
+    preconstruction = dict(runtime_preconstructor(
+      (program,), (binding.program_key,), (identity,), device="AMD"))
+    attestation = dict(runtime_attestor(program, preconstruction))
+    runtime_rows = preconstruction.get("runtimes")
+    runtime_row = runtime_rows[0] if isinstance(runtime_rows, list) and runtime_rows else None
+    effective_aql = attestation.get("amd_aql_effective")
+    queue_class = attestation.get("queue_class")
+    runtime_class = attestation.get("runtime_class")
+    runtime_checks = {
+      "preconstruction_pass": preconstruction.get("status") == "PASS",
+      "one_runtime": preconstruction.get("count") == 1 and
+        isinstance(runtime_row, Mapping),
+      "ordered_program_key_exact":
+        preconstruction.get("ordered_program_keys") == [binding.program_key],
+      "no_compute_dispatch":
+        preconstruction.get("no_compute_dispatch_during_preconstruction") is True,
+      "runtime_cache_binding_exact":
+        attestation.get("runtime_cache_binding_exact") is True,
+      "runtime_lifecycle_checks_pass":
+        isinstance(runtime_row, Mapping) and runtime_row.get("all_checks_pass") is True,
+      "queue_mode_exact":
+        type(effective_aql) is bool and effective_aql == (queue_mode == "AQL"),
+      "runtime_class_attested":
+        isinstance(runtime_class, str) and bool(runtime_class),
+      "queue_class_attested":
+        isinstance(queue_class, str) and bool(queue_class),
+      "preconstruction_all_checks_pass":
+        preconstruction.get("all_checks_pass") is True,
+    }
+    if not all(runtime_checks.values()):
+      failed = sorted(key for key, passed in runtime_checks.items() if not passed)
+      raise RuntimeError(f"staged runtime preconstruction checks failed: {failed!r}")
+  except BaseException as exc:
+    partial = getattr(exc, "runtime_preconstruction", None)
+    try: health_after = bool(health_probe())
+    except BaseException: health_after = False
+    try: kernel_faults, kernel_fault_evidence = fault_collector(started)
+    except BaseException as fault_exc:
+      kernel_faults = [f"kernel fault collection failed: {type(fault_exc).__name__}: {fault_exc}"]
+      kernel_fault_evidence = {}
+    return {
+      "schema": FROZEN_STAGED_RUNTIME_CANARY_SCHEMA, "status": "BLOCKED",
+      "exact_blocker": "staged runtime preconstruction failed closed",
+      "exception": type(exc).__name__, "error": str(exc),
+      "family_identity": family.family_identity,
+      "program_key": binding.program_key, "binary_sha256": binding.binary_sha256,
+      "queue_mode": queue_mode, "amd_aql_effective": queue_mode == "AQL",
+      "runtime_count": 0, "target_dispatch_count": 0,
+      "health_before": health_before, "health_after": health_after,
+      "kernel_faults": kernel_faults, "kernel_fault_evidence": dict(kernel_fault_evidence),
+      "runtime_preconstruction": dict(partial) if isinstance(partial, Mapping) else None,
+      "compile_performed": False, "requires_recompile": False,
+    }
+
+  try: health_after = bool(health_probe())
+  except BaseException: health_after = False
+  try: kernel_faults, kernel_fault_evidence = fault_collector(started)
+  except BaseException as exc:
+    kernel_faults = [f"kernel fault collection failed: {type(exc).__name__}: {exc}"]
+    kernel_fault_evidence = {}
+  passed = health_after and not kernel_faults
+  return {
+    "schema": FROZEN_STAGED_RUNTIME_CANARY_SCHEMA,
+    "status": "PASS" if passed else "BLOCKED",
+    "exact_blocker": None if passed else
+      "post-preconstruction health or kernel-fault evidence failed",
+    "family_identity": family.family_identity,
+    "program_key": binding.program_key, "binary_sha256": binding.binary_sha256,
+    "queue_mode": queue_mode, "amd_aql_effective": effective_aql,
+    "runtime_class": runtime_class, "queue_class": queue_class,
+    "runtime_count": 1, "target_dispatch_count": 0,
+    "runtime_cache_binding_exact": runtime_checks["runtime_cache_binding_exact"],
+    "code_ranges_valid": runtime_checks["runtime_lifecycle_checks_pass"],
+    "timeline_clean": runtime_checks["no_compute_dispatch"],
+    "health_before": health_before, "health_after": health_after,
+    "kernel_faults": kernel_faults, "kernel_fault_evidence": dict(kernel_fault_evidence),
+    "runtime_preconstruction": preconstruction,
+    "compile_performed": False, "requires_recompile": False,
+  }
+
+
 def _validated_child_env_overrides(overrides: Mapping[str, str] | None) -> dict[str, str]:
   """Keep the differential surface deliberately limited to PM4 versus AQL."""
   normalized = {} if overrides is None else {str(k): str(v) for k, v in overrides.items()}
@@ -1243,6 +1517,17 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
   if n_chunk_tiles is None: n_chunk_tiles = total_n_tiles
   if not 0 < n_chunk_tiles <= total_n_tiles: raise ValueError(f"n_chunk_tiles must be in [1,{total_n_tiles}]")
   if preloaded_epochs: persistent_buffers = True
+  staged_phase_receipts_enabled = _frozen_staged_phase_receipts_enabled(
+    frozen_bundle=frozen_bundle, warmups=warmups, rounds=rounds,
+    epoch_start=epoch_start, n_chunk_tiles=n_chunk_tiles, total_n_tiles=total_n_tiles,
+    host_accumulate=host_accumulate, in_kernel_accumulate=in_kernel_accumulate,
+    per_epoch_check=per_epoch_check, persistent_buffers=persistent_buffers,
+    preloaded_epochs=preloaded_epochs, sync_each_epoch=sync_each_epoch,
+    stable_metadata_staging=stable_metadata_staging,
+    stable_epoch_staging=stable_epoch_staging,
+    wait_each_dispatch=wait_each_dispatch)
+  phase_isolation = _new_frozen_staged_phase_receipt() \
+    if staged_phase_receipts_enabled else None
   accumulation_mode = (TARGET_IN_PLACE_ACCUMULATION if in_kernel_accumulate else
                        "host_fp32_add" if host_accumulate else "tinygrad_elementwise_add")
   frozen_identity: dict[str, Any] | None = None
@@ -1393,6 +1678,14 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
       accum = None if host_accumulate else Tensor.zeros(m * n, dtype=dtypes.float32, device="AMD").realize()
     accum_host = np.zeros(m * n, dtype=np.float32) if host_accumulate else None
     elapsed = 0.0
+    if staged_phase_receipts_enabled and timed:
+      # Preloaded producer inputs and target output initialization must be
+      # complete before the first fixed-VA destination can be overwritten.
+      Device["AMD"].synchronize()
+      _complete_frozen_staged_preparation_receipt(
+        phase_isolation,
+        target_dispatch_count=0 if runtime_evidence is None
+          else int(runtime_evidence.get("launch_count", 0)))
     for epoch in range(epoch_start, epoch_start + epoch_limit):
       partial = persistent_partial if persistent_buffers else Tensor.empty(m * n, dtype=dtypes.float32, device="AMD").realize()
       if persistent_buffers:
@@ -1469,6 +1762,10 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
         }
         if not any(x["epoch"] == epoch for x in metadata_staging["per_epoch_vas"]):
           metadata_staging["per_epoch_vas"].append(entry)
+      if staged_phase_receipts_enabled and timed:
+        # Make all four stage completions an observed boundary before target
+        # submission, instead of inferring completion from queue ordering.
+        Device["AMD"].synchronize()
       for n0 in range(0, n, n_chunk_tiles*128):
         n1 = min(n, n0 + n_chunk_tiles*128)
         tile_count = (n1 - n0) // 128
@@ -1534,6 +1831,14 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
         # Optional lifecycle diagnostic: force the backend queue to drain at
         # the epoch boundary. This does not alter the generated kernel/route.
         Device["AMD"].synchronize()
+      if staged_phase_receipts_enabled and timed:
+        if runtime_evidence is None or not runtime_evidence.get("launches"):
+          raise RuntimeError("frozen staged target launch receipt is missing")
+        _append_frozen_staged_epoch_receipt(
+          phase_isolation, epoch=epoch, program_key=frozen_binding.program_key,
+          epoch_stage=epoch_staging["per_epoch_vas"][-1],
+          metadata_stage=metadata_staging["per_epoch_vas"][-1],
+          launch=runtime_evidence["launches"][-1])
       elapsed += (time.perf_counter() - t0) * 1000.0
       completed_epochs += 1
     if not wait_each_dispatch:
@@ -1561,9 +1866,23 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
             "accumulation": accumulation_mode,
             "repack": repack_evidence, "reduction": reduction_evidence,
             "metadata_staging": metadata_staging, "epoch_staging": epoch_staging,
+            **({"phase_isolation": phase_isolation}
+               if phase_isolation is not None else {}),
             "runtime_evidence": runtime_evidence,
             "execution_fixture": execution_fixture_identity, "fixture_roles": fixture_roles,
             "compile_performed": frozen_bundle is None, "requires_recompile": frozen_bundle is None}
+  if staged_phase_receipts_enabled and (
+      phase_isolation["preparation"].get("status") != "PASS" or
+      len(phase_isolation["epochs"]) != epoch_limit):
+    return {
+      "schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1",
+      "status": "BLOCKED", **role_identity,
+      "exact_blocker": "frozen staged phase-isolation receipt is incomplete",
+      "completed_epochs": completed_epochs, "phase_isolation": phase_isolation,
+      "metadata_staging": metadata_staging, "epoch_staging": epoch_staging,
+      "runtime_evidence": runtime_evidence,
+      "compile_performed": False, "requires_recompile": False,
+    }
   compare_k = epoch_limit * 256
   compare_words = q4_blocks[:, epoch_start:epoch_start+epoch_limit, :].reshape(-1).view(np.uint8)
   compare_values = values_np[epoch_start*2:(epoch_start+epoch_limit)*2]
@@ -1603,6 +1922,8 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
           "same_session_timing": True, "no_fallback": True,
           "repack": repack_evidence, "reduction": reduction_evidence,
           "metadata_staging": metadata_staging, "epoch_staging": epoch_staging,
+          **({"phase_isolation": phase_isolation}
+             if phase_isolation is not None else {}),
           "runtime_evidence": runtime_evidence,
           "execution_fixture": execution_fixture_identity, "fixture_roles": fixture_roles,
           "compile_performed": frozen_bundle is None, "requires_recompile": frozen_bundle is None}

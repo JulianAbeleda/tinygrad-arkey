@@ -18,6 +18,7 @@ from tinygrad.schedule.rangeify import get_kernel_graph
 from extra.qk.mmq_exact_role_spec import exact_role_spec
 from extra.qk.mmq_llama_five_buffer_full_kernel import build_llama_five_buffer_full_kernel
 from extra.qk.mmq_llama_five_buffer_gpu_harness import (FrozenRuntimePreconstructionError,
+  FROZEN_STAGED_PHASE_RECEIPT_SCHEMA,
   SingleTilePointerBiasCarrierError,
   TARGET_IN_PLACE_ACCUMULATION, _accumulate_target_role_epoch,
   _aql_packet_census_from_exception,
@@ -32,8 +33,11 @@ from extra.qk.mmq_llama_five_buffer_gpu_harness import (FrozenRuntimePreconstruc
   _dispatch_error_runtime_reuse_evidence,
   _fixed_base_ordinal_reference_operands, _fixed_base_ordinal_sequence_reference_operands,
   _fixed_base_prefix_reference_operands,
+  _frozen_staged_phase_receipts_enabled,
   _frozen_program_set_ordinal_sequence_target_identities, _frozen_program_set_ordinal_target_identity,
   _frozen_program_set_target_identities,
+  _new_frozen_staged_phase_receipt, _complete_frozen_staged_preparation_receipt,
+  _append_frozen_staged_epoch_receipt,
   _producer_oracle_diagnostic, _producer_probe_status,
   _crosscheck_preconstructed_dispatch_runtimes,
   _preconstruct_frozen_program_runtimes,
@@ -71,6 +75,72 @@ def test_gpu_harness_preloaded_q4_pack_makes_each_epoch_a_contiguous_n_slice():
     assert np.array_equal(packed[epoch*epoch_bytes:(epoch+1)*epoch_bytes], expected)
   # The original N-major flattening cannot be consumed by one base-offset view.
   assert not np.array_equal(blocks.reshape(-1)[:epoch_bytes], np.ascontiguousarray(blocks[:, 0, :]).reshape(-1))
+
+
+def test_frozen_staged_phase_receipt_capability_and_exact_mode_are_fail_closed():
+  from extra.qk.mmq_frozen_staged_family_execution import PHASE_SCHEMA
+  assert FROZEN_STAGED_PHASE_RECEIPT_SCHEMA == PHASE_SCHEMA
+  exact = {
+    "frozen_bundle": "/frozen/bundle", "warmups": 0, "rounds": 1,
+    "epoch_start": 0, "n_chunk_tiles": 40, "total_n_tiles": 40,
+    "host_accumulate": False, "in_kernel_accumulate": True,
+    "per_epoch_check": False, "persistent_buffers": True,
+    "preloaded_epochs": True, "sync_each_epoch": True,
+    "stable_metadata_staging": True, "stable_epoch_staging": True,
+    "wait_each_dispatch": True,
+  }
+  assert _frozen_staged_phase_receipts_enabled(**exact) is True
+  for field, value in (
+      ("frozen_bundle", None), ("warmups", 1), ("rounds", 2),
+      ("n_chunk_tiles", 39), ("sync_each_epoch", False),
+      ("stable_epoch_staging", False), ("wait_each_dispatch", False)):
+    assert _frozen_staged_phase_receipts_enabled(**(exact | {field: value})) is False
+
+
+def test_frozen_staged_phase_receipt_links_four_stages_to_real_launch_kernargs():
+  receipt = _new_frozen_staged_phase_receipt()
+  _complete_frozen_staged_preparation_receipt(receipt, target_dispatch_count=0)
+  vas = [0x1000, 0x2000, 0x3000, 0x4000, 0x5000]
+  launch = {
+    "epoch": 0,
+    "arguments": [{"slot": slot, "va": va} for slot, va in enumerate(vas)],
+    "kernarg": {
+      "pointer_words": list(vas), "bound_pointer_words": list(vas),
+      "pointer_words_match_bound": True,
+    },
+  }
+  _append_frozen_staged_epoch_receipt(
+    receipt, epoch=0, program_key="a" * 64,
+    epoch_stage={"epoch": 0, "stage_q4_va": vas[1], "stage_values_va": vas[2]},
+    metadata_stage={
+      "epoch": 0, "stage_scales_va": vas[3], "stage_sums_va": vas[4]},
+    launch=launch)
+  assert receipt["preparation"]["synchronize_returned"] is True
+  row = receipt["epochs"][0]
+  assert [stage["destination_va"] for stage in row["stages"]] == vas[1:]
+  assert all(stage["completion_returned"] for stage in row["stages"])
+  assert row["target_kernarg_vas_slots_1_4"] == vas[1:]
+  assert row["stage_destination_vas_match_target_kernargs"] is True
+  assert row["target_dispatch_returned"] is row["target_synchronize_returned"] is True
+
+  malformed = _new_frozen_staged_phase_receipt()
+  _complete_frozen_staged_preparation_receipt(malformed, target_dispatch_count=0)
+  launch["kernarg"]["pointer_words"][4] += 4
+  with pytest.raises(RuntimeError, match="stage/target VA receipt failed checks"):
+    _append_frozen_staged_epoch_receipt(
+      malformed, epoch=0, program_key="a" * 64,
+      epoch_stage={"epoch": 0, "stage_q4_va": vas[1], "stage_values_va": vas[2]},
+      metadata_stage={
+        "epoch": 0, "stage_scales_va": vas[3], "stage_sums_va": vas[4]},
+      launch=launch)
+  assert malformed["epochs"] == []
+
+
+def test_frozen_staged_preparation_receipt_rejects_prior_target_dispatch():
+  receipt = _new_frozen_staged_phase_receipt()
+  with pytest.raises(RuntimeError, match="observed a target dispatch"):
+    _complete_frozen_staged_preparation_receipt(receipt, target_dispatch_count=1)
+  assert receipt["preparation"]["status"] == "PENDING"
 
 
 def test_gpu_harness_preloaded_q4_pack_rejects_layout_drift():
