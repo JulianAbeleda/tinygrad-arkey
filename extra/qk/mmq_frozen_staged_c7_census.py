@@ -34,6 +34,7 @@ from extra.qk.mmq_staged_c7_c8_contract import (
   staged_c7_budget_identity, staged_c7_census_identity,
   staged_logical_memory_requirements, validate_staged_c7_memory_ledger,
 )
+from extra.qk.mmq_staged_c7_authority import load_staged_c7_authority_snapshot
 from extra.qk.physical_memory_ledger import (
   AllocationOwner, PhysicalMemoryEvidence, PhysicalMemoryLedger,
   allocation_owner, bind_allocation_owner,
@@ -406,7 +407,10 @@ def _run_frozen_staged_c7_queue_worker(
     allocation_granularity_bytes: int, memory_authority: Mapping[str, Any],
     ) -> dict[str, Any]:
   """Spawn-only worker: the parent never imports or constructs a live device."""
-  os.environ.update({"AMD_AQL": "1" if queue_mode == "AQL" else "0", "DEV": "AMD"})
+  os.environ.update({
+    "AMD_AQL": "1" if queue_mode == "AQL" else "0",
+    "DEV": ledger_device,
+  })
   role = exact_role_spec(role_name, shape=role_shape, inventory=inventory)
   family = load_frozen_staged_family_manifest(
     staged_family_manifest, role_spec=role,
@@ -489,7 +493,7 @@ def run_frozen_staged_c7_queue_capture_isolated(
   if fault_collector is None:
     from extra.qk.mmq_target_epoch_orchestrator import collect_kernel_fault_evidence
     fault_collector = collect_kernel_fault_evidence
-  env_overrides = {"AMD_AQL": expected_aql}
+  env_overrides = {"AMD_AQL": expected_aql, "DEV": ledger_device}
   started = time.time()
   try: health_before = bool(health_probe(env_overrides))
   except BaseException: health_before = False
@@ -688,24 +692,13 @@ def main(argv: Sequence[str] | None = None) -> int:
   capture = sub.add_parser("capture", parents=[common])
   capture.add_argument("--queue-mode", choices=QUEUE_MODES, required=True)
   capture.add_argument("--runtime-canary-isolation", type=Path, required=True)
-  capture.add_argument("--admitted-budget-bytes", type=int, required=True)
-  capture.add_argument("--budget-provenance", required=True)
-  capture.add_argument("--device-identity", required=True)
-  capture.add_argument("--software-identity", required=True)
-  capture.add_argument("--allocator-identity", required=True)
-  capture.add_argument("--allocation-granularity-bytes", type=int, required=True)
-  capture.add_argument("--ledger-device", default="AMD")
+  capture.add_argument("--authority-snapshot", type=Path, required=True)
   capture.add_argument("--timeout-seconds", type=float, default=900.0)
   capture.add_argument("--output", type=Path, required=True)
   build = sub.add_parser("build", parents=[common])
   build.add_argument("--pm4-observation", type=Path, required=True)
   build.add_argument("--aql-observation", type=Path, required=True)
-  build.add_argument("--admitted-budget-bytes", type=int, required=True)
-  build.add_argument("--budget-provenance", required=True)
-  build.add_argument("--device-identity", required=True)
-  build.add_argument("--software-identity", required=True)
-  build.add_argument("--allocator-identity", required=True)
-  build.add_argument("--allocation-granularity-bytes", type=int, required=True)
+  build.add_argument("--authority-snapshot", type=Path, required=True)
   build.add_argument("--output", type=Path)
   args = parser.parse_args(argv)
   family = _load_family(args)
@@ -718,19 +711,17 @@ def main(argv: Sequence[str] | None = None) -> int:
       json.loads(args.c7_ledger.read_text()), family=family)
     _write_json(None, result)
     return 0 if result["status"] == "PASS" else 1
+  authority_snapshot = load_staged_c7_authority_snapshot(args.authority_snapshot)
+  authority = authority_snapshot["memory_authority"]
+  budget = authority_snapshot["budget"]
   if args.command == "capture":
-    authority = staged_c7_memory_authority(
-      device_identity=args.device_identity, software_identity=args.software_identity,
-      allocator_identity=args.allocator_identity,
-      allocation_granularity_bytes=args.allocation_granularity_bytes,
-      admitted_budget_bytes=args.admitted_budget_bytes,
-      budget_provenance=args.budget_provenance)
     result = run_frozen_staged_c7_queue_capture_isolated(
       family=family, queue_mode=args.queue_mode,
       frozen_bundle=args.frozen_bundle,
       staged_family_manifest=args.staged_family_manifest,
       runtime_canary_isolation=json.loads(args.runtime_canary_isolation.read_text()),
-      memory_authority=authority, ledger_device=args.ledger_device,
+      memory_authority=authority,
+      ledger_device=authority_snapshot["selected_device"],
       timeout_seconds=args.timeout_seconds, inventory=args.inventory)
     _write_json(args.output, result)
     return 0 if result["status"] == "PASS" else 1
@@ -747,11 +738,12 @@ def main(argv: Sequence[str] | None = None) -> int:
   }
   result = build_frozen_staged_c7_from_observations(
     family=family, queue_observations=observations,
-    admitted_budget_bytes=args.admitted_budget_bytes,
-    budget_provenance=args.budget_provenance,
-    device_identity=args.device_identity, software_identity=args.software_identity,
-    allocator_identity=args.allocator_identity,
-    allocation_granularity_bytes=args.allocation_granularity_bytes)
+    admitted_budget_bytes=budget["admitted_bytes"],
+    budget_provenance=budget["provenance"],
+    device_identity=authority["device_identity"],
+    software_identity=authority["software_identity"],
+    allocator_identity=authority["allocator_identity"],
+    allocation_granularity_bytes=authority["allocation_granularity_bytes"])
   _write_json(args.output, result)
   return 0 if result["status"] == "PASS" else 1
 

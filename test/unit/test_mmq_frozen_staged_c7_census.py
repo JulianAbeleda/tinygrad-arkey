@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import os
 from types import SimpleNamespace
 
@@ -15,6 +16,7 @@ from extra.qk.mmq_frozen_staged_c7_census import (
   _write_json,
   build_frozen_staged_c7_census, build_frozen_staged_c7_from_observations,
   capture_frozen_staged_c7_queue_probe,
+  main as c7_main,
   run_frozen_staged_c7_queue_capture_isolated,
   staged_c7_memory_authority,
 )
@@ -288,7 +290,7 @@ def test_isolated_capture_requires_exact_c4_and_parent_health_fault_envelope(fam
 
   def health(env):
     calls["health"] += 1
-    assert env == {"AMD_AQL": "0"}
+    assert env == {"AMD_AQL": "0", "DEV": "CPU"}
     return True
 
   canary = {
@@ -356,3 +358,46 @@ def test_c7_json_evidence_is_published_atomically(tmp_path, monkeypatch):
   assert output.read_text() == '{\n  "status": "PASS"\n}\n'
   assert len(calls) == 1 and calls[0][1] == output
   assert not list(output.parent.glob(f".{output.name}.*.tmp"))
+
+
+def test_c7_capture_cli_consumes_only_validated_authority_snapshot(
+    family, tmp_path, monkeypatch):
+  authority = _authority()
+  snapshot = {
+    "selected_device": "AMD",
+    "memory_authority": authority,
+    "budget": {
+      "admitted_bytes": 1_000_000_000,
+      "provenance": "mock live device admission scan",
+    },
+  }
+  canary = tmp_path / "c4.json"
+  canary.write_text('{"status":"PASS"}')
+  output = tmp_path / "c7-pm4.json"
+  seen = {}
+
+  monkeypatch.setattr(
+    "extra.qk.mmq_frozen_staged_c7_census._load_family",
+    lambda _args: family)
+  monkeypatch.setattr(
+    "extra.qk.mmq_frozen_staged_c7_census.load_staged_c7_authority_snapshot",
+    lambda path: seen.setdefault("authority_path", path) and snapshot)
+
+  def capture(**kwargs):
+    seen.update(kwargs)
+    return {"status": "PASS", "queue_mode": "PM4"}
+
+  monkeypatch.setattr(
+    "extra.qk.mmq_frozen_staged_c7_census."
+    "run_frozen_staged_c7_queue_capture_isolated", capture)
+  monkeypatch.setenv("AMD_AQL", "0")
+  assert c7_main([
+    "capture", "--staged-family-manifest", "/frozen/family.json",
+    "--frozen-bundle", "/frozen/bundle", "--role", "attn_qo",
+    "--queue-mode", "PM4", "--runtime-canary-isolation", str(canary),
+    "--authority-snapshot", str(tmp_path / "authority.json"),
+    "--output", str(output),
+  ]) == 0
+  assert seen["authority_path"] == tmp_path / "authority.json"
+  assert seen["memory_authority"] == authority
+  assert json.loads(output.read_text())["status"] == "PASS"
