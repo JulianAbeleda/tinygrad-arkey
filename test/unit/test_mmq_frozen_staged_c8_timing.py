@@ -22,7 +22,7 @@ from extra.qk.mmq_staged_c7_c8_contract import (
 from extra.qk.mmq_llama_five_buffer_gpu_harness import (
   FROZEN_STAGED_C8_TIMING_RECEIPT_SCHEMA,
   _bind_staged_observer_buffer, _frozen_staged_c8_timing_receipt, _notify_staged_observer,
-  _staged_observer_allocation, run_full_grid_target_role_probe,
+  _materialize_staged_buffer, _staged_observer_allocation, run_full_grid_target_role_probe,
 )
 from test.unit.test_mmq_frozen_staged_family import _loader, _produce
 from test.unit.test_mmq_staged_c7_c8_contract import _c6, _c7, _fallback
@@ -329,6 +329,20 @@ def test_lifecycle_observer_persistently_binds_lazy_tensor_buffer():
   assert events == [(buffer, "output", "persistent_partial")]
   with pytest.raises(TypeError, match="bind_buffer"):
     _bind_staged_observer_buffer(object(), tensor, "output", "persistent_partial")
+
+
+def test_fixed_va_stage_materializes_during_preparation():
+  calls = []
+
+  class Buffer:
+    def get_buf(self, device):
+      calls.append(device)
+
+  tensor = type("TensorLike", (), {
+    "uop": type("UOpLike", (), {"buffer": Buffer()})(),
+  })()
+  _materialize_staged_buffer(tensor)
+  assert calls == ["AMD"]
 
 
 def test_direct_packed_live_seam_uses_real_boundary_contract_without_device(monkeypatch, family):

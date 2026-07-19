@@ -21,6 +21,7 @@ from extra.qk.mmq_frozen_staged_c7_census import (
   staged_c7_memory_authority,
 )
 from extra.qk.mmq_frozen_staged_family import FrozenStagedFamily, load_frozen_staged_family_manifest
+from extra.qk.mmq_llama_five_buffer_gpu_harness import _materialize_staged_buffer
 from extra.qk.mmq_staged_c7_c8_contract import (
   staged_logical_memory_requirements, validate_staged_c7_memory_ledger,
 )
@@ -50,12 +51,13 @@ def test_harness_adapter_binds_owner_across_lazy_allocation_boundary(family):
   capture = FrozenStagedC7QueueCapture(family, "PM4", "CPU", 4096)
   adapter = FrozenStagedC7HarnessAdapter(capture)
   buffer = Buffer("CPU", 4096, dtypes.uint8)
+  tensor = SimpleNamespace(uop=SimpleNamespace(buffer=buffer))
   with Context(LRU=0), adapter.active():
     # Mirror AMD's Tensor.realize/get_buf split: creation ownership ends before
     # the physical allocator event, while the exact base retains its binding.
     with adapter.allocation("output", "persistent_partial"):
       adapter.bind_buffer(buffer, "output", "persistent_partial")
-    buffer.allocate()
+    _materialize_staged_buffer(tensor, "CPU")
     adapter.begin_route()
     adapter.end_route()
     buffer.deallocate()

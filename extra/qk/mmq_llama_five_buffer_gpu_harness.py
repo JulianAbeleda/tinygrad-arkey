@@ -854,6 +854,11 @@ def _bind_staged_observer_buffer(
   callback(tensor.uop.buffer, category, name)
 
 
+def _materialize_staged_buffer(tensor: Any, device: str = "AMD") -> None:
+  """Allocate a fixed-VA stage during preparation, before route measurement."""
+  tensor.uop.buffer.get_buf(device)
+
+
 def _notify_staged_observer(observer: Any | None, method: str, *args: Any) -> None:
   if observer is None: return
   callback = getattr(observer, method, None)
@@ -1806,6 +1811,7 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
         _bind_staged_observer_buffer(
           staged_lifecycle_observer, persistent_q4_stage, "compact_q4_stage", "persistent_q4_stage")
         persistent_q4_stage.realize()
+        _materialize_staged_buffer(persistent_q4_stage)
       with _staged_observer_allocation(
           staged_lifecycle_observer, "compact_q8_values_stage", "persistent_values_stage"):
         persistent_values_stage = Tensor.empty(2 * m * 128, dtype=dtypes.int8, device="AMD")
@@ -1813,6 +1819,7 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
           staged_lifecycle_observer, persistent_values_stage,
           "compact_q8_values_stage", "persistent_values_stage")
         persistent_values_stage.realize()
+        _materialize_staged_buffer(persistent_values_stage)
     if stable_metadata_staging:
       # Keep full preloaded sources for the epoch sequence, but bind the
       # kernel to one stable one-epoch metadata allocation refreshed by SDMA.
@@ -1823,6 +1830,7 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
           staged_lifecycle_observer, persistent_scales_stage,
           "compact_q8_scales_stage", "persistent_scales_stage")
         persistent_scales_stage.realize()
+        _materialize_staged_buffer(persistent_scales_stage)
       with _staged_observer_allocation(
           staged_lifecycle_observer, "compact_q8_sums_stage", "persistent_sums_stage"):
         persistent_sums_stage = Tensor.empty(2 * m * 4, dtype=dtypes.float32, device="AMD")
@@ -1830,6 +1838,7 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
           staged_lifecycle_observer, persistent_sums_stage,
           "compact_q8_sums_stage", "persistent_sums_stage")
         persistent_sums_stage.realize()
+        _materialize_staged_buffer(persistent_sums_stage)
     if preloaded_epochs:
       # ``_random_q4_words`` is N-major: [N, epoch, 144]. A Buffer view can
       # shift only one contiguous base, so preload epoch-major storage instead
