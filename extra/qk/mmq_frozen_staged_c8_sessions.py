@@ -39,6 +39,8 @@ SCHEMA = "tinygrad.mmq_q4k_q8_1.frozen_staged_c8_persistent_sessions.v1"
 QUEUE_SESSION_SCHEMA = f"{SCHEMA}.queue"
 QUEUE_ATTESTATION_SCHEMA = f"{SCHEMA}.effective_queue_attestation"
 CLOCK_IDENTITY = "clock-policy-0"
+ROUTE_SEQUENCE_SCHEMA = \
+  "tinygrad.mmq_q4k_q8_1.frozen_staged_c8_route_sequence.v1"
 
 RunnerFactory = Callable[..., QueueTimingRunners]
 AttestorFactory = Callable[..., Any]
@@ -333,6 +335,181 @@ def run_persistent_c8_queue_session_worker(
   return {**payload, "evidence_identity": _identity(payload)}
 
 
+def run_persistent_c8_route_sequence_worker(
+    family: FrozenStagedFamily, c6_correctness_evidence: Mapping[str, Any],
+    queue_mode: str, sequence: Sequence[str], session_identity: str,
+    clock_identity: str, runner_factory: RunnerFactory,
+    attestor_factory: AttestorFactory,
+    runner_config: Mapping[str, Any] | None = None,
+    attestor_config: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
+  """Run one bounded diagnostic route sequence inside one persistent child."""
+  if not isinstance(family, FrozenStagedFamily):
+    raise TypeError("family must be a loader-validated FrozenStagedFamily")
+  if queue_mode not in QUEUE_MODES:
+    raise ValueError(f"queue_mode must be one of {QUEUE_MODES!r}")
+  normalized = tuple(sequence)
+  supported = {"staged_candidate", "direct_packed"}
+  if not 1 <= len(normalized) <= 3 or any(route not in supported for route in normalized):
+    raise ValueError("diagnostic route sequence must contain 1-3 supported routes")
+  session_identity = _nonempty(session_identity, "session_identity")
+  clock_identity = _nonempty(clock_identity, "clock_identity")
+  os.environ.update({
+    "AMD_AQL": "1" if queue_mode == "AQL" else "0", "DEV": "AMD"})
+  attestor = attestor_factory(
+    queue_mode=queue_mode,
+    config={} if attestor_config is None else dict(attestor_config))
+  attestation = _validated_queue_attestation(
+    attestor() if callable(attestor) else attestor, queue_mode)
+  runners = runner_factory(
+    queue_mode=queue_mode, family=family,
+    c6_correctness_evidence=dict(c6_correctness_evidence),
+    clock_identity=clock_identity, clock_ns=time.perf_counter_ns,
+    config={} if runner_config is None else dict(runner_config))
+  if not isinstance(runners, QueueTimingRunners):
+    raise TypeError("runner_factory must return QueueTimingRunners")
+  runners.validate(queue_mode)
+  executable = _nonempty(
+    c6_correctness_evidence.get("candidate_executable_identity"),
+    "C6 candidate_executable_identity")
+  counts = {"staged_candidate": 0, "direct_packed": 0}
+  breadcrumbs: list[dict[str, Any]] = []
+  failure = None
+  for position, route in enumerate(normalized):
+    runner = runners.candidate if route == "staged_candidate" else runners.direct_packed
+    invocation_index = counts[route]
+    try:
+      receipt = _invoke(
+        runner, queue_mode=queue_mode, route=route, phase="diagnostic",
+        invocation_index=invocation_index, pair_index=position,
+        family=family, clock_identity=clock_identity,
+        candidate_executable_identity=executable)
+    except Exception as exc:
+      nested = getattr(exc, "failure_evidence", None)
+      failure = {
+        "position": position, "route": route,
+        "invocation_index": invocation_index,
+        "exception": type(exc).__name__, "error": str(exc),
+        "nested_failure": dict(nested) if isinstance(nested, Mapping) else None,
+      }
+      break
+    counts[route] += 1
+    lifecycle = None
+    if route == "staged_candidate":
+      state = getattr(runner, "persistent_session_state", None)
+      if isinstance(state, Mapping):
+        lifecycle = {
+          key: state.get(key) for key in (
+            "signature", "initialization_count", "invocation_count",
+            "buffer_ranges", "runtime_identity")
+        }
+    breadcrumbs.append({
+      "position": position, "route": route,
+      "invocation_index": invocation_index,
+      "receipt_schema": receipt.get("schema"),
+      "receipt_status": receipt.get("status"),
+      "complete_role_ms": receipt.get("complete_role_ms"),
+      "persistent_session_lifecycle": lifecycle,
+    })
+  exact_blocker = None if failure is None else (
+    f"{queue_mode} diagnostic route sequence failed at position "
+    f"{failure['position']} {failure['route']}[{failure['invocation_index']}]: "
+    f"{failure['exception']}: {failure['error']}")
+  payload = {
+    "schema": ROUTE_SEQUENCE_SCHEMA,
+    "status": "PASS" if failure is None else "BLOCKED",
+    "exact_blocker": exact_blocker, "queue_mode": queue_mode,
+    "family_identity": family.family_identity,
+    "session_identity": session_identity, "clock_identity": clock_identity,
+    "effective_queue_attestation": attestation,
+    "sequence": list(normalized), "completed_positions": len(breadcrumbs),
+    "invocation_counts": counts, "breadcrumbs": breadcrumbs,
+    "invocation_failure": failure, "persistent_child_session": True,
+    "no_retry": True, "no_queue_fallback": True,
+    "production_dispatch_changed": False,
+  }
+  return {**payload, "evidence_identity": _identity(payload)}
+
+
+def run_guarded_persistent_c8_route_sequence(
+    *, family: FrozenStagedFamily,
+    c6_correctness_evidence: Mapping[str, Any],
+    queue_mode: str, sequence: Sequence[str],
+    runner_factory: RunnerFactory,
+    attestor_factory: AttestorFactory = amd_effective_queue_attestor_factory,
+    runner_config: Mapping[str, Any] | None = None,
+    attestor_config: Mapping[str, Any] | None = None,
+    timeout_seconds: float = 180.0,
+    isolated_runner: Callable[..., Any] | None = None,
+    health_probe: Callable[[Mapping[str, str]], bool] | None = None,
+    fault_collector: Callable[[float], tuple[list[str], Mapping[str, Any]]] | None = None,
+    ) -> dict[str, Any]:
+  """Contain one no-retry route-sequence diagnostic with health/fault guards."""
+  timeout_seconds = _positive_number(timeout_seconds, "timeout_seconds")
+  if isolated_runner is None:
+    from tinygrad.runtime.process_isolated import run_isolated
+    isolated_runner = run_isolated
+  if health_probe is None:
+    from extra.qk.mmq_target_epoch_orchestrator import spawned_tiny_health_probe
+    health_probe = spawned_tiny_health_probe
+  if fault_collector is None:
+    from extra.qk.mmq_target_epoch_orchestrator import collect_kernel_fault_evidence
+    fault_collector = collect_kernel_fault_evidence
+  env = {"AMD_AQL": "1" if queue_mode == "AQL" else "0"}
+  try: health_before = bool(health_probe(env))
+  except Exception: health_before = False
+  started = time.time()
+  isolated = None
+  if health_before:
+    args = (
+      family, dict(c6_correctness_evidence), queue_mode, tuple(sequence),
+      _identity({
+        "schema": f"{ROUTE_SEQUENCE_SCHEMA}.session_identity",
+        "queue_mode": queue_mode, "sequence": list(sequence),
+        "nonce": time.time_ns(),
+      }),
+      CLOCK_IDENTITY, runner_factory, attestor_factory,
+      {} if runner_config is None else dict(runner_config),
+      {} if attestor_config is None else dict(attestor_config),
+    )
+    isolated = isolated_runner(
+      run_persistent_c8_route_sequence_worker, args=args,
+      timeout_seconds=timeout_seconds, start_method="spawn")
+  try: health_after = bool(health_probe(env))
+  except Exception: health_after = False
+  try:
+    faults, fault_evidence = fault_collector(started)
+    faults, fault_evidence = list(faults), dict(fault_evidence)
+  except Exception as exc:
+    faults = [f"kernel fault collection failed: {type(exc).__name__}: {exc}"]
+    fault_evidence = {}
+  child = getattr(isolated, "result", None)
+  timed_out = bool(getattr(isolated, "timed_out", False))
+  error = getattr(isolated, "error", None)
+  blocker = None
+  if not health_before: blocker = f"{queue_mode} diagnostic preflight health failed"
+  elif timed_out: blocker = f"{queue_mode} diagnostic child timed out"
+  elif not isinstance(child, Mapping):
+    blocker = error or f"{queue_mode} diagnostic child returned no structured result"
+  elif child.get("schema") != ROUTE_SEQUENCE_SCHEMA or child.get("status") != "PASS":
+    blocker = child.get("exact_blocker") or f"{queue_mode} diagnostic child blocked"
+  elif faults: blocker = f"{queue_mode} kernel fault/reset marker observed during diagnostic"
+  elif not health_after: blocker = f"{queue_mode} diagnostic postflight health failed"
+  payload = {
+    "schema": f"{ROUTE_SEQUENCE_SCHEMA}.guarded",
+    "status": "PASS" if blocker is None else "BLOCKED",
+    "exact_blocker": blocker, "queue_mode": queue_mode,
+    "sequence": list(sequence), "health_before": health_before,
+    "health_after": health_after, "kernel_faults": faults,
+    "kernel_fault_evidence": fault_evidence, "timed_out": timed_out,
+    "error": error, "elapsed_seconds": getattr(isolated, "elapsed_seconds", None),
+    "child": dict(child) if isinstance(child, Mapping) else None,
+    "spawn_count": 1 if isolated is not None else 0,
+    "no_retry": True, "no_queue_fallback": True,
+  }
+  return {**payload, "evidence_identity": _identity(payload)}
+
+
 def _session_envelope(
     *, family: FrozenStagedFamily, queue_mode: str, isolated_runner: Callable[..., Any],
     health_probe: Callable[[Mapping[str, str]], bool],
@@ -602,8 +779,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 __all__ = [
   "CLOCK_IDENTITY", "QUEUE_ATTESTATION_SCHEMA", "QUEUE_SESSION_SCHEMA", "SCHEMA",
+  "ROUTE_SEQUENCE_SCHEMA",
   "amd_effective_queue_attestor_factory", "run_persistent_c8_queue_session_worker",
-  "run_persistent_c8_sessions",
+  "run_persistent_c8_route_sequence_worker",
+  "run_guarded_persistent_c8_route_sequence", "run_persistent_c8_sessions",
 ]
 
 

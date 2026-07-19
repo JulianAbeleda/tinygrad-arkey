@@ -7,9 +7,11 @@ import pytest
 
 from extra.qk.mmq_frozen_epoch_runtime_preconstruction_canary import QUEUE_CLASSES
 from extra.qk.mmq_frozen_staged_c8_sessions import (
-  CLOCK_IDENTITY, QUEUE_ATTESTATION_SCHEMA, QUEUE_SESSION_SCHEMA, SCHEMA,
+  CLOCK_IDENTITY, QUEUE_ATTESTATION_SCHEMA, QUEUE_SESSION_SCHEMA,
+  ROUTE_SEQUENCE_SCHEMA, SCHEMA,
   _atomic_write_json, run_persistent_c8_queue_session_worker,
-  run_persistent_c8_sessions,
+  run_guarded_persistent_c8_route_sequence,
+  run_persistent_c8_route_sequence_worker, run_persistent_c8_sessions,
 )
 from extra.qk.mmq_frozen_staged_c8_timing import QueueTimingRunners
 from extra.qk.mmq_frozen_staged_family import (
@@ -258,6 +260,69 @@ def test_worker_localizes_fallback_round_failure(family):
   assert result["invocation_counts"]["direct_packed"] == 3
   assert result["completed_paired_rounds"] == 0
   assert "round direct_packed[3] pair[0]" in result["exact_blocker"]
+
+
+def test_bounded_route_sequence_reuses_one_candidate_owner(family):
+  c6, events = _c6(family), []
+  runner_factory, attestor_factory = _factories(family, c6, events)
+
+  def persistent_factory(**kwargs):
+    runners = runner_factory(**kwargs)
+    state = {
+      "signature": {"role": "fixture"}, "initialization_count": 1,
+      "invocation_count": 0, "buffer_ranges": {"output": [1, 2]},
+      "runtime_identity": {"object_id": 7},
+    }
+
+    def candidate(**invoke_kwargs):
+      state["invocation_count"] += 1
+      return runners.candidate(**invoke_kwargs)
+
+    candidate.persistent_session_state = state
+    return QueueTimingRunners(candidate, runners.direct_packed)
+
+  result = run_persistent_c8_route_sequence_worker(
+    family, c6, "PM4", ("staged_candidate", "staged_candidate"),
+    "session", CLOCK_IDENTITY, persistent_factory, attestor_factory)
+  assert result["schema"] == ROUTE_SEQUENCE_SCHEMA
+  assert result["status"] == "PASS"
+  assert result["completed_positions"] == 2
+  assert result["invocation_counts"] == {
+    "staged_candidate": 2, "direct_packed": 0}
+  assert [row["route"] for row in result["breadcrumbs"]] == [
+    "staged_candidate", "staged_candidate"]
+  assert [row["persistent_session_lifecycle"]["invocation_count"]
+          for row in result["breadcrumbs"]] == [1, 2]
+
+
+def test_guarded_route_sequence_stops_after_one_faulting_child(family):
+  c6, events = _c6(family), []
+  runner_factory, attestor_factory = _factories(family, c6, events)
+
+  def failing_factory(**kwargs):
+    runners = runner_factory(**kwargs)
+    calls = 0
+
+    def candidate(**invoke_kwargs):
+      nonlocal calls
+      if calls == 1: raise RuntimeError("second candidate failed")
+      calls += 1
+      return runners.candidate(**invoke_kwargs)
+
+    return QueueTimingRunners(candidate, runners.direct_packed)
+
+  result = run_guarded_persistent_c8_route_sequence(
+    family=family, c6_correctness_evidence=c6, queue_mode="PM4",
+    sequence=("staged_candidate", "staged_candidate"),
+    runner_factory=failing_factory, attestor_factory=attestor_factory,
+    isolated_runner=_direct_isolated(events),
+    health_probe=lambda _env: True,
+    fault_collector=lambda _started: (["synthetic fault"], {"clean": False}))
+  assert result["status"] == "BLOCKED"
+  assert result["spawn_count"] == 1 and result["no_retry"] is True
+  assert result["child"]["completed_positions"] == 1
+  assert result["child"]["invocation_failure"]["position"] == 1
+  assert result["kernel_faults"] == ["synthetic fault"]
 
 
 def test_parent_preserves_structured_child_blocker_and_fault_evidence(family):

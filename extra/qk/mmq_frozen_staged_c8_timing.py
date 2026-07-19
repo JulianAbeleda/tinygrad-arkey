@@ -520,6 +520,7 @@ def make_frozen_staged_candidate_runner(
     raise TypeError("same-process staged timing probe runner must be callable")
   if getattr(probe_runner, "__name__", "") == "run_full_grid_target_role_probe_isolated":
     raise ValueError("C8 warmed pairing cannot spawn one isolated child per candidate invocation")
+  persistent_session_state: dict[str, Any] = {}
 
   def run(*, queue_mode: str, family: FrozenStagedFamily,
           clock_identity: str, candidate_executable_identity: str,
@@ -543,7 +544,9 @@ def make_frozen_staged_candidate_runner(
          os.environ.get("AMD_AQL") != expected_aql:
         raise ValueError(
           "same-process staged timing child AMD_AQL mode differs from queue_mode")
-      return probe_runner(**kwargs, c8_phase_timing=True)
+      return probe_runner(
+        **kwargs, c8_phase_timing=True,
+        persistent_session_state=persistent_session_state)
 
     result = run_frozen_staged_family_prefix_probe(
       role_spec=role_spec, frozen_bundle=frozen_bundle,
@@ -573,6 +576,8 @@ def make_frozen_staged_candidate_runner(
         "exact_blocker": result.get("exact_blocker"),
         "exception": result.get("exception"), "error": result.get("error"),
         "raw_probe_failure": raw_failure or None,
+        "persistent_session_lifecycle":
+          result.get("persistent_session_lifecycle"),
       }
       message = f"{queue_mode} frozen staged timing execution did not pass{suffix}"
       raise StagedCandidateExecutionError(message, failure_evidence)
@@ -594,6 +599,7 @@ def make_frozen_staged_candidate_runner(
       "epochs": receipt["epochs"], "final_sync_ms": receipt["final_sync_ms"],
       "complete_role_ms": receipt["complete_role_ms"],
     }
+  setattr(run, "persistent_session_state", persistent_session_state)
   return run
 
 

@@ -428,7 +428,9 @@ def test_staged_live_seam_reuses_validated_prefix_executor_and_enriches_receipt(
   def probe_runner(**kwargs):
     assert "timeout_seconds" not in kwargs
     assert "child_env_overrides" not in kwargs
-    seen.append(("probe", kwargs["c8_phase_timing"]))
+    seen.append((
+      "probe", kwargs["c8_phase_timing"],
+      id(kwargs["persistent_session_state"])))
     return {"c8_timing_receipt": raw}
 
   def prefix_executor(**kwargs):
@@ -453,8 +455,17 @@ def test_staged_live_seam_reuses_validated_prefix_executor_and_enriches_receipt(
   receipt = runner(
     queue_mode="PM4", family=family, clock_identity="clock-policy-0",
     candidate_executable_identity=c6["candidate_executable_identity"])
-  assert seen == [("prefix", family.binding.role_spec.epochs, "PM4"), ("probe", True)]
+  second = runner(
+    queue_mode="PM4", family=family, clock_identity="clock-policy-0",
+    candidate_executable_identity=c6["candidate_executable_identity"])
+  probes = [row for row in seen if row[0] == "probe"]
+  assert [row[:2] for row in probes] == [("probe", True), ("probe", True)]
+  assert probes[0][2] == probes[1][2]
+  assert [row for row in seen if row[0] == "prefix"] == [
+    ("prefix", family.binding.role_spec.epochs, "PM4"),
+    ("prefix", family.binding.role_spec.epochs, "PM4")]
   assert receipt["schema"] == CANDIDATE_RECEIPT_SCHEMA
+  assert second["schema"] == CANDIDATE_RECEIPT_SCHEMA
   assert receipt["family_identity"] == family.family_identity
   assert receipt["phase_semantics"] == PHASE_SEMANTICS
 
@@ -497,4 +508,5 @@ def test_staged_live_seam_preserves_nested_probe_blocker(family, monkeypatch):
     "exact_blocker": "guarded staged prefix runner raised",
     "exception": "RuntimeError", "error": "device timeline stopped",
     "raw_probe_failure": None,
+    "persistent_session_lifecycle": None,
   }

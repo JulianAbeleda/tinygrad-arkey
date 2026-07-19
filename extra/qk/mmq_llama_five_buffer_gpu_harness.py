@@ -1585,7 +1585,9 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
                                     wait_each_dispatch: bool = True,
                                     frozen_bundle: str | Path | None = None,
                                     c8_phase_timing: bool = False,
-                                    staged_lifecycle_observer: Any | None = None) -> dict[str, Any]:
+                                    staged_lifecycle_observer: Any | None = None,
+                                    persistent_session_state: dict[str, Any] | None = None,
+                                    ) -> dict[str, Any]:
   """Run the emitted K=256 program across one admitted exact 14B Q4 role.
 
   By default each epoch writes a full-role partial and tinygrad performs the
@@ -1652,6 +1654,26 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
     raise ValueError("C8 phase timing requires the exact frozen full-role staged execution contract")
   if staged_lifecycle_observer is not None and not full_role_staged_execution:
     raise ValueError("staged lifecycle observation requires the exact frozen full-role staged execution contract")
+  if persistent_session_state is not None and not isinstance(persistent_session_state, dict):
+    raise TypeError("persistent_session_state must be a mutable dict")
+  if persistent_session_state is not None and not full_role_staged_execution:
+    raise ValueError("persistent session reuse requires the exact frozen full-role staged execution contract")
+  session_signature = {
+    "role": role_spec.role, "shape": list(role_spec.shape),
+    "frozen_bundle": str(Path(frozen_bundle).resolve()) if frozen_bundle is not None else None,
+    "epoch_start": epoch_start, "epoch_limit": epoch_limit,
+    "n_chunk_tiles": n_chunk_tiles, "in_kernel_accumulate": in_kernel_accumulate,
+    "persistent_buffers": persistent_buffers, "preloaded_epochs": preloaded_epochs,
+    "sync_each_epoch": sync_each_epoch,
+    "stable_metadata_staging": stable_metadata_staging,
+    "stable_epoch_staging": stable_epoch_staging,
+    "wait_each_dispatch": wait_each_dispatch,
+  }
+  if persistent_session_state is not None:
+    prior_signature = persistent_session_state.get("signature")
+    if prior_signature is not None and prior_signature != session_signature:
+      raise ValueError("persistent staged session invocation contract changed")
+    persistent_session_state.setdefault("signature", session_signature)
   phase_isolation = _new_frozen_staged_phase_receipt() \
     if staged_phase_receipts_enabled else None
   accumulation_mode = (TARGET_IN_PLACE_ACCUMULATION if in_kernel_accumulate else
@@ -1768,7 +1790,33 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
     buf.get_buf("AMD")  # Tensor.realize materializes the UOp, but allocation is lazy.
     buf.copyin(memoryview(np.ascontiguousarray(array)))
 
-  if persistent_buffers:
+  prepared_session_buffers = None if persistent_session_state is None else \
+    persistent_session_state.get("prepared_buffers")
+  session_reused = prepared_session_buffers is not None
+  if prepared_session_buffers is not None:
+    if not isinstance(prepared_session_buffers, tuple) or len(prepared_session_buffers) != 9:
+      raise RuntimeError("persistent staged session buffer ownership is malformed")
+    (
+      persistent_partial, persistent_q4, persistent_values,
+      persistent_scales, persistent_sums, persistent_q4_stage,
+      persistent_values_stage, persistent_scales_stage,
+      persistent_sums_stage,
+    ) = prepared_session_buffers
+    observed_ranges = {
+      name: [
+        int((handle:=tensor.uop.buffer.get_buf("AMD")).va_addr),
+        int(handle.va_addr) + int(handle.size),
+      ]
+      for name, tensor in zip((
+        "output", "full_q4_source", "full_q8_values_source",
+        "full_q8_scales_source", "full_q8_sums_source",
+        "compact_q4_stage", "compact_q8_values_stage",
+        "compact_q8_scales_stage", "compact_q8_sums_stage",
+      ), prepared_session_buffers)
+    }
+    if observed_ranges != persistent_session_state.get("buffer_ranges"):
+      raise RuntimeError("persistent staged session buffer ranges changed")
+  elif persistent_buffers:
     with _staged_observer_allocation(
         staged_lifecycle_observer, "output", "persistent_partial"):
       persistent_partial = Tensor.empty(m * n, dtype=dtypes.float32, device="AMD")
@@ -1849,6 +1897,56 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
       copyin_buffer(persistent_values, values_np.reshape(-1))
       copyin_buffer(persistent_scales, scales_np.reshape(-1))
       copyin_buffer(persistent_sums, sums_np.reshape(-1))
+    if persistent_session_state is not None:
+      prepared_session_buffers = (
+        persistent_partial, persistent_q4, persistent_values,
+        persistent_scales, persistent_sums, persistent_q4_stage,
+        persistent_values_stage, persistent_scales_stage,
+        persistent_sums_stage,
+      )
+      if any(tensor is None for tensor in prepared_session_buffers):
+        raise RuntimeError("persistent staged session did not prepare all nine buffers")
+      buffer_ranges = {
+        name: [
+          int((handle:=tensor.uop.buffer.get_buf("AMD")).va_addr),
+          int(handle.va_addr) + int(handle.size),
+        ]
+        for name, tensor in zip((
+          "output", "full_q4_source", "full_q8_values_source",
+          "full_q8_scales_source", "full_q8_sums_source",
+          "compact_q4_stage", "compact_q8_values_stage",
+          "compact_q8_scales_stage", "compact_q8_sums_stage",
+        ), prepared_session_buffers)
+      }
+      ranges = list(buffer_ranges.values())
+      if any(start <= 0 or end <= start for start, end in ranges) or any(
+          not (end <= other_start or start >= other_end)
+          for index, (start, end) in enumerate(ranges)
+          for other_start, other_end in ranges[index+1:]):
+        raise RuntimeError("persistent staged session buffer ranges overlap")
+      persistent_session_state.update({
+        "prepared_buffers": prepared_session_buffers,
+        "buffer_ranges": buffer_ranges, "initialization_count": 1,
+        "invocation_count": 0, "runtime": None, "runtime_identity": None,
+      })
+  session_invocation_index = None
+  if persistent_session_state is not None:
+    if persistent_session_state.get("initialization_count") != 1:
+      raise RuntimeError("persistent staged session initialization count changed")
+    session_invocation_index = int(persistent_session_state["invocation_count"])
+    persistent_session_state["invocation_count"] = session_invocation_index + 1
+
+  def persistent_session_evidence() -> dict[str, Any] | None:
+    if persistent_session_state is None: return None
+    return {
+      "enabled": True, "initialization_count": persistent_session_state["initialization_count"],
+      "invocation_index": session_invocation_index,
+      "invocation_count": persistent_session_state["invocation_count"],
+      "reused_prepared_buffers": session_reused,
+      "buffer_ranges": dict(persistent_session_state["buffer_ranges"]),
+      "runtime_identity": persistent_session_state.get("runtime_identity"),
+      "runtime_cache_binding_exact": persistent_session_state.get("runtime") is not None,
+    }
 
   def run_epochs(*, timed: bool = False):
     nonlocal completed_epochs, runtime_evidence, c8_timing_receipt, observer_route_started
@@ -2030,6 +2128,39 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
         else:
           buffers = (out_view, q4.uop.buffer, values.uop.buffer, scales.uop.buffer, sums.uop.buffer)
         runtime = get_runtime("AMD", program)
+        if persistent_session_state is not None:
+          from tinygrad.engine.realize import runtime_cache
+          owned_runtime = persistent_session_state.get("runtime")
+          if owned_runtime is None:
+            lib = getattr(runtime, "lib_gpu", None)
+            lib_va, lib_nbytes = int(getattr(lib, "va_addr", 0)), int(getattr(lib, "size", 0))
+            entry_va = int(getattr(runtime, "prog_addr", 0))
+            if lib_va <= 0 or lib_nbytes <= 0 or not lib_va <= entry_va < lib_va + lib_nbytes:
+              raise RuntimeError("persistent staged session runtime code range is invalid")
+            if any(not (
+                lib_va + lib_nbytes <= start or lib_va >= end)
+                for start, end in persistent_session_state["buffer_ranges"].values()):
+              raise RuntimeError("persistent staged session runtime overlaps a data buffer")
+            persistent_session_state["runtime"] = runtime
+            persistent_session_state["runtime_identity"] = {
+              "object_id": id(runtime), "program_key": program.key.hex(),
+              "library_va": lib_va, "library_nbytes": lib_nbytes,
+              "entry_va": entry_va,
+            }
+          elif runtime is not owned_runtime or \
+               runtime_cache.get((program.key, "AMD")) is not owned_runtime:
+            raise RuntimeError("persistent staged session runtime cache binding changed")
+          else:
+            identity = persistent_session_state["runtime_identity"]
+            lib = getattr(runtime, "lib_gpu", None)
+            observed = {
+              "object_id": id(runtime), "program_key": program.key.hex(),
+              "library_va": int(getattr(lib, "va_addr", 0)),
+              "library_nbytes": int(getattr(lib, "size", 0)),
+              "entry_va": int(getattr(runtime, "prog_addr", 0)),
+            }
+            if observed != identity:
+              raise RuntimeError("persistent staged session runtime code range changed")
         if runtime_evidence is None:
           runtime_evidence = _runtime_identity_evidence(Device["AMD"], runtime, artifact.get("binary_sha256"))
           runtime_evidence.update({
@@ -2142,6 +2273,8 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
             "metadata_staging": metadata_staging, "epoch_staging": epoch_staging,
             **({"phase_isolation": phase_isolation}
                if phase_isolation is not None else {}),
+            **({"persistent_session_lifecycle": persistent_session_evidence()}
+               if persistent_session_state is not None else {}),
             "runtime_evidence": runtime_evidence,
             "execution_fixture": execution_fixture_identity, "fixture_roles": fixture_roles,
             "compile_performed": frozen_bundle is None, "requires_recompile": frozen_bundle is None}
@@ -2154,6 +2287,8 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
       "exact_blocker": "frozen staged phase-isolation receipt is incomplete",
       "completed_epochs": completed_epochs, "phase_isolation": phase_isolation,
       "metadata_staging": metadata_staging, "epoch_staging": epoch_staging,
+      **({"persistent_session_lifecycle": persistent_session_evidence()}
+         if persistent_session_state is not None else {}),
       "runtime_evidence": runtime_evidence,
       "compile_performed": False, "requires_recompile": False,
     }
@@ -2200,6 +2335,8 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
              if phase_isolation is not None else {}),
           **({"c8_timing_receipt": c8_timing_receipt}
              if c8_timing_receipt is not None else {}),
+          **({"persistent_session_lifecycle": persistent_session_evidence()}
+             if persistent_session_state is not None else {}),
           "runtime_evidence": runtime_evidence,
           "execution_fixture": execution_fixture_identity, "fixture_roles": fixture_roles,
           "compile_performed": frozen_bundle is None, "requires_recompile": frozen_bundle is None}
