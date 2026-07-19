@@ -501,7 +501,10 @@ def test_five_buffer_preparation_realizes_and_synchronizes_before_pointer_audit(
       return self.handle
   class FakeTensor:
     def __init__(self, slot):
-      self.uop = SimpleNamespace(buffer=Buffer(0x1000 + slot*0x1000, 64 + slot))
+      key = SimpleNamespace(hex=lambda slot=slot: f"buffer-{slot}")
+      self.uop = SimpleNamespace(
+        buffer=Buffer(0x1000 + slot*0x1000, 64 + slot),
+        buf_uop=SimpleNamespace(key=key))
     def realize(self, *companions):
       events.append(("realize", len(companions)))
   class FakeDevice:
@@ -515,6 +518,8 @@ def test_five_buffer_preparation_realizes_and_synchronizes_before_pointer_audit(
   assert phase["synchronize"] == {"began": True, "returned": True, "failure": None}
   assert [row["va"] for row in phase["allocations"]] == [
     0x1000, 0x2000, 0x3000, 0x4000, 0x5000]
+  assert [row["buffer_uop_key"] for row in phase["allocations"]] == [
+    f"buffer-{slot}" for slot in range(5)]
   assert events[:2] == [("realize", 4), ("synchronize",)]
 
 

@@ -23,7 +23,20 @@ from extra.qk.q4k_q8_activation_producer import (
 
 SCHEDULE_SCHEMA = "tinygrad.prefill_frozen_epoch_program_set_schedule.v2"
 EVIDENCE_SCHEMA = "tinygrad.prefill_frozen_epoch_program_set_execution.v2"
+PREPARATION_SCHEMA = "tinygrad.prefill_frozen_epoch_program_set_preparation.v1"
+PREPARATION_RECEIPT_SCHEMA = "tinygrad.prefill_frozen_epoch_program_set_preparation_receipt.v1"
 ABI_NAMES = ("output", "q4", "q8_values", "q8_scales", "q8_original_sums")
+
+
+@dataclass(frozen=True)
+class FrozenEpochProgramSetPreparation:
+  """The exact five ABI tensors before any frozen target PROGRAM is attached."""
+  operands: tuple[Tensor, Tensor, Tensor, Tensor, Tensor]
+  binding: FrozenEpochProgramSetBinding
+  role_spec: ExactRoleSpec
+  dispatch_count: int
+  require_c1: bool
+  evidence: Mapping[str, Any]
 
 
 @dataclass(frozen=True)
@@ -107,7 +120,7 @@ def validate_frozen_epoch_program_set_evidence(evidence: Mapping[str, Any],
   }
 
 
-def build_frozen_epoch_program_set_schedule(
+def prepare_frozen_epoch_program_set_schedule(
     lin: Any, activation: Tensor, *, role_spec: ExactRoleSpec,
     frozen_bundle: str | Path, enabled: bool = False,
     prefix_epochs: int | None = None,
@@ -117,8 +130,8 @@ def build_frozen_epoch_program_set_schedule(
     binding_loader: Callable[..., FrozenEpochProgramSetBinding] = load_frozen_epoch_program_set_binding,
     activation_producer: Callable[[Tensor, PhysicalDS4Q8ActivationSpec], Q4KQ8ActivationTile] =
       produce_physical_ds4_q8_1_tensor,
-    ) -> FrozenEpochProgramSetSchedule | None:
-  """Build a fixed-base PROGRAM prefix; disabled returns before loading or Tensor access."""
+    ) -> FrozenEpochProgramSetPreparation | None:
+  """Build the exact five operands without attaching a frozen target PROGRAM."""
   if not enabled: return None
   role_spec = admit_exact_role_spec(role_spec, inventory=inventory)
   if binding is None:
@@ -160,6 +173,114 @@ def build_frozen_epoch_program_set_schedule(
   fixed_inputs = (packed_weight, q8_values, q8_scales, q8_sums)
   preparation_outputs = (output, *fixed_inputs)
   fixed_keys = [output.uop.key.hex(), *(tensor.uop.key.hex() for tensor in fixed_inputs)]
+  evidence = {
+    "schema": PREPARATION_SCHEMA, "research_only": True, "default_off": True,
+    "role": role_spec.role, "shape": list(role_spec.shape),
+    "candidate_identity": binding.candidate_identity, "family_identity": binding.family_identity,
+    "dispatch_count": dispatch_count, "expected_dispatch_count": role_spec.epochs,
+    "target_programs_attached": False, "require_c1": require_c1,
+    "initial_tensor_keys": fixed_keys,
+    "abi_names": list(ABI_NAMES),
+  }
+  return FrozenEpochProgramSetPreparation(
+    preparation_outputs, binding, role_spec, dispatch_count, require_c1, evidence)
+
+
+def _attach_frozen_epoch_program_set_schedule(
+    preparation: FrozenEpochProgramSetPreparation, *,
+    require_realized_operands: bool,
+    preparation_receipt: Mapping[str, Any] | None = None,
+    ) -> FrozenEpochProgramSetSchedule:
+  """Attach the selected PROGRAM prefix to the preparation's current UOps.
+
+  The strict two-stage route calls this only after realizing and synchronizing
+  ``preparation.operands``. The ordinary lazy schedule builder below composes
+  the same primitives with ``require_realized_operands=False``.
+  """
+  if not isinstance(preparation, FrozenEpochProgramSetPreparation):
+    raise TypeError("attachment requires a frozen epoch PROGRAM set preparation")
+  if not isinstance(require_realized_operands, bool):
+    raise TypeError("require_realized_operands must be a bool")
+  binding, role_spec, dispatch_count = \
+    preparation.binding, preparation.role_spec, preparation.dispatch_count
+  if not isinstance(preparation.require_c1, bool):
+    raise TypeError("frozen epoch preparation require_c1 marker must be a bool")
+  _validate_binding(binding, role_spec, require_c1=preparation.require_c1)
+  if not isinstance(dispatch_count, int) or isinstance(dispatch_count, bool) or \
+     not 1 <= dispatch_count <= role_spec.epochs:
+    raise ValueError("frozen epoch preparation dispatch count is invalid")
+  expected_evidence = {
+    "schema": PREPARATION_SCHEMA, "role": role_spec.role, "shape": list(role_spec.shape),
+    "candidate_identity": binding.candidate_identity, "family_identity": binding.family_identity,
+    "dispatch_count": dispatch_count, "expected_dispatch_count": role_spec.epochs,
+    "target_programs_attached": False, "require_c1": preparation.require_c1,
+    "abi_names": list(ABI_NAMES),
+  }
+  if any(preparation.evidence.get(key) != value for key, value in expected_evidence.items()) or \
+     not isinstance(preparation.evidence.get("initial_tensor_keys"), list) or \
+     len(preparation.evidence["initial_tensor_keys"]) != 5:
+    raise ValueError("frozen epoch preparation evidence is missing or invalid")
+  if len(preparation.operands) != 5:
+    raise ValueError("frozen epoch preparation lost the exact five-buffer ABI")
+  preparation_outputs = preparation.operands
+  output, *fixed_input_list = preparation_outputs
+  fixed_inputs = tuple(fixed_input_list)
+  parameters = five_buffer_parameters(*role_spec.shape)
+  for name, tensor, parameter, dtype in zip(
+      ABI_NAMES, preparation_outputs, parameters,
+      (dtypes.float32, dtypes.uint32, dtypes.int8, dtypes.float32, dtypes.float32)):
+    _require_amd_tensor(tensor, name=f"prepared {name}", elements=parameter.size, dtype=dtype)
+  if require_realized_operands and any(not tensor.uop.is_realized for tensor in preparation.operands):
+    raise ValueError("strict frozen PROGRAM attachment requires all five preparation operands to be realized")
+
+  # Read the Tensor UOps only at attachment time. Realization may replace a
+  # lazy expression (notably packed Q4) with a newly allocated BUFFER UOp.
+  # Attaching earlier would permanently capture the stale pre-realization UOp.
+  attached_buffer_uops = tuple(tensor.uop.buf_uop for tensor in preparation.operands)
+  if require_realized_operands and any(uop.op is not Ops.BUFFER for uop in attached_buffer_uops):
+    raise ValueError("strict frozen PROGRAM attachment requires five direct BUFFER identities")
+  if require_realized_operands:
+    if not isinstance(preparation_receipt, Mapping) or \
+       preparation_receipt.get("schema") != PREPARATION_RECEIPT_SCHEMA or \
+       preparation_receipt.get("phase") != "producer_and_output_initialization" or \
+       preparation_receipt.get("status") != "PASS" or \
+       preparation_receipt.get("all_checks_pass") is not True or \
+       preparation_receipt.get("target_dispatch_allowed") is not True or \
+       not isinstance(preparation_receipt.get("checks"), Mapping) or \
+       any(preparation_receipt["checks"].get(key) is not True for key in (
+         "exact_five_slots", "all_vas_nonzero", "all_vas_distinct",
+         "all_extents_nonempty", "all_allocations_cover_tensor_extents")) or \
+       not isinstance(preparation_receipt.get("realize"), Mapping) or \
+       preparation_receipt["realize"].get("began") is not True or \
+       preparation_receipt["realize"].get("returned") is not True or \
+       not isinstance(preparation_receipt.get("synchronize"), Mapping) or \
+       preparation_receipt["synchronize"].get("began") is not True or \
+       preparation_receipt["synchronize"].get("returned") is not True or \
+       preparation_receipt["synchronize"].get("failure") is not None:
+      raise ValueError("strict frozen PROGRAM attachment requires a successful synchronized preparation receipt")
+    allocations = preparation_receipt.get("allocations")
+    current_keys = [uop.key.hex() for uop in attached_buffer_uops]
+    expected_nbytes = [
+      int(parameter.size) * dtype.itemsize
+      for parameter, dtype in zip(
+        parameters, (dtypes.float32, dtypes.uint32, dtypes.int8, dtypes.float32, dtypes.float32))]
+    current_allocations = []
+    for slot, (name, tensor, key) in enumerate(zip(ABI_NAMES, preparation.operands, current_keys)):
+      buffer = tensor.uop.buffer
+      handle = buffer.get_buf(PROGRAM_DEVICE)
+      current_allocations.append({
+        "slot": slot, "name": name, "buffer_uop_key": key,
+        "va": int(handle.va_addr), "nbytes": int(buffer.nbytes),
+        "allocation_nbytes": int(handle.size),
+      })
+    if not isinstance(allocations, list) or len(allocations) != 5 or \
+       any(not isinstance(row, Mapping) for row in allocations) or \
+       [dict(row) for row in allocations] != current_allocations or \
+       [row.get("nbytes") if isinstance(row, Mapping) else None for row in allocations] != expected_nbytes or \
+       any(row["va"] <= 0 or row["allocation_nbytes"] < expected_nbytes[slot]
+           for slot, row in enumerate(current_allocations)) or \
+       len({row["va"] for row in allocations}) != 5:
+      raise ValueError("synchronized preparation receipt differs from the current five buffer identities")
   programs = binding.artifact.programs[:dispatch_count]
   for program in programs:
     output = output.custom_kernel(
@@ -177,7 +298,10 @@ def build_frozen_epoch_program_set_schedule(
       "q8_layout": "q8_1_mmq_ds4_transposed_blocks",
       "full_role_ds4_producer_calls": 1, "host_staging": False,
       "fixed_base_slots": list(range(5)), "abi_names": list(ABI_NAMES),
-      "all_calls_share_buffer_identity": True, "initial_tensor_keys": fixed_keys,
+      "all_calls_share_buffer_identity": True,
+      "initial_tensor_keys": list(preparation.evidence["initial_tensor_keys"]),
+      "attached_after_realization": require_realized_operands,
+      "attached_buffer_uop_keys": [uop.key.hex() for uop in attached_buffer_uops],
     },
     "dispatch": {
       "mode": "static_offset_program_chain", "count": dispatch_count,
@@ -194,13 +318,48 @@ def build_frozen_epoch_program_set_schedule(
     "candidate_identity": binding.candidate_identity, "family_identity": binding.family_identity,
     "dispatch_count": dispatch_count, "expected_dispatch_count": role_spec.epochs,
     "prefix_complete": True, "complete_role": dispatch_count == role_spec.epochs,
+    "two_stage_realized_attachment": require_realized_operands,
+    "two_stage_synchronized_attachment": require_realized_operands,
     "execution": execution,
   }
   return FrozenEpochProgramSetSchedule(
     output.reshape(1, role_spec.m, role_spec.n), preparation_outputs, binding, evidence)
 
 
+def attach_frozen_epoch_program_set_schedule(
+    preparation: FrozenEpochProgramSetPreparation, *,
+    preparation_receipt: Mapping[str, Any],
+    ) -> FrozenEpochProgramSetSchedule:
+  """Strict public attachment after successful realization and synchronization."""
+  return _attach_frozen_epoch_program_set_schedule(
+    preparation, require_realized_operands=True,
+    preparation_receipt=preparation_receipt)
+
+
+def build_frozen_epoch_program_set_schedule(
+    lin: Any, activation: Tensor, *, role_spec: ExactRoleSpec,
+    frozen_bundle: str | Path, enabled: bool = False,
+    prefix_epochs: int | None = None,
+    require_c1: bool = False,
+    inventory: str | Path | Mapping[str, Any] = DEFAULT_INVENTORY,
+    binding: FrozenEpochProgramSetBinding | None = None,
+    binding_loader: Callable[..., FrozenEpochProgramSetBinding] = load_frozen_epoch_program_set_binding,
+    activation_producer: Callable[[Tensor, PhysicalDS4Q8ActivationSpec], Q4KQ8ActivationTile] =
+      produce_physical_ds4_q8_1_tensor,
+    ) -> FrozenEpochProgramSetSchedule | None:
+  """Compose preparation and attachment for the existing all-lazy graph API."""
+  preparation = prepare_frozen_epoch_program_set_schedule(
+    lin, activation, role_spec=role_spec, frozen_bundle=frozen_bundle, enabled=enabled,
+    prefix_epochs=prefix_epochs, require_c1=require_c1, inventory=inventory,
+    binding=binding, binding_loader=binding_loader, activation_producer=activation_producer)
+  if preparation is None: return None
+  return _attach_frozen_epoch_program_set_schedule(
+    preparation, require_realized_operands=False, preparation_receipt=None)
+
+
 __all__ = [
-  "EVIDENCE_SCHEMA", "SCHEDULE_SCHEMA", "FrozenEpochProgramSetSchedule",
-  "build_frozen_epoch_program_set_schedule", "validate_frozen_epoch_program_set_evidence",
+  "EVIDENCE_SCHEMA", "PREPARATION_RECEIPT_SCHEMA", "PREPARATION_SCHEMA", "SCHEDULE_SCHEMA",
+  "FrozenEpochProgramSetPreparation", "FrozenEpochProgramSetSchedule",
+  "attach_frozen_epoch_program_set_schedule", "build_frozen_epoch_program_set_schedule",
+  "prepare_frozen_epoch_program_set_schedule", "validate_frozen_epoch_program_set_evidence",
 ]

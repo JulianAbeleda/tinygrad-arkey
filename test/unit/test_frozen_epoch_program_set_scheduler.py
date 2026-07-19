@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from math import prod
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -10,7 +11,7 @@ from tinygrad import Tensor, dtypes
 from tinygrad.engine.realize import get_call_arg_uops
 from tinygrad.function import function
 from tinygrad.helpers import Context
-from tinygrad.uop.ops import Ops
+from tinygrad.uop.ops import Ops, UOp, buffers
 
 from extra.qk.mmq_exact_role_spec import exact_role_spec
 from extra.qk.mmq_frozen_epoch_program_set import (
@@ -87,6 +88,62 @@ def _build(prefix_epochs):
   return role_spec, binding, result, weight_calls, producer_calls
 
 
+def _prepare(prefix_epochs=2):
+  role_spec = exact_role_spec("ffn_gate_up")
+  weight_calls, producer_calls = [], []
+  binding = _binding(role_spec)
+  result = scheduler.prepare_frozen_epoch_program_set_schedule(
+    _linear(role_spec, weight_calls),
+    Tensor.empty(role_spec.m, role_spec.k, dtype=dtypes.float16, device="AMD"),
+    role_spec=role_spec, frozen_bundle="/frozen/v2.tar", enabled=True,
+    prefix_epochs=prefix_epochs, binding=binding,
+    binding_loader=lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("binding reloaded")),
+    activation_producer=_producer(producer_calls))
+  return role_spec, binding, result, weight_calls, producer_calls
+
+
+class _MockHandle:
+  def __init__(self, va: int, size: int): self.va_addr, self.size = va, size
+
+
+class _MockRealizedBuffer:
+  def __init__(self, va: int, size: int):
+    self.nbytes, self.handle = size, _MockHandle(va, size)
+  def is_allocated(self): return True
+  def get_buf(self, device):
+    assert device == "AMD"
+    return self.handle
+  def ref(self, _delta): return self
+
+
+def _mock_realize_preparation(preparation):
+  replacement_uops, allocations = [], []
+  for slot, (name, tensor) in enumerate(zip(scheduler.ABI_NAMES, preparation.operands)):
+    replacement = UOp.new_buffer("AMD", prod(tensor.shape), tensor.dtype).reshape(tensor.shape)
+    tensor.uop = replacement
+    replacement_uops.append(replacement.buf_uop)
+    size = prod(tensor.shape) * tensor.dtype.itemsize
+    buffer = _MockRealizedBuffer(0x1000 * (slot + 1), size)
+    buffers[replacement.buf_uop] = buffer
+    allocations.append({
+      "slot": slot, "name": name, "buffer_uop_key": replacement.buf_uop.key.hex(),
+      "va": buffer.handle.va_addr, "nbytes": size, "allocation_nbytes": size,
+    })
+  receipt = {
+    "schema": scheduler.PREPARATION_RECEIPT_SCHEMA,
+    "phase": "producer_and_output_initialization",
+    "status": "PASS", "all_checks_pass": True, "target_dispatch_allowed": True,
+    "checks": {
+      "exact_five_slots": True, "all_vas_nonzero": True, "all_vas_distinct": True,
+      "all_extents_nonempty": True, "all_allocations_cover_tensor_extents": True,
+    },
+    "realize": {"began": True, "returned": True},
+    "synchronize": {"began": True, "returned": True, "failure": None},
+    "allocations": allocations,
+  }
+  return replacement_uops, receipt
+
+
 @pytest.mark.parametrize("prefix_epochs", [1, 2, 20])
 def test_v2_scheduler_prefix_uses_one_producer_and_same_five_buffer_identities(prefix_epochs):
   with patch("tinygrad.engine.realize.get_runtime") as get_runtime, Context(ALLOW_DEVICE_USAGE=0):
@@ -120,6 +177,106 @@ def test_v2_scheduler_prefix_uses_one_producer_and_same_five_buffer_identities(p
   assert execution["dispatch"]["program_keys"] == list(binding.program_keys[:prefix_epochs])
   assert result.evidence["prefix_complete"] is True
   assert result.evidence["complete_role"] is (prefix_epochs == role_spec.epochs)
+
+
+def test_two_stage_preparation_contains_no_target_call_and_strict_attachment_uses_current_buffers():
+  with Context(ALLOW_DEVICE_USAGE=0):
+    role_spec, binding, preparation, weight_calls, producer_calls = _prepare()
+  assert preparation is not None and preparation.evidence["schema"] == scheduler.PREPARATION_SCHEMA
+  assert preparation.evidence["target_programs_attached"] is False
+  assert weight_calls == ["packed-weight"] and len(producer_calls) == 1
+  assert all(not any(node.op is Ops.PROGRAM for node in tensor.uop.toposort())
+             for tensor in preparation.operands)
+  with pytest.raises(ValueError, match="requires all five preparation operands to be realized"):
+    scheduler.attach_frozen_epoch_program_set_schedule(
+      preparation, preparation_receipt={})
+
+  # Model Tensor.realize replacing lazy expressions with new concrete BUFFER
+  # identities without touching AMD. Attachment must read these current UOps,
+  # not any identities that existed while preparation was built.
+  replacement_uops, receipt = _mock_realize_preparation(preparation)
+  schedule = scheduler.attach_frozen_epoch_program_set_schedule(
+    preparation, preparation_receipt=receipt)
+  calls = [node for node in schedule.output.uop.toposort()
+           if node.op is Ops.CALL and node.src[0].op is Ops.PROGRAM]
+  arguments = [get_call_arg_uops(call) for call in calls]
+  assert [call.src[0] for call in calls] == list(binding.artifact.programs[:2])
+  assert all(arguments[0][slot].buf_uop is replacement_uops[slot]
+             for slot in range(5))
+  assert all(node.op is not Ops.CONTIGUOUS for node in arguments[0][1].toposort())
+  assert schedule.evidence["two_stage_realized_attachment"] is True
+  assert schedule.evidence["two_stage_synchronized_attachment"] is True
+  assert schedule.evidence["execution"]["operands"]["attached_buffer_uop_keys"] == \
+    [uop.key.hex() for uop in replacement_uops]
+
+
+def test_lazy_q4_realization_changes_identity_and_post_realize_attachment_tracks_new_buffer_on_cpu():
+  """Regression for the stale-Q4 identity hidden by the former one-stage API."""
+  program = _binding(exact_role_spec("ffn_gate_up")).artifact.programs[0]
+  q4 = (Tensor(list(range(16)), dtype=dtypes.uint32, device="CPU") + 1).contiguous()
+  others = [Tensor.empty(1, device="CPU") for _ in range(4)]
+
+  eager = others[0].custom_kernel(q4, *others[1:], fxn=lambda *_: program)[0]
+  eager_call = next(node for node in eager.uop.toposort()
+                    if node.op is Ops.CALL and node.src[0] is program)
+  eager_q4_buffer = get_call_arg_uops(eager_call)[1].buf_uop
+  assert eager_q4_buffer is q4.uop.buf_uop
+
+  q4.realize()
+  assert q4.uop.op is Ops.BUFFER
+  assert eager_q4_buffer is not q4.uop.buf_uop
+
+  attached = others[0].custom_kernel(q4, *others[1:], fxn=lambda *_: program)[0]
+  attached_call = next(node for node in attached.uop.toposort()
+                       if node.op is Ops.CALL and node.src[0] is program)
+  assert get_call_arg_uops(attached_call)[1].buf_uop is q4.uop.buf_uop
+
+
+def test_two_stage_attachment_rejects_forged_preparation_and_receipt_drift():
+  with Context(ALLOW_DEVICE_USAGE=0):
+    _, _, preparation, _, _ = _prepare(prefix_epochs=1)
+  forged_evidence = replace(
+    preparation, evidence={**preparation.evidence, "family_identity": "family:forged"})
+  with pytest.raises(ValueError, match="evidence is missing or invalid"):
+    scheduler.attach_frozen_epoch_program_set_schedule(
+      forged_evidence, preparation_receipt={})
+
+  wrong_q4 = Tensor.empty(1, dtype=dtypes.uint32, device="AMD")
+  forged_operands = replace(
+    preparation,
+    operands=(preparation.operands[0], wrong_q4, *preparation.operands[2:]))
+  with pytest.raises(ValueError, match="element count differs"):
+    scheduler.attach_frozen_epoch_program_set_schedule(
+      forged_operands, preparation_receipt={})
+
+  _, receipt = _mock_realize_preparation(preparation)
+  receipt = {
+    **receipt,
+    "allocations": [{**row, "va": 0x1000} for row in receipt["allocations"]],
+  }
+  with pytest.raises(ValueError, match="receipt differs"):
+    scheduler.attach_frozen_epoch_program_set_schedule(
+      preparation, preparation_receipt=receipt)
+
+
+def test_preparation_allows_same_selected_program_in_upstream_layer_ancestry():
+  role_spec, binding = exact_role_spec("ffn_gate_up"), None
+  binding = _binding(role_spec)
+  upstream = binding.artifact.programs[0]
+  activation = Tensor.empty(role_spec.m, role_spec.k, dtype=dtypes.float16, device="AMD")
+  companions = [Tensor.empty(1, device="AMD") for _ in range(4)]
+  activation = activation.custom_kernel(
+    *companions, fxn=lambda *_: upstream)[0]
+  with Context(ALLOW_DEVICE_USAGE=0):
+    preparation = scheduler.prepare_frozen_epoch_program_set_schedule(
+      _linear(role_spec, []), activation,
+      role_spec=role_spec, frozen_bundle="/frozen/v2.tar", enabled=True,
+      prefix_epochs=1, binding=binding, activation_producer=_producer([]))
+  assert preparation is not None
+  upstream_programs = {
+    node for tensor in preparation.operands for node in tensor.uop.toposort()
+    if node.op is Ops.PROGRAM}
+  assert upstream in upstream_programs
 
 
 def test_v2_scheduler_is_default_off_before_binding_or_tensor_access():

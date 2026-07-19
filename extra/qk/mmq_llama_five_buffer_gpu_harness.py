@@ -1291,8 +1291,10 @@ def _realize_and_synchronize_five_buffer_preparation(
   if not isinstance(preparation_outputs, tuple) or len(preparation_outputs) != 5:
     raise ValueError("five-buffer preparation requires the exact five ABI tensors")
   from tinygrad.device import Device
+  from extra.qk.prefill.frozen_epoch_program_set_scheduler import PREPARATION_RECEIPT_SCHEMA
   dev = Device["AMD"]
   phase = {
+    "schema": PREPARATION_RECEIPT_SCHEMA,
     "status": "PENDING", "phase": "producer_and_output_initialization",
     "target_dispatch_allowed": False,
     "realize": {"began": False, "returned": False},
@@ -1313,6 +1315,7 @@ def _realize_and_synchronize_five_buffer_preparation(
       allocations.append({
         "slot": slot, "name": name, "va": int(handle.va_addr),
         "nbytes": int(buffer.nbytes), "allocation_nbytes": int(handle.size),
+        "buffer_uop_key": tensor.uop.buf_uop.key.hex(),
       })
     phase["allocations"] = allocations
     checks = {
@@ -2935,8 +2938,9 @@ def run_frozen_epoch_program_set_prefix_probe(
     Q8_1_MMQ_DS4_LAYOUT, q4k_q8_1_mmq_ds4_tile_reference,
     q8_1_mmq_ds4_quantize_reference,
   )
-  from extra.qk.prefill.frozen_epoch_program_set_scheduler import \
-    build_frozen_epoch_program_set_schedule
+  from extra.qk.prefill.frozen_epoch_program_set_scheduler import (
+    attach_frozen_epoch_program_set_schedule, prepare_frozen_epoch_program_set_schedule,
+  )
   from extra.qk.q4k_q8_activation_producer import produce_physical_ds4_q8_1_tensor
 
   binding = load_frozen_epoch_program_set_binding(role_spec, frozen_bundle)
@@ -2957,35 +2961,26 @@ def run_frozen_epoch_program_set_prefix_probe(
     produced_tiles.append(tile)
     return tile
 
-  schedule = build_frozen_epoch_program_set_schedule(
+  preparation = prepare_frozen_epoch_program_set_schedule(
     linear, activation, role_spec=role_spec, frozen_bundle=frozen_bundle,
     enabled=True, prefix_epochs=prefix_epochs, binding=binding,
     activation_producer=capture_producer)
-  if schedule is None: raise RuntimeError("frozen v2 fixed-base scheduler unexpectedly remained disabled")
+  if preparation is None:
+    raise RuntimeError("frozen v2 fixed-base scheduler preparation unexpectedly remained disabled")
   if len(produced_tiles) != 1:
     raise RuntimeError("frozen v2 fixed-base scheduler did not expose exactly one full-role producer tile")
 
-  output = schedule.output
   selected_programs = binding.artifact.programs[:prefix_epochs]
-  calls = [node for node in output.uop.toposort()
-           if node.op is Ops.CALL and node.src[0] in selected_programs]
-  if [call.src[0] for call in calls] != list(selected_programs):
-    raise RuntimeError("frozen v2 fixed-base graph lost its exact ordered PROGRAM prefix")
-  arguments = [get_call_arg_uops(call) for call in calls]
-  if any(len(row) != 5 for row in arguments):
-    raise RuntimeError("frozen v2 fixed-base graph lost the five-buffer ABI")
-  if any(arguments[0][slot].buf_uop is not row[slot].buf_uop
-         for row in arguments for slot in range(5)):
-    raise RuntimeError("frozen v2 fixed-base graph changed a buffer identity within the prefix")
-  if any(previous not in current[0].toposort()
-         for previous, current in zip(calls, arguments[1:])):
-    raise RuntimeError("frozen v2 fixed-base graph lost its slot-zero ordering chain")
+  if any(node in selected_programs
+         for tensor in preparation.operands for node in tensor.uop.toposort()):
+    raise RuntimeError("frozen v2 preparation attached a selected target PROGRAM too early")
   graph_evidence = {
-    "program_calls": len(calls), "expected_program_calls": prefix_epochs,
+    "program_calls": 0, "expected_program_calls": prefix_epochs,
     "program_keys": list(binding.program_keys[:prefix_epochs]),
-    "ordered_program_prefix": True, "five_buffer_abi": True,
-    "all_calls_share_buffer_identity": True, "slot0_ordered": True,
-    "buffer_uop_keys": [value.buf_uop.key.hex() for value in arguments[0]],
+    "ordered_program_prefix": False, "five_buffer_abi": True,
+    "all_calls_share_buffer_identity": False, "slot0_ordered": False,
+    "target_programs_attached_during_preparation": False,
+    "attachment_stage": "awaiting_synchronized_preparation",
     "full_role_producer_calls": len(produced_tiles),
   }
   retained_outputs = _retained_producer_tensors(produced_tiles)
@@ -3026,7 +3021,7 @@ def run_frozen_epoch_program_set_prefix_probe(
 
   try:
     preparation_phase = _realize_and_synchronize_five_buffer_preparation(
-      schedule.preparation_outputs)
+      preparation.operands)
   except BaseException as exc:
     partial = _preparation_phase_from_exception(exc)
     return {
@@ -3044,6 +3039,53 @@ def run_frozen_epoch_program_set_prefix_probe(
       "compile_performed": False, "requires_recompile": False,
       "hip_used": False, "no_fallback": True,
     }
+
+  try:
+    schedule = attach_frozen_epoch_program_set_schedule(
+      preparation, preparation_receipt=preparation_phase)
+  except BaseException as exc:
+    return {
+      "schema": schema, "status": "BLOCKED",
+      "exact_blocker": "frozen target attachment rejected the synchronized preparation",
+      "exception": type(exc).__name__, "error": str(exc),
+      "research_only": True, "production_dispatch_changed": False,
+      "default_route": "direct_packed", "role": role_spec.role,
+      "shape": list(role_spec.shape), "prefix_epochs": prefix_epochs,
+      "graph": graph_evidence, "target_program_identities": target_identities,
+      "runtime_preconstruction": runtime_preconstruction,
+      "preparation_phase": preparation_phase,
+      "family_identity": binding.family_identity,
+      "frozen_bundle": str(Path(frozen_bundle).resolve()),
+      "compile_performed": False, "requires_recompile": False,
+      "hip_used": False, "no_fallback": True,
+    }
+
+  output = schedule.output
+  calls = [node for node in output.uop.toposort()
+           if node.op is Ops.CALL and node.src[0] in selected_programs]
+  if [call.src[0] for call in calls] != list(selected_programs):
+    raise RuntimeError("frozen v2 fixed-base graph lost its exact ordered PROGRAM prefix")
+  arguments = [get_call_arg_uops(call) for call in calls]
+  if any(len(row) != 5 for row in arguments):
+    raise RuntimeError("frozen v2 fixed-base graph lost the five-buffer ABI")
+  if any(arguments[0][slot].buf_uop is not row[slot].buf_uop
+         for row in arguments for slot in range(5)):
+    raise RuntimeError("frozen v2 fixed-base graph changed a buffer identity within the prefix")
+  if any(previous not in current[0].toposort()
+         for previous, current in zip(calls, arguments[1:])):
+    raise RuntimeError("frozen v2 fixed-base graph lost its slot-zero ordering chain")
+  attached_keys = [value.buf_uop.key.hex() for value in arguments[0]]
+  prepared_keys = [row["buffer_uop_key"] for row in preparation_phase["allocations"]]
+  if attached_keys != prepared_keys:
+    raise RuntimeError("frozen v2 target attachment differs from synchronized preparation buffers")
+  graph_evidence.update({
+    "program_calls": len(calls), "ordered_program_prefix": True,
+    "all_calls_share_buffer_identity": True, "slot0_ordered": True,
+    "buffer_uop_keys": attached_keys,
+    "prepared_buffer_uop_keys": prepared_keys,
+    "attachment_matches_synchronized_preparation": True,
+    "attachment_stage": "attached_after_synchronized_preparation",
+  })
 
   dispatch_census_key = "aql_packet_census" if bool(getattr(Device["AMD"], "is_aql", False)) \
     else "pm4_dispatch_census"
