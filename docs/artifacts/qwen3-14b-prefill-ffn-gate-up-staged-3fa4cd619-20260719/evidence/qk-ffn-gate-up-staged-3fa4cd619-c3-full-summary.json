@@ -1,0 +1,45 @@
+{
+  "certificate_sha256": "9170c3f71b04a4fe7943cafc4a7b0beaa3d0d41f290d47a07f829e347f8e556f",
+  "children": {
+    "C3a": {
+      "certificate_sha256": "24cb44e2b97de90c0425a13cf7d92a38d5e6a54bf983b8aa9b6baca3af99fd0d",
+      "proofs": {
+        "all_logical_input_load_and_output_rmw_addresses_in_bounds": true,
+        "complete_declared_grid_exhaustively_evaluated": true,
+        "output_read_modify_write_complete_once": true,
+        "retained_sink_identity_bound_to_frozen_family": true
+      },
+      "state": "PASS"
+    },
+    "C3b": {
+      "certificate_sha256": "6b88b3ec5fbcf09636e5ab5fbc296e7fcb46af45225bbe5631fd84e401db0ae0",
+      "exhaustive_launch_coordinate_count": 139264,
+      "proofs": {
+        "all_input_load_and_output_rmw_addresses_in_bounds": true,
+        "all_native_address_arithmetic_without_overflow_or_wrap": true,
+        "complete_declared_grid_exhaustively_evaluated": true,
+        "frozen_family_and_program_payload_identity_bound": true
+      },
+      "projected_address_evaluations": 19636224,
+      "state": "PASS"
+    }
+  },
+  "cpu_only": true,
+  "family_identity": "sha256:4e82044650b7c03a579b42b8dd270389d280c2f5eab9f9004a3bc83dbe79917f",
+  "gates": {
+    "C3": "PASS",
+    "C3a": "PASS",
+    "C3b": "PASS"
+  },
+  "identity_binding": {
+    "binary_sha256": "149ba322c1a99c1fa056d25c6230bc8908c27f15fe94b177276c5808eebe8bf3",
+    "program_key": "14f2a216a8a7609e8a251fe3869b3fb146fd5d5a8ca0ec468120e0fbcbd54a60",
+    "serialized_program_sha256": "a7da263f5f659752dd43b638ab21c51f58c54a4cb1fe05b95c38a57e75f6cb6d",
+    "serialized_sink_sha256": "d2f18a586e8007a321177005453816232592c2d075794881d302105a4e726ba9",
+    "sink_key": "a3a4f98c4ebebfe8f770f2f3f4e611c22f92510845e482d1bc79dfb75963a495",
+    "source_sha256": "05875a80074fb19df641fb86f97090b01af1844bf2074ed8d7b10274c15b57cc"
+  },
+  "note": "Deterministic summary of certify_frozen_staged_full_memory; replay the producer to regenerate the complete child bodies.",
+  "schema": "tinygrad.mmq_q4k_q8_1.frozen_staged_full_memory_certificate_summary.v1",
+  "state": "PASS"
+}

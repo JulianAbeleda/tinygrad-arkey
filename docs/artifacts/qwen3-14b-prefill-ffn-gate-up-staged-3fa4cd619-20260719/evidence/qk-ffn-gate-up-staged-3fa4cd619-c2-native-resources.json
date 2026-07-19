@@ -1,0 +1,30 @@
+{
+  "allocated_sgpr": null,
+  "allocated_vgpr": 256,
+  "authority": {
+    "sgpr_scratch_spills": "renderer_final_linear",
+    "vgpr_lds_wave": "final_elf_descriptor",
+    "workgroup": "program_info_launch"
+  },
+  "global_size": [136, 4, 1],
+  "lds_bytes": 57856,
+  "local_size": [256, 1, 1],
+  "max_workgroup_threads": 256,
+  "schema": "tinygrad.amd.native_program_resources.v1",
+  "scratch_bytes": 0,
+  "scratch_spill_proof": {
+    "amdisarenderer_spill_construction": "hard_error",
+    "byte_identical_reassembly": true,
+    "pre_and_final_linear_scratch_spill_instructions": "absent",
+    "private_segment_fixed_size": 0,
+    "private_segment_properties": "disabled"
+  },
+  "sgpr": 16,
+  "sgpr_spills": 0,
+  "target": "gfx1100",
+  "used_vgpr": 256,
+  "vgpr": 256,
+  "vgpr_spills": 0,
+  "wavefront_size": 32,
+  "workgroup_threads": 256
+}

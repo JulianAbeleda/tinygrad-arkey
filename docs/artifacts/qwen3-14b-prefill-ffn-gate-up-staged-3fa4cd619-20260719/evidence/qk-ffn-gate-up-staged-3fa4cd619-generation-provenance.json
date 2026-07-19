@@ -1,0 +1,105 @@
+{
+  "artifact_identity": {
+    "binary_sha256": "149ba322c1a99c1fa056d25c6230bc8908c27f15fe94b177276c5808eebe8bf3",
+    "bundle_manifest_file_sha256": "a476a5f45ed18a574cefd977e691b055d66649594c9bfaf1eb5b644e8b7458a8",
+    "family_identity": "sha256:4e82044650b7c03a579b42b8dd270389d280c2f5eab9f9004a3bc83dbe79917f",
+    "family_manifest_file_sha256": "7db46d3e61bf6e49f118f9570131c5e583c4c7ce69668c26bbfd0fc311aadf8d",
+    "program_key": "14f2a216a8a7609e8a251fe3869b3fb146fd5d5a8ca0ec468120e0fbcbd54a60",
+    "serialized_program_sha256": "a7da263f5f659752dd43b638ab21c51f58c54a4cb1fe05b95c38a57e75f6cb6d",
+    "serialized_sink_sha256": "d2f18a586e8007a321177005453816232592c2d075794881d302105a4e726ba9",
+    "sink_key": "a3a4f98c4ebebfe8f770f2f3f4e611c22f92510845e482d1bc79dfb75963a495",
+    "source_sha256": "05875a80074fb19df641fb86f97090b01af1844bf2074ed8d7b10274c15b57cc"
+  },
+  "compiler_environment": {
+    "ALLOW_HALF8": null,
+    "AMD": null,
+    "AMD_CC": null,
+    "AMD_COMGR_SAVE_TEMPS": null,
+    "COALESCED_LOAD_LOWERING": null,
+    "DECODE_FAST_EXP2": null,
+    "DEV": null,
+    "DEVECTORIZE_NO_PTR_GROUP": null,
+    "HIPCC": null,
+    "NOOPT": null,
+    "PYTHONHASHSEED": "0",
+    "REGALLOC_ADDR_REMAT": "1",
+    "REGALLOC_ADDR_REMAT_END_NO_EMIT": null,
+    "REGALLOC_ADDR_REMAT_NO_END": null,
+    "REG_STORE_DEVEC": null,
+    "ROCM_PATH": null,
+    "SCHED_LIST": null,
+    "SCHED_MODULO": null,
+    "SCHED_MODULO_PROBE": null,
+    "SCHED_UNROLL": null,
+    "UNSAFE_DISABLE_MASK": null,
+    "V_DOT2_LOWERING": null,
+    "WARP_REDUCE_LOWERING": null
+  },
+  "configuration": {
+    "compiler_environment": {
+      "ALLOW_HALF8": null,
+      "AMD": null,
+      "AMD_CC": null,
+      "AMD_COMGR_SAVE_TEMPS": null,
+      "COALESCED_LOAD_LOWERING": null,
+      "DECODE_FAST_EXP2": null,
+      "DEV": null,
+      "DEVECTORIZE_NO_PTR_GROUP": null,
+      "HIPCC": null,
+      "NOOPT": null,
+      "PYTHONHASHSEED": "0",
+      "REGALLOC_ADDR_REMAT": "1",
+      "REGALLOC_ADDR_REMAT_END_NO_EMIT": null,
+      "REGALLOC_ADDR_REMAT_NO_END": null,
+      "REG_STORE_DEVEC": null,
+      "ROCM_PATH": null,
+      "SCHED_LIST": null,
+      "SCHED_MODULO": null,
+      "SCHED_MODULO_PROBE": null,
+      "SCHED_UNROLL": null,
+      "UNSAFE_DISABLE_MASK": null,
+      "V_DOT2_LOWERING": null,
+      "WARP_REDUCE_LOWERING": null
+    },
+    "generator": {
+      "compile": "extra.qk.mmq_target_epoch_orchestrator.compile_target_kernel",
+      "family": "extra.qk.mmq_frozen_staged_family.produce_frozen_staged_family_manifest",
+      "freeze": "extra.qk.mmq_frozen_target_artifact.produce_frozen_target_artifact"
+    },
+    "program": {
+      "accumulate": true,
+      "grid": [136, 4, 1],
+      "local_size": [256, 1, 1],
+      "shape": [512, 17408, 256],
+      "target": "AMD:ISA:gfx1100"
+    },
+    "role": {
+      "candidate_identity": "3e367ee04b0aa5db66ecaad085ec9f5ea414a56b8161b406cdefb125378356eb",
+      "epoch_count": 20,
+      "epoch_k": 256,
+      "name": "ffn_gate_up",
+      "shape": [512, 17408, 5120]
+    },
+    "schema": "tinygrad.mmq_q4k_q8_1.staged_family_generation_configuration.v1"
+  },
+  "configuration_identity": "c30f8b65be508c2297057f4b54250c5f06ae427b69ab48bfb58931ecef979265",
+  "cpu_only": true,
+  "gpu_dispatch_performed": false,
+  "gpu_runtime_initialized": false,
+  "repository": {
+    "dirty": false,
+    "revision": "3fa4cd6195e460930417732fb404521e33c9cf3c"
+  },
+  "schema": "tinygrad.mmq_q4k_q8_1.staged_family_generation_record.v1",
+  "source_files": {
+    "extra/qk/mmq_frozen_staged_family.py": "af0c4226421a743035df835f709e4257f323d4153241d00d04517c925863b30f",
+    "extra/qk/mmq_frozen_target_artifact.py": "084de472078bf17e4e230e6b08d55ec52c63653eb18ceaad820eed5a17eacefb",
+    "extra/qk/mmq_target_epoch_orchestrator.py": "cd8cb3d85111f36e5450447e04a0a901a13c4d7c8afc9f6054f2f5ebec8556cd"
+  },
+  "state": "PASS",
+  "toolchain": {
+    "assembler": "tinygrad.renderer.amd.elf.assemble_linear target=AMD:ISA:gfx1100 file_sha256:ad1895526c44ffd3c00583534f26585ef65525e5bb80f5ad98ef3653e468e027",
+    "python": "CPython 3.12.3 cache=cpython-312 pickle=5",
+    "renderer": "tinygrad.renderer.isa.amd.AMDISARenderer file_sha256:c5c2b031f349ae016e0ac248e49fb589b6285c7965cb2323db308f42b2b3f682"
+  }
+}

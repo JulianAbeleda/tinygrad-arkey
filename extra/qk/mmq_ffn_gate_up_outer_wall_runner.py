@@ -19,15 +19,23 @@ from extra.qk.mmq_ffn_gate_up_matched_timing_contract import (
 )
 
 
-SCHEMA = "tinygrad.mmq_q4k_q8_1.ffn_gate_up_outer_wall_receipt.v1"
+SCHEMA = "tinygrad.mmq_q4k_q8_1.ffn_gate_up_outer_wall_receipt.v2"
 CANDIDATE_TRACE_SCHEMA = \
   "tinygrad.mmq_q4k_q8_1.ffn_gate_up_candidate_phase_trace.v1"
+QUEUE_ATTESTATION_SCHEMA = \
+  "tinygrad.mmq_q4k_q8_1.ffn_gate_up_effective_queue_attestation.v1"
+EXECUTION_ATTESTATION_SCHEMA = \
+  "tinygrad.mmq_q4k_q8_1.ffn_gate_up_post_sync_execution_attestation.v1"
+HOST_IO_CENSUS_SCHEMA = \
+  "tinygrad.mmq_q4k_q8_1.ffn_gate_up_host_io_census.v1"
 MEASUREMENT_SOURCE = "outer_synchronized_wall"
 
 _HEX = frozenset("0123456789abcdef")
 _TOP_LEVEL_FIELDS = {
   "schema", "status", "contract_identity", "workload_identity",
   "input_identity", "queue_mode", "route_id", "executable_identity",
+  "effective_queue_attestation", "post_sync_execution_attestation",
+  "host_io_census",
   "timing_boundary_identity", "measurement_source",
   "pre_sync_outside_timed_wall", "readback_performed", "timing",
   "evidence_identity",
@@ -43,6 +51,23 @@ _CANDIDATE_TRACE_FIELDS = {
   "output_initialization", "epochs",
 }
 _INTERVAL_FIELDS = {"start_ns", "end_ns"}
+_QUEUE_ATTESTATION_FIELDS = {
+  "schema", "status", "queue_mode", "instantiated_device_attestation",
+  "evidence_identity",
+}
+_EXECUTION_ATTESTATION_FIELDS = {
+  "schema", "status", "observation_authority", "queue_mode", "route_id",
+  "executable_identity", "input_identity", "observed_after_post_sync",
+  "evidence_identity",
+}
+_HOST_IO_SNAPSHOT_FIELDS = {
+  "authority", "provider_identity", "readback_count", "copyout_count",
+  "copyout_bytes",
+}
+_HOST_IO_CENSUS_FIELDS = {
+  "schema", "status", "before", "after", "delta", "no_readback",
+  "no_copyout", "evidence_identity",
+}
 _EPOCH_FIELDS = {
   "ordinal", "gather", "q4_transfer", "q8_values_transfer",
   "q8_scales_transfer", "q8_sums_transfer", "staging_sync",
@@ -68,6 +93,16 @@ class OuterWallRunResult:
 
   output: Any
   receipt: Mapping[str, Any]
+
+
+class HostIoCensusViolation(ValueError):
+  """Fail-closed host I/O observation with retained machine-readable census."""
+
+  def __init__(self, evidence: Mapping[str, Any]):
+    self.evidence = dict(evidence)
+    super().__init__(
+      "readback/copyout observed during matched timing invocation: "
+      f"{self.evidence['delta']!r}")
 
 
 def _canonical(value: Any) -> bytes:
@@ -97,6 +132,127 @@ def _content_identity(value: Any, label: str) -> str:
      len(value) != 71 or any(char not in _HEX for char in value[7:]):
     raise ValueError(f"{label} must be a sha256 content identity")
   return value
+
+
+def seal_ffn_gate_up_effective_queue_attestation(
+    value: Any, *, queue_mode: str,
+    ) -> dict[str, Any]:
+  """Validate and bind the existing live instantiated-device queue attestation."""
+  from extra.qk.mmq_frozen_staged_c8_sessions import _validated_queue_attestation
+  observed = _validated_queue_attestation(value, queue_mode)
+  payload = {
+    "schema": QUEUE_ATTESTATION_SCHEMA, "status": "PASS",
+    "queue_mode": queue_mode, "instantiated_device_attestation": observed,
+  }
+  return {**payload, "evidence_identity": _identity(payload)}
+
+
+def validate_ffn_gate_up_effective_queue_attestation(
+    value: Any, *, queue_mode: str,
+    ) -> dict[str, Any]:
+  row = _mapping(value, "ffn_gate_up effective queue attestation")
+  _exact_keys(
+    row, _QUEUE_ATTESTATION_FIELDS, "ffn_gate_up effective queue attestation")
+  if row["schema"] != QUEUE_ATTESTATION_SCHEMA or row["status"] != "PASS" or \
+     row["queue_mode"] != queue_mode:
+    raise ValueError("ffn_gate_up effective queue attestation differs")
+  expected = seal_ffn_gate_up_effective_queue_attestation(
+    row["instantiated_device_attestation"], queue_mode=queue_mode)
+  if dict(row) != expected:
+    raise ValueError("ffn_gate_up effective queue attestation identity differs")
+  return dict(row)
+
+
+def build_ffn_gate_up_post_sync_execution_attestation(
+    *, observation_authority: str, queue_mode: str, route_id: str,
+    executable_identity: str, input_identity: str,
+    ) -> dict[str, Any]:
+  """Build the exact observation returned by one route's post-sync attestor."""
+  if not isinstance(observation_authority, str) or not observation_authority:
+    raise ValueError("execution observation authority must be non-empty")
+  if queue_mode not in QUEUE_MODES or \
+     route_id not in (CANDIDATE_ROUTE, DIRECT_ROUTE):
+    raise ValueError("execution observation queue/route differs")
+  executable_identity = _content_identity(
+    executable_identity, "observed executable identity")
+  input_identity = _content_identity(input_identity, "observed input identity")
+  payload = {
+    "schema": EXECUTION_ATTESTATION_SCHEMA, "status": "PASS",
+    "observation_authority": observation_authority,
+    "queue_mode": queue_mode, "route_id": route_id,
+    "executable_identity": executable_identity,
+    "input_identity": input_identity, "observed_after_post_sync": True,
+  }
+  return {**payload, "evidence_identity": _identity(payload)}
+
+
+def validate_ffn_gate_up_post_sync_execution_attestation(
+    value: Any, *, queue_mode: str, route_id: str,
+    executable_identity: str, input_identity: str,
+    ) -> dict[str, Any]:
+  row = _mapping(value, "ffn_gate_up post-sync execution attestation")
+  _exact_keys(
+    row, _EXECUTION_ATTESTATION_FIELDS,
+    "ffn_gate_up post-sync execution attestation")
+  if row["schema"] != EXECUTION_ATTESTATION_SCHEMA or \
+     row["status"] != "PASS" or \
+     row["observed_after_post_sync"] is not True:
+    raise ValueError("post-sync execution was not observed")
+  expected = build_ffn_gate_up_post_sync_execution_attestation(
+    observation_authority=row["observation_authority"],
+    queue_mode=queue_mode, route_id=route_id,
+    executable_identity=executable_identity, input_identity=input_identity)
+  if dict(row) != expected:
+    raise ValueError("post-sync execution attestation differs from timed route")
+  return dict(row)
+
+
+def _host_io_snapshot(value: Any, label: str) -> dict[str, Any]:
+  row = _mapping(value, label)
+  _exact_keys(row, _HOST_IO_SNAPSHOT_FIELDS, label)
+  if not isinstance(row["authority"], str) or not row["authority"] or \
+     not isinstance(row["provider_identity"], str) or not row["provider_identity"]:
+    raise ValueError(f"{label} authority/provider identity must be non-empty")
+  normalized = {
+    "authority": row["authority"], "provider_identity": row["provider_identity"]}
+  for field in ("readback_count", "copyout_count", "copyout_bytes"):
+    normalized[field] = _duration(row[field], f"{label}.{field}")
+  return normalized
+
+
+def _host_io_census(before: Any, after: Any) -> dict[str, Any]:
+  before = _host_io_snapshot(before, "host I/O census before")
+  after = _host_io_snapshot(after, "host I/O census after")
+  if before["authority"] != after["authority"] or \
+     before["provider_identity"] != after["provider_identity"]:
+    raise ValueError("host I/O census provider changed during invocation")
+  delta = {
+    field: after[field] - before[field]
+    for field in ("readback_count", "copyout_count", "copyout_bytes")
+  }
+  if any(value < 0 for value in delta.values()):
+    raise ValueError("host I/O census counters moved backwards")
+  payload = {
+    "schema": HOST_IO_CENSUS_SCHEMA,
+    "status": "PASS" if not any(delta.values()) else "BLOCKED",
+    "before": before, "after": after, "delta": delta,
+    "no_readback": delta["readback_count"] == 0,
+    "no_copyout": delta["copyout_count"] == 0 and delta["copyout_bytes"] == 0,
+  }
+  result = {**payload, "evidence_identity": _identity(payload)}
+  if result["status"] != "PASS":
+    raise HostIoCensusViolation(result)
+  return result
+
+
+def validate_ffn_gate_up_host_io_census(value: Any) -> dict[str, Any]:
+  row = _mapping(value, "ffn_gate_up host I/O census")
+  _exact_keys(row, _HOST_IO_CENSUS_FIELDS, "ffn_gate_up host I/O census")
+  expected = _host_io_census(row["before"], row["after"])
+  if dict(row) != expected or row["no_readback"] is not True or \
+     row["no_copyout"] is not True:
+    raise ValueError("ffn_gate_up host I/O census differs")
+  return dict(row)
 
 
 def _timestamp(value: Any, label: str) -> int:
@@ -275,6 +431,9 @@ def run_ffn_gate_up_outer_synchronized_wall(
     queue_mode: str, route_id: str, executable_identity: str,
     pre_sync: Callable[[], Any], invoke_route: Callable[[], RouteInvocation],
     realize_output: Callable[[Any], Any], post_sync: Callable[[], Any],
+    attest_post_sync: Callable[[Any, str], Mapping[str, Any]],
+    host_io_census: Callable[[], Mapping[str, Any]],
+    effective_queue_attestation: Mapping[str, Any],
     clock_ns: Callable[[], int],
     readback_requested: bool = False, readback_callback: Any | None = None,
     ) -> OuterWallRunResult:
@@ -289,9 +448,14 @@ def run_ffn_gate_up_outer_synchronized_wall(
     raise ValueError("readback_requested must be a bool")
   if readback_requested or readback_callback is not None:
     raise ValueError("readback is forbidden by the matched timing contract")
+  queue_attestation = validate_ffn_gate_up_effective_queue_attestation(
+    effective_queue_attestation, queue_mode=queue_mode)
   if not all(callable(callback) for callback in (
-      pre_sync, invoke_route, realize_output, post_sync, clock_ns)):
-    raise TypeError("outer-wall synchronization, route, realization, and clock callbacks must be callable")
+      pre_sync, invoke_route, realize_output, post_sync, attest_post_sync,
+      host_io_census, clock_ns)):
+    raise TypeError(
+      "outer-wall synchronization, route, realization, attestation, census, "
+      "and clock callbacks must be callable")
   expected_executable = _route_executable(
     validated, queue_mode=queue_mode, route_id=route_id)
   executable_identity = _content_identity(
@@ -299,6 +463,8 @@ def run_ffn_gate_up_outer_synchronized_wall(
   if executable_identity != expected_executable:
     raise ValueError("timed executable identity differs from the exact route")
 
+  host_io_before = _host_io_snapshot(
+    host_io_census(), "host I/O census before")
   pre_sync()
   outer_start_ns = _timestamp(clock_ns(), "outer start")
   invocation = invoke_route()
@@ -316,6 +482,12 @@ def run_ffn_gate_up_outer_synchronized_wall(
   if any(current <= prior for prior, current in zip(
       checkpoints, checkpoints[1:])):
     raise ValueError("outer-wall clock checkpoints must be strictly monotonic")
+  execution_attestation = validate_ffn_gate_up_post_sync_execution_attestation(
+    attest_post_sync(invocation.output, queue_mode),
+    queue_mode=queue_mode, route_id=route_id,
+    executable_identity=executable_identity,
+    input_identity=validated["common_inputs"]["identity"])
+  host_io = _host_io_census(host_io_before, host_io_census())
 
   timing = _candidate_timing(
     trace=invocation.candidate_phase_trace,
@@ -340,6 +512,9 @@ def run_ffn_gate_up_outer_synchronized_wall(
     "input_identity": validated["common_inputs"]["identity"],
     "queue_mode": queue_mode, "route_id": route_id,
     "executable_identity": executable_identity,
+    "effective_queue_attestation": queue_attestation,
+    "post_sync_execution_attestation": execution_attestation,
+    "host_io_census": host_io,
     "timing_boundary_identity": boundary_identity,
     "measurement_source": MEASUREMENT_SOURCE,
     "pre_sync_outside_timed_wall": True,
@@ -403,6 +578,13 @@ def validate_ffn_gate_up_outer_wall_receipt(
     validated, queue_mode=queue_mode, route_id=route_id)
   if row["executable_identity"] != expected_executable:
     raise ValueError("outer-wall receipt executable identity differs")
+  validate_ffn_gate_up_effective_queue_attestation(
+    row["effective_queue_attestation"], queue_mode=queue_mode)
+  validate_ffn_gate_up_post_sync_execution_attestation(
+    row["post_sync_execution_attestation"], queue_mode=queue_mode,
+    route_id=route_id, executable_identity=expected_executable,
+    input_identity=validated["common_inputs"]["identity"])
+  validate_ffn_gate_up_host_io_census(row["host_io_census"])
   if row["timing_boundary_identity"] != \
      validated["timing_boundary"]["boundary_identity"] or \
      row["measurement_source"] != MEASUREMENT_SOURCE:
@@ -418,8 +600,15 @@ def validate_ffn_gate_up_outer_wall_receipt(
 
 
 __all__ = [
-  "CANDIDATE_TRACE_SCHEMA", "MEASUREMENT_SOURCE", "OuterWallRunResult",
-  "RouteInvocation", "SCHEMA",
+  "CANDIDATE_TRACE_SCHEMA", "EXECUTION_ATTESTATION_SCHEMA",
+  "HOST_IO_CENSUS_SCHEMA", "HostIoCensusViolation", "MEASUREMENT_SOURCE",
+  "OuterWallRunResult",
+  "QUEUE_ATTESTATION_SCHEMA", "RouteInvocation", "SCHEMA",
+  "build_ffn_gate_up_post_sync_execution_attestation",
   "run_ffn_gate_up_outer_synchronized_wall",
+  "seal_ffn_gate_up_effective_queue_attestation",
+  "validate_ffn_gate_up_effective_queue_attestation",
+  "validate_ffn_gate_up_host_io_census",
   "validate_ffn_gate_up_outer_wall_receipt",
+  "validate_ffn_gate_up_post_sync_execution_attestation",
 ]

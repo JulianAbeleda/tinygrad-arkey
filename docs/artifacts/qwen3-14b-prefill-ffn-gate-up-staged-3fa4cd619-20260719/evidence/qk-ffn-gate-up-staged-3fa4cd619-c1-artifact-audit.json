@@ -1,0 +1,51 @@
+{
+  "bundle": {
+    "function": "mmq_llama_five_buffer_full_grid_accumulate",
+    "program_key": "14f2a216a8a7609e8a251fe3869b3fb146fd5d5a8ca0ec468120e0fbcbd54a60",
+    "schema": "tinygrad.mmq_q4k_q8_1.frozen_target_artifact.v2",
+    "state": "FROZEN"
+  },
+  "findings": [],
+  "identity": {
+    "expected": {
+      "binary_nbytes": 77079,
+      "binary_sha256": "149ba322c1a99c1fa056d25c6230bc8908c27f15fe94b177276c5808eebe8bf3",
+      "disassembly_nbytes": 913960,
+      "disassembly_sha256": "7dca1ffda07b8f5d75b21c0f0b1886db4000305eb0d14b2c508507fcf78b9ff2"
+    },
+    "findings": [],
+    "observed": {
+      "binary_nbytes": 77079,
+      "binary_sha256": "149ba322c1a99c1fa056d25c6230bc8908c27f15fe94b177276c5808eebe8bf3",
+      "disassembly_nbytes": 913960,
+      "disassembly_sha256": "7dca1ffda07b8f5d75b21c0f0b1886db4000305eb0d14b2c508507fcf78b9ff2"
+    },
+    "passed": true
+  },
+  "passed": true,
+  "schema": "tinygrad.mmq_q4k_q8_1.frozen_target_artifact_audit.v1",
+  "static_audit": {
+    "binary_nbytes": 77079,
+    "binary_sha256": "149ba322c1a99c1fa056d25c6230bc8908c27f15fe94b177276c5808eebe8bf3",
+    "control_flow": {
+      "direct": [],
+      "errors": [],
+      "indirect": [],
+      "indirect_control_flow_flag": false,
+      "status": "PASS"
+    },
+    "disassembly_sha256": "7dca1ffda07b8f5d75b21c0f0b1886db4000305eb0d14b2c508507fcf78b9ff2",
+    "findings": [],
+    "instruction_count": 13020,
+    "passed": true,
+    "schema": "tinygrad.amd.hsaco_static_audit.v1",
+    "termination": {
+      "errors": [],
+      "final_endpgm_pc": 76336,
+      "passed": true,
+      "trailing_padding_dwords": 115
+    },
+    "verdict": "PASS"
+  },
+  "verdict": "PASS"
+}

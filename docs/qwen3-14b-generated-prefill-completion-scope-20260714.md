@@ -1,7 +1,7 @@
 # Qwen3-14B generated-prefill completion scope
 
 Date: 2026-07-14
-Last reconciled: 2026-07-18
+Last reconciled: 2026-07-19
 
 ## Objective
 
@@ -16,6 +16,22 @@ quant format + operation role + M/N/K + layouts + target capability + memory bud
 
 Model profile names may select input facts and benchmark fixtures. They may not select compiler lowering, transport,
 schedule, or promotion state.
+
+## 2026-07-19 current `ffn_gate_up` candidate
+
+A new exact compact-K256 staged family was generated from clean revision `3fa4cd619` for
+`ffn_gate_up (512,17408,5120)`: family
+`sha256:4e82044650b7c03a579b42b8dd270389d280c2f5eab9f9004a3bc83dbe79917f`, PROGRAM key
+`14f2a216a8a7609e8a251fe3869b3fb146fd5d5a8ca0ec468120e0fbcbd54a60`, and HSACO SHA256
+`149ba322c1a99c1fa056d25c6230bc8908c27f15fe94b177276c5808eebe8bf3`. Its retained CPU-only evidence passes C1,
+C2, and exhaustive C3a/C3b. Final resources are 256 VGPRs, 16 SGPRs, 57,856-byte LDS, zero scratch, and zero spills.
+
+No GPU has executed this new binary. Historical full-role correctness observations are not transferable to it.
+C4-C8, mixed-route transition safety, whole-model validation, and promotion remain open. The new matched timing
+contract and persistent PM4/AQL collector require the Q8 producer inside each common outer wall, exclude readback,
+retain raw seeded paired samples, bind live queue/post-sync executable observations plus a host-I/O census,
+and fail closed unless both queues beat the same qualified direct-packed route. The current injected-callback
+captures are explicitly not promotion evidence; the production low-level route builders remain to be connected.
 
 ## 2026-07-19 `ffn_gate_up` performance-comparability correction
 
@@ -45,7 +61,7 @@ promotion is enabled.
 
 | Phase | Current state | Remaining gate |
 |---|---|---|
-| 3 — Q4_K role completion | Incomplete for `ffn_gate_up` performance. Full-role correctness/resource/health evidence exists, but the retained bounded timing uses mismatched measurement boundaries and the exact generated full-role observations have no matched direct-packed comparator. Performance is `UNKNOWN_NOT_EVALUATED`. | Collect candidate and direct-packed full-role timing under identical workload and measurement-definition descriptors; only then decide win/loss. |
+| 3 — Q4_K role completion | Incomplete. The new exact `ffn_gate_up` family passes CPU/static C1-C3 with zero spills, but has not run on GPU; historical full-role correctness is not evidence for this binary. Performance remains `UNKNOWN_NOT_EVALUATED`. | Run guarded C4-C7 for the new family, including FP16-backed candidate production and mixed-route transitions, then collect candidate/direct full-role timing through the matched persistent PM4/AQL collector and decide win/loss. |
 | 4 — Q6_K role completion | Complete for the declared fallback strategy. Both exact direct-packed Q6 rows (`attn_kv` and `ffn_down`) are qualified and timed under the retained policy contract. | No generated Q6 route is required unless measured whole-policy attribution shows the qualified fallbacks miss the target. |
 | 5 — Central candidate policy | The default-off policy machinery is implemented, but the retained immutable six-row artifact is integration-only and is not a performance-qualified policy. It binds the now-rejected `ffn_gate_up` candidate so the live seam and census can be exercised; `production_promotion=false`. | Build a new immutable policy only after at least one comparable full-role generated candidate wins. |
 | 6 — Mixed-route 14B integration | Not complete. The live research route remains explicit/default-off; no production route changed. Its current policy is an integration diagnostic, not a promotion candidate. | Diagnose the live-model route and complete correctness/census/memory/health/decode/rollback proof, but do not advance it to Phase 7 unless the bound candidate is also performance-qualified. |

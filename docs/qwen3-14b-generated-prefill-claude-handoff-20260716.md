@@ -1,5 +1,56 @@
 # Qwen3-14B generated-prefill Claude handoff
 
+## 1.8 Current status 2026-07-19: new exact `ffn_gate_up` family passes CPU/static C1-C3
+
+This section supersedes any implication that the historical full-role `ffn_gate_up` runtime evidence is already
+bound to the current candidate. A new deterministic compact-K256 staged family has been frozen for the exact
+`ffn_gate_up (512,17408,5120)` role from clean revision
+`3fa4cd6195e460930417732fb404521e33c9cf3c`:
+
+- family `sha256:4e82044650b7c03a579b42b8dd270389d280c2f5eab9f9004a3bc83dbe79917f`;
+- PROGRAM key `14f2a216a8a7609e8a251fe3869b3fb146fd5d5a8ca0ec468120e0fbcbd54a60`;
+- retained SINK key `a3a4f98c4ebebfe8f770f2f3f4e611c22f92510845e482d1bc79dfb75963a495`;
+- source SHA256 `05875a80074fb19df641fb86f97090b01af1844bf2074ed8d7b10274c15b57cc`;
+- HSACO SHA256 `149ba322c1a99c1fa056d25c6230bc8908c27f15fe94b177276c5808eebe8bf3`.
+
+The frozen seven-file target bundle and compact evidence are retained under
+`docs/artifacts/qwen3-14b-prefill-ffn-gate-up-staged-3fa4cd619-20260719/`.
+Generation was CPU-only through `AMDISARenderer`; provenance records a clean repository, the exact 23-key compiler
+environment, no `Device` initialization, and no GPU allocation, queue, or dispatch.
+
+C1 passes the static HSACO audit with 13,020 instructions and a terminal `s_endpgm`. C2 binds the final gfx1100
+wave32 descriptor and byte-identical reassembly: grid `136x4x1`, local size `256x1x1`, 57,856-byte LDS, 256
+allocated/used VGPRs, 16 SGPRs, zero scratch, and zero VGPR/SGPR spills. C3a/C3b pass for the same family and program.
+The exhaustive native certificate covers 139,264 launch coordinates and 19,636,224 projected address evaluations
+with no bounds failure, uint32 wrap, or incomplete output read-modify-write coverage. The full C3 certificate SHA256
+is `9170c3f71b04a4fe7943cafc4a7b0beaa3d0d41f290d47a07f829e347f8e556f`.
+
+The matched-timing foundation is now fail closed and role exact. It declares one common logical Q4 input and one
+resident FP16 activation; requires the candidate to produce Q8 from that FP16 activation inside every measured outer
+wall; excludes correctness readback; requires separate persistent PM4/AQL sessions, at least three warmups per route,
+at least ten seeded balanced pairs, and exact candidate/direct executable qualifications; and reports a win only if
+both queues win. Runtime-owned typed callbacks and typed no-readback output realization flow unchanged through the
+session worker and collector. The worker binds a live instantiated-device queue attestation before executing either
+route, validates a post-sync observation of the actual queue/route/executable/input after every wall, and retains a
+cumulative host-I/O census spanning pre-sync through that observation. Readback or device-to-host
+copyout, clock reset across invocations, duplicate receipts, odd/unbalanced pairing, legacy receipt runners,
+prequantized launch inputs, retry, queue fallback, or identity drift fail closed. Injected callback captures remain
+explicitly ineligible for promotion until the production route builders supply these observed authorities.
+
+This is infrastructure and static certification, not runtime qualification. No GPU has executed this new binary.
+C4 zero-dispatch construction, FP16-backed C5/C6 correctness, joint C7 memory admission, mixed-route transition
+preflights, matched C8 timing, whole-model validation, and production promotion all remain open:
+
+```text
+ffn_gate_up_current_family_c1_c3=PASS
+ffn_gate_up_current_family_c4_c8=OPEN
+ffn_gate_up_current_family_gpu_execution=false
+ffn_gate_up_current_family_correctness=UNKNOWN_NOT_EVALUATED
+ffn_gate_up_current_family_performance=UNKNOWN_NOT_EVALUATED
+production_promotion=false
+default_route=direct_packed
+```
+
 ## 1.7 Current status 2026-07-19: `ffn_gate_up` performance is `UNKNOWN_NOT_EVALUATED`
 
 This section supersedes the `ffn_gate_up` performance conclusions in §1.2, §1.1, and §0.9. Source inspection of

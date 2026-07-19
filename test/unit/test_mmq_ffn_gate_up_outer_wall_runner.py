@@ -11,9 +11,13 @@ from extra.qk.mmq_ffn_gate_up_matched_timing_contract import (
 )
 from extra.qk.mmq_ffn_gate_up_outer_wall_runner import (
   CANDIDATE_TRACE_SCHEMA, RouteInvocation,
-  run_ffn_gate_up_outer_synchronized_wall,
+  build_ffn_gate_up_post_sync_execution_attestation,
+  run_ffn_gate_up_outer_synchronized_wall as _run_outer,
+  seal_ffn_gate_up_effective_queue_attestation,
   validate_ffn_gate_up_outer_wall_receipt,
 )
+from extra.qk.mmq_frozen_staged_c8_sessions import QUEUE_ATTESTATION_SCHEMA
+from extra.qk.mmq_frozen_epoch_runtime_preconstruction_canary import QUEUE_CLASSES
 
 
 def _sid(label: str) -> str:
@@ -22,6 +26,52 @@ def _sid(label: str) -> str:
 
 def _raw(label: str) -> str:
   return hashlib.sha256(label.encode()).hexdigest()
+
+
+def _effective_queue(queue: str) -> dict:
+  expected_aql = "1" if queue == "AQL" else "0"
+  return {
+    "schema": QUEUE_ATTESTATION_SCHEMA,
+    "authority": "instantiated_device_state", "device": "AMD",
+    "requested_queue_mode": queue, "effective_queue_mode": queue,
+    "effective_queue_class": QUEUE_CLASSES[queue],
+    "expected_queue_class": QUEUE_CLASSES[queue],
+    "environment_amd_aql": expected_aql,
+    "checks": {
+      "environment_matches_requested": True,
+      "requested_matches_effective": True,
+      "queue_class_matches_effective": True,
+    },
+    "all_checks_pass": True,
+  }
+
+
+def _host_io() -> dict:
+  return {
+    "authority": "instrumented_test_host_io",
+    "provider_identity": "test-host-io-provider",
+    "readback_count": 0, "copyout_count": 0, "copyout_bytes": 0,
+  }
+
+
+def run_ffn_gate_up_outer_synchronized_wall(**kwargs):
+  queue, route = kwargs["queue_mode"], kwargs["route_id"]
+  executable = kwargs["executable_identity"]
+  contract = kwargs["contract"]
+  kwargs.setdefault(
+    "effective_queue_attestation",
+    seal_ffn_gate_up_effective_queue_attestation(
+      _effective_queue(queue), queue_mode=queue))
+  kwargs.setdefault("host_io_census", _host_io)
+  kwargs.setdefault(
+    "attest_post_sync",
+    lambda _output, observed_queue:
+      build_ffn_gate_up_post_sync_execution_attestation(
+        observation_authority="instrumented_test_execution",
+        queue_mode=observed_queue, route_id=route,
+        executable_identity=executable,
+        input_identity=contract["common_inputs"]["identity"]))
+  return _run_outer(**kwargs)
 
 
 def _authority() -> dict:
@@ -131,6 +181,7 @@ def _run_candidate(
     trace: dict | None = None, clock_values=(100, 500, 550, 600),
     readback_requested=False, readback_callback=None,
     executable_identity: str | None = None,
+    outer_overrides: dict | None = None,
     ):
   authority = _authority() if authority is None else authority
   contract = _contract(authority) if contract is None else contract
@@ -147,15 +198,20 @@ def _run_candidate(
     value.realized = True
   def post_sync(): events.append("post_sync")
 
-  result = run_ffn_gate_up_outer_synchronized_wall(
-    contract=contract, contract_validation_kwargs=authority,
-    queue_mode="PM4", route_id="staged_candidate",
-    executable_identity=executable_identity or
+  kwargs = {
+    "contract": contract, "contract_validation_kwargs": authority,
+    "queue_mode": "PM4", "route_id": "staged_candidate",
+    "executable_identity": executable_identity or
       authority["candidate_binding"]["candidate_executable_identity"],
-    pre_sync=pre_sync, invoke_route=invoke, realize_output=realize,
-    post_sync=post_sync, clock_ns=Clock(clock_values),
-    readback_requested=readback_requested,
-    readback_callback=readback_callback)
+    "pre_sync": pre_sync, "invoke_route": invoke, "realize_output": realize,
+    "post_sync": post_sync, "clock_ns": Clock(clock_values),
+    "readback_requested": readback_requested,
+    "readback_callback": readback_callback,
+  }
+  if outer_overrides:
+    kwargs.update(outer_overrides)
+  result = run_ffn_gate_up_outer_synchronized_wall(
+    **kwargs)
   return result, output, events
 
 
@@ -430,3 +486,49 @@ def test_realize_callback_cannot_return_a_readback_value():
       realize_output=lambda _: object(),
       post_sync=lambda: None, clock_ns=Clock((100, 500)))
   assert output.readback_called is False
+
+
+def test_post_sync_attestation_is_outside_wall_and_host_io_census_is_enforced():
+  authority = _authority()
+  events, counts = [], {
+    "readback_count": 0, "copyout_count": 0, "copyout_bytes": 0}
+  clock_values = iter((100, 500, 550, 600))
+
+  def clock():
+    events.append("clock")
+    return next(clock_values)
+
+  def census():
+    events.append("census")
+    return {
+      "authority": "instrumented_test_host_io",
+      "provider_identity": "test-host-io-provider", **counts}
+
+  def attest(_output, queue):
+    events.append("attest")
+    return build_ffn_gate_up_post_sync_execution_attestation(
+      observation_authority="instrumented_test_execution",
+      queue_mode=queue, route_id="staged_candidate",
+      executable_identity=authority["candidate_binding"][
+        "candidate_executable_identity"],
+      input_identity=authority["input_identity"])
+
+  result, _, _ = _run_candidate(
+    authority=authority,
+    outer_overrides={
+      "clock_ns": clock, "host_io_census": census,
+      "attest_post_sync": attest})
+  assert events == [
+    "census", "clock", "clock", "clock", "clock", "attest", "census"]
+  assert result.receipt["host_io_census"]["delta"] == {
+    "readback_count": 0, "copyout_count": 0, "copyout_bytes": 0}
+
+  def readback_attest(output, queue):
+    counts["readback_count"] += 1
+    return attest(output, queue)
+
+  with pytest.raises(ValueError, match="readback/copyout observed"):
+    _run_candidate(
+      authority=authority,
+      outer_overrides={
+        "host_io_census": census, "attest_post_sync": readback_attest})
