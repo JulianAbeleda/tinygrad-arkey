@@ -198,38 +198,109 @@ def run_persistent_c8_queue_session_worker(
 
   candidate_warmups, fallback_warmups = [], []
   candidate_invocations = fallback_invocations = 0
+  orders = staged_c8_randomized_orders(seed=seed, round_count=rounds)
+  pairs: list[dict[str, Any]] = []
+  failure: dict[str, Any] | None = None
+
+  def invoke_tracked(
+      runner: Callable[..., Mapping[str, Any]], *, route: str, phase: str,
+      invocation_index: int, pair_index: int | None,
+      ) -> dict[str, Any] | None:
+    nonlocal failure
+    try:
+      return _invoke(
+        runner, queue_mode=queue_mode, route=route, phase=phase,
+        invocation_index=invocation_index, pair_index=pair_index,
+        family=family, clock_identity=clock_identity,
+        candidate_executable_identity=executable)
+    except Exception as exc:
+      nested = getattr(exc, "failure_evidence", None)
+      if isinstance(nested, Mapping):
+        try:
+          json.loads(_canonical(nested))
+          nested = dict(nested)
+        except (TypeError, ValueError):
+          nested = None
+      failure = {
+        "route": route, "phase": phase,
+        "invocation_index": invocation_index, "pair_index": pair_index,
+        "exception": type(exc).__name__, "error": str(exc),
+        "nested_failure": nested,
+      }
+      return None
+
+  def blocked() -> dict[str, Any]:
+    assert failure is not None
+    pair_suffix = "" if failure["pair_index"] is None else \
+      f" pair[{failure['pair_index']}]"
+    exact_blocker = (
+      f"{queue_mode} persistent C8 invocation failed at "
+      f"{failure['phase']} {failure['route']}[{failure['invocation_index']}]"
+      f"{pair_suffix}: "
+      f"{failure['exception']}: {failure['error']}")
+    sample = {
+      "session_identity": session_identity, "clock_identity": clock_identity,
+      "candidate_warmups": candidate_warmups,
+      "fallback_warmups": fallback_warmups, "paired_rounds": pairs,
+    }
+    payload = {
+      "schema": QUEUE_SESSION_SCHEMA, "status": "BLOCKED",
+      "exact_blocker": exact_blocker, "queue_mode": queue_mode,
+      "family_identity": family.family_identity,
+      "session_identity": session_identity, "clock_identity": clock_identity,
+      "effective_queue_attestation": attestation,
+      "runner_factory_invocations": 1,
+      "candidate_runner_instance_count": 1,
+      "fallback_runner_instance_count": 1,
+      "invocation_failure": dict(failure),
+      "invocation_counts": {
+        "staged_candidate": candidate_invocations,
+        "direct_packed": fallback_invocations,
+      },
+      "completed_warmups": {
+        "staged_candidate": len(candidate_warmups),
+        "direct_packed": len(fallback_warmups),
+      },
+      "completed_paired_rounds": len(pairs),
+      "warmups_per_route": warmups, "paired_rounds": rounds, "seed": seed,
+      "orders": orders, "samples": sample,
+      "persistent_child_session": True, "same_session": True,
+      "same_clock": True, "equal_warmups": True,
+      "no_retry": True, "no_queue_fallback": True,
+      "production_dispatch_changed": False,
+    }
+    return {**payload, "evidence_identity": _identity(payload)}
+
   for _ in range(warmups):
-    candidate_warmups.append(_invoke(
-      runners.candidate, queue_mode=queue_mode, route="staged_candidate",
-      phase="warmup", invocation_index=candidate_invocations, pair_index=None,
-      family=family, clock_identity=clock_identity,
-      candidate_executable_identity=executable))
+    receipt = invoke_tracked(
+      runners.candidate, route="staged_candidate", phase="warmup",
+      invocation_index=candidate_invocations, pair_index=None)
+    if receipt is None: return blocked()
+    candidate_warmups.append(receipt)
     candidate_invocations += 1
-    fallback_warmups.append(_invoke(
-      runners.direct_packed, queue_mode=queue_mode, route="direct_packed",
-      phase="warmup", invocation_index=fallback_invocations, pair_index=None,
-      family=family, clock_identity=clock_identity,
-      candidate_executable_identity=executable))
+    receipt = invoke_tracked(
+      runners.direct_packed, route="direct_packed", phase="warmup",
+      invocation_index=fallback_invocations, pair_index=None)
+    if receipt is None: return blocked()
+    fallback_warmups.append(receipt)
     fallback_invocations += 1
 
-  orders = staged_c8_randomized_orders(seed=seed, round_count=rounds)
-  pairs = []
   for pair_index, order in enumerate(orders):
     row: dict[str, Any] = {"order": list(order)}
     for route in order:
       if route == "staged_candidate":
-        row["candidate"] = _invoke(
-          runners.candidate, queue_mode=queue_mode, route=route, phase="round",
-          invocation_index=candidate_invocations, pair_index=pair_index,
-          family=family, clock_identity=clock_identity,
-          candidate_executable_identity=executable)
+        receipt = invoke_tracked(
+          runners.candidate, route=route, phase="round",
+          invocation_index=candidate_invocations, pair_index=pair_index)
+        if receipt is None: return blocked()
+        row["candidate"] = receipt
         candidate_invocations += 1
       elif route == "direct_packed":
-        row["fallback"] = _invoke(
-          runners.direct_packed, queue_mode=queue_mode, route=route, phase="round",
-          invocation_index=fallback_invocations, pair_index=pair_index,
-          family=family, clock_identity=clock_identity,
-          candidate_executable_identity=executable)
+        receipt = invoke_tracked(
+          runners.direct_packed, route=route, phase="round",
+          invocation_index=fallback_invocations, pair_index=pair_index)
+        if receipt is None: return blocked()
+        row["fallback"] = receipt
         fallback_invocations += 1
       else:
         raise ValueError(f"seeded C8 order contains unsupported route {route!r}")
@@ -294,6 +365,9 @@ def _session_envelope(
     None if runner_error is not None else isolated is not None
   child_status = "not_launched" if launched is False else \
     "runner_error" if runner_error else getattr(isolated, "status", None)
+  if isinstance(child, Mapping) and child.get("schema") == QUEUE_SESSION_SCHEMA and \
+     child.get("status") == "BLOCKED":
+    child_status = "blocked"
   timed_out = bool(getattr(isolated, "timed_out", False))
   error = runner_error or getattr(isolated, "error", None)
   target_dispatch_attempted: bool | None = \
@@ -303,6 +377,9 @@ def _session_envelope(
   blocker = None
   if not health_before: blocker = f"{queue_mode} C8 preflight health failed"
   elif timed_out: blocker = f"{queue_mode} persistent C8 child timed out"
+  elif child_status == "blocked" and isinstance(child, Mapping):
+    blocker = child.get("exact_blocker") or \
+      f"{queue_mode} persistent C8 child reported a blocker"
   elif child_status != "passed" or not isinstance(child, Mapping):
     blocker = error or f"{queue_mode} persistent C8 child returned no structured result"
   elif faults: blocker = f"{queue_mode} kernel fault/reset marker observed during C8"

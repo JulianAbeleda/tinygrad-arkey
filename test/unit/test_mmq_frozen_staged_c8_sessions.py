@@ -196,6 +196,99 @@ def test_worker_and_factories_are_spawn_serializable_without_a_device(family):
     "staged_candidate": 13, "direct_packed": 13}
 
 
+def test_worker_localizes_failed_invocation_and_preserves_partial_schedule(family):
+  c6, events = _c6(family), []
+  runner_factory, attestor_factory = _factories(family, c6, events)
+
+  def failing_factory(**kwargs):
+    runners = runner_factory(**kwargs)
+    candidate_calls = 0
+
+    def candidate(**invoke_kwargs):
+      nonlocal candidate_calls
+      if candidate_calls == 1:
+        raise RuntimeError("classified candidate failure")
+      candidate_calls += 1
+      return runners.candidate(**invoke_kwargs)
+
+    return QueueTimingRunners(candidate, runners.direct_packed)
+
+  result = run_persistent_c8_queue_session_worker(
+    family, c6, "PM4", 3, 10, 5, "PM4-spawn-session",
+    CLOCK_IDENTITY, failing_factory, attestor_factory)
+  assert result["schema"] == QUEUE_SESSION_SCHEMA
+  assert result["status"] == "BLOCKED"
+  assert result["invocation_failure"] == {
+    "route": "staged_candidate", "phase": "warmup",
+    "invocation_index": 1, "pair_index": None,
+    "exception": "RuntimeError", "error": "classified candidate failure",
+    "nested_failure": None,
+  }
+  assert result["invocation_counts"] == {
+    "staged_candidate": 1, "direct_packed": 1}
+  assert result["completed_warmups"] == {
+    "staged_candidate": 1, "direct_packed": 1}
+  assert result["completed_paired_rounds"] == 0
+  assert "warmup staged_candidate[1]" in result["exact_blocker"]
+  assert len([row for row in events if row[0] == "invoke"]) == 2
+
+
+def test_worker_localizes_fallback_round_failure(family):
+  c6, events = _c6(family), []
+  runner_factory, attestor_factory = _factories(family, c6, events)
+
+  def failing_factory(**kwargs):
+    runners = runner_factory(**kwargs)
+
+    def fallback(**invoke_kwargs):
+      if invoke_kwargs["phase"] == "round":
+        raise RuntimeError("classified fallback failure")
+      return runners.direct_packed(**invoke_kwargs)
+
+    return QueueTimingRunners(runners.candidate, fallback)
+
+  result = run_persistent_c8_queue_session_worker(
+    family, c6, "PM4", 3, 10, 5, "PM4-spawn-session",
+    CLOCK_IDENTITY, failing_factory, attestor_factory)
+  assert result["status"] == "BLOCKED"
+  assert result["invocation_failure"]["route"] == "direct_packed"
+  assert result["invocation_failure"]["phase"] == "round"
+  assert result["invocation_failure"]["invocation_index"] == 3
+  assert result["invocation_failure"]["pair_index"] == 0
+  assert result["invocation_counts"]["direct_packed"] == 3
+  assert result["completed_paired_rounds"] == 0
+  assert "round direct_packed[3] pair[0]" in result["exact_blocker"]
+
+
+def test_parent_preserves_structured_child_blocker_and_fault_evidence(family):
+  c6, events = _c6(family), []
+  runner_factory, attestor_factory = _factories(family, c6, events)
+
+  def failing_factory(**kwargs):
+    runners = runner_factory(**kwargs)
+
+    def candidate(**_invoke_kwargs):
+      raise RuntimeError("instruction fault boundary")
+
+    return QueueTimingRunners(candidate, runners.direct_packed)
+
+  result = run_persistent_c8_sessions(
+    family=family, c7_memory_ledger=_c7(family),
+    c6_correctness_evidence=c6, runner_factory=failing_factory,
+    attestor_factory=attestor_factory, isolated_runner=_direct_isolated(events),
+    health_probe=lambda _env: True,
+    fault_collector=lambda _started: (["synthetic SQ instruction fault"], {"clean": False}),
+    session_identity_factory=lambda queue: f"{queue}-session")
+  pm4 = result["queue_sessions"]["PM4"]
+  assert result["status"] == "BLOCKED"
+  assert pm4["child_status"] == "blocked"
+  assert pm4["child"]["invocation_failure"]["route"] == "staged_candidate"
+  assert pm4["kernel_faults"] == ["synthetic SQ instruction fault"]
+  assert "warmup staged_candidate[0]" in pm4["exact_blocker"]
+  assert result["queue_sessions"]["AQL"]["child_status"] == \
+    "not_attempted_after_prior_blocker"
+
+
 def test_parent_contains_timeout_without_retry_or_queue_fallback(family):
   c6, events = _c6(family), []
   runner_factory, attestor_factory = _factories(family, c6, events)

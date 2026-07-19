@@ -467,3 +467,34 @@ def test_staged_live_seam_rejects_fresh_process_per_timing_invocation():
       role_spec=object(), frozen_bundle="/bundle",
       staged_family_manifest="/family", runtime_canary_by_queue={},
       probe_runner=run_full_grid_target_role_probe_isolated)
+
+
+def test_staged_live_seam_preserves_nested_probe_blocker(family, monkeypatch):
+  def prefix_executor(**_kwargs):
+    return {
+      "status": "BLOCKED", "family_identity": family.family_identity,
+      "exact_blocker": "guarded staged prefix runner raised",
+      "exception": "RuntimeError", "error": "device timeline stopped",
+    }
+
+  monkeypatch.setattr(
+    "extra.qk.mmq_frozen_staged_family_execution.run_frozen_staged_family_prefix_probe",
+    prefix_executor)
+  runner = make_frozen_staged_candidate_runner(
+    role_spec=family.binding.role_spec, frozen_bundle="/bundle",
+    staged_family_manifest="/family",
+    runtime_canary_by_queue={"PM4": {"canary": True}},
+    probe_runner=lambda **_kwargs: {})
+  with pytest.raises(
+      ValueError,
+      match="guarded staged prefix runner raised; RuntimeError; device timeline stopped") as raised:
+    runner(
+      queue_mode="PM4", family=family, clock_identity="clock-policy-0",
+      candidate_executable_identity="candidate")
+  assert raised.value.failure_evidence == {
+    "schema": "tinygrad.mmq_q4k_q8_1.frozen_staged_candidate_failure.v1",
+    "status": "BLOCKED",
+    "exact_blocker": "guarded staged prefix runner raised",
+    "exception": "RuntimeError", "error": "device timeline stopped",
+    "raw_probe_failure": None,
+  }

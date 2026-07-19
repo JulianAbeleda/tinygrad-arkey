@@ -51,8 +51,18 @@ PHASE_SEMANTICS = {
   "dispatch_sync": "post-dispatch Device.synchronize plus phase-isolation receipt closure",
   "final_sync": "explicit final Device.synchronize after the complete epoch sequence",
 }
+STAGED_CANDIDATE_FAILURE_SCHEMA = \
+  "tinygrad.mmq_q4k_q8_1.frozen_staged_candidate_failure.v1"
 
 TimingRunner = Callable[..., Mapping[str, Any]]
+
+
+class StagedCandidateExecutionError(ValueError):
+  """Compact JSON-safe evidence for one failed staged timing invocation."""
+
+  def __init__(self, message: str, failure_evidence: Mapping[str, Any]):
+    super().__init__(message)
+    self.failure_evidence = dict(failure_evidence)
 
 
 def _canonical(value: Any) -> bytes:
@@ -544,7 +554,28 @@ def make_frozen_staged_candidate_runner(
       probe_runner=timing_probe,
       persistent_session_parent_containment=True)
     if result.get("status") != "PASS" or result.get("family_identity") != family.family_identity:
-      raise ValueError(f"{queue_mode} frozen staged timing execution did not pass")
+      details = [
+        value for value in (
+          result.get("exact_blocker"), result.get("exception"), result.get("error"))
+        if isinstance(value, str) and value
+      ]
+      suffix = f": {'; '.join(details)}" if details else ""
+      raw = result.get("raw_probe")
+      raw_failure = {
+        key: raw[key] for key in (
+          "exact_blocker", "exception", "error", "completed_epochs")
+        if isinstance(raw, Mapping) and key in raw and
+           isinstance(raw[key], (str, int, float, bool, type(None)))
+      }
+      failure_evidence = {
+        "schema": STAGED_CANDIDATE_FAILURE_SCHEMA,
+        "status": "BLOCKED",
+        "exact_blocker": result.get("exact_blocker"),
+        "exception": result.get("exception"), "error": result.get("error"),
+        "raw_probe_failure": raw_failure or None,
+      }
+      message = f"{queue_mode} frozen staged timing execution did not pass{suffix}"
+      raise StagedCandidateExecutionError(message, failure_evidence)
     receipt = result.get("raw_probe", {}).get("c8_timing_receipt")
     if not isinstance(receipt, Mapping) or \
        receipt.get("schema") != FROZEN_STAGED_C8_TIMING_RECEIPT_SCHEMA or \
@@ -691,7 +722,8 @@ def main(argv: list[str] | None = None) -> int:
 
 __all__ = [
   "CANDIDATE_RECEIPT_SCHEMA", "FALLBACK_RECEIPT_SCHEMA", "MEASUREMENT_SOURCE",
-  "PHASE_SEMANTICS",
+  "PHASE_SEMANTICS", "STAGED_CANDIDATE_FAILURE_SCHEMA",
+  "StagedCandidateExecutionError",
   "QueueTimingAuthority", "QueueTimingRunners", "SCHEMA",
   "collect_staged_c8_timing", "collect_staged_c8_timing_from_samples",
   "make_direct_packed_fallback_runner", "make_frozen_staged_candidate_runner",
