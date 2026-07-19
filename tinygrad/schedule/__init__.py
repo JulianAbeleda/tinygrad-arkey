@@ -1,7 +1,8 @@
 import time, inspect
 from dataclasses import replace
 from collections import deque
-from tinygrad.uop.ops import UOp, Ops, UOpMetaClass, track_rewrites, graph_rewrite, gate_kernel_sink, KernelInfo, memory_semantic_owner
+from tinygrad.uop.ops import (DIAGNOSTIC_LAUNCH_AUTHORITY, DiagnosticCallInfo, UOp, Ops, UOpMetaClass, track_rewrites,
+                              graph_rewrite, gate_kernel_sink, KernelInfo, memory_semantic_owner)
 from tinygrad.uop.spec import type_verify, spec_tensor
 from tinygrad.helpers import DEBUG, cpu_profile, TracingKey, SPEC, pluralize, SCACHE, BASEDIR, partition, getenv
 
@@ -87,7 +88,14 @@ def create_schedule(sched_sink:UOp) -> UOp:
         # Concrete call arguments stay byte-for-byte identical to an unmarked
         # schedule so ownership cannot perturb fusion, graphing, or dispatch.
         call = function.call(*buf_uops, metadata=k.arg.metadata)
-        if semantic_slots and not isinstance(function.arg, KernelInfo):
+        if isinstance(k.arg, DiagnosticCallInfo):
+          if k.arg.diagnostic_launch_authority != DIAGNOSTIC_LAUNCH_AUTHORITY:
+            raise ValueError("diagnostic CALL global size lacks explicit research-only authority")
+          # This is invocation-only launch authority. Rebuilding the CALL with
+          # function.call would otherwise silently turn the bounded diagnostic
+          # back into an ordinary full-grid invocation.
+          call = call.replace(arg=replace(k.arg, memory_semantic_slots=tuple(sorted(semantic_slots.items()))))
+        elif semantic_slots and not isinstance(function.arg, KernelInfo):
           call = call.replace(arg=replace(call.arg, memory_semantic_slots=tuple(sorted(semantic_slots.items()))))
         linearized.append(call)
       for x in children.get(rk, []):

@@ -8,8 +8,10 @@ from unittest.mock import Mock, patch
 
 from tinygrad import Tensor, dtypes
 from tinygrad.runtime.process_isolated import IsolatedResult
-from tinygrad.uop.ops import (CallInfo, DIAGNOSTIC_LAUNCH_AUTHORITY, DiagnosticCallInfo,
-                              Ops, ProgramInfo, UOp)
+from tinygrad.uop.ops import (CallInfo, DIAGNOSTIC_LAUNCH_AUTHORITY, DiagnosticCallInfo, Ops, ProgramInfo, UOp,
+                              bind_memory_semantic_owner)
+from tinygrad.schedule import create_schedule
+from tinygrad.schedule.rangeify import get_kernel_graph
 
 from extra.qk.mmq_exact_role_spec import exact_role_spec
 from extra.qk.mmq_llama_five_buffer_full_kernel import build_llama_five_buffer_full_kernel
@@ -1219,6 +1221,49 @@ def test_call_launch_override_is_authorized_bounded_and_ordinary_callinfo_is_unc
     diagnostic_launch_authority=DIAGNOSTIC_LAUNCH_AUTHORITY))
   with pytest.raises(ValueError, match="bounded"):
     _kernel_launch_dims(oversized, program, {})
+
+
+def test_bounded_grid_callinfo_survives_create_schedule_with_merged_semantic_slots():
+  from tinygrad.engine.realize import _kernel_launch_dims
+  program = _bounded_grid_test_program()
+  tensors = [Tensor.empty(1, device="AMD") for _ in range(5)]
+  output = tensors[0].custom_kernel(*tensors[1:], fxn=lambda *_: program)[0]
+
+  ordinary = create_schedule(get_kernel_graph(UOp.sink(output.uop))).src
+  ordinary_calls = [call for call in ordinary if call.op is Ops.CALL and call.src[0] is program]
+  assert len(ordinary_calls) == 1 and type(ordinary_calls[0].arg) is CallInfo
+  assert ordinary_calls[0].arg == CallInfo()
+
+  bind_memory_semantic_owner(tensors[0].uop, "side-owner")
+  bounded, _ = _apply_diagnostic_global_grid_to_target_calls(
+    output, (program,), (1, 4, 1))
+  bounded_call = next(call for call in bounded.uop.toposort()
+                      if call.op is Ops.CALL and call.src[0] is program)
+  bounded_uop = bounded.uop.substitute({
+    bounded_call: bounded_call.replace(arg=replace(
+      bounded_call.arg, memory_semantic_slots=((3, "diagnostic-owner"),)))
+  }, walk=True)
+  scheduled = create_schedule(get_kernel_graph(UOp.sink(bounded_uop))).src
+  scheduled_calls = [call for call in scheduled if call.op is Ops.CALL and call.src[0] is program]
+  assert len(scheduled_calls) == 1 and isinstance(scheduled_calls[0].arg, DiagnosticCallInfo)
+  assert scheduled_calls[0].arg.diagnostic_global_size == (1, 4, 1)
+  assert scheduled_calls[0].arg.diagnostic_launch_authority == DIAGNOSTIC_LAUNCH_AUTHORITY
+  assert scheduled_calls[0].arg.memory_semantic_slots == (
+    (0, "side-owner"), (3, "diagnostic-owner"))
+  assert _kernel_launch_dims(scheduled_calls[0], program, {}) == ((1, 4, 1), (256, 1, 1))
+
+
+def test_create_schedule_rejects_diagnostic_grid_without_authority():
+  program = _bounded_grid_test_program()
+  tensors = [Tensor.empty(1, device="AMD") for _ in range(5)]
+  output = tensors[0].custom_kernel(*tensors[1:], fxn=lambda *_: program)[0]
+  call = next(call for call in output.uop.toposort()
+              if call.op is Ops.CALL and call.src[0] is program)
+  unauthorized = output.uop.substitute({
+    call: call.replace(arg=DiagnosticCallInfo(diagnostic_global_size=(1, 4, 1)))
+  }, walk=True)
+  with pytest.raises(ValueError, match="authority"):
+    create_schedule(get_kernel_graph(UOp.sink(unauthorized)))
 
 
 def test_v2_fixed_base_ordinal_admission_uses_dynamic_full_role_epoch_count():
