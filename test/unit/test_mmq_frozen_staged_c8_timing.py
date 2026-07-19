@@ -21,7 +21,7 @@ from extra.qk.mmq_staged_c7_c8_contract import (
 )
 from extra.qk.mmq_llama_five_buffer_gpu_harness import (
   FROZEN_STAGED_C8_TIMING_RECEIPT_SCHEMA,
-  _frozen_staged_c8_timing_receipt, _notify_staged_observer,
+  _bind_staged_observer_buffer, _frozen_staged_c8_timing_receipt, _notify_staged_observer,
   _staged_observer_allocation, run_full_grid_target_role_probe,
 )
 from test.unit.test_mmq_frozen_staged_family import _loader, _produce
@@ -311,6 +311,24 @@ def test_neutral_lifecycle_observer_is_default_off_and_preallocation_scoped():
   with _staged_observer_allocation(None, "output", "ignored"):
     pass
   _notify_staged_observer(None, "begin_route")
+
+
+def test_lifecycle_observer_persistently_binds_lazy_tensor_buffer():
+  events = []
+  buffer = object()
+
+  class Observer:
+    def bind_buffer(self, actual, category, name):
+      events.append((actual, category, name))
+
+  tensor = type("TensorLike", (), {
+    "uop": type("UOpLike", (), {"buffer": buffer})(),
+  })()
+  _bind_staged_observer_buffer(Observer(), tensor, "output", "persistent_partial")
+  _bind_staged_observer_buffer(None, tensor, "output", "ignored")
+  assert events == [(buffer, "output", "persistent_partial")]
+  with pytest.raises(TypeError, match="bind_buffer"):
+    _bind_staged_observer_buffer(object(), tensor, "output", "persistent_partial")
 
 
 def test_direct_packed_live_seam_uses_real_boundary_contract_without_device(monkeypatch, family):

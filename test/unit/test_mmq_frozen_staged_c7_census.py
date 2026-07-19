@@ -12,7 +12,7 @@ from tinygrad.dtype import dtypes
 from tinygrad.helpers import Context
 
 from extra.qk.mmq_frozen_staged_c7_census import (
-  FULL_ROUTE_CATEGORIES, FrozenStagedC7QueueCapture,
+  FULL_ROUTE_CATEGORIES, FrozenStagedC7HarnessAdapter, FrozenStagedC7QueueCapture,
   _write_json,
   build_frozen_staged_c7_census, build_frozen_staged_c7_from_observations,
   capture_frozen_staged_c7_queue_probe,
@@ -43,6 +43,25 @@ def _authority(*, budget: int = 1_000_000_000, granularity: int = 4096) -> dict:
     allocation_granularity_bytes=granularity,
     admitted_budget_bytes=budget,
     budget_provenance="mock live device admission scan")
+
+
+def test_harness_adapter_binds_owner_across_lazy_allocation_boundary(family):
+  capture = FrozenStagedC7QueueCapture(family, "PM4", "CPU", 4096)
+  adapter = FrozenStagedC7HarnessAdapter(capture)
+  buffer = Buffer("CPU", 4096, dtypes.uint8)
+  with Context(LRU=0), adapter.active():
+    # Mirror AMD's Tensor.realize/get_buf split: creation ownership ends before
+    # the physical allocator event, while the exact base retains its binding.
+    with adapter.allocation("output", "persistent_partial"):
+      adapter.bind_buffer(buffer, "output", "persistent_partial")
+    buffer.allocate()
+    adapter.begin_route()
+    adapter.end_route()
+    buffer.deallocate()
+  evidence = capture.physical_evidence()
+  assert evidence.complete
+  allocation = next(event for event in capture.ledger.events if event.event == "alloc")
+  assert allocation.owner == capture.owner("output", "persistent_partial")
 
 
 def _captured_queue(family: FrozenStagedFamily, queue: str, *,

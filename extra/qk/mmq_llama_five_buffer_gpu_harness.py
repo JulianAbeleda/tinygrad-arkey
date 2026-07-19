@@ -836,6 +836,24 @@ def _staged_observer_allocation(observer: Any | None, category: str, name: str):
   return scope
 
 
+def _bind_staged_observer_buffer(
+    observer: Any | None, tensor: Any, category: str, name: str,
+  ) -> None:
+  """Bind ownership to a lazy Tensor allocation before its first ``get_buf``.
+
+  ``Tensor.realize`` can leave an AMD ``Buffer`` physically unallocated until
+  a later copy or dispatch.  The ambient allocation scope above therefore
+  cannot by itself cover every allocator event.  Persist the same semantic
+  owner on the exact lazy base buffer so the physical ledger observes it when
+  allocation eventually occurs.
+  """
+  if observer is None: return
+  callback = getattr(observer, "bind_buffer", None)
+  if not callable(callback):
+    raise TypeError("staged_lifecycle_observer must provide bind_buffer(buffer, category, name)")
+  callback(tensor.uop.buffer, category, name)
+
+
 def _notify_staged_observer(observer: Any | None, method: str, *args: Any) -> None:
   if observer is None: return
   callback = getattr(observer, method, None)
@@ -1748,47 +1766,70 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
   if persistent_buffers:
     with _staged_observer_allocation(
         staged_lifecycle_observer, "output", "persistent_partial"):
-      persistent_partial = Tensor.empty(m * n, dtype=dtypes.float32, device="AMD").realize()
+      persistent_partial = Tensor.empty(m * n, dtype=dtypes.float32, device="AMD")
+      _bind_staged_observer_buffer(
+        staged_lifecycle_observer, persistent_partial, "output", "persistent_partial")
+      persistent_partial.realize()
     q4_capacity = (n * (k // 256) * 36) if preloaded_epochs else n_chunk_tiles * 128 * 36
     with _staged_observer_allocation(
         staged_lifecycle_observer, "full_q4_source", "persistent_q4"):
-      persistent_q4 = Tensor.empty(q4_capacity, dtype=dtypes.uint32, device="AMD").realize()
+      persistent_q4 = Tensor.empty(q4_capacity, dtype=dtypes.uint32, device="AMD")
+      _bind_staged_observer_buffer(
+        staged_lifecycle_observer, persistent_q4, "full_q4_source", "persistent_q4")
+      persistent_q4.realize()
     value_records = (k // 128) if preloaded_epochs else 2
     with _staged_observer_allocation(
         staged_lifecycle_observer, "full_q8_values_source", "persistent_values"):
-      persistent_values = Tensor.empty(
-        value_records * m * 128, dtype=dtypes.int8, device="AMD").realize()
+      persistent_values = Tensor.empty(value_records * m * 128, dtype=dtypes.int8, device="AMD")
+      _bind_staged_observer_buffer(
+        staged_lifecycle_observer, persistent_values, "full_q8_values_source", "persistent_values")
+      persistent_values.realize()
     with _staged_observer_allocation(
         staged_lifecycle_observer, "full_q8_scales_source", "persistent_scales"):
-      persistent_scales = Tensor.empty(
-        value_records * m * 4, dtype=dtypes.float32, device="AMD").realize()
+      persistent_scales = Tensor.empty(value_records * m * 4, dtype=dtypes.float32, device="AMD")
+      _bind_staged_observer_buffer(
+        staged_lifecycle_observer, persistent_scales, "full_q8_scales_source", "persistent_scales")
+      persistent_scales.realize()
     with _staged_observer_allocation(
         staged_lifecycle_observer, "full_q8_sums_source", "persistent_sums"):
-      persistent_sums = Tensor.empty(
-        value_records * m * 4, dtype=dtypes.float32, device="AMD").realize()
+      persistent_sums = Tensor.empty(value_records * m * 4, dtype=dtypes.float32, device="AMD")
+      _bind_staged_observer_buffer(
+        staged_lifecycle_observer, persistent_sums, "full_q8_sums_source", "persistent_sums")
+      persistent_sums.realize()
     if stable_epoch_staging:
       # The live frozen runtime binds one persistent allocation for every ABI
       # slot. Mirror that contract here instead of changing Q4/Q8-value view
       # pointers between launches.
       with _staged_observer_allocation(
           staged_lifecycle_observer, "compact_q4_stage", "persistent_q4_stage"):
-        persistent_q4_stage = Tensor.empty(
-          n * 36, dtype=dtypes.uint32, device="AMD").realize()
+        persistent_q4_stage = Tensor.empty(n * 36, dtype=dtypes.uint32, device="AMD")
+        _bind_staged_observer_buffer(
+          staged_lifecycle_observer, persistent_q4_stage, "compact_q4_stage", "persistent_q4_stage")
+        persistent_q4_stage.realize()
       with _staged_observer_allocation(
           staged_lifecycle_observer, "compact_q8_values_stage", "persistent_values_stage"):
-        persistent_values_stage = Tensor.empty(
-          2 * m * 128, dtype=dtypes.int8, device="AMD").realize()
+        persistent_values_stage = Tensor.empty(2 * m * 128, dtype=dtypes.int8, device="AMD")
+        _bind_staged_observer_buffer(
+          staged_lifecycle_observer, persistent_values_stage,
+          "compact_q8_values_stage", "persistent_values_stage")
+        persistent_values_stage.realize()
     if stable_metadata_staging:
       # Keep full preloaded sources for the epoch sequence, but bind the
       # kernel to one stable one-epoch metadata allocation refreshed by SDMA.
       with _staged_observer_allocation(
           staged_lifecycle_observer, "compact_q8_scales_stage", "persistent_scales_stage"):
-        persistent_scales_stage = Tensor.empty(
-          2 * m * 4, dtype=dtypes.float32, device="AMD").realize()
+        persistent_scales_stage = Tensor.empty(2 * m * 4, dtype=dtypes.float32, device="AMD")
+        _bind_staged_observer_buffer(
+          staged_lifecycle_observer, persistent_scales_stage,
+          "compact_q8_scales_stage", "persistent_scales_stage")
+        persistent_scales_stage.realize()
       with _staged_observer_allocation(
           staged_lifecycle_observer, "compact_q8_sums_stage", "persistent_sums_stage"):
-        persistent_sums_stage = Tensor.empty(
-          2 * m * 4, dtype=dtypes.float32, device="AMD").realize()
+        persistent_sums_stage = Tensor.empty(2 * m * 4, dtype=dtypes.float32, device="AMD")
+        _bind_staged_observer_buffer(
+          staged_lifecycle_observer, persistent_sums_stage,
+          "compact_q8_sums_stage", "persistent_sums_stage")
+        persistent_sums_stage.realize()
     if preloaded_epochs:
       # ``_random_q4_words`` is N-major: [N, epoch, 144]. A Buffer view can
       # shift only one contiguous base, so preload epoch-major storage instead

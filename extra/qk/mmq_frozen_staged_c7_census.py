@@ -300,6 +300,10 @@ class FrozenStagedC7HarnessAdapter:
   def allocation(self, category: str, name: str) -> contextlib.AbstractContextManager[AllocationOwner]:
     return self.queue_capture.allocation(category, name)
 
+  def bind_buffer(self, buffer: Any, category: str, name: str) -> AllocationOwner:
+    """Persist the semantic owner when the harness's allocation is lazy."""
+    return self.queue_capture.bind_buffer(buffer, category, name)
+
   def begin_route(self) -> int: return self.queue_capture.begin_route()
   def end_route(self) -> int: return self.queue_capture.end_route()
 
