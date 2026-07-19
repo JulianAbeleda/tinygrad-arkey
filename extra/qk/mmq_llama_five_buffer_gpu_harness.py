@@ -10,6 +10,7 @@ as a numerical pass.
 from __future__ import annotations
 
 import argparse
+from contextlib import nullcontext
 import hashlib
 import json
 import os
@@ -38,6 +39,8 @@ ATOL = 3e-3
 TARGET_IN_PLACE_ACCUMULATION = "target_in_place_fp32_add"
 FROZEN_STAGED_PHASE_RECEIPT_SCHEMA = \
   "tinygrad.mmq_q4k_q8_1.frozen_staged_phase_isolation.v1"
+FROZEN_STAGED_C8_TIMING_RECEIPT_SCHEMA = \
+  "tinygrad.mmq_q4k_q8_1.frozen_staged_phase_timing.v1"
 FROZEN_STAGED_RUNTIME_CANARY_SCHEMA = \
   "tinygrad.mmq_q4k_q8_1.frozen_staged_runtime_canary.v1"
 _TARGET_BUFFER_NAMES = ("output", "q4", "q8_values", "q8_scales", "q8_original_sums")
@@ -821,6 +824,98 @@ def _new_frozen_staged_phase_receipt() -> dict[str, Any]:
   }
 
 
+def _staged_observer_allocation(observer: Any | None, category: str, name: str):
+  """Return the observer's pre-allocation ownership scope, or a no-op scope."""
+  if observer is None: return nullcontext()
+  allocation = getattr(observer, "allocation", None)
+  if not callable(allocation):
+    raise TypeError("staged_lifecycle_observer must provide allocation(category, name)")
+  scope = allocation(category, name)
+  if not hasattr(scope, "__enter__") or not hasattr(scope, "__exit__"):
+    raise TypeError("staged lifecycle allocation callback must return a context manager")
+  return scope
+
+
+def _notify_staged_observer(observer: Any | None, method: str, *args: Any) -> None:
+  if observer is None: return
+  callback = getattr(observer, method, None)
+  if not callable(callback):
+    raise TypeError(f"staged_lifecycle_observer must provide {method}()")
+  callback(*args)
+
+
+def _frozen_staged_c8_timing_receipt(
+    *, program_key: str, binary_sha256: str, queue_mode: str,
+    output_initialization_ns: int, epoch_rows: list[Mapping[str, Any]],
+    final_sync_ns: int,
+    ) -> dict[str, Any]:
+  """Normalize a gap-free nanosecond phase partition into a JSON receipt."""
+  if queue_mode not in ("PM4", "AQL"):
+    raise ValueError("frozen staged C8 timing queue mode is invalid")
+  if not isinstance(program_key, str) or not program_key or \
+     not isinstance(binary_sha256, str) or len(binary_sha256) != 64:
+    raise ValueError("frozen staged C8 timing program identity is incomplete")
+  if not isinstance(output_initialization_ns, int) or output_initialization_ns < 0 or \
+     not isinstance(final_sync_ns, int) or final_sync_ns < 0:
+    raise ValueError("frozen staged C8 timing boundaries must be non-negative integers")
+  normalized, total_ns = [], output_initialization_ns + final_sync_ns
+  expected_transfers = tuple(zip(
+    range(1, 5), _TARGET_BUFFER_NAMES[1:],
+    ("compact_q4_stage", "compact_q8_values_stage",
+     "compact_q8_scales_stage", "compact_q8_sums_stage")))
+  for ordinal, row in enumerate(epoch_rows):
+    if not isinstance(row, Mapping) or row.get("ordinal") != ordinal:
+      raise ValueError("frozen staged C8 timing epoch order differs")
+    transfers = row.get("transfers")
+    if not isinstance(transfers, list) or len(transfers) != 4:
+      raise ValueError("frozen staged C8 timing requires four transfer rows")
+    normalized_transfers = []
+    for transfer, expected in zip(transfers, expected_transfers):
+      slot, name, category = expected
+      if not isinstance(transfer, Mapping) or \
+         (transfer.get("slot"), transfer.get("name"), transfer.get("category")) != expected or \
+         not isinstance(transfer.get("nbytes"), int) or transfer["nbytes"] <= 0 or \
+         not isinstance(transfer.get("elapsed_ns"), int) or transfer["elapsed_ns"] < 0:
+        raise ValueError("frozen staged C8 transfer timing differs from the four-buffer ABI")
+      normalized_transfers.append({
+        "slot": slot, "name": name, "category": category,
+        "nbytes": transfer["nbytes"], "elapsed_ms": transfer["elapsed_ns"] / 1e6,
+      })
+      total_ns += transfer["elapsed_ns"]
+    timings = {}
+    for name in ("gather_ns", "staging_sync_ns", "dispatch_ns", "dispatch_sync_ns"):
+      value = row.get(name)
+      if not isinstance(value, int) or value < 0:
+        raise ValueError(f"frozen staged C8 {name} must be a non-negative integer")
+      timings[name.removesuffix("_ns") + "_ms"] = value / 1e6
+      total_ns += value
+    normalized.append({
+      "ordinal": ordinal, "gather_ms": timings["gather_ms"],
+      "transfers": normalized_transfers,
+      "staging_sync_ms": timings["staging_sync_ms"],
+      "dispatch_ms": timings["dispatch_ms"],
+      "dispatch_sync_ms": timings["dispatch_sync_ms"],
+    })
+  return {
+    "schema": FROZEN_STAGED_C8_TIMING_RECEIPT_SCHEMA,
+    "status": "PASS", "program_key": program_key,
+    "binary_sha256": binary_sha256, "queue_mode": queue_mode,
+    "measurement_source": "synchronized_wall",
+    "phase_semantics": {
+      "gather": "all per-epoch host/source-view work outside the four transfer calls before staging synchronization",
+      "transfers": "four separately timed AMD SDMA enqueue calls in ABI slot order",
+      "staging_sync": "Device.synchronize returning before target submission",
+      "dispatch": "runtime invocation with wait=True plus target argument/accumulation work",
+      "dispatch_sync": "post-dispatch Device.synchronize plus phase-isolation receipt closure",
+      "final_sync": "explicit final Device.synchronize after the complete epoch sequence",
+    },
+    "output_initialization_ms": output_initialization_ns / 1e6,
+    "epochs": normalized, "final_sync_ms": final_sync_ns / 1e6,
+    "complete_role_ms": total_ns / 1e6,
+    "gap_free_phase_partition": True,
+  }
+
+
 def _complete_frozen_staged_preparation_receipt(
     receipt: dict[str, Any], *, target_dispatch_count: int,
     ) -> None:
@@ -1465,7 +1560,9 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
                                     stable_metadata_staging: bool = False,
                                     stable_epoch_staging: bool = False,
                                     wait_each_dispatch: bool = True,
-                                    frozen_bundle: str | Path | None = None) -> dict[str, Any]:
+                                    frozen_bundle: str | Path | None = None,
+                                    c8_phase_timing: bool = False,
+                                    staged_lifecycle_observer: Any | None = None) -> dict[str, Any]:
   """Run the emitted K=256 program across one admitted exact 14B Q4 role.
 
   By default each epoch writes a full-role partial and tinygrad performs the
@@ -1526,6 +1623,12 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
     stable_metadata_staging=stable_metadata_staging,
     stable_epoch_staging=stable_epoch_staging,
     wait_each_dispatch=wait_each_dispatch)
+  full_role_staged_execution = staged_phase_receipts_enabled and \
+    epoch_start == 0 and epoch_limit == total_epochs
+  if c8_phase_timing and not full_role_staged_execution:
+    raise ValueError("C8 phase timing requires the exact frozen full-role staged execution contract")
+  if staged_lifecycle_observer is not None and not full_role_staged_execution:
+    raise ValueError("staged lifecycle observation requires the exact frozen full-role staged execution contract")
   phase_isolation = _new_frozen_staged_phase_receipt() \
     if staged_phase_receipts_enabled else None
   accumulation_mode = (TARGET_IN_PLACE_ACCUMULATION if in_kernel_accumulate else
@@ -1632,6 +1735,8 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
     "per_epoch_vas": [],
   }
   runtime_evidence: dict[str, Any] | None = None
+  c8_timing_receipt: dict[str, Any] | None = None
+  observer_route_started = False
 
   def copyin_buffer(tensor, array) -> None:
     # Buffer.copyin is synchronous host-to-device staging for HCQ allocators;
@@ -1641,24 +1746,49 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
     buf.copyin(memoryview(np.ascontiguousarray(array)))
 
   if persistent_buffers:
-    persistent_partial = Tensor.empty(m * n, dtype=dtypes.float32, device="AMD").realize()
+    with _staged_observer_allocation(
+        staged_lifecycle_observer, "output", "persistent_partial"):
+      persistent_partial = Tensor.empty(m * n, dtype=dtypes.float32, device="AMD").realize()
     q4_capacity = (n * (k // 256) * 36) if preloaded_epochs else n_chunk_tiles * 128 * 36
-    persistent_q4 = Tensor.empty(q4_capacity, dtype=dtypes.uint32, device="AMD").realize()
+    with _staged_observer_allocation(
+        staged_lifecycle_observer, "full_q4_source", "persistent_q4"):
+      persistent_q4 = Tensor.empty(q4_capacity, dtype=dtypes.uint32, device="AMD").realize()
     value_records = (k // 128) if preloaded_epochs else 2
-    persistent_values = Tensor.empty(value_records * m * 128, dtype=dtypes.int8, device="AMD").realize()
-    persistent_scales = Tensor.empty(value_records * m * 4, dtype=dtypes.float32, device="AMD").realize()
-    persistent_sums = Tensor.empty(value_records * m * 4, dtype=dtypes.float32, device="AMD").realize()
+    with _staged_observer_allocation(
+        staged_lifecycle_observer, "full_q8_values_source", "persistent_values"):
+      persistent_values = Tensor.empty(
+        value_records * m * 128, dtype=dtypes.int8, device="AMD").realize()
+    with _staged_observer_allocation(
+        staged_lifecycle_observer, "full_q8_scales_source", "persistent_scales"):
+      persistent_scales = Tensor.empty(
+        value_records * m * 4, dtype=dtypes.float32, device="AMD").realize()
+    with _staged_observer_allocation(
+        staged_lifecycle_observer, "full_q8_sums_source", "persistent_sums"):
+      persistent_sums = Tensor.empty(
+        value_records * m * 4, dtype=dtypes.float32, device="AMD").realize()
     if stable_epoch_staging:
       # The live frozen runtime binds one persistent allocation for every ABI
       # slot. Mirror that contract here instead of changing Q4/Q8-value view
       # pointers between launches.
-      persistent_q4_stage = Tensor.empty(n * 36, dtype=dtypes.uint32, device="AMD").realize()
-      persistent_values_stage = Tensor.empty(2 * m * 128, dtype=dtypes.int8, device="AMD").realize()
+      with _staged_observer_allocation(
+          staged_lifecycle_observer, "compact_q4_stage", "persistent_q4_stage"):
+        persistent_q4_stage = Tensor.empty(
+          n * 36, dtype=dtypes.uint32, device="AMD").realize()
+      with _staged_observer_allocation(
+          staged_lifecycle_observer, "compact_q8_values_stage", "persistent_values_stage"):
+        persistent_values_stage = Tensor.empty(
+          2 * m * 128, dtype=dtypes.int8, device="AMD").realize()
     if stable_metadata_staging:
       # Keep full preloaded sources for the epoch sequence, but bind the
       # kernel to one stable one-epoch metadata allocation refreshed by SDMA.
-      persistent_scales_stage = Tensor.empty(2 * m * 4, dtype=dtypes.float32, device="AMD").realize()
-      persistent_sums_stage = Tensor.empty(2 * m * 4, dtype=dtypes.float32, device="AMD").realize()
+      with _staged_observer_allocation(
+          staged_lifecycle_observer, "compact_q8_scales_stage", "persistent_scales_stage"):
+        persistent_scales_stage = Tensor.empty(
+          2 * m * 4, dtype=dtypes.float32, device="AMD").realize()
+      with _staged_observer_allocation(
+          staged_lifecycle_observer, "compact_q8_sums_stage", "persistent_sums_stage"):
+        persistent_sums_stage = Tensor.empty(
+          2 * m * 4, dtype=dtypes.float32, device="AMD").realize()
     if preloaded_epochs:
       # ``_random_q4_words`` is N-major: [N, epoch, 144]. A Buffer view can
       # shift only one contiguous base, so preload epoch-major storage instead
@@ -1671,7 +1801,10 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
       copyin_buffer(persistent_sums, sums_np.reshape(-1))
 
   def run_epochs(*, timed: bool = False):
-    nonlocal completed_epochs, runtime_evidence
+    nonlocal completed_epochs, runtime_evidence, c8_timing_receipt, observer_route_started
+    c8_cursor_ns = time.perf_counter_ns() if c8_phase_timing and timed else None
+    c8_output_initialization_ns = 0
+    c8_epoch_rows: list[dict[str, Any]] = []
     if in_kernel_accumulate:
       accum = _zero_persistent_target_output(persistent_partial, target_output_zero, copyin_buffer)
     else:
@@ -1686,7 +1819,15 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
         phase_isolation,
         target_dispatch_count=0 if runtime_evidence is None
           else int(runtime_evidence.get("launch_count", 0)))
+      _notify_staged_observer(staged_lifecycle_observer, "begin_route")
+      observer_route_started = staged_lifecycle_observer is not None
+      if c8_cursor_ns is not None:
+        output_end_ns = time.perf_counter_ns()
+        c8_output_initialization_ns = output_end_ns - c8_cursor_ns
+        c8_cursor_ns = output_end_ns
     for epoch in range(epoch_start, epoch_start + epoch_limit):
+      c8_epoch_start_ns = c8_cursor_ns
+      c8_transfer_rows: list[dict[str, Any]] = []
       partial = persistent_partial if persistent_buffers else Tensor.empty(m * n, dtype=dtypes.float32, device="AMD").realize()
       if persistent_buffers:
         if not preloaded_epochs:
@@ -1713,8 +1854,24 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
         src_q4_buf, src_values_buf = src_q4.get_buf("AMD"), src_values.get_buf("AMD")
         if dev.hw_copy_queue_t is None or not hasattr(allocator, "_transfer"):
           raise RuntimeError("stable epoch staging requires an AMD SDMA transfer queue")
+        transfer_started_ns = time.perf_counter_ns() if c8_epoch_start_ns is not None else None
         allocator._transfer(dst_q4, src_q4_buf, src_q4.nbytes, src_dev=dev, dest_dev=dev)
+        if transfer_started_ns is not None:
+          transfer_ended_ns = time.perf_counter_ns()
+          c8_transfer_rows.append({
+            "slot": 1, "name": "q4", "category": "compact_q4_stage",
+            "nbytes": src_q4.nbytes,
+            "elapsed_ns": transfer_ended_ns - transfer_started_ns,
+          })
+          transfer_started_ns = time.perf_counter_ns()
         allocator._transfer(dst_values, src_values_buf, src_values.nbytes, src_dev=dev, dest_dev=dev)
+        if transfer_started_ns is not None:
+          transfer_ended_ns = time.perf_counter_ns()
+          c8_transfer_rows.append({
+            "slot": 2, "name": "q8_values", "category": "compact_q8_values_stage",
+            "nbytes": src_values.nbytes,
+            "elapsed_ns": transfer_ended_ns - transfer_started_ns,
+          })
         stage_q4_va, stage_values_va = int(dst_q4.va_addr), int(dst_values.va_addr)
         if epoch_staging["per_epoch_vas"] and (
             stage_q4_va != epoch_staging["per_epoch_vas"][0]["stage_q4_va"] or
@@ -1746,8 +1903,24 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
           raise RuntimeError("stable metadata staging requires an AMD SDMA transfer queue")
         # _transfer enqueues SDMA and signals the device timeline; the
         # subsequent HCQ compute launch waits on that timeline before reading.
+        transfer_started_ns = time.perf_counter_ns() if c8_epoch_start_ns is not None else None
         allocator._transfer(dst_scales, src_scales_buf, src_scales.nbytes, src_dev=dev, dest_dev=dev)
+        if transfer_started_ns is not None:
+          transfer_ended_ns = time.perf_counter_ns()
+          c8_transfer_rows.append({
+            "slot": 3, "name": "q8_scales", "category": "compact_q8_scales_stage",
+            "nbytes": src_scales.nbytes,
+            "elapsed_ns": transfer_ended_ns - transfer_started_ns,
+          })
+          transfer_started_ns = time.perf_counter_ns()
         allocator._transfer(dst_sums, src_sums_buf, src_sums.nbytes, src_dev=dev, dest_dev=dev)
+        if transfer_started_ns is not None:
+          transfer_ended_ns = time.perf_counter_ns()
+          c8_transfer_rows.append({
+            "slot": 4, "name": "q8_original_sums", "category": "compact_q8_sums_stage",
+            "nbytes": src_sums.nbytes,
+            "elapsed_ns": transfer_ended_ns - transfer_started_ns,
+          })
         stage_scales_va, stage_sums_va = int(dst_scales.va_addr), int(dst_sums.va_addr)
         if metadata_staging["per_epoch_vas"] and (
             stage_scales_va != metadata_staging["per_epoch_vas"][0]["stage_scales_va"] or
@@ -1765,7 +1938,11 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
       if staged_phase_receipts_enabled and timed:
         # Make all four stage completions an observed boundary before target
         # submission, instead of inferring completion from queue ordering.
+        staging_sync_started_ns = time.perf_counter_ns() \
+          if c8_epoch_start_ns is not None else None
         Device["AMD"].synchronize()
+        staging_sync_ended_ns = time.perf_counter_ns() \
+          if staging_sync_started_ns is not None else None
       for n0 in range(0, n, n_chunk_tiles*128):
         n1 = min(n, n0 + n_chunk_tiles*128)
         tile_count = (n1 - n0) // 128
@@ -1809,15 +1986,22 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
             "intermediate_readback": bool(per_epoch_check),
             "external_accumulation_add": accumulation_mode != TARGET_IN_PLACE_ACCUMULATION,
           })
+          _notify_staged_observer(
+            staged_lifecycle_observer, "runtime", runtime, Device["AMD"])
         _dispatch_with_runtime_evidence(
           runtime, buffers, tuple(program.arg.globals),
           global_size=(tile_count, m//128, 1), local_size=program.arg.local_size,
           vals=tuple(program.arg.vals({})), runtime_evidence=runtime_evidence,
           context={"epoch": epoch, "n0": n0, "n1": n1, "tile_count": tile_count},
           wait=wait_each_dispatch)
+        _notify_staged_observer(
+          staged_lifecycle_observer, "launch", runtime,
+          runtime_evidence["launches"][-1])
       partial_host = partial.numpy() if per_epoch_check else None
       accum, accum_host = _accumulate_target_role_epoch(
         partial, accum, accum_host, partial_host, mode=accumulation_mode)
+      c8_dispatch_ended_ns = time.perf_counter_ns() \
+        if c8_epoch_start_ns is not None else None
       if per_epoch_check:
         ep_scales = scales_np[epoch*2:(epoch+1)*2].astype(np.float16).astype(np.float32)
         ep_sums = sums_np[epoch*2:(epoch+1)*2].astype(np.float16).astype(np.float32)
@@ -1839,6 +2023,23 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
           epoch_stage=epoch_staging["per_epoch_vas"][-1],
           metadata_stage=metadata_staging["per_epoch_vas"][-1],
           launch=runtime_evidence["launches"][-1])
+      if c8_epoch_start_ns is not None:
+        c8_epoch_end_ns = time.perf_counter_ns()
+        if staging_sync_started_ns is None or staging_sync_ended_ns is None or \
+           c8_dispatch_ended_ns is None or len(c8_transfer_rows) != 4:
+          raise RuntimeError("frozen staged C8 phase partition is incomplete")
+        transfer_ns = sum(row["elapsed_ns"] for row in c8_transfer_rows)
+        gather_ns = staging_sync_started_ns - c8_epoch_start_ns - transfer_ns
+        if gather_ns < 0:
+          raise RuntimeError("frozen staged C8 gather partition became negative")
+        c8_epoch_rows.append({
+          "ordinal": epoch - epoch_start, "gather_ns": gather_ns,
+          "transfers": c8_transfer_rows,
+          "staging_sync_ns": staging_sync_ended_ns - staging_sync_started_ns,
+          "dispatch_ns": c8_dispatch_ended_ns - staging_sync_ended_ns,
+          "dispatch_sync_ns": c8_epoch_end_ns - c8_dispatch_ended_ns,
+        })
+        c8_cursor_ns = c8_epoch_end_ns
       elapsed += (time.perf_counter() - t0) * 1000.0
       completed_epochs += 1
     if not wait_each_dispatch:
@@ -1849,12 +2050,35 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
       t0 = time.perf_counter()
       Device["AMD"].synchronize()
       elapsed += (time.perf_counter() - t0) * 1000.0
+    c8_final_sync_ns = 0
+    if staged_phase_receipts_enabled and timed and \
+       (c8_phase_timing or staged_lifecycle_observer is not None):
+      final_sync_start_ns = c8_cursor_ns
+      Device["AMD"].synchronize()
+      final_sync_end_ns = time.perf_counter_ns() if final_sync_start_ns is not None else None
+      if final_sync_start_ns is not None and final_sync_end_ns is not None:
+        c8_final_sync_ns = final_sync_end_ns - final_sync_start_ns
+      _notify_staged_observer(staged_lifecycle_observer, "end_route")
+      observer_route_started = False
+    if c8_phase_timing and timed:
+      if frozen_binding is None or c8_cursor_ns is None:
+        raise RuntimeError("frozen staged C8 timing lacks its exact PROGRAM binding")
+      c8_timing_receipt = _frozen_staged_c8_timing_receipt(
+        program_key=frozen_binding.program_key,
+        binary_sha256=artifact["binary_sha256"],
+        queue_mode="AQL" if os.environ.get("AMD_AQL") == "1" else "PM4",
+        output_initialization_ns=c8_output_initialization_ns,
+        epoch_rows=c8_epoch_rows, final_sync_ns=c8_final_sync_ns)
     return (accum_host if host_accumulate else accum), elapsed
   try:
     for _ in range(warmups): run_epochs()
     samples = []
     for _ in range(rounds): accum, elapsed = run_epochs(timed=True); samples.append(elapsed)
   except BaseException as exc:
+    if observer_route_started:
+      try: _notify_staged_observer(staged_lifecycle_observer, "end_route")
+      except BaseException: pass
+      observer_route_started = False
     return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
             "shape": [m, n, k], "role": role_spec.role, "bounded_only": True,
             "production_dispatch_changed": False, "default_route": "direct_packed",
@@ -1924,6 +2148,8 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
           "metadata_staging": metadata_staging, "epoch_staging": epoch_staging,
           **({"phase_isolation": phase_isolation}
              if phase_isolation is not None else {}),
+          **({"c8_timing_receipt": c8_timing_receipt}
+             if c8_timing_receipt is not None else {}),
           "runtime_evidence": runtime_evidence,
           "execution_fixture": execution_fixture_identity, "fixture_roles": fixture_roles,
           "compile_performed": frozen_bundle is None, "requires_recompile": frozen_bundle is None}
@@ -4696,6 +4922,7 @@ def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
                                               stable_epoch_staging: bool = False,
                                               wait_each_dispatch: bool = True,
                                               frozen_bundle: str | Path | None = None,
+                                              c8_phase_timing: bool = False,
                                               child_env_overrides: Mapping[str, str] | None = None) -> dict[str, Any]:
   try: role_spec = admit_exact_role_spec(role_spec)
   except (TypeError, ValueError) as exc:
@@ -4759,6 +4986,7 @@ def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
           f"sync_each_epoch={bool(sync_each_epoch)}, stable_metadata_staging={bool(stable_metadata_staging)}, "
           f"stable_epoch_staging={bool(stable_epoch_staging)}, "
           f"wait_each_dispatch={bool(wait_each_dispatch)}, "
+          f"c8_phase_timing={bool(c8_phase_timing)}, "
           f"frozen_bundle={frozen_arg})), flush=True)")
   started = time.time()
   try:

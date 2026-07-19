@@ -164,6 +164,19 @@ class PhysicalMemoryLedger:
     self._manifests_seen += 1
     return self._manifests_seen
 
+  def record_boundary(self, name:str) -> int:
+    """Insert a non-allocation sequence boundary into an active census.
+
+    Route-level evidence can then intersect allocation lifetimes with an exact
+    preparation/dispatch/teardown window without inventing event ordinals.
+    Boundary rows never enter allocation reconciliation or peak accounting.
+    """
+    if not self._active: raise RuntimeError("physical allocation boundary requires an active ledger")
+    if not isinstance(name, str) or not name: raise ValueError("physical allocation boundary name must be non-empty")
+    sequence = len(self.events) + 1
+    self.events.append(AllocationEvent(sequence, f"boundary:{name}", 0, "", 0, 0, None))
+    return sequence
+
   @contextlib.contextmanager
   def active(self) -> Iterator[PhysicalMemoryLedger]:
     global _active_ledger
