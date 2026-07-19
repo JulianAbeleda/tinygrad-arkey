@@ -15,7 +15,8 @@ from tinygrad.uop.ops import Ops, ProgramInfo, UOp
 from extra.qk import mmq_llama_five_buffer_full_kernel as full_kernel
 from extra.qk.mmq_exact_role_spec import exact_role_spec
 from extra.qk.mmq_target_epoch_orchestrator import (
-  ATTESTATION_SCHEMA, FIXTURE_SCHEMA, compile_target_program, orchestrate_epoch_sweep, parse_kernel_faults,
+  ATTESTATION_SCHEMA, FIXTURE_SCHEMA, collect_kernel_fault_evidence, compile_target_program,
+  orchestrate_epoch_sweep, parse_kernel_fault_evidence, parse_kernel_faults,
   spawned_tiny_health_probe, target_fixture_evidence,
 )
 
@@ -109,6 +110,47 @@ def test_parse_kernel_faults_finds_only_relevant_gpu_health_markers():
   assert any("MES failed" in row for row in faults)
   assert any("GPU reset" in row for row in faults)
   assert parse_kernel_faults("all quiet\nordinary compiler warning") == []
+
+
+def test_kernel_fault_evidence_preserves_bounded_chronological_fault_details():
+  text = """
+    harmless amdgpu informational row
+    amdgpu: sq_intr: SQC instruction memory violation
+    amdgpu: VM_L2_PROTECTION_FAULT_STATUS:0x00201031
+    amdgpu: Faulty UTCL2 client ID: TCP (0x8)
+    amdgpu: VM_L2_PROTECTION_FAULT_ADDR: 0x00000000deadbeef
+    amdgpu: R/W: 1
+    amdgpu: [gfxhub] page fault (vmid:8 pasid:32774)
+    irrelevant row between fault markers
+    amdgpu: GPU reset begin
+  """
+  evidence = parse_kernel_fault_evidence(text)
+  assert evidence["schema"] == "tinygrad.amd_kernel_fault_evidence.v1"
+  assert evidence["status"] == "FAULTS" and evidence["truncated"] is False
+  assert [row["primary_marker"] for row in evidence["blocks"]] == [
+    "sq_intr", "[gfxhub] page fault", "gpu reset"]
+  first = evidence["blocks"][0]
+  assert first["details"] == {
+    "fault_addresses": ["0x00000000deadbeef"],
+    "clients": ["TCP"], "statuses": ["0x00201031"], "accesses": ["1"],
+  }
+  assert [row["ordinal"] for row in evidence["blocks"]] == [0, 1, 2]
+  assert all("harmless" not in line for block in evidence["blocks"] for line in block["lines"])
+
+
+def test_kernel_fault_evidence_is_bounded_and_read_errors_fail_closed_without_message():
+  evidence = parse_kernel_fault_evidence("\n".join(
+    f"amdgpu: GPU reset marker {index} " + "x" * 700 for index in range(40)))
+  assert len(evidence["blocks"]) == evidence["limits"]["max_blocks"] == 8
+  assert evidence["relevant_line_count"] == 40 and evidence["truncated"] is True
+  assert max(len(line) for block in evidence["blocks"] for line in block["lines"]) <= 513
+
+  def unavailable(_: float) -> str: raise RuntimeError("token=do-not-copy")
+  faults, read_error = collect_kernel_fault_evidence(1.0, fault_reader=unavailable)
+  assert faults == ["kernel-log scan failed: RuntimeError"]
+  assert read_error["status"] == "READ_ERROR"
+  assert read_error["read_error"] == {"type": "RuntimeError"}
+  assert "do-not-copy" not in str(read_error)
 
 
 def test_all_pass_runs_epochs_in_order_aggregates_fp32_and_is_never_promotable():

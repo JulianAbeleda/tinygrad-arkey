@@ -3411,7 +3411,7 @@ def run_frozen_epoch_program_set_prefix_probe_isolated(
     return {"schema": schema, "status": "BLOCKED", "exact_blocker": str(exc)}
   if timeout_seconds <= 0:
     return {"schema": schema, "status": "BLOCKED", "exact_blocker": "timeout_seconds must be positive"}
-  from extra.qk.mmq_target_epoch_orchestrator import parse_kernel_faults, read_kernel_log_since, spawned_tiny_health_probe
+  from extra.qk.mmq_target_epoch_orchestrator import collect_kernel_fault_evidence, spawned_tiny_health_probe
   try: health_before = bool(spawned_tiny_health_probe(env_overrides))
   except BaseException: health_before = False
   if not health_before:
@@ -3427,8 +3427,7 @@ def run_frozen_epoch_program_set_prefix_probe_isolated(
     args=(role_spec, str(Path(frozen_bundle).resolve()), prefix_epochs,
           preconstruct_runtimes, env_overrides),
     timeout_seconds=timeout_seconds, start_method="spawn")
-  try: kernel_faults = parse_kernel_faults(read_kernel_log_since(started))
-  except BaseException as exc: kernel_faults = [f"kernel-log scan failed: {type(exc).__name__}: {exc}"]
+  kernel_faults, kernel_fault_evidence = collect_kernel_fault_evidence(started)
   try: health_after = bool(spawned_tiny_health_probe(env_overrides))
   except BaseException: health_after = False
   if isolated.timed_out:
@@ -3440,7 +3439,8 @@ def run_frozen_epoch_program_set_prefix_probe_isolated(
       "exact_blocker": "frozen v2 fixed-base prefix child timed out",
       "timeout": True, "timeout_seconds": timeout_seconds,
       "health_before": health_before, "health_after": health_after,
-      "kernel_faults": kernel_faults, "child_env_overrides": env_overrides,
+      "kernel_faults": kernel_faults, "kernel_fault_evidence": kernel_fault_evidence,
+      "child_env_overrides": env_overrides,
     })
     if isinstance(isolated.evidence, dict):
       result["isolated_failure_evidence"] = dict(isolated.evidence)
@@ -3470,7 +3470,8 @@ def run_frozen_epoch_program_set_prefix_probe_isolated(
         result["dispatch"] = {census_key: isolated.evidence[census_key]}
   result.update({
     "health_before": health_before, "health_after": health_after,
-    "kernel_faults": kernel_faults, "child_env_overrides": env_overrides,
+    "kernel_faults": kernel_faults, "kernel_fault_evidence": kernel_fault_evidence,
+    "child_env_overrides": env_overrides,
   })
   if kernel_faults:
     result.update({"status": "BLOCKED", "exact_blocker": "AMD kernel fault/reset marker observed"})
@@ -3696,7 +3697,7 @@ def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
     return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
             **role_identity, "exact_blocker": str(exc)}
   health_overrides = dict(env_overrides)
-  from extra.qk.mmq_target_epoch_orchestrator import parse_kernel_faults, read_kernel_log_since, spawned_tiny_health_probe
+  from extra.qk.mmq_target_epoch_orchestrator import collect_kernel_fault_evidence, spawned_tiny_health_probe
   try: health_before = bool(spawned_tiny_health_probe(health_overrides or None))
   except BaseException: health_before = False
   mode_health_before = health_before
@@ -3729,8 +3730,7 @@ def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
     proc = subprocess.run([sys.executable, "-c", code], cwd=ROOT, env=child_env,
                           text=True, capture_output=True, timeout=timeout_seconds, check=False)
   except subprocess.TimeoutExpired:
-    try: kernel_faults = parse_kernel_faults(read_kernel_log_since(started))
-    except BaseException as exc: kernel_faults = [f"kernel-log scan failed: {type(exc).__name__}: {exc}"]
+    kernel_faults, kernel_fault_evidence = collect_kernel_fault_evidence(started)
     try: health_after = bool(spawned_tiny_health_probe(health_overrides or None))
     except BaseException: health_after = False
     mode_health_after = health_after
@@ -3739,6 +3739,7 @@ def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
             "exact_blocker": f"target-role compile/{epoch_limit if epoch_limit is not None else 'full'}-epoch dispatch timed out",
             "timeout_seconds": timeout_seconds, "timeout": True, "health_before": health_before,
             "mode_health_before": mode_health_before, "kernel_faults": kernel_faults,
+            "kernel_fault_evidence": kernel_fault_evidence,
             "health_after": health_after, "mode_health_after": mode_health_after,
             "health_mode": health_mode, "child_env_overrides": env_overrides,
             "compile_performed": False if frozen_bundle is not None else None,
@@ -3750,8 +3751,7 @@ def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
     if isinstance(candidate, dict):
       result = candidate
       break
-  try: kernel_faults = parse_kernel_faults(read_kernel_log_since(started))
-  except BaseException as exc: kernel_faults = [f"kernel-log scan failed: {type(exc).__name__}: {exc}"]
+  kernel_faults, kernel_fault_evidence = collect_kernel_fault_evidence(started)
   try: health_after = bool(spawned_tiny_health_probe(health_overrides or None))
   except BaseException: health_after = False
   mode_health_after = health_after
@@ -3760,7 +3760,8 @@ def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
     return {"schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "BLOCKED",
             "exact_blocker": "target-role child returned no structured result", "returncode": proc.returncode,
             "stdout_tail": proc.stdout[-2000:], "stderr_tail": proc.stderr[-2000:],
-            "kernel_faults": kernel_faults, "health_before": health_before, "health_after": health_after,
+            "kernel_faults": kernel_faults, "kernel_fault_evidence": kernel_fault_evidence,
+            "health_before": health_before, "health_after": health_after,
             "mode_health_before": mode_health_before, "mode_health_after": mode_health_after,
             "health_mode": health_mode, "child_env_overrides": env_overrides,
             "diagnostic": {"epoch_limit": epoch_limit, "n_chunk_tiles": n_chunk_tiles,
@@ -3772,7 +3773,8 @@ def run_full_grid_target_role_probe_isolated(*, timeout_seconds: float = 900.0,
                            "stable_epoch_staging": stable_epoch_staging,
                            "role": role_spec.role, "shape": list(role_spec.shape),
                            "frozen_bundle": str(Path(frozen_bundle).resolve()) if frozen_bundle is not None else None}}
-  result.update({"kernel_faults": kernel_faults, "health_before": health_before, "health_after": health_after,
+  result.update({"kernel_faults": kernel_faults, "kernel_fault_evidence": kernel_fault_evidence,
+                 "health_before": health_before, "health_after": health_after,
                  "mode_health_before": mode_health_before, "mode_health_after": mode_health_after,
                  "health_mode": health_mode, "child_env_overrides": env_overrides})
   if kernel_faults:

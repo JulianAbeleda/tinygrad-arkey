@@ -928,6 +928,7 @@ def test_v2_fixed_base_isolated_reuses_health_aql_and_exact_prefix(tmp_path, rol
       prefix_epochs=prefix_epochs, timeout_seconds=1)
   assert result["status"] == "PASS"
   assert result["health_before"] is result["health_after"] is True
+  assert result["kernel_fault_evidence"]["status"] == "CLEAR"
   assert result["child_env_overrides"] == {"AMD_AQL": "1"}
   assert health.call_args_list[0].args[0] == {"AMD_AQL": "1"}
   assert run.call_args.kwargs["start_method"] == "spawn"

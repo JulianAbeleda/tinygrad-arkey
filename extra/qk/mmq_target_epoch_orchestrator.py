@@ -26,6 +26,7 @@ import json
 import os
 from pathlib import Path
 import pickle
+import re
 import subprocess
 import tempfile
 import time
@@ -59,6 +60,76 @@ _GPU_FAULT_MARKERS = (
   "vram is lost",
   "ring gfx timeout",
 )
+KERNEL_FAULT_EVIDENCE_SCHEMA = "tinygrad.amd_kernel_fault_evidence.v1"
+_MAX_FAULT_BLOCKS, _MAX_FAULT_LINES, _MAX_FAULT_LINE_CHARS = 8, 32, 512
+_GPU_FAULT_CONTINUATION_MARKERS = (
+  "vm_l2_protection_fault", "faulty utcl2 client", "fault address", "client id",
+  "memory violation", "protection fault", "queue evicted", "r/w:", "access type",
+)
+_FAULT_ADDRESS_RE = re.compile(
+  r"(?:vm_l2_protection_fault_addr|fault address)\s*[:=]\s*(0x[0-9a-f]+)", re.IGNORECASE)
+_FAULT_CLIENT_RE = re.compile(
+  r"(?:faulty\s+utcl2\s+client(?:\s+id)?|client\s+id)\s*[:=]\s*([a-z0-9_-]+)", re.IGNORECASE)
+_FAULT_STATUS_RE = re.compile(
+  r"(?:vm_l2_protection_fault_status|fault status|status)\s*[:=]\s*(0x[0-9a-f]+)", re.IGNORECASE)
+_FAULT_ACCESS_RE = re.compile(
+  r"(?:\br/?w\b|access(?:\s+type)?)\s*[:=]\s*(read|write|0x[0-9a-f]+|\d+)", re.IGNORECASE)
+
+
+def _bounded_fault_row(raw: str) -> tuple[str, bool]:
+  row = "".join(char if char.isprintable() else " " for char in raw).strip()
+  if len(row) <= _MAX_FAULT_LINE_CHARS: return row, False
+  return row[:_MAX_FAULT_LINE_CHARS] + "…", True
+
+
+def _fault_marker_kind(lowered: str) -> str | None:
+  return next((marker for marker in _GPU_FAULT_MARKERS if marker in lowered), None)
+
+
+def parse_kernel_fault_evidence(text: str) -> dict[str, Any]:
+  """Capture bounded AMD fault blocks while preserving log chronology."""
+  blocks: list[dict[str, Any]] = []
+  current: dict[str, Any] | None = None
+  relevant_line_count, retained_line_count = 0, 0
+  truncated = False
+  for raw in str(text).splitlines():
+    lowered = raw.lower()
+    marker = _fault_marker_kind(lowered)
+    continuation = any(item in lowered for item in _GPU_FAULT_CONTINUATION_MARKERS)
+    if marker is None and (current is None or not continuation): continue
+    relevant_line_count += 1
+    if marker is not None:
+      if len(blocks) >= _MAX_FAULT_BLOCKS:
+        current, truncated = None, True
+        continue
+      current = {
+        "ordinal": len(blocks), "primary_marker": marker, "lines": [],
+        "details": {"fault_addresses": [], "clients": [], "statuses": [], "accesses": []},
+      }
+      blocks.append(current)
+    if current is None or retained_line_count >= _MAX_FAULT_LINES:
+      truncated = True
+      continue
+    row, row_truncated = _bounded_fault_row(raw)
+    truncated |= row_truncated
+    current["lines"].append(row)
+    retained_line_count += 1
+    for regex, key in (
+      (_FAULT_ADDRESS_RE, "fault_addresses"), (_FAULT_CLIENT_RE, "clients"),
+      (_FAULT_STATUS_RE, "statuses"), (_FAULT_ACCESS_RE, "accesses"),
+    ):
+      match = regex.search(row)
+      if match is not None and match.group(1) not in current["details"][key]:
+        current["details"][key].append(match.group(1))
+  return {
+    "schema": KERNEL_FAULT_EVIDENCE_SCHEMA,
+    "status": "FAULTS" if blocks else "CLEAR",
+    "source": "kernel_journal_window", "blocks": blocks,
+    "relevant_line_count": relevant_line_count, "retained_line_count": retained_line_count,
+    "truncated": truncated,
+    "limits": {"max_blocks": _MAX_FAULT_BLOCKS, "max_lines": _MAX_FAULT_LINES,
+               "max_line_chars": _MAX_FAULT_LINE_CHARS},
+  }
 
 
 def parse_kernel_faults(text: str) -> list[str]:
@@ -81,6 +152,25 @@ def read_kernel_log_since(since_timestamp: float) -> str:
   if proc.returncode != 0:
     raise RuntimeError(f"journalctl failed ({proc.returncode}): {proc.stderr[-500:]}")
   return proc.stdout
+
+
+def collect_kernel_fault_evidence(
+  since_timestamp: float, *, fault_reader: Callable[[float], str] | None = None,
+) -> tuple[list[str], dict[str, Any]]:
+  """Read once and return legacy marker rows plus bounded typed evidence."""
+  reader = read_kernel_log_since if fault_reader is None else fault_reader
+  try: text = reader(since_timestamp)
+  except BaseException as exc:
+    error_type = type(exc).__name__
+    return [f"kernel-log scan failed: {error_type}"], {
+      "schema": KERNEL_FAULT_EVIDENCE_SCHEMA, "status": "READ_ERROR",
+      "source": "kernel_journal_window", "blocks": [],
+      "relevant_line_count": 0, "retained_line_count": 0, "truncated": False,
+      "limits": {"max_blocks": _MAX_FAULT_BLOCKS, "max_lines": _MAX_FAULT_LINES,
+                 "max_line_chars": _MAX_FAULT_LINE_CHARS},
+      "read_error": {"type": error_type},
+    }
+  return parse_kernel_faults(text), parse_kernel_fault_evidence(text)
 
 
 def compile_target_program(*, accumulate: bool = False, target: str | None = None,
@@ -495,6 +585,7 @@ if __name__ == "__main__": raise SystemExit(main())
 __all__ = [
   "SCHEMA", "ATTESTATION_SCHEMA", "FIXTURE_SCHEMA", "TOTAL_EPOCHS", "compile_target_program",
   "compile_target_program_artifact", "target_program_artifact_evidence", "target_fixture_evidence", "orchestrate_epoch_sweep",
-  "parse_kernel_faults", "read_kernel_log_since", "run_isolated_target_epoch",
+  "KERNEL_FAULT_EVIDENCE_SCHEMA", "parse_kernel_fault_evidence", "parse_kernel_faults",
+  "collect_kernel_fault_evidence", "read_kernel_log_since", "run_isolated_target_epoch",
   "spawned_tiny_health_probe",
 ]
