@@ -1903,6 +1903,18 @@ def _selected_wmma_roots(nodes:list[UOp], wmmas:list[UOp]) -> dict[UOp,UOp]|None
     symbolic_heads[symbolic] = machine
   return selected_roots
 
+def _stable_progressive_head_order(heads:list[UOp], dependencies:dict[UOp,set[UOp]], node_pos:dict[UOp,int]) -> list[UOp]|None:
+  """Return a dependency order with graph position as the identity-independent tie-break."""
+  ordered:list[UOp] = []
+  remaining = set(heads)
+  while remaining:
+    ready = [h for h in remaining if not (dependencies[h] & remaining)]
+    if not ready: return None
+    ready.sort(key=lambda h:(len(dependencies[h]), node_pos[h]))
+    ordered.extend(ready)
+    remaining.difference_update(ready)
+  return ordered
+
 def _serialize_progressive_c_drains(ctx:IselContext, x:UOp):
   """Drain every selected C lane before reusing its proven physical lease."""
   if _progressive_c_assignment(ctx) is None or getattr(ctx, "_progressive_c_serialized", False): return None
@@ -1932,14 +1944,10 @@ def _serialize_progressive_c_drains(ctx:IselContext, x:UOp):
   head_set = set(drain_by_head)
   dependencies = {h:{candidate for candidate, symbolic in selected_roots.items()
                      if candidate is not h and symbolic in selected_roots[h].backward_slice} for h in head_set}
-  ordered_heads:list[UOp] = []
-  remaining = set(head_set)
-  while remaining:
-    ready = [h for h in remaining if not (dependencies[h] & remaining)]
-    if not ready: return None
-    ready.sort(key=lambda h:len(dependencies[h]))
-    ordered_heads.extend(ready)
-    remaining.difference_update(ready)
+  # UOp hashes are object identities, so set iteration is process/heap-layout dependent.  Several independent chain
+  # heads can become ready together with equal dependency counts; use their deterministic graph position to break that
+  # tie instead of publishing identity order into drain edges, scheduling, register allocation, and the final binary.
+  if (ordered_heads := _stable_progressive_head_order(heads, dependencies, {u:i for i,u in enumerate(nodes)})) is None: return None
   heads = ordered_heads
   subs:dict[UOp,UOp] = {}
   for head, previous_head in zip(heads[1:], heads):

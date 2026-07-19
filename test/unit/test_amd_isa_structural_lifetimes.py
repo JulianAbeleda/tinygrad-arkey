@@ -13,6 +13,15 @@ def _vreg(name:str, index:int) -> Register:
   return Register(name, index)
 
 
+def test_progressive_head_order_uses_graph_position_for_ready_ties():
+  # Object/UOp identity hashes are deliberately irrelevant: two independent
+  # heads are ready in each wave, and graph position defines their exact order.
+  a, b, c, d = (object() for _ in range(4))
+  dependencies = {a:set(), b:set(), c:{a}, d:{b}}
+  positions = {b:0, a:1, d:2, c:3}
+  assert amd._stable_progressive_head_order([a, b, c, d], dependencies, positions) == [b, a, d, c]
+
+
 def test_wide_fragment_release_order_survives_pre_regalloc_cleanup():
   """A later wide producer starts only after the prior fragment's FP32 update."""
   addr0 = UOp(Ops.INS, dtypes.int32, arg=AMDOps.MOV, tag=(_vreg("v4", 4),))
