@@ -33,6 +33,12 @@ class IsolatedResult:
   stderr: str = ""
   elapsed_seconds: float = 0.0
   timed_out: bool = False
+  # Typed diagnostics carried by an exception raised after a child has
+  # already captured useful execution evidence (for example a PM4 census
+  # followed by a delayed queue synchronize failure).  This is intentionally
+  # limited to plain mappings so the parent never receives live runtime
+  # objects.
+  evidence: dict[str, Any] | None = None
 
 
 def _child(queue: Any, callback: Callable[..., Any], args: tuple[Any, ...], kwargs: dict[str, Any], limit: int) -> None:
@@ -45,7 +51,12 @@ def _child(queue: Any, callback: Callable[..., Any], args: tuple[Any, ...], kwar
       value = callback(*args, **kwargs)
     row = {"status": "passed", "result": value, "error": None}
   except BaseException as exc:  # serialize failure; never let the child hang on an exception
-    row = {"status": "failed", "result": None, "error": f"{type(exc).__name__}: {exc}"}
+    evidence = {}
+    for name in ("pm4_dispatch_census", "aql_packet_census", "runtime_preconstruction"):
+      value = getattr(exc, name, None)
+      if isinstance(value, dict): evidence[name] = value
+    row = {"status": "failed", "result": None, "error": f"{type(exc).__name__}: {exc}",
+           "evidence": evidence or None}
   row.update(stdout=out.text(), stderr=err.text(), elapsed_seconds=time.monotonic() - started)
   with contextlib.suppress(Exception): queue.put(row)
 
@@ -89,7 +100,8 @@ def run_isolated(callback: Callable[..., Any], *, args: tuple[Any, ...] = (), kw
   except Exception:
     return IsolatedResult("failed", error="isolated callback exited without a result", elapsed_seconds=elapsed)
   return IsolatedResult(row.get("status", "failed"), row.get("result"), row.get("error"),
-                        row.get("stdout", ""), row.get("stderr", ""), row.get("elapsed_seconds", elapsed))
+                        row.get("stdout", ""), row.get("stderr", ""), row.get("elapsed_seconds", elapsed),
+                        evidence=row.get("evidence"))
 
 
 __all__ = ["IsolatedResult", "run_isolated"]

@@ -3,6 +3,11 @@ from tinygrad.runtime.process_isolated import run_isolated
 
 def _success(value): return {"value": value}
 def _failure(): raise RuntimeError("boom")
+def _failure_with_census():
+  exc = RuntimeError("delayed synchronize")
+  exc.pm4_dispatch_census = {"status": "REALIZATION_ERROR", "accepted_target_call_count": 1,
+                             "calls": [{"kernarg_qwords": [1, 2, 3, 4, 5]}]}
+  raise exc
 def _hang():
   import time; time.sleep(10)
 def _no_result():
@@ -13,6 +18,14 @@ def test_isolated_success_and_exception_are_structured():
   assert run_isolated(_success, args=(3,), timeout_seconds=2).result == {"value": 3}
   failed = run_isolated(_failure, timeout_seconds=2)
   assert failed.status == "failed" and "boom" in (failed.error or "")
+
+
+def test_isolated_failure_preserves_typed_dispatch_evidence():
+  failed = run_isolated(_failure_with_census, timeout_seconds=2)
+  assert failed.status == "failed" and "delayed synchronize" in (failed.error or "")
+  assert failed.evidence == {"pm4_dispatch_census": {
+    "status": "REALIZATION_ERROR", "accepted_target_call_count": 1,
+    "calls": [{"kernarg_qwords": [1, 2, 3, 4, 5]}]}}
 
 
 def test_isolated_timeout_is_hard_and_fail_closed():
