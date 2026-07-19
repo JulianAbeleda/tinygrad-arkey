@@ -15,6 +15,17 @@ from typing import Any, Mapping, Sequence
 
 SCHEMA = "tinygrad.memory_adaptive_policy.v1"
 CACHE_SCHEMA = "tinygrad.memory_adaptive_policy_cache.v1"
+PRODUCTION_ELIGIBILITY_SCHEMA = "tinygrad.accelerated_candidate.production_eligibility.v1"
+PRODUCTION_ELIGIBILITY_REQUIREMENT_SCHEMA = \
+  "tinygrad.accelerated_candidate.production_eligibility_requirement.v1"
+WHOLE_MODEL_FULL_OUTPUT_AUTHORITY = {
+  "schema": "tinygrad.whole_model_full_output_production_eligibility.v1",
+  "required_checks": [
+    "exact whole-policy identity",
+    "full-output numerical parity",
+    "complete exact route census",
+  ],
+}
 OBJECTIVE = "steady_state_end_to_end_tok_s"
 _NON_SEMANTIC_KEYS = frozenset({
   "filename", "file_name", "model_filename", "model_path", "path",
@@ -22,6 +33,7 @@ _NON_SEMANTIC_KEYS = frozenset({
   "profile", "profile_id", "benchmark_profile",
 })
 _REQUIRED_GATES = ("correctness", "resource", "gpu_health", "route_census")
+_DIRECT_PACKED_STRATEGY = "DIRECT_PACKED_FALLBACK"
 
 
 def _canonical(value: Any) -> Any:
@@ -41,6 +53,139 @@ def _canonical(value: Any) -> Any:
 
 def canonical_json(value: Any) -> str:
   return json.dumps(_canonical(value), sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False)
+
+
+def _identity(value: Mapping[str, Any]) -> str:
+  return "sha256:" + hashlib.sha256(canonical_json(value).encode("utf-8")).hexdigest()
+
+
+def build_production_eligibility_requirement(*, authority: Mapping[str, Any]) -> dict[str, Any]:
+  """Build the immutable authority requirement carried by a candidate row."""
+  if not isinstance(authority, Mapping) or not authority:
+    raise ValueError("production eligibility requirement needs non-empty authority")
+  payload = {
+    "schema": PRODUCTION_ELIGIBILITY_REQUIREMENT_SCHEMA,
+    "authority": _canonical(authority),
+  }
+  return {**payload, "requirement_identity": _identity(payload)}
+
+
+def whole_model_full_output_eligibility_requirement() -> dict[str, Any]:
+  """Requirement fulfilled only by the guarded whole-model evidence adapter."""
+  return build_production_eligibility_requirement(authority=WHOLE_MODEL_FULL_OUTPUT_AUTHORITY)
+
+
+def _validate_production_eligibility_requirement(value: Any) -> tuple[dict[str, Any] | None, str | None]:
+  label = "production eligibility requirement"
+  if not isinstance(value, Mapping): return None, f"{label} missing or not a mapping"
+  if set(value) != {"schema", "authority", "requirement_identity"}:
+    return None, f"{label} fields are malformed"
+  if value.get("schema") != PRODUCTION_ELIGIBILITY_REQUIREMENT_SCHEMA:
+    return None, f"{label} schema is unsupported"
+  if not isinstance(value.get("authority"), Mapping) or not value["authority"]:
+    return None, f"{label} authority is missing"
+  payload = {"schema": value["schema"], "authority": value["authority"]}
+  try: identity = _identity(payload)
+  except (TypeError, ValueError): return None, f"{label} content is malformed"
+  if value.get("requirement_identity") != identity:
+    return None, f"{label} identity mismatch"
+  return dict(_canonical(value)), None
+
+
+def production_candidate_identity(candidate: Mapping[str, Any]) -> str:
+  """Bind post-execution eligibility to one canonical search candidate row."""
+  if not isinstance(candidate, Mapping): raise TypeError("production candidate must be a mapping")
+  _candidate_id(candidate)
+  return _identity(candidate)
+
+
+def build_production_eligibility(*, candidate: Mapping[str, Any], promotion_eligible: bool,
+                                 authority: Mapping[str, Any], blocker: str | None = None) -> dict[str, Any]:
+  """Build one candidate-bound production eligibility classification.
+
+  This is classification evidence, not a route selector.  A blocked record is
+  useful durable evidence but cannot pass ``select_policy``.
+  """
+  candidate_id = _candidate_id(candidate)
+  requirement, requirement_error = _validate_production_eligibility_requirement(
+    candidate.get("production_eligibility_requirement"))
+  if requirement_error is not None: raise ValueError(requirement_error)
+  if not isinstance(promotion_eligible, bool):
+    raise TypeError("production eligibility requires one Boolean classification")
+  if not isinstance(authority, Mapping) or not authority:
+    raise ValueError("production eligibility requires non-empty authority")
+  normalized_authority = _canonical(authority)
+  if normalized_authority != requirement["authority"]:
+    raise ValueError("production eligibility authority does not match candidate requirement")
+  if blocker is not None and (not isinstance(blocker, str) or not blocker):
+    raise ValueError("production eligibility blocker must be a non-empty string or None")
+  if promotion_eligible != (blocker is None):
+    raise ValueError("production eligibility blocker must be absent for PASS and present for BLOCKED")
+  payload = {
+    "schema": PRODUCTION_ELIGIBILITY_SCHEMA,
+    "status": "PASS" if promotion_eligible else "BLOCKED",
+    "candidate_id": candidate_id,
+    "candidate_identity": production_candidate_identity(candidate),
+    "requirement_identity": requirement["requirement_identity"],
+    "promotion_eligible": promotion_eligible,
+    "authority": normalized_authority,
+    "blocker": blocker,
+  }
+  return {**payload, "evidence_identity": _identity(payload)}
+
+
+def validate_production_eligibility(value: Any, *, candidate: Mapping[str, Any],
+                                    require_eligible: bool = True) -> tuple[dict[str, Any] | None, str | None]:
+  """Validate exact candidate binding and optionally require a passing class."""
+  label = "production eligibility"
+  try:
+    candidate_id = _candidate_id(candidate)
+    candidate_identity = production_candidate_identity(candidate)
+  except (TypeError, ValueError): return None, f"{label} candidate is malformed"
+  if not isinstance(value, Mapping): return None, f"{label} evidence missing or not a mapping"
+  expected = {
+    "schema", "status", "candidate_id", "candidate_identity",
+    "requirement_identity",
+    "promotion_eligible", "authority", "blocker", "evidence_identity",
+  }
+  if set(value) != expected: return None, f"{label} evidence fields are malformed"
+  payload = {key: value[key] for key in expected if key != "evidence_identity"}
+  try: identity = _identity(payload)
+  except (TypeError, ValueError): return None, f"{label} evidence content is malformed"
+  if value.get("schema") != PRODUCTION_ELIGIBILITY_SCHEMA:
+    return None, f"{label} evidence schema is unsupported"
+  if value.get("candidate_id") != candidate_id:
+    return None, f"{label} candidate binding mismatch"
+  if value.get("candidate_identity") != candidate_identity:
+    return None, f"{label} canonical candidate identity mismatch"
+  requirement, requirement_error = _validate_production_eligibility_requirement(
+    candidate.get("production_eligibility_requirement"))
+  if requirement_error is not None: return None, requirement_error
+  if value.get("requirement_identity") != requirement["requirement_identity"]:
+    return None, f"{label} requirement identity mismatch"
+  try: normalized_authority = _canonical(value.get("authority"))
+  except (TypeError, ValueError): return None, f"{label} authority is malformed"
+  if normalized_authority != requirement["authority"]:
+    return None, f"{label} authority does not match candidate requirement"
+  if value.get("evidence_identity") != identity:
+    return None, f"{label} evidence identity mismatch"
+  authority, blocker = value.get("authority"), value.get("blocker")
+  if not isinstance(authority, Mapping) or not authority:
+    return None, f"{label} authority is missing"
+  if blocker is not None and (not isinstance(blocker, str) or not blocker):
+    return None, f"{label} blocker is malformed"
+  eligible = value.get("promotion_eligible")
+  if not isinstance(eligible, bool):
+    return None, f"{label} promotion_eligible is not Boolean"
+  expected_status = "PASS" if eligible else "BLOCKED"
+  if value.get("status") != expected_status:
+    return None, f"{label} status contradicts promotion_eligible"
+  if eligible != (blocker is None):
+    return None, f"{label} blocker contradicts promotion_eligible"
+  normalized = dict(_canonical(value))
+  if require_eligible and eligible is not True:
+    return None, f"{label} is BLOCKED: {blocker or 'promotion_eligible is false'}"
+  return normalized, None
 
 
 def canonical_search_record(*, gpu_facts: Mapping[str, Any], model_facts: Mapping[str, Any],
@@ -128,14 +273,24 @@ def select_policy(*, gpu_facts: Mapping[str, Any], model_facts: Mapping[str, Any
   if max_relative_noise < 0 or tie_relative_tolerance < 0: raise ValueError("noise tolerances must be non-negative")
   ids = [_candidate_id(c) for c in candidates]
   if len(ids) != len(set(ids)): raise ValueError("candidate_id values must be unique")
+  by_id = {candidate_id: candidate for candidate_id, candidate in zip(ids, candidates)}
   key_args = dict(gpu_facts=gpu_facts, model_facts=model_facts, workload=workload, candidates=candidates,
                   compiler_runtime_revision=compiler_runtime_revision, search_revision=search_revision)
   key = canonical_search_key(**key_args)
   accepted: list[dict[str, Any]] = []
   rejected: list[dict[str, Any]] = []
   for candidate_id in sorted(ids):
+    candidate = by_id[candidate_id]
     proof = evidence.get(candidate_id)
     reasons = []
+    eligibility = None
+    is_direct_packed_baseline = candidate_id == baseline_candidate_id and \
+      candidate.get("strategy") == _DIRECT_PACKED_STRATEGY
+    if not is_direct_packed_baseline:
+      eligibility, eligibility_error = validate_production_eligibility(
+        proof.get("production_eligibility") if isinstance(proof, Mapping) else None,
+        candidate=candidate)
+      if eligibility_error is not None: reasons.append(eligibility_error)
     if not isinstance(proof, Mapping): reasons.append("missing guarded evidence")
     else:
       for gate in _REQUIRED_GATES:
@@ -150,7 +305,8 @@ def select_policy(*, gpu_facts: Mapping[str, Any], model_facts: Mapping[str, Any
       rejected.append({"candidate_id": candidate_id, "reasons": reasons})
     else:
       assert timing is not None
-      accepted.append({"candidate_id": candidate_id, "timing": timing.to_json(), "_timing": timing})
+      accepted.append({"candidate_id": candidate_id, "timing": timing.to_json(), "_timing": timing,
+                       **({"production_eligibility": eligibility} if eligibility is not None else {})})
 
   decision, selected_id, tie_ids = "REFUSE", None, []
   reason = "no candidate passed every correctness, resource, GPU-health, route-census, and timing gate"
@@ -192,3 +348,15 @@ def cache_matches(cache_record: Mapping[str, Any], **search_key_args: Any) -> bo
             cache_record["result"].get("search_key") == cache_record["search_key"])
   except (TypeError, ValueError):
     return False
+
+
+__all__ = [
+  "SCHEMA", "CACHE_SCHEMA", "PRODUCTION_ELIGIBILITY_SCHEMA",
+  "PRODUCTION_ELIGIBILITY_REQUIREMENT_SCHEMA", "WHOLE_MODEL_FULL_OUTPUT_AUTHORITY", "OBJECTIVE",
+  "TimingSummary", "production_candidate_identity",
+  "build_production_eligibility_requirement",
+  "whole_model_full_output_eligibility_requirement",
+  "build_production_eligibility", "validate_production_eligibility",
+  "canonical_json", "canonical_search_record", "canonical_search_key",
+  "select_policy", "make_cache_record", "cache_matches",
+]

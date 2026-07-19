@@ -3,6 +3,9 @@ import copy
 import pytest
 
 from extra.qk.memory_adaptive_autoscan import AutoscanCandidate, autoscan_selected_model
+from extra.qk.memory_adaptive_policy import (
+  build_production_eligibility, build_production_eligibility_requirement,
+)
 from tinygrad.llm.device_facts import (
   DeviceCapabilities, DeviceFacts, MalformedDeviceFactsError, ProbeRecord, UnsupportedDeviceFactsSchemaError,
 )
@@ -22,13 +25,23 @@ def device(free, *, queue_mode="PM4", schema_version=2):
 def candidate(cid, strategy, workspace):
   memory = CandidateMemoryCoverage(cid, strategy, (term("workspace", workspace, ByteLifetime.CANDIDATE_WORKSPACE),),
                                    ("row",), ("row",))
-  return AutoscanCandidate(memory, {"candidate_id": cid, "route": strategy.value})
+  policy = {"candidate_id": cid, "route": strategy.value}
+  if strategy is not Strategy.DIRECT_PACKED_FALLBACK:
+    policy["production_eligibility_requirement"] = build_production_eligibility_requirement(
+      authority={"schema": "test.autoscan_production_authority.v1"})
+  return AutoscanCandidate(memory, policy)
 
 
-def proof(speed=100):
-  return {"correctness": {"status": "PASS"}, "resource": {"status": "PASS"},
-          "gpu_health": {"status": "PASS"}, "route_census": {"status": "PASS", "complete": True},
-          "end_to_end_timing": {"scope": "end_to_end", "metric": "tok_s", "samples": [speed]*3}}
+def proof(speed=100, candidate=None):
+  row = {"correctness": {"status": "PASS"}, "resource": {"status": "PASS"},
+         "gpu_health": {"status": "PASS"}, "route_census": {"status": "PASS", "complete": True},
+         "end_to_end_timing": {"scope": "end_to_end", "metric": "tok_s", "samples": [speed]*3}}
+  if candidate is not None and candidate.memory.strategy is not Strategy.DIRECT_PACKED_FALLBACK:
+    policy = candidate.policy_record()
+    row["production_eligibility"] = build_production_eligibility(
+      candidate=policy, promotion_eligible=True,
+      authority=policy["production_eligibility_requirement"]["authority"])
+  return row
 
 
 def args(free=200):
@@ -43,15 +56,16 @@ def args(free=200):
 
 def test_runs_only_feasible_candidates_and_free_vram_changes_feasibility():
   seen = []
-  low = autoscan_selected_model(**args(120), evidence_runner=lambda c: seen.append(c.candidate_id) or proof())
+  low = autoscan_selected_model(**args(120), evidence_runner=lambda c: seen.append(c.candidate_id) or proof(candidate=c))
   assert seen == ["baseline"] and low["selected_candidate_id"] == "baseline"
   seen.clear()
-  high = autoscan_selected_model(**args(250), evidence_runner=lambda c: seen.append(c.candidate_id) or proof(120 if c.candidate_id == "overlay" else 100))
+  high = autoscan_selected_model(**args(250), evidence_runner=lambda c: seen.append(c.candidate_id) or
+    proof(120 if c.candidate_id == "overlay" else 100, candidate=c))
   assert seen == ["baseline", "overlay"] and high["selected_candidate_id"] == "overlay"
 
 
 def test_rename_is_nonsemantic_and_exact_cache_skips_runner():
-  first = autoscan_selected_model(**args(250), evidence_runner=lambda c: proof())
+  first = autoscan_selected_model(**args(250), evidence_runner=lambda c: proof(candidate=c))
   renamed = args(250); renamed["selected_model_facts"] = copy.deepcopy(renamed["selected_model_facts"])
   renamed["selected_model_facts"].update(filename="other.gguf", size_label="8B", profile="renamed")
   second = autoscan_selected_model(**renamed, cache_record=first["cache_record"],
@@ -60,11 +74,11 @@ def test_rename_is_nonsemantic_and_exact_cache_skips_runner():
 
 
 def test_queue_mode_changes_exact_cache_identity_and_runs_search_again():
-  first = autoscan_selected_model(**args(250), evidence_runner=lambda c: proof())
+  first = autoscan_selected_model(**args(250), evidence_runner=lambda c: proof(candidate=c))
   changed = args(250); changed["device_facts"] = device(250, queue_mode="AQL")
   seen = []
   second = autoscan_selected_model(**changed, cache_record=first["cache_record"],
-                                   evidence_runner=lambda c: seen.append(c.candidate_id) or proof())
+                                   evidence_runner=lambda c: seen.append(c.candidate_id) or proof(candidate=c))
   assert not second["from_cache"] and seen == ["baseline", "overlay"]
   assert first["cache_record"]["search_key"] != second["cache_record"]["search_key"]
 
@@ -75,7 +89,7 @@ def test_supplied_v1_facts_trigger_one_explicit_reprobe_before_cache_or_executio
   scans = []
   result = autoscan_selected_model(
     **values, device_scanner=lambda *, selected_device: scans.append(selected_device) or device(250, queue_mode="AQL"),
-    evidence_runner=lambda c: proof())
+    evidence_runner=lambda c: proof(candidate=c))
   assert scans == ["AMD:0"] and result["decision"] == "SELECTED"
   assert result["cache_record"]["result"]["canonical_inputs"]["gpu_facts"]["queue_mode"] == "AQL"
 

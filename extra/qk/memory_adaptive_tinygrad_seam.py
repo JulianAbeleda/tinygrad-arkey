@@ -18,6 +18,7 @@ if __package__ in (None, ""):
   sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
 from extra.qk.memory_adaptive_candidate_catalog import CandidateSpec, inventory_invocation_ids
+from extra.qk.memory_adaptive_policy import whole_model_full_output_eligibility_requirement
 from extra.qk.memory_adaptive_transport import SelectedModelScan
 from extra.qk.memory_adaptive_allocation_observer import (SCHEMA as CHECKPOINT_OBSERVER_SCHEMA,
   derive_memory_facts, validate_memory_facts)
@@ -293,6 +294,7 @@ class TinygradWholeModelSeam:
                   "sum(rows * cols * sizeof(fp16))", ByteLifetime.CANDIDATE_WORKSPACE), graph_bound),
         target_requirements={"backend": "AMD"},
         policy={"binding": {"strategy": Strategy.FULL_RESIDENT_OVERLAY.value},
+                "production_eligibility_requirement": whole_model_full_output_eligibility_requirement(),
                 "routes": {row["invocation_id"]: fixed_routes.get(row["invocation_id"], "full-resident-overlay")
                            for row in rows}}, **kernel_facts),
     )

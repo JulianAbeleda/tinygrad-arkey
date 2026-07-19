@@ -15,11 +15,25 @@ reproduced `r1` bundle. The `evidence/` directory retains the reproducibility re
 certificates, isolated PM4/AQL C4-C6 results, and the C7 authority, guarded PM4/AQL captures, and joined
 physical-memory ledger from clean revision `c590434d8513ab169a018e736e0785da917e43a2`.
 
-C7 passes on both PM4 and AQL for all 20 epochs. Both guarded runs have zero numerical mismatches, clean
+The initial retained C7 checkpoint passes on both PM4 and AQL for all 20 epochs. Both guarded runs have zero numerical mismatches, clean
 pre/post health and fault evidence, complete explicit allocation ownership, no dense-FP16 materialization,
 and no production-dispatch mutation. The joined ledger identity is
 `sha256:b45d0ca24314704c4d9146201d2869c9a82350988bd9d2113182946f625bb062`;
 its measured peaks are 104,988,672 bytes on PM4 and 121,765,888 bytes on AQL under the shared
 25,248,309,248-byte admitted budget.
 
-C8 matched timing, C9 whole-model validation, and production promotion are not claimed here.
+The later `f0d7a09ce6f7f408cc911521ecabbe0f181ac5d6` evidence tranche retains the exact C6 binding/composition,
+dual-queue C7 candidate captures, authority, and final ledger, dual-queue direct-packed qualifications, and guarded
+`direct_packed -> staged_candidate` transition envelopes. In both PM4 and AQL, direct packed returns `PASS`,
+then the first candidate invocation completes zero epochs and produces an SQ type-2 memory violation followed
+by reset/recovery. The final C7 ledger identity is
+`sha256:20310f57ae2ec94e37a4ee1acf84a5da418fc13011fd0264b5d6af0ff8cab322`; it retains the same measured
+peaks under the final 25,248,317,440-byte admitted budget. The CPU-only joined classification is
+`qk-attn-qo-f0d7a09ce-transition-safety-classification.json`, with content identity
+`sha256:9c7b68d681293876c7ee2542bbc4dc8e055b9f68fce5b7b7d54e6a00143038eb`. It disqualifies this exact staged
+candidate and selects `direct_packed` as a safety fallback.
+
+This is not a matched C8 timing result. It records `c8_status=BLOCKED_AT_C8`,
+`timing_c8_status=NOT_EVALUATED`,
+`timing_c8_win=false`, `promotion_eligible=false`, and `production_dispatch_changed=false`. C9 whole-model
+validation and generated-route production promotion remain open and are not claimed here.

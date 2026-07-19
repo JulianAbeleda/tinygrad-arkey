@@ -1,5 +1,74 @@
 # Qwen3-14B generated-prefill Claude handoff
 
+## 1.6 Current status 2026-07-19: exact staged `attn_qo` is transition-disqualified
+
+This section supersedes §1.5 for the exact deterministic staged family. C1-C7 remain passing evidence; the C8
+outcome is a safety disqualification, not a timing loss or a generated-route promotion.
+
+The selected family is still:
+
+- role `attn_qo (512,5120,5120)`;
+- family `sha256:2cfc30075f8024cee8a927c2c3de2e87eef3db6d83882da69faa0fe0a3cc1e4f`;
+- PROGRAM key `3f478e6d89a2de467f6b7d1ca18418cdfd0cdb19de05db1d66608e65a5e6475f`;
+- HSACO SHA256 `dfb213624287a8dec10f8646d8c16e49651efee8e0ca27c67ff982b0d6b050bf`.
+
+C7 now passes independently on PM4 and AQL under one live device/software authority. The staged route peaks at
+104,988,672 physical bytes on PM4 and 121,765,888 bytes on AQL, both below the shared 25,248,317,440-byte
+admitted budget. It materializes no dense FP16 weight. Standalone staged correctness remains zero mismatches with
+maximum absolute error `0.00341796875`.
+
+The promotion-grade mixed-route session cannot safely reach matched timing:
+
+1. `staged_candidate -> staged_candidate` passes under one retained PM4 runtime/buffer owner.
+2. `direct_packed -> staged_candidate` passes direct packed, then faults on candidate invocation 0 before epoch 0
+   completes.
+3. The same boundary reproduces under PM4 and AQL, with effective instantiated-queue attestations, no retry, no
+   queue fallback, an SQ type-2 memory violation, GPU reset, and healthy post-reset recovery.
+
+The following non-decision diagnostics narrowed the cause but are not inputs to the normalized safety
+classification: retaining the direct output allocation does not change the result; candidate code bytes are
+identical before and after direct execution; candidate `RSRC3.INST_PREF_SIZE` and `RSRC1.FWD_PROGRESS`
+discriminators do not change the result; and offline final-ISA def/use finds no undefined physical-register reads
+beyond the ABI live-ins. The retained C3 certificate exhaustively covers 5,873,664 projected final-native global
+addresses with no out-of-bounds access or uint32 overflow. The separate LDS audit covers all 688 DS operations; the
+maximum effective end is 57,840 bytes within the declared 57,856-byte LDS allocation.
+
+The evidence therefore supports an exact safety decision without claiming a driver root cause: this staged
+candidate passes by itself but is not safe after the admitted direct-packed route. Do not run a route-isolated
+timing collector and reinterpret it as promotion evidence. Real inference also crosses kernel/route boundaries, so
+fresh-process timing would hide the production safety requirement.
+
+The generic memory-adaptive selector now requires every accelerated candidate to carry a search-keyed production
+eligibility requirement and matching candidate-bound evidence. Missing, malformed, blocked, or identity-mismatched
+evidence rejects the accelerated row; the named `DIRECT_PACKED_FALLBACK` baseline is the only exemption. The runtime
+collector revalidates the selected accelerated record before model binding. Existing full-resident-overlay search
+continues through its guarded whole-model full-output/route-census authority. The Qo adapter binds both the exact C6
+composition and this transition-safety classification, so even a hypothetically faster Qo row is rejected and a
+later composition-only eligibility change cannot bypass the retained safety disqualification. Qo is still not
+added to the production candidate catalog, and no generated-route runtime binder is claimed.
+
+The durable bundle and decision inputs are under
+`docs/artifacts/qwen3-14b-prefill-attn-qo-staged-951d3615c-20260719/`. The normalized transition classification has
+identity `sha256:9c7b68d681293876c7ee2542bbc4dc8e055b9f68fce5b7b7d54e6a00143038eb` and records:
+
+```text
+attn_qo_staged_c1_c7=PASS
+attn_qo_staged_transition_pm4=SQ_TYPE_2_AT_CANDIDATE_EPOCH_0
+attn_qo_staged_transition_aql=SQ_TYPE_2_AT_CANDIDATE_EPOCH_0
+attn_qo_staged_candidate=DISQUALIFIED
+attn_qo_selected_route=direct_packed
+attn_qo_c8_status=BLOCKED_AT_C8
+attn_qo_timing_c8_status=NOT_EVALUATED
+attn_qo_timing_c8_win=false
+production_promotion=false
+```
+
+`direct_packed` remains the FP16-overlay-free, memory-admitted quantized fallback for this scanned
+Qwen3-14B/gfx1100 setting: packed Q4/Q6 weights remain resident and a dense full-model FP16 weight overlay is not
+created. Selecting it resolves this exact Qo candidate safely; it does not satisfy the
+higher-level objective of finding and promoting a faster generated candidate. Phase 6 mixed-route whole-model
+validation and Phase 7 parity remain open.
+
 ## 1.5 Current status 2026-07-19: deterministic staged `attn_qo` passes PM4/AQL C1-C6
 
 This section supersedes §1.4 for the selected dense fixed-VA staged family. The direct-layout v3 classification in

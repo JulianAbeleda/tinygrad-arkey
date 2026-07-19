@@ -776,6 +776,15 @@ Only `CERTIFIED_WIN` can enter a performance-qualified candidate policy. `CERTIF
 correctness/certification result and supplies training evidence to the next search. `BLOCKED_AT_Cn` returns directly
 to the owning layer rather than restarting the entire pipeline.
 
+A cross-route execution fault at C8 is `BLOCKED_AT_C8`, not `CERTIFIED_FALLBACK`. Preserve the passing C1-C7
+evidence, retain the exact mixed-route transition, disqualify that candidate, and select the already-qualified
+direct-packed safety fallback. Do not substitute route-isolated timing: it cannot prove that the candidate is safe
+at the route boundary used by production. The decision artifact must keep timing and promotion false.
+
+Before an accelerated row can enter machine-policy ranking, bind its production-eligibility authority into the
+canonical candidate/search identity and require matching candidate-bound evidence. A passing microkernel,
+standalone role, or composition alone is insufficient when a retained transition-safety classification is blocked.
+
 ## 13. Success and falsification
 
 The process succeeds when a new role can move through C0-C8 by supplying role facts, without adding a model-name

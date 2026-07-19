@@ -1,0 +1,20 @@
+{
+  "candidate_binary_sha256": "dfb213624287a8dec10f8646d8c16e49651efee8e0ca27c67ff982b0d6b050bf",
+  "candidate_executable_identity": "sha256:89c8483c94c9fe0668dd5dd20cf47037e109a4fe176a148ed1010985fa43fe89",
+  "device_identity": "sha256:392f9b14a5b73962ab30addad4273014bb446ddde4dbed7786c63d461023abf5",
+  "evidence_identity": "sha256:be9a118ef830ae0951c5e0544cb0a9c12bd9e5dfeecc6f288c7b92131a7e3018",
+  "family_identity": "sha256:2cfc30075f8024cee8a927c2c3de2e87eef3db6d83882da69faa0fe0a3cc1e4f",
+  "input_identity": "sha256:165771c7f98a70582a623a4b96fdbdb4247ed0109e3412c2c166f7476914acea",
+  "queue_comparators": {
+    "AQL": "sha256:76d5a2dbdbfe2411ad02ec67f3bfd473e2df9eab00e8f6ed487473825440b26e",
+    "PM4": "sha256:41390335307eb3031f5c30b8637b0505cfe9499034c7dd1115013c65c5a0148d"
+  },
+  "queue_correctness": {
+    "AQL": "sha256:b489d7fdb3453b865cbf7bebcbab61a36084ce29982079893f7ab768275bd702",
+    "PM4": "sha256:889effad67dbb66d7a9394589575b188200403e5201b8c77f3325255025cbd02"
+  },
+  "schema": "tinygrad.mmq_q4k_q8_1.staged_c6_correctness_binding.v1",
+  "software_identity": "sha256:850535c70d6d08eb83792fd8d53c88ff243c3c642685bebbe6d2d7890543b782",
+  "status": "PASS",
+  "workload_identity": "sha256:1d89d6703d7c6a0d94ae1fe53d872f4193494b814ef3c3db51971cac3dc96ca9"
+}

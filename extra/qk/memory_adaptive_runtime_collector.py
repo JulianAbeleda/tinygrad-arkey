@@ -10,7 +10,10 @@ from __future__ import annotations
 import hashlib, json, pathlib
 from typing import Any, Mapping, Sequence
 
-from extra.qk.memory_adaptive_policy import CACHE_SCHEMA, SCHEMA as POLICY_SCHEMA, canonical_json, canonical_search_key
+from extra.qk.memory_adaptive_policy import (
+  CACHE_SCHEMA, SCHEMA as POLICY_SCHEMA, canonical_json, canonical_search_key,
+  validate_production_eligibility,
+)
 from extra.qk.memory_adaptive_allocation_observer import validate_memory_facts
 from tinygrad.llm.device_facts import DeviceFactsSchemaError, validate_device_facts_snapshot
 
@@ -87,10 +90,18 @@ def collect_runtime_policy(request: Mapping[str, Any], source: Mapping[str, Any]
     selected_id = result.get("selected_candidate_id")
     selected = [x for x in candidates if x.get("candidate_id") == selected_id]
     accepted = result.get("accepted_candidates")
+    selected_acceptances = [x for x in accepted
+                            if isinstance(x, Mapping) and x.get("candidate_id") == selected_id] \
+      if isinstance(accepted, list) else []
     if (not isinstance(selected_id, str) or len(selected) != 1 or not isinstance(accepted, list) or
-        sum(isinstance(x, Mapping) and x.get("candidate_id") == selected_id for x in accepted) != 1): return None
+        len(selected_acceptances) != 1): return None
     policy = dict(selected[0])
     if policy.get("strategy") != "DIRECT_PACKED_FALLBACK":
+      eligibility, eligibility_error = validate_production_eligibility(
+        selected_acceptances[0].get("production_eligibility"), candidate=policy)
+      if eligibility_error is not None or \
+         selected_acceptances[0].get("production_eligibility") != eligibility:
+        return None
       bundle = validate_memory_facts(policy.get("memory_fact_evidence"), candidate_id=selected_id)
       if bundle is None or policy.get("memory_facts") != bundle["facts"]: return None
       policy["memory_fact_evidence"], policy["memory_facts"] = bundle, dict(bundle["facts"])

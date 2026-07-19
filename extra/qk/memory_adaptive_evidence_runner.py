@@ -10,6 +10,11 @@ from dataclasses import dataclass
 from typing import Any, Callable, Mapping
 
 from extra.qk.memory_adaptive_autoscan import AutoscanCandidate
+from extra.qk.memory_adaptive_policy import (
+  WHOLE_MODEL_FULL_OUTPUT_AUTHORITY, build_production_eligibility,
+  whole_model_full_output_eligibility_requirement,
+)
+from tinygrad.llm.prefill_memory_plan import Strategy
 
 SCHEMA = "tinygrad.memory_adaptive_guarded_evidence.v2"
 
@@ -96,13 +101,26 @@ class EvidenceAdapter:
     timing_ok = timing.get("scope") == "end_to_end" and timing.get("metric") in ("tok_s", "end_to_end_tok_s") and isinstance(samples, (list, tuple))
     timing_record = {**dict(timing), "metric": "tok_s", "samples": list(samples)} if timing_ok else \
       {"scope": timing.get("scope"), "metric": timing.get("metric"), "samples": []}
+    eligibility = None
+    if candidate.memory.strategy is not Strategy.DIRECT_PACKED_FALLBACK and \
+       candidate.policy.get("production_eligibility_requirement") == whole_model_full_output_eligibility_requirement():
+      eligible = identity_ok and correctness_ok and census_ok
+      blockers = []
+      if not identity_ok: blockers.append("whole-policy identity mismatch")
+      if not correctness_ok: blockers.append("full-output numerical parity did not pass")
+      if not census_ok: blockers.append("exact route census did not pass")
+      eligibility = build_production_eligibility(
+        candidate=candidate.policy_record(), promotion_eligible=eligible,
+        authority=WHOLE_MODEL_FULL_OUTPUT_AUTHORITY,
+        blocker=None if eligible else "; ".join(blockers))
     return {"schema": SCHEMA, "candidate_id": candidate.candidate_id,
       "whole_policy_identity": candidate.whole_policy_identity,
       "compile": _pass(identity_ok and (compile_row.get("status") in ("passed", "PASS") or compile_row.get("passed") is True), compile_row),
       "correctness": _pass(identity_ok and correctness_ok, correctness), "resource": _pass(identity_ok and resource_ok, resource),
       "gpu_health": _pass(identity_ok and health_ok, execution),
       "route_census": {**_pass(census_ok, census), "complete": bool(census_ok)},
-      "end_to_end_timing": timing_record if identity_ok else {**timing_record, "samples": []}}
+      "end_to_end_timing": timing_record if identity_ok else {**timing_record, "samples": []},
+      **({"production_eligibility": eligibility} if eligibility is not None else {})}
 
 
 ArtifactCollector = Callable[[AutoscanCandidate], CandidateArtifacts | Mapping[str, Any] | None]

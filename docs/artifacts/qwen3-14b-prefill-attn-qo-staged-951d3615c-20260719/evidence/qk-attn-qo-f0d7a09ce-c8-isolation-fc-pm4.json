@@ -1,0 +1,235 @@
+{
+  "child": {
+    "breadcrumbs": [
+      {
+        "complete_role_ms": 636.203454,
+        "invocation_index": 0,
+        "persistent_session_lifecycle": null,
+        "position": 0,
+        "receipt_schema": "tinygrad.direct_packed.complete_role_timing_receipt.v1",
+        "receipt_status": "PASS",
+        "route": "direct_packed"
+      }
+    ],
+    "clock_identity": "clock-policy-0",
+    "completed_positions": 1,
+    "effective_queue_attestation": {
+      "all_checks_pass": true,
+      "authority": "instantiated_device_state",
+      "checks": {
+        "environment_matches_requested": true,
+        "queue_class_matches_effective": true,
+        "requested_matches_effective": true
+      },
+      "device": "AMD",
+      "effective_queue_class": "tinygrad.runtime.ops_amd.AMDComputeQueue",
+      "effective_queue_mode": "PM4",
+      "environment_amd_aql": "0",
+      "expected_queue_class": "tinygrad.runtime.ops_amd.AMDComputeQueue",
+      "requested_queue_mode": "PM4",
+      "schema": "tinygrad.mmq_q4k_q8_1.frozen_staged_c8_persistent_sessions.v1.effective_queue_attestation"
+    },
+    "evidence_identity": "sha256:16bba62539a119081190f4654568b803fc707b34b589ee60349a8d9ffaf971cb",
+    "exact_blocker": "PM4 diagnostic route sequence failed at position 1 staged_candidate[0]: StagedCandidateExecutionError: PM4 frozen staged timing execution did not pass: guarded staged prefix evidence failed closed; ValueError; guarded staged probe did not pass: 'target-role GPU dispatch failed or timed out'",
+    "family_identity": "sha256:2cfc30075f8024cee8a927c2c3de2e87eef3db6d83882da69faa0fe0a3cc1e4f",
+    "invocation_counts": {
+      "direct_packed": 1,
+      "staged_candidate": 0
+    },
+    "invocation_failure": {
+      "error": "PM4 frozen staged timing execution did not pass: guarded staged prefix evidence failed closed; ValueError; guarded staged probe did not pass: 'target-role GPU dispatch failed or timed out'",
+      "exception": "StagedCandidateExecutionError",
+      "invocation_index": 0,
+      "nested_failure": {
+        "error": "guarded staged probe did not pass: 'target-role GPU dispatch failed or timed out'",
+        "exact_blocker": "guarded staged prefix evidence failed closed",
+        "exception": "ValueError",
+        "persistent_session_lifecycle": null,
+        "raw_probe_failure": {
+          "completed_epochs": 0,
+          "error": "",
+          "exact_blocker": "target-role GPU dispatch failed or timed out",
+          "exception": "RuntimeError"
+        },
+        "schema": "tinygrad.mmq_q4k_q8_1.frozen_staged_candidate_failure.v1",
+        "status": "BLOCKED"
+      },
+      "position": 1,
+      "route": "staged_candidate"
+    },
+    "no_queue_fallback": true,
+    "no_retry": true,
+    "persistent_child_session": true,
+    "production_dispatch_changed": false,
+    "queue_mode": "PM4",
+    "schema": "tinygrad.mmq_q4k_q8_1.frozen_staged_c8_route_sequence.v1",
+    "sequence": [
+      "direct_packed",
+      "staged_candidate"
+    ],
+    "session_identity": "sha256:885d7c0b5c2e142059641bdeda3a45167eacdf1eb95b4d37b808198648c0ab11",
+    "status": "BLOCKED"
+  },
+  "elapsed_seconds": 38.070286937989295,
+  "error": null,
+  "evidence_identity": "sha256:4bbc251503e132715864ca60700ff527dbaa822288fba3d3f8c0755000ec4ae5",
+  "exact_blocker": "PM4 diagnostic route sequence failed at position 1 staged_candidate[0]: StagedCandidateExecutionError: PM4 frozen staged timing execution did not pass: guarded staged prefix evidence failed closed; ValueError; guarded staged probe did not pass: 'target-role GPU dispatch failed or timed out'",
+  "health_after": true,
+  "health_before": true,
+  "kernel_fault_evidence": {
+    "blocks": [
+      {
+        "details": {
+          "accesses": [],
+          "clients": [],
+          "fault_addresses": [],
+          "statuses": []
+        },
+        "lines": [
+          "[595300.315518] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: sq_intr: error, detail 0x00000000, type 2, sh 0, priv 1, wave_id 3, simd_id 0, wgp_id 0"
+        ],
+        "ordinal": 0,
+        "primary_marker": "sq_intr"
+      },
+      {
+        "details": {
+          "accesses": [],
+          "clients": [],
+          "fault_addresses": [],
+          "statuses": []
+        },
+        "lines": [
+          "[595330.804276] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: [gfxhub] page fault (src_id:0 ring:88 vmid:8 pasid:32774)"
+        ],
+        "ordinal": 1,
+        "primary_marker": "[gfxhub] page fault"
+      },
+      {
+        "details": {
+          "accesses": [
+            "0x0"
+          ],
+          "clients": [
+            "SQC"
+          ],
+          "fault_addresses": [
+            "0x0000ffffffbfe000"
+          ],
+          "statuses": [
+            "0x008012B0"
+          ]
+        },
+        "lines": [
+          "[595330.804279] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: sq_intr: error, detail 0x00000000, type 2, sh 0, priv 1, wave_id 3, simd_id 0, wgp_id 0",
+          "[595330.804287] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu:   in page starting at address 0x0000ffffffbfe000 from client 10",
+          "[595330.804290] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: GCVM_L2_PROTECTION_FAULT_STATUS:0x008012B0",
+          "[595330.804292] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu:          Faulty UTCL2 client ID: SQC (inst) (0x9)",
+          "[595330.804301] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu:          RW: 0x0"
+        ],
+        "ordinal": 2,
+        "primary_marker": "sq_intr"
+      },
+      {
+        "details": {
+          "accesses": [],
+          "clients": [],
+          "fault_addresses": [],
+          "statuses": []
+        },
+        "lines": [
+          "[595332.804397] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: MES failed to respond to msg=REMOVE_QUEUE"
+        ],
+        "ordinal": 3,
+        "primary_marker": "mes failed"
+      },
+      {
+        "details": {
+          "accesses": [],
+          "clients": [],
+          "fault_addresses": [],
+          "statuses": []
+        },
+        "lines": [
+          "[595332.804405] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: MES might be in unrecoverable state, issue a GPU reset"
+        ],
+        "ordinal": 4,
+        "primary_marker": "gpu reset"
+      },
+      {
+        "details": {
+          "accesses": [],
+          "clients": [],
+          "fault_addresses": [],
+          "statuses": []
+        },
+        "lines": [
+          "[595332.804424] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: GPU reset begin!. Source:  3"
+        ],
+        "ordinal": 5,
+        "primary_marker": "gpu reset"
+      },
+      {
+        "details": {
+          "accesses": [],
+          "clients": [],
+          "fault_addresses": [],
+          "statuses": []
+        },
+        "lines": [
+          "[595334.871355] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: MES failed to respond to msg=REMOVE_QUEUE"
+        ],
+        "ordinal": 6,
+        "primary_marker": "mes failed"
+      },
+      {
+        "details": {
+          "accesses": [],
+          "clients": [],
+          "fault_addresses": [],
+          "statuses": []
+        },
+        "lines": [
+          "[595336.871738] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: MES failed to respond to msg=REMOVE_QUEUE"
+        ],
+        "ordinal": 7,
+        "primary_marker": "mes failed"
+      }
+    ],
+    "limits": {
+      "max_blocks": 8,
+      "max_line_chars": 512,
+      "max_lines": 32
+    },
+    "relevant_line_count": 16,
+    "retained_line_count": 12,
+    "schema": "tinygrad.amd_kernel_fault_evidence.v1",
+    "source": "kernel_journal_window",
+    "status": "FAULTS",
+    "truncated": true
+  },
+  "kernel_faults": [
+    "[595300.315518] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: sq_intr: error, detail 0x00000000, type 2, sh 0, priv 1, wave_id 3, simd_id 0, wgp_id 0",
+    "[595330.804276] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: [gfxhub] page fault (src_id:0 ring:88 vmid:8 pasid:32774)",
+    "[595330.804279] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: sq_intr: error, detail 0x00000000, type 2, sh 0, priv 1, wave_id 3, simd_id 0, wgp_id 0",
+    "[595332.804397] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: MES failed to respond to msg=REMOVE_QUEUE",
+    "[595332.804405] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: MES might be in unrecoverable state, issue a GPU reset",
+    "[595332.804424] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: GPU reset begin!. Source:  3",
+    "[595334.871355] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: MES failed to respond to msg=REMOVE_QUEUE",
+    "[595336.871738] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: MES failed to respond to msg=REMOVE_QUEUE",
+    "[595337.428332] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: GPU reset succeeded, trying to resume",
+    "[595337.428643] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: VRAM is lost due to GPU reset!",
+    "[595337.842802] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: GPU reset(60) succeeded!",
+    "[595337.856203] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: [drm] device wedged, but recovered through reset"
+  ],
+  "no_queue_fallback": true,
+  "no_retry": true,
+  "queue_mode": "PM4",
+  "schema": "tinygrad.mmq_q4k_q8_1.frozen_staged_c8_route_sequence.v1.guarded",
+  "sequence": [
+    "direct_packed",
+    "staged_candidate"
+  ],
+  "spawn_count": 1,
+  "status": "BLOCKED",
+  "timed_out": false
+}

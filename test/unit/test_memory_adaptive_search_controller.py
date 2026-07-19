@@ -3,6 +3,7 @@ import inspect, json
 import pytest
 
 from extra.qk.memory_adaptive_candidate_catalog import CandidateSpec
+from extra.qk.memory_adaptive_policy import whole_model_full_output_eligibility_requirement
 import extra.qk.memory_adaptive_search_controller as controller
 from extra.qk.memory_adaptive_search_controller import SelectedModelScan, _run_controller_with_seam, main, run_controller
 from extra.qk.memory_adaptive_transport import SelectedModelScan as TransportSelectedModelScan
@@ -67,6 +68,7 @@ class Seam:
     return [CandidateSpec("fast", Strategy.FULL_RESIDENT_OVERLAY, ids,
               (ByteTerm("overlay", 100, "candidate", "exact", ByteLifetime.CANDIDATE_WORKSPACE),),
               full_m_values=(16, 32), tail_m_values=(), correctness_m_values=(16, 32),
+              policy={"production_eligibility_requirement": whole_model_full_output_eligibility_requirement()},
               invocation_bytes=({"m": 16, "activation_bytes": 8, "scratch_bytes": 4},
                                 {"m": 32, "activation_bytes": 16, "scratch_bytes": 8})),
             CandidateSpec("partial", Strategy.BOUNDED_PACKED_TILES, ("a",), full_m_values=(32,),

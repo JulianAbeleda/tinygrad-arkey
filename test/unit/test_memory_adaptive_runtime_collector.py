@@ -1,6 +1,9 @@
 import copy, json
 
-from extra.qk.memory_adaptive_policy import SCHEMA, make_cache_record, select_policy
+from extra.qk.memory_adaptive_policy import (
+  SCHEMA, build_production_eligibility, build_production_eligibility_requirement,
+  make_cache_record, select_policy,
+)
 from extra.qk.memory_adaptive_runtime_collector import collect_runtime_policy, make_file_policy_collector, make_policy_collector
 from extra.qk.memory_adaptive_allocation_observer import EXACT_MEMORY_KEYS, make_memory_facts
 
@@ -20,7 +23,9 @@ def fixture(device_facts=None):
      "workload_choice": {"candidate_id": "base", "full_m": 32, "feasible": True}},
     {"candidate_id": "fast:M32", "policy_candidate_id": "fast", "strategy": "FULL_RESIDENT_OVERLAY",
      "routes": {"a": "q4-overlay", "b": "q6-overlay"},
-     "workload_choice": {"candidate_id": "fast", "full_m": 32, "feasible": True}},
+     "workload_choice": {"candidate_id": "fast", "full_m": 32, "feasible": True},
+     "production_eligibility_requirement": build_production_eligibility_requirement(
+       authority={"schema": "test.full_output_parity_requirement.v1"})},
   ]
   facts = {key: (1 if key in ("resident_copies", "batch_size", "kv_element_bytes") else 0) for key in EXACT_MEMORY_KEYS}
   provenance = {key: {"source": "runtime collector fixture", "detail": f"measured {key}"} for key in EXACT_MEMORY_KEYS}
@@ -32,7 +37,13 @@ def fixture(device_facts=None):
   revision = {"compiler": "c1", "runtime": "r1"}
   result = select_policy(gpu_facts=device, model_facts={"facts": {"content_hash": "hash"}, "inventory": inventory},
     workload={"prompt_tokens": 32}, candidates=candidates, compiler_runtime_revision=revision,
-    evidence={"base:M32": proof, "fast:M32": {**proof, "end_to_end_timing": {"scope": "end_to_end", "metric": "tok_s", "samples": [120]*3}}},
+    evidence={"base:M32": proof, "fast:M32": {
+      **proof,
+      "production_eligibility": build_production_eligibility(
+        candidate=candidates[1], promotion_eligible=True,
+        authority=candidates[1]["production_eligibility_requirement"]["authority"]),
+      "end_to_end_timing": {"scope": "end_to_end", "metric": "tok_s", "samples": [120]*3},
+    }},
     baseline_candidate_id="base:M32")
   return request, result, make_cache_record(result), revision
 
@@ -98,5 +109,22 @@ def test_accelerated_cache_cannot_omit_or_forge_memory_evidence():
   for mutate in (lambda x: x["result"]["canonical_inputs"]["candidates"][1].pop("memory_facts"),
                  lambda x: x["result"]["canonical_inputs"]["candidates"][1]["memory_facts"].update(batch_size=2),
                  lambda x: x["result"]["canonical_inputs"]["candidates"][1]["memory_fact_evidence"]["facts"].update(batch_size=2)):
+    bad = copy.deepcopy(cache); mutate(bad)
+    assert collect_runtime_policy(request, bad) is None
+
+
+def test_runtime_revalidates_selected_accelerated_production_eligibility():
+  request, result, cache, _ = fixture()
+  selected_id = result["selected_candidate_id"]
+  assert selected_id == "fast:M32"
+  accepted_index = next(index for index, row in enumerate(
+    cache["result"]["accepted_candidates"]) if row["candidate_id"] == selected_id)
+  for mutate in (
+      lambda x: x["result"]["accepted_candidates"][accepted_index].pop("production_eligibility"),
+      lambda x: x["result"]["accepted_candidates"][accepted_index]["production_eligibility"].update(
+        promotion_eligible=False),
+      lambda x: x["result"]["accepted_candidates"][accepted_index]["production_eligibility"].update(
+        candidate_identity="sha256:forged"),
+  ):
     bad = copy.deepcopy(cache); mutate(bad)
     assert collect_runtime_policy(request, bad) is None

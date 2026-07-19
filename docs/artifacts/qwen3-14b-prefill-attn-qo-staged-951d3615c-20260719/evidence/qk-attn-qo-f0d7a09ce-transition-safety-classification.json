@@ -1,0 +1,90 @@
+{
+  "c6_evidence_identity": "sha256:be9a118ef830ae0951c5e0544cb0a9c12bd9e5dfeecc6f288c7b92131a7e3018",
+  "candidate_executable_identity": "sha256:89c8483c94c9fe0668dd5dd20cf47037e109a4fe176a148ed1010985fa43fe89",
+  "classification_scope": "transition_safety_only",
+  "clock_identity": "clock-policy-0",
+  "decision": {
+    "c8_status": "BLOCKED_AT_C8",
+    "candidate_disposition": "DISQUALIFIED",
+    "candidate_route": "staged_candidate",
+    "promotion_eligible": false,
+    "rule": "safety-first: disqualify the exact staged candidate when both PM4 and AQL direct-to-candidate transitions fault at candidate epoch 0 after direct returned PASS",
+    "selected_route": "direct_packed",
+    "selection_kind": "SAFETY_FALLBACK",
+    "timing_c8_status": "NOT_EVALUATED",
+    "timing_c8_win": false
+  },
+  "evidence_identity": "sha256:9c7b68d681293876c7ee2542bbc4dc8e055b9f68fce5b7b7d54e6a00143038eb",
+  "family_identity": "sha256:2cfc30075f8024cee8a927c2c3de2e87eef3db6d83882da69faa0fe0a3cc1e4f",
+  "production_dispatch_changed": false,
+  "promotion_eligible": false,
+  "queues": {
+    "AQL": {
+      "candidate_disposition": "DISQUALIFIED",
+      "candidate_individual_authority": {
+        "authority_identity": "sha256:29d7f7815fb365f056a2b575fb34862a50cfefe833501ef3a740faec151057fd",
+        "binary_sha256": "dfb213624287a8dec10f8646d8c16e49651efee8e0ca27c67ff982b0d6b050bf",
+        "program_key": "3f478e6d89a2de467f6b7d1ca18418cdfd0cdb19de05db1d66608e65a5e6475f",
+        "schema": "tinygrad.mmq_q4k_q8_1.staged_c7_queue_capture_isolation.v1",
+        "status": "PASS"
+      },
+      "direct_individual_authority": {
+        "fallback_evidence_identity": "sha256:ad63e10bb8b3b97dc914b814f18e3f74e12a3401a42d2365edb2f74eaa7b2d40",
+        "qualification_identity": "sha256:7773f67c7840485a0c946a4a8368075f378cdb131b464cee7fc81b36edfe1c48",
+        "schema": "tinygrad.direct_packed.executable_qualification.v1",
+        "status": "PASS"
+      },
+      "queue_mode": "AQL",
+      "selected_route": "direct_packed",
+      "transition": {
+        "candidate_completed_epochs": 0,
+        "candidate_failed_invocation_index": 0,
+        "child_evidence_identity": "sha256:9fc5f22d7aa6d5e5918c6e588a2cabf77e3ef37e08d39a35413f0d45322fb862",
+        "clock_identity": "clock-policy-0",
+        "direct_completed_before_candidate": true,
+        "direct_receipt_status": "PASS",
+        "health_recovered": true,
+        "no_queue_fallback": true,
+        "no_retry": true,
+        "session_identity": "sha256:dec21065322637af6b8cfb38cb63872495c71e5b8fe1a684f4af7e6c393c7f14",
+        "sq_type_2_line_count": 4,
+        "transition_evidence_identity": "sha256:f90cd3570631297d4cdda3fb4165d0f563deb6c73a474a219979ccfd3e3571fa"
+      }
+    },
+    "PM4": {
+      "candidate_disposition": "DISQUALIFIED",
+      "candidate_individual_authority": {
+        "authority_identity": "sha256:6feaee65176ca15f3ee7b69c5920feabea295002a248e2093c63af228acf4379",
+        "binary_sha256": "dfb213624287a8dec10f8646d8c16e49651efee8e0ca27c67ff982b0d6b050bf",
+        "program_key": "3f478e6d89a2de467f6b7d1ca18418cdfd0cdb19de05db1d66608e65a5e6475f",
+        "schema": "tinygrad.mmq_q4k_q8_1.staged_c7_queue_capture_isolation.v1",
+        "status": "PASS"
+      },
+      "direct_individual_authority": {
+        "fallback_evidence_identity": "sha256:e5c4714d35d8aa842da1f582a52b0feb6900ffd4a06d543988ad60ab31f1560f",
+        "qualification_identity": "sha256:a6ef47e7c169dd6faf6192973436d9d7738e027c310c695e2a18eab24c8fb514",
+        "schema": "tinygrad.direct_packed.executable_qualification.v1",
+        "status": "PASS"
+      },
+      "queue_mode": "PM4",
+      "selected_route": "direct_packed",
+      "transition": {
+        "candidate_completed_epochs": 0,
+        "candidate_failed_invocation_index": 0,
+        "child_evidence_identity": "sha256:16bba62539a119081190f4654568b803fc707b34b589ee60349a8d9ffaf971cb",
+        "clock_identity": "clock-policy-0",
+        "direct_completed_before_candidate": true,
+        "direct_receipt_status": "PASS",
+        "health_recovered": true,
+        "no_queue_fallback": true,
+        "no_retry": true,
+        "session_identity": "sha256:885d7c0b5c2e142059641bdeda3a45167eacdf1eb95b4d37b808198648c0ab11",
+        "sq_type_2_line_count": 2,
+        "transition_evidence_identity": "sha256:4bbc251503e132715864ca60700ff527dbaa822288fba3d3f8c0755000ec4ae5"
+      }
+    }
+  },
+  "schema": "tinygrad.mmq_q4k_q8_1.staged_transition_safety_classification.v1",
+  "software_identity": "sha256:850535c70d6d08eb83792fd8d53c88ff243c3c642685bebbe6d2d7890543b782",
+  "status": "PASS"
+}
