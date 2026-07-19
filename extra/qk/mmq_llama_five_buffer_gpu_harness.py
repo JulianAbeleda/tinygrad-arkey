@@ -37,11 +37,104 @@ RTOL = 3e-3
 ATOL = 3e-3
 TARGET_IN_PLACE_ACCUMULATION = "target_in_place_fp32_add"
 _TARGET_BUFFER_NAMES = ("output", "q4", "q8_values", "q8_scales", "q8_original_sums")
+ATTN_QO_DIAGNOSTIC_GLOBAL_GRIDS = (
+  (1, 4, 1), (8, 4, 1), (9, 4, 1), (16, 4, 1), (32, 4, 1), (40, 4, 1),
+)
 
 
 def _blocked(reason: str, **evidence: Any) -> dict[str, Any]:
   return {"protocol": PROTOCOL, "shape": list(SHAPE), "passed": False,
           "verdict": BLOCKED, "blocker": reason, "evidence": evidence}
+
+
+def _validate_attn_qo_diagnostic_global_grid(
+    role_spec: ExactRoleSpec, requested: tuple[int, ...] | list[int] | None,
+    ) -> tuple[int, int, int] | None:
+  """Admit only the explicit attn_qo fault-localization ladder."""
+  if requested is None: return None
+  if role_spec.role != "attn_qo":
+    raise ValueError("bounded diagnostic global grid is allowlisted only for role 'attn_qo'")
+  if not isinstance(requested, (tuple, list)) or len(requested) != 3 or \
+     any(not isinstance(value, int) or isinstance(value, bool) for value in requested):
+    raise ValueError("bounded diagnostic global grid requires exactly three integer dimensions")
+  grid = tuple(requested)
+  if grid not in ATTN_QO_DIAGNOSTIC_GLOBAL_GRIDS:
+    raise ValueError(
+      f"bounded attn_qo diagnostic global grid must be one of {ATTN_QO_DIAGNOSTIC_GLOBAL_GRIDS}")
+  return grid
+
+
+def _apply_diagnostic_global_grid_to_target_calls(
+    output: Any, selected_programs: tuple[Any, ...] | list[Any],
+    bounded_grid: tuple[int, int, int],
+    ) -> tuple[Any, dict[str, Any]]:
+  """Reduce only selected CALL grids while preserving exact frozen PROGRAMs."""
+  from tinygrad import Tensor
+  from tinygrad.uop.ops import (
+    DIAGNOSTIC_LAUNCH_AUTHORITY, DiagnosticCallInfo, Ops,
+  )
+  selected_programs = tuple(selected_programs)
+  calls = [node for node in output.uop.toposort()
+           if node.op is Ops.CALL and node.src[0] in selected_programs]
+  if [call.src[0] for call in calls] != list(selected_programs):
+    raise RuntimeError("bounded diagnostic grid did not find the exact ordered target CALL sequence")
+  full_grids = tuple(tuple(program.arg.global_size) for program in selected_programs)
+  local_sizes = tuple(tuple(program.arg.local_size or ()) for program in selected_programs)
+  if not full_grids or any(grid != (40, 4, 1) for grid in full_grids):
+    raise ValueError("bounded attn_qo diagnostic requires exact frozen full grids (40,4,1)")
+  if any(len(local) != 3 for local in local_sizes):
+    raise ValueError("bounded diagnostic requires concrete three-dimensional frozen local sizes")
+  if any(requested > full for requested, full in zip(bounded_grid, full_grids[0])):
+    raise ValueError("bounded diagnostic grid exceeds the frozen PROGRAM global grid")
+
+  program_keys = tuple(program.key.hex() for program in selected_programs)
+  binary_hashes = tuple(hashlib.sha256(next(
+    source.arg for source in program.src if source.op is Ops.BINARY)).hexdigest()
+    for program in selected_programs)
+  replacements = {}
+  for call in calls:
+    original = call.arg
+    diagnostic = DiagnosticCallInfo(
+      original.grad_fxn, original.metadata, original.name, original.precompile,
+      original.precompile_backward, original.memory_semantic_slots,
+      bounded_grid, DIAGNOSTIC_LAUNCH_AUTHORITY)
+    replacements[call] = call.replace(arg=diagnostic)
+  bounded_output = Tensor(output.uop.substitute(replacements, walk=True))
+  bounded_calls = [node for node in bounded_output.uop.toposort()
+                   if node.op is Ops.CALL and node.src[0] in selected_programs]
+  if [call.src[0] for call in bounded_calls] != list(selected_programs):
+    raise RuntimeError("bounded diagnostic CALL rewrite changed the ordered frozen PROGRAM sequence")
+  if any(call.arg.diagnostic_global_size != bounded_grid or
+         call.arg.diagnostic_launch_authority != DIAGNOSTIC_LAUNCH_AUTHORITY
+         for call in bounded_calls):
+    raise RuntimeError("bounded diagnostic CALL rewrite lost its explicit launch authority")
+  if tuple(program.key.hex() for program in selected_programs) != program_keys:
+    raise RuntimeError("bounded diagnostic CALL rewrite changed a frozen PROGRAM key")
+  if tuple(hashlib.sha256(next(
+      source.arg for source in program.src if source.op is Ops.BINARY)).hexdigest()
+      for program in selected_programs) != binary_hashes:
+    raise RuntimeError("bounded diagnostic CALL rewrite changed a frozen binary")
+  return bounded_output, {
+    "schema": "tinygrad.mmq_attn_qo_bounded_global_grid.v1",
+    "enabled": True, "research_only": True, "diagnostic_only": True,
+    "production_promotion": False, "promotion_eligible": False,
+    "c1_certification_claimed": False, "c1_certification_eligible": False,
+    "reason": "launch-only fault localization is not full-grid correctness or provenance evidence",
+    "role_allowlist": ["attn_qo"],
+    "allowed_global_grid_ladder": [list(grid) for grid in ATTN_QO_DIAGNOSTIC_GLOBAL_GRIDS],
+    "requested_global_grid": list(bounded_grid),
+    "effective_bounded_global_grids": [list(bounded_grid) for _ in bounded_calls],
+    "frozen_full_global_grids": [list(grid) for grid in full_grids],
+    "frozen_local_sizes": [list(local) for local in local_sizes],
+    "effective_local_sizes": [list(local) for local in local_sizes],
+    "program_keys_before": list(program_keys), "program_keys_after": list(program_keys),
+    "binary_sha256_before": list(binary_hashes), "binary_sha256_after": list(binary_hashes),
+    "program_objects_preserved": all(
+      bounded.src[0] is original.src[0] for original, bounded in zip(calls, bounded_calls)),
+    "program_keys_preserved": True, "binary_identities_preserved": True,
+    "local_sizes_preserved": True, "buffer_abi_preserved": True,
+    "call_count": len(bounded_calls),
+  }
 
 
 def _random_q4_words(n: int, k: int, seed: int) -> np.ndarray:
@@ -180,6 +273,11 @@ def _numeric_comparison(got: np.ndarray, reference: np.ndarray, *, rtol: float =
     "nan_got": nan_got, "nan_reference": nan_ref, "inf_got": inf_got, "inf_reference": inf_ref,
   })
   return result
+
+
+def _exact_zero_comparison(got: np.ndarray) -> dict[str, Any]:
+  """Require a diagnostic output region to remain exactly floating-point zero."""
+  return _numeric_comparison(got, np.zeros_like(got), rtol=0.0, atol=0.0)
 
 
 def _artifact_evidence(program, metadata_parser) -> tuple[Any, Any, dict[str, Any]]:
@@ -1168,6 +1266,9 @@ def _decode_aql_kernel_dispatch_packet(packet: bytes) -> dict[str, Any]:
     "system_fence_scope": hsa.HSA_FENCE_SCOPE_SYSTEM,
     "kernel_object": int(decoded.kernel_object),
     "kernarg_address": int(ctypes.cast(decoded.kernarg_address, ctypes.c_void_p).value or 0),
+    "workgroup_size": [
+      int(decoded.workgroup_size_x), int(decoded.workgroup_size_y), int(decoded.workgroup_size_z)],
+    "grid_size": [int(decoded.grid_size_x), int(decoded.grid_size_y), int(decoded.grid_size_z)],
   }
 
 
@@ -1359,6 +1460,8 @@ def _realize_with_aql_packet_census(output: Any, expected_vas: list[list[int]] |
                                     target_program_identity: Mapping[str, Any] | None = None,
                                     target_program_identities: tuple[Mapping[str, Any], ...] | None = None,
                                     target_program_keys: tuple[str, ...] | None = None,
+                                    target_launch_dims: tuple[
+                                      tuple[tuple[int, ...], tuple[int, ...]], ...] | None = None,
                                     target_dispatch_count: int | None = None,
                                     require_fixed_scale_va: bool = False,
                                     require_all_five_vas_fixed: bool = False,
@@ -1413,6 +1516,13 @@ def _realize_with_aql_packet_census(output: Any, expected_vas: list[list[int]] |
     raise ValueError("AQL target census PROGRAM keys differ from the target dispatch sequence")
   if require_runtime_lifecycle and target_program_keys is None:
     raise ValueError("AQL runtime lifecycle census requires exact PROGRAM keys")
+  if target_launch_dims is not None and (
+      len(target_launch_dims) != target_dispatch_count or any(
+        len(row) != 2 or len(row[0]) != 3 or len(row[1]) != 3 or
+        any(not isinstance(value, int) or isinstance(value, bool) or value <= 0
+            for dims in row for value in dims)
+        for row in target_launch_dims)):
+    raise ValueError("AQL dispatch census launch dimensions differ from the target sequence")
 
   from tinygrad.runtime import ops_amd
   constructed, published, calls = [], [], []
@@ -1442,6 +1552,8 @@ def _realize_with_aql_packet_census(output: Any, expected_vas: list[list[int]] |
       "target_program_identities": [dict(identity) for identity in normalized_identities]
         if target_program_identities is not None else None,
       "target_program_keys": list(target_program_keys) if target_program_keys is not None else None,
+      "target_launch_dims": None if target_launch_dims is None else [
+        [list(global_size), list(local_size)] for global_size, local_size in target_launch_dims],
       "target_call_count": len(copied_calls),
       "accepted_target_call_count": sum(row["accepted_before_doorbell"] for row in copied_calls),
       "non_target_kernel_dispatch_count": non_target_kernel_dispatch_count,
@@ -1473,6 +1585,8 @@ def _realize_with_aql_packet_census(output: Any, expected_vas: list[list[int]] |
       } for slot, buf in enumerate(args_state.bufs)],
       "runtime_lifecycle": _aql_runtime_lifecycle_evidence(prg, args_state),
       "program_identity": _aql_target_program_identity(prg),
+      "global_size": tuple(int(value) for value in global_size),
+      "local_size": tuple(int(value) for value in local_size),
     })
     return result
 
@@ -1513,6 +1627,7 @@ def _realize_with_aql_packet_census(output: Any, expected_vas: list[list[int]] |
       expected_identity = (None if normalized_identities is None else
                            normalized_identities[call_index] if ordered_identity_sequence else normalized_identities[0])
       expected_program_key = None if target_program_keys is None else target_program_keys[call_index]
+      expected_launch = None if target_launch_dims is None else target_launch_dims[call_index]
       lifecycle = built["runtime_lifecycle"]
       kernarg_start, kernarg_end = lifecycle["kernarg_va"], \
         lifecycle["kernarg_va"] + lifecycle["kernarg_allocation_nbytes"]
@@ -1530,6 +1645,14 @@ def _realize_with_aql_packet_census(output: Any, expected_vas: list[list[int]] |
         "five_constructed_buffer_vas_distinct": len(set(argument_vas)) == 5,
         "ordered_program_identity_matches": expected_identity is None or
           built["program_identity"] == expected_identity,
+        "dispatch_dimensions_match":
+          expected_launch is None or (
+            built["global_size"] == expected_launch[0] and
+            built["local_size"] == expected_launch[1] and
+            packet["workgroup_size"] == list(expected_launch[1]) and
+            packet["grid_size"] == [
+              global_dim * local_dim
+              for global_dim, local_dim in zip(expected_launch[0], expected_launch[1])]),
         **({
           **lifecycle["checks"],
           "runtime_cache_exact_program_binding":
@@ -1559,6 +1682,11 @@ def _realize_with_aql_packet_census(output: Any, expected_vas: list[list[int]] |
         "checks": checks, "all_checks_pass": accepted_before_doorbell,
         "accepted_before_doorbell": accepted_before_doorbell,
         "target_exec_observed": True, "submit_began": False, "submit_returned": False,
+        "global_size": list(built["global_size"]), "local_size": list(built["local_size"]),
+        "expected_global_size": None if expected_launch is None else list(expected_launch[0]),
+        "expected_local_size": None if expected_launch is None else list(expected_launch[1]),
+        "packet_workgroup_size": list(packet["workgroup_size"]),
+        "packet_grid_size": list(packet["grid_size"]),
       })
       if not accepted_before_doorbell:
         raise RuntimeError("AQL target packet census rejected dispatch before doorbell")
@@ -1827,7 +1955,8 @@ def _realize_with_amd_dispatch_census(
   if bool(getattr(Device["AMD"], "is_aql", False)):
     return _realize_with_aql_packet_census(
       output, target_program_identities=target_program_identities,
-      target_program_keys=target_program_keys, require_runtime_lifecycle=True,
+      target_program_keys=target_program_keys, target_launch_dims=target_launch_dims,
+      require_runtime_lifecycle=True,
       require_all_five_vas_fixed=require_all_five_vas_fixed,
       require_all_five_vas_distinct=require_all_five_vas_distinct,
       retained_outputs=retained_outputs)
@@ -2919,13 +3048,28 @@ def run_frozen_epoch_program_set_ordinal_sequence_probe(
 
 def run_frozen_epoch_program_set_prefix_probe(
     *, role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC, frozen_bundle: str | Path,
-    prefix_epochs: int, preconstruct_runtimes: bool = False) -> dict[str, Any]:
+    prefix_epochs: int, preconstruct_runtimes: bool = False,
+    diagnostic_global_grid: tuple[int, int, int] | list[int] | None = None) -> dict[str, Any]:
   """Run a frozen v2 fixed-base scheduler prefix with one full-role producer."""
   schema = "tinygrad.mmq_frozen_epoch_program_set_prefix_probe.v2"
   if not isinstance(preconstruct_runtimes, bool):
     raise ValueError("preconstruct_runtimes must be a bool")
   role_spec = admit_exact_role_spec(role_spec)
   prefix_epochs = _validate_v2_fixed_base_prefix_epochs(role_spec, prefix_epochs)
+  diagnostic_global_grid = _validate_attn_qo_diagnostic_global_grid(
+    role_spec, diagnostic_global_grid)
+  if diagnostic_global_grid is not None and not preconstruct_runtimes:
+    raise ValueError("bounded diagnostic global grid requires exact runtime preconstruction")
+  diagnostic_request = None if diagnostic_global_grid is None else {
+    "schema": "tinygrad.mmq_attn_qo_bounded_global_grid.v1",
+    "enabled": True, "research_only": True, "diagnostic_only": True,
+    "production_promotion": False, "promotion_eligible": False,
+    "c1_certification_claimed": False, "c1_certification_eligible": False,
+    "requested_global_grid": list(diagnostic_global_grid),
+    "allowed_global_grid_ladder": [
+      list(grid) for grid in ATTN_QO_DIAGNOSTIC_GLOBAL_GRIDS],
+    "phase": "requested_before_runtime_preconstruction_or_gpu_dispatch",
+  }
 
   from types import SimpleNamespace
   from tinygrad import Tensor, dtypes
@@ -3013,6 +3157,8 @@ def run_frozen_epoch_program_set_prefix_probe(
           "enabled": True, "status": "PRECONSTRUCTION_ERROR",
           "exception": type(exc).__name__, "error": str(exc),
         },
+        **({"bounded_global_grid_diagnostic": diagnostic_request}
+           if diagnostic_request is not None else {}),
         "family_identity": binding.family_identity,
         "frozen_bundle": str(Path(frozen_bundle).resolve()),
         "compile_performed": False, "requires_recompile": False,
@@ -3034,6 +3180,8 @@ def run_frozen_epoch_program_set_prefix_probe(
       "graph": graph_evidence, "target_program_identities": target_identities,
       "runtime_preconstruction": runtime_preconstruction,
       "preparation_phase": partial,
+      **({"bounded_global_grid_diagnostic": diagnostic_request}
+         if diagnostic_request is not None else {}),
       "family_identity": binding.family_identity,
       "frozen_bundle": str(Path(frozen_bundle).resolve()),
       "compile_performed": False, "requires_recompile": False,
@@ -3054,6 +3202,8 @@ def run_frozen_epoch_program_set_prefix_probe(
       "graph": graph_evidence, "target_program_identities": target_identities,
       "runtime_preconstruction": runtime_preconstruction,
       "preparation_phase": preparation_phase,
+      **({"bounded_global_grid_diagnostic": diagnostic_request}
+         if diagnostic_request is not None else {}),
       "family_identity": binding.family_identity,
       "frozen_bundle": str(Path(frozen_bundle).resolve()),
       "compile_performed": False, "requires_recompile": False,
@@ -3086,16 +3236,35 @@ def run_frozen_epoch_program_set_prefix_probe(
     "attachment_matches_synchronized_preparation": True,
     "attachment_stage": "attached_after_synchronized_preparation",
   })
+  bounded_grid_evidence = None
+  if diagnostic_global_grid is not None:
+    output, bounded_grid_evidence = _apply_diagnostic_global_grid_to_target_calls(
+      output, selected_programs, diagnostic_global_grid)
+    calls = [node for node in output.uop.toposort()
+             if node.op is Ops.CALL and node.src[0] in selected_programs]
+    graph_evidence.update({
+      "bounded_global_grid_diagnostic": True,
+      "call_launch_only_override": True,
+      "program_nodes_replaced": False,
+      "program_keys_preserved": bounded_grid_evidence["program_keys_preserved"],
+      "binary_identities_preserved": bounded_grid_evidence["binary_identities_preserved"],
+      "buffer_abi_preserved": bounded_grid_evidence["buffer_abi_preserved"],
+      "local_sizes_preserved": bounded_grid_evidence["local_sizes_preserved"],
+      "full_grid_correctness_claimed": False,
+      "c1_certification_claimed": False,
+      "production_promotion": False,
+    })
 
   dispatch_census_key = "aql_packet_census" if bool(getattr(Device["AMD"], "is_aql", False)) \
     else "pm4_dispatch_census"
+  target_launch_dims = tuple(
+    (diagnostic_global_grid or tuple(program.arg.global_size), tuple(program.arg.local_size))
+    for program in selected_programs)
   try:
     packet_census = _realize_with_amd_dispatch_census(
       output, target_program_identities=target_identities,
       target_program_keys=tuple(binding.program_keys[:prefix_epochs]),
-      target_launch_dims=tuple(
-        (tuple(program.arg.global_size), tuple(program.arg.local_size))
-        for program in selected_programs),
+      target_launch_dims=target_launch_dims,
       require_all_five_vas_fixed=True, require_all_five_vas_distinct=True,
       retained_outputs=())
   except BaseException as exc:
@@ -3121,6 +3290,8 @@ def run_frozen_epoch_program_set_prefix_probe(
       "runtime_reuse_crosscheck": runtime_reuse_crosscheck,
       "preparation_phase": preparation_phase,
       "preparation_dispatch_crosscheck": preparation_dispatch_crosscheck,
+      **({"bounded_global_grid_diagnostic": bounded_grid_evidence}
+         if bounded_grid_evidence is not None else {}),
       **({"dispatch": {dispatch_census_key: packet_census}} if packet_census is not None else {}),
       "family_identity": binding.family_identity,
       "frozen_bundle": str(Path(frozen_bundle).resolve()),
@@ -3154,6 +3325,8 @@ def run_frozen_epoch_program_set_prefix_probe(
       "runtime_reuse_crosscheck": runtime_reuse_crosscheck,
       "preparation_phase": preparation_phase,
       "preparation_dispatch_crosscheck": preparation_dispatch_crosscheck,
+      **({"bounded_global_grid_diagnostic": bounded_grid_evidence}
+         if bounded_grid_evidence is not None else {}),
       "dispatch": {dispatch_census_key: packet_census},
       "family_identity": binding.family_identity,
       "frozen_bundle": str(Path(frozen_bundle).resolve()),
@@ -3172,6 +3345,8 @@ def run_frozen_epoch_program_set_prefix_probe(
       "runtime_reuse_crosscheck": runtime_reuse_crosscheck,
       "preparation_phase": preparation_phase,
       "preparation_dispatch_crosscheck": preparation_dispatch_crosscheck,
+      **({"bounded_global_grid_diagnostic": bounded_grid_evidence}
+         if bounded_grid_evidence is not None else {}),
       "dispatch": {dispatch_census_key: packet_census},
       "family_identity": binding.family_identity,
       "frozen_bundle": str(Path(frozen_bundle).resolve()),
@@ -3193,15 +3368,23 @@ def run_frozen_epoch_program_set_prefix_probe(
     sums_prefix.astype(np.float16).astype(np.float32),
     Q81MMQDS4ActivationSpec(m=m, k=prefix_epochs*256, m_tile=m))
   consumer_reference = q4k_q8_1_mmq_ds4_tile_reference(q4_prefix, actual_ds4, ref_spec)
-  consumer_comparison = _numeric_comparison(
-    output.numpy().reshape(m, n), consumer_reference)
+  got_output = output.numpy().reshape(m, n)
+  if diagnostic_global_grid is None:
+    consumer_comparison = _numeric_comparison(got_output, consumer_reference)
+    untouched_comparison = None
+  else:
+    bounded_columns = diagnostic_global_grid[0] * 128
+    consumer_comparison = _numeric_comparison(
+      got_output[:, :bounded_columns], consumer_reference[:, :bounded_columns])
+    untouched_comparison = _exact_zero_comparison(got_output[:, bounded_columns:])
 
   oracle_values, oracle_scales, oracle_sums = q8_1_mmq_ds4_quantize_reference(
     activation_np.astype(np.float32))
   producer_diagnostic = _producer_oracle_diagnostic(
     actual_values, actual_scales, actual_sums,
     oracle_values, oracle_scales, oracle_sums)
-  passed = consumer_comparison["status"] == "pass"
+  passed = consumer_comparison["status"] == "pass" and (
+    untouched_comparison is None or untouched_comparison["status"] == "pass")
   return {
     "schema": schema, "status": "PASS" if passed else "CONSUMER_MISMATCH",
     "exact_blocker": None if passed else
@@ -3211,6 +3394,14 @@ def run_frozen_epoch_program_set_prefix_probe(
     "shape": list(role_spec.shape), "prefix_epochs": prefix_epochs,
     "producer": "extra.qk.q4k_q8_activation_producer.produce_physical_ds4_q8_1_tensor",
     "graph": graph_evidence, "runtime_preconstruction": runtime_preconstruction,
+    **({"bounded_global_grid_diagnostic": {
+      **bounded_grid_evidence,
+      "phase": "audited_target_dispatch_completed",
+      "effective_target_launch_dims": [
+        [list(global_size), list(local_size)] for global_size, local_size in target_launch_dims],
+      "full_grid_correctness_claimed": False,
+      "preconstructed_runtime_reuse_attested": runtime_reuse_crosscheck["all_checks_pass"],
+    }} if bounded_grid_evidence is not None else {}),
     "runtime_reuse_crosscheck": runtime_reuse_crosscheck,
     "preparation_phase": preparation_phase,
     "preparation_dispatch_crosscheck": preparation_dispatch_crosscheck,
@@ -3223,7 +3414,12 @@ def run_frozen_epoch_program_set_prefix_probe(
     "correctness": {
       "status": "PASS" if passed else "CONSUMER_MISMATCH",
       "comparison": consumer_comparison,
-      "authority": "same_session_retained_full_role_producer_bytes_with_static_offset_prefix_and_fp16_metadata_roundtrip",
+      **({"untouched_output_comparison": untouched_comparison,
+          "bounded_columns": diagnostic_global_grid[0] * 128,
+          "full_grid_correctness_claimed": False,
+          "authority": "diagnostic_launched_column_prefix_and_zero_untouched_suffix_only"}
+         if diagnostic_global_grid is not None else {
+           "authority": "same_session_retained_full_role_producer_bytes_with_static_offset_prefix_and_fp16_metadata_roundtrip"}),
     },
     "producer_diagnostic": {
       **producer_diagnostic,
@@ -3384,18 +3580,21 @@ def run_frozen_scheduler_producer_prefix_probe_isolated(
 
 def _run_frozen_epoch_program_set_prefix_probe_worker(
     role_spec: ExactRoleSpec, frozen_bundle: str, prefix_epochs: int,
-    preconstruct_runtimes: bool, child_env_overrides: Mapping[str, str]) -> dict[str, Any]:
+    preconstruct_runtimes: bool, child_env_overrides: Mapping[str, str],
+    diagnostic_global_grid: tuple[int, int, int] | None = None) -> dict[str, Any]:
   """Spawn-safe worker; apply the narrow queue env before device creation."""
   os.environ.update(dict(child_env_overrides))
   os.environ["DEV"] = "AMD"
   return run_frozen_epoch_program_set_prefix_probe(
     role_spec=role_spec, frozen_bundle=frozen_bundle, prefix_epochs=prefix_epochs,
-    preconstruct_runtimes=preconstruct_runtimes)
+    preconstruct_runtimes=preconstruct_runtimes,
+    diagnostic_global_grid=diagnostic_global_grid)
 
 
 def run_frozen_epoch_program_set_prefix_probe_isolated(
     *, role_spec: ExactRoleSpec = DEFAULT_EXACT_ROLE_SPEC, frozen_bundle: str | Path,
     prefix_epochs: int, preconstruct_runtimes: bool = False,
+    diagnostic_global_grid: tuple[int, int, int] | list[int] | None = None,
     timeout_seconds: float = 180.0,
     child_env_overrides: Mapping[str, str] | None = None) -> dict[str, Any]:
   """Run the v2 fixed-base prefix in the existing health-guarded child flow."""
@@ -3405,6 +3604,10 @@ def run_frozen_epoch_program_set_prefix_probe_isolated(
       raise ValueError("preconstruct_runtimes must be a bool")
     role_spec = admit_exact_role_spec(role_spec)
     prefix_epochs = _validate_v2_fixed_base_prefix_epochs(role_spec, prefix_epochs)
+    diagnostic_global_grid = _validate_attn_qo_diagnostic_global_grid(
+      role_spec, diagnostic_global_grid)
+    if diagnostic_global_grid is not None and not preconstruct_runtimes:
+      raise ValueError("bounded diagnostic global grid requires exact runtime preconstruction")
     env_overrides = _validated_child_env_overrides(child_env_overrides)
     env_overrides.setdefault("AMD_AQL", "1")
   except (TypeError, ValueError) as exc:
@@ -3425,7 +3628,7 @@ def run_frozen_epoch_program_set_prefix_probe_isolated(
   isolated = run_isolated(
     _run_frozen_epoch_program_set_prefix_probe_worker,
     args=(role_spec, str(Path(frozen_bundle).resolve()), prefix_epochs,
-          preconstruct_runtimes, env_overrides),
+          preconstruct_runtimes, env_overrides, diagnostic_global_grid),
     timeout_seconds=timeout_seconds, start_method="spawn")
   kernel_faults, kernel_fault_evidence = collect_kernel_fault_evidence(started)
   try: health_after = bool(spawned_tiny_health_probe(env_overrides))
@@ -3900,6 +4103,9 @@ def main() -> int:
                       help="run a 1/2/3-epoch or admitted-full-role frozen v2 static-offset prefix")
   parser.add_argument("--scheduler-v2-fixed-base-preconstruct-runtimes", action="store_true",
                       help="preconstruct/cache the selected exact runtimes before the v2 prefix realization")
+  parser.add_argument("--scheduler-v2-fixed-base-diagnostic-global-grid", type=int, nargs=3,
+                      metavar=("X", "Y", "Z"),
+                      help="research-only attn_qo CALL launch grid; never C1/promotion evidence")
   parser.add_argument("--scheduler-v2-fixed-base-ordinal", type=int,
                       help="run one research-only frozen v2 static-offset ordinal")
   parser.add_argument("--scheduler-v2-fixed-base-ordinal-sequence", type=int, nargs=2,
@@ -3910,6 +4116,14 @@ def main() -> int:
      args.scheduler_v2_fixed_base_prefix_epochs is None:
     parser.error("--scheduler-v2-fixed-base-preconstruct-runtimes requires "
                  "--scheduler-v2-fixed-base-prefix-epochs")
+  if args.scheduler_v2_fixed_base_diagnostic_global_grid is not None and \
+     args.scheduler_v2_fixed_base_prefix_epochs is None:
+    parser.error("--scheduler-v2-fixed-base-diagnostic-global-grid requires "
+                 "--scheduler-v2-fixed-base-prefix-epochs")
+  if args.scheduler_v2_fixed_base_diagnostic_global_grid is not None and \
+     not args.scheduler_v2_fixed_base_preconstruct_runtimes:
+    parser.error("--scheduler-v2-fixed-base-diagnostic-global-grid requires "
+                 "--scheduler-v2-fixed-base-preconstruct-runtimes")
   if args.scheduler_v2_fixed_base_ordinal_sequence is not None:
     if args.target_role_frozen_bundle is None:
       parser.error("--scheduler-v2-fixed-base-ordinal-sequence requires --target-role-frozen-bundle")
@@ -3950,6 +4164,7 @@ def main() -> int:
       role_spec=role_spec, frozen_bundle=args.target_role_frozen_bundle,
       prefix_epochs=args.scheduler_v2_fixed_base_prefix_epochs,
       preconstruct_runtimes=args.scheduler_v2_fixed_base_preconstruct_runtimes,
+      diagnostic_global_grid=args.scheduler_v2_fixed_base_diagnostic_global_grid,
       timeout_seconds=args.target_role_timeout,
       child_env_overrides={"AMD_AQL": args.target_role_amd_aql}
         if args.target_role_amd_aql is not None else None)

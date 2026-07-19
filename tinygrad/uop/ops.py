@@ -1203,6 +1203,23 @@ class CallInfo:
     gf = id(self.grad_fxn) if self.grad_fxn else None
     return f"CallInfo({gf}, {self.metadata}, {repr(self.name)}, {self.precompile}, {self.precompile_backward}, {self.memory_semantic_slots})"
 
+
+DIAGNOSTIC_LAUNCH_AUTHORITY = "tinygrad.research_only.call_global_size.v1"
+
+
+@dataclass(frozen=True)
+class DiagnosticCallInfo(CallInfo):
+  """Explicit invocation-only launch reduction; ordinary CallInfo is unchanged."""
+  diagnostic_global_size: tuple[int, ...]|None = None
+  diagnostic_launch_authority: str|None = None
+  def __reduce__(self):
+    return (DiagnosticCallInfo, (
+      None, self.metadata, self.name, self.precompile, self.precompile_backward,
+      self.memory_semantic_slots, self.diagnostic_global_size, self.diagnostic_launch_authority))
+  def __repr__(self):
+    return (f"DiagnosticCallInfo({super().__repr__()}, {self.diagnostic_global_size}, "
+            f"{repr(self.diagnostic_launch_authority)})")
+
 # Allocation ownership is side metadata except while an explicit tensor-graph
 # carrier is awaiting scheduler consumption. Keeping the weak binding here
 # lets generic compiler code preserve it without importing an application.

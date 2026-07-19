@@ -8,7 +8,8 @@ from unittest.mock import Mock, patch
 
 from tinygrad import Tensor, dtypes
 from tinygrad.runtime.process_isolated import IsolatedResult
-from tinygrad.uop.ops import Ops, UOp
+from tinygrad.uop.ops import (CallInfo, DIAGNOSTIC_LAUNCH_AUTHORITY, DiagnosticCallInfo,
+                              Ops, ProgramInfo, UOp)
 
 from extra.qk.mmq_exact_role_spec import exact_role_spec
 from extra.qk.mmq_llama_five_buffer_full_kernel import build_llama_five_buffer_full_kernel
@@ -17,7 +18,9 @@ from extra.qk.mmq_llama_five_buffer_gpu_harness import (FrozenRuntimePreconstruc
   _aql_packet_census_from_exception,
   _pm4_dispatch_census_from_exception,
   _aql_target_program_identity, _audit_target_aql_kernargs,
-  _bind_sink, _dispatch_with_runtime_evidence, _numeric_comparison, _pack_q4_epochs_contiguous,
+  _apply_diagnostic_global_grid_to_target_calls,
+  _bind_sink, _dispatch_with_runtime_evidence, _exact_zero_comparison,
+  _numeric_comparison, _pack_q4_epochs_contiguous,
   _decode_aql_kernel_dispatch_packet, _load_frozen_execution_binding, _random_q4_words, _runtime_identity_evidence,
   _dispatch_error_runtime_reuse_evidence,
   _fixed_base_ordinal_reference_operands, _fixed_base_ordinal_sequence_reference_operands,
@@ -33,6 +36,7 @@ from extra.qk.mmq_llama_five_buffer_gpu_harness import (FrozenRuntimePreconstruc
   _scheduler_prefix_two_launches,
   _validate_v2_fixed_base_ordinal, _validate_v2_fixed_base_ordinal_sequence,
   _validate_v2_fixed_base_prefix_epochs,
+  _validate_attn_qo_diagnostic_global_grid,
   _validate_frozen_execution_fixture, _validate_frozen_fixture, _validated_child_env_overrides,
   _zero_persistent_target_output,
   main, run_amd_validation, run_frozen_scheduler_prefix_two_probe_isolated,
@@ -247,6 +251,8 @@ def test_aql_packet_census_retains_accepted_packet_and_kernargs_when_doorbell_fa
   slot = Slot()
   packet = bytes(hsa.hsa_kernel_dispatch_packet_t(
     header=ops_amd.AQL_HDR | (hsa.HSA_PACKET_TYPE_KERNEL_DISPATCH << hsa.HSA_PACKET_HEADER_TYPE),
+    workgroup_size_x=256, workgroup_size_y=1, workgroup_size_z=1,
+    grid_size_x=8*256, grid_size_y=4, grid_size_z=1,
     kernel_object=descriptor_va, kernarg_address=ctypes.c_void_p(kernarg_va)))
 
   monkeypatch.setattr(ops_amd.AMDComputeAQLQueue, "exec",
@@ -259,7 +265,7 @@ def test_aql_packet_census_retains_accepted_packet_and_kernargs_when_doorbell_fa
 
   class Output:
     def realize(self, *retained):
-      ops_amd.AMDComputeAQLQueue.exec(queue, program, args_state, (1, 1, 1), (1, 1, 1))
+      ops_amd.AMDComputeAQLQueue.exec(queue, program, args_state, (8, 4, 1), (256, 1, 1))
       ops_amd._publish_aql_packet(slot, packet)
       ops_amd.AMDQueueDesc.signal_doorbell(desc, dev)
 
@@ -267,6 +273,7 @@ def test_aql_packet_census_retains_accepted_packet_and_kernargs_when_doorbell_fa
     _realize_with_aql_packet_census(
       Output(), target_program_identities=(identity,),
       target_program_keys=(program_key,), require_all_five_vas_fixed=True,
+      target_launch_dims=(((8, 4, 1), (256, 1, 1)),),
       require_runtime_lifecycle=True)
   census = _aql_packet_census_from_exception(raised.value)
   assert census is not None
@@ -285,6 +292,11 @@ def test_aql_packet_census_retains_accepted_packet_and_kernargs_when_doorbell_fa
   assert call["program_identity"] == call["expected_program_identity"] == identity
   assert call["kernel_object"] == descriptor_va and call["kernarg_address"] == kernarg_va
   assert call["kernarg_qwords"] == argument_vas
+  assert call["global_size"] == call["expected_global_size"] == [8, 4, 1]
+  assert call["local_size"] == call["expected_local_size"] == [256, 1, 1]
+  assert call["packet_workgroup_size"] == [256, 1, 1]
+  assert call["packet_grid_size"] == [2048, 4, 1]
+  assert call["checks"]["dispatch_dimensions_match"] is True
   lifecycle = call["runtime_lifecycle"]
   assert lifecycle["program_library_va"] == 0x800000
   assert lifecycle["program_library_nbytes"] == 0x20000
@@ -311,6 +323,7 @@ def test_aql_packet_census_retains_accepted_packet_and_kernargs_when_doorbell_fa
     _realize_with_aql_packet_census(
       Output(), target_program_identities=(identity,),
       target_program_keys=(program_key,), require_all_five_vas_fixed=True,
+      target_launch_dims=(((8, 4, 1), (256, 1, 1)),),
       require_runtime_lifecycle=True)
   delayed_census = _aql_packet_census_from_exception(delayed.value)
   assert delayed_census is not None and delayed_census["status"] == "SYNCHRONIZATION_ERROR"
@@ -1132,6 +1145,82 @@ def test_v2_fixed_base_prefix_admission_uses_dynamic_full_role_epoch_count():
       _validate_v2_fixed_base_prefix_epochs(role_spec, invalid)
 
 
+def test_attn_qo_bounded_grid_admission_is_explicit_and_fail_closed():
+  qo, kv = exact_role_spec("attn_qo"), exact_role_spec("attn_kv")
+  allowed = ((1, 4, 1), (8, 4, 1), (9, 4, 1), (16, 4, 1), (32, 4, 1), (40, 4, 1))
+  assert tuple(_validate_attn_qo_diagnostic_global_grid(qo, list(grid)) for grid in allowed) == allowed
+  assert _validate_attn_qo_diagnostic_global_grid(qo, None) is None
+  with pytest.raises(ValueError, match="allowlisted only"):
+    _validate_attn_qo_diagnostic_global_grid(kv, (1, 4, 1))
+  for invalid in ((2, 4, 1), (1, 3, 1), (1, 4, 2), (41, 4, 1), (1, 4), (True, 4, 1)):
+    with pytest.raises(ValueError):
+      _validate_attn_qo_diagnostic_global_grid(qo, invalid)
+
+
+def test_bounded_grid_untouched_suffix_requires_exact_zero():
+  assert _exact_zero_comparison(np.zeros((2, 3), dtype=np.float32))["status"] == "pass"
+  for stray in (0.001, 0.0029, -0.001):
+    got = np.zeros((2, 3), dtype=np.float32)
+    got[1, 2] = stray
+    comparison = _exact_zero_comparison(got)
+    assert comparison["status"] == "mismatch"
+    assert comparison["mismatch_count"] == 1
+
+
+def _bounded_grid_test_program(binary=b"exact-frozen-binary"):
+  return UOp(
+    Ops.PROGRAM,
+    src=(UOp(Ops.SINK), UOp(Ops.DEVICE, arg="AMD"), UOp(Ops.LINEAR),
+         UOp(Ops.SOURCE, arg="exact frozen source"), UOp(Ops.BINARY, arg=binary)),
+    arg=ProgramInfo(
+      name="attn_qo_epoch_0", global_size=(40, 4, 1), local_size=(256, 1, 1),
+      globals=tuple(range(5)), outs=(0,), ins=tuple(range(5))))
+
+
+def test_bounded_grid_rewrites_only_call_and_preserves_frozen_program_identity():
+  program = _bounded_grid_test_program()
+  tensors = [Tensor.empty(1, device="AMD") for _ in range(5)]
+  output = tensors[0].custom_kernel(*tensors[1:], fxn=lambda *_: program)[0]
+  original_key, original_binary = program.key, program.src[4].arg
+  bounded, evidence = _apply_diagnostic_global_grid_to_target_calls(
+    output, (program,), (1, 4, 1))
+  calls = [node for node in bounded.uop.toposort()
+           if node.op is Ops.CALL and node.src[0] is program]
+  assert len(calls) == 1 and isinstance(calls[0].arg, DiagnosticCallInfo)
+  assert calls[0].arg.diagnostic_global_size == (1, 4, 1)
+  assert calls[0].arg.diagnostic_launch_authority == DIAGNOSTIC_LAUNCH_AUTHORITY
+  assert program.key == original_key and program.src[4].arg is original_binary
+  assert program.arg.global_size == (40, 4, 1) and program.arg.local_size == (256, 1, 1)
+  assert evidence["program_objects_preserved"] is True
+  assert evidence["program_keys_preserved"] is evidence["binary_identities_preserved"] is True
+  assert evidence["local_sizes_preserved"] is evidence["buffer_abi_preserved"] is True
+  assert evidence["promotion_eligible"] is evidence["c1_certification_eligible"] is False
+
+
+def test_call_launch_override_is_authorized_bounded_and_ordinary_callinfo_is_unchanged():
+  from tinygrad.engine.realize import _kernel_launch_dims
+  program = _bounded_grid_test_program()
+  ordinary = program.call()
+  assert type(ordinary.arg) is CallInfo
+  assert repr(ordinary.arg) == "CallInfo(None, (), None, False, False, ())"
+  assert ordinary.arg.__reduce__() == (CallInfo, (None, (), None, False, False, ()))
+  assert _kernel_launch_dims(ordinary, program, {}) == ((40, 4, 1), (256, 1, 1))
+
+  authorized = ordinary.replace(arg=DiagnosticCallInfo(
+    diagnostic_global_size=(8, 4, 1),
+    diagnostic_launch_authority=DIAGNOSTIC_LAUNCH_AUTHORITY))
+  assert _kernel_launch_dims(authorized, program, {}) == ((8, 4, 1), (256, 1, 1))
+  unauthorized = ordinary.replace(arg=DiagnosticCallInfo(
+    diagnostic_global_size=(8, 4, 1)))
+  with pytest.raises(ValueError, match="authority"):
+    _kernel_launch_dims(unauthorized, program, {})
+  oversized = ordinary.replace(arg=DiagnosticCallInfo(
+    diagnostic_global_size=(41, 4, 1),
+    diagnostic_launch_authority=DIAGNOSTIC_LAUNCH_AUTHORITY))
+  with pytest.raises(ValueError, match="bounded"):
+    _kernel_launch_dims(oversized, program, {})
+
+
 def test_v2_fixed_base_ordinal_admission_uses_dynamic_full_role_epoch_count():
   attn, down = exact_role_spec("attn_kv"), exact_role_spec("ffn_down")
   assert [_validate_v2_fixed_base_ordinal(attn, value) for value in (0, 2, 19)] == [0, 2, 19]
@@ -1171,6 +1260,68 @@ def test_v2_fixed_base_cli_accepts_dynamic_full_role_epoch_count(monkeypatch, ca
   assert probe.call_args.kwargs["prefix_epochs"] == 68
   assert probe.call_args.kwargs["preconstruct_runtimes"] is True
   assert json.loads(capsys.readouterr().out)["status"] == "PASS"
+
+
+def test_attn_qo_bounded_grid_cli_requires_preconstruction_and_forwards_exact_grid(
+    monkeypatch, capsys, tmp_path):
+  bundle = tmp_path / "frozen-v3"
+  monkeypatch.setattr("sys.argv", [
+    "mmq_llama_five_buffer_gpu_harness",
+    "--scheduler-v2-fixed-base-prefix-epochs", "1",
+    "--scheduler-v2-fixed-base-preconstruct-runtimes",
+    "--scheduler-v2-fixed-base-diagnostic-global-grid", "1", "4", "1",
+    "--target-role-name", "attn_qo",
+    "--target-role-frozen-bundle", str(bundle),
+    "--target-role-amd-aql", "0",
+  ])
+  with patch(
+      "extra.qk.mmq_llama_five_buffer_gpu_harness.run_frozen_epoch_program_set_prefix_probe_isolated",
+      return_value={"status": "PASS", "research_only": True,
+                    "bounded_global_grid_diagnostic": {"promotion_eligible": False}}) as probe:
+    assert main() == 0
+  assert probe.call_args.kwargs["role_spec"].role == "attn_qo"
+  assert probe.call_args.kwargs["prefix_epochs"] == 1
+  assert probe.call_args.kwargs["preconstruct_runtimes"] is True
+  assert probe.call_args.kwargs["diagnostic_global_grid"] == [1, 4, 1]
+  assert probe.call_args.kwargs["child_env_overrides"] == {"AMD_AQL": "0"}
+  assert json.loads(capsys.readouterr().out)["bounded_global_grid_diagnostic"]["promotion_eligible"] is False
+
+  monkeypatch.setattr("sys.argv", [
+    "mmq_llama_five_buffer_gpu_harness",
+    "--scheduler-v2-fixed-base-prefix-epochs", "1",
+    "--scheduler-v2-fixed-base-diagnostic-global-grid", "1", "4", "1",
+    "--target-role-name", "attn_qo",
+    "--target-role-frozen-bundle", str(bundle),
+  ])
+  with pytest.raises(SystemExit):
+    main()
+
+
+def test_attn_qo_bounded_grid_isolated_forwards_grid_and_rejects_other_role_before_health(tmp_path):
+  child = {"schema": "tinygrad.mmq_frozen_epoch_program_set_prefix_probe.v2", "status": "PASS"}
+  with patch("tinygrad.runtime.process_isolated.run_isolated",
+             return_value=IsolatedResult("passed", result=child)) as run, \
+       patch("extra.qk.mmq_target_epoch_orchestrator.read_kernel_log_since", return_value=""), \
+       patch("extra.qk.mmq_target_epoch_orchestrator.spawned_tiny_health_probe", return_value=True) as health:
+    result = run_frozen_epoch_program_set_prefix_probe_isolated(
+      role_spec=exact_role_spec("attn_qo"), frozen_bundle=tmp_path / "frozen-v3",
+      prefix_epochs=1, preconstruct_runtimes=True,
+      diagnostic_global_grid=(1, 4, 1), timeout_seconds=1)
+    assert result["status"] == "PASS"
+    assert run.call_args.kwargs["args"][5] == (1, 4, 1)
+    health.reset_mock()
+    rejected = run_frozen_epoch_program_set_prefix_probe_isolated(
+      role_spec=exact_role_spec("attn_kv"), frozen_bundle=tmp_path / "frozen-v3",
+      prefix_epochs=1, preconstruct_runtimes=True,
+      diagnostic_global_grid=(1, 4, 1), timeout_seconds=1)
+    missing_preconstruction = run_frozen_epoch_program_set_prefix_probe_isolated(
+      role_spec=exact_role_spec("attn_qo"), frozen_bundle=tmp_path / "frozen-v3",
+      prefix_epochs=1, preconstruct_runtimes=False,
+      diagnostic_global_grid=(1, 4, 1), timeout_seconds=1)
+  assert rejected["status"] == "BLOCKED" and "allowlisted only" in rejected["exact_blocker"]
+  assert missing_preconstruction["status"] == "BLOCKED"
+  assert "requires exact runtime preconstruction" in missing_preconstruction["exact_blocker"]
+  health.assert_not_called()
 
 
 def test_v2_fixed_base_ordinal_cli_dispatches_research_only_probe(monkeypatch, capsys, tmp_path):

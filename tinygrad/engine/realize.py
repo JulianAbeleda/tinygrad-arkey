@@ -5,7 +5,8 @@ from dataclasses import dataclass, replace, field
 from tinygrad.helpers import colored, DEBUG, GlobalCounters, ansilen, all_int, TRACEMETA, prod, flatten, Context, getenv
 from tinygrad.helpers import size_to_str, time_to_str, VALIDATE_WITH_CPU, PROFILE, ProfilePointEvent, cpu_events
 from tinygrad.dtype import dtypes
-from tinygrad.uop.ops import Ops, PatternMatcher, UOp, UPat, sym_infer, buffers, graph_rewrite, ProgramInfo
+from tinygrad.uop.ops import (DIAGNOSTIC_LAUNCH_AUTHORITY, DiagnosticCallInfo, Ops, PatternMatcher, UOp, UPat,
+                             sym_infer, buffers, graph_rewrite, ProgramInfo)
 from tinygrad.device import Device, Buffer, MultiBuffer
 from tinygrad.renderer import Estimates
 from tinygrad.codegen import to_program
@@ -169,13 +170,33 @@ def exec_copy(ctx:ExecContext, call:UOp, ast:UOp) -> float|None:
       else: dest.copyin(src.as_memoryview(allow_zero_copy=True))
   return None
 
+def _kernel_launch_dims(
+    call:UOp, ast:UOp, var_vals:dict[str, int],
+    ) -> tuple[tuple[int, ...], tuple[int, ...]|None]:
+  """Resolve PROGRAM launch dimensions plus an invocation-local diagnostic grid."""
+  global_size, local_size = ast.arg.launch_dims(var_vals)
+  diagnostic_global_size = getattr(call.arg, "diagnostic_global_size", None)
+  if diagnostic_global_size is not None:
+    if not isinstance(call.arg, DiagnosticCallInfo) or \
+       call.arg.diagnostic_launch_authority != DIAGNOSTIC_LAUNCH_AUTHORITY:
+      raise ValueError("diagnostic CALL global size lacks explicit research-only authority")
+    if not isinstance(diagnostic_global_size, tuple) or len(diagnostic_global_size) != len(global_size) or \
+       any(not isinstance(value, int) or isinstance(value, bool) or value <= 0 for value in diagnostic_global_size):
+      raise ValueError("diagnostic CALL global size must be a positive concrete tuple matching PROGRAM rank")
+    if any(not isinstance(value, int) or isinstance(value, bool) or value <= 0 for value in global_size) or \
+       any(requested > full for requested, full in zip(diagnostic_global_size, global_size)):
+      raise ValueError("diagnostic CALL global size must be bounded by the concrete PROGRAM global size")
+    global_size = diagnostic_global_size
+  return global_size, local_size
+
+
 def exec_kernel(ctx:ExecContext, call:UOp, ast:UOp) -> float|None:
   et = None
   for bufs, device_vars in unwrap_multi(call, resolve_params(call, ctx.input_uops)):
     var_vals = {**ctx.var_vals, **device_vars}
     prg_bufs = [bufs[i].ensure_allocated() for i in ast.arg.globals]
     rt = get_runtime(device:=bufs[0].device, ast, cache=ctx.cache)
-    global_size, local_size = ast.arg.launch_dims(var_vals)
+    global_size, local_size = _kernel_launch_dims(call, ast, var_vals)
     with track_stats(ctx, call, device, prg_bufs, var_vals) as tm:
       et = tm[0] = rt(*[b.get_buf(device) for b in prg_bufs], global_size=global_size, local_size=local_size, vals=ast.arg.vals(var_vals),
                        wait=ctx.wait, timeout=ctx.timeout)
