@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections import Counter
 import hashlib
 import json
+from math import prod
 import struct
 from typing import Any, Iterable, Mapping
 
@@ -33,10 +34,12 @@ _NATIVE_BINARY = {
   AMDOps.V_IADD: lambda a, b: a + b,
   AMDOps.V_IMUL: lambda a, b: a * b,
   AMDOps.V_OFFSET: lambda a, b: a << b,
-  AMDOps.V_LSHR: lambda a, b: (a & 0xffffffff) >> b,
+  AMDOps.V_LSHR: lambda a, b: a >> b,
   AMDOps.V_AND: lambda a, b: a & b,
 }
 _NATIVE_LEAF = frozenset((AMDOps.WG_ID, AMDOps.WI_ID, AMDOps.MOV))
+_NATIVE_SHIFTS = frozenset((AMDOps.V_OFFSET, AMDOps.V_LSHR))
+_UINT32_MAX = 0xffffffff
 
 
 def _sha256_json(value: Any) -> str:
@@ -264,26 +267,60 @@ def _native_specials(value: UOp, found: set[str] | None = None) -> set[str]:
   return found
 
 
-def _eval_native_address(value: UOp, coordinate: Mapping[str, int], memo: dict[UOp, int]) -> int:
-  if value in memo: return memo[value]
+def _eval_native_address(value: UOp, coordinate: Mapping[str, int], memo: dict[UOp, int],
+                         arithmetic: dict[str, Any] | None = None) -> int:
+  if value in memo:
+    if arithmetic is not None: arithmetic["memoized_node_reuses"] += 1
+    return memo[value]
   if value.op is Ops.CONST:
-    result = int(value.arg)
+    if type(value.arg) is not int:
+      raise ValueError("C3 native address CONST must carry an exact integer")
+    result = value.arg
   elif value.op is Ops.SPECIAL:
-    try: result = int(coordinate[str(value.arg)])
+    try: result = coordinate[str(value.arg)]
     except KeyError as exc: raise ValueError(f"C3 native address uses unknown SPECIAL {value.arg!r}") from exc
+    if type(result) is not int:
+      raise ValueError(f"C3 native address SPECIAL {value.arg!r} coordinate must be an exact integer")
   elif value.op is Ops.AFTER and value.src:
-    result = _eval_native_address(value.src[0], coordinate, memo)
+    result = _eval_native_address(value.src[0], coordinate, memo, arithmetic)
   elif value.op in (Ops.CAST, Ops.BITCAST) and value.src:
-    result = _eval_native_address(value.src[0], coordinate, memo)
+    if len(value.src) != 1:
+      raise ValueError(f"C3 native address {value.op.name} must have exactly one value operand")
+    if value.op is Ops.BITCAST and value.dtype.itemsize != value.src[0].dtype.itemsize:
+      raise ValueError("C3 native address BITCAST changes scalar storage width")
+    result = _eval_native_address(value.src[0], coordinate, memo, arithmetic)
   elif value.op is Ops.INS and value.arg in _NATIVE_LEAF and value.src:
-    result = _eval_native_address(value.src[0], coordinate, memo)
+    if value.arg is AMDOps.MOV and len(value.src) != 1:
+      raise ValueError("C3 native address MOV must have exactly one value operand")
+    if value.arg in (AMDOps.WG_ID, AMDOps.WI_ID) and (
+        len(value.src) < 2 or value.src[0].op is not Ops.SPECIAL or
+        value.src[1].op is not Ops.CONST or type(value.src[1].arg) is not int):
+      raise ValueError(f"C3 native address {value.arg.name} lost its SPECIAL/axis operands")
+    if value.arg in (AMDOps.WG_ID, AMDOps.WI_ID):
+      special, axis = str(value.src[0].arg), value.src[1].arg
+      expected = {"lidx0": (AMDOps.WI_ID, 0), "gidx0": (AMDOps.WG_ID, 2), "gidx1": (AMDOps.WG_ID, 3)}
+      if special not in expected or (value.arg, axis) != expected[special]:
+        raise ValueError(f"C3 native address {value.arg.name} SPECIAL/axis semantics differ")
+    result = _eval_native_address(value.src[0], coordinate, memo, arithmetic)
   elif value.op is Ops.INS and value.arg in _NATIVE_BINARY and len(value.src) >= 2:
-    lhs = _eval_native_address(value.src[0], coordinate, memo)
-    rhs = _eval_native_address(value.src[1], coordinate, memo)
+    lhs = _eval_native_address(value.src[0], coordinate, memo, arithmetic)
+    rhs = _eval_native_address(value.src[1], coordinate, memo, arithmetic)
+    if value.arg in _NATIVE_SHIFTS and not 0 <= rhs < 32:
+      raise ValueError(f"C3 native address arithmetic {value.arg.name} has invalid uint32 shift {rhs}")
     result = _NATIVE_BINARY[value.arg](lhs, rhs)
+    if arithmetic is not None:
+      arithmetic["evaluated_binary_operations"] += 1
+      arithmetic["minimum_binary_result"] = result if arithmetic["minimum_binary_result"] is None \
+        else min(arithmetic["minimum_binary_result"], result)
+      arithmetic["maximum_binary_result"] = result if arithmetic["maximum_binary_result"] is None \
+        else max(arithmetic["maximum_binary_result"], result)
   else:
     raise ValueError(f"C3 native address uses unsupported node {value.op.name}:{getattr(value.arg, 'name', value.arg)!r}")
-  memo[value] = result & 0xffffffff
+  if not 0 <= result <= _UINT32_MAX:
+    raise ValueError(
+      f"C3 native address {value.op.name}:{getattr(value.arg, 'name', value.arg)!r} "
+      f"has out-of-range uint32 value {result}; truncation/wrap is forbidden")
+  memo[value] = result
   return memo[value]
 
 
@@ -344,15 +381,17 @@ def _native_memory_rows(program: UOp) -> tuple[tuple[str, int, UOp, int, int], .
 
 
 def _native_address_fingerprint(value: UOp) -> tuple[Any, ...]:
-  if value.op is Ops.CONST: return ("const", int(value.arg))
-  if value.op is Ops.SPECIAL: return ("special", str(value.arg))
-  if value.op is Ops.AFTER and value.src: return _native_address_fingerprint(value.src[0])
+  if value.op is Ops.CONST: return ("const", str(value.dtype), int(value.arg))
+  if value.op is Ops.SPECIAL: return ("special", str(value.dtype), str(value.arg))
+  if value.op is Ops.AFTER and value.src:
+    return ("AFTER", str(value.dtype), _native_address_fingerprint(value.src[0]))
   if value.op in (Ops.CAST, Ops.BITCAST) and value.src:
-    return (value.op.name, _native_address_fingerprint(value.src[0]))
+    return (value.op.name, str(value.dtype), str(value.src[0].dtype), _native_address_fingerprint(value.src[0]))
   if value.op is Ops.INS and value.arg in _NATIVE_LEAF and value.src:
-    return (value.arg.name, _native_address_fingerprint(value.src[0]))
+    return (value.arg.name, str(value.dtype), _native_address_fingerprint(value.src[0]))
   if value.op is Ops.INS and value.arg in _NATIVE_BINARY and len(value.src) >= 2:
-    return (value.arg.name, _native_address_fingerprint(value.src[0]), _native_address_fingerprint(value.src[1]))
+    return (value.arg.name, str(value.dtype),
+            _native_address_fingerprint(value.src[0]), _native_address_fingerprint(value.src[1]))
   raise ValueError(f"C3 native address uses unsupported node {value.op.name}:{getattr(value.arg, 'name', value.arg)!r}")
 
 
@@ -380,10 +419,17 @@ def certify_native_program_memory(role_spec: ExactRoleSpec, program: UOp, epoch:
   if not memory: raise ValueError("C3 native PROGRAM contains no certifiable global memory instructions")
   counters: dict[tuple[str, int], Counter[int] | _ExactOnceCoverage] = {}
   instruction_census = Counter((kind, slot) for kind, slot, *_ in memory)
+  arithmetic: dict[str, Any] = {
+    "evaluated_binary_operations": 0, "minimum_binary_result": None, "maximum_binary_result": None,
+    "memoized_node_reuses": 0, "projected_address_evaluations": 0,
+    "projected_address_evaluations_reused_from_family_cache": 0,
+  }
   for kind, slot, address, immediate, width in memory:
     element_width = parameters[slot].dtype.itemsize
     if width % element_width:
       raise ValueError(f"C3 native {kind} width splits a {ABI_NAMES[slot]} element")
+    if not 0 <= immediate <= _UINT32_MAX:
+      raise ValueError(f"C3 native {kind} {ABI_NAMES[slot]} immediate is outside uint32")
     key = (kind, slot)
     counter = counters.setdefault(
       key, _ExactOnceCoverage(parameters[slot].size) if slot == 0 else Counter())
@@ -393,12 +439,17 @@ def certify_native_program_memory(role_spec: ExactRoleSpec, program: UOp, epoch:
     byte_bases = None if _evaluation_cache is None else _evaluation_cache.get(fingerprint)
     if byte_bases is None:
       byte_bases = tuple(
-        _eval_native_address(address, coordinate, {})
+        _eval_native_address(address, coordinate, {}, arithmetic)
         for coordinate in _coordinate_projection(role_spec, names))
+      arithmetic["projected_address_evaluations"] += len(byte_bases)
       if _evaluation_cache is not None: _evaluation_cache[fingerprint] = byte_bases
+    else:
+      arithmetic["projected_address_evaluations_reused_from_family_cache"] += len(byte_bases)
     for byte_base in byte_bases:
       byte_start = byte_base + immediate
       byte_end = byte_start + width
+      if byte_start > _UINT32_MAX or byte_end > _UINT32_MAX + 1:
+        raise ValueError(f"C3 native {kind} {ABI_NAMES[slot]} effective byte range overflows uint32")
       if byte_start < 0 or byte_end > parameters[slot].size * element_width:
         raise ValueError(
           f"C3 native {kind} {ABI_NAMES[slot]} byte range [{byte_start},{byte_end}) "
@@ -439,8 +490,20 @@ def certify_native_program_memory(role_spec: ExactRoleSpec, program: UOp, epoch:
   return {
     "authority": "retained_final_selected_native_uop_graph", "epoch": epoch,
     "program_key": program.key.hex(), "global_memory_instruction_lanes": len(memory),
+    "full_grid": list(role_spec.program.grid), "local_size": [256, 1, 1],
+    "exhaustive_launch_coordinate_count": prod(role_spec.program.grid) * 256,
     "rows": rows, "all_native_global_bases_resolve_to_five_buffer_kernarg_slots": True,
     "all_native_effective_addresses_within_declared_allocations": True,
+    "native_address_arithmetic": {
+      **arithmetic,
+      "count_semantics": (
+        "binary operations and projected address coordinates evaluated in this variant; "
+        "memoized_node_reuses counts only within one projected expression evaluation"
+      ),
+      "uint32_minimum": 0, "uint32_maximum": _UINT32_MAX,
+      "all_leaves_passthroughs_operands_and_results_range_checked_before_memoization": True,
+      "all_intermediates_within_uint32_without_overflow_or_wrap": True,
+    },
     "output_read_modify_write_complete_once": True,
   }
 

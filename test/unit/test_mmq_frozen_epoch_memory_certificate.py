@@ -8,7 +8,7 @@ from tinygrad.uop.ops import Ops, ProgramInfo, UOp
 
 from extra.qk.mmq_exact_role_spec import ExactRoleSpec
 from extra.qk.mmq_frozen_epoch_memory_certificate import (
-  SCHEMA, certify_frozen_epoch_memory, certify_frozen_epoch_program_family, certify_native_program_memory,
+  SCHEMA, _eval_native_address, certify_frozen_epoch_memory, certify_frozen_epoch_program_family, certify_native_program_memory,
   certify_source_sink_memory,
 )
 from extra.qk.mmq_llama_five_buffer_full_kernel import build_llama_five_buffer_epoch_offset_family
@@ -29,7 +29,8 @@ def _ins(op: AMDOps, a: UOp, b: int) -> UOp:
 
 def _synthetic_native_program(*, bad_q4_offset: bool = False,
                               bad_q4_pointer_offset: bool = False,
-                              unsupported_q4_address: bool = False) -> UOp:
+                              unsupported_q4_address: bool = False,
+                              wrapped_q4_address: bool = False) -> UOp:
   parameters = five_buffer_parameters(*ROLE.shape)
   params = tuple(UOp.param(parameter.slot, parameter.dtype.ptr(parameter.size)) for parameter in parameters)
   pointers = tuple(UOp(
@@ -62,6 +63,11 @@ def _synthetic_native_program(*, bad_q4_offset: bool = False,
     if bad_q4_offset and word == 35: byte = UOp.const(dtypes.int32, parameters[1].size * 4)
     if unsupported_q4_address and word == 35:
       byte = UOp(Ops.INS, dtypes.int32, (byte, UOp.const(dtypes.int32, 0)), AMDOps.V_OR)
+    if wrapped_q4_address and word == 0:
+      # The hardware result is zero after uint32 wrap and would therefore look
+      # in-bounds unless the certificate audits arithmetic intermediates.
+      byte = UOp(Ops.INS, dtypes.int32, (
+        UOp.const(dtypes.uint32, 0xffffffff), UOp.const(dtypes.uint32, 1)), AMDOps.V_IADD)
     memory.append(UOp(Ops.INS, dtypes.uint32, (byte, pointers[1], UOp.const(dtypes.int32, 0).rtag()),
                       AMDOps.GLOBAL_LOAD))
 
@@ -86,6 +92,10 @@ def test_c3_source_and_final_native_cover_full_grid_and_match_unique_sets(source
   assert certificate["source_sink"]["output_read_modify_write_complete_once"] is True
   assert certificate["final_native"]["all_native_global_bases_resolve_to_five_buffer_kernarg_slots"] is True
   assert certificate["final_native"]["all_native_effective_addresses_within_declared_allocations"] is True
+  arithmetic = certificate["final_native"]["native_address_arithmetic"]
+  assert arithmetic["evaluated_binary_operations"] > 0
+  assert arithmetic["projected_address_evaluations"] > 0
+  assert arithmetic["all_leaves_passthroughs_operands_and_results_range_checked_before_memoization"] is True
   rows = {(row["kind"], row["name"]): row for row in certificate["final_native"]["rows"]}
   assert rows[("load", "output")]["unique_elements"] == rows[("store", "output")]["unique_elements"] == 128 * 128
   assert rows[("load", "q4")]["unique_elements"] == 128 * 36
@@ -112,7 +122,49 @@ def test_c3_source_rejects_missing_output_store(source_sink: UOp):
   ({"bad_q4_offset": True}, "exceeds allocation"),
   ({"bad_q4_pointer_offset": True}, "kernarg byte offset"),
   ({"unsupported_q4_address": True}, "unsupported node"),
+  ({"wrapped_q4_address": True}, "out-of-range uint32 value"),
 ))
 def test_c3_native_rejects_out_of_bounds_wrong_base_and_opaque_address(kwargs, message):
   with pytest.raises(ValueError, match=message):
     certify_native_program_memory(ROLE, _synthetic_native_program(**kwargs), 0)
+
+
+@pytest.mark.parametrize("op", (Ops.CAST, Ops.BITCAST))
+def test_c3_native_rejects_uint64_value_that_casts_or_bitcasts_outside_uint32(op):
+  wide = UOp.const(dtypes.uint64, 0x1_0000_0000)
+  narrowed = UOp(op, dtypes.uint32, (wide,))
+  with pytest.raises(ValueError, match="out-of-range uint32 value|BITCAST changes scalar storage width"):
+    _eval_native_address(narrowed, {}, {})
+
+
+@pytest.mark.parametrize(("value", "message"), (
+  (UOp(Ops.INS, dtypes.int32, (
+    UOp.const(dtypes.uint32, 1), UOp.const(dtypes.uint32, 32)), AMDOps.V_OFFSET), "invalid uint32 shift"),
+  (UOp(Ops.INS, dtypes.int32, (
+    UOp.const(dtypes.uint32, 1), UOp.const(dtypes.uint32, 32)), AMDOps.V_LSHR), "invalid uint32 shift"),
+  (UOp(Ops.INS, dtypes.int32, (
+    UOp.const(dtypes.uint32, 0x80000000), UOp.const(dtypes.uint32, 1)), AMDOps.V_OFFSET), "out-of-range uint32 value"),
+  (UOp(Ops.INS, dtypes.int32, (
+    UOp.const(dtypes.uint32, 0xffffffff), UOp.const(dtypes.uint32, 1)), AMDOps.V_IADD), "out-of-range uint32 value"),
+  (UOp(Ops.INS, dtypes.int32, (
+    UOp.const(dtypes.uint64, 0x1_0000_0000), UOp.const(dtypes.uint32, 0)), AMDOps.V_AND), "out-of-range uint32 value"),
+  (UOp(Ops.INS, dtypes.int32, (UOp.const(dtypes.uint64, 0x1_0000_0000),), AMDOps.MOV), "out-of-range uint32 value"),
+))
+def test_c3_native_rejects_invalid_shift_binary_operand_result_and_mov_leaf(value, message):
+  with pytest.raises(ValueError, match=message):
+    _eval_native_address(value, {}, {})
+
+
+def test_c3_native_rejects_out_of_range_special_leaf_before_memoization():
+  special = UOp.special(1, "gidx0")
+  with pytest.raises(ValueError, match="out-of-range uint32 value"):
+    _eval_native_address(special, {"gidx0": 0x1_0000_0000}, {})
+
+
+def test_c3_native_rejects_noninteger_const_and_wrong_workgroup_axis_semantics():
+  with pytest.raises(ValueError, match="CONST must carry an exact integer"):
+    _eval_native_address(UOp.const(dtypes.float32, 1.5), {}, {})
+  wrong_axis = UOp(Ops.INS, dtypes.int32, (
+    UOp.special(1, "gidx0"), UOp.const(dtypes.int32, 3)), AMDOps.WG_ID)
+  with pytest.raises(ValueError, match="SPECIAL/axis semantics differ"):
+    _eval_native_address(wrong_axis, {"gidx0": 0}, {})
