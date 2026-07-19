@@ -64,10 +64,12 @@ KERNEL_FAULT_EVIDENCE_SCHEMA = "tinygrad.amd_kernel_fault_evidence.v1"
 _MAX_FAULT_BLOCKS, _MAX_FAULT_LINES, _MAX_FAULT_LINE_CHARS = 8, 32, 512
 _GPU_FAULT_CONTINUATION_MARKERS = (
   "vm_l2_protection_fault", "faulty utcl2 client", "fault address", "client id",
-  "memory violation", "protection fault", "queue evicted", "r/w:", "access type",
+  "in page starting at address", "memory violation", "protection fault",
+  "queue evicted", "r/w:", "rw:", "access type",
 )
 _FAULT_ADDRESS_RE = re.compile(
-  r"(?:vm_l2_protection_fault_addr|fault address)\s*[:=]\s*(0x[0-9a-f]+)", re.IGNORECASE)
+  r"(?:vm_l2_protection_fault_addr|fault address|in page starting at address)\s*[:=]?\s*(0x[0-9a-f]+)",
+  re.IGNORECASE)
 _FAULT_CLIENT_RE = re.compile(
   r"(?:faulty\s+utcl2\s+client(?:\s+id)?|client\s+id)\s*[:=]\s*([a-z0-9_-]+)", re.IGNORECASE)
 _FAULT_STATUS_RE = re.compile(

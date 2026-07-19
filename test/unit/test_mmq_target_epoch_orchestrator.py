@@ -116,11 +116,11 @@ def test_kernel_fault_evidence_preserves_bounded_chronological_fault_details():
   text = """
     harmless amdgpu informational row
     amdgpu: sq_intr: SQC instruction memory violation
-    amdgpu: VM_L2_PROTECTION_FAULT_STATUS:0x00201031
-    amdgpu: Faulty UTCL2 client ID: TCP (0x8)
-    amdgpu: VM_L2_PROTECTION_FAULT_ADDR: 0x00000000deadbeef
-    amdgpu: R/W: 1
     amdgpu: [gfxhub] page fault (vmid:8 pasid:32774)
+    amdgpu: in page starting at address 0x00000000deadbeef from client 10
+    amdgpu: GCVM_L2_PROTECTION_FAULT_STATUS:0x00201031
+    amdgpu: Faulty UTCL2 client ID: TCP (0x8)
+    amdgpu: RW: 0x1
     irrelevant row between fault markers
     amdgpu: GPU reset begin
   """
@@ -129,10 +129,10 @@ def test_kernel_fault_evidence_preserves_bounded_chronological_fault_details():
   assert evidence["status"] == "FAULTS" and evidence["truncated"] is False
   assert [row["primary_marker"] for row in evidence["blocks"]] == [
     "sq_intr", "[gfxhub] page fault", "gpu reset"]
-  first = evidence["blocks"][0]
-  assert first["details"] == {
+  page_fault = evidence["blocks"][1]
+  assert page_fault["details"] == {
     "fault_addresses": ["0x00000000deadbeef"],
-    "clients": ["TCP"], "statuses": ["0x00201031"], "accesses": ["1"],
+    "clients": ["TCP"], "statuses": ["0x00201031"], "accesses": ["0x1"],
   }
   assert [row["ordinal"] for row in evidence["blocks"]] == [0, 1, 2]
   assert all("harmless" not in line for block in evidence["blocks"] for line in block["lines"])
