@@ -1,5 +1,71 @@
 # Qwen3-14B generated-prefill Claude handoff
 
+## 1.5 Current status 2026-07-19: deterministic staged `attn_qo` passes PM4 C1-C6
+
+This section supersedes §1.4 for the selected dense fixed-VA staged family. The direct-layout v3 classification in
+§1.4 remains the negative-control result and must not be reopened.
+
+Commit `951d3615c [amd] stabilize progressive drain ordering` fixes the fresh-process compiler reproducibility
+blocker. `_serialize_progressive_c_drains` previously selected equally ready drain heads through identity-hashed
+`UOp` set order, publishing heap-layout order into post-instruction-selection dependencies, later scheduling,
+register allocation, source, and HSACO. The fix uses selected-graph position only as the equal-ready tie-break.
+Twenty-seven focused tests and a 92-test staged-family review pass.
+
+Two clean, exact-environment `attn_qo (512,5120,5120)` builds at `951d3615c` are now byte-identical through the
+retained SINK, PROGRAM, rendered source, disassembly, HSACO, serialized PROGRAM, bundle manifest, deterministic ustar
+archive, and staged-family manifest:
+
+- family identity
+  `sha256:2cfc30075f8024cee8a927c2c3de2e87eef3db6d83882da69faa0fe0a3cc1e4f`;
+- SINK key `bd77ed89317319ced878964575afdbc59487f23d50240ad7d397d5bd2f9cbe44`;
+- PROGRAM key `3f478e6d89a2de467f6b7d1ca18418cdfd0cdb19de05db1d66608e65a5e6475f`;
+- source SHA256 `c8b75dd0cf9905d02d74ca5923154669692b2c1df4dd627980c769c82cc021ef`;
+- HSACO SHA256 `dfb213624287a8dec10f8646d8c16e49651efee8e0ca27c67ff982b0d6b050bf`;
+- both archive SHA256 values
+  `35d52dbd52a4add2ba564ab216617569544e12fa0adf12ddbb830be43ed2ecf3`.
+
+C1-C3 pass for that exact family. C2 reports gfx1100 wave32, grid `40x4`, local size 256, 57,856-byte LDS,
+256 allocated/used VGPRs, 16 SGPRs, zero scratch, and zero VGPR/SGPR spills. C3a/C3b exhaustively bind the retained
+source and final native address expressions; all five ABI bases, 40,960 launch coordinates, 5,873,664 projected
+addresses, and exact-once output RMW coverage pass.
+
+The isolated PM4 escalation also passes:
+
+1. C4 preconstructs the exact runtime with zero target dispatches, no compile/recompile, exact cache/binary binding,
+   clean timeline and fault window, and healthy pre/post probes.
+2. C5 prefix 1 compares all 2,621,440 outputs with zero mismatches, maximum absolute error
+   `0.0001220703125`, exact five-pointer/stage bindings, phase isolation, and clean health.
+3. C5 prefix 3 compares all outputs with zero mismatches, maximum absolute error `0.00048828125`; all three
+   overwrite/submit/synchronize receipts pass and health remains clean.
+4. C6 full 20 compares all outputs with zero mismatches, maximum absolute error `0.00341796875`; all 20 fixed-VA
+   staging and target lifecycle receipts pass, with no fallback, HIP path, fault, reset, or unhealthy post-state.
+
+Current working evidence is:
+
+- static summary `/tmp/qk-attn-qo-staged-951d3615c-final-static-evidence-20260719.json`,
+  SHA256 `9d34e25a24e5b207428ed9f5c8f3bd8d60050cc7a940c8d675d0f87e3c26a6b2`;
+- C4 `/tmp/qk-attn-qo-staged-951d3615c-final-20260719-c4-pm4.json`,
+  SHA256 `df45aa281b2e12eb73f4801f6c1fa31e2c25570116b3cd5ddcbba45f88192004`;
+- C5 prefix 1 and 3 SHA256 values
+  `579d55f6a5e753946bc6d0ad6e6f0bd02a65d0796335f839748ba4bd1b5996ff` and
+  `c81973ff564047bcb2c296a51b836f840ab8219e8a43ce342fcd28835cbf86f6`;
+- C6 `/tmp/qk-attn-qo-staged-951d3615c-final-20260719-c6-pm4-full20.json`,
+  SHA256 `7ef898e7efb5562df7c7eb9ee006459348b5f9409e3abc9aaeff73cca73109ad`.
+
+These `/tmp` paths are not durable promotion assets. Retain the content-addressed bundle and evidence before final
+promotion. C7 exact memory admission and promotion-grade C8 matched PM4/AQL timing remain open. The single C6
+synchronized PM4 sample is `27.137666009366512 ms`, which is diagnostic only and already suggests this serialized
+staged family will be a correctness-qualified fallback against the retained roughly `9.35 ms` direct-packed
+comparator. Do not make a C8 decision without the required matched warmups and randomized paired rounds.
+
+```text
+attn_qo_staged_c1_c6_pm4=PASS
+attn_qo_staged_c7=OPEN
+attn_qo_staged_c8=OPEN
+production_promotion=false
+default_route=direct_packed
+```
+
 ## 1.4 Current status 2026-07-19: `attn_qo` direct layout classified; staged family is next
 
 Read this section before the older corrected-v2 lifecycle diagnoses. Section 1.2 remains the historical performance

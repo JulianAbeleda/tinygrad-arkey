@@ -424,7 +424,7 @@ different compact/donor PROGRAM and do not certify the new full-role fixed-strid
 | Role | Observed corrected-v2 milestone | Retrospective or open gaps under the strengthened method |
 |---|---|---|
 | `attn_kv` | Zero-resource family plus native-PM4 prefix-3/full-20 retained-producer correctness and lifecycle result | C0A producer/spec result, C1 provenance/durability, C3 final-native certificate, strengthened C5 phase isolation, internal C4 queue attestation, C7 memory ledger, and C8 performance |
-| `attn_qo` | Provenance-complete 20-program v3 family passes C1-C4; exact direct-layout prefix 1 faults, while bounded grids `1x4`, `8x4`, and `9x4` and isolated tiles 11/12 pass | Direct full-role layout remains blocked at C5; a certification-grade dense staged family, C7 memory admission, and C8 timing remain open |
+| `attn_qo` | Direct v3 remains classified `BLOCKED_AT_C5`. The selected dense fixed-VA staged family at `951d3615c` is fresh-process byte-reproducible, passes C1-C4, PM4 prefix 1/prefix 3 C5, and complete 20-epoch C6 with zero mismatches and clean health/fault evidence | C7 exact PM4/AQL memory admission, C8 matched complete-role timing/route decision, durable retention, and queue qualification remain open |
 | `ffn_gate_up` | No corrected-v2 family certified through this ladder | C1 onward |
 | `ffn_down` | No corrected-v2 family certified through this ladder | C1 onward |
 
