@@ -493,7 +493,11 @@ def run_frozen_staged_c7_queue_capture_isolated(
   if fault_collector is None:
     from extra.qk.mmq_target_epoch_orchestrator import collect_kernel_fault_evidence
     fault_collector = collect_kernel_fault_evidence
-  env_overrides = {"AMD_AQL": expected_aql, "DEV": ledger_device}
+  # The shared tiny health probe admits only the queue selector. The selected
+  # DEV is already fixed in the parent capture environment and inherited by
+  # its spawned health child; the target worker receives ledger_device
+  # explicitly below.
+  env_overrides = {"AMD_AQL": expected_aql}
   started = time.time()
   try: health_before = bool(health_probe(env_overrides))
   except BaseException: health_before = False

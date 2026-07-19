@@ -290,7 +290,7 @@ def test_isolated_capture_requires_exact_c4_and_parent_health_fault_envelope(fam
 
   def health(env):
     calls["health"] += 1
-    assert env == {"AMD_AQL": "0", "DEV": "CPU"}
+    assert env == {"AMD_AQL": "0"}
     return True
 
   canary = {
