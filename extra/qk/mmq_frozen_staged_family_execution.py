@@ -9,11 +9,17 @@ must be present in the returned evidence.
 """
 from __future__ import annotations
 
+import argparse
+import json
+import os
 from pathlib import Path
+import sys
+import tempfile
+import time
 from typing import Any, Callable, Mapping
 
 from extra.qk.mmq_exact_role_spec import (
-  DEFAULT_INVENTORY, ExactRoleSpec, admit_exact_role_spec,
+  DEFAULT_INVENTORY, ExactRoleSpec, admit_exact_role_spec, exact_role_spec,
 )
 from extra.qk.mmq_frozen_staged_family import (
   FrozenStagedFamily, load_frozen_staged_family_manifest,
@@ -26,6 +32,8 @@ RUNTIME_CANARY_SCHEMA = "tinygrad.mmq_q4k_q8_1.frozen_staged_runtime_canary.v1"
 PHASE_SCHEMA = "tinygrad.mmq_q4k_q8_1.frozen_staged_phase_isolation.v1"
 INTEGRATION_CAPABILITY_SCHEMA = \
   "tinygrad.mmq_q4k_q8_1.frozen_staged_integration_capability.v1"
+ISOLATED_C4_SCHEMA = \
+  "tinygrad.mmq_q4k_q8_1.frozen_staged_runtime_canary_isolation.v1"
 QUEUE_MODES = ("PM4", "AQL")
 _BUFFER_NAMES = ("output", "q4", "q8_values", "q8_scales", "q8_original_sums")
 _NUMERIC_AUTHORITY = "same_session_fp16_rounded_ds4_reference"
@@ -119,8 +127,11 @@ def validate_frozen_staged_runtime_canary(
       isinstance(evidence.get("runtime_class"), str) and bool(evidence["runtime_class"]),
     "queue_class_attested":
       isinstance(evidence.get("queue_class"), str) and bool(evidence["queue_class"]),
-    "runtime_count_exact": evidence.get("runtime_count") == 1,
-    "target_dispatch_count_zero": evidence.get("target_dispatch_count") == 0,
+    "runtime_count_exact":
+      type(evidence.get("runtime_count")) is int and evidence["runtime_count"] == 1,
+    "target_dispatch_count_zero":
+      type(evidence.get("target_dispatch_count")) is int and
+      evidence["target_dispatch_count"] == 0,
     "runtime_cache_binding_exact": evidence.get("runtime_cache_binding_exact") is True,
     "code_ranges_valid": evidence.get("code_ranges_valid") is True,
     "timeline_clean": evidence.get("timeline_clean") is True,
@@ -154,7 +165,9 @@ def _validate_phase_isolation(
     "producer_and_output_initialization_only":
       preparation.get("phase") == "producer_and_output_initialization",
     "status_pass": preparation.get("status") == "PASS",
-    "target_dispatch_count_zero": preparation.get("target_dispatch_count") == 0,
+    "target_dispatch_count_zero":
+      type(preparation.get("target_dispatch_count")) is int and
+      preparation["target_dispatch_count"] == 0,
     "synchronize_returned": preparation.get("synchronize_returned") is True,
     "target_allowed_only_after_synchronize":
       preparation.get("target_allowed_only_after_synchronize") is True,
@@ -170,7 +183,8 @@ def _validate_phase_isolation(
     if not isinstance(row, Mapping):
       raise ValueError("staged phase-isolation epoch receipt must be a mapping")
     checks = {
-      "epoch_exact": row.get("epoch") == epoch,
+      "epoch_exact":
+        type(row.get("epoch")) is int and row["epoch"] == epoch,
       "program_key_exact": row.get("program_key") == program_key,
       "stage_completion_returned": row.get("stage_completion_returned") is True,
       "target_submitted_after_stage_completion":
@@ -180,7 +194,9 @@ def _validate_phase_isolation(
       "overwrite_allowed_only_after_target_completion":
         row.get("overwrite_allowed_only_after_target_completion") is True,
       "prior_target_completion_observed":
-        epoch == 0 or row.get("prior_target_completion_epoch") == epoch - 1,
+        (epoch == 0 and row.get("prior_target_completion_epoch") is None) or
+        (epoch > 0 and type(row.get("prior_target_completion_epoch")) is int and
+         row["prior_target_completion_epoch"] == epoch - 1),
     }
     if not all(checks.values()):
       failed = sorted(key for key, value in checks.items() if not value)
@@ -211,8 +227,10 @@ def _validate_stage_vas(
   if not isinstance(epoch_rows, list) or not isinstance(metadata_rows, list) or \
      len(epoch_rows) != prefix_epochs or len(metadata_rows) != prefix_epochs:
     raise ValueError("fixed-stage VA census does not cover the exact prefix")
-  if [row.get("epoch") for row in epoch_rows] != list(range(prefix_epochs)) or \
-     [row.get("epoch") for row in metadata_rows] != list(range(prefix_epochs)):
+  if any(not isinstance(row, Mapping) or type(row.get("epoch")) is not int
+         for row in [*epoch_rows, *metadata_rows]) or \
+     [row["epoch"] for row in epoch_rows] != list(range(prefix_epochs)) or \
+     [row["epoch"] for row in metadata_rows] != list(range(prefix_epochs)):
     raise ValueError("fixed-stage VA census epoch order differs")
   stage_columns = (
     (epoch_rows, "stage_q4_va"), (epoch_rows, "stage_values_va"),
@@ -261,17 +279,22 @@ def _validate_runtime_launches(
   if runtime.get("binary_sha256") != family.binding.binary_sha256:
     raise ValueError("runtime binary identity differs from the staged family")
   launches = runtime.get("launches")
-  if runtime.get("launch_count") != prefix_epochs or \
+  if type(runtime.get("launch_count")) is not int or \
+     runtime["launch_count"] != prefix_epochs or \
      not isinstance(launches, list) or len(launches) != prefix_epochs:
     raise ValueError("native launch census does not cover the exact prefix")
   expected_abi = family.manifest["program"]["abi"]
   first_vas = None
   normalized = []
   for epoch, launch in enumerate(launches):
-    if not isinstance(launch, Mapping) or launch.get("epoch") != epoch:
+    if not isinstance(launch, Mapping) or \
+       type(launch.get("epoch")) is not int or launch["epoch"] != epoch:
       raise ValueError("native launch census epoch order differs")
-    if launch.get("global_size") != family.manifest["program"]["grid"] or \
-       launch.get("local_size") != family.manifest["program"]["local_size"]:
+    global_size, local_size = launch.get("global_size"), launch.get("local_size")
+    if not isinstance(global_size, list) or not isinstance(local_size, list) or \
+       any(type(value) is not int for value in [*global_size, *local_size]) or \
+       global_size != family.manifest["program"]["grid"] or \
+       local_size != family.manifest["program"]["local_size"]:
       raise ValueError("native launch geometry differs from the staged family")
     arguments, kernarg = launch.get("arguments"), launch.get("kernarg")
     if not isinstance(arguments, list) or len(arguments) != 5 or not isinstance(kernarg, Mapping):
@@ -279,8 +302,10 @@ def _validate_runtime_launches(
     rows = []
     for slot, (argument, expected) in enumerate(zip(arguments, expected_abi)):
       if not isinstance(argument, Mapping) or \
-         argument.get("slot") != slot or argument.get("name") != expected["name"] or \
-         argument.get("nbytes") != expected["nbytes"] or \
+         type(argument.get("slot")) is not int or argument["slot"] != slot or \
+         argument.get("name") != expected["name"] or \
+         type(argument.get("nbytes")) is not int or \
+         argument["nbytes"] != expected["nbytes"] or \
          type(argument.get("va")) is not int or argument["va"] <= 0 or \
          argument.get("va_matches_base_offset") is not True:
         raise ValueError("native launch argument differs from the exact staged ABI")
@@ -343,14 +368,19 @@ def _validate_probe_result(
       correctness.get("authority") == _NUMERIC_AUTHORITY,
     "full_output_compared":
       isinstance(comparison, Mapping) and
-      comparison.get("got_size") == expected_values and
-      comparison.get("reference_size") == expected_values and
-      comparison.get("mismatch_count") == 0,
+      type(comparison.get("got_size")) is int and
+      comparison["got_size"] == expected_values and
+      type(comparison.get("reference_size")) is int and
+      comparison["reference_size"] == expected_values and
+      type(comparison.get("mismatch_count")) is int and
+      comparison["mismatch_count"] == 0,
     "finite_output_and_reference":
       isinstance(comparison, Mapping) and
-      comparison.get("nan_got") == comparison.get("nan_reference") == 0 and
-      comparison.get("inf_got") == comparison.get("inf_reference") == 0 and
-      comparison.get("joint_finite") == expected_values,
+      all(type(comparison.get(name)) is int
+          for name in ("nan_got", "nan_reference", "inf_got", "inf_reference", "joint_finite")) and
+      comparison["nan_got"] == comparison["nan_reference"] == 0 and
+      comparison["inf_got"] == comparison["inf_reference"] == 0 and
+      comparison["joint_finite"] == expected_values,
   })
   artifact = result.get("artifacts")
   frozen = artifact.get("frozen_bundle") if isinstance(artifact, Mapping) else None
@@ -540,9 +570,417 @@ def run_frozen_staged_family_ladder(
   }
 
 
+def _c4_blocked(reason: str, **evidence: Any) -> dict[str, Any]:
+  return {
+    "schema": RUNTIME_CANARY_SCHEMA, "status": "BLOCKED",
+    "exact_blocker": reason, "target_dispatch_count": 0,
+    "compile_performed": False, "requires_recompile": False,
+    **evidence,
+  }
+
+
+def _isolated_c4_blocked(reason: str, **evidence: Any) -> dict[str, Any]:
+  return {
+    "schema": ISOLATED_C4_SCHEMA, "status": "BLOCKED",
+    "exact_blocker": reason,
+    "containment_authority": "outer_parent_fresh_process_guards",
+    "launched": False, "child_status": "not_launched",
+    "timed_out": False, "error": None,
+    "target_dispatch_count": 0,
+    "health_before": None, "health_after": None,
+    "kernel_faults": [], "runtime_canary": None,
+    "compile_performed": False, "requires_recompile": False,
+    **evidence,
+  }
+
+
+def _queue_environment(queue_mode: str) -> dict[str, str]:
+  queue_mode = _queue_mode(queue_mode)
+  expected = "1" if queue_mode == "AQL" else "0"
+  if os.environ.get("AMD_AQL") != expected:
+    raise ValueError(
+      f"AMD_AQL must be {expected!r} for requested staged queue mode {queue_mode!r}")
+  return {"AMD_AQL": expected}
+
+
+def _run_frozen_staged_c4_worker(
+    role_spec: ExactRoleSpec, frozen_bundle: str, staged_family_manifest: str,
+    queue_mode: str, inventory: str | Path | Mapping[str, Any],
+    ) -> dict[str, Any]:
+  """Spawn-only compact-family C4 entry; never constructs a target CALL."""
+  os.environ.update({"AMD_AQL": "1" if queue_mode == "AQL" else "0", "DEV": "AMD"})
+  from extra.qk.mmq_llama_five_buffer_gpu_harness import \
+    run_frozen_staged_runtime_preconstruction_canary
+  # ``run_isolated`` workers are daemon processes and therefore cannot spawn
+  # the helper's default health children. The outer parent owns both real
+  # health probes and the complete kernel-fault window; these callbacks keep
+  # the compact helper focused solely on its no-dispatch runtime operation.
+  return run_frozen_staged_runtime_preconstruction_canary(
+    role_spec=role_spec, frozen_bundle=frozen_bundle,
+    staged_family_manifest=staged_family_manifest, queue_mode=queue_mode,
+    inventory=inventory, health_probe=lambda: True,
+    fault_collector=lambda started: ([], {}))
+
+
+def validate_frozen_staged_runtime_canary_isolation(
+    evidence: Mapping[str, Any], family: FrozenStagedFamily, *, queue_mode: str,
+    ) -> dict[str, Any]:
+  """Require the persisted parent-containment envelope and its exact base C4."""
+  queue_mode = _queue_mode(queue_mode)
+  if not isinstance(evidence, Mapping) or evidence.get("schema") != ISOLATED_C4_SCHEMA:
+    raise ValueError("isolated staged runtime canary schema is missing or invalid")
+  nested = evidence.get("runtime_canary")
+  if not isinstance(nested, Mapping):
+    raise ValueError("isolated staged runtime canary lacks its nested base canary")
+  validated = validate_frozen_staged_runtime_canary(
+    nested, family, queue_mode=queue_mode)
+  checks = {
+    "status_pass": evidence.get("status") == "PASS",
+    "outer_parent_authority_exact":
+      evidence.get("containment_authority") ==
+      "outer_parent_fresh_process_guards",
+    "launched_true": evidence.get("launched") is True,
+    "child_status_passed": evidence.get("child_status") == "passed",
+    "timed_out_false": evidence.get("timed_out") is False,
+    "error_none": evidence.get("error") is None,
+    "role_matches":
+      evidence.get("role") == family.binding.role_spec.role,
+    "shape_matches":
+      evidence.get("shape") == list(family.binding.role_spec.shape),
+    "family_identity_matches":
+      evidence.get("family_identity") == family.family_identity,
+    "program_key_matches":
+      evidence.get("program_key") == family.binding.program_key,
+    "binary_sha256_matches":
+      evidence.get("binary_sha256") == family.binding.binary_sha256,
+    "queue_mode_matches": evidence.get("queue_mode") == queue_mode,
+    "timeout_positive":
+      isinstance(evidence.get("timeout_seconds"), (int, float)) and
+      not isinstance(evidence["timeout_seconds"], bool) and
+      evidence["timeout_seconds"] > 0,
+    "elapsed_nonnegative":
+      isinstance(evidence.get("elapsed_seconds"), (int, float)) and
+      not isinstance(evidence["elapsed_seconds"], bool) and
+      evidence["elapsed_seconds"] >= 0,
+    "captured_output_strings":
+      isinstance(evidence.get("stdout_tail"), str) and
+      isinstance(evidence.get("stderr_tail"), str),
+    "target_dispatch_count_zero":
+      type(evidence.get("target_dispatch_count")) is int and
+      evidence["target_dispatch_count"] == 0,
+    "health_before": evidence.get("health_before") is True,
+    "health_after": evidence.get("health_after") is True,
+    "kernel_faults_clean":
+      isinstance(evidence.get("kernel_faults"), list) and
+      not evidence["kernel_faults"],
+    "kernel_fault_evidence_attested":
+      isinstance(evidence.get("kernel_fault_evidence"), Mapping),
+    "compile_performed_false": evidence.get("compile_performed") is False,
+    "requires_recompile_false": evidence.get("requires_recompile") is False,
+    "nested_target_dispatch_count_matches":
+      evidence.get("target_dispatch_count") ==
+      validated.get("target_dispatch_count"),
+    "nested_health_matches":
+      evidence.get("health_before") == validated.get("health_before") and
+      evidence.get("health_after") == validated.get("health_after"),
+    "nested_faults_match":
+      evidence.get("kernel_faults") == validated.get("kernel_faults"),
+  }
+  if not all(checks.values()):
+    failed = sorted(key for key, value in checks.items() if not value)
+    raise ValueError(
+      f"isolated staged runtime canary failed checks: {failed!r}")
+  return {
+    **dict(evidence), "runtime_canary": validated,
+    "checks": checks, "all_checks_pass": True,
+  }
+
+
+def run_frozen_staged_runtime_canary_isolated(
+    *, role_spec: ExactRoleSpec, frozen_bundle: str | Path,
+    staged_family_manifest: str | Path, queue_mode: str,
+    timeout_seconds: float = 300.0,
+    inventory: str | Path | Mapping[str, Any] = DEFAULT_INVENTORY,
+    family_loader: Callable[..., FrozenStagedFamily] = load_frozen_staged_family_manifest,
+    isolated_runner: Callable[..., Any] | None = None,
+    health_probe: Callable[[Mapping[str, str]], bool] | None = None,
+    fault_collector: Callable[[float], tuple[list[str], Mapping[str, Any]]] | None = None,
+    ) -> dict[str, Any]:
+  """Run compact one-PROGRAM C4 in a fresh child with parent-owned containment."""
+  try:
+    role_spec = admit_exact_role_spec(role_spec, inventory=inventory)
+    queue_mode = _queue_mode(queue_mode)
+    if not isinstance(timeout_seconds, (int, float)) or isinstance(timeout_seconds, bool) or \
+       timeout_seconds <= 0:
+      raise ValueError("timeout_seconds must be positive")
+    env_overrides = _queue_environment(queue_mode)
+    family = family_loader(
+      staged_family_manifest, role_spec=role_spec, frozen_bundle=frozen_bundle,
+      inventory=inventory)
+    if not isinstance(family, FrozenStagedFamily) or family.binding.role_spec != role_spec:
+      raise ValueError("staged family loader returned a mismatched family")
+  except BaseException as exc:
+    return _isolated_c4_blocked(
+      "isolated staged runtime canary admission failed",
+      exception=type(exc).__name__, error=str(exc),
+      role=getattr(role_spec, "role", None), queue_mode=queue_mode)
+
+  if isolated_runner is None:
+    from tinygrad.runtime.process_isolated import run_isolated
+    isolated_runner = run_isolated
+  if health_probe is None:
+    from extra.qk.mmq_target_epoch_orchestrator import spawned_tiny_health_probe
+    health_probe = spawned_tiny_health_probe
+  if fault_collector is None:
+    from extra.qk.mmq_target_epoch_orchestrator import collect_kernel_fault_evidence
+    fault_collector = collect_kernel_fault_evidence
+
+  # The fault window begins before the first parent health dispatch and closes
+  # only after the second. Thus either guard's fault/reset is attributable.
+  started = time.time()
+  try: health_before = bool(health_probe(env_overrides))
+  except BaseException: health_before = False
+  isolated, runner_error = None, None
+  if health_before:
+    try:
+      isolated = isolated_runner(
+        _run_frozen_staged_c4_worker,
+        args=(
+          role_spec, str(Path(frozen_bundle).resolve()),
+          str(Path(staged_family_manifest).resolve()), queue_mode, inventory,
+        ),
+        timeout_seconds=float(timeout_seconds), start_method="spawn")
+    except BaseException as exc:
+      runner_error = f"{type(exc).__name__}: {exc}"
+  try: health_after = bool(health_probe(env_overrides))
+  except BaseException: health_after = False
+  try:
+    kernel_faults, kernel_fault_evidence = fault_collector(started)
+    kernel_faults = list(kernel_faults)
+    kernel_fault_evidence = dict(kernel_fault_evidence)
+  except BaseException as exc:
+    kernel_faults = [
+      f"kernel fault collection failed: {type(exc).__name__}: {exc}"]
+    kernel_fault_evidence = {}
+
+  launched = health_before
+  child_status = (
+    "not_launched" if not launched else
+    "runner_error" if runner_error is not None else
+    getattr(isolated, "status", None))
+  timed_out = bool(getattr(isolated, "timed_out", False))
+  child_error = runner_error or getattr(isolated, "error", None)
+  child = getattr(isolated, "result", None)
+  base = dict(child) if isinstance(child, Mapping) else _c4_blocked(
+    "isolated staged runtime canary child returned no structured result")
+  child_faults = base.get("kernel_faults")
+  combined_faults = list(dict.fromkeys(
+    [*(child_faults if isinstance(child_faults, list) else []), *kernel_faults]))
+  base.update({
+    # The base helper's in-child health callbacks are deliberately inert; the
+    # independent outer-parent probes are the sole persisted authority.
+    "health_before": health_before,
+    "health_after": health_after,
+    "kernel_faults": combined_faults,
+    "kernel_fault_evidence": kernel_fault_evidence,
+    "target_dispatch_count": base.get("target_dispatch_count", 0),
+    "compile_performed": False, "requires_recompile": False,
+  })
+
+  blocker = None
+  if not health_before:
+    blocker = "isolated staged runtime canary preflight health failed"
+  elif timed_out:
+    blocker = "isolated staged runtime canary child timed out"
+    base.update({
+      "status": "BLOCKED",
+      "timeout": True, "timeout_seconds": timeout_seconds,
+    })
+  elif child_status != "passed":
+    blocker = child_error or "isolated staged runtime canary child failed"
+  elif combined_faults:
+    blocker = \
+      "kernel fault/reset marker observed during isolated staged runtime canary"
+  elif base["health_before"] is not True or base["health_after"] is not True:
+    blocker = "isolated staged runtime canary health containment failed"
+
+  if blocker is None and base.get("status") == "PASS":
+    try:
+      base = validate_frozen_staged_runtime_canary(
+        base, family, queue_mode=queue_mode)
+    except BaseException as exc:
+      blocker = "isolated staged runtime canary evidence failed closed"
+      base.update({
+        "status": "BLOCKED", "exception": type(exc).__name__,
+        "error": str(exc),
+      })
+  elif blocker is None:
+    blocker = base.get("exact_blocker") or \
+      "isolated staged runtime canary child did not pass"
+  if type(base.get("target_dispatch_count")) is not int or \
+     base["target_dispatch_count"] != 0:
+    blocker = "isolated staged runtime canary reported an invalid target dispatch count"
+    base["status"] = "BLOCKED"
+
+  envelope = {
+    "schema": ISOLATED_C4_SCHEMA,
+    "status": "PASS" if blocker is None else "BLOCKED",
+    "exact_blocker": blocker,
+    "containment_authority": "outer_parent_fresh_process_guards",
+    "role": role_spec.role, "shape": list(role_spec.shape),
+    "queue_mode": queue_mode,
+    "family_identity": family.family_identity,
+    "program_key": family.binding.program_key,
+    "binary_sha256": family.binding.binary_sha256,
+    "launched": launched, "child_status": child_status,
+    "timed_out": timed_out, "error": child_error,
+    "elapsed_seconds": getattr(isolated, "elapsed_seconds", None),
+    "stdout_tail": str(getattr(isolated, "stdout", ""))[-2000:],
+    "stderr_tail": str(getattr(isolated, "stderr", ""))[-2000:],
+    "timeout_seconds": timeout_seconds,
+    "target_dispatch_count": base.get("target_dispatch_count"),
+    "health_before": base.get("health_before"),
+    "health_after": base.get("health_after"),
+    "kernel_faults": combined_faults,
+    "kernel_fault_evidence": kernel_fault_evidence,
+    "runtime_canary": base,
+    "compile_performed": False, "requires_recompile": False,
+  }
+  if envelope["status"] == "PASS":
+    try:
+      envelope = validate_frozen_staged_runtime_canary_isolation(
+        envelope, family, queue_mode=queue_mode)
+    except BaseException as exc:
+      envelope.update({
+        "status": "BLOCKED",
+        "exact_blocker":
+          "isolated staged runtime canary envelope failed closed",
+        "exception": type(exc).__name__, "validation_error": str(exc),
+      })
+  return envelope
+
+
+def run_frozen_staged_family_prefix_from_canary_file(
+    *, role_spec: ExactRoleSpec, frozen_bundle: str | Path,
+    staged_family_manifest: str | Path, runtime_canary_path: str | Path,
+    prefix_epochs: int, queue_mode: str, timeout_seconds: float = 300.0,
+    inventory: str | Path | Mapping[str, Any] = DEFAULT_INVENTORY,
+    family_loader: Callable[..., FrozenStagedFamily] = load_frozen_staged_family_manifest,
+    probe_runner: Callable[..., Mapping[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+  """Admit an exact persisted C4 result before invoking the approved prefix wrapper."""
+  try:
+    role_spec = admit_exact_role_spec(role_spec, inventory=inventory)
+    queue_mode = _queue_mode(queue_mode)
+    _queue_environment(queue_mode)
+    if not isinstance(timeout_seconds, (int, float)) or isinstance(timeout_seconds, bool) or \
+       timeout_seconds <= 0:
+      raise ValueError("timeout_seconds must be positive")
+    family = family_loader(
+      staged_family_manifest, role_spec=role_spec, frozen_bundle=frozen_bundle,
+      inventory=inventory)
+    if not isinstance(family, FrozenStagedFamily) or family.binding.role_spec != role_spec:
+      raise ValueError("staged family loader returned a mismatched family")
+    persisted = json.loads(Path(runtime_canary_path).read_text())
+    if not isinstance(persisted, Mapping):
+      raise ValueError("persisted isolated staged runtime canary must be a JSON object")
+    isolated_canary = validate_frozen_staged_runtime_canary_isolation(
+      persisted, family, queue_mode=queue_mode)
+    runtime_canary = isolated_canary["runtime_canary"]
+  except BaseException as exc:
+    return _blocked(
+      "persisted staged C4 runtime canary admission failed",
+      exception=type(exc).__name__, error=str(exc),
+      role=getattr(role_spec, "role", None), prefix_epochs=prefix_epochs,
+      queue_mode=queue_mode, target_dispatch_attempted=False,
+      runtime_canary_path=str(Path(runtime_canary_path).resolve()))
+  result = run_frozen_staged_family_prefix_probe(
+    role_spec=role_spec, frozen_bundle=frozen_bundle,
+    staged_family_manifest=staged_family_manifest,
+    prefix_epochs=prefix_epochs, queue_mode=queue_mode,
+    runtime_canary=runtime_canary, timeout_seconds=timeout_seconds,
+    inventory=inventory, family_loader=family_loader, probe_runner=probe_runner)
+  return {**result, "c4_runtime_canary_isolation": isolated_canary}
+
+
+def _atomic_write_json(path: str | Path, payload: Mapping[str, Any]) -> None:
+  output = Path(path)
+  output.parent.mkdir(parents=True, exist_ok=True)
+  fd, temporary = tempfile.mkstemp(
+    prefix=f".{output.name}.", suffix=".tmp", dir=output.parent)
+  try:
+    with os.fdopen(fd, "w") as handle:
+      json.dump(dict(payload), handle, indent=2, sort_keys=True, allow_nan=False)
+      handle.write("\n")
+      handle.flush()
+      os.fsync(handle.fileno())
+    os.replace(temporary, output)
+  except BaseException:
+    try: os.unlink(temporary)
+    except FileNotFoundError: pass
+    raise
+
+
+def main(argv: list[str] | None = None) -> int:
+  common = argparse.ArgumentParser(add_help=False)
+  common.add_argument("--role", required=True)
+  common.add_argument("--inventory", type=Path, default=DEFAULT_INVENTORY)
+  common.add_argument("--frozen-bundle", type=Path, required=True)
+  common.add_argument("--staged-family-manifest", type=Path, required=True)
+  common.add_argument("--queue-mode", choices=QUEUE_MODES, required=True)
+  common.add_argument("--timeout-seconds", type=float, default=300.0)
+  common.add_argument("--output", type=Path, required=True)
+  parser = argparse.ArgumentParser(description=__doc__)
+  subparsers = parser.add_subparsers(dest="command", required=True)
+  subparsers.add_parser(
+    "c4", parents=[common],
+    help="run one compact staged runtime preconstruction with no target dispatch")
+  prefix = subparsers.add_parser(
+    "prefix", parents=[common],
+    help="run one admitted staged prefix using an exact persisted C4 result")
+  prefix.add_argument("--prefix-epochs", type=int, required=True)
+  prefix.add_argument("--runtime-canary", type=Path, required=True)
+  args = parser.parse_args(argv)
+
+  try:
+    role_spec = exact_role_spec(args.role, inventory=args.inventory)
+    if args.command == "c4":
+      result = run_frozen_staged_runtime_canary_isolated(
+        role_spec=role_spec, frozen_bundle=args.frozen_bundle,
+        staged_family_manifest=args.staged_family_manifest,
+        queue_mode=args.queue_mode, timeout_seconds=args.timeout_seconds,
+        inventory=args.inventory)
+    else:
+      result = run_frozen_staged_family_prefix_from_canary_file(
+        role_spec=role_spec, frozen_bundle=args.frozen_bundle,
+        staged_family_manifest=args.staged_family_manifest,
+        runtime_canary_path=args.runtime_canary,
+        prefix_epochs=args.prefix_epochs, queue_mode=args.queue_mode,
+        timeout_seconds=args.timeout_seconds, inventory=args.inventory)
+  except BaseException as exc:
+    result = (
+      _isolated_c4_blocked(
+        "staged CLI admission failed", exception=type(exc).__name__, error=str(exc))
+      if args.command == "c4" else
+      _blocked(
+        "staged CLI admission failed", exception=type(exc).__name__, error=str(exc),
+        target_dispatch_attempted=False)
+    )
+  _atomic_write_json(args.output, result)
+  print(json.dumps(result, indent=2, sort_keys=True, allow_nan=False))
+  return 0 if result.get("status") == "PASS" else 1
+
+
 __all__ = [
-  "INTEGRATION_CAPABILITY_SCHEMA", "LADDER_SCHEMA", "PHASE_SCHEMA", "QUEUE_MODES",
+  "INTEGRATION_CAPABILITY_SCHEMA", "ISOLATED_C4_SCHEMA", "LADDER_SCHEMA",
+  "PHASE_SCHEMA", "QUEUE_MODES",
   "RUNTIME_CANARY_SCHEMA", "SCHEMA",
+  "run_frozen_staged_family_prefix_from_canary_file",
   "run_frozen_staged_family_ladder", "run_frozen_staged_family_prefix_probe",
+  "run_frozen_staged_runtime_canary_isolated",
   "validate_frozen_staged_runtime_canary",
+  "validate_frozen_staged_runtime_canary_isolation",
 ]
+
+
+if __name__ == "__main__": raise SystemExit(main(sys.argv[1:]))
