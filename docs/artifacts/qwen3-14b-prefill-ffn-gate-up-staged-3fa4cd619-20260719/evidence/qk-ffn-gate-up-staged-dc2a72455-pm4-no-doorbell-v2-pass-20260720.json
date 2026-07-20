@@ -1,0 +1,124 @@
+{
+  "schema": "tinygrad.mmq_q4k_q8_1.ffn_gate_up_pm4_no_doorbell_evidence.v2",
+  "status": "PASS",
+  "queue_mode": "PM4",
+  "prefix_epochs": 1,
+  "submit_policy": "snapshot_only",
+  "target_dispatch_submitted": false,
+  "native_submit_call_count": 0,
+  "ring_copy_performed": false,
+  "doorbell_rung": false,
+  "health_before": true,
+  "health_after": true,
+  "kernel_faults": [],
+  "kernel_fault_evidence": {},
+  "family_identity": "sha256:4e82044650b7c03a579b42b8dd270389d280c2f5eab9f9004a3bc83dbe79917f",
+  "fixture_identity": "sha256:30a8f9513b94de41bc53ad73759b54fedd1b7f00ff118d40a2e2529f49ba1baf",
+  "workload_identity": "sha256:f061cc838d3f879bc8dbf9805dd61f064215a5b637d3a03974d6d3aedfc4e112",
+  "input_identity": "sha256:c86b5fd9abe76f0a776fd990cc7938ad7cf4a70cf2e6e70870202dd3fbc6e595",
+  "candidate_executable_identity": "sha256:48b8d87229e53cd323677fbdcdeb8681772e4fa31948c13a8f7849c3a7e02ccb",
+  "program_key": "14f2a216a8a7609e8a251fe3869b3fb146fd5d5a8ca0ec468120e0fbcbd54a60",
+  "binary_sha256": "149ba322c1a99c1fa056d25c6230bc8908c27f15fe94b177276c5808eebe8bf3",
+  "pre_submit": {
+    "schema": "tinygrad.mmq_q4k_q8_1.pm4_pre_submit_snapshot.v2",
+    "capture_point": "AMDComputeQueue._submit_after_complete_command_construction_before_ring_copy_and_doorbell",
+    "runtime_object_identity": 138962922602464,
+    "runtime_class": "tinygrad.runtime.ops_amd.AMDProgram",
+    "runtime_name": "mmq_llama_five_buffer_full_grid_accumulate",
+    "runtime_device": "AMD",
+    "kernarg_va": 138962597315008,
+    "kernarg_nbytes": 40,
+    "kernarg_qwords": [
+      138962773475328,
+      138962770968576,
+      138962977947648,
+      138963712561152,
+      138963667394560
+    ],
+    "argument_buffers": [
+      {
+        "slot": 0,
+        "va": 138962773475328,
+        "size": 35651584
+      },
+      {
+        "slot": 1,
+        "va": 138962770968576,
+        "size": 2506752
+      },
+      {
+        "slot": 2,
+        "va": 138962977947648,
+        "size": 131072
+      },
+      {
+        "slot": 3,
+        "va": 138963712561152,
+        "size": 16384
+      },
+      {
+        "slot": 4,
+        "va": 138963667394560,
+        "size": 16384
+      }
+    ],
+    "pm4_kernarg_user_data": {
+      "packet_dword_offset": 77,
+      "register_index": 0,
+      "low_dword": 3225420224,
+      "high_dword": 32354,
+      "pointer": 138962597315008
+    },
+    "pm4_dispatch_direct": {
+      "packet_dword_offset": 94,
+      "group_counts": [
+        136,
+        4,
+        1
+      ],
+      "dispatch_initiator": 32773
+    },
+    "pm4_workgroup_size": {
+      "packet_dword_offset": 84,
+      "register_index": 3,
+      "size": [
+        256,
+        1,
+        1
+      ]
+    },
+    "pm4_program_entry": {
+      "packet_dword_offset": 54,
+      "register_index": 0,
+      "low_dword": 1658253009,
+      "high_dword": 126,
+      "entry_va": 138962977870080
+    },
+    "pm4_dword_count": 141,
+    "pm4_sha256": "746f4f808711ccc2c5e905a2644bbdb8d7c5cad620cea19cfc04a4e91a2df650",
+    "checks": {
+      "queue_device_matches_submit_device": true,
+      "runtime_device_matches_submit_device": true,
+      "args_state_program_matches_runtime": true,
+      "exact_five_argument_buffers": true,
+      "exact_five_kernarg_qwords": true,
+      "five_qwords_match_constructed_buffers": true,
+      "pm4_command_words_concrete": true,
+      "pm4_command_stream_nonempty": true,
+      "pm4_packet_stream_decoded": true,
+      "pm4_kernarg_user_data_found_once": true,
+      "pm4_kernarg_uses_user_data_0": true,
+      "pm4_kernarg_user_data_matches_kernarg_va": true,
+      "pm4_dispatch_direct_found_once": true,
+      "pm4_dispatch_groups_match_requested": true,
+      "pm4_workgroup_size_found_once": true,
+      "pm4_workgroup_size_matches_requested": true,
+      "pm4_program_entry_found_once": true,
+      "pm4_program_entry_matches_runtime": true
+    },
+    "all_checks_pass": true
+  },
+  "all_checks_pass": true,
+  "promotion_evidence_eligible": false,
+  "commit": "dc2a72455"
+}

@@ -689,9 +689,9 @@ def _validate_pm4_pre_submit_snapshot(value: Any) -> dict[str, Any]:
      len(dispatch["group_counts"]) != 3 or \
      any(not exact_int(item) or item <= 0
          for item in dispatch["group_counts"]) or \
-    not exact_int(dispatch.get("dispatch_initiator")) or \
-    workgroup.get("register_index") != 3 or \
-    not isinstance(workgroup.get("size"), list) or \
+     not exact_int(dispatch.get("dispatch_initiator")) or \
+     workgroup.get("register_index") != 3 or \
+     not isinstance(workgroup.get("size"), list) or \
      len(workgroup["size"]) != 3 or \
      any(not exact_int(item) or item <= 0 for item in workgroup["size"]) or \
      program.get("register_index") != 0 or \
