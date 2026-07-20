@@ -1,5 +1,43 @@
 # Qwen3-14B generated-prefill Claude handoff
 
+## 1.14 Current status 2026-07-20: `attn_qo` C8 disqualification is a harness lifecycle bug, not a kernel defect — candidate EXONERATED
+
+The `attn_qo` staged `BLOCKED_AT_C8` / candidate `DISQUALIFIED` decision (§1.6) was re-examined and **overturned as a
+kernel verdict**. A guarded GPU experiment on the existing C8 transition harness proved the fault is lazy first-time
+construction of the candidate runtime + five buffers on the shared `Device["AMD"]` singleton *after* a
+`direct_packed` route — the anti-pattern method §5.4 / commit `8269edefe` already fixed for `attn_kv` — not a
+property of the `attn_qo` kernel.
+
+Evidence (three guarded runs, reusing only existing wiring; full artifact
+`docs/artifacts/qwen3-14b-prefill-attn-qo-staged-951d3615c-20260719/attn-qo-c8-transition-lifecycle-exoneration-20260720.md`):
+
+- `[staged_candidate]` → PASS.
+- `[direct_packed, staged_candidate]` → FAULT (SQ type-2 + GPU reset on candidate invocation 0 — the original §1.6
+  signature).
+- `[staged_candidate, direct_packed, staged_candidate]` → PASS, with **verified** runtime/buffer reuse at position 2
+  (`initialization_count: 1` at both candidate positions, identical `runtime_identity`, `invocation_count` 1→2).
+
+So **construction-after-direct** faults; **dispatch-after-direct** is safe once the candidate is preconstructed
+clean. The kernel passes standalone and across the boundary when built correctly. Every §1.6 static exoneration
+(identical code bytes, ISA def/use clean, C3 addresses in-bounds) already pointed here; this closes the one variable
+those checks did not cover. GPU reset recovered cleanly each run.
+
+How this happened: the transition harness is wired **per-role** (`build_direct_packed_objects` allowlists only
+`attn_qo`/`ffn_gate_up`, `mmq_attn_qo_c8_runtime.py:75`), so no known-good cross-role control could be run without
+new code — and none was run before disqualifying. §12.9 is amended to forbid `DISQUALIFYING` a candidate on a
+cross-route fault until the §5.4 lifecycle pattern (or a known-good control) is ruled out.
+
+Actions from this finding:
+1. **Fix the C8 session harness**: preconstruct the candidate runtime/buffers before any route runs
+   (`run_persistent_c8_route_sequence_worker`, per §5.4). This clears the trap for every role's C8, not just
+   `attn_qo`.
+2. **Re-run `attn_qo` C8** through the fixed harness to a real timing result and lift the `DISQUALIFIED` disposition
+   bound into the Qo adapter. Caveat: `software_identity` pins the clean commit
+   (`mmq_staged_c7_authority.py:251-256`), so re-running through the fixed harness requires **re-certifying C6+C7 at
+   the new commit** — a Phase-D-scale GPU cascade, not a quick rerun.
+3. This is **separate from `ffn_gate_up`'s C5 fault**, which reproduces standalone (no prior route). Same SQ type-2
+   signature family, different regime — do not assume one fix covers both (see §1.13 B1-fault).
+
 ## 1.13 Current status 2026-07-20: PM4 pre-submit decoder FIXED and independently verified; C5 guarded dispatch is now unblocked
 
 The §1.12 blocker is resolved. The PM4 pre-submit authority mismatch was a **CPU-side validator bug, not a

@@ -424,7 +424,7 @@ different compact/donor PROGRAM and do not certify the new full-role fixed-strid
 | Role | Observed corrected-v2 milestone | Retrospective or open gaps under the strengthened method |
 |---|---|---|
 | `attn_kv` | Zero-resource family plus native-PM4 prefix-3/full-20 retained-producer correctness and lifecycle result | C0A producer/spec result, C1 provenance/durability, C3 final-native certificate, strengthened C5 phase isolation, internal C4 queue attestation, C7 memory ledger, and C8 performance |
-| `attn_qo` | Direct v3 remains classified `BLOCKED_AT_C5`. The selected dense fixed-VA staged family at `951d3615c` is fresh-process byte-reproducible and passes C1-C4, prefix 1/prefix 3 C5, and complete 20-epoch C6 independently under PM4 and AQL with zero mismatches and clean health/fault evidence. **Update 2026-07-19 (handoff §1.6): the staged family now passes C7 memory admission independently on PM4 and AQL (peaks 104,988,672 B / 121,765,888 B, no dense FP16), and is classified transition-disqualified at the C8 route boundary (`BLOCKED_AT_C8`): it faults on `direct_packed -> staged_candidate` invocation 0 (SQ type-2 memory violation + reset) though `staged -> staged` passes.** | Resolution of the `BLOCKED_AT_C8` cross-route transition-safety disqualification (or acceptance of the direct-packed fallback per §12.9), and durable retention, remain open |
+| `attn_qo` | Direct v3 remains classified `BLOCKED_AT_C5`. The selected dense fixed-VA staged family at `951d3615c` is fresh-process byte-reproducible and passes C1-C4, prefix 1/prefix 3 C5, and complete 20-epoch C6 independently under PM4 and AQL with zero mismatches and clean health/fault evidence. **Update 2026-07-19 (handoff §1.6): the staged family now passes C7 memory admission independently on PM4 and AQL (peaks 104,988,672 B / 121,765,888 B, no dense FP16), and is classified transition-disqualified at the C8 route boundary (`BLOCKED_AT_C8`): it faults on `direct_packed -> staged_candidate` invocation 0 (SQ type-2 memory violation + reset) though `staged -> staged` passes. Update 2026-07-20 (evidence `docs/artifacts/qwen3-14b-prefill-attn-qo-staged-951d3615c-20260719/attn-qo-c8-transition-lifecycle-exoneration-20260720.md`): the fault is proven to be a harness lifecycle bug (lazy candidate construction after the direct route), NOT the kernel — `[staged, direct, staged]` passes with verified runtime reuse. The candidate is EXONERATED; the `DISQUALIFIED` disposition should be lifted.** | Preconstruction harness fix (§5.4), then C6+C7 re-certification at the fixed commit and a real C8 timing result; the cross-route fault is no longer attributable to the candidate |
 | `ffn_gate_up` | **Update 2026-07-20:** a staged family (bundle `3fa4cd619`, HSACO `149ba322…`) passes static C1-C3 and the no-target PM4 C4 canary. Its first real C5 prefix-1 dispatch **faulted** (`MMU fault: 0x0` / 4-GiB TCP data-read, GPU reset; handoff §1.11). A downstream CPU-side PM4 pre-submit decoder bug that blocked the guarded instrument was fixed and verified (handoff §1.13, `dc2a72455`), so C5 is re-approachable. | C5 fault root-cause (see §12.6 fail clause — treat as N-scaling aggregate-layout, per the `attn_qo` §9 precedent, not a schedule hunt), then C6 onward |
 | `ffn_down` | No corrected-v2 family certified through this ladder | C1 onward |
 
@@ -787,9 +787,24 @@ correctness/certification result and supplies training evidence to the next sear
 to the owning layer rather than restarting the entire pipeline.
 
 A cross-route execution fault at C8 is `BLOCKED_AT_C8`, not `CERTIFIED_FALLBACK`. Preserve the passing C1-C7
-evidence, retain the exact mixed-route transition, disqualify that candidate, and select the already-qualified
-direct-packed safety fallback. Do not substitute route-isolated timing: it cannot prove that the candidate is safe
-at the route boundary used by production. The decision artifact must keep timing and promotion false.
+evidence, retain the exact mixed-route transition, and select the already-qualified direct-packed safety fallback.
+Do not substitute route-isolated timing: it cannot prove that the candidate is safe at the route boundary used by
+production. The decision artifact must keep timing and promotion false.
+
+**Amendment 2026-07-20 — do not `DISQUALIFY` the candidate on a cross-route fault until the harness lifecycle is
+ruled out.** A cross-route fault is `BLOCKED_AT_C8` (timing/promotion false, fallback selected) regardless of cause,
+but the *candidate* may be marked `DISQUALIFIED` only after proving the fault is caused by the candidate and not by
+the transition harness. The `attn_qo` staged C8 fault was shown (evidence:
+`docs/artifacts/qwen3-14b-prefill-attn-qo-staged-951d3615c-20260719/attn-qo-c8-transition-lifecycle-exoneration-20260720.md`)
+to be a harness bug — lazy first-time construction of the candidate runtime/buffers on the shared device *after* a
+`direct_packed` route — the exact anti-pattern §5.4 forbids, not a kernel defect. Required before `DISQUALIFIED`:
+(1) preconstruct the candidate before any route (§5.4) and re-run the transition; if it then passes, it was a
+harness bug — fix the harness, do not disqualify; (2) if a fault persists after correct preconstruction, run a
+known-good certified control (e.g. `attn_kv`) through the same boundary — if the control also faults, classify
+`BLOCKED_AT_C8_INFRASTRUCTURE` and fix the harness; only if the control survives and the candidate alone faults is
+`candidate DISQUALIFIED` warranted. The per-role wiring of the transition harness
+(`build_direct_packed_objects` allowlist) previously made such a control impossible to run without new code; that
+gap is why the original `attn_qo` disqualification was premature.
 
 Before an accelerated row can enter machine-policy ranking, bind its production-eligibility authority into the
 canonical candidate/search identity and require matching candidate-bound evidence. A passing microkernel,
