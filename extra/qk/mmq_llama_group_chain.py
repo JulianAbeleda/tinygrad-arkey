@@ -101,33 +101,36 @@ def _instantiate_group_wmma_vectors(recurrence: LlamaOracleRecurrenceGraph, publ
   seed in would force ``walk=True`` to re-traverse the ever-growing prior-chain ancestry on every group,
   which is exactly the superlinear substitution-embedding cost this module's docstring warns against.
 
-  Cross-element WAR guard (EVERY group, not just group 0): AMDISARenderer's WMMA isel keys the A/B fragment's
-  physical VGPR window on a *constant* ``"wmma_ab"`` id (register pressure), reusing the SAME registers for
-  every one of the 8 ``subtile_n`` elements' chains. Isel recognizes each element's own chain by walking
-  backward through consecutive ``Ops.WMMA`` ``src[2]`` links (the seed swap above) all the way to its group-0
-  zero seed -- this correctly threads a WAR-guard dependency *within* one element's own cross-group lineage
-  (each later group's fragment reload waits on the previous group's WMMA read via the existing
-  ``dep=(prev.src[0],)`` accumulate-tile guard elsewhere in ``isel_wmma``) -- but the 8 elements are
-  otherwise-independent chains (never linked to each other via ``src[2]``), so isel visits each one as a
-  separate top-level match with no ordering between them. Without an explicit edge, element e's read/reload
-  of the shared window for ANY group can be scheduled interleaved with element e-1's, e+1's, etc: real
-  Ops.BARRIER nodes DO already separate one GROUP's collective reads from the next group's writes (see
-  chain_group_stage below), but nothing orders the 8 elements' OWN reload/consume cycles relative to EACH
-  OTHER *within* one barrier-bounded group step. REGALLOC_DEBUG_PRESSURE on
+  Cross-element WAR guard (group 0 / ``seeds is None`` only -- REVERTED from an "every group" version, see
+  below): AMDISARenderer's WMMA isel keys the A/B fragment's physical VGPR window on a *constant*
+  ``"wmma_ab"`` id (register pressure), reusing the SAME registers for every one of the 8 ``subtile_n``
+  elements' chains. Isel recognizes each element's own chain by walking backward through consecutive
+  ``Ops.WMMA`` ``src[2]`` links (the seed swap above) all the way to its group-0 zero seed -- this correctly
+  threads a WAR-guard dependency *within* one element's own cross-group lineage (each later group's fragment
+  reload waits on the previous group's WMMA read via the existing ``dep=(prev.src[0],)`` accumulate-tile
+  guard elsewhere in ``isel_wmma``) -- but the 8 elements are otherwise-independent chains (never linked to
+  each other via ``src[2]``), so isel visits each one as a separate top-level match with no ordering between
+  them. Without an explicit edge, element e's chain-HEAD (group 0) fragment reload can be scheduled before
+  element e-1's LAST WMMA has consumed the same physical window: REGALLOC_DEBUG_PRESSURE on
   build_llama_five_buffer_full_kernel(128,128,256) found several simultaneously-live DS_LOAD_B128 virtuals
   all constrained to the SAME single fixed VGPR, a hard (not just soft-pressure) allocation conflict.
 
-  Gating only the group-0 zero seed (an earlier version of this fix) was insufficient: it orders element e's
-  full chain-HEAD behind element e-1's full chain, but does nothing for groups 1-7's OWN cross-element
-  ordering at their own step. Gate every group's accumulator seed instead, chaining ``.after()`` (a
-  scheduling-only pseudo-op, no extra hardware barrier -- the real ``s_barrier`` between groups already
-  covers cross-wave LDS visibility) onto element e-1's own result at THIS group. For groups 1-7 that seed IS
-  ``seeds[element]``, itself an ``Ops.WMMA`` node -- spec-legal directly under ``Ops.AFTER`` (type_verify's
-  spec_tensor allows ``Ops.WMMA`` as an AFTER operand), and AMDISARenderer's chain-walk unwraps a leading
-  AFTER before checking ``Ops.WMMA`` so it still recognizes the wrapped node as a chain continuation. For
-  group 0 the seed is a plain zero ``Ops.CONST``, which is NOT spec-legal directly under ``Ops.AFTER`` --
-  wrap it in an identity ``Ops.BITCAST`` first (also spec-legal under AFTER, and already unwrapped by the
-  isel helpers that read this seed, e.g. ``_wmma_elems``).
+  A version of this fix that ALSO gated ``seeds[element]`` for groups 1-7 (wiring each group's own
+  cross-element WAR guard, not just group 0's) was tried and reverted: it re-triggers exactly the
+  superlinear substitution-embedding cost this function's docstring above warns about -- wrapping
+  ``seeds[element]`` (itself already carrying the full prior-group ancestry) in ``.after(prior_element_result)``
+  (which ALSO carries the full prior-group ancestry, from a *different* element) creates a DAG where many
+  nodes share deep, overlapping ancestries; `full_rewrite_to_sink`'s devectorize pass on the resulting graph
+  went from ~12s (2 K32 groups) to >90s / hit the full kernel's `graph_rewrite` "infinite loop (stack too
+  big)" limit on all 8 groups. Group 0's zero seed has no such ancestry (a bare CONST), so gating only it is
+  cheap and safe -- it just doesn't fully close the register-pressure gap for groups 1-7's OWN cross-element
+  step (tracked separately; do not re-add the groups-1-7 wrap without first solving the substitution cost).
+
+  Chain ``.after()`` (a scheduling-only pseudo-op, no extra hardware barrier) onto the zero seed, ordering
+  element e's chain head behind element e-1's own final WMMA. The seed is a plain zero ``Ops.CONST``, which
+  is NOT spec-legal directly under ``Ops.AFTER`` (type_verify's spec_tensor requires a buffer/movement/WMMA/
+  etc-typed first operand) -- wrap it in an identity ``Ops.BITCAST`` first (spec-legal under AFTER, and
+  already unwrapped by the isel helpers that read this seed, e.g. ``_wmma_elems``).
   """
   phase, subtile = recurrence.phases[0], recurrence.stage.subtile_n
   group = phase.groups[0]
@@ -139,8 +142,7 @@ def _instantiate_group_wmma_vectors(recurrence: LlamaOracleRecurrenceGraph, publ
     second_c = second_sym.substitute(substitutions, walk=True)
     first_c = second_c.src[2]
     if seeds is not None:
-      seed = seeds[element] if prior_element_result is None else seeds[element].after(prior_element_result)
-      seeded_first = UOp(first_c.op, first_c.dtype, (first_c.src[0], first_c.src[1], seed), first_c.arg, tag=first_c.tag)
+      seeded_first = UOp(first_c.op, first_c.dtype, (first_c.src[0], first_c.src[1], seeds[element]), first_c.arg, tag=first_c.tag)
       second_c = UOp(second_c.op, second_c.dtype, (second_c.src[0], second_c.src[1], seeded_first), second_c.arg, tag=second_c.tag)
     elif prior_element_result is not None:
       zero = first_c.src[2]
