@@ -55,11 +55,13 @@ claimed.
 
 The first guarded PM4 C5 prefix-1 attempt is retained as
 `evidence/qk-ffn-gate-up-staged-f0a46ff09-c5-pm4-prefix1-20260719.json`.
-Its single target dispatch raised a precise `0xFFFFFFBFE000` MMU fault; the
-parent observed SQ/page-fault/MES/reset markers, the reset recovered, and the
-postflight tiny-health probe passed. The result is `BLOCKED`, not a health or
-correctness pass. No retry, prefix-3, full-20, direct, transition, or AQL
-attempt followed, and no output comparison was reached.
+Its single target dispatch returned `0xFFFFFFBFE000` through the KFD event
+object, but timestamp/PID correlation proves that address was stale event
+state. The contemporaneous kernel journal records TCP data-read faults at
+pages zero and 4 GiB, then SQ/page-fault/MES/reset markers. The reset recovered
+and the postflight tiny-health probe passed. The result is `BLOCKED`, not a
+health or correctness pass. No retry, prefix-3, full-20, direct, transition, or
+AQL attempt followed, and no output comparison was reached.
 
 The current CPU-only audit is repairing exception-path evidence propagation so
 the already-captured five argument VAs and kernarg qwords cannot be discarded

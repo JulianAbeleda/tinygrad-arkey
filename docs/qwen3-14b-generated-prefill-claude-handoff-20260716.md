@@ -4,15 +4,18 @@
 
 The first and only target dispatch of the current exact family was attempted through the one-shot guarded PM4
 prefix-1 runner pushed in `f0a46ff09`. The child loaded the frozen PROGRAM without compiling and entered the exact
-candidate invocation, then raised:
+candidate invocation. Its KFD event object returned:
 
 ```text
 MMU fault: 0xFFFFFFBFE000 | NotPresent=1 ReadOnly=0 NoExecute=0 imprecise=0
 HW fault: reset_type=0 reset_cause=0 memory_lost=1 gpu_id=10727
 ```
 
-The parent observed gfxhub page faults, SQ error interrupts, MES queue-removal failures, a successful GPU reset,
-VRAM loss, and a recovered tiny-health probe. It classified the attempt `BLOCKED`, retained
+That `0xFFFFFFBFE000` address is stale event state and is not the fault address of this invocation. The
+timestamp- and PID-matched kernel journal for child PID 1932187 instead records TCP data-read faults at pages
+`0x0000000000000000` and `0x0000000100000000`, status `0x00801031`, followed by SQ error interrupts, MES
+queue-removal failures, a successful GPU reset, and VRAM loss. The parent recovered a tiny-health probe, classified
+the attempt `BLOCKED`, retained
 `promotion_evidence_eligible=false`, and performed no retry, fallback, prefix-3, full-20, transition, direct, or AQL
 attempt. The output was never read back or compared. The immutable envelope is
 `docs/artifacts/qwen3-14b-prefill-ffn-gate-up-staged-3fa4cd619-20260719/evidence/`
@@ -23,16 +26,18 @@ CPU-only audit has narrowed but not yet proven the cause:
 
 - The five-buffer order, 64-bit pointer packing, PM4 user-SGPR binding, and ISA kernarg offsets `0/8/16/24/32`
   agree. Existing injected high-VA tests preserve the complete qwords.
-- The precise fault VA is not shaped like a normal observed AMD allocation and is the 48-bit sign extension of
-  `-0x402000`. All statically projected target addresses are non-negative and in bounds.
+- The contemporaneous zero/4-GiB data-read addresses cannot be produced by any certified legal offset from a valid
+  five-buffer base: the largest allocation is 35,651,584 bytes and all projected accesses are non-negative and in
+  bounds. This makes invalid realized pointer/base state or native physical address-register corruption the leading
+  split. The lost launch qwords prevent choosing between them.
 - The faulting binary `149ba322…` has the same five-buffer ABI, `136x4x1` grid, `256x1x1` local size, descriptor,
   global-memory instruction inventory, and zero-scratch resource class as the older frozen binary `99c7ee0c…`.
   That older control completed 20 PM4 epochs and a full numerical comparison. This rules out a generic launcher,
   geometry, or workload-capacity explanation, but one fault does not by itself prove that the new binary is
   deterministically bad.
 - The renderer-side executable delta is concentrated in deterministic progressive C-drain ordering and its
-  resulting register/schedule permutation. The current binary has one fewer emitted wait than the control. This is
-  a root-cause lead, not yet a correctness claim.
+  resulting register/schedule permutation. The current binary has one fewer emitted wait than the control. This
+  remains a possible physical-register/address-state lead, not yet a correctness claim.
 - The existing launch recorder captures argument VAs and kernarg qwords in a `finally` block, but the low-level
   session discards that local row when synchronous dispatch raises. Therefore this attempt does not retain the
   exact five attempted VAs needed to distinguish pointer visibility from native address formation.
