@@ -424,8 +424,8 @@ different compact/donor PROGRAM and do not certify the new full-role fixed-strid
 | Role | Observed corrected-v2 milestone | Retrospective or open gaps under the strengthened method |
 |---|---|---|
 | `attn_kv` | Zero-resource family plus native-PM4 prefix-3/full-20 retained-producer correctness and lifecycle result | C0A producer/spec result, C1 provenance/durability, C3 final-native certificate, strengthened C5 phase isolation, internal C4 queue attestation, C7 memory ledger, and C8 performance |
-| `attn_qo` | Direct v3 remains classified `BLOCKED_AT_C5`. The selected dense fixed-VA staged family at `951d3615c` is fresh-process byte-reproducible and passes C1-C4, prefix 1/prefix 3 C5, and complete 20-epoch C6 independently under PM4 and AQL with zero mismatches and clean health/fault evidence | C7 exact PM4/AQL memory admission, C8 matched complete-role timing/route decision, and durable retention remain open |
-| `ffn_gate_up` | No corrected-v2 family certified through this ladder | C1 onward |
+| `attn_qo` | Direct v3 remains classified `BLOCKED_AT_C5`. The selected dense fixed-VA staged family at `951d3615c` is fresh-process byte-reproducible and passes C1-C4, prefix 1/prefix 3 C5, and complete 20-epoch C6 independently under PM4 and AQL with zero mismatches and clean health/fault evidence. **Update 2026-07-19 (handoff §1.6): the staged family is additionally classified transition-disqualified at the C8 route boundary (`BLOCKED_AT_C8`).** | C7 exact PM4/AQL memory admission, resolution of the `BLOCKED_AT_C8` transition-safety disqualification, and durable retention remain open |
+| `ffn_gate_up` | **Update 2026-07-20:** a staged family (bundle `3fa4cd619`, HSACO `149ba322…`) passes static C1-C3 and the no-target PM4 C4 canary. Its first real C5 prefix-1 dispatch **faulted** (`MMU fault: 0x0` / 4-GiB TCP data-read, GPU reset; handoff §1.11). A downstream CPU-side PM4 pre-submit decoder bug that blocked the guarded instrument was fixed and verified (handoff §1.13, `dc2a72455`), so C5 is re-approachable. | C5 fault root-cause (see §12.6 fail clause — treat as N-scaling aggregate-layout, per the `attn_qo` §9 precedent, not a schedule hunt), then C6 onward |
 | `ffn_down` | No corrected-v2 family certified through this ladder | C1 onward |
 
 The working corrected-v2 `attn_qo` bundle is
@@ -705,6 +705,16 @@ Ordered solution:
 If staged `attn_qo` passes but staged `ffn_gate_up` fails, the initial search space is intentionally narrow: maximum
 grid index, compact-stage/output allocation extent, code/runtime footprint, or workload duration. The tile recurrence
 and 20-epoch lifecycle remain positive controls.
+
+**Status 2026-07-20: this fail clause is now live.** Staged `attn_qo` passes C1-C6; staged `ffn_gate_up` faults at
+C5 (`MMU fault: 0x0` / 4-GiB, GPU reset). This is the same *aggregate-multi-workgroup* signature `attn_qo`'s direct
+layout produced in §9 (the `16x4` `0x0` fault), whose proven cause was the sparse large-stride Q4 access pattern —
+resolved by the compact staged contract, **not** by schedule/register/wait changes (§9.3: *stop schedule changes*).
+Directed diagnosis, in order: (1) confirm the frozen `ffn_gate_up` staged family really uses the compact dense
+fixed-VA per-epoch stride (not a regressed 720-uint32 direct layout); (2) project every address at the 136-wide grid
+and find the first boundary crossing (the narrow axes above); (3) only then weigh schedule leads (§1.11's one-fewer
+wait; progressive-C-drain reuse), noting `attn_qo` shares the same `_serialize_progressive_c_drains` machinery yet
+passes, so a role-agnostic drain bug is unlikely. Do not restart schedule/grid search before (1)-(2).
 
 Exit artifact:
 

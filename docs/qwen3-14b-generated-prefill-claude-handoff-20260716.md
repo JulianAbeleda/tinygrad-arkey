@@ -58,12 +58,30 @@ ladder escalation** — gate every rung manually.
   local size `256×1×1`. With the decoder now trustworthy, the pre-submit snapshot is authoritative: either the tile
   executes clean (compare the touched `128×128` region to the declared authority, retain PASS), or it **reproduces
   the §1.11 fault** — in which case you now have a trustworthy pre-submit snapshot of the exact faulting command.
-- **B1-fault path.** Leading hypothesis from §1.11: the zero / 4-GiB TCP data-read addresses cannot come from any
-  legal offset off the five-buffer bases (largest allocation 35,651,584 B), so suspect an invalid realized
-  pointer/base or native address-register corruption. Prime concrete lead: the known-good frozen control
-  `99c7ee0c…` executed the same ABI+geometry correctly; the current `149ba322…` differs only in schedule /
-  instruction order. Diff the two schedules, root-cause on CPU, re-verify no-doorbell, then retry B1. Do not brute-
-  force grid/schedule variants — one proven root cause.
+- **B1-fault path — follow the `attn_qo` precedent; do NOT start with a schedule hunt.** This exact situation
+  (staged `attn_qo` passes, staged `ffn_gate_up` faults with a `0x0` / aggregate-multi-workgroup signature) is the
+  one the certification-method doc predicts (§12.6 fail clause) and already resolved once for `attn_qo` (method §9).
+  Precedent: `attn_qo`'s **direct**-layout family faulted identically — `16x4` / 64-workgroup `MMU fault: 0x0`, SQ
+  type-2 memory violation + reset — and the root cause was **aggregate direct-layout memory access** (sparse
+  720-uint32 Q4 row stride across many workgroups), fixed by switching to the **compact dense fixed-VA per-epoch
+  staged contract**, NOT by any schedule / register / wait change. Method §9.3 is explicit: *stop schedule changes,
+  direct-grid widening, and tile-by-tile search*. Diagnose in this order:
+  1. **Verify `ffn_gate_up`'s frozen staged family is genuinely on the compact dense fixed-VA per-epoch contract**
+     (small per-epoch Q4 stride, like staged `attn_qo`'s 36 uint32) and not a regressed large-stride / direct-style
+     layout (720 uint32). If it carries the large-stride layout, that IS the bug — regenerate the staged family per
+     method §12.6; do not patch the schedule.
+  2. **Walk the §12.6 narrow N-scaling search space** at the 136-wide grid: maximum grid index, compact-stage /
+     output allocation extent, code/runtime footprint, workload duration. Project every address at the widest grid
+     on CPU and find the first that crosses a boundary (the §1.11 audit started this; `attn_qo` §9.2 did it
+     tile-by-tile).
+  3. **Only if** the staged contract is confirmed compact and all projected addresses are in-bounds, consider the
+     schedule leads — §1.11's "one fewer emitted wait than the control", and deepseek's progressive-C-drain
+     register-reuse hypothesis. Strong counter-evidence to a generic drain bug: `attn_qo` uses the **same** shared
+     progressive-C-drain machinery (`_serialize_progressive_c_drains` in `tinygrad/renderer/isa/amd.py`) and passes
+     C1–C6, so a role-agnostic drain-schedule corruption is unlikely to be the whole story — it points to something
+     specific to `ffn_gate_up`'s N=17408 / 136-wide grid.
+  Method references before starting: §5 (what actually made `attn_kv` work), §12.5 (`attn_qo` staged recipe),
+  §12.6 (`ffn_gate_up` N-scaling recipe — you are now in its fail clause), §9.3 (the stop-schedule-changes precedent).
 - **B2.** Walk the reduced-grid ladder one rung at a time — `(2,1,1) → (1,2,1) → (1,4,1) → (8,4,1) → (32,4,1) →
   (40,4,1) → (41,4,1) → (136,1,1)` (the runner's allowlist) — stopping on first anomaly, retaining evidence per rung.
 - **B3.** C5 proper per the method doc: phase-isolated prefix-1 then prefix-3 full dispatches (all five kernarg
