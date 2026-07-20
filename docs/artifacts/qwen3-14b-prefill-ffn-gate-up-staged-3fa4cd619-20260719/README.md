@@ -52,3 +52,19 @@ pre/post health probes, and no kernel-fault marker. This is not numerical
 correctness: AQL C4, all C5+ target execution, matched full-role timing,
 whole-model validation, and production promotion remain open and are not
 claimed.
+
+The first guarded PM4 C5 prefix-1 attempt is retained as
+`evidence/qk-ffn-gate-up-staged-f0a46ff09-c5-pm4-prefix1-20260719.json`.
+Its single target dispatch raised a precise `0xFFFFFFBFE000` MMU fault; the
+parent observed SQ/page-fault/MES/reset markers, the reset recovered, and the
+postflight tiny-health probe passed. The result is `BLOCKED`, not a health or
+correctness pass. No retry, prefix-3, full-20, direct, transition, or AQL
+attempt followed, and no output comparison was reached.
+
+The current CPU-only audit is repairing exception-path evidence propagation so
+the already-captured five argument VAs and kernarg qwords cannot be discarded
+when synchronous dispatch raises. Until that repair and its injected tests are
+complete, another target dispatch is not permitted. The older frozen
+`99c7ee0c...` control executed the same ABI and geometry correctly; the new
+`149ba322...` schedule/order delta is under audit but is not yet a proven root
+cause.

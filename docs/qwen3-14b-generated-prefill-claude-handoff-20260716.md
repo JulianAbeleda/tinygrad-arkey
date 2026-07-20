@@ -1,5 +1,48 @@
 # Qwen3-14B generated-prefill Claude handoff
 
+## 1.11 Current status 2026-07-19: exact `ffn_gate_up` PM4 C5 prefix 1 faults; ladder stopped
+
+The first and only target dispatch of the current exact family was attempted through the one-shot guarded PM4
+prefix-1 runner pushed in `f0a46ff09`. The child loaded the frozen PROGRAM without compiling and entered the exact
+candidate invocation, then raised:
+
+```text
+MMU fault: 0xFFFFFFBFE000 | NotPresent=1 ReadOnly=0 NoExecute=0 imprecise=0
+HW fault: reset_type=0 reset_cause=0 memory_lost=1 gpu_id=10727
+```
+
+The parent observed gfxhub page faults, SQ error interrupts, MES queue-removal failures, a successful GPU reset,
+VRAM loss, and a recovered tiny-health probe. It classified the attempt `BLOCKED`, retained
+`promotion_evidence_eligible=false`, and performed no retry, fallback, prefix-3, full-20, transition, direct, or AQL
+attempt. The output was never read back or compared. The immutable envelope is
+`docs/artifacts/qwen3-14b-prefill-ffn-gate-up-staged-3fa4cd619-20260719/evidence/`
+`qk-ffn-gate-up-staged-f0a46ff09-c5-pm4-prefix1-20260719.json`, file SHA256
+`3f7557a14c8b902bb378d75bc8c5befd3718d6fb5da25fcd2f448e79aec3a610`.
+
+CPU-only audit has narrowed but not yet proven the cause:
+
+- The five-buffer order, 64-bit pointer packing, PM4 user-SGPR binding, and ISA kernarg offsets `0/8/16/24/32`
+  agree. Existing injected high-VA tests preserve the complete qwords.
+- The precise fault VA is not shaped like a normal observed AMD allocation and is the 48-bit sign extension of
+  `-0x402000`. All statically projected target addresses are non-negative and in bounds.
+- The faulting binary `149ba322…` has the same five-buffer ABI, `136x4x1` grid, `256x1x1` local size, descriptor,
+  global-memory instruction inventory, and zero-scratch resource class as the older frozen binary `99c7ee0c…`.
+  That older control completed 20 PM4 epochs and a full numerical comparison. This rules out a generic launcher,
+  geometry, or workload-capacity explanation, but one fault does not by itself prove that the new binary is
+  deterministically bad.
+- The renderer-side executable delta is concentrated in deterministic progressive C-drain ordering and its
+  resulting register/schedule permutation. The current binary has one fewer emitted wait than the control. This is
+  a root-cause lead, not yet a correctness claim.
+- The existing launch recorder captures argument VAs and kernarg qwords in a `finally` block, but the low-level
+  session discards that local row when synchronous dispatch raises. Therefore this attempt does not retain the
+  exact five attempted VAs needed to distinguish pointer visibility from native address formation.
+
+The next permitted work is CPU-only: preserve the already-captured launch row across the exception boundary, add an
+injected exception regression proving exact high-bit qwords survive, complete the final-ISA/control comparison, and
+commit those diagnostics. Only then may one new guarded PM4 prefix-1 attempt run. It must stop again on any timeout,
+numeric failure, fault/reset marker, or unhealthy probe. Do not run prefix 3, AQL, a new launcher, a broad spill
+search, or the rejected half2 metadata ordering experiment before that discriminator.
+
 ## 1.10 Current status 2026-07-19: exact `ffn_gate_up` PM4 C4 passes
 
 After the CPU-preflight route tranche was independently audited and pushed as `8cad0c4ba`, the existing guarded C4

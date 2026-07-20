@@ -1,0 +1,200 @@
+{
+  "child_status": "passed",
+  "config_identity": "sha256:1a149c0759b3bc96159bf8b259473ecc43fcf77c88cfd616b326292a250468f6",
+  "elapsed_seconds": 7.486399636021815,
+  "error": null,
+  "evidence_identity": "sha256:c2b610ecb4d3cb74021f0456072a6ea8cfcc3b9b0101ab0fabc3b5e6468599b3",
+  "exact_blocker": "PM4 kernel fault/reset marker observed",
+  "health_after": true,
+  "health_before": true,
+  "kernel_fault_evidence": {
+    "blocks": [
+      {
+        "details": {
+          "accesses": [],
+          "clients": [],
+          "fault_addresses": [],
+          "statuses": []
+        },
+        "lines": [
+          "[606491.965074] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: sq_intr: error, detail 0x00000000, type 2, sh 1, priv 1, wave_id 3, simd_id 0, wgp_id 0"
+        ],
+        "ordinal": 0,
+        "primary_marker": "sq_intr"
+      },
+      {
+        "details": {
+          "accesses": [],
+          "clients": [],
+          "fault_addresses": [],
+          "statuses": []
+        },
+        "lines": [
+          "[606491.965082] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: sq_intr: error, detail 0x00000000, type 2, sh 1, priv 1, wave_id 3, simd_id 0, wgp_id 0"
+        ],
+        "ordinal": 1,
+        "primary_marker": "sq_intr"
+      },
+      {
+        "details": {
+          "accesses": [],
+          "clients": [],
+          "fault_addresses": [],
+          "statuses": []
+        },
+        "lines": [
+          "[606491.965086] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: sq_intr: error, detail 0x00000000, type 2, sh 0, priv 1, wave_id 3, simd_id 0, wgp_id 0"
+        ],
+        "ordinal": 2,
+        "primary_marker": "sq_intr"
+      },
+      {
+        "details": {
+          "accesses": [],
+          "clients": [],
+          "fault_addresses": [],
+          "statuses": []
+        },
+        "lines": [
+          "[606491.965089] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: sq_intr: error, detail 0x00000000, type 2, sh 1, priv 1, wave_id 3, simd_id 0, wgp_id 0"
+        ],
+        "ordinal": 3,
+        "primary_marker": "sq_intr"
+      },
+      {
+        "details": {
+          "accesses": [],
+          "clients": [],
+          "fault_addresses": [],
+          "statuses": []
+        },
+        "lines": [
+          "[606491.965092] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: sq_intr: error, detail 0x00000000, type 2, sh 0, priv 1, wave_id 3, simd_id 0, wgp_id 0"
+        ],
+        "ordinal": 4,
+        "primary_marker": "sq_intr"
+      },
+      {
+        "details": {
+          "accesses": [],
+          "clients": [],
+          "fault_addresses": [],
+          "statuses": []
+        },
+        "lines": [
+          "[606491.965091] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: [gfxhub] page fault (src_id:0 ring:24 vmid:8 pasid:32774)"
+        ],
+        "ordinal": 5,
+        "primary_marker": "[gfxhub] page fault"
+      },
+      {
+        "details": {
+          "accesses": [],
+          "clients": [],
+          "fault_addresses": [],
+          "statuses": []
+        },
+        "lines": [
+          "[606491.965095] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: sq_intr: error, detail 0x00000000, type 2, sh 1, priv 1, wave_id 3, simd_id 0, wgp_id 0"
+        ],
+        "ordinal": 6,
+        "primary_marker": "sq_intr"
+      },
+      {
+        "details": {
+          "accesses": [],
+          "clients": [],
+          "fault_addresses": [],
+          "statuses": []
+        },
+        "lines": [
+          "[606491.965098] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: sq_intr: error, detail 0x00000000, type 2, sh 1, priv 1, wave_id 3, simd_id 0, wgp_id 0"
+        ],
+        "ordinal": 7,
+        "primary_marker": "sq_intr"
+      }
+    ],
+    "limits": {
+      "max_blocks": 8,
+      "max_line_chars": 512,
+      "max_lines": 32
+    },
+    "relevant_line_count": 29,
+    "retained_line_count": 8,
+    "schema": "tinygrad.amd_kernel_fault_evidence.v1",
+    "source": "kernel_journal_window",
+    "status": "FAULTS",
+    "truncated": true
+  },
+  "kernel_faults": [
+    "[606491.965074] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: sq_intr: error, detail 0x00000000, type 2, sh 1, priv 1, wave_id 3, simd_id 0, wgp_id 0",
+    "[606491.965082] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: sq_intr: error, detail 0x00000000, type 2, sh 1, priv 1, wave_id 3, simd_id 0, wgp_id 0",
+    "[606491.965086] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: sq_intr: error, detail 0x00000000, type 2, sh 0, priv 1, wave_id 3, simd_id 0, wgp_id 0",
+    "[606491.965089] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: sq_intr: error, detail 0x00000000, type 2, sh 1, priv 1, wave_id 3, simd_id 0, wgp_id 0",
+    "[606491.965092] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: sq_intr: error, detail 0x00000000, type 2, sh 0, priv 1, wave_id 3, simd_id 0, wgp_id 0",
+    "[606491.965091] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: [gfxhub] page fault (src_id:0 ring:24 vmid:8 pasid:32774)",
+    "[606491.965095] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: sq_intr: error, detail 0x00000000, type 2, sh 1, priv 1, wave_id 3, simd_id 0, wgp_id 0",
+    "[606491.965098] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: sq_intr: error, detail 0x00000000, type 2, sh 1, priv 1, wave_id 3, simd_id 0, wgp_id 0",
+    "[606491.965101] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: sq_intr: error, detail 0x00000000, type 2, sh 1, priv 1, wave_id 3, simd_id 0, wgp_id 0",
+    "[606491.965103] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: sq_intr: error, detail 0x00000000, type 2, sh 0, priv 1, wave_id 3, simd_id 0, wgp_id 0",
+    "[606491.965106] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: sq_intr: error, detail 0x00000000, type 2, sh 1, priv 1, wave_id 3, simd_id 0, wgp_id 0",
+    "[606491.965124] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: [gfxhub] page fault (src_id:0 ring:24 vmid:8 pasid:32774)",
+    "[606491.965515] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: [gfxhub] page fault (src_id:0 ring:24 vmid:8 pasid:32774)",
+    "[606491.965526] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: [gfxhub] page fault (src_id:0 ring:24 vmid:8 pasid:32774)",
+    "[606491.965537] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: [gfxhub] page fault (src_id:0 ring:24 vmid:8 pasid:32774)",
+    "[606491.965547] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: [gfxhub] page fault (src_id:0 ring:24 vmid:8 pasid:32774)",
+    "[606491.965558] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: [gfxhub] page fault (src_id:0 ring:24 vmid:8 pasid:32774)",
+    "[606491.965568] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: [gfxhub] page fault (src_id:0 ring:24 vmid:8 pasid:32774)",
+    "[606491.965579] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: [gfxhub] page fault (src_id:0 ring:24 vmid:8 pasid:32774)",
+    "[606491.965589] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: [gfxhub] page fault (src_id:0 ring:24 vmid:8 pasid:32774)",
+    "[606493.965709] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: MES failed to respond to msg=REMOVE_QUEUE",
+    "[606493.965715] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: MES might be in unrecoverable state, issue a GPU reset",
+    "[606493.965734] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: GPU reset begin!. Source:  3",
+    "[606496.035005] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: MES failed to respond to msg=REMOVE_QUEUE",
+    "[606498.035389] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: MES failed to respond to msg=REMOVE_QUEUE",
+    "[606498.588822] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: GPU reset succeeded, trying to resume",
+    "[606498.589125] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: VRAM is lost due to GPU reset!",
+    "[606499.005091] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: amdgpu: GPU reset(63) succeeded!",
+    "[606499.019634] ubuntu-dualboot kernel: amdgpu 0000:08:00.0: [drm] device wedged, but recovered through reset"
+  ],
+  "launched": true,
+  "no_queue_fallback": true,
+  "no_retry": true,
+  "operation_schema": "tinygrad.mmq_q4k_q8_1.ffn_gate_up_guarded_correctness_stage.v2.candidate_prefix",
+  "promotion_evidence_eligible": false,
+  "queue_mode": "PM4",
+  "request_identity": "sha256:da873081d9eb6391b347870f1419b8760d3ae9191cf069ee1f15789fd47f7288",
+  "result": {
+    "compile_performed": false,
+    "config_identity": "sha256:1a149c0759b3bc96159bf8b259473ecc43fcf77c88cfd616b326292a250468f6",
+    "evidence_identity": "sha256:09191479d026c4c4d62e037922b784fe2237d21e371cae5d77c1e9ff54637fd1",
+    "exact_blocker": "PM4 prefix-1 failed closed: RuntimeError: MMU fault: 0xFFFFFFBFE000 | NotPresent=1 ReadOnly=0 NoExecute=0 imprecise=0\nHW fault: reset_type=0 reset_cause=0 memory_lost=1 gpu_id=10727",
+    "exception": "RuntimeError",
+    "failed_attempt": {
+      "c4_canary_identity": "sha256:e2a7fec5ffbbb0e78bafd5e316f8c1d3fbf36615c667a6fac346b466e7bd7e6e",
+      "candidate_executable_identity": "sha256:48b8d87229e53cd323677fbdcdeb8681772e4fa31948c13a8f7849c3a7e02ccb",
+      "family_identity": "sha256:4e82044650b7c03a579b42b8dd270389d280c2f5eab9f9004a3bc83dbe79917f",
+      "fixture_identity": "sha256:30a8f9513b94de41bc53ad73759b54fedd1b7f00ff118d40a2e2529f49ba1baf",
+      "input_identity": "sha256:c86b5fd9abe76f0a776fd990cc7938ad7cf4a70cf2e6e70870202dd3fbc6e595",
+      "logical_q4_identity": "sha256:652e4ef0d0493ea70172a7e8be59f1e0686bf601c59f9f1281fde2bf1bcb0f53",
+      "phase": "invocation",
+      "resident_fp16_activation_identity": "sha256:c457f61ff0f1921c4cc0e4fb84ee12bd2c4bcb10c5e92472a8b720e7f6b36388",
+      "workload_identity": "sha256:f061cc838d3f879bc8dbf9805dd61f064215a5b637d3a03974d6d3aedfc4e112"
+    },
+    "no_fallback": true,
+    "no_retry": true,
+    "prefix_epochs": 1,
+    "promotion_evidence_eligible": false,
+    "queue_mode": "PM4",
+    "request_identity": "sha256:da873081d9eb6391b347870f1419b8760d3ae9191cf069ee1f15789fd47f7288",
+    "requires_recompile": false,
+    "retry_count": 0,
+    "schema": "tinygrad.mmq_q4k_q8_1.ffn_gate_up_guarded_correctness_stage.v2.candidate_prefix",
+    "status": "BLOCKED"
+  },
+  "retry_count": 0,
+  "schema": "tinygrad.mmq_q4k_q8_1.ffn_gate_up_guarded_correctness_stage.v2.envelope",
+  "spawn_count": 1,
+  "status": "BLOCKED",
+  "timed_out": false
+}
