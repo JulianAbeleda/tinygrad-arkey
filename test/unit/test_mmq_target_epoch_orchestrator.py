@@ -149,11 +149,82 @@ def test_kernel_fault_evidence_preserves_bounded_chronological_fault_details():
     "sq_intr", "[gfxhub] page fault", "gpu reset"]
   page_fault = evidence["blocks"][1]
   assert page_fault["details"] == {
+    "process_pids": [],
     "fault_addresses": ["0x00000000deadbeef"],
-    "clients": ["TCP"], "statuses": ["0x00201031"], "accesses": ["0x1"],
+    "clients": ["10", "TCP"], "statuses": ["0x00201031"],
+    "more_faults": [], "permission_faults": [], "mapping_errors": [],
+    "accesses": ["0x1"],
   }
   assert [row["ordinal"] for row in evidence["blocks"]] == [0, 1, 2]
   assert all("harmless" not in line for block in evidence["blocks"] for line in block["lines"])
+
+
+def test_kernel_fault_evidence_groups_exact_ffn_zero_and_4gib_context_despite_sq_interleave():
+  text = """
+    [606491.965074] kernel: amdgpu: sq_intr: error, detail 0x00000000, type 2, sh 1, priv 1, wave_id 3, simd_id 0, wgp_id 0
+    [606491.965082] kernel: amdgpu: sq_intr: error, detail 0x00000000, type 2, sh 1, priv 1, wave_id 3, simd_id 0, wgp_id 0
+    [606491.965086] kernel: amdgpu: sq_intr: error, detail 0x00000000, type 2, sh 0, priv 1, wave_id 3, simd_id 0, wgp_id 0
+    [606491.965089] kernel: amdgpu: sq_intr: error, detail 0x00000000, type 2, sh 1, priv 1, wave_id 3, simd_id 0, wgp_id 0
+    [606491.965092] kernel: amdgpu: sq_intr: error, detail 0x00000000, type 2, sh 0, priv 1, wave_id 3, simd_id 0, wgp_id 0
+    [606491.965091] kernel: amdgpu: [gfxhub] page fault (src_id:0 ring:24 vmid:8 pasid:32774)
+    [606491.965095] kernel: amdgpu: sq_intr: error, detail 0x00000000, type 2, sh 1, priv 1, wave_id 3, simd_id 0, wgp_id 0
+    [606491.965098] kernel: amdgpu: sq_intr: error, detail 0x00000000, type 2, sh 1, priv 1, wave_id 3, simd_id 0, wgp_id 0
+    [606491.965098] kernel: amdgpu:  Process python pid 1932187 thread python pid 1932187
+    [606491.965101] kernel: amdgpu: sq_intr: error, detail 0x00000000, type 2, sh 1, priv 1, wave_id 3, simd_id 0, wgp_id 0
+    [606491.965102] kernel: amdgpu:   in page starting at address 0x0000000000000000 from client 10
+    [606491.965103] kernel: amdgpu: sq_intr: error, detail 0x00000000, type 2, sh 0, priv 1, wave_id 3, simd_id 0, wgp_id 0
+    [606491.965105] kernel: amdgpu: GCVM_L2_PROTECTION_FAULT_STATUS:0x00801031
+    [606491.965106] kernel: amdgpu: sq_intr: error, detail 0x00000000, type 2, sh 1, priv 1, wave_id 3, simd_id 0, wgp_id 0
+    [606491.965107] kernel: amdgpu:          Faulty UTCL2 client ID: TCP (0x8)
+    [606491.965110] kernel: amdgpu:          MORE_FAULTS: 0x1
+    [606491.965112] kernel: amdgpu:          WALKER_ERROR: 0x0
+    [606491.965114] kernel: amdgpu:          PERMISSION_FAULTS: 0x3
+    [606491.965116] kernel: amdgpu:          MAPPING_ERROR: 0x0
+    [606491.965118] kernel: amdgpu:          RW: 0x0
+    [606491.965124] kernel: amdgpu: [gfxhub] page fault (src_id:0 ring:24 vmid:8 pasid:32774)
+    [606491.965127] kernel: amdgpu:  Process python pid 1932187 thread python pid 1932187
+    [606491.965130] kernel: amdgpu:   in page starting at address 0x0000000000000000 from client 10
+    [606491.965526] kernel: amdgpu: [gfxhub] page fault (src_id:0 ring:24 vmid:8 pasid:32774)
+    [606491.965528] kernel: amdgpu:  Process python pid 1932187 thread python pid 1932187
+    [606491.965531] kernel: amdgpu:   in page starting at address 0x0000000100000000 from client 10
+  """
+  evidence = parse_kernel_fault_evidence(text)
+  assert evidence["schema"] == "tinygrad.amd_kernel_fault_evidence.v1"
+  assert evidence["status"] == "FAULTS" and evidence["truncated"] is False
+  assert [row["primary_marker"] for row in evidence["blocks"]] == [
+    "sq_intr", "[gfxhub] page fault", "[gfxhub] page fault", "[gfxhub] page fault"]
+  first_page = evidence["blocks"][1]
+  assert first_page["details"] == {
+    "process_pids": ["1932187"],
+    "fault_addresses": ["0x0000000000000000"],
+    "clients": ["10", "TCP"], "statuses": ["0x00801031"],
+    "more_faults": ["0x1"], "permission_faults": ["0x3"],
+    "mapping_errors": ["0x0"], "accesses": ["0x0"],
+  }
+  assert sum("sq_intr:" in line for line in first_page["lines"]) == 5
+  assert evidence["blocks"][2]["details"]["fault_addresses"] == [
+    "0x0000000000000000"]
+  assert evidence["blocks"][3]["details"]["fault_addresses"] == [
+    "0x0000000100000000"]
+  assert all(block["details"]["process_pids"] == ["1932187"]
+             for block in evidence["blocks"][1:])
+
+
+def test_kernel_journal_authority_ignores_stale_kfd_event_fault_address():
+  stale_kfd_event = """
+    KFD event object: MMU fault: 0xFFFFFFBFE000 | NotPresent=1 ReadOnly=0
+    amdgpu: [gfxhub] page fault (vmid:8 pasid:32774)
+    amdgpu:  Process python pid 1932187 thread python pid 1932187
+    amdgpu:   in page starting at address 0x0000000100000000 from client 10
+    amdgpu: GCVM_L2_PROTECTION_FAULT_STATUS:0x00801031
+  """
+  faults, evidence = collect_kernel_fault_evidence(
+    1.0, fault_reader=lambda _: stale_kfd_event)
+  assert faults == ["amdgpu: [gfxhub] page fault (vmid:8 pasid:32774)"]
+  assert evidence["source"] == "kernel_journal_window"
+  assert evidence["blocks"][0]["details"]["fault_addresses"] == [
+    "0x0000000100000000"]
+  assert "0xFFFFFFBFE000" not in str(evidence)
 
 
 def test_kernel_fault_evidence_is_bounded_and_read_errors_fail_closed_without_message():

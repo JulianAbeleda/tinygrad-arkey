@@ -834,6 +834,12 @@ class KFDIface:
                         doorbell=MMIOInterface(self.doorbells + queue.doorbell_offset - self.doorbells_base, 8, fmt='Q'))
 
   def sleep(self, tm:int):
+    # WAIT_EVENTS writes only the union belonging to each event that fired.  The
+    # array is persistent, so leaving an older union intact can join a stale
+    # memory-fault VA to a later hardware exception.  Clear output payloads
+    # before every wait while preserving event_id and kfd_event_data_ext.
+    for event in self.queue_event_arr:
+      ctypes.memset(ctypes.addressof(event), 0, ctypes.sizeof(kfd.struct_kfd_hsa_memory_exception_data))
     kfd.AMDKFD_IOC_WAIT_EVENTS(KFDIface.kfd, events_ptr=self.queue_event_arr_ptr, num_events=3, wait_for_all=0, timeout=tm)
     if self.queue_event_arr[1].memory_exception_data.gpu_id or self.queue_event_arr[2].hw_exception_data.gpu_id: self.on_device_hang()
 

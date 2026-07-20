@@ -67,15 +67,24 @@ _MAX_FAULT_BLOCKS, _MAX_FAULT_LINES, _MAX_FAULT_LINE_CHARS = 8, 32, 512
 _GPU_FAULT_CONTINUATION_MARKERS = (
   "vm_l2_protection_fault", "faulty utcl2 client", "fault address", "client id",
   "in page starting at address", "memory violation", "protection fault",
-  "queue evicted", "r/w:", "rw:", "access type",
+  "queue evicted", " process ", "more_faults", "walker_error",
+  "permission_faults", "mapping_error", "r/w:", "rw:", "access type",
 )
+_FAULT_PROCESS_PID_RE = re.compile(
+  r"\bprocess\s+\S+\s+pid\s+(\d+)", re.IGNORECASE)
 _FAULT_ADDRESS_RE = re.compile(
   r"(?:vm_l2_protection_fault_addr|fault address|in page starting at address)\s*[:=]?\s*(0x[0-9a-f]+)",
   re.IGNORECASE)
 _FAULT_CLIENT_RE = re.compile(
-  r"(?:faulty\s+utcl2\s+client(?:\s+id)?|client\s+id)\s*[:=]\s*([a-z0-9_-]+)", re.IGNORECASE)
+  r"(?:(?:faulty\s+utcl2\s+client(?:\s+id)?|client\s+id)\s*[:=]\s*|from\s+client\s+)"
+  r"([a-z0-9_-]+)", re.IGNORECASE)
 _FAULT_STATUS_RE = re.compile(
   r"(?:vm_l2_protection_fault_status|fault status|status)\s*[:=]\s*(0x[0-9a-f]+)", re.IGNORECASE)
+_FAULT_MORE_RE = re.compile(r"\bmore_faults\s*[:=]\s*(0x[0-9a-f]+|\d+)", re.IGNORECASE)
+_FAULT_PERMISSION_RE = re.compile(
+  r"\bpermission_faults\s*[:=]\s*(0x[0-9a-f]+|\d+)", re.IGNORECASE)
+_FAULT_MAPPING_RE = re.compile(
+  r"\bmapping_error\s*[:=]\s*(0x[0-9a-f]+|\d+)", re.IGNORECASE)
 _FAULT_ACCESS_RE = re.compile(
   r"(?:\br/?w\b|access(?:\s+type)?)\s*[:=]\s*(read|write|0x[0-9a-f]+|\d+)", re.IGNORECASE)
 
@@ -103,12 +112,28 @@ def parse_kernel_fault_evidence(text: str) -> dict[str, Any]:
     if marker is None and (current is None or not continuation): continue
     relevant_line_count += 1
     if marker is not None:
+      # gfxhub context is emitted from a different kernel path than SQ
+      # interrupts, so the rows can interleave. Once a page-fault block has
+      # begun, keep later SQ rows with it instead of letting an SQ burst consume
+      # the block budget and orphan Process/address/status continuation rows.
+      grouped_sq = marker == "sq_intr" and current is not None and \
+        current["primary_marker"] in ("sq_intr", "[gfxhub] page fault")
+      if grouped_sq:
+        marker = None
+      elif retained_line_count >= _MAX_FAULT_LINES:
+        current, truncated = None, True
+        continue
+    if marker is not None:
       if len(blocks) >= _MAX_FAULT_BLOCKS:
         current, truncated = None, True
         continue
       current = {
         "ordinal": len(blocks), "primary_marker": marker, "lines": [],
-        "details": {"fault_addresses": [], "clients": [], "statuses": [], "accesses": []},
+        "details": {
+          "process_pids": [], "fault_addresses": [], "clients": [],
+          "statuses": [], "more_faults": [], "permission_faults": [],
+          "mapping_errors": [], "accesses": [],
+        },
       }
       blocks.append(current)
     if current is None or retained_line_count >= _MAX_FAULT_LINES:
@@ -119,8 +144,11 @@ def parse_kernel_fault_evidence(text: str) -> dict[str, Any]:
     current["lines"].append(row)
     retained_line_count += 1
     for regex, key in (
+      (_FAULT_PROCESS_PID_RE, "process_pids"),
       (_FAULT_ADDRESS_RE, "fault_addresses"), (_FAULT_CLIENT_RE, "clients"),
-      (_FAULT_STATUS_RE, "statuses"), (_FAULT_ACCESS_RE, "accesses"),
+      (_FAULT_STATUS_RE, "statuses"), (_FAULT_MORE_RE, "more_faults"),
+      (_FAULT_PERMISSION_RE, "permission_faults"),
+      (_FAULT_MAPPING_RE, "mapping_errors"), (_FAULT_ACCESS_RE, "accesses"),
     ):
       match = regex.search(row)
       if match is not None and match.group(1) not in current["details"][key]:
