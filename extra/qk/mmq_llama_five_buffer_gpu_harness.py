@@ -51,6 +51,8 @@ PM4_PRE_SUBMIT_SCHEMA = \
 PM4_PRE_SUBMIT_CAPTURE_POINT = \
   "AMDComputeQueue._submit_after_complete_command_construction_" \
   "before_ring_copy_and_doorbell"
+PM4_NO_DOORBELL_RECEIPT_SCHEMA = \
+  "tinygrad.mmq_q4k_q8_1.pm4_no_doorbell_receipt.v1"
 PM4_PRE_SUBMIT_CHECK_KEYS = frozenset({
   "queue_device_matches_submit_device",
   "runtime_device_matches_submit_device",
@@ -115,6 +117,13 @@ class SingleTilePointerBiasCarrierError(RuntimeError):
   def __init__(self, message: str, carrier_evidence: Mapping[str, Any]):
     super().__init__(message)
     self.carrier_evidence = dict(carrier_evidence)
+
+
+class _PM4NoDoorbellStop(BaseException):
+  """Private control transfer that cannot be mistaken for a runtime failure."""
+  def __init__(self, token: object):
+    super().__init__("private PM4 snapshot-only stop")
+    self.token = token
 
 
 def _single_tile_call_carrier(argument: Any) -> tuple[Any, tuple[Any, ...], dict[str, Any]]:
@@ -864,8 +873,48 @@ def _pm4_pre_submit_snapshot(
 def _dispatch_with_runtime_evidence(runtime: Any, buffers: tuple[Any, ...], globals_: tuple[int, ...],
                                     *, global_size: tuple[int, int, int], local_size: tuple[int, int, int] | None,
                                     vals: tuple[Any, ...], runtime_evidence: dict[str, Any],
-                                    context: Mapping[str, Any], wait: bool = True) -> Any:
+                                    context: Mapping[str, Any], wait: bool = True,
+                                    pm4_submit_policy: str = "execute") -> Any:
   """Invoke the normal runtime once while recording its real kernarg allocation."""
+  if pm4_submit_policy not in ("execute", "snapshot_only"):
+    raise ValueError("pm4_submit_policy must be 'execute' or 'snapshot_only'")
+  dev = getattr(runtime, "dev", None)
+  snapshot_only = pm4_submit_policy == "snapshot_only"
+  no_doorbell_before: dict[str, Any] | None = None
+  if snapshot_only:
+    from tinygrad.helpers import PROFILE
+    from tinygrad.runtime import ops_amd
+    if getattr(dev, "is_aql", None) is not False:
+      raise ValueError("snapshot_only requires the exact PM4 runtime route")
+    queue_factory = getattr(dev, "hw_compute_queue_t", None)
+    if getattr(queue_factory, "func", queue_factory) is not \
+        ops_amd.AMDComputeQueue:
+      raise ValueError(
+        "snapshot_only requires the exact AMDComputeQueue factory")
+    if wait is not True:
+      raise ValueError("snapshot_only requires wait=True")
+    if bool(PROFILE) or bool(getattr(dev, "pmc_enabled", False)) or \
+       bool(getattr(dev, "sqtt_enabled", False)):
+      raise ValueError("snapshot_only rejects PROFILE, PMC, and SQTT modes")
+    timeline_value = getattr(dev, "timeline_value", None)
+    prof_exec_counter = getattr(dev, "prof_exec_counter", None)
+    timeline_signal = getattr(dev, "timeline_signal", None)
+    if not isinstance(timeline_value, int) or isinstance(timeline_value, bool) or \
+       timeline_value < 1 or \
+       not isinstance(prof_exec_counter, int) or isinstance(prof_exec_counter, bool) or \
+       timeline_signal is None or not hasattr(timeline_signal, "value"):
+      raise ValueError("snapshot_only requires concrete HCQ host counter and signal state")
+    timeline_signal_value = int(timeline_signal.value)
+    if getattr(dev, "error_state", None) is not None:
+      raise RuntimeError("snapshot_only requires a device with no prior error state")
+    if timeline_signal_value != timeline_value - 1:
+      raise RuntimeError("snapshot_only requires no outstanding device timeline work")
+    no_doorbell_before = {
+      "timeline_value": timeline_value,
+      "prof_exec_counter": prof_exec_counter,
+      "timeline_signal_value": timeline_signal_value,
+      "error_state": getattr(dev, "error_state", None),
+    }
   launch = {
     **dict(context), "global_size": list(global_size), "local_size": list(local_size or ()),
     "arguments": _launch_buffer_evidence(_TARGET_BUFFER_NAMES, buffers, globals_),
@@ -876,6 +925,8 @@ def _dispatch_with_runtime_evidence(runtime: Any, buffers: tuple[Any, ...], glob
   original_fill = runtime.fill_kernargs
   captured: dict[str, Any] = {}
   original_pm4_submit = None
+  no_doorbell_token = object() if snapshot_only else None
+  native_submit_call_count = 0
 
   def capture_kernargs(bufs, values=(), kernargs=None):
     state = original_fill(bufs, values, kernargs)
@@ -883,10 +934,14 @@ def _dispatch_with_runtime_evidence(runtime: Any, buffers: tuple[Any, ...], glob
     captured["bound_pointer_words"] = [int(getattr(buf, "va_addr")) for buf in state.bufs[:5]]
     return state
 
-  if getattr(getattr(runtime, "dev", None), "is_aql", None) is False:
+  if getattr(dev, "is_aql", None) is False:
     from tinygrad.runtime import ops_amd
     original_pm4_submit = ops_amd.AMDComputeQueue._submit
     def capture_pm4_submit(queue, submit_dev):
+      nonlocal native_submit_call_count
+      if snapshot_only and type(queue) is not ops_amd.AMDComputeQueue:
+        raise RuntimeError(
+          "PM4 evidence hook observed a non-exact AMDComputeQueue instance")
       state = captured.get("state")
       if state is not None and submit_dev is runtime.dev:
         if "pre_submit" in captured:
@@ -898,13 +953,32 @@ def _dispatch_with_runtime_evidence(runtime: Any, buffers: tuple[Any, ...], glob
           raise RuntimeError(
             "target PM4 pre-submit snapshot failed exact checks")
         captured["pre_submit"] = snapshot
+        if snapshot_only:
+          captured["no_doorbell_stop_raised"] = True
+          raise _PM4NoDoorbellStop(no_doorbell_token)
+      if snapshot_only:
+        raise RuntimeError(
+          "snapshot_only observed a non-target PM4 submit before the target stop")
+      native_submit_call_count += 1
       return original_pm4_submit(queue, submit_dev)
     ops_amd.AMDComputeQueue._submit = capture_pm4_submit
 
-  runtime.fill_kernargs = capture_kernargs
+  try:
+    runtime.fill_kernargs = capture_kernargs
+  except BaseException:
+    if original_pm4_submit is not None:
+      ops_amd.AMDComputeQueue._submit = original_pm4_submit
+    raise
   failure: BaseException | None = None
+  no_doorbell_stop_caught = False
   try:
     result = runtime(*args, global_size=global_size, local_size=local_size, vals=vals, wait=wait)
+  except _PM4NoDoorbellStop as exc:
+    if not snapshot_only or exc.token is not no_doorbell_token:
+      failure = exc
+      raise
+    no_doorbell_stop_caught = True
+    result = None
   except BaseException as exc:
     failure = exc
     raise
@@ -913,6 +987,69 @@ def _dispatch_with_runtime_evidence(runtime: Any, buffers: tuple[Any, ...], glob
     else: delattr(runtime, "fill_kernargs")
     if original_pm4_submit is not None:
       ops_amd.AMDComputeQueue._submit = original_pm4_submit
+    if snapshot_only and no_doorbell_before is not None:
+      timeline_value_after_unwind = getattr(dev, "timeline_value", None)
+      prof_exec_counter_after_unwind = getattr(dev, "prof_exec_counter", None)
+      timeline_signal_value_after = int(dev.timeline_signal.value)
+      error_state_after = getattr(dev, "error_state", None)
+      dev.timeline_value = no_doorbell_before["timeline_value"]
+      dev.prof_exec_counter = no_doorbell_before["prof_exec_counter"]
+      hooks_restored = original_pm4_submit is not None and \
+        ops_amd.AMDComputeQueue._submit is original_pm4_submit
+      fill_hook_restored = (
+        getattr(runtime, "__dict__", {}).get("fill_kernargs") is prior_instance_fill
+        if had_instance_fill else
+        "fill_kernargs" not in getattr(runtime, "__dict__", {}))
+      receipt_checks = {
+        "private_stop_raised_at_target_submit":
+          captured.get("no_doorbell_stop_raised") is True,
+        "private_stop_caught_by_owner": no_doorbell_stop_caught,
+        "pre_submit_snapshot_passed":
+          captured.get("pre_submit", {}).get("all_checks_pass") is True,
+        "native_submit_not_called": native_submit_call_count == 0,
+        "timeline_advanced_exactly_once":
+          timeline_value_after_unwind == no_doorbell_before["timeline_value"] + 1,
+        "prof_exec_counter_advanced_exactly_once":
+          prof_exec_counter_after_unwind ==
+            no_doorbell_before["prof_exec_counter"] + 1,
+        "timeline_rollback_restored":
+          dev.timeline_value == no_doorbell_before["timeline_value"],
+        "prof_exec_counter_rollback_restored":
+          dev.prof_exec_counter == no_doorbell_before["prof_exec_counter"],
+        "timeline_signal_unchanged":
+          timeline_signal_value_after ==
+            no_doorbell_before["timeline_signal_value"],
+        "error_state_unchanged":
+          error_state_after is no_doorbell_before["error_state"],
+        "submit_hook_restored": hooks_restored,
+        "fill_kernargs_hook_restored": fill_hook_restored,
+      }
+      launch["pm4_no_doorbell_receipt"] = {
+        "schema": PM4_NO_DOORBELL_RECEIPT_SCHEMA,
+        "status": "CAPTURED_NO_SUBMIT",
+        "submit_policy": "snapshot_only",
+        "pre_submit": captured.get("pre_submit"),
+        "target_dispatch_submitted": False,
+        "native_submit_call_count": native_submit_call_count,
+        "ring_copy_performed": False,
+        "doorbell_rung": False,
+        "timeline_value_before": no_doorbell_before["timeline_value"],
+        "timeline_value_after_runtime_unwind": timeline_value_after_unwind,
+        "timeline_value_after_rollback": dev.timeline_value,
+        "timeline_rollback_applied":
+          dev.timeline_value == no_doorbell_before["timeline_value"],
+        "prof_exec_counter_before": no_doorbell_before["prof_exec_counter"],
+        "prof_exec_counter_after_runtime_unwind":
+          prof_exec_counter_after_unwind,
+        "prof_exec_counter_after_rollback": dev.prof_exec_counter,
+        "timeline_signal_value_before":
+          no_doorbell_before["timeline_signal_value"],
+        "timeline_signal_value_after": timeline_signal_value_after,
+        "terminal_child_required": True,
+        "promotion_evidence_eligible": False,
+        "checks": receipt_checks,
+        "all_checks_pass": all(receipt_checks.values()),
+      }
     state = captured.get("state")
     if state is not None:
       launch["kernarg"] = {
@@ -949,6 +1086,10 @@ def _dispatch_with_runtime_evidence(runtime: Any, buffers: tuple[Any, ...], glob
         # Never replace the device/runtime exception with an observability
         # failure. The caller will report that no structured launch survived.
         pass
+  if snapshot_only:
+    receipt = launch.get("pm4_no_doorbell_receipt")
+    if not isinstance(receipt, dict) or receipt.get("all_checks_pass") is not True:
+      raise RuntimeError("snapshot_only failed no-doorbell control-flow checks")
   return result
 
 

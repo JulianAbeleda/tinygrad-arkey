@@ -110,6 +110,113 @@ def fake_candidate_builder(config, *, queue_mode, prefix_epochs):
     lambda prefix: np.array([prefix]), _comparison)
 
 
+def _no_doorbell_receipt():
+  argument_vas = [
+    0x00007F8800001000, 0x00007F8804001000,
+    0x00007F8808001000, 0x00007F880C001000,
+    0x00007F8810001000]
+  kernarg_va = 0x00007F88ABCDEF00
+  pre_submit_checks = {
+    "queue_device_matches_submit_device": True,
+    "runtime_device_matches_submit_device": True,
+    "args_state_program_matches_runtime": True,
+    "exact_five_argument_buffers": True,
+    "exact_five_kernarg_qwords": True,
+    "five_qwords_match_constructed_buffers": True,
+    "pm4_command_words_concrete": True,
+    "pm4_command_stream_nonempty": True,
+    "pm4_packet_stream_decoded": True,
+    "pm4_kernarg_user_data_found_once": True,
+    "pm4_kernarg_uses_user_data_0": True,
+    "pm4_kernarg_user_data_matches_kernarg_va": True,
+  }
+  pre_submit = {
+    "schema": gc.PM4_PRE_SUBMIT_SCHEMA,
+    "capture_point": gc.PM4_PRE_SUBMIT_CAPTURE_POINT,
+    "runtime_object_identity": 12345,
+    "runtime_class": gc.PM4_RUNTIME_CLASS,
+    "runtime_name": gc.PM4_RUNTIME_NAME,
+    "runtime_device": "AMD",
+    "kernarg_va": kernarg_va, "kernarg_nbytes": 40,
+    "kernarg_qwords": argument_vas,
+    "argument_buffers": [
+      {"slot": slot, "va": va, "size": size}
+      for slot, (va, size) in enumerate(
+        zip(argument_vas, gc.PM4_ARGUMENT_NBYTES))],
+    "pm4_kernarg_user_data": {
+      "packet_dword_offset": 12, "register_index": 0,
+      "low_dword": kernarg_va & 0xffffffff,
+      "high_dword": kernarg_va >> 32, "pointer": kernarg_va,
+    },
+    "pm4_dword_count": 64, "pm4_sha256": "c" * 64,
+    "checks": pre_submit_checks, "all_checks_pass": True,
+  }
+  checks = {
+    "private_stop_raised_at_target_submit": True,
+    "private_stop_caught_by_owner": True,
+    "pre_submit_snapshot_passed": True,
+    "native_submit_not_called": True,
+    "timeline_advanced_exactly_once": True,
+    "prof_exec_counter_advanced_exactly_once": True,
+    "timeline_rollback_restored": True,
+    "prof_exec_counter_rollback_restored": True,
+    "timeline_signal_unchanged": True,
+    "error_state_unchanged": True,
+    "submit_hook_restored": True,
+    "fill_kernargs_hook_restored": True,
+  }
+  return {
+    "schema": gc.PM4_NO_DOORBELL_RECEIPT_SCHEMA,
+    "status": "CAPTURED_NO_SUBMIT", "submit_policy": "snapshot_only",
+    "pre_submit": pre_submit,
+    "target_dispatch_submitted": False, "native_submit_call_count": 0,
+    "ring_copy_performed": False, "doorbell_rung": False,
+    "timeline_value_before": 7, "timeline_value_after_runtime_unwind": 8,
+    "timeline_value_after_rollback": 7, "timeline_rollback_applied": True,
+    "prof_exec_counter_before": 11,
+    "prof_exec_counter_after_runtime_unwind": 12,
+    "prof_exec_counter_after_rollback": 11,
+    "timeline_signal_value_before": 6,
+    "timeline_signal_value_after": 6, "terminal_child_required": True,
+    "promotion_evidence_eligible": False, "checks": checks,
+    "all_checks_pass": True,
+  }
+
+
+class FakeNoDoorbellSession(FakeSession):
+  def __init__(self, sink, receipts):
+    super().__init__("PM4", 1)
+    self.sink, self.receipts, self.invoke_count = sink, receipts, 0
+
+  def invoke(self, prefix_epochs):
+    self.invoke_count += 1
+    assert prefix_epochs == 1
+    self.sink.extend(copy.deepcopy(self.receipts))
+    return SimpleNamespace(output=object())
+
+
+def fake_no_doorbell_builder(
+    config, *, queue_mode, prefix_epochs, pm4_submit_policy="execute",
+    pm4_no_doorbell_receipt_sink=None):
+  assert config == {}
+  assert (queue_mode, prefix_epochs, pm4_submit_policy) == \
+    ("PM4", 1, "snapshot_only")
+  assert isinstance(pm4_no_doorbell_receipt_sink, list)
+  runtime = fake_candidate_builder(
+    config, queue_mode=queue_mode, prefix_epochs=prefix_epochs)
+  session = FakeNoDoorbellSession(
+    pm4_no_doorbell_receipt_sink, [_no_doorbell_receipt()])
+  return gc.replace(
+    runtime, session=session,
+    producer_attest=lambda _prefix: pytest.fail(
+      "producer attestation must not run"),
+    synchronize=lambda: pytest.fail("extra synchronization must not run"),
+    readback=lambda _output: pytest.fail("readback must not run"),
+    reference=lambda _prefix: pytest.fail("reference must not run"),
+    comparator=lambda _got, _reference: pytest.fail(
+      "numeric comparison must not run"))
+
+
 def _candidate_request(prefix=1, prior=None, queue="PM4", cross=None):
   return gc.CandidatePrefixRequest(
     {}, queue, prefix, prior, cross, fake_candidate_builder)
@@ -176,6 +283,128 @@ def _guard(prefix=1, prior=None, queue="PM4", cross=None, **kwargs):
     isolated_runner=kwargs.pop("isolated_runner", _isolated),
     health_probe=kwargs.pop("health_probe", lambda _env: True),
     fault_collector=kwargs.pop("fault_collector", _faults), **kwargs)
+
+
+def _guard_no_doorbell(runtime_builder=fake_no_doorbell_builder, **kwargs):
+  return gc.run_guarded_pm4_no_doorbell(
+    config={}, runtime_builder=runtime_builder,
+    isolated_runner=kwargs.pop("isolated_runner", _isolated),
+    health_probe=kwargs.pop("health_probe", lambda _env: True),
+    fault_collector=kwargs.pop("fault_collector", _faults), **kwargs)
+
+
+def test_pm4_no_doorbell_is_one_terminal_diagnostic_child_with_no_submit():
+  envelope = _guard_no_doorbell()
+  result = gc.validate_pm4_no_doorbell_evidence(envelope["result"])
+  assert gc.validate_guarded_envelope(envelope) == envelope
+  assert envelope["status"] == result["status"] == "PASS"
+  assert envelope["spawn_count"] == 1
+  assert result["environment"] == {
+    "DEV": "AMD", "AMD_AQL": "0", "PROFILE": "0"}
+  assert result["invocation_count"] == result["receipt_count"] == 1
+  assert result["target_dispatch_submitted"] is False
+  assert result["native_submit_call_count"] == 0
+  assert result["timeline_rollback_applied"] is True
+  assert result["terminal_child_required"] is True
+  assert result["readback_performed"] is False
+  assert result["numeric_validation_performed"] is False
+  assert result["attestation_performed"] is False
+  assert result["producer_attestation_performed"] is False
+  assert result["promotion_evidence_eligible"] is False
+
+
+def test_pm4_no_doorbell_accepts_exact_real_harness_receipt_shape():
+  from extra.qk.mmq_frozen_staged_low_level_session import \
+    PM4_NO_DOORBELL_CHECK_KEYS
+  receipt = _no_doorbell_receipt()
+  assert set(receipt["checks"]) == PM4_NO_DOORBELL_CHECK_KEYS
+  assert gc._validate_pm4_no_doorbell_receipt(receipt) == receipt
+
+
+@pytest.mark.parametrize("mutation", (
+  "schema", "runtime_name", "argument_va", "qword", "user_data_pointer",
+  "check_key", "pm4_hash",
+))
+def test_rehashed_pm4_no_doorbell_nested_pre_submit_tamper_is_rejected(
+    mutation):
+  child = copy.deepcopy(_guard_no_doorbell()["result"])
+  pre_submit = child["receipt"]["pre_submit"]
+  if mutation == "schema":
+    pre_submit["schema"] = "tampered"
+  elif mutation == "runtime_name":
+    pre_submit["runtime_name"] = "other_kernel"
+  elif mutation == "argument_va":
+    pre_submit["argument_buffers"][0]["va"] += 0x1000
+  elif mutation == "qword":
+    pre_submit["kernarg_qwords"][0] += 0x1000
+  elif mutation == "user_data_pointer":
+    pre_submit["pm4_kernarg_user_data"]["pointer"] += 0x1000
+  elif mutation == "check_key":
+    pre_submit["checks"].pop("pm4_packet_stream_decoded")
+  elif mutation == "pm4_hash":
+    pre_submit["pm4_sha256"] = "C" * 64
+  child["evidence_identity"] = gc._identity({
+    key: value for key, value in child.items() if key != "evidence_identity"})
+  with pytest.raises(ValueError, match="PM4 no-doorbell"):
+    gc.validate_pm4_no_doorbell_evidence(child)
+
+
+@pytest.mark.parametrize("receipts,mutation", [
+  ([], None),
+  ([_no_doorbell_receipt(), _no_doorbell_receipt()], None),
+  ([_no_doorbell_receipt()], "bad"),
+])
+def test_pm4_no_doorbell_zero_two_or_bad_receipts_block(
+    receipts, mutation):
+  receipts = copy.deepcopy(receipts)
+  if mutation == "bad":
+    receipts[0]["all_checks_pass"] = False
+
+  def builder(config, *, queue_mode, prefix_epochs, pm4_submit_policy,
+                  pm4_no_doorbell_receipt_sink):
+    runtime = fake_no_doorbell_builder(
+      config, queue_mode=queue_mode, prefix_epochs=prefix_epochs,
+      pm4_submit_policy=pm4_submit_policy,
+      pm4_no_doorbell_receipt_sink=pm4_no_doorbell_receipt_sink)
+    return gc.replace(
+      runtime, session=FakeNoDoorbellSession(
+        pm4_no_doorbell_receipt_sink, receipts))
+
+  envelope = _guard_no_doorbell(builder)
+  assert envelope["status"] == "BLOCKED"
+  assert envelope["result"]["status"] == "BLOCKED"
+  assert "failed closed" in envelope["result"]["exact_blocker"]
+  assert envelope["result"]["retry_count"] == 0
+
+
+def test_pm4_no_doorbell_health_and_fault_containment_fail_closed():
+  launches = []
+  preflight = _guard_no_doorbell(
+    isolated_runner=lambda *args, **kwargs:
+      launches.append((args, kwargs)) or pytest.fail("must not launch"),
+    health_probe=lambda _env: False)
+  assert preflight["status"] == "BLOCKED"
+  assert preflight["spawn_count"] == 0 and launches == []
+
+  faults = _guard_no_doorbell(
+    fault_collector=lambda _started: (
+      ["amdgpu fault"], {
+        **_clear_fault_evidence(), "status": "FAULTS",
+        "blocks": [{"lines": ["amdgpu fault"]}],
+        "relevant_line_count": 1, "retained_line_count": 1}))
+  assert faults["status"] == "BLOCKED"
+  assert faults["result"]["status"] == "PASS"
+  assert "kernel fault/reset marker" in faults["exact_blocker"]
+
+
+def test_production_candidate_builder_diagnostic_defaults_are_nonexecuting_opt_in():
+  signature = inspect.signature(gc.build_production_candidate_prefix_runtime)
+  assert signature.parameters["pm4_submit_policy"].default == "execute"
+  assert signature.parameters[
+    "pm4_no_doorbell_receipt_sink"].default is None
+  source = inspect.getsource(gc.build_production_candidate_prefix_runtime)
+  assert "pm4_submit_policy=pm4_submit_policy" in source
+  assert "pm4_no_doorbell_receipt_sink=pm4_no_doorbell_receipt_sink" in source
 
 
 def test_pm4_prefix1_is_standalone_one_child_with_no_later_prerequisites():

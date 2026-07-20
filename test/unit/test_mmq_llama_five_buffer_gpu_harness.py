@@ -19,6 +19,7 @@ from extra.qk.mmq_exact_role_spec import exact_role_spec
 from extra.qk.mmq_llama_five_buffer_full_kernel import build_llama_five_buffer_full_kernel
 from extra.qk.mmq_llama_five_buffer_gpu_harness import (FrozenRuntimePreconstructionError,
   FROZEN_STAGED_PHASE_RECEIPT_SCHEMA,
+  PM4_NO_DOORBELL_RECEIPT_SCHEMA,
   PM4_PRE_SUBMIT_CAPTURE_POINT, PM4_PRE_SUBMIT_SCHEMA,
   RUNTIME_DISPATCH_FAILURE_ATTR, RUNTIME_DISPATCH_FAILURE_SCHEMA,
   SingleTilePointerBiasCarrierError,
@@ -2108,6 +2109,228 @@ def test_target_runtime_fault_retains_high_bit_kernarg_and_launch_evidence(
   assert native_submit_calls == [(queue, dev)]
   assert ops_amd.AMDComputeQueue._submit is native_submit
   assert "fill_kernargs" not in runtime.__dict__
+
+
+def test_target_runtime_snapshot_only_captures_high_bits_without_native_submit_and_rolls_back(
+    monkeypatch):
+  from tinygrad.runtime import ops_amd
+
+  class Handle:
+    def __init__(self, va, size): self.va_addr, self.size = va, size
+  class Buffer:
+    def __init__(self, va, size):
+      self._handle, self.nbytes, self.offset = Handle(va, size), size, 0
+    @property
+    def base(self): return self
+    def get_buf(self, device):
+      assert device == "AMD"
+      return self._handle
+  words = [
+    0x00007F8827C50000, 0x00007F89FFBFD000,
+    0x0000123456789000, 0x00007FFFFFFFD000,
+    0x00000001FFBFD000]
+  buffers = tuple(Buffer(va, 0x1000 + slot * 0x100)
+                  for slot, va in enumerate(words))
+  class View:
+    def view(self, **kwargs): return words
+  class Kernarg:
+    va_addr, size = 0x00007F8ABCDE0000, 40
+    def cpu_view(self): return View()
+  signal = SimpleNamespace(value=10)
+  dev = SimpleNamespace(
+    is_aql=False, device="AMD", timeline_value=11,
+    prof_exec_counter=7, timeline_signal=signal, error_state=None,
+    pmc_enabled=False, sqtt_enabled=False,
+    hw_compute_queue_t=ops_amd.AMDComputeQueue)
+  pm4 = SimpleNamespace(
+    PACKET3_SET_SH_REG=0x76, PACKET3_SET_SH_REG_START=0x2c00,
+    PACKET3=lambda op, count:
+      (3 << 30) | (op << 8) | (count << 16))
+  gc = SimpleNamespace(
+    regCOMPUTE_USER_DATA_0=SimpleNamespace(addr=(0x2c10,)))
+  queue = object.__new__(ops_amd.AMDComputeQueue)
+  queue.dev, queue.binded_device = dev, None
+  queue.pm4, queue.gc = pm4, gc
+  queue._q = [
+    pm4.PACKET3(pm4.PACKET3_SET_SH_REG, 2),
+    gc.regCOMPUTE_USER_DATA_0.addr[0] -
+      pm4.PACKET3_SET_SH_REG_START,
+    Kernarg.va_addr & 0xffffffff, Kernarg.va_addr >> 32]
+  native_submit_calls = []
+  def native_submit(self, submit_dev):
+    native_submit_calls.append((self, submit_dev))
+    return self
+  monkeypatch.setattr(ops_amd.AMDComputeQueue, "_submit", native_submit)
+
+  class Runtime:
+    name = "high_bit_snapshot_only_target"
+    def fill_kernargs(self, bufs, vals=(), kernargs=None):
+      assert kernargs is None and vals == ()
+      return SimpleNamespace(
+        buf=Kernarg(), bufs=tuple(buf.get_buf("AMD") for buf in buffers),
+        prg=self)
+    def __call__(self, *args, global_size, local_size, vals, wait):
+      assert wait is True
+      state = self.fill_kernargs(args, vals)
+      self.dev.prof_exec_counter += 1
+      self.dev.timeline_value += 1
+      ops_amd.AMDComputeQueue._submit(queue, self.dev)
+      raise AssertionError("snapshot_only target submit unexpectedly returned")
+  runtime = Runtime()
+  runtime.dev = dev
+  evidence = {"launches": [], "launch_count": 0}
+  result = _dispatch_with_runtime_evidence(
+    runtime, buffers, tuple(range(5)),
+    global_size=(136, 4, 1), local_size=(256, 1, 1), vals=(),
+    runtime_evidence=evidence, context={"epoch": 0}, wait=True,
+    pm4_submit_policy="snapshot_only")
+  assert result is None
+  assert native_submit_calls == []
+  assert ops_amd.AMDComputeQueue._submit is native_submit
+  assert "fill_kernargs" not in runtime.__dict__
+  assert dev.timeline_value == 11 and dev.prof_exec_counter == 7
+  assert dev.timeline_signal.value == 10 and dev.error_state is None
+  launch = evidence["launches"][0]
+  receipt = launch["pm4_no_doorbell_receipt"]
+  assert receipt["schema"] == PM4_NO_DOORBELL_RECEIPT_SCHEMA
+  assert receipt["status"] == "CAPTURED_NO_SUBMIT"
+  assert receipt["submit_policy"] == "snapshot_only"
+  assert receipt["target_dispatch_submitted"] is False
+  assert receipt["native_submit_call_count"] == 0
+  assert receipt["ring_copy_performed"] is receipt["doorbell_rung"] is False
+  assert receipt["timeline_value_before"] == 11
+  assert receipt["timeline_value_after_runtime_unwind"] == 12
+  assert receipt["timeline_value_after_rollback"] == 11
+  assert receipt["timeline_rollback_applied"] is True
+  assert receipt["prof_exec_counter_before"] == 7
+  assert receipt["prof_exec_counter_after_runtime_unwind"] == 8
+  assert receipt["prof_exec_counter_after_rollback"] == 7
+  assert receipt["timeline_signal_value_before"] == \
+    receipt["timeline_signal_value_after"] == 10
+  assert receipt["terminal_child_required"] is True
+  assert receipt["promotion_evidence_eligible"] is False
+  assert receipt["pre_submit"]["kernarg_va"] == Kernarg.va_addr
+  assert receipt["pre_submit"]["kernarg_qwords"] == words
+  assert receipt["pre_submit"]["pm4_kernarg_user_data"]["pointer"] == \
+    Kernarg.va_addr
+  assert receipt["all_checks_pass"] is True
+  assert all(receipt["checks"].values())
+  assert launch["kernarg"]["pointer_words"] == words
+  assert evidence["launch_count"] == 1
+
+
+def test_target_runtime_snapshot_only_admission_is_strict_and_side_effect_free(
+    monkeypatch):
+  import functools
+  from tinygrad.helpers import Context
+  from tinygrad.runtime import ops_amd
+
+  class Buffer:
+    nbytes, offset = 8, 0
+    @property
+    def base(self): return self
+    def get_buf(self, device):
+      return SimpleNamespace(va_addr=0x1000, size=8)
+  buffers = (Buffer(),) * 5
+  calls = []
+  class Runtime:
+    def fill_kernargs(self, *args, **kwargs):
+      calls.append("fill")
+      raise AssertionError("admission must precede kernarg allocation")
+    def __call__(self, *args, **kwargs):
+      calls.append("call")
+      raise AssertionError("admission must precede runtime entry")
+
+  def make_runtime(**changes):
+    runtime = Runtime()
+    runtime.dev = SimpleNamespace(
+      is_aql=False, device="AMD", timeline_value=5,
+      prof_exec_counter=3, timeline_signal=SimpleNamespace(value=4),
+      error_state=None, pmc_enabled=False, sqtt_enabled=False,
+      hw_compute_queue_t=ops_amd.AMDComputeQueue)
+    for key, value in changes.items(): setattr(runtime.dev, key, value)
+    return runtime
+  def invoke(runtime, **kwargs):
+    return _dispatch_with_runtime_evidence(
+      runtime, buffers, tuple(range(5)),
+      global_size=(1, 1, 1), local_size=(256, 1, 1), vals=(),
+      runtime_evidence={"launches": [], "launch_count": 0},
+      context={"epoch": 0}, pm4_submit_policy="snapshot_only", **kwargs)
+
+  with pytest.raises(ValueError, match="exact PM4"):
+    invoke(make_runtime(is_aql=True), wait=True)
+  alternate_submit_calls = []
+  class AlternateQueue:
+    def _submit(self, _submit_dev):
+      alternate_submit_calls.append(self)
+  class OverridingQueue(ops_amd.AMDComputeQueue):
+    def _submit(self, _submit_dev):
+      alternate_submit_calls.append(self)
+  with pytest.raises(ValueError, match="exact AMDComputeQueue factory"):
+    invoke(make_runtime(hw_compute_queue_t=AlternateQueue), wait=True)
+  with pytest.raises(ValueError, match="exact AMDComputeQueue factory"):
+    invoke(make_runtime(hw_compute_queue_t=OverridingQueue), wait=True)
+  with pytest.raises(ValueError, match="wait=True"):
+    invoke(make_runtime(hw_compute_queue_t=functools.partial(
+      ops_amd.AMDComputeQueue, object())), wait=False)
+  with pytest.raises(ValueError, match="wait=True"):
+    invoke(make_runtime(), wait=False)
+  with pytest.raises(ValueError, match="PROFILE, PMC, and SQTT"):
+    invoke(make_runtime(pmc_enabled=True), wait=True)
+  with pytest.raises(ValueError, match="PROFILE, PMC, and SQTT"):
+    invoke(make_runtime(sqtt_enabled=True), wait=True)
+  with Context(PROFILE=1), \
+       pytest.raises(ValueError, match="PROFILE, PMC, and SQTT"):
+    invoke(make_runtime(), wait=True)
+  prior_error = RuntimeError("prior device error")
+  with pytest.raises(RuntimeError, match="no prior error"):
+    invoke(make_runtime(error_state=prior_error), wait=True)
+  with pytest.raises(RuntimeError, match="no outstanding"):
+    invoke(make_runtime(timeline_signal=SimpleNamespace(value=3)), wait=True)
+  with pytest.raises(ValueError, match="pm4_submit_policy"):
+    _dispatch_with_runtime_evidence(
+      make_runtime(), buffers, tuple(range(5)),
+      global_size=(1, 1, 1), local_size=(256, 1, 1), vals=(),
+      runtime_evidence={"launches": [], "launch_count": 0},
+      context={"epoch": 0}, wait=True, pm4_submit_policy="unsafe")
+  assert calls == [] and alternate_submit_calls == []
+
+
+def test_snapshot_only_restores_submit_hook_when_fill_hook_installation_fails():
+  from tinygrad.runtime import ops_amd
+
+  class Buffer:
+    nbytes, offset = 8, 0
+    @property
+    def base(self): return self
+    def get_buf(self, device):
+      assert device == "AMD"
+      return SimpleNamespace(va_addr=0x1000, size=8)
+
+  class Runtime:
+    def __init__(self):
+      object.__setattr__(self, "dev", SimpleNamespace(
+        is_aql=False, device="AMD", timeline_value=5,
+        prof_exec_counter=3, timeline_signal=SimpleNamespace(value=4),
+        error_state=None, pmc_enabled=False, sqtt_enabled=False,
+        hw_compute_queue_t=ops_amd.AMDComputeQueue))
+    def fill_kernargs(self, *args, **kwargs):
+      raise AssertionError("runtime must not reach fill_kernargs")
+    def __setattr__(self, name, value):
+      if name == "fill_kernargs":
+        raise RuntimeError("injected fill hook installation rejection")
+      object.__setattr__(self, name, value)
+    def __call__(self, *args, **kwargs):
+      raise AssertionError("runtime must not be entered")
+
+  native_submit = ops_amd.AMDComputeQueue._submit
+  with pytest.raises(RuntimeError, match="fill hook installation rejection"):
+    _dispatch_with_runtime_evidence(
+      Runtime(), (Buffer(),) * 5, tuple(range(5)),
+      global_size=(1, 1, 1), local_size=(256, 1, 1), vals=(),
+      runtime_evidence={"launches": [], "launch_count": 0},
+      context={"epoch": 0}, wait=True, pm4_submit_policy="snapshot_only")
+  assert ops_amd.AMDComputeQueue._submit is native_submit
 
 
 @pytest.mark.parametrize("program_state", ("missing", "wrong"))

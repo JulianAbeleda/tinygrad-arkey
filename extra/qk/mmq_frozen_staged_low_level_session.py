@@ -9,6 +9,7 @@ be tested without importing or opening a GPU device.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+import copy
 from dataclasses import dataclass
 import hashlib
 import json
@@ -32,6 +33,23 @@ PM4_PRE_SUBMIT_SCHEMA = \
 PM4_PRE_SUBMIT_CAPTURE_POINT = \
   "AMDComputeQueue._submit_after_complete_command_construction_" \
   "before_ring_copy_and_doorbell"
+PM4_NO_DOORBELL_RECEIPT_SCHEMA = \
+  "tinygrad.mmq_q4k_q8_1.pm4_no_doorbell_receipt.v1"
+PM4_SUBMIT_POLICIES = ("execute", "snapshot_only")
+PM4_NO_DOORBELL_CHECK_KEYS = frozenset({
+  "private_stop_raised_at_target_submit",
+  "private_stop_caught_by_owner",
+  "pre_submit_snapshot_passed",
+  "native_submit_not_called",
+  "timeline_advanced_exactly_once",
+  "prof_exec_counter_advanced_exactly_once",
+  "timeline_rollback_restored",
+  "prof_exec_counter_rollback_restored",
+  "timeline_signal_unchanged",
+  "error_state_unchanged",
+  "submit_hook_restored",
+  "fill_kernargs_hook_restored",
+})
 PM4_PRE_SUBMIT_CHECK_KEYS = frozenset({
   "queue_device_matches_submit_device",
   "runtime_device_matches_submit_device",
@@ -517,6 +535,180 @@ def _failed_dispatch_observation(
   }
 
 
+def _validate_pm4_no_doorbell_receipt(
+    value: Any, *, runtime: Any,
+    runtime_observation: Mapping[str, Any],
+    fixed_five_vas: tuple[int, ...],
+    expected_schema: str = PM4_NO_DOORBELL_RECEIPT_SCHEMA,
+    ) -> dict[str, Any]:
+  receipt = dict(_mapping(value, "PM4 no-doorbell receipt"))
+  pre_submit = dict(_mapping(
+    receipt.get("pre_submit"), "PM4 no-doorbell pre-submit snapshot"))
+  pre_submit_arguments = pre_submit.get("argument_buffers")
+  argument_vas = [
+    item.get("va") for item in pre_submit_arguments
+  ] if isinstance(pre_submit_arguments, list) and all(
+    isinstance(item, Mapping) for item in pre_submit_arguments) else None
+  argument_layout_exact = isinstance(pre_submit_arguments, list) and \
+    len(pre_submit_arguments) == len(EXACT_ABI_NBYTES) and all(
+      item.get("slot") == slot and item.get("va") == fixed_five_vas[slot] and
+      item.get("size") == EXACT_ABI_NBYTES[slot]
+      for slot, item in enumerate(pre_submit_arguments)
+      if isinstance(item, Mapping))
+  pre_submit_checks = pre_submit.get("checks")
+  receipt_checks = receipt.get("checks")
+  pm4_user_data = pre_submit.get("pm4_kernarg_user_data")
+  native_submit_call_count = receipt.get("native_submit_call_count")
+  timeline_before = receipt.get("timeline_value_before")
+  timeline_after_unwind = receipt.get("timeline_value_after_runtime_unwind")
+  timeline_after_rollback = receipt.get("timeline_value_after_rollback")
+  prof_before = receipt.get("prof_exec_counter_before")
+  prof_after_unwind = receipt.get("prof_exec_counter_after_runtime_unwind")
+  prof_after_rollback = receipt.get("prof_exec_counter_after_rollback")
+  timeline_signal_before = receipt.get("timeline_signal_value_before")
+  timeline_signal_after = receipt.get("timeline_signal_value_after")
+  exact_int = lambda item: isinstance(item, int) and not isinstance(item, bool)
+  checks = {
+    "schema_exact": receipt.get("schema") == expected_schema,
+    "status_exact": receipt.get("status") == "CAPTURED_NO_SUBMIT",
+    "submit_policy_exact":
+      receipt.get("submit_policy") == "snapshot_only",
+    "target_dispatch_not_submitted":
+      receipt.get("target_dispatch_submitted") is False,
+    "native_submit_never_called":
+      exact_int(native_submit_call_count) and native_submit_call_count == 0,
+    "ring_copy_not_performed": receipt.get("ring_copy_performed") is False,
+    "doorbell_not_rung": receipt.get("doorbell_rung") is False,
+    "timeline_rollback_applied":
+      receipt.get("timeline_rollback_applied") is True,
+    "terminal_child_required":
+      receipt.get("terminal_child_required") is True,
+    "promotion_evidence_ineligible":
+      receipt.get("promotion_evidence_eligible") is False,
+    "receipt_all_checks_pass": receipt.get("all_checks_pass") is True,
+    "receipt_internal_checks_exact":
+      isinstance(receipt_checks, Mapping) and
+      set(receipt_checks) == PM4_NO_DOORBELL_CHECK_KEYS and
+      all(item is True for item in receipt_checks.values()),
+    "timeline_advanced_exactly_once":
+      exact_int(timeline_before) and exact_int(timeline_after_unwind) and
+      timeline_after_unwind == timeline_before + 1,
+    "timeline_rollback_exact":
+      exact_int(timeline_after_rollback) and
+      timeline_after_rollback == timeline_before,
+    "prof_exec_counter_advanced_exactly_once":
+      exact_int(prof_before) and exact_int(prof_after_unwind) and
+      prof_after_unwind == prof_before + 1,
+    "prof_exec_counter_rollback_exact":
+      exact_int(prof_after_rollback) and prof_after_rollback == prof_before,
+    "timeline_signal_unchanged":
+      exact_int(timeline_signal_before) and exact_int(timeline_signal_after) and
+      timeline_signal_after == timeline_signal_before,
+    "pre_submit_schema_exact":
+      pre_submit.get("schema") == PM4_PRE_SUBMIT_SCHEMA,
+    "pre_submit_capture_point_exact":
+      pre_submit.get("capture_point") == PM4_PRE_SUBMIT_CAPTURE_POINT,
+    "pre_submit_internal_checks_exact":
+      isinstance(pre_submit_checks, Mapping) and
+      set(pre_submit_checks) == PM4_PRE_SUBMIT_CHECK_KEYS and
+      all(item is True for item in pre_submit_checks.values()),
+    "pre_submit_all_checks_pass":
+      pre_submit.get("all_checks_pass") is True,
+    "pre_submit_argument_vas_exact":
+      argument_vas == list(fixed_five_vas),
+    "pre_submit_argument_layout_exact": argument_layout_exact,
+    "pre_submit_kernarg_qwords_exact":
+      pre_submit.get("kernarg_qwords") == list(fixed_five_vas),
+    "pre_submit_runtime_object_identity_exact":
+      pre_submit.get("runtime_object_identity") == id(runtime) ==
+      runtime_observation["runtime_object_identity"],
+    "pre_submit_runtime_class_exact":
+      pre_submit.get("runtime_class") == runtime_observation["runtime_class"],
+    "pre_submit_runtime_name_exact":
+      pre_submit.get("runtime_name") == runtime_observation["runtime_name"],
+    "pre_submit_runtime_device_exact":
+      pre_submit.get("runtime_device") == runtime_observation["runtime_device"],
+    "pre_submit_pm4_kernarg_user_data_exact":
+      isinstance(pm4_user_data, Mapping) and
+      exact_int(pm4_user_data.get("low_dword")) and
+      exact_int(pm4_user_data.get("high_dword")) and
+      exact_int(pm4_user_data.get("register_index")) and
+      pm4_user_data.get("register_index") == 0 and
+      pm4_user_data.get("pointer") == pre_submit.get("kernarg_va") and
+      pm4_user_data.get("pointer") == (
+        pm4_user_data.get("low_dword", -1) |
+        (pm4_user_data.get("high_dword", -1) << 32)),
+  }
+  if not all(checks.values()):
+    raise ValueError(
+      "PM4 no-doorbell receipt differs from authority: "
+      f"{sorted(key for key, passed in checks.items() if not passed)!r}")
+  return copy.deepcopy(receipt)
+
+
+def _dispatch_production_runtime(
+    runtime: Any, buffers: tuple[Any, ...],
+    program_authority: FrozenStagedProgramAuthority, epoch: int, *,
+    runtime_observation: Mapping[str, Any],
+    dispatch_with_runtime_evidence: Callable[..., None],
+    pm4_submit_policy: str,
+    pm4_no_doorbell_receipt_sink: list[Mapping[str, Any]] | None,
+    fixed_five_vas: tuple[int, ...],
+    receipt_schema: str = PM4_NO_DOORBELL_RECEIPT_SCHEMA,
+    ) -> Mapping[str, Any]:
+  evidence: dict[str, Any] = {"launch_count": 0, "launches": []}
+  dispatch_with_runtime_evidence(
+    runtime, buffers, program_authority.globals,
+    global_size=program_authority.global_size,
+    local_size=program_authority.local_size,
+    # ``from_binding`` rejects any scalar values. This compact target has
+    # exactly five pointer globals and therefore an empty scalar vals tuple.
+    vals=(), runtime_evidence=evidence, context={"epoch": epoch}, wait=True,
+    pm4_submit_policy=pm4_submit_policy)
+  launches = evidence.get("launches")
+  if not isinstance(launches, list) or not launches:
+    raise ValueError("runtime dispatch produced no launch evidence")
+  launch_count = evidence.get("launch_count")
+  if pm4_submit_policy == "snapshot_only" and (
+      not isinstance(launch_count, int) or isinstance(launch_count, bool) or
+      launch_count != 1 or len(launches) != 1):
+    raise ValueError(
+      "snapshot-only dispatch requires exactly one launch receipt")
+  launch = dict(_mapping(launches[-1], "captured target launch"))
+  kernarg = _mapping(launch.get("kernarg"), "captured target kernarg")
+  row: dict[str, Any] = {
+    "epoch": epoch, "program_key": program_authority.program_key,
+    "binary_sha256": program_authority.binary_sha256,
+    "global_size": list(program_authority.global_size),
+    "local_size": list(program_authority.local_size),
+    "argument_vas": [
+      item["va"] for item in launch["arguments"]],
+    "kernarg_pointer_words": kernarg.get("pointer_words"),
+    "kernarg_pointer_words_match_bound":
+      kernarg.get("pointer_words_match_bound"),
+  }
+  if pm4_submit_policy == "snapshot_only":
+    if row["argument_vas"] != list(fixed_five_vas) or \
+       row["kernarg_pointer_words"] != list(fixed_five_vas) or \
+       row["kernarg_pointer_words_match_bound"] is not True:
+      raise ValueError(
+        "snapshot-only launch pointers differ from fixed five-buffer authority")
+    if "pm4_no_doorbell_receipt" not in launch:
+      raise ValueError(
+        "snapshot-only dispatch produced no PM4 no-doorbell receipt")
+    receipt = _validate_pm4_no_doorbell_receipt(
+      launch["pm4_no_doorbell_receipt"], runtime=runtime,
+      runtime_observation=runtime_observation,
+      fixed_five_vas=fixed_five_vas,
+      expected_schema=receipt_schema)
+    row["pm4_no_doorbell_receipt"] = copy.deepcopy(receipt)
+    assert pm4_no_doorbell_receipt_sink is not None
+    pm4_no_doorbell_receipt_sink.append(copy.deepcopy(receipt))
+  elif "pm4_no_doorbell_receipt" in launch:
+    raise ValueError("execute dispatch unexpectedly produced no-doorbell receipt")
+  return row
+
+
 def _runtime_observation(value: Any, authority: FrozenStagedProgramAuthority) -> dict[str, Any]:
   row = _mapping(value, "runtime observation")
   required = {
@@ -891,13 +1083,17 @@ class FrozenStagedLowLevelSession:
       prefix_epochs = invocation.pending_observation["prefix_epochs"]
       if len(pending.launch_observations) != prefix_epochs:
         raise ValueError("post-sync launch count differs from prefix")
-      expected_launch_keys = {
+      base_expected_launch_keys = {
         "epoch", "program_key", "binary_sha256", "global_size",
         "local_size", "argument_vas", "kernarg_pointer_words",
         "kernarg_pointer_words_match_bound",
       }
       for epoch, row in enumerate(pending.launch_observations):
-        if set(row) != expected_launch_keys or \
+        row_keys = set(row)
+        snapshot_only = "pm4_no_doorbell_receipt" in row
+        expected_launch_keys = base_expected_launch_keys | (
+          {"pm4_no_doorbell_receipt"} if snapshot_only else set())
+        if row_keys != expected_launch_keys or \
            row["epoch"] != epoch or \
            row["program_key"] != self.authority.program_key or \
            row["binary_sha256"] != self.authority.binary_sha256 or \
@@ -908,6 +1104,11 @@ class FrozenStagedLowLevelSession:
            row["kernarg_pointer_words_match_bound"] is not True:
           raise ValueError(
             f"post-sync launch observation {epoch} differs from authority")
+        if snapshot_only:
+          _validate_pm4_no_doorbell_receipt(
+            row["pm4_no_doorbell_receipt"], runtime=self.runtime,
+            runtime_observation=current_runtime,
+            fixed_five_vas=self.fixed_five_vas)
       payload = {
         "schema": ATTESTATION_SCHEMA, "status": "PASS",
         "queue_mode": queue_mode,
@@ -947,6 +1148,8 @@ class FrozenStagedLowLevelSession:
 
 def production_frozen_staged_low_level_dependencies(
     authority: FrozenStagedProgramAuthority,
+    *, pm4_submit_policy: str = "execute",
+    pm4_no_doorbell_receipt_sink: list[Mapping[str, Any]] | None = None,
     ) -> FrozenStagedLowLevelDependencies:
   """Build the existing tinygrad AMD mechanisms after queue selection.
 
@@ -957,16 +1160,28 @@ def production_frozen_staged_low_level_dependencies(
   harness's native dispatch-evidence wrapper.
   """
   authority.validate()
+  if pm4_submit_policy not in PM4_SUBMIT_POLICIES:
+    raise ValueError(
+      f"pm4_submit_policy must be one of {PM4_SUBMIT_POLICIES!r}")
+  if pm4_submit_policy == "snapshot_only":
+    if not isinstance(pm4_no_doorbell_receipt_sink, list):
+      raise TypeError(
+        "snapshot-only PM4 dispatch requires a list receipt sink")
+  elif pm4_no_doorbell_receipt_sink is not None:
+    raise ValueError("execute PM4 dispatch does not accept a receipt sink")
   import time
   from tinygrad import Tensor, dtypes
   from tinygrad.device import Device
   from tinygrad.engine.realize import get_runtime, runtime_cache
   from extra.qk.mmq_llama_five_buffer_gpu_harness import (
+    PM4_NO_DOORBELL_RECEIPT_SCHEMA as HARNESS_RECEIPT_SCHEMA,
     _dispatch_with_runtime_evidence, _runtime_identity_evidence,
   )
   from extra.qk.q4k_q8_activation_producer import (
     PhysicalDS4Q8ActivationSpec, produce_physical_ds4_q8_1_tensor,
   )
+  if HARNESS_RECEIPT_SCHEMA != PM4_NO_DOORBELL_RECEIPT_SCHEMA:
+    raise RuntimeError("harness and low-level no-doorbell schemas differ")
 
   dtype_by_slot = (
     dtypes.float32, dtypes.uint32, dtypes.int8, dtypes.float32,
@@ -1099,28 +1314,15 @@ def production_frozen_staged_low_level_dependencies(
       program_authority: FrozenStagedProgramAuthority, epoch: int,
       ) -> Mapping[str, Any]:
     buffers = tuple(as_buffer(value) for value in values)
-    evidence: dict[str, Any] = {"launch_count": 0, "launches": []}
-    _dispatch_with_runtime_evidence(
-      runtime, buffers, program_authority.globals,
-      global_size=program_authority.global_size,
-      local_size=program_authority.local_size,
-      # ``from_binding`` rejects any scalar values. This compact target has
-      # exactly five pointer globals and therefore an empty scalar vals tuple.
-      vals=(),
-      runtime_evidence=evidence, context={"epoch": epoch}, wait=True)
-    launch = evidence["launches"][-1]
-    kernarg = _mapping(launch.get("kernarg"), "captured target kernarg")
-    return {
-      "epoch": epoch, "program_key": program_authority.program_key,
-      "binary_sha256": program_authority.binary_sha256,
-      "global_size": list(program_authority.global_size),
-      "local_size": list(program_authority.local_size),
-      "argument_vas": [
-        row["va"] for row in launch["arguments"]],
-      "kernarg_pointer_words": kernarg.get("pointer_words"),
-      "kernarg_pointer_words_match_bound":
-        kernarg.get("pointer_words_match_bound"),
-    }
+    return _dispatch_production_runtime(
+      runtime, buffers, program_authority, epoch,
+      runtime_observation=observe_runtime(runtime),
+      dispatch_with_runtime_evidence=_dispatch_with_runtime_evidence,
+      pm4_submit_policy=pm4_submit_policy,
+      pm4_no_doorbell_receipt_sink=pm4_no_doorbell_receipt_sink,
+      fixed_five_vas=tuple(
+        int(buffer.get_buf("AMD").va_addr) for buffer in buffers),
+      receipt_schema=HARNESS_RECEIPT_SCHEMA)
 
   return FrozenStagedLowLevelDependencies(
     observe_binding=observe_binding, create_runtime=create_runtime,
@@ -1137,6 +1339,7 @@ __all__ = [
   "FrozenStagedLowLevelDependencies", "FrozenStagedLowLevelInvocation",
   "FrozenStagedLowLevelSession", "FrozenStagedProgramAuthority",
   "INVOCATION_FAILURE_ATTR", "INVOCATION_FAILURE_SCHEMA",
-  "PENDING_OBSERVATION_SCHEMA", "QUEUE_MODES",
+  "PENDING_OBSERVATION_SCHEMA", "PM4_NO_DOORBELL_CHECK_KEYS",
+  "PM4_NO_DOORBELL_RECEIPT_SCHEMA", "PM4_SUBMIT_POLICIES", "QUEUE_MODES",
   "production_frozen_staged_low_level_dependencies",
 ]

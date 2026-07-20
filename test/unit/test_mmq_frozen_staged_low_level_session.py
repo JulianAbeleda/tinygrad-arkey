@@ -13,7 +13,11 @@ from extra.qk.mmq_frozen_staged_low_level_session import (
   FrozenStagedAbiSlot, FrozenStagedLowLevelDependencies,
   FrozenStagedLowLevelInvocation, FrozenStagedLowLevelSession,
   FrozenStagedProgramAuthority, INVOCATION_FAILURE_ATTR,
-  INVOCATION_FAILURE_SCHEMA,
+  INVOCATION_FAILURE_SCHEMA, PM4_NO_DOORBELL_RECEIPT_SCHEMA,
+  PM4_NO_DOORBELL_CHECK_KEYS,
+  PM4_PRE_SUBMIT_CAPTURE_POINT, PM4_PRE_SUBMIT_CHECK_KEYS,
+  PM4_PRE_SUBMIT_SCHEMA, _dispatch_production_runtime,
+  production_frozen_staged_low_level_dependencies,
 )
 
 
@@ -87,6 +91,10 @@ class FakeDependencies:
     self.cleanup_sync_failure = False
     self.cleanup_sync_armed = False
     self.dispatch_failure = False
+    self.pm4_submit_policy = "execute"
+    self.pm4_no_doorbell_receipt_sink: list[dict] = []
+    self.pm4_snapshot_receipt_mode = "valid"
+    self.pm4_snapshot_policy_calls: list[str] = []
 
   def _allocate_bytes(self, label: str, nbytes: int) -> FakeBuffer:
     value = FakeBuffer(label, self.next_va, nbytes)
@@ -251,6 +259,81 @@ class FakeDependencies:
         },
       }
       raise failure
+    if self.pm4_submit_policy == "snapshot_only":
+      def snapshot_dispatch(
+          _runtime, _buffers, _globals, **kwargs):
+        self.pm4_snapshot_policy_calls.append(kwargs["pm4_submit_policy"])
+        launch = {
+          "epoch": epoch,
+          "arguments": [
+            {"slot": slot, "va": value.va, "size": value.nbytes}
+            for slot, value in enumerate(buffers)],
+          "kernarg": {
+            "pointer_words": [value.va for value in buffers],
+            "pointer_words_match_bound": True,
+          },
+        }
+        if self.pm4_snapshot_receipt_mode != "zero":
+          checks = {key: True for key in PM4_PRE_SUBMIT_CHECK_KEYS}
+          kernarg_va = 0x123456789000
+          receipt = {
+            "schema": PM4_NO_DOORBELL_RECEIPT_SCHEMA,
+            "status": "CAPTURED_NO_SUBMIT",
+            "submit_policy": "snapshot_only",
+            "target_dispatch_submitted": False,
+            "native_submit_call_count": 0,
+            "ring_copy_performed": False,
+            "doorbell_rung": False,
+            "timeline_value_before": 40,
+            "timeline_value_after_runtime_unwind": 41,
+            "timeline_value_after_rollback": 40,
+            "timeline_rollback_applied": True,
+            "prof_exec_counter_before": 70,
+            "prof_exec_counter_after_runtime_unwind": 71,
+            "prof_exec_counter_after_rollback": 70,
+            "timeline_signal_value_before": 39,
+            "timeline_signal_value_after": 39,
+            "terminal_child_required": True,
+            "promotion_evidence_eligible": False,
+            "checks": {
+              key: True for key in PM4_NO_DOORBELL_CHECK_KEYS},
+            "all_checks_pass": True,
+            "pre_submit": {
+              "schema": PM4_PRE_SUBMIT_SCHEMA,
+              "capture_point": PM4_PRE_SUBMIT_CAPTURE_POINT,
+              "runtime_object_identity": id(runtime),
+              "runtime_class": self.runtime_row["runtime_class"],
+              "runtime_name": self.runtime_row["runtime_name"],
+              "runtime_device": self.runtime_row["runtime_device"],
+              "kernarg_va": kernarg_va, "kernarg_nbytes": 40,
+              "kernarg_qwords": [value.va for value in buffers],
+              "pm4_kernarg_user_data": {
+                "packet_dword_offset": 11, "register_index": 0,
+                "low_dword": kernarg_va & 0xffffffff,
+                "high_dword": kernarg_va >> 32,
+                "pointer": kernarg_va,
+              },
+              "argument_buffers": [
+                {"slot": slot, "va": value.va, "size": value.nbytes}
+                for slot, value in enumerate(buffers)],
+              "pm4_dword_count": 17, "pm4_sha256": "3" * 64,
+              "checks": checks, "all_checks_pass": True,
+            },
+          }
+          if self.pm4_snapshot_receipt_mode == "bad":
+            receipt["target_dispatch_submitted"] = True
+          launch["pm4_no_doorbell_receipt"] = receipt
+        kwargs["runtime_evidence"]["launch_count"] = 1
+        kwargs["runtime_evidence"]["launches"].append(launch)
+
+      return _dispatch_production_runtime(
+        runtime, buffers, authority, epoch,
+        runtime_observation=self.runtime_row,
+        dispatch_with_runtime_evidence=snapshot_dispatch,
+        pm4_submit_policy=self.pm4_submit_policy,
+        pm4_no_doorbell_receipt_sink=
+          self.pm4_no_doorbell_receipt_sink,
+        fixed_five_vas=tuple(value.va for value in buffers))
     return row
 
   def clock_ns(self):
@@ -735,3 +818,98 @@ def test_poison_runtime_identity_fails_closed(field, value):
   fake.runtime_row[field] = value
   with pytest.raises(ValueError):
     session.invoke(1)
+
+
+def test_snapshot_only_receipt_is_exactly_once_copied_and_syncs_after_rollback():
+  _, fake, _, session = _prepared()
+  fake.pm4_submit_policy = "snapshot_only"
+  invocation = session.invoke(1)
+
+  assert fake.pm4_snapshot_policy_calls == ["snapshot_only"]
+  assert len(fake.pm4_no_doorbell_receipt_sink) == 1
+  receipt = fake.pm4_no_doorbell_receipt_sink[0]
+  assert receipt["status"] == "CAPTURED_NO_SUBMIT"
+  assert receipt["target_dispatch_submitted"] is False
+  assert receipt["native_submit_call_count"] == 0
+  assert receipt["timeline_rollback_applied"] is True
+  assert fake.events[-2:] == ["dispatch:0", "sync"]
+
+  launch_receipt = \
+    session._pending.launch_observations[0]["pm4_no_doorbell_receipt"]
+  assert launch_receipt == receipt
+  assert launch_receipt is not receipt
+  launch_receipt["pre_submit"]["kernarg_qwords"][0] = 1
+  assert receipt["pre_submit"]["kernarg_qwords"] == \
+    list(session.fixed_five_vas)
+  launch_receipt["pre_submit"]["kernarg_qwords"][0] = \
+    session.fixed_five_vas[0]
+
+  attestation = session.attest_post_sync(invocation, "PM4")
+  assert attestation.status == "PASS"
+
+
+@pytest.mark.parametrize("receipt_mode,error_match", (
+  ("zero", "produced no PM4 no-doorbell receipt"),
+  ("bad", "receipt differs from authority"),
+))
+def test_snapshot_only_bad_or_zero_receipt_fails_closed(
+    receipt_mode, error_match):
+  _, fake, _, session = _prepared()
+  fake.pm4_submit_policy = "snapshot_only"
+  fake.pm4_snapshot_receipt_mode = receipt_mode
+  with pytest.raises(ValueError, match=error_match):
+    session.invoke(1)
+  assert fake.pm4_no_doorbell_receipt_sink == []
+  assert session.has_pending_invocation is False
+  with pytest.raises(RuntimeError, match="failed closed"):
+    session.invoke(1)
+
+
+def test_snapshot_only_requires_exactly_one_launch_receipt():
+  authority = _authority()
+  runtime = object()
+  buffers = tuple(
+    FakeBuffer(slot.name, 0x10000000 + slot.slot * 0x4000000, slot.nbytes)
+    for slot in authority.abi)
+  runtime_row = {
+    "runtime_object_identity": id(runtime),
+    "runtime_class": "fake.AMDProgram",
+    "runtime_name": authority.function_name,
+    "runtime_device": "AMD",
+  }
+
+  def no_launch(_runtime, _buffers, _globals, **_kwargs):
+    pass
+
+  with pytest.raises(ValueError, match="no launch evidence"):
+    _dispatch_production_runtime(
+      runtime, buffers, authority, 0, runtime_observation=runtime_row,
+      dispatch_with_runtime_evidence=no_launch,
+      pm4_submit_policy="snapshot_only",
+      pm4_no_doorbell_receipt_sink=[],
+      fixed_five_vas=tuple(value.va for value in buffers))
+
+  def two_launches(_runtime, _buffers, _globals, **kwargs):
+    kwargs["runtime_evidence"]["launch_count"] = 2
+    kwargs["runtime_evidence"]["launches"].extend(({}, {}))
+
+  with pytest.raises(ValueError, match="exactly one launch receipt"):
+    _dispatch_production_runtime(
+      runtime, buffers, authority, 0, runtime_observation=runtime_row,
+      dispatch_with_runtime_evidence=two_launches,
+      pm4_submit_policy="snapshot_only",
+      pm4_no_doorbell_receipt_sink=[],
+      fixed_five_vas=tuple(value.va for value in buffers))
+
+
+@pytest.mark.parametrize("policy,sink,error,error_match", (
+  ("bogus", None, ValueError, "pm4_submit_policy"),
+  ("snapshot_only", None, TypeError, "requires a list receipt sink"),
+  ("execute", [], ValueError, "does not accept a receipt sink"),
+))
+def test_production_policy_and_sink_fail_before_device_import(
+    policy, sink, error, error_match):
+  with pytest.raises(error, match=error_match):
+    production_frozen_staged_low_level_dependencies(
+      _authority(), pm4_submit_policy=policy,
+      pm4_no_doorbell_receipt_sink=sink)

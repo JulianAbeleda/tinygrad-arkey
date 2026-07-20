@@ -30,6 +30,7 @@ SCHEMA = "tinygrad.mmq_q4k_q8_1.ffn_gate_up_guarded_correctness_stage.v2"
 CANDIDATE_SCHEMA = f"{SCHEMA}.candidate_prefix"
 DIRECT_SCHEMA = f"{SCHEMA}.direct_full_role"
 TRANSITION_SCHEMA = f"{SCHEMA}.transition"
+PM4_NO_DOORBELL_SCHEMA = f"{SCHEMA}.pm4_no_doorbell"
 ENVELOPE_SCHEMA = f"{SCHEMA}.envelope"
 COMPOSITION_SCHEMA = f"{SCHEMA}.composition"
 JOINT_C7_SCHEMA = f"{SCHEMA}.joint_c7"
@@ -39,6 +40,30 @@ LOW_LEVEL_ATTESTATION_SCHEMA = \
 LOW_LEVEL_INVOCATION_FAILURE_SCHEMA = \
   "tinygrad.mmq_q4k_q8_1.frozen_staged_low_level_failure.v1"
 LOW_LEVEL_INVOCATION_FAILURE_ATTR = "frozen_staged_low_level_failure"
+PM4_NO_DOORBELL_RECEIPT_SCHEMA = \
+  "tinygrad.mmq_q4k_q8_1.pm4_no_doorbell_receipt.v1"
+PM4_PRE_SUBMIT_SCHEMA = \
+  "tinygrad.mmq_q4k_q8_1.pm4_pre_submit_snapshot.v1"
+PM4_PRE_SUBMIT_CAPTURE_POINT = \
+  "AMDComputeQueue._submit_after_complete_command_construction_" \
+  "before_ring_copy_and_doorbell"
+PM4_PRE_SUBMIT_CHECK_KEYS = {
+  "queue_device_matches_submit_device",
+  "runtime_device_matches_submit_device",
+  "args_state_program_matches_runtime",
+  "exact_five_argument_buffers",
+  "exact_five_kernarg_qwords",
+  "five_qwords_match_constructed_buffers",
+  "pm4_command_words_concrete",
+  "pm4_command_stream_nonempty",
+  "pm4_packet_stream_decoded",
+  "pm4_kernarg_user_data_found_once",
+  "pm4_kernarg_uses_user_data_0",
+  "pm4_kernarg_user_data_matches_kernarg_va",
+}
+PM4_ARGUMENT_NBYTES = (35651584, 2506752, 131072, 16384, 16384)
+PM4_RUNTIME_CLASS = "tinygrad.runtime.ops_amd.AMDProgram"
+PM4_RUNTIME_NAME = "mmq_llama_five_buffer_full_grid_accumulate"
 QUEUE_MODES = ("PM4", "AQL")
 PREFIXES = (1, 3, 20)
 OUTPUT_SHAPE = (512, 17408)
@@ -465,6 +490,24 @@ class CandidatePrefixRequest:
   runtime_builder: Callable[..., CandidatePrefixRuntime]
 
 
+@dataclass(frozen=True)
+class PM4NoDoorbellRequest:
+  config: Mapping[str, Any]
+  runtime_builder: Callable[..., CandidatePrefixRuntime]
+
+
+def _pm4_no_doorbell_request_identity(
+    request: PM4NoDoorbellRequest,
+    ) -> str:
+  return _identity({
+    "schema": f"{SCHEMA}.pm4_no_doorbell_request",
+    "queue_mode": "PM4",
+    "prefix_epochs": 1,
+    "submit_policy": "snapshot_only",
+    "config_identity": _identity(dict(request.config)),
+  })
+
+
 def _candidate_request_identity(request: CandidatePrefixRequest) -> str:
   return _identity({
     "schema": f"{SCHEMA}.candidate_request",
@@ -478,6 +521,227 @@ def _candidate_request_identity(request: CandidatePrefixRequest) -> str:
       None if request.cross_queue_admission is None else
       getattr(request.cross_queue_admission, "evidence_identity", None),
   })
+
+
+def _validate_pm4_pre_submit_snapshot(value: Any) -> dict[str, Any]:
+  row = dict(_mapping(value, "PM4 no-doorbell pre-submit snapshot"))
+  _exact_keys(row, {
+    "schema", "capture_point", "runtime_object_identity", "runtime_class",
+    "runtime_name", "runtime_device", "kernarg_va", "kernarg_nbytes",
+    "kernarg_qwords", "argument_buffers", "pm4_kernarg_user_data",
+    "pm4_dword_count", "pm4_sha256", "checks", "all_checks_pass",
+  }, "PM4 no-doorbell pre-submit snapshot")
+  checks = dict(_mapping(
+    row.get("checks"), "PM4 no-doorbell pre-submit checks"))
+  _exact_keys(
+    checks, set(PM4_PRE_SUBMIT_CHECK_KEYS),
+    "PM4 no-doorbell pre-submit checks")
+  exact_int = lambda item: \
+    isinstance(item, int) and not isinstance(item, bool)
+  identity_checks = {
+    "schema": row.get("schema") == PM4_PRE_SUBMIT_SCHEMA,
+    "capture_point":
+      row.get("capture_point") == PM4_PRE_SUBMIT_CAPTURE_POINT,
+    "runtime_object_identity":
+      exact_int(row.get("runtime_object_identity")) and
+      row["runtime_object_identity"] > 0,
+    "runtime_class": row.get("runtime_class") == PM4_RUNTIME_CLASS,
+    "runtime_name": row.get("runtime_name") == PM4_RUNTIME_NAME,
+    "runtime_device": row.get("runtime_device") == "AMD",
+    "kernarg_va":
+      exact_int(row.get("kernarg_va")) and
+      0 < row["kernarg_va"] < 1 << 64,
+    "kernarg_nbytes": row.get("kernarg_nbytes") == 40,
+    "pm4_dword_count":
+      exact_int(row.get("pm4_dword_count")) and
+      row["pm4_dword_count"] > 0,
+    "pm4_sha256": isinstance(row.get("pm4_sha256"), str) and
+      len(row["pm4_sha256"]) == 64 and
+      all(char in _HEX for char in row["pm4_sha256"]),
+    "checks": all(item is True for item in checks.values()),
+    "all_checks_pass": row.get("all_checks_pass") is True,
+  }
+  if not all(identity_checks.values()):
+    raise ValueError(
+      "PM4 no-doorbell pre-submit identity differs: "
+      f"{sorted(key for key, passed in identity_checks.items() if not passed)!r}")
+
+  arguments = row.get("argument_buffers")
+  if not isinstance(arguments, list) or len(arguments) != 5:
+    raise ValueError(
+      "PM4 no-doorbell pre-submit requires five argument buffers")
+  argument_vas: list[int] = []
+  for slot, (argument, expected_nbytes) in enumerate(
+      zip(arguments, PM4_ARGUMENT_NBYTES)):
+    argument = dict(_mapping(
+      argument, f"PM4 no-doorbell argument {slot}"))
+    _exact_keys(
+      argument, {"slot", "va", "size"},
+      f"PM4 no-doorbell argument {slot}")
+    va = argument.get("va")
+    if argument.get("slot") != slot or argument.get("size") != \
+       expected_nbytes or not exact_int(va) or not 0 < va < 1 << 64:
+      raise ValueError(
+        f"PM4 no-doorbell argument {slot} differs from ABI authority")
+    argument_vas.append(va)
+
+  qwords = row.get("kernarg_qwords")
+  if not isinstance(qwords, list) or len(qwords) != 5 or \
+     any(not exact_int(item) or not 0 < item < 1 << 64 for item in qwords) or \
+     qwords != argument_vas:
+    raise ValueError(
+      "PM4 no-doorbell kernarg qwords differ from argument VAs")
+
+  user_data = dict(_mapping(
+    row.get("pm4_kernarg_user_data"),
+    "PM4 no-doorbell kernarg USER_DATA"))
+  _exact_keys(user_data, {
+    "packet_dword_offset", "register_index", "low_dword", "high_dword",
+    "pointer",
+  }, "PM4 no-doorbell kernarg USER_DATA")
+  packet_offset = user_data.get("packet_dword_offset")
+  low, high, pointer = (
+    user_data.get("low_dword"), user_data.get("high_dword"),
+    user_data.get("pointer"))
+  if not exact_int(packet_offset) or \
+     not 0 <= packet_offset < row["pm4_dword_count"] or \
+     user_data.get("register_index") != 0 or \
+     any(not exact_int(item) or not 0 <= item <= 0xffffffff
+         for item in (low, high)) or \
+     not exact_int(pointer) or pointer != low | (high << 32) or \
+     pointer != row["kernarg_va"]:
+    raise ValueError(
+      "PM4 no-doorbell USER_DATA_0 differs from kernarg authority")
+  return row
+
+
+def _validate_pm4_no_doorbell_receipt(value: Any) -> dict[str, Any]:
+  row = dict(_mapping(value, "PM4 no-doorbell receipt"))
+  _exact_keys(row, {
+    "schema", "status", "submit_policy", "pre_submit",
+    "target_dispatch_submitted", "native_submit_call_count",
+    "ring_copy_performed", "doorbell_rung", "timeline_value_before",
+    "timeline_value_after_runtime_unwind", "timeline_value_after_rollback",
+    "timeline_rollback_applied", "prof_exec_counter_before",
+    "prof_exec_counter_after_runtime_unwind",
+    "prof_exec_counter_after_rollback", "timeline_signal_value_before",
+    "timeline_signal_value_after", "terminal_child_required",
+    "promotion_evidence_eligible", "checks", "all_checks_pass",
+  }, "PM4 no-doorbell receipt")
+  checks = _mapping(row.get("checks"), "PM4 no-doorbell receipt checks")
+  _exact_keys(dict(checks), {
+    "private_stop_raised_at_target_submit", "private_stop_caught_by_owner",
+    "pre_submit_snapshot_passed", "native_submit_not_called",
+    "timeline_advanced_exactly_once",
+    "prof_exec_counter_advanced_exactly_once",
+    "timeline_rollback_restored", "prof_exec_counter_rollback_restored",
+    "timeline_signal_unchanged", "error_state_unchanged",
+    "submit_hook_restored", "fill_kernargs_hook_restored",
+  }, "PM4 no-doorbell receipt checks")
+  state = {
+    "schema": row.get("schema") == PM4_NO_DOORBELL_RECEIPT_SCHEMA,
+    "status": row.get("status") == "CAPTURED_NO_SUBMIT",
+    "policy": row.get("submit_policy") == "snapshot_only",
+    "target_not_submitted": row.get("target_dispatch_submitted") is False,
+    "native_submit_count": row.get("native_submit_call_count") == 0,
+    "ring_copy": row.get("ring_copy_performed") is False,
+    "doorbell": row.get("doorbell_rung") is False,
+    "rollback": row.get("timeline_rollback_applied") is True,
+    "terminal": row.get("terminal_child_required") is True,
+    "promotion": row.get("promotion_evidence_eligible") is False,
+    "checks": all(item is True for item in checks.values()),
+    "all_checks": row.get("all_checks_pass") is True,
+  }
+  integer_fields = (
+    "timeline_value_before", "timeline_value_after_runtime_unwind",
+    "timeline_value_after_rollback", "prof_exec_counter_before",
+    "prof_exec_counter_after_runtime_unwind",
+    "prof_exec_counter_after_rollback", "timeline_signal_value_before",
+    "timeline_signal_value_after",
+  )
+  if not all(state.values()) or any(
+      not isinstance(row.get(field), int) or isinstance(row.get(field), bool)
+      for field in integer_fields):
+    raise ValueError(
+      "PM4 no-doorbell receipt failed exact checks: "
+      f"{sorted(key for key, passed in state.items() if not passed)!r}")
+  if row["timeline_value_after_runtime_unwind"] != \
+       row["timeline_value_before"] + 1 or \
+     row["timeline_value_after_rollback"] != row["timeline_value_before"] or \
+     row["prof_exec_counter_after_runtime_unwind"] != \
+       row["prof_exec_counter_before"] + 1 or \
+     row["prof_exec_counter_after_rollback"] != \
+       row["prof_exec_counter_before"] or \
+     row["timeline_signal_value_after"] != \
+       row["timeline_signal_value_before"]:
+    raise ValueError("PM4 no-doorbell receipt counter facts differ")
+  _validate_pm4_pre_submit_snapshot(row.get("pre_submit"))
+  return row
+
+
+def validate_pm4_no_doorbell_evidence(value: Any) -> dict[str, Any]:
+  row = dict(_mapping(value, "PM4 no-doorbell evidence"))
+  _exact_keys(row, {
+    "schema", "status", "exact_blocker", "queue_mode", "prefix_epochs",
+    "submit_policy", "no_retry", "retry_count", "no_fallback",
+    "compile_performed", "requires_recompile",
+    "promotion_evidence_eligible", "config_identity", "request_identity",
+    "environment", "family_identity", "fixture_identity",
+    "workload_identity", "input_identity", "logical_q4_identity",
+    "resident_fp16_activation_identity", "candidate_executable_identity",
+    "program_key", "binary_sha256", "c4_canary_identity",
+    "invocation_count", "receipt_count", "receipt",
+    "target_dispatch_submitted", "native_submit_call_count",
+    "timeline_rollback_applied", "terminal_child_required",
+    "readback_performed", "numeric_validation_performed",
+    "attestation_performed", "producer_attestation_performed",
+    "attempt", "evidence_identity",
+  }, "PM4 no-doorbell evidence")
+  if not _identity_valid(row) or row.get("schema") != \
+       PM4_NO_DOORBELL_SCHEMA or row.get("status") != "PASS" or \
+     row.get("exact_blocker") is not None:
+    raise ValueError("PM4 no-doorbell evidence identity/state differs")
+  expected = {
+    "queue_mode": "PM4", "prefix_epochs": 1,
+    "submit_policy": "snapshot_only", "no_retry": True, "retry_count": 0,
+    "no_fallback": True, "compile_performed": False,
+    "requires_recompile": False, "promotion_evidence_eligible": False,
+    "environment": {"DEV": "AMD", "AMD_AQL": "0", "PROFILE": "0"},
+    "invocation_count": 1, "receipt_count": 1,
+    "target_dispatch_submitted": False, "native_submit_call_count": 0,
+    "timeline_rollback_applied": True, "terminal_child_required": True,
+    "readback_performed": False, "numeric_validation_performed": False,
+    "attestation_performed": False,
+    "producer_attestation_performed": False,
+  }
+  if any(row.get(key) != item for key, item in expected.items()):
+    raise ValueError("PM4 no-doorbell evidence diagnostic state differs")
+  for field in (
+      "config_identity", "request_identity", "family_identity",
+      "fixture_identity", "workload_identity", "input_identity",
+      "logical_q4_identity", "resident_fp16_activation_identity",
+      "candidate_executable_identity", "c4_canary_identity"):
+    _content_identity(row.get(field), f"PM4 no-doorbell {field}")
+  for field in ("program_key", "binary_sha256"):
+    _hex_digest(row.get(field), f"PM4 no-doorbell {field}")
+  if row["candidate_executable_identity"] != \
+       _candidate_executable_identity_from_parts(
+         row["family_identity"], row["program_key"], row["binary_sha256"]):
+    raise ValueError("PM4 no-doorbell executable derivation differs")
+  receipt = _validate_pm4_no_doorbell_receipt(row.get("receipt"))
+  if any(row.get(field) != receipt[field] for field in (
+      "target_dispatch_submitted", "native_submit_call_count",
+      "timeline_rollback_applied", "terminal_child_required")):
+    raise ValueError("PM4 no-doorbell nested receipt binding differs")
+  attempt = _mapping(row.get("attempt"), "PM4 no-doorbell attempt")
+  _exact_keys(dict(attempt), {
+    "phase", "invocation_count", "receipt_count", "receipt",
+  }, "PM4 no-doorbell attempt")
+  if attempt != {
+      "phase": "complete", "invocation_count": 1, "receipt_count": 1,
+      "receipt": receipt}:
+    raise ValueError("PM4 no-doorbell nested attempt differs")
+  return row
 
 
 def validate_candidate_prefix_evidence(
@@ -864,6 +1128,79 @@ def run_candidate_prefix_child(request: CandidatePrefixRequest) -> dict[str, Any
         f"{type(exc).__name__}: {exc}",
       "exception": type(exc).__name__,
       "failed_attempt": attempt,
+    }
+  return {**payload, "evidence_identity": _identity(payload)}
+
+
+def run_pm4_no_doorbell_child(
+    request: PM4NoDoorbellRequest,
+    ) -> dict[str, Any]:
+  """Capture exactly one target PM4 command without submitting it."""
+  if not isinstance(request, PM4NoDoorbellRequest):
+    raise TypeError("PM4 no-doorbell child requires a typed request")
+  environment = {"DEV": "AMD", "AMD_AQL": "0", "PROFILE": "0"}
+  os.environ.update(environment)
+  base = {
+    "schema": PM4_NO_DOORBELL_SCHEMA, "status": "BLOCKED",
+    "exact_blocker": None, "queue_mode": "PM4", "prefix_epochs": 1,
+    "submit_policy": "snapshot_only", "no_retry": True, "retry_count": 0,
+    "no_fallback": True, "compile_performed": False,
+    "requires_recompile": False, "promotion_evidence_eligible": False,
+    "config_identity": _identity(dict(request.config)),
+    "request_identity": _pm4_no_doorbell_request_identity(request),
+    "environment": environment,
+  }
+  receipts: list[Mapping[str, Any]] = []
+  attempt: dict[str, Any] = {
+    "phase": "runtime_construction", "invocation_count": 0,
+    "receipt_count": 0, "receipt": None}
+  try:
+    runtime = request.runtime_builder(
+      dict(_mapping(request.config, "PM4 no-doorbell config")),
+      queue_mode="PM4", prefix_epochs=1,
+      pm4_submit_policy="snapshot_only",
+      pm4_no_doorbell_receipt_sink=receipts)
+    if not isinstance(runtime, CandidatePrefixRuntime):
+      raise TypeError("PM4 no-doorbell builder returned no typed runtime")
+    runtime.validate("PM4", 1)
+    attempt["phase"] = "invocation"
+    runtime.session.invoke(prefix_epochs=1)
+    attempt["invocation_count"] = 1
+    attempt["receipt_count"] = len(receipts)
+    if len(receipts) != 1:
+      raise ValueError(
+        "PM4 no-doorbell invocation requires exactly one harness receipt")
+    receipt = _validate_pm4_no_doorbell_receipt(receipts[0])
+    attempt.update({
+      "phase": "complete", "receipt_count": 1, "receipt": receipt})
+    payload = {
+      **base, "status": "PASS",
+      "family_identity": runtime.family_identity,
+      "fixture_identity": runtime.fixture_identity,
+      "workload_identity": runtime.workload_identity,
+      "input_identity": runtime.input_identity,
+      "logical_q4_identity": runtime.logical_q4_identity,
+      "resident_fp16_activation_identity":
+        runtime.resident_fp16_activation_identity,
+      "candidate_executable_identity":
+        runtime.candidate_executable_identity,
+      "program_key": runtime.program_key,
+      "binary_sha256": runtime.binary_sha256,
+      "c4_canary_identity": runtime.c4_canary_identity,
+      "invocation_count": 1, "receipt_count": 1, "receipt": receipt,
+      "target_dispatch_submitted": False, "native_submit_call_count": 0,
+      "timeline_rollback_applied": True, "terminal_child_required": True,
+      "readback_performed": False, "numeric_validation_performed": False,
+      "attestation_performed": False,
+      "producer_attestation_performed": False, "attempt": attempt,
+    }
+  except BaseException as exc:
+    attempt["receipt_count"] = len(receipts)
+    payload = {
+      **base, "exact_blocker":
+        f"PM4 no-doorbell diagnostic failed closed: "
+        f"{type(exc).__name__}: {exc}",
+      "exception": type(exc).__name__, "failed_attempt": attempt,
     }
   return {**payload, "evidence_identity": _identity(payload)}
 
@@ -1331,6 +1668,10 @@ def validate_guarded_envelope(value: Any) -> dict[str, Any]:
   result = row.get("result")
   if operation == CANDIDATE_SCHEMA:
     child = validate_candidate_prefix_evidence(result, queue_mode=queue)
+  elif operation == PM4_NO_DOORBELL_SCHEMA:
+    if queue != "PM4":
+      raise ValueError("PM4 no-doorbell envelope queue differs")
+    child = validate_pm4_no_doorbell_evidence(result)
   elif operation == DIRECT_SCHEMA:
     child = validate_direct_evidence(result, queue_mode=queue)
   elif operation == TRANSITION_SCHEMA:
@@ -1349,6 +1690,8 @@ def _request_identity(
     ) -> str:
   if expected_schema == CANDIDATE_SCHEMA:
     return _candidate_request_identity(request)
+  if expected_schema == PM4_NO_DOORBELL_SCHEMA:
+    return _pm4_no_doorbell_request_identity(request)
   if expected_schema == DIRECT_SCHEMA:
     return _direct_request_identity(request)
   if expected_schema == TRANSITION_SCHEMA:
@@ -1410,6 +1753,13 @@ def _guarded_envelope(
              _candidate_request_identity(request) or \
            candidate["config_identity"] != _identity(dict(request.config)):
           raise ValueError("candidate request/config binding differs")
+      elif expected_schema == PM4_NO_DOORBELL_SCHEMA:
+        diagnostic = validate_pm4_no_doorbell_evidence(result)
+        if diagnostic["request_identity"] != \
+             _pm4_no_doorbell_request_identity(request) or \
+           diagnostic["config_identity"] != _identity(dict(request.config)):
+          raise ValueError(
+            "PM4 no-doorbell request/config binding differs")
       elif expected_schema == DIRECT_SCHEMA:
         direct = validate_direct_evidence(result, queue_mode=queue_mode)
         if direct["request_identity"] != _direct_request_identity(request) or \
@@ -1491,6 +1841,28 @@ def run_guarded_candidate_prefix(
       dict(_mapping(config, "candidate config")), queue_mode, prefix_epochs,
       prior_evidence, cross_queue_admission, runtime_builder),
     expected_schema=CANDIDATE_SCHEMA, queue_mode=queue_mode,
+    timeout_seconds=timeout_seconds, isolated_runner=isolated_runner,
+    health_probe=health_probe, fault_collector=fault_collector)
+
+
+def run_guarded_pm4_no_doorbell(
+    *, config: Mapping[str, Any],
+    runtime_builder: Callable[..., CandidatePrefixRuntime],
+    timeout_seconds: float = 900.0,
+    isolated_runner: Callable[..., Any] | None = None,
+    health_probe: Callable[[Mapping[str, str]], bool] | None = None,
+    fault_collector: Callable[
+      [float], tuple[list[str], Mapping[str, Any]]] | None = None,
+    ) -> dict[str, Any]:
+  """Guard one terminal PM4 command capture with no target submission."""
+  timeout_seconds = _positive_seconds(timeout_seconds)
+  isolated_runner, health_probe, fault_collector = _containment_defaults(
+    isolated_runner, health_probe, fault_collector)
+  return _guarded_envelope(
+    child=run_pm4_no_doorbell_child,
+    request=PM4NoDoorbellRequest(
+      dict(_mapping(config, "PM4 no-doorbell config")), runtime_builder),
+    expected_schema=PM4_NO_DOORBELL_SCHEMA, queue_mode="PM4",
     timeout_seconds=timeout_seconds, isolated_runner=isolated_runner,
     health_probe=health_probe, fault_collector=fault_collector)
 
@@ -1671,6 +2043,8 @@ def validate_joint_c7_evidence(value: Any) -> dict[str, Any]:
 
 def build_production_candidate_prefix_runtime(
     config: Mapping[str, Any], *, queue_mode: str, prefix_epochs: int,
+    pm4_submit_policy: str = "execute",
+    pm4_no_doorbell_receipt_sink: list[Mapping[str, Any]] | None = None,
     ) -> CandidatePrefixRuntime:
   """Production default for one candidate stage, including standalone PM4 p1."""
   queue_mode, prefix_epochs = _queue(queue_mode), _prefix(prefix_epochs)
@@ -1724,7 +2098,9 @@ def build_production_candidate_prefix_runtime(
     family.binding, family_identity=family.family_identity,
     candidate_executable_identity=candidate_identity,
     input_identity=fixture.input_identity)
-  dependencies = production_frozen_staged_low_level_dependencies(authority)
+  dependencies = production_frozen_staged_low_level_dependencies(
+    authority, pm4_submit_policy=pm4_submit_policy,
+    pm4_no_doorbell_receipt_sink=pm4_no_doorbell_receipt_sink)
   produced: list[tuple[Any, Any, Any]] = []
   captured: dict[int, tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
   raw_produce = dependencies.produce_q8
@@ -1810,10 +2186,12 @@ def build_production_candidate_prefix_runtime(
 __all__ = [
   "CANDIDATE_SCHEMA", "COMPOSITION_SCHEMA", "DIRECT_SCHEMA",
   "ENVELOPE_SCHEMA", "OUTPUT_ELEMENTS", "OUTPUT_SHAPE", "PREFIXES",
-  "JOINT_C7_SCHEMA", "PRODUCER_SCHEMA", "QUEUE_MODES", "SCHEMA",
+  "JOINT_C7_SCHEMA", "PM4_NO_DOORBELL_RECEIPT_SCHEMA",
+  "PM4_NO_DOORBELL_SCHEMA", "PRODUCER_SCHEMA", "QUEUE_MODES", "SCHEMA",
   "TRANSITION_SCHEMA",
   "TRANSITION_SEQUENCES", "CandidatePrefixRequest",
-  "CandidatePrefixRuntime", "DirectCorrectnessRequest",
+  "CandidatePrefixRuntime", "PM4NoDoorbellRequest",
+  "DirectCorrectnessRequest",
   "DirectCorrectnessRuntime", "FrozenCorrectnessEvidenceRef",
   "TransitionRequest",
   "build_production_candidate_prefix_runtime",
@@ -1822,8 +2200,10 @@ __all__ = [
   "ffn_gate_up_consumer_prefix_reference",
   "ffn_gate_up_direct_dense_reference", "freeze_correctness_evidence",
   "load_frozen_correctness_evidence", "run_candidate_prefix_child",
+  "run_guarded_pm4_no_doorbell", "run_pm4_no_doorbell_child",
   "run_direct_correctness_child", "run_guarded_candidate_prefix",
   "run_guarded_direct_correctness", "run_guarded_transition",
   "run_transition_child", "validate_candidate_prefix_evidence",
   "validate_direct_evidence", "validate_joint_c7_evidence",
+  "validate_pm4_no_doorbell_evidence",
 ]
