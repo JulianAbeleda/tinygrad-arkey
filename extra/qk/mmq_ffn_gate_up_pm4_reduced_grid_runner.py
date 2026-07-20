@@ -39,6 +39,9 @@ OUTPUT_TILE_ROWS = 128
 ALLOWED_DIAGNOSTIC_GLOBAL_SIZES = (
   (1, 1, 1), (2, 1, 1), (1, 2, 1), (1, 4, 1), (8, 4, 1),
   (32, 4, 1), (40, 4, 1), (41, 4, 1), (136, 1, 1),
+  # Boundary-search / deconfound rows for the (8,4,1)-pass -> (32,4,1)-fault
+  # transition: separate max column index (gidx0) from total workgroup count.
+  (16, 1, 1), (32, 1, 1), (64, 1, 1), (16, 4, 1),
 )
 CLAIM_SCHEMA = \
   "tinygrad.mmq_q4k_q8_1.ffn_gate_up_pm4_reduced_grid_claim.v1"
