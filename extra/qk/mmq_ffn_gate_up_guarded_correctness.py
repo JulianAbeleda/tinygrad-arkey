@@ -1580,6 +1580,12 @@ def run_pm4_no_doorbell_child(
     }
   except BaseException as exc:
     attempt["receipt_count"] = len(receipts)
+    invocation_failure = getattr(
+      exc, LOW_LEVEL_INVOCATION_FAILURE_ATTR, None)
+    if isinstance(invocation_failure, Mapping):
+      # Preserve the exact pre-submit snapshot even when a diagnostic
+      # authority check rejects the command before producing a receipt.
+      attempt["invocation_failure"] = dict(invocation_failure)
     payload = {
       **base, "exact_blocker":
         f"PM4 no-doorbell diagnostic failed closed: "

@@ -1,0 +1,96 @@
+{
+  "child_status": "passed",
+  "config_identity": "sha256:1a149c0759b3bc96159bf8b259473ecc43fcf77c88cfd616b326292a250468f6",
+  "elapsed_seconds": 6.3062491960590705,
+  "error": null,
+  "evidence_identity": "sha256:661dfda128144ad561851c166beadfc7f6529c8bd559210240bc1e1efc9ce686",
+  "exact_blocker": "PM4 FFN reduced-grid diagnostic failed closed: ValueError: FFN reduced-grid low-level receipt failed exact checks: ['pre_submit']",
+  "health_after": true,
+  "health_before": true,
+  "kernel_fault_evidence": {
+    "blocks": [],
+    "limits": {
+      "max_blocks": 8,
+      "max_line_chars": 512,
+      "max_lines": 32
+    },
+    "relevant_line_count": 0,
+    "retained_line_count": 0,
+    "schema": "tinygrad.amd_kernel_fault_evidence.v1",
+    "source": "kernel_journal_window",
+    "status": "CLEAR",
+    "truncated": false
+  },
+  "kernel_faults": [],
+  "launched": true,
+  "no_queue_fallback": true,
+  "no_retry": true,
+  "operation_schema": "tinygrad.mmq_q4k_q8_1.ffn_gate_up_guarded_correctness_stage.v2.ffn_reduced_grid",
+  "promotion_evidence_eligible": false,
+  "queue_mode": "PM4",
+  "request_identity": "sha256:f8a5fe9d9be410606f45644e3cf047763b13dfef0eafc7d0da8563e2b9dad169",
+  "result": {
+    "compile_performed": false,
+    "config_identity": "sha256:1a149c0759b3bc96159bf8b259473ecc43fcf77c88cfd616b326292a250468f6",
+    "diagnostic_global_size": [
+      1,
+      1,
+      1
+    ],
+    "environment": {
+      "AMD_AQL": "0",
+      "DEV": "AMD",
+      "PROFILE": "0"
+    },
+    "evidence_identity": "sha256:1c9bd7bc81b91b83f2b043fd50af437af65990029599f17c3c25e2de814e8511",
+    "exact_blocker": "PM4 FFN reduced-grid diagnostic failed closed: ValueError: FFN reduced-grid low-level receipt failed exact checks: ['pre_submit']",
+    "exception": "ValueError",
+    "failed_attempt": {
+      "invocation_count": 1,
+      "phase": "diagnostic_post_sync_receipt",
+      "receipt_count": 1
+    },
+    "frozen_global_size": [
+      136,
+      4,
+      1
+    ],
+    "full_grid_validation_performed": false,
+    "full_prefix1_reference_constructed": false,
+    "invocation_count": 0,
+    "local_size": [
+      256,
+      1,
+      1
+    ],
+    "no_fallback": true,
+    "no_retry": true,
+    "numeric_validation_performed": false,
+    "ordinary_attestation_performed": false,
+    "prefix_epochs": 1,
+    "producer_attestation_performed": false,
+    "promotion_evidence_eligible": false,
+    "queue_mode": "PM4",
+    "readback_performed": false,
+    "receipt_count": 0,
+    "request_identity": "sha256:f8a5fe9d9be410606f45644e3cf047763b13dfef0eafc7d0da8563e2b9dad169",
+    "requires_recompile": false,
+    "retry_count": 0,
+    "schema": "tinygrad.mmq_q4k_q8_1.ffn_gate_up_guarded_correctness_stage.v2.ffn_reduced_grid",
+    "status": "BLOCKED",
+    "target_dispatch_submitted": true,
+    "target_submit_entered": true,
+    "target_submit_returned": true,
+    "touched_element_count": 16384,
+    "touched_shape": [
+      128,
+      128
+    ],
+    "untouched_element_count": 8896512
+  },
+  "retry_count": 0,
+  "schema": "tinygrad.mmq_q4k_q8_1.ffn_gate_up_guarded_correctness_stage.v2.envelope",
+  "spawn_count": 1,
+  "status": "BLOCKED",
+  "timed_out": false
+}

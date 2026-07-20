@@ -1,5 +1,34 @@
 # Qwen3-14B generated-prefill Claude handoff
 
+## 1.12 Current status 2026-07-19: PM4 v2 pre-submit authority mismatch now blocking no-doorbell + reduced-grid
+
+Current state is a CPU-discovered contract mismatch in the PM4 pre-submit authority path, not a runtime fault.
+
+Latest blocked artifacts:
+
+- `docs/artifacts/qwen3-14b-prefill-ffn-gate-up-staged-3fa4cd619-20260719/evidence/qk-ffn-gate-up-staged-89b28fbe8-pm4-no-doorbell-v2-20260719.json`
+- `docs/artifacts/qwen3-14b-prefill-ffn-gate-up-staged-3fa4cd619-20260719/evidence/qk-ffn-gate-up-staged-89b28fbe8-pm4-no-doorbell-debug-20260719.json`
+- `docs/artifacts/qwen3-14b-prefill-ffn-gate-up-staged-3fa4cd619-20260719/evidence/qk-ffn-gate-up-staged-89b28fbe8-pm4-reduced-1x1-20260719.json`
+
+All three are `BLOCKED` and have `health_before=true`, `health_after=true`, `kernel_faults=[]`,
+`kernel_fault_evidence.status=CLEAR`.
+
+Observed blockers:
+
+- `PM4 no-doorbell diagnostic failed closed: ValueError: PM4 decoded command authority differs`
+- `PM4 FFN reduced-grid diagnostic failed closed: ValueError: FFN reduced-grid low-level receipt failed exact checks: ['pre_submit']`
+
+Code changes currently in this branch:
+
+- `extra/qk/mmq_ffn_gate_up_guarded_correctness.py`: preserve `failed_attempt.invocation_failure` in `run_pm4_no_doorbell_child`
+  when a low-level invocation fails without a normal receipt path.
+- `extra/qk/mmq_llama_five_buffer_gpu_harness.py`: store pre-submit snapshot before checks and include failed key names in
+  the raised `RuntimeError` so a failing signature is auditable.
+
+Execution order is still blocked until v2 PM4 pre-submit decoding is corrected. Next step is to fix that decoder
+against the captured dispatch packet, rerun no-doorbell v2 PASS, then rerun reduced-grid `1x1`, then the diagnostic
+ladder only if that passes.
+
 ## 1.11 Current status 2026-07-19: exact `ffn_gate_up` PM4 C5 prefix 1 faults; ladder stopped
 
 The first and only target dispatch of the current exact family was attempted through the one-shot guarded PM4

@@ -1,0 +1,66 @@
+{
+  "child_status": "passed",
+  "config_identity": "sha256:1a149c0759b3bc96159bf8b259473ecc43fcf77c88cfd616b326292a250468f6",
+  "elapsed_seconds": 6.236571799963713,
+  "error": null,
+  "evidence_identity": "sha256:90ce5bf858f39885eaf002ac49801c77e9efcbb7f0cffed10c1d83416e2e29ce",
+  "exact_blocker": "PM4 no-doorbell diagnostic failed closed: ValueError: PM4 decoded command authority differs",
+  "health_after": true,
+  "health_before": true,
+  "kernel_fault_evidence": {
+    "blocks": [],
+    "limits": {
+      "max_blocks": 8,
+      "max_line_chars": 512,
+      "max_lines": 32
+    },
+    "relevant_line_count": 0,
+    "retained_line_count": 0,
+    "schema": "tinygrad.amd_kernel_fault_evidence.v1",
+    "source": "kernel_journal_window",
+    "status": "CLEAR",
+    "truncated": false
+  },
+  "kernel_faults": [],
+  "launched": true,
+  "no_queue_fallback": true,
+  "no_retry": true,
+  "operation_schema": "tinygrad.mmq_q4k_q8_1.ffn_gate_up_guarded_correctness_stage.v2.pm4_no_doorbell",
+  "promotion_evidence_eligible": false,
+  "queue_mode": "PM4",
+  "request_identity": "sha256:ffed1b48c39153d1158815a52650a1fd24affa1575f170b4dd2f455decda64e7",
+  "result": {
+    "compile_performed": false,
+    "config_identity": "sha256:1a149c0759b3bc96159bf8b259473ecc43fcf77c88cfd616b326292a250468f6",
+    "environment": {
+      "AMD_AQL": "0",
+      "DEV": "AMD",
+      "PROFILE": "0"
+    },
+    "evidence_identity": "sha256:d7b0f4376741c5556bbe6a82553ef4514fb68104bbfb3ebceb4ec9ea8eb39e80",
+    "exact_blocker": "PM4 no-doorbell diagnostic failed closed: ValueError: PM4 decoded command authority differs",
+    "exception": "ValueError",
+    "failed_attempt": {
+      "invocation_count": 1,
+      "phase": "invocation",
+      "receipt": null,
+      "receipt_count": 1
+    },
+    "no_fallback": true,
+    "no_retry": true,
+    "prefix_epochs": 1,
+    "promotion_evidence_eligible": false,
+    "queue_mode": "PM4",
+    "request_identity": "sha256:ffed1b48c39153d1158815a52650a1fd24affa1575f170b4dd2f455decda64e7",
+    "requires_recompile": false,
+    "retry_count": 0,
+    "schema": "tinygrad.mmq_q4k_q8_1.ffn_gate_up_guarded_correctness_stage.v2.pm4_no_doorbell",
+    "status": "BLOCKED",
+    "submit_policy": "snapshot_only"
+  },
+  "retry_count": 0,
+  "schema": "tinygrad.mmq_q4k_q8_1.ffn_gate_up_guarded_correctness_stage.v2.envelope",
+  "spawn_count": 1,
+  "status": "BLOCKED",
+  "timed_out": false
+}

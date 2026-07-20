@@ -1043,10 +1043,15 @@ def _dispatch_with_runtime_evidence(runtime: Any, buffers: tuple[Any, ...], glob
           queue, submit_dev, runtime, state,
           expected_global_size=global_size,
           expected_local_size=local_size or (1, 1, 1))
-        if snapshot["all_checks_pass"] is not True:
-          raise RuntimeError(
-            "target PM4 pre-submit snapshot failed exact checks")
+        # Retain even a rejected snapshot so a fail-closed diagnostic names
+        # the concrete decoded command that disproved its authority contract.
         captured["pre_submit"] = snapshot
+        if snapshot["all_checks_pass"] is not True:
+          failed = sorted(
+            key for key, passed in snapshot["checks"].items() if not passed)
+          raise RuntimeError(
+            "target PM4 pre-submit snapshot failed exact checks: "
+            f"{failed!r}")
         if snapshot_only:
           captured["no_doorbell_stop_raised"] = True
           raise _PM4NoDoorbellStop(no_doorbell_token)
