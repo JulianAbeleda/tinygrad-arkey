@@ -1,6 +1,65 @@
 # Qwen3-14B generated-prefill Claude handoff
 
+## 1.15 Current status 2026-07-20: `ffn_gate_up` C5 root cause = CORRECT kernel, unsupportable LDS footprint on AMD; design direction is occupancy-based route admission
+
+### The finding
+
+`ffn_gate_up`'s C5 fault is fully root-caused. **The generated kernel is not wrong — AMD cannot support its resource footprint at scale.**
+
+- **Kernel is numerically correct.** On real GPU it passes every grid it can run — `(1,1,1),(2,1,1),(1,2,1),(1,4,1),(8,4,1)` with **zero mismatches** (up to 524,288 output values). C1–C4 pass, ISA def/use is clean, the C3 certificate has all addresses in-bounds, and its wait/barrier structure matches the hand kernel. No logic defect survives.
+- **The fault is purely aggregate-scale / occupancy.** A reduced-grid + deconfound sweep proved it: passes at ≤32 workgroups, faults at ≥64 (SQ type-2 → MES REMOVE_QUEUE timeout → GPU reset). It is **count-driven, not column-index-driven** (`(32,1,1)` gidx0=31 PASS vs `(16,4,1)` gidx0=15 FAULT) and **not layout-driven** (both `attn_qo` and `ffn_gate_up` staged families are the identical compact `q4_k_words[n,36]` 36-uint32 contract — verified).
+- **Cause = LDS bloat from an NVIDIA-shaped port.** The generated Q4_K kernel faithfully ports llama.cpp CUDA `mmq.cuh` (int8-quantized MMQ). It allocates **57,856 B LDS** (`ids` 512 + `q8` activation 18,432 + `q4` weight **38,912**, the Q4 tile held at full K=256 residency — `mmq_llama_candidate_plan.py:44-56`), sized for NVIDIA's large shared memory. On gfx1100 (~64 KB LDS/CU) that yields ~1 workgroup/CU occupancy; at the full 544-workgroup grid the scheduler wedges.
+- **Proof it's the footprint, not the kernel** (3-way cross-check): the **hand** Q4_K kernel (`build_gemm_lds2_q4k`, `wmma.py:501-654`) does the same MMQ in **16,384 B** LDS (fp16-dequant-in-register + BK=32 streaming) and runs all 544 workgroups fine; the **generated fp16** graph-GEMM (generic scheduler WMMA lowering) uses **20,480 B** and runs 384 workgroups fine. Both working kernels ≤20 KB; ours 57 KB. Ruled out as differentiators: threads (fp16 is also 256), "generated" (fp16 is generated), "Q4_K" (hand is Q4_K), grid size (hand does 544 at 14B). **LDS is the sole differentiator.**
+
+Caveat: the exact driver/firmware wedge mechanism at the 64-workgroup line is not captured (MES scheduler internals). But every kernel-logic explanation is eliminated and the leaner kernels run the same scale, so "correct kernel, unsupportable footprint at scale" is the well-supported conclusion.
+
+### Design direction (endorsed): occupancy-based route admission — do NOT branch on GPU name
+
+The strategic response is not to "fix" one kernel but to make route selection admit candidates on an **occupancy/LDS** axis, mirroring the existing VRAM tier-ladder — so the *same* candidate set routes correctly per device from facts, and when we later target NVIDIA the "unsupportable" int8-MMQ kernel becomes the *preferred* route automatically.
+
+**Kernel-side factors** (from the plan/manifest, per candidate): LDS bytes/workgroup (the load-bearing one), VGPR/thread, threads/workgroup (waves), scratch/spill (must be 0), tile size → total workgroups for the workload.
+
+**Hardware-side factors** (probed per device, not hardcoded): LDS budget per CU/WGP, VGPR file per SIMD/CU, max resident workgroups/CU, CU/SM count, and the qualitative scheduler-robustness-at-low-occupancy (AMD MES wedges; NVIDIA tolerates).
+
+**Derived predicate** — the one factor that decides it is `occupancy × scale`:
+```
+occupancy = min( LDS_per_CU / kernel_LDS, VGPR_file / kernel_VGPR, max_resident_wg, ... )
+admit if occupancy >= device_calibrated_floor  AND  total_workgroups within the sustained envelope
+```
+On gfx1100 the 57 KB kernel gives ~1 wg/CU and wedges at 544 wg; on NVIDIA (~228 KB shared) it gives 3–4/SM and is fine; the 16–20 KB kernels give 3–6/CU on AMD and pass. So the same predicate selects int8-MMQ on NVIDIA and a lean kernel on AMD, with no `if amd`/`if nvidia`.
+
+Two caveats on the design: (1) the occupancy **floor is empirical** — the router needs a per-device **calibration probe** (dispatch increasing workgroup counts at a candidate's footprint, find the safe ceiling), exactly as VRAM admission probes free memory; (2) this is an **admission/routing** fix — it lets AMD correctly *avoid* the unsupportable kernel and NVIDIA *use* it, but AMD still needs a **lean candidate in the set** to route to.
+
+### Fix fork for an AMD-supportable Q4_K candidate (still needed for an AMD fast path)
+
+- **(A)** Stream the Q4 tile at BK granularity instead of full-K256 residency — keeps the int8-MMQ algorithm, targets ~16–20 KB. Plan-level redesign of the recurrence/barrier graph (`mmq_llama_candidate_plan.py` `_geometry()` + phase wiring), not a config knob; more barriers + repeated Q4 loads. The machine search never explored streamed-K/low-LDS configs, so this is unexplored space, not a rejected one.
+- **(B)** Adopt the hand kernel's fp16-dequant-in-register strategy — eliminates the `ids`+`q8` LDS regions, matches the proven 16 KB design; but abandons the "exact llama.cpp int8-MMQ port" this module set was built to mirror.
+- Fallback: use the hand kernel as the production kernel for these roles (works today; contradicts generated-only goal).
+
+Recommendation: build the occupancy-admission axis (the portable, correct-either-way piece), then add a lean AMD candidate — leaning **(B)** for a proven working reference, **(A)** if int8 proves faster once it fits.
+
+### Integration point (sized against the existing route planner)
+
+Good news: most of the *facts* already flow; the occupancy axis is a bounded add, not new machinery.
+
+**Already present:**
+- **Kernel-side resources** per candidate: `KernelResources{vgpr,sgpr,lds_bytes,scratch,spills}` (`amd_resource_artifact.py:125`), parsed straight from AMDGPU code-object metadata (`group_segment_fixed_size`→`lds_bytes`, `amdgpu_metadata.py:27`, `mmq_compile_evidence.py:91`), aggregated per route (`memory_adaptive_tinygrad_seam.py:425`).
+- **Workgroup count**: in frozen family manifests (`"grid"`, `mmq_frozen_staged_family.py:307`) — the source of the 544 figure.
+- **Device per-workgroup LDS ceiling**: `DeviceCapabilities.lds_bytes` (`device_facts.py`, from rocminfo/renderer) — already the right fact.
+- **An admission-predicate template** (`requirement <= budget`, gate list, PASS/FAIL evidence) at three levels: `memory_ledger.py:SelectedModelMemoryLedger.decide()` (production), `prefill_memory_plan.py:plan_prefill_memory()` (offline), and `memory_adaptive_policy.py:select_policy()` `_REQUIRED_GATES` (perf ranking).
+- Even a **placeholder occupancy field + `min_occupancy` check** already exists (`mmq_resource_checks.py:35`) — but it's on a *disconnected offline promotion gate*, never populated, and `q4k_q8_mmq_uop_resource_gate.py` explicitly reports occupancy `"unavailable"` because it looked only at the code object.
+
+**The actual work (bounded):**
+1. **Surface CU/WGP count** to `DeviceCapabilities` — it already exists unused in the AMD backend (`ops_amd.py:908` `cu_per_simd_array`/`simd_count`/`array_count` from `gc_info`); just add a field, no new hardware query.
+2. **Write the `occupancy()` formula** — combine code-object resources (lds_bytes, vgpr, threads) with device facts (LDS/CU, VGPR file, CU count) and workgroup count. None exists; the prior "occupancy unavailable" was because they read only the code object — the formula's whole job is to *bridge* code-object + device facts. One small pure function, same shape as `calculate_admissible_budget()`.
+3. **Wire it into the LIVE selector** as a second admission axis alongside the VRAM byte-budget in `memory_ledger.py:decide()` / `prefill_memory_plan.py` (and/or add `"occupancy"` to `select_policy`'s `_REQUIRED_GATES` with a real populator replacing the placeholder). **This is the real gap: the production path today has *zero* compute/occupancy hooks — only VRAM bytes.**
+4. **Calibrate the per-device floor** with a probe (dispatch rising workgroup counts at a candidate footprint, find the safe ceiling) — reuse the guarded reduced-grid ladder already built (`mmq_ffn_gate_up_pm4_reduced_grid_runner.py`), which is exactly how we found gfx1100's 32-safe/64-fault boundary.
+
+Net sizing: kernel-side fact plumbing is done; device CU-count is a small additive probe; the occupancy formula is new but small; the substantive piece is giving the live selector a second (occupancy) admission dimension beside the existing byte-budget one. Move toward this design once the root cause is accepted.
+
 ## 1.14 Current status 2026-07-20: `attn_qo` C8 disqualification is a harness lifecycle bug, not a kernel defect — candidate EXONERATED
+
+> **CORRECTION (2026-07-20, later in session): the "harness lazy-construction" root cause claimed in this section was REFUTED.** The preconstruction harness fix (`9119a7462`) did **not** resolve the fault: on re-certification at the fixed commit, `direct_packed -> staged` still faulted, and even `[staged, direct, staged]` (which passed once pre-fix) faulted at the reused position — so the earlier single passing run did not reproduce. Subsequent forensics (fault-address attribution) showed the candidate's five pointers are correct at dispatch and the logged `0xFFFFFFBFE000` address is a reset-recovery artifact (the same stale value §1.11 warned about); the real signal is an address-less SQ type-2 wave fault. **Net: `attn_qo`'s C8 fault is a real, still-unresolved SQ-level route-boundary fault; the candidate is NOT exonerated and `BLOCKED_AT_C8` stands.** The §5.4 preconstruction fix and its docs/§12.9 amendment are kept (they are sound harness hygiene) but must not be read as having fixed `attn_qo`. Treat the "EXONERATED" claim in this section's heading and body as superseded.
 
 The `attn_qo` staged `BLOCKED_AT_C8` / candidate `DISQUALIFIED` decision (§1.6) was re-examined and **overturned as a
 kernel verdict**. A guarded GPU experiment on the existing C8 transition harness proved the fault is lazy first-time
