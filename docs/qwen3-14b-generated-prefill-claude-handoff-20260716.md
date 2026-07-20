@@ -80,8 +80,18 @@ ladder escalation** — gate every rung manually.
      progressive-C-drain machinery (`_serialize_progressive_c_drains` in `tinygrad/renderer/isa/amd.py`) and passes
      C1–C6, so a role-agnostic drain-schedule corruption is unlikely to be the whole story — it points to something
      specific to `ffn_gate_up`'s N=17408 / 136-wide grid.
+  4. **Same-signature cross-check against `attn_qo` C8 (§1.6).** `ffn_gate_up`'s C5 fault and `attn_qo`'s C8
+     transition fault are the **same family** — SQ type-2 memory violation + GPU reset. `attn_qo` faults only on the
+     `direct_packed -> staged_candidate` route transition (invocation 0, before epoch 0), while `staged -> staged`
+     passes. First establish which regime `ffn_gate_up` is in: does its C5 prefix-1 fault **standalone**, or only
+     **after another route**? If it only faults post-transition, this is the `attn_qo` cross-route problem, not an
+     `ffn_gate_up`-specific layout bug. Critically, `attn_qo`'s §1.6 diagnostics already **refute register-corruption
+     and static-address** causes for this exact signature: "offline final-ISA def/use finds no undefined physical-
+     register reads beyond the ABI live-ins" and the C3 certificate covers all projected addresses with no OOB /
+     uint32 overflow. That is direct evidence against deepseek's VGPR-reuse hypothesis for the shared fault family.
   Method references before starting: §5 (what actually made `attn_kv` work), §12.5 (`attn_qo` staged recipe),
-  §12.6 (`ffn_gate_up` N-scaling recipe — you are now in its fail clause), §9.3 (the stop-schedule-changes precedent).
+  §12.6 (`ffn_gate_up` N-scaling recipe — you are now in its fail clause), §9.3 (the stop-schedule-changes
+  precedent), §1.6 (the `attn_qo` C8 same-signature cross-route fault and its def/use-clean diagnostics).
 - **B2.** Walk the reduced-grid ladder one rung at a time — `(2,1,1) → (1,2,1) → (1,4,1) → (8,4,1) → (32,4,1) →
   (40,4,1) → (41,4,1) → (136,1,1)` (the runner's allowlist) — stopping on first anomaly, retaining evidence per rung.
 - **B3.** C5 proper per the method doc: phase-isolated prefix-1 then prefix-3 full dispatches (all five kernarg
