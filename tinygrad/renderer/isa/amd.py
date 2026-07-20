@@ -1360,7 +1360,17 @@ def _frag_b128_loads(ctx:IselContext, E:tuple[UOp, ...], base:int, dep:tuple[UOp
   addrs = [_wmma_half_addr(e) for e in E]
   if any(a is None for a in addrs): return None
   idx0, ptr0, expr0, c0 = addrs[0]
-  if any(ptr is not ptr0 or expr is not expr0 or c != c0 + i for i, (_idx, ptr, expr, c) in enumerate(addrs)): return None
+  # Consecutive lanes are adjacent in units of the operand's own itemsize (the address constant `c` is in
+  # bytes) -- this was previously hardcoded to a 1-byte lane stride, which only holds for a byte/int8
+  # carrier.  A general fix, but NOT sufficient on its own to make the fp16 K32-group dequant-in-register
+  # LDS fragment loads take this vectorized ds_load_b128 path: investigation (REGALLOC_DEBUG showed ~1950
+  # live DS_LOAD virtuals at peak on build_llama_five_buffer_full_kernel(128,128,256)) found those B-role
+  # fragment elements arrive here already as `dtypes.uchar` LOADs (itemsize 1), not `dtypes.half`, so this
+  # stride generalization is a no-op for that path -- the elements are byte-typed further upstream (likely
+  # in the record-template/CONTRACT lowering for the uint8-addressed LDS arena), which is the next thing to
+  # chase to actually close the gap.
+  step = E[0].dtype.itemsize
+  if any(ptr is not ptr0 or expr is not expr0 or c != c0 + i * step for i, (_idx, ptr, expr, c) in enumerate(addrs)): return None
   if dep: idx0 = _index_after_dep(idx0, dep[-1])
   idxc = isel_index(ctx, idx0)
   if idxc is None or idxc.op is not Ops.NOOP or len(idxc.src) not in (2, 3): return None
