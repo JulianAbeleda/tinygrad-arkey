@@ -2138,7 +2138,8 @@ def test_target_runtime_snapshot_only_captures_high_bits_without_native_submit_a
     def cpu_view(self): return View()
   signal = SimpleNamespace(value=10)
   dev = SimpleNamespace(
-    is_aql=False, device="AMD", timeline_value=11,
+    # AMDDevice stores AMD_AQL=0 as int, not the singleton False.
+    is_aql=0, device="AMD", timeline_value=11,
     prof_exec_counter=7, timeline_signal=signal, error_state=None,
     pmc_enabled=False, sqtt_enabled=False,
     hw_compute_queue_t=ops_amd.AMDComputeQueue)

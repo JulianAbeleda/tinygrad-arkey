@@ -126,6 +126,12 @@ class _PM4NoDoorbellStop(BaseException):
     self.token = token
 
 
+def _is_pm4_route_flag(value: Any) -> bool:
+  # AMDDevice stores getenv("AMD_AQL", ...) as the integer 0/1 in production,
+  # while CPU fakes commonly use bool.  Reject every other false-y value.
+  return type(value) in (bool, int) and value == 0
+
+
 def _single_tile_call_carrier(argument: Any) -> tuple[Any, tuple[Any, ...], dict[str, Any]]:
   """Resolve one physical BUFFER plus already-realized dependency carriers."""
   from tinygrad.helpers import prod
@@ -884,7 +890,7 @@ def _dispatch_with_runtime_evidence(runtime: Any, buffers: tuple[Any, ...], glob
   if snapshot_only:
     from tinygrad.helpers import PROFILE
     from tinygrad.runtime import ops_amd
-    if getattr(dev, "is_aql", None) is not False:
+    if not _is_pm4_route_flag(getattr(dev, "is_aql", None)):
       raise ValueError("snapshot_only requires the exact PM4 runtime route")
     queue_factory = getattr(dev, "hw_compute_queue_t", None)
     if getattr(queue_factory, "func", queue_factory) is not \
@@ -934,7 +940,7 @@ def _dispatch_with_runtime_evidence(runtime: Any, buffers: tuple[Any, ...], glob
     captured["bound_pointer_words"] = [int(getattr(buf, "va_addr")) for buf in state.bufs[:5]]
     return state
 
-  if getattr(dev, "is_aql", None) is False:
+  if _is_pm4_route_flag(getattr(dev, "is_aql", None)):
     from tinygrad.runtime import ops_amd
     original_pm4_submit = ops_amd.AMDComputeQueue._submit
     def capture_pm4_submit(queue, submit_dev):
