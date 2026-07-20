@@ -85,6 +85,9 @@ EXACT_LOCAL_SIZE = (256, 1, 1)
 DIAGNOSTIC_GLOBAL_SIZE_ALLOWLIST = frozenset({
   (1, 1, 1), (2, 1, 1), (1, 2, 1), (1, 4, 1), (8, 4, 1),
   (32, 4, 1), (40, 4, 1), (41, 4, 1), (136, 1, 1),
+  # Boundary-search / deconfound rows (count vs column-index); kept in sync
+  # with FFN_REDUCED_GLOBAL_SIZE_ALLOWLIST and the reduced-grid runner.
+  (16, 1, 1), (32, 1, 1), (64, 1, 1), (16, 4, 1),
 })
 EXACT_FUNCTION = "mmq_llama_five_buffer_full_grid_accumulate"
 EXACT_COMPILE_TARGET = "AMD:ISA:gfx1100"

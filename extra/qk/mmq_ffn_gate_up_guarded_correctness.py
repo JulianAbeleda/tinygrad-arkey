@@ -78,6 +78,9 @@ PREFIXES = (1, 3, 20)
 FFN_REDUCED_GLOBAL_SIZE_ALLOWLIST = (
   (1, 1, 1), (2, 1, 1), (1, 2, 1), (1, 4, 1), (8, 4, 1),
   (32, 4, 1), (40, 4, 1), (41, 4, 1), (136, 1, 1),
+  # Boundary-search / deconfound rows (count vs column-index); must stay in
+  # sync with ALLOWED_DIAGNOSTIC_GLOBAL_SIZES in the reduced-grid runner.
+  (16, 1, 1), (32, 1, 1), (64, 1, 1), (16, 4, 1),
 )
 FFN_FROZEN_GLOBAL_SIZE = (136, 4, 1)
 FFN_FROZEN_LOCAL_SIZE = (256, 1, 1)
