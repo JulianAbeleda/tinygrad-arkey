@@ -268,17 +268,25 @@ def test_bounded_route_sequence_reuses_one_candidate_owner(family):
 
   def persistent_factory(**kwargs):
     runners = runner_factory(**kwargs)
-    state = {
-      "signature": {"role": "fixture"}, "initialization_count": 1,
-      "invocation_count": 0, "buffer_ranges": {"output": [1, 2]},
-      "runtime_identity": {"object_id": 7},
-    }
+    state = {}
+    preconstruct_calls = []
+
+    def preconstruct(*, queue_mode):
+      preconstruct_calls.append(queue_mode)
+      state.update({
+        "signature": {"role": "fixture"}, "initialization_count": 1,
+        "invocation_count": 0, "buffer_ranges": {"output": [1, 2]},
+        "runtime_identity": {"object_id": 7},
+      })
+      return {"status": "PASS", "construct_only": True, "target_dispatch_count": 0}
 
     def candidate(**invoke_kwargs):
+      assert preconstruct_calls == ["PM4"]
       state["invocation_count"] += 1
       return runners.candidate(**invoke_kwargs)
 
     candidate.persistent_session_state = state
+    candidate.preconstruct = preconstruct
     return QueueTimingRunners(candidate, runners.direct_packed)
 
   result = run_persistent_c8_route_sequence_worker(
@@ -295,6 +303,89 @@ def test_bounded_route_sequence_reuses_one_candidate_owner(family):
           for row in result["breadcrumbs"]] == [1, 2]
 
 
+def test_route_sequence_worker_preconstructs_candidate_before_first_route(family):
+  c6, events = _c6(family), []
+  runner_factory, attestor_factory = _factories(family, c6, events)
+
+  def tracking_factory(**kwargs):
+    runners = runner_factory(**kwargs)
+    preconstruct_calls = []
+
+    def preconstruct(*, queue_mode):
+      assert not preconstruct_calls, "preconstruct must be invoked exactly once"
+      preconstruct_calls.append(queue_mode)
+      events.append(("preconstruct", queue_mode))
+      return {"status": "PASS", "construct_only": True, "target_dispatch_count": 0}
+
+    def candidate(**invoke_kwargs):
+      assert preconstruct_calls == ["PM4"], \
+        "candidate route ran before preconstruction completed"
+      return runners.candidate(**invoke_kwargs)
+
+    candidate.preconstruct = preconstruct
+    return QueueTimingRunners(candidate, runners.direct_packed)
+
+  result = run_persistent_c8_route_sequence_worker(
+    family, c6, "PM4", ("staged_candidate",),
+    "session", CLOCK_IDENTITY, tracking_factory, attestor_factory)
+  assert result["schema"] == ROUTE_SEQUENCE_SCHEMA and result["status"] == "PASS"
+  ordered = [row[0] for row in events if row[0] in ("preconstruct", "invoke")]
+  assert ordered == ["preconstruct", "invoke"]
+
+
+def test_route_sequence_worker_preconstructs_candidate_before_direct_packed_first_route(family):
+  c6, events = _c6(family), []
+  runner_factory, attestor_factory = _factories(family, c6, events)
+
+  def tracking_factory(**kwargs):
+    runners = runner_factory(**kwargs)
+    preconstruct_calls = []
+
+    def preconstruct(*, queue_mode):
+      assert not preconstruct_calls, "preconstruct must be invoked exactly once"
+      preconstruct_calls.append(queue_mode)
+      events.append(("preconstruct", queue_mode))
+      return {"status": "PASS", "construct_only": True, "target_dispatch_count": 0}
+
+    def direct_packed(**invoke_kwargs):
+      assert preconstruct_calls == ["PM4"], \
+        "direct_packed route ran before the candidate was preconstructed"
+      return runners.direct_packed(**invoke_kwargs)
+
+    runners.candidate.preconstruct = preconstruct
+    return QueueTimingRunners(runners.candidate, direct_packed)
+
+  result = run_persistent_c8_route_sequence_worker(
+    family, c6, "PM4", ("direct_packed", "staged_candidate"),
+    "session", CLOCK_IDENTITY, tracking_factory, attestor_factory)
+  assert result["schema"] == ROUTE_SEQUENCE_SCHEMA and result["status"] == "PASS"
+  ordered = [row[0] for row in events if row[0] in ("preconstruct", "invoke")]
+  assert ordered == ["preconstruct", "invoke", "invoke"]
+  assert [row[4] for row in events if row[0] == "invoke"] == \
+    ["direct_packed", "staged_candidate"]
+
+
+def test_route_sequence_worker_fails_closed_without_candidate_preconstruct(family):
+  c6, events = _c6(family), []
+  runner_factory, attestor_factory = _factories(family, c6, events)
+
+  with pytest.raises(TypeError, match="preconstruct"):
+    run_persistent_c8_route_sequence_worker(
+      family, c6, "PM4", ("staged_candidate",),
+      "session", CLOCK_IDENTITY, runner_factory, attestor_factory)
+  assert not [row for row in events if row[0] == "invoke"]
+
+
+def test_route_sequence_worker_does_not_preconstruct_direct_packed_only_sequence(family):
+  c6, events = _c6(family), []
+  runner_factory, attestor_factory = _factories(family, c6, events)
+
+  result = run_persistent_c8_route_sequence_worker(
+    family, c6, "PM4", ("direct_packed",),
+    "session", CLOCK_IDENTITY, runner_factory, attestor_factory)
+  assert result["schema"] == ROUTE_SEQUENCE_SCHEMA and result["status"] == "PASS"
+
+
 def test_guarded_route_sequence_stops_after_one_faulting_child(family):
   c6, events = _c6(family), []
   runner_factory, attestor_factory = _factories(family, c6, events)
@@ -309,6 +400,8 @@ def test_guarded_route_sequence_stops_after_one_faulting_child(family):
       calls += 1
       return runners.candidate(**invoke_kwargs)
 
+    candidate.preconstruct = lambda *, queue_mode: {
+      "status": "PASS", "construct_only": True, "target_dispatch_count": 0}
     return QueueTimingRunners(candidate, runners.direct_packed)
 
   result = run_guarded_persistent_c8_route_sequence(

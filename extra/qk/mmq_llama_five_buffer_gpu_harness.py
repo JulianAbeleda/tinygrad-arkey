@@ -2010,6 +2010,7 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
                                     c8_phase_timing: bool = False,
                                     staged_lifecycle_observer: Any | None = None,
                                     persistent_session_state: dict[str, Any] | None = None,
+                                    construct_only: bool = False,
                                     ) -> dict[str, Any]:
   """Run the emitted K=256 program across one admitted exact 14B Q4 role.
 
@@ -2081,6 +2082,9 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
     raise TypeError("persistent_session_state must be a mutable dict")
   if persistent_session_state is not None and not full_role_staged_execution:
     raise ValueError("persistent session reuse requires the exact frozen full-role staged execution contract")
+  if construct_only and (persistent_session_state is None or not full_role_staged_execution):
+    raise ValueError(
+      "construct_only preconstruction requires a persistent full-role staged session")
   session_signature = {
     "role": role_spec.role, "shape": list(role_spec.shape),
     "frozen_bundle": str(Path(frozen_bundle).resolve()) if frozen_bundle is not None else None,
@@ -2352,6 +2356,52 @@ def run_full_grid_target_role_probe(*, warmups: int = 0, rounds: int = 1,
         "buffer_ranges": buffer_ranges, "initialization_count": 1,
         "invocation_count": 0, "runtime": None, "runtime_identity": None,
       })
+  if construct_only:
+    # Lifecycle-phase-only construction: populate the persistent session's
+    # cached runtime exactly as the first real dispatch would (same
+    # get_runtime call, same runtime-cache/code-range identity checks), but
+    # return before any epoch loop, target CALL, or queue doorbell.  This
+    # deliberately does not touch invocation_count, which must still read 0
+    # at the first real (dispatching) invocation.
+    from tinygrad.engine.realize import get_runtime, runtime_cache
+    runtime = get_runtime("AMD", program)
+    owned_runtime = persistent_session_state.get("runtime")
+    if owned_runtime is None:
+      lib = getattr(runtime, "lib_gpu", None)
+      lib_va, lib_nbytes = int(getattr(lib, "va_addr", 0)), int(getattr(lib, "size", 0))
+      entry_va = int(getattr(runtime, "prog_addr", 0))
+      if lib_va <= 0 or lib_nbytes <= 0 or not lib_va <= entry_va < lib_va + lib_nbytes:
+        raise RuntimeError("persistent staged session runtime code range is invalid")
+      if any(not (
+          lib_va + lib_nbytes <= start or lib_va >= end)
+          for start, end in persistent_session_state["buffer_ranges"].values()):
+        raise RuntimeError("persistent staged session runtime overlaps a data buffer")
+      persistent_session_state["runtime"] = runtime
+      persistent_session_state["runtime_identity"] = {
+        "object_id": id(runtime), "program_key": program.key.hex(),
+        "library_va": lib_va, "library_nbytes": lib_nbytes,
+        "entry_va": entry_va,
+      }
+    elif runtime is not owned_runtime or \
+         runtime_cache.get((program.key, "AMD")) is not owned_runtime:
+      raise RuntimeError("persistent staged session runtime cache binding changed")
+    return {
+      "schema": "tinygrad.mmq_q4k_q8_1_full_grid_target_role_probe.v1", "status": "PASS",
+      **role_identity, "accumulation": accumulation_mode, "artifacts": artifact,
+      "construct_only": True, "target_dispatch_count": 0,
+      "compile_performed": artifact.get("compile_performed"),
+      "requires_recompile": artifact.get("requires_recompile"),
+      "persistent_session_lifecycle": {
+        "enabled": True,
+        "initialization_count": persistent_session_state["initialization_count"],
+        "invocation_index": None,
+        "invocation_count": persistent_session_state["invocation_count"],
+        "reused_prepared_buffers": session_reused,
+        "buffer_ranges": dict(persistent_session_state["buffer_ranges"]),
+        "runtime_identity": persistent_session_state.get("runtime_identity"),
+        "runtime_cache_binding_exact": persistent_session_state.get("runtime") is not None,
+      },
+    }
   session_invocation_index = None
   if persistent_session_state is not None:
     if persistent_session_state.get("initialization_count") != 1:

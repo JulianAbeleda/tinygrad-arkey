@@ -369,6 +369,18 @@ def run_persistent_c8_route_sequence_worker(
   if not isinstance(runners, QueueTimingRunners):
     raise TypeError("runner_factory must return QueueTimingRunners")
   runners.validate(queue_mode)
+  if "staged_candidate" in normalized:
+    # Preconstruct the candidate's runtime + five buffers as a separate,
+    # no-dispatch lifecycle phase before any route in the sequence runs.
+    # This keeps the candidate's first-ever construction on the shared
+    # device singleton clean of any prior direct_packed route (see the
+    # frozen-staged §5.4 preconstruction pattern).  Failure here fails
+    # closed: the exception propagates and the worker never reaches the
+    # route loop below.
+    preconstruct = getattr(runners.candidate, "preconstruct", None)
+    if not callable(preconstruct):
+      raise TypeError("staged candidate runner is missing preconstruct(queue_mode=...)")
+    preconstruct(queue_mode=queue_mode)
   executable = _nonempty(
     c6_correctness_evidence.get("candidate_executable_identity"),
     "C6 candidate_executable_identity")

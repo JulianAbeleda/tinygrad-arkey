@@ -599,7 +599,53 @@ def make_frozen_staged_candidate_runner(
       "epochs": receipt["epochs"], "final_sync_ms": receipt["final_sync_ms"],
       "complete_role_ms": receipt["complete_role_ms"],
     }
+  def preconstruct(*, queue_mode: str) -> Mapping[str, Any]:
+    """Construct the candidate's runtime and five buffers with zero dispatch.
+
+    This is a separate lifecycle phase, not a receipted invocation.  It must
+    run before any route (candidate or direct_packed) in a mixed-route C8
+    session so the candidate's first-ever runtime/buffer construction on the
+    shared device singleton never happens after a fallback route has already
+    touched that device.  It performs the identical ``get_runtime`` call and
+    runtime-cache/code-range identity checks the first real dispatch would
+    perform, but returns before any epoch loop, target CALL, or doorbell.
+    Fails closed: any exception here propagates to the caller uncaught.
+    """
+    if queue_mode not in runtime_canary_by_queue:
+      raise ValueError(f"{queue_mode} runtime canary is unavailable")
+    if persistent_session_state:
+      raise RuntimeError(
+        "candidate runtime preconstruction must run before any session state exists")
+    expected_aql = "1" if queue_mode == "AQL" else "0"
+    if os.environ.get("AMD_AQL") != expected_aql:
+      raise ValueError(
+        "candidate runtime preconstruction AMD_AQL mode differs from queue_mode")
+    result = probe_runner(
+      role_spec=role_spec, frozen_bundle=frozen_bundle,
+      warmups=0, rounds=1, epoch_limit=role_spec.epochs,
+      n_chunk_tiles=role_spec.program.grid[0], epoch_start=0,
+      host_accumulate=False, in_kernel_accumulate=True,
+      per_epoch_check=False, persistent_buffers=True,
+      preloaded_epochs=True, sync_each_epoch=True,
+      stable_metadata_staging=True, stable_epoch_staging=True,
+      wait_each_dispatch=True, c8_phase_timing=True,
+      persistent_session_state=persistent_session_state,
+      construct_only=True)
+    if not isinstance(result, Mapping) or result.get("status") != "PASS" or \
+       result.get("construct_only") is not True or \
+       result.get("target_dispatch_count") != 0:
+      raise RuntimeError(f"{queue_mode} candidate runtime preconstruction did not pass")
+    lifecycle = result.get("persistent_session_lifecycle")
+    if not isinstance(lifecycle, Mapping) or \
+       lifecycle.get("initialization_count") != 1 or \
+       not isinstance(lifecycle.get("buffer_ranges"), Mapping) or not lifecycle["buffer_ranges"] or \
+       not isinstance(lifecycle.get("runtime_identity"), Mapping) or not lifecycle["runtime_identity"]:
+      raise RuntimeError(
+        f"{queue_mode} candidate runtime preconstruction left an incomplete session")
+    return result
+
   setattr(run, "persistent_session_state", persistent_session_state)
+  setattr(run, "preconstruct", preconstruct)
   return run
 
 
