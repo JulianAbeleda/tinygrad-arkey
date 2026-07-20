@@ -1,5 +1,103 @@
 # Qwen3-14B generated-prefill Claude handoff
 
+## 1.13 Current status 2026-07-20: PM4 pre-submit decoder FIXED and independently verified; C5 guarded dispatch is now unblocked
+
+The §1.12 blocker is resolved. The PM4 pre-submit authority mismatch was a **CPU-side validator bug, not a
+producer bug**: `_validate_pm4_pre_submit_snapshot` hardcoded `workgroup.register_index == 0`, but
+`AMDComputeQueue.exec` writes the local size through the `regCOMPUTE_START_X` 8-register block
+`[0, 0, 0, *local_size, 0, 0]`, so `regCOMPUTE_NUM_THREAD_X` is decoded at `START_X + 3`. The decoder always
+reported `register_index = 3` correctly; the validator rejected the correct value. Fixed in **`dc2a72455`** (change
+`!= 0` → `!= 3`, plus an explanatory comment, a real frozen PM4 fixture at
+`test/unit/fixtures/ffn_gate_up_pm4_pre_submit_real.json`, and 7 regression tests). Commit is on `origin/master`.
+
+### Independent verification (this review)
+
+- Decoder now PASSES on the real frozen packet, and the no-doorbell v2 diagnostic reaches **`status: PASS`,
+  `all_checks_pass: true`, `health_before/after: true`, `kernel_faults: []`, `target_dispatch_submitted: false`,
+  `native_submit_call_count: 0`** — i.e. a clean pass with **zero dispatch / no doorbell**.
+- The committed fixture was checked against a **fresh, independent zero-dispatch GPU capture**. Every
+  layout-derived field matched exactly: `pm4_dword_count = 141`; packet offsets `54/77/84/94`;
+  `workgroup register_index = 3`, `size = [256,1,1]`; `dispatch group_counts = [136,4,1]`,
+  `dispatch_initiator = 32773`; `kernarg user_data register_index = 0`; all 18 `checks` True. Only `pm4_sha256`
+  differs, which is expected because VAs change per run. The exact match of the compiled-layout fields against an
+  independent run is strong evidence the fixture is a **genuine capture**, not authored to pass.
+- Full guarded-correctness suite: **78/78 green**, including the 4 pass-path + 3 fail-closed corruption tests. The
+  corruption test that resets `workgroup register_index` back to `0` still raises `ValueError`, confirming the fix
+  remains an **exact-value assertion (fail-closed), not a loosened tautology**.
+
+### Review verdict on `dc2a72455` (deepseek)
+
+Good, disciplined work. Correct root cause (the `START_X + 3` layout), fail-closed invariant preserved, scope kept
+tight (only the workgroup assertion changed; `user_data`/`program` correctly left at `register_index == 0`, which
+the fixture confirms is right because this program's scratch/dispatch-ptr SGPR flags are off, so the kernarg VA does
+sit at `USER_DATA_0[0:2]`), and the new tests genuinely exercise the corrected path. Remaining closeout gaps, none
+of them correctness issues: (1) no fresh no-doorbell v2 PASS evidence JSON was retained under `docs/artifacts/.../
+evidence/` (the two saved `pm4-no-doorbell-*` artifacts are still the pre-fix BLOCKED envelopes); (2) handoff was
+not updated (done here); (3) cosmetic — three `\`-continued lines in the boolean chain shifted to 4-space indent.
+
+### Exhaustive remaining-work runbook (for deepseek to continue)
+
+Authority docs are unchanged: `docs/generated-prefill-role-certification-method-20260718.md` (C0–C9 ladder) and
+`docs/qwen3-14b-generated-prefill-completion-scope-20260714.md` (final promotion authority). Ladder to the end
+goal: **fix decoder (DONE) → C5 guarded dispatch → ffn_gate_up C6–C8 → six-row policy → whole-model Phase 6/7.**
+Non-negotiables apply throughout: fail-closed on missing/ambiguous evidence; no hidden dense dequant / scratch
+spill / handwritten-oracle substitution; preserve exact llama recurrence ordering and rounding (no FMA /
+reassociation / moved fp16 boundaries); route selection from workload+hardware facts, never a model-name/VRAM
+branch; keep `production_promotion=false` until the whole-model gate passes; small coherent commits pushed to
+`origin/master`; never rewrite or delete user stashes; do not begin performance autoscan until beyond-parity is
+proven. Correctness before timing — a probe, single tile, or partial grid is never a full-role result.
+
+**A5 closeout first (small):** on the AMD host, regenerate the no-doorbell v2 PASS snapshot and retain it as an
+immutable evidence JSON under the `ffn-gate-up-staged` evidence directory (so the fix has a durable PASS artifact,
+not only a green test). Fix the cosmetic indent while touching the file. Commit + push.
+
+**Phase B — clear C5 (the first real GPU dispatch since the §1.11 fault).** Run each step as a single guarded child
+that stops immediately on any fault, unhealthy probe, timeout, or untouched-output corruption. **No automatic
+ladder escalation** — gate every rung manually.
+- **B1.** Guarded real `(1, 1, 1)` reduced-grid dispatch via `extra/qk/mmq_ffn_gate_up_pm4_reduced_grid_runner.py`,
+  local size `256×1×1`. With the decoder now trustworthy, the pre-submit snapshot is authoritative: either the tile
+  executes clean (compare the touched `128×128` region to the declared authority, retain PASS), or it **reproduces
+  the §1.11 fault** — in which case you now have a trustworthy pre-submit snapshot of the exact faulting command.
+- **B1-fault path.** Leading hypothesis from §1.11: the zero / 4-GiB TCP data-read addresses cannot come from any
+  legal offset off the five-buffer bases (largest allocation 35,651,584 B), so suspect an invalid realized
+  pointer/base or native address-register corruption. Prime concrete lead: the known-good frozen control
+  `99c7ee0c…` executed the same ABI+geometry correctly; the current `149ba322…` differs only in schedule /
+  instruction order. Diff the two schedules, root-cause on CPU, re-verify no-doorbell, then retry B1. Do not brute-
+  force grid/schedule variants — one proven root cause.
+- **B2.** Walk the reduced-grid ladder one rung at a time — `(2,1,1) → (1,2,1) → (1,4,1) → (8,4,1) → (32,4,1) →
+  (40,4,1) → (41,4,1) → (136,1,1)` (the runner's allowlist) — stopping on first anomaly, retaining evidence per rung.
+- **B3.** C5 proper per the method doc: phase-isolated prefix-1 then prefix-3 full dispatches (all five kernarg
+  qwords nonzero/ordered/sized, dispatch-under-census, compare + health-check). Reuse the phase-isolated
+  producer/target path already proven for `attn_qo`. Exit B = C5 prefix-1 and prefix-3 pass with numeric comparison
+  and clean health.
+
+**Phase C — ffn_gate_up to `CERTIFIED_WIN`.**
+- **C6:** full 20 ordered K256 epochs on the frozen family; prove no recompile / fallback / hidden route / missing
+  epoch; compare the complete **8,912,896-value** output to the declared authority (zero mismatch, finite,
+  tolerance-clean, healthy post-run canary).
+- **C7:** prove `dense_fp16_weight_materialization=false`; peak bytes ≤ admitted budget.
+- **C8:** time the **complete 20-epoch role** (including activation prep + sync — never one epoch vs full-K
+  fallback) in matched warmed sessions vs the direct-packed comparator (**≈ 2.762 ms**, §13.2); qualify **PM4 and
+  AQL separately**; Q4 target ≥ 60 aggregate logical TFLOP/s. Beat comparator ⇒ `CERTIFIED_WIN`; C0–C7 clean but
+  lose ⇒ `CERTIFIED_FALLBACK`; cross-route fault at C8 ⇒ `BLOCKED_AT_C8` (not fallback).
+
+**Phase D — close the six-row policy.** Same C0–C8 ladder, reusing the now-proven decoder/harness/phase-isolated
+path: `attn_qo` (passes C1–C6; resolve its C8 `BLOCKED_AT_C8` safety disqualification, then C7); `attn_kv`
+(correctness done; finish C0A producer/spec, C1 durability, C3 final-native certificate, C7, C8); `ffn_down`
+(512,5120,17408) from C0/C1 through C8 — shared-N5120 donor evidence does not count; bind the two Q6 direct-packed
+fallback rows into the contract. Assemble the immutable six-row policy (4 Q4 exact-bound + 2 Q6 fallback rows) with
+live registry/runtime binding, fail-closed on missing evidence / identity drift / unknown workload.
+
+**Phase E — whole-model promotion (the end goal).** Phase 6: live mixed-route Qwen3-14B prefill with route census +
+decode-regression gate + one-change rollback to direct-packed. Phase 7: whole-prefill synchronized tok/s at
+contexts 512 / 1024 / 2048 / 4096, tinygrad vs llama.cpp, three alternating pinned-clock sessions with raw samples
+retained; Boltbeam attribution on any miss. Promotion gate: every context median > llama, paired 95% lower bound
+> 1.00, geo-mean ≥ 105% of llama, project target ≥ 2000 tok/s, decode within tolerance. Only then promote to
+production and permit autoscan.
+
+**Immediate next action:** do the A5 closeout, then execute B1 (guarded `(1,1,1)` dispatch) — the first real GPU
+launch since the §1.11 fault.
+
 ## 1.12 Current status 2026-07-19: PM4 v2 pre-submit authority mismatch now blocking no-doorbell + reduced-grid
 
 Current state is a CPU-discovered contract mismatch in the PM4 pre-submit authority path, not a runtime fault.
