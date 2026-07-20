@@ -23,3 +23,10 @@ Controlled LDS sweep on real gfx1100: a synthetic minimal WMMA kernel with **tun
 - **If the wedge is LDS-independent** (same grid threshold regardless of LDS, or no synthetic wedge at all) → H2 → the wedge is our kernel/dispatch, and the lean-LDS rebuild alone won't fix it; the real fix is elsewhere (kernel bug / dispatch path), and int8-MMQ is still the throughput target but needs the bug found.
 
 Result decides whether "rebuild int8-MMQ lean" is the path or whether we chase a dispatch/kernel bug.
+
+## RESULT (2026-07-20): H1 REFUTED — LDS fatness is NOT the wedge cause
+Synthetic tunable-LDS sweep (256-thread/8-wave workgroups, DEFINE_LOCAL K bytes, full-buffer write + barrier + readback, real AMDISARenderer + HCQ dispatch), 6 LDS sizes × 5 grids = **30/30 CLEAN**, including the **exact original wedge condition (57,856 B @ 64 wg)** and the maximal (65,536 B @ 544 wg). 0 wedges, GPU healthy throughout, journal clean. Occupancy classes 4/2/1 wg-per-CU all ran identically.
+
+**Verdict: H2.** The wedge does not track LDS size or occupancy. Rebuilding int8-MMQ lean (43 KB) will NOT by itself remove the wedge. Caveat: the synthetic kernel had **no WMMA** (minimal variant), so this rules out LDS/occupancy/barrier/dispatch-shape but leaves the real kernel's **WMMA (`v_wmma_i32_16x16x16_iu8`) traffic or memory-access pattern** as the remaining suspect.
+
+**Broader read:** llama's int8-MMQ (same tile/pack, WMMA, 544 wg) runs correct+fast; our *generated* int8-MMQ wedges and our *generated* fp16-dequant produces wrong multi-wave numbers. Tile/pack/waits now all match llama. So the root cause is a **generated-codegen bug in multi-wave WMMA execution**, not LDS/occupancy/tiling/waits. That is the thing to chase (or route around by using a kernel that already works — llama.cpp, or the hand kernel which is correct in real full-model runs).
