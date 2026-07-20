@@ -43,6 +43,28 @@ FROZEN_STAGED_C8_TIMING_RECEIPT_SCHEMA = \
   "tinygrad.mmq_q4k_q8_1.frozen_staged_phase_timing.v1"
 FROZEN_STAGED_RUNTIME_CANARY_SCHEMA = \
   "tinygrad.mmq_q4k_q8_1.frozen_staged_runtime_canary.v1"
+RUNTIME_DISPATCH_FAILURE_SCHEMA = \
+  "tinygrad.mmq_q4k_q8_1.runtime_dispatch_failure.v1"
+RUNTIME_DISPATCH_FAILURE_ATTR = "mmq_runtime_dispatch_failure"
+PM4_PRE_SUBMIT_SCHEMA = \
+  "tinygrad.mmq_q4k_q8_1.pm4_pre_submit_snapshot.v1"
+PM4_PRE_SUBMIT_CAPTURE_POINT = \
+  "AMDComputeQueue._submit_after_complete_command_construction_" \
+  "before_ring_copy_and_doorbell"
+PM4_PRE_SUBMIT_CHECK_KEYS = frozenset({
+  "queue_device_matches_submit_device",
+  "runtime_device_matches_submit_device",
+  "args_state_program_matches_runtime",
+  "exact_five_argument_buffers",
+  "exact_five_kernarg_qwords",
+  "five_qwords_match_constructed_buffers",
+  "pm4_command_words_concrete",
+  "pm4_command_stream_nonempty",
+  "pm4_packet_stream_decoded",
+  "pm4_kernarg_user_data_found_once",
+  "pm4_kernarg_uses_user_data_0",
+  "pm4_kernarg_user_data_matches_kernarg_va",
+})
 _TARGET_BUFFER_NAMES = ("output", "q4", "q8_values", "q8_scales", "q8_original_sums")
 ATTN_QO_DIAGNOSTIC_GLOBAL_GRIDS = (
   (1, 4, 1), (8, 4, 1), (9, 4, 1), (16, 4, 1), (32, 4, 1), (40, 4, 1),
@@ -745,6 +767,100 @@ def _launch_buffer_evidence(names: tuple[str, ...], buffers: tuple[Any, ...],
   return rows
 
 
+def _pm4_pre_submit_snapshot(
+    queue: Any, submit_dev: Any, runtime: Any, args_state: Any,
+    ) -> dict[str, Any]:
+  """Snapshot concrete PM4/kernarg state before ring copy and doorbell."""
+  command_words = list(queue._q)
+  concrete = all(
+    isinstance(value, int) and not isinstance(value, bool) and
+    0 <= value <= 0xffffffff for value in command_words)
+  command_bytes = b"".join(
+    int(value).to_bytes(4, "little") for value in command_words
+  ) if concrete else b""
+  argument_buffers = [{
+    "slot": slot, "va": int(buf.va_addr), "size": int(buf.size),
+  } for slot, buf in enumerate(args_state.bufs)]
+  kernarg_qwords = [
+    int(value) for value in
+    args_state.buf.cpu_view().view(size=40, fmt="Q")[:5]]
+  pm4, gc = getattr(queue, "pm4", None), getattr(queue, "gc", None)
+  user_data = getattr(gc, "regCOMPUTE_USER_DATA_0", None)
+  user_data_matches: list[dict[str, int]] = []
+  packet_stream_decoded = bool(concrete and pm4 is not None and
+    user_data is not None)
+  cursor = 0
+  while packet_stream_decoded and cursor < len(command_words):
+    header = command_words[cursor]
+    if header >> 30 != 3:
+      packet_stream_decoded = False
+      break
+    packet_dword_count = ((header >> 16) & 0x3fff) + 2
+    packet_end = cursor + packet_dword_count
+    if packet_end > len(command_words):
+      packet_stream_decoded = False
+      break
+    opcode = (header >> 8) & 0xff
+    if opcode == int(pm4.PACKET3_SET_SH_REG):
+      payload = command_words[cursor+1:packet_end]
+      register_start = int(pm4.PACKET3_SET_SH_REG_START) + \
+        (payload[0] & 0xffff)
+      register_index = int(user_data.addr[0]) - register_start
+      if 0 <= register_index and register_index + 2 < len(payload):
+        low, high = payload[register_index+1:register_index+3]
+        user_data_matches.append({
+          "packet_dword_offset": cursor,
+          "register_index": register_index,
+          "low_dword": low, "high_dword": high,
+          "pointer": low | (high << 32),
+        })
+    cursor = packet_end
+  user_data_evidence = user_data_matches[0] \
+    if len(user_data_matches) == 1 else None
+  checks = {
+    "queue_device_matches_submit_device":
+      getattr(queue, "dev", None) is submit_dev,
+    "runtime_device_matches_submit_device":
+      getattr(runtime, "dev", None) is submit_dev,
+    "args_state_program_matches_runtime":
+      getattr(args_state, "prg", None) is runtime,
+    "exact_five_argument_buffers": len(argument_buffers) == 5,
+    "exact_five_kernarg_qwords": len(kernarg_qwords) == 5,
+    "five_qwords_match_constructed_buffers":
+      kernarg_qwords == [row["va"] for row in argument_buffers],
+    "pm4_command_words_concrete": concrete,
+    "pm4_command_stream_nonempty": bool(command_bytes),
+    "pm4_packet_stream_decoded": packet_stream_decoded,
+    "pm4_kernarg_user_data_found_once": len(user_data_matches) == 1,
+    "pm4_kernarg_uses_user_data_0":
+      user_data_evidence is not None and
+      user_data_evidence["register_index"] == 0,
+    "pm4_kernarg_user_data_matches_kernarg_va":
+      user_data_evidence is not None and
+      user_data_evidence["pointer"] == int(args_state.buf.va_addr),
+  }
+  if set(checks) != PM4_PRE_SUBMIT_CHECK_KEYS:
+    raise RuntimeError("PM4 pre-submit implementation check keys drifted")
+  return {
+    "schema": PM4_PRE_SUBMIT_SCHEMA,
+    "capture_point": PM4_PRE_SUBMIT_CAPTURE_POINT,
+    "runtime_object_identity": id(runtime),
+    "runtime_class":
+      f"{type(runtime).__module__}.{type(runtime).__qualname__}",
+    "runtime_name": getattr(runtime, "name", None),
+    "runtime_device": getattr(getattr(runtime, "dev", None), "device", None),
+    "kernarg_va": int(args_state.buf.va_addr),
+    "kernarg_nbytes": int(args_state.buf.size),
+    "kernarg_qwords": kernarg_qwords,
+    "argument_buffers": argument_buffers,
+    "pm4_kernarg_user_data": user_data_evidence,
+    "pm4_dword_count": len(command_words),
+    "pm4_sha256":
+      hashlib.sha256(command_bytes).hexdigest() if command_bytes else None,
+    "checks": checks, "all_checks_pass": all(checks.values()),
+  }
+
+
 def _dispatch_with_runtime_evidence(runtime: Any, buffers: tuple[Any, ...], globals_: tuple[int, ...],
                                     *, global_size: tuple[int, int, int], local_size: tuple[int, int, int] | None,
                                     vals: tuple[Any, ...], runtime_evidence: dict[str, Any],
@@ -759,6 +875,7 @@ def _dispatch_with_runtime_evidence(runtime: Any, buffers: tuple[Any, ...], glob
   prior_instance_fill = getattr(runtime, "__dict__", {}).get("fill_kernargs")
   original_fill = runtime.fill_kernargs
   captured: dict[str, Any] = {}
+  original_pm4_submit = None
 
   def capture_kernargs(bufs, values=(), kernargs=None):
     state = original_fill(bufs, values, kernargs)
@@ -766,12 +883,36 @@ def _dispatch_with_runtime_evidence(runtime: Any, buffers: tuple[Any, ...], glob
     captured["bound_pointer_words"] = [int(getattr(buf, "va_addr")) for buf in state.bufs[:5]]
     return state
 
+  if getattr(getattr(runtime, "dev", None), "is_aql", None) is False:
+    from tinygrad.runtime import ops_amd
+    original_pm4_submit = ops_amd.AMDComputeQueue._submit
+    def capture_pm4_submit(queue, submit_dev):
+      state = captured.get("state")
+      if state is not None and submit_dev is runtime.dev:
+        if "pre_submit" in captured:
+          raise RuntimeError(
+            "target runtime produced multiple PM4 pre-submit snapshots")
+        snapshot = _pm4_pre_submit_snapshot(
+          queue, submit_dev, runtime, state)
+        if snapshot["all_checks_pass"] is not True:
+          raise RuntimeError(
+            "target PM4 pre-submit snapshot failed exact checks")
+        captured["pre_submit"] = snapshot
+      return original_pm4_submit(queue, submit_dev)
+    ops_amd.AMDComputeQueue._submit = capture_pm4_submit
+
   runtime.fill_kernargs = capture_kernargs
+  failure: BaseException | None = None
   try:
     result = runtime(*args, global_size=global_size, local_size=local_size, vals=vals, wait=wait)
+  except BaseException as exc:
+    failure = exc
+    raise
   finally:
     if had_instance_fill: runtime.fill_kernargs = prior_instance_fill
     else: delattr(runtime, "fill_kernargs")
+    if original_pm4_submit is not None:
+      ops_amd.AMDComputeQueue._submit = original_pm4_submit
     state = captured.get("state")
     if state is not None:
       launch["kernarg"] = {
@@ -790,6 +931,24 @@ def _dispatch_with_runtime_evidence(runtime: Any, buffers: tuple[Any, ...], glob
       launch["kernarg"] = None
     runtime_evidence["launches"].append(launch)
     runtime_evidence["launch_count"] = len(runtime_evidence["launches"])
+    if failure is not None:
+      failure_payload = {
+        "schema": RUNTIME_DISPATCH_FAILURE_SCHEMA,
+        "failure_boundary": (
+          "runtime_call_raised_after_kernarg_capture_before_return"
+          if state is not None else
+          "runtime_call_raised_before_kernarg_capture"),
+        "wait": wait, "launch": launch,
+        "pre_submit": captured.get("pre_submit"),
+        "authoritative_qword_snapshot":
+          "pre_submit" if captured.get("pre_submit") is not None else None,
+      }
+      try:
+        setattr(failure, RUNTIME_DISPATCH_FAILURE_ATTR, failure_payload)
+      except BaseException:
+        # Never replace the device/runtime exception with an observability
+        # failure. The caller will report that no structured launch survived.
+        pass
   return result
 
 
@@ -2885,6 +3044,17 @@ def _realize_with_pm4_dispatch_census(
       "expected_program_identity": dict(row["expected_program_identity"]),
       "kernarg_qwords": list(row["kernarg_qwords"]),
       "argument_buffers": [dict(argument) for argument in row["argument_buffers"]],
+      "pre_submit_snapshot": {
+        **row["pre_submit_snapshot"],
+        "kernarg_qwords":
+          list(row["pre_submit_snapshot"]["kernarg_qwords"]),
+        "argument_buffers": [
+          dict(argument)
+          for argument in row["pre_submit_snapshot"]["argument_buffers"]],
+        "pm4_kernarg_user_data":
+          dict(row["pre_submit_snapshot"]["pm4_kernarg_user_data"]),
+        "checks": dict(row["pre_submit_snapshot"]["checks"]),
+      },
       "runtime_lifecycle": {
         **row["runtime_lifecycle"], "checks": dict(row["runtime_lifecycle"]["checks"])},
       "global_size": list(row["global_size"]), "local_size": list(row["local_size"]),
@@ -2958,25 +3128,25 @@ def _realize_with_pm4_dispatch_census(
     expected_global, expected_local = target_launch_dims[call_index]
     expected_row = None if expected_vas is None else expected_vas[call_index]
     args_state, lifecycle = built["args_state"], built["runtime_lifecycle"]
-    kernarg_qwords = [
-      int(value) for value in args_state.buf.cpu_view().view(size=40, fmt='Q')[:5]]
-    argument_vas = [row["va"] for row in built["argument_buffers"]]
+    pre_submit = _pm4_pre_submit_snapshot(
+      queue, submit_dev, built["program"], args_state)
+    kernarg_qwords = pre_submit["kernarg_qwords"]
+    argument_vas = [
+      row["va"] for row in pre_submit["argument_buffers"]]
     kernarg_start = lifecycle["kernarg_va"]
     kernarg_end = kernarg_start + lifecycle["kernarg_allocation_nbytes"]
     prior_ranges = [
       (row["runtime_lifecycle"]["kernarg_va"],
        row["runtime_lifecycle"]["kernarg_va"] + row["runtime_lifecycle"]["kernarg_allocation_nbytes"])
       for row in calls]
-    command_words = list(queue._q)
-    concrete_command_words = all(
-      isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= 0xffffffff
-      for value in command_words)
-    command_bytes = b"".join(
-      int(value).to_bytes(4, "little") for value in command_words) if concrete_command_words else b""
     checks = {
       "queue_class_is_native_pm4": type(queue) is ops_amd.AMDComputeQueue,
       "queue_device_matches_submit_device": queue.dev is submit_dev is dev,
       "device_reports_pm4": not bool(getattr(submit_dev, "is_aql", False)),
+      "pre_submit_snapshot_checks_pass":
+        pre_submit["all_checks_pass"] is True,
+      "pre_submit_argument_buffers_match_exec":
+        pre_submit["argument_buffers"] == built["argument_buffers"],
       "ordered_program_identity_matches": built["program_identity"] == expected_identity,
       **lifecycle["checks"],
       "runtime_cache_exact_program_binding":
@@ -2994,9 +3164,12 @@ def _realize_with_pm4_dispatch_census(
       "wait_and_barrier_commands_precede_exec": built["before_exec_dword_count"] > 0,
       "exec_appended_pm4_commands":
         built["after_exec_dword_count"] > built["before_exec_dword_count"],
-      "signal_commands_follow_exec": len(command_words) > built["after_exec_dword_count"],
-      "pm4_command_words_concrete": concrete_command_words,
-      "pm4_command_stream_nonempty": bool(command_bytes),
+      "signal_commands_follow_exec":
+        pre_submit["pm4_dword_count"] > built["after_exec_dword_count"],
+      "pm4_command_words_concrete":
+        pre_submit["checks"]["pm4_command_words_concrete"],
+      "pm4_command_stream_nonempty":
+        pre_submit["checks"]["pm4_command_stream_nonempty"],
       **_audit_target_aql_kernargs(
         kernarg_qwords, [row["kernarg_qwords"] for row in calls],
         expected_vas=expected_row, require_fixed_scale_va=False,
@@ -3011,11 +3184,12 @@ def _realize_with_pm4_dispatch_census(
       "kernarg_qwords": kernarg_qwords,
       "expected_vas": expected_row,
       "argument_buffers": built["argument_buffers"],
+      "pre_submit_snapshot": pre_submit,
       "runtime_lifecycle": lifecycle,
       "global_size": built["global_size"], "local_size": built["local_size"],
       "expected_global_size": expected_global, "expected_local_size": expected_local,
-      "pm4_dword_count": len(command_words),
-      "pm4_sha256": hashlib.sha256(command_bytes).hexdigest() if command_bytes else None,
+      "pm4_dword_count": pre_submit["pm4_dword_count"],
+      "pm4_sha256": pre_submit["pm4_sha256"],
       "before_exec_dword_count": built["before_exec_dword_count"],
       "after_exec_dword_count": built["after_exec_dword_count"],
       "checks": checks, "all_checks_pass": accepted,

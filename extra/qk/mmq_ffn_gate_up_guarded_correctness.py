@@ -36,6 +36,9 @@ JOINT_C7_SCHEMA = f"{SCHEMA}.joint_c7"
 PRODUCER_SCHEMA = f"{SCHEMA}.q8_producer"
 LOW_LEVEL_ATTESTATION_SCHEMA = \
   "tinygrad.mmq_q4k_q8_1.frozen_staged_low_level_attestation.v1"
+LOW_LEVEL_INVOCATION_FAILURE_SCHEMA = \
+  "tinygrad.mmq_q4k_q8_1.frozen_staged_low_level_failure.v1"
+LOW_LEVEL_INVOCATION_FAILURE_ATTR = "frozen_staged_low_level_failure"
 QUEUE_MODES = ("PM4", "AQL")
 PREFIXES = (1, 3, 20)
 OUTPUT_SHAPE = (512, 17408)
@@ -847,6 +850,14 @@ def run_candidate_prefix_child(request: CandidatePrefixRequest) -> dict[str, Any
       "attempt": attempt,
     }
   except BaseException as exc:
+    low_level_failure = getattr(
+      exc, LOW_LEVEL_INVOCATION_FAILURE_ATTR, None)
+    if isinstance(low_level_failure, Mapping):
+      low_level_failure = dict(low_level_failure)
+      attempt["invocation_failure"] = low_level_failure
+      if low_level_failure.get("schema") == \
+           LOW_LEVEL_INVOCATION_FAILURE_SCHEMA:
+        attempt["invocation_subphase"] = low_level_failure.get("subphase")
     payload = {
       **base, "exact_blocker":
         f"{queue_mode} prefix-{prefix_epochs} failed closed: "

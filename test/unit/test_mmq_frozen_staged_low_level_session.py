@@ -12,7 +12,8 @@ from extra.qk.mmq_frozen_staged_low_level_session import (
   ABI_NAMES, ATTESTATION_SCHEMA, CANDIDATE_TRACE_SCHEMA,
   FrozenStagedAbiSlot, FrozenStagedLowLevelDependencies,
   FrozenStagedLowLevelInvocation, FrozenStagedLowLevelSession,
-  FrozenStagedProgramAuthority,
+  FrozenStagedProgramAuthority, INVOCATION_FAILURE_ATTR,
+  INVOCATION_FAILURE_SCHEMA,
 )
 
 
@@ -85,6 +86,7 @@ class FakeDependencies:
     self.fail_transfer = False
     self.cleanup_sync_failure = False
     self.cleanup_sync_armed = False
+    self.dispatch_failure = False
 
   def _allocate_bytes(self, label: str, nbytes: int) -> FakeBuffer:
     value = FakeBuffer(label, self.next_va, nbytes)
@@ -181,6 +183,74 @@ class FakeDependencies:
         _raw("wrong") if self.launch_drift == "binary_sha256" else \
         False if self.launch_drift == "kernarg_pointer_words_match_bound" \
         else [1, 2, 3]
+    if self.dispatch_failure:
+      launch = {
+        "epoch": epoch, "global_size": list(authority.global_size),
+        "local_size": list(authority.local_size),
+        "arguments": [
+          {
+            "call_index": slot, "slot": slot, "name": ABI_NAMES[slot],
+            "va": value.va, "base_va": value.va, "offset_bytes": 0,
+            "nbytes": value.nbytes, "base_nbytes": value.nbytes,
+            "va_matches_base_offset": True,
+          }
+          for slot, value in enumerate(buffers)],
+        "kernarg": {
+          "va": 0x123456789000, "size": 40,
+          "bound_pointer_words": [value.va for value in buffers],
+          "pointer_words": None,
+          "pointer_words_read_error":
+            "RuntimeError: simulated post-fault kernarg mapping loss",
+        },
+      }
+      failure = RuntimeError("injected target dispatch fault")
+      pre_submit_checks = {
+        "queue_device_matches_submit_device": True,
+        "runtime_device_matches_submit_device": True,
+        "args_state_program_matches_runtime": True,
+        "exact_five_argument_buffers": True,
+        "exact_five_kernarg_qwords": True,
+        "five_qwords_match_constructed_buffers": True,
+        "pm4_command_words_concrete": True,
+        "pm4_command_stream_nonempty": True,
+        "pm4_packet_stream_decoded": True,
+        "pm4_kernarg_user_data_found_once": True,
+        "pm4_kernarg_uses_user_data_0": True,
+        "pm4_kernarg_user_data_matches_kernarg_va": True,
+      }
+      failure.mmq_runtime_dispatch_failure = {
+        "schema": "tinygrad.mmq_q4k_q8_1.runtime_dispatch_failure.v1",
+        "failure_boundary":
+          "runtime_call_raised_after_kernarg_capture_before_return",
+        "wait": True, "launch": launch,
+        "authoritative_qword_snapshot": "pre_submit",
+        "pre_submit": {
+          "schema":
+            "tinygrad.mmq_q4k_q8_1.pm4_pre_submit_snapshot.v1",
+          "capture_point":
+            "AMDComputeQueue._submit_after_complete_command_construction_"
+            "before_ring_copy_and_doorbell",
+          "runtime_object_identity": id(runtime),
+          "runtime_class": self.runtime_row["runtime_class"],
+          "runtime_name": self.runtime_row["runtime_name"],
+          "runtime_device": self.runtime_row["runtime_device"],
+          "kernarg_va": launch["kernarg"]["va"],
+          "kernarg_nbytes": launch["kernarg"]["size"],
+          "kernarg_qwords": [value.va for value in buffers],
+          "pm4_kernarg_user_data": {
+            "packet_dword_offset": 11, "register_index": 0,
+            "low_dword": launch["kernarg"]["va"] & 0xffffffff,
+            "high_dword": launch["kernarg"]["va"] >> 32,
+            "pointer": launch["kernarg"]["va"],
+          },
+          "argument_buffers": [
+            {"slot": slot, "va": value.va, "size": value.nbytes}
+            for slot, value in enumerate(buffers)],
+          "pm4_dword_count": 17, "pm4_sha256": "3" * 64,
+          "checks": pre_submit_checks, "all_checks_pass": True,
+        },
+      }
+      raise failure
     return row
 
   def clock_ns(self):
@@ -577,6 +647,81 @@ def test_q8_failure_cleanup_drains_before_release_or_retains_on_sync_failure():
   gc.collect()
   assert session._failed_q8_sources is not None
   assert all(ref() is not None for ref in fake.q8_refs)
+
+
+def test_dispatch_fault_retains_exact_low_level_phase_runtime_and_launch():
+  authority, fake, _, session = _prepared()
+  fake.dispatch_failure = True
+  with pytest.raises(
+      RuntimeError, match="injected target dispatch fault") as caught:
+    session.invoke(1)
+  failure = getattr(caught.value, INVOCATION_FAILURE_ATTR)
+  assert failure["schema"] == INVOCATION_FAILURE_SCHEMA
+  assert failure["phase"] == "epoch_dispatch"
+  assert failure["subphase"] == \
+    "runtime_call_raised_after_kernarg_capture_before_return"
+  assert failure["epoch"] == 0 and failure["queue_mode"] == "PM4"
+  assert failure["family_identity"] == authority.family_identity
+  assert failure["program_key"] == authority.program_key
+  assert failure["binary_sha256"] == authority.binary_sha256
+  assert failure["runtime_observation"] == \
+    session.prepared_runtime_observation
+  assert failure["runtime_observation"]["runtime_object_identity"] == \
+    id(fake.runtime)
+  assert failure["fixed_five_vas"] == list(session.fixed_five_vas)
+  dispatch = failure["dispatch_failure"]
+  assert dispatch["all_authority_checks_pass"] is True
+  assert all(dispatch["checks"].values())
+  assert dispatch["authoritative_qword_snapshot"] == "pre_submit"
+  assert dispatch["pre_submit"]["kernarg_qwords"] == \
+    list(session.fixed_five_vas)
+  assert [row["va"] for row in
+          dispatch["pre_submit"]["argument_buffers"]] == \
+    list(session.fixed_five_vas)
+  assert dispatch["pre_submit"]["runtime_object_identity"] == id(fake.runtime)
+  assert dispatch["pre_submit"]["pm4_kernarg_user_data"]["pointer"] == \
+    dispatch["pre_submit"]["kernarg_va"]
+  assert not any(dispatch["post_failure_checks"].values())
+  assert dispatch["launch"]["global_size"] == \
+    list(authority.global_size)
+  assert dispatch["launch"]["local_size"] == \
+    list(authority.local_size)
+  assert [row["va"] for row in dispatch["launch"]["arguments"]] == \
+    list(session.fixed_five_vas)
+  assert dispatch["launch"]["kernarg"]["pointer_words"] is None
+  assert "simulated post-fault kernarg mapping loss" in \
+    dispatch["launch"]["kernarg"]["pointer_words_read_error"]
+  assert session.has_pending_invocation is False
+  with pytest.raises(RuntimeError, match="failed closed"):
+    session.invoke(1)
+
+
+@pytest.mark.parametrize("mutation", ("missing", "extra"))
+def test_dispatch_fault_rejects_mutated_pre_submit_internal_check_keys(
+    mutation):
+  _, fake, _, session = _prepared()
+  fake.dispatch_failure = True
+  original_dispatch = session.dependencies.dispatch
+
+  def mutate_failure(*args, **kwargs):
+    try:
+      return original_dispatch(*args, **kwargs)
+    except RuntimeError as exc:
+      checks = exc.mmq_runtime_dispatch_failure["pre_submit"]["checks"]
+      if mutation == "missing":
+        checks.pop("pm4_packet_stream_decoded")
+      else:
+        checks["fabricated_only_check"] = True
+      raise
+
+  object.__setattr__(session.dependencies, "dispatch", mutate_failure)
+  with pytest.raises(
+      RuntimeError, match="injected target dispatch fault") as caught:
+    session.invoke(1)
+  dispatch = getattr(
+    caught.value, INVOCATION_FAILURE_ATTR)["dispatch_failure"]
+  assert dispatch["checks"]["pre_submit_internal_checks_exact"] is False
+  assert dispatch["all_authority_checks_pass"] is False
 
 
 @pytest.mark.parametrize("field,value", (

@@ -21,6 +21,31 @@ PENDING_OBSERVATION_SCHEMA = \
   "tinygrad.mmq_q4k_q8_1.frozen_staged_low_level_pending.v1"
 ATTESTATION_SCHEMA = \
   "tinygrad.mmq_q4k_q8_1.frozen_staged_low_level_attestation.v1"
+INVOCATION_FAILURE_SCHEMA = \
+  "tinygrad.mmq_q4k_q8_1.frozen_staged_low_level_failure.v1"
+INVOCATION_FAILURE_ATTR = "frozen_staged_low_level_failure"
+RUNTIME_DISPATCH_FAILURE_SCHEMA = \
+  "tinygrad.mmq_q4k_q8_1.runtime_dispatch_failure.v1"
+RUNTIME_DISPATCH_FAILURE_ATTR = "mmq_runtime_dispatch_failure"
+PM4_PRE_SUBMIT_SCHEMA = \
+  "tinygrad.mmq_q4k_q8_1.pm4_pre_submit_snapshot.v1"
+PM4_PRE_SUBMIT_CAPTURE_POINT = \
+  "AMDComputeQueue._submit_after_complete_command_construction_" \
+  "before_ring_copy_and_doorbell"
+PM4_PRE_SUBMIT_CHECK_KEYS = frozenset({
+  "queue_device_matches_submit_device",
+  "runtime_device_matches_submit_device",
+  "args_state_program_matches_runtime",
+  "exact_five_argument_buffers",
+  "exact_five_kernarg_qwords",
+  "five_qwords_match_constructed_buffers",
+  "pm4_command_words_concrete",
+  "pm4_command_stream_nonempty",
+  "pm4_packet_stream_decoded",
+  "pm4_kernarg_user_data_found_once",
+  "pm4_kernarg_uses_user_data_0",
+  "pm4_kernarg_user_data_matches_kernarg_va",
+})
 QUEUE_MODES = ("PM4", "AQL")
 ABI_NAMES = (
   "output", "q4", "q8_values", "q8_scales", "q8_original_sums")
@@ -401,6 +426,97 @@ def _require_disjoint_buffer_ranges(
     raise ValueError(f"{label} buffer extents overlap")
 
 
+def _failed_dispatch_observation(
+    exc: BaseException, *, epoch: int,
+    authority: FrozenStagedProgramAuthority,
+    fixed_five_vas: tuple[int, ...],
+    runtime_observation: Mapping[str, Any],
+    ) -> dict[str, Any] | None:
+  raw = getattr(exc, RUNTIME_DISPATCH_FAILURE_ATTR, None)
+  if not isinstance(raw, Mapping):
+    return None
+  row = dict(raw)
+  launch_value = row.get("launch")
+  launch = dict(launch_value) if isinstance(launch_value, Mapping) else {}
+  arguments = launch.get("arguments")
+  argument_vas = [
+    item.get("va") for item in arguments
+  ] if isinstance(arguments, list) and all(
+    isinstance(item, Mapping) for item in arguments) else None
+  kernarg_value = launch.get("kernarg")
+  kernarg = dict(kernarg_value) if isinstance(kernarg_value, Mapping) else {}
+  pre_submit_value = row.get("pre_submit")
+  pre_submit = dict(pre_submit_value) \
+    if isinstance(pre_submit_value, Mapping) else {}
+  pre_submit_arguments = pre_submit.get("argument_buffers")
+  pre_submit_argument_vas = [
+    item.get("va") for item in pre_submit_arguments
+  ] if isinstance(pre_submit_arguments, list) and all(
+    isinstance(item, Mapping) for item in pre_submit_arguments) else None
+  pre_submit_checks = pre_submit.get("checks")
+  pre_submit_checks_exact = isinstance(pre_submit_checks, Mapping) and \
+    set(pre_submit_checks) == PM4_PRE_SUBMIT_CHECK_KEYS and all(
+      value is True for value in pre_submit_checks.values())
+  pm4_user_data_value = pre_submit.get("pm4_kernarg_user_data")
+  pm4_user_data = dict(pm4_user_data_value) \
+    if isinstance(pm4_user_data_value, Mapping) else {}
+  checks = {
+    "schema_exact": row.get("schema") == RUNTIME_DISPATCH_FAILURE_SCHEMA,
+    "failure_boundary_exact":
+      row.get("failure_boundary") ==
+      "runtime_call_raised_after_kernarg_capture_before_return",
+    "wait_true": row.get("wait") is True,
+    "epoch_exact": launch.get("epoch") == epoch,
+    "global_size_exact":
+      launch.get("global_size") == list(authority.global_size),
+    "local_size_exact":
+      launch.get("local_size") == list(authority.local_size),
+    "argument_vas_exact": argument_vas == list(fixed_five_vas),
+    "pre_submit_schema_exact":
+      pre_submit.get("schema") == PM4_PRE_SUBMIT_SCHEMA,
+    "pre_submit_capture_point_exact":
+      pre_submit.get("capture_point") == PM4_PRE_SUBMIT_CAPTURE_POINT,
+    "pre_submit_internal_checks_exact": pre_submit_checks_exact,
+    "pre_submit_all_checks_pass":
+      pre_submit.get("all_checks_pass") is True,
+    "pre_submit_argument_vas_exact":
+      pre_submit_argument_vas == list(fixed_five_vas),
+    "pre_submit_kernarg_qwords_exact":
+      pre_submit.get("kernarg_qwords") == list(fixed_five_vas),
+    "pre_submit_pm4_kernarg_user_data_exact":
+      pm4_user_data.get("register_index") == 0 and
+      pm4_user_data.get("pointer") == pre_submit.get("kernarg_va") and
+      pm4_user_data.get("pointer") == (
+        pm4_user_data.get("low_dword", -1) |
+        (pm4_user_data.get("high_dword", -1) << 32)),
+    "pre_submit_runtime_object_identity_exact":
+      pre_submit.get("runtime_object_identity") ==
+      runtime_observation["runtime_object_identity"],
+    "pre_submit_runtime_class_exact":
+      pre_submit.get("runtime_class") == runtime_observation["runtime_class"],
+    "pre_submit_runtime_name_exact":
+      pre_submit.get("runtime_name") == runtime_observation["runtime_name"],
+    "pre_submit_runtime_device_exact":
+      pre_submit.get("runtime_device") == runtime_observation["runtime_device"],
+  }
+  post_failure_checks = {
+    "kernarg_pointer_words_exact":
+      kernarg.get("pointer_words") == list(fixed_five_vas),
+    "kernarg_pointer_words_match_bound":
+      kernarg.get("pointer_words_match_bound") is True,
+  }
+  return {
+    "schema": RUNTIME_DISPATCH_FAILURE_SCHEMA,
+    "failure_boundary": row.get("failure_boundary"),
+    "wait": row.get("wait"), "epoch": epoch,
+    "authoritative_qword_snapshot": "pre_submit",
+    "pre_submit": pre_submit,
+    "launch": launch, "checks": checks,
+    "post_failure_checks": post_failure_checks,
+    "all_authority_checks_pass": all(checks.values()),
+  }
+
+
 def _runtime_observation(value: Any, authority: FrozenStagedProgramAuthority) -> dict[str, Any]:
   row = _mapping(value, "runtime observation")
   required = {
@@ -590,6 +706,7 @@ class FrozenStagedLowLevelSession:
     if not isinstance(cursor, int) or isinstance(cursor, bool) or cursor < 0:
       raise ValueError("low-level invocation clock must be non-negative")
     q8_sources: tuple[Any, Any, Any] | None = None
+    failure_phase, failure_epoch = "activation_producer", None
     try:
       def produce() -> tuple[Any, Any, Any]:
         nonlocal q8_sources
@@ -604,6 +721,7 @@ class FrozenStagedLowLevelSession:
 
       activation_phase, q8_sources, cursor = self._phase(cursor, produce)
 
+      failure_phase = "route_setup"
       def setup() -> None:
         current_runtime = _runtime_observation(
           self.dependencies.observe_runtime(self.runtime), self.authority)
@@ -613,6 +731,7 @@ class FrozenStagedLowLevelSession:
 
       route_setup_phase, _, cursor = self._phase(cursor, setup)
 
+      failure_phase = "output_initialization"
       def initialize_output() -> None:
         self.dependencies.zero_output(self.output)
         self.dependencies.synchronize()
@@ -624,8 +743,10 @@ class FrozenStagedLowLevelSession:
         self.q4_observation,
         *self._assert_all_ranges(q8_sources)[2:])
       for epoch in range(prefix_epochs):
+        failure_epoch = epoch
         epoch_row: dict[str, Any] = {"ordinal": epoch}
 
+        failure_phase = "epoch_gather"
         def gather() -> tuple[Any, Any, Any, Any]:
           views = tuple(
             self.dependencies.epoch_view(source, slot, epoch)
@@ -644,15 +765,18 @@ class FrozenStagedLowLevelSession:
         epoch_row["gather"], views, cursor = self._phase(cursor, gather)
         for phase_name, source, destination, slot in zip(
             _EPOCH_PHASES[1:5], views, self.stages, self.authority.abi[1:]):
+          failure_phase = f"epoch_{phase_name}"
           def transfer(
               source: Any = source, destination: Any = destination,
               nbytes: int = slot.nbytes,
               ) -> None:
             self.dependencies.transfer(destination, source, nbytes)
           epoch_row[phase_name], _, cursor = self._phase(cursor, transfer)
+        failure_phase = "epoch_staging_sync"
         epoch_row["staging_sync"], _, cursor = self._phase(
           cursor, self.dependencies.synchronize)
 
+        failure_phase = "epoch_dispatch"
         def dispatch() -> Mapping[str, Any]:
           return self.dependencies.dispatch(
             self.runtime, (self.output, *self.stages),
@@ -661,6 +785,7 @@ class FrozenStagedLowLevelSession:
         epoch_row["dispatch"], launch, cursor = self._phase(cursor, dispatch)
         launch_rows.append(dict(_mapping(
           launch, f"epoch {epoch} dispatch observation")))
+        failure_phase = "epoch_dispatch_sync"
         epoch_row["dispatch_sync"], _, cursor = self._phase(
           cursor, self.dependencies.synchronize)
         epoch_rows.append(epoch_row)
@@ -697,9 +822,38 @@ class FrozenStagedLowLevelSession:
         source_observations=tuple(source_observations))
       self._invocation_ordinal += 1
       return invocation
-    except BaseException:
+    except BaseException as exc:
       self._failed = True
       self._pending = None
+      dispatch_failure = None if failure_epoch is None else \
+        _failed_dispatch_observation(
+          exc, epoch=failure_epoch, authority=self.authority,
+          fixed_five_vas=self.fixed_five_vas,
+          runtime_observation=self.prepared_runtime_observation)
+      failure_payload = {
+        "schema": INVOCATION_FAILURE_SCHEMA,
+        "phase": failure_phase,
+        "subphase": (
+          dispatch_failure["failure_boundary"]
+          if dispatch_failure is not None else None),
+        "epoch": failure_epoch,
+        "queue_mode": self.prepared_runtime_observation["queue_mode"],
+        "family_identity": self.authority.family_identity,
+        "candidate_executable_identity":
+          self.authority.candidate_executable_identity,
+        "input_identity": self.authority.input_identity,
+        "program_key": self.authority.program_key,
+        "binary_sha256": self.authority.binary_sha256,
+        "runtime_observation": dict(self.prepared_runtime_observation),
+        "fixed_five_vas": list(self.fixed_five_vas),
+        "dispatch_failure": dispatch_failure,
+      }
+      try:
+        setattr(exc, INVOCATION_FAILURE_ATTR, failure_payload)
+      except BaseException:
+        # Preserve the original failure even if its exception object cannot
+        # carry diagnostic attributes.
+        pass
       if q8_sources is not None:
         try:
           # Drain any submitted producer, SDMA, or dispatch work before
@@ -982,6 +1136,7 @@ __all__ = [
   "FrozenStagedAbiSlot", "FrozenStagedLowLevelAttestation",
   "FrozenStagedLowLevelDependencies", "FrozenStagedLowLevelInvocation",
   "FrozenStagedLowLevelSession", "FrozenStagedProgramAuthority",
+  "INVOCATION_FAILURE_ATTR", "INVOCATION_FAILURE_SCHEMA",
   "PENDING_OBSERVATION_SCHEMA", "QUEUE_MODES",
   "production_frozen_staged_low_level_dependencies",
 ]

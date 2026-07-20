@@ -355,6 +355,109 @@ def test_failed_candidate_attempt_retains_raw_mismatch_and_hashes():
   assert len(attempt["reference_sha256"]) == 64
 
 
+def test_failed_candidate_attempt_retains_low_level_dispatch_subphase():
+  class FaultingSession:
+    def attest_post_sync(self, invocation, queue):
+      raise AssertionError("faulting invocation must not reach attestation")
+
+    def invoke(self, prefix_epochs):
+      failure = RuntimeError("injected target dispatch fault")
+      failure.frozen_staged_low_level_failure = {
+        "schema": gc.LOW_LEVEL_INVOCATION_FAILURE_SCHEMA,
+        "phase": "epoch_dispatch",
+        "subphase":
+          "runtime_call_raised_after_kernarg_capture_before_return",
+        "epoch": 0, "queue_mode": "PM4",
+        "family_identity": _sid("family"),
+        "candidate_executable_identity":
+          gc._candidate_executable_identity_from_parts(
+            _sid("family"), "1" * 64, "2" * 64),
+        "input_identity": _sid("input"), "program_key": "1" * 64,
+        "binary_sha256": "2" * 64,
+        "runtime_observation": {
+          "queue_mode": "PM4", "runtime_class": "FakeRuntime",
+          "runtime_name": "fake_kernel", "runtime_device": "AMD",
+          "runtime_object_identity": 7,
+          "runtime_device_identity_exact": True,
+          "runtime_cache_binding_exact": True,
+          "program_key": "1" * 64, "binary_sha256": "2" * 64,
+          "library_va": 0x800000, "library_nbytes": 0x2000,
+          "entry_va": 0x800100,
+        },
+        "fixed_five_vas": [
+          0x7F8800001000, 0x7F8800002000, 0x7F8800003000,
+          0x7F8800004000, 0x7F8800005000],
+        "dispatch_failure": {
+          "schema": "tinygrad.mmq_q4k_q8_1.runtime_dispatch_failure.v1",
+          "failure_boundary":
+            "runtime_call_raised_after_kernarg_capture_before_return",
+          "wait": True, "epoch": 0,
+          "launch": {
+            "epoch": 0, "global_size": [136, 4, 1],
+            "local_size": [256, 1, 1],
+            "arguments": [], "kernarg": {
+              "pointer_words": [
+                0x7F8800001000, 0x7F8800002000, 0x7F8800003000,
+                0x7F8800004000, 0x7F8800005000]}},
+          "authoritative_qword_snapshot": "pre_submit",
+          "pre_submit": {
+            "schema":
+              "tinygrad.mmq_q4k_q8_1.pm4_pre_submit_snapshot.v1",
+            "capture_point":
+              "AMDComputeQueue._submit_after_complete_command_construction_"
+              "before_ring_copy_and_doorbell",
+            "runtime_object_identity": 7,
+            "runtime_class": "FakeRuntime",
+            "runtime_name": "fake_kernel", "runtime_device": "AMD",
+            "kernarg_va": 0x7F88ABCDEF00,
+            "pm4_kernarg_user_data": {
+              "packet_dword_offset": 11, "register_index": 0,
+              "low_dword": 0xABCDEF00, "high_dword": 0x7F88,
+              "pointer": 0x7F88ABCDEF00,
+            },
+            "kernarg_qwords": [
+              0x7F8800001000, 0x7F8800002000, 0x7F8800003000,
+              0x7F8800004000, 0x7F8800005000],
+            "argument_buffers": [
+              {"slot": slot, "va": va, "size": 4096}
+              for slot, va in enumerate((
+                0x7F8800001000, 0x7F8800002000, 0x7F8800003000,
+                0x7F8800004000, 0x7F8800005000))],
+            "checks": {"pre_submit_exact": True},
+            "all_checks_pass": True,
+          },
+          "checks": {}, "all_authority_checks_pass": True,
+        },
+      }
+      raise failure
+
+  def faulting_builder(config, *, queue_mode, prefix_epochs):
+    runtime = fake_candidate_builder(
+      config, queue_mode=queue_mode, prefix_epochs=prefix_epochs)
+    return gc.replace(runtime, session=FaultingSession())
+
+  result = gc.run_candidate_prefix_child(gc.CandidatePrefixRequest(
+    {}, "PM4", 1, None, None, faulting_builder))
+  assert result["status"] == "BLOCKED"
+  assert result["exception"] == "RuntimeError"
+  assert "injected target dispatch fault" in result["exact_blocker"]
+  attempt = result["failed_attempt"]
+  assert attempt["phase"] == "invocation"
+  assert attempt["invocation_subphase"] == \
+    "runtime_call_raised_after_kernarg_capture_before_return"
+  failure = attempt["invocation_failure"]
+  assert failure["phase"] == "epoch_dispatch"
+  assert failure["runtime_observation"]["runtime_object_identity"] == 7
+  assert failure["dispatch_failure"]["launch"]["global_size"] == \
+    [136, 4, 1]
+  assert failure["dispatch_failure"]["launch"]["kernarg"]["pointer_words"] == \
+    failure["fixed_five_vas"]
+  assert failure["dispatch_failure"]["pre_submit"]["kernarg_qwords"] == \
+    failure["fixed_five_vas"]
+  assert result["no_retry"] is result["no_fallback"] is True
+  assert result["retry_count"] == 0
+
+
 def _direct_evidence(queue="PM4", candidate_full_ref=None):
   manifest_payload = {
     "artifact_schema": "fake", "queue_mode": queue,

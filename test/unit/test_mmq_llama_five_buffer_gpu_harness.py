@@ -19,6 +19,8 @@ from extra.qk.mmq_exact_role_spec import exact_role_spec
 from extra.qk.mmq_llama_five_buffer_full_kernel import build_llama_five_buffer_full_kernel
 from extra.qk.mmq_llama_five_buffer_gpu_harness import (FrozenRuntimePreconstructionError,
   FROZEN_STAGED_PHASE_RECEIPT_SCHEMA,
+  PM4_PRE_SUBMIT_CAPTURE_POINT, PM4_PRE_SUBMIT_SCHEMA,
+  RUNTIME_DISPATCH_FAILURE_ATTR, RUNTIME_DISPATCH_FAILURE_SCHEMA,
   SingleTilePointerBiasCarrierError,
   TARGET_IN_PLACE_ACCUMULATION, _accumulate_target_role_epoch,
   _aql_packet_census_from_exception,
@@ -28,6 +30,7 @@ from extra.qk.mmq_llama_five_buffer_gpu_harness import (FrozenRuntimePreconstruc
   _attest_attn_qo_single_tile_pointer_views,
   _apply_diagnostic_global_grid_to_target_calls,
   _bind_sink, _dispatch_with_runtime_evidence, _exact_zero_comparison,
+  _pm4_pre_submit_snapshot,
   _numeric_comparison, _pack_q4_epochs_contiguous,
   _decode_aql_kernel_dispatch_packet, _load_frozen_execution_binding, _random_q4_words, _runtime_identity_evidence,
   _dispatch_error_runtime_reuse_evidence,
@@ -441,17 +444,30 @@ def test_pm4_dispatch_census_retains_accepted_submit_and_kernargs_when_doorbell_
     name="target", lib=b"target binary",
     lib_gpu=SimpleNamespace(va_addr=0x800000, size=0x20000),
     prog_addr=0x804000, aql_prog_addr=0x810000,
-    kernargs_segment_size=40)
+    kernargs_segment_size=40, dev=dev)
+  args_state.prg = program
   identity = _aql_target_program_identity(program)
   program_key = "cd" * 32
   from tinygrad.engine.realize import runtime_cache
   monkeypatch.setitem(runtime_cache, (bytes.fromhex(program_key), "AMD"), program)
 
+  pm4 = SimpleNamespace(
+    PACKET3_SET_SH_REG=0x76, PACKET3_SET_SH_REG_START=0x2c00,
+    PACKET3=lambda op, count: (
+      3 << 30) | (op << 8) | (count << 16))
+  gc = SimpleNamespace(
+    regCOMPUTE_USER_DATA_0=SimpleNamespace(addr=(0x2c10,)))
   queue = object.__new__(ops_amd.AMDComputeQueue)
-  queue.dev, queue.binded_device, queue._q = dev, None, [0xc0001000, 0xc0001001]
+  queue.dev, queue.binded_device = dev, None
+  queue.pm4, queue.gc = pm4, gc
+  queue._q = [pm4.PACKET3(0x10, 0), 0]
 
   def fake_exec(self, prg, state, global_size, local_size):
-    self._q.extend([0xc0002000, 0xc0002001])
+    self._q.extend([
+      pm4.PACKET3(pm4.PACKET3_SET_SH_REG, 2),
+      gc.regCOMPUTE_USER_DATA_0.addr[0] -
+        pm4.PACKET3_SET_SH_REG_START,
+      state.buf.va_addr & 0xffffffff, state.buf.va_addr >> 32])
     return self
   def faulting_submit(self, submit_dev):
     raise RuntimeError("simulated PM4 post-audit MMU fault")
@@ -462,7 +478,7 @@ def test_pm4_dispatch_census_retains_accepted_submit_and_kernargs_when_doorbell_
     def realize(self, *retained):
       ops_amd.AMDComputeQueue.exec(
         queue, program, args_state, (8, 4, 1), (256, 1, 1))
-      queue._q.append(0xc0003000)
+      queue._q.extend([pm4.PACKET3(0x10, 0), 0])
       ops_amd.AMDComputeQueue._submit(queue, dev)
 
   with pytest.raises(RuntimeError, match="simulated PM4 post-audit MMU fault") as raised:
@@ -488,14 +504,26 @@ def test_pm4_dispatch_census_retains_accepted_submit_and_kernargs_when_doorbell_
   assert call["checks"]["five_qwords_match_expected_vas"] is True
   assert call["global_size"] == call["expected_global_size"] == [8, 4, 1]
   assert call["local_size"] == call["expected_local_size"] == [256, 1, 1]
-  assert call["pm4_dword_count"] == 5 and len(call["pm4_sha256"]) == 64
-  assert call["before_exec_dword_count"] == 2 and call["after_exec_dword_count"] == 4
+  assert call["pm4_dword_count"] == 8 and len(call["pm4_sha256"]) == 64
+  pre_submit = call["pre_submit_snapshot"]
+  assert pre_submit["schema"] == PM4_PRE_SUBMIT_SCHEMA
+  assert pre_submit["capture_point"] == PM4_PRE_SUBMIT_CAPTURE_POINT
+  assert pre_submit["kernarg_qwords"] == argument_vas
+  assert pre_submit["argument_buffers"] == call["argument_buffers"]
+  assert pre_submit["runtime_object_identity"] == id(program)
+  assert pre_submit["pm4_kernarg_user_data"] == {
+    "packet_dword_offset": 2, "register_index": 0,
+    "low_dword": kernarg_va, "high_dword": 0,
+    "pointer": kernarg_va}
+  assert pre_submit["all_checks_pass"] is True
+  assert call["before_exec_dword_count"] == 2 and \
+    call["after_exec_dword_count"] == 6
   assert all(call["checks"].values())
   assert census["all_accepted_target_calls_pass"] is True
 
   # A same-name runtime with the wrong binary identity must be stopped before
   # the native _submit can copy commands into the ring or ring the doorbell.
-  queue._q = [0xc0001000, 0xc0001001]
+  queue._q = [pm4.PACKET3(0x10, 0), 0]
   submitted = []
   def must_not_submit(self, submit_dev):
     submitted.append(True)
@@ -516,7 +544,7 @@ def test_pm4_dispatch_census_retains_accepted_submit_and_kernargs_when_doorbell_
   assert rejected_census["calls"][0]["checks"]["ordered_program_identity_matches"] is False
   assert rejected_census["calls"][0]["submit_began"] is False
 
-  queue._q = [0xc0001000, 0xc0001001]
+  queue._q = [pm4.PACKET3(0x10, 0), 0]
   submitted.clear()
   with pytest.raises(RuntimeError, match="simulated delayed PM4 synchronize fault") as delayed:
     _realize_with_pm4_dispatch_census(
@@ -1961,6 +1989,161 @@ def test_target_role_runtime_evidence_captures_views_kernarg_words_and_launch_co
   assert launch["kernarg"]["va"] == 0x9000
   assert launch["kernarg"]["pointer_words"] == words
   assert launch["kernarg"]["pointer_words_match_bound"] is True
+
+
+def test_target_runtime_fault_retains_high_bit_kernarg_and_launch_evidence(
+    monkeypatch):
+  from tinygrad.runtime import ops_amd
+
+  class Handle:
+    def __init__(self, va, size): self.va_addr, self.size = va, size
+  class Buffer:
+    def __init__(self, va, size, *, base=None, offset=0):
+      self._handle, self.nbytes, self.offset = Handle(va, size), size, offset
+      self._base = self if base is None else base
+    @property
+    def base(self): return self._base
+    def get_buf(self, device):
+      assert device == "AMD"
+      return self._handle
+  base_vas = (
+    0x00007F8827C50000, 0x00007F89FFBFD000,
+    0x0000123456789000, 0x00007FFFFFFFD000,
+    0x00000001FFBFD000)
+  bases = tuple(Buffer(va, 0x1000) for va in base_vas)
+  buffers = tuple(
+    Buffer(base._handle.va_addr + 0x80, 0x800, base=base, offset=0x80)
+    for base in bases)
+  words = [buf.get_buf("AMD").va_addr for buf in buffers]
+  kernarg_readable = {"value": True}
+  class View:
+    def view(self, **kwargs):
+      if not kernarg_readable["value"]:
+        raise RuntimeError("simulated post-fault kernarg mapping loss")
+      return words
+  class Kernarg:
+    va_addr, size = 0x00007F8ABCDE0000, 40
+    def cpu_view(self): return View()
+  dev = SimpleNamespace(is_aql=False, device="AMD")
+  pm4 = SimpleNamespace(
+    PACKET3_SET_SH_REG=0x76, PACKET3_SET_SH_REG_START=0x2c00,
+    PACKET3=lambda op, count: (
+      3 << 30) | (op << 8) | (count << 16))
+  gc = SimpleNamespace(
+    regCOMPUTE_USER_DATA_0=SimpleNamespace(addr=(0x2c10,)))
+  queue = object.__new__(ops_amd.AMDComputeQueue)
+  queue.dev, queue.binded_device = dev, None
+  queue.pm4, queue.gc = pm4, gc
+  queue._q = [
+    pm4.PACKET3(pm4.PACKET3_SET_SH_REG, 2),
+    gc.regCOMPUTE_USER_DATA_0.addr[0] - pm4.PACKET3_SET_SH_REG_START,
+    Kernarg.va_addr & 0xffffffff, Kernarg.va_addr >> 32]
+  native_submit_calls = []
+  def native_submit(self, submit_dev):
+    native_submit_calls.append((self, submit_dev))
+    return self
+  monkeypatch.setattr(ops_amd.AMDComputeQueue, "_submit", native_submit)
+
+  class Runtime:
+    name = "high_bit_fault_target"
+    def fill_kernargs(self, bufs, vals=(), kernargs=None):
+      assert kernargs is None and vals == ()
+      return SimpleNamespace(
+        buf=Kernarg(),
+        bufs=tuple(buf.get_buf("AMD") for buf in buffers),
+        prg=self)
+    def __call__(self, *args, global_size, local_size, vals, wait):
+      assert global_size == (136, 4, 1)
+      assert local_size == (256, 1, 1)
+      assert vals == () and wait is True
+      self.fill_kernargs(args, vals)
+      ops_amd.AMDComputeQueue._submit(queue, self.dev)
+      kernarg_readable["value"] = False
+      raise RuntimeError("injected PM4 wait fault")
+  runtime = Runtime()
+  runtime.dev = dev
+  evidence = {"launches": [], "launch_count": 0}
+  with pytest.raises(RuntimeError, match="injected PM4 wait fault") as caught:
+    _dispatch_with_runtime_evidence(
+      runtime, buffers, tuple(range(5)),
+      global_size=(136, 4, 1), local_size=(256, 1, 1), vals=(),
+      runtime_evidence=evidence, context={"epoch": 0}, wait=True)
+  failure = getattr(caught.value, RUNTIME_DISPATCH_FAILURE_ATTR)
+  assert failure["schema"] == RUNTIME_DISPATCH_FAILURE_SCHEMA
+  assert failure["failure_boundary"] == \
+    "runtime_call_raised_after_kernarg_capture_before_return"
+  assert failure["wait"] is True
+  assert failure["authoritative_qword_snapshot"] == "pre_submit"
+  pre_submit = failure["pre_submit"]
+  assert pre_submit["schema"] == PM4_PRE_SUBMIT_SCHEMA
+  assert pre_submit["capture_point"] == PM4_PRE_SUBMIT_CAPTURE_POINT
+  assert pre_submit["kernarg_qwords"] == words
+  assert [row["va"] for row in pre_submit["argument_buffers"]] == words
+  assert pre_submit["runtime_object_identity"] == id(runtime)
+  assert pre_submit["runtime_name"] == "high_bit_fault_target"
+  assert pre_submit["runtime_device"] == "AMD"
+  assert pre_submit["pm4_dword_count"] == 4
+  assert len(pre_submit["pm4_sha256"]) == 64
+  assert pre_submit["pm4_kernarg_user_data"] == {
+    "packet_dword_offset": 0, "register_index": 0,
+    "low_dword": Kernarg.va_addr & 0xffffffff,
+    "high_dword": Kernarg.va_addr >> 32,
+    "pointer": Kernarg.va_addr}
+  assert pre_submit["all_checks_pass"] is True
+  assert all(pre_submit["checks"].values())
+  launch = failure["launch"]
+  assert evidence == {"launches": [launch], "launch_count": 1}
+  assert launch["epoch"] == 0
+  assert launch["global_size"] == [136, 4, 1]
+  assert launch["local_size"] == [256, 1, 1]
+  assert [row["va"] for row in launch["arguments"]] == words
+  assert [row["base_va"] for row in launch["arguments"]] == list(base_vas)
+  assert all(row["offset_bytes"] == 0x80 for row in launch["arguments"])
+  assert all(row["va_matches_base_offset"] for row in launch["arguments"])
+  assert launch["kernarg"]["va"] == Kernarg.va_addr
+  assert launch["kernarg"]["pointer_words"] is None
+  assert "simulated post-fault kernarg mapping loss" in \
+    launch["kernarg"]["pointer_words_read_error"]
+  assert launch["kernarg"]["bound_pointer_words"] == words
+  assert native_submit_calls == [(queue, dev)]
+  assert ops_amd.AMDComputeQueue._submit is native_submit
+  assert "fill_kernargs" not in runtime.__dict__
+
+
+@pytest.mark.parametrize("program_state", ("missing", "wrong"))
+def test_pm4_pre_submit_requires_explicit_args_state_program_identity(
+    program_state):
+  class View:
+    def view(self, **kwargs): return [0x1000, 0x2000, 0x3000, 0x4000, 0x5000]
+  kernarg = SimpleNamespace(
+    va_addr=0x00007F8ABCDE0000, size=40,
+    cpu_view=lambda: View())
+  dev = SimpleNamespace(is_aql=False, device="AMD")
+  runtime = SimpleNamespace(dev=dev, name="target")
+  pm4 = SimpleNamespace(
+    PACKET3_SET_SH_REG=0x76, PACKET3_SET_SH_REG_START=0x2c00,
+    PACKET3=lambda op, count:
+      (3 << 30) | (op << 8) | (count << 16))
+  gc = SimpleNamespace(
+    regCOMPUTE_USER_DATA_0=SimpleNamespace(addr=(0x2c10,)))
+  queue = SimpleNamespace(
+    dev=dev, pm4=pm4, gc=gc,
+    _q=[
+      pm4.PACKET3(pm4.PACKET3_SET_SH_REG, 2),
+      gc.regCOMPUTE_USER_DATA_0.addr[0] -
+        pm4.PACKET3_SET_SH_REG_START,
+      kernarg.va_addr & 0xffffffff, kernarg.va_addr >> 32])
+  args_state = SimpleNamespace(
+    buf=kernarg,
+    bufs=tuple(
+      SimpleNamespace(va_addr=value, size=0x1000)
+      for value in View().view()))
+  if program_state == "wrong":
+    args_state.prg = object()
+  snapshot = _pm4_pre_submit_snapshot(
+    queue, dev, runtime, args_state)
+  assert snapshot["checks"]["args_state_program_matches_runtime"] is False
+  assert snapshot["all_checks_pass"] is False
 
 
 def test_target_role_runtime_identity_distinguishes_pm4_from_aql(monkeypatch):
