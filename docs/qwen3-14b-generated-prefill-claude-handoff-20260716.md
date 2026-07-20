@@ -1,5 +1,27 @@
 # Qwen3-14B generated-prefill Claude handoff
 
+## 1.16 DECISION 2026-07-20: AMD Q4_K prefill primitive = fp16-dequant-in-register + streamed-K (the `build_gemm_lds2_q4k` algorithm)
+
+Following the §1.15 root cause, the AMD prefill primitive for the Q4_K MMQ roles is **decided**: dequantize Q4_K weights to fp16 **in registers**, accumulate with **fp16 WMMA**, stream K at BK-granularity through a **lean (~16 KB) LDS** tile. This is the algorithm the hand kernel `build_gemm_lds2_q4k` (`extra/qk/prefill/wmma.py:501-654`, hand-asm-bisect worktree) already implements.
+
+**Why this and not the alternatives** — it is the only candidate satisfying all three hard constraints at once:
+
+| candidate | compressed (fits 14B) | AMD-supportable at scale | correct | verdict |
+|---|---|---|---|---|
+| fp16-dequant-in-register | yes (Q4_K, on-the-fly) | yes (16 KB LDS, 544 wg proven) | yes (0 RMSE, ~3.4k tok/s, beats llama 8B) | **CHOSEN** |
+| int8-MMQ (generated, current) | yes | **no** (57 KB LDS wedges >64 wg) | yes | NVIDIA-only |
+| fp16 graph-GEMM overlay | **no** (dense fp16, 2× VRAM, 8B-only) | yes | yes | disqualified for 14B |
+| direct-packed | yes | yes | yes but slow | correctness fallback only |
+
+Note this primitive does **not** violate the §2 "no hidden dense dequantization" rule: it dequants per-tile in registers, weights stay Q4_K-compressed in memory — unlike the fp16 overlay which materializes dense fp16 weights.
+
+**Sequencing:**
+1. **Now (working AMD route):** promote the hand `build_gemm_lds2_q4k` as the AMD Q4_K prefill primitive — it is correct and supported at full scale today. (It is hand-authored, so per §2 it cannot yet satisfy a *generated*-route claim — it runs as the supported route while the generated version is built.)
+2. **Follow-on (generated claim):** generate the *same* algorithm (§1.15 fork B) — teach the MMQ lowering to emit fp16-dequant-in-register + streamed-K instead of the int8-MMQ port; the hand kernel is the exact convergence target. (Scope below / tracked separately.)
+3. **NVIDIA:** retain the int8-MMQ generated kernel; the §1.15 occupancy-admission axis routes it there automatically once built.
+
+This is a direction decision, not a code change yet. The two build tracks it implies: (a) the occupancy-admission route axis (§1.15 integration point), and (b) the generated fp16-dequant lowering (fork B, scoped separately).
+
 ## 1.15 Current status 2026-07-20: `ffn_gate_up` C5 root cause = CORRECT kernel, unsupportable LDS footprint on AMD; design direction is occupancy-based route admission
 
 ### The finding
