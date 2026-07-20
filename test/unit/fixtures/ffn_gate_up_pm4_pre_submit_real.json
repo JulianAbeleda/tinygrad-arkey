@@ -1,0 +1,99 @@
+{
+  "schema": "tinygrad.mmq_q4k_q8_1.pm4_pre_submit_snapshot.v2",
+  "capture_point": "AMDComputeQueue._submit_after_complete_command_construction_before_ring_copy_and_doorbell",
+  "runtime_object_identity": 124237563989888,
+  "runtime_class": "tinygrad.runtime.ops_amd.AMDProgram",
+  "runtime_name": "mmq_llama_five_buffer_full_grid_accumulate",
+  "runtime_device": "AMD",
+  "kernarg_va": 124237176111552,
+  "kernarg_nbytes": 40,
+  "kernarg_qwords": [
+    124237339688960,
+    124237337182208,
+    124237558222848,
+    124238291275776,
+    124238282977280
+  ],
+  "argument_buffers": [
+    {
+      "slot": 0,
+      "va": 124237339688960,
+      "size": 35651584
+    },
+    {
+      "slot": 1,
+      "va": 124237337182208,
+      "size": 2506752
+    },
+    {
+      "slot": 2,
+      "va": 124237558222848,
+      "size": 131072
+    },
+    {
+      "slot": 3,
+      "va": 124238291275776,
+      "size": 16384
+    },
+    {
+      "slot": 4,
+      "va": 124238282977280,
+      "size": 16384
+    }
+  ],
+  "pm4_kernarg_user_data": {
+    "packet_dword_offset": 77,
+    "register_index": 0,
+    "low_dword": 952107456,
+    "high_dword": 28926,
+    "pointer": 124237176111552
+  },
+  "pm4_dispatch_direct": {
+    "packet_dword_offset": 94,
+    "group_counts": [
+      136,
+      4,
+      1
+    ],
+    "dispatch_initiator": 32773
+  },
+  "pm4_workgroup_size": {
+    "packet_dword_offset": 84,
+    "register_index": 3,
+    "size": [
+      256,
+      1,
+      1
+    ]
+  },
+  "pm4_program_entry": {
+    "packet_dword_offset": 54,
+    "register_index": 0,
+    "low_dword": 4266624353,
+    "high_dword": 112,
+    "entry_va": 124237558145280
+  },
+  "pm4_dword_count": 141,
+  "pm4_sha256": "e10ba282fa06d8ccedc84e3d8c78fa4f1112e9b436882fce3c86695e9d280947",
+  "checks": {
+    "queue_device_matches_submit_device": true,
+    "runtime_device_matches_submit_device": true,
+    "args_state_program_matches_runtime": true,
+    "exact_five_argument_buffers": true,
+    "exact_five_kernarg_qwords": true,
+    "five_qwords_match_constructed_buffers": true,
+    "pm4_command_words_concrete": true,
+    "pm4_command_stream_nonempty": true,
+    "pm4_packet_stream_decoded": true,
+    "pm4_kernarg_user_data_found_once": true,
+    "pm4_kernarg_uses_user_data_0": true,
+    "pm4_kernarg_user_data_matches_kernarg_va": true,
+    "pm4_dispatch_direct_found_once": true,
+    "pm4_dispatch_groups_match_requested": true,
+    "pm4_workgroup_size_found_once": true,
+    "pm4_workgroup_size_matches_requested": true,
+    "pm4_program_entry_found_once": true,
+    "pm4_program_entry_matches_runtime": true
+  },
+  "all_checks_pass": true
+}

@@ -140,8 +140,8 @@ def _no_doorbell_receipt():
       "packet_dword_offset": 24, "group_counts": [136, 4, 1],
       "dispatch_initiator": 1,
     },
-    "pm4_workgroup_size": {
-      "packet_dword_offset": 18, "register_index": 0,
+   "pm4_workgroup_size": {
+      "packet_dword_offset": 18, "register_index": 3,
       "size": [256, 1, 1],
     },
     "pm4_program_entry": {
@@ -1278,3 +1278,66 @@ def test_rehashed_huge_tolerance_and_forged_executable_are_rejected(tmp_path):
   _rehash(envelope)
   with pytest.raises(ValueError, match="executable derivation"):
     gc.freeze_correctness_evidence(tmp_path / "executable.json", envelope)
+
+
+# ── Phase A4 regression: real frozen PM4 pre-submit fixture ──
+
+def _load_real_pre_submit():
+  import json
+  from pathlib import Path
+  fixture_path = Path(__file__).resolve().parent / \
+    "fixtures" / "ffn_gate_up_pm4_pre_submit_real.json"
+  return json.loads(fixture_path.read_text())
+
+
+def test_a4_real_frozen_pre_submit_passes():
+  """Phase A4: corrected decoder passes on the real frozen packet."""
+  pre_submit = _load_real_pre_submit()
+  validated = gc._validate_pm4_pre_submit_snapshot(pre_submit)
+  assert validated == pre_submit
+  assert validated["all_checks_pass"] is True
+  assert validated["pm4_workgroup_size"]["register_index"] == 3
+
+
+def test_a4_real_frozen_pre_submit_workgroup_register_index():
+  """Real fixture workgroup register_index must be 3 (START_X+3)."""
+  pre_submit = _load_real_pre_submit()
+  assert pre_submit["pm4_workgroup_size"]["register_index"] == 3
+  assert pre_submit["pm4_workgroup_size"]["size"] == [256, 1, 1]
+
+
+def test_a4_real_frozen_pre_submit_kernarg_user_data():
+  """Real fixture kernarg user_data register_index must be 0."""
+  pre_submit = _load_real_pre_submit()
+  assert pre_submit["pm4_kernarg_user_data"]["register_index"] == 0
+  assert pre_submit["pm4_kernarg_user_data"]["pointer"] == \
+    pre_submit["kernarg_va"]
+
+
+@pytest.mark.parametrize("mutation,field,expected_error", (
+  ("wrong_register_index", "pm4_workgroup_size",
+   "PM4 decoded command authority differs"),
+  ("wrong_kernarg_va", "kernarg_va",
+   "PM4 no-doorbell USER_DATA_0 differs from kernarg authority"),
+  ("wrong_group_counts", "pm4_dispatch_direct",
+   "PM4 decoded command authority differs"),
+  ("truncated_stream", "pm4_dword_count",
+   "PM4 no-doorbell pre-submit identity differs"),
+))
+def test_a4_real_frozen_pre_submit_fails_closed_on_corruption(
+    mutation, field, expected_error):
+  """Phase A4: corrected decoder fails closed on injected corruption."""
+  import copy
+  pre_submit = copy.deepcopy(_load_real_pre_submit())
+  if mutation == "wrong_register_index":
+    pre_submit["pm4_workgroup_size"]["register_index"] = 0
+  elif mutation == "wrong_kernarg_va":
+    pre_submit["kernarg_va"] += 0x1000
+  elif mutation == "wrong_group_counts":
+    pre_submit["pm4_dispatch_direct"]["group_counts"] = [0, 1, 1]
+  elif mutation == "truncated_stream":
+    pre_submit["pm4_dword_count"] = 0
+  else:
+    raise ValueError(f"unknown mutation: {mutation}")
+  with pytest.raises(ValueError, match=expected_error):
+    gc._validate_pm4_pre_submit_snapshot(pre_submit)

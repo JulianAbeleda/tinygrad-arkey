@@ -676,6 +676,9 @@ def _validate_pm4_pre_submit_snapshot(value: Any) -> dict[str, Any]:
   _exact_keys(program, {
     "packet_dword_offset", "register_index", "low_dword", "high_dword",
     "entry_va"}, "PM4 program entry")
+  # exec writes regCOMPUTE_START_X as one 8-register block [0,0,0,*local_size,0,0];
+  # regCOMPUTE_NUM_THREAD_X sits at START_X+3, so the decoded register_index is 3.
+  # Reject any other value to keep the fail-closed invariant.
   if any(
       not exact_int(item) or not 0 <= item < row["pm4_dword_count"]
       for item in (
@@ -686,9 +689,9 @@ def _validate_pm4_pre_submit_snapshot(value: Any) -> dict[str, Any]:
      len(dispatch["group_counts"]) != 3 or \
      any(not exact_int(item) or item <= 0
          for item in dispatch["group_counts"]) or \
-     not exact_int(dispatch.get("dispatch_initiator")) or \
-     workgroup.get("register_index") != 0 or \
-     not isinstance(workgroup.get("size"), list) or \
+    not exact_int(dispatch.get("dispatch_initiator")) or \
+    workgroup.get("register_index") != 3 or \
+    not isinstance(workgroup.get("size"), list) or \
      len(workgroup["size"]) != 3 or \
      any(not exact_int(item) or item <= 0 for item in workgroup["size"]) or \
      program.get("register_index") != 0 or \
