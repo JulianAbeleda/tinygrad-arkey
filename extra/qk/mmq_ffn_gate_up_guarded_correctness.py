@@ -31,6 +31,7 @@ CANDIDATE_SCHEMA = f"{SCHEMA}.candidate_prefix"
 DIRECT_SCHEMA = f"{SCHEMA}.direct_full_role"
 TRANSITION_SCHEMA = f"{SCHEMA}.transition"
 PM4_NO_DOORBELL_SCHEMA = f"{SCHEMA}.pm4_no_doorbell"
+FFN_REDUCED_GRID_SCHEMA = f"{SCHEMA}.ffn_reduced_grid"
 ENVELOPE_SCHEMA = f"{SCHEMA}.envelope"
 COMPOSITION_SCHEMA = f"{SCHEMA}.composition"
 JOINT_C7_SCHEMA = f"{SCHEMA}.joint_c7"
@@ -42,8 +43,10 @@ LOW_LEVEL_INVOCATION_FAILURE_SCHEMA = \
 LOW_LEVEL_INVOCATION_FAILURE_ATTR = "frozen_staged_low_level_failure"
 PM4_NO_DOORBELL_RECEIPT_SCHEMA = \
   "tinygrad.mmq_q4k_q8_1.pm4_no_doorbell_receipt.v1"
+LOW_LEVEL_DIAGNOSTIC_RECEIPT_SCHEMA = \
+  "tinygrad.mmq_q4k_q8_1.frozen_staged_low_level_diagnostic_receipt.v1"
 PM4_PRE_SUBMIT_SCHEMA = \
-  "tinygrad.mmq_q4k_q8_1.pm4_pre_submit_snapshot.v1"
+  "tinygrad.mmq_q4k_q8_1.pm4_pre_submit_snapshot.v2"
 PM4_PRE_SUBMIT_CAPTURE_POINT = \
   "AMDComputeQueue._submit_after_complete_command_construction_" \
   "before_ring_copy_and_doorbell"
@@ -60,12 +63,24 @@ PM4_PRE_SUBMIT_CHECK_KEYS = {
   "pm4_kernarg_user_data_found_once",
   "pm4_kernarg_uses_user_data_0",
   "pm4_kernarg_user_data_matches_kernarg_va",
+  "pm4_dispatch_direct_found_once",
+  "pm4_dispatch_groups_match_requested",
+  "pm4_workgroup_size_found_once",
+  "pm4_workgroup_size_matches_requested",
+  "pm4_program_entry_found_once",
+  "pm4_program_entry_matches_runtime",
 }
 PM4_ARGUMENT_NBYTES = (35651584, 2506752, 131072, 16384, 16384)
 PM4_RUNTIME_CLASS = "tinygrad.runtime.ops_amd.AMDProgram"
 PM4_RUNTIME_NAME = "mmq_llama_five_buffer_full_grid_accumulate"
 QUEUE_MODES = ("PM4", "AQL")
 PREFIXES = (1, 3, 20)
+FFN_REDUCED_GLOBAL_SIZE_ALLOWLIST = (
+  (1, 1, 1), (2, 1, 1), (1, 2, 1), (1, 4, 1), (8, 4, 1),
+  (32, 4, 1), (40, 4, 1), (41, 4, 1), (136, 1, 1),
+)
+FFN_FROZEN_GLOBAL_SIZE = (136, 4, 1)
+FFN_FROZEN_LOCAL_SIZE = (256, 1, 1)
 OUTPUT_SHAPE = (512, 17408)
 OUTPUT_ELEMENTS = OUTPUT_SHAPE[0] * OUTPUT_SHAPE[1]
 TRANSITION_SEQUENCES = {
@@ -143,6 +158,19 @@ def _prefix(value: Any) -> int:
      value not in PREFIXES:
     raise ValueError(f"prefix_epochs must be one of {PREFIXES!r}")
   return value
+
+
+def _ffn_reduced_global_size(value: Any) -> tuple[int, int, int]:
+  if not isinstance(value, (tuple, list)) or len(value) != 3 or any(
+      not isinstance(item, int) or isinstance(item, bool) for item in value):
+    raise ValueError(
+      "FFN reduced diagnostic global size requires three integers")
+  grid = tuple(value)
+  if grid not in FFN_REDUCED_GLOBAL_SIZE_ALLOWLIST:
+    raise ValueError(
+      "FFN reduced diagnostic global size must be one of "
+      f"{FFN_REDUCED_GLOBAL_SIZE_ALLOWLIST!r}")
+  return grid
 
 
 def _positive_seconds(value: Any) -> float:
@@ -496,6 +524,13 @@ class PM4NoDoorbellRequest:
   runtime_builder: Callable[..., CandidatePrefixRuntime]
 
 
+@dataclass(frozen=True)
+class FFNReducedGridRequest:
+  config: Mapping[str, Any]
+  diagnostic_global_size: tuple[int, int, int]
+  runtime_builder: Callable[..., CandidatePrefixRuntime]
+
+
 def _pm4_no_doorbell_request_identity(
     request: PM4NoDoorbellRequest,
     ) -> str:
@@ -504,6 +539,19 @@ def _pm4_no_doorbell_request_identity(
     "queue_mode": "PM4",
     "prefix_epochs": 1,
     "submit_policy": "snapshot_only",
+    "config_identity": _identity(dict(request.config)),
+  })
+
+
+def _ffn_reduced_grid_request_identity(
+    request: FFNReducedGridRequest,
+    ) -> str:
+  return _identity({
+    "schema": f"{SCHEMA}.ffn_reduced_grid_request",
+    "queue_mode": "PM4",
+    "prefix_epochs": 1,
+    "diagnostic_global_size":
+      list(_ffn_reduced_global_size(request.diagnostic_global_size)),
     "config_identity": _identity(dict(request.config)),
   })
 
@@ -529,6 +577,7 @@ def _validate_pm4_pre_submit_snapshot(value: Any) -> dict[str, Any]:
     "schema", "capture_point", "runtime_object_identity", "runtime_class",
     "runtime_name", "runtime_device", "kernarg_va", "kernarg_nbytes",
     "kernarg_qwords", "argument_buffers", "pm4_kernarg_user_data",
+    "pm4_dispatch_direct", "pm4_workgroup_size", "pm4_program_entry",
     "pm4_dword_count", "pm4_sha256", "checks", "all_checks_pass",
   }, "PM4 no-doorbell pre-submit snapshot")
   checks = dict(_mapping(
@@ -612,6 +661,44 @@ def _validate_pm4_pre_submit_snapshot(value: Any) -> dict[str, Any]:
      pointer != row["kernarg_va"]:
     raise ValueError(
       "PM4 no-doorbell USER_DATA_0 differs from kernarg authority")
+  dispatch = dict(_mapping(
+    row.get("pm4_dispatch_direct"), "PM4 DISPATCH_DIRECT"))
+  _exact_keys(dispatch, {
+    "packet_dword_offset", "group_counts", "dispatch_initiator"},
+    "PM4 DISPATCH_DIRECT")
+  workgroup = dict(_mapping(
+    row.get("pm4_workgroup_size"), "PM4 workgroup size"))
+  _exact_keys(workgroup, {
+    "packet_dword_offset", "register_index", "size"},
+    "PM4 workgroup size")
+  program = dict(_mapping(
+    row.get("pm4_program_entry"), "PM4 program entry"))
+  _exact_keys(program, {
+    "packet_dword_offset", "register_index", "low_dword", "high_dword",
+    "entry_va"}, "PM4 program entry")
+  if any(
+      not exact_int(item) or not 0 <= item < row["pm4_dword_count"]
+      for item in (
+        dispatch.get("packet_dword_offset"),
+        workgroup.get("packet_dword_offset"),
+        program.get("packet_dword_offset"))) or \
+     not isinstance(dispatch.get("group_counts"), list) or \
+     len(dispatch["group_counts"]) != 3 or \
+     any(not exact_int(item) or item <= 0
+         for item in dispatch["group_counts"]) or \
+     not exact_int(dispatch.get("dispatch_initiator")) or \
+     workgroup.get("register_index") != 0 or \
+     not isinstance(workgroup.get("size"), list) or \
+     len(workgroup["size"]) != 3 or \
+     any(not exact_int(item) or item <= 0 for item in workgroup["size"]) or \
+     program.get("register_index") != 0 or \
+     any(not exact_int(program.get(key)) or
+         not 0 <= program[key] <= 0xffffffff
+         for key in ("low_dword", "high_dword")) or \
+     not exact_int(program.get("entry_va")) or \
+     program["entry_va"] != (
+       program["low_dword"] | (program["high_dword"] << 32)) << 8:
+    raise ValueError("PM4 decoded command authority differs")
   return row
 
 
@@ -741,6 +828,303 @@ def validate_pm4_no_doorbell_evidence(value: Any) -> dict[str, Any]:
       "phase": "complete", "invocation_count": 1, "receipt_count": 1,
       "receipt": receipt}:
     raise ValueError("PM4 no-doorbell nested attempt differs")
+  return row
+
+
+_LOW_LEVEL_DIAGNOSTIC_RECEIPT_KEYS = {
+  "schema", "status", "queue_mode", "promotion_evidence_eligible",
+  "target_dispatch_submitted", "target_submit_entered",
+  "target_submit_returned", "native_submit_entered_count",
+  "native_submit_returned_count", "post_dispatch_sync_completed",
+  "family_identity",
+  "candidate_executable_identity", "input_identity", "program_key",
+  "binary_sha256", "runtime_class", "runtime_name", "runtime_device",
+  "runtime_object_identity", "runtime_device_identity_exact",
+  "runtime_cache_binding_exact", "library_va", "library_nbytes", "entry_va",
+  "fixed_five_vas", "frozen_global_size", "effective_global_size",
+  "local_size", "pre_submit", "launch_count", "observation_identity",
+}
+
+
+def _validate_ffn_reduced_receipt(
+    value: Any, *, runtime: CandidatePrefixRuntime | None = None,
+    diagnostic_global_size: tuple[int, int, int] | None = None,
+    ) -> dict[str, Any]:
+  if isinstance(value, Mapping):
+    row = dict(value)
+  else:
+    row = {
+      key: (
+        list(getattr(value, key, ()))
+        if key in (
+          "fixed_five_vas", "frozen_global_size", "effective_global_size",
+          "local_size")
+        else getattr(value, key, None))
+      for key in _LOW_LEVEL_DIAGNOSTIC_RECEIPT_KEYS}
+  _exact_keys(
+    row, set(_LOW_LEVEL_DIAGNOSTIC_RECEIPT_KEYS),
+    "FFN reduced-grid low-level receipt")
+  exact_int = lambda item: \
+    isinstance(item, int) and not isinstance(item, bool)
+  expected_grid = (
+    _ffn_reduced_global_size(diagnostic_global_size)
+    if diagnostic_global_size is not None else
+    _ffn_reduced_global_size(row.get("effective_global_size")))
+  checks = {
+    "schema":
+      row.get("schema") == LOW_LEVEL_DIAGNOSTIC_RECEIPT_SCHEMA,
+    "status": row.get("status") == "PASS",
+    "queue_mode": row.get("queue_mode") == "PM4",
+    "promotion_evidence_eligible":
+      row.get("promotion_evidence_eligible") is False,
+    "target_dispatch_submitted":
+      row.get("target_dispatch_submitted") is True,
+    "target_submit_entered": row.get("target_submit_entered") is True,
+    "target_submit_returned": row.get("target_submit_returned") is True,
+    "native_submit_entered_count":
+      row.get("native_submit_entered_count") == 1,
+    "native_submit_returned_count":
+      row.get("native_submit_returned_count") == 1,
+    "post_dispatch_sync_completed":
+      row.get("post_dispatch_sync_completed") is True,
+    "runtime_class": row.get("runtime_class") == PM4_RUNTIME_CLASS,
+    "runtime_name": row.get("runtime_name") == PM4_RUNTIME_NAME,
+    "runtime_device": row.get("runtime_device") == "AMD",
+    "runtime_object_identity":
+      exact_int(row.get("runtime_object_identity")) and
+      row["runtime_object_identity"] > 0,
+    "runtime_device_identity_exact":
+      row.get("runtime_device_identity_exact") is True,
+    "runtime_cache_binding_exact":
+      row.get("runtime_cache_binding_exact") is True,
+    "library_va":
+      exact_int(row.get("library_va")) and row["library_va"] > 0,
+    "library_nbytes":
+      exact_int(row.get("library_nbytes")) and row["library_nbytes"] > 0,
+    "entry_va":
+      exact_int(row.get("entry_va")) and
+      row.get("library_va", 0) <= row["entry_va"] <
+        row.get("library_va", 0) + row.get("library_nbytes", 0),
+    "fixed_five_vas":
+      isinstance(row.get("fixed_five_vas"), list) and
+      len(row["fixed_five_vas"]) == 5 and
+      all(exact_int(item) and 0 < item < 1 << 64
+          for item in row["fixed_five_vas"]),
+    "frozen_global_size":
+      row.get("frozen_global_size") == list(FFN_FROZEN_GLOBAL_SIZE),
+    "effective_global_size":
+      row.get("effective_global_size") == list(expected_grid),
+    "local_size":
+      row.get("local_size") == list(FFN_FROZEN_LOCAL_SIZE),
+    "launch_count": row.get("launch_count") == 1,
+  }
+  for field in (
+      "family_identity", "candidate_executable_identity", "input_identity"):
+    try: _content_identity(row.get(field), f"FFN reduced receipt {field}")
+    except ValueError: checks[field] = False
+    else: checks[field] = True
+  for field in ("program_key", "binary_sha256"):
+    try: _hex_digest(row.get(field), f"FFN reduced receipt {field}")
+    except ValueError: checks[field] = False
+    else: checks[field] = True
+  payload = {
+    key: item for key, item in row.items()
+    if key != "observation_identity"}
+  checks["observation_identity"] = \
+    row.get("observation_identity") == _identity(payload)
+  try:
+    pre_submit = _validate_pm4_pre_submit_snapshot(row.get("pre_submit"))
+  except ValueError:
+    checks["pre_submit"] = False
+  else:
+    checks["pre_submit"] = True
+    checks["pre_submit_five_va_binding"] = \
+      pre_submit["kernarg_qwords"] == row.get("fixed_five_vas")
+    checks["pre_submit_runtime_binding"] = all((
+      pre_submit["runtime_class"] == row.get("runtime_class"),
+      pre_submit["runtime_name"] == row.get("runtime_name"),
+      pre_submit["runtime_device"] == row.get("runtime_device"),
+      pre_submit["runtime_object_identity"] ==
+        row.get("runtime_object_identity"),
+    ))
+    checks["pre_submit_grid_binding"] = \
+      pre_submit["pm4_dispatch_direct"]["group_counts"] == \
+      row.get("effective_global_size")
+    checks["pre_submit_local_binding"] = \
+      pre_submit["pm4_workgroup_size"]["size"] == row.get("local_size")
+    checks["pre_submit_entry_binding"] = \
+      pre_submit["pm4_program_entry"]["entry_va"] == row.get("entry_va")
+  if runtime is not None:
+    checks.update({
+      "runtime_queue_binding": runtime.queue_mode == "PM4",
+      "runtime_family_binding":
+        row.get("family_identity") == runtime.family_identity,
+      "runtime_executable_binding":
+        row.get("candidate_executable_identity") ==
+          runtime.candidate_executable_identity,
+      "runtime_input_binding":
+        row.get("input_identity") == runtime.input_identity,
+      "runtime_program_binding":
+        row.get("program_key") == runtime.program_key,
+      "runtime_binary_binding":
+        row.get("binary_sha256") == runtime.binary_sha256,
+    })
+  if not all(checks.values()):
+    raise ValueError(
+      "FFN reduced-grid low-level receipt failed exact checks: "
+      f"{sorted(key for key, passed in checks.items() if not passed)!r}")
+  return row
+
+
+def _validate_ffn_reduced_comparison(
+    value: Any, *, diagnostic_global_size: tuple[int, int, int],
+    ) -> dict[str, Any]:
+  row = _validate_numeric_comparison(
+    value, "FFN reduced-grid touched comparison")
+  gx, gy, _ = _ffn_reduced_global_size(diagnostic_global_size)
+  touched_shape = [gy * 128, gx * 128]
+  touched_elements = math.prod(touched_shape)
+  checks = {
+    "status": row["status"] == "pass",
+    "rtol": row["rtol"] == 3e-3,
+    "atol": row["atol"] == 3e-3,
+    "got_shape": row["got_shape"] == touched_shape,
+    "reference_shape": row["reference_shape"] == touched_shape,
+    "got_size": row["got_size"] == touched_elements,
+    "reference_size": row["reference_size"] == touched_elements,
+    "mismatch_count": row["mismatch_count"] == 0,
+    "nan_got": row["nan_got"] == 0,
+    "nan_reference": row["nan_reference"] == 0,
+    "inf_got": row["inf_got"] == 0,
+    "inf_reference": row["inf_reference"] == 0,
+    "joint_finite": row["joint_finite"] == touched_elements,
+  }
+  if not all(checks.values()):
+    raise ValueError(
+      "FFN reduced-grid touched comparison failed exact checks: "
+      f"{sorted(key for key, passed in checks.items() if not passed)!r}")
+  return row
+
+
+def validate_ffn_reduced_grid_evidence(
+    value: Any, *,
+    diagnostic_global_size: tuple[int, int, int] | None = None,
+    ) -> dict[str, Any]:
+  row = dict(_mapping(value, "FFN reduced-grid evidence"))
+  _exact_keys(row, {
+    "schema", "status", "exact_blocker", "queue_mode", "prefix_epochs",
+    "diagnostic_global_size", "frozen_global_size", "local_size",
+    "touched_shape", "touched_element_count", "untouched_element_count",
+    "untouched_nonzero_count", "first_untouched_nonzero_index",
+    "first_untouched_nonzero_value", "no_retry", "retry_count",
+    "no_fallback", "compile_performed", "requires_recompile",
+    "promotion_evidence_eligible", "ordinary_attestation_performed",
+    "full_grid_validation_performed", "full_prefix1_reference_constructed",
+    "target_dispatch_submitted", "target_submit_entered",
+    "target_submit_returned", "invocation_count", "receipt_count",
+    "readback_performed", "numeric_validation_performed",
+    "producer_attestation_performed", "config_identity", "request_identity",
+    "environment", "family_identity", "fixture_identity",
+    "workload_identity", "input_identity", "logical_q4_identity",
+    "resident_fp16_activation_identity", "candidate_executable_identity",
+    "program_key", "binary_sha256", "c4_canary_identity", "q8_producer",
+    "consumer_reference_q8_sha256", "diagnostic_receipt",
+    "touched_comparison", "output_sha256", "reference_sha256", "attempt",
+    "evidence_identity",
+  }, "FFN reduced-grid evidence")
+  if not _identity_valid(row) or row.get("schema") != \
+       FFN_REDUCED_GRID_SCHEMA or row.get("status") != "PASS" or \
+     row.get("exact_blocker") is not None:
+    raise ValueError("FFN reduced-grid evidence identity/state differs")
+  grid = _ffn_reduced_global_size(row.get("diagnostic_global_size"))
+  if diagnostic_global_size is not None and \
+     grid != _ffn_reduced_global_size(diagnostic_global_size):
+    raise ValueError("FFN reduced-grid evidence request grid differs")
+  gx, gy, _ = grid
+  touched_shape = [gy * 128, gx * 128]
+  touched_elements = math.prod(touched_shape)
+  expected = {
+    "queue_mode": "PM4", "prefix_epochs": 1,
+    "frozen_global_size": list(FFN_FROZEN_GLOBAL_SIZE),
+    "local_size": list(FFN_FROZEN_LOCAL_SIZE),
+    "touched_shape": touched_shape,
+    "touched_element_count": touched_elements,
+    "untouched_element_count": OUTPUT_ELEMENTS - touched_elements,
+    "untouched_nonzero_count": 0,
+    "first_untouched_nonzero_index": None,
+    "first_untouched_nonzero_value": None,
+    "no_retry": True, "retry_count": 0, "no_fallback": True,
+    "compile_performed": False, "requires_recompile": False,
+    "promotion_evidence_eligible": False,
+    "ordinary_attestation_performed": False,
+    "full_grid_validation_performed": False,
+    "full_prefix1_reference_constructed": True,
+    "target_dispatch_submitted": True,
+    "target_submit_entered": True, "target_submit_returned": True,
+    "invocation_count": 1, "receipt_count": 1,
+    "readback_performed": True, "numeric_validation_performed": True,
+    "producer_attestation_performed": True,
+    "environment": {"DEV": "AMD", "AMD_AQL": "0", "PROFILE": "0"},
+  }
+  if any(row.get(key) != item for key, item in expected.items()):
+    raise ValueError("FFN reduced-grid evidence diagnostic state differs")
+  for field in (
+      "config_identity", "request_identity", "family_identity",
+      "fixture_identity", "workload_identity", "input_identity",
+      "logical_q4_identity", "resident_fp16_activation_identity",
+      "candidate_executable_identity", "c4_canary_identity"):
+    _content_identity(row.get(field), f"FFN reduced-grid {field}")
+  for field in ("program_key", "binary_sha256"):
+    _hex_digest(row.get(field), f"FFN reduced-grid {field}")
+  if row["candidate_executable_identity"] != \
+       _candidate_executable_identity_from_parts(
+         row["family_identity"], row["program_key"], row["binary_sha256"]):
+    raise ValueError("FFN reduced-grid executable derivation differs")
+  producer = _candidate_producer_evidence(
+    row.get("q8_producer"), {
+      "queue_mode": "PM4", "prefix_epochs": 1,
+      "family_identity": row["family_identity"],
+      "input_identity": row["input_identity"],
+    })
+  if row.get("consumer_reference_q8_sha256") != \
+       producer["consumer_reference_q8_sha256"]:
+    raise ValueError("FFN reduced-grid Q8 reference binding differs")
+  receipt = _validate_ffn_reduced_receipt(
+    row.get("diagnostic_receipt"), diagnostic_global_size=grid)
+  receipt_bindings = {
+    "family_identity": row["family_identity"],
+    "candidate_executable_identity": row["candidate_executable_identity"],
+    "input_identity": row["input_identity"], "program_key": row["program_key"],
+    "binary_sha256": row["binary_sha256"],
+  }
+  if any(receipt.get(key) != item for key, item in receipt_bindings.items()):
+    raise ValueError("FFN reduced-grid receipt/executable binding differs")
+  comparison = _validate_ffn_reduced_comparison(
+    row.get("touched_comparison"), diagnostic_global_size=grid)
+  for field in ("output_sha256", "reference_sha256"):
+    _hex_digest(row.get(field), f"FFN reduced-grid {field}")
+  attempt = dict(_mapping(row.get("attempt"), "FFN reduced-grid attempt"))
+  _exact_keys(attempt, {
+    "phase", "invocation_count", "receipt_count", "diagnostic_receipt",
+    "q8_producer", "touched_comparison", "output_sha256",
+    "reference_sha256", "touched_shape", "untouched_element_count",
+    "untouched_nonzero_count", "first_untouched_nonzero_index",
+    "first_untouched_nonzero_value",
+  }, "FFN reduced-grid attempt")
+  expected_attempt = {
+    "phase": "complete", "invocation_count": 1, "receipt_count": 1,
+    "diagnostic_receipt": receipt, "q8_producer": producer,
+    "touched_comparison": comparison,
+    "output_sha256": row["output_sha256"],
+    "reference_sha256": row["reference_sha256"],
+    "touched_shape": touched_shape,
+    "untouched_element_count": OUTPUT_ELEMENTS - touched_elements,
+    "untouched_nonzero_count": 0,
+    "first_untouched_nonzero_index": None,
+    "first_untouched_nonzero_value": None,
+  }
+  if attempt != expected_attempt:
+    raise ValueError("FFN reduced-grid nested attempt differs")
   return row
 
 
@@ -1199,6 +1583,213 @@ def run_pm4_no_doorbell_child(
     payload = {
       **base, "exact_blocker":
         f"PM4 no-doorbell diagnostic failed closed: "
+        f"{type(exc).__name__}: {exc}",
+      "exception": type(exc).__name__, "failed_attempt": attempt,
+    }
+  return {**payload, "evidence_identity": _identity(payload)}
+
+
+def _ffn_reduced_output_facts(
+    got: Any, reference: Any, *,
+    diagnostic_global_size: tuple[int, int, int],
+    comparator: Callable[[Any, Any], Mapping[str, Any]],
+    ) -> dict[str, Any]:
+  grid = _ffn_reduced_global_size(diagnostic_global_size)
+  gx, gy, _ = grid
+  rows, cols = gy * 128, gx * 128
+  got_array = np.ascontiguousarray(np.asarray(got))
+  reference_array = np.ascontiguousarray(np.asarray(reference))
+  if got_array.shape != OUTPUT_SHAPE or reference_array.shape != OUTPUT_SHAPE:
+    raise ValueError("FFN reduced-grid output/reference shape differs")
+  touched = dict(_mapping(
+    comparator(
+      np.ascontiguousarray(got_array[:rows, :cols]),
+      np.ascontiguousarray(reference_array[:rows, :cols])),
+    "raw FFN reduced-grid comparison"))
+  untouched_mask = np.ones(OUTPUT_SHAPE, dtype=np.bool_)
+  untouched_mask[:rows, :cols] = False
+  untouched_nonzero = untouched_mask & (got_array != 0)
+  untouched_nonzero_count = int(np.count_nonzero(untouched_nonzero))
+  first_index = None
+  if untouched_nonzero_count:
+    first_index = [
+      int(item) for item in np.unravel_index(
+        int(np.argmax(untouched_nonzero)), OUTPUT_SHAPE)]
+  first_value = (
+    None if first_index is None else
+    repr(got_array[tuple(first_index)].item()))
+  return {
+    "touched_shape": [rows, cols],
+    "untouched_element_count": int(untouched_mask.sum()),
+    "untouched_nonzero_count": untouched_nonzero_count,
+    "first_untouched_nonzero_index": first_index,
+    "first_untouched_nonzero_value": first_value,
+    "touched_comparison": touched,
+    "output_sha256": _array_sha256(got_array),
+    "reference_sha256": _array_sha256(reference_array),
+  }
+
+
+def run_ffn_reduced_grid_child(
+    request: FFNReducedGridRequest,
+    ) -> dict[str, Any]:
+  """Execute and check exactly one allowlisted reduced FFN PM4 grid."""
+  if not isinstance(request, FFNReducedGridRequest):
+    raise TypeError("FFN reduced-grid child requires a typed request")
+  grid = _ffn_reduced_global_size(request.diagnostic_global_size)
+  environment = {"DEV": "AMD", "AMD_AQL": "0", "PROFILE": "0"}
+  os.environ.update(environment)
+  gx, gy, _ = grid
+  touched_shape = [gy * 128, gx * 128]
+  touched_elements = math.prod(touched_shape)
+  base = {
+    "schema": FFN_REDUCED_GRID_SCHEMA, "status": "BLOCKED",
+    "exact_blocker": None, "queue_mode": "PM4", "prefix_epochs": 1,
+    "diagnostic_global_size": list(grid),
+    "frozen_global_size": list(FFN_FROZEN_GLOBAL_SIZE),
+    "local_size": list(FFN_FROZEN_LOCAL_SIZE),
+    "touched_shape": touched_shape,
+    "touched_element_count": touched_elements,
+    "untouched_element_count": OUTPUT_ELEMENTS - touched_elements,
+    "no_retry": True, "retry_count": 0, "no_fallback": True,
+    "compile_performed": False, "requires_recompile": False,
+    "promotion_evidence_eligible": False,
+    "ordinary_attestation_performed": False,
+    "full_grid_validation_performed": False,
+    "full_prefix1_reference_constructed": False,
+    "target_dispatch_submitted": False,
+    "target_submit_entered": False, "target_submit_returned": False,
+    "invocation_count": 0, "receipt_count": 0,
+    "readback_performed": False, "numeric_validation_performed": False,
+    "producer_attestation_performed": False,
+    "config_identity": _identity(dict(request.config)),
+    "request_identity": _ffn_reduced_grid_request_identity(request),
+    "environment": environment,
+  }
+  receipts: list[Mapping[str, Any]] = []
+  submit_facts: dict[str, Any] = {
+    "target_submit_entered": False,
+    "target_submit_returned": False,
+    "target_dispatch_submitted": False,
+  }
+  attempt: dict[str, Any] = {
+    "phase": "runtime_construction", "invocation_count": 0,
+    "receipt_count": 0}
+  try:
+    runtime = request.runtime_builder(
+      dict(_mapping(request.config, "FFN reduced-grid config")),
+      queue_mode="PM4", prefix_epochs=1,
+      diagnostic_global_size=grid,
+      diagnostic_dispatch_receipt_sink=receipts)
+    if not isinstance(runtime, CandidatePrefixRuntime):
+      raise TypeError("FFN reduced-grid builder returned no typed runtime")
+    runtime.validate("PM4", 1)
+    invoke_diagnostic = getattr(
+      runtime.session, "invoke_diagnostic_one_epoch", None)
+    complete_diagnostic = getattr(
+      runtime.session, "complete_diagnostic_post_sync", None)
+    if not callable(invoke_diagnostic) or not callable(complete_diagnostic):
+      raise TypeError(
+        "FFN reduced-grid runtime requires diagnostic low-level methods")
+    attempt["phase"] = "diagnostic_invocation"
+    submit_facts["target_dispatch_submitted"] = None
+    invocation = invoke_diagnostic(grid)
+    submit_facts = {
+      "target_submit_entered": True,
+      "target_submit_returned": True,
+      "target_dispatch_submitted": True,
+    }
+    output = getattr(invocation, "output", None)
+    if output is None:
+      raise TypeError("FFN reduced-grid invocation omitted output")
+    attempt["invocation_count"] = 1
+    if receipts:
+      raise ValueError(
+        "FFN reduced-grid receipt appeared before post-dispatch sync")
+    runtime.synchronize()
+    attempt["phase"] = "diagnostic_post_sync_receipt"
+    completed = complete_diagnostic(invocation, "PM4")
+    attempt["receipt_count"] = len(receipts)
+    if len(receipts) != 1:
+      raise ValueError(
+        "FFN reduced-grid invocation requires exactly one diagnostic receipt")
+    receipt = _validate_ffn_reduced_receipt(
+      completed, runtime=runtime, diagnostic_global_size=grid)
+    sink_receipt = _validate_ffn_reduced_receipt(
+      receipts[0], runtime=runtime, diagnostic_global_size=grid)
+    if sink_receipt != receipt:
+      raise ValueError(
+        "FFN reduced-grid returned/sink diagnostic receipts differ")
+    attempt["diagnostic_receipt"] = receipt
+    attempt["phase"] = "producer_readback"
+    producer = _candidate_producer_attestation(runtime)
+    attempt["q8_producer"] = producer
+    attempt["phase"] = "output_readback_and_reduced_comparison"
+    got = runtime.readback(output)
+    reference = runtime.reference(1)
+    facts = _ffn_reduced_output_facts(
+      got, reference, diagnostic_global_size=grid,
+      comparator=runtime.comparator)
+    attempt.update(facts)
+    comparison = _validate_ffn_reduced_comparison(
+      facts["touched_comparison"], diagnostic_global_size=grid)
+    if facts["untouched_nonzero_count"] != 0:
+      raise ValueError(
+        "FFN reduced-grid output modified an untouched sentinel element")
+    attempt["phase"] = "complete"
+    payload = {
+      **base, "status": "PASS", "exact_blocker": None,
+      "full_prefix1_reference_constructed": True,
+      "target_dispatch_submitted": True,
+      "target_submit_entered": True, "target_submit_returned": True,
+      "invocation_count": 1, "receipt_count": 1,
+      "readback_performed": True, "numeric_validation_performed": True,
+      "producer_attestation_performed": True,
+      "family_identity": runtime.family_identity,
+      "fixture_identity": runtime.fixture_identity,
+      "workload_identity": runtime.workload_identity,
+      "input_identity": runtime.input_identity,
+      "logical_q4_identity": runtime.logical_q4_identity,
+      "resident_fp16_activation_identity":
+        runtime.resident_fp16_activation_identity,
+      "candidate_executable_identity":
+        runtime.candidate_executable_identity,
+      "program_key": runtime.program_key,
+      "binary_sha256": runtime.binary_sha256,
+      "c4_canary_identity": runtime.c4_canary_identity,
+      "q8_producer": producer,
+      "consumer_reference_q8_sha256":
+        producer["consumer_reference_q8_sha256"],
+      "diagnostic_receipt": receipt,
+      "touched_comparison": comparison,
+      "untouched_nonzero_count": 0,
+      "first_untouched_nonzero_index": None,
+      "first_untouched_nonzero_value": None,
+      "output_sha256": facts["output_sha256"],
+      "reference_sha256": facts["reference_sha256"],
+      "attempt": attempt,
+    }
+  except BaseException as exc:
+    attempt["receipt_count"] = len(receipts)
+    low_level_failure = getattr(
+      exc, LOW_LEVEL_INVOCATION_FAILURE_ATTR, None)
+    if isinstance(low_level_failure, Mapping):
+      attempt["invocation_failure"] = dict(low_level_failure)
+      dispatch_failure = low_level_failure.get("dispatch_failure")
+      if isinstance(dispatch_failure, Mapping):
+        observed_submit = dispatch_failure.get("submit_evidence")
+        if isinstance(observed_submit, Mapping):
+          submit_facts = {
+            "target_submit_entered":
+              observed_submit.get("target_submit_entered"),
+            "target_submit_returned":
+              observed_submit.get("target_submit_returned"),
+            "target_dispatch_submitted":
+              observed_submit.get("target_dispatch_submitted"),
+          }
+    payload = {
+      **base, **submit_facts, "exact_blocker":
+        "PM4 FFN reduced-grid diagnostic failed closed: "
         f"{type(exc).__name__}: {exc}",
       "exception": type(exc).__name__, "failed_attempt": attempt,
     }
@@ -1672,6 +2263,10 @@ def validate_guarded_envelope(value: Any) -> dict[str, Any]:
     if queue != "PM4":
       raise ValueError("PM4 no-doorbell envelope queue differs")
     child = validate_pm4_no_doorbell_evidence(result)
+  elif operation == FFN_REDUCED_GRID_SCHEMA:
+    if queue != "PM4":
+      raise ValueError("FFN reduced-grid envelope queue differs")
+    child = validate_ffn_reduced_grid_evidence(result)
   elif operation == DIRECT_SCHEMA:
     child = validate_direct_evidence(result, queue_mode=queue)
   elif operation == TRANSITION_SCHEMA:
@@ -1692,6 +2287,8 @@ def _request_identity(
     return _candidate_request_identity(request)
   if expected_schema == PM4_NO_DOORBELL_SCHEMA:
     return _pm4_no_doorbell_request_identity(request)
+  if expected_schema == FFN_REDUCED_GRID_SCHEMA:
+    return _ffn_reduced_grid_request_identity(request)
   if expected_schema == DIRECT_SCHEMA:
     return _direct_request_identity(request)
   if expected_schema == TRANSITION_SCHEMA:
@@ -1760,6 +2357,14 @@ def _guarded_envelope(
            diagnostic["config_identity"] != _identity(dict(request.config)):
           raise ValueError(
             "PM4 no-doorbell request/config binding differs")
+      elif expected_schema == FFN_REDUCED_GRID_SCHEMA:
+        diagnostic = validate_ffn_reduced_grid_evidence(
+          result, diagnostic_global_size=request.diagnostic_global_size)
+        if diagnostic["request_identity"] != \
+             _ffn_reduced_grid_request_identity(request) or \
+           diagnostic["config_identity"] != _identity(dict(request.config)):
+          raise ValueError(
+            "FFN reduced-grid request/config binding differs")
       elif expected_schema == DIRECT_SCHEMA:
         direct = validate_direct_evidence(result, queue_mode=queue_mode)
         if direct["request_identity"] != _direct_request_identity(request) or \
@@ -1863,6 +2468,31 @@ def run_guarded_pm4_no_doorbell(
     request=PM4NoDoorbellRequest(
       dict(_mapping(config, "PM4 no-doorbell config")), runtime_builder),
     expected_schema=PM4_NO_DOORBELL_SCHEMA, queue_mode="PM4",
+    timeout_seconds=timeout_seconds, isolated_runner=isolated_runner,
+    health_probe=health_probe, fault_collector=fault_collector)
+
+
+def run_guarded_ffn_reduced_grid(
+    *, config: Mapping[str, Any],
+    diagnostic_global_size: tuple[int, int, int],
+    runtime_builder: Callable[..., CandidatePrefixRuntime],
+    timeout_seconds: float = 900.0,
+    isolated_runner: Callable[..., Any] | None = None,
+    health_probe: Callable[[Mapping[str, str]], bool] | None = None,
+    fault_collector: Callable[
+      [float], tuple[list[str], Mapping[str, Any]]] | None = None,
+    ) -> dict[str, Any]:
+  """Guard one PM4-only reduced-grid execution; never escalate or retry."""
+  grid = _ffn_reduced_global_size(diagnostic_global_size)
+  timeout_seconds = _positive_seconds(timeout_seconds)
+  isolated_runner, health_probe, fault_collector = _containment_defaults(
+    isolated_runner, health_probe, fault_collector)
+  return _guarded_envelope(
+    child=run_ffn_reduced_grid_child,
+    request=FFNReducedGridRequest(
+      dict(_mapping(config, "FFN reduced-grid config")), grid,
+      runtime_builder),
+    expected_schema=FFN_REDUCED_GRID_SCHEMA, queue_mode="PM4",
     timeout_seconds=timeout_seconds, isolated_runner=isolated_runner,
     health_probe=health_probe, fault_collector=fault_collector)
 
@@ -2045,6 +2675,9 @@ def build_production_candidate_prefix_runtime(
     config: Mapping[str, Any], *, queue_mode: str, prefix_epochs: int,
     pm4_submit_policy: str = "execute",
     pm4_no_doorbell_receipt_sink: list[Mapping[str, Any]] | None = None,
+    diagnostic_global_size: tuple[int, int, int] | None = None,
+    diagnostic_dispatch_receipt_sink:
+      list[Mapping[str, Any]] | None = None,
     ) -> CandidatePrefixRuntime:
   """Production default for one candidate stage, including standalone PM4 p1."""
   queue_mode, prefix_epochs = _queue(queue_mode), _prefix(prefix_epochs)
@@ -2100,7 +2733,9 @@ def build_production_candidate_prefix_runtime(
     input_identity=fixture.input_identity)
   dependencies = production_frozen_staged_low_level_dependencies(
     authority, pm4_submit_policy=pm4_submit_policy,
-    pm4_no_doorbell_receipt_sink=pm4_no_doorbell_receipt_sink)
+    pm4_no_doorbell_receipt_sink=pm4_no_doorbell_receipt_sink,
+    diagnostic_global_size=diagnostic_global_size,
+    diagnostic_dispatch_receipt_sink=diagnostic_dispatch_receipt_sink)
   produced: list[tuple[Any, Any, Any]] = []
   captured: dict[int, tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
   raw_produce = dependencies.produce_q8
@@ -2185,12 +2820,13 @@ def build_production_candidate_prefix_runtime(
 
 __all__ = [
   "CANDIDATE_SCHEMA", "COMPOSITION_SCHEMA", "DIRECT_SCHEMA",
-  "ENVELOPE_SCHEMA", "OUTPUT_ELEMENTS", "OUTPUT_SHAPE", "PREFIXES",
+  "ENVELOPE_SCHEMA", "FFN_REDUCED_GLOBAL_SIZE_ALLOWLIST",
+  "FFN_REDUCED_GRID_SCHEMA", "OUTPUT_ELEMENTS", "OUTPUT_SHAPE", "PREFIXES",
   "JOINT_C7_SCHEMA", "PM4_NO_DOORBELL_RECEIPT_SCHEMA",
   "PM4_NO_DOORBELL_SCHEMA", "PRODUCER_SCHEMA", "QUEUE_MODES", "SCHEMA",
   "TRANSITION_SCHEMA",
   "TRANSITION_SEQUENCES", "CandidatePrefixRequest",
-  "CandidatePrefixRuntime", "PM4NoDoorbellRequest",
+  "CandidatePrefixRuntime", "FFNReducedGridRequest", "PM4NoDoorbellRequest",
   "DirectCorrectnessRequest",
   "DirectCorrectnessRuntime", "FrozenCorrectnessEvidenceRef",
   "TransitionRequest",
@@ -2200,10 +2836,12 @@ __all__ = [
   "ffn_gate_up_consumer_prefix_reference",
   "ffn_gate_up_direct_dense_reference", "freeze_correctness_evidence",
   "load_frozen_correctness_evidence", "run_candidate_prefix_child",
+  "run_ffn_reduced_grid_child", "run_guarded_ffn_reduced_grid",
   "run_guarded_pm4_no_doorbell", "run_pm4_no_doorbell_child",
   "run_direct_correctness_child", "run_guarded_candidate_prefix",
   "run_guarded_direct_correctness", "run_guarded_transition",
   "run_transition_child", "validate_candidate_prefix_evidence",
   "validate_direct_evidence", "validate_joint_c7_evidence",
+  "validate_ffn_reduced_grid_evidence",
   "validate_pm4_no_doorbell_evidence",
 ]

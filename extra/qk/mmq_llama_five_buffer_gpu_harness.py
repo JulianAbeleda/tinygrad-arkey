@@ -10,6 +10,7 @@ as a numerical pass.
 from __future__ import annotations
 
 import argparse
+import copy
 from contextlib import nullcontext
 import hashlib
 import json
@@ -44,10 +45,10 @@ FROZEN_STAGED_C8_TIMING_RECEIPT_SCHEMA = \
 FROZEN_STAGED_RUNTIME_CANARY_SCHEMA = \
   "tinygrad.mmq_q4k_q8_1.frozen_staged_runtime_canary.v1"
 RUNTIME_DISPATCH_FAILURE_SCHEMA = \
-  "tinygrad.mmq_q4k_q8_1.runtime_dispatch_failure.v1"
+  "tinygrad.mmq_q4k_q8_1.runtime_dispatch_failure.v2"
 RUNTIME_DISPATCH_FAILURE_ATTR = "mmq_runtime_dispatch_failure"
 PM4_PRE_SUBMIT_SCHEMA = \
-  "tinygrad.mmq_q4k_q8_1.pm4_pre_submit_snapshot.v1"
+  "tinygrad.mmq_q4k_q8_1.pm4_pre_submit_snapshot.v2"
 PM4_PRE_SUBMIT_CAPTURE_POINT = \
   "AMDComputeQueue._submit_after_complete_command_construction_" \
   "before_ring_copy_and_doorbell"
@@ -66,6 +67,12 @@ PM4_PRE_SUBMIT_CHECK_KEYS = frozenset({
   "pm4_kernarg_user_data_found_once",
   "pm4_kernarg_uses_user_data_0",
   "pm4_kernarg_user_data_matches_kernarg_va",
+  "pm4_dispatch_direct_found_once",
+  "pm4_dispatch_groups_match_requested",
+  "pm4_workgroup_size_found_once",
+  "pm4_workgroup_size_matches_requested",
+  "pm4_program_entry_found_once",
+  "pm4_program_entry_matches_runtime",
 })
 _TARGET_BUFFER_NAMES = ("output", "q4", "q8_values", "q8_scales", "q8_original_sums")
 ATTN_QO_DIAGNOSTIC_GLOBAL_GRIDS = (
@@ -783,7 +790,9 @@ def _launch_buffer_evidence(names: tuple[str, ...], buffers: tuple[Any, ...],
 
 
 def _pm4_pre_submit_snapshot(
-    queue: Any, submit_dev: Any, runtime: Any, args_state: Any,
+    queue: Any, submit_dev: Any, runtime: Any, args_state: Any, *,
+    expected_global_size: tuple[int, int, int],
+    expected_local_size: tuple[int, int, int],
     ) -> dict[str, Any]:
   """Snapshot concrete PM4/kernarg state before ring copy and doorbell."""
   command_words = list(queue._q)
@@ -801,7 +810,12 @@ def _pm4_pre_submit_snapshot(
     args_state.buf.cpu_view().view(size=40, fmt="Q")[:5]]
   pm4, gc = getattr(queue, "pm4", None), getattr(queue, "gc", None)
   user_data = getattr(gc, "regCOMPUTE_USER_DATA_0", None)
+  num_thread = getattr(gc, "regCOMPUTE_NUM_THREAD_X", None)
+  program_lo = getattr(gc, "regCOMPUTE_PGM_LO", None)
   user_data_matches: list[dict[str, int]] = []
+  workgroup_matches: list[dict[str, Any]] = []
+  program_matches: list[dict[str, int]] = []
+  dispatch_matches: list[dict[str, Any]] = []
   packet_stream_decoded = bool(concrete and pm4 is not None and
     user_data is not None)
   cursor = 0
@@ -829,9 +843,41 @@ def _pm4_pre_submit_snapshot(
           "low_dword": low, "high_dword": high,
           "pointer": low | (high << 32),
         })
+      if num_thread is not None:
+        register_index = int(num_thread.addr[0]) - register_start
+        if 0 <= register_index and register_index + 3 < len(payload):
+          workgroup_matches.append({
+            "packet_dword_offset": cursor,
+            "register_index": register_index,
+            "size": list(payload[register_index+1:register_index+4]),
+          })
+      if program_lo is not None:
+        register_index = int(program_lo.addr[0]) - register_start
+        if 0 <= register_index and register_index + 2 < len(payload):
+          low, high = payload[register_index+1:register_index+3]
+          program_matches.append({
+            "packet_dword_offset": cursor,
+            "register_index": register_index,
+            "low_dword": low, "high_dword": high,
+            "entry_va": (low | (high << 32)) << 8,
+          })
+    if opcode == int(getattr(pm4, "PACKET3_DISPATCH_DIRECT", -1)):
+      payload = command_words[cursor+1:packet_end]
+      if len(payload) == 4:
+        dispatch_matches.append({
+          "packet_dword_offset": cursor,
+          "group_counts": list(payload[:3]),
+          "dispatch_initiator": payload[3],
+        })
     cursor = packet_end
   user_data_evidence = user_data_matches[0] \
     if len(user_data_matches) == 1 else None
+  workgroup_evidence = workgroup_matches[0] \
+    if len(workgroup_matches) == 1 else None
+  program_evidence = program_matches[0] \
+    if len(program_matches) == 1 else None
+  dispatch_evidence = dispatch_matches[0] \
+    if len(dispatch_matches) == 1 else None
   checks = {
     "queue_device_matches_submit_device":
       getattr(queue, "dev", None) is submit_dev,
@@ -853,6 +899,18 @@ def _pm4_pre_submit_snapshot(
     "pm4_kernarg_user_data_matches_kernarg_va":
       user_data_evidence is not None and
       user_data_evidence["pointer"] == int(args_state.buf.va_addr),
+    "pm4_dispatch_direct_found_once": len(dispatch_matches) == 1,
+    "pm4_dispatch_groups_match_requested":
+      dispatch_evidence is not None and
+      dispatch_evidence["group_counts"] == list(expected_global_size),
+    "pm4_workgroup_size_found_once": len(workgroup_matches) == 1,
+    "pm4_workgroup_size_matches_requested":
+      workgroup_evidence is not None and
+      workgroup_evidence["size"] == list(expected_local_size),
+    "pm4_program_entry_found_once": len(program_matches) == 1,
+    "pm4_program_entry_matches_runtime":
+      program_evidence is not None and
+      program_evidence["entry_va"] == getattr(runtime, "prog_addr", None),
   }
   if set(checks) != PM4_PRE_SUBMIT_CHECK_KEYS:
     raise RuntimeError("PM4 pre-submit implementation check keys drifted")
@@ -869,6 +927,9 @@ def _pm4_pre_submit_snapshot(
     "kernarg_qwords": kernarg_qwords,
     "argument_buffers": argument_buffers,
     "pm4_kernarg_user_data": user_data_evidence,
+    "pm4_dispatch_direct": dispatch_evidence,
+    "pm4_workgroup_size": workgroup_evidence,
+    "pm4_program_entry": program_evidence,
     "pm4_dword_count": len(command_words),
     "pm4_sha256":
       hashlib.sha256(command_bytes).hexdigest() if command_bytes else None,
@@ -880,12 +941,21 @@ def _dispatch_with_runtime_evidence(runtime: Any, buffers: tuple[Any, ...], glob
                                     *, global_size: tuple[int, int, int], local_size: tuple[int, int, int] | None,
                                     vals: tuple[Any, ...], runtime_evidence: dict[str, Any],
                                     context: Mapping[str, Any], wait: bool = True,
-                                    pm4_submit_policy: str = "execute") -> Any:
+                                    pm4_submit_policy: str = "execute",
+                                    retain_pm4_pre_submit: bool = False) -> Any:
   """Invoke the normal runtime once while recording its real kernarg allocation."""
   if pm4_submit_policy not in ("execute", "snapshot_only"):
     raise ValueError("pm4_submit_policy must be 'execute' or 'snapshot_only'")
   dev = getattr(runtime, "dev", None)
   snapshot_only = pm4_submit_policy == "snapshot_only"
+  if not isinstance(retain_pm4_pre_submit, bool):
+    raise TypeError("retain_pm4_pre_submit must be bool")
+  if retain_pm4_pre_submit and snapshot_only:
+    raise ValueError(
+      "retain_pm4_pre_submit is only valid for executing PM4 dispatch")
+  if retain_pm4_pre_submit and \
+     not _is_pm4_route_flag(getattr(dev, "is_aql", None)):
+    raise ValueError("retain_pm4_pre_submit requires the PM4 runtime route")
   no_doorbell_before: dict[str, Any] | None = None
   if snapshot_only:
     from tinygrad.helpers import PROFILE
@@ -933,6 +1003,21 @@ def _dispatch_with_runtime_evidence(runtime: Any, buffers: tuple[Any, ...], glob
   original_pm4_submit = None
   no_doorbell_token = object() if snapshot_only else None
   native_submit_call_count = 0
+  native_submit_returned_count = 0
+  target_submit_entered_count = 0
+  target_submit_returned_count = 0
+
+  def execute_submit_evidence() -> dict[str, Any]:
+    submitted = (
+      True if target_submit_returned_count == 1 else
+      False if target_submit_entered_count == 0 else None)
+    return {
+      "native_submit_entered_count": native_submit_call_count,
+      "native_submit_returned_count": native_submit_returned_count,
+      "target_submit_entered": target_submit_entered_count == 1,
+      "target_submit_returned": target_submit_returned_count == 1,
+      "target_dispatch_submitted": submitted,
+    }
 
   def capture_kernargs(bufs, values=(), kernargs=None):
     state = original_fill(bufs, values, kernargs)
@@ -944,7 +1029,8 @@ def _dispatch_with_runtime_evidence(runtime: Any, buffers: tuple[Any, ...], glob
     from tinygrad.runtime import ops_amd
     original_pm4_submit = ops_amd.AMDComputeQueue._submit
     def capture_pm4_submit(queue, submit_dev):
-      nonlocal native_submit_call_count
+      nonlocal native_submit_call_count, native_submit_returned_count
+      nonlocal target_submit_entered_count, target_submit_returned_count
       if snapshot_only and type(queue) is not ops_amd.AMDComputeQueue:
         raise RuntimeError(
           "PM4 evidence hook observed a non-exact AMDComputeQueue instance")
@@ -954,7 +1040,9 @@ def _dispatch_with_runtime_evidence(runtime: Any, buffers: tuple[Any, ...], glob
           raise RuntimeError(
             "target runtime produced multiple PM4 pre-submit snapshots")
         snapshot = _pm4_pre_submit_snapshot(
-          queue, submit_dev, runtime, state)
+          queue, submit_dev, runtime, state,
+          expected_global_size=global_size,
+          expected_local_size=local_size or (1, 1, 1))
         if snapshot["all_checks_pass"] is not True:
           raise RuntimeError(
             "target PM4 pre-submit snapshot failed exact checks")
@@ -962,11 +1050,16 @@ def _dispatch_with_runtime_evidence(runtime: Any, buffers: tuple[Any, ...], glob
         if snapshot_only:
           captured["no_doorbell_stop_raised"] = True
           raise _PM4NoDoorbellStop(no_doorbell_token)
+        target_submit_entered_count += 1
       if snapshot_only:
         raise RuntimeError(
           "snapshot_only observed a non-target PM4 submit before the target stop")
       native_submit_call_count += 1
-      return original_pm4_submit(queue, submit_dev)
+      result = original_pm4_submit(queue, submit_dev)
+      native_submit_returned_count += 1
+      if state is not None and submit_dev is runtime.dev:
+        target_submit_returned_count += 1
+      return result
     ops_amd.AMDComputeQueue._submit = capture_pm4_submit
 
   try:
@@ -1085,6 +1178,7 @@ def _dispatch_with_runtime_evidence(runtime: Any, buffers: tuple[Any, ...], glob
         "pre_submit": captured.get("pre_submit"),
         "authoritative_qword_snapshot":
           "pre_submit" if captured.get("pre_submit") is not None else None,
+        "submit_evidence": execute_submit_evidence(),
       }
       try:
         setattr(failure, RUNTIME_DISPATCH_FAILURE_ATTR, failure_payload)
@@ -1096,6 +1190,24 @@ def _dispatch_with_runtime_evidence(runtime: Any, buffers: tuple[Any, ...], glob
     receipt = launch.get("pm4_no_doorbell_receipt")
     if not isinstance(receipt, dict) or receipt.get("all_checks_pass") is not True:
       raise RuntimeError("snapshot_only failed no-doorbell control-flow checks")
+  if retain_pm4_pre_submit:
+    pre_submit = captured.get("pre_submit")
+    if not isinstance(pre_submit, dict) or \
+       pre_submit.get("all_checks_pass") is not True:
+      raise RuntimeError(
+        "executing PM4 dispatch produced no authoritative pre-submit snapshot")
+    launch["pre_submit"] = copy.deepcopy(pre_submit)
+    submit_evidence = execute_submit_evidence()
+    if submit_evidence != {
+        "native_submit_entered_count": 1,
+        "native_submit_returned_count": 1,
+        "target_submit_entered": True,
+        "target_submit_returned": True,
+        "target_dispatch_submitted": True,
+        }:
+      raise RuntimeError(
+        "executing PM4 dispatch submit attribution differs from one target")
+    launch["submit_evidence"] = submit_evidence
   return result
 
 
@@ -3276,7 +3388,9 @@ def _realize_with_pm4_dispatch_census(
     expected_row = None if expected_vas is None else expected_vas[call_index]
     args_state, lifecycle = built["args_state"], built["runtime_lifecycle"]
     pre_submit = _pm4_pre_submit_snapshot(
-      queue, submit_dev, built["program"], args_state)
+      queue, submit_dev, built["program"], args_state,
+      expected_global_size=built["global_size"],
+      expected_local_size=built["local_size"])
     kernarg_qwords = pre_submit["kernarg_qwords"]
     argument_vas = [
       row["va"] for row in pre_submit["argument_buffers"]]

@@ -117,19 +117,7 @@ def _no_doorbell_receipt():
     0x00007F8810001000]
   kernarg_va = 0x00007F88ABCDEF00
   pre_submit_checks = {
-    "queue_device_matches_submit_device": True,
-    "runtime_device_matches_submit_device": True,
-    "args_state_program_matches_runtime": True,
-    "exact_five_argument_buffers": True,
-    "exact_five_kernarg_qwords": True,
-    "five_qwords_match_constructed_buffers": True,
-    "pm4_command_words_concrete": True,
-    "pm4_command_stream_nonempty": True,
-    "pm4_packet_stream_decoded": True,
-    "pm4_kernarg_user_data_found_once": True,
-    "pm4_kernarg_uses_user_data_0": True,
-    "pm4_kernarg_user_data_matches_kernarg_va": True,
-  }
+    key: True for key in gc.PM4_PRE_SUBMIT_CHECK_KEYS}
   pre_submit = {
     "schema": gc.PM4_PRE_SUBMIT_SCHEMA,
     "capture_point": gc.PM4_PRE_SUBMIT_CAPTURE_POINT,
@@ -147,6 +135,19 @@ def _no_doorbell_receipt():
       "packet_dword_offset": 12, "register_index": 0,
       "low_dword": kernarg_va & 0xffffffff,
       "high_dword": kernarg_va >> 32, "pointer": kernarg_va,
+    },
+    "pm4_dispatch_direct": {
+      "packet_dword_offset": 24, "group_counts": [136, 4, 1],
+      "dispatch_initiator": 1,
+    },
+    "pm4_workgroup_size": {
+      "packet_dword_offset": 18, "register_index": 0,
+      "size": [256, 1, 1],
+    },
+    "pm4_program_entry": {
+      "packet_dword_offset": 6, "register_index": 0,
+      "low_dword": 0x8001, "high_dword": 0,
+      "entry_va": 0x800100,
     },
     "pm4_dword_count": 64, "pm4_sha256": "c" * 64,
     "checks": pre_submit_checks, "all_checks_pass": True,
@@ -215,6 +216,127 @@ def fake_no_doorbell_builder(
     reference=lambda _prefix: pytest.fail("reference must not run"),
     comparator=lambda _got, _reference: pytest.fail(
       "numeric comparison must not run"))
+
+
+def _diagnostic_receipt(grid=(1, 1, 1)):
+  pre_submit = copy.deepcopy(_no_doorbell_receipt()["pre_submit"])
+  pre_submit["pm4_dispatch_direct"]["group_counts"] = list(grid)
+  payload = {
+    "schema": gc.LOW_LEVEL_DIAGNOSTIC_RECEIPT_SCHEMA,
+    "status": "PASS", "queue_mode": "PM4",
+    "promotion_evidence_eligible": False,
+    "target_dispatch_submitted": True,
+    "native_submit_entered_count": 1,
+    "native_submit_returned_count": 1,
+    "target_submit_entered": True, "target_submit_returned": True,
+    "post_dispatch_sync_completed": True,
+    "family_identity": _sid("family"),
+    "candidate_executable_identity":
+      gc._candidate_executable_identity_from_parts(
+        _sid("family"), "1" * 64, "2" * 64),
+    "input_identity": _sid("input"), "program_key": "1" * 64,
+    "binary_sha256": "2" * 64, "runtime_class": gc.PM4_RUNTIME_CLASS,
+    "runtime_name": gc.PM4_RUNTIME_NAME, "runtime_device": "AMD",
+    "runtime_object_identity": pre_submit["runtime_object_identity"],
+    "runtime_device_identity_exact": True,
+    "runtime_cache_binding_exact": True, "library_va": 0x800000,
+    "library_nbytes": 0x2000, "entry_va": 0x800100,
+    "fixed_five_vas": list(pre_submit["kernarg_qwords"]),
+    "frozen_global_size": list(gc.FFN_FROZEN_GLOBAL_SIZE),
+    "effective_global_size": list(grid),
+    "local_size": list(gc.FFN_FROZEN_LOCAL_SIZE),
+    "pre_submit": pre_submit, "launch_count": 1,
+  }
+  return {**payload, "observation_identity": gc._identity(payload)}
+
+
+def _reduced_comparison(got, reference):
+  got, reference = np.asarray(got), np.asarray(reference)
+  mismatch_indices = np.argwhere(got != reference)
+  mismatch = int(mismatch_indices.shape[0])
+  first = None if mismatch == 0 else [
+    int(item) for item in mismatch_indices[0]]
+  return {
+    "status": "pass" if mismatch == 0 else "mismatch",
+    "rtol": 3e-3, "atol": 3e-3,
+    "got_shape": list(got.shape), "reference_shape": list(reference.shape),
+    "mismatch_count": mismatch, "first_mismatch_index": first,
+    "first_mismatch_got":
+      None if first is None else float(got[tuple(first)]),
+    "first_mismatch_reference":
+      None if first is None else float(reference[tuple(first)]),
+    "got_size": int(got.size), "reference_size": int(reference.size),
+    "nan_got": int(np.isnan(got).sum()),
+    "nan_reference": int(np.isnan(reference).sum()),
+    "inf_got": int(np.isinf(got).sum()),
+    "inf_reference": int(np.isinf(reference).sum()),
+    "joint_finite": int((np.isfinite(got) & np.isfinite(reference)).sum()),
+    "max_abs_error": float(np.max(np.abs(got-reference))),
+    "mean_abs_error": float(np.mean(np.abs(got-reference))),
+  }
+
+
+class FakeReducedGridSession(FakeSession):
+  def __init__(self, grid, sink, *, receipt_mutator=None, fault=False):
+    super().__init__("PM4", 1)
+    self.grid, self.sink = tuple(grid), sink
+    self.receipt_mutator, self.fault = receipt_mutator, fault
+
+  def invoke(self, prefix_epochs):
+    pytest.fail("ordinary invocation must not run for reduced grid")
+
+  def attest_post_sync(self, invocation, queue):
+    pytest.fail("ordinary attestation must not run for reduced grid")
+
+  def invoke_diagnostic_one_epoch(self, grid):
+    assert tuple(grid) == self.grid and self.sink == []
+    if self.fault:
+      raise RuntimeError("injected reduced-grid target fault")
+    self.pending = SimpleNamespace(output=object())
+    return self.pending
+
+  def complete_diagnostic_post_sync(self, invocation, queue):
+    assert invocation is self.pending and queue == "PM4" and self.sink == []
+    self.pending = None
+    receipt = _diagnostic_receipt(self.grid)
+    if self.receipt_mutator is not None:
+      self.receipt_mutator(receipt)
+      receipt["observation_identity"] = gc._identity({
+        key: value for key, value in receipt.items()
+        if key != "observation_identity"})
+    self.sink.append(copy.deepcopy(receipt))
+    return SimpleNamespace(**{
+      key: tuple(value) if key in (
+        "fixed_five_vas", "frozen_global_size", "effective_global_size",
+        "local_size") else value
+      for key, value in receipt.items()})
+
+
+def fake_reduced_grid_builder(
+    config, *, queue_mode, prefix_epochs, diagnostic_global_size=None,
+    diagnostic_dispatch_receipt_sink=None, output_mutator=None,
+    comparison_mutator=None, receipt_mutator=None, fault=False):
+  assert config == {} and (queue_mode, prefix_epochs) == ("PM4", 1)
+  grid = gc._ffn_reduced_global_size(diagnostic_global_size)
+  assert isinstance(diagnostic_dispatch_receipt_sink, list)
+  got = np.zeros(gc.OUTPUT_SHAPE, dtype=np.float16)
+  reference = np.zeros(gc.OUTPUT_SHAPE, dtype=np.float16)
+  if output_mutator is not None:
+    output_mutator(got, grid)
+  runtime = fake_candidate_builder(
+    config, queue_mode=queue_mode, prefix_epochs=prefix_epochs)
+  def compare(got_slice, reference_slice):
+    row = _reduced_comparison(got_slice, reference_slice)
+    if comparison_mutator is not None:
+      comparison_mutator(row)
+    return row
+  return gc.replace(
+    runtime,
+    session=FakeReducedGridSession(
+      grid, diagnostic_dispatch_receipt_sink,
+      receipt_mutator=receipt_mutator, fault=fault),
+    readback=lambda _output: got, reference=lambda _prefix: reference,
+    comparator=compare)
 
 
 def _candidate_request(prefix=1, prior=None, queue="PM4", cross=None):
@@ -288,6 +410,16 @@ def _guard(prefix=1, prior=None, queue="PM4", cross=None, **kwargs):
 def _guard_no_doorbell(runtime_builder=fake_no_doorbell_builder, **kwargs):
   return gc.run_guarded_pm4_no_doorbell(
     config={}, runtime_builder=runtime_builder,
+    isolated_runner=kwargs.pop("isolated_runner", _isolated),
+    health_probe=kwargs.pop("health_probe", lambda _env: True),
+    fault_collector=kwargs.pop("fault_collector", _faults), **kwargs)
+
+
+def _guard_reduced(
+    grid=(1, 1, 1), runtime_builder=fake_reduced_grid_builder, **kwargs):
+  return gc.run_guarded_ffn_reduced_grid(
+    config={}, diagnostic_global_size=grid,
+    runtime_builder=runtime_builder,
     isolated_runner=kwargs.pop("isolated_runner", _isolated),
     health_probe=kwargs.pop("health_probe", lambda _env: True),
     fault_collector=kwargs.pop("fault_collector", _faults), **kwargs)
@@ -397,14 +529,163 @@ def test_pm4_no_doorbell_health_and_fault_containment_fail_closed():
   assert "kernel fault/reset marker" in faults["exact_blocker"]
 
 
+def test_ffn_reduced_grid_is_one_pm4_epoch_with_strict_numeric_scope():
+  envelope = _guard_reduced((1, 1, 1))
+  result = gc.validate_ffn_reduced_grid_evidence(
+    envelope["result"], diagnostic_global_size=(1, 1, 1))
+  assert gc.validate_guarded_envelope(envelope) == envelope
+  assert envelope["status"] == result["status"] == "PASS"
+  assert result["environment"] == {
+    "DEV": "AMD", "AMD_AQL": "0", "PROFILE": "0"}
+  assert result["diagnostic_global_size"] == [1, 1, 1]
+  assert result["frozen_global_size"] == [136, 4, 1]
+  assert result["local_size"] == [256, 1, 1]
+  assert result["touched_shape"] == [128, 128]
+  assert result["invocation_count"] == result["receipt_count"] == 1
+  assert result["target_dispatch_submitted"] is True
+  assert result["target_submit_entered"] is True
+  assert result["target_submit_returned"] is True
+  assert result["q8_producer"]["status"] == "PASS"
+  assert result["full_prefix1_reference_constructed"] is True
+  assert result["touched_comparison"]["status"] == "pass"
+  assert result["untouched_nonzero_count"] == 0
+  assert result["ordinary_attestation_performed"] is False
+  assert result["full_grid_validation_performed"] is False
+  assert result["promotion_evidence_eligible"] is False
+
+
+@pytest.mark.parametrize("grid", gc.FFN_REDUCED_GLOBAL_SIZE_ALLOWLIST)
+def test_ffn_reduced_grid_allowlist_and_request_identity_bind_exact_grid(grid):
+  request = gc.FFNReducedGridRequest({}, grid, fake_reduced_grid_builder)
+  assert gc._ffn_reduced_grid_request_identity(request) != \
+    gc._ffn_reduced_grid_request_identity(
+      gc.FFNReducedGridRequest(
+        {}, (1, 1, 1) if grid != (1, 1, 1) else (2, 1, 1),
+        fake_reduced_grid_builder))
+  assert gc._ffn_reduced_global_size(list(grid)) == grid
+
+
+def test_ffn_reduced_grid_allowlist_exactly_matches_low_level_authority():
+  from extra.qk.mmq_frozen_staged_low_level_session import \
+    DIAGNOSTIC_GLOBAL_SIZE_ALLOWLIST
+  assert set(gc.FFN_REDUCED_GLOBAL_SIZE_ALLOWLIST) == \
+    DIAGNOSTIC_GLOBAL_SIZE_ALLOWLIST
+
+
+@pytest.mark.parametrize("grid", (
+  (136, 4, 1), (0, 1, 1), (1, 1), (1, True, 1), "1,1,1",
+))
+def test_ffn_reduced_grid_rejects_full_or_untyped_grid_before_health(grid):
+  called = []
+  with pytest.raises(ValueError, match="reduced diagnostic global size"):
+    gc.run_guarded_ffn_reduced_grid(
+      config={}, diagnostic_global_size=grid,
+      runtime_builder=fake_reduced_grid_builder,
+      health_probe=lambda _env: called.append(True) or True,
+      isolated_runner=_isolated, fault_collector=_faults)
+  assert called == []
+
+
+@pytest.mark.parametrize("failure", ("target_fault", "touched_mismatch",
+                                     "untouched_sentinel", "bad_receipt"))
+def test_ffn_reduced_grid_fault_mismatch_sentinel_or_receipt_blocks(failure):
+  def builder(config, **kwargs):
+    options = {}
+    if failure == "target_fault":
+      options["fault"] = True
+    elif failure == "touched_mismatch":
+      options["output_mutator"] = \
+        lambda output, _grid: output.__setitem__((0, 0), 1)
+    elif failure == "untouched_sentinel":
+      options["output_mutator"] = \
+        lambda output, _grid: output.__setitem__((128, 0), 1)
+    else:
+      options["receipt_mutator"] = \
+        lambda receipt: receipt.update(effective_global_size=[2, 1, 1])
+    return fake_reduced_grid_builder(config, **kwargs, **options)
+
+  envelope = _guard_reduced(runtime_builder=builder)
+  assert envelope["status"] == "BLOCKED"
+  child = envelope["result"]
+  assert child["status"] == "BLOCKED"
+  assert child["retry_count"] == 0 and child["no_fallback"] is True
+  attempt = child["failed_attempt"]
+  if failure == "target_fault":
+    assert attempt["phase"] == "diagnostic_invocation"
+    assert child["target_submit_entered"] is False
+    assert child["target_submit_returned"] is False
+    assert child["target_dispatch_submitted"] is None
+  elif failure == "touched_mismatch":
+    assert attempt["touched_comparison"]["status"] == "mismatch"
+  elif failure == "untouched_sentinel":
+    assert attempt["untouched_nonzero_count"] == 1
+    assert attempt["first_untouched_nonzero_index"] == [128, 0]
+  else:
+    assert "receipt" in child["exact_blocker"]
+
+
+def test_ffn_reduced_grid_health_and_fault_containment_fail_closed():
+  launches = []
+  preflight = _guard_reduced(
+    isolated_runner=lambda *args, **kwargs:
+      launches.append((args, kwargs)) or pytest.fail("must not launch"),
+    health_probe=lambda _env: False)
+  assert preflight["status"] == "BLOCKED"
+  assert preflight["spawn_count"] == 0 and launches == []
+
+  faults = _guard_reduced(
+    fault_collector=lambda _started: (
+      ["amdgpu fault"], {
+        **_clear_fault_evidence(), "status": "FAULTS",
+        "blocks": [{"lines": ["amdgpu fault"]}],
+        "relevant_line_count": 1, "retained_line_count": 1}))
+  assert faults["status"] == "BLOCKED"
+  assert faults["result"]["status"] == "PASS"
+  assert "kernel fault/reset marker" in faults["exact_blocker"]
+
+
+def test_rehashed_ffn_reduced_grid_or_receipt_identity_tamper_is_rejected():
+  child = copy.deepcopy(_guard_reduced()["result"])
+  child["diagnostic_global_size"] = [2, 1, 1]
+  _rehash(child)
+  with pytest.raises(ValueError, match="diagnostic state|nested attempt"):
+    gc.validate_ffn_reduced_grid_evidence(child)
+
+  child = copy.deepcopy(_guard_reduced()["result"])
+  child["diagnostic_receipt"]["binary_sha256"] = "3" * 64
+  child["diagnostic_receipt"]["observation_identity"] = gc._identity({
+    key: value for key, value in child["diagnostic_receipt"].items()
+    if key != "observation_identity"})
+  child["attempt"]["diagnostic_receipt"] = child["diagnostic_receipt"]
+  _rehash(child)
+  with pytest.raises(ValueError, match="binding"):
+    gc.validate_ffn_reduced_grid_evidence(child)
+
+  child = copy.deepcopy(_guard_reduced()["result"])
+  pre_submit = child["diagnostic_receipt"]["pre_submit"]
+  pre_submit["kernarg_qwords"][0] += 0x1000
+  child["diagnostic_receipt"]["observation_identity"] = gc._identity({
+    key: value for key, value in child["diagnostic_receipt"].items()
+    if key != "observation_identity"})
+  child["attempt"]["diagnostic_receipt"] = child["diagnostic_receipt"]
+  _rehash(child)
+  with pytest.raises(ValueError, match="pre-submit|receipt"):
+    gc.validate_ffn_reduced_grid_evidence(child)
+
+
 def test_production_candidate_builder_diagnostic_defaults_are_nonexecuting_opt_in():
   signature = inspect.signature(gc.build_production_candidate_prefix_runtime)
   assert signature.parameters["pm4_submit_policy"].default == "execute"
   assert signature.parameters[
     "pm4_no_doorbell_receipt_sink"].default is None
+  assert signature.parameters["diagnostic_global_size"].default is None
+  assert signature.parameters[
+    "diagnostic_dispatch_receipt_sink"].default is None
   source = inspect.getsource(gc.build_production_candidate_prefix_runtime)
   assert "pm4_submit_policy=pm4_submit_policy" in source
   assert "pm4_no_doorbell_receipt_sink=pm4_no_doorbell_receipt_sink" in source
+  assert "diagnostic_global_size=diagnostic_global_size" in source
+  assert "diagnostic_dispatch_receipt_sink=" in source
 
 
 def test_pm4_prefix1_is_standalone_one_child_with_no_later_prerequisites():
@@ -617,7 +898,7 @@ def test_failed_candidate_attempt_retains_low_level_dispatch_subphase():
           0x7F8800001000, 0x7F8800002000, 0x7F8800003000,
           0x7F8800004000, 0x7F8800005000],
         "dispatch_failure": {
-          "schema": "tinygrad.mmq_q4k_q8_1.runtime_dispatch_failure.v1",
+          "schema": "tinygrad.mmq_q4k_q8_1.runtime_dispatch_failure.v2",
           "failure_boundary":
             "runtime_call_raised_after_kernarg_capture_before_return",
           "wait": True, "epoch": 0,
@@ -631,7 +912,7 @@ def test_failed_candidate_attempt_retains_low_level_dispatch_subphase():
           "authoritative_qword_snapshot": "pre_submit",
           "pre_submit": {
             "schema":
-              "tinygrad.mmq_q4k_q8_1.pm4_pre_submit_snapshot.v1",
+              "tinygrad.mmq_q4k_q8_1.pm4_pre_submit_snapshot.v2",
             "capture_point":
               "AMDComputeQueue._submit_after_complete_command_construction_"
               "before_ring_copy_and_doorbell",

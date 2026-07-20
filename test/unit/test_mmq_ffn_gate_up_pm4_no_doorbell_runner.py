@@ -11,6 +11,7 @@ import pytest
 from extra.qk.mmq_ffn_gate_up_guarded_correctness import (
   CANDIDATE_EXECUTABLE_SCHEMA, ENVELOPE_SCHEMA,
   PM4_NO_DOORBELL_RECEIPT_SCHEMA, PM4_NO_DOORBELL_SCHEMA,
+  PM4_PRE_SUBMIT_CHECK_KEYS, PM4_PRE_SUBMIT_SCHEMA,
   build_production_candidate_prefix_runtime,
 )
 from extra.qk.mmq_ffn_gate_up_pm4_no_doorbell_runner import (
@@ -88,23 +89,11 @@ def _clear_fault_evidence() -> dict:
 
 def _no_doorbell_receipt() -> dict:
   pre_submit_checks = {
-    "queue_device_matches_submit_device": True,
-    "runtime_device_matches_submit_device": True,
-    "args_state_program_matches_runtime": True,
-    "exact_five_argument_buffers": True,
-    "exact_five_kernarg_qwords": True,
-    "five_qwords_match_constructed_buffers": True,
-    "pm4_command_words_concrete": True,
-    "pm4_command_stream_nonempty": True,
-    "pm4_packet_stream_decoded": True,
-    "pm4_kernarg_user_data_found_once": True,
-    "pm4_kernarg_uses_user_data_0": True,
-    "pm4_kernarg_user_data_matches_kernarg_va": True,
-  }
+    key: True for key in PM4_PRE_SUBMIT_CHECK_KEYS}
   vas = [0x10000, 0x20000, 0x30000, 0x40000, 0x50000]
   kernarg_va = 0x70000
   pre_submit = {
-    "schema": "tinygrad.mmq_q4k_q8_1.pm4_pre_submit_snapshot.v1",
+    "schema": PM4_PRE_SUBMIT_SCHEMA,
     "capture_point":
       "AMDComputeQueue._submit_after_complete_command_construction_"
       "before_ring_copy_and_doorbell",
@@ -122,6 +111,18 @@ def _no_doorbell_receipt() -> dict:
       "packet_dword_offset": 1, "register_index": 0,
       "low_dword": kernarg_va, "high_dword": 0,
       "pointer": kernarg_va,
+    },
+    "pm4_dispatch_direct": {
+      "packet_dword_offset": 11, "group_counts": [136, 4, 1],
+      "dispatch_initiator": 1,
+    },
+    "pm4_workgroup_size": {
+      "packet_dword_offset": 7, "register_index": 0,
+      "size": [256, 1, 1],
+    },
+    "pm4_program_entry": {
+      "packet_dword_offset": 3, "register_index": 0,
+      "low_dword": 0x8001, "high_dword": 0, "entry_va": 0x800100,
     },
     "pm4_dword_count": 16, "pm4_sha256": "3" * 64,
     "checks": pre_submit_checks, "all_checks_pass": True,

@@ -10,6 +10,8 @@ import pytest
 
 from extra.qk.mmq_frozen_staged_low_level_session import (
   ABI_NAMES, ATTESTATION_SCHEMA, CANDIDATE_TRACE_SCHEMA,
+  DIAGNOSTIC_GLOBAL_SIZE_ALLOWLIST,
+  DIAGNOSTIC_PENDING_OBSERVATION_SCHEMA, DIAGNOSTIC_RECEIPT_SCHEMA,
   FrozenStagedAbiSlot, FrozenStagedLowLevelDependencies,
   FrozenStagedLowLevelInvocation, FrozenStagedLowLevelSession,
   FrozenStagedProgramAuthority, INVOCATION_FAILURE_ATTR,
@@ -95,6 +97,8 @@ class FakeDependencies:
     self.pm4_no_doorbell_receipt_sink: list[dict] = []
     self.pm4_snapshot_receipt_mode = "valid"
     self.pm4_snapshot_policy_calls: list[str] = []
+    self.diagnostic_global_size: tuple[int, int, int] | None = None
+    self.diagnostic_dispatch_receipt_sink: list[dict] | None = None
 
   def _allocate_bytes(self, label: str, nbytes: int) -> FakeBuffer:
     value = FakeBuffer(label, self.next_va, nbytes)
@@ -174,18 +178,70 @@ class FakeDependencies:
     if self.cleanup_sync_armed:
       raise RuntimeError("injected cleanup synchronization failure")
 
+  def diagnostic_pre_submit(self, runtime, buffers):
+    kernarg_va = 0x123456789000
+    return {
+      "schema": PM4_PRE_SUBMIT_SCHEMA,
+      "capture_point": PM4_PRE_SUBMIT_CAPTURE_POINT,
+      "runtime_object_identity": id(runtime),
+      "runtime_class": self.runtime_row["runtime_class"],
+      "runtime_name": self.runtime_row["runtime_name"],
+      "runtime_device": self.runtime_row["runtime_device"],
+      "kernarg_va": kernarg_va, "kernarg_nbytes": 40,
+      "kernarg_qwords": [value.va for value in buffers],
+      "pm4_kernarg_user_data": {
+        "packet_dword_offset": 11, "register_index": 0,
+        "low_dword": kernarg_va & 0xffffffff,
+        "high_dword": kernarg_va >> 32, "pointer": kernarg_va,
+      },
+      "pm4_dispatch_direct": {
+        "packet_dword_offset": 13,
+        "group_counts": list(self.diagnostic_global_size),
+        "dispatch_initiator": 1,
+      },
+      "pm4_workgroup_size": {
+        "packet_dword_offset": 7, "register_index": 0,
+        "size": list(self.authority.local_size),
+      },
+      "pm4_program_entry": {
+        "packet_dword_offset": 3, "register_index": 0,
+        "low_dword": self.runtime_row["entry_va"] >> 8,
+        "high_dword": 0, "entry_va": self.runtime_row["entry_va"],
+      },
+      "argument_buffers": [
+        {"slot": slot, "va": value.va, "size": value.nbytes}
+        for slot, value in enumerate(buffers)],
+      "pm4_dword_count": 17, "pm4_sha256": "3" * 64,
+      "checks": {key: True for key in PM4_PRE_SUBMIT_CHECK_KEYS},
+      "all_checks_pass": True,
+    }
+
   def dispatch(self, runtime, buffers, authority, epoch):
     assert runtime is self.runtime
     self.events.append(f"dispatch:{epoch}")
+    effective_grid = self.diagnostic_global_size or authority.global_size
     row = {
       "epoch": epoch, "program_key": authority.program_key,
       "binary_sha256": authority.binary_sha256,
-      "global_size": list(authority.global_size),
+      "global_size": list(effective_grid),
       "local_size": list(authority.local_size),
       "argument_vas": [value.va for value in buffers],
       "kernarg_pointer_words": [value.va for value in buffers],
       "kernarg_pointer_words_match_bound": True,
     }
+    if self.diagnostic_global_size is not None:
+      row.update({
+        "frozen_global_size": list(authority.global_size),
+        "effective_global_size": list(effective_grid),
+        "pre_submit": self.diagnostic_pre_submit(runtime, buffers),
+        "submit_evidence": {
+          "native_submit_entered_count": 1,
+          "native_submit_returned_count": 1,
+          "target_submit_entered": True,
+          "target_submit_returned": True,
+          "target_dispatch_submitted": True,
+        },
+      })
     if self.launch_drift is not None:
       row[self.launch_drift] = \
         _raw("wrong") if self.launch_drift == "binary_sha256" else \
@@ -193,7 +249,7 @@ class FakeDependencies:
         else [1, 2, 3]
     if self.dispatch_failure:
       launch = {
-        "epoch": epoch, "global_size": list(authority.global_size),
+        "epoch": epoch, "global_size": list(effective_grid),
         "local_size": list(authority.local_size),
         "arguments": [
           {
@@ -213,28 +269,16 @@ class FakeDependencies:
       }
       failure = RuntimeError("injected target dispatch fault")
       pre_submit_checks = {
-        "queue_device_matches_submit_device": True,
-        "runtime_device_matches_submit_device": True,
-        "args_state_program_matches_runtime": True,
-        "exact_five_argument_buffers": True,
-        "exact_five_kernarg_qwords": True,
-        "five_qwords_match_constructed_buffers": True,
-        "pm4_command_words_concrete": True,
-        "pm4_command_stream_nonempty": True,
-        "pm4_packet_stream_decoded": True,
-        "pm4_kernarg_user_data_found_once": True,
-        "pm4_kernarg_uses_user_data_0": True,
-        "pm4_kernarg_user_data_matches_kernarg_va": True,
-      }
+        key: True for key in PM4_PRE_SUBMIT_CHECK_KEYS}
       failure.mmq_runtime_dispatch_failure = {
-        "schema": "tinygrad.mmq_q4k_q8_1.runtime_dispatch_failure.v1",
+        "schema": "tinygrad.mmq_q4k_q8_1.runtime_dispatch_failure.v2",
         "failure_boundary":
           "runtime_call_raised_after_kernarg_capture_before_return",
         "wait": True, "launch": launch,
         "authoritative_qword_snapshot": "pre_submit",
         "pre_submit": {
           "schema":
-            "tinygrad.mmq_q4k_q8_1.pm4_pre_submit_snapshot.v1",
+            "tinygrad.mmq_q4k_q8_1.pm4_pre_submit_snapshot.v2",
           "capture_point":
             "AMDComputeQueue._submit_after_complete_command_construction_"
             "before_ring_copy_and_doorbell",
@@ -251,11 +295,32 @@ class FakeDependencies:
             "high_dword": launch["kernarg"]["va"] >> 32,
             "pointer": launch["kernarg"]["va"],
           },
+          "pm4_dispatch_direct": {
+            "packet_dword_offset": 13,
+            "group_counts": list(effective_grid),
+            "dispatch_initiator": 1,
+          },
+          "pm4_workgroup_size": {
+            "packet_dword_offset": 7, "register_index": 0,
+            "size": list(authority.local_size),
+          },
+          "pm4_program_entry": {
+            "packet_dword_offset": 3, "register_index": 0,
+            "low_dword": self.runtime_row["entry_va"] >> 8,
+            "high_dword": 0, "entry_va": self.runtime_row["entry_va"],
+          },
           "argument_buffers": [
             {"slot": slot, "va": value.va, "size": value.nbytes}
             for slot, value in enumerate(buffers)],
           "pm4_dword_count": 17, "pm4_sha256": "3" * 64,
           "checks": pre_submit_checks, "all_checks_pass": True,
+        },
+        "submit_evidence": {
+          "native_submit_entered_count": 1,
+          "native_submit_returned_count": 1,
+          "target_submit_entered": True,
+          "target_submit_returned": True,
+          "target_dispatch_submitted": True,
         },
       }
       raise failure
@@ -349,7 +414,10 @@ class FakeDependencies:
       observe_buffer=self.observe_buffer, zero_output=self.zero_output,
       produce_q8=self.produce_q8, epoch_view=self.epoch_view,
       transfer=self.transfer, synchronize=self.synchronize,
-      dispatch=self.dispatch, clock_ns=self.clock_ns)
+      dispatch=self.dispatch, clock_ns=self.clock_ns,
+      diagnostic_global_size=self.diagnostic_global_size,
+      diagnostic_dispatch_receipt_sink=
+        self.diagnostic_dispatch_receipt_sink)
 
 
 def _prepared():
@@ -367,6 +435,24 @@ def _prepared():
     common_resident_fp16=fake.common, q4_epoch_major=q4,
     dependencies=fake.build())
   return authority, fake, binding, session
+
+
+def _prepared_diagnostic(grid=(1, 1, 1)):
+  authority = _authority()
+  fake = FakeDependencies(authority)
+  fake.diagnostic_global_size = grid
+  fake.diagnostic_dispatch_receipt_sink = []
+  fake.common = FakeBuffer(
+    "resident-fp16", 0x90000000,
+    authority.full_shape[0] * authority.full_shape[2] * 2)
+  q4 = FakeBuffer(
+    "epoch-major-q4", 0x40000000,
+    authority.abi[1].nbytes * authority.dispatch_count)
+  session = FrozenStagedLowLevelSession.prepare(
+    binding=object(), authority=authority,
+    common_resident_fp16=fake.common, q4_epoch_major=q4,
+    dependencies=fake.build())
+  return authority, fake, session
 
 
 def _flatten_trace(trace):
@@ -876,6 +962,7 @@ def test_snapshot_only_requires_exactly_one_launch_receipt():
     "runtime_class": "fake.AMDProgram",
     "runtime_name": authority.function_name,
     "runtime_device": "AMD",
+    "entry_va": 0x80000100,
   }
 
   def no_launch(_runtime, _buffers, _globals, **_kwargs):
@@ -902,6 +989,98 @@ def test_snapshot_only_requires_exactly_one_launch_receipt():
       fixed_five_vas=tuple(value.va for value in buffers))
 
 
+def test_production_dispatch_uses_effective_grid_and_retains_exact_pm4_state():
+  authority = _authority()
+  runtime = object()
+  buffers = tuple(
+    FakeBuffer(
+      slot.name, 0x10000000 + slot.slot * 0x4000000, slot.nbytes)
+    for slot in authority.abi)
+  fixed_vas = tuple(value.va for value in buffers)
+  runtime_row = {
+    "runtime_object_identity": id(runtime),
+    "runtime_class": "fake.AMDProgram",
+    "runtime_name": authority.function_name,
+    "runtime_device": "AMD",
+    "entry_va": 0x80000100,
+  }
+  calls = []
+
+  def retained_dispatch(
+      observed_runtime, observed_buffers, observed_globals, **kwargs):
+    calls.append((
+      observed_runtime, observed_buffers, observed_globals, dict(kwargs)))
+    assert kwargs["global_size"] == (40, 4, 1)
+    assert kwargs["local_size"] == authority.local_size
+    assert kwargs["retain_pm4_pre_submit"] is True
+    assert kwargs["pm4_submit_policy"] == "execute"
+    kernarg_va = 0x123456789000
+    launch = {
+      "epoch": 0,
+      "arguments": [
+        {"slot": slot, "va": value.va, "size": value.nbytes}
+        for slot, value in enumerate(buffers)],
+      "kernarg": {
+        "pointer_words": list(fixed_vas),
+        "pointer_words_match_bound": True,
+      },
+      "pre_submit": {
+        "schema": PM4_PRE_SUBMIT_SCHEMA,
+        "capture_point": PM4_PRE_SUBMIT_CAPTURE_POINT,
+        **runtime_row,
+        "kernarg_va": kernarg_va, "kernarg_nbytes": 40,
+        "kernarg_qwords": list(fixed_vas),
+        "pm4_kernarg_user_data": {
+          "packet_dword_offset": 11, "register_index": 0,
+          "low_dword": kernarg_va & 0xffffffff,
+          "high_dword": kernarg_va >> 32, "pointer": kernarg_va,
+        },
+        "pm4_dispatch_direct": {
+          "packet_dword_offset": 13,
+          "group_counts": [40, 4, 1], "dispatch_initiator": 1,
+        },
+        "pm4_workgroup_size": {
+          "packet_dword_offset": 7, "register_index": 0,
+          "size": list(authority.local_size),
+        },
+        "pm4_program_entry": {
+          "packet_dword_offset": 3, "register_index": 0,
+          "low_dword": runtime_row["entry_va"] >> 8,
+          "high_dword": 0, "entry_va": runtime_row["entry_va"],
+        },
+        "argument_buffers": [
+          {"slot": slot, "va": value.va, "size": value.nbytes}
+          for slot, value in enumerate(buffers)],
+        "pm4_dword_count": 17, "pm4_sha256": "3" * 64,
+        "checks": {key: True for key in PM4_PRE_SUBMIT_CHECK_KEYS},
+        "all_checks_pass": True,
+      },
+      "submit_evidence": {
+        "native_submit_entered_count": 1,
+        "native_submit_returned_count": 1,
+        "target_submit_entered": True,
+        "target_submit_returned": True,
+        "target_dispatch_submitted": True,
+      },
+    }
+    kwargs["runtime_evidence"]["launch_count"] = 1
+    kwargs["runtime_evidence"]["launches"].append(launch)
+
+  row = _dispatch_production_runtime(
+    runtime, buffers, authority, 0, runtime_observation=runtime_row,
+    dispatch_with_runtime_evidence=retained_dispatch,
+    pm4_submit_policy="execute", pm4_no_doorbell_receipt_sink=None,
+    fixed_five_vas=fixed_vas, effective_global_size=(40, 4, 1))
+  assert len(calls) == 1
+  assert calls[0][:3] == (runtime, buffers, authority.globals)
+  assert row["program_key"] == authority.program_key
+  assert row["binary_sha256"] == authority.binary_sha256
+  assert row["frozen_global_size"] == list(authority.global_size)
+  assert row["effective_global_size"] == [40, 4, 1]
+  assert row["argument_vas"] == list(fixed_vas)
+  assert row["pre_submit"]["kernarg_qwords"] == list(fixed_vas)
+
+
 @pytest.mark.parametrize("policy,sink,error,error_match", (
   ("bogus", None, ValueError, "pm4_submit_policy"),
   ("snapshot_only", None, TypeError, "requires a list receipt sink"),
@@ -913,3 +1092,181 @@ def test_production_policy_and_sink_fail_before_device_import(
     production_frozen_staged_low_level_dependencies(
       _authority(), pm4_submit_policy=policy,
       pm4_no_doorbell_receipt_sink=sink)
+
+
+@pytest.mark.parametrize("grid", sorted(DIAGNOSTIC_GLOBAL_SIZE_ALLOWLIST))
+def test_allowlisted_diagnostic_grid_is_one_epoch_and_promotion_ineligible(
+    grid):
+  authority, fake, session = _prepared_diagnostic(grid)
+  invocation = session.invoke_diagnostic_one_epoch(grid)
+  pending = invocation.pending_observation
+  assert pending["schema"] == DIAGNOSTIC_PENDING_OBSERVATION_SCHEMA
+  assert pending["promotion_evidence_eligible"] is False
+  assert pending["frozen_global_size"] == list(authority.global_size)
+  assert pending["effective_global_size"] == list(grid)
+  assert pending["local_size"] == list(authority.local_size)
+  assert pending["launch_count"] == 1
+  assert len(invocation.candidate_phase_trace["epochs"]) == 1
+  launch = session._pending.launch_observations[0]
+  assert launch["program_key"] == authority.program_key
+  assert launch["binary_sha256"] == authority.binary_sha256
+  assert launch["frozen_global_size"] == list(authority.global_size)
+  assert launch["effective_global_size"] == list(grid)
+  assert launch["global_size"] == list(grid)
+  assert launch["local_size"] == list(authority.local_size)
+  assert launch["argument_vas"] == list(session.fixed_five_vas)
+  assert launch["kernarg_pointer_words"] == list(session.fixed_five_vas)
+  assert launch["pre_submit"]["kernarg_qwords"] == \
+    list(session.fixed_five_vas)
+  assert launch["pre_submit"]["pm4_kernarg_user_data"]["pointer"] == \
+    launch["pre_submit"]["kernarg_va"]
+  assert fake.diagnostic_dispatch_receipt_sink == []
+
+  receipt = session.complete_diagnostic_post_sync(invocation, "PM4")
+  assert receipt.schema == DIAGNOSTIC_RECEIPT_SCHEMA
+  assert receipt.status == "PASS"
+  assert receipt.promotion_evidence_eligible is False
+  assert receipt.target_dispatch_submitted is True
+  assert receipt.post_dispatch_sync_completed is True
+  assert receipt.frozen_global_size == authority.global_size
+  assert receipt.effective_global_size == grid
+  assert receipt.local_size == authority.local_size
+  assert receipt.fixed_five_vas == session.fixed_five_vas
+  assert receipt.program_key == authority.program_key
+  assert receipt.binary_sha256 == authority.binary_sha256
+  assert receipt.runtime_object_identity == id(fake.runtime)
+  assert receipt.pre_submit["kernarg_qwords"] == \
+    list(session.fixed_five_vas)
+  assert receipt.launch_count == 1
+  assert fake.events[-1] == "observe_runtime"
+  assert len(fake.diagnostic_dispatch_receipt_sink) == 1
+  sink_receipt = fake.diagnostic_dispatch_receipt_sink[0]
+  assert sink_receipt["schema"] == DIAGNOSTIC_RECEIPT_SCHEMA
+  assert sink_receipt["effective_global_size"] == list(grid)
+  assert sink_receipt["fixed_five_vas"] == list(session.fixed_five_vas)
+  assert sink_receipt["pre_submit"]["pm4_sha256"] == "3" * 64
+  assert sink_receipt["observation_identity"] == receipt.observation_identity
+  assert session.has_pending_invocation is False
+
+
+@pytest.mark.parametrize("grid", (
+  (136, 4, 1), (137, 1, 1), (1, 1, 2), (0, 1, 1), (1, 1),
+))
+def test_diagnostic_grid_rejected_before_device_import(grid):
+  with pytest.raises(ValueError, match="diagnostic global size"):
+    production_frozen_staged_low_level_dependencies(
+      _authority(), diagnostic_global_size=grid,
+      diagnostic_dispatch_receipt_sink=[])
+
+
+@pytest.mark.parametrize("kwargs,error,error_match", (
+  (
+    {"diagnostic_global_size": (1, 1, 1)},
+    ValueError, "provided together"),
+  (
+    {"diagnostic_dispatch_receipt_sink": []},
+    ValueError, "provided together"),
+  (
+    {
+      "diagnostic_global_size": (1, 1, 1),
+      "diagnostic_dispatch_receipt_sink": [],
+      "pm4_submit_policy": "snapshot_only",
+      "pm4_no_doorbell_receipt_sink": [],
+    },
+    ValueError, "requires execute PM4"),
+))
+def test_diagnostic_dependency_contract_rejected_before_device_import(
+    kwargs, error, error_match):
+  with pytest.raises(error, match=error_match):
+    production_frozen_staged_low_level_dependencies(_authority(), **kwargs)
+
+
+def test_ordinary_and_diagnostic_terminal_states_are_strictly_separate():
+  _, _, _, ordinary = _prepared()
+  ordinary_invocation = ordinary.invoke(1)
+  with pytest.raises(
+      ValueError, match="rejects ordinary invocation"):
+    ordinary.complete_diagnostic_post_sync(ordinary_invocation, "PM4")
+  assert ordinary.has_pending_invocation
+  ordinary.attest_post_sync(ordinary_invocation, "PM4")
+
+  _, _, diagnostic = _prepared_diagnostic((1, 1, 1))
+  with pytest.raises(
+      RuntimeError, match="rejects diagnostic-configured"):
+    diagnostic.invoke(1)
+  invocation = diagnostic.invoke_diagnostic_one_epoch((1, 1, 1))
+  with pytest.raises(
+      ValueError, match="rejects diagnostic invocation"):
+    diagnostic.attest_post_sync(invocation, "PM4")
+  assert diagnostic.has_pending_invocation
+  diagnostic.complete_diagnostic_post_sync(invocation, "PM4")
+
+
+def test_diagnostic_fault_preserves_effective_grid_and_frozen_authority():
+  authority, fake, session = _prepared_diagnostic((40, 4, 1))
+  fake.dispatch_failure = True
+  with pytest.raises(
+      RuntimeError, match="injected target dispatch fault") as caught:
+    session.invoke_diagnostic_one_epoch((40, 4, 1))
+  failure = getattr(caught.value, INVOCATION_FAILURE_ATTR)
+  assert failure["diagnostic"] is True
+  assert failure["promotion_evidence_eligible"] is False
+  assert failure["frozen_global_size"] == list(authority.global_size)
+  assert failure["effective_global_size"] == [40, 4, 1]
+  dispatch = failure["dispatch_failure"]
+  assert dispatch["frozen_global_size"] == list(authority.global_size)
+  assert dispatch["effective_global_size"] == [40, 4, 1]
+  assert dispatch["launch"]["global_size"] == [40, 4, 1]
+  assert dispatch["checks"]["global_size_exact"] is True
+  assert dispatch["submit_evidence"] == {
+    "native_submit_entered_count": 1,
+    "native_submit_returned_count": 1,
+    "target_submit_entered": True,
+    "target_submit_returned": True,
+    "target_dispatch_submitted": True,
+  }
+  assert dispatch["all_authority_checks_pass"] is True
+
+
+def test_diagnostic_invocation_rejects_grid_different_from_dependencies():
+  _, _, session = _prepared_diagnostic((1, 1, 1))
+  with pytest.raises(ValueError, match="differs from configured"):
+    session.invoke_diagnostic_one_epoch((2, 1, 1))
+  assert session.has_pending_invocation is False
+
+
+def test_diagnostic_aql_route_is_rejected_before_target_dispatch():
+  _, fake, session = _prepared_diagnostic((1, 1, 1))
+  fake.runtime_row["queue_mode"] = "AQL"
+  session.prepared_runtime_observation["queue_mode"] = "AQL"
+  with pytest.raises(ValueError, match="requires PM4"):
+    session.invoke_diagnostic_one_epoch((1, 1, 1))
+  assert not any(event.startswith("dispatch:") for event in fake.events)
+  assert session.has_pending_invocation is False
+
+
+@pytest.mark.parametrize("mutation", (
+  "qword", "runtime", "user_data", "command_hash",
+  "dispatch_grid", "local_size", "program_entry",
+))
+def test_diagnostic_completion_rejects_pre_submit_authority_drift(mutation):
+  _, _, session = _prepared_diagnostic((1, 1, 1))
+  invocation = session.invoke_diagnostic_one_epoch((1, 1, 1))
+  snapshot = session._pending.launch_observations[0]["pre_submit"]
+  if mutation == "qword":
+    snapshot["kernarg_qwords"][0] += 8
+  elif mutation == "runtime":
+    snapshot["runtime_object_identity"] += 1
+  elif mutation == "user_data":
+    snapshot["pm4_kernarg_user_data"]["pointer"] += 8
+  elif mutation == "dispatch_grid":
+    snapshot["pm4_dispatch_direct"]["group_counts"][0] += 1
+  elif mutation == "local_size":
+    snapshot["pm4_workgroup_size"]["size"][0] //= 2
+  elif mutation == "program_entry":
+    snapshot["pm4_program_entry"]["entry_va"] += 0x100
+  else:
+    snapshot["pm4_sha256"] = None
+  with pytest.raises(ValueError, match="pre-submit differs"):
+    session.complete_diagnostic_post_sync(invocation, "PM4")
+  assert session.has_pending_invocation is False

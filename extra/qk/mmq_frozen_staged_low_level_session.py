@@ -22,14 +22,18 @@ PENDING_OBSERVATION_SCHEMA = \
   "tinygrad.mmq_q4k_q8_1.frozen_staged_low_level_pending.v1"
 ATTESTATION_SCHEMA = \
   "tinygrad.mmq_q4k_q8_1.frozen_staged_low_level_attestation.v1"
+DIAGNOSTIC_PENDING_OBSERVATION_SCHEMA = \
+  "tinygrad.mmq_q4k_q8_1.frozen_staged_low_level_diagnostic_pending.v1"
+DIAGNOSTIC_RECEIPT_SCHEMA = \
+  "tinygrad.mmq_q4k_q8_1.frozen_staged_low_level_diagnostic_receipt.v1"
 INVOCATION_FAILURE_SCHEMA = \
   "tinygrad.mmq_q4k_q8_1.frozen_staged_low_level_failure.v1"
 INVOCATION_FAILURE_ATTR = "frozen_staged_low_level_failure"
 RUNTIME_DISPATCH_FAILURE_SCHEMA = \
-  "tinygrad.mmq_q4k_q8_1.runtime_dispatch_failure.v1"
+  "tinygrad.mmq_q4k_q8_1.runtime_dispatch_failure.v2"
 RUNTIME_DISPATCH_FAILURE_ATTR = "mmq_runtime_dispatch_failure"
 PM4_PRE_SUBMIT_SCHEMA = \
-  "tinygrad.mmq_q4k_q8_1.pm4_pre_submit_snapshot.v1"
+  "tinygrad.mmq_q4k_q8_1.pm4_pre_submit_snapshot.v2"
 PM4_PRE_SUBMIT_CAPTURE_POINT = \
   "AMDComputeQueue._submit_after_complete_command_construction_" \
   "before_ring_copy_and_doorbell"
@@ -63,6 +67,12 @@ PM4_PRE_SUBMIT_CHECK_KEYS = frozenset({
   "pm4_kernarg_user_data_found_once",
   "pm4_kernarg_uses_user_data_0",
   "pm4_kernarg_user_data_matches_kernarg_va",
+  "pm4_dispatch_direct_found_once",
+  "pm4_dispatch_groups_match_requested",
+  "pm4_workgroup_size_found_once",
+  "pm4_workgroup_size_matches_requested",
+  "pm4_program_entry_found_once",
+  "pm4_program_entry_matches_runtime",
 })
 QUEUE_MODES = ("PM4", "AQL")
 ABI_NAMES = (
@@ -72,6 +82,10 @@ EXACT_FULL_SHAPE = (512, 17408, 5120)
 EXACT_PROGRAM_SHAPE = (512, 17408, 256)
 EXACT_GLOBAL_SIZE = (136, 4, 1)
 EXACT_LOCAL_SIZE = (256, 1, 1)
+DIAGNOSTIC_GLOBAL_SIZE_ALLOWLIST = frozenset({
+  (1, 1, 1), (2, 1, 1), (1, 2, 1), (1, 4, 1), (8, 4, 1),
+  (32, 4, 1), (40, 4, 1), (41, 4, 1), (136, 1, 1),
+})
 EXACT_FUNCTION = "mmq_llama_five_buffer_full_grid_accumulate"
 EXACT_COMPILE_TARGET = "AMD:ISA:gfx1100"
 EXACT_ABI_ELEMENTS = (8912896, 626688, 131072, 4096, 4096)
@@ -362,11 +376,27 @@ class FrozenStagedLowLevelDependencies:
     [Any, tuple[Any, ...], FrozenStagedProgramAuthority, int],
     Mapping[str, Any]]
   clock_ns: Callable[[], int]
+  diagnostic_global_size: tuple[int, int, int] | None = None
+  diagnostic_dispatch_receipt_sink: list[Mapping[str, Any]] | None = None
 
   def validate(self) -> "FrozenStagedLowLevelDependencies":
-    for name in self.__dataclass_fields__:
+    for name in (
+        "observe_binding", "create_runtime", "observe_runtime", "allocate",
+        "realize_many", "observe_buffer", "zero_output", "produce_q8",
+        "epoch_view", "transfer", "synchronize", "dispatch", "clock_ns"):
       if not callable(getattr(self, name)):
         raise TypeError(f"low-level dependency {name} must be callable")
+    if (self.diagnostic_global_size is None) != \
+       (self.diagnostic_dispatch_receipt_sink is None):
+      raise ValueError(
+        "diagnostic grid and diagnostic receipt sink must be provided together")
+    if self.diagnostic_global_size is not None:
+      grid = _tuple3(
+        self.diagnostic_global_size, "diagnostic global size")
+      if grid not in DIAGNOSTIC_GLOBAL_SIZE_ALLOWLIST:
+        raise ValueError("diagnostic global size is not allowlisted")
+      if not isinstance(self.diagnostic_dispatch_receipt_sink, list):
+        raise TypeError("diagnostic dispatch receipt sink must be a list")
     return self
 
 
@@ -401,6 +431,41 @@ class FrozenStagedLowLevelAttestation:
   observation_identity: str
 
 
+@dataclass(frozen=True)
+class FrozenStagedLowLevelDiagnosticReceipt:
+  schema: str
+  status: str
+  queue_mode: str
+  promotion_evidence_eligible: bool
+  target_dispatch_submitted: bool
+  native_submit_entered_count: int
+  native_submit_returned_count: int
+  target_submit_entered: bool
+  target_submit_returned: bool
+  post_dispatch_sync_completed: bool
+  family_identity: str
+  candidate_executable_identity: str
+  input_identity: str
+  program_key: str
+  binary_sha256: str
+  runtime_class: str
+  runtime_name: str
+  runtime_device: str
+  runtime_object_identity: int
+  runtime_device_identity_exact: bool
+  runtime_cache_binding_exact: bool
+  library_va: int
+  library_nbytes: int
+  entry_va: int
+  fixed_five_vas: tuple[int, ...]
+  frozen_global_size: tuple[int, int, int]
+  effective_global_size: tuple[int, int, int]
+  local_size: tuple[int, int, int]
+  pre_submit: Mapping[str, Any]
+  launch_count: int
+  observation_identity: str
+
+
 @dataclass
 class _PendingState:
   invocation: FrozenStagedLowLevelInvocation
@@ -408,6 +473,8 @@ class _PendingState:
   runtime_observation: Mapping[str, Any]
   launch_observations: tuple[Mapping[str, Any], ...]
   source_observations: tuple[Mapping[str, int], ...]
+  diagnostic: bool
+  effective_global_size: tuple[int, int, int]
 
 
 def _buffer_observation(
@@ -447,6 +514,7 @@ def _require_disjoint_buffer_ranges(
 def _failed_dispatch_observation(
     exc: BaseException, *, epoch: int,
     authority: FrozenStagedProgramAuthority,
+    effective_global_size: tuple[int, int, int],
     fixed_five_vas: tuple[int, ...],
     runtime_observation: Mapping[str, Any],
     ) -> dict[str, Any] | None:
@@ -478,6 +546,41 @@ def _failed_dispatch_observation(
   pm4_user_data_value = pre_submit.get("pm4_kernarg_user_data")
   pm4_user_data = dict(pm4_user_data_value) \
     if isinstance(pm4_user_data_value, Mapping) else {}
+  pm4_dispatch = pre_submit.get("pm4_dispatch_direct")
+  pm4_workgroup = pre_submit.get("pm4_workgroup_size")
+  pm4_program = pre_submit.get("pm4_program_entry")
+  submit_value = row.get("submit_evidence")
+  submit_evidence = dict(submit_value) \
+    if isinstance(submit_value, Mapping) else {}
+  submit_keys = {
+    "native_submit_entered_count", "native_submit_returned_count",
+    "target_submit_entered", "target_submit_returned",
+    "target_dispatch_submitted",
+  }
+  submit_counts_exact = all(
+    isinstance(submit_evidence.get(key), int) and
+    not isinstance(submit_evidence.get(key), bool) and
+    submit_evidence[key] in (0, 1)
+    for key in ("native_submit_entered_count",
+                "native_submit_returned_count"))
+  submit_state_exact = (
+    set(submit_evidence) == submit_keys and submit_counts_exact and
+    type(submit_evidence.get("target_submit_entered")) is bool and
+    type(submit_evidence.get("target_submit_returned")) is bool and
+    (submit_evidence.get("target_dispatch_submitted") is None or
+     type(submit_evidence.get("target_dispatch_submitted")) is bool) and
+    submit_evidence.get("target_submit_entered") is
+      (submit_evidence.get("native_submit_entered_count") == 1) and
+    submit_evidence.get("target_submit_returned") is
+      (submit_evidence.get("native_submit_returned_count") == 1) and
+    (not submit_evidence.get("target_submit_returned") or
+     submit_evidence.get("target_submit_entered")))
+  if submit_state_exact:
+    expected_submitted = (
+      True if submit_evidence["target_submit_returned"] else
+      None if submit_evidence["target_submit_entered"] else False)
+    submit_state_exact = \
+      submit_evidence["target_dispatch_submitted"] is expected_submitted
   checks = {
     "schema_exact": row.get("schema") == RUNTIME_DISPATCH_FAILURE_SCHEMA,
     "failure_boundary_exact":
@@ -486,7 +589,7 @@ def _failed_dispatch_observation(
     "wait_true": row.get("wait") is True,
     "epoch_exact": launch.get("epoch") == epoch,
     "global_size_exact":
-      launch.get("global_size") == list(authority.global_size),
+      launch.get("global_size") == list(effective_global_size),
     "local_size_exact":
       launch.get("local_size") == list(authority.local_size),
     "argument_vas_exact": argument_vas == list(fixed_five_vas),
@@ -516,6 +619,16 @@ def _failed_dispatch_observation(
       pre_submit.get("runtime_name") == runtime_observation["runtime_name"],
     "pre_submit_runtime_device_exact":
       pre_submit.get("runtime_device") == runtime_observation["runtime_device"],
+    "pre_submit_dispatch_grid_exact":
+      isinstance(pm4_dispatch, Mapping) and
+      pm4_dispatch.get("group_counts") == list(effective_global_size),
+    "pre_submit_workgroup_size_exact":
+      isinstance(pm4_workgroup, Mapping) and
+      pm4_workgroup.get("size") == list(authority.local_size),
+    "pre_submit_program_entry_exact":
+      isinstance(pm4_program, Mapping) and
+      pm4_program.get("entry_va") == runtime_observation["entry_va"],
+    "submit_evidence_exact": submit_state_exact,
   }
   post_failure_checks = {
     "kernarg_pointer_words_exact":
@@ -523,16 +636,23 @@ def _failed_dispatch_observation(
     "kernarg_pointer_words_match_bound":
       kernarg.get("pointer_words_match_bound") is True,
   }
-  return {
+  observation = {
     "schema": RUNTIME_DISPATCH_FAILURE_SCHEMA,
     "failure_boundary": row.get("failure_boundary"),
     "wait": row.get("wait"), "epoch": epoch,
     "authoritative_qword_snapshot": "pre_submit",
     "pre_submit": pre_submit,
+    "submit_evidence": submit_evidence,
     "launch": launch, "checks": checks,
     "post_failure_checks": post_failure_checks,
     "all_authority_checks_pass": all(checks.values()),
   }
+  if effective_global_size != authority.global_size:
+    observation.update({
+      "frozen_global_size": list(authority.global_size),
+      "effective_global_size": list(effective_global_size),
+    })
+  return observation
 
 
 def _validate_pm4_no_doorbell_receipt(
@@ -646,6 +766,90 @@ def _validate_pm4_no_doorbell_receipt(
   return copy.deepcopy(receipt)
 
 
+def _validate_diagnostic_pm4_pre_submit(
+    value: Any, *, runtime: Any,
+    runtime_observation: Mapping[str, Any],
+    fixed_five_vas: tuple[int, ...],
+    effective_global_size: tuple[int, int, int],
+    local_size: tuple[int, int, int],
+    ) -> dict[str, Any]:
+  snapshot = dict(_mapping(value, "diagnostic PM4 pre-submit snapshot"))
+  argument_buffers = snapshot.get("argument_buffers")
+  argument_vas = [
+    item.get("va") for item in argument_buffers
+  ] if isinstance(argument_buffers, list) and all(
+    isinstance(item, Mapping) for item in argument_buffers) else None
+  checks = snapshot.get("checks")
+  user_data = snapshot.get("pm4_kernarg_user_data")
+  dispatch_direct = snapshot.get("pm4_dispatch_direct")
+  workgroup_size = snapshot.get("pm4_workgroup_size")
+  program_entry = snapshot.get("pm4_program_entry")
+  exact_int = lambda item: isinstance(item, int) and not isinstance(item, bool)
+  authority_checks = {
+    "schema_exact": snapshot.get("schema") == PM4_PRE_SUBMIT_SCHEMA,
+    "capture_point_exact":
+      snapshot.get("capture_point") == PM4_PRE_SUBMIT_CAPTURE_POINT,
+    "internal_checks_exact":
+      isinstance(checks, Mapping) and
+      set(checks) == PM4_PRE_SUBMIT_CHECK_KEYS and
+      all(item is True for item in checks.values()),
+    "all_checks_pass": snapshot.get("all_checks_pass") is True,
+    "argument_vas_exact": argument_vas == list(fixed_five_vas),
+    "argument_layout_exact":
+      isinstance(argument_buffers, list) and
+      len(argument_buffers) == len(EXACT_ABI_NBYTES) and all(
+        isinstance(item, Mapping) and item.get("slot") == slot and
+        item.get("va") == fixed_five_vas[slot] and
+        item.get("size") == EXACT_ABI_NBYTES[slot]
+        for slot, item in enumerate(argument_buffers)),
+    "kernarg_qwords_exact":
+      snapshot.get("kernarg_qwords") == list(fixed_five_vas),
+    "kernarg_layout_exact":
+      exact_int(snapshot.get("kernarg_va")) and
+      snapshot.get("kernarg_va") > 0 and
+      snapshot.get("kernarg_nbytes") == 40,
+    "runtime_object_identity_exact":
+      snapshot.get("runtime_object_identity") == id(runtime) ==
+      runtime_observation["runtime_object_identity"],
+    "runtime_class_exact":
+      snapshot.get("runtime_class") == runtime_observation["runtime_class"],
+    "runtime_name_exact":
+      snapshot.get("runtime_name") == runtime_observation["runtime_name"],
+    "runtime_device_exact":
+      snapshot.get("runtime_device") == runtime_observation["runtime_device"],
+    "kernarg_user_data_exact":
+      isinstance(user_data, Mapping) and
+      user_data.get("register_index") == 0 and
+      exact_int(user_data.get("low_dword")) and
+      exact_int(user_data.get("high_dword")) and
+      user_data.get("pointer") == snapshot.get("kernarg_va") and
+      user_data.get("pointer") == (
+        user_data.get("low_dword", -1) |
+        (user_data.get("high_dword", -1) << 32)),
+    "pm4_stream_identity_concrete":
+      exact_int(snapshot.get("pm4_dword_count")) and
+      snapshot.get("pm4_dword_count") > 0 and
+      isinstance(snapshot.get("pm4_sha256"), str) and
+      len(snapshot.get("pm4_sha256")) == 64 and
+      all(char in _HEX for char in snapshot.get("pm4_sha256")),
+    "dispatch_direct_exact":
+      isinstance(dispatch_direct, Mapping) and
+      dispatch_direct.get("group_counts") == list(effective_global_size),
+    "workgroup_size_exact":
+      isinstance(workgroup_size, Mapping) and
+      workgroup_size.get("size") == list(local_size),
+    "program_entry_exact":
+      isinstance(program_entry, Mapping) and
+      program_entry.get("entry_va") == runtime_observation["entry_va"],
+  }
+  if not all(authority_checks.values()):
+    raise ValueError(
+      "diagnostic PM4 pre-submit differs from authority: "
+      f"{sorted(key for key, passed in authority_checks.items()
+                if not passed)!r}")
+  return copy.deepcopy(snapshot)
+
+
 def _dispatch_production_runtime(
     runtime: Any, buffers: tuple[Any, ...],
     program_authority: FrozenStagedProgramAuthority, epoch: int, *,
@@ -654,17 +858,32 @@ def _dispatch_production_runtime(
     pm4_submit_policy: str,
     pm4_no_doorbell_receipt_sink: list[Mapping[str, Any]] | None,
     fixed_five_vas: tuple[int, ...],
+    effective_global_size: tuple[int, int, int] | None = None,
     receipt_schema: str = PM4_NO_DOORBELL_RECEIPT_SCHEMA,
     ) -> Mapping[str, Any]:
+  effective_grid = program_authority.global_size \
+    if effective_global_size is None else _tuple3(
+      effective_global_size, "effective global size")
+  if effective_global_size is not None and \
+     effective_grid not in DIAGNOSTIC_GLOBAL_SIZE_ALLOWLIST:
+    raise ValueError("effective diagnostic global size is not allowlisted")
   evidence: dict[str, Any] = {"launch_count": 0, "launches": []}
+  dispatch_kwargs: dict[str, Any] = {
+    "global_size": effective_grid,
+    "local_size": program_authority.local_size,
+    "vals": (),
+    "runtime_evidence": evidence,
+    "context": {"epoch": epoch},
+    "wait": True,
+    "pm4_submit_policy": pm4_submit_policy,
+  }
+  if effective_global_size is not None:
+    dispatch_kwargs["retain_pm4_pre_submit"] = True
   dispatch_with_runtime_evidence(
     runtime, buffers, program_authority.globals,
-    global_size=program_authority.global_size,
-    local_size=program_authority.local_size,
     # ``from_binding`` rejects any scalar values. This compact target has
     # exactly five pointer globals and therefore an empty scalar vals tuple.
-    vals=(), runtime_evidence=evidence, context={"epoch": epoch}, wait=True,
-    pm4_submit_policy=pm4_submit_policy)
+    **dispatch_kwargs)
   launches = evidence.get("launches")
   if not isinstance(launches, list) or not launches:
     raise ValueError("runtime dispatch produced no launch evidence")
@@ -679,7 +898,7 @@ def _dispatch_production_runtime(
   row: dict[str, Any] = {
     "epoch": epoch, "program_key": program_authority.program_key,
     "binary_sha256": program_authority.binary_sha256,
-    "global_size": list(program_authority.global_size),
+    "global_size": list(effective_grid),
     "local_size": list(program_authority.local_size),
     "argument_vas": [
       item["va"] for item in launch["arguments"]],
@@ -687,6 +906,30 @@ def _dispatch_production_runtime(
     "kernarg_pointer_words_match_bound":
       kernarg.get("pointer_words_match_bound"),
   }
+  if effective_global_size is not None:
+    row["frozen_global_size"] = list(program_authority.global_size)
+    row["effective_global_size"] = list(effective_grid)
+    if pm4_submit_policy != "execute":
+      raise ValueError("diagnostic dispatch requires execute PM4")
+    row["pre_submit"] = _validate_diagnostic_pm4_pre_submit(
+      launch.get("pre_submit"), runtime=runtime,
+      runtime_observation=runtime_observation,
+      fixed_five_vas=fixed_five_vas,
+      effective_global_size=effective_grid,
+      local_size=program_authority.local_size)
+    submit_evidence = dict(_mapping(
+      launch.get("submit_evidence"), "diagnostic PM4 submit evidence"))
+    expected_submit_evidence = {
+      "native_submit_entered_count": 1,
+      "native_submit_returned_count": 1,
+      "target_submit_entered": True,
+      "target_submit_returned": True,
+      "target_dispatch_submitted": True,
+    }
+    if submit_evidence != expected_submit_evidence:
+      raise ValueError(
+        "diagnostic PM4 submit evidence differs from one returned target")
+    row["submit_evidence"] = submit_evidence
   if pm4_submit_policy == "snapshot_only":
     if row["argument_vas"] != list(fixed_five_vas) or \
        row["kernarg_pointer_words"] != list(fixed_five_vas) or \
@@ -886,10 +1129,38 @@ class FrozenStagedLowLevelSession:
     return (resident, q4, *q8)
 
   def invoke(self, prefix_epochs: int) -> FrozenStagedLowLevelInvocation:
+    if self.dependencies.diagnostic_global_size is not None:
+      raise RuntimeError(
+        "ordinary invocation rejects diagnostic-configured dependencies")
+    return self._invoke(prefix_epochs, diagnostic_global_size=None)
+
+  def invoke_diagnostic_one_epoch(
+      self, grid: tuple[int, int, int],
+      ) -> FrozenStagedLowLevelInvocation:
+    effective_grid = _tuple3(grid, "diagnostic global size")
+    if effective_grid not in DIAGNOSTIC_GLOBAL_SIZE_ALLOWLIST:
+      raise ValueError("diagnostic global size is not allowlisted")
+    if self.dependencies.diagnostic_global_size is None:
+      raise RuntimeError(
+        "diagnostic invocation requires diagnostic-configured dependencies")
+    if effective_grid != self.dependencies.diagnostic_global_size:
+      raise ValueError(
+        "diagnostic invocation grid differs from configured dependency grid")
+    if self.prepared_runtime_observation["queue_mode"] != "PM4":
+      raise ValueError("diagnostic invocation requires PM4 queue mode")
+    return self._invoke(1, diagnostic_global_size=effective_grid)
+
+  def _invoke(
+      self, prefix_epochs: int, *,
+      diagnostic_global_size: tuple[int, int, int] | None,
+      ) -> FrozenStagedLowLevelInvocation:
     allowed = (1, 3, self.authority.dispatch_count)
-    if not isinstance(prefix_epochs, int) or isinstance(prefix_epochs, bool) or \
-       prefix_epochs not in allowed:
+    if diagnostic_global_size is None and (
+        not isinstance(prefix_epochs, int) or isinstance(prefix_epochs, bool) or
+        prefix_epochs not in allowed):
       raise ValueError(f"prefix_epochs must be one of {allowed!r}")
+    if diagnostic_global_size is not None and prefix_epochs != 1:
+      raise ValueError("diagnostic invocation requires exactly one epoch")
     if self._failed:
       raise RuntimeError("frozen staged low-level session is failed closed")
     if self._pending is not None:
@@ -983,7 +1254,9 @@ class FrozenStagedLowLevelSession:
         epoch_rows.append(epoch_row)
 
       pending_payload = {
-        "schema": PENDING_OBSERVATION_SCHEMA,
+        "schema": (
+          PENDING_OBSERVATION_SCHEMA if diagnostic_global_size is None else
+          DIAGNOSTIC_PENDING_OBSERVATION_SCHEMA),
         "invocation_ordinal": self._invocation_ordinal,
         "prefix_epochs": prefix_epochs,
         "queue_mode": self.prepared_runtime_observation["queue_mode"],
@@ -996,6 +1269,13 @@ class FrozenStagedLowLevelSession:
         "fixed_five_vas": list(self.fixed_five_vas),
         "launch_count": len(launch_rows),
       }
+      if diagnostic_global_size is not None:
+        pending_payload.update({
+          "promotion_evidence_eligible": False,
+          "frozen_global_size": list(self.authority.global_size),
+          "effective_global_size": list(diagnostic_global_size),
+          "local_size": list(self.authority.local_size),
+        })
       pending_observation = {
         **pending_payload, "observation_identity": _identity(pending_payload)}
       trace = {
@@ -1011,7 +1291,11 @@ class FrozenStagedLowLevelSession:
         invocation=invocation, q8_sources=q8_sources,
         runtime_observation=dict(self.prepared_runtime_observation),
         launch_observations=tuple(launch_rows),
-        source_observations=tuple(source_observations))
+        source_observations=tuple(source_observations),
+        diagnostic=diagnostic_global_size is not None,
+        effective_global_size=(
+          self.authority.global_size if diagnostic_global_size is None else
+          diagnostic_global_size))
       self._invocation_ordinal += 1
       return invocation
     except BaseException as exc:
@@ -1020,6 +1304,9 @@ class FrozenStagedLowLevelSession:
       dispatch_failure = None if failure_epoch is None else \
         _failed_dispatch_observation(
           exc, epoch=failure_epoch, authority=self.authority,
+          effective_global_size=(
+            self.authority.global_size if diagnostic_global_size is None else
+            diagnostic_global_size),
           fixed_five_vas=self.fixed_five_vas,
           runtime_observation=self.prepared_runtime_observation)
       failure_payload = {
@@ -1040,6 +1327,13 @@ class FrozenStagedLowLevelSession:
         "fixed_five_vas": list(self.fixed_five_vas),
         "dispatch_failure": dispatch_failure,
       }
+      if diagnostic_global_size is not None:
+        failure_payload.update({
+          "diagnostic": True,
+          "promotion_evidence_eligible": False,
+          "frozen_global_size": list(self.authority.global_size),
+          "effective_global_size": list(diagnostic_global_size),
+        })
       try:
         setattr(exc, INVOCATION_FAILURE_ATTR, failure_payload)
       except BaseException:
@@ -1067,6 +1361,9 @@ class FrozenStagedLowLevelSession:
     pending = self._pending
     if pending is None or invocation is not pending.invocation:
       raise ValueError("post-sync attestation invocation identity differs")
+    if pending.diagnostic:
+      raise ValueError(
+        "ordinary post-sync attestation rejects diagnostic invocation")
     try:
       if queue_mode not in QUEUE_MODES or \
          queue_mode != pending.runtime_observation["queue_mode"]:
@@ -1145,11 +1442,143 @@ class FrozenStagedLowLevelSession:
       self._pending = None
     return attestation
 
+  def complete_diagnostic_post_sync(
+      self, invocation: FrozenStagedLowLevelInvocation, queue_mode: str,
+      ) -> FrozenStagedLowLevelDiagnosticReceipt:
+    if self._failed:
+      raise RuntimeError("frozen staged low-level session is failed closed")
+    pending = self._pending
+    if pending is None or invocation is not pending.invocation:
+      raise ValueError("diagnostic post-sync invocation identity differs")
+    if not pending.diagnostic:
+      raise ValueError(
+        "diagnostic post-sync completion rejects ordinary invocation")
+    try:
+      if queue_mode != "PM4" or \
+         queue_mode != pending.runtime_observation["queue_mode"]:
+        raise ValueError("diagnostic post-sync requires PM4 queue mode")
+      current_runtime = _runtime_observation(
+        self.dependencies.observe_runtime(self.runtime), self.authority)
+      if current_runtime != pending.runtime_observation:
+        raise ValueError("diagnostic post-sync runtime/code range drifted")
+      current_sources = (
+        self.q4_observation,
+        *self._assert_all_ranges(pending.q8_sources)[2:])
+      if tuple(current_sources) != pending.source_observations:
+        raise ValueError("diagnostic post-sync source VA/extent drifted")
+      if len(pending.launch_observations) != 1:
+        raise ValueError("diagnostic launch count differs from one epoch")
+      row = pending.launch_observations[0]
+      expected_keys = {
+        "epoch", "program_key", "binary_sha256", "global_size",
+        "frozen_global_size", "effective_global_size", "local_size",
+        "argument_vas", "kernarg_pointer_words", "submit_evidence",
+        "kernarg_pointer_words_match_bound", "pre_submit",
+      }
+      pre_submit = _validate_diagnostic_pm4_pre_submit(
+        row.get("pre_submit"), runtime=self.runtime,
+        runtime_observation=current_runtime,
+        fixed_five_vas=self.fixed_five_vas,
+        effective_global_size=pending.effective_global_size,
+        local_size=self.authority.local_size)
+      checks = {
+        "launch_fields_exact": set(row) == expected_keys,
+        "epoch_zero": row.get("epoch") == 0,
+        "program_key_exact":
+          row.get("program_key") == self.authority.program_key,
+        "binary_exact":
+          row.get("binary_sha256") == self.authority.binary_sha256,
+        "frozen_grid_exact":
+          row.get("frozen_global_size") == list(self.authority.global_size),
+        "effective_grid_exact":
+          row.get("global_size") == list(pending.effective_global_size) and
+          row.get("effective_global_size") ==
+          list(pending.effective_global_size),
+        "local_size_exact":
+          row.get("local_size") == list(self.authority.local_size),
+        "argument_vas_exact":
+          row.get("argument_vas") == list(self.fixed_five_vas),
+        "kernarg_qwords_exact":
+          row.get("kernarg_pointer_words") == list(self.fixed_five_vas),
+        "kernarg_qwords_match_bound":
+          row.get("kernarg_pointer_words_match_bound") is True,
+        "no_no_doorbell_receipt":
+          "pm4_no_doorbell_receipt" not in row,
+        "submit_evidence_exact": row.get("submit_evidence") == {
+          "native_submit_entered_count": 1,
+          "native_submit_returned_count": 1,
+          "target_submit_entered": True,
+          "target_submit_returned": True,
+          "target_dispatch_submitted": True,
+        },
+      }
+      if not all(checks.values()):
+        raise ValueError(
+          "diagnostic post-sync launch differs from authority: "
+          f"{sorted(key for key, passed in checks.items() if not passed)!r}")
+      payload = {
+        "schema": DIAGNOSTIC_RECEIPT_SCHEMA, "status": "PASS",
+        "queue_mode": queue_mode,
+        "promotion_evidence_eligible": False,
+        "target_dispatch_submitted": True,
+        "native_submit_entered_count": 1,
+        "native_submit_returned_count": 1,
+        "target_submit_entered": True,
+        "target_submit_returned": True,
+        "post_dispatch_sync_completed": True,
+        "family_identity": self.authority.family_identity,
+        "candidate_executable_identity":
+          self.authority.candidate_executable_identity,
+        "input_identity": self.authority.input_identity,
+        "program_key": self.authority.program_key,
+        "binary_sha256": self.authority.binary_sha256,
+        "runtime_class": current_runtime["runtime_class"],
+        "runtime_name": current_runtime["runtime_name"],
+        "runtime_device": current_runtime["runtime_device"],
+        "runtime_object_identity":
+          current_runtime["runtime_object_identity"],
+        "runtime_device_identity_exact":
+          current_runtime["runtime_device_identity_exact"],
+        "runtime_cache_binding_exact":
+          current_runtime["runtime_cache_binding_exact"],
+        "library_va": current_runtime["library_va"],
+        "library_nbytes": current_runtime["library_nbytes"],
+        "entry_va": current_runtime["entry_va"],
+        "fixed_five_vas": list(self.fixed_five_vas),
+        "frozen_global_size": list(self.authority.global_size),
+        "effective_global_size": list(pending.effective_global_size),
+        "local_size": list(self.authority.local_size),
+        "pre_submit": pre_submit,
+        "launch_count": 1,
+      }
+      payload_with_identity = {
+        **payload, "observation_identity": _identity(payload)}
+      receipt = FrozenStagedLowLevelDiagnosticReceipt(
+        **{
+          **payload_with_identity,
+          "fixed_five_vas": self.fixed_five_vas,
+          "frozen_global_size": self.authority.global_size,
+          "effective_global_size": pending.effective_global_size,
+          "local_size": self.authority.local_size,
+        })
+      sink = self.dependencies.diagnostic_dispatch_receipt_sink
+      if not isinstance(sink, list):
+        raise RuntimeError("diagnostic receipt sink is unavailable")
+      sink.append(copy.deepcopy(payload_with_identity))
+    except BaseException:
+      self._failed = True
+      raise
+    finally:
+      self._pending = None
+    return receipt
+
 
 def production_frozen_staged_low_level_dependencies(
     authority: FrozenStagedProgramAuthority,
     *, pm4_submit_policy: str = "execute",
     pm4_no_doorbell_receipt_sink: list[Mapping[str, Any]] | None = None,
+    diagnostic_global_size: tuple[int, int, int] | None = None,
+    diagnostic_dispatch_receipt_sink: list[Mapping[str, Any]] | None = None,
     ) -> FrozenStagedLowLevelDependencies:
   """Build the existing tinygrad AMD mechanisms after queue selection.
 
@@ -1169,6 +1598,21 @@ def production_frozen_staged_low_level_dependencies(
         "snapshot-only PM4 dispatch requires a list receipt sink")
   elif pm4_no_doorbell_receipt_sink is not None:
     raise ValueError("execute PM4 dispatch does not accept a receipt sink")
+  if (diagnostic_global_size is None) != \
+     (diagnostic_dispatch_receipt_sink is None):
+    raise ValueError(
+      "diagnostic grid and diagnostic receipt sink must be provided together")
+  if diagnostic_global_size is not None:
+    diagnostic_global_size = _tuple3(
+      diagnostic_global_size, "diagnostic global size")
+    if diagnostic_global_size not in DIAGNOSTIC_GLOBAL_SIZE_ALLOWLIST:
+      raise ValueError("diagnostic global size is not allowlisted")
+    if not isinstance(diagnostic_dispatch_receipt_sink, list):
+      raise TypeError("diagnostic dispatch receipt sink must be a list")
+    if pm4_submit_policy != "execute" or \
+       pm4_no_doorbell_receipt_sink is not None:
+      raise ValueError(
+        "diagnostic dispatch requires execute PM4 without no-doorbell sink")
   import time
   from tinygrad import Tensor, dtypes
   from tinygrad.device import Device
@@ -1322,6 +1766,7 @@ def production_frozen_staged_low_level_dependencies(
       pm4_no_doorbell_receipt_sink=pm4_no_doorbell_receipt_sink,
       fixed_five_vas=tuple(
         int(buffer.get_buf("AMD").va_addr) for buffer in buffers),
+      effective_global_size=diagnostic_global_size,
       receipt_schema=HARNESS_RECEIPT_SCHEMA)
 
   return FrozenStagedLowLevelDependencies(
@@ -1330,12 +1775,18 @@ def production_frozen_staged_low_level_dependencies(
     realize_many=realize_many, observe_buffer=observe_buffer,
     zero_output=zero_output, produce_q8=produce_q8,
     epoch_view=epoch_view, transfer=transfer, synchronize=synchronize,
-    dispatch=dispatch, clock_ns=time.perf_counter_ns).validate()
+    dispatch=dispatch, clock_ns=time.perf_counter_ns,
+    diagnostic_global_size=diagnostic_global_size,
+    diagnostic_dispatch_receipt_sink=
+      diagnostic_dispatch_receipt_sink).validate()
 
 
 __all__ = [
   "ABI_NAMES", "ATTESTATION_SCHEMA", "CANDIDATE_TRACE_SCHEMA",
+  "DIAGNOSTIC_GLOBAL_SIZE_ALLOWLIST",
+  "DIAGNOSTIC_PENDING_OBSERVATION_SCHEMA", "DIAGNOSTIC_RECEIPT_SCHEMA",
   "FrozenStagedAbiSlot", "FrozenStagedLowLevelAttestation",
+  "FrozenStagedLowLevelDiagnosticReceipt",
   "FrozenStagedLowLevelDependencies", "FrozenStagedLowLevelInvocation",
   "FrozenStagedLowLevelSession", "FrozenStagedProgramAuthority",
   "INVOCATION_FAILURE_ATTR", "INVOCATION_FAILURE_SCHEMA",
