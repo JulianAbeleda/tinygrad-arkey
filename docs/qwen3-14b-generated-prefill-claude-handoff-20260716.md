@@ -17,7 +17,7 @@ Note this primitive does **not** violate the §2 "no hidden dense dequantization
 
 **Sequencing:**
 1. **Now (working AMD route):** promote the hand `build_gemm_lds2_q4k` as the AMD Q4_K prefill primitive — it is correct and supported at full scale today. (It is hand-authored, so per §2 it cannot yet satisfy a *generated*-route claim — it runs as the supported route while the generated version is built.)
-2. **Follow-on (generated claim):** generate the *same* algorithm (§1.15 fork B) — teach the MMQ lowering to emit fp16-dequant-in-register + streamed-K instead of the int8-MMQ port; the hand kernel is the exact convergence target. (Scope below / tracked separately.)
+2. **Follow-on (generated claim):** generate the *same* algorithm (§1.15 fork B) — teach the MMQ lowering to emit fp16-dequant-in-register + streamed-K instead of the int8-MMQ port; the hand kernel is the exact convergence target. **Implementation scope: [`docs/amd-fp16-dequant-q4k-primitive-scope-20260720.md`](amd-fp16-dequant-q4k-primitive-scope-20260720.md)** — recommends authoring in the existing Python UOp-graph MMQ stack (~400–600 lines + new frozen family), rewriting the recurrence to straight fp16-WMMA/fp32-accumulate against a **new correctness authority** (the hand kernel / GGML dequant, not the int8 authority, per §2.5); rejects the scheduler-Tensor-graph route (it would dense-materialize fp16 weights, violating §2.4).
 3. **NVIDIA:** retain the int8-MMQ generated kernel; the §1.15 occupancy-admission axis routes it there automatically once built.
 
 This is a direction decision, not a code change yet. The two build tracks it implies: (a) the occupancy-admission route axis (§1.15 integration point), and (b) the generated fp16-dequant lowering (fork B, scoped separately).
