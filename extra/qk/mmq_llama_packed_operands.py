@@ -49,6 +49,24 @@ Q4_K_DECODED_LDS_ROW = PackedOperandTransform("llama.q4_k.decoded_lds_row.v1", (
   PackedOperandComponent("padding", dtypes.int32, 288, 16, "4x_int32_padding", 4, 16),
 ))
 
+# fp16-dequant-in-register Q4_K primitive (implementation plan PART I.2/II.3,
+# ``extra/qk/prefill/wmma.py:554-592`` ``decode_group``).  One LDS row here is
+# exactly one K32 group (32 fp16 values = 64 bytes): ``d*sc*code - dmin*mn``
+# computed in a f32 intermediate with a single final cast to half, mirroring
+# the hand kernel's decode order.  The packed wire-format source is still
+# ``Q4_K_GLOBAL_BLOCK`` above (144B/superblock); only the *decoded* LDS
+# transform below differs from the retired int8 ``Q4_K_DECODED_LDS_ROW``.
+Q4_K_DECODED_GROUP_LDS_ROW = PackedOperandTransform("llama.q4_k.decoded_fp16_group_lds_row.v1", (
+  PackedOperandComponent("value", dtypes.half, 0, 64, "half[32]_dequantized_k32_group", 64, 16),
+))
+
+# Plain fp16 activation: never quantized, no ids/q8 split (implementation plan
+# I.6/II.6).  One LDS row is one K32 slice of one activation row, copied
+# straight from the [M,K] fp16 source with no transform.
+ACTIVATION_FP16_GROUP_ROW = PackedOperandTransform("llama.activation.fp16_k32_group_row.v1", (
+  PackedOperandComponent("value", dtypes.half, 0, 64, "half[32]_fp16_activation_k32_group", 64, 16),
+))
+
 
 @dataclass(frozen=True)
 class LlamaPackedOperandOracle:
@@ -132,5 +150,6 @@ def validate_llama_packed_operand_oracle(candidate: LlamaPackedOperandOracle) ->
   candidate.validate()
 
 
-__all__ = ["LLAMA_SOURCE_COMMIT", "LlamaPackedOperandOracle", "Q4_K_DECODED_LDS_ROW", "Q4_K_GLOBAL_BLOCK",
-           "Q8_1_DS4_ROW", "SCHEMA", "SOURCE_ANCHORS", "llama_packed_operand_oracle", "validate_llama_packed_operand_oracle"]
+__all__ = ["ACTIVATION_FP16_GROUP_ROW", "LLAMA_SOURCE_COMMIT", "LlamaPackedOperandOracle", "Q4_K_DECODED_GROUP_LDS_ROW",
+           "Q4_K_DECODED_LDS_ROW", "Q4_K_GLOBAL_BLOCK", "Q8_1_DS4_ROW", "SCHEMA", "SOURCE_ANCHORS",
+           "llama_packed_operand_oracle", "validate_llama_packed_operand_oracle"]

@@ -27,8 +27,12 @@ PLAN_SCHEMA = "tinygrad.mmq_llama_candidate_plan.v1"
 DESCRIPTOR_ID = "llama.q4_k_q8_1.mmq.amd_mma"
 
 
-def _rdna3_i8_tc():
-  return next(tc for tc in amd_rdna3 if tc.dtype_in == dtypes.char and tc.dtype_out == dtypes.int)
+def _rdna3_f16_tc():
+  return next(tc for tc in amd_rdna3 if tc.dtype_in == dtypes.half and tc.dtype_out == dtypes.float)
+
+
+# Retained alias: some call sites still spell the selector by its historical (int8-era) name.
+_rdna3_i8_tc = _rdna3_f16_tc
 
 
 Q8_RECORD_TRANSFORM = PackedOperandRecordTransform(
@@ -42,18 +46,27 @@ Q4_RECORD_TRANSFORM = PackedOperandRecordTransform(
 
 
 def _geometry() -> KernelTileGeometry:
-  ids = KernelLDSArenaRegion("ids", 0, 512, 16, KernelLDSRecordLayout(128, 4, (
-    KernelLDSRecordComponent("value", dtypes.int, 0, 4, 4),)))
-  q8 = KernelLDSArenaRegion("q8", 512, 18944, 16, KernelLDSRecordLayout(128, 144, (
-    KernelLDSRecordComponent("ds", dtypes.half, 0, 16, 16),
-    KernelLDSRecordComponent("qs", dtypes.char, 16, 128, 16))))
-  q4 = KernelLDSArenaRegion("q4", 18944, 57856, 16, KernelLDSRecordLayout(128, 304, (
-    KernelLDSRecordComponent("qs", dtypes.int, 0, 256, 16),
-    KernelLDSRecordComponent("dm", dtypes.half, 256, 32, 16),
-    KernelLDSRecordComponent("padding", dtypes.int, 288, 16, 16))))
-  return KernelTileGeometry((128, 128, 256), (8, 1), 256, 32,
-    # Physical oracle order is IDs, B/Q8, A/Q4; role order is not arena order.
-    (KernelLDSWindow("B", 512, 18944, 144), KernelLDSWindow("A", 18944, 57856, 304)), (), (ids, q8, q4))
+  # Phase-1 fp16 bring-up geometry: mirror the hand kernel (wmma.py
+  # build_gemm_lds2_q4k, PART I.1 of the implementation plan) LDS layout exactly
+  # -- two single-buffered fp16 regions, SA=SB=BK*2=64 B/row, 128 rows each,
+  # 16384 B total, instead of the int8 kernel's ids/q8/q4 57856 B arena.
+  #
+  # This intentionally shrinks the hierarchical stage's outer/phase/group K
+  # decomposition from the int8 kernel's K256 = 2 phases * 4 K32 groups down to
+  # exactly one K32 group (outer_k=phase_k=group_k=32, phase_count=1): the hand
+  # kernel never keeps a full-K256 operand resident in LDS (both A and B are
+  # re-decoded and re-stored every K32 group), so matching its ~16 KB budget is
+  # structurally incompatible with the old persistent(K256)/overwriteable(K128)
+  # hierarchy at K256 granularity. The generic HierarchicalPackedRecordStage /
+  # HierarchicalPackedRecordStageDescriptor machinery still applies unmodified
+  # at this finer granularity -- an outer K256 loop is expected to invoke this
+  # recurrence eight times (K256 = 8 * K32); wiring that outer loop is later work.
+  a = KernelLDSArenaRegion("A", 0, 8192, 16, KernelLDSRecordLayout(128, 64, (
+    KernelLDSRecordComponent("value", dtypes.half, 0, 64, 16),)))
+  b = KernelLDSArenaRegion("B", 8192, 16384, 16, KernelLDSRecordLayout(128, 64, (
+    KernelLDSRecordComponent("value", dtypes.half, 0, 64, 16),)))
+  return KernelTileGeometry((128, 128, 32), (8, 1), 256, 32,
+    (KernelLDSWindow("A", 0, 8192, 64), KernelLDSWindow("B", 8192, 16384, 64)), (), (a, b))
 
 
 @dataclass(frozen=True)
@@ -144,14 +157,20 @@ class LlamaMMQCandidatePlan:
 
 
 def llama_mmq_candidate_plan() -> LlamaMMQCandidatePlan:
-  geometry, tc = _geometry(), _rdna3_i8_tc()
-  # llama's tile_A/x is decoded Q4 (output i/row, partitioned by eight waves);
-  # tile_B/y is the twice-refilled Q8 panel (output j/column, eight subtiles).
+  geometry, tc = _geometry(), _rdna3_f16_tc()
+  # Single K32 group per stage/epoch (phase-1 bring-up; see _geometry()).  Both
+  # A and B are re-decoded/re-stored every group, so there is no true
+  # multi-phase residency left at this granularity -- phase_count=1 collapses
+  # the generic hierarchical persistent/overwriteable lifecycle to exactly one
+  # produce/publish/consume/release cycle per role, matching the hand kernel's
+  # per-K32-group double-barrier cadence (wmma.py I.3/I.4).
   lifecycle = HierarchicalKernelPipelinePlan(HierarchicalPipelineRole("A", "outer_epoch"),
-                                              HierarchicalPipelineRole("B", "inner_phase"), 2)
-  assert len(hierarchical_lifecycle_events(lifecycle)) == 12
-  recurrence = DotUpdateRecurrencePlan(dtypes.float.vec(8), dtypes.int.vec(8), 2, 4, 2, Ops.WMMA)
-  writeback = WMMAWritebackDescriptor(geometry, tc, dtypes.float, 8, WMMAWritebackLayout("col", "row", 128), "ids")
+                                              HierarchicalPipelineRole("B", "inner_phase"), 1)
+  assert len(hierarchical_lifecycle_events(lifecycle)) == 7
+  recurrence = DotUpdateRecurrencePlan(dtypes.float.vec(8), dtypes.float.vec(8), 1, 1, 2, Ops.WMMA)
+  # No ids-gather LDS region in the fp16 hand kernel (I.6): output is dense
+  # row-major, not a token/expert-id lookup, so the writeback has no ids_region.
+  writeback = WMMAWritebackDescriptor(geometry, tc, dtypes.float, 8, WMMAWritebackLayout("col", "row", 128), None)
   return LlamaMMQCandidatePlan(geometry, Q8_RECORD_TRANSFORM, Q4_RECORD_TRANSFORM, lifecycle, recurrence, tc, writeback)
 
 

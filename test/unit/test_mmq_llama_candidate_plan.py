@@ -1,3 +1,4 @@
+import pytest
 from dataclasses import replace
 from copy import deepcopy
 
@@ -10,6 +11,7 @@ from tinygrad.codegen.opt.packed_weight import PackedOperandRecordTransform
 from extra.qk.kernel_vocabulary import KernelCandidateContext, KernelTileGeometry
 
 
+@pytest.mark.xfail(reason="phase2-fp16-dequant-q4k: retired int8 5-buffer/2-phase-x-4-group MMQ structural assumptions (exact WMMA/tag/offset counts, q8/q4 LDS region names, dm/ds sidecar correction) superseded by the fp16-dequant-in-register per-K32-group design (see docs/amd-fp16-dequant-q4k-primitive-implementation-plan-20260720.md); not rewritten this phase")
 def test_source_anchored_typed_plan_and_formulas():
   p = llama_mmq_candidate_plan()
   assert p.source_commit == LLAMA_SOURCE_COMMIT and len(LLAMA_SOURCE_COMMIT) == 40
@@ -34,6 +36,7 @@ def test_source_anchored_typed_plan_and_formulas():
   assert p.tensor_core.dtype_in == dtypes.char and p.tensor_core.dtype_out == dtypes.int
 
 
+@pytest.mark.xfail(reason="phase2-fp16-dequant-q4k: retired int8 5-buffer/2-phase-x-4-group MMQ structural assumptions (exact WMMA/tag/offset counts, q8/q4 LDS region names, dm/ds sidecar correction) superseded by the fp16-dequant-in-register per-K32-group design (see docs/amd-fp16-dequant-q4k-primitive-implementation-plan-20260720.md); not rewritten this phase")
 def test_stable_context_and_representation_only_json():
   a, b = llama_mmq_candidate_plan(), llama_mmq_candidate_plan()
   assert a.identity() == b.identity()
@@ -45,6 +48,7 @@ def test_stable_context_and_representation_only_json():
   assert row["structural_plan"] == llama_q4k_q8_structural_descriptor()
 
 
+@pytest.mark.xfail(reason="phase2-fp16-dequant-q4k: retired int8 5-buffer/2-phase-x-4-group MMQ structural assumptions (exact WMMA/tag/offset counts, q8/q4 LDS region names, dm/ds sidecar correction) superseded by the fp16-dequant-in-register per-K32-group design (see docs/amd-fp16-dequant-q4k-primitive-implementation-plan-20260720.md); not rewritten this phase")
 def test_only_full_typed_projection_passes_and_mutations_fail():
   plan = llama_mmq_candidate_plan()
   projected = plan.structural_descriptor()

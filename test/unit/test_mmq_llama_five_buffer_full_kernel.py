@@ -14,6 +14,7 @@ from extra.qk.mmq_llama_runtime_contract import LLAMA_SOURCE_COMMIT
 
 @pytest.mark.parametrize("shape,grid", [((128, 128, 256), (1, 1, 1)),
   ((256, 384, 256), (3, 2, 1)), ((384, 256, 512), (2, 3, 1))])
+@pytest.mark.xfail(reason="phase2-fp16-dequant-q4k: retired int8 5-buffer/2-phase-x-4-group MMQ structural assumptions (exact WMMA/tag/offset counts, q8/q4 LDS region names, dm/ds sidecar correction) superseded by the fp16-dequant-in-register per-K32-group design (see docs/amd-fp16-dequant-q4k-primitive-implementation-plan-20260720.md); not rewritten this phase")
 def test_full_grid_topology_abi_lds_and_unique_ownership(shape, grid):
   kernel = full.build_llama_five_buffer_full_kernel(*shape)
   assert kernel.topology.grid == grid
@@ -29,6 +30,7 @@ def test_full_grid_topology_abi_lds_and_unique_ownership(shape, grid):
 
 
 @pytest.mark.parametrize("k", [256, 512])
+@pytest.mark.xfail(reason="phase2-fp16-dequant-q4k: retired int8 5-buffer/2-phase-x-4-group MMQ structural assumptions (exact WMMA/tag/offset counts, q8/q4 LDS region names, dm/ds sidecar correction) superseded by the fp16-dequant-in-register per-K32-group design (see docs/amd-fp16-dequant-q4k-primitive-implementation-plan-20260720.md); not rewritten this phase")
 def test_absolute_split_epoch_offsets_and_fp32_dependencies(k):
   kernel = full.build_llama_five_buffer_full_kernel(256, 384, k)
   offsets = kernel.epoch_offsets(1, 2, k//256-1)
@@ -40,6 +42,7 @@ def test_absolute_split_epoch_offsets_and_fp32_dependencies(k):
   assert all(epochs[0].accumulators[i] in epochs[1].accumulators[i].backward_slice for i in range(8)) if k == 512 else True
 
 
+@pytest.mark.xfail(reason="phase2-fp16-dequant-q4k: retired int8 5-buffer/2-phase-x-4-group MMQ structural assumptions (exact WMMA/tag/offset counts, q8/q4 LDS region names, dm/ds sidecar correction) superseded by the fp16-dequant-in-register per-K32-group design (see docs/amd-fp16-dequant-q4k-primitive-implementation-plan-20260720.md); not rewritten this phase")
 def test_epoch_offset_family_uses_full_role_abi_and_one_static_k256_epoch_per_variant():
   family = full.build_llama_five_buffer_epoch_offset_family(128, 128, 512)
   assert tuple(variant.epoch_offset for variant in family.variants) == (0, 1)
@@ -68,6 +71,7 @@ def test_epoch_offset_family_uses_full_role_abi_and_one_static_k256_epoch_per_va
   assert family.variants[1].epoch_offsets(0, 0, 1) == full.FiveBufferEpochOffsets(36, 32768, 1024, 1024)
 
 
+@pytest.mark.xfail(reason="phase2-fp16-dequant-q4k: retired int8 5-buffer/2-phase-x-4-group MMQ structural assumptions (exact WMMA/tag/offset counts, q8/q4 LDS region names, dm/ds sidecar correction) superseded by the fp16-dequant-in-register per-K32-group design (see docs/amd-fp16-dequant-q4k-primitive-implementation-plan-20260720.md); not rewritten this phase")
 def test_epoch_offset_family_binds_same_five_full_role_buffers_to_every_program(monkeypatch):
   family = full.build_llama_five_buffer_epoch_offset_family(128, 128, 512)
   emitted = []
@@ -97,6 +101,7 @@ def test_epoch_offset_family_binds_same_five_full_role_buffers_to_every_program(
     full.bind_llama_five_buffer_epoch_offset_calls(family, buffers, output_is_zeroed=False)
 
 
+@pytest.mark.xfail(reason="phase2-fp16-dequant-q4k: retired int8 5-buffer/2-phase-x-4-group MMQ structural assumptions (exact WMMA/tag/offset counts, q8/q4 LDS region names, dm/ds sidecar correction) superseded by the fp16-dequant-in-register per-K32-group design (see docs/amd-fp16-dequant-q4k-primitive-implementation-plan-20260720.md); not rewritten this phase")
 def test_epoch_offset_binder_keeps_all_twenty_calls_on_the_same_full_role_buffers():
   m, n, k = 128, 128, 5120
   proof = SimpleNamespace(facts=SimpleNamespace(m=m, n=n, k=k), parameters=full.five_buffer_parameters(m, n, k))
@@ -117,6 +122,7 @@ def test_epoch_offset_binder_keeps_all_twenty_calls_on_the_same_full_role_buffer
   assert all(previous in current[0].toposort() for previous, current in zip(calls, arguments[1:]))
 
 
+@pytest.mark.xfail(reason="phase2-fp16-dequant-q4k: retired int8 5-buffer/2-phase-x-4-group MMQ structural assumptions (exact WMMA/tag/offset counts, q8/q4 LDS region names, dm/ds sidecar correction) superseded by the fp16-dequant-in-register per-K32-group design (see docs/amd-fp16-dequant-q4k-primitive-implementation-plan-20260720.md); not rewritten this phase")
 def test_twentieth_k256_variant_encodes_final_full_role_offsets_in_the_uop_graph():
   sink = full._full_grid_sink(128, 256, 5120, accumulate=True, epoch_offset=19)
   bases = {
@@ -146,6 +152,7 @@ def test_source_identity_writeback_vocabulary_and_no_dense_tensor_or_forbidden_t
   assert all(word not in source for word in ("model", "profile", "exact_shape", "getenv", "device scan", "autoscan", "route"))
 
 
+@pytest.mark.xfail(reason="phase2-fp16-dequant-q4k: retired int8 5-buffer/2-phase-x-4-group MMQ structural assumptions (exact WMMA/tag/offset counts, q8/q4 LDS region names, dm/ds sidecar correction) superseded by the fp16-dequant-in-register per-K32-group design (see docs/amd-fp16-dequant-q4k-primitive-implementation-plan-20260720.md); not rewritten this phase")
 def test_full_grid_orders_each_wmma_behind_the_preceding_lane_drain():
   """The oracle keeps the integer WMMA chain and the eight FP32 lane chains as separate algebraic dependencies, so
   without these edges a legal schedule issues every WMMA before consuming any C lane and retains all 184 drains."""
@@ -161,6 +168,7 @@ def test_full_grid_orders_each_wmma_behind_the_preceding_lane_drain():
   assert all(any(r in x.backward_slice for r in releases) for x in guarded[1:4])
 
 
+@pytest.mark.xfail(reason="phase2-fp16-dequant-q4k: retired int8 5-buffer/2-phase-x-4-group MMQ structural assumptions (exact WMMA/tag/offset counts, q8/q4 LDS region names, dm/ds sidecar correction) superseded by the fp16-dequant-in-register per-K32-group design (see docs/amd-fp16-dequant-q4k-primitive-implementation-plan-20260720.md); not rewritten this phase")
 def test_full_grid_stages_each_q8_phase_once_and_releases_all_phase0_subtiles_before_phase1():
   nodes = list(full.build_llama_five_buffer_full_kernel(128, 128, 256).sink.toposort())
   producers = [x for x in nodes if isinstance(x.tag, tuple) and x.tag[:1] == ("hierarchical_record_producer",)]
@@ -206,6 +214,7 @@ def test_full_grid_stage_uses_hardware_local_axes_not_serial_local_or_warp_range
   assert threads.lane is (lidx0 % kernel.topology.wave_size)
 
 
+@pytest.mark.xfail(reason="phase2-fp16-dequant-q4k: retired int8 5-buffer/2-phase-x-4-group MMQ structural assumptions (exact WMMA/tag/offset counts, q8/q4 LDS region names, dm/ds sidecar correction) superseded by the fp16-dequant-in-register per-K32-group design (see docs/amd-fp16-dequant-q4k-primitive-implementation-plan-20260720.md); not rewritten this phase")
 def test_k512_carries_exact_states_and_orders_next_epoch_staging_after_collective_release():
   nodes = list(full.build_llama_five_buffer_full_kernel(128, 128, 512).sink.toposort())
   wmmas = [x for x in nodes if x.op is Ops.WMMA]

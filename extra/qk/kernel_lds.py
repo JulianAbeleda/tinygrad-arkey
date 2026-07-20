@@ -857,7 +857,7 @@ def build_packed_record_lds_stage(geometry:KernelTileGeometry, *, tc, allocation
 
 def _hierarchical_record_roles(geometry:KernelTileGeometry, descriptor:HierarchicalPackedRecordStageDescriptor,
                                templates:tuple[PackedRecordOperandTemplate, ...],
-                               regions:tuple[PackedRecordLDSRegionBinding, ...]):
+                               regions:tuple[PackedRecordLDSRegionBinding, ...], tc):
   if not isinstance(templates, tuple) or len(templates) != 2 or not all(isinstance(x, PackedRecordOperandTemplate) for x in templates):
     raise ValueError("hierarchical record stage requires exactly two packed record templates")
   if not isinstance(regions, tuple) or len(regions) != 2 or not all(isinstance(x, PackedRecordLDSRegionBinding) for x in regions):
@@ -883,10 +883,10 @@ def _hierarchical_record_roles(geometry:KernelTileGeometry, descriptor:Hierarchi
         raise ValueError(f"hierarchical role {role!r} field {name!r} does not match its record layout")
     primary = layout.component(template.primary_field)
     fragment_dtype = primary.dtype if template.fragment_dtype is None else template.fragment_dtype
-    if fragment_dtype != dtypes.char: raise ValueError("hierarchical primary fragment view must be char")
+    if fragment_dtype != tc.dtype_in: raise ValueError("hierarchical primary fragment view must match the descriptor dtype_in")
     if primary.size_bytes != expected_k * fragment_dtype.itemsize:
       raise ValueError(f"hierarchical role {role!r} K extent mismatch")
-    if descriptor.group_k < 16: raise ValueError("group_k must cover one char.vec16 primary fragment")
+    if descriptor.group_k < 16: raise ValueError("group_k must cover one dtype_in.vec16 primary fragment")
     if region.base < 0 or region.end > geometry.lds_bytes or region.end-region.base != layout.size_bytes:
       raise ValueError(f"hierarchical role {role!r} region addresses escape LDS")
     if region.base + (layout.rows-1)*layout.stride_bytes + layout.stride_bytes > region.end:
@@ -906,9 +906,11 @@ def build_hierarchical_packed_record_stage(geometry:KernelTileGeometry, *, alloc
   if (allocation.op is not Ops.DEFINE_LOCAL or allocation.ptrdtype.addrspace is not AddrSpace.LOCAL or
       allocation.ptrdtype.base != dtypes.uint8 or allocation.ptrdtype.size != geometry.lds_bytes):
     raise ValueError("hierarchical record allocation must be one exact byte-addressed LDS arena")
-  persistent, overwriteable = _hierarchical_record_roles(geometry, descriptor, templates, regions)
   validate_rdna3_wmma_descriptor(tc)
-  if tc.dtype_in != dtypes.char: raise ValueError("hierarchical record stage requires the int8 RDNA3 descriptor")
+  # dtype_in is validated against the RDNA3 descriptor set above (char or half);
+  # _hierarchical_record_roles below checks every template's fragment view
+  # against this same tc.dtype_in, so no separate int8-only gate is needed here.
+  persistent, overwriteable = _hierarchical_record_roles(geometry, descriptor, templates, regions, tc)
   validate_precontract_contracts(tc, contracts, context="hierarchical packed record",
                                  mismatch="does not match actual descriptor operand mapping")
   contract_by_role = {x.role:x for x in contracts}
@@ -1014,12 +1016,16 @@ def build_hierarchical_packed_record_stage(geometry:KernelTileGeometry, *, alloc
         contract = contract_by_role[template.role]
         if template.role == "A": row = (threads.wave_m*subtiles_m+subtile_m)*16+threads.lane%16
         else: row = (threads.wave_n*subtiles_n+subtile_n)*16+threads.lane%16
-        address = UOp.const(dtypes.weakint, region.base+primary.offset_bytes+logical_k)+row*layout.stride_bytes+contract.element
+        # logical_k/contract.element are K-element counts, not byte offsets; scale
+        # by dtype_in.itemsize so this generalizes past the int8 (1 byte/element)
+        # case (e.g. half is 2 bytes/element).
+        address = UOp.const(dtypes.weakint, region.base+primary.offset_bytes)+row*layout.stride_bytes+ \
+                  (logical_k+contract.element)*tc.dtype_in.itemsize
         if logical_k < 0 or logical_k+16 > role_k:
           raise ValueError(f"hierarchical role {template.role!r} group primary address escapes its K extent")
-        load = ordered.index(address, dtype=dtypes.char).replace(
+        load = ordered.index(address, dtype=tc.dtype_in).replace(
           tag=("hierarchical_record_fragment_load", template.role, phase, group, logical_k)).load()
-        fragment = UOp(Ops.CONTRACT, dtypes.char.vec(16), (load,), contract.arg,
+        fragment = UOp(Ops.CONTRACT, tc.dtype_in.vec(16), (load,), contract.arg,
                        tag=("hierarchical_record_fragment", template.role, phase, group, logical_k))
         consumed.append(fragment)
         sidecars = []
@@ -1128,7 +1134,7 @@ def prove_hierarchical_packed_record_stage(stage:HierarchicalPackedRecordStage) 
       expected_o = group_index*descriptor.group_k
       if (group.phase, group.group, group.persistent_k, group.overwriteable_k) != (phase_index, group_index, expected_p, expected_o):
         errors.append(f"phase {phase_index} group {group_index}: K address mismatch")
-      if group.persistent_fragment.dtype != dtypes.char.vec(16) or group.overwriteable_fragment.dtype != dtypes.char.vec(16):
+      if group.persistent_fragment.dtype != stage.tc.dtype_in.vec(16) or group.overwriteable_fragment.dtype != stage.tc.dtype_in.vec(16):
         errors.append(f"phase {phase_index} group {group_index}: primary fragment carrier mismatch")
       for role, fragment, row in ((descriptor.plan.persistent.name, group.persistent_fragment, group.persistent_row),
                                   (descriptor.plan.overwriteable.name, group.overwriteable_fragment, group.overwriteable_row)):

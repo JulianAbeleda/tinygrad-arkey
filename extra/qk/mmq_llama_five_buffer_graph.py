@@ -12,7 +12,8 @@ from tinygrad.uop.ops import UOp
 from extra.qk.mmq_llama_candidate_plan import llama_mmq_candidate_plan
 from extra.qk.mmq_llama_full_kernel import (LlamaFullKernelFacts, bounded_final_release,
   scheduler_valid_callback_sink)
-from extra.qk.mmq_llama_oracle_epoch import build_llama_oracle_epoch_stage_five_buffer
+from extra.qk.mmq_llama_group_chain import chain_group_stage
+from extra.qk.mmq_llama_oracle_epoch import build_llama_oracle_group_stage
 from extra.qk.mmq_llama_oracle_recurrence import LlamaOracleRecurrenceGraph, build_llama_oracle_recurrence
 from extra.qk.mmq_llama_runtime_contract import LLAMA_SOURCE_COMMIT, SOURCE_ANCHORS
 
@@ -20,6 +21,11 @@ from extra.qk.mmq_llama_runtime_contract import LLAMA_SOURCE_COMMIT, SOURCE_ANCH
 SCHEMA = "tinygrad.mmq_llama_five_buffer_graph.v1"
 BLOCKER = ("bounded one-tile source-pinned oracle proof only; no grid addressing, executable emission, "
            "dispatch routing, edge handling, or full-grid correctness claim")
+# Historical name: this ABI was five split int8-MMQ buffers before the
+# fp16-dequant-in-register primitive (implementation plan PART II.6).  It is
+# now output + q4 (still packed, decoded in-register) + one plain fp16
+# activation buffer -- three slots -- but the "five_buffer" module/class names
+# are kept to avoid a repo-wide rename cascade.
 
 
 @dataclass(frozen=True)
@@ -33,11 +39,9 @@ class FiveBufferParameter:
 
 @dataclass(frozen=True)
 class FiveBufferEpochOffsets:
-  """Element offsets in the declared split physical arrays."""
+  """Element offsets in the declared physical arrays for one K256 epoch."""
   q4: int
-  values: int
-  scales: int
-  sums: int
+  activation: int
 
 
 @dataclass(frozen=True)
@@ -45,9 +49,14 @@ class FiveBufferEpoch:
   ordinal: int
   k0: int
   offsets: FiveBufferEpochOffsets
-  recurrence: LlamaOracleRecurrenceGraph
+  recurrences: tuple[LlamaOracleRecurrenceGraph, ...]
   previous_accumulators: tuple[UOp, ...]
   accumulators: tuple[UOp, ...]
+
+  @property
+  def recurrence(self) -> LlamaOracleRecurrenceGraph:
+    """Last K32-group recurrence of this epoch (for consumer-seam ordering)."""
+    return self.recurrences[-1]
 
 
 @dataclass(frozen=True)
@@ -73,7 +82,7 @@ class LlamaFiveBufferGraph:
 
   def __post_init__(self) -> None:
     if self.source_commit != LLAMA_SOURCE_COMMIT: raise ValueError("source identity drift")
-    if tuple(x.slot for x in self.parameters) != tuple(range(5)): raise ValueError("five-buffer ABI slots must be exactly 0..4")
+    if tuple(x.slot for x in self.parameters) != tuple(range(3)): raise ValueError("fp16 ABI slots must be exactly 0..2")
     if self.custom_kernel is not None or self.emitted or self.routed: raise ValueError("proof graph cannot claim emission or routing")
     if any(kind.startswith("dense") or kind.startswith("dequant") for kind, _, _ in self.allocated_shapes):
       raise ValueError("dense/dequantized allocation is forbidden")
@@ -83,25 +92,24 @@ class LlamaFiveBufferGraph:
 
 
 def five_buffer_parameters(m:int, n:int, k:int) -> tuple[FiveBufferParameter, ...]:
-  """Return the immutable output/Q4/Q8-values/scales/original-sums ABI."""
+  """Return the immutable output/Q4/activation ABI (implementation plan PART II.6).
+
+  Q4 stays packed (still decoded in-register); the three split int8-MMQ Q8
+  buffers (values/scales/original-sums) collapse into one plain fp16
+  activation buffer -- three slots total.
+  """
   facts = LlamaFullKernelFacts(m, n, k)
   if facts.m % 128 or facts.n % 128: raise ValueError("M and N must be complete 128-row proof tiles")
   return (
     FiveBufferParameter(0, "output", dtypes.float32, m*n, (m, n)),
     FiveBufferParameter(1, "q4", dtypes.uint32, n*(k//256)*36, (n, k//256, 36)),
-    FiveBufferParameter(2, "q8_values", dtypes.int8, (k//128)*m*128, (k//128, m, 128)),
-    FiveBufferParameter(3, "q8_scales", dtypes.float32, (k//128)*m*4, (k//128, m, 4)),
-    FiveBufferParameter(4, "q8_original_sums", dtypes.float32, (k//128)*m*4, (k//128, m, 4)),
+    FiveBufferParameter(2, "activation", dtypes.half, m*k, (m, k)),
   )
 
 
 def _offsets(facts:LlamaFullKernelFacts, tile_m:int, tile_n:int, epoch:int) -> FiveBufferEpochOffsets:
-  m0, n0, records = tile_m*128, tile_n*128, epoch*2
-  return FiveBufferEpochOffsets(
-    q4=(n0*(facts.k//256)+epoch)*36,
-    values=(records*facts.m+m0)*128,
-    scales=(records*facts.m+m0)*4,
-    sums=(records*facts.m+m0)*4)
+  m0, n0 = tile_m*128, tile_n*128
+  return FiveBufferEpochOffsets(q4=(n0*(facts.k//256)+epoch)*36, activation=m0*facts.k)
 
 
 def build_llama_five_buffer_graph(m:int, n:int, k:int, *, tile_m:int=0, tile_n:int=0) -> LlamaFiveBufferGraph:
@@ -113,21 +121,21 @@ def build_llama_five_buffer_graph(m:int, n:int, k:int, *, tile_m:int=0, tile_n:i
   if tile_m < 0 or tile_n < 0 or (tile_m+1)*128 > m or (tile_n+1)*128 > n:
     raise ValueError("bounded proof tile is outside the aligned physical buffers")
   sources = tuple(UOp.param(x.slot, x.dtype.ptr(x.size)) for x in params)
-  previous = tuple(UOp.const(dtypes.float, 0.0).replace(tag=("llama_five_buffer_initial_lane", lane)) for lane in range(8))
+  states, prior_release = None, None
   epochs:list[FiveBufferEpoch] = []
   for ordinal in range(k//256):
     offsets = _offsets(facts, tile_m, tile_n, ordinal)
-    stage = build_llama_oracle_epoch_stage_five_buffer(sources[1], sources[2], sources[3], sources[4],
-      q4_word_offset=offsets.q4, values_offset=offsets.values,
-      scales_offset=offsets.scales, sums_offset=offsets.sums,
-      q4_row_stride_words=(facts.k//256)*36, q8_record_rows=facts.m)
-    recurrence = build_llama_oracle_recurrence(stage)
-    exported = recurrence.export_accumulators()
-    accumulators = tuple((previous[lane] + (value-recurrence.initial[lane])).replace(
-      tag=("llama_five_buffer_fp32_epoch_join", ordinal, lane)) for lane, value in enumerate(exported))
-    if epochs: accumulators = tuple(x.after(epochs[-1].recurrence.consumer_seam) for x in accumulators)
-    epochs.append(FiveBufferEpoch(ordinal, ordinal*256, offsets, recurrence, previous, accumulators))
-    previous = accumulators
+    recurrences = []
+    previous = states
+    for group_index in range(8):
+      stage = build_llama_oracle_group_stage(sources[1], sources[2],
+        q4_word_offset=offsets.q4, q4_row_stride_words=(facts.k//256)*36, group_index=group_index,
+        k_base=ordinal*256+group_index*32, activation_element_offset=offsets.activation, k_total=facts.k)
+      recurrence = build_llama_oracle_recurrence(stage)
+      recurrences.append(recurrence)
+      states, prior_release = chain_group_stage(recurrence, ordinal*8+group_index, states, prior_release)
+    accumulators = states
+    epochs.append(FiveBufferEpoch(ordinal, ordinal*256, offsets, tuple(recurrences), previous, accumulators))
   allocations = tuple((x.name, x.physical_shape, x.dtype.name) for x in params) + \
                 (("lds_bounded_tile", (plan.geometry.lds_bytes,), "uint8"),)
   return LlamaFiveBufferGraph(facts, params, FiveBufferTileBody(tile_m, tile_n, tuple(epochs)),
@@ -135,12 +143,24 @@ def build_llama_five_buffer_graph(m:int, n:int, k:int, *, tile_m:int=0, tile_n:i
 
 
 def build_llama_five_buffer_bounded_sink(graph:LlamaFiveBufferGraph) -> UOp:
-  """Build only the existing 8xvec8 progressive proof drain into ABI slot zero."""
-  if not isinstance(graph, LlamaFiveBufferGraph): raise TypeError("expected LlamaFiveBufferGraph")
-  output = UOp.param(0, dtypes.float32.ptr(graph.parameters[0].size))
-  output_base = graph.body.tile_m*128*graph.facts.n + graph.body.tile_n*128
-  store = bounded_final_release(graph, output.index(UOp.const(dtypes.weakint, output_base), ptr=True))  # type: ignore[arg-type]
-  return scheduler_valid_callback_sink(store, name="mmq_llama_five_buffer_bounded_proof")
+  """Retired for this phase.
+
+  The old epilogue drain (``bounded_final_release``/``order_wmma_behind_lane_drain``
+  in ``mmq_llama_full_kernel.py``) assumes one recurrence per K256 epoch (the
+  int8 2-phase x 4-group stage).  Phase-1/2 shrank the stage granularity to one
+  K32 group (``mmq_llama_candidate_plan.py`` ``_geometry()``), so a K256 epoch
+  is now eight chained ``LlamaOracleRecurrenceGraph`` objects
+  (``FiveBufferEpoch.recurrences``), not one.  The full-grid kernel
+  (``mmq_llama_five_buffer_full_kernel.py``) does not use this bounded-proof
+  epilogue -- it builds its own writeback directly off ``group_major_accumulator_vectors``.
+  Rewiring this smaller bounded-tile proof path to the new per-group epilogue
+  is out of scope for this phase; call sites should build off
+  ``mmq_llama_five_buffer_full_kernel.py`` instead.
+  """
+  raise NotImplementedError(
+    "build_llama_five_buffer_bounded_sink is retired: phase-1/2 moved to per-K32-group recurrences "
+    "(FiveBufferEpoch.recurrences), and the old single-recurrence-per-epoch bounded_final_release epilogue "
+    "was not rewired for it -- use mmq_llama_five_buffer_full_kernel.py's full-grid sink instead")
 
 
 __all__ = ["BLOCKER", "SCHEMA", "FiveBufferEpoch", "FiveBufferEpochOffsets", "FiveBufferParameter",

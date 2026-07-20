@@ -75,8 +75,18 @@ def lds_roundtrip_segments() -> tuple[LDSRoundTripSegment, ...]:
   return first, second, third
 
 
-DEBUG_WORDS = sum(x.word_count for x in lds_roundtrip_segments())
-DEBUG_BYTES = DEBUG_WORDS * 4
+try:
+  DEBUG_WORDS = sum(x.word_count for x in lds_roundtrip_segments())
+  DEBUG_BYTES = DEBUG_WORDS * 4
+except (KeyError, ValueError):
+  # phase2-fp16-dequant-q4k: the candidate-plan geometry no longer has "q8"/"q4"
+  # LDS regions (two fp16 "A"/"B" K32-group regions replaced them; see
+  # mmq_llama_candidate_plan.py _geometry()).  This whole probe targets the
+  # retired int8 5-buffer record layout and has not been rewritten for the
+  # per-K32-group fp16 design -- degrade to None at import time instead of
+  # crashing test collection; callers of lds_roundtrip_segments() still fail
+  # loudly with a clear KeyError.
+  DEBUG_WORDS = DEBUG_BYTES = None
 
 
 @dataclass(frozen=True)

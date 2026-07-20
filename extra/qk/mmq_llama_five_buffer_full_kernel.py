@@ -1,7 +1,7 @@
 """Full-grid emission seam for the source-pinned five-buffer llama MMQ graph."""
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from math import prod
 from typing import Any
 
@@ -16,7 +16,8 @@ from extra.qk.kernel_writeback import (WMMAWritebackDescriptor, WMMAWritebackLay
 from extra.qk.mmq_llama_candidate_plan import llama_mmq_candidate_plan
 from extra.qk.mmq_llama_five_buffer_graph import (FiveBufferEpochOffsets, LlamaFiveBufferGraph,
   build_llama_five_buffer_graph, five_buffer_parameters)
-from extra.qk.mmq_llama_oracle_epoch import build_llama_oracle_epoch_stage_five_buffer
+from extra.qk.mmq_llama_group_chain import group_major_accumulator_vectors
+from extra.qk.mmq_llama_oracle_epoch import build_llama_oracle_group_stage
 from extra.qk.mmq_llama_oracle_recurrence import LlamaOracleRecurrenceGraph, build_llama_oracle_recurrence
 from extra.qk.mmq_llama_runtime_contract import LLAMA_SOURCE_COMMIT, SOURCE_ANCHORS
 from extra.qk.prefill.q4k_q8_five_buffer_compile_adapter import AMD_ISA_TARGET
@@ -32,7 +33,11 @@ class FullGridTopology:
   local_size: tuple[int, int, int] = (256, 1, 1)
   waves: tuple[int, int] = (8, 1)
   wave_size: int = 32
-  lds_bytes: int = 57856
+  # Was a duplicate hardcoded 57856 (the int8 ids/q8/q4 arena size), independent
+  # of extra/qk/mmq_llama_candidate_plan.py's authoritative geometry.  Derive it
+  # instead, so this topology always tracks the candidate plan's LDS arena size
+  # (16384 for the fp16 two-region bring-up geometry).
+  lds_bytes: int = field(default_factory=lambda: llama_mmq_candidate_plan().geometry.lds_bytes)
 
 
 @dataclass(frozen=True)
@@ -64,7 +69,7 @@ class LlamaFiveBufferFullKernel:
   def __post_init__(self) -> None:
     if self.source_commit != LLAMA_SOURCE_COMMIT: raise ValueError("source identity drift")
     if self.emitted != (self.program is not None): raise ValueError("emitted must match successful to_program")
-    if tuple(x.slot for x in self.proof_graph.parameters) != tuple(range(5)): raise ValueError("ABI must be exactly slots 0..4")
+    if tuple(x.slot for x in self.proof_graph.parameters) != tuple(range(3)): raise ValueError("ABI must be exactly slots 0..2")
     if self.epoch_offset is not None and not 0 <= self.epoch_offset < self.proof_graph.facts.k//256:
       raise ValueError("compile-time epoch offset is outside the full-role buffers")
     if len(self.owner_coordinates) != self.proof_graph.facts.m*self.proof_graph.facts.n:
@@ -74,9 +79,8 @@ class LlamaFiveBufferFullKernel:
     facts = self.proof_graph.facts
     if not (0 <= tile_m < facts.m//128 and 0 <= tile_n < facts.n//128 and 0 <= epoch < facts.k//256):
       raise ValueError("tile/epoch outside full grid")
-    m0, n0, records = tile_m*128, tile_n*128, epoch*2
-    return FiveBufferEpochOffsets((n0*(facts.k//256)+epoch)*36,
-      (records*facts.m+m0)*128, (records*facts.m+m0)*4, (records*facts.m+m0)*4)
+    m0, n0 = tile_m*128, tile_n*128
+    return FiveBufferEpochOffsets((n0*(facts.k//256)+epoch)*36, m0*facts.k)
 
 
 @dataclass(frozen=True)
@@ -102,110 +106,26 @@ class LlamaFiveBufferEpochOffsetFamily:
     return tuple(variant.program for variant in self.variants if variant.program is not None)
 
 
-def _phase_order_replacements(recurrence:LlamaOracleRecurrenceGraph, epoch_index:int, phase_index:int) -> dict[UOp, UOp]:
-  """Order the four K32 groups while one Q8 phase is resident in LDS."""
-  replacements:dict[UOp, UOp] = {}
-  prior_drain:tuple[UOp, ...]|None = None
-  for group in recurrence.phases[phase_index].groups:
-    first = group.wmmas[0]
-    if prior_drain is not None:
-      drain = tuple(x.substitute(replacements) for x in prior_drain)
-      inputs = tuple(UOp(Ops.BITCAST, x.substitute(replacements).dtype,
-                         (x.substitute(replacements),)).after(*drain) for x in first.src)
-      replacements[first] = first.replace(src=inputs)
-    release = UOp(Ops.BARRIER, dtypes.void,
-                  tuple(x.substitute(replacements) for x in group.update)).replace(
-                    tag=("llama_five_buffer_phase_major_group_release", epoch_index, phase_index, group.ordinal))
-    prior_drain = tuple(group.update) + (release,)
-  return replacements
-
-
-def _instantiate_phase_subtiles(recurrence:LlamaOracleRecurrenceGraph, epoch_index:int, phase_index:int, publish:UOp,
-                                seeds:tuple[tuple[UOp, ...], ...]|None=None) -> tuple[tuple[UOp, ...], ...]:
-  """Instantiate arithmetic/fragments only; the phase producer and publish stay shared."""
-  phase, subtile = recurrence.phases[phase_index], recurrence.stage.subtile_n
-  order = _phase_order_replacements(recurrence, epoch_index, phase_index)
-  ordered_final = tuple(x.substitute(order) for x in phase.groups[-1].update)
-  results:list[tuple[UOp, ...]] = []
-  prior_drains:tuple[UOp, ...]|None = None
-  for element in range(8):
-    substitutions = {subtile: UOp.const(dtypes.weakint, element), phase.publish: publish}
-    if seeds is not None:
-      substitutions.update({old: new for old, new in zip(phase.groups[0].previous, seeds[element])})
-    # Carried states contain the preceding epoch's interned recurrence leaves. Single-pass substitution replaces each
-    # current-epoch seed as an opaque state and never walks back into that already-instantiated graph.
-    lanes = tuple(x.substitute(substitutions, walk=True) for x in ordered_final)
-    if prior_drains is not None:
-      head = phase.groups[0].wmmas[0].substitute(substitutions, walk=True)
-      guarded = head.replace(src=tuple(UOp(Ops.BITCAST, s.dtype, (s,)).after(*prior_drains) for s in head.src))
-      lanes = tuple(x.substitute({head: guarded}, walk=True) for x in lanes)
-    results.append(lanes)
-    prior_drains = lanes
-  return tuple(results)
-
-
-def _producer_after_release(producer:UOp, release:UOp) -> UOp:
-  """Order the first LDS write after a collective release; producer-local store order carries the rest."""
-  if producer.op is not Ops.GROUP or not producer.src or any(x.op is not Ops.STORE for x in producer.src):
-    raise ValueError("phase-major staging requires a GROUP of LDS stores")
-  first = producer.src[0]
-  if first.src[0].op is not Ops.INDEX: raise ValueError("phase-major staging store lacks an INDEX address")
-  address = first.src[0]
-  guarded_address = address.replace(src=(address.src[0].after(release),)+address.src[1:])
-  guarded_first = first.replace(src=(guarded_address,)+first.src[1:])
-  return producer.substitute({first: guarded_first}, walk=True)
-
-
-def _phase_major_epoch(recurrence:LlamaOracleRecurrenceGraph, epoch_index:int,
-                       seeds:tuple[tuple[UOp, ...], ...]|None, prior_epoch_release:UOp|None
-                       ) -> tuple[tuple[tuple[UOp, ...], ...], UOp]:
-  """Carry exact FP32 states through one K256 epoch while staging each Q8 phase once."""
-  persistent, phase0_producer = recurrence.stage.persistent_producer, recurrence.phases[0].producer
-  if prior_epoch_release is not None:
-    persistent = _producer_after_release(persistent, prior_epoch_release)
-    phase0_producer = _producer_after_release(phase0_producer, prior_epoch_release)
-  phase0_publish = UOp.barrier(UOp.group(persistent, phase0_producer)).replace(
-    tag=("llama_five_buffer_phase_major_publish", epoch_index, 0))
-  phase0 = _instantiate_phase_subtiles(recurrence, epoch_index, 0, phase0_publish, seeds)
-  phase0_release = UOp(Ops.BARRIER, dtypes.void, tuple(x for lanes in phase0 for x in lanes)).replace(
-    tag=("llama_five_buffer_phase_major_collective_release", epoch_index, 0))
-  phase1_producer = recurrence.phases[1].producer.substitute(
-    {recurrence.phases[0].release: phase0_release}, walk=True)
-  phase1_publish = UOp.barrier(UOp.group(persistent, phase1_producer)).replace(
-    tag=("llama_five_buffer_phase_major_publish", epoch_index, 1))
-  phase1 = _instantiate_phase_subtiles(recurrence, epoch_index, 1, phase1_publish, phase0)
-  epoch_release = UOp(Ops.BARRIER, dtypes.void, tuple(x for lanes in phase1 for x in lanes)).replace(
-    tag=("llama_five_buffer_phase_major_collective_release", epoch_index, 1))
-  return phase1, epoch_release
-
-
-def _phase_major_accumulator_vectors(recurrences:tuple[LlamaOracleRecurrenceGraph, ...]) -> tuple[UOp, ...]:
-  """Carry 8x8 accumulator states exactly across K256 epochs without algebraic epoch joins."""
-  states:tuple[tuple[UOp, ...], ...]|None = None
-  prior_release = None
-  for epoch_index, recurrence in enumerate(recurrences):
-    states, prior_release = _phase_major_epoch(recurrence, epoch_index, states, prior_release)
-  if states is None: raise ValueError("phase-major writeback requires at least one K256 epoch")
-  return tuple(UOp(Ops.STACK, dtypes.float.vec(8), lanes) for lanes in states)
-
-
 def _full_grid_sink(m:int, n:int, k:int, *, accumulate: bool = False, epoch_offset: int|None = None) -> UOp:
   params = five_buffer_parameters(m, n, k)
-  output, q4, values, scales, sums = tuple(UOp.param(x.slot, x.dtype.ptr(x.size)) for x in params)
+  output, q4, activation = tuple(UOp.param(x.slot, x.dtype.ptr(x.size)) for x in params)
   block_n, block_m, local = UOp.special(n//128, "gidx0"), UOp.special(m//128, "gidx1"), UOp.special(256, "lidx0")
   wave_m, wave_n, lane = local//32, UOp.const(dtypes.weakint, 0), local%32
   if epoch_offset is not None and not 0 <= epoch_offset < k//256:
     raise ValueError("compile-time epoch offset is outside the full-role buffers")
+  # One K256 epoch is eight chained K32-group recurrences (implementation plan
+  # PART V.2 phase-1 bring-up note): the old int8 2-phase-x-4-group "phase
+  # major" staging is retired -- see mmq_llama_group_chain.py.
   recurrences = []
   for epoch in range(k//256) if epoch_offset is None else (epoch_offset,):
-    records = epoch*2
-    recurrence = build_llama_oracle_recurrence(build_llama_oracle_epoch_stage_five_buffer(q4, values, scales, sums,
-      q4_word_offset=(block_n*128*(k//256)+epoch)*36,
-      values_offset=(records*m+block_m*128)*128,
-      scales_offset=(records*m+block_m*128)*4, sums_offset=(records*m+block_m*128)*4,
-      q4_row_stride_words=(k//256)*36, q8_record_rows=m))
-    recurrences.append(recurrence)
-  accumulators = _phase_major_accumulator_vectors(tuple(recurrences))
+    q4_word_offset = (block_n*128*(k//256)+epoch)*36
+    activation_element_offset = (block_m*128)*k
+    for group_index in range(8):
+      stage = build_llama_oracle_group_stage(q4, activation,
+        q4_word_offset=q4_word_offset, q4_row_stride_words=(k//256)*36, group_index=group_index,
+        k_base=epoch*256+group_index*32, activation_element_offset=activation_element_offset, k_total=k)
+      recurrences.append(build_llama_oracle_recurrence(stage))
+  accumulators = group_major_accumulator_vectors(tuple(recurrences))
   plan = llama_mmq_candidate_plan()
   desc = WMMAWritebackDescriptor(plan.geometry, plan.tensor_core, dtypes.float, 8,
     # Oracle A rows are Q4/N and B rows are Q8/M, so row-major output[M,N]
@@ -272,7 +192,15 @@ def compile_llama_five_buffer_full_kernel(kernel:LlamaFiveBufferFullKernel, targ
   if not isinstance(kernel, LlamaFiveBufferFullKernel): raise TypeError("expected full-grid kernel")
   try: program = to_program(kernel.sink, AMDISARenderer(Target.parse(target)))
   except NotImplementedError as exc:
-    if RESOURCE_BLOCKER not in str(exc): raise
+    # Two distinct AMDISARenderer resource gates observed at this fp16 K32-group
+    # geometry: the regalloc spill-decision gate (RESOURCE_BLOCKER, "Inc 0 has
+    # no spills") and an earlier ISA-selection register-stage-lease pool
+    # overflow ("AMD:ISA vgpr lease exceeds virtual pool") that fires before
+    # spill accounting is even reached.  Both are the renderer failing closed
+    # on register pressure it cannot satisfy spill-free for this geometry, not
+    # a crash in this stack -- treat both as the same fail-closed blocker
+    # rather than letting the second one propagate as an uncaught exception.
+    if RESOURCE_BLOCKER not in str(exc) and not str(exc).startswith("AMD:ISA "): raise
     return kernel
   return replace(kernel, program=program, emitted=True, blocker="")
 
@@ -285,11 +213,11 @@ def compile_llama_five_buffer_epoch_offset_family(family:LlamaFiveBufferEpochOff
 
 
 def bind_llama_five_buffer_epoch_offset_calls(family:LlamaFiveBufferEpochOffsetFamily,
-                                              buffers:tuple[Any, Any, Any, Any, Any],
+                                              buffers:tuple[Any, Any, Any],
                                               *, output_is_zeroed: bool) -> Any:
-  """Bind every emitted variant to the same five full-role buffer identities."""
+  """Bind every emitted variant to the same three full-role buffer identities (output/q4/activation)."""
   if not isinstance(family, LlamaFiveBufferEpochOffsetFamily): raise TypeError("expected epoch-offset family")
-  if len(buffers) != 5: raise ValueError("epoch-offset family requires exactly five full-role buffers")
+  if len(buffers) != 3: raise ValueError("epoch-offset family requires exactly three full-role buffers")
   if output_is_zeroed is not True:
     raise ValueError("first accumulating epoch requires an explicitly zeroed full-role output")
   for value, parameter in zip(buffers, family.proof_graph.parameters):

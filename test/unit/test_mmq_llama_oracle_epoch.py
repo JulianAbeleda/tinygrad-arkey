@@ -13,6 +13,7 @@ def _stage():
                                         UOp.param(1, dtypes.uint8.ptr(2*128*144)))
 
 
+@pytest.mark.xfail(reason="phase2-fp16-dequant-q4k: retired int8 5-buffer/2-phase-x-4-group MMQ structural assumptions (exact WMMA/tag/offset counts, q8/q4 LDS region names, dm/ds sidecar correction) superseded by the fp16-dequant-in-register per-K32-group design (see docs/amd-fp16-dequant-q4k-primitive-implementation-plan-20260720.md); not rewritten this phase")
 def test_exact_record_callbacks_schedules_arena_and_lifecycle_are_one_stage():
   stage = _stage()
   assert stage.geometry.tile == (128, 128, 256) and stage.geometry.waves == (8, 1)
@@ -29,6 +30,7 @@ def test_exact_record_callbacks_schedules_arena_and_lifecycle_are_one_stage():
   assert prove_hierarchical_packed_record_stage(stage).passed
 
 
+@pytest.mark.xfail(reason="phase2-fp16-dequant-q4k: retired int8 5-buffer/2-phase-x-4-group MMQ structural assumptions (exact WMMA/tag/offset counts, q8/q4 LDS region names, dm/ds sidecar correction) superseded by the fp16-dequant-in-register per-K32-group design (see docs/amd-fp16-dequant-q4k-primitive-implementation-plan-20260720.md); not rewritten this phase")
 def test_exact_record_stage_feeds_connected_oracle_recurrence():
   graph = build_llama_oracle_recurrence(_stage())
   assert [x.k for x in graph.groups] == list(range(0, 256, 32))

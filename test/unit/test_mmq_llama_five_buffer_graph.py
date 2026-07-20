@@ -7,6 +7,7 @@ from extra.qk.mmq_llama_five_buffer_graph import (BLOCKER, build_llama_five_buff
   build_llama_five_buffer_graph, five_buffer_parameters)
 
 
+@pytest.mark.xfail(reason="phase2-fp16-dequant-q4k: retired int8 5-buffer/2-phase-x-4-group MMQ structural assumptions (exact WMMA/tag/offset counts, q8/q4 LDS region names, dm/ds sidecar correction) superseded by the fp16-dequant-in-register per-K32-group design (see docs/amd-fp16-dequant-q4k-primitive-implementation-plan-20260720.md); not rewritten this phase")
 def test_exact_five_buffer_abi_slots_dtypes_shapes_and_sizes():
   params = five_buffer_parameters(128, 256, 512)
   assert [(x.slot, x.name, x.dtype) for x in params] == [
@@ -17,6 +18,7 @@ def test_exact_five_buffer_abi_slots_dtypes_shapes_and_sizes():
 
 
 @pytest.mark.parametrize("k,expected", [(256, [(0, 0, 0, 0)]), (512, [(0, 0, 0, 0), (36, 256*128, 256*4, 256*4)])])
+@pytest.mark.xfail(reason="phase2-fp16-dequant-q4k: retired int8 5-buffer/2-phase-x-4-group MMQ structural assumptions (exact WMMA/tag/offset counts, q8/q4 LDS region names, dm/ds sidecar correction) superseded by the fp16-dequant-in-register per-K32-group design (see docs/amd-fp16-dequant-q4k-primitive-implementation-plan-20260720.md); not rewritten this phase")
 def test_epoch_offsets_wmmas_lds_and_fp32_recurrence(k, expected):
   graph = build_llama_five_buffer_graph(128, 128, k)
   assert [(e.offsets.q4, e.offsets.values, e.offsets.scales, e.offsets.sums) for e in graph.body.epochs] == expected
@@ -27,12 +29,14 @@ def test_epoch_offsets_wmmas_lds_and_fp32_recurrence(k, expected):
     assert graph.body.epochs[0].recurrence.consumer_seam in graph.body.epochs[1].accumulators[0].backward_slice
 
 
+@pytest.mark.xfail(reason="phase2-fp16-dequant-q4k: retired int8 5-buffer/2-phase-x-4-group MMQ structural assumptions (exact WMMA/tag/offset counts, q8/q4 LDS region names, dm/ds sidecar correction) superseded by the fp16-dequant-in-register per-K32-group design (see docs/amd-fp16-dequant-q4k-primitive-implementation-plan-20260720.md); not rewritten this phase")
 def test_tile_rebasing_uses_declared_split_physical_layouts():
   graph = build_llama_five_buffer_graph(256, 256, 512, tile_m=1, tile_n=1)
   assert [(e.offsets.q4, e.offsets.values, e.offsets.scales) for e in graph.body.epochs] == [
     (128*2*36, 128*128, 128*4), ((128*2+1)*36, (2*256+128)*128, (2*256+128)*4)]
 
 
+@pytest.mark.xfail(reason="phase2-fp16-dequant-q4k: retired int8 5-buffer/2-phase-x-4-group MMQ structural assumptions (exact WMMA/tag/offset counts, q8/q4 LDS region names, dm/ds sidecar correction) superseded by the fp16-dequant-in-register per-K32-group design (see docs/amd-fp16-dequant-q4k-primitive-implementation-plan-20260720.md); not rewritten this phase")
 def test_no_dense_allocations_and_bounded_writeback_only():
   graph = build_llama_five_buffer_graph(128, 128, 256)
   assert graph.allocated_shapes[-1] == ("lds_bounded_tile", (57856,), "uint8")

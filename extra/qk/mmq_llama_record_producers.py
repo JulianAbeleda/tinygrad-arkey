@@ -12,7 +12,8 @@ from tinygrad.codegen.opt.packed_weight import PackedOperandComponent, PackedOpe
 from tinygrad.dtype import PtrDType, dtypes
 from tinygrad.uop.ops import Ops, UOp
 
-from extra.qk.mmq_llama_packed_operands import Q4_K_DECODED_LDS_ROW, Q8_1_DS4_ROW
+from extra.qk.mmq_llama_packed_operands import (ACTIVATION_FP16_GROUP_ROW, Q4_K_DECODED_GROUP_LDS_ROW,
+  Q4_K_DECODED_LDS_ROW, Q8_1_DS4_ROW)
 
 SOURCE_ANCHORS = (
   "ggml/src/ggml-cuda/mmq.cuh:2079-2089 unpack_scales_q45_K",
@@ -84,6 +85,13 @@ Q4_K_UINT32_BLOCK = PackedOperandTransform("llama.q4_k.global_block.uint32x36.v1
   PackedOperandComponent("record", dtypes.uint32, 0, 144, "block_q4_K_uint32x36", 144, 16),
 ))
 Q4_K_RECORD_DECODE = PackedOperandRecordTransform("llama.q4_k.load_tiles_q4_K.v1", Q4_K_UINT32_BLOCK, Q4_K_DECODED_LDS_ROW)
+
+# fp16-dequant-in-register decode (implementation plan PART I.2/II.3): one K32
+# group at a time, matching wmma.py decode_group/get_scale_min_k4 exactly.
+Q4_K_RECORD_DECODE_GROUP = PackedOperandRecordTransform(
+  "llama.q4_k.decode_group_fp16.v1", Q4_K_UINT32_BLOCK, Q4_K_DECODED_GROUP_LDS_ROW)
+ACTIVATION_FP16_RECORD_COPY = PackedOperandRecordTransform(
+  "llama.activation.fp16_group_copy.v1", ACTIVATION_FP16_GROUP_ROW, ACTIVATION_FP16_GROUP_ROW)
 
 
 def _stack(dtype, values: tuple[UOp, ...]) -> UOp:
@@ -187,6 +195,67 @@ def q4_k_dm_record_callback(sources: tuple[UOp, ...], row: UOp, k: UOp, width: i
   return _stack(dtypes.half, tuple(vals))
 
 
+def q4_k_fp16_decode_group_callback(sources: tuple[UOp, ...], row: UOp, k: UOp, width: int, *,
+                                    group_index: int, row_stride_words: int = 36) -> UOp:
+  """Dequantize ``width`` consecutive local-K codes at ``k`` (0..31) within one K32 group.
+
+  Mirrors ``wmma.py`` ``decode_group``/``get_scale_min_k4`` exactly (implementation
+  plan PART I.2): per nibble ``value = d*sc*code - dmin*mn`` computed with a f32
+  intermediate, then a single final cast to half.  ``group_index`` (0..7) selects
+  the ggml Q4_K sub-group -- see ``tinygrad/llm/gguf.py`` ggml_type 12 decode
+  (``sc``/``mn`` via the packed 6-bit scale bytes; nibble chunk ``group_index//2``,
+  nibble half ``group_index%2``) -- both are re-derived here bit-for-bit rather
+  than via the packed-int32x4 int8-MMQ callback above, since a scalar fp16
+  decode needs one code at a time, not four packed char lanes.
+  """
+  if not 0 <= group_index < 8: raise ValueError("Q4_K group_index must be in [0, 8)")
+  source = sources[0]
+  dm_word = source.index(row*row_stride_words).load()
+  d = (dm_word & UOp.const(dtypes.uint32, 0xffff)).cast(dtypes.uint16).bitcast(dtypes.half).cast(dtypes.float32)
+  dmin = (dm_word >> 16).cast(dtypes.uint16).bitcast(dtypes.half).cast(dtypes.float32)
+  group_u = UOp.const(dtypes.weakint, group_index)
+  sc = _scale_or_min(source, row, group_u, False, row_stride_words).cast(dtypes.float32)
+  mn = _scale_or_min(source, row, group_u, True, row_stride_words).cast(dtypes.float32)
+  tdsc, tdmn = d*sc, dmin*mn
+  nibble_shift = 4 if group_index % 2 else 0
+  chunk_byte0 = 16 + (group_index//2)*32
+  vals = []
+  for i in range(width):
+    local_k = k+i
+    byte = _packed_byte(source, row, chunk_byte0+local_k, row_stride_words)
+    code = (byte >> nibble_shift) & UOp.const(dtypes.uint32, 0xf)
+    value = tdsc*code.cast(dtypes.float32) - tdmn
+    vals.append(value.cast(dtypes.half))
+  return _stack(dtypes.half, tuple(vals))
+
+
+def activation_fp16_group_callback(sources: tuple[UOp, ...], row: UOp, k: UOp, width: int, *,
+                                   k_total: int, k_base: int) -> UOp:
+  """Plain fp16 activation copy (implementation plan I.6/II.6): no quantization, no ids gather."""
+  source = sources[0]
+  vals = [source.index(row*k_total+k_base+i+k).load() for i in range(width)]
+  return _stack(dtypes.half, tuple(vals))
+
+
+@dataclass(frozen=True)
+class Q4KFp16DecodeGroupProducer:
+  group_index: int
+  row_stride_words: int = 36
+
+  def __call__(self, sources: tuple[UOp, ...], row: UOp, k: UOp, width: int) -> UOp:
+    return q4_k_fp16_decode_group_callback(sources, row, k, width,
+      group_index=self.group_index, row_stride_words=self.row_stride_words)
+
+
+@dataclass(frozen=True)
+class ActivationFp16GroupProducer:
+  k_total: int
+  k_base: int
+
+  def __call__(self, sources: tuple[UOp, ...], row: UOp, k: UOp, width: int) -> UOp:
+    return activation_fp16_group_callback(sources, row, k, width, k_total=self.k_total, k_base=self.k_base)
+
+
 def _linear_q8_ds4_schedule(template: PackedRecordOperandTemplate, threads: PrecontractThreadAxes,
                             source_k: int) -> tuple[PackedRecordCooperativeStore, ...]:
   """Exact 256-thread linear copy used for each Q8 K128 phase."""
@@ -281,6 +350,13 @@ LLAMA_Q4_K_COOPERATIVE_SCHEDULE = PackedRecordCooperativeSchedule(
   "llama-load-tiles-q4-k-wave-row-v1", _q4_k_oracle_schedule, ("wave_m", "lane"))
 LLAMA_Q8_DS4_COOPERATIVE_SCHEDULE = PackedRecordCooperativeSchedule(
   "llama-q8-ds4-linear-256-v1", _linear_q8_ds4_schedule, ("wave_m", "wave_n", "lane"))
+# _linear_q8_ds4_schedule is generic single-field-producer vocabulary (despite
+# the historical name): reused verbatim for the fp16 Q4_K-decode and plain-fp16
+# activation K32-group templates below.
+LLAMA_Q4K_FP16_GROUP_SCHEDULE = PackedRecordCooperativeSchedule(
+  "llama-q4k-fp16-decode-group-linear-256-v1", _linear_q8_ds4_schedule, ("wave_m", "wave_n", "lane"))
+LLAMA_ACTIVATION_FP16_GROUP_SCHEDULE = PackedRecordCooperativeSchedule(
+  "llama-activation-fp16-group-linear-256-v1", _linear_q8_ds4_schedule, ("wave_m", "wave_n", "lane"))
 
 
 def build_q8_ds4_record_template(role: str, record_source: UOp, row_axis: UOp, k_axis: UOp,
@@ -342,16 +418,46 @@ def build_q4_k_record_template(role: str, source: UOp, row_axis: UOp, k_axis: UO
     ("padding",), "qs", row_axis, k_axis, row_tile_base, dtypes.char, schedule)
 
 
+def build_llama_q4_k_fp16_group_record_template(role: str, source: UOp, row_axis: UOp, k_axis: UOp,
+                                                row_tile_base: UOp, *, group_index: int,
+                                                row_stride_words: int = 36) -> PackedRecordOperandTemplate:
+  """One K32-group fp16-dequant-in-register Q4_K decode (implementation plan I.2/II.3)."""
+  if source.dtype.base != dtypes.uint32: raise TypeError("Q4_K source must be physical uint32[36] blocks")
+  if not isinstance(row_stride_words, int) or isinstance(row_stride_words, bool) or row_stride_words < 36:
+    raise ValueError("Q4_K row stride must be at least 36 uint32 words")
+  if source.dtype.size < 128*row_stride_words:
+    raise TypeError("Q4_K source does not cover 128 rows at the declared physical stride")
+  return PackedRecordOperandTemplate(role, Q4_K_RECORD_DECODE_GROUP, (PackedRecordSource("record", source),),
+    (PackedRecordFieldProducer("value", ("record",),
+      Q4KFp16DecodeGroupProducer(group_index, row_stride_words), vector_bytes=16),),
+    (), "value", row_axis, k_axis, row_tile_base, dtypes.half, LLAMA_Q4K_FP16_GROUP_SCHEDULE)
+
+
+def build_llama_activation_fp16_group_record_template(role: str, source: UOp, row_axis: UOp, k_axis: UOp,
+                                                       row_tile_base: UOp, *, k_total: int,
+                                                       k_base: int) -> PackedRecordOperandTemplate:
+  """One K32-group plain fp16 activation cooperative copy (implementation plan I.6/II.6)."""
+  if source.dtype.base != dtypes.half: raise TypeError("activation source must be a physical half[M,K] array")
+  if not isinstance(k_total, int) or isinstance(k_total, bool) or k_total <= 0: raise ValueError("k_total must be a positive int")
+  if not isinstance(k_base, int) or isinstance(k_base, bool) or k_base < 0: raise ValueError("k_base must be a non-negative int")
+  return PackedRecordOperandTemplate(role, ACTIVATION_FP16_RECORD_COPY, (PackedRecordSource("value", source),),
+    (PackedRecordFieldProducer("value", ("value",), ActivationFp16GroupProducer(k_total, k_base), vector_bytes=16),),
+    (), "value", row_axis, k_axis, row_tile_base, dtypes.half, LLAMA_ACTIVATION_FP16_GROUP_SCHEDULE)
+
+
 # Explicit llama names plus short generic-template-friendly names.
 build_llama_q8_ds4_record_template = build_q8_ds4_record_template
 build_llama_split_q8_ds4_record_template = build_split_q8_ds4_record_template
 build_llama_q4_k_record_template = build_q4_k_record_template
 
-__all__ = ["LLAMA_Q4_K_COOPERATIVE_SCHEDULE", "LLAMA_Q8_DS4_COOPERATIVE_SCHEDULE",
-  "Q4_K_RECORD_DECODE", "Q4_K_UINT32_BLOCK", "Q8_DS4_GLOBAL_RECORD", "Q8_DS4_RECORD_COPY",
+__all__ = ["ACTIVATION_FP16_RECORD_COPY", "LLAMA_ACTIVATION_FP16_GROUP_SCHEDULE", "LLAMA_Q4K_FP16_GROUP_SCHEDULE",
+  "LLAMA_Q4_K_COOPERATIVE_SCHEDULE", "LLAMA_Q8_DS4_COOPERATIVE_SCHEDULE",
+  "Q4_K_RECORD_DECODE", "Q4_K_RECORD_DECODE_GROUP", "Q4_K_UINT32_BLOCK", "Q8_DS4_GLOBAL_RECORD", "Q8_DS4_RECORD_COPY",
   "Q8_DS4_SPLIT_GLOBAL_RECORD", "Q8_DS4_SPLIT_RECORD_ADAPTER",
   "SOURCE_ANCHORS", "RecordProducerInstanceWitness", "is_record_producer_instance_dependency",
   "record_producer_instance_value", "record_producer_instance_witnesses",
+  "activation_fp16_group_callback", "build_llama_activation_fp16_group_record_template",
+  "build_llama_q4_k_fp16_group_record_template",
   "build_q4_k_record_template", "build_q8_ds4_record_template", "build_split_q8_ds4_record_template",
   "build_llama_q4_k_record_template", "build_llama_q8_ds4_record_template", "build_llama_split_q8_ds4_record_template",
-  "q4_k_dm_record_callback", "q4_k_qs_record_callback"]
+  "q4_k_dm_record_callback", "q4_k_fp16_decode_group_callback", "q4_k_qs_record_callback"]
