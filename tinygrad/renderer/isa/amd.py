@@ -1237,6 +1237,12 @@ def _wmma_half_addr(e:UOp):
   lane = 0
   if e.op is Ops.GEP:
     lane = e.arg[0]; e = e.src[0]
+  # A fragment lane whose native LDS storage is byte-addressed (e.g. a half fragment loaded from a uint8
+  # arena) loads its own itemsize in raw bytes and reinterprets the VALUE via one wrapping BITCAST, rather
+  # than lying about the dtype at the INDEX (see extra/qk/mmq_llama_oracle_recurrence.py _fragment_at).
+  # Unwrap that value-level cast the same way the GEP lane split above is unwrapped.
+  if e.op is Ops.BITCAST and e.src:
+    e = e.src[0]
   if e.op is not Ops.LOAD: return None
   idx = e.src[0].src[0] if e.src[0].op is Ops.CAST else e.src[0]
   if idx.op is not Ops.INDEX or idx.src[1].op is Ops.CONST: return None
@@ -1360,16 +1366,21 @@ def _frag_b128_loads(ctx:IselContext, E:tuple[UOp, ...], base:int, dep:tuple[UOp
   addrs = [_wmma_half_addr(e) for e in E]
   if any(a is None for a in addrs): return None
   idx0, ptr0, expr0, c0 = addrs[0]
-  # Consecutive lanes are adjacent in units of the operand's own itemsize (the address constant `c` is in
-  # bytes) -- this was previously hardcoded to a 1-byte lane stride, which only holds for a byte/int8
-  # carrier.  A general fix, but NOT sufficient on its own to make the fp16 K32-group dequant-in-register
-  # LDS fragment loads take this vectorized ds_load_b128 path: investigation (REGALLOC_DEBUG showed ~1950
-  # live DS_LOAD virtuals at peak on build_llama_five_buffer_full_kernel(128,128,256)) found those B-role
-  # fragment elements arrive here already as `dtypes.uchar` LOADs (itemsize 1), not `dtypes.half`, so this
-  # stride generalization is a no-op for that path -- the elements are byte-typed further upstream (likely
-  # in the record-template/CONTRACT lowering for the uint8-addressed LDS arena), which is the next thing to
-  # chase to actually close the gap.
-  step = E[0].dtype.itemsize
+  # The address constant `c` is counted in units of the POINTER's own base dtype (the natural index unit for
+  # `Ops.INDEX`), not necessarily the loaded element's dtype. When the two match 1:1 (the original case this
+  # was written for: a genuinely `half`-typed pointer feeding `half`-typed loads, or a byte pointer feeding
+  # byte loads), that unit is exactly 1 lane and the old hardcoded stride-1 check is correct. When they don't
+  # match -- a byte-addressed LDS arena (uint8*) whose fragment lanes are wider than one byte, e.g. a `half`
+  # fragment reinterpreted via a value-level BITCAST over raw byte loads (see
+  # extra/qk/mmq_llama_oracle_recurrence.py _fragment_at) -- consecutive lanes are `itemsize / ptr_itemsize`
+  # pointer-units apart. Deriving the stride from that ratio (instead of assuming it's always 1, which
+  # silently misdetected fp16 LDS fragments and fell through to a scalar-load + V_PACK fallback -- an
+  # 8x-16x DS_LOAD instruction blowup, REGALLOC_DEBUG: ~1950 live DS_LOAD virtuals at peak on
+  # build_llama_five_buffer_full_kernel(128,128,256) -- or assuming it's always itemsize, which broke the
+  # pre-existing global/element-addressed fragment case) keeps both shapes correct.
+  ptr_itemsize = ptr0.dtype.base.itemsize if isinstance(ptr0.dtype, PtrDType) else 1
+  step, rem = divmod(E[0].dtype.itemsize, ptr_itemsize)
+  if rem or step < 1: return None
   if any(ptr is not ptr0 or expr is not expr0 or c != c0 + i * step for i, (_idx, ptr, expr, c) in enumerate(addrs)): return None
   if dep: idx0 = _index_after_dep(idx0, dep[-1])
   idxc = isel_index(ctx, idx0)

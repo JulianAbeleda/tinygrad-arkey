@@ -87,8 +87,23 @@ def _fragment_at(stage:HierarchicalPackedRecordStage, publish:UOp, group:Hierarc
   contract = next(x for x in stage.contracts if x.role == role)
   ordered = stage.allocation.after(publish)
   esz = stage.tc.dtype_in.itemsize
-  load = ordered.index(base+offset*esz, dtype=stage.tc.dtype_in).replace(
+  # `ordered` is the LDS arena's own uint8 pointer (the arena is always a raw byte buffer, matching the
+  # retired int8 kernel's byte-granularity fragments). Indexing it with `dtype=stage.tc.dtype_in` while
+  # leaving the pointer itself byte-typed does NOT reinterpret the storage -- .index()'s `dtype=` kwarg only
+  # overrides the resulting INDEX node's declared dtype (tinygrad/uop/ops.py UOp.index), it does not bitcast
+  # the pointer. For int8 (esz=1) this mismatch was invisible (byte pointer == byte dtype). For fp16 (esz=2)
+  # it meant every fragment INDEX/LOAD lied about being `half` while the pointer stayed uint8-granular, so a
+  # later legalization pass decomposed each 16-lane fragment into 16 raw `uchar` scalar loads instead of a
+  # genuine half load, which is why AMDISARenderer's vectorized ds_load_b128 fragment path never engaged and
+  # every fragment fell back to scalar loads + V_PACK (~1950 live DS_LOAD virtuals at peak, REGALLOC_DEBUG on
+  # build_llama_five_buffer_full_kernel(128,128,256)). Fix: keep the pointer/INDEX genuinely byte-typed (load
+  # `esz` raw bytes -- a no-op reshape for esz==1/int8) and reinterpret the LOADED VALUE via .bitcast, instead
+  # of lying about the dtype at the INDEX. tinygrad/renderer/isa/amd.py's _wmma_half_addr/_frag_b128_loads
+  # unwrap this per-element value BITCAST the same way they already unwrap a GEP lane split.
+  byte_dtype = dtypes.uint8.vec(esz) if esz > 1 else dtypes.uint8
+  raw = ordered.index(base+offset*esz, dtype=byte_dtype).replace(
     tag=("llama_oracle_fragment_load", role, group.phase, group.group, group.persistent_k+offset)).load()
+  load = raw.bitcast(stage.tc.dtype_in) if esz > 1 else raw
   return UOp(Ops.CONTRACT, stage.tc.dtype_in.vec(16), (load,), contract.arg,
              tag=("llama_oracle_fragment", role, group.phase, group.group, offset))
 
