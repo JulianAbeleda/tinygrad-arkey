@@ -1,0 +1,290 @@
+{
+  "child_status": "passed",
+  "config_identity": "sha256:1a149c0759b3bc96159bf8b259473ecc43fcf77c88cfd616b326292a250468f6",
+  "elapsed_seconds": 6.329935014015064,
+  "error": null,
+  "evidence_identity": "sha256:1a8faa64e85206f30f5533094c1e462d636ab3ad4a973529cbbfbd9ea49fca48",
+  "exact_blocker": null,
+  "health_after": true,
+  "health_before": true,
+  "kernel_fault_evidence": {
+    "blocks": [],
+    "limits": {
+      "max_blocks": 8,
+      "max_line_chars": 512,
+      "max_lines": 32
+    },
+    "relevant_line_count": 0,
+    "retained_line_count": 0,
+    "schema": "tinygrad.amd_kernel_fault_evidence.v1",
+    "source": "kernel_journal_window",
+    "status": "CLEAR",
+    "truncated": false
+  },
+  "kernel_faults": [],
+  "launched": true,
+  "no_queue_fallback": true,
+  "no_retry": true,
+  "operation_schema": "tinygrad.mmq_q4k_q8_1.ffn_gate_up_guarded_correctness_stage.v2.pm4_no_doorbell",
+  "promotion_evidence_eligible": false,
+  "queue_mode": "PM4",
+  "request_identity": "sha256:ffed1b48c39153d1158815a52650a1fd24affa1575f170b4dd2f455decda64e7",
+  "result": {
+    "attempt": {
+      "invocation_count": 1,
+      "phase": "complete",
+      "receipt": {
+        "all_checks_pass": true,
+        "checks": {
+          "error_state_unchanged": true,
+          "fill_kernargs_hook_restored": true,
+          "native_submit_not_called": true,
+          "pre_submit_snapshot_passed": true,
+          "private_stop_caught_by_owner": true,
+          "private_stop_raised_at_target_submit": true,
+          "prof_exec_counter_advanced_exactly_once": true,
+          "prof_exec_counter_rollback_restored": true,
+          "submit_hook_restored": true,
+          "timeline_advanced_exactly_once": true,
+          "timeline_rollback_restored": true,
+          "timeline_signal_unchanged": true
+        },
+        "doorbell_rung": false,
+        "native_submit_call_count": 0,
+        "pre_submit": {
+          "all_checks_pass": true,
+          "argument_buffers": [
+            {
+              "size": 35651584,
+              "slot": 0,
+              "va": 136710916669440
+            },
+            {
+              "size": 2506752,
+              "slot": 1,
+              "va": 136710914162688
+            },
+            {
+              "size": 131072,
+              "slot": 2,
+              "va": 136711128481792
+            },
+            {
+              "size": 16384,
+              "slot": 3,
+              "va": 136711853658112
+            },
+            {
+              "size": 16384,
+              "slot": 4,
+              "va": 136711812935680
+            }
+          ],
+          "capture_point": "AMDComputeQueue._submit_after_complete_command_construction_before_ring_copy_and_doorbell",
+          "checks": {
+            "args_state_program_matches_runtime": true,
+            "exact_five_argument_buffers": true,
+            "exact_five_kernarg_qwords": true,
+            "five_qwords_match_constructed_buffers": true,
+            "pm4_command_stream_nonempty": true,
+            "pm4_command_words_concrete": true,
+            "pm4_kernarg_user_data_found_once": true,
+            "pm4_kernarg_user_data_matches_kernarg_va": true,
+            "pm4_kernarg_uses_user_data_0": true,
+            "pm4_packet_stream_decoded": true,
+            "queue_device_matches_submit_device": true,
+            "runtime_device_matches_submit_device": true
+          },
+          "kernarg_nbytes": 40,
+          "kernarg_qwords": [
+            136710916669440,
+            136710914162688,
+            136711128481792,
+            136711853658112,
+            136711812935680
+          ],
+          "kernarg_va": 136710750994880,
+          "pm4_dword_count": 141,
+          "pm4_kernarg_user_data": {
+            "high_dword": 31830,
+            "low_dword": 1941963200,
+            "packet_dword_offset": 77,
+            "pointer": 136710750994880,
+            "register_index": 0
+          },
+          "pm4_sha256": "b245389e5b1137820b3c6e582c74685e613e78dcbff05fead76b7fe448373690",
+          "runtime_class": "tinygrad.runtime.ops_amd.AMDProgram",
+          "runtime_device": "AMD",
+          "runtime_name": "mmq_llama_five_buffer_full_grid_accumulate",
+          "runtime_object_identity": 136711134606976,
+          "schema": "tinygrad.mmq_q4k_q8_1.pm4_pre_submit_snapshot.v1"
+        },
+        "prof_exec_counter_after_rollback": 7,
+        "prof_exec_counter_after_runtime_unwind": 8,
+        "prof_exec_counter_before": 7,
+        "promotion_evidence_eligible": false,
+        "ring_copy_performed": false,
+        "schema": "tinygrad.mmq_q4k_q8_1.pm4_no_doorbell_receipt.v1",
+        "status": "CAPTURED_NO_SUBMIT",
+        "submit_policy": "snapshot_only",
+        "target_dispatch_submitted": false,
+        "terminal_child_required": true,
+        "timeline_rollback_applied": true,
+        "timeline_signal_value_after": 63,
+        "timeline_signal_value_before": 63,
+        "timeline_value_after_rollback": 64,
+        "timeline_value_after_runtime_unwind": 65,
+        "timeline_value_before": 64
+      },
+      "receipt_count": 1
+    },
+    "attestation_performed": false,
+    "binary_sha256": "149ba322c1a99c1fa056d25c6230bc8908c27f15fe94b177276c5808eebe8bf3",
+    "c4_canary_identity": "sha256:e2a7fec5ffbbb0e78bafd5e316f8c1d3fbf36615c667a6fac346b466e7bd7e6e",
+    "candidate_executable_identity": "sha256:48b8d87229e53cd323677fbdcdeb8681772e4fa31948c13a8f7849c3a7e02ccb",
+    "compile_performed": false,
+    "config_identity": "sha256:1a149c0759b3bc96159bf8b259473ecc43fcf77c88cfd616b326292a250468f6",
+    "environment": {
+      "AMD_AQL": "0",
+      "DEV": "AMD",
+      "PROFILE": "0"
+    },
+    "evidence_identity": "sha256:225606fc9a1062f358f2903793ac5b4417801bb111e0e7b76fb2817d9a1bd2e3",
+    "exact_blocker": null,
+    "family_identity": "sha256:4e82044650b7c03a579b42b8dd270389d280c2f5eab9f9004a3bc83dbe79917f",
+    "fixture_identity": "sha256:30a8f9513b94de41bc53ad73759b54fedd1b7f00ff118d40a2e2529f49ba1baf",
+    "input_identity": "sha256:c86b5fd9abe76f0a776fd990cc7938ad7cf4a70cf2e6e70870202dd3fbc6e595",
+    "invocation_count": 1,
+    "logical_q4_identity": "sha256:652e4ef0d0493ea70172a7e8be59f1e0686bf601c59f9f1281fde2bf1bcb0f53",
+    "native_submit_call_count": 0,
+    "no_fallback": true,
+    "no_retry": true,
+    "numeric_validation_performed": false,
+    "prefix_epochs": 1,
+    "producer_attestation_performed": false,
+    "program_key": "14f2a216a8a7609e8a251fe3869b3fb146fd5d5a8ca0ec468120e0fbcbd54a60",
+    "promotion_evidence_eligible": false,
+    "queue_mode": "PM4",
+    "readback_performed": false,
+    "receipt": {
+      "all_checks_pass": true,
+      "checks": {
+        "error_state_unchanged": true,
+        "fill_kernargs_hook_restored": true,
+        "native_submit_not_called": true,
+        "pre_submit_snapshot_passed": true,
+        "private_stop_caught_by_owner": true,
+        "private_stop_raised_at_target_submit": true,
+        "prof_exec_counter_advanced_exactly_once": true,
+        "prof_exec_counter_rollback_restored": true,
+        "submit_hook_restored": true,
+        "timeline_advanced_exactly_once": true,
+        "timeline_rollback_restored": true,
+        "timeline_signal_unchanged": true
+      },
+      "doorbell_rung": false,
+      "native_submit_call_count": 0,
+      "pre_submit": {
+        "all_checks_pass": true,
+        "argument_buffers": [
+          {
+            "size": 35651584,
+            "slot": 0,
+            "va": 136710916669440
+          },
+          {
+            "size": 2506752,
+            "slot": 1,
+            "va": 136710914162688
+          },
+          {
+            "size": 131072,
+            "slot": 2,
+            "va": 136711128481792
+          },
+          {
+            "size": 16384,
+            "slot": 3,
+            "va": 136711853658112
+          },
+          {
+            "size": 16384,
+            "slot": 4,
+            "va": 136711812935680
+          }
+        ],
+        "capture_point": "AMDComputeQueue._submit_after_complete_command_construction_before_ring_copy_and_doorbell",
+        "checks": {
+          "args_state_program_matches_runtime": true,
+          "exact_five_argument_buffers": true,
+          "exact_five_kernarg_qwords": true,
+          "five_qwords_match_constructed_buffers": true,
+          "pm4_command_stream_nonempty": true,
+          "pm4_command_words_concrete": true,
+          "pm4_kernarg_user_data_found_once": true,
+          "pm4_kernarg_user_data_matches_kernarg_va": true,
+          "pm4_kernarg_uses_user_data_0": true,
+          "pm4_packet_stream_decoded": true,
+          "queue_device_matches_submit_device": true,
+          "runtime_device_matches_submit_device": true
+        },
+        "kernarg_nbytes": 40,
+        "kernarg_qwords": [
+          136710916669440,
+          136710914162688,
+          136711128481792,
+          136711853658112,
+          136711812935680
+        ],
+        "kernarg_va": 136710750994880,
+        "pm4_dword_count": 141,
+        "pm4_kernarg_user_data": {
+          "high_dword": 31830,
+          "low_dword": 1941963200,
+          "packet_dword_offset": 77,
+          "pointer": 136710750994880,
+          "register_index": 0
+        },
+        "pm4_sha256": "b245389e5b1137820b3c6e582c74685e613e78dcbff05fead76b7fe448373690",
+        "runtime_class": "tinygrad.runtime.ops_amd.AMDProgram",
+        "runtime_device": "AMD",
+        "runtime_name": "mmq_llama_five_buffer_full_grid_accumulate",
+        "runtime_object_identity": 136711134606976,
+        "schema": "tinygrad.mmq_q4k_q8_1.pm4_pre_submit_snapshot.v1"
+      },
+      "prof_exec_counter_after_rollback": 7,
+      "prof_exec_counter_after_runtime_unwind": 8,
+      "prof_exec_counter_before": 7,
+      "promotion_evidence_eligible": false,
+      "ring_copy_performed": false,
+      "schema": "tinygrad.mmq_q4k_q8_1.pm4_no_doorbell_receipt.v1",
+      "status": "CAPTURED_NO_SUBMIT",
+      "submit_policy": "snapshot_only",
+      "target_dispatch_submitted": false,
+      "terminal_child_required": true,
+      "timeline_rollback_applied": true,
+      "timeline_signal_value_after": 63,
+      "timeline_signal_value_before": 63,
+      "timeline_value_after_rollback": 64,
+      "timeline_value_after_runtime_unwind": 65,
+      "timeline_value_before": 64
+    },
+    "receipt_count": 1,
+    "request_identity": "sha256:ffed1b48c39153d1158815a52650a1fd24affa1575f170b4dd2f455decda64e7",
+    "requires_recompile": false,
+    "resident_fp16_activation_identity": "sha256:c457f61ff0f1921c4cc0e4fb84ee12bd2c4bcb10c5e92472a8b720e7f6b36388",
+    "retry_count": 0,
+    "schema": "tinygrad.mmq_q4k_q8_1.ffn_gate_up_guarded_correctness_stage.v2.pm4_no_doorbell",
+    "status": "PASS",
+    "submit_policy": "snapshot_only",
+    "target_dispatch_submitted": false,
+    "terminal_child_required": true,
+    "timeline_rollback_applied": true,
+    "workload_identity": "sha256:f061cc838d3f879bc8dbf9805dd61f064215a5b637d3a03974d6d3aedfc4e112"
+  },
+  "retry_count": 0,
+  "schema": "tinygrad.mmq_q4k_q8_1.ffn_gate_up_guarded_correctness_stage.v2.envelope",
+  "spawn_count": 1,
+  "status": "PASS",
+  "timed_out": false
+}
