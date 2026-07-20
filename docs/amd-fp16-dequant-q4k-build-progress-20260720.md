@@ -2,6 +2,14 @@
 
 Living doc — resume the implementation from here if context is lost. Plan: [`amd-fp16-dequant-q4k-primitive-implementation-plan-20260720.md`](amd-fp16-dequant-q4k-primitive-implementation-plan-20260720.md). Decision/context: handoff §1.16 (AMD primitive = fp16-dequant-in-register), §1.15 (occupancy routing). Last updated 2026-07-20.
 
+## CORRECTNESS FAIL-FAST RESULT (2026-07-20) — decode CORRECT, full-kernel GPU output WRONG
+Verified on a minimal real config (BN=16 single subtile, real decode, K=256; **compiles spill-free**: emitted=True, VGPR=224, 0 spills, `v_wmma_f32_16x16x16_f16`, LDS 16384).
+- **Decode math: PASS, bit-exact.** `q4_k_fp16_decode_group_callback` vs `gguf.ggml_data_to_tensor` (GGML_Q4_K), CPU: **max abs diff 0.0**. The novel dequant (`d·sc·code−dmin·mn`, f32 intermediate, single f16 cast) + the `.bitcast(half)` are CORRECT. The highest-risk part works.
+- **GPU dispatch: FAIL.** 2048/2048 mismatch, 368 NaN, max_abs_err ~1.29e3. Deterministic pattern: weight-rows 0–22 (waves 0–1) = NaN; rows 23–127 (waves ≥2) = **exactly 0.0, never written**. Same with a single unchained K32 group → NOT a chaining/lifetime bug. Fault is in the WMMA-fragment/cooperative-LDS-staging/multi-wave-writeback wiring — a path never before run on real GPU.
+- **Next discriminator:** a genuinely single-wave (32-thread) config to separate "generator wiring logic bug" from "multi-wave LDS race" (needs parameterizing the hardcoded 128-row/8-wave cooperative schedules in `mmq_llama_record_producers.py`).
+- **Repro:** `scratchpad/min_fp16_q4k_kernel.py` (build/compile), `scratchpad/gpu_correctness_check.py` (dispatch+reference+compare).
+- **So: two open problems on the FULL kernel** — (1) full-geometry spill-free (deferred, register-window structural), (2) the GPU correctness wiring bug above. The decode/approach is validated; the generated kernel's integration is not.
+
 ## One-line state
 Converting the MMQ generator int8→fp16-dequant IN PLACE (per §1.16; int8 source preserved in git history for later NVIDIA recovery = task #15). Kernel now RENDERS correct-structure fp16 (16 KB LDS, f16 WMMA, 3-buffer ABI); the register-pressure spill is SOLVED; currently closing the last compile blockers. **Numerical correctness NOT yet measured** (that's phase 3/4).
 
