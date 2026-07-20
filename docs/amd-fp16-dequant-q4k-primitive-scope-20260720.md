@@ -1,5 +1,7 @@
 # Scope: generated fp16-dequant-in-register Q4_K prefill primitive (AMD)
 
+> **Superseded by the exhaustive plan: [`amd-fp16-dequant-q4k-primitive-implementation-plan-20260720.md`](amd-fp16-dequant-q4k-primitive-implementation-plan-20260720.md)** — the bit-exact target algorithm, full keep/modify/replace change-map, C0–C8 register-and-certify checklist, and correctness-authority swap. This doc is the summary.
+
 Date: 2026-07-20. Derives from handoff §1.15–1.16 (the AMD-primitive decision) and §2/§5–6 (constraints).
 
 ## Objective
