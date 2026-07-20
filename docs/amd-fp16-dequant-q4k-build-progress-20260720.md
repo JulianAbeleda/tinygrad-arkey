@@ -8,16 +8,13 @@ Converting the MMQ generator int8→fp16-dequant IN PLACE (per §1.16; int8 sour
 ## Commits on master (in order)
 - `4eef43945` [wip] convert generator int8→fp16-dequant (renders, not spill-free) — phases 1-2.
 - `f6c5c4f6a` [wip] chain accumulator across K32 groups (fixed 512→64 VGPR accumulator blowup; 64 chain heads → 8, matching hand kernel).
-- `27e1f0f25` [amd] generalize `_frag_b128_loads` lane stride by dtype itemsize (keeper; general bug — was hardcoded 1-byte, only correct for int8).
+- `27e1f0f25` [amd] generalize `_frag_b128_loads` lane stride by dtype itemsize (keeper; superseded by the ratio fix in 65c16271b).
+- `65c16271b` [wip] **fix fp16 fragment DS_LOAD vectorization — REGISTER WALL DOWN.** `_fragment_at` load raw bytes (`uint8.vec(esz)`) then `.bitcast(half)` the VALUE (was `UOp.index(dtype=half)` mislabeling a uint8 ptr → legalizer shattered into 16 uchar scalar loads); `_wmma_half_addr` unwraps the BITCAST; `_frag_b128_loads` stride = loaded/pointer itemsize RATIO. Result: scalar DS_LOAD 1950→0 (28 vectorized DS_LOAD_B128), peak vregs 491→63, compile 6.5min→75s. `test_amd_isa_wmma.py` 4 failures are PRE-EXISTING (verified on baseline 51cce914c), not regressions.
 
-## UNCOMMITTED in working tree (from the running spill-fix agent) — DO NOT LOSE
-- `extra/qk/mmq_llama_oracle_recurrence.py` `_fragment_at`: load raw bytes with correctly-typed ptr (`uint8.vec(esz)`) then `.bitcast(half)` the VALUE (was `UOp.index(dtype=half)` which mislabeled a uint8 ptr → legalizer shattered into 16 uchar scalar loads).
-- `tinygrad/renderer/isa/amd.py` `_wmma_half_addr`: unwrap the per-element `Ops.BITCAST` so `_frag_b128_loads` recognizes the vectorized load.
-- **Effect (verified on cheap 2-group probe): scalar DS_LOAD 1950→0 (now 28 vectorized DS_LOAD_B128), peak vregs 491→63, full compile 6.5min→75s.** THE REGISTER-PRESSURE WALL IS DOWN.
-- **BUT: regresses 8 tests in `test/unit/test_amd_isa_wmma.py`** (int8 fragment path) — must be fixed before commit. Agent is on it.
-
-## CURRENT BLOCKER (after DS_LOAD fix)
-New, smaller: SGPR allocation fails on `v0 = Ops.PARAM(slot=0)` (the `output` kernarg pointer) at uop=1, **zero contention** (peak_live_virtual=1). Not shape-dependent, fires before any group/decode/WMMA. Hypothesis (agent): the 17-slot SGPR-pair candidate set overlaps a `FixedRegisterUse`-reserved ABI slot (workgroup_coords/loop_counter) invisible to the virtual allocator — look in the kernarg/ABI candidate construction in isel + `regalloc.py` fixed-ABI reservations. Was previously masked by the huge VGPR DS_LOAD spill.
+## CURRENT BLOCKER (after DS_LOAD fix) — being fixed via real barriers
+Full kernel still `emitted=False`. Real target (the "SGPR/PARAM(0)" label was cosmetic — `Register.index` is always 0): an **intra-chain `DS_LOAD_B128` fixed-lease (`v200`) conflict** — 7 reloads within one subtile element's 7 non-head groups are hoisted together by the greedy `pressure_schedule`/`_pressure_schedule_block` (`tinygrad/codegen/late/regalloc.py`) because there is **no real `Ops.BARRIER` between K32 groups** to split the block (only `.after()` pseudo-ops).
+- **FIX IN PROGRESS (graph-side, preferred over core-scheduler change): emit real `Ops.BARRIER` between the 8 K32 groups** (hand-kernel cadence, wmma.py:600-631). This splits the block for the scheduler AND — **likely also a real correctness bug** — provides the cross-wave workgroup barrier the single-buffered LDS (DBUF=0, 8 waves sharing LDS) requires; `.after()` only orders within one wave, so without it waves race on shared LDS → wrong runtime results. Agent verifying whether any real barrier exists today.
+- Fallback if barriers insufficient: minimal `_pressure_schedule_block` change (split at `.after()`-chained fixed-lease boundaries) — core-scheduler, blast radius, needs review.
 
 ## Verification commands
 - Full compile (~75s now): `build_llama_five_buffer_full_kernel(128,128,256)` then `compile_llama_five_buffer_full_kernel(k)`; check `.emitted` (True=spill-free), `.blocker`, `.program.arg` (VGPR/LDS). Confirm ISA has `v_wmma_f32_16x16x16_f16`, LDS group_segment 16384.
