@@ -1576,6 +1576,10 @@ def _wmma_chain_nodes(root:UOp) -> list[UOp]:
   chain = [root]
   while True:
     c = chain[-1].src[2]
+    # A WAR-guard/scheduling-only Ops.AFTER may wrap the chain link (see extra/qk/mmq_llama_group_chain.py
+    # _instantiate_group_wmma_vectors's cross-element guard): unwrap it before checking Ops.WMMA so the
+    # backward chain-walk still recognizes the wrapped node as a genuine chain continuation.
+    if c.op is Ops.AFTER and c.src: c = c.src[0]
     if c.op is Ops.WMMA: chain.append(c)
     elif (prev := _wmma_chain_prev(c)) is not None: chain.append(prev)
     else: break
@@ -1714,8 +1718,17 @@ def isel_wmma(ctx:IselContext, x:UOp):
     cin = [_fixed_alias(cbase, i, x.dtype.scalar(), after) for i in range(8)]
     return memo.setdefault(x, _build_wmma_tile(ctx, x.src[0], x.src[1], cin, abase, bbase, cbase, ()))
   chain = [x]                                   # outermost .. head
+  # extra_dep[consumer] holds a WAR-guard's extra ordering operand (e.g. the cross-element guard in
+  # extra/qk/mmq_llama_group_chain.py _instantiate_group_wmma_vectors), keyed by the chain entry whose
+  # src[2] carried the Ops.AFTER wrapper -- i.e. the entry that actually needs to wait on it once tiled below.
+  extra_dep: dict[UOp, tuple[UOp, ...]] = {}
   while True:
-    c = chain[-1].src[2]
+    consumer = chain[-1]
+    c = consumer.src[2]
+    # See _wmma_chain_nodes: unwrap a WAR-guard Ops.AFTER before checking Ops.WMMA.
+    if c.op is Ops.AFTER and c.src:
+      extra_dep[consumer] = c.src[1:]
+      c = c.src[0]
     if c.op is Ops.WMMA: chain.append(c)
     elif (prev := _wmma_chain_prev(c)) is not None: chain.append(prev)
     else: break
@@ -1761,7 +1774,10 @@ def isel_wmma(ctx:IselContext, x:UOp):
       dep = _wmma_carrier_order_deps(tile.src[2])
     else:                                       # ACCUMULATE: src2 = prior tile's 8 pinned D lanes (== v{cbase..cbase+7})
       cin = list(prev.src)                      #   -> lower_inst reads dbase=v{cbase} for both src2 and vdst (in place)
-      dep = (prev.src[0],)                      # WAR guard: reload this tile's shared A/B frags only after the prior matmul
+      # WAR guard: reload this tile's shared A/B frags only after the prior matmul read them, PLUS any extra
+      # WAR-guard operand a cross-chain Ops.AFTER wrapper carried on this tile's own (pre-chain-walk) src[2]
+      # (e.g. the cross-element guard in mmq_llama_group_chain.py -- see extra_dep above).
+      dep = (prev.src[0],) + extra_dep.get(tile, ())
     if resident_ab:
       akey, bkey = _wmma_frag_reuse_key(ctx, "A", tile.src[0]), _wmma_frag_reuse_key(ctx, "B", tile.src[1])
       tabase, tbbase = _ab_base(ctx, ("A", akey), _wmma_operand_regs(tile.src[0])), _ab_base(ctx, ("B", bkey), _wmma_operand_regs(tile.src[1]))
