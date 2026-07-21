@@ -49,24 +49,6 @@ class PrefillRunProfile:
 
 
 @dataclass(frozen=True)
-class SixRowResearchHarnessConfig:
-  """Explicit subprocess authority for the default-off mixed-route smoke."""
-  policy_path: str
-  frozen_bundles: tuple[str, ...]
-  fallback_program_identities: tuple[str, ...]
-  inventory_path: str = str(ROOT / "bench/prefill-pure-full-kernel/qwen3-14b-mixed-quant-candidate-inventory-v1.json")
-
-  def validate(self, profile: PrefillRunProfile) -> None:
-    if not self.policy_path or not self.inventory_path or not self.frozen_bundles or not self.fallback_program_identities:
-      raise ValueError("six-row research smoke requires policy, inventory, frozen bundle, and fallback program authorities")
-    # The frozen AMDProgram is eager and is not captured as a TinyJit LINEAR.
-    # Until replay integration exists, only one direct non-JIT smoke call is truthful.
-    if profile.mode != "smoke" or profile.K != 1 or profile.warmups != 0 or profile.rounds != 1 or \
-       profile.start_positions != (0,) or profile.whole_lengths != (512,):
-      raise ValueError("six-row research is smoke-only and requires K=1, warmups=0, rounds=1, start=0, whole=512")
-
-
-@dataclass(frozen=True)
 class PrefillModelHarnessProfile:
   model_profile: ModelProfile
   default_model: str
@@ -131,11 +113,9 @@ def prefill_run_profile(mode: str = "authority", *, K: int | None = None, warmup
 
 def prefill_authority_argv(model_path: str, profile: PrefillRunProfile, *, model_profile_id: str | None = None,
                            pin_clock: bool = False, artifact: bool = True, require_route: str | None = None,
-                           six_row_research: SixRowResearchHarnessConfig | None = None,
                            artifact_path: str | None = None) -> list[str]:
   profile.validate()
   if not artifact and artifact_path: raise ValueError("prefill artifact path cannot be combined with artifact=False")
-  if six_row_research is not None: six_row_research.validate(profile)
   model_profile = resolve_prefill_model_profile(model_profile_id, model_path=model_path)
   argv = ["extra/qk/prefill_whole_synced.py", "--model", model_path, "--mode", profile.mode,
           "--model-profile", model_profile.id,
@@ -147,13 +127,6 @@ def prefill_authority_argv(model_path: str, profile: PrefillRunProfile, *, model
   if not artifact: argv.append("--no-artifact")
   elif artifact_path: argv.extend(("--artifact", artifact_path))
   if require_route: argv.extend(("--require-route", require_route))
-  if six_row_research is not None:
-    argv.extend(("--six-row-research-policy", six_row_research.policy_path,
-                 "--six-row-research-inventory", six_row_research.inventory_path))
-    for declaration in six_row_research.frozen_bundles:
-      argv.extend(("--six-row-frozen-bundle", declaration))
-    for declaration in six_row_research.fallback_program_identities:
-      argv.extend(("--six-row-fallback-program", declaration))
   return argv
 
 

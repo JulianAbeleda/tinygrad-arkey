@@ -88,36 +88,6 @@ def _scoped_candidate_compiler_state():
     for name,value in saved.items(): setattr(pr,name,value)
 
 
-def _research_non_jit_prefill_call(model, tokens, start_pos: int, temperature, *, logits_only: bool):
-  """Execute one truthful research call without TinyJit replay.
-
-  The frozen candidate is now a scheduler-owned PROGRAM chain. This direct
-  forward remains intentionally limited to the smoke gate until a separate
-  whole-model TinyJit replay run validates capture and repeated-call outputs.
-  """
-  from tinygrad.llm.prefill_route_observer import prefill_route_scope
-  for q4k_linear in model._q4k_linears.linears: q4k_linear.decode_enabled = False
-  for block in model.blk:
-    block._use_flash, block._prefill_v2, block._is_prefill, block._ring_freqs, block._ring_full = \
-      True, True, True, None, False
-  with prefill_route_scope(True):
-    if logits_only: return model.logits(tokens.contiguous(), start_pos)
-    return model.forward(tokens.contiguous(), start_pos, temperature)
-
-
-@contextmanager
-def _six_row_research_scope(model, authority):
-  if authority is None:
-    yield None
-    return
-  from extra.qk.prefill.six_row_benchmark_bridge import exact_research_model_scope
-  from extra.qk.prefill_research_routes import route_direct_packed_prefill_research
-  from tinygrad.llm.prefill_routes import prefill_route_override
-  with exact_research_model_scope(model, authority) as config, \
-       prefill_route_override(lambda linear, value: route_direct_packed_prefill_research(linear, value, config=config)):
-    yield config
-
-
 # Route provenance -> named measurement regime (F2). The prefill-whole-synced-authority schema is reused for THREE
 # incomparable regimes: the pure tinygrad-generated scheduler path, the S10 compiler-primitive spec-owned hybrid,
 # and the external hand-written kernel reference. They differ ~2.7x in pp512 and MUST NOT be compared across regimes.
@@ -274,13 +244,8 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
                       require_route: str | None = None, comparator_id: str | None = None,
                       candidate_id: str | None = None, primitive_class: str | None = None,
                       threshold: dict[str, Any] | None = None, ledger: str | None = None,
-                      quality_gate: dict[str, Any] | None = None, model_profile_id: str | None = None,
-                      six_row_research_authority: Any | None = None) -> dict[str, Any]:
+                      quality_gate: dict[str, Any] | None = None, model_profile_id: str | None = None) -> dict[str, Any]:
   if K < 1 or warmups < 0 or rounds < 1: raise ValueError("K >= 1, warmups >= 0, and rounds >= 1 are required")
-  if six_row_research_authority is not None and \
-     (mode != "smoke" or K != 1 or warmups != 0 or rounds != 1 or
-      tuple(start_positions) != (0,) or tuple(whole_lengths) != (512,)):
-    raise ValueError("six-row research is non-JIT smoke-only: require K=1, warmups=0, rounds=1, start=0, whole=512")
   model_profile = resolve_prefill_model_profile(model_profile_id, model_path=model_path)
   for key, value in model_profile.env.items(): os.environ.setdefault(key, value)
   if pin_clock: set_clock_pin_env(os.environ, True)
@@ -297,8 +262,6 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
   chunk = Tensor([[(i * 7) % 1000 for i in range(chunk_n)]], dtype="int32").contiguous()
 
   def prefill_call(sp_int: int):
-    if six_row_research_authority is not None:
-      return _research_non_jit_prefill_call(model, chunk, sp_int, temp, logits_only=logits_only)
     if not logits_only: return model(chunk, sp_int, temp, use_flash=True)
     for q4k_linear in model._q4k_linears.linears: q4k_linear.decode_enabled = False
     for block in model.blk:
@@ -333,19 +296,9 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
             "profile": profile_range_summary(profile_events)}
 
   from extra.qk.prefill_graph_gemm_route import candidate_route_census, finalize_candidate_route_census
-  candidate_registry=getattr(model, "_prefill_graph_gemm_registry", None); candidate_census=research_execution_census=None
-  with _scoped_candidate_compiler_state(), _six_row_research_scope(model, six_row_research_authority):
-    if six_row_research_authority is not None:
-      from extra.qk.prefill.six_row_benchmark_bridge import research_execution_census_expectations
-      from extra.qk.prefill_route_census import collect_prefill_route_execution_census
-      expected = research_execution_census_expectations(model, six_row_research_authority)
-      with collect_prefill_route_execution_census(**expected) as collector:
-        chunk_rows={sp:burst(sp) for sp in start_positions}
-      research_execution_census=collector.artifact()
-      if research_execution_census.get("status") != "PASS":
-        raise RuntimeError("six-row research execution census failed: " +
-                           str(research_execution_census.get("blocker", "unknown census failure")))
-    elif candidate_registry is None:
+  candidate_registry=getattr(model, "_prefill_graph_gemm_registry", None); candidate_census=None
+  with _scoped_candidate_compiler_state():
+    if candidate_registry is None:
       chunk_rows={sp:burst(sp) for sp in start_positions}
     else:
       with candidate_route_census() as collector: chunk_rows={sp:burst(sp) for sp in start_positions}
@@ -371,10 +324,6 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
     for length, tps in whole.items(): print(f"  WHOLE-PREFILL@{length}: {tps:.0f} tok/s")
 
   route_attr = _route_attribution(runtime_route_env)
-  research_route = None
-  if six_row_research_authority is not None:
-    from extra.qk.prefill.six_row_benchmark_bridge import research_bridge_summary
-    research_route = research_bridge_summary(six_row_research_authority)
   report = {
     "schema": "prefill-whole-synced-authority.v1",
     "model": model_path,
@@ -398,13 +347,8 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
     "git_dirty": _dirty_tree(),
     "route_attribution": route_attr,
     "candidate_set_route_census": candidate_census,
-    "six_row_research_route": research_route,
-    "six_row_research_execution_census": research_execution_census,
     "prefill_role_routes": _prefill_role_routes(str(route_attr.get("prefill_route_family", ""))),
-    "timing_authority": (
-      "non-authoritative one-shot direct model.forward integration smoke; eager frozen AMDProgram is not TinyJit replay captured"
-      if research_route is not None else
-      "synced model.__call__ prefill-v2 warmstart path, min over repeated bursts, no generate TTFT/sampling"),
+    "timing_authority": "synced model.__call__ prefill-v2 warmstart path, min over repeated bursts, no generate TTFT/sampling",
     # valid-benchmark-artifact checklist fields (F3/F4). None/MISSING here means the completeness gate
     # below refuses to stamp mode:"authority" -- honesty over invention.
     "comparator_id": comparator_id,
@@ -419,11 +363,6 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
     "reproducibility_band": reproducibility_band({str(k): row["samples_ms"] for k, row in chunk_rows.items()}),
   }
   report["measurement_regime"] = measurement_regime(report)
-  if research_route is not None:
-    report["measurement_regime"] = {
-      "regime_id": "six_row_research_smoke_non_jit", "mode": mode,
-      "authoritative_for_generated_promotion": False, "tinyjit_replay_authority": False,
-    }
   completeness = authority_completeness_gate(report, quality_gate=quality_gate)
   report["authority_completeness"] = completeness
   if mode == "authority" and not completeness["ok"]:
@@ -431,13 +370,7 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
     report["mode"] = "authority_incomplete"
     report["authority_blocked_reason"] = ("refusing mode:authority; missing required fields: "
                                           + ", ".join(completeness["missing"]))
-  binding_gate = route_binding_gate(report, require_route, env=runtime_route_env) if research_route is None else {
-    "schema": "prefill-route-binding-gate.v1", "verdict": "PREFILL_ROUTE_BINDING_DEFERRED",
-    "required_route": require_route, "selected_family": "six_row_research",
-    "selected_route": "immutable_six_row_mixed_route", "binding_regime": "research_smoke_non_jit",
-    "candidate_set_requested": False,
-    "failures": ([] if require_route is None else ["--require-route is a production-route gate and is invalid for six-row research"]),
-  }
+  binding_gate = route_binding_gate(report, require_route, env=runtime_route_env)
   report["prefill_route_binding_gate"] = binding_gate
   if (require_route or binding_gate["candidate_set_requested"]) and binding_gate["failures"]:
     raise RuntimeError("prefill route binding gate failed: " + "; ".join(binding_gate["failures"]))
@@ -470,13 +403,6 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
   ap.add_argument("--threshold", default="", help="explicit pass/fail threshold as inline JSON, e.g. '{\"pp512_min\":1629}' (F4)")
   ap.add_argument("--ledger", default="", help="path/URL to the ledger/refutation record for this candidate (F4)")
   ap.add_argument("--quality-gate", default="", help="path to a whole-model quality/correctness gate JSON with a 'status' field (F3)")
-  ap.add_argument("--six-row-research-policy", default="",
-                  help="explicitly enable the default-off non-JIT six-row research smoke with this policy")
-  ap.add_argument("--six-row-research-inventory",
-                  default="bench/prefill-pure-full-kernel/qwen3-14b-mixed-quant-candidate-inventory-v1.json")
-  ap.add_argument("--six-row-frozen-bundle", action="append", default=[], metavar="IDENTITY=PATH")
-  ap.add_argument("--six-row-fallback-program", action="append", default=[], metavar="IDENTITY=PROGRAM",
-                  help="fallback binding identity to declared direct-packed program identity")
   add_clock_pin_arg(ap)
   args = ap.parse_args(argv)
   profile = prefill_run_profile(
@@ -493,19 +419,6 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
     try: threshold = json.loads(args.threshold)
     except json.JSONDecodeError: threshold = {"raw": args.threshold}
   quality_gate = json.loads(pathlib.Path(args.quality_gate).read_text()) if args.quality_gate else None
-  six_row_research_authority = None
-  if args.six_row_research_policy:
-    from extra.qk.prefill.six_row_benchmark_bridge import (
-      build_exact_research_authority, parse_identity_assignments,
-    )
-    six_row_research_authority = build_exact_research_authority(
-      policy_path=args.six_row_research_policy,
-      frozen_bundles=parse_identity_assignments(args.six_row_frozen_bundle, label="frozen bundle"),
-      fallback_program_identities=parse_identity_assignments(
-        args.six_row_fallback_program, label="declared fallback program identity"),
-      inventory=args.six_row_research_inventory)
-  elif args.six_row_frozen_bundle or args.six_row_fallback_program:
-    ap.error("six-row bundle/fallback declarations require --six-row-research-policy")
   report = prefill_authority(model_path=args.model, K=profile.K, warmups=profile.warmups, rounds=profile.rounds,
                              start_positions=profile.start_positions, whole_lengths=profile.whole_lengths,
                              chunk_n=profile.chunk_n, max_context=profile.max_context, mode=profile.mode,
@@ -514,8 +427,7 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
                              comparator_id=args.comparator_id or None, candidate_id=args.candidate_id or None,
                              primitive_class=args.primitive_class or None, threshold=threshold,
                              ledger=args.ledger or None, quality_gate=quality_gate,
-                             model_profile_id=args.model_profile or None,
-                             six_row_research_authority=six_row_research_authority)
+                             model_profile_id=args.model_profile or None)
   if not args.no_artifact:
     out = pathlib.Path(args.artifact) if args.artifact else ARTIFACT_DIR / "latest.json"
     if not out.is_absolute(): out = ROOT / out
