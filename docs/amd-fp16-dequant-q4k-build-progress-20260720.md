@@ -1,5 +1,20 @@
 # BUILD PROGRESS / CONTINUATION: generated fp16-dequant Q4_K primitive (AMD)
 
+## ⭐ AUTHORITATIVE OUTCOME (2026-07-21) — read this first; supersedes all per-stage numbers below
+**The win (verified on the ONE canonical harness `extra/qk/prefill_whole_synced.py`, clean sequential A/B, no GPU contention):**
+
+| context | default (direct-packed) | packed-WMMA | llama | vs default | vs llama |
+|---|---|---|---|---|---|
+| @512 | 355 | 1850 | 1899 | **5.2×** | 97% |
+| @1024 | 348 | 1748 | 1836 | 5.0× | 95% |
+| @2048 | 335 | 1528 | 1762 | 4.6× | 87% |
+| @4096 | 317 | 1270 | 1655 | 4.0× | 77% |
+
+- **BANKED WIN: packed-WMMA prefill is a real ~5× over tinygrad's default, holding 4-5× at every context.** Scheduler-native (no bespoke kernel, no int8), correctness-gated (max_abs 0.0), landed as an opt-in production route.
+- **It does NOT beat llama** (geo-mean ~89%): ~parity at pp512 (within llama's ±100 run noise), trailing to 77% by pp4096. **The residual gap is the ATTENTION path scaling (per-chunk 277→511ms vs llama's flatter flash-attn), NOT the packed-WMMA GEMMs** — those are done+correct. Beyond-parity goal (≥105% geo-mean, ≥2000) NOT met; the next lever is a flash-attention-quality prefill continuation path, an attention problem orthogonal to everything here.
+- **Reproduce:** `TINYGRAD_PREFILL_PACKED_WMMA=1 DEV=AMD python -m extra.qk.prefill_whole_synced --whole-lengths 512,1024,2048,4096` (default off = fail-closed direct-packed baseline). Commits: `da28e5efd` (codegen geometry unlock), `b10f640be` (quant-aware warmstart key), `c35b5ff53` (production Q4K/Q6K PackedWMMA candidates).
+- **⚠️ Everything below this block is per-stage working history. Numbers like "1911 estimate", "1826 = parity", "1854 past llama" are SUPERSEDED scratch-bench overclaims — trust ONLY the canonical A/B above.** Do NOT re-explore: bespoke int8 mmq_llama stack (superseded), int8 on RDNA3 (no tensor-core rate edge), or scratch benches (use the canonical harness).
+
 ## PRIMITIVE-SUBSTRATE PIVOT (2026-07-20) — read this first
 The bespoke hand-authored `mmq_llama_*` UOp stack (below) is stuck on a multi-wave writeback codegen bug + spill wall. A cleaner path was proven: the **plain Tensor primitive** `x @ q4_k_reference(bytes).reshape(N,K).cast(half).transpose()` (USE_TC=1, no `.contiguous()`) is the *substrate* — the tinygrad scheduler produces it CORRECT (rel_rmse ~4.1e-4 at ALL real 14B shapes) and FUSED/non-materializing (single kernel, no dense fp16 weight ever allocated, even at the 178MB ffn shapes). Multi-wave correctness + non-materialization — the entire reason the bespoke stack existed — are **free** here.
 
