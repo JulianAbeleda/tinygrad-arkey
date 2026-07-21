@@ -38,6 +38,16 @@ Bottom-up steady-state (200 warmup, min-of-30, host-dispatch removed), all linea
 
 ---
 
+### PRIMITIVE-ROUTE VIABILITY SWEEP (2026-07-20) — only #2 viable; int8 moot; overhead second-order
+Tested all primitive-aligned routes to beyond-parity (scheduler-native, no bespoke stack):
+- **#2 codegen fix — VIABLE, LANDED (commit `da28e5efd`).** 17-line diff, 2 files: `postrange.py:449` validate accumulator ownership vs `subtiles_m*subtiles_n*8` not literal 64 (was silently forcing sm*sn==8); `kernel_lds.py:340` `_wave_ok` accepts CONST-0 for size-1 wave axes (was requiring live RANGE → wm=1 crash). Unlocks attn_kv machine-filling geometry (32×64/waves(1,2)=256 wg; 64×64/waves(2,2)=128 wg), correct on real GPU (max_abs 0.0), FFN path green, unit suite 76 pass/1 fail (pre-existing, confirmed by revert). Separate degenerate sm=1/sn=1 `shift_to` wall scoped out (not needed for ≥96-wg). Bench of unlocked geometry → whole-model tok/s: IN PROGRESS.
+- **#3 int8-through-substrate — VIABLE but MOOT on gfx1100.** The iu8 WMMA descriptor/renderer/LDS-staging already exist and are dtype-generic in CORE tinygrad (`tc.py:140-147` `(char,int)` entry, `cstyle.py:445` `wmma_i32_16x16x16_iu8`, `kernel_lds.py:24-31` dtype-agnostic) — NO bespoke stack forced. BUT RDNA3 iu8 uses the SAME `elements_per_thread=(16,16,8)` as fp16 → int8 issues at the SAME rate → no 2× edge (`docs/prefill-lessons-ledger.md:90-95`; 2× is RDNA4/CDNA only). Even fully built, int8 would NOT exceed fork B's ~69 TFLOP/s fp16 ceiling. Gaps if ever wanted (RDNA4): int8 output in `packed_weight.py` dequant_tile + block_q8_1 activation + DS4 as scheduler ops + a register-pressure spill at `test_stage1_int8_candidate_compiles_end_to_end`. **DECISION: skip — no throughput gain here.**
+- **#4 non-GEMM overhead — VIABLE but SECOND-ORDER.** SwiGLU already 1 fused kernel; residuals structurally pinned by multi-consumer CSE (`.contiguous()` are legit realize boundaries, dropping = recompute across 40 layers); codebase already hand-tuned for warmstart TC-kernel isolation (`model.py:403`). Recoverable ~1-4ms of 311ms body → single-digit tok/s. **DECISION: skip.**
+
+**Roadmap collapsed: #2 (attention occupancy, landed) is the sole primary lever → ~1900 est (beats llama). The >2000 push is NOT int8 — it's FFN-tiling headroom (fp16 WMMA 69 TFLOP/s ≈ 57% of ~120 peak).**
+
+---
+
 Living doc — resume the implementation from here if context is lost. Plan: [`amd-fp16-dequant-q4k-primitive-implementation-plan-20260720.md`](amd-fp16-dequant-q4k-primitive-implementation-plan-20260720.md). Decision/context: handoff §1.16 (AMD primitive = fp16-dequant-in-register), §1.15 (occupancy routing). Last updated 2026-07-20.
 
 ## CORRECTNESS FAIL-FAST RESULT (2026-07-20) — decode CORRECT, full-kernel GPU output WRONG
