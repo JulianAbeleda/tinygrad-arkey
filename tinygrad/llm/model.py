@@ -1237,9 +1237,14 @@ class Transformer:
       from tinygrad.llm.prefill_routes import packed_wmma_prefill_enabled
       if packed_wmma_prefill_enabled():
         model._packed_wmma_warmstart, model._packed_wmma_warmstart_contexts = model._build_packed_wmma_warmstart()
-    # For selected concrete-KV reuse, precompile the per-start_pos concrete prefill jits at load so the
-    # ~5s/jit compile tax is paid once here, not inline on a cold prompt -> every generation is warm.
-    if config.prefill_v2 and config.prefill_concrete_kv: model.precompile_concrete_prefill_jits()
+    # Concrete-KV is now the default prefill-v2 execution mode (see prefill_concrete_kv_auto_decision),
+    # so per-start_pos jits compile LAZILY on first use by default (cached on the model instance
+    # thereafter, model.py's `prefill_v2_jits.setdefault` at __call__) -- a cold prompt pays the
+    # ~5s/new-chunk-offset tax inline once, not ceil(max_context/ubatch)*~5s at every load. Only callers
+    # who explicitly declare workload reuse (prefill_workload_reuse, still off by default -- nothing
+    # currently sets it) pay that bounded precompile-at-load cost up front so every generation is warm.
+    if config.prefill_v2 and config.prefill_concrete_kv and config.prefill_workload_reuse:
+      model.precompile_concrete_prefill_jits()
     return model, kv
 
   def get_start_pos(self, tokens:list[int]) -> int:
@@ -1320,8 +1325,10 @@ class Transformer:
         # prefill v2: a CONCRETE-T chunk of all-real prompt tokens (start_pos still symbolic; only the token
         # dim must be concrete for tensor cores). remaining>=UBATCH => start_pos<prompt_len so we slice from t.
         # concrete start_pos -> KV=start_pos+T concrete -> attention TC fires (the validated 1.24x, byte-identical).
-        # Default ON for the FIRST chunk (start_pos==0): one cached concrete jit, no multi-chunk compile cost.
-        # Workload reuse selects concrete capture for all chunks (K jits, paid back by repeated requests).
+        # start_pos==0 is always concrete (one jit, unconditionally). prefill_concrete_kv is now the
+        # default for prefill-v2 (see prefill_concrete_kv_auto_decision) so CONTINUATION chunks (sp>0)
+        # also take the concrete/TC-attn path instead of the slow symbolic SDPA fallback -- each
+        # per-start_pos jit compiles lazily on first use and is cached on the model instance thereafter.
         use_concrete = (start_pos == 0) or self.config.prefill_concrete_kv
         sp, ntv = (start_pos if use_concrete else v_start_pos.bind(start_pos)), ubatch
         out = self(t[:, sp:sp+ubatch], sp, temp, use_flash=False).realize()

@@ -44,10 +44,16 @@ def prefill_policy_uses_overlay(policy:Mapping[str, Any]|None) -> bool:
   return prefill_policy_strategy(policy) == "FULL_RESIDENT_OVERLAY"
 
 def prefill_concrete_kv_auto_decision(workload_reuse:bool, prefill_v2_on:bool) -> tuple[bool, str]:
-  # Precompile pays off only when the caller declares that generated workload will be reused.
+  # Concrete-KV (the TC-attention fast path, model.py's `isinstance(start_pos, int)` gate) is the
+  # default execution mode for every prefill-v2 chunk, not an opt-in: a symbolic start_pos (the
+  # `v_start_pos.bind(sp)` continuation-chunk fallback) never satisfies that isinstance check, so
+  # every chunk past the first would otherwise take the slow SDPA path regardless of `workload_reuse`.
+  # Each per-start_pos jit still compiles lazily on first use (~5s) and is cached on the model instance
+  # for its lifetime (see model.py's `prefill_v2_jits.setdefault`), so only the first request to touch a
+  # given chunk offset pays the tax; `workload_reuse` (unused here) separately gates EAGER precompile-at-load
+  # (model.py's `precompile_concrete_prefill_jits`) for callers who want that tax paid up front instead.
   if not prefill_v2_on: return (False, "selected prefill representation is off -> concrete-KV moot")
-  if workload_reuse: return (True, "workload reuse + concrete prefill representation -> precompile concrete jits")
-  return (False, "one-shot workload -> no concrete-KV precompile")
+  return (True, "prefill-v2 concrete-KV attention is the default execution path; per-start_pos jits compile lazily and cache")
 
 def prefill_v2_validate_ubatch(ubatch:int) -> None:
   if ubatch not in _CONCRETE_PREFILL_VALIDATED_M:

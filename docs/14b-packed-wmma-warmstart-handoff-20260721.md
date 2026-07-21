@@ -1,8 +1,17 @@
 ## Summary
 
-Packed-WMMA is now the default 14B prefill route (`6ca798568`). It hits ~1829 tok/s at pp512 — ~5.2× over the old direct-packed baseline (~354 tok/s), and at parity with llama.cpp (~1837 tok/s).
+Packed-WMMA is now the default 14B prefill route (`6ca798568`). It hits ~1829 tok/s at pp512 — ~5.2× over the old direct-packed baseline (~354 tok/s), and roughly at parity with llama.cpp (~1837 tok/s) at pp512.
 
-There's a remaining ~6% gap to the theoretical ceiling (~1940 tok/s, projected from the hand kernel `build_gemm_lds2_q4k` scaled to 14B). This doc records what was tried to close it and why none of it worked.
+## ⚠️ UPDATE (2026-07-21, VERIFIED) — two follow-ups tested; supersedes the ceiling framing below
+**(1) The real prize was a `concrete_kv` wiring bug — FIXED.** Real `model.generate()` multi-chunk prefill was cratering because `_workload_reuse=False` is hardcoded → `prefill_concrete_kv` was always False → every continuation chunk (sp>0) took the slow symbolic SDPA path. `prefill_concrete_kv_auto_decision` now defaults concrete-KV **on** for prefill-v2 (lazy per-start_pos jit compile, no load-time precompile tax; eager precompile still gated behind the off-by-default `prefill_workload_reuse`). **Verified real 14B generate() multi-context: pp1024 530→1664, pp2048 280→1515, pp4096 152→1258 tok/s (3–8× recovery); pp512 unchanged; load +0.** This affected the default route for every >512-token prompt — it was the biggest, cheapest win, far larger than the pp512 GEMM ceiling.
+
+**(2) The "teach the scheduler UPCAST/UNROLL" idea below is a DEAD END — tested.** Direct measurement on ffn_gate_up: the 8B UPCAST/UNROLL warmstart recipe on a contiguous-fp16 weight = **6.6 TFLOP/s vs the shipped packed-WMMA's 9.5 — i.e. 31% SLOWER** (opts confirmed applied). The packed route's speed comes from its `candidate_context` tile geometry (`PACKED_WMMA_GEOM`/`kernel_vocabulary`), NOT the postrange Opt list. So UPCAST/UNROLL is not the missing lever; the doc's premise ("14B is slow *because* it can't take UPCAST/UNROLL") is a spurious correlation (8B is faster mainly because it's a smaller model). Any residual pp512 ceiling upside is in **`candidate_context` geometry search** (tm/tn/tk/waves/LDS), not warmstart-opt richness. Do NOT build the scheduler-UPCAST/UNROLL primitive.
+
+**Still open (real project, not a config fix): flash-attention for prefill.** Both prefill attention branches materialize the full T×KV score matrix; the only flash kernel is decode-only (hard-gated T==1). Even after the concrete_kv fix, attention scales worse than llama's flash-attn at very large contexts — closing that residual needs a new flash-*prefill* kernel (query-dim tiling + online-softmax), deferred.
+
+---
+
+There's a remaining ~6% gap to a *theoretical* ceiling (~1940 tok/s, projected from the hand kernel `build_gemm_lds2_q4k` scaled to 14B). **NOTE (superseded by the UPDATE above): that ceiling is projected from the 8B fp16-overlay speed, a path 14B can't use (it OOMs), and the UPCAST/UNROLL lever this doc proposes to close it was tested and is a dead end.** The section below records what was tried; read it as history, corrected by the UPDATE.
 
 ## Current state
 
