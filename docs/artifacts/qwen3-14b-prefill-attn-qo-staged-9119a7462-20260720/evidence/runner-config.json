@@ -1,0 +1,8 @@
+{
+  "authority_snapshot": "/tmp/qk-attn-qo-9119a7462-20260720/c7-authority-snapshot.json",
+  "composition": "/tmp/qk-attn-qo-9119a7462-20260720/c6-composition.json",
+  "frozen_bundle": "/home/ubuntu/tinygrad-arkey/docs/artifacts/qwen3-14b-prefill-attn-qo-staged-951d3615c-20260719/bundle",
+  "qualification_aql": "/tmp/qk-attn-qo-9119a7462-20260720/direct-packed-aql-qualification.json",
+  "qualification_pm4": "/tmp/qk-attn-qo-9119a7462-20260720/direct-packed-pm4-qualification.json",
+  "staged_family_manifest": "/home/ubuntu/tinygrad-arkey/docs/artifacts/qwen3-14b-prefill-attn-qo-staged-951d3615c-20260719/evidence/qk-attn-qo-staged-951d3615c-final-r1-20260719-family.json"
+}

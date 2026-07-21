@@ -1,0 +1,150 @@
+{
+  "child": {
+    "breadcrumbs": [
+      {
+        "complete_role_ms": 31.865882,
+        "invocation_index": 0,
+        "persistent_session_lifecycle": {
+          "buffer_ranges": {
+            "compact_q4_stage": [
+              126967568035840,
+              126967568773120
+            ],
+            "compact_q8_scales_stage": [
+              126968338411520,
+              126968338427904
+            ],
+            "compact_q8_sums_stage": [
+              126968338165760,
+              126968338182144
+            ],
+            "compact_q8_values_stage": [
+              126967567904768,
+              126967568035840
+            ],
+            "full_q4_source": [
+              126967342891008,
+              126967357636608
+            ],
+            "full_q8_scales_source": [
+              126967561367552,
+              126967561695232
+            ],
+            "full_q8_sums_source": [
+              126967497809920,
+              126967498137600
+            ],
+            "full_q8_values_source": [
+              126967366549504,
+              126967369170944
+            ],
+            "output": [
+              126967330373632,
+              126967340859392
+            ]
+          },
+          "initialization_count": 1,
+          "invocation_count": 1,
+          "runtime_identity": {
+            "entry_va": 126968321663232,
+            "library_nbytes": 77824,
+            "library_va": 126968321662976,
+            "object_id": 126967358189840,
+            "program_key": "3f478e6d89a2de467f6b7d1ca18418cdfd0cdb19de05db1d66608e65a5e6475f"
+          },
+          "signature": {
+            "epoch_limit": 20,
+            "epoch_start": 0,
+            "frozen_bundle": "/home/ubuntu/tinygrad-arkey/docs/artifacts/qwen3-14b-prefill-attn-qo-staged-951d3615c-20260719/bundle",
+            "in_kernel_accumulate": true,
+            "n_chunk_tiles": 40,
+            "persistent_buffers": true,
+            "preloaded_epochs": true,
+            "role": "attn_qo",
+            "shape": [
+              512,
+              5120,
+              5120
+            ],
+            "stable_epoch_staging": true,
+            "stable_metadata_staging": true,
+            "sync_each_epoch": true,
+            "wait_each_dispatch": true
+          }
+        },
+        "position": 0,
+        "receipt_schema": "tinygrad.mmq_q4k_q8_1.frozen_staged_candidate_timing_receipt.v1",
+        "receipt_status": "PASS",
+        "route": "staged_candidate"
+      }
+    ],
+    "clock_identity": "clock-policy-0",
+    "completed_positions": 1,
+    "effective_queue_attestation": {
+      "all_checks_pass": true,
+      "authority": "instantiated_device_state",
+      "checks": {
+        "environment_matches_requested": true,
+        "queue_class_matches_effective": true,
+        "requested_matches_effective": true
+      },
+      "device": "AMD",
+      "effective_queue_class": "tinygrad.runtime.ops_amd.AMDComputeQueue",
+      "effective_queue_mode": "PM4",
+      "environment_amd_aql": "0",
+      "expected_queue_class": "tinygrad.runtime.ops_amd.AMDComputeQueue",
+      "requested_queue_mode": "PM4",
+      "schema": "tinygrad.mmq_q4k_q8_1.frozen_staged_c8_persistent_sessions.v1.effective_queue_attestation"
+    },
+    "evidence_identity": "sha256:19279136c2713fc2a7ad6b464a4353ec8260eb53c966331078b44e82c4a200a8",
+    "exact_blocker": null,
+    "family_identity": "sha256:2cfc30075f8024cee8a927c2c3de2e87eef3db6d83882da69faa0fe0a3cc1e4f",
+    "invocation_counts": {
+      "direct_packed": 0,
+      "staged_candidate": 1
+    },
+    "invocation_failure": null,
+    "no_queue_fallback": true,
+    "no_retry": true,
+    "persistent_child_session": true,
+    "production_dispatch_changed": false,
+    "queue_mode": "PM4",
+    "schema": "tinygrad.mmq_q4k_q8_1.frozen_staged_c8_route_sequence.v1",
+    "sequence": [
+      "staged_candidate"
+    ],
+    "session_identity": "sha256:6b3c924636da5bcb46043a25970b020c5b5a2c4d51a82e4f19f699fa7f3500d9",
+    "status": "PASS"
+  },
+  "elapsed_seconds": 16.128435377962887,
+  "error": null,
+  "evidence_identity": "sha256:9ef39deb820c55fcc817fc19657f0d620bb66e4561363d7566970d8014462be9",
+  "exact_blocker": null,
+  "health_after": true,
+  "health_before": true,
+  "kernel_fault_evidence": {
+    "blocks": [],
+    "limits": {
+      "max_blocks": 8,
+      "max_line_chars": 512,
+      "max_lines": 32
+    },
+    "relevant_line_count": 0,
+    "retained_line_count": 0,
+    "schema": "tinygrad.amd_kernel_fault_evidence.v1",
+    "source": "kernel_journal_window",
+    "status": "CLEAR",
+    "truncated": false
+  },
+  "kernel_faults": [],
+  "no_queue_fallback": true,
+  "no_retry": true,
+  "queue_mode": "PM4",
+  "schema": "tinygrad.mmq_q4k_q8_1.frozen_staged_c8_route_sequence.v1.guarded",
+  "sequence": [
+    "staged_candidate"
+  ],
+  "spawn_count": 1,
+  "status": "PASS",
+  "timed_out": false
+}

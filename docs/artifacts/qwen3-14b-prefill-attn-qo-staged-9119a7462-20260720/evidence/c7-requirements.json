@@ -1,0 +1,18 @@
+{
+  "compact_stage_bytes": 901120,
+  "components": {
+    "compact_q4_stage": 737280,
+    "compact_q8_scales_stage": 16384,
+    "compact_q8_sums_stage": 16384,
+    "compact_q8_values_stage": 131072,
+    "full_q4_source": 14745600,
+    "full_q8_scales_source": 327680,
+    "full_q8_sums_source": 327680,
+    "full_q8_values_source": 2621440,
+    "output": 10485760
+  },
+  "epoch_count": 20,
+  "family_identity": "sha256:2cfc30075f8024cee8a927c2c3de2e87eef3db6d83882da69faa0fe0a3cc1e4f",
+  "full_source_bytes": 18022400,
+  "output_bytes": 10485760
+}

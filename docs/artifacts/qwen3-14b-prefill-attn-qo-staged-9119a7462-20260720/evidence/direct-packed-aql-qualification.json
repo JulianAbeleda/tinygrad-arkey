@@ -1,0 +1,290 @@
+{
+  "fallback_evidence": {
+    "artifact_identity": "sha256:bc4289a5ee887debbd03abacc0c23c4c6f47558dc26defe11f5e62086ef549ca",
+    "artifact_schema": "tinygrad.direct_packed.compiled_linear_executable.v1",
+    "binary_sha256": "56188261499a0e14b484974f175af17a1be6e7c275cb8007e1e99914fa8166e2",
+    "clock_identity": "clock-policy-0",
+    "comparator_identity": "sha256:76d5a2dbdbfe2411ad02ec67f3bfd473e2df9eab00e8f6ed487473825440b26e",
+    "device_identity": "sha256:392f9b14a5b73962ab30addad4273014bb446ddde4dbed7786c63d461023abf5",
+    "evidence_identity": "sha256:64cca135b86067ce87d2dbe286aa7361a67d301635a501c33b629a83c1158d2f",
+    "executable_identity": "sha256:5f2d8d2ae653c228856f679bf947dfacae69cf7f9aafaae500de8bc31158e090",
+    "input_identity": "sha256:165771c7f98a70582a623a4b96fdbdb4247ed0109e3412c2c166f7476914acea",
+    "queue_mode": "AQL",
+    "route_id": "direct_packed",
+    "schema": "tinygrad.direct_packed.complete_role_fallback.v1",
+    "software_identity": "sha256:c75c6266c6ceeb782ceb1849243ad1bbcb836314a2dc045c47a6adb1e7d06a1d",
+    "status": "PASS",
+    "workload_identity": "sha256:1d89d6703d7c6a0d94ae1fe53d872f4193494b814ef3c3db51971cac3dc96ca9"
+  },
+  "observation": {
+    "manifest": {
+      "aggregate_binary_sha256": "56188261499a0e14b484974f175af17a1be6e7c275cb8007e1e99914fa8166e2",
+      "artifact_schema": "tinygrad.direct_packed.compiled_linear_executable.v1",
+      "calls": [
+        {
+          "arguments": [
+            {
+              "device": "AMD",
+              "dtype": "dtypes.uint",
+              "op": "BUFFER",
+              "shape": [
+                3686400
+              ]
+            },
+            {
+              "device": "NPY",
+              "dtype": "dtypes.uint",
+              "op": "BUFFER",
+              "shape": [
+                3686400
+              ]
+            }
+          ],
+          "nbytes": 14745600,
+          "operation": "COPY",
+          "ordinal": 0
+        },
+        {
+          "arguments": [
+            {
+              "device": "AMD",
+              "dtype": "dtypes.float",
+              "op": "BUFFER",
+              "shape": [
+                2621440
+              ]
+            },
+            {
+              "device": "NPY",
+              "dtype": "dtypes.float",
+              "op": "BUFFER",
+              "shape": [
+                2621440
+              ]
+            }
+          ],
+          "nbytes": 10485760,
+          "operation": "COPY",
+          "ordinal": 1
+        },
+        {
+          "arguments": [
+            {
+              "device": "AMD",
+              "dtype": "dtypes.half",
+              "op": "BUFFER",
+              "shape": [
+                2621440
+              ]
+            },
+            {
+              "device": "AMD",
+              "dtype": "dtypes.float",
+              "op": "BUFFER",
+              "shape": [
+                2621440
+              ]
+            }
+          ],
+          "operation": "PROGRAM",
+          "ordinal": 2,
+          "program_index": 0
+        },
+        {
+          "arguments": [
+            {
+              "device": "AMD",
+              "dtype": "dtypes.half",
+              "op": "BUFFER",
+              "shape": [
+                2621440
+              ]
+            },
+            {
+              "device": "AMD",
+              "dtype": "dtypes.half",
+              "op": "BUFFER",
+              "shape": [
+                2621440
+              ]
+            }
+          ],
+          "operation": "PROGRAM",
+          "ordinal": 3,
+          "program_index": 1
+        },
+        {
+          "arguments": [
+            {
+              "device": "AMD",
+              "dtype": "dtypes.float",
+              "op": "BUFFER",
+              "shape": [
+                2621440
+              ]
+            },
+            {
+              "device": "AMD",
+              "dtype": "dtypes.uint",
+              "op": "BUFFER",
+              "shape": [
+                3686400
+              ]
+            },
+            {
+              "device": "AMD",
+              "dtype": "dtypes.half",
+              "op": "BUFFER",
+              "shape": [
+                2621440
+              ]
+            }
+          ],
+          "operation": "PROGRAM",
+          "ordinal": 4,
+          "program_index": 2
+        }
+      ],
+      "direct_packed_program_ordinals": [
+        4
+      ],
+      "executable_identity": "sha256:5f2d8d2ae653c228856f679bf947dfacae69cf7f9aafaae500de8bc31158e090",
+      "programs": [
+        {
+          "binary_nbytes": 4928,
+          "binary_sha256": "396d4a8a5ab661bec64c92c31bc155b2bdb44b063291e4d7e03d873fc0fd3f5c",
+          "call_ordinal": 2,
+          "execution_device": "AMD",
+          "function_name": "E_20480_32_4_eca9739f9c86207e5f51f3823264a72431ade2de30fa53b24395b7de09f5ed46",
+          "global_size": [
+            20480,
+            1,
+            1
+          ],
+          "globals": [
+            0,
+            1
+          ],
+          "ins": [
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "outs": [
+            0
+          ],
+          "program_key": "df1d61425a36a5a773adb8fea830b9b0d9ea4f80003d5abb07540629b6469eb1",
+          "program_name": "E\u001b[90m_\u001b[0m\u001b[34m20480\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m_eca9739f9c86207e5f51f3823264a72431ade2de30fa53b24395b7de09f5ed46\u001b[0m",
+          "source_sha256": "9a73425dbb73476630c196427b8e861eea9bbf4f0f857f50f9e6ebd32594d1db",
+          "target": "AMD",
+          "values": []
+        },
+        {
+          "binary_nbytes": 4800,
+          "binary_sha256": "387f73749a1f2f259f3dd74ef5ad3ee9bc532885dc4f67d9595d73b351d9722c",
+          "call_ordinal": 3,
+          "execution_device": "AMD",
+          "function_name": "E_20480_32_4_5babc4c68abfe2ea8626949d21af548a958f3d9203578af2971ba89293354fc7",
+          "global_size": [
+            20480,
+            1,
+            1
+          ],
+          "globals": [
+            0,
+            1
+          ],
+          "ins": [
+            1
+          ],
+          "local_size": [
+            32,
+            1,
+            1
+          ],
+          "outs": [
+            0
+          ],
+          "program_key": "c7f95724e9c786eeefc8719e21d3e19c3b77959d4279d6bc123fb2ce821beee9",
+          "program_name": "E\u001b[90m_\u001b[0m\u001b[34m20480\u001b[0m\u001b[90m_\u001b[0m\u001b[36m32\u001b[0m\u001b[90m_\u001b[0m\u001b[33m4\u001b[0m\u001b[90m_5babc4c68abfe2ea8626949d21af548a958f3d9203578af2971ba89293354fc7\u001b[0m",
+          "source_sha256": "363faad2be1ec4767d8cbf31da0dac30c0f7b04c35b8bdfcd50d0f96a50da291",
+          "target": "AMD",
+          "values": []
+        },
+        {
+          "binary_nbytes": 14136,
+          "binary_sha256": "e454661f71880ef465d4e92d23dc29f1b75c6c788d3c965aa4959374ca602d9a",
+          "call_ordinal": 4,
+          "execution_device": "AMD",
+          "function_name": "q4k_gen_prefill_direct_out_5120_5120_512",
+          "global_size": [
+            8,
+            80,
+            1
+          ],
+          "globals": [
+            0,
+            1,
+            2
+          ],
+          "ins": [
+            1,
+            2
+          ],
+          "local_size": [
+            16,
+            16,
+            1
+          ],
+          "outs": [
+            0
+          ],
+          "program_key": "840a0eada25fa087c455e258b017245924acc6f649b4f2a461afc629988a9ab1",
+          "program_name": "q4k_gen_prefill_direct_out_5120_5120_512",
+          "source_sha256": "8c4f640ed6cd38ec933004324e1a1e2eaeaf08f0194a3f037e8141133efddd2d",
+          "target": "AMD",
+          "values": []
+        }
+      ],
+      "queue_mode": "AQL",
+      "variables": {}
+    },
+    "observation_identity": "sha256:850a75a224abd181b84dadd2d5b097f9850259a2a7449f185d686b0d6f11c1cc",
+    "post_sync_attestation": true,
+    "profile_code_objects_verified": 0,
+    "queue_mode": "AQL",
+    "runtime_cache_join_verified": true,
+    "runtime_programs": [
+      {
+        "binary_sha256": "396d4a8a5ab661bec64c92c31bc155b2bdb44b063291e4d7e03d873fc0fd3f5c",
+        "device": "AMD",
+        "function_name": "E_20480_32_4_eca9739f9c86207e5f51f3823264a72431ade2de30fa53b24395b7de09f5ed46",
+        "program_key": "df1d61425a36a5a773adb8fea830b9b0d9ea4f80003d5abb07540629b6469eb1"
+      },
+      {
+        "binary_sha256": "387f73749a1f2f259f3dd74ef5ad3ee9bc532885dc4f67d9595d73b351d9722c",
+        "device": "AMD",
+        "function_name": "E_20480_32_4_5babc4c68abfe2ea8626949d21af548a958f3d9203578af2971ba89293354fc7",
+        "program_key": "c7f95724e9c786eeefc8719e21d3e19c3b77959d4279d6bc123fb2ce821beee9"
+      },
+      {
+        "binary_sha256": "e454661f71880ef465d4e92d23dc29f1b75c6c788d3c965aa4959374ca602d9a",
+        "device": "AMD",
+        "function_name": "q4k_gen_prefill_direct_out_5120_5120_512",
+        "program_key": "840a0eada25fa087c455e258b017245924acc6f649b4f2a461afc629988a9ab1"
+      }
+    ],
+    "schema": "tinygrad.direct_packed.compiled_linear_observation.v1",
+    "status": "PASS"
+  },
+  "production_dispatch_changed": false,
+  "qualification_identity": "sha256:c430eabfca8241cd4f4197f99fd0b8c3429e32724de7139ffa0c428ea3308bf3",
+  "qualification_only": true,
+  "queue_mode": "AQL",
+  "schema": "tinygrad.direct_packed.executable_qualification.v1",
+  "status": "PASS",
+  "timing_samples_collected": false
+}

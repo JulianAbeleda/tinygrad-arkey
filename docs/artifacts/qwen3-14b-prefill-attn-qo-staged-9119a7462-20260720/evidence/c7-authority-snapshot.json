@@ -1,0 +1,242 @@
+{
+  "allocation_granularity_bytes": 4096,
+  "allocator_identity": "sha256:0ab3d83385db9cfffbd6a3e88b5c19ae1dbaef6db249a5c8434d5fcf856e9124",
+  "allocator_implementation": {
+    "allocator": {
+      "class": "tinygrad.runtime.ops_amd.AMDAllocator",
+      "source": "tinygrad/runtime/ops_amd.py",
+      "source_sha256": "sha256:a40ba58c8329495c5298df6b4ab2097e21d60c36cd1947706e9b45111029789b"
+    },
+    "interface": {
+      "class": "tinygrad.runtime.ops_amd.KFDIface",
+      "source": "tinygrad/runtime/ops_amd.py",
+      "source_sha256": "sha256:a40ba58c8329495c5298df6b4ab2097e21d60c36cd1947706e9b45111029789b"
+    }
+  },
+  "budget": {
+    "admitted_bytes": 25248309248,
+    "policy": "minimum_of_pm4_aql_scanned_device_memory_budget",
+    "provenance": "minimum of independent PM4/AQL live free VRAM minus each scan's live occupied-byte disturbance reserve, rounded to their equal scanned allocator granularity",
+    "queue_budgets": {
+      "AQL": {
+        "admitted_bytes": 25248309248,
+        "free_bytes": 25500667904,
+        "provenance": {
+          "detail": "live free VRAM minus live occupied-byte disturbance reserve, rounded to scanned allocator granularity",
+          "source": "rocm-smi --showmeminfo vram"
+        },
+        "reserve_bytes": 252358656
+      },
+      "PM4": {
+        "admitted_bytes": 25248317440,
+        "free_bytes": 25500672000,
+        "provenance": {
+          "detail": "live free VRAM minus live occupied-byte disturbance reserve, rounded to scanned allocator granularity",
+          "source": "rocm-smi --showmeminfo vram"
+        },
+        "reserve_bytes": 252354560
+      }
+    }
+  },
+  "device_identity": "sha256:392f9b14a5b73962ab30addad4273014bb446ddde4dbed7786c63d461023abf5",
+  "memory_authority": {
+    "allocation_granularity_bytes": 4096,
+    "allocator_identity": "sha256:0ab3d83385db9cfffbd6a3e88b5c19ae1dbaef6db249a5c8434d5fcf856e9124",
+    "budget_identity": "sha256:c456fcd858d53f627aefc471b08abcf717b9189f5bb10db27bb309bc361e4ab0",
+    "device_identity": "sha256:392f9b14a5b73962ab30addad4273014bb446ddde4dbed7786c63d461023abf5",
+    "software_identity": "sha256:c75c6266c6ceeb782ceb1849243ad1bbcb836314a2dc045c47a6adb1e7d06a1d"
+  },
+  "queue_neutral_hardware": {
+    "architecture": "gfx1100",
+    "backend": "AMD",
+    "capabilities": {
+      "global_allocation_granularity": 4096,
+      "lds_allocation_granularity": null,
+      "lds_bytes": 65536,
+      "max_workgroup_dimensions": [
+        1024,
+        1024,
+        1024
+      ],
+      "max_workgroup_threads": 1024,
+      "wave_size": 32
+    },
+    "schema_version": 2,
+    "selected_device": "AMD",
+    "total_vram_bytes": 25753026560
+  },
+  "queue_observations": {
+    "AQL": {
+      "allocation_granularity_bytes": 4096,
+      "allocator_implementation": {
+        "allocator": {
+          "class": "tinygrad.runtime.ops_amd.AMDAllocator",
+          "source": "tinygrad/runtime/ops_amd.py",
+          "source_sha256": "sha256:a40ba58c8329495c5298df6b4ab2097e21d60c36cd1947706e9b45111029789b"
+        },
+        "interface": {
+          "class": "tinygrad.runtime.ops_amd.KFDIface",
+          "source": "tinygrad/runtime/ops_amd.py",
+          "source_sha256": "sha256:a40ba58c8329495c5298df6b4ab2097e21d60c36cd1947706e9b45111029789b"
+        }
+      },
+      "budget": {
+        "admitted_bytes": 25248309248,
+        "free_bytes": 25500667904,
+        "provenance": {
+          "detail": "live free VRAM minus live occupied-byte disturbance reserve, rounded to scanned allocator granularity",
+          "source": "rocm-smi --showmeminfo vram"
+        },
+        "reserve_bytes": 252358656
+      },
+      "facts": {
+        "architecture": "gfx1100",
+        "backend": "AMD",
+        "capabilities": {
+          "global_allocation_granularity": 4096,
+          "lds_allocation_granularity": null,
+          "lds_bytes": 65536,
+          "max_workgroup_dimensions": [
+            1024,
+            1024,
+            1024
+          ],
+          "max_workgroup_threads": 1024,
+          "wave_size": 32
+        },
+        "errors": [],
+        "free_vram_bytes": 25500667904,
+        "memory_probe": {
+          "error": null,
+          "observed_at": "2026-07-20T12:29:12.479502+00:00",
+          "source": "rocm-smi --showmeminfo vram",
+          "state": "ok"
+        },
+        "queue_mode": "AQL",
+        "schema_version": 2,
+        "selected_device": "AMD",
+        "target_probe": {
+          "error": null,
+          "observed_at": "2026-07-20T12:29:12.479502+00:00",
+          "source": "tinygrad-device + rocminfo",
+          "state": "ok"
+        },
+        "total_vram_bytes": 25753026560
+      },
+      "queue_mode": "AQL",
+      "queue_neutral_hardware": {
+        "architecture": "gfx1100",
+        "backend": "AMD",
+        "capabilities": {
+          "global_allocation_granularity": 4096,
+          "lds_allocation_granularity": null,
+          "lds_bytes": 65536,
+          "max_workgroup_dimensions": [
+            1024,
+            1024,
+            1024
+          ],
+          "max_workgroup_threads": 1024,
+          "wave_size": 32
+        },
+        "schema_version": 2,
+        "selected_device": "AMD",
+        "total_vram_bytes": 25753026560
+      }
+    },
+    "PM4": {
+      "allocation_granularity_bytes": 4096,
+      "allocator_implementation": {
+        "allocator": {
+          "class": "tinygrad.runtime.ops_amd.AMDAllocator",
+          "source": "tinygrad/runtime/ops_amd.py",
+          "source_sha256": "sha256:a40ba58c8329495c5298df6b4ab2097e21d60c36cd1947706e9b45111029789b"
+        },
+        "interface": {
+          "class": "tinygrad.runtime.ops_amd.KFDIface",
+          "source": "tinygrad/runtime/ops_amd.py",
+          "source_sha256": "sha256:a40ba58c8329495c5298df6b4ab2097e21d60c36cd1947706e9b45111029789b"
+        }
+      },
+      "budget": {
+        "admitted_bytes": 25248317440,
+        "free_bytes": 25500672000,
+        "provenance": {
+          "detail": "live free VRAM minus live occupied-byte disturbance reserve, rounded to scanned allocator granularity",
+          "source": "rocm-smi --showmeminfo vram"
+        },
+        "reserve_bytes": 252354560
+      },
+      "facts": {
+        "architecture": "gfx1100",
+        "backend": "AMD",
+        "capabilities": {
+          "global_allocation_granularity": 4096,
+          "lds_allocation_granularity": null,
+          "lds_bytes": 65536,
+          "max_workgroup_dimensions": [
+            1024,
+            1024,
+            1024
+          ],
+          "max_workgroup_threads": 1024,
+          "wave_size": 32
+        },
+        "errors": [],
+        "free_vram_bytes": 25500672000,
+        "memory_probe": {
+          "error": null,
+          "observed_at": "2026-07-20T12:29:11.790519+00:00",
+          "source": "rocm-smi --showmeminfo vram",
+          "state": "ok"
+        },
+        "queue_mode": "PM4",
+        "schema_version": 2,
+        "selected_device": "AMD",
+        "target_probe": {
+          "error": null,
+          "observed_at": "2026-07-20T12:29:11.790519+00:00",
+          "source": "tinygrad-device + rocminfo",
+          "state": "ok"
+        },
+        "total_vram_bytes": 25753026560
+      },
+      "queue_mode": "PM4",
+      "queue_neutral_hardware": {
+        "architecture": "gfx1100",
+        "backend": "AMD",
+        "capabilities": {
+          "global_allocation_granularity": 4096,
+          "lds_allocation_granularity": null,
+          "lds_bytes": 65536,
+          "max_workgroup_dimensions": [
+            1024,
+            1024,
+            1024
+          ],
+          "max_workgroup_threads": 1024,
+          "wave_size": 32
+        },
+        "schema_version": 2,
+        "selected_device": "AMD",
+        "total_vram_bytes": 25753026560
+      }
+    }
+  },
+  "schema": "tinygrad.mmq_q4k_q8_1.staged_c7_dual_queue_authority.v1",
+  "selected_device": "AMD",
+  "snapshot_identity": "sha256:3b4ec3ed7193c7c181d0305a9ad985f875703bc402f5ebeb933cb50994556a63",
+  "software": {
+    "python_implementation": "CPython",
+    "python_version": "3.12.3",
+    "repository": {
+      "clean": true,
+      "commit": "9119a7462d046b62c6efafb9a6329e9de53c26c4",
+      "tree": "24550e986c15db9508c9d695ed7fdbc6aab2e3ff",
+      "vcs": "git"
+    },
+    "semantics": "clean tinygrad repository commit and tree executing both DeviceFacts scans and the subsequent staged C7 collector"
+  },
+  "software_identity": "sha256:c75c6266c6ceeb782ceb1849243ad1bbcb836314a2dc045c47a6adb1e7d06a1d",
+  "status": "PASS"
+}

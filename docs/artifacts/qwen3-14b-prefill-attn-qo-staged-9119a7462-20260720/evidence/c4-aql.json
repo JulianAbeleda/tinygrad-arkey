@@ -1,0 +1,221 @@
+{
+  "all_checks_pass": true,
+  "binary_sha256": "dfb213624287a8dec10f8646d8c16e49651efee8e0ca27c67ff982b0d6b050bf",
+  "checks": {
+    "binary_sha256_matches": true,
+    "captured_output_strings": true,
+    "child_status_passed": true,
+    "compile_performed_false": true,
+    "elapsed_nonnegative": true,
+    "error_none": true,
+    "family_identity_matches": true,
+    "health_after": true,
+    "health_before": true,
+    "kernel_fault_evidence_attested": true,
+    "kernel_faults_clean": true,
+    "launched_true": true,
+    "nested_faults_match": true,
+    "nested_health_matches": true,
+    "nested_target_dispatch_count_matches": true,
+    "outer_parent_authority_exact": true,
+    "program_key_matches": true,
+    "queue_mode_matches": true,
+    "requires_recompile_false": true,
+    "role_matches": true,
+    "shape_matches": true,
+    "status_pass": true,
+    "target_dispatch_count_zero": true,
+    "timed_out_false": true,
+    "timeout_positive": true
+  },
+  "child_status": "passed",
+  "compile_performed": false,
+  "containment_authority": "outer_parent_fresh_process_guards",
+  "elapsed_seconds": 5.485833297017962,
+  "error": null,
+  "exact_blocker": null,
+  "family_identity": "sha256:2cfc30075f8024cee8a927c2c3de2e87eef3db6d83882da69faa0fe0a3cc1e4f",
+  "health_after": true,
+  "health_before": true,
+  "kernel_fault_evidence": {
+    "blocks": [],
+    "limits": {
+      "max_blocks": 8,
+      "max_line_chars": 512,
+      "max_lines": 32
+    },
+    "relevant_line_count": 0,
+    "retained_line_count": 0,
+    "schema": "tinygrad.amd_kernel_fault_evidence.v1",
+    "source": "kernel_journal_window",
+    "status": "CLEAR",
+    "truncated": false
+  },
+  "kernel_faults": [],
+  "launched": true,
+  "program_key": "3f478e6d89a2de467f6b7d1ca18418cdfd0cdb19de05db1d66608e65a5e6475f",
+  "queue_mode": "AQL",
+  "requires_recompile": false,
+  "role": "attn_qo",
+  "runtime_canary": {
+    "all_checks_pass": true,
+    "amd_aql_effective": true,
+    "binary_sha256": "dfb213624287a8dec10f8646d8c16e49651efee8e0ca27c67ff982b0d6b050bf",
+    "checks": {
+      "binary_sha256_matches": true,
+      "code_ranges_valid": true,
+      "compile_performed_false": true,
+      "effective_queue_mode_attested": true,
+      "family_identity_matches": true,
+      "health_after": true,
+      "health_before": true,
+      "kernel_faults_clean": true,
+      "manifest_has_one_compact_program": true,
+      "program_key_matches": true,
+      "queue_class_attested": true,
+      "queue_mode_matches": true,
+      "requires_recompile_false": true,
+      "runtime_cache_binding_exact": true,
+      "runtime_class_attested": true,
+      "runtime_count_exact": true,
+      "status_pass": true,
+      "target_dispatch_count_zero": true,
+      "timeline_clean": true
+    },
+    "code_ranges_valid": true,
+    "compile_performed": false,
+    "exact_blocker": null,
+    "family_identity": "sha256:2cfc30075f8024cee8a927c2c3de2e87eef3db6d83882da69faa0fe0a3cc1e4f",
+    "health_after": true,
+    "health_before": true,
+    "kernel_fault_evidence": {
+      "blocks": [],
+      "limits": {
+        "max_blocks": 8,
+        "max_line_chars": 512,
+        "max_lines": 32
+      },
+      "relevant_line_count": 0,
+      "retained_line_count": 0,
+      "schema": "tinygrad.amd_kernel_fault_evidence.v1",
+      "source": "kernel_journal_window",
+      "status": "CLEAR",
+      "truncated": false
+    },
+    "kernel_faults": [],
+    "program_key": "3f478e6d89a2de467f6b7d1ca18418cdfd0cdb19de05db1d66608e65a5e6475f",
+    "queue_class": "tinygrad.runtime.ops_amd.AMDComputeAQLQueue",
+    "queue_mode": "AQL",
+    "requires_recompile": false,
+    "runtime_cache_binding_exact": true,
+    "runtime_class": "tinygrad.runtime.ops_amd.AMDProgram",
+    "runtime_count": 1,
+    "runtime_preconstruction": {
+      "all_checks_pass": true,
+      "attempts": [
+        {
+          "epoch": 0,
+          "expected_program_identity": {
+            "binary_sha256": "dfb213624287a8dec10f8646d8c16e49651efee8e0ca27c67ff982b0d6b050bf",
+            "function_name": "mmq_llama_five_buffer_full_grid_accumulate"
+          },
+          "get_runtime_begin": {
+            "prof_exec_counter": 0,
+            "signal_value": 0,
+            "timeline_value": 1
+          },
+          "get_runtime_end": {
+            "prof_exec_counter": 0,
+            "signal_value": 1,
+            "timeline_value": 2
+          },
+          "get_runtime_returned": true,
+          "program_key": "3f478e6d89a2de467f6b7d1ca18418cdfd0cdb19de05db1d66608e65a5e6475f"
+        }
+      ],
+      "count": 1,
+      "device": "AMD",
+      "enabled": true,
+      "no_compute_dispatch_during_preconstruction": true,
+      "ordered_program_keys": [
+        "3f478e6d89a2de467f6b7d1ca18418cdfd0cdb19de05db1d66608e65a5e6475f"
+      ],
+      "prof_exec_counter_after": 0,
+      "prof_exec_counter_before": 0,
+      "runtime_cache_retains_code_allocations": true,
+      "runtimes": [
+        {
+          "all_checks_pass": true,
+          "checks": {
+            "device_timeline_drained_after_runtime_init": true,
+            "no_compute_dispatch_during_runtime_init": true,
+            "program_descriptor_in_library_range": true,
+            "program_entry_in_library_range": true,
+            "program_key_matches_retained_sequence": true,
+            "program_library_disjoint_from_prior": true,
+            "program_library_range_nonempty": true,
+            "runtime_cache_exact_program_binding": true,
+            "runtime_identity_matches_retained_binary": true,
+            "runtime_object_distinct_from_prior": true,
+            "timeline_did_not_regress": true
+          },
+          "epoch": 0,
+          "expected_program_identity": {
+            "binary_sha256": "dfb213624287a8dec10f8646d8c16e49651efee8e0ca27c67ff982b0d6b050bf",
+            "function_name": "mmq_llama_five_buffer_full_grid_accumulate"
+          },
+          "program_descriptor_offset": 76800,
+          "program_descriptor_va": 131300429569024,
+          "program_entry_offset": 256,
+          "program_entry_va": 131300429492480,
+          "program_identity": {
+            "binary_sha256": "dfb213624287a8dec10f8646d8c16e49651efee8e0ca27c67ff982b0d6b050bf",
+            "function_name": "mmq_llama_five_buffer_full_grid_accumulate"
+          },
+          "program_key": "3f478e6d89a2de467f6b7d1ca18418cdfd0cdb19de05db1d66608e65a5e6475f",
+          "program_library_nbytes": 77824,
+          "program_library_va": 131300429492224,
+          "runtime_cache_bindings": [
+            {
+              "device": "AMD",
+              "program_key": "3f478e6d89a2de467f6b7d1ca18418cdfd0cdb19de05db1d66608e65a5e6475f"
+            }
+          ],
+          "runtime_object_id": 131299697181376,
+          "timeline_after_runtime_init": {
+            "prof_exec_counter": 0,
+            "signal_value": 1,
+            "timeline_value": 2
+          }
+        }
+      ],
+      "status": "PASS",
+      "timeline_after": {
+        "prof_exec_counter": 0,
+        "signal_value": 1,
+        "timeline_value": 2
+      },
+      "timeline_before": {
+        "prof_exec_counter": 0,
+        "signal_value": 0,
+        "timeline_value": 1
+      }
+    },
+    "schema": "tinygrad.mmq_q4k_q8_1.frozen_staged_runtime_canary.v1",
+    "status": "PASS",
+    "target_dispatch_count": 0,
+    "timeline_clean": true
+  },
+  "schema": "tinygrad.mmq_q4k_q8_1.frozen_staged_runtime_canary_isolation.v1",
+  "shape": [
+    512,
+    5120,
+    5120
+  ],
+  "status": "PASS",
+  "stderr_tail": "",
+  "stdout_tail": "",
+  "target_dispatch_count": 0,
+  "timed_out": false,
+  "timeout_seconds": 300.0
+}
