@@ -1,5 +1,43 @@
 # BUILD PROGRESS / CONTINUATION: generated fp16-dequant Q4_K primitive (AMD)
 
+## PRIMITIVE-SUBSTRATE PIVOT (2026-07-20) — read this first
+The bespoke hand-authored `mmq_llama_*` UOp stack (below) is stuck on a multi-wave writeback codegen bug + spill wall. A cleaner path was proven: the **plain Tensor primitive** `x @ q4_k_reference(bytes).reshape(N,K).cast(half).transpose()` (USE_TC=1, no `.contiguous()`) is the *substrate* — the tinygrad scheduler produces it CORRECT (rel_rmse ~4.1e-4 at ALL real 14B shapes) and FUSED/non-materializing (single kernel, no dense fp16 weight ever allocated, even at the 178MB ffn shapes). Multi-wave correctness + non-materialization — the entire reason the bespoke stack existed — are **free** here.
+
+**But throughput is the whole story now — TWO independent gaps (measured on ffn_gate_up 512×17408×5120, gfx1100):**
+- **Gap 1 — dequant feed: ~4.1 → ~14.5 TFLOP/s.** Default fused primitive emits NO WMMA (Q4_K block scale/min → multiple reduce axes → TC heuristic `heuristic.py:67` skips it → scalar accum). `TC_OPT=2` forces WMMA but is WORSE (2.2 TFLOP/s): dequant recomputed per-K, per-lane along M (reuse factor 2 not 512), no LDS staging → ~80 dequant VALU ops / 2 WMMA calls, tensor cores starved.
+- **Gap 2 — WMMA GEMM itself: ~14.5 → llama's 61 TFLOP/s.** Even DENSE fp16 WMMA (no dequant) tops out ~14.5 (~12% of RDNA3 fp16 peak). Scheduler's generic TC lowering is weak on these shapes; closing this needs int8 (~2×) + better tiling (~2×).
+
+**The lever for Gap 1 already exists in-tree:** `build_precontract_lds_stage` (`tinygrad/codegen/opt/kernel_lds.py:394-470`), staged dequant panel in LDS + M-reuse via WMMA, activated by `candidate_context`/geometry at `postrange.py:372-408`. The plain Tensor expr never attaches it → falls into the naive branch. **Plan: keep the primitive as substrate, wire it through the existing LDS-staging machinery** (no hand-authored ISA; reuses the good scheduler part, drops the buggy hand-written writeback). Repro scripts: `scratchpad/qk_wmma_prefill_bench.py`, `scratchpad/exp1_dense_fp16.py`, `scratchpad/exp2_min.py`.
+
+### HEAD-TO-HEAD RESULT (2026-07-20) — packed-WMMA (fork B) IS THE ROUTE; matches/beats llama per-kernel
+The `candidate_context`/`PackedWeightTransform`/`build_precontract_lds_stage` machinery is ALREADY wired via `extra/qk/prefill/current_prefill_execution_adapter.py` (scheduler-native "fork B" = fp16-dequant-in-register + LDS-staged WMMA), exercised by `extra/qk/prefill/packed_wmma_correctness_canary.py`. Correct (canary max_abs_error 0.0), fused (50MB packed B, never 178MB dense). **Steady-state (min-of-30 after 200-dispatch warmup — the earlier "~33 TFLOP/s wash" was a COLD-CLOCK artifact: packed-WMMA's first ~7 dispatches sit at 2.76ms then drop to 1.33ms):**
+
+| role | direct-packed | dense-fp16 | **packed-WMMA** | llama isolated |
+|---|---:|---:|---:|---:|
+| ffn_gate_up 512×17408×5120 | 14.6 | 20.0 | **68.8** | ~56–65 |
+| ffn_down 512×5120×17408 | 14.1 | 26.9 | **62.2** | ~56–65 |
+| attn_qo 512×5120×5120 | 14.0 | 27.8 | **39.6** | — |
+
+(TFLOP/s.) Packed-WMMA beats direct-packed **4.2–4.6× every role**, matches/beats llama on the dominant ffn roles WITH fp16 (no int8). llama rocprof: `/home/ubuntu/BoltBeam/outputs/llama-prefill-qwen14b-pp512-20260714-fresh/rocprof/qwen14b_pp512_kernel_trace.csv`, ffn_gate_up-class = Grid 4352×32, 1.41–1.62ms → 56–65 TFLOP/s.
+
+**PIVOT: fork-B packed-WMMA REPLACES the C5-faulted int8 `mmq_llama_five_buffer_*` stack** (separate impl — hand-built UOp graph + native PM4, zero cross-imports; confirmed via grep). The int8 grind (C5 fault, spill wall, multi-wave writeback bug) is MOOT — this scheduler-native fp16 path already works and is faster. Bench harness: `scratchpad/bench_variant.py`; ISA diag: `scratchpad/diagnose_wmma.py`.
+
+**Open (do not over-call yet):** (1) direct_packed measured 6.27ms vs stale doc §13.2 2.762ms (~2.3× disc, flag not reconcile; relative win is same-harness solid).
+
+### WHOLE-MODEL ESTIMATE (2026-07-20) — ~1460–1650 tok/s; gap to llama = attention GEMM only
+Bottom-up steady-state (200 warmup, min-of-30, host-dispatch removed), all linear roles at real 14B dims × 40 layers + measured non-GEMM overhead. Per-layer GEMM 6.412ms → ×40 = 256.5ms; non-GEMM (norms/rope/qk-norm/attn-scores/PV/residual/swiglu) 1.363ms/layer → 54.5ms. Body 311ms → **1646 tok/s** (last-token lm_head); 1463 w/ full dense-fp16 lm_head. vs llama **1837**, default **366** → **~4–4.5× default, ~80–90% llama.** GEMM 82.5% / overhead 17.5%.
+
+**The gap is entirely the small-N attention GEMMs (packed-WMMA):**
+- **attn_kv 512×1024×5120 = 12.0 TFLOP/s** — N=1024 → ~32 workgroups, cannot fill 96 CUs. GRID-limited.
+- **attn_qo 512×5120×5120 = 38.1 TFLOP/s** — occupancy-limited (40KB LDS → 1 wg/CU).
+- FFN roles fine: ffn_gate/up 69.2, ffn_down 62.0 (at/above llama). Attention-linear = 36% of GEMM time despite trivial FLOPs.
+
+**Lever:** if attn roles hit FFN-like efficiency, attn GEMM ~92ms→~31ms → body ~250ms → **~2050 tok/s (past llama 1837 AND project ≥2000 target).** Fix = make small-N attention GEMMs fill the machine: smaller tiles→more workgroups (grid-limited attn_kv), shrink LDS→2 wg/CU (occupancy attn_qo), possibly split-K.
+
+**Tier-2 (real end-to-end) BLOCKED — glue needed (packed-WMMA isolated under `extra/qk/prefill/`, zero refs in `tinygrad/llm/*`):** (1) `Q4KPackedWMMAPrefillCandidate` matching `PrefillLinearRouteSpec` in `tinygrad/llm/prefill_routes.py:151`; (2) real GGUF Q4_K→`PackedWeightTransform` materializer (today only fed `Tensor.empty` synthetic); (3) route registration in `model_route_plan.py`/`prefill_policy.py`; (4) lm_head role (no `model_profiles.py` entry). NEXT: close attn_qo/attn_kv occupancy+grid (the crux to beat llama), then wire Tier-2. Bench: `scratchpad/bench_variant2.py`, `bench_overhead.py`, `bench_lmhead.py`.
+
+---
+
 Living doc — resume the implementation from here if context is lost. Plan: [`amd-fp16-dequant-q4k-primitive-implementation-plan-20260720.md`](amd-fp16-dequant-q4k-primitive-implementation-plan-20260720.md). Decision/context: handoff §1.16 (AMD primitive = fp16-dequant-in-register), §1.15 (occupancy routing). Last updated 2026-07-20.
 
 ## CORRECTNESS FAIL-FAST RESULT (2026-07-20) — decode CORRECT, full-kernel GPU output WRONG
