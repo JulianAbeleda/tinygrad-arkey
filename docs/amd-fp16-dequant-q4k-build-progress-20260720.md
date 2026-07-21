@@ -66,6 +66,22 @@ Applied correctness-gated FFN geometries (bench `scratchpad/e2e_packed_wmma_benc
 - **Step 1 (`b10f640be`): quant-aware `_warmstart_key`** — packed-PARAM dtype (uint32 Q4 / uint16 Q6) in the key so same-shape Q4/Q6 don't collide. Replaced the N-pad hack; clean path measures **1851 tok/s** (past llama 1837). 2 pre-existing unit fails only.
 - **Step 2 (`c35b5ff53`): production candidate classes** — `extra/qk/prefill/packed_wmma_prefill_candidates.py` (`Q4K`/`Q6KPackedWmmaPrefillCandidate`, frozen 6-combo geom table, gate-once cache, warmstart-table builder). Selectable via `route_packed_wmma_prefill` (env `TINYGRAD_PREFILL_PACKED_WMMA`, default OFF, fail-closed) inside the direct_packed branch. Verified via NORMAL dispatcher (no override): opted-in **1854-1858 tok/s** (past llama), 100% coverage, 6/6 gates max_abs 0.0; opted-out byte-identical 354. 15 pre-existing unit fails unchanged (A/B verified).
 
+## VERIFIED CANONICAL A/B (2026-07-21) — corrects earlier scratch-bench overclaims
+Ran the CANONICAL authority `extra/qk/prefill_whole_synced.py` (warms TinyJit at concrete start_pos per 512-chunk, min-of-burst, sums per-chunk — the one true harness) as a clean sequential A/B, default vs packed-WMMA (`TINYGRAD_PREFILL_PACKED_WMMA=1`), no GPU contention:
+
+| context | default (direct-packed) | packed-WMMA | llama | vs default | vs llama |
+|---|---|---|---|---|---|
+| @512 | 355 | 1850 | 1899 | **5.2×** | 97% |
+| @1024 | 348 | 1748 | 1836 | 5.0× | 95% |
+| @2048 | 335 | 1528 | 1762 | 4.6× | 87% |
+| @4096 | 317 | 1270 | 1655 | 4.0× | 77% |
+
+**Verified conclusions:**
+- **~5× win over tinygrad default is REAL** (default canonical=355 confirms the ~354 baseline in the authoritative harness; packed-WMMA=1850). Holds 4-5× across ALL contexts, no cratering (earlier collapse was the symbolic-path/concrete_kv=False misconfig + GPU contention, NOT real).
+- **Does NOT beat llama — earlier "1854 past llama" was OVERSTATED** (scratch bench, looser methodology). Canonical: pp512 ~97% (≈parity within llama's ±100 noise), falling to 77% by pp4096. **Geo-mean ~89% of llama.** Residual gap widens with context = ATTENTION scaling (per-chunk 277→511ms vs llama flatter flash-attn), NOT the packed-WMMA GEMMs (done+correct).
+- Baseline scare resolved: the 1869 canonical number that looked like a fast "default" was packed-WMMA (env=1); the STATIC route-attribution label (`prefill_v2_scheduler_matmul_default`) is a policy label, not the runtime dispatch. fp16 resident overlay OOMs 14B (29.5GB fp16 + 9GB Q4 = 38.5GB >> 24GB), so there is no fast fp16 default — default is slow Q4 direct-packed (~355).
+- **Beyond-parity goal (≥105% geo-mean, ≥2000, all contexts) NOT met.** The remaining gap to llama is the attention path, not the quantized matmul.
+
 ## HONEST STATUS vs the HIGH-LEVEL GOAL (beyond-parity, ≥2000, all contexts, certified)
 - ✅ Beyond-parity at **pp512**: 1854 = 100.9% of llama 1837, real end-to-end, correctness-gated, scheduler-native (no bespoke kernel, no int8).
 - ✅ Landed as a real opt-in production route; default unchanged.
