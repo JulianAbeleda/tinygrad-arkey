@@ -62,6 +62,18 @@ Applied correctness-gated FFN geometries (bench `scratchpad/e2e_packed_wmma_benc
 
 ## FULL ARC: 354 (default) → 793 (Q4 packed-WMMA) → 1710 (+Q6) → 1826 (+FFN geom) = 5.16×, 99.4% of llama. Scheduler-native, no bespoke kernel, no int8. Perf at in-frame ceiling (remaining 0.6% diffuse: attention/norms/floor; FFN ~54-65% of fp16 peak, geometry knobs ~tapped).
 
+## PRODUCTIONIZATION — LANDED (2026-07-20/21)
+- **Step 1 (`b10f640be`): quant-aware `_warmstart_key`** — packed-PARAM dtype (uint32 Q4 / uint16 Q6) in the key so same-shape Q4/Q6 don't collide. Replaced the N-pad hack; clean path measures **1851 tok/s** (past llama 1837). 2 pre-existing unit fails only.
+- **Step 2 (`c35b5ff53`): production candidate classes** — `extra/qk/prefill/packed_wmma_prefill_candidates.py` (`Q4K`/`Q6KPackedWmmaPrefillCandidate`, frozen 6-combo geom table, gate-once cache, warmstart-table builder). Selectable via `route_packed_wmma_prefill` (env `TINYGRAD_PREFILL_PACKED_WMMA`, default OFF, fail-closed) inside the direct_packed branch. Verified via NORMAL dispatcher (no override): opted-in **1854-1858 tok/s** (past llama), 100% coverage, 6/6 gates max_abs 0.0; opted-out byte-identical 354. 15 pre-existing unit fails unchanged (A/B verified).
+
+## HONEST STATUS vs the HIGH-LEVEL GOAL (beyond-parity, ≥2000, all contexts, certified)
+- ✅ Beyond-parity at **pp512**: 1854 = 100.9% of llama 1837, real end-to-end, correctness-gated, scheduler-native (no bespoke kernel, no int8).
+- ✅ Landed as a real opt-in production route; default unchanged.
+- ❌ **≥2000 target NOT met** (1854) — remaining ~8% needs deeper scheduling (kernel fusion of norms/rope into matmul epilogues, attention-core opt, FFN past ~65% of fp16 peak), which is a harder/uncertain research push, not more geometry sweeps (geometry knobs ~tapped).
+- ❌ **Multi-context NOT validated** — geom table is pp512-only; goal requires 512/1024/2048/4096 all beat llama, geo-mean ≥105%.
+- ❌ **Certification (C-ladder C0-C9) + policy auto-selection NOT done** — route is opt-in, not promoted to default.
+- NEXT: validate/extend to contexts 1024/2048/4096 (does parity hold?), then either the deeper-scheduling push for ≥2000 or the C-ladder certification to promote.
+
 ## PRODUCTIONIZATION (decided 2026-07-20) — land the proven bench as a real route
 All the above is in a SCRATCH bench (`e2e_packed_wmma_bench_q6.py`); only the codegen fix (`da28e5efd`) is landed. To ship: (1) clean quant-aware `_warmstart_key` (`postrange.py:555`) replacing the N-pad workaround; (2) `Q4K`/`Q6K PackedWMMAPrefillCandidate` (`prefill_routes.py` interface `run(lin,x,x_batch,spec)`) with per-(quant,role) geometry table + build-time correctness gate; (3) route registration/selection; (4) C-ladder certification. Success gate: production route measures ~1826 real, correctness-gated, unit tests green.
 
