@@ -48,7 +48,13 @@ Bottom-up steady-state (200 warmup, min-of-30, host-dispatch removed), all linea
   - GEMM-shaped r_ (already-accelerated Q4 WMMA + attention QK^T/PV): 221ms (34.3%).
   - norms/rope/lm_head/argmax + E_ elementwise: 40.5ms (6.3%).
   - **Each Q4_K packed-WMMA linear = EXACTLY 1 fused kernel** (movement chain fully fuses, no helpers) → fusion is NOT a lever.
-- **THE LEVER: route Q6_K roles (esp. ffn_down) through packed-WMMA** — primitive #2 already decodes Q6_K (canary max_abs 0.0); router just declines Q6 today. Est: 645ms→~310ms → **~1650 tok/s (nearly 2×)**. IN PROGRESS. Bench: `scratchpad/e2e_debug2_trace.py`, `kernel_rows_v2.json`.
+- **THE LEVER: route Q6_K roles (esp. ffn_down) through packed-WMMA** — primitive #2 already decodes Q6_K (canary max_abs 0.0); router just declines Q6 today. Est: 645ms→~310ms → ~1650 tok/s.
+
+### Q6_K ROUTING DONE — real pp512 = 1710 tok/s (2.16×, 93% of llama) [2026-07-20]
+Routed Q6_K ffn_down + attn_v through packed-WMMA (bench `scratchpad/e2e_packed_wmma_bench_q6.py`). **Real measured: 1710 min / 1708.6 median tok/s** (5×8, synced) — from 793 (2.16×), vs llama 1837 (**93%**), vs default 354 (**4.8×**). 100% route coverage, zero ungated fallbacks, correctness-gated max_abs 0.0, finite.
+- **Blocker fixed (scratch workaround, needs clean production fix):** warmstart table `_warmstart_key` (`postrange.py:555`) keys on `(out-dims, reduce)` with NO quant awareness → same-shape Q4/Q6 ffn_down COLLIDE ("packed-weight B carrier must reach exactly one canonical packed PARAM, found 0", `kernel_lds.py:208`). Workaround: pad Q6 output N by one tile + PRE-MATERIALIZED padded packed weight (real bytes + zero dummy blocks, `Tensor.cat().contiguous().realize()`) + force `.contiguous()` on padded output before slicing (else movement-fusion cancels pad vs slice). **Clean fix = make `_warmstart_key` quant-aware.**
+- **Q6_K geometry:** ffn_down Q4-winner (128×128/(4,2)/bc=1) FAILS gate for Q6; swept → **64×64/waves(2,2)/bc=1 PASSES** (max_abs 0.0). attn_kv 64×32/(2,1)/bc=1 passes for Q6 unchanged. (Silent-wrong discipline caught it.)
+- **NEXT: re-profile the new ~300ms pass** → biggest remaining bucket (Q4 WMMA GEMM + attention + norms) to chase the last 7% to llama (FFN tiling ~57% of peak; attention).
 
 ### PRIMITIVE-ROUTE VIABILITY SWEEP (2026-07-20) — only #2 viable; int8 moot; overhead second-order
 Tested all primitive-aligned routes to beyond-parity (scheduler-native, no bespoke stack):
