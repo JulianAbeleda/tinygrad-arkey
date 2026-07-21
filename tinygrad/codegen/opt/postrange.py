@@ -449,10 +449,16 @@ class Scheduler:
                 c_axes=tuple(range_by_id[a] for a,sz in tc_upcast_axes[2] if sz == 2)
                 if len(c_axes) != 3: raise KernelOptError("buffer2 accumulator contract does not have three binary axes")
                 c_elem=(c_axes[0]*2+c_axes[1])*2+c_axes[2]
+                # NOTE: 8 here is tc.elements_per_thread[2] (_RDNA3_ELEMENTS[2]), the fixed number of
+                # accumulator elements a lane owns per WMMA subtile on RDNA3 -- a hardware constant, not
+                # tied to sm*sn. The total accumulator element count is subtiles_m*subtiles_n*8 and need
+                # not equal 64: previously this was compared against a hardcoded 64, which silently forced
+                # sm*sn==8. Compare against the actual derived total instead so any sm*sn is admissible.
+                accumulator_total = factors.subtiles_m*factors.subtiles_n*8
                 accumulator_owners=[(sm*factors.subtiles_n+sn)*8+elem for sm in range(factors.subtiles_m)
                   for sn in range(factors.subtiles_n) for elem in range(8)]
-                if len(accumulator_owners) != 64 or set(accumulator_owners) != set(range(64)):
-                  raise KernelOptError("buffer2 accumulator ownership must be an exact unique cover of [0, 64)")
+                if len(accumulator_owners) != accumulator_total or set(accumulator_owners) != set(range(accumulator_total)):
+                  raise KernelOptError("buffer2 accumulator ownership must be an exact unique cover of [0, subtiles_m*subtiles_n*8)")
                 class _StageCallbacks:
                   producer = staticmethod(_produce)
                   fragments = staticmethod(_fragments)

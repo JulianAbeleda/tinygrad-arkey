@@ -341,10 +341,15 @@ def validate_precontract_thread_axes(geometry:KernelTileGeometry, factors:Precon
                                      threads:PrecontractThreadAxes, subtile_m:UOp, subtile_n:UOp,
                                      *, context:str="precontract") -> None:
   """Validate live wave/lane and subtile RANGE ownership against tile factors."""
-  if ((threads.wave_m.op, threads.wave_m.vmax + 1, threads.wave_m.arg[-1]) !=
-      (Ops.RANGE, factors.waves_m, AxisType.LOCAL) or
-      (threads.wave_n.op, threads.wave_n.vmax + 1, threads.wave_n.arg[-1]) !=
-      (Ops.RANGE, factors.waves_n, AxisType.LOCAL) or
+  # A size-1 wave axis has no live cross-wave choice to make, so the caller collapses it to a
+  # CONST 0 (see postrange.py's _apply_tc_opt) instead of an unsupported size-one RANGE. Accept
+  # that degenerate case here rather than requiring a live RANGE for a wave count of exactly 1.
+  def _wave_ok(wave:UOp, count:int) -> bool:
+    if count == 1:
+      return wave.op is Ops.CONST and wave.arg == 0
+    return (wave.op, wave.vmax + 1, wave.arg[-1]) == (Ops.RANGE, count, AxisType.LOCAL)
+  if (not _wave_ok(threads.wave_m, factors.waves_m) or
+      not _wave_ok(threads.wave_n, factors.waves_n) or
       (threads.lane.op, threads.lane.vmax + 1, threads.lane.arg[-1]) !=
       (Ops.RANGE, geometry.wave_size, AxisType.WARP)):
     raise ValueError(f"{context} thread axes do not match derived wave geometry")
