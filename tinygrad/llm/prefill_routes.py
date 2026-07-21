@@ -245,6 +245,42 @@ def route_direct_packed_prefill(lin, x:Tensor) -> Tensor | None:
   return None if spec is None else _run_direct_packed_baseline(lin, x, spec)
 
 
+def packed_wmma_prefill_enabled() -> bool:
+  """Opt-in gate for the packed-WMMA prefill candidates (Q4KPackedWmmaPrefillCandidate /
+  Q6KPackedWmmaPrefillCandidate, extra/qk/prefill/packed_wmma_prefill_candidates.py).
+
+  Default (unset/0) is fail-closed: route_packed_wmma_prefill declines every call and
+  route_prefill_linear behaves exactly as it did before this route existed -- the
+  direct-packed baseline remains the only production route for Q4_K/Q6_K prefill linears.
+  This is a plain opt-in env knob (not routed through the immutable attachment/policy
+  machinery in model.py) because packed-wmma is a not-yet-certified accelerated
+  implementation of the SAME attachment-selected "direct_packed" strategy, not a
+  competing strategy the fail-closed policy needs to arbitrate.
+  """
+  from tinygrad.helpers import getenv
+  return bool(getenv("TINYGRAD_PREFILL_PACKED_WMMA", 0))
+
+
+def route_packed_wmma_prefill(lin, x:Tensor) -> Tensor | None:
+  """Production packed-WMMA route: an accelerated implementation of the direct-packed
+  strategy for Q4_K/Q6_K prefill linears whose (quant, role) has a gated, frozen packed-WMMA
+  geometry (see PACKED_WMMA_GEOM). Only reachable when packed_wmma_prefill_enabled(); declines
+  (returns None) for anything ungated, unknown-shaped, or outside the frozen geometry table --
+  the caller falls through to route_direct_packed_prefill.
+  """
+  if not packed_wmma_prefill_enabled(): return None
+  spec = _attached_direct_packed_spec(lin, x)
+  if spec is None: return None
+  from extra.qk.prefill.packed_wmma_prefill_candidates import select_packed_wmma_prefill_candidate
+  candidate = select_packed_wmma_prefill_candidate(lin, spec)
+  if candidate is None: return None
+  x_batch = prefill_activation(x[0].cast(dtypes.float16).contiguous())
+  out = candidate.run(lin, x, x_batch, spec)
+  if out is None: return None
+  notify_prefill_route(lin)
+  return prefill_output(out)
+
+
 def route_prefill_linear(lin, x:Tensor) -> Tensor:
   if (override := _PREFILL_ROUTE_OVERRIDE.get()) is not None:
     routed = override(lin, x)
@@ -253,6 +289,8 @@ def route_prefill_linear(lin, x:Tensor) -> Tensor:
   w = getattr(lin, "_pf16_w", None)
 
   if route == "direct_packed":
+    routed = route_packed_wmma_prefill(lin, x)
+    if routed is not None: return routed
     routed = route_direct_packed_prefill(lin, x)
     if routed is not None: return routed
 
