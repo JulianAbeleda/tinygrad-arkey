@@ -790,9 +790,8 @@ class Transformer:
     # prefill v2 warmstart table is built here but installed into the global codegen knob ONLY for the duration
     # of the prefill-v2 forward (see __call__), to contain that ambient power rather than leave it set process-wide.
     self._pf16_warmstart:dict|None = None
-    # Packed-WMMA prefill warmstart table: built ONLY when the opt-in gate
-    # (prefill_routes.packed_wmma_prefill_enabled()) is set, so the default (opt-out) load path
-    # never runs the packed-wmma correctness gate or touches this table. See _build_packed_wmma_warmstart.
+    # Packed-WMMA prefill warmstart table: built when prefill_routes.packed_wmma_prefill_enabled()
+    # is set (default ON). See _build_packed_wmma_warmstart.
     # NOTE: cannot be built here -- Q4_K/Q6_K packed storage (q4k_storage/prefill_packed_weight) is
     # installed onto these same Linear objects by from_gguf AFTER Transformer.__init__ returns (via
     # _install_q4k_primitives/_install_q6k_primitives, once state_dict is loaded). is_direct_packed_prefill_linear
@@ -977,7 +976,7 @@ class Transformer:
     # consulted at kernel-compile time, i.e. this jit's first call), then restore -- decode/other paths never
     # see a populated _WARMSTART_OPTS even within this process. The packed-wmma table (only non-empty when
     # prefill_routes.packed_wmma_prefill_enabled() was set at model init, see _build_packed_wmma_warmstart) is
-    # merged on top of the dense fp16 table; when it's empty/None this is byte-for-byte the prior behavior.
+    # merged on top of the dense fp16 table.
     import tinygrad.codegen.opt.postrange as pr
     merged_opts = {**(self._pf16_warmstart or {}), **(self._packed_wmma_warmstart or {})}
     with prefill_route_scope(True), pr.warmstart_candidate_state(merged_opts, self._packed_wmma_warmstart_contexts):
@@ -1231,7 +1230,7 @@ class Transformer:
       Tensor.realize(*params)
     # prefill v2 (opt-in): realize fp16 weights now that primitives are installed (shapes/dequant graphs ready)
     if config.prefill_v2: model.realize_prefill_v2_weights()
-    # packed-wmma prefill warmstart (opt-in, see prefill_routes.packed_wmma_prefill_enabled()): built here,
+    # packed-wmma prefill warmstart (default ON, see prefill_routes.packed_wmma_prefill_enabled()): built here,
     # not in __init__, because it needs the just-installed Q4_K/Q6_K packed storage on model.blk[*] linears
     # to identify which covered linears are packed-weight candidates at all.
     if config.prefill_v2:

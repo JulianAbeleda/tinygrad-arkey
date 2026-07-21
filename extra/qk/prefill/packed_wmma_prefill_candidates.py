@@ -6,9 +6,10 @@ selectable through the normal prefill dispatcher (tinygrad/llm/prefill_routes.py
 route_prefill_linear / route_packed_wmma_prefill), instead of the scratch
 `prefill_route_override` research hook.
 
-Selection is opt-in only: tinygrad.llm.prefill_routes.packed_wmma_prefill_enabled() gates
-every entry point here from production dispatch. Default (opt-out) behavior is byte-for-byte
-identical to before this module existed -- the direct-packed baseline stays the only route.
+Default is ON: tinygrad.llm.prefill_routes.packed_wmma_prefill_enabled() gates every
+entry point. Any ungated or unknown (quant, role, shape) combo silently declines, and
+the caller falls through to the direct-packed baseline. Set TINYGRAD_PREFILL_PACKED_WMMA=0
+to disable and use direct-packed only.
 
 Geometry table: FROZEN. Each (quant, role) entry was independently correctness-gated and
 throughput-measured in the scratch bench; changing a tile here requires re-verifying both

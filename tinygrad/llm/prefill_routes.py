@@ -246,19 +246,15 @@ def route_direct_packed_prefill(lin, x:Tensor) -> Tensor | None:
 
 
 def packed_wmma_prefill_enabled() -> bool:
-  """Opt-in gate for the packed-WMMA prefill candidates (Q4KPackedWmmaPrefillCandidate /
+  """Gate for the packed-WMMA prefill candidates (Q4KPackedWmmaPrefillCandidate /
   Q6KPackedWmmaPrefillCandidate, extra/qk/prefill/packed_wmma_prefill_candidates.py).
 
-  Default (unset/0) is fail-closed: route_packed_wmma_prefill declines every call and
-  route_prefill_linear behaves exactly as it did before this route existed -- the
-  direct-packed baseline remains the only production route for Q4_K/Q6_K prefill linears.
-  This is a plain opt-in env knob (not routed through the immutable attachment/policy
-  machinery in model.py) because packed-wmma is a not-yet-certified accelerated
-  implementation of the SAME attachment-selected "direct_packed" strategy, not a
-  competing strategy the fail-closed policy needs to arbitrate.
+  Default is ON: the packed-WMMA route is correctness-gated (6/6 combos, max_abs 0.0)
+  and fails closed for anything ungated or unknown-shaped. Set TINYGRAD_PREFILL_PACKED_WMMA=0
+  to revert to the direct-packed baseline only.
   """
   from tinygrad.helpers import getenv
-  return bool(getenv("TINYGRAD_PREFILL_PACKED_WMMA", 0))
+  return bool(getenv("TINYGRAD_PREFILL_PACKED_WMMA", 1))
 
 
 def route_packed_wmma_prefill(lin, x:Tensor) -> Tensor | None:
