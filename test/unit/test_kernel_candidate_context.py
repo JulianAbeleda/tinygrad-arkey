@@ -84,7 +84,7 @@ def test_candidate_geometry_survives_program_and_warmstart_propagation(monkeypat
   sink = _sink("4" * 64).replace(arg=KernelInfo(name="candidate", opts_to_apply=(), candidate_context=context))
   program = to_program(sink, PythonRenderer(Target("PYTHON")))
   assert program.src[0].arg.candidate_context.geometry == _geometry()
-  key = (frozenset(), 1)
+  key = (frozenset(), 1, frozenset())
   monkeypatch.setattr(postrange, "_WARMSTART_OPTS", {key: ()})
   monkeypatch.setattr(postrange, "_WARMSTART_CANDIDATE_CONTEXTS", {key: context})
   optimized = postrange.apply_opts(_sink("4" * 64).replace(arg=KernelInfo()), PythonRenderer(Target("PYTHON")))
@@ -93,7 +93,7 @@ def test_candidate_geometry_survives_program_and_warmstart_propagation(monkeypat
 
 def test_warmstart_candidate_context_reaches_optimized_kernel(monkeypatch):
   context = KernelCandidateContext("boltbeam.full_kernel_candidate.v1", "3" * 64)
-  key = (frozenset(), 1)
+  key = (frozenset(), 1, frozenset())
   monkeypatch.setattr(postrange, "_WARMSTART_OPTS", {key: ()})
   monkeypatch.setattr(postrange, "_WARMSTART_CANDIDATE_CONTEXTS", {key: context})
   optimized = postrange.apply_opts(_sink("4" * 64).replace(arg=KernelInfo()), PythonRenderer(Target("PYTHON")))

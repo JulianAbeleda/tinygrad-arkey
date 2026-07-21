@@ -5,7 +5,7 @@ from typing import cast
 from tinygrad.uop.ops import Ops, UOp, KernelInfo, graph_rewrite, AxisType, ssimplify, GroupOp, remove_all_tags
 from tinygrad.uop.ops import axis_letters, axis_colors, axis_to_pos
 from tinygrad.device import Buffer
-from tinygrad.dtype import dtypes
+from tinygrad.dtype import dtypes, PtrDType
 from tinygrad.helpers import colored, DEBUG, NOOPT, argsort, round_up, prod, merge_dicts, get_single_element, flatten
 from tinygrad.helpers import ALLOW_TF32, count
 from tinygrad.codegen.opt import Opt, OptOps, KernelOptError, check
@@ -554,14 +554,32 @@ def _candidate_lds_buffer_id(k:Scheduler) -> int:
   if any(r.arg[0] == buffer_id for r in k.rngs): raise KernelOptError("candidate LDS allocation ID collides with a live range")
   return buffer_id
 
+# Packed-weight quant formats (packed_weight.py: PackedWeightTransform.storage_dtype) carry their weight
+# bytes as a narrow uint PARAM instead of the dense fp16 activation/weight dtype. Two different-quant
+# linears (e.g. Q4_K and Q6_K ffn_down) can share an identical (m, n, k) real shape -- their raw packed
+# PARAM dtype (uint32 for Q4_K, uint16 for Q6_K) is the one thing that already differs on the AST at
+# apply_opts time, before any candidate_context is attached, so it's what the key uses to tell them apart.
+_PACKED_STORAGE_DTYPES = (dtypes.uint16, dtypes.uint32)
+
+def warmstart_key(out_dims, reduce, packed_dtype=None):
+  """Public key builder mirroring `_warmstart_key`, for callers (e.g. model-init warmstart-table
+  precomputation) that don't have a live Scheduler/AST to derive the discriminator from directly.
+  `packed_dtype` is the packed-weight PARAM's storage dtype (e.g. dtypes.uint16/uint32) for a
+  packed-weight candidate, or None for the plain dense (non-packed) path."""
+  return (frozenset(out_dims), reduce, frozenset((packed_dtype,)) if packed_dtype is not None else frozenset())
+
 def _warmstart_key(k):
-  # match on CONCRETE dims only (the forward's batch dim is a symbolic JIT variable); key = (out-dims, reduce)
+  # match on CONCRETE dims only (the forward's batch dim is a symbolic JIT variable); key = (out-dims, reduce,
+  # packed-weight-dtype-discriminator). The discriminator is empty for kernels with no packed-weight PARAM
+  # (the plain dense fp16 path), so it doesn't change that path's keying.
   red, out = 1, []
   for s, t in zip(k.full_shape, k.axis_types):
     if t in (AxisType.REDUCE, AxisType.UNROLL, AxisType.GROUP_REDUCE):
       if isinstance(s, int): red *= s
     elif isinstance(s, int): out.append(s)
-  return (frozenset(out), red)
+  packed_dtypes = frozenset(u.dtype.base for u in k.ast.backward_slice
+                             if u.op is Ops.PARAM and isinstance(u.dtype, PtrDType) and u.dtype.base in _PACKED_STORAGE_DTYPES)
+  return (frozenset(out), red, packed_dtypes)
 
 def _warmstart_match(k):
   return _WARMSTART_OPTS.get(_warmstart_key(k))

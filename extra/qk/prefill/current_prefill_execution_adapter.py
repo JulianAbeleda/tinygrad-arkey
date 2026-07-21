@@ -51,12 +51,15 @@ def compile_current_prefill_program(payload: dict[str, Any], canonical_identity:
   from tinygrad import Tensor, dtypes
   from tinygrad.codegen import to_program_cache
   from tinygrad.codegen.opt import Opt, OptOps
-  from tinygrad.codegen.opt.postrange import warmstart_candidate_state
+  from tinygrad.codegen.opt.postrange import warmstart_candidate_state, warmstart_key
   from tinygrad.engine.realize import compile_linear
   from tinygrad.helpers import Context, getenv
   from tinygrad.uop.ops import Ops
 
-  key = (frozenset({m, n}), k)
+  # packed_dtype discriminates same-(m,n,k) different-quant candidates on the shared warmstart table
+  # (postrange._warmstart_key) -- None for the dense (non-packed) path, matching that key's empty discriminator.
+  packed_dtype = admission.context.packed_weight.storage_dtype if admission.context.packed_weight is not None else None
+  key = warmstart_key({m, n}, k, packed_dtype)
   opts = {key: (Opt(OptOps.TC, 0, (-1, 2, 1)),)}
   getenv.cache_clear(); to_program_cache.clear()
   try:

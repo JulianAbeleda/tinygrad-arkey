@@ -28,7 +28,7 @@ def test_attn_qo_register_prefill_compile_is_cpu_only_and_zero_lds():
   assert admission.pipeline_plan.storage.kind == "global_register_resident"
   assert admission.active_lds_bytes == 0
 
-  key = (frozenset({512, 4096}), 4096)
+  key = postrange.warmstart_key({512, 4096}, 4096)
   old_opts, old_contexts = postrange._WARMSTART_OPTS, postrange._WARMSTART_CANDIDATE_CONTEXTS
   try:
     postrange._WARMSTART_OPTS = {**(old_opts or {}), key: (Opt(OptOps.TC, 0, (-1, 2, 1)),)}

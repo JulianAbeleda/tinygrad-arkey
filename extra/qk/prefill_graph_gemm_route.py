@@ -98,7 +98,10 @@ def _install_candidate_matmul(x,w,out_f,in_f,admission,compile_artifact:Mapping[
   from tinygrad.codegen.opt import Opt, OptOps
   import tinygrad.codegen.opt.postrange as pr
   m = int(x.shape[-2])
-  key=(frozenset({m,out_f}),in_f)
+  # packed_dtype discriminates same-(m,out_f,in_f) different-quant candidates (e.g. Q4_K vs Q6_K sharing a
+  # role's shape) so they land on distinct warmstart-table keys instead of colliding on one (postrange._warmstart_key).
+  packed_dtype = admission.context.packed_weight.storage_dtype if admission.context.packed_weight is not None else None
+  key=pr.warmstart_key({m,out_f},in_f,packed_dtype)
   existing=(pr._WARMSTART_CANDIDATE_CONTEXTS or {}).get(key)
   if existing is not None and existing.canonical_identity != admission.canonical_identity:
     raise ValueError(f"candidate warmstart key collision for {key!r}")

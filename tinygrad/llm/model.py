@@ -3,6 +3,7 @@ import contextlib, contextvars, functools, hashlib, itertools, json, pathlib
 from dataclasses import dataclass, replace
 from tinygrad import Tensor, nn, UOp, TinyJit, dtypes, function, Device, role_metadata
 from tinygrad.codegen.opt import Opt, OptOps
+from tinygrad.codegen.opt.postrange import warmstart_key as _warmstart_key
 from tinygrad.helpers import prod
 from tinygrad.llm.admission import (
   AUTO_MAX_CONTEXT, AdmissionInputs, ExactSelectedModelPlan, plan_exact_selected_model_load,
@@ -852,7 +853,9 @@ class Transformer:
     # absent (e.g. a silu-fused gate) keeps the heuristic; a key that applies-then-errors falls back too
     # (postrange.py). NOT set into the global here -- installed only around the prefill-v2 forward (__call__).
     def _opts(out_f, in_f): return _prefill_v2_without_parked_4x4(_prefill_v2_opts(out_f, in_f))
-    return {(frozenset({out_f, self.config.prefill_ubatch}), in_f): _opts(out_f, in_f)
+    # dense fp16 path has no packed-weight PARAM, so packed_dtype=None (matches the key
+    # postrange._warmstart_key computes for a kernel with no packed-weight-dtype PARAM).
+    return {_warmstart_key({out_f, self.config.prefill_ubatch}, in_f): _opts(out_f, in_f)
             for _, out_f, in_f in self._prefill_v2_covered()}
 
   def realize_prefill_v2_weights(self) -> int:
