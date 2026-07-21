@@ -119,7 +119,12 @@ def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv
             kv_load(1, kvh, s * L + b * TK + tt, d).cast(_F32))   # K_ONLY V from global via the centralized loader
       accu = acc[dd].store(acc.after(tt)[dd] * corr + p * vd).end(dd)
       denu = den.after(accu)[0].store(den.after(tt)[0] * corr + p)
-      mxu = mx.after(denu)[0].store(new_m).end(tt).end(b)
+      mxu0 = mx.after(denu)[0].store(new_m).end(tt)
+      # WAR barrier: all warps must finish READING ksh/vsh this iteration before the next
+      # iteration's staging store overwrites the shared LDS tile. Latent since decode's G<=8 warps
+      # never manifested it, but it corrupts at high warp counts (found via the M-tiled prefill clone).
+      bar2 = UOp.barrier(UOp.group(mxu0))
+      mxu = bar2.end(b)
     else:
       tt = UOp.range(TK, 5, axis_type=AxisType.REDUCE)
       in_r = (s * L + b * TK + tt) < Tc
@@ -134,7 +139,12 @@ def flash_block_tiled_xlane_score_pv_tile_whole_cache_kernel(Hd:int, Hq:int, Hkv
             kv_load(1, kvh, s * L + b * TK + tt, d).cast(_F32))   # K_ONLY V from global via the centralized loader
       accu = acc[dd].store(acc.after(tt)[dd] * corr + p * vd).end(dd)
       denu = den.after(accu)[0].store(den.after(tt)[0] * corr + p)
-      mxu = mx.after(denu)[0].store(new_m).end(tt).end(b)
+      mxu0 = mx.after(denu)[0].store(new_m).end(tt)
+      # WAR barrier: all warps must finish READING ksh/vsh this iteration before the next
+      # iteration's staging store overwrites the shared LDS tile. Latent since decode's G<=8 warps
+      # never manifested it, but it corrupts at high warp counts (found via the M-tiled prefill clone).
+      bar2 = UOp.barrier(UOp.group(mxu0))
+      mxu = bar2.end(b)
     af, lf, mf = acc.after(mxu), den.after(mxu), mx.after(mxu)
     base = (h * S + s) * W
     dd2 = UOp.range(R, 8)
