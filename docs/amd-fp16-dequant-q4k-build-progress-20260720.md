@@ -54,7 +54,16 @@ Bottom-up steady-state (200 warmup, min-of-30, host-dispatch removed), all linea
 Routed Q6_K ffn_down + attn_v through packed-WMMA (bench `scratchpad/e2e_packed_wmma_bench_q6.py`). **Real measured: 1710 min / 1708.6 median tok/s** (5×8, synced) — from 793 (2.16×), vs llama 1837 (**93%**), vs default 354 (**4.8×**). 100% route coverage, zero ungated fallbacks, correctness-gated max_abs 0.0, finite.
 - **Blocker fixed (scratch workaround, needs clean production fix):** warmstart table `_warmstart_key` (`postrange.py:555`) keys on `(out-dims, reduce)` with NO quant awareness → same-shape Q4/Q6 ffn_down COLLIDE ("packed-weight B carrier must reach exactly one canonical packed PARAM, found 0", `kernel_lds.py:208`). Workaround: pad Q6 output N by one tile + PRE-MATERIALIZED padded packed weight (real bytes + zero dummy blocks, `Tensor.cat().contiguous().realize()`) + force `.contiguous()` on padded output before slicing (else movement-fusion cancels pad vs slice). **Clean fix = make `_warmstart_key` quant-aware.**
 - **Q6_K geometry:** ffn_down Q4-winner (128×128/(4,2)/bc=1) FAILS gate for Q6; swept → **64×64/waves(2,2)/bc=1 PASSES** (max_abs 0.0). attn_kv 64×32/(2,1)/bc=1 passes for Q6 unchanged. (Silent-wrong discipline caught it.)
-- **NEXT: re-profile the new ~300ms pass** → biggest remaining bucket (Q4 WMMA GEMM + attention + norms) to chase the last 7% to llama (FFN tiling ~57% of peak; attention).
+- Re-profile of the ~300ms pass: FFN dominates (65% — ffn_gate_up 40%, ffn_down 25%), attention ~11%, Q6 fallback GONE. Matmuls 83.6% of pass.
+
+### FFN GEOMETRY APPLIED — real pp512 = 1826 tok/s = 99.4% of llama [2026-07-20]
+Applied correctness-gated FFN geometries (bench `scratchpad/e2e_packed_wmma_bench_q6.py:49-66` GEOM table). **Real measured: 1826 median / 1828 min tok/s** — 99.4% of llama 1837, 5.16× default 354, 100% coverage, all 6 (quant,role) combos gate max_abs 0.0, finite.
+- Winning geoms: Q4 ffn_gate_up 256/64/32,(8,1),bc1 = 76.6 TFLOP/s; Q4 ffn_down 256/128/32,(8,2),**bc2** = 78.1 (bc=2 double-buffer beat bc1 +15%); Q6 ffn_down 256/64/32,(8,1),bc1 = 57.0 (**Q4 winner tile is SILENT-WRONG for Q6, max_abs 57.75 → swept**); attn_qo 128/32,(4,1),bc1; attn_kv 64/32,(2,1),bc1. Note wn=1 wins rely on OUR landed size-1-wave fix.
+
+## FULL ARC: 354 (default) → 793 (Q4 packed-WMMA) → 1710 (+Q6) → 1826 (+FFN geom) = 5.16×, 99.4% of llama. Scheduler-native, no bespoke kernel, no int8. Perf at in-frame ceiling (remaining 0.6% diffuse: attention/norms/floor; FFN ~54-65% of fp16 peak, geometry knobs ~tapped).
+
+## PRODUCTIONIZATION (decided 2026-07-20) — land the proven bench as a real route
+All the above is in a SCRATCH bench (`e2e_packed_wmma_bench_q6.py`); only the codegen fix (`da28e5efd`) is landed. To ship: (1) clean quant-aware `_warmstart_key` (`postrange.py:555`) replacing the N-pad workaround; (2) `Q4K`/`Q6K PackedWMMAPrefillCandidate` (`prefill_routes.py` interface `run(lin,x,x_batch,spec)`) with per-(quant,role) geometry table + build-time correctness gate; (3) route registration/selection; (4) C-ladder certification. Success gate: production route measures ~1826 real, correctness-gated, unit tests green.
 
 ### PRIMITIVE-ROUTE VIABILITY SWEEP (2026-07-20) — only #2 viable; int8 moot; overhead second-order
 Tested all primitive-aligned routes to beyond-parity (scheduler-native, no bespoke stack):
