@@ -316,6 +316,15 @@ class Scheduler:
 
   def _apply_tc_opt(self, use_tensor_cores:int, axis:int, tc_select:int, opt_level:int) -> None|list[UOp]:
     if not (reduceops := self.reduceops): raise KernelOptError("no reduce ops for TensorCore")
+    # Composite reductions currently consume scalar score/state values.  A
+    # tensor-core rewrite would pack the QK contraction into fragment lanes
+    # before the online combine can read it, violating that ABI (and producing
+    # either a shape error or numerically corrupted softmax state).  Keep this
+    # boundary fail-closed until the composite lane ABI is explicitly owned by
+    # a backend.  Ordinary REDUCE matmuls have no composite state ranges and
+    # retain the existing WMMA path unchanged.
+    if self.composite_state_ranges:
+      return None
     try:
       tensor_cores = self.ren.tensor_cores if tc_select == -1 else [self.ren.tensor_cores[tc_select]]
     except IndexError:
