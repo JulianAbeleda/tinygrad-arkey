@@ -475,6 +475,11 @@ def reduce_to_acc(ctx:ReduceContext, red:UOp):
       
       input_specs = getattr(composite, "input_specs", ())
       auxiliary_inputs = extra_srcs[-len(input_specs):] if input_specs else ()
+      # Score-expanded-Hd is semantically repeated across the output lane.
+      # Select one representative score lane; the declared logical V input
+      # still supplies the output-Hd value for the accumulator update.
+      if input_specs and input_specs[0].primary_repeated and inp.dtype.count > 1:
+        inp = inp.gep(0)
       v_inp = _load_v_at_reduce_pos(auxiliary_inputs[0], composite, input_ranges, reduce_range, inp._shape,
                                     input_specs[0].range_axes) if auxiliary_inputs else None
       

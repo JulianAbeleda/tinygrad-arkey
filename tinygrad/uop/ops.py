@@ -1189,6 +1189,11 @@ class CompositeInputSpec(NamedTuple):
   # owner RANGE ids without collapsing the source's distinct axis identity.
   source_shape: tuple|None = None
   source_axis_ranges: tuple[int|None, ...]|None = None
+  # Semantic provenance: the primary reduction value is expanded by a
+  # repeated logical lane (for example score[..., None].expand(..., Hd)).
+  # Late lowering may select one representative lane instead of treating the
+  # repetition as an independent reduction element.
+  primary_repeated: bool = False
 
 class ScopedReduceSpec(NamedTuple):
   """Source-visible contract for a producer nested inside an outer reduction.
