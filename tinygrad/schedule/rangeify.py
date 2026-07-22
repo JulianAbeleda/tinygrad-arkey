@@ -19,15 +19,13 @@ sys.setrecursionlimit(10000)
 def lower_attention_semantic(att:UOp) -> UOp:
   """Fail-closed semantic attention lowering.
 
-  The marker is the sole eligibility boundary. The bounded online primitive is
-  retained as a scheduler IR checkpoint, but it is not a production lowering:
-  its nested reduction loop currently renders malformed AMD C on real prefill
-  shapes. Retain the ordinary graph until the generic range ownership/codegen
-  path proves that primitive end-to-end. In particular, never reverse-match
-  generic ADD reductions.
+  The marker is the sole eligibility boundary. Static-shape markers carry a
+  bounded online primitive whose auxiliary score/probability values are sized
+  by KV block; dynamic or unsupported forms retain the ordinary source. In
+  particular, never reverse-match generic ADD reductions.
   """
   assert isinstance(att.arg, AttentionSpec)
-  return att.src[0]
+  return att.src[1] if att.arg.kv_block else att.src[0]
 
 pm_attention_semantic = PatternMatcher([
   (UPat(Ops.ATTENTION, name="att"), lower_attention_semantic),
