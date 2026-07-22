@@ -110,11 +110,25 @@ def _combine_step_independent(op, acc, elem):
     """Per-element step for independent-slot combine."""
     return acc.alu(op, elem)
 
-# Registry: combine_fn -> (step_fn, num_slots, identity_getter)
-# step_fn takes (state_values..., element_parts...) and returns new state
+def _combine_step_online_softmax(m_old, l_old, acc_old, score, v_val):
+    """Per-element step for online-softmax (m,l,acc) combine."""
+    from tinygrad.uop.ops import UOp, Ops, dtypes
+    LOG2E = UOp.const(dtypes.float32, 1.4426950408889634)
+    NEG1 = UOp.const(dtypes.float32, -1.0)
+    m_new = m_old.alu(Ops.MAX, score)
+    diff = m_old.alu(Ops.ADD, m_new.alu(Ops.MUL, NEG1))
+    corr = diff.alu(Ops.MUL, LOG2E).alu(Ops.EXP2)
+    score_shifted = score.alu(Ops.ADD, m_new.alu(Ops.MUL, NEG1))
+    exp_score = score_shifted.alu(Ops.MUL, LOG2E).alu(Ops.EXP2)
+    l_new = l_old.alu(Ops.MUL, corr).alu(Ops.ADD, exp_score)
+    acc_new = acc_old.alu(Ops.MUL, corr).alu(Ops.ADD, exp_score.alu(Ops.MUL, v_val))
+    return m_new, l_new, acc_new
+
+# Registry: combine_fn -> (step_fn, num_slots, identity_getter, elements_per_step)
 COMBINE_STEP_REGISTRY = {
-    None: (lambda *args: args[0].alu(args[1].op, args[2]) if len(args) == 3 else None, None, None),
-    "online_softmax_l": (_combine_step_online_softmax_l, 2, lambda slot: slot.identity),
+    None: (lambda *args: args[0].alu(args[1].op, args[2]) if len(args) == 3 else None, None, None, 1),
+    "online_softmax_l": (_combine_step_online_softmax_l, 2, lambda slot: slot.identity, 1),
+    "online_softmax": (_combine_step_online_softmax, 3, lambda slot: slot.identity, 2),
 }
 
 def _handle_no_range_generic(inp, composite, red):
@@ -134,9 +148,10 @@ def _handle_no_range_generic(inp, composite, red):
             _composite_result_cache[r] = results
         return results[-1]
     
-    step_fn = COMBINE_STEP_REGISTRY.get(composite.combine_fn, (None,))[0]
-    if step_fn is None:
+    entry = COMBINE_STEP_REGISTRY.get(composite.combine_fn)
+    if entry is None or entry[0] is None:
         raise RuntimeError(f"Unknown composite combine: {composite.combine_fn}")
+    step_fn, num_slots, _, elems_per_step = entry
     
     # Initialize state from slot identities
     state = []
@@ -145,8 +160,9 @@ def _handle_no_range_generic(inp, composite, red):
         state.append(red.const(slot.dtype, ident_val))
     
     # Iterate over elements
-    for elem in inp_lst:
-        state = list(step_fn(*state, elem))
+    for i in range(0, len(inp_lst), elems_per_step):
+        group = inp_lst[i:i + elems_per_step]
+        state = list(step_fn(*state, *group))
     
     # Populate cache with all final state values
     _composite_result_cache[red.arg] = state
@@ -224,3 +240,20 @@ def _resolve_reduce_slot(slot):
     cached = _composite_result_cache.get(slot.src[0])
     if cached is None: return None
     return cached[slot.arg]
+
+
+def resolve_reduce_slot_tensor(slot):
+    """Resolve REDUCE_SLOT to a plain REDUCE for the specific slot.
+    Runs at the tensor level before scheduling.
+    """
+    from tinygrad.uop.ops import CompositeReduce
+    import sys
+    red = slot.src[0]
+    print(f"DEBUG resolve_reduce_slot_tensor: red.op={red.op}, arg={slot.arg}", file=sys.stderr)
+    if red.op is not Ops.REDUCE: return None
+    composite = red.arg[0]
+    if not isinstance(composite, CompositeReduce): return None
+    slot_info = composite.slots[slot.arg]
+    result = UOp(Ops.REDUCE, slot.dtype, src=red.src, arg=(slot_info.op, red.arg[1]))
+    print(f"DEBUG resolve_reduce_slot_tensor: returning REDUCE with op={slot_info.op}", file=sys.stderr)
+    return result

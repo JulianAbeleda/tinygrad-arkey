@@ -369,10 +369,13 @@ def horizontal_reduce(inp:UOp, out_dtype:DType) -> list[UOp]:
 def reduce_to_acc(ctx:ReduceContext, red:UOp):
   inp, reduce_range = red.src[0], red.src[1:]
 
-  # Composite reduce with no ranges yet (pre-rangeify): pass through unchanged
-  from tinygrad.uop.ops import CompositeReduce
+  # Composite reduce with no ranges yet: rangeify inline
+  from tinygrad.uop.ops import CompositeReduce, AxisType
   if isinstance(red.arg[0], CompositeReduce) and len(reduce_range) == 0:
-    return None  # let rangeify expand it first
+    axis = red.arg[1]
+    rngs = tuple(UOp.range(UOp.const(dtypes.weakint, red.src[0].shape[i]), i, AxisType.REDUCE) for i in axis)
+    red = UOp(Ops.REDUCE, red.dtype, src=(red.src[0],) + rngs, arg=(red.arg[0], ()))
+    inp, reduce_range = red.src[0], red.src[1:]
 
   lst = horizontal_reduce(inp, red.dtype)
   assert all(x.dtype == red.dtype for x in lst), f"horizontal reduction mismatch {lst[0].dtype} != {red.dtype}"

@@ -703,6 +703,11 @@ def _get_kernel_graph(sink:UOp) -> UOp:
 
   # convert movement ops to ranges
   tsink, rctx = run_rangeify(tsink, bool(DEBUG_RANGEIFY))
+  # Lower composite REDUCEs before symbolic/reduce_collapse so they aren't
+  # constant-folded away before _resolve_reduce_slot can run.
+  from tinygrad.codegen.late.composite_combines import _lower_composite_no_range_pm
+  tsink = graph_rewrite(tsink, PatternMatcher([(UPat(Ops.REDUCE, name="red"), _lower_composite_no_range_pm)]),
+                       name="lower_composite_pre_rangeify")
   tsink = graph_rewrite(tsink, symbolic+pm_reduce_simplify+pm_const_buffer_folding+pm_remove_bufferize, name="symbolic+reduce_collapse+debuf")
   tsink = graph_rewrite(tsink, pm_limit_bufs, ctx=rctx, name="limit buffers")
 

@@ -207,7 +207,12 @@ class Tensor(RandMixin):
 
   def linear_with_vars(self, *lst:Tensor) -> tuple[UOp, dict[str, int]]:
     """Creates the LINEAR UOp needed to realize these Tensor(s), with Variables."""
-    big_sink, becomes_map = transform_to_call(UOp.sink(*[x.uop for x in (self,)+lst]))
+    from tinygrad.codegen.late.composite_combines import resolve_reduce_slot_tensor
+    from tinygrad.uop.ops import PatternMatcher, UPat, Ops, graph_rewrite
+    sink = UOp.sink(*[x.uop for x in (self,)+lst])
+    # Resolve REDUCE_SLOT to plain REDUCE before scheduling
+    sink = graph_rewrite(sink, PatternMatcher([(UPat(Ops.REDUCE_SLOT, name="slot"), resolve_reduce_slot_tensor)]), name="resolve_reduce_slot")
+    big_sink, becomes_map = transform_to_call(sink)
     _apply_map_to_tensors(becomes_map, name="buffers")
     return create_linear_with_vars(big_sink)
 
