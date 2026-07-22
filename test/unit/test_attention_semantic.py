@@ -39,6 +39,27 @@ class TestAttentionSemantic(unittest.TestCase):
     for contraction in contractions:
       self.assertEqual(tuple(x.dtype.scalar() for x in contraction_body(contraction).src), (dtypes.float16, dtypes.float16))
 
+  def test_generic_scheduler_reproduction_keeps_qk_and_pv_in_distinct_kernels(self):
+    """Minimal generic multi-reduce scheduler reproduction.
+
+    A QK reduction feeds both the online max and probability expressions. The
+    current rangeify ownership rules realize it before the later PV reduction,
+    so postrange receives one compatible contraction per kernel. This pins the
+    boundary a future generic multi-reduction scheduler must remove.
+    """
+    q = Tensor.empty(1, 1, 16, 16, dtype=dtypes.float16)
+    k = Tensor.empty(1, 1, 16, 16, dtype=dtypes.float16)
+    v = Tensor.empty(1, 1, 16, 16, dtype=dtypes.float16)
+    calls = shared_prefill_attention(q, k, v).schedule_linear().src
+    def is_fp16_contraction(red):
+      body = red.src[0]
+      while body.op is Ops.CAST: body = body.src[0]
+      return red.arg[0] is Ops.ADD and body.op is Ops.MUL and tuple(x.dtype.scalar() for x in body.src) == (dtypes.float16, dtypes.float16)
+    contraction_calls = [i for i,call in enumerate(calls) if any(is_fp16_contraction(red)
+      for red in call.src[0].toposort() if red.op is Ops.REDUCE)]
+    self.assertEqual(len(contraction_calls), 2)
+    self.assertNotEqual(*contraction_calls)
+
   def test_bounded_online_primitive_matches_attention(self):
     rng = np.random.default_rng(0)
     q = Tensor(rng.standard_normal((1, 2, 3, 4), dtype=np.float32))
