@@ -19,15 +19,15 @@ sys.setrecursionlimit(10000)
 def lower_attention_semantic(att:UOp) -> UOp:
   """Fail-closed semantic attention lowering.
 
-  The marker is the sole eligibility boundary. Until a tiled score-resident
-  lowering proves it can consume this exact contract, retain its ordinary
-  fallback result. In particular, never reverse-match generic ADD reductions.
+  The marker is the sole eligibility boundary. The bounded online primitive is
+  retained as a scheduler IR checkpoint, but it is not a production lowering:
+  its nested reduction loop currently renders malformed AMD C on real prefill
+  shapes. Retain the ordinary graph until the generic range ownership/codegen
+  path proves that primitive end-to-end. In particular, never reverse-match
+  generic ADD reductions.
   """
   assert isinstance(att.arg, AttentionSpec)
-  # src[1] is the bounded online-softmax primitive for statically shaped
-  # attention. Its graph has no full T x KV score/probability result. Dynamic
-  # or otherwise ineligible attention keeps the explicit ordinary fallback.
-  return att.src[1] if att.arg.kv_block else att.src[0]
+  return att.src[0]
 
 pm_attention_semantic = PatternMatcher([
   (UPat(Ops.ATTENTION, name="att"), lower_attention_semantic),

@@ -1218,7 +1218,10 @@ class Tensor(RandMixin):
     if attn_mask is not None:
       if attn_mask.dtype == dtypes.bool: attn_mask = attn_mask.where(0, -float("inf"))
       qk = qk + attn_mask
-    out = qk.cast(self.dtype).softmax(-1).dropout(dropout_p) @ value
+    # Softmax keeps a broadcasted reduction view. Materialize it before the
+    # PV contraction: consuming that view directly as a matmul operand can
+    # alias its reduction-axis indexing and produce incorrect results.
+    out = qk.cast(self.dtype).softmax(-1).contiguous().dropout(dropout_p) @ value
     # Dropout is stochastic and intentionally remains on the ordinary path.
     if dropout_p != 0: return out
     primitive = self._online_attention_primitive(key, value, attn_mask, scale, qk_dtype, out.dtype)
@@ -1251,19 +1254,28 @@ class Tensor(RandMixin):
       stop = min(start + kv_block, key.shape[-2])
       score = self.matmul(key[..., start:stop, :].transpose(-2, -1), dtype=acc_dtype) * scale
       if attn_mask is not None: score = score + attn_mask[..., start:stop]
-      block_m = score.max(axis=-1, keepdim=True)
-      new_m = m.maximum(block_m)
-      corr = (m - new_m).exp()
-      p = (score - new_m).exp()
-      l = l * corr + p.sum(axis=-1, keepdim=True)
+      # Reduced-row values feed a broadcasted score tile. Materialize these
+      # bounded row/tile edges so rangeify cannot alias the KV reduction index
+      # with the later elementwise/PV indexing.
+      block_m = score.max(axis=-1, keepdim=True).contiguous()
+      new_m = m.maximum(block_m).contiguous()
+      corr = (m - new_m).exp().contiguous()
+      p = (score - new_m).exp().contiguous()
+      l = (l * corr + p.sum(axis=-1, keepdim=True).contiguous()).contiguous()
       # Preserve a tensor-core-visible fp16/bf16 PV contraction while the
       # running accumulator remains in acc_dtype. For ordinary float inputs
       # this is a no-op; for reduced-precision activations it is the explicit
       # activation boundary used by the existing generic TC matcher.
-      pv_weights = p if p.dtype == value.dtype else p.cast(value.dtype)
-      acc = acc * corr + pv_weights.matmul(value[..., start:stop, :], dtype=acc_dtype)
+      # `p` carries the max-reduction broadcast view. As with ordinary SDPA,
+      # make the PV operand contiguous before matmul so its reduce-axis index
+      # cannot alias the contraction index.
+      pv_weights = (p if p.dtype == value.dtype else p.cast(value.dtype)).contiguous()
+      acc_corr = corr.expand(acc.shape).contiguous()
+      acc = (acc * acc_corr + pv_weights.matmul(value[..., start:stop, :], dtype=acc_dtype)).contiguous()
       m = new_m
-    return (acc / l).cast(out_dtype)
+    # `l` is a reduced row scalar; materialize its broadcast source before the
+    # final vector normalization for the same indexing reason as PV weights.
+    return (acc / l.contiguous()).cast(out_dtype)
 
   # ***** cast ops *****
 
