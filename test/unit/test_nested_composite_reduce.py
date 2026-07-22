@@ -181,3 +181,22 @@ def test_composite_reduce_state_adapter_bounded_attention_graph():
   assert lowered.op is Ops.TUPLE
   assert tuple(x.shape for x in lowered.src) == (m.shape, l.shape, acc.shape)
   np.testing.assert_allclose(out.numpy(), (acc / l).numpy(), rtol=1e-5, atol=1e-5)
+
+def test_composite_reduce_state_adapter_q16_hd64_fp16_numeric_gate():
+  """The opt-in heterogeneous carrier scales to a representative prefill tile."""
+  rng = np.random.default_rng(1)
+  q_np = rng.standard_normal((1, 1, 16, 64)).astype(np.float16)
+  k_np = rng.standard_normal((1, 1, 16, 64)).astype(np.float16)
+  v_np = rng.standard_normal((1, 1, 16, 64)).astype(np.float16)
+  q, k, v = (Tensor(x, device="CPU") for x in (q_np, k_np, v_np))
+  out = q.scaled_dot_product_attention(k, v)
+  scores = (q.cast(dtypes.float32) @ k.cast(dtypes.float32).transpose(-1, -2)) / (64 ** 0.5)
+  m = scores.max(axis=-1, keepdim=True)
+  weights = (scores - m).exp()
+  l = weights.sum(axis=-1, keepdim=True)
+  acc = weights @ v.cast(dtypes.float32)
+  state = composite_reduce_state_adapter((m, l, acc), (m.shape, l.shape, acc.shape))
+  lowered = lower_composite_accumulator(state)
+  assert lowered.op is Ops.TUPLE
+  assert tuple(x.shape for x in lowered.src) == (m.shape, l.shape, acc.shape)
+  np.testing.assert_allclose(out.numpy(), (acc / l).numpy(), rtol=3e-2, atol=3e-2)
