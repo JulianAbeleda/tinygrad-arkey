@@ -407,9 +407,6 @@ def reduce_to_acc(ctx:ReduceContext, red:UOp):
     red = UOp(Ops.REDUCE, red.dtype, src=(red.src[0],) + rngs + extra_srcs, arg=(red.arg[0], ()))
     inp, reduce_range = red.src[0], red.src[1:]
 
-  import sys
-  if not (isinstance(red.arg, tuple) and len(red.arg) > 0 and hasattr(red.arg[0], 'slots')):
-    print(f"DEBUG reduce_to_acc normal: op={red.arg[0] if isinstance(red.arg, tuple) and len(red.arg)>0 else red.arg}, len(reduce_range)={len(reduce_range)}", file=sys.stderr)
   lst = horizontal_reduce(inp, red.dtype)
   assert all(x.dtype == red.dtype for x in lst), f"horizontal reduction mismatch {lst[0].dtype} != {red.dtype}"
   # if we have a range
