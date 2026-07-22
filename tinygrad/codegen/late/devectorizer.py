@@ -387,165 +387,23 @@ def reduce_to_acc(ctx:ReduceContext, red:UOp):
     if isinstance(red.arg[0], CompositeReduce):
       composite = red.arg[0]
       
-      # Coupled combine: online-softmax (m,l,acc) with correction
-      if composite.combine_fn == "online_softmax":
-        # Slots: m (MAX), l (ADD), acc (ADD). Input: vec2(score, v)
-        assert len(composite.slots) == 3
-        LOG2E = red.const(red.dtype, 1.4426950408889634)
-        NEG1 = red.const(red.dtype, -1.0)
-        
-        inp_score = inp if inp.dtype.count == 1 else inp.gep(0)
-        inp_v = inp if inp.dtype.count == 1 else inp.gep(1)
-        
-        accs = []
-        acc_reads = []
-        for i, slot in enumerate(composite.slots):
-          ident = red.const(slot.dtype, slot.identity if slot.identity is not None else identity_element(slot.op, slot.dtype.scalar()))
-          acc = UOp.placeholder((1,), slot.dtype, ctx.acc_num, AddrSpace.REG)
-          ctx.acc_num += 1
-          acc_init = acc.after(*input_ranges).index(UOp.const(dtypes.weakint, 0)).store(ident)
-          acc_read = acc.after(acc_init, *reduce_range).index(UOp.const(dtypes.weakint, 0))
-          accs.append(acc)
-          acc_reads.append(acc_read)
-        
-        m_old, l_old, acc_old = acc_reads
-        
-        # m_new = max(m_old, score)
-        m_new = m_old.alu(Ops.MAX, inp_score)
-        # diff = m_old - m_new (= m_old + (-1)*m_new)
-        diff = m_old.alu(Ops.ADD, m_new.alu(Ops.MUL, NEG1))
-        # correction = exp(diff) = exp2(diff * log2(e))
-        corr = diff.alu(Ops.MUL, LOG2E).alu(Ops.EXP2)
-        # score_shifted = score - m_new
-        score_shifted = inp_score.alu(Ops.ADD, m_new.alu(Ops.MUL, NEG1))
-        # exp_score = exp(score_shifted)
-        exp_score = score_shifted.alu(Ops.MUL, LOG2E).alu(Ops.EXP2)
-        # l_new = l_old * corr + exp_score
-        l_new = l_old.alu(Ops.MUL, corr).alu(Ops.ADD, exp_score)
-        # acc_new = acc_old * corr + exp_score * v
-        acc_new = acc_old.alu(Ops.MUL, corr).alu(Ops.ADD, exp_score.alu(Ops.MUL, inp_v))
-        
-        results = []
-        for acc, new_val in zip(accs, [m_new, l_new, acc_new]):
-          acc_end = acc.index(UOp.const(dtypes.weakint, 0)).store(new_val).end(*reduce_range).rtag("mergeable")
-          results.append(acc.after(acc_end).index(UOp.const(dtypes.weakint, 0)))
-        
-        # Anchor return on ALL accumulators' ends so DCE doesn't drop non-last slots
-        # (m and l would freeze at identity if only acc's chain is reachable)
-        anchored = results[2]
-        for r in results[:2]:  # anchor m and l
-          anchored = anchored.after(r)
-        rcp_l = results[1].alu(Ops.RECIPROCAL)
-        return anchored.alu(Ops.MUL, rcp_l)
-      
-      # Coupled combine: online-softmax, l-only. Slots: m (MAX), l (ADD). Input: score scalar.
-      if composite.combine_fn == "online_softmax_l":
-        assert len(composite.slots) == 2
-        LOG2E = UOp.const(dtypes.float32, 1.4426950408889634)
-        NEG1 = UOp.const(dtypes.float32, -1.0)
-        
-        inp_score = inp  # scalar per-element input from REDUCE loop
-        
-        accs = []
-        acc_reads = []
-        for i, slot in enumerate(composite.slots):
-          ident = red.const(slot.dtype, slot.identity if slot.identity is not None else identity_element(slot.op, slot.dtype.scalar()))
-          acc = UOp.placeholder((1,), slot.dtype, ctx.acc_num, AddrSpace.REG)
-          ctx.acc_num += 1
-          acc_init = acc.after(*input_ranges).index(UOp.const(dtypes.weakint, 0)).store(ident)
-          acc_read = acc.after(acc_init, *reduce_range).index(UOp.const(dtypes.weakint, 0))
-          accs.append(acc)
-          acc_reads.append(acc_read)
-        
-        m_old, l_old = acc_reads
-        
-        # m_new = max(m_old, score)
-        m_new = m_old.alu(Ops.MAX, inp_score)
-        # diff = m_old - m_new
-        diff = m_old.alu(Ops.ADD, m_new.alu(Ops.MUL, NEG1))
-        # correction = exp(diff) = exp2(diff * log2(e))
-        corr = diff.alu(Ops.MUL, LOG2E).alu(Ops.EXP2)
-        # score_shifted = score - m_new
-        score_shifted = inp_score.alu(Ops.ADD, m_new.alu(Ops.MUL, NEG1))
-        # exp_score = exp(score_shifted)
-        exp_score = score_shifted.alu(Ops.MUL, LOG2E).alu(Ops.EXP2)
-        # l_new = l_old * corr + exp_score
-        l_new = l_old.alu(Ops.MUL, corr).alu(Ops.ADD, exp_score)
-        
-        # NOTE: each slot's END must stay reachable from the returned value, or DCE drops the non-surfaced slot's
-        # store (its final read is never consumed) and the loop-carried accumulator (here, m) never advances --
-        # silently freezing at its identity every iteration. Anchor the return on ALL ends via .after(*ends), not
-        # just the surfaced slot's own end, so merge_reduce_ends (which walks sink.backward_slice) sees every END
-        # sharing this reduce_range and merges them into one real loop. (Verified: without this, l == 1.0 for
-        # every input because m stays at -inf forever and the correction term is always exp(-inf) == 0.)
-        ends = [acc.index(UOp.const(dtypes.weakint, 0)).store(new_val).end(*reduce_range).rtag("mergeable")
-                for acc, new_val in zip(accs, [m_new, l_new])]
-        results = [acc.after(end).index(UOp.const(dtypes.weakint, 0)) for acc, end in zip(accs, ends)]
-
-        # Return l (last slot), anchored on every slot's end so m's store isn't DCE'd.
-        return accs[-1].after(*ends).index(UOp.const(dtypes.weakint, 0))
-
-      # Coupled combine: online-softmax, acc-only. Slots: m (MAX), acc (ADD, vec-Hd). Input: vec(score, v...).
-      # Surfaces acc (last slot), via the same accs[-1] convention as the default independent-slots path.
-      if composite.combine_fn == "online_softmax_acc":
-        assert len(composite.slots) == 2
-        # m/score-space math is always scalar (slot m's dtype), even though red.dtype (the surfaced acc) is vec-Hd.
-        m_dtype = composite.slots[0].dtype
-        LOG2E = red.const(m_dtype, 1.4426950408889634)
-        NEG1 = red.const(m_dtype, -1.0)
-
-        inp_score = inp.gep(0)
-        inp_v = inp.gep(tuple(range(1, inp.dtype.count)))
-
-        accs = []
-        acc_reads = []
-        for i, slot in enumerate(composite.slots):
-          ident = red.const(slot.dtype, slot.identity if slot.identity is not None else identity_element(slot.op, slot.dtype.scalar()))
-          acc = UOp.placeholder((1,), slot.dtype, ctx.acc_num, AddrSpace.REG)
-          ctx.acc_num += 1
-          acc_init = acc.after(*input_ranges).index(UOp.const(dtypes.weakint, 0)).store(ident)
-          acc_read = acc.after(acc_init, *reduce_range).index(UOp.const(dtypes.weakint, 0))
-          accs.append(acc)
-          acc_reads.append(acc_read)
-
-        m_old, acc_old = acc_reads
-
-        # m_new = max(m_old, score)
-        m_new = m_old.alu(Ops.MAX, inp_score)
-        # diff = m_old - m_new (= m_old + (-1)*m_new)
-        diff = m_old.alu(Ops.ADD, m_new.alu(Ops.MUL, NEG1))
-        # correction = exp(diff) = exp2(diff * log2(e))
-        corr = diff.alu(Ops.MUL, LOG2E).alu(Ops.EXP2)
-        # score_shifted = score - m_new
-        score_shifted = inp_score.alu(Ops.ADD, m_new.alu(Ops.MUL, NEG1))
-        # exp_score = exp(score_shifted)
-        exp_score = score_shifted.alu(Ops.MUL, LOG2E).alu(Ops.EXP2)
-        # acc_new = acc_old * corr + exp_score * v  (exp_score broadcast across the v vector)
-        exp_score_v = exp_score if inp_v.dtype.count == 1 else exp_score.broadcast(inp_v.dtype.count)
-        acc_new = acc_old.alu(Ops.MUL, corr).alu(Ops.ADD, exp_score_v.alu(Ops.MUL, inp_v))
-
-        # See the online_softmax_l branch above for why every slot's END must stay reachable from the return value.
-        ends = [acc.index(UOp.const(dtypes.weakint, 0)).store(new_val).end(*reduce_range).rtag("mergeable")
-                for acc, new_val in zip(accs, [m_new, acc_new])]
-        results = [acc.after(end).index(UOp.const(dtypes.weakint, 0)) for acc, end in zip(accs, ends)]
-
-        return accs[-1].after(*ends).index(UOp.const(dtypes.weakint, 0))
-
-      # Default: independent slots
+      # Create accumulators (common to all combines)
       accs = []
+      acc_reads = []
       for i, slot in enumerate(composite.slots):
         ident = red.const(slot.dtype, slot.identity if slot.identity is not None else identity_element(slot.op, slot.dtype.scalar()))
         acc = UOp.placeholder((1,), slot.dtype, ctx.acc_num, AddrSpace.REG)
         ctx.acc_num += 1
         acc_init = acc.after(*input_ranges).index(UOp.const(dtypes.weakint, 0)).store(ident)
-        inp_lst = horizontal_reduce(inp, slot.dtype)
         acc_read = acc.after(acc_init, *reduce_range).index(UOp.const(dtypes.weakint, 0))
-        lst_slot = [acc_read] + inp_lst
-        ret_slot = functools.reduce(lambda x,y: x.alu(slot.op, y), lst_slot)
-        acc_end = acc.index(UOp.const(dtypes.weakint, 0)).store(ret_slot).end(*reduce_range).rtag("mergeable")
-        accs.append(acc.after(acc_end).index(UOp.const(dtypes.weakint, 0)))
-      return accs[-1]
-
+        accs.append(acc)
+        acc_reads.append(acc_read)
+      
+      # Dispatch to combine function (combine-agnostic)
+      from tinygrad.codegen.late.composite_combines import COMBINE_REGISTRY, _independent_slots
+      combine_fn = COMBINE_REGISTRY.get(composite.combine_fn, _independent_slots)
+      return combine_fn(ctx, accs, acc_reads, inp, composite, input_ranges, reduce_range, red)
+    
     identity = red.const(red.dtype, identity_element(red.arg[0], red.dtype.scalar()))
     acc = UOp.placeholder((1,), red.dtype, ctx.acc_num, AddrSpace.REG).replace(tag=red.tag if isinstance(red.tag, RegisterResidentAccumulator) else None)
     acc_init = acc.after(*input_ranges).index(UOp.const(dtypes.weakint, 0)).store(identity)
