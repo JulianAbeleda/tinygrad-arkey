@@ -51,3 +51,19 @@ A → B1 → B2 → C → D. Claude gates between each; agents serialized (singl
 Both reduces recompute the same deterministic running max `m` → `l` and `acc` stay consistent. Each surfaces only its LAST slot — exactly what Phase A already supports. **Both are score-resident** (score never materialized), so the flash memory win holds; cost is one extra QKᵀ (cheap WMMA). This avoids the value-model wall entirely.
 
 **Revised sequencing:** A ✅ → (A.5 multi-output — SKIP, use two-reduce) → **B: rangeify emits the TWO-reduce structure for `softmax(q@kᵀ)@v`** (score-resident, correct, no WMMA) → C: WMMA both QKᵀ (shared/recomputed) and PV contractions → D: gate vs SDPA (must beat it despite the extra QKᵀ) + wire. If the two-reduce recompute makes it lose to SDPA at D, that's the honest NO-GO.
+
+---
+
+## ✅ Two-reduce formulation VALIDATED + exhaustive next steps (2026-07-22)
+
+**Two-reduce online-softmax = exact attention** (numpy, max_abs_err 7.6e-8, MATCH). Splitting into `(m,l)→l` and `(m,acc)→acc`, sharing the deterministic running max `m`, reproduces standard attention. The formulation is proven; the multi-output wall is genuinely avoided. This is a build, not a wall.
+
+**Concrete steps (each = an agent + Claude gate; no step is blocked, each is a modification of working infra):**
+- **S1 ✅ two-reduce math** — validated exact.
+- **S2 — 2-slot coupled combines.** Generalize the existing hardcoded 3-slot `"online_softmax"` combine in `reduce_to_acc` into two 2-slot coupled combines: `(m,l)` surfacing `l`, and `(m,acc)` surfacing `acc` (vec-Hd). Each surfaces its LAST slot — existing `accs[-1]` already does this, so NO multi-output needed. Test each combine in isolation (correct `l`, correct `acc`) vs numpy.
+- **S3 — two-reduce attention through the pipeline (the workaround test).** Construct `softmax(q@kᵀ)@v` as two composite reduces manually (as Phase A constructed one), realize, assert `max_rel_err ≤ 1e-2` vs fp32 reference. Proves the composite machinery does two-reduce attention correctly (no rangeify emission, no WMMA yet).
+- **S4 (Phase B) — rangeify emits the two-reduce structure** from the `softmax(q@kᵀ·scale+mask)@v` subgraph; score-resident (no `T×KV` buffer); correct.
+- **S5 (Phase C) — WMMA** on the QKᵀ (over Hd) and PV (over blockKV) contractions inside the composite reduces (dual-contraction; resolve `postrange.py:391` single-tag).
+- **S6 (Phase D) — gate** vs SDPA at 2048 (must beat it despite the extra QKᵀ); wire into `model.py:583-598` + 14B if GO.
+
+Mindset: each step is a modification of infrastructure that already works, not a new wall. Prove each with an artifact; only stop if a step is genuinely, verifiably impossible.
