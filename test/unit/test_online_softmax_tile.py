@@ -42,3 +42,16 @@ def test_online_softmax_tile_normalized_path_keeps_state_in_register_graph():
   assert tile.weights is not None
   assert tile.pv.src[0] is tile.weights
   assert any(x.op is Ops.REDUCE for x in tile.weights.toposort())
+
+def test_online_softmax_tile_descriptor_matches_ordinary_pv_wmma_fragments():
+  """Normalized weights remain a regular WMMA A fragment, not a new backend op."""
+  tile = online_softmax_tile(
+    _frag(), _frag(), _frag(),
+    qk_acc=UOp.placeholder((16, 16), dtypes.float32, 1),
+    pv_acc=UOp.placeholder((16, 16), dtypes.float32, 2),
+    m=UOp.placeholder((16, 1), dtypes.float32, 3),
+    l=UOp.placeholder((16, 1), dtypes.float32, 4),
+    dims=(16, 16, 16), device="AMD", threads=32, normalize=True)
+  assert tile.ordinary_wmma_ready()
+  # Admission is still fail-closed until generated source and ISA evidence.
+  assert tile.abi_report()["renderer"] == "fail-closed"

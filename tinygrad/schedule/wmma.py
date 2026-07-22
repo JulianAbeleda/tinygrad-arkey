@@ -46,6 +46,20 @@ class OnlineSoftmaxTile:
             "dims": tuple(dims), "device": device, "threads": threads,
             "renderer": "fail-closed", "isa": "not-emitted"}
 
+  def ordinary_wmma_ready(self) -> bool:
+    """Return whether both contractions have the ordinary fragment ABI.
+
+    This is deliberately only a descriptor check.  It does not change
+    admission policy; callers still need backend/source/ISA evidence before
+    enabling a production attention shape.
+    """
+    self.validate()
+    dims, _device, threads = self.qk.arg
+    if tuple(dims) != (16, 16, 16) or threads != 32: return False
+    return all(len(n.src) == 3 and n.src[0].shape == (16, 16) and
+               n.src[1].shape == (16, 16) and n.src[2].shape == (16, 16)
+               for n in (self.qk, self.pv))
+
 
 def online_softmax_tile(q_frag:UOp, k_frag:UOp, v_frag:UOp, *,
                         qk_acc:UOp, pv_acc:UOp, m:UOp, l:UOp,
