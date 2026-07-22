@@ -53,3 +53,12 @@ P1.a (deepseek) located the failing opt; Claude verified by direct measurement. 
 **Verified fix (measured, then reverted pending clean P1.b):** wrap the post-TC LOCAL in `try/except KernelOptError: pass` so a LOCAL failure keeps the TC'd kernel instead of discarding it. Result on `(a@b).max(-1)` TC_OPT=2: **WMMA 0→3, max_rel_err 0.00000.** The applied-but-not-lowered gap is a ~2-line fix. Route (a) piece 1 works.
 
 Open for P1.b (deepseek to implement cleanly): (a) blanket try/except around the LOCAL (smallest, verified) vs (b) validate axis type before LOCAL (more surgical, avoids masking unrelated LOCAL failures). Must run the full postrange/heuristic test suite for regressions before commit.
+
+## ✅ PIECE 1 COMMITTED + VERIFIED CLEAN (cb6e760e0, 2026-07-21)
+
+deepseek landed the fix (cb6e760e0): wraps the whole post-TC pressure-admission/upcast/local block in `try/except KernelOptError` so a post-TC opt failure retains the valid TC schedule instead of discarding it. deepseek did NOT run the regression suite (a missed gate); Claude ran it:
+- Repro `(a@b).max(-1)` TC_OPT=2: **WMMA 0→3, max_rel_err 0.00000.** ✓
+- Normal 1024³ GEMM: still WMMA, correct (unregressed). ✓
+- WMMA + packed-WMMA unit suite (test_wmma_value_semantics, test_amd_isa_wmma, test_q4k_wmma_value, test_q4k_wmma_tiled_gates, test_mmq_llama_packed_operands): **fix = parent = "5 failed, 54 passed, 10 skipped"** — identical split, **zero new regressions.** The 5 failures are pre-existing (register-pressure gates + a known q4k no-hand verdict FAIL), confirmed on parent 10fec3793.
+
+**Piece 1 done.** WMMA now survives a fused matmul+epilogue-reduce on the existing centralized TC path. Next: Piece 2 — the REDUCE-preserving *attention* fusion (QKᵀ + softmax epilogue + PV, matmuls kept as REDUCEs, NOT PCONTIG). Claude to scope.
