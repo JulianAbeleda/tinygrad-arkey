@@ -111,7 +111,7 @@ def _handle_pv_matmul(red:UOp, mul_inp:UOp):
     combine_fn="online_softmax",
     v_uop=V_ref,
   )
-  return UOp(Ops.REDUCE, red.dtype, (score, V_ref), (composite, score_axis))
+  return UOp(Ops.REDUCE, red.dtype.vec(Hd), (score, V_ref), (composite, score_axis))
 
 def add_ranges_to_store(ctx, x):
   if x.src[0]._shape is None or x.src[1]._shape is None or x.src[0].shape == (): return None

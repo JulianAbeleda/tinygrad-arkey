@@ -315,6 +315,15 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
         return self.src[0]._shape
       # REDUCE with empty axis is passthrough (lowered form)
       case Ops.REDUCE if len(self.arg[1]) == 0:
+        # Composite reduce with vec output: compute shape from input minus reduced dims
+        if isinstance(self.arg[0], CompositeReduce):
+          last_slot = self.arg[0].slots[-1]
+          if last_slot.dtype.count > 1:
+            ps = self.src[0]._shape
+            if ps is None: return None
+            reduce_axes = {r.arg[0] for r in self.src[1:] if r.op is Ops.RANGE and r.arg[1] is AxisType.REDUCE}
+            if reduce_axes:
+              return tuple(last_slot.dtype.count if i in reduce_axes else s for i,s in enumerate(ps))
         # these can mismatch if there's a horizonal reduce
         return (self.dtype.count,) if self.dtype.count > 1 else ()
 
@@ -367,7 +376,15 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
           axis_arg = self.arg[1]
           if not isinstance(axis_arg, tuple) or not all(isinstance(x, int) and x>=0 and x<len(ps) for x in axis_arg):
             raise ValueError(f"invalid type for axis: {axis_arg}")
-          return tuple(1 if i in axis_arg else s for i,s in enumerate(ps))
+          ret = list(1 if i in axis_arg else s for i,s in enumerate(ps))
+          # Composite reduce: last slot may have vector dtype (flash attention acc)
+          if isinstance(self.arg[0], CompositeReduce):
+            last_slot = self.arg[0].slots[-1]
+            if last_slot.dtype.count > 1 and len(ret) > 0:
+              for ax in sorted(axis_arg, reverse=True):
+                if ax < len(ret):
+                  ret[ax] = last_slot.dtype.count
+          return tuple(ret)
 
     if self.op in GroupOp.Unary.union({Ops.CAST}):
       assert len(self.src) == 1, "unary ops must have 1 src"
