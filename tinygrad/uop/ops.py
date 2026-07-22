@@ -271,6 +271,9 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
           shape = self.src[0].arg[0].slot_shapes[self.arg]
           if shape is not None: return shape
         return self.src[0]._shape
+      case Ops.COMPOSITE_ACCUMULATOR:
+        # Backend-neutral tuple carrier: arg is the per-slot logical shape.
+        return tuple(self.arg) if isinstance(self.arg, tuple) else self.src[0]._shape
       case Ops.SCOPED_REDUCE:
         # The first SCOPED_REDUCE source is its semantically identical
         # fallback.  It is deliberately source-visible so a compiler that

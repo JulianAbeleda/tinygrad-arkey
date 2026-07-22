@@ -133,6 +133,9 @@ spec_shared = PatternMatcher([
 
 # these ops can exist in tensor but not programs. example: movement
 spec_tensor = PatternMatcher([
+  # CompositeAccumulator carries scalar/vector slot state until a backend
+  # proves a register layout.  It is intentionally not a renderer op.
+  (UPat(Ops.COMPOSITE_ACCUMULATOR, name="a"), lambda a: isinstance(a.arg, tuple) and len(a.src) > 0),
   (UPat(Ops.MEMORY_SEMANTIC, src=(UPat(),), name="m"), lambda m:
    m.dtype == m.src[0].dtype and m.arg.__class__.__name__ == "MemorySemanticOwner" and
    getattr(m.arg, "__dataclass_params__", None) is not None and
