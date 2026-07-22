@@ -191,7 +191,9 @@ def hand_coded_optimizations(k:Scheduler) -> Scheduler:
     if k.full_shape[axis] <= 7 and is_masked and prod(k.full_shape[j] for j in to_upcast) * k.full_shape[axis] <= 7 * 7:
       if DEBUG >= 4: print(f"upcasting masked axis : {axis}")
       to_upcast.append(axis)
-  for axis in to_upcast[::-1]: k.apply_opt(Opt(OptOps.UPCAST, axis, 0))
+  for axis in to_upcast[::-1]:
+    try: k.apply_opt(Opt(OptOps.UPCAST, axis, 0))
+    except KernelOptError: pass
 
   # potentially do more upcasts of non reduce axes based on a heuristic
   is_dsp = k.ren is not None and k.ren.target.device == "DSP"
@@ -217,7 +219,8 @@ def hand_coded_optimizations(k:Scheduler) -> Scheduler:
     if xb_choices:
       xb_choices = sorted(xb_choices)
       if DEBUG >= 4: print(f"more upcast axis : {xb_choices}")
-      k.apply_opt(Opt(OptOps.UPCAST, xb_choices[0][2], xb_choices[0][3]))
+      try: k.apply_opt(Opt(OptOps.UPCAST, xb_choices[0][2], xb_choices[0][3]))
+      except KernelOptError: break
       upcasted_axis.add(xb_choices[0][2])
     else: break
 
@@ -242,7 +245,11 @@ def hand_coded_optimizations(k:Scheduler) -> Scheduler:
   # if nothing at all is upcasted and it's easy to, do an upcast
   for splits in [4]:
     if not k.upcasted and k.upcastable_dims and k.full_shape[k.upcastable_dims[-1]] % splits == 0:
-      k.apply_opt(Opt(OptOps.UPCAST, k.upcastable_dims[-1], splits))
+      # Composite reductions own their output lanes as scalar LOOP state.  The
+      # scheduler rejects packing those ranges; this opportunistic fallback
+      # must fail closed and leave the valid scalar schedule intact.
+      try: k.apply_opt(Opt(OptOps.UPCAST, k.upcastable_dims[-1], splits))
+      except KernelOptError: pass
 
   # **** local groups ****
 
