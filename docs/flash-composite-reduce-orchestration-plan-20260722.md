@@ -1,0 +1,38 @@
+# Orchestration plan: composite-reduce flash — Claude drives, low agents execute
+
+**Owner:** Claude (orchestrator + gate). **Executors:** low-effort agents, one concrete phase each. **Verification:** Claude in the main loop after every agent — no result is trusted until I reproduce its artifact.
+
+**Why this supersedes deepseek's "infra ready" framing:** verified 2026-07-22 — deepseek's "full-pipeline proof" was a normal `x.sum()` *injected* at `reduce_to_acc` (late stage), bypassing spec/rangeify. A genuinely-built composite reduce **fails UOp verification** (`at 20 on Ops.REDUCE`). Plus a copy-paste bug (`composite_reduce` duplicated into `UPat`) and no committed end-to-end test. So the primitive is NOT yet a validated first-class construct. Phase A fixes that before the scheduler work.
+
+Repo: `/home/ubuntu/tinygrad-arkey` · Python: `.venv/bin/python` · Env: `DEV=AMD`
+
+## Global rules (every agent)
+- **Single GPU lane → agents run ONE AT A TIME.** Claude serializes; never two GPU agents at once.
+- **Agents gather verifiable artifacts, Claude decides.** Every task ends with a concrete artifact (a passing test, a per-kernel `__WMMA` dump, a `max_rel_err`, a buffer list) — never a prose conclusion. Claude reproduces it before the next phase.
+- **No hand kernels** (no `custom_kernel`, UOp *kernel bodies*, `__builtin_amdgcn`/barriers/LDS, `flash_kernels` imports). This is scheduler/codegen work. (Building a composite-REDUCE UOp *graph* is allowed and required — that is not a hand kernel.)
+- **Prove WMMA per-kernel** (dump `__WMMA` call sites + which kernel); never aggregate grep counts.
+- **Run the relevant test suite before every commit**; keep it unregressed (baseline: WMMA/packed subset `54 passed/10 skipped/5 xfailed`; `test_tiny`+scheduler `38/1`; pre-existing: 3 `test_wmma_emitted_code_fixtures` subtests, ignore).
+- `tm` not wall-clock, warm ≥200. Commit on master, no branches, Co-Authored-By trailer, push. Honest fallback: stop + report the precise blocker rather than fake/force.
+
+## Phase A — Make the composite reduce a real first-class construct (small, do first)
+**Goal:** a genuinely-constructed multi-slot composite reduce passes verification and lowers to correct results for ALL slots — the proof deepseek's 1-slot reroute did not give.
+1. **Fix the copy-paste bug:** `composite_reduce` is defined twice in `ops.py` (line 594 on UOp, line 1399 inside the `UPat` class with a UOp-creating body). Remove the wrong one from `UPat`.
+2. **Diagnose + fix verification:** find the spec check that rejects a REDUCE with a `CompositeReduce` arg (`spec.py` — the `hasattr(x.arg[0],'slots')` relaxation is incomplete; the failure is `at 20 on Ops.REDUCE`). Make a properly-formed composite REDUCE (post-rangeify RANGE-src form, as the scheduler would emit) pass verification.
+3. **Real end-to-end test (the Phase A gate):** build a 2-slot `(ADD, MAX)` composite reduce over a small tensor, run it through the full realize pipeline, and assert **BOTH** slots correct (sum AND max) — not just `accs[-1]`. Commit as `test/unit/test_composite_reduce.py`.
+**Artifacts:** the passing test (both slots), regression suite counts. **Gate:** Claude reproduces the test.
+
+## Phase B — Scheduler emits the composite reduce for attention (the core, multi-step)
+**Goal:** a rangeify graph-rewrite recognizes `softmax(q@kᵀ·scale + mask) @ v` and restructures it into ONE composite REDUCE over KV carrying `(m, l, acc)` — QKᵀ and PV as inner ADD+MUL contractions, softmax correction as the combine — so the `T×KV` score never materializes.
+- Anchor: `tinygrad/schedule/rangeify.py` (the graph-rewrite machinery + where the score bufferize is inserted, `remove_bufferize`). The online-softmax combine math (NOT the kernel) ← `extra/qk/flash_kernels.py` for reference.
+- Sub-steps (each an agent + Claude gate): (B1) pattern-match the attention subgraph and emit the composite REDUCE structure, correctness first with NO WMMA; (B2) prove the score buffer is gone (per-kernel buffer list) and `max_rel_err ≤ 1e-2` vs fp32.
+**Fallback:** if rangeify cannot emit the composite structure without REDUCE→LOOP (kills WMMA) or a hand kernel → stop, report the precise rangeify blocker.
+
+## Phase C — WMMA on both inner contractions
+**Goal:** the TC opt WMMA's BOTH the QKᵀ (over Hd) and PV (over KV) contractions inside the composite reduce. Resolve the single-tag limit at `postrange.py:391` (`get_single_element([... tag=="TC"])`) — it currently allows one TC reduce; attention needs two.
+**Artifacts:** per-kernel dump with TWO `__WMMA` call sites, score buffer still gone, correctness held.
+
+## Phase D — Gate + wire
+Measure the composite-reduce attention vs materialized SDPA at `T=KV=2048`: two-ceiling table (empirical ceilings), absolute `tm` (warm ≥200), per-kernel WMMA, `max_rel_err`. If faster with correctness → wire into `model.py:583-598` + 14B integration test (tok/s vs shipped). Else → honest numbers, do not wire.
+
+## Sequencing
+A → B1 → B2 → C → D. Claude gates between each; agents serialized (single GPU). The hard, genuinely-multi-week work is B (scheduler emission) and C (dual-contraction WMMA). A is small but non-negotiable (it makes "the primitive works" actually true). Stop honestly at any real wall.
