@@ -90,6 +90,16 @@ def add_ranges_to_store(ctx, x):
 
 def lower_shaped_wmma(ctx, x):
   dims, device, threads = x.arg
+  # Keep the declarative tile boundary fail-closed before constructing the
+  # backend WMMA carrier.  In particular, a tile primitive must carry three
+  # fragment-shaped operands; accepting scalar state here silently generates
+  # an invalid AMD fragment ABI and is much harder to diagnose downstream.
+  if len(x.src) != 3 or any(s.shape is None or s.shape == () for s in x.src):
+    raise ValueError("SHAPED_WMMA requires three shaped fragment operands")
+  if not (isinstance(dims, tuple) and len(dims) == 3 and all(isinstance(d, int) and d > 0 for d in dims)):
+    raise ValueError("SHAPED_WMMA dimensions must be a positive (N, M, K) tuple")
+  if not isinstance(threads, int) or threads <= 0:
+    raise ValueError("SHAPED_WMMA thread count must be positive")
   dtype_in, dtype_out = x.src[0].dtype.base, x.dtype
   upcasts = [(s, UOp.range(s.shape[-1], next(ctx), axis_type=AxisType.UPCAST)) for s in x.src]
   tc_upcast_axes = tuple(((u.arg[0], s.shape[-1]),) for s, u in upcasts)
