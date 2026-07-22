@@ -33,6 +33,19 @@ pm_attention_semantic = PatternMatcher([
   (UPat(Ops.ATTENTION, name="att"), lower_attention_semantic),
 ])
 
+def lower_scoped_value_semantic(value:UOp) -> UOp:
+  """Fail closed until a backend owns the scoped loop and its registers."""
+  return value.src[0].src[0]
+
+def lower_scoped_reduce_semantic(red:UOp) -> UOp:
+  # A naked boundary is valid IR too. Lower to its ordinary semantic source.
+  return red.src[0]
+
+pm_scoped_reduce_semantic = PatternMatcher([
+  (UPat(Ops.SCOPED_VALUE, name="value"), lower_scoped_value_semantic),
+  (UPat(Ops.SCOPED_REDUCE, name="red"), lower_scoped_reduce_semantic),
+])
+
 def add_ranges_to_store(ctx, x):
   if x.src[0]._shape is None or x.src[1]._shape is None or x.src[0].shape == (): return None
   assert x.src[0].shape == x.src[1].shape, "bad store shape"
@@ -689,7 +702,7 @@ def _get_kernel_graph(sink:UOp) -> UOp:
   # Attention may only be lowered from its explicit semantic marker. The
   # previous broad ADD-REDUCE matcher was unsound: ordinary reductions must
   # always retain their original semantics.
-  tsink = graph_rewrite(tsink, pm_attention_semantic, name="attention_semantic")
+  tsink = graph_rewrite(tsink, pm_attention_semantic+pm_scoped_reduce_semantic, name="attention_semantic")
 
   # convert movement ops to ranges
   tsink, rctx = run_rangeify(tsink, bool(DEBUG_RANGEIFY))

@@ -236,7 +236,7 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
         if self.src[0].op is Ops.NOOP: return self.marg
 
       # hacks for NOOP
-      case Ops.NOOP | Ops.MEMORY_SEMANTIC:
+      case Ops.NOOP | Ops.MEMORY_SEMANTIC | Ops.SCOPED_VALUE:
         return self.src[0]._shape if len(self.src) >= 1 else None
 
       case Ops.GETTUPLE:
@@ -267,6 +267,11 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
       case Ops.REDUCE_SLOT:
         # A slot is a projection of the composite result and has the ordinary
         # reduced tensor shape. It is not a hardware vector lane.
+        return self.src[0]._shape
+      case Ops.SCOPED_REDUCE:
+        # The first SCOPED_REDUCE source is its semantically identical
+        # fallback.  It is deliberately source-visible so a compiler that
+        # cannot lower the scoped form can fail closed without graph surgery.
         return self.src[0]._shape
       case Ops.ATTENTION:
         # src[0] is the ordinary, semantically identical fallback result. The
@@ -611,6 +616,35 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
       inputs = (legacy_v,)
     composite = CompositeReduce(slots=tuple(slots), combine_fn=kwargs.pop('combine_fn', None))
     return UOp(Ops.REDUCE, kwargs.pop('dtype', self.dtype), src=(self,)+tuple(inputs), arg=(composite, axis), **kwargs)
+
+  def scoped_reduce(self, producer: 'UOp', *logical_inputs: 'UOp', axis: tuple[int, ...], axis_maps: tuple[tuple[int, ...], ...],
+                    scope_owner: int, result_dtypes: tuple[Any, ...]|None=None) -> 'UOp':
+    """Create a nested-reduction semantic boundary.
+
+    ``self`` is the ordinary fallback result. ``producer`` is the inner
+    reduction body. Every source after the fallback has one explicit map from
+    its axes to the outer logical axes (``-1`` marks a value-local axis).
+    ``scope_owner`` names the outer reduction loop that owns the producer.
+    """
+    src = (self, producer) + logical_inputs
+    if len(axis_maps) != len(src)-1: raise ValueError("one axis map is required for the producer and each logical input")
+    if result_dtypes is None: result_dtypes = (self.dtype,)
+    spec = ScopedReduceSpec(tuple(axis), tuple(tuple(x) for x in axis_maps), scope_owner, tuple(result_dtypes))
+    return UOp(Ops.SCOPED_REDUCE, self.dtype, src=src, arg=spec)
+
+  def scoped_value(self, slot_or_axis_map:int|tuple[int|None, ...]=0) -> 'UOp':
+    """Create either a typed scoped result or an owned logical input.
+
+    SCOPED_REDUCE sources use an integer result slot. All other values use an
+    axis map and remain unindexed until their owning reduction lowers.
+    """
+    if self.op is Ops.SCOPED_REDUCE:
+      if not isinstance(slot_or_axis_map, int): raise ValueError("SCOPED_REDUCE result requires an integer slot")
+      if not 0 <= slot_or_axis_map < len(self.arg.result_dtypes): raise ValueError(f"invalid scoped result slot {slot_or_axis_map}")
+      return UOp(Ops.SCOPED_VALUE, self.arg.result_dtypes[slot_or_axis_map], src=(self,), arg=slot_or_axis_map)
+    if isinstance(slot_or_axis_map, int): raise ValueError("logical scoped value requires an axis map")
+    if len(slot_or_axis_map) != len(self.shape): raise ValueError("scoped value axis map rank mismatch")
+    return UOp(Ops.SCOPED_VALUE, self.dtype, (self,), ScopedValueSpec(tuple(slot_or_axis_map)))
 
   def contiguous(self, *args, **kwargs):
     if self.op is Ops.CONTIGUOUS: return self
@@ -1138,6 +1172,23 @@ class AccumulatorSlot(NamedTuple):
 class CompositeReduce(NamedTuple):
   slots: tuple
   combine_fn: Any = None  # UOp sub-graph encoding combine (None = independent slots)
+
+class ScopedReduceSpec(NamedTuple):
+  """Source-visible contract for a producer nested inside an outer reduction.
+
+  ``source_axis_maps[i]`` maps axes of source ``i+1`` to the fallback's outer
+  logical axes. ``-1`` denotes a value-local/SSA axis.  The spec contains no
+  UOps: all dependencies remain normal sources and therefore survive graph
+  substitution, scheduling, and DCE.
+  """
+  reduce_axes: tuple[int, ...]
+  source_axis_maps: tuple[tuple[int, ...], ...]
+  scope_owner: int
+  result_dtypes: tuple[Any, ...]
+
+class ScopedValueSpec(NamedTuple):
+  # source axis -> owner primary-input axis, with None for broadcast axes
+  axis_map: tuple[int|None, ...]
 
 class AttentionSpec(NamedTuple):
   """Immutable semantics for an attention operation before scheduler lowering.

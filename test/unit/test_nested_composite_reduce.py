@@ -1,7 +1,7 @@
-"""Generic nested-reduction boundary: an inner contraction feeds one stateful outer reduction."""
+"""Generic scoped nested-reduction boundary, intentionally not attention-specific."""
 from tinygrad import Tensor, dtypes
 from tinygrad.uop import Ops
-from tinygrad.uop.ops import AccumulatorSlot, UOp
+from tinygrad.uop.ops import AccumulatorSlot, UOp, ScopedReduceSpec
 
 
 def test_nested_reduction_with_logical_element_input_stays_in_one_schedule():
@@ -21,3 +21,31 @@ def test_nested_reduction_with_logical_element_input_stays_in_one_schedule():
   calls = acc.schedule_linear().src
   assert len(calls) == 1
   assert sum(u.op is Ops.REDUCE for u in calls[0].src[0].toposort()) >= 2
+
+def test_scoped_reduce_keeps_producer_inputs_and_ssa_result_explicit():
+  # Non-attention proof: inner dot product is consumed by an outer weighted
+  # reduction. The fallback is ordinary tinygrad, while scoped IR records the
+  # exact producer/input correspondence a fused backend must own.
+  lhs = Tensor.empty(1, 1, 4, 8, dtype=dtypes.float32)
+  rhs = Tensor.empty(1, 1, 6, 8, dtype=dtypes.float32)
+  weights = Tensor.empty(1, 1, 4, 6, dtype=dtypes.float32)
+  inner = lhs @ rhs.transpose(-2, -1)
+  fallback = (inner * weights).sum(axis=3)
+  scoped = fallback.uop.scoped_reduce(
+    inner.uop, weights.uop, axis=(3,),
+    axis_maps=((0, 1, 2, 3), (0, 1, 2, 3)), scope_owner=3,
+    result_dtypes=(dtypes.float32, dtypes.float32))
+  result = scoped.scoped_value(0)
+
+  assert result.op is Ops.SCOPED_VALUE
+  assert result.src == (scoped,)
+  assert isinstance(scoped.arg, ScopedReduceSpec)
+  assert scoped.src[1] is inner.uop
+  assert scoped.src[2] is weights.uop
+  assert scoped.arg.source_axis_maps == ((0, 1, 2, 3), (0, 1, 2, 3))
+  assert scoped.arg.scope_owner == 3
+
+  # The generic fallback reaches rangeify once; the semantic boundary cannot
+  # recursively re-enter rangeify because it lowers directly to fallback.
+  calls = Tensor(result).schedule_linear().src
+  assert len(calls) == 1

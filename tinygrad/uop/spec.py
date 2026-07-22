@@ -199,6 +199,18 @@ spec_tensor = PatternMatcher([
   (UPat(Ops.REDUCE_SLOT, src=(UPat(),), name="x"),
    lambda x: isinstance(x.arg, int) and x.src[0].op is Ops.REDUCE and hasattr(x.src[0].arg[0], 'slots') and 0 <= x.arg < len(x.src[0].arg[0].slots)),
 
+  # SCOPED_REDUCE is a generic nested-reduction boundary. Its fallback,
+  # producer, and logical-element inputs are all normal sources; only axis
+  # correspondence and loop ownership live in immutable metadata.
+  (UPat(Ops.SCOPED_REDUCE, src=(UPat(), UPat()), allow_any_len=True, name="x"),
+   lambda x: hasattr(x.arg, 'source_axis_maps') and len(x.arg.source_axis_maps) == len(x.src)-1
+   and isinstance(x.arg.scope_owner, int) and len(x.arg.result_dtypes) > 0),
+  (UPat(Ops.SCOPED_VALUE, src=(UPat(Ops.SCOPED_REDUCE, name="x"),), name="v"),
+   lambda x,v: isinstance(v.arg, int) and 0 <= v.arg < len(x.arg.result_dtypes) and v.dtype == x.arg.result_dtypes[v.arg]),
+
+  (UPat(Ops.SCOPED_VALUE, src=(UPat(),), name="x"),
+   lambda x: hasattr(x.arg, 'axis_map') and len(x.arg.axis_map) == len(x.src[0].shape)),
+
   # ATTENTION keeps a normal fallback plus explicit Q/K/V/(optional mask)
   # dependencies until rangeify selects a lowering.
   (UPat(Ops.ATTENTION, name="x"),

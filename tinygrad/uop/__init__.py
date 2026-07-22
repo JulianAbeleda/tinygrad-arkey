@@ -67,6 +67,9 @@ class Ops(FastEnum):
   NOOP = auto(); REWRITE_ERROR = auto()
   # Value-preserving ownership carrier consumed by the scheduler before codegen.
   MEMORY_SEMANTIC = auto()
+  # Scheduler-only logical element with explicit owner-axis mapping. It is
+  # consumed by a stateful reduction before program lowering.
+  SCOPED_VALUE = auto()
   # FUNCTION has a TUPLE body and is gradient-able; CALL is an opaque kernel invocation
   PARAM = auto(); FUNCTION = auto(); CALL = auto()
 
@@ -155,6 +158,10 @@ class Ops(FastEnum):
 
   # multi-output reduce slot access: REDUCE_SLOT(composite_reduce, i) returns slot i
   REDUCE_SLOT = auto()
+
+  # semantic nested-reduction boundary. SCOPED_VALUE is declared above for
+  # logical input ownership and typed result projections.
+  SCOPED_REDUCE = auto()
 
   # expander ops
   UNROLL = auto(); CONTRACT = auto(); VCAT = auto(); PTRCAT = auto()
