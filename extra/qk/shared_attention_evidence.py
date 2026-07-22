@@ -31,19 +31,25 @@ def dual_wmma_fused_call_report(source: str, allocation_shapes: tuple[tuple[int,
   """
   upper = source.upper()
   calls = upper.count("CALL")
-  qk = "QK" in upper and "WMMA" in upper
-  pv = "PV" in upper and "WMMA" in upper
+  # Role attribution must be present on the same generated-code line as WMMA;
+  # a generic WMMA elsewhere must never satisfy either contraction gate.
+  source_wmma_lines = tuple(line.upper() for line in source.splitlines() if "WMMA" in line.upper())
+  qk_source = sum("QK" in line for line in source_wmma_lines)
+  pv_source = sum("PV" in line for line in source_wmma_lines)
+  qk, pv = qk_source > 0, pv_source > 0
   shaped = "SHAPED_WMMA" in upper or "TILE_GATHER" in upper
   # The census supplies logical attention buffers, which have a batch/head
   # prefix in addition to the T x KV matrix.  Small 2-D fragments are not
   # score/probability materializations and must not trip this gate.
   score_probability = any(len(shape) >= 3 and shape[-2] > 1 and shape[-1] > 1 for shape in allocation_shapes)
   report = {"single_call": calls == 1, "qk_wmma": qk, "pv_wmma": pv,
+            "qk_source_wmma_lines": qk_source, "pv_source_wmma_lines": pv_source,
             "shaped_fragments": shaped, "full_score_probability_buffers": score_probability}
   report["promotable"] = bool(report["single_call"] and qk and pv and shaped and not score_probability)
   return report
 
-def dual_wmma_fused_call_fixture(*, isa: str | None = None) -> dict[str, object]:
+def dual_wmma_fused_call_fixture(*, isa: str | None = None,
+                                 allocation_shapes: tuple[tuple[int, ...], ...] = ((16, 16), (16, 16))) -> dict[str, object]:
   """Build a deterministic source/ISA fixture for the dual-WMMA gate.
 
   This is intentionally synthetic: it exercises the evidence contract without
@@ -55,11 +61,17 @@ def dual_wmma_fused_call_fixture(*, isa: str | None = None) -> dict[str, object]
             "// QK WMMA score tile\n"
             "// PV WMMA value tile\n"
             "SHAPED_WMMA(TILE_GATHER score,value,acc)\n")
-  report = dual_wmma_fused_call_report(source, ((16, 16), (16, 16)))
-  isa_lines = tuple(line for line in (isa or "").splitlines() if "WMMA" in line.upper())
+  report = dual_wmma_fused_call_report(source, allocation_shapes)
+  isa_lines = tuple(line.upper() for line in (isa or "").splitlines() if "WMMA" in line.upper())
+  qk_isa = sum("QK" in line for line in isa_lines)
+  pv_isa = sum("PV" in line for line in isa_lines)
   report.update({"source": source, "isa_lines": isa_lines,
+                 "qk_isa_wmma_instructions": qk_isa, "pv_isa_wmma_instructions": pv_isa,
                  "isa_captured": bool(isa_lines),
-                 "promotable": bool(report["promotable"] and isa_lines)})
+                 # The fixture is deliberately not promotable unless both roles
+                 # are attributed in the real ISA capture, not merely any WMMA.
+                 "role_attributed_isa": bool(qk_isa and pv_isa),
+                 "promotable": bool(report["promotable"] and qk_isa and pv_isa)})
   return report
 
 ATTENTION_EVIDENCE_SCHEMA = "tinygrad.shared_attention_evidence.v1"

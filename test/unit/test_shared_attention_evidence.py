@@ -77,6 +77,16 @@ def test_dual_wmma_fused_call_fixture_requires_real_isa_capture():
   assert fixture["promotable"] is False
 
 def test_dual_wmma_fused_call_report_accepts_one_call_source_and_isa_fixture():
-  fixture = dual_wmma_fused_call_fixture(isa="v_wmma_f32_16x16x16_f16\n v_wmma_f32_16x16x16_f16")
+  fixture = dual_wmma_fused_call_fixture(isa="QK v_wmma_f32_16x16x16_f16\nPV v_wmma_f32_16x16x16_f16")
   assert fixture["isa_captured"] is True
+  assert fixture["qk_isa_wmma_instructions"] == fixture["pv_isa_wmma_instructions"] == 1
   assert fixture["promotable"] is True
+
+def test_dual_wmma_report_does_not_credit_unattributed_isa_or_source_lines():
+  fixture = dual_wmma_fused_call_fixture(isa="v_wmma_f32_16x16x16_f16")
+  assert fixture["isa_captured"] is True
+  assert fixture["role_attributed_isa"] is False
+  assert fixture["promotable"] is False
+  report = dual_wmma_fused_call_report("CALL fused\n// WMMA helper\nSHAPED_WMMA")
+  assert report["qk_source_wmma_lines"] == report["pv_source_wmma_lines"] == 0
+  assert report["promotable"] is False
