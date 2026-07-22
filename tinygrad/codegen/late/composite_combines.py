@@ -161,7 +161,17 @@ def _handle_no_range_generic(inp, composite, red, auxiliary_inputs=()):
         if len(auxiliary_inputs) + 1 != elems_per_step:
             raise RuntimeError(f"composite {composite.combine_fn!r} expects {elems_per_step} logical inputs, "
                                f"got one primary and {len(auxiliary_inputs)} auxiliary inputs")
-        auxiliary_lanes = [_horizontal_reduce(x, composite.slots[-1].dtype) for x in auxiliary_inputs]
+        auxiliary_lanes = []
+        for x in auxiliary_inputs:
+            lanes = _horizontal_reduce(x, composite.slots[-1].dtype)
+            # Expander can leave the logical V carrier as one scalar LOAD
+            # while the repeated score is packed. Rebuild the lane group from
+            # the LOAD pointer; broadcasting the scalar would duplicate V[0]
+            # and is semantically invalid.
+            if len(lanes) == 1 and len(inp_lst) > 1 and x.op is Ops.LOAD and x.src and x.src[0].dtype.__class__.__name__ == "PtrDType":
+                ptr = x.src[0]
+                lanes = [ptr.gep(i).load(dtype=x.dtype) for i in range(len(inp_lst))]
+            auxiliary_lanes.append(lanes)
         if any(len(x) != len(inp_lst) for x in auxiliary_lanes):
             raise RuntimeError("composite auxiliary inputs must have the same horizontal lane count as the primary input")
         for i, primary in enumerate(inp_lst):
