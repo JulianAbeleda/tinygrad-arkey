@@ -17,6 +17,10 @@ This is an **MVP proof-of-theory**, not a build. You are proving *one* claim che
 
 **Do NOT:** build routing integration, a geometry sweep, GQA variants, quant-KV, decode support, or the autotuner. Those are the *full build*, scoped **only after** this MVP passes review. Scope creep here is failure.
 
+**The MVP kernel is DISPOSABLE SCAFFOLDING — it gets `rm`'d at the end.** The two files you create (`flash_prefill_wmma_kernel.py`, `flash_prefill_wmma_mvp_gate.py`) exist *only* to produce the gate number. At the end of the task — **whether GO or NO-GO** — you `rm` them and commit the removal. They are **never shipped, never wired into routing, never kept.** This is deliberate: the *shipped* path is scheduler-native (see §7, Option B), so a hand-authored UOp kernel cannot be the deliverable — it would be exactly the hand-kernel we are choosing *not* to ship. The MVP hand-builds only because that is the cheapest way to get a trustworthy number; the number is the deliverable, the kernel is a throwaway jig.
+
+**Also note (kickback correction, 2026-07-21):** a *roofline arithmetic projection* — measuring SDPA and comparing it to an idealized matmul-only floor — is **M0, not M3, and NOT a gate pass.** The reuse-path NO-GO already proved projections and reality diverge precisely at the fusion/softmax/barrier/occupancy overhead an idealized floor deletes. M3 requires the **actual built, correctness-validated kernel** measured in absolute `tm`, plus a `C_peak` measurement that is self-consistent (a kernel reporting >100% of `C_peak` means `C_peak` was mis-measured — fix the denominator before comparing fractions). No kernel built = automatic NO-GO by §5's hard prerequisite.
+
 **Success is a number, not a vibe:** the MVP passes iff the fused-WMMA kernel's attention op is measurably closer to the **compute roofline** than materialized SDPA is, at one large-context config, with correctness held. Exact gate in §5.
 
 ---
@@ -47,9 +51,9 @@ Attention today: materialized SDPA is pinned near `B_peak` (HBM-bound by score s
 | Correctness reference | `model.py:583–598` — the concrete TC-attn path (`scores = qg@kgᵀ·scale + mask; s = scores.softmax(-1); out = s@vg`) | Golden output to diff against (fp16 tolerance) | This IS the reference; the MVP must match it numerically. |
 | Measurement harness | `extra/qk/prefill_whole_synced.py` (canonical prefill harness) | DEBUG=2 `tm` GPU kernel time (never wall-clock), warmup to boost clocks (≥200 dispatch) | Add per-op time extraction for the attention kernel only. |
 
-**Files you will CREATE (all under `extra/qk/`, which sz.py leaves unbudgeted — do not add core budget):**
-- `extra/qk/flash_prefill_wmma_kernel.py` — the fused-WMMA kernel (the one real artifact).
-- `extra/qk/flash_prefill_wmma_mvp_gate.py` — standalone correctness+roofline harness for the MVP (imports the kernel, the reference, the two-ceiling measurement). Not wired into routing.
+**Files you will CREATE (all under `extra/qk/`, which sz.py leaves unbudgeted — do not add core budget) — both DISPOSABLE, `rm`'d at task end (§0):**
+- `extra/qk/flash_prefill_wmma_kernel.py` — the throwaway fused-WMMA proof kernel (hand-authored UOps, reused from `flash_kernels.py`). Exists to produce the gate number, then deleted.
+- `extra/qk/flash_prefill_wmma_mvp_gate.py` — throwaway correctness+roofline harness (imports the kernel, the reference, the two-ceiling measurement). Not wired into routing. Deleted at task end.
 
 **Files you will NOT touch in the MVP:** `model.py`, `prefill_routes.py`, `prefill_policy.py`, `postrange.py`, `kernel_lds.py`. No routing, no defaults, no warmstart tables. The MVP runs from its own gate script.
 
@@ -115,8 +119,19 @@ At M3, with **correctness held** (hard prerequisite — fail here = NO-GO regard
 
 ## 7. Exit → review → full build
 
-At M3 GO/NO-GO, **hand back to Claude** with the §5 report. Then:
+At M3 GO/NO-GO, **`rm` the two disposable MVP files and commit the removal** (§0), then **hand back to Claude** with the §5 report (the report is text — it survives the file deletion). Then:
 - **If NO-GO:** bank the roofline result in this doc's parent chain; the flash-fusion lever is closed with a *measured* ceiling reason. Done.
-- **If GO:** Claude reviews the MVP kernel + numbers, then writes a **second, exhaustive scope** for the full build — covering: GQA head-sharding, the geometry sweep via BubbleBeam+FutureSight (`FLASH_PREFILL_GEOM` populated by search), multi-KV-size coverage, concrete-KV/quant-KV integration, routing (`prefill_routes.py`/`prefill_policy.py` new strategy), the fp16-path (8B) validation sweep, and the static→dynamic autotuner flip. That build scope is out of this task's bounds by design.
+- **If GO:** Claude reviews the numbers, then writes a **second, exhaustive scope** for the full build. **The full build is Option B — teach the scheduler to fuse attention as a scheduler-native primitive. It is NOT hand-building/shipping the MVP kernel (that is why the MVP kernel is thrown away).**
 
-**The MVP's only job: cheaply turn "we think fused-WMMA-flash moves attention to the compute roofline" into a measured yes/no, so the weeks-scale build is funded on evidence, not hope.**
+### The full build is B (scheduler-native flash-fusion), not A (hand kernel) — decided
+
+The shipped path must stay **machine-generated and scheduler-native**, consistent with how the GEMM win was made (packed-WMMA is a view-chain the scheduler lowers to WMMA — no hand kernel). Flash is the one place where "match llama" and "scheduler-native" pull apart, because llama's advantage *is* a hand-fused kernel and tinygrad's scheduler does not fuse attention today (it materializes the score tensor → the HBM spill). The two options were:
+
+- **A — hand-build the fused kernel** (llama-style, `flash_kernels.py`-style). Fast, proven, but off-philosophy and hard to feed BubbleBeam (you'd be autotuning hand-written UOp geometry, not scheduler opts). **Rejected.**
+- **B — teach the scheduler a flash-fusion primitive** (CHOSEN): a schedule pattern where online-softmax keeps the `T×KV` score tile in LDS/registers (never materialized to HBM) and lowers `QKᵀ`/`PV` to WMMA via the existing TC opt. Bigger — a genuine compiler project — but it stays scheduler-native, generalizes past this one kernel, and plugs into BubbleBeam+FutureSight (and the eventual static→dynamic autotuner) the same way packed-WMMA's geometry search does.
+
+So the MVP kernel proves the *physics* (the fused-WMMA roofline is reachable); the full build then makes the scheduler produce that schedule itself — no shipped hand kernel. The MVP jig is deleted precisely so no one mistakes it for the deliverable.
+
+The full-build scope (written only after a GO) covers: the scheduler flash-fusion primitive (the core B work), GQA head-sharding, the geometry sweep via BubbleBeam+FutureSight (`FLASH_PREFILL_GEOM` populated by search), multi-KV-size coverage, concrete-KV/quant-KV integration, routing (`prefill_routes.py`/`prefill_policy.py` new strategy), the fp16-path (8B) validation sweep, and the static→dynamic autotuner flip. Out of this task's bounds by design.
+
+**The MVP's only job: cheaply turn "we think fused-WMMA-flash moves attention to the compute roofline" into a measured yes/no — using a throwaway hand kernel — so the weeks-scale *scheduler-native* build is funded on evidence, not hope.**
