@@ -268,7 +268,7 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
         # A slot is a projection of the composite result and has the ordinary
         # reduced tensor shape. It is not a hardware vector lane.
         if getattr(self.src[0].arg[0], "slot_shapes", ()):
-          shape = self.src[0].arg[0].slot_shapes[self.arg]
+          shape = _normalize_composite_shape(self.src[0].arg[0].slot_shapes[self.arg])
           if shape is not None: return shape
         return self.src[0]._shape
       case Ops.COMPOSITE_ACCUMULATOR:
@@ -637,7 +637,7 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
       tile_carrier.validate()
     composite = CompositeReduce(slots=tuple(slots), combine_fn=kwargs.pop('combine_fn', None),
                                 input_specs=tuple(input_specs), tile_carrier=tile_carrier,
-                                slot_shapes=tuple(slot_shapes or ()))
+                                slot_shapes=tuple(_normalize_composite_shape(s) for s in (slot_shapes or ())))
     return UOp(Ops.REDUCE, kwargs.pop('dtype', self.dtype), src=(self,)+tuple(inputs), arg=(composite, axis), **kwargs)
 
   def scoped_reduce(self, producer: 'UOp', *logical_inputs: 'UOp', axis: tuple[int, ...], axis_maps: tuple[tuple[int, ...], ...],
@@ -1199,6 +1199,15 @@ class CompositeReduce(NamedTuple):
   input_specs: tuple = () # one source-role/axis-map owner per auxiliary REDUCE source
   tile_carrier: Any = None # optional backend-neutral tile/state ABI contract
   slot_shapes: tuple[tuple|None, ...] = () # logical output shape per REDUCE_SLOT
+
+def _normalize_composite_shape(shape):
+  """Normalize compiler shape metadata before it reaches generic shape logic."""
+  if shape is None: return None
+  if isinstance(shape, UOp): shape = shape.shape
+  if shape is None: return None
+  if not isinstance(shape, (tuple, list)):
+    raise TypeError(f"composite slot shape must be a tuple/list/UOp, got {type(shape).__name__}")
+  return tuple(shape)
 
 class CompositeTileCarrier(NamedTuple):
   """Logical tile contract shared by composite attention and WMMA lowering.

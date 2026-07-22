@@ -50,6 +50,20 @@ class TestCompositeReduce(unittest.TestCase):
     self.assertEqual(float(total.numpy()[0]), 136.0)
     self.assertEqual(float(maximum.numpy()[0]), 16.0)
 
+  def test_direct_16x16_realization_normalizes_uop_slot_shape(self):
+    """Shape metadata may be supplied as a UOp without breaking graph rewrite."""
+    t = Tensor.arange(256, dtype=dtypes.float32).reshape(16, 16)
+    slot_sum, slot_max = self._make_slots()
+    # The scalar reduction shape is represented by a compiler UOp here; the
+    # constructor must normalize it before generic shape inference calls len().
+    scalar_shape = UOp.const(dtypes.weakint, 0)
+    red = UOp.composite_reduce(t.uop, slot_sum, slot_max, axis=(0, 1),
+                               slot_shapes=[scalar_shape, []])
+    self.assertEqual(red.arg[0].slot_shapes, ((), ()))
+    slots = [UOp(Ops.REDUCE_SLOT, dtypes.float32, (red,), i) for i in (0, 1)]
+    self.assertEqual(slots[0].shape, ())
+    self.assertEqual(slots[1].shape, ())
+
   def test_auxiliary_v_is_a_source_and_uses_kv_axis(self):
     v = Tensor.empty(2, 3, 5, 4, dtype=dtypes.float32)
     slot = AccumulatorSlot(op=Ops.ADD, dtype=dtypes.float32, identity=0.0, name="acc")
