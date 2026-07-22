@@ -26,4 +26,14 @@
 **P2.5 — Ship (if GO):** wire via `ScheduleHints.pcontig` on the attention path (`model.py:583–598`), integration-test 14B prefill, geometry-tune via BubbleBeam. If NO-GO: bank the precise obstacle.
 
 ## Status log
-- P2.1: launched.
+- P2.1: **DONE.** Instrumented `_apply_tc_opt`. Unfused (PCONTIG=0): QKᵀ matched=True (WMMA); PV matched=False (it's fp32 — `.softmax`+`v.float()`, not fp16); softmax reduces correctly no. Fused (PCONTIG=8): `_apply_tc_opt` **never called**.
+- P2.2: **BLOCKED — architectural incompatibility (verified, not a knob).** Root cause: PCONTIG fusion converts REDUCE axes → LOOP axes, so the fused kernel has `n_reduce_axes=0`. Even with TC_OPT=2 (gate passes), `_apply_tc_opt` bails at line 299 (`"no reduce ops for TensorCore"`) because WMMA can only attach to a REDUCE op and fusion removed them. Measured: PCONTIG=8 × TC_OPT∈{0,1,2} → **0 WMMA, ~4928µs** (2.6× slower than unfused 131µs). **WMMA and PCONTIG-fusion are structurally mutually exclusive; no knob bridges it.**
+
+## ⛔ CONCLUSION (2026-07-21) — the cheap scheduler-native path is closed; fused+WMMA needs real new machinery
+
+The three theories all fell:
+1. deepseek's "rangeify can't fuse / needs a tuple-accumulator REDUCE" — **false** (PCONTIG fuses today).
+2. "fusion just isn't attempting WMMA; flip TC_OPT" — **false** (gate passes, TC opt still bails).
+3. The real wall: **WMMA needs a REDUCE op; PCONTIG's fusion turns the matmul contractions into a sequential LOOP with no REDUCE, so there is nothing for the TC opt to grab.**
+
+PCONTIG produces the *wrong structure* for flash: a monolithic reduce-free loop. The **flash** structure is different — an outer KV-block LOOP with the QKᵀ (over Hd) and PV (over block-KV) contractions **preserved as REDUCE ops** (WMMA-able) inside each block, score kept resident. `_apply_tc_opt`'s "epilogue reduction around the dot-product" comment (postrange.py:305-307) shows the TC opt *could* handle an outer-loop + inner-dot shape — but **no existing pass produces that shape for attention.** Making the scheduler emit the flash block-loop-with-preserved-matmul-REDUCEs structure is the genuine multi-week compiler build (either a new rangeify fusion that preserves the contraction REDUCEs, or WMMA-on-loop-accumulation). The 2.45× bracket is the real physics ceiling; reaching it requires that build. **No cheap knob path exists — proven, not assumed.**
