@@ -7,15 +7,27 @@ _CONCRETE_PREFILL_VALIDATED_M = (512,)
 
 _EXECUTING_STRATEGIES = frozenset(("FULL_RESIDENT_OVERLAY", "BOUNDED_PACKED_TILES", "DIRECT_PACKED_FALLBACK"))
 _TC_ATTN_TARGET_REQUIREMENTS = {"backend": "AMD", "architecture": "gfx1100"}
+_SHARED_ATTENTION_PROOF_FIELDS = ("correctness", "score_resident", "qk_wmma", "pv_wmma")
 
 def _requirements_met(requirements:Mapping[str, Any], scanned_device_facts:Any) -> bool:
   """Match an exact candidate target contract against the one load-entry scan."""
   return all(getattr(scanned_device_facts, name, None) == expected for name, expected in requirements.items())
 
+def shared_attention_proven_eligible(value:Mapping[str, Any], scanned_device_facts:Any) -> bool:
+  """Admit bounded attention only from a target-bound, complete proof record."""
+  proof = value.get("shared_attention_proof")
+  if not isinstance(proof, Mapping) or proof.get("status") != "PASS": return False
+  if not _requirements_met(_TC_ATTN_TARGET_REQUIREMENTS, scanned_device_facts): return False
+  target = proof.get("target")
+  geometry = proof.get("geometry")
+  return (isinstance(target, Mapping) and dict(target) == _TC_ATTN_TARGET_REQUIREMENTS and
+          isinstance(geometry, Mapping) and bool(geometry) and
+          all(proof.get(field) is True for field in _SHARED_ATTENTION_PROOF_FIELDS))
+
 def select_prefill_runtime_policy(value:Mapping[str, Any], *, scanned_device_facts:Any, workload_reuse:bool,
                                   tc_attn_override:bool|None=None) -> Mapping[str, Any]:
   """Add derived runtime diagnostics without granting them route authority."""
-  target_default = _requirements_met(_TC_ATTN_TARGET_REQUIREMENTS, scanned_device_facts)
+  target_default = shared_attention_proven_eligible(value, scanned_device_facts)
   selected = dict(value)
   selected["routes"] = dict(selected["routes"])
   selected.update({"workload_reuse": bool(workload_reuse),
