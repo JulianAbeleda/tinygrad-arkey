@@ -386,6 +386,55 @@ def reduce_to_acc(ctx:ReduceContext, red:UOp):
     from tinygrad.uop.ops import CompositeReduce
     if isinstance(red.arg[0], CompositeReduce):
       composite = red.arg[0]
+      
+      # Coupled combine: online-softmax (m,l,acc) with correction
+      if composite.combine_fn == "online_softmax":
+        # Slots: m (MAX), l (ADD), acc (ADD). Input: vec2(score, v)
+        assert len(composite.slots) == 3
+        LOG2E = red.const(red.dtype, 1.4426950408889634)
+        NEG1 = red.const(red.dtype, -1.0)
+        
+        inp_score = inp if inp.dtype.count == 1 else inp.gep(0)
+        inp_v = inp if inp.dtype.count == 1 else inp.gep(1)
+        
+        accs = []
+        acc_reads = []
+        for i, slot in enumerate(composite.slots):
+          ident = red.const(slot.dtype, slot.identity if slot.identity is not None else identity_element(slot.op, slot.dtype.scalar()))
+          acc = UOp.placeholder((1,), slot.dtype, ctx.acc_num, AddrSpace.REG)
+          ctx.acc_num += 1
+          acc_init = acc.after(*input_ranges).index(UOp.const(dtypes.weakint, 0)).store(ident)
+          acc_read = acc.after(acc_init, *reduce_range).index(UOp.const(dtypes.weakint, 0))
+          accs.append(acc)
+          acc_reads.append(acc_read)
+        
+        m_old, l_old, acc_old = acc_reads
+        
+        # m_new = max(m_old, score)
+        m_new = m_old.alu(Ops.MAX, inp_score)
+        # diff = m_old - m_new (= m_old + (-1)*m_new)
+        diff = m_old.alu(Ops.ADD, m_new.alu(Ops.MUL, NEG1))
+        # correction = exp(diff) = exp2(diff * log2(e))
+        corr = diff.alu(Ops.MUL, LOG2E).alu(Ops.EXP2)
+        # score_shifted = score - m_new
+        score_shifted = inp_score.alu(Ops.ADD, m_new.alu(Ops.MUL, NEG1))
+        # exp_score = exp(score_shifted)
+        exp_score = score_shifted.alu(Ops.MUL, LOG2E).alu(Ops.EXP2)
+        # l_new = l_old * corr + exp_score
+        l_new = l_old.alu(Ops.MUL, corr).alu(Ops.ADD, exp_score)
+        # acc_new = acc_old * corr + exp_score * v
+        acc_new = acc_old.alu(Ops.MUL, corr).alu(Ops.ADD, exp_score.alu(Ops.MUL, inp_v))
+        
+        results = []
+        for acc, new_val in zip(accs, [m_new, l_new, acc_new]):
+          acc_end = acc.index(UOp.const(dtypes.weakint, 0)).store(new_val).end(*reduce_range).rtag("mergeable")
+          results.append(acc.after(acc_end).index(UOp.const(dtypes.weakint, 0)))
+        
+        # Return acc / l as the attention output (multi-output solved via division)
+        rcp_l = results[1].alu(Ops.RECIPROCAL)
+        return results[2].alu(Ops.MUL, rcp_l)
+      
+      # Default: independent slots
       accs = []
       for i, slot in enumerate(composite.slots):
         ident = red.const(slot.dtype, slot.identity if slot.identity is not None else identity_element(slot.op, slot.dtype.scalar()))
