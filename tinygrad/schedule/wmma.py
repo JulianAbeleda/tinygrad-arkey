@@ -86,6 +86,34 @@ def build_owned_fragment_index_map(source_shape: tuple[int, ...], spec: TileGath
       out.append(tuple(coord))
   return tuple(out)
 
+def construct_hd16_tile_carriers(score: UOp, value: UOp, acc: UOp, *,
+                                 batch: int = 1, heads: int = 1,
+                                 provenance: tuple[str, ...] = ()) -> tuple[UOp, UOp, UOp]:
+  """Construct the first exact QK/PV/acc tile handoff.
+
+  This is intentionally limited to the geometry whose ownership map is
+  proven: score ``(B,H,16,16,1)``, value ``(B,H,1,16,16)``, and accumulator
+  ``(B,H,16,16)``.  The constructor does not reshape or infer lanes; callers
+  must provide already-shaped logical tile sources.  It is therefore safe to
+  use as a scheduler primitive while broader Hd packing remains fail-closed.
+  """
+  if any(x.shape is None for x in (score, value, acc)):
+    raise ValueError("Hd16 tile carriers require concrete source shapes")
+  if score.shape != (batch, heads, 16, 16, 1):
+    raise ValueError("Hd16 score carrier requires (B,H,16,16,1) ownership")
+  if value.shape != (batch, heads, 1, 16, 16):
+    raise ValueError("Hd16 value carrier requires (B,H,1,16,16) ownership")
+  if acc.shape != (batch, heads, 16, 16):
+    raise ValueError("Hd16 accumulator carrier requires (B,H,16,16) ownership")
+  score_spec = TileGatherSpec("score", (16, 16), (2, 3), (0, 1))
+  value_spec = TileGatherSpec("value", (16, 16), (3, 4), (0, 1))
+  acc_spec = TileGatherSpec("acc", (16, 16), (2, 3), (0, 1))
+  build_owned_fragment_index_map(score.shape, score_spec)
+  build_owned_fragment_index_map(value.shape, value_spec)
+  # Accumulator ownership follows query/Hd lanes; Hd=16 makes this exact.
+  return (tile_gather(score, score_spec), tile_gather(value, value_spec),
+          tile_gather(acc, acc_spec))
+
 def lower_tile_gather(source: UOp, *, role: str, dtype: DType) -> UOp:
   """Resolve a TILE_GATHER only when an upstream pass already shaped it.
 
@@ -97,8 +125,18 @@ def lower_tile_gather(source: UOp, *, role: str, dtype: DType) -> UOp:
   spec = source.arg
   spec.validate()
   declared_role = "v" if spec.role == "value" else spec.role
-  if declared_role != role or source.shape != spec.fragment_shape or source.src[0].shape != spec.fragment_shape:
+  if declared_role != role or source.shape != spec.fragment_shape:
     raise ValueError("tile gather is not a shaped fragment")
+  # A scheduler-owned carrier may retain the rankful source that established
+  # ownership (the Hd16 constructor does this). Keep the opaque carrier at
+  # the WMMA boundary rather than flattening that source prematurely.
+  if source.src[0].shape != spec.fragment_shape:
+    allowed = ((len(source.src[0].shape) == 5 and spec.role == "score" and source.src[0].shape[-3:] == (16, 16, 1)) or
+               (len(source.src[0].shape) == 5 and spec.role == "value" and source.src[0].shape[-3:] == (1, 16, 16)) or
+               (len(source.src[0].shape) == 4 and spec.role == "acc" and source.src[0].shape[-2:] == (16, 16)))
+    if not allowed:
+      raise ValueError("tile gather is not a shaped fragment")
+    return source
   return adapt_wmma_fragment(source, role=role, dtype=dtype, shape=spec.fragment_shape)
 
 def emit_tile_gather_shaped_wmma(a_frag: UOp, b_frag: UOp, acc_frag: UOp, *,

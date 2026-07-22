@@ -201,6 +201,26 @@ def test_owned_fragment_index_map_rejects_unsupported_geometry():
   with pytest.raises(ValueError, match="exceeds"):
     build_owned_fragment_index_map((1, 1, 16, 8, 1), TileGatherSpec("score", (16, 16), (2, 3), (0, 1)))
 
+def test_hd16_constructor_builds_exact_dual_role_carriers():
+  from tinygrad.schedule.wmma import construct_hd16_tile_carriers, emit_tile_gather_shaped_wmma
+  score = UOp.placeholder((1, 1, 16, 16, 1), dtypes.half, 60)
+  value = UOp.placeholder((1, 1, 1, 16, 16), dtypes.half, 61)
+  acc = UOp.placeholder((1, 1, 16, 16), dtypes.float32, 62)
+  qk_score, pv_value, pv_acc = construct_hd16_tile_carriers(score, value, acc)
+  assert qk_score.arg.role == "score" and pv_value.arg.role == "value" and pv_acc.arg.role == "acc"
+  assert all(x.shape == (16, 16) for x in (qk_score, pv_value, pv_acc))
+  qk = emit_tile_gather_shaped_wmma(qk_score, pv_value, pv_acc)
+  pv = emit_tile_gather_shaped_wmma(qk_score, pv_value, pv_acc)
+  assert qk.op is Ops.SHAPED_WMMA and pv.op is Ops.SHAPED_WMMA
+  assert qk.src[0].arg.role == "score" and pv.src[1].arg.role == "value"
+
+def test_hd16_constructor_rejects_unproven_geometry():
+  from tinygrad.schedule.wmma import construct_hd16_tile_carriers
+  with pytest.raises(ValueError, match="Hd16"):
+    construct_hd16_tile_carriers(UOp.placeholder((1, 1, 16, 16, 2), dtypes.half, 63),
+                                 UOp.placeholder((1, 1, 1, 16, 16), dtypes.half, 64),
+                                 UOp.placeholder((1, 1, 16, 16), dtypes.float32, 65))
+
 def test_rangeify_handoff_unwraps_only_exact_tile_carriers():
   from tinygrad.uop.ops import TileGatherSpec, graph_rewrite
   from tinygrad.schedule.wmma import tile_gather
