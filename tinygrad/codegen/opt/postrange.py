@@ -324,7 +324,12 @@ class Scheduler:
     # a backend.  Ordinary REDUCE matmuls have no composite state ranges and
     # retain the existing WMMA path unchanged.
     if self.composite_state_ranges:
-      return None
+      # Permit only a scalar ordinary dot reduction to use WMMA alongside a
+      # composite state machine.  Composite-owned reductions and any packed
+      # output remain fail-closed until their lane ABI is backend-owned.
+      ordinary = [r for r in reduceops if r.arg[0] is Ops.ADD and r.dtype.count == 1 and
+                  not r.op_in_backward_slice_with_self(*self.composite_state_ranges)]
+      if not ordinary: return None
     try:
       tensor_cores = self.ren.tensor_cores if tc_select == -1 else [self.ren.tensor_cores[tc_select]]
     except IndexError:
