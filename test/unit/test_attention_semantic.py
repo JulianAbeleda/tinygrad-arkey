@@ -128,6 +128,17 @@ class TestAttentionSemantic(unittest.TestCase):
       self.assertEqual(len(composite), 1)
       self.assertEqual(composite[0].arg[0].input_specs[0].axis_map, (0, 1, None, 3, 4))
 
+  def test_bounded_semantic_admission_inlines_qk_under_composite_call(self):
+    q = Tensor.empty(1, 1, 2, 64, dtype=dtypes.float16)
+    k = Tensor.empty(1, 1, 3, 64, dtype=dtypes.float16)
+    v = Tensor.empty(1, 1, 3, 64, dtype=dtypes.float16)
+    calls = shared_prefill_attention(q, k, v).schedule_linear().src
+    self.assertEqual(len(calls), 1)
+    self.assertFalse(calls[0].ranges)
+    reductions = [u for u in calls[0].src[0].toposort() if u.op is Ops.REDUCE]
+    self.assertTrue(any(r.arg[0] is Ops.ADD for r in reductions))
+    self.assertTrue(any(hasattr(r.arg[0], "combine_fn") and r.arg[0].combine_fn == "online_softmax" for r in reductions))
+
   def test_bounded_semantic_admission_handles_gqa_and_additive_mask(self):
     rng = np.random.default_rng(21)
     qv = rng.standard_normal((1, 2, 2, 64), dtype=np.float32)

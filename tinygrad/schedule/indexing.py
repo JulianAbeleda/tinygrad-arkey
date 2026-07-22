@@ -40,11 +40,13 @@ class BufferizeOpts:
   device: str|tuple[str, ...]|int|None
   addrspace: AddrSpace = AddrSpace.GLOBAL
   removable: bool = True
+  composite_consumer: bool = False
 
 @dataclass
 class IndexingContext:
   realize_map: dict[UOp, None|list[int]] = field(default_factory=dict)
   range_map: dict[UOp, tuple[tuple[UOp, ...], tuple[UOp, ...]]] = field(default_factory=dict)
+  composite_owned: set[UOp] = field(default_factory=set)
 
   # create ranges
   range_idx: Iterator[int] = field(default_factory=itertools.count)
@@ -72,7 +74,8 @@ def create_bufferize_and_index_based_on_ranges(ctx:IndexingContext, x:UOp):
         # the Bufferize before a COPY is not removable. there should be a better way to do this
         removable = x.op is not Ops.COPY and s.op not in ALWAYS_CONTIGUOUS
         # LOCAL: None in the device assigns it a number later
-        opts = BufferizeOpts(device=s.device, removable=removable) if len(ctx.range_map[s][1]) == len(realized_ranges) else \
+        composite_consumer = s in ctx.composite_owned
+        opts = BufferizeOpts(device=s.device, removable=removable, composite_consumer=composite_consumer) if len(ctx.range_map[s][1]) == len(realized_ranges) else \
                BufferizeOpts(device=s.device, addrspace=AddrSpace.LOCAL, removable=removable)
         new_src = UOp(Ops.STAGE, s.dtype, src=(new_src,)+closed_ranges, arg=opts)
         if x in ctx.range_map: new_src = new_src.index(*[r for i,r in enumerate(ctx.range_map[x][0]) if i in realized_ranges])
@@ -186,6 +189,14 @@ def run_rangeify(tsink:UOp, debug:bool=False) -> tuple[UOp, IndexingContext]:
   # get the consumer map
   with cpu_profile("consumer map in rangeify", "TINY"):
     consumer_map = consumer_map_from_toposort(tsink_toposort:=tsink.toposort(gate_kernel_sink))
+
+  # Composite reductions own their primary producer slice until bufferization.
+  # This is structural provenance, not an op-name heuristic: only a stage
+  # whose source is on that slice may bypass the matmul realization guard.
+  for x in tsink_toposort:
+    if x.op is Ops.REDUCE and hasattr(x.arg[0], "combine_fn"):
+      rctx.composite_owned.update(x.src[0].backward_slice)
+      rctx.composite_owned.add(x.src[0])
 
   # explicit rangeify
   ending_ranges: dict[UOp, list[UOp]] = {}
