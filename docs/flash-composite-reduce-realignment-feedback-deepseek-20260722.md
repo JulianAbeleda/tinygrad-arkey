@@ -2,17 +2,24 @@
 
 **Context:** your composite-reduce work is a good *base* — the primitive lowers, M4/M5 pass, and your blocker analysis is honest. Keep it. But it **diverged from its own Phase 0 design and from how the rest of tinygrad works**: the combine is a hardcoded special case, and composite reduces are carved *out* of the optimizer. This scope realigns it. The hardcoded version stays as the reference to diff against; the realigned version is what ships.
 
-## Why this matters — measured against the repo's principles
-(From `knowledge_base/principles/codebase-organization-principles.md`.)
+## Why this matters — orthogonality, centralization, modularization, abstraction
 
-1. **Consistency — "looks like it was written by one person with one set of conventions."** tinygrad's convention: *everything is a UOp flowing through PatternMatcher rewrites and one generic optimizer.* A REDUCE carries a generic op (ADD/MAX/MUL). Your changes break this two ways:
-   - `reduce_to_acc` has `if composite.combine_fn == "online_softmax":` followed by the hand-coded formula (LOG2E/EXP2/MAX/correction). The combine is **code baked into the lowering, keyed on a string** — nothing else in tinygrad is shaped like that.
-   - `bab4f31aa` ("skip all opts for composite kernels") and `433da4696` ("skip UNROLL collapse for composite REDUCE") special-case composite reduces **out of** the generic optimizer/expander. Every other op flows *through* it.
-2. **Clear mental models — "signatures tell you about the domain, not the implementation strategy."** The domain object is *"a reduce carrying a combine."* A string tag + a baked formula is implementation-technique-shaped. The combine should be **domain data** (a UOp sub-graph), so a reader sees "a reduce + its combine," not "a special case for one string."
-3. **Information hiding — deep modules.** The combine belongs behind a clean interface: `(state, element) -> new_state` as a UOp sub-graph. Online-softmax is then just *one instance* passed in, not a branch in the lowering. (This is exactly your Phase 0 design, §3: *"the combine is a UOp sub-graph, so it participates in the rewrites."*)
-4. **Restraint** — generalizing here is NOT premature abstraction: it *removes* complexity (deletes the string branch + the two skip carve-outs) AND is required for the goal. So it passes the restraint test (it reduces what the next person must hold).
+The realignment is really one idea in four lenses. Deepseek's build has exactly two violations — a **hardcoded combine** and a **"skip-opts" carve-out** — and each fails all four:
 
-**The self-defeating part (the real reason to fix, not just style):** WMMA *is* an optimizer pass. `skip all opts for composite kernels` therefore **guarantees the composite reduce can never be WMMA'd** — which is why Phase 2 (composite, no WMMA) and Phase 3 (WMMA, no composite) can't merge. The carve-out isn't an unblock; it forecloses the win. Aligning with the repo (composite flows through the optimizer) is the *same thing as* unblocking the goal.
+**1. Orthogonality.** Three things must vary independently: *what* is accumulated (the combine — online-softmax), *how* a reduce accumulates (the lowering), and *whether/how it's optimized* (WMMA). Deepseek coupled all three:
+   - `if combine_fn == "online_softmax"` bakes the *what* into the *how* → changing the combine means editing `reduce_to_acc`.
+   - `skip all opts for composite kernels` couples *being composite* to *not being optimized* → you can't be composite AND WMMA'd.
+   - **Orthogonal target:** the combine is data passed in; `reduce_to_acc` is combine-agnostic; the optimizer treats a composite REDUCE like any REDUCE. Each axis moves without touching the others.
+
+**2. Centralization.** There is supposed to be **one** WMMA path (the TC opt on a REDUCE), **one** reduce lowering, **one** optimizer. The carve-out creates a **second regime** — composite reduces that bypass the central optimizer — so now there are two ways a reduce gets (or doesn't get) scheduled. And the online-softmax math lives in a bespoke spot instead of one composable place. **Target:** composite reduces go through the *same* central TC-opt/optimizer as everything; nothing forks the path.
+
+**3. Modularization.** A combine should be a self-contained module you swap in. A string branch + inline formula is the opposite: adding a second combine means surgery inside the lowering. **Target:** a new combine is new *data* (a UOp sub-graph), with **zero** edits to `reduce_to_acc`. The test of success: a second, unrelated combine works through the identical code path with no new branch.
+
+**4. Abstraction.** The combine should be an **interface** — `(state_slots, element) -> new_state_slots` — with online-softmax as one *instance* behind it. Deepseek has no abstraction: the online-softmax formula *is* the code. **Target:** the reduce machinery depends only on the abstract combine contract, never on the concrete online-softmax. (This is exactly your Phase 0 design §3: *"the combine is a UOp sub-graph, so it participates in the rewrites."* The implementation regressed from the design into a concrete special case.)
+
+**These are the same principles the repo's own governing doc encodes** (`minimization-principles.md`: §III.9 "generate, never hand-write"; §III.10 "rules-as-data, not hand-coded passes"; §III.12 "don't fight the compiler / never rebuild it to escape it"; §II.4 "never add an op you can compose"). Orthogonality/centralization/modularization/abstraction are *why* those rules exist.
+
+**And it's self-defeating, not just impure:** WMMA *is* an optimizer pass, so `skip all opts for composite` **guarantees the composite reduce can never be WMMA'd** — which is exactly why Phase 2 (composite, no WMMA) and Phase 3 (WMMA, no composite) can never merge. The orthogonality violation *is* the blocker. Restoring orthogonality (composite flows through the machine) *is* the unblock. Aligning with your principles and reaching the flash win are the same act.
 
 ## The realignment work
 Keep normal (single-op) reduces byte-identical throughout. Each step commits an artifact Claude re-runs.
