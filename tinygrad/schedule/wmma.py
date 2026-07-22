@@ -60,6 +60,24 @@ class OnlineSoftmaxTile:
                n.src[1].shape == (16, 16) and n.src[2].shape == (16, 16)
                for n in (self.qk, self.pv))
 
+  def candidate_report(self) -> dict:
+    """Describe bounded admission without claiming backend promotion.
+
+    This is intentionally diagnostic: a shaped graph can satisfy the ordinary
+    fragment descriptor while still lacking generated source/ISA evidence.
+    Keeping those facts separate prevents an opt-in experiment from silently
+    enabling the production attention route.
+    """
+    self.validate()
+    ready = self.ordinary_wmma_ready()
+    reasons = [] if ready else ["fragment ABI is not descriptor-shaped"]
+    if self.weights is None:
+      reasons.append("normalized score weights are not present")
+    return {"descriptor_valid": True, "ordinary_fragment_abi": ready,
+            "qk_wmma_candidate": ready, "pv_wmma_candidate": ready and self.weights is not None,
+            "source_evidence": False, "isa_evidence": False,
+            "production_promotion": False, "reasons": tuple(reasons)}
+
 
 def online_softmax_tile(q_frag:UOp, k_frag:UOp, v_frag:UOp, *,
                         qk_acc:UOp, pv_acc:UOp, m:UOp, l:UOp,

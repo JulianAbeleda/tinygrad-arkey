@@ -55,3 +55,18 @@ def test_online_softmax_tile_descriptor_matches_ordinary_pv_wmma_fragments():
   assert tile.ordinary_wmma_ready()
   # Admission is still fail-closed until generated source and ISA evidence.
   assert tile.abi_report()["renderer"] == "fail-closed"
+
+
+def test_online_softmax_tile_candidate_report_is_fail_closed_without_backend_evidence():
+  tile = online_softmax_tile(
+    _frag(), _frag(), _frag(),
+    qk_acc=UOp.placeholder((16, 16), dtypes.float32, 1),
+    pv_acc=UOp.placeholder((16, 16), dtypes.float32, 2),
+    m=UOp.placeholder((16, 1), dtypes.float32, 3),
+    l=UOp.placeholder((16, 1), dtypes.float32, 4),
+    dims=(16, 16, 16), device="AMD", threads=32, normalize=True)
+  report = tile.candidate_report()
+  assert report["descriptor_valid"] and report["ordinary_fragment_abi"]
+  assert report["qk_wmma_candidate"] and report["pv_wmma_candidate"]
+  assert not report["source_evidence"] and not report["isa_evidence"]
+  assert not report["production_promotion"] and report["reasons"] == ()
