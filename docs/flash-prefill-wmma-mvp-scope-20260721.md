@@ -160,3 +160,66 @@ So the MVP kernel proves the *physics* (the fused-WMMA roofline is reachable); t
 The full-build scope (written only after a GO) covers: the scheduler flash-fusion primitive (the core B work), GQA head-sharding, the geometry sweep via BubbleBeam+FutureSight (`FLASH_PREFILL_GEOM` populated by search), multi-KV-size coverage, concrete-KV/quant-KV integration, routing (`prefill_routes.py`/`prefill_policy.py` new strategy), the fp16-path (8B) validation sweep, and the static→dynamic autotuner flip. Out of this task's bounds by design.
 
 **The MVP's only job: cheaply turn "we think fused-WMMA-flash moves attention to the compute roofline" into a measured yes/no — using a throwaway hand kernel — so the weeks-scale *scheduler-native* build is funded on evidence, not hope.**
+
+---
+
+# FULL BUILD SCOPE (for deepseek) — scheduler-native flash-prefill fusion
+
+**Status:** MVP gate = **GO** (measured 2.45× bracket, see top of doc). This is the funded build. Executor: deepseek. Reviewer: Claude. Commit on master, no branches, `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`, push origin/master.
+
+## B.0 — Objective (one sentence)
+
+Teach the **rangeify scheduler** to rewrite the attention subgraph `(Q@Kᵀ·scale + mask).softmax(-1) @ V` into a **single kernel** that tiles the KV axis, carries the online-softmax running state `(m, l, acc)` across blocks, keeps each block's `M×blockKV` score **resident (LDS/registers, never the full `T×KV` in HBM)**, and lowers both matmuls to WMMA via the **existing** TC opt — converting the measured 2.45× bracket into a hard, correctness-validated number.
+
+## B.1 — The scheduler map (verified entry points — trace these, don't guess)
+
+This is NOT upstream tinygrad. It is a **rangeify-based** scheduler. The real sites:
+
+| Concern | File / symbol | Role |
+|---|---|---|
+| Rewrite machinery | `tinygrad/uop/ops.py` — `graph_rewrite`, `PatternMatcher`, `UPat` | how every rewrite is written (see `function.py:pm_ctx`, `realize.py:pm_flatten_linear` for examples to model on) |
+| **Where kernel boundaries form** | `tinygrad/schedule/rangeify.py` — `rangeify_codegen`, `pm_add_buffers_local`, `pm_store_ranges` | ranges/buffers get assigned here; a reduce that writes a buffer another reduce reads = a kernel boundary = the HBM spill. **The fusion must restructure the graph BEFORE this so the blocked-attention lands as one range nest.** |
+| Codegen chain | `tinygrad/codegen/__init__.py` | the ordered `graph_rewrite` pipeline; find where to insert the attention rewrite (before rangeify buffer insertion) |
+| WMMA (REUSE, do not touch) | `tinygrad/codegen/opt/postrange.py:_apply_tc_opt` + `tinygrad/codegen/opt/tc.py:amd_rdna3` | already lowers an fp16 matmul in a kernel to `__builtin_amdgcn_wmma_f32_16x16x16_f16_w32`. Once `QKᵀ`/`PV` are inside one kernel, TC opt tensor-cores them for free. |
+| Pattern origin | `tinygrad/tensor.py:1175` `scaled_dot_product_attention` → `qk.cast(...).softmax(-1) @ value` | the exact tensor-level expression that produces the subgraph to match |
+
+**First deliverable (B-M0, do before writing any rewrite): a trace.** Dump the UOp/range graph for the MVP config attention (reuse the `sdpa_bench.py` shape: `T=KV=2048, H=8, Hd=128`) and identify (a) the exact UOp pattern for `softmax(QKᵀ)@V`, (b) the precise rangeify site where the `scores`/`probs` buffers get inserted (the boundary to eliminate), (c) where in the `codegen/__init__.py` chain to insert the rewrite. Write this map to `docs/flash-prefill-fusion-trace-<date>.md`. **Do not start the rewrite until this trace is confirmed with Claude** — a wrong insertion point is the most expensive mistake here.
+
+## B.2 — The rewrite design
+
+The online-softmax math is a **known result** (FlashAttention, Dao 2022) and is already implemented as a UOp recurrence in `extra/qk/flash_kernels.py` (the running `m`/`l`/`acc` + correction `corr = exp(m_old - m_new)`, lines ~114–146). **Reuse that math as the reference for the recurrence — do NOT reuse the coupled decode kernel body** (its split/combine/cache-indexing are what made extraction fail; see the pivot note). The rewrite emits the recurrence into the scheduler graph, not a hand kernel.
+
+Transform, per query-tile × KV-block:
+1. `S_block = Q_tile @ Kᵀ_block · scale` — a matmul reduce over `Hd`, kept as a small `M×blockKV` tile (fits LDS/regs). TC opt → WMMA.
+2. `S_block += additive_mask` — **−∞ additive mask, never a bool `maximum`** (a raw bool-vector max hit a `MAX→CMPLT` lowering bug in an earlier attempt; the additive form sidesteps it, and matches `flash_kernels.py`'s "sc=-inf for OOB").
+3. `m_new = max(m, rowmax(S_block))`; `p = exp(S_block − m_new)`; `corr = exp(m − m_new)`.
+4. `l = l·corr + rowsum(p)`; `acc = acc·corr + p @ V_block` — second matmul reduce over `blockKV`. TC opt → WMMA.
+5. After the KV loop: `out = acc / l`. Causal: skip blocks fully above the diagonal.
+
+The key scheduler property to achieve: steps 1–4 for a given query-tile must live in **one range nest** so `S_block`/`p` are registers/LDS, not buffers. That is the entire compiler task — the rangeify graph must not insert a buffer between the `QKᵀ` reduce and the `PV` reduce.
+
+## B.3 — Milestones (gate on B-M4)
+
+- **B-M0 — Trace** (§B.1). Confirm the pattern, the boundary site, the insertion point. Review with Claude. **Hard stop before B-M1.**
+- **B-M1 — Correct fused rewrite, one config, WMMA-off acceptable.** Land the rewrite so `softmax(QKᵀ)@V` for `T=KV=2048,H=8` becomes one kernel with the score tile resident. Correctness first: diff vs the `model.py:583–598` concrete-TC-attn reference (fp16 tol ~1e-2). Speed irrelevant here — prove the *single-kernel, no-spill* structure exists.
+- **B-M2 — WMMA on.** Confirm TC opt lowers both matmuls in the fused kernel (inspect generated `__builtin_amdgcn_wmma`). Correctness held.
+- **B-M3 — Occupancy/pressure tune.** This is the residual risk the bracket couldn't measure: does single-kernel register/LDS pressure cut occupancy? Tune the query-tile M and KV-block sizes (this is where BubbleBeam+FutureSight geometry search plugs in — mirror `PACKED_WMMA_GEOM`/`FLASH_PREFILL_GEOM`; static table first, per the static-for-troubleshootability decision).
+- **B-M4 — Gate re-run + report.** Measure the *built fused kernel* vs SDPA at the MVP config (DEBUG=2 `tm`, warm clocks). Apply §5 gate (compute_frac up, mem_frac down, ≥80% score-HBM-bytes deleted, faster `tm`, correctness held). Report to Claude with the two-ceiling table. This converts the 2.45× bracket into a hard number.
+
+## B.4 — After the core lands (breadth — separate milestones, do NOT block B-M4 on these)
+
+GQA head-sharding (`Hq=40,Hkv=8,G=5`); multi-KV-size coverage (512→4096); the `FLASH_PREFILL_GEOM` geometry sweep via BubbleBeam+FutureSight (`extra/qk/bubblebeam_futuresight.py:score_candidate/rank_candidates`); concrete-KV / quant-KV integration (the `prefill_concrete_kv` path); routing (`prefill_routes.py`/`prefill_policy.py` — new strategy alongside `BOUNDED_PACKED_TILES`); the **fp16-path (8B) validation** (the fusion is weight-format-independent — confirm the same win on the overlay path); the static→dynamic autotuner flip once end-to-end is proven.
+
+## B.5 — Guardrails + anti-duplication (hard)
+
+- **Reuse, don't reinvent:** online-softmax math ← `flash_kernels.py` (math only, not the kernel); WMMA ← TC opt (`postrange.py`/`tc.py`), never a hand emitter; rewrite machinery ← `graph_rewrite`/`PatternMatcher`; geometry search ← `bubblebeam_futuresight.py`; correctness ref ← `model.py:583–598`; measurement ← `prefill_whole_synced.py` / DEBUG=2 `tm`. If you're re-implementing any of these, stop.
+- **Single GPU lane.** `pkill` strays + confirm VRAM free (`rocm-smi`) before each run. Never background benches + report "waiting" (MMU faults / VRAM contention). Run, wait, read.
+- **`tm` not wall-clock**, warm ≥200 dispatches. `/home/ubuntu/tinygrad-arkey/.venv/bin/python`. Temp in `/home/ubuntu/.claude/jobs/6db6b205/tmp/`.
+- **No BEAM** (hangs gfx1100). **Commit on master, no branches**, the Co-Authored-By trailer, push origin/master.
+- **Core budget:** the rewrite lives in `tinygrad/` (it's real core), so watch `sz.py` (BUDGET_DIRS ≤35000, target 30000; currently ~30,294). Keep the fusion pass lean; geometry tables / search stay in `extra/qk/` (unbudgeted).
+
+## B.6 — Honest fallback
+
+If the single-kernel no-spill structure proves not landable in the rangeify scheduler within a reasonable budget (e.g. the range model can't express the cross-block `(m,l,acc)` recurrence without a buffer), that is itself the decision-relevant finding: it means B is more expensive than the 2.45× headroom justifies *right now*, and the fallback is to bank the trace + the blocker precisely (what in rangeify forces the buffer) and stop — not to silently regress to a hand kernel. Report that to Claude rather than grinding indefinitely.
+
+**Bottom line for deepseek: B-M0 trace first (confirm with Claude), then land the fused no-spill rewrite for one config (correctness before speed), then WMMA, then tune, then re-run the gate. The measured 2.45× says the prize is real; your job is to make the scheduler produce it.**
