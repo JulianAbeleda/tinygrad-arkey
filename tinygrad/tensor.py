@@ -207,11 +207,25 @@ class Tensor(RandMixin):
 
   def linear_with_vars(self, *lst:Tensor) -> tuple[UOp, dict[str, int]]:
     """Creates the LINEAR UOp needed to realize these Tensor(s), with Variables."""
+    import sys
+    print(f"DEBUG lwv: type(self)={type(self).__name__}, id={id(self)}, self.uop.op={self.uop.op if hasattr(self, 'uop') else 'NO_UOP'}", file=sys.stderr)
     from tinygrad.codegen.late.composite_combines import resolve_reduce_slot_tensor
-    from tinygrad.uop.ops import PatternMatcher, UPat, Ops, graph_rewrite
-    sink = UOp.sink(*[x.uop for x in (self,)+lst])
-    # Resolve REDUCE_SLOT to plain REDUCE before scheduling
-    sink = graph_rewrite(sink, PatternMatcher([(UPat(Ops.REDUCE_SLOT, name="slot"), resolve_reduce_slot_tensor)]), name="resolve_reduce_slot")
+    import sys
+    print(f"DEBUG linear_with_vars entry: self.uop.op={self.uop.op}", file=sys.stderr)
+    # Resolve REDUCE_SLOT to plain REDUCE before creating sink
+    uops = []
+    for x in (self,)+lst:
+      u = x.uop
+      if u.op is Ops.REDUCE_SLOT:
+        resolved = resolve_reduce_slot_tensor(u)
+        if resolved is not None:
+          u = resolved
+          x.uop = resolved  # update tensor so subsequent accesses see the resolved UOp
+      uops.append(u)
+    import sys
+    for u in uops:
+      print(f"DEBUG uop to sink: op={u.op}", file=sys.stderr)
+    sink = UOp.sink(*uops)
     big_sink, becomes_map = transform_to_call(sink)
     _apply_map_to_tensors(becomes_map, name="buffers")
     return create_linear_with_vars(big_sink)
