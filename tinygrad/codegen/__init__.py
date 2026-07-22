@@ -120,6 +120,11 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   sink = graph_rewrite(sink, pm_add_buffers_local+rangeify_codegen, ctx=itertools.count(0), name="add local buffers")
 
   # ** devectorizer (full_graph_rewrite) **
+  # Handle composite REDUCEs with no ranges (post-expander STACK form)
+  from tinygrad.codegen.late.composite_combines import _lower_composite_no_range_pm
+  sink = graph_rewrite(sink, PatternMatcher([(UPat(Ops.REDUCE, name="red"), _lower_composite_no_range_pm)]),
+                       name="lower_composite_no_range")
+
   # remove reduce
   sink = graph_rewrite(sink, pm_reduce+gep_pushing, ctx=ReduceContext(), name="remove_reduce")
   if ren.target.device == "AMD":

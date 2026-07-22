@@ -130,3 +130,10 @@ def _handle_no_range(inp, composite, red):
         return acc.alu(Ops.MUL, rcp_l)
     
     return inp_lst[-1]  # fallback: return last element
+
+def _lower_composite_no_range_pm(red):
+    """PatternMatcher callback: lower composite REDUCE with no ranges."""
+    from tinygrad.uop.ops import CompositeReduce
+    if not isinstance(red.arg[0], CompositeReduce): return None
+    if len(red.src) >= 2: return None
+    return _handle_no_range(red.src[0], red.arg[0], red)
