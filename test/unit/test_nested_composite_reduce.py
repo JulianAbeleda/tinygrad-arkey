@@ -1,5 +1,6 @@
 """Generic scoped nested-reduction boundary, intentionally not attention-specific."""
 import numpy as np
+import pytest
 
 from tinygrad import Tensor, dtypes
 from tinygrad.uop import Ops
@@ -83,6 +84,22 @@ def test_scoped_reduce_keeps_producer_inputs_and_ssa_result_explicit():
   # recursively re-enter rangeify because it lowers directly to fallback.
   calls = Tensor(result).schedule_linear().src
   assert len(calls) == 1
+
+def test_scoped_reduce_rejects_generic_scoped_value_as_producer():
+  """A logical carrier cannot silently become a scheduler-owned producer."""
+  fallback = Tensor.empty(1, 1, 2, 3, dtype=dtypes.float32)
+  logical = fallback.uop.scoped_value((0, 1, 2, 3))
+  with pytest.raises(ValueError, match="explicit computation"):
+    fallback.uop.scoped_reduce(logical, axis=(3,), axis_maps=((0, 1, 2, 3),), scope_owner=3)
+
+def test_scoped_reduce_accepts_explicit_inner_matmul_producer():
+  """An ordinary computation is a valid producer when ownership is explicit."""
+  lhs = Tensor.empty(1, 1, 2, 4, dtype=dtypes.float32)
+  rhs = Tensor.empty(1, 1, 3, 4, dtype=dtypes.float32)
+  inner = lhs @ rhs.transpose(-2, -1)
+  fallback = inner.sum(axis=3)
+  scoped = fallback.uop.scoped_reduce(inner.uop, axis=(3,), axis_maps=((0, 1, 2, 3),), scope_owner=3)
+  assert scoped.op is Ops.SCOPED_REDUCE and scoped.src[1] is inner.uop
 
 
 def test_auxiliary_value_survives_one_owned_composite_reduction():

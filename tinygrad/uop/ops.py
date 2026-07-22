@@ -653,6 +653,7 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
     if len(axis_maps) != len(src)-1: raise ValueError("one axis map is required for the producer and each logical input")
     if result_dtypes is None: result_dtypes = (self.dtype,)
     spec = ScopedReduceSpec(tuple(axis), tuple(tuple(x) for x in axis_maps), scope_owner, tuple(result_dtypes))
+    spec.validate_producer(producer)
     return UOp(Ops.SCOPED_REDUCE, self.dtype, src=src, arg=spec)
 
   def scoped_value(self, slot_or_axis_map:int|tuple[int|None, ...]=0) -> 'UOp':
@@ -1316,6 +1317,24 @@ class ScopedReduceSpec(NamedTuple):
   source_axis_maps: tuple[tuple[int, ...], ...]
   scope_owner: int
   result_dtypes: tuple[Any, ...]
+
+  def validate_producer(self, producer: 'UOp'):
+    """Validate the source which is owned by this explicit scope boundary.
+
+    Ownership must never be inferred from a generic ``SCOPED_VALUE`` carrier:
+    that node is only an axis-mapped logical input and has no producer
+    lifetime.  A scoped boundary may own an ordinary producer (for example an
+    inner MATMUL) or a structured REDUCE, but the producer itself must be a
+    real computation node with a shape and cannot be another unresolvable
+    value projection.
+    """
+    if producer.op is Ops.SCOPED_VALUE:
+      raise ValueError("SCOPED_REDUCE producer must be an explicit computation, not SCOPED_VALUE")
+    if producer.op is Ops.SCOPED_REDUCE:
+      raise ValueError("nested SCOPED_REDUCE producer requires an outer ownership resolver")
+    if producer.shape is None:
+      raise ValueError("SCOPED_REDUCE producer must have a concrete logical shape")
+    return producer
 
 class ScopedValueSpec(NamedTuple):
   # source axis -> owner primary-input axis, with None for broadcast axes
