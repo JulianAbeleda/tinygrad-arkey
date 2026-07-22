@@ -195,6 +195,12 @@ spec_tensor = PatternMatcher([
   (UPat(Ops.REDUCE_SLOT, src=(UPat(),), name="x"),
    lambda x: isinstance(x.arg, int) and x.src[0].op is Ops.REDUCE and hasattr(x.src[0].arg[0], 'slots') and 0 <= x.arg < len(x.src[0].arg[0].slots)),
 
+  # ATTENTION keeps a normal fallback plus explicit Q/K/V/(optional mask)
+  # dependencies until rangeify selects a lowering.
+  (UPat(Ops.ATTENTION, name="x"),
+   lambda x: hasattr(x.arg, 'scale') and len(x.src) == ((5 if x.arg.kv_block else 4) + int(x.arg.mask_present))
+   and x.dtype == x.src[0].dtype == x.arg.output_dtype),
+
   # COPY. TODO: this should not have allow_any_len, but something is adding ranges
   (UPat(Ops.COPY, name="copy", src=(UPat.var("x"), UPat(Ops.DEVICE)), allow_any_len=True, arg=None), lambda copy,x: copy.dtype == x.dtype),
   (UPat(Ops.ALLREDUCE, name="red", src=(UPat.var("x"), UPat(Ops.DEVICE))), lambda red,x: red.dtype == x.dtype and isinstance(red.arg, Ops)),

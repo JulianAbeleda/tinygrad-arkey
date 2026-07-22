@@ -265,7 +265,13 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
       case Ops.GEP:
         return (len(self.arg),) if len(self.arg) > 1 else ()
       case Ops.REDUCE_SLOT:
-        return ()  # scalar: each slot is a single accumulated value
+        # A slot is a projection of the composite result and has the ordinary
+        # reduced tensor shape. It is not a hardware vector lane.
+        return self.src[0]._shape
+      case Ops.ATTENTION:
+        # src[0] is the ordinary, semantically identical fallback result. The
+        # remaining sources are the explicit Q/K/V/(optional mask) inputs.
+        return self.src[0]._shape if len(self.src) else None
       case Ops.STACK:
         if len(self.src) == 0: return ()
         if isinstance(self.dtype, PtrDType):
@@ -315,15 +321,6 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
         return self.src[0]._shape
       # REDUCE with empty axis is passthrough (lowered form)
       case Ops.REDUCE if len(self.arg[1]) == 0:
-        # Composite reduce with vec output: compute shape from input minus reduced dims
-        if isinstance(self.arg[0], CompositeReduce):
-          last_slot = self.arg[0].slots[-1]
-          if last_slot.dtype.count > 1:
-            ps = self.src[0]._shape
-            if ps is None: return None
-            reduce_axes = {r.arg[0] for r in self.src[1:] if r.op is Ops.RANGE and r.arg[1] is AxisType.REDUCE}
-            if reduce_axes:
-              return tuple(last_slot.dtype.count if i in reduce_axes else s for i,s in enumerate(ps))
         # these can mismatch if there's a horizonal reduce
         return (self.dtype.count,) if self.dtype.count > 1 else ()
 
@@ -377,13 +374,6 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
           if not isinstance(axis_arg, tuple) or not all(isinstance(x, int) and x>=0 and x<len(ps) for x in axis_arg):
             raise ValueError(f"invalid type for axis: {axis_arg}")
           ret = list(1 if i in axis_arg else s for i,s in enumerate(ps))
-          # Composite reduce: last slot may have vector dtype (flash attention acc)
-          if isinstance(self.arg[0], CompositeReduce):
-            last_slot = self.arg[0].slots[-1]
-            if last_slot.dtype.count > 1 and len(ret) > 0:
-              for ax in sorted(axis_arg, reverse=True):
-                if ax < len(ret):
-                  ret[ax] = last_slot.dtype.count
           return tuple(ret)
 
     if self.op in GroupOp.Unary.union({Ops.CAST}):
@@ -610,11 +600,17 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
     if isinstance(arg, Ops): arg = (arg, ())
     return UOp(Ops.REDUCE, kwargs.pop('dtype', self.dtype), src=(self,)+src, arg=arg, **kwargs)
 
-  def composite_reduce(self, *slots: 'AccumulatorSlot', axis: tuple[int, ...] = (), **kwargs):
-    """Create a REDUCE with a composite accumulator (multi-slot)."""
+  def composite_reduce(self, *slots: 'AccumulatorSlot', axis: tuple[int, ...] = (), inputs: tuple['UOp', ...] = (), **kwargs):
+    """Create a stateful REDUCE. All logical-element inputs are explicit sources."""
     from tinygrad.uop.ops import CompositeReduce, AccumulatorSlot
-    composite = CompositeReduce(slots=tuple(slots), combine_fn=kwargs.pop('combine_fn', None), v_uop=kwargs.pop('v_uop', None))
-    return UOp(Ops.REDUCE, kwargs.pop('dtype', self.dtype), src=(self,), arg=(composite, axis), **kwargs)
+    # Compatibility is source-visible: callers formerly passing v_uop now get
+    # the same dependency in REDUCE.src rather than invisible metadata.
+    legacy_v = kwargs.pop('v_uop', None)
+    if legacy_v is not None:
+      if inputs: raise ValueError("pass auxiliary composite inputs once, using inputs=")
+      inputs = (legacy_v,)
+    composite = CompositeReduce(slots=tuple(slots), combine_fn=kwargs.pop('combine_fn', None))
+    return UOp(Ops.REDUCE, kwargs.pop('dtype', self.dtype), src=(self,)+tuple(inputs), arg=(composite, axis), **kwargs)
 
   def contiguous(self, *args, **kwargs):
     if self.op is Ops.CONTIGUOUS: return self
@@ -1142,7 +1138,21 @@ class AccumulatorSlot(NamedTuple):
 class CompositeReduce(NamedTuple):
   slots: tuple
   combine_fn: Any = None  # UOp sub-graph encoding combine (None = independent slots)
-  v_uop: Any = None       # optional second input (V tensor for flash attention)
+
+class AttentionSpec(NamedTuple):
+  """Immutable semantics for an attention operation before scheduler lowering.
+
+  Q, K, V, and an optional mask are UOp sources of Ops.ATTENTION.  This arg
+  deliberately contains only scalar/layout facts so graph traversal and
+  substitution cannot lose a tensor dependency.
+  """
+  scale: float
+  causal: bool
+  mask_present: bool
+  qk_dtype: Any
+  output_dtype: Any
+  reduce_axis: int = -1
+  kv_block: int = 0
 
 
 @dataclass(frozen=True)

@@ -2,7 +2,7 @@ from dataclasses import dataclass, field, replace
 import itertools
 from tinygrad.dtype import dtypes, PtrDType, AddrSpace, Invalid
 from tinygrad.uop.ops import PatternMatcher, UPat, Ops, UOp, resolve, GroupOp, _substitute, KernelInfo, ParamArg, ScheduleHints
-from tinygrad.uop.ops import graph_rewrite, sint, AxisType, BottomUpGate, profile_matches, identity_element, AccumulatorSlot, CompositeReduce
+from tinygrad.uop.ops import graph_rewrite, sint, AxisType, BottomUpGate, profile_matches, identity_element, AccumulatorSlot, CompositeReduce, AttentionSpec
 from tinygrad.uop.symbolic import symbolic
 from tinygrad.helpers import prod, all_same, getenv, dedup, all_int, DEBUG, SPLIT_REDUCEOP, DEBUG_RANGEIFY, VIZ, MAX_KERNEL_BUFFERS
 from tinygrad.helpers import PCONTIG, FLOAT16, OPENPILOT_HACKS, Context, argsort, partition, get_single_element
@@ -16,102 +16,22 @@ from tinygrad.schedule.allreduce import create_allreduce_function
 import sys
 sys.setrecursionlimit(10000)
 
-def _flash_attn_match(red:UOp):
-  """Match ADD REDUCE for softmax and replace with composite online-softmax REDUCE.
-  
-  Filters: float dtype only, elementwise input ops only (excludes MOVEMENT ops
-  like PERMUTE/RESHAPE that appear in internal tensor plumbing), excludes MUL
-  inputs (unless part of PV matmul for flash attention), excludes
-  INDEX/LOAD/BUFFER/CONST (scheduling noise).
+def lower_attention_semantic(att:UOp) -> UOp:
+  """Fail-closed semantic attention lowering.
+
+  The marker is the sole eligibility boundary. Until a tiled score-resident
+  lowering proves it can consume this exact contract, retain its ordinary
+  fallback result. In particular, never reverse-match generic ADD reductions.
   """
-  try:
-    if red.arg[0] is not Ops.ADD: return None
-    if not red.src: return None
-    # Only float dtypes (online_softmax_l uses float arithmetic)
-    if not dtypes.is_float(red.dtype): return None
-    inp = red.src[0]
-    # Check for PV matmul: ADD REDUCE of MUL(probs, V)
-    mul_inp = None
-    if inp.op is Ops.MUL:
-      mul_inp = inp
-    elif inp.op is Ops.CAST and inp.src and inp.src[0].op is Ops.MUL:
-      mul_inp = inp.src[0]
-    if mul_inp is not None:
-      return _handle_pv_matmul(red, mul_inp)
-    # Skip movement ops (PERMUTE, RESHAPE, EXPAND, etc.) - only match elementwise inputs
-    if inp.op in GroupOp.Movement: return None
-    # Skip scheduling infrastructure ops
-    if inp.op in (Ops.INDEX, Ops.LOAD, Ops.BUFFER, Ops.CONST): return None
-    # Input must have at least 2 dimensions (not a flat vector reduce)
-    if inp._shape is None or len(inp._shape) < 2: return None
-    slot_m = AccumulatorSlot(op=Ops.MAX, dtype=red.dtype, identity=float("-inf"), name="m")
-    slot_l = AccumulatorSlot(op=Ops.ADD, dtype=red.dtype, identity=0.0, name="l")
-    return red.replace(arg=(CompositeReduce(slots=(slot_m, slot_l), combine_fn="online_softmax_l"), red.arg[1]))
-  except Exception:
-    return None
+  assert isinstance(att.arg, AttentionSpec)
+  # src[1] is the bounded online-softmax primitive for statically shaped
+  # attention. Its graph has no full T x KV score/probability result. Dynamic
+  # or otherwise ineligible attention keeps the explicit ordinary fallback.
+  return att.src[1] if att.arg.kv_block else att.src[0]
 
-def _find_score_from_softmax(probs:UOp) -> UOp|None:
-  """Walk back from softmax output to find the score input (before EXP2)."""
-  cur = probs
-  # Unwrap broadcasts first (EXPAND, RESHAPE, PERMUTE, CAST)
-  while cur is not None and cur.op in (Ops.EXPAND, Ops.RESHAPE, Ops.PERMUTE, Ops.CAST):
-    cur = cur.src[0] if cur.src else None
-  if cur is None:
-    return None
-  while cur.op in (Ops.MUL, Ops.CAST):
-    cur = cur.src[0] if cur.src else cur
-    if not cur.src: break
-  if cur.op is Ops.EXP2:
-    return cur.src[0] if cur.src else None
-  return None  # No softmax pattern found
-
-def _unbroadcast_src(u:UOp) -> UOp:
-  """Walk through EXPAND/RESHAPE/PERMUTE/CAST to find the underlying source."""
-  while u is not None and u.op in (Ops.EXPAND, Ops.RESHAPE, Ops.PERMUTE, Ops.CAST, Ops.CONTIGUOUS, Ops.AFTER):
-    u = u.src[0] if u.src else None
-  return u
-
-def _handle_pv_matmul(red:UOp, mul_inp:UOp):
-  """Handle PV matmul: ADD REDUCE of MUL(probs, V). Replace with 3-slot composite."""
-  s0, s1 = mul_inp.src[0], mul_inp.src[1]
-  probs, V_ref = None, None
-  # Walk through broadcast ops to find underlying source
-  u0, u1 = _unbroadcast_src(s0), _unbroadcast_src(s1)
-  # V typically traces to a direct COPY/BUFFER; probs traces through softmax
-  for s, u in [(s0, u0), (s1, u1)]:
-    if u is not None and u.op in (Ops.COPY, Ops.BUFFER, Ops.PARAM):
-      V_ref = s
-      break
-  if V_ref is None:
-    # Fallback: use shape heuristic on base shapes
-    s0_base = u0._shape if u0 is not None else None
-    s1_base = u1._shape if u1 is not None else None
-    if s0_base and s1_base and len(s0_base) >= 2 and len(s1_base) >= 2:
-      if s0_base[-1] > s1_base[-1]:
-        V_ref, probs = s0, s1
-      else:
-        V_ref, probs = s1, s0
-  if V_ref is not None and probs is None:
-    probs = s1 if V_ref is s0 else s0
-  if probs is None or V_ref is None:
-    return None
-  score = _find_score_from_softmax(probs)
-  if score is None:
-    return None
-  # Use score's last axis as the reduce axis (KV dim for standard attention)
-  score_axis = (len(score._shape) - 1,) if score._shape and len(score._shape) > 0 else red.arg[1]
-  # Get Hd from V's base shape (last dim before broadcast)
-  V_base = _unbroadcast_src(V_ref)
-  Hd = V_base._shape[-1] if V_base is not None and V_base._shape else 1
-  slot_m = AccumulatorSlot(op=Ops.MAX, dtype=red.dtype, identity=float("-inf"), name="m")
-  slot_l = AccumulatorSlot(op=Ops.ADD, dtype=red.dtype, identity=0.0, name="l")
-  slot_acc = AccumulatorSlot(op=Ops.ADD, dtype=red.dtype.vec(Hd), identity=0.0, name="acc")
-  composite = CompositeReduce(
-    slots=(slot_m, slot_l, slot_acc),
-    combine_fn="online_softmax",
-    v_uop=V_ref,
-  )
-  return UOp(Ops.REDUCE, red.dtype.vec(Hd), (score, V_ref), (composite, score_axis))
+pm_attention_semantic = PatternMatcher([
+  (UPat(Ops.ATTENTION, name="att"), lower_attention_semantic),
+])
 
 def add_ranges_to_store(ctx, x):
   if x.src[0]._shape is None or x.src[1]._shape is None or x.src[0].shape == (): return None
@@ -766,9 +686,10 @@ def _get_kernel_graph(sink:UOp) -> UOp:
   if OPENPILOT_HACKS: tsink = graph_rewrite(tsink, pm_fold_moved_after, ctx={}, name="fold moved afters")
   tsink = graph_rewrite(tsink, pm_syntactic_sugar+pm_mops+earliest_rewrites, bottom_up=True, name="earliest rewrites")
 
-  # flash attention rewrite: match ADD REDUCE and replace with composite REDUCE
-  tsink = graph_rewrite(tsink, PatternMatcher([(UPat(Ops.REDUCE, name="red"), _flash_attn_match)]),
-                        name="flash_attn_rewrite")
+  # Attention may only be lowered from its explicit semantic marker. The
+  # previous broad ADD-REDUCE matcher was unsound: ordinary reductions must
+  # always retain their original semantics.
+  tsink = graph_rewrite(tsink, pm_attention_semantic, name="attention_semantic")
 
   # convert movement ops to ranges
   tsink, rctx = run_rangeify(tsink, bool(DEBUG_RANGEIFY))

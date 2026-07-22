@@ -149,6 +149,10 @@ class Ops(FastEnum):
   # reduce
   REDUCE = auto(); ALLREDUCE = auto()
 
+  # semantic attention boundary. This is tensor-graph only and is lowered by
+  # rangeify either to a fused implementation or its explicit fallback src.
+  ATTENTION = auto()
+
   # multi-output reduce slot access: REDUCE_SLOT(composite_reduce, i) returns slot i
   REDUCE_SLOT = auto()
 

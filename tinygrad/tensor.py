@@ -116,12 +116,6 @@ class Tensor(RandMixin):
     # by this point, it has to be a UOp
     if not isinstance(data, UOp): raise RuntimeError(f"can't create Tensor from {data!r} with type {type(data)}")
 
-    # Resolve REDUCE_SLOT to plain REDUCE at tensor creation time
-    from tinygrad.codegen.late.composite_combines import resolve_reduce_slot_tensor
-    if data.op is Ops.REDUCE_SLOT:
-      resolved = resolve_reduce_slot_tensor(data)
-      if resolved is not None: data = resolved
-
     # data might be on a different device
     self.uop:UOp = data if data.device is None or data.device == _device else data.copy_to_device(_device)
 
@@ -213,11 +207,7 @@ class Tensor(RandMixin):
 
   def linear_with_vars(self, *lst:Tensor) -> tuple[UOp, dict[str, int]]:
     """Creates the LINEAR UOp needed to realize these Tensor(s), with Variables."""
-    from tinygrad.codegen.late.composite_combines import resolve_reduce_slot_tensor
-    from tinygrad.uop.ops import PatternMatcher, UPat, Ops, graph_rewrite
     sink = UOp.sink(*[x.uop for x in (self,)+lst])
-    # Resolve REDUCE_SLOT to plain REDUCE before scheduling
-    sink = graph_rewrite(sink, PatternMatcher([(UPat(Ops.REDUCE_SLOT, name="slot"), resolve_reduce_slot_tensor)]), name="resolve_reduce_slot")
     big_sink, becomes_map = transform_to_call(sink)
     _apply_map_to_tensors(becomes_map, name="buffers")
     return create_linear_with_vars(big_sink)
@@ -1206,8 +1196,21 @@ class Tensor(RandMixin):
       key = key.repeat_interleave(int(self.shape[-3] // key.shape[-3]), dim=-3)
       value = value.repeat_interleave(int(self.shape[-3] // value.shape[-3]), dim=-3)
 
+    return self._semantic_attention(key, value, attn_mask=attn_mask, dropout_p=dropout_p, is_causal=is_causal)
+
+  def _semantic_attention(self, key:Tensor, value:Tensor, attn_mask:Tensor|None=None, dropout_p:float=0.0,
+                          is_causal:bool=False, scale:float|None=None) -> Tensor:
+    """Create an explicit attention semantic boundary with a correct fallback.
+
+    `Ops.ATTENTION` owns the complete attention contract while its first source
+    is the ordinary graph. Rangeify may replace this marker only after it has a
+    proven fused lowering; otherwise it returns that source unchanged.
+    """
+    from tinygrad.uop.ops import AttentionSpec
     q = self
-    qk = q.matmul(key.transpose(-2,-1), dtype=least_upper_dtype(q.dtype, key.dtype, dtypes.float32)) / math.sqrt(q.shape[-1])
+    scale = 1.0 / math.sqrt(q.shape[-1]) if scale is None else scale
+    qk_dtype = least_upper_dtype(q.dtype, key.dtype, dtypes.float32)
+    qk = q.matmul(key.transpose(-2,-1), dtype=qk_dtype) * scale
     # handle attention mask
     if is_causal:
       if attn_mask is not None: raise RuntimeError("cannot set attn_mask when is_causal=True")
@@ -1215,7 +1218,47 @@ class Tensor(RandMixin):
     if attn_mask is not None:
       if attn_mask.dtype == dtypes.bool: attn_mask = attn_mask.where(0, -float("inf"))
       qk = qk + attn_mask
-    return qk.cast(self.dtype).softmax(-1).dropout(dropout_p) @ value
+    out = qk.cast(self.dtype).softmax(-1).dropout(dropout_p) @ value
+    # Dropout is stochastic and intentionally remains on the ordinary path.
+    if dropout_p != 0: return out
+    primitive = self._online_attention_primitive(key, value, attn_mask, scale, qk_dtype, out.dtype)
+    spec = AttentionSpec(float(scale), is_causal, attn_mask is not None, qk_dtype, out.dtype,
+                         kv_block=64 if primitive is not None else 0)
+    # src[0] is always the ordinary fallback. When a bounded primitive is
+    # available it is src[1], followed by Q/K/V/(mask), so the rangeify
+    # lowering can discard src[0] without losing a graph dependency.
+    src = (out.uop,) + ((primitive.uop,) if primitive is not None else ()) + (q.uop, key.uop, value.uop) + \
+          ((attn_mask.uop,) if attn_mask is not None else ())
+    return Tensor(UOp(Ops.ATTENTION, out.uop.dtype, src=src, arg=spec), device=out.device)
+
+  def _online_attention_primitive(self, key:Tensor, value:Tensor, attn_mask:Tensor|None,
+                                  scale:float, acc_dtype:DType, out_dtype:DType) -> Tensor|None:
+    """Bounded-score reference lowering for a semantic attention marker.
+
+    This is deliberately expressed in ordinary Tensor IR. Each iteration owns
+    only a `query x kv_block` score/probability tile and merges it into the
+    stable `(m, l, acc)` state. The scheduler can subsequently fuse or tile
+    these contractions without needing to rediscover softmax semantics.
+    """
+    if not all(isinstance(x, int) for x in (*self.shape, *key.shape, *value.shape)): return None
+    if len(self.shape) < 2 or key.shape[-2] <= 0 or key.shape[-1] != self.shape[-1] or value.shape[-2] != key.shape[-2]: return None
+    kv_block = 64
+    row_shape = self.shape[:-1] + (1,)
+    m = Tensor.full(row_shape, float("-inf"), device=self.device, dtype=acc_dtype)
+    l = Tensor.zeros(*row_shape, device=self.device, dtype=acc_dtype)
+    acc = Tensor.zeros(*self.shape, device=self.device, dtype=acc_dtype)
+    for start in range(0, key.shape[-2], kv_block):
+      stop = min(start + kv_block, key.shape[-2])
+      score = self.matmul(key[..., start:stop, :].transpose(-2, -1), dtype=acc_dtype) * scale
+      if attn_mask is not None: score = score + attn_mask[..., start:stop]
+      block_m = score.max(axis=-1, keepdim=True)
+      new_m = m.maximum(block_m)
+      corr = (m - new_m).exp()
+      p = (score - new_m).exp()
+      l = l * corr + p.sum(axis=-1, keepdim=True)
+      acc = acc * corr + p.matmul(value[..., start:stop, :], dtype=acc_dtype)
+      m = new_m
+    return (acc / l).cast(out_dtype)
 
   # ***** cast ops *****
 
