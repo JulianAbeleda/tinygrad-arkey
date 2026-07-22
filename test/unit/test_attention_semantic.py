@@ -106,6 +106,21 @@ class TestAttentionSemantic(unittest.TestCase):
     linear = attention.schedule_linear()
     self.assertFalse(any(u.op is Ops.ATTENTION for u in linear.toposort()))
 
+  def test_prefill_shape_semantic_lowering_does_not_promote_block_materialization(self):
+    q = Tensor.empty(1, 32, 512, 128, dtype=dtypes.float16)
+    k = Tensor.empty(1, 32, 512, 128, dtype=dtypes.float16)
+    v = Tensor.empty(1, 32, 512, 128, dtype=dtypes.float16)
+    fallback = shared_prefill_attention(q, k, v)
+    selected = shared_prefill_attention(
+      Tensor.empty(1, 32, 512, 128, dtype=dtypes.float16),
+      Tensor.empty(1, 32, 512, 128, dtype=dtypes.float16),
+      Tensor.empty(1, 32, 512, 128, dtype=dtypes.float16))
+    fallback_calls = len(Tensor(fallback.uop.src[0]).schedule_linear().src)
+    selected_calls = len(selected.schedule_linear().src)
+    # The candidate primitive currently expands to 84 calls at this shape;
+    # retain SDPA until generic tiled lowering removes that materialization.
+    self.assertEqual(selected_calls, fallback_calls)
+
   def test_shared_primitive_matches_grouped_query_attention(self):
     rng = np.random.default_rng(1)
     qv = rng.standard_normal((1, 4, 3, 4), dtype=np.float32)

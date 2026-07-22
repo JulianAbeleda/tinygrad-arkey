@@ -207,6 +207,14 @@ class Tensor(RandMixin):
 
   def linear_with_vars(self, *lst:Tensor) -> tuple[UOp, dict[str, int]]:
     """Creates the LINEAR UOp needed to realize these Tensor(s), with Variables."""
+    # Semantic attention must be selected before transform_to_call decides
+    # realization ownership. Waiting until rangeify is too late: ATTENTION can
+    # itself become a scheduled producer and retain its bounded primitive even
+    # when the lowering chooses the ordinary fallback.
+    from tinygrad.schedule.rangeify import lower_attention_semantic
+    raw_sink = UOp.sink(*[x.uop for x in (self,)+lst])
+    attention_map = {u:lower_attention_semantic(u) for u in raw_sink.toposort() if u.op is Ops.ATTENTION}
+    if attention_map: _apply_map_to_tensors(attention_map, name="attention semantic")
     sink = UOp.sink(*[x.uop for x in (self,)+lst])
     big_sink, becomes_map = transform_to_call(sink)
     _apply_map_to_tensors(becomes_map, name="buffers")

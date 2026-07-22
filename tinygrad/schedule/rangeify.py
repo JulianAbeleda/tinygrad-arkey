@@ -19,13 +19,15 @@ sys.setrecursionlimit(10000)
 def lower_attention_semantic(att:UOp) -> UOp:
   """Fail-closed semantic attention lowering.
 
-  The marker is the sole eligibility boundary. Static-shape markers carry a
-  bounded online primitive whose auxiliary score/probability values are sized
-  by KV block; dynamic or unsupported forms retain the ordinary source. In
+  The marker is the sole eligibility boundary. The bounded online primitive is
+  retained for compiler development, but it expands into one materialized
+  Tensor subgraph per KV block today. That is slower than ordinary SDPA at
+  prefill lengths, so production always retains the ordinary source until a
+  generic tiled loop lowering collapses those blocks into one kernel. In
   particular, never reverse-match generic ADD reductions.
   """
   assert isinstance(att.arg, AttentionSpec)
-  return att.src[1] if att.arg.kv_block else att.src[0]
+  return att.src[0]
 
 pm_attention_semantic = PatternMatcher([
   (UPat(Ops.ATTENTION, name="att"), lower_attention_semantic),
