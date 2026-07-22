@@ -319,6 +319,12 @@ def cleanup_dead_axes(b:UOp):
     else:
       reshape.append(s)
       new_rng.append(rng)
+  # Logical (non-range) dimensions, such as a lane-shaped accumulator, are
+  # carried in the buffer shape after the scheduler-owned range axes.  They
+  # must survive dead-axis cleanup unchanged; only removed range axes become
+  # singleton dimensions before the final expand.
+  if len(b.shape) > len(b.src)-1:
+    reshape.extend(b.shape[len(b.src)-1:])
   if hit:
     return b.replace(src=b.src[0:1]+tuple(new_rng)).reshape(tuple(reshape)).expand(b.shape)
 
