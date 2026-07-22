@@ -65,6 +65,15 @@ class TestCompositeReduce(unittest.TestCase):
     self.assertEqual(slots[0].shape, ())
     self.assertEqual(slots[1].shape, ())
 
+  def test_direct_attention_malformed_slot_fails_closed_without_len_uop(self):
+    """A truncated composite tuple must reject slot projection, never alias state."""
+    q = Tensor.randn(1, 1, 16, 16, dtype=dtypes.float16)
+    k = Tensor.randn(1, 1, 16, 16, dtype=dtypes.float16)
+    v = Tensor.randn(1, 1, 16, 16, dtype=dtypes.float16)
+    out = q.scaled_dot_product_attention(k, v)
+    with self.assertRaisesRegex(RuntimeError, "invalid composite reduction slot"):
+      out.realize()
+
   def test_auxiliary_v_is_a_source_and_uses_kv_axis(self):
     v = Tensor.empty(2, 3, 5, 4, dtype=dtypes.float32)
     slot = AccumulatorSlot(op=Ops.ADD, dtype=dtypes.float32, identity=0.0, name="acc")
