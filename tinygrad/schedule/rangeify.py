@@ -309,7 +309,15 @@ def cleanup_dead_axes(b:UOp):
   new_rng = []
   hit = False
   reshape: list[sint] = []
-  for s,rng in zip(b.shape, b.src[1:]):
+  # A composite REDUCE_SLOT may carry logical lane axes in its shape that are
+  # not scheduler ranges (for example a scalar m/l slot paired with an Hd
+  # accumulator lane).  Only range-backed axes participate in dead-axis
+  # elimination; preserve trailing logical axes verbatim.
+  for i,s in enumerate(b.shape):
+    if i >= len(b.src)-1:
+      reshape.append(s)
+      continue
+    rng = b.src[i+1]
     # skip for symbolic. TODO: fix this
     if rng.op is Ops.RANGE and rng.src[0].op is not Ops.CONST: return None
     # CONSTs are already dead axes

@@ -5,6 +5,7 @@ from tinygrad import Tensor, dtypes
 from tinygrad.uop import Ops
 from tinygrad.uop.ops import AccumulatorSlot, UOp, ScopedReduceSpec, CompositeInputSpec
 from tinygrad.codegen.late.devectorizer import _partition_composite_sources
+from tinygrad.schedule.rangeify import cleanup_dead_axes
 
 def test_lane_aware_composite_input_is_explicit_and_scalar_safe():
   """The grouped-load carrier is metadata; scalar source ownership is unchanged."""
@@ -102,3 +103,13 @@ def test_composite_source_partition_excludes_range_carriers():
   ranges, aux = _partition_composite_sources((r0, value), red.arg[0])
   assert ranges == (r0,)
   assert aux == (value,)
+
+def test_cleanup_dead_axes_preserves_unranged_logical_lane():
+  """Slot-specific logical lanes are not scheduler ranges and must survive cleanup."""
+  src = UOp.placeholder((2, 4), dtypes.float32, 0)
+  rng = UOp.range(UOp.const(dtypes.weakint, 2), 0)
+  stage = src.bufferize(rng)
+  cleaned = cleanup_dead_axes(stage)
+  assert cleaned is not None
+  assert cleaned.shape[-1] == 4
+  assert cleaned.shape == stage.shape
