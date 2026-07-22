@@ -168,9 +168,19 @@ def _handle_no_range_generic(inp, composite, red, auxiliary_inputs=()):
             # while the repeated score is packed. Rebuild the lane group from
             # the LOAD pointer; broadcasting the scalar would duplicate V[0]
             # and is semantically invalid.
-            if len(lanes) == 1 and len(inp_lst) > 1 and x.op is Ops.LOAD and x.src and x.src[0].dtype.__class__.__name__ == "PtrDType":
-                ptr = x.src[0]
-                lanes = [ptr.gep(i).load(dtype=x.dtype) for i in range(len(inp_lst))]
+            if len(lanes) == 1 and len(inp_lst) > 1:
+                # The expander commonly leaves V as CAST(INDEX(...)) rather
+                # than a direct LOAD.  Rebuild the logical index for each
+                # output-Hd lane; pointer GEP or scalar broadcast would either
+                # lose the original address arithmetic or duplicate V[0].
+                carrier = x.src[0] if x.op is Ops.CAST and x.src else x
+                if carrier.op is Ops.INDEX and len(carrier.src) == 2:
+                    base, idx = carrier.src
+                    lanes = []
+                    for lane in range(len(inp_lst)):
+                        lane_idx = idx.alu(Ops.ADD, UOp.const(idx.dtype.scalar(), lane))
+                        value = base.index(lane_idx)
+                        lanes.append(value.cast(x.dtype) if x.op is Ops.CAST else value)
             auxiliary_lanes.append(lanes)
         if any(len(x) != len(inp_lst) for x in auxiliary_lanes):
             raise RuntimeError("composite auxiliary inputs must have the same horizontal lane count as the primary input")
