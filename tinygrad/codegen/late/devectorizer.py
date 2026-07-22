@@ -368,6 +368,12 @@ def horizontal_reduce(inp:UOp, out_dtype:DType) -> list[UOp]:
 
 def reduce_to_acc(ctx:ReduceContext, red:UOp):
   inp, reduce_range = red.src[0], red.src[1:]
+
+  # Composite reduce with no ranges yet (pre-rangeify): pass through unchanged
+  from tinygrad.uop.ops import CompositeReduce
+  if isinstance(red.arg[0], CompositeReduce) and len(reduce_range) == 0:
+    return None  # let rangeify expand it first
+
   lst = horizontal_reduce(inp, red.dtype)
   assert all(x.dtype == red.dtype for x in lst), f"horizontal reduction mismatch {lst[0].dtype} != {red.dtype}"
   # if we have a range
@@ -375,6 +381,25 @@ def reduce_to_acc(ctx:ReduceContext, red:UOp):
     topo = inp.toposort()
     ended_ranges = flatten([x.ended_ranges for x in topo if x.op is Ops.END])
     input_ranges = tuple([x for x in topo if x.op is Ops.RANGE and x not in reduce_range and x not in ended_ranges])
+
+    # Check for composite reduce (multi-accumulator)
+    from tinygrad.uop.ops import CompositeReduce
+    if isinstance(red.arg[0], CompositeReduce):
+      composite = red.arg[0]
+      accs = []
+      for i, slot in enumerate(composite.slots):
+        ident = red.const(slot.dtype, slot.identity if slot.identity is not None else identity_element(slot.op, slot.dtype.scalar()))
+        acc = UOp.placeholder((1,), slot.dtype, ctx.acc_num, AddrSpace.REG)
+        ctx.acc_num += 1
+        acc_init = acc.after(*input_ranges).index(UOp.const(dtypes.weakint, 0)).store(ident)
+        inp_lst = horizontal_reduce(inp, slot.dtype)
+        acc_read = acc.after(acc_init, *reduce_range).index(UOp.const(dtypes.weakint, 0))
+        lst_slot = [acc_read] + inp_lst
+        ret_slot = functools.reduce(lambda x,y: x.alu(slot.op, y), lst_slot)
+        acc_end = acc.index(UOp.const(dtypes.weakint, 0)).store(ret_slot).end(*reduce_range).rtag("mergeable")
+        accs.append(acc.after(acc_end).index(UOp.const(dtypes.weakint, 0)))
+      return accs[-1]
+
     identity = red.const(red.dtype, identity_element(red.arg[0], red.dtype.scalar()))
     acc = UOp.placeholder((1,), red.dtype, ctx.acc_num, AddrSpace.REG).replace(tag=red.tag if isinstance(red.tag, RegisterResidentAccumulator) else None)
     acc_init = acc.after(*input_ranges).index(UOp.const(dtypes.weakint, 0)).store(identity)

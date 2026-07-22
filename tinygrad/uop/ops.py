@@ -1108,6 +1108,17 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
 
 class RegisterResidentAccumulator(NamedTuple): op: Ops
 
+class AccumulatorSlot(NamedTuple):
+  op: Ops          # underlying reduce op (ADD, MAX, MUL)
+  dtype: Any = None   # dtype of this accumulator slot
+  identity: Any = None    # identity element value
+  name: str = ""   # debug name
+
+class CompositeReduce(NamedTuple):
+  slots: tuple
+  combine_fn: Any = None  # UOp sub-graph encoding combine (None = independent slots)
+
+
 @dataclass(frozen=True)
 class KernelInfo:
   name: str = "test"            # name of the kernel

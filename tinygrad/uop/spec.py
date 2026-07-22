@@ -188,7 +188,7 @@ spec_tensor = PatternMatcher([
 
   # REDUCE has arg=(op, axis_tuple), src[1:] are ranges after lowering
   (UPat(Ops.REDUCE, src=(UPat(),), allow_any_len=True, name="x"),
-   lambda x: isinstance(x.arg, tuple) and len(x.arg) == 2 and x.arg[0] in {Ops.ADD, Ops.MUL, Ops.MAX}
+   lambda x: isinstance(x.arg, tuple) and len(x.arg) == 2 and (x.arg[0] in {Ops.ADD, Ops.MUL, Ops.MAX} or hasattr(x.arg[0], 'slots'))
    and isinstance(x.arg[1], tuple) and all(y.dtype in (dtypes.weakint, dtypes.int) for y in x.src[1:])),
 
   # COPY. TODO: this should not have allow_any_len, but something is adding ranges
