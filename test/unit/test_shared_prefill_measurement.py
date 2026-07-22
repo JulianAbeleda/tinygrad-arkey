@@ -10,6 +10,7 @@ def test_shared_attention_attribution_reports_request_not_fusion():
     "schema": "shared-prefill-attention-route.v1",
     "requested": True,
     "boundary": "shared_prefill_attention",
+    "selected_lowering": "bounded_online_primitive",
     "fallback_contract": "ordinary_sdpa",
     "fusion_proven": False,
   }
@@ -20,3 +21,4 @@ def test_shared_attention_attribution_is_fail_closed_when_not_admitted():
   got = shared_attention_attribution(model)
   assert not got["requested"]
   assert got["boundary"] == "scaled_dot_product_attention"
+  assert got["selected_lowering"] == "ordinary_sdpa"
