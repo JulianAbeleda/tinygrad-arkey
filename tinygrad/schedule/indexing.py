@@ -25,6 +25,13 @@ def realize_store_after_src(ctx:dict[UOp, None], dest:UOp, src:UOp):
   # you don't usually have to do this for assign unless there's a WAR hazard like TestAssign.test_assign_double_diamond_reduce
   if dest.base in src.backward_slice_with_self: ctx[src] = None
 
+def _resolve_composite_axis_owner(owner_ranges:tuple[UOp, ...], axis:int|None) -> UOp|None:
+  """Return the live RANGE owning a logical axis, or None if collapsed/local."""
+  if axis is None or axis == -1 or not isinstance(axis, int): return None
+  if axis < 0 or axis >= len(owner_ranges): return None
+  owner = owner_ranges[axis]
+  return owner if owner.op is Ops.RANGE else None
+
 pm_generate_realize_map = PatternMatcher([
   # always realize
   (UPat({Ops.COPY, Ops.CONTIGUOUS, Ops.STORE}, name="tr"), realize),
@@ -102,7 +109,15 @@ def convert_reduce_to_reduce_with_ranges(ctx:IndexingContext, x:UOp):
   if hasattr(reduce_arg, "input_specs") and reduce_arg.input_specs:
     owner_ranges = ctx.range_map[x][0]
     def resolve_axis(axis):
-      if axis is None or axis == -1: return axis
+      """Resolve a source's logical axis to its owning live range.
+
+      Rangeify may collapse singleton/broadcast dimensions, so the range map
+      is not a positional representation of the source rank.  Keep the
+      source-axis provenance intact and return ``None`` for axes without a
+      live owner (including value-local ``-1`` axes).
+      """
+      if axis is None or axis == -1 or not isinstance(axis, int): return axis
+      if axis < 0 or axis >= len(owner_ranges): return None
       owner = owner_ranges[axis]
       return owner.arg[0] if owner.op is Ops.RANGE else None
     resolved_specs, resolved_srcs = [], []
@@ -110,7 +125,9 @@ def convert_reduce_to_reduce_with_ranges(ctx:IndexingContext, x:UOp):
       if spec.axis_map is not None and src.op is Ops.SCOPED_VALUE:
         # Index the source while owner_ranges are still addressed by logical
         # primary dimension. The empty late map marks this as already owned.
-        idxs = tuple(owner_ranges[a] if a is not None else UOp.const(dtypes.weakint, 0) for a in spec.axis_map if a != -1)
+        idxs = tuple((_resolve_composite_axis_owner(owner_ranges, a) or UOp.const(dtypes.weakint, 0))
+                     if a is not None else UOp.const(dtypes.weakint, 0)
+                     for a in spec.axis_map if a != -1)
         resolved_srcs.append(src.src[0].index(*idxs))
         resolved_specs.append(spec._replace(range_axes=(), source_shape=src.src[0].shape,
                               source_axis_ranges=tuple(resolve_axis(a) for a in spec.axis_map)))

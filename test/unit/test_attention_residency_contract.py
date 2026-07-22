@@ -6,6 +6,8 @@ not full T x KV tensors. Kernel-count and WMMA promotion remain separate gates.
 """
 from tinygrad import Tensor, dtypes
 from tinygrad.uop import Ops
+from tinygrad.uop.ops import AxisType, UOp
+from tinygrad.schedule.indexing import _resolve_composite_axis_owner
 from tinygrad.llm.flash_prefill_attention import shared_prefill_attention
 
 
@@ -25,3 +27,12 @@ def test_semantic_attention_primitive_has_no_full_score_or_probability_buffer():
   t = 129
   buffers = _primitive_buffers(t)
   assert not [shape for shape in buffers if len(shape) >= 4 and shape[-2:] == (t, t)]
+
+def test_composite_axis_owner_preserves_collapsed_source_axes():
+  owners = (UOp.range(2, 10, AxisType.LOOP), UOp.const(dtypes.weakint, 0),
+            UOp.range(4, 11, AxisType.REDUCE), UOp.range(8, 12, AxisType.LOOP))
+  assert _resolve_composite_axis_owner(owners, 0) is owners[0]
+  assert _resolve_composite_axis_owner(owners, 1) is None
+  assert _resolve_composite_axis_owner(owners, 3) is owners[3]
+  assert _resolve_composite_axis_owner(owners, 4) is None
+  assert _resolve_composite_axis_owner(owners, -1) is None
