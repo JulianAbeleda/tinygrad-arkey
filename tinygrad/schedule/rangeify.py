@@ -21,7 +21,8 @@ def _flash_attn_match(red:UOp):
   
   Filters: float dtype only, elementwise input ops only (excludes MOVEMENT ops
   like PERMUTE/RESHAPE that appear in internal tensor plumbing), excludes MUL
-  inputs (dot products), excludes INDEX/LOAD/BUFFER/CONST (scheduling noise).
+  inputs (unless part of PV matmul for flash attention), excludes
+  INDEX/LOAD/BUFFER/CONST (scheduling noise).
   """
   try:
     if red.arg[0] is not Ops.ADD: return None
@@ -29,11 +30,16 @@ def _flash_attn_match(red:UOp):
     # Only float dtypes (online_softmax_l uses float arithmetic)
     if not dtypes.is_float(red.dtype): return None
     inp = red.src[0]
+    # Check for PV matmul: ADD REDUCE of MUL(probs, V)
+    mul_inp = None
+    if inp.op is Ops.MUL:
+      mul_inp = inp
+    elif inp.op is Ops.CAST and inp.src and inp.src[0].op is Ops.MUL:
+      mul_inp = inp.src[0]
+    if mul_inp is not None:
+      return _handle_pv_matmul(red, mul_inp)
     # Skip movement ops (PERMUTE, RESHAPE, EXPAND, etc.) - only match elementwise inputs
     if inp.op in GroupOp.Movement: return None
-    # Skip dot product matmuls (MUL * MUL pattern)
-    if inp.op is Ops.MUL: return None
-    if inp.op is Ops.CAST and inp.src and inp.src[0].op is Ops.MUL: return None
     # Skip scheduling infrastructure ops
     if inp.op in (Ops.INDEX, Ops.LOAD, Ops.BUFFER, Ops.CONST): return None
     # Input must have at least 2 dimensions (not a flat vector reduce)
@@ -43,6 +49,45 @@ def _flash_attn_match(red:UOp):
     return red.replace(arg=(CompositeReduce(slots=(slot_m, slot_l), combine_fn="online_softmax_l"), red.arg[1]))
   except Exception:
     return None
+
+def _find_score_from_softmax(probs:UOp) -> UOp|None:
+  """Walk back from softmax output to find the score input (before EXP2)."""
+  cur = probs
+  while cur.op in (Ops.DIV, Ops.MUL, Ops.CAST):
+    cur = cur.src[0] if cur.src else cur
+    if not cur.src: break
+  if cur.op is Ops.EXP2:
+    return cur.src[0] if cur.src else None
+  return probs if probs.op not in (Ops.REDUCE,) else None
+
+def _handle_pv_matmul(red:UOp, mul_inp:UOp):
+  """Handle PV matmul: ADD REDUCE of MUL(probs, V). Replace with 3-slot composite."""
+  s0, s1 = mul_inp.src[0], mul_inp.src[1]
+  probs, V_ref = None, None
+  s0_shape = s0._shape
+  s1_shape = s1._shape
+  if s0_shape and s1_shape and len(s0_shape) >= 2 and len(s1_shape) >= 2:
+    if s0_shape[-1] > s1_shape[-1]:
+      V_ref, probs = s0, s1
+    else:
+      V_ref, probs = s1, s0
+  else:
+    V_ref, probs = s0, s1
+  if probs is None or V_ref is None:
+    return None
+  score = _find_score_from_softmax(probs)
+  if score is None:
+    return None
+  Hd = V_ref._shape[-1] if V_ref._shape else 1
+  slot_m = AccumulatorSlot(op=Ops.MAX, dtype=red.dtype, identity=float("-inf"), name="m")
+  slot_l = AccumulatorSlot(op=Ops.ADD, dtype=red.dtype, identity=0.0, name="l")
+  slot_acc = AccumulatorSlot(op=Ops.ADD, dtype=red.dtype.vec(Hd), identity=0.0, name="acc")
+  composite = CompositeReduce(
+    slots=(slot_m, slot_l, slot_acc),
+    combine_fn="online_softmax",
+    v_uop=V_ref,
+  )
+  return UOp(Ops.REDUCE, red.dtype, (score, V_ref), (composite, red.arg[1]))
 
 def add_ranges_to_store(ctx, x):
   if x.src[0]._shape is None or x.src[1]._shape is None or x.src[0].shape == (): return None
@@ -693,10 +738,6 @@ def get_kernel_graph(sink:UOp) -> UOp:
   return _get_kernel_graph(sink)
 
 def _get_kernel_graph(sink:UOp) -> UOp:
-  import sys
-  for u in sink.toposort():
-    if u.op is Ops.REDUCE:
-      print(f"DEBUG _get_kernel_graph: REDUCE, len(src)={len(u.src)}, arg[1]={u.arg[1] if isinstance(u.arg, tuple) and len(u.arg) > 1 else '?'}", file=sys.stderr)
   tsink = graph_rewrite(sink, multi_pm, name="multi_pm")
   if OPENPILOT_HACKS: tsink = graph_rewrite(tsink, pm_fold_moved_after, ctx={}, name="fold moved afters")
   tsink = graph_rewrite(tsink, pm_syntactic_sugar+pm_mops+earliest_rewrites, bottom_up=True, name="earliest rewrites")
