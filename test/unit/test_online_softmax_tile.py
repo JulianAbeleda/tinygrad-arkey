@@ -142,3 +142,14 @@ def test_grouped_tile_load_rejects_missing_or_non_integer_indices():
     grouped_tile_load(source, spec, i)
   with pytest.raises(ValueError, match="integer"):
     grouped_tile_load(source, spec, UOp(Ops.CONST, dtypes.float32, (), 0), i)
+
+def test_rangeify_handoff_unwraps_only_exact_tile_carriers():
+  from tinygrad.uop.ops import TileGatherSpec, graph_rewrite
+  from tinygrad.schedule.wmma import tile_gather
+  from tinygrad.schedule.rangeify import pm_mops
+  source = UOp.placeholder((16, 16), dtypes.half, 40)
+  carrier = tile_gather(source, TileGatherSpec("score", (16, 16), (0, 1), (0, 1)))
+  assert graph_rewrite(carrier, pm_mops) is source
+  bad = tile_gather(UOp.placeholder((8, 16), dtypes.half, 41), TileGatherSpec("score", (16, 16), (0, 1), (0, 1)))
+  with pytest.raises(ValueError, match="exact shaped"):
+    graph_rewrite(bad, pm_mops)

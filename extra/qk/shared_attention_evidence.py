@@ -20,6 +20,29 @@ def fused_wmma_role_report(source: str) -> dict[str, object]:
   return {"wmma_lines": len(lines), "qk": qk, "pv": pv,
           "single_call": calls == 1, "promotable": bool(qk and pv and calls == 1)}
 
+
+def dual_wmma_fused_call_report(source: str, allocation_shapes: tuple[tuple[int, ...], ...] = ()) -> dict[str, object]:
+  """Return the strict compiler-side dual-WMMA diagnostic.
+
+  This is intentionally only an evidence parser: it never enables a lowering.  A
+  candidate is promotable only when one fused CALL contains explicit QK and PV
+  WMMA markers, shaped-fragment construction, and no materialized score or
+  probability tensor.  Missing or ambiguous evidence fails closed.
+  """
+  upper = source.upper()
+  calls = upper.count("CALL")
+  qk = "QK" in upper and "WMMA" in upper
+  pv = "PV" in upper and "WMMA" in upper
+  shaped = "SHAPED_WMMA" in upper or "TILE_GATHER" in upper
+  # The census supplies logical attention buffers, which have a batch/head
+  # prefix in addition to the T x KV matrix.  Small 2-D fragments are not
+  # score/probability materializations and must not trip this gate.
+  score_probability = any(len(shape) >= 3 and shape[-2] > 1 and shape[-1] > 1 for shape in allocation_shapes)
+  report = {"single_call": calls == 1, "qk_wmma": qk, "pv_wmma": pv,
+            "shaped_fragments": shaped, "full_score_probability_buffers": score_probability}
+  report["promotable"] = bool(report["single_call"] and qk and pv and shaped and not score_probability)
+  return report
+
 ATTENTION_EVIDENCE_SCHEMA = "tinygrad.shared_attention_evidence.v1"
 DEFAULT_CONTEXTS = (512, 2048, 4096)
 _GEOMETRIES = ((16, 32, 1, 1), (16, 64, 1, 2), (32, 64, 2, 1), (32, 128, 2, 2), (64, 64, 4, 1))
@@ -90,4 +113,5 @@ def authority_command(profile: ModelProfile, *, artifact_path: str) -> list[str]
 
 
 __all__ = ["ATTENTION_EVIDENCE_SCHEMA", "DEFAULT_CONTEXTS", "AttentionGeometry", "AttentionWorkload",
-           "attention_workloads", "authority_command", "fused_wmma_role_report", "geometry_candidates"]
+           "attention_workloads", "authority_command", "dual_wmma_fused_call_report",
+           "fused_wmma_role_report", "geometry_candidates"]

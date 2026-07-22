@@ -166,12 +166,23 @@ def _mop_index(r:UOp, idx:UOp):
       ret = r.src[0].index(*apply_movement_op(r.op, r.src[0].shape[:src_prefix], r.shape[:len(idxs)], idxs), dtype=idx.dtype, arg=idx.arg)
       return ret if ret.shape == idx.shape else None
 
+def lower_tile_gather_carrier(x: UOp) -> UOp:
+  """Unwrap only an already-shaped ownership-preserving tile carrier."""
+  spec = x.arg
+  spec.validate()
+  if x.shape != spec.fragment_shape or x.src[0].shape != spec.fragment_shape:
+    raise ValueError("TILE_GATHER must carry an exact shaped fragment")
+  if spec.fragment_shape != (16, 16):
+    raise ValueError("TILE_GATHER WMMA handoff requires a 16x16 fragment")
+  return x.src[0]
+
 pm_mops = PatternMatcher([
   (UPat(GroupOp.Movement, name="r").f(Ops.INDEX, allow_any_len=True, name="idx"), _mop_index),
   # move movement ops and INDEX after AFTER (but not when AFTER has a raw STORE with shaped children — from replace_contig_with_store_after)
   (UPat(GroupOp.Movement|{Ops.INDEX}, name="r").after(name="a", allow_any_len=True),
    lambda r,a: UOp(r.op, r.dtype, (a.replace(src=(r.src[0],)+a.src[1:]),)+r.src[1:], r.arg)),
   (UPat(GroupOp.Movement, name="r").end(name="a", allow_any_len=True), lambda r,a: a.replace(src=(r.src[0],)+a.src[1:])),
+  (UPat(Ops.TILE_GATHER, name="x"), lower_tile_gather_carrier),
   # lower SHAPED_WMMA to WMMA with CONTRACT/UNROLL
   (UPat(Ops.SHAPED_WMMA, name="x"), lower_shaped_wmma),
 ])

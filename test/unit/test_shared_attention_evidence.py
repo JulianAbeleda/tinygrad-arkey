@@ -1,5 +1,6 @@
 from extra.qk.model_profiles import MODEL_PROFILES
-from extra.qk.shared_attention_evidence import DEFAULT_CONTEXTS, attention_workloads, authority_command, fused_wmma_role_report, geometry_candidates
+from extra.qk.shared_attention_evidence import (DEFAULT_CONTEXTS, attention_workloads, authority_command,
+  dual_wmma_fused_call_report, fused_wmma_role_report, geometry_candidates)
 from pathlib import Path
 
 
@@ -56,3 +57,14 @@ def test_dual_wmma_report_requires_qk_and_pv_in_one_call():
 def test_dual_wmma_report_fails_closed_for_missing_role_or_multiple_calls():
   assert not fused_wmma_role_report("CALL fused\n// QK WMMA")["promotable"]
   assert not fused_wmma_role_report("CALL qk\n// QK WMMA\nCALL pv\n// PV WMMA")["promotable"]
+
+def test_strict_dual_wmma_gate_requires_one_call_shaped_fragments_and_residency():
+  source = "CALL fused_attention\n// QK WMMA\n// PV WMMA\nSHAPED_WMMA(TILE_GATHER)"
+  report = dual_wmma_fused_call_report(source, ((32, 128), (32, 128)))
+  assert report["promotable"]
+  assert report["full_score_probability_buffers"] is False
+
+def test_strict_dual_wmma_gate_fails_closed_for_unshaped_or_materialized_graphs():
+  assert not dual_wmma_fused_call_report("CALL fused\n// QK WMMA\n// PV WMMA")["promotable"]
+  assert not dual_wmma_fused_call_report("CALL fused\n// QK WMMA\n// PV WMMA\nSHAPED_WMMA", ((1, 8, 64, 64),))["promotable"]
+  assert not dual_wmma_fused_call_report("CALL qk\n// QK WMMA\nCALL pv\n// PV WMMA\nSHAPED_WMMA")["promotable"]
