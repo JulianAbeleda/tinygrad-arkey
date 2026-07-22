@@ -53,9 +53,32 @@ def lower_tile_gather(source: UOp, *, role: str, dtype: DType) -> UOp:
     raise ValueError("expected TILE_GATHER carrier")
   spec = source.arg
   spec.validate()
-  if spec.role != role or source.shape != spec.fragment_shape or source.src[0].shape != spec.fragment_shape:
+  declared_role = "v" if spec.role == "value" else spec.role
+  if declared_role != role or source.shape != spec.fragment_shape or source.src[0].shape != spec.fragment_shape:
     raise ValueError("tile gather is not a shaped fragment")
   return adapt_wmma_fragment(source, role=role, dtype=dtype, shape=spec.fragment_shape)
+
+def emit_tile_gather_shaped_wmma(a_frag: UOp, b_frag: UOp, acc_frag: UOp, *,
+                                 roles: tuple[str, str, str] = ("score", "value", "acc"),
+                                 dims: tuple[int, int, int] = (16, 16, 16),
+                                 device: str = "AMD", threads: int = 32,
+                                 dtype_out: DType | None = None) -> UOp:
+  """Emit an existing SHAPED_WMMA node from exact tile carriers only.
+
+  This is the deliberately small handoff for scheduler-owned fragments.  The
+  carriers must already be logical 16x16 tiles; no reshape, broadcast, index
+  synthesis, or lane inference is performed here.  Consequently malformed
+  composite sources fail before backend code generation.
+  """
+  if len(roles) != 3:
+    raise ValueError("tile WMMA emitter requires three carrier roles")
+  carriers = (a_frag, b_frag, acc_frag)
+  abi_roles = tuple("v" if r == "value" else r for r in roles)
+  lowered = tuple(lower_tile_gather(x, role=r, dtype=x.dtype.base)
+                  for x, r in zip(carriers, abi_roles))
+  if any(x.shape != (16, 16) for x in lowered):
+    raise ValueError("tile WMMA emitter requires exact 16x16 fragments")
+  return shaped_wmma(*lowered, dims=dims, device=device, threads=threads, dtype_out=dtype_out)
 
 def amd_tile_wmma_boundary_report(*, qk_score: UOp, pv_value: UOp, pv_acc: UOp) -> dict:
   """Describe whether AMD can consume the composite tile at the WMMA boundary.

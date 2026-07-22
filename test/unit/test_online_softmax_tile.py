@@ -119,6 +119,26 @@ def test_tile_gather_rejects_ambiguous_axis_or_offset_metadata():
                TileGatherSpec("value", (16, 16), (1, 2), (0, 1), (4,))):
     with pytest.raises(ValueError): spec.validate()
 
+def test_exact_tile_gather_emitter_reaches_existing_shaped_wmma_boundary():
+  from tinygrad.uop.ops import TileGatherSpec
+  from tinygrad.schedule.wmma import tile_gather, emit_tile_gather_shaped_wmma
+  spec_a = TileGatherSpec("score", (16, 16), (0, 1), (0, 1))
+  spec_b = TileGatherSpec("value", (16, 16), (0, 1), (0, 1))
+  spec_acc = TileGatherSpec("acc", (16, 16), (0, 1), (0, 1))
+  a = tile_gather(UOp.placeholder((16, 16), dtypes.half, 50), spec_a)
+  b = tile_gather(UOp.placeholder((16, 16), dtypes.half, 51), spec_b)
+  acc = tile_gather(UOp.placeholder((16, 16), dtypes.float32, 52), spec_acc)
+  node = emit_tile_gather_shaped_wmma(a, b, acc)
+  assert node.op is Ops.SHAPED_WMMA and node.src == (a, b, acc)
+
+def test_exact_tile_gather_emitter_rejects_unshaped_source():
+  from tinygrad.uop.ops import TileGatherSpec
+  from tinygrad.schedule.wmma import tile_gather, emit_tile_gather_shaped_wmma
+  carrier = tile_gather(UOp.placeholder((8, 16), dtypes.half, 53),
+                        TileGatherSpec("score", (16, 16), (0, 1), (0, 1)))
+  with pytest.raises(ValueError, match="shaped fragment"):
+    emit_tile_gather_shaped_wmma(carrier, carrier, carrier)
+
 def test_grouped_tile_load_preserves_index_and_lane_ownership():
   from tinygrad.uop.ops import TileGatherSpec
   from tinygrad.schedule.wmma import grouped_tile_load, lower_tile_gather
