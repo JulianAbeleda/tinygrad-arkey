@@ -41,6 +41,7 @@ class TestCompositeReduce(unittest.TestCase):
     reds = [u for u in lowered.toposort() if u.op is Ops.REDUCE and isinstance(u.arg[0], CompositeReduce)]
     self.assertEqual(len(reds), 1)
     self.assertEqual(tuple(s.name for s in reds[0].arg[0].slots), ("m", "l", "acc"))
+    self.assertEqual(reds[0].arg[0].combine_fn, "online_softmax")
 
   def test_composite_reduce_is_real_composite_reduce_uop(self):
     t = Tensor.arange(1, 17, dtype=dtypes.float32).reshape(16)

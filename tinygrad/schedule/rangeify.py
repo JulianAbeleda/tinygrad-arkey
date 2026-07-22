@@ -78,12 +78,26 @@ def lower_attention_semantic(att:UOp) -> UOp:
                AccumulatorSlot(Ops.ADD, att.arg.qk_dtype, 0.0, "acc"))
       tile_carrier = CompositeTileCarrier((16, 16, hd), (16, hd, hd), (16, 16, hd),
                                           provenance=("qk", "pv", "online_softmax") + (("owned-index-map",) if owned_map_proven else ()))
-      red = score.uop.composite_reduce(*slots, axis=(3,), inputs=(logical_v,), combine_fn="online_softmax",
+      # Keep the reduction result as the raw online-softmax state.  The
+      # public output must normalize only after the single composite producer
+      # has materialized all three slots; using the legacy ``online_softmax``
+      # combine here would normalize inside the reducer and make REDUCE_SLOT
+      # projections observe an already-divided accumulator.
+      # State-only mode is opt-in until tuple-state code generation is proven
+      # on every backend.  The default remains the established normalized
+      # scalar combine, preserving the production correctness path.
+      state_combine = "online_softmax_state" if getenv("TINYGRAD_ONLINE_SOFTMAX_STATE", 0) else "online_softmax"
+      red = score.uop.composite_reduce(*slots, axis=(3,), inputs=(logical_v,), combine_fn=state_combine,
         input_specs=(CompositeInputSpec("logical", (0, 1, None, 3, 4), primary_repeated=True),),
         tile_carrier=tile_carrier)
       acc = Tensor(UOp(Ops.REDUCE_SLOT, att.arg.qk_dtype, (red,), 2))
       den = Tensor(UOp(Ops.REDUCE_SLOT, att.arg.qk_dtype, (red,), 1))
-      return (acc / den).reshape(b, h, q_len, hd).cast(att.arg.output_dtype).uop
+      if state_combine == "online_softmax_state":
+        from tinygrad.codegen.late.flash_attn import normalize_online_softmax_state
+        out = normalize_online_softmax_state(acc, den)
+      else:
+        out = acc / den
+      return out.reshape(b, h, q_len, hd).cast(att.arg.output_dtype).uop
   return att.src[0]
 
 pm_attention_semantic = PatternMatcher([

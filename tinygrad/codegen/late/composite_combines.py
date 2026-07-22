@@ -159,6 +159,10 @@ COMBINE_STEP_REGISTRY = {
     None: (lambda *args: args[0].alu(args[1].op, args[2]) if len(args) == 3 else None, None, None, 1),
     "online_softmax_l": (_combine_step_online_softmax_l, 2, lambda slot: slot.identity, 1),
     "online_softmax": (_combine_step_online_softmax, 3, lambda slot: slot.identity, 2),
+    # State-only producer shares the same per-element recurrence as the
+    # legacy normalized combine; normalization is performed by the consumer
+    # after REDUCE_SLOT projections are resolved.
+    "online_softmax_state": (_combine_step_online_softmax, 3, lambda slot: slot.identity, 2),
 }
 
 def _handle_no_range_generic(inp, composite, red, auxiliary_inputs=()):
