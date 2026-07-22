@@ -1,6 +1,6 @@
 from extra.qk.model_profiles import MODEL_PROFILES
 from extra.qk.shared_attention_evidence import (DEFAULT_CONTEXTS, attention_workloads, authority_command,
-  dual_wmma_fused_call_report, fused_wmma_role_report, geometry_candidates)
+  dual_wmma_fused_call_report, dual_wmma_fused_call_fixture, fused_wmma_role_report, geometry_candidates)
 from pathlib import Path
 
 
@@ -68,3 +68,15 @@ def test_strict_dual_wmma_gate_fails_closed_for_unshaped_or_materialized_graphs(
   assert not dual_wmma_fused_call_report("CALL fused\n// QK WMMA\n// PV WMMA")["promotable"]
   assert not dual_wmma_fused_call_report("CALL fused\n// QK WMMA\n// PV WMMA\nSHAPED_WMMA", ((1, 8, 64, 64),))["promotable"]
   assert not dual_wmma_fused_call_report("CALL qk\n// QK WMMA\nCALL pv\n// PV WMMA\nSHAPED_WMMA")["promotable"]
+
+def test_dual_wmma_fused_call_fixture_requires_real_isa_capture():
+  fixture = dual_wmma_fused_call_fixture()
+  assert fixture["qk_wmma"] and fixture["pv_wmma"]
+  assert fixture["single_call"] and fixture["shaped_fragments"]
+  assert fixture["isa_captured"] is False
+  assert fixture["promotable"] is False
+
+def test_dual_wmma_fused_call_report_accepts_one_call_source_and_isa_fixture():
+  fixture = dual_wmma_fused_call_fixture(isa="v_wmma_f32_16x16x16_f16\n v_wmma_f32_16x16x16_f16")
+  assert fixture["isa_captured"] is True
+  assert fixture["promotable"] is True

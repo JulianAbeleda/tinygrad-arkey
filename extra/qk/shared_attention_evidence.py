@@ -43,6 +43,25 @@ def dual_wmma_fused_call_report(source: str, allocation_shapes: tuple[tuple[int,
   report["promotable"] = bool(report["single_call"] and qk and pv and shaped and not score_probability)
   return report
 
+def dual_wmma_fused_call_fixture(*, isa: str | None = None) -> dict[str, object]:
+  """Build a deterministic source/ISA fixture for the dual-WMMA gate.
+
+  This is intentionally synthetic: it exercises the evidence contract without
+  pretending that the production composite scheduler already emits both
+  instructions.  ``isa`` is optional so real compiler captures can be plugged
+  in later; absent ISA keeps the fixture non-promotable.
+  """
+  source = ("CALL fused_attention\n"
+            "// QK WMMA score tile\n"
+            "// PV WMMA value tile\n"
+            "SHAPED_WMMA(TILE_GATHER score,value,acc)\n")
+  report = dual_wmma_fused_call_report(source, ((16, 16), (16, 16)))
+  isa_lines = tuple(line for line in (isa or "").splitlines() if "WMMA" in line.upper())
+  report.update({"source": source, "isa_lines": isa_lines,
+                 "isa_captured": bool(isa_lines),
+                 "promotable": bool(report["promotable"] and isa_lines)})
+  return report
+
 ATTENTION_EVIDENCE_SCHEMA = "tinygrad.shared_attention_evidence.v1"
 DEFAULT_CONTEXTS = (512, 2048, 4096)
 _GEOMETRIES = ((16, 32, 1, 1), (16, 64, 1, 2), (32, 64, 2, 1), (32, 128, 2, 2), (64, 64, 4, 1))
@@ -114,4 +133,5 @@ def authority_command(profile: ModelProfile, *, artifact_path: str) -> list[str]
 
 __all__ = ["ATTENTION_EVIDENCE_SCHEMA", "DEFAULT_CONTEXTS", "AttentionGeometry", "AttentionWorkload",
            "attention_workloads", "authority_command", "dual_wmma_fused_call_report",
+           "dual_wmma_fused_call_fixture",
            "fused_wmma_role_report", "geometry_candidates"]
