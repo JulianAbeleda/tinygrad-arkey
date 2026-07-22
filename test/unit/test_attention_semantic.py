@@ -106,6 +106,49 @@ class TestAttentionSemantic(unittest.TestCase):
     linear = attention.schedule_linear()
     self.assertFalse(any(u.op is Ops.ATTENTION for u in linear.toposort()))
 
+  def test_bounded_semantic_admission_uses_scoped_composite_before_score_bufferization(self):
+    q = Tensor.empty(1, 1, 2, 1, dtype=dtypes.float32)
+    k = Tensor.empty(1, 1, 3, 1, dtype=dtypes.float32)
+    v = Tensor.empty(1, 1, 3, 1, dtype=dtypes.float32)
+    calls = shared_prefill_attention(q, k, v).schedule_linear().src
+    reductions = [u for call in calls for u in call.src[0].toposort() if u.op is Ops.REDUCE]
+    composite = [u for u in reductions if hasattr(u.arg[0], "combine_fn") and u.arg[0].combine_fn == "online_softmax"]
+    self.assertEqual(len(composite), 1)
+    self.assertEqual(len(composite[0].arg[0].input_specs), 1)
+    self.assertEqual(composite[0].arg[0].input_specs[0].role, "logical")
+
+  def test_bounded_semantic_admission_keeps_logical_hd_axis_and_fp16_inputs(self):
+    for hd, dtype in ((64, dtypes.float32), (128, dtypes.float16)):
+      q = Tensor.empty(1, 1, 2, hd, dtype=dtype)
+      k = Tensor.empty(1, 1, 3, hd, dtype=dtype)
+      v = Tensor.empty(1, 1, 3, hd, dtype=dtype)
+      calls = shared_prefill_attention(q, k, v).schedule_linear().src
+      composite = [u for call in calls for u in call.src[0].toposort()
+                   if u.op is Ops.REDUCE and hasattr(u.arg[0], "combine_fn") and u.arg[0].combine_fn == "online_softmax"]
+      self.assertEqual(len(composite), 1)
+      self.assertEqual(composite[0].arg[0].input_specs[0].axis_map, (0, 1, None, 3, 4))
+
+  def test_bounded_semantic_admission_handles_gqa_and_additive_mask(self):
+    rng = np.random.default_rng(21)
+    qv = rng.standard_normal((1, 2, 2, 64), dtype=np.float32)
+    kv = rng.standard_normal((1, 1, 3, 64), dtype=np.float32)
+    vv = rng.standard_normal((1, 1, 3, 64), dtype=np.float32)
+    mask = rng.standard_normal((1, 1, 2, 3), dtype=np.float32)
+    got = shared_prefill_attention(Tensor(qv), Tensor(kv), Tensor(vv), mask=Tensor(mask)).numpy()
+    kk, vv = np.repeat(kv, 2, axis=1), np.repeat(vv, 2, axis=1)
+    scores = qv @ kk.swapaxes(-2, -1) / np.sqrt(64) + mask
+    probs = np.exp(scores - scores.max(axis=-1, keepdims=True)); expected = probs / probs.sum(axis=-1, keepdims=True) @ vv
+    np.testing.assert_allclose(got, expected, rtol=1e-5, atol=1e-5)
+
+  def test_bounded_semantic_admission_handles_causal_mask_source(self):
+    rng = np.random.default_rng(22)
+    qv = rng.standard_normal((1, 1, 2, 64), dtype=np.float32)
+    kv = rng.standard_normal((1, 1, 3, 64), dtype=np.float32)
+    vv = rng.standard_normal((1, 1, 3, 64), dtype=np.float32)
+    got = shared_prefill_attention(Tensor(qv), Tensor(kv), Tensor(vv), causal=True).numpy()
+    expected = Tensor(qv).scaled_dot_product_attention(Tensor(kv), Tensor(vv), is_causal=True).numpy()
+    np.testing.assert_allclose(got, expected, rtol=1e-5, atol=1e-5)
+
   def test_prefill_shape_semantic_lowering_does_not_promote_block_materialization(self):
     q = Tensor.empty(1, 32, 512, 128, dtype=dtypes.float16)
     k = Tensor.empty(1, 32, 512, 128, dtype=dtypes.float16)
