@@ -43,6 +43,49 @@ def tile_gather(source: UOp, spec: TileGatherSpec) -> UOp:
     raise ValueError("tile gather base offset is outside source shape")
   return UOp(Ops.TILE_GATHER, source.dtype, (source,), arg=spec)
 
+def build_owned_fragment_index_map(source_shape: tuple[int, ...], spec: TileGatherSpec) -> tuple[tuple[int, ...], ...]:
+  """Build concrete source coordinates for one owned logical 16x16 tile.
+
+  This is a renderer-neutral primitive: it does not reshape, broadcast, or
+  infer lanes. ``source_axes`` explicitly names the source dimensions owned by
+  the two fragment axes in ``tile_axes``; all remaining dimensions are fixed
+  by ``base_offsets`` (zero when omitted).  Only exact 16x16 tiles are
+  accepted, and value tiles must expose an Hd source axis with a compatible
+  lane group.
+  """
+  spec.validate()
+  if tuple(spec.fragment_shape) != (16, 16):
+    raise ValueError("owned fragment builder requires an exact 16x16 fragment")
+  if len(source_shape) == 0 or any(not isinstance(x, int) or x <= 0 for x in source_shape):
+    raise ValueError("source shape must be a positive concrete rank")
+  if any(a >= len(source_shape) for a in spec.source_axes):
+    raise ValueError("tile gather source axes are out of range")
+  offsets = spec.base_offsets or (0,) * len(spec.source_axes)
+  if len(offsets) != len(spec.source_axes):
+    raise ValueError("tile gather base offsets must match source axes")
+  # A value tile's second fragment axis is the logical Hd lane.  Keep this
+  # explicit rather than guessing a packed/vector layout.
+  if spec.role == "value" and 1 not in spec.tile_axes:
+    raise ValueError("value fragment must map Hd ownership to tile axis 1")
+  if 16 % spec.lane_group:
+    raise ValueError("lane group must divide the 16-lane fragment")
+  axis_to_tile = {axis: tile for axis, tile in zip(spec.source_axes, spec.tile_axes)}
+  out = []
+  for row in range(16):
+    for col in range(16):
+      coord = [0] * len(source_shape)
+      for axis in range(len(source_shape)):
+        if axis in spec.source_axes:
+          i = spec.source_axes.index(axis)
+          tile_axis = axis_to_tile[axis]
+          coord[axis] = offsets[i] + (row if tile_axis == 0 else col)
+        elif spec.base_offsets:
+          coord[axis] = 0
+        if coord[axis] >= source_shape[axis]:
+          raise ValueError("owned fragment coordinate exceeds source shape")
+      out.append(tuple(coord))
+  return tuple(out)
+
 def lower_tile_gather(source: UOp, *, role: str, dtype: DType) -> UOp:
   """Resolve a TILE_GATHER only when an upstream pass already shaped it.
 

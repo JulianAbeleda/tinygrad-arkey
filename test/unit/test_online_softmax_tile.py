@@ -163,6 +163,30 @@ def test_grouped_tile_load_rejects_missing_or_non_integer_indices():
   with pytest.raises(ValueError, match="integer"):
     grouped_tile_load(source, spec, UOp(Ops.CONST, dtypes.float32, (), 0), i)
 
+def test_owned_fragment_index_map_preserves_5d_qkv_hd_ownership():
+  from tinygrad.uop.ops import TileGatherSpec
+  from tinygrad.schedule.wmma import build_owned_fragment_index_map
+  # [batch, head, q/kv, kv, hd], with q/kv and hd explicitly owned.
+  score = build_owned_fragment_index_map((1, 1, 16, 16, 1),
+      TileGatherSpec("score", (16, 16), (2, 3), (0, 1), (0, 0)))
+  assert score[0] == (0, 0, 0, 0, 0)
+  assert score[15] == (0, 0, 0, 15, 0)
+  assert score[16] == (0, 0, 1, 0, 0)
+  assert score[-1] == (0, 0, 15, 15, 0)
+  value = build_owned_fragment_index_map((1, 1, 1, 16, 16),
+      TileGatherSpec("value", (16, 16), (3, 4), (0, 1), (0, 0), 4))
+  assert value[0] == (0, 0, 0, 0, 0) and value[-1] == (0, 0, 0, 15, 15)
+
+def test_owned_fragment_index_map_rejects_unsupported_geometry():
+  from tinygrad.uop.ops import TileGatherSpec
+  from tinygrad.schedule.wmma import build_owned_fragment_index_map
+  with pytest.raises(ValueError, match="exact 16x16"):
+    build_owned_fragment_index_map((16, 16), TileGatherSpec("score", (8, 16), (0, 1), (0, 1)))
+  with pytest.raises(ValueError, match="Hd ownership"):
+    build_owned_fragment_index_map((16, 16, 16), TileGatherSpec("value", (16, 16), (0, 1), (0, 2)))
+  with pytest.raises(ValueError, match="exceeds"):
+    build_owned_fragment_index_map((1, 1, 16, 8, 1), TileGatherSpec("score", (16, 16), (2, 3), (0, 1)))
+
 def test_rangeify_handoff_unwraps_only_exact_tile_carriers():
   from tinygrad.uop.ops import TileGatherSpec, graph_rewrite
   from tinygrad.schedule.wmma import tile_gather
