@@ -572,6 +572,17 @@ def lower_composite_accumulator(state:UOp):
       raise RuntimeError(f"composite accumulator slot {i} shape mismatch: {src.shape} != {shape}")
   return UOp(Ops.TUPLE, dtypes.void, state.src).replace(tag=("composite_accumulator", shapes))
 
+def composite_reduce_state_adapter(values:tuple[UOp, ...], shapes:tuple[tuple|None, ...]):
+  """Opt-in adapter for synthetic composite-reduce state experiments.
+
+  This deliberately does not alter bounded attention.  It provides a small
+  backend-neutral bridge from already-computed slot values to the explicit
+  heterogeneous carrier used by primitive ABI tests.
+  """
+  if len(values) != len(shapes):
+    raise ValueError(f"composite state arity mismatch: {len(values)} != {len(shapes)}")
+  return UOp(Ops.COMPOSITE_ACCUMULATOR, values[0].dtype if values else dtypes.void, values, shapes)
+
 pm_reduce = PatternMatcher([
   (UPat(Ops.COMPOSITE_ACCUMULATOR, name="state"), lower_composite_accumulator),
   # REDUCE -> DEFINE_ACC+ASSIGN, then merge ENDs with same range
