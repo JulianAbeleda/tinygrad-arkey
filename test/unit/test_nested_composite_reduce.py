@@ -3,8 +3,22 @@ import numpy as np
 
 from tinygrad import Tensor, dtypes
 from tinygrad.uop import Ops
-from tinygrad.uop.ops import AccumulatorSlot, UOp, ScopedReduceSpec
+from tinygrad.uop.ops import AccumulatorSlot, UOp, ScopedReduceSpec, CompositeInputSpec
 from tinygrad.codegen.late.devectorizer import _partition_composite_sources
+
+def test_lane_aware_composite_input_is_explicit_and_scalar_safe():
+  """The grouped-load carrier is metadata; scalar source ownership is unchanged."""
+  spec = CompositeInputSpec("logical", (0, 1, None, 3, 4), lane_axis=4, lane_group=16)
+  assert spec.validate_lane_abi() is spec
+  assert spec.axis_map[-1] == 4 and spec.lane_axis == 4 and spec.lane_group == 16
+  value = Tensor.empty(1, 1, 16, 64, dtype=dtypes.float16)
+  score = Tensor.empty(1, 1, 16, 16, dtype=dtypes.float16)
+  red = score.uop.composite_reduce(
+    AccumulatorSlot(Ops.MAX, dtypes.float32, float("-inf"), "m"),
+    AccumulatorSlot(Ops.ADD, dtypes.float32, 0.0, "l"),
+    AccumulatorSlot(Ops.ADD, dtypes.float32, 0.0, "acc"), axis=(3,),
+    inputs=(value.uop,), input_specs=(spec,), combine_fn="online_softmax")
+  assert red.arg[0].input_specs[0] == spec
 
 
 def test_nested_reduction_with_logical_element_input_stays_in_one_schedule():

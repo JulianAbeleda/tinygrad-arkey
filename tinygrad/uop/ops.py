@@ -620,6 +620,8 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
       input_specs = tuple(CompositeInputSpec("logical", x.arg.axis_map if x.op is Ops.SCOPED_VALUE and hasattr(x.arg, "axis_map") else None)
                           for x in inputs)
     if len(input_specs) != len(inputs): raise ValueError("one CompositeInputSpec is required for each composite input")
+    for spec in input_specs:
+      if hasattr(spec, "validate_lane_abi"): spec.validate_lane_abi()
     if tile_carrier is not None:
       tile_carrier.validate()
     composite = CompositeReduce(slots=tuple(slots), combine_fn=kwargs.pop('combine_fn', None),
@@ -1252,6 +1254,17 @@ class CompositeInputSpec(NamedTuple):
   # Late lowering may select one representative lane instead of treating the
   # repetition as an independent reduction element.
   primary_repeated: bool = False
+  # Optional logical lane carrier for grouped loads.  This is metadata only:
+  # lowering must preserve scalar source indexing until a backend consumes it.
+  lane_axis: int|None = None
+  lane_group: int = 1
+
+  def validate_lane_abi(self):
+    if not isinstance(self.lane_group, int) or self.lane_group < 1:
+      raise ValueError("composite input lane_group must be a positive integer")
+    if self.lane_axis is not None and self.lane_axis < 0:
+      raise ValueError("composite input lane_axis must be non-negative")
+    return self
 
 class ScopedReduceSpec(NamedTuple):
   """Source-visible contract for a producer nested inside an outer reduction.
