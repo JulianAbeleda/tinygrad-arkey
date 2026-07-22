@@ -60,12 +60,7 @@ def lower_attention_semantic(att:UOp) -> UOp:
                                           provenance=("qk", "pv", "online_softmax"))
       red = score.uop.composite_reduce(*slots, axis=(3,), inputs=(logical_v,), combine_fn="online_softmax",
         input_specs=(CompositeInputSpec("logical", (0, 1, None, 3, 4), primary_repeated=True),),
-        tile_carrier=tile_carrier,
-        # The state ABI is heterogeneous: m/l are scalar per query position,
-        # while acc retains the logical Hd lane.  Keep this shape metadata on
-        # the REDUCE itself so REDUCE_SLOT projection never infers a giant
-        # vector dtype or accidentally drops the output lane.
-        slot_shapes=((b, h, q_len), (b, h, q_len), (b, h, q_len, hd)))
+        tile_carrier=tile_carrier)
       acc = Tensor(UOp(Ops.REDUCE_SLOT, att.arg.qk_dtype, (red,), 2))
       den = Tensor(UOp(Ops.REDUCE_SLOT, att.arg.qk_dtype, (red,), 1))
       return (acc / den).reshape(b, h, q_len, hd).cast(att.arg.output_dtype).uop
@@ -314,15 +309,7 @@ def cleanup_dead_axes(b:UOp):
   new_rng = []
   hit = False
   reshape: list[sint] = []
-  # A composite REDUCE_SLOT may carry logical lane axes in its shape that are
-  # not scheduler ranges (for example a scalar m/l slot paired with an Hd
-  # accumulator lane).  Only range-backed axes participate in dead-axis
-  # elimination; preserve trailing logical axes verbatim.
-  for i,s in enumerate(b.shape):
-    if i >= len(b.src)-1:
-      reshape.append(s)
-      continue
-    rng = b.src[i+1]
+  for s,rng in zip(b.shape, b.src[1:]):
     # skip for symbolic. TODO: fix this
     if rng.op is Ops.RANGE and rng.src[0].op is not Ops.CONST: return None
     # CONSTs are already dead axes
