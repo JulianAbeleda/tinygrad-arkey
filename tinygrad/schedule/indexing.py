@@ -196,6 +196,9 @@ def run_rangeify(tsink:UOp, debug:bool=False) -> tuple[UOp, IndexingContext]:
       assert rctx.realize_map[x] is None
       rctx.realize_map[x] = list(range(len(x.shape)))
     elif len(consumer_rngs) == 0:
+      # A root REDUCE still needs an explicit output range so its reduction
+      # body executes; ordinary reductions with consumers retain ownership of
+      # their consumer ranges.
       if x.op is Ops.REDUCE and len(x.arg[1]): out_rngs = tuple(rctx.new_range(s) for s in x.shape)
       else: continue
     elif len(consumer_rngs) == 1:

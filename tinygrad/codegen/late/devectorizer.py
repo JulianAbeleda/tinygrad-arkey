@@ -366,7 +366,7 @@ def horizontal_reduce(inp:UOp, out_dtype:DType) -> list[UOp]:
     return [inp.gep(tuple(range(i, inp.dtype.count, horizontal_amount))) for i in range(0, horizontal_amount)]
   return [inp]
 
-def _load_v_at_reduce_pos(v_src:UOp, composite, input_ranges, reduce_range):
+def _load_v_at_reduce_pos(v_src:UOp, composite, input_ranges, reduce_range, score_shape=None):
   """Create a LOAD from V at the current reduce position.
   Uses RANGE UOps from input_ranges and reduce_range to build indices.
   """
@@ -380,21 +380,40 @@ def _load_v_at_reduce_pos(v_src:UOp, composite, input_ranges, reduce_range):
     v_rank = len(v_shape) if v_shape is not None else (max(range_by_axis.keys()) + 2 if range_by_axis else 1)
   except Exception:
     v_rank = max(range_by_axis.keys()) + 2 if range_by_axis else 1
-  # Build index tuple: use range if axis is known, else CONST 0
-  # Exclude last axis (Hd) — LOAD dtype handles it
-  v_indices = tuple(range_by_axis.get(ax, UOp.const(dtypes.weakint, 0)) for ax in range(v_rank - 1))
+  # V is [..., KV, Hd], while score is [..., Q, KV]. The query axis is
+  # absent from V, so score-axis numbers cannot be copied directly.
+  v_indices = []
+  score_rank = len(score_shape) if score_shape is not None else 0
+  reduce_axis = reduce_range[-1].arg[0] if reduce_range else None
+  query_axis = reduce_axis - 1 if reduce_axis is not None and reduce_axis > 0 else None
+  for v_axis in range(v_rank - 1):
+    if score_rank == v_rank and query_axis is not None and v_axis == query_axis:
+      v_indices.append(reduce_range[-1])
+    elif score_rank == v_rank and query_axis is not None and v_axis > query_axis:
+      v_indices.append(range_by_axis.get(v_axis + 1, UOp.const(dtypes.weakint, 0)))
+    else:
+      v_indices.append(range_by_axis.get(v_axis, UOp.const(dtypes.weakint, 0)))
+  v_indices = tuple(v_indices)
   if not v_indices:
     v_indices = (UOp.const(dtypes.weakint, 0),)
   v_index = v_src.index(*v_indices)
-  return v_index.load(dtype=composite.slots[2].dtype)
+  # The auxiliary value is a logical element for the final state slot. A
+  # generic composite may have one or many slots; never assume online-softmax
+  # has already supplied a third slot here.
+  return v_index.load(dtype=composite.slots[-1].dtype)
 
 def reduce_to_acc(ctx:ReduceContext, red:UOp):
   from tinygrad.uop.ops import CompositeReduce
   composite = red.arg[0] if isinstance(red.arg, tuple) and len(red.arg) > 0 and isinstance(red.arg[0], CompositeReduce) else None
   inp = red.src[0]
   raw_rest = red.src[1:]
-  reduce_range = tuple(x for x in raw_rest if x.op is Ops.RANGE and x.arg[1] is AxisType.REDUCE)
-  extra_srcs = tuple(x for x in raw_rest if x not in reduce_range)
+  range_srcs = tuple(x for x in raw_rest if x.op is Ops.RANGE)
+  # Ordinary REDUCE lowering owns every range supplied by rangeify: output
+  # loop ranges are part of the loop-carried accumulator context too. Only a
+  # composite with explicit auxiliary sources needs to split REDUCE ranges
+  # from those sources.
+  reduce_range = tuple(x for x in range_srcs if x.arg[1] is AxisType.REDUCE) if composite is not None else raw_rest
+  extra_srcs = tuple(x for x in raw_rest if x.op is not Ops.RANGE)
 
   # Composite reduce with no ranges yet: rangeify inline
   if isinstance(red.arg[0], CompositeReduce) and len(reduce_range) == 0:
@@ -409,14 +428,15 @@ def reduce_to_acc(ctx:ReduceContext, red:UOp):
   if len(reduce_range) != 0:
     topo = inp.toposort()
     ended_ranges = flatten([x.ended_ranges for x in topo if x.op is Ops.END])
-    input_ranges = tuple([x for x in topo if x.op is Ops.RANGE and x not in reduce_range and x not in ended_ranges])
+    input_ranges = tuple(dict.fromkeys(x for x in (*range_srcs, *topo)
+      if x.op is Ops.RANGE and x not in reduce_range and x not in ended_ranges))
 
     # Check for composite reduce (multi-accumulator)
     if isinstance(red.arg[0], CompositeReduce):
       composite = red.arg[0]
       
       # Auxiliary logical-element inputs are ordinary REDUCE sources.
-      v_inp = _load_v_at_reduce_pos(extra_srcs[0], composite, input_ranges, reduce_range) if extra_srcs else None
+      v_inp = _load_v_at_reduce_pos(extra_srcs[0], composite, input_ranges, reduce_range, inp._shape) if extra_srcs else None
       
       # Create accumulators (common to all combines)
       accs = []

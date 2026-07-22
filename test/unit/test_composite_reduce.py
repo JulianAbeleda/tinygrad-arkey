@@ -14,7 +14,8 @@ import numpy as np
 
 from tinygrad import Tensor, dtypes
 from tinygrad.helpers import NOOPT
-from tinygrad.uop.ops import UOp, Ops, AccumulatorSlot, CompositeReduce
+from tinygrad.uop.ops import UOp, Ops, AxisType, AccumulatorSlot, CompositeReduce
+from tinygrad.codegen.late.devectorizer import _load_v_at_reduce_pos
 
 
 class TestCompositeReduce(unittest.TestCase):
@@ -48,6 +49,19 @@ class TestCompositeReduce(unittest.TestCase):
     total.realize(maximum)
     self.assertEqual(float(total.numpy()[0]), 136.0)
     self.assertEqual(float(maximum.numpy()[0]), 16.0)
+
+  def test_auxiliary_v_is_a_source_and_uses_kv_axis(self):
+    v = Tensor.empty(2, 3, 5, 4, dtype=dtypes.float32)
+    slot = AccumulatorSlot(op=Ops.ADD, dtype=dtypes.float32, identity=0.0, name="acc")
+    red = UOp.composite_reduce(Tensor.empty(2, 3, 7, 5, dtype=dtypes.float32).uop, slot,
+                               axis=(3,), inputs=(v.uop,))
+    self.assertEqual(red.src[-1], v.uop)
+    outer = (UOp.range(2, 0), UOp.range(3, 1))
+    kv = UOp.range(5, 3, AxisType.REDUCE)
+    loaded = _load_v_at_reduce_pos(v.uop, red.arg[0], outer, (kv,), red.src[0]._shape)
+    idx = loaded.src[0]
+    self.assertIs(idx.op, Ops.INDEX)
+    self.assertIs(idx.src[-1], kv)
 
 
 class TestOnlineSoftmaxTwoReduce(unittest.TestCase):
