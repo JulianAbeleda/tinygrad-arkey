@@ -231,7 +231,7 @@ def _lower_composite_no_range_pm(red):
     ninputs = len(getattr(composite, "input_specs", ()))
     auxiliary_inputs = candidates[-ninputs:] if ninputs else ()
     result = _handle_no_range_generic(red.src[0], composite, red, auxiliary_inputs)
-    return UOp(Ops.TUPLE, dtypes.void, result)
+    return UOp(Ops.TUPLE, dtypes.void, result).replace(tag=("composite_reduce", composite))
 
 def resolve_reduce_slot_tensor(slot):
     """Graph-local projection from the structured composite reduction result."""
@@ -247,4 +247,14 @@ def resolve_reduce_slot_tensor(slot):
     # Project directly while the structured result is still in compiler IR.
     # This leaves no TUPLE/GETTUPLE operation for the renderer and preserves
     # the one reduction's shared END dependencies.
-    return src.src[slot.arg]
+    result = src.src[slot.arg]
+    metadata = src.tag if isinstance(src.tag, tuple) and len(src.tag) == 2 and src.tag[0] == "composite_reduce" else None
+    composite = metadata[1] if metadata is not None else None
+    if composite is not None and slot.arg < len(composite.slots):
+      sdtype = composite.slots[slot.arg].dtype
+      if sdtype is not None and result.dtype.count == 1 and sdtype.count > 1: result = result.broadcast(sdtype.count)
+      if sdtype is not None and result.dtype != sdtype: result = result.cast(sdtype)
+    if composite is not None and slot.arg < len(composite.slot_shapes):
+      shape = composite.slot_shapes[slot.arg]
+      if shape is not None and result.shape != tuple(shape): result = result.reshape(tuple(shape))
+    return result

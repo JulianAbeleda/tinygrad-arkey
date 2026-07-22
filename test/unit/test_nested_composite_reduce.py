@@ -5,6 +5,7 @@ from tinygrad import Tensor, dtypes
 from tinygrad.uop import Ops
 from tinygrad.uop.ops import AccumulatorSlot, UOp, ScopedReduceSpec, CompositeInputSpec
 from tinygrad.codegen.late.devectorizer import _partition_composite_sources
+from tinygrad.codegen.late.composite_combines import resolve_reduce_slot_tensor
 from tinygrad.schedule.rangeify import cleanup_dead_axes
 
 def test_lane_aware_composite_input_is_explicit_and_scalar_safe():
@@ -127,3 +128,11 @@ def test_cleanup_dead_axes_preserves_unranged_logical_lane():
   assert cleaned is not None
   assert cleaned.shape[-1] == 4
   assert cleaned.shape == stage.shape
+
+def test_slot_projection_uses_carried_composite_metadata_for_vector_shape():
+  """REDUCE_SLOT can recover a lane-shaped slot after REDUCE lowering."""
+  slot = AccumulatorSlot(Ops.ADD, dtypes.float32.vec(4), 0.0, "acc")
+  red = UOp.placeholder((1,), dtypes.float32, 0).composite_reduce(slot, axis=(0,), slot_shapes=((4,),))
+  lowered = UOp(Ops.TUPLE, dtypes.void, (UOp.const(dtypes.float32, 1.0),)).replace(tag=("composite_reduce", red.arg[0]))
+  projected = resolve_reduce_slot_tensor(UOp(Ops.REDUCE_SLOT, dtypes.float32.vec(4), (lowered,), 0))
+  assert projected.dtype == dtypes.float32.vec(4) and projected.shape == (4,)

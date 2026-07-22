@@ -469,7 +469,7 @@ def reduce_to_acc(ctx:ReduceContext, red:UOp):
       input_specs = getattr(composite, "input_specs", ())
       auxiliary_inputs = extra_srcs[-len(input_specs):] if input_specs else ()
       from tinygrad.codegen.late.composite_combines import _handle_no_range_generic
-      return UOp(Ops.TUPLE, dtypes.void, _handle_no_range_generic(inp, composite, red, auxiliary_inputs))
+      return UOp(Ops.TUPLE, dtypes.void, _handle_no_range_generic(inp, composite, red, auxiliary_inputs)).replace(tag=("composite_reduce", composite))
     rngs = tuple(UOp.range(UOp.const(dtypes.weakint, red.src[0].shape[i]), i, AxisType.REDUCE) for i in axis)
     red = UOp(Ops.REDUCE, red.dtype, src=(red.src[0],) + rngs + extra_srcs, arg=(red.arg[0], ()))
     inp, reduce_range = red.src[0], rngs
@@ -514,7 +514,7 @@ def reduce_to_acc(ctx:ReduceContext, red:UOp):
         raise RuntimeError(f"unknown composite combine {composite.combine_fn!r}")
       combine_fn = combine_fn or _independent_slots
       result = combine_fn(ctx, accs, acc_reads, inp, composite, input_ranges, reduce_range, red, v_inp=v_inp)
-      return UOp(Ops.TUPLE, dtypes.void, result)
+      return UOp(Ops.TUPLE, dtypes.void, result).replace(tag=("composite_reduce", composite))
     
     if not isinstance(red.arg[0], Ops):
       raise RuntimeError(f"non-ALU reduction reached ordinary lowering: arg={red.arg!r}, composite={composite!r}, src_ops={[x.op for x in red.src]}")
