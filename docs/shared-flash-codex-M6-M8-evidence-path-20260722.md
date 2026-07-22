@@ -1,7 +1,17 @@
 # Shared flash attention M6/M8 geometry and evidence path
 
-**Status:** preparation only. The production route remains ordinary SDPA and
-`promotion_eligible=false`.
+**Status:** evidence infrastructure complete; production promotion remains
+fail-closed until dual-WMMA and real hardware measurements exist.
+
+## Machine-checkable promotion record
+
+`extra/qk/shared_attention_promotion.py` is the single validator for the final
+record. It requires both model profiles, at least 200 warmed samples, generated
+source and ISA artifacts, an allocation census, and positive timing/FLOP/byte
+accounting. Missing evidence always produces `promotion_eligible=false`.
+
+Keep `qk_wmma=false` and `pv_wmma=false` until generated source and AMD ISA
+prove both contractions in the same fused call.
 
 ## One shared search domain
 
