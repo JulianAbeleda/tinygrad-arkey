@@ -65,8 +65,8 @@ def test_auxiliary_value_survives_one_owned_composite_reduction():
   slots = (AccumulatorSlot(Ops.MAX, dtypes.float32, float("-inf"), "m"),
            AccumulatorSlot(Ops.ADD, dtypes.float32, 0.0, "l"),
            AccumulatorSlot(Ops.ADD, dtypes.float32, 0.0, "acc"))
-  mapped_value = value.transpose(-2, -1).expand(*score.shape)
-  red = score.uop.composite_reduce(*slots, axis=(3,), inputs=(mapped_value.uop,), combine_fn="online_softmax")
+  mapped_value = value.transpose(-2, -1).expand(*score.shape).uop.scoped_value((0, 1, None, 3))
+  red = score.uop.composite_reduce(*slots, axis=(3,), inputs=(mapped_value,), combine_fn="online_softmax")
   l_val = Tensor(UOp(Ops.REDUCE_SLOT, dtypes.float32, (red,), 1))
   acc_val = Tensor(UOp(Ops.REDUCE_SLOT, dtypes.float32, (red,), 2))
   result = acc_val / l_val

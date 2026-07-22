@@ -7,7 +7,13 @@ _CONCRETE_PREFILL_VALIDATED_M = (512,)
 
 _EXECUTING_STRATEGIES = frozenset(("FULL_RESIDENT_OVERLAY", "BOUNDED_PACKED_TILES", "DIRECT_PACKED_FALLBACK"))
 _TC_ATTN_TARGET_REQUIREMENTS = {"backend": "AMD", "architecture": "gfx1100"}
-_SHARED_ATTENTION_PROOF_FIELDS = ("correctness", "score_resident", "qk_wmma", "pv_wmma")
+# Enabling one shared compiler path changes both supported model routes.  A
+# synthetic or one-model proof is therefore not enough to select it in either
+# model: promotion needs the complete cross-route result, including decode
+# protection.
+_SHARED_ATTENTION_PROOF_FIELDS = ("correctness", "score_resident", "qk_wmma", "pv_wmma",
+                                  "model_8b_prefill", "model_14b_prefill",
+                                  "decode_nonregression_8b", "decode_nonregression_14b")
 
 def _requirements_met(requirements:Mapping[str, Any], scanned_device_facts:Any) -> bool:
   """Match an exact candidate target contract against the one load-entry scan."""
@@ -30,8 +36,10 @@ def select_prefill_runtime_policy(value:Mapping[str, Any], *, scanned_device_fac
   target_default = shared_attention_proven_eligible(value, scanned_device_facts)
   selected = dict(value)
   selected["routes"] = dict(selected["routes"])
+  # An override is a disable switch for diagnosis, never an admission bypass.
+  # The proof remains the only authority that can turn this path on.
   selected.update({"workload_reuse": bool(workload_reuse),
-                   "prefill_tc_attn": target_default if tc_attn_override is None else tc_attn_override})
+                   "prefill_tc_attn": target_default and tc_attn_override is not False})
   return immutable_prefill_policy(selected)
 
 def immutable_prefill_policy(value:Mapping[str, Any]) -> Mapping[str, Any]:

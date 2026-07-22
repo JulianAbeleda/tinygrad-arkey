@@ -366,10 +366,21 @@ def horizontal_reduce(inp:UOp, out_dtype:DType) -> list[UOp]:
     return [inp.gep(tuple(range(i, inp.dtype.count, horizontal_amount))) for i in range(0, horizontal_amount)]
   return [inp]
 
-def _load_v_at_reduce_pos(v_src:UOp, composite, input_ranges, reduce_range, score_shape=None):
+def _load_v_at_reduce_pos(v_src:UOp, composite, input_ranges, reduce_range, score_shape=None, axis_map=None):
   """Create a LOAD from V at the current reduce position.
   Uses RANGE UOps from input_ranges and reduce_range to build indices.
   """
+  # A declared map owns this load. It avoids inferring logical inputs from
+  # expander-created STACK/weakint range carriers.
+  if axis_map is not None:
+    if len(axis_map) == 0: return v_src.load(dtype=composite.slots[-1].dtype)
+    range_by_axis = {r.arg[0]: r for r in input_ranges + reduce_range}
+    source = v_src.src[0] if v_src.op is Ops.SCOPED_VALUE else v_src
+    # None is a broadcast-zero source axis. -1 is value-local and deliberately
+    # omitted, preserving the trailing contiguous lane for a vector load.
+    idxs = tuple(range_by_axis[axis] if axis is not None else UOp.const(dtypes.weakint, 0)
+                 for axis in axis_map if axis != -1)
+    return source.index(*idxs).load(dtype=composite.slots[-1].dtype)
   # Build axis -> RANGE mapping from all visible ranges
   range_by_axis = {}
   for r in input_ranges + reduce_range:
@@ -424,13 +435,10 @@ def reduce_to_acc(ctx:ReduceContext, red:UOp):
   if composite is not None and len(reduce_range) == 0:
     axis = red.arg[1]
     if not axis:
-      # The expander has horizontally materialized the owned reduction axis.
-      # Weak-integer CONST/STACK sources are range metadata; all remaining
-      # sources are lane-aligned logical inputs to the composite combine.
-      def is_materialized_range_src(x:UOp) -> bool:
-        return x.dtype.scalar() == dtypes.weakint and (x.op is Ops.CONST or
-          (x.op is Ops.STACK and all(y.op is Ops.CONST for y in x.src)))
-      auxiliary_inputs = tuple(x for x in extra_srcs if not is_materialized_range_src(x))
+      # Source roles are part of CompositeReduce metadata. Do not infer them
+      # from expander-created weakint/STACK carriers.
+      input_specs = getattr(composite, "input_specs", ())
+      auxiliary_inputs = extra_srcs[-len(input_specs):] if input_specs else ()
       from tinygrad.codegen.late.composite_combines import _handle_no_range_generic
       return UOp(Ops.TUPLE, dtypes.void, _handle_no_range_generic(inp, composite, red, auxiliary_inputs))
     rngs = tuple(UOp.range(UOp.const(dtypes.weakint, red.src[0].shape[i]), i, AxisType.REDUCE) for i in axis)
@@ -449,8 +457,10 @@ def reduce_to_acc(ctx:ReduceContext, red:UOp):
     # Check for composite reduce (multi-accumulator)
     if composite is not None:
       
-      # Auxiliary logical-element inputs are ordinary REDUCE sources.
-      v_inp = _load_v_at_reduce_pos(extra_srcs[0], composite, input_ranges, reduce_range, inp._shape) if extra_srcs else None
+      input_specs = getattr(composite, "input_specs", ())
+      auxiliary_inputs = extra_srcs[-len(input_specs):] if input_specs else ()
+      v_inp = _load_v_at_reduce_pos(auxiliary_inputs[0], composite, input_ranges, reduce_range, inp._shape,
+                                    input_specs[0].range_axes) if auxiliary_inputs else None
       
       # Create accumulators (common to all combines)
       accs = []

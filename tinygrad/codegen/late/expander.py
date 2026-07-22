@@ -158,8 +158,24 @@ expander = PatternMatcher([
 
 def fix_reduce_unroll(x:UOp):
   reduce_range, expanded_srcs = partition(x.src[1:], lambda y: y.op is Ops.RANGE)
-  expanded_srcs = [y for y in expanded_srcs if y.op is not Ops.CONST]
   if len(expanded_srcs) == 0: return None
+
+  # Ordinary REDUCEs retain the established expansion contract. Composite
+  # reductions are the only form with explicit logical-element sources that
+  # must be separated from range carriers.
+  composite = isinstance(x.arg, tuple) and len(x.arg) > 0 and \
+    (hasattr(x.arg[0], "slots") and hasattr(x.arg[0], "combine_fn"))
+  if not composite:
+    expanded_srcs = [y for y in expanded_srcs if y.op is not Ops.CONST]
+    # A rolled/group reduction can carry computed range metadata here. It is
+    # not an unrolled reduction and must retain the ordinary lowering path.
+    if not all(y.op is Ops.UNROLL for y in expanded_srcs): return None
+    ret = x.src[0]
+    if len(contract_axis:=tuple(dedup(flatten(y.arg for y in expanded_srcs)))):
+      ret = UOp(Ops.CONTRACT, x.dtype.vec(prod(y[1] for y in contract_axis)), (ret,), tuple(contract_axis), tag=1)
+    return x.replace(src=(ret,)+tuple(reduce_range))
+
+  expanded_srcs = [y for y in expanded_srcs if y.op is not Ops.CONST]
 
   # A rewritten RANGE is an integer UNROLL over a CONST lane vector. Composite
   # REDUCEs may also own logical-element inputs which expand over the same axis;

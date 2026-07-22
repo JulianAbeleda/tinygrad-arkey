@@ -605,7 +605,8 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
     if isinstance(arg, Ops): arg = (arg, ())
     return UOp(Ops.REDUCE, kwargs.pop('dtype', self.dtype), src=(self,)+src, arg=arg, **kwargs)
 
-  def composite_reduce(self, *slots: 'AccumulatorSlot', axis: tuple[int, ...] = (), inputs: tuple['UOp', ...] = (), **kwargs):
+  def composite_reduce(self, *slots: 'AccumulatorSlot', axis: tuple[int, ...] = (), inputs: tuple['UOp', ...] = (),
+                       input_specs: tuple['CompositeInputSpec', ...]|None = None, **kwargs):
     """Create a stateful REDUCE. All logical-element inputs are explicit sources."""
     from tinygrad.uop.ops import CompositeReduce, AccumulatorSlot
     # Compatibility is source-visible: callers formerly passing v_uop now get
@@ -614,7 +615,11 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
     if legacy_v is not None:
       if inputs: raise ValueError("pass auxiliary composite inputs once, using inputs=")
       inputs = (legacy_v,)
-    composite = CompositeReduce(slots=tuple(slots), combine_fn=kwargs.pop('combine_fn', None))
+    if input_specs is None:
+      input_specs = tuple(CompositeInputSpec("logical", x.arg.axis_map if x.op is Ops.SCOPED_VALUE and hasattr(x.arg, "axis_map") else None)
+                          for x in inputs)
+    if len(input_specs) != len(inputs): raise ValueError("one CompositeInputSpec is required for each composite input")
+    composite = CompositeReduce(slots=tuple(slots), combine_fn=kwargs.pop('combine_fn', None), input_specs=tuple(input_specs))
     return UOp(Ops.REDUCE, kwargs.pop('dtype', self.dtype), src=(self,)+tuple(inputs), arg=(composite, axis), **kwargs)
 
   def scoped_reduce(self, producer: 'UOp', *logical_inputs: 'UOp', axis: tuple[int, ...], axis_maps: tuple[tuple[int, ...], ...],
@@ -1172,6 +1177,14 @@ class AccumulatorSlot(NamedTuple):
 class CompositeReduce(NamedTuple):
   slots: tuple
   combine_fn: Any = None  # UOp sub-graph encoding combine (None = independent slots)
+  input_specs: tuple = () # one source-role/axis-map owner per auxiliary REDUCE source
+
+class CompositeInputSpec(NamedTuple):
+  role: str
+  axis_map: tuple[int|None, ...]|None = None
+  # Filled by rangeify only. Public axis_map stays in primary logical-dimension
+  # coordinates; this maps it to the owning live RANGE ids for late lowering.
+  range_axes: tuple[int|None, ...]|None = None
 
 class ScopedReduceSpec(NamedTuple):
   """Source-visible contract for a producer nested inside an outer reduction.

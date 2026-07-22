@@ -54,7 +54,7 @@ class IndexingContext:
     return UOp.range(s, next(self.range_idx), axistype) if resolve(s!=1) else UOp.const(dtypes.weakint, 0)
 
 def create_bufferize_and_index_based_on_ranges(ctx:IndexingContext, x:UOp):
-  if x.op in {Ops.STAGE, Ops.INDEX}: return None
+  if x.op in {Ops.STAGE, Ops.INDEX, Ops.SCOPED_VALUE}: return None
   new_srcs = []
   for s in x.src:
     new_src = s
@@ -92,7 +92,30 @@ def convert_reduce_to_reduce_with_ranges(ctx:IndexingContext, x:UOp):
   # input ranges
   new_ranges = [r for i,r in enumerate(ctx.range_map[x][0]) if i in x.arg[1]]
   extra_srcs = x.src[1:]
-  ret = UOp(Ops.REDUCE, x.dtype, src=(x.src[0],)+tuple(new_ranges)+tuple(extra_srcs), arg=(x.arg[0], ()))
+  reduce_arg = x.arg[0]
+  # Resolve source maps while the range context still has primary logical
+  # dimension positions. Late lowering must not reinterpret a logical axis as
+  # a mutable RANGE.arg id after singleton/range collapse.
+  if hasattr(reduce_arg, "input_specs") and reduce_arg.input_specs:
+    owner_ranges = ctx.range_map[x][0]
+    def resolve_axis(axis):
+      if axis is None or axis == -1: return axis
+      owner = owner_ranges[axis]
+      return owner.arg[0] if owner.op is Ops.RANGE else None
+    resolved_specs, resolved_srcs = [], []
+    for spec, src in zip(reduce_arg.input_specs, extra_srcs):
+      if spec.axis_map is not None and src.op is Ops.SCOPED_VALUE:
+        # Index the source while owner_ranges are still addressed by logical
+        # primary dimension. The empty late map marks this as already owned.
+        idxs = tuple(owner_ranges[a] if a is not None else UOp.const(dtypes.weakint, 0) for a in spec.axis_map if a != -1)
+        resolved_srcs.append(src.src[0].index(*idxs))
+        resolved_specs.append(spec._replace(range_axes=()))
+      else:
+        resolved_srcs.append(src)
+        resolved_specs.append(spec._replace(range_axes=tuple(resolve_axis(a) for a in spec.axis_map))
+                              if spec.axis_map is not None else spec)
+    extra_srcs, reduce_arg = tuple(resolved_srcs), reduce_arg._replace(input_specs=tuple(resolved_specs))
+  ret = UOp(Ops.REDUCE, x.dtype, src=(x.src[0],)+tuple(new_ranges)+tuple(extra_srcs), arg=(reduce_arg, ()))
   ctx.range_map[ret] = ctx.range_map[x]
   return ret
 
@@ -167,7 +190,7 @@ def run_rangeify(tsink:UOp, debug:bool=False) -> tuple[UOp, IndexingContext]:
   # explicit rangeify
   ending_ranges: dict[UOp, list[UOp]] = {}
   for x in reversed(tsink_toposort):
-    if x.op in {Ops.DEVICE, Ops.UNIQUE}: continue
+    if x.op in {Ops.DEVICE, Ops.UNIQUE, Ops.SCOPED_VALUE}: continue
 
     # no ranges on kernels, they are internal
     if x.op in {Ops.CALL, Ops.FUNCTION, Ops.LINEAR}: continue

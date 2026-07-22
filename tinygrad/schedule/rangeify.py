@@ -42,8 +42,10 @@ def lower_scoped_reduce_semantic(red:UOp) -> UOp:
   return red.src[0]
 
 pm_scoped_reduce_semantic = PatternMatcher([
-  (UPat(Ops.SCOPED_VALUE, name="value"), lower_scoped_value_semantic),
-  (UPat(Ops.SCOPED_REDUCE, name="red"), lower_scoped_reduce_semantic),
+  # Only SSA result projections lower here. SCOPED_VALUE with an axis-map is
+  # a logical input carrier and must survive until its owning REDUCE resolves
+  # that map in rangeify.
+  (UPat(Ops.SCOPED_VALUE, src=(UPat(Ops.SCOPED_REDUCE),), name="value"), lower_scoped_value_semantic),
 ])
 
 def add_ranges_to_store(ctx, x):

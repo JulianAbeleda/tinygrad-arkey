@@ -57,3 +57,7 @@ WMMA macro cannot be promoted into a model-level performance claim.
    non-regression.
 
 Until all six are present, `promotion_eligible` remains false.
+
+The production policy enforces this: a caller can use an override to disable an
+already-proven route for diagnosis, but cannot use `tc_attn_override=True` to
+bypass the complete cross-route proof.
