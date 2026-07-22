@@ -53,32 +53,56 @@ def _flash_attn_match(red:UOp):
 def _find_score_from_softmax(probs:UOp) -> UOp|None:
   """Walk back from softmax output to find the score input (before EXP2)."""
   cur = probs
-  while cur.op in (Ops.DIV, Ops.MUL, Ops.CAST):
+  # Unwrap broadcasts first (EXPAND, RESHAPE, PERMUTE, CAST)
+  while cur is not None and cur.op in (Ops.EXPAND, Ops.RESHAPE, Ops.PERMUTE, Ops.CAST):
+    cur = cur.src[0] if cur.src else None
+  if cur is None:
+    return None
+  while cur.op in (Ops.MUL, Ops.CAST):
     cur = cur.src[0] if cur.src else cur
     if not cur.src: break
   if cur.op is Ops.EXP2:
     return cur.src[0] if cur.src else None
-  return probs if probs.op not in (Ops.REDUCE,) else None
+  return None  # No softmax pattern found
+
+def _unbroadcast_src(u:UOp) -> UOp:
+  """Walk through EXPAND/RESHAPE/PERMUTE/CAST to find the underlying source."""
+  while u is not None and u.op in (Ops.EXPAND, Ops.RESHAPE, Ops.PERMUTE, Ops.CAST, Ops.CONTIGUOUS, Ops.AFTER):
+    u = u.src[0] if u.src else None
+  return u
 
 def _handle_pv_matmul(red:UOp, mul_inp:UOp):
   """Handle PV matmul: ADD REDUCE of MUL(probs, V). Replace with 3-slot composite."""
   s0, s1 = mul_inp.src[0], mul_inp.src[1]
   probs, V_ref = None, None
-  s0_shape = s0._shape
-  s1_shape = s1._shape
-  if s0_shape and s1_shape and len(s0_shape) >= 2 and len(s1_shape) >= 2:
-    if s0_shape[-1] > s1_shape[-1]:
-      V_ref, probs = s0, s1
-    else:
-      V_ref, probs = s1, s0
-  else:
-    V_ref, probs = s0, s1
+  # Walk through broadcast ops to find underlying source
+  u0, u1 = _unbroadcast_src(s0), _unbroadcast_src(s1)
+  # V typically traces to a direct COPY/BUFFER; probs traces through softmax
+  for s, u in [(s0, u0), (s1, u1)]:
+    if u is not None and u.op in (Ops.COPY, Ops.BUFFER, Ops.PARAM):
+      V_ref = s
+      break
+  if V_ref is None:
+    # Fallback: use shape heuristic on base shapes
+    s0_base = u0._shape if u0 is not None else None
+    s1_base = u1._shape if u1 is not None else None
+    if s0_base and s1_base and len(s0_base) >= 2 and len(s1_base) >= 2:
+      if s0_base[-1] > s1_base[-1]:
+        V_ref, probs = s0, s1
+      else:
+        V_ref, probs = s1, s0
+  if V_ref is not None and probs is None:
+    probs = s1 if V_ref is s0 else s0
   if probs is None or V_ref is None:
     return None
   score = _find_score_from_softmax(probs)
   if score is None:
     return None
-  Hd = V_ref._shape[-1] if V_ref._shape else 1
+  # Use score's last axis as the reduce axis (KV dim for standard attention)
+  score_axis = (len(score._shape) - 1,) if score._shape and len(score._shape) > 0 else red.arg[1]
+  # Get Hd from V's base shape (last dim before broadcast)
+  V_base = _unbroadcast_src(V_ref)
+  Hd = V_base._shape[-1] if V_base is not None and V_base._shape else 1
   slot_m = AccumulatorSlot(op=Ops.MAX, dtype=red.dtype, identity=float("-inf"), name="m")
   slot_l = AccumulatorSlot(op=Ops.ADD, dtype=red.dtype, identity=0.0, name="l")
   slot_acc = AccumulatorSlot(op=Ops.ADD, dtype=red.dtype.vec(Hd), identity=0.0, name="acc")
@@ -87,7 +111,7 @@ def _handle_pv_matmul(red:UOp, mul_inp:UOp):
     combine_fn="online_softmax",
     v_uop=V_ref,
   )
-  return UOp(Ops.REDUCE, red.dtype, (score, V_ref), (composite, red.arg[1]))
+  return UOp(Ops.REDUCE, red.dtype, (score, V_ref), (composite, score_axis))
 
 def add_ranges_to_store(ctx, x):
   if x.src[0]._shape is None or x.src[1]._shape is None or x.src[0].shape == (): return None
