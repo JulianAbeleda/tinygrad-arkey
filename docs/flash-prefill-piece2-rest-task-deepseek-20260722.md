@@ -1,3 +1,7 @@
+> ⛔ **SUPERSEDED / COMPLETE (2026-07-22).** This task finished: incremental fusion is walled (verified in `flash-prefill-finish-report-20260722.md` — the model already uses fp16 probs, score residency needs a scheduler extension, no shippable win via knobs). **The real remaining project is `flash-scheduler-extension-scope-deepseek-20260722.md` (composite-accumulator REDUCE).** Do that next, not this.
+
+---
+
 # TASK (deepseek): finish flash-prefill fusion — the rest of Piece 2, milestone-gated
 
 Read this ENTIRE file first. Context: Piece 1 (cb6e760e0) made WMMA survive a fused matmul+epilogue-reduce. Piece 2 so far (74fda0fe6) added a REDUCE-preserving fusion that reduced attention kernel count — but on review it FALLS SHORT of the goal: only QKᵀ is on WMMA (PV is not), and the T×KV score still spills. This task finishes the job in **4 milestones. Run them in sequence, end-to-end — no waiting for Claude between milestones.** Claude reviews ONCE at the very end from the evidence you commit. Because there is no live gating, you MUST self-document every milestone's artifacts (commit them) so the end review can verify each step. STOP early only if you hit a genuine blocker (see §2.5 Fallback) — never fake, force, or paper over.
