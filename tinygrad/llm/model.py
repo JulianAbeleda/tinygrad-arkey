@@ -591,6 +591,13 @@ class TransformerBlock(FFNBlock):
       with role_metadata("attn_score"): scores = _prefill_semantic(_prefill, prefill_scratch, (qg @ kg.transpose(-1, -2)).float() * scale)
       with role_metadata("attn_mask"): scores = _prefill_semantic(_prefill, prefill_scratch, scores + mask.reshape(1, 1, 1, T, KV))
       with role_metadata("softmax"): s = _prefill_semantic(_prefill, prefill_scratch, scores.softmax(-1))
+      # Phase 3: composite online-softmax l-value (computed alongside standard softmax)
+      if getattr(self.config, 'prefill_flash_attn', False):
+        from tinygrad.uop.ops import AccumulatorSlot, Ops
+        slot_m = AccumulatorSlot(op=Ops.MAX, dtype=scores.uop.dtype, identity=float("-inf"), name="m")
+        slot_l = AccumulatorSlot(op=Ops.ADD, dtype=scores.uop.dtype, identity=0.0, name="l")
+        _flash_l = _prefill_semantic(_prefill, prefill_scratch,
+            Tensor(scores.uop.composite_reduce(slot_m, slot_l, axis=(-1,), combine_fn="online_softmax_l")))
       with role_metadata("attn_av"):
         attn = (s.cast(dtypes.float16) @ vg).reshape(B, self.config.n_heads, T, Hd).cast(q.dtype)  # (B,H,T,Hd)
     else:
