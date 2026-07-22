@@ -23,6 +23,29 @@ class OnlineSoftmaxTile:
   acc: UOp
   weights: UOp|None = None
 
+  def validate(self) -> None:
+    """Validate the backend-neutral tile boundary before backend lowering.
+
+    This intentionally does not admit the primitive for code generation; it
+    only guarantees that diagnostics describe a complete QK/PV tile contract.
+    """
+    if self.qk.op is not Ops.SHAPED_WMMA or self.pv.op is not Ops.SHAPED_WMMA:
+      raise ValueError("online softmax tile requires SHAPED_WMMA QK and PV nodes")
+    if self.qk.arg != self.pv.arg:
+      raise ValueError("online softmax tile QK/PV descriptors must match")
+    if self.acc is not self.pv:
+      raise ValueError("online softmax tile acc must be the PV accumulator result")
+    if self.m.shape is None or self.l.shape is None:
+      raise ValueError("online softmax tile state must have logical shapes")
+
+  def abi_report(self) -> dict:
+    """Return stable source/ISA diagnostic metadata without claiming emission."""
+    self.validate()
+    dims, device, threads = self.qk.arg
+    return {"primitive": "online_softmax_tile", "qk": "SHAPED_WMMA", "pv": "SHAPED_WMMA",
+            "dims": tuple(dims), "device": device, "threads": threads,
+            "renderer": "fail-closed", "isa": "not-emitted"}
+
 
 def online_softmax_tile(q_frag:UOp, k_frag:UOp, v_frag:UOp, *,
                         qk_acc:UOp, pv_acc:UOp, m:UOp, l:UOp,
@@ -54,7 +77,9 @@ def online_softmax_tile(q_frag:UOp, k_frag:UOp, v_frag:UOp, *,
     pv_input = weights
   pv = shaped_wmma(pv_input, v_frag, pv_acc, dims=dims, device=device, threads=threads,
                    dtype_out=dtype_out)
-  return OnlineSoftmaxTile(qk=qk, pv=pv, m=m, l=l, acc=pv, weights=weights)
+  tile = OnlineSoftmaxTile(qk=qk, pv=pv, m=m, l=l, acc=pv, weights=weights)
+  tile.validate()
+  return tile
 
 
 def shaped_wmma(a_frag:UOp, b_frag:UOp, acc_frag:UOp, *, dims:tuple[int, int, int],

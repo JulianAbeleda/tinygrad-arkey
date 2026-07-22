@@ -18,6 +18,9 @@ def test_online_softmax_tile_has_explicit_qk_and_pv_wmma_nodes():
   assert tile.pv.op is Ops.SHAPED_WMMA
   assert tile.pv.src[0] is tile.qk
   assert tile.m.dtype.base == tile.l.dtype.base == dtypes.float32
+  report = tile.abi_report()
+  assert report["qk"] == report["pv"] == "SHAPED_WMMA"
+  assert report["renderer"] == "fail-closed" and report["isa"] == "not-emitted"
 
 
 def test_online_softmax_tile_keeps_accumulator_roles_distinct():
