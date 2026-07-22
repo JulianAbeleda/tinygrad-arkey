@@ -32,6 +32,24 @@ class Scheduler:
   @property
   def axis_types(self) -> list[AxisType]: return [x.arg[-1] for x in self.rngs]
 
+  @property
+  def composite_state_ranges(self) -> frozenset[UOp]:
+    """Ranges owned by a stateful composite outside its reduction axis.
+
+    Composite accumulators have a scalar state contract today.  Keep their
+    logical output lanes as LOOP ranges until a backend explicitly advertises
+    a lane ABI; otherwise generic UPCAST selection turns the state tuple into
+    an accidental vector and changes the reduction contract.  This is
+    provenance-based (not an op-name carve-out): ordinary REDUCEs are
+    unaffected, and future composites can opt into lanes by carrying their own
+    lowering rather than bypassing the scheduler.
+    """
+    ret = set()
+    for red in self.ast.backward_slice:
+      if red.op is Ops.REDUCE and getattr(red.arg[0], "combine_fn", None) is not None:
+        ret.update(r for r in red.src[1:] if r.op is Ops.RANGE and r.arg[-1] is not AxisType.REDUCE)
+    return frozenset(ret)
+
   # strings like ['g0', 'g1', 'l0', 'l1', 'l2', 'l3', 'l4', 'l5', 'R0', 'r0', 'r1', 'r2', 'u0', 'u1', 'u2']
   def shape_str(self) -> list[str]:
     ret: list[str] = []
@@ -235,6 +253,7 @@ class Scheduler:
       if opt.op is OptOps.UPCAST:
         check((self.ren is not None and self.ren.target.device == "DSP") or amt <= 16, "don't upcast more than 16")
         check(rng.arg[-1] in {AxisType.GLOBAL, AxisType.LOCAL, AxisType.LOOP}, f"upcast is for GLOBAL/LOCAL/LOOP, not {rng.arg[-1]}")
+        check(rng not in self.composite_state_ranges, "composite state lanes must remain LOOP")
       if opt.op is OptOps.LOCAL:
         check(not self.dont_use_locals, "can't use locals")
         check(rng.arg[-1] in {AxisType.GLOBAL, AxisType.LOOP}, "local is for globals")
