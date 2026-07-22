@@ -1207,7 +1207,11 @@ def _normalize_composite_shape(shape):
   if shape is None: return None
   if not isinstance(shape, (tuple, list)):
     raise TypeError(f"composite slot shape must be a tuple/list/UOp, got {type(shape).__name__}")
-  return tuple(shape)
+  # Slot metadata is occasionally assembled from symbolic compiler UOps.  Do
+  # not let those objects reach generic tuple/shape code, where ``len(UOp)``
+  # raises a misleading TypeError.  Normalize only this documented metadata
+  # boundary; ordinary graph rewrite and tensor shapes remain untouched.
+  return tuple(_normalize_composite_shape(x) if isinstance(x, (UOp, tuple, list)) else x for x in shape)
 
 class CompositeTileCarrier(NamedTuple):
   """Logical tile contract shared by composite attention and WMMA lowering.

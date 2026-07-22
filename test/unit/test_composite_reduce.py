@@ -14,7 +14,7 @@ import numpy as np
 
 from tinygrad import Tensor, dtypes
 from tinygrad.helpers import NOOPT
-from tinygrad.uop.ops import UOp, Ops, AxisType, AccumulatorSlot, CompositeReduce, CompositeInputSpec
+from tinygrad.uop.ops import UOp, Ops, AxisType, AccumulatorSlot, CompositeReduce, CompositeInputSpec, _normalize_composite_shape
 from tinygrad.codegen.late.devectorizer import _load_v_at_reduce_pos
 
 
@@ -57,6 +57,7 @@ class TestCompositeReduce(unittest.TestCase):
     # The scalar reduction shape is represented by a compiler UOp here; the
     # constructor must normalize it before generic shape inference calls len().
     scalar_shape = UOp.const(dtypes.weakint, 0)
+    self.assertEqual(_normalize_composite_shape((scalar_shape,)), ((),))
     red = UOp.composite_reduce(t.uop, slot_sum, slot_max, axis=(0, 1),
                                slot_shapes=[scalar_shape, []])
     self.assertEqual(red.arg[0].slot_shapes, ((), ()))
