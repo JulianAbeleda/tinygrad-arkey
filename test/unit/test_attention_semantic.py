@@ -40,13 +40,12 @@ class TestAttentionSemantic(unittest.TestCase):
     for contraction in contractions:
       self.assertEqual(tuple(x.dtype.scalar() for x in contraction_body(contraction).src), (dtypes.float16, dtypes.float16))
 
-  def test_generic_scheduler_reproduction_keeps_qk_and_pv_in_distinct_kernels(self):
-    """Minimal generic multi-reduce scheduler reproduction.
+  def test_semantic_attention_scheduler_keeps_qk_and_pv_in_one_fused_call(self):
+    """The admitted semantic shape is represented by one composite call.
 
-    A QK reduction feeds both the online max and probability expressions. The
-    current rangeify ownership rules realize it before the later PV reduction,
-    so postrange receives one compatible contraction per kernel. This pins the
-    boundary a future generic multi-reduction scheduler must remove.
+    This is distinct from generic SDPA scheduling: the semantic attention
+    boundary deliberately owns QK, online-softmax state, and PV together so
+    score/probability buffers are not materialized.
     """
     q = Tensor.empty(1, 1, 16, 16, dtype=dtypes.float16)
     k = Tensor.empty(1, 1, 16, 16, dtype=dtypes.float16)
@@ -58,8 +57,7 @@ class TestAttentionSemantic(unittest.TestCase):
       return red.arg[0] is Ops.ADD and body.op is Ops.MUL and tuple(x.dtype.scalar() for x in body.src) == (dtypes.float16, dtypes.float16)
     contraction_calls = [i for i,call in enumerate(calls) if any(is_fp16_contraction(red)
       for red in call.src[0].toposort() if red.op is Ops.REDUCE)]
-    self.assertGreaterEqual(len(contraction_calls), 2)
-    self.assertGreater(len(set(contraction_calls)), 1)
+    self.assertEqual(len(contraction_calls), 1)
 
   def test_bounded_online_primitive_matches_attention(self):
     rng = np.random.default_rng(0)
