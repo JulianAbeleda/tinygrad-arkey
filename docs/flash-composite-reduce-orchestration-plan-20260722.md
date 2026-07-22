@@ -36,3 +36,18 @@ Measure the composite-reduce attention vs materialized SDPA at `T=KV=2048`: two-
 
 ## Sequencing
 A → B1 → B2 → C → D. Claude gates between each; agents serialized (single GPU). The hard, genuinely-multi-week work is B (scheduler emission) and C (dual-contraction WMMA). A is small but non-negotiable (it makes "the primitive works" actually true). Stop honestly at any real wall.
+
+---
+
+## ⭐ PIVOT (2026-07-22) — Phase A.5 multi-output is a value-model wall; avoid it with two reduces
+
+**Phase A.5 BLOCKED (verified by Claude).** Exposing >1 slot from one composite REDUCE collides with two pervasive, generic assumptions: `rangeify.py:423` (`size = prod(shape)//dtype.count` → 0 for a vec-dtype reduce) and `symbolic.py:212` (GEP-in-dtype-order folds to identity for scalar dtype). A clean fix needs a NEW `Ops` member (e.g. `Ops.REDUCE_SLOT`) audited across every dispatch table — a large refactor. Agent stopped honestly, reverted clean.
+
+**Workaround that stays on existing infra — TWO composite reduces (no multi-output needed):**
+- Reduce 1: slots `(m, l)` → surfaces `l` (last slot, via existing `accs[-1]`)
+- Reduce 2: slots `(m, acc)` → surfaces `acc` (last slot)
+- `out = acc / l`
+
+Both reduces recompute the same deterministic running max `m` → `l` and `acc` stay consistent. Each surfaces only its LAST slot — exactly what Phase A already supports. **Both are score-resident** (score never materialized), so the flash memory win holds; cost is one extra QKᵀ (cheap WMMA). This avoids the value-model wall entirely.
+
+**Revised sequencing:** A ✅ → (A.5 multi-output — SKIP, use two-reduce) → **B: rangeify emits the TWO-reduce structure for `softmax(q@kᵀ)@v`** (score-resident, correct, no WMMA) → C: WMMA both QKᵀ (shared/recomputed) and PV contractions → D: gate vs SDPA (must beat it despite the extra QKᵀ) + wire. If the two-reduce recompute makes it lose to SDPA at D, that's the honest NO-GO.
