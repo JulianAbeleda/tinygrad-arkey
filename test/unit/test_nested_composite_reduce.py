@@ -5,6 +5,7 @@ from tinygrad import Tensor, dtypes
 from tinygrad.uop import Ops
 from tinygrad.uop.ops import AccumulatorSlot, UOp, ScopedReduceSpec, CompositeInputSpec
 from tinygrad.codegen.late.devectorizer import _partition_composite_sources
+from tinygrad.codegen.late.devectorizer import lower_composite_accumulator
 from tinygrad.codegen.late.composite_combines import resolve_reduce_slot_tensor
 from tinygrad.schedule.rangeify import cleanup_dead_axes
 
@@ -144,3 +145,12 @@ def test_composite_accumulator_carrier_preserves_scalar_and_vector_slots():
               ((1,), (1,), (2,)))
   assert state.shape == ((1,), (1,), (2,))
   assert state.op is Ops.COMPOSITE_ACCUMULATOR
+
+def test_composite_accumulator_lowering_keeps_heterogeneous_slots():
+  state = UOp(Ops.COMPOSITE_ACCUMULATOR, dtypes.float32.vec(2),
+              (UOp.const(dtypes.float32, 1.0), UOp.const(dtypes.float32, 2.0),
+               UOp.const(dtypes.float32.vec(2), (3.0, 4.0))),
+              ((), (), (2,)))
+  lowered = lower_composite_accumulator(state)
+  assert lowered.op is Ops.TUPLE and lowered.dtype is dtypes.void
+  assert tuple(x.dtype for x in lowered.src) == (dtypes.float32, dtypes.float32, dtypes.float32.vec(2))

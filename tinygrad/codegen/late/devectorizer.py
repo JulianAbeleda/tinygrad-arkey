@@ -554,7 +554,26 @@ def _resolve_reduce_slot_pm(slot):
     from tinygrad.codegen.late.composite_combines import resolve_reduce_slot_tensor
     return resolve_reduce_slot_tensor(slot)
 
+def lower_composite_accumulator(state:UOp):
+  """Lower a heterogeneous composite state carrier to an explicit tuple.
+
+  COMPOSITE_ACCUMULATOR is intentionally backend-neutral: its ``arg`` records
+  the logical shape of each state slot while sources carry the actual scalar or
+  vector values.  Do not flatten slots into one vector (that loses the scalar
+  m/l versus vector acc ABI).  The tuple is the scheduler-visible primitive;
+  later register lowering can allocate each member independently.
+  """
+  if state.op is not Ops.COMPOSITE_ACCUMULATOR: return None
+  shapes = state.arg if isinstance(state.arg, tuple) else ()
+  if len(shapes) != len(state.src):
+    raise RuntimeError(f"composite accumulator slot/source mismatch: {len(shapes)} != {len(state.src)}")
+  for i, (src, shape) in enumerate(zip(state.src, shapes)):
+    if shape is not None and tuple(src.shape) != tuple(shape):
+      raise RuntimeError(f"composite accumulator slot {i} shape mismatch: {src.shape} != {shape}")
+  return UOp(Ops.TUPLE, dtypes.void, state.src).replace(tag=("composite_accumulator", shapes))
+
 pm_reduce = PatternMatcher([
+  (UPat(Ops.COMPOSITE_ACCUMULATOR, name="state"), lower_composite_accumulator),
   # REDUCE -> DEFINE_ACC+ASSIGN, then merge ENDs with same range
   (UPat(Ops.REDUCE, name="red"), reduce_to_acc),
   # REDUCE_SLOT is only a projection from the graph-local TUPLE result.
