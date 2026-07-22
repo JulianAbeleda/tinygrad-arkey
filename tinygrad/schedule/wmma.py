@@ -15,6 +15,8 @@ def tile_gather(source: UOp, spec: TileGatherSpec) -> UOp:
   spec.validate()
   if source.shape is None or any(a < 0 or a >= len(source.shape) for a in spec.source_axes):
     raise ValueError("tile gather source axes are out of range")
+  if spec.base_offsets and any(o >= source.shape[a] for o, a in zip(spec.base_offsets, spec.source_axes)):
+    raise ValueError("tile gather base offset is outside source shape")
   return UOp(Ops.TILE_GATHER, source.dtype, (source,), arg=spec)
 
 

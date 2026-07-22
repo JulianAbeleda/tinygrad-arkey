@@ -1258,12 +1258,23 @@ class TileGatherSpec(NamedTuple):
   fragment_shape: tuple[int, int]
   source_axes: tuple[int, ...]
   tile_axes: tuple[int, ...]
+  base_offsets: tuple[int, ...] = ()
+  lane_group: int = 1
 
   def validate(self):
     if self.role not in ("score", "value", "acc"): raise ValueError("invalid tile gather role")
     if len(self.fragment_shape) != 2 or any(not isinstance(x, int) or x <= 0 for x in self.fragment_shape):
       raise ValueError("tile gather fragment shape must be positive rank-2")
     if len(self.source_axes) != len(self.tile_axes): raise ValueError("tile gather axis ownership mismatch")
+    if len(set(self.source_axes)) != len(self.source_axes) or len(set(self.tile_axes)) != len(self.tile_axes):
+      raise ValueError("tile gather axes must be unique")
+    if any(not isinstance(x, int) or x < 0 for x in self.source_axes + self.tile_axes):
+      raise ValueError("tile gather axes must be non-negative integers")
+    if self.base_offsets and (len(self.base_offsets) != len(self.source_axes) or
+                              any(not isinstance(x, int) or x < 0 for x in self.base_offsets)):
+      raise ValueError("tile gather base offsets must match source axes")
+    if not isinstance(self.lane_group, int) or self.lane_group < 1:
+      raise ValueError("tile gather lane_group must be positive")
     return self
 
 class CompositeInputSpec(NamedTuple):

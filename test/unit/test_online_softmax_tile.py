@@ -92,3 +92,19 @@ def test_composite_tile_fragment_adapter_preserves_grouped_lane_shapes():
   value = UOp.placeholder((16, 64), dtypes.half, 21)
   acc = UOp.placeholder((16, 64), dtypes.float32, 22)
   assert adapt_composite_tile_fragments(carrier, score=score, value=value, acc=acc, dtype=dtypes.half) == (score, value, acc)
+
+def test_tile_gather_preserves_axis_ownership_and_base_offsets():
+  from tinygrad.uop.ops import TileGatherSpec
+  from tinygrad.schedule.wmma import tile_gather
+  source = UOp.placeholder((2, 8, 64), dtypes.half, 30)
+  spec = TileGatherSpec("value", (16, 16), (1, 2), (0, 1), (4, 8), 4)
+  gathered = tile_gather(source, spec)
+  assert gathered.op is Ops.TILE_GATHER and gathered.src == (source,)
+  assert gathered.arg.source_axes == (1, 2) and gathered.arg.tile_axes == (0, 1)
+  assert gathered.arg.base_offsets == (4, 8) and gathered.arg.lane_group == 4
+
+def test_tile_gather_rejects_ambiguous_axis_or_offset_metadata():
+  from tinygrad.uop.ops import TileGatherSpec
+  for spec in (TileGatherSpec("value", (16, 16), (1, 1), (0, 1)),
+               TileGatherSpec("value", (16, 16), (1, 2), (0, 1), (4,))):
+    with pytest.raises(ValueError): spec.validate()
