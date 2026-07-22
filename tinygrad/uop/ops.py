@@ -1396,11 +1396,6 @@ class UPat(OpMixin):
     if isinstance(arg, Ops): arg = (arg, ())
     return UPat(Ops.REDUCE, self.match_dtype, src=(self,)+src, arg=arg, **kwargs)
   def broadcast(self, **kwargs): return UPat(Ops.STACK, self.match_dtype, src=self, **kwargs)
-  def composite_reduce(self, *slots: 'AccumulatorSlot', axis: tuple[int, ...] = (), **kwargs):
-    """Create a REDUCE with a composite accumulator (multi-slot)."""
-    from tinygrad.uop.ops import CompositeReduce, AccumulatorSlot
-    composite = CompositeReduce(slots=tuple(slots), combine_fn=kwargs.pop('combine_fn', None))
-    return UOp(Ops.REDUCE, kwargs.pop('dtype', self.dtype), src=(self,), arg=(composite, axis), **kwargs)
 
   def contiguous(self, *args, **kwargs): return UPat(Ops.CONTIGUOUS, dtype=self.match_dtype, src=(self,)+args, **kwargs)
   def after(self, *src:UPat, **kwargs): return UPat(Ops.AFTER, self.match_dtype, (self,)+src, **kwargs)
