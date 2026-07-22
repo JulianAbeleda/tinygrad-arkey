@@ -1,5 +1,6 @@
 from extra.qk.model_profiles import MODEL_PROFILES
 from extra.qk.shared_attention_evidence import DEFAULT_CONTEXTS, attention_workloads, authority_command, geometry_candidates
+from pathlib import Path
 
 
 def test_shared_attention_workloads_cover_both_real_routes_with_one_schema():
@@ -26,3 +27,25 @@ def test_both_routes_use_the_same_pinned_whole_prefill_authority_harness():
     assert "--model-profile" in argv and profile.id in argv
     assert "--pin-clock" in argv
     assert "--artifact" in argv
+
+
+def test_model_prefill_has_one_shared_attention_boundary_for_both_weight_routes():
+  """The 8B overlay and 14B packed projections must not grow separate attention kernels."""
+  source = (Path(__file__).parents[2] / "tinygrad/llm/model.py").read_text()
+  assert source.count("from tinygrad.llm.flash_prefill_attention import shared_prefill_attention") == 1
+  assert source.count("shared_prefill_attention(q, k, v, mask=mask)") == 1
+  # The shared call is downstream of both projection branches and retains the
+  # model-owned mask; this guards accidental route-specific attention forks.
+  assert "self.config.prefill_tc_attn" in source
+  assert "q.scaled_dot_product_attention(k, v, attn_mask=mask, enable_gqa=True)" in source
+
+
+def test_real_model_context_domain_and_gqa_are_explicitly_represented():
+  rows = attention_workloads()
+  assert {row.T for row in rows} == {512, 2048, 4096}
+  assert {row.KV for row in rows} == {512, 2048, 4096}
+  for row in rows:
+    assert row.Hq % row.Hkv == 0
+    assert row.G == row.Hq // row.Hkv
+    assert row.Hd == 128
+    assert row.causal
