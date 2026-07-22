@@ -161,3 +161,23 @@ def test_composite_reduce_state_adapter_is_opt_in_and_numeric_carrier_safe():
   state = composite_reduce_state_adapter(vals, ((), (), (2,)))
   lowered = lower_composite_accumulator(state)
   assert tuple(x.dtype for x in lowered.src) == (dtypes.float32, dtypes.float32, dtypes.float32.vec(2))
+
+def test_composite_reduce_state_adapter_bounded_attention_graph():
+  """The opt-in carrier can wrap a real bounded attention state without changing it."""
+  from tinygrad.llm.flash_prefill_attention import shared_prefill_attention
+  q = Tensor([[[(1.0, 0.0), (0.0, 1.0)]]], dtype=dtypes.float32)
+  k = Tensor([[[(1.0, 0.0), (0.0, 1.0), (1.0, 1.0)]]], dtype=dtypes.float32)
+  v = Tensor([[[(1.0, 2.0), (3.0, 4.0), (5.0, 6.0)]]], dtype=dtypes.float32)
+  out = shared_prefill_attention(q, k, v)
+  # Keep the reference computation separate: the adapter is only a carrier
+  # boundary and must never replace the proven scalar attention path.
+  scores = q @ k.transpose(-1, -2) / (2 ** 0.5)
+  m = scores.max(axis=-1, keepdim=True)
+  weights = (scores - m).exp()
+  l = weights.sum(axis=-1, keepdim=True)
+  acc = weights @ v
+  state = composite_reduce_state_adapter((m, l, acc), (m.shape, l.shape, acc.shape))
+  lowered = lower_composite_accumulator(state)
+  assert lowered.op is Ops.TUPLE
+  assert tuple(x.shape for x in lowered.src) == (m.shape, l.shape, acc.shape)
+  np.testing.assert_allclose(out.numpy(), (acc / l).numpy(), rtol=1e-5, atol=1e-5)
