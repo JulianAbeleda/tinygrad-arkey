@@ -4,6 +4,7 @@ import numpy as np
 from tinygrad import Tensor, dtypes
 from tinygrad.uop import Ops
 from tinygrad.uop.ops import AccumulatorSlot, UOp, ScopedReduceSpec
+from tinygrad.codegen.late.devectorizer import _partition_composite_sources
 
 
 def test_nested_reduction_with_logical_element_input_stays_in_one_schedule():
@@ -75,3 +76,15 @@ def test_auxiliary_value_survives_one_owned_composite_reduction():
   weights = np.exp(score_np - score_np.max(axis=-1, keepdims=True))
   expected = (weights * value_np.swapaxes(-2, -1)).sum(axis=-1, keepdims=True) / weights.sum(axis=-1, keepdims=True)
   np.testing.assert_allclose(result.numpy(), expected, rtol=1e-5, atol=1e-5)
+
+def test_composite_source_partition_excludes_range_carriers():
+  """Rangeify-owned RANGE UOps never count as logical auxiliary inputs."""
+  lhs = UOp.placeholder((2,), dtypes.float32, 0)
+  value = UOp.placeholder((2,), dtypes.float32, 1)
+  r0 = UOp.range(UOp.const(dtypes.weakint, 2), 7)
+  red = lhs.composite_reduce(
+    AccumulatorSlot(Ops.ADD, dtypes.float32, 0.0, "acc"), axis=(0,),
+    inputs=(value,), combine_fn="online_softmax")
+  ranges, aux = _partition_composite_sources((r0, value), red.arg[0])
+  assert ranges == (r0,)
+  assert aux == (value,)

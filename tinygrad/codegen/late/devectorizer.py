@@ -413,6 +413,18 @@ def _load_v_at_reduce_pos(v_src:UOp, composite, input_ranges, reduce_range, scor
   # has already supplied a third slot here.
   return v_index.load(dtype=composite.slots[-1].dtype)
 
+def _partition_composite_sources(srcs, composite):
+  """Separate range context from the explicitly declared logical inputs.
+
+  Rangeify may append RANGE UOps to a REDUCE source list.  They are loop
+  context, never auxiliary tensors.  Composite input ownership is therefore
+  determined only from non-RANGE sources and the declared input-spec count.
+  """
+  ranges = tuple(x for x in srcs if x.op is Ops.RANGE)
+  candidates = tuple(x for x in srcs if x.op is not Ops.RANGE)
+  ninputs = len(getattr(composite, "input_specs", ()))
+  return ranges, (candidates[-ninputs:] if ninputs else ())
+
 def reduce_to_acc(ctx:ReduceContext, red:UOp):
   from tinygrad.uop.ops import CompositeReduce
   composite_arg = red.arg[0] if isinstance(red.arg, tuple) and len(red.arg) > 0 else None
@@ -430,6 +442,10 @@ def reduce_to_acc(ctx:ReduceContext, red:UOp):
   # from those sources.
   reduce_range = tuple(x for x in range_srcs if x.arg[1] is AxisType.REDUCE) if composite is not None else raw_rest
   extra_srcs = tuple(x for x in raw_rest if x.op is not Ops.RANGE)
+  if composite is not None:
+    # Keep the source partition explicit; non-range carriers not declared by
+    # CompositeInputSpec must not become logical auxiliary inputs.
+    _, extra_srcs = _partition_composite_sources(raw_rest, composite)
 
   # Composite reduce with no ranges yet: rangeify inline
   if composite is not None and len(reduce_range) == 0:
