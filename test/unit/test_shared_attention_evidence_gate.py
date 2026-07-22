@@ -1,4 +1,4 @@
-from extra.qk.shared_attention_evidence_gate import MIN_TIMING_SAMPLES, SCHEMA, classify_shared_attention_evidence
+from extra.qk.shared_attention_evidence_gate import MIN_TIMING_SAMPLES, SCHEMA, classify_shared_attention_evidence, summarize_checkpoint
 
 
 def _evidence():
@@ -37,3 +37,12 @@ def test_override_like_or_partial_cross_route_claims_do_not_pass():
   assert not classify_shared_attention_evidence(row).passed
   row = _evidence(); row["noopt"] = 1
   assert not classify_shared_attention_evidence(row).passed
+
+
+def test_partial_checkpoint_reports_green_primitives_but_blocks_promotion():
+  row = _evidence()
+  row.pop("wmma"); row.pop("timing")
+  summary = summarize_checkpoint(row)
+  assert summary["gates"] == {"single_call": "PASS", "score_probability_residency": "PASS",
+                               "correctness": "PASS", "dual_wmma": "BLOCKED", "hardware_8b_14b": "NOT_MEASURED"}
+  assert summary["promotion"] == "NO-GO"

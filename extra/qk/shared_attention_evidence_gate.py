@@ -89,4 +89,37 @@ def classify_shared_attention_evidence(value: Mapping[str, Any] | None) -> GateR
   return GateResult("pass" if not errors else "reject", tuple(errors))
 
 
-__all__ = ["GateResult", "MIN_TIMING_SAMPLES", "SCHEMA", "classify_shared_attention_evidence"]
+def summarize_checkpoint(value: Mapping[str, Any] | None) -> dict[str, Any]:
+  """Expose partial gate facts without converting missing evidence to PASS.
+
+  This is the report-facing view used while the compiler is still fail-closed:
+  primitive schedule/residency/correctness may be recorded independently from
+  dual-WMMA and real-model timing.  Only an all-PASS summary can be promotable.
+  """
+  if not isinstance(value, Mapping):
+    return {"schema": SCHEMA, "promotion": "NO-GO", "gates": {"single_call": "NOT_PROVEN",
+            "score_probability_residency": "NOT_PROVEN", "correctness": "NOT_PROVEN",
+            "dual_wmma": "BLOCKED", "hardware_8b_14b": "NOT_MEASURED"}}
+  schedule = value.get("schedule")
+  allocations = value.get("allocations")
+  correctness = value.get("correctness")
+  wmma = value.get("wmma")
+  timing = value.get("timing")
+  single_call = "PASS" if isinstance(schedule, Mapping) and schedule.get("call_count") == 1 else "NOT_PROVEN"
+  residency = "PASS" if (isinstance(allocations, Mapping) and allocations.get("complete") is True and
+                          allocations.get("full_score_probability_buffers") == 0) else "NOT_PROVEN"
+  numeric = "PASS" if (isinstance(correctness, Mapping) and correctness.get("status") == "PASS" and
+                        correctness.get("reference") == "fp32") else "NOT_PROVEN"
+  dual = "PASS" if (value.get("noopt") == 0 and isinstance(wmma, Mapping) and
+                      all(isinstance(row, Mapping) and row.get("source_wmma_lines", 0) >= 1 and
+                          row.get("isa_wmma_instructions", 0) >= 1 for row in (wmma.get("qk"), wmma.get("pv")))) else "BLOCKED"
+  samples = (timing.get("baseline_samples_ms"), timing.get("candidate_samples_ms")) if isinstance(timing, Mapping) else (None, None)
+  model_timing = "PASS" if (all(_positive_samples(x) is not None and len(_positive_samples(x)) >= MIN_TIMING_SAMPLES for x in samples) and
+                             isinstance(value.get("model_coverage"), (list, tuple)) and
+                             set(value["model_coverage"]) == SUPPORTED_PROFILES) else "NOT_MEASURED"
+  gates = {"single_call": single_call, "score_probability_residency": residency, "correctness": numeric,
+           "dual_wmma": dual, "hardware_8b_14b": model_timing}
+  return {"schema": SCHEMA, "promotion": "GO" if all(x == "PASS" for x in gates.values()) else "NO-GO", "gates": gates}
+
+
+__all__ = ["GateResult", "MIN_TIMING_SAMPLES", "SCHEMA", "classify_shared_attention_evidence", "summarize_checkpoint"]

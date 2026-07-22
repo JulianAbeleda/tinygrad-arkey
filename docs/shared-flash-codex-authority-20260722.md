@@ -4,6 +4,24 @@
 **Target:** AMD gfx1100  
 **Status:** **NO-GO: fail-closed to ordinary SDPA**
 
+## Current checkpoint: `06df4ed4f`
+
+The latest correctness checkpoint is intentionally partial. Its authority
+summary is:
+
+| Gate | Status | Interpretation |
+|---|---|---|
+| One fused `CALL` | PASS | Current scoped schedule evidence has one selected compute call. |
+| No full score/probability buffers | PASS | Current allocation/residency evidence reports zero full score/probability buffers. |
+| Independent fp32 correctness | PASS | The fp16 composite boundary correctness gate is green. |
+| QK + PV dual-WMMA | BLOCKED | Commit `81b7426be` keeps the composite tensor-core boundary fail-closed; no dual-WMMA proof exists. |
+| 8B/14B hardware timing | NOT MEASURED | No paired, warmed, GPU-`tm` baseline/candidate artifacts exist. |
+| Promotion | NO-GO | Missing WMMA and model evidence keep ordinary SDPA selected. |
+
+This is a checkpoint, not a timing result. The report-facing
+`summarize_checkpoint()` helper preserves these partial statuses and returns
+`promotion: NO-GO` unless every required gate is independently present.
+
 ## Decision
 
 The shared semantic attention boundary and bounded online-softmax Tensor
