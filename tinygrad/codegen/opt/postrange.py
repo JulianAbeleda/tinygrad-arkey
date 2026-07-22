@@ -323,7 +323,18 @@ class Scheduler:
     # boundary fail-closed until the composite lane ABI is explicitly owned by
     # a backend.  Ordinary REDUCE matmuls have no composite state ranges and
     # retain the existing WMMA path unchanged.
-    if self.composite_state_ranges:
+    composite_carriers = []
+    for reduceop in self.reduceops:
+      carg = reduceop.arg[0] if isinstance(reduceop.arg, tuple) and reduceop.arg else None
+      carrier = getattr(carg, "tile_carrier", None)
+      if carrier is not None:
+        try: carrier.validate()
+        except (AttributeError, ValueError): return None
+        composite_carriers.append(carrier)
+    # Carrier metadata is now part of WMMA candidate validation.  It proves
+    # the score/value/output tile geometry, but does not by itself authorize
+    # fragment lowering; the typed online-softmax ABI remains fail-closed.
+    if self.composite_state_ranges or composite_carriers:
       return None
     try:
       tensor_cores = self.ren.tensor_cores if tc_select == -1 else [self.ren.tensor_cores[tc_select]]

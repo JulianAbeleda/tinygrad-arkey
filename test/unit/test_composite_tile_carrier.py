@@ -1,5 +1,8 @@
 from tinygrad.uop.ops import UOp, Ops, CompositeTileCarrier, AccumulatorSlot, CompositeInputSpec
 from tinygrad.dtype import dtypes
+from tinygrad import Tensor
+from tinygrad.llm.flash_prefill_attention import shared_prefill_attention
+from tinygrad.schedule.rangeify import lower_attention_semantic
 
 
 def test_composite_tile_carrier_validates_attention_geometry():
@@ -21,3 +24,15 @@ def test_composite_reduce_keeps_tile_carrier_source_visible():
   assert red.arg[0].tile_carrier is carrier
   assert red.src[-1] is value
   assert red.arg[0].tile_carrier.validate() is carrier
+
+def test_bounded_attention_attaches_shared_tile_carrier():
+  q = Tensor.empty(1, 1, 16, 64, dtype=dtypes.float16)
+  k = Tensor.empty(1, 1, 16, 64, dtype=dtypes.float16)
+  v = Tensor.empty(1, 1, 16, 64, dtype=dtypes.float16)
+  lowered = lower_attention_semantic(shared_prefill_attention(q, k, v).uop)
+  carriers = [u.arg[0].tile_carrier for u in lowered.toposort()
+              if u.op is Ops.REDUCE and getattr(u.arg[0], "tile_carrier", None) is not None]
+  assert len(carriers) == 1
+  assert carriers[0].score_shape == (16, 16, 64)
+  assert carriers[0].value_shape == (16, 64, 64)
+  assert carriers[0].output_shape == (16, 16, 64)

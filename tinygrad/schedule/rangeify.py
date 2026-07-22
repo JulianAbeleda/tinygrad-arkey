@@ -2,7 +2,7 @@ from dataclasses import dataclass, field, replace
 import itertools
 from tinygrad.dtype import dtypes, PtrDType, AddrSpace, Invalid
 from tinygrad.uop.ops import PatternMatcher, UPat, Ops, UOp, resolve, GroupOp, _substitute, KernelInfo, ParamArg, ScheduleHints
-from tinygrad.uop.ops import graph_rewrite, sint, AxisType, BottomUpGate, profile_matches, identity_element, AccumulatorSlot, CompositeReduce, CompositeInputSpec, AttentionSpec
+from tinygrad.uop.ops import graph_rewrite, sint, AxisType, BottomUpGate, profile_matches, identity_element, AccumulatorSlot, CompositeReduce, CompositeInputSpec, CompositeTileCarrier, AttentionSpec
 from tinygrad.uop.symbolic import symbolic
 from tinygrad.helpers import prod, all_same, getenv, dedup, all_int, DEBUG, SPLIT_REDUCEOP, DEBUG_RANGEIFY, VIZ, MAX_KERNEL_BUFFERS
 from tinygrad.helpers import PCONTIG, FLOAT16, OPENPILOT_HACKS, Context, argsort, partition, get_single_element
@@ -56,8 +56,11 @@ def lower_attention_semantic(att:UOp) -> UOp:
       slots = (AccumulatorSlot(Ops.MAX, att.arg.qk_dtype, float("-inf"), "m"),
                AccumulatorSlot(Ops.ADD, att.arg.qk_dtype, 0.0, "l"),
                AccumulatorSlot(Ops.ADD, att.arg.qk_dtype, 0.0, "acc"))
+      tile_carrier = CompositeTileCarrier((16, 16, hd), (16, hd, hd), (16, 16, hd),
+                                          provenance=("qk", "pv", "online_softmax"))
       red = score.uop.composite_reduce(*slots, axis=(3,), inputs=(logical_v,), combine_fn="online_softmax",
-        input_specs=(CompositeInputSpec("logical", (0, 1, None, 3, 4), primary_repeated=True),))
+        input_specs=(CompositeInputSpec("logical", (0, 1, None, 3, 4), primary_repeated=True),),
+        tile_carrier=tile_carrier)
       acc = Tensor(UOp(Ops.REDUCE_SLOT, att.arg.qk_dtype, (red,), 2))
       den = Tensor(UOp(Ops.REDUCE_SLOT, att.arg.qk_dtype, (red,), 1))
       return (acc / den).reshape(b, h, q_len, hd).cast(att.arg.output_dtype).uop
