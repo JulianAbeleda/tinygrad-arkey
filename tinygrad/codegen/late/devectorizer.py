@@ -390,22 +390,18 @@ def _load_v_at_reduce_pos(v_src:UOp, composite, input_ranges, reduce_range):
 
 def reduce_to_acc(ctx:ReduceContext, red:UOp):
   from tinygrad.uop.ops import CompositeReduce
-  # Separate V extra src from ranges: if composite has v_uop, last src is V reference
   composite = red.arg[0] if isinstance(red.arg, tuple) and len(red.arg) > 0 and isinstance(red.arg[0], CompositeReduce) else None
-  has_v = composite is not None and composite.v_uop is not None
   inp = red.src[0]
   raw_rest = red.src[1:]
-  reduce_range = raw_rest[:-1] if has_v and len(raw_rest) > 0 else raw_rest
-  v_src = raw_rest[-1] if has_v and len(raw_rest) > 0 else None
+  reduce_range = tuple(x for x in raw_rest if x.op is Ops.RANGE and x.arg[1] is AxisType.REDUCE)
+  extra_srcs = tuple(x for x in raw_rest if x not in reduce_range)
 
   # Composite reduce with no ranges yet: rangeify inline
   if isinstance(red.arg[0], CompositeReduce) and len(reduce_range) == 0:
-    from tinygrad.uop.ops import AxisType
     axis = red.arg[1]
-    extra_srcs = red.src[1:]
     rngs = tuple(UOp.range(UOp.const(dtypes.weakint, red.src[0].shape[i]), i, AxisType.REDUCE) for i in axis)
     red = UOp(Ops.REDUCE, red.dtype, src=(red.src[0],) + rngs + extra_srcs, arg=(red.arg[0], ()))
-    inp, reduce_range = red.src[0], red.src[1:]
+    inp, reduce_range = red.src[0], rngs
 
   lst = horizontal_reduce(inp, red.dtype)
   assert all(x.dtype == red.dtype for x in lst), f"horizontal reduction mismatch {lst[0].dtype} != {red.dtype}"
@@ -419,10 +415,8 @@ def reduce_to_acc(ctx:ReduceContext, red:UOp):
     if isinstance(red.arg[0], CompositeReduce):
       composite = red.arg[0]
       
-      # Load V input if composite has v_uop
-      v_inp = None
-      if composite.v_uop is not None and v_src is not None:
-        v_inp = _load_v_at_reduce_pos(v_src, composite, input_ranges, reduce_range)
+      # Auxiliary logical-element inputs are ordinary REDUCE sources.
+      v_inp = _load_v_at_reduce_pos(extra_srcs[0], composite, input_ranges, reduce_range) if extra_srcs else None
       
       # Create accumulators (common to all combines)
       accs = []
@@ -436,29 +430,13 @@ def reduce_to_acc(ctx:ReduceContext, red:UOp):
         accs.append(acc)
         acc_reads.append(acc_read)
       
-      # Compute slot results for REDUCE_SLOT cache (range path).
-      # For independent slots, create plain REDUCE UOps that each compute one slot.
-      from tinygrad.codegen.late.composite_combines import COMBINE_REGISTRY, _independent_slots, _composite_result_cache
-      combine_fn = COMBINE_REGISTRY.get(composite.combine_fn, _independent_slots)
-      
-      if composite.combine_fn is None:
-          # Independent slots: create plain REDUCE for each slot and cache them.
-          # These will be lowered when _resolve_reduce_slot_pm returns them.
-          slot_results = []
-          for slot in composite.slots:
-              slot_red = UOp(Ops.REDUCE, slot.dtype, src=red.src, arg=(slot.op, red.arg[1]))
-              slot_results.append(slot_red)
-          _composite_result_cache[red.arg] = slot_results
-          for r in slot_results:
-              _composite_result_cache[r] = slot_results
-      
+      from tinygrad.codegen.late.composite_combines import COMBINE_REGISTRY, _independent_slots
+      combine_fn = COMBINE_REGISTRY.get(composite.combine_fn)
+      if combine_fn is None and composite.combine_fn is not None:
+        raise RuntimeError(f"unknown composite combine {composite.combine_fn!r}")
+      combine_fn = combine_fn or _independent_slots
       result = combine_fn(ctx, accs, acc_reads, inp, composite, input_ranges, reduce_range, red, v_inp=v_inp)
-      
-      # Map the combine result to the cached slot results so REDUCE_SLOT lookup works
-      if composite.combine_fn is None:
-          _composite_result_cache[result] = slot_results
-      
-      return result
+      return UOp(Ops.TUPLE, dtypes.void, result)
     
     identity = red.const(red.dtype, identity_element(red.arg[0], red.dtype.scalar()))
     acc = UOp.placeholder((1,), red.dtype, ctx.acc_num, AddrSpace.REG).replace(tag=red.tag if isinstance(red.tag, RegisterResidentAccumulator) else None)
@@ -491,25 +469,14 @@ def merge_reduce_ends(ctx:ReduceContext, sink:UOp):
   return sink.substitute(subs) if subs else None
 
 def _resolve_reduce_slot_pm(slot):
-    """PatternMatcher callback: resolve REDUCE_SLOT from _composite_result_cache.
-    Delegates to the robust _resolve_reduce_slot in composite_combines.py.
-    Returns a UOp that replaces the REDUCE_SLOT in the graph.
-    """
-    from tinygrad.codegen.late.composite_combines import _resolve_reduce_slot, _composite_result_cache
-    slot_result = _resolve_reduce_slot(slot)
-    if slot_result is None:
-        return None
-    # Cache the slot result itself so subsequent lookups work
-    cached = _composite_result_cache.get(slot.src[0])
-    if cached is not None:
-        _composite_result_cache[slot_result] = cached
-    return slot_result
+    from tinygrad.codegen.late.composite_combines import resolve_reduce_slot_tensor
+    return resolve_reduce_slot_tensor(slot)
 
 pm_reduce = PatternMatcher([
-  # REDUCE_SLOT -> resolve from cache (must run before REDUCE lowering so returned REDUCEs get lowered)
-  (UPat(Ops.REDUCE_SLOT, name="slot"), _resolve_reduce_slot_pm),
   # REDUCE -> DEFINE_ACC+ASSIGN, then merge ENDs with same range
   (UPat(Ops.REDUCE, name="red"), reduce_to_acc),
+  # REDUCE_SLOT is only a projection from the graph-local TUPLE result.
+  (UPat(Ops.REDUCE_SLOT, name="slot"), _resolve_reduce_slot_pm),
   (UPat(Ops.SINK, name="sink"), merge_reduce_ends),
   # tensor core built in accumulate
   (UPat(Ops.WMMA, name="wmma") + UPat.var("add"),

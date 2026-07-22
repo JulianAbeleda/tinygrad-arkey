@@ -13,10 +13,6 @@ import functools
 from tinygrad.uop.ops import UOp, Ops, dtypes, AxisType, AddrSpace
 from tinygrad.uop.ops import identity_element, CompositeReduce, AccumulatorSlot
 
-# Cache: maps (composite, axis) tuple -> list of slot-result UOps, and each slot result -> list
-# Used by _resolve_reduce_slot to resolve REDUCE_SLOT ops after REDUCE lowering.
-_composite_result_cache: dict = {}
-
 def _independent_slots(ctx, accs, acc_reads, inp, composite, input_ranges, reduce_range, red, v_inp=None):
     """Default combine: each slot independently reduces the input using its op."""
     results = []
@@ -26,7 +22,7 @@ def _independent_slots(ctx, accs, acc_reads, inp, composite, input_ranges, reduc
         ret = functools.reduce(lambda x, y: x.alu(slot.op, y), lst)
         end = acc.index(UOp.const(dtypes.weakint, 0)).store(ret).end(*reduce_range).rtag("mergeable")
         results.append(acc.after(end).index(UOp.const(dtypes.weakint, 0)))
-    return results[-1]
+    return tuple(result.after(*[r.src[0] for r in results]) for result in results)
 
 def online_softmax_l(ctx, accs, acc_reads, inp, composite, input_ranges, reduce_range, red, v_inp=None):
     """Online-softmax: (m, l) state with correction-based combine.
@@ -53,7 +49,7 @@ def online_softmax_l(ctx, accs, acc_reads, inp, composite, input_ranges, reduce_
     
     ends = [acc.index(UOp.const(dtypes.weakint, 0)).store(new_val).end(*reduce_range).rtag("mergeable")
             for acc, new_val in zip(accs, [m_new, l_new])]
-    return accs[-1].after(*ends).index(UOp.const(dtypes.weakint, 0))
+    return tuple(acc.after(*ends).index(UOp.const(dtypes.weakint, 0)) for acc in accs)
 
 def online_softmax(ctx, accs, acc_reads, inp, composite, input_ranges, reduce_range, red, v_inp=None):
     """Online-softmax: (m, l, acc) state with correction + acc/l output."""
@@ -80,10 +76,7 @@ def online_softmax(ctx, accs, acc_reads, inp, composite, input_ranges, reduce_ra
     
     ends = [acc.index(UOp.const(dtypes.weakint, 0)).store(new_val).end(*reduce_range).rtag("mergeable")
             for acc, new_val in zip(accs, [m_new, l_new, acc_new])]
-    rcp_l = accs[1].after(ends[1]).index(UOp.const(dtypes.weakint, 0)).alu(Ops.RECIPROCAL)
-    ret_acc = accs[2].after(ends[2]).index(UOp.const(dtypes.weakint, 0))
-    anchored = ret_acc.after(ends[0]).after(ends[1])
-    return anchored.alu(Ops.MUL, rcp_l)
+    return tuple(acc.after(*ends).index(UOp.const(dtypes.weakint, 0)) for acc in accs)
 
 # Registry: combine_fn string -> callable
 COMBINE_REGISTRY = {
@@ -148,11 +141,7 @@ def _handle_no_range_generic(inp, composite, red):
         for slot in composite.slots:
             slot_lst = _horizontal_reduce(inp, slot.dtype)
             results.append(functools.reduce(lambda x,y: x.alu(slot.op, y), slot_lst))
-        # Populate cache for REDUCE_SLOT resolution
-        _composite_result_cache[red.arg] = results
-        for r in results:
-            _composite_result_cache[r] = results
-        return results[-1]
+        return tuple(results)
     
     entry = COMBINE_STEP_REGISTRY.get(composite.combine_fn)
     if entry is None or entry[0] is None:
@@ -170,65 +159,7 @@ def _handle_no_range_generic(inp, composite, red):
         group = inp_lst[i:i + elems_per_step]
         state = list(step_fn(*state, *group))
     
-    # Populate cache with all final state values
-    _composite_result_cache[red.arg] = state
-    for s in state:
-        _composite_result_cache[s] = state
-    return state[-1]
-
-def _handle_no_range(inp, composite, red):
-    """Handle composite REDUCE with no ranges (STACK-based, post-expander).
-    Iterates over input elements using the combine logic."""
-    from tinygrad.uop.ops import CompositeReduce, AccumulatorSlot
-    inp_lst = _horizontal_reduce(inp, composite.slots[0].dtype)
-    
-    if composite.combine_fn is None:
-        results = []
-        for slot in composite.slots:
-            slot_lst = _horizontal_reduce(inp, slot.dtype)
-            results.append(functools.reduce(lambda x,y: x.alu(slot.op, y), slot_lst))
-        # Populate cache for REDUCE_SLOT resolution
-        _composite_result_cache[red.arg] = results
-        for r in results:
-            _composite_result_cache[r] = results
-        return results[-1]
-    
-    if composite.combine_fn == "online_softmax_l":
-        LOG2E = UOp.const(dtypes.float32, 1.4426950408889634)
-        NEG1 = UOp.const(dtypes.float32, -1.0)
-        m = red.const(composite.slots[0].dtype, composite.slots[0].identity if composite.slots[0].identity is not None else identity_element(composite.slots[0].op, composite.slots[0].dtype.scalar()))
-        l = red.const(composite.slots[1].dtype, composite.slots[1].identity if composite.slots[1].identity is not None else identity_element(composite.slots[1].op, composite.slots[1].dtype.scalar()))
-        for score in inp_lst:
-            m_new = m.alu(Ops.MAX, score)
-            diff = m.alu(Ops.ADD, m_new.alu(Ops.MUL, NEG1))
-            corr = diff.alu(Ops.MUL, LOG2E).alu(Ops.EXP2)
-            score_shifted = score.alu(Ops.ADD, m_new.alu(Ops.MUL, NEG1))
-            exp_score = score_shifted.alu(Ops.MUL, LOG2E).alu(Ops.EXP2)
-            l = l.alu(Ops.MUL, corr).alu(Ops.ADD, exp_score)
-            m = m_new
-        return l
-    
-    if composite.combine_fn == "online_softmax":
-        LOG2E = UOp.const(dtypes.float32, 1.4426950408889634)
-        NEG1 = UOp.const(dtypes.float32, -1.0)
-        m = red.const(composite.slots[0].dtype, composite.slots[0].identity if composite.slots[0].identity is not None else identity_element(composite.slots[0].op, composite.slots[0].dtype.scalar()))
-        l = red.const(composite.slots[1].dtype, composite.slots[1].identity if composite.slots[1].identity is not None else identity_element(composite.slots[1].op, composite.slots[1].dtype.scalar()))
-        acc = red.const(composite.slots[2].dtype, composite.slots[2].identity if composite.slots[2].identity is not None else identity_element(composite.slots[2].op, composite.slots[2].dtype.scalar()))
-        for elem in inp_lst:
-            score = elem.gep(0) if elem.dtype.count > 1 else elem
-            v_val = elem.gep(1) if elem.dtype.count > 1 else elem
-            m_new = m.alu(Ops.MAX, score)
-            diff = m.alu(Ops.ADD, m_new.alu(Ops.MUL, NEG1))
-            corr = diff.alu(Ops.MUL, LOG2E).alu(Ops.EXP2)
-            score_shifted = score.alu(Ops.ADD, m_new.alu(Ops.MUL, NEG1))
-            exp_score = score_shifted.alu(Ops.MUL, LOG2E).alu(Ops.EXP2)
-            l = l.alu(Ops.MUL, corr).alu(Ops.ADD, exp_score)
-            acc = acc.alu(Ops.MUL, corr).alu(Ops.ADD, exp_score.alu(Ops.MUL, v_val))
-            m = m_new
-        rcp_l = l.alu(Ops.RECIPROCAL)
-        return acc.alu(Ops.MUL, rcp_l)
-    
-    return inp_lst[-1]  # fallback: return last element
+    return tuple(state)
 
 def _lower_composite_no_range_pm(red):
     """PatternMatcher callback: lower composite REDUCE with no ranges.
@@ -254,64 +185,15 @@ def _lower_composite_no_range_pm(red):
             pass
 
     result = _handle_no_range_generic(red.src[0], red.arg[0], red)
-    # Store result -> slot_results so _resolve_reduce_slot can find the
-    # slot results even after graph_rewrite substitutes the REDUCE.
-    slot_results = _composite_result_cache.get(red.arg, [])
-    if slot_results:
-        _composite_result_cache[result] = slot_results
-    return result
-
-def _resolve_reduce_slot(slot):
-    """PatternMatcher callback: resolve REDUCE_SLOT to the cached slot result.
-    The cache is populated by REDUCE lowering (both no-range and range paths).
-    After the REDUCE is lowered, REDUCE_SLOT.src[0] points to the lowering result
-    which is also stored as a cache key.
-
-    Robust to graph rewriting: if the REDUCE has been substituted away, walks
-    the src's toposort to find the original REDUCE's arg in the cache, and
-    falls back to scanning all cache entries as a last resort.
-    """
-    src = slot.src[0]
-
-    # 1. Direct lookup by src identity (lowered value or original REDUCE).
-    cached = _composite_result_cache.get(src)
-    if cached is not None:
-        return cached[slot.arg]
-
-    # 2. If src is still a REDUCE, try its arg (CompositeReduce tuple).
-    if src.op is Ops.REDUCE:
-        cached = _composite_result_cache.get(src.arg)
-        if cached is not None:
-            return cached[slot.arg]
-
-    # 3. Walk src.toposort() to find any REDUCE whose arg is in the cache.
-    for u in src.toposort():
-        if u.op is Ops.REDUCE:
-            cached = _composite_result_cache.get(u.arg)
-            if cached is not None:
-                # Cache so future lookups for this src are fast.
-                _composite_result_cache[src] = cached
-                return cached[slot.arg]
-
-    # 4. Last resort: scan all cache entries for any list with enough slots.
-    for cached_val in _composite_result_cache.values():
-        if isinstance(cached_val, (list, tuple)) and slot.arg < len(cached_val):
-            return cached_val[slot.arg]
-
-    return None
-
+    return UOp(Ops.TUPLE, dtypes.void, result)
 
 def resolve_reduce_slot_tensor(slot):
-    """Resolve REDUCE_SLOT to a plain REDUCE for the specific slot.
-    Runs at the tensor level before scheduling."""
-    from tinygrad.uop.ops import CompositeReduce
-    red = slot.src[0]
-    if red.op is not Ops.REDUCE: return None
-    composite = red.arg[0]
-    if not isinstance(composite, CompositeReduce): return None
-    slot_info = composite.slots[slot.arg]
-    axis = red.arg[1]
-    ret = UOp(Ops.REDUCE, slot.dtype, src=red.src, arg=(slot_info.op, axis))
-    if axis:
-      ret = ret.reshape(tuple(s for i, s in enumerate(ret.shape) if i not in axis))
-    return ret
+    """Graph-local projection from the structured composite reduction result."""
+    src = slot.src[0]
+    if src.op is not Ops.TUPLE: return None
+    if not isinstance(slot.arg, int) or not 0 <= slot.arg < len(src.src):
+      raise RuntimeError(f"invalid composite reduction slot {slot.arg}")
+    # Project directly while the structured result is still in compiler IR.
+    # This leaves no TUPLE/GETTUPLE operation for the renderer and preserves
+    # the one reduction's shared END dependencies.
+    return src.src[slot.arg]

@@ -5,14 +5,8 @@ schedule/codegen/realize pipeline, and asserts both slots compute the correct nu
 This is NOT a 1-slot normal-sum rerouted at the devectorizer -- the UOp graph genuinely carries a CompositeReduce
 with 2 AccumulatorSlots, and Ops.REDUCE + CompositeReduce is asserted on the constructed UOp before it is lowered.
 
-Construction note: tinygrad.codegen.late.devectorizer.reduce_to_acc lowers a composite REDUCE via a DEFINE_ACC
-per slot when the REDUCE already carries RANGE srcs (post-rangeify accumulator-loop form), but returns only the
-LAST slot's accumulator read (accs[-1]) -- multi-slot readback isn't wired up yet, so each slot is exercised by
-building its own composite reduce with that slot last. Additionally, the codegen optimizer's expander can fully
-unroll a small constant-size reduce loop before remove_reduce runs, which drops the RANGE src entirely and defeats
-reduce_to_acc's composite lowering (it falls through a pre-rangeify passthrough meant for a different case). We
-disable that optimization (NOOPT) for this test so the composite reduce actually goes through the real
-accumulator-loop lowering path -- the thing this test is chartered to prove works.
+Each REDUCE_SLOT is a graph-local projection from the one structured composite
+reduction result. The tests realize both projections in one schedule.
 """
 import unittest
 
@@ -46,29 +40,14 @@ class TestCompositeReduce(unittest.TestCase):
     self.assertEqual(red.arg[0].slots[0].op, Ops.ADD)
     self.assertEqual(red.arg[0].slots[1].op, Ops.MAX)
 
-  def test_composite_reduce_sum_slot(self):
-    # arange(1..16): sum = 136. Test the sum slot by placing it last (reduce_to_acc surfaces the last slot).
-    t = Tensor.arange(1, 17, dtype=dtypes.float32).reshape(16)
-    slot_sum, slot_max = self._make_slots()
-    red = UOp.composite_reduce(t.uop, slot_max, slot_sum, axis=(0,))
-    self.assertIs(red.op, Ops.REDUCE)
-    self.assertIsInstance(red.arg[0], CompositeReduce)
-    out = Tensor(red)
-    result = out.numpy()
-    self.assertEqual(result.shape, (1,))
-    self.assertEqual(float(result[0]), 136.0)
-
-  def test_composite_reduce_max_slot(self):
-    # arange(1..16): max = 16. Test the max slot by placing it last.
+  def test_composite_reduce_both_slots(self):
     t = Tensor.arange(1, 17, dtype=dtypes.float32).reshape(16)
     slot_sum, slot_max = self._make_slots()
     red = UOp.composite_reduce(t.uop, slot_sum, slot_max, axis=(0,))
-    self.assertIs(red.op, Ops.REDUCE)
-    self.assertIsInstance(red.arg[0], CompositeReduce)
-    out = Tensor(red)
-    result = out.numpy()
-    self.assertEqual(result.shape, (1,))
-    self.assertEqual(float(result[0]), 16.0)
+    total, maximum = Tensor(UOp(Ops.REDUCE_SLOT, dtypes.float32, (red,), 0)), Tensor(UOp(Ops.REDUCE_SLOT, dtypes.float32, (red,), 1))
+    total.realize(maximum)
+    self.assertEqual(float(total.numpy()[0]), 136.0)
+    self.assertEqual(float(maximum.numpy()[0]), 16.0)
 
 
 class TestOnlineSoftmaxTwoReduce(unittest.TestCase):
@@ -104,7 +83,7 @@ class TestOnlineSoftmaxTwoReduce(unittest.TestCase):
     self.assertIsInstance(red.arg[0], CompositeReduce)
     self.assertEqual(red.arg[0].combine_fn, "online_softmax_l")
 
-    result = Tensor(red).numpy()
+    result = Tensor(UOp(Ops.REDUCE_SLOT, dtypes.float32, (red,), 1)).numpy()
     m = scores.max()
     expected_l = np.exp(scores - m).sum()
     np.testing.assert_allclose(result.flatten(), [expected_l], rtol=1e-5, atol=1e-5)
@@ -133,7 +112,7 @@ class TestOnlineSoftmaxTwoReduce(unittest.TestCase):
     This test pins the exact reproduction so it stays honest and machine-checked rather than a narrated claim.
     """
     from tinygrad.device import CompileError
-    wall_errors = (AssertionError, IndexError, CompileError)
+    wall_errors = (AssertionError, IndexError, CompileError, RuntimeError)
 
     scores = np.array([1.0, 3.0, 2.0, 0.5], dtype=np.float32)
     v = np.array([10.0, 20.0, 30.0, 40.0], dtype=np.float32)
@@ -148,7 +127,7 @@ class TestOnlineSoftmaxTwoReduce(unittest.TestCase):
     slot_sum_vec = AccumulatorSlot(op=Ops.ADD, dtype=dtypes.float32.vec(2), identity=0.0, name="sum")
     red_default = vec_t.uop.composite_reduce(slot_sum_vec, axis=(0,))
     with self.assertRaises(wall_errors):
-      Tensor(red_default).numpy()
+      Tensor(UOp(Ops.REDUCE_SLOT, dtypes.float32.vec(2), (red_default,), 0)).numpy()
 
     # (3) online_softmax_acc itself -- identical wall, confirming it is not specific to this combine.
     slot_m = AccumulatorSlot(op=Ops.MAX, dtype=dtypes.float32, identity=float("-inf"), name="m")
@@ -180,35 +159,17 @@ class TestMultiOutputM4(unittest.TestCase):
     self.assertIsInstance(red.arg[0], CompositeReduce)
     self.assertEqual(len(red.arg[0].slots), 2)
 
-  def test_sum_slot_value(self):
-    t = Tensor.arange(1, 17, dtype=dtypes.float32).reshape(16)
-    slot_max = AccumulatorSlot(op=Ops.MAX, dtype=dtypes.float32, identity=float("-inf"), name="max")
-    slot_sum = AccumulatorSlot(op=Ops.ADD, dtype=dtypes.float32, identity=0.0, name="sum")
-    red = t.uop.composite_reduce(slot_max, slot_sum, axis=(0,))
-    result = Tensor(red).numpy()
-    self.assertEqual(float(result[0]), 136.0)
-
-  def test_max_slot_value(self):
-    t = Tensor.arange(1, 17, dtype=dtypes.float32).reshape(16)
-    slot_sum = AccumulatorSlot(op=Ops.ADD, dtype=dtypes.float32, identity=0.0, name="sum")
-    slot_max = AccumulatorSlot(op=Ops.MAX, dtype=dtypes.float32, identity=float("-inf"), name="max")
-    red = t.uop.composite_reduce(slot_sum, slot_max, axis=(0,))
-    result = Tensor(red).numpy()
-    self.assertEqual(float(result[0]), 16.0)
-
-  def test_both_slots_same_reduce(self):
+  def test_both_slots_same_reduce_numeric(self):
     t = Tensor.arange(1, 17, dtype=dtypes.float32).reshape(16)
     slot_sum = AccumulatorSlot(op=Ops.ADD, dtype=dtypes.float32, identity=0.0, name="sum")
     slot_max = AccumulatorSlot(op=Ops.MAX, dtype=dtypes.float32, identity=float("-inf"), name="max")
     red = t.uop.composite_reduce(slot_sum, slot_max, axis=(0,))
     s0 = UOp(Ops.REDUCE_SLOT, dtypes.float32, src=(red,), arg=0)
     s1 = UOp(Ops.REDUCE_SLOT, dtypes.float32, src=(red,), arg=1)
-    # Both REDUCE_SLOTs reference the same REDUCE object (not two copies)
-    self.assertIs(s0.src[0], s1.src[0])
-    self.assertIs(s0.src[0], red)
-    # REDUCE has composite arg with two slots
-    self.assertTrue(hasattr(red.arg[0], 'slots'))
-    self.assertEqual(len(red.arg[0].slots), 2)
+    out0, out1 = Tensor(s0), Tensor(s1)
+    out0.realize(out1)
+    self.assertEqual(float(out0.numpy()[0]), 136.0)
+    self.assertEqual(float(out1.numpy()[0]), 16.0)
 
 
 
