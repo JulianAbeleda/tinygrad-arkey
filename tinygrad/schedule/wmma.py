@@ -2,9 +2,33 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from tinygrad.dtype import DType
+from tinygrad.dtype import DType, dtypes
 from tinygrad.uop.ops import Ops, UOp
 from tinygrad.uop.ops import CompositeTileCarrier, TileGatherSpec
+
+def grouped_tile_load(source: UOp, spec: TileGatherSpec, *indices: UOp) -> UOp:
+  """Build an ownership-preserving INDEX/LOAD tile carrier.
+
+  ``indices`` are supplied by the scheduler for exactly ``source_axes``;
+  this helper never invents, flattens, or broadcasts an index.  The resulting
+  LOAD is wrapped in TILE_GATHER so the later shaped-fragment lowering can
+  consume the explicit axis/lane ABI.
+  """
+  spec.validate()
+  if len(indices) != len(spec.source_axes):
+    raise ValueError("grouped tile load requires one index per owned source axis")
+  if source.shape is None or any(a < 0 or a >= len(source.shape) for a in spec.source_axes):
+    raise ValueError("tile gather source axes are out of range")
+  if any(not dtypes.is_int(i.dtype.base) or i.shape not in ((), (1,),
+          (spec.fragment_shape[t],)) for i, t in zip(indices, spec.tile_axes)):
+    raise ValueError("tile gather indices must be scalar or lane-vector integer UOps")
+  indexed = source.index(*indices)
+  loaded = indexed.load()
+  # The load must already have the logical fragment shape; no reshape belongs
+  # in this primitive, because that would erase lane ownership.
+  if loaded.shape != spec.fragment_shape:
+    raise ValueError("grouped tile load does not produce the declared fragment shape")
+  return tile_gather(loaded, spec)
 
 def tile_gather(source: UOp, spec: TileGatherSpec) -> UOp:
   """Create an opt-in ownership-preserving tile carrier.

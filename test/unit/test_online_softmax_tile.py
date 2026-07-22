@@ -118,3 +118,27 @@ def test_tile_gather_rejects_ambiguous_axis_or_offset_metadata():
   for spec in (TileGatherSpec("value", (16, 16), (1, 1), (0, 1)),
                TileGatherSpec("value", (16, 16), (1, 2), (0, 1), (4,))):
     with pytest.raises(ValueError): spec.validate()
+
+def test_grouped_tile_load_preserves_index_and_lane_ownership():
+  from tinygrad.uop.ops import TileGatherSpec
+  from tinygrad.schedule.wmma import grouped_tile_load, lower_tile_gather
+  source = UOp.placeholder((16, 16), dtypes.half, 32)
+  i0 = UOp.placeholder((16,), dtypes.int32, 34)
+  i1 = UOp.placeholder((16,), dtypes.int32, 35)
+  spec = TileGatherSpec("score", (16, 16), (0, 1), (0, 1), (0, 0), 1)
+  carrier = grouped_tile_load(source, spec, i0, i1)
+  assert carrier.op is Ops.TILE_GATHER and carrier.src[0].op is Ops.LOAD
+  assert carrier.src[0].src[0].op is Ops.INDEX
+  assert carrier.arg.source_axes == (0, 1) and carrier.arg.tile_axes == (0, 1)
+  assert lower_tile_gather(carrier, role="score", dtype=dtypes.half) is carrier
+
+def test_grouped_tile_load_rejects_missing_or_non_integer_indices():
+  from tinygrad.uop.ops import TileGatherSpec
+  from tinygrad.schedule.wmma import grouped_tile_load
+  source = UOp.placeholder((16, 16), dtypes.half, 33)
+  spec = TileGatherSpec("score", (16, 16), (0, 1), (0, 1))
+  i = UOp(Ops.CONST, dtypes.int32, (), 0)
+  with pytest.raises(ValueError, match="one index"):
+    grouped_tile_load(source, spec, i)
+  with pytest.raises(ValueError, match="integer"):
+    grouped_tile_load(source, spec, UOp(Ops.CONST, dtypes.float32, (), 0), i)
