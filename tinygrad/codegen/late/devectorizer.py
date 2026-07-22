@@ -493,8 +493,11 @@ def reduce_to_acc(ctx:ReduceContext, red:UOp):
       # still supplies the output-Hd value for the accumulator update.
       if input_specs and input_specs[0].primary_repeated and inp.dtype.count > 1:
         inp = inp.gep(0)
-      v_inp = _load_v_at_reduce_pos(auxiliary_inputs[0], composite, input_ranges, reduce_range, inp._shape,
-                                    input_specs[0].range_axes, input_specs[0].lane_group) if auxiliary_inputs else None
+      # Auxiliary V loads are admitted only after a real shaped-fragment
+      # lowering exists.  Until then the generic scalar reducer must remain
+      # authoritative; passing a lane-shaped LOAD here creates invalid ALU
+      # shape pairs and can corrupt unrelated CPU/AMD attention kernels.
+      v_inp = None
       
       # Create accumulators (common to all combines)
       accs = []
