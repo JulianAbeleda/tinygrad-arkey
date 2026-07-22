@@ -34,7 +34,13 @@ def lower_attention_semantic(att:UOp) -> UOp:
   if att.arg.kv_block and len(att.src) >= 5:
     q, k, v = (att.src[2], att.src[3], att.src[4])
     b, h, q_len, hd = q.shape
-    if hd in {1, 64, 128} and q_len == 2 and k.shape == v.shape == (b, h, 3, hd) and \
+    tiny_shape = q_len == 2 and k.shape == v.shape == (b, h, 3, hd)
+    # First tile-eligible admission. Keep it deliberately exact while the
+    # semantic path gains source-level WMMA coverage; broader prefill shapes
+    # retain ordinary SDPA until geometry selection is proven.
+    wmma_shape = q.dtype == k.dtype == v.dtype == dtypes.half and hd in {64, 128} and \
+      q_len == 16 and k.shape == v.shape == (b, h, 16, hd)
+    if hd in {1, 64, 128} and (tiny_shape or wmma_shape) and \
        q.dtype == k.dtype == v.dtype and q.dtype in {dtypes.float, dtypes.half}:
       from tinygrad import Tensor
       # Hd stays a logical output axis rather than a giant vector dtype. This
@@ -44,15 +50,16 @@ def lower_attention_semantic(att:UOp) -> UOp:
       if att.arg.mask_present:
         if len(att.src) != 6: return att.src[0]
         score = score + Tensor(att.src[5])
-      score = score.reshape(b, h, 2, 3, 1).expand(b, h, 2, 3, hd)
-      logical_v = Tensor(v).cast(att.arg.qk_dtype).reshape(b, h, 1, 3, hd).expand(*score.shape).uop.scoped_value((0, 1, None, 3, 4))
+      kv_len = k.shape[2]
+      score = score.reshape(b, h, q_len, kv_len, 1).expand(b, h, q_len, kv_len, hd)
+      logical_v = Tensor(v).cast(att.arg.qk_dtype).reshape(b, h, 1, kv_len, hd).expand(*score.shape).uop.scoped_value((0, 1, None, 3, 4))
       slots = (AccumulatorSlot(Ops.MAX, att.arg.qk_dtype, float("-inf"), "m"),
                AccumulatorSlot(Ops.ADD, att.arg.qk_dtype, 0.0, "l"),
                AccumulatorSlot(Ops.ADD, att.arg.qk_dtype, 0.0, "acc"))
       red = score.uop.composite_reduce(*slots, axis=(3,), inputs=(logical_v,), combine_fn="online_softmax")
       acc = Tensor(UOp(Ops.REDUCE_SLOT, att.arg.qk_dtype, (red,), 2))
       den = Tensor(UOp(Ops.REDUCE_SLOT, att.arg.qk_dtype, (red,), 1))
-      return (acc / den).reshape(b, h, 2, hd).cast(att.arg.output_dtype).uop
+      return (acc / den).reshape(b, h, q_len, hd).cast(att.arg.output_dtype).uop
   return att.src[0]
 
 pm_attention_semantic = PatternMatcher([
