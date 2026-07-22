@@ -130,7 +130,7 @@ COMBINE_STEP_REGISTRY = {
     "online_softmax": (_combine_step_online_softmax, 3, lambda slot: slot.identity, 2),
 }
 
-def _handle_no_range_generic(inp, composite, red):
+def _handle_no_range_generic(inp, composite, red, auxiliary_inputs=()):
     """Generic no-range handler: iterate over elements using combine step function."""
     from tinygrad.uop.ops import Ops, dtypes, identity_element
     inp_lst = _horizontal_reduce(inp, composite.slots[0].dtype)
@@ -154,10 +154,22 @@ def _handle_no_range_generic(inp, composite, red):
         ident_val = slot.identity if slot.identity is not None else identity_element(slot.op, slot.dtype.scalar())
         state.append(red.const(slot.dtype, ident_val))
     
-    # Iterate over elements
-    for i in range(0, len(inp_lst), elems_per_step):
-        group = inp_lst[i:i + elems_per_step]
-        state = list(step_fn(*state, *group))
+    # Separate auxiliary inputs are lane-aligned logical elements. The packed
+    # representation remains supported for composites that place every input
+    # in the primary vector.
+    if auxiliary_inputs:
+        if len(auxiliary_inputs) + 1 != elems_per_step:
+            raise RuntimeError(f"composite {composite.combine_fn!r} expects {elems_per_step} logical inputs, "
+                               f"got one primary and {len(auxiliary_inputs)} auxiliary inputs")
+        auxiliary_lanes = [_horizontal_reduce(x, composite.slots[-1].dtype) for x in auxiliary_inputs]
+        if any(len(x) != len(inp_lst) for x in auxiliary_lanes):
+            raise RuntimeError("composite auxiliary inputs must have the same horizontal lane count as the primary input")
+        for i, primary in enumerate(inp_lst):
+            state = list(step_fn(*state, primary, *(x[i] for x in auxiliary_lanes)))
+    else:
+        for i in range(0, len(inp_lst), elems_per_step):
+            group = inp_lst[i:i + elems_per_step]
+            state = list(step_fn(*state, *group))
     
     return tuple(state)
 
@@ -170,8 +182,9 @@ def _lower_composite_no_range_pm(red):
     handler.
     """
     from tinygrad.uop.ops import CompositeReduce, AxisType
-    if not isinstance(red.arg[0], CompositeReduce): return None
-    if len(red.src) >= 2: return None
+    composite = red.arg[0]
+    if not isinstance(composite, CompositeReduce) and not (hasattr(composite, "slots") and hasattr(composite, "combine_fn")): return None
+    if any(x.op is Ops.RANGE for x in red.src[1:]): return None
 
     # Pre-rangeify: the REDUCE has an axis but no ranges yet.  Create synthetic
     # RANGEs so the range path in reduce_to_acc can lower it correctly.
@@ -180,16 +193,21 @@ def _lower_composite_no_range_pm(red):
         try:
             shape = red.src[0].shape
             rngs = tuple(UOp.range(UOp.const(dtypes.weakint, shape[i]), i, AxisType.REDUCE) for i in axis)
-            return UOp(Ops.REDUCE, red.dtype, src=(red.src[0],) + rngs, arg=(red.arg[0], ()))
+            return UOp(Ops.REDUCE, red.dtype, src=(red.src[0],) + rngs + red.src[1:], arg=(composite, ()))
         except Exception:
             pass
 
-    result = _handle_no_range_generic(red.src[0], red.arg[0], red)
+    result = _handle_no_range_generic(red.src[0], composite, red, red.src[1:])
     return UOp(Ops.TUPLE, dtypes.void, result)
 
 def resolve_reduce_slot_tensor(slot):
     """Graph-local projection from the structured composite reduction result."""
     src = slot.src[0]
+    # Horizontal expansion can leave the consumed reduction-axis carrier
+    # around the structured result. It is not an output expansion: every
+    # TUPLE member is already the fully reduced scalar state.
+    if src.op is Ops.UNROLL and len(src.src) == 1 and src.src[0].op is Ops.TUPLE:
+      src = src.src[0]
     if src.op is not Ops.TUPLE: return None
     if not isinstance(slot.arg, int) or not 0 <= slot.arg < len(src.src):
       raise RuntimeError(f"invalid composite reduction slot {slot.arg}")

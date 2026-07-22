@@ -127,6 +127,13 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
 
   # remove reduce
   sink = graph_rewrite(sink, pm_reduce+gep_pushing, ctx=ReduceContext(), name="remove_reduce")
+  # A composite REDUCE lowered during the pass above can be shared by several
+  # REDUCE_SLOT users. Resolve those projections after the structured TUPLE is
+  # present, then let dead graph nodes disappear naturally.
+  from tinygrad.codegen.late.composite_combines import resolve_reduce_slot_tensor
+  slot_subs = {u: resolved for u in sink.toposort() if u.op is Ops.REDUCE_SLOT
+               if (resolved:=resolve_reduce_slot_tensor(u)) is not None}
+  if slot_subs: sink = sink.substitute(slot_subs)
   if ren.target.device == "AMD":
     sink = graph_rewrite(sink, pm_group_wmma_reg_store, name="group wmma reg ownership")
 

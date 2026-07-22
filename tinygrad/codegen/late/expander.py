@@ -157,15 +157,27 @@ expander = PatternMatcher([
 # ****
 
 def fix_reduce_unroll(x:UOp):
-  reduce_range, reduce_expand = partition(x.src[1:], lambda y: y.op is Ops.RANGE)
-  if len(reduce_expand) == 0: return None
-  reduce_expand = [x for x in reduce_expand if x.op is not Ops.CONST]
-  assert all(x.op is Ops.UNROLL for x in reduce_expand), f"not all UNROLLS in {reduce_expand}"
+  reduce_range, expanded_srcs = partition(x.src[1:], lambda y: y.op is Ops.RANGE)
+  expanded_srcs = [y for y in expanded_srcs if y.op is not Ops.CONST]
+  if len(expanded_srcs) == 0: return None
+
+  # A rewritten RANGE is an integer UNROLL over a CONST lane vector. Composite
+  # REDUCEs may also own logical-element inputs which expand over the same axis;
+  # those are values, not range carriers, and must remain paired with the
+  # horizontally reduced primary input.
+  def is_range_carrier(y:UOp) -> bool:
+    if y.dtype.scalar() not in dtypes.ints: return False
+    if y.op is Ops.UNROLL and len(y.src) == 1:
+      return y.src[0].op is Ops.CONST or (y.src[0].op is Ops.STACK and all(z.op is Ops.CONST for z in y.src[0].src))
+    return y.op is Ops.STACK and all(z.op is Ops.CONST for z in y.src)
+  range_expands, auxiliary_expands = partition(expanded_srcs, is_range_carrier)
+  if len(range_expands) == 0: return None
   ret = x.src[0]
-  if len(contract_axis:=flatten(x.arg for x in reduce_expand)):
+  if len(contract_axis:=tuple(dedup(flatten(y.arg for y in range_expands if y.op is Ops.UNROLL)))):
     ret = UOp(Ops.CONTRACT, x.dtype.vec(prod(x[1] for x in contract_axis)), (ret,), tuple(contract_axis), tag=1)
   # REDUCE supports both "horizontal" reduction and range reduction. the horizontal elements are taken in the nearest group
-  return x.replace(src=(ret,)+tuple(reduce_range))
+  auxiliary_values = tuple(y.src[0] if y.op is Ops.UNROLL else y for y in auxiliary_expands)
+  return x.replace(src=(ret,)+tuple(reduce_range)+auxiliary_values)
 
 def fix_store_unroll(x:UOp):
   store_expand, store_range = partition(x.src[2:], lambda y: y.op is Ops.UNROLL)

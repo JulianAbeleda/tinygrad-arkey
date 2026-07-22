@@ -1,4 +1,6 @@
 """Generic scoped nested-reduction boundary, intentionally not attention-specific."""
+import numpy as np
+
 from tinygrad import Tensor, dtypes
 from tinygrad.uop import Ops
 from tinygrad.uop.ops import AccumulatorSlot, UOp, ScopedReduceSpec
@@ -49,3 +51,27 @@ def test_scoped_reduce_keeps_producer_inputs_and_ssa_result_explicit():
   # recursively re-enter rangeify because it lowers directly to fallback.
   calls = Tensor(result).schedule_linear().src
   assert len(calls) == 1
+
+
+def test_auxiliary_value_survives_one_owned_composite_reduction():
+  """Decisive feasibility gate: inner dot + mapped value + outer state reduce."""
+  rng = np.random.default_rng(0)
+  lhs_np = rng.standard_normal((1, 1, 3, 4), dtype=np.float32)
+  rhs_np = rng.standard_normal((1, 1, 5, 4), dtype=np.float32)
+  value_np = rng.standard_normal((1, 1, 5, 1), dtype=np.float32)
+
+  lhs, rhs, value = Tensor(lhs_np, device="CPU"), Tensor(rhs_np, device="CPU"), Tensor(value_np, device="CPU")
+  score = lhs @ rhs.transpose(-2, -1)
+  slots = (AccumulatorSlot(Ops.MAX, dtypes.float32, float("-inf"), "m"),
+           AccumulatorSlot(Ops.ADD, dtypes.float32, 0.0, "l"),
+           AccumulatorSlot(Ops.ADD, dtypes.float32, 0.0, "acc"))
+  mapped_value = value.transpose(-2, -1).expand(*score.shape)
+  red = score.uop.composite_reduce(*slots, axis=(3,), inputs=(mapped_value.uop,), combine_fn="online_softmax")
+  l_val = Tensor(UOp(Ops.REDUCE_SLOT, dtypes.float32, (red,), 1))
+  acc_val = Tensor(UOp(Ops.REDUCE_SLOT, dtypes.float32, (red,), 2))
+  result = acc_val / l_val
+
+  score_np = lhs_np @ np.swapaxes(rhs_np, -1, -2)
+  weights = np.exp(score_np - score_np.max(axis=-1, keepdims=True))
+  expected = (weights * value_np.swapaxes(-2, -1)).sum(axis=-1, keepdims=True) / weights.sum(axis=-1, keepdims=True)
+  np.testing.assert_allclose(result.numpy(), expected, rtol=1e-5, atol=1e-5)

@@ -10,7 +10,9 @@ def flatten_range(r:UOp) -> UOp|None:
   rngs = r.src[off:]
   if not len(rngs): return None
   new_rngs = [x for x in UOp.sink(*rngs).toposort() if x.op is Ops.RANGE]
-  return r.replace(src=r.src[:off]+tuple(new_rngs))
+  auxiliary = tuple(x for x in rngs if x.op is not Ops.RANGE)
+  new_src = r.src[:off]+tuple(new_rngs)+auxiliary
+  return r.replace(src=new_src) if new_src != r.src else None
 
 pm_flatten_range = PatternMatcher([
   # real ranges only
@@ -22,7 +24,8 @@ def count_divmod(x:UOp) -> int: return sum(u.op in {Ops.FLOORDIV, Ops.FLOORMOD} 
 def simplify_merge_adjacent(u:UOp) -> UOp|None:
   reduce_ranges = [x.ranges for x in u.backward_slice_with_self if x.op is Ops.REDUCE]
   # on END we only want to merge adjacent ranges, on REDUCE we want to try all combinations
-  for r0, r1 in (zip(u.ended_ranges, u.ended_ranges[1:]) if u.op is Ops.END else itertools.permutations(u.ended_ranges, 2)):
+  ended_ranges = tuple(x for x in u.ended_ranges if x.op is Ops.RANGE)
+  for r0, r1 in (zip(ended_ranges, ended_ranges[1:]) if u.op is Ops.END else itertools.permutations(ended_ranges, 2)):
     # check same type
     if r0.arg[-1] == r1.arg[-1]:
       # check if the ranges to merge are in the same reduces
@@ -54,7 +57,7 @@ pm_simplify_ranges = PatternMatcher([
   (UPat((Ops.END, Ops.REDUCE), name="u"), simplify_merge_adjacent),
   (UPat(Ops.INDEX, name="idx"), mark_gated),
   # reduce ranges can't be shrunk
-  (UPat(Ops.REDUCE, name="red"), lambda ctx, red: ctx.update({r:r.src[0] for r in red.src[1:]})),
+  (UPat(Ops.REDUCE, name="red"), lambda ctx, red: ctx.update({r:r.src[0] for r in red.src[1:] if r.op is Ops.RANGE})),
   (UPat(Ops.SINK, name="x"), lambda ctx, x: do_substitute(ctx, x, lambda r,c: r.replace(src=(c,)))),
 ])
 

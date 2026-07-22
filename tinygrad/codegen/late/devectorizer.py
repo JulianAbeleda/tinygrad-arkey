@@ -404,7 +404,12 @@ def _load_v_at_reduce_pos(v_src:UOp, composite, input_ranges, reduce_range, scor
 
 def reduce_to_acc(ctx:ReduceContext, red:UOp):
   from tinygrad.uop.ops import CompositeReduce
-  composite = red.arg[0] if isinstance(red.arg, tuple) and len(red.arg) > 0 and isinstance(red.arg[0], CompositeReduce) else None
+  composite_arg = red.arg[0] if isinstance(red.arg, tuple) and len(red.arg) > 0 else None
+  # CompositeReduce is immutable compiler data. Recognize its structural
+  # contract too so graph reconstruction/module identity cannot silently route
+  # a stateful reduction through ordinary ALU lowering.
+  composite = composite_arg if isinstance(composite_arg, CompositeReduce) or \
+    (hasattr(composite_arg, "slots") and hasattr(composite_arg, "combine_fn")) else None
   inp = red.src[0]
   raw_rest = red.src[1:]
   range_srcs = tuple(x for x in raw_rest if x.op is Ops.RANGE)
@@ -416,8 +421,18 @@ def reduce_to_acc(ctx:ReduceContext, red:UOp):
   extra_srcs = tuple(x for x in raw_rest if x.op is not Ops.RANGE)
 
   # Composite reduce with no ranges yet: rangeify inline
-  if isinstance(red.arg[0], CompositeReduce) and len(reduce_range) == 0:
+  if composite is not None and len(reduce_range) == 0:
     axis = red.arg[1]
+    if not axis:
+      # The expander has horizontally materialized the owned reduction axis.
+      # Weak-integer CONST/STACK sources are range metadata; all remaining
+      # sources are lane-aligned logical inputs to the composite combine.
+      def is_materialized_range_src(x:UOp) -> bool:
+        return x.dtype.scalar() == dtypes.weakint and (x.op is Ops.CONST or
+          (x.op is Ops.STACK and all(y.op is Ops.CONST for y in x.src)))
+      auxiliary_inputs = tuple(x for x in extra_srcs if not is_materialized_range_src(x))
+      from tinygrad.codegen.late.composite_combines import _handle_no_range_generic
+      return UOp(Ops.TUPLE, dtypes.void, _handle_no_range_generic(inp, composite, red, auxiliary_inputs))
     rngs = tuple(UOp.range(UOp.const(dtypes.weakint, red.src[0].shape[i]), i, AxisType.REDUCE) for i in axis)
     red = UOp(Ops.REDUCE, red.dtype, src=(red.src[0],) + rngs + extra_srcs, arg=(red.arg[0], ()))
     inp, reduce_range = red.src[0], rngs
@@ -432,8 +447,7 @@ def reduce_to_acc(ctx:ReduceContext, red:UOp):
       if x.op is Ops.RANGE and x not in reduce_range and x not in ended_ranges))
 
     # Check for composite reduce (multi-accumulator)
-    if isinstance(red.arg[0], CompositeReduce):
-      composite = red.arg[0]
+    if composite is not None:
       
       # Auxiliary logical-element inputs are ordinary REDUCE sources.
       v_inp = _load_v_at_reduce_pos(extra_srcs[0], composite, input_ranges, reduce_range, inp._shape) if extra_srcs else None
@@ -458,11 +472,15 @@ def reduce_to_acc(ctx:ReduceContext, red:UOp):
       result = combine_fn(ctx, accs, acc_reads, inp, composite, input_ranges, reduce_range, red, v_inp=v_inp)
       return UOp(Ops.TUPLE, dtypes.void, result)
     
+    if not isinstance(red.arg[0], Ops):
+      raise RuntimeError(f"non-ALU reduction reached ordinary lowering: arg={red.arg!r}, composite={composite!r}, src_ops={[x.op for x in red.src]}")
     identity = red.const(red.dtype, identity_element(red.arg[0], red.dtype.scalar()))
     acc = UOp.placeholder((1,), red.dtype, ctx.acc_num, AddrSpace.REG).replace(tag=red.tag if isinstance(red.tag, RegisterResidentAccumulator) else None)
     acc_init = acc.after(*input_ranges).index(UOp.const(dtypes.weakint, 0)).store(identity)
     lst = [acc.after(acc_init, *reduce_range).index(UOp.const(dtypes.weakint, 0))] + lst  # put acc as the first element
     ctx.acc_num += 1
+  if not isinstance(red.arg[0], Ops):
+    raise RuntimeError(f"non-ALU no-range reduction: arg={red.arg!r}, composite={composite!r}, src_ops={[x.op for x in red.src]}")
   ret = functools.reduce(lambda x,y: x.alu(red.arg[0], y), lst)
   if len(reduce_range) == 0: return ret
   end = acc.index(UOp.const(dtypes.weakint, 0)).store(ret).end(*reduce_range).rtag("mergeable")
@@ -496,7 +514,7 @@ pm_reduce = PatternMatcher([
   # REDUCE -> DEFINE_ACC+ASSIGN, then merge ENDs with same range
   (UPat(Ops.REDUCE, name="red"), reduce_to_acc),
   # REDUCE_SLOT is only a projection from the graph-local TUPLE result.
-  (UPat(Ops.REDUCE_SLOT, name="slot"), _resolve_reduce_slot_pm),
+  (UPat(Ops.REDUCE_SLOT, src=(UPat(),), name="slot"), _resolve_reduce_slot_pm),
   (UPat(Ops.SINK, name="sink"), merge_reduce_ends),
   # tensor core built in accumulate
   (UPat(Ops.WMMA, name="wmma") + UPat.var("add"),
