@@ -315,20 +315,17 @@ def remove_bufferize(src:UOp, buf:UOp, idx:UOp):
     # converting REDUCE axes to LOOP (unlike PCONTIG).
     # Do NOT fuse if any reduce consumer is a matmul (ADD+MUL) — those need
     # their own TC scheduling and should stay in separate kernels.
-    if PCONTIG >= 0:
-      matmul_reduces = [r for r in reduces if r.arg[0] is Ops.ADD and
-        (r.src[0].op is Ops.MUL or (r.src[0].op is Ops.CAST and r.src[0].src[0].op is Ops.MUL))]
-      if matmul_reduces:
-        return None
-      all_subs = [(k,v) for k,v in zip(buf.src[1:], idx.src[1:]) if k.op is not Ops.CONST]
-      if all_subs:
-        try:
-          ret = src.substitute(dict(all_subs), extra_pm=pm_gate_substitute)
-          return ret
-        except Exception:
-          pass
-    else:
-      return None
+    matmul_reduces = [r for r in reduces if r.arg[0] is Ops.ADD and
+      (r.src[0].op is Ops.MUL or (r.src[0].op is Ops.CAST and r.src[0].src[0].op is Ops.MUL))]
+    if matmul_reduces:
+      return None  # stay in separate kernel for its own TC scheduling
+    all_subs = [(k,v) for k,v in zip(buf.src[1:], idx.src[1:]) if k.op is not Ops.CONST]
+    if all_subs:
+      try:
+        ret = src.substitute(dict(all_subs), extra_pm=pm_gate_substitute)
+        return ret
+      except Exception:
+        pass
 
   # if it makes it here, the bufferize is removed
   # this is the ranges replaced
