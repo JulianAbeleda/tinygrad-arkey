@@ -16,6 +16,7 @@ from tinygrad import Tensor, dtypes
 from tinygrad.helpers import NOOPT
 from tinygrad.uop.ops import UOp, Ops, AxisType, AccumulatorSlot, CompositeReduce, CompositeInputSpec, _normalize_composite_shape
 from tinygrad.codegen.late.devectorizer import _load_v_at_reduce_pos
+from tinygrad.schedule.rangeify import lower_attention_semantic
 
 
 class TestCompositeReduce(unittest.TestCase):
@@ -30,6 +31,16 @@ class TestCompositeReduce(unittest.TestCase):
     slot_sum = AccumulatorSlot(op=Ops.ADD, dtype=dtypes.float32, identity=0.0, name="sum")
     slot_max = AccumulatorSlot(op=Ops.MAX, dtype=dtypes.float32, identity=float("-inf"), name="max")
     return slot_sum, slot_max
+
+  def test_bounded_attention_producer_emits_all_three_slots(self):
+    from tinygrad.llm.flash_prefill_attention import shared_prefill_attention
+    q = Tensor.empty(1, 1, 16, 16, dtype=dtypes.half)
+    k = Tensor.empty(1, 1, 16, 16, dtype=dtypes.half)
+    v = Tensor.empty(1, 1, 16, 16, dtype=dtypes.half)
+    lowered = lower_attention_semantic(shared_prefill_attention(q, k, v).uop)
+    reds = [u for u in lowered.toposort() if u.op is Ops.REDUCE and isinstance(u.arg[0], CompositeReduce)]
+    self.assertEqual(len(reds), 1)
+    self.assertEqual(tuple(s.name for s in reds[0].arg[0].slots), ("m", "l", "acc"))
 
   def test_composite_reduce_is_real_composite_reduce_uop(self):
     t = Tensor.arange(1, 17, dtype=dtypes.float32).reshape(16)

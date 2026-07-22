@@ -513,12 +513,12 @@ def reduce_to_acc(ctx:ReduceContext, red:UOp):
         accs.append(acc)
         acc_reads.append(acc_read)
       
-      from tinygrad.codegen.late.composite_combines import COMBINE_REGISTRY, _independent_slots
+      from tinygrad.codegen.late.composite_combines import COMBINE_REGISTRY, _independent_slots, validate_composite_state
       combine_fn = COMBINE_REGISTRY.get(composite.combine_fn)
       if combine_fn is None and composite.combine_fn is not None:
         raise RuntimeError(f"unknown composite combine {composite.combine_fn!r}")
       combine_fn = combine_fn or _independent_slots
-      result = combine_fn(ctx, accs, acc_reads, inp, composite, input_ranges, reduce_range, red, v_inp=v_inp)
+      result = validate_composite_state(combine_fn(ctx, accs, acc_reads, inp, composite, input_ranges, reduce_range, red, v_inp=v_inp), composite)
       return UOp(Ops.TUPLE, dtypes.void, result if isinstance(result, tuple) else (result,)).replace(tag=("composite_reduce", composite))
     
     if not isinstance(red.arg[0], Ops):

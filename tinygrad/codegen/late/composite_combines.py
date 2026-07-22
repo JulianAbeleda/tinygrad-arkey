@@ -13,6 +13,19 @@ import functools
 from tinygrad.uop.ops import UOp, Ops, dtypes, AxisType, AddrSpace
 from tinygrad.uop.ops import identity_element, CompositeReduce, AccumulatorSlot
 
+def validate_composite_state(result, composite):
+    """Require one state value per declared accumulator slot.
+
+    Composite reductions are a single producer.  Silently accepting a partial
+    tuple would let REDUCE_SLOT projections observe unrelated or missing state
+    and is therefore always a lowering error.
+    """
+    values = result if isinstance(result, tuple) else (result,)
+    expected = len(composite.slots)
+    if len(values) != expected:
+        raise RuntimeError(f"invalid composite reduction slot: composite {composite.combine_fn!r} produced {len(values)} slots, expected {expected}")
+    return tuple(values)
+
 def _independent_slots(ctx, accs, acc_reads, inp, composite, input_ranges, reduce_range, red, v_inp=None):
     """Default combine: each slot independently reduces the input using its op."""
     results = []
@@ -142,7 +155,7 @@ def _handle_no_range_generic(inp, composite, red, auxiliary_inputs=()):
         for slot in composite.slots:
             slot_lst = _horizontal_reduce(inp, slot.dtype)
             results.append(functools.reduce(lambda x,y: x.alu(slot.op, y), slot_lst))
-        return tuple(results)
+        return validate_composite_state(tuple(results), composite)
     
     entry = COMBINE_STEP_REGISTRY.get(composite.combine_fn)
     if entry is None or entry[0] is None:
@@ -192,7 +205,7 @@ def _handle_no_range_generic(inp, composite, red, auxiliary_inputs=()):
             group = inp_lst[i:i + elems_per_step]
             state = list(step_fn(*state, *group))
     
-    return tuple(state)
+    return validate_composite_state(tuple(state), composite)
 
 def _lower_composite_no_range_pm(red):
     """PatternMatcher callback: lower composite REDUCE with no ranges.
