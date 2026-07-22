@@ -1,6 +1,7 @@
+import pytest
 from tinygrad.dtype import dtypes
 from tinygrad.uop.ops import Ops, UOp
-from tinygrad.schedule.wmma import online_softmax_tile
+from tinygrad.schedule.wmma import online_softmax_tile, adapt_wmma_fragment
 
 
 def _frag(dtype=dtypes.half):
@@ -70,3 +71,14 @@ def test_online_softmax_tile_candidate_report_is_fail_closed_without_backend_evi
   assert report["qk_wmma_candidate"] and report["pv_wmma_candidate"]
   assert not report["source_evidence"] and not report["isa_evidence"]
   assert not report["production_promotion"] and report["reasons"] == ()
+
+
+def test_source_to_shaped_wmma_adapter_requires_exact_fragment_abi():
+  half_tile = _frag()
+  acc_tile = UOp.placeholder((16, 16), dtypes.float32, 9)
+  assert adapt_wmma_fragment(half_tile, role="score", dtype=dtypes.half) is half_tile
+  assert adapt_wmma_fragment(acc_tile, role="acc", dtype=dtypes.float32) is acc_tile
+  with pytest.raises(ValueError, match="logical 16x16"):
+    adapt_wmma_fragment(UOp.placeholder((16,), dtypes.half, 10), role="v", dtype=dtypes.half)
+  with pytest.raises(ValueError, match="dtype"):
+    adapt_wmma_fragment(half_tile, role="score", dtype=dtypes.float32)

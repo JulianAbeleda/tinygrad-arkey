@@ -6,6 +6,23 @@ from tinygrad.dtype import DType
 from tinygrad.uop.ops import Ops, UOp
 
 
+def adapt_wmma_fragment(source: UOp, *, role: str, dtype: DType) -> UOp:
+  """Validate/adapt one logical tile at the SHAPED_WMMA boundary.
+
+  Composite lowering must perform the real range ownership and packing before
+  this point.  This primitive deliberately does not reshape or broadcast: it
+  accepts only an exact 16x16 carrier, making invalid score/V lane mappings
+  fail immediately instead of reaching backend codegen with corrupted lanes.
+  """
+  if role not in ("q", "k", "score", "v", "acc"):
+    raise ValueError(f"unknown WMMA fragment role: {role}")
+  if source.shape != (16, 16):
+    raise ValueError(f"{role} fragment must be a logical 16x16 tile")
+  if source.dtype.base != dtype:
+    raise ValueError(f"{role} fragment dtype does not match the tile ABI")
+  return source
+
+
 @dataclass(frozen=True)
 class OnlineSoftmaxTile:
   """Declarative register-tile contract for fused attention.
