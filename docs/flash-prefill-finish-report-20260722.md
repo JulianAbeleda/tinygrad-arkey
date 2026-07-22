@@ -127,3 +127,17 @@ No speedup to wire into 14B. Per §2.5: "do NOT wire a non-win into the model."
 3. Honest code path (no misleading PCONTIG gate)
 4. Zero correctness regression (max_rel_err = 0.0)
 5. Test suite unregressed (36 passed, 10 skipped, 4 xfailed)
+
+---
+
+## ⭐ CLAUDE VERIFICATION + COMPLETION (2026-07-22)
+
+Tested the primitive approach to conclusion (per user: "if WMMA needs a reduce, test first"). Verified findings:
+
+- **M1 adds no functional win.** The shipped model (`model.py:591-597`) ALREADY uses fp16 probs (`s.cast(float16) @ vg`) → PV is already WMMA-eligible. deepseek's per-kernel "both matmuls WMMA" is real but the model already had it; the rangeify cleanup changed no behavior that matters.
+- **My "~1.5× via fp16 probs" was a false alarm** — measured vs an fp32-probs SDPA baseline the model doesn't use. Against the real fp16-probs baseline it's ~1.02× (deepseek was correct). Corrected.
+- **The primitive DOES exist for matmul + ONE reduce:** `(a@b).max(-1)` fuses to one kernel, WMMA intact, score resident (Piece 1). The wall is specifically softmax's TWO passes (max, then sum) over the FULL T×KV score: rangeify materializes the whole 8 MB score before softmax and does not tile by query-row.
+- **M3 verified at T=KV=2048:** fused ~1150µs vs SDPA(fp16-probs) — no meaningful gain; the 8 MB score spill dominates and is untouched.
+- **Fundamental wall confirmed by test:** keeping the score resident requires online-softmax (a KV-block LOOP carrying running max/sum/acc). WMMA attaches to a REDUCE; the online-softmax carry is a LOOP-with-state, not a REDUCE. Every existing mechanism confirms the exclusivity: PCONTIG fuses but converts REDUCE→LOOP (0 WMMA); TC_OPT can't rescue it; deepseek's REDUCE-preserving fusion keeps the matmul REDUCE (WMMA) but therefore CANNOT remove the score buffer (its own `matmul_reduces` guard). 
+
+**COMPLETION VERDICT:** deepseek's honest fallback (M2 blocked, M3 no-win, M4 skip) is CORRECT and verified. There is **no shippable win** reachable by knobs or incremental rangeify changes. The full 2.45× flash win requires a genuine scheduler extension — row-tiled resident-score flash where the KV contraction is WMMA *inside* a carried-state loop (WMMA-on-loop-accumulation) OR a composite-accumulator REDUCE. That is a multi-week compiler project, not a primitive tweak. The primitive route was tested to its limit; the limit is architectural.
