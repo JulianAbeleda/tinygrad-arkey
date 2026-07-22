@@ -366,7 +366,7 @@ def horizontal_reduce(inp:UOp, out_dtype:DType) -> list[UOp]:
     return [inp.gep(tuple(range(i, inp.dtype.count, horizontal_amount))) for i in range(0, horizontal_amount)]
   return [inp]
 
-def _load_v_at_reduce_pos(v_src:UOp, composite, input_ranges, reduce_range, score_shape=None, axis_map=None):
+def _load_v_at_reduce_pos(v_src:UOp, composite, input_ranges, reduce_range, score_shape=None, axis_map=None, lane_group=1):
   """Create a LOAD from V at the current reduce position.
   Uses RANGE UOps from input_ranges and reduce_range to build indices.
   """
@@ -380,6 +380,15 @@ def _load_v_at_reduce_pos(v_src:UOp, composite, input_ranges, reduce_range, scor
     # omitted, preserving the trailing contiguous lane for a vector load.
     idxs = tuple(range_by_axis[axis] if axis is not None else UOp.const(dtypes.weakint, 0)
                  for axis in axis_map if axis != -1)
+    # A grouped lane carrier is lowered as an explicit vector of scalar loads.
+    # This preserves source indexing (and therefore aliasing/layout semantics)
+    # while making the logical Hd lane visible to the combine.  Backends may
+    # later replace this STACK/vectorize with a fragment load; no backend
+    # assumptions are made here.
+    if lane_group > 1:
+      scalar_dtype = composite.slots[-1].dtype.scalar()
+      return UOp.vectorize(*(source.index(*(idxs[:-1] + (idxs[-1] + UOp.const(dtypes.weakint, lane),))).load(dtype=scalar_dtype)
+                            for lane in range(lane_group)))
     return source.index(*idxs).load(dtype=composite.slots[-1].dtype)
   # Build axis -> RANGE mapping from all visible ranges
   range_by_axis = {}
@@ -481,7 +490,7 @@ def reduce_to_acc(ctx:ReduceContext, red:UOp):
       if input_specs and input_specs[0].primary_repeated and inp.dtype.count > 1:
         inp = inp.gep(0)
       v_inp = _load_v_at_reduce_pos(auxiliary_inputs[0], composite, input_ranges, reduce_range, inp._shape,
-                                    input_specs[0].range_axes) if auxiliary_inputs else None
+                                    input_specs[0].range_axes, input_specs[0].lane_group) if auxiliary_inputs else None
       
       # Create accumulators (common to all combines)
       accs = []
