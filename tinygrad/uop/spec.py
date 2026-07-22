@@ -186,10 +186,14 @@ spec_tensor = PatternMatcher([
    lambda x: x.src[1].dtype.count == x.src[2].dtype.count),
   (UPat((Ops.PERMUTE, Ops.FLIP), name="mv", src=(UPat(),)), lambda mv: isinstance(mv.arg, tuple)),
 
-  # REDUCE has arg=(op, axis_tuple), src[1:] are ranges after lowering
+  # REDUCE has arg=(op, axis_tuple). Ordinary reductions only carry ranges
+  # after lowering; a CompositeReduce may additionally carry explicit logical
+  # element inputs. Those inputs are part of the reduction body, not hidden
+  # metadata, which lets a nested producer remain register-scoped.
   (UPat(Ops.REDUCE, src=(UPat(),), allow_any_len=True, name="x"),
    lambda x: isinstance(x.arg, tuple) and len(x.arg) == 2 and (x.arg[0] in {Ops.ADD, Ops.MUL, Ops.MAX} or hasattr(x.arg[0], 'slots'))
-   and isinstance(x.arg[1], tuple) and all(y.dtype in (dtypes.weakint, dtypes.int) for y in x.src[1:])),
+   and isinstance(x.arg[1], tuple) and all(y.dtype in (dtypes.weakint, dtypes.int) for y in x.src[1:] if y.op is Ops.RANGE)
+   and (hasattr(x.arg[0], 'slots') or all(y.op is Ops.RANGE for y in x.src[1:]))),
 
   # REDUCE_SLOT reads slot i from a composite REDUCE
   (UPat(Ops.REDUCE_SLOT, src=(UPat(),), name="x"),

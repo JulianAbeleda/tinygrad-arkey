@@ -62,13 +62,23 @@ def shared_attention_attribution(model) -> dict[str, Any]:
   """
   config = model.config
   requested = bool(getattr(config, "prefill_tc_attn", False) and getattr(config, "prefill_v2", False))
+  # This attribution is consumed by whole-prefill evidence.  The bounded
+  # primitive is an inspectable correctness/residency candidate, but it is not
+  # the selected lowering: lower_attention_semantic currently returns the
+  # ordinary SDPA source for every workload.  Keep candidate evidence and
+  # runtime selection disjoint so a benchmark cannot promote a request.
   return {
-    "schema": "shared-prefill-attention-route.v1",
+    "schema": "shared-prefill-attention-route.v2",
     "requested": requested,
     "boundary": "shared_prefill_attention" if requested else "scaled_dot_product_attention",
-    "selected_lowering": "bounded_online_primitive" if requested else "ordinary_sdpa",
+    "semantic_candidate": "bounded_online_primitive" if requested else None,
+    "selected_lowering": "ordinary_sdpa",
     "fallback_contract": "ordinary_sdpa",
     "fusion_proven": False,
+    "dual_wmma_proven": False,
+    "performance_proven": False,
+    "promotion_eligible": False,
+    "blocker": "generic tiled fused attention lowering is not implemented",
   }
 
 
