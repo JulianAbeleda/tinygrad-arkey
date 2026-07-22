@@ -17,7 +17,32 @@ This is an **MVP proof-of-theory**, not a build. You are proving *one* claim che
 
 **Do NOT:** build routing integration, a geometry sweep, GQA variants, quant-KV, decode support, or the autotuner. Those are the *full build*, scoped **only after** this MVP passes review. Scope creep here is failure.
 
-**The MVP kernel is DISPOSABLE SCAFFOLDING — it gets `rm`'d at the end.** The two files you create (`flash_prefill_wmma_kernel.py`, `flash_prefill_wmma_mvp_gate.py`) exist *only* to produce the gate number. At the end of the task — **whether GO or NO-GO** — you `rm` them and commit the removal. They are **never shipped, never wired into routing, never kept.** This is deliberate: the *shipped* path is scheduler-native (see §7, Option B), so a hand-authored UOp kernel cannot be the deliverable — it would be exactly the hand-kernel we are choosing *not* to ship. The MVP hand-builds only because that is the cheapest way to get a trustworthy number; the number is the deliverable, the kernel is a throwaway jig.
+## ⭐⭐ MEASURED GATE SIGNAL (2026-07-21) — GO to fund the B build; real WMMA kernels, not a projection
+
+Bracketed the fused-flash win with **real measured kernels** at the MVP config (`T=KV=2048, H=8, Hd=128`, gfx1100, warmed clocks, DEBUG=2 `tm`):
+
+| stage | SDPA (measured) | fused floor (measured WMMA pieces) |
+|---|---|---|
+| `QKᵀ` | 304µs @ 28.4 TFLOP/s (WMMA) | 296µs (same WMMA) |
+| softmax | 362µs, ~550 GFLOP/s (HBM-bound, 2 passes) | ~0 — fused in-register, no HBM |
+| `P·V` | **1187µs @ 9 TFLOP/s** (reads fp32 probs from HBM) | 460µs @ 18.7 TFLOP/s (resident fp16 probs, WMMA) |
+| **total** | **~1853µs** | **~756µs → 2.45×** |
+
+**Why this GO is credible where deepseek's was not:** deepseek compared SDPA to an *idealized matmul-only floor* (13.9ms, softmax/staging deleted — unbuildable). This compares SDPA to **two real achievable WMMA kernels** (a `QKᵀ` and a *resident-probs* `P·V`) that run today. The spill cost is concretely located: softmax's 362µs of HBM passes vanish under fusion, and PV drops 1187→460µs because it stops reading freshly-materialized fp32 probs from HBM. **The occupancy failure that killed the decode-reuse path (M=1, no parallelism, scalar `fdot2`) does NOT apply** — prefill is M=2048 rows (full occupancy) with genuine WMMA on both matmuls.
+
+**The one thing this bracket still does NOT measure** (and only the built kernel will): whether fusing `QKᵀ`+softmax+`P·V` into a *single* kernel raises register/LDS pressure enough to cut occupancy vs running them as three kernels. That is the residual build risk — but the 2.45× headroom is a large cushion, and even a substantial fusion tax likely still lands below SDPA. **Verdict: fund the B build.** The bracket is enough to commit; the built kernel converts 2.45×-with-a-caveat into a hard number.
+
+---
+
+## ⭐ PIVOT (2026-07-21) — hand jig abandoned; MVP is now the minimal B slice (scheduler fusion)
+
+Hands-on finding (Claude, before spending the jig's build cost): WMMA on gfx1100 is **declarative** (`tc.py:amd_rdna3` swizzle) and the scheduler applies it by reshaping matmul operands + emitting the `Ops.WMMA` UOp inside the TC opt (`postrange.py:_apply_tc_opt`) — verified by compiling a real fp16 matmul (`__builtin_amdgcn_wmma_f32_16x16x16_f16_w32`, `float8 = wmma(half16, half16, float8)`, wave32). **Consequence:** a hand-authored fused flash kernel would have to *reproduce that swizzle + fragment loads by hand* — i.e. reimplement the TC opt inline — which is near-B complexity done by hand and then thrown away. That is exactly why the decode kernel uses scalar `fdot2` and why prior attempts stalled here.
+
+The cost calculus inverts: the jig's expensive core (hand WMMA swizzle) is throwaway, while **Option B reuses the scheduler's WMMA for free** and its only new work is the online-softmax *blocking* rewrite. So the MVP proof is now a **minimal B slice**: land the smallest scheduler-side blocked-online-softmax fusion for ONE config (14B, `T=KV=2048`, causal, fp16, resident K/V), reusing the scheduler's existing WMMA, and measure it against SDPA at the §5 gate. Keepable (first brick of B), not disposable. The disposable-hand-jig sections below are superseded; kept as history.
+
+---
+
+**The (superseded) hand jig was DISPOSABLE SCAFFOLDING — it would have been `rm`'d at the end.** The two files you create (`flash_prefill_wmma_kernel.py`, `flash_prefill_wmma_mvp_gate.py`) exist *only* to produce the gate number. At the end of the task — **whether GO or NO-GO** — you `rm` them and commit the removal. They are **never shipped, never wired into routing, never kept.** This is deliberate: the *shipped* path is scheduler-native (see §7, Option B), so a hand-authored UOp kernel cannot be the deliverable — it would be exactly the hand-kernel we are choosing *not* to ship. The MVP hand-builds only because that is the cheapest way to get a trustworthy number; the number is the deliverable, the kernel is a throwaway jig.
 
 **Also note (kickback correction, 2026-07-21):** a *roofline arithmetic projection* — measuring SDPA and comparing it to an idealized matmul-only floor — is **M0, not M3, and NOT a gate pass.** The reuse-path NO-GO already proved projections and reality diverge precisely at the fusion/softmax/barrier/occupancy overhead an idealized floor deletes. M3 requires the **actual built, correctness-validated kernel** measured in absolute `tm`, plus a `C_peak` measurement that is self-consistent (a kernel reporting >100% of `C_peak` means `C_peak` was mis-measured — fix the denominator before comparing fractions). No kernel built = automatic NO-GO by §5's hard prerequisite.
 
