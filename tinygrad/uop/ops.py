@@ -606,7 +606,8 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
     return UOp(Ops.REDUCE, kwargs.pop('dtype', self.dtype), src=(self,)+src, arg=arg, **kwargs)
 
   def composite_reduce(self, *slots: 'AccumulatorSlot', axis: tuple[int, ...] = (), inputs: tuple['UOp', ...] = (),
-                       input_specs: tuple['CompositeInputSpec', ...]|None = None, **kwargs):
+                       input_specs: tuple['CompositeInputSpec', ...]|None = None,
+                       tile_carrier: 'CompositeTileCarrier|None' = None, **kwargs):
     """Create a stateful REDUCE. All logical-element inputs are explicit sources."""
     from tinygrad.uop.ops import CompositeReduce, AccumulatorSlot
     # Compatibility is source-visible: callers formerly passing v_uop now get
@@ -619,7 +620,10 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
       input_specs = tuple(CompositeInputSpec("logical", x.arg.axis_map if x.op is Ops.SCOPED_VALUE and hasattr(x.arg, "axis_map") else None)
                           for x in inputs)
     if len(input_specs) != len(inputs): raise ValueError("one CompositeInputSpec is required for each composite input")
-    composite = CompositeReduce(slots=tuple(slots), combine_fn=kwargs.pop('combine_fn', None), input_specs=tuple(input_specs))
+    if tile_carrier is not None:
+      tile_carrier.validate()
+    composite = CompositeReduce(slots=tuple(slots), combine_fn=kwargs.pop('combine_fn', None),
+                                input_specs=tuple(input_specs), tile_carrier=tile_carrier)
     return UOp(Ops.REDUCE, kwargs.pop('dtype', self.dtype), src=(self,)+tuple(inputs), arg=(composite, axis), **kwargs)
 
   def scoped_reduce(self, producer: 'UOp', *logical_inputs: 'UOp', axis: tuple[int, ...], axis_maps: tuple[tuple[int, ...], ...],
@@ -1178,6 +1182,34 @@ class CompositeReduce(NamedTuple):
   slots: tuple
   combine_fn: Any = None  # UOp sub-graph encoding combine (None = independent slots)
   input_specs: tuple = () # one source-role/axis-map owner per auxiliary REDUCE source
+  tile_carrier: Any = None # optional backend-neutral tile/state ABI contract
+
+class CompositeTileCarrier(NamedTuple):
+  """Logical tile contract shared by composite attention and WMMA lowering.
+
+  This is metadata only: it does not prescribe a backend fragment layout.  The
+  scheduler uses it to prove that score, value, and accumulator lanes share
+  the same tile ownership before attempting a hardware lowering.
+  """
+  score_shape: tuple[int, int, int]       # (M, N, K) score tile
+  value_shape: tuple[int, int, int]       # (N, K, Hd) value tile
+  output_shape: tuple[int, int, int]      # (M, N, Hd) output tile
+  state_slots: tuple[str, ...] = ("m", "l", "acc")
+  score_role: str = "score"
+  value_role: str = "logical"
+  provenance: tuple[str, ...] = ()
+
+  def validate(self):
+    if len(self.score_shape) != 3 or len(self.value_shape) != 3 or len(self.output_shape) != 3:
+      raise ValueError("composite tile shapes must be rank-3")
+    m, n, k = self.score_shape
+    vn, vk, hd = self.value_shape
+    om, on, ohd = self.output_shape
+    if (n, k) != (vn, vk) or (m, hd) != (om, ohd) or on != n:
+      raise ValueError("composite tile score/value/output dimensions do not align")
+    if self.state_slots != ("m", "l", "acc"):
+      raise ValueError("online composite tile requires m/l/acc state slots")
+    return self
 
 class CompositeInputSpec(NamedTuple):
   role: str
