@@ -162,8 +162,15 @@ def _handle_no_range_generic(inp, composite, red, auxiliary_inputs=()):
             raise RuntimeError(f"composite {composite.combine_fn!r} expects {elems_per_step} logical inputs, "
                                f"got one primary and {len(auxiliary_inputs)} auxiliary inputs")
         auxiliary_lanes = [_horizontal_reduce(x, composite.slots[-1].dtype) for x in auxiliary_inputs]
+        # A rank-mapped source may legitimately be scalar while the primary
+        # score carrier is packed across a local Hd lane.  Treat that source
+        # as a broadcast carrier; grouped/rank-aware loaders provide varying
+        # lanes when the source actually owns the lane axis.
+        auxiliary_lanes = [x if len(x) == len(inp_lst) else
+                           ([x[0]] * len(inp_lst) if len(x) == 1 else x)
+                           for x in auxiliary_lanes]
         if any(len(x) != len(inp_lst) for x in auxiliary_lanes):
-            raise RuntimeError("composite auxiliary inputs must have the same horizontal lane count as the primary input")
+            raise RuntimeError("composite auxiliary inputs must have same lane count or be scalar broadcast")
         for i, primary in enumerate(inp_lst):
             state = list(step_fn(*state, primary, *(x[i] for x in auxiliary_lanes)))
     else:

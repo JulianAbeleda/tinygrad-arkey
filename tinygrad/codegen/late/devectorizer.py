@@ -376,10 +376,18 @@ def _load_v_at_reduce_pos(v_src:UOp, composite, input_ranges, reduce_range, scor
     if len(axis_map) == 0: return v_src.load(dtype=composite.slots[-1].dtype)
     range_by_axis = {r.arg[0]: r for r in input_ranges + reduce_range}
     source = v_src.src[0] if v_src.op is Ops.SCOPED_VALUE else v_src
-    # None is a broadcast-zero source axis. -1 is value-local and deliberately
-    # omitted, preserving the trailing contiguous lane for a vector load.
-    idxs = tuple(range_by_axis[axis] if axis is not None else UOp.const(dtypes.weakint, 0)
-                 for axis in axis_map if axis != -1)
+    # axis_map is expressed in primary (score) coordinates.  Compact the
+    # mapped coordinates into the source rank: a rank-5 score
+    # (B,H,Q,KV,Hd) mapped to rank-4 V uses (B,H,KV,Hd), not source indices
+    # (0,1,3,4).  None is a broadcast primary axis; -1 is value-local.
+    # Missing source dimensions are broadcast at zero (for legacy maps that
+    # omit a trailing singleton/local axis).
+    mapped = [axis for axis in axis_map if axis is not None and axis != -1]
+    try: source_rank = len(source._shape) if source._shape is not None else len(mapped)
+    except Exception: source_rank = len(mapped)
+    idxs = tuple(range_by_axis[axis] for axis in mapped[:source_rank])
+    if len(idxs) < source_rank:
+      idxs += (UOp.const(dtypes.weakint, 0),) * (source_rank - len(idxs))
     return source.index(*idxs).load(dtype=composite.slots[-1].dtype)
   # Build axis -> RANGE mapping from all visible ranges
   range_by_axis = {}
