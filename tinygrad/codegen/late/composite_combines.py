@@ -59,12 +59,8 @@ def online_softmax(ctx, accs, acc_reads, inp, composite, input_ranges, reduce_ra
     # Score: inp is the reduction input (score value at current KV position)
     inp_score = inp
     # V: provided by devectorizer from composite.v_uop, else fall back to gep
-    if v_inp is None:
-        inp_v = inp if inp.dtype.count == 1 else inp.gep(1)
-    else:
-        # The generic scalar reducer cannot consume a lane-shaped V load.
-        # Keep this path scalar until a proven tile carrier lowering exists.
-        inp_v = inp if inp.dtype.count == 1 else inp.gep(1)
+    # Generic reduction remains scalar-only until a proven tile lowering.
+    inp_v = inp if inp.dtype.count == 1 else inp.gep(1)
 
     m_old, l_old, acc_old = acc_reads
     
@@ -74,30 +70,14 @@ def online_softmax(ctx, accs, acc_reads, inp, composite, input_ranges, reduce_ra
     score_shifted = inp_score.alu(Ops.ADD, m_new.alu(Ops.MUL, NEG1))
     exp_score = score_shifted.alu(Ops.MUL, LOG2E).alu(Ops.EXP2)
     l_new = l_old.alu(Ops.MUL, corr).alu(Ops.ADD, exp_score)
-    # The online state is scalar for m/l but the PV accumulator may carry a
-    # logical Hd lane group. Broadcast scalar factors only at this boundary;
-    # source V remains lane-shaped and is never packed into a giant score dtype.
-    # UOp.broadcast changes logical shape but does not reliably construct the
-    # vector dtype expected by late devectorization.  Build the lane carrier
-    # explicitly so scalar state factors and V have identical dtypes/shapes.
-    def lane_expand(x):
-      if acc_old.dtype.count == 1 or x.dtype.count == acc_old.dtype.count: return x
-      if x.dtype.count != 1: raise ValueError("online_softmax lane width mismatch")
-      return UOp(Ops.STACK, x.dtype.scalar().vec(acc_old.dtype.count), (x,) * acc_old.dtype.count)
-    acc_corr = lane_expand(corr)
-    acc_exp = lane_expand(exp_score)
-    # A scalar accumulator is the generic fallback representation; consume
-    # the owned scalar lane rather than introducing an unrepresentable vector
-    # result into that slot.
-    if inp_v.dtype.count > 1 or inp_v.shape != ():
-      inp_v = inp_v.gep(0)
-    else:
-      inp_v = lane_expand(inp_v)
-    acc_new = acc_old.alu(Ops.MUL, acc_corr).alu(Ops.ADD, acc_exp.alu(Ops.MUL, inp_v))
+    acc_new = acc_old.alu(Ops.MUL, corr).alu(Ops.ADD, exp_score.alu(Ops.MUL, inp_v))
     
     ends = [acc.index(UOp.const(dtypes.weakint, 0)).store(new_val).end(*reduce_range).rtag("mergeable")
             for acc, new_val in zip(accs, [m_new, l_new, acc_new])]
-    return tuple(acc.after(*ends).index(UOp.const(dtypes.weakint, 0)) for acc in accs)
+    rcp_l = accs[1].after(ends[1]).index(UOp.const(dtypes.weakint, 0)).alu(Ops.RECIPROCAL)
+    ret_acc = accs[2].after(ends[2]).index(UOp.const(dtypes.weakint, 0))
+    anchored = ret_acc.after(ends[0]).after(ends[1])
+    return anchored.alu(Ops.MUL, rcp_l)
 
 # Registry: combine_fn string -> callable
 COMBINE_REGISTRY = {
