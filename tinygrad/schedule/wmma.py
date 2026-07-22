@@ -114,6 +114,45 @@ def construct_hd16_tile_carriers(score: UOp, value: UOp, acc: UOp, *,
   return (tile_gather(score, score_spec), tile_gather(value, value_spec),
           tile_gather(acc, acc_spec))
 
+def composite_reduce_hd16_carriers(red: UOp) -> tuple[UOp, UOp, UOp] | None:
+  """Return an owned QK/PV/acc carrier triple for one exact composite REDUCE.
+
+  This is an opt-in scheduler primitive, not a production admission hook.  It
+  deliberately requires rankful sources with the proven ``(B,H,16,16,1)`` /
+  ``(B,H,1,16,16)`` / ``(B,H,16,16)`` ownership map.  Any ordinary reduction,
+  missing metadata, or different geometry returns ``None`` so the existing
+  scalar online-softmax reducer remains authoritative.
+  """
+  if red.op is not Ops.REDUCE or not red.arg or not isinstance(red.arg[0], CompositeReduce):
+    return None
+  comp = red.arg[0]
+  carrier = comp.tile_carrier
+  if carrier is None:
+    return None
+  try:
+    carrier.validate()
+  except ValueError:
+    return None
+  if carrier.score_shape != (16, 16, 16) or carrier.value_shape != (16, 16, 16) or carrier.output_shape != (16, 16, 16):
+    return None
+  # The reducer's primary source is the score tensor; the declared auxiliary
+  # source is V.  Accumulator shape is taken from slot_shapes, never inferred
+  # from a vector dtype.
+  score = red.src[0]
+  aux = tuple(x for x in red.src[1:] if x.op is not Ops.RANGE)
+  if len(aux) != 1 or not comp.slot_shapes or len(comp.slot_shapes) < 3:
+    return None
+  value = aux[0]
+  acc_shape = comp.slot_shapes[2]
+  if acc_shape is None:
+    return None
+  acc = UOp.placeholder(acc_shape, comp.slots[2].dtype, -1)
+  try:
+    return construct_hd16_tile_carriers(score, value, acc,
+                                        batch=score.shape[0], heads=score.shape[1])
+  except (AttributeError, IndexError, TypeError, ValueError):
+    return None
+
 def lower_tile_gather(source: UOp, *, role: str, dtype: DType) -> UOp:
   """Resolve a TILE_GATHER only when an upstream pass already shaped it.
 

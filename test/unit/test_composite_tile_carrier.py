@@ -66,6 +66,23 @@ def test_real_bounded_attention_fails_closed_before_fragment_emission():
   assert report["renderer"] == "fail-closed" and report["isa"] == "not-emitted"
   assert any("TILE_GATHER" in reason for reason in report["reasons"])
 
+def test_hd16_reducer_handoff_is_opt_in_and_preserves_scalar_boundary():
+  from tinygrad.schedule.wmma import composite_reduce_hd16_carriers
+  score = UOp.placeholder((1, 1, 16, 16, 1), dtypes.half, 70)
+  value = UOp.placeholder((1, 1, 1, 16, 16), dtypes.half, 71)
+  carrier = CompositeTileCarrier((16, 16, 16), (16, 16, 16), (16, 16, 16),
+                                 provenance=("qk", "pv", "online_softmax"))
+  red = score.composite_reduce(
+    AccumulatorSlot(Ops.MAX, dtypes.float32, float("-inf"), "m"),
+    AccumulatorSlot(Ops.ADD, dtypes.float32, 0.0, "l"),
+    AccumulatorSlot(Ops.ADD, dtypes.float32, 0.0, "acc"), axis=(3,), inputs=(value,),
+    combine_fn="online_softmax", tile_carrier=carrier,
+    slot_shapes=((1, 1, 16), (1, 1, 16), (1, 1, 16, 16)))
+  carriers = composite_reduce_hd16_carriers(red)
+  assert carriers is not None
+  assert tuple(x.arg.role for x in carriers) == ("score", "value", "acc")
+  assert composite_reduce_hd16_carriers(score.composite_reduce(*red.arg[0].slots, axis=(3,), inputs=(value,), combine_fn="online_softmax")) is None
+
 def test_amd_tile_wmma_boundary_requires_explicit_score_value_acc_carriers():
   def carrier(role):
     src = UOp.placeholder((16, 16), dtypes.half, 0)
