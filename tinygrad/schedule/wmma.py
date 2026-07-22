@@ -19,6 +19,20 @@ def tile_gather(source: UOp, spec: TileGatherSpec) -> UOp:
     raise ValueError("tile gather base offset is outside source shape")
   return UOp(Ops.TILE_GATHER, source.dtype, (source,), arg=spec)
 
+def lower_tile_gather(source: UOp, *, role: str, dtype: DType) -> UOp:
+  """Resolve a TILE_GATHER only when an upstream pass already shaped it.
+
+  No flattening, broadcast, or index synthesis is permitted here.  This
+  fail-closed resolver is the handoff point for the future grouped LOAD pass.
+  """
+  if source.op is not Ops.TILE_GATHER:
+    raise ValueError("expected TILE_GATHER carrier")
+  spec = source.arg
+  spec.validate()
+  if spec.role != role or source.shape != spec.fragment_shape or source.src[0].shape != spec.fragment_shape:
+    raise ValueError("tile gather is not a shaped fragment")
+  return adapt_wmma_fragment(source, role=role, dtype=dtype, shape=spec.fragment_shape)
+
 
 def adapt_wmma_fragment(source: UOp, *, role: str, dtype: DType, shape: tuple[int, int] = (16, 16)) -> UOp:
   """Validate/adapt one logical tile at the SHAPED_WMMA boundary.

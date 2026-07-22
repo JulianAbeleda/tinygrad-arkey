@@ -93,6 +93,16 @@ def test_composite_tile_fragment_adapter_preserves_grouped_lane_shapes():
   acc = UOp.placeholder((16, 64), dtypes.float32, 22)
   assert adapt_composite_tile_fragments(carrier, score=score, value=value, acc=acc, dtype=dtypes.half) == (score, value, acc)
 
+def test_tile_gather_lowering_is_fail_closed_without_flattening():
+  from tinygrad.uop.ops import TileGatherSpec
+  from tinygrad.schedule.wmma import tile_gather, lower_tile_gather
+  src = UOp.placeholder((16, 16), dtypes.half, 30)
+  gathered = tile_gather(src, TileGatherSpec("score", (16, 16), (0, 1), (0, 1)))
+  assert lower_tile_gather(gathered, role="score", dtype=dtypes.half) is gathered
+  bad = tile_gather(UOp.placeholder((16, 16, 2), dtypes.half, 31), TileGatherSpec("score", (16, 16), (0, 1), (0, 1)))
+  with pytest.raises(ValueError, match="shaped fragment"):
+    lower_tile_gather(bad, role="score", dtype=dtypes.half)
+
 def test_tile_gather_preserves_axis_ownership_and_base_offsets():
   from tinygrad.uop.ops import TileGatherSpec
   from tinygrad.schedule.wmma import tile_gather
