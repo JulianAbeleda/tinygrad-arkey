@@ -225,7 +225,8 @@ def _lower_composite_no_range_pm(red):
     ninputs = len(getattr(composite, "input_specs", ()))
     auxiliary_inputs = candidates[-ninputs:] if ninputs else ()
     result = _handle_no_range_generic(red.src[0], composite, red, auxiliary_inputs)
-    return UOp(Ops.TUPLE, dtypes.void, result).replace(tag=("composite_reduce", composite))
+    # Keep the UOp constructor's source ABI explicit for one-slot combines.
+    return UOp(Ops.TUPLE, dtypes.void, result if isinstance(result, tuple) else (result,)).replace(tag=("composite_reduce", composite))
 
 def resolve_reduce_slot_tensor(slot):
     """Graph-local projection from the structured composite reduction result."""
