@@ -596,7 +596,7 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
   def composite_reduce(self, *slots: 'AccumulatorSlot', axis: tuple[int, ...] = (), **kwargs):
     """Create a REDUCE with a composite accumulator (multi-slot)."""
     from tinygrad.uop.ops import CompositeReduce, AccumulatorSlot
-    composite = CompositeReduce(slots=tuple(slots), combine_fn=kwargs.pop('combine_fn', None))
+    composite = CompositeReduce(slots=tuple(slots), combine_fn=kwargs.pop('combine_fn', None), v_uop=kwargs.pop('v_uop', None))
     return UOp(Ops.REDUCE, kwargs.pop('dtype', self.dtype), src=(self,), arg=(composite, axis), **kwargs)
 
   def contiguous(self, *args, **kwargs):
@@ -1125,6 +1125,7 @@ class AccumulatorSlot(NamedTuple):
 class CompositeReduce(NamedTuple):
   slots: tuple
   combine_fn: Any = None  # UOp sub-graph encoding combine (None = independent slots)
+  v_uop: Any = None       # optional second input (V tensor for flash attention)
 
 
 @dataclass(frozen=True)
