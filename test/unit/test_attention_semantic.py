@@ -1,4 +1,5 @@
 import unittest
+import os
 import numpy as np
 from tinygrad import Tensor, dtypes
 from tinygrad.uop import Ops
@@ -7,6 +8,18 @@ from tinygrad.llm.flash_prefill_attention import shared_prefill_attention
 from tinygrad.codegen.late.flash_attn import merge_online_softmax_tile
 
 class TestAttentionSemantic(unittest.TestCase):
+  @staticmethod
+  def _combine_name():
+    return "online_softmax_state" if os.getenv("TINYGRAD_ONLINE_SOFTMAX_STATE", "0") not in ("", "0") else "online_softmax"
+
+  def test_opt_in_state_mode_small_hd16_numeric(self):
+    if self._combine_name() != "online_softmax_state": self.skipTest("state combine is opt-in")
+    rng = np.random.default_rng(7)
+    q, k, v = (Tensor(rng.standard_normal(shape).astype(np.float16), dtype=dtypes.float16)
+               for shape in ((1, 1, 16, 16), (1, 1, 16, 16), (1, 1, 16, 16)))
+    out = shared_prefill_attention(q, k, v).numpy()
+    ref = q.cast(dtypes.float32).scaled_dot_product_attention(k.cast(dtypes.float32), v.cast(dtypes.float32)).numpy()
+    np.testing.assert_allclose(out, ref, rtol=3e-2, atol=3e-2)
   def test_shared_attention_keeps_all_tensor_dependencies(self):
     q = Tensor.empty(1, 2, 4, 8, dtype=dtypes.float16)
     k = Tensor.empty(1, 2, 4, 8, dtype=dtypes.float16)
@@ -124,7 +137,7 @@ class TestAttentionSemantic(unittest.TestCase):
     v = Tensor.empty(1, 1, 3, 1, dtype=dtypes.float32)
     calls = shared_prefill_attention(q, k, v).schedule_linear().src
     reductions = [u for call in calls for u in call.src[0].toposort() if u.op is Ops.REDUCE]
-    composite = [u for u in reductions if hasattr(u.arg[0], "combine_fn") and u.arg[0].combine_fn == "online_softmax"]
+    composite = [u for u in reductions if hasattr(u.arg[0], "combine_fn") and u.arg[0].combine_fn == self._combine_name()]
     self.assertEqual(len(composite), 1)
     self.assertEqual(len(composite[0].arg[0].input_specs), 1)
     self.assertEqual(composite[0].arg[0].input_specs[0].role, "logical")
@@ -136,7 +149,7 @@ class TestAttentionSemantic(unittest.TestCase):
       v = Tensor.empty(1, 1, 3, hd, dtype=dtype)
       calls = shared_prefill_attention(q, k, v).schedule_linear().src
       composite = [u for call in calls for u in call.src[0].toposort()
-                   if u.op is Ops.REDUCE and hasattr(u.arg[0], "combine_fn") and u.arg[0].combine_fn == "online_softmax"]
+                   if u.op is Ops.REDUCE and hasattr(u.arg[0], "combine_fn") and u.arg[0].combine_fn == self._combine_name()]
       self.assertEqual(len(composite), 1)
       self.assertEqual(composite[0].arg[0].input_specs[0].axis_map, (0, 1, None, 3, 4))
 
@@ -149,7 +162,7 @@ class TestAttentionSemantic(unittest.TestCase):
     self.assertFalse(calls[0].ranges)
     reductions = [u for u in calls[0].src[0].toposort() if u.op is Ops.REDUCE]
     self.assertTrue(any(r.arg[0] is Ops.ADD for r in reductions))
-    self.assertTrue(any(hasattr(r.arg[0], "combine_fn") and r.arg[0].combine_fn == "online_softmax" for r in reductions))
+    self.assertTrue(any(hasattr(r.arg[0], "combine_fn") and r.arg[0].combine_fn == self._combine_name() for r in reductions))
 
   def test_wmma_shape_semantic_admission_keeps_qk_and_composite_in_one_call(self):
     q = Tensor.empty(1, 1, 16, 64, dtype=dtypes.float16)
@@ -160,7 +173,7 @@ class TestAttentionSemantic(unittest.TestCase):
     self.assertFalse(calls[0].ranges)
     reductions = [u for u in calls[0].src[0].toposort() if u.op is Ops.REDUCE]
     self.assertTrue(any(r.arg[0] is Ops.ADD for r in reductions))
-    self.assertTrue(any(hasattr(r.arg[0], "combine_fn") and r.arg[0].combine_fn == "online_softmax" for r in reductions))
+    self.assertTrue(any(hasattr(r.arg[0], "combine_fn") and r.arg[0].combine_fn == self._combine_name() for r in reductions))
 
   def test_bounded_semantic_admission_handles_gqa_and_additive_mask(self):
     rng = np.random.default_rng(21)
