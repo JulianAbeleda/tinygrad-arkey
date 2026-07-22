@@ -126,6 +126,12 @@ def composite_reduce_hd16_carriers(red: UOp) -> tuple[UOp, UOp, UOp] | None:
   if red.op is not Ops.REDUCE or not red.arg or not isinstance(red.arg[0], CompositeReduce):
     return None
   comp = red.arg[0]
+  # Never let a vector-typed logical reduction enter this experimental handoff:
+  # the scalar online-softmax reducer is still the only production-safe path.
+  if red.dtype.count != 1 or red.src[0].dtype.count != 1:
+    return None
+  if len(red.src[0].shape or ()) != 5 or tuple(red.arg[1] or ()) != (3,):
+    return None
   carrier = comp.tile_carrier
   if carrier is None:
     return None
@@ -143,6 +149,8 @@ def composite_reduce_hd16_carriers(red: UOp) -> tuple[UOp, UOp, UOp] | None:
   if len(aux) != 1 or not comp.slot_shapes or len(comp.slot_shapes) < 3:
     return None
   value = aux[0]
+  if value.dtype.count != 1 or len(value.shape or ()) != 5:
+    return None
   acc_shape = comp.slot_shapes[2]
   if acc_shape is None:
     return None
