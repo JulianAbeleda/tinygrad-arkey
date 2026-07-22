@@ -7,6 +7,18 @@ matmuls go through the existing TC optimizer for WMMA.
 from tinygrad.uop.ops import AccumulatorSlot, Ops
 from tinygrad import Tensor
 
+def merge_online_softmax_tile(m: Tensor, l: Tensor, acc: Tensor, scores: Tensor,
+                              v: Tensor) -> tuple[Tensor, Tensor, Tensor]:
+    """Merge one score/V tile into a running online-softmax state."""
+    block_m = scores.max(axis=-1, keepdim=True)
+    new_m = m.maximum(block_m)
+    corr = (m - new_m).exp()
+    weights = (scores - new_m).exp()
+    new_l = l * corr + weights.sum(axis=-1, keepdim=True)
+    pv_weights = weights if weights.dtype == v.dtype else weights.cast(v.dtype)
+    new_acc = acc * corr + pv_weights.matmul(v, dtype=acc.dtype)
+    return new_m, new_l, new_acc
+
 def flash_attention(q: Tensor, k: Tensor, v: Tensor, scale: float = None,
                     mask: Tensor = None) -> Tensor:
     """

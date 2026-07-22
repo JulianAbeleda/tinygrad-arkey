@@ -4,6 +4,7 @@ from tinygrad import Tensor, dtypes
 from tinygrad.uop import Ops
 from tinygrad.uop.ops import AttentionSpec
 from tinygrad.llm.flash_prefill_attention import shared_prefill_attention
+from tinygrad.codegen.late.flash_attn import merge_online_softmax_tile
 
 class TestAttentionSemantic(unittest.TestCase):
   def test_shared_attention_keeps_all_tensor_dependencies(self):
@@ -96,6 +97,19 @@ class TestAttentionSemantic(unittest.TestCase):
     scores = qv @ np.swapaxes(kv, -1, -2) / np.sqrt(4)
     probs = np.exp(scores - scores.max(axis=-1, keepdims=True))
     expected = probs / probs.sum(axis=-1, keepdims=True) @ vv
+    np.testing.assert_allclose(got, expected, rtol=1e-5, atol=1e-5)
+
+  def test_tile_state_merge_matches_single_pass_reference(self):
+    rng = np.random.default_rng(123)
+    scores = rng.standard_normal((1, 2, 7), dtype=np.float32)
+    values = rng.standard_normal((1, 7, 4), dtype=np.float32)
+    m, l = Tensor.full((1, 2, 1), -float("inf")), Tensor.zeros(1, 2, 1)
+    acc = Tensor.zeros(1, 2, 4)
+    for lo, hi in ((0, 3), (3, 5), (5, 7)):
+      m, l, acc = merge_online_softmax_tile(m, l, acc, Tensor(scores[..., lo:hi]), Tensor(values[:, lo:hi]))
+    got = (acc / l).numpy()
+    p = np.exp(scores - scores.max(axis=-1, keepdims=True)); p /= p.sum(axis=-1, keepdims=True)
+    expected = p @ values
     np.testing.assert_allclose(got, expected, rtol=1e-5, atol=1e-5)
 
   def test_semantic_marker_fail_closes_to_ordinary_sdpa(self):

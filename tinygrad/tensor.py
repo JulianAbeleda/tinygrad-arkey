@@ -1258,22 +1258,16 @@ class Tensor(RandMixin):
     m = Tensor.full(row_shape, float("-inf"), device=self.device, dtype=acc_dtype)
     l = Tensor.zeros(*row_shape, device=self.device, dtype=acc_dtype)
     acc = Tensor.zeros(*self.shape, device=self.device, dtype=acc_dtype)
+    from tinygrad.codegen.late.flash_attn import merge_online_softmax_tile
     for start in range(0, key.shape[-2], kv_block):
       stop = min(start + kv_block, key.shape[-2])
       score = self.matmul(key[..., start:stop, :].transpose(-2, -1), dtype=acc_dtype) * scale
       if attn_mask is not None: score = score + attn_mask[..., start:stop]
-      block_m = score.max(axis=-1, keepdim=True)
-      new_m = m.maximum(block_m)
-      corr = (m - new_m).exp()
-      p = (score - new_m).exp()
-      l = l * corr + p.sum(axis=-1, keepdim=True)
       # Preserve a tensor-core-visible fp16/bf16 PV contraction while the
       # running accumulator remains in acc_dtype. For ordinary float inputs
       # this is a no-op; for reduced-precision activations it is the explicit
       # activation boundary used by the existing generic TC matcher.
-      pv_weights = p if p.dtype == value.dtype else p.cast(value.dtype)
-      acc = acc * corr + pv_weights.matmul(value[..., start:stop, :], dtype=acc_dtype)
-      m = new_m
+      m, l, acc = merge_online_softmax_tile(m, l, acc, score, value[..., start:stop, :])
     return (acc / l).cast(out_dtype)
 
   # ***** cast ops *****
