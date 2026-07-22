@@ -79,21 +79,22 @@ def hand_coded_optimizations(k:Scheduler) -> Scheduler:
         transient_reserve = _epilogue_transient_reserve(k)
         try:
           # The intrinsic's minimum carrier set is itself optional.  If a fused
-          # epilogue leaves no bounded transient headroom, retain the reduction
-          # loop and let the generic scheduler tile it.
-          if not _pressure_admits(accumulators=tc_output_lanes, fragments=tc_fragment_lanes,
-                                  transient_reserve=transient_reserve):
-            good_tc_opt = False
-          for tc_dim in [1,0]: # attempt to upcast M and N
-            szs = [sz for sz in [5,4,3,2] if rngs[tc_dim].src[0].divides(sz) is not None]
-            szs = [sz for sz in szs if good_tc_opt and _pressure_admits(accumulators=tc_output_lanes*sz,
-              fragments=tc_fragment_lanes, transient_reserve=transient_reserve)]
-            if szs:
-              # set it to the replaced range
-              rngs[tc_dim] = tk.apply_opt(Opt(OptOps.UPCAST, tk.rngs.index(rngs[tc_dim]), szs[0]))[0]
-              tc_output_lanes *= szs[0]
-          if (szs := [sz for sz in [4,2] if rngs[0].src[0].divides(sz) is not None]): # attempt to local N
-            tk.apply_opt(Opt(OptOps.LOCAL, tk.rngs.index(rngs[0]), szs[0]))
+          # epilogue leaves no bounded transient headroom, skip the optional
+          # upcast and local but keep the TC schedule (Piece 2: REDUCE-preserving
+          # fusion kernel pressure may exceed the conservative heuristic estimate).
+          pressure_ok = _pressure_admits(accumulators=tc_output_lanes, fragments=tc_fragment_lanes,
+                                         transient_reserve=transient_reserve)
+          if pressure_ok:
+            for tc_dim in [1,0]: # attempt to upcast M and N
+              szs = [sz for sz in [5,4,3,2] if rngs[tc_dim].src[0].divides(sz) is not None]
+              szs = [sz for sz in szs if _pressure_admits(accumulators=tc_output_lanes*sz,
+                fragments=tc_fragment_lanes, transient_reserve=transient_reserve)]
+              if szs:
+                # set it to the replaced range
+                rngs[tc_dim] = tk.apply_opt(Opt(OptOps.UPCAST, tk.rngs.index(rngs[tc_dim]), szs[0]))[0]
+                tc_output_lanes *= szs[0]
+            if (szs := [sz for sz in [4,2] if rngs[0].src[0].divides(sz) is not None]): # attempt to local N
+              tk.apply_opt(Opt(OptOps.LOCAL, tk.rngs.index(rngs[0]), szs[0]))
         except KernelOptError:
           pass
       if good_tc_opt: return tk
