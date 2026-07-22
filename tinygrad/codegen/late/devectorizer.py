@@ -417,6 +417,10 @@ def _load_v_at_reduce_pos(v_src:UOp, composite, input_ranges, reduce_range, scor
   if not v_indices:
     v_indices = (UOp.const(dtypes.weakint, 0),)
   v_index = v_src.index(*v_indices)
+  if lane_group > 1:
+    scalar_dtype = composite.slots[-1].dtype.scalar()
+    return UOp.vectorize(*(v_src.index(*(v_indices + (UOp.const(dtypes.weakint, lane),))).load(dtype=scalar_dtype)
+                          for lane in range(lane_group)))
   # The auxiliary value is a logical element for the final state slot. A
   # generic composite may have one or many slots; never assume online-softmax
   # has already supplied a third slot here.

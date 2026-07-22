@@ -14,7 +14,7 @@ import numpy as np
 
 from tinygrad import Tensor, dtypes
 from tinygrad.helpers import NOOPT
-from tinygrad.uop.ops import UOp, Ops, AxisType, AccumulatorSlot, CompositeReduce
+from tinygrad.uop.ops import UOp, Ops, AxisType, AccumulatorSlot, CompositeReduce, CompositeInputSpec
 from tinygrad.codegen.late.devectorizer import _load_v_at_reduce_pos
 
 
@@ -62,6 +62,21 @@ class TestCompositeReduce(unittest.TestCase):
     idx = loaded.src[0]
     self.assertIs(idx.op, Ops.INDEX)
     self.assertIs(idx.src[-1], kv)
+
+  def test_grouped_lane_load_preserves_kv_and_appends_hd(self):
+    v = Tensor.empty(2, 3, 5, 4, dtype=dtypes.float32)
+    slot = AccumulatorSlot(op=Ops.ADD, dtype=dtypes.float32, identity=0.0, name="acc")
+    spec = CompositeInputSpec("logical", lane_group=2)
+    red = UOp.composite_reduce(Tensor.empty(2, 3, 7, 5, dtype=dtypes.float32).uop, slot,
+                               axis=(3,), inputs=(v.uop,), input_specs=(spec,))
+    outer = (UOp.range(2, 0), UOp.range(3, 1))
+    kv = UOp.range(5, 3, AxisType.REDUCE)
+    loaded = _load_v_at_reduce_pos(v.uop, red.arg[0], outer, (kv,), red.src[0]._shape,
+                                   lane_group=2)
+    self.assertEqual(loaded.dtype.count, 2)
+    self.assertTrue(all(x.op is Ops.LOAD for x in loaded.src))
+    self.assertIn(kv, loaded.src[0].backward_slice)
+    self.assertNotEqual(loaded.src[0].src[0].src[-1], loaded.src[1].src[0].src[-1])
 
 
 class TestOnlineSoftmaxTwoReduce(unittest.TestCase):

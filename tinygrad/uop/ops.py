@@ -267,6 +267,9 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
       case Ops.REDUCE_SLOT:
         # A slot is a projection of the composite result and has the ordinary
         # reduced tensor shape. It is not a hardware vector lane.
+        if getattr(self.src[0].arg[0], "slot_shapes", ()):
+          shape = self.src[0].arg[0].slot_shapes[self.arg]
+          if shape is not None: return shape
         return self.src[0]._shape
       case Ops.SCOPED_REDUCE:
         # The first SCOPED_REDUCE source is its semantically identical
@@ -607,7 +610,8 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
 
   def composite_reduce(self, *slots: 'AccumulatorSlot', axis: tuple[int, ...] = (), inputs: tuple['UOp', ...] = (),
                        input_specs: tuple['CompositeInputSpec', ...]|None = None,
-                       tile_carrier: 'CompositeTileCarrier|None' = None, **kwargs):
+                       tile_carrier: 'CompositeTileCarrier|None' = None,
+                       slot_shapes: tuple[tuple|None, ...]|None = None, **kwargs):
     """Create a stateful REDUCE. All logical-element inputs are explicit sources."""
     from tinygrad.uop.ops import CompositeReduce, AccumulatorSlot
     # Compatibility is source-visible: callers formerly passing v_uop now get
@@ -625,7 +629,8 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
     if tile_carrier is not None:
       tile_carrier.validate()
     composite = CompositeReduce(slots=tuple(slots), combine_fn=kwargs.pop('combine_fn', None),
-                                input_specs=tuple(input_specs), tile_carrier=tile_carrier)
+                                input_specs=tuple(input_specs), tile_carrier=tile_carrier,
+                                slot_shapes=tuple(slot_shapes or ()))
     return UOp(Ops.REDUCE, kwargs.pop('dtype', self.dtype), src=(self,)+tuple(inputs), arg=(composite, axis), **kwargs)
 
   def scoped_reduce(self, producer: 'UOp', *logical_inputs: 'UOp', axis: tuple[int, ...], axis_maps: tuple[tuple[int, ...], ...],
@@ -1185,6 +1190,7 @@ class CompositeReduce(NamedTuple):
   combine_fn: Any = None  # UOp sub-graph encoding combine (None = independent slots)
   input_specs: tuple = () # one source-role/axis-map owner per auxiliary REDUCE source
   tile_carrier: Any = None # optional backend-neutral tile/state ABI contract
+  slot_shapes: tuple[tuple|None, ...] = () # logical output shape per REDUCE_SLOT
 
 class CompositeTileCarrier(NamedTuple):
   """Logical tile contract shared by composite attention and WMMA lowering.
