@@ -72,7 +72,14 @@ def online_softmax(ctx, accs, acc_reads, inp, composite, input_ranges, reduce_ra
     score_shifted = inp_score.alu(Ops.ADD, m_new.alu(Ops.MUL, NEG1))
     exp_score = score_shifted.alu(Ops.MUL, LOG2E).alu(Ops.EXP2)
     l_new = l_old.alu(Ops.MUL, corr).alu(Ops.ADD, exp_score)
-    acc_new = acc_old.alu(Ops.MUL, corr).alu(Ops.ADD, exp_score.alu(Ops.MUL, inp_v))
+    # The online state is scalar for m/l but the PV accumulator may carry a
+    # logical Hd lane group. Broadcast scalar factors only at this boundary;
+    # source V remains lane-shaped and is never packed into a giant score dtype.
+    acc_corr = corr.broadcast(acc_old.dtype.count) if acc_old.dtype.count > 1 and corr.dtype.count == 1 else corr
+    acc_exp = exp_score.broadcast(acc_old.dtype.count) if acc_old.dtype.count > 1 and exp_score.dtype.count == 1 else exp_score
+    if inp_v.dtype.count == 1 and acc_old.dtype.count > 1:
+      inp_v = inp_v.broadcast(acc_old.dtype.count)
+    acc_new = acc_old.alu(Ops.MUL, acc_corr).alu(Ops.ADD, acc_exp.alu(Ops.MUL, inp_v))
     
     ends = [acc.index(UOp.const(dtypes.weakint, 0)).store(new_val).end(*reduce_range).rtag("mergeable")
             for acc, new_val in zip(accs, [m_new, l_new, acc_new])]
