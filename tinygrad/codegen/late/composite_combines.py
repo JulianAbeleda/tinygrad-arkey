@@ -197,7 +197,13 @@ def _lower_composite_no_range_pm(red):
         except Exception:
             pass
 
-    result = _handle_no_range_generic(red.src[0], composite, red, red.src[1:])
+    # Expander/rangeify may leave auxiliary carriers and RANGE context after
+    # the primary input.  Only sources declared by CompositeInputSpec are
+    # logical combine inputs; range carriers are never V tensors.
+    candidates = tuple(x for x in red.src[1:] if x.op is not Ops.RANGE)
+    ninputs = len(getattr(composite, "input_specs", ()))
+    auxiliary_inputs = candidates[-ninputs:] if ninputs else ()
+    result = _handle_no_range_generic(red.src[0], composite, red, auxiliary_inputs)
     return UOp(Ops.TUPLE, dtypes.void, result)
 
 def resolve_reduce_slot_tensor(slot):
