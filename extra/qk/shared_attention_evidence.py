@@ -11,6 +11,15 @@ from dataclasses import dataclass
 from extra.qk.model_profiles import MODEL_PROFILES, ModelProfile
 from extra.qk.prefill_harness import prefill_authority_argv, prefill_run_profile, resolve_prefill_model_profile
 
+def fused_wmma_role_report(source: str) -> dict[str, object]:
+  """Fail-closed diagnostic requiring explicit QK/PV WMMA in one CALL."""
+  lines = tuple(line for line in source.splitlines() if "WMMA" in line.upper())
+  upper = "\n".join(lines).upper()
+  calls = source.upper().count("CALL")
+  qk, pv = "QK" in upper, "PV" in upper
+  return {"wmma_lines": len(lines), "qk": qk, "pv": pv,
+          "single_call": calls == 1, "promotable": bool(qk and pv and calls == 1)}
+
 ATTENTION_EVIDENCE_SCHEMA = "tinygrad.shared_attention_evidence.v1"
 DEFAULT_CONTEXTS = (512, 2048, 4096)
 _GEOMETRIES = ((16, 32, 1, 1), (16, 64, 1, 2), (32, 64, 2, 1), (32, 128, 2, 2), (64, 64, 4, 1))
@@ -81,4 +90,4 @@ def authority_command(profile: ModelProfile, *, artifact_path: str) -> list[str]
 
 
 __all__ = ["ATTENTION_EVIDENCE_SCHEMA", "DEFAULT_CONTEXTS", "AttentionGeometry", "AttentionWorkload",
-           "attention_workloads", "authority_command", "geometry_candidates"]
+           "attention_workloads", "authority_command", "fused_wmma_role_report", "geometry_candidates"]

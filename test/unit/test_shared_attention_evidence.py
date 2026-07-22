@@ -1,5 +1,5 @@
 from extra.qk.model_profiles import MODEL_PROFILES
-from extra.qk.shared_attention_evidence import DEFAULT_CONTEXTS, attention_workloads, authority_command, geometry_candidates
+from extra.qk.shared_attention_evidence import DEFAULT_CONTEXTS, attention_workloads, authority_command, fused_wmma_role_report, geometry_candidates
 from pathlib import Path
 
 
@@ -49,3 +49,10 @@ def test_real_model_context_domain_and_gqa_are_explicitly_represented():
     assert row.G == row.Hq // row.Hkv
     assert row.Hd == 128
     assert row.causal
+
+def test_dual_wmma_report_requires_qk_and_pv_in_one_call():
+  assert fused_wmma_role_report("CALL fused\n// QK WMMA\n// PV WMMA")["promotable"]
+
+def test_dual_wmma_report_fails_closed_for_missing_role_or_multiple_calls():
+  assert not fused_wmma_role_report("CALL fused\n// QK WMMA")["promotable"]
+  assert not fused_wmma_role_report("CALL qk\n// QK WMMA\nCALL pv\n// PV WMMA")["promotable"]
