@@ -58,3 +58,48 @@ Pause here for design review. The Phase 1 result confirms the composite
 accumulator is expressible at the devectorizer level. Phase 2 (rangeify
 integration) is the hard part — it's genuinely multi-week scheduler work
 that should proceed after the design and toy proofs are reviewed.
+
+---
+
+## Update: Phase 2 Full-Pipeline Proof (e2173f766)
+
+### What was tested
+- `UOp.composite_reduce()` method added to create composite REDUCE UOps
+- Full pipeline test: normal Tensor `x.sum()` intercepted at `reduce_to_acc`,
+  converted to composite (ADD+MAX), run through rangeify → scheduler → expander →
+  devectorizer → render. Result matches reference sum exactly.
+
+### Verification
+- Composite sum produces numerically identical result to normal sum
+- test_amd_isa_wmma.py: 36 passed, 4 xfailed (unregressed)
+- All normal operations (sum, max, matmul, fused matmul+max with WMMA) continue to work
+
+### What this proves
+The ENTIRE pipeline (rangeify, scheduler, expander, devectorizer, renderer) correctly
+handles a REDUCE with CompositeReduce arg. The only remaining work for Phase 2 is
+**pattern recognition** — getting the scheduler to emit a composite REDUCE when it
+sees the attention pattern, instead of splitting into separate kernels.
+
+---
+
+## Remaining Work (Phase 2-4)
+
+### Phase 2: Online-softmax composite reduce through rangeify
+The pipeline handling of composite REDUCE is proven. What remains:
+1. **Rangeify pattern match:** detect `softmax(matmul(q,k))@v` and emit a single
+   composite REDUCE over KV with (m, l, acc) accumulator slots
+2. **Online-softmax combine:** encode the correction-based combine as a UOp sub-graph
+   that `reduce_to_acc` can lower
+
+### Phase 3: WMMA on both contractions
+Once the composite REDUCE is emitted by rangeify, TC opt must find both the QKᵀ
+(over Hd) and PV (over KV_block) contractions inside the composite body and apply
+WMMA to each. Currently TC opt assumes one TC-tagged REDUCE (`get_single_element`).
+
+### Phase 4: Gate + wire
+Benchmark vs SDPA at T=KV=2048, wire into 14B model if speedup is real.
+
+### Risk
+The rangeify pattern match (Phase 2.1) is the highest-risk item. It requires
+modifying rangeify's kernel formation to recognize multi-reduce patterns and
+emit composite REDUCE ops. This is genuinely multi-week scheduler work.
