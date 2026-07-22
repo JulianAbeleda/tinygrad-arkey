@@ -9,6 +9,19 @@ def test_composite_tile_carrier_validates_attention_geometry():
   carrier = CompositeTileCarrier((16, 16, 64), (16, 64, 64), (16, 16, 64),
                                 provenance=("qk", "pv", "online_softmax"))
   assert carrier.validate() is carrier
+  abi = carrier.fragment_abi()
+  assert abi["score"] == (16, 16) and abi["pv_b"] == (16, 64)
+  assert abi["acc"] == (16, 64) and abi["state"] == ("m", "l", "acc")
+
+
+def test_composite_tile_carrier_rejects_mismatched_fragment_role():
+  carrier = CompositeTileCarrier((16, 16, 64), (16, 64, 64), (16, 16, 64),
+                                 value_fragment=(16, 32), provenance=("qk", "pv"))
+  try:
+    carrier.validate()
+    assert False, "mismatched fragment role must fail closed"
+  except ValueError:
+    pass
 
 
 def test_composite_reduce_keeps_tile_carrier_source_visible():

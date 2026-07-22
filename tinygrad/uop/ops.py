@@ -1198,6 +1198,13 @@ class CompositeTileCarrier(NamedTuple):
   score_role: str = "score"
   value_role: str = "logical"
   provenance: tuple[str, ...] = ()
+  # Fragment ABI metadata.  These are logical shapes, not packed dtypes: the
+  # Hd lane remains explicit until a backend proves its register layout.
+  score_fragment: tuple[int, int] | None = None
+  value_fragment: tuple[int, int] | None = None
+  output_fragment: tuple[int, int] | None = None
+  lane_axis: int = 2
+  lane_group: int = 1
 
   def validate(self):
     if len(self.score_shape) != 3 or len(self.value_shape) != 3 or len(self.output_shape) != 3:
@@ -1209,7 +1216,26 @@ class CompositeTileCarrier(NamedTuple):
       raise ValueError("composite tile score/value/output dimensions do not align")
     if self.state_slots != ("m", "l", "acc"):
       raise ValueError("online composite tile requires m/l/acc state slots")
+    sf = self.score_fragment or (m, n)
+    vf = self.value_fragment or (n, hd)
+    of = self.output_fragment or (m, hd)
+    if sf != (m, n) or vf != (n, hd) or of != (m, hd):
+      raise ValueError("composite fragment roles do not match tile geometry")
+    if self.lane_axis != 2 or not isinstance(self.lane_group, int) or self.lane_group < 1:
+      raise ValueError("composite lane ABI must use a positive Hd lane group")
+    if hd % self.lane_group:
+      raise ValueError("lane group must divide output Hd")
     return self
+
+  def fragment_abi(self) -> dict:
+    """Return explicit logical fragment roles for backend lowering."""
+    self.validate()
+    m, n, _k = self.score_shape
+    _vn, _vk, hd = self.value_shape
+    return {"qk_a": (m, _k), "qk_b": (_k, n), "score": (m, n),
+            "pv_a": (m, n), "pv_b": (n, hd), "acc": (m, hd),
+            "state": self.state_slots, "lane_axis": self.lane_axis,
+            "lane_group": self.lane_group}
 
 class CompositeInputSpec(NamedTuple):
   role: str
