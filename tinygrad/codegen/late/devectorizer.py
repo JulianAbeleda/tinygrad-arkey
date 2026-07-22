@@ -430,9 +430,13 @@ def reduce_to_acc(ctx:ReduceContext, red:UOp):
           acc_end = acc.index(UOp.const(dtypes.weakint, 0)).store(new_val).end(*reduce_range).rtag("mergeable")
           results.append(acc.after(acc_end).index(UOp.const(dtypes.weakint, 0)))
         
-        # Return acc / l as the attention output (multi-output solved via division)
+        # Anchor return on ALL accumulators' ends so DCE doesn't drop non-last slots
+        # (m and l would freeze at identity if only acc's chain is reachable)
+        anchored = results[2]
+        for r in results[:2]:  # anchor m and l
+          anchored = anchored.after(r)
         rcp_l = results[1].alu(Ops.RECIPROCAL)
-        return results[2].alu(Ops.MUL, rcp_l)
+        return anchored.alu(Ops.MUL, rcp_l)
       
       # Coupled combine: online-softmax, l-only. Slots: m (MAX), l (ADD). Input: score scalar.
       if composite.combine_fn == "online_softmax_l":
