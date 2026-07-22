@@ -45,14 +45,6 @@ def bounded_reduction_unroll(upcast_lanes:int, reduction_size:int, choices:tuple
   return None
 
 def hand_coded_optimizations(k:Scheduler) -> Scheduler:
-  # Composite reduces (online-softmax) need the loop structure preserved.
-  # The scheduler's UPCAST/UNROLL vectorizes the body, which the composite
-  # lowering in reduce_to_acc can't handle. Skip all opts for composite kernels.
-  from tinygrad.uop.ops import CompositeReduce
-  for u in k.ast.toposort():
-    if u.op is Ops.REDUCE and isinstance(u.arg[0], CompositeReduce):
-      return k
-
   # first try the tensor cores
   """ Attempts to apply a tensor core optimization to the kernel. If one exists and applies properly, return true, otherwise return false.
   Tensor cores are optimized instructions that matrix multiply-accumulate across a wave of threads: D(M, N) = A(M, K) * B(K, N) + C(M, N).
