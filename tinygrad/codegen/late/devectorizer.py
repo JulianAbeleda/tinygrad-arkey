@@ -366,6 +366,28 @@ def horizontal_reduce(inp:UOp, out_dtype:DType) -> list[UOp]:
     return [inp.gep(tuple(range(i, inp.dtype.count, horizontal_amount))) for i in range(0, horizontal_amount)]
   return [inp]
 
+def _load_v_at_reduce_pos(v_src:UOp, composite, input_ranges, reduce_range):
+  """Create a LOAD from V at the current reduce position.
+  Uses RANGE UOps from input_ranges and reduce_range to build indices.
+  """
+  # Build axis -> RANGE mapping from all visible ranges
+  range_by_axis = {}
+  for r in input_ranges + reduce_range:
+    range_by_axis[r.arg[0]] = r
+  # Determine rank from V shape; fall back to max axis + 1
+  try:
+    v_shape = v_src._shape
+    v_rank = len(v_shape) if v_shape is not None else (max(range_by_axis.keys()) + 2 if range_by_axis else 1)
+  except Exception:
+    v_rank = max(range_by_axis.keys()) + 2 if range_by_axis else 1
+  # Build index tuple: use range if axis is known, else CONST 0
+  # Exclude last axis (Hd) — LOAD dtype handles it
+  v_indices = tuple(range_by_axis.get(ax, UOp.const(dtypes.weakint, 0)) for ax in range(v_rank - 1))
+  if not v_indices:
+    v_indices = (UOp.const(dtypes.weakint, 0),)
+  v_index = v_src.index(*v_indices)
+  return v_index.load(dtype=composite.slots[2].dtype)
+
 def reduce_to_acc(ctx:ReduceContext, red:UOp):
   from tinygrad.uop.ops import CompositeReduce
   # Separate V extra src from ranges: if composite has v_uop, last src is V reference

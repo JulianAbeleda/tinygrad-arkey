@@ -303,23 +303,6 @@ def _resolve_reduce_slot(slot):
 
 def resolve_reduce_slot_tensor(slot):
     """Resolve REDUCE_SLOT to a plain REDUCE for the specific slot.
-    Runs at the tensor level before scheduling.
-    """
-    from tinygrad.uop.ops import CompositeReduce
-    import sys
-    red = slot.src[0]
-    print(f"DEBUG resolve_reduce_slot_tensor: red.op={red.op}, arg={slot.arg}", file=sys.stderr)
-    if red.op is not Ops.REDUCE: return None
-    composite = red.arg[0]
-    if not isinstance(composite, CompositeReduce): return None
-    slot_info = composite.slots[slot.arg]
-    result = UOp(Ops.REDUCE, slot.dtype, src=red.src, arg=(slot_info.op, red.arg[1]))
-    print(f"DEBUG resolve_reduce_slot_tensor: returning REDUCE with op={slot_info.op}", file=sys.stderr)
-    return result
-
-
-def resolve_reduce_slot_tensor(slot):
-    """Resolve REDUCE_SLOT to a plain REDUCE for the specific slot.
     Runs at the tensor level before scheduling."""
     from tinygrad.uop.ops import CompositeReduce
     red = slot.src[0]
@@ -327,4 +310,8 @@ def resolve_reduce_slot_tensor(slot):
     composite = red.arg[0]
     if not isinstance(composite, CompositeReduce): return None
     slot_info = composite.slots[slot.arg]
-    return UOp(Ops.REDUCE, slot.dtype, src=red.src, arg=(slot_info.op, red.arg[1]))
+    axis = red.arg[1]
+    ret = UOp(Ops.REDUCE, slot.dtype, src=red.src, arg=(slot_info.op, axis))
+    if axis:
+      ret = ret.reshape(tuple(s for i, s in enumerate(ret.shape) if i not in axis))
+    return ret
