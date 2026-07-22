@@ -399,10 +399,29 @@ def reduce_to_acc(ctx:ReduceContext, red:UOp):
         accs.append(acc)
         acc_reads.append(acc_read)
       
-      # Dispatch to combine function (combine-agnostic)
-      from tinygrad.codegen.late.composite_combines import COMBINE_REGISTRY, _independent_slots
+      # Compute slot results for REDUCE_SLOT cache (range path).
+      # For independent slots, create plain REDUCE UOps that each compute one slot.
+      from tinygrad.codegen.late.composite_combines import COMBINE_REGISTRY, _independent_slots, _composite_result_cache
       combine_fn = COMBINE_REGISTRY.get(composite.combine_fn, _independent_slots)
-      return combine_fn(ctx, accs, acc_reads, inp, composite, input_ranges, reduce_range, red)
+      
+      if composite.combine_fn is None:
+          # Independent slots: create plain REDUCE for each slot and cache them.
+          # These will be lowered when _resolve_reduce_slot_pm returns them.
+          slot_results = []
+          for slot in composite.slots:
+              slot_red = UOp(Ops.REDUCE, slot.dtype, src=red.src, arg=(slot.op, red.arg[1]))
+              slot_results.append(slot_red)
+          _composite_result_cache[red.arg] = slot_results
+          for r in slot_results:
+              _composite_result_cache[r] = slot_results
+      
+      result = combine_fn(ctx, accs, acc_reads, inp, composite, input_ranges, reduce_range, red)
+      
+      # Map the combine result to the cached slot results so REDUCE_SLOT lookup works
+      if composite.combine_fn is None:
+          _composite_result_cache[result] = slot_results
+      
+      return result
     
     identity = red.const(red.dtype, identity_element(red.arg[0], red.dtype.scalar()))
     acc = UOp.placeholder((1,), red.dtype, ctx.acc_num, AddrSpace.REG).replace(tag=red.tag if isinstance(red.tag, RegisterResidentAccumulator) else None)
@@ -434,7 +453,22 @@ def merge_reduce_ends(ctx:ReduceContext, sink:UOp):
       for e in group: subs[e] = merged
   return sink.substitute(subs) if subs else None
 
+def _resolve_reduce_slot_pm(slot):
+    """PatternMatcher callback: resolve REDUCE_SLOT from _composite_result_cache.
+    Returns a plain REDUCE UOp that will be lowered by the REDUCE rule in this same pm.
+    """
+    from tinygrad.codegen.late.composite_combines import _composite_result_cache
+    cached = _composite_result_cache.get(slot.src[0])
+    if cached is None:
+        return None
+    slot_result = cached[slot.arg]
+    # Cache the slot result itself so subsequent lookups work
+    _composite_result_cache[slot_result] = cached
+    return slot_result
+
 pm_reduce = PatternMatcher([
+  # REDUCE_SLOT -> resolve from cache (must run before REDUCE lowering so returned REDUCEs get lowered)
+  (UPat(Ops.REDUCE_SLOT, name="slot"), _resolve_reduce_slot_pm),
   # REDUCE -> DEFINE_ACC+ASSIGN, then merge ENDs with same range
   (UPat(Ops.REDUCE, name="red"), reduce_to_acc),
   (UPat(Ops.SINK, name="sink"), merge_reduce_ends),

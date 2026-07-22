@@ -2,7 +2,7 @@ from dataclasses import dataclass, field, replace
 import itertools
 from tinygrad.dtype import dtypes, PtrDType, AddrSpace, Invalid
 from tinygrad.uop.ops import PatternMatcher, UPat, Ops, UOp, resolve, GroupOp, _substitute, KernelInfo, ParamArg, ScheduleHints
-from tinygrad.uop.ops import graph_rewrite, sint, AxisType, BottomUpGate, profile_matches, identity_element
+from tinygrad.uop.ops import graph_rewrite, sint, AxisType, BottomUpGate, profile_matches, identity_element, AccumulatorSlot, CompositeReduce
 from tinygrad.uop.symbolic import symbolic
 from tinygrad.helpers import prod, all_same, getenv, dedup, all_int, DEBUG, SPLIT_REDUCEOP, DEBUG_RANGEIFY, VIZ, MAX_KERNEL_BUFFERS
 from tinygrad.helpers import PCONTIG, FLOAT16, OPENPILOT_HACKS, Context, argsort, partition, get_single_element
@@ -15,6 +15,34 @@ from tinygrad.schedule.allreduce import create_allreduce_function
 # creation can recurse a lot
 import sys
 sys.setrecursionlimit(10000)
+
+def _flash_attn_match(red:UOp):
+  """Match ADD REDUCE for softmax and replace with composite online-softmax REDUCE.
+  
+  Filters: float dtype only, elementwise input ops only (excludes MOVEMENT ops
+  like PERMUTE/RESHAPE that appear in internal tensor plumbing), excludes MUL
+  inputs (dot products), excludes INDEX/LOAD/BUFFER/CONST (scheduling noise).
+  """
+  try:
+    if red.arg[0] is not Ops.ADD: return None
+    if not red.src: return None
+    # Only float dtypes (online_softmax_l uses float arithmetic)
+    if not dtypes.is_float(red.dtype): return None
+    inp = red.src[0]
+    # Skip movement ops (PERMUTE, RESHAPE, EXPAND, etc.) - only match elementwise inputs
+    if inp.op in GroupOp.Movement: return None
+    # Skip dot product matmuls (MUL * MUL pattern)
+    if inp.op is Ops.MUL: return None
+    if inp.op is Ops.CAST and inp.src and inp.src[0].op is Ops.MUL: return None
+    # Skip scheduling infrastructure ops
+    if inp.op in (Ops.INDEX, Ops.LOAD, Ops.BUFFER, Ops.CONST): return None
+    # Input must have at least 2 dimensions (not a flat vector reduce)
+    if inp._shape is None or len(inp._shape) < 2: return None
+    slot_m = AccumulatorSlot(op=Ops.MAX, dtype=red.dtype, identity=float("-inf"), name="m")
+    slot_l = AccumulatorSlot(op=Ops.ADD, dtype=red.dtype, identity=0.0, name="l")
+    return red.replace(arg=(CompositeReduce(slots=(slot_m, slot_l), combine_fn="online_softmax_l"), red.arg[1]))
+  except Exception:
+    return None
 
 def add_ranges_to_store(ctx, x):
   if x.src[0]._shape is None or x.src[1]._shape is None or x.src[0].shape == (): return None
@@ -669,9 +697,12 @@ def _get_kernel_graph(sink:UOp) -> UOp:
   if OPENPILOT_HACKS: tsink = graph_rewrite(tsink, pm_fold_moved_after, ctx={}, name="fold moved afters")
   tsink = graph_rewrite(tsink, pm_syntactic_sugar+pm_mops+earliest_rewrites, bottom_up=True, name="earliest rewrites")
 
+  # flash attention rewrite: match ADD REDUCE and replace with composite REDUCE
+  tsink = graph_rewrite(tsink, PatternMatcher([(UPat(Ops.REDUCE, name="red"), _flash_attn_match)]),
+                        name="flash_attn_rewrite")
+
   # convert movement ops to ranges
   tsink, rctx = run_rangeify(tsink, bool(DEBUG_RANGEIFY))
-
   tsink = graph_rewrite(tsink, symbolic+pm_reduce_simplify+pm_const_buffer_folding+pm_remove_bufferize, name="symbolic+reduce_collapse+debuf")
   tsink = graph_rewrite(tsink, pm_limit_bufs, ctx=rctx, name="limit buffers")
 

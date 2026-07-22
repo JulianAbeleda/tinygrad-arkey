@@ -13,6 +13,10 @@ import functools
 from tinygrad.uop.ops import UOp, Ops, dtypes, AxisType, AddrSpace
 from tinygrad.uop.ops import identity_element, CompositeReduce, AccumulatorSlot
 
+# Cache: maps (composite, axis) tuple -> list of slot-result UOps, and each slot result -> list
+# Used by _resolve_reduce_slot to resolve REDUCE_SLOT ops after REDUCE lowering.
+_composite_result_cache: dict = {}
+
 def _independent_slots(ctx, accs, acc_reads, inp, composite, input_ranges, reduce_range, red):
     """Default combine: each slot independently reduces the input using its op."""
     results = []
@@ -25,19 +29,27 @@ def _independent_slots(ctx, accs, acc_reads, inp, composite, input_ranges, reduc
     return results[-1]
 
 def online_softmax_l(ctx, accs, acc_reads, inp, composite, input_ranges, reduce_range, red):
-    """Online-softmax: (m, l) state with correction-based combine."""
+    """Online-softmax: (m, l) state with correction-based combine.
+    
+    Decomposes the input into scalar elements (horizontal reduce) and iterates,
+    applying the per-element online softmax combine step for each element.
+    """
     LOG2E = UOp.const(dtypes.float32, 1.4426950408889634)
     NEG1 = UOp.const(dtypes.float32, -1.0)
     
-    inp_score = inp
+    # Decompose input into scalar elements (like _independent_slots does)
+    inp_lst = _horizontal_reduce(inp, composite.slots[0].dtype)
     m_old, l_old = acc_reads
     
-    m_new = m_old.alu(Ops.MAX, inp_score)
-    diff = m_old.alu(Ops.ADD, m_new.alu(Ops.MUL, NEG1))
-    corr = diff.alu(Ops.MUL, LOG2E).alu(Ops.EXP2)
-    score_shifted = inp_score.alu(Ops.ADD, m_new.alu(Ops.MUL, NEG1))
-    exp_score = score_shifted.alu(Ops.MUL, LOG2E).alu(Ops.EXP2)
-    l_new = l_old.alu(Ops.MUL, corr).alu(Ops.ADD, exp_score)
+    m_new, l_new = m_old, l_old
+    for inp_score in inp_lst:
+        m_new = m_new.alu(Ops.MAX, inp_score)
+        diff = m_old.alu(Ops.ADD, m_new.alu(Ops.MUL, NEG1))
+        corr = diff.alu(Ops.MUL, LOG2E).alu(Ops.EXP2)
+        score_shifted = inp_score.alu(Ops.ADD, m_new.alu(Ops.MUL, NEG1))
+        exp_score = score_shifted.alu(Ops.MUL, LOG2E).alu(Ops.EXP2)
+        l_new = l_new.alu(Ops.MUL, corr).alu(Ops.ADD, exp_score)
+        m_old, l_old = m_new, l_new
     
     ends = [acc.index(UOp.const(dtypes.weakint, 0)).store(new_val).end(*reduce_range).rtag("mergeable")
             for acc, new_val in zip(accs, [m_new, l_new])]
@@ -116,6 +128,10 @@ def _handle_no_range_generic(inp, composite, red):
         for slot in composite.slots:
             slot_lst = _horizontal_reduce(inp, slot.dtype)
             results.append(functools.reduce(lambda x,y: x.alu(slot.op, y), slot_lst))
+        # Populate cache for REDUCE_SLOT resolution
+        _composite_result_cache[red.arg] = results
+        for r in results:
+            _composite_result_cache[r] = results
         return results[-1]
     
     step_fn = COMBINE_STEP_REGISTRY.get(composite.combine_fn, (None,))[0]
@@ -132,6 +148,10 @@ def _handle_no_range_generic(inp, composite, red):
     for elem in inp_lst:
         state = list(step_fn(*state, elem))
     
+    # Populate cache with all final state values
+    _composite_result_cache[red.arg] = state
+    for s in state:
+        _composite_result_cache[s] = state
     return state[-1]
 
 def _handle_no_range(inp, composite, red):
@@ -145,6 +165,10 @@ def _handle_no_range(inp, composite, red):
         for slot in composite.slots:
             slot_lst = _horizontal_reduce(inp, slot.dtype)
             results.append(functools.reduce(lambda x,y: x.alu(slot.op, y), slot_lst))
+        # Populate cache for REDUCE_SLOT resolution
+        _composite_result_cache[red.arg] = results
+        for r in results:
+            _composite_result_cache[r] = results
         return results[-1]
     
     if composite.combine_fn == "online_softmax_l":
@@ -190,3 +214,13 @@ def _lower_composite_no_range_pm(red):
     if not isinstance(red.arg[0], CompositeReduce): return None
     if len(red.src) >= 2: return None
     return _handle_no_range_generic(red.src[0], red.arg[0], red)
+
+def _resolve_reduce_slot(slot):
+    """PatternMatcher callback: resolve REDUCE_SLOT to the cached slot result.
+    The cache is populated by REDUCE lowering (both no-range and range paths).
+    After the REDUCE is lowered, REDUCE_SLOT.src[0] points to the lowering result
+    which is also stored as a cache key.
+    """
+    cached = _composite_result_cache.get(slot.src[0])
+    if cached is None: return None
+    return cached[slot.arg]
