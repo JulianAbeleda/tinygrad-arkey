@@ -157,6 +157,8 @@ expander = PatternMatcher([
 # ****
 
 def fix_reduce_unroll(x:UOp):
+  from tinygrad.uop.ops import CompositeReduce
+  if isinstance(x.arg[0], CompositeReduce): return None
   reduce_range, reduce_expand = partition(x.src[1:], lambda y: y.op is Ops.RANGE)
   if len(reduce_expand) == 0: return None
   reduce_expand = [x for x in reduce_expand if x.op is not Ops.CONST]
