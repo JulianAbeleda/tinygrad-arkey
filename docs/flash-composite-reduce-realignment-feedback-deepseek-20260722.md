@@ -1,6 +1,19 @@
 # FEEDBACK → deepseek: realign the composite reduce with the repo (machine-native, not hardcoded)
 
-**Context:** your composite-reduce work is a good *base* — the primitive lowers, M4/M5 pass, and your blocker analysis is honest. Keep it. But it **diverged from its own Phase 0 design and from how the rest of tinygrad works**: the combine is a hardcoded special case, and composite reduces are carved *out* of the optimizer. This scope realigns it. The hardcoded version stays as the reference to diff against; the realigned version is what ships.
+## ⚠️ THIS IS A DESIGN REFACTOR — not new work, not a rewrite. Read this framing first.
+
+You are **restructuring existing, working code to change its shape, while its behavior stays identical.** Treat it with refactor discipline:
+- **Behavior-preserving.** The composite reduce must compute the *same numeric result* before and after. Correctness is the fixed invariant; only the *structure* changes (hardcoded → orthogonal/abstract).
+- **The existing tests + the hardcoded version are your ORACLE.** M4/M5 and the composite tests must stay green at every step; the current hardcoded output is what you diff the refactored output against. Do NOT delete the hardcoded version until the refactored one reproduces it exactly — keep it side-by-side as the reference.
+- **Incremental, green between each step.** Small commits, full suite green each time. Never a big-bang rewrite.
+- **Exactly ONE intended behavior change, and it's a *removal of a restriction*, not a logic change:** the composite reduce stops being exempted from the optimizer (so it can be WMMA'd). Its numeric output is unchanged; it simply now flows through the machine like every other REDUCE.
+- **You are not starting over.** The base is good (§ below). This refactor pays down the design debt in it — it does not discard it.
+
+If at any point you find yourself rewriting the combine math or re-deriving online-softmax, stop — that's not a refactor, that's a rewrite, and the numeric oracle already exists in your own passing tests.
+
+---
+
+**Context:** your composite-reduce work is a good *base* — the primitive lowers, M4/M5 pass, and your blocker analysis is honest. Keep it. But it **diverged from its own Phase 0 design and from how the rest of tinygrad works**: the combine is a hardcoded special case, and composite reduces are carved *out* of the optimizer. This refactor realigns it. The hardcoded version stays as the reference oracle to diff against; the realigned version is what ships.
 
 ## Why this matters — orthogonality, centralization, modularization, abstraction
 
