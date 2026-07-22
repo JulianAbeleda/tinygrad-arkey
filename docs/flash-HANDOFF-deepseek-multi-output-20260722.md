@@ -28,3 +28,15 @@ Full scope: **`docs/flash-multi-output-reduce-scope-deepseek-20260722.md`** (rea
 
 ## One line
 **You own the multi-output route end to end. Baseline: master a5a24a0d8, REDUCE_SLOT added but UNPROVEN. Prove M1-M3, then M4 (two slots from one reduce), M5 (attention acc/l ≤1e-2), then Phase B rangeify emission, C WMMA, D gate+wire. Per-artifact proof, no hand kernels, stop honestly at a real wall. Claude re-runs your gate tests.**
+
+---
+
+## UPDATE (2026-07-22) — intel from the abandoned two-reduce agent that helps YOU
+
+The two-reduce track was abandoned but its agent left two findings on master (`90a12cc20`, `829e7e9be`, both green) that apply to the multi-output route:
+
+1. **A general composite-machinery bug is now FIXED (keep it) — you need this.** `reduce_to_acc` used to `return results[-1]`, which let DCE delete the stores of every non-surfaced slot (e.g. `m` froze at its identity forever — verified in generated ISA). Fixed by anchoring the return on `.after(*ends)` (ALL slots' ends) so `merge_reduce_ends` keeps them. **This directly enables your multi-output goal:** REDUCE_SLOT reads multiple slots, so the non-"last" slots' stores MUST survive DCE. Confirm your REDUCE_SLOT lowering benefits from / is consistent with this fix.
+
+2. **A real wall you WILL hit at M5 — the vec-input wall.** The `online_softmax` combine takes a `vec2(score, v)` input. Building that vec input *externally at the Tensor/UOp level* is rejected at `tinygrad/uop/symbolic.py:205` (`gep_pushing` GEP-of-GEP fold): vec dtypes are only legitimate when introduced by the optimizer's own UPCAST/CONTRACT/WMMA expander, NOT as a literal externally-constructed input dtype to `Ops.REDUCE`. Documented + machine-checked in `test_online_softmax_acc_vec_input_is_walled` (3 reproductions).
+   - **Implication:** a MANUAL M5 test that hand-builds the reduce with a literal vec2(score,v) input will hit this wall.
+   - **But likely NOT a wall for Phase B (scheduler-emitted):** when rangeify emits the reduce, `score` (from the QKᵀ matmul) and `v` enter via RANGE-indexed loads inside the kernel, not a literal external vec input — so the scheduler path may sidestep symbolic.py:205 entirely. **Test M5 accordingly:** if the manual vec2 construction is walled, feed score and v as separate scalar/RANGE-indexed inputs to the combine rather than a pre-packed vec, OR validate the combine at the Phase-B (scheduler-emitted) level. Report precisely which path works.
