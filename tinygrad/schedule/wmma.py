@@ -4,7 +4,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from tinygrad.dtype import DType
 from tinygrad.uop.ops import Ops, UOp
-from tinygrad.uop.ops import CompositeTileCarrier
+from tinygrad.uop.ops import CompositeTileCarrier, TileGatherSpec
+
+def tile_gather(source: UOp, spec: TileGatherSpec) -> UOp:
+  """Create an opt-in ownership-preserving tile carrier.
+
+  This is deliberately scheduler-only: it records how q/kv/hd axes map into
+  a shaped fragment but performs no flattening or backend lowering.
+  """
+  spec.validate()
+  if source.shape is None or any(a < 0 or a >= len(source.shape) for a in spec.source_axes):
+    raise ValueError("tile gather source axes are out of range")
+  return UOp(Ops.TILE_GATHER, source.dtype, (source,), arg=spec)
 
 
 def adapt_wmma_fragment(source: UOp, *, role: str, dtype: DType, shape: tuple[int, int] = (16, 16)) -> UOp:

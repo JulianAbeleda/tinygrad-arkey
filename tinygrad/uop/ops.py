@@ -274,6 +274,10 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
       case Ops.COMPOSITE_ACCUMULATOR:
         # Backend-neutral tuple carrier: arg is the per-slot logical shape.
         return tuple(self.arg) if isinstance(self.arg, tuple) else self.src[0]._shape
+      case Ops.TILE_GATHER:
+        # Scheduler-only carrier.  The argument is the explicit fragment
+        # shape; no renderer may consume this until ownership lowering exists.
+        return self.arg.fragment_shape
       case Ops.SCOPED_REDUCE:
         # The first SCOPED_REDUCE source is its semantically identical
         # fallback.  It is deliberately source-visible so a compiler that
@@ -1247,6 +1251,20 @@ class CompositeTileCarrier(NamedTuple):
             "pv_a": (m, n), "pv_b": (n, hd), "acc": (m, hd),
             "state": self.state_slots, "lane_axis": self.lane_axis,
             "lane_group": self.lane_group}
+
+class TileGatherSpec(NamedTuple):
+  """Explicit ownership contract for a logical attention tile gather."""
+  role: str
+  fragment_shape: tuple[int, int]
+  source_axes: tuple[int, ...]
+  tile_axes: tuple[int, ...]
+
+  def validate(self):
+    if self.role not in ("score", "value", "acc"): raise ValueError("invalid tile gather role")
+    if len(self.fragment_shape) != 2 or any(not isinstance(x, int) or x <= 0 for x in self.fragment_shape):
+      raise ValueError("tile gather fragment shape must be positive rank-2")
+    if len(self.source_axes) != len(self.tile_axes): raise ValueError("tile gather axis ownership mismatch")
+    return self
 
 class CompositeInputSpec(NamedTuple):
   role: str

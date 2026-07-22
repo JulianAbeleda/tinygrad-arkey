@@ -69,7 +69,7 @@ class Ops(FastEnum):
   MEMORY_SEMANTIC = auto()
   # Scheduler-only logical element with explicit owner-axis mapping. It is
   # consumed by a stateful reduction before program lowering.
-  SCOPED_VALUE = auto()
+  SCOPED_VALUE = auto(); TILE_GATHER = auto()
   # FUNCTION has a TUPLE body and is gradient-able; CALL is an opaque kernel invocation
   PARAM = auto(); FUNCTION = auto(); CALL = auto()
 
