@@ -80,3 +80,53 @@ def _horizontal_reduce(inp: UOp, out_dtype):
         horizontal_amount = inp.dtype.count // out_dtype.count
         return [inp.gep(tuple(range(i, inp.dtype.count, horizontal_amount))) for i in range(0, horizontal_amount)]
     return [inp]
+
+def _handle_no_range(inp, composite, red):
+    """Handle composite REDUCE with no ranges (STACK-based, post-expander).
+    Iterates over input elements using the combine logic."""
+    from tinygrad.uop.ops import CompositeReduce, AccumulatorSlot
+    inp_lst = _horizontal_reduce(inp, composite.slots[0].dtype)
+    
+    if composite.combine_fn is None:
+        results = []
+        for slot in composite.slots:
+            slot_lst = _horizontal_reduce(inp, slot.dtype)
+            results.append(functools.reduce(lambda x,y: x.alu(slot.op, y), slot_lst))
+        return results[-1]
+    
+    if composite.combine_fn == "online_softmax_l":
+        LOG2E = UOp.const(dtypes.float32, 1.4426950408889634)
+        NEG1 = UOp.const(dtypes.float32, -1.0)
+        m = red.const(composite.slots[0].dtype, composite.slots[0].identity if composite.slots[0].identity is not None else identity_element(composite.slots[0].op, composite.slots[0].dtype.scalar()))
+        l = red.const(composite.slots[1].dtype, composite.slots[1].identity if composite.slots[1].identity is not None else identity_element(composite.slots[1].op, composite.slots[1].dtype.scalar()))
+        for score in inp_lst:
+            m_new = m.alu(Ops.MAX, score)
+            diff = m.alu(Ops.ADD, m_new.alu(Ops.MUL, NEG1))
+            corr = diff.alu(Ops.MUL, LOG2E).alu(Ops.EXP2)
+            score_shifted = score.alu(Ops.ADD, m_new.alu(Ops.MUL, NEG1))
+            exp_score = score_shifted.alu(Ops.MUL, LOG2E).alu(Ops.EXP2)
+            l = l.alu(Ops.MUL, corr).alu(Ops.ADD, exp_score)
+            m = m_new
+        return l
+    
+    if composite.combine_fn == "online_softmax":
+        LOG2E = UOp.const(dtypes.float32, 1.4426950408889634)
+        NEG1 = UOp.const(dtypes.float32, -1.0)
+        m = red.const(composite.slots[0].dtype, composite.slots[0].identity if composite.slots[0].identity is not None else identity_element(composite.slots[0].op, composite.slots[0].dtype.scalar()))
+        l = red.const(composite.slots[1].dtype, composite.slots[1].identity if composite.slots[1].identity is not None else identity_element(composite.slots[1].op, composite.slots[1].dtype.scalar()))
+        acc = red.const(composite.slots[2].dtype, composite.slots[2].identity if composite.slots[2].identity is not None else identity_element(composite.slots[2].op, composite.slots[2].dtype.scalar()))
+        for elem in inp_lst:
+            score = elem.gep(0) if elem.dtype.count > 1 else elem
+            v_val = elem.gep(1) if elem.dtype.count > 1 else elem
+            m_new = m.alu(Ops.MAX, score)
+            diff = m.alu(Ops.ADD, m_new.alu(Ops.MUL, NEG1))
+            corr = diff.alu(Ops.MUL, LOG2E).alu(Ops.EXP2)
+            score_shifted = score.alu(Ops.ADD, m_new.alu(Ops.MUL, NEG1))
+            exp_score = score_shifted.alu(Ops.MUL, LOG2E).alu(Ops.EXP2)
+            l = l.alu(Ops.MUL, corr).alu(Ops.ADD, exp_score)
+            acc = acc.alu(Ops.MUL, corr).alu(Ops.ADD, exp_score.alu(Ops.MUL, v_val))
+            m = m_new
+        rcp_l = l.alu(Ops.RECIPROCAL)
+        return acc.alu(Ops.MUL, rcp_l)
+    
+    return inp_lst[-1]  # fallback: return last element
