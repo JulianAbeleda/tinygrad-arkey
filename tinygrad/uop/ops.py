@@ -1185,6 +1185,10 @@ class CompositeInputSpec(NamedTuple):
   # Filled by rangeify only. Public axis_map stays in primary logical-dimension
   # coordinates; this maps it to the owning live RANGE ids for late lowering.
   range_axes: tuple[int|None, ...]|None = None
+  # Immutable source-rank provenance. Rangeify resolves axis_map to concrete
+  # owner RANGE ids without collapsing the source's distinct axis identity.
+  source_shape: tuple|None = None
+  source_axis_ranges: tuple[int|None, ...]|None = None
 
 class ScopedReduceSpec(NamedTuple):
   """Source-visible contract for a producer nested inside an outer reduction.

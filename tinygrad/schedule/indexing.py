@@ -112,10 +112,13 @@ def convert_reduce_to_reduce_with_ranges(ctx:IndexingContext, x:UOp):
         # primary dimension. The empty late map marks this as already owned.
         idxs = tuple(owner_ranges[a] if a is not None else UOp.const(dtypes.weakint, 0) for a in spec.axis_map if a != -1)
         resolved_srcs.append(src.src[0].index(*idxs))
-        resolved_specs.append(spec._replace(range_axes=()))
+        resolved_specs.append(spec._replace(range_axes=(), source_shape=src.src[0].shape,
+                              source_axis_ranges=tuple(resolve_axis(a) for a in spec.axis_map)))
       else:
         resolved_srcs.append(src)
-        resolved_specs.append(spec._replace(range_axes=tuple(resolve_axis(a) for a in spec.axis_map))
+        resolved_specs.append(spec._replace(source_shape=src.shape,
+                              source_axis_ranges=tuple(resolve_axis(a) for a in spec.axis_map),
+                              range_axes=tuple(resolve_axis(a) for a in spec.axis_map))
                               if spec.axis_map is not None else spec)
     extra_srcs, reduce_arg = tuple(resolved_srcs), reduce_arg._replace(input_specs=tuple(resolved_specs))
   ret = UOp(Ops.REDUCE, x.dtype, src=(x.src[0],)+tuple(new_ranges)+tuple(extra_srcs), arg=(reduce_arg, ()))
