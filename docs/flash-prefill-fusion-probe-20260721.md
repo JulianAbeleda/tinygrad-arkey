@@ -5,6 +5,19 @@
 
 ---
 
+## ⛔ CORRECTION (Claude, 2026-07-21) — this probe is INVALID; conclusions below are wrong. Read this first.
+
+The probe code (`flash_prefill_blocked_tensor.py`) called `acc.realize(); m.realize(); l.realize(); synchronize()` **inside the KV-block loop**. That forces eager per-block materialization, which manufactured *every* finding below — the 28 kernels, the HBM round-trips, the "134×", and the "rangeify never sees the recurrence as one graph." Rangeify was never allowed to see the fused graph. Verified corrections:
+
+1. **Correctness was deepseek's own bug.** Same math as a single graph (no in-loop realize) = **max_rel_err 0.0009 (exact)**. The reported "0.082" was error injected by the forced per-block realize (which measured 0.17). The blocked-online-softmax approach is numerically sound.
+2. **"Rangeify needs a 3-tuple accumulator REDUCE / 1–2 weeks" is FALSE.** Rangeify already fuses attention **today** via the `PCONTIG` knob (`rangeify.py:286,296–310` — partial-contiguous fusion of reduce chains that touch buffers; settable per-computation via `ScheduleHints.pcontig`, `rangeify.py:646`). Measured: SDPA at `T=KV=512` goes **31→19 kernels** at `PCONTIG≥4`, **correct** (rel err 0.00000). No missing primitive, no scheduler extension for *fusion*.
+3. **The REAL gap: fusion drops WMMA.** `PCONTIG=0` emits 2 WMMA calls (QKᵀ + PV on tensor cores); `PCONTIG=8` emits **0** → the fused kernel runs matmuls on vector ALUs → ~2.6× **slower** (~4900µs vs ~1850µs). Fusion and WMMA are currently mutually exclusive here.
+4. **Precisely located.** `postrange.py:_apply_tc_opt` (lines 305–318) already handles "an outer epilogue reduction around the actual dot-product reduction" and picks the first WMMA-compatible MUL-reduce — but tags **only one** reduce as TC (line 342). Fused attention has QKᵀ + max + sum + PV reduces and loses the WMMA-compatible MUL shape entirely. **Phase 2 = make WMMA coexist with `PCONTIG` fusion** (WMMA-ify both matmul contractions inside the fused kernel), reusing/extending the epilogue-reduce TC selection that already exists. Real, bounded compiler work in the TC-opt/postrange layer — NOT a from-scratch REDUCE primitive, NOT deepseek's tuple accumulator.
+
+**Everything below is deepseek's original text, retained as a record of the invalid probe. Do not act on §4/§5.**
+
+---
+
 ## 1. Correct Blocked Online-Softmax Code
 
 File: [extra/qk/flash_prefill_blocked_tensor.py](/home/ubuntu/tinygrad-arkey/extra/qk/flash_prefill_blocked_tensor.py)
