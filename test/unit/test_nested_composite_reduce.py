@@ -21,6 +21,20 @@ def test_lane_aware_composite_input_is_explicit_and_scalar_safe():
     inputs=(value.uop,), input_specs=(spec,), combine_fn="online_softmax")
   assert red.arg[0].input_specs[0] == spec
 
+def test_composite_state_slots_preserve_heterogeneous_logical_shapes():
+  """State metadata keeps scalar m/l distinct from the logical Hd accumulator."""
+  score = Tensor.empty(1, 1, 2, 3, 4, dtype=dtypes.float32)
+  value = Tensor.empty(1, 1, 2, 3, 4, dtype=dtypes.float32)
+  red = score.uop.composite_reduce(
+    AccumulatorSlot(Ops.MAX, dtypes.float32, float("-inf"), "m"),
+    AccumulatorSlot(Ops.ADD, dtypes.float32, 0.0, "l"),
+    AccumulatorSlot(Ops.ADD, dtypes.float32, 0.0, "acc"), axis=(3,),
+    inputs=(value.uop,), combine_fn="online_softmax",
+    slot_shapes=((1, 1, 2), (1, 1, 2), (1, 1, 2, 4)))
+  assert Tensor(UOp(Ops.REDUCE_SLOT, dtypes.float32, (red,), 0)).shape == (1, 1, 2)
+  assert Tensor(UOp(Ops.REDUCE_SLOT, dtypes.float32, (red,), 1)).shape == (1, 1, 2)
+  assert Tensor(UOp(Ops.REDUCE_SLOT, dtypes.float32, (red,), 2)).shape == (1, 1, 2, 4)
+
 
 def test_nested_reduction_with_logical_element_input_stays_in_one_schedule():
   # This is intentionally not attention-specific. `score` is an inner
