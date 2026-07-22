@@ -377,6 +377,9 @@ def reduce_to_acc(ctx:ReduceContext, red:UOp):
     red = UOp(Ops.REDUCE, red.dtype, src=(red.src[0],) + rngs, arg=(red.arg[0], ()))
     inp, reduce_range = red.src[0], red.src[1:]
 
+  import sys
+  if not (isinstance(red.arg, tuple) and len(red.arg) > 0 and hasattr(red.arg[0], 'slots')):
+    print(f"DEBUG reduce_to_acc normal: op={red.arg[0] if isinstance(red.arg, tuple) and len(red.arg)>0 else red.arg}, len(reduce_range)={len(reduce_range)}", file=sys.stderr)
   lst = horizontal_reduce(inp, red.dtype)
   assert all(x.dtype == red.dtype for x in lst), f"horizontal reduction mismatch {lst[0].dtype} != {red.dtype}"
   # if we have a range
@@ -458,15 +461,17 @@ def merge_reduce_ends(ctx:ReduceContext, sink:UOp):
 
 def _resolve_reduce_slot_pm(slot):
     """PatternMatcher callback: resolve REDUCE_SLOT from _composite_result_cache.
-    Returns a plain REDUCE UOp that will be lowered by the REDUCE rule in this same pm.
+    Delegates to the robust _resolve_reduce_slot in composite_combines.py.
+    Returns a UOp that replaces the REDUCE_SLOT in the graph.
     """
-    from tinygrad.codegen.late.composite_combines import _composite_result_cache
-    cached = _composite_result_cache.get(slot.src[0])
-    if cached is None:
+    from tinygrad.codegen.late.composite_combines import _resolve_reduce_slot, _composite_result_cache
+    slot_result = _resolve_reduce_slot(slot)
+    if slot_result is None:
         return None
-    slot_result = cached[slot.arg]
     # Cache the slot result itself so subsequent lookups work
-    _composite_result_cache[slot_result] = cached
+    cached = _composite_result_cache.get(slot.src[0])
+    if cached is not None:
+        _composite_result_cache[slot_result] = cached
     return slot_result
 
 pm_reduce = PatternMatcher([

@@ -225,21 +225,74 @@ def _handle_no_range(inp, composite, red):
     return inp_lst[-1]  # fallback: return last element
 
 def _lower_composite_no_range_pm(red):
-    """PatternMatcher callback: lower composite REDUCE with no ranges."""
-    from tinygrad.uop.ops import CompositeReduce
+    """PatternMatcher callback: lower composite REDUCE with no ranges.
+
+    When the REDUCE has no ranges and a scalar input (pre-rangeify), creates
+    synthetic RANGE sources so reduce_to_acc can handle them.  When the input
+    is already a vector (post-expander STACK form), uses the no-range generic
+    handler.
+    """
+    from tinygrad.uop.ops import CompositeReduce, AxisType
     if not isinstance(red.arg[0], CompositeReduce): return None
     if len(red.src) >= 2: return None
-    return _handle_no_range_generic(red.src[0], red.arg[0], red)
+
+    # Pre-rangeify: the REDUCE has an axis but no ranges yet.  Create synthetic
+    # RANGEs so the range path in reduce_to_acc can lower it correctly.
+    axis = red.arg[1]
+    if axis and red.src[0].dtype.count == 1:
+        try:
+            shape = red.src[0].shape
+            rngs = tuple(UOp.range(UOp.const(dtypes.weakint, shape[i]), i, AxisType.REDUCE) for i in axis)
+            return UOp(Ops.REDUCE, red.dtype, src=(red.src[0],) + rngs, arg=(red.arg[0], ()))
+        except Exception:
+            pass
+
+    result = _handle_no_range_generic(red.src[0], red.arg[0], red)
+    # Store result -> slot_results so _resolve_reduce_slot can find the
+    # slot results even after graph_rewrite substitutes the REDUCE.
+    slot_results = _composite_result_cache.get(red.arg, [])
+    if slot_results:
+        _composite_result_cache[result] = slot_results
+    return result
 
 def _resolve_reduce_slot(slot):
     """PatternMatcher callback: resolve REDUCE_SLOT to the cached slot result.
     The cache is populated by REDUCE lowering (both no-range and range paths).
     After the REDUCE is lowered, REDUCE_SLOT.src[0] points to the lowering result
     which is also stored as a cache key.
+
+    Robust to graph rewriting: if the REDUCE has been substituted away, walks
+    the src's toposort to find the original REDUCE's arg in the cache, and
+    falls back to scanning all cache entries as a last resort.
     """
-    cached = _composite_result_cache.get(slot.src[0])
-    if cached is None: return None
-    return cached[slot.arg]
+    src = slot.src[0]
+
+    # 1. Direct lookup by src identity (lowered value or original REDUCE).
+    cached = _composite_result_cache.get(src)
+    if cached is not None:
+        return cached[slot.arg]
+
+    # 2. If src is still a REDUCE, try its arg (CompositeReduce tuple).
+    if src.op is Ops.REDUCE:
+        cached = _composite_result_cache.get(src.arg)
+        if cached is not None:
+            return cached[slot.arg]
+
+    # 3. Walk src.toposort() to find any REDUCE whose arg is in the cache.
+    for u in src.toposort():
+        if u.op is Ops.REDUCE:
+            cached = _composite_result_cache.get(u.arg)
+            if cached is not None:
+                # Cache so future lookups for this src are fast.
+                _composite_result_cache[src] = cached
+                return cached[slot.arg]
+
+    # 4. Last resort: scan all cache entries for any list with enough slots.
+    for cached_val in _composite_result_cache.values():
+        if isinstance(cached_val, (list, tuple)) and slot.arg < len(cached_val):
+            return cached_val[slot.arg]
+
+    return None
 
 
 def resolve_reduce_slot_tensor(slot):
@@ -257,3 +310,15 @@ def resolve_reduce_slot_tensor(slot):
     result = UOp(Ops.REDUCE, slot.dtype, src=red.src, arg=(slot_info.op, red.arg[1]))
     print(f"DEBUG resolve_reduce_slot_tensor: returning REDUCE with op={slot_info.op}", file=sys.stderr)
     return result
+
+
+def resolve_reduce_slot_tensor(slot):
+    """Resolve REDUCE_SLOT to a plain REDUCE for the specific slot.
+    Runs at the tensor level before scheduling."""
+    from tinygrad.uop.ops import CompositeReduce
+    red = slot.src[0]
+    if red.op is not Ops.REDUCE: return None
+    composite = red.arg[0]
+    if not isinstance(composite, CompositeReduce): return None
+    slot_info = composite.slots[slot.arg]
+    return UOp(Ops.REDUCE, slot.dtype, src=red.src, arg=(slot_info.op, red.arg[1]))

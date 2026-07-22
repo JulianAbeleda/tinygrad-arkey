@@ -693,6 +693,10 @@ def get_kernel_graph(sink:UOp) -> UOp:
   return _get_kernel_graph(sink)
 
 def _get_kernel_graph(sink:UOp) -> UOp:
+  import sys
+  for u in sink.toposort():
+    if u.op is Ops.REDUCE:
+      print(f"DEBUG _get_kernel_graph: REDUCE, len(src)={len(u.src)}, arg[1]={u.arg[1] if isinstance(u.arg, tuple) and len(u.arg) > 1 else '?'}", file=sys.stderr)
   tsink = graph_rewrite(sink, multi_pm, name="multi_pm")
   if OPENPILOT_HACKS: tsink = graph_rewrite(tsink, pm_fold_moved_after, ctx={}, name="fold moved afters")
   tsink = graph_rewrite(tsink, pm_syntactic_sugar+pm_mops+earliest_rewrites, bottom_up=True, name="earliest rewrites")

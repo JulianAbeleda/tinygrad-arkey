@@ -88,6 +88,8 @@ def convert_pad_to_where_to_keep_behavior_local(ctx:IndexingContext, x:UOp):
   return ret
 
 def convert_reduce_to_reduce_with_ranges(ctx:IndexingContext, x:UOp):
+  import sys
+  print(f"DEBUG convert_reduce: op={x.op}, arg[1]={x.arg[1]}, in range_map={x in ctx.range_map}", file=sys.stderr)
   if len(x.arg[1]) == 0: return None
   # input ranges
   new_ranges = [r for i,r in enumerate(ctx.range_map[x][0]) if i in x.arg[1]]
@@ -186,6 +188,9 @@ def run_rangeify(tsink:UOp, debug:bool=False) -> tuple[UOp, IndexingContext]:
     #  3. potentially new if this op has 2+ consumers
 
     consumer_rngs = [rctx.range_map[c][0] for c in consumer_map[x] if c in rctx.range_map]
+    import sys
+    if x.op is Ops.REDUCE and len(x.arg[1]):
+      print(f"DEBUG run_rangeify REDUCE: in realize={x in rctx.realize_map}, consumer_rngs={len(consumer_rngs)}, arg[1]={x.arg[1]}", file=sys.stderr)
     if x in rctx.realize_map:
       # if this is in the realize_map, we create new ranges (at the output)
       out_rngs = tuple(rctx.new_range(s) for s in x.shape)
@@ -195,8 +200,12 @@ def run_rangeify(tsink:UOp, debug:bool=False) -> tuple[UOp, IndexingContext]:
       assert rctx.realize_map[x] is None
       rctx.realize_map[x] = list(range(len(x.shape)))
     elif len(consumer_rngs) == 0:
-      # if no consumers have ranges and this isn't realized, this doesn't have ranges either.
-      continue
+      import sys
+      if x.op is Ops.REDUCE and len(x.arg[1]):
+        print(f"DEBUG run_rangeify: REDUCE without consumers, creating ranges. arg[1]={x.arg[1]}", file=sys.stderr)
+        out_rngs = tuple(rctx.new_range(s) for s in x.shape)
+      else:
+        continue
     elif len(consumer_rngs) == 1:
       # if this has one consumer, it inherits the ranges from it
       out_rngs = consumer_rngs[0]
