@@ -62,7 +62,9 @@ def online_softmax(ctx, accs, acc_reads, inp, composite, input_ranges, reduce_ra
     if v_inp is None:
         inp_v = inp if inp.dtype.count == 1 else inp.gep(1)
     else:
-        inp_v = v_inp
+        # The generic scalar reducer cannot consume a lane-shaped V load.
+        # Keep this path scalar until a proven tile carrier lowering exists.
+        inp_v = v_inp.gep(0) if v_inp.dtype.count > 1 else v_inp
 
     m_old, l_old, acc_old = acc_reads
     
@@ -75,10 +77,22 @@ def online_softmax(ctx, accs, acc_reads, inp, composite, input_ranges, reduce_ra
     # The online state is scalar for m/l but the PV accumulator may carry a
     # logical Hd lane group. Broadcast scalar factors only at this boundary;
     # source V remains lane-shaped and is never packed into a giant score dtype.
-    acc_corr = corr.broadcast(acc_old.dtype.count) if acc_old.dtype.count > 1 and corr.dtype.count == 1 else corr
-    acc_exp = exp_score.broadcast(acc_old.dtype.count) if acc_old.dtype.count > 1 and exp_score.dtype.count == 1 else exp_score
-    if inp_v.dtype.count == 1 and acc_old.dtype.count > 1:
-      inp_v = inp_v.broadcast(acc_old.dtype.count)
+    # UOp.broadcast changes logical shape but does not reliably construct the
+    # vector dtype expected by late devectorization.  Build the lane carrier
+    # explicitly so scalar state factors and V have identical dtypes/shapes.
+    def lane_expand(x):
+      if acc_old.dtype.count == 1 or x.dtype.count == acc_old.dtype.count: return x
+      if x.dtype.count != 1: raise ValueError("online_softmax lane width mismatch")
+      return UOp(Ops.STACK, x.dtype.scalar().vec(acc_old.dtype.count), (x,) * acc_old.dtype.count)
+    acc_corr = lane_expand(corr)
+    acc_exp = lane_expand(exp_score)
+    # A scalar accumulator is the generic fallback representation; consume
+    # the owned scalar lane rather than introducing an unrepresentable vector
+    # result into that slot.
+    if inp_v.dtype.count > 1 or inp_v.shape != ():
+      inp_v = inp_v.gep(0)
+    else:
+      inp_v = lane_expand(inp_v)
     acc_new = acc_old.alu(Ops.MUL, acc_corr).alu(Ops.ADD, acc_exp.alu(Ops.MUL, inp_v))
     
     ends = [acc.index(UOp.const(dtypes.weakint, 0)).store(new_val).end(*reduce_range).rtag("mergeable")
