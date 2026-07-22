@@ -88,12 +88,10 @@ def convert_pad_to_where_to_keep_behavior_local(ctx:IndexingContext, x:UOp):
   return ret
 
 def convert_reduce_to_reduce_with_ranges(ctx:IndexingContext, x:UOp):
-  import sys
-  print(f"DEBUG convert_reduce: op={x.op}, arg[1]={x.arg[1]}, in range_map={x in ctx.range_map}", file=sys.stderr)
   if len(x.arg[1]) == 0: return None
   # input ranges
   new_ranges = [r for i,r in enumerate(ctx.range_map[x][0]) if i in x.arg[1]]
-  extra_srcs = x.src[1+len(x.arg[1]):] if len(x.src) > 1+len(x.arg[1]) else ()
+  extra_srcs = x.src[1:]
   ret = UOp(Ops.REDUCE, x.dtype, src=(x.src[0],)+tuple(new_ranges)+tuple(extra_srcs), arg=(x.arg[0], ()))
   ctx.range_map[ret] = ctx.range_map[x]
   return ret
