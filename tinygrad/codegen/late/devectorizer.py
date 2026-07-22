@@ -441,8 +441,8 @@ def reduce_to_acc(ctx:ReduceContext, red:UOp):
       # Coupled combine: online-softmax, l-only. Slots: m (MAX), l (ADD). Input: score scalar.
       if composite.combine_fn == "online_softmax_l":
         assert len(composite.slots) == 2
-        LOG2E = red.const_like(1.4426950408889634, dtype=red.dtype.scalar())
-        NEG1 = red.const_like(-1.0, dtype=red.dtype.scalar())
+        LOG2E = UOp.const(dtypes.float32, 1.4426950408889634)
+        NEG1 = UOp.const(dtypes.float32, -1.0)
         
         inp_score = inp  # scalar per-element input from REDUCE loop
         
