@@ -16,6 +16,8 @@ accumulator-loop lowering path -- the thing this test is chartered to prove work
 """
 import unittest
 
+import numpy as np
+
 from tinygrad import Tensor, dtypes
 from tinygrad.helpers import NOOPT
 from tinygrad.uop.ops import UOp, Ops, AccumulatorSlot, CompositeReduce
