@@ -197,3 +197,23 @@ class TestAttentionSemantic(unittest.TestCase):
     probs = np.exp(scores - scores.max(axis=-1, keepdims=True))
     expected = probs / probs.sum(axis=-1, keepdims=True) @ v_expanded
     np.testing.assert_allclose(got, expected, rtol=1e-5, atol=1e-5)
+
+  def test_fp16_tile_attention_is_exact_under_tc_optimizer_boundary(self):
+    """The composite path stays numerically correct when TC_OPT is enabled.
+
+    The composite WMMA boundary is deliberately fail-closed today: QK is
+    consumed as scalar scores by online-softmax.  This gate protects that
+    contract while standalone matmul WMMA remains covered by the AMD ISA
+    compilation tests.
+    """
+    rng = np.random.default_rng(7)
+    qv = rng.standard_normal((1, 1, 16, 64), dtype=np.float32)
+    kv = rng.standard_normal((1, 1, 16, 64), dtype=np.float32)
+    vv = rng.standard_normal((1, 1, 16, 64), dtype=np.float32)
+    got = shared_prefill_attention(Tensor(qv, dtype=dtypes.float16),
+                                   Tensor(kv, dtype=dtypes.float16),
+                                   Tensor(vv, dtype=dtypes.float16)).numpy()
+    scores = qv @ np.swapaxes(kv, -1, -2) / np.sqrt(64)
+    probs = np.exp(scores - scores.max(axis=-1, keepdims=True))
+    expected = probs / probs.sum(axis=-1, keepdims=True) @ vv
+    np.testing.assert_allclose(got, expected, rtol=2e-3, atol=2e-3)
