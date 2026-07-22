@@ -92,11 +92,28 @@ def online_softmax(ctx, accs, acc_reads, inp, composite, input_ranges, reduce_ra
     anchored = ret_acc.after(ends[0]).after(ends[1])
     return anchored.alu(Ops.MUL, rcp_l)
 
+def online_softmax_state(ctx, accs, acc_reads, inp, composite, input_ranges, reduce_range, red, v_inp=None):
+    """Online-softmax state-only combine returning raw (m, l, acc)."""
+    LOG2E = UOp.const(dtypes.float32, 1.4426950408889634)
+    NEG1 = UOp.const(dtypes.float32, -1.0)
+    inp_v = inp if inp.dtype.count == 1 else inp.gep(1)
+    m_old, l_old, acc_old = acc_reads
+    m_new = m_old.alu(Ops.MAX, inp)
+    diff = m_old.alu(Ops.ADD, m_new.alu(Ops.MUL, NEG1))
+    corr = diff.alu(Ops.MUL, LOG2E).alu(Ops.EXP2)
+    exp_score = inp.alu(Ops.ADD, m_new.alu(Ops.MUL, NEG1)).alu(Ops.MUL, LOG2E).alu(Ops.EXP2)
+    l_new = l_old.alu(Ops.MUL, corr).alu(Ops.ADD, exp_score)
+    acc_new = acc_old.alu(Ops.MUL, corr).alu(Ops.ADD, exp_score.alu(Ops.MUL, inp_v))
+    ends = [acc.index(UOp.const(dtypes.weakint, 0)).store(new_val).end(*reduce_range).rtag("mergeable")
+            for acc, new_val in zip(accs, [m_new, l_new, acc_new])]
+    return tuple(acc.after(end).index(UOp.const(dtypes.weakint, 0)) for acc, end in zip(accs, ends))
+
 # Registry: combine_fn string -> callable
 COMBINE_REGISTRY = {
     None: _independent_slots,
     "online_softmax_l": online_softmax_l,
     "online_softmax": online_softmax,
+    "online_softmax_state": online_softmax_state,
 }
 
 def _horizontal_reduce(inp: UOp, out_dtype):

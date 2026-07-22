@@ -19,6 +19,10 @@ def merge_online_softmax_tile(m: Tensor, l: Tensor, acc: Tensor, scores: Tensor,
     new_acc = acc * corr + pv_weights.matmul(v, dtype=acc.dtype)
     return new_m, new_l, new_acc
 
+def normalize_online_softmax_state(acc: Tensor, l: Tensor) -> Tensor:
+    """Materialize public attention output from raw online-softmax state."""
+    return acc / l
+
 def flash_attention(q: Tensor, k: Tensor, v: Tensor, scale: float = None,
                     mask: Tensor = None) -> Tensor:
     """
