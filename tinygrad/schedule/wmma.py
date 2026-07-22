@@ -4,9 +4,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from tinygrad.dtype import DType
 from tinygrad.uop.ops import Ops, UOp
+from tinygrad.uop.ops import CompositeTileCarrier
 
 
-def adapt_wmma_fragment(source: UOp, *, role: str, dtype: DType) -> UOp:
+def adapt_wmma_fragment(source: UOp, *, role: str, dtype: DType, shape: tuple[int, int] = (16, 16)) -> UOp:
   """Validate/adapt one logical tile at the SHAPED_WMMA boundary.
 
   Composite lowering must perform the real range ownership and packing before
@@ -16,11 +17,28 @@ def adapt_wmma_fragment(source: UOp, *, role: str, dtype: DType) -> UOp:
   """
   if role not in ("q", "k", "score", "v", "acc"):
     raise ValueError(f"unknown WMMA fragment role: {role}")
-  if source.shape != (16, 16):
-    raise ValueError(f"{role} fragment must be a logical 16x16 tile")
+  if source.shape != shape:
+    raise ValueError(f"{role} fragment must be a logical {shape[0]}x{shape[1]} tile")
   if source.dtype.base != dtype:
     raise ValueError(f"{role} fragment dtype does not match the tile ABI")
   return source
+
+def adapt_composite_tile_fragments(carrier: CompositeTileCarrier, *, score: UOp, value: UOp,
+                                   acc: UOp, dtype: DType) -> tuple[UOp, UOp, UOp]:
+  """Validate the logical carriers before constructing QK/PV WMMA nodes.
+
+  This is intentionally a zero-copy boundary: grouped Hd lanes must already
+  be owned by the scheduler.  Flattening or broadcasting here would silently
+  destroy lane provenance, so malformed composite sources fail closed.
+  """
+  carrier.validate()
+  expected = (("score", score, carrier.score_fragment or carrier.score_shape[:2]),
+              ("v", value, carrier.value_fragment or (carrier.value_shape[0], carrier.value_shape[2])),
+              ("acc", acc, carrier.output_fragment or (carrier.output_shape[0], carrier.output_shape[2])))
+  out = []
+  for role, src, shape in expected:
+    out.append(adapt_wmma_fragment(src, role=role, dtype=dtype if role != "acc" else src.dtype.base, shape=shape))
+  return tuple(out)
 
 
 @dataclass(frozen=True)

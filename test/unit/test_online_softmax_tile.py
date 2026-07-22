@@ -82,3 +82,13 @@ def test_source_to_shaped_wmma_adapter_requires_exact_fragment_abi():
     adapt_wmma_fragment(UOp.placeholder((16,), dtypes.half, 10), role="v", dtype=dtypes.half)
   with pytest.raises(ValueError, match="dtype"):
     adapt_wmma_fragment(half_tile, role="score", dtype=dtypes.float32)
+
+
+def test_composite_tile_fragment_adapter_preserves_grouped_lane_shapes():
+  from tinygrad.uop.ops import CompositeTileCarrier
+  from tinygrad.schedule.wmma import adapt_composite_tile_fragments
+  carrier = CompositeTileCarrier((16, 16, 64), (16, 64, 64), (16, 16, 64), lane_group=4)
+  score = UOp.placeholder((16, 16), dtypes.half, 20)
+  value = UOp.placeholder((16, 64), dtypes.half, 21)
+  acc = UOp.placeholder((16, 64), dtypes.float32, 22)
+  assert adapt_composite_tile_fragments(carrier, score=score, value=value, acc=acc, dtype=dtypes.half) == (score, value, acc)
