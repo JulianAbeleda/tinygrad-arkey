@@ -177,6 +177,20 @@ def test_owned_fragment_index_map_preserves_5d_qkv_hd_ownership():
       TileGatherSpec("value", (16, 16), (3, 4), (0, 1), (0, 0), 4))
   assert value[0] == (0, 0, 0, 0, 0) and value[-1] == (0, 0, 0, 15, 15)
 
+def test_owned_fragment_index_map_qk_pv_numeric_coordinate_equivalence():
+  """The scheduler map names the same coordinates as a direct tile gather."""
+  from tinygrad.uop.ops import TileGatherSpec
+  from tinygrad.schedule.wmma import build_owned_fragment_index_map
+  qk = build_owned_fragment_index_map((1, 1, 16, 16, 1),
+      TileGatherSpec("score", (16, 16), (2, 3), (0, 1)))
+  pv = build_owned_fragment_index_map((1, 1, 1, 16, 16),
+      TileGatherSpec("value", (16, 16), (3, 4), (0, 1)))
+  # Flattened tile order is row-major for both fragments; the shared KV
+  # coordinate is therefore identical across QK columns and PV rows.
+  assert all(qk[r * 16 + c][3] == pv[c * 16 + r][3] for r in range(16) for c in range(16))
+  assert qk[0][2] == qk[15][2] == 0 and qk[16][2] == 1
+  assert pv[0][4] == 0 and pv[15][4] == 15
+
 def test_owned_fragment_index_map_rejects_unsupported_geometry():
   from tinygrad.uop.ops import TileGatherSpec
   from tinygrad.schedule.wmma import build_owned_fragment_index_map

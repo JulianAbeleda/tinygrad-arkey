@@ -40,8 +40,28 @@ def lower_attention_semantic(att:UOp) -> UOp:
     # retain ordinary SDPA until geometry selection is proven.
     wmma_shape = q.dtype == k.dtype == v.dtype == dtypes.half and hd in {64, 128} and \
       q_len == 16 and k.shape == v.shape == (b, h, 16, hd)
-    if hd in {1, 64, 128} and (tiny_shape or wmma_shape) and \
+    # The first ownership-map integration is deliberately Hd=16 only.  It
+    # validates the concrete QK and PV tile coordinates before constructing
+    # the ordinary scalar composite reduction; no backend promotion happens
+    # here, and all other geometries retain the scalar/fallback route.
+    owned_map_shape = q.dtype == k.dtype == v.dtype == dtypes.half and hd == 16 and \
+      q_len == 16 and k.shape == v.shape == (b, h, 16, hd)
+    if hd in {1, 16, 64, 128} and (tiny_shape or wmma_shape or owned_map_shape) and \
        q.dtype == k.dtype == v.dtype and q.dtype in {dtypes.float, dtypes.half}:
+      owned_map_proven = False
+      if owned_map_shape:
+        from tinygrad.schedule.wmma import build_owned_fragment_index_map
+        from tinygrad.uop.ops import TileGatherSpec
+        # QK owns (query, kv) and PV owns (kv, Hd).  Keep this proof local to
+        # the admission boundary so a malformed layout simply falls back.
+        try:
+          build_owned_fragment_index_map((b, h, q_len, 16, 1),
+              TileGatherSpec("score", (16, 16), (2, 3), (0, 1)))
+          build_owned_fragment_index_map((b, h, 1, 16, hd),
+              TileGatherSpec("value", (16, 16), (3, 4), (0, 1), lane_group=1))
+          owned_map_proven = True
+        except ValueError:
+          return att.src[0]
       from tinygrad import Tensor
       # Hd stays a logical output axis rather than a giant vector dtype. This
       # keeps the scalar/vector ABI generic while the scoped reduction owns
@@ -57,7 +77,7 @@ def lower_attention_semantic(att:UOp) -> UOp:
                AccumulatorSlot(Ops.ADD, att.arg.qk_dtype, 0.0, "l"),
                AccumulatorSlot(Ops.ADD, att.arg.qk_dtype, 0.0, "acc"))
       tile_carrier = CompositeTileCarrier((16, 16, hd), (16, hd, hd), (16, 16, hd),
-                                          provenance=("qk", "pv", "online_softmax"))
+                                          provenance=("qk", "pv", "online_softmax") + (("owned-index-map",) if owned_map_proven else ()))
       red = score.uop.composite_reduce(*slots, axis=(3,), inputs=(logical_v,), combine_fn="online_softmax",
         input_specs=(CompositeInputSpec("logical", (0, 1, None, 3, 4), primary_repeated=True),),
         tile_carrier=tile_carrier)
