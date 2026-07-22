@@ -81,6 +81,59 @@ def _horizontal_reduce(inp: UOp, out_dtype):
         return [inp.gep(tuple(range(i, inp.dtype.count, horizontal_amount))) for i in range(0, horizontal_amount)]
     return [inp]
 
+def _combine_step_online_softmax_l(m_old, l_old, score):
+    """Per-element step for online-softmax (m,l) combine."""
+    from tinygrad.uop.ops import UOp, Ops, dtypes
+    LOG2E = UOp.const(dtypes.float32, 1.4426950408889634)
+    NEG1 = UOp.const(dtypes.float32, -1.0)
+    m_new = m_old.alu(Ops.MAX, score)
+    diff = m_old.alu(Ops.ADD, m_new.alu(Ops.MUL, NEG1))
+    corr = diff.alu(Ops.MUL, LOG2E).alu(Ops.EXP2)
+    score_shifted = score.alu(Ops.ADD, m_new.alu(Ops.MUL, NEG1))
+    exp_score = score_shifted.alu(Ops.MUL, LOG2E).alu(Ops.EXP2)
+    l_new = l_old.alu(Ops.MUL, corr).alu(Ops.ADD, exp_score)
+    return m_new, l_new
+
+def _combine_step_independent(op, acc, elem):
+    """Per-element step for independent-slot combine."""
+    return acc.alu(op, elem)
+
+# Registry: combine_fn -> (step_fn, num_slots, identity_getter)
+# step_fn takes (state_values..., element_parts...) and returns new state
+COMBINE_STEP_REGISTRY = {
+    None: (lambda *args: args[0].alu(args[1].op, args[2]) if len(args) == 3 else None, None, None),
+    "online_softmax_l": (_combine_step_online_softmax_l, 2, lambda slot: slot.identity),
+}
+
+def _handle_no_range_generic(inp, composite, red):
+    """Generic no-range handler: iterate over elements using combine step function."""
+    from tinygrad.uop.ops import Ops, dtypes, identity_element
+    inp_lst = _horizontal_reduce(inp, composite.slots[0].dtype)
+    
+    if composite.combine_fn is None:
+        # Independent slots: reduce each independently
+        results = []
+        for slot in composite.slots:
+            slot_lst = _horizontal_reduce(inp, slot.dtype)
+            results.append(functools.reduce(lambda x,y: x.alu(slot.op, y), slot_lst))
+        return results[-1]
+    
+    step_fn = COMBINE_STEP_REGISTRY.get(composite.combine_fn, (None,))[0]
+    if step_fn is None:
+        raise RuntimeError(f"Unknown composite combine: {composite.combine_fn}")
+    
+    # Initialize state from slot identities
+    state = []
+    for slot in composite.slots:
+        ident_val = slot.identity if slot.identity is not None else identity_element(slot.op, slot.dtype.scalar())
+        state.append(red.const(slot.dtype, ident_val))
+    
+    # Iterate over elements
+    for elem in inp_lst:
+        state = list(step_fn(*state, elem))
+    
+    return state[-1]
+
 def _handle_no_range(inp, composite, red):
     """Handle composite REDUCE with no ranges (STACK-based, post-expander).
     Iterates over input elements using the combine logic."""
@@ -136,4 +189,4 @@ def _lower_composite_no_range_pm(red):
     from tinygrad.uop.ops import CompositeReduce
     if not isinstance(red.arg[0], CompositeReduce): return None
     if len(red.src) >= 2: return None
-    return _handle_no_range(red.src[0], red.arg[0], red)
+    return _handle_no_range_generic(red.src[0], red.arg[0], red)
