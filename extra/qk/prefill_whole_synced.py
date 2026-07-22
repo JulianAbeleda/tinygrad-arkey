@@ -52,6 +52,25 @@ def _prefill_graph_gemm_enabled(model) -> bool:
   return getattr(model, "_prefill_graph_gemm_registry", None) is not None
 
 
+def shared_attention_attribution(model) -> dict[str, Any]:
+  """Report the model-side semantic-attention admission without claiming fusion.
+
+  The generated kernel proof is deliberately separate: a requested semantic
+  boundary can still fail closed to ordinary SDPA when its scheduler eligibility
+  gate rejects a workload.  This makes 8B and 14B measurements comparable while
+  preventing an artifact from overstating a scheduler request as score residency.
+  """
+  config = model.config
+  requested = bool(getattr(config, "prefill_tc_attn", False) and getattr(config, "prefill_v2", False))
+  return {
+    "schema": "shared-prefill-attention-route.v1",
+    "requested": requested,
+    "boundary": "shared_prefill_attention" if requested else "scaled_dot_product_attention",
+    "fallback_contract": "ordinary_sdpa",
+    "fusion_proven": False,
+  }
+
+
 def _runtime_route_env(model) -> dict[str, Any]:
   env = dict(os.environ)
   for key in ("BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_JSON", "BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH",
@@ -337,6 +356,7 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
     "graph_gemm": graph_gemm,
     "prefill_v2": bool(model.config.prefill_v2),
     "prefill_route": model.prefill_policy.get("strategy", "unknown"),
+    "shared_attention": shared_attention_attribution(model),
     "K": K,
     "warmups": warmups,
     "rounds": rounds,

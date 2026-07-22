@@ -581,25 +581,13 @@ class TransformerBlock(FFNBlock):
                                          ring_full=_ring_full)
       attn = out.reshape(B, Hq, T, Hd).cast(q.dtype)
     elif self.config.prefill_tc_attn and getattr(self, '_prefill_v2', False) and isinstance(start_pos, int) and resolve(T != 1):
-      # P2: Option-B explicit TC attention on CONCRETE KV. Q@Kᵀ (TC) -> fp16 scores -> softmax -> P@V (TC),
-      # GQA via broadcast (K/V per kv-head expanded over the G group dim). Concrete KV=start_pos+T -> TC fires.
-      Hkv, Hd, KV = self.config.n_kv_heads, self.config.head_dim, start_pos + T
-      G = self.config.n_heads // Hkv; scale = Hd ** -0.5
-      qg = q.reshape(B, Hkv, G, T, Hd).cast(dtypes.float16)
-      kg = k.reshape(B, Hkv, 1, KV, Hd).cast(dtypes.float16)
-      vg = v.reshape(B, Hkv, 1, KV, Hd).cast(dtypes.float16)
-      with role_metadata("attn_score"): scores = _prefill_semantic(_prefill, prefill_scratch, (qg @ kg.transpose(-1, -2)).float() * scale)
-      with role_metadata("attn_mask"): scores = _prefill_semantic(_prefill, prefill_scratch, scores + mask.reshape(1, 1, 1, T, KV))
-      with role_metadata("softmax"): s = _prefill_semantic(_prefill, prefill_scratch, scores.softmax(-1))
-      # Phase 3: composite online-softmax l-value (computed alongside standard softmax)
-      if getattr(self.config, 'prefill_flash_attn', False):
-        from tinygrad.uop.ops import AccumulatorSlot, Ops
-        slot_m = AccumulatorSlot(op=Ops.MAX, dtype=scores.uop.dtype, identity=float("-inf"), name="m")
-        slot_l = AccumulatorSlot(op=Ops.ADD, dtype=scores.uop.dtype, identity=0.0, name="l")
-        _flash_l = _prefill_semantic(_prefill, prefill_scratch,
-            Tensor(scores.uop.composite_reduce(slot_m, slot_l, axis=(-1,), combine_fn="online_softmax_l")))
-      with role_metadata("attn_av"):
-        attn = (s.cast(dtypes.float16) @ vg).reshape(B, self.config.n_heads, T, Hd).cast(q.dtype)  # (B,H,T,Hd)
+      # Q/K/V have the same fp16 activation contract for resident-overlay and
+      # packed-weight projections.  Capture attention once at that boundary;
+      # rangeify either lowers the semantic operation or preserves its exact
+      # SDPA fallback.  Do not decompose scores here.
+      from tinygrad.llm.flash_prefill_attention import shared_prefill_attention
+      with role_metadata("shared_prefill_attention"):
+        attn = _prefill_semantic(_prefill, prefill_scratch, shared_prefill_attention(q, k, v, mask=mask))
     else:
       attn = _prefill_semantic(_prefill, prefill_scratch,
                                q.scaled_dot_product_attention(k, v, attn_mask=mask, enable_gqa=True))  # (B,H,T,Hd)
