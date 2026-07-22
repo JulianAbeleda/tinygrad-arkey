@@ -57,6 +57,33 @@ def lower_tile_gather(source: UOp, *, role: str, dtype: DType) -> UOp:
     raise ValueError("tile gather is not a shaped fragment")
   return adapt_wmma_fragment(source, role=role, dtype=dtype, shape=spec.fragment_shape)
 
+def amd_tile_wmma_boundary_report(*, qk_score: UOp, pv_value: UOp, pv_acc: UOp) -> dict:
+  """Describe whether AMD can consume the composite tile at the WMMA boundary.
+
+  This is intentionally diagnostic only.  The renderer must not synthesize
+  lane packing or emit an instruction from a logical composite reduction.  A
+  report is promotable only when all three operands are explicit TILE_GATHER
+  carriers with exact 16x16 ownership and the expected score/value/acc roles.
+  """
+  reasons = []
+  nodes = (("score", qk_score), ("value", pv_value), ("acc", pv_acc))
+  for role, node in nodes:
+    if node.op is not Ops.TILE_GATHER:
+      reasons.append(f"{role} is not a TILE_GATHER carrier")
+      continue
+    spec = node.arg
+    try: spec.validate()
+    except ValueError as e:
+      reasons.append(f"{role} carrier invalid: {e}")
+      continue
+    if spec.role != role:
+      reasons.append(f"{role} carrier declares role {spec.role}")
+    if spec.fragment_shape != (16, 16) or node.shape != (16, 16) or node.src[0].shape != (16, 16):
+      reasons.append(f"{role} carrier is not an exact 16x16 fragment")
+  return {"backend": "amd", "qk": "score", "pv": "value", "acc": "acc",
+          "promotable": not reasons, "renderer": "ordinary_wmma" if not reasons else "fail-closed",
+          "isa": "eligible" if not reasons else "not-emitted", "reasons": tuple(reasons)}
+
 
 def adapt_wmma_fragment(source: UOp, *, role: str, dtype: DType, shape: tuple[int, int] = (16, 16)) -> UOp:
   """Validate/adapt one logical tile at the SHAPED_WMMA boundary.

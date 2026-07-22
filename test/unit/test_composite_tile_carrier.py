@@ -3,6 +3,8 @@ from tinygrad.dtype import dtypes
 from tinygrad import Tensor
 from tinygrad.llm.flash_prefill_attention import shared_prefill_attention
 from tinygrad.schedule.rangeify import lower_attention_semantic
+from tinygrad.schedule.wmma import amd_tile_wmma_boundary_report, tile_gather
+from tinygrad.uop.ops import TileGatherSpec
 
 
 def test_composite_tile_carrier_validates_attention_geometry():
@@ -49,3 +51,17 @@ def test_bounded_attention_attaches_shared_tile_carrier():
   assert carriers[0].score_shape == (16, 16, 64)
   assert carriers[0].value_shape == (16, 64, 64)
   assert carriers[0].output_shape == (16, 16, 64)
+
+def test_amd_tile_wmma_boundary_requires_explicit_score_value_acc_carriers():
+  def carrier(role):
+    src = UOp.placeholder((16, 16), dtypes.half, 0)
+    return tile_gather(src, TileGatherSpec(role, (16, 16), (0, 1), (0, 1)))
+  report = amd_tile_wmma_boundary_report(qk_score=carrier("score"), pv_value=carrier("value"), pv_acc=carrier("acc"))
+  assert report["promotable"] and report["renderer"] == "ordinary_wmma"
+
+def test_amd_tile_wmma_boundary_fails_closed_for_unshaped_or_wrong_role():
+  src = UOp.placeholder((16, 8), dtypes.half, 0)
+  bad = tile_gather(src, TileGatherSpec("score", (16, 8), (0, 1), (0, 1)))
+  report = amd_tile_wmma_boundary_report(qk_score=bad, pv_value=bad, pv_acc=bad)
+  assert not report["promotable"] and report["renderer"] == "fail-closed"
+  assert report["isa"] == "not-emitted" and report["reasons"]
