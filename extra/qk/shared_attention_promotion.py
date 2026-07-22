@@ -29,6 +29,8 @@ class RooflineMeasurement:
   source_artifact: str | None = None
   isa_artifact: str | None = None
   allocation_census: str | None = None
+  dual_wmma_fused_call_report: dict[str, Any] | None = None
+  hardware_status: str = "NOT_MEASURED"
 
   def validate(self) -> list[str]:
     errors: list[str] = []
@@ -40,6 +42,26 @@ class RooflineMeasurement:
     if not self.source_artifact: errors.append("missing generated source artifact")
     if not self.isa_artifact: errors.append("missing ISA artifact")
     if not self.allocation_census: errors.append("missing allocation census")
+    if self.hardware_status not in ("MEASURED", "NOT_MEASURED"):
+      errors.append("hardware_status must be MEASURED or NOT_MEASURED")
+    report = self.dual_wmma_fused_call_report
+    if report is None:
+      errors.append("missing dual-WMMA fused-call report")
+    elif not isinstance(report, dict):
+      errors.append("dual-WMMA fused-call report must be an object")
+    else:
+      if report.get("fused_call_count") != 1:
+        errors.append("dual-WMMA report must identify exactly one fused CALL")
+      if report.get("qk_wmma") is not True:
+        errors.append("dual-WMMA report missing QK WMMA evidence")
+      if report.get("pv_wmma") is not True:
+        errors.append("dual-WMMA report missing PV WMMA evidence")
+      if report.get("source_artifact") != self.source_artifact:
+        errors.append("dual-WMMA source artifact does not match measurement")
+      if report.get("isa_artifact") != self.isa_artifact:
+        errors.append("dual-WMMA ISA artifact does not match measurement")
+    if self.hardware_status == "MEASURED" and (not report or report.get("hardware_verified") is not True):
+      errors.append("MEASURED hardware requires explicit hardware_verified evidence")
     if self.candidate_ms is not None and self.baseline_ms is not None and self.candidate_ms >= self.baseline_ms:
       errors.append("candidate is not faster than baseline")
     return errors
@@ -59,8 +81,10 @@ def promotion_status(proof: dict[str, Any], measurements: list[RooflineMeasureme
   profiles = {m.model_profile for m in measurements}
   for profile in ("qwen3_8b_q4k_m_gfx1100", "qwen3_14b_q4k_m_gfx1100"):
     if profile not in profiles: measurement_errors.append(f"missing measurements for {profile}")
+  hardware_status = "MEASURED" if measurements and all(m.hardware_status == "MEASURED" for m in measurements) else "NOT_MEASURED"
   return {"promotion_eligible": not missing and not measurement_errors,
           "missing_flags": missing, "measurement_errors": measurement_errors,
+          "hardware_status": hardware_status,
           "measurements": [{**asdict(m), "derived": m.derived()} for m in measurements]}
 
 __all__ = ["REQUIRED_FLAGS", "RooflineMeasurement", "promotion_status"]
