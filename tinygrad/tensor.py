@@ -1256,7 +1256,12 @@ class Tensor(RandMixin):
       corr = (m - new_m).exp()
       p = (score - new_m).exp()
       l = l * corr + p.sum(axis=-1, keepdim=True)
-      acc = acc * corr + p.matmul(value[..., start:stop, :], dtype=acc_dtype)
+      # Preserve a tensor-core-visible fp16/bf16 PV contraction while the
+      # running accumulator remains in acc_dtype. For ordinary float inputs
+      # this is a no-op; for reduced-precision activations it is the explicit
+      # activation boundary used by the existing generic TC matcher.
+      pv_weights = p if p.dtype == value.dtype else p.cast(value.dtype)
+      acc = acc * corr + pv_weights.matmul(value[..., start:stop, :], dtype=acc_dtype)
       m = new_m
     return (acc / l).cast(out_dtype)
 

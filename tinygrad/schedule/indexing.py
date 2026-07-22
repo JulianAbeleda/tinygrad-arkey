@@ -187,9 +187,6 @@ def run_rangeify(tsink:UOp, debug:bool=False) -> tuple[UOp, IndexingContext]:
     #  3. potentially new if this op has 2+ consumers
 
     consumer_rngs = [rctx.range_map[c][0] for c in consumer_map[x] if c in rctx.range_map]
-    import sys
-    if x.op is Ops.REDUCE and len(x.arg[1]):
-      print(f"DEBUG run_rangeify REDUCE: in realize={x in rctx.realize_map}, consumer_rngs={len(consumer_rngs)}, arg[1]={x.arg[1]}", file=sys.stderr)
     if x in rctx.realize_map:
       # if this is in the realize_map, we create new ranges (at the output)
       out_rngs = tuple(rctx.new_range(s) for s in x.shape)
@@ -199,12 +196,8 @@ def run_rangeify(tsink:UOp, debug:bool=False) -> tuple[UOp, IndexingContext]:
       assert rctx.realize_map[x] is None
       rctx.realize_map[x] = list(range(len(x.shape)))
     elif len(consumer_rngs) == 0:
-      import sys
-      if x.op is Ops.REDUCE and len(x.arg[1]):
-        print(f"DEBUG run_rangeify: REDUCE without consumers, creating ranges. arg[1]={x.arg[1]}", file=sys.stderr)
-        out_rngs = tuple(rctx.new_range(s) for s in x.shape)
-      else:
-        continue
+      if x.op is Ops.REDUCE and len(x.arg[1]): out_rngs = tuple(rctx.new_range(s) for s in x.shape)
+      else: continue
     elif len(consumer_rngs) == 1:
       # if this has one consumer, it inherits the ranges from it
       out_rngs = consumer_rngs[0]

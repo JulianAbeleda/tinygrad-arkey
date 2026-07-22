@@ -21,6 +21,24 @@ class TestAttentionSemantic(unittest.TestCase):
     red = (Tensor.ones(4, 8, dtype=dtypes.float32) * 3).sum(axis=-1)
     self.assertNotEqual(red.uop.op, Ops.ATTENTION)
 
+  def test_fp16_primitive_exposes_qk_and_pv_contractions(self):
+    q = Tensor.empty(1, 1, 16, 16, dtype=dtypes.float16)
+    k = Tensor.empty(1, 1, 16, 16, dtype=dtypes.float16)
+    v = Tensor.empty(1, 1, 16, 16, dtype=dtypes.float16)
+    out = shared_prefill_attention(q, k, v)
+    primitive = out.uop.src[1]
+    def contraction_body(red):
+      body = red.src[0]
+      while body.op is Ops.CAST: body = body.src[0]
+      return body
+    contractions = [u for u in primitive.toposort()
+                    if u.op is Ops.REDUCE and u.arg[0] is Ops.ADD and contraction_body(u).op is Ops.MUL]
+    self.assertGreaterEqual(len(contractions), 2)
+    # Both operands of each contraction are fp16, so the centralized AMD TC
+    # matcher can select its standard fp16->fp32 WMMA descriptor.
+    for contraction in contractions:
+      self.assertEqual(tuple(x.dtype.scalar() for x in contraction_body(contraction).src), (dtypes.float16, dtypes.float16))
+
   def test_bounded_online_primitive_matches_attention(self):
     rng = np.random.default_rng(0)
     q = Tensor(rng.standard_normal((1, 2, 3, 4), dtype=np.float32))
