@@ -367,14 +367,22 @@ def horizontal_reduce(inp:UOp, out_dtype:DType) -> list[UOp]:
   return [inp]
 
 def reduce_to_acc(ctx:ReduceContext, red:UOp):
-  inp, reduce_range = red.src[0], red.src[1:]
+  from tinygrad.uop.ops import CompositeReduce
+  # Separate V extra src from ranges: if composite has v_uop, last src is V reference
+  composite = red.arg[0] if isinstance(red.arg, tuple) and len(red.arg) > 0 and isinstance(red.arg[0], CompositeReduce) else None
+  has_v = composite is not None and composite.v_uop is not None
+  inp = red.src[0]
+  raw_rest = red.src[1:]
+  reduce_range = raw_rest[:-1] if has_v and len(raw_rest) > 0 else raw_rest
+  v_src = raw_rest[-1] if has_v and len(raw_rest) > 0 else None
 
   # Composite reduce with no ranges yet: rangeify inline
-  from tinygrad.uop.ops import CompositeReduce, AxisType
   if isinstance(red.arg[0], CompositeReduce) and len(reduce_range) == 0:
+    from tinygrad.uop.ops import AxisType
     axis = red.arg[1]
+    extra_srcs = red.src[1:]
     rngs = tuple(UOp.range(UOp.const(dtypes.weakint, red.src[0].shape[i]), i, AxisType.REDUCE) for i in axis)
-    red = UOp(Ops.REDUCE, red.dtype, src=(red.src[0],) + rngs, arg=(red.arg[0], ()))
+    red = UOp(Ops.REDUCE, red.dtype, src=(red.src[0],) + rngs + extra_srcs, arg=(red.arg[0], ()))
     inp, reduce_range = red.src[0], red.src[1:]
 
   import sys
@@ -389,9 +397,13 @@ def reduce_to_acc(ctx:ReduceContext, red:UOp):
     input_ranges = tuple([x for x in topo if x.op is Ops.RANGE and x not in reduce_range and x not in ended_ranges])
 
     # Check for composite reduce (multi-accumulator)
-    from tinygrad.uop.ops import CompositeReduce
     if isinstance(red.arg[0], CompositeReduce):
       composite = red.arg[0]
+      
+      # Load V input if composite has v_uop
+      v_inp = None
+      if composite.v_uop is not None and v_src is not None:
+        v_inp = _load_v_at_reduce_pos(v_src, composite, input_ranges, reduce_range)
       
       # Create accumulators (common to all combines)
       accs = []
@@ -421,7 +433,7 @@ def reduce_to_acc(ctx:ReduceContext, red:UOp):
           for r in slot_results:
               _composite_result_cache[r] = slot_results
       
-      result = combine_fn(ctx, accs, acc_reads, inp, composite, input_ranges, reduce_range, red)
+      result = combine_fn(ctx, accs, acc_reads, inp, composite, input_ranges, reduce_range, red, v_inp=v_inp)
       
       # Map the combine result to the cached slot results so REDUCE_SLOT lookup works
       if composite.combine_fn is None:

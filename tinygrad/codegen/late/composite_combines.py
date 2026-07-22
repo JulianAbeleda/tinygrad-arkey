@@ -17,7 +17,7 @@ from tinygrad.uop.ops import identity_element, CompositeReduce, AccumulatorSlot
 # Used by _resolve_reduce_slot to resolve REDUCE_SLOT ops after REDUCE lowering.
 _composite_result_cache: dict = {}
 
-def _independent_slots(ctx, accs, acc_reads, inp, composite, input_ranges, reduce_range, red):
+def _independent_slots(ctx, accs, acc_reads, inp, composite, input_ranges, reduce_range, red, v_inp=None):
     """Default combine: each slot independently reduces the input using its op."""
     results = []
     for i, (slot, acc, acc_read) in enumerate(zip(composite.slots, accs, acc_reads)):
@@ -28,7 +28,7 @@ def _independent_slots(ctx, accs, acc_reads, inp, composite, input_ranges, reduc
         results.append(acc.after(end).index(UOp.const(dtypes.weakint, 0)))
     return results[-1]
 
-def online_softmax_l(ctx, accs, acc_reads, inp, composite, input_ranges, reduce_range, red):
+def online_softmax_l(ctx, accs, acc_reads, inp, composite, input_ranges, reduce_range, red, v_inp=None):
     """Online-softmax: (m, l) state with correction-based combine.
     
     Decomposes the input into scalar elements (horizontal reduce) and iterates,
@@ -55,13 +55,19 @@ def online_softmax_l(ctx, accs, acc_reads, inp, composite, input_ranges, reduce_
             for acc, new_val in zip(accs, [m_new, l_new])]
     return accs[-1].after(*ends).index(UOp.const(dtypes.weakint, 0))
 
-def online_softmax(ctx, accs, acc_reads, inp, composite, input_ranges, reduce_range, red):
+def online_softmax(ctx, accs, acc_reads, inp, composite, input_ranges, reduce_range, red, v_inp=None):
     """Online-softmax: (m, l, acc) state with correction + acc/l output."""
     LOG2E = UOp.const(dtypes.float32, 1.4426950408889634)
     NEG1 = UOp.const(dtypes.float32, -1.0)
     
-    inp_score = inp if inp.dtype.count == 1 else inp.gep(0)
-    inp_v = inp if inp.dtype.count == 1 else inp.gep(1)
+    # Score: inp is the reduction input (score value at current KV position)
+    inp_score = inp
+    # V: provided by devectorizer from composite.v_uop, else fall back to gep
+    if v_inp is None:
+        inp_v = inp if inp.dtype.count == 1 else inp.gep(1)
+    else:
+        inp_v = v_inp
+
     m_old, l_old, acc_old = acc_reads
     
     m_new = m_old.alu(Ops.MAX, inp_score)
