@@ -1262,28 +1262,19 @@ class Tensor(RandMixin):
       stop = min(start + kv_block, key.shape[-2])
       score = self.matmul(key[..., start:stop, :].transpose(-2, -1), dtype=acc_dtype) * scale
       if attn_mask is not None: score = score + attn_mask[..., start:stop]
-      # Reduced-row values feed a broadcasted score tile. Materialize these
-      # bounded row/tile edges so rangeify cannot alias the KV reduction index
-      # with the later elementwise/PV indexing.
-      block_m = score.max(axis=-1, keepdim=True).contiguous()
-      new_m = m.maximum(block_m).contiguous()
-      corr = (m - new_m).exp().contiguous()
-      p = (score - new_m).exp().contiguous()
-      l = (l * corr + p.sum(axis=-1, keepdim=True).contiguous()).contiguous()
+      block_m = score.max(axis=-1, keepdim=True)
+      new_m = m.maximum(block_m)
+      corr = (m - new_m).exp()
+      p = (score - new_m).exp()
+      l = l * corr + p.sum(axis=-1, keepdim=True)
       # Preserve a tensor-core-visible fp16/bf16 PV contraction while the
       # running accumulator remains in acc_dtype. For ordinary float inputs
       # this is a no-op; for reduced-precision activations it is the explicit
       # activation boundary used by the existing generic TC matcher.
-      # `p` carries the max-reduction broadcast view. As with ordinary SDPA,
-      # make the PV operand contiguous before matmul so its reduce-axis index
-      # cannot alias the contraction index.
-      pv_weights = (p if p.dtype == value.dtype else p.cast(value.dtype)).contiguous()
-      acc_corr = corr.expand(acc.shape).contiguous()
-      acc = (acc * acc_corr + pv_weights.matmul(value[..., start:stop, :], dtype=acc_dtype)).contiguous()
+      pv_weights = p if p.dtype == value.dtype else p.cast(value.dtype)
+      acc = acc * corr + pv_weights.matmul(value[..., start:stop, :], dtype=acc_dtype)
       m = new_m
-    # `l` is a reduced row scalar; materialize its broadcast source before the
-    # final vector normalization for the same indexing reason as PV weights.
-    return (acc / l.contiguous()).cast(out_dtype)
+    return (acc / l).cast(out_dtype)
 
   # ***** cast ops *****
 
