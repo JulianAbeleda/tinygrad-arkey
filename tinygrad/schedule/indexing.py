@@ -123,14 +123,15 @@ def convert_reduce_to_reduce_with_ranges(ctx:IndexingContext, x:UOp):
     resolved_specs, resolved_srcs = [], []
     for spec, src in zip(reduce_arg.input_specs, extra_srcs):
       if spec.axis_map is not None and src.op is Ops.SCOPED_VALUE:
-        # Index the source while owner_ranges are still addressed by logical
-        # primary dimension. The empty late map marks this as already owned.
+        # Materialize only the pointer while retaining the source-rank marker
+        # in its tag. The explicit spec remains the authoritative carrier.
         def resolve_idx(axis):
           if axis is None: return UOp.const(dtypes.weakint, 0)
           owner = _resolve_composite_axis_owner(owner_ranges, axis)
           return owner if owner is not None else UOp.const(dtypes.weakint, 0)
         idxs = tuple(resolve_idx(a) for a in spec.axis_map if a != -1)
-        resolved_srcs.append(src.src[0].index(*idxs))
+        indexed = src.src[0].index(*idxs)
+        resolved_srcs.append(indexed.replace(tag=src.arg))
         resolved_specs.append(spec._replace(range_axes=(), source_shape=src.src[0].shape,
                               source_axis_ranges=tuple(resolve_axis(a) for a in spec.axis_map)))
       else:
