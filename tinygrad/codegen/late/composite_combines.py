@@ -64,7 +64,7 @@ def online_softmax(ctx, accs, acc_reads, inp, composite, input_ranges, reduce_ra
     else:
         # The generic scalar reducer cannot consume a lane-shaped V load.
         # Keep this path scalar until a proven tile carrier lowering exists.
-        inp_v = v_inp.gep(0) if v_inp.dtype.count > 1 else v_inp
+        inp_v = inp if inp.dtype.count == 1 else inp.gep(1)
 
     m_old, l_old, acc_old = acc_reads
     
