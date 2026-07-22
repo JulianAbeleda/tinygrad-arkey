@@ -129,7 +129,7 @@ class Scheduler:
     # structure.  This pass owns flat reductions whose one loop plus one
     # expanded inner axis otherwise become one wide straight-line body.
     if len(reduction_ranges) > 2: return
-    streams = sum(u.op is Ops.INDEX and bool(u.src[1].ranges.keys() & reduction_ranges)
+    streams = sum(u.op is Ops.INDEX and len(u.src) >= 2 and bool(u.src[1].ranges.keys() & reduction_ranges)
                   for u in self.reduceop.backward_slice)
     if streams <= 0: return
 

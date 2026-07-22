@@ -149,6 +149,9 @@ class Ops(FastEnum):
   # reduce
   REDUCE = auto(); ALLREDUCE = auto()
 
+  # multi-output reduce slot access: REDUCE_SLOT(composite_reduce, i) returns slot i
+  REDUCE_SLOT = auto()
+
   # expander ops
   UNROLL = auto(); CONTRACT = auto(); VCAT = auto(); PTRCAT = auto()
 

@@ -59,6 +59,8 @@ base_rewrite = PatternMatcher([
 
   # SHRINK/INDEX
   (UPat(Ops.INDEX, src=(UPat.var("buf"), UPat.var('idx')), name="x"), lambda ctx,**kwargs: ctx.render_index(**kwargs)),
+  # zero-dim INDEX (scalar access)
+  (UPat(Ops.INDEX, src=(UPat.var("buf"),), name="x"), lambda ctx,buf,x: ctx[buf] if isinstance(buf.dtype, PtrDType) else ctx[buf]),
   (UPat(Ops.SHRINK, src=(UPat.var("buf"), UPat.var('idx'), UPat.cvar()), name="x"), lambda ctx,**kwargs: ctx.render_index(**kwargs)),
   (UPat(Ops.STACK, name="x"),
    lambda ctx,x: f"{ctx.float4.replace('float4', ctx.render_type(x))}" + \

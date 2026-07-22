@@ -39,6 +39,7 @@ def simplify_merge_adjacent(u:UOp) -> UOp|None:
   return u
 
 def mark_gated(ctx, idx):
+  if len(idx.src) < 2: return  # zero-dim index, nothing to gate
   if idx.src[1].op is Ops.WHERE:
     x, cond = idx.src[1].get_idx(), idx.src[1].get_valid()
     # get all ranges r with guards "r < c" for some const c

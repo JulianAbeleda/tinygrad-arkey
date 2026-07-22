@@ -264,6 +264,8 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
 
       case Ops.GEP:
         return (len(self.arg),) if len(self.arg) > 1 else ()
+      case Ops.REDUCE_SLOT:
+        return ()  # scalar: each slot is a single accumulated value
       case Ops.STACK:
         if len(self.src) == 0: return ()
         if isinstance(self.dtype, PtrDType):

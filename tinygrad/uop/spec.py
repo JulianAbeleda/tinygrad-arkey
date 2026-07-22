@@ -191,6 +191,10 @@ spec_tensor = PatternMatcher([
    lambda x: isinstance(x.arg, tuple) and len(x.arg) == 2 and (x.arg[0] in {Ops.ADD, Ops.MUL, Ops.MAX} or hasattr(x.arg[0], 'slots'))
    and isinstance(x.arg[1], tuple) and all(y.dtype in (dtypes.weakint, dtypes.int) for y in x.src[1:])),
 
+  # REDUCE_SLOT reads slot i from a composite REDUCE
+  (UPat(Ops.REDUCE_SLOT, src=(UPat(),), name="x"),
+   lambda x: isinstance(x.arg, int) and x.src[0].op is Ops.REDUCE and hasattr(x.src[0].arg[0], 'slots') and 0 <= x.arg < len(x.src[0].arg[0].slots)),
+
   # COPY. TODO: this should not have allow_any_len, but something is adding ranges
   (UPat(Ops.COPY, name="copy", src=(UPat.var("x"), UPat(Ops.DEVICE)), allow_any_len=True, arg=None), lambda copy,x: copy.dtype == x.dtype),
   (UPat(Ops.ALLREDUCE, name="red", src=(UPat.var("x"), UPat(Ops.DEVICE))), lambda red,x: red.dtype == x.dtype and isinstance(red.arg, Ops)),
@@ -225,6 +229,12 @@ spec_tensor = PatternMatcher([
 
 # these ops can exist in programs but not the tensor spec. example: LOAD
 spec_program = PatternMatcher([
+  # REDUCE with composite arg may reach program level before lowering
+  (UPat(Ops.REDUCE, src=(UPat(),), allow_any_len=True, name="x"),
+   lambda x: isinstance(x.arg, tuple) and len(x.arg) == 2 and (x.arg[0] in {Ops.ADD, Ops.MUL, Ops.MAX} or hasattr(x.arg[0], 'slots'))),
+  # REDUCE_SLOT may reach program level before lowering
+  (UPat(Ops.REDUCE_SLOT, src=(UPat(),), name="x"),
+   lambda x: isinstance(x.arg, int) and x.src[0].op is Ops.REDUCE),
   (UPat(Ops.MEMORY_SEMANTIC), lambda: False),
   # weakint is not allowed in programs
   (UPat(GroupOp.All, dtypes.weakint), lambda: False),
