@@ -200,6 +200,18 @@ def run_rangeify(tsink:UOp, debug:bool=False) -> tuple[UOp, IndexingContext]:
     if x.op is Ops.REDUCE and hasattr(x.arg[0], "combine_fn"):
       rctx.composite_owned.update(x.src[0].backward_slice)
       rctx.composite_owned.add(x.src[0])
+    # A SCOPED_REDUCE is an explicit nested producer contract.  Its producer
+    # is not a materialized auxiliary tensor: it is evaluated in the owning
+    # outer reduction scope.  Transfer ownership before rangeify consults the
+    # realization map, otherwise the generic producer path splits it into a
+    # separate kernel and the scope contract is lost.
+    if x.op is Ops.SCOPED_REDUCE and len(x.src) > 1:
+      producer = x.src[1]
+      owned = producer.backward_slice
+      rctx.composite_owned.update(owned)
+      rctx.composite_owned.add(producer)
+      for u in owned:
+        rctx.realize_map.pop(u, None)
 
   # explicit rangeify
   ending_ranges: dict[UOp, list[UOp]] = {}
