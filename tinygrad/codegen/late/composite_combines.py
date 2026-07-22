@@ -10,14 +10,7 @@ The combine is responsible for:
 This keeps reduce_to_acc completely combine-agnostic.
 """
 import functools
-from tinygrad.uop.ops import UOp, Ops, dtypes, AxisType, AddrSpace
-
-def _offset_global_ranges(u, lane):
-    if u.op is Ops.RANGE and u.arg[1] is AxisType.GLOBAL:
-        return u.alu(Ops.ADD, UOp.const(u.dtype, lane))
-    if not u.src: return u
-    ns = tuple(_offset_global_ranges(s, lane) for s in u.src)
-    return u.replace(src=ns) if ns != u.src else u
+from tinygrad.uop.ops import UOp, Ops, dtypes, AxisType, AddrSpace, graph_rewrite, PatternMatcher, UPat
 from tinygrad.uop.ops import identity_element, CompositeReduce, AccumulatorSlot
 
 def _independent_slots(ctx, accs, acc_reads, inp, composite, input_ranges, reduce_range, red, v_inp=None):
@@ -187,7 +180,10 @@ def _handle_no_range_generic(inp, composite, red, auxiliary_inputs=()):
                     for lane in range(len(inp_lst)):
                         # The final GLOBAL range is the value-local Hd lane;
                         # warp/query ranges belong to the flattened batch.
-                        lane_idx = _offset_global_ranges(idx, lane)
+                        lane_idx = graph_rewrite(idx, PatternMatcher([
+                          (UPat(Ops.RANGE, name="r"), lambda r, lane=lane: r.alu(Ops.ADD, UOp.const(r.dtype, lane))
+                            if r.arg[1] is AxisType.GLOBAL else None),
+                        ]))
                         value = base.index(lane_idx)
                         lanes.append(value.cast(x.dtype) if x.op is Ops.CAST else value)
             auxiliary_lanes.append(lanes)
