@@ -3,7 +3,7 @@ from tinygrad.dtype import dtypes
 from tinygrad import Tensor
 from tinygrad.llm.flash_prefill_attention import shared_prefill_attention
 from tinygrad.schedule.rangeify import lower_attention_semantic
-from tinygrad.schedule.wmma import amd_tile_wmma_boundary_report, tile_gather
+from tinygrad.schedule.wmma import amd_tile_wmma_boundary_report, composite_reduce_tile_report, tile_gather
 from tinygrad.uop.ops import TileGatherSpec
 
 
@@ -51,6 +51,20 @@ def test_bounded_attention_attaches_shared_tile_carrier():
   assert carriers[0].score_shape == (16, 16, 64)
   assert carriers[0].value_shape == (16, 64, 64)
   assert carriers[0].output_shape == (16, 16, 64)
+
+def test_real_bounded_attention_fails_closed_before_fragment_emission():
+  """The real graph has logical ownership, but no scheduler fragment handoff yet."""
+  q = Tensor.empty(1, 1, 16, 64, dtype=dtypes.float16)
+  k = Tensor.empty(1, 1, 16, 64, dtype=dtypes.float16)
+  v = Tensor.empty(1, 1, 16, 64, dtype=dtypes.float16)
+  lowered = lower_attention_semantic(shared_prefill_attention(q, k, v).uop)
+  reds = [u for u in lowered.toposort() if u.op is Ops.REDUCE and
+          getattr(u.arg[0], "tile_carrier", None) is not None]
+  assert len(reds) == 1
+  report = composite_reduce_tile_report(reds[0])
+  assert not report["promotable"]
+  assert report["renderer"] == "fail-closed" and report["isa"] == "not-emitted"
+  assert any("TILE_GATHER" in reason for reason in report["reasons"])
 
 def test_amd_tile_wmma_boundary_requires_explicit_score_value_acc_carriers():
   def carrier(role):

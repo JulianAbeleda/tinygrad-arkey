@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from tinygrad.dtype import DType, dtypes
 from tinygrad.uop.ops import Ops, UOp
-from tinygrad.uop.ops import CompositeTileCarrier, TileGatherSpec
+from tinygrad.uop.ops import CompositeReduce, CompositeTileCarrier, TileGatherSpec, Ops
 
 def grouped_tile_load(source: UOp, spec: TileGatherSpec, *indices: UOp) -> UOp:
   """Build an ownership-preserving INDEX/LOAD tile carrier.
@@ -105,6 +105,33 @@ def amd_tile_wmma_boundary_report(*, qk_score: UOp, pv_value: UOp, pv_acc: UOp) 
       reasons.append(f"{role} carrier is not an exact 16x16 fragment")
   return {"backend": "amd", "qk": "score", "pv": "value", "acc": "acc",
           "promotable": not reasons, "renderer": "ordinary_wmma" if not reasons else "fail-closed",
+          "isa": "eligible" if not reasons else "not-emitted", "reasons": tuple(reasons)}
+
+def composite_reduce_tile_report(red: UOp) -> dict:
+  """Diagnose whether a real composite REDUCE has reached fragment lowering.
+
+  The bounded semantic attention route intentionally remains scalar until the
+  scheduler can construct owned 16x16 score/value/accumulator fragments.  This
+  resolver never reshapes or broadcasts a logical reduction; it reports the
+  exact missing edge and keeps production admission fail-closed.
+  """
+  reasons = []
+  if red.op is not Ops.REDUCE:
+    reasons.append("node is not a REDUCE")
+    return {"promotable": False, "renderer": "fail-closed", "isa": "not-emitted", "reasons": tuple(reasons)}
+  comp = red.arg[0] if red.arg else None
+  if not isinstance(comp, CompositeReduce):
+    reasons.append("REDUCE does not carry CompositeReduce metadata")
+  carrier = getattr(comp, "tile_carrier", None)
+  if carrier is None:
+    reasons.append("composite REDUCE has no tile carrier")
+  else:
+    try: carrier.validate()
+    except ValueError as e: reasons.append(f"tile carrier invalid: {e}")
+  carriers = [u for u in red.toposort() if u.op is Ops.TILE_GATHER]
+  if len(carriers) < 3:
+    reasons.append(f"real reduction exposes {len(carriers)} TILE_GATHER fragments; need score/value/acc")
+  return {"promotable": not reasons, "renderer": "ordinary_wmma" if not reasons else "fail-closed",
           "isa": "eligible" if not reasons else "not-emitted", "reasons": tuple(reasons)}
 
 
