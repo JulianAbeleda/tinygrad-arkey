@@ -93,7 +93,8 @@ def convert_reduce_to_reduce_with_ranges(ctx:IndexingContext, x:UOp):
   if len(x.arg[1]) == 0: return None
   # input ranges
   new_ranges = [r for i,r in enumerate(ctx.range_map[x][0]) if i in x.arg[1]]
-  ret = UOp(Ops.REDUCE, x.dtype, src=(x.src[0],)+tuple(new_ranges), arg=(x.arg[0], ()))
+  extra_srcs = x.src[1+len(x.arg[1]):] if len(x.src) > 1+len(x.arg[1]) else ()
+  ret = UOp(Ops.REDUCE, x.dtype, src=(x.src[0],)+tuple(new_ranges)+tuple(extra_srcs), arg=(x.arg[0], ()))
   ctx.range_map[ret] = ctx.range_map[x]
   return ret
 
