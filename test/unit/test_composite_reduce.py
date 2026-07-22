@@ -158,5 +158,59 @@ class TestOnlineSoftmaxTwoReduce(unittest.TestCase):
       Tensor(red_acc).numpy()
 
 
+class TestMultiOutputM4(unittest.TestCase):
+  """M4: two slots from ONE composite reduce."""
+  def setUp(self):
+    self._noopt_prev = NOOPT.value
+    NOOPT.value = 1
+  def tearDown(self):
+    NOOPT.value = self._noopt_prev
+
+  def test_one_reduce_two_slots_structure(self):
+    t = Tensor.arange(1, 17, dtype=dtypes.float32).reshape(16)
+    slot_sum = AccumulatorSlot(op=Ops.ADD, dtype=dtypes.float32, identity=0.0, name="sum")
+    slot_max = AccumulatorSlot(op=Ops.MAX, dtype=dtypes.float32, identity=float("-inf"), name="max")
+    red = t.uop.composite_reduce(slot_sum, slot_max, axis=(0,))
+    s0 = UOp(Ops.REDUCE_SLOT, dtypes.float32, src=(red,), arg=0)
+    s1 = UOp(Ops.REDUCE_SLOT, dtypes.float32, src=(red,), arg=1)
+    self.assertIs(s0.src[0], red)
+    self.assertIs(s1.src[0], red)
+    self.assertEqual(s0.arg, 0)
+    self.assertEqual(s1.arg, 1)
+    self.assertIsInstance(red.arg[0], CompositeReduce)
+    self.assertEqual(len(red.arg[0].slots), 2)
+
+  def test_sum_slot_value(self):
+    t = Tensor.arange(1, 17, dtype=dtypes.float32).reshape(16)
+    slot_max = AccumulatorSlot(op=Ops.MAX, dtype=dtypes.float32, identity=float("-inf"), name="max")
+    slot_sum = AccumulatorSlot(op=Ops.ADD, dtype=dtypes.float32, identity=0.0, name="sum")
+    red = t.uop.composite_reduce(slot_max, slot_sum, axis=(0,))
+    result = Tensor(red).numpy()
+    self.assertEqual(float(result[0]), 136.0)
+
+  def test_max_slot_value(self):
+    t = Tensor.arange(1, 17, dtype=dtypes.float32).reshape(16)
+    slot_sum = AccumulatorSlot(op=Ops.ADD, dtype=dtypes.float32, identity=0.0, name="sum")
+    slot_max = AccumulatorSlot(op=Ops.MAX, dtype=dtypes.float32, identity=float("-inf"), name="max")
+    red = t.uop.composite_reduce(slot_sum, slot_max, axis=(0,))
+    result = Tensor(red).numpy()
+    self.assertEqual(float(result[0]), 16.0)
+
+  def test_both_slots_same_reduce(self):
+    t = Tensor.arange(1, 17, dtype=dtypes.float32).reshape(16)
+    slot_sum = AccumulatorSlot(op=Ops.ADD, dtype=dtypes.float32, identity=0.0, name="sum")
+    slot_max = AccumulatorSlot(op=Ops.MAX, dtype=dtypes.float32, identity=float("-inf"), name="max")
+    red = t.uop.composite_reduce(slot_sum, slot_max, axis=(0,))
+    s0 = UOp(Ops.REDUCE_SLOT, dtypes.float32, src=(red,), arg=0)
+    s1 = UOp(Ops.REDUCE_SLOT, dtypes.float32, src=(red,), arg=1)
+    # Both REDUCE_SLOTs reference the same REDUCE object (not two copies)
+    self.assertIs(s0.src[0], s1.src[0])
+    self.assertIs(s0.src[0], red)
+    # REDUCE has composite arg with two slots
+    self.assertTrue(hasattr(red.arg[0], 'slots'))
+    self.assertEqual(len(red.arg[0].slots), 2)
+
+
+
 if __name__ == "__main__":
   unittest.main()
