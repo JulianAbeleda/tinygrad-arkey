@@ -2836,8 +2836,23 @@ def lower_state_phase_reload_gep(x:UOp, carrier:UOp) -> UOp|None:
     return None
   return lanes.src[x.arg[0]]
 
+def lower_rotating_pv_state(x:UOp) -> UOp|None:
+  """Lower one typed block-major rotating-PV state access to wave-private LDS."""
+  from tinygrad.uop.ops import RotatingPVStateSpec
+  if not (isinstance(x.arg, tuple) and len(x.arg) == 2 and isinstance(x.arg[1], RotatingPVStateSpec) and
+          x.arg[0] in {"rotating_pv_state_write_v1", "rotating_pv_state_read_v1"}): return None
+  state=x.arg[1]; state.validate()
+  if x.arg[0] == "rotating_pv_state_write_v1":
+    value,storage,lane,*deps=x.src
+    if (storage,lane) != (state.storage,state.lane) or value.dtype != state.dtype: return None
+    return UOp.group(*(storage.after(*deps).index(state.block_offset(i)).store(value.gep(i)) for i in range(8)))
+  storage,lane,*deps=x.src
+  if (storage,lane) != (state.storage,state.lane): return None
+  return UOp(Ops.STACK,state.dtype,tuple(storage.after(*deps).index(state.block_offset(i)).load() for i in range(8)))
+
 native_repack_matcher = PatternMatcher([
   (UPat(Ops.GEP, src=(UPat(Ops.CUSTOMI,name="carrier"),), name="x"), lower_state_phase_reload_gep),
+  (UPat((Ops.CUSTOMI,Ops.CUSTOM),name="x"), lower_rotating_pv_state),
   (UPat((Ops.CUSTOMI,Ops.CUSTOM),name="x"), lower_state_phase_transfer),
   (UPat(Ops.AMD_ROW_SOFTMAX_REPACK, name="x"), expand_native_row_softmax_repack),
   (UPat(Ops.AMD_ROW_SOFTMAX_SLOT, src=(UPat(Ops.TUPLE, name="owner"),), name="x"), lambda x,owner: owner.src[x.arg.slot]),
