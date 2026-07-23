@@ -77,10 +77,14 @@ def do_expand(root:UOp):
   # this avoids creating a VECTORIZE of REG pointers which the devectorizer can't resolve
   if root.op is Ops.INDEX and not isinstance(root.dtype, PtrDType) and \
     isinstance(root.src[0].dtype, PtrDType) and root.src[0].dtype.addrspace == AddrSpace.REG:
+    # Expanding a register INDEX creates fresh scalar INDEX nodes. Preserve
+    # only the dedicated composite provenance tag; ordinary views stay
+    # untagged and cannot become REDUCE_SLOT projections.
+    view_tag = root.tag if isinstance(root.tag, tuple) and len(root.tag) == 2 and root.tag[0] == "composite_view" else None
     idxs = []
     for j in range(expand_sz):
       idx_srcs = tuple(s.gep(j) if isinstance(s.dtype, PtrDType) or s.dtype.count > 1 else s for s in new_srcs)
-      idxs.append(UOp(Ops.INDEX, root.dtype, idx_srcs, root.arg))
+      idxs.append(UOp(Ops.INDEX, root.dtype, idx_srcs, root.arg, view_tag))
     # A vector carrier cannot itself be vectorized with ``dtype.vec``. Keep
     # each per-expansion vector INDEX as a VCAT child; the paired LOAD rule
     # above then materializes one vector LOAD per child without nesting STACK.
