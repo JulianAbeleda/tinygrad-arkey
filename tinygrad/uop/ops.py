@@ -1284,6 +1284,7 @@ class CompositeTileCarrier(NamedTuple):
   output_fragment: tuple[int, int] | None = None
   lane_axis: int = 2
   lane_group: int = 1
+  typed_fragment_abi: str | None = None
 
   def validate(self):
     if len(self.score_shape) != 3 or len(self.value_shape) != 3 or len(self.output_shape) != 3:
@@ -1304,6 +1305,13 @@ class CompositeTileCarrier(NamedTuple):
       raise ValueError("composite lane ABI must use a positive Hd lane group")
     if hd % self.lane_group:
       raise ValueError("lane group must divide output Hd")
+    if self.typed_fragment_abi is not None:
+      if self.typed_fragment_abi != "online_softmax_qk_pv_v1":
+        raise ValueError("unknown composite typed fragment ABI")
+      if (m, n, k, hd) != (16, 16, 16, 16) or self.lane_group != 16:
+        raise ValueError("online softmax fragment ABI requires exact 16x16x16 ownership")
+      if (sf, vf, of) != ((16, 16), (16, 16), (16, 16)):
+        raise ValueError("online softmax fragment ABI requires QK/PV/output fragments")
     return self
 
   def fragment_abi(self) -> dict:
@@ -1314,7 +1322,7 @@ class CompositeTileCarrier(NamedTuple):
     return {"qk_a": (m, _k), "qk_b": (_k, n), "score": (m, n),
             "pv_a": (m, n), "pv_b": (n, hd), "acc": (m, hd),
             "state": self.state_slots, "lane_axis": self.lane_axis,
-            "lane_group": self.lane_group}
+            "lane_group": self.lane_group, "typed_fragment_abi": self.typed_fragment_abi}
 
 class TileGatherSpec(NamedTuple):
   """Explicit ownership contract for a logical attention tile gather."""

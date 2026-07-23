@@ -88,6 +88,9 @@ def lower_attention_semantic(att:UOp) -> UOp:
       # scalar combine, preserving the production correctness path.
       state_geometry_ok = hd == 16 and q_len == 16 and kv_len == 16
       state_combine = "online_softmax_state" if getenv("TINYGRAD_ONLINE_SOFTMAX_STATE", 0) and getenv("TINYGRAD_ENABLE_EXPERIMENTAL_TILE", 0) and state_geometry_ok else "online_softmax"
+      if state_combine == "online_softmax_state" and owned_map_proven:
+        tile_carrier = tile_carrier._replace(score_fragment=(16, 16), value_fragment=(16, 16), output_fragment=(16, 16),
+                                             lane_group=16, typed_fragment_abi="online_softmax_qk_pv_v1").validate()
       red = score.uop.composite_reduce(*slots, axis=(3,), inputs=(logical_v,), combine_fn=state_combine,
         input_specs=(CompositeInputSpec("logical", (0, 1, None, 3, 4), primary_repeated=True,
                                         lane_axis=4, lane_group=hd if state_combine == "online_softmax_state" else 1),),

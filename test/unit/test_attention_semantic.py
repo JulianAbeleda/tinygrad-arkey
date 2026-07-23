@@ -32,6 +32,10 @@ class TestAttentionSemantic(unittest.TestCase):
     state_reduces = [u for u in primitive.toposort() if u.op is Ops.REDUCE and
                      isinstance(u.arg[0], CompositeReduce) and u.arg[0].combine_fn == "online_softmax_state"]
     self.assertEqual(len(state_reduces), 1)
+    carrier = state_reduces[0].arg[0].tile_carrier
+    self.assertEqual(carrier.typed_fragment_abi, "online_softmax_qk_pv_v1")
+    self.assertEqual(carrier.fragment_abi()["lane_group"], 16)
+    self.assertEqual(len(state_reduces[0].arg[0].tile_fragments), 3)
     self.assertFalse(any(u.op is Ops.COMPOSITE_ACCUMULATOR for u in primitive.toposort()))
 
   def test_opt_in_state_producer_is_dependency_only(self):
