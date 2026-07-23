@@ -280,7 +280,7 @@ def row_softmax_lds_repack(score: UOp, m: UOp, l: UOp, *,
   return UOp(Ops.ROW_SOFTMAX_REPACK, dtypes.half, (score, m, l), arg=spec)
 
 def amd_gfx1100_row_softmax_repack(score: UOp, m: UOp, l: UOp, *,
-                                   spec: AMDRowSoftmaxRepackSpec|None = None, kv_tile:UOp|None=None) -> UOp:
+                                   spec: AMDRowSoftmaxRepackSpec|None = None, kv_tile:UOp|None=None, grid_id:UOp|None=None) -> UOp:
   """Build the exact native wave32 QK-C -> PV-A scheduler carrier.
 
   ``score`` is one physical QK WMMA C fragment owned by a wave lane. ``m``
@@ -297,15 +297,16 @@ def amd_gfx1100_row_softmax_repack(score: UOp, m: UOp, l: UOp, *,
     raise ValueError(f"gfx1100 {spec.mode} repack requires exact {state_dt} m/l row state")
   if (kv_tile is not None) != spec.dynamic_kv_v1 or (kv_tile is not None and kv_tile.op is not Ops.RANGE):
     raise ValueError("dynamic row-softmax repack requires its exact RANGE tile source")
-  owner = UOp(Ops.AMD_ROW_SOFTMAX_REPACK, dtypes.half.vec(16), (score, m, l)+(() if kv_tile is None else (kv_tile,)), arg=spec)
+  if (grid_id is not None) != (spec.grid is not None): raise ValueError("grid repack requires its exact group source")
+  owner = UOp(Ops.AMD_ROW_SOFTMAX_REPACK, dtypes.half.vec(16), (score, m, l)+(() if kv_tile is None else (kv_tile,))+(() if grid_id is None else (grid_id,)), arg=spec)
   return UOp(Ops.AMD_ROW_SOFTMAX_SLOT, dtypes.half.vec(16), (owner,), arg=AMDRowSoftmaxSlotSpec(slot=0))
 
 def amd_gfx1100_row_softmax_state(score:UOp, m:UOp, l:UOp, *, spec:AMDRowSoftmaxRepackSpec|None=None,
-                                  kv_tile:UOp|None=None) -> tuple[UOp, UOp, UOp, UOp]:
+                                  kv_tile:UOp|None=None, grid_id:UOp|None=None) -> tuple[UOp, UOp, UOp, UOp]:
   """Return typed views of one native repack execution: P, new_m, new_l, alpha."""
   spec = AMDRowSoftmaxRepackSpec(mode="stateful_unnormalized_v1") if spec is None else spec
   if spec.mode not in {"stateful_unnormalized_v1", "loop_state_v1"}: raise ValueError("native state projections require a stateful native mode")
-  p = amd_gfx1100_row_softmax_repack(score, m, l, spec=spec, kv_tile=kv_tile)
+  p = amd_gfx1100_row_softmax_repack(score, m, l, spec=spec, kv_tile=kv_tile, grid_id=grid_id)
   owner = p.src[0]
   return (p, *(UOp(Ops.AMD_ROW_SOFTMAX_SLOT, dtypes.float.vec(8), (owner,), arg=AMDRowSoftmaxSlotSpec(slot=i)) for i in range(1, 4)))
 
@@ -458,7 +459,7 @@ def amd_gfx1100_q16_kv64_hd128_loop_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, s
   if tuple(x.ptrdtype.base for x in owners)!=(dtypes.half,)*4 or not isinstance(scale,float) or not math.isfinite(scale) or scale<=0:
     raise ValueError("q16-kv64-hd128 requires fp16 owners and positive finite scale")
   if not isinstance(valid_kv,int) or isinstance(valid_kv,bool) or not 0 <= valid_kv <= 64: raise ValueError("valid_kv must be in [0,64]")
-  if query_start is None: query_start=valid_kv-q_tokens
+  if query_start is None: query_start=valid_kv-16
   if not isinstance(query_start,int) or isinstance(query_start,bool): raise ValueError("query_start must be integral")
   lane=UOp.special(32,"lidx0"); col=lane.alu(Ops.AND,UOp.const(dtypes.weakint,15))
   zero=UOp.const(dtypes.float.vec(8),(0.0,)*8); axes=((),(),tuple((-120-i,2) for i in range(3)))
@@ -511,7 +512,7 @@ def amd_gfx1100_q32_hq4_hkv2_kv64_hd128_loop_attention(q:UOp, k:UOp, v:UOp, out:
   if tuple(x.ptrdtype.base for x in owners)!=(dtypes.half,)*4 or not isinstance(scale,float) or not math.isfinite(scale) or scale<=0:
     raise ValueError("q32-hq4-hkv2 requires fp16 owners and positive finite scale")
   if not isinstance(valid_kv,int) or isinstance(valid_kv,bool) or not 0 <= valid_kv <= 64: raise ValueError("valid_kv must be in [0,64]")
-  if query_start is None: query_start=valid_kv-16
+  if query_start is None: query_start=valid_kv-32
   if not isinstance(query_start,int) or isinstance(query_start,bool): raise ValueError("query_start must be integral")
   lane=UOp.special(32,"lidx0"); group=UOp.special(8,"gidx0"); col=lane.alu(Ops.AND,UOp.const(dtypes.weakint,15))
   zero=UOp.const(dtypes.float.vec(8),(0.0,)*8); axes=((),(),tuple((-120-i,2) for i in range(3)))
@@ -531,7 +532,7 @@ def amd_gfx1100_q32_hq4_hkv2_kv64_hd128_loop_attention(q:UOp, k:UOp, v:UOp, out:
   old_m,old_l=state_read(mreg,m_init,"m"),state_read(lreg,l_init,"l"); qk=zero
   for block in range(8): qk=UOp(Ops.WMMA,dtypes.float.vec(8),(fragment(q,"Q",block),fragment(k,"K",block),qk),warg)
   p,new_m,new_l,alpha=amd_gfx1100_row_softmax_state(qk,old_m,old_l,spec=AMDRowSoftmaxRepackSpec(score_scale=float(scale),mode="loop_state_v1",
-    validity_mode="causal_v1" if causal else "tail_v1",query_start=query_start,kv_start=-1,valid_kv=valid_kv,dynamic_kv_v1=True),kv_tile=rng)
+    validity_mode="causal_v1" if causal else "tail_v1",query_start=query_start,kv_start=-1,valid_kv=valid_kv,dynamic_kv_v1=True,grid=grid),kv_tile=rng,grid_id=group)
   writes=[*state_write(mreg,"m",new_m),*state_write(lreg,"l",new_l)]
   for block in range(8):
     old_c=state_read(creg,c_init,"acc",block,block*8); pv=UOp(Ops.WMMA,dtypes.float.vec(8),(p,fragment(v,"V",block),old_c.alu(Ops.MUL,alpha)),warg)
@@ -550,7 +551,7 @@ def amd_gfx1100_q16_grid_hd128_loop_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_toke
   if tuple(x.ptrdtype.base for x in owners)!=(dtypes.half,)*4 or not isinstance(scale,float) or not math.isfinite(scale) or scale<=0: raise ValueError("grid loop requires fp16 and finite scale")
   valid_kv=kv_tokens if valid_kv is None else valid_kv
   if not isinstance(valid_kv,int) or isinstance(valid_kv,bool) or not 0<=valid_kv<=kv_tokens: raise ValueError("valid_kv is outside KV geometry")
-  if query_start is None: query_start=valid_kv-16
+  if query_start is None: query_start=valid_kv-q_tokens
   lane=UOp.special(32,"lidx0"); group=UOp.special(q_heads*grid.q_tiles,"gidx0"); col=lane.alu(Ops.AND,UOp.const(dtypes.weakint,15)); zero=UOp.const(dtypes.float.vec(8),(0.0,)*8); axes=((),(),tuple((-120-i,2) for i in range(3))); warg=("WMMA_16_16_16_half_float",(16,16,16),dtypes.half,dtypes.float,"AMD:gfx1100",32,axes,())
   rng=UOp.range((kv_tokens+15)//16,9600,AxisType.REDUCE); mreg=UOp.placeholder((8,),dtypes.float,9601,addrspace=AddrSpace.REG); lreg=UOp.placeholder((8,),dtypes.float,9602,addrspace=AddrSpace.REG); creg=UOp.placeholder((64,),dtypes.float,9603,addrspace=AddrSpace.REG)
   def wr(reg,role,value,b=0,o=0,a="write"): return tuple(UOp(Ops.AMD_ATTENTION_LOOP_STATE,dtypes.void,(reg.index(UOp.const(dtypes.weakint,o+i)).store(value.gep(i)),),arg=AMDLoopStateSpec(role=role,access=a,block=b,lane=i,owner=9604)) for i in range(8))
@@ -559,7 +560,7 @@ def amd_gfx1100_q16_grid_hd128_loop_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_toke
   def fr(owner,role,b): return UOp(Ops.AMD_PACKED_FRAGMENT_LOAD,dtypes.half.vec(16),(owner,lane,col,rng,group),arg=AMDPackedFragmentLoopSpec(role=role,head_block=b,grid=grid))
   om,ol=rd(mreg,mi,"m"),rd(lreg,li,"l"); qk=zero
   for b in range(8): qk=UOp(Ops.WMMA,dtypes.float.vec(8),(fr(q,"Q",b),fr(k,"K",b),qk),warg)
-  p,nm,nl,alpha=amd_gfx1100_row_softmax_state(qk,om,ol,spec=AMDRowSoftmaxRepackSpec(score_scale=scale,mode="loop_state_v1",validity_mode="causal_v1" if causal else "tail_v1",query_start=query_start,kv_start=-1,valid_kv=valid_kv,dynamic_kv_v1=True),kv_tile=rng); writes=[*wr(mreg,"m",nm),*wr(lreg,"l",nl)]
+  p,nm,nl,alpha=amd_gfx1100_row_softmax_state(qk,om,ol,spec=AMDRowSoftmaxRepackSpec(score_scale=scale,mode="loop_state_v1",validity_mode="causal_v1" if causal else "tail_v1",query_start=query_start,kv_start=-1,valid_kv=valid_kv,dynamic_kv_v1=True,grid=grid),kv_tile=rng,grid_id=group); writes=[*wr(mreg,"m",nm),*wr(lreg,"l",nl)]
   for b in range(8):
     oc=rd(creg,ci,"acc",b,b*8); pv=UOp(Ops.WMMA,dtypes.float.vec(8),(p,fr(v,"V",b),oc.alu(Ops.MUL,alpha)),warg); writes.extend(wr(creg,"acc",pv,b,b*8))
   end=UOp.group(*writes).end(rng).replace(tag=("amd_gfx1100_attention_grid_loop_end_v1",rng)); fl=rd(lreg,end,"l",final=True); fc=tuple(rd(creg,end,"acc",b,b*8,final=True) for b in range(8)); drain=UOp(Ops.AMD_ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,group,fl,*fc),arg=AMDAttentionOutputDrainSpec(grid=grid))

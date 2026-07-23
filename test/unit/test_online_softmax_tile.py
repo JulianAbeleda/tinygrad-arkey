@@ -911,3 +911,22 @@ def test_gfx1100_model_grid_static_loop_body_is_invariant(hq,hkv,kv):
   linear=next(u for u in to_program(sink,AMDISARenderer(Target.parse("AMD:ISA:gfx1100"))).src if u.op is Ops.LINEAR)
   mn=[str(u.arg).split("(",1)[0] for u in linear.src if not isinstance(u.arg,tuple)]
   assert mn.count("v_wmma_f32_16x16x16_f16")==16 and mn.count("s_barrier")==1
+
+@pytest.mark.parametrize("hq,hkv",[(8,2),(10,2)])
+def test_gfx1100_model_grid_causal_mask_uses_runtime_q_tile(hq,hkv):
+  import numpy as np
+  from tinygrad import Tensor
+  from tinygrad.schedule.wmma import amd_gfx1100_q16_grid_hd128_loop_attention
+  from tinygrad.uop.ops import KernelInfo
+  rng=np.random.default_rng(2000+hq); q=rng.normal(0,.2,(hq,32,128)).astype(np.float16)
+  k=rng.normal(0,.2,(hkv,64,128)).astype(np.float16); v=rng.normal(0,.4,(hkv,64,128)).astype(np.float16)
+  tq,tk,tv=(Tensor(x.reshape(-1),device="AMD") for x in (q,k,v)); out=Tensor.empty(q.size,dtype=dtypes.half,device="AMD")
+  def kernel(o,qi,ki,vi): return amd_gfx1100_q16_grid_hd128_loop_attention(qi,ki,vi,o,q_tokens=32,q_heads=hq,
+    kv_heads=hkv,kv_tokens=64,scale=.25,causal=True,kernel_info=KernelInfo(name=f"grid_causal_g{hq//hkv}"))
+  got=out.custom_kernel(tq,tk,tv,fxn=kernel)[0].numpy().reshape(hq,32,128).astype(np.float32); ref=np.empty_like(got)
+  for head in range(hq):
+    score=q[head].astype(np.float32)@k[head//(hq//hkv)].astype(np.float32).T*.25
+    valid=np.arange(64)[None,:] <= (32+np.arange(32))[:,None]; score=np.where(valid,score,-np.inf)
+    prob=np.exp(score-score.max(1,keepdims=True)); prob/=prob.sum(1,keepdims=True)
+    ref[head]=prob@v[head//(hq//hkv)].astype(np.float32)
+  np.testing.assert_allclose(got,ref,rtol=.02,atol=4e-3)

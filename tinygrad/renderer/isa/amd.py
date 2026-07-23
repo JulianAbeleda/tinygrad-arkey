@@ -2570,7 +2570,7 @@ def expand_native_row_softmax_repack(ctx, x:UOp, native_state:bool=True) -> UOp:
     if len(x.src) != 1: raise ValueError("initial-state repack must not carry old m/l state")
     score, m, l = x.src[0], None, None
   else:
-    expected=4 if x.arg.dynamic_kv_v1 else 3
+    expected=(5 if x.arg.grid is not None else 4) if x.arg.dynamic_kv_v1 else 3
     if len(x.src) != expected: raise ValueError("row-softmax transition repack requires score/m/l and its declared tile source")
     score, m, l, *tile_src = x.src
     if x.arg.dynamic_kv_v1 and tile_src[0].op is not Ops.RANGE: raise ValueError("dynamic repack tile source must be RANGE")
@@ -2597,6 +2597,9 @@ def expand_native_row_softmax_repack(ctx, x:UOp, native_state:bool=True) -> UOp:
         else UOp.const(dtypes.weakint,x.arg.kv_start)
       kv = col.alu(Ops.ADD, kv_base)
       qrow = row.alu(Ops.ADD, UOp.const(dtypes.weakint, x.arg.query_start))
+      if x.arg.grid is not None:
+        qtile=tile_src[1] % x.arg.grid.q_tiles
+        qrow=qrow.alu(Ops.ADD,qtile*16)
       valid = kv.alu(Ops.CMPLT, UOp.const(dtypes.weakint, x.arg.valid_kv))
       if x.arg.validity_mode == "causal_v1": valid = valid.alu(Ops.AND,
         kv.alu(Ops.CMPLT, qrow.alu(Ops.ADD, UOp.const(dtypes.weakint, 1))))

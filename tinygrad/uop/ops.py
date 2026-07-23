@@ -1416,6 +1416,7 @@ class AMDRowSoftmaxRepackSpec(NamedTuple):
   kv_start: int = 0
   valid_kv: int = 16
   dynamic_kv_v1: bool = False
+  grid: Any|None = None
 
   def validate(self):
     if (self.native_abi, self.target, self.wave_size) != ("amd_gfx1100_online_softmax_qk_pv_v1", "gfx1100", 32):
@@ -1437,6 +1438,7 @@ class AMDRowSoftmaxRepackSpec(NamedTuple):
     if self.dynamic_kv_v1:
       if self.mode != "loop_state_v1" or self.kv_start != -1 or not 0 <= self.valid_kv <= 4096:
         raise ValueError("dynamic row-softmax validity requires loop_state_v1 and a bounded KV loop")
+      if self.grid is not None: self.grid.validate()
     elif self.kv_start < 0 or not 0 <= self.valid_kv <= 32 or self.kv_start not in {0, 16}:
       raise ValueError("row-softmax native repack validity requires a supported 16-wide KV tile")
     if self.validity_mode == "all_v1" and (self.query_start, self.kv_start, self.valid_kv) != (0, 0, 16):
