@@ -571,12 +571,12 @@ def amd_gfx1100_q16_grid_hd128_loop_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_toke
   ci=UOp.group(*(x for b in range(acc_blocks) for x in wr(creg,"acc",zero,b,b*8,"init")))
   def rd(reg,init,role,b=0,o=0,final=False): return UOp(Ops.STACK,dtypes.float.vec(8),tuple(UOp(Ops.AMD_ATTENTION_LOOP_STATE,dtypes.float,(reg,init) if final else (reg,init,rng),arg=AMDLoopStateSpec(role=role,access="final_read" if final else "read",block=b,lane=i,owner=9604)) for i in range(8)))
   def fr(owner,role,b): return UOp(Ops.AMD_PACKED_FRAGMENT_LOAD,dtypes.half.vec(16),(owner,lane,col,rng,group),arg=AMDPackedFragmentLoopSpec(role=role,head_block=b,grid=grid))
+  if not phase_abi_v1: om,ol=rd(mreg,mi,"m"),rd(lreg,li,"l")
+  qk=zero
+  for b in range(8): qk=UOp(Ops.WMMA,dtypes.float.vec(8),(fr(q,"Q",b),fr(k,"K",b),qk),warg,tag=("attention_wmma","QK",b))
   if phase_abi_v1:
     om=UOp(Ops.STACK,dtypes.float.vec(8),tuple(ml.loop_read(i,init_token) for i in range(8)))
     ol=UOp(Ops.STACK,dtypes.float.vec(8),tuple(ml.loop_read(8+i,init_token) for i in range(8)))
-  else: om,ol=rd(mreg,mi,"m"),rd(lreg,li,"l")
-  qk=zero
-  for b in range(8): qk=UOp(Ops.WMMA,dtypes.float.vec(8),(fr(q,"Q",b),fr(k,"K",b),qk),warg,tag=("attention_wmma","QK",b))
   p,nm,nl,alpha=amd_gfx1100_row_softmax_state(qk,om,ol,spec=AMDRowSoftmaxRepackSpec(score_scale=scale,mode="loop_state_v1",validity_mode="causal_v1" if causal else "tail_v1",query_start=query_start,kv_start=-1,valid_kv=valid_kv,dynamic_kv_v1=True,grid=grid),kv_tile=rng,grid_id=group)
   # Phase ABI keeps m/l in LDS. Commit the next recurrence state before the
   # PV body and make that body consume the commit token: p/alpha are already
