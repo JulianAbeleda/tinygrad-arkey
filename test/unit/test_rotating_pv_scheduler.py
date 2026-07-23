@@ -15,4 +15,5 @@ def test_rotating_pv_scheduler_probe_builds_one_ordered_kv_body_and_drain():
   drains = [x for x in topo if x.op is Ops.CUSTOMI and x.arg[0] == "rotating_pv_sequential_drain_v1"]
   assert len(drains) == 8 and drains[0].src[2] is end
   assert all(drains[block].src[2] is drains[block-1] for block in range(1, 8))
+  assert all(drain.shape == () and drain.tag == ("rotating_pv_sequential_drain_v1", block, 1) for block,drain in enumerate(drains))
   type_verify(sink, spec_full)

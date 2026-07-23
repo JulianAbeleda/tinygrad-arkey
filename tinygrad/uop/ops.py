@@ -353,7 +353,7 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
       # wmma output shape = accumulator shape (src[2])
       case Ops.WMMA | Ops.SHAPED_WMMA: return self.src[2]._shape
 
-      case Ops.CUSTOMI if isinstance(self.arg, tuple) and self.arg[:1] == ("state_loop_read_v1",): return ()
+      case Ops.CUSTOMI if isinstance(self.arg, tuple) and self.arg[:1] in {("state_loop_read_v1",), ("rotating_pv_state_read_v1",), ("rotating_pv_sequential_drain_v1",)}: return ()
       case Ops.CUSTOMI: return self.src[0]._shape if len(self.src) else None
 
       # passthrough ops
@@ -1395,6 +1395,10 @@ class RotatingPVSequentialDrainSpec(NamedTuple):
   @property
   def dtype(self) -> DType: return self.state.dtype
 
+  @property
+  def renderer_tag(self) -> tuple[str, int, int]:
+    return ("rotating_pv_sequential_drain_v1", self.state.block, self.state.generation)
+
   def validate(self):
     self.state.validate()
     return self
@@ -1404,7 +1408,7 @@ class RotatingPVSequentialDrainSpec(NamedTuple):
     if final_token.dtype == dtypes.void and final_token.op is not Ops.END:
       raise TypeError("rotating PV drain requires a matching END or prior drain token")
     return UOp(Ops.CUSTOMI, self.dtype, (self.state.storage, self.state.lane, final_token),
-               ("rotating_pv_sequential_drain_v1", self))
+               ("rotating_pv_sequential_drain_v1", self), tag=self.renderer_tag)
 
 class CompositeReduce(NamedTuple):
   slots: tuple
