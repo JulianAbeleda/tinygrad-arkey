@@ -1283,11 +1283,28 @@ class StateHandle(NamedTuple):
   region: StateRegionSpec
   boundary: PhaseBoundarySpec
   generation: int = 0
+  storage: UOp|None = None
+  lane: UOp|None = None
+  lane_stride: int = 0
+  element_offset: int = 0
 
   def validate(self):
     self.region.validate(); self.boundary.validate()
     if not isinstance(self.generation, int) or self.generation < 0:
       raise ValueError("state handle generation must be non-negative")
+    if self.storage is None:
+      if self.lane is not None or self.lane_stride != 0 or self.element_offset != 0:
+        raise ValueError("storage-free state handles cannot carry lane addressing")
+      return self
+    if self.storage.op is not Ops.DEFINE_LOCAL or not isinstance(self.storage.dtype, PtrDType) or \
+       self.storage.dtype.addrspace is not AddrSpace.LOCAL or self.storage.dtype.base != self.region.dtype:
+      raise TypeError("state storage must be a local pointer with the region scalar dtype")
+    if self.lane is None or not dtypes.is_int(self.lane.dtype) or self.lane.dtype.vcount != 1:
+      raise TypeError("state storage requires a scalar integer lane UOp")
+    if not isinstance(self.lane_stride, int) or self.lane_stride < self.region.lanes:
+      raise ValueError("state lane stride must cover every region lane")
+    if not isinstance(self.element_offset, int) or not 0 <= self.element_offset <= self.lane_stride-self.region.lanes:
+      raise ValueError("state element offset must fit within one lane stride")
     return self
 
   @property
@@ -1296,13 +1313,17 @@ class StateHandle(NamedTuple):
   def publish(self, value: UOp) -> UOp:
     self.validate()
     if value.dtype != self.dtype: raise TypeError("state publish dtype does not match its handle")
-    return UOp(Ops.CUSTOMI, value.dtype, (value,), ("state_publish_v1", self))
+    src=(value,) if self.storage is None else (value,self.storage,self.lane)
+    return UOp(Ops.CUSTOMI, value.dtype, src, ("state_publish_v1", self))
 
-  def reload(self, published: UOp) -> UOp:
+  def reload(self, published: UOp, wait: UOp|None=None) -> UOp:
     self.validate()
     if published.op is not Ops.CUSTOMI or published.dtype != self.dtype or published.arg != ("state_publish_v1", self):
       raise ValueError("state reload requires publication from the same handle")
-    return UOp(Ops.CUSTOMI, self.dtype, (published,), ("state_reload_v1", self))
+    if wait is not None and (wait.op is not Ops.WAIT or published not in wait.src):
+      raise ValueError("state reload wait must depend on its publication")
+    src=(published,) if self.storage is None else (published,self.storage,self.lane)
+    return UOp(Ops.CUSTOMI, self.dtype, src if wait is None else (*src,wait), ("state_reload_v1", self))
 
 class CompositeReduce(NamedTuple):
   slots: tuple

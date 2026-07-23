@@ -1,6 +1,6 @@
 import pytest
 
-from tinygrad.dtype import dtypes
+from tinygrad.dtype import dtypes, AddrSpace
 from tinygrad.uop import Ops
 from tinygrad.uop.ops import UOp, StateRegionSpec, PhaseBoundarySpec, StateHandle
 from tinygrad.uop.spec import spec_full, type_verify
@@ -35,3 +35,26 @@ def test_state_handle_rejects_invalid_phase_lifetime_and_foreign_publication():
   with pytest.raises(ValueError): handle.reload(foreign.publish(UOp.const(dtypes.float, 1.0)))
   malformed = UOp(Ops.CUSTOMI, dtypes.float, (UOp.const(dtypes.float, 1.0),), ("state_reload_v1", handle))
   with pytest.raises(RuntimeError): type_verify(UOp.sink(malformed), spec_full)
+
+
+def test_lane_major_local_state_publish_reload_tracks_storage_and_wait_order():
+  storage = UOp(Ops.DEFINE_LOCAL, dtypes.float.ptr(128, AddrSpace.LOCAL), arg=91)
+  lane = UOp.special(8, "state_lane")
+  handle = StateHandle(StateRegionSpec("vector_state", dtypes.float, 8), PhaseBoundarySpec("publish", "reload"),
+                       storage=storage, lane=lane, lane_stride=16, element_offset=4)
+  published = handle.publish(UOp.const(dtypes.float.vec(8), 1.0))
+  wait = UOp(Ops.WAIT, dtypes.void, (published,), arg=("state_handle_wait_v1", handle))
+  reloaded = handle.reload(published, wait)
+  assert published.src[1:] == (storage, lane)
+  assert reloaded.src == (published, storage, lane, wait)
+  type_verify(UOp.sink(reloaded), spec_full)
+
+
+def test_storage_backed_state_rejects_invalid_storage_lane_and_offset():
+  storage = UOp(Ops.DEFINE_LOCAL, dtypes.float.ptr(64, AddrSpace.LOCAL), arg=92)
+  lane = UOp.special(8, "state_lane")
+  region = StateRegionSpec("vector_state", dtypes.float, 8)
+  boundary = PhaseBoundarySpec("publish", "reload")
+  with pytest.raises(TypeError): StateHandle(region, boundary, storage=UOp(Ops.DEFINE_REG, dtypes.float.ptr(64, AddrSpace.REG), arg=93), lane=lane, lane_stride=8).validate()
+  with pytest.raises(TypeError): StateHandle(region, boundary, storage=storage, lane=UOp.const(dtypes.float, 0.0), lane_stride=8).validate()
+  with pytest.raises(ValueError): StateHandle(region, boundary, storage=storage, lane=lane, lane_stride=8, element_offset=1).validate()

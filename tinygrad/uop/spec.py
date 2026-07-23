@@ -89,10 +89,15 @@ def validate_state_transfer(x:UOp):
   try: x.arg[1].validate()
   except (TypeError, ValueError): return False
   handle=x.arg[1]
-  if x.dtype != handle.dtype or len(x.src) != 1: return False
-  if x.arg[0] == "state_publish_v1": return x.src[0].dtype == handle.dtype
+  if x.dtype != handle.dtype: return False
+  storage_src=() if handle.storage is None else (handle.storage,handle.lane)
+  if x.arg[0] == "state_publish_v1":
+    return x.src == (x.src[0],*storage_src) and x.src[0].dtype == handle.dtype
+  if len(x.src) not in (1+len(storage_src),2+len(storage_src)): return False
   source=x.src[0]
-  return source.op is Ops.CUSTOMI and source.dtype == handle.dtype and source.arg == ("state_publish_v1", handle)
+  if source.op is not Ops.CUSTOMI or source.dtype != handle.dtype or source.arg != ("state_publish_v1", handle) or x.src[1:1+len(storage_src)] != storage_src:
+    return False
+  return len(x.src) == 1+len(storage_src) or (x.src[-1].op is Ops.WAIT and source in x.src[-1].src)
 
 # ***** new specs *****
 
