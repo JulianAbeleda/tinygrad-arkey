@@ -252,6 +252,13 @@ def _attached_direct_packed_spec(lin, x:Tensor) -> PrefillLinearRouteSpec | None
   return PrefillLinearRouteSpec(route, quant, _direct_packed_module_role(lin), m, n, k)
 
 
+def _exact_q6k_vocab_direct_prefill(lin, x:Tensor) -> bool:
+  """The only vocab projection admitted to bypass the packed-WMMA half-output route."""
+  return (_is_q6k_linear(lin) and str(getattr(lin, "name", "")) == "output.weight" and
+          _direct_packed_module_role(lin) == "lm_head" and tuple(x.shape) == (1, 512, 4096) and
+          getattr(lin, "out_features", None) == 151936 and getattr(lin, "in_features", None) == 4096)
+
+
 def _run_direct_packed_baseline(lin, x:Tensor, spec:PrefillLinearRouteSpec) -> Tensor | None:
   x_batch = prefill_activation(x[0].cast(dtypes.float16).contiguous())
   candidate = select_direct_packed_prefill_candidate(lin, spec)
@@ -307,8 +314,9 @@ def route_prefill_linear(lin, x:Tensor) -> Tensor:
   w = getattr(lin, "_pf16_w", None)
 
   if route in ("direct_packed", "bounded_packed"):
-    routed = route_packed_wmma_prefill(lin, x)
-    if routed is not None: return routed
+    if not _exact_q6k_vocab_direct_prefill(lin, x):
+      routed = route_packed_wmma_prefill(lin, x)
+      if routed is not None: return routed
     routed = route_direct_packed_prefill(lin, x)
     if routed is not None: return routed
 
