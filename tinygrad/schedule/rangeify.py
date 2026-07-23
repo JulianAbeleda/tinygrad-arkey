@@ -87,7 +87,7 @@ def lower_attention_semantic(att:UOp) -> UOp:
       # on every backend.  The default remains the established normalized
       # scalar combine, preserving the production correctness path.
       state_geometry_ok = hd == 16 and q_len == 16 and kv_len == 16
-      state_combine = "online_softmax_state" if getenv("TINYGRAD_ONLINE_SOFTMAX_STATE", 0) and state_geometry_ok else "online_softmax"
+      state_combine = "online_softmax_state" if getenv("TINYGRAD_ONLINE_SOFTMAX_STATE", 0) and getenv("TINYGRAD_ENABLE_EXPERIMENTAL_TILE", 0) and state_geometry_ok else "online_softmax"
       red = score.uop.composite_reduce(*slots, axis=(3,), inputs=(logical_v,), combine_fn=state_combine,
         input_specs=(CompositeInputSpec("logical", (0, 1, None, 3, 4), primary_repeated=True),),
         tile_carrier=tile_carrier,
