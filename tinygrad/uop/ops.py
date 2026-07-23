@@ -353,7 +353,9 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
       # wmma output shape = accumulator shape (src[2])
       case Ops.WMMA | Ops.SHAPED_WMMA: return self.src[2]._shape
 
-      case Ops.CUSTOMI if isinstance(self.arg, tuple) and self.arg[:1] in {("state_loop_read_v1",), ("rotating_pv_state_read_v1",), ("rotating_pv_loop_read_v1",), ("rotating_pv_sequential_drain_v1",)}: return ()
+      case Ops.CUSTOMI if isinstance(self.arg, tuple) and self.arg[:1] in {("state_loop_read_v1",), ("rotating_pv_state_read_v1",), ("rotating_pv_loop_read_v1",)}:
+        return (self.dtype.count,) if self.dtype.count > 1 else ()
+      case Ops.CUSTOMI if isinstance(self.arg, tuple) and self.arg[:1] == ("rotating_pv_sequential_drain_v1",): return ()
       case Ops.CUSTOMI: return self.src[0]._shape if len(self.src) else None
 
       # passthrough ops

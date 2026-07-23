@@ -595,28 +595,39 @@ def amd_gfx1100_q16_grid_hd128_loop_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_toke
   end=UOp.group(*writes).end(rng).replace(tag=("amd_gfx1100_attention_grid_loop_end_v1",rng)); final_token=end if phase_abi_v1 else None; fl=(UOp(Ops.STACK,dtypes.float.vec(8),tuple(ml.loop_read(8+i,final_token) for i in range(8))) if phase_abi_v1 else rd(lreg,end,"l",final=True)); fc=tuple(rd(creg,end,"acc",b,b*8,final=True) for b in range(acc_blocks)); drain=UOp(Ops.AMD_ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,group,fl,*fc),arg=AMDAttentionOutputDrainSpec(native_abi="amd_gfx1100_attention_output_drain_v1" if acc_blocks==8 else "amd_gfx1100_attention_output_drain_acc_slice_v2",blocks=acc_blocks,grid=grid,output_block_base=output_block_base))
   return UOp.sink(mi,li,ci,end,drain,arg=kernel_info).replace(tag=("amd_gfx1100_q16_grid_hd128_loop_v1",))
 
-def amd_gfx1100_rotating_pv_scheduler_probe(out:UOp, final_l:UOp, *, q_tokens:int, q_heads:int, kv_heads:int, kv_tokens:int) -> UOp:
+def amd_gfx1100_rotating_pv_scheduler_probe(q:UOp, k:UOp, v:UOp, out:UOp, *, q_tokens:int, q_heads:int, kv_heads:int, kv_tokens:int, scale:float=1/(128**.5)) -> UOp:
   """Opt-in exact-8B rotating-PV construction probe; it has no production route or lowering."""
   if (q_tokens, q_heads, kv_heads, kv_tokens) != (512, 32, 8, 512):
     raise ValueError("rotating PV scheduler probe is exact-8B only")
-  from tinygrad.uop.ops import AMDAttentionGridSpec, AxisType, RotatingPVLoopReadSpec, RotatingPVSequentialDrainSpec, RotatingPVStateSpec
+  from tinygrad.uop.ops import AMDAttentionGridSpec, AMDLoopStateSpec, AMDPackedFragmentLoopSpec, AMDRowSoftmaxRepackSpec, AxisType, RotatingPVLoopReadSpec, RotatingPVSequentialDrainSpec, RotatingPVStateSpec
   lane=UOp.special(32,"lidx0")
   grid=AMDAttentionGridSpec(q_tokens=q_tokens,q_heads=q_heads,kv_heads=kv_heads,group_ratio=q_heads//kv_heads,kv_tokens=kv_tokens); grid.validate()
   group=UOp.special(q_heads*grid.q_tiles,"gidx0")
   storage=UOp(Ops.DEFINE_LOCAL,dtypes.float.ptr(2048,AddrSpace.LOCAL),arg=9620)
   rng=UOp.range(kv_tokens//16,9621,AxisType.REDUCE)
-  zero=UOp.const(dtypes.float.vec(8),(0.0,)*8)
+  col=lane.alu(Ops.AND,UOp.const(dtypes.weakint,15)); zero=UOp.const(dtypes.float.vec(8),(0.0,)*8)
+  axes=((),(),tuple((-120-i,2) for i in range(3))); warg=("WMMA_16_16_16_half_float",(16,16,16),dtypes.half,dtypes.float,"AMD:gfx1100",32,axes,())
+  mreg=UOp.placeholder((8,),dtypes.float,9622,addrspace=AddrSpace.REG); lreg=UOp.placeholder((8,),dtypes.float,9623,addrspace=AddrSpace.REG)
+  def wr(reg,role,value): return tuple(UOp(Ops.AMD_ATTENTION_LOOP_STATE,dtypes.void,(reg.index(UOp.const(dtypes.weakint,i)).store(value.gep(i)),),arg=AMDLoopStateSpec(role=role,access="write",block=0,lane=i,owner=9624)) for i in range(8))
+  def rd(reg,init,role,final=False): return UOp(Ops.STACK,dtypes.float.vec(8),tuple(UOp(Ops.AMD_ATTENTION_LOOP_STATE,dtypes.float,(reg,init) if final else (reg,init,rng),arg=AMDLoopStateSpec(role=role,access="final_read" if final else "read",block=0,lane=i,owner=9624)) for i in range(8)))
+  def fr(owner,role,block): return UOp(Ops.AMD_PACKED_FRAGMENT_LOAD,dtypes.half.vec(16),(owner,lane,col,rng,group),arg=AMDPackedFragmentLoopSpec(role=role,head_block=block,grid=grid))
+  mi=UOp.group(*wr(mreg,"m",UOp.const(dtypes.float.vec(8),(-float("inf"),)*8))); li=UOp.group(*wr(lreg,"l",zero)); om,ol=rd(mreg,mi,"m"),rd(lreg,li,"l")
+  qk=zero
+  for block in range(8): qk=UOp(Ops.WMMA,dtypes.float.vec(8),(fr(q,"Q",block),fr(k,"K",block),qk),warg,tag=("attention_wmma","QK",block))
+  p,nm,nl,alpha=amd_gfx1100_row_softmax_state(qk,om,ol,spec=AMDRowSoftmaxRepackSpec(score_scale=scale,mode="loop_state_v1",validity_mode="tail_v1",query_start=0,kv_start=-1,valid_kv=kv_tokens,dynamic_kv_v1=True,grid=grid),kv_tile=rng,grid_id=group)
+  ml_commit=UOp.group(*wr(mreg,"m",nm),*wr(lreg,"l",nl))
   initialized=tuple(RotatingPVStateSpec(storage,lane,block,generation=0).write(zero) for block in range(8))
   init=UOp.group(*initialized)
   states=tuple(RotatingPVStateSpec(storage,lane,block,generation=1) for block in range(8))
   reads=tuple(RotatingPVLoopReadSpec(state,rng,wait_generation=0,publication_generation=1).reload(init) for state in states)
-  pv_updates=tuple(UOp(Ops.CUSTOMI,state.dtype,(read,rng),arg=("rotating_pv_pv_update_v1",state),tag=("rotating_pv_pv_update_v1",rng,block)) for block,(state,read) in enumerate(zip(states,reads)))
+  pv_updates=tuple(UOp(Ops.WMMA,dtypes.float.vec(8),(p,fr(v.after(ml_commit),"V",block),read.alu(Ops.MUL,alpha)),warg,tag=("attention_wmma","PV",block)) for block,read in enumerate(reads))
   writes=tuple(state.write(update,after=rng) for state,update in zip(states,pv_updates))
   end=UOp.group(*writes).end(rng).replace(tag=("rotating_pv_kv_iteration_end_v1",rng))
+  final_l=rd(lreg,end,"l",final=True)
   drains=[]; token=end
   for state in states:
     drains.append(RotatingPVSequentialDrainSpec(state,out,group,grid,final_l,state.block).reload(token)); token=drains[-1]
-  return UOp.sink(init,end,*drains).replace(tag=("amd_gfx1100_rotating_pv_scheduler_probe_v1",))
+  return UOp.sink(mi,li,init,end,*drains).replace(tag=("amd_gfx1100_rotating_pv_scheduler_probe_v1",))
 
 def amd_gfx1100_q16_grid_qk_stats_stage(q:UOp,k:UOp,stats:UOp,*,q_tokens:int,q_heads:int,kv_heads:int,kv_tokens:int,scale:float,kernel_info,causal:bool=True,query_start:int|None=None)->UOp:
   """Direct diagnostic Stage A: QK online reduction to fp32 `[query, m/l]` state only."""

@@ -50,7 +50,10 @@ def rotating_pv_kernel_probe() -> dict:
   try:
     from tinygrad.schedule.wmma import amd_gfx1100_rotating_pv_scheduler_probe
     out = UOp(Ops.PARAM, dtypes.half.ptr(geometry["q_tokens"]*geometry["q_heads"]*geometry["head_dim"]), arg=ParamArg(0))
-    sink = amd_gfx1100_rotating_pv_scheduler_probe(out, UOp.const(dtypes.float.vec(8), 1.0),
+    q = UOp(Ops.PARAM, dtypes.half.ptr(geometry["q_tokens"]*geometry["q_heads"]*geometry["head_dim"]), arg=ParamArg(1))
+    k = UOp(Ops.PARAM, dtypes.half.ptr(geometry["kv_tokens"]*geometry["kv_heads"]*geometry["head_dim"]), arg=ParamArg(2))
+    v = UOp(Ops.PARAM, dtypes.half.ptr(geometry["kv_tokens"]*geometry["kv_heads"]*geometry["head_dim"]), arg=ParamArg(3))
+    sink = amd_gfx1100_rotating_pv_scheduler_probe(q, k, v, out,
       q_tokens=geometry["q_tokens"], q_heads=geometry["q_heads"], kv_heads=geometry["kv_heads"], kv_tokens=geometry["kv_tokens"])
     sink = sink.replace(arg=KernelInfo(name=row["kernel_name"]))
     type_verify(sink, spec_full)
