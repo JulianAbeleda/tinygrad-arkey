@@ -2290,7 +2290,8 @@ def expand_native_row_softmax_repack(ctx, x:UOp) -> UOp:
     stores.append(lds.index(row.alu(Ops.MUL, UOp.const(dtypes.weakint, 16)).alu(Ops.ADD, col)).store(normalized))
   ready = UOp.barrier(UOp.group(*stores))
   reload_row = col.alu(Ops.MUL, UOp.const(dtypes.weakint, 16))
-  vals = [lds.index(reload_row.alu(Ops.ADD, UOp.const(dtypes.weakint, i))).load().after(ready) for i in range(16)]
+  published = lds.after(ready)
+  vals = [published.index(reload_row.alu(Ops.ADD, UOp.const(dtypes.weakint, i))).load() for i in range(16)]
   return UOp(Ops.STACK, dtypes.half.vec(16), tuple(vals), tag=("amd_gfx1100_pv_a_reload_v1",))
 
 native_repack_matcher = PatternMatcher([

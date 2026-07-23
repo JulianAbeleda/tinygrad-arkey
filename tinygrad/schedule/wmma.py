@@ -310,8 +310,10 @@ def amd_gfx1100_q16_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, scale:float, kern
   qfrag = UOp(Ops.STACK, dtypes.half.vec(16), tuple(q.index(col*16+i).load() for i in range(16)))
   kfrag = UOp(Ops.STACK, dtypes.half.vec(16), tuple(k.index(col*16+i).load() for i in range(16)))
   zero = UOp.const(dtypes.float.vec(8), (0.0,)*8)
-  fragment_axes = (tuple((-100-i, 2) for i in range(4)), tuple((-110-i, 2) for i in range(4)),
-                   tuple((-120-i, 2) for i in range(3)))
+  # A/B are already physical half16 fragments and must not be permuted by
+  # logical upcast-axis rewriting. C retains its exact three binary axes so
+  # eight native accumulator lanes can be projected with GEP.
+  fragment_axes = ((), (), tuple((-120-i, 2) for i in range(3)))
   warg = ("WMMA_16_16_16_half_float", (16,16,16), dtypes.half, dtypes.float, "AMD:gfx1100", 32, fragment_axes, ())
   qk = UOp(Ops.WMMA, dtypes.float.vec(8), (qfrag, kfrag, zero), warg)
   weights = amd_gfx1100_row_softmax_repack(qk, UOp.const(dtypes.float, -float("inf")), UOp.const(dtypes.float, 0),

@@ -118,6 +118,46 @@ class TestAttentionSemantic(unittest.TestCase):
     self.assertEqual(mnemonics.count("v_wmma_f32_16x16x16_f16"), 2)
     self.assertEqual(mnemonics.count("s_barrier"), 1)
 
+  def test_exact_q16_gfx1100_tc_integration_renders_hip_source(self):
+    if self._combine_name() != "online_softmax_state": self.skipTest("state combine is opt-in")
+    from dataclasses import replace
+    from tinygrad.codegen import to_program
+    from tinygrad.codegen.opt import Opt, OptOps
+    from tinygrad.helpers import Target
+    from tinygrad.renderer.cstyle import HIPRenderer
+    q = Tensor.empty(1,1,16,16,dtype=dtypes.half,device="AMD")
+    k = Tensor.empty(1,1,16,16,dtype=dtypes.half,device="AMD")
+    v = Tensor.empty(1,1,16,16,dtype=dtypes.half,device="AMD")
+    calls = shared_prefill_attention(q,k,v).schedule_linear().src
+    self.assertEqual(len(calls), 1)
+    ast = calls[0].src[0].replace(arg=replace(calls[0].src[0].arg,
+      opts_to_apply=(Opt(OptOps.TC,0,(0,0,1)),)))
+    program = to_program(ast, HIPRenderer(Target.parse("AMD:HIP:gfx1100")))
+    source = next(u.arg for u in program.src if u.op is Ops.SOURCE)
+    self.assertEqual(source.count("#define __WMMA_16_16_16_half_float"), 1)
+    self.assertEqual(source.count("__WMMA_16_16_16_half_float("), 2)
+    self.assertIn("__attribute__((shared", source)
+    self.assertIn("__builtin_amdgcn_s_barrier", source)
+    self.assertIn("__builtin_amdgcn_ds_bpermute", source)
+    self.assertIn("__builtin_fmaxf", source)
+
+  def test_exact_q16_gfx1100_native_runtime_matches_reference(self):
+    from tinygrad.schedule.wmma import amd_gfx1100_q16_attention
+    from tinygrad.uop.ops import KernelInfo
+    rng = np.random.default_rng(44)
+    qv, kv, vv = (rng.standard_normal((16,16)).astype(np.float16) for _ in range(3))
+    q, k, v = (Tensor(x.reshape(256), device="AMD", dtype=dtypes.half) for x in (qv,kv,vv))
+    out = Tensor.empty(256, device="AMD", dtype=dtypes.half)
+    def kernel(o, qq, kk, value):
+      return amd_gfx1100_q16_attention(qq, kk, value, o, scale=0.25,
+                                       kernel_info=KernelInfo(name="q16_native_numeric"))
+    got = out.custom_kernel(q,k,v,fxn=kernel)[0].reshape(16,16).numpy()
+    scores = qv.astype(np.float32) @ kv.astype(np.float32).T * 0.25
+    probs = np.exp(scores-scores.max(axis=1,keepdims=True)); probs /= probs.sum(axis=1,keepdims=True)
+    ref = probs @ vv.astype(np.float32)
+    self.assertTrue(np.isfinite(got).all())
+    np.testing.assert_allclose(got, ref, rtol=1.2e-1, atol=1e-3)
+
   def test_state_composite_carries_authoritative_kv_range_owner(self):
     if self._combine_name() != "online_softmax_state": self.skipTest("state combine is opt-in")
     from tinygrad.schedule.rangeify import get_kernel_graph

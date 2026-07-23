@@ -90,6 +90,21 @@ extra_pm = PatternMatcher([
   (UPat(Ops.WHERE, name="alu"), no_vectorized_alu),
 ])
 
+_HIP_BPERMUTE_F32 = "__builtin_bit_cast(float, __builtin_amdgcn_ds_bpermute({0}, __builtin_bit_cast(unsigned int, {1})))"
+
+def _hip_native_bpermute_max(x:UOp) -> UOp|None:
+  if x.dtype != dtypes.float or len(x.src) != 2: return None
+  peers = [s for s in x.src if s.op is Ops.CUSTOMI and s.dtype == dtypes.float and s.arg in ("bpermute", _HIP_BPERMUTE_F32)]
+  if len(peers) != 1: return None
+  return UOp(Ops.CUSTOMI, dtypes.float, x.src, "__builtin_fmaxf({0}, {1})")
+
+hip_native_repack_pm = PatternMatcher([
+  (UPat(Ops.MAX, name="x"), _hip_native_bpermute_max),
+  (UPat(Ops.CUSTOMI, name="x"), lambda x: x.replace(
+    arg=_HIP_BPERMUTE_F32)
+    if x.arg == "bpermute" and x.dtype == dtypes.float else None),
+])
+
 def create_non_native_float_pats(dts:tuple[DType, ...], casting:bool=True):
   patterns = PatternMatcher([
     (UPat(Ops.WHERE, src=(UPat.var("b"), UPat.var("x", dtype=dts), UPat.var("y", dtype=dts))),
@@ -347,6 +362,12 @@ class HIPRenderer(CStyleLanguage):
     from tinygrad.runtime.support.compiler_amd import HIPCompiler, HIPCCCompiler
     self.compiler, self.tensor_cores = (HIPCCCompiler if use_hipcc else HIPCompiler)(target.arch), tc.get_amd(target.arch)
     if not self.is_cdna4(target.arch): self.extra_matcher += pm_manual_bf16_cast + extra_pm
+    if target.arch.split(":")[0] == "gfx1100":
+      # The scheduler-owned expansion is shared with the native ISA renderer;
+      # HIP only supplies source spelling for its existing bpermute marker.
+      from tinygrad.renderer.isa.amd import native_repack_matcher
+      self.native_repack_matcher = native_repack_matcher + PatternMatcher([(UPat(Ops.MAX, name="x"), _hip_native_bpermute_max)])
+      self.extra_matcher += hip_native_repack_pm
     if self.is_cdna(target.arch):
       self.string_rewrite = PatternMatcher([
         (UPat(Ops.WMMA, name="x"), lambda ctx,x: f"__{x.arg[0]}({ctx[x.src[0]]}, {ctx[x.src[1]]}, {ctx[x.src[2]]},"
