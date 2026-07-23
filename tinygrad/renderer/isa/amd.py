@@ -401,6 +401,7 @@ class AMDOps(FastEnum):
   V_WMMA_ZERO = 68                       # WMMA with post-regalloc zero initialization of its fixed C span
   FRAGMENT_LOAD_DWORD = 69               # exact contiguous packed fragment dword load into a physical destination
   ATTENTION_OUTPUT_DRAIN = 70            # sequential fixed-C Hd128 normalization and global stores
+  ATTENTION_STATS_DRAIN = 74             # sequential fixed m/l O(Q) stats stores
   V_CAUSAL_MASK = 72                     # fused kv<=qrow compare and score/-inf select, no bool VGPR
   V_CAUSAL_ZERO = 73                     # fused kv<=qrow compare and weight/zero select, no bool VGPR
 
@@ -924,6 +925,14 @@ def isel_attention_output_drain(ctx:IselContext, x:UOp):
   payload = None if x.arg.native_abi == "amd_gfx1100_attention_output_drain_v1" else \
     AMDAttentionOutputDrainPayload(x.arg.native_abi,x.arg.output_block_base,x.arg.blocks).validate()
   return UOp(Ops.INS,dtypes.void,src=tuple(src),arg=AMDOps.ATTENTION_OUTPUT_DRAIN,tag=payload)
+
+def isel_attention_stats_drain(ctx:IselContext, x:UOp):
+  from tinygrad.uop.ops import AMDAttentionStatsDrainSpec
+  if not isinstance(x.arg,AMDAttentionStatsDrainSpec) or len(x.src) != 4 or x.dtype != dtypes.void: raise ValueError("AMD attention stats drain is malformed")
+  x.arg.validate(); stats,group,m,l=x.src
+  if group.op is Ops.CAST: group=group.src[0]
+  if not isinstance(stats.dtype,PtrDType) or stats.dtype.base != dtypes.float or m.dtype != dtypes.float.vec(8) or l.dtype != dtypes.float.vec(8): raise ValueError("AMD attention stats drain ownership is malformed")
+  return UOp(Ops.INS,dtypes.void,src=(stats,group,m,l),arg=AMDOps.ATTENTION_STATS_DRAIN)
 
 # ---- Phase G ALU/control isel ----
 def isel_cast(ctx:IselContext, x:UOp):
@@ -2372,6 +2381,7 @@ isel_matcher = PatternMatcher([
   # decode-attention primitives injected as CUSTOMI markers (Phase F.2/F.3): cross-lane exchange + packed fp16 dot
   (UPat(Ops.CUSTOMI, name="x"), lambda ctx, x: isel_customi(ctx, x)),
   (UPat(Ops.AMD_ATTENTION_OUTPUT_DRAIN, name="x"), isel_attention_output_drain),
+  (UPat(Ops.AMD_ATTENTION_STATS_DRAIN, name="x"), isel_attention_stats_drain),
   (UPat(Ops.EXP2, name="x"), lambda ctx, x: UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]),), arg=AMDOps.V_EXP, tag=_vreg_def(ctx, x.dtype))),  # N1A: hardware exp2
   (UPat(Ops.RECIPROCAL, dtype=dtypes.float32, name="x"),
    lambda ctx, x: UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]),), arg=AMDOps.V_RCP, tag=_vreg_def(ctx, x.dtype))),
@@ -3038,6 +3048,14 @@ def lower_inst(x:UOp):
           *([_ins(v_add_nc_u32_e32(_V[3],_V[3],_V[4]),None)] if grid else []),
           _ins(global_store_b16(addr=_V[3],data=_V[c],saddr=_S2(ptr),offset=(e*256+(j+output_block_base)*16)*2),None)]
     return (insts[-1], insts)
+  if a is AMDOps.ATTENTION_STATS_DRAIN:
+    if len(src) != 4 or not isinstance(src[0].reg,Register) or not isinstance(src[1].reg,Register): raise ValueError("opaque attention stats drain lost ownership")
+    ptr,group=src[0].reg,src[1].reg; insts=[_ins(v_lshrrev_b32_e32(_V[2],4,_V[0]),None),_ins(v_mul_lo_u32(_V[4],_Vr(group),128),None)]
+    for e in range(8):
+      insts += [_ins(v_lshlrev_b32_e32(_V[3],3,_V[2]),None),_ins(v_add_nc_u32_e32(_V[3],_V[3],_V[4]),None),
+        _ins(global_store_b32(addr=_V[3],data=_V[72+e],saddr=_S2(ptr),offset=e*16),None),
+        _ins(global_store_b32(addr=_V[3],data=_V[80+e],saddr=_S2(ptr),offset=e*16+4),None)]
+    return (insts[-1],insts)
   if a is AMDOps.GLOBAL_LOAD_B64:
     off_r, ptr_r, imm = src[0].reg, src[1].reg, src[2].arg
     ld = _ins(global_load_b64(vdst=_V[x.reg.index:x.reg.index+1], addr=_Vr(off_r), saddr=_S2(ptr_r), offset=imm), x.tag)

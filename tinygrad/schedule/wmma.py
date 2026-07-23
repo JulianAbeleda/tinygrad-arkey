@@ -567,6 +567,48 @@ def amd_gfx1100_q16_grid_hd128_loop_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_toke
   end=UOp.group(*writes).end(rng).replace(tag=("amd_gfx1100_attention_grid_loop_end_v1",rng)); fl=rd(lreg,end,"l",final=True); fc=tuple(rd(creg,end,"acc",b,b*8,final=True) for b in range(acc_blocks)); drain=UOp(Ops.AMD_ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,group,fl,*fc),arg=AMDAttentionOutputDrainSpec(native_abi="amd_gfx1100_attention_output_drain_v1" if acc_blocks==8 else "amd_gfx1100_attention_output_drain_acc_slice_v2",blocks=acc_blocks,grid=grid,output_block_base=output_block_base))
   return UOp.sink(mi,li,ci,end,drain,arg=kernel_info).replace(tag=("amd_gfx1100_q16_grid_hd128_loop_v1",))
 
+def amd_gfx1100_q16_grid_qk_stats_stage(q:UOp,k:UOp,stats:UOp,*,q_tokens:int,q_heads:int,kv_heads:int,kv_tokens:int,scale:float,kernel_info,causal:bool=True,query_start:int|None=None)->UOp:
+  """Direct diagnostic Stage A: QK online reduction to fp32 `[query, m/l]` state only."""
+  from tinygrad.uop.ops import AMDAttentionGridSpec, AMDAttentionStatsDrainSpec, AMDLoopStateSpec, AMDPackedFragmentLoopSpec, AxisType
+  grid=AMDAttentionGridSpec(q_tokens=q_tokens,q_heads=q_heads,kv_heads=kv_heads,group_ratio=q_heads//kv_heads,kv_tokens=kv_tokens); grid.validate()
+  qn,kn=q_heads*q_tokens*128,kv_heads*kv_tokens*128
+  if tuple(x.arg.slot for x in (q,k,stats)) != (1,2,0) or q.ptrdtype.size != qn or k.ptrdtype.size != kn or stats.ptrdtype.size != q_heads*q_tokens*2:
+    raise ValueError("qk stats stage requires Q1/K2/stats0 exact geometry")
+  if q.ptrdtype.base != dtypes.half or k.ptrdtype.base != dtypes.half or stats.ptrdtype.base != dtypes.float or not causal: raise ValueError("qk stats stage requires causal fp16 Q/K and fp32 stats")
+  query_start=kv_tokens-q_tokens if query_start is None else query_start
+  lane=UOp.special(32,"lidx0"); group=UOp.special(q_heads*grid.q_tiles,"gidx0"); col=lane.alu(Ops.AND,UOp.const(dtypes.weakint,15)); zero=UOp.const(dtypes.float.vec(8),(0.0,)*8)
+  axes=((),(),tuple((-120-i,2) for i in range(3))); warg=("WMMA_16_16_16_half_float",(16,16,16),dtypes.half,dtypes.float,"AMD:gfx1100",32,axes,())
+  rng=UOp.range((kv_tokens+15)//16,9700,AxisType.REDUCE); mreg=UOp.placeholder((8,),dtypes.float,9701,addrspace=AddrSpace.REG); lreg=UOp.placeholder((8,),dtypes.float,9702,addrspace=AddrSpace.REG)
+  def wr(reg,role,value,a="write"): return tuple(UOp(Ops.AMD_ATTENTION_LOOP_STATE,dtypes.void,(reg.index(UOp.const(dtypes.weakint,i)).store(value.gep(i)),),arg=AMDLoopStateSpec(role=role,access=a,lane=i,owner=9704)) for i in range(8))
+  def rd(reg,init,role,final=False): return UOp(Ops.STACK,dtypes.float.vec(8),tuple(UOp(Ops.AMD_ATTENTION_LOOP_STATE,dtypes.float,(reg,init) if final else (reg,init,rng),arg=AMDLoopStateSpec(role=role,access="final_read" if final else "read",lane=i,owner=9704)) for i in range(8)))
+  def fr(owner,role,b): return UOp(Ops.AMD_PACKED_FRAGMENT_LOAD,dtypes.half.vec(16),(owner,lane,col,rng,group),arg=AMDPackedFragmentLoopSpec(role=role,head_block=b,grid=grid))
+  mi=UOp.group(*wr(mreg,"m",UOp.const(dtypes.float.vec(8),(-float("inf"),)*8),"init")); li=UOp.group(*wr(lreg,"l",zero,"init")); om,ol=rd(mreg,mi,"m"),rd(lreg,li,"l"); qk=zero
+  for b in range(8): qk=UOp(Ops.WMMA,dtypes.float.vec(8),(fr(q,"Q",b),fr(k,"K",b),qk),warg,tag=("attention_wmma","QK",b))
+  _,nm,nl,_=amd_gfx1100_row_softmax_state(qk,om,ol,spec=AMDRowSoftmaxRepackSpec(score_scale=scale,mode="loop_state_v1",validity_mode="causal_v1",query_start=query_start,kv_start=-1,valid_kv=kv_tokens,dynamic_kv_v1=True,grid=grid),kv_tile=rng,grid_id=group)
+  end=UOp.group(*wr(mreg,"m",nm),*wr(lreg,"l",nl)).end(rng); fm,fl=rd(mreg,end,"m",True),rd(lreg,end,"l",True)
+  drain=UOp(Ops.AMD_ATTENTION_STATS_DRAIN,dtypes.void,(stats,group,fm,fl),arg=AMDAttentionStatsDrainSpec())
+  return UOp.sink(mi,li,end,drain,arg=kernel_info).replace(tag=("amd_gfx1100_qk_stats_stage_v1",))
+
+def amd_gfx1100_q16_grid_pv_slice_stage(q:UOp,k:UOp,v:UOp,stats:UOp,out:UOp,*,q_tokens:int,q_heads:int,kv_heads:int,kv_tokens:int,scale:float,kernel_info,output_block_base:int,acc_blocks:int=2,causal:bool=True,query_start:int|None=None)->UOp:
+  """Direct diagnostic Stage B: reload final m/l, recompute QK/P, and own one aligned PV slice."""
+  from tinygrad.uop.ops import AMDAttentionOutputDrainSpec, AMDAttentionGridSpec, AMDLoopStateSpec, AMDPackedFragmentLoopSpec, AxisType
+  grid=AMDAttentionGridSpec(q_tokens=q_tokens,q_heads=q_heads,kv_heads=kv_heads,group_ratio=q_heads//kv_heads,kv_tokens=kv_tokens); grid.validate()
+  qn,kn,outn=q_heads*q_tokens*128,kv_heads*kv_tokens*128,q_heads*q_tokens*128
+  if tuple(x.arg.slot for x in (q,k,v,stats,out)) != (1,2,3,4,0) or tuple(x.ptrdtype.size for x in (q,k,v,stats,out)) != (qn,kn,kn,q_heads*q_tokens*2,outn): raise ValueError("pv slice stage requires Q1/K2/V3/stats4/out0 exact geometry")
+  if (output_block_base,acc_blocks) not in {(0,2),(2,2),(4,2),(6,2)} or not causal: raise ValueError("pv slice stage requires one aligned causal two-block slice")
+  query_start=kv_tokens-q_tokens if query_start is None else query_start; lane=UOp.special(32,"lidx0"); group=UOp.special(q_heads*grid.q_tiles,"gidx0"); col=lane.alu(Ops.AND,UOp.const(dtypes.weakint,15)); zero=UOp.const(dtypes.float.vec(8),(0.0,)*8)
+  axes=((),(),tuple((-120-i,2) for i in range(3))); warg=("WMMA_16_16_16_half_float",(16,16,16),dtypes.half,dtypes.float,"AMD:gfx1100",32,axes,()); rng=UOp.range((kv_tokens+15)//16,9800,AxisType.REDUCE); creg=UOp.placeholder((16,),dtypes.float,9803,addrspace=AddrSpace.REG)
+  def wr(value,b): return tuple(UOp(Ops.AMD_ATTENTION_LOOP_STATE,dtypes.void,(creg.index(UOp.const(dtypes.weakint,b*8+i)).store(value.gep(i)),),arg=AMDLoopStateSpec(role="acc",access="write",block=b,lane=i,owner=9804)) for i in range(8))
+  def rd(init,b,final=False): return UOp(Ops.STACK,dtypes.float.vec(8),tuple(UOp(Ops.AMD_ATTENTION_LOOP_STATE,dtypes.float,(creg,init) if final else (creg,init,rng),arg=AMDLoopStateSpec(role="acc",access="final_read" if final else "read",block=b,lane=i,owner=9804)) for i in range(8)))
+  def fr(owner,role,b): return UOp(Ops.AMD_PACKED_FRAGMENT_LOAD,dtypes.half.vec(16),(owner,lane,col,rng,group),arg=AMDPackedFragmentLoopSpec(role=role,head_block=b,grid=grid))
+  def stat(which): return UOp(Ops.STACK,dtypes.float.vec(8),tuple(stats.index(group*UOp.const(dtypes.weakint,32)+(UOp.const(dtypes.weakint,2*e)+lane.alu(Ops.SHR,UOp.const(dtypes.weakint,4)))*UOp.const(dtypes.weakint,2)+UOp.const(dtypes.weakint,which)).load() for e in range(8)))
+  fm,fl=stat(0),stat(1); ci=UOp.group(*(x for b in range(2) for x in wr(zero,b))); qk=zero
+  for b in range(8): qk=UOp(Ops.WMMA,dtypes.float.vec(8),(fr(q,"Q",b),fr(k,"K",b),qk),warg,tag=("attention_wmma","QK",b))
+  p,_,_,alpha=amd_gfx1100_row_softmax_state(qk,fm,fl,spec=AMDRowSoftmaxRepackSpec(score_scale=scale,mode="loop_state_v1",validity_mode="causal_v1",query_start=query_start,kv_start=-1,valid_kv=kv_tokens,dynamic_kv_v1=True,grid=grid),kv_tile=rng,grid_id=group); writes=[]
+  for b in range(2): writes.extend(wr(UOp(Ops.WMMA,dtypes.float.vec(8),(p,fr(v,"V",b+output_block_base),rd(ci,b).alu(Ops.MUL,alpha)),warg,tag=("attention_wmma","PV",b)),b))
+  end=UOp.group(*writes).end(rng); fc=tuple(rd(end,b,True) for b in range(2)); drain=UOp(Ops.AMD_ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,group,fl,*fc),arg=AMDAttentionOutputDrainSpec(native_abi="amd_gfx1100_attention_output_drain_acc_slice_v2",blocks=2,grid=grid,output_block_base=output_block_base))
+  return UOp.sink(ci,end,drain,arg=kernel_info).replace(tag=("amd_gfx1100_pv_slice_stage_v1",))
+
 class OnlineSoftmaxBlockTransition(NamedTuple):
   """Typed online-softmax state at one completed KV tile boundary."""
   new_m: UOp

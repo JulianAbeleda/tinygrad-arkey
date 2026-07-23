@@ -152,6 +152,15 @@ def _hip_expand_attention_output_drain(x:UOp) -> UOp:
       stores.append(dst.store((acc[j].gep(e)*recip).cast(dtypes.half)))
   return UOp.group(*stores)
 
+def _hip_expand_attention_stats_drain(x:UOp) -> UOp:
+  from tinygrad.uop.ops import AMDAttentionStatsDrainSpec
+  if not isinstance(x.arg,AMDAttentionStatsDrainSpec) or len(x.src) != 4: raise ValueError("HIP attention stats drain is malformed")
+  x.arg.validate(); stats,group,m,l=x.src; lane=UOp.special(32,"lidx0"); half=lane.alu(Ops.SHR,UOp.const(dtypes.weakint,4)); stores=[]
+  for e in range(8):
+    base=group*UOp.const(dtypes.weakint,32)+(UOp.const(dtypes.weakint,2*e)+half)*UOp.const(dtypes.weakint,2)
+    stores += [stats.index(base).store(m.gep(e)),stats.index(base+UOp.const(dtypes.weakint,1)).store(l.gep(e))]
+  return UOp.group(*stores)
+
 hip_native_repack_pm = PatternMatcher([
   (UPat(Ops.MAX, name="x"), _hip_native_bpermute_max),
   (UPat(Ops.CUSTOMI, name="x"), _hip_native_row_state),
@@ -425,6 +434,7 @@ class HIPRenderer(CStyleLanguage):
       from tinygrad.renderer.isa.amd import native_repack_matcher
       from tinygrad.renderer.isa.amd import native_state_lane_matcher
       self.native_repack_matcher = PatternMatcher([(UPat(Ops.AMD_ATTENTION_OUTPUT_DRAIN,name="x"), _hip_expand_attention_output_drain),
+        (UPat(Ops.AMD_ATTENTION_STATS_DRAIN,name="x"), _hip_expand_attention_stats_drain),
         (UPat(Ops.AMD_ATTENTION_LOOP_STATE,name="x"), _hip_expand_attention_loop_state),
         (UPat(Ops.AMD_ROW_SOFTMAX_REPACK,name="x"), _hip_expand_native_row_softmax)]) + native_repack_matcher + \
         PatternMatcher([(UPat(Ops.MAX, name="x"), _hip_native_bpermute_max)])
@@ -490,7 +500,8 @@ class HIPRenderer(CStyleLanguage):
                     '_dp4a(unsigned int a, unsigned int b, unsigned int c){ return __builtin_amdgcn_udot4(a, b, c, false); }')
     type_map = { dtypes.bfloat16: "bf16", dtypes.float: "f32", dtypes.half: "f16", dtypes.fp8e4m3: "_fp8_fp8", dtypes.fp8e5m2: "_bf8_bf8" }
     used_dtypes = uops_to_dtypes(uops)
-    if any(u.op is Ops.CONST and not math.isfinite(u.arg) for u in uops):
+    if any(u.op is Ops.CONST and not math.isfinite(u.arg) for u in uops) or \
+       any(u.op in {Ops.CUSTOM,Ops.CUSTOMI} and "INFINITY" in str(u.arg) for u in uops):
       prefix += ["#define INFINITY (__builtin_inff())", "#define NAN (__builtin_nanf(\"\"))"]
     if any(u.op is Ops.SPECIAL for u in uops):
       prefix.append("typedef long unsigned int size_t;")

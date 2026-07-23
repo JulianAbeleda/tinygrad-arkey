@@ -302,7 +302,7 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
       case Ops.AMD_ROW_SOFTMAX_SLOT: return (self.dtype.count,)
       case Ops.AMD_PACKED_FRAGMENT_LOAD: return (self.dtype.count,)
       case Ops.AMD_ATTENTION_LOOP_STATE: return (self.dtype.count,) if self.dtype != dtypes.void and self.dtype.count != 1 else ()
-      case Ops.AMD_ATTENTION_OUTPUT_DRAIN: return self.src[0]._shape
+      case Ops.AMD_ATTENTION_OUTPUT_DRAIN | Ops.AMD_ATTENTION_STATS_DRAIN: return self.src[0]._shape
       case Ops.AMD_PV_C_LANE: return ()
       case Ops.SCOPED_REDUCE:
         # The first SCOPED_REDUCE source is its semantically identical
@@ -1664,6 +1664,12 @@ class AMDAttentionOutputDrainPayload(NamedTuple):
     if self.native_abi != "amd_gfx1100_attention_output_drain_acc_slice_v2" or self.blocks not in {1,2,4} or \
        not 0 <= self.output_block_base <= 8-self.blocks or self.output_block_base % self.blocks:
       raise ValueError("AMD attention output drain payload requires an aligned v2 accumulator slice")
+    return self
+
+class AMDAttentionStatsDrainSpec(NamedTuple):
+  native_abi: str = "amd_gfx1100_attention_qk_stats_drain_v1"
+  def validate(self):
+    if self.native_abi != "amd_gfx1100_attention_qk_stats_drain_v1": raise ValueError("AMD attention stats drain ABI mismatch")
     return self
 
 class AMDLoopStateSpec(NamedTuple):

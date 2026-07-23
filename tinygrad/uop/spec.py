@@ -75,6 +75,13 @@ def validate_amd_attention_output_drain(x:UOp):
   except ValueError: return False
   return len(x.src)==3+x.arg.blocks and x.src[0].dtype.size==grid.q_heads*grid.q_tokens*128 and all(s.dtype==dtypes.float.vec(8) for s in x.src[2:])
 
+def validate_amd_attention_stats_drain(x:UOp):
+  if not hasattr(x.arg,"native_abi") or x.arg.native_abi != "amd_gfx1100_attention_qk_stats_drain_v1" or x.dtype != dtypes.void or len(x.src) != 4: return False
+  stats,group,m,l=x.src
+  try: x.arg.validate()
+  except ValueError: return False
+  return isinstance(stats.dtype,PtrDType) and stats.dtype.base == dtypes.float and group.op in {Ops.SPECIAL,Ops.CAST} and m.dtype == l.dtype == dtypes.float.vec(8)
+
 # ***** new specs *****
 
 # these ops can be used in the tensor graph and programs
@@ -298,6 +305,7 @@ spec_tensor = PatternMatcher([
    getattr(getattr(x.arg,"grid",None),"native_abi",None) == "amd_gfx1100_attention_multiwave_g2_v1" and
    str(x.src[5].arg)=="gidx0" and x.dtype == dtypes.half.vec(16)),
   (UPat(Ops.AMD_ATTENTION_OUTPUT_DRAIN, name="x"), validate_amd_attention_output_drain),
+  (UPat(Ops.AMD_ATTENTION_STATS_DRAIN, name="x"), validate_amd_attention_stats_drain),
 
   # ATTENTION keeps a normal fallback plus explicit Q/K/V/(optional mask)
   # dependencies until rangeify selects a lowering.
@@ -361,6 +369,7 @@ spec_program = PatternMatcher([
   (UPat(Ops.AMD_ATTENTION_LOOP_STATE, name="x"),
    lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_attention_loop_state_v1"),
   (UPat(Ops.AMD_ATTENTION_OUTPUT_DRAIN, name="x"), validate_amd_attention_output_drain),
+  (UPat(Ops.AMD_ATTENTION_STATS_DRAIN, name="x"), validate_amd_attention_stats_drain),
   # REDUCE with composite arg may reach program level before lowering
   (UPat(Ops.REDUCE, src=(UPat(),), allow_any_len=True, name="x"),
    lambda x: isinstance(x.arg, tuple) and len(x.arg) == 2 and (x.arg[0] in {Ops.ADD, Ops.MUL, Ops.MAX} or hasattr(x.arg[0], 'slots'))),
