@@ -1,6 +1,7 @@
 from extra.qk.model_profiles import MODEL_PROFILES
 from extra.qk.shared_attention_evidence import (DEFAULT_CONTEXTS, attention_workloads, authority_command,
-  dual_wmma_fused_call_report, dual_wmma_fused_call_fixture, fused_wmma_role_report, geometry_candidates)
+  dual_wmma_fused_call_report, dual_wmma_fused_call_fixture, fused_wmma_role_report, geometry_candidates,
+  shared_attention_proof_artifact)
 from pathlib import Path
 
 
@@ -90,3 +91,14 @@ def test_dual_wmma_report_does_not_credit_unattributed_isa_or_source_lines():
   report = dual_wmma_fused_call_report("CALL fused\n// WMMA helper\nSHAPED_WMMA")
   assert report["qk_source_wmma_lines"] == report["pv_source_wmma_lines"] == 0
   assert report["promotable"] is False
+
+def test_shared_proof_artifact_binds_both_model_routes_to_one_native_boundary():
+  routes = {name: {"first_chunk": True, "prefix_chunk": True, "shared_boundary": "shared_prefill_attention",
+                   "projection_strategies": ("FULL_RESIDENT_OVERLAY", "BOUNDED_PACKED_TILES")}
+            for name in ("qwen3_8b_q4k_m_gfx1100", "qwen3_14b_q4k_m_gfx1100")}
+  artifact = shared_attention_proof_artifact(
+    source="CALL fused_attention\n// QK WMMA\n// PV WMMA\nSHAPED_WMMA(TILE_GATHER)",
+    isa="QK: v_wmma_f32_16x16x16_f16\nPV: v_wmma_f32_16x16x16_f16",
+    ownership={"authority": "final_regalloc", "operands": ("output", "q", "k", "v"), "grid_owner": "gidx0"}, model_routes=routes)
+  assert artifact["status"] == "PASS"
+  assert artifact["compiler"]["ownership"]["grid_owner"] == "gidx0"
