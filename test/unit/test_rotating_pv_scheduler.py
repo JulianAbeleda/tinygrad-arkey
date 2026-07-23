@@ -4,6 +4,7 @@ from tinygrad.schedule.wmma import amd_gfx1100_rotating_pv_scheduler_probe
 from tinygrad.uop.ops import ParamArg, UOp
 from tinygrad.uop.spec import spec_full, type_verify
 from extra.qk.rotating_pv_abi import rotating_pv_kernel_probe
+import pytest
 
 
 def test_rotating_pv_scheduler_probe_builds_one_ordered_kv_body_and_drain():
@@ -35,3 +36,16 @@ def test_rotating_pv_kernel_probe_wraps_exact_scheduler_sink():
   assert probe["status"] == "CONSTRUCTED" and not probe["promotion_eligible"]
   assert probe["geometry"] == {"q_tokens": 512, "q_heads": 32, "kv_heads": 8, "kv_tokens": 512, "head_dim": 128}
   assert probe["sink"].arg.name == "rotating_pv_scheduler_probe"
+
+
+def test_rotating_pv_exact_isa_reaches_resource_gate_after_fragment_lowering():
+  from tinygrad.codegen import to_program
+  from tinygrad.helpers import Target
+  from tinygrad.renderer.isa.amd import AMDISARenderer
+  sink = rotating_pv_kernel_probe()["sink"]
+  try:
+    to_program(sink, AMDISARenderer(Target.parse("AMD:ISA:gfx1100")))
+  except NotImplementedError as exc:
+    assert "spill-free VGPR/SGPR budget" in str(exc)
+  except RuntimeError as exc:
+    assert "lazy opaque fragment lowering produced unselected" not in str(exc)
