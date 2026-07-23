@@ -291,6 +291,10 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
         # Scheduler-only carrier.  The argument is the explicit fragment
         # shape; no renderer may consume this until ownership lowering exists.
         return self.arg.fragment_shape
+      case Ops.ROW_SOFTMAX_REPACK:
+        # Scheduler-only QK-C -> PV-A bridge. Backend lowering must consume it
+        # before program construction.
+        return self.arg.fragment_shape
       case Ops.SCOPED_REDUCE:
         # The first SCOPED_REDUCE source is its semantically identical
         # fallback.  It is deliberately source-visible so a compiler that
@@ -1347,6 +1351,33 @@ class TileGatherSpec(NamedTuple):
       raise ValueError("tile gather base offsets must match source axes")
     if not isinstance(self.lane_group, int) or self.lane_group < 1:
       raise ValueError("tile gather lane_group must be positive")
+    return self
+
+class RowSoftmaxRepackSpec(NamedTuple):
+  """Typed scheduler contract for the nonlinear QK-C -> PV-A boundary.
+
+  The operation computes rowwise online-softmax weights, stages them through
+  one LDS tile, synchronizes the workgroup, and reloads the tile in PV-A
+  ownership. This describes required semantics only; it is not a backend
+  lowering and deliberately supports only the first proven fragment ABI.
+  """
+  typed_fragment_abi: str = "online_softmax_qk_pv_v1"
+  fragment_shape: tuple[int, int] = (16, 16)
+  state_shape: tuple[int, int] = (16, 1)
+  lds_shape: tuple[int, int] = (16, 16)
+  row_axis: int = 0
+  reduction_axis: int = 1
+  requires_barrier: bool = True
+
+  def validate(self):
+    if self.typed_fragment_abi != "online_softmax_qk_pv_v1":
+      raise ValueError("unknown row-softmax repack fragment ABI")
+    if self.fragment_shape != (16, 16) or self.state_shape != (16, 1) or self.lds_shape != (16, 16):
+      raise ValueError("online softmax repack ABI requires exact 16x16 score/LDS and 16x1 row state")
+    if (self.row_axis, self.reduction_axis) != (0, 1):
+      raise ValueError("online softmax repack ABI requires rowwise KV reduction")
+    if self.requires_barrier is not True:
+      raise ValueError("online softmax LDS repack requires a workgroup barrier")
     return self
 
 class CompositeInputSpec(NamedTuple):

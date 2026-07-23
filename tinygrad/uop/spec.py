@@ -238,6 +238,14 @@ spec_tensor = PatternMatcher([
   (UPat(Ops.SCOPED_VALUE, src=(UPat(),), name="x"),
    lambda x: hasattr(x.arg, 'axis_map') and len(x.arg.axis_map) == len(x.src[0].shape)),
 
+  # Scheduler-only nonlinear fragment bridge. It remains illegal in rendered
+  # programs until a backend installs a descriptor-specific lowering.
+  (UPat(Ops.ROW_SOFTMAX_REPACK, src=(UPat(), UPat(), UPat()), name="x"),
+   lambda x: hasattr(x.arg, 'typed_fragment_abi') and x.arg.typed_fragment_abi == "online_softmax_qk_pv_v1"
+   and x.shape == (16, 16) and x.src[0].shape == (16, 16)
+   and x.src[1].shape == x.src[2].shape == (16, 1)
+   and x.dtype == dtypes.half and all(s.dtype == dtypes.float32 for s in x.src)),
+
   # ATTENTION keeps a normal fallback plus explicit Q/K/V/(optional mask)
   # dependencies until rangeify selects a lowering.
   (UPat(Ops.ATTENTION, name="x"),

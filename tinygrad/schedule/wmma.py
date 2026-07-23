@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from tinygrad.dtype import DType, dtypes
 from tinygrad.uop.ops import Ops, UOp
-from tinygrad.uop.ops import CompositeReduce, CompositeTileCarrier, TileGatherSpec, Ops
+from tinygrad.uop.ops import CompositeReduce, CompositeTileCarrier, TileGatherSpec, RowSoftmaxRepackSpec, Ops
 
 def grouped_tile_load(source: UOp, spec: TileGatherSpec, *indices: UOp) -> UOp:
   """Build an ownership-preserving INDEX/LOAD tile carrier.
@@ -259,6 +259,23 @@ def emit_hd16_dual_tile_wmma(score: UOp, value: UOp, acc: UOp, *,
   pv = emit_tile_gather_shaped_wmma(score, value, acc, roles=("score", "value", "acc"),
                                    dims=dims, device=device, threads=threads, dtype_out=dtype_out)
   return qk, pv
+
+def row_softmax_lds_repack(score: UOp, m: UOp, l: UOp, *,
+                           spec: RowSoftmaxRepackSpec|None = None) -> UOp:
+  """Construct the typed scheduler-only QK-C -> PV-A bridge.
+
+  No reshape, state broadcast, LDS allocation, or barrier is synthesized here.
+  The descriptor records those mandatory lowering semantics, while all live
+  score/state dependencies remain normal UOp sources. Unsupported geometry or
+  dtype fails before a backend can observe the node.
+  """
+  spec = RowSoftmaxRepackSpec() if spec is None else spec
+  spec.validate()
+  if score.shape != spec.fragment_shape or score.dtype.base != dtypes.float32:
+    raise ValueError("row-softmax repack requires one fp32 16x16 QK-C fragment")
+  if any(x.shape != spec.state_shape or x.dtype.base != dtypes.float32 for x in (m, l)):
+    raise ValueError("row-softmax repack requires fp32 16x1 m/l row state")
+  return UOp(Ops.ROW_SOFTMAX_REPACK, dtypes.half, (score, m, l), arg=spec)
 
 def amd_tile_wmma_boundary_report(*, qk_score: UOp, pv_value: UOp, pv_acc: UOp) -> dict:
   """Describe whether AMD can consume the composite tile at the WMMA boundary.

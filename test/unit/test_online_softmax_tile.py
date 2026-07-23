@@ -221,6 +221,32 @@ def test_hd16_constructor_rejects_unproven_geometry():
                                  UOp.placeholder((1, 1, 1, 16, 16), dtypes.half, 64),
                                  UOp.placeholder((1, 1, 16, 16), dtypes.float32, 65))
 
+def test_row_softmax_lds_repack_has_exact_typed_contract():
+  from tinygrad.schedule.wmma import row_softmax_lds_repack
+  score = UOp.placeholder((16, 16), dtypes.float32, 80)
+  m = UOp.placeholder((16, 1), dtypes.float32, 81)
+  l = UOp.placeholder((16, 1), dtypes.float32, 82)
+  repacked = row_softmax_lds_repack(score, m, l)
+  assert repacked.op is Ops.ROW_SOFTMAX_REPACK and repacked.src == (score, m, l)
+  assert repacked.shape == (16, 16) and repacked.dtype == dtypes.half
+  assert repacked.arg.typed_fragment_abi == "online_softmax_qk_pv_v1"
+  assert repacked.arg.lds_shape == (16, 16) and repacked.arg.requires_barrier
+
+def test_row_softmax_lds_repack_fails_closed_on_unproven_contracts():
+  from tinygrad.schedule.wmma import row_softmax_lds_repack
+  from tinygrad.uop.ops import RowSoftmaxRepackSpec
+  score = UOp.placeholder((16, 16), dtypes.float32, 83)
+  m = UOp.placeholder((16, 1), dtypes.float32, 84)
+  l = UOp.placeholder((16, 1), dtypes.float32, 85)
+  with pytest.raises(ValueError, match="QK-C"):
+    row_softmax_lds_repack(UOp.placeholder((8, 16), dtypes.float32, 86), m, l)
+  with pytest.raises(ValueError, match="m/l"):
+    row_softmax_lds_repack(score, UOp.placeholder((16,), dtypes.float32, 87), l)
+  with pytest.raises(ValueError, match="unknown"):
+    row_softmax_lds_repack(score, m, l, spec=RowSoftmaxRepackSpec(typed_fragment_abi="untyped"))
+  with pytest.raises(ValueError, match="barrier"):
+    row_softmax_lds_repack(score, m, l, spec=RowSoftmaxRepackSpec(requires_barrier=False))
+
 def test_rangeify_handoff_unwraps_only_exact_tile_carriers():
   from tinygrad.uop.ops import TileGatherSpec, graph_rewrite
   from tinygrad.schedule.wmma import tile_gather
