@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from tinygrad.llm.prefill_policy import select_prefill_runtime_policy
+from tinygrad.llm.prefill_policy import select_prefill_runtime_policy, bounded_packed_projection_proven_eligible
 from extra.qk.shared_attention_evidence import shared_attention_proof_artifact
 
 
@@ -42,3 +42,11 @@ def test_shared_attention_artifact_fails_closed_without_role_attributed_isa():
     isa="QK: v_wmma", ownership={"authority": "final_regalloc", "operands": ("output", "q", "k", "v"), "grid_owner": "gidx0"},
     model_routes={})
   assert bad["status"] == "INCOMPLETE"
+
+def test_bounded_packed_projection_requires_all_compiler_numeric_and_owner_facts():
+  proof = {"status": "PASS", "target": {"backend": "AMD", "architecture": "gfx1100"},
+           "q4_source_owner": "MODEL_PARAMETER", "fused_dequant_wmma": True, "fp16_qkv_outputs": True,
+           "numeric_correctness": True, "memory_cap": True, "allocation_owner_identity": "q4k:selected"}
+  assert bounded_packed_projection_proven_eligible({"bounded_packed_projection_proof": proof}, _facts())
+  proof["numeric_correctness"] = False
+  assert not bounded_packed_projection_proven_eligible({"bounded_packed_projection_proof": proof}, _facts())

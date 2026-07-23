@@ -17,6 +17,7 @@ from tinygrad.llm.decode_routes import FLASH_DECODE_CANDIDATE, flash_decode_atte
 from tinygrad.llm.prefill_policy import (
   immutable_prefill_policy, prefill_concrete_kv_auto_decision, prefill_policy_strategy,
   prefill_policy_uses_overlay, prefill_v2_validate_ubatch, select_prefill_runtime_policy,
+  bounded_packed_projection_proven_eligible,
 )
 from tinygrad.llm.prefill_routes import is_direct_packed_prefill_linear, route_prefill_linear
 from tinygrad.llm.prefill_memory_plan import Strategy
@@ -179,8 +180,8 @@ def select_memory_adaptive_runtime_policy(*, kv:dict, meta:dict, device_facts, u
   if selected.get("decision") != "SELECTED" or (validation not in ("exact_cache", "measured") and not trial):
     raise ValueError("memory-adaptive policy must be a cached/validated SELECTED result")
   policy = immutable_prefill_policy(selected["policy"])
-  if prefill_policy_strategy(policy) == "BOUNDED_PACKED_TILES":
-    raise ValueError("BOUNDED_PACKED_TILES has no production runtime binder; collector may not promote it yet")
+  if prefill_policy_strategy(policy) == "BOUNDED_PACKED_TILES" and not bounded_packed_projection_proven_eligible(policy, device_facts):
+    raise ValueError("BOUNDED_PACKED_TILES requires a complete bound packed-projection proof")
   if tuple(sorted(policy["routes"])) != tuple(sorted(invocation_ids)):
     raise ValueError("memory-adaptive policy route coverage does not exactly match selected GGUF inventory")
   fixed_routes = {row["invocation_id"]: row["fixed_route_id"] for row in inventory["rows"]
@@ -221,8 +222,10 @@ def _attach_selected_prefill_inventory(model, inventory:dict, policy, scanned_ta
       raise ValueError(f"selected prefill tensor {tensor_identity!r} has no exact runtime linear") from exc
     if hasattr(obj, "_prefill_route_attachment"): raise ValueError(f"duplicate runtime attachment for {tensor_identity!r}")
     invocation_id = row["invocation_id"]
+    proof = policy.get("bounded_packed_projection_proof", {}) if hasattr(policy, "get") else {}
+    owner_identity = proof.get("allocation_owner_identity") if hasattr(proof, "get") else None
     setattr(obj, "_prefill_route_attachment", PrefillRouteAttachment(invocation_id, routes[invocation_id], tensor_identity,
-                                                                       policy, scanned_target_facts))
+                                                                       policy, scanned_target_facts, owner_identity))
     attached.add(invocation_id)
   if attached != set(routes): raise ValueError("selected prefill inventory did not attach exactly once")
 

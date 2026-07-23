@@ -68,6 +68,12 @@ def _attached_production_route(lin, x: Tensor) -> str | None:
                   f"prefill_{quant.lower()}_direct_packed_load_direct_out"}
   if attachment.route_id in baseline_ids:
     return "direct_packed"
+  if policy.get("strategy") == "BOUNDED_PACKED_TILES":
+    from tinygrad.llm.prefill_policy import bounded_packed_projection_proven_eligible
+    proof = policy.get("bounded_packed_projection_proof", {})
+    if (bounded_packed_projection_proven_eligible(policy, facts) and attachment.allocation_owner_identity ==
+        proof.get("allocation_owner_identity")):
+      return "bounded_packed"
   if policy.get("strategy") == "FULL_RESIDENT_OVERLAY" and getattr(lin, "_pf16_w", None) is not None:
     return "fp16"
   return None
@@ -220,14 +226,15 @@ def _direct_packed_module_role(lin) -> str:
 
 def _attached_direct_packed_spec(lin, x:Tensor) -> PrefillLinearRouteSpec | None:
   """Build the production baseline spec from attachment and structural facts only."""
-  if _attached_production_route(lin, x) != "direct_packed": return None
+  if _attached_production_route(lin, x) not in ("direct_packed", "bounded_packed"): return None
   if getattr(lin, "bias", None) is not None or len(x.shape) != 3 or x.shape[0] != 1: return None
   m, k = x.shape[-2], x.shape[-1]
   n, in_f = getattr(lin, "out_features", None), getattr(lin, "in_features", None)
   if not all(isinstance(v, int) for v in (m, k, n, in_f)) or k != in_f: return None
   quant = "q4k" if _is_q4k_linear(lin) else "q6k" if _is_q6k_linear(lin) else ""
   if quant == "": return None
-  return PrefillLinearRouteSpec("direct_packed", quant, _direct_packed_module_role(lin), m, n, k)
+  route = "bounded_packed" if _attached_production_route(lin, x) == "bounded_packed" else "direct_packed"
+  return PrefillLinearRouteSpec(route, quant, _direct_packed_module_role(lin), m, n, k)
 
 
 def _run_direct_packed_baseline(lin, x:Tensor, spec:PrefillLinearRouteSpec) -> Tensor | None:
@@ -284,7 +291,7 @@ def route_prefill_linear(lin, x:Tensor) -> Tensor:
   route = _attached_production_route(lin, x)
   w = getattr(lin, "_pf16_w", None)
 
-  if route == "direct_packed":
+  if route in ("direct_packed", "bounded_packed"):
     routed = route_packed_wmma_prefill(lin, x)
     if routed is not None: return routed
     routed = route_direct_packed_prefill(lin, x)

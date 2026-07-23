@@ -13,6 +13,7 @@ class PrefillRouteAttachment:
   tensor_identity: str
   selected_policy: object
   scanned_target_facts: object
+  allocation_owner_identity: str | None = None
 
 @dataclass(frozen=True)
 class PrefillRouteExecution:

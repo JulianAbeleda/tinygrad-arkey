@@ -33,6 +33,16 @@ def shared_attention_proven_eligible(value:Mapping[str, Any], scanned_device_fac
           isinstance(geometry, Mapping) and bool(geometry) and
           artifact_ok and all(proof.get(field) is True for field in _SHARED_ATTENTION_PROOF_FIELDS))
 
+def bounded_packed_projection_proven_eligible(value:Mapping[str, Any], scanned_device_facts:Any) -> bool:
+  """Admit the bounded projection binder only with its own compiler-owned proof."""
+  proof = value.get("bounded_packed_projection_proof")
+  if not isinstance(proof, Mapping) or proof.get("status") != "PASS": return False
+  if not _requirements_met(_TC_ATTN_TARGET_REQUIREMENTS, scanned_device_facts): return False
+  return (proof.get("target") == _TC_ATTN_TARGET_REQUIREMENTS and proof.get("q4_source_owner") == "MODEL_PARAMETER" and
+          proof.get("fused_dequant_wmma") is True and proof.get("fp16_qkv_outputs") is True and
+          proof.get("numeric_correctness") is True and proof.get("memory_cap") is True and
+          isinstance(proof.get("allocation_owner_identity"), str) and bool(proof["allocation_owner_identity"]))
+
 def select_prefill_runtime_policy(value:Mapping[str, Any], *, scanned_device_facts:Any, workload_reuse:bool,
                                   tc_attn_override:bool|None=None) -> Mapping[str, Any]:
   """Add derived runtime diagnostics without granting them route authority."""
