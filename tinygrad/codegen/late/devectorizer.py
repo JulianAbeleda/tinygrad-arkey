@@ -371,15 +371,35 @@ def horizontal_reduce(inp:UOp, out_dtype:DType) -> list[UOp]:
     return [inp.gep(tuple(range(i, inp.dtype.count, horizontal_amount))) for i in range(0, horizontal_amount)]
   return [inp]
 
+def _select_vector_lane_at(inp:UOp, lane:UOp) -> UOp:
+  """Select one scalar lane while retaining the live loop dependency."""
+  if inp.dtype.count == 1: return inp
+  if inp.op in GroupOp.ALU or inp.op in (Ops.CAST, Ops.BITCAST):
+    return UOp(inp.op, inp.dtype.scalar(), tuple(_select_vector_lane_at(s, lane) if s.dtype.count > 1 else s for s in inp.src), inp.arg)
+  ret = inp.gep(0)
+  for i in range(1, inp.dtype.count):
+    lane_ne_i = lane.alu(Ops.CMPNE, UOp.const(lane.dtype, i))
+    ret = lane_ne_i.alu(Ops.WHERE, ret, inp.gep(i))
+  return ret
+
 def _vectorize_live_v_index(v_src:UOp, reduce_range, lane_group:int, dtype:DType) -> UOp|None:
-  """Vectorize the actual optimized V index by replacing only its Hd RANGE."""
+  """Rebuild V[kv, hd] from the optimized carrier without preserving its wrong-axis vector lanes."""
   if lane_group <= 1: return None
-  # Post-expander INDEX may already own the complete contiguous Hd vector.
-  # It is authoritative: there is no scalar lane coordinate left to replace.
-  if v_src.dtype.count == lane_group: return v_src
   outer = v_src
   carrier = outer.src[0] if outer.op is Ops.CAST and outer.src else outer
   if carrier.op is not Ops.INDEX or len(carrier.src) < 2: return None
+  if v_src.dtype.count == lane_group and reduce_range:
+    # Expander's vector lanes are KV-strided values for one Hd position. Use
+    # lane zero only for its batch/head base, then express the required row as
+    # base + live_kv*Hd + hd so no V value can be hoisted out of the KV loop.
+    pointer = carrier.src[0].src[0] if carrier.src[0].op is Ops.STACK else carrier.src[0]
+    base = carrier.src[1].src[0] if carrier.src[1].op is Ops.STACK else carrier.src[1]
+    kv = reduce_range[-1]
+    lanes = []
+    for lane in range(lane_group):
+      offset = kv * UOp.const(kv.dtype, lane_group) + UOp.const(kv.dtype, lane)
+      lanes.append(pointer.index(base + offset).load(dtype=dtype.scalar()))
+    return UOp.vectorize(*lanes)
   reduce_set = set(reduce_range)
   index_exprs = carrier.src[1:]
   candidates = tuple(dict.fromkeys(r for idx in index_exprs for r in idx.backward_slice
@@ -528,7 +548,7 @@ def reduce_to_acc(ctx:ReduceContext, red:UOp):
       # Select one representative score lane; the declared logical V input
       # still supplies the output-Hd value for the accumulator update.
       if input_specs and input_specs[0].primary_repeated and inp.dtype.count > 1:
-        inp = inp.gep(0)
+        inp = _select_vector_lane_at(inp, reduce_range[-1])
       # Auxiliary V loads are admitted only after a real shaped-fragment
       # lowering exists.  Until then the generic scalar reducer must remain
       # authoritative; passing a lane-shaped LOAD here creates invalid ALU

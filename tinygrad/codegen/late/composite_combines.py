@@ -99,7 +99,7 @@ def online_softmax_state(ctx, accs, acc_reads, inp, composite, input_ranges, red
     m_new, l_new, acc_new = _combine_step_online_softmax_state(*acc_reads, inp, v_inp)
     ends = [acc.index(UOp.const(dtypes.weakint, 0)).store(new_val).end(*reduce_range).rtag("mergeable")
             for acc, new_val in zip(accs, [m_new, l_new, acc_new])]
-    return tuple(acc.after(end).index(UOp.const(dtypes.weakint, 0)) for acc, end in zip(accs, ends))
+    return tuple(acc.after(*ends).index(UOp.const(dtypes.weakint, 0)) for acc in accs)
 
 # Registry: combine_fn string -> callable
 COMBINE_REGISTRY = {
