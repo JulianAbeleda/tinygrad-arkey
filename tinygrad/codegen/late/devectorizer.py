@@ -638,8 +638,17 @@ def validate_deferred_state_liveness(state:UOp) -> bool:
     if write_idx.op is not Ops.INDEX: continue
     write_base = write_idx.src[0]
     while write_base.op is Ops.AFTER: write_base = write_base.src[0]
+    rhs = store.src[-1]
+    rhs_ops = {u.op for u in (rhs, *rhs.backward_slice)}
+    vector_inputs = []
+    for u in (rhs, *rhs.backward_slice):
+      if u.op is not Ops.INDEX or u.dtype.count != rhs.dtype.count: continue
+      base = u.src[0]
+      while base.op is Ops.AFTER: base = base.src[0]
+      if base is not read_base: vector_inputs.append(u)
+    rhs_is_lane_update = Ops.ADD in rhs_ops and Ops.MUL in rhs_ops and Ops.EXP2 in rhs_ops and Ops.STACK in rhs_ops and bool(vector_inputs)
     if read_base is write_base and acc.src[1:] == write_idx.src[1:] and \
-       acc.dtype.count == store.src[-1].dtype.count and acc.dtype.count > 1: return True
+       acc.dtype.count == rhs.dtype.count and acc.dtype.count > 1 and rhs_is_lane_update: return True
   return False
 
 def lower_deferred_reduce_slot(state:UOp):
