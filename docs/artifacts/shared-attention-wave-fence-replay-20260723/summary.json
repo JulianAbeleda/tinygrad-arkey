@@ -1,0 +1,54 @@
+{
+  "schema": "tinygrad.shared_attention_wave_fence_delta.v1",
+  "baseline": "../shared-attention-benchmark-replay-20260723/summary.json",
+  "compiler_commit": "ef0b033f0",
+  "capture_commit": "3e069552f",
+  "protocol": "TinyJit replay plus device synchronize; 3 warmups; 10 samples",
+  "verdict": "NEUTRAL_RETAIN",
+  "neutral_threshold_percent": 1.0,
+  "rows": [
+    {
+      "profile": "qwen3_8b_q4k_m_gfx1100",
+      "kv": 512,
+      "barrier_median_ms": 0.5444895,
+      "wave_fence_median_ms": 0.5444015,
+      "latency_delta_percent": -0.016162,
+      "numeric_max_abs": 0.00006103515625,
+      "removed_dynamic_workgroup_barriers": 32768
+    },
+    {
+      "profile": "qwen3_14b_q4k_m_gfx1100",
+      "kv": 512,
+      "barrier_median_ms": 0.5776465,
+      "wave_fence_median_ms": 0.578787,
+      "latency_delta_percent": 0.197439,
+      "numeric_max_abs": 0.00006103515625,
+      "removed_dynamic_workgroup_barriers": 40960
+    },
+    {
+      "profile": "qwen3_8b_q4k_m_gfx1100",
+      "kv": 4096,
+      "barrier_median_ms": 3.483183,
+      "wave_fence_median_ms": 3.4764935,
+      "latency_delta_percent": -0.19205,
+      "numeric_max_abs": 0.0000019073486328125,
+      "removed_dynamic_workgroup_barriers": 262144
+    },
+    {
+      "profile": "qwen3_14b_q4k_m_gfx1100",
+      "kv": 4096,
+      "barrier_median_ms": 3.552323,
+      "wave_fence_median_ms": 3.548073,
+      "latency_delta_percent": -0.11964,
+      "numeric_max_abs": 0.0000019073486328125,
+      "removed_dynamic_workgroup_barriers": 327680
+    }
+  ],
+  "resource_delta": {
+    "vgpr": 0,
+    "sgpr": 0,
+    "lds_bytes": 0,
+    "scratch_bytes": 0,
+    "spills": 0
+  }
+}
