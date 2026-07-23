@@ -34,7 +34,7 @@ from tinygrad.runtime.autogen.amd.rdna3.ins import (
   v_xor_b32_e32, v_and_b32_e32, v_or_b32_e32, v_max_f32_e32, v_lshrrev_b32_e32, v_pack_b32_f16,
   v_lshl_or_b32,
   v_cvt_f16_f32_e32, v_cvt_f32_f16_e32, v_cvt_i32_f32_e32, v_cvt_f32_i32_e32, v_cvt_f32_u32_e32, v_cvt_u32_f32_e32,
-  v_cmp_lt_f32_e32, v_cmp_lt_i32_e32, v_cmp_neq_f32_e32, v_cmp_ne_u32_e32, v_cndmask_b32_e32, s_and_saveexec_b32,
+  v_cmp_lt_f32_e32, v_cmp_lt_i32_e32, v_cmp_le_i32_e32, v_cmp_neq_f32_e32, v_cmp_ne_u32_e32, v_cndmask_b32_e32, s_and_saveexec_b32,
   ds_store_b16, ds_load_u16, v_exp_f32_e32, v_rcp_f32_e32, v_trunc_f32_e32,
   # Phase-1a: 16-bit global access for fp16 elements (b32 over-reads/writes 2 bytes past the last element -> MMU fault)
   global_load_u8, global_store_b8, global_load_u16, global_store_b16,
@@ -401,6 +401,8 @@ class AMDOps(FastEnum):
   V_WMMA_ZERO = 68                       # WMMA with post-regalloc zero initialization of its fixed C span
   FRAGMENT_LOAD_DWORD = 69               # exact contiguous packed fragment dword load into a physical destination
   ATTENTION_OUTPUT_DRAIN = 70            # sequential fixed-C Hd128 normalization and global stores
+  V_CAUSAL_MASK = 72                     # fused kv<=qrow compare and score/-inf select, no bool VGPR
+  V_CAUSAL_ZERO = 73                     # fused kv<=qrow compare and weight/zero select, no bool VGPR
 
 def _reg(r:Register): return r  # passthrough; encoding maps index in post_regalloc
 
@@ -899,6 +901,12 @@ def isel_customi(ctx:IselContext, x:UOp):
     return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[1]), _tov(ctx, x.src[0])), arg=AMDOps.DS_BPERMUTE, tag=_vreg_def(ctx, x.dtype))
   if arg == "bpermute":     # F.2 marker: src=(addr, data)
     return UOp(Ops.INS, x.dtype, src=(_tov(ctx, x.src[0]), _tov(ctx, x.src[1])), arg=AMDOps.DS_BPERMUTE, tag=_vreg_def(ctx, x.dtype))
+  if arg == "(({1}<={2})?{0}:-INFINITY)":
+    return UOp(Ops.INS,x.dtype,src=(_tov(ctx,x.src[0]),_tov(ctx,x.src[1]),_tov(ctx,x.src[2])),arg=AMDOps.V_CAUSAL_MASK,
+               tag=_vreg_def(ctx,x.dtype))
+  if arg == "(({1}<={2})?{0}:0.0f)":
+    return UOp(Ops.INS,x.dtype,src=(_tov(ctx,x.src[0]),_tov(ctx,x.src[1]),_tov(ctx,x.src[2])),arg=AMDOps.V_CAUSAL_ZERO,
+               tag=_vreg_def(ctx,x.dtype))
   raise NotImplementedError(f"AMD:ISA CUSTOMI unmapped arg: {arg[:70]}")
 
 def isel_attention_output_drain(ctx:IselContext, x:UOp):
@@ -2613,17 +2621,30 @@ def expand_native_row_softmax_repack(ctx, x:UOp, native_state:bool=True) -> UOp:
     row = UOp.const(dtypes.weakint, 2*e).alu(Ops.ADD, halfwave)
     valid = None
     if x.arg.validity_mode in {"tail_v1", "causal_v1"}:
-      kv_base = tile_src[0].cast(dtypes.weakint).alu(Ops.MUL,UOp.const(dtypes.weakint,16)) if x.arg.dynamic_kv_v1 \
-        else UOp.const(dtypes.weakint,x.arg.kv_start)
-      kv = col.alu(Ops.ADD, kv_base)
-      qrow = row.alu(Ops.ADD, UOp.const(dtypes.weakint, x.arg.query_start))
-      if x.arg.grid is not None:
-        qtile=tile_src[1] % x.arg.grid.q_tiles
-        qrow=qrow.alu(Ops.ADD,qtile*16)
-      valid = kv.alu(Ops.CMPLT, UOp.const(dtypes.weakint, x.arg.valid_kv))
-      if x.arg.validity_mode == "causal_v1": valid = valid.alu(Ops.AND,
-        kv.alu(Ops.CMPLT, qrow.alu(Ops.ADD, UOp.const(dtypes.weakint, 1))))
+      fused_causal = x.arg.validity_mode == "causal_v1" and x.arg.grid is not None and \
+        x.arg.query_start == x.arg.valid_kv-x.arg.grid.q_tokens
+      if fused_causal:
+        kv_base=tile_src[0].cast(dtypes.int).alu(Ops.MUL,UOp.const(dtypes.int,16))
+        kv=col.cast(dtypes.int).alu(Ops.ADD,kv_base)
+        qrow=row.cast(dtypes.int).alu(Ops.ADD,UOp.const(dtypes.int,x.arg.query_start))
+        qrow=qrow.alu(Ops.ADD,(tile_src[1].cast(dtypes.int) % x.arg.grid.q_tiles)*16)
+      else:
+        kv_base = tile_src[0].cast(dtypes.weakint).alu(Ops.MUL,UOp.const(dtypes.weakint,16)) if x.arg.dynamic_kv_v1 \
+          else UOp.const(dtypes.weakint,x.arg.kv_start)
+        kv = col.alu(Ops.ADD, kv_base)
+        qrow = row.alu(Ops.ADD, UOp.const(dtypes.weakint, x.arg.query_start))
+        if x.arg.grid is not None:
+          qtile=tile_src[1] % x.arg.grid.q_tiles
+          qrow=qrow.alu(Ops.ADD,qtile*16)
+      causal = kv.alu(Ops.CMPLT,qrow.alu(Ops.ADD,UOp.const(dtypes.weakint,1))) if x.arg.validity_mode == "causal_v1" else None
+      if fused_causal: valid=None
+      else:
+        valid = kv.alu(Ops.CMPLT, UOp.const(dtypes.weakint, x.arg.valid_kv))
+        if causal is not None: valid=valid.alu(Ops.AND,causal)
     value = score.gep(e).alu(Ops.MUL, UOp.const(dtypes.float, x.arg.score_scale))
+    if x.arg.validity_mode == "causal_v1" and x.arg.grid is not None and \
+       x.arg.query_start == x.arg.valid_kv-x.arg.grid.q_tokens:
+      value=UOp(Ops.CUSTOMI,dtypes.float,(value,kv,qrow),"(({1}<={2})?{0}:-INFINITY)")
     if valid is not None: value = valid.where(value, UOp.const(dtypes.float, -float("inf")))
     if stores: value = value.bitcast(dtypes.uint).after(UOp.group(stores[-1])).bitcast(dtypes.float)
     row_max = value
@@ -2632,6 +2653,7 @@ def expand_native_row_softmax_repack(ctx, x:UOp, native_state:bool=True) -> UOp:
       row_max = row_max.alu(Ops.MAX, UOp(Ops.CUSTOMI, dtypes.float, (addr, row_max), "bpermute"))
     new_m = row_max if initial_state else old_m.alu(Ops.MAX, row_max)
     weight = (value-new_m).alu(Ops.MUL, log2e).exp2()
+    if fused_causal: weight=UOp(Ops.CUSTOMI,dtypes.float,(weight,kv,qrow),"(({1}<={2})?{0}:0.0f)")
     if valid is not None: weight = valid.where(weight, UOp.const(dtypes.float, 0))
     row_sum = weight
     for mask in x.arg.xor_masks:
@@ -2930,7 +2952,8 @@ def lower_inst(x:UOp):
     for j in range(8):
       for e in range(8):
         c=8+j*8+e; l=80+e
-        insts += [_ins(v_rcp_f32_e32(_V[3],_V[l]),None), _ins(v_mul_f32_e32(_V[c],_V[c],_V[3]),None),
+        insts += [_ins(v_cmp_neq_f32_e32(0,_V[l]),None), _ins(v_rcp_f32_e32(_V[3],_V[l]),None),
+          _ins(v_mul_f32_e32(_V[c],_V[c],_V[3]),None), _ins(v_cndmask_b32_e32(_V[c],0,_V[c]),None),
           _ins(v_cvt_f16_f32_e32(_V[c],_V[c]),None),
           _ins(v_lshlrev_b32_e32(_V[3],7,_V[2]),None),
           _ins(v_add_nc_u32_e32(_V[3],_V[1],_V[3]),None),
@@ -3019,6 +3042,14 @@ def lower_inst(x:UOp):
     cmp = UOp(Ops.INS, arg=cmpfn(_Vr(src[0].reg), _Vr(src[1].reg)))           # VCC = (s0 <cmp> s1)
     sel = _ins(v_cndmask_b32_e32(_Vr(x.reg), 0, _Vr(src[2].reg)), x.tag)      # VCC ? 1 : 0
     return (sel, [cmp, sel])
+  if a is AMDOps.V_CAUSAL_MASK:
+    cmp = UOp(Ops.INS,arg=v_cmp_le_i32_e32(_Vr(src[1].reg),_Vr(src[2].reg)))
+    sel = _ins(v_cndmask_b32_e32(_Vr(x.reg),0xff800000,_Vr(src[0].reg)),x.tag)
+    return (sel,[cmp,sel])
+  if a is AMDOps.V_CAUSAL_ZERO:
+    cmp = UOp(Ops.INS,arg=v_cmp_le_i32_e32(_Vr(src[1].reg),_Vr(src[2].reg)))
+    sel = _ins(v_cndmask_b32_e32(_Vr(x.reg),0,_Vr(src[0].reg)),x.tag)
+    return (sel,[cmp,sel])
   if a is AMDOps.V_WHERE:                            # cond(0/1) ? t(src1) : f(src2)
     cmp = UOp(Ops.INS, arg=v_cmp_ne_u32_e32(0, _Vr(src[0].reg)))              # VCC = (cond != 0)
     sel = _ins(v_cndmask_b32_e32(_Vr(x.reg), _Vr(src[2].reg), _Vr(src[1].reg)), x.tag)  # VCC ? t : f

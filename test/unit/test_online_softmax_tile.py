@@ -933,6 +933,45 @@ def test_gfx1100_model_grid_final_wmma_role_ledger():
   assert all("wmma" in type(linear.src[idx].arg).__name__.lower() or
              "wmma" in str(getattr(linear.src[idx].arg,"op","")).lower() for idx,_ in sites)
 
+def test_gfx1100_grid_causal_mask_is_fused_without_bool_or_infinity_vgprs():
+  import re
+  from tinygrad.codegen import to_program
+  from tinygrad.helpers import Target
+  from tinygrad.renderer.isa.amd import AMDISARenderer
+  from tinygrad.schedule.wmma import amd_gfx1100_q16_grid_hd128_loop_attention
+  from tinygrad.uop.ops import KernelInfo, ParamArg
+  hq,hkv,qt,kv=8,2,32,64; sizes=(hq*qt*128,hq*qt*128,hkv*kv*128,hkv*kv*128)
+  p=[UOp(Ops.PARAM,dtypes.half.ptr(sizes[i]),arg=ParamArg(i)) for i in range(4)]
+  sink=amd_gfx1100_q16_grid_hd128_loop_attention(p[1],p[2],p[3],p[0],q_tokens=qt,q_heads=hq,kv_heads=hkv,
+    kv_tokens=kv,scale=.25,causal=True,kernel_info=KernelInfo(name="grid_causal_fused_mask"))
+  program=to_program(sink,AMDISARenderer(Target.parse("AMD:ISA:gfx1100")))
+  linear=next(u for u in program.src if u.op is Ops.LINEAR); text="\n".join(str(u.arg) for u in linear.src)
+  assert text.count("v_cmp_le_i32_e32")==16 and text.count("v_wmma_f32_16x16x16_f16")==16
+  assert text.count("v_cndmask_b32_e32")>=16 and "scratch" not in text.lower() and "spill" not in text.lower()
+  assert max((int(x) for x in re.findall(r"(?<![a-zA-Z0-9_])v(?:\[(\d+)|([0-9]+))",text) for x in x if x),default=-1)<256
+
+@pytest.mark.parametrize("valid_kv,query_start",((64,32),(61,29),(0,-32)))
+def test_gfx1100_grid_fused_causal_mask_numeric_tail_and_fully_masked(valid_kv,query_start):
+  import numpy as np
+  from tinygrad import Tensor
+  from tinygrad.schedule.wmma import amd_gfx1100_q16_grid_hd128_loop_attention
+  from tinygrad.uop.ops import KernelInfo
+  hq,hkv,qt,kv=8,2,32,64; rng=np.random.default_rng(7700+valid_kv)
+  q=rng.normal(0,.2,(hq,qt,128)).astype(np.float16); k=rng.normal(0,.2,(hkv,kv,128)).astype(np.float16)
+  v=rng.normal(0,.4,(hkv,kv,128)).astype(np.float16)
+  tq,tk,tv=(Tensor(x.reshape(-1),device="AMD") for x in (q,k,v)); out=Tensor.empty(q.size,dtype=dtypes.half,device="AMD")
+  def kernel(o,qi,ki,vi): return amd_gfx1100_q16_grid_hd128_loop_attention(qi,ki,vi,o,q_tokens=qt,q_heads=hq,kv_heads=hkv,
+    kv_tokens=kv,scale=.25,causal=True,valid_kv=valid_kv,query_start=query_start,kernel_info=KernelInfo(name=f"grid_mask_{valid_kv}"))
+  got=out.custom_kernel(tq,tk,tv,fxn=kernel)[0].numpy().reshape(q.shape).astype(np.float32); ref=np.zeros_like(got)
+  for head in range(hq):
+    scores=q[head].astype(np.float32)@k[head//4].astype(np.float32).T*.25
+    for row in range(qt):
+      valid=(np.arange(kv)<valid_kv)&(np.arange(kv)<=query_start+row)
+      if valid.any():
+        prob=np.exp(scores[row,valid]-scores[row,valid].max()); prob/=prob.sum(); ref[head,row]=prob@v[head//4,valid].astype(np.float32)
+  np.testing.assert_allclose(got,ref,rtol=.02,atol=4e-3)
+  if valid_kv==0: assert np.array_equal(got,np.zeros_like(got))
+
 @pytest.mark.parametrize("hq,hkv",[(8,2),(10,2)])
 def test_gfx1100_model_grid_causal_mask_uses_runtime_q_tile(hq,hkv):
   import numpy as np
