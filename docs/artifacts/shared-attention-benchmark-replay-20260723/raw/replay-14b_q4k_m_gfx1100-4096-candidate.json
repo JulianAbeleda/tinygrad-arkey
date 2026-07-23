@@ -1,0 +1,56 @@
+{
+  "assumptions": {
+    "bytes": "fp16 QKV/output; excludes cache and compiler",
+    "flops": "4*Hq*Q*KV*Hd"
+  },
+  "candidate_context": {
+    "causal": true,
+    "hd": 128,
+    "hkv": 8,
+    "hq": 40,
+    "kv_tokens": 4096,
+    "profile": "qwen3_14b_q4k_m_gfx1100",
+    "q_tokens": 512,
+    "start_pos": 3584,
+    "strategy": "BOUNDED_PACKED_TILES"
+  },
+  "config": {
+    "device": "AMD",
+    "dtype": "float16",
+    "kv": 4096,
+    "mode": "candidate",
+    "profile": "qwen3_14b_q4k_m_gfx1100",
+    "q_tokens": 512,
+    "samples": 10,
+    "seed": 20264859,
+    "warmup": 3
+  },
+  "hardware": {
+    "platform": "Linux-6.8.0-134-generic-x86_64-with-glibc2.39",
+    "rocm_visible_devices": null
+  },
+  "input_sha256": "987d03569eada92787512656c0622710775373909037b71fd1a6b68ae239ca05",
+  "numeric_max_abs": 1.9073486328125e-06,
+  "proof_path": "/home/ubuntu/tinygrad-arkey/docs/artifacts/shared-attention-m10e1-20260723/shared_attention_proof.json",
+  "proof_sha256": "d61b76a98a5a2804b538475607dbaab44fed8f80df397e21ec2f959f99971f45",
+  "schema": "tinygrad.shared_attention_benchmark.v1",
+  "timing": {
+    "median_ms": 3.552323,
+    "p10_ms": 2.8236414,
+    "p90_ms": 3.5676285,
+    "protocol": "tinyjit_replay_plus_device_synchronize",
+    "raw_ms": [
+      2.441442,
+      2.866108,
+      3.537836,
+      3.542544,
+      3.551812,
+      3.552834,
+      3.559115,
+      3.566079,
+      3.566811,
+      3.574986
+    ],
+    "tokens_s": 144131.03763368365
+  }
+}
