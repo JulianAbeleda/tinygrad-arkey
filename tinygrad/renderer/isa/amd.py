@@ -2636,6 +2636,10 @@ def expand_loop_fragment(x:UOp) -> UOp:
     if len(x.src) not in {4,5}: raise ValueError("loop fragment is malformed")
     owner,lane,col,rng,*grid_src=x.src; wave_id=None
   if (x.arg.grid is None) != (len(grid_src)==0): raise ValueError("loop fragment grid ownership must be explicit")
+  # Staged QK fragments carry a typed retirement token in their descriptor.
+  # Make it a real load dependency here, before the opaque-fragment handoff;
+  # retaining it only in the tag lets HIP materialize every fragment eagerly.
+  owner=owner.after(x.arg.stage_wait) if x.arg.stage_wait is not None else owner
   if not grid_src: gbase=UOp.const(dtypes.weakint,0)
   elif isinstance(x.arg.grid, AMDMultiWaveAttentionGridSpec):
     grid,group=x.arg.grid,grid_src[0]
