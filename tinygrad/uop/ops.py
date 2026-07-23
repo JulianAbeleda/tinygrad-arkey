@@ -1276,6 +1276,14 @@ class SharedAttentionCandidateContext(NamedTuple):
   hd: int
   causal: bool
 
+  @property
+  def schema_version(self) -> int: return 1
+
+  @property
+  def canonical_identity(self) -> str:
+    payload = "shared_attention_candidate_v1|" + "|".join(map(str, self))
+    return hashlib.sha256(payload.encode()).hexdigest()
+
   def validate(self):
     if not isinstance(self.profile, str) or not self.profile or self.strategy not in ("FULL_RESIDENT_OVERLAY", "BOUNDED_PACKED_TILES"):
       raise ValueError("invalid shared attention profile/strategy")
@@ -1747,6 +1755,7 @@ class ProgramInfo:
   aux: tuple = ()
   wmma_roles: WMMARoleLedger = WMMARoleLedger()
   wmma_role_expectation: tuple[AttentionWMMARole, ...] = ()
+  candidate_context: SharedAttentionCandidateContext|None = None
 
   @property
   def function_name(self): return to_function_name(self.name)
@@ -1782,7 +1791,8 @@ class ProgramInfo:
       if u.op is Ops.DEFINE_VAR and u.arg[0] == 'core_id': global_size[0] = u.arg[2] + 1
     return ProgramInfo(sink.arg.name if isinstance(sink.arg, KernelInfo) else "test", tuple(global_size),
                        tuple(local_size) if local_size is not None else None, tuple(sorted(_vars, key=lambda v: v.arg)),
-                       tuple(sorted(dedup(_globals))), tuple(sorted(dedup(outs))), tuple(sorted(dedup(ins))), aux)
+                       tuple(sorted(dedup(_globals))), tuple(sorted(dedup(outs))), tuple(sorted(dedup(ins))), aux,
+                       candidate_context=sink.arg.candidate_context if isinstance(sink.arg, KernelInfo) else None)
 
 @dataclass(frozen=True)
 class CallInfo:

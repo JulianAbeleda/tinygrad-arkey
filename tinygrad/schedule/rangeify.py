@@ -44,7 +44,8 @@ def lower_attention_semantic(att:UOp) -> UOp:
     # retain ordinary SDPA until geometry selection is proven.
     wmma_shape = q.dtype == k.dtype == v.dtype == dtypes.half and hd in {64, 128} and \
       q_len == 16 and k.shape == v.shape == (b, h, 16, hd)
-    grid_shape = grid is not None and not att.arg.mask_present and q.dtype == k.dtype == v.dtype == dtypes.half and \
+    context_causal = att.arg.attention_context is not None and att.arg.attention_context.causal
+    grid_shape = grid is not None and (not att.arg.mask_present or context_causal) and q.dtype == k.dtype == v.dtype == dtypes.half and \
       q.shape == (1, grid.q_heads, grid.q_tokens, 128) and k.shape == v.shape == (1, grid.kv_heads, grid.kv_tokens, 128)
     # The first ownership-map integration is deliberately Hd=16 only.  It
     # validates the concrete QK and PV tile coordinates before constructing
@@ -78,7 +79,7 @@ def lower_attention_semantic(att:UOp) -> UOp:
       if grid_shape:
         work_k, work_v = work_k.repeat_interleave(grid.group_ratio, dim=1), work_v.repeat_interleave(grid.group_ratio, dim=1)
       score = Tensor(q).matmul(work_k.transpose(-2, -1), dtype=att.arg.qk_dtype) * att.arg.scale
-      if att.arg.mask_present:
+      if att.arg.mask_present and not context_causal:
         if len(att.src) != 6: return att.src[0]
         score = score + Tensor(att.src[5])
       kv_len = work_k.shape[2]
@@ -110,7 +111,8 @@ def lower_attention_semantic(att:UOp) -> UOp:
         tile_carrier=tile_carrier,
         slot_shapes=((b, h, q_len), (b, h, q_len), (b, h, q_len, hd)),
         lane_shapes=((), (), (hd,)) if state_combine == "online_softmax_state" else (), attention_grid=grid if grid_shape else None,
-        attention_causal=att.arg.causal if grid_shape else False, attention_context=att.arg.attention_context if grid_shape else None)
+        attention_causal=(att.arg.causal or context_causal) if grid_shape else False,
+        attention_context=att.arg.attention_context if grid_shape else None)
       if state_combine == "online_softmax_state" and owned_map_proven and hd == 16:
         from tinygrad.schedule.wmma import construct_hd16_tile_carriers
         # The live score source is rankful/vector-typed at this stage. Keep
@@ -865,8 +867,13 @@ def split_store(x:UOp) -> UOp|None:
   if ret.op is Ops.STORE: stored = ret.src[1]
   elif ret.op is Ops.END and ret.src[0].op is Ops.STORE: stored = ret.src[0].src[1]
   else: raise RuntimeError(f"unknown kernel type {ret.op}")
+  attention_contexts = dedup([u.arg[0].attention_context for u in ret.toposort()
+    if u.op is Ops.REDUCE and isinstance(u.arg, tuple) and isinstance(u.arg[0], CompositeReduce) and u.arg[0].attention_context is not None])
+  if len(attention_contexts) > 1: raise RuntimeError("conflicting shared attention candidate contexts in one kernel")
+  candidate_context = attention_contexts[0].validate() if attention_contexts else None
   if stored.op in {Ops.COPY, Ops.SLICE}: ret = stored.replace(src=stored.src + ret.ended_ranges)
   else: ret = ret.sink(arg=KernelInfo(name=lctx.name or "test", opts_to_apply=lctx.opts,
+                                      candidate_context=candidate_context,
                                       memory_semantic_slots=tuple(sorted(slot_owners.items()))))
 
   kernel = ret.call(*lctx.map.values(), *lctx.vars.keys())

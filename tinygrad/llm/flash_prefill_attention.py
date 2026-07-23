@@ -4,10 +4,11 @@ The model routes meet here after Q/K/V projection. The operation deliberately
 does not encode model, weight-format, or target-specific policy.
 """
 from tinygrad import Tensor
-from tinygrad.uop.ops import AMDAttentionGridSpec
+from tinygrad.uop.ops import AMDAttentionGridSpec, SharedAttentionCandidateContext
 
 def shared_prefill_attention(q:Tensor, k:Tensor, v:Tensor, *, scale:float|None=None,
-                             mask:Tensor|None=None, causal:bool=False) -> Tensor:
+                             mask:Tensor|None=None, causal:bool=False,
+                             candidate_context:SharedAttentionCandidateContext|None=None) -> Tensor:
   # Preserve native GQA ownership for the exact gfx1100 prefill proof. The
   # semantic fallback expands only inside Tensor._semantic_attention, so this
   # boundary and its ATTENTION sources remain Q/Hq and K,V/Hkv.
@@ -27,4 +28,10 @@ def shared_prefill_attention(q:Tensor, k:Tensor, v:Tensor, *, scale:float|None=N
     # opt-in proof. Those calls have no native descriptor and therefore must
     # remain byte-for-byte on the ordinary SDPA path.
     if grid is None: k, v = k.repeat_interleave(groups, dim=-3), v.repeat_interleave(groups, dim=-3)
-  return q._semantic_attention(k, v, attn_mask=mask, is_causal=causal, scale=scale, attention_grid=grid)
+  if candidate_context is not None:
+    candidate_context.validate()
+    if grid is None or (candidate_context.q_tokens,candidate_context.kv_tokens,candidate_context.hq,candidate_context.hkv,candidate_context.hd) != \
+       (q.shape[-2],k.shape[-2],q.shape[-3],k.shape[-3],q.shape[-1]):
+      raise ValueError("shared attention candidate context does not match the admitted GQA geometry")
+  return q._semantic_attention(k, v, attn_mask=mask, is_causal=causal, scale=scale, attention_grid=grid,
+                               attention_context=candidate_context)

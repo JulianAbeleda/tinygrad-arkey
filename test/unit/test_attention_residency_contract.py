@@ -92,3 +92,40 @@ def test_native_gqa_prefill_semantic_owner_reaches_one_grid_wmma_body(hq):
   mnemonics = [str(u.arg).split("(", 1)[0] for u in linear.src if not isinstance(u.arg, tuple)]
   assert mnemonics.count("v_wmma_f32_16x16x16_f16") == 16
   assert mnemonics.count("s_barrier") == 1
+
+def _final_model_attention_program(context=None, *, hq=32, hkv=8, qt=512, kv=512):
+  from dataclasses import replace
+  from tinygrad.codegen import to_program
+  from tinygrad.codegen.opt import Opt, OptOps
+  from tinygrad.helpers import Target
+  from tinygrad.renderer.cstyle import HIPRenderer
+  if context is not None: hq,hkv,qt,kv = context.hq,context.hkv,context.q_tokens,context.kv_tokens
+  q = Tensor.empty(1,hq,qt,128,dtype=dtypes.float16,device="AMD")
+  k = Tensor.empty(1,hkv,kv,128,dtype=dtypes.float16,device="AMD")
+  v = Tensor.empty(1,hkv,kv,128,dtype=dtypes.float16,device="AMD")
+  mask = Tensor.full((1,1,qt,kv),float("-inf"),dtype=dtypes.float16,buffer=False).triu(context.start_pos+1) if context is not None else None
+  calls = shared_prefill_attention(q,k,v,mask=mask,candidate_context=context).schedule_linear().src
+  attention_calls = [call for call in calls if
+    (getattr(call.src[0].arg,"candidate_context",None) == context if context is not None else
+     sorted(u.arg.slot for u in call.src[0].toposort() if u.op is Ops.PARAM) == [0,1,2,3])]
+  assert len(attention_calls) == 1
+  ast = attention_calls[0].src[0].replace(arg=replace(attention_calls[0].src[0].arg,opts_to_apply=(Opt(OptOps.TC,0,(0,0,1)),)))
+  return to_program(ast,HIPRenderer(Target.parse("AMD:HIP:gfx1100")))
+
+@pytest.mark.parametrize("context", (
+  pytest.param(("qwen3_8b_q4k_m_gfx1100","FULL_RESIDENT_OVERLAY",512,512,0,32),id="8b-overlay-first"),
+  pytest.param(("qwen3_14b_q4k_m_gfx1100","BOUNDED_PACKED_TILES",512,1024,512,40),id="14b-bounded-prefix"),
+))
+def test_model_route_context_reaches_final_program_with_exact_wmma_roles(context):
+  from tinygrad.uop.ops import SharedAttentionCandidateContext
+  ctx = SharedAttentionCandidateContext(context[0],context[1],context[2],context[3],context[4],context[5],8,128,True)
+  program = _final_model_attention_program(ctx)
+  assert program.arg.candidate_context == ctx
+  roles = [role for _,role in program.arg.wmma_roles.sites]
+  assert sorted(role.tile for role in roles if role.contraction == "QK") == list(range(8))
+  assert sorted(role.tile for role in roles if role.contraction == "PV") == list(range(8))
+
+def test_non_candidate_attention_final_program_context_is_none():
+  # The same admitted geometry remains structurally accelerated without
+  # acquiring candidate provenance from shape alone.
+  assert _final_model_attention_program().arg.candidate_context is None

@@ -340,10 +340,15 @@ class Scheduler:
            all(p.ptrdtype.base == dtypes.half for p in params) and scale is not None and math.isfinite(scale) and scale > 0:
           from tinygrad.schedule.wmma import amd_gfx1100_q16_grid_hd128_loop_attention
           context = getattr(comp, "attention_context", None)
-          if context is not None: context.validate()
+          existing_context = self.ast.arg.candidate_context
+          if context is not None:
+            context.validate()
+            if existing_context is not None and existing_context != context:
+              raise KernelOptError("conflicting shared attention candidate context at native handoff")
           self.ast = amd_gfx1100_q16_grid_hd128_loop_attention(params[1], params[2], params[3], params[0],
             q_tokens=grid.q_tokens, q_heads=grid.q_heads, kv_heads=grid.kv_heads, kv_tokens=grid.kv_tokens,
-            scale=scale, causal=comp.attention_causal, kernel_info=self.ast.arg.replace(candidate_context=context))
+            scale=scale, causal=comp.attention_causal,
+            kernel_info=replace(self.ast.arg, candidate_context=context if context is not None else existing_context))
           self.tensor_core = next((tc for tc in self.ren.tensor_cores if tc.dims == (16,16,16) and
                                    tc.dtype_in == dtypes.half and tc.dtype_out == dtypes.float), None)
           if self.tensor_core is None: raise KernelOptError("gfx1100 grid attention requires fp16 16x16x16 tensor core")

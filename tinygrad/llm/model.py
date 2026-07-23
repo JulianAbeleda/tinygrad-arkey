@@ -589,8 +589,14 @@ class TransformerBlock(FFNBlock):
       # rangeify either lowers the semantic operation or preserves its exact
       # SDPA fallback.  Do not decompose scores here.
       from tinygrad.llm.flash_prefill_attention import shared_prefill_attention
+      from tinygrad.uop.ops import SharedAttentionCandidateContext
+      _strategy = prefill_policy_strategy(self.config.prefill_policy)
+      _profile = "qwen3_8b_q4k_m_gfx1100" if self.config.n_heads == 32 else "qwen3_14b_q4k_m_gfx1100" if self.config.n_heads == 40 else ""
+      _ctx = SharedAttentionCandidateContext(_profile, _strategy, T, start_pos+T, start_pos, self.config.n_heads,
+        self.config.n_kv_heads, self.config.head_dim, True) if _profile and _strategy in ("FULL_RESIDENT_OVERLAY", "BOUNDED_PACKED_TILES") else None
       with role_metadata("shared_prefill_attention"):
-        attn = _prefill_semantic(_prefill, prefill_scratch, shared_prefill_attention(q, k, v, mask=mask))
+        attn = _prefill_semantic(_prefill, prefill_scratch,
+          shared_prefill_attention(q, k, v, mask=mask, candidate_context=_ctx))
     else:
       attn = _prefill_semantic(_prefill, prefill_scratch,
                                q.scaled_dot_product_attention(k, v, attn_mask=mask, enable_gqa=True))  # (B,H,T,Hd)

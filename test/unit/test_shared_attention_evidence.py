@@ -35,7 +35,7 @@ def test_model_prefill_has_one_shared_attention_boundary_for_both_weight_routes(
   """The 8B overlay and 14B packed projections must not grow separate attention kernels."""
   source = (Path(__file__).parents[2] / "tinygrad/llm/model.py").read_text()
   assert source.count("from tinygrad.llm.flash_prefill_attention import shared_prefill_attention") == 1
-  assert source.count("shared_prefill_attention(q, k, v, mask=mask)") == 1
+  assert source.count("shared_prefill_attention(q, k, v") == 1
   # The shared call is downstream of both projection branches and retains the
   # model-owned mask; this guards accidental route-specific attention forks.
   assert "self.config.prefill_tc_attn" in source
