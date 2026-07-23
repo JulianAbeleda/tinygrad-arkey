@@ -12,6 +12,7 @@ This keeps reduce_to_acc completely combine-agnostic.
 import functools
 from tinygrad.helpers import prod
 from tinygrad.uop.ops import UOp, Ops, dtypes, AxisType, AddrSpace
+from tinygrad.dtype import PtrDType
 from tinygrad.uop.ops import identity_element, CompositeReduce, AccumulatorSlot
 
 def validate_composite_state(result, composite):
@@ -430,6 +431,7 @@ def resolve_composite_reduce_slot_prebufferize(slot):
     return UOp(Ops.DEFERRED_REDUCE_SLOT, slot.dtype, (owner, *extras), DeferredReduceSlot(slot.arg, tuple(descriptors)))
   shape = composite.slot_shapes[slot.arg]
   if shape is None: raise RuntimeError("composite slot is missing validated logical shape")
+  if slot.arg >= len(base.src): raise RuntimeError(f"invalid composite reduction slot {slot.arg}")
   result = base.src[slot.arg]
   if views:
     # The view is already a logical projection; retain its indices on the
@@ -437,7 +439,16 @@ def resolve_composite_reduce_slot_prebufferize(slot):
     for indexed_view in reversed(views):
       tag = indexed_view.tag if isinstance(indexed_view.tag, tuple) and len(indexed_view.tag) == 2 and indexed_view.tag[0] == "composite_view" else None
       result = UOp(Ops.INDEX, result.dtype, (result,) + indexed_view.src[1:], indexed_view.arg, tag)
-  if result.shape != tuple(shape): result = result.reshape(tuple(shape))
   sdtype = composite.slots[slot.arg].dtype
-  if sdtype is not None and result.dtype != sdtype: result = result.cast(sdtype)
+  # Storage owners retain pointer dtype; their declared logical dtype/shape is
+  # carried by the composite slot and must not be inferred through a scalar CAST.
+  if sdtype is not None and result.dtype != sdtype and not isinstance(result.dtype, PtrDType): result = result.cast(sdtype)
+  if result.shape != tuple(shape):
+    # A direct TUPLE member has no scheduler view to supply its logical
+    # dimensions.  Restore the declared shape at this one typed boundary.
+    if not views: return result.reshape(tuple(shape))
+    # INDEX/STAGE views are physical scalar projections whose enclosing RANGE
+    # owns the logical extent.  Re-shaping them here would manufacture data
+    # (and used to leak a ValueError); keep the proven projection intact.
+    return result
   return result

@@ -388,6 +388,10 @@ def _vectorize_live_v_index(v_src:UOp, reduce_range, lane_group:int, dtype:DType
   outer = v_src
   carrier = outer.src[0] if outer.op is Ops.CAST and outer.src else outer
   if carrier.op is not Ops.INDEX or len(carrier.src) < 2: return None
+  # A post-expander owned V vector already has the requested physical lane
+  # ABI.  It is indexed by the live KV range, so scalarizing it would both
+  # duplicate a load and incorrectly reinterpret its lanes as Hd positions.
+  if v_src.dtype.count == lane_group and any(r in carrier.backward_slice for r in reduce_range): return v_src
   if v_src.dtype.count == lane_group and reduce_range:
     # Expander's vector lanes are KV-strided values for one Hd position. Use
     # lane zero only for its batch/head base, then express the required row as
@@ -633,7 +637,9 @@ def _resolve_reduce_slot_pm(slot):
 def _project_deferred_carrier(carrier:UOp, slot:int) -> UOp|None:
   """Project a physical slot through optimizer-only unary state wrappers."""
   if carrier.op is Ops.TUPLE:
-    return carrier.src[slot] if 0 <= slot < len(carrier.src) else None
+    if not isinstance(slot, int) or not 0 <= slot < len(carrier.src):
+      raise RuntimeError(f"invalid composite reduction slot {slot}")
+    return carrier.src[slot]
   if carrier.op is Ops.UNROLL and len(carrier.src) == 1:
     inner = _project_deferred_carrier(carrier.src[0], slot)
     if inner is None: return None
@@ -978,7 +984,8 @@ pm_group_wmma_reg_store = PatternMatcher([
 
 def add_load(idx:UOp):
   if isinstance(idx.dtype, PtrDType): return None
-  assert isinstance(idx.src[0].dtype, PtrDType), f"param is not PtrDType {idx.src[0].dtype}"
+  if not isinstance(idx.src[0].dtype, PtrDType):
+    raise RuntimeError(f"invalid composite reduction slot: INDEX owner is not pointer-typed ({idx.src[0].dtype})")
   return idx.replace(dtype=idx.src[0].dtype).load(dtype=idx.dtype.base)
 
 pm_add_loads = PatternMatcher([
