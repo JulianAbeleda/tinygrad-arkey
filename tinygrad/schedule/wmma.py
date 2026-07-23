@@ -335,6 +335,28 @@ def amd_gfx1100_q16_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, scale:float, kern
   stores = [out.index((UOp.const(dtypes.weakint, 2*e)+halfwave)*16+col).store(pv.gep(e).cast(dtypes.half)) for e in range(8)]
   return UOp.sink(*stores, arg=kernel_info)
 
+def amd_gfx1100_q16_kv32_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, scale:float, kernel_info) -> UOp:
+  owners=(q,k,v,out)
+  if any(x.op is not Ops.PARAM or not isinstance(x.dtype,PtrDType) for x in owners): raise ValueError("q16-kv32 requires PARAM owners")
+  if tuple(x.arg.slot for x in owners)!=(1,2,3,0) or tuple(x.ptrdtype.size for x in owners)!=(256,512,512,256):
+    raise ValueError("q16-kv32 requires Q1/K2/V3/out0 sized 256/512/512/256")
+  if tuple(x.ptrdtype.base for x in owners)!=(dtypes.half,)*4 or not isinstance(scale,float) or not math.isfinite(scale) or scale<=0:
+    raise ValueError("q16-kv32 requires fp16 owners and positive finite scale")
+  lane=UOp.special(32,"lidx0"); col=lane.alu(Ops.AND,UOp.const(dtypes.weakint,15)); half=lane.alu(Ops.SHR,UOp.const(dtypes.weakint,4))
+  qf=UOp(Ops.STACK,dtypes.half.vec(16),tuple(q.index((UOp.const(dtypes.weakint,i*2)+half)*16+col).load() for i in range(16)))
+  zero=UOp.const(dtypes.float.vec(8),(0.0,)*8); axes=((),(),tuple((-120-i,2) for i in range(3)))
+  warg=("WMMA_16_16_16_half_float",(16,16,16),dtypes.half,dtypes.float,"AMD:gfx1100",32,axes,())
+  sm=UOp.const(dtypes.float.vec(8),(-float("inf"),)*8); sl=UOp.const(dtypes.float.vec(8),(0.0,)*8); acc=zero
+  for tile in range(2):
+    base=UOp.const(dtypes.weakint,tile*256)
+    kf=UOp(Ops.STACK,dtypes.half.vec(16),tuple(k.index(base+col*16+i).load() for i in range(16)))
+    qk=UOp(Ops.WMMA,dtypes.float.vec(8),(qf,kf,zero),warg)
+    p,sm,sl,alpha=amd_gfx1100_row_softmax_state(qk,sm,sl,spec=AMDRowSoftmaxRepackSpec(score_scale=float(scale),mode="stateful_unnormalized_v1"))
+    vf=UOp(Ops.STACK,dtypes.half.vec(16),tuple(v.index(base+i*16+col).load() for i in range(16)))
+    acc=UOp(Ops.WMMA,dtypes.float.vec(8),(p,vf,acc.alu(Ops.MUL,alpha)),warg)
+  stores=(out.index((UOp.const(dtypes.weakint,2*e)+half)*16+col).store((acc.gep(e)/sl.gep(e)).cast(dtypes.half)) for e in range(8))
+  return UOp.sink(*stores,arg=kernel_info)
+
 class OnlineSoftmaxBlockTransition(NamedTuple):
   """Typed online-softmax state at one completed KV tile boundary."""
   new_m: UOp

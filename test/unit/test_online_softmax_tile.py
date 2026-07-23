@@ -571,3 +571,21 @@ def test_attached_tile_lowering_rejects_unproven_rankful_layout():
   carrier = tile_gather(source, TileGatherSpec("score", (16, 16), (2, 3), (0, 1)))
   with pytest.raises(ValueError, match="unsupported|exceeds"):
     lower_attached_tile_gather(carrier, role="score", dtype=dtypes.half)
+
+def test_gfx1100_q16_kv32_builder_is_one_online_chain():
+  from tinygrad.schedule.wmma import amd_gfx1100_q16_kv32_attention
+  from tinygrad.uop.ops import KernelInfo, ParamArg
+  p={0:UOp(Ops.PARAM,dtypes.half.ptr(256),arg=ParamArg(0)),1:UOp(Ops.PARAM,dtypes.half.ptr(256),arg=ParamArg(1)),
+     2:UOp(Ops.PARAM,dtypes.half.ptr(512),arg=ParamArg(2)),3:UOp(Ops.PARAM,dtypes.half.ptr(512),arg=ParamArg(3))}
+  sink=amd_gfx1100_q16_kv32_attention(p[1],p[2],p[3],p[0],scale=.25,kernel_info=KernelInfo(name="q16_kv32")); topo=sink.toposort()
+  assert sum(u.op is Ops.WMMA for u in topo)==4
+  owners=[u for u in topo if u.op is Ops.AMD_ROW_SOFTMAX_REPACK]
+  assert len(owners)==2 and all(u.arg.mode=="stateful_unnormalized_v1" for u in owners)
+  assert sum(u.op is Ops.RECIPROCAL for u in topo)==8
+
+def test_gfx1100_q16_kv32_builder_fails_closed_owner_sizes():
+  from tinygrad.schedule.wmma import amd_gfx1100_q16_kv32_attention
+  from tinygrad.uop.ops import KernelInfo, ParamArg
+  p=[UOp(Ops.PARAM,dtypes.half.ptr(256),arg=ParamArg(i)) for i in range(4)]
+  with pytest.raises(ValueError,match="256/512/512/256"):
+    amd_gfx1100_q16_kv32_attention(p[1],p[2],p[3],p[0],scale=.25,kernel_info=KernelInfo(name="bad"))
