@@ -680,7 +680,8 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
                                 slot_shapes=tuple(_normalize_composite_shape(s) for s in (slot_shapes or ())),
                                 lane_shapes=normalized_lanes,
                                 attention_grid=kwargs.pop('attention_grid', None),
-                                attention_causal=kwargs.pop('attention_causal', False))
+                                attention_causal=kwargs.pop('attention_causal', False),
+                                attention_context=kwargs.pop('attention_context', None))
     return UOp(Ops.REDUCE, kwargs.pop('dtype', self.dtype), src=(self,)+tuple(inputs), arg=(composite, axis), **kwargs)
 
   def composite_reduce_slot(self, slot: int, *, dtype=None):
@@ -1262,6 +1263,35 @@ class CompositeReduce(NamedTuple):
   # remains semantic metadata until postrange admits every live PARAM owner.
   attention_grid: Any = None
   attention_causal: bool = False
+  attention_context: Any = None
+
+class SharedAttentionCandidateContext(NamedTuple):
+  profile: str
+  strategy: str
+  q_tokens: int
+  kv_tokens: int
+  start_pos: int
+  hq: int
+  hkv: int
+  hd: int
+  causal: bool
+
+  def validate(self):
+    if not isinstance(self.profile, str) or not self.profile or self.strategy not in ("FULL_RESIDENT_OVERLAY", "BOUNDED_PACKED_TILES"):
+      raise ValueError("invalid shared attention profile/strategy")
+    if not all(isinstance(x, int) and x > 0 for x in (self.q_tokens, self.kv_tokens, self.hq, self.hkv, self.hd)) or self.start_pos < 0:
+      raise ValueError("invalid shared attention geometry")
+    if self.hd != 128 or self.hq % self.hkv: raise ValueError("shared attention requires Hd128 integral GQA")
+    return self
+
+class AttentionWMMARole(NamedTuple):
+  contraction: str
+  tile: int
+
+  def validate(self):
+    if self.contraction not in ("QK", "PV") or not isinstance(self.tile, int) or not 0 <= self.tile < 8:
+      raise ValueError("invalid attention WMMA role")
+    return self
 
 class DeferredReduceSlot(NamedTuple):
   slot: int
@@ -1646,6 +1676,7 @@ class AttentionSpec(NamedTuple):
   # original Q/K/V head ownership instead of making repeat_interleave part of
   # the selected path; unsupported targets keep the ordinary fallback.
   attention_grid: AMDAttentionGridSpec|None = None
+  attention_context: SharedAttentionCandidateContext|None = None
 
 
 @dataclass(frozen=True)
