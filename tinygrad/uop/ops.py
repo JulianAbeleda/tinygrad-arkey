@@ -678,7 +678,9 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
     composite = CompositeReduce(slots=tuple(slots), combine_fn=kwargs.pop('combine_fn', None),
                                 input_specs=tuple(input_specs), tile_carrier=tile_carrier,
                                 slot_shapes=tuple(_normalize_composite_shape(s) for s in (slot_shapes or ())),
-                                lane_shapes=normalized_lanes)
+                                lane_shapes=normalized_lanes,
+                                attention_grid=kwargs.pop('attention_grid', None),
+                                attention_causal=kwargs.pop('attention_causal', False))
     return UOp(Ops.REDUCE, kwargs.pop('dtype', self.dtype), src=(self,)+tuple(inputs), arg=(composite, axis), **kwargs)
 
   def composite_reduce_slot(self, slot: int, *, dtype=None):
@@ -1256,6 +1258,10 @@ class CompositeReduce(NamedTuple):
   # while logical axis positions are still authoritative; late lowering must
   # not infer KV ownership from extent or mutable AxisType classification.
   reduce_range_axes: tuple[int, ...] = ()
+  # Optional exact launch ownership for a backend-native attention loop. This
+  # remains semantic metadata until postrange admits every live PARAM owner.
+  attention_grid: Any = None
+  attention_causal: bool = False
 
 class DeferredReduceSlot(NamedTuple):
   slot: int
@@ -1636,6 +1642,10 @@ class AttentionSpec(NamedTuple):
   output_dtype: Any
   reduce_axis: int = -1
   kv_block: int = 0
+  # Native GQA is opt-in at the shared prefill boundary.  It records the
+  # original Q/K/V head ownership instead of making repeat_interleave part of
+  # the selected path; unsupported targets keep the ordinary fallback.
+  attention_grid: AMDAttentionGridSpec|None = None
 
 
 @dataclass(frozen=True)

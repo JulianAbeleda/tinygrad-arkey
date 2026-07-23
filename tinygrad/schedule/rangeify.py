@@ -33,6 +33,10 @@ def lower_attention_semantic(att:UOp) -> UOp:
   # the source-visible ordinary SDPA fallback below.
   if att.arg.kv_block and len(att.src) >= 5:
     q, k, v = (att.src[2], att.src[3], att.src[4])
+    grid = att.arg.attention_grid
+    if grid is not None:
+      try: grid.validate()
+      except ValueError: grid = None
     b, h, q_len, hd = q.shape
     tiny_shape = q_len == 2 and k.shape == v.shape == (b, h, 3, hd)
     # First tile-eligible admission. Keep it deliberately exact while the
@@ -40,13 +44,15 @@ def lower_attention_semantic(att:UOp) -> UOp:
     # retain ordinary SDPA until geometry selection is proven.
     wmma_shape = q.dtype == k.dtype == v.dtype == dtypes.half and hd in {64, 128} and \
       q_len == 16 and k.shape == v.shape == (b, h, 16, hd)
+    grid_shape = grid is not None and not att.arg.mask_present and q.dtype == k.dtype == v.dtype == dtypes.half and \
+      q.shape == (1, grid.q_heads, grid.q_tokens, 128) and k.shape == v.shape == (1, grid.kv_heads, grid.kv_tokens, 128)
     # The first ownership-map integration is deliberately Hd=16 only.  It
     # validates the concrete QK and PV tile coordinates before constructing
     # the ordinary scalar composite reduction; no backend promotion happens
     # here, and all other geometries retain the scalar/fallback route.
     owned_map_shape = q.dtype == k.dtype == v.dtype == dtypes.half and hd == 16 and \
       q_len == 16 and k.shape == v.shape == (b, h, 16, hd)
-    if hd in {1, 16, 64, 128} and (tiny_shape or wmma_shape or owned_map_shape) and \
+    if hd in {1, 16, 64, 128} and (tiny_shape or wmma_shape or owned_map_shape or grid_shape) and \
        q.dtype == k.dtype == v.dtype and q.dtype in {dtypes.float, dtypes.half}:
       owned_map_proven = False
       if owned_map_shape:
@@ -66,14 +72,19 @@ def lower_attention_semantic(att:UOp) -> UOp:
       # Hd stays a logical output axis rather than a giant vector dtype. This
       # keeps the scalar/vector ABI generic while the scoped reduction owns
       # only KV; a later optimizer may pack the Hd axis for hardware.
-      score = Tensor(q).matmul(Tensor(k).transpose(-2, -1), dtype=att.arg.qk_dtype) * att.arg.scale
+      # Scalar fallback graph needs a broadcasted K/V view, but the exact
+      # descriptor itself stays on the original PARAM owners.
+      work_k, work_v = Tensor(k), Tensor(v)
+      if grid_shape:
+        work_k, work_v = work_k.repeat_interleave(grid.group_ratio, dim=1), work_v.repeat_interleave(grid.group_ratio, dim=1)
+      score = Tensor(q).matmul(work_k.transpose(-2, -1), dtype=att.arg.qk_dtype) * att.arg.scale
       if att.arg.mask_present:
         if len(att.src) != 6: return att.src[0]
         score = score + Tensor(att.src[5])
-      kv_len = k.shape[2]
+      kv_len = work_k.shape[2]
       score_tile = score.reshape(b, h, q_len, kv_len, 1)
       score = score_tile.expand(b, h, q_len, kv_len, hd)
-      value_tile = Tensor(v).cast(att.arg.qk_dtype).reshape(b, h, 1, kv_len, hd)
+      value_tile = work_v.cast(att.arg.qk_dtype).reshape(b, h, 1, kv_len, hd)
       logical_v = value_tile.expand(*score.shape).uop.scoped_value((0, 1, None, 3, 4))
       slots = (AccumulatorSlot(Ops.MAX, att.arg.qk_dtype, float("-inf"), "m"),
                AccumulatorSlot(Ops.ADD, att.arg.qk_dtype, 0.0, "l"),
@@ -88,8 +99,8 @@ def lower_attention_semantic(att:UOp) -> UOp:
       # State-only mode is opt-in until tuple-state code generation is proven
       # on every backend.  The default remains the established normalized
       # scalar combine, preserving the production correctness path.
-      state_geometry_ok = hd == 16 and q_len == 16 and kv_len == 16
-      state_combine = "online_softmax_state" if getenv("TINYGRAD_ONLINE_SOFTMAX_STATE", 0) and getenv("TINYGRAD_ENABLE_EXPERIMENTAL_TILE", 0) and state_geometry_ok else "online_softmax"
+      state_geometry_ok = (hd == 16 and q_len == 16 and kv_len == 16) or grid_shape
+      state_combine = "online_softmax_state" if grid_shape or (getenv("TINYGRAD_ONLINE_SOFTMAX_STATE", 0) and getenv("TINYGRAD_ENABLE_EXPERIMENTAL_TILE", 0) and state_geometry_ok) else "online_softmax"
       if state_combine == "online_softmax_state" and owned_map_proven:
         tile_carrier = tile_carrier._replace(score_fragment=(16, 16), value_fragment=(16, 16), output_fragment=(16, 16),
                                              lane_group=16, typed_fragment_abi="online_softmax_qk_pv_v1").validate()
@@ -98,7 +109,8 @@ def lower_attention_semantic(att:UOp) -> UOp:
                                         lane_axis=4, lane_group=hd if state_combine == "online_softmax_state" else 1),),
         tile_carrier=tile_carrier,
         slot_shapes=((b, h, q_len), (b, h, q_len), (b, h, q_len, hd)),
-        lane_shapes=((), (), (hd,)) if state_combine == "online_softmax_state" else ())
+        lane_shapes=((), (), (hd,)) if state_combine == "online_softmax_state" else (), attention_grid=grid if grid_shape else None,
+        attention_causal=att.arg.causal if grid_shape else False)
       if state_combine == "online_softmax_state" and owned_map_proven and hd == 16:
         from tinygrad.schedule.wmma import construct_hd16_tile_carriers
         # The live score source is rankful/vector-typed at this stage. Keep

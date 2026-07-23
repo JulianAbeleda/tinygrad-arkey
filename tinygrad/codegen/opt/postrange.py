@@ -322,6 +322,30 @@ class Scheduler:
     # to the existing blanket composite guard below.
     composites = [r for r in reduceops if getattr(r.arg[0] if isinstance(r.arg, tuple) and r.arg else None,
                                                   "combine_fn", None) == "online_softmax_state"]
+    # Exact semantic GQA route. The descriptor is only an admission request:
+    # all four live PARAM slots and their physical sizes must match before the
+    # generic grid builder can replace the scalar semantic graph.
+    if len(composites) == 1 and self.ren.target.device == "AMD" and self.ren.target.arch == "gfx1100":
+      red, comp = composites[0], composites[0].arg[0]
+      grid = getattr(comp, "attention_grid", None)
+      if grid is not None:
+        try: grid.validate()
+        except ValueError: return None
+        params = sorted({u for u in self.ast.toposort() if u.op is Ops.PARAM}, key=lambda u:u.arg.slot)
+        sizes = (grid.q_heads*grid.q_tokens*128, grid.q_heads*grid.q_tokens*128,
+                 grid.kv_heads*grid.kv_tokens*128, grid.kv_heads*grid.kv_tokens*128)
+        scale = next((float(s.arg) for s in red.src[0].src if s.op is Ops.CONST and s.dtype.scalar() in dtypes.floats), None) \
+          if red.src[0].op is Ops.MUL else None
+        if [p.arg.slot for p in params] == [0,1,2,3] and tuple(p.ptrdtype.size for p in params) == sizes and \
+           all(p.ptrdtype.base == dtypes.half for p in params) and scale is not None and math.isfinite(scale) and scale > 0:
+          from tinygrad.schedule.wmma import amd_gfx1100_q16_grid_hd128_loop_attention
+          self.ast = amd_gfx1100_q16_grid_hd128_loop_attention(params[1], params[2], params[3], params[0],
+            q_tokens=grid.q_tokens, q_heads=grid.q_heads, kv_heads=grid.kv_heads, kv_tokens=grid.kv_tokens,
+            scale=scale, causal=comp.attention_causal, kernel_info=self.ast.arg)
+          self.tensor_core = next((tc for tc in self.ren.tensor_cores if tc.dims == (16,16,16) and
+                                   tc.dtype_in == dtypes.half and tc.dtype_out == dtypes.float), None)
+          if self.tensor_core is None: raise KernelOptError("gfx1100 grid attention requires fp16 16x16x16 tensor core")
+          return []
     if len(composites) == 1 and self.ren.target.device == "AMD" and self.ren.target.arch == "gfx1100" and \
        getattr(self.ren, "native_repack_matcher", None) is not None:
       red, comp = composites[0], composites[0].arg[0]

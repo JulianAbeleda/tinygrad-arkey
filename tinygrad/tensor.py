@@ -1207,7 +1207,7 @@ class Tensor(RandMixin):
     return self._semantic_attention(key, value, attn_mask=attn_mask, dropout_p=dropout_p, is_causal=is_causal)
 
   def _semantic_attention(self, key:Tensor, value:Tensor, attn_mask:Tensor|None=None, dropout_p:float=0.0,
-                          is_causal:bool=False, scale:float|None=None) -> Tensor:
+                          is_causal:bool=False, scale:float|None=None, attention_grid=None) -> Tensor:
     """Create an explicit attention semantic boundary with a correct fallback.
 
     `Ops.ATTENTION` owns the complete attention contract while its first source
@@ -1218,7 +1218,14 @@ class Tensor(RandMixin):
     q = self
     scale = 1.0 / math.sqrt(q.shape[-1]) if scale is None else scale
     qk_dtype = least_upper_dtype(q.dtype, key.dtype, dtypes.float32)
-    qk = q.matmul(key.transpose(-2,-1), dtype=qk_dtype) * scale
+    # The fallback is deliberately ordinary SDPA. Native GQA metadata keeps
+    # the unexpanded operands in ATTENTION.src for rangeify; only this
+    # fallback view expands K/V when heads differ.
+    fallback_key, fallback_value = key, value
+    if attention_grid is not None and q.shape[-3] != key.shape[-3]:
+      fallback_key = key.repeat_interleave(attention_grid.group_ratio, dim=-3)
+      fallback_value = value.repeat_interleave(attention_grid.group_ratio, dim=-3)
+    qk = q.matmul(fallback_key.transpose(-2,-1), dtype=qk_dtype) * scale
     # handle attention mask
     if is_causal:
       if attn_mask is not None: raise RuntimeError("cannot set attn_mask when is_causal=True")
@@ -1229,12 +1236,12 @@ class Tensor(RandMixin):
     # Softmax keeps a broadcasted reduction view. Materialize it before the
     # PV contraction: consuming that view directly as a matmul operand can
     # alias its reduction-axis indexing and produce incorrect results.
-    out = qk.cast(self.dtype).softmax(-1).contiguous().dropout(dropout_p) @ value
+    out = qk.cast(self.dtype).softmax(-1).contiguous().dropout(dropout_p) @ fallback_value
     # Dropout is stochastic and intentionally remains on the ordinary path.
     if dropout_p != 0: return out
-    primitive = self._online_attention_primitive(key, value, attn_mask, scale, qk_dtype, out.dtype)
+    primitive = self._online_attention_primitive(fallback_key, fallback_value, attn_mask, scale, qk_dtype, out.dtype)
     spec = AttentionSpec(float(scale), is_causal, attn_mask is not None, qk_dtype, out.dtype,
-                         kv_block=64 if primitive is not None else 0)
+                         kv_block=64 if primitive is not None else 0, attention_grid=attention_grid)
     # src[0] is always the ordinary fallback. When a bounded primitive is
     # available it is src[1], followed by Q/K/V/(mask), so the rangeify
     # lowering can discard src[0] without losing a graph dependency.
