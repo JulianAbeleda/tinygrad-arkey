@@ -620,12 +620,27 @@ def _project_deferred_carrier(carrier:UOp, slot:int) -> UOp|None:
     return inner
   return None
 
+def validate_deferred_state_liveness(state:UOp) -> bool:
+  """Validate physical acc/l update ownership before devectorization erases it."""
+  carrier = state.src[0]
+  while carrier.op is Ops.UNROLL and len(carrier.src) == 1: carrier = carrier.src[0]
+  if carrier.op is not Ops.TUPLE or state.arg.normalize_by is None: return False
+  if not (0 <= state.arg.slot < len(carrier.src) and 0 <= state.arg.normalize_by < len(carrier.src)): return False
+  acc, den = carrier.src[state.arg.slot], carrier.src[state.arg.normalize_by]
+  acc_ends, den_ends = ([u for u in x.backward_slice if u.op is Ops.END] for x in (acc, den))
+  if not acc_ends or not den_ends: return False
+  update_stores = [u for end in acc_ends for u in (end.src[0], *end.src[0].backward_slice) if u.op is Ops.STORE]
+  return any(store.src[-1].dtype.count > 1 for store in update_stores)
+
 def lower_deferred_reduce_slot(state:UOp):
   """Resolve once after REDUCE lowering, consuming the carrier rather than materializing it."""
   if state.op is not Ops.DEFERRED_REDUCE_SLOT: return None
   result = _project_deferred_carrier(state.src[0], state.arg.slot)
   if result is None:
     return None
+  if state.arg.normalize_by is not None and any(u.op is Ops.TUPLE for u in state.src[0].backward_slice) and \
+     not validate_deferred_state_liveness(state):
+    raise RuntimeError("physical deferred acc projection lost its KV update END")
   if not isinstance(state.arg.slot, int):
     raise RuntimeError(f"invalid deferred composite slot {state.arg.slot}")
   cursor = 1

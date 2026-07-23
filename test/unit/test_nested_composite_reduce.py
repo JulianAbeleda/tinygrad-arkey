@@ -181,6 +181,21 @@ def test_deferred_state_projection_lowers_once_to_physical_hd16_slot():
   assert rewritten_owner is physical.src[2]
   assert all(u.op not in (Ops.REDUCE, Ops.DEFERRED_REDUCE_OWNER, Ops.DEFERRED_REDUCE_SLOT) for u in rewritten_owner.toposort())
 
+def test_physical_projection_requires_vector_update_after_end():
+  from tinygrad.codegen.late.devectorizer import validate_deferred_state_liveness
+  from tinygrad.dtype import AddrSpace
+  from tinygrad.uop.ops import AxisType, DeferredReduceSlot
+  rng = UOp.range(3, 0, AxisType.REDUCE)
+  accbuf = UOp.placeholder((1,), dtypes.float32.vec(2), 91, AddrSpace.REG)
+  denbuf = UOp.placeholder((1,), dtypes.float32, 92, AddrSpace.REG)
+  idx = UOp.const(dtypes.weakint, 0)
+  den_end = denbuf.index(idx).store(UOp.const(dtypes.float32, 2.0)).end(rng)
+  acc_end = accbuf.index(idx).store(UOp.const(dtypes.float32.vec(2), (3.0, 4.0))).end(rng)
+  physical = UOp(Ops.TUPLE, dtypes.void, (UOp.const(dtypes.float32, 1.0),
+    denbuf.after(den_end).index(idx), accbuf.after(acc_end).index(idx)))
+  state = UOp(Ops.DEFERRED_REDUCE_SLOT, dtypes.float32, (physical,), DeferredReduceSlot(2, normalize_by=1))
+  assert validate_deferred_state_liveness(state)
+
 
 def test_nested_reduction_with_logical_element_input_stays_in_one_schedule():
   # This is intentionally not attention-specific. `score` is an inner
