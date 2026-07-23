@@ -1404,6 +1404,7 @@ class AMDRowSoftmaxRepackSpec(NamedTuple):
   lds_address: str = "row*16+col"
   requires_barrier: bool = True
   reload_layout: str = "wmma_f32_16x16x16_f16_pv_a_wave32_v1"
+  score_scale: float = 1.0
 
   def validate(self):
     if (self.native_abi, self.target, self.wave_size) != ("amd_gfx1100_online_softmax_qk_pv_v1", "gfx1100", 32):
@@ -1416,6 +1417,8 @@ class AMDRowSoftmaxRepackSpec(NamedTuple):
       raise ValueError("row-softmax native repack requires the exact 256-half LDS identity map")
     if self.requires_barrier is not True or self.reload_layout != "wmma_f32_16x16x16_f16_pv_a_wave32_v1":
       raise ValueError("row-softmax native repack requires barriered native PV-A reload")
+    if not isinstance(self.score_scale, float) or not math.isfinite(self.score_scale) or self.score_scale <= 0:
+      raise ValueError("row-softmax native repack requires one positive finite score scale")
     return self
 
 class CompositeInputSpec(NamedTuple):

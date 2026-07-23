@@ -2273,7 +2273,8 @@ def expand_native_row_softmax_repack(ctx, x:UOp) -> UOp:
   lds = UOp(Ops.DEFINE_LOCAL, dtypes.half.ptr(256, AddrSpace.LOCAL), arg=next(ctx))
   stores, log2e = [], UOp.const(dtypes.float, 1.4426950408889634)
   for e in range(8):
-    value, row_max = score.gep(e), score.gep(e)
+    value = score.gep(e).alu(Ops.MUL, UOp.const(dtypes.float, x.arg.score_scale))
+    row_max = value
     for mask in x.arg.xor_masks:
       addr = lane_hw.alu(Ops.XOR, UOp.const(dtypes.int, mask)).alu(Ops.MUL, UOp.const(dtypes.int, 4))
       row_max = row_max.alu(Ops.MAX, UOp(Ops.CUSTOMI, dtypes.float, (addr, row_max), "bpermute"))

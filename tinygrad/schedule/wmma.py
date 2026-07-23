@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from tinygrad.dtype import DType, dtypes
+import math
+from tinygrad.dtype import DType, dtypes, PtrDType
 from tinygrad.uop.ops import Ops, UOp
 from tinygrad.uop.ops import CompositeReduce, CompositeTileCarrier, TileGatherSpec, RowSoftmaxRepackSpec, AMDRowSoftmaxRepackSpec, Ops
 
@@ -292,6 +293,33 @@ def amd_gfx1100_row_softmax_repack(score: UOp, m: UOp, l: UOp, *,
   if any(x.dtype != dtypes.float32 or x.shape != () for x in (m, l)):
     raise ValueError("gfx1100 row-softmax repack requires scalar fp32 m/l row state")
   return UOp(Ops.AMD_ROW_SOFTMAX_REPACK, dtypes.half.vec(16), (score, m, l), arg=spec)
+
+def amd_gfx1100_q16_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, scale:float, kernel_info) -> UOp:
+  """Build the exact live-owner q16 native attention kernel graph."""
+  owners = (q, k, v, out)
+  if any(x.op is not Ops.PARAM or not isinstance(x.dtype, PtrDType) or x.ptrdtype.size != 256 for x in owners):
+    raise ValueError("q16 native attention requires four live 256-element PARAM owners")
+  if tuple(x.ptrdtype.base for x in owners) != (dtypes.half,)*4:
+    raise ValueError("q16 native attention requires fp16 Q/K/V/output owners")
+  if tuple(x.arg.slot for x in owners) != (1, 2, 3, 0):
+    raise ValueError("q16 native attention requires PARAM slots Q=1 K=2 V=3 output=0")
+  if not isinstance(scale, float) or not math.isfinite(scale) or scale <= 0:
+    raise ValueError("q16 native attention requires one positive finite score scale")
+  lane = UOp.special(32, "lidx0")
+  col, halfwave = lane & 15, lane >> 4
+  qfrag = UOp(Ops.STACK, dtypes.half.vec(16), tuple(q.index(col*16+i).load() for i in range(16)))
+  kfrag = UOp(Ops.STACK, dtypes.half.vec(16), tuple(k.index(col*16+i).load() for i in range(16)))
+  zero = UOp.const(dtypes.float.vec(8), (0.0,)*8)
+  fragment_axes = (tuple((-100-i, 2) for i in range(4)), tuple((-110-i, 2) for i in range(4)),
+                   tuple((-120-i, 2) for i in range(3)))
+  warg = ("WMMA_16_16_16_half_float", (16,16,16), dtypes.half, dtypes.float, "AMD:gfx1100", 32, fragment_axes, ())
+  qk = UOp(Ops.WMMA, dtypes.float.vec(8), (qfrag, kfrag, zero), warg)
+  weights = amd_gfx1100_row_softmax_repack(qk, UOp.const(dtypes.float, -float("inf")), UOp.const(dtypes.float, 0),
+                                            spec=AMDRowSoftmaxRepackSpec(score_scale=float(scale)))
+  vfrag = UOp(Ops.STACK, dtypes.half.vec(16), tuple(v.index(i*16+col).load() for i in range(16)))
+  pv = UOp(Ops.WMMA, dtypes.float.vec(8), (weights, vfrag, zero), warg)
+  stores = [out.index((UOp.const(dtypes.weakint, 2*e)+halfwave)*16+col).store(pv.gep(e).cast(dtypes.half)) for e in range(8)]
+  return UOp.sink(*stores, arg=kernel_info)
 
 def amd_tile_wmma_boundary_report(*, qk_score: UOp, pv_value: UOp, pv_acc: UOp) -> dict:
   """Describe whether AMD can consume the composite tile at the WMMA boundary.

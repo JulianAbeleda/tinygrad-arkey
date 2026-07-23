@@ -386,6 +386,58 @@ def test_gfx1100_native_repack_direct_builder_reaches_final_program():
   assert any(m.startswith("ds_load") for m in mnemonics)
   assert "s_barrier" in mnemonics
 
+def test_gfx1100_q16_live_owner_builder_has_exact_fragment_addresses():
+  from tinygrad.schedule.wmma import amd_gfx1100_q16_attention
+  from tinygrad.uop.ops import KernelInfo, ParamArg
+  params = {slot:UOp(Ops.PARAM, dtypes.half.ptr(256), arg=ParamArg(slot)) for slot in range(4)}
+  sink = amd_gfx1100_q16_attention(params[1], params[2], params[3], params[0],
+                                   scale=0.25, kernel_info=KernelInfo(name="q16_live_owner"))
+  wmmas = [u for u in sink.toposort() if u.op is Ops.WMMA]
+  assert len(wmmas) == 2
+  qfrag, kfrag = wmmas[0].src[:2]
+  weights, vfrag = wmmas[1].src[:2]
+  assert qfrag.op is kfrag.op is vfrag.op is Ops.STACK
+  assert qfrag.dtype == kfrag.dtype == vfrag.dtype == dtypes.half.vec(16)
+  assert weights.op is Ops.AMD_ROW_SOFTMAX_REPACK and weights.arg.score_scale == 0.25
+  assert all(x.op is Ops.LOAD and x.src[0].src[0] is params[1] for x in qfrag.src)
+  assert all(x.op is Ops.LOAD and x.src[0].src[0] is params[2] for x in kfrag.src)
+  assert all(x.op is Ops.LOAD and x.src[0].src[0] is params[3] for x in vfrag.src)
+  qaddrs = [x.src[0].src[1].render() for x in qfrag.src]
+  kaddrs = [x.src[0].src[1].render() for x in kfrag.src]
+  vaddrs = [x.src[0].src[1].render() for x in vfrag.src]
+  assert len(set(qaddrs)) == len(set(kaddrs)) == len(set(vaddrs)) == 16
+  assert qaddrs == kaddrs and vaddrs != qaddrs
+  stores = [u for u in sink.src if u.op is Ops.STORE]
+  assert len(stores) == 8 and all(s.src[0].src[0] is params[0] for s in stores)
+  assert len({s.src[0].src[1].render() for s in stores}) == 8
+
+def test_gfx1100_q16_live_owner_builder_fails_closed_on_owner_mismatch():
+  from tinygrad.schedule.wmma import amd_gfx1100_q16_attention
+  from tinygrad.uop.ops import KernelInfo, ParamArg
+  p = {slot:UOp(Ops.PARAM, dtypes.half.ptr(256), arg=ParamArg(slot)) for slot in range(4)}
+  with pytest.raises(ValueError, match="PARAM slots"):
+    amd_gfx1100_q16_attention(p[2], p[1], p[3], p[0], scale=0.25, kernel_info=KernelInfo(name="bad"))
+  with pytest.raises(ValueError, match="positive finite"):
+    amd_gfx1100_q16_attention(p[1], p[2], p[3], p[0], scale=0.0, kernel_info=KernelInfo(name="bad"))
+
+def test_gfx1100_q16_live_owner_builder_feeds_proven_dual_wmma_pipeline():
+  from tinygrad.codegen import full_rewrite_to_sink, to_program
+  from tinygrad.helpers import Target
+  from tinygrad.renderer.isa.amd import AMDISARenderer
+  from tinygrad.schedule.wmma import amd_gfx1100_q16_attention
+  from tinygrad.uop.ops import KernelInfo, ParamArg
+  p = {slot:UOp(Ops.PARAM, dtypes.half.ptr(256), arg=ParamArg(slot)) for slot in range(4)}
+  sink = amd_gfx1100_q16_attention(p[1], p[2], p[3], p[0], scale=0.25, kernel_info=KernelInfo(name="q16_live_owner"))
+  ren = AMDISARenderer(Target.parse("AMD:ISA:gfx1100"))
+  final = full_rewrite_to_sink(sink, ren, optimize=False)
+  assert len([u for u in final.toposort() if u.op is Ops.WMMA]) == 2
+  assert len([u for u in final.toposort() if u.op is Ops.BARRIER]) == 1
+  assert not any(u.op is Ops.AMD_ROW_SOFTMAX_REPACK for u in final.toposort())
+  program = to_program(sink, ren)
+  linear = next(u for u in program.src if u.op is Ops.LINEAR)
+  mnemonics = [str(u.arg).split("(", 1)[0] for u in linear.src if not isinstance(u.arg, tuple)]
+  assert mnemonics.count("v_wmma_f32_16x16x16_f16") == 2 and "s_barrier" in mnemonics
+
 def test_rangeify_handoff_unwraps_only_exact_tile_carriers():
   from tinygrad.uop.ops import TileGatherSpec, graph_rewrite
   from tinygrad.schedule.wmma import tile_gather
