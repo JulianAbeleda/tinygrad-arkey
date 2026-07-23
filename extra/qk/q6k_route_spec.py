@@ -22,7 +22,7 @@ from typing import Any
 
 from tinygrad import dtypes
 from tinygrad.helpers import cdiv
-from tinygrad.uop.ops import AxisType, KernelInfo, UOp
+from tinygrad.uop.ops import AxisType, KernelInfo, Ops, UOp
 
 from extra.qk.quant.q6_k_gemv_primitive import _q6k_block_dot, parse_opt
 from extra.qk.layout import Q6_K_BLOCK_ELEMS, Q6K_HALFWORDS_PER_BLOCK
@@ -30,6 +30,7 @@ from extra.qk.layout import Q6_K_BLOCK_ELEMS, Q6K_HALFWORDS_PER_BLOCK
 # the Q6_K dequant grammar reads 16 within-block byte positions per block; the coop lane axis and the partial
 # reduce axis both have this extent. Kept as a named constant so the spec is data, not a magic literal.
 Q6K_POS_EXTENT = 16
+Q6K_VOCAB_SCALAR_REDUCE_MIN_ROWS = 131072
 
 _ALLOWED_ROUTE_FAMILIES = ("q6k_coop", "q6k_partial")
 _ALLOWED_REDUCTION = ("external_sum",)
@@ -112,6 +113,26 @@ def emit_q6k_gemv_kernel(spec:Q6KGEMVRouteSpec):
   spec.validate()
   if spec.route_family == "q6k_coop": return _emit_coop(spec)
   return _emit_partial(spec)
+
+
+def q6k_vocab_scalar_reduce_eligible(spec:Q6KGEMVRouteSpec) -> bool:
+  """Keep the direct stage-two reduction fail-closed to the generated large-vocab coop layout."""
+  return (spec.route_family == "q6k_coop" and spec.rows >= Q6K_VOCAB_SCALAR_REDUCE_MIN_ROWS and
+          spec.partial_axis_extent == Q6K_POS_EXTENT)
+
+
+def emit_q6k_vocab_scalar_reduce_kernel(spec:Q6KGEMVRouteSpec):
+  """Reduce coop partials with one scalar output store per vocabulary row."""
+  if not q6k_vocab_scalar_reduce_eligible(spec):
+    raise ValueError(f"Q6_K scalar vocab reduction is not admitted for {spec.to_json()}")
+
+  def kernel(out:UOp, partials:UOp) -> UOp:
+    row = UOp.range(spec.rows, 0)
+    pos = UOp.range(spec.partial_axis_extent, 1, axis_type=AxisType.REDUCE)
+    return out[row].store(partials[row, pos].reduce(pos, arg=Ops.ADD)).end(row).sink(
+      arg=KernelInfo(name=f"q6k_vocab_scalar_reduce_{spec.rows}_{spec.k}", opts_to_apply=()))
+
+  return kernel
 
 
 def _emit_coop(spec:Q6KGEMVRouteSpec):

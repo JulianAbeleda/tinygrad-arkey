@@ -89,6 +89,9 @@ class _Q6KDecodeCandidate:
                                     use_coop=binding.use_coop, opts=linear.opts)
     partials = Tensor.empty(binding.N, spec.partial_axis_extent, dtype=dtypes.float32, device=x.device)
     partial = partials.custom_kernel(linear.q6k_storage.halfs.to(x.device), x_vec, fxn=qk_ops.emit_q6k_gemv_kernel(spec))[0]
+    if qk_ops.q6k_vocab_scalar_reduce_eligible(spec):
+      out = Tensor.empty(binding.N, dtype=dtypes.float32, device=x.device)
+      return out.custom_kernel(partial, fxn=qk_ops.emit_q6k_vocab_scalar_reduce_kernel(spec))[0].reshape(1, 1, binding.N)
     return partial.sum(axis=1).reshape(1, 1, binding.N)
 
 Q6K_DECODE_CANDIDATE = _Q6KDecodeCandidate()
