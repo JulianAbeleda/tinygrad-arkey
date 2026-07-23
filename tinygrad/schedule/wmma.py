@@ -559,10 +559,10 @@ def amd_gfx1100_q16_grid_hd128_loop_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_toke
   def rd(reg,init,role,b=0,o=0,final=False): return UOp(Ops.STACK,dtypes.float.vec(8),tuple(UOp(Ops.AMD_ATTENTION_LOOP_STATE,dtypes.float,(reg,init) if final else (reg,init,rng),arg=AMDLoopStateSpec(role=role,access="final_read" if final else "read",block=b,lane=i,owner=9604)) for i in range(8)))
   def fr(owner,role,b): return UOp(Ops.AMD_PACKED_FRAGMENT_LOAD,dtypes.half.vec(16),(owner,lane,col,rng,group),arg=AMDPackedFragmentLoopSpec(role=role,head_block=b,grid=grid))
   om,ol=rd(mreg,mi,"m"),rd(lreg,li,"l"); qk=zero
-  for b in range(8): qk=UOp(Ops.WMMA,dtypes.float.vec(8),(fr(q,"Q",b),fr(k,"K",b),qk),warg)
+  for b in range(8): qk=UOp(Ops.WMMA,dtypes.float.vec(8),(fr(q,"Q",b),fr(k,"K",b),qk),warg,tag=("attention_wmma","QK",b))
   p,nm,nl,alpha=amd_gfx1100_row_softmax_state(qk,om,ol,spec=AMDRowSoftmaxRepackSpec(score_scale=scale,mode="loop_state_v1",validity_mode="causal_v1" if causal else "tail_v1",query_start=query_start,kv_start=-1,valid_kv=valid_kv,dynamic_kv_v1=True,grid=grid),kv_tile=rng,grid_id=group); writes=[*wr(mreg,"m",nm),*wr(lreg,"l",nl)]
   for b in range(8):
-    oc=rd(creg,ci,"acc",b,b*8); pv=UOp(Ops.WMMA,dtypes.float.vec(8),(p,fr(v,"V",b),oc.alu(Ops.MUL,alpha)),warg); writes.extend(wr(creg,"acc",pv,b,b*8))
+    oc=rd(creg,ci,"acc",b,b*8); pv=UOp(Ops.WMMA,dtypes.float.vec(8),(p,fr(v,"V",b),oc.alu(Ops.MUL,alpha)),warg,tag=("attention_wmma","PV",b)); writes.extend(wr(creg,"acc",pv,b,b*8))
   end=UOp.group(*writes).end(rng).replace(tag=("amd_gfx1100_attention_grid_loop_end_v1",rng)); fl=rd(lreg,end,"l",final=True); fc=tuple(rd(creg,end,"acc",b,b*8,final=True) for b in range(8)); drain=UOp(Ops.AMD_ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,group,fl,*fc),arg=AMDAttentionOutputDrainSpec(grid=grid))
   return UOp.sink(mi,li,ci,end,drain,arg=kernel_info).replace(tag=("amd_gfx1100_q16_grid_hd128_loop_v1",))
 

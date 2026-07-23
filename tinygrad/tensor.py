@@ -1207,7 +1207,7 @@ class Tensor(RandMixin):
     return self._semantic_attention(key, value, attn_mask=attn_mask, dropout_p=dropout_p, is_causal=is_causal)
 
   def _semantic_attention(self, key:Tensor, value:Tensor, attn_mask:Tensor|None=None, dropout_p:float=0.0,
-                          is_causal:bool=False, scale:float|None=None, attention_grid=None) -> Tensor:
+                          is_causal:bool=False, scale:float|None=None, attention_grid=None, attention_context=None) -> Tensor:
     """Create an explicit attention semantic boundary with a correct fallback.
 
     `Ops.ATTENTION` owns the complete attention contract while its first source
@@ -1241,7 +1241,7 @@ class Tensor(RandMixin):
     if dropout_p != 0: return out
     primitive = self._online_attention_primitive(fallback_key, fallback_value, attn_mask, scale, qk_dtype, out.dtype)
     spec = AttentionSpec(float(scale), is_causal, attn_mask is not None, qk_dtype, out.dtype,
-                         kv_block=64 if primitive is not None else 0, attention_grid=attention_grid)
+                         kv_block=64 if primitive is not None else 0, attention_grid=attention_grid, attention_context=attention_context)
     # src[0] is always the ordinary fallback. When a bounded primitive is
     # available it is src[1], followed by Q/K/V/(mask), so the rangeify
     # lowering can discard src[0] without losing a graph dependency.

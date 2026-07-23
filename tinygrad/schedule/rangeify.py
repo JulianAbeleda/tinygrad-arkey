@@ -110,7 +110,7 @@ def lower_attention_semantic(att:UOp) -> UOp:
         tile_carrier=tile_carrier,
         slot_shapes=((b, h, q_len), (b, h, q_len), (b, h, q_len, hd)),
         lane_shapes=((), (), (hd,)) if state_combine == "online_softmax_state" else (), attention_grid=grid if grid_shape else None,
-        attention_causal=att.arg.causal if grid_shape else False)
+        attention_causal=att.arg.causal if grid_shape else False, attention_context=att.arg.attention_context if grid_shape else None)
       if state_combine == "online_softmax_state" and owned_map_proven and hd == 16:
         from tinygrad.schedule.wmma import construct_hd16_tile_carriers
         # The live score source is rankful/vector-typed at this stage. Keep
