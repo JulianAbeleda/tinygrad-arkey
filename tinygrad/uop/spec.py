@@ -251,6 +251,9 @@ spec_tensor = PatternMatcher([
    lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_online_softmax_qk_pv_v1"
    and x.dtype == dtypes.half.vec(16) and x.src[0].dtype == dtypes.float32.vec(8)
    and x.src[1].dtype == x.src[2].dtype == dtypes.float32),
+  (UPat(Ops.AMD_PV_C_LANE, src=(UPat(),), name="x"),
+   lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_pv_c_lane_v1"
+   and x.src[0].dtype == dtypes.float.vec(8) and x.dtype == dtypes.float),
 
   # ATTENTION keeps a normal fallback plus explicit Q/K/V/(optional mask)
   # dependencies until rangeify selects a lowering.

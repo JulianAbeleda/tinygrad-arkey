@@ -482,6 +482,37 @@ def test_online_softmax_block_transition_fails_closed_on_non_native_state():
       UOp.const(dtypes.float.vec(4), (0.0,)*4), UOp.const(dtypes.float, 0), UOp.const(dtypes.float, 1),
       UOp.const(dtypes.float.vec(4), (0.0,)*4))
 
+def test_gfx1100_pv_c_lane_projection_owns_exact_row_mapping():
+  from tinygrad.schedule.wmma import amd_gfx1100_pv_c_lane
+  acc = UOp.const(dtypes.float.vec(8), tuple(float(i) for i in range(8)))
+  lane = amd_gfx1100_pv_c_lane(acc, 5)
+  assert lane.op is Ops.AMD_PV_C_LANE and lane.dtype == dtypes.float
+  assert lane.arg.element == 5 and lane.arg.lane_count == 8
+  assert lane.arg.row_expr == "2*e+(lane>>4)" and lane.arg.owner_e_expr == "row>>1"
+  with pytest.raises(ValueError, match=r"\[0,8\)"):
+    amd_gfx1100_pv_c_lane(acc, 8)
+
+def test_gfx1100_pv_c_lane_lowers_after_tensor_spec_to_legal_scalar_program():
+  import numpy as np
+  from tinygrad import Tensor
+  from tinygrad.schedule.wmma import amd_gfx1100_pv_c_lane
+  from tinygrad.uop.ops import KernelInfo
+  src = Tensor(np.arange(8,dtype=np.float32), device="AMD")
+  out = Tensor.empty(8, dtype=dtypes.float, device="AMD")
+  def kernel(o, inp):
+    vals = [inp.index(UOp.const(dtypes.weakint, i)).load() for i in range(8)]
+    vec = vals[0].vectorize(*vals[1:])
+    return UOp.sink(*[o.index(UOp.const(dtypes.weakint, i)).store(amd_gfx1100_pv_c_lane(vec, i)) for i in range(8)],
+                    arg=KernelInfo(name="pv_c_lanes"))
+  np.testing.assert_array_equal(out.custom_kernel(src, fxn=kernel)[0].numpy(), np.arange(8,dtype=np.float32))
+
+def test_gfx1100_row_state_broadcast_has_canonical_halfwave_owner_address():
+  from tinygrad.schedule.wmma import amd_gfx1100_broadcast_row_state
+  lane, state = UOp.special(32, "lidx0"), UOp.const(dtypes.float, 3)
+  broadcast = amd_gfx1100_broadcast_row_state(state, lane)
+  assert broadcast.op is Ops.CUSTOMI and broadcast.arg == "bpermute"
+  assert "16" in broadcast.src[0].render() and "4" in broadcast.src[0].render()
+
 def test_rangeify_handoff_unwraps_only_exact_tile_carriers():
   from tinygrad.uop.ops import TileGatherSpec, graph_rewrite
   from tinygrad.schedule.wmma import tile_gather

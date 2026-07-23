@@ -90,6 +90,8 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
     (UPat(Ops.REDUCE_SLOT, src=(UPat(),), name="slot"), resolve_composite_reduce_slot_prebufferize),
   ]), name="resolve_composite_slots_before_spec")
   if SPEC: type_verify(ast, spec_tensor)
+  if (native_state_pm:=getattr(ren, "native_state_lane_matcher", None)) is not None:
+    ast = graph_rewrite(ast, native_state_pm, name="lower native state lanes after tensor spec")
 
   # preprocess
   sink = graph_rewrite(ast, pm_mops+pm_syntactic_sugar+pm_store_ranges, ctx=itertools.count(1000), name="early movement ops", bottom_up=True)
@@ -115,6 +117,8 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
     if (native_repack_pm:=getattr(ren, "native_repack_matcher", None)) is not None:
       sink = graph_rewrite(sink, native_repack_pm, ctx=itertools.count(700), bottom_up=True,
                            name="expand optimizer native row softmax repack")
+    if (native_state_pm:=getattr(ren, "native_state_lane_matcher", None)) is not None:
+      sink = graph_rewrite(sink, native_state_pm, name="lower optimizer native state lanes")
 
   # ** expander (expand_rewrite) **
   sink = graph_rewrite(sink, sym+pm_move_where_on_load, name="postopt symbolic")

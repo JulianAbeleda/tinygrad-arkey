@@ -2298,6 +2298,17 @@ native_repack_matcher = PatternMatcher([
   (UPat(Ops.AMD_ROW_SOFTMAX_REPACK, name="x"), expand_native_row_softmax_repack),
 ])
 
+def lower_native_pv_c_lane(x:UOp) -> UOp:
+  x.arg.validate()
+  e = x.arg.element
+  if x.src[0].dtype != dtypes.float.vec(8) or not 0 <= e < 8:
+    raise ValueError("invalid native PV-C lane projection")
+  return x.src[0].gep(e)
+
+native_state_lane_matcher = PatternMatcher([
+  (UPat(Ops.AMD_PV_C_LANE, name="x"), lower_native_pv_c_lane),
+])
+
 # ============================ post-regalloc: build real rdna3 Insts + waitcnts ============================
 def _S2(r:Register): return _S[r.index:r.index+1]   # SGPR pair s[i:i+1]
 def _Vr(r:Register): return _V[r.index]
@@ -2678,6 +2689,7 @@ class AMDISARenderer(ISARenderer):
   tensor_cores = amd_rdna3
   pre_isel_matcher = pre_isel_matcher
   native_repack_matcher = native_repack_matcher
+  native_state_lane_matcher = native_state_lane_matcher
   isel_matcher = isel_matcher
   post_isel_matcher = post_isel_matcher
   pre_regalloc_matcher = pre_regalloc_matcher

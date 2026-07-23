@@ -299,6 +299,7 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
         # Physical wave32 QK-C -> PV-A bridge. Its vec16 dtype is the native
         # per-lane PV-A fragment, not a logical tensor dimension.
         return (self.dtype.count,)
+      case Ops.AMD_PV_C_LANE: return ()
       case Ops.SCOPED_REDUCE:
         # The first SCOPED_REDUCE source is its semantically identical
         # fallback.  It is deliberately source-visible so a compiler that
@@ -1419,6 +1420,25 @@ class AMDRowSoftmaxRepackSpec(NamedTuple):
       raise ValueError("row-softmax native repack requires barriered native PV-A reload")
     if not isinstance(self.score_scale, float) or not math.isfinite(self.score_scale) or self.score_scale <= 0:
       raise ValueError("row-softmax native repack requires one positive finite score scale")
+    return self
+
+class AMDPVCLaneSpec(NamedTuple):
+  native_abi: str = "amd_gfx1100_pv_c_lane_v1"
+  lane_count: int = 8
+  row_expr: str = "2*e+(lane>>4)"
+  col_expr: str = "lane&15"
+  owner_lane_expr: str = "16*(row&1)"
+  owner_e_expr: str = "row>>1"
+  element: int = 0
+
+  def validate(self):
+    if self.native_abi != "amd_gfx1100_pv_c_lane_v1" or self.lane_count != 8:
+      raise ValueError("PV-C lane projection requires exact gfx1100 float.vec(8) ABI")
+    if (self.row_expr, self.col_expr, self.owner_lane_expr, self.owner_e_expr) != \
+       ("2*e+(lane>>4)", "lane&15", "16*(row&1)", "row>>1"):
+      raise ValueError("PV-C lane projection has unsupported row ownership")
+    if not isinstance(self.element, int) or not 0 <= self.element < 8:
+      raise ValueError("PV-C lane projection element must be in [0,8)")
     return self
 
 class CompositeInputSpec(NamedTuple):

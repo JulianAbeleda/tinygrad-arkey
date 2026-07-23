@@ -6,7 +6,7 @@ import math
 from typing import NamedTuple
 from tinygrad.dtype import DType, dtypes, PtrDType
 from tinygrad.uop.ops import Ops, UOp
-from tinygrad.uop.ops import CompositeReduce, CompositeTileCarrier, TileGatherSpec, RowSoftmaxRepackSpec, AMDRowSoftmaxRepackSpec, Ops
+from tinygrad.uop.ops import CompositeReduce, CompositeTileCarrier, TileGatherSpec, RowSoftmaxRepackSpec, AMDRowSoftmaxRepackSpec, AMDPVCLaneSpec, Ops
 
 def grouped_tile_load(source: UOp, spec: TileGatherSpec, *indices: UOp) -> UOp:
   """Build an ownership-preserving INDEX/LOAD tile carrier.
@@ -353,6 +353,19 @@ def online_softmax_block_transition(old_m:UOp, old_l:UOp, old_acc:UOp,
   new_l = old_l.alu(Ops.MUL, alpha).alu(Ops.ADD, block_l.alu(Ops.MUL, probability_scale))
   new_acc = pv_c.alu(Ops.ADD, block_acc.alu(Ops.MUL, probability_scale.broadcast(8)))
   return OnlineSoftmaxBlockTransition(new_m, alpha, probability_scale, pv_c, new_l, new_acc)
+
+def amd_gfx1100_pv_c_lane(acc:UOp, e:int, *, spec:AMDPVCLaneSpec|None=None) -> UOp:
+  spec = AMDPVCLaneSpec() if spec is None else spec
+  spec.validate()
+  if acc.dtype != dtypes.float.vec(8) or not isinstance(e, int) or not 0 <= e < 8:
+    raise ValueError("PV-C lane projection requires float.vec(8) and e in [0,8)")
+  return UOp(Ops.AMD_PV_C_LANE, dtypes.float, (acc,), arg=spec._replace(element=e))
+
+def amd_gfx1100_broadcast_row_state(state:UOp, lane:UOp) -> UOp:
+  if state.dtype != dtypes.float or state.shape != () or lane.dtype.scalar() not in dtypes.ints+(dtypes.weakint,):
+    raise ValueError("gfx1100 row-state broadcast requires scalar fp32 state and integer lane")
+  addr = lane.cast(dtypes.int).alu(Ops.AND, UOp.const(dtypes.int, 16)).alu(Ops.MUL, UOp.const(dtypes.int, 4))
+  return UOp(Ops.CUSTOMI, dtypes.float, (addr, state), "bpermute")
 
 def amd_tile_wmma_boundary_report(*, qk_score: UOp, pv_value: UOp, pv_acc: UOp) -> dict:
   """Describe whether AMD can consume the composite tile at the WMMA boundary.

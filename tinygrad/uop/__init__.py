@@ -69,7 +69,7 @@ class Ops(FastEnum):
   MEMORY_SEMANTIC = auto()
   # Scheduler-only logical element with explicit owner-axis mapping. It is
   # consumed by a stateful reduction before program lowering.
-  SCOPED_VALUE = auto(); TILE_GATHER = auto(); ROW_SOFTMAX_REPACK = auto(); AMD_ROW_SOFTMAX_REPACK = auto()
+  SCOPED_VALUE = auto(); TILE_GATHER = auto(); ROW_SOFTMAX_REPACK = auto(); AMD_ROW_SOFTMAX_REPACK = auto(); AMD_PV_C_LANE = auto()
   # FUNCTION has a TUPLE body and is gradient-able; CALL is an opaque kernel invocation
   PARAM = auto(); FUNCTION = auto(); CALL = auto()
 

@@ -366,7 +366,9 @@ class HIPRenderer(CStyleLanguage):
       # The scheduler-owned expansion is shared with the native ISA renderer;
       # HIP only supplies source spelling for its existing bpermute marker.
       from tinygrad.renderer.isa.amd import native_repack_matcher
+      from tinygrad.renderer.isa.amd import native_state_lane_matcher
       self.native_repack_matcher = native_repack_matcher + PatternMatcher([(UPat(Ops.MAX, name="x"), _hip_native_bpermute_max)])
+      self.native_state_lane_matcher = native_state_lane_matcher
       self.extra_matcher += hip_native_repack_pm
     if self.is_cdna(target.arch):
       self.string_rewrite = PatternMatcher([
