@@ -726,6 +726,32 @@ def test_gfx1100_q16_kv64_hd128_loop_causal_tail_numeric(valid_kv,query_start):
   np.testing.assert_allclose(got,ref,rtol=.02,atol=4e-3)
   if query_start == -16: assert np.array_equal(got,np.zeros_like(got))
 
+def test_gfx1100_q32_hq4_hkv2_kv64_hd128_grid_loop_contract():
+  from tinygrad.schedule.wmma import amd_gfx1100_q32_hq4_hkv2_kv64_hd128_loop_attention
+  from tinygrad.uop.ops import KernelInfo, ParamArg, AMDAttentionGridSpec, AMDPackedFragmentLoopSpec
+  p=[UOp(Ops.PARAM,dtypes.half.ptr(16384),arg=ParamArg(i)) for i in range(4)]
+  sink=amd_gfx1100_q32_hq4_hkv2_kv64_hd128_loop_attention(p[1],p[2],p[3],p[0],scale=.25,kernel_info=KernelInfo(name="grid_loop"))
+  topo=sink.toposort(); group=next(u for u in topo if u.op is Ops.SPECIAL and str(u.arg)=="gidx0")
+  frags=[u for u in topo if u.op is Ops.AMD_PACKED_FRAGMENT_LOAD]
+  assert len(frags)==24 and all(isinstance(u.arg,AMDPackedFragmentLoopSpec) and isinstance(u.arg.grid,AMDAttentionGridSpec) and u.src[4] is group for u in frags)
+  drain=next(u for u in topo if u.op is Ops.AMD_ATTENTION_OUTPUT_DRAIN)
+  assert drain.src[1] is group and drain.arg.grid == AMDAttentionGridSpec()
+
+def test_gfx1100_q32_hq4_hkv2_kv64_hd128_grid_loop_numeric():
+  import numpy as np
+  from tinygrad import Tensor
+  from tinygrad.schedule.wmma import amd_gfx1100_q32_hq4_hkv2_kv64_hd128_loop_attention
+  from tinygrad.uop.ops import KernelInfo
+  rng=np.random.default_rng(3242); q=rng.normal(0,.2,(4,32,128)).astype(np.float16)
+  k=rng.normal(0,.2,(2,64,128)).astype(np.float16); v=rng.normal(0,.4,(2,64,128)).astype(np.float16)
+  tq,tk,tv=(Tensor(x.reshape(-1),device="AMD") for x in (q,k,v)); out=Tensor.empty(16384,dtype=dtypes.half,device="AMD")
+  def kernel(o,qi,ki,vi): return amd_gfx1100_q32_hq4_hkv2_kv64_hd128_loop_attention(qi,ki,vi,o,scale=.25,kernel_info=KernelInfo(name="grid_loop_num"))
+  got=out.custom_kernel(tq,tk,tv,fxn=kernel)[0].numpy().reshape(4,32,128).astype(np.float32); ref=np.empty_like(got)
+  for h in range(4):
+    scores=(q[h].astype(np.float32)@k[h//2].astype(np.float32).T)*.25; probs=np.exp(scores-scores.max(axis=1,keepdims=True)); probs/=probs.sum(axis=1,keepdims=True)
+    ref[h]=probs@v[h//2].astype(np.float32)
+  np.testing.assert_allclose(got,ref,rtol=.02,atol=4e-3)
+
 def test_gfx1100_q16_kv32_builder_fails_closed_owner_sizes():
   from tinygrad.schedule.wmma import amd_gfx1100_q16_kv32_attention
   from tinygrad.uop.ops import KernelInfo, ParamArg
@@ -843,3 +869,18 @@ def test_gfx1100_corrected_c_requires_exact_alpha_and_prior_wmma_lanes():
   wrong=list(vals); wrong[3]=prior.gep(4)*alphas[3]
   assert not _corrected_c_transition(wrong,arg)
   assert not _corrected_c_transition(vals,(*arg[:-1],("different",)))
+
+def test_gfx1100_q32_hq4_hkv2_kv64_hd128_grid_loop_final_isa():
+  from tinygrad.codegen import to_program
+  from tinygrad.helpers import Target
+  from tinygrad.renderer.isa.amd import AMDISARenderer
+  from tinygrad.schedule.wmma import amd_gfx1100_q32_hq4_hkv2_kv64_hd128_loop_attention
+  from tinygrad.uop.ops import KernelInfo, ParamArg
+  p=[UOp(Ops.PARAM,dtypes.half.ptr(16384),arg=ParamArg(i)) for i in range(4)]
+  sink=amd_gfx1100_q32_hq4_hkv2_kv64_hd128_loop_attention(p[1],p[2],p[3],p[0],scale=.25,
+    kernel_info=KernelInfo(name="grid_micro_isa"))
+  program=to_program(sink,AMDISARenderer(Target.parse("AMD:ISA:gfx1100")))
+  linear=next(u for u in program.src if u.op is Ops.LINEAR)
+  mn=[str(u.arg).split("(",1)[0] for u in linear.src if not isinstance(u.arg,tuple)]
+  assert mn.count("v_wmma_f32_16x16x16_f16")==16
+  assert mn.count("s_barrier")==1 and mn.count("ds_load_b128")==2

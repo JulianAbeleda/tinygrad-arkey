@@ -1477,6 +1477,24 @@ class AMDRowSoftmaxSlotSpec(NamedTuple):
       raise ValueError("native row-softmax slot must be in [0,4)")
     return self
 
+class AMDAttentionGridSpec(NamedTuple):
+  """Exact Q32/Hq4/Hkv2/G2 workgroup ownership for the native loop."""
+  native_abi: str = "amd_gfx1100_attention_grid_q32_hq4_hkv2_g2_v1"
+  q_tokens: int = 32
+  q_heads: int = 4
+  kv_heads: int = 2
+  group_ratio: int = 2
+  kv_tokens: int = 64
+  head_dim: int = 128
+  group_expr: str = "q_tile=group%2;q_head=group//2;kv_head=q_head//2"
+
+  def validate(self):
+    if (self.native_abi,self.q_tokens,self.q_heads,self.kv_heads,self.group_ratio,self.kv_tokens,self.head_dim,self.group_expr) != \
+       ("amd_gfx1100_attention_grid_q32_hq4_hkv2_g2_v1",32,4,2,2,64,128,
+        "q_tile=group%2;q_head=group//2;kv_head=q_head//2"):
+      raise ValueError("AMD attention grid requires exact Q32/Hq4/Hkv2/G2 ownership")
+    return self
+
 class AMDAttentionOutputDrainSpec(NamedTuple):
   """Typed final ownership boundary for the native Hd128 attention ABI."""
   native_abi: str = "amd_gfx1100_attention_output_drain_v1"
@@ -1484,11 +1502,13 @@ class AMDAttentionOutputDrainSpec(NamedTuple):
   blocks: int = 8
   lanes_per_fragment: int = 8
   address_expr: str = "e*256+halfwave*128+j*16+col"
+  grid: AMDAttentionGridSpec|None = None
 
   def validate(self):
     if (self.native_abi, self.head_dim, self.blocks, self.lanes_per_fragment, self.address_expr) != \
        ("amd_gfx1100_attention_output_drain_v1", 128, 8, 8, "e*256+halfwave*128+j*16+col"):
       raise ValueError("AMD attention output drain requires the exact gfx1100 Hd128 v1 ABI")
+    if self.grid is not None: self.grid.validate()
     return self
 
 class AMDLoopStateSpec(NamedTuple):
@@ -1518,12 +1538,14 @@ class AMDPackedFragmentLoopSpec(NamedTuple):
   native_abi: str = "amd_gfx1100_packed_fragment_hd128_loop_v1"
   role: str = "Q"
   head_block: int = 0
+  grid: AMDAttentionGridSpec|None = None
 
   def validate(self):
     if self.native_abi != "amd_gfx1100_packed_fragment_hd128_loop_v1" or self.role not in {"Q", "K", "V"}:
       raise ValueError("AMD loop fragment has an unsupported ABI or role")
     if not isinstance(self.head_block, int) or isinstance(self.head_block, bool) or not 0 <= self.head_block < 8:
       raise ValueError("AMD loop fragment has an invalid head block")
+    if self.grid is not None: self.grid.validate()
     return self
 
 class CompositeInputSpec(NamedTuple):

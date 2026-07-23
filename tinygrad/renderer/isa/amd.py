@@ -904,12 +904,15 @@ def isel_attention_output_drain(ctx:IselContext, x:UOp):
   from tinygrad.uop.ops import AMDAttentionOutputDrainSpec
   if not isinstance(x.arg, AMDAttentionOutputDrainSpec): raise ValueError("AMD attention output drain is missing its typed ABI")
   x.arg.validate()
-  if len(x.src) != 10 or x.dtype != dtypes.void or not isinstance(x.src[0].dtype, PtrDType) or \
-     x.src[0].dtype.base != dtypes.half or x.src[0].dtype.size != 2048:
+  grid=x.arg.grid; expected=11 if grid is not None else 10; src=list(x.src)
+  if grid is not None and src[1].op is Ops.CAST: src[1]=src[1].src[0]
+  if len(src) != expected or x.dtype != dtypes.void or not isinstance(src[0].dtype, PtrDType) or \
+     src[0].dtype.base != dtypes.half or src[0].dtype.size != (16384 if grid is not None else 2048):
     raise ValueError("AMD attention output drain has malformed ownership sources")
-  if x.src[1].dtype != dtypes.float.vec(8) or any(s.dtype != dtypes.float.vec(8) for s in x.src[2:]):
+  state=src[2:] if grid is not None else src[1:]
+  if state[0].dtype != dtypes.float.vec(8) or any(s.dtype != dtypes.float.vec(8) for s in state[1:]):
     raise ValueError("AMD attention output drain requires l plus eight native PV fragments")
-  return UOp(Ops.INS,dtypes.void,src=x.src,arg=AMDOps.ATTENTION_OUTPUT_DRAIN)
+  return UOp(Ops.INS,dtypes.void,src=tuple(src),arg=AMDOps.ATTENTION_OUTPUT_DRAIN)
 
 # ---- Phase G ALU/control isel ----
 def isel_cast(ctx:IselContext, x:UOp):
@@ -1571,7 +1574,18 @@ def _pack_frag_tile(ctx:IselContext, carrier:UOp, base:int, dep:tuple[UOp,...], 
   E = _wmma_elems(carrier, 16)
   if carrier.dtype.scalar() is dtypes.char: return _frag_b128_loads(ctx, E, base, dep, role) or _pack_i8_fragment(ctx, carrier, base, dep)
   if (stage := _pack_stage_fragment(ctx, carrier, dep)) is not None: return stage
-  if (wide := _frag_b128_loads(ctx, E, base, dep, role)) is not None: return wide
+  # Online-softmax P is one post-barrier LDS fragment shared by all Hd128 PV
+  # output blocks.  Keep the selected b128 definition in its physical A span
+  # and return zero-cost aliases to it for subsequent PV WMMAs; rebuilding it
+  # per block creates sixteen overlapping constrained SSA loads.
+  p_memo = getattr(ctx, "_attention_p_fragments", None)
+  p_key = (carrier, base) if role == "A" else None
+  if p_key is not None and p_memo is not None and (packed := p_memo.get(p_key)) is not None: return packed
+  if (wide := _frag_b128_loads(ctx, E, base, dep, role)) is not None:
+    if p_key is not None and any(u.op is Ops.INS and u.arg is AMDOps.DS_LOAD_B128 for u in wide):
+      if p_memo is None: p_memo = ctx._attention_p_fragments = {}
+      p_memo[p_key] = wide
+    return wide
   def local(v:UOp) -> UOp:
     if v.op is Ops.LOAD and len(v.src) == 1 and v.src[0].op is Ops.INDEX:
       idx = isel_index(ctx, v.src[0])
@@ -1585,8 +1599,11 @@ def isel_packed_fragment(ctx:IselContext,x:UOp, base:int|None=None) -> UOp:
   loop = isinstance(x.arg, AMDPackedFragmentLoopSpec)
   if loop:
     x.arg.validate(); abi,role,tile,hd_block="amd_gfx1100_packed_fragment_hd128_loop_v1",x.arg.role,0,x.arg.head_block
-    if len(x.src) != 4: raise ValueError("loop fragment requires one RANGE tile source")
-    owner,lane,col,rng=x.src
+    if len(x.src) not in {4,5}: raise ValueError("loop fragment requires RANGE tile and optional typed grid source")
+    owner,lane,col,rng,*grid_src=x.src
+    grid_id=grid_src[0] if grid_src else None
+    if grid_id is not None and grid_id.op is Ops.CAST: grid_id=grid_id.src[0]
+    if (x.arg.grid is None) != (grid_id is None): raise ValueError("loop fragment grid ownership must be explicit")
     lane=lane.src[0] if lane.op is Ops.CAST else lane; col=col.src[0] if col.op is Ops.CAST else col
     rng=rng.src[0] if rng.op is Ops.CAST else rng
     if rng.op is not Ops.RANGE: raise ValueError("loop fragment requires one RANGE tile source")
@@ -1598,6 +1615,11 @@ def isel_packed_fragment(ctx:IselContext,x:UOp, base:int|None=None) -> UOp:
   if abi not in {"amd_gfx1100_packed_fragment_v1","amd_gfx1100_packed_fragment_hd128_v1","amd_gfx1100_packed_fragment_hd128_loop_v1"} or \
      role not in {"Q","K","V"} or tile not in {0,1} or not isinstance(hd_block,int) or not 0 <= hd_block < 8:
     raise ValueError("invalid opaque gfx1100 packed fragment")
+  # Grid attention has one physical fragment transaction stream.  Carry its
+  # completion into the next address definition so the seven Q head-block
+  # bases are produced and consumed one at a time instead of all being live
+  # before the first global load.
+  grid_tail = getattr(ctx, "_attention_grid_fragment_tail", None) if loop and x.arg.grid is not None else None
   if base is None: base=_frag_base(ctx,("amd_gfx1100_opaque_fragment","A" if role=="Q" else "B"),8)
   if base is None: raise NotImplementedError("opaque fragment fixed span exhausted")
   if lane.op is not Ops.SPECIAL or str(lane.arg) != "lidx0" or col.op is not Ops.AND or col.src[0] is not lane or \
@@ -1620,6 +1642,16 @@ def isel_packed_fragment(ctx:IselContext,x:UOp, base:int|None=None) -> UOp:
     elif role=="Q": base_idx=add_imm(row_base,hd_block*16)
     elif role=="V": base_idx=add_imm(tile_base,hd_block*16)
     else: base_idx=UOp(Ops.INS,dtypes.int,src=(add_imm(tile_base,hd_block*16),row_base),arg=AMDOps.V_IADD,tag=_vreg_def(ctx))
+    if loop and x.arg.grid is not None:
+      bases=getattr(ctx,"_attention_grid_bases",None)
+      if bases is None:
+        gv=_tov(ctx,grid_id)
+        qbase=UOp(Ops.INS,dtypes.int,src=(gv,UOp.const(dtypes.int32,2048).rtag()),arg=AMDOps.V_IMUL,tag=_pin(4,0))
+        kvh=UOp(Ops.INS,dtypes.int,src=(gv,UOp.const(dtypes.int32,2).rtag()),arg=AMDOps.V_LSHR,tag=_pin(6,0))
+        kvbase=UOp(Ops.INS,dtypes.int,src=(kvh,UOp.const(dtypes.int32,8192).rtag()),arg=AMDOps.V_IMUL,tag=_pin(5,0))
+        bases=ctx._attention_grid_bases=(qbase,kvbase)
+      gbase=bases[0 if role=="Q" else 1]
+      base_idx=UOp(Ops.INS,dtypes.int,src=(base_idx,gbase) + ((grid_tail,) if grid_tail is not None else ()),arg=AMDOps.V_IADD,tag=_pin(7,0))
   else:
     off=tile*256
     base_idx=add_imm(shl4(col_v),0 if role=="Q" else off) if role in {"Q","K"} else add_imm(col_v,off)
@@ -1630,14 +1662,17 @@ def isel_packed_fragment(ctx:IselContext,x:UOp, base:int|None=None) -> UOp:
   for i in range(8):
     if role in {"Q","K"}:
       op=UOp(Ops.INS,dtypes.void,src=(ix.src[1],ix.src[0],UOp.const(dtypes.int32,i*4).rtag(),
-        UOp.const(dtypes.int32,base+i).rtag()),arg=AMDOps.FRAGMENT_LOAD_DWORD)
+        UOp.const(dtypes.int32,base+i).rtag()) + ((grid_tail,) if grid_tail is not None else ()),arg=AMDOps.FRAGMENT_LOAD_DWORD)
       packs.append(_fixed_alias(base,i,dtypes.int32,op))
+      if loop and x.arg.grid is not None: grid_tail=op
       continue
     stride=256 if abi in {"amd_gfx1100_packed_fragment_hd128_v1","amd_gfx1100_packed_fragment_hd128_loop_v1"} else (64 if role=="Q" else 32)
     op=UOp(Ops.INS,dtypes.void,src=(ix.src[1],ix.src[0],UOp.const(dtypes.int32,(2*i)*stride).rtag(),
       UOp.const(dtypes.int32,(2*i+1)*stride).rtag(),UOp.const(dtypes.int32,scratch).rtag(),
-      UOp.const(dtypes.int32,base+i).rtag()),arg=AMDOps.FRAGMENT_LOAD_PAIR)
+      UOp.const(dtypes.int32,base+i).rtag()) + ((grid_tail,) if grid_tail is not None else ()),arg=AMDOps.FRAGMENT_LOAD_PAIR)
     packs.append(_fixed_alias(base,i,dtypes.int32,op))
+    if loop and x.arg.grid is not None: grid_tail=op
+  if loop and x.arg.grid is not None: ctx._attention_grid_fragment_tail=grid_tail
   packs=tuple(packs)
   return UOp(Ops.NOOP,dtypes.half.vec(16),packs,arg=("amd_gfx1100_packed_fragment_v1",role,tile))
 
@@ -1966,8 +2001,16 @@ def isel_wmma(ctx:IselContext, x:UOp):
       else:
         cE = [UOp.const(x.dtype.scalar(), tile.src[2].arg)] * 8 if tile.src[2].op is Ops.CONST else _wmma_elems(tile.src[2], 8)
         corrected = _corrected_c_transition(cE, tile.arg)
-        if corrected is not None or (hd128_lease is not None and hd128_lease[0] == "pv" and all(e.op is Ops.MUL for e in cE)):
+        if corrected is not None:
           cin = [UOp(Ops.INS, x.dtype.scalar(), src=(_tov(ctx, cE[i]),), arg=AMDOps.MOV, tag=_pin(cbase, i)) for i in range(8)]
+        elif hd128_lease is not None and hd128_lease[0] == "pv" and all(e.op is Ops.MUL and len(e.src) == 2 for e in cE):
+          # The online-softmax correction is the C seed for this PV WMMA.  It
+          # must overwrite the old fixed C lane in place: materializing the
+          # 64 correction products as ordinary SSA values keeps all of them
+          # live until their corresponding WMMA and exceeds the no-spill pool
+          # once grid-address state is present.
+          cin = [UOp(Ops.INS, x.dtype.scalar(), src=(_tov(ctx, cE[i].src[0]), _tov(ctx, cE[i].src[1])),
+                     arg=AMDOps.V_MUL, tag=_pin(cbase, i)) for i in range(8)]
         else:
           for i in range(8):
             if cE[i].op is not Ops.CONST:
@@ -2497,13 +2540,15 @@ def expand_loop_fragment(x:UOp) -> UOp:
   turns this back into a physical AMD carrier after index lowering.
   """
   from tinygrad.uop.ops import AMDPackedFragmentLoopSpec
-  if not isinstance(x.arg, AMDPackedFragmentLoopSpec) or len(x.src)!=4: raise ValueError("loop fragment is malformed")
-  x.arg.validate(); owner,lane,col,rng=x.src; role,block=x.arg.role,x.arg.head_block
-  if role=="Q": offs=tuple(col*128+block*16+i for i in range(16))
-  elif role=="K": offs=tuple(rng*2048+col*128+block*16+i for i in range(16))
-  else: offs=tuple(rng*2048+block*16+i*128+col for i in range(16))
+  if not isinstance(x.arg, AMDPackedFragmentLoopSpec) or len(x.src) not in {4,5}: raise ValueError("loop fragment is malformed")
+  x.arg.validate(); owner,lane,col,rng,*grid_src=x.src; role,block=x.arg.role,x.arg.head_block
+  if (x.arg.grid is None) != (len(grid_src)==0): raise ValueError("loop fragment grid ownership must be explicit")
+  gbase=UOp.const(dtypes.weakint,0) if not grid_src else (grid_src[0]*2048 if role=="Q" else (grid_src[0]>>2)*8192)
+  if role=="Q": offs=tuple(gbase+col*128+block*16+i for i in range(16))
+  elif role=="K": offs=tuple(gbase+rng*2048+col*128+block*16+i for i in range(16))
+  else: offs=tuple(gbase+rng*2048+block*16+i*128+col for i in range(16))
   return UOp(Ops.STACK,dtypes.half.vec(16),tuple(owner.index(off).load() for off in offs),
-    tag=("amd_gfx1100_fragment_load_hd128_loop_v1",role,block,owner,lane,col,rng))
+    tag=("amd_gfx1100_fragment_load_hd128_loop_v1",role,block,owner,lane,col,rng,*grid_src))
 
 def expand_native_row_softmax_repack(ctx, x:UOp, native_state:bool=True) -> UOp:
   """Expand the exact gfx1100-v1 QK-C -> PV-A bridge before isel."""
@@ -2839,12 +2884,16 @@ def lower_inst(x:UOp):
     # v1..v3 are the sole address/temporary lease.  This keeps all 64 stores
     # sequential and prevents scalar epilogue SSA from spanning the 8 PV C
     # fragments.
-    if len(src) != 10 or not isinstance(src[0].reg, Register):
+    grid = len(src)==11
+    if len(src) not in {10,11} or not isinstance(src[0].reg, Register):
       raise ValueError("opaque attention output drain lost its output pointer")
     ptr = src[0].reg
     if ptr.index < 0: raise ValueError("opaque attention output drain has invalid output pointer")
     # ABI v0 is lidx0. v1=col, v2=halfwave, v3=per-store byte address / reciprocal.
     insts=[_ins(v_and_b32_e32(_V[1],15,_V[0]),None), _ins(v_lshrrev_b32_e32(_V[2],4,_V[0]),None)]
+    if grid:
+      if not isinstance(src[1].reg,Register): raise ValueError("grid attention drain lost gidx0")
+      insts.append(_ins(v_mul_lo_u32(_V[4],_Vr(src[1].reg),2048),None))
     for j in range(8):
       for e in range(8):
         c=8+j*8+e; l=80+e
@@ -2853,6 +2902,7 @@ def lower_inst(x:UOp):
           _ins(v_lshlrev_b32_e32(_V[3],7,_V[2]),None),
           _ins(v_add_nc_u32_e32(_V[3],_V[1],_V[3]),None),
           _ins(v_lshlrev_b32_e32(_V[3],1,_V[3]),None),
+          *([_ins(v_add_nc_u32_e32(_V[3],_V[3],_V[4]),None)] if grid else []),
           _ins(global_store_b16(addr=_V[3],data=_V[c],saddr=_S2(ptr),offset=(e*256+j*16)*2),None)]
     return (insts[-1], insts)
   if a is AMDOps.GLOBAL_LOAD_B64:
