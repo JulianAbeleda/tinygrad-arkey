@@ -15,7 +15,7 @@ from tinygrad.llm.flash_prefill_attention import shared_prefill_attention
 from tinygrad.renderer.cstyle import HIPRenderer
 from tinygrad.renderer.isa.amd import AMDISARenderer
 from tinygrad.uop.ops import Ops, SharedAttentionCandidateContext
-from extra.qk.shared_attention_capture import build_shared_attention_compiler_capture
+from extra.qk.shared_attention_capture import SharedAttentionCompilerCapture, build_shared_attention_compiler_capture
 from extra.qk.shared_attention_evidence import shared_attention_proof_artifact
 
 _ROUTES = (
@@ -60,21 +60,26 @@ def _numeric(ctx:SharedAttentionCandidateContext,seed:int):
     ref[head]=probs@v[head//group].astype(np.float32)
   return got,ref
 
-def generate(output_dir:Path) -> None:
-  output_dir.mkdir(parents=True,exist_ok=True); captures=[]
-  for index,(slug,profile,strategy,hq,qt,kv,start) in enumerate(_ROUTES):
+def generate(output_dir:Path,route:str|None=None) -> None:
+  output_dir.mkdir(parents=True,exist_ok=True)
+  selected=tuple(row for row in _ROUTES if route is None or row[0]==route)
+  if not selected: raise ValueError(f"unknown route {route!r}")
+  for index,(slug,profile,strategy,hq,qt,kv,start) in enumerate(selected):
     ctx=SharedAttentionCandidateContext(profile,strategy,qt,kv,start,hq,8,128,True).validate()
     schedule,call,hip,isa=_schedule(ctx); got,ref=_numeric(ctx,20260723+index)
     capture=build_shared_attention_compiler_capture(schedule=schedule,compute_call=call,hip_program=hip,
       amd_isa_program=isa,output=got,reference=ref)
-    captures.append(capture)
     _canonical_write(output_dir/f"{slug}.json",capture.to_json())
     (output_dir/f"{slug}.hip.cpp").write_text(capture.hip_source)
     (output_dir/f"{slug}.amdisa.s").write_text(capture.amd_isa_text)
-  _canonical_write(output_dir/"shared_attention_proof.json",shared_attention_proof_artifact(tuple(captures)))
+  paths=tuple(output_dir/f"{row[0]}.json" for row in _ROUTES)
+  if all(path.is_file() for path in paths):
+    captures=tuple(SharedAttentionCompilerCapture.from_json(json.loads(path.read_text())) for path in paths)
+    _canonical_write(output_dir/"shared_attention_proof.json",shared_attention_proof_artifact(captures))
 
 def main() -> None:
   parser=argparse.ArgumentParser(); parser.add_argument("--output-dir",type=Path,required=True)
-  generate(parser.parse_args().output_dir)
+  parser.add_argument("--route",choices=tuple(row[0] for row in _ROUTES))
+  args=parser.parse_args(); generate(args.output_dir,args.route)
 
 if __name__ == "__main__": main()
