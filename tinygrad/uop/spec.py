@@ -1,6 +1,6 @@
 import math
 from typing import cast, Any
-from tinygrad.uop.ops import PatternMatcher, UPat, GroupOp, Ops, UOp, AxisType, KernelInfo, ParamArg, ScheduleHints
+from tinygrad.uop.ops import PatternMatcher, UPat, GroupOp, Ops, UOp, AxisType, KernelInfo, ParamArg, ScheduleHints, StateHandle
 from tinygrad.uop.render import print_uops, pyrender
 from tinygrad.dtype import DType, ImageDType, dtypes, PtrDType, AddrSpace, Invalid, ConstFloat
 from tinygrad.helpers import DEBUG, Context, prod, SPEC, Metadata, panic, CHECK_OOB, all_same
@@ -82,6 +82,18 @@ def validate_amd_attention_stats_drain(x:UOp):
   except ValueError: return False
   return isinstance(stats.dtype,PtrDType) and stats.dtype.base == dtypes.float and group.op in {Ops.SPECIAL,Ops.CAST} and m.dtype == l.dtype == dtypes.float.vec(8)
 
+def validate_state_transfer(x:UOp):
+  """Validate generic state publication/reload descriptors without backend policy."""
+  if not (isinstance(x.arg, tuple) and len(x.arg) == 2 and x.arg[0] in {"state_publish_v1", "state_reload_v1"} and isinstance(x.arg[1], StateHandle)):
+    return False
+  try: x.arg[1].validate()
+  except (TypeError, ValueError): return False
+  handle=x.arg[1]
+  if x.dtype != handle.dtype or len(x.src) != 1: return False
+  if x.arg[0] == "state_publish_v1": return x.src[0].dtype == handle.dtype
+  source=x.src[0]
+  return source.op is Ops.CUSTOMI and source.dtype == handle.dtype and source.arg == ("state_publish_v1", handle)
+
 # ***** new specs *****
 
 # these ops can be used in the tensor graph and programs
@@ -134,7 +146,7 @@ spec_shared = PatternMatcher([
         allow_any_len=True), lambda: True),
 
   # CUSTOM (inline and non inline)
-  (UPat((Ops.CUSTOMI, Ops.CUSTOM)), lambda: True),
+  (UPat((Ops.CUSTOMI, Ops.CUSTOM), name="x"), lambda x: validate_state_transfer(x) if isinstance(x.arg, tuple) and x.arg[:1] in {("state_publish_v1",), ("state_reload_v1",)} else True),
 
   # BARRIER (on any length). TODO: this should only be in spec_program
   (UPat(Ops.BARRIER, dtypes.void), lambda: True),

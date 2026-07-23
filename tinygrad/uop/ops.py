@@ -1247,6 +1247,63 @@ class AccumulatorSlot(NamedTuple):
   identity: Any = None    # identity element value
   name: str = ""   # debug name
 
+class StateRegionSpec(NamedTuple):
+  """Backend-neutral logical storage region for a value crossing phases."""
+  name: str
+  dtype: DType
+  lanes: int = 1
+
+  def validate(self):
+    if not isinstance(self.name, str) or not self.name:
+      raise ValueError("state region requires a non-empty name")
+    if not isinstance(self.dtype, DType) or self.dtype.vcount != 1:
+      raise TypeError("state region dtype must be scalar")
+    if not isinstance(self.lanes, int) or self.lanes < 1:
+      raise ValueError("state region lanes must be positive")
+    return self
+
+  @property
+  def value_dtype(self) -> DType: return self.dtype.vec(self.lanes)
+
+class PhaseBoundarySpec(NamedTuple):
+  """One directed compiler phase boundary; names intentionally remain generic."""
+  publish_phase: str
+  reload_phase: str
+  ordinal: int = 0
+
+  def validate(self):
+    if not all(isinstance(x, str) and x for x in (self.publish_phase, self.reload_phase)):
+      raise ValueError("phase boundary names must be non-empty strings")
+    if self.publish_phase == self.reload_phase or not isinstance(self.ordinal, int) or self.ordinal < 0:
+      raise ValueError("phase boundary must be directed with a non-negative ordinal")
+    return self
+
+class StateHandle(NamedTuple):
+  """Typed identity for generic state publication and reload descriptors."""
+  region: StateRegionSpec
+  boundary: PhaseBoundarySpec
+  generation: int = 0
+
+  def validate(self):
+    self.region.validate(); self.boundary.validate()
+    if not isinstance(self.generation, int) or self.generation < 0:
+      raise ValueError("state handle generation must be non-negative")
+    return self
+
+  @property
+  def dtype(self) -> DType: return self.region.value_dtype
+
+  def publish(self, value: UOp) -> UOp:
+    self.validate()
+    if value.dtype != self.dtype: raise TypeError("state publish dtype does not match its handle")
+    return UOp(Ops.CUSTOMI, value.dtype, (value,), ("state_publish_v1", self))
+
+  def reload(self, published: UOp) -> UOp:
+    self.validate()
+    if published.op is not Ops.CUSTOMI or published.dtype != self.dtype or published.arg != ("state_publish_v1", self):
+      raise ValueError("state reload requires publication from the same handle")
+    return UOp(Ops.CUSTOMI, self.dtype, (published,), ("state_reload_v1", self))
+
 class CompositeReduce(NamedTuple):
   slots: tuple
   combine_fn: Any = None  # UOp sub-graph encoding combine (None = independent slots)
