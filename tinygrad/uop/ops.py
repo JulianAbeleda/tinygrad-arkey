@@ -1226,6 +1226,10 @@ class CompositeReduce(NamedTuple):
   slot_shapes: tuple[tuple|None, ...] = () # logical output shape per REDUCE_SLOT
   tile_fragments: tuple = () # optional scheduler-owned score/value/acc TILE_GATHER nodes
   lane_shapes: tuple[tuple|None, ...] = () # physical register lanes per state slot; () is scalar
+  # Concrete RANGE ids which own the semantic reduction.  Rangeify fills this
+  # while logical axis positions are still authoritative; late lowering must
+  # not infer KV ownership from extent or mutable AxisType classification.
+  reduce_range_axes: tuple[int, ...] = ()
 
 def _normalize_composite_shape(shape):
   """Normalize compiler shape metadata before it reaches generic shape logic."""

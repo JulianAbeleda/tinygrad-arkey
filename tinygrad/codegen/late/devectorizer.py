@@ -453,7 +453,10 @@ def reduce_to_acc(ctx:ReduceContext, red:UOp):
   # loop ranges are part of the loop-carried accumulator context too. Only a
   # composite with explicit auxiliary sources needs to split REDUCE ranges
   # from those sources.
-  reduce_range = tuple(x for x in range_srcs if x.arg[1] is AxisType.REDUCE) if composite is not None else raw_rest
+  if composite is not None and getattr(composite, "reduce_range_axes", ()):
+    reduce_range = tuple(x for x in range_srcs if x.arg[0] in composite.reduce_range_axes)
+  else:
+    reduce_range = tuple(x for x in range_srcs if x.arg[1] is AxisType.REDUCE) if composite is not None else raw_rest
   extra_srcs = tuple(x for x in raw_rest if x.op is not Ops.RANGE)
   if composite is not None:
     # Keep the source partition explicit; non-range carriers not declared by

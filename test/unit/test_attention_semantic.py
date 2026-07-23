@@ -4,7 +4,7 @@ import numpy as np
 from tinygrad import Tensor, dtypes
 from tinygrad.uop import Ops
 from tinygrad.uop.ops import AttentionSpec
-from tinygrad.uop.ops import CompositeReduce
+from tinygrad.uop.ops import AxisType, CompositeReduce, UOp
 from tinygrad.llm.flash_prefill_attention import shared_prefill_attention
 from tinygrad.codegen.late.flash_attn import merge_online_softmax_tile
 from tinygrad.schedule.rangeify import lower_attention_semantic
@@ -33,6 +33,33 @@ class TestAttentionSemantic(unittest.TestCase):
                      isinstance(u.arg[0], CompositeReduce) and u.arg[0].combine_fn == "online_softmax_state"]
     self.assertEqual(len(state_reduces), 1)
     self.assertFalse(any(u.op is Ops.COMPOSITE_ACCUMULATOR for u in primitive.toposort()))
+
+  def test_state_composite_carries_authoritative_kv_range_owner(self):
+    if self._combine_name() != "online_softmax_state": self.skipTest("state combine is opt-in")
+    from tinygrad.schedule.rangeify import get_kernel_graph
+    q = Tensor.empty(1, 1, 16, 16, dtype=dtypes.float16)
+    k = Tensor.empty(1, 1, 16, 16, dtype=dtypes.float16)
+    v = Tensor.empty(1, 1, 16, 16, dtype=dtypes.float16)
+    graph = get_kernel_graph(UOp.sink(shared_prefill_attention(q, k, v).uop))
+    reds = [u for u in graph.toposort() if u.op is Ops.REDUCE and isinstance(u.arg[0], CompositeReduce) and
+            u.arg[0].combine_fn == "online_softmax_state"]
+    self.assertEqual(len(reds), 1)
+    red, owners = reds[0], reds[0].arg[0].reduce_range_axes
+    self.assertEqual(len(owners), 1)
+    ranges = [u for u in red.src[1:] if u.op is Ops.RANGE]
+    kv = [u for u in ranges if u.arg[0] in owners]
+    # Output/Hd ownership lives in the primary expression rather than the
+    # REDUCE context sources.  It must remain a distinct LOOP even though it
+    # has the same extent as KV and the nested QK contraction.
+    output = [u for u in red.src[0].toposort() if u.op is Ops.RANGE and
+              u.arg[0] not in owners and u.arg[1] is AxisType.LOOP and u.vmax == 15]
+    self.assertEqual(len(kv), 1)
+    self.assertEqual(len(output), 1)
+
+  def test_ordinary_reduce_has_no_composite_range_owner(self):
+    graph = Tensor.ones(16, 16).sum(axis=1).schedule_linear()
+    reds = [u for u in graph.toposort() if u.op is Ops.REDUCE]
+    self.assertTrue(all(not isinstance(u.arg[0], CompositeReduce) for u in reds))
   def test_shared_attention_keeps_all_tensor_dependencies(self):
     q = Tensor.empty(1, 2, 4, 8, dtype=dtypes.float16)
     k = Tensor.empty(1, 2, 4, 8, dtype=dtypes.float16)

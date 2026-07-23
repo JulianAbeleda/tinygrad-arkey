@@ -108,6 +108,8 @@ def convert_reduce_to_reduce_with_ranges(ctx:IndexingContext, x:UOp):
   new_ranges = [r for i,r in enumerate(ctx.range_map[x][0]) if i in x.arg[1]]
   extra_srcs = x.src[1:]
   reduce_arg = x.arg[0]
+  if hasattr(reduce_arg, "reduce_range_axes"):
+    reduce_arg = reduce_arg._replace(reduce_range_axes=tuple(r.arg[0] for r in new_ranges))
   # Resolve source maps while the range context still has primary logical
   # dimension positions. Late lowering must not reinterpret a logical axis as
   # a mutable RANGE.arg id after singleton/range collapse.
