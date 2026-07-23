@@ -295,6 +295,10 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
         # Scheduler-only QK-C -> PV-A bridge. Backend lowering must consume it
         # before program construction.
         return self.arg.fragment_shape
+      case Ops.AMD_ROW_SOFTMAX_REPACK:
+        # Physical wave32 QK-C -> PV-A bridge. Its vec16 dtype is the native
+        # per-lane PV-A fragment, not a logical tensor dimension.
+        return (self.dtype.count,)
       case Ops.SCOPED_REDUCE:
         # The first SCOPED_REDUCE source is its semantically identical
         # fallback.  It is deliberately source-visible so a compiler that
@@ -1378,6 +1382,40 @@ class RowSoftmaxRepackSpec(NamedTuple):
       raise ValueError("online softmax repack ABI requires rowwise KV reduction")
     if self.requires_barrier is not True:
       raise ValueError("online softmax LDS repack requires a workgroup barrier")
+    return self
+
+class AMDRowSoftmaxRepackSpec(NamedTuple):
+  """Exact RDNA3 wave32 realization of ``online_softmax_qk_pv_v1``.
+
+  This descriptor is scheduler-owned. It deliberately records every physical
+  fact needed by a future instruction selector rather than allowing the
+  renderer to infer a lane permutation or a weaker synchronization contract.
+  """
+  native_abi: str = "amd_gfx1100_online_softmax_qk_pv_v1"
+  target: str = "gfx1100"
+  wave_size: int = 32
+  qk_c_lanes: int = 8
+  pv_a_lanes: int = 16
+  row_expr: str = "2*e+(lane>>4)"
+  col_expr: str = "lane&15"
+  xor_masks: tuple[int, ...] = (1, 2, 4, 8)
+  lds_dtype: str = "half"
+  lds_elements: int = 256
+  lds_address: str = "row*16+col"
+  requires_barrier: bool = True
+  reload_layout: str = "wmma_f32_16x16x16_f16_pv_a_wave32_v1"
+
+  def validate(self):
+    if (self.native_abi, self.target, self.wave_size) != ("amd_gfx1100_online_softmax_qk_pv_v1", "gfx1100", 32):
+      raise ValueError("row-softmax native repack requires exact AMD gfx1100 wave32 v1 ABI")
+    if (self.qk_c_lanes, self.pv_a_lanes) != (8, 16):
+      raise ValueError("row-softmax native repack requires float.vec(8) QK-C and half.vec(16) PV-A")
+    if (self.row_expr, self.col_expr) != ("2*e+(lane>>4)", "lane&15") or self.xor_masks != (1, 2, 4, 8):
+      raise ValueError("row-softmax native repack has an unsupported lane reduction layout")
+    if (self.lds_dtype, self.lds_elements, self.lds_address) != ("half", 256, "row*16+col"):
+      raise ValueError("row-softmax native repack requires the exact 256-half LDS identity map")
+    if self.requires_barrier is not True or self.reload_layout != "wmma_f32_16x16x16_f16_pv_a_wave32_v1":
+      raise ValueError("row-softmax native repack requires barriered native PV-A reload")
     return self
 
 class CompositeInputSpec(NamedTuple):

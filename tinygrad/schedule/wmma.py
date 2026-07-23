@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from tinygrad.dtype import DType, dtypes
 from tinygrad.uop.ops import Ops, UOp
-from tinygrad.uop.ops import CompositeReduce, CompositeTileCarrier, TileGatherSpec, RowSoftmaxRepackSpec, Ops
+from tinygrad.uop.ops import CompositeReduce, CompositeTileCarrier, TileGatherSpec, RowSoftmaxRepackSpec, AMDRowSoftmaxRepackSpec, Ops
 
 def grouped_tile_load(source: UOp, spec: TileGatherSpec, *indices: UOp) -> UOp:
   """Build an ownership-preserving INDEX/LOAD tile carrier.
@@ -276,6 +276,22 @@ def row_softmax_lds_repack(score: UOp, m: UOp, l: UOp, *,
   if any(x.shape != spec.state_shape or x.dtype.base != dtypes.float32 for x in (m, l)):
     raise ValueError("row-softmax repack requires fp32 16x1 m/l row state")
   return UOp(Ops.ROW_SOFTMAX_REPACK, dtypes.half, (score, m, l), arg=spec)
+
+def amd_gfx1100_row_softmax_repack(score: UOp, m: UOp, l: UOp, *,
+                                   spec: AMDRowSoftmaxRepackSpec|None = None) -> UOp:
+  """Build the exact native wave32 QK-C -> PV-A scheduler carrier.
+
+  ``score`` is one physical QK WMMA C fragment owned by a wave lane. ``m``
+  and ``l`` are the scalar row-state values for that lane. No target, lane,
+  LDS, barrier, or reload property is inferred by this primitive.
+  """
+  spec = AMDRowSoftmaxRepackSpec() if spec is None else spec
+  spec.validate()
+  if score.dtype != dtypes.float32.vec(8) or score.shape != (8,):
+    raise ValueError("gfx1100 row-softmax repack requires native QK-C float.vec(8)")
+  if any(x.dtype != dtypes.float32 or x.shape != () for x in (m, l)):
+    raise ValueError("gfx1100 row-softmax repack requires scalar fp32 m/l row state")
+  return UOp(Ops.AMD_ROW_SOFTMAX_REPACK, dtypes.half.vec(16), (score, m, l), arg=spec)
 
 def amd_tile_wmma_boundary_report(*, qk_score: UOp, pv_value: UOp, pv_acc: UOp) -> dict:
   """Describe whether AMD can consume the composite tile at the WMMA boundary.

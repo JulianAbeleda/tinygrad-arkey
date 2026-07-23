@@ -245,6 +245,12 @@ spec_tensor = PatternMatcher([
    and x.shape == (16, 16) and x.src[0].shape == (16, 16)
    and x.src[1].shape == x.src[2].shape == (16, 1)
    and x.dtype == dtypes.half and all(s.dtype == dtypes.float32 for s in x.src)),
+  # Descriptor-specific scheduler legalization. This remains non-renderable
+  # until AMD instruction selection explicitly implements the declared ABI.
+  (UPat(Ops.AMD_ROW_SOFTMAX_REPACK, src=(UPat(), UPat(), UPat()), name="x"),
+   lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_online_softmax_qk_pv_v1"
+   and x.dtype == dtypes.half.vec(16) and x.src[0].dtype == dtypes.float32.vec(8)
+   and x.src[1].dtype == x.src[2].dtype == dtypes.float32),
 
   # ATTENTION keeps a normal fallback plus explicit Q/K/V/(optional mask)
   # dependencies until rangeify selects a lowering.

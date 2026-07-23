@@ -2,7 +2,7 @@ from dataclasses import dataclass, field, replace
 import itertools
 from tinygrad.dtype import dtypes, PtrDType, AddrSpace, Invalid
 from tinygrad.uop.ops import PatternMatcher, UPat, Ops, UOp, resolve, GroupOp, _substitute, KernelInfo, ParamArg, ScheduleHints
-from tinygrad.uop.ops import graph_rewrite, sint, AxisType, BottomUpGate, profile_matches, identity_element, AccumulatorSlot, CompositeReduce, CompositeInputSpec, CompositeTileCarrier, AttentionSpec
+from tinygrad.uop.ops import graph_rewrite, sint, AxisType, BottomUpGate, profile_matches, identity_element, AccumulatorSlot, CompositeReduce, CompositeInputSpec, CompositeTileCarrier, AttentionSpec, AMDRowSoftmaxRepackSpec
 from tinygrad.uop.symbolic import symbolic
 from tinygrad.helpers import prod, all_same, getenv, dedup, all_int, DEBUG, SPLIT_REDUCEOP, DEBUG_RANGEIFY, VIZ, MAX_KERNEL_BUFFERS
 from tinygrad.helpers import PCONTIG, FLOAT16, OPENPILOT_HACKS, Context, argsort, partition, get_single_element
@@ -248,6 +248,18 @@ def lower_tile_gather_carrier(x: UOp) -> UOp:
     raise ValueError("TILE_GATHER WMMA handoff requires a 16x16 fragment")
   return x.src[0]
 
+def lower_row_softmax_repack(x: UOp) -> UOp:
+  """Legalize only a physically established gfx1100-v1 fragment contract.
+
+  Rangeify is not allowed to manufacture native lanes from a logical tile.
+  The QK shaped lowering must expose float.vec(8), and row-state scalarization
+  must already have happened. Anything else fails at this exact boundary.
+  """
+  from tinygrad.schedule.wmma import amd_gfx1100_row_softmax_repack
+  x.arg.validate()
+  native = AMDRowSoftmaxRepackSpec()
+  return amd_gfx1100_row_softmax_repack(*x.src, spec=native)
+
 pm_mops = PatternMatcher([
   (UPat(GroupOp.Movement, name="r").f(Ops.INDEX, allow_any_len=True, name="idx"), _mop_index),
   # move movement ops and INDEX after AFTER (but not when AFTER has a raw STORE with shaped children — from replace_contig_with_store_after)
@@ -255,6 +267,9 @@ pm_mops = PatternMatcher([
    lambda r,a: UOp(r.op, r.dtype, (a.replace(src=(r.src[0],)+a.src[1:]),)+r.src[1:], r.arg)),
   (UPat(GroupOp.Movement, name="r").end(name="a", allow_any_len=True), lambda r,a: a.replace(src=(r.src[0],)+a.src[1:])),
   (UPat(Ops.TILE_GATHER, name="x"), lower_tile_gather_carrier),
+  # Legalize the nonlinear bridge in the same scheduler handoff as WMMA.
+  # It intentionally precedes SHAPED_WMMA in matcher order.
+  (UPat(Ops.ROW_SOFTMAX_REPACK, name="x"), lower_row_softmax_repack),
   # lower SHAPED_WMMA to WMMA with CONTRACT/UNROLL
   (UPat(Ops.SHAPED_WMMA, name="x"), lower_shaped_wmma),
 ])

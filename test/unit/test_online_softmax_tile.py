@@ -248,6 +248,45 @@ def test_row_softmax_lds_repack_fails_closed_on_unproven_contracts():
   with pytest.raises(ValueError, match="barrier"):
     row_softmax_lds_repack(score, m, l, spec=RowSoftmaxRepackSpec(requires_barrier=False))
 
+def test_gfx1100_native_row_softmax_repack_descriptor_is_exact():
+  from tinygrad.schedule.wmma import amd_gfx1100_row_softmax_repack
+  score = UOp(Ops.CONST, dtypes.float32.vec(8), (), (0.0,) * 8)
+  m, l = UOp.const(dtypes.float32, 0), UOp.const(dtypes.float32, 1)
+  native = amd_gfx1100_row_softmax_repack(score, m, l)
+  assert native.op is Ops.AMD_ROW_SOFTMAX_REPACK and native.dtype == dtypes.half.vec(16)
+  assert native.arg.target == "gfx1100" and native.arg.wave_size == 32
+  assert native.arg.row_expr == "2*e+(lane>>4)" and native.arg.col_expr == "lane&15"
+  assert native.arg.xor_masks == (1, 2, 4, 8)
+  assert (native.arg.lds_dtype, native.arg.lds_elements, native.arg.lds_address) == ("half", 256, "row*16+col")
+  assert native.arg.requires_barrier
+  assert native.arg.reload_layout == "wmma_f32_16x16x16_f16_pv_a_wave32_v1"
+
+def test_gfx1100_native_row_softmax_repack_fails_closed():
+  from tinygrad.schedule.wmma import amd_gfx1100_row_softmax_repack
+  from tinygrad.uop.ops import AMDRowSoftmaxRepackSpec
+  m, l = UOp.const(dtypes.float32, 0), UOp.const(dtypes.float32, 1)
+  with pytest.raises(ValueError, match="float.vec"):
+    amd_gfx1100_row_softmax_repack(UOp.const(dtypes.float32.vec(4), (0.0,) * 4), m, l)
+  with pytest.raises(ValueError, match="exact AMD"):
+    amd_gfx1100_row_softmax_repack(UOp.const(dtypes.float32.vec(8), (0.0,) * 8), m, l,
+      spec=AMDRowSoftmaxRepackSpec(target="gfx1200"))
+
+def test_rangeify_legalizes_exact_logical_repack_and_rejects_logical_tiles():
+  from tinygrad.schedule.rangeify import lower_row_softmax_repack
+  from tinygrad.schedule.wmma import row_softmax_lds_repack
+  m, l = UOp.const(dtypes.float32, 0), UOp.const(dtypes.float32, 1)
+  # The exact native handoff is accepted.
+  logical_native = UOp(Ops.ROW_SOFTMAX_REPACK, dtypes.half,
+    (UOp.const(dtypes.float32.vec(8), (0.0,) * 8), m, l), arg=__import__('tinygrad.uop.ops', fromlist=['RowSoftmaxRepackSpec']).RowSoftmaxRepackSpec())
+  assert lower_row_softmax_repack(logical_native).op is Ops.AMD_ROW_SOFTMAX_REPACK
+  # A logical 16x16 tile has not established native lane ownership and must
+  # fail instead of being flattened or silently repacked.
+  logical_tile = row_softmax_lds_repack(UOp.placeholder((16, 16), dtypes.float32, 90),
+                                        UOp.placeholder((16, 1), dtypes.float32, 91),
+                                        UOp.placeholder((16, 1), dtypes.float32, 92))
+  with pytest.raises(ValueError, match="float.vec"):
+    lower_row_softmax_repack(logical_tile)
+
 def test_rangeify_handoff_unwraps_only_exact_tile_carriers():
   from tinygrad.uop.ops import TileGatherSpec, graph_rewrite
   from tinygrad.schedule.wmma import tile_gather
