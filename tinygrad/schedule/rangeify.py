@@ -109,6 +109,9 @@ def lower_attention_semantic(att:UOp) -> UOp:
         out = normalize_online_softmax_state(acc, den)
       else:
         out = acc / den
+      expected = b*h*q_len*hd
+      if out.shape is None or prod(out.shape) != expected:
+        return None
       return out.reshape(b, h, q_len, hd).cast(att.arg.output_dtype).uop
   return att.src[0]
 
