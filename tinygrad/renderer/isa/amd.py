@@ -1585,6 +1585,8 @@ def _register_stage_fragment_role(carrier:UOp) -> str|None:
   return next(iter(roles)) if len(roles) == 1 else None
 
 def _pack_frag_tile(ctx:IselContext, carrier:UOp, base:int, dep:tuple[UOp,...], role:str) -> tuple[UOp,...]:
+  if carrier.op is Ops.AFTER and carrier.src and carrier.src[0].op is Ops.AMD_PACKED_FRAGMENT_LOAD:
+    return _pack_frag_tile(ctx, carrier.src[0], base, dep+tuple(carrier.src[1:]), role)
   if carrier.op is Ops.AMD_PACKED_FRAGMENT_LOAD:
     lowered=isel_packed_fragment(ctx,carrier,base)
     bad=next((u for u in lowered.toposort() if u.op not in {Ops.INS,Ops.NOOP,Ops.CONST,Ops.PARAM,Ops.SPECIAL,Ops.RANGE}),None)
