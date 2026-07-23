@@ -74,6 +74,14 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   if (_u:=getenv("SCHED_UNROLL")) > 1 and ren.target.device == "AMD":
     # recurrence-aware loop-unroll primitive (default-off codegen scheduling capability)
     ast = cg_extras.unroll_recurrence(ast, _u)
+  # SPEC validation runs before the late devectorizer.  Resolve only the
+  # provenance-tagged INDEX views that the expander can place around a
+  # composite REDUCE_SLOT; ordinary REDUCE_SLOT/INDEX nodes remain subject to
+  # the existing fail-closed spec rules.
+  from tinygrad.codegen.late.composite_combines import resolve_composite_reduce_slot_prebufferize
+  ast = graph_rewrite(ast, PatternMatcher([
+    (UPat(Ops.REDUCE_SLOT, src=(UPat(),), name="slot"), resolve_composite_reduce_slot_prebufferize),
+  ]), name="resolve_composite_slots_before_spec")
   if SPEC: type_verify(ast, spec_tensor)
 
   # preprocess

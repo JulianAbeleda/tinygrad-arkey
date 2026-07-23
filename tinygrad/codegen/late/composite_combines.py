@@ -263,18 +263,23 @@ def _lower_composite_no_range_pm(red):
     return UOp(Ops.TUPLE, dtypes.void, result if isinstance(result, tuple) else (result,)).replace(tag=("composite_reduce", composite))
 
 def resolve_reduce_slot_tensor(slot):
-    """Graph-local projection from the structured composite reduction result."""
-    src = slot.src[0]
-    if src.op is Ops.INDEX:
-      raise RuntimeError("composite REDUCE_SLOT provenance lost through INDEX/bufferization; refusing untyped slot lowering")
-    # Horizontal expansion can leave the consumed reduction-axis carrier
-    # around the structured result. It is not an output expansion: every
-    # TUPLE member is already the fully reduced scalar state.
-    if src.op is Ops.UNROLL and len(src.src) == 1 and src.src[0].op is Ops.TUPLE:
-      src = src.src[0]
-    if src.op is not Ops.TUPLE: return None
-    if not isinstance(slot.arg, int) or not 0 <= slot.arg < len(src.src):
-      raise RuntimeError(f"invalid composite reduction slot {slot.arg}")
+  """Graph-local projection from the structured composite reduction result."""
+  src = slot.src[0]
+  if src.op is Ops.INDEX:
+    # A validated composite_view is intentionally handled by the
+    # prebufferize resolver below. Ordinary INDEX values remain a hard
+    # failure: they must not masquerade as REDUCE_SLOT projections.
+    tag = src.tag
+    if isinstance(tag, tuple) and len(tag) == 2 and tag[0] == "composite_view": return None
+    raise RuntimeError("composite REDUCE_SLOT provenance lost through INDEX/bufferization; refusing untyped slot lowering")
+  # Horizontal expansion can leave the consumed reduction-axis carrier
+  # around the structured result. It is not an output expansion: every
+  # TUPLE member is already the fully reduced scalar state.
+  if src.op is Ops.UNROLL and len(src.src) == 1 and src.src[0].op is Ops.TUPLE:
+    src = src.src[0]
+  if src.op is not Ops.TUPLE: return None
+  if not isinstance(slot.arg, int) or not 0 <= slot.arg < len(src.src):
+    raise RuntimeError(f"invalid composite reduction slot {slot.arg}")
     # Project directly while the structured result is still in compiler IR.
     # This leaves no TUPLE/GETTUPLE operation for the renderer and preserves
     # the one reduction's shared END dependencies.
