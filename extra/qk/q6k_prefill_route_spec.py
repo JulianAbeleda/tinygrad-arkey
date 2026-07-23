@@ -13,7 +13,7 @@ from typing import Any
 from tinygrad import dtypes
 from tinygrad.codegen.opt import Opt
 from tinygrad.helpers import cdiv
-from tinygrad.uop.ops import AxisType, KernelInfo, UOp
+from tinygrad.uop.ops import AxisType, KernelInfo, Ops, UOp
 
 from extra.qk.layout import Q6K_HALFWORDS_PER_BLOCK, Q6_K_BLOCK_ELEMS
 from extra.qk.quant.q6_k_gemv_primitive import _q6k_block_dot_packed_load_gemm, parse_opt
@@ -102,9 +102,8 @@ def _emit_direct_out(spec:Q6KPrefillRouteSpec):
     base = (row * k_blocks + blk) * Q6K_HALFWORDS_PER_BLOCK
     contrib = _q6k_block_dot_packed_load_gemm(halfs, x, base, blk, lane2, bb, k)
 
-    acc = out[bb, row].set(0.0)
-    acc = out[bb, row].set(acc.after(blk, lane2)[bb, row] + contrib, end=lane2)
-    return acc.end(row, bb, blk).sink(arg=KernelInfo(name=name, opts_to_apply=opts))
+    return out[bb, row].store(contrib.reduce(blk, lane2, arg=Ops.ADD)).end(row, bb).sink(
+      arg=KernelInfo(name=name, opts_to_apply=opts))
 
   return kernel
 

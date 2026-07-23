@@ -108,10 +108,13 @@ def derive_selected_gguf_prefill_inventory(kv:dict, meta:dict, ubatch:int=512) -
     # Generation consumes only the final token's output projection.  The
     # pp512 dense candidate set therefore cannot own LM-head merely because
     # its source tensor is quantized; keep it on the explicit fixed lazy route.
-    candidate_controlled = tensor.quant_label in ("Q4_K", "Q6_K") and tensor.role != "lm_head"
+    q6k_8b_vocab_prefill = (tensor.name == "output.weight" and tensor.role == "lm_head" and
+                             tensor.quant_label == "Q6_K" and ubatch == 512 and
+                             tensor.rows == 151936 and tensor.cols == 4096)
+    candidate_controlled = tensor.quant_label in ("Q4_K", "Q6_K") and (tensor.role != "lm_head" or q6k_8b_vocab_prefill)
     # The lazy lm-head projection is physically M=1 after final-token pruning. Other selected prefill linears
     # execute at the concrete ubatch. Fixed rows remain census obligations, but are outside candidate geometry.
-    physical_m = 1 if tensor.role == "lm_head" else ubatch
+    physical_m = ubatch if q6k_8b_vocab_prefill else 1 if tensor.role == "lm_head" else ubatch
     semantic = {"tensor_identity": tensor.name, "role": tensor.role, "quant_format": tensor.quant_label,
                 "candidate_controlled": candidate_controlled,
                 "shape": {"m": physical_m, "n": tensor.rows, "k": tensor.cols}}
@@ -1198,7 +1201,11 @@ class Transformer:
       prefill_device_facts=_device_facts, exact_memory_plan=_exact_memory_plan,
       prefill_tc_attn=bool(_runtime_policy["prefill_tc_attn"]),
       prefill_v2=_v2_on, prefill_ubatch=_prefill_ubatch, prefill_concrete_kv=_concrete_kv,
-      prefill_workload_reuse=_workload_reuse, flash_decode=_flash_decode, lm_head_route="lazy",
+      prefill_workload_reuse=_workload_reuse, flash_decode=_flash_decode,
+      lm_head_route=("direct_packed_8b_vocab" if any(
+        row.get("tensor_identity") == "output.weight" and row.get("role") == "lm_head" and
+        row.get("quant_format") == "Q6_K" and row.get("shape") == {"m": 512, "n": 151936, "k": 4096}
+        for row in _runtime_inventory.get("rows", ())) else "lazy"),
       kv_quant=_kv_quant, ring=_ring_admitted)
     # FAST_EMPTY_INIT: every weight is REPLACED by load_state_dict below, so building the ~254 random init graphs
     # (nn.Linear Tensor.uniform / nn.Embedding glorot_uniform) is wasted work (~2.3s of the load, per profiling).
