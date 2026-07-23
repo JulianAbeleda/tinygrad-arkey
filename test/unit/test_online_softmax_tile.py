@@ -745,6 +745,58 @@ def test_gfx1100_split_score_state_pv_slice_direct_diagnostic():
       valid=np.arange(kv) <= kv-qt+r; prob=np.exp(score[r,valid]-score[r,valid].max()); prob/=prob.sum(); ref[h,r]=prob@v[h//4,valid].astype(np.float32)
   np.testing.assert_allclose(got,ref,rtol=.02,atol=4e-3)
 
+def _gfx1100_lds_rotating_pv_pressure_ast():
+  """Executable compile-only pressure probe: real one-block attention plus eight lane-major LDS accumulator windows."""
+  from tinygrad.codegen.opt.compiler_policies import WaitCount
+  from tinygrad.dtype import AddrSpace
+  from tinygrad.schedule.wmma import amd_gfx1100_q16_grid_hd128_loop_attention
+  from tinygrad.uop.ops import KernelInfo, ParamArg
+  hq,hkv,qt,kv=8,2,32,64
+  sizes=(hq*qt*128,hq*qt*128,hkv*kv*128,hkv*kv*128)
+  p=[UOp(Ops.PARAM,dtypes.half.ptr(sizes[i]),arg=ParamArg(i)) for i in range(4)]
+  proof=UOp(Ops.PARAM,dtypes.float.ptr(256),arg=ParamArg(4))
+  ast=amd_gfx1100_q16_grid_hd128_loop_attention(p[1],p[2],p[3],p[0],q_tokens=qt,q_heads=hq,kv_heads=hkv,
+    kv_tokens=kv,scale=.25,causal=True,kernel_info=KernelInfo(name="lds_rotating_pv_pressure"),output_block_base=0,acc_blocks=1)
+  lane=UOp.special(32,"lidx0")
+  # 64 fp32 values/lane * wave32 = 8192 bytes, indexed as [lane][block][element]. Cross-lane reload keeps the local
+  # observable to HIP/LLVM; the proof output makes the synthetic state executable rather than dead shared memory.
+  lds=UOp(Ops.DEFINE_LOCAL,dtypes.float.ptr(2048,AddrSpace.LOCAL),arg=9900)
+  def addr(block,e,owner=lds,lane_owner=lane):
+    return owner.index(lane_owner*UOp.const(dtypes.weakint,64)+UOp.const(dtypes.weakint,block*8+e))
+  init=UOp.group(*(addr(block,e).store(UOp.const(dtypes.float,0.0)) for block in range(8) for e in range(8)))
+  prev=UOp(Ops.WAIT,dtypes.void,(init,),WaitCount(lgkmcnt=0))
+  values=()
+  for block in range(8):
+    owner=lds.after(prev); read_lane=lane.alu(Ops.XOR,UOp.const(dtypes.weakint,1))
+    loads=tuple(addr(block,e,owner,read_lane).load() for e in range(8))
+    ready=UOp(Ops.WAIT,dtypes.void,loads,WaitCount(lgkmcnt=0))
+    values=tuple(loads[e].after(ready).alu(Ops.ADD,UOp.const(dtypes.float,float(block+1))) for e in range(8))
+    stores=UOp.group(*(addr(block,e,lds.after(ready)).store(values[e]) for e in range(8)))
+    prev=UOp(Ops.WAIT,dtypes.void,(stores,),WaitCount(lgkmcnt=0))
+  proof_stores=UOp.group(*(proof.after(prev).index(lane*UOp.const(dtypes.weakint,8)+UOp.const(dtypes.weakint,e)).store(values[e]) for e in range(8)))
+  return ast.replace(src=ast.src+(prev,proof_stores))
+
+def test_gfx1100_lds_rotating_pv_pressure_compile_microgate():
+  from tinygrad.codegen import to_program
+  from tinygrad.helpers import Target
+  from tinygrad.renderer.cstyle import HIPRenderer
+  from tinygrad.renderer.isa.amd import AMDISARenderer
+  from extra.qk.amdgpu_metadata import parse_amdgpu_metadata
+  ast=_gfx1100_lds_rotating_pv_pressure_ast()
+  hip=to_program(ast,HIPRenderer(Target.parse("AMD:HIP:gfx1100")))
+  binary=next(u.arg for u in hip.src if u.op is Ops.BINARY); resources=parse_amdgpu_metadata(binary)
+  assert {key:resources[key] for key in ("vgpr","sgpr","lds_bytes","scratch_bytes","vgpr_spills","sgpr_spills")} == {
+    "vgpr":197,"sgpr":26,"lds_bytes":8704,"scratch_bytes":0,"vgpr_spills":0,"sgpr_spills":0}
+  renderer=AMDISARenderer(Target.parse("AMD:ISA:gfx1100")); program=to_program(ast,renderer)
+  linear=next(u for u in program.src if u.op is Ops.LINEAR)
+  instructions=[str(u.arg) for u in linear.src if not isinstance(u.arg,tuple)]
+  wmma=[x for x in instructions if x.startswith("v_wmma_f32_16x16x16_f16")]
+  assert len(wmma)==9 and "v[8:15]" in wmma[-1]  # real helper retains the one-block fixed PV C window
+  assert sum(x.startswith("ds_load") for x in instructions)>=64
+  assert sum(x.startswith("ds_store") for x in instructions)>=128
+  assert sum(x.startswith("s_waitcnt") for x in instructions)>=9 and not any(x.startswith("s_barrier") for x in instructions)
+  assert resources["vgpr"] > 192  # executable negative microgate: existing primitives suffice, resource admission does not
+
 def test_gfx1100_q16_kv32_hd128_numeric():
   import numpy as np
   from tinygrad import Tensor

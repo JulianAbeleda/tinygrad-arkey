@@ -1,0 +1,30 @@
+{
+  "schema": "tinygrad.shared_attention_lds_pv_pressure_microgate.v1",
+  "target": "AMD:HIP:gfx1100",
+  "mode": "compile_only_no_dispatch",
+  "geometry": {"hq": 8, "hkv": 2, "q_tokens": 32, "kv_tokens": 64, "head_dim": 128, "wave_size": 32},
+  "kernel": {
+    "backing": "DEFINE_LOCAL fp32[2048], lane-major [lane][block][element]",
+    "accumulator_lds_bytes": 8192,
+    "probability_lds_bytes": 512,
+    "total_lds_bytes": 8704,
+    "windows": 8,
+    "values_per_window_per_lane": 8,
+    "representative_attention": "real direct helper: 8 QK WMMA + 1 PV WMMA with fixed v8:v15 C window",
+    "synchronization": "typed lgkmcnt(0) wave waits; zero workgroup barriers"
+  },
+  "hip_resources": {"vgpr": 197, "sgpr": 26, "lds_bytes": 8704, "scratch_bytes": 0, "vgpr_spills": 0, "sgpr_spills": 0},
+  "amd_isa_structure": {"wmma": 9, "ds_load_min": 64, "ds_store_min": 128, "typed_wait_min": 9, "workgroup_barriers": 0},
+  "primitive_support": {
+    "define_local": "sufficient",
+    "indexed_fp32_lds_load_store": "sufficient",
+    "typed_wave_wait": "sufficient",
+    "missing_opcode": null
+  },
+  "admission": {
+    "vgpr_max": 192,
+    "result": "REJECT_RESOURCE",
+    "reason": "compiled allocation is 197 VGPR, five above the one-block admission threshold"
+  },
+  "boundary": "This is an executable allocator-pressure microgate, not the full integrated eight-PV-WMMA attention algorithm. It proves existing LDS primitives suffice and falsifies admission for this representative one-block construction."
+}
