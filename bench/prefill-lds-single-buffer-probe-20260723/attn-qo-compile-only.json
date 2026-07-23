@@ -1,0 +1,52 @@
+{
+  "baseline": {
+    "binary_sha256": "bfcffa930b18bebc6cfb2f0f9a4b7300b4fa990ce866fa711ce7c5576325b4f0",
+    "canonical_identity": "7508432bc2ab86532eb07bea71fb4f518e82dc259252a704f60131b2aa608d24",
+    "isa_artifact_status": "partial",
+    "label": "two_buffer_baseline",
+    "resources": {
+      "allocated_vgpr": 248,
+      "lds_bytes": 40960,
+      "scratch_bytes": 0,
+      "sgpr": 18,
+      "sgpr_spills": 0,
+      "vgpr": 188,
+      "vgpr_spills": 0,
+      "wavefront_size": 32,
+      "workgroup_threads": 256
+    },
+    "source_sha256": "9d4869b6663a2785d5e68e9f5cf634d44bccfc48ed3c7b1636586649ccbe3c47"
+  },
+  "delta": {
+    "allocated_vgpr": -128,
+    "lds_bytes": -20480,
+    "scratch_bytes": 0,
+    "sgpr": 0,
+    "sgpr_spills": 0,
+    "vgpr": -75,
+    "vgpr_spills": 0
+  },
+  "mode": "compile_only_no_dispatch",
+  "probe": {
+    "binary_sha256": "588e58330da659f401a03b5d08289a52065f2826d83b0a2c01abf49d6d425ab7",
+    "canonical_identity": "555ff0474238c6408dfe79ff14e26febf588072bd7aefaac312e521748b55ece",
+    "isa_artifact_status": "partial",
+    "label": "one_buffer_probe",
+    "resources": {
+      "allocated_vgpr": 120,
+      "lds_bytes": 20480,
+      "scratch_bytes": 0,
+      "sgpr": 18,
+      "sgpr_spills": 0,
+      "vgpr": 113,
+      "vgpr_spills": 0,
+      "wavefront_size": 32,
+      "workgroup_threads": 256
+    },
+    "source_sha256": "9aa370711a57186eba5fdf0a744e2ac62df245d3276bd3737bf780398fe8c7de"
+  },
+  "profile": "qwen3_8b_q4k_m_gfx1100",
+  "promotion": "not_registered_not_promoted",
+  "role": "attn_qo",
+  "schema": "tinygrad.prefill_lds_single_buffer_compile_probe.v1"
+}
