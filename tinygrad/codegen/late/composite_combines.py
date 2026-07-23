@@ -281,6 +281,10 @@ def resolve_reduce_slot_tensor(slot):
     result = src.src[slot.arg]
     metadata = src.tag if isinstance(src.tag, tuple) and len(src.tag) == 2 and src.tag[0] == "composite_reduce" else None
     composite = metadata[1] if metadata is not None else None
+    # A generic COMPOSITE_ACCUMULATOR lowers to a tagged tuple too, but it is
+    # only an opt-in carrier adapter, not a REDUCE producer.  REDUCE_SLOT must
+    # never infer projection semantics from its shape metadata.
+    if not isinstance(composite, CompositeReduce): return None
     if composite is not None and slot.arg < len(composite.slots):
       sdtype = composite.slots[slot.arg].dtype
       if sdtype is not None and result.dtype.count == 1 and sdtype.count > 1: result = result.broadcast(sdtype.count)

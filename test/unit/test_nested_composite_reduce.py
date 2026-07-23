@@ -218,6 +218,14 @@ def test_composite_accumulator_lowering_keeps_heterogeneous_slots():
   assert lowered.op is Ops.TUPLE and lowered.dtype is dtypes.void
   assert tuple(x.dtype for x in lowered.src) == (dtypes.float32, dtypes.float32, dtypes.float32.vec(2))
 
+def test_generic_composite_accumulator_is_not_a_reduce_slot_producer():
+  """The opt-in carrier adapter must not masquerade as a CompositeReduce."""
+  state = UOp(Ops.COMPOSITE_ACCUMULATOR, dtypes.float32,
+              (UOp.const(dtypes.float32, 1.0),), ((),))
+  lowered = lower_composite_accumulator(state)
+  slot = UOp(Ops.REDUCE_SLOT, dtypes.float32, (lowered,), 0)
+  assert resolve_reduce_slot_tensor(slot) is None
+
 def test_composite_reduce_state_adapter_is_opt_in_and_numeric_carrier_safe():
   vals = (UOp.const(dtypes.float32, 1.5), UOp.const(dtypes.float32, 2.0),
           UOp.const(dtypes.float32.vec(2), (3.0, 4.0)))
