@@ -108,7 +108,7 @@ def validate_state_loop_read(x:UOp):
   handle,element=x.arg[1:]
   try: handle.validate()
   except (TypeError,ValueError): return False
-  return handle.storage is not None and 0 <= element < handle.region.lanes and x.dtype == handle.region.dtype and len(x.src) in (2,3) and x.src[:2] == (handle.storage,handle.lane) and (len(x.src)==2 or x.src[2].dtype != dtypes.void)
+  return handle.storage is not None and 0 <= element < handle.region.lanes and x.dtype == handle.region.dtype and len(x.src) in (2,3) and x.src[:2] == (handle.storage,handle.lane)
 
 def validate_state_loop_write(x:UOp):
   if not (isinstance(x.arg,tuple) and len(x.arg)==3 and x.arg[0] == "state_loop_write_v1" and isinstance(x.arg[1],StateHandle) and isinstance(x.arg[2],int)):

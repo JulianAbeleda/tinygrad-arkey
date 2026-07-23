@@ -353,6 +353,7 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
       # wmma output shape = accumulator shape (src[2])
       case Ops.WMMA | Ops.SHAPED_WMMA: return self.src[2]._shape
 
+      case Ops.CUSTOMI if isinstance(self.arg, tuple) and self.arg[:1] == ("state_loop_read_v1",): return ()
       case Ops.CUSTOMI: return self.src[0]._shape if len(self.src) else None
 
       # passthrough ops
@@ -1336,7 +1337,6 @@ class StateHandle(NamedTuple):
     self.validate()
     if self.storage is None or not isinstance(element,int) or not 0 <= element < self.region.lanes:
       raise ValueError("state loop read requires one in-range storage-backed element")
-    if after is not None and after.dtype == dtypes.void: raise TypeError("state loop read ordering source must carry a value")
     src=(self.storage,self.lane) if after is None else (self.storage,self.lane,after)
     return UOp(Ops.CUSTOMI, self.region.dtype, src, ("state_loop_read_v1",self,element))
 
