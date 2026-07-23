@@ -903,14 +903,17 @@ def test_gfx1100_model_grid_static_loop_body_is_invariant(hq,hkv,kv):
   from tinygrad.helpers import Target
   from tinygrad.renderer.isa.amd import AMDISARenderer
   from tinygrad.schedule.wmma import amd_gfx1100_q16_grid_hd128_loop_attention
-  from tinygrad.uop.ops import KernelInfo,ParamArg
+  from tinygrad.uop.ops import AMDAttentionGridSpec,KernelInfo,ParamArg
   sizes=(hq*512*128,hq*512*128,hkv*kv*128,hkv*kv*128)
   p=[UOp(Ops.PARAM,dtypes.half.ptr(sizes[i]),arg=ParamArg(i)) for i in range(4)]
   sink=amd_gfx1100_q16_grid_hd128_loop_attention(p[1],p[2],p[3],p[0],q_tokens=512,q_heads=hq,kv_heads=hkv,
     kv_tokens=kv,scale=.25,kernel_info=KernelInfo(name=f"model_{hq}_{kv}"))
   linear=next(u for u in to_program(sink,AMDISARenderer(Target.parse("AMD:ISA:gfx1100"))).src if u.op is Ops.LINEAR)
   mn=[str(u.arg).split("(",1)[0] for u in linear.src if not isinstance(u.arg,tuple)]
-  assert mn.count("v_wmma_f32_16x16x16_f16")==16 and mn.count("s_barrier")==1
+  assert AMDAttentionGridSpec(q_tokens=512,q_heads=hq,kv_heads=hkv,group_ratio=hq//hkv,kv_tokens=kv).single_wave_workgroup
+  waits=[u.arg for u in linear.src if str(u.arg).split("(",1)[0] == "s_waitcnt"]
+  assert mn.count("v_wmma_f32_16x16x16_f16")==16 and mn.count("s_barrier")==0
+  assert sum(getattr(w,"simm16",None) == (63 << 10) | 7 for w in waits) == 1
 
 def test_gfx1100_model_grid_final_wmma_role_ledger():
   from tinygrad.codegen import to_program

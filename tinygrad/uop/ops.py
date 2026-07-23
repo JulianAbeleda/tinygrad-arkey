@@ -1514,7 +1514,7 @@ class AMDRowSoftmaxRepackSpec(NamedTuple):
     if (self.lds_dtype, self.lds_elements, self.lds_address) != ("half", 256, "row*16+col"):
       raise ValueError("row-softmax native repack requires the exact 256-half LDS identity map")
     if self.requires_barrier is not True or self.reload_layout != "wmma_f32_16x16x16_f16_pv_a_wave32_v1":
-      raise ValueError("row-softmax native repack requires barriered native PV-A reload")
+      raise ValueError("row-softmax native repack requires a conservative workgroup-barrier fallback")
     if not isinstance(self.score_scale, float) or not math.isfinite(self.score_scale) or self.score_scale <= 0:
       raise ValueError("row-softmax native repack requires one positive finite score scale")
     if self.validity_mode not in {"all_v1", "tail_v1", "causal_v1"}:
@@ -1575,11 +1575,15 @@ class AMDAttentionGridSpec(NamedTuple):
   kv_tokens: int = 64
   head_dim: int = 128
   group_expr: str = "q_tile=group%q_tiles;q_head=group//q_tiles;kv_head=q_head//group_ratio"
+  wave_size: int = 32
+  local_size: int = 32
 
   @property
   def q_tiles(self): return self.q_tokens//16
   @property
   def grid_size(self): return self.q_heads*self.q_tiles
+  @property
+  def single_wave_workgroup(self): return self.wave_size == 32 and self.local_size == self.wave_size
 
   def group_coords(self, gid:int) -> tuple[int,int,int]:
     self.validate()
@@ -1589,8 +1593,10 @@ class AMDAttentionGridSpec(NamedTuple):
 
   def validate(self):
     if self.native_abi != "amd_gfx1100_attention_grid_hd128_v1" or self.group_expr != "q_tile=group%q_tiles;q_head=group//q_tiles;kv_head=q_head//group_ratio": raise ValueError("AMD attention grid has an unsupported ownership ABI")
-    if not all(isinstance(x,int) and not isinstance(x,bool) for x in (self.q_tokens,self.q_heads,self.kv_heads,self.group_ratio,self.kv_tokens,self.head_dim)): raise ValueError("AMD attention grid dimensions must be integral")
+    if not all(isinstance(x,int) and not isinstance(x,bool) for x in (self.q_tokens,self.q_heads,self.kv_heads,self.group_ratio,self.kv_tokens,self.head_dim,self.wave_size,self.local_size)): raise ValueError("AMD attention grid dimensions must be integral")
     if self.head_dim != 128 or self.q_tokens <= 0 or self.q_tokens % 16 or self.kv_tokens <= 0 or self.kv_tokens % 16 or self.kv_tokens > 4096 or self.q_heads <= 0 or self.kv_heads <= 0 or self.group_ratio <= 0 or self.q_heads != self.kv_heads*self.group_ratio: raise ValueError("AMD attention grid requires Hd128, 16-wide tokens, and grouped heads")
+    if self.wave_size != 32 or self.local_size < self.wave_size or self.local_size % self.wave_size:
+      raise ValueError("AMD attention grid requires wave32 and a whole-wave workgroup")
     return self
 
 class AMDAttentionOutputDrainSpec(NamedTuple):

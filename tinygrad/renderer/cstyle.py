@@ -20,6 +20,17 @@ def _render_arg_format(ctx, x:UOp) -> str:
                        f"literal C braces must be doubled and placeholders must match len(src)={len(x.src)}. "
                        f"arg={x.arg!r}") from e
 
+def _render_hip_wait(x:UOp) -> str:
+  from tinygrad.codegen.opt.compiler_policies import WaitCount
+  if not isinstance(x.arg, WaitCount): raise ValueError("HIP WAIT lowering requires a typed WaitCount")
+  return f"__builtin_amdgcn_s_waitcnt({x.arg.simm16});"
+
+def _render_hip_barrier(ctx, x:UOp) -> str:
+  from tinygrad.codegen.opt.compiler_policies import WaveLDSFence
+  if isinstance(x.arg,WaveLDSFence): return _render_hip_wait(x)
+  if x.arg is not None: raise ValueError("HIP BARRIER has an unsupported typed payload")
+  return ctx.barrier
+
 
 base_rewrite = PatternMatcher([
   # local/reg buffers
@@ -447,6 +458,8 @@ class HIPRenderer(CStyleLanguage):
   smem_prefix_for_cast: bool = False
   barrier = '__builtin_amdgcn_fence(__ATOMIC_RELEASE, "workgroup");' + '__builtin_amdgcn_s_barrier();' + \
             '__builtin_amdgcn_fence(__ATOMIC_ACQUIRE, "workgroup");'
+  string_rewrite = PatternMatcher([(UPat(Ops.WAIT, name="x"), _render_hip_wait),
+                                   (UPat(Ops.BARRIER, name="x"), _render_hip_barrier)]) + base_rewrite
   float4 = "make_float4"
   type_map = {dtypes.bfloat16: "hip_bfloat16", dtypes.fp8e4m3: "hip_fp8", dtypes.fp8e5m2: "hip_bf8"}
   extra_matcher = create_non_native_float_pats((dtypes.bfloat16, *dtypes.fp8s)) + PatternMatcher([

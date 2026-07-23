@@ -2676,7 +2676,15 @@ def expand_native_row_softmax_repack(ctx, x:UOp, native_state:bool=True) -> UOp:
       state_writes_m.append(mw); state_writes_l.append(lw); state_writes_alpha.append(aw)
       stores.append(UOp.group(published_row, mw, lw, aw))
     else: stores.append(published_row)
-  ready = UOp.barrier(UOp.group(*stores))
+  # A workgroup barrier is necessary unless the launch descriptor proves that
+  # the complete workgroup is one gfx1100 wave.  In that exact case wave issue
+  # order plus lgkmcnt(0) publishes all P stores before any PV-A reload without
+  # paying for an inter-wave rendezvous that cannot have participants.
+  if x.arg.grid is not None and x.arg.grid.single_wave_workgroup:
+    from tinygrad.codegen.opt.compiler_policies import WaveLDSFence
+    ready = UOp(Ops.BARRIER, dtypes.void, (UOp.group(*stores),), arg=WaveLDSFence(
+      wave_size=x.arg.grid.wave_size, workgroup_size=x.arg.grid.local_size))
+  else: ready = UOp.barrier(UOp.group(*stores))
   reload_row = col.alu(Ops.MUL, UOp.const(dtypes.weakint, 16))
   published = lds.after(ready)
   vals = [published.index(reload_row.alu(Ops.ADD, UOp.const(dtypes.weakint, i))).load() for i in range(16)]
@@ -3130,6 +3138,12 @@ def lower_sink(x:UOp):
   return (x.replace(op=Ops.NOOP, src=()), [end])
 
 def lower_barrier(x:UOp):
+  from tinygrad.codegen.opt.compiler_policies import WaveLDSFence
+  if isinstance(x.arg,WaveLDSFence):
+    wait=UOp(Ops.INS,arg=s_waitcnt(simm16=x.arg.simm16))
+    _proof_record_inst("waitcnt","WAITCNT",wait.arg,{"simm16":x.arg.simm16,"vmcnt":x.arg.vmcnt,
+      "lgkmcnt":x.arg.lgkmcnt,"expcnt":x.arg.expcnt,"reason":"single_wave_lds_publication"})
+    return (wait,[wait])
   b = UOp(Ops.INS, arg=s_barrier())
   _proof_record_inst("barrier", "BARRIER", b.arg)
   return (b, [b])

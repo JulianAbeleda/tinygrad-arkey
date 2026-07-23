@@ -9,7 +9,7 @@ from typing import Any, Mapping
 from tinygrad.uop.ops import (AttentionWMMARole, KernelInfo, Ops, ProgramInfo,
   SharedAttentionCandidateContext, UOp)
 
-CAPTURE_SCHEMA = "tinygrad.shared_attention_compiler_capture.v1"
+CAPTURE_SCHEMA = "tinygrad.shared_attention_compiler_capture.v2"
 _RESOURCE_FIELDS = ("vgpr", "sgpr", "lds_bytes", "scratch_bytes", "vgpr_spills", "sgpr_spills", "wavefront_size")
 
 def _sha(data:bytes) -> str: return hashlib.sha256(data).hexdigest()
@@ -25,6 +25,77 @@ def _context_json(ctx:SharedAttentionCandidateContext) -> dict[str,Any]:
 def _context_from_json(row:Mapping[str,Any]) -> SharedAttentionCandidateContext:
   if set(row) != set(SharedAttentionCandidateContext._fields): raise ValueError("candidate_context fields are malformed")
   return SharedAttentionCandidateContext(*(row[name] for name in SharedAttentionCandidateContext._fields)).validate()
+
+@dataclass(frozen=True)
+class SharedAttentionSynchronization:
+  scope: str
+  workgroup_waves: int
+  lds_wait_sites: int
+  workgroup_barriers: int
+
+  def validate(self) -> SharedAttentionSynchronization:
+    if self.scope not in {"wave", "workgroup"}: raise ValueError("shared attention synchronization scope is invalid")
+    if not all(isinstance(x,int) and not isinstance(x,bool) and x >= 0 for x in
+               (self.workgroup_waves,self.lds_wait_sites,self.workgroup_barriers)):
+      raise ValueError("shared attention synchronization counts are malformed")
+    expected = ("wave",1,1,0) if self.scope == "wave" else ("workgroup",self.workgroup_waves,0,1)
+    if (self.scope,self.workgroup_waves,self.lds_wait_sites,self.workgroup_barriers) != expected or self.workgroup_waves < 1:
+      raise ValueError("shared attention synchronization contract is not exact")
+    return self
+
+  def to_json(self) -> dict[str,Any]:
+    return {"scope":self.scope,"workgroup_waves":self.workgroup_waves,
+            "lds_wait_sites":self.lds_wait_sites,"workgroup_barriers":self.workgroup_barriers}
+
+  @classmethod
+  def from_json(cls,row:Mapping[str,Any]) -> SharedAttentionSynchronization:
+    if set(row) != {"scope","workgroup_waves","lds_wait_sites","workgroup_barriers"}:
+      raise ValueError("shared attention synchronization fields are malformed")
+    return cls(str(row["scope"]),int(row["workgroup_waves"]),int(row["lds_wait_sites"]),
+               int(row["workgroup_barriers"])).validate()
+
+def _is_wave_lds_wait(line:str) -> bool:
+  line=line.lower()
+  if "s_waitcnt" not in line: return False
+  if all(x in line for x in ("vmcnt(63)","lgkmcnt(0)","expcnt(7)")): return True
+  match=re.search(r"\bs_waitcnt\((\d*)\)",line)
+  if match is None: return False
+  simm16=int(match.group(1) or 0)
+  return simm16 == (63 << 10) | 7
+
+def _ordered_lds_wait_sites(text:str, *, source:bool) -> int:
+  if source:
+    stores=[m.start() for m in re.finditer(r"\*\(buf0\+[^;\n]+\)\s*=",text)]
+    loads=[m.start() for m in re.finditer(r"half\s+val\d+\s*=\s*\(\*\(buf0",text)]
+    waits=[m.start() for m in re.finditer(r"__builtin_amdgcn_s_waitcnt\([^)]*\);",text)]
+  else:
+    lines=text.splitlines(); stores=[i for i,x in enumerate(lines) if re.search(r"\bds_store",x,re.I)]
+    loads=[i for i,x in enumerate(lines) if re.search(r"\bds_load",x,re.I)]
+    waits=[i for i,x in enumerate(lines) if _is_wave_lds_wait(x)]
+  if not stores or not loads: raise ValueError("shared attention LDS publication/reload markers are missing")
+  last_store=max(stores); first_reload=min((x for x in loads if x > last_store),default=-1)
+  if first_reload < 0: raise ValueError("shared attention LDS reload does not follow publication")
+  return sum(last_store < x < first_reload for x in waits)
+
+def _derive_synchronization(local_size:tuple[int,...]|None, wavefront_size:int, hip_source:str,
+                            amd_isa_text:str) -> SharedAttentionSynchronization:
+  if local_size is None or not local_size or any(not isinstance(x,int) or x <= 0 for x in local_size):
+    raise ValueError("shared attention synchronization requires static local size")
+  threads=math.prod(local_size)
+  if wavefront_size <= 0 or threads % wavefront_size: raise ValueError("workgroup is not a whole number of waves")
+  waves=threads//wavefront_size
+  source_barriers=hip_source.count("__builtin_amdgcn_s_barrier")
+  isa_barriers=len(re.findall(r"\bs_barrier\b",amd_isa_text,re.I))
+  if source_barriers != isa_barriers: raise ValueError("HIP/ISA workgroup barrier counts differ")
+  if waves == 1:
+    source_waits=_ordered_lds_wait_sites(hip_source,source=True)
+    isa_waits=_ordered_lds_wait_sites(amd_isa_text,source=False)
+    if source_barriers or source_waits != 1 or isa_waits != 1:
+      raise ValueError(f"single-wave LDS wait is missing, duplicated, or misordered: source_waits={source_waits}, "
+                       f"isa_waits={isa_waits}, source_barriers={source_barriers}")
+    return SharedAttentionSynchronization("wave",1,1,0).validate()
+  if source_barriers != 1: raise ValueError("multi-wave workgroup requires one workgroup barrier")
+  return SharedAttentionSynchronization("workgroup",waves,0,1).validate()
 
 @dataclass(frozen=True)
 class SharedAttentionCompilerCapture:
@@ -46,6 +117,7 @@ class SharedAttentionCompilerCapture:
   amd_isa_sha256: str
   loop_count: int
   barrier_count: int
+  synchronization: SharedAttentionSynchronization
   static_wmma_count: int
   highest_vgpr: int
   highest_sgpr: int
@@ -68,6 +140,7 @@ class SharedAttentionCompilerCapture:
       "hip_source":self.hip_source,"hip_source_sha256":self.hip_source_sha256,
       "hip_resources":{key:value for key,value in self.hip_resources},"amd_isa_text":self.amd_isa_text,
       "amd_isa_sha256":self.amd_isa_sha256,"loop_count":self.loop_count,"barrier_count":self.barrier_count,
+      "synchronization":self.synchronization.to_json(),
       "static_wmma_count":self.static_wmma_count,"highest_vgpr":self.highest_vgpr,"highest_sgpr":self.highest_sgpr,
       "spill_count":self.spill_count,"scratch_bytes":self.scratch_bytes,"lds_bytes":self.lds_bytes,
       "numeric":{"max_abs":self.numeric_max_abs,"max_rel":self.numeric_max_rel,"rel_l2":self.numeric_rel_l2,
@@ -98,8 +171,14 @@ class SharedAttentionCompilerCapture:
     if any(not isinstance(x,int) or x < 0 for x in (self.copy_call_count,self.loop_count,self.barrier_count,self.static_wmma_count,
       self.highest_vgpr,self.highest_sgpr,self.spill_count,self.scratch_bytes,self.lds_bytes)):
       raise ValueError("AMD ISA counts/resources are malformed")
-    if self.loop_count < 1 or self.barrier_count < 1 or self.static_wmma_count != 16 or self.spill_count or self.scratch_bytes:
+    self.synchronization.validate()
+    if self.barrier_count != self.synchronization.workgroup_barriers:
+      raise ValueError("captured barrier count differs from synchronization contract")
+    if self.loop_count < 1 or self.static_wmma_count != 16 or self.spill_count or self.scratch_bytes:
       raise ValueError("AMD ISA loop/WMMA/resource contract failed")
+    wavefront=dict(self.hip_resources)["wavefront_size"]
+    derived=_derive_synchronization((self.synchronization.workgroup_waves*wavefront,),wavefront,self.hip_source,self.amd_isa_text)
+    if derived != self.synchronization: raise ValueError("shared attention synchronization evidence is not reproducible")
     sites = tuple(site for site,_ in self.wmma_roles)
     if len(self.wmma_roles) != 16 or sites != tuple(sorted(set(sites))): raise ValueError("WMMA role sites are malformed")
     for role in (role for _,role in self.wmma_roles): role.validate()
@@ -117,7 +196,7 @@ class SharedAttentionCompilerCapture:
   def from_json(cls,row:Mapping[str,Any]) -> SharedAttentionCompilerCapture:
     required = {"schema","candidate_context","canonical_graph_sha256","compute_call_count","copy_call_count","param_ownership",
       "allocation_elements","allocation_complete","expanded_kv_buffers","score_probability_buffers","wmma_roles","hip_source",
-      "hip_source_sha256","hip_resources","amd_isa_text","amd_isa_sha256","loop_count","barrier_count","static_wmma_count",
+      "hip_source_sha256","hip_resources","amd_isa_text","amd_isa_sha256","loop_count","barrier_count","synchronization","static_wmma_count",
       "highest_vgpr","highest_sgpr","spill_count","scratch_bytes","lds_bytes","numeric","capture_sha256"}
     if set(row) != required: raise ValueError("shared attention capture fields are malformed")
     numeric = row["numeric"]
@@ -131,7 +210,8 @@ class SharedAttentionCompilerCapture:
       tuple(int(x) for x in row["allocation_elements"]),row["allocation_complete"],int(row["expanded_kv_buffers"]),
       int(row["score_probability_buffers"]),roles,str(row["hip_source"]),str(row["hip_source_sha256"]),
       tuple(sorted((str(k),int(v)) for k,v in resources.items())),str(row["amd_isa_text"]),str(row["amd_isa_sha256"]),
-      int(row["loop_count"]),int(row["barrier_count"]),int(row["static_wmma_count"]),int(row["highest_vgpr"]),
+      int(row["loop_count"]),int(row["barrier_count"]),SharedAttentionSynchronization.from_json(row["synchronization"]),
+      int(row["static_wmma_count"]),int(row["highest_vgpr"]),
       int(row["highest_sgpr"]),int(row["spill_count"]),int(row["scratch_bytes"]),int(row["lds_bytes"]),
       float(numeric["max_abs"]),float(numeric["max_rel"]),float(numeric["rel_l2"]),str(numeric["reference_sha256"]),
       str(row["capture_sha256"])).validate()
@@ -193,9 +273,10 @@ def build_shared_attention_compiler_capture(*, schedule:UOp, compute_call:UOp, h
   capture = SharedAttentionCompilerCapture(CAPTURE_SCHEMA,context,compute_sink.replace(arg=None).key.hex(),compute_calls,copy_calls,
     params,buffers,True,expanded_count,score_count,isa_info.wmma_roles.sites,hip_source,_text_sha(hip_source),hip_resources,
     isa_text,_text_sha(isa_text),max(1,isa_text.lower().count("s_cbranch")),isa_text.lower().count("s_barrier"),
+    _derive_synchronization(hip_info.local_size,dict(hip_resources)["wavefront_size"],hip_source,isa_text),
     len(isa_info.wmma_roles.sites),_highest_register(isa_text,"v"),_highest_register(isa_text,"s"),
     sum("spill" in str(u.arg).lower() for u in isa_linear.src),sum("scratch" in str(u.arg).lower() for u in isa_linear.src),lds_bytes,
     float(diff.max(initial=0)),float((diff/denom).max(initial=0)),float(np.linalg.norm(diff)/(np.linalg.norm(ref)+1e-12)),_sha(ref_bytes))
   return capture.with_hash().validate()
 
-__all__ = ["CAPTURE_SCHEMA","SharedAttentionCompilerCapture","build_shared_attention_compiler_capture"]
+__all__ = ["CAPTURE_SCHEMA","SharedAttentionSynchronization","SharedAttentionCompilerCapture","build_shared_attention_compiler_capture"]

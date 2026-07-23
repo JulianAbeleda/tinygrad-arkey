@@ -162,6 +162,29 @@ class WaitCount:
     """Pack architectural fields into the AMD SOPP immediate."""
     return (self.vmcnt << 10) | (self.lgkmcnt << 4) | self.expcnt
 
+@dataclass(frozen=True)
+class WaveLDSFence(WaitCount):
+  """Typed LDS publication fence for one exact gfx1100 wave/workgroup.
+
+  This is deliberately a ``WaitCount`` subtype so every existing AMD WAIT
+  lowering consumes the same architectural immediate.  The extra fields are
+  the admission proof: this weaker-than-workgroup operation is invalid unless
+  one 32-lane wave is the complete workgroup.
+  """
+  vmcnt: int = 63
+  lgkmcnt: int = 0
+  expcnt: int = 7
+  target: str = "gfx1100"
+  wave_size: int = 32
+  workgroup_size: int = 32
+
+  def __post_init__(self):
+    super().__post_init__()
+    if (self.target, self.wave_size, self.workgroup_size) != ("gfx1100", 32, 32):
+      raise ValueError("wave LDS fence requires one gfx1100 wave32 workgroup")
+    if (self.vmcnt, self.lgkmcnt, self.expcnt) != (63, 0, 7):
+      raise ValueError("wave LDS fence must wait only for complete LDS publication")
+
 
 def wait_count_for_dependency(dep: WaitDependency, *, younger_vmem_loads: int | None = None) -> WaitCount:
   """Create a sound AMD wait immediate from a typed staged dependency.
