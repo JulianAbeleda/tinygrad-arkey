@@ -2850,8 +2850,34 @@ def lower_rotating_pv_state(x:UOp) -> UOp|None:
   if (storage,lane) != (state.storage,state.lane): return None
   return UOp(Ops.STACK,state.dtype,tuple(storage.after(*deps).index(state.block_offset(i)).load() for i in range(8)))
 
+def lower_rotating_pv_loop_read(x:UOp) -> UOp|None:
+  from tinygrad.codegen.opt.compiler_policies import WaitCount
+  from tinygrad.uop.ops import RotatingPVLoopReadSpec
+  if not (isinstance(x.arg,tuple) and x.arg[:1] == ("rotating_pv_loop_read_v1",) and isinstance(x.arg[1],RotatingPVLoopReadSpec)): return None
+  state=x.arg[1].state; state.validate(); storage,lane,rng,publication=x.src
+  if (storage,lane,rng) != (state.storage,state.lane,x.arg[1].rng): return None
+  wait=UOp(Ops.WAIT,dtypes.void,(publication,),WaitCount(lgkmcnt=0))
+  return UOp(Ops.STACK,state.dtype,tuple(storage.after(rng,wait).index(state.block_offset(i)).load() for i in range(8)))
+
+def lower_rotating_pv_drain(x:UOp) -> UOp|None:
+  from tinygrad.codegen.opt.compiler_policies import WaitCount
+  from tinygrad.uop.ops import RotatingPVSequentialDrainSpec
+  if not (isinstance(x.arg,tuple) and x.arg[:1] == ("rotating_pv_sequential_drain_v1",) and isinstance(x.arg[1],RotatingPVSequentialDrainSpec)): return None
+  spec=x.arg[1]; spec.validate(); out,group,final_l,storage,lane,token=x.src
+  if (out,group,final_l,storage,lane) != (spec.out,spec.group,spec.final_l,spec.state.storage,spec.state.lane): return None
+  wait=UOp(Ops.WAIT,dtypes.void,(token,),WaitCount(lgkmcnt=0))
+  acc=UOp(Ops.STACK,spec.dtype,tuple(storage.after(wait).index(spec.state.block_offset(i)).load() for i in range(8)))
+  col=lane.alu(Ops.AND,UOp.const(dtypes.weakint,15)); half=lane.alu(Ops.SHR,UOp.const(dtypes.weakint,4)); stores=[]
+  for e in range(8):
+    recip=final_l.gep(e).ne(UOp.const(dtypes.float,0)).where(UOp.const(dtypes.float,1)/final_l.gep(e),UOp.const(dtypes.float,0))
+    idx=group*UOp.const(dtypes.weakint,2048)+(UOp.const(dtypes.weakint,2*e)+half)*UOp.const(dtypes.weakint,128)+UOp.const(dtypes.weakint,spec.output_block*16)+col
+    stores.append(out.index(idx).store((acc.gep(e)*recip).cast(dtypes.half)))
+  return acc.after(UOp.group(*stores))
+
 native_repack_matcher = PatternMatcher([
   (UPat(Ops.GEP, src=(UPat(Ops.CUSTOMI,name="carrier"),), name="x"), lower_state_phase_reload_gep),
+  (UPat((Ops.CUSTOMI,Ops.CUSTOM),name="x"), lower_rotating_pv_loop_read),
+  (UPat((Ops.CUSTOMI,Ops.CUSTOM),name="x"), lower_rotating_pv_drain),
   (UPat((Ops.CUSTOMI,Ops.CUSTOM),name="x"), lower_rotating_pv_state),
   (UPat((Ops.CUSTOMI,Ops.CUSTOM),name="x"), lower_state_phase_transfer),
   (UPat(Ops.AMD_ROW_SOFTMAX_REPACK, name="x"), expand_native_row_softmax_repack),

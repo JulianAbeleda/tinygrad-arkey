@@ -43,3 +43,7 @@ def test_rotating_pv_drain_reloads_blocks_sequentially_compile_only():
   assert all(drain.src[3:5] == (storage, lane) for drain in drains)
   assert drains[0].src[5] is initial_token and all(drains[block].src[5] is drains[block-1] for block in range(1, 8))
   type_verify(UOp.sink(drains[-1]), spec_full)
+  lowered = graph_rewrite(UOp.sink(drains[-1]), native_repack_matcher, bottom_up=True)
+  assert not any(u.op is Ops.CUSTOMI and isinstance(u.arg, tuple) and u.arg[:1] == ("rotating_pv_sequential_drain_v1",)
+                 for u in lowered.toposort())
+  assert sum(u.op is Ops.LOAD for u in lowered.toposort()) == 64
