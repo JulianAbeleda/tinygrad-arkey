@@ -930,3 +930,21 @@ def test_gfx1100_model_grid_causal_mask_uses_runtime_q_tile(hq,hkv):
     prob=np.exp(score-score.max(1,keepdims=True)); prob/=prob.sum(1,keepdims=True)
     ref[head]=prob@v[head//(hq//hkv)].astype(np.float32)
   np.testing.assert_allclose(got,ref,rtol=.02,atol=4e-3)
+
+@pytest.mark.parametrize("hq,hkv,kv,query_start", ((32,8,512,0),(40,8,1024,512)))
+def test_gfx1100_model_profile_grid_numeric_first_and_prefix(hq,hkv,kv,query_start):
+  import numpy as np
+  from tinygrad import Tensor
+  from tinygrad.schedule.wmma import amd_gfx1100_q16_grid_hd128_loop_attention
+  from tinygrad.uop.ops import KernelInfo
+  q_tokens=512; rng=np.random.default_rng(9100+hq+kv)
+  q=rng.normal(0,.04,(hq,q_tokens,128)).astype(np.float16)
+  k=rng.normal(0,.04,(hkv,kv,128)).astype(np.float16); v=rng.normal(0,.04,(hkv,kv,128)).astype(np.float16)
+  tq,tk,tv=(Tensor(x.reshape(-1),device="AMD") for x in (q,k,v)); out=Tensor.empty(q.size,dtype=dtypes.half,device="AMD")
+  def kernel(o,qi,ki,vi): return amd_gfx1100_q16_grid_hd128_loop_attention(qi,ki,vi,o,q_tokens=q_tokens,q_heads=hq,
+    kv_heads=hkv,kv_tokens=kv,scale=.25,causal=True,kernel_info=KernelInfo(name=f"model_grid_{hq}_{kv}"))
+  got=out.custom_kernel(tq,tk,tv,fxn=kernel)[0].numpy().reshape(q.shape).astype(np.float32)
+  for head,row in ((0,0),(0,q_tokens-1),(hq-1,0),(hq-1,q_tokens-1)):
+    score=q[head,row].astype(np.float32)@k[head//(hq//hkv)].astype(np.float32).T*.25
+    score[np.arange(kv)>query_start+row]=-np.inf; prob=np.exp(score-score.max()); prob/=prob.sum()
+    np.testing.assert_allclose(got[head,row],prob@v[head//(hq//hkv)].astype(np.float32),rtol=.02,atol=4e-3)
