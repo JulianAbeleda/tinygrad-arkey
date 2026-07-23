@@ -268,7 +268,7 @@ def test_gfx1100_native_row_softmax_state_has_one_owner_and_typed_slots():
   from tinygrad.schedule.wmma import amd_gfx1100_row_softmax_state
   score = UOp(Ops.WMMA, dtypes.float.vec(8), (UOp.const(dtypes.half.vec(16), (0,)*16),)*2+
     (UOp.const(dtypes.float.vec(8), (0,)*8),), ("WMMA_16_16_16_half_float", (16,16,16), dtypes.half, dtypes.float, "AMD:gfx1100", 32, ((),(),()), ()))
-  slots = amd_gfx1100_row_softmax_state(score, UOp.const(dtypes.float, -float("inf")), UOp.const(dtypes.float, 0))
+  slots = amd_gfx1100_row_softmax_state(score, UOp.const(dtypes.float.vec(8), (-float("inf"),)*8), UOp.const(dtypes.float.vec(8), (0,)*8))
   assert [x.dtype for x in slots] == [dtypes.half.vec(16), dtypes.float.vec(8), dtypes.float.vec(8), dtypes.float.vec(8)]
   assert len({x.src[0] for x in slots}) == 1 and all(x.op is Ops.AMD_ROW_SOFTMAX_SLOT for x in slots)
   from tinygrad.renderer.isa.amd import native_repack_matcher
@@ -277,6 +277,16 @@ def test_gfx1100_native_row_softmax_state_has_one_owner_and_typed_slots():
   # One owner means one physical LDS allocation and one eight-element pair of butterfly trees.
   assert sum(u.op is Ops.DEFINE_LOCAL for u in lowered.toposort()) == 1
   assert sum(u.op is Ops.BARRIER for u in lowered.toposort()) == 1
+  assert not any(u.op in {Ops.RECIPROCAL, Ops.FDIV} for u in lowered.toposort())
+
+def test_gfx1100_native_repack_modes_fail_closed():
+  from tinygrad.schedule.wmma import amd_gfx1100_row_softmax_state
+  from tinygrad.uop.ops import AMDRowSoftmaxRepackSpec
+  score = UOp.const(dtypes.float.vec(8), (0,)*8)
+  with pytest.raises(ValueError, match="stateful_unnormalized"):
+    amd_gfx1100_row_softmax_state(score, UOp.const(dtypes.float, 0), UOp.const(dtypes.float, 1))
+  with pytest.raises(ValueError, match="unknown normalization"):
+    AMDRowSoftmaxRepackSpec(mode="mixed").validate()
 
 def test_gfx1100_native_row_softmax_repack_fails_closed():
   from tinygrad.schedule.wmma import amd_gfx1100_row_softmax_repack

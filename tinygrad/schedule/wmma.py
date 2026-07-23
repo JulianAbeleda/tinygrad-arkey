@@ -291,13 +291,17 @@ def amd_gfx1100_row_softmax_repack(score: UOp, m: UOp, l: UOp, *,
   spec.validate()
   if score.dtype != dtypes.float32.vec(8) or score.shape != (8,):
     raise ValueError("gfx1100 row-softmax repack requires native QK-C float.vec(8)")
-  if any(x.dtype != dtypes.float32 or x.shape != () for x in (m, l)):
-    raise ValueError("gfx1100 row-softmax repack requires scalar fp32 m/l row state")
+  state_dt = dtypes.float32 if spec.mode == "legacy_normalized" else dtypes.float32.vec(8)
+  state_shape = () if spec.mode == "legacy_normalized" else (8,)
+  if any(x.dtype != state_dt or x.shape != state_shape for x in (m, l)):
+    raise ValueError(f"gfx1100 {spec.mode} repack requires exact {state_dt} m/l row state")
   owner = UOp(Ops.AMD_ROW_SOFTMAX_REPACK, dtypes.half.vec(16), (score, m, l), arg=spec)
   return UOp(Ops.AMD_ROW_SOFTMAX_SLOT, dtypes.half.vec(16), (owner,), arg=AMDRowSoftmaxSlotSpec(slot=0))
 
 def amd_gfx1100_row_softmax_state(score:UOp, m:UOp, l:UOp, *, spec:AMDRowSoftmaxRepackSpec|None=None) -> tuple[UOp, UOp, UOp, UOp]:
   """Return typed views of one native repack execution: P, new_m, new_l, alpha."""
+  spec = AMDRowSoftmaxRepackSpec(mode="stateful_unnormalized_v1") if spec is None else spec
+  if spec.mode != "stateful_unnormalized_v1": raise ValueError("native state projections require stateful_unnormalized_v1")
   p = amd_gfx1100_row_softmax_repack(score, m, l, spec=spec)
   owner = p.src[0]
   return (p, *(UOp(Ops.AMD_ROW_SOFTMAX_SLOT, dtypes.float.vec(8), (owner,), arg=AMDRowSoftmaxSlotSpec(slot=i)) for i in range(1, 4)))

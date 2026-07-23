@@ -2265,29 +2265,33 @@ def expand_native_row_softmax_repack(ctx, x:UOp) -> UOp:
   score, m, l = x.src
   if score.op is not Ops.WMMA or score.dtype != dtypes.float.vec(8):
     raise ValueError("AMD row-softmax repack requires one raw QK WMMA float.vec(8)")
-  if any(s.dtype != dtypes.float or s.shape != () for s in (m, l)):
-    raise ValueError("AMD row-softmax repack requires scalar fp32 m/l state")
+  stateful = x.arg.mode == "stateful_unnormalized_v1"
+  state_dt, state_shape = (dtypes.float.vec(8), (8,)) if stateful else (dtypes.float, ())
+  if any(s.dtype != state_dt or s.shape != state_shape for s in (m, l)):
+    raise ValueError("AMD row-softmax repack state dtype does not match descriptor mode")
   lane = UOp.special(32, "lidx0")
   lane_hw = lane.cast(dtypes.int)
   halfwave, col = lane.alu(Ops.SHR, UOp.const(dtypes.weakint, 4)), lane.alu(Ops.AND, UOp.const(dtypes.weakint, 15))
   lds = UOp(Ops.DEFINE_LOCAL, dtypes.half.ptr(256, AddrSpace.LOCAL), arg=next(ctx))
   stores, new_ms, new_ls, alphas, log2e = [], [], [], [], UOp.const(dtypes.float, 1.4426950408889634)
   for e in range(8):
+    old_m, old_l = (m.gep(e), l.gep(e)) if stateful else (m, l)
     value = score.gep(e).alu(Ops.MUL, UOp.const(dtypes.float, x.arg.score_scale))
     row_max = value
     for mask in x.arg.xor_masks:
       addr = lane_hw.alu(Ops.XOR, UOp.const(dtypes.int, mask)).alu(Ops.MUL, UOp.const(dtypes.int, 4))
       row_max = row_max.alu(Ops.MAX, UOp(Ops.CUSTOMI, dtypes.float, (addr, row_max), "bpermute"))
-    new_m = m.alu(Ops.MAX, row_max)
+    new_m = old_m.alu(Ops.MAX, row_max)
     weight = (value-new_m).alu(Ops.MUL, log2e).exp2()
     row_sum = weight
     for mask in x.arg.xor_masks:
       addr = lane_hw.alu(Ops.XOR, UOp.const(dtypes.int, mask)).alu(Ops.MUL, UOp.const(dtypes.int, 4))
       row_sum = row_sum.alu(Ops.ADD, UOp(Ops.CUSTOMI, dtypes.float, (addr, row_sum), "bpermute"))
-    alpha = (m-new_m).alu(Ops.MUL, log2e).exp2()
-    new_l = l.alu(Ops.MUL, alpha).alu(Ops.ADD, row_sum)
+    raw_alpha = (old_m-new_m).alu(Ops.MUL, log2e).exp2()
+    alpha = new_m.ne(UOp.const(dtypes.float, -float("inf"))).where(raw_alpha, UOp.const(dtypes.float, 1)) if stateful else raw_alpha
+    new_l = old_l.alu(Ops.MUL, alpha).alu(Ops.ADD, row_sum)
     new_ms.append(new_m); new_ls.append(new_l); alphas.append(alpha)
-    normalized = (weight / new_l).cast(dtypes.half)
+    normalized = (weight if stateful else weight / new_l).cast(dtypes.half)
     row = UOp.const(dtypes.weakint, 2*e).alu(Ops.ADD, halfwave)
     stores.append(lds.index(row.alu(Ops.MUL, UOp.const(dtypes.weakint, 16)).alu(Ops.ADD, col)).store(normalized))
   ready = UOp.barrier(UOp.group(*stores))
