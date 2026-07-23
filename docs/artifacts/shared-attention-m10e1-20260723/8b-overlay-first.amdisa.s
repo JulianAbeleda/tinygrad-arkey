@@ -1,4 +1,4 @@
-E_1024_32_32_cf2718eb0cfdcc04cb05c16b95eb22b20ab5040af92064a62344636f02d0be3c:
+E_1024_32_32_91f38103f27a28e6cd4068f80224b8cc429f0132a9c112f281970f7aa116fed6:
   v_and_b32_e32(v[128], 15)
   v_lshlrev_b32_e32(v[129], 7, v[128])
   v_add_nc_u32_e32(v[129], LIT, v[129], 112)
@@ -529,7 +529,7 @@ E_1024_32_32_cf2718eb0cfdcc04cb05c16b95eb22b20ab5040af92064a62344636f02d0be3c:
   v_add_nc_u32_e32(v[217], LIT, v[217], 224)
   v_lshlrev_b32_e32(v[217], 1, v[217])
   ds_store_b16(v[0], v[217], v[1])
-  s_barrier()
+  s_waitcnt(64519)
   v_and_b32_e32(v[217], 15)
   v_mul_lo_u32(v[217], v[217], 16)
   v_lshlrev_b32_e32(v[217], 1, v[217])
