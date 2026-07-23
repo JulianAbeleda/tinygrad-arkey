@@ -29,6 +29,21 @@ def test_vector_state_publish_reload_preserves_lanes_and_phase_boundary():
   type_verify(UOp.sink(reloaded), spec_full)
 
 
+def test_vector_state_reload_is_a_typed_scalar_lane_carrier():
+  handle = _handle(8)
+  reloaded = handle.reload(handle.publish(UOp.const(dtypes.float.vec(8), 1.0)))
+  lane = reloaded.gep(3)
+  assert lane.dtype == dtypes.float
+  type_verify(UOp.sink(lane), spec_full)
+
+
+def test_scalar_state_reload_remains_a_raw_scalar_value():
+  handle = _handle()
+  reloaded = handle.reload(handle.publish(UOp.const(dtypes.float, 1.0)))
+  assert reloaded.dtype == dtypes.float
+  type_verify(UOp.sink(reloaded), spec_full)
+
+
 def test_state_handle_rejects_invalid_phase_lifetime_and_foreign_publication():
   with pytest.raises(ValueError): PhaseBoundarySpec("same", "same").validate()
   handle, foreign = _handle(), StateHandle(StateRegionSpec("other", dtypes.float), PhaseBoundarySpec("produce", "consume"))

@@ -99,6 +99,11 @@ def validate_state_transfer(x:UOp):
     return False
   return len(x.src) == 1+len(storage_src) or (x.src[-1].op is Ops.WAIT and source in x.src[-1].src)
 
+def validate_state_reload_gep(gep:UOp, reload:UOp):
+  """Permit scalar lanes from the typed generic reload carrier only."""
+  return reload.op is Ops.CUSTOMI and isinstance(reload.arg, tuple) and reload.arg[:1] == ("state_reload_v1",) and \
+    validate_state_transfer(reload) and validate_scalar_gep(gep, reload)
+
 # ***** new specs *****
 
 # these ops can be used in the tensor graph and programs
@@ -183,6 +188,10 @@ spec_shared = PatternMatcher([
 
   # WMMA returns a vector value. GEP is the backend-independent vocabulary for extracting one result lane.
   (UPat(Ops.WMMA, name="wmma").f(Ops.GEP, name="gep"), lambda gep,wmma: validate_scalar_gep(gep, wmma)),
+
+  # Generic phase-state reloads are typed carriers. Their vector lanes may be
+  # projected without teaching consumers any scheduler or backend-specific ABI.
+  (UPat(Ops.CUSTOMI, name="reload").f(Ops.GEP, name="gep"), validate_state_reload_gep),
 ])
 
 # these ops can exist in tensor but not programs. example: movement
