@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import argparse, json, sys
-from dataclasses import replace
 from pathlib import Path
 if __package__ in (None, ""): sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
 
 from tinygrad import Tensor, dtypes
 from tinygrad.codegen import to_program
-from tinygrad.codegen.opt import Opt, OptOps
 from tinygrad.helpers import Target
 from tinygrad.llm.flash_prefill_attention import shared_prefill_attention
 from tinygrad.renderer.cstyle import HIPRenderer
@@ -38,7 +36,7 @@ def _schedule(ctx:SharedAttentionCandidateContext):
   schedule=shared_prefill_attention(q,k,v,mask=_mask(ctx),candidate_context=ctx).schedule_linear()
   calls=[call for call in schedule.src if call.op is Ops.CALL and getattr(call.src[0].arg,"candidate_context",None)==ctx]
   if len(calls)!=1: raise RuntimeError("expected one context-bound compute call")
-  ast=calls[0].src[0].replace(arg=replace(calls[0].src[0].arg,opts_to_apply=(Opt(OptOps.TC,0,(0,0,1)),)))
+  ast=calls[0].src[0]
   hip=to_program(ast,HIPRenderer(Target.parse("AMD:HIP:gfx1100")))
   isa=to_program(ast,AMDISARenderer(Target.parse("AMD:ISA:gfx1100")))
   return schedule,calls[0],hip,isa

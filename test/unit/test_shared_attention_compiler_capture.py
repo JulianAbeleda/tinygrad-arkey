@@ -54,24 +54,24 @@ def test_proof_requires_only_exact_validated_four_capture_coverage():
 
 def test_constructor_uses_actual_scheduled_call_and_final_hip_amdisa_programs():
   import numpy as np
-  from dataclasses import replace as dc_replace
   from tinygrad import Tensor, dtypes
   from tinygrad.codegen import to_program
-  from tinygrad.codegen.opt import Opt, OptOps
   from tinygrad.helpers import Target
   from tinygrad.llm.flash_prefill_attention import shared_prefill_attention
   from tinygrad.renderer.cstyle import HIPRenderer
   from tinygrad.renderer.isa.amd import AMDISARenderer
   from tinygrad.uop.ops import Ops
   from extra.qk.shared_attention_capture import build_shared_attention_compiler_capture
-  ctx=SharedAttentionCandidateContext("qwen3_8b_q4k_m_gfx1100","FULL_RESIDENT_OVERLAY",512,512,0,32,8,128,False)
+  ctx=SharedAttentionCandidateContext("qwen3_8b_q4k_m_gfx1100","FULL_RESIDENT_OVERLAY",512,512,0,32,8,128,True)
   q=Tensor.empty(1,32,512,128,dtype=dtypes.float16,device="AMD")
   k=Tensor.empty(1,8,512,128,dtype=dtypes.float16,device="AMD")
   v=Tensor.empty(1,8,512,128,dtype=dtypes.float16,device="AMD")
-  schedule=shared_prefill_attention(q,k,v,candidate_context=ctx).schedule_linear()
+  mask=Tensor.full((1,1,512,512),float("-inf"),dtype=dtypes.float16,buffer=False).triu(1)
+  schedule=shared_prefill_attention(q,k,v,mask=mask,candidate_context=ctx).schedule_linear()
   calls=[x for x in schedule.src if x.op is Ops.CALL and getattr(x.src[0].arg,"candidate_context",None)==ctx]
   assert len(calls)==1
-  ast=calls[0].src[0].replace(arg=dc_replace(calls[0].src[0].arg,opts_to_apply=(Opt(OptOps.TC,0,(0,0,1)),)))
+  ast=calls[0].src[0]
+  assert ast.arg.opts_to_apply is None and ast.arg.required_native_attention.candidate_context==ctx
   hip=to_program(ast,HIPRenderer(Target.parse("AMD:HIP:gfx1100")))
   isa=to_program(ast,AMDISARenderer(Target.parse("AMD:ISA:gfx1100")))
   zeros=np.zeros((1,32,512,128),dtype=np.float32)

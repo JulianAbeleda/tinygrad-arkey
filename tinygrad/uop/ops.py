@@ -1292,6 +1292,25 @@ class SharedAttentionCandidateContext(NamedTuple):
     if self.hd != 128 or self.hq % self.hkv: raise ValueError("shared attention requires Hd128 integral GQA")
     return self
 
+class NativeAttentionRequest(NamedTuple):
+  native_abi: str
+  candidate_context: SharedAttentionCandidateContext
+  grid: AMDAttentionGridSpec
+  input_dtype: DType
+  combine_fn: str
+
+  def validate(self):
+    self.candidate_context.validate(); self.grid.validate()
+    ctx=self.candidate_context
+    if self.native_abi != "amd_gfx1100_attention_grid_hd128_v1" or self.grid.native_abi != self.native_abi:
+      raise ValueError("native attention request ABI mismatch")
+    if self.input_dtype != dtypes.half or self.combine_fn != "online_softmax_state":
+      raise ValueError("native attention request dtype/combine mismatch")
+    if (ctx.q_tokens,ctx.kv_tokens,ctx.hq,ctx.hkv,ctx.hd) != \
+       (self.grid.q_tokens,self.grid.kv_tokens,self.grid.q_heads,self.grid.kv_heads,self.grid.head_dim) or not ctx.causal:
+      raise ValueError("native attention request context/grid mismatch")
+    return self
+
 class AttentionWMMARole(NamedTuple):
   contraction: str
   tile: int
@@ -1719,6 +1738,7 @@ class KernelInfo:
   opts_to_apply: tuple|None = None
   estimates: Estimates|None = None
   candidate_context: Any|None = None
+  required_native_attention: NativeAttentionRequest|None = None
   # Exact CALL parameter slots whose concrete allocations inherit a scheduler
   # memory owner. Values are immutable vocabulary objects, never UOp identities.
   memory_semantic_slots: tuple[tuple[int, Any], ...] = tuple()

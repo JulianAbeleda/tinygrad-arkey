@@ -2,7 +2,7 @@ from __future__ import annotations
 import contextlib, math, itertools
 from dataclasses import replace
 from typing import cast
-from tinygrad.uop.ops import Ops, UOp, KernelInfo, graph_rewrite, AxisType, ssimplify, GroupOp, remove_all_tags
+from tinygrad.uop.ops import Ops, UOp, KernelInfo, NativeAttentionRequest, graph_rewrite, AxisType, ssimplify, GroupOp, remove_all_tags
 from tinygrad.uop.ops import axis_letters, axis_colors, axis_to_pos
 from tinygrad.device import Buffer
 from tinygrad.dtype import dtypes, PtrDType
@@ -331,6 +331,10 @@ class Scheduler:
       if grid is not None:
         try: grid.validate()
         except ValueError: return None
+        request = self.ast.arg.required_native_attention
+        if request is not None and (request.grid != grid or request.candidate_context != getattr(comp,"attention_context",None) or
+                                    request.combine_fn != comp.combine_fn):
+          raise KernelOptError("native attention request does not match composite owner")
         params = sorted({u for u in self.ast.toposort() if u.op is Ops.PARAM}, key=lambda u:u.arg.slot)
         sizes = (grid.q_heads*grid.q_tokens*128, grid.q_heads*grid.q_tokens*128,
                  grid.kv_heads*grid.kv_tokens*128, grid.kv_heads*grid.kv_tokens*128)
@@ -692,7 +696,14 @@ def apply_opts(ast:UOp, ren:Renderer) -> UOp:
   if ast.tag is not None: return ast
   k = Scheduler(ast, ren)
   k.convert_loop_to_global()
-  if ast.arg is not None and ast.arg.opts_to_apply is not None:
+  required_native = ast.arg.required_native_attention if isinstance(ast.arg,KernelInfo) else None
+  if required_native is not None:
+    if not isinstance(required_native,NativeAttentionRequest): raise KernelOptError("malformed native attention request")
+    required_native.validate()
+    if ren.target.device != "AMD" or ren.target.arch != "gfx1100": raise KernelOptError("native attention request target mismatch")
+    if ast.arg.candidate_context != required_native.candidate_context: raise KernelOptError("native attention request context mismatch")
+    native_opt=Opt(OptOps.TC,0,(0,0,1)); k.planned_opts=(native_opt,); k.apply_opt(native_opt)
+  elif ast.arg is not None and ast.arg.opts_to_apply is not None:
     k.planned_opts = tuple(ast.arg.opts_to_apply)
     for opt in ast.arg.opts_to_apply: k.apply_opt(opt)
   elif _WARMSTART_OPTS is not None and (forced := _warmstart_match(k)) is not None:

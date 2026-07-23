@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field, replace
 import itertools
 from tinygrad.dtype import dtypes, PtrDType, AddrSpace, Invalid
-from tinygrad.uop.ops import PatternMatcher, UPat, Ops, UOp, resolve, GroupOp, _substitute, KernelInfo, ParamArg, ScheduleHints
+from tinygrad.uop.ops import PatternMatcher, UPat, Ops, UOp, resolve, GroupOp, _substitute, KernelInfo, ParamArg, ScheduleHints, NativeAttentionRequest
 from tinygrad.uop.ops import graph_rewrite, sint, AxisType, BottomUpGate, profile_matches, identity_element, AccumulatorSlot, CompositeReduce, CompositeInputSpec, CompositeTileCarrier, AttentionSpec, AMDRowSoftmaxRepackSpec
 from tinygrad.uop.symbolic import symbolic
 from tinygrad.helpers import prod, all_same, getenv, dedup, all_int, DEBUG, SPLIT_REDUCEOP, DEBUG_RANGEIFY, VIZ, MAX_KERNEL_BUFFERS
@@ -867,13 +867,21 @@ def split_store(x:UOp) -> UOp|None:
   if ret.op is Ops.STORE: stored = ret.src[1]
   elif ret.op is Ops.END and ret.src[0].op is Ops.STORE: stored = ret.src[0].src[1]
   else: raise RuntimeError(f"unknown kernel type {ret.op}")
-  attention_contexts = dedup([u.arg[0].attention_context for u in ret.toposort()
+  attention_composites = dedup([u.arg[0] for u in ret.toposort()
     if u.op is Ops.REDUCE and isinstance(u.arg, tuple) and isinstance(u.arg[0], CompositeReduce) and u.arg[0].attention_context is not None])
+  attention_contexts = dedup([comp.attention_context for comp in attention_composites])
   if len(attention_contexts) > 1: raise RuntimeError("conflicting shared attention candidate contexts in one kernel")
   candidate_context = attention_contexts[0].validate() if attention_contexts else None
+  if candidate_context is not None:
+    if len(attention_composites) != 1: raise RuntimeError("native attention request requires one composite owner")
+    comp=attention_composites[0]
+    required_native_attention=NativeAttentionRequest("amd_gfx1100_attention_grid_hd128_v1",candidate_context,
+      comp.attention_grid,dtypes.half,comp.combine_fn).validate()
+  else: required_native_attention=None
   if stored.op in {Ops.COPY, Ops.SLICE}: ret = stored.replace(src=stored.src + ret.ended_ranges)
   else: ret = ret.sink(arg=KernelInfo(name=lctx.name or "test", opts_to_apply=lctx.opts,
                                       candidate_context=candidate_context,
+                                      required_native_attention=required_native_attention,
                                       memory_semantic_slots=tuple(sorted(slot_owners.items()))))
 
   kernel = ret.call(*lctx.map.values(), *lctx.vars.keys())
