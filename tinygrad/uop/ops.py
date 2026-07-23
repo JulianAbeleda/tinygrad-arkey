@@ -1723,33 +1723,34 @@ class RowSoftmaxRepackSpec(NamedTuple):
     return self
 
 class SoftmaxBridgeSpec(NamedTuple):
-  """Opt-in LDS contract for one wave's eight ``m/l/alpha`` softmax rows."""
+  """Opt-in lane-private LDS contract for one wave's eight ``m/l/alpha`` rows."""
   storage: UOp
   lane: UOp
   native_abi: str = "amd_gfx1100_softmax_bridge_v1"
   rows: int = 8
+  lanes: int = 32
   fields: tuple[str, ...] = ("new_m", "new_l", "alpha")
 
   @property
-  def elements(self) -> int: return self.rows * len(self.fields)
+  def elements(self) -> int: return self.rows * len(self.fields) * self.lanes
 
   @property
   def bytes(self) -> int: return self.elements * 4
 
   def validate(self):
-    if self.native_abi != "amd_gfx1100_softmax_bridge_v1" or (self.rows, self.fields) != (8, ("new_m", "new_l", "alpha")):
+    if self.native_abi != "amd_gfx1100_softmax_bridge_v1" or (self.rows, self.lanes, self.fields) != (8, 32, ("new_m", "new_l", "alpha")):
       raise ValueError("softmax bridge requires exact eight-row m/l/alpha ABI")
     if self.storage.op is not Ops.DEFINE_LOCAL or not isinstance(self.storage.dtype, PtrDType) or \
-       self.storage.dtype.addrspace is not AddrSpace.LOCAL or self.storage.dtype.base != dtypes.float or self.storage.dtype.size != 24:
-      raise ValueError("softmax bridge requires DEFINE_LOCAL fp32[24]")
+       self.storage.dtype.addrspace is not AddrSpace.LOCAL or self.storage.dtype.base != dtypes.float or self.storage.dtype.size != 768:
+      raise ValueError("softmax bridge requires lane-private DEFINE_LOCAL fp32[768]")
     if self.lane.op is not Ops.SPECIAL or self.lane.arg != "lidx0" or len(self.lane.src) != 1 or self.lane.src[0].arg != 32:
       raise ValueError("softmax bridge requires wave32 lidx0 ownership")
     return self
 
-  def offset(self, field: str, row: int) -> int:
+  def offset(self, field: str, row: int) -> UOp:
     self.validate()
     if field not in self.fields or not isinstance(row, int) or not 0 <= row < self.rows: raise ValueError("softmax bridge index is out of range")
-    return self.fields.index(field) * self.rows + row
+    return UOp.const(self.lane.dtype, (self.fields.index(field) * self.rows + row) * self.lanes) + self.lane
 
 class AMDRowSoftmaxRepackSpec(NamedTuple):
   """Exact RDNA3 wave32 realization of ``online_softmax_qk_pv_v1``.

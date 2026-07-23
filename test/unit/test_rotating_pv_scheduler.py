@@ -41,11 +41,11 @@ def test_rotating_pv_kernel_probe_wraps_exact_scheduler_sink():
   assert probe["sink"].arg.name == "rotating_pv_scheduler_probe"
 
 
-def test_softmax_bridge_contract_is_exact_24_fp32_scalars():
+def test_softmax_bridge_contract_is_exact_lane_private_768_fp32_scalars():
   lane = UOp.special(32, "lidx0")
-  bridge = SoftmaxBridgeSpec(UOp(Ops.DEFINE_LOCAL, dtypes.float.ptr(24, AddrSpace.LOCAL), arg=9630), lane)
-  assert bridge.validate().elements == 24 and bridge.bytes == 96
-  assert tuple(bridge.offset(field, 7) for field in bridge.fields) == (7, 15, 23)
+  bridge = SoftmaxBridgeSpec(UOp(Ops.DEFINE_LOCAL, dtypes.float.ptr(768, AddrSpace.LOCAL), arg=9630), lane)
+  assert bridge.validate().elements == 768 and bridge.bytes == 3072
+  assert tuple(bridge.offset(field, 7).src[0].arg for field in bridge.fields) == (224, 480, 736)
 
 
 def test_rotating_pv_exact_isa_reaches_resource_gate_after_fragment_lowering():
