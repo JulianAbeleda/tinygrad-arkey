@@ -2777,7 +2777,29 @@ def lower_native_row_state_gep(x:UOp, s:UOp) -> UOp|None:
   if len(x.arg) != 1 or not 0 <= x.arg[0] < 8: raise ValueError("invalid native row-state projection")
   return s.src[x.arg[0]]
 
+def lower_state_phase_transfer(x:UOp) -> UOp|None:
+  """Lower generic explicit state publication to its caller-owned LDS region.
+
+  Storage-free handles deliberately remain opaque: they are semantic phase
+  carriers and must not acquire an implicit allocation in a renderer.
+  """
+  from tinygrad.uop.ops import StateHandle
+  if not (isinstance(x.arg,tuple) and len(x.arg)==2 and x.arg[0] in {"state_publish_v1","state_reload_v1"} and
+          isinstance(x.arg[1],StateHandle)): return None
+  op,handle=x.arg; handle.validate()
+  if handle.storage is None: return None
+  if op=="state_publish_v1":
+    value,storage,lane=x.src
+    base=lane.alu(Ops.MUL,UOp.const(dtypes.weakint,handle.lane_stride)).alu(Ops.ADD,UOp.const(dtypes.weakint,handle.element_offset))
+    stores=tuple(storage.index(base.alu(Ops.ADD,UOp.const(dtypes.weakint,i))).store(value.gep(i)) for i in range(handle.region.lanes))
+    return value.after(UOp.group(*stores))
+  published,storage,lane,*deps=x.src
+  base=lane.alu(Ops.MUL,UOp.const(dtypes.weakint,handle.lane_stride)).alu(Ops.ADD,UOp.const(dtypes.weakint,handle.element_offset))
+  owner=storage.after(published,*deps)
+  return UOp(Ops.STACK,handle.dtype,tuple(owner.index(base.alu(Ops.ADD,UOp.const(dtypes.weakint,i))).load() for i in range(handle.region.lanes)))
+
 native_repack_matcher = PatternMatcher([
+  (UPat((Ops.CUSTOMI,Ops.CUSTOM),name="x"), lower_state_phase_transfer),
   (UPat(Ops.AMD_ROW_SOFTMAX_REPACK, name="x"), expand_native_row_softmax_repack),
   (UPat(Ops.AMD_ROW_SOFTMAX_SLOT, src=(UPat(Ops.TUPLE, name="owner"),), name="x"), lambda x,owner: owner.src[x.arg.slot]),
   (UPat(Ops.GEP, src=(UPat(Ops.STACK, name="s"),), name="x"), lower_native_row_state_gep),
