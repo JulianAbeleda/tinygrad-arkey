@@ -1599,6 +1599,34 @@ class AMDAttentionGridSpec(NamedTuple):
       raise ValueError("AMD attention grid requires wave32 and a whole-wave workgroup")
     return self
 
+class AMDMultiWaveAttentionGridSpec(NamedTuple):
+  """G2 ownership: one workgroup owns (kv_head,q_tile), each wave owns one Q head."""
+  native_abi: str = "amd_gfx1100_attention_multiwave_g2_v1"
+  q_tokens: int = 512
+  q_heads: int = 4
+  kv_heads: int = 2
+  kv_tokens: int = 512
+  head_dim: int = 128
+  wave_size: int = 32
+  waves_per_group: int = 2
+
+  @property
+  def q_tiles(self): return self.q_tokens//16
+  @property
+  def local_size(self): return self.wave_size*self.waves_per_group
+  @property
+  def grid_size(self): return self.kv_heads*self.q_tiles
+  def group_coords(self,gid:int,wave_id:int)->tuple[int,int,int]:
+    self.validate()
+    if not 0 <= gid < self.grid_size or not 0 <= wave_id < self.waves_per_group: raise ValueError("multiwave attention coordinate is out of range")
+    kv_head,q_tile=divmod(gid,self.q_tiles); return kv_head*self.waves_per_group+wave_id,q_tile,kv_head
+  def validate(self):
+    if self.native_abi != "amd_gfx1100_attention_multiwave_g2_v1" or self.wave_size != 32 or self.waves_per_group != 2 or self.head_dim != 128:
+      raise ValueError("AMD multiwave attention requires exact G2 wave32 Hd128 ABI")
+    if self.q_tokens <= 0 or self.q_tokens%16 or self.kv_tokens <= 0 or self.kv_tokens%16 or self.q_heads != self.kv_heads*2:
+      raise ValueError("AMD multiwave attention requires 16-wide tokens and G2 heads")
+    return self
+
 class AMDAttentionOutputDrainSpec(NamedTuple):
   """Typed final ownership boundary for the native Hd128 attention ABI."""
   native_abi: str = "amd_gfx1100_attention_output_drain_v1"
