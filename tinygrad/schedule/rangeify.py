@@ -102,8 +102,8 @@ def lower_attention_semantic(att:UOp) -> UOp:
           UOp.placeholder((b, h, 1, 16, 16), dtypes.half, 9202),
           UOp.placeholder((b, h, 16, 16), dtypes.float32, 9203), batch=b, heads=h)
         red = red.replace(arg=(red.arg[0]._replace(tile_fragments=fragments),) + red.arg[1:])
-    acc = Tensor(red.composite_reduce_slot(2, dtype=att.arg.qk_dtype))
-    den = Tensor(red.composite_reduce_slot(1, dtype=att.arg.qk_dtype))
+      acc = Tensor(red.composite_reduce_slot(2, dtype=att.arg.qk_dtype))
+      den = Tensor(red.composite_reduce_slot(1, dtype=att.arg.qk_dtype))
       if state_combine == "online_softmax_state":
         from tinygrad.codegen.late.flash_attn import normalize_online_softmax_state
         out = normalize_online_softmax_state(acc, den)
