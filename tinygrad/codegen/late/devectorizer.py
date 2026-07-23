@@ -556,8 +556,10 @@ def merge_reduce_ends(ctx:ReduceContext, sink:UOp):
   return sink.substitute(subs) if subs else None
 
 def _resolve_reduce_slot_pm(slot):
-    from tinygrad.codegen.late.composite_combines import resolve_reduce_slot_tensor
-    return resolve_reduce_slot_tensor(slot)
+    from tinygrad.codegen.late.composite_combines import resolve_reduce_slot_tensor, resolve_composite_reduce_slot_prebufferize
+    # Expander can leave a validated composite_view INDEX around the tuple.
+    # Resolve that form before applying the stricter direct-tuple resolver.
+    return resolve_reduce_slot_tensor(slot) or resolve_composite_reduce_slot_prebufferize(slot)
 
 def lower_composite_accumulator(state:UOp):
   """Lower a heterogeneous composite state carrier to an explicit tuple.

@@ -833,7 +833,10 @@ def _get_kernel_graph(sink:UOp) -> UOp:
                        name="lower_composite_pre_rangeify")
   from tinygrad.codegen.late.composite_combines import resolve_composite_reduce_slot_prebufferize
   tsink = graph_rewrite(tsink, PatternMatcher([
-    (UPat(Ops.REDUCE_SLOT, src=(UPat(Ops.TUPLE),), name="slot"), resolve_composite_reduce_slot_prebufferize),
+    # Expander may insert tagged INDEX views between a REDUCE_SLOT and the
+    # structured tuple.  Let the resolver inspect those views; it remains
+    # fail-closed for ordinary/unprovenance'd values.
+    (UPat(Ops.REDUCE_SLOT, src=(UPat(),), name="slot"), resolve_composite_reduce_slot_prebufferize),
   ]), name="resolve_composite_slots_prebufferize")
   tsink = graph_rewrite(tsink, symbolic+pm_reduce_simplify+pm_const_buffer_folding+pm_remove_bufferize, name="symbolic+reduce_collapse+debuf")
   tsink = graph_rewrite(tsink, pm_limit_bufs, ctx=rctx, name="limit buffers")
