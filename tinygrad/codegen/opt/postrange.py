@@ -316,6 +316,40 @@ class Scheduler:
 
   def _apply_tc_opt(self, use_tensor_cores:int, axis:int, tc_select:int, opt_level:int) -> None|list[UOp]:
     if not (reduceops := self.reduceops): raise KernelOptError("no reduce ops for TensorCore")
+    # One exact descriptor-owned composite route. Consume only live PARAM and
+    # INDEX ownership from the canonical scalar graph; tile_fragments are
+    # detached metadata and are never consulted. Any mismatch falls through
+    # to the existing blanket composite guard below.
+    composites = [r for r in reduceops if getattr(r.arg[0] if isinstance(r.arg, tuple) and r.arg else None,
+                                                  "combine_fn", None) == "online_softmax_state"]
+    if len(composites) == 1 and self.ren.target.device == "AMD" and self.ren.target.arch == "gfx1100" and \
+       getattr(self.ren, "native_repack_matcher", None) is not None:
+      red, comp = composites[0], composites[0].arg[0]
+      carrier = comp.tile_carrier
+      try: carrier.validate()
+      except (AttributeError, ValueError): carrier = None
+      all_params = sorted({u for u in self.ast.toposort() if u.op is Ops.PARAM}, key=lambda u:u.arg.slot)
+      score_params = sorted({u for u in red.src[0].toposort() if u.op is Ops.PARAM}, key=lambda u:u.arg.slot)
+      aux = tuple(s for s in red.src[1:] if s.op is not Ops.RANGE)
+      value_params = sorted({u for s in aux for u in s.toposort() if u.op is Ops.PARAM}, key=lambda u:u.arg.slot)
+      stores = [u for u in self.ast.toposort() if u.op is Ops.STORE]
+      output_params = sorted({p for st in stores for p in st.src[0].toposort() if p.op is Ops.PARAM}, key=lambda u:u.arg.slot)
+      scale = next((float(s.arg) for s in red.src[0].src if s.op is Ops.CONST and s.dtype.scalar() in dtypes.floats), None) \
+        if red.src[0].op is Ops.MUL else None
+      exact = carrier is not None and carrier.typed_fragment_abi == "online_softmax_qk_pv_v1" and \
+        carrier.score_shape == carrier.value_shape == carrier.output_shape == (16,16,16) and \
+        comp.slot_shapes == ((1,1,16),(1,1,16),(1,1,16,16)) and comp.lane_shapes == ((),(),(16,)) and \
+        len(aux) == 1 and [u.arg.slot for u in all_params] == [0,1,2,3] and \
+        [u.arg.slot for u in score_params] == [1,2] and [u.arg.slot for u in value_params] == [3] and \
+        [u.arg.slot for u in output_params] == [0] and scale is not None and math.isfinite(scale) and scale > 0
+      if exact:
+        from tinygrad.schedule.wmma import amd_gfx1100_q16_attention
+        self.ast = amd_gfx1100_q16_attention(score_params[0], score_params[1], value_params[0], output_params[0],
+                                              scale=scale, kernel_info=self.ast.arg)
+        self.tensor_core = next((tc for tc in self.ren.tensor_cores if tc.dims == (16,16,16) and
+                                 tc.dtype_in == dtypes.half and tc.dtype_out == dtypes.float), None)
+        if self.tensor_core is None: raise KernelOptError("gfx1100 q16 attention requires fp16 16x16x16 tensor core")
+        return []
     # Composite reductions currently consume scalar score/state values.  A
     # tensor-core rewrite would pack the QK contraction into fragment lanes
     # before the online combine can read it, violating that ABI (and producing

@@ -87,6 +87,37 @@ class TestAttentionSemantic(unittest.TestCase):
     self.assertEqual(len(output_stores), 16)
     self.assertTrue(all(u.src[0].op is Ops.INDEX and len(u.src[0].src) == 2 for u in output_stores))
 
+  def test_exact_q16_gfx1100_tc_integration_reaches_dual_wmma_program(self):
+    if self._combine_name() != "online_softmax_state": self.skipTest("state combine is opt-in")
+    from dataclasses import replace
+    from tinygrad.codegen import full_rewrite_to_sink, to_program
+    from tinygrad.codegen.opt import Opt, OptOps
+    from tinygrad.helpers import Target
+    from tinygrad.renderer.isa.amd import AMDISARenderer
+    q = Tensor.empty(1,1,16,16,dtype=dtypes.half,device="AMD")
+    k = Tensor.empty(1,1,16,16,dtype=dtypes.half,device="AMD")
+    v = Tensor.empty(1,1,16,16,dtype=dtypes.half,device="AMD")
+    calls = shared_prefill_attention(q,k,v).schedule_linear().src
+    self.assertEqual(len(calls), 1)
+    ast = calls[0].src[0].replace(arg=replace(calls[0].src[0].arg,
+      opts_to_apply=(Opt(OptOps.TC,0,(0,0,1)),)))
+    ren = AMDISARenderer(Target.parse("AMD:ISA:gfx1100"))
+    final = full_rewrite_to_sink(ast, ren, optimize=True)
+    nodes = final.toposort()
+    self.assertEqual(sum(u.op is Ops.WMMA for u in nodes), 2)
+    self.assertEqual(sum(u.op is Ops.DEFINE_LOCAL for u in nodes), 1)
+    self.assertEqual(sum(u.op is Ops.BARRIER for u in nodes), 1)
+    self.assertFalse(any(u.op is Ops.AMD_ROW_SOFTMAX_REPACK for u in nodes))
+    output_stores = [u for u in nodes if u.op is Ops.STORE and any(
+      p.op is Ops.PARAM and p.arg.slot == 0 for p in u.src[0].toposort())]
+    self.assertEqual(len(output_stores), 8)
+    self.assertEqual({p.arg.slot for p in nodes if p.op is Ops.PARAM}, {0,1,2,3})
+    program = to_program(ast, ren)
+    linear = next(u for u in program.src if u.op is Ops.LINEAR)
+    mnemonics = [str(u.arg).split("(",1)[0] for u in linear.src if not isinstance(u.arg,tuple)]
+    self.assertEqual(mnemonics.count("v_wmma_f32_16x16x16_f16"), 2)
+    self.assertEqual(mnemonics.count("s_barrier"), 1)
+
   def test_state_composite_carries_authoritative_kv_range_owner(self):
     if self._combine_name() != "online_softmax_state": self.skipTest("state combine is opt-in")
     from tinygrad.schedule.rangeify import get_kernel_graph

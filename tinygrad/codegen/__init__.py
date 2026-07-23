@@ -110,6 +110,11 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
 
     # do postrange optimization: explicit opts_to_apply, warm-start, or hand_coded_optimizations
     sink = apply_opts(sink, ren)
+    # Scheduler TC integration may introduce a descriptor-owned native
+    # repack during apply_opts, after the initial AST hook above.
+    if (native_repack_pm:=getattr(ren, "native_repack_matcher", None)) is not None:
+      sink = graph_rewrite(sink, native_repack_pm, ctx=itertools.count(700), bottom_up=True,
+                           name="expand optimizer native row softmax repack")
 
   # ** expander (expand_rewrite) **
   sink = graph_rewrite(sink, sym+pm_move_where_on_load, name="postopt symbolic")
