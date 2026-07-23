@@ -65,6 +65,21 @@ class TestAttentionSemantic(unittest.TestCase):
     self.assertTrue(all(x.op is Ops.INDEX for x in accesses), "output STORE lanes must remain addresses, not loaded values")
     self.assertEqual(len({idx.src[-1].render() for idx in accesses}), 16)
 
+  def test_opt_in_state_amd_output_stores_have_scalar_param_addresses(self):
+    if self._combine_name() != "online_softmax_state": self.skipTest("state combine is opt-in")
+    from tinygrad.codegen import full_rewrite_to_sink
+    from tinygrad.device import Device
+    rng = np.random.default_rng(13)
+    q, k, v = (Tensor(rng.standard_normal((1, 1, 16, 16)).astype(np.float16), dtype=dtypes.float16, device="AMD") for _ in range(3))
+    compute = [call for call in shared_prefill_attention(q, k, v).schedule_linear().src
+               if any(u.op is Ops.DEFERRED_REDUCE_SLOT for u in call.src[0].toposort())]
+    self.assertEqual(len(compute), 1)
+    final = full_rewrite_to_sink(compute[0].src[0], Device["AMD"].renderer, optimize=compute[0].src[0].tag is None)
+    output_stores = [u for u in final.toposort() if u.op is Ops.STORE and any(
+      x.op is Ops.PARAM and getattr(x.arg, "slot", None) == 0 for x in u.src[0].backward_slice)]
+    self.assertEqual(len(output_stores), 16)
+    self.assertTrue(all(u.src[0].op is Ops.INDEX and len(u.src[0].src) == 2 for u in output_stores))
+
   def test_state_composite_carries_authoritative_kv_range_owner(self):
     if self._combine_name() != "online_softmax_state": self.skipTest("state combine is opt-in")
     from tinygrad.schedule.rangeify import get_kernel_graph

@@ -176,6 +176,17 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   if ren.target.device == "AMD":
     sink = graph_rewrite(sink, pm_group_wmma_reg_store, name="group wmma reg ownership")
 
+  # GPU dimension assignment requires scalar global STORE addresses. A
+  # deferred projection can already own its Hd lanes as STACK(INDEX...), so
+  # lower that backend-neutral store ABI before gpudims inspects destinations.
+  if had_deferred_reduce_projection:
+    output_store_subs = {}
+    for store in (u for u in sink.toposort() if u.op is Ops.STORE and u.src[0].op is Ops.STACK):
+      targets, value = store.src[0].src, store.src[1]
+      if not targets or not all(x.op is Ops.INDEX for x in targets) or value.dtype.count != len(targets): continue
+      output_store_subs[store] = UOp.group(*(target.store(value.gep(i)) for i,target in enumerate(targets)))
+    if output_store_subs: sink = sink.substitute(output_store_subs)
+
   # add gpu dims (late). this works after devectorize, but it's faster here
   sink = graph_rewrite(sink, pm_add_gpudims, ctx=ren, name="add gpudims")
 
