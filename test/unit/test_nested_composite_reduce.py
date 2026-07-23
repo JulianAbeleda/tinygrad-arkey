@@ -238,6 +238,20 @@ def test_lane_state_projection_waits_for_physical_reduce_owner():
   projected = UOp(Ops.REDUCE_SLOT, dtypes.float32, (surrounding,), 2)
   assert resolve_composite_reduce_slot_prebufferize(projected) is None
 
+def test_lane_state_projection_resolves_only_physical_vector_slot():
+  """Post-lowering projection accepts the real 1/1/16 physical state ABI."""
+  slots = (AccumulatorSlot(Ops.MAX, dtypes.float32, float("-inf"), "m"),
+           AccumulatorSlot(Ops.ADD, dtypes.float32, 0.0, "l"),
+           AccumulatorSlot(Ops.ADD, dtypes.float32, 0.0, "acc"))
+  red = UOp.placeholder((16,), dtypes.float32, 0).composite_reduce(*slots, axis=(0,),
+    combine_fn="online_softmax_state", slot_shapes=((), (), (16,)), lane_shapes=((), (), (16,)))
+  physical = UOp(Ops.TUPLE, dtypes.void, (
+    UOp.const(dtypes.float32, 1.0), UOp.const(dtypes.float32, 2.0),
+    UOp.const(dtypes.float32.vec(16), tuple(float(x) for x in range(16))))).replace(
+      tag=("composite_reduce", red.arg[0]))
+  projected = resolve_reduce_slot_tensor(UOp(Ops.REDUCE_SLOT, dtypes.float32, (physical,), 2))
+  assert projected is physical.src[2] and projected.dtype.count == 16
+
 def test_composite_accumulator_carrier_preserves_scalar_and_vector_slots():
   """The first-class carrier keeps m/l scalar and acc lanes explicit."""
   state = UOp(Ops.COMPOSITE_ACCUMULATOR, dtypes.float32.vec(2),

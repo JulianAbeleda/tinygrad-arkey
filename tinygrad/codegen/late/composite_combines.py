@@ -10,6 +10,7 @@ The combine is responsible for:
 This keeps reduce_to_acc completely combine-agnostic.
 """
 import functools
+from tinygrad.helpers import prod
 from tinygrad.uop.ops import UOp, Ops, dtypes, AxisType, AddrSpace
 from tinygrad.uop.ops import identity_element, CompositeReduce, AccumulatorSlot
 
@@ -302,24 +303,30 @@ def resolve_reduce_slot_tensor(slot):
   if src.op is not Ops.TUPLE: return None
   if not isinstance(slot.arg, int) or not 0 <= slot.arg < len(src.src):
     raise RuntimeError(f"invalid composite reduction slot {slot.arg}")
-    # Project directly while the structured result is still in compiler IR.
-    # This leaves no TUPLE/GETTUPLE operation for the renderer and preserves
-    # the one reduction's shared END dependencies.
-    result = src.src[slot.arg]
-    metadata = src.tag if isinstance(src.tag, tuple) and len(src.tag) == 2 and src.tag[0] == "composite_reduce" else None
-    composite = metadata[1] if metadata is not None else None
-    # A generic COMPOSITE_ACCUMULATOR lowers to a tagged tuple too, but it is
-    # only an opt-in carrier adapter, not a REDUCE producer.  REDUCE_SLOT must
-    # never infer projection semantics from its shape metadata.
-    if not isinstance(composite, CompositeReduce): return None
-    if composite is not None and slot.arg < len(composite.slots):
-      sdtype = composite.slots[slot.arg].dtype
-      if sdtype is not None and result.dtype.count == 1 and sdtype.count > 1: result = result.broadcast(sdtype.count)
-      if sdtype is not None and result.dtype != sdtype: result = result.cast(sdtype)
-    if composite is not None and slot.arg < len(composite.slot_shapes):
-      shape = composite.slot_shapes[slot.arg]
-      if shape is not None and result.shape != tuple(shape): result = result.reshape(tuple(shape))
+  # Project directly while the structured result is still in compiler IR.
+  # This leaves no TUPLE/GETTUPLE operation for the renderer and preserves
+  # the one reduction's shared END dependencies.
+  result = src.src[slot.arg]
+  metadata = src.tag if isinstance(src.tag, tuple) and len(src.tag) == 2 and src.tag[0] == "composite_reduce" else None
+  composite = metadata[1] if metadata is not None else None
+  # A generic COMPOSITE_ACCUMULATOR lowers to a tagged tuple too, but it is
+  # only an opt-in carrier adapter, not a REDUCE producer.  REDUCE_SLOT must
+  # never infer projection semantics from its shape metadata.
+  if not isinstance(composite, CompositeReduce): return None
+  lane_shapes = getattr(composite, "lane_shapes", ())
+  if lane_shapes:
+    expected = prod(lane_shapes[slot.arg]) if lane_shapes[slot.arg] else 1
+    if result.dtype.count != expected:
+      raise RuntimeError(f"composite slot {slot.arg} physical lane mismatch: {result.dtype.count} != {expected}")
     return result
+  if slot.arg < len(composite.slots):
+    sdtype = composite.slots[slot.arg].dtype
+    if sdtype is not None and result.dtype.count == 1 and sdtype.count > 1: result = result.broadcast(sdtype.count)
+    if sdtype is not None and result.dtype != sdtype: result = result.cast(sdtype)
+  if slot.arg < len(composite.slot_shapes):
+    shape = composite.slot_shapes[slot.arg]
+    if shape is not None and result.shape != tuple(shape): result = result.reshape(tuple(shape))
+  return result
 
 def resolve_composite_reduce_slot_prebufferize(slot):
   """Resolve only a proven composite slot before rangeify materializes buffers.
