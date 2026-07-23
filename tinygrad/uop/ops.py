@@ -1492,6 +1492,29 @@ class RotatingPVSequentialDrainSpec(NamedTuple):
     return UOp(Ops.CUSTOMI, self.dtype, (self.out, self.group, self.final_l, self.state.storage, self.state.lane, final_token),
                ("rotating_pv_sequential_drain_v1", self), tag=self.renderer_tag)
 
+class RotatingPVSequenceSpec(NamedTuple):
+  """Typed ordered-emission marker for one rotating-PV block's four sub-steps:
+  publication/boundary sync, C-window LDS load, PV WMMA, C-window LDS store."""
+  state: RotatingPVStateSpec
+  block: int
+
+  @property
+  def dtype(self) -> DType: return self.state.dtype
+
+  def validate(self):
+    self.state.validate()
+    if not isinstance(self.block, int) or not 0 <= self.block < 8 or self.block != self.state.block:
+      raise ValueError("rotating PV sequence block must match its state block")
+    return self
+
+  def sequence(self, sync: UOp, c_load: UOp, pv_wmma: UOp, c_store: UOp) -> UOp:
+    self.validate()
+    if sync.dtype != dtypes.void: raise TypeError("rotating PV sequence requires a void sync/publication token")
+    if c_load.dtype != self.dtype: raise TypeError("rotating PV sequence requires a matching C-window load")
+    if pv_wmma.dtype != self.dtype: raise TypeError("rotating PV sequence requires a matching PV WMMA result")
+    if c_store.dtype != dtypes.void: raise TypeError("rotating PV sequence requires a void C-window store")
+    return UOp(Ops.ROTATING_PV_SEQUENCE, dtypes.void, (sync, c_load, pv_wmma, c_store), self)
+
 class CompositeReduce(NamedTuple):
   slots: tuple
   combine_fn: Any = None  # UOp sub-graph encoding combine (None = independent slots)
@@ -1521,6 +1544,7 @@ class SharedAttentionCandidateContext(NamedTuple):
   hd: int
   causal: bool
   acc_blocks: int = 8
+  output_block_base: int = 0
 
   @property
   def schema_version(self) -> int: return 1
