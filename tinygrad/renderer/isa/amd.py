@@ -1665,7 +1665,11 @@ def isel_packed_fragment(ctx:IselContext,x:UOp, base:int|None=None) -> UOp:
   # bases are produced and consumed one at a time instead of all being live
   # before the first global load.
   grid_tail = getattr(ctx, "_attention_grid_fragment_tail", None) if loop and x.arg.grid is not None else None
-  if owner_deps and x.arg.head_block == 4: grid_tail=owner_deps[0]
+  # The graph-owned rotating probe fence is lowered by HIP before fragment
+  # expansion.  Do not re-inject its raw producer graph here: this late opaque
+  # selector runs after bottom-up isel and would otherwise retain unselected
+  # weakint casts from that producer.  Generic fragment ownership is unchanged.
+  if owner_deps and x.arg.head_block == 4 and owner_deps[0].op is Ops.INS: grid_tail=owner_deps[0]
   if base is None: base=_frag_base(ctx,("amd_gfx1100_opaque_fragment","A" if role=="Q" else "B"),8)
   if base is None: raise NotImplementedError("opaque fragment fixed span exhausted")
   tid=_validate_fragment_lane_provenance(lane,wave_id,col,multiwave)
