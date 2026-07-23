@@ -407,6 +407,8 @@ def do_to_program(ast:UOp, renderer:Renderer) -> UOp:
     # instruction selection
     if isinstance(renderer, ISARenderer):
       full_sink = graph_rewrite(full_sink, renderer.pre_isel_matcher, ctx=itertools.count(-1, -1), name="pre instruction selection", bottom_up=True)
+      if (opaque_pm:=getattr(renderer,"native_fragment_opaque_matcher",None)) is not None:
+        full_sink=graph_rewrite(full_sink,opaque_pm,name="opaque native fragments",bottom_up=True)
       isel_ctx = IselContext(full_sink)
       full_sink = graph_rewrite(full_sink, renderer.isel_matcher, ctx=isel_ctx, name="instruction selection", bottom_up=True)
       if renderer.post_isel_matcher is not None:

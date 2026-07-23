@@ -103,7 +103,9 @@ spec_shared = PatternMatcher([
   # TODO: remove UNROLL here, it's for SPEC=2
   (UPat(Ops.GROUP, dtypes.void, src=UPat((Ops.GROUP, Ops.STORE, Ops.NOOP, Ops.UNROLL, Ops.INS))), lambda: True),
   (UPat(Ops.GROUP, dtypes.void, src=UPat(Ops.CUSTOMI, name="x")),
-   lambda x: isinstance(x.arg, tuple) and x.arg[:1] == ("amd_register_stage_pair",)),
+   lambda x: isinstance(x.arg, tuple) and x.arg[:1] in {("amd_register_stage_pair",), ("amd_gfx1100_row_state_write_v1",)}),
+  (UPat(Ops.GROUP, dtypes.void, name="x"), lambda x: all(s.op in {Ops.GROUP, Ops.STORE, Ops.NOOP, Ops.UNROLL, Ops.INS} or
+    (s.op is Ops.CUSTOMI and isinstance(s.arg, tuple) and s.arg[:1] == ("amd_gfx1100_row_state_write_v1",)) for s in x.src)),
 
   # TOOD: these should be buffer with different addrspace
   (UPat((Ops.DEFINE_LOCAL, Ops.DEFINE_REG)), lambda: True),
@@ -250,10 +252,16 @@ spec_tensor = PatternMatcher([
   (UPat(Ops.AMD_ROW_SOFTMAX_REPACK, src=(UPat(), UPat(), UPat()), name="x"),
    lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_online_softmax_qk_pv_v1"
    and x.dtype == dtypes.half.vec(16) and x.src[0].dtype == dtypes.float32.vec(8)
-   and x.src[1].dtype == x.src[2].dtype == dtypes.float32),
+   and ((x.arg.mode == "legacy_normalized" and x.src[1].dtype == x.src[2].dtype == dtypes.float32)
+        or (x.arg.mode == "stateful_unnormalized_v1" and x.src[1].dtype == x.src[2].dtype == dtypes.float32.vec(8)))),
+  (UPat(Ops.AMD_ROW_SOFTMAX_REPACK, src=(UPat(),), name="x"),
+   lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_online_softmax_qk_pv_v1"
+   and x.arg.mode == "initial_state_v1" and x.dtype == dtypes.half.vec(16) and x.src[0].dtype == dtypes.float32.vec(8)),
   (UPat(Ops.AMD_ROW_SOFTMAX_SLOT, src=(UPat(Ops.AMD_ROW_SOFTMAX_REPACK),), name="x"),
    lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_online_softmax_qk_pv_v1"
    and x.dtype in {dtypes.half.vec(16), dtypes.float.vec(8)}),
+  (UPat(Ops.GEP, src=(UPat(Ops.AMD_ROW_SOFTMAX_SLOT, name="slot"),), name="x"),
+   lambda x,slot: slot.dtype == dtypes.float.vec(8) and x.dtype == dtypes.float and len(x.arg) == 1 and 0 <= x.arg[0] < 8),
   (UPat(Ops.AMD_PV_C_LANE, src=(UPat(),), name="x"),
    lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_pv_c_lane_v1"
    and x.src[0].dtype == dtypes.float.vec(8) and x.dtype == dtypes.float),

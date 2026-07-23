@@ -282,16 +282,19 @@ def _ab_base(ctx:IselContext, key, nregs:int=8) -> int|None:
 
 def _shared_high_ab_regs(ctx:IselContext) -> tuple[int, ...]:
   """Physical high A/B lease used by serialized, non-resident WMMA chains."""
-  if _progressive_c_assignment(ctx) is None or _resident_ab_enabled(ctx) or _ab_reserved_regs(ctx): return ()
+  has_opaque=any(u.op is Ops.WMMA and any(s.op is Ops.AMD_PACKED_FRAGMENT_LOAD for s in u.src[:2]) for u in ctx.uses)
+  if not has_opaque and (_progressive_c_assignment(ctx) is None or _resident_ab_enabled(ctx) or _ab_reserved_regs(ctx)): return ()
   def uses_low_resident_ab(u:UOp) -> bool:
     c2 = u.src[2]
     return c2.op in (Ops.STACK, Ops.NOOP) and c2.src and c2.src[0].op is Ops.LOAD and \
       c2.src[0].src[0].op is Ops.INDEX and \
       (dr := _reg_base(c2.src[0].src[0].src[0])).op is Ops.DEFINE_REG and dr.dtype.addrspace == AddrSpace.REG
   wmmas = [u for u in ctx.uses if u.op is Ops.WMMA and not uses_low_resident_ab(u) and
-           not (_register_stage_fragment_role(u.src[0]) == "A" and _register_stage_fragment_role(u.src[1]) == "B")]
+           (u.src[0].op is Ops.AMD_PACKED_FRAGMENT_LOAD or u.src[1].op is Ops.AMD_PACKED_FRAGMENT_LOAD or
+            not (_register_stage_fragment_role(u.src[0]) == "A" and _register_stage_fragment_role(u.src[1]) == "B"))]
   if not wmmas: return ()
-  width = max(_wmma_operand_regs(u.src[0]) for u in wmmas) + max(_wmma_operand_regs(u.src[1]) for u in wmmas)
+  width = max(_wmma_operand_regs(u.src[0]) for u in wmmas) + max(_wmma_operand_regs(u.src[1]) for u in wmmas) + \
+    int(any(s.op is Ops.AMD_PACKED_FRAGMENT_LOAD for u in wmmas for s in u.src[:2]))
   if FRAG_BASE + width > FRAG_TOP: raise NotImplementedError("AMD:ISA shared high A/B lease exceeds the fragment window")
   return tuple(range(FRAG_BASE, FRAG_BASE + width))
 
@@ -367,6 +370,9 @@ class AMDOps(FastEnum):
   V_TRUNC = 64                           # truncate float32 toward zero -> v_trunc_f32
   V_MUL_F16 = 65                         # native fp16 multiply -> v_mul_f16_e32; one rounding per metadata lane
   V_HALF_CANON = 66                      # b32 copy into a low VGPR before scalar-f16 VOP consumption
+  FRAGMENT_LOAD_PAIR = 67                # exact opaque fp16 pair load, expanded post-regalloc into load/load/wait/pack
+  V_WMMA_ZERO = 68                       # WMMA with post-regalloc zero initialization of its fixed C span
+  FRAGMENT_LOAD_DWORD = 69               # exact contiguous packed fragment dword load into a physical destination
 
 def _reg(r:Register): return r  # passthrough; encoding maps index in post_regalloc
 
@@ -813,6 +819,16 @@ def _tov(ctx:IselContext, u:UOp):
 def isel_customi(ctx:IselContext, x:UOp):
   # CUSTOMI markers: Phase F hand-built markers ("bpermute"/"fdot2") AND the generated tile's HIP-builtin strings
   # ("__builtin_amdgcn_fdot2(...)", "...__builtin_amdgcn_ds_bpermute(...)"). NOTE operand order differs between them.
+  if isinstance(x.arg, tuple) and x.arg[:1] in {("amd_gfx1100_row_state_write_v1",), ("amd_gfx1100_row_state_read_v1",)}:
+    kind, owner, role, e = x.arg
+    if role not in {"m", "l"} or not isinstance(e, int) or not 0 <= e < 8: raise ValueError("malformed native row-state marker")
+    base = _acc_base(ctx, ("amd_gfx1100_row_state_v1", owner, role))
+    if base is None: raise NotImplementedError("native row-state fixed VGPR span exhausted")
+    if kind == "amd_gfx1100_row_state_write_v1":
+      if len(x.src) != 1 or x.src[0].dtype != dtypes.float: raise ValueError("native row-state write requires scalar fp32")
+      return UOp(Ops.INS, dtypes.float, src=(_tov(ctx, x.src[0]),), arg=AMDOps.MOV, tag=_pin(base, e))
+    if not x.src: raise ValueError("native row-state read requires its write dependency")
+    return _fixed_alias(base, e, dtypes.float, *x.src)
   if isinstance(x.arg, tuple) and x.arg[:1] == ("amd_register_stage_pair",):
     a, adjacent, b = x.src
     # CUSTOMI selection can run before its INDEX children in the unified
@@ -1418,10 +1434,16 @@ def _wmma_operand_regs(carrier:UOp) -> int:
 # D lanes). All three fragments are pinned: A->abase, B->bbase, D/C in-place->cbase. On accumulate tiles the A/B packs
 # carry `dep` (the prior WMMA def) as an extra ignored src so the shared-frag reload is scheduled AFTER the prior matmul
 # read it (WAR guard). Returns the 8-lane NOOP output carrier (lane 0 = the V_WMMA def, lanes 1..7 = passthrough MOVs).
-def _build_wmma_tile(ctx:IselContext, A:UOp, B:UOp, cin:list[UOp], abase:int, bbase:int, cbase:int, dep:tuple[UOp,...]):
+def _build_wmma_tile(ctx:IselContext, A:UOp, B:UOp, cin:list[UOp], abase:int, bbase:int, cbase:int, dep:tuple[UOp,...],
+                     zero_init:bool=False):
+  opaque_fragment = any(s.op is Ops.AMD_PACKED_FRAGMENT_LOAD or
+    (s.op is Ops.NOOP and isinstance(s.arg, tuple) and s.arg[:1] == ("amd_gfx1100_packed_fragment_v1",)) for s in (A, B))
   apk = _pack_frag_tile(ctx, A, abase, dep, "A")
   bpk = _pack_frag_tile(ctx, B, bbase, dep, "B")
-  return _build_wmma_from_packs(ctx, apk, bpk, cin, cbase)
+  selected_zero = all(c.op is Ops.INS and c.arg is AMDOps.V_CONST and c.src[0].op is Ops.CONST and float(c.src[0].arg) == 0 for c in cin)
+  zero_init=opaque_fragment and (zero_init or selected_zero)
+  if zero_init: cin=[]
+  return _build_wmma_from_packs(ctx, apk, bpk, cin, cbase, zero_init=zero_init)
 
 def _pack_i8_fragment(ctx:IselContext, carrier:UOp, base:int, dep:tuple[UOp, ...]) -> tuple[UOp, ...]:
   """Pack sixteen signed bytes into the four b32 source registers required by RDNA3 iu8 WMMA."""
@@ -1478,7 +1500,10 @@ def _pack_stage_fragment(ctx:IselContext, carrier:UOp, dep:tuple[UOp,...]=()) ->
   return tuple(packed)
 
 def _register_stage_fragment_role(carrier:UOp) -> str|None:
+  if carrier.op is Ops.AMD_PACKED_FRAGMENT_LOAD and isinstance(carrier.arg,tuple) and carrier.arg[:1]==("amd_gfx1100_packed_fragment_v1",):
+    return None
   """Return A/B when every lane is backed by one logical register stage."""
+  if carrier.op not in {Ops.STACK, Ops.NOOP} or carrier.dtype != dtypes.half.vec(16) or len(carrier.src) != 16: return None
   E = _wmma_elems(carrier, 16)
   if not E: return None
   roles = set()
@@ -1493,11 +1518,72 @@ def _register_stage_fragment_role(carrier:UOp) -> str|None:
   return next(iter(roles)) if len(roles) == 1 else None
 
 def _pack_frag_tile(ctx:IselContext, carrier:UOp, base:int, dep:tuple[UOp,...], role:str) -> tuple[UOp,...]:
+  if carrier.op is Ops.AMD_PACKED_FRAGMENT_LOAD:
+    lowered=isel_packed_fragment(ctx,carrier,base)
+    bad=next((u for u in lowered.toposort() if u.op not in {Ops.INS,Ops.NOOP,Ops.CONST,Ops.PARAM,Ops.SPECIAL}),None)
+    if bad is not None: raise RuntimeError(f"lazy opaque fragment lowering produced unselected {bad.op}/{bad.dtype}")
+    return lowered.src
+  if carrier.op is Ops.NOOP and isinstance(carrier.arg,tuple) and carrier.arg[:1]==("amd_gfx1100_packed_fragment_v1",): return carrier.src
   E = _wmma_elems(carrier, 16)
   if carrier.dtype.scalar() is dtypes.char: return _frag_b128_loads(ctx, E, base, dep, role) or _pack_i8_fragment(ctx, carrier, base, dep)
   if (stage := _pack_stage_fragment(ctx, carrier, dep)) is not None: return stage
-  return _frag_b128_loads(ctx, E, base, dep, role) or tuple(
-    UOp(Ops.INS, dtypes.int32, src=(_tov(ctx, E[2*i]), _tov(ctx, E[2*i+1]))+dep, arg=AMDOps.V_PACK, tag=_pin(base, i)) for i in range(8))
+  if (wide := _frag_b128_loads(ctx, E, base, dep, role)) is not None: return wide
+  def local(v:UOp) -> UOp:
+    if v.op is Ops.LOAD and len(v.src) == 1 and v.src[0].op is Ops.INDEX:
+      idx = isel_index(ctx, v.src[0])
+      if idx is not None and (ld := isel_load(ctx, v.replace(src=(idx,)))) is not None: return ld
+    return _tov(ctx, v)
+  return tuple(UOp(Ops.INS, dtypes.int32, src=(local(E[2*i]), local(E[2*i+1]))+dep,
+                   arg=AMDOps.V_PACK, tag=_pin(base, i)) for i in range(8))
+
+def isel_packed_fragment(ctx:IselContext,x:UOp, base:int|None=None) -> UOp:
+  abi,role,tile=x.arg
+  if abi!="amd_gfx1100_packed_fragment_v1" or role not in {"Q","K","V"} or tile not in {0,1} or len(x.src)!=3:
+    raise ValueError("invalid opaque gfx1100 packed fragment")
+  owner,lane,col=x.src
+  if base is None: base=_frag_base(ctx,("amd_gfx1100_opaque_fragment","A" if role=="Q" else "B"),8)
+  if base is None: raise NotImplementedError("opaque fragment fixed span exhausted")
+  if lane.op is not Ops.SPECIAL or str(lane.arg) != "lidx0" or col.op is not Ops.AND or col.src[0] is not lane or \
+     col.src[1].op is not Ops.CONST or int(col.src[1].arg) != 15:
+    raise ValueError("opaque gfx1100 fragment requires exact lidx0/column provenance")
+  lane_v=isel_special(ctx,lane).replace(dtype=dtypes.int)
+  col_v=UOp(Ops.INS,dtypes.int,src=(lane_v,UOp.const(dtypes.int32,15).rtag()),arg=AMDOps.V_AND,tag=_vreg_def(ctx))
+  half_v=UOp(Ops.INS,dtypes.int,src=(lane_v,UOp.const(dtypes.int32,4).rtag()),arg=AMDOps.V_LSHR,tag=_vreg_def(ctx))
+  def add_imm(v:UOp, imm:int) -> UOp:
+    return v if imm == 0 else UOp(Ops.INS,dtypes.int,src=(v,UOp.const(dtypes.int32,imm).rtag()),arg=AMDOps.V_IADD,tag=_vreg_def(ctx))
+  def shl4(v:UOp) -> UOp:
+    return UOp(Ops.INS,dtypes.int,src=(v,UOp.const(dtypes.int32,4).rtag()),arg=AMDOps.V_OFFSET,tag=_vreg_def(ctx))
+  off=tile*256
+  base_idx=add_imm(shl4(col_v),0 if role=="Q" else off) if role in {"Q","K"} else add_imm(col_v,off)
+  ix=isel_index(ctx,owner.index(base_idx))
+  scratch=_frag_base(ctx,("amd_gfx1100_opaque_fragment","scratch"),1)
+  if scratch is None: raise NotImplementedError("opaque fragment scratch span exhausted")
+  packs=[]
+  for i in range(8):
+    if role in {"Q","K"}:
+      op=UOp(Ops.INS,dtypes.void,src=(ix.src[1],ix.src[0],UOp.const(dtypes.int32,i*4).rtag(),
+        UOp.const(dtypes.int32,base+i).rtag()),arg=AMDOps.FRAGMENT_LOAD_DWORD)
+      packs.append(_fixed_alias(base,i,dtypes.int32,op))
+      continue
+    stride=64 if role=="Q" else 32
+    op=UOp(Ops.INS,dtypes.void,src=(ix.src[1],ix.src[0],UOp.const(dtypes.int32,(2*i)*stride).rtag(),
+      UOp.const(dtypes.int32,(2*i+1)*stride).rtag(),UOp.const(dtypes.int32,scratch).rtag(),
+      UOp.const(dtypes.int32,base+i).rtag()),arg=AMDOps.FRAGMENT_LOAD_PAIR)
+    packs.append(_fixed_alias(base,i,dtypes.int32,op))
+  packs=tuple(packs)
+  return UOp(Ops.NOOP,dtypes.half.vec(16),packs,arg=("amd_gfx1100_packed_fragment_v1",role,tile))
+
+def preselect_packed_fragment(ctx:IselContext, x:UOp) -> UOp:
+  from tinygrad.uop.ops import graph_rewrite
+  lowered=graph_rewrite(isel_packed_fragment(ctx,x),isel_matcher,ctx=ctx,name="lower opaque fragment addresses",bottom_up=True)
+  bad=next((u for u in lowered.toposort() if u.op not in {Ops.INS,Ops.NOOP,Ops.CONST,Ops.PARAM,Ops.SPECIAL}),None)
+  if bad is not None:
+    raise RuntimeError(f"opaque native fragment lowering produced unselected {bad.op}/{bad.dtype}")
+  return lowered
+
+native_fragment_isel_matcher=PatternMatcher([
+  (UPat(Ops.AMD_PACKED_FRAGMENT_LOAD,name="x"),lambda ctx,x: preselect_packed_fragment(ctx,x)),
+])
 
 # B0.M residency: pack a 16-fp16 fragment carrier into the 8 VGPRs [base, base+8) EXACTLY as _build_wmma_tile does
 # (element e -> reg base+e//2, e%2 low/high half via v_pack_b32_f16), but MEMOIZED on the carrier identity so a
@@ -1565,10 +1651,16 @@ def _dbuf_d3a_probe_marker(ctx:IselContext, tile:UOp, dep:tuple[UOp,...]) -> tup
 # B0.M residency: build ONE subtile v_wmma from ALREADY-PACKED resident A/B fragments (apk,bpk) + this subtile's 8 cin
 # accumulator lanes. Same element/lane order as _build_wmma_tile (A0..A7,B0..B7,C0..C7; def -> cbase) -- only the packs
 # are hoisted out (shared) instead of rebuilt per subtile. Returns the 8-lane D output carrier.
-def _build_wmma_from_packs(ctx:IselContext, apk:tuple[UOp,...], bpk:tuple[UOp,...], cin:list[UOp], cbase:int, dep:tuple[UOp,...]=()):
+def _build_wmma_from_packs(ctx:IselContext, apk:tuple[UOp,...], bpk:tuple[UOp,...], cin:list[UOp], cbase:int,
+                           dep:tuple[UOp,...]=(), zero_init:bool=False):
   if len(apk) != len(bpk) or len(apk) not in (4, 8): raise ValueError(f"invalid WMMA packed fragment widths {len(apk)}/{len(bpk)}")
-  acc_dtype, op = (dtypes.int32, AMDOps.V_WMMA_I8) if len(apk) == 4 else (dtypes.float32, AMDOps.V_WMMA)
-  wm = UOp(Ops.INS, acc_dtype, src=tuple(apk) + tuple(bpk) + tuple(cin) + dep, arg=op, tag=_pin(cbase, 0))
+  acc_dtype, op = (dtypes.int32, AMDOps.V_WMMA_I8) if len(apk) == 4 else \
+    (dtypes.float32, AMDOps.V_WMMA_ZERO if zero_init else AMDOps.V_WMMA)
+  wm_src=tuple(apk)+tuple(bpk)+((UOp.const(dtypes.int32,cbase).rtag(),) if zero_init else tuple(cin))+dep
+  if zero_init:
+    wm=UOp(Ops.INS,dtypes.void,src=wm_src,arg=op)
+    return UOp(Ops.NOOP,dtypes.float32.vec(8),src=tuple(_fixed_alias(cbase,i,dtypes.float32,wm) for i in range(8)))
+  wm = UOp(Ops.INS, acc_dtype, src=wm_src, arg=op, tag=_pin(cbase, 0))
   outs = [wm] + [UOp(Ops.INS, acc_dtype, src=(wm,), arg=AMDOps.MOV, tag=_pin(cbase, i)) for i in range(1, 8)]
   return UOp(Ops.NOOP, acc_dtype.vec(8), src=tuple(outs))
 
@@ -1672,6 +1764,23 @@ def _try_wmma_kmajor_phase(ctx:IselContext, x:UOp):
 # rule before descending -- see the trace), so an accumulate tile sees a RAW Ops.WMMA at src[2], NOT a lowered carrier.
 # We therefore collapse the WHOLE chain on first touch and memoize each tile's output, so whichever node is visited first
 # builds the entire chain and later visits of inner tiles just return their cached carrier.
+def _corrected_c_transition(vals:list[UOp], descriptor) -> UOp|None:
+  """Prove alpha*prior-PV-C lane ownership for one stateful attention transition."""
+  owner, prior = None, None
+  for i,val in enumerate(vals):
+    if val.op is not Ops.MUL or len(val.src) != 2: return None
+    tagged = [s for s in val.src if isinstance(s.tag, tuple) and s.tag[:1] == ("amd_gfx1100_online_softmax_alpha_v1",)]
+    if len(tagged) != 1 or len(tagged[0].tag) != 2: return None
+    alpha_owner = tagged[0].tag[1]
+    if alpha_owner.op is not Ops.AMD_ROW_SOFTMAX_REPACK or not alpha_owner.src or \
+       alpha_owner.src[0].op is not Ops.WMMA or alpha_owner.src[0].arg != descriptor: return None
+    lane = val.src[1] if val.src[0] is tagged[0] else val.src[0]
+    if lane.op is not Ops.GEP or lane.arg != (i,) or len(lane.src) != 1: return None
+    if lane.src[0].op is not Ops.WMMA or lane.src[0].dtype != dtypes.float.vec(8) or lane.src[0].arg != descriptor: return None
+    if owner is None: owner, prior = alpha_owner, lane.src[0]
+    elif alpha_owner is not owner or lane.src[0] is not prior: return None
+  return prior if len(vals) == 8 else None
+
 def isel_wmma(ctx:IselContext, x:UOp):
   memo = ctx._wmma_memo = getattr(ctx, "_wmma_memo", {})
   if x in memo: return memo[x]
@@ -1716,7 +1825,7 @@ def isel_wmma(ctx:IselContext, x:UOp):
       raise NotImplementedError(f"AMD:ISA WMMA fragment region [{FRAG_BASE},{FRAG_TOP}) exhausted (A={abase} B={bbase} C={cbase})")
     _record_direct_wmma_fragments(ctx, abase, bbase, _wmma_operand_regs(x.src[0]), _wmma_operand_regs(x.src[1]))
     cin = [_fixed_alias(cbase, i, x.dtype.scalar(), after) for i in range(8)]
-    return memo.setdefault(x, _build_wmma_tile(ctx, x.src[0], x.src[1], cin, abase, bbase, cbase, ()))
+    return memo.setdefault(x, _build_wmma_tile(ctx, x.src[0], x.src[1], cin, abase, bbase, cbase, (), zero_init=x.src[2].op is Ops.CONST))
   chain = [x]                                   # outermost .. head
   # extra_dep[consumer] holds a WAR-guard's extra ordering operand (e.g. the cross-element guard in
   # extra/qk/mmq_llama_group_chain.py _instantiate_group_wmma_vectors), keyed by the chain entry whose
@@ -1749,7 +1858,11 @@ def isel_wmma(ctx:IselContext, x:UOp):
   # PREFILL_WMMA_CHAIN_AB_RESIDENT instead allocates resident A/B fragments by address key so row/col fragments can be
   # reused across subtiles, matching the hand LDS2 amortization target when VGPR budget allows it.
   # Single-chain kernels (_c_low False) keep the legacy per-head high C + per-head A/B (k64-chain / single-tile tests).
-  cbase = _acc_base(ctx, (id(head_acc[0]), head_acc[1]) if head_acc is not None else ("wmma_root", x)) if _c_low(ctx) else _frag_base(ctx, id(head.src[2]), 8)
+  corrected_prior = None if head.src[2].op is Ops.CONST else _corrected_c_transition(_wmma_elems(head.src[2], 8), head.arg)
+  # A corrected transition overwrites the proven prior PV C fragment in place:
+  # alpha multiplication remains explicit, but PV1 does not allocate a second C run.
+  cbase = _acc_base(ctx, (id(head_acc[0]), head_acc[1]) if head_acc is not None else ("wmma_root", x)) if _c_low(ctx) else \
+    _frag_base(ctx, id(corrected_prior.src[2]) if corrected_prior is not None else id(head.src[2]), 8)
   ab_key = "wmma_ab" if _c_low(ctx) else id(head.src[2])
   stage_backed = all(_register_stage_fragment_role(tile.src[0]) == "A" and
                      _register_stage_fragment_role(tile.src[1]) == "B" for tile in chain)
@@ -1766,11 +1879,15 @@ def isel_wmma(ctx:IselContext, x:UOp):
       if head_acc is not None:
         cin = [_fixed_alias(cbase, i, x.dtype.scalar(), head_acc[2]) for i in range(8)]
       else:
-        cE = _wmma_elems(tile.src[2], 8)
-        for i in range(8):
-          if cE[i].op is not Ops.CONST:
-            raise NotImplementedError(f"AMD:ISA WMMA C init lane {i} is {cE[i].op}, expected CONST at the K-reduction chain head")
-        cin = [UOp(Ops.INS, x.dtype.scalar(), src=(cE[i].rtag(),), arg=AMDOps.V_CONST, tag=_pin(cbase, i)) for i in range(8)]
+        cE = [UOp.const(x.dtype.scalar(), tile.src[2].arg)] * 8 if tile.src[2].op is Ops.CONST else _wmma_elems(tile.src[2], 8)
+        corrected = _corrected_c_transition(cE, tile.arg)
+        if corrected is not None:
+          cin = [UOp(Ops.INS, x.dtype.scalar(), src=(_tov(ctx, cE[i]),), arg=AMDOps.MOV, tag=_pin(cbase, i)) for i in range(8)]
+        else:
+          for i in range(8):
+            if cE[i].op is not Ops.CONST:
+              raise NotImplementedError(f"AMD:ISA WMMA C init lane {i} is {cE[i].op}, expected CONST at the K-reduction chain head")
+          cin = [UOp(Ops.INS, x.dtype.scalar(), src=(cE[i].rtag(),), arg=AMDOps.V_CONST, tag=_pin(cbase, i)) for i in range(8)]
       dep = _wmma_carrier_order_deps(tile.src[2])
     else:                                       # ACCUMULATE: src2 = prior tile's 8 pinned D lanes (== v{cbase..cbase+7})
       cin = list(prev.src)                      #   -> lower_inst reads dbase=v{cbase} for both src2 and vdst (in place)
@@ -1788,7 +1905,8 @@ def isel_wmma(ctx:IselContext, x:UOp):
       apk, bpk = _pack_frag(ctx, tile.src[0], tabase), _pack_frag(ctx, tile.src[1], tbbase)
       prev = memo[tile] = _build_wmma_from_packs(ctx, apk, bpk, cin, cbase)
     else:
-      prev = memo[tile] = _build_wmma_tile(ctx, tile.src[0], tile.src[1], cin, abase, bbase, cbase, dep)
+      prev = memo[tile] = _build_wmma_tile(ctx, tile.src[0], tile.src[1], cin, abase, bbase, cbase, dep,
+                                           zero_init=tile.src[2].op is Ops.CONST)
     if tile is head:
       marker = UOp(Ops.NOOP, dtypes.void, arg=("selected_wmma_root", x))
       prev = memo[tile] = prev.replace(src=prev.src + (marker,))
@@ -2021,6 +2139,7 @@ def _post_isel_structural_lifetimes(ctx:IselContext, x:UOp):
   return chained
 
 isel_matcher = PatternMatcher([
+  (UPat(Ops.AMD_PACKED_FRAGMENT_LOAD,name="x"), lambda ctx,x: isel_packed_fragment(ctx,x)),
   (UPat(Ops.WAIT, name="x"), isel_typed_wait),
   (UPat(Ops.PARAM, name="x"), isel_param),
   (UPat(Ops.DEFINE_VAR, name="x"), isel_var),
@@ -2257,56 +2376,103 @@ pre_isel_matcher = PatternMatcher([
   (UPat(Ops.GROUP, name="x"), _pair_register_stage_stores),
 ])
 
-def expand_native_row_softmax_repack(ctx, x:UOp) -> UOp:
+def _opaque_exact_fragment_inputs(x:UOp) -> UOp|None:
+  if x.op is not Ops.WMMA or len(x.src) != 3: return None
+  changed, src = False, list(x.src)
+  for pos in (0,1):
+    c=src[pos]
+    if not (c.op is Ops.STACK and c.dtype == dtypes.half.vec(16) and len(c.src)==16 and isinstance(c.tag,tuple) and
+            c.tag[:1]==("amd_gfx1100_fragment_load_v1",) and all(v.op is Ops.LOAD and v.dtype==dtypes.half for v in c.src)): continue
+    _,role,tile,owner,lane,col=c.tag
+    if role not in {"Q","K","V"} or not isinstance(tile,int) or tile not in {0,1}: raise ValueError("malformed gfx1100 fragment descriptor")
+    if role == "Q" and pos != 0 or role == "K" and pos != 1 or role == "V" and pos != 1: raise ValueError("fragment role/WMMA operand mismatch")
+    src[pos]=UOp(Ops.AMD_PACKED_FRAGMENT_LOAD,dtypes.half.vec(16),(owner,lane,col),arg=("amd_gfx1100_packed_fragment_v1",role,tile))
+    changed=True
+  return x.replace(src=tuple(src)) if changed else None
+
+native_fragment_opaque_matcher=PatternMatcher([(UPat(Ops.WMMA,name="x"),_opaque_exact_fragment_inputs)])
+
+def expand_native_row_softmax_repack(ctx, x:UOp, native_state:bool=True) -> UOp:
   """Expand the exact gfx1100-v1 QK-C -> PV-A bridge before isel."""
   from tinygrad.uop.ops import AMDRowSoftmaxRepackSpec
   if not isinstance(x.arg, AMDRowSoftmaxRepackSpec): raise ValueError("AMD row-softmax repack is missing its native descriptor")
   x.arg.validate()
-  score, m, l = x.src
+  initial_state = x.arg.mode == "initial_state_v1"
+  if initial_state:
+    if len(x.src) != 1: raise ValueError("initial-state repack must not carry old m/l state")
+    score, m, l = x.src[0], None, None
+  else:
+    if len(x.src) != 3: raise ValueError("row-softmax transition repack requires score/m/l")
+    score, m, l = x.src
   if score.op is not Ops.WMMA or score.dtype != dtypes.float.vec(8):
     raise ValueError("AMD row-softmax repack requires one raw QK WMMA float.vec(8)")
-  stateful = x.arg.mode == "stateful_unnormalized_v1"
+  stateful = x.arg.mode in {"initial_state_v1", "stateful_unnormalized_v1"}
   state_dt, state_shape = (dtypes.float.vec(8), (8,)) if stateful else (dtypes.float, ())
-  if any(s.dtype != state_dt or s.shape != state_shape for s in (m, l)):
+  if not initial_state and any(s.dtype != state_dt or s.shape != state_shape for s in (m, l)):
     raise ValueError("AMD row-softmax repack state dtype does not match descriptor mode")
   lane = UOp.special(32, "lidx0")
   lane_hw = lane.cast(dtypes.int)
   halfwave, col = lane.alu(Ops.SHR, UOp.const(dtypes.weakint, 4)), lane.alu(Ops.AND, UOp.const(dtypes.weakint, 15))
   lds = UOp(Ops.DEFINE_LOCAL, dtypes.half.ptr(256, AddrSpace.LOCAL), arg=next(ctx))
+  state_owner = next(ctx) if stateful and native_state else None
+  state_writes_m, state_writes_l = [], []
   stores, new_ms, new_ls, alphas, log2e = [], [], [], [], UOp.const(dtypes.float, 1.4426950408889634)
   for e in range(8):
-    old_m, old_l = (m.gep(e), l.gep(e)) if stateful else (m, l)
+    old_m, old_l = (m.gep(e), l.gep(e)) if stateful and not initial_state else (m, l)
     value = score.gep(e).alu(Ops.MUL, UOp.const(dtypes.float, x.arg.score_scale))
+    if stores: value = value.bitcast(dtypes.uint).after(UOp.group(stores[-1])).bitcast(dtypes.float)
     row_max = value
     for mask in x.arg.xor_masks:
       addr = lane_hw.alu(Ops.XOR, UOp.const(dtypes.int, mask)).alu(Ops.MUL, UOp.const(dtypes.int, 4))
       row_max = row_max.alu(Ops.MAX, UOp(Ops.CUSTOMI, dtypes.float, (addr, row_max), "bpermute"))
-    new_m = old_m.alu(Ops.MAX, row_max)
+    new_m = row_max if initial_state else old_m.alu(Ops.MAX, row_max)
     weight = (value-new_m).alu(Ops.MUL, log2e).exp2()
     row_sum = weight
     for mask in x.arg.xor_masks:
       addr = lane_hw.alu(Ops.XOR, UOp.const(dtypes.int, mask)).alu(Ops.MUL, UOp.const(dtypes.int, 4))
       row_sum = row_sum.alu(Ops.ADD, UOp(Ops.CUSTOMI, dtypes.float, (addr, row_sum), "bpermute"))
-    raw_alpha = (old_m-new_m).alu(Ops.MUL, log2e).exp2()
-    alpha = new_m.ne(UOp.const(dtypes.float, -float("inf"))).where(raw_alpha, UOp.const(dtypes.float, 1)) if stateful else raw_alpha
-    new_l = old_l.alu(Ops.MUL, alpha).alu(Ops.ADD, row_sum)
-    new_ms.append(new_m); new_ls.append(new_l); alphas.append(alpha)
+    raw_alpha = UOp.const(dtypes.float, 1) if initial_state else (old_m-new_m).alu(Ops.MUL, log2e).exp2()
+    alpha = raw_alpha
+    new_l = row_sum if initial_state else old_l.alu(Ops.MUL, alpha).alu(Ops.ADD, row_sum)
+    if not stateful or not native_state: new_ms.append(new_m); new_ls.append(new_l)
+    alphas.append(alpha)
     normalized = (weight if stateful else weight / new_l).cast(dtypes.half)
     row = UOp.const(dtypes.weakint, 2*e).alu(Ops.ADD, halfwave)
-    stores.append(lds.index(row.alu(Ops.MUL, UOp.const(dtypes.weakint, 16)).alu(Ops.ADD, col)).store(normalized))
+    published_row = lds.index(row.alu(Ops.MUL, UOp.const(dtypes.weakint, 16)).alu(Ops.ADD, col)).store(normalized)
+    # Serialize row publication so eight independent butterfly/exp/CVT trees
+    # do not become simultaneously live before the barrier.
+    if stateful and native_state:
+      mw = UOp(Ops.CUSTOMI, dtypes.void, (new_m,), arg=("amd_gfx1100_row_state_write_v1", state_owner, "m", e))
+      lw = UOp(Ops.CUSTOMI, dtypes.void, (new_l,), arg=("amd_gfx1100_row_state_write_v1", state_owner, "l", e))
+      state_writes_m.append(mw); state_writes_l.append(lw)
+      stores.append(UOp.group(published_row, mw, lw))
+    else: stores.append(published_row)
   ready = UOp.barrier(UOp.group(*stores))
   reload_row = col.alu(Ops.MUL, UOp.const(dtypes.weakint, 16))
   published = lds.after(ready)
   vals = [published.index(reload_row.alu(Ops.ADD, UOp.const(dtypes.weakint, i))).load() for i in range(16)]
+  if stateful and native_state:
+    new_ms = [UOp(Ops.CUSTOMI, dtypes.float, (state_writes_m[i], ready), arg=("amd_gfx1100_row_state_read_v1", state_owner, "m", i)) for i in range(8)]
+    new_ls = [UOp(Ops.CUSTOMI, dtypes.float, (state_writes_l[i], ready), arg=("amd_gfx1100_row_state_read_v1", state_owner, "l", i)) for i in range(8)]
   p = UOp(Ops.STACK, dtypes.half.vec(16), tuple(vals), tag=("amd_gfx1100_pv_a_reload_v1",))
   # Each physical accumulator element owns one row. These vector states stay
   # replicated in the native C layout until a descriptor-owned final store.
-  return UOp(Ops.TUPLE, dtypes.void, (p, UOp(Ops.STACK, dtypes.float.vec(8), tuple(new_ms)),
-    UOp(Ops.STACK, dtypes.float.vec(8), tuple(new_ls)), UOp(Ops.STACK, dtypes.float.vec(8), tuple(alphas))))
+  alpha_owner = x
+  tagged_alphas = tuple(a.replace(tag=("amd_gfx1100_online_softmax_alpha_v1", alpha_owner)) for a in alphas)
+  return UOp(Ops.TUPLE, dtypes.void, (p,
+    UOp(Ops.STACK, dtypes.float.vec(8), tuple(new_ms), tag=("amd_gfx1100_row_state_v1", "m")),
+    UOp(Ops.STACK, dtypes.float.vec(8), tuple(new_ls), tag=("amd_gfx1100_row_state_v1", "l")),
+    UOp(Ops.STACK, dtypes.float.vec(8), tagged_alphas, tag=("amd_gfx1100_row_state_v1", "alpha"))))
+
+def lower_native_row_state_gep(x:UOp, s:UOp) -> UOp|None:
+  if not isinstance(s.tag, tuple) or s.tag[:1] != ("amd_gfx1100_row_state_v1",): return None
+  if len(x.arg) != 1 or not 0 <= x.arg[0] < 8: raise ValueError("invalid native row-state projection")
+  return s.src[x.arg[0]]
 
 native_repack_matcher = PatternMatcher([
   (UPat(Ops.AMD_ROW_SOFTMAX_REPACK, name="x"), expand_native_row_softmax_repack),
   (UPat(Ops.AMD_ROW_SOFTMAX_SLOT, src=(UPat(Ops.TUPLE, name="owner"),), name="x"), lambda x,owner: owner.src[x.arg.slot]),
+  (UPat(Ops.GEP, src=(UPat(Ops.STACK, name="s"),), name="x"), lower_native_row_state_gep),
 ])
 
 def lower_native_pv_c_lane(x:UOp) -> UOp:
@@ -2387,16 +2553,22 @@ def lower_inst(x:UOp):
     b = UOp(Ops.INS, arg=s_barrier())
     _proof_record_inst("barrier", "BARRIER", b.arg)
     return (b, [b])
-  if a is AMDOps.V_WMMA:                             # B0.L7: D = A*B + C, 16x16x16 fp16->fp32. src=(A0..7,B0..7,C0..7).
+  if a in (AMDOps.V_WMMA, AMDOps.V_WMMA_ZERO):       # B0.L7: D = A*B + C, 16x16x16 fp16->fp32.
     # Fragment bases are the FIRST reg of each 8-VGPR run (src[0]=A base, src[8]=B base, src[16]=C base). D writes in
     # place over C so vdst==src2. NOTE inclusive 8-reg slices: _V[b:b+7] == Reg(256+b, 8) (dsl slice end is inclusive).
-    a0, b0, dbase = packed_base(src[:8]), packed_base(src[8:16]), packed_base(src[16:24])
+    a0, b0 = packed_base(src[:8]), packed_base(src[8:16])
+    dbase = src[16].arg if a is AMDOps.V_WMMA_ZERO else packed_base(src[16:24])
     inst = v_wmma_f32_16x16x16_f16(vdst=_V[dbase:dbase+7], src0=_V[a0:a0+7], src1=_V[b0:b0+7], src2=_V[dbase:dbase+7])
     _proof_record("wmma", x, inst, {
       "a_vgpr_range": [a0, a0 + 7], "b_vgpr_range": [b0, b0 + 7], "c_vgpr_range": [dbase, dbase + 7],
       "accumulator_in_place": True, "semantic_ownership": {"A": "lhs", "B": "rhs"},
     })
-    return _ins(inst, x.tag)
+    out=_ins(inst,x.tag)
+    if a is AMDOps.V_WMMA_ZERO:
+      init=[UOp(Ops.INS,arg=v_mov_b32_e32(_V[dbase+i],0)) for i in range(8)]
+      out=_ins(inst,None)
+      return (out,init+[out])
+    return out
   if a is AMDOps.V_WMMA_I8:                          # signed int8 A/B packed as 4 b32 each; int32 C/D is 8 b32
     a0, b0, dbase = packed_base(src[:4]), packed_base(src[4:8]), packed_base(src[8:16])
     inst = v_wmma_i32_16x16x16_iu8(vdst=_V[dbase:dbase+7], src0=_V[a0:a0+3], src1=_V[b0:b0+3],
@@ -2501,6 +2673,21 @@ def lower_inst(x:UOp):
       "byte_offset": imm,
     })
     return (ld, [ld])
+  if a is AMDOps.FRAGMENT_LOAD_PAIR:
+    off_r, ptr_r, imm0, imm1, scratch, dest = src[0].reg, src[1].reg, src[2].arg, src[3].arg, src[4].arg, src[5].arg
+    if not all(isinstance(v,int) and FRAG_BASE <= v < FRAG_TOP for v in (scratch,dest)):
+      raise ValueError("opaque fragment pair lost its reserved physical register contract")
+    ld0=_ins(global_load_u16(vdst=_V[dest],addr=_Vr(off_r),saddr=_S2(ptr_r),offset=imm0),None)
+    ld1=_ins(global_load_u16(vdst=_V[scratch],addr=_Vr(off_r),saddr=_S2(ptr_r),offset=imm1),None)
+    wait=_ins(s_waitcnt(simm16=0),None)
+    pack=_ins(v_pack_b32_f16(_V[dest],_V[dest],_V[scratch]),None)
+    return (pack,[ld0,ld1,wait,pack])
+  if a is AMDOps.FRAGMENT_LOAD_DWORD:
+    off_r,ptr_r,imm,dest=src[0].reg,src[1].reg,src[2].arg,src[3].arg
+    if not isinstance(dest,int) or not FRAG_BASE <= dest < FRAG_TOP:
+      raise ValueError("opaque fragment dword lost its reserved physical destination")
+    ld=_ins(global_load_b32(vdst=_V[dest],addr=_Vr(off_r),saddr=_S2(ptr_r),offset=imm),None)
+    return (ld,[ld])
   if a is AMDOps.GLOBAL_LOAD_B64:
     off_r, ptr_r, imm = src[0].reg, src[1].reg, src[2].arg
     ld = _ins(global_load_b64(vdst=_V[x.reg.index:x.reg.index+1], addr=_Vr(off_r), saddr=_S2(ptr_r), offset=imm), x.tag)
@@ -2699,6 +2886,8 @@ class AMDISARenderer(ISARenderer):
   # the half-input CAST/dequant path already lowers (V_CVT_H2F etc.) so the fragment sources render fine.
   tensor_cores = amd_rdna3
   pre_isel_matcher = pre_isel_matcher
+  native_fragment_opaque_matcher = native_fragment_opaque_matcher
+  native_fragment_isel_matcher = native_fragment_isel_matcher
   native_repack_matcher = native_repack_matcher
   native_state_lane_matcher = native_state_lane_matcher
   isel_matcher = isel_matcher

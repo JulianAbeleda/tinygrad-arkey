@@ -300,6 +300,7 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
         # per-lane PV-A fragment, not a logical tensor dimension.
         return (self.dtype.count,)
       case Ops.AMD_ROW_SOFTMAX_SLOT: return (self.dtype.count,)
+      case Ops.AMD_PACKED_FRAGMENT_LOAD: return (self.dtype.count,)
       case Ops.AMD_PV_C_LANE: return ()
       case Ops.SCOPED_REDUCE:
         # The first SCOPED_REDUCE source is its semantically identical
@@ -1422,7 +1423,7 @@ class AMDRowSoftmaxRepackSpec(NamedTuple):
       raise ValueError("row-softmax native repack requires barriered native PV-A reload")
     if not isinstance(self.score_scale, float) or not math.isfinite(self.score_scale) or self.score_scale <= 0:
       raise ValueError("row-softmax native repack requires one positive finite score scale")
-    if self.mode not in {"legacy_normalized", "stateful_unnormalized_v1"}:
+    if self.mode not in {"legacy_normalized", "initial_state_v1", "stateful_unnormalized_v1"}:
       raise ValueError("row-softmax native repack has unknown normalization mode")
     return self
 

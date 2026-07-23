@@ -580,7 +580,7 @@ def test_gfx1100_q16_kv32_builder_is_one_online_chain():
   sink=amd_gfx1100_q16_kv32_attention(p[1],p[2],p[3],p[0],scale=.25,kernel_info=KernelInfo(name="q16_kv32")); topo=sink.toposort()
   assert sum(u.op is Ops.WMMA for u in topo)==4
   owners=[u for u in topo if u.op is Ops.AMD_ROW_SOFTMAX_REPACK]
-  assert len(owners)==2 and all(u.arg.mode=="stateful_unnormalized_v1" for u in owners)
+  assert len(owners)==2 and [u.arg.mode for u in owners]==["initial_state_v1", "stateful_unnormalized_v1"]
   assert sum(u.op is Ops.RECIPROCAL for u in topo)==8
 
 def test_gfx1100_q16_kv32_builder_fails_closed_owner_sizes():
@@ -589,3 +589,58 @@ def test_gfx1100_q16_kv32_builder_fails_closed_owner_sizes():
   p=[UOp(Ops.PARAM,dtypes.half.ptr(256),arg=ParamArg(i)) for i in range(4)]
   with pytest.raises(ValueError,match="256/512/512/256"):
     amd_gfx1100_q16_kv32_attention(p[1],p[2],p[3],p[0],scale=.25,kernel_info=KernelInfo(name="bad"))
+
+def test_gfx1100_q16_kv32_reaches_final_isa_program():
+  from tinygrad.codegen import full_rewrite_to_sink, to_program
+  from tinygrad.helpers import Target
+  from tinygrad.renderer.isa.amd import AMDISARenderer
+  from tinygrad.schedule.wmma import amd_gfx1100_q16_kv32_attention
+  from tinygrad.uop.ops import KernelInfo, ParamArg
+  p={0:UOp(Ops.PARAM,dtypes.half.ptr(256),arg=ParamArg(0)),1:UOp(Ops.PARAM,dtypes.half.ptr(256),arg=ParamArg(1)),
+     2:UOp(Ops.PARAM,dtypes.half.ptr(512),arg=ParamArg(2)),3:UOp(Ops.PARAM,dtypes.half.ptr(512),arg=ParamArg(3))}
+  sink=amd_gfx1100_q16_kv32_attention(p[1],p[2],p[3],p[0],scale=.25,kernel_info=KernelInfo(name="q16_kv32"))
+  ren=AMDISARenderer(Target.parse("AMD:ISA:gfx1100")); final=full_rewrite_to_sink(sink,ren,optimize=False)
+  nodes=final.toposort()
+  assert sum(u.op is Ops.WMMA for u in nodes)==4 and sum(u.op is Ops.BARRIER for u in nodes)==2
+  assert not any(u.op in {Ops.AMD_ROW_SOFTMAX_REPACK,Ops.AMD_ROW_SOFTMAX_SLOT} for u in nodes)
+  program=to_program(sink,ren); linear=next(u for u in program.src if u.op is Ops.LINEAR)
+  mn=[str(u.arg).split("(",1)[0] for u in linear.src if not isinstance(u.arg,tuple)]
+  assert mn.count("v_wmma_f32_16x16x16_f16")==4 and mn.count("s_barrier")==2
+
+def test_gfx1100_q16_kv32_numeric_two_tile_transition():
+  import numpy as np
+  from tinygrad import Tensor
+  from tinygrad.schedule.wmma import amd_gfx1100_q16_kv32_attention
+  from tinygrad.uop.ops import KernelInfo
+  q=np.eye(16,dtype=np.float16); k=np.zeros((32,16),dtype=np.float16)
+  for row in range(16):
+    k[row,row]=np.float16(2 if row%2==0 else 6)
+    k[16+row,row]=np.float16(6 if row%2==0 else 2)
+  v=np.random.default_rng(9).normal(0,.5,(32,16)).astype(np.float16)
+  tq,tk,tv=(Tensor(x.reshape(-1),device="AMD") for x in (q,k,v))
+  out=Tensor.empty(256,dtype=dtypes.half,device="AMD")
+  def kernel(o,qi,ki,vi):
+    return amd_gfx1100_q16_kv32_attention(qi,ki,vi,o,scale=1.0,kernel_info=KernelInfo(name="q16_kv32_numeric"))
+  got=out.custom_kernel(tq,tk,tv,fxn=kernel)[0].numpy().reshape(16,16).astype(np.float32)
+  scores=q.astype(np.float32)@k.astype(np.float32).T
+  probs=np.exp(scores-scores.max(axis=-1,keepdims=True)); probs/=probs.sum(axis=-1,keepdims=True)
+  ref=probs@v.astype(np.float32)
+  np.testing.assert_allclose(got,ref,rtol=.01,atol=2e-3)
+
+def test_gfx1100_corrected_c_requires_exact_alpha_and_prior_wmma_lanes():
+  from tinygrad.renderer.isa.amd import _corrected_c_transition
+  from tinygrad.uop.ops import AMDRowSoftmaxRepackSpec
+  arg=("WMMA_16_16_16_half_float",(16,16,16),dtypes.half,dtypes.float,"AMD:gfx1100",32,(),())
+  prior=UOp(Ops.WMMA,dtypes.float.vec(8),(UOp.const(dtypes.half.vec(16),(0,)*16),
+    UOp.const(dtypes.half.vec(16),(0,)*16),UOp.const(dtypes.float.vec(8),(0,)*8)),arg)
+  owner=UOp(Ops.AMD_ROW_SOFTMAX_REPACK,dtypes.half.vec(16),(prior,
+    UOp.const(dtypes.float.vec(8),(0,)*8),UOp.const(dtypes.float.vec(8),(0,)*8)),AMDRowSoftmaxRepackSpec(mode="stateful_unnormalized_v1"))
+  alphas=[UOp.const(dtypes.float,1).replace(tag=("amd_gfx1100_online_softmax_alpha_v1",owner)) for _ in range(8)]
+  vals=[prior.gep(i)*alphas[i] for i in range(8)]
+  assert _corrected_c_transition(vals,arg) is prior
+  assert not _corrected_c_transition([prior.gep(i)*UOp.const(dtypes.float,1) for i in range(8)],arg)
+  mixed=list(vals); mixed[7]=prior.gep(7)*alphas[7].replace(tag=(alphas[7].tag[0],UOp.const(dtypes.int,2)))
+  assert not _corrected_c_transition(mixed,arg)
+  wrong=list(vals); wrong[3]=prior.gep(4)*alphas[3]
+  assert not _corrected_c_transition(wrong,arg)
+  assert not _corrected_c_transition(vals,(*arg[:-1],("different",)))

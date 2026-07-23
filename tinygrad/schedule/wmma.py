@@ -306,6 +306,13 @@ def amd_gfx1100_row_softmax_state(score:UOp, m:UOp, l:UOp, *, spec:AMDRowSoftmax
   owner = p.src[0]
   return (p, *(UOp(Ops.AMD_ROW_SOFTMAX_SLOT, dtypes.float.vec(8), (owner,), arg=AMDRowSoftmaxSlotSpec(slot=i)) for i in range(1, 4)))
 
+def amd_gfx1100_row_softmax_initial(score:UOp, *, spec:AMDRowSoftmaxRepackSpec) -> tuple[UOp, UOp, UOp, UOp]:
+  spec.validate()
+  if spec.mode != "initial_state_v1" or score.dtype != dtypes.float.vec(8): raise ValueError("invalid native initial-state repack")
+  owner=UOp(Ops.AMD_ROW_SOFTMAX_REPACK,dtypes.half.vec(16),(score,),arg=spec)
+  return (UOp(Ops.AMD_ROW_SOFTMAX_SLOT,dtypes.half.vec(16),(owner,),arg=AMDRowSoftmaxSlotSpec(slot=0)),
+    *(UOp(Ops.AMD_ROW_SOFTMAX_SLOT,dtypes.float.vec(8),(owner,),arg=AMDRowSoftmaxSlotSpec(slot=i)) for i in range(1,4)))
+
 def amd_gfx1100_q16_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, scale:float, kernel_info) -> UOp:
   """Build the exact live-owner q16 native attention kernel graph."""
   owners = (q, k, v, out)
@@ -343,18 +350,38 @@ def amd_gfx1100_q16_kv32_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, scale:float,
   if tuple(x.ptrdtype.base for x in owners)!=(dtypes.half,)*4 or not isinstance(scale,float) or not math.isfinite(scale) or scale<=0:
     raise ValueError("q16-kv32 requires fp16 owners and positive finite scale")
   lane=UOp.special(32,"lidx0"); col=lane.alu(Ops.AND,UOp.const(dtypes.weakint,15)); half=lane.alu(Ops.SHR,UOp.const(dtypes.weakint,4))
-  qf=UOp(Ops.STACK,dtypes.half.vec(16),tuple(q.index((UOp.const(dtypes.weakint,i*2)+half)*16+col).load() for i in range(16)))
   zero=UOp.const(dtypes.float.vec(8),(0.0,)*8); axes=((),(),tuple((-120-i,2) for i in range(3)))
   warg=("WMMA_16_16_16_half_float",(16,16,16),dtypes.half,dtypes.float,"AMD:gfx1100",32,axes,())
   sm=UOp.const(dtypes.float.vec(8),(-float("inf"),)*8); sl=UOp.const(dtypes.float.vec(8),(0.0,)*8); acc=zero
   for tile in range(2):
     base=UOp.const(dtypes.weakint,tile*256)
-    kf=UOp(Ops.STACK,dtypes.half.vec(16),tuple(k.index(base+col*16+i).load() for i in range(16)))
+    q_owner,k_owner,v_owner=(q,k,v) if tile == 0 else (q.after(acc),k.after(acc),v.after(acc))
+    qf=UOp(Ops.STACK,dtypes.half.vec(16),tuple(q_owner.index(col*16+i).load() for i in range(16)),
+      tag=("amd_gfx1100_fragment_load_v1","Q",tile,q,lane,col))
+    kf=UOp(Ops.STACK,dtypes.half.vec(16),tuple(k_owner.index(base+col*16+i).load() for i in range(16)),
+      tag=("amd_gfx1100_fragment_load_v1","K",tile,k,lane,col))
     qk=UOp(Ops.WMMA,dtypes.float.vec(8),(qf,kf,zero),warg)
-    p,sm,sl,alpha=amd_gfx1100_row_softmax_state(qk,sm,sl,spec=AMDRowSoftmaxRepackSpec(score_scale=float(scale),mode="stateful_unnormalized_v1"))
-    vf=UOp(Ops.STACK,dtypes.half.vec(16),tuple(v.index(base+i*16+col).load() for i in range(16)))
-    acc=UOp(Ops.WMMA,dtypes.float.vec(8),(p,vf,acc.alu(Ops.MUL,alpha)),warg)
-  stores=(out.index((UOp.const(dtypes.weakint,2*e)+half)*16+col).store((acc.gep(e)/sl.gep(e)).cast(dtypes.half)) for e in range(8))
+    if tile == 0:
+      p,sm,sl,alpha=amd_gfx1100_row_softmax_initial(qk,
+        spec=AMDRowSoftmaxRepackSpec(score_scale=float(scale),mode="initial_state_v1"))
+    else:
+      p,sm,sl,alpha=amd_gfx1100_row_softmax_state(qk,sm,sl,
+        spec=AMDRowSoftmaxRepackSpec(score_scale=float(scale),mode="stateful_unnormalized_v1"))
+    corrected=zero
+    if tile:
+      corrected=acc.alu(Ops.MUL,alpha)
+    v_ready=v_owner.after(corrected if tile else p)
+    vf=UOp(Ops.STACK,dtypes.half.vec(16),tuple(v_ready.index(base+i*16+col).load() for i in range(16)),
+      tag=("amd_gfx1100_fragment_load_v1","V",tile,v,lane,col))
+    acc=UOp(Ops.WMMA,dtypes.float.vec(8),(p,vf,corrected),warg)
+  stores=[]
+  for e in range(8):
+    value=acc.gep(e)
+    if stores: value=value.bitcast(dtypes.uint).after(UOp.group(stores[-1])).bitcast(dtypes.float)
+    den=sl.gep(e)
+    recip=den.ne(UOp.const(dtypes.float,0)).where(UOp.const(dtypes.float,1)/den,UOp.const(dtypes.float,0))
+    dst=out.index((UOp.const(dtypes.weakint,2*e)+half)*16+col)
+    stores.append(dst.store(value.alu(Ops.MUL,recip).cast(dtypes.half)))
   return UOp.sink(*stores,arg=kernel_info)
 
 class OnlineSoftmaxBlockTransition(NamedTuple):

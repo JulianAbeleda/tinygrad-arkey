@@ -98,8 +98,20 @@ def _hip_native_bpermute_max(x:UOp) -> UOp|None:
   if len(peers) != 1: return None
   return UOp(Ops.CUSTOMI, dtypes.float, x.src, "__builtin_fmaxf({0}, {1})")
 
+def _hip_native_row_state(x:UOp) -> UOp|None:
+  if not isinstance(x.arg,tuple) or not x.arg: return None
+  if x.arg[0] == "amd_gfx1100_row_state_write_v1": return x.replace(arg="do {{ (void)({0}); }} while (0)")
+  if x.arg[0] == "amd_gfx1100_row_state_read_v1" and x.src and x.src[0].op in {Ops.NOOP,Ops.CUSTOMI} and x.src[0].src:
+    return x.src[0].src[0].after(*x.src[1:])
+  return None
+
+def _hip_expand_native_row_softmax(ctx, x:UOp) -> UOp:
+  from tinygrad.renderer.isa.amd import expand_native_row_softmax_repack
+  return expand_native_row_softmax_repack(ctx,x,native_state=False)
+
 hip_native_repack_pm = PatternMatcher([
   (UPat(Ops.MAX, name="x"), _hip_native_bpermute_max),
+  (UPat(Ops.CUSTOMI, name="x"), _hip_native_row_state),
   (UPat(Ops.CUSTOMI, name="x"), lambda x: x.replace(
     arg=_HIP_BPERMUTE_F32)
     if x.arg == "bpermute" and x.dtype == dtypes.float else None),
@@ -367,7 +379,8 @@ class HIPRenderer(CStyleLanguage):
       # HIP only supplies source spelling for its existing bpermute marker.
       from tinygrad.renderer.isa.amd import native_repack_matcher
       from tinygrad.renderer.isa.amd import native_state_lane_matcher
-      self.native_repack_matcher = native_repack_matcher + PatternMatcher([(UPat(Ops.MAX, name="x"), _hip_native_bpermute_max)])
+      self.native_repack_matcher = PatternMatcher([(UPat(Ops.AMD_ROW_SOFTMAX_REPACK,name="x"), _hip_expand_native_row_softmax)]) + native_repack_matcher + \
+        PatternMatcher([(UPat(Ops.MAX, name="x"), _hip_native_bpermute_max)])
       self.native_state_lane_matcher = native_state_lane_matcher
       self.extra_matcher += hip_native_repack_pm
     if self.is_cdna(target.arch):
