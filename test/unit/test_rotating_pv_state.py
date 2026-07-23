@@ -2,7 +2,7 @@ from tinygrad import dtypes
 from tinygrad.codegen.opt.compiler_policies import WaitCount
 from tinygrad.dtype import AddrSpace
 from tinygrad.renderer.isa.amd import native_repack_matcher
-from tinygrad.uop.ops import Ops, RotatingPVSequentialDrainSpec, RotatingPVStateSpec, UOp, graph_rewrite
+from tinygrad.uop.ops import AxisType, Ops, RotatingPVSequentialDrainSpec, RotatingPVStateSpec, UOp, graph_rewrite
 from tinygrad.uop.spec import spec_full, type_verify
 
 
@@ -26,7 +26,9 @@ def test_rotating_pv_state_uops_are_typed_and_compile_only():
 def test_rotating_pv_drain_reloads_blocks_sequentially_compile_only():
   storage = UOp(Ops.DEFINE_LOCAL, dtypes.float.ptr(2048, AddrSpace.LOCAL), arg=2202)
   lane = UOp.special(32, "lidx0")
-  initial_token = token = UOp.const(dtypes.float, 1.0)
+  rng = UOp.range(1, 2203, AxisType.REDUCE)
+  writes = tuple(RotatingPVStateSpec(storage, lane, block, generation=2).write(UOp.const(dtypes.float.vec(8), 0.0), after=rng) for block in range(8))
+  initial_token = token = UOp.group(*writes).end(rng)
   drains = []
   for block in range(8):
     drains.append(RotatingPVSequentialDrainSpec(RotatingPVStateSpec(storage, lane, block, generation=2)).reload(token))

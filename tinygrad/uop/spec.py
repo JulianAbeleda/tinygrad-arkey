@@ -125,11 +125,19 @@ def validate_rotating_pv_sequential_drain(x:UOp):
   try: x.arg[1].validate()
   except (TypeError, ValueError): return False
   drain=x.arg[1]
-  if x.dtype != drain.dtype or len(x.src) != 3 or x.src[:2] != (drain.state.storage,drain.state.lane) or x.src[2].dtype == dtypes.void:
+  if x.dtype != drain.dtype or len(x.src) != 3 or x.src[:2] != (drain.state.storage,drain.state.lane):
     return False
   token=x.src[2]
   if drain.state.block == 0:
-    return not (token.op is Ops.CUSTOMI and isinstance(token.arg, tuple) and token.arg[:1] == ("rotating_pv_sequential_drain_v1",))
+    if token.op is not Ops.END or token.dtype != dtypes.void or len(token.src) != 2 or token.src[0].op is not Ops.GROUP: return False
+    writes=token.src[0].src
+    if len(writes) != 8: return False
+    published=[]
+    for write in writes:
+      if not validate_rotating_pv_state(write) or write.arg[0] != "rotating_pv_state_write_v1": return False
+      published.append(write.arg[1])
+    return all(state.storage is drain.state.storage and state.lane is drain.state.lane and state.generation == drain.state.generation
+               for state in published) and {state.block for state in published} == set(range(8))
   if token.op is not Ops.CUSTOMI or not validate_rotating_pv_sequential_drain(token): return False
   previous=token.arg[1].state
   return previous.storage is drain.state.storage and previous.lane is drain.state.lane and \
@@ -202,9 +210,9 @@ spec_shared = PatternMatcher([
   # TODO: remove UNROLL here, it's for SPEC=2
   (UPat(Ops.GROUP, dtypes.void, src=UPat((Ops.GROUP, Ops.STORE, Ops.NOOP, Ops.UNROLL, Ops.INS))), lambda: True),
   (UPat(Ops.GROUP, dtypes.void, src=UPat(Ops.CUSTOMI, name="x")),
-   lambda x: isinstance(x.arg, tuple) and x.arg[:1] in {("amd_register_stage_pair",), ("amd_gfx1100_row_state_write_v1",), ("amd_gfx1100_attention_loop_state_write_v1",), ("state_loop_write_v1",)}),
+   lambda x: isinstance(x.arg, tuple) and x.arg[:1] in {("amd_register_stage_pair",), ("amd_gfx1100_row_state_write_v1",), ("amd_gfx1100_attention_loop_state_write_v1",), ("state_loop_write_v1",), ("rotating_pv_state_write_v1",)}),
   (UPat(Ops.GROUP, dtypes.void, name="x"), lambda x: all(s.op in {Ops.GROUP, Ops.STORE, Ops.NOOP, Ops.UNROLL, Ops.INS, Ops.AMD_ATTENTION_LOOP_STATE} or
-    (s.op is Ops.CUSTOMI and isinstance(s.arg, tuple) and s.arg[:1] in {("amd_gfx1100_row_state_write_v1",), ("amd_gfx1100_attention_loop_state_write_v1",), ("state_loop_write_v1",)}) for s in x.src)),
+    (s.op is Ops.CUSTOMI and isinstance(s.arg, tuple) and s.arg[:1] in {("amd_gfx1100_row_state_write_v1",), ("amd_gfx1100_attention_loop_state_write_v1",), ("state_loop_write_v1",), ("rotating_pv_state_write_v1",)}) for s in x.src)),
 
   # TOOD: these should be buffer with different addrspace
   (UPat((Ops.DEFINE_LOCAL, Ops.DEFINE_REG)), lambda: True),

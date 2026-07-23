@@ -595,6 +595,27 @@ def amd_gfx1100_q16_grid_hd128_loop_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_toke
   end=UOp.group(*writes).end(rng).replace(tag=("amd_gfx1100_attention_grid_loop_end_v1",rng)); final_token=end if phase_abi_v1 else None; fl=(UOp(Ops.STACK,dtypes.float.vec(8),tuple(ml.loop_read(8+i,final_token) for i in range(8))) if phase_abi_v1 else rd(lreg,end,"l",final=True)); fc=tuple(rd(creg,end,"acc",b,b*8,final=True) for b in range(acc_blocks)); drain=UOp(Ops.AMD_ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,group,fl,*fc),arg=AMDAttentionOutputDrainSpec(native_abi="amd_gfx1100_attention_output_drain_v1" if acc_blocks==8 else "amd_gfx1100_attention_output_drain_acc_slice_v2",blocks=acc_blocks,grid=grid,output_block_base=output_block_base))
   return UOp.sink(mi,li,ci,end,drain,arg=kernel_info).replace(tag=("amd_gfx1100_q16_grid_hd128_loop_v1",))
 
+def amd_gfx1100_rotating_pv_scheduler_probe(*, q_tokens:int, q_heads:int, kv_heads:int, kv_tokens:int) -> UOp:
+  """Opt-in exact-8B rotating-PV construction probe; it has no production route or lowering."""
+  if (q_tokens, q_heads, kv_heads, kv_tokens) != (512, 32, 8, 512):
+    raise ValueError("rotating PV scheduler probe is exact-8B only")
+  from tinygrad.uop.ops import AxisType, RotatingPVSequentialDrainSpec, RotatingPVStateSpec
+  lane=UOp.special(32,"lidx0")
+  storage=UOp(Ops.DEFINE_LOCAL,dtypes.float.ptr(2048,AddrSpace.LOCAL),arg=9620)
+  rng=UOp.range(kv_tokens//16,9621,AxisType.REDUCE)
+  zero=UOp.const(dtypes.float.vec(8),(0.0,)*8)
+  initialized=tuple(RotatingPVStateSpec(storage,lane,block,generation=0).write(zero) for block in range(8))
+  init=UOp.group(*initialized)
+  states=tuple(RotatingPVStateSpec(storage,lane,block,generation=1) for block in range(8))
+  reads=tuple(state.read(init) for state in states)
+  pv_updates=tuple(read.after(rng).replace(tag=("rotating_pv_pv_update_v1",rng,block)) for block,read in enumerate(reads))
+  writes=tuple(state.write(update,after=rng) for state,update in zip(states,pv_updates))
+  end=UOp.group(*writes).end(rng).replace(tag=("rotating_pv_kv_iteration_end_v1",rng))
+  drains=[]; token=end
+  for state in states:
+    drains.append(RotatingPVSequentialDrainSpec(state).reload(token)); token=drains[-1]
+  return UOp.sink(init,end,*drains).replace(tag=("amd_gfx1100_rotating_pv_scheduler_probe_v1",))
+
 def amd_gfx1100_q16_grid_qk_stats_stage(q:UOp,k:UOp,stats:UOp,*,q_tokens:int,q_heads:int,kv_heads:int,kv_tokens:int,scale:float,kernel_info,causal:bool=True,query_start:int|None=None)->UOp:
   """Direct diagnostic Stage A: QK online reduction to fp32 `[query, m/l]` state only."""
   from tinygrad.uop.ops import AMDAttentionGridSpec, AMDAttentionStatsDrainSpec, AMDLoopStateSpec, AMDPackedFragmentLoopSpec, AxisType

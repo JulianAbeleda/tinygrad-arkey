@@ -1401,7 +1401,8 @@ class RotatingPVSequentialDrainSpec(NamedTuple):
 
   def reload(self, final_token: UOp) -> UOp:
     self.validate()
-    if final_token.dtype == dtypes.void: raise TypeError("rotating PV drain requires a value-carrying final token")
+    if final_token.dtype == dtypes.void and final_token.op is not Ops.END:
+      raise TypeError("rotating PV drain requires a matching END or prior drain token")
     return UOp(Ops.CUSTOMI, self.dtype, (self.state.storage, self.state.lane, final_token),
                ("rotating_pv_sequential_drain_v1", self))
 
