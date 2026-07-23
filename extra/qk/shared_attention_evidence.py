@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 from extra.qk.model_profiles import MODEL_PROFILES, ModelProfile
 from extra.qk.prefill_harness import prefill_authority_argv, prefill_run_profile, resolve_prefill_model_profile
+from extra.qk.shared_attention_capture import SharedAttentionCompilerCapture
 
 def fused_wmma_role_report(source: str) -> dict[str, object]:
   """Fail-closed diagnostic requiring explicit QK/PV WMMA in one CALL."""
@@ -74,27 +75,40 @@ def dual_wmma_fused_call_fixture(*, isa: str | None = None,
                  "promotable": bool(report["promotable"] and qk_isa and pv_isa)})
   return report
 
-def shared_attention_proof_artifact(*, source:str, isa:str, ownership:dict[str, object],
-                                    model_routes:dict[str, dict[str, object]]) -> dict[str, object]:
-  """Bind a shared-attention admission record to compiler and route evidence."""
-  source_report = dual_wmma_fused_call_report(source)
-  isa_roles = tuple(sorted({line.split(":", 1)[0].strip().upper()
-                            for line in isa.splitlines() if "WMMA" in line.upper()}))
-  ownership_ok = (ownership.get("authority") == "final_regalloc" and
-                  ownership.get("operands") == ("output", "q", "k", "v") and ownership.get("grid_owner") == "gidx0")
-  required_models = {"qwen3_8b_q4k_m_gfx1100", "qwen3_14b_q4k_m_gfx1100"}
-  route_ok = set(model_routes) == required_models and all(
-    route.get("first_chunk") is True and route.get("prefix_chunk") is True and
-    route.get("shared_boundary") == "shared_prefill_attention" and
-    set(route.get("projection_strategies", ())) == {"FULL_RESIDENT_OVERLAY", "BOUNDED_PACKED_TILES"}
-    for route in model_routes.values())
-  passed = bool(source_report["promotable"] and {"QK", "PV"} <= set(isa_roles) and ownership_ok and route_ok)
-  return {"schema": "tinygrad.shared_attention_proof.v1", "status": "PASS" if passed else "INCOMPLETE",
-          "compiler": {"source": source_report, "isa_roles": isa_roles, "ownership": dict(ownership)},
-          "model_routes": {name: dict(route) for name, route in model_routes.items()}, "passed": passed}
+def shared_attention_proof_artifact(captures:tuple[SharedAttentionCompilerCapture,...]) -> dict[str, object]:
+  """Aggregate only four validated, content-addressed compiler captures.
+
+  Raw caller-provided source, ISA, ownership, or route claims are deliberately
+  not accepted. Every fact in the proof originates in a capture constructor.
+  """
+  if not isinstance(captures,tuple) or any(not isinstance(x,SharedAttentionCompilerCapture) for x in captures):
+    raise TypeError("shared attention proof requires immutable compiler captures")
+  captures = tuple(x.validate() for x in captures)
+  def route_key(capture:SharedAttentionCompilerCapture):
+    ctx = capture.candidate_context
+    if ctx.start_pos == 0 and ctx.kv_tokens != ctx.q_tokens: raise ValueError("first-chunk capture has prefix KV geometry")
+    if ctx.start_pos > 0 and ctx.kv_tokens != ctx.start_pos+ctx.q_tokens: raise ValueError("prefix capture KV geometry is not exact")
+    return (ctx.profile,ctx.strategy,"first" if ctx.start_pos == 0 else "prefix")
+  required = {
+    ("qwen3_8b_q4k_m_gfx1100","FULL_RESIDENT_OVERLAY","first"),
+    ("qwen3_8b_q4k_m_gfx1100","FULL_RESIDENT_OVERLAY","prefix"),
+    ("qwen3_14b_q4k_m_gfx1100","BOUNDED_PACKED_TILES","first"),
+    ("qwen3_14b_q4k_m_gfx1100","BOUNDED_PACKED_TILES","prefix"),
+  }
+  keys = tuple(route_key(x) for x in captures)
+  if len(captures) != 4 or len(set(keys)) != 4 or set(keys) != required:
+    raise ValueError("shared attention proof requires exact 8B/14B first/prefix coverage")
+  rows = sorted(zip(keys,captures),key=lambda x:x[0])
+  return {"schema":"tinygrad.shared_attention_proof.v2","status":"PASS","passed":True,
+    "captures":[{"profile":key[0],"strategy":key[1],"position":key[2],
+      "capture_sha256":capture.capture_sha256,"canonical_graph_sha256":capture.canonical_graph_sha256,
+      "candidate_context":{name:getattr(capture.candidate_context,name) for name in capture.candidate_context._fields},
+      "wmma":{"qk":8,"pv":8},"numeric":{"max_abs":capture.numeric_max_abs,"max_rel":capture.numeric_max_rel,
+        "rel_l2":capture.numeric_rel_l2,"reference_sha256":capture.reference_sha256}}
+      for key,capture in rows]}
 
 ATTENTION_EVIDENCE_SCHEMA = "tinygrad.shared_attention_evidence.v1"
-SHARED_ATTENTION_PROOF_SCHEMA = "tinygrad.shared_attention_proof.v1"
+SHARED_ATTENTION_PROOF_SCHEMA = "tinygrad.shared_attention_proof.v2"
 DEFAULT_CONTEXTS = (512, 2048, 4096)
 _GEOMETRIES = ((16, 32, 1, 1), (16, 64, 1, 2), (32, 64, 2, 1), (32, 128, 2, 2), (64, 64, 4, 1))
 

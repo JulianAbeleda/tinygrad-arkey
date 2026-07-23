@@ -92,13 +92,6 @@ def test_dual_wmma_report_does_not_credit_unattributed_isa_or_source_lines():
   assert report["qk_source_wmma_lines"] == report["pv_source_wmma_lines"] == 0
   assert report["promotable"] is False
 
-def test_shared_proof_artifact_binds_both_model_routes_to_one_native_boundary():
-  routes = {name: {"first_chunk": True, "prefix_chunk": True, "shared_boundary": "shared_prefill_attention",
-                   "projection_strategies": ("FULL_RESIDENT_OVERLAY", "BOUNDED_PACKED_TILES")}
-            for name in ("qwen3_8b_q4k_m_gfx1100", "qwen3_14b_q4k_m_gfx1100")}
-  artifact = shared_attention_proof_artifact(
-    source="CALL fused_attention\n// QK WMMA\n// PV WMMA\nSHAPED_WMMA(TILE_GATHER)",
-    isa="QK: v_wmma_f32_16x16x16_f16\nPV: v_wmma_f32_16x16x16_f16",
-    ownership={"authority": "final_regalloc", "operands": ("output", "q", "k", "v"), "grid_owner": "gidx0"}, model_routes=routes)
-  assert artifact["status"] == "PASS"
-  assert artifact["compiler"]["ownership"]["grid_owner"] == "gidx0"
+def test_shared_proof_artifact_has_no_raw_string_construction_path():
+  import pytest
+  with pytest.raises(TypeError): shared_attention_proof_artifact(source="CALL fused",isa="v_wmma",ownership={},model_routes={})

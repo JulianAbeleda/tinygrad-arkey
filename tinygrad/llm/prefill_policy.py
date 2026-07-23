@@ -27,8 +27,9 @@ def shared_attention_proven_eligible(value:Mapping[str, Any], scanned_device_fac
   target = proof.get("target")
   geometry = proof.get("geometry")
   artifact = proof.get("artifact")
-  artifact_ok = (isinstance(artifact, Mapping) and artifact.get("schema") == "tinygrad.shared_attention_proof.v1" and
-                 artifact.get("status") == "PASS" and artifact.get("passed") is True)
+  artifact_ok = (isinstance(artifact, Mapping) and artifact.get("schema") == "tinygrad.shared_attention_proof.v2" and
+                 artifact.get("status") == "PASS" and artifact.get("passed") is True and
+                 isinstance(artifact.get("captures"), list) and len(artifact["captures"]) == 4)
   return (isinstance(target, Mapping) and dict(target) == _TC_ATTN_TARGET_REQUIREMENTS and
           isinstance(geometry, Mapping) and bool(geometry) and
           artifact_ok and all(proof.get(field) is True for field in _SHARED_ATTENTION_PROOF_FIELDS))
