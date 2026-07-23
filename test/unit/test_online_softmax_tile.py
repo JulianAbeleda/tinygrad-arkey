@@ -633,6 +633,31 @@ def test_gfx1100_q16_kv32_hd128_reaches_spill_free_final_isa():
   mn=[str(u.arg).split("(",1)[0] for u in linear.src if not isinstance(u.arg,tuple)]
   assert mn.count("v_wmma_f32_16x16x16_f16")==32 and mn.count("s_barrier")==2
 
+@pytest.mark.parametrize("output_block_base,expected_blocks",[(0,range(4)),(4,range(4,8))])
+def test_gfx1100_acc_slice_v2_drain_preserves_output_block_base_to_amd_stores(output_block_base,expected_blocks):
+  from tinygrad.codegen import to_program
+  from tinygrad.helpers import Target
+  from tinygrad.renderer.isa.amd import AMDISARenderer
+  from tinygrad.schedule.wmma import amd_gfx1100_q16_grid_hd128_loop_attention
+  from tinygrad.uop.ops import KernelInfo, ParamArg
+  q_heads,kv_heads,q_tokens,kv_tokens=32,8,512,512
+  sizes=(q_heads*q_tokens*128,kv_heads*kv_tokens*128,kv_heads*kv_tokens*128,q_heads*q_tokens*128)
+  slot_sizes=(sizes[3],sizes[0],sizes[1],sizes[2])
+  p=[UOp(Ops.PARAM,dtypes.half.ptr(slot_sizes[i]),arg=ParamArg(i)) for i in range(4)]
+  sink=amd_gfx1100_q16_grid_hd128_loop_attention(p[1],p[2],p[3],p[0],q_tokens=q_tokens,q_heads=q_heads,kv_heads=kv_heads,
+    kv_tokens=kv_tokens,scale=.25,kernel_info=KernelInfo(name=f"slice_{output_block_base}"),output_block_base=output_block_base,acc_blocks=4)
+  program=to_program(sink,AMDISARenderer(Target.parse("AMD:ISA:gfx1100")))
+  linear=next(u for u in program.src if u.op is Ops.LINEAR)
+  stores=[u.arg for u in linear.src if str(u.arg).startswith("global_store_b16")]
+  assert len(stores)==32
+  offsets={x.offset for x in stores}
+  assert offsets == {2*(e*256+j*16) for e in range(8) for j in expected_blocks}
+
+def test_gfx1100_acc_slice_v2_drain_rejects_invalid_output_block_base():
+  from tinygrad.uop.ops import AMDAttentionOutputDrainSpec
+  with pytest.raises(ValueError,match="exact gfx1100"):
+    AMDAttentionOutputDrainSpec(native_abi="amd_gfx1100_attention_output_drain_acc_slice_v2",blocks=4,output_block_base=2).validate()
+
 def test_gfx1100_q16_kv32_hd128_numeric():
   import numpy as np
   from tinygrad import Tensor

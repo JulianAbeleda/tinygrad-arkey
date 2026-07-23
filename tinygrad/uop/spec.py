@@ -67,13 +67,13 @@ def validate_scalar_gep(gep:UOp, src:UOp):
 
 def validate_amd_attention_output_drain(x:UOp):
   """One source-count-aware contract for both legacy and grid native drains."""
-  if not hasattr(x.arg,"native_abi") or x.arg.native_abi != "amd_gfx1100_attention_output_drain_v1" or x.dtype != dtypes.void: return False
+  if not hasattr(x.arg,"native_abi") or x.arg.native_abi not in {"amd_gfx1100_attention_output_drain_v1","amd_gfx1100_attention_output_drain_acc_slice_v2"} or x.dtype != dtypes.void: return False
   if not x.src or not isinstance(x.src[0].dtype,PtrDType) or x.src[0].dtype.base != dtypes.half: return False
   grid=x.arg.grid
   if grid is None: return len(x.src)==10 and x.src[0].dtype.size==2048 and all(s.dtype==dtypes.float.vec(8) for s in x.src[1:])
   try: grid.validate()
   except ValueError: return False
-  return len(x.src)==11 and x.src[0].dtype.size==grid.q_heads*grid.q_tokens*128 and all(s.dtype==dtypes.float.vec(8) for s in x.src[2:])
+  return len(x.src)==3+x.arg.blocks and x.src[0].dtype.size==grid.q_heads*grid.q_tokens*128 and all(s.dtype==dtypes.float.vec(8) for s in x.src[2:])
 
 # ***** new specs *****
 

@@ -910,7 +910,7 @@ def isel_customi(ctx:IselContext, x:UOp):
   raise NotImplementedError(f"AMD:ISA CUSTOMI unmapped arg: {arg[:70]}")
 
 def isel_attention_output_drain(ctx:IselContext, x:UOp):
-  from tinygrad.uop.ops import AMDAttentionOutputDrainSpec
+  from tinygrad.uop.ops import AMDAttentionOutputDrainSpec, AMDAttentionOutputDrainPayload
   if not isinstance(x.arg, AMDAttentionOutputDrainSpec): raise ValueError("AMD attention output drain is missing its typed ABI")
   x.arg.validate()
   grid=x.arg.grid; expected=(3+x.arg.blocks) if grid is not None else (2+x.arg.blocks); src=list(x.src)
@@ -921,7 +921,9 @@ def isel_attention_output_drain(ctx:IselContext, x:UOp):
   state=src[2:] if grid is not None else src[1:]
   if state[0].dtype != dtypes.float.vec(8) or len(state) != 1+x.arg.blocks or any(s.dtype != dtypes.float.vec(8) for s in state[1:]):
     raise ValueError("AMD attention output drain requires l plus eight native PV fragments")
-  return UOp(Ops.INS,dtypes.void,src=tuple(src),arg=AMDOps.ATTENTION_OUTPUT_DRAIN)
+  payload = None if x.arg.native_abi == "amd_gfx1100_attention_output_drain_v1" else \
+    AMDAttentionOutputDrainPayload(x.arg.native_abi,x.arg.output_block_base,x.arg.blocks).validate()
+  return UOp(Ops.INS,dtypes.void,src=tuple(src),arg=AMDOps.ATTENTION_OUTPUT_DRAIN,tag=payload)
 
 # ---- Phase G ALU/control isel ----
 def isel_cast(ctx:IselContext, x:UOp):
@@ -3011,6 +3013,14 @@ def lower_inst(x:UOp):
       raise ValueError("opaque attention output drain lost its output pointer")
     ptr = src[0].reg
     if ptr.index < 0: raise ValueError("opaque attention output drain has invalid output pointer")
+    from tinygrad.uop.ops import AMDAttentionOutputDrainPayload
+    payload=x.tag
+    if payload is not None:
+      if not isinstance(payload,AMDAttentionOutputDrainPayload): raise ValueError("opaque attention output drain has malformed sideband")
+      payload.validate()
+      if payload.blocks != blocks: raise ValueError("opaque attention output drain sideband block count drifted")
+      output_block_base=payload.output_block_base
+    else: output_block_base=0
     # ABI v0 is lidx0. v1=col, v2=halfwave, v3=per-store byte address / reciprocal.
     insts=[_ins(v_and_b32_e32(_V[1],15,_V[0]),None), _ins(v_lshrrev_b32_e32(_V[2],4,_V[0]),None)]
     if grid:
@@ -3026,7 +3036,7 @@ def lower_inst(x:UOp):
           _ins(v_add_nc_u32_e32(_V[3],_V[1],_V[3]),None),
           _ins(v_lshlrev_b32_e32(_V[3],1,_V[3]),None),
           *([_ins(v_add_nc_u32_e32(_V[3],_V[3],_V[4]),None)] if grid else []),
-          _ins(global_store_b16(addr=_V[3],data=_V[c],saddr=_S2(ptr),offset=(e*256+j*16)*2),None)]
+          _ins(global_store_b16(addr=_V[3],data=_V[c],saddr=_S2(ptr),offset=(e*256+(j+output_block_base)*16)*2),None)]
     return (insts[-1], insts)
   if a is AMDOps.GLOBAL_LOAD_B64:
     off_r, ptr_r, imm = src[0].reg, src[1].reg, src[2].arg

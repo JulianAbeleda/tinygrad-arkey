@@ -1654,6 +1654,18 @@ class AMDAttentionOutputDrainSpec(NamedTuple):
     if self.grid is not None: self.grid.validate()
     return self
 
+class AMDAttentionOutputDrainPayload(NamedTuple):
+  """Post-regalloc sideband for the versioned accumulator-slice drain ABI."""
+  native_abi: str
+  output_block_base: int
+  blocks: int
+
+  def validate(self):
+    if (self.native_abi,self.output_block_base,self.blocks) != ("amd_gfx1100_attention_output_drain_acc_slice_v2",0,4) and \
+       (self.native_abi,self.output_block_base,self.blocks) != ("amd_gfx1100_attention_output_drain_acc_slice_v2",4,4):
+      raise ValueError("AMD attention output drain payload requires an aligned v2 accumulator slice")
+    return self
+
 class AMDLoopStateSpec(NamedTuple):
   """Scheduler-visible recurrence ownership for the unlowered KV tile loop."""
   native_abi: str = "amd_gfx1100_attention_loop_state_v1"
