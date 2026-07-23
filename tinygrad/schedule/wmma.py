@@ -240,6 +240,24 @@ def emit_tile_gather_shaped_wmma(a_frag: UOp, b_frag: UOp, acc_frag: UOp, *,
     raise ValueError("tile WMMA emitter requires exact 16x16 fragments")
   return shaped_wmma(*lowered, dims=dims, device=device, threads=threads, dtype_out=dtype_out)
 
+def emit_hd16_dual_tile_wmma(score: UOp, value: UOp, acc: UOp, *,
+                             dims: tuple[int, int, int] = (16, 16, 16),
+                             device: str = "AMD", threads: int = 32,
+                             dtype_out: DType | None = None) -> tuple[UOp, UOp]:
+  """Route one proven Hd=16 carrier triple into separate QK/PV nodes.
+
+  This is an authoring primitive only.  ``score`` is retained as the QK-side
+  owned tile and ``value``/``acc`` as the PV-side operands; both nodes share
+  the exact carrier validation path and no lane packing is inferred here.
+  Production admission remains fail-closed until source and ISA evidence
+  exists for the resulting fused loop.
+  """
+  qk = emit_tile_gather_shaped_wmma(score, score, acc, roles=("score", "score", "acc"),
+                                   dims=dims, device=device, threads=threads, dtype_out=dtype_out)
+  pv = emit_tile_gather_shaped_wmma(score, value, acc, roles=("score", "value", "acc"),
+                                   dims=dims, device=device, threads=threads, dtype_out=dtype_out)
+  return qk, pv
+
 def amd_tile_wmma_boundary_report(*, qk_score: UOp, pv_value: UOp, pv_acc: UOp) -> dict:
   """Describe whether AMD can consume the composite tile at the WMMA boundary.
 
