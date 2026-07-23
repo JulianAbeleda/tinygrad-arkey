@@ -301,6 +301,7 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
         return (self.dtype.count,)
       case Ops.AMD_ROW_SOFTMAX_SLOT: return (self.dtype.count,)
       case Ops.AMD_PACKED_FRAGMENT_LOAD: return (self.dtype.count,)
+      case Ops.AMD_GQA_KV_STAGE: return self.src[0]._shape
       case Ops.AMD_ATTENTION_LOOP_STATE: return (self.dtype.count,) if self.dtype != dtypes.void and self.dtype.count != 1 else ()
       case Ops.AMD_ATTENTION_OUTPUT_DRAIN: return self.src[0]._shape
       case Ops.AMD_PV_C_LANE: return ()
@@ -1638,7 +1639,7 @@ class AMDAttentionOutputDrainSpec(NamedTuple):
   blocks: int = 8
   lanes_per_fragment: int = 8
   address_expr: str = "e*256+halfwave*128+j*16+col"
-  grid: AMDAttentionGridSpec|None = None
+  grid: AMDAttentionGridSpec|AMDMultiWaveAttentionGridSpec|None = None
 
   def validate(self):
     if (self.native_abi, self.head_dim, self.blocks, self.lanes_per_fragment, self.address_expr) != \
@@ -1675,6 +1676,7 @@ class AMDPackedFragmentLoopSpec(NamedTuple):
   role: str = "Q"
   head_block: int = 0
   grid: AMDAttentionGridSpec|AMDMultiWaveAttentionGridSpec|None = None
+  storage: str = "global"
 
   def validate(self):
     if self.native_abi != "amd_gfx1100_packed_fragment_hd128_loop_v1" or self.role not in {"Q", "K", "V"}:
@@ -1682,6 +1684,26 @@ class AMDPackedFragmentLoopSpec(NamedTuple):
     if not isinstance(self.head_block, int) or isinstance(self.head_block, bool) or not 0 <= self.head_block < 8:
       raise ValueError("AMD loop fragment has an invalid head block")
     if self.grid is not None: self.grid.validate()
+    if self.storage not in {"global", "g2_lds"}: raise ValueError("AMD loop fragment has an unsupported storage owner")
+    if self.storage == "g2_lds" and (not isinstance(self.grid, AMDMultiWaveAttentionGridSpec) or self.role not in {"K", "V"}):
+      raise ValueError("G2 LDS fragments are restricted to multiwave K/V owners")
+    return self
+
+class AMDGQAKVStageSpec(NamedTuple):
+  """Exact G2 cooperative K/V tile staging into one shared 8 KiB slab."""
+  native_abi: str = "amd_gfx1100_gqa_kv_stage_g2_v1"
+  grid: AMDMultiWaveAttentionGridSpec = AMDMultiWaveAttentionGridSpec()
+  slab_elements: int = 4096
+  k_base: int = 0
+  v_base: int = 2048
+  vector_elements: int = 8
+  vectors_per_lane: int = 4
+
+  def validate(self):
+    self.grid.validate()
+    if (self.native_abi,self.slab_elements,self.k_base,self.v_base,self.vector_elements,self.vectors_per_lane) != \
+       ("amd_gfx1100_gqa_kv_stage_g2_v1",4096,0,2048,8,4):
+      raise ValueError("AMD G2 K/V stage requires the exact 8 KiB slab ABI")
     return self
 
 class CompositeInputSpec(NamedTuple):

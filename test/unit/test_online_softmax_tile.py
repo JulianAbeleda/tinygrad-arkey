@@ -737,6 +737,41 @@ def test_gfx1100_q32_hq4_hkv2_kv64_hd128_grid_loop_contract():
   drain=next(u for u in topo if u.op is Ops.AMD_ATTENTION_OUTPUT_DRAIN)
   assert drain.src[1] is group and drain.arg.grid == AMDAttentionGridSpec()
 
+def test_gfx1100_g2_shared_kv_stage_contract():
+  import itertools
+  from tinygrad.schedule.wmma import amd_gfx1100_q32_hq4_hkv2_kv64_hd128_g2_attention
+  from tinygrad.renderer.isa.amd import expand_gqa_kv_stage
+  from tinygrad.uop.ops import KernelInfo, ParamArg, AMDGQAKVStageSpec, AMDPackedFragmentLoopSpec
+  from tinygrad.codegen.opt.compiler_policies import WaveLDSFence
+  p=[UOp(Ops.PARAM,dtypes.half.ptr(16384),arg=ParamArg(i)) for i in range(4)]
+  sink=amd_gfx1100_q32_hq4_hkv2_kv64_hd128_g2_attention(p[1],p[2],p[3],p[0],scale=.25,kernel_info=KernelInfo(name="g2_stage"))
+  topo=sink.toposort(); stages=[u for u in topo if u.op is Ops.AMD_GQA_KV_STAGE]
+  assert len(stages)==1 and isinstance(stages[0].arg,AMDGQAKVStageSpec)
+  assert stages[0].arg.k_base+2048 == stages[0].arg.v_base and stages[0].arg.v_base+2048 == stages[0].arg.slab_elements
+  frags=[u for u in topo if u.op is Ops.AMD_PACKED_FRAGMENT_LOAD]
+  assert len(frags)==24 and sum(u.arg.storage=="g2_lds" for u in frags)==16
+  assert all(u.src[0] is stages[0] for u in frags if u.arg.storage=="g2_lds")
+  assert all(len(u.src)==6 and isinstance(u.arg,AMDPackedFragmentLoopSpec) for u in frags)
+  tail_barriers=[u for u in topo if u.op is Ops.BARRIER]
+  assert len(tail_barriers)==1 and tail_barriers[0].arg is None
+  expanded=expand_gqa_kv_stage(itertools.count(9705),stages[0]); etopo=expanded.toposort()
+  loads=[u for u in etopo if u.op is Ops.LOAD]; stores=[u for u in etopo if u.op is Ops.STORE]
+  barriers=[u for u in etopo if u.op is Ops.BARRIER]
+  assert len(loads)==8 and len(stores)==8 and len(barriers)==1 and barriers[0].arg is None
+  assert not any(isinstance(u.arg,WaveLDSFence) for u in barriers)
+
+def test_gfx1100_g2_stage_fails_closed_wrong_wave_provenance():
+  import itertools
+  from tinygrad.dtype import AddrSpace
+  from tinygrad.renderer.isa.amd import expand_gqa_kv_stage
+  from tinygrad.uop.ops import ParamArg, AMDGQAKVStageSpec, AMDMultiWaveAttentionGridSpec, AxisType
+  grid=AMDMultiWaveAttentionGridSpec(q_tokens=32,q_heads=4,kv_heads=2,kv_tokens=64)
+  k=UOp(Ops.PARAM,dtypes.half.ptr(16384),arg=ParamArg(2)); v=UOp(Ops.PARAM,dtypes.half.ptr(16384),arg=ParamArg(3))
+  tid=UOp.special(64,"lidx0"); lane=tid&31; rng=UOp.range(4,9700,AxisType.REDUCE); group=UOp.special(4,"gidx0")
+  stage=UOp(Ops.AMD_GQA_KV_STAGE,dtypes.half.ptr(4096,AddrSpace.LOCAL),(k,v,rng,tid,lane,tid>>4,group),arg=AMDGQAKVStageSpec(grid=grid))
+  with pytest.raises(ValueError,match="exact lane"):
+    expand_gqa_kv_stage(itertools.count(9705),stage)
+
 def test_gfx1100_q32_hq4_hkv2_kv64_hd128_grid_loop_numeric():
   import numpy as np
   from tinygrad import Tensor
@@ -751,6 +786,27 @@ def test_gfx1100_q32_hq4_hkv2_kv64_hd128_grid_loop_numeric():
     scores=(q[h].astype(np.float32)@k[h//2].astype(np.float32).T)*.25; probs=np.exp(scores-scores.max(axis=1,keepdims=True)); probs/=probs.sum(axis=1,keepdims=True)
     ref[h]=probs@v[h//2].astype(np.float32)
   np.testing.assert_allclose(got,ref,rtol=.02,atol=4e-3)
+
+def test_gfx1100_g2_shared_kv_stage_numeric_replay():
+  import numpy as np
+  from tinygrad import Tensor
+  from tinygrad.schedule.wmma import amd_gfx1100_q32_hq4_hkv2_kv64_hd128_loop_attention, amd_gfx1100_q32_hq4_hkv2_kv64_hd128_g2_attention
+  from tinygrad.uop.ops import KernelInfo
+  rng=np.random.default_rng(3243); q=rng.normal(0,.2,(4,32,128)).astype(np.float16)
+  k=rng.normal(0,.2,(2,64,128)).astype(np.float16); v=rng.normal(0,.4,(2,64,128)).astype(np.float16)
+  tq,tk,tv=(Tensor(x.reshape(-1),device="AMD") for x in (q,k,v))
+  def run(builder,name):
+    out=Tensor.empty(16384,dtype=dtypes.half,device="AMD")
+    def kernel(o,qi,ki,vi): return builder(qi,ki,vi,o,scale=.25,kernel_info=KernelInfo(name=name))
+    return out.custom_kernel(tq,tk,tv,fxn=kernel)[0].numpy().reshape(4,32,128).astype(np.float32)
+  single,g2=run(amd_gfx1100_q32_hq4_hkv2_kv64_hd128_loop_attention,"grid_loop_replay"),run(amd_gfx1100_q32_hq4_hkv2_kv64_hd128_g2_attention,"g2_stage_replay")
+  ref=np.empty_like(g2)
+  for h in range(4):
+    scores=(q[h].astype(np.float32)@k[h//2].astype(np.float32).T)*.25; probs=np.exp(scores-scores.max(axis=1,keepdims=True)); probs/=probs.sum(axis=1,keepdims=True)
+    ref[h]=probs@v[h//2].astype(np.float32)
+  np.testing.assert_allclose(single,ref,rtol=.02,atol=4e-3)
+  np.testing.assert_allclose(g2,ref,rtol=.02,atol=4e-3)
+  np.testing.assert_allclose(g2,single,rtol=.02,atol=4e-3)
 
 def test_gfx1100_q16_kv32_builder_fails_closed_owner_sizes():
   from tinygrad.schedule.wmma import amd_gfx1100_q16_kv32_attention

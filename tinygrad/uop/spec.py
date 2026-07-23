@@ -75,6 +75,16 @@ def validate_amd_attention_output_drain(x:UOp):
   except ValueError: return False
   return len(x.src)==11 and x.src[0].dtype.size==grid.q_heads*grid.q_tokens*128 and all(s.dtype==dtypes.float.vec(8) for s in x.src[2:])
 
+def validate_amd_gqa_kv_stage(x:UOp):
+  from tinygrad.dtype import AddrSpace
+  if not hasattr(x.arg,"native_abi") or x.arg.native_abi != "amd_gfx1100_gqa_kv_stage_g2_v1" or len(x.src) != 7: return False
+  try: x.arg.validate()
+  except ValueError: return False
+  k,v,tile,tid,lane,wave,group=x.src
+  return isinstance(x.dtype,PtrDType) and x.dtype.addrspace is AddrSpace.LOCAL and x.dtype.base == dtypes.half and x.dtype.size == 4096 and \
+    all(isinstance(owner.dtype,PtrDType) and owner.dtype.addrspace is AddrSpace.GLOBAL and owner.dtype.base == dtypes.half for owner in (k,v)) and \
+    tile.op is Ops.RANGE and tid.op is Ops.SPECIAL and str(tid.arg)=="lidx0" and group.op is Ops.SPECIAL and str(group.arg)=="gidx0"
+
 # ***** new specs *****
 
 # these ops can be used in the tensor graph and programs
@@ -297,6 +307,7 @@ spec_tensor = PatternMatcher([
    lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_packed_fragment_hd128_loop_v1" and
    getattr(getattr(x.arg,"grid",None),"native_abi",None) == "amd_gfx1100_attention_multiwave_g2_v1" and
    str(x.src[5].arg)=="gidx0" and x.dtype == dtypes.half.vec(16)),
+  (UPat(Ops.AMD_GQA_KV_STAGE, name="x"), validate_amd_gqa_kv_stage),
   (UPat(Ops.AMD_ATTENTION_OUTPUT_DRAIN, name="x"), validate_amd_attention_output_drain),
 
   # ATTENTION keeps a normal fallback plus explicit Q/K/V/(optional mask)
@@ -341,7 +352,7 @@ spec_tensor = PatternMatcher([
 spec_program = PatternMatcher([
   # Scalar address arithmetic introduced by the native Hd128 attention drain.
   (UPat(Ops.CONST, dtypes.weakint, name="x"), lambda x: isinstance(x.arg, int) and 0 <= x.arg <= 2_621_440),
-  (UPat((Ops.ADD, Ops.MUL, Ops.SHR, Ops.CDIV), dtypes.weakint, src=(UPat(dtype=dtypes.weakint), UPat(dtype=dtypes.weakint))), lambda: True),
+  (UPat((Ops.ADD, Ops.MUL, Ops.SHR, Ops.CDIV, Ops.CMOD), dtypes.weakint, src=(UPat(dtype=dtypes.weakint), UPat(dtype=dtypes.weakint))), lambda: True),
   # A fully masked row folds -inf to its uint bit pattern while retaining LDS publication ordering.
   (UPat(Ops.AFTER, dtypes.uint, src=(UPat(Ops.CONST, dtypes.uint), UPat(Ops.STORE))), lambda: True),
   (UPat(Ops.AMD_PACKED_FRAGMENT_LOAD,src=(UPat(),UPat(),UPat(),UPat()),name="x"),
@@ -357,7 +368,9 @@ spec_program = PatternMatcher([
   (UPat(Ops.CAST,dtype=dtypes.weakint,src=(UPat(Ops.RANGE,dtype=dtypes.int),)), lambda: True),
   (UPat(Ops.CAST,dtype=dtypes.weakint,src=(UPat(Ops.SPECIAL,dtype=dtypes.int,name="s"),)), lambda s: str(s.arg) in {"lidx0","gidx0"}),
   (UPat(Ops.CAST,dtype=dtypes.weakint,src=(UPat(Ops.AND,dtype=dtypes.int,name="a"),)),
-   lambda a: any(s.op is Ops.CONST and int(s.arg)==15 for s in a.src) and any(s.op is Ops.SPECIAL and str(s.arg)=="lidx0" for s in a.src)),
+   lambda a: any(s.op is Ops.CONST and int(s.arg) in {15,31} for s in a.src) and any(s.op is Ops.SPECIAL and str(s.arg)=="lidx0" for s in a.src)),
+  (UPat(Ops.CAST,dtype=dtypes.weakint,src=(UPat(Ops.SHR,dtype=dtypes.int,name="a"),)),
+   lambda a: a.src[0].op is Ops.SPECIAL and str(a.src[0].arg)=="lidx0" and a.src[1].op is Ops.CONST and int(a.src[1].arg)==5),
   (UPat(Ops.AMD_ATTENTION_LOOP_STATE, name="x"),
    lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_attention_loop_state_v1"),
   (UPat(Ops.AMD_ATTENTION_OUTPUT_DRAIN, name="x"), validate_amd_attention_output_drain),
