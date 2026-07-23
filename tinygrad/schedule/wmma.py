@@ -618,10 +618,10 @@ def amd_gfx1100_rotating_pv_scheduler_probe(q:UOp, k:UOp, v:UOp, out:UOp, *, q_t
   ml_commit=UOp.group(*wr(mreg,"m",nm),*wr(lreg,"l",nl))
   initialized=tuple(RotatingPVStateSpec(storage,lane,block,generation=0).write(zero) for block in range(8))
   init=UOp.group(*initialized)
-  states=tuple(RotatingPVStateSpec(storage,lane,block,generation=1) for block in range(8))
+  states=tuple(RotatingPVStateSpec(storage,lane,block,generation=block+1) for block in range(8))
   writes=[]; publication=init
   for block,state in enumerate(states):
-    read=RotatingPVLoopReadSpec(state,rng,wait_generation=0,publication_generation=1).reload(publication)
+    read=RotatingPVLoopReadSpec(state,rng,wait_generation=block,publication_generation=block+1).reload(publication)
     update=UOp(Ops.WMMA,dtypes.float.vec(8),(p,fr(v,"V",block),read.alu(Ops.MUL,alpha)),warg,tag=("attention_wmma","PV",block))
     publication=state.write(update,after=rng); writes.append(publication)
   writes=tuple(writes)

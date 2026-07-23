@@ -145,12 +145,12 @@ def validate_rotating_pv_sequential_drain(x:UOp):
     for write in writes:
       if not validate_rotating_pv_state(write) or write.arg[0] != "rotating_pv_state_write_v1": return False
       published.append(write.arg[1])
-    return all(state.storage is drain.state.storage and state.lane is drain.state.lane and state.generation == drain.state.generation
-               for state in published) and {state.block for state in published} == set(range(8))
+    return all(state.storage is drain.state.storage and state.lane is drain.state.lane and state.generation == state.block+1
+               for state in published) and {state.block for state in published} == set(range(8)) and drain.state.generation == 1
   if token.op is not Ops.CUSTOMI or not validate_rotating_pv_sequential_drain(token): return False
   previous=token.arg[1].state
   return previous.storage is drain.state.storage and previous.lane is drain.state.lane and \
-    previous.generation == drain.state.generation and previous.block == drain.state.block-1
+    previous.generation == drain.state.generation-1 and previous.block == drain.state.block-1
 
 def validate_state_loop_read(x:UOp):
   if not (isinstance(x.arg,tuple) and len(x.arg)==3 and x.arg[0] == "state_loop_read_v1" and isinstance(x.arg[1],StateHandle) and isinstance(x.arg[2],int)):
