@@ -125,6 +125,15 @@ def test_lane_state_prebuffer_view_reconnects_exact_reduce_producer():
   rebuilt = resolve_composite_reduce_slot_prebufferize(deferred)
   assert rebuilt.op is Ops.DEFERRED_REDUCE_SLOT and rebuilt.src[0] is red
 
+def test_lane_state_direct_slot_becomes_opaque_before_scheduler_views():
+  slots = (AccumulatorSlot(Ops.MAX, dtypes.float32, float("-inf"), "m"),
+           AccumulatorSlot(Ops.ADD, dtypes.float32, 0.0, "l"),
+           AccumulatorSlot(Ops.ADD, dtypes.float32, 0.0, "acc"))
+  red = UOp.placeholder((16,), dtypes.float32, 0).composite_reduce(*slots, axis=(0,),
+    combine_fn="online_softmax_state", slot_shapes=((), (), (16,)), lane_shapes=((), (), (16,)))
+  deferred = resolve_composite_reduce_slot_prebufferize(red.composite_reduce_slot(2))
+  assert deferred.op is Ops.DEFERRED_REDUCE_SLOT and deferred.src == (red,) and deferred.arg.slot == 2
+
 def test_deferred_state_projection_lowers_once_to_physical_hd16_slot():
   slots = (AccumulatorSlot(Ops.MAX, dtypes.float32, float("-inf"), "m"),
            AccumulatorSlot(Ops.ADD, dtypes.float32, 0.0, "l"),

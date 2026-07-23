@@ -339,6 +339,11 @@ def resolve_composite_reduce_slot_prebufferize(slot):
   """
   if slot.op is not Ops.REDUCE_SLOT: return None
   view = slot.src[0]
+  if view.op is Ops.REDUCE and isinstance(view.arg, tuple) and isinstance(view.arg[0], CompositeReduce) and view.arg[0].lane_shapes:
+    from tinygrad.uop.ops import DeferredReduceSlot
+    if not isinstance(slot.arg, int) or not 0 <= slot.arg < len(view.arg[0].slots):
+      raise RuntimeError(f"invalid composite reduction slot {slot.arg}")
+    return UOp(Ops.DEFERRED_REDUCE_SLOT, slot.dtype, (view,), DeferredReduceSlot(slot.arg))
   # Expander may wrap the structured tuple in INDEX/STAGE views.  Keep the
   # INDEX nodes for rebuilding the logical projection, but peel STAGE as a
   # scheduler ownership boundary.
