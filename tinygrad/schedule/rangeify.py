@@ -362,6 +362,12 @@ ALWAYS_RUN_OPS = {Ops.CONTIGUOUS, Ops.COPY, Ops.NOOP}
 def cleanup_dead_axes(b:UOp):
   # don't optimize ALWAYS_RUN_OPS or AFTER (AFTER is a buffer identity — ranges define consumer access, not computation)
   if b.src[0].op in ALWAYS_RUN_OPS or b.src[0].op is Ops.AFTER: return None
+  # Composite reductions carry their logical state in a metadata-tagged TUPLE.
+  # Generic BUFFER shape inference assumes src[0] has a concrete shape, which
+  # is intentionally false for this tuple carrier.  Leave its range/lane
+  # ownership untouched; REDUCE_SLOT projection resolves the per-slot shape.
+  if b.src[0].op is Ops.TUPLE and isinstance(b.src[0].tag, tuple) and b.src[0].tag[0] == "composite_reduce":
+    return None
 
   new_rng = []
   hit = False
@@ -603,6 +609,8 @@ def bufferize_to_store(ctx:itertools.count, x:UOp, idx:UOp, allow_locals=True):
 # collapse any BUFFERIZE to single input BUFFERIZE
 def flatten_bufferize(x:UOp):
   if len(x.src) == 2: return None
+  if x.src[0].op is Ops.TUPLE and isinstance(x.src[0].tag, tuple) and x.src[0].tag[0] == "composite_reduce":
+    return None
   ret = x.replace(src=(x.src[0], get_single_element(apply_movement_op(Ops.RESHAPE, (prod(x.shape),), x.shape, x.src[1:]))))
   rngs = x.src[1:]
   ret = ret.reshape(x.shape)
