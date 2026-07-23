@@ -35,7 +35,7 @@ def probe() -> dict:
     qi = Tensor.empty(hq*q*128, dtype=dtypes.half, device="AMD")
     ki = Tensor.empty(hkv*kv*128, dtype=dtypes.half, device="AMD")
     vi = Tensor.empty(hkv*kv*128, dtype=dtypes.half, device="AMD")
-    out = Tensor.empty(hq*q*128, dtype=dtypes.float, device="AMD")
+    out = Tensor.empty(hq*q*128, dtype=dtypes.half, device="AMD")
     def kernel(o, qv, kvv, vv):
       return amd_gfx1100_q16_grid_hd128_loop_attention(qv, kvv, vv, o, q_tokens=q, q_heads=hq, kv_heads=hkv,
         kv_tokens=kv, scale=1/(128**.5), causal=True, kernel_info=KernelInfo(name="phase_abi_v1_probe"), phase_abi_v1=True)
