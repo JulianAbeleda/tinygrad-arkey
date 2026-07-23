@@ -4,7 +4,7 @@ from __future__ import annotations
 import argparse, hashlib, json, os, platform, statistics, time, subprocess, sys
 from pathlib import Path
 import numpy as np
-from tinygrad import Tensor, dtypes, Device
+from tinygrad import Tensor, dtypes, Device, TinyJit
 from tinygrad.llm.flash_prefill_attention import shared_prefill_attention
 from tinygrad.uop.ops import SharedAttentionCandidateContext
 
@@ -22,10 +22,10 @@ def _inputs(hq,hkv,q,kv,seed):
   rng=np.random.default_rng(seed)
   vals=[rng.normal(0,.04,(1,h,q if n==0 else kv,128)).astype(np.float16) for n,h in enumerate((hq,hkv,hkv))]
   return tuple(Tensor(x,device="AMD") for x in vals), vals
-def _candidate(q,k,v,ctx): return shared_prefill_attention(q,k,v,mask=_mask(ctx.q_tokens,ctx.kv_tokens,ctx.start_pos),candidate_context=ctx)
-def _baseline(q,k,v,ctx):
+def _candidate(q,k,v,mask,ctx): return shared_prefill_attention(q,k,v,mask=mask,candidate_context=ctx)
+def _baseline(q,k,v,mask,ctx):
   g=ctx.hq//ctx.hkv
-  return q.scaled_dot_product_attention(k.repeat_interleave(g,dim=-3),v.repeat_interleave(g,dim=-3),attn_mask=_mask(ctx.q_tokens,ctx.kv_tokens,ctx.start_pos))
+  return q.scaled_dot_product_attention(k.repeat_interleave(g,dim=-3),v.repeat_interleave(g,dim=-3),attn_mask=mask)
 def _time(fn,warmup,samples):
   for _ in range(warmup): fn().realize()
   _sync(); out=[]
@@ -39,10 +39,14 @@ def run_one(proof_path:Path,out:Path,*,profile:str,kv:int,mode:str,samples:int,w
   if route is None or mode not in {"candidate","baseline"}: raise ValueError("invalid profile or mode")
   profile,strategy,hq,hkv=route; ctx=SharedAttentionCandidateContext(profile,strategy,512,kv,kv-512,hq,hkv,128,True).validate()
   (q,k,v),raw=_inputs(hq,hkv,512,kv,20260723+hq+kv)
-  cand=lambda:_candidate(q,k,v,ctx); base=lambda:_baseline(q,k,v,ctx)
+  mask=_mask(ctx.q_tokens,ctx.kv_tokens,ctx.start_pos)
+  cand=lambda:_candidate(q,k,v,mask,ctx); base=lambda:_baseline(q,k,v,mask,ctx)
   cg,bg=cand().numpy().astype(np.float32),base().numpy().astype(np.float32)
   if not np.allclose(cg,bg,rtol=.03,atol=.006): raise RuntimeError(f"numeric gate failed for {profile} KV={kv}: max_abs={np.abs(cg-bg).max()}")
-  timing=_summary(_time(cand if mode=="candidate" else base,warmup,samples)); timing["tokens_s"]=512000/timing["median_ms"]
+  # Capture is completed before timing. The sampled closure is JIT replay only.
+  replay=TinyJit(cand if mode=="candidate" else base)
+  timing=_summary(_time(replay,warmup,samples)); timing["tokens_s"]=512000/timing["median_ms"]
+  timing["protocol"]="tinyjit_replay_plus_device_synchronize"
   artifact={"schema":SCHEMA,"proof_path":str(proof_path),"proof_sha256":_sha(proof_path.read_text()),"config":{"samples":samples,"warmup":warmup,"q_tokens":512,"kv":kv,"profile":profile,"mode":mode,"seed":20260723+hq+kv,"dtype":"float16","device":"AMD"},"hardware":{"platform":platform.platform(),"rocm_visible_devices":os.getenv("ROCR_VISIBLE_DEVICES")},"assumptions":{"flops":"4*Hq*Q*KV*Hd","bytes":"fp16 QKV/output; excludes cache and compiler"},"candidate_context":dict(zip(ctx._fields,ctx)),"timing":timing,"numeric_max_abs":float(np.abs(cg-bg).max()),"input_sha256":_sha("".join(str(x.shape)+str(x.sum()) for x in raw))}
   out.parent.mkdir(parents=True,exist_ok=True); out.write_text(json.dumps(artifact,sort_keys=True,indent=2)+"\n"); return artifact
 def main():
