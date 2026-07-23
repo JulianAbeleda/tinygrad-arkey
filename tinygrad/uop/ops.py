@@ -1409,7 +1409,7 @@ class RotatingPVLoopReadSpec(NamedTuple):
     self.validate()
     if publication.dtype != dtypes.void: raise TypeError("rotating PV loop read requires a void publication token")
     return UOp(Ops.CUSTOMI, self.dtype, (self.state.storage, self.state.lane, self.rng, publication),
-               ("rotating_pv_loop_read_v1", self), tag=("rotating_pv_loop_read_v1", self.state.block, self.publication_generation))
+               ("rotating_pv_loop_read_v1", self), tag=("rotating_pv_loop_read_v1", self.state.block, self.wait_generation, self.publication_generation))
 
 class RotatingPVSequentialDrainSpec(NamedTuple):
   """One ordered float8 drain with exact output ownership for the unavailable rotating-PV ABI."""
@@ -1420,17 +1420,20 @@ class RotatingPVSequentialDrainSpec(NamedTuple):
   final_l: UOp
   output_block: int
   output_block_base: int = 0
+  native_abi: str = "amd_gfx1100_rotating_pv_sequential_drain_v1"
 
   @property
   def dtype(self) -> DType: return self.state.dtype
 
   @property
-  def renderer_tag(self) -> tuple[str, int, int]:
-    return ("rotating_pv_sequential_drain_v1", self.state.block, self.state.generation)
+  def renderer_tag(self) -> tuple[str, int, int, int, int]:
+    return (self.native_abi, self.output_block, self.output_block_base, self.state.block, self.state.generation)
 
   def validate(self):
     self.state.validate()
     self.grid.validate()
+    if self.native_abi != "amd_gfx1100_rotating_pv_sequential_drain_v1":
+      raise ValueError("rotating PV drain has an unsupported native ABI")
     if (self.grid.q_tokens, self.grid.q_heads, self.grid.kv_heads, self.grid.kv_tokens) != (512, 32, 8, 512):
       raise ValueError("rotating PV drain is exact-8B only")
     if not isinstance(self.out.dtype, PtrDType) or self.out.dtype.base != dtypes.half or self.out.dtype.size != 512*32*128:
