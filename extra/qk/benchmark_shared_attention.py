@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Attention-only, proof-gated AMD benchmark for shared prefill attention."""
 from __future__ import annotations
-import argparse, hashlib, json, os, platform, statistics, time
+import argparse, hashlib, json, os, platform, statistics, time, subprocess, sys
 from pathlib import Path
 import numpy as np
 from tinygrad import Tensor, dtypes, Device
@@ -10,6 +10,7 @@ from tinygrad.uop.ops import SharedAttentionCandidateContext
 
 SCHEMA="tinygrad.shared_attention_benchmark.v1"
 ROUTES=(("qwen3_8b_q4k_m_gfx1100","FULL_RESIDENT_OVERLAY",32,8),("qwen3_14b_q4k_m_gfx1100","BOUNDED_PACKED_TILES",40,8))
+DEFAULT_PROOF=Path(__file__).resolve().parents[2]/"docs/artifacts/shared-attention-m10e1-20260723/shared_attention_proof.json"
 def _sha(x): return hashlib.sha256(x.encode()).hexdigest()
 def _mask(q,kv,start): return Tensor.full((1,1,q,kv),float("-inf"),dtype=dtypes.float16,buffer=False).triu(start+1)
 def _sync(): Device["AMD"].synchronize()
@@ -33,25 +34,20 @@ def _time(fn,warmup,samples):
   return out
 def _summary(x):
   x=sorted(x); return {"raw_ms":x,"median_ms":statistics.median(x),"p10_ms":np.percentile(x,10).item(),"p90_ms":np.percentile(x,90).item()}
-def run(proof_path:Path,out:Path,*,samples:int,warmup:int,contexts:tuple[int,...]):
-  proof=_proof(proof_path); rows=[]
-  for profile,strategy,hq,hkv in ROUTES:
-    for kv in contexts:
-      ctx=SharedAttentionCandidateContext(profile,strategy,512,kv,kv-512,hq,hkv,128,True).validate()
-      (q,k,v),raw=_inputs(hq,hkv,512,kv,20260723+hq+kv)
-      cand=lambda:_candidate(q,k,v,ctx); base=lambda:_baseline(q,k,v,ctx)
-      # Numeric gate is deliberately before any timed iteration.
-      cg,bg=cand().numpy().astype(np.float32),base().numpy().astype(np.float32)
-      if not np.allclose(cg,bg,rtol=.03,atol=.006): raise RuntimeError(f"numeric gate failed for {profile} KV={kv}: max_abs={np.abs(cg-bg).max()}")
-      c,b=_summary(_time(cand,warmup,samples)),_summary(_time(base,warmup,samples))
-      c["tokens_s"]=512000/c["median_ms"]; b["tokens_s"]=512000/b["median_ms"]
-      rows.append({"candidate_context":dict(zip(ctx._fields,ctx)),"candidate":c,"baseline":b,"speedup":b["median_ms"]/c["median_ms"],
-        "numeric_max_abs":float(np.abs(cg-bg).max()),"input_sha256":_sha("".join(str(x.shape)+str(x.sum()) for x in raw))})
-  artifact={"schema":SCHEMA,"proof_path":str(proof_path),"proof_sha256":_sha(proof_path.read_text()),"config":{"samples":samples,"warmup":warmup,"contexts":contexts,"q_tokens":512,"dtype":"float16","device":"AMD"},"hardware":{"platform":platform.platform(),"rocm_visible_devices":os.getenv("ROCR_VISIBLE_DEVICES")},"assumptions":{"flops":"4*Hq*Q*KV*Hd","bytes":"fp16 QKV/output; excludes cache and compiler"},"rows":rows}
+def run_one(proof_path:Path,out:Path,*,profile:str,kv:int,mode:str,samples:int,warmup:int):
+  proof=_proof(proof_path); route=next((x for x in ROUTES if x[0]==profile),None)
+  if route is None or mode not in {"candidate","baseline"}: raise ValueError("invalid profile or mode")
+  profile,strategy,hq,hkv=route; ctx=SharedAttentionCandidateContext(profile,strategy,512,kv,kv-512,hq,hkv,128,True).validate()
+  (q,k,v),raw=_inputs(hq,hkv,512,kv,20260723+hq+kv)
+  cand=lambda:_candidate(q,k,v,ctx); base=lambda:_baseline(q,k,v,ctx)
+  cg,bg=cand().numpy().astype(np.float32),base().numpy().astype(np.float32)
+  if not np.allclose(cg,bg,rtol=.03,atol=.006): raise RuntimeError(f"numeric gate failed for {profile} KV={kv}: max_abs={np.abs(cg-bg).max()}")
+  timing=_summary(_time(cand if mode=="candidate" else base,warmup,samples)); timing["tokens_s"]=512000/timing["median_ms"]
+  artifact={"schema":SCHEMA,"proof_path":str(proof_path),"proof_sha256":_sha(proof_path.read_text()),"config":{"samples":samples,"warmup":warmup,"q_tokens":512,"kv":kv,"profile":profile,"mode":mode,"seed":20260723+hq+kv,"dtype":"float16","device":"AMD"},"hardware":{"platform":platform.platform(),"rocm_visible_devices":os.getenv("ROCR_VISIBLE_DEVICES")},"assumptions":{"flops":"4*Hq*Q*KV*Hd","bytes":"fp16 QKV/output; excludes cache and compiler"},"candidate_context":dict(zip(ctx._fields,ctx)),"timing":timing,"numeric_max_abs":float(np.abs(cg-bg).max()),"input_sha256":_sha("".join(str(x.shape)+str(x.sum()) for x in raw))}
   out.parent.mkdir(parents=True,exist_ok=True); out.write_text(json.dumps(artifact,sort_keys=True,indent=2)+"\n"); return artifact
 def main():
-  p=argparse.ArgumentParser(); p.add_argument("--proof",type=Path,required=True); p.add_argument("--output",type=Path,required=True); p.add_argument("--samples",type=int,default=10); p.add_argument("--warmup",type=int,default=3); p.add_argument("--contexts",default="512,1024,2048,4096")
+  p=argparse.ArgumentParser(); p.add_argument("--proof",type=Path,default=DEFAULT_PROOF); p.add_argument("--output",type=Path,required=True); p.add_argument("--samples",type=int,default=10); p.add_argument("--warmup",type=int,default=3); p.add_argument("--profile",choices=tuple(x[0] for x in ROUTES),required=True); p.add_argument("--kv",type=int,required=True); p.add_argument("--mode",choices=("candidate","baseline"),required=True)
   a=p.parse_args();
   if a.samples<10 or a.warmup<1: raise ValueError("require >=10 samples and >=1 warmup")
-  run(a.proof,a.output,samples=a.samples,warmup=a.warmup,contexts=tuple(int(x) for x in a.contexts.split(",")))
+  run_one(a.proof,a.output,profile=a.profile,kv=a.kv,mode=a.mode,samples=a.samples,warmup=a.warmup)
 if __name__=="__main__": main()
