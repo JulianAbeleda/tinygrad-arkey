@@ -84,7 +84,11 @@ def create_bufferize_and_index_based_on_ranges(ctx:IndexingContext, x:UOp):
         composite_consumer = s in ctx.composite_owned
         opts = BufferizeOpts(device=s.device, removable=removable, composite_consumer=composite_consumer) if len(ctx.range_map[s][1]) == len(realized_ranges) else \
                BufferizeOpts(device=s.device, addrspace=AddrSpace.LOCAL, removable=removable)
-        new_src = UOp(Ops.STAGE, s.dtype, src=(new_src,)+closed_ranges, arg=opts)
+        # Carry composite provenance across the scheduler STAGE boundary so
+        # the subsequent INDEX remains a typed REDUCE_SLOT view.  Never copy
+        # arbitrary tags onto STAGE nodes.
+        stage_tag = s.tag if isinstance(s.tag, tuple) and len(s.tag) == 2 and s.tag[0] in ("composite_reduce", "composite_slot", "composite_view") else None
+        new_src = UOp(Ops.STAGE, s.dtype, src=(new_src,)+closed_ranges, arg=opts, tag=stage_tag)
         if x in ctx.range_map: new_src = new_src.index(*[r for i,r in enumerate(ctx.range_map[x][0]) if i in realized_ranges])
     new_srcs.append(new_src)
   # NOTE: do we need this?
