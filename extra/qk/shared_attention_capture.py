@@ -10,6 +10,8 @@ from tinygrad.uop.ops import (AttentionWMMARole, KernelInfo, Ops, ProgramInfo,
   SharedAttentionCandidateContext, UOp)
 
 CAPTURE_SCHEMA = "tinygrad.shared_attention_compiler_capture.v2"
+ACC_SLICE_CAPTURE_SCHEMA = "tinygrad.shared_attention_compiler_capture.acc_slice_v3"
+ACC_SLICE_PASS_SCHEMA = "tinygrad.shared_attention_acc_slice_pass.v1"
 _RESOURCE_FIELDS = ("vgpr", "sgpr", "lds_bytes", "scratch_bytes", "vgpr_spills", "sgpr_spills", "wavefront_size")
 
 def _sha(data:bytes) -> str: return hashlib.sha256(data).hexdigest()
@@ -19,12 +21,44 @@ def _is_sha(value:Any) -> bool:
 def _canonical(value:Mapping[str,Any]) -> bytes:
   return json.dumps(value,sort_keys=True,separators=(",",":"),allow_nan=False).encode()
 
-def _context_json(ctx:SharedAttentionCandidateContext) -> dict[str,Any]:
-  return {name:getattr(ctx,name) for name in ctx._fields}
+def _context_json(ctx:SharedAttentionCandidateContext, *, include_slice:bool=True) -> dict[str,Any]:
+  names=ctx._fields if include_slice else tuple(x for x in ctx._fields if x not in {"output_block_base","acc_blocks"})
+  return {name:getattr(ctx,name) for name in names}
 
 def _context_from_json(row:Mapping[str,Any]) -> SharedAttentionCandidateContext:
-  if set(row) != set(SharedAttentionCandidateContext._fields): raise ValueError("candidate_context fields are malformed")
-  return SharedAttentionCandidateContext(*(row[name] for name in SharedAttentionCandidateContext._fields)).validate()
+  full=set(SharedAttentionCandidateContext._fields); legacy=full-{"output_block_base","acc_blocks"}
+  if frozenset(row) not in {frozenset(full),frozenset(legacy)}: raise ValueError("candidate_context fields are malformed")
+  values={**row}
+  values.setdefault("output_block_base",0); values.setdefault("acc_blocks",8)
+  return SharedAttentionCandidateContext(*(values[name] for name in SharedAttentionCandidateContext._fields)).validate()
+
+@dataclass(frozen=True)
+class SharedAttentionAccSlicePass:
+  schema: str
+  output_block_base: int
+  acc_blocks: int
+  qk_recomputed: bool
+  logical_graph_sha256: str
+
+  def validate(self) -> SharedAttentionAccSlicePass:
+    if self.schema != ACC_SLICE_PASS_SCHEMA: raise ValueError("shared attention accumulator-slice pass schema mismatch")
+    if (self.output_block_base,self.acc_blocks) not in {(0,4),(4,4)}:
+      raise ValueError("shared attention accumulator-slice ownership is not an exact half")
+    if self.qk_recomputed is not True: raise ValueError("shared attention accumulator-slice pass must declare QK recomputation")
+    if not _is_sha(self.logical_graph_sha256): raise ValueError("shared attention accumulator-slice logical graph hash is malformed")
+    return self
+
+  def to_json(self) -> dict[str,Any]:
+    return {"schema":self.schema,"output_block_base":self.output_block_base,"acc_blocks":self.acc_blocks,
+            "qk_recomputed":self.qk_recomputed,"logical_graph_sha256":self.logical_graph_sha256}
+
+  @classmethod
+  def from_json(cls,row:Mapping[str,Any]) -> SharedAttentionAccSlicePass:
+    if set(row) != {"schema","output_block_base","acc_blocks","qk_recomputed","logical_graph_sha256"}:
+      raise ValueError("shared attention accumulator-slice pass fields are malformed")
+    if not isinstance(row["qk_recomputed"],bool): raise ValueError("shared attention accumulator-slice recomputation flag is malformed")
+    return cls(str(row["schema"]),int(row["output_block_base"]),int(row["acc_blocks"]),
+               row["qk_recomputed"],str(row["logical_graph_sha256"])).validate()
 
 @dataclass(frozen=True)
 class SharedAttentionSynchronization:
@@ -129,9 +163,10 @@ class SharedAttentionCompilerCapture:
   numeric_rel_l2: float
   reference_sha256: str
   capture_sha256: str = ""
+  acc_slice_pass: SharedAttentionAccSlicePass|None = None
 
   def _payload(self) -> dict[str,Any]:
-    return {"schema":self.schema,"candidate_context":_context_json(self.candidate_context),
+    payload = {"schema":self.schema,"candidate_context":_context_json(self.candidate_context,include_slice=self.schema!=CAPTURE_SCHEMA),
       "canonical_graph_sha256":self.canonical_graph_sha256,"compute_call_count":self.compute_call_count,
       "copy_call_count":self.copy_call_count,"param_ownership":[list(x) for x in self.param_ownership],
       "allocation_elements":list(self.allocation_elements),"allocation_complete":self.allocation_complete,
@@ -145,13 +180,16 @@ class SharedAttentionCompilerCapture:
       "spill_count":self.spill_count,"scratch_bytes":self.scratch_bytes,"lds_bytes":self.lds_bytes,
       "numeric":{"max_abs":self.numeric_max_abs,"max_rel":self.numeric_max_rel,"rel_l2":self.numeric_rel_l2,
                  "reference_sha256":self.reference_sha256}}
+    if self.schema == ACC_SLICE_CAPTURE_SCHEMA:
+      payload["acc_slice_pass"] = self.acc_slice_pass.to_json() if self.acc_slice_pass is not None else None
+    return payload
 
   def with_hash(self) -> SharedAttentionCompilerCapture:
     return replace(self,capture_sha256=_sha(_canonical(self._payload())))
 
   def validate(self) -> SharedAttentionCompilerCapture:
     self.candidate_context.validate()
-    if self.schema != CAPTURE_SCHEMA: raise ValueError("shared attention capture schema mismatch")
+    if self.schema not in {CAPTURE_SCHEMA,ACC_SLICE_CAPTURE_SCHEMA}: raise ValueError("shared attention capture schema mismatch")
     if not all(_is_sha(x) for x in (self.canonical_graph_sha256,self.hip_source_sha256,self.amd_isa_sha256,
                                     self.reference_sha256,self.capture_sha256)):
       raise ValueError("shared attention capture hash is malformed")
@@ -174,17 +212,29 @@ class SharedAttentionCompilerCapture:
     self.synchronization.validate()
     if self.barrier_count != self.synchronization.workgroup_barriers:
       raise ValueError("captured barrier count differs from synchronization contract")
-    if self.loop_count < 1 or self.static_wmma_count != 16 or self.spill_count or self.scratch_bytes:
+    expected_wmma = 16 if self.schema == CAPTURE_SCHEMA else 12
+    if self.loop_count < 1 or self.static_wmma_count != expected_wmma or self.spill_count or self.scratch_bytes:
       raise ValueError("AMD ISA loop/WMMA/resource contract failed")
     wavefront=dict(self.hip_resources)["wavefront_size"]
     derived=_derive_synchronization((self.synchronization.workgroup_waves*wavefront,),wavefront,self.hip_source,self.amd_isa_text)
     if derived != self.synchronization: raise ValueError("shared attention synchronization evidence is not reproducible")
+    if self.schema == CAPTURE_SCHEMA:
+      if self.acc_slice_pass is not None or (ctx.output_block_base,ctx.acc_blocks) != (0,8):
+        raise ValueError("v2 shared attention capture cannot claim accumulator-slice ownership")
+      pv_tiles=list(range(8))
+    else:
+      if self.acc_slice_pass is None: raise ValueError("accumulator-slice capture metadata is missing")
+      self.acc_slice_pass.validate()
+      if (ctx.output_block_base,ctx.acc_blocks) != (self.acc_slice_pass.output_block_base,self.acc_slice_pass.acc_blocks):
+        raise ValueError("capture context and accumulator-slice ownership differ")
+      pv_tiles=list(range(4))
     sites = tuple(site for site,_ in self.wmma_roles)
-    if len(self.wmma_roles) != 16 or sites != tuple(sorted(set(sites))): raise ValueError("WMMA role sites are malformed")
+    if len(self.wmma_roles) != expected_wmma or sites != tuple(sorted(set(sites))): raise ValueError("WMMA role sites are malformed")
     for role in (role for _,role in self.wmma_roles): role.validate()
-    for contraction in ("QK","PV"):
-      if sorted(role.tile for _,role in self.wmma_roles if role.contraction == contraction) != list(range(8)):
-        raise ValueError(f"shared attention capture requires exactly 8 {contraction} roles")
+    if sorted(role.tile for _,role in self.wmma_roles if role.contraction == "QK") != list(range(8)):
+      raise ValueError("shared attention capture requires exactly 8 QK roles")
+    if sorted(role.tile for _,role in self.wmma_roles if role.contraction == "PV") != pv_tiles:
+      raise ValueError(f"shared attention capture requires exactly {len(pv_tiles)} PV roles")
     if not all(isinstance(x,(int,float)) and math.isfinite(x) and x >= 0 for x in
                (self.numeric_max_abs,self.numeric_max_rel,self.numeric_rel_l2)):
       raise ValueError("numeric metrics are malformed")
@@ -198,6 +248,7 @@ class SharedAttentionCompilerCapture:
       "allocation_elements","allocation_complete","expanded_kv_buffers","score_probability_buffers","wmma_roles","hip_source",
       "hip_source_sha256","hip_resources","amd_isa_text","amd_isa_sha256","loop_count","barrier_count","synchronization","static_wmma_count",
       "highest_vgpr","highest_sgpr","spill_count","scratch_bytes","lds_bytes","numeric","capture_sha256"}
+    if row.get("schema") == ACC_SLICE_CAPTURE_SCHEMA: required.add("acc_slice_pass")
     if set(row) != required: raise ValueError("shared attention capture fields are malformed")
     numeric = row["numeric"]
     if not isinstance(numeric,Mapping) or set(numeric) != {"max_abs","max_rel","rel_l2","reference_sha256"}:
@@ -205,6 +256,8 @@ class SharedAttentionCompilerCapture:
     resources = row["hip_resources"]
     if not isinstance(resources,Mapping): raise ValueError("HIP resources are malformed")
     roles = tuple((int(x[0]),AttentionWMMARole(str(x[1]),int(x[2]))) for x in row["wmma_roles"])
+    pass_row=row.get("acc_slice_pass")
+    acc_slice_pass=SharedAttentionAccSlicePass.from_json(pass_row) if isinstance(pass_row,Mapping) else None
     return cls(str(row["schema"]),_context_from_json(row["candidate_context"]),str(row["canonical_graph_sha256"]),
       int(row["compute_call_count"]),int(row["copy_call_count"]),tuple((int(x[0]),int(x[1])) for x in row["param_ownership"]),
       tuple(int(x) for x in row["allocation_elements"]),row["allocation_complete"],int(row["expanded_kv_buffers"]),
@@ -214,7 +267,7 @@ class SharedAttentionCompilerCapture:
       int(row["static_wmma_count"]),int(row["highest_vgpr"]),
       int(row["highest_sgpr"]),int(row["spill_count"]),int(row["scratch_bytes"]),int(row["lds_bytes"]),
       float(numeric["max_abs"]),float(numeric["max_rel"]),float(numeric["rel_l2"]),str(numeric["reference_sha256"]),
-      str(row["capture_sha256"])).validate()
+      str(row["capture_sha256"]),acc_slice_pass).validate()
 
 def _program_parts(program:UOp) -> tuple[ProgramInfo,UOp,str,bytes|None]:
   if program.op is not Ops.PROGRAM or not isinstance(program.arg,ProgramInfo): raise TypeError("capture requires a final PROGRAM")
@@ -270,13 +323,24 @@ def build_shared_attention_compiler_capture(*, schedule:UOp, compute_call:UOp, h
   if out.shape != ref.shape or out.size != context.hq*context.q_tokens*context.hd: raise ValueError("numeric output/reference shape mismatch")
   diff = np.abs(out-ref); denom = np.maximum(np.abs(ref),1e-3)
   ref_bytes = str(ref.shape).encode()+str(ref.dtype).encode()+ref.tobytes()
-  capture = SharedAttentionCompilerCapture(CAPTURE_SCHEMA,context,compute_sink.replace(arg=None).key.hex(),compute_calls,copy_calls,
+  schema, acc_slice_pass = CAPTURE_SCHEMA, None
+  if context.acc_blocks == 4:
+    logical_context = _context_json(context)
+    logical_context["output_block_base"], logical_context["acc_blocks"] = 0, 8
+    logical_graph_sha256 = _sha(_canonical({"candidate_context":logical_context,"param_ownership":[list(x) for x in params],
+      "qk_tiles":list(range(8)),"pv_output_tiles":list(range(8))}))
+    acc_slice_pass = SharedAttentionAccSlicePass(ACC_SLICE_PASS_SCHEMA,context.output_block_base,context.acc_blocks,
+      True,logical_graph_sha256)
+    schema = ACC_SLICE_CAPTURE_SCHEMA
+  capture = SharedAttentionCompilerCapture(schema,context,compute_sink.replace(arg=None).key.hex(),compute_calls,copy_calls,
     params,buffers,True,expanded_count,score_count,isa_info.wmma_roles.sites,hip_source,_text_sha(hip_source),hip_resources,
     isa_text,_text_sha(isa_text),max(1,isa_text.lower().count("s_cbranch")),isa_text.lower().count("s_barrier"),
     _derive_synchronization(hip_info.local_size,dict(hip_resources)["wavefront_size"],hip_source,isa_text),
     len(isa_info.wmma_roles.sites),_highest_register(isa_text,"v"),_highest_register(isa_text,"s"),
     sum("spill" in str(u.arg).lower() for u in isa_linear.src),sum("scratch" in str(u.arg).lower() for u in isa_linear.src),lds_bytes,
-    float(diff.max(initial=0)),float((diff/denom).max(initial=0)),float(np.linalg.norm(diff)/(np.linalg.norm(ref)+1e-12)),_sha(ref_bytes))
+    float(diff.max(initial=0)),float((diff/denom).max(initial=0)),float(np.linalg.norm(diff)/(np.linalg.norm(ref)+1e-12)),_sha(ref_bytes),
+    acc_slice_pass=acc_slice_pass)
   return capture.with_hash().validate()
 
-__all__ = ["CAPTURE_SCHEMA","SharedAttentionSynchronization","SharedAttentionCompilerCapture","build_shared_attention_compiler_capture"]
+__all__ = ["CAPTURE_SCHEMA","ACC_SLICE_CAPTURE_SCHEMA","ACC_SLICE_PASS_SCHEMA","SharedAttentionAccSlicePass",
+           "SharedAttentionSynchronization","SharedAttentionCompilerCapture","build_shared_attention_compiler_capture"]

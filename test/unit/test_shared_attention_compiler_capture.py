@@ -3,22 +3,32 @@ import hashlib
 
 import pytest
 
-from extra.qk.shared_attention_capture import CAPTURE_SCHEMA, SharedAttentionCompilerCapture
+from extra.qk.shared_attention_capture import (ACC_SLICE_CAPTURE_SCHEMA, ACC_SLICE_PASS_SCHEMA, CAPTURE_SCHEMA,
+  SharedAttentionAccSlicePass, SharedAttentionCompilerCapture, SharedAttentionSynchronization)
 from extra.qk.shared_attention_evidence import shared_attention_proof_artifact
 from tinygrad.uop.ops import AttentionWMMARole, SharedAttentionCandidateContext
 
 def _sha(value:str) -> str: return hashlib.sha256(value.encode()).hexdigest()
 
-def capture(profile,strategy,start,hq):
+def capture(profile,strategy,start,hq,base=0,blocks=8):
   qt,kv=16,start+16
-  ctx=SharedAttentionCandidateContext(profile,strategy,qt,kv,start,hq,8,128,True)
-  roles=tuple((i,AttentionWMMARole("QK" if i<8 else "PV",i if i<8 else i-8)) for i in range(16))
-  hip="// final HIP source\n"; isa="loop:\n"+"s_cbranch_scc1 loop\n"+"s_barrier\n"+("v_wmma_f32_16x16x16_f16 v0, v1, v2\n"*16)
+  ctx=SharedAttentionCandidateContext(profile,strategy,qt,kv,start,hq,8,128,True,base,blocks)
+  roles=tuple((i,AttentionWMMARole("QK",i)) for i in range(8))+tuple((8+i,AttentionWMMARole("PV",i)) for i in range(blocks))
+  static_wmma_count=8+blocks
+  hip="*(buf0+0) = x;\n__builtin_amdgcn_s_barrier();\nhalf val0 = (*(buf0+0));\n"
+  isa="loop:\n"+"s_cbranch_scc1 loop\n"+"ds_store_b16\n"+"s_barrier\n"+"ds_load_b16\n"+("v_wmma_f32_16x16x16_f16 v0, v1, v2\n"*static_wmma_count)
   resources=tuple(sorted({"vgpr":64,"sgpr":16,"lds_bytes":512,"scratch_bytes":0,"vgpr_spills":0,
                           "sgpr_spills":0,"wavefront_size":32}.items()))
   sizes=(hq*qt*128,hq*qt*128,8*kv*128,8*kv*128)
-  value=SharedAttentionCompilerCapture(CAPTURE_SCHEMA,ctx,"a"*64,1,0,tuple(enumerate(sizes)),tuple(sorted(sizes)),True,0,0,
-    roles,hip,_sha(hip),resources,isa,_sha(isa),1,1,16,64,16,0,0,512,.01,.02,.005,"b"*64)
+  pass_metadata=None
+  schema=CAPTURE_SCHEMA
+  if blocks == 4:
+    schema=ACC_SLICE_CAPTURE_SCHEMA
+    pass_metadata=SharedAttentionAccSlicePass(ACC_SLICE_PASS_SCHEMA,base,blocks,True,_sha(f"{profile}:{strategy}:{start}:{hq}"))
+  value=SharedAttentionCompilerCapture(schema,ctx,_sha(f"graph:{profile}:{strategy}:{start}:{base}:{blocks}"),1,0,
+    tuple(enumerate(sizes)),tuple(sorted(sizes)),True,0,0,roles,hip,_sha(hip),resources,isa,_sha(isa),1,1,
+    SharedAttentionSynchronization("workgroup",2,0,1),static_wmma_count,64,16,0,0,512,.01,.02,.005,"b"*64,
+    acc_slice_pass=pass_metadata)
   return value.with_hash().validate()
 
 def captures():
@@ -26,6 +36,13 @@ def captures():
           capture("qwen3_8b_q4k_m_gfx1100","FULL_RESIDENT_OVERLAY",16,32),
           capture("qwen3_14b_q4k_m_gfx1100","BOUNDED_PACKED_TILES",0,40),
           capture("qwen3_14b_q4k_m_gfx1100","BOUNDED_PACKED_TILES",16,40))
+
+def slice_captures():
+  return tuple(capture(profile,strategy,start,hq,base,4) for profile,strategy,start,hq in
+    (("qwen3_8b_q4k_m_gfx1100","FULL_RESIDENT_OVERLAY",0,32),
+     ("qwen3_8b_q4k_m_gfx1100","FULL_RESIDENT_OVERLAY",16,32),
+     ("qwen3_14b_q4k_m_gfx1100","BOUNDED_PACKED_TILES",0,40),
+     ("qwen3_14b_q4k_m_gfx1100","BOUNDED_PACKED_TILES",16,40)) for base in (0,4))
 
 def test_capture_is_immutable_content_addressed_and_strictly_roundtrips():
   value=captures()[0]
@@ -51,6 +68,42 @@ def test_proof_requires_only_exact_validated_four_capture_coverage():
   with pytest.raises(ValueError,match="exact"): shared_attention_proof_artifact(captures()[:-1])
   with pytest.raises(TypeError,match="immutable"): shared_attention_proof_artifact(("raw source",))
   with pytest.raises(TypeError): shared_attention_proof_artifact(source="raw",isa="raw",ownership={},model_routes={})
+
+def test_acc_slice_capture_roundtrip_and_two_pass_proof():
+  values=slice_captures()
+  assert SharedAttentionCompilerCapture.from_json(values[0].to_json()) == values[0]
+  proof=shared_attention_proof_artifact(values)
+  assert proof["schema"] == "tinygrad.shared_attention_proof.acc_slice_v3"
+  assert proof["passed"] and len(proof["captures"]) == 4
+  assert all(row["output_blocks"] == list(range(8)) and row["wmma"] == {"qk":16,"pv":8,"qk_recomputed_passes":2}
+             for row in proof["captures"])
+
+def test_acc_slice_proof_rejects_overlap_gap_and_mixed_schema():
+  values=list(slice_captures())
+  overlap=values.copy(); overlap[1]=capture("qwen3_8b_q4k_m_gfx1100","FULL_RESIDENT_OVERLAY",0,32,0,4)
+  with pytest.raises(ValueError,match="overlap"): shared_attention_proof_artifact(tuple(overlap))
+  gap=values.copy(); gap[0]=capture("qwen3_8b_q4k_m_gfx1100","FULL_RESIDENT_OVERLAY",0,32,4,4)
+  with pytest.raises(ValueError,match="gap"): shared_attention_proof_artifact(tuple(gap))
+  with pytest.raises(ValueError,match="mixed"): shared_attention_proof_artifact(tuple(values[:-1])+captures()[:1])
+
+def test_acc_slice_proof_rejects_graph_context_numeric_and_resource_mismatch():
+  values=list(slice_captures())
+  graph=values.copy(); graph[1]=replace(graph[1],acc_slice_pass=replace(graph[1].acc_slice_pass,logical_graph_sha256="c"*64)).with_hash().validate()
+  with pytest.raises(ValueError,match="logical graphs"): shared_attention_proof_artifact(tuple(graph))
+  context=values.copy(); context[1]=replace(context[1],candidate_context=context[1].candidate_context._replace(causal=False)).with_hash().validate()
+  with pytest.raises(ValueError,match="contexts"): shared_attention_proof_artifact(tuple(context))
+  numeric=values.copy(); numeric[1]=replace(numeric[1],numeric_max_abs=.011).with_hash().validate()
+  with pytest.raises(ValueError,match="numeric"): shared_attention_proof_artifact(tuple(numeric))
+  resource=values.copy()
+  changed_resources=tuple((name,1024 if name == "lds_bytes" else value) for name,value in resource[1].hip_resources)
+  resource[1]=replace(resource[1],hip_resources=changed_resources,lds_bytes=1024).with_hash().validate()
+  with pytest.raises(ValueError,match="resource"): shared_attention_proof_artifact(tuple(resource))
+
+def test_acc_slice_capture_rejects_incomplete_role_and_recomputation_metadata():
+  value=slice_captures()[0]
+  with pytest.raises(ValueError,match="WMMA role|4 PV"): replace(value,wmma_roles=value.wmma_roles[:-1]).with_hash().validate()
+  bad_pass=replace(value.acc_slice_pass,qk_recomputed=False)
+  with pytest.raises(ValueError,match="QK recomputation"): replace(value,acc_slice_pass=bad_pass).with_hash().validate()
 
 def test_constructor_uses_actual_scheduled_call_and_final_hip_amdisa_programs():
   import numpy as np

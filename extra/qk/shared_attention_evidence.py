@@ -10,7 +10,7 @@ from dataclasses import dataclass
 
 from extra.qk.model_profiles import MODEL_PROFILES, ModelProfile
 from extra.qk.prefill_harness import prefill_authority_argv, prefill_run_profile, resolve_prefill_model_profile
-from extra.qk.shared_attention_capture import SharedAttentionCompilerCapture
+from extra.qk.shared_attention_capture import ACC_SLICE_CAPTURE_SCHEMA, CAPTURE_SCHEMA, SharedAttentionCompilerCapture
 
 def fused_wmma_role_report(source: str) -> dict[str, object]:
   """Fail-closed diagnostic requiring explicit QK/PV WMMA in one CALL."""
@@ -75,8 +75,14 @@ def dual_wmma_fused_call_fixture(*, isa: str | None = None,
                  "promotable": bool(report["promotable"] and qk_isa and pv_isa)})
   return report
 
-def shared_attention_proof_artifact(captures:tuple[SharedAttentionCompilerCapture,...]) -> dict[str, object]:
-  """Aggregate only four validated, content-addressed compiler captures.
+def _shared_attention_route_key(capture:SharedAttentionCompilerCapture) -> tuple[str,str,str]:
+  ctx = capture.candidate_context
+  if ctx.start_pos == 0 and ctx.kv_tokens != ctx.q_tokens: raise ValueError("first-chunk capture has prefix KV geometry")
+  if ctx.start_pos > 0 and ctx.kv_tokens != ctx.start_pos+ctx.q_tokens: raise ValueError("prefix capture KV geometry is not exact")
+  return (ctx.profile,ctx.strategy,"first" if ctx.start_pos == 0 else "prefix")
+
+def _shared_attention_v2_proof_artifact(captures:tuple[SharedAttentionCompilerCapture,...]) -> dict[str, object]:
+  """Aggregate only four validated, content-addressed legacy compiler captures.
 
   Raw caller-provided source, ISA, ownership, or route claims are deliberately
   not accepted. Every fact in the proof originates in a capture constructor.
@@ -84,18 +90,13 @@ def shared_attention_proof_artifact(captures:tuple[SharedAttentionCompilerCaptur
   if not isinstance(captures,tuple) or any(not isinstance(x,SharedAttentionCompilerCapture) for x in captures):
     raise TypeError("shared attention proof requires immutable compiler captures")
   captures = tuple(x.validate() for x in captures)
-  def route_key(capture:SharedAttentionCompilerCapture):
-    ctx = capture.candidate_context
-    if ctx.start_pos == 0 and ctx.kv_tokens != ctx.q_tokens: raise ValueError("first-chunk capture has prefix KV geometry")
-    if ctx.start_pos > 0 and ctx.kv_tokens != ctx.start_pos+ctx.q_tokens: raise ValueError("prefix capture KV geometry is not exact")
-    return (ctx.profile,ctx.strategy,"first" if ctx.start_pos == 0 else "prefix")
   required = {
     ("qwen3_8b_q4k_m_gfx1100","FULL_RESIDENT_OVERLAY","first"),
     ("qwen3_8b_q4k_m_gfx1100","FULL_RESIDENT_OVERLAY","prefix"),
     ("qwen3_14b_q4k_m_gfx1100","BOUNDED_PACKED_TILES","first"),
     ("qwen3_14b_q4k_m_gfx1100","BOUNDED_PACKED_TILES","prefix"),
   }
-  keys = tuple(route_key(x) for x in captures)
+  keys = tuple(_shared_attention_route_key(x) for x in captures)
   if len(captures) != 4 or len(set(keys)) != 4 or set(keys) != required:
     raise ValueError("shared attention proof requires exact 8B/14B first/prefix coverage")
   rows = sorted(zip(keys,captures),key=lambda x:x[0])
@@ -106,6 +107,62 @@ def shared_attention_proof_artifact(captures:tuple[SharedAttentionCompilerCaptur
       "wmma":{"qk":8,"pv":8},"numeric":{"max_abs":capture.numeric_max_abs,"max_rel":capture.numeric_max_rel,
         "rel_l2":capture.numeric_rel_l2,"reference_sha256":capture.reference_sha256}}
       for key,capture in rows]}
+
+def _shared_attention_acc_slice_proof_artifact(captures:tuple[SharedAttentionCompilerCapture,...]) -> dict[str, object]:
+  required = {
+    ("qwen3_8b_q4k_m_gfx1100","FULL_RESIDENT_OVERLAY","first"),
+    ("qwen3_8b_q4k_m_gfx1100","FULL_RESIDENT_OVERLAY","prefix"),
+    ("qwen3_14b_q4k_m_gfx1100","BOUNDED_PACKED_TILES","first"),
+    ("qwen3_14b_q4k_m_gfx1100","BOUNDED_PACKED_TILES","prefix"),
+  }
+  groups:dict[tuple[str,str,str],list[SharedAttentionCompilerCapture]] = {}
+  for capture in captures: groups.setdefault(_shared_attention_route_key(capture),[]).append(capture)
+  if len(captures) != 8 or set(groups) != required or any(len(group) != 2 for group in groups.values()):
+    raise ValueError("accumulator-slice proof requires exactly two passes for each 8B/14B first/prefix route")
+  rows:list[dict[str,object]] = []
+  for key in sorted(groups):
+    pair = groups[key]
+    intervals = sorted((capture.acc_slice_pass.output_block_base,
+                        capture.acc_slice_pass.output_block_base+capture.acc_slice_pass.acc_blocks) for capture in pair)
+    if intervals[0][0] != 0: raise ValueError("accumulator-slice output ownership has a gap")
+    if intervals[0][1] > intervals[1][0]: raise ValueError("accumulator-slice output ownership overlaps")
+    if intervals[0][1] < intervals[1][0] or intervals[1][1] != 8:
+      raise ValueError("accumulator-slice output ownership has a gap")
+    contexts = {tuple((name,getattr(capture.candidate_context,name)) for name in capture.candidate_context._fields
+                      if name not in {"output_block_base","acc_blocks"}) for capture in pair}
+    if len(contexts) != 1: raise ValueError("accumulator-slice candidate contexts do not match")
+    if len({capture.acc_slice_pass.logical_graph_sha256 for capture in pair}) != 1:
+      raise ValueError("accumulator-slice logical graphs do not match")
+    if len({capture.param_ownership for capture in pair}) != 1:
+      raise ValueError("accumulator-slice parameter ownership does not match")
+    numerics = {(capture.numeric_max_abs,capture.numeric_max_rel,capture.numeric_rel_l2,capture.reference_sha256) for capture in pair}
+    if len(numerics) != 1: raise ValueError("accumulator-slice numeric records do not match")
+    resources = {(capture.hip_resources,capture.highest_vgpr,capture.highest_sgpr,capture.spill_count,
+                  capture.scratch_bytes,capture.lds_bytes,capture.synchronization) for capture in pair}
+    if len(resources) != 1: raise ValueError("accumulator-slice resource records do not match")
+    if any(not capture.allocation_complete or capture.expanded_kv_buffers or capture.score_probability_buffers or
+           capture.spill_count or capture.scratch_bytes for capture in pair):
+      raise ValueError("accumulator-slice proof forbids incomplete, materialized, or spilled captures")
+    numeric = pair[0]
+    rows.append({"profile":key[0],"strategy":key[1],"position":key[2],
+      "logical_graph_sha256":pair[0].acc_slice_pass.logical_graph_sha256,"output_blocks":list(range(8)),
+      "wmma":{"qk":16,"pv":8,"qk_recomputed_passes":2},
+      "passes":[{"output_block_base":capture.acc_slice_pass.output_block_base,"acc_blocks":capture.acc_slice_pass.acc_blocks,
+        "qk_recomputed":capture.acc_slice_pass.qk_recomputed,"capture_sha256":capture.capture_sha256,
+        "canonical_graph_sha256":capture.canonical_graph_sha256} for capture in sorted(pair,key=lambda x:x.acc_slice_pass.output_block_base)],
+      "numeric":{"max_abs":numeric.numeric_max_abs,"max_rel":numeric.numeric_max_rel,"rel_l2":numeric.numeric_rel_l2,
+        "reference_sha256":numeric.reference_sha256}})
+  return {"schema":"tinygrad.shared_attention_proof.acc_slice_v3","status":"PASS","passed":True,"captures":rows}
+
+def shared_attention_proof_artifact(captures:tuple[SharedAttentionCompilerCapture,...]) -> dict[str, object]:
+  """Aggregate complete v2 captures or paired accumulator-slice v3 captures, failing closed on mixed evidence."""
+  if not isinstance(captures,tuple) or any(not isinstance(x,SharedAttentionCompilerCapture) for x in captures):
+    raise TypeError("shared attention proof requires immutable compiler captures")
+  captures = tuple(x.validate() for x in captures)
+  schemas = {capture.schema for capture in captures}
+  if schemas == {CAPTURE_SCHEMA}: return _shared_attention_v2_proof_artifact(captures)
+  if schemas == {ACC_SLICE_CAPTURE_SCHEMA}: return _shared_attention_acc_slice_proof_artifact(captures)
+  raise ValueError("shared attention proof does not accept mixed or unknown capture schemas")
 
 ATTENTION_EVIDENCE_SCHEMA = "tinygrad.shared_attention_evidence.v1"
 SHARED_ATTENTION_PROOF_SCHEMA = "tinygrad.shared_attention_proof.v2"
