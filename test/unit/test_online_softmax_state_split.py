@@ -76,12 +76,20 @@ class TestOnlineSoftmaxStateSplit(unittest.TestCase):
 
   def test_q16_hd16_state_abi_and_cpu_numeric_gate(self):
     rng = np.random.default_rng(32)
-    scores = Tensor(rng.standard_normal((1, 16, 16), dtype=np.float32))
-    values = Tensor(rng.standard_normal((1, 16, 16), dtype=np.float32))
-    m, l, acc = Tensor.full((1, 16, 1), -float("inf")), Tensor.zeros(1, 16, 1), Tensor.zeros(1, 16, 16)
-    m, l, acc = merge_online_softmax_tile(m, l, acc, scores, values)
-    got = normalize_online_softmax_state(acc, l).numpy()
-    score_np, value_np = scores.numpy(), values.numpy()
+    score_np = rng.standard_normal((1, 16, 16), dtype=np.float32)
+    value_np = rng.standard_normal((1, 16, 16), dtype=np.float32)
+    slots = (AccumulatorSlot(Ops.MAX, dtypes.float32, -float("inf"), "m"),
+             AccumulatorSlot(Ops.ADD, dtypes.float32, 0.0, "l"),
+             AccumulatorSlot(Ops.ADD, dtypes.float32, 0.0, "acc"))
+    values = UOp.vectorize(*(UOp.const(dtypes.float32, float(x)) for x in value_np.reshape(-1)))
+    rows = []
+    for row in score_np.reshape(16, 16):
+      scores = UOp.vectorize(*(UOp.const(dtypes.float32, float(x)) for x in row))
+      red = scores.composite_reduce(*slots, axis=(), inputs=(values,), combine_fn="online_softmax_state",
+        input_specs=(CompositeInputSpec("logical", lane_group=16),), lane_shapes=((), (), (16,)))
+      _, den, acc = _handle_no_range_generic(scores, red.arg[0], red, (values,))
+      rows.append([acc.gep(i).alu(Ops.MUL, den.alu(Ops.RECIPROCAL)).simplify().arg for i in range(16)])
+    got = np.array(rows, dtype=np.float32).reshape(1, 16, 16)
     weights = np.exp(score_np-score_np.max(axis=-1, keepdims=True)); weights /= weights.sum(axis=-1, keepdims=True)
     np.testing.assert_allclose(got, weights @ value_np, rtol=1e-5, atol=1e-5)
 
