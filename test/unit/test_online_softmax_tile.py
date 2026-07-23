@@ -438,6 +438,50 @@ def test_gfx1100_q16_live_owner_builder_feeds_proven_dual_wmma_pipeline():
   mnemonics = [str(u.arg).split("(", 1)[0] for u in linear.src if not isinstance(u.arg, tuple)]
   assert mnemonics.count("v_wmma_f32_16x16x16_f16") == 2 and "s_barrier" in mnemonics
 
+def test_online_softmax_block_transition_has_explicit_typed_state_edges():
+  from tinygrad.schedule.wmma import online_softmax_block_transition
+  old_m, old_l = UOp.const(dtypes.float, -3), UOp.const(dtypes.float, 2)
+  block_m, block_l = UOp.const(dtypes.float, 4), UOp.const(dtypes.float, 5)
+  old_acc = UOp.const(dtypes.float.vec(8), (1.0,)*8)
+  block_acc = UOp.const(dtypes.float.vec(8), (2.0,)*8)
+  state = online_softmax_block_transition(old_m, old_l, old_acc, block_m, block_l, block_acc)
+  assert state.new_m.op is Ops.MAX
+  assert state.alpha.op is Ops.EXP2 and state.probability_scale.op is Ops.EXP2
+  assert state.pv_c.op is Ops.MUL and old_acc in state.pv_c.backward_slice
+  assert state.new_l.dtype == dtypes.float and state.new_acc.dtype == dtypes.float.vec(8)
+  assert block_acc in state.new_acc.backward_slice and old_acc in state.new_acc.backward_slice
+
+def test_online_softmax_block_transition_dominant_second_tile_runtime():
+  import numpy as np
+  from tinygrad import Tensor
+  from tinygrad.schedule.wmma import online_softmax_block_transition
+  from tinygrad.uop.ops import KernelInfo
+  old = Tensor(np.arange(1,9,dtype=np.float32), device="CPU")
+  block = Tensor(np.arange(11,19,dtype=np.float32), device="CPU")
+  out = Tensor.empty(10, dtype=dtypes.float, device="CPU")
+  def kernel(o, old_buf, block_buf):
+    old_vals, block_vals = ([buf.index(UOp.const(dtypes.weakint, i)).load() for i in range(8)] for buf in (old_buf, block_buf))
+    old_acc = old_vals[0].vectorize(*old_vals[1:])
+    block_acc = block_vals[0].vectorize(*block_vals[1:])
+    state = online_softmax_block_transition(UOp.const(dtypes.float, 0), UOp.const(dtypes.float, 1), old_acc,
+                                            UOp.const(dtypes.float, 12), UOp.const(dtypes.float, 1), block_acc)
+    return UOp.sink(o.index(UOp.const(dtypes.weakint, 0)).store(state.new_m),
+                    o.index(UOp.const(dtypes.weakint, 1)).store(state.new_l),
+                    o.index(UOp.const(dtypes.weakint, 2)).store(state.new_acc),
+                    arg=KernelInfo(name="state_merge"))
+  got = out.custom_kernel(old, block, fxn=kernel)[0].numpy()
+  alpha = np.exp(-12.0)
+  np.testing.assert_allclose(got[0], 12.0, rtol=0, atol=0)
+  np.testing.assert_allclose(got[1], 1.0+alpha, rtol=1e-6, atol=1e-6)
+  np.testing.assert_allclose(got[2:], block.numpy()+old.numpy()*alpha, rtol=1e-6, atol=1e-6)
+
+def test_online_softmax_block_transition_fails_closed_on_non_native_state():
+  from tinygrad.schedule.wmma import online_softmax_block_transition
+  with pytest.raises(ValueError, match="float.vec"):
+    online_softmax_block_transition(UOp.const(dtypes.float, 0), UOp.const(dtypes.float, 1),
+      UOp.const(dtypes.float.vec(4), (0.0,)*4), UOp.const(dtypes.float, 0), UOp.const(dtypes.float, 1),
+      UOp.const(dtypes.float.vec(4), (0.0,)*4))
+
 def test_rangeify_handoff_unwraps_only_exact_tile_carriers():
   from tinygrad.uop.ops import TileGatherSpec, graph_rewrite
   from tinygrad.schedule.wmma import tile_gather

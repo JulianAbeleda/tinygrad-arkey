@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
+from typing import NamedTuple
 from tinygrad.dtype import DType, dtypes, PtrDType
 from tinygrad.uop.ops import Ops, UOp
 from tinygrad.uop.ops import CompositeReduce, CompositeTileCarrier, TileGatherSpec, RowSoftmaxRepackSpec, AMDRowSoftmaxRepackSpec, Ops
@@ -322,6 +323,36 @@ def amd_gfx1100_q16_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, scale:float, kern
   pv = UOp(Ops.WMMA, dtypes.float.vec(8), (weights, vfrag, zero), warg)
   stores = [out.index((UOp.const(dtypes.weakint, 2*e)+halfwave)*16+col).store(pv.gep(e).cast(dtypes.half)) for e in range(8)]
   return UOp.sink(*stores, arg=kernel_info)
+
+class OnlineSoftmaxBlockTransition(NamedTuple):
+  """Typed online-softmax state at one completed KV tile boundary."""
+  new_m: UOp
+  alpha: UOp
+  probability_scale: UOp
+  pv_c: UOp
+  new_l: UOp
+  new_acc: UOp
+
+def online_softmax_block_transition(old_m:UOp, old_l:UOp, old_acc:UOp,
+                                    block_m:UOp, block_l:UOp, block_acc:UOp) -> OnlineSoftmaxBlockTransition:
+  """Merge one completed score/PV tile into resident fp32 state.
+
+  ``block_acc`` is PV over probabilities relative to ``block_m``. The returned
+  ``pv_c`` is the exact C seed for a subsequent PV contraction, while
+  ``probability_scale`` is the multiplier applied to that tile's P fragment.
+  """
+  if any(x.dtype != dtypes.float or x.shape != () for x in (old_m, old_l, block_m, block_l)):
+    raise ValueError("online softmax block transition requires scalar fp32 m/l state")
+  if old_acc.dtype != dtypes.float.vec(8) or block_acc.dtype != dtypes.float.vec(8):
+    raise ValueError("online softmax block transition requires native float.vec(8) accumulators")
+  new_m = old_m.alu(Ops.MAX, block_m)
+  log2e = UOp.const(dtypes.float, 1.4426950408889634)
+  alpha = (old_m-new_m).alu(Ops.MUL, log2e).exp2()
+  probability_scale = (block_m-new_m).alu(Ops.MUL, log2e).exp2()
+  pv_c = old_acc.alu(Ops.MUL, alpha.broadcast(8))
+  new_l = old_l.alu(Ops.MUL, alpha).alu(Ops.ADD, block_l.alu(Ops.MUL, probability_scale))
+  new_acc = pv_c.alu(Ops.ADD, block_acc.alu(Ops.MUL, probability_scale.broadcast(8)))
+  return OnlineSoftmaxBlockTransition(new_m, alpha, probability_scale, pv_c, new_l, new_acc)
 
 def amd_tile_wmma_boundary_report(*, qk_score: UOp, pv_value: UOp, pv_acc: UOp) -> dict:
   """Describe whether AMD can consume the composite tile at the WMMA boundary.
