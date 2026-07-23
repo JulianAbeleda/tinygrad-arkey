@@ -322,7 +322,8 @@ def resolve_composite_reduce_slot_prebufferize(slot):
     # The view is already a logical projection; retain its indices on the
     # selected slot rather than treating an untyped INDEX as a slot reducer.
     for indexed_view in reversed(views):
-      result = UOp(Ops.INDEX, result.dtype, (result,) + indexed_view.src[1:], indexed_view.arg)
+      tag = indexed_view.tag if isinstance(indexed_view.tag, tuple) and len(indexed_view.tag) == 2 and indexed_view.tag[0] == "composite_view" else None
+      result = UOp(Ops.INDEX, result.dtype, (result,) + indexed_view.src[1:], indexed_view.arg, tag)
   if result.shape != tuple(shape): result = result.reshape(tuple(shape))
   sdtype = composite.slots[slot.arg].dtype
   if sdtype is not None and result.dtype != sdtype: result = result.cast(sdtype)
