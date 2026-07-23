@@ -1,0 +1,5615 @@
+{
+  "allocation_domains": {
+    "amd_isa_references": "tinygrad AMD ISA final program; semantic attribution only",
+    "hip_resources": "LLVM/clang compiled HIP binary metadata"
+  },
+  "geometry": {
+    "causal": true,
+    "head_dim": 128,
+    "hkv": 2,
+    "hq": 8,
+    "kv_tokens": 64,
+    "q_tokens": 32
+  },
+  "schema": "tinygrad.shared_attention_acc_slice_vgpr_attribution.v1",
+  "target": "gfx1100",
+  "variants": {
+    "full": {
+      "acc_blocks": 8,
+      "amd_isa_highest_referenced_vgpr": 234,
+      "amd_isa_referenced_vgpr_count": 203,
+      "amd_isa_referenced_vgpr_ranges": [
+        [
+          0,
+          95
+        ],
+        [
+          128,
+          234
+        ]
+      ],
+      "highest_reference_sites": {
+        "219": [
+          {
+            "line": 375,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 376,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 381,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 382,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 383,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 384,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 385,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 386,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 388,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 389,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 615,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 616,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 617,
+            "mnemonic": "v_exp_f32_e32"
+          },
+          {
+            "line": 621,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 623,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 1001,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 1004,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 1007,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 1010,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 1013,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 1016,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 1019,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 1022,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 1744,
+            "mnemonic": "v_mov_b32_e32"
+          }
+        ],
+        "220": [
+          {
+            "line": 395,
+            "mnemonic": "v_and_b32_e32"
+          },
+          {
+            "line": 397,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 398,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 399,
+            "mnemonic": "v_lshlrev_b32_e32"
+          },
+          {
+            "line": 400,
+            "mnemonic": "ds_store_b16"
+          },
+          {
+            "line": 401,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 402,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 403,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 404,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 405,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 406,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 407,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 408,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 409,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 410,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 1745,
+            "mnemonic": "v_mov_b32_e32"
+          }
+        ],
+        "221": [
+          {
+            "line": 396,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 397,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 403,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 404,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 405,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 406,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 407,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 408,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 410,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 411,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 626,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 627,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 628,
+            "mnemonic": "v_exp_f32_e32"
+          },
+          {
+            "line": 632,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 634,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 993,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 994,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 995,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 996,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 997,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 998,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 999,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 1000,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 1746,
+            "mnemonic": "v_mov_b32_e32"
+          }
+        ],
+        "222": [
+          {
+            "line": 417,
+            "mnemonic": "v_and_b32_e32"
+          },
+          {
+            "line": 419,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 420,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 421,
+            "mnemonic": "v_lshlrev_b32_e32"
+          },
+          {
+            "line": 422,
+            "mnemonic": "ds_store_b16"
+          },
+          {
+            "line": 423,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 424,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 425,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 426,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 427,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 428,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 429,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 430,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 431,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 432,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 1747,
+            "mnemonic": "v_mov_b32_e32"
+          }
+        ],
+        "223": [
+          {
+            "line": 418,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 419,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 425,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 426,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 427,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 428,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 429,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 430,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 432,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 433,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 637,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 638,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 639,
+            "mnemonic": "v_exp_f32_e32"
+          },
+          {
+            "line": 643,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 645,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 985,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 986,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 987,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 988,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 989,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 990,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 991,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 992,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 1748,
+            "mnemonic": "v_mov_b32_e32"
+          }
+        ],
+        "224": [
+          {
+            "line": 439,
+            "mnemonic": "v_and_b32_e32"
+          },
+          {
+            "line": 441,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 442,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 443,
+            "mnemonic": "v_lshlrev_b32_e32"
+          },
+          {
+            "line": 444,
+            "mnemonic": "ds_store_b16"
+          },
+          {
+            "line": 445,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 446,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 447,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 448,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 449,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 450,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 451,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 452,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 453,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 454,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 1749,
+            "mnemonic": "v_mov_b32_e32"
+          }
+        ],
+        "225": [
+          {
+            "line": 440,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 441,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 447,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 448,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 449,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 450,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 451,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 452,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 454,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 455,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 648,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 649,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 650,
+            "mnemonic": "v_exp_f32_e32"
+          },
+          {
+            "line": 654,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 656,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 977,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 978,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 979,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 980,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 981,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 982,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 983,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 984,
+            "mnemonic": "v_mul_f32_e32"
+          }
+        ],
+        "226": [
+          {
+            "line": 461,
+            "mnemonic": "v_and_b32_e32"
+          },
+          {
+            "line": 463,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 464,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 465,
+            "mnemonic": "v_lshlrev_b32_e32"
+          },
+          {
+            "line": 466,
+            "mnemonic": "ds_store_b16"
+          },
+          {
+            "line": 467,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 468,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 469,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 470,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 471,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 472,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 473,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 474,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 475,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 476,
+            "mnemonic": "v_mul_f32_e32"
+          }
+        ],
+        "227": [
+          {
+            "line": 462,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 463,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 469,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 470,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 471,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 472,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 473,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 474,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 476,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 477,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 659,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 660,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 661,
+            "mnemonic": "v_exp_f32_e32"
+          },
+          {
+            "line": 665,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 667,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 969,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 970,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 971,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 972,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 973,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 974,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 975,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 976,
+            "mnemonic": "v_mul_f32_e32"
+          }
+        ],
+        "228": [
+          {
+            "line": 483,
+            "mnemonic": "v_and_b32_e32"
+          },
+          {
+            "line": 485,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 486,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 487,
+            "mnemonic": "v_lshlrev_b32_e32"
+          },
+          {
+            "line": 488,
+            "mnemonic": "ds_store_b16"
+          },
+          {
+            "line": 489,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 490,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 491,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 492,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 493,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 494,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 495,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 496,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 497,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 498,
+            "mnemonic": "v_mul_f32_e32"
+          }
+        ],
+        "229": [
+          {
+            "line": 484,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 485,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 491,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 492,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 493,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 494,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 495,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 496,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 498,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 499,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 670,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 671,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 672,
+            "mnemonic": "v_exp_f32_e32"
+          },
+          {
+            "line": 676,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 678,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 961,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 962,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 963,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 964,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 965,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 966,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 967,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 968,
+            "mnemonic": "v_mul_f32_e32"
+          }
+        ],
+        "230": [
+          {
+            "line": 505,
+            "mnemonic": "v_and_b32_e32"
+          },
+          {
+            "line": 507,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 508,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 509,
+            "mnemonic": "v_lshlrev_b32_e32"
+          },
+          {
+            "line": 510,
+            "mnemonic": "ds_store_b16"
+          },
+          {
+            "line": 511,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 512,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 513,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 514,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 515,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 516,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 517,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 518,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 519,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 520,
+            "mnemonic": "v_mul_f32_e32"
+          }
+        ],
+        "231": [
+          {
+            "line": 506,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 507,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 513,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 514,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 515,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 516,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 517,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 518,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 520,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 521,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 681,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 682,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 683,
+            "mnemonic": "v_exp_f32_e32"
+          },
+          {
+            "line": 687,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 689,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 953,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 954,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 955,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 956,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 957,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 958,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 959,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 960,
+            "mnemonic": "v_mul_f32_e32"
+          }
+        ],
+        "232": [
+          {
+            "line": 528,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 529,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 537,
+            "mnemonic": "v_and_b32_e32"
+          },
+          {
+            "line": 538,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 539,
+            "mnemonic": "v_lshlrev_b32_e32"
+          },
+          {
+            "line": 951,
+            "mnemonic": "ds_load_b128"
+          }
+        ],
+        "233": [
+          {
+            "line": 540,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 541,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 542,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 543,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 544,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 545,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 546,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 547,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 548,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 549,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 550,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 551,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 552,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 553,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 554,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 555,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 556,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 557,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 558,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 559,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 560,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 561,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 562,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 563,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 564,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 565,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 566,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 567,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 568,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 569,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 570,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 571,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 572,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 573,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 574,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 575,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 576,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 577,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 578,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 579,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 580,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 581,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 582,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 583,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 584,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 585,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 586,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 587,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 588,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 589,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 590,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 591,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 592,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 593,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 594,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 595,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 596,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 597,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 598,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 599,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 600,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 601,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 602,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 603,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 608,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 609,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 611,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 613,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 614,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 619,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 620,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 622,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 624,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 625,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 630,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 631,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 633,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 635,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 636,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 641,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 642,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 644,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 646,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 647,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 652,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 653,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 655,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 657,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 658,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 663,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 664,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 666,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 668,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 669,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 674,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 675,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 677,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 679,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 680,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 685,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 686,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 688,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 690,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 691,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 692,
+            "mnemonic": "v_mov_b32_e32"
+          },
+          {
+            "line": 693,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 694,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 695,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 696,
+            "mnemonic": "v_lshlrev_b32_e32"
+          },
+          {
+            "line": 697,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 698,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 701,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 702,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 705,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 706,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 709,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 710,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 713,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 714,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 717,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 718,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 721,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 722,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 725,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 726,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 729,
+            "mnemonic": "v_mov_b32_e32"
+          },
+          {
+            "line": 730,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 731,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 732,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 733,
+            "mnemonic": "v_lshlrev_b32_e32"
+          },
+          {
+            "line": 734,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 735,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 738,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 739,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 742,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 743,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 746,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 747,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 750,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 751,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 754,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 755,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 758,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 759,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 762,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 763,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 766,
+            "mnemonic": "v_mov_b32_e32"
+          },
+          {
+            "line": 767,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 768,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 769,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 770,
+            "mnemonic": "v_lshlrev_b32_e32"
+          },
+          {
+            "line": 771,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 772,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 775,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 776,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 779,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 780,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 783,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 784,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 787,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 788,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 791,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 792,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 795,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 796,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 799,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 800,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 803,
+            "mnemonic": "v_mov_b32_e32"
+          },
+          {
+            "line": 804,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 805,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 806,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 807,
+            "mnemonic": "v_lshlrev_b32_e32"
+          },
+          {
+            "line": 808,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 809,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 812,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 813,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 816,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 817,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 820,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 821,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 824,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 825,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 828,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 829,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 832,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 833,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 836,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 837,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 840,
+            "mnemonic": "v_mov_b32_e32"
+          },
+          {
+            "line": 841,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 842,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 843,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 844,
+            "mnemonic": "v_lshlrev_b32_e32"
+          },
+          {
+            "line": 845,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 846,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 849,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 850,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 853,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 854,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 857,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 858,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 861,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 862,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 865,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 866,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 869,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 870,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 873,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 874,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 877,
+            "mnemonic": "v_mov_b32_e32"
+          },
+          {
+            "line": 878,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 879,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 880,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 881,
+            "mnemonic": "v_lshlrev_b32_e32"
+          },
+          {
+            "line": 882,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 883,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 886,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 887,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 890,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 891,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 894,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 895,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 898,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 899,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 902,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 903,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 906,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 907,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 910,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 911,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 914,
+            "mnemonic": "v_mov_b32_e32"
+          },
+          {
+            "line": 915,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 916,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 917,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 918,
+            "mnemonic": "v_lshlrev_b32_e32"
+          },
+          {
+            "line": 919,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 920,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 923,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 924,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 927,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 928,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 931,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 932,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 935,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 936,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 939,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 940,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 943,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 944,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 947,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 948,
+            "mnemonic": "global_load_u16"
+          }
+        ],
+        "234": [
+          {
+            "line": 610,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 613,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 621,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 624,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 632,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 635,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 643,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 646,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 654,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 657,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 665,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 668,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 676,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 679,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 687,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 690,
+            "mnemonic": "v_mul_f32_e32"
+          }
+        ]
+      },
+      "hip_resources": {
+        "lds_bytes": 512,
+        "scratch_bytes": 0,
+        "sgpr": 26,
+        "sgpr_spills": 0,
+        "vgpr": 254,
+        "vgpr_spills": 0,
+        "wavefront_size": 32
+      },
+      "output_block_base": 0
+    },
+    "high": {
+      "acc_blocks": 4,
+      "amd_isa_highest_referenced_vgpr": 234,
+      "amd_isa_referenced_vgpr_count": 203,
+      "amd_isa_referenced_vgpr_ranges": [
+        [
+          0,
+          95
+        ],
+        [
+          128,
+          234
+        ]
+      ],
+      "highest_reference_sites": {
+        "219": [
+          {
+            "line": 376,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 377,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 382,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 383,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 384,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 385,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 386,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 387,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 389,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 390,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 616,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 617,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 618,
+            "mnemonic": "v_exp_f32_e32"
+          },
+          {
+            "line": 622,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 624,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 830,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 833,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 836,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 839,
+            "mnemonic": "v_mul_f32_e32"
+          }
+        ],
+        "220": [
+          {
+            "line": 396,
+            "mnemonic": "v_and_b32_e32"
+          },
+          {
+            "line": 398,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 399,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 400,
+            "mnemonic": "v_lshlrev_b32_e32"
+          },
+          {
+            "line": 401,
+            "mnemonic": "ds_store_b16"
+          },
+          {
+            "line": 402,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 403,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 404,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 405,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 406,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 407,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 408,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 409,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 410,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 411,
+            "mnemonic": "v_mul_f32_e32"
+          }
+        ],
+        "221": [
+          {
+            "line": 397,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 398,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 404,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 405,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 406,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 407,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 408,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 409,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 411,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 412,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 627,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 628,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 629,
+            "mnemonic": "v_exp_f32_e32"
+          },
+          {
+            "line": 633,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 635,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 826,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 827,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 828,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 829,
+            "mnemonic": "v_mul_f32_e32"
+          }
+        ],
+        "222": [
+          {
+            "line": 418,
+            "mnemonic": "v_and_b32_e32"
+          },
+          {
+            "line": 420,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 421,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 422,
+            "mnemonic": "v_lshlrev_b32_e32"
+          },
+          {
+            "line": 423,
+            "mnemonic": "ds_store_b16"
+          },
+          {
+            "line": 424,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 425,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 426,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 427,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 428,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 429,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 430,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 431,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 432,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 433,
+            "mnemonic": "v_mul_f32_e32"
+          }
+        ],
+        "223": [
+          {
+            "line": 419,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 420,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 426,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 427,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 428,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 429,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 430,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 431,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 433,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 434,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 638,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 639,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 640,
+            "mnemonic": "v_exp_f32_e32"
+          },
+          {
+            "line": 644,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 646,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 822,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 823,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 824,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 825,
+            "mnemonic": "v_mul_f32_e32"
+          }
+        ],
+        "224": [
+          {
+            "line": 440,
+            "mnemonic": "v_and_b32_e32"
+          },
+          {
+            "line": 442,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 443,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 444,
+            "mnemonic": "v_lshlrev_b32_e32"
+          },
+          {
+            "line": 445,
+            "mnemonic": "ds_store_b16"
+          },
+          {
+            "line": 446,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 447,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 448,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 449,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 450,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 451,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 452,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 453,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 454,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 455,
+            "mnemonic": "v_mul_f32_e32"
+          }
+        ],
+        "225": [
+          {
+            "line": 441,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 442,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 448,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 449,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 450,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 451,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 452,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 453,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 455,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 456,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 649,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 650,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 651,
+            "mnemonic": "v_exp_f32_e32"
+          },
+          {
+            "line": 655,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 657,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 818,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 819,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 820,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 821,
+            "mnemonic": "v_mul_f32_e32"
+          }
+        ],
+        "226": [
+          {
+            "line": 462,
+            "mnemonic": "v_and_b32_e32"
+          },
+          {
+            "line": 464,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 465,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 466,
+            "mnemonic": "v_lshlrev_b32_e32"
+          },
+          {
+            "line": 467,
+            "mnemonic": "ds_store_b16"
+          },
+          {
+            "line": 468,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 469,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 470,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 471,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 472,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 473,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 474,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 475,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 476,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 477,
+            "mnemonic": "v_mul_f32_e32"
+          }
+        ],
+        "227": [
+          {
+            "line": 463,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 464,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 470,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 471,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 472,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 473,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 474,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 475,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 477,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 478,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 660,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 661,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 662,
+            "mnemonic": "v_exp_f32_e32"
+          },
+          {
+            "line": 666,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 668,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 814,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 815,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 816,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 817,
+            "mnemonic": "v_mul_f32_e32"
+          }
+        ],
+        "228": [
+          {
+            "line": 484,
+            "mnemonic": "v_and_b32_e32"
+          },
+          {
+            "line": 486,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 487,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 488,
+            "mnemonic": "v_lshlrev_b32_e32"
+          },
+          {
+            "line": 489,
+            "mnemonic": "ds_store_b16"
+          },
+          {
+            "line": 490,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 491,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 492,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 493,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 494,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 495,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 496,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 497,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 498,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 499,
+            "mnemonic": "v_mul_f32_e32"
+          }
+        ],
+        "229": [
+          {
+            "line": 485,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 486,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 492,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 493,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 494,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 495,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 496,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 497,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 499,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 500,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 671,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 672,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 673,
+            "mnemonic": "v_exp_f32_e32"
+          },
+          {
+            "line": 677,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 679,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 810,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 811,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 812,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 813,
+            "mnemonic": "v_mul_f32_e32"
+          }
+        ],
+        "230": [
+          {
+            "line": 506,
+            "mnemonic": "v_and_b32_e32"
+          },
+          {
+            "line": 508,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 509,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 510,
+            "mnemonic": "v_lshlrev_b32_e32"
+          },
+          {
+            "line": 511,
+            "mnemonic": "ds_store_b16"
+          },
+          {
+            "line": 512,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 513,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 514,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 515,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 516,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 517,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 518,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 519,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 520,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 521,
+            "mnemonic": "v_mul_f32_e32"
+          }
+        ],
+        "231": [
+          {
+            "line": 507,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 508,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 514,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 515,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 516,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 517,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 518,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 519,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 521,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 522,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 682,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 683,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 684,
+            "mnemonic": "v_exp_f32_e32"
+          },
+          {
+            "line": 688,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 690,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 806,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 807,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 808,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 809,
+            "mnemonic": "v_mul_f32_e32"
+          }
+        ],
+        "232": [
+          {
+            "line": 529,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 530,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 538,
+            "mnemonic": "v_and_b32_e32"
+          },
+          {
+            "line": 539,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 540,
+            "mnemonic": "v_lshlrev_b32_e32"
+          },
+          {
+            "line": 804,
+            "mnemonic": "ds_load_b128"
+          }
+        ],
+        "233": [
+          {
+            "line": 541,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 542,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 543,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 544,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 545,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 546,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 547,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 548,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 549,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 550,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 551,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 552,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 553,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 554,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 555,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 556,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 557,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 558,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 559,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 560,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 561,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 562,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 563,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 564,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 565,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 566,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 567,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 568,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 569,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 570,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 571,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 572,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 573,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 574,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 575,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 576,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 577,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 578,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 579,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 580,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 581,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 582,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 583,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 584,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 585,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 586,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 587,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 588,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 589,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 590,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 591,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 592,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 593,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 594,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 595,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 596,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 597,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 598,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 599,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 600,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 601,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 602,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 603,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 604,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 609,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 610,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 612,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 614,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 615,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 620,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 621,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 623,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 625,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 626,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 631,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 632,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 634,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 636,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 637,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 642,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 643,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 645,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 647,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 648,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 653,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 654,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 656,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 658,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 659,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 664,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 665,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 667,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 669,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 670,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 675,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 676,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 678,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 680,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 681,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 686,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 687,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 689,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 691,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 692,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 693,
+            "mnemonic": "v_mov_b32_e32"
+          },
+          {
+            "line": 694,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 695,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 696,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 697,
+            "mnemonic": "v_lshlrev_b32_e32"
+          },
+          {
+            "line": 698,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 699,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 702,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 703,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 706,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 707,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 710,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 711,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 714,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 715,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 718,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 719,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 722,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 723,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 726,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 727,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 730,
+            "mnemonic": "v_mov_b32_e32"
+          },
+          {
+            "line": 731,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 732,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 733,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 734,
+            "mnemonic": "v_lshlrev_b32_e32"
+          },
+          {
+            "line": 735,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 736,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 739,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 740,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 743,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 744,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 747,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 748,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 751,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 752,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 755,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 756,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 759,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 760,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 763,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 764,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 767,
+            "mnemonic": "v_mov_b32_e32"
+          },
+          {
+            "line": 768,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 769,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 770,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 771,
+            "mnemonic": "v_lshlrev_b32_e32"
+          },
+          {
+            "line": 772,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 773,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 776,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 777,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 780,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 781,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 784,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 785,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 788,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 789,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 792,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 793,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 796,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 797,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 800,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 801,
+            "mnemonic": "global_load_u16"
+          }
+        ],
+        "234": [
+          {
+            "line": 611,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 614,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 622,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 625,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 633,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 636,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 644,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 647,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 655,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 658,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 666,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 669,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 677,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 680,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 688,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 691,
+            "mnemonic": "v_mul_f32_e32"
+          }
+        ]
+      },
+      "hip_resources": {
+        "lds_bytes": 512,
+        "scratch_bytes": 0,
+        "sgpr": 26,
+        "sgpr_spills": 0,
+        "vgpr": 245,
+        "vgpr_spills": 0,
+        "wavefront_size": 32
+      },
+      "output_block_base": 4
+    },
+    "low": {
+      "acc_blocks": 4,
+      "amd_isa_highest_referenced_vgpr": 234,
+      "amd_isa_referenced_vgpr_count": 171,
+      "amd_isa_referenced_vgpr_ranges": [
+        [
+          0,
+          39
+        ],
+        [
+          72,
+          95
+        ],
+        [
+          128,
+          234
+        ]
+      ],
+      "highest_reference_sites": {
+        "219": [
+          {
+            "line": 375,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 376,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 381,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 382,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 383,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 384,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 385,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 386,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 388,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 389,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 615,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 616,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 617,
+            "mnemonic": "v_exp_f32_e32"
+          },
+          {
+            "line": 621,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 623,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 829,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 832,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 835,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 838,
+            "mnemonic": "v_mul_f32_e32"
+          }
+        ],
+        "220": [
+          {
+            "line": 395,
+            "mnemonic": "v_and_b32_e32"
+          },
+          {
+            "line": 397,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 398,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 399,
+            "mnemonic": "v_lshlrev_b32_e32"
+          },
+          {
+            "line": 400,
+            "mnemonic": "ds_store_b16"
+          },
+          {
+            "line": 401,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 402,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 403,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 404,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 405,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 406,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 407,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 408,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 409,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 410,
+            "mnemonic": "v_mul_f32_e32"
+          }
+        ],
+        "221": [
+          {
+            "line": 396,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 397,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 403,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 404,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 405,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 406,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 407,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 408,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 410,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 411,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 626,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 627,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 628,
+            "mnemonic": "v_exp_f32_e32"
+          },
+          {
+            "line": 632,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 634,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 825,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 826,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 827,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 828,
+            "mnemonic": "v_mul_f32_e32"
+          }
+        ],
+        "222": [
+          {
+            "line": 417,
+            "mnemonic": "v_and_b32_e32"
+          },
+          {
+            "line": 419,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 420,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 421,
+            "mnemonic": "v_lshlrev_b32_e32"
+          },
+          {
+            "line": 422,
+            "mnemonic": "ds_store_b16"
+          },
+          {
+            "line": 423,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 424,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 425,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 426,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 427,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 428,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 429,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 430,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 431,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 432,
+            "mnemonic": "v_mul_f32_e32"
+          }
+        ],
+        "223": [
+          {
+            "line": 418,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 419,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 425,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 426,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 427,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 428,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 429,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 430,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 432,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 433,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 637,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 638,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 639,
+            "mnemonic": "v_exp_f32_e32"
+          },
+          {
+            "line": 643,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 645,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 821,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 822,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 823,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 824,
+            "mnemonic": "v_mul_f32_e32"
+          }
+        ],
+        "224": [
+          {
+            "line": 439,
+            "mnemonic": "v_and_b32_e32"
+          },
+          {
+            "line": 441,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 442,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 443,
+            "mnemonic": "v_lshlrev_b32_e32"
+          },
+          {
+            "line": 444,
+            "mnemonic": "ds_store_b16"
+          },
+          {
+            "line": 445,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 446,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 447,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 448,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 449,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 450,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 451,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 452,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 453,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 454,
+            "mnemonic": "v_mul_f32_e32"
+          }
+        ],
+        "225": [
+          {
+            "line": 440,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 441,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 447,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 448,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 449,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 450,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 451,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 452,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 454,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 455,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 648,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 649,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 650,
+            "mnemonic": "v_exp_f32_e32"
+          },
+          {
+            "line": 654,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 656,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 817,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 818,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 819,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 820,
+            "mnemonic": "v_mul_f32_e32"
+          }
+        ],
+        "226": [
+          {
+            "line": 461,
+            "mnemonic": "v_and_b32_e32"
+          },
+          {
+            "line": 463,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 464,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 465,
+            "mnemonic": "v_lshlrev_b32_e32"
+          },
+          {
+            "line": 466,
+            "mnemonic": "ds_store_b16"
+          },
+          {
+            "line": 467,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 468,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 469,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 470,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 471,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 472,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 473,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 474,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 475,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 476,
+            "mnemonic": "v_mul_f32_e32"
+          }
+        ],
+        "227": [
+          {
+            "line": 462,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 463,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 469,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 470,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 471,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 472,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 473,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 474,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 476,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 477,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 659,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 660,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 661,
+            "mnemonic": "v_exp_f32_e32"
+          },
+          {
+            "line": 665,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 667,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 813,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 814,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 815,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 816,
+            "mnemonic": "v_mul_f32_e32"
+          }
+        ],
+        "228": [
+          {
+            "line": 483,
+            "mnemonic": "v_and_b32_e32"
+          },
+          {
+            "line": 485,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 486,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 487,
+            "mnemonic": "v_lshlrev_b32_e32"
+          },
+          {
+            "line": 488,
+            "mnemonic": "ds_store_b16"
+          },
+          {
+            "line": 489,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 490,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 491,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 492,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 493,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 494,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 495,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 496,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 497,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 498,
+            "mnemonic": "v_mul_f32_e32"
+          }
+        ],
+        "229": [
+          {
+            "line": 484,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 485,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 491,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 492,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 493,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 494,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 495,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 496,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 498,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 499,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 670,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 671,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 672,
+            "mnemonic": "v_exp_f32_e32"
+          },
+          {
+            "line": 676,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 678,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 809,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 810,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 811,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 812,
+            "mnemonic": "v_mul_f32_e32"
+          }
+        ],
+        "230": [
+          {
+            "line": 505,
+            "mnemonic": "v_and_b32_e32"
+          },
+          {
+            "line": 507,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 508,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 509,
+            "mnemonic": "v_lshlrev_b32_e32"
+          },
+          {
+            "line": 510,
+            "mnemonic": "ds_store_b16"
+          },
+          {
+            "line": 511,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 512,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 513,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 514,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 515,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 516,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 517,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 518,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 519,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 520,
+            "mnemonic": "v_mul_f32_e32"
+          }
+        ],
+        "231": [
+          {
+            "line": 506,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 507,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 513,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 514,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 515,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 516,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 517,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 518,
+            "mnemonic": "v_max_f32_e32"
+          },
+          {
+            "line": 520,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 521,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 681,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 682,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 683,
+            "mnemonic": "v_exp_f32_e32"
+          },
+          {
+            "line": 687,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 689,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 805,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 806,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 807,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 808,
+            "mnemonic": "v_mul_f32_e32"
+          }
+        ],
+        "232": [
+          {
+            "line": 528,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 529,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 537,
+            "mnemonic": "v_and_b32_e32"
+          },
+          {
+            "line": 538,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 539,
+            "mnemonic": "v_lshlrev_b32_e32"
+          },
+          {
+            "line": 803,
+            "mnemonic": "ds_load_b128"
+          }
+        ],
+        "233": [
+          {
+            "line": 540,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 541,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 542,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 543,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 544,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 545,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 546,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 547,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 548,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 549,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 550,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 551,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 552,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 553,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 554,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 555,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 556,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 557,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 558,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 559,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 560,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 561,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 562,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 563,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 564,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 565,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 566,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 567,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 568,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 569,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 570,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 571,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 572,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 573,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 574,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 575,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 576,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 577,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 578,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 579,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 580,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 581,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 582,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 583,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 584,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 585,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 586,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 587,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 588,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 589,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 590,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 591,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 592,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 593,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 594,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 595,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 596,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 597,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 598,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 599,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 600,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 601,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 602,
+            "mnemonic": "ds_bpermute_b32"
+          },
+          {
+            "line": 603,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 608,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 609,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 611,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 613,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 614,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 619,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 620,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 622,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 624,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 625,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 630,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 631,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 633,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 635,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 636,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 641,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 642,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 644,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 646,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 647,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 652,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 653,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 655,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 657,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 658,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 663,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 664,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 666,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 668,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 669,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 674,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 675,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 677,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 679,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 680,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 685,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 686,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 688,
+            "mnemonic": "v_cmp_ne_u32_e32"
+          },
+          {
+            "line": 690,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 691,
+            "mnemonic": "v_add_f32_e32"
+          },
+          {
+            "line": 692,
+            "mnemonic": "v_mov_b32_e32"
+          },
+          {
+            "line": 693,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 694,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 695,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 696,
+            "mnemonic": "v_lshlrev_b32_e32"
+          },
+          {
+            "line": 697,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 698,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 701,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 702,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 705,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 706,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 709,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 710,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 713,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 714,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 717,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 718,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 721,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 722,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 725,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 726,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 729,
+            "mnemonic": "v_mov_b32_e32"
+          },
+          {
+            "line": 730,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 731,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 732,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 733,
+            "mnemonic": "v_lshlrev_b32_e32"
+          },
+          {
+            "line": 734,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 735,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 738,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 739,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 742,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 743,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 746,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 747,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 750,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 751,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 754,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 755,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 758,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 759,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 762,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 763,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 766,
+            "mnemonic": "v_mov_b32_e32"
+          },
+          {
+            "line": 767,
+            "mnemonic": "v_mul_lo_u32"
+          },
+          {
+            "line": 768,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 769,
+            "mnemonic": "v_add_nc_u32_e32"
+          },
+          {
+            "line": 770,
+            "mnemonic": "v_lshlrev_b32_e32"
+          },
+          {
+            "line": 771,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 772,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 775,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 776,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 779,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 780,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 783,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 784,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 787,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 788,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 791,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 792,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 795,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 796,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 799,
+            "mnemonic": "global_load_u16"
+          },
+          {
+            "line": 800,
+            "mnemonic": "global_load_u16"
+          }
+        ],
+        "234": [
+          {
+            "line": 610,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 613,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 621,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 624,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 632,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 635,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 643,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 646,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 654,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 657,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 665,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 668,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 676,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 679,
+            "mnemonic": "v_mul_f32_e32"
+          },
+          {
+            "line": 687,
+            "mnemonic": "v_cndmask_b32_e32"
+          },
+          {
+            "line": 690,
+            "mnemonic": "v_mul_f32_e32"
+          }
+        ]
+      },
+      "hip_resources": {
+        "lds_bytes": 512,
+        "scratch_bytes": 0,
+        "sgpr": 26,
+        "sgpr_spills": 0,
+        "vgpr": 244,
+        "vgpr_spills": 0,
+        "wavefront_size": 32
+      },
+      "output_block_base": 0
+    }
+  }
+}
