@@ -1323,6 +1323,12 @@ class StateHandle(NamedTuple):
     if wait is not None and (wait.op is not Ops.WAIT or published not in wait.src):
       raise ValueError("state reload wait must depend on its publication")
     src=(published,) if self.storage is None else (published,self.storage,self.lane)
+    if self.storage is not None and self.region.lanes > 1:
+      order=wait if wait is not None else published
+      base=self.lane*UOp.const(self.lane.dtype, self.lane_stride)+UOp.const(self.lane.dtype, self.element_offset)
+      loads=tuple(self.storage.after(order).index(base+UOp.const(self.lane.dtype, i)).load() for i in range(self.region.lanes))
+      lanes=UOp(Ops.STACK, self.dtype, loads, tag=("state_reload_lanes_v1", self))
+      return UOp(Ops.CUSTOMI, self.dtype, (lanes,), ("state_reload_v1", self))
     return UOp(Ops.CUSTOMI, self.dtype, src if wait is None else (*src,wait), ("state_reload_v1", self))
 
 class CompositeReduce(NamedTuple):

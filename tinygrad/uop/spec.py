@@ -93,6 +93,9 @@ def validate_state_transfer(x:UOp):
   storage_src=() if handle.storage is None else (handle.storage,handle.lane)
   if x.arg[0] == "state_publish_v1":
     return x.src == (x.src[0],*storage_src) and x.src[0].dtype == handle.dtype
+  if handle.storage is not None and handle.region.lanes > 1:
+    if len(x.src) != 1 or x.src[0].op is not Ops.STACK or x.src[0].dtype != handle.dtype or x.src[0].tag != ("state_reload_lanes_v1", handle): return False
+    return len(x.src[0].src) == handle.region.lanes and all(source.dtype == handle.region.dtype for source in x.src[0].src)
   if len(x.src) not in (1+len(storage_src),2+len(storage_src)): return False
   source=x.src[0]
   if source.op is not Ops.CUSTOMI or source.dtype != handle.dtype or source.arg != ("state_publish_v1", handle) or x.src[1:1+len(storage_src)] != storage_src:
@@ -101,8 +104,15 @@ def validate_state_transfer(x:UOp):
 
 def validate_state_reload_gep(gep:UOp, reload:UOp):
   """Permit scalar lanes from the typed generic reload carrier only."""
-  return reload.op is Ops.CUSTOMI and isinstance(reload.arg, tuple) and reload.arg[:1] == ("state_reload_v1",) and \
-    validate_state_transfer(reload) and validate_scalar_gep(gep, reload)
+  if reload.op is Ops.CUSTOMI:
+    return isinstance(reload.arg, tuple) and reload.arg[:1] == ("state_reload_v1",) and validate_state_transfer(reload) and validate_scalar_gep(gep, reload)
+  if reload.op is not Ops.STACK or not (isinstance(reload.tag, tuple) and len(reload.tag) == 2 and reload.tag[0] == "state_reload_v1"):
+    return False
+  handle=reload.tag[1]
+  try: handle.validate()
+  except (TypeError, ValueError, AttributeError): return False
+  return isinstance(handle, StateHandle) and handle.storage is not None and reload.dtype == handle.dtype and \
+    len(reload.src) == handle.region.lanes and all(source.dtype == handle.region.dtype for source in reload.src) and validate_scalar_gep(gep, reload)
 
 # ***** new specs *****
 

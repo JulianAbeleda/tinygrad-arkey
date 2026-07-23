@@ -61,8 +61,21 @@ def test_lane_major_local_state_publish_reload_tracks_storage_and_wait_order():
   wait = UOp(Ops.WAIT, dtypes.void, (published,), arg=("state_handle_wait_v1", handle))
   reloaded = handle.reload(published, wait)
   assert published.src[1:] == (storage, lane)
-  assert reloaded.src == (published, storage, lane, wait)
+  assert reloaded.op is Ops.CUSTOMI and reloaded.arg == ("state_reload_v1", handle)
+  assert reloaded.src[0].op is Ops.STACK and reloaded.src[0].tag == ("state_reload_lanes_v1", handle)
+  assert len(reloaded.src[0].src) == 8 and all(source.op is Ops.LOAD for source in reloaded.src[0].src)
   type_verify(UOp.sink(reloaded), spec_full)
+
+
+def test_storage_backed_vector_reload_stack_tag_allows_scalar_gep():
+  storage = UOp(Ops.DEFINE_LOCAL, dtypes.float.ptr(128, AddrSpace.LOCAL), arg=94)
+  handle = StateHandle(StateRegionSpec("vector_state", dtypes.float, 8), PhaseBoundarySpec("publish", "reload"),
+                       storage=storage, lane=UOp.special(8, "state_lane"), lane_stride=8)
+  reloaded = handle.reload(handle.publish(UOp.const(dtypes.float.vec(8), 1.0)))
+  assert reloaded.op is Ops.CUSTOMI and reloaded.arg == ("state_reload_v1", handle)
+  lane = reloaded.gep(5)
+  assert lane.src == (reloaded,) and lane.dtype == dtypes.float
+  type_verify(UOp.sink(lane), spec_full)
 
 
 def test_storage_backed_state_rejects_invalid_storage_lane_and_offset():
