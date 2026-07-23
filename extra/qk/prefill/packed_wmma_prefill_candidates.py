@@ -265,7 +265,13 @@ class PackedWmmaPrefillCandidate:
     blocks, halfwords = n * k // transform.block_elems, transform.block_bytes // 2
     b = packed_weight.bitcast(dtypes.uint16).reshape(blocks, halfwords).pad(((0, 0), (0, 128 - halfwords))) \
       .reshape(blocks, 128, 1).expand(blocks, 128, 2).reshape(n, k).bitcast(dtypes.half)
-    out = x_batch @ b.transpose()
+    # Keep the primitive's vectorized accumulator store rank-2. Letting the
+    # final (1,M,N) view fuse into this producer can make HIP assign a vector
+    # expression to a constructed float4 value instead of an addressable
+    # scalar output lane. The concrete rank-2 boundary is the same output ABI
+    # used by the direct-packed primitive; the model-facing batch view stays
+    # metadata-only after this scalarized store.
+    out = (x_batch @ b.transpose()).contiguous()
     # This is the real model-forward binding, rather than a warmstart-table
     # annotation. The exact identity is observable by the whole-model route
     # census/provenance hooks only after this guarded body has been selected.
