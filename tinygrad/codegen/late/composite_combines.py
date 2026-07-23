@@ -265,6 +265,8 @@ def _lower_composite_no_range_pm(red):
 def resolve_reduce_slot_tensor(slot):
     """Graph-local projection from the structured composite reduction result."""
     src = slot.src[0]
+    if src.op is Ops.INDEX:
+      raise RuntimeError("composite REDUCE_SLOT provenance lost through INDEX/bufferization; refusing untyped slot lowering")
     # Horizontal expansion can leave the consumed reduction-axis carrier
     # around the structured result. It is not an output expansion: every
     # TUPLE member is already the fully reduced scalar state.
