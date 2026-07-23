@@ -2,13 +2,21 @@ import unittest
 import numpy as np
 from tinygrad import Tensor
 from tinygrad.codegen.late.flash_attn import merge_online_softmax_tile, normalize_online_softmax_state
-from tinygrad.codegen.late.composite_combines import COMBINE_REGISTRY
-from tinygrad.uop.ops import AccumulatorSlot, Ops
+from tinygrad.codegen.late.composite_combines import COMBINE_REGISTRY, _combine_step_online_softmax_state
+from tinygrad.uop.ops import AccumulatorSlot, Ops, UOp, dtypes
 
 class TestOnlineSoftmaxStateSplit(unittest.TestCase):
   def test_state_combine_is_registered_separately(self):
     self.assertIn("online_softmax_state", COMBINE_REGISTRY)
     self.assertIsNot(COMBINE_REGISTRY["online_softmax_state"], COMBINE_REGISTRY["online_softmax"])
+
+  def test_lane_state_step_has_scalar_scalar_vector_abi(self):
+    m, l, score = (UOp.const(dtypes.float32, x) for x in (0.5, 2.0, 1.0))
+    acc = UOp.const(dtypes.float32.vec(2), (3.0, 4.0))
+    value = UOp.const(dtypes.float32.vec(2), (5.0, 6.0))
+    new_m, new_l, new_acc = _combine_step_online_softmax_state(m, l, acc, score, value)
+    self.assertEqual((new_m.dtype.count, new_l.dtype.count, new_acc.dtype.count), (1, 1, 2))
+    self.assertTrue(any(u.op is Ops.STACK for u in new_acc.toposort()))
 
   def test_normalization_of_raw_state_matches_attention(self):
     rng = np.random.default_rng(31)
