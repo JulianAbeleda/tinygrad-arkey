@@ -210,6 +210,8 @@ def finalize_after(ctx:AllocCtx, x:UOp):
     if not isinstance(t, int):
       continue
     original_uop: UOp = ctx.uop_list[t]
+    if replace_uop.ndim != len(original_uop.shape):
+      continue
     replacement = replace_uop.shrink_to(original_uop.shape)
     ctx.buffer_map[original_uop] = propagate_memory_semantic(original_uop, replacement)
   return ret
