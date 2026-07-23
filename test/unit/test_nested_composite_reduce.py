@@ -9,6 +9,7 @@ from tinygrad.codegen.late.devectorizer import _partition_composite_sources
 from tinygrad.codegen.late.devectorizer import lower_composite_accumulator, composite_reduce_state_adapter
 from tinygrad.codegen.late.composite_combines import resolve_reduce_slot_tensor, resolve_composite_reduce_slot_prebufferize
 from tinygrad.schedule.rangeify import cleanup_dead_axes
+from tinygrad.uop.spec import spec_tensor, type_verify
 
 def test_lane_aware_composite_input_is_explicit_and_scalar_safe():
   """The grouped-load carrier is metadata; scalar source ownership is unchanged."""
@@ -54,6 +55,17 @@ def test_prebufferize_rejects_untagged_index_view():
   base = UOp(Ops.TUPLE, dtypes.void, (UOp.placeholder((2,), dtypes.float32, 92),))
   idx = UOp(Ops.INDEX, dtypes.float32, (base, UOp.const(dtypes.weakint, 0)), None)
   assert resolve_composite_reduce_slot_prebufferize(UOp(Ops.REDUCE_SLOT, dtypes.float32, (idx,), 0)) is None
+
+def test_spec_accepts_only_tagged_composite_index_slot_view():
+  src = Tensor.empty(1, 2, 3, dtype=dtypes.float32)
+  red = src.uop.composite_reduce(AccumulatorSlot(Ops.ADD, dtypes.float32, 0.0, "sum"), axis=(2,), slot_shapes=((1, 2),))
+  tup = UOp(Ops.TUPLE, dtypes.void, (UOp.placeholder((1, 2), dtypes.float32, 93),)).replace(tag=("composite_reduce", red.arg[0]))
+  idx = UOp(Ops.INDEX, dtypes.float32, (tup, UOp.const(dtypes.weakint, 0)), None)
+  type_verify(UOp(Ops.REDUCE_SLOT, dtypes.float32, (idx,), 0), spec_tensor)
+  plain = UOp(Ops.TUPLE, dtypes.void, (UOp.const(dtypes.float32, 1.0),))
+  untagged = UOp(Ops.INDEX, dtypes.float32, (plain, UOp.const(dtypes.weakint, 0)), None)
+  with pytest.raises(RuntimeError, match="UOp verification failed"):
+    type_verify(UOp(Ops.REDUCE_SLOT, dtypes.float32, (untagged,), 0), spec_tensor)
 
 
 def test_nested_reduction_with_logical_element_input_stays_in_one_schedule():

@@ -31,6 +31,20 @@ def validate_index(uidx:UOp, gate:UOp|None=None):
   from tinygrad.uop.validate import validate_index_with_z3
   return validate_index_with_z3(sz, idx, gate)
 
+def _is_tagged_composite_slot_view(x: UOp) -> bool:
+  """Accept only expander INDEX views that retain composite provenance.
+
+  REDUCE_SLOT normally consumes the structured REDUCE directly.  During
+  expansion an INDEX may temporarily sit between the slot and its tagged
+  TUPLE; accepting arbitrary INDEX here would let an ordinary indexed value
+  masquerade as a reduction projection.
+  """
+  if x.op is not Ops.INDEX or not x.src: return False
+  base = x.src[0]
+  tag = base.tag
+  return base.op is Ops.TUPLE and isinstance(tag, tuple) and len(tag) == 2 \
+    and tag[0] == "composite_reduce" and hasattr(tag[1], "slots")
+
 def type_verify(ast:UOp|list[UOp], check_spec:PatternMatcher):
   lst = list(ast.toposort()) if isinstance(ast, UOp) else ast
   if SPEC > 1: test_pyrender(lst[-1])  # assume this is the sink
@@ -200,7 +214,9 @@ spec_tensor = PatternMatcher([
 
   # REDUCE_SLOT reads slot i from a composite REDUCE
   (UPat(Ops.REDUCE_SLOT, src=(UPat(),), name="x"),
-   lambda x: isinstance(x.arg, int) and x.src[0].op is Ops.REDUCE and hasattr(x.src[0].arg[0], 'slots') and 0 <= x.arg < len(x.src[0].arg[0].slots)),
+   lambda x: isinstance(x.arg, int) and 0 <= x.arg < (
+     len(x.src[0].arg[0].slots) if x.src[0].op is Ops.REDUCE and hasattr(x.src[0].arg[0], 'slots') else
+     len(x.src[0].src[0].tag[1].slots) if _is_tagged_composite_slot_view(x.src[0]) else -1)),
 
   # SCOPED_REDUCE is a generic nested-reduction boundary. Its fallback,
   # producer, and logical-element inputs are all normal sources; only axis
