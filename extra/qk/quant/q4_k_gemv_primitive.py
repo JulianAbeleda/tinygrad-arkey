@@ -159,6 +159,15 @@ def q4k_gemm_packed_load_direct_out_kernel(rows:int, k:int, b:int, schedule:str,
     base = (row * k_blocks + blk) * Q4K_WORDS_PER_BLOCK
     contrib = _q4k_block_dot_packed_load_gemm(words, x, base, blk, lane4, bb, k)
 
+    # The full Qwen vocabulary projection is consumed by the model's output
+    # path in the same forward program. Its staged accumulator recurrence can
+    # be vector-fused into a constructed float32 lvalue on HIP. Use a real
+    # scalar-addressable reduction store for this exact vocabulary extent;
+    # all ordinary packed-prefill roles retain their established recurrence.
+    if rows >= 131072:
+      return out[bb, row].store(contrib.reduce(blk, lane4, arg=Ops.ADD)).end(row, bb).sink(
+        arg=_kernel_info(f"{name}_{rows}_{k}_{b}_1", schedule, opts))
+
     acc = out[bb, row].set(0.0)
     acc = out[bb, row].set(acc.after(blk, lane4)[bb, row] + contrib, end=lane4)
     return acc.end(row, bb, blk).sink(arg=_kernel_info(f"{name}_{rows}_{k}_{b}_1", schedule, opts))
