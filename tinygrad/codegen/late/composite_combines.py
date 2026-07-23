@@ -314,11 +314,14 @@ def resolve_composite_reduce_slot_prebufferize(slot):
   # INDEX nodes for rebuilding the logical projection, but peel STAGE as a
   # scheduler ownership boundary.
   views = []
+  ancestry = []
   base = view
   while base.op in (Ops.INDEX, Ops.STAGE) and base.src:
+    ancestry.append(base)
     if base.op is Ops.INDEX: views.append(base)
     base = base.src[0]
   if base.op is not Ops.TUPLE: return None
+  ancestry.append(base)
 
   def find_composite(value, seen=None):
     """Find an actual CompositeReduce in bounded UOp metadata ancestry."""
@@ -346,9 +349,9 @@ def resolve_composite_reduce_slot_prebufferize(slot):
   # Prefer explicit validated tags, then inspect the tuple and its source
   # metadata.  The latter is intentionally bounded to this ancestry and
   # requires a real CompositeReduce object.
-  composite = find_composite(base.tag)
-  if composite is None: composite = find_composite(base.arg)
-  if composite is None: composite = find_composite(base.metadata)
+  composite = next((found for node in ancestry
+                    for value in (node.tag, node.arg, node.metadata)
+                    if (found := find_composite(value)) is not None), None)
   if composite is None:
     composite = next((found for source in base.src if (found := find_composite(source)) is not None), None)
   if composite is None: return None
