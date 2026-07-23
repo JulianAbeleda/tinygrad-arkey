@@ -7,8 +7,8 @@
     "stage_b_pv_slice_0": {"output_block_base": 0, "acc_blocks": 2, "vgpr": 192, "sgpr": 26, "lds_bytes": 512, "scratch_bytes": 0, "vgpr_spills": 0, "sgpr_spills": 0, "max_referenced_vgpr": 228},
     "stage_b_pv_slice_2": {"output_block_base": 2, "acc_blocks": 2, "vgpr": 192, "sgpr": 26, "lds_bytes": 512, "scratch_bytes": 0, "vgpr_spills": 0, "sgpr_spills": 0, "max_referenced_vgpr": 228},
     "stage_b_pv_slice_4": {"output_block_base": 4, "acc_blocks": 2, "vgpr": 192, "sgpr": 26, "lds_bytes": 512, "scratch_bytes": 0, "vgpr_spills": 0, "sgpr_spills": 0, "max_referenced_vgpr": 228},
-    "stage_b_pv_slice_6": {"output_block_base": 6, "acc_blocks": 2, "vgpr": 197, "sgpr": 26, "lds_bytes": 512, "scratch_bytes": 0, "vgpr_spills": 0, "sgpr_spills": 0, "max_referenced_vgpr": 228}
+    "stage_b_pv_slice_6": {"output_block_base": 6, "v_input_block_base": 6, "acc_blocks": 2, "vgpr": 192, "sgpr": 26, "lds_bytes": 512, "scratch_bytes": 0, "vgpr_spills": 0, "sgpr_spills": 0, "max_referenced_vgpr": 228}
   },
   "numeric": {"result": "passed", "comparison": "Stage A stores final fp32 m/l only; four Stage B launches reload m/l, recompute QK/P, own disjoint Hd32 slices, and assemble exact Hd128 output within rtol=0.02, atol=0.004"},
-  "gate": {"pv_slice_vgpr_max": 192, "result": "failed", "reason": "output_block_base=6 allocates 197 VGPR; replay was not run"}
+  "gate": {"pv_slice_vgpr_max": 192, "result": "passed", "reason": "Stage B receives a pre-biased V view; fragment blocks remain logical and output_block_base remains drain-only"}
 }

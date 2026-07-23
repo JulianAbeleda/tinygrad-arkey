@@ -727,17 +727,17 @@ def test_gfx1100_split_score_state_pv_slice_direct_diagnostic():
   q=rng.normal(0,.2,(hq,qt,128)).astype(np.float16); k=rng.normal(0,.2,(hkv,kv,128)).astype(np.float16); v=rng.normal(0,.4,(hkv,kv,128)).astype(np.float16)
   qn,kn,outn=hq*qt*128,hkv*kv*128,hq*qt*128; statsn=hq*qt*2
   def stage_a(o,qi,ki): return amd_gfx1100_q16_grid_qk_stats_stage(qi,ki,o,q_tokens=qt,q_heads=hq,kv_heads=hkv,kv_tokens=kv,scale=scale,kernel_info=KernelInfo(name="split_a"))
-  def stage_b(base): return lambda o,qi,ki,vi,si: amd_gfx1100_q16_grid_pv_slice_stage(qi,ki,vi,si,o,q_tokens=qt,q_heads=hq,kv_heads=hkv,kv_tokens=kv,scale=scale,kernel_info=KernelInfo(name=f"split_b_{base}"),output_block_base=base)
+  def stage_b(base): return lambda o,qi,ki,vi,si: amd_gfx1100_q16_grid_pv_slice_stage(qi,ki,vi,si,o,q_tokens=qt,q_heads=hq,kv_heads=hkv,kv_tokens=kv,scale=scale,kernel_info=KernelInfo(name=f"split_b_{base}"),output_block_base=base,v_input_block_base=base)
   def metadata(fxn, sizes, float_slots):
     p=[UOp(Ops.PARAM,(dtypes.float if i in float_slots else dtypes.half).ptr(sizes[i]),arg=ParamArg(i)) for i in range(len(sizes))]
     sink=fxn(*p); program=to_program(sink,HIPRenderer(Target.parse("AMD:HIP:gfx1100"))); binary=next(u.arg for u in program.src if u.op is Ops.BINARY); row=parse_amdgpu_metadata(binary)
     renderer=AMDISARenderer(Target.parse("AMD:ISA:gfx1100")); isa=to_program(sink,renderer); linear=next(u for u in isa.src if u.op is Ops.LINEAR); import re
     row["max_referenced_vgpr"]=max((int(y) for x in re.findall(r"(?<![a-zA-Z0-9_])v(?:\[(\d+)|([0-9]+))",renderer.asm_str(list(linear.src),isa.arg.name)) for y in x if y),default=-1)
     return {x:row[x] for x in ("vgpr","sgpr","lds_bytes","scratch_bytes","vgpr_spills","sgpr_spills","max_referenced_vgpr")}
-  resources={"stage_a":metadata(stage_a,(statsn,qn,kn),{0}), **{f"stage_b_{base}":metadata(stage_b(base),(outn,qn,kn,kn,statsn),{4}) for base in range(0,8,2)}}
+  resources={"stage_a":metadata(stage_a,(statsn,qn,kn),{0}), **{f"stage_b_{base}":metadata(stage_b(base),(outn,qn,kn,kn-base*16,statsn),{4}) for base in range(0,8,2)}}
   assert all(all(row[x] == 0 for x in ("scratch_bytes","vgpr_spills","sgpr_spills")) for name,row in resources.items() if name.startswith("stage_b_"))
   tq,tk,tv=(Tensor(x.reshape(-1),device="AMD") for x in (q,k,v)); stats=Tensor.empty(statsn,dtype=dtypes.float,device="AMD").custom_kernel(tq,tk,fxn=stage_a)[0].realize(); out=Tensor.empty(outn,dtype=dtypes.half,device="AMD")
-  for base in range(0,8,2): out=out.custom_kernel(tq,tk,tv,stats,fxn=stage_b(base))[0].realize()
+  for base in range(0,8,2): out=out.custom_kernel(tq,tk,tv[base*16:],stats,fxn=stage_b(base))[0].realize()
   got=out.numpy().reshape(q.shape).astype(np.float32); ref=np.zeros_like(got)
   for h in range(hq):
     score=q[h].astype(np.float32)@k[h//4].astype(np.float32).T*scale

@@ -589,13 +589,13 @@ def amd_gfx1100_q16_grid_qk_stats_stage(q:UOp,k:UOp,stats:UOp,*,q_tokens:int,q_h
   drain=UOp(Ops.AMD_ATTENTION_STATS_DRAIN,dtypes.void,(stats,group,fm,fl),arg=AMDAttentionStatsDrainSpec())
   return UOp.sink(mi,li,end,drain,arg=kernel_info).replace(tag=("amd_gfx1100_qk_stats_stage_v1",))
 
-def amd_gfx1100_q16_grid_pv_slice_stage(q:UOp,k:UOp,v:UOp,stats:UOp,out:UOp,*,q_tokens:int,q_heads:int,kv_heads:int,kv_tokens:int,scale:float,kernel_info,output_block_base:int,acc_blocks:int=2,causal:bool=True,query_start:int|None=None)->UOp:
+def amd_gfx1100_q16_grid_pv_slice_stage(q:UOp,k:UOp,v:UOp,stats:UOp,out:UOp,*,q_tokens:int,q_heads:int,kv_heads:int,kv_tokens:int,scale:float,kernel_info,output_block_base:int,v_input_block_base:int=0,acc_blocks:int=2,causal:bool=True,query_start:int|None=None)->UOp:
   """Direct diagnostic Stage B: reload final m/l, recompute QK/P, and own one aligned PV slice."""
   from tinygrad.uop.ops import AMDAttentionOutputDrainSpec, AMDAttentionGridSpec, AMDLoopStateSpec, AMDPackedFragmentLoopSpec, AxisType
   grid=AMDAttentionGridSpec(q_tokens=q_tokens,q_heads=q_heads,kv_heads=kv_heads,group_ratio=q_heads//kv_heads,kv_tokens=kv_tokens); grid.validate()
   qn,kn,outn=q_heads*q_tokens*128,kv_heads*kv_tokens*128,q_heads*q_tokens*128
-  if tuple(x.arg.slot for x in (q,k,v,stats,out)) != (1,2,3,4,0) or tuple(x.ptrdtype.size for x in (q,k,v,stats,out)) != (qn,kn,kn,q_heads*q_tokens*2,outn): raise ValueError("pv slice stage requires Q1/K2/V3/stats4/out0 exact geometry")
-  if (output_block_base,acc_blocks) not in {(0,2),(2,2),(4,2),(6,2)} or not causal: raise ValueError("pv slice stage requires one aligned causal two-block slice")
+  if tuple(x.arg.slot for x in (q,k,v,stats,out)) != (1,2,3,4,0) or tuple(x.ptrdtype.size for x in (q,k,v,stats,out)) != (qn,kn,kn-v_input_block_base*16,q_heads*q_tokens*2,outn): raise ValueError("pv slice stage requires Q1/K2/prebiased-V3/stats4/out0 exact geometry")
+  if (output_block_base,acc_blocks) not in {(0,2),(2,2),(4,2),(6,2)} or v_input_block_base != output_block_base or not causal: raise ValueError("pv slice stage requires one aligned prebiased causal two-block slice")
   query_start=kv_tokens-q_tokens if query_start is None else query_start; lane=UOp.special(32,"lidx0"); group=UOp.special(q_heads*grid.q_tiles,"gidx0"); col=lane.alu(Ops.AND,UOp.const(dtypes.weakint,15)); zero=UOp.const(dtypes.float.vec(8),(0.0,)*8)
   axes=((),(),tuple((-120-i,2) for i in range(3))); warg=("WMMA_16_16_16_half_float",(16,16,16),dtypes.half,dtypes.float,"AMD:gfx1100",32,axes,()); rng=UOp.range((kv_tokens+15)//16,9800,AxisType.REDUCE); creg=UOp.placeholder((16,),dtypes.float,9803,addrspace=AddrSpace.REG)
   def wr(value,b): return tuple(UOp(Ops.AMD_ATTENTION_LOOP_STATE,dtypes.void,(creg.index(UOp.const(dtypes.weakint,b*8+i)).store(value.gep(i)),),arg=AMDLoopStateSpec(role="acc",access="write",block=b,lane=i,owner=9804)) for i in range(8))
@@ -605,7 +605,7 @@ def amd_gfx1100_q16_grid_pv_slice_stage(q:UOp,k:UOp,v:UOp,stats:UOp,out:UOp,*,q_
   fm,fl=stat(0),stat(1); ci=UOp.group(*(x for b in range(2) for x in wr(zero,b))); qk=zero
   for b in range(8): qk=UOp(Ops.WMMA,dtypes.float.vec(8),(fr(q,"Q",b),fr(k,"K",b),qk),warg,tag=("attention_wmma","QK",b))
   p,_,_,alpha=amd_gfx1100_row_softmax_state(qk,fm,fl,spec=AMDRowSoftmaxRepackSpec(score_scale=scale,mode="loop_state_v1",validity_mode="causal_v1",query_start=query_start,kv_start=-1,valid_kv=kv_tokens,dynamic_kv_v1=True,grid=grid),kv_tile=rng,grid_id=group); writes=[]
-  for b in range(2): writes.extend(wr(UOp(Ops.WMMA,dtypes.float.vec(8),(p,fr(v,"V",b+output_block_base),rd(ci,b).alu(Ops.MUL,alpha)),warg,tag=("attention_wmma","PV",b)),b))
+  for b in range(2): writes.extend(wr(UOp(Ops.WMMA,dtypes.float.vec(8),(p,fr(v,"V",b),rd(ci,b).alu(Ops.MUL,alpha)),warg,tag=("attention_wmma","PV",b)),b))
   end=UOp.group(*writes).end(rng); fc=tuple(rd(end,b,True) for b in range(2)); drain=UOp(Ops.AMD_ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,group,fl,*fc),arg=AMDAttentionOutputDrainSpec(native_abi="amd_gfx1100_attention_output_drain_acc_slice_v2",blocks=2,grid=grid,output_block_base=output_block_base))
   return UOp.sink(ci,end,drain,arg=kernel_info).replace(tag=("amd_gfx1100_pv_slice_stage_v1",))
 
