@@ -116,7 +116,11 @@ def _direct_packed_opts(lin, spec:"PrefillLinearRouteSpec"):
     # upcast joins non-contiguous vocabulary rows into a constructed float32
     # value on HIP. Keep its established local tile but leave the output
     # scalar-addressable; normal prefill roles retain the measured 4x4 path.
-    if spec.role == "lm_head":
+    # Some model-forward attachments name this projection `output` rather
+    # than `lm_head`; the full-vocabulary width is the structural ownership
+    # fact at the primitive boundary. No admitted dense prefill role reaches
+    # this extent.
+    if spec.role == "lm_head" or spec.n >= 131072:
       return tuple(parse(x) for x in ("LOCAL:0:16", "LOCAL:1:16"))
     return tuple(parse(x) for x in ("LOCAL:0:16", "LOCAL:1:16", "UPCAST:0:4", "UPCAST:1:4"))
   else:
