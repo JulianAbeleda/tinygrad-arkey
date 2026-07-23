@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import math
 from typing import NamedTuple
-from tinygrad.dtype import DType, dtypes, PtrDType
+from tinygrad.dtype import DType, dtypes, PtrDType, AddrSpace
 from tinygrad.uop.ops import Ops, UOp
 from tinygrad.uop.ops import CompositeReduce, CompositeTileCarrier, TileGatherSpec, RowSoftmaxRepackSpec, AMDRowSoftmaxRepackSpec, AMDRowSoftmaxSlotSpec, AMDPVCLaneSpec, Ops
 
@@ -437,6 +437,60 @@ def amd_gfx1100_q16_kv32_hd128_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, scale:
   from tinygrad.uop.ops import AMDAttentionOutputDrainSpec
   drain=UOp(Ops.AMD_ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,sl,*acc),arg=AMDAttentionOutputDrainSpec())
   return UOp.sink(drain,arg=kernel_info)
+
+def amd_gfx1100_q16_kv64_hd128_loop_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, scale:float, kernel_info) -> UOp:
+  """Scheduler-only Q16/KV64/Hd128 recurrence with one runtime KV tile body.
+
+  This deliberately has no AMD/HIP lowering yet.  The typed state and dynamic
+  fragment carriers prevent it from silently falling back to the static KV32
+  implementation while retaining the exact graph that a future backend must
+  consume.
+  """
+  from tinygrad.uop.ops import AMDAttentionOutputDrainSpec, AMDLoopStateSpec, AMDPackedFragmentLoopSpec, AxisType
+  owners=(q,k,v,out)
+  if any(x.op is not Ops.PARAM or not isinstance(x.dtype,PtrDType) for x in owners): raise ValueError("q16-kv64-hd128 requires PARAM owners")
+  if tuple(x.arg.slot for x in owners)!=(1,2,3,0) or tuple(x.ptrdtype.size for x in owners)!=(2048,8192,8192,2048):
+    raise ValueError("q16-kv64-hd128 requires Q1/K2/V3/out0 sized 2048/8192/8192/2048")
+  if tuple(x.ptrdtype.base for x in owners)!=(dtypes.half,)*4 or not isinstance(scale,float) or not math.isfinite(scale) or scale<=0:
+    raise ValueError("q16-kv64-hd128 requires fp16 owners and positive finite scale")
+  lane=UOp.special(32,"lidx0"); col=lane.alu(Ops.AND,UOp.const(dtypes.weakint,15))
+  zero=UOp.const(dtypes.float.vec(8),(0.0,)*8); axes=((),(),tuple((-120-i,2) for i in range(3)))
+  warg=("WMMA_16_16_16_half_float",(16,16,16),dtypes.half,dtypes.float,"AMD:gfx1100",32,axes,())
+  rng=UOp.range(4,9400,AxisType.REDUCE)
+  mreg=UOp.placeholder((8,),dtypes.float,9401,addrspace=AddrSpace.REG)
+  lreg=UOp.placeholder((8,),dtypes.float,9402,addrspace=AddrSpace.REG)
+  creg=UOp.placeholder((64,),dtypes.float,9403,addrspace=AddrSpace.REG)
+  m_init=mreg.index(UOp.const(dtypes.weakint,0),dtype=dtypes.float.vec(8)).store(UOp.const(dtypes.float.vec(8),(-float("inf"),)*8))
+  l_init=lreg.index(UOp.const(dtypes.weakint,0),dtype=dtypes.float.vec(8)).store(zero)
+  c_init=creg.index(UOp.const(dtypes.weakint,0),dtype=dtypes.float.vec(64)).store(UOp.const(dtypes.float.vec(64),(0.0,)*64))
+  def state_read(reg, init, role, block=0, offset=0):
+    raw=reg.after(init,rng).index(UOp.const(dtypes.weakint,offset),dtype=dtypes.float.vec(8)).load()
+    return UOp(Ops.AMD_ATTENTION_LOOP_STATE,dtypes.float.vec(8),(raw,),arg=AMDLoopStateSpec(role=role,access="read",block=block))
+  def fragment(owner, role, block):
+    return UOp(Ops.AMD_PACKED_FRAGMENT_LOAD,dtypes.half.vec(16),(owner,lane,col,rng),arg=AMDPackedFragmentLoopSpec(role=role,head_block=block))
+  old_m,old_l=state_read(mreg,m_init,"m"),state_read(lreg,l_init,"l")
+  qk=zero
+  for block in range(8): qk=UOp(Ops.WMMA,dtypes.float.vec(8),(fragment(q,"Q",block),fragment(k,"K",block),qk),warg)
+  p,new_m,new_l,alpha=amd_gfx1100_row_softmax_state(qk,old_m,old_l,
+    spec=AMDRowSoftmaxRepackSpec(score_scale=float(scale),mode="stateful_unnormalized_v1"))
+  writes=[]
+  for role,reg,value in (("m",mreg,new_m),("l",lreg,new_l)):
+    store=reg.index(UOp.const(dtypes.weakint,0),dtype=dtypes.float.vec(8)).store(value)
+    writes.append(UOp(Ops.AMD_ATTENTION_LOOP_STATE,dtypes.void,(store,),arg=AMDLoopStateSpec(role=role,access="write")))
+  for block in range(8):
+    old_c=state_read(creg,c_init,"acc",block,block*8)
+    corrected=old_c.alu(Ops.MUL,alpha)
+    pv=UOp(Ops.WMMA,dtypes.float.vec(8),(p,fragment(v,"V",block),corrected),warg)
+    store=creg.index(UOp.const(dtypes.weakint,block*8),dtype=dtypes.float.vec(8)).store(pv)
+    writes.append(UOp(Ops.AMD_ATTENTION_LOOP_STATE,dtypes.void,(store,),arg=AMDLoopStateSpec(role="acc",access="write",block=block)))
+  end=UOp.group(*writes).end(rng).replace(tag=("amd_gfx1100_attention_kv64_loop_end_v1",rng))
+  final_l=UOp(Ops.AMD_ATTENTION_LOOP_STATE,dtypes.float.vec(8),(lreg.after(end).index(UOp.const(dtypes.weakint,0),dtype=dtypes.float.vec(8)).load(),),
+    arg=AMDLoopStateSpec(role="l",access="read"))
+  final_c=tuple(UOp(Ops.AMD_ATTENTION_LOOP_STATE,dtypes.float.vec(8),
+    (creg.after(end).index(UOp.const(dtypes.weakint,block*8),dtype=dtypes.float.vec(8)).load(),),
+    arg=AMDLoopStateSpec(role="acc",access="read",block=block)) for block in range(8))
+  drain=UOp(Ops.AMD_ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,final_l,*final_c),arg=AMDAttentionOutputDrainSpec())
+  return UOp.sink(m_init,l_init,c_init,end,drain,arg=kernel_info)
 
 class OnlineSoftmaxBlockTransition(NamedTuple):
   """Typed online-softmax state at one completed KV tile boundary."""

@@ -648,6 +648,27 @@ def test_gfx1100_q16_kv32_hd128_numeric():
   probs=np.exp(scores-scores.max(axis=1,keepdims=True)); probs/=probs.sum(axis=1,keepdims=True)
   np.testing.assert_allclose(got,probs@v.astype(np.float32),rtol=.02,atol=4e-3)
 
+def test_gfx1100_q16_kv64_hd128_loop_has_one_static_stateful_body():
+  from tinygrad.schedule.wmma import amd_gfx1100_q16_kv64_hd128_loop_attention
+  from tinygrad.uop.ops import KernelInfo, ParamArg, AMDLoopStateSpec, AMDPackedFragmentLoopSpec
+  sizes=(2048,2048,8192,8192)
+  p=[UOp(Ops.PARAM,dtypes.half.ptr(sizes[i]),arg=ParamArg(i)) for i in range(4)]
+  sink=amd_gfx1100_q16_kv64_hd128_loop_attention(p[1],p[2],p[3],p[0],scale=.25,kernel_info=KernelInfo(name="kv64_loop"))
+  topo=sink.toposort(); ranges=[u for u in topo if u.op is Ops.RANGE]; ends=[u for u in topo if u.op is Ops.END]
+  assert len(ranges)==len(ends)==1 and ranges[0].src[0].arg==4 and ends[0].src[1] is ranges[0]
+  assert len([u for u in topo if u.op is Ops.DEFINE_REG])==3
+  assert len([u for u in topo if u.op is Ops.WMMA])==16
+  repacks=[u for u in topo if u.op is Ops.AMD_ROW_SOFTMAX_REPACK]
+  assert len(repacks)==1 and repacks[0].arg.mode=="stateful_unnormalized_v1"
+  states=[u for u in topo if u.op is Ops.AMD_ATTENTION_LOOP_STATE]
+  assert {x.arg.role for x in states}=={"m","l","acc"}
+  assert len([x for x in states if x.arg.role=="acc" and x.arg.access=="write"])==8
+  frags=[u for u in topo if u.op is Ops.AMD_PACKED_FRAGMENT_LOAD]
+  assert len(frags)==24 and all(isinstance(x.arg,AMDPackedFragmentLoopSpec) and x.src[3] is ranges[0] for x in frags)
+  drains=[u for u in topo if u.op is Ops.AMD_ATTENTION_OUTPUT_DRAIN]
+  assert len(drains)==1 and ends[0] in drains[0].backward_slice
+  assert all(isinstance(x.arg,AMDLoopStateSpec) for x in states)
+
 def test_gfx1100_q16_kv32_builder_fails_closed_owner_sizes():
   from tinygrad.schedule.wmma import amd_gfx1100_q16_kv32_attention
   from tinygrad.uop.ops import KernelInfo, ParamArg

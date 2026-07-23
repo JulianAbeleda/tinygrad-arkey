@@ -301,6 +301,7 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
         return (self.dtype.count,)
       case Ops.AMD_ROW_SOFTMAX_SLOT: return (self.dtype.count,)
       case Ops.AMD_PACKED_FRAGMENT_LOAD: return (self.dtype.count,)
+      case Ops.AMD_ATTENTION_LOOP_STATE: return (self.dtype.count,) if self.dtype != dtypes.void else ()
       case Ops.AMD_ATTENTION_OUTPUT_DRAIN: return self.src[0]._shape
       case Ops.AMD_PV_C_LANE: return ()
       case Ops.SCOPED_REDUCE:
@@ -1484,6 +1485,35 @@ class AMDAttentionOutputDrainSpec(NamedTuple):
     if (self.native_abi, self.head_dim, self.blocks, self.lanes_per_fragment, self.address_expr) != \
        ("amd_gfx1100_attention_output_drain_v1", 128, 8, 8, "e*256+halfwave*128+j*16+col"):
       raise ValueError("AMD attention output drain requires the exact gfx1100 Hd128 v1 ABI")
+    return self
+
+class AMDLoopStateSpec(NamedTuple):
+  """Scheduler-visible recurrence ownership for the unlowered KV tile loop."""
+  native_abi: str = "amd_gfx1100_attention_loop_state_v1"
+  role: str = "m"
+  access: str = "read"
+  block: int = 0
+
+  def validate(self):
+    if self.native_abi != "amd_gfx1100_attention_loop_state_v1":
+      raise ValueError("AMD attention loop state requires the exact gfx1100 v1 ABI")
+    if self.role not in {"m", "l", "acc"} or self.access not in {"read", "write"}:
+      raise ValueError("AMD attention loop state has an unsupported role or access")
+    if not isinstance(self.block, int) or isinstance(self.block, bool) or not 0 <= self.block < (8 if self.role == "acc" else 1):
+      raise ValueError("AMD attention loop state has an invalid block")
+    return self
+
+class AMDPackedFragmentLoopSpec(NamedTuple):
+  """Exact Hd128 fragment role plus a runtime KV-tile RANGE source."""
+  native_abi: str = "amd_gfx1100_packed_fragment_hd128_loop_v1"
+  role: str = "Q"
+  head_block: int = 0
+
+  def validate(self):
+    if self.native_abi != "amd_gfx1100_packed_fragment_hd128_loop_v1" or self.role not in {"Q", "K", "V"}:
+      raise ValueError("AMD loop fragment has an unsupported ABI or role")
+    if not isinstance(self.head_block, int) or isinstance(self.head_block, bool) or not 0 <= self.head_block < 8:
+      raise ValueError("AMD loop fragment has an invalid head block")
     return self
 
 class CompositeInputSpec(NamedTuple):

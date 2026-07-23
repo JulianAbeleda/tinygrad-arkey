@@ -265,6 +265,8 @@ spec_tensor = PatternMatcher([
   (UPat(Ops.AMD_PV_C_LANE, src=(UPat(),), name="x"),
    lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_pv_c_lane_v1"
    and x.src[0].dtype == dtypes.float.vec(8) and x.dtype == dtypes.float),
+  (UPat(Ops.AMD_ATTENTION_LOOP_STATE, src=(UPat(),), name="x"),
+   lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_attention_loop_state_v1"),
   (UPat(Ops.AMD_ATTENTION_OUTPUT_DRAIN, src=(UPat(), UPat(), UPat(), UPat(), UPat(), UPat(), UPat(), UPat(), UPat(), UPat()), name="x"),
    lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_attention_output_drain_v1"
    and x.dtype == dtypes.void and isinstance(x.src[0].dtype, PtrDType) and x.src[0].dtype.base == dtypes.half and x.src[0].dtype.size == 2048
@@ -310,6 +312,8 @@ spec_tensor = PatternMatcher([
 
 # these ops can exist in programs but not the tensor spec. example: LOAD
 spec_program = PatternMatcher([
+  (UPat(Ops.AMD_ATTENTION_LOOP_STATE, src=(UPat(),), name="x"),
+   lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_attention_loop_state_v1"),
   (UPat(Ops.AMD_ATTENTION_OUTPUT_DRAIN, src=(UPat(), UPat(), UPat(), UPat(), UPat(), UPat(), UPat(), UPat(), UPat(), UPat()), name="x"),
    lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_attention_output_drain_v1"
    and x.dtype == dtypes.void and isinstance(x.src[0].dtype, PtrDType) and x.src[0].dtype.base == dtypes.half and x.src[0].dtype.size == 2048
