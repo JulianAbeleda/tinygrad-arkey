@@ -89,9 +89,11 @@ def lower_attention_semantic(att:UOp) -> UOp:
       state_geometry_ok = hd == 16 and q_len == 16 and kv_len == 16
       state_combine = "online_softmax_state" if getenv("TINYGRAD_ONLINE_SOFTMAX_STATE", 0) and getenv("TINYGRAD_ENABLE_EXPERIMENTAL_TILE", 0) and state_geometry_ok else "online_softmax"
       red = score.uop.composite_reduce(*slots, axis=(3,), inputs=(logical_v,), combine_fn=state_combine,
-        input_specs=(CompositeInputSpec("logical", (0, 1, None, 3, 4), primary_repeated=True),),
+        input_specs=(CompositeInputSpec("logical", (0, 1, None, 3, 4), primary_repeated=True,
+                                        lane_axis=4, lane_group=hd if state_combine == "online_softmax_state" else 1),),
         tile_carrier=tile_carrier,
-        slot_shapes=((b, h, q_len), (b, h, q_len), (b, h, q_len, hd)))
+        slot_shapes=((b, h, q_len), (b, h, q_len), (b, h, q_len, hd)),
+        lane_shapes=((), (), (hd,)) if state_combine == "online_softmax_state" else ())
       if state_combine == "online_softmax_state" and owned_map_proven and hd == 16:
         from tinygrad.schedule.wmma import construct_hd16_tile_carriers
         # The live score source is rankful/vector-typed at this stage. Keep

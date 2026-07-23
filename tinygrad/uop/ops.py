@@ -625,7 +625,8 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
   def composite_reduce(self, *slots: 'AccumulatorSlot', axis: tuple[int, ...] = (), inputs: tuple['UOp', ...] = (),
                        input_specs: tuple['CompositeInputSpec', ...]|None = None,
                        tile_carrier: 'CompositeTileCarrier|None' = None,
-                       slot_shapes: tuple[tuple|None, ...]|None = None, **kwargs):
+                       slot_shapes: tuple[tuple|None, ...]|None = None,
+                       lane_shapes: tuple[tuple|None, ...]|None = None, **kwargs):
     """Create a stateful REDUCE. All logical-element inputs are explicit sources."""
     from tinygrad.uop.ops import CompositeReduce, AccumulatorSlot
     # Compatibility is source-visible: callers formerly passing v_uop now get
@@ -642,9 +643,16 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
       if hasattr(spec, "validate_lane_abi"): spec.validate_lane_abi()
     if tile_carrier is not None:
       tile_carrier.validate()
+    normalized_lanes = tuple(_normalize_composite_shape(s) for s in (lane_shapes or ()))
+    if normalized_lanes and len(normalized_lanes) != len(slots):
+      raise ValueError("one physical lane shape is required for each composite slot")
+    for lane_shape in normalized_lanes:
+      if lane_shape is None or any(not isinstance(x, int) or x < 1 for x in lane_shape):
+        raise ValueError("composite physical lane shapes must contain positive integer dimensions")
     composite = CompositeReduce(slots=tuple(slots), combine_fn=kwargs.pop('combine_fn', None),
                                 input_specs=tuple(input_specs), tile_carrier=tile_carrier,
-                                slot_shapes=tuple(_normalize_composite_shape(s) for s in (slot_shapes or ())))
+                                slot_shapes=tuple(_normalize_composite_shape(s) for s in (slot_shapes or ())),
+                                lane_shapes=normalized_lanes)
     return UOp(Ops.REDUCE, kwargs.pop('dtype', self.dtype), src=(self,)+tuple(inputs), arg=(composite, axis), **kwargs)
 
   def composite_reduce_slot(self, slot: int, *, dtype=None):
@@ -1217,6 +1225,7 @@ class CompositeReduce(NamedTuple):
   tile_carrier: Any = None # optional backend-neutral tile/state ABI contract
   slot_shapes: tuple[tuple|None, ...] = () # logical output shape per REDUCE_SLOT
   tile_fragments: tuple = () # optional scheduler-owned score/value/acc TILE_GATHER nodes
+  lane_shapes: tuple[tuple|None, ...] = () # physical register lanes per state slot; () is scalar
 
 def _normalize_composite_shape(shape):
   """Normalize compiler shape metadata before it reaches generic shape logic."""

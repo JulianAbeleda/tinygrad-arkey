@@ -3,6 +3,7 @@ import numpy as np
 from tinygrad import Tensor
 from tinygrad.codegen.late.flash_attn import merge_online_softmax_tile, normalize_online_softmax_state
 from tinygrad.codegen.late.composite_combines import COMBINE_REGISTRY
+from tinygrad.uop.ops import AccumulatorSlot, Ops
 
 class TestOnlineSoftmaxStateSplit(unittest.TestCase):
   def test_state_combine_is_registered_separately(self):
@@ -19,5 +20,32 @@ class TestOnlineSoftmaxStateSplit(unittest.TestCase):
     got = normalize_online_softmax_state(acc, l).numpy()
     p = np.exp(scores - scores.max(axis=-1, keepdims=True)); p /= p.sum(axis=-1, keepdims=True)
     np.testing.assert_allclose(got, p @ values, rtol=1e-5, atol=1e-5)
+
+  def test_kv3_hd2_state_abi_is_heterogeneous_and_numeric(self):
+    scores = Tensor([[[0.5, -1.0, 2.0]]])
+    values = Tensor([[[1.0, 2.0], [3.0, -1.0], [0.5, 4.0]]])
+    slots = (AccumulatorSlot(Ops.MAX, scores.dtype, -float("inf"), "m"),
+             AccumulatorSlot(Ops.ADD, scores.dtype, 0.0, "l"),
+             AccumulatorSlot(Ops.ADD, scores.dtype, 0.0, "acc"))
+    red = scores.uop.composite_reduce(*slots, axis=(2,), inputs=(values.uop,), combine_fn="online_softmax_state",
+      slot_shapes=((1, 1), (1, 1), (1, 1, 2)), lane_shapes=((), (), (2,)))
+    self.assertEqual(red.arg[0].lane_shapes, ((), (), (2,)))
+    m, l, acc = Tensor.full((1, 1, 1), -float("inf")), Tensor.zeros(1, 1, 1), Tensor.zeros(1, 1, 2)
+    m, l, acc = merge_online_softmax_tile(m, l, acc, scores, values)
+    got = normalize_online_softmax_state(acc, l).numpy()
+    score_np, value_np = scores.numpy(), values.numpy()
+    weights = np.exp(score_np-score_np.max(axis=-1, keepdims=True)); weights /= weights.sum(axis=-1, keepdims=True)
+    np.testing.assert_allclose(got, weights @ value_np, rtol=1e-6, atol=1e-6)
+
+  def test_q16_hd16_state_abi_and_cpu_numeric_gate(self):
+    rng = np.random.default_rng(32)
+    scores = Tensor(rng.standard_normal((1, 16, 16), dtype=np.float32))
+    values = Tensor(rng.standard_normal((1, 16, 16), dtype=np.float32))
+    m, l, acc = Tensor.full((1, 16, 1), -float("inf")), Tensor.zeros(1, 16, 1), Tensor.zeros(1, 16, 16)
+    m, l, acc = merge_online_softmax_tile(m, l, acc, scores, values)
+    got = normalize_online_softmax_state(acc, l).numpy()
+    score_np, value_np = scores.numpy(), values.numpy()
+    weights = np.exp(score_np-score_np.max(axis=-1, keepdims=True)); weights /= weights.sum(axis=-1, keepdims=True)
+    np.testing.assert_allclose(got, weights @ value_np, rtol=1e-5, atol=1e-5)
 
 if __name__ == "__main__": unittest.main()
