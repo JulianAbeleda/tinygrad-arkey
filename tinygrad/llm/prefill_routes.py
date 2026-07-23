@@ -254,8 +254,12 @@ def _attached_direct_packed_spec(lin, x:Tensor) -> PrefillLinearRouteSpec | None
 
 def _exact_q6k_vocab_direct_prefill(lin, x:Tensor) -> bool:
   """The only vocab projection admitted to bypass the packed-WMMA half-output route."""
-  return (_is_q6k_linear(lin) and str(getattr(lin, "name", "")) == "output.weight" and
-          _direct_packed_module_role(lin) == "lm_head" and tuple(x.shape) == (1, 512, 4096) and
+  binding = getattr(lin, "_prefill_direct_packed_binding", None)
+  attachment = getattr(lin, "_prefill_route_attachment", None)
+  return (_is_q6k_linear(lin) and isinstance(binding, PrefillDirectPackedBinding) and
+          isinstance(attachment, PrefillRouteAttachment) and attachment.tensor_identity == "output.weight" and
+          binding.phase == "prefill" and binding.role == "lm_head" and binding.shape == (512, 151936, 4096) and
+          tuple(x.shape) == (1, 512, 4096) and
           getattr(lin, "out_features", None) == 151936 and getattr(lin, "in_features", None) == 4096)
 
 
