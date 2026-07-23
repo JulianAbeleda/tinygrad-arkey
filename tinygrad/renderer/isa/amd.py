@@ -1665,7 +1665,7 @@ def isel_packed_fragment(ctx:IselContext,x:UOp, base:int|None=None) -> UOp:
   # bases are produced and consumed one at a time instead of all being live
   # before the first global load.
   grid_tail = getattr(ctx, "_attention_grid_fragment_tail", None) if loop and x.arg.grid is not None else None
-  if owner_deps: grid_tail=owner_deps[0]
+  if owner_deps and x.arg.head_block == 4: grid_tail=owner_deps[0]
   if base is None: base=_frag_base(ctx,("amd_gfx1100_opaque_fragment","A" if role=="Q" else "B"),8)
   if base is None: raise NotImplementedError("opaque fragment fixed span exhausted")
   tid=_validate_fragment_lane_provenance(lane,wave_id,col,multiwave)
@@ -2870,6 +2870,27 @@ def lower_rotating_pv_loop_read(x:UOp) -> UOp|None:
   wait=UOp(Ops.WAIT,dtypes.void,(publication,),WaitCount(lgkmcnt=0))
   return UOp(Ops.STACK,state.dtype,tuple(storage.after(rng,wait).index(state.block_offset(i)).load() for i in range(8)))
 
+def lower_softmax_bridge(x:UOp) -> UOp|None:
+  from tinygrad.codegen.opt.compiler_policies import WaitCount
+  from tinygrad.uop.ops import SoftmaxBridgeSpec
+  if not (isinstance(x.arg,tuple) and x.arg[:1] in {("softmax_bridge_publish_v1",), ("softmax_bridge_reload_v1",)} and isinstance(x.arg[1],SoftmaxBridgeSpec)): return None
+  spec=x.arg[1]; spec.validate()
+  if x.arg[0] == "softmax_bridge_publish_v1":
+    new_m,new_l,alpha,storage,lane=x.src
+    if (storage,lane) != (spec.storage,spec.lane): return None
+    values={"new_m":new_m,"new_l":new_l,"alpha":alpha}
+    return UOp.group(*(storage.index(spec.offset(field,row)).store(values[field].gep(row)) for field in spec.fields for row in range(spec.rows)))
+  _tag,spec,field=x.arg; _anchor,storage,lane,publication=x.src
+  if (storage,lane) != (spec.storage,spec.lane): return None
+  wait=UOp(Ops.WAIT,dtypes.void,(publication,),WaitCount(lgkmcnt=0))
+  return UOp(Ops.STACK,dtypes.float.vec(spec.rows),tuple(storage.after(wait).index(spec.offset(field,row)).load() for row in range(spec.rows)),
+             tag=("softmax_bridge_reload_v1",spec,field))
+
+def lower_softmax_bridge_gep(x:UOp, s:UOp) -> UOp|None:
+  if not (isinstance(s.tag,tuple) and s.tag[:1] == ("softmax_bridge_reload_v1",) and len(x.arg) == 1 and 0 <= x.arg[0] < len(s.src)):
+    return None
+  return s.src[x.arg[0]]
+
 def lower_rotating_pv_publication(x:UOp) -> UOp|None:
   from tinygrad.codegen.opt.compiler_policies import WaitCount
   from tinygrad.uop.ops import RotatingPVPublicationSpec
@@ -2905,7 +2926,9 @@ def lower_rotating_pv_drain(x:UOp) -> UOp|None:
 
 native_repack_matcher = PatternMatcher([
   (UPat(Ops.GEP, src=(UPat(Ops.CUSTOMI,name="carrier"),), name="x"), lower_state_phase_reload_gep),
+  (UPat((Ops.CUSTOMI,Ops.CUSTOM),name="x"), lower_softmax_bridge),
   (UPat((Ops.CUSTOMI,Ops.CUSTOM),name="x"), lower_rotating_pv_wmma),
+  (UPat(Ops.GEP, src=(UPat(Ops.STACK,name="s"),), name="x"), lower_softmax_bridge_gep),
   (UPat((Ops.CUSTOMI,Ops.CUSTOM),name="x"), lower_rotating_pv_publication),
   (UPat((Ops.CUSTOMI,Ops.CUSTOM),name="x"), lower_rotating_pv_loop_read),
   (UPat((Ops.CUSTOMI,Ops.CUSTOM),name="x"), lower_rotating_pv_drain),

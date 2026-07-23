@@ -1752,6 +1752,21 @@ class SoftmaxBridgeSpec(NamedTuple):
     if field not in self.fields or not isinstance(row, int) or not 0 <= row < self.rows: raise ValueError("softmax bridge index is out of range")
     return UOp.const(self.lane.dtype, (self.fields.index(field) * self.rows + row) * self.lanes) + self.lane
 
+  def publish(self, new_m: UOp, new_l: UOp, alpha: UOp) -> UOp:
+    self.validate()
+    if any(x.dtype != dtypes.float.vec(self.rows) for x in (new_m, new_l, alpha)):
+      raise TypeError("softmax bridge publish requires float8 m/l/alpha")
+    return UOp(Ops.CUSTOMI, dtypes.void, (new_m, new_l, alpha, self.storage, self.lane),
+               ("softmax_bridge_publish_v1", self))
+
+  def reload(self, field: str, publication: UOp) -> UOp:
+    self.validate()
+    if field not in self.fields or publication.dtype != dtypes.void:
+      raise TypeError("softmax bridge reload requires a field and publication token")
+    anchor=UOp.const(dtypes.float.vec(self.rows), (0.0,)*self.rows)
+    return UOp(Ops.CUSTOMI, dtypes.float.vec(self.rows), (anchor, self.storage, self.lane, publication),
+               ("softmax_bridge_reload_v1", self, field))
+
 class AMDRowSoftmaxRepackSpec(NamedTuple):
   """Exact RDNA3 wave32 realization of ``online_softmax_qk_pv_v1``.
 

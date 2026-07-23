@@ -599,11 +599,12 @@ def amd_gfx1100_rotating_pv_scheduler_probe(q:UOp, k:UOp, v:UOp, out:UOp, *, q_t
   """Opt-in exact-8B rotating-PV construction probe; it has no production route or lowering."""
   if (q_tokens, q_heads, kv_heads, kv_tokens) != (512, 32, 8, 512):
     raise ValueError("rotating PV scheduler probe is exact-8B only")
-  from tinygrad.uop.ops import AMDAttentionGridSpec, AMDLoopStateSpec, AMDPackedFragmentLoopSpec, AMDRowSoftmaxRepackSpec, AxisType, RotatingPVPVUpdateSpec, RotatingPVPublicationSpec, RotatingPVSequentialDrainSpec, RotatingPVStateSpec
+  from tinygrad.uop.ops import AMDAttentionGridSpec, AMDLoopStateSpec, AMDPackedFragmentLoopSpec, AMDRowSoftmaxRepackSpec, AxisType, RotatingPVPVUpdateSpec, RotatingPVPublicationSpec, RotatingPVSequentialDrainSpec, RotatingPVStateSpec, SoftmaxBridgeSpec
   lane=UOp.special(32,"lidx0")
   grid=AMDAttentionGridSpec(q_tokens=q_tokens,q_heads=q_heads,kv_heads=kv_heads,group_ratio=q_heads//kv_heads,kv_tokens=kv_tokens); grid.validate()
   group=UOp.special(q_heads*grid.q_tiles,"gidx0")
   storage=UOp(Ops.DEFINE_LOCAL,dtypes.float.ptr(2048,AddrSpace.LOCAL),arg=9620)
+  bridge_storage=UOp(Ops.DEFINE_LOCAL,dtypes.float.ptr(768,AddrSpace.LOCAL),arg=9625)
   rng=UOp.range(kv_tokens//16,9621,AxisType.REDUCE)
   col=lane.alu(Ops.AND,UOp.const(dtypes.weakint,15)); zero=UOp.const(dtypes.float.vec(8),(0.0,)*8)
   axes=((),(),tuple((-120-i,2) for i in range(3))); warg=("WMMA_16_16_16_half_float",(16,16,16),dtypes.half,dtypes.float,"AMD:gfx1100",32,axes,())
@@ -620,22 +621,24 @@ def amd_gfx1100_rotating_pv_scheduler_probe(q:UOp, k:UOp, v:UOp, out:UOp, *, q_t
   q_stage,k_stage=q.after(qk_phase),k.after(qk_phase)
   for block in range(4,8): qk=UOp(Ops.WMMA,dtypes.float.vec(8),(fr(q_stage,"Q",block),fr(k_stage,"K",block),qk),warg,tag=("attention_wmma","QK",block))
   p,nm,nl,alpha=amd_gfx1100_row_softmax_state(qk,om,ol,spec=AMDRowSoftmaxRepackSpec(score_scale=scale,mode="loop_state_v1",validity_mode="tail_v1",query_start=0,kv_start=-1,valid_kv=kv_tokens,dynamic_kv_v1=True,grid=grid),kv_tile=rng,grid_id=group)
+  bridge=SoftmaxBridgeSpec(bridge_storage,lane); bridge_publish=bridge.publish(nm,nl,alpha)
+  bridge_alpha,bridge_l=bridge.reload("alpha",bridge_publish),bridge.reload("new_l",bridge_publish)
   ml_commit=UOp.group(*wr(mreg,"m",nm),*wr(lreg,"l",nl))
   initialized=tuple(RotatingPVStateSpec(storage,lane,block,generation=0).write(zero) for block in range(8))
   init=UOp.group(*initialized)
   states=tuple(RotatingPVStateSpec(storage,lane,block,generation=block+1) for block in range(8))
   writes=[]; publications=[]; publication=init
   for block,state in enumerate(states):
-    update=RotatingPVPVUpdateSpec(state,rng,wait_generation=block,publication_generation=block+1,wmma_arg=warg).update(p,fr(v,"V",block),alpha,publication)
+    update=RotatingPVPVUpdateSpec(state,rng,wait_generation=block,publication_generation=block+1,wmma_arg=warg).update(p,fr(v,"V",block),bridge_alpha,publication)
     write=state.write(update,after=rng); publication=RotatingPVPublicationSpec(state).publish(write)
     writes.append(write); publications.append(publication)
   writes=tuple(writes)
   end=UOp.group(*writes).end(rng).replace(tag=("rotating_pv_kv_iteration_end_v1",rng))
-  final_l=rd(lreg,end,"l",final=True)
+  final_l=bridge_l
   drains=[]; token=end
   for state in states:
     drains.append(RotatingPVSequentialDrainSpec(state,out,group,grid,final_l,state.block).reload(token)); token=drains[-1]
-  return UOp.sink(mi,li,init,end,*publications,*drains).replace(tag=("amd_gfx1100_rotating_pv_scheduler_probe_v1",))
+  return UOp.sink(mi,li,init,bridge_publish,end,*publications,*drains).replace(tag=("amd_gfx1100_rotating_pv_scheduler_probe_v1",))
 
 def amd_gfx1100_q16_grid_qk_stats_stage(q:UOp,k:UOp,stats:UOp,*,q_tokens:int,q_heads:int,kv_heads:int,kv_tokens:int,scale:float,kernel_info,causal:bool=True,query_start:int|None=None)->UOp:
   """Direct diagnostic Stage A: QK online reduction to fp32 `[query, m/l]` state only."""
