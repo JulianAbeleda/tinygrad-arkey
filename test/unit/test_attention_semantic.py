@@ -17,7 +17,7 @@ class TestAttentionSemantic(unittest.TestCase):
   def test_opt_in_state_mode_small_hd16_numeric(self):
     if self._combine_name() != "online_softmax_state": self.skipTest("state combine is opt-in")
     rng = np.random.default_rng(7)
-    q, k, v = (Tensor(rng.standard_normal(shape).astype(np.float16), dtype=dtypes.float16)
+    q, k, v = (Tensor(rng.standard_normal(shape).astype(np.float16), dtype=dtypes.float16, device="CPU")
                for shape in ((1, 1, 16, 16), (1, 1, 16, 16), (1, 1, 16, 16)))
     out = shared_prefill_attention(q, k, v).numpy()
     ref = q.cast(dtypes.float32).scaled_dot_product_attention(k.cast(dtypes.float32), v.cast(dtypes.float32)).numpy()
@@ -52,13 +52,17 @@ class TestAttentionSemantic(unittest.TestCase):
     from tinygrad.codegen import full_rewrite_to_sink
     from tinygrad.device import Device
     rng = np.random.default_rng(11)
-    q, k, v = (Tensor(rng.standard_normal((1, 1, 16, 16)).astype(np.float16), dtype=dtypes.float16) for _ in range(3))
+    q, k, v = (Tensor(rng.standard_normal((1, 1, 16, 16)).astype(np.float16), dtype=dtypes.float16, device="CPU") for _ in range(3))
     calls = shared_prefill_attention(q, k, v).schedule_linear().src
     compute = [call for call in calls if any(u.op is Ops.DEFERRED_REDUCE_SLOT for u in call.src[0].toposort())]
     self.assertEqual(len(compute), 1)
     ast = compute[0].src[0]
     final = full_rewrite_to_sink(ast, Device[compute[0].device].renderer, optimize=ast.tag is None)
     self.assertFalse(any(u.op in (Ops.DEFERRED_REDUCE_OWNER, Ops.DEFERRED_REDUCE_SLOT, Ops.TUPLE) for u in final.toposort()))
+    lane_stores = [u for u in final.toposort() if u.op is Ops.STORE and u.src[0].op is Ops.STACK and u.src[-1].op is Ops.STACK]
+    self.assertEqual(len(lane_stores), 1)
+    accesses = [x.src[0] if x.op is Ops.LOAD else x for x in lane_stores[0].src[0].src]
+    self.assertEqual(len({idx.src[-1].render() for idx in accesses}), 16)
 
   def test_state_composite_carries_authoritative_kv_range_owner(self):
     if self._combine_name() != "online_softmax_state": self.skipTest("state combine is opt-in")

@@ -134,7 +134,38 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
                        name="lower_composite_no_range")
 
   # remove reduce
+  had_deferred_reduce_projection = any(u.op is Ops.DEFERRED_REDUCE_SLOT for u in sink.toposort())
   sink = graph_rewrite(sink, pm_reduce+gep_pushing, ctx=ReduceContext(), name="remove_reduce")
+  if had_deferred_reduce_projection:
+    lane_range = None
+    store_subs = {}
+    for store in (u for u in sink.toposort() if u.op is Ops.STORE and u.src[0].op is Ops.INDEX):
+      unrolls = [u for u in (store.src[-1], *store.src[-1].backward_slice) if u.op is Ops.UNROLL and len(u.arg)]
+      if len(unrolls) != 1: continue
+      unroll = unrolls[0]
+      lanes = unroll.src[0].dtype.count
+      idx = store.src[0]
+      candidates = [r for r in idx.src[-1].backward_slice if r.op is Ops.RANGE and r.vmin == 0 and r.vmax == lanes-1]
+      for r in candidates:
+        z, o = UOp.const(r.dtype, 0), UOp.const(r.dtype, 1)
+        delta = (idx.src[-1].substitute({r:o}) - idx.src[-1].substitute({r:z})).simplify()
+        if delta.vmin == delta.vmax == 1: lane_range = r; break
+      if lane_range is None: continue
+      lane_indices = UOp.vectorize(*(idx.substitute({lane_range: UOp.const(lane_range.dtype, lane)}) for lane in range(lanes)))
+      indexed_unroll = UOp(Ops.UNROLL, idx.dtype, (lane_indices,), unroll.arg)
+      store_subs[store] = store.replace(src=(indexed_unroll, *store.src[1:]))
+    if store_subs:
+      sink = sink.substitute(store_subs)
+      sink = graph_rewrite(sink, expander, name="expand deferred reduce output")
+      topo = sink.toposort()
+      ended_ranges = {r for u in topo if u.op is Ops.END for r in u.src[1:] if r.op is Ops.RANGE}
+      users = {r: [] for r in topo if r.op is Ops.RANGE}
+      for u in topo:
+        for s in u.src:
+          if s in users: users[s].append(u)
+      stale = {r for r, us in users.items() if r not in ended_ranges and all(u.op is Ops.AFTER for u in us)}
+      if stale:
+        sink = sink.substitute({u: u.replace(src=tuple(s for s in u.src if s not in stale)) for u in topo if u.op is Ops.AFTER})
   # A composite REDUCE lowered during the pass above can be shared by several
   # REDUCE_SLOT users. Resolve those projections after the structured TUPLE is
   # present, then let dead graph nodes disappear naturally.

@@ -617,7 +617,7 @@ def _project_deferred_carrier(carrier:UOp, slot:int) -> UOp|None:
   if carrier.op is Ops.UNROLL and len(carrier.src) == 1:
     inner = _project_deferred_carrier(carrier.src[0], slot)
     if inner is None: return None
-    return inner
+    return inner if inner.dtype.count == 1 else UOp(Ops.UNROLL, inner.dtype.scalar(), (inner,), carrier.arg)
   return None
 
 def validate_deferred_state_liveness(state:UOp) -> bool:
