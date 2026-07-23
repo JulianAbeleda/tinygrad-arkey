@@ -17,7 +17,7 @@ The generated kernel has `151936` output columns, which is the Qwen vocabulary p
 
 ## Corrected route identity
 
-The full model does not reach the Q4_K vocabulary emitter. The independent route trace shows:
+The full model does not reach the Q4_K vocabulary emitter; it selects the Q6_K cooperative route. The independent route trace shows:
 
 - 8B uses `q6k_gen_coop_151936_4096`.
 - 14B uses `q6k_gen_coop_151936_5120`.
@@ -27,7 +27,7 @@ The full model does not reach the Q4_K vocabulary emitter. The independent route
 
 ## Why the previous fixes were insufficient
 
-The named and untagged full-vocabulary guards were added to the known `extra/qk/q4k_prefill_route_spec.py` direct-output emitter. Its compile-only probe is clean, but the complete model forward still emits the old vector lvalue. Therefore the model is selecting a second Q4_K vocabulary route or a separate downstream emitter/cache path.
+The named and untagged full-vocabulary guards were added to the known `extra/qk/q4k_prefill_route_spec.py` direct-output emitter. Its compile-only probe is clean, but the complete model forward still emits the old vector lvalue. The actual model route is the Q6_K cooperative emitter and its downstream reduction.
 
 ## Required work
 
