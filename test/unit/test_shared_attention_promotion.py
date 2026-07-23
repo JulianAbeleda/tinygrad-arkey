@@ -1,11 +1,28 @@
-from extra.qk.shared_attention_promotion import RooflineMeasurement, promotion_status
+from extra.qk.shared_attention_promotion import (COMPOSITE_ADMISSION_SCHEMA, RooflineMeasurement,
+  composite_admission_errors, promotion_status)
+
+def _admission(profile, *, lowering="fused_tiled_attention", vgpr=192):
+  strategy = "FULL_RESIDENT_OVERLAY" if "8b" in profile else "BOUNDED_PACKED_TILES"
+  return {"schema":COMPOSITE_ADMISSION_SCHEMA,"candidate_id":"one-pass-lds","admitted":True,
+          "selected_lowering":lowering,"candidate_form":"one_pass_lds_composite",
+          "structural_proof":{"status":"PASS","proof_required":True,"composite_closure":True,"one_pass":True,
+                              "score_resident":True,"lds_pv_rotation":True,"qk_wmma":True,"pv_wmma":True},
+          "route":{"profile":profile,"strategy":strategy,"context":2048,"q_tokens":512},
+          "resources":{"vgpr":vgpr,"lds_bytes":8704,"scratch_bytes":0,"vgpr_spills":0,"sgpr_spills":0}}
 
 def _m(profile, **kwargs):
   report = {"fused_call_count": 1, "qk_wmma": True, "pv_wmma": True,
             "source_artifact": "source.s", "isa_artifact": "isa.s"}
   report.update(kwargs.pop("report", {}))
+  admission=kwargs.pop("admission",_admission(profile)); candidate_id=admission["candidate_id"]
+  census={"complete":True,"expected":[{"candidate_id":candidate_id,"profile":profile,"context":2048}],
+          "observed":[{"candidate_id":candidate_id,"profile":profile,"context":2048}],"missing":[],"unexpected":[]}
+  numeric={"candidate_id":candidate_id,"status":"PASS","full_output":True,"tolerance_passed":True,
+           "candidate_shape":[1,32,512,128],"baseline_shape":[1,32,512,128],
+           "compared_elements":2097152,"max_abs":0.001}
   return RooflineMeasurement(profile, 2048, 10, 5, 1e12, 1e9, 2e12, 2e11, 200,
-                             "source.s", "isa.s", "alloc.json", report, kwargs.pop("hardware_status", "NOT_MEASURED"))
+                             "source.s", "isa.s", "alloc.json", report, kwargs.pop("hardware_status", "NOT_MEASURED"),
+                             admission,kwargs.pop("census",census),kwargs.pop("numeric",numeric))
 
 def test_promotion_is_fail_closed_without_flags_or_measurements():
   result = promotion_status({}, [])
@@ -37,3 +54,18 @@ def test_measured_hardware_requires_explicit_verification():
   m = _m("qwen3_8b_q4k_m_gfx1100", hardware_status="MEASURED",
          report={"hardware_verified": True})
   assert "MEASURED hardware requires explicit hardware_verified evidence" not in m.validate()
+
+def test_composite_admission_rejects_ordinary_sdpa_and_unproven_pressure():
+  ordinary=_admission("qwen3_8b_q4k_m_gfx1100",lowering="ordinary_sdpa")
+  assert "ordinary_sdpa is not a composite candidate" in composite_admission_errors(
+    ordinary,profile="qwen3_8b_q4k_m_gfx1100",context=2048,strategy="FULL_RESIDENT_OVERLAY")
+  high=_admission("qwen3_8b_q4k_m_gfx1100",vgpr=197)
+  assert "composite resource proof requires 1..192 VGPRs" in composite_admission_errors(
+    high,profile="qwen3_8b_q4k_m_gfx1100",context=2048,strategy="FULL_RESIDENT_OVERLAY")
+
+def test_promotion_requires_exact_census_and_full_output_gate():
+  bad_census={"complete":False,"expected":[],"observed":[],"missing":[],"unexpected":[]}
+  assert "candidate route census is incomplete or inexact" in _m("qwen3_8b_q4k_m_gfx1100",census=bad_census).validate()
+  bad_numeric={"candidate_id":"one-pass-lds","status":"PASS","full_output":False,"tolerance_passed":True,
+               "candidate_shape":[1],"baseline_shape":[1],"compared_elements":1,"max_abs":0.0}
+  assert "full-output numeric gate is not PASS" in _m("qwen3_8b_q4k_m_gfx1100",numeric=bad_numeric).validate()
