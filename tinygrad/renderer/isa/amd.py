@@ -27,7 +27,7 @@ from tinygrad.renderer.amd.dsl import s as _S, v as _V, NULL, VCC, EXEC, Reg, Fi
 from tinygrad.runtime.autogen.amd.rdna3.ins import (
   s_load_b64, s_load_b32, global_load_b32, global_load_b64, global_load_b128, global_store_b32,
   v_add_f32_e32, v_mul_f32_e32, v_sub_f32_e32, v_mul_f16_e32,
-  v_lshlrev_b32_e32, v_mov_b32_e32, v_mul_lo_u32, v_add_nc_u32_e32, v_bfe_u32, s_waitcnt, s_waitcnt_vscnt, s_endpgm,
+  v_lshlrev_b32_e32, v_mov_b32_e32, v_mul_lo_u32, v_mul_hi_u32, v_add_nc_u32_e32, v_bfe_u32, s_waitcnt, s_waitcnt_vscnt, s_endpgm,
   s_mov_b32, s_add_i32, s_cmp_lt_i32, ds_load_u8, ds_load_b32, ds_store_b8, ds_store_b32, ds_store_b64, ds_load_b128, ds_store_b128, s_barrier,
   ds_bpermute_b32, v_dot2_f32_f16,
   # Phase G: full block-tile ALU/control surface
@@ -364,6 +364,7 @@ class AMDOps(FastEnum):
   # Phase G full block-tile surface
   V_XOR = 21; V_AND = 22; V_MAX = 23     # bitwise/min-max VALU (XOR/AND/MAX); CMOD-by-pow2 reuses V_AND with a mask
   V_LSHR = 24                            # logical shift right (CDIV-by-pow2 -> v_lshrrev)
+  V_IMULHI = 71                          # u32 high product for compile-time reciprocal divisions
   V_CVT_F2H = 25; V_CVT_H2F = 26; V_CVT_F2I = 27; V_CVT_I2F = 28   # numeric casts (v_cvt_*)
   V_CMPLT_F = 29; V_CMPLT_I = 30; V_CMPNE_F = 31; V_CMPNE_I = 32   # compares -> 0/1 bool VGPR (via VCC + v_cndmask)
   V_WHERE = 33                           # select: cond(0/1) ? t : f  -> v_cmp_ne(cond,0) + v_cndmask
@@ -907,7 +908,7 @@ def isel_attention_output_drain(ctx:IselContext, x:UOp):
   grid=x.arg.grid; expected=11 if grid is not None else 10; src=list(x.src)
   if grid is not None and src[1].op is Ops.CAST: src[1]=src[1].src[0]
   if len(src) != expected or x.dtype != dtypes.void or not isinstance(src[0].dtype, PtrDType) or \
-     src[0].dtype.base != dtypes.half or src[0].dtype.size != (16384 if grid is not None else 2048):
+     src[0].dtype.base != dtypes.half or src[0].dtype.size != (grid.q_heads*grid.q_tokens*128 if grid is not None else 2048):
     raise ValueError("AMD attention output drain has malformed ownership sources")
   state=src[2:] if grid is not None else src[1:]
   if state[0].dtype != dtypes.float.vec(8) or any(s.dtype != dtypes.float.vec(8) for s in state[1:]):
@@ -1647,8 +1648,13 @@ def isel_packed_fragment(ctx:IselContext,x:UOp, base:int|None=None) -> UOp:
       if bases is None:
         gv=_tov(ctx,grid_id)
         qbase=UOp(Ops.INS,dtypes.int,src=(gv,UOp.const(dtypes.int32,2048).rtag()),arg=AMDOps.V_IMUL,tag=_pin(4,0))
-        kvh=UOp(Ops.INS,dtypes.int,src=(gv,UOp.const(dtypes.int32,2).rtag()),arg=AMDOps.V_LSHR,tag=_pin(6,0))
-        kvbase=UOp(Ops.INS,dtypes.int,src=(kvh,UOp.const(dtypes.int32,8192).rtag()),arg=AMDOps.V_IMUL,tag=_pin(5,0))
+        grid=x.arg.grid; per_kv=grid.q_tiles*grid.group_ratio
+        if per_kv & (per_kv-1) == 0: kvh=UOp(Ops.INS,dtypes.int,src=(gv,UOp.const(dtypes.int32,per_kv.bit_length()-1).rtag()),arg=AMDOps.V_LSHR,tag=_pin(6,0))
+        elif per_kv == 160:
+          hi=UOp(Ops.INS,dtypes.int,src=(gv,UOp.const(dtypes.int32,0xCCCCCCCD).rtag()),arg=AMDOps.V_IMULHI,tag=_pin(6,0))
+          kvh=UOp(Ops.INS,dtypes.int,src=(hi,UOp.const(dtypes.int32,7).rtag()),arg=AMDOps.V_LSHR,tag=_pin(6,0))
+        else: raise ValueError(f"AMD grid lacks a reciprocal division for {per_kv}")
+        kvbase=UOp(Ops.INS,dtypes.int,src=(kvh,UOp.const(dtypes.int32,grid.kv_tokens*128).rtag()),arg=AMDOps.V_IMUL,tag=_pin(5,0))
         bases=ctx._attention_grid_bases=(qbase,kvbase)
       gbase=bases[0 if role=="Q" else 1]
       base_idx=UOp(Ops.INS,dtypes.int,src=(base_idx,gbase) + ((grid_tail,) if grid_tail is not None else ()),arg=AMDOps.V_IADD,tag=_pin(7,0))
@@ -2543,7 +2549,11 @@ def expand_loop_fragment(x:UOp) -> UOp:
   if not isinstance(x.arg, AMDPackedFragmentLoopSpec) or len(x.src) not in {4,5}: raise ValueError("loop fragment is malformed")
   x.arg.validate(); owner,lane,col,rng,*grid_src=x.src; role,block=x.arg.role,x.arg.head_block
   if (x.arg.grid is None) != (len(grid_src)==0): raise ValueError("loop fragment grid ownership must be explicit")
-  gbase=UOp.const(dtypes.weakint,0) if not grid_src else (grid_src[0]*2048 if role=="Q" else (grid_src[0]>>2)*8192)
+  if not grid_src: gbase=UOp.const(dtypes.weakint,0)
+  elif role=="Q": gbase=grid_src[0]*2048
+  else:
+    grid=x.arg.grid
+    gbase=(grid_src[0]//(grid.q_tiles*grid.group_ratio))*(grid.kv_tokens*128)
   if role=="Q": offs=tuple(gbase+col*128+block*16+i for i in range(16))
   elif role=="K": offs=tuple(gbase+rng*2048+col*128+block*16+i for i in range(16))
   else: offs=tuple(gbase+rng*2048+block*16+i*128+col for i in range(16))
@@ -2945,6 +2955,9 @@ def lower_inst(x:UOp):
   if a is AMDOps.V_IMUL:                            # u32 mul (VOP3); src1 may be a reg or an integer immediate
     o1 = src[1].arg if src[1].op is Ops.CONST else _Vr(src[1].reg)
     return _ins(v_mul_lo_u32(_Vr(x.reg), _Vr(src[0].reg), o1), x.tag)
+  if a is AMDOps.V_IMULHI:
+    o1 = src[1].arg if src[1].op is Ops.CONST else _Vr(src[1].reg)
+    return _ins(v_mul_hi_u32(_Vr(x.reg), _Vr(src[0].reg), o1), x.tag)
   if a is AMDOps.V_IADD:                            # u32 add (VOP2); a CONST goes in src0 since vsrc1 must be a VGPR
     if src[1].op is Ops.CONST: return _ins(v_add_nc_u32_e32(_Vr(x.reg), src[1].arg, _Vr(src[0].reg)), x.tag)
     return _ins(v_add_nc_u32_e32(_Vr(x.reg), _Vr(src[0].reg), _Vr(src[1].reg)), x.tag)

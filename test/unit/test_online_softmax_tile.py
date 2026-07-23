@@ -884,3 +884,30 @@ def test_gfx1100_q32_hq4_hkv2_kv64_hd128_grid_loop_final_isa():
   mn=[str(u.arg).split("(",1)[0] for u in linear.src if not isinstance(u.arg,tuple)]
   assert mn.count("v_wmma_f32_16x16x16_f16")==16
   assert mn.count("s_barrier")==1 and mn.count("ds_load_b128")==2
+
+@pytest.mark.parametrize("hq,hkv",[(32,8),(40,8)])
+def test_gfx1100_model_grid_group_mapping_is_bijective_and_gqa_shared(hq,hkv):
+  from tinygrad.uop.ops import AMDAttentionGridSpec
+  grid=AMDAttentionGridSpec(q_tokens=512,q_heads=hq,kv_heads=hkv,group_ratio=hq//hkv,kv_tokens=512)
+  coords=[grid.group_coords(gid) for gid in range(grid.grid_size)]
+  assert len(set((qh,qt) for qh,qt,_ in coords))==grid.grid_size
+  assert all(kvh==qh//grid.group_ratio for qh,_,kvh in coords)
+  for kvh in range(hkv):
+    owned={qh for qh,_,kh in coords if kh==kvh}
+    assert owned==set(range(kvh*grid.group_ratio,(kvh+1)*grid.group_ratio))
+  with pytest.raises(ValueError,match="outside"): grid.group_coords(grid.grid_size)
+
+@pytest.mark.parametrize("hq,hkv,kv",[(32,8,512),(40,8,512),(32,8,4096),(40,8,4096)])
+def test_gfx1100_model_grid_static_loop_body_is_invariant(hq,hkv,kv):
+  from tinygrad.codegen import to_program
+  from tinygrad.helpers import Target
+  from tinygrad.renderer.isa.amd import AMDISARenderer
+  from tinygrad.schedule.wmma import amd_gfx1100_q16_grid_hd128_loop_attention
+  from tinygrad.uop.ops import KernelInfo,ParamArg
+  sizes=(hq*512*128,hq*512*128,hkv*kv*128,hkv*kv*128)
+  p=[UOp(Ops.PARAM,dtypes.half.ptr(sizes[i]),arg=ParamArg(i)) for i in range(4)]
+  sink=amd_gfx1100_q16_grid_hd128_loop_attention(p[1],p[2],p[3],p[0],q_tokens=512,q_heads=hq,kv_heads=hkv,
+    kv_tokens=kv,scale=.25,kernel_info=KernelInfo(name=f"model_{hq}_{kv}"))
+  linear=next(u for u in to_program(sink,AMDISARenderer(Target.parse("AMD:ISA:gfx1100"))).src if u.op is Ops.LINEAR)
+  mn=[str(u.arg).split("(",1)[0] for u in linear.src if not isinstance(u.arg,tuple)]
+  assert mn.count("v_wmma_f32_16x16x16_f16")==16 and mn.count("s_barrier")==1

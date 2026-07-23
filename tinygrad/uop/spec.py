@@ -65,6 +65,16 @@ def validate_scalar_gep(gep:UOp, src:UOp):
   return gep.dtype == src.dtype.scalar() and src.dtype.vcount > 1 and isinstance(gep.arg, tuple) and len(gep.arg) == 1 and \
     type(gep.arg[0]) is int and 0 <= gep.arg[0] < src.dtype.vcount
 
+def validate_amd_attention_output_drain(x:UOp):
+  """One source-count-aware contract for both legacy and grid native drains."""
+  if not hasattr(x.arg,"native_abi") or x.arg.native_abi != "amd_gfx1100_attention_output_drain_v1" or x.dtype != dtypes.void: return False
+  if not x.src or not isinstance(x.src[0].dtype,PtrDType) or x.src[0].dtype.base != dtypes.half: return False
+  grid=x.arg.grid
+  if grid is None: return len(x.src)==10 and x.src[0].dtype.size==2048 and all(s.dtype==dtypes.float.vec(8) for s in x.src[1:])
+  try: grid.validate()
+  except ValueError: return False
+  return len(x.src)==11 and x.src[0].dtype.size==grid.q_heads*grid.q_tokens*128 and all(s.dtype==dtypes.float.vec(8) for s in x.src[2:])
+
 # ***** new specs *****
 
 # these ops can be used in the tensor graph and programs
@@ -280,14 +290,7 @@ spec_tensor = PatternMatcher([
   (UPat(Ops.AMD_PACKED_FRAGMENT_LOAD, src=(UPat(), UPat(), UPat(), UPat(Ops.RANGE), UPat(Ops.SPECIAL)), name="x"),
    lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_packed_fragment_hd128_loop_v1" and getattr(x.arg,"grid",None) is not None
    and str(x.src[4].arg)=="gidx0" and x.dtype == dtypes.half.vec(16)),
-  (UPat(Ops.AMD_ATTENTION_OUTPUT_DRAIN, src=(UPat(), UPat(), UPat(), UPat(), UPat(), UPat(), UPat(), UPat(), UPat(), UPat()), name="x"),
-   lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_attention_output_drain_v1"
-   and x.dtype == dtypes.void and isinstance(x.src[0].dtype, PtrDType) and x.src[0].dtype.base == dtypes.half and x.src[0].dtype.size == 2048
-   and x.src[1].dtype == dtypes.float.vec(8) and all(s.dtype == dtypes.float.vec(8) for s in x.src[2:])),
-  (UPat(Ops.AMD_ATTENTION_OUTPUT_DRAIN, src=(UPat(), UPat(Ops.SPECIAL), UPat(), UPat(), UPat(), UPat(), UPat(), UPat(), UPat(), UPat(), UPat()), name="x"),
-   lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_attention_output_drain_v1" and getattr(x.arg,"grid",None) is not None
-   and str(x.src[1].arg)=="gidx0" and x.dtype == dtypes.void and isinstance(x.src[0].dtype, PtrDType) and x.src[0].dtype.base == dtypes.half and x.src[0].dtype.size == 16384
-   and x.src[2].dtype == dtypes.float.vec(8) and all(s.dtype == dtypes.float.vec(8) for s in x.src[3:])),
+  (UPat(Ops.AMD_ATTENTION_OUTPUT_DRAIN, name="x"), validate_amd_attention_output_drain),
 
   # ATTENTION keeps a normal fallback plus explicit Q/K/V/(optional mask)
   # dependencies until rangeify selects a lowering.
@@ -330,8 +333,8 @@ spec_tensor = PatternMatcher([
 # these ops can exist in programs but not the tensor spec. example: LOAD
 spec_program = PatternMatcher([
   # Scalar address arithmetic introduced by the native Hd128 attention drain.
-  (UPat(Ops.CONST, dtypes.weakint, name="x"), lambda x: isinstance(x.arg, int) and 0 <= x.arg <= 8192),
-  (UPat((Ops.ADD, Ops.MUL, Ops.SHR), dtypes.weakint, src=(UPat(dtype=dtypes.weakint), UPat(dtype=dtypes.weakint))), lambda: True),
+  (UPat(Ops.CONST, dtypes.weakint, name="x"), lambda x: isinstance(x.arg, int) and 0 <= x.arg <= 2_621_440),
+  (UPat((Ops.ADD, Ops.MUL, Ops.SHR, Ops.CDIV), dtypes.weakint, src=(UPat(dtype=dtypes.weakint), UPat(dtype=dtypes.weakint))), lambda: True),
   # A fully masked row folds -inf to its uint bit pattern while retaining LDS publication ordering.
   (UPat(Ops.AFTER, dtypes.uint, src=(UPat(Ops.CONST, dtypes.uint), UPat(Ops.STORE))), lambda: True),
   (UPat(Ops.AMD_PACKED_FRAGMENT_LOAD,src=(UPat(),UPat(),UPat(),UPat()),name="x"),
@@ -346,15 +349,7 @@ spec_program = PatternMatcher([
    lambda a: any(s.op is Ops.CONST and int(s.arg)==15 for s in a.src) and any(s.op is Ops.SPECIAL and str(s.arg)=="lidx0" for s in a.src)),
   (UPat(Ops.AMD_ATTENTION_LOOP_STATE, name="x"),
    lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_attention_loop_state_v1"),
-  (UPat(Ops.AMD_ATTENTION_OUTPUT_DRAIN, src=(UPat(), UPat(), UPat(), UPat(), UPat(), UPat(), UPat(), UPat(), UPat(), UPat()), name="x"),
-   lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_attention_output_drain_v1"
-   and x.dtype == dtypes.void and isinstance(x.src[0].dtype, PtrDType) and x.src[0].dtype.base == dtypes.half and x.src[0].dtype.size == 2048
-   and x.src[1].dtype == dtypes.float.vec(8) and all(s.dtype == dtypes.float.vec(8) for s in x.src[2:])),
-  (UPat(Ops.AMD_ATTENTION_OUTPUT_DRAIN, name="x"),
-   lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_attention_output_drain_v1" and getattr(x.arg,"grid",None) is not None and
-   len(x.src)==11 and x.dtype == dtypes.void and isinstance(x.src[0].dtype, PtrDType) and x.src[0].dtype.base == dtypes.half and x.src[0].dtype.size == 16384 and
-   ((x.src[1].op is Ops.SPECIAL and str(x.src[1].arg)=="gidx0") or (x.src[1].op is Ops.CAST and x.src[1].src[0].op is Ops.SPECIAL and str(x.src[1].src[0].arg)=="gidx0")) and
-   x.src[2].dtype == dtypes.float.vec(8) and all(s.dtype == dtypes.float.vec(8) for s in x.src[3:])),
+  (UPat(Ops.AMD_ATTENTION_OUTPUT_DRAIN, name="x"), validate_amd_attention_output_drain),
   # REDUCE with composite arg may reach program level before lowering
   (UPat(Ops.REDUCE, src=(UPat(),), allow_any_len=True, name="x"),
    lambda x: isinstance(x.arg, tuple) and len(x.arg) == 2 and (x.arg[0] in {Ops.ADD, Ops.MUL, Ops.MAX} or hasattr(x.arg[0], 'slots'))),

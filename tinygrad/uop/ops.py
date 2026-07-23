@@ -1435,8 +1435,8 @@ class AMDRowSoftmaxRepackSpec(NamedTuple):
     if not all(isinstance(x, int) and not isinstance(x, bool) for x in (self.query_start, self.kv_start, self.valid_kv)):
       raise ValueError("row-softmax native repack validity metadata must be integral")
     if self.dynamic_kv_v1:
-      if self.mode != "loop_state_v1" or self.kv_start != -1 or not 0 <= self.valid_kv <= 64:
-        raise ValueError("dynamic row-softmax validity requires loop_state_v1 and a KV64 loop bound")
+      if self.mode != "loop_state_v1" or self.kv_start != -1 or not 0 <= self.valid_kv <= 4096:
+        raise ValueError("dynamic row-softmax validity requires loop_state_v1 and a bounded KV loop")
     elif self.kv_start < 0 or not 0 <= self.valid_kv <= 32 or self.kv_start not in {0, 16}:
       raise ValueError("row-softmax native repack validity requires a supported 16-wide KV tile")
     if self.validity_mode == "all_v1" and (self.query_start, self.kv_start, self.valid_kv) != (0, 0, 16):
@@ -1478,21 +1478,31 @@ class AMDRowSoftmaxSlotSpec(NamedTuple):
     return self
 
 class AMDAttentionGridSpec(NamedTuple):
-  """Exact Q32/Hq4/Hkv2/G2 workgroup ownership for the native loop."""
-  native_abi: str = "amd_gfx1100_attention_grid_q32_hq4_hkv2_g2_v1"
+  """Compile-time launch ownership for the fixed 16x16x128 attention wave."""
+  native_abi: str = "amd_gfx1100_attention_grid_hd128_v1"
   q_tokens: int = 32
   q_heads: int = 4
   kv_heads: int = 2
   group_ratio: int = 2
   kv_tokens: int = 64
   head_dim: int = 128
-  group_expr: str = "q_tile=group%2;q_head=group//2;kv_head=q_head//2"
+  group_expr: str = "q_tile=group%q_tiles;q_head=group//q_tiles;kv_head=q_head//group_ratio"
+
+  @property
+  def q_tiles(self): return self.q_tokens//16
+  @property
+  def grid_size(self): return self.q_heads*self.q_tiles
+
+  def group_coords(self, gid:int) -> tuple[int,int,int]:
+    self.validate()
+    if not isinstance(gid,int) or isinstance(gid,bool) or not 0 <= gid < self.grid_size: raise ValueError("group id is outside attention grid")
+    q_head,q_tile=divmod(gid,self.q_tiles)
+    return q_head,q_tile,q_head//self.group_ratio
 
   def validate(self):
-    if (self.native_abi,self.q_tokens,self.q_heads,self.kv_heads,self.group_ratio,self.kv_tokens,self.head_dim,self.group_expr) != \
-       ("amd_gfx1100_attention_grid_q32_hq4_hkv2_g2_v1",32,4,2,2,64,128,
-        "q_tile=group%2;q_head=group//2;kv_head=q_head//2"):
-      raise ValueError("AMD attention grid requires exact Q32/Hq4/Hkv2/G2 ownership")
+    if self.native_abi != "amd_gfx1100_attention_grid_hd128_v1" or self.group_expr != "q_tile=group%q_tiles;q_head=group//q_tiles;kv_head=q_head//group_ratio": raise ValueError("AMD attention grid has an unsupported ownership ABI")
+    if not all(isinstance(x,int) and not isinstance(x,bool) for x in (self.q_tokens,self.q_heads,self.kv_heads,self.group_ratio,self.kv_tokens,self.head_dim)): raise ValueError("AMD attention grid dimensions must be integral")
+    if self.head_dim != 128 or self.q_tokens <= 0 or self.q_tokens % 16 or self.kv_tokens <= 0 or self.kv_tokens % 16 or self.kv_tokens > 4096 or self.q_heads <= 0 or self.kv_heads <= 0 or self.group_ratio <= 0 or self.q_heads != self.kv_heads*self.group_ratio: raise ValueError("AMD attention grid requires Hd128, 16-wide tokens, and grouped heads")
     return self
 
 class AMDAttentionOutputDrainSpec(NamedTuple):
