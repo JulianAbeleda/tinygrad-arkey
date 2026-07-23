@@ -2071,8 +2071,12 @@ def _clear_non_composite_tag(x: UOp):
   # Backend scheduling may clear ordinary register/optimization tags, but
   # validated composite provenance is part of the REDUCE_SLOT type contract.
   if x.tag is None: return None
-  if isinstance(x.tag, tuple) and len(x.tag) == 2 and x.tag[0] in ("composite_reduce", "composite_slot", "composite_view"):
-    return None
+  if isinstance(x.tag, tuple) and len(x.tag) == 2:
+    kind, payload = x.tag
+    valid = (kind in ("composite_reduce", "composite_slot") and hasattr(payload, "slots")) or \
+            (kind == "composite_view" and isinstance(payload, tuple) and len(payload) >= 2 and
+             payload[0] in ("composite_reduce", "composite_slot", "composite_view"))
+    if valid: return None
   return x.replace(tag=None)
 remove_all_tags = PatternMatcher([(UPat(GroupOp.All, name="x"), _clear_non_composite_tag)])
 
