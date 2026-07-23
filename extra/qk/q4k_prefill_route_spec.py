@@ -103,6 +103,15 @@ def _emit_direct_out(spec:Q4KPrefillRouteSpec):
     base = (row * k_blocks + blk) * Q4K_WORDS_PER_BLOCK
     contrib = _q4k_block_dot_packed_load_gemm(words, x, base, blk, lane4, bb, k)
 
+    # Full-vocabulary output is consumed immediately by model sampling. The
+    # staged `.set(...after...)` recurrence below can then fuse its 32 output
+    # lanes with that consumer, leaving HIP a constructed `float32` lvalue.
+    # Store this one exact width through the primitive's scalar reduction form
+    # instead; ordinary prefill roles keep the measured direct-out recurrence.
+    if rows >= 131072:
+      return out[bb, row].store(contrib.reduce(blk, lane4, arg=Ops.ADD)).end(row, bb).sink(
+        arg=KernelInfo(name=name, opts_to_apply=opts))
+
     acc = out[bb, row].set(0.0)
     acc = out[bb, row].set(acc.after(blk, lane4)[bb, row] + contrib, end=lane4)
     return acc.end(row, bb, blk).sink(arg=KernelInfo(name=name, opts_to_apply=opts))
