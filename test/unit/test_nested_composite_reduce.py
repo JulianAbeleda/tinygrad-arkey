@@ -77,6 +77,22 @@ def test_composite_view_tag_survives_chained_index_views():
   resolved = resolve_composite_reduce_slot_prebufferize(UOp(Ops.REDUCE_SLOT, dtypes.float32, (chained,), 0))
   assert resolved is not None
 
+def test_prebufferize_recovers_composite_from_untagged_stage_tuple_metadata():
+  """AMD stage reconstruction may clear tags but retain the authoritative object."""
+  src = Tensor.empty(1, 2, 3, dtype=dtypes.float32)
+  red = src.uop.composite_reduce(AccumulatorSlot(Ops.ADD, dtypes.float32, 0.0, "sum"),
+                                  axis=(2,), slot_shapes=((),))
+  # Model the late scheduler shape: REDUCE_SLOT -> INDEX -> STAGE -> TUPLE.
+  # The tuple tag is gone, but its metadata still carries the actual
+  # CompositeReduce object.  Shape/tag lookalikes must not be accepted.
+  tup = UOp(Ops.TUPLE, dtypes.void, (UOp.const(dtypes.float32, 1.0),),
+            metadata=(red.arg[0],))
+  stage = UOp(Ops.STAGE, dtypes.void, (tup,), None)
+  indexed = UOp(Ops.INDEX, dtypes.float32, (stage, UOp.const(dtypes.weakint, 0)))
+  resolved = resolve_composite_reduce_slot_prebufferize(
+    UOp(Ops.REDUCE_SLOT, dtypes.float32, (indexed,), 0))
+  assert resolved is not None and resolved.dtype == dtypes.float32
+
 def test_postrange_tag_cleanup_preserves_validated_composite_provenance_only():
   src = Tensor.empty(1, 2, 3, dtype=dtypes.float32)
   red = src.uop.composite_reduce(AccumulatorSlot(Ops.ADD, dtypes.float32, 0.0, "sum"), axis=(2,), slot_shapes=((1, 2),))

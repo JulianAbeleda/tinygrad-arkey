@@ -300,34 +300,64 @@ def resolve_reduce_slot_tensor(slot):
     return result
 
 def resolve_composite_reduce_slot_prebufferize(slot):
-  """Resolve only a tagged composite slot before rangeify materializes buffers."""
+  """Resolve only a proven composite slot before rangeify materializes buffers.
+
+  The scheduler normally carries the ``CompositeReduce`` in a tag.  Some AMD
+  paths rebuild the ancestry as ``INDEX -> STAGE -> TUPLE`` and clear that tag,
+  so recover it only when the actual immutable CompositeReduce object remains
+  in the tuple/source metadata.  Shapes or generic tags are never sufficient
+  provenance.
+  """
   if slot.op is not Ops.REDUCE_SLOT: return None
   view = slot.src[0]
-  # Expander may wrap the structured tuple in an INDEX view.  Unwrap only
-  # when the indexed base still carries the composite provenance tag.
-  indexed = view.op is Ops.INDEX
+  # Expander may wrap the structured tuple in INDEX/STAGE views.  Keep the
+  # INDEX nodes for rebuilding the logical projection, but peel STAGE as a
+  # scheduler ownership boundary.
   views = []
   base = view
-  while base.op is Ops.INDEX and base.src:
-    views.append(base)
+  while base.op in (Ops.INDEX, Ops.STAGE) and base.src:
+    if base.op is Ops.INDEX: views.append(base)
     base = base.src[0]
   if base.op is not Ops.TUPLE: return None
-  tag = base.tag
-  composite = tag[1] if isinstance(tag, tuple) and len(tag) == 2 and tag[0] == "composite_reduce" else None
-  # Chained INDEX views carry an explicit, validated composite_view tag.  Do
-  # not infer provenance from arbitrary indexed bases.
-  if indexed and isinstance(view.tag, tuple) and len(view.tag) == 2 and view.tag[0] == "composite_view":
-    provenance = view.tag[1]
-    if isinstance(provenance, tuple) and len(provenance) >= 2 and provenance[0] in ("composite_slot", "composite_reduce"):
-      composite = provenance[1]
+
+  def find_composite(value, seen=None):
+    """Find an actual CompositeReduce in bounded UOp metadata ancestry."""
+    if isinstance(value, CompositeReduce): return value
+    if seen is None: seen = set()
+    if isinstance(value, UOp):
+      if value in seen: return None
+      seen.add(value)
+      # A reconstructed REDUCE may retain the authoritative object in arg.
+      found = find_composite(value.arg, seen)
+      if found is not None: return found
+      found = find_composite(value.tag, seen)
+      if found is not None: return found
+      return find_composite(value.metadata, seen)
+    if isinstance(value, (tuple, list)):
+      for item in value:
+        found = find_composite(item, seen)
+        if found is not None: return found
+    if isinstance(value, dict):
+      for item in value.values():
+        found = find_composite(item, seen)
+        if found is not None: return found
+    return None
+
+  # Prefer explicit validated tags, then inspect the tuple and its source
+  # metadata.  The latter is intentionally bounded to this ancestry and
+  # requires a real CompositeReduce object.
+  composite = find_composite(base.tag)
+  if composite is None: composite = find_composite(base.arg)
+  if composite is None: composite = find_composite(base.metadata)
+  if composite is None:
+    composite = next((found for source in base.src if (found := find_composite(source)) is not None), None)
   if composite is None: return None
-  if not hasattr(composite, "slots") or not hasattr(composite, "slot_shapes"): return None
   if not isinstance(slot.arg, int) or not 0 <= slot.arg < len(composite.slots):
     raise RuntimeError(f"invalid composite reduction slot {slot.arg}")
   shape = composite.slot_shapes[slot.arg]
   if shape is None: raise RuntimeError("composite slot is missing validated logical shape")
   result = base.src[slot.arg]
-  if indexed:
+  if views:
     # The view is already a logical projection; retain its indices on the
     # selected slot rather than treating an untyped INDEX as a slot reducer.
     for indexed_view in reversed(views):
