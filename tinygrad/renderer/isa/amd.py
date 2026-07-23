@@ -2685,6 +2685,7 @@ def expand_native_row_softmax_repack(ctx, x:UOp, native_state:bool=True) -> UOp:
     old_m, old_l = (m.gep(e), l.gep(e)) if stateful and not initial_state else (m, l)
     row = UOp.const(dtypes.weakint, 2*e).alu(Ops.ADD, halfwave)
     valid = None
+    fused_causal = False
     if x.arg.validity_mode in {"tail_v1", "causal_v1"}:
       fused_causal = x.arg.validity_mode == "causal_v1" and x.arg.grid is not None and \
         x.arg.query_start == x.arg.valid_kv-x.arg.grid.q_tokens

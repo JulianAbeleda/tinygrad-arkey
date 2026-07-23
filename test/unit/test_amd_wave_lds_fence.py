@@ -8,14 +8,14 @@ from tinygrad.renderer.isa.amd import expand_native_row_softmax_repack, _validat
 from tinygrad.uop.ops import AMDAttentionGridSpec, AMDMultiWaveAttentionGridSpec, AMDRowSoftmaxRepackSpec, Ops, UOp
 
 
-def _expanded(local_size: int) -> UOp:
+def _expanded(local_size: int, validity_mode: str = "tail_v1") -> UOp:
   grid = AMDAttentionGridSpec(local_size=local_size).validate()
   score = UOp(Ops.WMMA, dtypes.float.vec(8), (
     UOp.const(dtypes.half.vec(16), 0), UOp.const(dtypes.half.vec(16), 0), UOp.const(dtypes.float.vec(8), 0)),
     arg=("__WMMA_16_16_16_half_float", (16, 16, 16), dtypes.float, (32,)))
   state = UOp.const(dtypes.float.vec(8), 0)
   rng = UOp.range(4, 0, 4)
-  spec = AMDRowSoftmaxRepackSpec(mode="loop_state_v1", validity_mode="tail_v1", kv_start=-1, valid_kv=64,
+  spec = AMDRowSoftmaxRepackSpec(mode="loop_state_v1", validity_mode=validity_mode, kv_start=-1, valid_kv=64,
                                  dynamic_kv_v1=True, grid=grid)
   return expand_native_row_softmax_repack(itertools.count(),
     UOp(Ops.AMD_ROW_SOFTMAX_REPACK, dtypes.half.vec(16), (score, state, state, rng, UOp.const(dtypes.int, 0)), arg=spec))
@@ -44,6 +44,10 @@ def test_native_repack_uses_wave_wait_only_for_one_wave_workgroup():
   fallback = _expanded(64).toposort()
   barriers = [x for x in fallback if x.op is Ops.BARRIER]
   assert len(barriers) == 1 and barriers[0].arg is None
+
+
+def test_native_repack_all_valid_mode_does_not_enter_causal_specialization():
+  assert any(x.op is Ops.BARRIER for x in _expanded(32, "all_v1").toposort())
 
 
 def test_multiwave_repack_proves_disjoint_probability_slices():
