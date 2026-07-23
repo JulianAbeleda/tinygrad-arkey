@@ -568,6 +568,19 @@ def _resolve_reduce_slot_pm(slot):
     resolved = resolve_reduce_slot_tensor(slot)
     return resolved if resolved is not None else resolve_composite_reduce_slot_prebufferize(slot)
 
+def lower_deferred_reduce_slot(state:UOp):
+  """Resolve once, only after graph rewrite has lowered the producer to TUPLE."""
+  if state.op is not Ops.DEFERRED_REDUCE_SLOT or state.src[0].op is not Ops.TUPLE: return None
+  if not isinstance(state.arg.slot, int) or not 0 <= state.arg.slot < len(state.src[0].src):
+    raise RuntimeError(f"invalid deferred composite slot {state.arg.slot}")
+  result, cursor = state.src[0].src[state.arg.slot], 1
+  for op, arg, count in state.arg.views:
+    extra = state.src[cursor:cursor+count]
+    if len(extra) != count: raise RuntimeError("truncated deferred composite view sources")
+    result, cursor = UOp(op, state.dtype, (result, *extra), arg), cursor+count
+  if cursor != len(state.src): raise RuntimeError("unused deferred composite view sources")
+  return result
+
 def lower_composite_accumulator(state:UOp):
   """Lower a heterogeneous composite state carrier to an explicit tuple.
 
@@ -601,6 +614,7 @@ pm_reduce = PatternMatcher([
   (UPat(Ops.COMPOSITE_ACCUMULATOR, name="state"), lower_composite_accumulator),
   # REDUCE -> DEFINE_ACC+ASSIGN, then merge ENDs with same range
   (UPat(Ops.REDUCE, name="red"), reduce_to_acc),
+  (UPat(Ops.DEFERRED_REDUCE_SLOT, name="state"), lower_deferred_reduce_slot),
   # REDUCE_SLOT is only a projection from the graph-local TUPLE result.
   (UPat(Ops.REDUCE_SLOT, src=(UPat(),), name="slot"), _resolve_reduce_slot_pm),
   (UPat(Ops.SINK, name="sink"), merge_reduce_ends),

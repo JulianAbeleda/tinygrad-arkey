@@ -158,6 +158,8 @@ class Ops(FastEnum):
 
   # multi-output reduce slot access: REDUCE_SLOT(composite_reduce, i) returns slot i
   REDUCE_SLOT = auto()
+  # scheduler-only projection that waits for a composite REDUCE's physical tuple
+  DEFERRED_REDUCE_SLOT = auto()
 
   # semantic nested-reduction boundary. SCOPED_VALUE is declared above for
   # logical input ownership and typed result projections.

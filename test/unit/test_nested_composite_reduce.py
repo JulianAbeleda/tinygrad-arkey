@@ -4,9 +4,9 @@ import pytest
 
 from tinygrad import Tensor, dtypes
 from tinygrad.uop import Ops
-from tinygrad.uop.ops import AccumulatorSlot, UOp, ScopedReduceSpec, CompositeInputSpec, graph_rewrite, remove_all_tags
+from tinygrad.uop.ops import AccumulatorSlot, UOp, UPat, PatternMatcher, ScopedReduceSpec, CompositeInputSpec, graph_rewrite, remove_all_tags
 from tinygrad.codegen.late.devectorizer import _partition_composite_sources
-from tinygrad.codegen.late.devectorizer import lower_composite_accumulator, composite_reduce_state_adapter
+from tinygrad.codegen.late.devectorizer import lower_composite_accumulator, composite_reduce_state_adapter, lower_deferred_reduce_slot
 from tinygrad.codegen.late.composite_combines import resolve_reduce_slot_tensor, resolve_composite_reduce_slot_prebufferize
 from tinygrad.schedule.rangeify import cleanup_dead_axes
 from tinygrad.uop.spec import spec_tensor, type_verify
@@ -123,8 +123,31 @@ def test_lane_state_prebuffer_view_reconnects_exact_reduce_producer():
   view = stage.index(UOp.const(dtypes.weakint, 0))
   deferred = UOp(Ops.REDUCE_SLOT, dtypes.float32, (view,), 2, original.tag)
   rebuilt = resolve_composite_reduce_slot_prebufferize(deferred)
-  inner = next(u for u in rebuilt.toposort() if u.op is Ops.REDUCE_SLOT)
-  assert inner.src[0] is red
+  assert rebuilt.op is Ops.DEFERRED_REDUCE_SLOT and rebuilt.src[0] is red
+
+def test_deferred_state_projection_lowers_once_to_physical_hd16_slot():
+  slots = (AccumulatorSlot(Ops.MAX, dtypes.float32, float("-inf"), "m"),
+           AccumulatorSlot(Ops.ADD, dtypes.float32, 0.0, "l"),
+           AccumulatorSlot(Ops.ADD, dtypes.float32, 0.0, "acc"))
+  red = UOp.placeholder((16,), dtypes.float32, 0).composite_reduce(*slots, axis=(0,),
+    combine_fn="online_softmax_state", slot_shapes=((), (), (16,)), lane_shapes=((), (), (16,)))
+  physical = UOp(Ops.TUPLE, dtypes.void, (UOp.const(dtypes.float32, 1.0), UOp.const(dtypes.float32, 2.0),
+    UOp.const(dtypes.float32.vec(16), tuple(float(x) for x in range(16))))).replace(tag=("composite_reduce", red.arg[0]))
+  from tinygrad.uop.ops import DeferredReduceSlot
+  deferred = UOp(Ops.DEFERRED_REDUCE_SLOT, dtypes.float32, (physical,), DeferredReduceSlot(2))
+  lowered = lower_deferred_reduce_slot(deferred)
+  assert lowered is physical.src[2] and lowered.dtype.count == 16
+  assert all(u.op is not Ops.DEFERRED_REDUCE_SLOT for u in lowered.toposort())
+
+  # Child-first rewrite substitutes the producer exactly once, then resolves
+  # the opaque projection. This is the recursion boundary pm_reduce requires.
+  pending = deferred.replace(src=(red,))
+  rewritten = graph_rewrite(pending, PatternMatcher([
+    (UPat(Ops.REDUCE, name="producer"), lambda ctx, producer: ctx.get(producer)),
+    (UPat(Ops.DEFERRED_REDUCE_SLOT, name="state"), lower_deferred_reduce_slot),
+  ]), ctx={red: physical})
+  assert rewritten is physical.src[2]
+  assert all(u.op not in (Ops.REDUCE, Ops.DEFERRED_REDUCE_SLOT) for u in rewritten.toposort())
 
 
 def test_nested_reduction_with_logical_element_input_stays_in_one_schedule():

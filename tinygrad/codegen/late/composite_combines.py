@@ -396,9 +396,12 @@ def resolve_composite_reduce_slot_prebufferize(slot):
     while isinstance(tag, tuple) and len(tag) >= 2 and tag[0] == "composite_view": tag = tag[1]
     producer = tag[2] if isinstance(tag, tuple) and len(tag) >= 3 and tag[0] == "composite_slot" else None
     if not isinstance(producer, UOp) or producer.op is not Ops.REDUCE or producer.arg[0] is not composite: return None
-    result = UOp(Ops.REDUCE_SLOT, slot.dtype, (producer,), slot.arg, slot.tag)
-    for node in reversed(ancestry[:-1]): result = node.replace(src=(result,) + node.src[1:])
-    return result
+    from tinygrad.uop.ops import DeferredReduceSlot
+    descriptors, extras = [], []
+    for node in reversed(ancestry[:-1]):
+      descriptors.append((node.op, node.arg, len(node.src)-1))
+      extras.extend(node.src[1:])
+    return UOp(Ops.DEFERRED_REDUCE_SLOT, slot.dtype, (producer, *extras), DeferredReduceSlot(slot.arg, tuple(descriptors)))
   shape = composite.slot_shapes[slot.arg]
   if shape is None: raise RuntimeError("composite slot is missing validated logical shape")
   result = base.src[slot.arg]

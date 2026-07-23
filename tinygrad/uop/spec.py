@@ -221,6 +221,8 @@ spec_tensor = PatternMatcher([
    lambda x: isinstance(x.arg, int) and 0 <= x.arg < (
      len(x.src[0].arg[0].slots) if x.src[0].op is Ops.REDUCE and hasattr(x.src[0].arg[0], 'slots') else
      len(x.src[0].src[0].tag[1].slots) if _is_tagged_composite_slot_view(x.src[0]) else -1)),
+  (UPat(Ops.DEFERRED_REDUCE_SLOT, src=(UPat(),), allow_any_len=True, name="x"),
+   lambda x: hasattr(x.arg, "slot") and hasattr(x.arg, "views") and x.src[0].op in (Ops.REDUCE, Ops.TUPLE)),
 
   # SCOPED_REDUCE is a generic nested-reduction boundary. Its fallback,
   # producer, and logical-element inputs are all normal sources; only axis
@@ -280,6 +282,7 @@ spec_program = PatternMatcher([
   # REDUCE_SLOT may reach program level before lowering
   (UPat(Ops.REDUCE_SLOT, src=(UPat(),), name="x"),
    lambda x: isinstance(x.arg, int) and x.src[0].op is Ops.REDUCE),
+  (UPat(Ops.DEFERRED_REDUCE_SLOT, src=(UPat(),), allow_any_len=True), lambda: False),
   (UPat(Ops.MEMORY_SEMANTIC), lambda: False),
   # weakint is not allowed in programs
   (UPat(GroupOp.All, dtypes.weakint), lambda: False),

@@ -271,6 +271,12 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
           shape = _normalize_composite_shape(self.src[0].arg[0].slot_shapes[self.arg])
           if shape is not None: return shape
         return self.src[0]._shape
+      case Ops.DEFERRED_REDUCE_SLOT:
+        owner = self.src[0].arg[0] if self.src[0].op is Ops.REDUCE and isinstance(self.src[0].arg, tuple) else None
+        if getattr(owner, "slot_shapes", ()):
+          shape = _normalize_composite_shape(owner.slot_shapes[self.arg.slot])
+          if shape is not None: return shape
+        return self.src[0]._shape
       case Ops.COMPOSITE_ACCUMULATOR:
         # Backend-neutral tuple carrier: arg is the per-slot logical shape.
         return tuple(self.arg) if isinstance(self.arg, tuple) else self.src[0]._shape
@@ -1230,6 +1236,11 @@ class CompositeReduce(NamedTuple):
   # while logical axis positions are still authoritative; late lowering must
   # not infer KV ownership from extent or mutable AxisType classification.
   reduce_range_axes: tuple[int, ...] = ()
+
+class DeferredReduceSlot(NamedTuple):
+  slot: int
+  # Inner-to-outer view descriptors: (op, arg, number of non-owner sources).
+  views: tuple[tuple[Ops, Any, int], ...] = ()
 
 def _normalize_composite_shape(shape):
   """Normalize compiler shape metadata before it reaches generic shape logic."""
