@@ -2,9 +2,10 @@
 """Generate content-addressed shared-attention compiler/numeric artifacts."""
 from __future__ import annotations
 
-import argparse, json
+import argparse, json, sys
 from dataclasses import replace
 from pathlib import Path
+if __package__ in (None, ""): sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
 
 from tinygrad import Tensor, dtypes
 from tinygrad.codegen import to_program
