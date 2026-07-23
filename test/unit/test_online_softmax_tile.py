@@ -614,8 +614,39 @@ def test_gfx1100_q16_kv32_hd128_has_exact_shared_p_and_output_ownership():
     assert len(chain)==8
     pslot=next(u for u in topo if u.op is Ops.AMD_ROW_SOFTMAX_SLOT and u.arg.slot==0 and u.src[0] is owner)
     assert sum(u.op is Ops.WMMA and u.src[0] is pslot for u in topo)==8
-  outputs=[u.tag for u in topo if isinstance(u.tag,tuple) and u.tag[:1]==("amd_gfx1100_hd128_output_v1",)]
-  assert len(outputs)==64 and set(outputs)=={("amd_gfx1100_hd128_output_v1",b,e) for b in range(8) for e in range(8)}
+  drains=[u for u in topo if u.op is Ops.AMD_ATTENTION_OUTPUT_DRAIN]
+  assert len(drains)==1 and drains[0].src[0] is p[0] and drains[0].src[1].dtype==dtypes.float.vec(8)
+  assert tuple(drains[0].src[2:]) == tuple(acc for acc in drains[0].src[2:]) and len(set(drains[0].src[2:]))==8
+
+def test_gfx1100_q16_kv32_hd128_reaches_spill_free_final_isa():
+  from tinygrad.codegen import full_rewrite_to_sink, to_program
+  from tinygrad.helpers import Target
+  from tinygrad.renderer.isa.amd import AMDISARenderer
+  from tinygrad.schedule.wmma import amd_gfx1100_q16_kv32_hd128_attention
+  from tinygrad.uop.ops import KernelInfo, ParamArg
+  sizes=(2048,2048,4096,4096); p=[UOp(Ops.PARAM,dtypes.half.ptr(sizes[i]),arg=ParamArg(i)) for i in range(4)]
+  sink=amd_gfx1100_q16_kv32_hd128_attention(p[1],p[2],p[3],p[0],scale=.25,kernel_info=KernelInfo(name="hd128_isa"))
+  ren=AMDISARenderer(Target.parse("AMD:ISA:gfx1100")); final=full_rewrite_to_sink(sink,ren,optimize=False)
+  assert sum(u.op is Ops.AMD_ATTENTION_OUTPUT_DRAIN for u in final.toposort())==1
+  assert final.src[0].op is Ops.AMD_ATTENTION_OUTPUT_DRAIN
+  prg=to_program(sink,ren); linear=next(u for u in prg.src if u.op is Ops.LINEAR)
+  mn=[str(u.arg).split("(",1)[0] for u in linear.src if not isinstance(u.arg,tuple)]
+  assert mn.count("v_wmma_f32_16x16x16_f16")==32 and mn.count("s_barrier")==2
+
+def test_gfx1100_q16_kv32_hd128_numeric():
+  import numpy as np
+  from tinygrad import Tensor
+  from tinygrad.schedule.wmma import amd_gfx1100_q16_kv32_hd128_attention
+  from tinygrad.uop.ops import KernelInfo
+  rng=np.random.default_rng(31); q=rng.normal(0,.2,(16,128)).astype(np.float16)
+  k=rng.normal(0,.2,(32,128)).astype(np.float16); v=rng.normal(0,.4,(32,128)).astype(np.float16)
+  tq,tk,tv=(Tensor(x.reshape(-1),device="AMD") for x in (q,k,v)); out=Tensor.empty(2048,dtype=dtypes.half,device="AMD")
+  def kernel(o,qi,ki,vi): return amd_gfx1100_q16_kv32_hd128_attention(qi,ki,vi,o,scale=.25,kernel_info=KernelInfo(name="hd128_num"))
+  got=out.custom_kernel(tq,tk,tv,fxn=kernel)[0].numpy().reshape(16,128).astype(np.float32)
+  scores=(q.astype(np.float32)@k.astype(np.float32).T)*.25
+  valid=np.arange(32)[None,:] <= (16+np.arange(16))[:,None]; scores=np.where(valid,scores,-np.inf)
+  probs=np.exp(scores-scores.max(axis=1,keepdims=True)); probs/=probs.sum(axis=1,keepdims=True)
+  np.testing.assert_allclose(got,probs@v.astype(np.float32),rtol=.02,atol=4e-3)
 
 def test_gfx1100_q16_kv32_builder_fails_closed_owner_sizes():
   from tinygrad.schedule.wmma import amd_gfx1100_q16_kv32_attention

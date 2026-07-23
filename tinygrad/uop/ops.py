@@ -301,6 +301,7 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
         return (self.dtype.count,)
       case Ops.AMD_ROW_SOFTMAX_SLOT: return (self.dtype.count,)
       case Ops.AMD_PACKED_FRAGMENT_LOAD: return (self.dtype.count,)
+      case Ops.AMD_ATTENTION_OUTPUT_DRAIN: return self.src[0]._shape
       case Ops.AMD_PV_C_LANE: return ()
       case Ops.SCOPED_REDUCE:
         # The first SCOPED_REDUCE source is its semantically identical
@@ -1469,6 +1470,20 @@ class AMDRowSoftmaxSlotSpec(NamedTuple):
       raise ValueError("native row-softmax slot requires exact gfx1100 repack ABI")
     if not isinstance(self.slot, int) or not 0 <= self.slot < 4:
       raise ValueError("native row-softmax slot must be in [0,4)")
+    return self
+
+class AMDAttentionOutputDrainSpec(NamedTuple):
+  """Typed final ownership boundary for the native Hd128 attention ABI."""
+  native_abi: str = "amd_gfx1100_attention_output_drain_v1"
+  head_dim: int = 128
+  blocks: int = 8
+  lanes_per_fragment: int = 8
+  address_expr: str = "e*256+halfwave*128+j*16+col"
+
+  def validate(self):
+    if (self.native_abi, self.head_dim, self.blocks, self.lanes_per_fragment, self.address_expr) != \
+       ("amd_gfx1100_attention_output_drain_v1", 128, 8, 8, "e*256+halfwave*128+j*16+col"):
+      raise ValueError("AMD attention output drain requires the exact gfx1100 Hd128 v1 ABI")
     return self
 
 class CompositeInputSpec(NamedTuple):

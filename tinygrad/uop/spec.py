@@ -265,6 +265,10 @@ spec_tensor = PatternMatcher([
   (UPat(Ops.AMD_PV_C_LANE, src=(UPat(),), name="x"),
    lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_pv_c_lane_v1"
    and x.src[0].dtype == dtypes.float.vec(8) and x.dtype == dtypes.float),
+  (UPat(Ops.AMD_ATTENTION_OUTPUT_DRAIN, src=(UPat(), UPat(), UPat(), UPat(), UPat(), UPat(), UPat(), UPat(), UPat(), UPat()), name="x"),
+   lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_attention_output_drain_v1"
+   and x.dtype == dtypes.void and isinstance(x.src[0].dtype, PtrDType) and x.src[0].dtype.base == dtypes.half and x.src[0].dtype.size == 2048
+   and x.src[1].dtype == dtypes.float.vec(8) and all(s.dtype == dtypes.float.vec(8) for s in x.src[2:])),
 
   # ATTENTION keeps a normal fallback plus explicit Q/K/V/(optional mask)
   # dependencies until rangeify selects a lowering.
@@ -306,6 +310,10 @@ spec_tensor = PatternMatcher([
 
 # these ops can exist in programs but not the tensor spec. example: LOAD
 spec_program = PatternMatcher([
+  (UPat(Ops.AMD_ATTENTION_OUTPUT_DRAIN, src=(UPat(), UPat(), UPat(), UPat(), UPat(), UPat(), UPat(), UPat(), UPat(), UPat()), name="x"),
+   lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_attention_output_drain_v1"
+   and x.dtype == dtypes.void and isinstance(x.src[0].dtype, PtrDType) and x.src[0].dtype.base == dtypes.half and x.src[0].dtype.size == 2048
+   and x.src[1].dtype == dtypes.float.vec(8) and all(s.dtype == dtypes.float.vec(8) for s in x.src[2:])),
   # REDUCE with composite arg may reach program level before lowering
   (UPat(Ops.REDUCE, src=(UPat(),), allow_any_len=True, name="x"),
    lambda x: isinstance(x.arg, tuple) and len(x.arg) == 2 and (x.arg[0] in {Ops.ADD, Ops.MUL, Ops.MAX} or hasattr(x.arg[0], 'slots'))),

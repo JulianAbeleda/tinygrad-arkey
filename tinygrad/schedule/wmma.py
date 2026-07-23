@@ -410,10 +410,9 @@ def amd_gfx1100_q16_kv32_hd128_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, scale:
   sm=UOp.const(dtypes.float.vec(8),(-float("inf"),)*8); sl=UOp.const(dtypes.float.vec(8),(0.0,)*8)
   acc=[zero]*8
   for tile in range(2):
-    phase=UOp.group(*acc) if tile else None
     qk=zero
     for hd_block in range(8):
-      q_owner=q if phase is None else q.after(phase); k_owner=k if phase is None else k.after(phase)
+      q_owner=q if tile == 0 else q.after(*acc); k_owner=k if tile == 0 else k.after(*acc)
       qf=UOp(Ops.STACK,dtypes.half.vec(16),tuple(q_owner.index(col*128+hd_block*16+i).load() for i in range(16)),
         tag=("amd_gfx1100_fragment_load_hd128_v1","Q",tile,hd_block,q,lane,col))
       kbase=UOp.const(dtypes.weakint,tile*2048+hd_block*16)
@@ -435,15 +434,9 @@ def amd_gfx1100_q16_kv32_hd128_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, scale:
         tag=("amd_gfx1100_fragment_load_hd128_v1","V",tile,hd_block,v,lane,col))
       next_acc.append(UOp(Ops.WMMA,dtypes.float.vec(8),(p,vf,corrected),warg))
     acc=next_acc
-  stores=[]
-  for hd_block in range(8):
-    for e in range(8):
-      value=acc[hd_block].gep(e)
-      if stores: value=value.bitcast(dtypes.uint).after(UOp.group(stores[-1])).bitcast(dtypes.float)
-      den=sl.gep(e); recip=den.ne(UOp.const(dtypes.float,0)).where(UOp.const(dtypes.float,1)/den,UOp.const(dtypes.float,0))
-      row=UOp.const(dtypes.weakint,2*e)+half; dst=out.index(row*128+hd_block*16+col)
-      stores.append(dst.store((value*recip).cast(dtypes.half).replace(tag=("amd_gfx1100_hd128_output_v1",hd_block,e))))
-  return UOp.sink(*stores,arg=kernel_info)
+  from tinygrad.uop.ops import AMDAttentionOutputDrainSpec
+  drain=UOp(Ops.AMD_ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,sl,*acc),arg=AMDAttentionOutputDrainSpec())
+  return UOp.sink(drain,arg=kernel_info)
 
 class OnlineSoftmaxBlockTransition(NamedTuple):
   """Typed online-softmax state at one completed KV tile boundary."""

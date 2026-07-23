@@ -109,6 +109,22 @@ def _hip_expand_native_row_softmax(ctx, x:UOp) -> UOp:
   from tinygrad.renderer.isa.amd import expand_native_row_softmax_repack
   return expand_native_row_softmax_repack(ctx,x,native_state=False)
 
+def _hip_expand_attention_output_drain(x:UOp) -> UOp:
+  """Expand the typed native-output ABI to ordinary HIP SSA stores."""
+  from tinygrad.uop.ops import AMDAttentionOutputDrainSpec
+  if not isinstance(x.arg, AMDAttentionOutputDrainSpec): raise ValueError("HIP attention output drain is missing its typed ABI")
+  x.arg.validate()
+  if len(x.src) != 10 or x.dtype != dtypes.void: raise ValueError("HIP attention output drain has malformed sources")
+  out, l, *acc = x.src
+  lane=UOp.special(32,"lidx0"); col=lane.alu(Ops.AND,UOp.const(dtypes.weakint,15)); half=lane.alu(Ops.SHR,UOp.const(dtypes.weakint,4))
+  stores=[]
+  for j in range(8):
+    for e in range(8):
+      den=l.gep(e); recip=den.ne(UOp.const(dtypes.float,0)).where(UOp.const(dtypes.float,1)/den,UOp.const(dtypes.float,0))
+      dst=out.index((UOp.const(dtypes.weakint,2*e)+half)*128+j*16+col)
+      stores.append(dst.store((acc[j].gep(e)*recip).cast(dtypes.half)))
+  return UOp.group(*stores)
+
 hip_native_repack_pm = PatternMatcher([
   (UPat(Ops.MAX, name="x"), _hip_native_bpermute_max),
   (UPat(Ops.CUSTOMI, name="x"), _hip_native_row_state),
@@ -379,7 +395,8 @@ class HIPRenderer(CStyleLanguage):
       # HIP only supplies source spelling for its existing bpermute marker.
       from tinygrad.renderer.isa.amd import native_repack_matcher
       from tinygrad.renderer.isa.amd import native_state_lane_matcher
-      self.native_repack_matcher = PatternMatcher([(UPat(Ops.AMD_ROW_SOFTMAX_REPACK,name="x"), _hip_expand_native_row_softmax)]) + native_repack_matcher + \
+      self.native_repack_matcher = PatternMatcher([(UPat(Ops.AMD_ATTENTION_OUTPUT_DRAIN,name="x"), _hip_expand_attention_output_drain),
+        (UPat(Ops.AMD_ROW_SOFTMAX_REPACK,name="x"), _hip_expand_native_row_softmax)]) + native_repack_matcher + \
         PatternMatcher([(UPat(Ops.MAX, name="x"), _hip_native_bpermute_max)])
       self.native_state_lane_matcher = native_state_lane_matcher
       self.extra_matcher += hip_native_repack_pm
