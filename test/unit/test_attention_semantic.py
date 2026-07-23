@@ -35,7 +35,10 @@ class TestAttentionSemantic(unittest.TestCase):
     carrier = state_reduces[0].arg[0].tile_carrier
     self.assertEqual(carrier.typed_fragment_abi, "online_softmax_qk_pv_v1")
     self.assertEqual(carrier.fragment_abi()["lane_group"], 16)
-    self.assertEqual(len(state_reduces[0].arg[0].tile_fragments), 3)
+    fragments = state_reduces[0].arg[0].tile_fragments
+    self.assertEqual(len(fragments), 3)
+    self.assertTrue(any(u.op is Ops.REDUCE for u in fragments[0].src[0].toposort()), "score fragment must own the real QK graph")
+    self.assertTrue(any(u.op is Ops.BUFFER for u in fragments[1].src[0].toposort()), "value fragment must own the real V graph")
     self.assertFalse(any(u.op is Ops.COMPOSITE_ACCUMULATOR for u in primitive.toposort()))
 
   def test_opt_in_state_producer_is_dependency_only(self):

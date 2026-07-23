@@ -71,8 +71,10 @@ def lower_attention_semantic(att:UOp) -> UOp:
         if len(att.src) != 6: return att.src[0]
         score = score + Tensor(att.src[5])
       kv_len = k.shape[2]
-      score = score.reshape(b, h, q_len, kv_len, 1).expand(b, h, q_len, kv_len, hd)
-      logical_v = Tensor(v).cast(att.arg.qk_dtype).reshape(b, h, 1, kv_len, hd).expand(*score.shape).uop.scoped_value((0, 1, None, 3, 4))
+      score_tile = score.reshape(b, h, q_len, kv_len, 1)
+      score = score_tile.expand(b, h, q_len, kv_len, hd)
+      value_tile = Tensor(v).cast(att.arg.qk_dtype).reshape(b, h, 1, kv_len, hd)
+      logical_v = value_tile.expand(*score.shape).uop.scoped_value((0, 1, None, 3, 4))
       slots = (AccumulatorSlot(Ops.MAX, att.arg.qk_dtype, float("-inf"), "m"),
                AccumulatorSlot(Ops.ADD, att.arg.qk_dtype, 0.0, "l"),
                AccumulatorSlot(Ops.ADD, att.arg.qk_dtype, 0.0, "acc"))
@@ -104,8 +106,8 @@ def lower_attention_semantic(att:UOp) -> UOp:
         # owns the range lanes; this records the exact ABI without changing
         # the scalar execution graph.
         fragments = construct_hd16_tile_carriers(
-          UOp.placeholder((b, h, 16, 16, 1), dtypes.half, 9201),
-          UOp.placeholder((b, h, 1, 16, 16), dtypes.half, 9202),
+          score_tile.uop,
+          value_tile.uop,
           UOp.placeholder((b, h, 16, 16), dtypes.float32, 9203), batch=b, heads=h)
         red = red.replace(arg=(red.arg[0]._replace(tile_fragments=fragments),) + red.arg[1:])
       if state_combine == "online_softmax_state":
