@@ -1,0 +1,24 @@
+{
+  "schema": "tinygrad.shared_attention_acc_slice_diagnostic.v1",
+  "date": "2026-07-23",
+  "target": "AMD:HIP:gfx1100",
+  "geometry": {
+    "hq": 8,
+    "hkv": 2,
+    "q_tokens": 32,
+    "kv_tokens": 64,
+    "head_dim": 128,
+    "causal": true,
+    "query_start": 32
+  },
+  "launches": {
+    "full": {"output_block_base": 0, "acc_blocks": 8, "vgpr": 254, "sgpr": 26, "lds_bytes": 512, "scratch_bytes": 0, "vgpr_spills": 0, "sgpr_spills": 0, "wavefront_size": 32},
+    "low": {"output_block_base": 0, "acc_blocks": 4, "vgpr": 244, "sgpr": 26, "lds_bytes": 512, "scratch_bytes": 0, "vgpr_spills": 0, "sgpr_spills": 0, "wavefront_size": 32},
+    "high": {"output_block_base": 4, "acc_blocks": 4, "vgpr": 245, "sgpr": 26, "lds_bytes": 512, "scratch_bytes": 0, "vgpr_spills": 0, "sgpr_spills": 0, "wavefront_size": 32}
+  },
+  "execution": {
+    "test": "AMD=1 PYTHONPATH=. pytest -q test/unit/test_online_softmax_tile.py -k acc_slice_v2_two_launch_causal_diagnostic",
+    "result": "passed",
+    "comparison": "two independent QK/softmax slice launches write disjoint Hd[0:64] and Hd[64:128] regions into one output; assembled output matches the causal fp32 reference at rtol=0.02, atol=0.004"
+  }
+}

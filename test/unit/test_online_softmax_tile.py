@@ -658,6 +658,48 @@ def test_gfx1100_acc_slice_v2_drain_rejects_invalid_output_block_base():
   with pytest.raises(ValueError,match="exact gfx1100"):
     AMDAttentionOutputDrainSpec(native_abi="amd_gfx1100_attention_output_drain_acc_slice_v2",blocks=4,output_block_base=2).validate()
 
+def test_gfx1100_acc_slice_v2_two_launch_causal_diagnostic():
+  """Test-only split-output diagnostic: two independent QK/softmax launches own Hd[0:64]/Hd[64:128]."""
+  import numpy as np
+  from tinygrad import Tensor
+  from tinygrad.codegen import to_program
+  from tinygrad.helpers import Target
+  from tinygrad.renderer.cstyle import HIPRenderer
+  from tinygrad.schedule.wmma import amd_gfx1100_q16_grid_hd128_loop_attention
+  from tinygrad.uop.ops import KernelInfo, Ops, ParamArg
+  from extra.qk.amdgpu_metadata import parse_amdgpu_metadata
+  hq,hkv,q_tokens,kv_tokens=8,2,32,64; scale=.25; rng=np.random.default_rng(20260723)
+  q=rng.normal(0,.2,(hq,q_tokens,128)).astype(np.float16)
+  k=rng.normal(0,.2,(hkv,kv_tokens,128)).astype(np.float16)
+  v=rng.normal(0,.4,(hkv,kv_tokens,128)).astype(np.float16)
+  sizes=(hq*q_tokens*128,hkv*kv_tokens*128,hkv*kv_tokens*128,hq*q_tokens*128)
+  def descriptor(name,output_block_base=0,acc_blocks=8):
+    slot_sizes=(sizes[3],sizes[0],sizes[1],sizes[2])
+    p=[UOp(Ops.PARAM,dtypes.half.ptr(slot_sizes[i]),arg=ParamArg(i)) for i in range(4)]
+    return amd_gfx1100_q16_grid_hd128_loop_attention(p[1],p[2],p[3],p[0],q_tokens=q_tokens,q_heads=hq,kv_heads=hkv,
+      kv_tokens=kv_tokens,scale=scale,causal=True,kernel_info=KernelInfo(name=name),output_block_base=output_block_base,acc_blocks=acc_blocks)
+  def metadata(sink):
+    program=to_program(sink,HIPRenderer(Target.parse("AMD:HIP:gfx1100")))
+    binary=next(u.arg for u in program.src if u.op is Ops.BINARY)
+    return {key:parse_amdgpu_metadata(binary)[key] for key in ("vgpr","sgpr","lds_bytes","scratch_bytes","vgpr_spills","sgpr_spills")}
+  full,low,high=(descriptor("acc_slice_full"),descriptor("acc_slice_low",0,4),descriptor("acc_slice_high",4,4))
+  resources={"full":metadata(full),"low":metadata(low),"high":metadata(high)}
+  assert all(row["scratch_bytes"] == row["vgpr_spills"] == row["sgpr_spills"] == 0 for row in resources.values())
+  tq,tk,tv=(Tensor(x.reshape(-1),device="AMD") for x in (q,k,v)); out=Tensor.empty(q.size,dtype=dtypes.half,device="AMD")
+  # Rebuild through the direct descriptor for each invocation; no automatic model rewrite is involved.
+  def low_kernel(o,qi,ki,vi): return amd_gfx1100_q16_grid_hd128_loop_attention(qi,ki,vi,o,q_tokens=q_tokens,q_heads=hq,kv_heads=hkv,kv_tokens=kv_tokens,scale=scale,causal=True,kernel_info=KernelInfo(name="acc_slice_low_run"),output_block_base=0,acc_blocks=4)
+  def high_kernel(o,qi,ki,vi): return amd_gfx1100_q16_grid_hd128_loop_attention(qi,ki,vi,o,q_tokens=q_tokens,q_heads=hq,kv_heads=hkv,kv_tokens=kv_tokens,scale=scale,causal=True,kernel_info=KernelInfo(name="acc_slice_high_run"),output_block_base=4,acc_blocks=4)
+  low_out=out.custom_kernel(tq,tk,tv,fxn=low_kernel)[0].realize()
+  got=low_out.custom_kernel(tq,tk,tv,fxn=high_kernel)[0].numpy().reshape(q.shape).astype(np.float32)
+  ref=np.zeros_like(got)
+  for head in range(hq):
+    score=q[head].astype(np.float32)@k[head//4].astype(np.float32).T*scale
+    for row in range(q_tokens):
+      valid=np.arange(kv_tokens) <= kv_tokens-q_tokens+row
+      prob=np.exp(score[row,valid]-score[row,valid].max()); prob/=prob.sum()
+      ref[head,row]=prob@v[head//4,valid].astype(np.float32)
+  np.testing.assert_allclose(got,ref,rtol=.02,atol=4e-3)
+
 def test_gfx1100_q16_kv32_hd128_numeric():
   import numpy as np
   from tinygrad import Tensor
