@@ -4,7 +4,7 @@ import pytest
 
 from tinygrad import Tensor, dtypes
 from tinygrad.uop import Ops
-from tinygrad.uop.ops import AccumulatorSlot, UOp, ScopedReduceSpec, CompositeInputSpec
+from tinygrad.uop.ops import AccumulatorSlot, UOp, ScopedReduceSpec, CompositeInputSpec, graph_rewrite, remove_all_tags
 from tinygrad.codegen.late.devectorizer import _partition_composite_sources
 from tinygrad.codegen.late.devectorizer import lower_composite_accumulator, composite_reduce_state_adapter
 from tinygrad.codegen.late.composite_combines import resolve_reduce_slot_tensor, resolve_composite_reduce_slot_prebufferize
@@ -76,6 +76,15 @@ def test_composite_view_tag_survives_chained_index_views():
   assert first.tag[0] == chained.tag[0] == "composite_view"
   resolved = resolve_composite_reduce_slot_prebufferize(UOp(Ops.REDUCE_SLOT, dtypes.float32, (chained,), 0))
   assert resolved is not None
+
+def test_postrange_tag_cleanup_preserves_validated_composite_provenance_only():
+  src = Tensor.empty(1, 2, 3, dtype=dtypes.float32)
+  red = src.uop.composite_reduce(AccumulatorSlot(Ops.ADD, dtypes.float32, 0.0, "sum"), axis=(2,), slot_shapes=((1, 2),))
+  tup = UOp(Ops.TUPLE, dtypes.void, (UOp.placeholder((1, 2), dtypes.float32, 95),)).replace(tag=("composite_reduce", red.arg[0]))
+  cleaned = graph_rewrite(tup, remove_all_tags)
+  assert cleaned.tag == tup.tag
+  ordinary = UOp(Ops.TUPLE, dtypes.void, tup.src, tag=("optimizer", 1))
+  assert graph_rewrite(ordinary, remove_all_tags).tag is None
 
 def test_composite_reduce_slot_constructor_carries_validated_provenance():
   src = Tensor.empty(1, 2, 3, dtype=dtypes.float32)
