@@ -195,6 +195,10 @@ def test_physical_projection_requires_vector_update_after_end():
     denbuf.after(den_end).index(idx), accbuf.after(acc_end).index(idx)))
   state = UOp(Ops.DEFERRED_REDUCE_SLOT, dtypes.float32, (physical,), DeferredReduceSlot(2, normalize_by=1))
   assert validate_deferred_state_liveness(state)
+  acc_read, acc_store = physical.src[2], acc_end.src[0]
+  assert acc_read.src[0].src[0] is acc_store.src[0].src[0]
+  assert acc_read.src[1:] == acc_store.src[0].src[1:]
+  assert acc_read.dtype.count == acc_store.src[-1].dtype.count == 2
 
 
 def test_nested_reduction_with_logical_element_input_stays_in_one_schedule():

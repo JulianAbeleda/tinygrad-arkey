@@ -630,7 +630,17 @@ def validate_deferred_state_liveness(state:UOp) -> bool:
   acc_ends, den_ends = ([u for u in x.backward_slice if u.op is Ops.END] for x in (acc, den))
   if not acc_ends or not den_ends: return False
   update_stores = [u for end in acc_ends for u in (end.src[0], *end.src[0].backward_slice) if u.op is Ops.STORE]
-  return any(store.src[-1].dtype.count > 1 for store in update_stores)
+  if acc.op is not Ops.INDEX: return False
+  read_base = acc.src[0]
+  while read_base.op is Ops.AFTER: read_base = read_base.src[0]
+  for store in update_stores:
+    write_idx = store.src[0]
+    if write_idx.op is not Ops.INDEX: continue
+    write_base = write_idx.src[0]
+    while write_base.op is Ops.AFTER: write_base = write_base.src[0]
+    if read_base is write_base and acc.src[1:] == write_idx.src[1:] and \
+       acc.dtype.count == store.src[-1].dtype.count and acc.dtype.count > 1: return True
+  return False
 
 def lower_deferred_reduce_slot(state:UOp):
   """Resolve once after REDUCE lowering, consuming the carrier rather than materializing it."""
