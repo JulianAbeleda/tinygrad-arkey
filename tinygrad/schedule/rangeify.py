@@ -831,6 +831,10 @@ def _get_kernel_graph(sink:UOp) -> UOp:
   from tinygrad.codegen.late.composite_combines import _lower_composite_no_range_pm
   tsink = graph_rewrite(tsink, PatternMatcher([(UPat(Ops.REDUCE, name="red"), _lower_composite_no_range_pm)]),
                        name="lower_composite_pre_rangeify")
+  from tinygrad.codegen.late.composite_combines import resolve_composite_reduce_slot_prebufferize
+  tsink = graph_rewrite(tsink, PatternMatcher([
+    (UPat(Ops.REDUCE_SLOT, src=(UPat(Ops.TUPLE),), name="slot"), resolve_composite_reduce_slot_prebufferize),
+  ]), name="resolve_composite_slots_prebufferize")
   tsink = graph_rewrite(tsink, symbolic+pm_reduce_simplify+pm_const_buffer_folding+pm_remove_bufferize, name="symbolic+reduce_collapse+debuf")
   tsink = graph_rewrite(tsink, pm_limit_bufs, ctx=rctx, name="limit buffers")
 

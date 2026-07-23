@@ -289,3 +289,20 @@ def resolve_reduce_slot_tensor(slot):
       shape = composite.slot_shapes[slot.arg]
       if shape is not None and result.shape != tuple(shape): result = result.reshape(tuple(shape))
     return result
+
+def resolve_composite_reduce_slot_prebufferize(slot):
+  """Resolve only a tagged composite slot before rangeify materializes buffers."""
+  if slot.op is not Ops.REDUCE_SLOT or slot.src[0].op is not Ops.TUPLE: return None
+  tag = slot.src[0].tag
+  if not (isinstance(tag, tuple) and len(tag) == 2 and tag[0] == "composite_reduce"): return None
+  composite = tag[1]
+  if not hasattr(composite, "slots") or not hasattr(composite, "slot_shapes"): return None
+  if not isinstance(slot.arg, int) or not 0 <= slot.arg < len(composite.slots):
+    raise RuntimeError(f"invalid composite reduction slot {slot.arg}")
+  shape = composite.slot_shapes[slot.arg]
+  if shape is None: raise RuntimeError("composite slot is missing validated logical shape")
+  result = slot.src[0].src[slot.arg]
+  if result.shape != tuple(shape): result = result.reshape(tuple(shape))
+  sdtype = composite.slots[slot.arg].dtype
+  if sdtype is not None and result.dtype != sdtype: result = result.cast(sdtype)
+  return result

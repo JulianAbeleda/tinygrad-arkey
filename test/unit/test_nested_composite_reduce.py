@@ -7,7 +7,7 @@ from tinygrad.uop import Ops
 from tinygrad.uop.ops import AccumulatorSlot, UOp, ScopedReduceSpec, CompositeInputSpec
 from tinygrad.codegen.late.devectorizer import _partition_composite_sources
 from tinygrad.codegen.late.devectorizer import lower_composite_accumulator, composite_reduce_state_adapter
-from tinygrad.codegen.late.composite_combines import resolve_reduce_slot_tensor
+from tinygrad.codegen.late.composite_combines import resolve_reduce_slot_tensor, resolve_composite_reduce_slot_prebufferize
 from tinygrad.schedule.rangeify import cleanup_dead_axes
 
 def test_lane_aware_composite_input_is_explicit_and_scalar_safe():
@@ -37,6 +37,18 @@ def test_composite_state_slots_preserve_heterogeneous_logical_shapes():
   assert Tensor(UOp(Ops.REDUCE_SLOT, dtypes.float32, (red,), 0)).shape == (1, 1, 2)
   assert Tensor(UOp(Ops.REDUCE_SLOT, dtypes.float32, (red,), 1)).shape == (1, 1, 2)
   assert Tensor(UOp(Ops.REDUCE_SLOT, dtypes.float32, (red,), 2)).shape == (1, 1, 2, 4)
+
+def test_composite_slot_resolves_before_bufferize_only_with_tagged_provenance():
+  src = Tensor.empty(1, 2, 3, dtype=dtypes.float32)
+  red = src.uop.composite_reduce(AccumulatorSlot(Ops.ADD, dtypes.float32, 0.0, "sum"), axis=(2,), slot_shapes=((1, 2),))
+  lowered = UOp(Ops.TUPLE, dtypes.void, (UOp.placeholder((1, 2), dtypes.float32, 91),)).replace(tag=("composite_reduce", red.arg[0]))
+  slot = UOp(Ops.REDUCE_SLOT, dtypes.float32, (lowered,), 0)
+  resolved = resolve_composite_reduce_slot_prebufferize(slot)
+  assert resolved is not None and resolved.shape == (1, 2)
+
+def test_prebufferize_slot_resolver_leaves_ordinary_tuple_untouched():
+  plain = UOp(Ops.TUPLE, dtypes.void, (UOp.const(dtypes.float32, 1.0),))
+  assert resolve_composite_reduce_slot_prebufferize(UOp(Ops.REDUCE_SLOT, dtypes.float32, (plain,), 0)) is None
 
 
 def test_nested_reduction_with_logical_element_input_stays_in_one_schedule():
