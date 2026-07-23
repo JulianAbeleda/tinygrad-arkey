@@ -3,7 +3,7 @@ from pathlib import Path
 
 from tinygrad import Tensor
 from tinygrad.llm.memory_semantics import (MemorySemanticClass, PREFILL_ACTIVATION, memory_semantic_owner)
-from tinygrad.llm.prefill_route_observer import PrefillRouteAttachment
+from tinygrad.llm.prefill_route_observer import PrefillDirectPackedBinding, PrefillRouteAttachment, prefill_route_scope
 from tinygrad.llm import prefill_routes
 
 
@@ -57,7 +57,9 @@ def test_direct_route_materialized_input_is_prefill_activation(monkeypatch):
   lin._prefill_route_attachment = PrefillRouteAttachment(
     "invocation", "direct-packed-baseline", "attn_q.weight",
     {"candidate_id": "direct-packed-baseline", "strategy": "DIRECT_PACKED_FALLBACK"}, {"backend": "CPU"})
-  out = prefill_routes.route_direct_packed_prefill(lin, Tensor.zeros(1, 2, 4, device="CPU"))
+  lin._prefill_graph_role = "attn_qo"
+  lin._prefill_direct_packed_binding = PrefillDirectPackedBinding("invocation", "prefill", "attn_qo", (2, 3, 4))
+  with prefill_route_scope(): out = prefill_routes.route_direct_packed_prefill(lin, Tensor.zeros(1, 2, 4, device="CPU"))
   assert out is not None and observed["owner"] == PREFILL_ACTIVATION
 
 

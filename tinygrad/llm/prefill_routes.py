@@ -8,7 +8,7 @@ from tinygrad import Tensor, dtypes
 from tinygrad.llm import route_ops as qk_ops
 from tinygrad.llm.memory_semantics import (prefill_activation as _prefill_activation,
   prefill_output as _prefill_output, prefill_scratch as _prefill_scratch)
-from tinygrad.llm.prefill_route_observer import PrefillRouteAttachment, notify_prefill_route
+from tinygrad.llm.prefill_route_observer import PrefillDirectPackedBinding, PrefillRouteAttachment, _ACTIVE, notify_prefill_route
 from tinygrad.uop.ops import UOp
 
 _PREFILL_ROUTE_OVERRIDE: ContextVar[Callable[[object, Tensor], Tensor | None] | None] = \
@@ -227,10 +227,15 @@ def _direct_packed_module_role(lin) -> str:
 def _attached_direct_packed_spec(lin, x:Tensor) -> PrefillLinearRouteSpec | None:
   """Build the production baseline spec from attachment and structural facts only."""
   if _attached_production_route(lin, x) not in ("direct_packed", "bounded_packed"): return None
+  binding = getattr(lin, "_prefill_direct_packed_binding", None)
+  if not isinstance(binding, PrefillDirectPackedBinding) or binding.phase != "prefill" or not _ACTIVE.get(): return None
   if getattr(lin, "bias", None) is not None or len(x.shape) != 3 or x.shape[0] != 1: return None
   m, k = x.shape[-2], x.shape[-1]
   n, in_f = getattr(lin, "out_features", None), getattr(lin, "in_features", None)
   if not all(isinstance(v, int) for v in (m, k, n, in_f)) or k != in_f: return None
+  if binding.shape != (m, n, k) or binding.role != _direct_packed_module_role(lin): return None
+  attachment = getattr(lin, "_prefill_route_attachment", None)
+  if not isinstance(attachment, PrefillRouteAttachment) or attachment.invocation_id != binding.invocation_id: return None
   quant = "q4k" if _is_q4k_linear(lin) else "q6k" if _is_q6k_linear(lin) else ""
   if quant == "": return None
   route = "bounded_packed" if _attached_production_route(lin, x) == "bounded_packed" else "direct_packed"

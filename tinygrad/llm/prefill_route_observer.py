@@ -16,6 +16,14 @@ class PrefillRouteAttachment:
   allocation_owner_identity: str | None = None
 
 @dataclass(frozen=True)
+class PrefillDirectPackedBinding:
+  """Exact selected-inventory ownership for the direct-packed prefill helper."""
+  invocation_id: str
+  phase: str
+  role: str
+  shape: tuple[int, int, int]
+
+@dataclass(frozen=True)
 class PrefillRouteExecution:
   """Identity reported by a route only after it has selected its executable path."""
   invocation_id: str
@@ -59,6 +67,6 @@ def notify_prefill_route_execution(linear: object, execution: PrefillRouteExecut
   observer = _EXECUTION_OBSERVER.get()
   if observer is not None and _ACTIVE.get(): observer(linear, execution)
 
-__all__ = ["PrefillRouteAttachment", "PrefillRouteExecution", "notify_prefill_route",
+__all__ = ["PrefillRouteAttachment", "PrefillDirectPackedBinding", "PrefillRouteExecution", "notify_prefill_route",
            "notify_prefill_route_execution", "observe_prefill_routes", "observe_prefill_route_executions",
            "prefill_route_scope"]

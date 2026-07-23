@@ -21,7 +21,7 @@ from tinygrad.llm.prefill_policy import (
 )
 from tinygrad.llm.prefill_routes import is_direct_packed_prefill_linear, route_prefill_linear
 from tinygrad.llm.prefill_memory_plan import Strategy
-from tinygrad.llm.prefill_route_observer import PrefillRouteAttachment, prefill_route_scope, notify_prefill_route
+from tinygrad.llm.prefill_route_observer import PrefillDirectPackedBinding, PrefillRouteAttachment, prefill_route_scope, notify_prefill_route
 from tinygrad.llm.qk_primitives import (
   QKConfig, QKPrimitiveBudget, Q4KPrimitiveLinear, Q4KPrimitiveRegistry, Q6KPrimitiveLinear,
   _install_q4k_primitives, _install_q6k_primitives, _qk_storage_summary,
@@ -222,10 +222,21 @@ def _attach_selected_prefill_inventory(model, inventory:dict, policy, scanned_ta
       raise ValueError(f"selected prefill tensor {tensor_identity!r} has no exact runtime linear") from exc
     if hasattr(obj, "_prefill_route_attachment"): raise ValueError(f"duplicate runtime attachment for {tensor_identity!r}")
     invocation_id = row["invocation_id"]
+    shape = row.get("shape")
+    if not isinstance(shape, dict): raise ValueError(f"selected prefill row {tensor_identity!r} has no concrete shape")
+    try: direct_shape = tuple(shape[axis] for axis in ("m", "n", "k"))
+    except KeyError as exc: raise ValueError(f"selected prefill row {tensor_identity!r} has incomplete shape") from exc
+    if any(not isinstance(value, int) or isinstance(value, bool) or value <= 0 for value in direct_shape):
+      raise ValueError(f"selected prefill row {tensor_identity!r} has invalid concrete shape")
     proof = policy.get("bounded_packed_projection_proof", {}) if hasattr(policy, "get") else {}
     owner_identity = proof.get("allocation_owner_identity") if hasattr(proof, "get") else None
     setattr(obj, "_prefill_route_attachment", PrefillRouteAttachment(invocation_id, routes[invocation_id], tensor_identity,
                                                                        policy, scanned_target_facts, owner_identity))
+    # This is intentionally separate from the generic route attachment: the
+    # direct helper is phase-owned and must match the selected physical M/N/K,
+    # rather than treating a tensor-level route id as permission for decode.
+    setattr(obj, "_prefill_direct_packed_binding", PrefillDirectPackedBinding(
+      invocation_id, "prefill", str(row.get("role", "")), direct_shape))
     attached.add(invocation_id)
   if attached != set(routes): raise ValueError("selected prefill inventory did not attach exactly once")
 
