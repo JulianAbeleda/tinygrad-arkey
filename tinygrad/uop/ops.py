@@ -1945,15 +1945,12 @@ class AMDPackedFragmentLoopSpec(NamedTuple):
   head_block: int = 0
   grid: AMDAttentionGridSpec|AMDMultiWaveAttentionGridSpec|None = None
   output_block_base: int = 0
-  stage_wait: UOp|None = None
 
   def validate(self):
     if self.native_abi != "amd_gfx1100_packed_fragment_hd128_loop_v1" or self.role not in {"Q", "K", "V"}:
       raise ValueError("AMD loop fragment has an unsupported ABI or role")
     if not isinstance(self.head_block, int) or isinstance(self.head_block, bool) or not 0 <= self.head_block < 8:
       raise ValueError("AMD loop fragment has an invalid head block")
-    if self.stage_wait is not None and (self.stage_wait.op is not Ops.WAIT or self.stage_wait.dtype is not dtypes.void):
-      raise ValueError("AMD loop fragment stage dependency must be a typed wait")
     if self.grid is not None: self.grid.validate()
     return self
 
