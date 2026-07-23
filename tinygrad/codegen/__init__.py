@@ -202,6 +202,16 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   devectorize_folding = PatternMatcher([]) if has_register_pipe else load_store_folding
   sink = graph_rewrite(sink, devectorize_symbolic+devectorize_alu+devectorize_buf_and_index+devectorize_folding+correct_load_store+load_store_indexing,
                        ctx=ren, name="devectorize")
+  if had_deferred_reduce_projection:
+    # add_loads may interpret the expanded output INDEX lanes as values and
+    # produce STORE(STACK(LOAD(INDEX)...), values). Restore the original sink
+    # ownership: projection lanes are values, output lanes remain addresses.
+    output_store_subs = {}
+    for store in (u for u in sink.toposort() if u.op is Ops.STORE and u.src[0].op is Ops.STACK):
+      if not store.src[0].src or not all(x.op is Ops.LOAD and x.src[0].op is Ops.INDEX for x in store.src[0].src): continue
+      addresses = tuple(x.src[0] for x in store.src[0].src)
+      output_store_subs[store] = store.replace(src=(store.src[0].replace(src=addresses), *store.src[1:]))
+    if output_store_subs: sink = sink.substitute(output_store_subs)
   if ren.target.device == "AMD":
     sink = graph_rewrite(sink, pm_distinct_reg_store_devec, name="distinct reg store devec")
   if getenv("COALESCED_LOAD_LOWERING") and ren.target.device == "AMD":

@@ -61,7 +61,8 @@ class TestAttentionSemantic(unittest.TestCase):
     self.assertFalse(any(u.op in (Ops.DEFERRED_REDUCE_OWNER, Ops.DEFERRED_REDUCE_SLOT, Ops.TUPLE) for u in final.toposort()))
     lane_stores = [u for u in final.toposort() if u.op is Ops.STORE and u.src[0].op is Ops.STACK and u.src[-1].op is Ops.STACK]
     self.assertEqual(len(lane_stores), 1)
-    accesses = [x.src[0] if x.op is Ops.LOAD else x for x in lane_stores[0].src[0].src]
+    accesses = lane_stores[0].src[0].src
+    self.assertTrue(all(x.op is Ops.INDEX for x in accesses), "output STORE lanes must remain addresses, not loaded values")
     self.assertEqual(len({idx.src[-1].render() for idx in accesses}), 16)
 
   def test_state_composite_carries_authoritative_kv_range_owner(self):
