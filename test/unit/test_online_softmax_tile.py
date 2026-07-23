@@ -671,6 +671,33 @@ def test_gfx1100_q16_kv32_numeric_two_tile_transition():
   ref=probs@v.astype(np.float32)
   np.testing.assert_allclose(got,ref,rtol=.01,atol=2e-3)
 
+@pytest.mark.parametrize("valid_kv,query_start",[(16,0),(13,0),(13,-16)])
+def test_gfx1100_q16_causal_tail_numeric(valid_kv,query_start):
+  import numpy as np
+  from tinygrad import Tensor
+  from tinygrad.schedule.wmma import amd_gfx1100_q16_attention
+  from tinygrad.uop.ops import KernelInfo
+  rng=np.random.default_rng(17+valid_kv+query_start)
+  q=rng.normal(0,.35,(16,16)).astype(np.float16)
+  k=rng.normal(0,.35,(16,16)).astype(np.float16)
+  v=rng.normal(0,.5,(16,16)).astype(np.float16)
+  tq,tk,tv=(Tensor(x.reshape(-1),device="AMD") for x in (q,k,v))
+  out=Tensor.empty(256,dtype=dtypes.half,device="AMD")
+  def kernel(o,qi,ki,vi):
+    return amd_gfx1100_q16_attention(qi,ki,vi,o,scale=.75,causal=True,valid_kv=valid_kv,query_start=query_start,
+      kernel_info=KernelInfo(name=f"q16_causal_kv{valid_kv}_q{query_start}"))
+  got=out.custom_kernel(tq,tk,tv,fxn=kernel)[0].numpy().reshape(16,16).astype(np.float32)
+  scores=(q.astype(np.float32)@k.astype(np.float32).T)*.75
+  valid=(np.arange(16)[None,:] < valid_kv) & \
+    (np.arange(16)[None,:] <= (query_start+np.arange(16))[:,None])
+  ref=np.zeros((16,16),dtype=np.float32)
+  for row in range(16):
+    if not valid[row].any(): continue
+    s=scores[row,valid[row]]; p=np.exp(s-s.max()); p/=p.sum()
+    ref[row]=p@v.astype(np.float32)[valid[row]]
+  np.testing.assert_allclose(got,ref,rtol=.015,atol=3e-3)
+  if query_start < 0: assert np.array_equal(got,np.zeros_like(got))
+
 def test_gfx1100_corrected_c_requires_exact_alpha_and_prior_wmma_lanes():
   from tinygrad.renderer.isa.amd import _corrected_c_transition
   from tinygrad.uop.ops import AMDRowSoftmaxRepackSpec
