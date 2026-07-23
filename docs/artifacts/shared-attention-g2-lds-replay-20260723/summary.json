@@ -1,0 +1,24 @@
+{
+  "schema": "tinygrad.shared_attention_g2_lds_replay.v1",
+  "candidate_commit": "b53ebfebd",
+  "retained_abi_commit": "618a4edfc",
+  "revert_commit": "36fefe7c4",
+  "protocol": "preallocated output; TinyJit capture completed before timing; device synchronize around every replay; fixed inputs; alternating A/B order",
+  "verdict": "REJECT_PERFORMANCE_RETAIN_ABI",
+  "reason": "G2 was neutral/slower at model-context lengths and introduced private memory; G4/G5 extension is not admitted",
+  "geometry_note": "Q32/Hq4/Hkv2/Hd128 is the exact G2 microkernel. KV512/KV4096 are model-context-length surrogates, not the actual 8B G4 head grouping.",
+  "rows": [
+    {"kv": 64, "samples": 30, "single_median_ms": 0.2343915, "g2_median_ms": 0.2334995, "g2_delta_percent": -0.38056, "max_abs_g2_single": 0.0, "max_abs_g2_ref": 0.00008243322372436523},
+    {"kv": 512, "samples": 12, "single_median_ms": 0.364626, "g2_median_ms": 0.365362, "g2_delta_percent": 0.201848, "max_abs_g2_single": 0.0, "max_abs_g2_ref": 0.000023417174816131592},
+    {"kv": 4096, "samples": 12, "single_median_ms": 1.441146, "g2_median_ms": 1.4648865, "g2_delta_percent": 1.647324, "max_abs_g2_single": 0.0, "max_abs_g2_ref": 0.000009257346391677856}
+  ],
+  "compiled_loop_body": {
+    "single_wave": {"k_global_load_sites": 128, "v_global_load_sites": 128, "load_width": "half", "workgroup_barriers": 0, "wave_waits": 1},
+    "g2_lds": {"k_global_load_sites": 4, "v_global_load_sites": 4, "load_width": "half8/b128", "workgroup_barriers": 2, "wave_waits": 1}
+  },
+  "resources": {
+    "single_wave": {"vgpr": 246, "sgpr": 18, "lds_bytes": 512, "private_bytes": 0, "wavefront_size": 32},
+    "g2_lds": {"vgpr": 250, "sgpr": 18, "lds_bytes": 9216, "private_bytes": 36, "wavefront_size": 32}
+  },
+  "extension": {"g4": "NOT_RUN_G2_FAILED_ADMISSION", "g5": "NOT_RUN_G2_FAILED_ADMISSION"}
+}
