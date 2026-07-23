@@ -640,6 +640,16 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
                                 slot_shapes=tuple(_normalize_composite_shape(s) for s in (slot_shapes or ())))
     return UOp(Ops.REDUCE, kwargs.pop('dtype', self.dtype), src=(self,)+tuple(inputs), arg=(composite, axis), **kwargs)
 
+  def composite_reduce_slot(self, slot: int, *, dtype=None):
+    """Construct a typed projection while preserving composite provenance."""
+    if self.op is not Ops.REDUCE or not hasattr(self.arg[0], 'slots'):
+      raise ValueError("composite_reduce_slot requires a composite REDUCE")
+    composite = self.arg[0]
+    if not isinstance(slot, int) or not 0 <= slot < len(composite.slots):
+      raise ValueError(f"invalid composite reduction slot {slot}")
+    return UOp(Ops.REDUCE_SLOT, dtype or composite.slots[slot].dtype, (self,), slot,
+               tag=("composite_slot", composite, slot))
+
   def scoped_reduce(self, producer: 'UOp', *logical_inputs: 'UOp', axis: tuple[int, ...], axis_maps: tuple[tuple[int, ...], ...],
                     scope_owner: int, result_dtypes: tuple[Any, ...]|None=None) -> 'UOp':
     """Create a nested-reduction semantic boundary.

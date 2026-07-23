@@ -67,6 +67,13 @@ def test_spec_accepts_only_tagged_composite_index_slot_view():
   with pytest.raises(RuntimeError, match="UOp verification failed"):
     type_verify(UOp(Ops.REDUCE_SLOT, dtypes.float32, (untagged,), 0), spec_tensor)
 
+def test_composite_reduce_slot_constructor_carries_validated_provenance():
+  src = Tensor.empty(1, 2, 3, dtype=dtypes.float32)
+  red = src.uop.composite_reduce(AccumulatorSlot(Ops.ADD, dtypes.float32, 0.0, "sum"), axis=(2,), slot_shapes=((1, 2),))
+  slot = red.composite_reduce_slot(0)
+  assert slot.arg == 0 and slot.tag[0] == "composite_slot" and slot.tag[1] is red.arg[0]
+  type_verify(slot, spec_tensor)
+
 
 def test_nested_reduction_with_logical_element_input_stays_in_one_schedule():
   # This is intentionally not attention-specific. `score` is an inner
