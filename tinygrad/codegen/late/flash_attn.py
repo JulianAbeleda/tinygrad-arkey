@@ -21,6 +21,11 @@ def merge_online_softmax_tile(m: Tensor, l: Tensor, acc: Tensor, scores: Tensor,
 
 def normalize_online_softmax_state(acc: Tensor, l: Tensor) -> Tensor:
     """Materialize public attention output from raw online-softmax state."""
+    # The state reducer carries l as one scalar per (B,H,T), while acc keeps
+    # the logical head-dimension lane.  Add exactly that lane axis; relying on
+    # generic left-aligned broadcasting is incorrect for Hd > 1.
+    if len(acc.shape) == len(l.shape) + 1 and tuple(acc.shape[:-1]) == tuple(l.shape):
+      l = l.reshape(*l.shape, 1)
     return acc / l
 
 def flash_attention(q: Tensor, k: Tensor, v: Tensor, scale: float = None,
