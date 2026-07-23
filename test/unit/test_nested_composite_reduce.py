@@ -238,6 +238,20 @@ def test_lane_state_projection_waits_for_physical_reduce_owner():
   projected = UOp(Ops.REDUCE_SLOT, dtypes.float32, (surrounding,), 2)
   assert resolve_composite_reduce_slot_prebufferize(projected) is None
 
+def test_lane_state_projection_rebuilds_only_validated_composite_index_provenance():
+  slots = (AccumulatorSlot(Ops.MAX, dtypes.float32, float("-inf"), "m"),
+           AccumulatorSlot(Ops.ADD, dtypes.float32, 0.0, "l"),
+           AccumulatorSlot(Ops.ADD, dtypes.float32, 0.0, "acc"))
+  red = UOp.placeholder((3, 2), dtypes.float32, 0).composite_reduce(*slots, axis=(0,),
+    combine_fn="online_softmax_state", slot_shapes=((), (), (2,)), lane_shapes=((), (), (2,)))
+  state = UOp(Ops.TUPLE, dtypes.void, tuple(UOp.const(dtypes.float32, float(i)) for i in range(3))).replace(
+    tag=("composite_reduce", red.arg[0]))
+  view = UOp(Ops.INDEX, dtypes.float32, (state, UOp.const(dtypes.weakint, 0)))
+  projected = UOp(Ops.REDUCE_SLOT, dtypes.float32, (view,), 2)
+  rebuilt = resolve_composite_reduce_slot_prebufferize(projected)
+  assert rebuilt.op is Ops.REDUCE_SLOT and rebuilt.src[0].tag[0] == "composite_view"
+  assert rebuilt.src[0].tag[1][0] == "composite_slot" and rebuilt.src[0].tag[1][1] is red.arg[0]
+
 def test_composite_accumulator_carrier_preserves_scalar_and_vector_slots():
   """The first-class carrier keeps m/l scalar and acc lanes explicit."""
   state = UOp(Ops.COMPOSITE_ACCUMULATOR, dtypes.float32.vec(2),

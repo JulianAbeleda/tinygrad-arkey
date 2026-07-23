@@ -239,6 +239,10 @@ def _lower_composite_no_range_pm(red):
     from tinygrad.uop.ops import CompositeReduce, AxisType
     composite = red.arg[0]
     if not isinstance(composite, CompositeReduce) and not (hasattr(composite, "slots") and hasattr(composite, "combine_fn")): return None
+    # A heterogeneous state has a physical register ABI. It must reach
+    # reduce_to_acc intact; scalar no-range expansion cannot allocate or
+    # update its lane-shaped slots.
+    if getattr(composite, "lane_shapes", ()): return None
     if any(x.op is Ops.RANGE for x in red.src[1:]): return None
 
     # Pre-rangeify: the REDUCE has an axis but no ranges yet.  Create synthetic
@@ -362,6 +366,18 @@ def resolve_composite_reduce_slot_prebufferize(slot):
     # Heterogeneous physical state is owned by reduce_to_acc. Resolving any
     # slot here would turn its per-output register value into a logical tensor
     # reshape before those lanes and output ranges exist.
+    if view.op is Ops.INDEX and not (isinstance(view.tag, tuple) and len(view.tag) == 2 and view.tag[0] == "composite_view"):
+      # The tagged TUPLE is created after rangeify has already built its
+      # STAGE/INDEX wrappers. Reconstruct provenance from this exact ancestry
+      # once; arbitrary INDEX values never enter this branch because a real
+      # CompositeReduce object was required above.
+      rebuilt = base
+      for node in reversed(ancestry[:-1]):
+        if node.op is Ops.STAGE:
+          rebuilt = node.replace(src=(rebuilt,)+node.src[1:], tag=("composite_reduce", composite))
+        elif node.op is Ops.INDEX:
+          rebuilt = node.replace(src=(rebuilt,)+node.src[1:], tag=("composite_view", ("composite_slot", composite, slot.arg)))
+      return slot.replace(src=(rebuilt,), tag=("composite_slot", composite, slot.arg))
     return None
   shape = composite.slot_shapes[slot.arg]
   if shape is None: raise RuntimeError("composite slot is missing validated logical shape")
