@@ -559,7 +559,11 @@ def _resolve_reduce_slot_pm(slot):
     from tinygrad.codegen.late.composite_combines import resolve_reduce_slot_tensor, resolve_composite_reduce_slot_prebufferize
     # Expander can leave a validated composite_view INDEX around the tuple.
     # Resolve that form before applying the stricter direct-tuple resolver.
-    return resolve_reduce_slot_tensor(slot) or resolve_composite_reduce_slot_prebufferize(slot)
+    # UOp does not have boolean truth semantics; using ``or`` here evaluates
+    # a successfully resolved value as a scalar expression and can crash (or
+    # silently mis-route) before the provenance-aware fallback runs.
+    resolved = resolve_reduce_slot_tensor(slot)
+    return resolved if resolved is not None else resolve_composite_reduce_slot_prebufferize(slot)
 
 def lower_composite_accumulator(state:UOp):
   """Lower a heterogeneous composite state carrier to an explicit tuple.
