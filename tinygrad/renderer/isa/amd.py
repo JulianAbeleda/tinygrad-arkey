@@ -2639,7 +2639,8 @@ def expand_loop_fragment(x:UOp) -> UOp:
   # Staged QK fragments carry a typed retirement token in their descriptor.
   # Make it a real load dependency here, before the opaque-fragment handoff;
   # retaining it only in the tag lets HIP materialize every fragment eagerly.
-  owner=owner.after(x.arg.stage_wait) if x.arg.stage_wait is not None else owner
+  stage_wait=getattr(x.arg, "stage_wait", None)
+  owner=owner.after(stage_wait) if stage_wait is not None else owner
   if not grid_src: gbase=UOp.const(dtypes.weakint,0)
   elif isinstance(x.arg.grid, AMDMultiWaveAttentionGridSpec):
     grid,group=x.arg.grid,grid_src[0]
