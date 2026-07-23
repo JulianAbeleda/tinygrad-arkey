@@ -1,0 +1,287 @@
+{
+  "artifact": {
+    "packed_bytes": 9437184,
+    "path": "bench/prefill-lds-single-buffer-probe-20260723/attn-qo-q4k-canary.npz",
+    "quant_format": "Q4_K",
+    "reference_elements": 2097152,
+    "shape": [
+      512,
+      4096,
+      4096
+    ]
+  },
+  "controls": {
+    "cpu_affinity": [
+      0
+    ],
+    "gpu_dpm": {
+      "mclk": "0: 96Mhz *\n1: 456Mhz \n2: 772Mhz \n3: 1249Mhz \n",
+      "power_level": "auto\n",
+      "sclk": "0: 500Mhz\n1: 8Mhz *\n2: 2304Mhz\n"
+    }
+  },
+  "mode": "isolated_guarded_candidate_only",
+  "profile": "qwen3_8b_q4k_m_gfx1100",
+  "promotion": "not_registered_not_promoted",
+  "quant_format": "Q4_K",
+  "role": "attn_qo",
+  "runs": [
+    {
+      "label": "two_buffer_baseline",
+      "outcome": {
+        "dispatch_state": "completed",
+        "errors": [],
+        "guarded": {
+          "atol": 0.02,
+          "device_fault": false,
+          "device_healthy_after": true,
+          "device_healthy_before": true,
+          "dispatch_performed": true,
+          "elapsed_seconds": 0.00071968,
+          "errors": [],
+          "finite_max": 52.5,
+          "finite_min": -0.1875,
+          "finite_output": true,
+          "full_output_compared": true,
+          "guards_intact": true,
+          "identity": {
+            "canonical_identity": "c7552cc28c88d07ed905951521b6c12bf5320f66a0a0c413211061549dd1ac91",
+            "quant_format": "Q4_K"
+          },
+          "inf_fraction": 0.0,
+          "inputs_unchanged": true,
+          "max_abs_error": 0.0,
+          "nan_fraction": 0.0,
+          "nonconstant_inputs": true,
+          "numerics_passed": true,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "passed": true,
+          "rtol": 0.02,
+          "schema": "guarded-execution.v1",
+          "status": "passed"
+        },
+        "health_after": true,
+        "health_terminal": {
+          "elapsed_seconds": 0.998387653962709,
+          "error": null,
+          "result": true,
+          "status": "passed",
+          "timed_out": false
+        },
+        "identity": {
+          "canonical_identity": "c7552cc28c88d07ed905951521b6c12bf5320f66a0a0c413211061549dd1ac91",
+          "quant_format": "Q4_K"
+        },
+        "passed": true,
+        "schema": "isolated-guarded-executor.v1",
+        "terminal": {
+          "child_status": "passed",
+          "elapsed_seconds": 1.4163750919979066,
+          "error": null,
+          "produced_result": true,
+          "stderr": "",
+          "stdout": "",
+          "timed_out": false
+        }
+      },
+      "phase": "warmup",
+      "wall_ms": 4296.397663
+    },
+    {
+      "label": "two_buffer_baseline",
+      "outcome": {
+        "dispatch_state": "completed",
+        "errors": [],
+        "guarded": {
+          "atol": 0.02,
+          "device_fault": false,
+          "device_healthy_after": true,
+          "device_healthy_before": true,
+          "dispatch_performed": true,
+          "elapsed_seconds": 0.0007140800000000001,
+          "errors": [],
+          "finite_max": 52.5,
+          "finite_min": -0.1875,
+          "finite_output": true,
+          "full_output_compared": true,
+          "guards_intact": true,
+          "identity": {
+            "canonical_identity": "c7552cc28c88d07ed905951521b6c12bf5320f66a0a0c413211061549dd1ac91",
+            "quant_format": "Q4_K"
+          },
+          "inf_fraction": 0.0,
+          "inputs_unchanged": true,
+          "max_abs_error": 0.0,
+          "nan_fraction": 0.0,
+          "nonconstant_inputs": true,
+          "numerics_passed": true,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "passed": true,
+          "rtol": 0.02,
+          "schema": "guarded-execution.v1",
+          "status": "passed"
+        },
+        "health_after": true,
+        "health_terminal": {
+          "elapsed_seconds": 0.9926671930588782,
+          "error": null,
+          "result": true,
+          "status": "passed",
+          "timed_out": false
+        },
+        "identity": {
+          "canonical_identity": "c7552cc28c88d07ed905951521b6c12bf5320f66a0a0c413211061549dd1ac91",
+          "quant_format": "Q4_K"
+        },
+        "passed": true,
+        "schema": "isolated-guarded-executor.v1",
+        "terminal": {
+          "child_status": "passed",
+          "elapsed_seconds": 1.395614990964532,
+          "error": null,
+          "produced_result": true,
+          "stderr": "",
+          "stdout": "",
+          "timed_out": false
+        }
+      },
+      "phase": "warmed_sample",
+      "wall_ms": 3910.511293
+    },
+    {
+      "label": "one_buffer_probe",
+      "outcome": {
+        "dispatch_state": "completed",
+        "errors": [],
+        "guarded": {
+          "atol": 0.02,
+          "device_fault": false,
+          "device_healthy_after": true,
+          "device_healthy_before": true,
+          "dispatch_performed": true,
+          "elapsed_seconds": 0.00057588,
+          "errors": [],
+          "finite_max": 52.5,
+          "finite_min": -0.1875,
+          "finite_output": true,
+          "full_output_compared": true,
+          "guards_intact": true,
+          "identity": {
+            "canonical_identity": "83dcb21acfed699cb0f27101422c6bbd6243236d6daf0f4431ce6c0efa6e550a",
+            "quant_format": "Q4_K"
+          },
+          "inf_fraction": 0.0,
+          "inputs_unchanged": true,
+          "max_abs_error": 0.0,
+          "nan_fraction": 0.0,
+          "nonconstant_inputs": true,
+          "numerics_passed": true,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "passed": true,
+          "rtol": 0.02,
+          "schema": "guarded-execution.v1",
+          "status": "passed"
+        },
+        "health_after": true,
+        "health_terminal": {
+          "elapsed_seconds": 0.9552527859341353,
+          "error": null,
+          "result": true,
+          "status": "passed",
+          "timed_out": false
+        },
+        "identity": {
+          "canonical_identity": "83dcb21acfed699cb0f27101422c6bbd6243236d6daf0f4431ce6c0efa6e550a",
+          "quant_format": "Q4_K"
+        },
+        "passed": true,
+        "schema": "isolated-guarded-executor.v1",
+        "terminal": {
+          "child_status": "passed",
+          "elapsed_seconds": 1.0508522200398147,
+          "error": null,
+          "produced_result": true,
+          "stderr": "",
+          "stdout": "",
+          "timed_out": false
+        }
+      },
+      "phase": "warmup",
+      "wall_ms": 3259.517778
+    },
+    {
+      "label": "one_buffer_probe",
+      "outcome": {
+        "dispatch_state": "completed",
+        "errors": [],
+        "guarded": {
+          "atol": 0.02,
+          "device_fault": false,
+          "device_healthy_after": true,
+          "device_healthy_before": true,
+          "dispatch_performed": true,
+          "elapsed_seconds": 0.00056976,
+          "errors": [],
+          "finite_max": 52.5,
+          "finite_min": -0.1875,
+          "finite_output": true,
+          "full_output_compared": true,
+          "guards_intact": true,
+          "identity": {
+            "canonical_identity": "83dcb21acfed699cb0f27101422c6bbd6243236d6daf0f4431ce6c0efa6e550a",
+            "quant_format": "Q4_K"
+          },
+          "inf_fraction": 0.0,
+          "inputs_unchanged": true,
+          "max_abs_error": 0.0,
+          "nan_fraction": 0.0,
+          "nonconstant_inputs": true,
+          "numerics_passed": true,
+          "output_shape": [
+            512,
+            4096
+          ],
+          "passed": true,
+          "rtol": 0.02,
+          "schema": "guarded-execution.v1",
+          "status": "passed"
+        },
+        "health_after": true,
+        "health_terminal": {
+          "elapsed_seconds": 1.0164290040265769,
+          "error": null,
+          "result": true,
+          "status": "passed",
+          "timed_out": false
+        },
+        "identity": {
+          "canonical_identity": "83dcb21acfed699cb0f27101422c6bbd6243236d6daf0f4431ce6c0efa6e550a",
+          "quant_format": "Q4_K"
+        },
+        "passed": true,
+        "schema": "isolated-guarded-executor.v1",
+        "terminal": {
+          "child_status": "passed",
+          "elapsed_seconds": 1.1598280989564955,
+          "error": null,
+          "produced_result": true,
+          "stderr": "",
+          "stdout": "",
+          "timed_out": false
+        }
+      },
+      "phase": "warmed_sample",
+      "wall_ms": 3324.693197
+    }
+  ],
+  "schema": "tinygrad.prefill_lds_single_buffer_runtime_probe.v1"
+}
