@@ -388,10 +388,17 @@ def resolve_composite_reduce_slot_prebufferize(slot):
     raise RuntimeError(f"invalid composite reduction slot {slot.arg}")
   lane_shapes = getattr(composite, "lane_shapes", ())
   if lane_shapes:
-    # Heterogeneous physical state is owned by reduce_to_acc. Resolving any
-    # slot here would turn its per-output register value into a logical tensor
-    # reshape before those lanes and output ranges exist.
-    return None
+    # Heterogeneous physical state is owned by reduce_to_acc. Recover only the
+    # exact REDUCE carried by composite_reduce_slot(), then replay scheduler
+    # views around a typed projection of that producer. Metadata-only shape
+    # lookalikes deliberately remain deferred.
+    tag = slot.tag
+    while isinstance(tag, tuple) and len(tag) >= 2 and tag[0] == "composite_view": tag = tag[1]
+    producer = tag[3] if isinstance(tag, tuple) and len(tag) >= 4 and tag[0] == "composite_slot" else None
+    if not isinstance(producer, UOp) or producer.op is not Ops.REDUCE or producer.arg[0] is not composite: return None
+    result = UOp(Ops.REDUCE_SLOT, slot.dtype, (producer,), slot.arg, slot.tag)
+    for node in reversed(ancestry[:-1]): result = node.replace(src=(result,) + node.src[1:])
+    return result
   shape = composite.slot_shapes[slot.arg]
   if shape is None: raise RuntimeError("composite slot is missing validated logical shape")
   result = base.src[slot.arg]

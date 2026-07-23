@@ -107,7 +107,24 @@ def test_composite_reduce_slot_constructor_carries_validated_provenance():
   red = src.uop.composite_reduce(AccumulatorSlot(Ops.ADD, dtypes.float32, 0.0, "sum"), axis=(2,), slot_shapes=((1, 2),))
   slot = red.composite_reduce_slot(0)
   assert slot.arg == 0 and slot.tag[0] == "composite_slot" and slot.tag[1] is red.arg[0]
+  assert slot.tag[3] is red
   type_verify(slot, spec_tensor)
+
+def test_lane_state_prebuffer_view_reconnects_exact_reduce_producer():
+  slots = (AccumulatorSlot(Ops.MAX, dtypes.float32, float("-inf"), "m"),
+           AccumulatorSlot(Ops.ADD, dtypes.float32, 0.0, "l"),
+           AccumulatorSlot(Ops.ADD, dtypes.float32, 0.0, "acc"))
+  red = UOp.placeholder((16,), dtypes.float32, 0).composite_reduce(*slots, axis=(0,),
+    combine_fn="online_softmax_state", slot_shapes=((), (), (16,)), lane_shapes=((), (), (16,)))
+  original = red.composite_reduce_slot(2)
+  logical = UOp(Ops.TUPLE, dtypes.void, tuple(UOp.const(dtypes.float32, float(i)) for i in range(3))).replace(
+    tag=("composite_reduce", red.arg[0]))
+  stage = UOp(Ops.STAGE, dtypes.void, (logical,), None, tag=("composite_slot", red.arg[0], 2, red))
+  view = stage.index(UOp.const(dtypes.weakint, 0))
+  deferred = UOp(Ops.REDUCE_SLOT, dtypes.float32, (view,), 2, original.tag)
+  rebuilt = resolve_composite_reduce_slot_prebufferize(deferred)
+  inner = next(u for u in rebuilt.toposort() if u.op is Ops.REDUCE_SLOT)
+  assert inner.src[0] is red
 
 
 def test_nested_reduction_with_logical_element_input_stays_in_one_schedule():

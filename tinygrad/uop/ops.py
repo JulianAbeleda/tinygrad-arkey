@@ -663,7 +663,7 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
     if not isinstance(slot, int) or not 0 <= slot < len(composite.slots):
       raise ValueError(f"invalid composite reduction slot {slot}")
     return UOp(Ops.REDUCE_SLOT, dtype or composite.slots[slot].dtype, (self,), slot,
-               tag=("composite_slot", composite, slot))
+               tag=("composite_slot", composite, slot, self))
 
   def scoped_reduce(self, producer: 'UOp', *logical_inputs: 'UOp', axis: tuple[int, ...], axis_maps: tuple[tuple[int, ...], ...],
                     scope_owner: int, result_dtypes: tuple[Any, ...]|None=None) -> 'UOp':
