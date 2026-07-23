@@ -27,6 +27,8 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass
+import json
+from pathlib import Path
 from typing import Any
 
 from tinygrad import Tensor, dtypes
@@ -48,6 +50,59 @@ PACKED_WMMA_TEMPLATE_PROFILE = "qwen3_14b_q4k_m_gfx1100"
 
 _GATE_CACHE: dict[tuple[str, str, int, int, int], tuple[bool, float | None]] = {}
 _ENTRY_CACHE: dict[tuple[str, str, int, int, int], dict[str, Any]] = {}
+
+# This is deliberately a single exact replacement, not a geometry policy.  The
+# two-buffer candidate set remains the default and every other payload continues
+# through its existing admission path.  The one-buffer payload is selected only
+# when all independently captured evidence still names the same artifacts and
+# identities.  Missing, malformed, or drifted evidence is a decline to buffer2.
+_SINGLE_BUFFER_ATTN_QO = {
+  "profile": "qwen3_8b_q4k_m_gfx1100", "quant": "Q4_K", "role": "attn_qo", "shape": (512, 4096, 4096),
+  "compile_identity": "555ff0474238c6408dfe79ff14e26febf588072bd7aefaac312e521748b55ece",
+  "packed_identity": "83dcb21acfed699cb0f27101422c6bbd6243236d6daf0f4431ce6c0efa6e550a",
+  "compile": "bench/prefill-lds-single-buffer-probe-20260723/attn-qo-compile-only.json",
+  "numeric": "bench/prefill-lds-single-buffer-probe-20260723/attn-qo-q4k-runtime-ab.json",
+  "timing": "bench/prefill-lds-single-buffer-probe-20260723/attn-qo-q4k-pinned-track.json",
+}
+
+
+def _single_buffer_attn_qo_admitted(payload: dict[str, Any], quant: str, role: str,
+                                    shape: tuple[int, int, int]) -> bool:
+  """Validate the evidence join for the sole registered one-buffer payload."""
+  spec = _SINGLE_BUFFER_ATTN_QO
+  if (quant, role, shape) != (spec["quant"], spec["role"], spec["shape"]): return False
+  try:
+    from extra.qk.runtime_specs import _canonical_full_kernel_identity
+    probe = one_buffer_payload(payload)
+    if _canonical_full_kernel_identity(probe) != spec["compile_identity"]: return False
+    root = Path(__file__).resolve().parents[3]
+    compile_row, numeric_row, timing_row = (json.loads((root / spec[key]).read_text()) for key in ("compile", "numeric", "timing"))
+    compiled = compile_row["probe"]
+    resources = compiled["resources"]
+    if (compile_row.get("schema") != "tinygrad.prefill_lds_single_buffer_compile_probe.v1" or
+        compile_row.get("profile") != spec["profile"] or compile_row.get("role") != role or
+        compiled.get("canonical_identity") != spec["compile_identity"] or
+        resources.get("lds_bytes") != 20480 or any(resources.get(k) != 0 for k in ("scratch_bytes", "vgpr_spills", "sgpr_spills"))): return False
+    matching = [r for r in numeric_row.get("runs", ()) if r.get("label") == "one_buffer_probe" and
+                r.get("phase") == "warmed_sample"]
+    guarded = matching[0]["outcome"]["guarded"] if len(matching) == 1 else {}
+    if (numeric_row.get("schema") != "tinygrad.prefill_lds_single_buffer_runtime_probe.v1" or
+        numeric_row.get("profile") != spec["profile"] or numeric_row.get("role") != role or
+        guarded.get("identity", {}).get("canonical_identity") != spec["packed_identity"] or
+        not all(guarded.get(k) is True for k in ("passed", "numerics_passed", "full_output_compared", "guards_intact", "finite_output")) or
+        guarded.get("max_abs_error") != 0.0): return False
+    variants = [v for v in timing_row.get("variants", ()) if v.get("label") == "one_buffer_probe"]
+    samples = variants[0].get("samples", ()) if len(variants) == 1 else ()
+    if (timing_row.get("schema") != "tinygrad.prefill_lds_single_buffer_peak_track.v1" or
+        timing_row.get("profile") != spec["profile"] or timing_row.get("role") != role or
+        timing_row.get("sample_count") != 10 or timing_row.get("warmup_count") != 3 or len(samples) != 10 or
+        not all(s.get("canonical_identity") == spec["packed_identity"] and s.get("max_abs_error") == 0.0 and
+                s.get("gpu_state", {}).get("power_dpm_force_performance_level", "").strip() == "manual" and
+                "1249Mhz *" in s.get("gpu_state", {}).get("pp_dpm_mclk", "") and
+                "2304Mhz" in s.get("gpu_state", {}).get("pp_dpm_sclk", "") for s in samples)): return False
+    return variants[0].get("summary", {}).get("median_ms") == 0.36741999999999997
+  except (KeyError, OSError, TypeError, ValueError):
+    return False
 
 
 def _mutate_payload(base_payload: dict, g: dict[str, int], stride: int = 80) -> dict:
@@ -81,6 +136,15 @@ def _payload_for_shape(role: str, shape: tuple[int, int, int]) -> dict:
   template = _template_payload_for_role(role)
   return rebind_full_kernel_workload(template, profile=PACKED_WMMA_TEMPLATE_PROFILE, role=role,
                                       shape=shape).to_json()["payload"]
+
+
+def one_buffer_payload(payload: dict[str, Any]) -> dict[str, Any]:
+  probe = copy.deepcopy(payload)
+  pipeline = probe["schedule"]["pipeline"]
+  if (pipeline.get("buffer_count"), pipeline.get("stage_count")) != (2, 1):
+    raise ValueError("one-buffer admission requires the exact two-buffer stage-1 baseline")
+  pipeline["buffer_count"] = 1
+  return probe
 
 
 def _run_gate(quant: str, role: str, shape: tuple[int, int, int], geom: dict[str, int]) -> tuple[bool, float | None]:
@@ -135,6 +199,7 @@ def warmstart_entry(quant: str, role: str, shape: tuple[int, int, int]) -> dict[
     g = PACKED_WMMA_GEOM[(quant, role)]
     base_payload = _payload_for_shape(role, shape)
     mutated = _mutate_payload(base_payload, g)
+    if _single_buffer_attn_qo_admitted(mutated, quant, role, shape): mutated = one_buffer_payload(mutated)
     entry = derive_packed_weight_candidate(mutated, quant)
     payload = entry.to_json()["payload"]
     admission = admit_current_prefill(payload, entry.canonical_identity)
