@@ -288,6 +288,21 @@ def test_gfx1100_native_repack_modes_fail_closed():
   with pytest.raises(ValueError, match="unknown normalization"):
     AMDRowSoftmaxRepackSpec(mode="mixed").validate()
 
+def test_gfx1100_native_repack_validity_contract_is_typed_and_fails_closed():
+  from tinygrad.uop.ops import AMDRowSoftmaxRepackSpec
+  causal=AMDRowSoftmaxRepackSpec(mode="initial_state_v1",validity_mode="causal_v1",query_start=0,kv_start=0,valid_kv=16)
+  tail=AMDRowSoftmaxRepackSpec(mode="initial_state_v1",validity_mode="causal_v1",query_start=0,kv_start=0,valid_kv=13)
+  causal.validate(); tail.validate()
+  assert (causal.row_expr,causal.col_expr)==("2*e+(lane>>4)","lane&15")
+  assert (tail.kv_start,tail.valid_kv)==(0,13)
+  for bad in (
+    AMDRowSoftmaxRepackSpec(validity_mode="implicit"),
+    AMDRowSoftmaxRepackSpec(validity_mode="causal_v1",kv_start=1),
+    AMDRowSoftmaxRepackSpec(validity_mode="causal_v1",valid_kv=33),
+    AMDRowSoftmaxRepackSpec(validity_mode="all_v1",valid_kv=13),
+  ):
+    with pytest.raises(ValueError,match="validity|KV tile"): bad.validate()
+
 def test_gfx1100_native_row_softmax_repack_fails_closed():
   from tinygrad.schedule.wmma import amd_gfx1100_row_softmax_repack
   from tinygrad.uop.ops import AMDRowSoftmaxRepackSpec
