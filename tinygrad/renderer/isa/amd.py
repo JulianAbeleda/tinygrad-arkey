@@ -2273,6 +2273,26 @@ def _post_isel_structural_lifetimes(ctx:IselContext, x:UOp):
   if serialized is not None: return serialized
   return chained
 
+def isel_wmma_with_role(ctx:IselContext, x:UOp):
+  """Bind a semantic attention role to the selected machine WMMA out-of-band."""
+  from tinygrad.uop.ops import AttentionWMMARole, get_attention_wmma_role, set_attention_wmma_role
+  role = get_attention_wmma_role(x)
+  if role is None and isinstance(x.tag, tuple) and len(x.tag) == 3 and x.tag[0] == "attention_wmma":
+    role = AttentionWMMARole(x.tag[1], x.tag[2]); role.validate()
+  out = isel_wmma(ctx, x)
+  if role is None or out is None: return out
+  frontier, seen = [out], set()
+  while frontier:
+    matches = [u for u in frontier if u.op is Ops.INS and u.arg in (AMDOps.V_WMMA, AMDOps.V_WMMA_ZERO)]
+    if matches:
+      unique = tuple(dict.fromkeys(matches))
+      if len(unique) != 1: raise RuntimeError("attention WMMA selected to ambiguous machine sites")
+      set_attention_wmma_role(unique[0], role)
+      return out
+    seen.update(frontier)
+    frontier = [s for u in frontier for s in u.src if s not in seen]
+  raise RuntimeError("attention WMMA role lost during instruction selection")
+
 isel_matcher = PatternMatcher([
   (UPat(Ops.AMD_ATTENTION_LOOP_STATE,name="x"), isel_attention_loop_state),
   (UPat(Ops.AMD_PACKED_FRAGMENT_LOAD,name="x"), lambda ctx,x: isel_packed_fragment(ctx,x)),
@@ -2327,7 +2347,7 @@ isel_matcher = PatternMatcher([
   (UPat(Ops.SHL, dtype=dtypes.ints, name="x"), lambda ctx, x: isel_shift(ctx, x, left=True)),
   (UPat(Ops.SHR, dtype=dtypes.ints, name="x"), lambda ctx, x: isel_shift(ctx, x, left=False)),
   # B0.L7: tensor-core matmul -> fragment packing + v_wmma (MUST precede the catch-all INS rule below)
-  (UPat(Ops.WMMA, name="x"), isel_wmma),
+  (UPat(Ops.WMMA, name="x"), isel_wmma_with_role),
   # catch-all register allocation seed (x86 alloc_vregs analog): tag None -> fresh vreg; physical -> constrained vreg
   (UPat(Ops.INS, name="x"), lambda ctx, x: alloc_vregs(ctx, x)),
 ])
@@ -3132,6 +3152,17 @@ class AMDISARenderer(ISARenderer):
   # so isel can lower it to hardware v_exp_f32 (Phase N1A).
   code_for_op = {op: (lambda: None) for op in (Ops.ADD, Ops.MUL, Ops.SUB, Ops.LOAD, Ops.STORE, Ops.EXP2)}
 
+  @staticmethod
+  def bind_attention_wmma_roles(ctx:IselContext, sink:UOp, roles:tuple) -> None:
+    """Rebind roles after post-isel graph substitution rebuilt machine nodes."""
+    from tinygrad.uop.ops import AttentionWMMARole, set_attention_wmma_role
+    sites = [u for u in sink.toposort() if u.op is Ops.INS and u.arg in (AMDOps.V_WMMA, AMDOps.V_WMMA_ZERO)]
+    if len(sites) != len(roles):
+      raise RuntimeError(f"attention WMMA post-isel site count changed: {len(roles)} -> {len(sites)}")
+    for site,role in zip(sites, roles):
+      if not isinstance(role, AttentionWMMARole): raise TypeError("attention WMMA role binding requires typed roles")
+      set_attention_wmma_role(site, role)
+
   def is_two_address(self, x:UOp) -> bool: return False    # AMD VALU is 3-address
   def _spill_unsupported(self) -> NotImplementedError:
     # Inc 0 deliberately has no scratch ABI.  Keep this failure explicit: a
@@ -3186,10 +3217,12 @@ class AMDISARenderer(ISARenderer):
     return prg.replace(src=(UOp(Ops.SINK, src=metadata, arg=sink.arg),) + prg.src[1:])
 
   def _final_linear(self, lin:UOp) -> UOp:
+    from tinygrad.uop.ops import FinalLinearMetadata
     insts = list(lin.src)
     policy = lin.arg if isinstance(lin.arg, PreassembledStreamPolicy) else None
     if not (policy and policy.preserve_instruction_order): insts = self._schedule(insts)
-    proof = lin.arg if isinstance(lin.arg, CompilerCaptureProof) else None
+    larg = lin.arg.regalloc_proof if isinstance(lin.arg, FinalLinearMetadata) else lin.arg
+    proof = larg if isinstance(larg, CompilerCaptureProof) else None
     targeted = proof is not None and proof.wait_policy == "targeted_vmcnt"
     if not (policy and policy.preserve_waitcnt): insts = self._insert_waitcnt(insts, targeted=targeted)
     return lin.replace(src=tuple(self._resolve_labels(insts)))
@@ -3228,7 +3261,9 @@ class AMDISARenderer(ISARenderer):
     from tinygrad.renderer.amd.elf import assemble_linear
     # Phase J: consumer-only waitcnt BEFORE label resolution (inserting waits shifts byte positions -> branch offsets
     # must be resolved after).
-    proof = lin.arg if isinstance(lin.arg, CompilerCaptureProof) else None
+    from tinygrad.uop.ops import FinalLinearMetadata
+    larg = lin.arg.regalloc_proof if isinstance(lin.arg, FinalLinearMetadata) else lin.arg
+    proof = larg if isinstance(larg, CompilerCaptureProof) else None
     return assemble_linear(self._assembly_program(prg, proof), self._final_linear(lin), self.target.arch)
 
   def compile_capture(self, prg:UOp, lin:UOp, binary:bytes, proof:CompilerCaptureProof|None=None) -> dict|None:

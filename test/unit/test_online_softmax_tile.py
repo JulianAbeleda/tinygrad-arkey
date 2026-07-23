@@ -912,6 +912,27 @@ def test_gfx1100_model_grid_static_loop_body_is_invariant(hq,hkv,kv):
   mn=[str(u.arg).split("(",1)[0] for u in linear.src if not isinstance(u.arg,tuple)]
   assert mn.count("v_wmma_f32_16x16x16_f16")==16 and mn.count("s_barrier")==1
 
+def test_gfx1100_model_grid_final_wmma_role_ledger():
+  from tinygrad.codegen import to_program
+  from tinygrad.helpers import Target
+  from tinygrad.renderer.isa.amd import AMDISARenderer
+  from tinygrad.schedule.wmma import amd_gfx1100_q16_grid_hd128_loop_attention
+  from tinygrad.uop.ops import AttentionWMMARole, FinalLinearMetadata, KernelInfo, ParamArg
+  hq,hkv,q_tokens,kv_tokens=8,2,32,64
+  sizes=(hq*q_tokens*128,hq*q_tokens*128,hkv*kv_tokens*128,hkv*kv_tokens*128)
+  p=[UOp(Ops.PARAM,dtypes.half.ptr(sizes[i]),arg=ParamArg(i)) for i in range(4)]
+  sink=amd_gfx1100_q16_grid_hd128_loop_attention(p[1],p[2],p[3],p[0],q_tokens=q_tokens,q_heads=hq,kv_heads=hkv,
+    kv_tokens=kv_tokens,scale=.25,kernel_info=KernelInfo(name="model_grid_role_ledger"))
+  program=to_program(sink,AMDISARenderer(Target.parse("AMD:ISA:gfx1100")))
+  linear=next(u for u in program.src if u.op is Ops.LINEAR)
+  assert isinstance(linear.arg,FinalLinearMetadata) and linear.arg.wmma_roles == program.arg.wmma_roles
+  sites=program.arg.wmma_roles.sites
+  assert all(isinstance(role,AttentionWMMARole) for _,role in sites)
+  assert [role.tile for _,role in sites if role.contraction == "QK"] == list(range(8))
+  assert [role.tile for _,role in sites if role.contraction == "PV"] == list(range(8))
+  assert all("wmma" in type(linear.src[idx].arg).__name__.lower() or
+             "wmma" in str(getattr(linear.src[idx].arg,"op","")).lower() for idx,_ in sites)
+
 @pytest.mark.parametrize("hq,hkv",[(8,2),(10,2)])
 def test_gfx1100_model_grid_causal_mask_uses_runtime_q_tile(hq,hkv):
   import numpy as np

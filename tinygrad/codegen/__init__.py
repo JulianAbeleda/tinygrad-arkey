@@ -5,6 +5,7 @@ import itertools
 from tinygrad.helpers import DISABLE_FAST_IDIV, TRANSCENDENTAL, SPEC, DEBUG, VIZ, IMAGE, NOOPT, EMULATED_DTYPES, NOLOCALS, USE_TC, getenv
 from tinygrad.helpers import ALLOW_TF32, TracingKey, Context, panic
 from tinygrad.uop.ops import PatternMatcher, graph_rewrite, UOp, pm_lower_index_dtype, Ops, UPat, track_rewrites, KernelInfo, ProgramInfo, GroupOp
+from tinygrad.uop.ops import AttentionWMMARole, WMMARoleLedger, FinalLinearMetadata, get_attention_wmma_role, set_attention_wmma_role
 from tinygrad.uop.ops import ParamArg
 from tinygrad.uop.render import pyrender
 from tinygrad.uop.spec import type_verify, spec_tensor, spec_program
@@ -303,20 +304,49 @@ def line_rewrite(lst:list[UOp], pm:PatternMatcher, ctx=None) -> list[UOp]:
   replaced: dict[UOp, UOp] = {}
   for u in lst:
     nu = u.replace(src=tuple([replaced.get(x, x) for x in u.src]))
+    if (role:=get_attention_wmma_role(u)) is not None: set_attention_wmma_role(nu, role)
     ret: tuple[UOp, list[UOp]] = cast(tuple[UOp, list[UOp]]|None, pm.rewrite(nu, ctx)) or (nu, [nu])
+    if role is not None:
+      if len(ret[1]) == 1:
+        for node in tuple(dict.fromkeys((ret[0], ret[1][0]))): set_attention_wmma_role(node, role)
+      else:
+        machine = [node for node in ret[1] if "wmma" in type(node.arg).__name__.lower() or
+                   "wmma" in str(getattr(node.arg, "op", "")).lower()]
+        if len(machine) != 1: raise RuntimeError("attention WMMA role lost across one-to-many line replacement")
+        set_attention_wmma_role(machine[0], role)
     replaced[u] = ret[0]
     newlst.extend(ret[1])
   return newlst
 
+# The final native rewrite may intern equal physical instructions.  Preserve roles by
+# LINEAR occurrence here instead of trying to attach distinct roles to one UOp object.
+def line_rewrite_wmma_ledger(lst:list[UOp], pm:PatternMatcher, ctx=None) -> tuple[list[UOp], WMMARoleLedger]:
+  newlst: list[UOp] = []
+  replaced: dict[UOp, UOp] = {}
+  sites: list[tuple[int, AttentionWMMARole]] = []
+  for u in lst:
+    nu = u.replace(src=tuple(replaced.get(x, x) for x in u.src))
+    ret: tuple[UOp, list[UOp]] = cast(tuple[UOp, list[UOp]]|None, pm.rewrite(nu, ctx)) or (nu, [nu])
+    if (role:=get_attention_wmma_role(u)) is not None:
+      machine = [i for i,node in enumerate(ret[1]) if "wmma" in type(node.arg).__name__.lower() or
+                 "wmma" in str(getattr(node.arg, "op", "")).lower()]
+      if len(machine) != 1: raise RuntimeError("attention WMMA role lost across final line replacement")
+      sites.append((len(newlst)+machine[0], role))
+    replaced[u] = ret[0]
+    newlst.extend(ret[1])
+  return newlst, WMMARoleLedger(tuple(sites)).validate()
+
 def do_linearize(ctx:Renderer, prg:UOp, sink:UOp) -> UOp:
   if DEBUG >= 3 and sink.arg.applied_opts: print(f"{sink.arg.function_name:<25} opts: {sink.arg.applied_opts}")
   lst = linearize(sink)
+  expected_roles = prg.arg.wmma_role_expectation if isinstance(prg.arg, ProgramInfo) else ()
   if getenv("V_DOT2_LOWERING") and ctx.target.device == "AMD":
     lst = cg_extras.line_lower_fdot2(lst)
   lst = line_rewrite(lst, pm_linearize_cleanups)
   # isa renderers need to allocate registers
   selection_proof = sink.tag if isinstance(sink.tag, CompilerCaptureProof) else None
   final_regalloc_proof = None
+  native_ledger = None
   if isinstance(ctx, ISARenderer):
     # Order compiler-owned reusable register leases while their structural
     # dependencies are still present.  Backend pre-allocation cleanup may then
@@ -325,11 +355,18 @@ def do_linearize(ctx:Renderer, prg:UOp, sink:UOp) -> UOp:
     if ctx.pre_regalloc_matcher is not None: lst = line_rewrite(lst, ctx.pre_regalloc_matcher, PreRegAllocContext())
     regalloc_ctx = LinearScanRegallocContext(lst, ctx)
     lst = line_rewrite(lst, pm_regalloc_rewrite, regalloc_ctx)
-    lst = line_rewrite(lst, ctx.post_regalloc_matcher, regalloc_ctx)
+    lst, native_ledger = line_rewrite_wmma_ledger(lst, ctx.post_regalloc_matcher, regalloc_ctx)
     if selection_proof is not None and not regalloc_ctx.spills and regalloc_ctx.stack_size == 0:
       final_regalloc_proof = selection_proof.finalize_zero_spill()
     if DEBUG >= 4: print(ctx.asm_str(lst, sink.arg.function_name))
-  return prg.replace(src=prg.src + (UOp(Ops.LINEAR, src=tuple(lst), arg=final_regalloc_proof),))
+  ledger = native_ledger if native_ledger is not None else \
+    WMMARoleLedger(tuple((i, role) for i,u in enumerate(lst) if (role:=get_attention_wmma_role(u)) is not None)).validate()
+  sites = ledger.sites
+  if sorted(expected_roles) != sorted(role for _,role in sites):
+    raise RuntimeError(f"attention WMMA role ledger loss/tamper: expected {expected_roles}, final {tuple(r for _,r in sites)}")
+  linear_arg = FinalLinearMetadata(final_regalloc_proof, ledger) if sites else final_regalloc_proof
+  new_arg = replace(prg.arg, wmma_roles=ledger) if isinstance(prg.arg, ProgramInfo) else prg.arg
+  return prg.replace(src=prg.src + (UOp(Ops.LINEAR, src=tuple(lst), arg=linear_arg),), arg=new_arg)
 
 def do_estimates(prg:UOp, sink:UOp, lin:UOp) -> UOp|None:
   if sink.arg.estimates is not None: return None
@@ -358,7 +395,8 @@ def do_assemble(ctx:Renderer, prg:UOp, lin:UOp) -> UOp:
       accepts_proof = len(inspect.signature(capture).parameters) >= 4
     except (TypeError, ValueError):
       accepts_proof = False
-    record = capture(prg, lin, binary, lin.arg) if accepts_proof else capture(prg, lin, binary)
+    proof = lin.arg.regalloc_proof if isinstance(lin.arg, FinalLinearMetadata) else lin.arg
+    record = capture(prg, lin, binary, proof) if accepts_proof else capture(prg, lin, binary)
   else: record = None
   new_arg = prg.arg
   if record is not None and hasattr(new_arg, "aux"):
@@ -405,7 +443,13 @@ def do_to_program(ast:UOp, renderer:Renderer) -> UOp:
   elif ast.op is Ops.SINK:
     assert isinstance(ast.arg, KernelInfo), "requires KernelInfo on arg to to_program"
     full_sink = full_rewrite_to_sink(ast, renderer, optimize=ast.tag is None)
-    prog_info = ProgramInfo.from_sink(full_sink)
+    declared_roles = []
+    for u in full_sink.toposort():
+      if u.op is not Ops.WMMA: continue
+      role = u.tag if isinstance(u.tag, AttentionWMMARole) else \
+        AttentionWMMARole(u.tag[1], u.tag[2]) if isinstance(u.tag, tuple) and len(u.tag) == 3 and u.tag[0] == "attention_wmma" else None
+      if role is not None: role.validate(); set_attention_wmma_role(u, role); declared_roles.append(role)
+    prog_info = replace(ProgramInfo.from_sink(full_sink), wmma_role_expectation=tuple(declared_roles))
     # instruction selection
     if isinstance(renderer, ISARenderer):
       if (loop_state_pm:=getattr(renderer,"native_loop_state_matcher",None)) is not None:
@@ -417,6 +461,8 @@ def do_to_program(ast:UOp, renderer:Renderer) -> UOp:
       full_sink = graph_rewrite(full_sink, renderer.isel_matcher, ctx=isel_ctx, name="instruction selection", bottom_up=True)
       if renderer.post_isel_matcher is not None:
         full_sink = graph_rewrite(full_sink, renderer.post_isel_matcher, ctx=isel_ctx, name="post instruction selection", bottom_up=True)
+      if declared_roles and (bind_roles:=getattr(renderer, "bind_attention_wmma_roles", None)) is not None:
+        bind_roles(isel_ctx, full_sink, tuple(declared_roles))
       if (capture_proof := renderer.capture_selection_proof(isel_ctx)) is not None:
         full_sink = full_sink.replace(tag=capture_proof)
     prg = UOp(Ops.PROGRAM, src=(full_sink, UOp(Ops.DEVICE, arg=renderer.target.device)), arg=prog_info)

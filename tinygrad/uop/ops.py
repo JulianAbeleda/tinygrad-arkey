@@ -1293,6 +1293,29 @@ class AttentionWMMARole(NamedTuple):
       raise ValueError("invalid attention WMMA role")
     return self
 
+attention_wmma_roles:weakref.WeakKeyDictionary[UOp, AttentionWMMARole] = weakref.WeakKeyDictionary()
+
+def set_attention_wmma_role(u:UOp, role:AttentionWMMARole) -> None:
+  role.validate()
+  if (old:=attention_wmma_roles.get(u)) is not None and old != role: raise RuntimeError("attention WMMA role tamper detected")
+  attention_wmma_roles[u] = role
+
+def get_attention_wmma_role(u:UOp) -> AttentionWMMARole|None: return attention_wmma_roles.get(u)
+
+class WMMARoleLedger(NamedTuple):
+  sites: tuple[tuple[int, AttentionWMMARole], ...] = ()
+  def validate(self):
+    if any(not isinstance(i, int) or i < 0 or not isinstance(r, AttentionWMMARole) for i,r in self.sites):
+      raise TypeError("WMMA role ledger requires typed non-negative sites")
+    if tuple(i for i,_ in self.sites) != tuple(sorted({i for i,_ in self.sites})):
+      raise ValueError("WMMA role ledger sites must be unique and ordered")
+    for _,role in self.sites: role.validate()
+    return self
+
+class FinalLinearMetadata(NamedTuple):
+  regalloc_proof: Any = None
+  wmma_roles: WMMARoleLedger = WMMARoleLedger()
+
 class DeferredReduceSlot(NamedTuple):
   slot: int
   # Inner-to-outer view descriptors: (op, arg, number of non-owner sources).
@@ -1722,6 +1745,8 @@ class ProgramInfo:
   outs: tuple[int, ...] = ()
   ins: tuple[int, ...] = ()
   aux: tuple = ()
+  wmma_roles: WMMARoleLedger = WMMARoleLedger()
+  wmma_role_expectation: tuple[AttentionWMMARole, ...] = ()
 
   @property
   def function_name(self): return to_function_name(self.name)
