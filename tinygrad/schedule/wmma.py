@@ -542,7 +542,7 @@ def amd_gfx1100_q32_hq4_hkv2_kv64_hd128_loop_attention(q:UOp, k:UOp, v:UOp, out:
   drain=UOp(Ops.AMD_ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,group,final_l,*final_c),arg=AMDAttentionOutputDrainSpec(grid=grid))
   return UOp.sink(m_init,l_init,c_init,end,drain,arg=kernel_info).replace(tag=("amd_gfx1100_q32_hq4_hkv2_kv64_hd128_loop_v1",))
 
-def amd_gfx1100_q16_grid_hd128_loop_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_tokens:int,q_heads:int,kv_heads:int,kv_tokens:int,scale:float,kernel_info,causal:bool=False,valid_kv:int|None=None,query_start:int|None=None)->UOp:
+def amd_gfx1100_q16_grid_hd128_loop_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_tokens:int,q_heads:int,kv_heads:int,kv_tokens:int,scale:float,kernel_info,causal:bool=False,valid_kv:int|None=None,query_start:int|None=None,output_block_base:int=0,acc_blocks:int=8)->UOp:
   """Fixed 16-WMMA attention wave with compile-time model geometry."""
   from tinygrad.uop.ops import AMDAttentionOutputDrainSpec, AMDAttentionGridSpec, AMDLoopStateSpec, AMDPackedFragmentLoopSpec, AxisType
   grid=AMDAttentionGridSpec(q_tokens=q_tokens,q_heads=q_heads,kv_heads=kv_heads,group_ratio=q_heads//kv_heads,kv_tokens=kv_tokens); grid.validate()
@@ -551,19 +551,20 @@ def amd_gfx1100_q16_grid_hd128_loop_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_toke
   if tuple(x.ptrdtype.base for x in owners)!=(dtypes.half,)*4 or not isinstance(scale,float) or not math.isfinite(scale) or scale<=0: raise ValueError("grid loop requires fp16 and finite scale")
   valid_kv=kv_tokens if valid_kv is None else valid_kv
   if not isinstance(valid_kv,int) or isinstance(valid_kv,bool) or not 0<=valid_kv<=kv_tokens: raise ValueError("valid_kv is outside KV geometry")
+  if (output_block_base,acc_blocks) not in {(0,8),(0,4),(4,4)}: raise ValueError("grid loop requires a full or aligned accumulator slice")
   if query_start is None: query_start=valid_kv-q_tokens
   lane=UOp.special(32,"lidx0"); group=UOp.special(q_heads*grid.q_tiles,"gidx0"); col=lane.alu(Ops.AND,UOp.const(dtypes.weakint,15)); zero=UOp.const(dtypes.float.vec(8),(0.0,)*8); axes=((),(),tuple((-120-i,2) for i in range(3))); warg=("WMMA_16_16_16_half_float",(16,16,16),dtypes.half,dtypes.float,"AMD:gfx1100",32,axes,())
-  rng=UOp.range((kv_tokens+15)//16,9600,AxisType.REDUCE); mreg=UOp.placeholder((8,),dtypes.float,9601,addrspace=AddrSpace.REG); lreg=UOp.placeholder((8,),dtypes.float,9602,addrspace=AddrSpace.REG); creg=UOp.placeholder((64,),dtypes.float,9603,addrspace=AddrSpace.REG)
+  rng=UOp.range((kv_tokens+15)//16,9600,AxisType.REDUCE); mreg=UOp.placeholder((8,),dtypes.float,9601,addrspace=AddrSpace.REG); lreg=UOp.placeholder((8,),dtypes.float,9602,addrspace=AddrSpace.REG); creg=UOp.placeholder((acc_blocks*8,),dtypes.float,9603,addrspace=AddrSpace.REG)
   def wr(reg,role,value,b=0,o=0,a="write"): return tuple(UOp(Ops.AMD_ATTENTION_LOOP_STATE,dtypes.void,(reg.index(UOp.const(dtypes.weakint,o+i)).store(value.gep(i)),),arg=AMDLoopStateSpec(role=role,access=a,block=b,lane=i,owner=9604)) for i in range(8))
-  mi=UOp.group(*wr(mreg,"m",UOp.const(dtypes.float.vec(8),(-float("inf"),)*8),a="init")); li=UOp.group(*wr(lreg,"l",zero,a="init")); ci=UOp.group(*(x for b in range(8) for x in wr(creg,"acc",zero,b,b*8,"init")))
+  mi=UOp.group(*wr(mreg,"m",UOp.const(dtypes.float.vec(8),(-float("inf"),)*8),a="init")); li=UOp.group(*wr(lreg,"l",zero,a="init")); ci=UOp.group(*(x for b in range(acc_blocks) for x in wr(creg,"acc",zero,b,b*8,"init")))
   def rd(reg,init,role,b=0,o=0,final=False): return UOp(Ops.STACK,dtypes.float.vec(8),tuple(UOp(Ops.AMD_ATTENTION_LOOP_STATE,dtypes.float,(reg,init) if final else (reg,init,rng),arg=AMDLoopStateSpec(role=role,access="final_read" if final else "read",block=b,lane=i,owner=9604)) for i in range(8)))
   def fr(owner,role,b): return UOp(Ops.AMD_PACKED_FRAGMENT_LOAD,dtypes.half.vec(16),(owner,lane,col,rng,group),arg=AMDPackedFragmentLoopSpec(role=role,head_block=b,grid=grid))
   om,ol=rd(mreg,mi,"m"),rd(lreg,li,"l"); qk=zero
   for b in range(8): qk=UOp(Ops.WMMA,dtypes.float.vec(8),(fr(q,"Q",b),fr(k,"K",b),qk),warg,tag=("attention_wmma","QK",b))
   p,nm,nl,alpha=amd_gfx1100_row_softmax_state(qk,om,ol,spec=AMDRowSoftmaxRepackSpec(score_scale=scale,mode="loop_state_v1",validity_mode="causal_v1" if causal else "tail_v1",query_start=query_start,kv_start=-1,valid_kv=valid_kv,dynamic_kv_v1=True,grid=grid),kv_tile=rng,grid_id=group); writes=[*wr(mreg,"m",nm),*wr(lreg,"l",nl)]
-  for b in range(8):
-    oc=rd(creg,ci,"acc",b,b*8); pv=UOp(Ops.WMMA,dtypes.float.vec(8),(p,fr(v,"V",b),oc.alu(Ops.MUL,alpha)),warg,tag=("attention_wmma","PV",b)); writes.extend(wr(creg,"acc",pv,b,b*8))
-  end=UOp.group(*writes).end(rng).replace(tag=("amd_gfx1100_attention_grid_loop_end_v1",rng)); fl=rd(lreg,end,"l",final=True); fc=tuple(rd(creg,end,"acc",b,b*8,final=True) for b in range(8)); drain=UOp(Ops.AMD_ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,group,fl,*fc),arg=AMDAttentionOutputDrainSpec(grid=grid))
+  for b in range(acc_blocks):
+    oc=rd(creg,ci,"acc",b,b*8); pv=UOp(Ops.WMMA,dtypes.float.vec(8),(p,fr(v,"V",b+output_block_base),oc.alu(Ops.MUL,alpha)),warg,tag=("attention_wmma","PV",b)); writes.extend(wr(creg,"acc",pv,b,b*8))
+  end=UOp.group(*writes).end(rng).replace(tag=("amd_gfx1100_attention_grid_loop_end_v1",rng)); fl=rd(lreg,end,"l",final=True); fc=tuple(rd(creg,end,"acc",b,b*8,final=True) for b in range(acc_blocks)); drain=UOp(Ops.AMD_ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,group,fl,*fc),arg=AMDAttentionOutputDrainSpec(native_abi="amd_gfx1100_attention_output_drain_v1" if acc_blocks==8 else "amd_gfx1100_attention_output_drain_acc_slice_v2",blocks=acc_blocks,grid=grid,output_block_base=output_block_base))
   return UOp.sink(mi,li,ci,end,drain,arg=kernel_info).replace(tag=("amd_gfx1100_q16_grid_hd128_loop_v1",))
 
 class OnlineSoftmaxBlockTransition(NamedTuple):

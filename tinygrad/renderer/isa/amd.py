@@ -913,13 +913,13 @@ def isel_attention_output_drain(ctx:IselContext, x:UOp):
   from tinygrad.uop.ops import AMDAttentionOutputDrainSpec
   if not isinstance(x.arg, AMDAttentionOutputDrainSpec): raise ValueError("AMD attention output drain is missing its typed ABI")
   x.arg.validate()
-  grid=x.arg.grid; expected=11 if grid is not None else 10; src=list(x.src)
+  grid=x.arg.grid; expected=(3+x.arg.blocks) if grid is not None else (2+x.arg.blocks); src=list(x.src)
   if grid is not None and src[1].op is Ops.CAST: src[1]=src[1].src[0]
   if len(src) != expected or x.dtype != dtypes.void or not isinstance(src[0].dtype, PtrDType) or \
      src[0].dtype.base != dtypes.half or src[0].dtype.size != (grid.q_heads*grid.q_tokens*128 if grid is not None else 2048):
     raise ValueError("AMD attention output drain has malformed ownership sources")
   state=src[2:] if grid is not None else src[1:]
-  if state[0].dtype != dtypes.float.vec(8) or any(s.dtype != dtypes.float.vec(8) for s in state[1:]):
+  if state[0].dtype != dtypes.float.vec(8) or len(state) != 1+x.arg.blocks or any(s.dtype != dtypes.float.vec(8) for s in state[1:]):
     raise ValueError("AMD attention output drain requires l plus eight native PV fragments")
   return UOp(Ops.INS,dtypes.void,src=tuple(src),arg=AMDOps.ATTENTION_OUTPUT_DRAIN)
 
@@ -3005,8 +3005,9 @@ def lower_inst(x:UOp):
     # v1..v3 are the sole address/temporary lease.  This keeps all 64 stores
     # sequential and prevents scalar epilogue SSA from spanning the 8 PV C
     # fragments.
-    grid = len(src)==11
-    if len(src) not in {10,11} or not isinstance(src[0].reg, Register):
+    grid = len(src) in {7,11}
+    blocks=len(src)-(3 if grid else 2)
+    if blocks not in {4,8} or not isinstance(src[0].reg, Register):
       raise ValueError("opaque attention output drain lost its output pointer")
     ptr = src[0].reg
     if ptr.index < 0: raise ValueError("opaque attention output drain has invalid output pointer")
@@ -3015,7 +3016,7 @@ def lower_inst(x:UOp):
     if grid:
       if not isinstance(src[1].reg,Register): raise ValueError("grid attention drain lost gidx0")
       insts.append(_ins(v_mul_lo_u32(_V[4],_Vr(src[1].reg),2048),None))
-    for j in range(8):
+    for j in range(blocks):
       for e in range(8):
         c=8+j*8+e; l=80+e
         insts += [_ins(v_cmp_neq_f32_e32(0,_V[l]),None), _ins(v_rcp_f32_e32(_V[3],_V[l]),None),

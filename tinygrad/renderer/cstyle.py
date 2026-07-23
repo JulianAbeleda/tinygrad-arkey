@@ -139,16 +139,16 @@ def _hip_expand_attention_output_drain(x:UOp) -> UOp:
   if not isinstance(x.arg, AMDAttentionOutputDrainSpec): raise ValueError("HIP attention output drain is missing its typed ABI")
   x.arg.validate()
   grid=x.arg.grid
-  if len(x.src) != (11 if grid is not None else 10) or x.dtype != dtypes.void: raise ValueError("HIP attention output drain has malformed sources")
+  if len(x.src) != (3+x.arg.blocks if grid is not None else 2+x.arg.blocks) or x.dtype != dtypes.void: raise ValueError("HIP attention output drain has malformed sources")
   out, *rest=x.src
   group, l, acc = (rest[0],rest[1],rest[2:]) if grid is not None else (None,rest[0],rest[1:])
   lane=UOp.special(32,"lidx0"); col=lane.alu(Ops.AND,UOp.const(dtypes.weakint,15)); half=lane.alu(Ops.SHR,UOp.const(dtypes.weakint,4))
   stores=[]
-  for j in range(8):
+  for j in range(x.arg.blocks):
     for e in range(8):
       den=l.gep(e); recip=den.ne(UOp.const(dtypes.float,0)).where(UOp.const(dtypes.float,1)/den,UOp.const(dtypes.float,0))
       base=group*UOp.const(dtypes.weakint,2048) if group is not None else UOp.const(dtypes.weakint,0)
-      dst=out.index(base+(UOp.const(dtypes.weakint,2*e)+half)*128+j*16+col)
+      dst=out.index(base+(UOp.const(dtypes.weakint,2*e)+half)*128+(j+x.arg.output_block_base)*16+col)
       stores.append(dst.store((acc[j].gep(e)*recip).cast(dtypes.half)))
   return UOp.group(*stores)
 

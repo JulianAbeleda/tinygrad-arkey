@@ -352,6 +352,8 @@ class Scheduler:
           self.ast = amd_gfx1100_q16_grid_hd128_loop_attention(params[1], params[2], params[3], params[0],
             q_tokens=grid.q_tokens, q_heads=grid.q_heads, kv_heads=grid.kv_heads, kv_tokens=grid.kv_tokens,
             scale=scale, causal=comp.attention_causal,
+            output_block_base=context.output_block_base if context is not None else 0,
+            acc_blocks=context.acc_blocks if context is not None else 8,
             kernel_info=replace(self.ast.arg, candidate_context=context if context is not None else existing_context))
           self.tensor_core = next((tc for tc in self.ren.tensor_cores if tc.dims == (16,16,16) and
                                    tc.dtype_in == dtypes.half and tc.dtype_out == dtypes.float), None)

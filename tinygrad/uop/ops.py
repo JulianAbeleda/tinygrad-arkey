@@ -1275,6 +1275,8 @@ class SharedAttentionCandidateContext(NamedTuple):
   hkv: int
   hd: int
   causal: bool
+  output_block_base: int = 0
+  acc_blocks: int = 8
 
   @property
   def schema_version(self) -> int: return 1
@@ -1290,6 +1292,7 @@ class SharedAttentionCandidateContext(NamedTuple):
     if not all(isinstance(x, int) and x > 0 for x in (self.q_tokens, self.kv_tokens, self.hq, self.hkv, self.hd)) or self.start_pos < 0:
       raise ValueError("invalid shared attention geometry")
     if self.hd != 128 or self.hq % self.hkv: raise ValueError("shared attention requires Hd128 integral GQA")
+    if (self.output_block_base,self.acc_blocks) not in {(0,8),(0,4),(4,4)}: raise ValueError("invalid shared attention accumulator slice")
     return self
 
 class NativeAttentionRequest(NamedTuple):
@@ -1639,10 +1642,14 @@ class AMDAttentionOutputDrainSpec(NamedTuple):
   lanes_per_fragment: int = 8
   address_expr: str = "e*256+halfwave*128+j*16+col"
   grid: AMDAttentionGridSpec|None = None
+  output_block_base: int = 0
 
   def validate(self):
-    if (self.native_abi, self.head_dim, self.blocks, self.lanes_per_fragment, self.address_expr) != \
-       ("amd_gfx1100_attention_output_drain_v1", 128, 8, 8, "e*256+halfwave*128+j*16+col"):
+    full=("amd_gfx1100_attention_output_drain_v1",128,8,8,"e*256+halfwave*128+j*16+col",0)
+    slice_=("amd_gfx1100_attention_output_drain_acc_slice_v2",128,4,8,"e*256+halfwave*128+j*16+col",self.output_block_base)
+    if (self.native_abi,self.head_dim,self.blocks,self.lanes_per_fragment,self.address_expr,self.output_block_base) != full and slice_ not in {
+      ("amd_gfx1100_attention_output_drain_acc_slice_v2",128,4,8,"e*256+halfwave*128+j*16+col",0),
+      ("amd_gfx1100_attention_output_drain_acc_slice_v2",128,4,8,"e*256+halfwave*128+j*16+col",4)}:
       raise ValueError("AMD attention output drain requires the exact gfx1100 Hd128 v1 ABI")
     if self.grid is not None: self.grid.validate()
     return self
