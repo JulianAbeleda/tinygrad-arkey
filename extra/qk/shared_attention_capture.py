@@ -7,11 +7,13 @@ import hashlib, json, math, re
 from typing import Any, Mapping
 
 from tinygrad.uop.ops import (AttentionWMMARole, KernelInfo, Ops, ProgramInfo,
-  SharedAttentionCandidateContext, UOp)
+  SharedAttentionCandidateContext, StateHandle, UOp)
 
 CAPTURE_SCHEMA = "tinygrad.shared_attention_compiler_capture.v2"
 ACC_SLICE_CAPTURE_SCHEMA = "tinygrad.shared_attention_compiler_capture.acc_slice_v3"
 ACC_SLICE_PASS_SCHEMA = "tinygrad.shared_attention_acc_slice_pass.v1"
+PHASE_CAPTURE_SCHEMA = "tinygrad.shared_attention_compiler_capture.phase_v4"
+PHASE_PLAN_SCHEMA = "tinygrad.shared_attention_phase_plan.v1"
 _RESOURCE_FIELDS = ("vgpr", "sgpr", "lds_bytes", "scratch_bytes", "vgpr_spills", "sgpr_spills", "wavefront_size")
 
 def _sha(data:bytes) -> str: return hashlib.sha256(data).hexdigest()
@@ -22,15 +24,154 @@ def _canonical(value:Mapping[str,Any]) -> bytes:
   return json.dumps(value,sort_keys=True,separators=(",",":"),allow_nan=False).encode()
 
 def _context_json(ctx:SharedAttentionCandidateContext, *, include_slice:bool=True) -> dict[str,Any]:
-  names=ctx._fields if include_slice else tuple(x for x in ctx._fields if x not in {"output_block_base","acc_blocks"})
+  names=ctx._fields if include_slice else tuple(x for x in ctx._fields if x != "acc_blocks")
   return {name:getattr(ctx,name) for name in names}
 
 def _context_from_json(row:Mapping[str,Any]) -> SharedAttentionCandidateContext:
-  full=set(SharedAttentionCandidateContext._fields); legacy=full-{"output_block_base","acc_blocks"}
-  if frozenset(row) not in {frozenset(full),frozenset(legacy)}: raise ValueError("candidate_context fields are malformed")
+  full=set(SharedAttentionCandidateContext._fields); legacy=full-{"acc_blocks"}; old=full|{"output_block_base"}
+  if frozenset(row) not in {frozenset(full),frozenset(legacy),frozenset(old)}:
+    raise ValueError("candidate_context fields are malformed")
   values={**row}
-  values.setdefault("output_block_base",0); values.setdefault("acc_blocks",8)
-  return SharedAttentionCandidateContext(*(values[name] for name in SharedAttentionCandidateContext._fields)).validate()
+  values.setdefault("acc_blocks",8)
+  ret=SharedAttentionCandidateContext(*(values[name] for name in SharedAttentionCandidateContext._fields))
+  _validate_candidate_context(ret)
+  return ret
+
+def _validate_candidate_context(ctx:SharedAttentionCandidateContext) -> None:
+  # Keep evidence compatible while legacy compiler contexts move slice base to
+  # pass metadata. Do not depend on the removed output_block_base attribute.
+  if not isinstance(ctx,SharedAttentionCandidateContext): raise TypeError("shared attention candidate context is malformed")
+  if not isinstance(ctx.profile,str) or not ctx.profile or ctx.strategy not in {"FULL_RESIDENT_OVERLAY","BOUNDED_PACKED_TILES"}:
+    raise ValueError("invalid shared attention profile/strategy")
+  if not all(isinstance(x,int) and not isinstance(x,bool) and x > 0 for x in
+             (ctx.q_tokens,ctx.kv_tokens,ctx.hq,ctx.hkv,ctx.hd,ctx.acc_blocks)) or ctx.start_pos < 0:
+    raise ValueError("invalid shared attention geometry")
+  if ctx.hd != 128 or ctx.hq % ctx.hkv or ctx.acc_blocks not in {4,8}:
+    raise ValueError("invalid shared attention GQA or accumulator ownership")
+
+@dataclass(frozen=True)
+class SharedAttentionStateHandleOwnership:
+  region: str
+  producer_phase_id: str
+  consumer_phase_id: str
+  boundary_ordinal: int
+  generation: int
+  block: int
+  block_count: int
+  lane: int
+  lane_count: int
+  lds_offset: int
+  storage_slot: int
+  storage_elements: int
+  lane_stride: int
+  element_offset: int
+  dtype: str
+  itemsize: int
+  shape: tuple[int,...]
+
+  @classmethod
+  def from_state_handle(cls, handle:StateHandle, *, block:int, block_count:int, lane:int, lane_count:int,
+                        lds_offset:int) -> SharedAttentionStateHandleOwnership:
+    handle.validate()
+    if handle.storage is None: raise ValueError("captured StateHandle must own local storage")
+    return cls(handle.region.name,handle.boundary.publish_phase,handle.boundary.reload_phase,handle.boundary.ordinal,
+               handle.generation,block,block_count,lane,lane_count,lds_offset,int(handle.storage.arg),handle.storage.ptrdtype.size,
+               handle.lane_stride,handle.element_offset,str(handle.region.dtype),
+               handle.region.dtype.itemsize,(handle.region.lanes,)).validate()
+
+  def validate(self) -> SharedAttentionStateHandleOwnership:
+    for name in (self.region,self.producer_phase_id,self.consumer_phase_id):
+      if not isinstance(name,str) or not re.fullmatch(r"[A-Za-z0-9_.:-]+",name):
+        raise ValueError("StateHandle region/phase ID is malformed")
+    if not isinstance(self.dtype,str) or not self.dtype: raise ValueError("StateHandle dtype is malformed")
+    if any(not isinstance(x,int) or isinstance(x,bool) for x in
+            (self.boundary_ordinal,self.generation,self.block,self.block_count,self.lane,self.lane_count,
+            self.lds_offset,self.storage_slot,self.storage_elements,self.lane_stride,self.element_offset,self.itemsize)):
+      raise ValueError("StateHandle ownership fields are malformed")
+    if self.boundary_ordinal < 0 or self.generation < 0: raise ValueError("StateHandle boundary/generation is malformed")
+    if self.block_count <= 0 or not 0 <= self.block < self.block_count or self.lane_count <= 0 or not 0 <= self.lane < self.lane_count:
+      raise ValueError("StateHandle logical ownership is out of range")
+    if self.itemsize <= 0 or self.lds_offset < 0 or self.lds_offset % self.itemsize:
+      raise ValueError("StateHandle LDS offset is invalid for dtype")
+    if any(not isinstance(x,int) or isinstance(x,bool) or x <= 0 for x in self.shape):
+      raise ValueError("StateHandle shape is malformed")
+    if self.storage_slot < 0 or self.storage_elements <= 0 or self.lane_stride < self.shape[0] or self.element_offset < 0 or \
+       self.element_offset+self.shape[0] > self.lane_stride:
+      raise ValueError("StateHandle storage/lane contract is malformed")
+    elements=math.prod(self.shape)
+    if self.lds_offset+elements*self.itemsize > self.storage_elements*self.itemsize:
+      raise ValueError("StateHandle ownership exceeds local storage")
+    return self
+
+  def to_json(self) -> dict[str,Any]:
+    return {"region":self.region,"producer_phase_id":self.producer_phase_id,"consumer_phase_id":self.consumer_phase_id,
+            "boundary_ordinal":self.boundary_ordinal,"generation":self.generation,"block":self.block,
+            "block_count":self.block_count,"lane":self.lane,"lane_count":self.lane_count,
+            "lds_offset":self.lds_offset,"storage_slot":self.storage_slot,"storage_elements":self.storage_elements,
+            "lane_stride":self.lane_stride,"element_offset":self.element_offset,"dtype":self.dtype,
+            "itemsize":self.itemsize,"shape":list(self.shape)}
+
+  @classmethod
+  def from_json(cls,row:Mapping[str,Any]) -> SharedAttentionStateHandleOwnership:
+    required={"region","producer_phase_id","consumer_phase_id","boundary_ordinal","generation","block","block_count",
+              "lane","lane_count","lds_offset","storage_slot","storage_elements","lane_stride","element_offset",
+              "dtype","itemsize","shape"}
+    if not isinstance(row,Mapping) or set(row) != required: raise ValueError("StateHandle fields are malformed")
+    if not isinstance(row["shape"],list): raise ValueError("StateHandle shape is malformed")
+    return cls(str(row["region"]),str(row["producer_phase_id"]),str(row["consumer_phase_id"]),
+               int(row["boundary_ordinal"]),int(row["generation"]),int(row["block"]),int(row["block_count"]),
+               int(row["lane"]),int(row["lane_count"]),int(row["lds_offset"]),int(row["storage_slot"]),
+               int(row["storage_elements"]),int(row["lane_stride"]),int(row["element_offset"]),str(row["dtype"]),int(row["itemsize"]),
+               tuple(int(x) for x in row["shape"])).validate()
+
+@dataclass(frozen=True)
+class SharedAttentionPhasePlan:
+  schema: str
+  phase_ids: tuple[str,...]
+  logical_graph_sha256: str
+  state_handles: tuple[SharedAttentionStateHandleOwnership,...]
+
+  def validate(self) -> SharedAttentionPhasePlan:
+    if self.schema != PHASE_PLAN_SCHEMA: raise ValueError("shared attention phase-plan schema mismatch")
+    if len(self.phase_ids) < 2 or len(set(self.phase_ids)) != len(self.phase_ids) or any(
+        not isinstance(x,str) or not re.fullmatch(r"[A-Za-z0-9_.:-]+",x) for x in self.phase_ids):
+      raise ValueError("compiler phase IDs are malformed or duplicated")
+    if not _is_sha(self.logical_graph_sha256): raise ValueError("phase-plan logical graph hash is malformed")
+    if not self.state_handles: raise ValueError("phase plan has no StateHandle ownership")
+    order={phase_id:index for index,phase_id in enumerate(self.phase_ids)}
+    groups:dict[tuple[str,str,str,int,int],list[SharedAttentionStateHandleOwnership]] = {}
+    for handle in self.state_handles:
+      handle.validate()
+      if handle.producer_phase_id not in order or handle.consumer_phase_id not in order or \
+         order[handle.producer_phase_id] >= order[handle.consumer_phase_id]:
+        raise ValueError("StateHandle producer/consumer phase mismatch")
+      groups.setdefault((handle.region,handle.producer_phase_id,handle.consumer_phase_id,
+                         handle.boundary_ordinal,handle.generation),[]).append(handle)
+    for handles in groups.values():
+      contracts={(x.block_count,x.lane_count,x.storage_slot,x.storage_elements,x.lane_stride,x.element_offset,
+                  x.dtype,x.itemsize,x.shape) for x in handles}
+      if len(contracts) != 1: raise ValueError("StateHandle shape/ownership contract mismatch")
+      block_count,lane_count,*_=next(iter(contracts)); pairs=[(x.block,x.lane) for x in handles]
+      if len(pairs) != len(set(pairs)): raise ValueError("StateHandle ownership overlap")
+      expected={(block,lane) for block in range(block_count) for lane in range(lane_count)}
+      if set(pairs) != expected: raise ValueError("StateHandle ownership gap")
+      intervals=sorted((x.lds_offset,x.lds_offset+math.prod(x.shape)*x.itemsize) for x in handles)
+      if any(right[0] < left[1] for left,right in zip(intervals,intervals[1:])):
+        raise ValueError("StateHandle LDS storage overlap")
+    return self
+
+  def to_json(self) -> dict[str,Any]:
+    return {"schema":self.schema,"phase_ids":list(self.phase_ids),"logical_graph_sha256":self.logical_graph_sha256,
+            "state_handles":[x.to_json() for x in self.state_handles]}
+
+  @classmethod
+  def from_json(cls,row:Mapping[str,Any]) -> SharedAttentionPhasePlan:
+    if not isinstance(row,Mapping) or set(row) != {"schema","phase_ids","logical_graph_sha256","state_handles"}:
+      raise ValueError("shared attention phase-plan fields are malformed")
+    if not isinstance(row["phase_ids"],list) or not isinstance(row["state_handles"],list):
+      raise ValueError("shared attention phase-plan lists are malformed")
+    return cls(str(row["schema"]),tuple(str(x) for x in row["phase_ids"]),str(row["logical_graph_sha256"]),
+               tuple(SharedAttentionStateHandleOwnership.from_json(x) for x in row["state_handles"])).validate()
 
 @dataclass(frozen=True)
 class SharedAttentionAccSlicePass:
@@ -164,6 +305,7 @@ class SharedAttentionCompilerCapture:
   reference_sha256: str
   capture_sha256: str = ""
   acc_slice_pass: SharedAttentionAccSlicePass|None = None
+  phase_plan: SharedAttentionPhasePlan|None = None
 
   def _payload(self) -> dict[str,Any]:
     payload = {"schema":self.schema,"candidate_context":_context_json(self.candidate_context,include_slice=self.schema!=CAPTURE_SCHEMA),
@@ -182,14 +324,17 @@ class SharedAttentionCompilerCapture:
                  "reference_sha256":self.reference_sha256}}
     if self.schema == ACC_SLICE_CAPTURE_SCHEMA:
       payload["acc_slice_pass"] = self.acc_slice_pass.to_json() if self.acc_slice_pass is not None else None
+    if self.schema == PHASE_CAPTURE_SCHEMA:
+      payload["phase_plan"] = self.phase_plan.to_json() if self.phase_plan is not None else None
     return payload
 
   def with_hash(self) -> SharedAttentionCompilerCapture:
     return replace(self,capture_sha256=_sha(_canonical(self._payload())))
 
   def validate(self) -> SharedAttentionCompilerCapture:
-    self.candidate_context.validate()
-    if self.schema not in {CAPTURE_SCHEMA,ACC_SLICE_CAPTURE_SCHEMA}: raise ValueError("shared attention capture schema mismatch")
+    _validate_candidate_context(self.candidate_context)
+    if self.schema not in {CAPTURE_SCHEMA,ACC_SLICE_CAPTURE_SCHEMA,PHASE_CAPTURE_SCHEMA}:
+      raise ValueError("shared attention capture schema mismatch")
     if not all(_is_sha(x) for x in (self.canonical_graph_sha256,self.hip_source_sha256,self.amd_isa_sha256,
                                     self.reference_sha256,self.capture_sha256)):
       raise ValueError("shared attention capture hash is malformed")
@@ -212,22 +357,31 @@ class SharedAttentionCompilerCapture:
     self.synchronization.validate()
     if self.barrier_count != self.synchronization.workgroup_barriers:
       raise ValueError("captured barrier count differs from synchronization contract")
-    expected_wmma = 16 if self.schema == CAPTURE_SCHEMA else 12
+    expected_wmma = 12 if self.schema == ACC_SLICE_CAPTURE_SCHEMA else 16
     if self.loop_count < 1 or self.static_wmma_count != expected_wmma or self.spill_count or self.scratch_bytes:
       raise ValueError("AMD ISA loop/WMMA/resource contract failed")
     wavefront=dict(self.hip_resources)["wavefront_size"]
     derived=_derive_synchronization((self.synchronization.workgroup_waves*wavefront,),wavefront,self.hip_source,self.amd_isa_text)
     if derived != self.synchronization: raise ValueError("shared attention synchronization evidence is not reproducible")
     if self.schema == CAPTURE_SCHEMA:
-      if self.acc_slice_pass is not None or (ctx.output_block_base,ctx.acc_blocks) != (0,8):
+      if self.acc_slice_pass is not None or self.phase_plan is not None or ctx.acc_blocks != 8:
         raise ValueError("v2 shared attention capture cannot claim accumulator-slice ownership")
       pv_tiles=list(range(8))
-    else:
-      if self.acc_slice_pass is None: raise ValueError("accumulator-slice capture metadata is missing")
+    elif self.schema == ACC_SLICE_CAPTURE_SCHEMA:
+      if self.acc_slice_pass is None or self.phase_plan is not None: raise ValueError("accumulator-slice capture metadata is missing")
       self.acc_slice_pass.validate()
-      if (ctx.output_block_base,ctx.acc_blocks) != (self.acc_slice_pass.output_block_base,self.acc_slice_pass.acc_blocks):
+      if ctx.acc_blocks != self.acc_slice_pass.acc_blocks:
         raise ValueError("capture context and accumulator-slice ownership differ")
       pv_tiles=list(range(4))
+    else:
+      if self.acc_slice_pass is not None or self.phase_plan is None:
+        raise ValueError("phase capture metadata is missing or mixed")
+      self.phase_plan.validate()
+      if self.phase_plan.logical_graph_sha256 != self.canonical_graph_sha256:
+        raise ValueError("phase plan and capture logical graphs differ")
+      if ctx.acc_blocks != 8:
+        raise ValueError("phase capture must own the complete output")
+      pv_tiles=list(range(8))
     sites = tuple(site for site,_ in self.wmma_roles)
     if len(self.wmma_roles) != expected_wmma or sites != tuple(sorted(set(sites))): raise ValueError("WMMA role sites are malformed")
     for role in (role for _,role in self.wmma_roles): role.validate()
@@ -249,6 +403,7 @@ class SharedAttentionCompilerCapture:
       "hip_source_sha256","hip_resources","amd_isa_text","amd_isa_sha256","loop_count","barrier_count","synchronization","static_wmma_count",
       "highest_vgpr","highest_sgpr","spill_count","scratch_bytes","lds_bytes","numeric","capture_sha256"}
     if row.get("schema") == ACC_SLICE_CAPTURE_SCHEMA: required.add("acc_slice_pass")
+    if row.get("schema") == PHASE_CAPTURE_SCHEMA: required.add("phase_plan")
     if set(row) != required: raise ValueError("shared attention capture fields are malformed")
     numeric = row["numeric"]
     if not isinstance(numeric,Mapping) or set(numeric) != {"max_abs","max_rel","rel_l2","reference_sha256"}:
@@ -258,6 +413,8 @@ class SharedAttentionCompilerCapture:
     roles = tuple((int(x[0]),AttentionWMMARole(str(x[1]),int(x[2]))) for x in row["wmma_roles"])
     pass_row=row.get("acc_slice_pass")
     acc_slice_pass=SharedAttentionAccSlicePass.from_json(pass_row) if isinstance(pass_row,Mapping) else None
+    phase_row=row.get("phase_plan")
+    phase_plan=SharedAttentionPhasePlan.from_json(phase_row) if isinstance(phase_row,Mapping) else None
     return cls(str(row["schema"]),_context_from_json(row["candidate_context"]),str(row["canonical_graph_sha256"]),
       int(row["compute_call_count"]),int(row["copy_call_count"]),tuple((int(x[0]),int(x[1])) for x in row["param_ownership"]),
       tuple(int(x) for x in row["allocation_elements"]),row["allocation_complete"],int(row["expanded_kv_buffers"]),
@@ -267,7 +424,7 @@ class SharedAttentionCompilerCapture:
       int(row["static_wmma_count"]),int(row["highest_vgpr"]),
       int(row["highest_sgpr"]),int(row["spill_count"]),int(row["scratch_bytes"]),int(row["lds_bytes"]),
       float(numeric["max_abs"]),float(numeric["max_rel"]),float(numeric["rel_l2"]),str(numeric["reference_sha256"]),
-      str(row["capture_sha256"]),acc_slice_pass).validate()
+      str(row["capture_sha256"]),acc_slice_pass,phase_plan).validate()
 
 def _program_parts(program:UOp) -> tuple[ProgramInfo,UOp,str,bytes|None]:
   if program.op is not Ops.PROGRAM or not isinstance(program.arg,ProgramInfo): raise TypeError("capture requires a final PROGRAM")
@@ -283,7 +440,7 @@ def _highest_register(text:str,prefix:str) -> int:
   return max(values,default=-1)+1
 
 def build_shared_attention_compiler_capture(*, schedule:UOp, compute_call:UOp, hip_program:UOp, amd_isa_program:UOp,
-                                            output:Any, reference:Any) -> SharedAttentionCompilerCapture:
+                                            output:Any, reference:Any, output_block_base:int=0) -> SharedAttentionCompilerCapture:
   """Construct evidence only from one scheduled call, two final programs, and numeric arrays."""
   import numpy as np
   calls = tuple(u for u in schedule.src if u.op is Ops.CALL)
@@ -292,7 +449,7 @@ def build_shared_attention_compiler_capture(*, schedule:UOp, compute_call:UOp, h
   if compute_sink.op is not Ops.SINK or not isinstance(compute_sink.arg,KernelInfo): raise TypeError("compute_call has no scheduled KernelInfo")
   context = compute_sink.arg.candidate_context
   if not isinstance(context,SharedAttentionCandidateContext): raise ValueError("compute call has no shared attention candidate context")
-  context.validate()
+  _validate_candidate_context(context)
   copy_calls = sum(any(x.op in {Ops.COPY,Ops.SLICE} for x in call.src[0].toposort()) for call in calls)
   compute_calls = len(calls)-copy_calls
   params = tuple(sorted((u.arg.slot,u.ptrdtype.size) for u in compute_sink.toposort() if u.op is Ops.PARAM))
@@ -326,10 +483,10 @@ def build_shared_attention_compiler_capture(*, schedule:UOp, compute_call:UOp, h
   schema, acc_slice_pass = CAPTURE_SCHEMA, None
   if context.acc_blocks == 4:
     logical_context = _context_json(context)
-    logical_context["output_block_base"], logical_context["acc_blocks"] = 0, 8
+    logical_context["acc_blocks"] = 8
     logical_graph_sha256 = _sha(_canonical({"candidate_context":logical_context,"param_ownership":[list(x) for x in params],
       "qk_tiles":list(range(8)),"pv_output_tiles":list(range(8))}))
-    acc_slice_pass = SharedAttentionAccSlicePass(ACC_SLICE_PASS_SCHEMA,context.output_block_base,context.acc_blocks,
+    acc_slice_pass = SharedAttentionAccSlicePass(ACC_SLICE_PASS_SCHEMA,output_block_base,context.acc_blocks,
       True,logical_graph_sha256)
     schema = ACC_SLICE_CAPTURE_SCHEMA
   capture = SharedAttentionCompilerCapture(schema,context,compute_sink.replace(arg=None).key.hex(),compute_calls,copy_calls,
@@ -342,5 +499,6 @@ def build_shared_attention_compiler_capture(*, schedule:UOp, compute_call:UOp, h
     acc_slice_pass=acc_slice_pass)
   return capture.with_hash().validate()
 
-__all__ = ["CAPTURE_SCHEMA","ACC_SLICE_CAPTURE_SCHEMA","ACC_SLICE_PASS_SCHEMA","SharedAttentionAccSlicePass",
+__all__ = ["CAPTURE_SCHEMA","ACC_SLICE_CAPTURE_SCHEMA","ACC_SLICE_PASS_SCHEMA","PHASE_CAPTURE_SCHEMA","PHASE_PLAN_SCHEMA",
+           "SharedAttentionStateHandleOwnership","SharedAttentionPhasePlan","SharedAttentionAccSlicePass",
            "SharedAttentionSynchronization","SharedAttentionCompilerCapture","build_shared_attention_compiler_capture"]

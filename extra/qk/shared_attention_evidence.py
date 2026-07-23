@@ -10,7 +10,8 @@ from dataclasses import dataclass
 
 from extra.qk.model_profiles import MODEL_PROFILES, ModelProfile
 from extra.qk.prefill_harness import prefill_authority_argv, prefill_run_profile, resolve_prefill_model_profile
-from extra.qk.shared_attention_capture import ACC_SLICE_CAPTURE_SCHEMA, CAPTURE_SCHEMA, SharedAttentionCompilerCapture
+from extra.qk.shared_attention_capture import (ACC_SLICE_CAPTURE_SCHEMA, CAPTURE_SCHEMA, PHASE_CAPTURE_SCHEMA,
+  SharedAttentionCompilerCapture)
 
 def fused_wmma_role_report(source: str) -> dict[str, object]:
   """Fail-closed diagnostic requiring explicit QK/PV WMMA in one CALL."""
@@ -154,6 +155,31 @@ def _shared_attention_acc_slice_proof_artifact(captures:tuple[SharedAttentionCom
         "reference_sha256":numeric.reference_sha256}})
   return {"schema":"tinygrad.shared_attention_proof.acc_slice_v3","status":"PASS","passed":True,"captures":rows}
 
+def _shared_attention_phase_proof_artifact(captures:tuple[SharedAttentionCompilerCapture,...]) -> dict[str,object]:
+  required = {
+    ("qwen3_8b_q4k_m_gfx1100","FULL_RESIDENT_OVERLAY","first"),
+    ("qwen3_8b_q4k_m_gfx1100","FULL_RESIDENT_OVERLAY","prefix"),
+    ("qwen3_14b_q4k_m_gfx1100","BOUNDED_PACKED_TILES","first"),
+    ("qwen3_14b_q4k_m_gfx1100","BOUNDED_PACKED_TILES","prefix"),
+  }
+  keyed={_shared_attention_route_key(capture):capture for capture in captures}
+  if len(captures) != 4 or len(keyed) != 4 or set(keyed) != required:
+    raise ValueError("phase proof requires exact 8B/14B first/prefix coverage")
+  phase_ids={capture.phase_plan.phase_ids for capture in captures}
+  if len(phase_ids) != 1: raise ValueError("compiler phase IDs differ across attention routes")
+  rows=[]
+  for key,capture in sorted(keyed.items()):
+    plan=capture.phase_plan.validate()
+    rows.append({"profile":key[0],"strategy":key[1],"position":key[2],"capture_sha256":capture.capture_sha256,
+      "logical_graph_sha256":plan.logical_graph_sha256,"phase_ids":list(plan.phase_ids),
+      "state_handles":[handle.to_json() for handle in plan.state_handles],
+      "numeric":{"max_abs":capture.numeric_max_abs,"max_rel":capture.numeric_max_rel,"rel_l2":capture.numeric_rel_l2,
+                 "reference_sha256":capture.reference_sha256},
+      "resources":{"vgpr":capture.highest_vgpr,"scratch_bytes":capture.scratch_bytes,"spill_count":capture.spill_count,
+                   "lds_bytes":capture.lds_bytes}})
+  return {"schema":"tinygrad.shared_attention_proof.phase_v4","status":"PASS","passed":True,
+          "phase_ids":list(next(iter(phase_ids))),"captures":rows}
+
 def shared_attention_proof_artifact(captures:tuple[SharedAttentionCompilerCapture,...]) -> dict[str, object]:
   """Aggregate complete v2 captures or paired accumulator-slice v3 captures, failing closed on mixed evidence."""
   if not isinstance(captures,tuple) or any(not isinstance(x,SharedAttentionCompilerCapture) for x in captures):
@@ -162,6 +188,7 @@ def shared_attention_proof_artifact(captures:tuple[SharedAttentionCompilerCaptur
   schemas = {capture.schema for capture in captures}
   if schemas == {CAPTURE_SCHEMA}: return _shared_attention_v2_proof_artifact(captures)
   if schemas == {ACC_SLICE_CAPTURE_SCHEMA}: return _shared_attention_acc_slice_proof_artifact(captures)
+  if schemas == {PHASE_CAPTURE_SCHEMA}: return _shared_attention_phase_proof_artifact(captures)
   raise ValueError("shared attention proof does not accept mixed or unknown capture schemas")
 
 ATTENTION_EVIDENCE_SCHEMA = "tinygrad.shared_attention_evidence.v1"

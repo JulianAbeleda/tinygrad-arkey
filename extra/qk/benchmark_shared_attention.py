@@ -18,7 +18,10 @@ def _mask(q,kv,start): return Tensor.full((1,1,q,kv),float("-inf"),dtype=dtypes.
 def _sync(): Device["AMD"].synchronize()
 def _proof(path:Path):
   p=json.loads(path.read_text())
-  if p.get("schema")!="tinygrad.shared_attention_proof.v2" or p.get("status")!="PASS" or p.get("passed") is not True: raise ValueError("aggregate shared-attention proof is not PASS")
+  schemas={"tinygrad.shared_attention_proof.v2","tinygrad.shared_attention_proof.acc_slice_v3",
+           "tinygrad.shared_attention_proof.phase_v4"}
+  if p.get("schema") not in schemas or p.get("status")!="PASS" or p.get("passed") is not True:
+    raise ValueError("aggregate shared-attention proof is not PASS")
   return p
 def _inputs(hq,hkv,q,kv,seed):
   rng=np.random.default_rng(seed)

@@ -4,15 +4,19 @@ import hashlib
 import pytest
 
 from extra.qk.shared_attention_capture import (ACC_SLICE_CAPTURE_SCHEMA, ACC_SLICE_PASS_SCHEMA, CAPTURE_SCHEMA,
-  SharedAttentionAccSlicePass, SharedAttentionCompilerCapture, SharedAttentionSynchronization)
+  PHASE_CAPTURE_SCHEMA, PHASE_PLAN_SCHEMA, SharedAttentionAccSlicePass, SharedAttentionCompilerCapture,
+  SharedAttentionPhasePlan, SharedAttentionStateHandleOwnership, SharedAttentionSynchronization)
 from extra.qk.shared_attention_evidence import shared_attention_proof_artifact
-from tinygrad.uop.ops import AttentionWMMARole, SharedAttentionCandidateContext
+from tinygrad import dtypes
+from tinygrad.dtype import AddrSpace
+from tinygrad.uop.ops import (AttentionWMMARole, PhaseBoundarySpec, SharedAttentionCandidateContext, StateHandle,
+  StateRegionSpec, UOp, Ops)
 
 def _sha(value:str) -> str: return hashlib.sha256(value.encode()).hexdigest()
 
 def capture(profile,strategy,start,hq,base=0,blocks=8):
   qt,kv=16,start+16
-  ctx=SharedAttentionCandidateContext(profile,strategy,qt,kv,start,hq,8,128,True,base,blocks)
+  ctx=SharedAttentionCandidateContext(profile,strategy,qt,kv,start,hq,8,128,True,blocks)
   roles=tuple((i,AttentionWMMARole("QK",i)) for i in range(8))+tuple((8+i,AttentionWMMARole("PV",i)) for i in range(blocks))
   static_wmma_count=8+blocks
   hip="*(buf0+0) = x;\n__builtin_amdgcn_s_barrier();\nhalf val0 = (*(buf0+0));\n"
@@ -43,6 +47,19 @@ def slice_captures():
      ("qwen3_8b_q4k_m_gfx1100","FULL_RESIDENT_OVERLAY",16,32),
      ("qwen3_14b_q4k_m_gfx1100","BOUNDED_PACKED_TILES",0,40),
      ("qwen3_14b_q4k_m_gfx1100","BOUNDED_PACKED_TILES",16,40)) for base in (0,4))
+
+def _phase_plan(graph_sha):
+  phase_ids=("compiler.phase.17","compiler.phase.42")
+  storage=UOp(Ops.DEFINE_LOCAL,dtypes.float.ptr(256,AddrSpace.LOCAL),arg=91)
+  handle=StateHandle(StateRegionSpec("online_state",dtypes.float,8),PhaseBoundarySpec(*phase_ids,ordinal=3),generation=5,
+                     storage=storage,lane=UOp.special(8,"state_lane"),lane_stride=8,element_offset=0)
+  handles=tuple(SharedAttentionStateHandleOwnership.from_state_handle(handle,block=block,block_count=2,lane=lane,lane_count=2,
+    lds_offset=(block*2+lane)*32) for block in range(2) for lane in range(2))
+  return SharedAttentionPhasePlan(PHASE_PLAN_SCHEMA,phase_ids,graph_sha,handles)
+
+def phase_captures():
+  return tuple(replace(value,schema=PHASE_CAPTURE_SCHEMA,phase_plan=_phase_plan(value.canonical_graph_sha256)).with_hash().validate()
+               for value in captures())
 
 def test_capture_is_immutable_content_addressed_and_strictly_roundtrips():
   value=captures()[0]
@@ -104,6 +121,33 @@ def test_acc_slice_capture_rejects_incomplete_role_and_recomputation_metadata():
   with pytest.raises(ValueError,match="WMMA role|4 PV"): replace(value,wmma_roles=value.wmma_roles[:-1]).with_hash().validate()
   bad_pass=replace(value.acc_slice_pass,qk_recomputed=False)
   with pytest.raises(ValueError,match="QK recomputation"): replace(value,acc_slice_pass=bad_pass).with_hash().validate()
+
+def test_generic_phase_capture_roundtrips_and_proves_all_routes():
+  values=phase_captures()
+  assert SharedAttentionCompilerCapture.from_json(values[0].to_json()) == values[0]
+  proof=shared_attention_proof_artifact(values)
+  assert proof["schema"] == "tinygrad.shared_attention_proof.phase_v4" and proof["passed"]
+  assert proof["phase_ids"] == ["compiler.phase.17","compiler.phase.42"]
+  assert all(len(row["state_handles"]) == 4 for row in proof["captures"])
+
+def test_phase_proof_fails_closed_on_phase_mismatch_and_shape_mismatch():
+  values=list(phase_captures()); plan=values[0].phase_plan
+  phase_bad=replace(plan,state_handles=(replace(plan.state_handles[0],producer_phase_id="compiler.phase.unknown"),)+plan.state_handles[1:])
+  values[0]=replace(values[0],phase_plan=phase_bad).with_hash()
+  with pytest.raises(ValueError,match="phase mismatch"): shared_attention_proof_artifact(tuple(values))
+  values=list(phase_captures()); plan=values[0].phase_plan
+  shape_bad=replace(plan,state_handles=(replace(plan.state_handles[0],shape=(4,)),)+plan.state_handles[1:])
+  values[0]=replace(values[0],phase_plan=shape_bad).with_hash()
+  with pytest.raises(ValueError,match="shape/ownership contract mismatch"): shared_attention_proof_artifact(tuple(values))
+
+def test_phase_proof_fails_closed_on_state_ownership_gap_and_overlap():
+  values=list(phase_captures()); plan=values[0].phase_plan
+  values[0]=replace(values[0],phase_plan=replace(plan,state_handles=plan.state_handles[:-1])).with_hash()
+  with pytest.raises(ValueError,match="ownership gap"): shared_attention_proof_artifact(tuple(values))
+  values=list(phase_captures()); plan=values[0].phase_plan
+  duplicate=replace(plan.state_handles[0],lds_offset=256)
+  values[0]=replace(values[0],phase_plan=replace(plan,state_handles=plan.state_handles+(duplicate,))).with_hash()
+  with pytest.raises(ValueError,match="ownership overlap"): shared_attention_proof_artifact(tuple(values))
 
 def test_constructor_uses_actual_scheduled_call_and_final_hip_amdisa_programs():
   import numpy as np
