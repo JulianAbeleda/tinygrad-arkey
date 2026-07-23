@@ -358,6 +358,11 @@ pm_render = PatternMatcher([
 class ReduceContext:
   acc_num: int = 0
 
+def physical_composite_slot_dtype(composite, slot_idx:int) -> DType:
+  lane_shape = composite.lane_shapes[slot_idx] if getattr(composite, "lane_shapes", ()) else ()
+  slot_dtype = composite.slots[slot_idx].dtype
+  return slot_dtype.scalar().vec(prod(lane_shape)) if lane_shape else slot_dtype
+
 def horizontal_reduce(inp:UOp, out_dtype:DType) -> list[UOp]:
   # if this has a horizontal reduction component, do that first
   if inp.dtype != out_dtype:
@@ -370,6 +375,10 @@ def _load_v_at_reduce_pos(v_src:UOp, composite, input_ranges, reduce_range, scor
   """Create a LOAD from V at the current reduce position.
   Uses RANGE UOps from input_ranges and reduce_range to build indices.
   """
+  # Rangeify may already have indexed and contracted the logical value input
+  # into its authoritative Hd lane group. Re-indexing that value as a pointer
+  # would invent ownership and produce an invalid INDEX over an ALU node.
+  if lane_group > 1 and v_src.dtype.count == lane_group: return v_src
   # A declared map owns this load. It avoids inferring logical inputs from
   # expander-created STACK/weakint range carriers.
   if axis_map is not None:
@@ -503,13 +512,22 @@ def reduce_to_acc(ctx:ReduceContext, red:UOp):
       # authoritative; passing a lane-shaped LOAD here creates invalid ALU
       # shape pairs and can corrupt unrelated CPU/AMD attention kernels.
       v_inp = None
+      if composite.combine_fn == "online_softmax_state":
+        if len(auxiliary_inputs) != 1 or len(input_specs) != 1:
+          raise RuntimeError("online_softmax_state requires exactly one declared V input")
+        spec = input_specs[0]
+        lane_group = prod(getattr(composite, "lane_shapes", ((), (), ()))[2] or (1,))
+        axis_map = tuple(spec.axis_map[:-1]) + (-1,) if lane_group > 1 and spec.axis_map else spec.axis_map
+        v_inp = _load_v_at_reduce_pos(auxiliary_inputs[0], composite, input_ranges, reduce_range, inp._shape,
+                                      axis_map=axis_map, lane_group=lane_group)
       
       # Create accumulators (common to all combines)
       accs = []
       acc_reads = []
       for i, slot in enumerate(composite.slots):
-        ident = red.const(slot.dtype, slot.identity if slot.identity is not None else identity_element(slot.op, slot.dtype.scalar()))
-        acc = UOp.placeholder((1,), slot.dtype, ctx.acc_num, AddrSpace.REG)
+        physical_dtype = physical_composite_slot_dtype(composite, i)
+        ident = red.const(physical_dtype, slot.identity if slot.identity is not None else identity_element(slot.op, physical_dtype.scalar()))
+        acc = UOp.placeholder((1,), physical_dtype, ctx.acc_num, AddrSpace.REG)
         ctx.acc_num += 1
         acc_init = acc.after(*input_ranges).index(UOp.const(dtypes.weakint, 0)).store(ident)
         acc_read = acc.after(acc_init, *reduce_range).index(UOp.const(dtypes.weakint, 0))
@@ -575,13 +593,10 @@ def _project_deferred_carrier(carrier:UOp, slot:int) -> UOp|None:
   if carrier.op is Ops.UNROLL and len(carrier.src) == 1:
     inner = _project_deferred_carrier(carrier.src[0], slot)
     if inner is None: return None
-    lanes = prod(x[1] for x in carrier.arg)
-    # Scalar state has no physical lane ABI yet. Its optimizer wrapper only
-    # described the tuple's logical output lane and must not manufacture a
-    # vector carrier. Physical lane state will naturally retain this UNROLL.
-    if inner.dtype.count == 1: return inner
-    if inner.dtype.count != lanes: return None
-    return UOp(carrier.op, inner.dtype.scalar(), (inner,), carrier.arg)
+    # This UNROLL described the tuple's logical output lane. A scalar slot has
+    # no lane to unroll, while a physical accumulator already carries Hd in
+    # its dtype; retaining the wrapper would duplicate that axis.
+    return inner
   return None
 
 def lower_deferred_reduce_slot(state:UOp):

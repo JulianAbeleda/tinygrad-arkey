@@ -3,6 +3,7 @@ import numpy as np
 from tinygrad import Tensor
 from tinygrad.codegen.late.flash_attn import merge_online_softmax_tile, normalize_online_softmax_state
 from tinygrad.codegen.late.composite_combines import COMBINE_REGISTRY, _combine_step_online_softmax_state
+from tinygrad.codegen.late.devectorizer import physical_composite_slot_dtype
 from tinygrad.uop.ops import AccumulatorSlot, Ops, UOp, dtypes
 
 class TestOnlineSoftmaxStateSplit(unittest.TestCase):
@@ -17,6 +18,14 @@ class TestOnlineSoftmaxStateSplit(unittest.TestCase):
     new_m, new_l, new_acc = _combine_step_online_softmax_state(m, l, acc, score, value)
     self.assertEqual((new_m.dtype.count, new_l.dtype.count, new_acc.dtype.count), (1, 1, 2))
     self.assertTrue(any(u.op is Ops.STACK for u in new_acc.toposort()))
+
+  def test_physical_register_cardinality_is_1_1_hd(self):
+    slots = (AccumulatorSlot(Ops.MAX, dtypes.float32, -float("inf"), "m"),
+             AccumulatorSlot(Ops.ADD, dtypes.float32, 0.0, "l"),
+             AccumulatorSlot(Ops.ADD, dtypes.float32, 0.0, "acc"))
+    red = UOp.placeholder((16,), dtypes.float32, 0).composite_reduce(*slots, axis=(0,),
+      combine_fn="online_softmax_state", lane_shapes=((), (), (16,)))
+    self.assertEqual(tuple(physical_composite_slot_dtype(red.arg[0], i).count for i in range(3)), (1, 1, 16))
 
   def test_normalization_of_raw_state_matches_attention(self):
     rng = np.random.default_rng(31)
