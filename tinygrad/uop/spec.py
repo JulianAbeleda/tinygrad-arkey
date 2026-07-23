@@ -102,6 +102,20 @@ def validate_state_transfer(x:UOp):
     return False
   return len(x.src) == 1+len(storage_src) or (x.src[-1].op is Ops.WAIT and source in x.src[-1].src)
 
+def validate_rotating_pv_state(x:UOp):
+  """Accept only typed construction markers; backend lowering remains unavailable."""
+  from tinygrad.uop.ops import RotatingPVStateSpec
+  if not (isinstance(x.arg, tuple) and len(x.arg) == 2 and x.arg[0] in {"rotating_pv_state_write_v1", "rotating_pv_state_read_v1"} and
+          isinstance(x.arg[1], RotatingPVStateSpec)):
+    return False
+  try: x.arg[1].validate()
+  except (TypeError, ValueError): return False
+  state=x.arg[1]
+  if x.arg[0] == "rotating_pv_state_write_v1":
+    return x.dtype == dtypes.void and len(x.src) in (3,4) and x.src[:3] == (x.src[0],state.storage,state.lane) and x.src[0].dtype == state.dtype and \
+      (len(x.src) == 3 or x.src[3].dtype != dtypes.void)
+  return x.dtype == state.dtype and len(x.src) in (2,3) and x.src[:2] == (state.storage,state.lane) and (len(x.src) == 2 or x.src[2].dtype == dtypes.void)
+
 def validate_state_loop_read(x:UOp):
   if not (isinstance(x.arg,tuple) and len(x.arg)==3 and x.arg[0] == "state_loop_read_v1" and isinstance(x.arg[1],StateHandle) and isinstance(x.arg[2],int)):
     return False
@@ -183,7 +197,7 @@ spec_shared = PatternMatcher([
         allow_any_len=True), lambda: True),
 
   # CUSTOM (inline and non inline)
-  (UPat((Ops.CUSTOMI, Ops.CUSTOM), name="x"), lambda x: validate_state_transfer(x) if isinstance(x.arg, tuple) and x.arg[:1] in {("state_publish_v1",), ("state_reload_v1",)} else validate_state_loop_read(x) if isinstance(x.arg, tuple) and x.arg[:1] == ("state_loop_read_v1",) else validate_state_loop_write(x) if isinstance(x.arg, tuple) and x.arg[:1] == ("state_loop_write_v1",) else True),
+  (UPat((Ops.CUSTOMI, Ops.CUSTOM), name="x"), lambda x: validate_state_transfer(x) if isinstance(x.arg, tuple) and x.arg[:1] in {("state_publish_v1",), ("state_reload_v1",)} else validate_rotating_pv_state(x) if isinstance(x.arg, tuple) and x.arg[:1] in {("rotating_pv_state_write_v1",), ("rotating_pv_state_read_v1",)} else validate_state_loop_read(x) if isinstance(x.arg, tuple) and x.arg[:1] == ("state_loop_read_v1",) else validate_state_loop_write(x) if isinstance(x.arg, tuple) and x.arg[:1] == ("state_loop_write_v1",) else True),
 
   # BARRIER (on any length). TODO: this should only be in spec_program
   (UPat(Ops.BARRIER, dtypes.void), lambda: True),

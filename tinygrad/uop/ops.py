@@ -1349,6 +1349,45 @@ class StateHandle(NamedTuple):
     src=(value,self.storage,self.lane) if after is None else (value,self.storage,self.lane,after)
     return UOp(Ops.CUSTOMI, dtypes.void, src, ("state_loop_write_v1",self,element))
 
+class RotatingPVStateSpec(NamedTuple):
+  """Typed block-major LDS state descriptor for the unavailable rotating-PV probe."""
+  storage: UOp
+  lane: UOp
+  block: int
+  generation: int = 0
+
+  @property
+  def dtype(self) -> DType: return dtypes.float.vec(8)
+
+  def validate(self):
+    if self.storage.op is not Ops.DEFINE_LOCAL or not isinstance(self.storage.dtype, PtrDType) or \
+       self.storage.dtype.addrspace is not AddrSpace.LOCAL or self.storage.dtype.base != dtypes.float or self.storage.dtype.size != 2048:
+      raise ValueError("rotating PV state requires DEFINE_LOCAL fp32[2048]")
+    if self.lane.op is not Ops.SPECIAL or self.lane.arg != "lidx0" or len(self.lane.src) != 1 or self.lane.src[0].arg != 32:
+      raise ValueError("rotating PV state requires the wave32 lidx0 owner")
+    if not isinstance(self.block, int) or not 0 <= self.block < 8:
+      raise ValueError("rotating PV state block must be in [0,8)")
+    if not isinstance(self.generation, int) or self.generation < 0:
+      raise ValueError("rotating PV state generation must be non-negative")
+    return self
+
+  def block_offset(self, element: int = 0) -> UOp:
+    self.validate()
+    if not isinstance(element, int) or not 0 <= element < 8:
+      raise ValueError("rotating PV state element must be in [0,8)")
+    return UOp.const(self.lane.dtype, self.block * 256 + element) + self.lane * UOp.const(self.lane.dtype, 8)
+
+  def write(self, value: UOp, after: UOp|None = None) -> UOp:
+    self.validate()
+    if value.dtype != self.dtype: raise TypeError("rotating PV state write requires float8")
+    src=(value,self.storage,self.lane) if after is None else (value,self.storage,self.lane,after)
+    return UOp(Ops.CUSTOMI, dtypes.void, src, ("rotating_pv_state_write_v1", self))
+
+  def read(self, after: UOp|None = None) -> UOp:
+    self.validate()
+    src=(self.storage,self.lane) if after is None else (self.storage,self.lane,after)
+    return UOp(Ops.CUSTOMI, self.dtype, src, ("rotating_pv_state_read_v1", self))
+
 class CompositeReduce(NamedTuple):
   slots: tuple
   combine_fn: Any = None  # UOp sub-graph encoding combine (None = independent slots)
