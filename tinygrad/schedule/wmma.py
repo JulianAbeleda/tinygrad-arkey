@@ -619,9 +619,12 @@ def amd_gfx1100_rotating_pv_scheduler_probe(q:UOp, k:UOp, v:UOp, out:UOp, *, q_t
   initialized=tuple(RotatingPVStateSpec(storage,lane,block,generation=0).write(zero) for block in range(8))
   init=UOp.group(*initialized)
   states=tuple(RotatingPVStateSpec(storage,lane,block,generation=1) for block in range(8))
-  reads=tuple(RotatingPVLoopReadSpec(state,rng,wait_generation=0,publication_generation=1).reload(init) for state in states)
-  pv_updates=tuple(UOp(Ops.WMMA,dtypes.float.vec(8),(p,fr(v,"V",block),read.alu(Ops.MUL,alpha)),warg,tag=("attention_wmma","PV",block)) for block,read in enumerate(reads))
-  writes=tuple(state.write(update,after=rng) for state,update in zip(states,pv_updates))
+  writes=[]; publication=init
+  for block,state in enumerate(states):
+    read=RotatingPVLoopReadSpec(state,rng,wait_generation=0,publication_generation=1).reload(publication)
+    update=UOp(Ops.WMMA,dtypes.float.vec(8),(p,fr(v,"V",block),read.alu(Ops.MUL,alpha)),warg,tag=("attention_wmma","PV",block))
+    publication=state.write(update,after=rng); writes.append(publication)
+  writes=tuple(writes)
   end=UOp.group(*writes).end(rng).replace(tag=("rotating_pv_kv_iteration_end_v1",rng))
   final_l=rd(lreg,end,"l",final=True)
   drains=[]; token=end
