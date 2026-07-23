@@ -578,9 +578,17 @@ def amd_gfx1100_q16_grid_hd128_loop_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_toke
   qk=zero
   for b in range(8): qk=UOp(Ops.WMMA,dtypes.float.vec(8),(fr(q,"Q",b),fr(k,"K",b),qk),warg,tag=("attention_wmma","QK",b))
   p,nm,nl,alpha=amd_gfx1100_row_softmax_state(qk,om,ol,spec=AMDRowSoftmaxRepackSpec(score_scale=scale,mode="loop_state_v1",validity_mode="causal_v1" if causal else "tail_v1",query_start=query_start,kv_start=-1,valid_kv=valid_kv,dynamic_kv_v1=True,grid=grid),kv_tile=rng,grid_id=group)
-  writes=([*(ml.loop_write(nm.gep(i),i,after=nm.gep(i)) for i in range(8)),*(ml.loop_write(nl.gep(i),8+i,after=nl.gep(i)) for i in range(8))] if phase_abi_v1 else [*wr(mreg,"m",nm),*wr(lreg,"l",nl)])
+  # Phase ABI keeps m/l in LDS. Commit the next recurrence state before the
+  # PV body and make that body consume the commit token: p/alpha are already
+  # formed from the old state, so this preserves the recurrence while giving
+  # regalloc an earlier end to the next-m/l lease. The default register-state
+  # route deliberately retains its existing ordering.
+  ml_commit=UOp.group(*( [*(ml.loop_write(nm.gep(i),i,after=nm.gep(i)) for i in range(8)),
+                            *(ml.loop_write(nl.gep(i),8+i,after=nl.gep(i)) for i in range(8))] )) if phase_abi_v1 else None
+  writes=[ml_commit] if ml_commit is not None else [*wr(mreg,"m",nm),*wr(lreg,"l",nl)]
+  pv_p,pv_alpha=(p.after(ml_commit),alpha.after(ml_commit)) if ml_commit is not None else (p,alpha)
   for b in range(acc_blocks):
-    oc=rd(creg,ci,"acc",b,b*8); pv=UOp(Ops.WMMA,dtypes.float.vec(8),(p,fr(v,"V",b+output_block_base),oc.alu(Ops.MUL,alpha)),warg,tag=("attention_wmma","PV",b)); writes.extend(wr(creg,"acc",pv,b,b*8))
+    oc=rd(creg,ci,"acc",b,b*8); pv=UOp(Ops.WMMA,dtypes.float.vec(8),(pv_p,fr(v,"V",b+output_block_base),oc.alu(Ops.MUL,pv_alpha)),warg,tag=("attention_wmma","PV",b)); writes.extend(wr(creg,"acc",pv,b,b*8))
   end=UOp.group(*writes).end(rng).replace(tag=("amd_gfx1100_attention_grid_loop_end_v1",rng)); final_token=end if phase_abi_v1 else None; fl=(UOp(Ops.STACK,dtypes.float.vec(8),tuple(ml.loop_read(8+i,final_token) for i in range(8))) if phase_abi_v1 else rd(lreg,end,"l",final=True)); fc=tuple(rd(creg,end,"acc",b,b*8,final=True) for b in range(acc_blocks)); drain=UOp(Ops.AMD_ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,group,fl,*fc),arg=AMDAttentionOutputDrainSpec(native_abi="amd_gfx1100_attention_output_drain_v1" if acc_blocks==8 else "amd_gfx1100_attention_output_drain_acc_slice_v2",blocks=acc_blocks,grid=grid,output_block_base=output_block_base))
   return UOp.sink(mi,li,ci,end,drain,arg=kernel_info).replace(tag=("amd_gfx1100_q16_grid_hd128_loop_v1",))
 
