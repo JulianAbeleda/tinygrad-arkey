@@ -1616,6 +1616,10 @@ class AMDMultiWaveAttentionGridSpec(NamedTuple):
   def local_size(self): return self.wave_size*self.waves_per_group
   @property
   def grid_size(self): return self.kv_heads*self.q_tiles
+  @property
+  def single_wave_workgroup(self): return False
+  @property
+  def p_wave_slices(self): return tuple((wave*512, 512) for wave in range(self.waves_per_group))
   def group_coords(self,gid:int,wave_id:int)->tuple[int,int,int]:
     self.validate()
     if not 0 <= gid < self.grid_size or not 0 <= wave_id < self.waves_per_group: raise ValueError("multiwave attention coordinate is out of range")
@@ -1670,7 +1674,7 @@ class AMDPackedFragmentLoopSpec(NamedTuple):
   native_abi: str = "amd_gfx1100_packed_fragment_hd128_loop_v1"
   role: str = "Q"
   head_block: int = 0
-  grid: AMDAttentionGridSpec|None = None
+  grid: AMDAttentionGridSpec|AMDMultiWaveAttentionGridSpec|None = None
 
   def validate(self):
     if self.native_abi != "amd_gfx1100_packed_fragment_hd128_loop_v1" or self.role not in {"Q", "K", "V"}:

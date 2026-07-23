@@ -293,6 +293,10 @@ spec_tensor = PatternMatcher([
   (UPat(Ops.AMD_PACKED_FRAGMENT_LOAD, src=(UPat(), UPat(), UPat(), UPat(Ops.RANGE), UPat(Ops.SPECIAL)), name="x"),
    lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_packed_fragment_hd128_loop_v1" and getattr(x.arg,"grid",None) is not None
    and str(x.src[4].arg)=="gidx0" and x.dtype == dtypes.half.vec(16)),
+  (UPat(Ops.AMD_PACKED_FRAGMENT_LOAD, src=(UPat(), UPat(), UPat(), UPat(), UPat(Ops.RANGE), UPat(Ops.SPECIAL)), name="x"),
+   lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_packed_fragment_hd128_loop_v1" and
+   getattr(getattr(x.arg,"grid",None),"native_abi",None) == "amd_gfx1100_attention_multiwave_g2_v1" and
+   str(x.src[5].arg)=="gidx0" and x.dtype == dtypes.half.vec(16)),
   (UPat(Ops.AMD_ATTENTION_OUTPUT_DRAIN, name="x"), validate_amd_attention_output_drain),
 
   # ATTENTION keeps a normal fallback plus explicit Q/K/V/(optional mask)
@@ -346,6 +350,10 @@ spec_program = PatternMatcher([
   (UPat(Ops.AMD_PACKED_FRAGMENT_LOAD,name="x"),
    lambda x: hasattr(x.arg,'native_abi') and x.arg.native_abi=="amd_gfx1100_packed_fragment_hd128_loop_v1" and getattr(x.arg,"grid",None) is not None and
    len(x.src)==5 and x.dtype==dtypes.half.vec(16) and all(s.dtype.scalar() in {dtypes.int,dtypes.weakint} for s in x.src[1:])),
+  (UPat(Ops.AMD_PACKED_FRAGMENT_LOAD,name="x"),
+   lambda x: hasattr(x.arg,'native_abi') and x.arg.native_abi=="amd_gfx1100_packed_fragment_hd128_loop_v1" and
+   getattr(getattr(x.arg,"grid",None),"native_abi",None)=="amd_gfx1100_attention_multiwave_g2_v1" and len(x.src)==6 and
+   x.dtype==dtypes.half.vec(16) and all(s.dtype.scalar() in {dtypes.int,dtypes.weakint} for s in x.src[1:])),
   (UPat(Ops.CAST,dtype=dtypes.weakint,src=(UPat(Ops.RANGE,dtype=dtypes.int),)), lambda: True),
   (UPat(Ops.CAST,dtype=dtypes.weakint,src=(UPat(Ops.SPECIAL,dtype=dtypes.int,name="s"),)), lambda s: str(s.arg) in {"lidx0","gidx0"}),
   (UPat(Ops.CAST,dtype=dtypes.weakint,src=(UPat(Ops.AND,dtype=dtypes.int,name="a"),)),

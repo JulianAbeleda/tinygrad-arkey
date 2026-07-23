@@ -164,12 +164,12 @@ class WaitCount:
 
 @dataclass(frozen=True)
 class WaveLDSFence(WaitCount):
-  """Typed LDS publication fence for one exact gfx1100 wave/workgroup.
+  """Typed LDS publication fence for disjoint per-wave gfx1100 slices.
 
   This is deliberately a ``WaitCount`` subtype so every existing AMD WAIT
-  lowering consumes the same architectural immediate.  The extra fields are
-  the admission proof: this weaker-than-workgroup operation is invalid unless
-  one 32-lane wave is the complete workgroup.
+  lowering consumes the same architectural immediate.  ``wave_slices`` is the
+  admission proof for the weaker-than-workgroup operation: each wave owns one
+  non-empty, non-overlapping LDS byte interval and no other wave consumes it.
   """
   vmcnt: int = 63
   lgkmcnt: int = 0
@@ -177,14 +177,26 @@ class WaveLDSFence(WaitCount):
   target: str = "gfx1100"
   wave_size: int = 32
   workgroup_size: int = 32
+  scope: str = "wave"
+  wave_slices: tuple[tuple[int, int], ...] = ((0, 512),)
 
   def __post_init__(self):
     super().__post_init__()
-    if (self.target, self.wave_size, self.workgroup_size) != ("gfx1100", 32, 32):
-      raise ValueError("wave LDS fence requires one gfx1100 wave32 workgroup")
-    if (self.vmcnt, self.lgkmcnt, self.expcnt) != (63, 0, 7):
-      raise ValueError("wave LDS fence must wait only for complete LDS publication")
-
+    if self.target != "gfx1100" or self.wave_size != 32 or self.workgroup_size < self.wave_size or self.workgroup_size % self.wave_size:
+      raise ValueError("wave LDS fence requires gfx1100 wave32 and a whole-wave workgroup")
+    if (self.vmcnt, self.lgkmcnt, self.expcnt) != (63, 0, 7) or self.scope != "wave":
+      raise ValueError("wave LDS fence requires the exact LDS publication wait and wave scope")
+    if len(self.wave_slices) != self.workgroup_size//self.wave_size:
+      raise ValueError("wave LDS fence requires exactly one LDS slice per wave")
+    slices: list[tuple[int, int]] = []
+    for item in self.wave_slices:
+      if not isinstance(item, tuple) or len(item) != 2 or any(not isinstance(v, int) or isinstance(v, bool) for v in item):
+        raise ValueError("wave LDS fence slices must be (byte_offset, byte_size) integer pairs")
+      offset, size = item
+      if offset < 0 or size <= 0: raise ValueError("wave LDS fence slices must be non-negative and non-empty")
+      slices.append((offset, offset+size))
+    if any(left[1] > right[0] for left, right in zip(sorted(slices), sorted(slices)[1:])):
+      raise ValueError("wave LDS fence slices must be disjoint")
 
 def wait_count_for_dependency(dep: WaitDependency, *, younger_vmem_loads: int | None = None) -> WaitCount:
   """Create a sound AMD wait immediate from a typed staged dependency.

@@ -1603,17 +1603,37 @@ def _pack_frag_tile(ctx:IselContext, carrier:UOp, base:int, dep:tuple[UOp,...], 
   return tuple(UOp(Ops.INS, dtypes.int32, src=(local(E[2*i]), local(E[2*i+1]))+dep,
                    arg=AMDOps.V_PACK, tag=_pin(base, i)) for i in range(8))
 
+def _validate_fragment_lane_provenance(lane:UOp, wave_id:UOp|None, col:UOp, multiwave:bool) -> UOp:
+  """Return the physical thread id only for the exact declared lane ABI."""
+  if multiwave:
+    if lane.op is not Ops.AND or lane.src[0].op is not Ops.SPECIAL or str(lane.src[0].arg) != "lidx0" or \
+       lane.src[1].op is not Ops.CONST or int(lane.src[1].arg) != 31 or wave_id is None or wave_id.op is not Ops.SHR or \
+       wave_id.src[0] is not lane.src[0] or wave_id.src[1].op is not Ops.CONST or int(wave_id.src[1].arg) != 5 or \
+       col.op is not Ops.AND or col.src[0] is not lane or col.src[1].op is not Ops.CONST or int(col.src[1].arg) != 15:
+      raise ValueError("multiwave fragment requires exact lane=lidx0&31, wave_id=lidx0>>5 provenance")
+    return lane.src[0]
+  if lane.op is not Ops.SPECIAL or str(lane.arg) != "lidx0" or col.op is not Ops.AND or col.src[0] is not lane or \
+     col.src[1].op is not Ops.CONST or int(col.src[1].arg) != 15:
+    raise ValueError("opaque gfx1100 fragment requires exact lidx0/column provenance")
+  return lane
+
 def isel_packed_fragment(ctx:IselContext,x:UOp, base:int|None=None) -> UOp:
-  from tinygrad.uop.ops import AMDPackedFragmentLoopSpec
+  from tinygrad.uop.ops import AMDPackedFragmentLoopSpec, AMDMultiWaveAttentionGridSpec
   loop = isinstance(x.arg, AMDPackedFragmentLoopSpec)
+  multiwave = loop and isinstance(x.arg.grid, AMDMultiWaveAttentionGridSpec)
   if loop:
     x.arg.validate(); abi,role,tile,hd_block="amd_gfx1100_packed_fragment_hd128_loop_v1",x.arg.role,0,x.arg.head_block
-    if len(x.src) not in {4,5}: raise ValueError("loop fragment requires RANGE tile and optional typed grid source")
-    owner,lane,col,rng,*grid_src=x.src
+    if multiwave:
+      if len(x.src) != 6: raise ValueError("multiwave loop fragment requires owner/lane/wave/column/range/group")
+      owner,lane,wave_id,col,rng,*grid_src=x.src
+    else:
+      if len(x.src) not in {4,5}: raise ValueError("loop fragment requires RANGE tile and optional typed grid source")
+      owner,lane,col,rng,*grid_src=x.src; wave_id=None
     grid_id=grid_src[0] if grid_src else None
     if grid_id is not None and grid_id.op is Ops.CAST: grid_id=grid_id.src[0]
     if (x.arg.grid is None) != (grid_id is None): raise ValueError("loop fragment grid ownership must be explicit")
     lane=lane.src[0] if lane.op is Ops.CAST else lane; col=col.src[0] if col.op is Ops.CAST else col
+    if wave_id is not None: wave_id=wave_id.src[0] if wave_id.op is Ops.CAST else wave_id
     rng=rng.src[0] if rng.op is Ops.CAST else rng
     if rng.op is not Ops.RANGE: raise ValueError("loop fragment requires one RANGE tile source")
   else:
@@ -1631,15 +1651,18 @@ def isel_packed_fragment(ctx:IselContext,x:UOp, base:int|None=None) -> UOp:
   grid_tail = getattr(ctx, "_attention_grid_fragment_tail", None) if loop and x.arg.grid is not None else None
   if base is None: base=_frag_base(ctx,("amd_gfx1100_opaque_fragment","A" if role=="Q" else "B"),8)
   if base is None: raise NotImplementedError("opaque fragment fixed span exhausted")
-  if lane.op is not Ops.SPECIAL or str(lane.arg) != "lidx0" or col.op is not Ops.AND or col.src[0] is not lane or \
-     col.src[1].op is not Ops.CONST or int(col.src[1].arg) != 15:
-    raise ValueError("opaque gfx1100 fragment requires exact lidx0/column provenance")
-  if abi in {"amd_gfx1100_packed_fragment_hd128_v1","amd_gfx1100_packed_fragment_hd128_loop_v1"} and (basis:=getattr(ctx,"_hd128_lane_basis",None)) is not None:
-    lane_v,col_v=basis
+  tid=_validate_fragment_lane_provenance(lane,wave_id,col,multiwave)
+  if multiwave and (basis:=getattr(ctx,"_hd128_multiwave_basis",None)) is not None:
+    lane_v,wave_v,col_v=basis
+  elif not multiwave and abi in {"amd_gfx1100_packed_fragment_hd128_v1","amd_gfx1100_packed_fragment_hd128_loop_v1"} and (basis:=getattr(ctx,"_hd128_lane_basis",None)) is not None:
+    lane_v,col_v=basis; wave_v=None
   else:
-    lane_v=isel_special(ctx,lane).replace(dtype=dtypes.int)
+    tid_v=isel_special(ctx,tid).replace(dtype=dtypes.int)
+    lane_v=UOp(Ops.INS,dtypes.int,src=(tid_v,UOp.const(dtypes.int32,31).rtag()),arg=AMDOps.V_AND,tag=_vreg_def(ctx)) if multiwave else tid_v
+    wave_v=UOp(Ops.INS,dtypes.int,src=(tid_v,UOp.const(dtypes.int32,5).rtag()),arg=AMDOps.V_LSHR,tag=_vreg_def(ctx)) if multiwave else None
     col_v=UOp(Ops.INS,dtypes.int,src=(lane_v,UOp.const(dtypes.int32,15).rtag()),arg=AMDOps.V_AND,tag=_vreg_def(ctx))
-    if abi in {"amd_gfx1100_packed_fragment_hd128_v1","amd_gfx1100_packed_fragment_hd128_loop_v1"}: ctx._hd128_lane_basis=(lane_v,col_v)
+    if multiwave: ctx._hd128_multiwave_basis=(lane_v,wave_v,col_v)
+    elif abi in {"amd_gfx1100_packed_fragment_hd128_v1","amd_gfx1100_packed_fragment_hd128_loop_v1"}: ctx._hd128_lane_basis=(lane_v,col_v)
   def add_imm(v:UOp, imm:int) -> UOp:
     return v if imm == 0 else UOp(Ops.INS,dtypes.int,src=(v,UOp.const(dtypes.int32,imm).rtag()),arg=AMDOps.V_IADD,tag=_vreg_def(ctx))
   def shl4(v:UOp) -> UOp:
@@ -1655,13 +1678,25 @@ def isel_packed_fragment(ctx:IselContext,x:UOp, base:int|None=None) -> UOp:
       bases=getattr(ctx,"_attention_grid_bases",None)
       if bases is None:
         gv=_tov(ctx,grid_id)
-        qbase=UOp(Ops.INS,dtypes.int,src=(gv,UOp.const(dtypes.int32,2048).rtag()),arg=AMDOps.V_IMUL,tag=_pin(4,0))
-        grid=x.arg.grid; per_kv=grid.q_tiles*grid.group_ratio
-        if per_kv & (per_kv-1) == 0: kvh=UOp(Ops.INS,dtypes.int,src=(gv,UOp.const(dtypes.int32,per_kv.bit_length()-1).rtag()),arg=AMDOps.V_LSHR,tag=_pin(6,0))
-        elif per_kv == 160:
-          hi=UOp(Ops.INS,dtypes.int,src=(gv,UOp.const(dtypes.int32,0xCCCCCCCD).rtag()),arg=AMDOps.V_IMULHI,tag=_pin(6,0))
-          kvh=UOp(Ops.INS,dtypes.int,src=(hi,UOp.const(dtypes.int32,7).rtag()),arg=AMDOps.V_LSHR,tag=_pin(6,0))
-        else: raise ValueError(f"AMD grid lacks a reciprocal division for {per_kv}")
+        grid=x.arg.grid
+        if multiwave:
+          if grid.q_tiles & (grid.q_tiles-1): raise ValueError("multiwave grid requires a power-of-two Q tile count")
+          shift=grid.q_tiles.bit_length()-1
+          kvh=UOp(Ops.INS,dtypes.int,src=(gv,UOp.const(dtypes.int32,shift).rtag()),arg=AMDOps.V_LSHR,tag=_pin(6,0))
+          qtile=UOp(Ops.INS,dtypes.int,src=(gv,UOp.const(dtypes.int32,grid.q_tiles-1).rtag()),arg=AMDOps.V_AND,tag=_vreg_def(ctx))
+          qhead=UOp(Ops.INS,dtypes.int,src=(kvh,UOp.const(dtypes.int32,1).rtag()),arg=AMDOps.V_OFFSET,tag=_vreg_def(ctx))
+          qhead=UOp(Ops.INS,dtypes.int,src=(qhead,wave_v),arg=AMDOps.V_IADD,tag=_vreg_def(ctx))
+          qhead_base=UOp(Ops.INS,dtypes.int,src=(qhead,UOp.const(dtypes.int32,grid.q_tokens*128).rtag()),arg=AMDOps.V_IMUL,tag=_vreg_def(ctx))
+          qtile_base=UOp(Ops.INS,dtypes.int,src=(qtile,UOp.const(dtypes.int32,2048).rtag()),arg=AMDOps.V_IMUL,tag=_vreg_def(ctx))
+          qbase=UOp(Ops.INS,dtypes.int,src=(qhead_base,qtile_base),arg=AMDOps.V_IADD,tag=_pin(4,0))
+        else:
+          qbase=UOp(Ops.INS,dtypes.int,src=(gv,UOp.const(dtypes.int32,2048).rtag()),arg=AMDOps.V_IMUL,tag=_pin(4,0))
+          per_kv=grid.q_tiles*grid.group_ratio
+          if per_kv & (per_kv-1) == 0: kvh=UOp(Ops.INS,dtypes.int,src=(gv,UOp.const(dtypes.int32,per_kv.bit_length()-1).rtag()),arg=AMDOps.V_LSHR,tag=_pin(6,0))
+          elif per_kv == 160:
+            hi=UOp(Ops.INS,dtypes.int,src=(gv,UOp.const(dtypes.int32,0xCCCCCCCD).rtag()),arg=AMDOps.V_IMULHI,tag=_pin(6,0))
+            kvh=UOp(Ops.INS,dtypes.int,src=(hi,UOp.const(dtypes.int32,7).rtag()),arg=AMDOps.V_LSHR,tag=_pin(6,0))
+          else: raise ValueError(f"AMD grid lacks a reciprocal division for {per_kv}")
         kvbase=UOp(Ops.INS,dtypes.int,src=(kvh,UOp.const(dtypes.int32,grid.kv_tokens*128).rtag()),arg=AMDOps.V_IMUL,tag=_pin(5,0))
         bases=ctx._attention_grid_bases=(qbase,kvbase)
       gbase=bases[0 if role=="Q" else 1]
@@ -2550,9 +2585,13 @@ def _opaque_exact_fragment_inputs(x:UOp) -> UOp|None:
             c.tag[:1] in {("amd_gfx1100_fragment_load_v1",),("amd_gfx1100_fragment_load_hd128_v1",),("amd_gfx1100_fragment_load_hd128_loop_v1",)} and
             all(v.op is Ops.LOAD and v.dtype==dtypes.half for v in c.src)): continue
     if c.tag[0] == "amd_gfx1100_fragment_load_hd128_loop_v1":
-      _,role,hd_block,owner,lane,col,rng=c.tag
       from tinygrad.uop.ops import AMDPackedFragmentLoopSpec
-      src[pos]=UOp(Ops.AMD_PACKED_FRAGMENT_LOAD,dtypes.half.vec(16),(owner,lane,col,rng),arg=AMDPackedFragmentLoopSpec(role=role,head_block=hd_block))
+      _,role,hd_block,*payload=c.tag
+      if payload and isinstance(payload[0], AMDPackedFragmentLoopSpec): spec,*fragment_src=payload
+      else:
+        owner,lane,col,rng=payload
+        spec,fragment_src=AMDPackedFragmentLoopSpec(role=role,head_block=hd_block),[owner,lane,col,rng]
+      src[pos]=UOp(Ops.AMD_PACKED_FRAGMENT_LOAD,dtypes.half.vec(16),tuple(fragment_src),arg=spec)
       changed=True
       continue
     if c.tag[0] == "amd_gfx1100_fragment_load_hd128_v1": _,role,tile,hd_block,owner,lane,col=c.tag
@@ -2573,11 +2612,21 @@ def expand_loop_fragment(x:UOp) -> UOp:
   Its tag retains the owner and RANGE identity; the normal late opaque pass
   turns this back into a physical AMD carrier after index lowering.
   """
-  from tinygrad.uop.ops import AMDPackedFragmentLoopSpec
-  if not isinstance(x.arg, AMDPackedFragmentLoopSpec) or len(x.src) not in {4,5}: raise ValueError("loop fragment is malformed")
-  x.arg.validate(); owner,lane,col,rng,*grid_src=x.src; role,block=x.arg.role,x.arg.head_block
+  from tinygrad.uop.ops import AMDPackedFragmentLoopSpec, AMDMultiWaveAttentionGridSpec
+  if not isinstance(x.arg, AMDPackedFragmentLoopSpec): raise ValueError("loop fragment is malformed")
+  x.arg.validate(); role,block=x.arg.role,x.arg.head_block
+  if isinstance(x.arg.grid, AMDMultiWaveAttentionGridSpec):
+    if len(x.src) != 6: raise ValueError("multiwave loop fragment requires owner/lane/wave/column/range/group")
+    owner,lane,wave_id,col,rng,*grid_src=x.src
+  else:
+    if len(x.src) not in {4,5}: raise ValueError("loop fragment is malformed")
+    owner,lane,col,rng,*grid_src=x.src; wave_id=None
   if (x.arg.grid is None) != (len(grid_src)==0): raise ValueError("loop fragment grid ownership must be explicit")
   if not grid_src: gbase=UOp.const(dtypes.weakint,0)
+  elif isinstance(x.arg.grid, AMDMultiWaveAttentionGridSpec):
+    grid,group=x.arg.grid,grid_src[0]
+    kv_head,q_tile=group//grid.q_tiles,group%grid.q_tiles
+    gbase=((kv_head*grid.waves_per_group+wave_id)*(grid.q_tokens*128)+q_tile*2048) if role=="Q" else kv_head*(grid.kv_tokens*128)
   elif role=="Q": gbase=grid_src[0]*2048
   else:
     grid=x.arg.grid
@@ -2586,11 +2635,11 @@ def expand_loop_fragment(x:UOp) -> UOp:
   elif role=="K": offs=tuple(gbase+rng*2048+col*128+block*16+i for i in range(16))
   else: offs=tuple(gbase+rng*2048+block*16+i*128+col for i in range(16))
   return UOp(Ops.STACK,dtypes.half.vec(16),tuple(owner.index(off).load() for off in offs),
-    tag=("amd_gfx1100_fragment_load_hd128_loop_v1",role,block,owner,lane,col,rng,*grid_src))
+    tag=("amd_gfx1100_fragment_load_hd128_loop_v1",role,block,x.arg,*x.src))
 
 def expand_native_row_softmax_repack(ctx, x:UOp, native_state:bool=True) -> UOp:
   """Expand the exact gfx1100-v1 QK-C -> PV-A bridge before isel."""
-  from tinygrad.uop.ops import AMDRowSoftmaxRepackSpec
+  from tinygrad.uop.ops import AMDRowSoftmaxRepackSpec, AMDMultiWaveAttentionGridSpec
   if not isinstance(x.arg, AMDRowSoftmaxRepackSpec): raise ValueError("AMD row-softmax repack is missing its native descriptor")
   x.arg.validate()
   initial_state = x.arg.mode == "initial_state_v1"
@@ -2609,10 +2658,14 @@ def expand_native_row_softmax_repack(ctx, x:UOp, native_state:bool=True) -> UOp:
   state_dt, state_shape = (dtypes.float.vec(8), (8,)) if stateful else (dtypes.float, ())
   if not initial_state and any(s.dtype != state_dt or s.shape != state_shape for s in (m, l)):
     raise ValueError("AMD row-softmax repack state dtype does not match descriptor mode")
-  lane = UOp.special(32, "lidx0")
+  multiwave = isinstance(x.arg.grid, AMDMultiWaveAttentionGridSpec)
+  tid = UOp.special(x.arg.grid.local_size if multiwave else 32, "lidx0")
+  lane = tid.alu(Ops.AND, UOp.const(dtypes.weakint, 31)) if multiwave else tid
+  wave_id = tid.alu(Ops.SHR, UOp.const(dtypes.weakint, 5)) if multiwave else UOp.const(dtypes.weakint, 0)
+  wave_base = wave_id.alu(Ops.MUL, UOp.const(dtypes.weakint, 256))
   lane_hw = lane.cast(dtypes.int)
   halfwave, col = lane.alu(Ops.SHR, UOp.const(dtypes.weakint, 4)), lane.alu(Ops.AND, UOp.const(dtypes.weakint, 15))
-  lds = UOp(Ops.DEFINE_LOCAL, dtypes.half.ptr(256, AddrSpace.LOCAL), arg=next(ctx))
+  lds = UOp(Ops.DEFINE_LOCAL, dtypes.half.ptr(512 if multiwave else 256, AddrSpace.LOCAL), arg=next(ctx))
   state_owner = next(ctx) if stateful and native_state else None
   state_writes_m, state_writes_l, state_writes_alpha = [], [], []
   stores, new_ms, new_ls, alphas, log2e = [], [], [], [], UOp.const(dtypes.float, 1.4426950408889634)
@@ -2666,7 +2719,8 @@ def expand_native_row_softmax_repack(ctx, x:UOp, native_state:bool=True) -> UOp:
     if not stateful or not native_state: new_ms.append(new_m); new_ls.append(new_l)
     alphas.append(alpha)
     normalized = (weight if stateful else weight / new_l).cast(dtypes.half)
-    published_row = lds.index(row.alu(Ops.MUL, UOp.const(dtypes.weakint, 16)).alu(Ops.ADD, col)).store(normalized)
+    published_row = lds.index(wave_base.alu(Ops.ADD,
+      row.alu(Ops.MUL, UOp.const(dtypes.weakint, 16)).alu(Ops.ADD, col))).store(normalized)
     # Serialize row publication so eight independent butterfly/exp/CVT trees
     # do not become simultaneously live before the barrier.
     if stateful and native_state:
@@ -2680,12 +2734,16 @@ def expand_native_row_softmax_repack(ctx, x:UOp, native_state:bool=True) -> UOp:
   # the complete workgroup is one gfx1100 wave.  In that exact case wave issue
   # order plus lgkmcnt(0) publishes all P stores before any PV-A reload without
   # paying for an inter-wave rendezvous that cannot have participants.
-  if x.arg.grid is not None and x.arg.grid.single_wave_workgroup:
+  if multiwave:
+    from tinygrad.codegen.opt.compiler_policies import WaveLDSFence
+    ready = UOp(Ops.BARRIER, dtypes.void, (UOp.group(*stores),), arg=WaveLDSFence(
+      wave_size=x.arg.grid.wave_size, workgroup_size=x.arg.grid.local_size, wave_slices=x.arg.grid.p_wave_slices))
+  elif x.arg.grid is not None and x.arg.grid.single_wave_workgroup:
     from tinygrad.codegen.opt.compiler_policies import WaveLDSFence
     ready = UOp(Ops.BARRIER, dtypes.void, (UOp.group(*stores),), arg=WaveLDSFence(
       wave_size=x.arg.grid.wave_size, workgroup_size=x.arg.grid.local_size))
   else: ready = UOp.barrier(UOp.group(*stores))
-  reload_row = col.alu(Ops.MUL, UOp.const(dtypes.weakint, 16))
+  reload_row = wave_base.alu(Ops.ADD, col.alu(Ops.MUL, UOp.const(dtypes.weakint, 16)))
   published = lds.after(ready)
   vals = [published.index(reload_row.alu(Ops.ADD, UOp.const(dtypes.weakint, i))).load() for i in range(16)]
   if stateful and native_state:
