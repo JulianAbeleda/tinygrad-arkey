@@ -89,7 +89,19 @@ def lower_attention_semantic(att:UOp) -> UOp:
       state_combine = "online_softmax_state" if getenv("TINYGRAD_ONLINE_SOFTMAX_STATE", 0) else "online_softmax"
       red = score.uop.composite_reduce(*slots, axis=(3,), inputs=(logical_v,), combine_fn=state_combine,
         input_specs=(CompositeInputSpec("logical", (0, 1, None, 3, 4), primary_repeated=True),),
-        tile_carrier=tile_carrier)
+        tile_carrier=tile_carrier,
+        slot_shapes=((b, h, q_len), (b, h, q_len), (b, h, q_len, hd)))
+      if state_combine == "online_softmax_state" and owned_map_proven and hd == 16:
+        from tinygrad.schedule.wmma import construct_hd16_tile_carriers
+        # The live score source is rankful/vector-typed at this stage. Keep
+        # the first fragment instantiation detached until grouped lowering
+        # owns the range lanes; this records the exact ABI without changing
+        # the scalar execution graph.
+        fragments = construct_hd16_tile_carriers(
+          UOp.placeholder((b, h, 16, 16, 1), dtypes.half, 9201),
+          UOp.placeholder((b, h, 1, 16, 16), dtypes.half, 9202),
+          UOp.placeholder((b, h, 16, 16), dtypes.float32, 9203), batch=b, heads=h)
+        red = red.replace(arg=(red.arg[0]._replace(tile_fragments=fragments),) + red.arg[1:])
       acc = Tensor(UOp(Ops.REDUCE_SLOT, att.arg.qk_dtype, (red,), 2))
       den = Tensor(UOp(Ops.REDUCE_SLOT, att.arg.qk_dtype, (red,), 1))
       if state_combine == "online_softmax_state":

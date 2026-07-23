@@ -1199,6 +1199,7 @@ class CompositeReduce(NamedTuple):
   input_specs: tuple = () # one source-role/axis-map owner per auxiliary REDUCE source
   tile_carrier: Any = None # optional backend-neutral tile/state ABI contract
   slot_shapes: tuple[tuple|None, ...] = () # logical output shape per REDUCE_SLOT
+  tile_fragments: tuple = () # optional scheduler-owned score/value/acc TILE_GATHER nodes
 
 def _normalize_composite_shape(shape):
   """Normalize compiler shape metadata before it reaches generic shape logic."""
