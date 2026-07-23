@@ -183,8 +183,40 @@ def lower_tile_gather(source: UOp, *, role: str, dtype: DType) -> UOp:
                (len(source.src[0].shape) == 4 and spec.role == "acc" and source.src[0].shape[-2:] == (16, 16)))
     if not allowed:
       raise ValueError("tile gather is not a shaped fragment")
-    return source
+    return lower_attached_tile_gather(source, role=role, dtype=dtype)
   return adapt_wmma_fragment(source, role=role, dtype=dtype, shape=spec.fragment_shape)
+
+def lower_attached_tile_gather(source: UOp, *, role: str, dtype: DType) -> UOp:
+  """Materialize one proven rankful carrier as an exact logical fragment.
+
+  The coordinate map is the ownership proof.  Only the three bounded Hd=16
+  layouts are accepted; unsupported packing remains opaque so the scalar
+  reducer stays authoritative.  This helper is intentionally not installed
+  in the production rangeify matcher.
+  """
+  if source.op is not Ops.TILE_GATHER:
+    raise ValueError("expected TILE_GATHER carrier")
+  spec = source.arg
+  spec.validate()
+  if spec.role != ("value" if role == "v" else role):
+    raise ValueError("tile gather role mismatch")
+  if source.shape != spec.fragment_shape:
+    raise ValueError("tile gather is not a shaped fragment")
+  base = source.src[0]
+  if base.shape == spec.fragment_shape:
+    return adapt_wmma_fragment(source, role=role, dtype=dtype, shape=spec.fragment_shape)
+  allowed = ((spec.role == "score" and base.shape[-3:] == (16, 16, 1)) or
+             (spec.role == "value" and base.shape[-3:] == (1, 16, 16)) or
+             (spec.role == "acc" and base.shape[-2:] == (16, 16)))
+  if not allowed:
+    raise ValueError("tile gather source geometry is unsupported")
+  build_owned_fragment_index_map(base.shape, spec)
+  fragment = base.reshape(spec.fragment_shape)
+  # Keep the original axis contract in ``spec`` even though the materialized
+  # child is now rank-2; reusing ``tile_gather`` would (correctly) reject the
+  # detached source axes against the new rank.
+  gathered = UOp(Ops.TILE_GATHER, fragment.dtype, (fragment,), arg=spec)
+  return adapt_wmma_fragment(gathered, role=role, dtype=dtype, shape=spec.fragment_shape)
 
 def emit_tile_gather_shaped_wmma(a_frag: UOp, b_frag: UOp, acc_frag: UOp, *,
                                  roles: tuple[str, str, str] = ("score", "value", "acc"),

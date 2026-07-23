@@ -231,3 +231,24 @@ def test_rangeify_handoff_unwraps_only_exact_tile_carriers():
   bad = tile_gather(UOp.placeholder((8, 16), dtypes.half, 41), TileGatherSpec("score", (16, 16), (0, 1), (0, 1)))
   with pytest.raises(ValueError, match="exact shaped"):
     graph_rewrite(bad, pm_mops)
+
+def test_attached_hd16_carrier_lowers_to_exact_fragment_without_metadata_loss():
+  from tinygrad.schedule.wmma import construct_hd16_tile_carriers, lower_attached_tile_gather
+  score = UOp.placeholder((1, 1, 16, 16, 1), dtypes.half, 70)
+  value = UOp.placeholder((1, 1, 1, 16, 16), dtypes.half, 71)
+  acc = UOp.placeholder((1, 1, 16, 16), dtypes.float32, 72)
+  carriers = construct_hd16_tile_carriers(score, value, acc)
+  lowered = tuple(lower_attached_tile_gather(x, role=r, dtype=x.dtype.base)
+                  for x, r in zip(carriers, ("score", "v", "acc")))
+  assert all(x.op is Ops.TILE_GATHER and x.shape == (16, 16) for x in lowered)
+  assert lowered[0].arg.source_axes == (2, 3)
+  assert lowered[1].arg.source_axes == (3, 4)
+  assert lowered[2].arg.source_axes == (2, 3)
+
+def test_attached_tile_lowering_rejects_unproven_rankful_layout():
+  from tinygrad.schedule.wmma import tile_gather, lower_attached_tile_gather
+  from tinygrad.uop.ops import TileGatherSpec
+  source = UOp.placeholder((1, 1, 16, 8, 1), dtypes.half, 73)
+  carrier = tile_gather(source, TileGatherSpec("score", (16, 16), (2, 3), (0, 1)))
+  with pytest.raises(ValueError, match="unsupported|exceeds"):
+    lower_attached_tile_gather(carrier, role="score", dtype=dtypes.half)
