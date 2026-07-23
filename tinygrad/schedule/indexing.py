@@ -87,7 +87,8 @@ def create_bufferize_and_index_based_on_ranges(ctx:IndexingContext, x:UOp):
         # Carry composite provenance across the scheduler STAGE boundary so
         # the subsequent INDEX remains a typed REDUCE_SLOT view.  Never copy
         # arbitrary tags onto STAGE nodes.
-        stage_tag = s.tag if isinstance(s.tag, tuple) and len(s.tag) == 2 and s.tag[0] in ("composite_reduce", "composite_slot", "composite_view") else None
+        candidate_tag = s.tag if s.tag is not None else new_src.tag
+        stage_tag = candidate_tag if isinstance(candidate_tag, tuple) and len(candidate_tag) == 2 and candidate_tag[0] in ("composite_reduce", "composite_slot", "composite_view") else None
         new_src = UOp(Ops.STAGE, s.dtype, src=(new_src,)+closed_ranges, arg=opts, tag=stage_tag)
         if x in ctx.range_map: new_src = new_src.index(*[r for i,r in enumerate(ctx.range_map[x][0]) if i in realized_ranges])
     new_srcs.append(new_src)
