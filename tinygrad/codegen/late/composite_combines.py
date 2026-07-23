@@ -394,7 +394,7 @@ def resolve_composite_reduce_slot_prebufferize(slot):
     # lookalikes deliberately remain deferred.
     tag = slot.tag
     while isinstance(tag, tuple) and len(tag) >= 2 and tag[0] == "composite_view": tag = tag[1]
-    producer = tag[3] if isinstance(tag, tuple) and len(tag) >= 4 and tag[0] == "composite_slot" else None
+    producer = tag[2] if isinstance(tag, tuple) and len(tag) >= 3 and tag[0] == "composite_slot" else None
     if not isinstance(producer, UOp) or producer.op is not Ops.REDUCE or producer.arg[0] is not composite: return None
     result = UOp(Ops.REDUCE_SLOT, slot.dtype, (producer,), slot.arg, slot.tag)
     for node in reversed(ancestry[:-1]): result = node.replace(src=(result,) + node.src[1:])
