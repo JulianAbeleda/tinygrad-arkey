@@ -1275,7 +1275,6 @@ class SharedAttentionCandidateContext(NamedTuple):
   hkv: int
   hd: int
   causal: bool
-  output_block_base: int = 0
   acc_blocks: int = 8
 
   @property
@@ -1700,6 +1699,7 @@ class AMDPackedFragmentLoopSpec(NamedTuple):
   role: str = "Q"
   head_block: int = 0
   grid: AMDAttentionGridSpec|AMDMultiWaveAttentionGridSpec|None = None
+  output_block_base: int = 0
 
   def validate(self):
     if self.native_abi != "amd_gfx1100_packed_fragment_hd128_loop_v1" or self.role not in {"Q", "K", "V"}:
