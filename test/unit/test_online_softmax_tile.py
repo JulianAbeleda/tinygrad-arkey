@@ -287,6 +287,43 @@ def test_rangeify_legalizes_exact_logical_repack_and_rejects_logical_tiles():
   with pytest.raises(ValueError, match="float.vec"):
     lower_row_softmax_repack(logical_tile)
 
+def test_native_qk_consumer_exposes_raw_c_and_reaches_two_wmmas():
+  import itertools
+  from tinygrad.schedule.rangeify import pm_native_row_softmax_repack, pm_mops
+  from tinygrad.uop.ops import RowSoftmaxRepackSpec, graph_rewrite
+  from tinygrad.schedule.wmma import shaped_wmma
+  q = UOp.const(dtypes.half.vec(16), (0.0,) * 16)
+  k = UOp.const(dtypes.half.vec(16), (0.0,) * 16)
+  qk_acc = UOp.const(dtypes.float32.vec(8), (0.0,) * 8)
+  qk = shaped_wmma(q, k, qk_acc, dims=(16, 16, 16), device="AMD:gfx1100", threads=32, dtype_out=dtypes.float32)
+  m, l = UOp.const(dtypes.float32, 0), UOp.const(dtypes.float32, 1)
+  logical = UOp(Ops.ROW_SOFTMAX_REPACK, dtypes.half, (qk, m, l), RowSoftmaxRepackSpec())
+  bridge = graph_rewrite(logical, pm_native_row_softmax_repack, ctx=itertools.count(100), bottom_up=False)
+  assert bridge.op is Ops.AMD_ROW_SOFTMAX_REPACK and bridge.src[0].op is Ops.WMMA
+  assert bridge.src[0].dtype == dtypes.float32.vec(8)
+  v = UOp.const(dtypes.half.vec(16), (0.0,) * 16)
+  pv_acc = UOp.const(dtypes.float32.vec(8), (0.0,) * 8)
+  pv = shaped_wmma(bridge, v, pv_acc, dims=(16, 16, 16), device="AMD:gfx1100", threads=32, dtype_out=dtypes.float32)
+  lowered = graph_rewrite(pv, pm_mops, ctx=itertools.count(200), bottom_up=True)
+  wmmas = [u for u in lowered.toposort() if u.op is Ops.WMMA]
+  assert len(wmmas) == 2
+  native = [u for u in lowered.toposort() if u.op is Ops.AMD_ROW_SOFTMAX_REPACK]
+  assert len(native) == 1 and native[0].src[0] is wmmas[0]
+  assert wmmas[1].src[0] is native[0]
+
+def test_native_qk_consumer_does_not_truncate_logical_c_fragment():
+  import itertools
+  from tinygrad.schedule.rangeify import pm_native_row_softmax_repack
+  from tinygrad.uop.ops import RowSoftmaxRepackSpec, graph_rewrite
+  from tinygrad.schedule.wmma import shaped_wmma
+  tile = UOp.placeholder((16, 16), dtypes.half, 93)
+  acc = UOp.placeholder((16, 16), dtypes.float32, 94)
+  qk = shaped_wmma(tile, tile, acc, dims=(16, 16, 16), device="AMD:gfx1100", threads=32, dtype_out=dtypes.float32)
+  logical = UOp(Ops.ROW_SOFTMAX_REPACK, dtypes.half, (qk, UOp.const(dtypes.float32, 0), UOp.const(dtypes.float32, 1)),
+                RowSoftmaxRepackSpec())
+  with pytest.raises(ValueError, match="native A/B"):
+    graph_rewrite(logical, pm_native_row_softmax_repack, ctx=itertools.count(300), bottom_up=False)
+
 def test_rangeify_handoff_unwraps_only_exact_tile_carriers():
   from tinygrad.uop.ops import TileGatherSpec, graph_rewrite
   from tinygrad.schedule.wmma import tile_gather

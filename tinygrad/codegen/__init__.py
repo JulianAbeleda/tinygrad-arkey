@@ -23,7 +23,7 @@ from tinygrad.codegen.opt.postrange import apply_opts
 from tinygrad.codegen import experimental as cg_extras
 from tinygrad.codegen.late.gater import pm_move_gates_from_index
 from tinygrad.codegen.simplify import pm_simplify_ranges, pm_flatten_range, pm_split_ranges, pm_load_collapse
-from tinygrad.schedule.rangeify import pm_add_buffers_local, rangeify_codegen, pm_mops, pm_syntactic_sugar, pm_store_ranges
+from tinygrad.schedule.rangeify import pm_add_buffers_local, rangeify_codegen, pm_mops, pm_syntactic_sugar, pm_store_ranges, pm_native_row_softmax_repack
 from tinygrad.codegen.late.linearizer import CFGContext, pm_split_ends, pm_add_control_flow, linearize
 from tinygrad.codegen.late.regalloc import LinearScanRegallocContext, pm_regalloc_rewrite, pressure_schedule
 
@@ -74,6 +74,10 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   if (_u:=getenv("SCHED_UNROLL")) > 1 and ren.target.device == "AMD":
     # recurrence-aware loop-unroll primitive (default-off codegen scheduling capability)
     ast = cg_extras.unroll_recurrence(ast, _u)
+  # Preserve the exact native QK C fragment for its nonlinear consumer before
+  # bottom-up movement lowering can install the ordinary logical wrapper.
+  ast = graph_rewrite(ast, pm_native_row_softmax_repack, ctx=itertools.count(900),
+                      bottom_up=False, name="native row softmax repack before spec")
   # SPEC validation runs before the late devectorizer.  Resolve only the
   # provenance-tagged INDEX views that the expander can place around a
   # composite REDUCE_SLOT; ordinary REDUCE_SLOT/INDEX nodes remain subject to

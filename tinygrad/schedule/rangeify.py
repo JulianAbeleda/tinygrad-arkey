@@ -163,7 +163,7 @@ def add_ranges_to_store(ctx, x):
   idxs = [UOp.range(r, next(ctx), AxisType.LOOP) for r in x.src[0].shape]
   return UOp.store(x.src[0].index(*idxs), x.src[1].index(*idxs)).end(*idxs)
 
-def lower_shaped_wmma(ctx, x):
+def _lower_shaped_wmma(ctx, x, raw_gfx1100_c:bool):
   dims, device, threads = x.arg
   # Keep the declarative tile boundary fail-closed before constructing the
   # backend WMMA carrier.  In particular, a tile primitive must carry three
@@ -181,11 +181,24 @@ def lower_shaped_wmma(ctx, x):
   name = f"WMMA_{'_'.join(map(str, dims))}_{dtype_in.name}_{dtype_out.name}"
   wmma_arg = (name, dims, dtype_in, dtype_out, device, threads, tc_upcast_axes, ())
   srcs = tuple(s if s.dtype.count == s.shape[-1] else s[u].contract(u) for s, u in upcasts)
+  if raw_gfx1100_c:
+    # This path is exclusively installed by the ROW_SOFTMAX_REPACK consumer
+    # rewrite below. Never truncate or synthesize a fragment: all three
+    # scheduler operands must already own the exact RDNA3 per-lane ABI.
+    if dims != (16, 16, 16) or device not in ("AMD", "AMD:gfx1100") or threads != 32 or dtype_out != dtypes.float:
+      raise ValueError("raw row-softmax QK lowering requires AMD gfx1100 16x16x16 fp16/fp32 wave32")
+    if tuple(s.dtype for s in srcs) != (dtypes.half.vec(16), dtypes.half.vec(16), dtypes.float32.vec(8)):
+      raise ValueError("raw row-softmax QK lowering requires native A/B half.vec(16) and C float.vec(8)")
+    raw_arg = ("WMMA_16_16_16_half_float", dims, dtypes.half, dtypes.float, device, threads, tc_upcast_axes, ())
+    return UOp(Ops.WMMA, dtypes.float32.vec(8), srcs, arg=raw_arg)
   wmma = UOp(Ops.WMMA, dtype_out.vec(x.src[2].shape[-1]), srcs, arg=wmma_arg)
   tmp = UOp.placeholder((x.src[2].shape[-1],), dtype_out, slot=next(ctx), addrspace=AddrSpace.REG)
   stores = UOp.group(*[tmp[e].store(wmma.gep(e)) for e in range(x.src[2].shape[-1])])
   vals = [tmp[e] for e in range(x.src[2].shape[-1])]
   return vals[0].vectorize(*vals[1:]).after(stores)
+
+def lower_shaped_wmma(ctx, x):
+  return _lower_shaped_wmma(ctx, x, False)
 
 pm_store_ranges = PatternMatcher([
   (UPat(Ops.STORE, name="x"), add_ranges_to_store),
@@ -259,6 +272,18 @@ def lower_row_softmax_repack(x: UOp) -> UOp:
   x.arg.validate()
   native = AMDRowSoftmaxRepackSpec()
   return amd_gfx1100_row_softmax_repack(*x.src, spec=native)
+
+def lower_row_softmax_repack_with_qk(ctx, x:UOp, qk:UOp) -> UOp:
+  """Consumer-aware raw-C handoff for one exact already-native QK node."""
+  from tinygrad.schedule.wmma import amd_gfx1100_row_softmax_repack
+  x.arg.validate()
+  raw_c = _lower_shaped_wmma(ctx, qk, True)
+  return amd_gfx1100_row_softmax_repack(raw_c, x.src[1], x.src[2], spec=AMDRowSoftmaxRepackSpec())
+
+pm_native_row_softmax_repack = PatternMatcher([
+  (UPat(Ops.ROW_SOFTMAX_REPACK, src=(UPat(Ops.SHAPED_WMMA, name="qk"), UPat(), UPat()), name="x"),
+   lower_row_softmax_repack_with_qk),
+])
 
 pm_mops = PatternMatcher([
   (UPat(GroupOp.Movement, name="r").f(Ops.INDEX, allow_any_len=True, name="idx"), _mop_index),
@@ -858,6 +883,10 @@ def get_kernel_graph(sink:UOp) -> UOp:
 def _get_kernel_graph(sink:UOp) -> UOp:
   tsink = graph_rewrite(sink, multi_pm, name="multi_pm")
   if OPENPILOT_HACKS: tsink = graph_rewrite(tsink, pm_fold_moved_after, ctx={}, name="fold moved afters")
+  # Consumer-aware and top-down: preserve the raw QK C fragment before the
+  # ordinary bottom-up SHAPED_WMMA rewrite wraps it in logical registers.
+  tsink = graph_rewrite(tsink, pm_native_row_softmax_repack, ctx=itertools.count(1000),
+                       bottom_up=False, name="native row softmax repack")
   tsink = graph_rewrite(tsink, pm_syntactic_sugar+pm_mops+earliest_rewrites, bottom_up=True, name="earliest rewrites")
 
   # Attention may only be lowered from its explicit semantic marker. The
