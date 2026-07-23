@@ -78,6 +78,19 @@ def test_storage_backed_vector_reload_stack_tag_allows_scalar_gep():
   type_verify(UOp.sink(lane), spec_full)
 
 
+def test_one_source_reload_lowers_at_generic_vector_lane_boundary():
+  from tinygrad.renderer.isa.amd import lower_state_phase_transfer, native_repack_matcher
+  from tinygrad.uop.ops import graph_rewrite
+  storage = UOp(Ops.DEFINE_LOCAL, dtypes.float.ptr(128, AddrSpace.LOCAL), arg=95)
+  handle = StateHandle(StateRegionSpec("vector_state", dtypes.float, 8), PhaseBoundarySpec("publish", "reload"),
+                       storage=storage, lane=UOp.special(8, "state_lane"), lane_stride=8)
+  reloaded = handle.reload(handle.publish(UOp.const(dtypes.float.vec(8), 1.0)))
+  assert len(reloaded.src) == 1 and lower_state_phase_transfer(reloaded) is None
+  lowered = graph_rewrite(UOp.sink(reloaded.gep(2)), native_repack_matcher, bottom_up=True)
+  assert not any(u.op is Ops.CUSTOMI and u.arg == ("state_reload_v1", handle) for u in lowered.toposort())
+  assert any(u.op is Ops.LOAD for u in lowered.toposort())
+
+
 def test_storage_backed_state_rejects_invalid_storage_lane_and_offset():
   storage = UOp(Ops.DEFINE_LOCAL, dtypes.float.ptr(64, AddrSpace.LOCAL), arg=92)
   lane = UOp.special(8, "state_lane")

@@ -2793,12 +2793,39 @@ def lower_state_phase_transfer(x:UOp) -> UOp|None:
     base=lane.alu(Ops.MUL,UOp.const(dtypes.weakint,handle.lane_stride)).alu(Ops.ADD,UOp.const(dtypes.weakint,handle.element_offset))
     stores=tuple(storage.index(base.alu(Ops.ADD,UOp.const(dtypes.weakint,i))).store(value.gep(i)) for i in range(handle.region.lanes))
     return value.after(UOp.group(*stores))
+  # Generic construction may already have materialized the lane-major reload
+  # as a provenance-preserving one-source carrier before renderer rewrites.
+  if len(x.src)==1:
+    lanes=x.src[0]
+    if handle.region.lanes > 1 and lanes.op is Ops.STACK and lanes.dtype == handle.dtype and \
+       lanes.tag == ("state_reload_lanes_v1",handle) and len(lanes.src) == handle.region.lanes and \
+       all(source.dtype == handle.region.dtype for source in lanes.src):
+      # Keep the typed carrier until a scalar consumer projects a lane.  A raw
+      # STACK is simplified by UOp GEP construction and loses this provenance.
+      return None
+    return lanes
   published,storage,lane,*deps=x.src
   base=lane.alu(Ops.MUL,UOp.const(dtypes.weakint,handle.lane_stride)).alu(Ops.ADD,UOp.const(dtypes.weakint,handle.element_offset))
   owner=storage.after(published,*deps)
   return UOp(Ops.STACK,handle.dtype,tuple(owner.index(base.alu(Ops.ADD,UOp.const(dtypes.weakint,i))).load() for i in range(handle.region.lanes)))
 
+def lower_state_phase_reload_gep(x:UOp, carrier:UOp) -> UOp|None:
+  """Consume one typed reload lane without exposing a raw vector stack."""
+  if not (isinstance(carrier.arg,tuple) and carrier.arg[:1] == ("state_reload_v1",) and len(carrier.arg) == 2): return None
+  handle=carrier.arg[1]
+  from tinygrad.uop.ops import StateHandle
+  if not isinstance(handle,StateHandle) or handle.storage is None or handle.region.lanes <= 1 or len(x.arg) != 1 or not 0 <= x.arg[0] < handle.region.lanes:
+    return None
+  try: handle.validate()
+  except (TypeError,ValueError): return None
+  if len(carrier.src) != 1: return None
+  lanes=carrier.src[0]
+  if lanes.op is not Ops.STACK or lanes.tag != ("state_reload_lanes_v1",handle) or len(lanes.src) != handle.region.lanes:
+    return None
+  return lanes.src[x.arg[0]]
+
 native_repack_matcher = PatternMatcher([
+  (UPat(Ops.GEP, src=(UPat(Ops.CUSTOMI,name="carrier"),), name="x"), lower_state_phase_reload_gep),
   (UPat((Ops.CUSTOMI,Ops.CUSTOM),name="x"), lower_state_phase_transfer),
   (UPat(Ops.AMD_ROW_SOFTMAX_REPACK, name="x"), expand_native_row_softmax_repack),
   (UPat(Ops.AMD_ROW_SOFTMAX_SLOT, src=(UPat(Ops.TUPLE, name="owner"),), name="x"), lambda x,owner: owner.src[x.arg.slot]),
