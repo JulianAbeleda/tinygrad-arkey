@@ -42,7 +42,8 @@ def test_online_softmax_tile_normalized_path_keeps_state_in_register_graph():
                              dims=(16, 16, 16), device="AMD", threads=256, normalize=True)
   assert tile.weights is not None
   assert tile.pv.src[0] is tile.weights
-  assert any(x.op is Ops.REDUCE for x in tile.weights.toposort())
+  assert tile.weights.op is Ops.ROW_SOFTMAX_REPACK
+  assert tile.weights.src[0] is tile.qk
 
 def test_online_softmax_tile_descriptor_matches_ordinary_pv_wmma_fragments():
   """Normalized weights remain a regular WMMA A fragment, not a new backend op."""

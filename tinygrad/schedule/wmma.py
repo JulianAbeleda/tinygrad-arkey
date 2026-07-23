@@ -459,13 +459,10 @@ def online_softmax_tile(q_frag:UOp, k_frag:UOp, v_frag:UOp, *,
   weights = None
   pv_input = qk
   if normalize:
-    block_m = qk.max(axis=-1, keepdim=True)
-    new_m = m.maximum(block_m)
-    corr = (m - new_m).exp()
-    probs = (qk - new_m).exp()
-    block_l = probs.sum(axis=-1, keepdim=True)
-    new_l = l * corr + block_l
-    weights = probs / new_l
+    # Preserve the descriptor-owned C(row,kv) layout through the nonlinear
+    # boundary. Backend lowering must realize the declared row reductions and
+    # LDS/barrier repack before PV consumes its native A fragment.
+    weights = row_softmax_lds_repack(qk, m, l)
     pv_input = weights
   pv = shaped_wmma(pv_input, v_frag, pv_acc, dims=dims, device=device, threads=threads,
                    dtype_out=dtype_out)
