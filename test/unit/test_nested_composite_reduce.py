@@ -60,12 +60,22 @@ def test_spec_accepts_only_tagged_composite_index_slot_view():
   src = Tensor.empty(1, 2, 3, dtype=dtypes.float32)
   red = src.uop.composite_reduce(AccumulatorSlot(Ops.ADD, dtypes.float32, 0.0, "sum"), axis=(2,), slot_shapes=((1, 2),))
   tup = UOp(Ops.TUPLE, dtypes.void, (UOp.placeholder((1, 2), dtypes.float32, 93),)).replace(tag=("composite_reduce", red.arg[0]))
-  idx = UOp(Ops.INDEX, dtypes.float32, (tup, UOp.const(dtypes.weakint, 0)), None)
+  idx = tup.index(UOp.const(dtypes.weakint, 0))
   type_verify(UOp(Ops.REDUCE_SLOT, dtypes.float32, (idx,), 0), spec_tensor)
   plain = UOp(Ops.TUPLE, dtypes.void, (UOp.const(dtypes.float32, 1.0),))
   untagged = UOp(Ops.INDEX, dtypes.float32, (plain, UOp.const(dtypes.weakint, 0)), None)
   with pytest.raises(RuntimeError, match="UOp verification failed"):
     type_verify(UOp(Ops.REDUCE_SLOT, dtypes.float32, (untagged,), 0), spec_tensor)
+
+def test_composite_view_tag_survives_chained_index_views():
+  src = Tensor.empty(1, 2, 3, dtype=dtypes.float32)
+  red = src.uop.composite_reduce(AccumulatorSlot(Ops.ADD, dtypes.float32, 0.0, "sum"), axis=(2,), slot_shapes=((1, 2),))
+  tup = UOp(Ops.TUPLE, dtypes.void, (UOp.placeholder((1, 2), dtypes.float32, 94),)).replace(tag=("composite_reduce", red.arg[0]))
+  first = tup.index(UOp.const(dtypes.weakint, 0))
+  chained = first.index(UOp.const(dtypes.weakint, 0))
+  assert first.tag[0] == chained.tag[0] == "composite_view"
+  resolved = resolve_composite_reduce_slot_prebufferize(UOp(Ops.REDUCE_SLOT, dtypes.float32, (chained,), 0))
+  assert resolved is not None
 
 def test_composite_reduce_slot_constructor_carries_validated_provenance():
   src = Tensor.empty(1, 2, 3, dtype=dtypes.float32)

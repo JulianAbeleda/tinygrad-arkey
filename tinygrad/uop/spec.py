@@ -40,10 +40,14 @@ def _is_tagged_composite_slot_view(x: UOp) -> bool:
   masquerade as a reduction projection.
   """
   if x.op is not Ops.INDEX or not x.src: return False
-  base = x.src[0]
-  tag = base.tag
-  return base.op is Ops.TUPLE and isinstance(tag, tuple) and len(tag) == 2 \
-    and tag[0] == "composite_reduce" and hasattr(tag[1], "slots")
+  tag = x.tag
+  if not (isinstance(tag, tuple) and len(tag) == 2 and tag[0] == "composite_view"): return False
+  provenance = tag[1]
+  if not (isinstance(provenance, tuple) and len(provenance) >= 2): return False
+  if provenance[0] == "composite_slot": return hasattr(provenance[1], "slots")
+  if provenance[0] == "composite_reduce": return hasattr(provenance[1], "slots")
+  if provenance[0] == "composite_view": return _is_tagged_composite_slot_view(x.src[0])
+  return False
 
 def type_verify(ast:UOp|list[UOp], check_spec:PatternMatcher):
   lst = list(ast.toposort()) if isinstance(ast, UOp) else ast

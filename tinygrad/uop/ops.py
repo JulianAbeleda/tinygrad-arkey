@@ -508,7 +508,14 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
   def vectorize(self, *srcs):
     return UOp(Ops.STACK, self.dtype.vec(len(srcs)+1), (self,)+srcs)
   def index(self, *srcs:UOp|None, ptr=False, **kwargs):
-    return UOp(Ops.INDEX, kwargs.pop("dtype", self.dtype if ptr else self.dtype.base), (self,)+tuple([x for x in srcs if x is not None]), **kwargs)
+    # Preserve composite provenance through indexed views, but only for the
+    # validated composite tags emitted by composite_reduce_slot()/expansion.
+    # Ordinary INDEX nodes remain untagged and therefore cannot masquerade as
+    # REDUCE_SLOT projections.
+    tag = kwargs.pop("tag", None)
+    if tag is None and isinstance(self.tag, tuple) and self.tag and self.tag[0] in ("composite_slot", "composite_reduce", "composite_view"):
+      tag = ("composite_view", self.tag)
+    return UOp(Ops.INDEX, kwargs.pop("dtype", self.dtype if ptr else self.dtype.base), (self,)+tuple([x for x in srcs if x is not None]), tag=tag, **kwargs)
   def __getitem__(self, idx):
     # pointers index into INDEX UOps (scalar lookup); everything else uses the shared mixin view path
     if not isinstance(self.dtype, PtrDType): return super(UOp, self).__getitem__(idx)
