@@ -210,6 +210,8 @@ def lower_attached_tile_gather(source: UOp, *, role: str, dtype: DType) -> UOp:
              (spec.role == "acc" and base.shape[-2:] == (16, 16)))
   if not allowed:
     raise ValueError("tile gather source geometry is unsupported")
+  if spec.role in ("score", "value") and len(base.shape) < 5:
+    raise ValueError("tile gather source rank is unsupported")
   build_owned_fragment_index_map(base.shape, spec)
   fragment = base.reshape(spec.fragment_shape)
   # Keep the original axis contract in ``spec`` even though the materialized
