@@ -1388,6 +1388,23 @@ class RotatingPVStateSpec(NamedTuple):
     src=(self.storage,self.lane) if after is None else (self.storage,self.lane,after)
     return UOp(Ops.CUSTOMI, self.dtype, src, ("rotating_pv_state_read_v1", self))
 
+class RotatingPVSequentialDrainSpec(NamedTuple):
+  """One ordered float8 reload from the unavailable rotating-PV LDS state."""
+  state: RotatingPVStateSpec
+
+  @property
+  def dtype(self) -> DType: return self.state.dtype
+
+  def validate(self):
+    self.state.validate()
+    return self
+
+  def reload(self, final_token: UOp) -> UOp:
+    self.validate()
+    if final_token.dtype == dtypes.void: raise TypeError("rotating PV drain requires a value-carrying final token")
+    return UOp(Ops.CUSTOMI, self.dtype, (self.state.storage, self.state.lane, final_token),
+               ("rotating_pv_sequential_drain_v1", self))
+
 class CompositeReduce(NamedTuple):
   slots: tuple
   combine_fn: Any = None  # UOp sub-graph encoding combine (None = independent slots)
