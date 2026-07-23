@@ -34,6 +34,19 @@ class TestAttentionSemantic(unittest.TestCase):
     self.assertEqual(len(state_reduces), 1)
     self.assertFalse(any(u.op is Ops.COMPOSITE_ACCUMULATOR for u in primitive.toposort()))
 
+  def test_opt_in_state_shared_owner_is_one_nonmaterialized_schedule_root(self):
+    if self._combine_name() != "online_softmax_state": self.skipTest("state combine is opt-in")
+    q = Tensor.empty(1, 1, 16, 16, dtype=dtypes.float16)
+    k = Tensor.empty(1, 1, 16, 16, dtype=dtypes.float16)
+    v = Tensor.empty(1, 1, 16, 16, dtype=dtypes.float16)
+    calls = shared_prefill_attention(q, k, v).schedule_linear().src
+    owners = [u for call in calls for u in call.src[0].toposort() if u.op is Ops.DEFERRED_REDUCE_OWNER]
+    projections = [u for call in calls for u in call.src[0].toposort() if u.op is Ops.DEFERRED_REDUCE_SLOT]
+    self.assertEqual((len(calls), len(owners), len(projections)), (1, 1, 1))
+    self.assertIs(projections[0].src[0], owners[0])
+    self.assertFalse(any(u.op is Ops.REDUCE_SLOT for call in calls for u in call.src[0].toposort()))
+    self.assertEqual(sum(u.op is Ops.STORE for u in calls[0].src[0].toposort()), 1)
+
   def test_state_composite_carries_authoritative_kv_range_owner(self):
     if self._combine_name() != "online_softmax_state": self.skipTest("state combine is opt-in")
     from tinygrad.schedule.rangeify import get_kernel_graph

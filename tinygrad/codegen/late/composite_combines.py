@@ -343,7 +343,8 @@ def resolve_composite_reduce_slot_prebufferize(slot):
     from tinygrad.uop.ops import DeferredReduceSlot
     if not isinstance(slot.arg, int) or not 0 <= slot.arg < len(view.arg[0].slots):
       raise RuntimeError(f"invalid composite reduction slot {slot.arg}")
-    return UOp(Ops.DEFERRED_REDUCE_SLOT, slot.dtype, (view,), DeferredReduceSlot(slot.arg))
+    owner = UOp(Ops.DEFERRED_REDUCE_OWNER, dtypes.void, (view,), view.arg[0])
+    return UOp(Ops.DEFERRED_REDUCE_SLOT, slot.dtype, (owner,), DeferredReduceSlot(slot.arg))
   # Expander may wrap the structured tuple in INDEX/STAGE views.  Keep the
   # INDEX nodes for rebuilding the logical projection, but peel STAGE as a
   # scheduler ownership boundary.
@@ -406,7 +407,8 @@ def resolve_composite_reduce_slot_prebufferize(slot):
     for node in reversed(ancestry[:-1]):
       descriptors.append((node.op, node.arg, len(node.src)-1))
       extras.extend(node.src[1:])
-    return UOp(Ops.DEFERRED_REDUCE_SLOT, slot.dtype, (producer, *extras), DeferredReduceSlot(slot.arg, tuple(descriptors)))
+    owner = UOp(Ops.DEFERRED_REDUCE_OWNER, dtypes.void, (producer,), composite)
+    return UOp(Ops.DEFERRED_REDUCE_SLOT, slot.dtype, (owner, *extras), DeferredReduceSlot(slot.arg, tuple(descriptors)))
   shape = composite.slot_shapes[slot.arg]
   if shape is None: raise RuntimeError("composite slot is missing validated logical shape")
   result = base.src[slot.arg]

@@ -272,10 +272,17 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
           if shape is not None: return shape
         return self.src[0]._shape
       case Ops.DEFERRED_REDUCE_SLOT:
-        owner = self.src[0].arg[0] if self.src[0].op is Ops.REDUCE and isinstance(self.src[0].arg, tuple) else None
+        owner = self.src[0].arg if self.src[0].op is Ops.DEFERRED_REDUCE_OWNER else \
+          (self.src[0].arg[0] if self.src[0].op is Ops.REDUCE and isinstance(self.src[0].arg, tuple) else None)
         if getattr(owner, "slot_shapes", ()):
           shape = _normalize_composite_shape(owner.slot_shapes[self.arg.slot])
           if shape is not None: return shape
+        return self.src[0]._shape
+      case Ops.DEFERRED_REDUCE_OWNER:
+        # The shared owner schedules through its primary accumulator output;
+        # scalar state members remain accessible only to deferred projections.
+        if getattr(self.arg, "slot_shapes", ()) and len(self.arg.slot_shapes) > 2:
+          return _normalize_composite_shape(self.arg.slot_shapes[2])
         return self.src[0]._shape
       case Ops.COMPOSITE_ACCUMULATOR:
         # Backend-neutral tuple carrier: arg is the per-slot logical shape.
@@ -1241,6 +1248,7 @@ class DeferredReduceSlot(NamedTuple):
   slot: int
   # Inner-to-outer view descriptors: (op, arg, number of non-owner sources).
   views: tuple[tuple[Ops, Any, int], ...] = ()
+  normalize_by: int|None = None
 
 def _normalize_composite_shape(shape):
   """Normalize compiler shape metadata before it reaches generic shape logic."""

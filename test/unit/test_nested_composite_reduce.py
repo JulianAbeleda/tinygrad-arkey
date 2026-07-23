@@ -6,7 +6,7 @@ from tinygrad import Tensor, dtypes
 from tinygrad.uop import Ops
 from tinygrad.uop.ops import AccumulatorSlot, UOp, UPat, PatternMatcher, ScopedReduceSpec, CompositeInputSpec, graph_rewrite, remove_all_tags
 from tinygrad.codegen.late.devectorizer import _partition_composite_sources
-from tinygrad.codegen.late.devectorizer import lower_composite_accumulator, composite_reduce_state_adapter, lower_deferred_reduce_slot
+from tinygrad.codegen.late.devectorizer import lower_composite_accumulator, composite_reduce_state_adapter, lower_deferred_reduce_slot, lower_deferred_reduce_owner
 from tinygrad.codegen.late.composite_combines import resolve_reduce_slot_tensor, resolve_composite_reduce_slot_prebufferize
 from tinygrad.schedule.rangeify import cleanup_dead_axes
 from tinygrad.uop.spec import spec_tensor, type_verify
@@ -123,7 +123,8 @@ def test_lane_state_prebuffer_view_reconnects_exact_reduce_producer():
   view = stage.index(UOp.const(dtypes.weakint, 0))
   deferred = UOp(Ops.REDUCE_SLOT, dtypes.float32, (view,), 2, original.tag)
   rebuilt = resolve_composite_reduce_slot_prebufferize(deferred)
-  assert rebuilt.op is Ops.DEFERRED_REDUCE_SLOT and rebuilt.src[0] is red
+  assert rebuilt.op is Ops.DEFERRED_REDUCE_SLOT and rebuilt.src[0].op is Ops.DEFERRED_REDUCE_OWNER
+  assert rebuilt.src[0].src == (red,)
 
 def test_lane_state_direct_slot_becomes_opaque_before_scheduler_views():
   slots = (AccumulatorSlot(Ops.MAX, dtypes.float32, float("-inf"), "m"),
@@ -132,7 +133,19 @@ def test_lane_state_direct_slot_becomes_opaque_before_scheduler_views():
   red = UOp.placeholder((16,), dtypes.float32, 0).composite_reduce(*slots, axis=(0,),
     combine_fn="online_softmax_state", slot_shapes=((), (), (16,)), lane_shapes=((), (), (16,)))
   deferred = resolve_composite_reduce_slot_prebufferize(red.composite_reduce_slot(2))
-  assert deferred.op is Ops.DEFERRED_REDUCE_SLOT and deferred.src == (red,) and deferred.arg.slot == 2
+  assert deferred.op is Ops.DEFERRED_REDUCE_SLOT and deferred.src[0].op is Ops.DEFERRED_REDUCE_OWNER
+  assert deferred.src[0].src == (red,) and deferred.arg.slot == 2
+
+def test_deferred_state_slots_share_one_multioutput_owner():
+  slots = (AccumulatorSlot(Ops.MAX, dtypes.float32, float("-inf"), "m"),
+           AccumulatorSlot(Ops.ADD, dtypes.float32, 0.0, "l"),
+           AccumulatorSlot(Ops.ADD, dtypes.float32, 0.0, "acc"))
+  red = UOp.placeholder((16,), dtypes.float32, 0).composite_reduce(*slots, axis=(0,),
+    combine_fn="online_softmax_state", slot_shapes=((), (), (16,)), lane_shapes=((), (), (16,)))
+  den = resolve_composite_reduce_slot_prebufferize(red.composite_reduce_slot(1))
+  acc = resolve_composite_reduce_slot_prebufferize(red.composite_reduce_slot(2))
+  assert den.src[0] is acc.src[0]
+  assert den.src[0].op is Ops.DEFERRED_REDUCE_OWNER and den.src[0].src == (red,)
 
 def test_deferred_state_projection_lowers_once_to_physical_hd16_slot():
   slots = (AccumulatorSlot(Ops.MAX, dtypes.float32, float("-inf"), "m"),
@@ -157,6 +170,16 @@ def test_deferred_state_projection_lowers_once_to_physical_hd16_slot():
   ]), ctx={red: physical})
   assert rewritten is physical.src[2]
   assert all(u.op not in (Ops.REDUCE, Ops.DEFERRED_REDUCE_SLOT) for u in rewritten.toposort())
+
+  owner = UOp(Ops.DEFERRED_REDUCE_OWNER, dtypes.void, (red,), red.arg[0])
+  owned_projection = deferred.replace(src=(owner,))
+  rewritten_owner = graph_rewrite(owned_projection, PatternMatcher([
+    (UPat(Ops.REDUCE, name="producer"), lambda ctx, producer: ctx.get(producer)),
+    (UPat(Ops.DEFERRED_REDUCE_OWNER, name="owner"), lower_deferred_reduce_owner),
+    (UPat(Ops.DEFERRED_REDUCE_SLOT, name="state"), lower_deferred_reduce_slot),
+  ]), ctx={red: physical})
+  assert rewritten_owner is physical.src[2]
+  assert all(u.op not in (Ops.REDUCE, Ops.DEFERRED_REDUCE_OWNER, Ops.DEFERRED_REDUCE_SLOT) for u in rewritten_owner.toposort())
 
 
 def test_nested_reduction_with_logical_element_input_stays_in_one_schedule():
