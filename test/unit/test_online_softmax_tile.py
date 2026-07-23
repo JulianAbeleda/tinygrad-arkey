@@ -605,6 +605,35 @@ def test_gfx1100_q16_kv32_builder_fails_closed_owner_sizes():
   with pytest.raises(ValueError,match="256/512/512/256"):
     amd_gfx1100_q16_kv32_attention(p[1],p[2],p[3],p[0],scale=.25,kernel_info=KernelInfo(name="bad"))
 
+def test_gfx1100_q16_causal_and_tail_masks_preserve_native_topology():
+  from tinygrad.schedule.wmma import amd_gfx1100_q16_attention
+  from tinygrad.uop.ops import KernelInfo, ParamArg
+  p=[UOp(Ops.PARAM,dtypes.half.ptr(256),arg=ParamArg(i)) for i in range(4)]
+  for valid_kv in (16,13):
+    sink=amd_gfx1100_q16_attention(p[1],p[2],p[3],p[0],scale=.25,causal=True,valid_kv=valid_kv,
+      kernel_info=KernelInfo(name=f"q16_causal_kv{valid_kv}"))
+    topo=sink.toposort(); owners=[u for u in topo if u.op is Ops.AMD_ROW_SOFTMAX_REPACK]
+    assert sum(u.op is Ops.WMMA for u in topo)==2 and len(owners)==1
+    assert (owners[0].arg.validity_mode,owners[0].arg.valid_kv)==("causal_v1",valid_kv)
+    assert owners[0].src[0].op is Ops.WMMA
+
+def test_gfx1100_q16_causal_tail_reaches_final_isa_without_intermediate_buffers():
+  from tinygrad.codegen import full_rewrite_to_sink, to_program
+  from tinygrad.helpers import Target
+  from tinygrad.renderer.isa.amd import AMDISARenderer
+  from tinygrad.schedule.wmma import amd_gfx1100_q16_attention
+  from tinygrad.uop.ops import KernelInfo, ParamArg
+  p=[UOp(Ops.PARAM,dtypes.half.ptr(256),arg=ParamArg(i)) for i in range(4)]
+  sink=amd_gfx1100_q16_attention(p[1],p[2],p[3],p[0],scale=.25,causal=True,valid_kv=13,
+    kernel_info=KernelInfo(name="q16_causal_tail_isa"))
+  ren=AMDISARenderer(Target.parse("AMD:ISA:gfx1100")); final=full_rewrite_to_sink(sink,ren,optimize=False)
+  nodes=final.toposort()
+  assert sum(u.op is Ops.WMMA for u in nodes)==2 and sum(u.op is Ops.BARRIER for u in nodes)==1
+  assert not any(u.op in {Ops.AMD_ROW_SOFTMAX_REPACK,Ops.AMD_ROW_SOFTMAX_SLOT} for u in nodes)
+  program=to_program(sink,ren); linear=next(u for u in program.src if u.op is Ops.LINEAR)
+  mn=[str(u.arg).split("(",1)[0] for u in linear.src if not isinstance(u.arg,tuple)]
+  assert mn.count("v_wmma_f32_16x16x16_f16")==2 and mn.count("s_barrier")==1
+
 def test_gfx1100_q16_kv32_reaches_final_isa_program():
   from tinygrad.codegen import full_rewrite_to_sink, to_program
   from tinygrad.helpers import Target

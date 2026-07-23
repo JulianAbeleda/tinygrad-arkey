@@ -313,7 +313,8 @@ def amd_gfx1100_row_softmax_initial(score:UOp, *, spec:AMDRowSoftmaxRepackSpec) 
   return (UOp(Ops.AMD_ROW_SOFTMAX_SLOT,dtypes.half.vec(16),(owner,),arg=AMDRowSoftmaxSlotSpec(slot=0)),
     *(UOp(Ops.AMD_ROW_SOFTMAX_SLOT,dtypes.float.vec(8),(owner,),arg=AMDRowSoftmaxSlotSpec(slot=i)) for i in range(1,4)))
 
-def amd_gfx1100_q16_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, scale:float, kernel_info) -> UOp:
+def amd_gfx1100_q16_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, scale:float, kernel_info,
+                             causal:bool=False, valid_kv:int=16, query_start:int=0) -> UOp:
   """Build the exact live-owner q16 native attention kernel graph."""
   owners = (q, k, v, out)
   if any(x.op is not Ops.PARAM or not isinstance(x.dtype, PtrDType) or x.ptrdtype.size != 256 for x in owners):
@@ -324,10 +325,14 @@ def amd_gfx1100_q16_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, scale:float, kern
     raise ValueError("q16 native attention requires PARAM slots Q=1 K=2 V=3 output=0")
   if not isinstance(scale, float) or not math.isfinite(scale) or scale <= 0:
     raise ValueError("q16 native attention requires one positive finite score scale")
+  if not isinstance(causal,bool) or not isinstance(valid_kv,int) or not 0 <= valid_kv <= 16 or not isinstance(query_start,int):
+    raise ValueError("q16 native attention requires typed causal/KV validity metadata")
   lane = UOp.special(32, "lidx0")
   col, halfwave = lane & 15, lane >> 4
-  qfrag = UOp(Ops.STACK, dtypes.half.vec(16), tuple(q.index(col*16+i).load() for i in range(16)))
-  kfrag = UOp(Ops.STACK, dtypes.half.vec(16), tuple(k.index(col*16+i).load() for i in range(16)))
+  qfrag = UOp(Ops.STACK, dtypes.half.vec(16), tuple(q.index(col*16+i).load() for i in range(16)),
+    tag=("amd_gfx1100_fragment_load_v1","Q",0,q,lane,col))
+  kfrag = UOp(Ops.STACK, dtypes.half.vec(16), tuple(k.index(col*16+i).load() for i in range(16)),
+    tag=("amd_gfx1100_fragment_load_v1","K",0,k,lane,col))
   zero = UOp.const(dtypes.float.vec(8), (0.0,)*8)
   # A/B are already physical half16 fragments and must not be permuted by
   # logical upcast-axis rewriting. C retains its exact three binary axes so
@@ -335,11 +340,18 @@ def amd_gfx1100_q16_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, scale:float, kern
   fragment_axes = ((), (), tuple((-120-i, 2) for i in range(3)))
   warg = ("WMMA_16_16_16_half_float", (16,16,16), dtypes.half, dtypes.float, "AMD:gfx1100", 32, fragment_axes, ())
   qk = UOp(Ops.WMMA, dtypes.float.vec(8), (qfrag, kfrag, zero), warg)
-  weights = amd_gfx1100_row_softmax_repack(qk, UOp.const(dtypes.float, -float("inf")), UOp.const(dtypes.float, 0),
-                                            spec=AMDRowSoftmaxRepackSpec(score_scale=float(scale)))
-  vfrag = UOp(Ops.STACK, dtypes.half.vec(16), tuple(v.index(i*16+col).load() for i in range(16)))
+  weights,sm,sl,_ = amd_gfx1100_row_softmax_initial(qk, spec=AMDRowSoftmaxRepackSpec(score_scale=float(scale),
+    mode="initial_state_v1",validity_mode="causal_v1" if causal else "all_v1",query_start=query_start,
+    kv_start=0,valid_kv=valid_kv))
+  vfrag = UOp(Ops.STACK, dtypes.half.vec(16), tuple(v.index(i*16+col).load() for i in range(16)),
+    tag=("amd_gfx1100_fragment_load_v1","V",0,v,lane,col))
   pv = UOp(Ops.WMMA, dtypes.float.vec(8), (weights, vfrag, zero), warg)
-  stores = [out.index((UOp.const(dtypes.weakint, 2*e)+halfwave)*16+col).store(pv.gep(e).cast(dtypes.half)) for e in range(8)]
+  stores=[]
+  for e in range(8):
+    value=pv.gep(e)
+    if stores: value=value.bitcast(dtypes.uint).after(UOp.group(stores[-1])).bitcast(dtypes.float)
+    den=sl.gep(e); recip=den.ne(UOp.const(dtypes.float,0)).where(UOp.const(dtypes.float,1)/den,UOp.const(dtypes.float,0))
+    stores.append(out.index((UOp.const(dtypes.weakint,2*e)+halfwave)*16+col).store((value*recip).cast(dtypes.half)))
   return UOp.sink(*stores, arg=kernel_info)
 
 def amd_gfx1100_q16_kv32_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, scale:float, kernel_info) -> UOp:

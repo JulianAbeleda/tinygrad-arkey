@@ -2419,7 +2419,15 @@ def expand_native_row_softmax_repack(ctx, x:UOp, native_state:bool=True) -> UOp:
   stores, new_ms, new_ls, alphas, log2e = [], [], [], [], UOp.const(dtypes.float, 1.4426950408889634)
   for e in range(8):
     old_m, old_l = (m.gep(e), l.gep(e)) if stateful and not initial_state else (m, l)
+    row = UOp.const(dtypes.weakint, 2*e).alu(Ops.ADD, halfwave)
+    valid = None
+    if x.arg.validity_mode == "causal_v1":
+      kv = col.alu(Ops.ADD, UOp.const(dtypes.weakint, x.arg.kv_start))
+      qrow = row.alu(Ops.ADD, UOp.const(dtypes.weakint, x.arg.query_start))
+      valid = col.alu(Ops.CMPLT, UOp.const(dtypes.weakint, x.arg.valid_kv)).alu(Ops.AND,
+        kv.alu(Ops.CMPLT, qrow.alu(Ops.ADD, UOp.const(dtypes.weakint, 1))))
     value = score.gep(e).alu(Ops.MUL, UOp.const(dtypes.float, x.arg.score_scale))
+    if valid is not None: value = valid.where(value, UOp.const(dtypes.float, -float("inf")))
     if stores: value = value.bitcast(dtypes.uint).after(UOp.group(stores[-1])).bitcast(dtypes.float)
     row_max = value
     for mask in x.arg.xor_masks:
@@ -2427,17 +2435,18 @@ def expand_native_row_softmax_repack(ctx, x:UOp, native_state:bool=True) -> UOp:
       row_max = row_max.alu(Ops.MAX, UOp(Ops.CUSTOMI, dtypes.float, (addr, row_max), "bpermute"))
     new_m = row_max if initial_state else old_m.alu(Ops.MAX, row_max)
     weight = (value-new_m).alu(Ops.MUL, log2e).exp2()
+    if valid is not None: weight = valid.where(weight, UOp.const(dtypes.float, 0))
     row_sum = weight
     for mask in x.arg.xor_masks:
       addr = lane_hw.alu(Ops.XOR, UOp.const(dtypes.int, mask)).alu(Ops.MUL, UOp.const(dtypes.int, 4))
       row_sum = row_sum.alu(Ops.ADD, UOp(Ops.CUSTOMI, dtypes.float, (addr, row_sum), "bpermute"))
-    raw_alpha = UOp.const(dtypes.float, 1) if initial_state else (old_m-new_m).alu(Ops.MUL, log2e).exp2()
+    raw_alpha = UOp.const(dtypes.float, 1) if initial_state else row_sum.ne(UOp.const(dtypes.float, 0)).where(
+      (old_m-new_m).alu(Ops.MUL, log2e).exp2(), UOp.const(dtypes.float, 1))
     alpha = raw_alpha
     new_l = row_sum if initial_state else old_l.alu(Ops.MUL, alpha).alu(Ops.ADD, row_sum)
     if not stateful or not native_state: new_ms.append(new_m); new_ls.append(new_l)
     alphas.append(alpha)
     normalized = (weight if stateful else weight / new_l).cast(dtypes.half)
-    row = UOp.const(dtypes.weakint, 2*e).alu(Ops.ADD, halfwave)
     published_row = lds.index(row.alu(Ops.MUL, UOp.const(dtypes.weakint, 16)).alu(Ops.ADD, col)).store(normalized)
     # Serialize row publication so eight independent butterfly/exp/CVT trees
     # do not become simultaneously live before the barrier.
