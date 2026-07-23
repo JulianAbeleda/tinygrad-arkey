@@ -1,7 +1,8 @@
 from tinygrad import dtypes
+from tinygrad.dtype import AddrSpace
 from tinygrad.uop import Ops
 from tinygrad.schedule.wmma import amd_gfx1100_rotating_pv_scheduler_probe
-from tinygrad.uop.ops import ParamArg, UOp
+from tinygrad.uop.ops import ParamArg, SoftmaxBridgeSpec, UOp
 from tinygrad.uop.spec import spec_full, type_verify
 from extra.qk.rotating_pv_abi import rotating_pv_kernel_probe
 import pytest
@@ -38,6 +39,13 @@ def test_rotating_pv_kernel_probe_wraps_exact_scheduler_sink():
   assert probe["status"] == "CONSTRUCTED" and not probe["promotion_eligible"]
   assert probe["geometry"] == {"q_tokens": 512, "q_heads": 32, "kv_heads": 8, "kv_tokens": 512, "head_dim": 128}
   assert probe["sink"].arg.name == "rotating_pv_scheduler_probe"
+
+
+def test_softmax_bridge_contract_is_exact_24_fp32_scalars():
+  lane = UOp.special(32, "lidx0")
+  bridge = SoftmaxBridgeSpec(UOp(Ops.DEFINE_LOCAL, dtypes.float.ptr(24, AddrSpace.LOCAL), arg=9630), lane)
+  assert bridge.validate().elements == 24 and bridge.bytes == 96
+  assert tuple(bridge.offset(field, 7) for field in bridge.fields) == (7, 15, 23)
 
 
 def test_rotating_pv_exact_isa_reaches_resource_gate_after_fragment_lowering():
