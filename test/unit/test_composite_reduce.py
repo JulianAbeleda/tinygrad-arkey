@@ -126,6 +126,12 @@ class TestCompositeReduce(unittest.TestCase):
     zero = UOp.const(kv.dtype, 0)
     self.assertEqual([lane.src[-1].substitute({kv: zero}).simplify().arg for lane in packed.src], [0, 1])
 
+  def test_post_expander_owned_v_vector_is_preserved(self):
+    kv = UOp.range(3, 0, AxisType.REDUCE)
+    owned = UOp.placeholder((3,), dtypes.float32.vec(2), 0).index(kv)
+    packed = _vectorize_live_v_index(owned, (kv,), 2, dtypes.float32)
+    self.assertIs(packed, owned)
+
 
 class TestOnlineSoftmaxTwoReduce(unittest.TestCase):
   """S2 (flash-composite-reduce-orchestration-plan-20260722.md): the two 2-slot coupled combines that

@@ -374,6 +374,9 @@ def horizontal_reduce(inp:UOp, out_dtype:DType) -> list[UOp]:
 def _vectorize_live_v_index(v_src:UOp, reduce_range, lane_group:int, dtype:DType) -> UOp|None:
   """Vectorize the actual optimized V index by replacing only its Hd RANGE."""
   if lane_group <= 1: return None
+  # Post-expander INDEX may already own the complete contiguous Hd vector.
+  # It is authoritative: there is no scalar lane coordinate left to replace.
+  if v_src.dtype.count == lane_group: return v_src
   outer = v_src
   carrier = outer.src[0] if outer.op is Ops.CAST and outer.src else outer
   if carrier.op is not Ops.INDEX or len(carrier.src) < 2: return None
