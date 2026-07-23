@@ -64,17 +64,11 @@ class IndexingContext:
 
 def create_bufferize_and_index_based_on_ranges(ctx:IndexingContext, x:UOp):
   if x.op in {Ops.STAGE, Ops.INDEX, Ops.SCOPED_VALUE}: return None
-  def typed_index(source:UOp, ranges) -> UOp:
-    indexed = source.index(*ranges)
-    provenance = source.tag
-    if isinstance(provenance, tuple) and len(provenance) >= 2 and provenance[0] in ("composite_reduce", "composite_slot", "composite_view"):
-      return indexed.replace(tag=("composite_view", provenance))
-    return indexed
   new_srcs = []
   for s in x.src:
     new_src = s
     if s.op in {Ops.PARAM, Ops.BUFFER, Ops.SLICE, Ops.MSTACK, Ops.MSELECT, Ops.AFTER}:
-      if x in ctx.range_map: new_src = typed_index(new_src, ctx.range_map[x][0])
+      if x in ctx.range_map: new_src = new_src.index(*ctx.range_map[x][0])
     elif s in ctx.realize_map:
       realized_ranges = ctx.realize_map[s]
       assert isinstance(realized_ranges, list), "realize map must contain range list"
@@ -94,15 +88,9 @@ def create_bufferize_and_index_based_on_ranges(ctx:IndexingContext, x:UOp):
         # the subsequent INDEX remains a typed REDUCE_SLOT view.  Never copy
         # arbitrary tags onto STAGE nodes.
         candidate_tag = s.tag if s.tag is not None else new_src.tag
-        # Callify deliberately strips tags. Reconstruct provenance only from
-        # the canonical REDUCE_SLOT -> CompositeReduce relationship; shapes,
-        # names, and arbitrary INDEX ancestry are never sufficient authority.
-        if candidate_tag is None and s.op is Ops.REDUCE_SLOT and s.src and s.src[0].op is Ops.REDUCE and \
-           hasattr(s.src[0].arg[0], "slots") and isinstance(s.arg, int) and 0 <= s.arg < len(s.src[0].arg[0].slots):
-          candidate_tag = ("composite_slot", s.src[0].arg[0], s.arg)
-        stage_tag = candidate_tag if isinstance(candidate_tag, tuple) and len(candidate_tag) >= 2 and candidate_tag[0] in ("composite_reduce", "composite_slot", "composite_view") else None
+        stage_tag = candidate_tag if isinstance(candidate_tag, tuple) and len(candidate_tag) == 2 and candidate_tag[0] in ("composite_reduce", "composite_slot", "composite_view") else None
         new_src = UOp(Ops.STAGE, s.dtype, src=(new_src,)+closed_ranges, arg=opts, tag=stage_tag)
-        if x in ctx.range_map: new_src = typed_index(new_src, [r for i,r in enumerate(ctx.range_map[x][0]) if i in realized_ranges])
+        if x in ctx.range_map: new_src = new_src.index(*[r for i,r in enumerate(ctx.range_map[x][0]) if i in realized_ranges])
     new_srcs.append(new_src)
   # NOTE: do we need this?
   return x.replace(src=tns) if x.src != (tns:=tuple(new_srcs)) else None
