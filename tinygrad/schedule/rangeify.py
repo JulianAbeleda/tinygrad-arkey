@@ -105,11 +105,13 @@ def lower_attention_semantic(att:UOp) -> UOp:
         red = red.replace(arg=(red.arg[0]._replace(tile_fragments=fragments),) + red.arg[1:])
       acc = Tensor(red.composite_reduce_slot(2, dtype=att.arg.qk_dtype))
       den = Tensor(red.composite_reduce_slot(1, dtype=att.arg.qk_dtype))
-      if state_combine == "online_softmax_state":
-        from tinygrad.codegen.late.flash_attn import normalize_online_softmax_state
-        out = normalize_online_softmax_state(acc, den)
-      else:
-        out = acc / den
+      # Both state and legacy composite reducers carry the accumulator with
+      # an explicit logical Hd axis while m/l remain scalar per query.  Use
+      # the shape-aware helper so division never relies on left-aligned
+      # broadcasting (which places the scalar on the wrong axis).  This does
+      # not alter reducer admission or WMMA lowering.
+      from tinygrad.codegen.late.flash_attn import normalize_online_softmax_state
+      out = normalize_online_softmax_state(acc, den)
       expected = b*h*q_len*hd
       if out.shape is None or prod(out.shape) != expected:
         return None
