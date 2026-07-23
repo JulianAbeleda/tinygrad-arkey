@@ -4,8 +4,10 @@ import numpy as np
 from tinygrad import Tensor, dtypes
 from tinygrad.uop import Ops
 from tinygrad.uop.ops import AttentionSpec
+from tinygrad.uop.ops import CompositeReduce
 from tinygrad.llm.flash_prefill_attention import shared_prefill_attention
 from tinygrad.codegen.late.flash_attn import merge_online_softmax_tile
+from tinygrad.schedule.rangeify import lower_attention_semantic
 
 class TestAttentionSemantic(unittest.TestCase):
   @staticmethod
@@ -20,6 +22,17 @@ class TestAttentionSemantic(unittest.TestCase):
     out = shared_prefill_attention(q, k, v).numpy()
     ref = q.cast(dtypes.float32).scaled_dot_product_attention(k.cast(dtypes.float32), v.cast(dtypes.float32)).numpy()
     np.testing.assert_allclose(out, ref, rtol=3e-2, atol=3e-2)
+
+  def test_opt_in_state_mode_uses_structured_composite_reduce(self):
+    if self._combine_name() != "online_softmax_state": self.skipTest("state combine is opt-in")
+    q = Tensor.empty(1, 1, 16, 16, dtype=dtypes.float16)
+    k = Tensor.empty(1, 1, 16, 16, dtype=dtypes.float16)
+    v = Tensor.empty(1, 1, 16, 16, dtype=dtypes.float16)
+    primitive = lower_attention_semantic(shared_prefill_attention(q, k, v).uop)
+    state_reduces = [u for u in primitive.toposort() if u.op is Ops.REDUCE and
+                     isinstance(u.arg[0], CompositeReduce) and u.arg[0].combine_fn == "online_softmax_state"]
+    self.assertEqual(len(state_reduces), 1)
+    self.assertFalse(any(u.op is Ops.COMPOSITE_ACCUMULATOR for u in primitive.toposort()))
   def test_shared_attention_keeps_all_tensor_dependencies(self):
     q = Tensor.empty(1, 2, 4, 8, dtype=dtypes.float16)
     k = Tensor.empty(1, 2, 4, 8, dtype=dtypes.float16)
