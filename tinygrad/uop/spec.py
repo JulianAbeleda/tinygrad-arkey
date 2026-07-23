@@ -169,9 +169,9 @@ spec_shared = PatternMatcher([
   # TODO: remove UNROLL here, it's for SPEC=2
   (UPat(Ops.GROUP, dtypes.void, src=UPat((Ops.GROUP, Ops.STORE, Ops.NOOP, Ops.UNROLL, Ops.INS))), lambda: True),
   (UPat(Ops.GROUP, dtypes.void, src=UPat(Ops.CUSTOMI, name="x")),
-   lambda x: isinstance(x.arg, tuple) and x.arg[:1] in {("amd_register_stage_pair",), ("amd_gfx1100_row_state_write_v1",), ("amd_gfx1100_attention_loop_state_write_v1",)}),
+   lambda x: isinstance(x.arg, tuple) and x.arg[:1] in {("amd_register_stage_pair",), ("amd_gfx1100_row_state_write_v1",), ("amd_gfx1100_attention_loop_state_write_v1",), ("state_loop_write_v1",)}),
   (UPat(Ops.GROUP, dtypes.void, name="x"), lambda x: all(s.op in {Ops.GROUP, Ops.STORE, Ops.NOOP, Ops.UNROLL, Ops.INS, Ops.AMD_ATTENTION_LOOP_STATE} or
-    (s.op is Ops.CUSTOMI and isinstance(s.arg, tuple) and s.arg[:1] in {("amd_gfx1100_row_state_write_v1",), ("amd_gfx1100_attention_loop_state_write_v1",)}) for s in x.src)),
+    (s.op is Ops.CUSTOMI and isinstance(s.arg, tuple) and s.arg[:1] in {("amd_gfx1100_row_state_write_v1",), ("amd_gfx1100_attention_loop_state_write_v1",), ("state_loop_write_v1",)}) for s in x.src)),
 
   # TOOD: these should be buffer with different addrspace
   (UPat((Ops.DEFINE_LOCAL, Ops.DEFINE_REG)), lambda: True),
