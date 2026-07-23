@@ -238,7 +238,10 @@ def _attached_direct_packed_spec(lin, x:Tensor) -> PrefillLinearRouteSpec | None
   """Build the production baseline spec from attachment and structural facts only."""
   if _attached_production_route(lin, x) not in ("direct_packed", "bounded_packed"): return None
   binding = getattr(lin, "_prefill_direct_packed_binding", None)
-  if not isinstance(binding, PrefillDirectPackedBinding) or binding.phase != "prefill" or not _ACTIVE.get(): return None
+  if not isinstance(binding, PrefillDirectPackedBinding) or binding.phase != "prefill": return None
+  # `Transformer.logits` invokes the explicit full-sequence LM-head route outside the census context.  Admit only
+  # the immutable 8B vocab attachment there; every ordinary direct-packed route still requires `_ACTIVE`.
+  if not _ACTIVE.get() and not _exact_q6k_vocab_direct_prefill(lin, x): return None
   if getattr(lin, "bias", None) is not None or len(x.shape) != 3 or x.shape[0] != 1: return None
   m, k = x.shape[-2], x.shape[-1]
   n, in_f = getattr(lin, "out_features", None), getattr(lin, "in_features", None)
