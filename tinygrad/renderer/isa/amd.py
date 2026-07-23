@@ -2257,6 +2257,44 @@ pre_isel_matcher = PatternMatcher([
   (UPat(Ops.GROUP, name="x"), _pair_register_stage_stores),
 ])
 
+def expand_native_row_softmax_repack(ctx, x:UOp) -> UOp:
+  """Expand the exact gfx1100-v1 QK-C -> PV-A bridge before isel."""
+  from tinygrad.uop.ops import AMDRowSoftmaxRepackSpec
+  if not isinstance(x.arg, AMDRowSoftmaxRepackSpec): raise ValueError("AMD row-softmax repack is missing its native descriptor")
+  x.arg.validate()
+  score, m, l = x.src
+  if score.op is not Ops.WMMA or score.dtype != dtypes.float.vec(8):
+    raise ValueError("AMD row-softmax repack requires one raw QK WMMA float.vec(8)")
+  if any(s.dtype != dtypes.float or s.shape != () for s in (m, l)):
+    raise ValueError("AMD row-softmax repack requires scalar fp32 m/l state")
+  lane = UOp(Ops.SPECIAL, dtypes.int, (UOp.const(dtypes.int, 32),), "lidx0")
+  halfwave, col = lane.alu(Ops.SHR, UOp.const(dtypes.int, 4)), lane.alu(Ops.AND, UOp.const(dtypes.int, 15))
+  lds = UOp(Ops.DEFINE_LOCAL, dtypes.half.ptr(256, AddrSpace.LOCAL), arg=next(ctx))
+  stores, log2e = [], UOp.const(dtypes.float, 1.4426950408889634)
+  for e in range(8):
+    value, row_max = score.gep(e), score.gep(e)
+    for mask in x.arg.xor_masks:
+      addr = lane.alu(Ops.XOR, UOp.const(dtypes.int, mask)).alu(Ops.MUL, UOp.const(dtypes.int, 4))
+      row_max = row_max.alu(Ops.MAX, UOp(Ops.CUSTOMI, dtypes.float, (addr, row_max), "bpermute"))
+    new_m = m.alu(Ops.MAX, row_max)
+    weight = (value-new_m).alu(Ops.MUL, log2e).exp2()
+    row_sum = weight
+    for mask in x.arg.xor_masks:
+      addr = lane.alu(Ops.XOR, UOp.const(dtypes.int, mask)).alu(Ops.MUL, UOp.const(dtypes.int, 4))
+      row_sum = row_sum.alu(Ops.ADD, UOp(Ops.CUSTOMI, dtypes.float, (addr, row_sum), "bpermute"))
+    alpha = (m-new_m).alu(Ops.MUL, log2e).exp2()
+    normalized = (weight / l.alu(Ops.MUL, alpha).alu(Ops.ADD, row_sum)).cast(dtypes.half)
+    row = UOp.const(dtypes.int, 2*e).alu(Ops.ADD, halfwave)
+    stores.append(lds.index(row.alu(Ops.MUL, UOp.const(dtypes.int, 16)).alu(Ops.ADD, col)).store(normalized))
+  ready = UOp.barrier(UOp.group(*stores))
+  reload_row = col.alu(Ops.MUL, UOp.const(dtypes.int, 16))
+  vals = [lds.index(reload_row.alu(Ops.ADD, UOp.const(dtypes.int, i))).load().after(ready) for i in range(16)]
+  return UOp(Ops.STACK, dtypes.half.vec(16), tuple(vals), tag=("amd_gfx1100_pv_a_reload_v1",))
+
+native_repack_matcher = PatternMatcher([
+  (UPat(Ops.AMD_ROW_SOFTMAX_REPACK, name="x"), expand_native_row_softmax_repack),
+])
+
 # ============================ post-regalloc: build real rdna3 Insts + waitcnts ============================
 def _S2(r:Register): return _S[r.index:r.index+1]   # SGPR pair s[i:i+1]
 def _Vr(r:Register): return _V[r.index]
@@ -2636,6 +2674,7 @@ class AMDISARenderer(ISARenderer):
   # the half-input CAST/dequant path already lowers (V_CVT_H2F etc.) so the fragment sources render fine.
   tensor_cores = amd_rdna3
   pre_isel_matcher = pre_isel_matcher
+  native_repack_matcher = native_repack_matcher
   isel_matcher = isel_matcher
   post_isel_matcher = post_isel_matcher
   pre_regalloc_matcher = pre_regalloc_matcher

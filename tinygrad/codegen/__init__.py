@@ -78,6 +78,9 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   # bottom-up movement lowering can install the ordinary logical wrapper.
   ast = graph_rewrite(ast, pm_native_row_softmax_repack, ctx=itertools.count(900),
                       bottom_up=False, name="native row softmax repack before spec")
+  if (native_repack_pm:=getattr(ren, "native_repack_matcher", None)) is not None:
+    ast = graph_rewrite(ast, native_repack_pm, ctx=itertools.count(800), bottom_up=True,
+                        name="expand native row softmax repack")
   # SPEC validation runs before the late devectorizer.  Resolve only the
   # provenance-tagged INDEX views that the expander can place around a
   # composite REDUCE_SLOT; ordinary REDUCE_SLOT/INDEX nodes remain subject to

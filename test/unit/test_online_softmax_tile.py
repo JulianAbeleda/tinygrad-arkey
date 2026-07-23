@@ -324,6 +324,39 @@ def test_native_qk_consumer_does_not_truncate_logical_c_fragment():
   with pytest.raises(ValueError, match="native A/B"):
     graph_rewrite(logical, pm_native_row_softmax_repack, ctx=itertools.count(300), bottom_up=False)
 
+def test_gfx1100_preisel_expands_native_repack_to_row_ops_lds_barrier_reload():
+  import itertools
+  from tinygrad.renderer.isa.amd import native_repack_matcher
+  from tinygrad.schedule.wmma import amd_gfx1100_row_softmax_repack
+  from tinygrad.uop.ops import graph_rewrite
+  arg = ("WMMA_16_16_16_half_float", (16, 16, 16), dtypes.half, dtypes.float, "AMD:gfx1100", 32, (), ())
+  qk = UOp(Ops.WMMA, dtypes.float.vec(8),
+           (UOp.const(dtypes.half.vec(16), (0.0,)*16), UOp.const(dtypes.half.vec(16), (0.0,)*16),
+            UOp.const(dtypes.float.vec(8), (0.0,)*8)), arg)
+  native = amd_gfx1100_row_softmax_repack(qk, UOp.const(dtypes.float, 0), UOp.const(dtypes.float, 1))
+  expanded = graph_rewrite(native, native_repack_matcher, ctx=itertools.count(700), bottom_up=True)
+  nodes = expanded.toposort()
+  assert expanded.op is Ops.STACK and expanded.dtype == dtypes.half.vec(16)
+  assert expanded.tag == ("amd_gfx1100_pv_a_reload_v1",)
+  assert len([u for u in nodes if u.op is Ops.WMMA]) == 1
+  assert len([u for u in nodes if u.op is Ops.CUSTOMI and u.arg == "bpermute"]) == 64
+  assert len([u for u in nodes if u.op is Ops.EXP2]) == 16
+  locals_ = [u for u in nodes if u.op is Ops.DEFINE_LOCAL]
+  assert len(locals_) == 1 and locals_[0].ptrdtype.size == 256 and locals_[0].ptrdtype.base == dtypes.half
+  assert len([u for u in nodes if u.op is Ops.STORE and locals_[0] in u.src[0].toposort()]) == 8
+  assert len([u for u in nodes if u.op is Ops.BARRIER]) == 1
+  assert len([u for u in nodes if u.op is Ops.LOAD and locals_[0] in u.src[0].toposort()]) == 16
+
+def test_gfx1100_preisel_native_repack_fails_closed_on_non_wmma_score():
+  import itertools
+  from tinygrad.renderer.isa.amd import native_repack_matcher
+  from tinygrad.schedule.wmma import amd_gfx1100_row_softmax_repack
+  from tinygrad.uop.ops import graph_rewrite
+  native = amd_gfx1100_row_softmax_repack(UOp.const(dtypes.float.vec(8), (0.0,)*8),
+                                           UOp.const(dtypes.float, 0), UOp.const(dtypes.float, 1))
+  with pytest.raises(ValueError, match="raw QK WMMA"):
+    graph_rewrite(native, native_repack_matcher, ctx=itertools.count(750), bottom_up=True)
+
 def test_rangeify_handoff_unwraps_only_exact_tile_carriers():
   from tinygrad.uop.ops import TileGatherSpec, graph_rewrite
   from tinygrad.schedule.wmma import tile_gather
