@@ -253,13 +253,30 @@ def test_gfx1100_native_row_softmax_repack_descriptor_is_exact():
   score = UOp(Ops.CONST, dtypes.float32.vec(8), (), (0.0,) * 8)
   m, l = UOp.const(dtypes.float32, 0), UOp.const(dtypes.float32, 1)
   native = amd_gfx1100_row_softmax_repack(score, m, l)
-  assert native.op is Ops.AMD_ROW_SOFTMAX_REPACK and native.dtype == dtypes.half.vec(16)
-  assert native.arg.target == "gfx1100" and native.arg.wave_size == 32
-  assert native.arg.row_expr == "2*e+(lane>>4)" and native.arg.col_expr == "lane&15"
-  assert native.arg.xor_masks == (1, 2, 4, 8)
-  assert (native.arg.lds_dtype, native.arg.lds_elements, native.arg.lds_address) == ("half", 256, "row*16+col")
-  assert native.arg.requires_barrier
-  assert native.arg.reload_layout == "wmma_f32_16x16x16_f16_pv_a_wave32_v1"
+  assert native.op is Ops.AMD_ROW_SOFTMAX_SLOT and native.dtype == dtypes.half.vec(16)
+  owner = native.src[0]
+  assert owner.op is Ops.AMD_ROW_SOFTMAX_REPACK and owner.arg.target == "gfx1100" and owner.arg.wave_size == 32
+  assert owner.arg.row_expr == "2*e+(lane>>4)" and owner.arg.col_expr == "lane&15"
+  assert owner.arg.xor_masks == (1, 2, 4, 8)
+  assert (owner.arg.lds_dtype, owner.arg.lds_elements, owner.arg.lds_address) == ("half", 256, "row*16+col")
+  assert owner.arg.requires_barrier
+  assert owner.arg.reload_layout == "wmma_f32_16x16x16_f16_pv_a_wave32_v1"
+
+def test_gfx1100_native_row_softmax_state_has_one_owner_and_typed_slots():
+  import itertools
+  from tinygrad.uop.ops import graph_rewrite
+  from tinygrad.schedule.wmma import amd_gfx1100_row_softmax_state
+  score = UOp(Ops.WMMA, dtypes.float.vec(8), (UOp.const(dtypes.half.vec(16), (0,)*16),)*2+
+    (UOp.const(dtypes.float.vec(8), (0,)*8),), ("WMMA_16_16_16_half_float", (16,16,16), dtypes.half, dtypes.float, "AMD:gfx1100", 32, ((),(),()), ()))
+  slots = amd_gfx1100_row_softmax_state(score, UOp.const(dtypes.float, -float("inf")), UOp.const(dtypes.float, 0))
+  assert [x.dtype for x in slots] == [dtypes.half.vec(16), dtypes.float.vec(8), dtypes.float.vec(8), dtypes.float.vec(8)]
+  assert len({x.src[0] for x in slots}) == 1 and all(x.op is Ops.AMD_ROW_SOFTMAX_SLOT for x in slots)
+  from tinygrad.renderer.isa.amd import native_repack_matcher
+  lowered = graph_rewrite(UOp.sink(*slots), native_repack_matcher, ctx=itertools.count(950), bottom_up=True)
+  assert not any(u.op in {Ops.AMD_ROW_SOFTMAX_REPACK, Ops.AMD_ROW_SOFTMAX_SLOT} for u in lowered.toposort())
+  # One owner means one physical LDS allocation and one eight-element pair of butterfly trees.
+  assert sum(u.op is Ops.DEFINE_LOCAL for u in lowered.toposort()) == 1
+  assert sum(u.op is Ops.BARRIER for u in lowered.toposort()) == 1
 
 def test_gfx1100_native_row_softmax_repack_fails_closed():
   from tinygrad.schedule.wmma import amd_gfx1100_row_softmax_repack
@@ -278,7 +295,7 @@ def test_rangeify_legalizes_exact_logical_repack_and_rejects_logical_tiles():
   # The exact native handoff is accepted.
   logical_native = UOp(Ops.ROW_SOFTMAX_REPACK, dtypes.half,
     (UOp.const(dtypes.float32.vec(8), (0.0,) * 8), m, l), arg=__import__('tinygrad.uop.ops', fromlist=['RowSoftmaxRepackSpec']).RowSoftmaxRepackSpec())
-  assert lower_row_softmax_repack(logical_native).op is Ops.AMD_ROW_SOFTMAX_REPACK
+  assert lower_row_softmax_repack(logical_native).op is Ops.AMD_ROW_SOFTMAX_SLOT
   # A logical 16x16 tile has not established native lane ownership and must
   # fail instead of being flattened or silently repacked.
   logical_tile = row_softmax_lds_repack(UOp.placeholder((16, 16), dtypes.float32, 90),
@@ -299,8 +316,8 @@ def test_native_qk_consumer_exposes_raw_c_and_reaches_two_wmmas():
   m, l = UOp.const(dtypes.float32, 0), UOp.const(dtypes.float32, 1)
   logical = UOp(Ops.ROW_SOFTMAX_REPACK, dtypes.half, (qk, m, l), RowSoftmaxRepackSpec())
   bridge = graph_rewrite(logical, pm_native_row_softmax_repack, ctx=itertools.count(100), bottom_up=False)
-  assert bridge.op is Ops.AMD_ROW_SOFTMAX_REPACK and bridge.src[0].op is Ops.WMMA
-  assert bridge.src[0].dtype == dtypes.float32.vec(8)
+  assert bridge.op is Ops.AMD_ROW_SOFTMAX_SLOT and bridge.src[0].op is Ops.AMD_ROW_SOFTMAX_REPACK and bridge.src[0].src[0].op is Ops.WMMA
+  assert bridge.src[0].src[0].dtype == dtypes.float32.vec(8)
   v = UOp.const(dtypes.half.vec(16), (0.0,) * 16)
   pv_acc = UOp.const(dtypes.float32.vec(8), (0.0,) * 8)
   pv = shaped_wmma(bridge, v, pv_acc, dims=(16, 16, 16), device="AMD:gfx1100", threads=32, dtype_out=dtypes.float32)
@@ -309,7 +326,7 @@ def test_native_qk_consumer_exposes_raw_c_and_reaches_two_wmmas():
   assert len(wmmas) == 2
   native = [u for u in lowered.toposort() if u.op is Ops.AMD_ROW_SOFTMAX_REPACK]
   assert len(native) == 1 and native[0].src[0] is wmmas[0]
-  assert wmmas[1].src[0] is native[0]
+  assert wmmas[1].src[0].op is Ops.AMD_ROW_SOFTMAX_SLOT and wmmas[1].src[0].src[0] is native[0]
 
 def test_native_qk_consumer_does_not_truncate_logical_c_fragment():
   import itertools
@@ -398,7 +415,7 @@ def test_gfx1100_q16_live_owner_builder_has_exact_fragment_addresses():
   weights, vfrag = wmmas[1].src[:2]
   assert qfrag.op is kfrag.op is vfrag.op is Ops.STACK
   assert qfrag.dtype == kfrag.dtype == vfrag.dtype == dtypes.half.vec(16)
-  assert weights.op is Ops.AMD_ROW_SOFTMAX_REPACK and weights.arg.score_scale == 0.25
+  assert weights.op is Ops.AMD_ROW_SOFTMAX_SLOT and weights.src[0].op is Ops.AMD_ROW_SOFTMAX_REPACK and weights.src[0].arg.score_scale == 0.25
   assert all(x.op is Ops.LOAD and x.src[0].src[0] is params[1] for x in qfrag.src)
   assert all(x.op is Ops.LOAD and x.src[0].src[0] is params[2] for x in kfrag.src)
   assert all(x.op is Ops.LOAD and x.src[0].src[0] is params[3] for x in vfrag.src)

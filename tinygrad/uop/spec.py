@@ -251,6 +251,9 @@ spec_tensor = PatternMatcher([
    lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_online_softmax_qk_pv_v1"
    and x.dtype == dtypes.half.vec(16) and x.src[0].dtype == dtypes.float32.vec(8)
    and x.src[1].dtype == x.src[2].dtype == dtypes.float32),
+  (UPat(Ops.AMD_ROW_SOFTMAX_SLOT, src=(UPat(Ops.AMD_ROW_SOFTMAX_REPACK),), name="x"),
+   lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_online_softmax_qk_pv_v1"
+   and x.dtype in {dtypes.half.vec(16), dtypes.float.vec(8)}),
   (UPat(Ops.AMD_PV_C_LANE, src=(UPat(),), name="x"),
    lambda x: hasattr(x.arg, 'native_abi') and x.arg.native_abi == "amd_gfx1100_pv_c_lane_v1"
    and x.src[0].dtype == dtypes.float.vec(8) and x.dtype == dtypes.float),

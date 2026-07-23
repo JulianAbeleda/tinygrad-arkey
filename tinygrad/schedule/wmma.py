@@ -6,7 +6,7 @@ import math
 from typing import NamedTuple
 from tinygrad.dtype import DType, dtypes, PtrDType
 from tinygrad.uop.ops import Ops, UOp
-from tinygrad.uop.ops import CompositeReduce, CompositeTileCarrier, TileGatherSpec, RowSoftmaxRepackSpec, AMDRowSoftmaxRepackSpec, AMDPVCLaneSpec, Ops
+from tinygrad.uop.ops import CompositeReduce, CompositeTileCarrier, TileGatherSpec, RowSoftmaxRepackSpec, AMDRowSoftmaxRepackSpec, AMDRowSoftmaxSlotSpec, AMDPVCLaneSpec, Ops
 
 def grouped_tile_load(source: UOp, spec: TileGatherSpec, *indices: UOp) -> UOp:
   """Build an ownership-preserving INDEX/LOAD tile carrier.
@@ -293,7 +293,14 @@ def amd_gfx1100_row_softmax_repack(score: UOp, m: UOp, l: UOp, *,
     raise ValueError("gfx1100 row-softmax repack requires native QK-C float.vec(8)")
   if any(x.dtype != dtypes.float32 or x.shape != () for x in (m, l)):
     raise ValueError("gfx1100 row-softmax repack requires scalar fp32 m/l row state")
-  return UOp(Ops.AMD_ROW_SOFTMAX_REPACK, dtypes.half.vec(16), (score, m, l), arg=spec)
+  owner = UOp(Ops.AMD_ROW_SOFTMAX_REPACK, dtypes.half.vec(16), (score, m, l), arg=spec)
+  return UOp(Ops.AMD_ROW_SOFTMAX_SLOT, dtypes.half.vec(16), (owner,), arg=AMDRowSoftmaxSlotSpec(slot=0))
+
+def amd_gfx1100_row_softmax_state(score:UOp, m:UOp, l:UOp, *, spec:AMDRowSoftmaxRepackSpec|None=None) -> tuple[UOp, UOp, UOp, UOp]:
+  """Return typed views of one native repack execution: P, new_m, new_l, alpha."""
+  p = amd_gfx1100_row_softmax_repack(score, m, l, spec=spec)
+  owner = p.src[0]
+  return (p, *(UOp(Ops.AMD_ROW_SOFTMAX_SLOT, dtypes.float.vec(8), (owner,), arg=AMDRowSoftmaxSlotSpec(slot=i)) for i in range(1, 4)))
 
 def amd_gfx1100_q16_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, scale:float, kernel_info) -> UOp:
   """Build the exact live-owner q16 native attention kernel graph."""

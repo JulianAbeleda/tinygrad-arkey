@@ -299,6 +299,7 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
         # Physical wave32 QK-C -> PV-A bridge. Its vec16 dtype is the native
         # per-lane PV-A fragment, not a logical tensor dimension.
         return (self.dtype.count,)
+      case Ops.AMD_ROW_SOFTMAX_SLOT: return (self.dtype.count,)
       case Ops.AMD_PV_C_LANE: return ()
       case Ops.SCOPED_REDUCE:
         # The first SCOPED_REDUCE source is its semantically identical
@@ -1439,6 +1440,19 @@ class AMDPVCLaneSpec(NamedTuple):
       raise ValueError("PV-C lane projection has unsupported row ownership")
     if not isinstance(self.element, int) or not 0 <= self.element < 8:
       raise ValueError("PV-C lane projection element must be in [0,8)")
+    return self
+
+class AMDRowSoftmaxSlotSpec(NamedTuple):
+  native_abi: str = "amd_gfx1100_online_softmax_qk_pv_v1"
+  slot: int = 0
+  dtypes: tuple[str, ...] = ("half.vec16", "float.vec8", "float.vec8", "float.vec8")
+
+  def validate(self):
+    if self.native_abi != "amd_gfx1100_online_softmax_qk_pv_v1" or self.dtypes != \
+       ("half.vec16", "float.vec8", "float.vec8", "float.vec8"):
+      raise ValueError("native row-softmax slot requires exact gfx1100 repack ABI")
+    if not isinstance(self.slot, int) or not 0 <= self.slot < 4:
+      raise ValueError("native row-softmax slot must be in [0,4)")
     return self
 
 class CompositeInputSpec(NamedTuple):

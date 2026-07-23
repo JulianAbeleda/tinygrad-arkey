@@ -2271,7 +2271,7 @@ def expand_native_row_softmax_repack(ctx, x:UOp) -> UOp:
   lane_hw = lane.cast(dtypes.int)
   halfwave, col = lane.alu(Ops.SHR, UOp.const(dtypes.weakint, 4)), lane.alu(Ops.AND, UOp.const(dtypes.weakint, 15))
   lds = UOp(Ops.DEFINE_LOCAL, dtypes.half.ptr(256, AddrSpace.LOCAL), arg=next(ctx))
-  stores, log2e = [], UOp.const(dtypes.float, 1.4426950408889634)
+  stores, new_ms, new_ls, alphas, log2e = [], [], [], [], UOp.const(dtypes.float, 1.4426950408889634)
   for e in range(8):
     value = score.gep(e).alu(Ops.MUL, UOp.const(dtypes.float, x.arg.score_scale))
     row_max = value
@@ -2285,17 +2285,24 @@ def expand_native_row_softmax_repack(ctx, x:UOp) -> UOp:
       addr = lane_hw.alu(Ops.XOR, UOp.const(dtypes.int, mask)).alu(Ops.MUL, UOp.const(dtypes.int, 4))
       row_sum = row_sum.alu(Ops.ADD, UOp(Ops.CUSTOMI, dtypes.float, (addr, row_sum), "bpermute"))
     alpha = (m-new_m).alu(Ops.MUL, log2e).exp2()
-    normalized = (weight / l.alu(Ops.MUL, alpha).alu(Ops.ADD, row_sum)).cast(dtypes.half)
+    new_l = l.alu(Ops.MUL, alpha).alu(Ops.ADD, row_sum)
+    new_ms.append(new_m); new_ls.append(new_l); alphas.append(alpha)
+    normalized = (weight / new_l).cast(dtypes.half)
     row = UOp.const(dtypes.weakint, 2*e).alu(Ops.ADD, halfwave)
     stores.append(lds.index(row.alu(Ops.MUL, UOp.const(dtypes.weakint, 16)).alu(Ops.ADD, col)).store(normalized))
   ready = UOp.barrier(UOp.group(*stores))
   reload_row = col.alu(Ops.MUL, UOp.const(dtypes.weakint, 16))
   published = lds.after(ready)
   vals = [published.index(reload_row.alu(Ops.ADD, UOp.const(dtypes.weakint, i))).load() for i in range(16)]
-  return UOp(Ops.STACK, dtypes.half.vec(16), tuple(vals), tag=("amd_gfx1100_pv_a_reload_v1",))
+  p = UOp(Ops.STACK, dtypes.half.vec(16), tuple(vals), tag=("amd_gfx1100_pv_a_reload_v1",))
+  # Each physical accumulator element owns one row. These vector states stay
+  # replicated in the native C layout until a descriptor-owned final store.
+  return UOp(Ops.TUPLE, dtypes.void, (p, UOp(Ops.STACK, dtypes.float.vec(8), tuple(new_ms)),
+    UOp(Ops.STACK, dtypes.float.vec(8), tuple(new_ls)), UOp(Ops.STACK, dtypes.float.vec(8), tuple(alphas))))
 
 native_repack_matcher = PatternMatcher([
   (UPat(Ops.AMD_ROW_SOFTMAX_REPACK, name="x"), expand_native_row_softmax_repack),
+  (UPat(Ops.AMD_ROW_SOFTMAX_SLOT, src=(UPat(Ops.TUPLE, name="owner"),), name="x"), lambda x,owner: owner.src[x.arg.slot]),
 ])
 
 def lower_native_pv_c_lane(x:UOp) -> UOp:
