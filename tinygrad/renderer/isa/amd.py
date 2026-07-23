@@ -2267,28 +2267,29 @@ def expand_native_row_softmax_repack(ctx, x:UOp) -> UOp:
     raise ValueError("AMD row-softmax repack requires one raw QK WMMA float.vec(8)")
   if any(s.dtype != dtypes.float or s.shape != () for s in (m, l)):
     raise ValueError("AMD row-softmax repack requires scalar fp32 m/l state")
-  lane = UOp(Ops.SPECIAL, dtypes.int, (UOp.const(dtypes.int, 32),), "lidx0")
-  halfwave, col = lane.alu(Ops.SHR, UOp.const(dtypes.int, 4)), lane.alu(Ops.AND, UOp.const(dtypes.int, 15))
+  lane = UOp.special(32, "lidx0")
+  lane_hw = lane.cast(dtypes.int)
+  halfwave, col = lane.alu(Ops.SHR, UOp.const(dtypes.weakint, 4)), lane.alu(Ops.AND, UOp.const(dtypes.weakint, 15))
   lds = UOp(Ops.DEFINE_LOCAL, dtypes.half.ptr(256, AddrSpace.LOCAL), arg=next(ctx))
   stores, log2e = [], UOp.const(dtypes.float, 1.4426950408889634)
   for e in range(8):
     value, row_max = score.gep(e), score.gep(e)
     for mask in x.arg.xor_masks:
-      addr = lane.alu(Ops.XOR, UOp.const(dtypes.int, mask)).alu(Ops.MUL, UOp.const(dtypes.int, 4))
+      addr = lane_hw.alu(Ops.XOR, UOp.const(dtypes.int, mask)).alu(Ops.MUL, UOp.const(dtypes.int, 4))
       row_max = row_max.alu(Ops.MAX, UOp(Ops.CUSTOMI, dtypes.float, (addr, row_max), "bpermute"))
     new_m = m.alu(Ops.MAX, row_max)
     weight = (value-new_m).alu(Ops.MUL, log2e).exp2()
     row_sum = weight
     for mask in x.arg.xor_masks:
-      addr = lane.alu(Ops.XOR, UOp.const(dtypes.int, mask)).alu(Ops.MUL, UOp.const(dtypes.int, 4))
+      addr = lane_hw.alu(Ops.XOR, UOp.const(dtypes.int, mask)).alu(Ops.MUL, UOp.const(dtypes.int, 4))
       row_sum = row_sum.alu(Ops.ADD, UOp(Ops.CUSTOMI, dtypes.float, (addr, row_sum), "bpermute"))
     alpha = (m-new_m).alu(Ops.MUL, log2e).exp2()
     normalized = (weight / l.alu(Ops.MUL, alpha).alu(Ops.ADD, row_sum)).cast(dtypes.half)
-    row = UOp.const(dtypes.int, 2*e).alu(Ops.ADD, halfwave)
-    stores.append(lds.index(row.alu(Ops.MUL, UOp.const(dtypes.int, 16)).alu(Ops.ADD, col)).store(normalized))
+    row = UOp.const(dtypes.weakint, 2*e).alu(Ops.ADD, halfwave)
+    stores.append(lds.index(row.alu(Ops.MUL, UOp.const(dtypes.weakint, 16)).alu(Ops.ADD, col)).store(normalized))
   ready = UOp.barrier(UOp.group(*stores))
-  reload_row = col.alu(Ops.MUL, UOp.const(dtypes.int, 16))
-  vals = [lds.index(reload_row.alu(Ops.ADD, UOp.const(dtypes.int, i))).load().after(ready) for i in range(16)]
+  reload_row = col.alu(Ops.MUL, UOp.const(dtypes.weakint, 16))
+  vals = [lds.index(reload_row.alu(Ops.ADD, UOp.const(dtypes.weakint, i))).load().after(ready) for i in range(16)]
   return UOp(Ops.STACK, dtypes.half.vec(16), tuple(vals), tag=("amd_gfx1100_pv_a_reload_v1",))
 
 native_repack_matcher = PatternMatcher([

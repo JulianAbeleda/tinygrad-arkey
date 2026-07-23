@@ -357,6 +357,35 @@ def test_gfx1100_preisel_native_repack_fails_closed_on_non_wmma_score():
   with pytest.raises(ValueError, match="raw QK WMMA"):
     graph_rewrite(native, native_repack_matcher, ctx=itertools.count(750), bottom_up=True)
 
+def test_gfx1100_native_repack_direct_builder_reaches_final_program():
+  from tinygrad.codegen import full_rewrite_to_sink, to_program
+  from tinygrad.helpers import Target
+  from tinygrad.renderer.isa.amd import AMDISARenderer
+  from tinygrad.uop.ops import KernelInfo, ParamArg, RowSoftmaxRepackSpec
+  from tinygrad.schedule.wmma import shaped_wmma
+  q = UOp.const(dtypes.half.vec(16), (0.0,)*16)
+  acc = UOp.const(dtypes.float.vec(8), (0.0,)*8)
+  qk = shaped_wmma(q, q, acc, dims=(16,16,16), device="AMD:gfx1100", threads=32, dtype_out=dtypes.float)
+  logical = UOp(Ops.ROW_SOFTMAX_REPACK, dtypes.half,
+                (qk, UOp.const(dtypes.float, 0), UOp.const(dtypes.float, 1)), RowSoftmaxRepackSpec())
+  pv = shaped_wmma(logical, q, acc, dims=(16,16,16), device="AMD:gfx1100", threads=32, dtype_out=dtypes.float)
+  out = UOp(Ops.PARAM, dtypes.float.ptr(8), arg=ParamArg(0))
+  ast = out.index(UOp.const(dtypes.weakint, 0)).store(pv).sink(arg=KernelInfo(name="native_repack_gate"))
+  ren = AMDISARenderer(Target.parse("AMD:ISA:gfx1100"))
+  final = full_rewrite_to_sink(ast, ren, optimize=False)
+  nodes = final.toposort()
+  assert not any(u.op in (Ops.ROW_SOFTMAX_REPACK, Ops.AMD_ROW_SOFTMAX_REPACK) for u in nodes)
+  assert len([u for u in nodes if u.op is Ops.WMMA]) == 2
+  assert len([u for u in nodes if u.op is Ops.DEFINE_LOCAL]) == 1
+  assert len([u for u in nodes if u.op is Ops.BARRIER]) == 1
+  program = to_program(ast, ren)
+  linear = next(u for u in program.src if u.op is Ops.LINEAR)
+  mnemonics = [str(u.arg).split("(", 1)[0] for u in linear.src if not isinstance(u.arg, tuple)]
+  assert mnemonics.count("v_wmma_f32_16x16x16_f16") == 2
+  assert any(m.startswith("ds_store") for m in mnemonics)
+  assert any(m.startswith("ds_load") for m in mnemonics)
+  assert "s_barrier" in mnemonics
+
 def test_rangeify_handoff_unwraps_only_exact_tile_carriers():
   from tinygrad.uop.ops import TileGatherSpec, graph_rewrite
   from tinygrad.schedule.wmma import tile_gather
