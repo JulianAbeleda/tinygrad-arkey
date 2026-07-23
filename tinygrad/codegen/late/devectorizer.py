@@ -371,6 +371,25 @@ def horizontal_reduce(inp:UOp, out_dtype:DType) -> list[UOp]:
     return [inp.gep(tuple(range(i, inp.dtype.count, horizontal_amount))) for i in range(0, horizontal_amount)]
   return [inp]
 
+def _vectorize_live_v_index(v_src:UOp, reduce_range, lane_group:int, dtype:DType) -> UOp|None:
+  """Vectorize the actual optimized V index by replacing only its Hd RANGE."""
+  if lane_group <= 1: return None
+  outer = v_src
+  carrier = outer.src[0] if outer.op is Ops.CAST and outer.src else outer
+  if carrier.op is not Ops.INDEX or len(carrier.src) < 2: return None
+  reduce_set = set(reduce_range)
+  index_exprs = carrier.src[1:]
+  candidates = tuple(dict.fromkeys(r for idx in index_exprs for r in idx.backward_slice
+    if r.op is Ops.RANGE and r not in reduce_set and r.vmin == 0 and r.vmax == lane_group-1))
+  if len(candidates) != 1: return None
+  hd_range = candidates[0]
+  lanes = []
+  for lane in range(lane_group):
+    indexed = carrier.substitute({hd_range: UOp.const(hd_range.dtype, lane)})
+    lanes.append(indexed.cast(outer.dtype) if outer.op is Ops.CAST else indexed)
+  if any(r in lane.backward_slice for lane in lanes for r in (hd_range,)): raise RuntimeError("Hd RANGE survived V lane substitution")
+  return UOp.vectorize(*lanes)
+
 def _load_v_at_reduce_pos(v_src:UOp, composite, input_ranges, reduce_range, score_shape=None, axis_map=None, lane_group=1):
   """Create a LOAD from V at the current reduce position.
   Uses RANGE UOps from input_ranges and reduce_range to build indices.
@@ -517,9 +536,11 @@ def reduce_to_acc(ctx:ReduceContext, red:UOp):
           raise RuntimeError("online_softmax_state requires exactly one declared V input")
         spec = input_specs[0]
         lane_group = prod(getattr(composite, "lane_shapes", ((), (), ()))[2] or (1,))
-        axis_map = tuple(spec.axis_map[:-1]) + (-1,) if lane_group > 1 and spec.axis_map else spec.axis_map
-        v_inp = _load_v_at_reduce_pos(auxiliary_inputs[0], composite, input_ranges, reduce_range, inp._shape,
-                                      axis_map=axis_map, lane_group=lane_group)
+        v_inp = _vectorize_live_v_index(auxiliary_inputs[0], reduce_range, lane_group, composite.slots[-1].dtype)
+        if v_inp is None:
+          axis_map = tuple(spec.axis_map[:-1]) + (-1,) if lane_group > 1 and spec.axis_map else spec.axis_map
+          v_inp = _load_v_at_reduce_pos(auxiliary_inputs[0], composite, input_ranges, reduce_range, inp._shape,
+                                        axis_map=axis_map, lane_group=lane_group)
       
       # Create accumulators (common to all combines)
       accs = []
@@ -593,9 +614,6 @@ def _project_deferred_carrier(carrier:UOp, slot:int) -> UOp|None:
   if carrier.op is Ops.UNROLL and len(carrier.src) == 1:
     inner = _project_deferred_carrier(carrier.src[0], slot)
     if inner is None: return None
-    # This UNROLL described the tuple's logical output lane. A scalar slot has
-    # no lane to unroll, while a physical accumulator already carries Hd in
-    # its dtype; retaining the wrapper would duplicate that axis.
     return inner
   return None
 

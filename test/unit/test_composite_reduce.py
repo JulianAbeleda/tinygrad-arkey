@@ -15,7 +15,7 @@ import numpy as np
 from tinygrad import Tensor, dtypes
 from tinygrad.helpers import NOOPT
 from tinygrad.uop.ops import UOp, Ops, AxisType, AccumulatorSlot, CompositeReduce, CompositeInputSpec, _normalize_composite_shape
-from tinygrad.codegen.late.devectorizer import _load_v_at_reduce_pos
+from tinygrad.codegen.late.devectorizer import _load_v_at_reduce_pos, _vectorize_live_v_index
 from tinygrad.schedule.rangeify import lower_attention_semantic
 
 
@@ -113,6 +113,18 @@ class TestCompositeReduce(unittest.TestCase):
     self.assertTrue(all(x.op is Ops.LOAD for x in loaded.src))
     self.assertIn(kv, loaded.src[0].backward_slice)
     self.assertNotEqual(loaded.src[0].src[0].src[-1], loaded.src[1].src[0].src[-1])
+
+  def test_live_v_index_vectorization_preserves_kv_and_replaces_only_hd(self):
+    v = UOp.placeholder((3, 2), dtypes.float32, 0)
+    kv = UOp.range(3, 0, AxisType.REDUCE)
+    hd = UOp.range(2, 1, AxisType.LOOP)
+    live = v.index(kv.alu(Ops.MUL, UOp.const(dtypes.weakint, 2)).alu(Ops.ADD, hd))
+    packed = _vectorize_live_v_index(live, (kv,), 2, dtypes.float32)
+    self.assertIsNotNone(packed)
+    self.assertEqual(packed.dtype.count, 2)
+    self.assertTrue(all(kv in lane.backward_slice and hd not in lane.backward_slice for lane in packed.src))
+    zero = UOp.const(kv.dtype, 0)
+    self.assertEqual([lane.src[-1].substitute({kv: zero}).simplify().arg for lane in packed.src], [0, 1])
 
 
 class TestOnlineSoftmaxTwoReduce(unittest.TestCase):
