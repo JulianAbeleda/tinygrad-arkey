@@ -616,7 +616,8 @@ def amd_gfx1100_rotating_pv_scheduler_probe(q:UOp, k:UOp, v:UOp, out:UOp, *, q_t
   for block in range(4): qk=UOp(Ops.WMMA,dtypes.float.vec(8),(fr(q,"Q",block),fr(k,"K",block),qk),warg,tag=("attention_wmma","QK",block))
   from tinygrad.codegen.opt.compiler_policies import WaitCount
   qk_retire=UOp(Ops.WAIT,dtypes.void,(qk,),WaitCount(vmcnt=0))
-  for block in range(4,8): qk=UOp(Ops.WMMA,dtypes.float.vec(8),(fr(q,"Q",block).after(qk_retire),fr(k,"K",block).after(qk_retire),qk),warg,tag=("attention_wmma","QK",block))
+  q_stage,k_stage=q.after(qk_retire),k.after(qk_retire)
+  for block in range(4,8): qk=UOp(Ops.WMMA,dtypes.float.vec(8),(fr(q_stage,"Q",block),fr(k_stage,"K",block),qk),warg,tag=("attention_wmma","QK",block))
   p,nm,nl,alpha=amd_gfx1100_row_softmax_state(qk,om,ol,spec=AMDRowSoftmaxRepackSpec(score_scale=scale,mode="loop_state_v1",validity_mode="tail_v1",query_start=0,kv_start=-1,valid_kv=kv_tokens,dynamic_kv_v1=True,grid=grid),kv_tile=rng,grid_id=group)
   ml_commit=UOp.group(*wr(mreg,"m",nm),*wr(lreg,"l",nl))
   initialized=tuple(RotatingPVStateSpec(storage,lane,block,generation=0).write(zero) for block in range(8))

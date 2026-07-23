@@ -1657,11 +1657,15 @@ def isel_packed_fragment(ctx:IselContext,x:UOp, base:int|None=None) -> UOp:
   if abi not in {"amd_gfx1100_packed_fragment_v1","amd_gfx1100_packed_fragment_hd128_v1","amd_gfx1100_packed_fragment_hd128_loop_v1"} or \
      role not in {"Q","K","V"} or tile not in {0,1} or not isinstance(hd_block,int) or not 0 <= hd_block < 8:
     raise ValueError("invalid opaque gfx1100 packed fragment")
+  owner_deps=()
+  if owner.op is Ops.AFTER and owner.src:
+    owner,owner_deps=owner.src[0],owner.src[1:]
   # Grid attention has one physical fragment transaction stream.  Carry its
   # completion into the next address definition so the seven Q head-block
   # bases are produced and consumed one at a time instead of all being live
   # before the first global load.
   grid_tail = getattr(ctx, "_attention_grid_fragment_tail", None) if loop and x.arg.grid is not None else None
+  if owner_deps: grid_tail=owner_deps[0]
   if base is None: base=_frag_base(ctx,("amd_gfx1100_opaque_fragment","A" if role=="Q" else "B"),8)
   if base is None: raise NotImplementedError("opaque fragment fixed span exhausted")
   tid=_validate_fragment_lane_provenance(lane,wave_id,col,multiwave)
