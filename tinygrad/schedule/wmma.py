@@ -280,7 +280,7 @@ def row_softmax_lds_repack(score: UOp, m: UOp, l: UOp, *,
   return UOp(Ops.ROW_SOFTMAX_REPACK, dtypes.half, (score, m, l), arg=spec)
 
 def amd_gfx1100_row_softmax_repack(score: UOp, m: UOp, l: UOp, *,
-                                   spec: AMDRowSoftmaxRepackSpec|None = None) -> UOp:
+                                   spec: AMDRowSoftmaxRepackSpec|None = None, kv_tile:UOp|None=None) -> UOp:
   """Build the exact native wave32 QK-C -> PV-A scheduler carrier.
 
   ``score`` is one physical QK WMMA C fragment owned by a wave lane. ``m``
@@ -295,14 +295,17 @@ def amd_gfx1100_row_softmax_repack(score: UOp, m: UOp, l: UOp, *,
   state_shape = () if spec.mode == "legacy_normalized" else (8,)
   if any(x.dtype != state_dt or x.shape != state_shape for x in (m, l)):
     raise ValueError(f"gfx1100 {spec.mode} repack requires exact {state_dt} m/l row state")
-  owner = UOp(Ops.AMD_ROW_SOFTMAX_REPACK, dtypes.half.vec(16), (score, m, l), arg=spec)
+  if (kv_tile is not None) != spec.dynamic_kv_v1 or (kv_tile is not None and kv_tile.op is not Ops.RANGE):
+    raise ValueError("dynamic row-softmax repack requires its exact RANGE tile source")
+  owner = UOp(Ops.AMD_ROW_SOFTMAX_REPACK, dtypes.half.vec(16), (score, m, l)+(() if kv_tile is None else (kv_tile,)), arg=spec)
   return UOp(Ops.AMD_ROW_SOFTMAX_SLOT, dtypes.half.vec(16), (owner,), arg=AMDRowSoftmaxSlotSpec(slot=0))
 
-def amd_gfx1100_row_softmax_state(score:UOp, m:UOp, l:UOp, *, spec:AMDRowSoftmaxRepackSpec|None=None) -> tuple[UOp, UOp, UOp, UOp]:
+def amd_gfx1100_row_softmax_state(score:UOp, m:UOp, l:UOp, *, spec:AMDRowSoftmaxRepackSpec|None=None,
+                                  kv_tile:UOp|None=None) -> tuple[UOp, UOp, UOp, UOp]:
   """Return typed views of one native repack execution: P, new_m, new_l, alpha."""
   spec = AMDRowSoftmaxRepackSpec(mode="stateful_unnormalized_v1") if spec is None else spec
-  if spec.mode != "stateful_unnormalized_v1": raise ValueError("native state projections require stateful_unnormalized_v1")
-  p = amd_gfx1100_row_softmax_repack(score, m, l, spec=spec)
+  if spec.mode not in {"stateful_unnormalized_v1", "loop_state_v1"}: raise ValueError("native state projections require a stateful native mode")
+  p = amd_gfx1100_row_softmax_repack(score, m, l, spec=spec, kv_tile=kv_tile)
   owner = p.src[0]
   return (p, *(UOp(Ops.AMD_ROW_SOFTMAX_SLOT, dtypes.float.vec(8), (owner,), arg=AMDRowSoftmaxSlotSpec(slot=i)) for i in range(1, 4)))
 
@@ -438,7 +441,8 @@ def amd_gfx1100_q16_kv32_hd128_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, scale:
   drain=UOp(Ops.AMD_ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,sl,*acc),arg=AMDAttentionOutputDrainSpec())
   return UOp.sink(drain,arg=kernel_info)
 
-def amd_gfx1100_q16_kv64_hd128_loop_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, scale:float, kernel_info) -> UOp:
+def amd_gfx1100_q16_kv64_hd128_loop_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, scale:float, kernel_info,
+                                               causal:bool=False, valid_kv:int=64, query_start:int|None=None) -> UOp:
   """Scheduler-only Q16/KV64/Hd128 recurrence with one runtime KV tile body.
 
   This deliberately has no AMD/HIP lowering yet.  The typed state and dynamic
@@ -453,6 +457,9 @@ def amd_gfx1100_q16_kv64_hd128_loop_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, s
     raise ValueError("q16-kv64-hd128 requires Q1/K2/V3/out0 sized 2048/8192/8192/2048")
   if tuple(x.ptrdtype.base for x in owners)!=(dtypes.half,)*4 or not isinstance(scale,float) or not math.isfinite(scale) or scale<=0:
     raise ValueError("q16-kv64-hd128 requires fp16 owners and positive finite scale")
+  if not isinstance(valid_kv,int) or isinstance(valid_kv,bool) or not 0 <= valid_kv <= 64: raise ValueError("valid_kv must be in [0,64]")
+  if query_start is None: query_start=valid_kv-16
+  if not isinstance(query_start,int) or isinstance(query_start,bool): raise ValueError("query_start must be integral")
   lane=UOp.special(32,"lidx0"); col=lane.alu(Ops.AND,UOp.const(dtypes.weakint,15))
   zero=UOp.const(dtypes.float.vec(8),(0.0,)*8); axes=((),(),tuple((-120-i,2) for i in range(3)))
   warg=("WMMA_16_16_16_half_float",(16,16,16),dtypes.half,dtypes.float,"AMD:gfx1100",32,axes,())
@@ -460,37 +467,38 @@ def amd_gfx1100_q16_kv64_hd128_loop_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, s
   mreg=UOp.placeholder((8,),dtypes.float,9401,addrspace=AddrSpace.REG)
   lreg=UOp.placeholder((8,),dtypes.float,9402,addrspace=AddrSpace.REG)
   creg=UOp.placeholder((64,),dtypes.float,9403,addrspace=AddrSpace.REG)
-  m_init=mreg.index(UOp.const(dtypes.weakint,0),dtype=dtypes.float.vec(8)).store(UOp.const(dtypes.float.vec(8),(-float("inf"),)*8))
-  l_init=lreg.index(UOp.const(dtypes.weakint,0),dtype=dtypes.float.vec(8)).store(zero)
-  c_init=creg.index(UOp.const(dtypes.weakint,0),dtype=dtypes.float.vec(64)).store(UOp.const(dtypes.float.vec(64),(0.0,)*64))
-  def state_read(reg, init, role, block=0, offset=0):
-    raw=reg.after(init,rng).index(UOp.const(dtypes.weakint,offset),dtype=dtypes.float.vec(8)).load()
-    return UOp(Ops.AMD_ATTENTION_LOOP_STATE,dtypes.float.vec(8),(raw,),arg=AMDLoopStateSpec(role=role,access="read",block=block))
+  state_owner=9404
+  def state_write(reg, role, value, block=0, offset=0, access="write"):
+    return tuple(UOp(Ops.AMD_ATTENTION_LOOP_STATE,dtypes.void,
+      (reg.index(UOp.const(dtypes.weakint,offset+i)).store(value.gep(i)),),
+      arg=AMDLoopStateSpec(role=role,access=access,block=block,lane=i,owner=state_owner)) for i in range(8))
+  m_init=UOp.group(*state_write(mreg,"m",UOp.const(dtypes.float.vec(8),(-float("inf"),)*8),access="init"))
+  l_init=UOp.group(*state_write(lreg,"l",zero,access="init"))
+  c_init=UOp.group(*(x for block in range(8) for x in state_write(creg,"acc",zero,block,block*8,access="init")))
+  def state_read(reg, init, role, block=0, offset=0, final=False):
+    lanes=tuple(UOp(Ops.AMD_ATTENTION_LOOP_STATE,dtypes.float,
+      (reg,init) if final else (reg,init,rng),
+      arg=AMDLoopStateSpec(role=role,access="final_read" if final else "read",block=block,lane=i,owner=state_owner)) for i in range(8))
+    return UOp(Ops.STACK,dtypes.float.vec(8),lanes)
   def fragment(owner, role, block):
     return UOp(Ops.AMD_PACKED_FRAGMENT_LOAD,dtypes.half.vec(16),(owner,lane,col,rng),arg=AMDPackedFragmentLoopSpec(role=role,head_block=block))
   old_m,old_l=state_read(mreg,m_init,"m"),state_read(lreg,l_init,"l")
   qk=zero
   for block in range(8): qk=UOp(Ops.WMMA,dtypes.float.vec(8),(fragment(q,"Q",block),fragment(k,"K",block),qk),warg)
   p,new_m,new_l,alpha=amd_gfx1100_row_softmax_state(qk,old_m,old_l,
-    spec=AMDRowSoftmaxRepackSpec(score_scale=float(scale),mode="stateful_unnormalized_v1"))
-  writes=[]
-  for role,reg,value in (("m",mreg,new_m),("l",lreg,new_l)):
-    store=reg.index(UOp.const(dtypes.weakint,0),dtype=dtypes.float.vec(8)).store(value)
-    writes.append(UOp(Ops.AMD_ATTENTION_LOOP_STATE,dtypes.void,(store,),arg=AMDLoopStateSpec(role=role,access="write")))
+    spec=AMDRowSoftmaxRepackSpec(score_scale=float(scale),mode="loop_state_v1",validity_mode="causal_v1" if causal else "tail_v1",
+      query_start=query_start,kv_start=-1,valid_kv=valid_kv,dynamic_kv_v1=True),kv_tile=rng)
+  writes=[*state_write(mreg,"m",new_m),*state_write(lreg,"l",new_l)]
   for block in range(8):
     old_c=state_read(creg,c_init,"acc",block,block*8)
     corrected=old_c.alu(Ops.MUL,alpha)
     pv=UOp(Ops.WMMA,dtypes.float.vec(8),(p,fragment(v,"V",block),corrected),warg)
-    store=creg.index(UOp.const(dtypes.weakint,block*8),dtype=dtypes.float.vec(8)).store(pv)
-    writes.append(UOp(Ops.AMD_ATTENTION_LOOP_STATE,dtypes.void,(store,),arg=AMDLoopStateSpec(role="acc",access="write",block=block)))
+    writes.extend(state_write(creg,"acc",pv,block,block*8))
   end=UOp.group(*writes).end(rng).replace(tag=("amd_gfx1100_attention_kv64_loop_end_v1",rng))
-  final_l=UOp(Ops.AMD_ATTENTION_LOOP_STATE,dtypes.float.vec(8),(lreg.after(end).index(UOp.const(dtypes.weakint,0),dtype=dtypes.float.vec(8)).load(),),
-    arg=AMDLoopStateSpec(role="l",access="read"))
-  final_c=tuple(UOp(Ops.AMD_ATTENTION_LOOP_STATE,dtypes.float.vec(8),
-    (creg.after(end).index(UOp.const(dtypes.weakint,block*8),dtype=dtypes.float.vec(8)).load(),),
-    arg=AMDLoopStateSpec(role="acc",access="read",block=block)) for block in range(8))
+  final_l=state_read(lreg,end,"l",final=True)
+  final_c=tuple(state_read(creg,end,"acc",block,block*8,final=True) for block in range(8))
   drain=UOp(Ops.AMD_ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,final_l,*final_c),arg=AMDAttentionOutputDrainSpec())
-  return UOp.sink(m_init,l_init,c_init,end,drain,arg=kernel_info)
+  return UOp.sink(m_init,l_init,c_init,end,drain,arg=kernel_info).replace(tag=("amd_gfx1100_q16_kv64_hd128_loop_v1",))
 
 class OnlineSoftmaxBlockTransition(NamedTuple):
   """Typed online-softmax state at one completed KV tile boundary."""

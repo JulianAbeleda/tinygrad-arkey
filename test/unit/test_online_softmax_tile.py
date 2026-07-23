@@ -659,15 +659,72 @@ def test_gfx1100_q16_kv64_hd128_loop_has_one_static_stateful_body():
   assert len([u for u in topo if u.op is Ops.DEFINE_REG])==3
   assert len([u for u in topo if u.op is Ops.WMMA])==16
   repacks=[u for u in topo if u.op is Ops.AMD_ROW_SOFTMAX_REPACK]
-  assert len(repacks)==1 and repacks[0].arg.mode=="stateful_unnormalized_v1"
+  assert len(repacks)==1 and repacks[0].arg.mode=="loop_state_v1"
   states=[u for u in topo if u.op is Ops.AMD_ATTENTION_LOOP_STATE]
   assert {x.arg.role for x in states}=={"m","l","acc"}
-  assert len([x for x in states if x.arg.role=="acc" and x.arg.access=="write"])==8
+  slots={(x.arg.role,x.arg.block,x.arg.lane) for x in states}
+  assert len(slots)==80 and len({x.arg.owner for x in states})==1
+  assert len([x for x in states if x.arg.role=="acc" and x.arg.access=="write"])==64
+  assert len([x for x in states if x.arg.access=="final_read"])==72
   frags=[u for u in topo if u.op is Ops.AMD_PACKED_FRAGMENT_LOAD]
   assert len(frags)==24 and all(isinstance(x.arg,AMDPackedFragmentLoopSpec) and x.src[3] is ranges[0] for x in frags)
   drains=[u for u in topo if u.op is Ops.AMD_ATTENTION_OUTPUT_DRAIN]
   assert len(drains)==1 and ends[0] in drains[0].backward_slice
   assert all(isinstance(x.arg,AMDLoopStateSpec) for x in states)
+
+def test_gfx1100_q16_kv64_hd128_loop_reaches_bounded_final_isa():
+  from tinygrad.codegen import to_program
+  from tinygrad.helpers import Target
+  from tinygrad.renderer.isa.amd import AMDISARenderer
+  from tinygrad.schedule.wmma import amd_gfx1100_q16_kv64_hd128_loop_attention
+  from tinygrad.uop.ops import KernelInfo, ParamArg
+  sizes=(2048,2048,8192,8192); p=[UOp(Ops.PARAM,dtypes.half.ptr(sizes[i]),arg=ParamArg(i)) for i in range(4)]
+  sink=amd_gfx1100_q16_kv64_hd128_loop_attention(p[1],p[2],p[3],p[0],scale=.25,kernel_info=KernelInfo(name="kv64_loop_isa"))
+  program=to_program(sink,AMDISARenderer(Target.parse("AMD:ISA:gfx1100")))
+  linear=next(u for u in program.src if u.op is Ops.LINEAR)
+  mn=[str(u.arg).split("(",1)[0] for u in linear.src if not isinstance(u.arg,tuple)]
+  assert mn.count("v_wmma_f32_16x16x16_f16")==16 and mn.count("s_barrier")==1
+  labels=[u for u in linear.src if isinstance(u.arg,tuple) and u.arg[:1]==("label",)]
+  branches=[u for u in linear.src if isinstance(u.arg,tuple) and u.arg[:1]==("branch",)]
+  assert len(labels)==2 and len(branches)==2
+
+def test_gfx1100_q16_kv64_hd128_loop_numeric():
+  import numpy as np
+  from tinygrad import Tensor
+  from tinygrad.schedule.wmma import amd_gfx1100_q16_kv64_hd128_loop_attention
+  from tinygrad.uop.ops import KernelInfo
+  rng=np.random.default_rng(64); q=rng.normal(0,.2,(16,128)).astype(np.float16)
+  k=rng.normal(0,.2,(64,128)).astype(np.float16); v=rng.normal(0,.4,(64,128)).astype(np.float16)
+  tq,tk,tv=(Tensor(x.reshape(-1),device="AMD") for x in (q,k,v)); out=Tensor.empty(2048,dtype=dtypes.half,device="AMD")
+  def kernel(o,qi,ki,vi):
+    return amd_gfx1100_q16_kv64_hd128_loop_attention(qi,ki,vi,o,scale=.25,kernel_info=KernelInfo(name="kv64_loop_num"))
+  got=out.custom_kernel(tq,tk,tv,fxn=kernel)[0].numpy().reshape(16,128).astype(np.float32)
+  scores=(q.astype(np.float32)@k.astype(np.float32).T)*.25
+  probs=np.exp(scores-scores.max(axis=1,keepdims=True)); probs/=probs.sum(axis=1,keepdims=True)
+  np.testing.assert_allclose(got,probs@v.astype(np.float32),rtol=.02,atol=4e-3)
+
+@pytest.mark.parametrize("valid_kv,query_start",[(64,None),(61,None),(64,-16)])
+def test_gfx1100_q16_kv64_hd128_loop_causal_tail_numeric(valid_kv,query_start):
+  import numpy as np
+  from tinygrad import Tensor
+  from tinygrad.schedule.wmma import amd_gfx1100_q16_kv64_hd128_loop_attention
+  from tinygrad.uop.ops import KernelInfo
+  rng=np.random.default_rng(128+valid_kv+(query_start or 0)); q=rng.normal(0,.2,(16,128)).astype(np.float16)
+  k=rng.normal(0,.2,(64,128)).astype(np.float16); v=rng.normal(0,.4,(64,128)).astype(np.float16)
+  tq,tk,tv=(Tensor(x.reshape(-1),device="AMD") for x in (q,k,v)); out=Tensor.empty(2048,dtype=dtypes.half,device="AMD")
+  def kernel(o,qi,ki,vi):
+    return amd_gfx1100_q16_kv64_hd128_loop_attention(qi,ki,vi,o,scale=.25,causal=True,valid_kv=valid_kv,query_start=query_start,
+      kernel_info=KernelInfo(name=f"kv64_loop_causal_{valid_kv}_{query_start}"))
+  got=out.custom_kernel(tq,tk,tv,fxn=kernel)[0].numpy().reshape(16,128).astype(np.float32)
+  qstart=valid_kv-16 if query_start is None else query_start
+  scores=(q.astype(np.float32)@k.astype(np.float32).T)*.25
+  valid=(np.arange(64)[None,:] < valid_kv) & (np.arange(64)[None,:] <= (qstart+np.arange(16))[:,None])
+  ref=np.zeros((16,128),dtype=np.float32)
+  for row in range(16):
+    if valid[row].any():
+      s=scores[row,valid[row]]; p=np.exp(s-s.max()); p/=p.sum(); ref[row]=p@v.astype(np.float32)[valid[row]]
+  np.testing.assert_allclose(got,ref,rtol=.02,atol=4e-3)
+  if query_start == -16: assert np.array_equal(got,np.zeros_like(got))
 
 def test_gfx1100_q16_kv32_builder_fails_closed_owner_sizes():
   from tinygrad.schedule.wmma import amd_gfx1100_q16_kv32_attention

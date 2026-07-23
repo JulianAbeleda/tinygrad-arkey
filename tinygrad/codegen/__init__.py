@@ -249,6 +249,8 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   # lower the index dtype to a concrete int
   sink = graph_rewrite(sink, pm_lower_index_dtype+load_store_indexing+(PatternMatcher([]) if has_register_pipe else gep_pushing), name="lower all index dtypes")
   sink = graph_rewrite(sink, register_pipe_symbolic if has_register_pipe else symbolic, name="post index symbolic")
+  if (loop_fragment_pm:=getattr(ren,"native_loop_fragment_matcher",None)) is not None:
+    sink=graph_rewrite(sink,loop_fragment_pm,name="expand native loop fragments after index lowering")
 
   # optional pre matcher
   if ren.pre_matcher is not None: sink = graph_rewrite(sink, ren.pre_matcher, name="pre_matcher")
@@ -406,6 +408,8 @@ def do_to_program(ast:UOp, renderer:Renderer) -> UOp:
     prog_info = ProgramInfo.from_sink(full_sink)
     # instruction selection
     if isinstance(renderer, ISARenderer):
+      if (loop_state_pm:=getattr(renderer,"native_loop_state_matcher",None)) is not None:
+        full_sink=graph_rewrite(full_sink,loop_state_pm,name="lower native attention loop state",bottom_up=True)
       full_sink = graph_rewrite(full_sink, renderer.pre_isel_matcher, ctx=itertools.count(-1, -1), name="pre instruction selection", bottom_up=True)
       if (opaque_pm:=getattr(renderer,"native_fragment_opaque_matcher",None)) is not None:
         full_sink=graph_rewrite(full_sink,opaque_pm,name="opaque native fragments",bottom_up=True)

@@ -109,6 +109,19 @@ def _hip_expand_native_row_softmax(ctx, x:UOp) -> UOp:
   from tinygrad.renderer.isa.amd import expand_native_row_softmax_repack
   return expand_native_row_softmax_repack(ctx,x,native_state=False)
 
+def _hip_expand_attention_loop_state(x:UOp) -> UOp:
+  from tinygrad.uop.ops import AMDLoopStateSpec
+  if not isinstance(x.arg, AMDLoopStateSpec): raise ValueError("HIP attention loop state is missing its typed ABI")
+  x.arg.validate()
+  if x.arg.access in {"init","write"}: return x.src[0]
+  reg=x.src[0]; offset=x.arg.block*8+x.arg.lane if x.arg.role=="acc" else x.arg.lane
+  addr=reg.after(*x.src[1:]).index(UOp.const(dtypes.weakint,offset))
+  return addr.load()
+
+def _hip_expand_loop_fragment(x:UOp) -> UOp:
+  from tinygrad.renderer.isa.amd import expand_loop_fragment
+  return expand_loop_fragment(x)
+
 def _hip_expand_attention_output_drain(x:UOp) -> UOp:
   """Expand the typed native-output ABI to ordinary HIP SSA stores."""
   from tinygrad.uop.ops import AMDAttentionOutputDrainSpec
@@ -391,14 +404,19 @@ class HIPRenderer(CStyleLanguage):
     self.compiler, self.tensor_cores = (HIPCCCompiler if use_hipcc else HIPCompiler)(target.arch), tc.get_amd(target.arch)
     if not self.is_cdna4(target.arch): self.extra_matcher += pm_manual_bf16_cast + extra_pm
     if target.arch.split(":")[0] == "gfx1100":
+      # Exact native attention loop address expressions retain weakint until HIP source rendering.
+      self.type_map = {**self.type_map, dtypes.weakint:"int"}
       # The scheduler-owned expansion is shared with the native ISA renderer;
       # HIP only supplies source spelling for its existing bpermute marker.
       from tinygrad.renderer.isa.amd import native_repack_matcher
       from tinygrad.renderer.isa.amd import native_state_lane_matcher
       self.native_repack_matcher = PatternMatcher([(UPat(Ops.AMD_ATTENTION_OUTPUT_DRAIN,name="x"), _hip_expand_attention_output_drain),
+        (UPat(Ops.AMD_ATTENTION_LOOP_STATE,name="x"), _hip_expand_attention_loop_state),
         (UPat(Ops.AMD_ROW_SOFTMAX_REPACK,name="x"), _hip_expand_native_row_softmax)]) + native_repack_matcher + \
         PatternMatcher([(UPat(Ops.MAX, name="x"), _hip_native_bpermute_max)])
       self.native_state_lane_matcher = native_state_lane_matcher
+      self.native_state_lane_matcher = PatternMatcher([(UPat(Ops.AMD_ATTENTION_LOOP_STATE,name="x"), _hip_expand_attention_loop_state)]) + native_state_lane_matcher
+      self.native_loop_fragment_matcher = PatternMatcher([(UPat(Ops.AMD_PACKED_FRAGMENT_LOAD,name="x"), _hip_expand_loop_fragment)])
       self.extra_matcher += hip_native_repack_pm
     if self.is_cdna(target.arch):
       self.string_rewrite = PatternMatcher([

@@ -126,6 +126,9 @@ def _wmma_acc_regs(ctx:IselContext) -> set:
 def _is_wmma_acc(ctx:IselContext, dreg:UOp) -> bool: return id(dreg) in _wmma_acc_regs(ctx)
 
 def _hd128_fragment_meta(x:UOp) -> tuple[str,int,int]|None:
+  from tinygrad.uop.ops import AMDPackedFragmentLoopSpec
+  if x.op is Ops.AMD_PACKED_FRAGMENT_LOAD and isinstance(x.arg, AMDPackedFragmentLoopSpec):
+    x.arg.validate(); return x.arg.role, 0, x.arg.head_block
   if x.op not in {Ops.AMD_PACKED_FRAGMENT_LOAD,Ops.NOOP} or not isinstance(x.arg,tuple) or len(x.arg)!=4 or \
      x.arg[0]!="amd_gfx1100_packed_fragment_hd128_v1": return None
   return x.arg[1],x.arg[2],x.arg[3]
@@ -843,6 +846,12 @@ def _tov(ctx:IselContext, u:UOp):
 def isel_customi(ctx:IselContext, x:UOp):
   # CUSTOMI markers: Phase F hand-built markers ("bpermute"/"fdot2") AND the generated tile's HIP-builtin strings
   # ("__builtin_amdgcn_fdot2(...)", "...__builtin_amdgcn_ds_bpermute(...)"). NOTE operand order differs between them.
+  if isinstance(x.arg, tuple) and x.arg[:1] == ("amd_gfx1100_attention_loop_state_write_v1",):
+    _,role,block,lane=x.arg
+    if role not in {"m","l","acc"} or not isinstance(block,int) or not isinstance(lane,int): raise ValueError("malformed attention loop-state write")
+    base={"m":72,"l":80,"acc":8}[role] + (block*8 if role=="acc" else 0)
+    if x.src[0].dtype != dtypes.float: raise ValueError("attention loop-state write requires scalar fp32")
+    return UOp(Ops.INS,dtypes.float,src=(_tov(ctx,x.src[0]),),arg=AMDOps.MOV,tag=_pin(base,lane))
   if isinstance(x.arg, tuple) and x.arg[:1] in {("amd_gfx1100_row_state_write_v1",), ("amd_gfx1100_row_state_read_v1",)}:
     kind, owner, role, e = x.arg
     if role not in {"m", "l", "alpha"} or not isinstance(e, int) or not 0 <= e < 8: raise ValueError("malformed native row-state marker")
@@ -1555,7 +1564,7 @@ def _register_stage_fragment_role(carrier:UOp) -> str|None:
 def _pack_frag_tile(ctx:IselContext, carrier:UOp, base:int, dep:tuple[UOp,...], role:str) -> tuple[UOp,...]:
   if carrier.op is Ops.AMD_PACKED_FRAGMENT_LOAD:
     lowered=isel_packed_fragment(ctx,carrier,base)
-    bad=next((u for u in lowered.toposort() if u.op not in {Ops.INS,Ops.NOOP,Ops.CONST,Ops.PARAM,Ops.SPECIAL}),None)
+    bad=next((u for u in lowered.toposort() if u.op not in {Ops.INS,Ops.NOOP,Ops.CONST,Ops.PARAM,Ops.SPECIAL,Ops.RANGE}),None)
     if bad is not None: raise RuntimeError(f"lazy opaque fragment lowering produced unselected {bad.op}/{bad.dtype}")
     return lowered.src
   if carrier.op is Ops.NOOP and isinstance(carrier.arg,tuple) and carrier.arg[:1]==("amd_gfx1100_packed_fragment_v1",): return carrier.src
@@ -1572,31 +1581,45 @@ def _pack_frag_tile(ctx:IselContext, carrier:UOp, base:int, dep:tuple[UOp,...], 
                    arg=AMDOps.V_PACK, tag=_pin(base, i)) for i in range(8))
 
 def isel_packed_fragment(ctx:IselContext,x:UOp, base:int|None=None) -> UOp:
-  if not isinstance(x.arg,tuple) or len(x.arg) not in {3,4}: raise ValueError("invalid opaque gfx1100 packed fragment")
-  abi,role,tile,*block=x.arg; hd_block=block[0] if block else 0
-  if abi not in {"amd_gfx1100_packed_fragment_v1","amd_gfx1100_packed_fragment_hd128_v1"} or \
-     role not in {"Q","K","V"} or tile not in {0,1} or len(x.src)!=3 or not isinstance(hd_block,int) or not 0 <= hd_block < 8:
+  from tinygrad.uop.ops import AMDPackedFragmentLoopSpec
+  loop = isinstance(x.arg, AMDPackedFragmentLoopSpec)
+  if loop:
+    x.arg.validate(); abi,role,tile,hd_block="amd_gfx1100_packed_fragment_hd128_loop_v1",x.arg.role,0,x.arg.head_block
+    if len(x.src) != 4: raise ValueError("loop fragment requires one RANGE tile source")
+    owner,lane,col,rng=x.src
+    lane=lane.src[0] if lane.op is Ops.CAST else lane; col=col.src[0] if col.op is Ops.CAST else col
+    rng=rng.src[0] if rng.op is Ops.CAST else rng
+    if rng.op is not Ops.RANGE: raise ValueError("loop fragment requires one RANGE tile source")
+  else:
+    if not isinstance(x.arg,tuple) or len(x.arg) not in {3,4}: raise ValueError("invalid opaque gfx1100 packed fragment")
+    abi,role,tile,*block=x.arg; hd_block=block[0] if block else 0
+    if len(x.src)!=3: raise ValueError("invalid opaque gfx1100 packed fragment")
+    owner,lane,col=x.src; rng=None
+  if abi not in {"amd_gfx1100_packed_fragment_v1","amd_gfx1100_packed_fragment_hd128_v1","amd_gfx1100_packed_fragment_hd128_loop_v1"} or \
+     role not in {"Q","K","V"} or tile not in {0,1} or not isinstance(hd_block,int) or not 0 <= hd_block < 8:
     raise ValueError("invalid opaque gfx1100 packed fragment")
-  owner,lane,col=x.src
   if base is None: base=_frag_base(ctx,("amd_gfx1100_opaque_fragment","A" if role=="Q" else "B"),8)
   if base is None: raise NotImplementedError("opaque fragment fixed span exhausted")
   if lane.op is not Ops.SPECIAL or str(lane.arg) != "lidx0" or col.op is not Ops.AND or col.src[0] is not lane or \
      col.src[1].op is not Ops.CONST or int(col.src[1].arg) != 15:
     raise ValueError("opaque gfx1100 fragment requires exact lidx0/column provenance")
-  if abi == "amd_gfx1100_packed_fragment_hd128_v1" and (basis:=getattr(ctx,"_hd128_lane_basis",None)) is not None:
+  if abi in {"amd_gfx1100_packed_fragment_hd128_v1","amd_gfx1100_packed_fragment_hd128_loop_v1"} and (basis:=getattr(ctx,"_hd128_lane_basis",None)) is not None:
     lane_v,col_v=basis
   else:
     lane_v=isel_special(ctx,lane).replace(dtype=dtypes.int)
     col_v=UOp(Ops.INS,dtypes.int,src=(lane_v,UOp.const(dtypes.int32,15).rtag()),arg=AMDOps.V_AND,tag=_vreg_def(ctx))
-    if abi == "amd_gfx1100_packed_fragment_hd128_v1": ctx._hd128_lane_basis=(lane_v,col_v)
+    if abi in {"amd_gfx1100_packed_fragment_hd128_v1","amd_gfx1100_packed_fragment_hd128_loop_v1"}: ctx._hd128_lane_basis=(lane_v,col_v)
   def add_imm(v:UOp, imm:int) -> UOp:
     return v if imm == 0 else UOp(Ops.INS,dtypes.int,src=(v,UOp.const(dtypes.int32,imm).rtag()),arg=AMDOps.V_IADD,tag=_vreg_def(ctx))
   def shl4(v:UOp) -> UOp:
     return UOp(Ops.INS,dtypes.int,src=(v,UOp.const(dtypes.int32,4).rtag()),arg=AMDOps.V_OFFSET,tag=_vreg_def(ctx))
-  if abi == "amd_gfx1100_packed_fragment_hd128_v1":
+  if abi in {"amd_gfx1100_packed_fragment_hd128_v1","amd_gfx1100_packed_fragment_hd128_loop_v1"}:
     row_base=UOp(Ops.INS,dtypes.int,src=(col_v,UOp.const(dtypes.int32,7).rtag()),arg=AMDOps.V_OFFSET,tag=_vreg_def(ctx))
-    base_idx=add_imm(row_base,hd_block*16+(0 if role=="Q" else tile*2048)) if role in {"Q","K"} else \
-      add_imm(col_v,tile*2048+hd_block*16)
+    tile_base=0 if rng is None else UOp(Ops.INS,dtypes.int,src=(_movs2v(ctx,rng),UOp.const(dtypes.int32,2048).rtag()),arg=AMDOps.V_IMUL,tag=_vreg_def(ctx))
+    if rng is None: base_idx=add_imm(row_base,hd_block*16+(0 if role=="Q" else tile*2048)) if role in {"Q","K"} else add_imm(col_v,tile*2048+hd_block*16)
+    elif role=="Q": base_idx=add_imm(row_base,hd_block*16)
+    elif role=="V": base_idx=add_imm(tile_base,hd_block*16)
+    else: base_idx=UOp(Ops.INS,dtypes.int,src=(add_imm(tile_base,hd_block*16),row_base),arg=AMDOps.V_IADD,tag=_vreg_def(ctx))
   else:
     off=tile*256
     base_idx=add_imm(shl4(col_v),0 if role=="Q" else off) if role in {"Q","K"} else add_imm(col_v,off)
@@ -1610,7 +1633,7 @@ def isel_packed_fragment(ctx:IselContext,x:UOp, base:int|None=None) -> UOp:
         UOp.const(dtypes.int32,base+i).rtag()),arg=AMDOps.FRAGMENT_LOAD_DWORD)
       packs.append(_fixed_alias(base,i,dtypes.int32,op))
       continue
-    stride=256 if abi == "amd_gfx1100_packed_fragment_hd128_v1" else (64 if role=="Q" else 32)
+    stride=256 if abi in {"amd_gfx1100_packed_fragment_hd128_v1","amd_gfx1100_packed_fragment_hd128_loop_v1"} else (64 if role=="Q" else 32)
     op=UOp(Ops.INS,dtypes.void,src=(ix.src[1],ix.src[0],UOp.const(dtypes.int32,(2*i)*stride).rtag(),
       UOp.const(dtypes.int32,(2*i+1)*stride).rtag(),UOp.const(dtypes.int32,scratch).rtag(),
       UOp.const(dtypes.int32,base+i).rtag()),arg=AMDOps.FRAGMENT_LOAD_PAIR)
@@ -1629,6 +1652,19 @@ def preselect_packed_fragment(ctx:IselContext, x:UOp) -> UOp:
 native_fragment_isel_matcher=PatternMatcher([
   (UPat(Ops.AMD_PACKED_FRAGMENT_LOAD,name="x"),lambda ctx,x: preselect_packed_fragment(ctx,x)),
 ])
+
+def isel_attention_loop_state(ctx:IselContext, x:UOp):
+  from tinygrad.uop.ops import AMDLoopStateSpec
+  if not isinstance(x.arg, AMDLoopStateSpec): raise ValueError("AMD attention loop state is missing its typed ABI")
+  x.arg.validate()
+  base={"m":72,"l":80,"acc":8}[x.arg.role] + (x.arg.block*8 if x.arg.role=="acc" else 0)
+  if x.arg.access == "read":
+    return UOp(Ops.NOOP,dtypes.float.vec(8),tuple(_fixed_alias(base,i,dtypes.float,*x.src) for i in range(8)))
+  store=x.src[0]
+  if store.op is not Ops.STORE or len(store.src)<2: raise ValueError("AMD attention loop-state write requires one STORE source")
+  vals=_wmma_elems(store.src[1],8)
+  if len(vals)!=8: raise ValueError("AMD attention loop-state write requires float.vec8")
+  return UOp.group(*(UOp(Ops.INS,dtypes.float,src=(_tov(ctx,v),),arg=AMDOps.MOV,tag=_pin(base,i)) for i,v in enumerate(vals)))
 
 # B0.M residency: pack a 16-fp16 fragment carrier into the 8 VGPRs [base, base+8) EXACTLY as _build_wmma_tile does
 # (element e -> reg base+e//2, e%2 low/high half via v_pack_b32_f16), but MEMOIZED on the carrier identity so a
@@ -1930,7 +1966,7 @@ def isel_wmma(ctx:IselContext, x:UOp):
       else:
         cE = [UOp.const(x.dtype.scalar(), tile.src[2].arg)] * 8 if tile.src[2].op is Ops.CONST else _wmma_elems(tile.src[2], 8)
         corrected = _corrected_c_transition(cE, tile.arg)
-        if corrected is not None:
+        if corrected is not None or (hd128_lease is not None and hd128_lease[0] == "pv" and all(e.op is Ops.MUL for e in cE)):
           cin = [UOp(Ops.INS, x.dtype.scalar(), src=(_tov(ctx, cE[i]),), arg=AMDOps.MOV, tag=_pin(cbase, i)) for i in range(8)]
         else:
           for i in range(8):
@@ -2189,6 +2225,7 @@ def _post_isel_structural_lifetimes(ctx:IselContext, x:UOp):
   return chained
 
 isel_matcher = PatternMatcher([
+  (UPat(Ops.AMD_ATTENTION_LOOP_STATE,name="x"), isel_attention_loop_state),
   (UPat(Ops.AMD_PACKED_FRAGMENT_LOAD,name="x"), lambda ctx,x: isel_packed_fragment(ctx,x)),
   (UPat(Ops.WAIT, name="x"), isel_typed_wait),
   (UPat(Ops.PARAM, name="x"), isel_param),
@@ -2433,8 +2470,14 @@ def _opaque_exact_fragment_inputs(x:UOp) -> UOp|None:
   for pos in (0,1):
     c=src[pos]
     if not (c.op is Ops.STACK and c.dtype == dtypes.half.vec(16) and len(c.src)==16 and isinstance(c.tag,tuple) and
-            c.tag[:1] in {("amd_gfx1100_fragment_load_v1",),("amd_gfx1100_fragment_load_hd128_v1",)} and
+            c.tag[:1] in {("amd_gfx1100_fragment_load_v1",),("amd_gfx1100_fragment_load_hd128_v1",),("amd_gfx1100_fragment_load_hd128_loop_v1",)} and
             all(v.op is Ops.LOAD and v.dtype==dtypes.half for v in c.src)): continue
+    if c.tag[0] == "amd_gfx1100_fragment_load_hd128_loop_v1":
+      _,role,hd_block,owner,lane,col,rng=c.tag
+      from tinygrad.uop.ops import AMDPackedFragmentLoopSpec
+      src[pos]=UOp(Ops.AMD_PACKED_FRAGMENT_LOAD,dtypes.half.vec(16),(owner,lane,col,rng),arg=AMDPackedFragmentLoopSpec(role=role,head_block=hd_block))
+      changed=True
+      continue
     if c.tag[0] == "amd_gfx1100_fragment_load_hd128_v1": _,role,tile,hd_block,owner,lane,col=c.tag
     else: _,role,tile,owner,lane,col=c.tag; hd_block=None
     if role not in {"Q","K","V"} or not isinstance(tile,int) or tile not in {0,1}: raise ValueError("malformed gfx1100 fragment descriptor")
@@ -2447,6 +2490,21 @@ def _opaque_exact_fragment_inputs(x:UOp) -> UOp|None:
 
 native_fragment_opaque_matcher=PatternMatcher([(UPat(Ops.WMMA,name="x"),_opaque_exact_fragment_inputs)])
 
+def expand_loop_fragment(x:UOp) -> UOp:
+  """Materialize the typed loop fragment before tensor/program verification.
+
+  Its tag retains the owner and RANGE identity; the normal late opaque pass
+  turns this back into a physical AMD carrier after index lowering.
+  """
+  from tinygrad.uop.ops import AMDPackedFragmentLoopSpec
+  if not isinstance(x.arg, AMDPackedFragmentLoopSpec) or len(x.src)!=4: raise ValueError("loop fragment is malformed")
+  x.arg.validate(); owner,lane,col,rng=x.src; role,block=x.arg.role,x.arg.head_block
+  if role=="Q": offs=tuple(col*128+block*16+i for i in range(16))
+  elif role=="K": offs=tuple(rng*2048+col*128+block*16+i for i in range(16))
+  else: offs=tuple(rng*2048+block*16+i*128+col for i in range(16))
+  return UOp(Ops.STACK,dtypes.half.vec(16),tuple(owner.index(off).load() for off in offs),
+    tag=("amd_gfx1100_fragment_load_hd128_loop_v1",role,block,owner,lane,col,rng))
+
 def expand_native_row_softmax_repack(ctx, x:UOp, native_state:bool=True) -> UOp:
   """Expand the exact gfx1100-v1 QK-C -> PV-A bridge before isel."""
   from tinygrad.uop.ops import AMDRowSoftmaxRepackSpec
@@ -2457,11 +2515,14 @@ def expand_native_row_softmax_repack(ctx, x:UOp, native_state:bool=True) -> UOp:
     if len(x.src) != 1: raise ValueError("initial-state repack must not carry old m/l state")
     score, m, l = x.src[0], None, None
   else:
-    if len(x.src) != 3: raise ValueError("row-softmax transition repack requires score/m/l")
-    score, m, l = x.src
+    expected=4 if x.arg.dynamic_kv_v1 else 3
+    if len(x.src) != expected: raise ValueError("row-softmax transition repack requires score/m/l and its declared tile source")
+    score, m, l, *tile_src = x.src
+    if x.arg.dynamic_kv_v1 and tile_src[0].op is not Ops.RANGE: raise ValueError("dynamic repack tile source must be RANGE")
   if score.op is not Ops.WMMA or score.dtype != dtypes.float.vec(8):
     raise ValueError("AMD row-softmax repack requires one raw QK WMMA float.vec(8)")
-  stateful = x.arg.mode in {"initial_state_v1", "stateful_unnormalized_v1"}
+  stateful = x.arg.mode in {"initial_state_v1", "stateful_unnormalized_v1", "loop_state_v1"}
+  native_state = native_state and x.arg.mode != "loop_state_v1"
   state_dt, state_shape = (dtypes.float.vec(8), (8,)) if stateful else (dtypes.float, ())
   if not initial_state and any(s.dtype != state_dt or s.shape != state_shape for s in (m, l)):
     raise ValueError("AMD row-softmax repack state dtype does not match descriptor mode")
@@ -2476,10 +2537,13 @@ def expand_native_row_softmax_repack(ctx, x:UOp, native_state:bool=True) -> UOp:
     old_m, old_l = (m.gep(e), l.gep(e)) if stateful and not initial_state else (m, l)
     row = UOp.const(dtypes.weakint, 2*e).alu(Ops.ADD, halfwave)
     valid = None
-    if x.arg.validity_mode == "causal_v1":
-      kv = col.alu(Ops.ADD, UOp.const(dtypes.weakint, x.arg.kv_start))
+    if x.arg.validity_mode in {"tail_v1", "causal_v1"}:
+      kv_base = tile_src[0].cast(dtypes.weakint).alu(Ops.MUL,UOp.const(dtypes.weakint,16)) if x.arg.dynamic_kv_v1 \
+        else UOp.const(dtypes.weakint,x.arg.kv_start)
+      kv = col.alu(Ops.ADD, kv_base)
       qrow = row.alu(Ops.ADD, UOp.const(dtypes.weakint, x.arg.query_start))
-      valid = col.alu(Ops.CMPLT, UOp.const(dtypes.weakint, x.arg.valid_kv)).alu(Ops.AND,
+      valid = kv.alu(Ops.CMPLT, UOp.const(dtypes.weakint, x.arg.valid_kv))
+      if x.arg.validity_mode == "causal_v1": valid = valid.alu(Ops.AND,
         kv.alu(Ops.CMPLT, qrow.alu(Ops.ADD, UOp.const(dtypes.weakint, 1))))
     value = score.gep(e).alu(Ops.MUL, UOp.const(dtypes.float, x.arg.score_scale))
     if valid is not None: value = valid.where(value, UOp.const(dtypes.float, -float("inf")))
@@ -2540,6 +2604,7 @@ native_repack_matcher = PatternMatcher([
   (UPat(Ops.AMD_ROW_SOFTMAX_SLOT, src=(UPat(Ops.TUPLE, name="owner"),), name="x"), lambda x,owner: owner.src[x.arg.slot]),
   (UPat(Ops.GEP, src=(UPat(Ops.STACK, name="s"),), name="x"), lower_native_row_state_gep),
 ])
+native_loop_fragment_matcher=PatternMatcher([(UPat(Ops.AMD_PACKED_FRAGMENT_LOAD,name="x"),expand_loop_fragment)])
 
 def lower_native_pv_c_lane(x:UOp) -> UOp:
   x.arg.validate()
@@ -2548,8 +2613,22 @@ def lower_native_pv_c_lane(x:UOp) -> UOp:
     raise ValueError("invalid native PV-C lane projection")
   return x.src[0].gep(e)
 
+def lower_amd_attention_loop_state(x:UOp) -> UOp:
+  from tinygrad.uop.ops import AMDLoopStateSpec
+  if not isinstance(x.arg, AMDLoopStateSpec): raise ValueError("AMD attention loop state is missing its typed ABI")
+  x.arg.validate(); base={"m":72,"l":80,"acc":8}[x.arg.role] + (x.arg.block*8 if x.arg.role=="acc" else 0)
+  if x.arg.access in {"read","final_read"}:
+    return _fixed_alias(base,x.arg.lane,dtypes.float)
+  store=x.src[0]
+  if store.op is not Ops.STORE or len(store.src)<2: raise ValueError("AMD attention loop-state write requires one STORE")
+  return UOp(Ops.CUSTOMI,dtypes.void,(store.src[1],),arg=("amd_gfx1100_attention_loop_state_write_v1",x.arg.role,x.arg.block,x.arg.lane))
+
 native_state_lane_matcher = PatternMatcher([
   (UPat(Ops.AMD_PV_C_LANE, name="x"), lower_native_pv_c_lane),
+])
+
+native_loop_state_matcher = PatternMatcher([
+  (UPat(Ops.AMD_ATTENTION_LOOP_STATE, name="x"), lower_amd_attention_loop_state),
 ])
 
 # ============================ post-regalloc: build real rdna3 Insts + waitcnts ============================
@@ -2978,6 +3057,7 @@ class AMDISARenderer(ISARenderer):
   native_fragment_isel_matcher = native_fragment_isel_matcher
   native_repack_matcher = native_repack_matcher
   native_state_lane_matcher = native_state_lane_matcher
+  native_loop_state_matcher = native_loop_state_matcher
   isel_matcher = isel_matcher
   post_isel_matcher = post_isel_matcher
   pre_regalloc_matcher = pre_regalloc_matcher

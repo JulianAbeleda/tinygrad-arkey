@@ -301,7 +301,7 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
         return (self.dtype.count,)
       case Ops.AMD_ROW_SOFTMAX_SLOT: return (self.dtype.count,)
       case Ops.AMD_PACKED_FRAGMENT_LOAD: return (self.dtype.count,)
-      case Ops.AMD_ATTENTION_LOOP_STATE: return (self.dtype.count,) if self.dtype != dtypes.void else ()
+      case Ops.AMD_ATTENTION_LOOP_STATE: return (self.dtype.count,) if self.dtype != dtypes.void and self.dtype.count != 1 else ()
       case Ops.AMD_ATTENTION_OUTPUT_DRAIN: return self.src[0]._shape
       case Ops.AMD_PV_C_LANE: return ()
       case Ops.SCOPED_REDUCE:
@@ -1415,6 +1415,7 @@ class AMDRowSoftmaxRepackSpec(NamedTuple):
   query_start: int = 0
   kv_start: int = 0
   valid_kv: int = 16
+  dynamic_kv_v1: bool = False
 
   def validate(self):
     if (self.native_abi, self.target, self.wave_size) != ("amd_gfx1100_online_softmax_qk_pv_v1", "gfx1100", 32):
@@ -1429,15 +1430,18 @@ class AMDRowSoftmaxRepackSpec(NamedTuple):
       raise ValueError("row-softmax native repack requires barriered native PV-A reload")
     if not isinstance(self.score_scale, float) or not math.isfinite(self.score_scale) or self.score_scale <= 0:
       raise ValueError("row-softmax native repack requires one positive finite score scale")
-    if self.validity_mode not in {"all_v1", "causal_v1"}:
+    if self.validity_mode not in {"all_v1", "tail_v1", "causal_v1"}:
       raise ValueError("row-softmax native repack has an unsupported validity mode")
     if not all(isinstance(x, int) and not isinstance(x, bool) for x in (self.query_start, self.kv_start, self.valid_kv)):
       raise ValueError("row-softmax native repack validity metadata must be integral")
-    if self.kv_start < 0 or not 0 <= self.valid_kv <= 32 or self.kv_start not in {0, 16}:
+    if self.dynamic_kv_v1:
+      if self.mode != "loop_state_v1" or self.kv_start != -1 or not 0 <= self.valid_kv <= 64:
+        raise ValueError("dynamic row-softmax validity requires loop_state_v1 and a KV64 loop bound")
+    elif self.kv_start < 0 or not 0 <= self.valid_kv <= 32 or self.kv_start not in {0, 16}:
       raise ValueError("row-softmax native repack validity requires a supported 16-wide KV tile")
     if self.validity_mode == "all_v1" and (self.query_start, self.kv_start, self.valid_kv) != (0, 0, 16):
       raise ValueError("unmasked row-softmax repack must retain the canonical validity identity")
-    if self.mode not in {"legacy_normalized", "initial_state_v1", "stateful_unnormalized_v1"}:
+    if self.mode not in {"legacy_normalized", "initial_state_v1", "stateful_unnormalized_v1", "loop_state_v1"}:
       raise ValueError("row-softmax native repack has unknown normalization mode")
     return self
 
@@ -1493,14 +1497,20 @@ class AMDLoopStateSpec(NamedTuple):
   role: str = "m"
   access: str = "read"
   block: int = 0
+  lane: int = 0
+  owner: int = 9404
 
   def validate(self):
     if self.native_abi != "amd_gfx1100_attention_loop_state_v1":
       raise ValueError("AMD attention loop state requires the exact gfx1100 v1 ABI")
-    if self.role not in {"m", "l", "acc"} or self.access not in {"read", "write"}:
+    if self.role not in {"m", "l", "acc"} or self.access not in {"init", "read", "write", "final_read"}:
       raise ValueError("AMD attention loop state has an unsupported role or access")
     if not isinstance(self.block, int) or isinstance(self.block, bool) or not 0 <= self.block < (8 if self.role == "acc" else 1):
       raise ValueError("AMD attention loop state has an invalid block")
+    if not isinstance(self.lane, int) or isinstance(self.lane, bool) or not 0 <= self.lane < 8:
+      raise ValueError("AMD attention loop state has an invalid lane")
+    if not isinstance(self.owner, int) or isinstance(self.owner, bool) or self.owner < 0:
+      raise ValueError("AMD attention loop state has an invalid owner")
     return self
 
 class AMDPackedFragmentLoopSpec(NamedTuple):
