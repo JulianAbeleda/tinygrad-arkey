@@ -86,11 +86,16 @@ def _single_buffer_attn_qo_admitted(payload: dict[str, Any], quant: str, role: s
     matching = [r for r in numeric_row.get("runs", ()) if r.get("label") == "one_buffer_probe" and
                 r.get("phase") == "warmed_sample"]
     guarded = matching[0]["outcome"]["guarded"] if len(matching) == 1 else {}
+    # Keep the evidence join decomposed into the actual forward-path guards:
+    # exact geometry, warmed phase, guarded producer/body execution, and the
+    # complete timing tail. A missing field declines to the two-buffer route.
+    phase_ok = len(matching) == 1 and matching[0].get("phase") == "warmed_sample"
+    producer_ok = guarded.get("identity", {}).get("canonical_identity") == spec["packed_identity"]
+    body_ok = all(guarded.get(k) is True for k in ("passed", "numerics_passed", "full_output_compared", "guards_intact", "finite_output")) and \
+      guarded.get("max_abs_error") == 0.0
     if (numeric_row.get("schema") != "tinygrad.prefill_lds_single_buffer_runtime_probe.v1" or
         numeric_row.get("profile") != spec["profile"] or numeric_row.get("role") != role or
-        guarded.get("identity", {}).get("canonical_identity") != spec["packed_identity"] or
-        not all(guarded.get(k) is True for k in ("passed", "numerics_passed", "full_output_compared", "guards_intact", "finite_output")) or
-        guarded.get("max_abs_error") != 0.0): return False
+        not (phase_ok and producer_ok and body_ok)): return False
     variants = [v for v in timing_row.get("variants", ()) if v.get("label") == "one_buffer_probe"]
     samples = variants[0].get("samples", ()) if len(variants) == 1 else ()
     if (timing_row.get("schema") != "tinygrad.prefill_lds_single_buffer_peak_track.v1" or
@@ -100,7 +105,13 @@ def _single_buffer_attn_qo_admitted(payload: dict[str, Any], quant: str, role: s
                 s.get("gpu_state", {}).get("power_dpm_force_performance_level", "").strip() == "manual" and
                 "1249Mhz *" in s.get("gpu_state", {}).get("pp_dpm_mclk", "") and
                 "2304Mhz" in s.get("gpu_state", {}).get("pp_dpm_sclk", "") for s in samples)): return False
-    return variants[0].get("summary", {}).get("median_ms") == 0.36741999999999997
+    tail_ok = timing_row.get("sample_count") == 10 and timing_row.get("warmup_count") == 3 and len(samples) == 10 and \
+      all(s.get("canonical_identity") == spec["packed_identity"] and s.get("max_abs_error") == 0.0 and
+          s.get("gpu_state", {}).get("power_dpm_force_performance_level", "").strip() == "manual" and
+          "1249Mhz *" in s.get("gpu_state", {}).get("pp_dpm_mclk", "") and
+          "2304Mhz" in s.get("gpu_state", {}).get("pp_dpm_sclk", "") for s in samples) and \
+      variants[0].get("summary", {}).get("median_ms") == 0.36741999999999997
+    return tail_ok
   except (KeyError, OSError, TypeError, ValueError):
     return False
 
@@ -199,7 +210,8 @@ def warmstart_entry(quant: str, role: str, shape: tuple[int, int, int]) -> dict[
     g = PACKED_WMMA_GEOM[(quant, role)]
     base_payload = _payload_for_shape(role, shape)
     mutated = _mutate_payload(base_payload, g)
-    if _single_buffer_attn_qo_admitted(mutated, quant, role, shape): mutated = one_buffer_payload(mutated)
+    one_buffer = _single_buffer_attn_qo_admitted(mutated, quant, role, shape)
+    if one_buffer: mutated = one_buffer_payload(mutated)
     entry = derive_packed_weight_candidate(mutated, quant)
     payload = entry.to_json()["payload"]
     admission = admit_current_prefill(payload, entry.canonical_identity)
@@ -208,8 +220,12 @@ def warmstart_entry(quant: str, role: str, shape: tuple[int, int, int]) -> dict[
     if transform is None: raise ValueError(f"packed-wmma combo {(quant, role)} is not a packed-weight candidate")
     warm_key = pr.warmstart_key({m, n}, k, transform.storage_dtype)
     opt = (Opt(OptOps.TC, 0, (-1, 2, 1)),)
+    # The canonical identity is bound at the model-forward call site below;
+    # retaining it here prevents a successful offline warmstart from being
+    # misattributed as a selected one-buffer execution.
     _ENTRY_CACHE[key] = {"key": warm_key, "opt": opt, "context": admission.context, "transform": transform,
-                          "m": m, "n": n, "k": k}
+                          "m": m, "n": n, "k": k, "canonical_identity": admission.canonical_identity,
+                          "one_buffer": one_buffer}
   return _ENTRY_CACHE[key]
 
 
@@ -242,6 +258,7 @@ class PackedWmmaPrefillCandidate:
     except Exception:
       return None
     if (e["m"], e["n"], e["k"]) != shape: return None
+    if e.get("one_buffer") and (self.quant, role, shape) != ("Q4_K", "attn_qo", (512, 4096, 4096)): return None
 
     transform = e["transform"]
     packed_weight = lin.prefill_packed_weight()
@@ -249,6 +266,14 @@ class PackedWmmaPrefillCandidate:
     b = packed_weight.bitcast(dtypes.uint16).reshape(blocks, halfwords).pad(((0, 0), (0, 128 - halfwords))) \
       .reshape(blocks, 128, 1).expand(blocks, 128, 2).reshape(n, k).bitcast(dtypes.half)
     out = x_batch @ b.transpose()
+    # This is the real model-forward binding, rather than a warmstart-table
+    # annotation. The exact identity is observable by the whole-model route
+    # census/provenance hooks only after this guarded body has been selected.
+    setattr(lin, "_prefill_full_kernel_candidate_identity", e["canonical_identity"])
+    setattr(lin, "_prefill_full_kernel_candidate_one_buffer", bool(e.get("one_buffer")))
+    if e.get("one_buffer"):
+      from extra.qk.prefill_graph_gemm_route import record_model_forward_candidate
+      record_model_forward_candidate(role=role, shape=shape, canonical_identity=e["canonical_identity"], one_buffer=True)
     return out.reshape(1, m, n)
 
 

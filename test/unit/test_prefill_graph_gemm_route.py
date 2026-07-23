@@ -136,3 +136,14 @@ def test_candidate_route_census_requires_exact_bindings_and_counts_reuse():
   assert next(x for x in report["selected"] if x["role"] == "attn_qo")["bindings"] == 2
   with route.candidate_route_census() as incomplete: route._record_candidate_route(admissions[0])
   assert len(route.finalize_candidate_route_census(incomplete,registry)["missing"]) == 3
+
+
+def test_model_forward_one_buffer_binding_is_censused_without_relaxing_registry_identity():
+  admission=_admission("attn_qo",4096,4096,"1"*64); registry=_registry((admission,))
+  with route.candidate_route_census() as collector:
+    route._record_candidate_route(admission)
+    route.record_model_forward_candidate(role="attn_qo",shape=(512,4096,4096),canonical_identity="2"*64,one_buffer=True)
+  report=route.finalize_candidate_route_census(collector,registry)
+  assert report["passed"] is True
+  assert report["model_forward"] == [{"role":"attn_qo","shape":{"m":512,"n":4096,"k":4096},
+                                       "canonical_identity":"2"*64,"one_buffer":True,"bindings":1}]

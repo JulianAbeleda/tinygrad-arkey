@@ -62,6 +62,13 @@ def shared_attention_attribution(model) -> dict[str, Any]:
   """
   config = model.config
   requested = bool(getattr(config, "prefill_tc_attn", False) and getattr(config, "prefill_v2", False))
+  one_buffer_identity = None
+  if getattr(config, "n_heads", None) == 32:
+    identities = {getattr(getattr(block, "attn_output", None), "_prefill_full_kernel_candidate_identity", None)
+                  for block in getattr(model, "blk", ())
+                  if getattr(getattr(block, "attn_output", None), "_prefill_full_kernel_candidate_one_buffer", False)}
+    identities.discard(None)
+    if len(identities) == 1: one_buffer_identity = identities.pop()
   # This attribution is consumed by whole-prefill evidence.  The bounded
   # primitive is an inspectable correctness/residency candidate, but it is not
   # the selected lowering: lower_attention_semantic currently returns the
@@ -79,6 +86,8 @@ def shared_attention_attribution(model) -> dict[str, Any]:
     "performance_proven": False,
     "promotion_eligible": False,
     "blocker": "generic tiled fused attention lowering is not implemented",
+    "model_forward_attn_qo_identity": one_buffer_identity,
+    "model_forward_attn_qo_one_buffer": one_buffer_identity is not None,
   }
 
 

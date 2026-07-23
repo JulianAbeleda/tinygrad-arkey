@@ -28,6 +28,18 @@ def test_prefill_role_routes_names_generated_candidates_only():
   assert whole._prefill_role_routes("ordinary") == {}
 
 
+def test_shared_attention_attribution_reports_only_bound_8b_one_buffer_identity():
+  lin = type("Linear", (), {"_prefill_full_kernel_candidate_identity": "a" * 64,
+                             "_prefill_full_kernel_candidate_one_buffer": True})()
+  model = type("Model", (), {"config": type("Config", (), {"n_heads": 32, "prefill_tc_attn": True, "prefill_v2": True})(),
+                              "blk": [type("Block", (), {"attn_output": lin})()]})()
+  attr = whole.shared_attention_attribution(model)
+  assert attr["model_forward_attn_qo_identity"] == "a" * 64
+  assert attr["model_forward_attn_qo_one_buffer"] is True
+  model.config.n_heads = 40
+  assert whole.shared_attention_attribution(model)["model_forward_attn_qo_identity"] is None
+
+
 def test_route_binding_gate_accepts_promoted_generated_route(monkeypatch):
   monkeypatch.setattr(whole,"effective_routes",lambda env=None:_effective())
   report=_report(); report["candidate_set_route_census"]={

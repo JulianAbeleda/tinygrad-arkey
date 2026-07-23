@@ -17,7 +17,7 @@ _CANDIDATE_ROUTE_CENSUS:ContextVar[dict[str,Any]|None]=ContextVar("candidate_rou
 
 @contextmanager
 def candidate_route_census():
-  collector={"selected":{}}
+  collector={"selected":{},"model_forward":{}}
   token=_CANDIDATE_ROUTE_CENSUS.set(collector)
   try: yield collector
   finally: _CANDIDATE_ROUTE_CENSUS.reset(token)
@@ -41,6 +41,17 @@ def _record_candidate_route(admission) -> None:
     raise RuntimeError(f"candidate route census identity drift for {key!r}")
   collector["selected"][key]={**row,"bindings":1 if prior is None else prior["bindings"]+1}
 
+def record_model_forward_candidate(*, role:str, shape:tuple[int,int,int], canonical_identity:str, one_buffer:bool) -> None:
+  """Record a separately admitted forward binding without relaxing registry census identity checks."""
+  collector=_CANDIDATE_ROUTE_CENSUS.get()
+  if collector is None or not one_buffer: return
+  if not isinstance(canonical_identity,str) or not canonical_identity or not all(isinstance(x,int) for x in shape): return
+  key=(role,*shape,canonical_identity)
+  prior=collector["model_forward"].get(key)
+  collector["model_forward"][key]={"role":role,"shape":{"m":shape[0],"n":shape[1],"k":shape[2]},
+                                    "canonical_identity":canonical_identity,"one_buffer":True,
+                                    "bindings":1 if prior is None else prior["bindings"]+1}
+
 def finalize_candidate_route_census(collector:dict[str,Any],registry) -> dict[str,Any]:
   enabled_roles = {admission.normalized_payload["workload"]["role"] for admission in registry.admissions}
   expected={_structural_route_key(_candidate_route_row(admission)):{**_candidate_route_row(admission),"bindings":0}
@@ -53,6 +64,7 @@ def finalize_candidate_route_census(collector:dict[str,Any],registry) -> dict[st
   return {"schema":"prefill-candidate-set-route-census.v1","passed":not (missing or unexpected or mismatched),
           "policy_roles": sorted(enabled_roles),
           "expected_entry_count":len(expected),"selected_entry_count":len(selected),
+          "model_forward": [collector["model_forward"][k] for k in sorted(collector["model_forward"])],
           "selected":[selected[k] for k in sorted(selected)],"missing":missing,"unexpected":unexpected,"identity_mismatches":mismatched}
 
 def _candidate_registry_from_env(env:dict[str,Any]):
