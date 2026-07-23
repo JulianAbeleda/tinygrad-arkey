@@ -396,6 +396,55 @@ def amd_gfx1100_q16_kv32_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, scale:float,
     stores.append(dst.store(value.alu(Ops.MUL,recip).cast(dtypes.half)))
   return UOp.sink(*stores,arg=kernel_info)
 
+def amd_gfx1100_q16_kv32_hd128_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, scale:float, kernel_info) -> UOp:
+  """Exact B=H=1, Q=16, KV=32, Hd=128 online-softmax kernel graph."""
+  owners=(q,k,v,out)
+  if any(x.op is not Ops.PARAM or not isinstance(x.dtype,PtrDType) for x in owners): raise ValueError("q16-kv32-hd128 requires PARAM owners")
+  if tuple(x.arg.slot for x in owners)!=(1,2,3,0) or tuple(x.ptrdtype.size for x in owners)!=(2048,4096,4096,2048):
+    raise ValueError("q16-kv32-hd128 requires Q1/K2/V3/out0 sized 2048/4096/4096/2048")
+  if tuple(x.ptrdtype.base for x in owners)!=(dtypes.half,)*4 or not isinstance(scale,float) or not math.isfinite(scale) or scale<=0:
+    raise ValueError("q16-kv32-hd128 requires fp16 owners and positive finite scale")
+  lane=UOp.special(32,"lidx0"); col=lane.alu(Ops.AND,UOp.const(dtypes.weakint,15)); half=lane.alu(Ops.SHR,UOp.const(dtypes.weakint,4))
+  zero=UOp.const(dtypes.float.vec(8),(0.0,)*8); axes=((),(),tuple((-120-i,2) for i in range(3)))
+  warg=("WMMA_16_16_16_half_float",(16,16,16),dtypes.half,dtypes.float,"AMD:gfx1100",32,axes,())
+  sm=UOp.const(dtypes.float.vec(8),(-float("inf"),)*8); sl=UOp.const(dtypes.float.vec(8),(0.0,)*8)
+  acc=[zero]*8
+  for tile in range(2):
+    phase=UOp.group(*acc) if tile else None
+    qk=zero
+    for hd_block in range(8):
+      q_owner=q if phase is None else q.after(phase); k_owner=k if phase is None else k.after(phase)
+      qf=UOp(Ops.STACK,dtypes.half.vec(16),tuple(q_owner.index(col*128+hd_block*16+i).load() for i in range(16)),
+        tag=("amd_gfx1100_fragment_load_hd128_v1","Q",tile,hd_block,q,lane,col))
+      kbase=UOp.const(dtypes.weakint,tile*2048+hd_block*16)
+      kf=UOp(Ops.STACK,dtypes.half.vec(16),tuple(k_owner.index(kbase+col*128+i).load() for i in range(16)),
+        tag=("amd_gfx1100_fragment_load_hd128_v1","K",tile,hd_block,k,lane,col))
+      qk=UOp(Ops.WMMA,dtypes.float.vec(8),(qf,kf,qk),warg)
+    if tile == 0:
+      p,sm,sl,alpha=amd_gfx1100_row_softmax_initial(qk,
+        spec=AMDRowSoftmaxRepackSpec(score_scale=float(scale),mode="initial_state_v1"))
+    else:
+      p,sm,sl,alpha=amd_gfx1100_row_softmax_state(qk,sm,sl,
+        spec=AMDRowSoftmaxRepackSpec(score_scale=float(scale),mode="stateful_unnormalized_v1",kv_start=16,
+          validity_mode="causal_v1",query_start=16,valid_kv=32))
+    next_acc=[]
+    for hd_block in range(8):
+      corrected=zero if tile == 0 else acc[hd_block].alu(Ops.MUL,alpha)
+      v_owner=v.after(corrected if tile else p); vbase=UOp.const(dtypes.weakint,tile*2048+hd_block*16)
+      vf=UOp(Ops.STACK,dtypes.half.vec(16),tuple(v_owner.index(vbase+i*128+col).load() for i in range(16)),
+        tag=("amd_gfx1100_fragment_load_hd128_v1","V",tile,hd_block,v,lane,col))
+      next_acc.append(UOp(Ops.WMMA,dtypes.float.vec(8),(p,vf,corrected),warg))
+    acc=next_acc
+  stores=[]
+  for hd_block in range(8):
+    for e in range(8):
+      value=acc[hd_block].gep(e)
+      if stores: value=value.bitcast(dtypes.uint).after(UOp.group(stores[-1])).bitcast(dtypes.float)
+      den=sl.gep(e); recip=den.ne(UOp.const(dtypes.float,0)).where(UOp.const(dtypes.float,1)/den,UOp.const(dtypes.float,0))
+      row=UOp.const(dtypes.weakint,2*e)+half; dst=out.index(row*128+hd_block*16+col)
+      stores.append(dst.store((value*recip).cast(dtypes.half).replace(tag=("amd_gfx1100_hd128_output_v1",hd_block,e))))
+  return UOp.sink(*stores,arg=kernel_info)
+
 class OnlineSoftmaxBlockTransition(NamedTuple):
   """Typed online-softmax state at one completed KV tile boundary."""
   new_m: UOp

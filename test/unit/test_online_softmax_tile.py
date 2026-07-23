@@ -598,6 +598,25 @@ def test_gfx1100_q16_kv32_builder_is_one_online_chain():
   assert len(owners)==2 and [u.arg.mode for u in owners]==["initial_state_v1", "stateful_unnormalized_v1"]
   assert sum(u.op is Ops.RECIPROCAL for u in topo)==8
 
+def test_gfx1100_q16_kv32_hd128_has_exact_shared_p_and_output_ownership():
+  from tinygrad.schedule.wmma import amd_gfx1100_q16_kv32_hd128_attention
+  from tinygrad.uop.ops import KernelInfo, ParamArg
+  sizes=(2048,2048,4096,4096)
+  p=[UOp(Ops.PARAM,dtypes.half.ptr(sizes[i]),arg=ParamArg(i)) for i in range(4)]
+  sink=amd_gfx1100_q16_kv32_hd128_attention(p[1],p[2],p[3],p[0],scale=.25,kernel_info=KernelInfo(name="q16_kv32_hd128"))
+  topo=sink.toposort(); wmmas=[u for u in topo if u.op is Ops.WMMA]
+  repacks=[u for u in topo if u.op is Ops.AMD_ROW_SOFTMAX_REPACK]
+  assert len(wmmas)==32 and len(repacks)==2
+  assert [r.arg.mode for r in repacks]==["initial_state_v1","stateful_unnormalized_v1"]
+  for owner in repacks:
+    score=owner.src[0]; chain=[]
+    while score.op is Ops.WMMA: chain.append(score); score=score.src[2]
+    assert len(chain)==8
+    pslot=next(u for u in topo if u.op is Ops.AMD_ROW_SOFTMAX_SLOT and u.arg.slot==0 and u.src[0] is owner)
+    assert sum(u.op is Ops.WMMA and u.src[0] is pslot for u in topo)==8
+  outputs=[u.tag for u in topo if isinstance(u.tag,tuple) and u.tag[:1]==("amd_gfx1100_hd128_output_v1",)]
+  assert len(outputs)==64 and set(outputs)=={("amd_gfx1100_hd128_output_v1",b,e) for b in range(8) for e in range(8)}
+
 def test_gfx1100_q16_kv32_builder_fails_closed_owner_sizes():
   from tinygrad.schedule.wmma import amd_gfx1100_q16_kv32_attention
   from tinygrad.uop.ops import KernelInfo, ParamArg
