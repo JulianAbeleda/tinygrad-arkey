@@ -1331,6 +1331,13 @@ class StateHandle(NamedTuple):
       return UOp(Ops.CUSTOMI, self.dtype, (lanes,), ("state_reload_v1", self))
     return UOp(Ops.CUSTOMI, self.dtype, src if wait is None else (*src,wait), ("state_reload_v1", self))
 
+  def loop_read(self, element:int) -> UOp:
+    """Test-only generic phase-loop lane view backed by this handle's storage."""
+    self.validate()
+    if self.storage is None or not isinstance(element,int) or not 0 <= element < self.region.lanes:
+      raise ValueError("state loop read requires one in-range storage-backed element")
+    return UOp(Ops.CUSTOMI, self.region.dtype, (self.storage,self.lane), ("state_loop_read_v1",self,element))
+
 class CompositeReduce(NamedTuple):
   slots: tuple
   combine_fn: Any = None  # UOp sub-graph encoding combine (None = independent slots)

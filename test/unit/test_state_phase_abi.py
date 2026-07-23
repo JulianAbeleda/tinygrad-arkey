@@ -91,6 +91,18 @@ def test_one_source_reload_lowers_at_generic_vector_lane_boundary():
   assert any(u.op is Ops.LOAD for u in lowered.toposort())
 
 
+def test_handle_owned_loop_state_lane_lowers_without_register_placeholder():
+  from tinygrad.renderer.isa.amd import lower_state_phase_transfer
+  storage = UOp(Ops.DEFINE_LOCAL, dtypes.float.ptr(128, AddrSpace.LOCAL), arg=96)
+  handle = StateHandle(StateRegionSpec("loop_state", dtypes.float, 8), PhaseBoundarySpec("loop_write", "loop_read"),
+                       storage=storage, lane=UOp.special(8, "state_lane"), lane_stride=8)
+  lane = handle.loop_read(3)
+  type_verify(UOp.sink(lane), spec_full)
+  lowered = lower_state_phase_transfer(lane)
+  assert lowered is not None and lowered.op is Ops.LOAD
+  assert not any(u.op is Ops.DEFINE_REG for u in lowered.toposort())
+
+
 def test_storage_backed_state_rejects_invalid_storage_lane_and_offset():
   storage = UOp(Ops.DEFINE_LOCAL, dtypes.float.ptr(64, AddrSpace.LOCAL), arg=92)
   lane = UOp.special(8, "state_lane")

@@ -2784,8 +2784,12 @@ def lower_state_phase_transfer(x:UOp) -> UOp|None:
   carriers and must not acquire an implicit allocation in a renderer.
   """
   from tinygrad.uop.ops import StateHandle
-  if not (isinstance(x.arg,tuple) and len(x.arg)==2 and x.arg[0] in {"state_publish_v1","state_reload_v1"} and
-          isinstance(x.arg[1],StateHandle)): return None
+  if isinstance(x.arg,tuple) and len(x.arg)==3 and x.arg[0] == "state_loop_read_v1" and isinstance(x.arg[1],StateHandle):
+    handle,element=x.arg[1:]; handle.validate()
+    if handle.storage is None or x.src != (handle.storage,handle.lane): return None
+    base=handle.lane.alu(Ops.MUL,UOp.const(dtypes.weakint,handle.lane_stride)).alu(Ops.ADD,UOp.const(dtypes.weakint,handle.element_offset+element))
+    return handle.storage.index(base).load()
+  if not (isinstance(x.arg,tuple) and len(x.arg)==2 and x.arg[0] in {"state_publish_v1","state_reload_v1"} and isinstance(x.arg[1],StateHandle)): return None
   op,handle=x.arg; handle.validate()
   if handle.storage is None: return None
   if op=="state_publish_v1":
