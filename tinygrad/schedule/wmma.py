@@ -502,11 +502,10 @@ def amd_gfx1100_q16_kv64_hd128_loop_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, s
   return UOp.sink(m_init,l_init,c_init,end,drain,arg=kernel_info).replace(tag=("amd_gfx1100_q16_kv64_hd128_loop_v1",))
 
 def amd_gfx1100_q32_hq4_hkv2_kv64_hd128_loop_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, scale:float, kernel_info,
-                                                          causal:bool=False, valid_kv:int=64, query_start:int|None=None,
-                                                          _g2_stage:bool=False) -> UOp:
+                                                          causal:bool=False, valid_kv:int=64, query_start:int|None=None) -> UOp:
   """Grid-native Q32/Hq4/Hkv2/G2 attention; one wave32 per Q-head tile."""
-  from tinygrad.uop.ops import AMDAttentionOutputDrainSpec, AMDAttentionGridSpec, AMDMultiWaveAttentionGridSpec, AMDGQAKVStageSpec, AMDLoopStateSpec, AMDPackedFragmentLoopSpec, AxisType
-  grid=(AMDMultiWaveAttentionGridSpec(q_tokens=32,q_heads=4,kv_heads=2,kv_tokens=64) if _g2_stage else AMDAttentionGridSpec()); grid.validate(); owners=(q,k,v,out)
+  from tinygrad.uop.ops import AMDAttentionOutputDrainSpec, AMDAttentionGridSpec, AMDLoopStateSpec, AMDPackedFragmentLoopSpec, AxisType
+  grid=AMDAttentionGridSpec(); grid.validate(); owners=(q,k,v,out)
   if any(x.op is not Ops.PARAM or not isinstance(x.dtype,PtrDType) for x in owners): raise ValueError("q32-hq4-hkv2 requires PARAM owners")
   if tuple(x.arg.slot for x in owners)!=(1,2,3,0) or tuple(x.ptrdtype.size for x in owners)!=(16384,16384,16384,16384):
     raise ValueError("q32-hq4-hkv2 requires Q1/K2/V3/out0 sized 16384")
@@ -515,9 +514,7 @@ def amd_gfx1100_q32_hq4_hkv2_kv64_hd128_loop_attention(q:UOp, k:UOp, v:UOp, out:
   if not isinstance(valid_kv,int) or isinstance(valid_kv,bool) or not 0 <= valid_kv <= 64: raise ValueError("valid_kv must be in [0,64]")
   if query_start is None: query_start=valid_kv-32
   if not isinstance(query_start,int) or isinstance(query_start,bool): raise ValueError("query_start must be integral")
-  tid=UOp.special(grid.local_size,"lidx0"); lane=tid.alu(Ops.AND,UOp.const(dtypes.weakint,31)) if _g2_stage else tid
-  wave_id=tid.alu(Ops.SHR,UOp.const(dtypes.weakint,5)) if _g2_stage else None
-  group=UOp.special(grid.grid_size if _g2_stage else 8,"gidx0"); col=lane.alu(Ops.AND,UOp.const(dtypes.weakint,15))
+  lane=UOp.special(32,"lidx0"); group=UOp.special(8,"gidx0"); col=lane.alu(Ops.AND,UOp.const(dtypes.weakint,15))
   zero=UOp.const(dtypes.float.vec(8),(0.0,)*8); axes=((),(),tuple((-120-i,2) for i in range(3)))
   warg=("WMMA_16_16_16_half_float",(16,16,16),dtypes.half,dtypes.float,"AMD:gfx1100",32,axes,())
   rng=UOp.range(4,9500,AxisType.REDUCE); mreg=UOp.placeholder((8,),dtypes.float,9501,addrspace=AddrSpace.REG)
@@ -530,13 +527,7 @@ def amd_gfx1100_q32_hq4_hkv2_kv64_hd128_loop_attention(q:UOp, k:UOp, v:UOp, out:
   def state_read(reg,init,role,block=0,offset=0,final=False):
     return UOp(Ops.STACK,dtypes.float.vec(8),tuple(UOp(Ops.AMD_ATTENTION_LOOP_STATE,dtypes.float,(reg,init) if final else (reg,init,rng),
       arg=AMDLoopStateSpec(role=role,access="final_read" if final else "read",block=block,lane=i,owner=state_owner)) for i in range(8)))
-  staged=UOp(Ops.AMD_GQA_KV_STAGE,dtypes.half.ptr(4096,AddrSpace.LOCAL),(k,v,rng,tid,lane,wave_id,group),
-    arg=AMDGQAKVStageSpec(grid=grid)) if _g2_stage else None
   def fragment(owner,role,block):
-    if _g2_stage:
-      storage="g2_lds" if role in {"K","V"} else "global"; actual=staged if storage=="g2_lds" else owner
-      return UOp(Ops.AMD_PACKED_FRAGMENT_LOAD,dtypes.half.vec(16),(actual,lane,wave_id,col,rng,group),
-        arg=AMDPackedFragmentLoopSpec(role=role,head_block=block,grid=grid,storage=storage))
     return UOp(Ops.AMD_PACKED_FRAGMENT_LOAD,dtypes.half.vec(16),(owner,lane,col,rng,group),arg=AMDPackedFragmentLoopSpec(role=role,head_block=block,grid=grid))
   old_m,old_l=state_read(mreg,m_init,"m"),state_read(lreg,l_init,"l"); qk=zero
   for block in range(8): qk=UOp(Ops.WMMA,dtypes.float.vec(8),(fragment(q,"Q",block),fragment(k,"K",block),qk),warg)
@@ -546,19 +537,10 @@ def amd_gfx1100_q32_hq4_hkv2_kv64_hd128_loop_attention(q:UOp, k:UOp, v:UOp, out:
   for block in range(8):
     old_c=state_read(creg,c_init,"acc",block,block*8); pv=UOp(Ops.WMMA,dtypes.float.vec(8),(p,fragment(v,"V",block),old_c.alu(Ops.MUL,alpha)),warg)
     writes.extend(state_write(creg,"acc",pv,block,block*8))
-  body_done=UOp.barrier(UOp.group(*writes)) if _g2_stage else UOp.group(*writes)
-  end=body_done.end(rng).replace(tag=("amd_gfx1100_attention_grid_kv64_loop_end_v1",rng)); final_l=state_read(lreg,end,"l",final=True)
+  end=UOp.group(*writes).end(rng).replace(tag=("amd_gfx1100_attention_grid_kv64_loop_end_v1",rng)); final_l=state_read(lreg,end,"l",final=True)
   final_c=tuple(state_read(creg,end,"acc",block,block*8,final=True) for block in range(8))
-  output_tile=((group//grid.q_tiles)*grid.waves_per_group+wave_id)*grid.q_tiles+(group%grid.q_tiles) if _g2_stage else group
-  drain=UOp(Ops.AMD_ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,output_tile,final_l,*final_c),arg=AMDAttentionOutputDrainSpec(grid=grid))
-  return UOp.sink(m_init,l_init,c_init,end,drain,arg=kernel_info).replace(tag=(
-    "amd_gfx1100_q32_hq4_hkv2_kv64_hd128_g2_stage_v1" if _g2_stage else "amd_gfx1100_q32_hq4_hkv2_kv64_hd128_loop_v1",))
-
-def amd_gfx1100_q32_hq4_hkv2_kv64_hd128_g2_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,scale:float,kernel_info,
-                                                       causal:bool=False,valid_kv:int=64,query_start:int|None=None)->UOp:
-  """Two-wave G2 variant of the shared loop builder with cooperative K/V LDS staging."""
-  return amd_gfx1100_q32_hq4_hkv2_kv64_hd128_loop_attention(q,k,v,out,scale=scale,kernel_info=kernel_info,
-    causal=causal,valid_kv=valid_kv,query_start=query_start,_g2_stage=True)
+  drain=UOp(Ops.AMD_ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,group,final_l,*final_c),arg=AMDAttentionOutputDrainSpec(grid=grid))
+  return UOp.sink(m_init,l_init,c_init,end,drain,arg=kernel_info).replace(tag=("amd_gfx1100_q32_hq4_hkv2_kv64_hd128_loop_v1",))
 
 def amd_gfx1100_q16_grid_hd128_loop_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_tokens:int,q_heads:int,kv_heads:int,kv_tokens:int,scale:float,kernel_info,causal:bool=False,valid_kv:int|None=None,query_start:int|None=None)->UOp:
   """Fixed 16-WMMA attention wave with compile-time model geometry."""

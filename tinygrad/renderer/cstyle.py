@@ -142,10 +142,7 @@ def _hip_expand_attention_output_drain(x:UOp) -> UOp:
   if len(x.src) != (11 if grid is not None else 10) or x.dtype != dtypes.void: raise ValueError("HIP attention output drain has malformed sources")
   out, *rest=x.src
   group, l, acc = (rest[0],rest[1],rest[2:]) if grid is not None else (None,rest[0],rest[1:])
-  from tinygrad.uop.ops import AMDMultiWaveAttentionGridSpec
-  tid=UOp.special(grid.local_size if isinstance(grid,AMDMultiWaveAttentionGridSpec) else 32,"lidx0")
-  lane=tid.alu(Ops.AND,UOp.const(dtypes.weakint,31)) if isinstance(grid,AMDMultiWaveAttentionGridSpec) else tid
-  col=lane.alu(Ops.AND,UOp.const(dtypes.weakint,15)); half=lane.alu(Ops.SHR,UOp.const(dtypes.weakint,4))
+  lane=UOp.special(32,"lidx0"); col=lane.alu(Ops.AND,UOp.const(dtypes.weakint,15)); half=lane.alu(Ops.SHR,UOp.const(dtypes.weakint,4))
   stores=[]
   for j in range(8):
     for e in range(8):
@@ -433,9 +430,7 @@ class HIPRenderer(CStyleLanguage):
         PatternMatcher([(UPat(Ops.MAX, name="x"), _hip_native_bpermute_max)])
       self.native_state_lane_matcher = native_state_lane_matcher
       self.native_state_lane_matcher = PatternMatcher([(UPat(Ops.AMD_ATTENTION_LOOP_STATE,name="x"), _hip_expand_attention_loop_state)]) + native_state_lane_matcher
-      from tinygrad.renderer.isa.amd import expand_gqa_kv_stage
-      self.native_loop_fragment_matcher = PatternMatcher([(UPat(Ops.AMD_GQA_KV_STAGE,name="x"), expand_gqa_kv_stage),
-        (UPat(Ops.AMD_PACKED_FRAGMENT_LOAD,name="x"), _hip_expand_loop_fragment)])
+      self.native_loop_fragment_matcher = PatternMatcher([(UPat(Ops.AMD_PACKED_FRAGMENT_LOAD,name="x"), _hip_expand_loop_fragment)])
       self.extra_matcher += hip_native_repack_pm
     if self.is_cdna(target.arch):
       self.string_rewrite = PatternMatcher([

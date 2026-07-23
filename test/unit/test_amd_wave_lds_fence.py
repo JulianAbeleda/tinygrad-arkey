@@ -73,4 +73,4 @@ def test_multiwave_fragment_lane_provenance_fails_closed():
   with pytest.raises(ValueError, match="exact lane"):
     _validate_fragment_lane_provenance(lane, tid >> 4, col, True)
   with pytest.raises(ValueError, match="exact lane"):
-    _validate_fragment_lane_provenance(lane, wave_id, tid & 7, True)
+    _validate_fragment_lane_provenance(lane, wave_id, tid & 15, True)

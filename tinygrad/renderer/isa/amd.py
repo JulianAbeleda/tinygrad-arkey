@@ -1603,20 +1603,16 @@ def _pack_frag_tile(ctx:IselContext, carrier:UOp, base:int, dep:tuple[UOp,...], 
   return tuple(UOp(Ops.INS, dtypes.int32, src=(local(E[2*i]), local(E[2*i+1]))+dep,
                    arg=AMDOps.V_PACK, tag=_pin(base, i)) for i in range(8))
 
-def _validate_fragment_lane_provenance(lane:UOp, wave_id:UOp|None, col:UOp|None, multiwave:bool) -> UOp:
+def _validate_fragment_lane_provenance(lane:UOp, wave_id:UOp|None, col:UOp, multiwave:bool) -> UOp:
   """Return the physical thread id only for the exact declared lane ABI."""
-  lane=lane.src[0] if lane.op is Ops.CAST else lane
-  if col is not None: col=col.src[0] if col.op is Ops.CAST else col
-  if wave_id is not None: wave_id=wave_id.src[0] if wave_id.op is Ops.CAST else wave_id
   if multiwave:
-    tid=lane.src[0] if lane.op is Ops.AND else None
     if lane.op is not Ops.AND or lane.src[0].op is not Ops.SPECIAL or str(lane.src[0].arg) != "lidx0" or \
        lane.src[1].op is not Ops.CONST or int(lane.src[1].arg) != 31 or wave_id is None or wave_id.op is not Ops.SHR or \
        wave_id.src[0] is not lane.src[0] or wave_id.src[1].op is not Ops.CONST or int(wave_id.src[1].arg) != 5 or \
-       (col is not None and (col.op is not Ops.AND or col.src[0] not in {lane,tid} or col.src[1].op is not Ops.CONST or int(col.src[1].arg) != 15)):
+       col.op is not Ops.AND or col.src[0] is not lane or col.src[1].op is not Ops.CONST or int(col.src[1].arg) != 15:
       raise ValueError("multiwave fragment requires exact lane=lidx0&31, wave_id=lidx0>>5 provenance")
     return lane.src[0]
-  if col is None or lane.op is not Ops.SPECIAL or str(lane.arg) != "lidx0" or col.op is not Ops.AND or col.src[0] is not lane or \
+  if lane.op is not Ops.SPECIAL or str(lane.arg) != "lidx0" or col.op is not Ops.AND or col.src[0] is not lane or \
      col.src[1].op is not Ops.CONST or int(col.src[1].arg) != 15:
     raise ValueError("opaque gfx1100 fragment requires exact lidx0/column provenance")
   return lane
@@ -2595,7 +2591,6 @@ def _opaque_exact_fragment_inputs(x:UOp) -> UOp|None:
       else:
         owner,lane,col,rng=payload
         spec,fragment_src=AMDPackedFragmentLoopSpec(role=role,head_block=hd_block),[owner,lane,col,rng]
-      if spec.storage == "g2_lds": continue
       src[pos]=UOp(Ops.AMD_PACKED_FRAGMENT_LOAD,dtypes.half.vec(16),tuple(fragment_src),arg=spec)
       changed=True
       continue
@@ -2623,13 +2618,11 @@ def expand_loop_fragment(x:UOp) -> UOp:
   if isinstance(x.arg.grid, AMDMultiWaveAttentionGridSpec):
     if len(x.src) != 6: raise ValueError("multiwave loop fragment requires owner/lane/wave/column/range/group")
     owner,lane,wave_id,col,rng,*grid_src=x.src
-    _validate_fragment_lane_provenance(lane,wave_id,col,True)
   else:
     if len(x.src) not in {4,5}: raise ValueError("loop fragment is malformed")
     owner,lane,col,rng,*grid_src=x.src; wave_id=None
   if (x.arg.grid is None) != (len(grid_src)==0): raise ValueError("loop fragment grid ownership must be explicit")
-  if x.arg.storage == "g2_lds": gbase=UOp.const(dtypes.weakint,0 if role=="K" else 2048)
-  elif not grid_src: gbase=UOp.const(dtypes.weakint,0)
+  if not grid_src: gbase=UOp.const(dtypes.weakint,0)
   elif isinstance(x.arg.grid, AMDMultiWaveAttentionGridSpec):
     grid,group=x.arg.grid,grid_src[0]
     kv_head,q_tile=group//grid.q_tiles,group%grid.q_tiles
@@ -2639,34 +2632,10 @@ def expand_loop_fragment(x:UOp) -> UOp:
     grid=x.arg.grid
     gbase=(grid_src[0]//(grid.q_tiles*grid.group_ratio))*(grid.kv_tokens*128)
   if role=="Q": offs=tuple(gbase+col*128+block*16+i for i in range(16))
-  elif role=="K": offs=tuple(gbase+(0 if x.arg.storage=="g2_lds" else rng*2048)+col*128+block*16+i for i in range(16))
-  else: offs=tuple(gbase+(0 if x.arg.storage=="g2_lds" else rng*2048)+block*16+i*128+col for i in range(16))
+  elif role=="K": offs=tuple(gbase+rng*2048+col*128+block*16+i for i in range(16))
+  else: offs=tuple(gbase+rng*2048+block*16+i*128+col for i in range(16))
   return UOp(Ops.STACK,dtypes.half.vec(16),tuple(owner.index(off).load() for off in offs),
     tag=("amd_gfx1100_fragment_load_hd128_loop_v1",role,block,x.arg,*x.src))
-
-def expand_gqa_kv_stage(ctx, x:UOp) -> UOp:
-  from tinygrad.uop.ops import AMDGQAKVStageSpec
-  if not isinstance(x.arg, AMDGQAKVStageSpec) or len(x.src) != 7: raise ValueError("G2 K/V stage is malformed")
-  x.arg.validate(); k,v,tile,tid,lane,wave_id,group=x.src
-  _validate_fragment_lane_provenance(lane,wave_id,None,True)
-  tile=tile.src[0] if tile.op is Ops.CAST else tile
-  tid=tid.src[0] if tid.op is Ops.CAST else tid
-  group=group.src[0] if group.op is Ops.CAST else group
-  if tile.op is not Ops.RANGE or tid.op is not Ops.SPECIAL or str(tid.arg)!="lidx0" or group.op is not Ops.SPECIAL or str(group.arg)!="gidx0":
-    raise ValueError("G2 K/V stage requires exact RANGE/lidx0/gidx0 ownership")
-  grid=x.arg.grid; kv_head=group//grid.q_tiles
-  slab=UOp(Ops.DEFINE_LOCAL,dtypes.half.ptr(x.arg.slab_elements,AddrSpace.LOCAL),arg=next(ctx) if ctx is not None else 9750)
-  vecdt=dtypes.half.vec(x.arg.vector_elements)
-  global_base=kv_head*(grid.kv_tokens*128//x.arg.vector_elements)+tile*(2048//x.arg.vector_elements)
-  stores=[]
-  for chunk in range(x.arg.vectors_per_lane):
-    offset=tid+chunk*grid.local_size
-    ksrc=k.index((global_base+offset)*x.arg.vector_elements).cast(vecdt.ptr(size=k.ptrdtype.size,addrspace=AddrSpace.GLOBAL)).load()
-    vsrc=v.index((global_base+offset)*x.arg.vector_elements).cast(vecdt.ptr(size=v.ptrdtype.size,addrspace=AddrSpace.GLOBAL)).load()
-    kdst=slab.index(x.arg.k_base+offset*x.arg.vector_elements).cast(vecdt.ptr(size=slab.ptrdtype.size,addrspace=AddrSpace.LOCAL))
-    vdst=slab.index(x.arg.v_base+offset*x.arg.vector_elements).cast(vecdt.ptr(size=slab.ptrdtype.size,addrspace=AddrSpace.LOCAL))
-    stores.extend((kdst.store(ksrc),vdst.store(vsrc)))
-  return slab.after(UOp.barrier(UOp.group(*stores)))
 
 def expand_native_row_softmax_repack(ctx, x:UOp, native_state:bool=True) -> UOp:
   """Expand the exact gfx1100-v1 QK-C -> PV-A bridge before isel."""
@@ -2801,8 +2770,7 @@ native_repack_matcher = PatternMatcher([
   (UPat(Ops.AMD_ROW_SOFTMAX_SLOT, src=(UPat(Ops.TUPLE, name="owner"),), name="x"), lambda x,owner: owner.src[x.arg.slot]),
   (UPat(Ops.GEP, src=(UPat(Ops.STACK, name="s"),), name="x"), lower_native_row_state_gep),
 ])
-native_loop_fragment_matcher=PatternMatcher([(UPat(Ops.AMD_GQA_KV_STAGE,name="x"),expand_gqa_kv_stage),
-  (UPat(Ops.AMD_PACKED_FRAGMENT_LOAD,name="x"),expand_loop_fragment)])
+native_loop_fragment_matcher=PatternMatcher([(UPat(Ops.AMD_PACKED_FRAGMENT_LOAD,name="x"),expand_loop_fragment)])
 
 def lower_native_pv_c_lane(x:UOp) -> UOp:
   x.arg.validate()
@@ -3043,8 +3011,7 @@ def lower_inst(x:UOp):
     ptr = src[0].reg
     if ptr.index < 0: raise ValueError("opaque attention output drain has invalid output pointer")
     # ABI v0 is lidx0. v1=col, v2=halfwave, v3=per-store byte address / reciprocal.
-    insts=[_ins(v_and_b32_e32(_V[1],15,_V[0]),None), _ins(v_lshrrev_b32_e32(_V[2],4,_V[0]),None),
-           _ins(v_and_b32_e32(_V[2],1,_V[2]),None)]
+    insts=[_ins(v_and_b32_e32(_V[1],15,_V[0]),None), _ins(v_lshrrev_b32_e32(_V[2],4,_V[0]),None)]
     if grid:
       if not isinstance(src[1].reg,Register): raise ValueError("grid attention drain lost gidx0")
       insts.append(_ins(v_mul_lo_u32(_V[4],_Vr(src[1].reg),2048),None))
