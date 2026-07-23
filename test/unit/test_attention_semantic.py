@@ -34,7 +34,7 @@ class TestAttentionSemantic(unittest.TestCase):
     self.assertEqual(len(state_reduces), 1)
     self.assertFalse(any(u.op is Ops.COMPOSITE_ACCUMULATOR for u in primitive.toposort()))
 
-  def test_opt_in_state_shared_owner_is_one_nonmaterialized_schedule_root(self):
+  def test_opt_in_state_producer_is_dependency_only(self):
     if self._combine_name() != "online_softmax_state": self.skipTest("state combine is opt-in")
     q = Tensor.empty(1, 1, 16, 16, dtype=dtypes.float16)
     k = Tensor.empty(1, 1, 16, 16, dtype=dtypes.float16)
@@ -42,10 +42,23 @@ class TestAttentionSemantic(unittest.TestCase):
     calls = shared_prefill_attention(q, k, v).schedule_linear().src
     owners = [u for call in calls for u in call.src[0].toposort() if u.op is Ops.DEFERRED_REDUCE_OWNER]
     projections = [u for call in calls for u in call.src[0].toposort() if u.op is Ops.DEFERRED_REDUCE_SLOT]
-    self.assertEqual((len(calls), len(owners), len(projections)), (1, 1, 1))
-    self.assertIs(projections[0].src[0], owners[0])
+    self.assertEqual((len(calls), len(owners), len(projections)), (1, 0, 1))
+    self.assertIs(projections[0].src[0].op, Ops.REDUCE)
     self.assertFalse(any(u.op is Ops.REDUCE_SLOT for call in calls for u in call.src[0].toposort()))
     self.assertEqual(sum(u.op is Ops.STORE for u in calls[0].src[0].toposort()), 1)
+
+  def test_opt_in_state_final_ir_consumes_shared_carrier(self):
+    if self._combine_name() != "online_softmax_state": self.skipTest("state combine is opt-in")
+    from tinygrad.codegen import full_rewrite_to_sink
+    from tinygrad.device import Device
+    rng = np.random.default_rng(11)
+    q, k, v = (Tensor(rng.standard_normal((1, 1, 16, 16)).astype(np.float16), dtype=dtypes.float16) for _ in range(3))
+    calls = shared_prefill_attention(q, k, v).schedule_linear().src
+    compute = [call for call in calls if any(u.op is Ops.DEFERRED_REDUCE_SLOT for u in call.src[0].toposort())]
+    self.assertEqual(len(compute), 1)
+    ast = compute[0].src[0]
+    final = full_rewrite_to_sink(ast, Device[compute[0].device].renderer, optimize=ast.tag is None)
+    self.assertFalse(any(u.op in (Ops.DEFERRED_REDUCE_OWNER, Ops.DEFERRED_REDUCE_SLOT, Ops.TUPLE) for u in final.toposort()))
 
   def test_state_composite_carries_authoritative_kv_range_owner(self):
     if self._combine_name() != "online_softmax_state": self.skipTest("state combine is opt-in")

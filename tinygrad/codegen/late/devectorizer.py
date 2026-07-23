@@ -568,15 +568,34 @@ def _resolve_reduce_slot_pm(slot):
     resolved = resolve_reduce_slot_tensor(slot)
     return resolved if resolved is not None else resolve_composite_reduce_slot_prebufferize(slot)
 
+def _project_deferred_carrier(carrier:UOp, slot:int) -> UOp|None:
+  """Project a physical slot through optimizer-only unary state wrappers."""
+  if carrier.op is Ops.TUPLE:
+    return carrier.src[slot] if 0 <= slot < len(carrier.src) else None
+  if carrier.op is Ops.UNROLL and len(carrier.src) == 1:
+    inner = _project_deferred_carrier(carrier.src[0], slot)
+    if inner is None: return None
+    lanes = prod(x[1] for x in carrier.arg)
+    # Scalar state has no physical lane ABI yet. Its optimizer wrapper only
+    # described the tuple's logical output lane and must not manufacture a
+    # vector carrier. Physical lane state will naturally retain this UNROLL.
+    if inner.dtype.count == 1: return inner
+    if inner.dtype.count != lanes: return None
+    return UOp(carrier.op, inner.dtype.scalar(), (inner,), carrier.arg)
+  return None
+
 def lower_deferred_reduce_slot(state:UOp):
-  """Resolve once, only after graph rewrite has lowered the producer to TUPLE."""
-  if state.op is not Ops.DEFERRED_REDUCE_SLOT or state.src[0].op is not Ops.TUPLE: return None
-  if not isinstance(state.arg.slot, int) or not 0 <= state.arg.slot < len(state.src[0].src):
+  """Resolve once after REDUCE lowering, consuming the carrier rather than materializing it."""
+  if state.op is not Ops.DEFERRED_REDUCE_SLOT: return None
+  result = _project_deferred_carrier(state.src[0], state.arg.slot)
+  if result is None:
+    return None
+  if not isinstance(state.arg.slot, int):
     raise RuntimeError(f"invalid deferred composite slot {state.arg.slot}")
-  result, cursor = state.src[0].src[state.arg.slot], 1
+  cursor = 1
   if state.arg.normalize_by is not None:
-    if not 0 <= state.arg.normalize_by < len(state.src[0].src): raise RuntimeError("invalid deferred normalization slot")
-    den = state.src[0].src[state.arg.normalize_by]
+    den = _project_deferred_carrier(state.src[0], state.arg.normalize_by)
+    if den is None: raise RuntimeError("invalid deferred normalization slot")
     den = den if den.dtype.count == result.dtype.count else den.broadcast(result.dtype.count)
     result = result.alu(Ops.MUL, den.alu(Ops.RECIPROCAL))
   for op, arg, count in state.arg.views:

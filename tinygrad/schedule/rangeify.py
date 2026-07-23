@@ -107,8 +107,13 @@ def lower_attention_semantic(att:UOp) -> UOp:
         red = red.replace(arg=(red.arg[0]._replace(tile_fragments=fragments),) + red.arg[1:])
       if state_combine == "online_softmax_state":
         from tinygrad.uop.ops import DeferredReduceSlot
-        owner = UOp(Ops.DEFERRED_REDUCE_OWNER, dtypes.void, (red,), red.arg[0])
-        out = UOp(Ops.DEFERRED_REDUCE_SLOT, att.arg.qk_dtype, (owner,), DeferredReduceSlot(2, normalize_by=1))
+        # The projection owns reachability; the structured producer is only
+        # its dependency, never an independently schedulable output.  During
+        # child-first pm_reduce rewriting REDUCE becomes the physical TUPLE,
+        # then DEFERRED_REDUCE_SLOT consumes the requested slots immediately.
+        # Consequently neither an OWNER nor the carrier TUPLE can become a
+        # kernel root or survive to spec_program.
+        out = UOp(Ops.DEFERRED_REDUCE_SLOT, att.arg.qk_dtype, (red,), DeferredReduceSlot(2, normalize_by=1))
         expected = b*h*q_len*hd
         if out.shape is None or prod(out.shape) != expected: return None
         return out.reshape(b, h, q_len, hd).cast(att.arg.output_dtype)
