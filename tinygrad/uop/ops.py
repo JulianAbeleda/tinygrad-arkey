@@ -1646,10 +1646,10 @@ class AMDAttentionOutputDrainSpec(NamedTuple):
 
   def validate(self):
     full=("amd_gfx1100_attention_output_drain_v1",128,8,8,"e*256+halfwave*128+j*16+col",0)
-    slice_=("amd_gfx1100_attention_output_drain_acc_slice_v2",128,4,8,"e*256+halfwave*128+j*16+col",self.output_block_base)
-    if (self.native_abi,self.head_dim,self.blocks,self.lanes_per_fragment,self.address_expr,self.output_block_base) != full and slice_ not in {
-      ("amd_gfx1100_attention_output_drain_acc_slice_v2",128,4,8,"e*256+halfwave*128+j*16+col",0),
-      ("amd_gfx1100_attention_output_drain_acc_slice_v2",128,4,8,"e*256+halfwave*128+j*16+col",4)}:
+    slice_ok=self.native_abi == "amd_gfx1100_attention_output_drain_acc_slice_v2" and self.head_dim == 128 and \
+      self.blocks in {1,2,4} and self.lanes_per_fragment == 8 and self.address_expr == "e*256+halfwave*128+j*16+col" and \
+      0 <= self.output_block_base <= 8-self.blocks and self.output_block_base % self.blocks == 0
+    if (self.native_abi,self.head_dim,self.blocks,self.lanes_per_fragment,self.address_expr,self.output_block_base) != full and not slice_ok:
       raise ValueError("AMD attention output drain requires the exact gfx1100 Hd128 v1 ABI")
     if self.grid is not None: self.grid.validate()
     return self
@@ -1661,8 +1661,8 @@ class AMDAttentionOutputDrainPayload(NamedTuple):
   blocks: int
 
   def validate(self):
-    if (self.native_abi,self.output_block_base,self.blocks) != ("amd_gfx1100_attention_output_drain_acc_slice_v2",0,4) and \
-       (self.native_abi,self.output_block_base,self.blocks) != ("amd_gfx1100_attention_output_drain_acc_slice_v2",4,4):
+    if self.native_abi != "amd_gfx1100_attention_output_drain_acc_slice_v2" or self.blocks not in {1,2,4} or \
+       not 0 <= self.output_block_base <= 8-self.blocks or self.output_block_base % self.blocks:
       raise ValueError("AMD attention output drain payload requires an aligned v2 accumulator slice")
     return self
 

@@ -3007,9 +3007,9 @@ def lower_inst(x:UOp):
     # v1..v3 are the sole address/temporary lease.  This keeps all 64 stores
     # sequential and prevents scalar epilogue SSA from spanning the 8 PV C
     # fragments.
-    grid = len(src) in {7,11}
+    grid = len(src) in {4,5,7,11}
     blocks=len(src)-(3 if grid else 2)
-    if blocks not in {4,8} or not isinstance(src[0].reg, Register):
+    if blocks not in {1,2,4,8} or not isinstance(src[0].reg, Register):
       raise ValueError("opaque attention output drain lost its output pointer")
     ptr = src[0].reg
     if ptr.index < 0: raise ValueError("opaque attention output drain has invalid output pointer")

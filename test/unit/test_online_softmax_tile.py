@@ -665,6 +665,7 @@ def test_gfx1100_acc_slice_v2_two_launch_causal_diagnostic():
   from tinygrad.codegen import to_program
   from tinygrad.helpers import Target
   from tinygrad.renderer.cstyle import HIPRenderer
+  from tinygrad.renderer.isa.amd import AMDISARenderer
   from tinygrad.schedule.wmma import amd_gfx1100_q16_grid_hd128_loop_attention
   from tinygrad.uop.ops import KernelInfo, Ops, ParamArg
   from extra.qk.amdgpu_metadata import parse_amdgpu_metadata
@@ -679,11 +680,17 @@ def test_gfx1100_acc_slice_v2_two_launch_causal_diagnostic():
     return amd_gfx1100_q16_grid_hd128_loop_attention(p[1],p[2],p[3],p[0],q_tokens=q_tokens,q_heads=hq,kv_heads=hkv,
       kv_tokens=kv_tokens,scale=scale,causal=True,kernel_info=KernelInfo(name=name),output_block_base=output_block_base,acc_blocks=acc_blocks)
   def metadata(sink):
+    import re
     program=to_program(sink,HIPRenderer(Target.parse("AMD:HIP:gfx1100")))
     binary=next(u.arg for u in program.src if u.op is Ops.BINARY)
-    return {key:parse_amdgpu_metadata(binary)[key] for key in ("vgpr","sgpr","lds_bytes","scratch_bytes","vgpr_spills","sgpr_spills")}
-  full,low,high=(descriptor("acc_slice_full"),descriptor("acc_slice_low",0,4),descriptor("acc_slice_high",4,4))
-  resources={"full":metadata(full),"low":metadata(low),"high":metadata(high)}
+    row={key:parse_amdgpu_metadata(binary)[key] for key in ("vgpr","sgpr","lds_bytes","scratch_bytes","vgpr_spills","sgpr_spills")}
+    renderer=AMDISARenderer(Target.parse("AMD:ISA:gfx1100")); isa=to_program(sink,renderer)
+    linear=next(u for u in isa.src if u.op is Ops.LINEAR)
+    asm=renderer.asm_str(list(linear.src),isa.arg.name)
+    row["max_referenced_vgpr"]=max((int(x) for x in re.findall(r"(?<![a-zA-Z0-9_])v(?:\[(\d+)|([0-9]+))",asm) for x in x if x),default=-1)
+    return row
+  full,low,high,two,one=(descriptor("acc_slice_full"),descriptor("acc_slice_low",0,4),descriptor("acc_slice_high",4,4),descriptor("acc_slice_two",0,2),descriptor("acc_slice_one",0,1))
+  resources={"full":metadata(full),"blocks4":metadata(low),"blocks2":metadata(two),"blocks1":metadata(one)}
   assert all(row["scratch_bytes"] == row["vgpr_spills"] == row["sgpr_spills"] == 0 for row in resources.values())
   tq,tk,tv=(Tensor(x.reshape(-1),device="AMD") for x in (q,k,v)); out=Tensor.empty(q.size,dtype=dtypes.half,device="AMD")
   # Rebuild through the direct descriptor for each invocation; no automatic model rewrite is involved.
@@ -699,6 +706,12 @@ def test_gfx1100_acc_slice_v2_two_launch_causal_diagnostic():
       prob=np.exp(score[row,valid]-score[row,valid].max()); prob/=prob.sum()
       ref[head,row]=prob@v[head//4,valid].astype(np.float32)
   np.testing.assert_allclose(got,ref,rtol=.02,atol=4e-3)
+  def two_kernel(base):
+    return lambda o,qi,ki,vi: amd_gfx1100_q16_grid_hd128_loop_attention(qi,ki,vi,o,q_tokens=q_tokens,q_heads=hq,kv_heads=hkv,
+      kv_tokens=kv_tokens,scale=scale,causal=True,kernel_info=KernelInfo(name=f"acc_slice_two_{base}"),output_block_base=base,acc_blocks=2)
+  assembled=Tensor.empty(q.size,dtype=dtypes.half,device="AMD")
+  for base in range(0,8,2): assembled=assembled.custom_kernel(tq,tk,tv,fxn=two_kernel(base))[0].realize()
+  np.testing.assert_allclose(assembled.numpy().reshape(q.shape).astype(np.float32),ref,rtol=.02,atol=4e-3)
 
 def test_gfx1100_q16_kv32_hd128_numeric():
   import numpy as np

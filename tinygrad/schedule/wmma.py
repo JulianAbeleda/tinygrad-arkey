@@ -551,7 +551,7 @@ def amd_gfx1100_q16_grid_hd128_loop_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_toke
   if tuple(x.ptrdtype.base for x in owners)!=(dtypes.half,)*4 or not isinstance(scale,float) or not math.isfinite(scale) or scale<=0: raise ValueError("grid loop requires fp16 and finite scale")
   valid_kv=kv_tokens if valid_kv is None else valid_kv
   if not isinstance(valid_kv,int) or isinstance(valid_kv,bool) or not 0<=valid_kv<=kv_tokens: raise ValueError("valid_kv is outside KV geometry")
-  if (output_block_base,acc_blocks) not in {(0,8),(0,4),(4,4)}: raise ValueError("grid loop requires a full or aligned accumulator slice")
+  if (output_block_base,acc_blocks) != (0,8) and (acc_blocks not in {1,2,4} or not 0 <= output_block_base <= 8-acc_blocks or output_block_base % acc_blocks): raise ValueError("grid loop requires a full or aligned accumulator slice")
   if query_start is None: query_start=valid_kv-q_tokens
   lane=UOp.special(32,"lidx0"); group=UOp.special(q_heads*grid.q_tiles,"gidx0"); col=lane.alu(Ops.AND,UOp.const(dtypes.weakint,15)); zero=UOp.const(dtypes.float.vec(8),(0.0,)*8); axes=((),(),tuple((-120-i,2) for i in range(3))); warg=("WMMA_16_16_16_half_float",(16,16,16),dtypes.half,dtypes.float,"AMD:gfx1100",32,axes,())
   rng=UOp.range((kv_tokens+15)//16,9600,AxisType.REDUCE); mreg=UOp.placeholder((8,),dtypes.float,9601,addrspace=AddrSpace.REG); lreg=UOp.placeholder((8,),dtypes.float,9602,addrspace=AddrSpace.REG); creg=UOp.placeholder((acc_blocks*8,),dtypes.float,9603,addrspace=AddrSpace.REG)
