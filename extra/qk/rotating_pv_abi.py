@@ -14,12 +14,16 @@ class AMDAttentionRotatingPVSpec:
   acc_blocks: int = 1
   total_blocks: int = 8
   acc_lds_bytes: int = 8192
-  total_lds_bytes: int = 8704
+  phase_ml_lds_bytes: int = 2048
+  p_lds_bytes: int = 512
 
   def validate(self) -> "AMDAttentionRotatingPVSpec":
-    if (self.acc_blocks, self.total_blocks, self.acc_lds_bytes, self.total_lds_bytes) != (1, 8, 8192, 8704):
-      raise ValueError("rotating PV ABI requires one of eight blocks and the exact 8192/8704 byte LDS contract")
+    if (self.acc_blocks, self.total_blocks, self.acc_lds_bytes, self.phase_ml_lds_bytes, self.p_lds_bytes) != (1, 8, 8192, 2048, 512):
+      raise ValueError("rotating PV ABI requires one of eight blocks and exact LDS components")
     return self
+
+  def total_lds_bytes(self, *, phase_abi: bool) -> int:
+    return self.acc_lds_bytes + self.p_lds_bytes + (self.phase_ml_lds_bytes if phase_abi else 0)
 
 
 def rotating_pv_probe_unavailable(*, q_tokens: int, q_heads: int, kv_heads: int, kv_tokens: int) -> dict:
@@ -30,5 +34,5 @@ def rotating_pv_probe_unavailable(*, q_tokens: int, q_heads: int, kv_heads: int,
   return {"schema": "tinygrad.shared_attention.rotating_pv_probe.v1", "status": "UNAVAILABLE",
           "promotion_eligible": False, "geometry": {"q_tokens": q_tokens, "q_heads": q_heads,
           "kv_heads": kv_heads, "kv_tokens": kv_tokens, "head_dim": 128},
-          "spec": AMDAttentionRotatingPVSpec().__dict__,
+          "spec": {**AMDAttentionRotatingPVSpec().__dict__, "total_lds_phase": AMDAttentionRotatingPVSpec().total_lds_bytes(phase_abi=True), "total_lds_nonphase": AMDAttentionRotatingPVSpec().total_lds_bytes(phase_abi=False)},
           "reason": "typed LDS accumulator StateHandle lowering and sequential drain are not implemented"}
