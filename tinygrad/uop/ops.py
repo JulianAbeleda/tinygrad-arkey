@@ -2067,7 +2067,14 @@ def _index_to_concrete_int(u:UOp) -> UOp: return graph_rewrite(u.sink(), pm_lowe
 
 _substitute = PatternMatcher([(UPat(tuple(Ops), name="x"), lambda ctx,x: ctx.get(x,None))])
 _pm_resolve_params = PatternMatcher([(UPat(Ops.PARAM, name="p"), lambda ctx,p: ctx[p.arg.slot])])
-remove_all_tags = PatternMatcher([(UPat(GroupOp.All, name="x"), lambda x: x.replace(tag=None) if x.tag is not None else None)])
+def _clear_non_composite_tag(x: UOp):
+  # Backend scheduling may clear ordinary register/optimization tags, but
+  # validated composite provenance is part of the REDUCE_SLOT type contract.
+  if x.tag is None: return None
+  if isinstance(x.tag, tuple) and len(x.tag) == 2 and x.tag[0] in ("composite_reduce", "composite_slot", "composite_view"):
+    return None
+  return x.replace(tag=None)
+remove_all_tags = PatternMatcher([(UPat(GroupOp.All, name="x"), _clear_non_composite_tag)])
 
 def gate_kernel_sink(x:UOp) -> bool:
   if x.op is Ops.LINEAR: return False
