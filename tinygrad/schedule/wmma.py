@@ -610,10 +610,13 @@ def amd_gfx1100_rotating_pv_scheduler_probe(q:UOp, k:UOp, v:UOp, out:UOp, *, q_t
   mreg=UOp.placeholder((8,),dtypes.float,9622,addrspace=AddrSpace.REG); lreg=UOp.placeholder((8,),dtypes.float,9623,addrspace=AddrSpace.REG)
   def wr(reg,role,value): return tuple(UOp(Ops.AMD_ATTENTION_LOOP_STATE,dtypes.void,(reg.index(UOp.const(dtypes.weakint,i)).store(value.gep(i)),),arg=AMDLoopStateSpec(role=role,access="write",block=0,lane=i,owner=9624)) for i in range(8))
   def rd(reg,init,role,final=False): return UOp(Ops.STACK,dtypes.float.vec(8),tuple(UOp(Ops.AMD_ATTENTION_LOOP_STATE,dtypes.float,(reg,init) if final else (reg,init,rng),arg=AMDLoopStateSpec(role=role,access="final_read" if final else "read",block=0,lane=i,owner=9624)) for i in range(8)))
-  def fr(owner,role,block): return UOp(Ops.AMD_PACKED_FRAGMENT_LOAD,dtypes.half.vec(16),(owner,lane,col,rng,group),arg=AMDPackedFragmentLoopSpec(role=role,head_block=block,grid=grid))
+  def fr(owner,role,block,stage_wait=None): return UOp(Ops.AMD_PACKED_FRAGMENT_LOAD,dtypes.half.vec(16),(owner,lane,col,rng,group),arg=AMDPackedFragmentLoopSpec(role=role,head_block=block,grid=grid,stage_wait=stage_wait))
   mi=UOp.group(*wr(mreg,"m",UOp.const(dtypes.float.vec(8),(-float("inf"),)*8))); li=UOp.group(*wr(lreg,"l",zero)); om,ol=rd(mreg,mi,"m"),rd(lreg,li,"l")
   qk=zero
-  for block in range(8): qk=UOp(Ops.WMMA,dtypes.float.vec(8),(fr(q,"Q",block),fr(k,"K",block),qk),warg,tag=("attention_wmma","QK",block))
+  for block in range(4): qk=UOp(Ops.WMMA,dtypes.float.vec(8),(fr(q,"Q",block),fr(k,"K",block),qk),warg,tag=("attention_wmma","QK",block))
+  from tinygrad.codegen.opt.compiler_policies import WaitCount
+  qk_retire=UOp(Ops.WAIT,dtypes.void,(qk,),WaitCount(vmcnt=0))
+  for block in range(4,8): qk=UOp(Ops.WMMA,dtypes.float.vec(8),(fr(q,"Q",block,qk_retire),fr(k,"K",block,qk_retire),qk),warg,tag=("attention_wmma","QK",block))
   p,nm,nl,alpha=amd_gfx1100_row_softmax_state(qk,om,ol,spec=AMDRowSoftmaxRepackSpec(score_scale=scale,mode="loop_state_v1",validity_mode="tail_v1",query_start=0,kv_start=-1,valid_kv=kv_tokens,dynamic_kv_v1=True,grid=grid),kv_tile=rng,grid_id=group)
   ml_commit=UOp.group(*wr(mreg,"m",nm),*wr(lreg,"l",nl))
   initialized=tuple(RotatingPVStateSpec(storage,lane,block,generation=0).write(zero) for block in range(8))
