@@ -357,6 +357,12 @@ def resolve_composite_reduce_slot_prebufferize(slot):
   if composite is None: return None
   if not isinstance(slot.arg, int) or not 0 <= slot.arg < len(composite.slots):
     raise RuntimeError(f"invalid composite reduction slot {slot.arg}")
+  lane_shapes = getattr(composite, "lane_shapes", ())
+  if lane_shapes:
+    # Heterogeneous physical state is owned by reduce_to_acc. Resolving any
+    # slot here would turn its per-output register value into a logical tensor
+    # reshape before those lanes and output ranges exist.
+    return None
   shape = composite.slot_shapes[slot.arg]
   if shape is None: raise RuntimeError("composite slot is missing validated logical shape")
   result = base.src[slot.arg]
