@@ -353,7 +353,7 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
       # wmma output shape = accumulator shape (src[2])
       case Ops.WMMA | Ops.SHAPED_WMMA: return self.src[2]._shape
 
-      case Ops.CUSTOMI if isinstance(self.arg, tuple) and self.arg[:1] in {("state_loop_read_v1",), ("rotating_pv_state_read_v1",), ("rotating_pv_sequential_drain_v1",)}: return ()
+      case Ops.CUSTOMI if isinstance(self.arg, tuple) and self.arg[:1] in {("state_loop_read_v1",), ("rotating_pv_state_read_v1",), ("rotating_pv_loop_read_v1",), ("rotating_pv_sequential_drain_v1",)}: return ()
       case Ops.CUSTOMI: return self.src[0]._shape if len(self.src) else None
 
       # passthrough ops
@@ -1388,9 +1388,38 @@ class RotatingPVStateSpec(NamedTuple):
     src=(self.storage,self.lane) if after is None else (self.storage,self.lane,after)
     return UOp(Ops.CUSTOMI, self.dtype, src, ("rotating_pv_state_read_v1", self))
 
-class RotatingPVSequentialDrainSpec(NamedTuple):
-  """One ordered float8 reload from the unavailable rotating-PV LDS state."""
+class RotatingPVLoopReadSpec(NamedTuple):
+  """Loop-carried rotating-PV reload with explicit range and publication generations."""
   state: RotatingPVStateSpec
+  rng: UOp
+  wait_generation: int
+  publication_generation: int
+
+  @property
+  def dtype(self) -> DType: return self.state.dtype
+
+  def validate(self):
+    self.state.validate()
+    if self.rng.op is not Ops.RANGE or not isinstance(self.wait_generation, int) or not isinstance(self.publication_generation, int) or \
+       self.wait_generation < 0 or self.publication_generation != self.wait_generation + 1 or self.state.generation != self.publication_generation:
+      raise ValueError("rotating PV loop read requires consecutive publication generations")
+    return self
+
+  def reload(self, publication: UOp) -> UOp:
+    self.validate()
+    if publication.dtype != dtypes.void: raise TypeError("rotating PV loop read requires a void publication token")
+    return UOp(Ops.CUSTOMI, self.dtype, (self.state.storage, self.state.lane, self.rng, publication),
+               ("rotating_pv_loop_read_v1", self), tag=("rotating_pv_loop_read_v1", self.state.block, self.publication_generation))
+
+class RotatingPVSequentialDrainSpec(NamedTuple):
+  """One ordered float8 drain with exact output ownership for the unavailable rotating-PV ABI."""
+  state: RotatingPVStateSpec
+  out: UOp
+  group: UOp
+  grid: Any
+  final_l: UOp
+  output_block: int
+  output_block_base: int = 0
 
   @property
   def dtype(self) -> DType: return self.state.dtype
@@ -1401,13 +1430,23 @@ class RotatingPVSequentialDrainSpec(NamedTuple):
 
   def validate(self):
     self.state.validate()
+    self.grid.validate()
+    if (self.grid.q_tokens, self.grid.q_heads, self.grid.kv_heads, self.grid.kv_tokens) != (512, 32, 8, 512):
+      raise ValueError("rotating PV drain is exact-8B only")
+    if not isinstance(self.out.dtype, PtrDType) or self.out.dtype.base != dtypes.half or self.out.dtype.size != 512*32*128:
+      raise TypeError("rotating PV drain requires exact fp16 output ownership")
+    if self.group.op is not Ops.SPECIAL or self.group.arg != "gidx0" or len(self.group.src) != 1 or self.group.src[0].arg != self.grid.q_heads*self.grid.q_tiles:
+      raise ValueError("rotating PV drain requires the exact attention group owner")
+    if self.final_l.dtype != dtypes.float.vec(8): raise TypeError("rotating PV drain requires float8 final denominator")
+    if not isinstance(self.output_block, int) or self.output_block_base != 0 or self.output_block != self.state.block:
+      raise ValueError("rotating PV drain requires exact output block ownership")
     return self
 
   def reload(self, final_token: UOp) -> UOp:
     self.validate()
     if final_token.dtype == dtypes.void and final_token.op is not Ops.END:
       raise TypeError("rotating PV drain requires a matching END or prior drain token")
-    return UOp(Ops.CUSTOMI, self.dtype, (self.state.storage, self.state.lane, final_token),
+    return UOp(Ops.CUSTOMI, self.dtype, (self.out, self.group, self.final_l, self.state.storage, self.state.lane, final_token),
                ("rotating_pv_sequential_drain_v1", self), tag=self.renderer_tag)
 
 class CompositeReduce(NamedTuple):
