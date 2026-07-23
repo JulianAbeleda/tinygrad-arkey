@@ -18,15 +18,14 @@ def test_rotating_pv_scheduler_probe_builds_one_ordered_kv_body_and_drain():
   writes = end.src[0].src
   assert len(writes) == 8 and all(x.arg[0] == "rotating_pv_state_write_v1" for x in writes)
   assert {x.arg[1].block for x in writes} == set(range(8)) and {x.arg[1].generation for x in writes} == set(range(1, 9))
-  assert all(x.src[0].op is Ops.WMMA and x.src[0].tag == ("attention_wmma", "PV", block) and
-             x.src[0].src[2].src[0].arg[0] == "rotating_pv_loop_read_v1" and x.src[0].src[2].src[0].arg[1].wait_generation == block and
-             x.src[0].src[2].src[0].arg[1].publication_generation == block+1 for block,x in enumerate(writes))
-  reads = tuple(write.src[0].src[2].src[0] for write in writes)
-  assert reads[0].src[3].op is Ops.GROUP and all(reads[block].src[3].arg[0] == "rotating_pv_publication_v1" and reads[block].src[3].src[0] is writes[block-1] for block in range(1, 8))
+  assert all(x.src[0].arg[0] == "rotating_pv_wmma_v1" and x.src[0].tag == ("attention_wmma", "PV", block) and
+             x.src[0].arg[1].wait_generation == block and x.src[0].arg[1].publication_generation == block+1 for block,x in enumerate(writes))
+  updates = tuple(write.src[0] for write in writes)
+  assert updates[0].src[6].op is Ops.GROUP and all(updates[block].src[6].arg[0] == "rotating_pv_publication_v1" and updates[block].src[6].src[0] is writes[block-1] for block in range(1, 8))
   assert all(x.src[-1] is end.src[1] for x in writes)
   drains = [x for x in topo if x.op is Ops.CUSTOMI and x.arg[0] == "rotating_pv_sequential_drain_v1"]
   assert sum(x.op is Ops.WMMA and x.tag[1] == "QK" for x in topo) == 8
-  assert sum(x.op is Ops.WMMA and x.tag[1] == "PV" for x in topo) == 8
+  assert sum(x.op is Ops.CUSTOMI and x.arg[0] == "rotating_pv_wmma_v1" for x in topo) == 8
   assert len(drains) == 8 and drains[0].src[5] is end and all(drain.src[0] is out for drain in drains)
   assert all(drains[block].src[5] is drains[block-1] for block in range(1, 8))
   assert all(drain.shape == () and drain.tag == ("amd_gfx1100_rotating_pv_sequential_drain_v1", block, 0, block, block+1)

@@ -599,7 +599,7 @@ def amd_gfx1100_rotating_pv_scheduler_probe(q:UOp, k:UOp, v:UOp, out:UOp, *, q_t
   """Opt-in exact-8B rotating-PV construction probe; it has no production route or lowering."""
   if (q_tokens, q_heads, kv_heads, kv_tokens) != (512, 32, 8, 512):
     raise ValueError("rotating PV scheduler probe is exact-8B only")
-  from tinygrad.uop.ops import AMDAttentionGridSpec, AMDLoopStateSpec, AMDPackedFragmentLoopSpec, AMDRowSoftmaxRepackSpec, AxisType, RotatingPVLoopReadSpec, RotatingPVPublicationSpec, RotatingPVSequentialDrainSpec, RotatingPVStateSpec
+  from tinygrad.uop.ops import AMDAttentionGridSpec, AMDLoopStateSpec, AMDPackedFragmentLoopSpec, AMDRowSoftmaxRepackSpec, AxisType, RotatingPVPVUpdateSpec, RotatingPVPublicationSpec, RotatingPVSequentialDrainSpec, RotatingPVStateSpec
   lane=UOp.special(32,"lidx0")
   grid=AMDAttentionGridSpec(q_tokens=q_tokens,q_heads=q_heads,kv_heads=kv_heads,group_ratio=q_heads//kv_heads,kv_tokens=kv_tokens); grid.validate()
   group=UOp.special(q_heads*grid.q_tiles,"gidx0")
@@ -621,8 +621,7 @@ def amd_gfx1100_rotating_pv_scheduler_probe(q:UOp, k:UOp, v:UOp, out:UOp, *, q_t
   states=tuple(RotatingPVStateSpec(storage,lane,block,generation=block+1) for block in range(8))
   writes=[]; publications=[]; publication=init
   for block,state in enumerate(states):
-    read=RotatingPVLoopReadSpec(state,rng,wait_generation=block,publication_generation=block+1).reload(publication)
-    update=UOp(Ops.WMMA,dtypes.float.vec(8),(p,fr(v,"V",block),read.alu(Ops.MUL,alpha)),warg,tag=("attention_wmma","PV",block))
+    update=RotatingPVPVUpdateSpec(state,rng,wait_generation=block,publication_generation=block+1,wmma_arg=warg).update(p,fr(v,"V",block),alpha,publication)
     write=state.write(update,after=rng); publication=RotatingPVPublicationSpec(state).publish(write)
     writes.append(write); publications.append(publication)
   writes=tuple(writes)

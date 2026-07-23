@@ -2867,6 +2867,16 @@ def lower_rotating_pv_publication(x:UOp) -> UOp|None:
   if (storage,lane) != (spec.state.storage,spec.state.lane): return None
   return UOp(Ops.WAIT,dtypes.void,(write,),WaitCount(lgkmcnt=0))
 
+def lower_rotating_pv_wmma(x:UOp) -> UOp|None:
+  from tinygrad.codegen.opt.compiler_policies import WaitCount
+  from tinygrad.uop.ops import RotatingPVPVUpdateSpec
+  if not (isinstance(x.arg,tuple) and x.arg[:1] == ("rotating_pv_wmma_v1",) and isinstance(x.arg[1],RotatingPVPVUpdateSpec)): return None
+  spec=x.arg[1]; spec.validate(); p,v,alpha,storage,lane,rng,publication=x.src
+  if (storage,lane,rng) != (spec.state.storage,spec.state.lane,spec.rng): return None
+  wait=UOp(Ops.WAIT,dtypes.void,(publication,),WaitCount(lgkmcnt=0))
+  c=UOp(Ops.STACK,spec.dtype,tuple(storage.after(rng,wait).index(spec.state.block_offset(i)).load() for i in range(8)))
+  return UOp(Ops.WMMA,spec.dtype,(p,v,c.alu(Ops.MUL,alpha)),spec.wmma_arg,tag=x.tag)
+
 def lower_rotating_pv_drain(x:UOp) -> UOp|None:
   from tinygrad.codegen.opt.compiler_policies import WaitCount
   from tinygrad.uop.ops import RotatingPVSequentialDrainSpec
@@ -2884,6 +2894,7 @@ def lower_rotating_pv_drain(x:UOp) -> UOp|None:
 
 native_repack_matcher = PatternMatcher([
   (UPat(Ops.GEP, src=(UPat(Ops.CUSTOMI,name="carrier"),), name="x"), lower_state_phase_reload_gep),
+  (UPat((Ops.CUSTOMI,Ops.CUSTOM),name="x"), lower_rotating_pv_wmma),
   (UPat((Ops.CUSTOMI,Ops.CUSTOM),name="x"), lower_rotating_pv_publication),
   (UPat((Ops.CUSTOMI,Ops.CUSTOM),name="x"), lower_rotating_pv_loop_read),
   (UPat((Ops.CUSTOMI,Ops.CUSTOM),name="x"), lower_rotating_pv_drain),

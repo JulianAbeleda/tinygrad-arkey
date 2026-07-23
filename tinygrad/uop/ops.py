@@ -1428,6 +1428,29 @@ class RotatingPVPublicationSpec(NamedTuple):
     return UOp(Ops.CUSTOMI, dtypes.void, (write, self.state.storage, self.state.lane),
                ("rotating_pv_publication_v1", self), tag=("rotating_pv_publication_v1", self.state.block, self.state.generation))
 
+class RotatingPVPVUpdateSpec(NamedTuple):
+  """Fused rotating-PV LDS reload and PV WMMA ownership marker."""
+  state: RotatingPVStateSpec
+  rng: UOp
+  wait_generation: int
+  publication_generation: int
+  wmma_arg: Any
+
+  @property
+  def dtype(self) -> DType: return self.state.dtype
+
+  def validate(self):
+    RotatingPVLoopReadSpec(self.state, self.rng, self.wait_generation, self.publication_generation).validate()
+    if not isinstance(self.wmma_arg, tuple): raise TypeError("rotating PV update requires a typed WMMA argument")
+    return self
+
+  def update(self, p: UOp, v: UOp, alpha: UOp, publication: UOp) -> UOp:
+    self.validate()
+    if p.dtype != dtypes.half.vec(16) or v.dtype != dtypes.half.vec(16) or alpha.dtype != dtypes.float.vec(8) or publication.dtype != dtypes.void:
+      raise TypeError("rotating PV update requires half16 P/V, float8 alpha, and a publication token")
+    return UOp(Ops.CUSTOMI, self.dtype, (p, v, alpha, self.state.storage, self.state.lane, self.rng, publication),
+               ("rotating_pv_wmma_v1", self), tag=("attention_wmma", "PV", self.state.block))
+
 class RotatingPVSequentialDrainSpec(NamedTuple):
   """One ordered float8 drain with exact output ownership for the unavailable rotating-PV ABI."""
   state: RotatingPVStateSpec
