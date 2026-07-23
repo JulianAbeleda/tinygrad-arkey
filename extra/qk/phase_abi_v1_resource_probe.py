@@ -43,9 +43,10 @@ def probe() -> dict:
     calls = [x for x in scheduled.src if x.op is Ops.CALL]
     if len(calls) != 1: raise RuntimeError(f"expected one phase ABI call, got {len(calls)}")
     program = to_program(calls[0].src[0], HIPRenderer(Target.parse("AMD:HIP:gfx1100")))
-    binary = compile_hip(program.src, "gfx1100")
+    source = next(u.arg for u in program.src if u.op is Ops.SOURCE)
+    binary = next(u.arg for u in program.src if u.op is Ops.BINARY)
     row["compile"] = {"status": "PASS", "command": "tinygrad.runtime.support.compiler_amd.compile_hip",
-                      "program_name": program.name, "source_sha256": __import__("hashlib").sha256(program.src.encode()).hexdigest(),
+                      "program_name": program.arg.name, "source_sha256": __import__("hashlib").sha256(source.encode()).hexdigest(),
                       "metadata": parse_amdgpu_metadata(binary)}
   except Exception as exc:
     row["compile"] = {"status": "UNAVAILABLE", "reason": f"{type(exc).__name__}: {exc}",

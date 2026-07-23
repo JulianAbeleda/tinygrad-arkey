@@ -586,9 +586,12 @@ def amd_gfx1100_q16_grid_hd128_loop_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_toke
   ml_commit=UOp.group(*( [*(ml.loop_write(nm.gep(i),i,after=nm.gep(i)) for i in range(8)),
                             *(ml.loop_write(nl.gep(i),8+i,after=nl.gep(i)) for i in range(8))] )) if phase_abi_v1 else None
   writes=[ml_commit] if ml_commit is not None else [*wr(mreg,"m",nm),*wr(lreg,"l",nl)]
-  pv_p,pv_alpha=(p.after(ml_commit),alpha.after(ml_commit)) if ml_commit is not None else (p,alpha)
+  # AMD_ROW_SOFTMAX_SLOT is a verifier ABI value and cannot be wrapped in AFTER.
+  # Gate V's PARAM owner, which makes the PV fragment load wait for the commit
+  # while keeping p/alpha as direct slot values.
+  pv_v=v.after(ml_commit) if ml_commit is not None else v
   for b in range(acc_blocks):
-    oc=rd(creg,ci,"acc",b,b*8); pv=UOp(Ops.WMMA,dtypes.float.vec(8),(pv_p,fr(v,"V",b+output_block_base),oc.alu(Ops.MUL,pv_alpha)),warg,tag=("attention_wmma","PV",b)); writes.extend(wr(creg,"acc",pv,b,b*8))
+    oc=rd(creg,ci,"acc",b,b*8); pv=UOp(Ops.WMMA,dtypes.float.vec(8),(p,fr(pv_v,"V",b+output_block_base),oc.alu(Ops.MUL,alpha)),warg,tag=("attention_wmma","PV",b)); writes.extend(wr(creg,"acc",pv,b,b*8))
   end=UOp.group(*writes).end(rng).replace(tag=("amd_gfx1100_attention_grid_loop_end_v1",rng)); final_token=end if phase_abi_v1 else None; fl=(UOp(Ops.STACK,dtypes.float.vec(8),tuple(ml.loop_read(8+i,final_token) for i in range(8))) if phase_abi_v1 else rd(lreg,end,"l",final=True)); fc=tuple(rd(creg,end,"acc",b,b*8,final=True) for b in range(acc_blocks)); drain=UOp(Ops.AMD_ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,group,fl,*fc),arg=AMDAttentionOutputDrainSpec(native_abi="amd_gfx1100_attention_output_drain_v1" if acc_blocks==8 else "amd_gfx1100_attention_output_drain_acc_slice_v2",blocks=acc_blocks,grid=grid,output_block_base=output_block_base))
   return UOp.sink(mi,li,ci,end,drain,arg=kernel_info).replace(tag=("amd_gfx1100_q16_grid_hd128_loop_v1",))
 
