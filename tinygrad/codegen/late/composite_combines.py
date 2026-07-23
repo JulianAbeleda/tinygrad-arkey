@@ -154,6 +154,28 @@ def _combine_step_online_softmax(m_old, l_old, acc_old, score, v_val):
     acc_new = acc_old.alu(Ops.MUL, corr).alu(Ops.ADD, exp_score.alu(Ops.MUL, v_val))
     return m_new, l_new, acc_new
 
+def _combine_step_online_softmax_state(m_old, l_old, acc_old, score, v_val):
+    """Heterogeneous online-softmax state step: scalar m/l and lane-shaped acc/V.
+
+    Scalar correction factors are explicitly broadcast to the accumulator
+    cardinality.  This is the primitive physical-state ABI: no later stage may
+    manufacture Hd lanes by reshaping a scalar REDUCE_SLOT.
+    """
+    LOG2E = UOp.const(dtypes.float32, 1.4426950408889634)
+    NEG1 = UOp.const(dtypes.float32, -1.0)
+    if m_old.dtype.count != 1 or l_old.dtype.count != 1 or score.dtype.count != 1:
+        raise RuntimeError("online_softmax_state requires scalar m, l, and score")
+    lanes = acc_old.dtype.count
+    if lanes < 1 or v_val.dtype.count != lanes:
+        raise RuntimeError(f"online_softmax_state acc/V lane mismatch: {lanes} != {v_val.dtype.count}")
+    m_new = m_old.alu(Ops.MAX, score)
+    corr = m_old.alu(Ops.ADD, m_new.alu(Ops.MUL, NEG1)).alu(Ops.MUL, LOG2E).alu(Ops.EXP2)
+    weight = score.alu(Ops.ADD, m_new.alu(Ops.MUL, NEG1)).alu(Ops.MUL, LOG2E).alu(Ops.EXP2)
+    l_new = l_old.alu(Ops.MUL, corr).alu(Ops.ADD, weight)
+    corr_lanes, weight_lanes = (corr, weight) if lanes == 1 else (corr.broadcast(lanes), weight.broadcast(lanes))
+    acc_new = acc_old.alu(Ops.MUL, corr_lanes).alu(Ops.ADD, weight_lanes.alu(Ops.MUL, v_val))
+    return m_new, l_new, acc_new
+
 # Registry: combine_fn -> (step_fn, num_slots, identity_getter, elements_per_step)
 COMBINE_STEP_REGISTRY = {
     None: (lambda *args: args[0].alu(args[1].op, args[2]) if len(args) == 3 else None, None, None, 1),
@@ -162,7 +184,7 @@ COMBINE_STEP_REGISTRY = {
     # State-only producer shares the same per-element recurrence as the
     # legacy normalized combine; normalization is performed by the consumer
     # after REDUCE_SLOT projections are resolved.
-    "online_softmax_state": (_combine_step_online_softmax, 3, lambda slot: slot.identity, 2),
+    "online_softmax_state": (_combine_step_online_softmax_state, 3, lambda slot: slot.identity, 2),
 }
 
 def _handle_no_range_generic(inp, composite, red, auxiliary_inputs=()):
