@@ -292,8 +292,14 @@ def resolve_reduce_slot_tensor(slot):
 
 def resolve_composite_reduce_slot_prebufferize(slot):
   """Resolve only a tagged composite slot before rangeify materializes buffers."""
-  if slot.op is not Ops.REDUCE_SLOT or slot.src[0].op is not Ops.TUPLE: return None
-  tag = slot.src[0].tag
+  if slot.op is not Ops.REDUCE_SLOT: return None
+  view = slot.src[0]
+  # Expander may wrap the structured tuple in an INDEX view.  Unwrap only
+  # when the indexed base still carries the composite provenance tag.
+  indexed = view.op is Ops.INDEX
+  base = view.src[0] if indexed and view.src else view
+  if base.op is not Ops.TUPLE: return None
+  tag = base.tag
   if not (isinstance(tag, tuple) and len(tag) == 2 and tag[0] == "composite_reduce"): return None
   composite = tag[1]
   if not hasattr(composite, "slots") or not hasattr(composite, "slot_shapes"): return None
@@ -301,7 +307,11 @@ def resolve_composite_reduce_slot_prebufferize(slot):
     raise RuntimeError(f"invalid composite reduction slot {slot.arg}")
   shape = composite.slot_shapes[slot.arg]
   if shape is None: raise RuntimeError("composite slot is missing validated logical shape")
-  result = slot.src[0].src[slot.arg]
+  result = base.src[slot.arg]
+  if indexed:
+    # The view is already a logical projection; retain its indices on the
+    # selected slot rather than treating an untyped INDEX as a slot reducer.
+    result = UOp(Ops.INDEX, result.dtype, (result,) + view.src[1:], view.arg)
   if result.shape != tuple(shape): result = result.reshape(tuple(shape))
   sdtype = composite.slots[slot.arg].dtype
   if sdtype is not None and result.dtype != sdtype: result = result.cast(sdtype)

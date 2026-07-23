@@ -50,6 +50,11 @@ def test_prebufferize_slot_resolver_leaves_ordinary_tuple_untouched():
   plain = UOp(Ops.TUPLE, dtypes.void, (UOp.const(dtypes.float32, 1.0),))
   assert resolve_composite_reduce_slot_prebufferize(UOp(Ops.REDUCE_SLOT, dtypes.float32, (plain,), 0)) is None
 
+def test_prebufferize_rejects_untagged_index_view():
+  base = UOp(Ops.TUPLE, dtypes.void, (UOp.placeholder((2,), dtypes.float32, 92),))
+  idx = UOp(Ops.INDEX, dtypes.float32, (base, UOp.const(dtypes.weakint, 0)), None)
+  assert resolve_composite_reduce_slot_prebufferize(UOp(Ops.REDUCE_SLOT, dtypes.float32, (idx,), 0)) is None
+
 
 def test_nested_reduction_with_logical_element_input_stays_in_one_schedule():
   # This is intentionally not attention-specific. `score` is an inner
