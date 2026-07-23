@@ -207,6 +207,8 @@ def finalize_after(ctx:AllocCtx, x:UOp):
   replace_uop = ret
   while replace_uop.op is Ops.AFTER: replace_uop = replace_uop.src[0]
   for t in x.tag:
+    if not isinstance(t, int):
+      continue
     original_uop: UOp = ctx.uop_list[t]
     replacement = replace_uop.shrink_to(original_uop.shape)
     ctx.buffer_map[original_uop] = propagate_memory_semantic(original_uop, replacement)
