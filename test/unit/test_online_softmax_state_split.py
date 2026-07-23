@@ -2,9 +2,10 @@ import unittest
 import numpy as np
 from tinygrad import Tensor
 from tinygrad.codegen.late.flash_attn import merge_online_softmax_tile, normalize_online_softmax_state
-from tinygrad.codegen.late.composite_combines import COMBINE_REGISTRY, _combine_step_online_softmax_state
+from tinygrad.codegen.late.composite_combines import (COMBINE_REGISTRY, _combine_step_online_softmax_state,
+  _handle_no_range_generic, _pack_online_softmax_v_lanes)
 from tinygrad.codegen.late.devectorizer import physical_composite_slot_dtype
-from tinygrad.uop.ops import AccumulatorSlot, Ops, UOp, dtypes
+from tinygrad.uop.ops import AccumulatorSlot, CompositeInputSpec, Ops, UOp, dtypes
 
 class TestOnlineSoftmaxStateSplit(unittest.TestCase):
   def test_state_combine_is_registered_separately(self):
@@ -26,6 +27,25 @@ class TestOnlineSoftmaxStateSplit(unittest.TestCase):
     red = UOp.placeholder((16,), dtypes.float32, 0).composite_reduce(*slots, axis=(0,),
       combine_fn="online_softmax_state", lane_shapes=((), (), (16,)))
     self.assertEqual(tuple(physical_composite_slot_dtype(red.arg[0], i).count for i in range(3)), (1, 1, 16))
+
+  def test_kv3_hd2_packing_keeps_distinct_lanes(self):
+    flat = UOp.vectorize(*(UOp.const(dtypes.float32, x) for x in (1.0, 2.0, 3.0, -1.0, 0.5, 4.0)))
+    packed = _pack_online_softmax_v_lanes(flat, 3, 2, dtypes.float32)
+    self.assertEqual([[lane.simplify().arg for lane in vec.src] for vec in packed], [[1.0, 2.0], [3.0, -1.0], [0.5, 4.0]])
+
+  def test_kv3_hd2_direct_composite_numeric(self):
+    score_vals, value_vals = (0.5, -1.0, 2.0), (1.0, 2.0, 3.0, -1.0, 0.5, 4.0)
+    scores = UOp.vectorize(*(UOp.const(dtypes.float32, x) for x in score_vals))
+    values = UOp.vectorize(*(UOp.const(dtypes.float32, x) for x in value_vals))
+    slots = (AccumulatorSlot(Ops.MAX, dtypes.float32, -float("inf"), "m"),
+             AccumulatorSlot(Ops.ADD, dtypes.float32, 0.0, "l"),
+             AccumulatorSlot(Ops.ADD, dtypes.float32, 0.0, "acc"))
+    red = scores.composite_reduce(*slots, axis=(), inputs=(values,), combine_fn="online_softmax_state",
+      input_specs=(CompositeInputSpec("logical", lane_group=2),), lane_shapes=((), (), (2,)))
+    _, den, acc = _handle_no_range_generic(scores, red.arg[0], red, (values,))
+    got = np.array([acc.gep(i).alu(Ops.MUL, den.alu(Ops.RECIPROCAL)).simplify().arg for i in range(2)])
+    weights = np.exp(np.array(score_vals)-max(score_vals)); weights /= weights.sum()
+    np.testing.assert_allclose(got, weights @ np.array(value_vals).reshape(3, 2), rtol=1e-6, atol=1e-6)
 
   def test_normalization_of_raw_state_matches_attention(self):
     rng = np.random.default_rng(31)

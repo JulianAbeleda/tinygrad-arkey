@@ -169,6 +169,27 @@ def _combine_step_online_softmax_state(m_old, l_old, acc_old, score, v_val):
     acc_new = acc_old.alu(Ops.MUL, corr_lanes).alu(Ops.ADD, weight_lanes.alu(Ops.MUL, v_val))
     return m_new, l_new, acc_new
 
+def _pack_online_softmax_v_lanes(x:UOp, steps:int, lane_group:int, dtype):
+    """Pack flattened V scalars as [KV][Hd], preserving distinct Hd lanes."""
+    if lane_group < 1: raise RuntimeError("online_softmax_state requires a positive lane group")
+    scalars = _horizontal_reduce(x, dtype.scalar())
+    if len(scalars) == steps*lane_group:
+        return [UOp.vectorize(*scalars[k*lane_group:(k+1)*lane_group]) for k in range(steps)]
+    if len(scalars) == steps and all(v.dtype.count == lane_group for v in scalars): return scalars
+    carrier = x.src[0] if x.op is Ops.CAST and x.src else x
+    if carrier.op is Ops.INDEX and len(carrier.src) >= 2:
+        base, prefix, idx = carrier.src[0], carrier.src[1:-1], carrier.src[-1]
+        packed = []
+        for kv in range(steps):
+            vals = []
+            for lane in range(lane_group):
+                off = UOp.const(idx.dtype.scalar(), kv*lane_group+lane)
+                val = base.index(*prefix, idx.alu(Ops.ADD, off))
+                vals.append(val.cast(x.dtype) if x.op is Ops.CAST else val)
+            packed.append(UOp.vectorize(*vals))
+        return packed
+    raise RuntimeError(f"cannot pack online_softmax_state V as {steps}x{lane_group} lanes")
+
 # Registry: combine_fn -> (step_fn, num_slots, identity_getter, elements_per_step)
 COMBINE_STEP_REGISTRY = {
     None: (lambda *args: args[0].alu(args[1].op, args[2]) if len(args) == 3 else None, None, None, 1),
@@ -200,9 +221,11 @@ def _handle_no_range_generic(inp, composite, red, auxiliary_inputs=()):
     
     # Initialize state from slot identities
     state = []
-    for slot in composite.slots:
+    for i, slot in enumerate(composite.slots):
         ident_val = slot.identity if slot.identity is not None else identity_element(slot.op, slot.dtype.scalar())
-        state.append(red.const(slot.dtype, ident_val))
+        lane_shape = composite.lane_shapes[i] if getattr(composite, "lane_shapes", ()) else ()
+        physical_dtype = slot.dtype.scalar().vec(prod(lane_shape)) if lane_shape else slot.dtype
+        state.append(red.const(physical_dtype, ident_val))
     
     # Separate auxiliary inputs are lane-aligned logical elements. The packed
     # representation remains supported for composites that place every input
@@ -213,6 +236,10 @@ def _handle_no_range_generic(inp, composite, red, auxiliary_inputs=()):
                                f"got one primary and {len(auxiliary_inputs)} auxiliary inputs")
         auxiliary_lanes = []
         for x in auxiliary_inputs:
+            if composite.combine_fn == "online_softmax_state":
+                lane_group = prod(composite.lane_shapes[2]) if composite.lane_shapes and composite.lane_shapes[2] else 1
+                auxiliary_lanes.append(_pack_online_softmax_v_lanes(x, len(inp_lst), lane_group, composite.slots[-1].dtype))
+                continue
             lanes = _horizontal_reduce(x, composite.slots[-1].dtype)
             # Expander can leave the logical V carrier as one scalar LOAD
             # while the repeated score is packed. Rebuild the lane group from
