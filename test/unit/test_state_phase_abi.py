@@ -103,6 +103,20 @@ def test_handle_owned_loop_state_lane_lowers_without_register_placeholder():
   assert not any(u.op is Ops.DEFINE_REG for u in lowered.toposort())
 
 
+def test_handle_owned_loop_state_init_iteration_final_write_read_ownership():
+  from tinygrad.renderer.isa.amd import lower_state_phase_transfer
+  storage = UOp(Ops.DEFINE_LOCAL, dtypes.float.ptr(128, AddrSpace.LOCAL), arg=97)
+  handle = StateHandle(StateRegionSpec("loop_state", dtypes.float, 8), PhaseBoundarySpec("init", "final"),
+                       storage=storage, lane=UOp.special(8, "state_lane"), lane_stride=8)
+  init = handle.loop_write(UOp.const(dtypes.float, 0.0), 0)
+  iteration = handle.loop_write(UOp.const(dtypes.float, 1.0), 0, after=handle.loop_read(0))
+  final = handle.loop_read(0)
+  type_verify(UOp.sink(init, iteration, final), spec_full)
+  assert lower_state_phase_transfer(init).op is Ops.STORE
+  assert lower_state_phase_transfer(iteration).op is Ops.STORE
+  assert lower_state_phase_transfer(final).op is Ops.LOAD
+
+
 def test_storage_backed_state_rejects_invalid_storage_lane_and_offset():
   storage = UOp(Ops.DEFINE_LOCAL, dtypes.float.ptr(64, AddrSpace.LOCAL), arg=92)
   lane = UOp.special(8, "state_lane")

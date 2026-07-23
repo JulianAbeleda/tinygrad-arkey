@@ -1338,6 +1338,15 @@ class StateHandle(NamedTuple):
       raise ValueError("state loop read requires one in-range storage-backed element")
     return UOp(Ops.CUSTOMI, self.region.dtype, (self.storage,self.lane), ("state_loop_read_v1",self,element))
 
+  def loop_write(self, value: UOp, element:int, after: UOp|None=None) -> UOp:
+    """Test-only generic phase-loop store with an optional typed ordering edge."""
+    self.validate()
+    if self.storage is None or value.dtype != self.region.dtype or not isinstance(element,int) or not 0 <= element < self.region.lanes:
+      raise ValueError("state loop write requires one in-range storage-backed scalar")
+    if after is not None and after.dtype == dtypes.void: raise TypeError("state loop write ordering source must carry a value")
+    src=(value,self.storage,self.lane) if after is None else (value,self.storage,self.lane,after)
+    return UOp(Ops.CUSTOMI, dtypes.void, src, ("state_loop_write_v1",self,element))
+
 class CompositeReduce(NamedTuple):
   slots: tuple
   combine_fn: Any = None  # UOp sub-graph encoding combine (None = independent slots)
