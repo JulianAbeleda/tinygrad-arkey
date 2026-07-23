@@ -123,7 +123,22 @@ def validate_rotating_pv_loop_read(x:UOp):
   try: x.arg[1].validate()
   except (TypeError, ValueError): return False
   read=x.arg[1]
-  return x.dtype == read.dtype and x.src == (read.state.storage, read.state.lane, read.rng, x.src[3]) and x.src[3].dtype == dtypes.void
+  if not (x.dtype == read.dtype and x.src == (read.state.storage, read.state.lane, read.rng, x.src[3]) and x.src[3].dtype == dtypes.void): return False
+  publication=x.src[3]
+  if read.wait_generation == 0: return publication.op is Ops.GROUP
+  return publication.op is Ops.CUSTOMI and publication.arg[:1] == ("rotating_pv_publication_v1",) and \
+    publication.arg[1].state.storage is read.state.storage and publication.arg[1].state.lane is read.state.lane and \
+    publication.arg[1].state.block == read.state.block-1 and publication.arg[1].state.generation == read.wait_generation
+
+def validate_rotating_pv_publication(x:UOp):
+  from tinygrad.uop.ops import RotatingPVPublicationSpec
+  if not (isinstance(x.arg, tuple) and len(x.arg) == 2 and x.arg[0] == "rotating_pv_publication_v1" and isinstance(x.arg[1], RotatingPVPublicationSpec)):
+    return False
+  try: x.arg[1].validate()
+  except (TypeError, ValueError): return False
+  spec=x.arg[1]
+  return x.dtype == dtypes.void and x.src == (x.src[0], spec.state.storage, spec.state.lane) and \
+    x.src[0].op is Ops.CUSTOMI and x.src[0].arg == ("rotating_pv_state_write_v1", spec.state)
 
 def validate_rotating_pv_sequential_drain(x:UOp):
   """Verify one block reload at a time; lowering remains intentionally absent."""
@@ -233,7 +248,7 @@ spec_shared = PatternMatcher([
         allow_any_len=True), lambda: True),
 
   # CUSTOM (inline and non inline)
-  (UPat((Ops.CUSTOMI, Ops.CUSTOM), name="x"), lambda x: validate_state_transfer(x) if isinstance(x.arg, tuple) and x.arg[:1] in {("state_publish_v1",), ("state_reload_v1",)} else validate_rotating_pv_state(x) if isinstance(x.arg, tuple) and x.arg[:1] in {("rotating_pv_state_write_v1",), ("rotating_pv_state_read_v1",)} else validate_rotating_pv_loop_read(x) if isinstance(x.arg, tuple) and x.arg[:1] == ("rotating_pv_loop_read_v1",) else validate_rotating_pv_sequential_drain(x) if isinstance(x.arg, tuple) and x.arg[:1] == ("rotating_pv_sequential_drain_v1",) else validate_state_loop_read(x) if isinstance(x.arg, tuple) and x.arg[:1] == ("state_loop_read_v1",) else validate_state_loop_write(x) if isinstance(x.arg, tuple) and x.arg[:1] == ("state_loop_write_v1",) else True),
+  (UPat((Ops.CUSTOMI, Ops.CUSTOM), name="x"), lambda x: validate_state_transfer(x) if isinstance(x.arg, tuple) and x.arg[:1] in {("state_publish_v1",), ("state_reload_v1",)} else validate_rotating_pv_state(x) if isinstance(x.arg, tuple) and x.arg[:1] in {("rotating_pv_state_write_v1",), ("rotating_pv_state_read_v1",)} else validate_rotating_pv_loop_read(x) if isinstance(x.arg, tuple) and x.arg[:1] == ("rotating_pv_loop_read_v1",) else validate_rotating_pv_publication(x) if isinstance(x.arg, tuple) and x.arg[:1] == ("rotating_pv_publication_v1",) else validate_rotating_pv_sequential_drain(x) if isinstance(x.arg, tuple) and x.arg[:1] == ("rotating_pv_sequential_drain_v1",) else validate_state_loop_read(x) if isinstance(x.arg, tuple) and x.arg[:1] == ("state_loop_read_v1",) else validate_state_loop_write(x) if isinstance(x.arg, tuple) and x.arg[:1] == ("state_loop_write_v1",) else True),
 
   # BARRIER (on any length). TODO: this should only be in spec_program
   (UPat(Ops.BARRIER, dtypes.void), lambda: True),

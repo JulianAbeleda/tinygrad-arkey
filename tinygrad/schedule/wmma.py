@@ -599,7 +599,7 @@ def amd_gfx1100_rotating_pv_scheduler_probe(q:UOp, k:UOp, v:UOp, out:UOp, *, q_t
   """Opt-in exact-8B rotating-PV construction probe; it has no production route or lowering."""
   if (q_tokens, q_heads, kv_heads, kv_tokens) != (512, 32, 8, 512):
     raise ValueError("rotating PV scheduler probe is exact-8B only")
-  from tinygrad.uop.ops import AMDAttentionGridSpec, AMDLoopStateSpec, AMDPackedFragmentLoopSpec, AMDRowSoftmaxRepackSpec, AxisType, RotatingPVLoopReadSpec, RotatingPVSequentialDrainSpec, RotatingPVStateSpec
+  from tinygrad.uop.ops import AMDAttentionGridSpec, AMDLoopStateSpec, AMDPackedFragmentLoopSpec, AMDRowSoftmaxRepackSpec, AxisType, RotatingPVLoopReadSpec, RotatingPVPublicationSpec, RotatingPVSequentialDrainSpec, RotatingPVStateSpec
   lane=UOp.special(32,"lidx0")
   grid=AMDAttentionGridSpec(q_tokens=q_tokens,q_heads=q_heads,kv_heads=kv_heads,group_ratio=q_heads//kv_heads,kv_tokens=kv_tokens); grid.validate()
   group=UOp.special(q_heads*grid.q_tiles,"gidx0")
@@ -619,18 +619,19 @@ def amd_gfx1100_rotating_pv_scheduler_probe(q:UOp, k:UOp, v:UOp, out:UOp, *, q_t
   initialized=tuple(RotatingPVStateSpec(storage,lane,block,generation=0).write(zero) for block in range(8))
   init=UOp.group(*initialized)
   states=tuple(RotatingPVStateSpec(storage,lane,block,generation=block+1) for block in range(8))
-  writes=[]; publication=init
+  writes=[]; publications=[]; publication=init
   for block,state in enumerate(states):
     read=RotatingPVLoopReadSpec(state,rng,wait_generation=block,publication_generation=block+1).reload(publication)
     update=UOp(Ops.WMMA,dtypes.float.vec(8),(p,fr(v,"V",block),read.alu(Ops.MUL,alpha)),warg,tag=("attention_wmma","PV",block))
-    publication=state.write(update,after=rng); writes.append(publication)
+    write=state.write(update,after=rng); publication=RotatingPVPublicationSpec(state).publish(write)
+    writes.append(write); publications.append(publication)
   writes=tuple(writes)
   end=UOp.group(*writes).end(rng).replace(tag=("rotating_pv_kv_iteration_end_v1",rng))
   final_l=rd(lreg,end,"l",final=True)
   drains=[]; token=end
   for state in states:
     drains.append(RotatingPVSequentialDrainSpec(state,out,group,grid,final_l,state.block).reload(token)); token=drains[-1]
-  return UOp.sink(mi,li,init,end,*drains).replace(tag=("amd_gfx1100_rotating_pv_scheduler_probe_v1",))
+  return UOp.sink(mi,li,init,end,*publications,*drains).replace(tag=("amd_gfx1100_rotating_pv_scheduler_probe_v1",))
 
 def amd_gfx1100_q16_grid_qk_stats_stage(q:UOp,k:UOp,stats:UOp,*,q_tokens:int,q_heads:int,kv_heads:int,kv_tokens:int,scale:float,kernel_info,causal:bool=True,query_start:int|None=None)->UOp:
   """Direct diagnostic Stage A: QK online reduction to fp32 `[query, m/l]` state only."""

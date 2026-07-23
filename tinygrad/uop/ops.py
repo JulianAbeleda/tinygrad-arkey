@@ -1413,6 +1413,21 @@ class RotatingPVLoopReadSpec(NamedTuple):
     return UOp(Ops.CUSTOMI, self.dtype, (self.state.storage, self.state.lane, self.rng, publication),
                ("rotating_pv_loop_read_v1", self), tag=("rotating_pv_loop_read_v1", self.state.block, self.wait_generation, self.publication_generation))
 
+class RotatingPVPublicationSpec(NamedTuple):
+  """Typed post-store visibility token for one rotating-PV block publication."""
+  state: RotatingPVStateSpec
+
+  def validate(self):
+    self.state.validate()
+    return self
+
+  def publish(self, write: UOp) -> UOp:
+    self.validate()
+    if write.op is not Ops.CUSTOMI or write.arg != ("rotating_pv_state_write_v1", self.state):
+      raise ValueError("rotating PV publication requires its matching typed state write")
+    return UOp(Ops.CUSTOMI, dtypes.void, (write, self.state.storage, self.state.lane),
+               ("rotating_pv_publication_v1", self), tag=("rotating_pv_publication_v1", self.state.block, self.state.generation))
+
 class RotatingPVSequentialDrainSpec(NamedTuple):
   """One ordered float8 drain with exact output ownership for the unavailable rotating-PV ABI."""
   state: RotatingPVStateSpec

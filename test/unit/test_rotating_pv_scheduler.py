@@ -22,7 +22,7 @@ def test_rotating_pv_scheduler_probe_builds_one_ordered_kv_body_and_drain():
              x.src[0].src[2].src[0].arg[0] == "rotating_pv_loop_read_v1" and x.src[0].src[2].src[0].arg[1].wait_generation == block and
              x.src[0].src[2].src[0].arg[1].publication_generation == block+1 for block,x in enumerate(writes))
   reads = tuple(write.src[0].src[2].src[0] for write in writes)
-  assert reads[0].src[3].op is Ops.GROUP and all(reads[block].src[3] is writes[block-1] for block in range(1, 8))
+  assert reads[0].src[3].op is Ops.GROUP and all(reads[block].src[3].arg[0] == "rotating_pv_publication_v1" and reads[block].src[3].src[0] is writes[block-1] for block in range(1, 8))
   assert all(x.src[-1] is end.src[1] for x in writes)
   drains = [x for x in topo if x.op is Ops.CUSTOMI and x.arg[0] == "rotating_pv_sequential_drain_v1"]
   assert sum(x.op is Ops.WMMA and x.tag[1] == "QK" for x in topo) == 8
