@@ -3,6 +3,7 @@ from tinygrad.uop import Ops
 from tinygrad.schedule.wmma import amd_gfx1100_rotating_pv_scheduler_probe
 from tinygrad.uop.ops import ParamArg, UOp
 from tinygrad.uop.spec import spec_full, type_verify
+from extra.qk.rotating_pv_abi import rotating_pv_kernel_probe
 
 
 def test_rotating_pv_scheduler_probe_builds_one_ordered_kv_body_and_drain():
@@ -23,3 +24,10 @@ def test_rotating_pv_scheduler_probe_builds_one_ordered_kv_body_and_drain():
   assert all(drain.shape == () and drain.tag == ("amd_gfx1100_rotating_pv_sequential_drain_v1", block, 0, block, 1)
              for block,drain in enumerate(drains))
   type_verify(sink, spec_full)
+
+
+def test_rotating_pv_kernel_probe_wraps_exact_scheduler_sink():
+  probe = rotating_pv_kernel_probe()
+  assert probe["status"] == "CONSTRUCTED" and not probe["promotion_eligible"]
+  assert probe["geometry"] == {"q_tokens": 512, "q_heads": 32, "kv_heads": 8, "kv_tokens": 512, "head_dim": 128}
+  assert probe["sink"].arg.name == "rotating_pv_scheduler_probe"
