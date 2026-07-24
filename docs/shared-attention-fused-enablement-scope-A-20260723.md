@@ -456,3 +456,31 @@ via A4 fused-vs-SDPA numerics (silent-miscompile risk); (4) A3 kernel-fires; (5)
 Shipped this session: class-1 fix (d51bd3e92), loud class-2 diagnostic (2ebdb2e15), full root-cause proof
 + fix requirement + localization (12fc34305, 1384e0115). The "lab kernel" is correct; the missing
 coupling is feeding it buffer-LOAD Q/K/V, and store-forwarding is what defeats every non-buffer attempt.
+
+### A2 — CLASS #2: mechanism fully bottomed out (2026-07-24, session 2)
+
+Continued option 1 (find + gate the store-forwarding). Full mechanism now understood:
+- Ordered cache read `AFTER(cache_kv, store(stack(k,v))).index()` -> FORWARDS the store's source (the
+  v_proj recompute) via `found_after` / `pm_fold_moved_after` (rangeify.py:265-280, "hack for openpilot":
+  matches `AFTER(_, STORE(_, movement/cast/where))` and maps the store's src to the after-wrapped value).
+  => class-2.
+- Raw cache read `cache_kv[i]` (no AFTER) -> CLEAN (no class-2, proven) but CYCLES: `split_store` /
+  `find_bufs` (rangeify.py:793, 855) reports "cycle detected while indexing cache_kv PARAM" because the
+  same buffer is read (attention) and written (store) with no ordering edge to split them into separate
+  kernels.
+- AFTER at the Tensor level always becomes after-then-index (forwarding) once the attention op indexes V
+  internally; index-then-after cannot be expressed from the model side.
+
+So Q/K/V-clean is proven to fix class-2, but every ordered path forwards and every non-forwarding path
+cycles. The fix is a targeted compiler change, one of:
+- (G1) Gate `found_after`/`pm_fold_moved_after` (rangeify.py:277) to NOT forward when the AFTER buffer is
+  a persistent/KV_CACHE-owned buffer (or is consumed by a composite reduce) -> the ordered cache read
+  becomes a genuine buffer LOAD, no forwarding, no cycle. Smallest lever; must not regress the openpilot
+  case it was added for.
+- (G2) Split the fused K/V cache read into its own realized kernel ordered after the store (proper
+  read-after-write kernel boundary), fixing the split_store cycle for this case.
+Plus the score/primary Q path needs the equivalent (Q has no cache; needs a scratch-buffer store+load or
+the same anti-forwarding treatment). Acceptance = A4 fused-vs-SDPA numerics.
+
+This is a focused compiler sub-project (gate one forwarding rule + handle Q + verify ordering), not a
+one-shot patch. All probes reverted; class-1 fix, loud guard, and full diagnosis remain committed/pushed.
