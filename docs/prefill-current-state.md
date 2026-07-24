@@ -72,10 +72,19 @@ Findings (honest, corrected):
    93%→74% of per-chunk time) while **fused attention is the ONLY component that grows with
    KV** — 4% (pp512) → 23% (pp4096), ~8×. So our own throughput decay (3564→2976 tok/s,
    −16.5%) is **entirely attention's KV-length scaling**, not GEMM. GEMM owns the *baseline*
-   ceiling (~3564 tok/s); attention owns the *long-context* decay. **Caveat:** this
-   attributes our own decay, not the gap vs llama — that needs a llama-side per-kernel trace
-   (in progress). But it makes our attention KV-scaling the prime suspect for the vs-llama
-   long-context crossover, the opposite of the retracted "not attention" claim.
+   ceiling (~3564 tok/s); attention owns the *long-context* decay.
+   **vs-llama attribution (settled — llama.cpp `flash_attn_ext` per-kernel trace under
+   rocprofv3, `-fa 1 -ngl 99`, same 8B model):** llama's prefill is the SAME qualitative
+   shape — GEMM-flat, attention-grows. But llama's attention plateaus lower: its attention
+   bucket is **6.7% (pp512) → 15.1% (pp4096)** (flash-attn core 4.5% → 13%), vs **ours 4% →
+   23%**. Both attention cores scale ~super-linearly (llama's `flash_attn_ext` grows 22.6×
+   over the sweep, comparable to ours) with GEMM/overhead shares tracking each other. So at
+   pp4096 our fused attention burns **~8 extra percentage points** of GPU budget vs llama
+   (23% vs 15%, ~1.5–1.8× less efficient) — and that IS the vs-llama gap. Throughput confirms
+   the crossover: we edge llama short (3564 vs llama 3306 at pp512) but fall behind long
+   (2976 vs 3214 at pp4096); we lose ~16% over the sweep, llama ~3%. **The long-context
+   deficit — intra-model AND vs-llama — is our fused attention's KV-scaling efficiency, NOT
+   GEMM or overhead. This fully retracts the earlier "not attention" claim.**
    **Next levers, ranked:** (1) fused-attention KV-scaling (owns the long-context deficit);
    (2) per-layer GEMM efficiency (owns the ~3564 baseline ceiling).
    *Trace method:* `PROFILE=1 TINYGRAD_PREFILL_PACKED_WMMA=0 prefill_whole_synced.py --mode
