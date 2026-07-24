@@ -1,3 +1,21 @@
+# >>> RESOLVED (2026-07-24, commit `ee2fa89c6`) <<<
+#
+# Fixed. The sharpened "reduce_acc_upcast_fix fail-close" guess below was WRONG (verified on
+# GPU). REAL root cause: the **deferred-reduce output projection** for the full 512×151936
+# vocab reduce lowered to `STORE(STACK(GEP(LOAD(INDEX(out,addr))) doubled), values)` — an
+# UPCAST'd size-2 inner reduce axis mapped 32 value lanes onto 16 distinct output addresses
+# (each duplicated), rendered as a `make_floatN(...)` lvalue. `reduce_acc_upcast_fix` correctly
+# DECLINES it (not a manual accumulator). The bare-`LOAD(INDEX)` output-projection restoration at
+# `codegen/__init__.py:235-244` only matches non-wide, non-doubled lanes and skipped this shape.
+# FIX: sibling rule `_devec_output_projection_store` in `pm_distinct_reg_store_devec`
+# (`tinygrad/codegen/late/reg_store.py`) restores addressable per-address global stores and
+# ADD-reduces each duplicate group. Fail-closed. Validated on gfx1100: `--logits-only` full-logits
+# argmax=198 == with-argmax ground truth; shipped path unchanged (8B SDPA==FUSED==198); canonical
+# harness compiles+runs. Regression test `test/unit/test_logits_only_reg_store.py`. The devectorizer
+# was also modularized first (`e9677b161`, NFC) — `reduce_acc_upcast_fix`/reg-store devec now live
+# in `reg_store.py`, so the file/line pointers below that say `devectorizer.py` are pre-refactor.
+# >>> END RESOLVED — original (partially-misattributed) handoff follows for the record <<<
+
 # Handoff: `--logits-only` prefill emits an unassignable vector store (CompileError) — 2026-07-24
 
 Scoped for another Claude to fix. Self-contained: symptom, exact repro, root cause with the
