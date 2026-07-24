@@ -76,3 +76,21 @@ Do NOT do dtype lowering inside the attention path, and it is worth being delibe
 Class-1 fix (d51bd3e92) and the loud class-2 guard (2ebdb2e15) stay. The composite-reduce lowering is left
 as-is (not deleted) but is no longer on the critical path for enablement. The full class-2 diagnosis
 (scope-A doc) remains the record of WHY the general path was abandoned for enablement.
+
+## STATUS 2026-07-24: INJECTION ROUTE WORKS (class-2 eliminated)
+Implemented `custom_kernel_attention` (llm/fused_attention.py) — builds the proven
+`amd_gfx1100_q16_grid_hd128_loop_attention` over FLAT bare-PARAM buffers via
+Tensor.custom_kernel (slots out=0,Q=1,K=2,V=3). Validated:
+- ISOLATED (random fp16 Q/K/V, 8B 32/8/512/128): schedules clean; schedule contains the
+  kernel + real AMD attention specs; COMPILES + RUNS; max_abs_err 4.0e-5 rel 2.3e-4 vs
+  causal-GQA softmax reference (PASS).
+- REAL GRAPH (fast 1 real block: projections+RoPE+KV cache -- the exact class-2 provenance):
+  SCHEDULES CLEAN via FUSED_CUSTOM_KERNEL=1.
+- WHOLE MODEL: N=1, N=2, all-32-blocks, and full-logits ALL SCHEDULE CLEAN.
+=> class-2 is architecturally removed: custom_kernel realizes Q/K/V as opaque buffers,
+   so the composite reduce (and its reach-through/forwarding/cycle) is never on the path.
+
+REMAINING (B5-B8): real-generation 8B fused-vs-SDPA numerics (A4 end-to-end; use the standard
+model.__call__/generate path -- the logits-only numpy shortcut hits a harness-only HW fault);
+14B; variable KV length (kernel bakes q_tokens/kv_tokens -> capture matrix or symbolic dim);
+make the route config-driven (drop the FUSED_CUSTOM_KERNEL env gate); A5-A8 tail.
