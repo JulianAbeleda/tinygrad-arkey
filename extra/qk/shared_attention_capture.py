@@ -8,6 +8,7 @@ from typing import Any, Mapping
 
 from tinygrad.uop.ops import (AttentionWMMARole, KernelInfo, Ops, ProgramInfo,
   SharedAttentionCandidateContext, StateHandle, UOp)
+from extra.qk.attention_harness_common import content_sha as _sha
 
 CAPTURE_SCHEMA = "tinygrad.shared_attention_compiler_capture.v2"
 ACC_SLICE_CAPTURE_SCHEMA = "tinygrad.shared_attention_compiler_capture.acc_slice_v3"
@@ -16,7 +17,6 @@ PHASE_CAPTURE_SCHEMA = "tinygrad.shared_attention_compiler_capture.phase_v4"
 PHASE_PLAN_SCHEMA = "tinygrad.shared_attention_phase_plan.v1"
 _RESOURCE_FIELDS = ("vgpr", "sgpr", "lds_bytes", "scratch_bytes", "vgpr_spills", "sgpr_spills", "wavefront_size")
 
-def _sha(data:bytes) -> str: return hashlib.sha256(data).hexdigest()
 def _text_sha(value:str) -> str: return _sha(value.encode())
 def _is_sha(value:Any) -> bool:
   return isinstance(value,str) and len(value) == 64 and all(c in "0123456789abcdef" for c in value)

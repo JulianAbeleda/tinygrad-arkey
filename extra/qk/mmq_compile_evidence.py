@@ -20,6 +20,7 @@ from tinygrad.uop.ops import Ops, UOp
 
 from extra.qk.mmq_q4k_q8_atom import Q4K_WORDS_PER_BLOCK, _q4k_q8_1_bounded_ds4_coop_tile_kernel
 from extra.qk.mmq_q4k_q8_reference import Q4_K_BLOCK_ELEMS
+from extra.qk.attention_harness_common import content_sha as _sha256
 
 SHAPE = {"M": 16, "N": 16, "K": 256}
 # Conservative shared declaration of codegen provenance environment inputs for
@@ -33,9 +34,6 @@ COMPILER_ENV = (
   "SCHED_LIST", "SCHED_MODULO", "SCHED_MODULO_PROBE", "SCHED_UNROLL",
   "UNSAFE_DISABLE_MASK", "V_DOT2_LOWERING", "WARP_REDUCE_LOWERING",
 )
-
-
-def _sha256(data:bytes) -> str: return hashlib.sha256(data).hexdigest()
 
 
 def build_mmq_sink(spec:Any) -> UOp:

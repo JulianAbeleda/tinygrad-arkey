@@ -9,7 +9,7 @@ from tinygrad import Tensor, dtypes, Device
 
 ROUTES=(("qwen3_8b_q4k_m_gfx1100","FULL_RESIDENT_OVERLAY",32,8),("qwen3_14b_q4k_m_gfx1100","BOUNDED_PACKED_TILES",40,8))
 
-def content_sha(text:str) -> str: return hashlib.sha256(text.encode()).hexdigest()
+def content_sha(x) -> str: return hashlib.sha256(x.encode() if isinstance(x,str) else x).hexdigest()
 def causal_mask(q_tokens:int, kv_tokens:int, start_pos:int) -> Tensor:
   return Tensor.full((1,1,q_tokens,kv_tokens),float("-inf"),dtype=dtypes.float16,buffer=False).triu(start_pos+1)
 def amd_sync() -> None: Device["AMD"].synchronize()

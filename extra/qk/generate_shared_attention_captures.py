@@ -15,6 +15,7 @@ from tinygrad.renderer.isa.amd import AMDISARenderer
 from tinygrad.uop.ops import Ops, SharedAttentionCandidateContext
 from extra.qk.shared_attention_capture import SharedAttentionCompilerCapture, build_shared_attention_compiler_capture
 from extra.qk.shared_attention_evidence import shared_attention_proof_artifact
+from extra.qk.attention_harness_common import causal_mask, candidate_context
 
 _ROUTES = (
   ("8b-overlay-first","qwen3_8b_q4k_m_gfx1100","FULL_RESIDENT_OVERLAY",32,512,512,0),
@@ -26,10 +27,7 @@ _ROUTES = (
 def _canonical_write(path:Path,value) -> None:
   path.write_text(json.dumps(value,sort_keys=True,separators=(",",":"),allow_nan=False)+"\n")
 
-# TODO(centralize): differs from attention_harness_common.causal_mask (takes a ctx object instead of
-# (q_tokens, kv_tokens, start_pos) positional args) — left as-is.
-def _mask(ctx:SharedAttentionCandidateContext) -> Tensor:
-  return Tensor.full((1,1,ctx.q_tokens,ctx.kv_tokens),float("-inf"),dtype=dtypes.float16,buffer=False).triu(ctx.start_pos+1)
+def _mask(ctx:SharedAttentionCandidateContext) -> Tensor: return causal_mask(ctx.q_tokens, ctx.kv_tokens, ctx.start_pos)
 
 def _schedule(ctx:SharedAttentionCandidateContext):
   q=Tensor.empty(1,ctx.hq,ctx.q_tokens,128,dtype=dtypes.float16,device="AMD")
@@ -65,9 +63,7 @@ def generate(output_dir:Path,route:str|None=None) -> None:
   selected=tuple(row for row in _ROUTES if route is None or row[0]==route)
   if not selected: raise ValueError(f"unknown route {route!r}")
   for index,(slug,profile,strategy,hq,qt,kv,start) in enumerate(selected):
-    # TODO(centralize): differs from attention_harness_common.candidate_context (explicit qt/start/hkv=8
-    # here vs the canonical q_tokens=512 default / kv-q_tokens start_pos formula) — left as-is.
-    ctx=SharedAttentionCandidateContext(profile,strategy,qt,kv,start,hq,8,128,True).validate()
+    ctx=candidate_context(profile,strategy,hq,8,kv,q_tokens=qt,start_pos=start)
     schedule,call,hip,isa=_schedule(ctx); got,ref=_numeric(ctx,20260723+index)
     capture=build_shared_attention_compiler_capture(schedule=schedule,compute_call=call,hip_program=hip,
       amd_isa_program=isa,output=got,reference=ref)
