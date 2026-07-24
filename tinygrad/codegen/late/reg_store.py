@@ -227,16 +227,21 @@ def _devec_stack_store(tgt:UOp, val:UOp, gate:UOp|None=None) -> UOp|None:
   return UOp.group(*stores)
 
 def _output_load_lane(u:UOp) -> tuple[UOp, int]|None:
-  # (global/local INDEX, float4-lane) if u == GEP(LOAD([CAST] INDEX(non-REG buf, addr)), lane), else None.
+  # (GLOBAL INDEX, float4-lane) if u == GEP(LOAD([CAST] INDEX(GLOBAL buf, addr)), lane), else None.
   # This is an output address that add_loads turned into a wide vector LOAD, whose lanes were then read
   # back as the (unassignable) STORE target instead of staying an addressable INDEX.
+  # GLOBAL-only ON PURPOSE (see _devec_output_projection_store): the only validated producer is the GLOBAL
+  # matmul-epilogue (LM-head) whose reduction is ADD.  A LOCAL/REG lane would be an online-softmax/composite
+  # combine intermediate whose reduction may be MAX (gmax) or MUL -- ADD-combining that would be silently
+  # wrong (the reduce op is unrecoverable at this stage), so those are excluded here and owned by
+  # reduce_acc_upcast_fix / a future op-aware combine lowering.
   if u.op is not Ops.GEP or not isinstance(u.arg, tuple) or len(u.arg) != 1: return None
   ld = u.src[0]
   if ld.op is not Ops.LOAD: return None
   idx = ld.src[0]
   if idx.op is Ops.CAST: idx = idx.src[0]
   if idx.op is not Ops.INDEX or len(idx.src) < 2: return None
-  if getattr(idx.src[0], "addrspace", None) not in (AddrSpace.GLOBAL, AddrSpace.LOCAL): return None
+  if getattr(idx.src[0], "addrspace", None) is not AddrSpace.GLOBAL: return None
   return (idx, u.arg[0])
 
 def _devec_output_projection_store(tgt:UOp, val:UOp) -> UOp|None:
@@ -247,8 +252,17 @@ def _devec_output_projection_store(tgt:UOp, val:UOp) -> UOp|None:
   # reduce axis left each distinct output address duplicated in contiguous same-size groups (the
   # 32-value -> 16-address make_floatN(...) lvalue on gfx1100).  Restore addressable per-address global
   # stores, horizontally ADD-reducing each group's partials (the sum the UPCAST'd reduce axis represents).
-  # Fail-closed: only fires when every lane is an output-load lane read, groups are contiguous and uniform
-  # with size>1, and each group's values are distinct (a genuine many->one reduction, not a broadcast).
+  #
+  # ADD-ONLY, by construction.  The reduce op is unrecoverable at this codegen stage (it is baked into the
+  # ALU chain by lower_deferred_reduce_slot; the store carries no op), so this pass cannot combine with the
+  # true op -- it always sums.  That is safe ONLY because _output_load_lane restricts to GLOBAL output-buffer
+  # lanes, whose sole producer is the additive matmul epilogue (LM-head).  A non-additive combine (the
+  # online-softmax gmax MAX-reduce -- exactly TG-P9.4's split-preserving combine) lives in REG/LOCAL and is
+  # excluded, so it can never be silently ADD-mis-combined here.  Making this op-aware (recover/propagate the
+  # reduce op so a MAX/MUL combine lowers correctly) is deferred to the fused-combine work, where a MAX
+  # producer actually exists to test against; adding untested MAX handling here now would be speculative.
+  # Fail-closed: only fires when every lane is a GLOBAL output-load lane read, groups are contiguous and
+  # uniform with size>1, and each group's values are distinct (a genuine many->one reduction, not a broadcast).
   if val.dtype.count != len(tgt.src): return None
   info = [_output_load_lane(p) for p in tgt.src]
   if any(x is None for x in info): return None

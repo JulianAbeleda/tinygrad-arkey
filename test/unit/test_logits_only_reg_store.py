@@ -48,15 +48,15 @@ from tinygrad.renderer import Target
 _LHS_MAKE_FLOAT = re.compile(r"make_float\d*\([^=]*\)\s*=")
 
 
-def _build_output_projection_store(nload=2, width=4, dup=2, nelem=256):
+def _build_output_projection_store(nload=2, width=4, dup=2, nelem=256, addrspace=AddrSpace.GLOBAL):
   # STORE(STACK(GEP(LOAD(INDEX(data0_GLOBAL, addr)), lane) ...), STACK(distinct scalars))
   # models the LM-head output projection: nload*width distinct output slots, each fed by
   # `dup` distinct partial-reduction lanes that must be summed into the output address.
-  data0 = UOp.placeholder((nelem,), dtypes.float, 0, addrspace=AddrSpace.GLOBAL)
+  data0 = UOp.placeholder((nelem,), dtypes.float, 0, addrspace=addrspace)
   tgt_lanes, val_lanes, c = [], [], 0.0
   for r in range(nload):
     idx = data0.index(UOp.const(dtypes.weakint, r * width))
-    load = idx.cast(dtypes.float.vec(width).ptr(nelem, addrspace=AddrSpace.GLOBAL)).load(dtype=dtypes.float.vec(width))
+    load = idx.cast(dtypes.float.vec(width).ptr(nelem, addrspace=addrspace)).load(dtype=dtypes.float.vec(width))
     for lane in range(width):
       gep = load.gep((lane,))
       for _ in range(dup):
@@ -95,6 +95,19 @@ def test_logits_only_output_projection_store_is_assignable():
   src = _finalize_and_render(sink)
   bad = [ln for ln in src.splitlines() if _LHS_MAKE_FLOAT.search(ln)]
   assert not bad, "rendered source has an unassignable make_floatN(...) store LHS:\n" + "\n".join(bad)
+
+
+def test_output_projection_devec_is_global_add_only():
+  # Hardening boundary: _devec_output_projection_store ADD-combines with no op-awareness (the reduce op is
+  # unrecoverable at this stage), so it must fire ONLY on GLOBAL output-buffer lanes (the additive matmul
+  # epilogue).  A LOCAL-addrspace lane would be an online-softmax/composite combine intermediate whose
+  # reduction may be MAX (gmax) -- ADD-combining it would be silently wrong.  Assert the pass DECLINES LOCAL.
+  from tinygrad.codegen.late.reg_store import _devec_output_projection_store
+  glob = _build_output_projection_store(addrspace=AddrSpace.GLOBAL).src[0]
+  assert _devec_output_projection_store(glob.src[0], glob.src[1]) is not None, "GLOBAL additive projection must still lower"
+  loc = _build_output_projection_store(addrspace=AddrSpace.LOCAL).src[0]
+  assert _devec_output_projection_store(loc.src[0], loc.src[1]) is None, \
+    "LOCAL lanes (possible non-ADD combine intermediate) must be declined, not silently ADD-combined"
 
 
 def test_manual_accumulator_widener_does_not_claim_the_output_projection():
