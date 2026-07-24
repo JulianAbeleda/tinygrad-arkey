@@ -31,7 +31,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from tinygrad import Tensor, dtypes
+from tinygrad import Tensor
 
 # Verified-correct geometries, keyed by (quant, role). Copied verbatim from the scratch bench's
 # gated/measured GEOM table (e2e_packed_wmma_bench_q6_nopad.py:56-75). DO NOT tune live.
@@ -105,13 +105,9 @@ def _single_buffer_attn_qo_admitted(payload: dict[str, Any], quant: str, role: s
                 s.get("gpu_state", {}).get("power_dpm_force_performance_level", "").strip() == "manual" and
                 "1249Mhz *" in s.get("gpu_state", {}).get("pp_dpm_mclk", "") and
                 "2304Mhz" in s.get("gpu_state", {}).get("pp_dpm_sclk", "") for s in samples)): return False
-    tail_ok = timing_row.get("sample_count") == 10 and timing_row.get("warmup_count") == 3 and len(samples) == 10 and \
-      all(s.get("canonical_identity") == spec["packed_identity"] and s.get("max_abs_error") == 0.0 and
-          s.get("gpu_state", {}).get("power_dpm_force_performance_level", "").strip() == "manual" and
-          "1249Mhz *" in s.get("gpu_state", {}).get("pp_dpm_mclk", "") and
-          "2304Mhz" in s.get("gpu_state", {}).get("pp_dpm_sclk", "") for s in samples) and \
-      variants[0].get("summary", {}).get("median_ms") == 0.36741999999999997
-    return tail_ok
+    # Everything tail_ok re-checked (sample/warmup counts, per-sample validity) is already
+    # guaranteed by the guard above; the only net-new gate is the pinned median.
+    return variants[0].get("summary", {}).get("median_ms") == 0.36741999999999997
   except (KeyError, OSError, TypeError, ValueError):
     return False
 
@@ -131,15 +127,8 @@ def _mutate_payload(base_payload: dict, g: dict[str, int], stride: int = 80) -> 
 
 
 def _template_payload_for_role(role: str) -> dict:
-  import json
-  from pathlib import Path
-  from extra.qk.route_manifest import promoted_prefill_candidate_policy
-  path = promoted_prefill_candidate_policy()["candidate_set_path"]
-  candidate_set = json.loads(Path(path).read_text())
-  payloads = [row["payload"] for row in candidate_set["entries"]]
-  template = next((p for p in payloads if p["workload"]["role"] == role), None)
-  if template is None: raise ValueError(f"candidate set has no schedule template for role {role!r}")
-  return template
+  from extra.qk.prefill.candidate_payloads import template_payload_for_role
+  return template_payload_for_role(role)
 
 
 def _payload_for_shape(role: str, shape: tuple[int, int, int]) -> dict:
@@ -260,11 +249,9 @@ class PackedWmmaPrefillCandidate:
     if (e["m"], e["n"], e["k"]) != shape: return None
     if e.get("one_buffer") and (self.quant, role, shape) != ("Q4_K", "attn_qo", (512, 4096, 4096)): return None
 
+    from extra.qk.prefill.current_prefill_execution_adapter import packed_half_carrier
     transform = e["transform"]
-    packed_weight = lin.prefill_packed_weight()
-    blocks, halfwords = n * k // transform.block_elems, transform.block_bytes // 2
-    b = packed_weight.bitcast(dtypes.uint16).reshape(blocks, halfwords).pad(((0, 0), (0, 128 - halfwords))) \
-      .reshape(blocks, 128, 1).expand(blocks, 128, 2).reshape(n, k).bitcast(dtypes.half)
+    b = packed_half_carrier(lin.prefill_packed_weight(), transform, n, k)
     # Keep the primitive's vectorized accumulator store rank-2. Letting the
     # final (1,M,N) view fuse into this producer can make HIP assign a vector
     # expression to a constructed float4 value instead of an addressable

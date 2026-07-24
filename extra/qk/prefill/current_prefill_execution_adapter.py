@@ -36,6 +36,19 @@ def _runtime_alive() -> bool:
   return True
 
 
+def packed_half_carrier(src, transform, n: int, k: int):
+  """Movement-only packed->half carrier view over a packed-weight buffer `src`.
+
+  Reinterprets the packed PARAM as an (n,k) half tensor that ordinary matmul matching sees,
+  preserving the real buffer plus N/K ownership; postrange later replaces these dummy half
+  values with transform.dequant at the B-tile producer. Shared by the compile path (a dummy
+  Tensor.empty source) and the model-forward run path (the real lin.prefill_packed_weight())."""
+  from tinygrad import dtypes
+  blocks, halfwords = n * k // transform.block_elems, transform.block_bytes // 2
+  return src.bitcast(dtypes.uint16).reshape(blocks, halfwords).pad(((0, 0), (0, 128 - halfwords))) \
+    .reshape(blocks, 128, 1).expand(blocks, 128, 2).reshape(n, k).bitcast(dtypes.half)
+
+
 def admit_current_prefill(payload: dict[str, Any], canonical_identity: str):
   """Admit any exact prefill workload supported by its typed hardware capability."""
   workload = full_kernel_workload(payload)
@@ -68,12 +81,8 @@ def compile_current_prefill_program(payload: dict[str, Any], canonical_identity:
       if (transform := admission.context.packed_weight) is None:
         b = Tensor.empty(n, k, dtype=dtypes.half)
       else:
-        # Movement-only logical carrier: it preserves the real packed PARAM plus N/K ownership for ordinary matmul
-        # matching. Postrange replaces these dummy half values with transform.dequant at the B tile producer.
-        blocks, halfwords = n*k//transform.block_elems, transform.block_bytes//2
         packed = Tensor.empty(transform.packed_bytes//transform.storage_width, dtype=transform.storage_dtype)
-        b = packed.bitcast(dtypes.uint16).reshape(blocks, halfwords).pad(((0,0),(0,128-halfwords))) \
-          .reshape(blocks,128,1).expand(blocks,128,2).reshape(n,k).bitcast(dtypes.half)
+        b = packed_half_carrier(packed, transform, n, k)
       compiled = compile_linear((a @ b.transpose()).schedule_linear())
   finally:
     getenv.cache_clear(); to_program_cache.clear()

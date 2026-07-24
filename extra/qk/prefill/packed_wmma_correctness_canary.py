@@ -17,7 +17,7 @@ from extra.qk.prefill.guarded_execution import GuardPolicy
 from extra.qk.prefill.host_safety_canary import make_tiny_health_probe
 from extra.qk.prefill.isolated_guarded_executor import (ExecutionRequest, make_tinygrad_bundle_builder,
   run_isolated_guarded_execution)
-from extra.qk.route_manifest import promoted_prefill_candidate_policy
+from extra.qk.prefill.candidate_payloads import find_role_template, load_candidate_payloads
 from extra.qk.runtime_specs import (derive_packed_weight_candidate, full_kernel_workload,
                                     rebind_full_kernel_workload)
 from extra.qk.model_profiles import profile_by_id
@@ -30,14 +30,11 @@ DEFAULT_ROLE = "attn_qo"
 
 def candidate_payload(profile:str=DEFAULT_PROFILE, role:str=DEFAULT_ROLE, candidate_set_path:str|None=None) -> dict:
   """Resolve an exact candidate or legally rebind the same-role schedule template to profile facts."""
-  path = candidate_set_path or promoted_prefill_candidate_policy()["candidate_set_path"]
-  candidate_set = json.loads(Path(path).read_text())
-  payloads = [row["payload"] for row in candidate_set["entries"]]
+  payloads = load_candidate_payloads(candidate_set_path)
   if exact := next((p for p in payloads if p["workload"]["profile"] == profile and p["workload"]["role"] == role), None):
     return exact
   role_shape = profile_by_id(profile).role_shape(role)
-  template = next((p for p in payloads if p["workload"]["role"] == role), None)
-  if template is None: raise ValueError(f"candidate set has no schedule template for role {role!r}")
+  template = find_role_template(payloads, role)
   return rebind_full_kernel_workload(template, profile=profile, role=role, shape=role_shape.mnk).to_json()["payload"]
 
 
