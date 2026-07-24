@@ -18,8 +18,10 @@ from tinygrad.codegen.gpudims import pm_add_gpudims
 from tinygrad.uop.symbolic import sym, symbolic_simple, gep_pushing, symbolic, pm_move_where_on_load, pm_clean_up_group_sink
 from tinygrad.uop.decompositions import get_late_rewrite_patterns, get_transcendental_patterns, pm_dtype_decomps
 from tinygrad.codegen.late.expander import expander, pm_pre_expander, pm_group_for_reduce
-from tinygrad.codegen.late.devectorizer import load_store_folding, load_store_indexing, devectorize_buf_and_index, devectorize_alu, pm_reduce, \
-  ReduceContext, correct_load_store, pm_render, pm_add_loads, pm_make_images, pm_reduce_acc_upcast_fix, pm_distinct_reg_store_devec, pm_group_wmma_reg_store
+from tinygrad.codegen.late.devectorizer import load_store_folding, load_store_indexing, devectorize_buf_and_index, devectorize_alu, \
+  correct_load_store, pm_render, pm_add_loads, pm_make_images
+from tinygrad.codegen.late.reduce_lowering import pm_reduce, ReduceContext
+from tinygrad.codegen.late.reg_store import pm_reduce_acc_upcast_fix, pm_distinct_reg_store_devec, pm_group_wmma_reg_store
 from tinygrad.codegen.opt.postrange import apply_opts
 from tinygrad.codegen import experimental as cg_extras
 from tinygrad.codegen.late.gater import pm_move_gates_from_index
@@ -210,7 +212,7 @@ def full_rewrite_to_sink(ast:UOp, ren:Renderer, optimize:bool=True) -> UOp:
   # AMD baseline: give manual END/AFTER scalar-REG accumulators the same widen+horizontal-reduce treatment Ops.REDUCE
   # gets, so an UPCAST/UNROLL'd reduce body no longer broadcasts the scalar slot into an unassignable
   # make_floatN(acc,...) store. Exact + fail-closed; runs before add_loads to match reduce_to_acc's form.
-  # See tinygrad/codegen/late/devectorizer.py reduce_acc_upcast_fix + docs/tg-p12-*.
+  # See tinygrad/codegen/late/reg_store.py reduce_acc_upcast_fix + docs/tg-p12-*.
   if ren.target.device == "AMD":
     sink = graph_rewrite(sink, pm_reduce_acc_upcast_fix, name="reduce acc upcast fix")
 

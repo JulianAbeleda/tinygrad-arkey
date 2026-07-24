@@ -1,6 +1,6 @@
 from tinygrad import dtypes
-from tinygrad.codegen.late.devectorizer import (_devec_distinct_reg_store, _manual_reduce_lanes,
-                                                pm_reduce_acc_upcast_fix)
+from tinygrad.codegen.late.reg_store import (_devec_distinct_reg_store, _manual_reduce_lanes,
+                                             pm_reduce_acc_upcast_fix)
 from tinygrad.dtype import AddrSpace
 from tinygrad.uop.ops import AxisType, Ops, UOp, graph_rewrite
 

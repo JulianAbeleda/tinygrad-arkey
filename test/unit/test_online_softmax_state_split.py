@@ -4,7 +4,7 @@ from tinygrad import Tensor
 from tinygrad.codegen.late.flash_attn import merge_online_softmax_tile, normalize_online_softmax_state
 from tinygrad.codegen.late.composite_combines import (COMBINE_REGISTRY, _combine_step_online_softmax_state,
   _handle_no_range_generic, _pack_online_softmax_v_lanes)
-from tinygrad.codegen.late.devectorizer import physical_composite_slot_dtype
+from tinygrad.codegen.late.reduce_lowering import physical_composite_slot_dtype
 from tinygrad.uop.ops import AccumulatorSlot, CompositeInputSpec, Ops, UOp, dtypes
 
 class TestOnlineSoftmaxStateSplit(unittest.TestCase):

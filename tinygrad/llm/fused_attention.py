@@ -38,7 +38,7 @@ MAP OF THE SCATTERED CODE THIS CENTRALIZES / REPLACES
 - (legacy) semantic lowering: schedule/rangeify.py:19-197 lower_attention_semantic
 - (legacy) range-assignment V handling: schedule/indexing.py:132 (SCOPED_VALUE branch)  <-- class-2 site
 - (legacy) combine + V-lane packing: codegen/late/composite_combines.py (online_softmax_state, _pack_online_softmax_v_lanes)
-- (legacy) devectorize V load: codegen/late/devectorizer.py:385-570 (_vectorize_live_v_index, _load_v_at_reduce_pos)
+- (legacy) devectorize V load: codegen/late/reduce_lowering.py (_vectorize_live_v_index, _load_v_at_reduce_pos)
 - (legacy) native swap to the hand kernel: codegen/opt/postrange.py:328-361 -> schedule/wmma.py:545
 - The proven kernel source + ABI (the "base"): produced by extra/qk/generate_shared_attention_captures
   (emits .hip.cpp/.amdisa.s + JSON; ABI = out[slot0], Q[slot1], K[slot2], V[slot3], scale/causal baked CONST)

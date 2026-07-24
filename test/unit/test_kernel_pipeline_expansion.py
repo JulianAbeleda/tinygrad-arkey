@@ -1,7 +1,8 @@
 import pytest
 
 from tinygrad import dtypes
-from tinygrad.codegen.late.devectorizer import ReduceContext, _group_wmma_reg_store, pm_group_wmma_reg_store, pm_reduce
+from tinygrad.codegen.late.reduce_lowering import ReduceContext, pm_reduce
+from tinygrad.codegen.late.reg_store import _group_wmma_reg_store, pm_group_wmma_reg_store
 from tinygrad.codegen.late.expander import do_contract, do_expand, expander, pm_group_for_reduce, pm_pre_expander
 from tinygrad.dtype import AddrSpace
 from tinygrad.uop.ops import AxisType, Ops, UOp, graph_rewrite

@@ -15,7 +15,7 @@ import numpy as np
 from tinygrad import Tensor, dtypes
 from tinygrad.helpers import NOOPT
 from tinygrad.uop.ops import UOp, Ops, AxisType, AccumulatorSlot, CompositeReduce, CompositeInputSpec, _normalize_composite_shape
-from tinygrad.codegen.late.devectorizer import _load_v_at_reduce_pos, _vectorize_live_v_index
+from tinygrad.codegen.late.reduce_lowering import _load_v_at_reduce_pos, _vectorize_live_v_index
 from tinygrad.schedule.rangeify import lower_attention_semantic
 
 

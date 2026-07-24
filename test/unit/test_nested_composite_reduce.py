@@ -5,8 +5,8 @@ import pytest
 from tinygrad import Tensor, dtypes
 from tinygrad.uop import Ops
 from tinygrad.uop.ops import AccumulatorSlot, UOp, UPat, PatternMatcher, ScopedReduceSpec, CompositeInputSpec, graph_rewrite, remove_all_tags
-from tinygrad.codegen.late.devectorizer import _partition_composite_sources
-from tinygrad.codegen.late.devectorizer import lower_composite_accumulator, composite_reduce_state_adapter, lower_deferred_reduce_slot, lower_deferred_reduce_owner
+from tinygrad.codegen.late.reduce_lowering import _partition_composite_sources
+from tinygrad.codegen.late.reduce_lowering import lower_composite_accumulator, composite_reduce_state_adapter, lower_deferred_reduce_slot, lower_deferred_reduce_owner
 from tinygrad.codegen.late.composite_combines import resolve_reduce_slot_tensor, resolve_composite_reduce_slot_prebufferize
 from tinygrad.schedule.rangeify import cleanup_dead_axes
 from tinygrad.uop.spec import spec_tensor, type_verify
@@ -182,7 +182,7 @@ def test_deferred_state_projection_lowers_once_to_physical_hd16_slot():
   assert all(u.op not in (Ops.REDUCE, Ops.DEFERRED_REDUCE_OWNER, Ops.DEFERRED_REDUCE_SLOT) for u in rewritten_owner.toposort())
 
 def test_physical_projection_requires_vector_update_after_end():
-  from tinygrad.codegen.late.devectorizer import validate_deferred_state_liveness
+  from tinygrad.codegen.late.reduce_lowering import validate_deferred_state_liveness
   from tinygrad.dtype import AddrSpace
   from tinygrad.uop.ops import AxisType, DeferredReduceSlot
   rng = UOp.range(3, 0, AxisType.REDUCE)
