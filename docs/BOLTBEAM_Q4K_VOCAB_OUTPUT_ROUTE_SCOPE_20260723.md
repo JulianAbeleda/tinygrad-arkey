@@ -52,3 +52,33 @@ The named and untagged full-vocabulary guards were added to the known `extra/qk/
 ## Completion criteria
 
 The scope is complete only when both model smokes compile and produce artifacts. 8B must show the exact one-buffer attention identity in the model-forward census and pass pinned numeric/timing gates. 14B may either pass with its own exact generated route or produce a structured fail-closed report naming the missing candidate/evidence; it must not silently fall back while claiming coverage.
+
+## Integration completion addendum
+
+The route integration itself is now established for the 8B attention projection: the exact one-buffer candidate is attached only under its phase, invocation, role, and shape guards. The remaining model-forward work is the vocabulary/logits boundary that runs after attention and is independent of attention math.
+
+### Required call-path invariants
+
+- `output.weight` must be identified as `lm_head` before route selection.
+- Q6_K vocabulary projection must use the exact direct scalar-output primitive for `(M,N,K)=(512,151936,4096)` on 8B.
+- The route must not enter packed-WMMA for that exact projection.
+- The final logits conversion must write scalar-addressable lanes; no constructed `make_float32` or `make_half32` value may appear on the left-hand side of a store.
+- Ordinary Q4/Q6 prefill roles, attention routes, and decode routes must retain their existing schedules.
+- 14B `(512,151936,5120)` remains declined until an exact generated payload, identity, and model-forward evidence join exists.
+
+### Execution sequence
+
+1. Capture the full model program source under `CCACHE=0 DEBUG=4` and record the kernel identity, input/output shapes, and route owner.
+2. Trace the final half conversion from `tinygrad/llm/prefill_routes.py` through the selected Q6/direct-output primitive and any logits consumer.
+3. Add one structural scalar-lane guard at the actual producer/consumer boundary. Do not add another parallel attention route or patch by generated variable name.
+4. Compile the complete 8B forward and assert the old vector-lvalue forms are absent.
+5. Run full-output nonconstant numeric parity for the vocabulary projection and attention output.
+6. Run pinned Boltbeam 8B with 3 warmups and 10 synchronized rounds, recording clock provenance, route census, model-forward identity, binary/source hashes, and timing samples.
+7. Run the same Boltbeam command for 14B. If admission declines, emit a structured fail-closed artifact naming the missing exact candidate/evidence; do not treat fallback as promotion.
+
+### Stop conditions
+
+- Any fix that changes ordinary roles or decode behavior is out of scope and must be reverted from the candidate path.
+- A compile-only pass without a model-forward route census is insufficient.
+- A smoke exit without a JSON artifact is incomplete.
+- An unpinned timing result cannot satisfy the promotion gate.
