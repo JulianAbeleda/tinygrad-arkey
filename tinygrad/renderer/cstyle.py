@@ -144,11 +144,17 @@ def _hip_expand_attention_output_drain(x:UOp) -> UOp:
   group, l, acc = (rest[0],rest[1],rest[2:]) if grid is not None else (None,rest[0],rest[1:])
   lane=UOp.special(32,"lidx0"); col=lane.alu(Ops.AND,UOp.const(dtypes.weakint,15)); half=lane.alu(Ops.SHR,UOp.const(dtypes.weakint,4))
   stores=[]
+  # `2048` was 16*Hd (16 q-tokens per tile * head_dim, the per-group row stride) and the bare `128` was
+  # the per-row Hd stride (each accumulator lane's row spans exactly head_dim contiguous elements) --
+  # both derive from the drain spec's own head_dim field (added in P-B1). `range(8)` (qk_c_lanes
+  # C-fragment), `*16` (WMMA/token tile width), `2*e`/`half`/`col` (wave32 lane math), and
+  # `range(x.arg.blocks)` (already blocks-derived) are untouched -- hardware / already-derived.
+  # Byte-identical at head_dim=128: 16*128==2048, 128==128.
   for j in range(x.arg.blocks):
     for e in range(8):
       den=l.gep(e); recip=den.ne(UOp.const(dtypes.float,0)).where(UOp.const(dtypes.float,1)/den,UOp.const(dtypes.float,0))
-      base=group*UOp.const(dtypes.weakint,2048) if group is not None else UOp.const(dtypes.weakint,0)
-      dst=out.index(base+(UOp.const(dtypes.weakint,2*e)+half)*128+(j+x.arg.output_block_base)*16+col)
+      base=group*UOp.const(dtypes.weakint,16*x.arg.head_dim) if group is not None else UOp.const(dtypes.weakint,0)
+      dst=out.index(base+(UOp.const(dtypes.weakint,2*e)+half)*UOp.const(dtypes.weakint,x.arg.head_dim)+(j+x.arg.output_block_base)*16+col)
       stores.append(dst.store((acc[j].gep(e)*recip).cast(dtypes.half)))
   return UOp.group(*stores)
 
