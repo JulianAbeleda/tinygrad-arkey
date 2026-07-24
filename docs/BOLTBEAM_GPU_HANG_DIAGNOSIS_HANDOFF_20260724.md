@@ -1,3 +1,34 @@
+# >>> CORRECTION (2026-07-24, post-review) — THIS DOC'S ORIGINAL DIAGNOSIS BELOW IS WRONG <<<
+#
+# A py-spy + dmesg review found the REAL root cause. Read this, not the "environment
+# degradation" theory below (kept for the record; its suspects — 18GB cache, IPC/semaphore
+# leaks, KFD handle leaks — are RED HERRINGS, not in the stall path).
+#
+# ROOT CAUSE — a reproducible CODE bug, triggered BY a clean GPU (not degradation):
+#   Clean GPU w/ ~25GB free -> FULL_RESIDENT_OVERLAY admitted -> prefill_v2=True ->
+#   from_gguf (model.py:1313) -> _build_packed_wmma_warmstart (model.py:952) -> gate_combo
+#   -> _run_gate (packed_wmma_prefill_candidates.py:171) -> run_canary
+#   (packed_wmma_correctness_canary.py:152) -> run_isolated (process_isolated.py:97,
+#   multiprocessing spawn). The spawned canary compiles+runs a packed-WMMA GEMM that
+#   HW-FAULTS the GPU (RuntimeError: HW fault ... memory_lost=1) -> full driver reset
+#   (dmesg: "amdgpu: GPU reset(81) succeeded", "device wedged, but recovered through reset").
+#   THE DRIVER-RESET WINDOW IS THE ">240s HANG"; auto-recovery is why VRAM reclaims + rocm-smi
+#   looks healthy after. Secondary deadlock in flat/unguarded scripts: spawn re-execs the
+#   whole script as __main__; the child re-runs load_model, dies on the admission
+#   "budget 0.0GB, KV admits 0" (parent holds ~19GB overlay) BEFORE draining the spawn pipe
+#   -> parent deadlocks in Process.start()/pipe_write, BEFORE run_isolated's timeout loop
+#   (process_isolated.py:97 vs 99-104) so the hard timeout never fires.
+#
+# PROVEN MITIGATION (immediate): TINYGRAD_PREFILL_PACKED_WMMA=0 -> repro completes ~15s,
+#   correct token, no spawn/fault/hang. (8B fast path is graph-GEMM, unaffected; disables
+#   only the packed-WMMA prefill route, which is 14B's fast path.)
+# REAL FIX (Codex): the packed-WMMA canary GEMM HW-faults (OOB/bad-tile) -> debug the
+#   kernel/geometry (_mutate_payload/PACKED_WMMA_GEOM/packed_wmma_correctness_canary.py).
+#   Robustness: (a) don't run the warmstart canary after the parent realized ~19GB overlay;
+#   (b) make run_isolated's hard timeout cover Process.start(), not just queue.get;
+#   (c) add if __name__=="__main__" guards to flat entry/repro scripts.
+# >>> END CORRECTION — original (incorrect) diagnosis follows <<<
+
 # BoltBeam / GPU prefill-run HANG — diagnosis handoff (2026-07-24)
 
 Handoff for Codex to diagnose + fix. Symptom: **BoltBeam prefill runs (and even a plain
