@@ -16,7 +16,8 @@ tinygrad.device.CompileError: compile failed
 ```
 
 This is a **codegen / store-lowering bug**, NOT a fused-attention or graph-GEMM bug, and NOT a
-regression in the shipped route. The normal (with-argmax) prefill path compiles and runs fine, so
+regression in the shipped route. It is a **BoltBeam (fork) bug, not an upstream tinygrad bug** — see
+"Attribution" below. The fix lives entirely in this repo; there is no upstream dependency. The normal (with-argmax) prefill path compiles and runs fine, so
 the benchmark numbers and shipped generation are unaffected. Only the `--logits-only` timing mode
 is blocked.
 
@@ -142,6 +143,28 @@ invariant violation to assert on and to lower.
   shipped inference.
 - **Class:** genuine tinygrad renderer/codegen invariant violation (unassignable store) that could
   bite any large reduce with a fused broadcast pre-scale, not just this kernel.
+
+## Attribution: BoltBeam (fork), not upstream tinygrad
+
+Confirmed by diffing the failing-path files against `upstream/master` (github.com/tinygrad/tinygrad):
+
+- `tinygrad/codegen/__init__.py:158-175` — the STORE/UNROLL substitution block
+  (`store_subs`/`indexed_unroll`) that forms the store whose destination becomes a VECTORIZE/EXPAND
+  is **absent from upstream** (`git show upstream/master:tinygrad/codegen/__init__.py | grep
+  indexed_unroll` → empty). Authored 100% by the repo owner under *"[codegen] bind physical attention
+  lanes to output addresses"*.
+- `tinygrad/codegen/late/devectorizer.py` — `+1022 / -0` vs upstream (fork-owned at this path).
+- `tinygrad/renderer/cstyle.py` — heavily forked (236 ins / 254 del).
+- `tinygrad/codegen/experimental.py` (loader for `extra.qk.*` passes) and
+  `extra/qk/reg_store_devec.py` — entirely BoltBeam.
+
+So the pipeline that mints the unassignable store is BoltBeam-authored fork code, and the fix belongs
+here — nothing to push upstream or wait on.
+
+**Caveat (to fully close):** forked files prove the *pipeline* is BoltBeam's, not that stock upstream
+tinygrad is immune to the same store-lowering gap. Running the pure-python repro (see "Suggested
+approach") against `upstream/master` would settle whether the underlying devectorizer gap also exists
+upstream. Either way BoltBeam owns the failing path as shipped.
 
 ## What is ruled out (with evidence)
 
