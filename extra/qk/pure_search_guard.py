@@ -51,6 +51,18 @@ def _decode_attention_rolled_back(e: dict[str, Any]) -> bool:
   return not _env_flag(e, "DECODE_LIVE_SPLIT", 1)
 
 
+def _prefill_attention_rolled_back(e: dict[str, Any]) -> bool:
+  # tinygrad/llm/model.py's prefill_custom_kernel_attn dispatch branch (P5b) has no env key that
+  # de-selects it: eligibility is computed from real model geometry (n_heads, n_kv_heads) + device
+  # facts (backend, architecture) via _should_use_custom_kernel_prefill_attn(...) -> ADMITTED_GRIDS +
+  # AMD + gfx1100, at model construction -- not read from os.environ. The env-driven rollback model
+  # this guard uses for the decode routes above doesn't apply the same way here; the real "rollback" is
+  # automatic non-admission (any shape outside ADMITTED_GRIDS, any non-AMD backend, or any non-gfx1100
+  # arch) documented on the manifest row, which safely falls to ordinary SDPA -- exactly like
+  # decode_q6k_gemv, generated is unconditional once admitted; no handwritten oracle kernel survives.
+  return False
+
+
 def _route_ids_matching(*, default_only: bool = False, env: dict[str, str] | None = None, **facts: Any) -> list[str]:
   candidates = set(default_routes()) if default_only else set(ROUTES)
   out = []
@@ -150,6 +162,10 @@ HOT_FAMILIES = [
    "generated": _default_route_id(workload="decode", quant=["fp16"], profile_id="qwen3_8b_q4_k_m_gfx1100_decode"),
    "oracle": _default_route_id(workload="decode", quant=["fp16"], profile_id="qwen3_8b_q4_k_m_gfx1100_decode"),
    "rollback_active": _decode_attention_rolled_back},
+  {"family": "prefill_attention",
+   "generated": _default_route_id(workload="prefill", quant=["fp16"], roles=["attention_tile"]),
+   "oracle": _default_route_id(workload="prefill", quant=["fp16"], roles=["attention_tile"]),
+   "rollback_active": _prefill_attention_rolled_back},
 ]
 
 

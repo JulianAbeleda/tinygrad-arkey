@@ -81,6 +81,17 @@ CENSUS_OVERLAY = [
     "rollback_flag": "DECODE_LIVE_SPLIT=0 exits the live-split default; no manifest fallback route row remains",
     "next_action": "keep promoted; 8B/14B/32B now share one modular structural-class route",
   }),
+  # ----- prefill attention -----
+  ("prefill_flash_attention_generated", {
+    "shape_guard": "B=1 Hq=32 Hkv=8 Hd=128 q_tokens=512 kv_tokens>=512 (8B) | B=1 Hq=40 Hkv=8 Hd=128 q_tokens=512 kv_tokens>=512 (14B)",
+    "writer": "generated",
+    "selector": "shape_admitted_model_config_default",
+    "route_guard": "tinygrad/llm/model.py Transformer._attention prefill_custom_kernel_attn branch (its own independent eligibility boundary, decoupled from the legacy prefill_tc_attn/shared_attention_proven_eligible proof): _should_use_custom_kernel_prefill_attn(n_heads, n_kv_heads, backend, arch) -> ADMITTED_GRIDS + AMD + gfx1100, threaded into TransformerConfig at model construction (P5b) -> route_prefill_attention(..., use_custom_kernel=True)",
+    "kernel_source": "tinygrad/llm/fused_attention.py custom_kernel_attention -> extra/qk/flash_prefill_attention_spec.py FlashPrefillAttentionSpec -> tinygrad/schedule/wmma/kernels.py amd_gfx1100_q16_grid_hd128_loop_attention (descriptor owns and threads head_dim; emitter derives every Hd-adjacent extent from it)",
+    "authority_artifact": "extra/qk/prefill_flash_e2e_parity.py (real 8B/14B token-parity: SDPA=49855==FUSED=49855, SDPA=90310==FUSED=90310, AUTHORITY_GATE PASS) + extra/qk/prefill_hd_sweep_numerics.py (Hd=64/128 lowering+numerics, max_abs_err=6.104e-05)",
+    "rollback_flag": "none; automatic non-admission (shape outside ADMITTED_GRIDS, non-AMD backend, or non-gfx1100 arch) falls to ordinary SDPA -- no manifest hand-kernel rollback exists or is needed",
+    "next_action": "keep promoted for the proven 8B/14B Hd=128 shapes; the honest Hd<=128 wave32 VGPR ceiling and the Hd in {48,80,96,112} acc_blocks-membership-set gap (hd_blocks not in {1,2,4,8}) remain open, unrelated to the promoted shapes",
+  }),
   # ----- prefill GEMM -----
   ("prefill_wmma_lds_dbuf_generated", {
     "shape_guard": "gfx1100 pp512 exact candidate set: attn_qo, attn_kv, ffn_down, ffn_gate_up",
