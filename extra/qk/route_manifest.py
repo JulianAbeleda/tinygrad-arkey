@@ -165,6 +165,42 @@ ROUTES = {
   # kernels (flash_state_gmax/flash_state_combine) and route_attribution branch no longer exist.
   # Generic flash fallback row REMOVED 2026-07-06 (no backups): the DECODE_LIVE_SPLIT=0 fallback implementation was
   # deleted; no rollback target remains.
+  # ---------------- prefill attention ----------------
+  "prefill_flash_attention_generated": {
+    "workload": "prefill", "profile_id": PROFILE_PREFILL, "status": "research",
+    "roles": ["attention_tile"], "excluded_roles": [],
+    "quant": ["fp16"],
+    # Hd=128 is the VALIDATED shape (parity with the decode-flash rows, which also pin Hd=128), even
+    # though FlashPrefillAttentionSpec.validate() now FORM-accepts any positive 16-multiple Hd<=128
+    # (P4a) and Hd=64 lowers + is numerically correct (extra/qk/prefill_hd_sweep_numerics.py). This row
+    # only claims what is proven on the real ADMITTED_GRIDS shapes; Hd=64 is evidence the FORM is
+    # generic, not a second admitted production shape.
+    "shape_guards": [{"B": 1, "Hq": 32, "Hkv": 8, "q_tokens": 512, "Hd": 128, "kv_tokens": ">=512"},
+                     {"B": 1, "Hq": 40, "Hkv": 8, "q_tokens": 512, "Hd": 128, "kv_tokens": ">=512"}],
+    # NOT env-gated the way the decode-flash rows are: selection is model.config.prefill_tc_attn
+    # (candidate-policy selected at model construction, tinygrad/llm/model.py:382,601,1218) gating
+    # route_prefill_attention(..., use_custom_kernel=True) (tinygrad/llm/fused_attention.py:154). There
+    # is no single os.environ key that forces this on today, so `env` is left empty rather than
+    # inventing one; this is itself part of why the row is NOT promoted (P5 is the enablement step that
+    # would make PURE_MACHINE_SEARCH_ONLY govern it, per docs/flash-prefill-pure-search-lift-scope-20260724.md).
+    "env": {},
+    "rollback": {},  # automatic: route_prefill_attention falls through to sdpa_fallback on NotImplementedError
+                     # (geometry not in ADMITTED_GRIDS, or spec.validate() rejects) or when prefill_tc_attn is False.
+    "baseline_route_id": "ordinary_tinygrad_graph",  # sdpa_fallback is q.scaled_dot_product_attention, ordinary tinygrad scheduling
+    "strict_fallback": False,
+    "expected_kernels": ["amd_gfx1100_q16_grid_hd128_loop_attention"],
+    "forbidden_kernels": ["fallback_graph"],
+    # REAL, re-run evidence only (do not cite unverifiable claims as a gate): extra/qk/prefill_hd_sweep_numerics.py
+    # is the concrete runnable numeric+lowering gate for THIS route (custom_kernel_attention ->
+    # FlashPrefillAttentionSpec -> amd_gfx1100_q16_grid_hd128_loop_attention), executed this session:
+    # `Hd=64: lowered=True max_abs_err=6.104e-05 PASS` and `Hd=128: lowered=True max_abs_err=6.104e-05 PASS`.
+    "authority_gate": "extra/qk/prefill_hd_sweep_numerics.py",
+    "promotion_artifacts": [],
+    "purity_status": "research",
+    "provenance": "machine_authored_generated",
+    "selector": "research_descriptor_only",
+    "route_attribution": "tinygrad/llm/fused_attention.py custom_kernel_attention (+ the postrange.py native AST-swap, tinygrad/codegen/opt/postrange.py:_apply_tc_opt) -> extra/qk/flash_prefill_attention_spec.py FlashPrefillAttentionSpec (descriptor owns the topology INCLUDING head_dim, threaded into the builder as of P4a) -> tinygrad/schedule/wmma/kernels.py amd_gfx1100_q16_grid_hd128_loop_attention (emitter derives every Hd-adjacent extent -- sizes, loop bounds, fragment/drain address math -- from head_dim, not bare literals).",
+    "note": "Genuinely machine_authored_generated, NOT a naming-trap wrapper: the descriptor owns AND THREADS head_dim (previously a decorative field the emitter ignored, P4a closed that gap), and the emitter + HIP backend derive every Hd-adjacent extent from it (P-B1 substrate validators 00989856a, P-B2 emitter index math 43a28aafd, P-B3 HIP drain address math 6f90d6fe7, P4a spec threading a1e96267c, plus a P4b de-weld pass that fixed a real out-of-bounds fragment-addressing bug in tinygrad/renderer/isa/amd.py:expand_loop_fragment found only by actually lowering Hd=64). Empirically Hd-generic: Hd=64 AND Hd=128 both lower and are numerically correct (max_abs_err=6.104e-05, extra/qk/prefill_hd_sweep_numerics.py), not merely form-generic. ONE real capability gap vs the decode-flash rows above: prefill's wave32 WMMA layout has a fixed per-wave VGPR budget, so FlashPrefillAttentionSpec.validate() hard-ceilings at Hd<=128 (Hd>128 rejected), whereas decode's scalar layout scales further (validated to Hd=256, extra/qk/decode_hd_sweep_numerics.py). shape_guards above pin the validated production Hd=128 shapes; Hd=64 is evidence of genericity, not a claimed second admitted shape. KNOWN RESIDUAL: the acc_blocks membership set ({1,2,4} in amd_gfx1100_q16_grid_hd128_loop_attention / {1,2,4,8} in FlashPrefillAttentionSpec.validate()) and the pv_slice_stage output_block_base allowlist ({(0,2),(2,2),(4,2),(6,2)}) both still assume hd_blocks==8 and were not generalized -- so the honest supported Hd set is {16,32,64,128} proven-clean, with a gap at Hd in {48,80,96,112} (hd_blocks in {3,5,6,7}, not divisors matched by the un-generalized sets) not yet supported. Deliberately NOT promoted (status=research, not promoted_default/default_shipped): P4c is the manifest-truth step only. Promotion (P5) requires wiring PURE_MACHINE_SEARCH_ONLY to actually govern this route (today prefill_tc_attn is config-flag-invisible to the guard's HOT_FAMILIES) and re-running this authority_gate on real 8B/14B, not just the synthetic Hd sweep."},
   # ---------------- prefill GEMM ----------------
   "prefill_v2_scheduler_matmul_default": {
     "workload": "prefill", "profile_id": PROFILE_PREFILL, "status": "superseded_rollback",
