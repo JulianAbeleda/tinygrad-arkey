@@ -51,6 +51,19 @@ _RUNTIME_PERSISTENT_OWNER = AllocationOwner("runtime_persistent", "model")
 def _should_use_flash_attention(ring_freqs:Tensor|None, start_pos:int|UOp, T:int|UOp, use_flash:bool) -> bool:
   return ring_freqs is not None or _route_should_use_flash_decode(start_pos, T, use_flash)
 
+def _should_use_custom_kernel_prefill_attn(n_heads:int, n_kv_heads:int, backend:str|None, arch:str|None) -> bool:
+  """Independent eligibility boundary for the proven custom-kernel-injection prefill attention route
+  (tinygrad/llm/fused_attention.py:custom_kernel_attention -> extra/qk/flash_prefill_attention_spec.py
+  FlashPrefillAttentionSpec), decoupled from the legacy composite-reduce path's prefill_tc_attn /
+  shared_attention_proven_eligible proof (that proof is unrelated evidence for the OFF-critical-path
+  class-2-risk `shared_prefill_attention` route -- see fused_attention.py's module docstring; P5b,
+  docs/flash-prefill-pure-search-lift-scope-20260724.md). True only for the PROVEN admitted 8B/14B
+  shapes on AMD/gfx1100 (extra/qk/prefill_hd_sweep_numerics.py Hd=64/128 lower+numerically correct,
+  extra/qk/prefill_flash_e2e_parity.py real-model 8B/14B token parity); every other shape/backend/arch
+  safely falls back to SDPA (the existing default for all of them today)."""
+  from tinygrad.llm.fused_attention import ADMITTED_GRIDS
+  return (n_heads, n_kv_heads, 512) in ADMITTED_GRIDS and backend == "AMD" and arch == "gfx1100"
+
 def _bind_tensor_owner(tensor:Tensor, owner:AllocationOwner) -> Tensor:
   """Attach semantic ownership to a lazy Tensor's eventual physical base."""
   bind_allocation_owner(tensor.uop.buffer, owner)
@@ -598,6 +611,35 @@ class TransformerBlock(FFNBlock):
                                          kv_scale=assigned_scale, freqs=(_fr if _rope_read else None),
                                          ring_full=_ring_full)
       attn = out.reshape(B, Hq, T, Hd).cast(q.dtype)
+    elif self.config.prefill_custom_kernel_attn and getattr(self, '_prefill_v2', False) and isinstance(start_pos, int) and resolve(T != 1):
+      # P5b: the proven custom-kernel-injection route's OWN independent eligibility boundary
+      # (_should_use_custom_kernel_prefill_attn -> ADMITTED_GRIDS + AMD/gfx1100), decoupled from the
+      # legacy composite-reduce path below (which requires the separate prefill_tc_attn /
+      # shared_attention_proven_eligible proof -- unrelated evidence for a different, class-2-risk
+      # path). Self-sufficient: builds its own ctx unconditionally (see below) so it cannot silently
+      # fall through to SDPA the way a copy-pasted strategy-gate once did (root-caused via
+      # p5_default_binding.py -- see the ctx comment). Admission is bounded to the proven 8B/14B
+      # shapes by _should_use_custom_kernel_prefill_attn, so this branch cannot regress anything else.
+      from tinygrad.llm.fused_attention import route_prefill_attention
+      from tinygrad.uop.ops import SharedAttentionCandidateContext
+      # Self-sufficient ctx: custom_kernel_attention/route_prefill_attention never read ctx.profile or
+      # ctx.strategy (confirmed by inspection of fused_attention.py -- it only reads ctx.kv_tokens/
+      # start_pos/q_tokens/output_block_base/acc_blocks). The legacy branch below gates ctx construction
+      # on `_strategy in ("FULL_RESIDENT_OVERLAY","BOUNDED_PACKED_TILES")` because the COMPOSITE
+      # shared_prefill_attention path cares about overlay/weight-loading strategy; that gate has nothing
+      # to do with this route and was a copy-paste coupling bug (root-caused via p5_default_binding.py:
+      # a DEFAULT model load resolves prefill_policy_strategy=='DIRECT_PACKED_FALLBACK', which made this
+      # branch build ctx=None and silently fall through to SDPA even though prefill_custom_kernel_attn
+      # was correctly True -- a token match hid a non-firing route). Build ctx unconditionally here;
+      # _profile is always non-empty when this branch is reached because
+      # _should_use_custom_kernel_prefill_attn already restricted admission to n_heads in {32,40}.
+      _profile = "qwen3_8b_q4k_m_gfx1100" if self.config.n_heads == 32 else "qwen3_14b_q4k_m_gfx1100" if self.config.n_heads == 40 else "custom_kernel_prefill_attn"
+      _ctx = SharedAttentionCandidateContext(_profile, prefill_policy_strategy(self.config.prefill_policy), T, start_pos+T,
+        start_pos, self.config.n_heads, self.config.n_kv_heads, self.config.head_dim, True)
+      with role_metadata("shared_prefill_attention"):
+        attn = _prefill_semantic(_prefill, prefill_scratch,
+          route_prefill_attention(q.cast(dtypes.half), k.cast(dtypes.half), v.cast(dtypes.half),
+            mask=mask, causal=True, ctx=_ctx, use_custom_kernel=True).cast(q.dtype))
     elif self.config.prefill_tc_attn and getattr(self, '_prefill_v2', False) and isinstance(start_pos, int) and resolve(T != 1):
       # Q/K/V have the same fp16 activation contract for resident-overlay and
       # packed-weight projections.  Capture attention once at that boundary;
@@ -1216,6 +1258,7 @@ class Transformer:
       admit=_admit, prefill_memory_plan=_plan.prefill_memory_plan, prefill_policy=_runtime_policy,
       prefill_device_facts=_device_facts, exact_memory_plan=_exact_memory_plan,
       prefill_tc_attn=bool(_runtime_policy["prefill_tc_attn"]),
+      prefill_custom_kernel_attn=_should_use_custom_kernel_prefill_attn(n_heads, n_kv_heads, _device_facts.backend, _device_facts.architecture),
       prefill_v2=_v2_on, prefill_ubatch=_prefill_ubatch, prefill_concrete_kv=_concrete_kv,
       prefill_workload_reuse=_workload_reuse, flash_decode=_flash_decode,
       lm_head_route=("direct_packed_8b_vocab" if any(
