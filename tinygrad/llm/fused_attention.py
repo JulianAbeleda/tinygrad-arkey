@@ -98,15 +98,26 @@ def custom_kernel_attention(q:Tensor, k:Tensor, v:Tensor, *, scale:float|None, c
   grid = prefill_grid_spec(q, k)
   if grid is None: raise NotImplementedError("custom_kernel_attention: geometry not admitted")
   Hq, Hkv, T, KV, Hd = grid.q_heads, grid.kv_heads, grid.q_tokens, grid.kv_tokens, grid.head_dim
+  # Fail-safe geometry cross-check: the ctx (which drives the causal boundary) must agree with the
+  # ACTUAL tensor shapes. For a growing unpadded prefill cache kv_tokens == start_pos + q_tokens. If a
+  # padded/ring KV buffer ever violates this, fall back (route_prefill_attention catches -> SDPA) rather
+  # than silently mis-mask. Variable kv_tokens is otherwise free (a fresh kernel compiles per length).
+  if not (grid.kv_tokens == ctx.kv_tokens == ctx.start_pos + ctx.q_tokens and grid.q_tokens == ctx.q_tokens):
+    raise NotImplementedError(f"custom_kernel_attention: ctx/tensor geometry mismatch "
+      f"(grid kv={grid.kv_tokens} q={grid.q_tokens}; ctx kv={ctx.kv_tokens} q={ctx.q_tokens} start={ctx.start_pos})")
   sc = float(scale) if scale is not None else 1.0 / (Hd ** 0.5)
   q_flat = q.cast(dtypes.half).reshape(Hq * T * Hd)
   k_flat = k.cast(dtypes.half).reshape(Hkv * KV * Hd)
   v_flat = v.cast(dtypes.half).reshape(Hkv * KV * Hd)
 
   def emit(out_ph, q_ph, k_ph, v_ph):
+    # Thread valid_kv/query_start from ctx explicitly (== the builder's no-padding defaults today, but
+    # robust for start_pos>0 chunks: the per-row causal boundary is ctx.start_pos, not an incidental
+    # kv_tokens-q_tokens equality).
     return amd_gfx1100_q16_grid_hd128_loop_attention(
       q_ph, k_ph, v_ph, out_ph, q_tokens=T, q_heads=Hq, kv_heads=Hkv, kv_tokens=KV,
-      scale=sc, causal=causal, output_block_base=ctx.output_block_base, acc_blocks=ctx.acc_blocks,
+      scale=sc, causal=causal, valid_kv=ctx.kv_tokens, query_start=ctx.start_pos,
+      output_block_base=ctx.output_block_base, acc_blocks=ctx.acc_blocks,
       kernel_info=KernelInfo(name="amd_gfx1100_q16_grid_hd128_loop_attention"))
 
   out_flat = Tensor.empty(Hq * T * Hd, dtype=dtypes.half, device=q.device)
