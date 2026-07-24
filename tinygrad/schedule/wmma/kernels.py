@@ -245,10 +245,13 @@ def amd_gfx1100_q32_hq4_hkv2_kv64_hd128_loop_attention(q:UOp, k:UOp, v:UOp, out:
   drain=UOp(Ops.AMD_ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,group,final_l,*final_c),arg=AMDAttentionOutputDrainSpec(grid=grid))
   return UOp.sink(m_init,l_init,c_init,end,drain,arg=kernel_info).replace(tag=("amd_gfx1100_q32_hq4_hkv2_kv64_hd128_loop_v1",))
 
-def amd_gfx1100_q16_grid_hd128_loop_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_tokens:int,q_heads:int,kv_heads:int,kv_tokens:int,scale:float,kernel_info,causal:bool=False,valid_kv:int|None=None,query_start:int|None=None,output_block_base:int=0,acc_blocks:int=8,phase_abi_v1:bool=False)->UOp:
+def amd_gfx1100_q16_grid_hd128_loop_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_tokens:int,q_heads:int,kv_heads:int,kv_tokens:int,scale:float,kernel_info,causal:bool=False,valid_kv:int|None=None,query_start:int|None=None,output_block_base:int=0,acc_blocks:int=8,phase_abi_v1:bool=False,head_dim:int=128)->UOp:
   """Fixed 16-WMMA attention wave with compile-time model geometry."""
   from tinygrad.uop.ops import AMDAttentionOutputDrainSpec, AMDAttentionGridSpec, AMDLoopStateSpec, AMDPackedFragmentLoopSpec, AxisType
-  grid=AMDAttentionGridSpec(q_tokens=q_tokens,q_heads=q_heads,kv_heads=kv_heads,group_ratio=q_heads//kv_heads,kv_tokens=kv_tokens); grid.validate()
+  # head_dim is now THREADED (not just the grid's own default): the descriptor genuinely owns it.
+  # Everything downstream (hd/hd_blocks locals, packed_fragment_load's grid-derived hdb bound from
+  # P-B1/P-B2) already reads from grid.head_dim, so passing it here cascades correctly.
+  grid=AMDAttentionGridSpec(q_tokens=q_tokens,q_heads=q_heads,kv_heads=kv_heads,group_ratio=q_heads//kv_heads,kv_tokens=kv_tokens,head_dim=head_dim); grid.validate()
   hd=grid.head_dim; hd_blocks=hd//16
   owners=(q,k,v,out); sizes=(q_heads*q_tokens*hd,kv_heads*kv_tokens*hd,kv_heads*kv_tokens*hd,q_heads*q_tokens*hd)
   if any(x.op is not Ops.PARAM or not isinstance(x.dtype,PtrDType) for x in owners) or tuple(x.arg.slot for x in owners)!=(1,2,3,0) or tuple(x.ptrdtype.size for x in owners)!=sizes: raise ValueError(f"grid loop requires Q1/K2/V3/out0 sized {sizes}")
@@ -296,14 +299,22 @@ def amd_gfx1100_q16_grid_hd128_loop_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_toke
   pv_v=v.after(ml_commit) if ml_commit is not None else v
   for b in range(acc_blocks):
     oc=rd(creg,ci,"acc",b,b*8); pv=UOp(Ops.WMMA,dtypes.float.vec(8),(p,fr(pv_v,"V",b+output_block_base),oc.alu(Ops.MUL,alpha)),warg,tag=("attention_wmma","PV",b)); writes.extend(wr(creg,"acc",pv,b,b*8))
-  end=UOp.group(*writes).end(rng).replace(tag=("amd_gfx1100_attention_grid_loop_end_v1",rng)); final_token=end if phase_abi_v1 else None; fl=(UOp(Ops.STACK,dtypes.float.vec(8),tuple(ml.loop_read(8+i,final_token) for i in range(8))) if phase_abi_v1 else rd(lreg,end,"l",final=True)); fc=tuple(rd(creg,end,"acc",b,b*8,final=True) for b in range(acc_blocks)); drain=UOp(Ops.AMD_ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,group,fl,*fc),arg=AMDAttentionOutputDrainSpec(native_abi="amd_gfx1100_attention_output_drain_v1" if acc_blocks==hd_blocks else "amd_gfx1100_attention_output_drain_acc_slice_v2",blocks=acc_blocks,grid=grid,output_block_base=output_block_base))
+  # NEWLY DE-WELDED: AMDAttentionOutputDrainSpec previously took no head_dim/address_expr here, so it
+  # silently rode the drain spec's own default (128 / "e*256+halfwave*128+j*16+col") regardless of the
+  # threaded grid -- masked because the grid always defaulted to 128 too. Now both are derived from the
+  # SAME threaded `hd`, matching cstyle.py's P-B3 formula exactly. Byte-identical at hd=128
+  # (2*128==256, hd==128 -> "e*256+halfwave*128+j*16+col", the exact previous default string).
+  end=UOp.group(*writes).end(rng).replace(tag=("amd_gfx1100_attention_grid_loop_end_v1",rng)); final_token=end if phase_abi_v1 else None; fl=(UOp(Ops.STACK,dtypes.float.vec(8),tuple(ml.loop_read(8+i,final_token) for i in range(8))) if phase_abi_v1 else rd(lreg,end,"l",final=True)); fc=tuple(rd(creg,end,"acc",b,b*8,final=True) for b in range(acc_blocks)); drain=UOp(Ops.AMD_ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,group,fl,*fc),arg=AMDAttentionOutputDrainSpec(native_abi="amd_gfx1100_attention_output_drain_v1" if acc_blocks==hd_blocks else "amd_gfx1100_attention_output_drain_acc_slice_v2",head_dim=hd,blocks=acc_blocks,address_expr=f"e*{2*hd}+halfwave*{hd}+j*16+col",grid=grid,output_block_base=output_block_base))
   return UOp.sink(mi,li,ci,end,drain,arg=kernel_info).replace(tag=("amd_gfx1100_q16_grid_hd128_loop_v1",))
 
 
-def amd_gfx1100_q16_grid_qk_stats_stage(q:UOp,k:UOp,stats:UOp,*,q_tokens:int,q_heads:int,kv_heads:int,kv_tokens:int,scale:float,kernel_info,causal:bool=True,query_start:int|None=None)->UOp:
+def amd_gfx1100_q16_grid_qk_stats_stage(q:UOp,k:UOp,stats:UOp,*,q_tokens:int,q_heads:int,kv_heads:int,kv_tokens:int,scale:float,kernel_info,causal:bool=True,query_start:int|None=None,head_dim:int=128)->UOp:
   """Direct diagnostic Stage A: QK online reduction to fp32 `[query, m/l]` state only."""
   from tinygrad.uop.ops import AMDAttentionGridSpec, AMDAttentionStatsDrainSpec, AMDLoopStateSpec, AMDPackedFragmentLoopSpec, AxisType
-  grid=AMDAttentionGridSpec(q_tokens=q_tokens,q_heads=q_heads,kv_heads=kv_heads,group_ratio=q_heads//kv_heads,kv_tokens=kv_tokens); grid.validate()
+  # head_dim threaded (matching amd_gfx1100_q16_grid_hd128_loop_attention). No drain-spec change needed
+  # here: AMDAttentionStatsDrainSpec carries no head_dim field at all (confirmed head_dim-independent
+  # in P-B3 -- it's per-row m/l stats, not an Hd-sized buffer).
+  grid=AMDAttentionGridSpec(q_tokens=q_tokens,q_heads=q_heads,kv_heads=kv_heads,group_ratio=q_heads//kv_heads,kv_tokens=kv_tokens,head_dim=head_dim); grid.validate()
   hd=grid.head_dim; hd_blocks=hd//16
   qn,kn=q_heads*q_tokens*hd,kv_heads*kv_tokens*hd
   if tuple(x.arg.slot for x in (q,k,stats)) != (1,2,0) or q.ptrdtype.size != qn or k.ptrdtype.size != kn or stats.ptrdtype.size != q_heads*q_tokens*2:
@@ -323,10 +334,11 @@ def amd_gfx1100_q16_grid_qk_stats_stage(q:UOp,k:UOp,stats:UOp,*,q_tokens:int,q_h
   drain=UOp(Ops.AMD_ATTENTION_STATS_DRAIN,dtypes.void,(stats,group,fm,fl),arg=AMDAttentionStatsDrainSpec())
   return UOp.sink(mi,li,end,drain,arg=kernel_info).replace(tag=("amd_gfx1100_qk_stats_stage_v1",))
 
-def amd_gfx1100_q16_grid_pv_slice_stage(q:UOp,k:UOp,v:UOp,stats:UOp,out:UOp,*,q_tokens:int,q_heads:int,kv_heads:int,kv_tokens:int,scale:float,kernel_info,output_block_base:int,v_input_block_base:int=0,acc_blocks:int=2,causal:bool=True,query_start:int|None=None)->UOp:
+def amd_gfx1100_q16_grid_pv_slice_stage(q:UOp,k:UOp,v:UOp,stats:UOp,out:UOp,*,q_tokens:int,q_heads:int,kv_heads:int,kv_tokens:int,scale:float,kernel_info,output_block_base:int,v_input_block_base:int=0,acc_blocks:int=2,causal:bool=True,query_start:int|None=None,head_dim:int=128)->UOp:
   """Direct diagnostic Stage B: reload final m/l, recompute QK/P, and own one aligned PV slice."""
   from tinygrad.uop.ops import AMDAttentionOutputDrainSpec, AMDAttentionGridSpec, AMDLoopStateSpec, AMDPackedFragmentLoopSpec, AxisType
-  grid=AMDAttentionGridSpec(q_tokens=q_tokens,q_heads=q_heads,kv_heads=kv_heads,group_ratio=q_heads//kv_heads,kv_tokens=kv_tokens); grid.validate()
+  # head_dim threaded (matching amd_gfx1100_q16_grid_hd128_loop_attention).
+  grid=AMDAttentionGridSpec(q_tokens=q_tokens,q_heads=q_heads,kv_heads=kv_heads,group_ratio=q_heads//kv_heads,kv_tokens=kv_tokens,head_dim=head_dim); grid.validate()
   hd=grid.head_dim; hd_blocks=hd//16
   qn,kn,outn=q_heads*q_tokens*hd,kv_heads*kv_tokens*hd,q_heads*q_tokens*hd
   if tuple(x.arg.slot for x in (q,k,v,stats,out)) != (1,2,3,4,0) or tuple(x.ptrdtype.size for x in (q,k,v,stats,out)) != (qn,kn,kn-v_input_block_base*16,q_heads*q_tokens*2,outn): raise ValueError("pv slice stage requires Q1/K2/prebiased-V3/stats4/out0 exact geometry")
@@ -341,5 +353,11 @@ def amd_gfx1100_q16_grid_pv_slice_stage(q:UOp,k:UOp,v:UOp,stats:UOp,out:UOp,*,q_
   for b in range(hd_blocks): qk=UOp(Ops.WMMA,dtypes.float.vec(8),(fr(q,"Q",b),fr(k,"K",b),qk),warg,tag=("attention_wmma","QK",b))
   p,_,_,alpha=amd_gfx1100_row_softmax_state(qk,fm,fl,spec=AMDRowSoftmaxRepackSpec(score_scale=scale,mode="loop_state_v1",validity_mode="causal_v1",query_start=query_start,kv_start=-1,valid_kv=kv_tokens,dynamic_kv_v1=True,grid=grid),kv_tile=rng,grid_id=group); writes=[]
   for b in range(2): writes.extend(wr(UOp(Ops.WMMA,dtypes.float.vec(8),(p,fr(v,"V",b),rd(ci,b).alu(Ops.MUL,alpha)),warg,tag=("attention_wmma","PV",b)),b))
-  end=UOp.group(*writes).end(rng); fc=tuple(rd(end,b,True) for b in range(2)); drain=UOp(Ops.AMD_ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,group,fl,*fc),arg=AMDAttentionOutputDrainSpec(native_abi="amd_gfx1100_attention_output_drain_acc_slice_v2",blocks=2,grid=grid,output_block_base=output_block_base))
+  # NEWLY DE-WELDED (same as amd_gfx1100_q16_grid_hd128_loop_attention): head_dim/address_expr were
+  # previously unset here, silently riding the drain spec's own default. Now derived from the same
+  # threaded `hd`. Byte-identical at hd=128. NOTE: the (output_block_base,acc_blocks) allowlist above
+  # ({(0,2),(2,2),(4,2),(6,2)}) still assumes hd_blocks==8 and was NOT generalized in this step (out of
+  # scope here; flagged in the P4a report) -- this stage is not on FlashPrefillAttentionSpec's emit()
+  # path, so it does not affect the spec-driven route's Hd-threading.
+  end=UOp.group(*writes).end(rng); fc=tuple(rd(end,b,True) for b in range(2)); drain=UOp(Ops.AMD_ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,group,fl,*fc),arg=AMDAttentionOutputDrainSpec(native_abi="amd_gfx1100_attention_output_drain_acc_slice_v2",head_dim=hd,blocks=2,address_expr=f"e*{2*hd}+halfwave*{hd}+j*16+col",grid=grid,output_block_base=output_block_base))
   return UOp.sink(ci,end,drain,arg=kernel_info).replace(tag=("amd_gfx1100_pv_slice_stage_v1",))

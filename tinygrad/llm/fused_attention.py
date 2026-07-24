@@ -128,9 +128,20 @@ def custom_kernel_attention(q:Tensor, k:Tensor, v:Tensor, *, scale:float|None, c
   # BOTH-gate: ADMITTED_GRIDS (proven-shapes allowlist, via prefill_grid_spec above) AND
   # spec.validate() (geometric legality) must both hold; validate() alone accepts any %16<=4096
   # geometry, so ADMITTED_GRIDS is what keeps this to the proven 512 shapes -- unchanged behavior.
+  #
+  # ctx.acc_blocks defaults to 8 (SharedAttentionCandidateContext's own default, the Hd=128
+  # full-accumulator value) when a caller doesn't override it. Forwarding that literal unconditionally
+  # would break the full-drain case at any Hd!=128 (hd_blocks != 8) even though the caller meant "give
+  # me the full accumulator", not literally 8 blocks. Detect the full-accumulator-default case
+  # (output_block_base==0 and acc_blocks==8, i.e. ctx never overrode either) and pass None so
+  # FlashPrefillAttentionSpec.__post_init__ resolves it via the SAME hd//16 formula the spec already
+  # uses -- byte-identical at Hd=128 (None -> 128//16==8, the exact value that would have been
+  # forwarded). An explicit non-full slice (output_block_base!=0, or an acc_blocks the caller
+  # intentionally set to something other than 8) is preserved exactly as given.
+  ctx_full_default = ctx.output_block_base == 0 and ctx.acc_blocks == 8
   spec = FlashPrefillAttentionSpec(Hq=Hq, Hkv=Hkv, Hd=Hd, q_tokens=T, kv_tokens=KV, causal=causal, scale=sc,
     valid_kv=ctx.kv_tokens, query_start=ctx.start_pos, output_block_base=ctx.output_block_base,
-    acc_blocks=ctx.acc_blocks)
+    acc_blocks=None if ctx_full_default else ctx.acc_blocks)
   try:
     spec.validate()
   except ValueError as e:

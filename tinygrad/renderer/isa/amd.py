@@ -2649,18 +2649,25 @@ def expand_loop_fragment(x:UOp) -> UOp:
   # retaining it only in the tag lets HIP materialize every fragment eagerly.
   stage_wait=getattr(x.arg, "stage_wait", None)
   owner=owner.after(stage_wait) if stage_wait is not None else owner
+  # `128`/`2048` below were head_dim / 16*head_dim (per-token-row Hd stride / per-16-token-tile Hd
+  # stride), hardcoded for Hd=128. Derived from the bound grid's own head_dim -- this is the residual
+  # weld that blocked the Hd=64 numerics sweep (MMU fault: fragment addressing still assumed Hd=128
+  # row strides against Hd=64-sized buffers). The grid-less branch (gbase=0, `not grid_src`) is the
+  # fixed grid-less kv64_hd128_loop kernel (no head_dim kwarg exists there, per P-B2) -- hd stays the
+  # literal 128 constant for that specific kernel family, not derived.
+  hd = x.arg.grid.head_dim if x.arg.grid is not None else 128
   if not grid_src: gbase=UOp.const(dtypes.weakint,0)
   elif isinstance(x.arg.grid, AMDMultiWaveAttentionGridSpec):
     grid,group=x.arg.grid,grid_src[0]
     kv_head,q_tile=group//grid.q_tiles,group%grid.q_tiles
-    gbase=((kv_head*grid.waves_per_group+wave_id)*(grid.q_tokens*128)+q_tile*2048) if role=="Q" else kv_head*(grid.kv_tokens*128)
-  elif role=="Q": gbase=grid_src[0]*2048
+    gbase=((kv_head*grid.waves_per_group+wave_id)*(grid.q_tokens*hd)+q_tile*16*hd) if role=="Q" else kv_head*(grid.kv_tokens*hd)
+  elif role=="Q": gbase=grid_src[0]*(16*hd)
   else:
     grid=x.arg.grid
-    gbase=(grid_src[0]//(grid.q_tiles*grid.group_ratio))*(grid.kv_tokens*128)
-  if role=="Q": offs=tuple(gbase+col*128+block*16+i for i in range(16))
-  elif role=="K": offs=tuple(gbase+rng*2048+col*128+block*16+i for i in range(16))
-  else: offs=tuple(gbase+rng*2048+block*16+i*128+col for i in range(16))
+    gbase=(grid_src[0]//(grid.q_tiles*grid.group_ratio))*(grid.kv_tokens*hd)
+  if role=="Q": offs=tuple(gbase+col*hd+block*16+i for i in range(16))
+  elif role=="K": offs=tuple(gbase+rng*16*hd+col*hd+block*16+i for i in range(16))
+  else: offs=tuple(gbase+rng*16*hd+block*16+i*hd+col for i in range(16))
   return UOp(Ops.STACK,dtypes.half.vec(16),tuple(owner.index(off).load() for off in offs),
     tag=("amd_gfx1100_fragment_load_hd128_loop_v1",role,block,x.arg,*x.src))
 

@@ -7,13 +7,16 @@ custom_kernel_attention is here owned as DATA by a frozen dataclass, so a route 
 compose it (machine_authored_generated) instead of importing the hand builder by
 name (hand_authored_uop_template). See docs/flash-prefill-pure-search-lift-scope-20260724.md.
 
-Track A (this file): Hd is pinned to 128 as a validated constant -- identical posture
-to AMDAttentionGridSpec.validate() today and to decode's own pinned token_block=16.
-The P1 de-literalization (tinygrad/schedule/wmma/kernels.py: hd = grid.head_dim,
-hd_blocks = hd // 16) already makes the emitter form-generic in head_dim, so lifting
-this pin later is Track B: relax AMD*Spec.validate() (AMDAttentionGridSpec,
-AMDLoopStateSpec, AMDPackedFragmentLoopSpec) plus AMDAttentionOutputDrainSpec's
-address_expr -- deliberately NOT done here.
+P-B1..P-B3 de-literalized the substrate validators, the emitter's index math, and the HIP backend's
+drain address math to all derive from head_dim. P4a (this file) closes the last gap: Hd is now THREADED
+into the builder call (not just a decorative field the emitter ignored) -- `self.Hd` flows into
+`amd_gfx1100_q16_grid_hd128_loop_attention`'s `head_dim=` kwarg, which threads into the
+AMDAttentionGridSpec and AMDAttentionOutputDrainSpec it constructs, so the descriptor genuinely owns
+head_dim end to end. Hd remains validated up to a ceiling (see validate()): the wave32 VGPR budget
+hard-ceilings at Hd=128, so Hd must be a positive 16-multiple <=128 -- form-generic + spec-threaded up
+to that ceiling. Only Hd=128 is numerically PROVEN so far (the route admits only ADMITTED_GRIDS-listed
+shapes); this validate() bound describes what the emitter can legally construct, not what is proven fast/
+correct on real hardware.
 """
 from __future__ import annotations
 
@@ -27,9 +30,9 @@ from tinygrad.uop.ops import UOp
 class FlashPrefillAttentionSpec:
   """Data-owned topology for amd_gfx1100_q16_grid_hd128_loop_attention.
 
-  Field names match the builder's kwargs 1:1 (Hq->q_heads, Hkv->kv_heads, Hd is
-  carried for parity with FlashDecodeTileSpec but is not itself passed to the
-  builder -- the builder derives head_dim from AMDAttentionGridSpec, not a kwarg).
+  Field names match the builder's kwargs 1:1 (Hq->q_heads, Hkv->kv_heads, Hd->head_dim
+  -- Hd IS passed to the builder now (P4a); it is no longer a decorative field the
+  emitter ignores).
   """
   Hq: int
   Hkv: int
@@ -40,17 +43,24 @@ class FlashPrefillAttentionSpec:
   Hd: int = 128
   valid_kv: int | None = None
   query_start: int | None = None
-  acc_blocks: int = 8
+  # None means "the full accumulator for whatever Hd is" (Hd//16), resolved in __post_init__ --
+  # byte-identical to the old literal default 8 at Hd=128 (128//16==8), but stays correct as Hd
+  # varies (an explicit value is always respected as given, never reinterpreted).
+  acc_blocks: int | None = None
   output_block_base: int = 0
   phase_abi_v1: bool = False
   target: str = "amd_gfx1100"
 
+  def __post_init__(self):
+    if self.acc_blocks is None:
+      object.__setattr__(self, "acc_blocks", self.Hd // 16)
+
   def validate(self) -> "FlashPrefillAttentionSpec":
-    # Hd is a pinned validated constant for this scope (Track A); the emitter is
-    # form-generic via head_dim//16 (P1) so lifting this is Track B: relax
-    # AMD*Spec.validate() + the drain address_expr (uop/ops.py), not attempted here.
-    if self.Hd != 128:
-      raise ValueError(f"FlashPrefillAttentionSpec requires Hd==128 (pinned validated constant), got {self.Hd}")
+    # Hd is form-generic + spec-threaded (P4a) up to the Hd<=128 wave32 VGPR-budget ceiling: Hd must
+    # be a positive 16-multiple <=128. Only Hd=128 is numerically validated/proven so far -- the route
+    # admits only ADMITTED_GRIDS-listed shapes (fused_attention.py), a separate, narrower gate.
+    if self.Hd <= 0 or self.Hd % 16 or self.Hd > 128:
+      raise ValueError(f"FlashPrefillAttentionSpec requires a positive 16-multiple head_dim <=128, got {self.Hd}")
     if self.q_tokens <= 0 or self.q_tokens % 16:
       raise ValueError(f"q_tokens must be a positive multiple of 16, got {self.q_tokens}")
     if self.kv_tokens <= 0 or self.kv_tokens % 16 or self.kv_tokens > 4096:
@@ -93,7 +103,7 @@ class FlashPrefillAttentionSpec:
         kv_heads=self.Hkv, kv_tokens=self.kv_tokens, scale=self.scale, causal=self.causal,
         valid_kv=self.valid_kv, query_start=self.query_start,
         output_block_base=self.output_block_base, acc_blocks=self.acc_blocks,
-        phase_abi_v1=self.phase_abi_v1, kernel_info=ki)
+        phase_abi_v1=self.phase_abi_v1, head_dim=self.Hd, kernel_info=ki)
     return fxn
 
   @property

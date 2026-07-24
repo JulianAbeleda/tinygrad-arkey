@@ -73,7 +73,10 @@ def validate_amd_attention_output_drain(x:UOp):
   if grid is None: return len(x.src)==10 and x.src[0].dtype.size==2048 and all(s.dtype==dtypes.float.vec(8) for s in x.src[1:])
   try: grid.validate()
   except ValueError: return False
-  return len(x.src)==3+x.arg.blocks and x.src[0].dtype.size==grid.q_heads*grid.q_tokens*128 and all(s.dtype==dtypes.float.vec(8) for s in x.src[2:])
+  # `128` was head_dim (out buffer size = q_heads*q_tokens*Hd); derived from the grid's own head_dim.
+  # Byte-identical at head_dim=128. (The grid-less branch above, line 73, is the fixed grid-less
+  # kv64_hd128_loop kernel -- genuinely no head_dim kwarg exists there, per P-B2 -- left literal.)
+  return len(x.src)==3+x.arg.blocks and x.src[0].dtype.size==grid.q_heads*grid.q_tokens*grid.head_dim and all(s.dtype==dtypes.float.vec(8) for s in x.src[2:])
 
 def validate_amd_attention_stats_drain(x:UOp):
   if not hasattr(x.arg,"native_abi") or x.arg.native_abi != "amd_gfx1100_attention_qk_stats_drain_v1" or x.dtype != dtypes.void or len(x.src) != 4: return False

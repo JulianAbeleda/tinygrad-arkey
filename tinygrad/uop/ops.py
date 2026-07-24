@@ -1416,8 +1416,15 @@ class SharedAttentionCandidateContext(NamedTuple):
       raise ValueError("invalid shared attention profile/strategy")
     if not all(isinstance(x, int) and x > 0 for x in (self.q_tokens, self.kv_tokens, self.hq, self.hkv, self.hd)) or self.start_pos < 0:
       raise ValueError("invalid shared attention geometry")
-    if self.hd != 128 or self.hq % self.hkv: raise ValueError("shared attention requires Hd128 integral GQA")
-    if (self.output_block_base,self.acc_blocks) not in {(0,8),(0,4),(4,4)}: raise ValueError("invalid shared attention accumulator slice")
+    # `hd != 128` was an exact pin; de-literalized to the same Hd<=128 wave32 VGPR-budget ceiling used
+    # by FlashPrefillAttentionSpec.validate() -- positive 16-multiple, <=128. Byte-identical at hd=128.
+    if self.hd <= 0 or self.hd % 16 or self.hd > 128 or self.hq % self.hkv: raise ValueError("shared attention requires Hd<=128 (16-multiple) integral GQA")
+    # {(0,8),(0,4),(4,4)} was the Hd=128 (hd_blocks=8) accumulator-slice allowlist: full, or an even
+    # half-split. Derived from hd_blocks=hd//16 so it stays correct as hd varies. Byte-identical at
+    # hd=128 (hdb=8,half=4 -> exactly {(0,8),(0,4),(4,4)}).
+    hdb=self.hd//16; half=hdb//2
+    allowed_slices={(0,hdb)} | ({(0,half),(half,half)} if half>0 and hdb%2==0 else set())
+    if (self.output_block_base,self.acc_blocks) not in allowed_slices: raise ValueError("invalid shared attention accumulator slice")
     return self
 
 class NativeAttentionRequest(NamedTuple):

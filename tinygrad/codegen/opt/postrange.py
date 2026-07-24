@@ -358,10 +358,17 @@ class Scheduler:
           # no site calls the gfx1100 builder directly. The only difference from that call site is
           # this one injects its carried-forward kernel_info (self.ast.arg's existing fields via
           # replace()) through spec.emit()'s optional kernel_info override.
+          # Same fix as fused_attention.py:custom_kernel_attention (P4a follow-up): the literal `8`
+          # fallback (and a context whose own acc_blocks==8 default was never overridden) is the
+          # Hd=128 full-accumulator value; forwarding it unconditionally would break the full-drain
+          # case at Hd!=head_dim==128. Pass None in the full-default case so
+          # FlashPrefillAttentionSpec.__post_init__ resolves via head_dim//16 -- byte-identical at
+          # head_dim=128 (None -> 128//16==8, the exact value previously forwarded).
+          ctx_full_default = context is None or (context.output_block_base == 0 and context.acc_blocks == 8)
           spec = FlashPrefillAttentionSpec(Hq=grid.q_heads, Hkv=grid.kv_heads, Hd=grid.head_dim,
             q_tokens=grid.q_tokens, kv_tokens=grid.kv_tokens, causal=comp.attention_causal, scale=scale,
             output_block_base=context.output_block_base if context is not None else 0,
-            acc_blocks=context.acc_blocks if context is not None else 8)
+            acc_blocks=None if ctx_full_default else context.acc_blocks)
           try: spec.validate()
           except ValueError: return None
           fxn = _PREFILL_EMITTERS[spec.target](spec,
