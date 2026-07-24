@@ -63,8 +63,26 @@ Findings (honest, corrected):
 3. **Fused's biggest actual value is closing the long-context gap to llama.** Pre-fused was
    **−30% behind llama** at pp4096 (2213 vs 3160); fused pulls that to **−4.4%** (3026).
    Short context we edge llama (+1.5%/+1.3%); long context llama still edges us
-   (−0.7%/−4.4%) — a crossover. The residual long-context deficit is the graph-GEMM /
-   per-chunk path, not attention (attention itself is fast). That is the next perf lever.
+   (−0.7%/−4.4%) — a crossover.
+   **CORRECTION (2026-07-24, per-kernel trace):** the earlier claim here — "the residual
+   long-context deficit is the graph-GEMM / per-chunk path, not attention" — is WRONG for
+   the *intra-model* context decay. A `PROFILE=1` per-kernel trace (8B, gfx1100, start_pos
+   0→3584; artifact `/tmp/...tax_trace_final.json`, method below) shows the per-chunk
+   decomposition is **GEMM-bound and flat with context** (QKV/O + FFN ≈ 470 ms/chunk,
+   93%→74% of per-chunk time) while **fused attention is the ONLY component that grows with
+   KV** — 4% (pp512) → 23% (pp4096), ~8×. So our own throughput decay (3564→2976 tok/s,
+   −16.5%) is **entirely attention's KV-length scaling**, not GEMM. GEMM owns the *baseline*
+   ceiling (~3564 tok/s); attention owns the *long-context* decay. **Caveat:** this
+   attributes our own decay, not the gap vs llama — that needs a llama-side per-kernel trace
+   (in progress). But it makes our attention KV-scaling the prime suspect for the vs-llama
+   long-context crossover, the opposite of the retracted "not attention" claim.
+   **Next levers, ranked:** (1) fused-attention KV-scaling (owns the long-context deficit);
+   (2) per-layer GEMM efficiency (owns the ~3564 baseline ceiling).
+   *Trace method:* `PROFILE=1 TINYGRAD_PREFILL_PACKED_WMMA=0 prefill_whole_synced.py --mode
+   authority --logits-only` populates `device_profile[sp].by_name` (per-kernel `device_ms`);
+   exclude the `r_16_2374_*` kernel (the 512×151936 LM-head is a `--logits-only` artifact,
+   absent from real generation). Non-`--logits-only` gives representative throughput but the
+   profiler returns 0 events on the argmax path.
 4. **Reconciliation:** unpinned-best fused 3623 ≈ pinned 3561 ≈ llama-best 3571 (all
    best-case ~3.6k). The historical "≈145% of llama" was an artifact of the invalid
    ~4408/4413 tinygrad number (see below) plus an un-artifacted "~3050" llama estimate; the
