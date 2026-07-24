@@ -406,3 +406,27 @@ Two candidate fixes (both bounded; ordering/correctness must be preserved):
   cycle and a Q scratch buffer.
 
 Loud class-2 guard (committed 2ebdb2e15) now makes any regression here fail with a clear message.
+
+### A2 — CLASS #2 FIX PLAN (compiler-side; recorded 2026-07-24)
+
+Correction to earlier "model-side F2 is easy": the model marks (`prefill_scratch` etc.) only attach
+allocation annotations, not buffer boundaries, and `.contiguous()` is reached-through. Real-valued K/V
+require a STORE, and the scheduler's store-to-load forwarding is exactly what inlines the v_proj source
+into the read. So model-side buffering hits the same wall — **the fix is compiler-side**, in the
+composite-reduce input lowering.
+
+THE FIX (bounded; two sites + one ordering invariant):
+1. Make the composite reduce consume Q/K/V as opaque buffer LOADS, not reach-throughs. When the per-input
+   index base is an `Ops.AFTER`/`Ops.STAGE` (scheduler-ordering wrapper), load from the underlying buffer
+   instead of forwarding the store's source, WHILE keeping the AFTER as an ordering edge (no read-before-
+   write race). Two reach-through sites:
+   - V-aux: `_pack_online_softmax_v_lanes` / `_handle_no_range_generic` (composite_combines.py 173-192,
+     249-262). A naive AFTER-peel here alone was insufficient (left Q dirty).
+   - Q/score-primary: the score-primary reconstruction (devectorizer `_select_vector_lane_at` /
+     `primary_repeated` path) pulls score's Q (q_proj). MUST pin exact site.
+2. Acceptance gate: A4 fused-vs-SDPA next-token numerics (ordering bugs are SILENT; schedule-success is
+   not acceptance). Then A3 confirm `amd_gfx1100_q16_grid_hd128_loop_attention` fires; 14B; A5-A8 tail.
+
+The loud class-2 guard (2ebdb2e15) catches any regression with a clear message. The proven root cause and
+fix requirement (clean leaf-buffer Q/K/V) are the north star: this is the coupling the isolated 254-VGPR
+"lab kernel" always assumed but was never wired to a real model graph.
