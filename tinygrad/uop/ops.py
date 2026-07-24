@@ -428,6 +428,28 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
       input_shapes = [x._shape for x in self.src]
       assert len(self.src) > 0 and all(x is not None for x in input_shapes), f"None input shape not supported for {self.op}"
       if DISALLOW_BROADCAST and not all_same(input_shapes):
+        # Loud, specific diagnostic for the shared-attention "class-2" collapse:
+        # one operand is a fused-attention composite input (carries a
+        # ScopedValueSpec tag) and a sibling has collapsed to a rank-0 scalar (),
+        # i.e. a Q4_K projection weight lost its contraction index because K/V
+        # reached the composite reduce carrying unrealized projection/KV-cache
+        # provenance instead of as materialized buffers. Surface it clearly rather
+        # than as a bare `shape mismatch [(...),()]` deep in scheduling.
+        if any(() == s for s in input_shapes):
+          def _has_scoped_value(n, d=24, seen=None):
+            if seen is None: seen = set()
+            if n in seen or d < 0: return False
+            seen.add(n)
+            if type(getattr(n, "tag", None)).__name__ == "ScopedValueSpec": return True
+            return any(_has_scoped_value(s, d-1, seen) for s in n.src)
+          if any(_has_scoped_value(s) for s in self.src):
+            raise RuntimeError(
+              f"shared-attention class-2: fused-attention composite input reached "
+              f"{self.op} with a collapsed rank-0 sibling {input_shapes} — a K/V/weight "
+              f"lost its contraction axis because K/V carried unrealized projection or "
+              f"KV-cache `.after(store)` provenance into the composite reduce. K/V must "
+              f"arrive as materialized buffers (see docs/shared-attention-fused-"
+              f"enablement-scope-A-20260723.md, class-2).")
         raise RuntimeError(f"shape mismatch at {self.op}: {input_shapes} {[x.op for x in self.src]}")
       # broadcasting lives in _shape property now
       return _broadcast_shape(*input_shapes)

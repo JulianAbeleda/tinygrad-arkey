@@ -341,3 +341,38 @@ which is the structural intent but needs to be done where it actually forces sep
 Class 1 (V-input degenerate axis) remains FIXED, committed (d51bd3e92), gated off, both gates green. That
 is the shippable result of this session. Class 2 is fully characterized and handed off with the four
 falsified approaches enumerated so no future session repeats them.
+
+### A2 — CLASS #2 ROOT CAUSE PROVEN + approach (a) tested (2026-07-24)
+
+First-principles breakthrough (working from the known-good isolated kernel's input contract):
+
+**PROVEN root cause.** In the real single-layer block, replacing Q/K/V with provenance-free
+`Tensor.empty` buffers (the isolated harness's exact contract) makes the fused path SCHEDULE CLEAN;
+real Q/K/V crash. So class-2 is entirely about INPUT PROVENANCE, not the composite lowering (which the
+harness proves correct). Role-tag ground truth: the collapsing `Ops.MUL [(1,32,512,128), ()]` is the
+class-1 `logical_v` (composite V input, tag `ScopedValueSpec(0,1,3,4)`) reading the KV cache (PARAM 8),
+spuriously EXPANDED with a 4096 (hidden) axis and multiplied by a Q4_K weight (PARAM 12) collapsed to
+`()`. The composite reduce fuses V's projection-matmul + `cache_kv.after(store(stack(k,v)))` provenance
+into itself, tangling V's KV reduce with a hidden-4096 projection contraction.
+
+**Ruled out (with evidence):**
+- `.realize()` — fundamentally impossible: the prefill-capture path runs under
+  `Context(ALLOW_DEVICE_USAGE=0)` by design (schedule-only, must not execute inline).
+- Direct pre-cache K/V — still carries v_proj matmul provenance; crashes.
+- **`.contiguous()` on K/V in lower_attention_semantic (approach a) — TESTED, INSUFFICIENT.** The
+  composite lowering reaches THROUGH the CONTIGUOUS boundary (its V-lane packing,
+  `_pack_online_softmax_v_lanes` / devectorizer, walks into V's INDEX/base to rebuild lanes and lands on
+  the v_proj reduce). A leaf buffer (empty / a PARAM) has no src to reach through, which is why the
+  harness works.
+
+**Loud failure ADDED (permanent).** `tinygrad/uop/ops.py` DISALLOW_BROADCAST site now detects the
+class-2 pattern (a `ScopedValueSpec`-tagged composite input meeting a rank-0 `()` sibling) and raises a
+descriptive error naming class-2 + the fix requirement + this doc, instead of the cryptic
+`shape mismatch [(...),()]`. Runs only on the already-failing path.
+
+**Refined fix direction (next):** give the composite reduce K/V whose reachable base is a clean
+BUFFER/PARAM, not a matmul. Most promising: for the fused path, read K/V from the raw `cache_kv` PARAM as
+a clean buffer read (not via `assigned_kv = cache_kv.after(store(...))`, which routes the reach-through
+into the projection), with the cache store kept as a separate scheduled sink. Alternatively, stop the
+composite V-lane packing from reaching through a bufferize boundary. Both are bounded; the cache-PARAM
+read matches the harness's leaf-buffer contract most directly.
