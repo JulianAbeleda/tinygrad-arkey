@@ -5,6 +5,7 @@ import math
 from tinygrad.dtype import dtypes, PtrDType, AddrSpace
 from tinygrad.uop.ops import Ops, UOp, AMDRowSoftmaxRepackSpec
 from tinygrad.schedule.wmma.softmax import amd_gfx1100_row_softmax_initial, amd_gfx1100_row_softmax_state
+from tinygrad.schedule.wmma.loop_state import loop_state_write, loop_state_read, packed_fragment_load
 
 def amd_gfx1100_q16_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, scale:float, kernel_info,
                              causal:bool=False, valid_kv:int=16, query_start:int=0) -> UOp:
@@ -158,18 +159,17 @@ def amd_gfx1100_q16_kv64_hd128_loop_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, s
   lreg=UOp.placeholder((8,),dtypes.float,9402,addrspace=AddrSpace.REG)
   creg=UOp.placeholder((64,),dtypes.float,9403,addrspace=AddrSpace.REG)
   state_owner=9404
+  # NOTE: fragment() below is deliberately NOT centralized into
+  # loop_state.packed_fragment_load -- this kernel has no grid/group source
+  # (its AMD_PACKED_FRAGMENT_LOAD is a 4-tuple, not the shared 5-tuple), so
+  # sharing it would change the emitted UOp's source arity.
   def state_write(reg, role, value, block=0, offset=0, access="write"):
-    return tuple(UOp(Ops.AMD_ATTENTION_LOOP_STATE,dtypes.void,
-      (reg.index(UOp.const(dtypes.weakint,offset+i)).store(value.gep(i)),),
-      arg=AMDLoopStateSpec(role=role,access=access,block=block,lane=i,owner=state_owner)) for i in range(8))
+    return loop_state_write(reg, value, role=role, owner=state_owner, offset=offset, block=block, access=access)
   m_init=UOp.group(*state_write(mreg,"m",UOp.const(dtypes.float.vec(8),(-float("inf"),)*8),access="init"))
   l_init=UOp.group(*state_write(lreg,"l",zero,access="init"))
   c_init=UOp.group(*(x for block in range(8) for x in state_write(creg,"acc",zero,block,block*8,access="init")))
   def state_read(reg, init, role, block=0, offset=0, final=False):
-    lanes=tuple(UOp(Ops.AMD_ATTENTION_LOOP_STATE,dtypes.float,
-      (reg,init) if final else (reg,init,rng),
-      arg=AMDLoopStateSpec(role=role,access="final_read" if final else "read",block=block,lane=i,owner=state_owner)) for i in range(8))
-    return UOp(Ops.STACK,dtypes.float.vec(8),lanes)
+    return loop_state_read(reg, init, rng, role=role, owner=state_owner, block=block, final=final)
   def fragment(owner, role, block):
     return UOp(Ops.AMD_PACKED_FRAGMENT_LOAD,dtypes.half.vec(16),(owner,lane,col,rng),arg=AMDPackedFragmentLoopSpec(role=role,head_block=block))
   old_m,old_l=state_read(mreg,m_init,"m"),state_read(lreg,l_init,"l")
@@ -209,15 +209,13 @@ def amd_gfx1100_q32_hq4_hkv2_kv64_hd128_loop_attention(q:UOp, k:UOp, v:UOp, out:
   rng=UOp.range(4,9500,AxisType.REDUCE); mreg=UOp.placeholder((8,),dtypes.float,9501,addrspace=AddrSpace.REG)
   lreg=UOp.placeholder((8,),dtypes.float,9502,addrspace=AddrSpace.REG); creg=UOp.placeholder((64,),dtypes.float,9503,addrspace=AddrSpace.REG); state_owner=9504
   def state_write(reg,role,value,block=0,offset=0,access="write"):
-    return tuple(UOp(Ops.AMD_ATTENTION_LOOP_STATE,dtypes.void,(reg.index(UOp.const(dtypes.weakint,offset+i)).store(value.gep(i)),),
-      arg=AMDLoopStateSpec(role=role,access=access,block=block,lane=i,owner=state_owner)) for i in range(8))
+    return loop_state_write(reg, value, role=role, owner=state_owner, offset=offset, block=block, access=access)
   m_init=UOp.group(*state_write(mreg,"m",UOp.const(dtypes.float.vec(8),(-float("inf"),)*8),access="init")); l_init=UOp.group(*state_write(lreg,"l",zero,access="init"))
   c_init=UOp.group(*(x for block in range(8) for x in state_write(creg,"acc",zero,block,block*8,access="init")))
   def state_read(reg,init,role,block=0,offset=0,final=False):
-    return UOp(Ops.STACK,dtypes.float.vec(8),tuple(UOp(Ops.AMD_ATTENTION_LOOP_STATE,dtypes.float,(reg,init) if final else (reg,init,rng),
-      arg=AMDLoopStateSpec(role=role,access="final_read" if final else "read",block=block,lane=i,owner=state_owner)) for i in range(8)))
+    return loop_state_read(reg, init, rng, role=role, owner=state_owner, block=block, final=final)
   def fragment(owner,role,block):
-    return UOp(Ops.AMD_PACKED_FRAGMENT_LOAD,dtypes.half.vec(16),(owner,lane,col,rng,group),arg=AMDPackedFragmentLoopSpec(role=role,head_block=block,grid=grid))
+    return packed_fragment_load(owner, role=role, head_block=block, grid=grid, lane=lane, col=col, rng=rng, group=group)
   old_m,old_l=state_read(mreg,m_init,"m"),state_read(lreg,l_init,"l"); qk=zero
   for block in range(8): qk=UOp(Ops.WMMA,dtypes.float.vec(8),(fragment(q,"Q",block),fragment(k,"K",block),qk),warg)
   p,new_m,new_l,alpha=amd_gfx1100_row_softmax_state(qk,old_m,old_l,spec=AMDRowSoftmaxRepackSpec(score_scale=float(scale),mode="loop_state_v1",
@@ -250,7 +248,7 @@ def amd_gfx1100_q16_grid_hd128_loop_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_toke
     ml=StateHandle(StateRegionSpec("online_ml",dtypes.float,16),PhaseBoundarySpec("loop_init","loop_final"),0,phase_lds,lane,16)
   else:
     mreg=UOp.placeholder((8,),dtypes.float,9601,addrspace=AddrSpace.REG); lreg=UOp.placeholder((8,),dtypes.float,9602,addrspace=AddrSpace.REG)
-  def wr(reg,role,value,b=0,o=0,a="write"): return tuple(UOp(Ops.AMD_ATTENTION_LOOP_STATE,dtypes.void,(reg.index(UOp.const(dtypes.weakint,o+i)).store(value.gep(i)),),arg=AMDLoopStateSpec(role=role,access=a,block=b,lane=i,owner=9604)) for i in range(8))
+  def wr(reg,role,value,b=0,o=0,a="write"): return loop_state_write(reg, value, role=role, owner=9604, offset=o, block=b, access=a)
   if phase_abi_v1:
     mi=UOp.group(*(ml.loop_write(UOp.const(dtypes.float,-float("inf")),i) for i in range(8)))
     li=UOp.group(*(ml.loop_write(UOp.const(dtypes.float,0.0),8+i) for i in range(8)))
@@ -258,8 +256,8 @@ def amd_gfx1100_q16_grid_hd128_loop_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_toke
   else:
     mi=UOp.group(*wr(mreg,"m",UOp.const(dtypes.float.vec(8),(-float("inf"),)*8),a="init")); li=UOp.group(*wr(lreg,"l",zero,a="init"))
   ci=UOp.group(*(x for b in range(acc_blocks) for x in wr(creg,"acc",zero,b,b*8,"init")))
-  def rd(reg,init,role,b=0,o=0,final=False): return UOp(Ops.STACK,dtypes.float.vec(8),tuple(UOp(Ops.AMD_ATTENTION_LOOP_STATE,dtypes.float,(reg,init) if final else (reg,init,rng),arg=AMDLoopStateSpec(role=role,access="final_read" if final else "read",block=b,lane=i,owner=9604)) for i in range(8)))
-  def fr(owner,role,b): return UOp(Ops.AMD_PACKED_FRAGMENT_LOAD,dtypes.half.vec(16),(owner,lane,col,rng,group),arg=AMDPackedFragmentLoopSpec(role=role,head_block=b,grid=grid))
+  def rd(reg,init,role,b=0,o=0,final=False): return loop_state_read(reg, init, rng, role=role, owner=9604, block=b, final=final)
+  def fr(owner,role,b): return packed_fragment_load(owner, role=role, head_block=b, grid=grid, lane=lane, col=col, rng=rng, group=group)
   if not phase_abi_v1: om,ol=rd(mreg,mi,"m"),rd(lreg,li,"l")
   qk=zero
   for b in range(8): qk=UOp(Ops.WMMA,dtypes.float.vec(8),(fr(q,"Q",b),fr(k,"K",b),qk),warg,tag=("attention_wmma","QK",b))
@@ -297,9 +295,9 @@ def amd_gfx1100_q16_grid_qk_stats_stage(q:UOp,k:UOp,stats:UOp,*,q_tokens:int,q_h
   lane=UOp.special(32,"lidx0"); group=UOp.special(q_heads*grid.q_tiles,"gidx0"); col=lane.alu(Ops.AND,UOp.const(dtypes.weakint,15)); zero=UOp.const(dtypes.float.vec(8),(0.0,)*8)
   axes=((),(),tuple((-120-i,2) for i in range(3))); warg=("WMMA_16_16_16_half_float",(16,16,16),dtypes.half,dtypes.float,"AMD:gfx1100",32,axes,())
   rng=UOp.range((kv_tokens+15)//16,9700,AxisType.REDUCE); mreg=UOp.placeholder((8,),dtypes.float,9701,addrspace=AddrSpace.REG); lreg=UOp.placeholder((8,),dtypes.float,9702,addrspace=AddrSpace.REG)
-  def wr(reg,role,value,a="write"): return tuple(UOp(Ops.AMD_ATTENTION_LOOP_STATE,dtypes.void,(reg.index(UOp.const(dtypes.weakint,i)).store(value.gep(i)),),arg=AMDLoopStateSpec(role=role,access=a,lane=i,owner=9704)) for i in range(8))
-  def rd(reg,init,role,final=False): return UOp(Ops.STACK,dtypes.float.vec(8),tuple(UOp(Ops.AMD_ATTENTION_LOOP_STATE,dtypes.float,(reg,init) if final else (reg,init,rng),arg=AMDLoopStateSpec(role=role,access="final_read" if final else "read",lane=i,owner=9704)) for i in range(8)))
-  def fr(owner,role,b): return UOp(Ops.AMD_PACKED_FRAGMENT_LOAD,dtypes.half.vec(16),(owner,lane,col,rng,group),arg=AMDPackedFragmentLoopSpec(role=role,head_block=b,grid=grid))
+  def wr(reg,role,value,a="write"): return loop_state_write(reg, value, role=role, owner=9704, access=a)
+  def rd(reg,init,role,final=False): return loop_state_read(reg, init, rng, role=role, owner=9704, final=final)
+  def fr(owner,role,b): return packed_fragment_load(owner, role=role, head_block=b, grid=grid, lane=lane, col=col, rng=rng, group=group)
   mi=UOp.group(*wr(mreg,"m",UOp.const(dtypes.float.vec(8),(-float("inf"),)*8),"init")); li=UOp.group(*wr(lreg,"l",zero,"init")); om,ol=rd(mreg,mi,"m"),rd(lreg,li,"l"); qk=zero
   for b in range(8): qk=UOp(Ops.WMMA,dtypes.float.vec(8),(fr(q,"Q",b),fr(k,"K",b),qk),warg,tag=("attention_wmma","QK",b))
   _,nm,nl,_=amd_gfx1100_row_softmax_state(qk,om,ol,spec=AMDRowSoftmaxRepackSpec(score_scale=scale,mode="loop_state_v1",validity_mode="causal_v1",query_start=query_start,kv_start=-1,valid_kv=kv_tokens,dynamic_kv_v1=True,grid=grid),kv_tile=rng,grid_id=group)
@@ -316,9 +314,9 @@ def amd_gfx1100_q16_grid_pv_slice_stage(q:UOp,k:UOp,v:UOp,stats:UOp,out:UOp,*,q_
   if (output_block_base,acc_blocks) not in {(0,2),(2,2),(4,2),(6,2)} or v_input_block_base != output_block_base or not causal: raise ValueError("pv slice stage requires one aligned prebiased causal two-block slice")
   query_start=kv_tokens-q_tokens if query_start is None else query_start; lane=UOp.special(32,"lidx0"); group=UOp.special(q_heads*grid.q_tiles,"gidx0"); col=lane.alu(Ops.AND,UOp.const(dtypes.weakint,15)); zero=UOp.const(dtypes.float.vec(8),(0.0,)*8)
   axes=((),(),tuple((-120-i,2) for i in range(3))); warg=("WMMA_16_16_16_half_float",(16,16,16),dtypes.half,dtypes.float,"AMD:gfx1100",32,axes,()); rng=UOp.range((kv_tokens+15)//16,9800,AxisType.REDUCE); creg=UOp.placeholder((16,),dtypes.float,9803,addrspace=AddrSpace.REG)
-  def wr(value,b): return tuple(UOp(Ops.AMD_ATTENTION_LOOP_STATE,dtypes.void,(creg.index(UOp.const(dtypes.weakint,b*8+i)).store(value.gep(i)),),arg=AMDLoopStateSpec(role="acc",access="write",block=b,lane=i,owner=9804)) for i in range(8))
-  def rd(init,b,final=False): return UOp(Ops.STACK,dtypes.float.vec(8),tuple(UOp(Ops.AMD_ATTENTION_LOOP_STATE,dtypes.float,(creg,init) if final else (creg,init,rng),arg=AMDLoopStateSpec(role="acc",access="final_read" if final else "read",block=b,lane=i,owner=9804)) for i in range(8)))
-  def fr(owner,role,b): return UOp(Ops.AMD_PACKED_FRAGMENT_LOAD,dtypes.half.vec(16),(owner,lane,col,rng,group),arg=AMDPackedFragmentLoopSpec(role=role,head_block=b,grid=grid))
+  def wr(value,b): return loop_state_write(creg, value, role="acc", owner=9804, offset=b*8, block=b, access="write")
+  def rd(init,b,final=False): return loop_state_read(creg, init, rng, role="acc", owner=9804, block=b, final=final)
+  def fr(owner,role,b): return packed_fragment_load(owner, role=role, head_block=b, grid=grid, lane=lane, col=col, rng=rng, group=group)
   def stat(which): return UOp(Ops.STACK,dtypes.float.vec(8),tuple(stats.index(group*UOp.const(dtypes.weakint,32)+(UOp.const(dtypes.weakint,2*e)+lane.alu(Ops.SHR,UOp.const(dtypes.weakint,4)))*UOp.const(dtypes.weakint,2)+UOp.const(dtypes.weakint,which)).load() for e in range(8)))
   fm,fl=stat(0),stat(1); ci=UOp.group(*(x for b in range(2) for x in wr(zero,b))); qk=zero
   for b in range(8): qk=UOp(Ops.WMMA,dtypes.float.vec(8),(fr(q,"Q",b),fr(k,"K",b),qk),warg,tag=("attention_wmma","QK",b))
