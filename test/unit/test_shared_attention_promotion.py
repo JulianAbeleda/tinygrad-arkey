@@ -59,9 +59,19 @@ def test_composite_admission_rejects_ordinary_sdpa_and_unproven_pressure():
   ordinary=_admission("qwen3_8b_q4k_m_gfx1100",lowering="ordinary_sdpa")
   assert "ordinary_sdpa is not a composite candidate" in composite_admission_errors(
     ordinary,profile="qwen3_8b_q4k_m_gfx1100",context=2048,strategy="FULL_RESIDENT_OVERLAY")
-  high=_admission("qwen3_8b_q4k_m_gfx1100",vgpr=197)
-  assert "composite resource proof requires 1..192 VGPRs" in composite_admission_errors(
-    high,profile="qwen3_8b_q4k_m_gfx1100",context=2048,strategy="FULL_RESIDENT_OVERLAY")
+  # VGPR count alone is not the gate: the production fused kernel runs at 254
+  # VGPR / 0 spills and must be admitted (see justification in
+  # extra/qk/shared_attention_promotion.py). 197 no longer trips the resource
+  # bound; only exceeding the real gfx1100 wave32 per-thread ceiling (256), or a
+  # spilling/scratching kernel, does.
+  production=_admission("qwen3_8b_q4k_m_gfx1100",vgpr=254)
+  errors=composite_admission_errors(
+    production,profile="qwen3_8b_q4k_m_gfx1100",context=2048,strategy="FULL_RESIDENT_OVERLAY")
+  assert not any("VGPR" in e for e in errors)
+
+  over_ceiling=_admission("qwen3_8b_q4k_m_gfx1100",vgpr=300)
+  assert "composite resource proof requires 1..256 VGPRs" in composite_admission_errors(
+    over_ceiling,profile="qwen3_8b_q4k_m_gfx1100",context=2048,strategy="FULL_RESIDENT_OVERLAY")
 
 def test_promotion_requires_exact_census_and_full_output_gate():
   bad_census={"complete":False,"expected":[],"observed":[],"missing":[],"unexpected":[]}

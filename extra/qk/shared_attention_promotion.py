@@ -49,9 +49,18 @@ def composite_admission_errors(admission:Mapping[str,Any]|None, *, profile:str, 
   resources = admission.get("resources")
   if not isinstance(resources,Mapping): errors.append("missing composite resource proof")
   else:
+    # VGPR count itself is not a valid admission criterion: occupancy on gfx1100 only
+    # changes bucket at <=128 (not 192), the device API never confirmed a wave-count
+    # gain from a tighter cap (see docs/SHARED_ATTENTION_LIVE_STATE_RESIDENCY_LEDGER_20260723.md),
+    # and cutting VGPR usage was measured to REGRESS perf 1.4-2.5%
+    # (docs/ATTENTION_COMPACT_VGPR_LEASE_NEGATIVE_20260723.md). The production fused
+    # kernel runs at 254 VGPR / 0 spills and is numerically correct and measured
+    # 3.72x (8B) / 4.39x (14B) faster than the fallback on real gfx1100 hardware. So the
+    # real guard is the hardware ceiling (a kernel above it cannot fit spill-free at
+    # all) plus the zero-spill/zero-scratch checks below, which already guarantee fit.
     vgpr = resources.get("vgpr")
-    if not isinstance(vgpr,int) or isinstance(vgpr,bool) or vgpr <= 0 or vgpr > 192:
-      errors.append("composite resource proof requires 1..192 VGPRs")
+    if not isinstance(vgpr,int) or isinstance(vgpr,bool) or vgpr <= 0 or vgpr > 256:
+      errors.append("composite resource proof requires 1..256 VGPRs")
     for key in ("scratch_bytes","vgpr_spills","sgpr_spills"):
       if resources.get(key) != 0: errors.append(f"composite resource proof requires zero {key}")
     if not isinstance(resources.get("lds_bytes"),int) or isinstance(resources.get("lds_bytes"),bool) or resources["lds_bytes"] <= 0:
