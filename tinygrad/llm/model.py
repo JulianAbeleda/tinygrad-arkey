@@ -613,9 +613,19 @@ class TransformerBlock(FFNBlock):
         # (see lower_attention_semantic grid_shape check). K/V are already fp16 here
         # but Q arrives fp32, which silently rejected the kernel into SDPA. Enforce
         # the contract; result is cast back to Q's original dtype like the SDPA path.
-        _qkv_h = (q.cast(dtypes.half), k.cast(dtypes.half), v.cast(dtypes.half))
-        attn = _prefill_semantic(_prefill, prefill_scratch,
-          shared_prefill_attention(*_qkv_h, mask=mask, candidate_context=_ctx).cast(q.dtype))
+        import os as _os
+        if _os.environ.get("FUSED_CUSTOM_KERNEL"):
+          # Custom-kernel injection route: bypass the composite-reduce lowering
+          # (class-2) by injecting the proven kernel via Tensor.custom_kernel, which
+          # realizes Q/K/V as opaque buffers. See llm/fused_attention.py.
+          from tinygrad.llm.fused_attention import route_prefill_attention
+          attn = _prefill_semantic(_prefill, prefill_scratch,
+            route_prefill_attention(q.cast(dtypes.half), k.cast(dtypes.half), v.cast(dtypes.half),
+              mask=mask, causal=True, ctx=_ctx, use_custom_kernel=True).cast(q.dtype))
+        else:
+          _qkv_h = (q.cast(dtypes.half), k.cast(dtypes.half), v.cast(dtypes.half))
+          attn = _prefill_semantic(_prefill, prefill_scratch,
+            shared_prefill_attention(*_qkv_h, mask=mask, candidate_context=_ctx).cast(q.dtype))
     else:
       attn = _prefill_semantic(_prefill, prefill_scratch,
                                q.scaled_dot_product_attention(k, v, attn_mask=mask, enable_gqa=True))  # (B,H,T,Hd)
