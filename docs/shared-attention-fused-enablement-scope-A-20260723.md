@@ -305,3 +305,39 @@ weight and its duplication path (fused-vs-SDPA differential trace), then impleme
 prove correctness by fused-vs-SDPA next-token numerics. Escalated to user for direction on whether to
 invest that isolation or hand class 2 to a dedicated compiler session. Class 1 remains fixed/shipped
 (d51bd3e92), gated off, both gates green.
+
+### A2 — CLASS #2: c3 attention-local fix FAILED; four fixes exhausted -> needs interactive expert session
+
+Identified the collapsing weight as **q_proj** by shape (PARAM(65536,144)=4096x4096 rules out k/v_proj at
+4096x1024; MUL output (1,32,512,128)=(b,heads,tok,hd) with a separate 4096 reduce is q_proj's signature,
+not o_proj's (1,512,4096)). q_proj is pulled into the fused `score` as a lazy subgraph.
+
+Attempted c3 (attention-local): force Q/K/V `.contiguous()` in lower_attention_semantic so the projection
+matmuls realize into their own kernels (single weight consumer -> no range divergence), matching the SDPA
+path and the proven isolated harness. **NO EFFECT** — crash byte-identical. (Caveat: `.contiguous()`
+inserted during a mid-schedule rewrite may not force a real realize boundary in this context, so this is a
+weak refutation of the consumer-duplication theory, not a strong one — but it did not work.)
+
+**Status: class 2 has resisted FOUR distinct targeted fixes and one decisive mechanism-falsification:**
+1. remove_bufferize shape-preserving reshape/expand (rangeify.py:588) — no effect.
+2. matmul_reduces guard bailing on PARAM in accessed_buffers (rangeify.py:574) — no effect.
+3. composite_owned walk bounded at kernel boundaries (indexing.py:226) — no effect;
+   and DECISIVE: composite_owned forced empty -> crash identical (composite_consumer NOT causal).
+4. Q/K/V `.contiguous()` at the attention boundary (rangeify.py:78-81) — no effect.
+Verification also showed the range-divergence mechanism is real but ENTANGLED with ubiquitous normal
+scheduling (merge-else fires 446x/schedule), so it is not cleanly isolable via one-shot instrumentation.
+
+**Conclusion / recommendation.** Class 2 is a deep, resistant range-assignment/composite-lowering defect
+that does not yield to one-shot, hypothesis-driven remote fixes. Every remote-agent mechanism diagnosis
+(composite_consumer over-scope; merge range-divergence; q_proj consumer duplication) has been either
+falsified or failed to fix when acted on. This class needs INTERACTIVE expert compiler debugging: step
+through the actual range assignment for the specific collapsing q_proj node under the fused DAG (pdb /
+DEBUG_RANGEIFY at the merge and cleanup_dead_axes), comparing the exact RANGE identities of the weight vs
+activation operands of the failing MUL, rather than more remote hypotheses. Alternatively, revisit whether
+the composite attention lowering should consume PRE-MATERIALIZED Q/K/V by construction (a real realize
+boundary enforced upstream at the model.py call site, att.src[2,3,4], not a mid-rewrite .contiguous()),
+which is the structural intent but needs to be done where it actually forces separate kernels.
+
+Class 1 (V-input degenerate axis) remains FIXED, committed (d51bd3e92), gated off, both gates green. That
+is the shippable result of this session. Class 2 is fully characterized and handed off with the four
+falsified approaches enumerated so no future session repeats them.
