@@ -92,9 +92,14 @@ def amd_gfx1100_q16_kv32_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, scale:float,
 
 def amd_gfx1100_q16_kv32_hd128_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, scale:float, kernel_info) -> UOp:
   """Exact B=H=1, Q=16, KV=32, Hd=128 online-softmax kernel graph."""
+  # No head_dim kwarg exists on this fixed micro-kernel (Q/KV/Hkv/Hq are all hardcoded, unlike the
+  # grid_hd128 family); `hd` is a local Track-A pinned-validated-constant, matching the AMD*Spec/
+  # FlashPrefillAttentionSpec posture, so the index math below reads as head_dim-derived rather than
+  # bare magic numbers. Byte-identical (hd==128 always, for this function).
+  hd=128
   owners=(q,k,v,out)
   if any(x.op is not Ops.PARAM or not isinstance(x.dtype,PtrDType) for x in owners): raise ValueError("q16-kv32-hd128 requires PARAM owners")
-  if tuple(x.arg.slot for x in owners)!=(1,2,3,0) or tuple(x.ptrdtype.size for x in owners)!=(2048,4096,4096,2048):
+  if tuple(x.arg.slot for x in owners)!=(1,2,3,0) or tuple(x.ptrdtype.size for x in owners)!=(16*hd,32*hd,32*hd,16*hd):
     raise ValueError("q16-kv32-hd128 requires Q1/K2/V3/out0 sized 2048/4096/4096/2048")
   if tuple(x.ptrdtype.base for x in owners)!=(dtypes.half,)*4 or not isinstance(scale,float) or not math.isfinite(scale) or scale<=0:
     raise ValueError("q16-kv32-hd128 requires fp16 owners and positive finite scale")
@@ -102,15 +107,15 @@ def amd_gfx1100_q16_kv32_hd128_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, scale:
   zero=UOp.const(dtypes.float.vec(8),(0.0,)*8); axes=((),(),tuple((-120-i,2) for i in range(3)))
   warg=("WMMA_16_16_16_half_float",(16,16,16),dtypes.half,dtypes.float,"AMD:gfx1100",32,axes,())
   sm=UOp.const(dtypes.float.vec(8),(-float("inf"),)*8); sl=UOp.const(dtypes.float.vec(8),(0.0,)*8)
-  acc=[zero]*8
+  acc=[zero]*(hd//16)
   for tile in range(2):
     qk=zero
-    for hd_block in range(8):
+    for hd_block in range(hd//16):
       q_owner=q if tile == 0 else q.after(*acc); k_owner=k if tile == 0 else k.after(*acc)
-      qf=UOp(Ops.STACK,dtypes.half.vec(16),tuple(q_owner.index(col*128+hd_block*16+i).load() for i in range(16)),
+      qf=UOp(Ops.STACK,dtypes.half.vec(16),tuple(q_owner.index(col*hd+hd_block*16+i).load() for i in range(16)),
         tag=("amd_gfx1100_fragment_load_hd128_v1","Q",tile,hd_block,q,lane,col))
-      kbase=UOp.const(dtypes.weakint,tile*2048+hd_block*16)
-      kf=UOp(Ops.STACK,dtypes.half.vec(16),tuple(k_owner.index(kbase+col*128+i).load() for i in range(16)),
+      kbase=UOp.const(dtypes.weakint,tile*16*hd+hd_block*16)
+      kf=UOp(Ops.STACK,dtypes.half.vec(16),tuple(k_owner.index(kbase+col*hd+i).load() for i in range(16)),
         tag=("amd_gfx1100_fragment_load_hd128_v1","K",tile,hd_block,k,lane,col))
       qk=UOp(Ops.WMMA,dtypes.float.vec(8),(qf,kf,qk),warg)
     if tile == 0:
@@ -121,10 +126,10 @@ def amd_gfx1100_q16_kv32_hd128_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, scale:
         spec=AMDRowSoftmaxRepackSpec(score_scale=float(scale),mode="stateful_unnormalized_v1",kv_start=16,
           validity_mode="causal_v1",query_start=16,valid_kv=32))
     next_acc=[]
-    for hd_block in range(8):
+    for hd_block in range(hd//16):
       corrected=zero if tile == 0 else acc[hd_block].alu(Ops.MUL,alpha)
-      v_owner=v.after(corrected if tile else p); vbase=UOp.const(dtypes.weakint,tile*2048+hd_block*16)
-      vf=UOp(Ops.STACK,dtypes.half.vec(16),tuple(v_owner.index(vbase+i*128+col).load() for i in range(16)),
+      v_owner=v.after(corrected if tile else p); vbase=UOp.const(dtypes.weakint,tile*16*hd+hd_block*16)
+      vf=UOp(Ops.STACK,dtypes.half.vec(16),tuple(v_owner.index(vbase+i*hd+col).load() for i in range(16)),
         tag=("amd_gfx1100_fragment_load_hd128_v1","V",tile,hd_block,v,lane,col))
       next_acc.append(UOp(Ops.WMMA,dtypes.float.vec(8),(p,vf,corrected),warg))
     acc=next_acc
@@ -142,9 +147,13 @@ def amd_gfx1100_q16_kv64_hd128_loop_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, s
   consume.
   """
   from tinygrad.uop.ops import AMDAttentionOutputDrainSpec, AMDLoopStateSpec, AMDPackedFragmentLoopSpec, AxisType
+  # No head_dim kwarg exists on this fixed micro-kernel; `hd` is a local Track-A pinned-validated-
+  # constant (same posture as amd_gfx1100_q16_kv32_hd128_attention) so the sizes/loop-bound math below
+  # reads as head_dim-derived. Byte-identical (hd==128 always, for this function).
+  hd=128
   owners=(q,k,v,out)
   if any(x.op is not Ops.PARAM or not isinstance(x.dtype,PtrDType) for x in owners): raise ValueError("q16-kv64-hd128 requires PARAM owners")
-  if tuple(x.arg.slot for x in owners)!=(1,2,3,0) or tuple(x.ptrdtype.size for x in owners)!=(2048,8192,8192,2048):
+  if tuple(x.arg.slot for x in owners)!=(1,2,3,0) or tuple(x.ptrdtype.size for x in owners)!=(16*hd,64*hd,64*hd,16*hd):
     raise ValueError("q16-kv64-hd128 requires Q1/K2/V3/out0 sized 2048/8192/8192/2048")
   if tuple(x.ptrdtype.base for x in owners)!=(dtypes.half,)*4 or not isinstance(scale,float) or not math.isfinite(scale) or scale<=0:
     raise ValueError("q16-kv64-hd128 requires fp16 owners and positive finite scale")
@@ -157,7 +166,8 @@ def amd_gfx1100_q16_kv64_hd128_loop_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, s
   rng=UOp.range(4,9400,AxisType.REDUCE)
   mreg=UOp.placeholder((8,),dtypes.float,9401,addrspace=AddrSpace.REG)
   lreg=UOp.placeholder((8,),dtypes.float,9402,addrspace=AddrSpace.REG)
-  creg=UOp.placeholder((64,),dtypes.float,9403,addrspace=AddrSpace.REG)
+  # creg width = (head-block count, derived) * (qk_c_lanes==8, hardware C-fragment width, stays literal).
+  creg=UOp.placeholder(((hd//16)*8,),dtypes.float,9403,addrspace=AddrSpace.REG)
   state_owner=9404
   # NOTE: fragment() below is deliberately NOT centralized into
   # loop_state.packed_fragment_load -- this kernel has no grid/group source
@@ -167,26 +177,26 @@ def amd_gfx1100_q16_kv64_hd128_loop_attention(q:UOp, k:UOp, v:UOp, out:UOp, *, s
     return loop_state_write(reg, value, role=role, owner=state_owner, offset=offset, block=block, access=access)
   m_init=UOp.group(*state_write(mreg,"m",UOp.const(dtypes.float.vec(8),(-float("inf"),)*8),access="init"))
   l_init=UOp.group(*state_write(lreg,"l",zero,access="init"))
-  c_init=UOp.group(*(x for block in range(8) for x in state_write(creg,"acc",zero,block,block*8,access="init")))
+  c_init=UOp.group(*(x for block in range(hd//16) for x in state_write(creg,"acc",zero,block,block*8,access="init")))
   def state_read(reg, init, role, block=0, offset=0, final=False):
     return loop_state_read(reg, init, rng, role=role, owner=state_owner, block=block, final=final)
   def fragment(owner, role, block):
     return UOp(Ops.AMD_PACKED_FRAGMENT_LOAD,dtypes.half.vec(16),(owner,lane,col,rng),arg=AMDPackedFragmentLoopSpec(role=role,head_block=block))
   old_m,old_l=state_read(mreg,m_init,"m"),state_read(lreg,l_init,"l")
   qk=zero
-  for block in range(8): qk=UOp(Ops.WMMA,dtypes.float.vec(8),(fragment(q,"Q",block),fragment(k,"K",block),qk),warg)
+  for block in range(hd//16): qk=UOp(Ops.WMMA,dtypes.float.vec(8),(fragment(q,"Q",block),fragment(k,"K",block),qk),warg)
   p,new_m,new_l,alpha=amd_gfx1100_row_softmax_state(qk,old_m,old_l,
     spec=AMDRowSoftmaxRepackSpec(score_scale=float(scale),mode="loop_state_v1",validity_mode="causal_v1" if causal else "tail_v1",
       query_start=query_start,kv_start=-1,valid_kv=valid_kv,dynamic_kv_v1=True),kv_tile=rng)
   writes=[*state_write(mreg,"m",new_m),*state_write(lreg,"l",new_l)]
-  for block in range(8):
+  for block in range(hd//16):
     old_c=state_read(creg,c_init,"acc",block,block*8)
     corrected=old_c.alu(Ops.MUL,alpha)
     pv=UOp(Ops.WMMA,dtypes.float.vec(8),(p,fragment(v,"V",block),corrected),warg)
     writes.extend(state_write(creg,"acc",pv,block,block*8))
   end=UOp.group(*writes).end(rng).replace(tag=("amd_gfx1100_attention_kv64_loop_end_v1",rng))
   final_l=state_read(lreg,end,"l",final=True)
-  final_c=tuple(state_read(creg,end,"acc",block,block*8,final=True) for block in range(8))
+  final_c=tuple(state_read(creg,end,"acc",block,block*8,final=True) for block in range(hd//16))
   drain=UOp(Ops.AMD_ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,final_l,*final_c),arg=AMDAttentionOutputDrainSpec())
   return UOp.sink(m_init,l_init,c_init,end,drain,arg=kernel_info).replace(tag=("amd_gfx1100_q16_kv64_hd128_loop_v1",))
 
@@ -194,9 +204,14 @@ def amd_gfx1100_q32_hq4_hkv2_kv64_hd128_loop_attention(q:UOp, k:UOp, v:UOp, out:
                                                           causal:bool=False, valid_kv:int=64, query_start:int|None=None) -> UOp:
   """Grid-native Q32/Hq4/Hkv2/G2 attention; one wave32 per Q-head tile."""
   from tinygrad.uop.ops import AMDAttentionOutputDrainSpec, AMDAttentionGridSpec, AMDLoopStateSpec, AMDPackedFragmentLoopSpec, AxisType
-  grid=AMDAttentionGridSpec(); grid.validate(); owners=(q,k,v,out)
+  grid=AMDAttentionGridSpec(); grid.validate(); hd=grid.head_dim; owners=(q,k,v,out)
+  # Unlike the coincidental-16384 read at a glance, this is genuinely grid.q_heads*grid.q_tokens*hd ==
+  # grid.kv_heads*grid.kv_tokens*hd == 4*32*128 == 2*64*128 for this fixed G2 default grid -- sourcing
+  # it from grid fields (which already exist here, unlike the two grid-less sibling kernels above)
+  # avoids conflating a coincidental "128" with head_dim.
+  sizes=(grid.q_heads*grid.q_tokens*hd,grid.kv_heads*grid.kv_tokens*hd,grid.kv_heads*grid.kv_tokens*hd,grid.q_heads*grid.q_tokens*hd)
   if any(x.op is not Ops.PARAM or not isinstance(x.dtype,PtrDType) for x in owners): raise ValueError("q32-hq4-hkv2 requires PARAM owners")
-  if tuple(x.arg.slot for x in owners)!=(1,2,3,0) or tuple(x.ptrdtype.size for x in owners)!=(16384,16384,16384,16384):
+  if tuple(x.arg.slot for x in owners)!=(1,2,3,0) or tuple(x.ptrdtype.size for x in owners)!=sizes:
     raise ValueError("q32-hq4-hkv2 requires Q1/K2/V3/out0 sized 16384")
   if tuple(x.ptrdtype.base for x in owners)!=(dtypes.half,)*4 or not isinstance(scale,float) or not math.isfinite(scale) or scale<=0:
     raise ValueError("q32-hq4-hkv2 requires fp16 owners and positive finite scale")
@@ -207,25 +222,26 @@ def amd_gfx1100_q32_hq4_hkv2_kv64_hd128_loop_attention(q:UOp, k:UOp, v:UOp, out:
   zero=UOp.const(dtypes.float.vec(8),(0.0,)*8); axes=((),(),tuple((-120-i,2) for i in range(3)))
   warg=("WMMA_16_16_16_half_float",(16,16,16),dtypes.half,dtypes.float,"AMD:gfx1100",32,axes,())
   rng=UOp.range(4,9500,AxisType.REDUCE); mreg=UOp.placeholder((8,),dtypes.float,9501,addrspace=AddrSpace.REG)
-  lreg=UOp.placeholder((8,),dtypes.float,9502,addrspace=AddrSpace.REG); creg=UOp.placeholder((64,),dtypes.float,9503,addrspace=AddrSpace.REG); state_owner=9504
+  # creg width = (head-block count, derived) * (qk_c_lanes==8, hardware C-fragment width, stays literal).
+  lreg=UOp.placeholder((8,),dtypes.float,9502,addrspace=AddrSpace.REG); creg=UOp.placeholder(((hd//16)*8,),dtypes.float,9503,addrspace=AddrSpace.REG); state_owner=9504
   def state_write(reg,role,value,block=0,offset=0,access="write"):
     return loop_state_write(reg, value, role=role, owner=state_owner, offset=offset, block=block, access=access)
   m_init=UOp.group(*state_write(mreg,"m",UOp.const(dtypes.float.vec(8),(-float("inf"),)*8),access="init")); l_init=UOp.group(*state_write(lreg,"l",zero,access="init"))
-  c_init=UOp.group(*(x for block in range(8) for x in state_write(creg,"acc",zero,block,block*8,access="init")))
+  c_init=UOp.group(*(x for block in range(hd//16) for x in state_write(creg,"acc",zero,block,block*8,access="init")))
   def state_read(reg,init,role,block=0,offset=0,final=False):
     return loop_state_read(reg, init, rng, role=role, owner=state_owner, block=block, final=final)
   def fragment(owner,role,block):
     return packed_fragment_load(owner, role=role, head_block=block, grid=grid, lane=lane, col=col, rng=rng, group=group)
   old_m,old_l=state_read(mreg,m_init,"m"),state_read(lreg,l_init,"l"); qk=zero
-  for block in range(8): qk=UOp(Ops.WMMA,dtypes.float.vec(8),(fragment(q,"Q",block),fragment(k,"K",block),qk),warg)
+  for block in range(hd//16): qk=UOp(Ops.WMMA,dtypes.float.vec(8),(fragment(q,"Q",block),fragment(k,"K",block),qk),warg)
   p,new_m,new_l,alpha=amd_gfx1100_row_softmax_state(qk,old_m,old_l,spec=AMDRowSoftmaxRepackSpec(score_scale=float(scale),mode="loop_state_v1",
     validity_mode="causal_v1" if causal else "tail_v1",query_start=query_start,kv_start=-1,valid_kv=valid_kv,dynamic_kv_v1=True,grid=grid),kv_tile=rng,grid_id=group)
   writes=[*state_write(mreg,"m",new_m),*state_write(lreg,"l",new_l)]
-  for block in range(8):
+  for block in range(hd//16):
     old_c=state_read(creg,c_init,"acc",block,block*8); pv=UOp(Ops.WMMA,dtypes.float.vec(8),(p,fragment(v,"V",block),old_c.alu(Ops.MUL,alpha)),warg)
     writes.extend(state_write(creg,"acc",pv,block,block*8))
   end=UOp.group(*writes).end(rng).replace(tag=("amd_gfx1100_attention_grid_kv64_loop_end_v1",rng)); final_l=state_read(lreg,end,"l",final=True)
-  final_c=tuple(state_read(creg,end,"acc",block,block*8,final=True) for block in range(8))
+  final_c=tuple(state_read(creg,end,"acc",block,block*8,final=True) for block in range(hd//16))
   drain=UOp(Ops.AMD_ATTENTION_OUTPUT_DRAIN,dtypes.void,(out,group,final_l,*final_c),arg=AMDAttentionOutputDrainSpec(grid=grid))
   return UOp.sink(m_init,l_init,c_init,end,drain,arg=kernel_info).replace(tag=("amd_gfx1100_q32_hq4_hkv2_kv64_hd128_loop_v1",))
 
