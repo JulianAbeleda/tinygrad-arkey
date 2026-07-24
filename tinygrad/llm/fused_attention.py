@@ -79,21 +79,39 @@ def prefill_grid_spec(q:Tensor, k:Tensor) -> AMDAttentionGridSpec | None:
 
 def custom_kernel_attention(q:Tensor, k:Tensor, v:Tensor, *, scale:float|None, causal:bool,
                             ctx:SharedAttentionCandidateContext) -> Tensor:
-  """Inject the proven captured fused-attention kernel via Tensor.custom_kernel.
+  """Inject the proven fused-attention kernel via Tensor.custom_kernel.
 
-  Q/K/V arrive fp16 (b, H, T, 128); returns fp16 (b, Hq, T, 128). The compiler
-  realizes Q/K/V as ordinary buffers -> no composite reduce -> no class-2.
+  Q/K/V arrive fp16 (1, H, T, 128); returns fp16 (1, Hq, T, 128). custom_kernel
+  .contiguous()'s each input into a real buffer that the kernel consumes opaquely
+  -> no composite reduce -> none of the class-2 reach-through/forwarding/cycle.
 
-  NOT YET IMPLEMENTED. Blocking sub-task B1 (scope doc): reverse the `fxn` (kernel
-  emitter) contract from the working packed-weight route (prefill_routes.py
-  `DirectPackedPrefillFormat.emit`), then load the captured kernel (extra/qk
-  capture: .hip.cpp/.amdisa.s + JSON launch/resource/param_ownership) as a
-  precompiled Program bound to placeholders [out, q, k, v]. Acceptance = A4
-  numerics vs SDPA (scope B5).
+  Mechanism (verified against postrange.py:328 + Tensor.custom_kernel):
+  - The proven UOp builder `amd_gfx1100_q16_grid_hd128_loop_attention(q,k,v,out,...)`
+    IS the custom_kernel `fxn` body. It requires BARE PARAM owners with slots
+    (Q,K,V,out)=(1,2,3,0), so we pass FLAT 1-D buffers (placeholder_like keeps
+    1-D tensors as bare PARAM; multi-dim would become RESHAPE(PARAM) and fail).
+  - custom_kernel(out_flat; q_flat,k_flat,v_flat) assigns slots 0,1,2,3 -> exactly
+    out=0, Q=1, K=2, V=3.
   """
-  raise NotImplementedError(
-    "custom_kernel_attention: injection route not yet built (scope B1-B4). "
-    "See docs/shared-attention-custom-kernel-injection-scope-20260724.md")
+  from tinygrad.schedule.wmma import amd_gfx1100_q16_grid_hd128_loop_attention
+  from tinygrad.uop.ops import KernelInfo
+  grid = prefill_grid_spec(q, k)
+  if grid is None: raise NotImplementedError("custom_kernel_attention: geometry not admitted")
+  Hq, Hkv, T, KV, Hd = grid.q_heads, grid.kv_heads, grid.q_tokens, grid.kv_tokens, grid.head_dim
+  sc = float(scale) if scale is not None else 1.0 / (Hd ** 0.5)
+  q_flat = q.cast(dtypes.half).reshape(Hq * T * Hd)
+  k_flat = k.cast(dtypes.half).reshape(Hkv * KV * Hd)
+  v_flat = v.cast(dtypes.half).reshape(Hkv * KV * Hd)
+
+  def emit(out_ph, q_ph, k_ph, v_ph):
+    return amd_gfx1100_q16_grid_hd128_loop_attention(
+      q_ph, k_ph, v_ph, out_ph, q_tokens=T, q_heads=Hq, kv_heads=Hkv, kv_tokens=KV,
+      scale=sc, causal=causal, output_block_base=ctx.output_block_base, acc_blocks=ctx.acc_blocks,
+      kernel_info=KernelInfo(name="amd_gfx1100_q16_grid_hd128_loop_attention"))
+
+  out_flat = Tensor.empty(Hq * T * Hd, dtype=dtypes.half, device=q.device)
+  result = out_flat.custom_kernel(q_flat, k_flat, v_flat, fxn=emit)[0]
+  return result.reshape(1, Hq, T, Hd)
 
 
 def sdpa_fallback(q:Tensor, k:Tensor, v:Tensor, *, scale:float|None, mask:Tensor|None) -> Tensor:
