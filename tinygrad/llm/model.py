@@ -609,8 +609,13 @@ class TransformerBlock(FFNBlock):
       _ctx = SharedAttentionCandidateContext(_profile, _strategy, T, start_pos+T, start_pos, self.config.n_heads,
         self.config.n_kv_heads, self.config.head_dim, True) if _profile and _strategy in ("FULL_RESIDENT_OVERLAY", "BOUNDED_PACKED_TILES") else None
       with role_metadata("shared_prefill_attention"):
+        # The shared-attention grid kernel requires a uniform fp16 Q/K/V contract
+        # (see lower_attention_semantic grid_shape check). K/V are already fp16 here
+        # but Q arrives fp32, which silently rejected the kernel into SDPA. Enforce
+        # the contract; result is cast back to Q's original dtype like the SDPA path.
+        _qkv_h = (q.cast(dtypes.half), k.cast(dtypes.half), v.cast(dtypes.half))
         attn = _prefill_semantic(_prefill, prefill_scratch,
-          shared_prefill_attention(q, k, v, mask=mask, candidate_context=_ctx))
+          shared_prefill_attention(*_qkv_h, mask=mask, candidate_context=_ctx).cast(q.dtype))
     else:
       attn = _prefill_semantic(_prefill, prefill_scratch,
                                q.scaled_dot_product_attention(k, v, attn_mask=mask, enable_gqa=True))  # (B,H,T,Hd)

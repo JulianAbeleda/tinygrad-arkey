@@ -83,10 +83,23 @@ def lower_attention_semantic(att:UOp) -> UOp:
         if len(att.src) != 6: return att.src[0]
         score = score + Tensor(att.src[5])
       kv_len = work_k.shape[2]
+      # Keep score at its natural (b,h,q_len,kv_len) rank for the composite
+      # reduce's primary input -- do NOT broadcast it to a fake hd axis here.
+      # Only the auxiliary V input carries hd lanes; the combine step
+      # (`_combine_step_online_softmax_state`) already broadcasts the scalar
+      # m/l correction factors to the accumulator's hd lanes via
+      # `corr.broadcast(lanes)`. Broadcasting score to hd at Tensor-
+      # construction time left an un-consumed EXPAND/RESHAPE on the primary
+      # input (the "primary_repeated" representative-lane selection only
+      # exists for the aux V input in the with-range devectorizer path, and
+      # not at all in the no-range composite lowering), which later crashed
+      # `bad reshape: () -> (...)` when its shape was recomputed against an
+      # already-collapsed scalar base. score_tile (with the extra unit axis)
+      # is still built for the hd==16 owned-fragment carrier construction
+      # below, which is unaffected by this change.
       score_tile = score.reshape(b, h, q_len, kv_len, 1)
-      score = score_tile.expand(b, h, q_len, kv_len, hd)
       value_tile = work_v.cast(att.arg.qk_dtype).reshape(b, h, 1, kv_len, hd)
-      logical_v = value_tile.expand(*score.shape).uop.scoped_value((0, 1, None, 3, 4))
+      logical_v = value_tile.expand(b, h, q_len, kv_len, hd).uop.scoped_value((0, 1, None, 3, 4))
       slots = (AccumulatorSlot(Ops.MAX, att.arg.qk_dtype, float("-inf"), "m"),
                AccumulatorSlot(Ops.ADD, att.arg.qk_dtype, 0.0, "l"),
                AccumulatorSlot(Ops.ADD, att.arg.qk_dtype, 0.0, "acc"))
