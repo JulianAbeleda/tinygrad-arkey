@@ -234,3 +234,44 @@ the composite lowering's bufferization boundary so upstream matmuls schedule ind
 the SDPA path), (b) make the range→const substitution contraction-aware (refuse to constant-fold a
 reduce-axis index on a matmul weight), or (c) a deeper rework of the composite-reduce lowering. Read-only
 mechanism investigation (no GPU) is proceeding to turn this into a concrete candidate before further runs.
+
+### A2 — CLASS #2 mechanism NARROWED by falsification (DECISIVE; escalation stands)
+
+Ran three targeted fixes against class 2 and one decisive causal probe. All GPU runs, 8B forced-fused repro.
+
+Falsified candidate fixes (each left the crash BYTE-IDENTICAL — `shape mismatch at Ops.MUL:
+[(1,32,512,128), ()]` at cleanup_dead_axes rangeify.py:481):
+1. Shape-preserving reshape+expand guard at `remove_bufferize` tail (rangeify.py:588) — no effect (the
+   weight is genuinely rank-0 at its own node; there is no shape to preserve there).
+2. `matmul_reduces` guard also bailing when `accessed_buffers` contains a PARAM (rangeify.py:574) — no
+   effect (the weight sits behind a STAGE boundary, so `red_gate` never surfaces the PARAM there; the
+   collapse does not flow through this guard).
+3. Bounding the `composite_owned` walk at GLOBAL-STAGE/AFTER/PARAM kernel boundaries (indexing.py:226) —
+   no effect.
+
+DECISIVE causal probe: forced `composite_owned` **completely empty** (DIAG_NO_COMPOSITE_OWNED). The crash
+**persists byte-identical.** This DEFINITIVELY FALSIFIES the `composite_consumer`/`composite_owned`
+over-scoping mechanism (the leading hypothesis). The upstream Q4_K projection weight loses its
+contraction-range index **independent of composite ownership** — i.e. the collapse is intrinsic to how the
+composite attention reduce restructures RANGE ASSIGNMENT / bufferization for the whole-model graph, not to
+which buffers are flagged composite consumers.
+
+**Remaining locus (not yet fixed):** the asymmetric multi-consumer range-merge in `run_rangeify`
+(indexing.py:283-304 — a per-occurrence `all_same(local_rngs)` identity check that can hand one occurrence
+of a shared weight an independent `new_range`/realize-axis while the sibling activation keeps the shared
+contraction RANGE) and/or `reduce_unparented` (codegen/simplify.py:82-96, which strips a RANGE from a
+REDUCE once one operand no longer references it). Confirming which requires deeper interactive tracing of
+range assignment across the per-KV-block-unrolled composite subgraph — the composite path's own docstring
+(rangeify.py:24-26) notes it "expands into one materialized Tensor subgraph per KV block today," which is
+the structural source of the non-identical shared-weight occurrences.
+
+**This is the directive's escalation point.** Class 2 is a genuine deeper composite-reduce-lowering defect
+(design (c)), NOT reachable by design (1) [attention-input restructure] or (2) [collapse-pass shape
+preserve], and NOT by composite-ownership scoping. Recommended before more GPU time: decide the design
+approach — (c1) make the range-merge share the contraction RANGE across all occurrences of a matmul weight
+(keep the weight ranged), (c2) prevent `reduce_unparented` from dropping a range still referenced by a
+sibling reduce operand, or (c3) rework the composite lowering so it does not unroll per-KV-block into
+structurally-distinct weight-index occurrences in the first place. Each is a bounded but real compiler task
+in range assignment; the choice affects blast radius on all matmul scheduling.
+
+Class 1 (V-input fix) remains committed, gated off, both gates green (d51bd3e92).
