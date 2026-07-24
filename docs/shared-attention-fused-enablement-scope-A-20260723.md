@@ -123,3 +123,114 @@ Implement A1 (strategy above), then run real 8B prefill through `schedule_linear
 
 This single spike converts the dominant unknown into a number and is the correct first step before
 committing to the full estimate.
+
+---
+
+## A2 — DESIGN DECISION + V-side fix (2026-07-23, session resume)
+
+**Decision: Approach (1) — restructure inputs — surgical variant.** Chosen over (2) harden-collapse-passes
+because (2) touches generic rewrite passes (`symbolic`/`pm_reduce_simplify`/`pm_const_buffer_folding`)
+used by every graph → unacceptable blast radius, and because (1) is the SAME structural move the score-side
+A1 fix already proved correct and non-regressing, one input downstream.
+
+**Root-cause confirmation (repro, this session).** Baseline repro crashes exactly as documented:
+`bad reshape: () -> (1,32,1,512,128)` in `_get_kernel_graph` → `symbolic+reduce_collapse+debuf` pass
+(rangeify.py:951) → `_mop_index` (rangeify.py:272) → shapeless node. The `(1,32,1,512,128)` target is
+verbatim `value_tile.reshape(b,h,1,kv_len,hd)` (h=32 grouped-up from 8 KV heads, kv=512, hd=128).
+
+**Why the size-1 axis is removable (not load-bearing).** V has no query dependence. The unit q_len axis on V
+existed only to satisfy `scoped_value`'s `len(axis_map)==rank` check and the general "input repeated across
+the reduced axes" convention. `_combine_step_online_softmax_state` (composite_combines.py:151-171) already
+broadcasts the scalar m/l correction factors to the accumulator's Hd lanes via `corr.broadcast(lanes)`, so
+nothing downstream consumes V's q_len axis. Under full-model DAG sharing the generic collapse passes fold
+V's degenerate broadcast source to a scalar PARAM load without rebuilding the enclosing RESHAPE → shapeless
+node → panic.
+
+**Fix (2 lines, minimal blast radius).** In `lower_attention_semantic` (rangeify.py):
+- Build the composite reduce's V input (`logical_v`) at natural rank-4 `(b,h,kv_len,hd)`:
+  `logical_v = work_v.cast(qk_dtype).uop.scoped_value((0,1,3,4))` (was rank-5 `reshape(...,1,...).expand(...)`
+  with axis_map `(0,1,None,3,4)`). axis_map maps V's 4 source axes to the reduction's logical axes
+  b→0,h→1,kv(reduce)→3,hd(lane)→4 — identical to before minus the dropped `None` (q_len) entry.
+- `CompositeInputSpec("logical", (0,1,3,4), ...)` (was `(0,1,None,3,4)`); `lane_axis=4` unchanged (Hd's
+  logical axis is still 4). `primary_repeated=True` unchanged (that flag governs the SCORE/primary input).
+
+**Decoupling note.** The rank-5 `value_tile` (rangeify.py:101) is intentionally LEFT in place — it is still
+consumed raw by the hd==16 owned-fragment carrier path (`construct_hd16_tile_carriers`, guarded
+`owned_map_proven and hd==16`, NOT taken for the real hd=128 grid path). For the real 8B/14B path
+`value_tile` is now dead (DCE'd) so its fragile RESHAPE never reaches scheduling. This leaves the hd==16
+synthetic test geometry and `wmma.py` untouched — the unit-test fail-set must be unchanged.
+
+Outcome classification (converges / next-crash / same-crash) pending the post-fix repro run.
+
+### A2 — post-fix outcome: NEXT-CRASH (same family, DIFFERENT subsystem)
+
+The V-side fix WORKED for its target: the `bad reshape: () -> (1,32,1,512,128)` crash is GONE; scheduling
+advances past it. New crash, one pass deeper (same `symbolic+reduce_collapse+debuf` pass, rangeify.py:964):
+```
+RuntimeError: shape mismatch at Ops.MUL: [(1, 32, 512, 128), ()] [Ops.INDEX, Ops.CAST]  (ops.py:431, DISALLOW_BROADCAST)
+```
+Instrumented provenance (ATTN_SHAPE_DEBUG dump):
+- src[0] = rank-4 activation `(1,32,512,128)`: INDEX(EXPAND(RESHAPE(STAGE bufferized, STACK<7>),
+  STACK<7>=[1,512,4096,1,32,512,..]), 0, RANGE(99,LOOP,512), RANGE(101,REDUCE,**4096**)).
+- src[1] = scalar `()`: CAST(MEMORY_SEMANTIC(MODEL_PARAMETER) -> ADD(MUL(MUL,CAST), MUL(MUL,CONST -1.0))).
+
+Interpretation: this is NOT a composite-reduce attention input. The REDUCE extent 4096 = the model hidden
+dim, and src[1] is a **Q4_K weight dequant** (scale*q + min) collapsed to a scalar. It is a **projection
+matmul** (v_proj/o_proj class) UPSTREAM of attention. The same matmul lowers fine on the ordinary SDPA
+path; the fused path's added DAG sharing exposes the collapse.
+
+**Design implication.** This instance is structurally OUT OF REACH of design (1) (restructure composite-
+reduce inputs) — it is an ordinary quant matmul, not an attention input. Two independent subsystems
+(attention-V, now quant-dequant) now fail with the identical `()`-collapse signature on the fused path.
+This shifts the evidence toward the crash being rooted in the **generic collapse pass** mishandling
+degenerate broadcast axes wherever the fused DAG exposes them — i.e. design (2) territory (harden the
+collapse pass to be shape-preserving), which the directive flags as higher blast radius (touches non-
+attention graphs). Pending: exact collapse-rule identification (which rewrite folds a broadcast quant
+scale to `()` without rebuilding the consumer) before choosing generic-pass fix vs attention-local
+avoidance. If the family keeps yielding new subsystem classes, this is the escalation point.
+
+### A2 — CRASH CLASS #2 pinned: upstream Q4_K projection-matmul weight loses its contraction index (ESCALATION)
+
+Applied a shape-preserving guard at the `remove_bufferize` fold tail (design (2), surgical) — it had ZERO
+effect; the crash was unchanged. A deep shape-transition walk (printing `_shape` at every ancestor of the
+scalar operand) shows WHY: the collapse is NOT a shape-dropping rewrite. The scalar operand's root is:
+```
+PARAM shape=(65536,144) uchar  ParamArg(12)          # a Q4_K quantized WEIGHT (144 B/superblock)
+  INDEX(PARAM, ADD_const, ADD_const) -> shape ()      # indexed by CONSTANT index expressions
+  full Q4_K dequant (SHL/BITCAST/WHERE/AND/OR nibble unpack + scale/min) -> shape ()
+```
+The whole dequant is legitimately evaluated at a SINGLE constant index, so its natural shape IS `()`.
+Meanwhile the co-operand (src[0], `(1,32,512,128)`) is indexed by `RANGE(101, AxisType.REDUCE, 4096)` —
+a **contraction axis** over the hidden dim. So this MUL is a **projection-matmul body** `A[i,k]·W[k]`
+reduced over k, and the weight has LOST its dependence on the contraction range k.
+
+**This is a correctness wall, not just a shape wall.** Broadcasting the scalar weight back to the
+activation's shape (the naive "make it schedule" move) would compute `W_const·Σ_k A[k]` instead of
+`Σ_k A[k]·W[k]` — a silent miscompile. The shape check is correctly refusing a malformed graph. The
+matmul-contraction should never have had its weight index resolved to a constant.
+
+**Why it is beyond design (1) and (2):** it is an ORDINARY Q4_K projection matmul UPSTREAM of attention
+(it also exists, correctly, on the SDPA path). Design (1) restructures composite-reduce *attention inputs*
+— cannot reach it. Design (2) shape-preserves generic folds — but the value here is genuinely scalar at
+its own node; there is no shape to preserve, and forcing one miscompiles. The real defect is that the
+fused-attention composite lowering perturbs the whole-model bufferization/range-substitution such that an
+upstream matmul weight's contraction RANGE is resolved to a CONST for the weight operand but not the
+activation operand (asymmetric). That is a deeper composite-lowering / bufferization-boundary rework.
+
+**Enumerated crash classes so far:**
+1. (FIXED, design-1) Attention V-input size-1 q_len axis → `bad reshape: () -> (1,32,1,512,128)`.
+   Fix: build `logical_v` at natural rank-4 (rangeify.py), non-regressing (unit tests 6/93 unchanged).
+2. (OPEN, deeper) Upstream Q4_K projection-matmul weight loses its contraction-range index under fused
+   DAG restructuring → `shape mismatch at Ops.MUL: [(1,32,512,128), ()]`. Broadcast-back = miscompile.
+   Root cause = asymmetric RANGE→CONST resolution across a matmul's two operands under the composite
+   graph. Requires preventing the erroneous weight-index collapse (keep the weight ranged over k), i.e.
+   a composite-lowering/bufferization-boundary fix, NOT a shape tweak.
+
+**Per the directive's "If blocked" clause, this is the escalation point** ("if the crash family keeps
+yielding new degenerate-axis classes, STOP and escalate the design question rather than burn GPU time").
+The design question for the user: how should the fused-attention composite lowering avoid perturbing
+upstream (non-attention) matmul bufferization so a Q4_K weight keeps its contraction index — (a) constrain
+the composite lowering's bufferization boundary so upstream matmuls schedule independently (as they do on
+the SDPA path), (b) make the range→const substitution contraction-aware (refuse to constant-fold a
+reduce-axis index on a matmul weight), or (c) a deeper rework of the composite-reduce lowering. Read-only
+mechanism investigation (no GPU) is proceeding to turn this into a concrete candidate before further runs.

@@ -99,7 +99,20 @@ def lower_attention_semantic(att:UOp) -> UOp:
       # below, which is unaffected by this change.
       score_tile = score.reshape(b, h, q_len, kv_len, 1)
       value_tile = work_v.cast(att.arg.qk_dtype).reshape(b, h, 1, kv_len, hd)
-      logical_v = value_tile.expand(b, h, q_len, kv_len, hd).uop.scoped_value((0, 1, None, 3, 4))
+      # V carries no query dependence: express the composite reduce's V input at
+      # its NATURAL (b,h,kv_len,hd) rank rather than reshape(...,1,...)+expand to a
+      # fake q_len axis. The size-1 q_len axis was pure scaffolding to satisfy
+      # scoped_value's len(axis_map)==rank check and the general "input repeated
+      # across the reduced axes" convention; nothing downstream requires it
+      # (`_combine_step_online_softmax_state` already broadcasts the scalar m/l
+      # correction factors to the accumulator's hd lanes). Keeping the synthetic
+      # unit axis produced a RESHAPE whose target `(b,h,1,kv_len,hd)` outlived its
+      # source under full-model DAG collapse, crashing `bad reshape: () -> (...)`
+      # in the symbolic+reduce_collapse+debuf pass. The rank-5 `value_tile` above
+      # is still built for the hd==16 owned-fragment carrier path (unaffected).
+      # axis_map maps V's 4 source axes to the reduction's logical axes:
+      # b->0, h->1, kv(reduce axis)->3, hd(lane axis)->4.
+      logical_v = work_v.cast(att.arg.qk_dtype).uop.scoped_value((0, 1, 3, 4))
       slots = (AccumulatorSlot(Ops.MAX, att.arg.qk_dtype, float("-inf"), "m"),
                AccumulatorSlot(Ops.ADD, att.arg.qk_dtype, 0.0, "l"),
                AccumulatorSlot(Ops.ADD, att.arg.qk_dtype, 0.0, "acc"))
@@ -119,7 +132,7 @@ def lower_attention_semantic(att:UOp) -> UOp:
         tile_carrier = tile_carrier._replace(score_fragment=(16, 16), value_fragment=(16, 16), output_fragment=(16, 16),
                                              lane_group=16, typed_fragment_abi="online_softmax_qk_pv_v1").validate()
       red = score.uop.composite_reduce(*slots, axis=(3,), inputs=(logical_v,), combine_fn=state_combine,
-        input_specs=(CompositeInputSpec("logical", (0, 1, None, 3, 4), primary_repeated=True,
+        input_specs=(CompositeInputSpec("logical", (0, 1, 3, 4), primary_repeated=True,
                                         lane_axis=4, lane_group=hd if state_combine == "online_softmax_state" else 1),),
         tile_carrier=tile_carrier,
         slot_shapes=((b, h, q_len), (b, h, q_len), (b, h, q_len, hd)),
