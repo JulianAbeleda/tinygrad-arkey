@@ -43,6 +43,8 @@ from tinygrad.runtime.autogen.amd.rdna3.ins import (
 from tinygrad.codegen.opt.tc import amd_rdna3
 from tinygrad.renderer.isa.extensions import get_amd_isa_extension_descriptors
 from tinygrad.renderer.isa.amd_register_allocator import AMDStageBufferSpec, allocate_amd_stage_buffer_leases
+from tinygrad.renderer.isa.amd_physical_regs import (_pin, _fixed_alias, _fixed_vgpr_index, _constrained_vgpr_index,
+  _fixed_contiguous_vgpr4)
 from tinygrad.renderer.isa.amd_register_contracts import (KARG, SPTR_POOL, SCNT_POOL, VBASE, TID, WGID_S0,
   FRAG_BASE, FRAG_TOP, LDS_PACK_BASE, LDS_PACK_TOP, WMMA_ACC_BASE)
 from tinygrad.renderer.isa.amd_proof import (install_amd_isa_proof_hook, _proof_record, _proof_record_inst,
@@ -1067,12 +1069,6 @@ def isel_gep(x:UOp):
 # renderer does NOT re-apply the swizzle: it packs element e into fragment VGPR (base + e//2), half (e%2: even->low16,
 # odd->high16). v_pack_b32_f16(vdst, s0, s1) puts s0 in low16, s1 in high16 -> pair (2i, 2i+1) -> reg i. This matches
 # the reference which loads A[l][0:16] as 16 CONTIGUOUS fp16 into regs Ab..Ab+7 (elem k in reg k//2).
-def _pin(base:int, i:int): return (Register(f"v{base+i}", base+i),)   # physical VGPR -> constrained vreg via alloc_vregs
-def _fixed_alias(base:int, i:int, dtype, *deps:UOp) -> UOp:
-  fixed = UOp(Ops.NOOP, dtype, tag=(FixedRegisterUse(f"v{base+i}", base+i),))
-  # NOOP.reg resolves through src[0], so keep the fixed-register sentinel first and ordering dependencies after it.
-  return fixed if not deps else UOp(Ops.NOOP, dtype, src=(fixed,) + deps)
-
 def _wmma_elems(carrier:UOp, n:int):
   while carrier.op in (Ops.AFTER, Ops.BITCAST) and carrier.src: carrier = carrier.src[0]
   if carrier.op not in (Ops.STACK, Ops.NOOP) or len(carrier.src) != n:
@@ -1085,17 +1081,6 @@ def _wmma_carrier_order_deps(carrier:UOp) -> tuple[UOp,...]:
     if carrier.op is Ops.AFTER: deps.extend(carrier.src[1:])
     carrier = carrier.src[0]
   return tuple(dict.fromkeys(deps))
-
-def _fixed_vgpr_index(u:UOp) -> int|None:
-  return u.tag[0].index if isinstance(u.tag, tuple) and len(u.tag) == 1 and isinstance(u.tag[0], Register) else None
-
-def _constrained_vgpr_index(u:UOp) -> int|None:
-  if not (isinstance(u.tag, tuple) and len(u.tag) == 1 and isinstance(u.tag[0], Register)): return None
-  cons = u.tag[0].cons
-  return cons[0].index if len(cons) == 1 else None
-
-def _fixed_contiguous_vgpr4(us:tuple[UOp, ...]) -> bool:
-  return len(us) == 4 and (b := _fixed_vgpr_index(us[0])) is not None and [_fixed_vgpr_index(u) for u in us] == list(range(b, b + 4))
 
 def _lds_b128_store_data(ctx:IselContext|None, u:UOp) -> tuple[UOp, ...]|None:
   """Return the 4-wide VGPR data span for a packed LDS store, or None (fail-closed)."""
