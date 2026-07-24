@@ -275,3 +275,33 @@ structurally-distinct weight-index occurrences in the first place. Each is a bou
 in range assignment; the choice affects blast radius on all matmul scheduling.
 
 Class 1 (V-input fix) remains committed, gated off, both gates green (d51bd3e92).
+
+### A2 — CLASS #2 hypothesis VERIFICATION (per user request "verify first"): real but entangled
+
+Instrumented the suspected merge site (indexing.py:302, the `else: new_range + realize_axis` branch) and
+ran the 8B forced-fused repro (DIAG_MERGE). Findings:
+- The merge-else branch fires **446 times per schedule; 425 reach a weight PARAM**. It is UBIQUITOUS normal
+  scheduling behavior, NOT a smoking gun. Minting a new range for a PARAM-reaching node happens constantly.
+- The predicted divergence IS present though: weight PARAMs get DISTINCT-identity ranges on extent-4096
+  contraction axes (e.g. `PARAM axis=2 extent=4096 nconsumers=3 distinct_local=3`; `RESHAPE axis=2
+  extent=4096 distinct_local=2`). The fused path gives a projection weight EXTRA consumers (3-4) whose
+  contraction ranges are not range-identity-equal -> the range-divergence mechanism is real.
+
+Conclusion (evidence-based):
+- The range-identity-divergence mechanism is REAL but ENTANGLED with ubiquitous normal scheduling. It is
+  not cleanly isolable at the merge without a fused-vs-SDPA differential on the specific collapsing weight.
+- **c1 (fix the general merge branch) is now judged too risky**: it runs 446x/schedule for EVERY model;
+  altering its range aliasing on an entangled signal risks broad non-attention regressions. Rejected as a
+  blind fix.
+- The divergence is driven by the EXTRA weight-consumers the fused attention path creates, which points at
+  **c3 (remove the duplication at the attention source, lower_attention_semantic)** as the more surgical
+  direction. BUT the specific collapsing weight was not isolated (PARAM(65536,144) = 4096x4096 could be
+  q_proj / o_proj / an FFN weight), so c3's exact edit point is not yet pinned, and c3 remains a band-aid
+  for the general shared-weight/multi-occurrence hazard.
+
+Net: verification correctly steered away from the high-blast-radius c1 and confirmed the mechanism, but did
+NOT yield a clean, provable fix. Next required step before ANY implementation: isolate the exact collapsing
+weight and its duplication path (fused-vs-SDPA differential trace), then implement c3 at the source and
+prove correctness by fused-vs-SDPA next-token numerics. Escalated to user for direction on whether to
+invest that isolation or hand class 2 to a dedicated compiler session. Class 1 remains fixed/shipped
+(d51bd3e92), gated off, both gates green.
