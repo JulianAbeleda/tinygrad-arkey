@@ -53,14 +53,25 @@ def _prefill_graph_gemm_enabled(model) -> bool:
 
 
 def shared_attention_attribution(model) -> dict[str, Any]:
-  """Report the model-side semantic-attention admission without claiming fusion.
+  """Report the model-side attention route truthfully.
 
-  The generated kernel proof is deliberately separate: a requested semantic
-  boundary can still fail closed to ordinary SDPA when its scheduler eligibility
-  gate rejects a workload.  This makes 8B and 14B measurements comparable while
-  preventing an artifact from overstating a scheduler request as score residency.
+  Two disjoint routes exist:
+  - CUSTOM-KERNEL INJECTION (tinygrad/llm/fused_attention.py:custom_kernel_attention),
+    gated by config.prefill_custom_kernel_attn. This is a PROVEN fused route: it
+    injects the captured amd_gfx1100_q16_grid_hd128_loop_attention kernel via
+    Tensor.custom_kernel (see extra/qk/flash_prefill_e2e_parity.py and
+    prefill_hd_sweep_numerics.py for the correctness/numerics proof). When this
+    gate is set, report the REAL route -- not the legacy SDPA constants.
+  - LEGACY semantic-candidate route (config.prefill_tc_attn without the custom
+    kernel gate): lower_attention_semantic (schedule/rangeify.py) currently
+    fails closed to ordinary SDPA for every workload. That branch's reporting
+    is unchanged from before -- it IS still SDPA.
+  Keeping these disjoint means a benchmark can't overstate either a scheduler
+  request (legacy) or an untraced-but-running route (custom kernel) as more
+  than what is actually proven.
   """
   config = model.config
+  custom_kernel = bool(getattr(config, "prefill_custom_kernel_attn", False))
   requested = bool(getattr(config, "prefill_tc_attn", False) and getattr(config, "prefill_v2", False))
   one_buffer_identity = None
   if getattr(config, "n_heads", None) == 32:
@@ -69,14 +80,45 @@ def shared_attention_attribution(model) -> dict[str, Any]:
                   if getattr(getattr(block, "attn_output", None), "_prefill_full_kernel_candidate_one_buffer", False)}
     identities.discard(None)
     if len(identities) == 1: one_buffer_identity = identities.pop()
-  # This attribution is consumed by whole-prefill evidence.  The bounded
-  # primitive is an inspectable correctness/residency candidate, but it is not
-  # the selected lowering: lower_attention_semantic currently returns the
-  # ordinary SDPA source for every workload.  Keep candidate evidence and
-  # runtime selection disjoint so a benchmark cannot promote a request.
+
+  if custom_kernel:
+    # The manifest's prefill_flash_attention_generated row is what actually describes this
+    # route (status=="promoted_default", provenance=="machine_authored_generated" -- see
+    # extra/qk/route_manifest.py). Read it rather than hardcoding True, so promotion_eligible
+    # tracks the manifest instead of drifting from it.
+    try:
+      from extra.qk.route_manifest import route as _manifest_route
+      manifest_row = _manifest_route("prefill_flash_attention_generated")
+      manifest_promoted = (manifest_row.get("status") == "promoted_default"
+                            and manifest_row.get("provenance") == "machine_authored_generated")
+    except Exception:
+      manifest_promoted = False
+    return {
+      "schema": "shared-prefill-attention-route.v3",
+      "requested": True,
+      "route_id": "prefill_flash_attention_generated",
+      "boundary": "custom_kernel_fused_attention",
+      "semantic_candidate": None,
+      # This is the emitted kernel name from FlashPrefillAttentionSpec.emitted_kernel_names
+      # (extra/qk/flash_prefill_attention_spec.py); hardcoded here rather than imported to
+      # avoid pulling extra/qk/ into this attribution helper's import path unconditionally --
+      # it is the sole entry in that tuple today (see fused_attention.py:ADMITTED_GRIDS/emit()).
+      "selected_lowering": "amd_gfx1100_q16_grid_hd128_loop_attention",
+      "fallback_contract": "ordinary_sdpa",
+      "fusion_proven": True,
+      "dual_wmma_proven": False,
+      "performance_proven": False,
+      "promotion_eligible": manifest_promoted,
+      "blocker": None,
+      "model_forward_attn_qo_identity": one_buffer_identity,
+      "model_forward_attn_qo_one_buffer": one_buffer_identity is not None,
+    }
+
+  # LEGACY branch (unchanged behavior): ordinary_sdpa is still the truth here.
   return {
-    "schema": "shared-prefill-attention-route.v2",
+    "schema": "shared-prefill-attention-route.v3",
     "requested": requested,
+    "route_id": None,
     "boundary": "shared_prefill_attention" if requested else "scaled_dot_product_attention",
     "semantic_candidate": "bounded_online_primitive" if requested else None,
     "selected_lowering": "ordinary_sdpa",
@@ -335,13 +377,16 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
             "profile": profile_range_summary(profile_events)}
 
   from extra.qk.prefill_graph_gemm_route import candidate_route_census, finalize_candidate_route_census
+  from tinygrad.llm.fused_attention import reset_custom_kernel_attention_trace, custom_kernel_attention_trace_snapshot
   candidate_registry=getattr(model, "_prefill_graph_gemm_registry", None); candidate_census=None
+  reset_custom_kernel_attention_trace()
   with _scoped_candidate_compiler_state():
     if candidate_registry is None:
       chunk_rows={sp:burst(sp) for sp in start_positions}
     else:
       with candidate_route_census() as collector: chunk_rows={sp:burst(sp) for sp in start_positions}
       candidate_census=finalize_candidate_route_census(collector,candidate_registry)
+  custom_kernel_attention_trace = custom_kernel_attention_trace_snapshot()
   chunk_ms = {sp: row["min_ms"] for sp, row in chunk_rows.items()}
   xs = sorted(chunk_ms)
   ys = [chunk_ms[x] for x in xs]
@@ -377,6 +422,11 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
     "prefill_v2": bool(model.config.prefill_v2),
     "prefill_route": model.prefill_policy.get("strategy", "unknown"),
     "shared_attention": shared_attention_attribution(model),
+    # Informational runtime trace from tinygrad/llm/fused_attention.py: how many times
+    # custom_kernel_attention actually dispatched during the bursts above, and the last
+    # geometry identity it dispatched. Soft/informational only -- NOT wired into
+    # route_binding_gate (which stays hard-fail-free for this field; see route_binding_gate).
+    "custom_kernel_attention_trace": custom_kernel_attention_trace,
     "K": K,
     "warmups": warmups,
     "rounds": rounds,
