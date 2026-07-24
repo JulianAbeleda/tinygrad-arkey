@@ -43,6 +43,8 @@ from tinygrad.runtime.autogen.amd.rdna3.ins import (
 from tinygrad.codegen.opt.tc import amd_rdna3
 from tinygrad.renderer.isa.extensions import get_amd_isa_extension_descriptors
 from tinygrad.renderer.isa.amd_register_allocator import AMDStageBufferSpec, allocate_amd_stage_buffer_leases
+from tinygrad.renderer.isa.amd_addressing import (LDSAddr, _const_base, _reg_base, _lid_ranges, _n_threads,
+  _lds_byte_offset, decompose_lds_index, _lds_key_uop, _lds_imm_bytes, _ds_imm_fits, _safe_lds_const_imm)
 from tinygrad.renderer.isa.amd_physical_regs import (_pin, _fixed_alias, _fixed_vgpr_index, _constrained_vgpr_index,
   _fixed_contiguous_vgpr4)
 from tinygrad.renderer.isa.amd_register_contracts import (KARG, SPTR_POOL, SCNT_POOL, VBASE, TID, WGID_S0,
@@ -86,15 +88,6 @@ def _workgroup_sgpr_index(ctx:IselContext, dim:int) -> int:
 # NOTE (B0.M multi-output-tile): the v>=238 garbage is a RAW-INS-only artifact; the ISA renderer's ELF descriptor auto-
 # sizes VGPR to the highest reg used, so through THIS renderer the real ceiling is OCCUPANCY, not v238. So we keep A/B in
 # the high [200,238) window (only 16 VGPRs needed, single reused pair) but place the C ACCUMULATORS LOW (see below).
-class LDSAddr(NamedTuple):
-  buf: UOp
-  dyn: UOp|None
-  const_half: int
-  const_bytes: int
-  itemsize: int
-  base_bytes: int
-  order: UOp|None
-  idx: UOp
 # B0.M: multi-output-tile C accumulators. A hand_coded M/N>16 upcasts the output into a WM x WN grid of 16x16 subtiles per
 # warp -> ONE reduce DEFINE_REG of vec width WM*WN*8, split by no_vectorized_wmma into WM*WN distinct Ops.WMMA each reading
 # an 8-lane accumulator slice. Each subtile needs its OWN fixed, contiguous, 8-aligned, loop-carried 8-VGPR run (v_wmma
@@ -442,15 +435,6 @@ def _is_sgpr(u:UOp) -> bool:
 def _movs2v(ctx:IselContext, u:UOp) -> UOp:
   return UOp(Ops.INS, dtypes.int32, src=(u,), arg=AMDOps.MOV_S2V, tag=_vreg_def(ctx))
 
-# ---- LDS-backed reduction accumulator (Ops.DEFINE_REG, addrspace REG). Phase B keeps the accumulator in LDS so the
-# read-modify-write across loop iterations is plain memory (no SSA/regalloc conflict). Each DEFINE_REG gets a fixed LDS
-# byte offset (assigned here, matched by elf.py's group-segment sizing which scans DEFINE_REG). NOOPT reductions are
-# single-thread (local_size=1) so one slot per accumulator suffices; multi-thread (GROUPTOP) cross-lane reduction is
-# out of scope for Phase B. ----
-def _reg_base(u:UOp) -> UOp:
-  while u.op is Ops.AFTER and u.src: u = u.src[0]   # AFTER(DEFINE_REG, ...) chain -> the DEFINE_REG
-  return u
-
 def _fixed_fp32_accumulators(ctx:IselContext) -> dict[UOp, int]:
   if (owned := getattr(ctx, "_fixed_fp32_accumulators", None)) is not None: return owned
   owned, top = {}, _ab_top(ctx) if _c_low(ctx) else WMMA_ACC_BASE
@@ -523,15 +507,6 @@ def _register_stage_index(ctx:IselContext, dreg:UOp, idx:UOp) -> tuple[str, int,
   if not 0 <= elem < meta["slots"] * width:
     raise NotImplementedError(f"AMD:ISA register stage element {elem} outside {meta['role']} buffer")
   return meta["role"], elem, _register_stage_base(ctx, meta) + (elem // 2)
-def _lid_ranges(ctx:IselContext) -> dict[int, int]:
-  if (r:=getattr(ctx, "_lidr", None)) is None:
-    r = ctx._lidr = {int(str(u.arg)[-1]): u.src[0].arg for u in ctx.uses if u.op is Ops.SPECIAL and str(u.arg).startswith("lidx")}
-  return r
-def _n_threads(ctx:IselContext) -> int:
-  n = 1
-  for v in _lid_ranges(ctx).values(): n *= v
-  return n
-
 def _next_loop_label(ctx:IselContext) -> int:
   # monotonic, unique per RANGE -> stable loop-label key (the counter SGPR is reused across non-overlapping loops)
   n = getattr(ctx, "_loop_label_n", 0); ctx._loop_label_n = n + 1
@@ -548,16 +523,6 @@ def _tid(ctx:IselContext) -> UOp:
     stride *= r.get(d, 1)
   t = ctx._tidins = acc
   return t
-def _lds_byte_offset(ctx:IselContext, dreg:UOp) -> int:
-  # allocate an LDS region: DEFINE_REG (addrspace REG) is PER-THREAD (THREADS copies); DEFINE_LOCAL is shared (1 copy).
-  d = getattr(ctx, "_lds", None)
-  if d is None: d = ctx._lds = {}
-  if dreg not in d:
-    d[dreg] = getattr(ctx, "_lds_top", 0)
-    per = dreg.dtype.size * dreg.dtype.base.itemsize
-    ctx._lds_top = d[dreg] + per * (_n_threads(ctx) if dreg.dtype.addrspace == AddrSpace.REG else 1)
-  return d[dreg]
-
 # ---- B0.L5: WMMA fragment VGPR allocator. A bump allocator over the reserved fragment region [FRAG_BASE, FRAG_TOP):
 # each distinct `key` (e.g. an A/B/C fragment identity) gets an `align`-aligned contiguous run of `n` VGPRs, STABLE across
 # repeat calls with the same key. Returns None when the region is exhausted (base+n would exceed FRAG_TOP) -> the WMMA
@@ -1171,22 +1136,9 @@ def _lds_addr_const_words(addr:UOp) -> int|None:
   if addr.src[1].op is not Ops.CONST or addr.src[1].arg != 1: return None
   return _ins_const_add(addr.src[0])
 
-def _lds_imm_bytes(a:UOp) -> int:
-  return int(a.src[2].arg) if len(a.src) >= 3 and a.src[2].op is Ops.CONST else 0
-
-def _ds_imm_fits(imm:int) -> bool:
-  return 0 <= imm <= 0xff
-
 def _ds_addr_imm(ctx:IselContext, addr:UOp, imm:int, align:int=1) -> tuple[UOp, int]:
   if _ds_imm_fits(imm) and imm % align == 0: return addr, imm
   return UOp(Ops.INS, dtypes.int32, src=(addr, UOp.const(dtypes.int32, imm).rtag()), arg=AMDOps.V_IADD, tag=_vreg_def(ctx)), 0
-
-def _safe_lds_const_imm(ctx:IselContext, idx_uop:UOp, dreg:UOp, idx:UOp, order:UOp|None=None) -> tuple[UOp, int]|None:
-  desc = decompose_lds_index(ctx, idx_uop, order)
-  if desc is None or desc.buf is not dreg or desc.dyn is None: return None
-  dyn, const_elems = _const_base(idx)
-  if dyn is not desc.dyn or desc.const_bytes != desc.base_bytes + const_elems * desc.itemsize: return None
-  return desc.dyn, desc.const_bytes
 
 def _fold_lds_addr_imm(ctx:IselContext, addr:UOp) -> tuple[UOp, int]:
   if addr.op is not Ops.INS or addr.arg is not AMDOps.V_OFFSET or len(addr.src) < 2 or addr.src[1].op is not Ops.CONST:
@@ -1231,27 +1183,6 @@ def _global_half8_base(vals:tuple[UOp, ...]) -> UOp|None:
   if any(ptr is not ptr0 or expr is not expr0 or c != c0 + i for i, (_idx, ptr, expr, c) in enumerate(addrs)): return None
   return idx0
 
-def decompose_lds_index(ctx:IselContext, idx:UOp, order:UOp|None=None) -> LDSAddr|None:
-  if idx.op is Ops.CAST and idx.src: idx = idx.src[0]
-  if idx.op is not Ops.INDEX or idx.addrspace != AddrSpace.LOCAL or len(idx.src) < 2: return None
-  ptr = idx.src[0]
-  if not isinstance(ptr.dtype, PtrDType) or ptr.dtype.addrspace == AddrSpace.GLOBAL: return None
-  itemsize = ptr.dtype.base.itemsize
-  if itemsize <= 0: return None
-  buf = _reg_base(ptr)
-  dyn, const_elems = _const_base(idx.src[1])
-  base_bytes = _lds_byte_offset(ctx, buf)
-  const_bytes = base_bytes + const_elems * itemsize
-  if const_bytes % 2 != 0: return None
-  return LDSAddr(buf, dyn, const_bytes // 2, const_bytes, itemsize, base_bytes, order, idx)
-
-def _lds_key_uop(u:UOp):
-  if u.op is Ops.AFTER and u.src: return _lds_key_uop(u.src[0])
-  if u.op is Ops.CAST and u.src: return _lds_key_uop(u.src[0])
-  if u.op is Ops.CONST: return (u.op.name, u.dtype, u.arg)
-  if u.op is Ops.SPECIAL: return (u.op.name, u.arg)
-  return (u.op.name, u.dtype, u.arg, tuple(_lds_key_uop(s) for s in u.src))
-
 def _load_vec4_index(v:UOp) -> UOp|None:
   if v.op is not Ops.LOAD or v.dtype.count != 4 or v.dtype.scalar() is not dtypes.half: return None
   idx = v.src[0].src[0] if v.src[0].op is Ops.CAST else v.src[0]
@@ -1292,14 +1223,6 @@ def _has_local_axis(x:UOp) -> bool:
   if x.op is Ops.RANGE and isinstance(x.arg, tuple) and x.arg[-1] is AxisType.LOCAL: return True
   if x.op is Ops.SPECIAL and str(x.arg).startswith("lidx") and str(x.arg) != "lidx0": return True
   return any(_has_local_axis(s) for s in x.src)
-
-def _const_base(x:UOp) -> tuple[UOp|None, int]:
-  if x.op is Ops.CONST: return None, int(x.arg)
-  if x.op is Ops.ADD:
-    a, ac = _const_base(x.src[0]); b, bc = _const_base(x.src[1])
-    if a is None: return b, ac + bc
-    if b is None: return a, ac + bc
-  return x, 0
 
 def _wmma_half_addr(e:UOp):
   lane = 0
