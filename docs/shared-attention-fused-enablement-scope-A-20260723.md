@@ -430,3 +430,29 @@ THE FIX (bounded; two sites + one ordering invariant):
 The loud class-2 guard (2ebdb2e15) catches any regression with a clear message. The proven root cause and
 fix requirement (clean leaf-buffer Q/K/V) are the north star: this is the coupling the isolated 254-VGPR
 "lab kernel" always assumed but was never wired to a real model graph.
+
+### A2 — CLASS #2: reach-through is UPSTREAM of rangeify (store-forwarding); attempts tested
+
+Attempted the targeted fix at the rangeify-time V-index site (indexing.py:132-141): peel AFTER wrappers
+off the V value before `src.src[0].index(*idxs)` and reattach ordering ends. Instrumented result:
+`v_val` at that point already contains the full Q4_K dequant (SHL/MUL/ADD in its toposort) AND one AFTER.
+Peeling the AFTER did NOT clear class-2 -> the v_proj recompute is inlined into V's value BEFORE this
+site (the store-to-load forwarding already happened upstream), so there is no clean `cache_kv` LOAD left
+to preserve at rangeify time. A single-site peel is too late.
+
+Precise state of the fix:
+- The composite reduce needs V (and the score/Q side) to reference an opaque BUFFER LOAD. Real V is either
+  the cache read (forwarded to the v_proj recompute upstream) or the direct projection -- both reachable
+  to v_proj. Only a genuine buffer (empty, or a non-forwarded cache LOAD) is clean (proven).
+- The fix must PREVENT the store-to-load forwarding for composite-reduce-consumed cache reads (so V stays
+  a buffer LOAD ordered after the store), OR restructure so V/K/Q are genuine buffer LOADs before the
+  attention op -- at BOTH the V-aux and score/primary sites. This is upstream of rangeify and multi-site;
+  not a single-line patch. Store-forwarding rewrite not yet pinned to one rule.
+
+Realistic remaining work (bounded but real): (1) locate + gate the store-to-load forwarding for composite
+V/K so the cache read stays a LOAD; (2) do the equivalent on the score/primary Q path; (3) verify ordering
+via A4 fused-vs-SDPA numerics (silent-miscompile risk); (4) A3 kernel-fires; (5) 14B; (6) A5-A8 tail.
+
+Shipped this session: class-1 fix (d51bd3e92), loud class-2 diagnostic (2ebdb2e15), full root-cause proof
++ fix requirement + localization (12fc34305, 1384e0115). The "lab kernel" is correct; the missing
+coupling is feeding it buffer-LOAD Q/K/V, and store-forwarding is what defeats every non-buffer attempt.
