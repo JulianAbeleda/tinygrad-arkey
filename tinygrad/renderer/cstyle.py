@@ -152,46 +152,6 @@ def _hip_expand_attention_output_drain(x:UOp) -> UOp:
       stores.append(dst.store((acc[j].gep(e)*recip).cast(dtypes.half)))
   return UOp.group(*stores)
 
-def _hip_expand_rotating_pv_drain(x:UOp) -> UOp:
-  from tinygrad.codegen.opt.compiler_policies import WaitCount
-  from tinygrad.uop.ops import RotatingPVSequentialDrainSpec
-  if not (isinstance(x.arg,tuple) and x.arg[:1] == ("rotating_pv_sequential_drain_v1",) and isinstance(x.arg[1],RotatingPVSequentialDrainSpec)):
-    return None
-  spec=x.arg[1]; spec.validate(); out,group,final_l,storage,lane,token=x.src
-  wait=UOp(Ops.WAIT,dtypes.void,(token,),WaitCount(lgkmcnt=0))
-  acc=UOp(Ops.STACK,spec.dtype,tuple(storage.after(wait).index(spec.state.block_offset(i)).load() for i in range(8)))
-  col=lane.alu(Ops.AND,UOp.const(dtypes.weakint,15)); half=lane.alu(Ops.SHR,UOp.const(dtypes.weakint,4)); stores=[]
-  for e in range(8):
-    recip=final_l.gep(e).ne(UOp.const(dtypes.float,0)).where(UOp.const(dtypes.float,1)/final_l.gep(e),UOp.const(dtypes.float,0))
-    idx=group*UOp.const(dtypes.weakint,2048)+(UOp.const(dtypes.weakint,2*e)+half)*UOp.const(dtypes.weakint,128)+UOp.const(dtypes.weakint,spec.output_block*16)+col
-    stores.append(out.index(idx).store((acc.gep(e)*recip).cast(dtypes.half)))
-  return acc.after(UOp.group(*stores))
-
-def _hip_expand_rotating_pv_sequence(x:UOp) -> UOp:
-  """Expand Ops.ROTATING_PV_SEQUENCE into its four sub-steps with explicit hard dependency
-  edges: sync -> c_load -> pv_wmma -> c_store, each via .after(), so toposort is structurally
-  forced into that exact order (not just AFTER's render-time name aliasing). This runs in
-  native_repack_matcher, which fires before linearize (see codegen/__init__.py), so the
-  Ops.ROTATING_PV_SEQUENCE marker never survives into the linearized list -- only its four
-  ordinary constituent ops (plus our AFTER wrappers) do.
-  Each AFTER wrapper is tagged ("rotating_pv_sequence_v1", generation, block, step) so
-  codegen/late/linearizer.py can keep one block's four steps contiguous and stop a later
-  block's c_load (generic LOAD priority -1) from being hoisted into an earlier block's
-  still-in-flight window. The wrapped nodes' OWN tags are left untouched -- pv_wmma in
-  particular may carry an ("attention_wmma", ...) role tag that other passes rely on."""
-  from tinygrad.uop.ops import RotatingPVSequenceSpec
-  if not isinstance(x.arg, RotatingPVSequenceSpec): raise ValueError("HIP rotating PV sequence is missing its typed ABI")
-  spec = x.arg; spec.validate()
-  if len(x.src) != 4 or x.dtype != dtypes.void: raise ValueError("HIP rotating PV sequence has malformed sources")
-  sync, c_load, pv_wmma, c_store = x.src
-  if sync.dtype != dtypes.void or c_load.dtype != spec.dtype or pv_wmma.dtype != spec.dtype or c_store.dtype != dtypes.void:
-    raise ValueError("HIP rotating PV sequence sources do not match the typed ABI")
-  seq_tag = lambda step: ("rotating_pv_sequence_v1", spec.state.generation, spec.block, step)
-  ordered_load = c_load.after(sync, tag=seq_tag(1))
-  ordered_wmma = pv_wmma.after(ordered_load, tag=seq_tag(2))
-  ordered_store = c_store.after(ordered_wmma, tag=seq_tag(3))
-  return ordered_store
-
 def _hip_expand_attention_stats_drain(x:UOp) -> UOp:
   from tinygrad.uop.ops import AMDAttentionStatsDrainSpec
   if not isinstance(x.arg,AMDAttentionStatsDrainSpec) or len(x.src) != 4: raise ValueError("HIP attention stats drain is malformed")
@@ -474,8 +434,6 @@ class HIPRenderer(CStyleLanguage):
       from tinygrad.renderer.isa.amd import native_repack_matcher
       from tinygrad.renderer.isa.amd import native_state_lane_matcher
       self.native_repack_matcher = PatternMatcher([(UPat(Ops.AMD_ATTENTION_OUTPUT_DRAIN,name="x"), _hip_expand_attention_output_drain),
-        (UPat(Ops.CUSTOMI,name="x"), _hip_expand_rotating_pv_drain),
-        (UPat(Ops.ROTATING_PV_SEQUENCE,name="x"), _hip_expand_rotating_pv_sequence),
         (UPat(Ops.AMD_ATTENTION_STATS_DRAIN,name="x"), _hip_expand_attention_stats_drain),
         (UPat(Ops.AMD_ATTENTION_LOOP_STATE,name="x"), _hip_expand_attention_loop_state),
         (UPat(Ops.AMD_ROW_SOFTMAX_REPACK,name="x"), _hip_expand_native_row_softmax)]) + native_repack_matcher + \

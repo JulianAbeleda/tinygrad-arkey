@@ -11,19 +11,6 @@ def linearize(sink:UOp) -> list[UOp]:
   out_degree:defaultdict[UOp, int] = defaultdict(int)
   priorities:dict[UOp, tuple[int, int, Any]] = {}
 
-  # cstyle.py's _hip_expand_rotating_pv_sequence expands Ops.ROTATING_PV_SEQUENCE (pre-linearize,
-  # in native_repack_matcher) into an explicit sync -> c_load -> pv_wmma -> c_store dependency
-  # chain, wrapping each of the latter three in an Ops.AFTER tagged
-  # ("rotating_pv_sequence_v1", generation, block, step). Recover that tag here, keyed by the
-  # wrapped (real) node, so a block's four steps can be clustered below instead of letting the
-  # generic LOAD=-1 / STORE=1 buckets let a later block's c_load get hoisted ahead of an earlier
-  # block's still in-flight window -- the dependency edges alone only fix intra-block order, not
-  # inter-block contiguity.
-  rotating_pv_seq_step:dict[UOp, tuple] = {}
-  for u in lst:
-    if u.op is Ops.AFTER and isinstance(u.tag, tuple) and u.tag[:1] == ("rotating_pv_sequence_v1",):
-      rotating_pv_seq_step[u.src[0]] = u.tag[1:]
-
   # get consumers and assign priorities
   # NOTE: this requires the lst be locally toposorted
   for u in reversed(lst):
@@ -36,16 +23,6 @@ def linearize(sink:UOp) -> list[UOp]:
     extra = None
     match u.op:
       # the order and placement of these defines is important
-      # a rotating-PV sequence step: fold (generation, block, step) into the priority integer
-      # itself (keeping extra=None, like every other case) rather than into `extra` -- mixing
-      # a tuple `extra` in here with the `extra=None` used by ordinary priority-0 ops (GEP,
-      # INDEX, CAST, untagged WMMA, ...) makes `sorted()` raise (None vs tuple), which silently
-      # reroutes the *entire* kernel's ordering through the TypeError fallback path below and
-      # stops this override from doing anything useful. A dedicated, disjoint priority band
-      # (unused by every other case above/below: -20,-19,-18,-17,-5,-1,0,1,5) both clusters one
-      # block's four steps together and keeps a later block's c_load out of an earlier block's
-      # still in-flight window, without perturbing priority comparisons anywhere else.
-      case _ if (step:=rotating_pv_seq_step.get(u)) is not None: priority = 1000 + step[0]*100 + step[1]*10 + step[2]
       case Ops.PARAM: priority, extra = -20, u.arg.slot
       case Ops.DEFINE_VAR: priority, extra = -19, u.arg
       case Ops.DEFINE_REG: priority = -18

@@ -1,3 +1,12 @@
+> **SUPERSEDED IN PART (2026-07-23).** The rotating-PV probe and its bespoke ABI have been
+> RETIRED (production is the accepted design; VGPR-cutting is a measured dead end). The real
+> open problem is NOT a rewrite of the prefill path — the kernel already compiles correct at
+> 254 VGPR. It is that the production **BoltBeam export path never runs the kernel**: the
+> policy never assembles the composite proof that enables the route, and an admission gate
+> caps VGPR at ≤192 (production is 254). See `boltbeam-export-triage-8b-14b-20260723.md` for
+> the verified diagnosis and the real next steps. The vocabulary-collapse design below is
+> retained for reference but is moot now that the duplicate route is removed.
+
 # Shared Flash-Prefill Rewrite Handoff (Gated, non-replacement)
 
 Date: 2026-07-23

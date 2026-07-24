@@ -102,104 +102,6 @@ def validate_state_transfer(x:UOp):
     return False
   return len(x.src) == 1+len(storage_src) or (x.src[-1].op is Ops.WAIT and source in x.src[-1].src)
 
-def validate_rotating_pv_state(x:UOp):
-  """Accept only typed construction markers; backend lowering remains unavailable."""
-  from tinygrad.uop.ops import RotatingPVStateSpec
-  if not (isinstance(x.arg, tuple) and len(x.arg) == 2 and x.arg[0] in {"rotating_pv_state_write_v1", "rotating_pv_state_read_v1"} and
-          isinstance(x.arg[1], RotatingPVStateSpec)):
-    return False
-  try: x.arg[1].validate()
-  except (TypeError, ValueError): return False
-  state=x.arg[1]
-  if x.arg[0] == "rotating_pv_state_write_v1":
-    return x.dtype == dtypes.void and len(x.src) in (3,4) and x.src[:3] == (x.src[0],state.storage,state.lane) and x.src[0].dtype == state.dtype and \
-      (len(x.src) == 3 or x.src[3].dtype != dtypes.void)
-  return x.dtype == state.dtype and len(x.src) in (2,3) and x.src[:2] == (state.storage,state.lane) and (len(x.src) == 2 or x.src[2].dtype == dtypes.void)
-
-def validate_rotating_pv_loop_read(x:UOp):
-  from tinygrad.uop.ops import RotatingPVLoopReadSpec
-  if not (isinstance(x.arg, tuple) and len(x.arg) == 2 and x.arg[0] == "rotating_pv_loop_read_v1" and isinstance(x.arg[1], RotatingPVLoopReadSpec)):
-    return False
-  try: x.arg[1].validate()
-  except (TypeError, ValueError): return False
-  read=x.arg[1]
-  if not (x.dtype == read.dtype and x.src == (read.state.storage, read.state.lane, read.rng, x.src[3]) and x.src[3].dtype == dtypes.void): return False
-  publication=x.src[3]
-  if read.wait_generation == 0: return publication.op is Ops.GROUP
-  return publication.op is Ops.CUSTOMI and publication.arg[:1] == ("rotating_pv_publication_v1",) and \
-    publication.arg[1].state.storage is read.state.storage and publication.arg[1].state.lane is read.state.lane and \
-    publication.arg[1].state.block == read.state.block-1 and publication.arg[1].state.generation == read.wait_generation
-
-def validate_rotating_pv_publication(x:UOp):
-  from tinygrad.uop.ops import RotatingPVPublicationSpec
-  if not (isinstance(x.arg, tuple) and len(x.arg) == 2 and x.arg[0] == "rotating_pv_publication_v1" and isinstance(x.arg[1], RotatingPVPublicationSpec)):
-    return False
-  try: x.arg[1].validate()
-  except (TypeError, ValueError): return False
-  spec=x.arg[1]
-  return x.dtype == dtypes.void and x.src == (x.src[0], spec.state.storage, spec.state.lane) and \
-    x.src[0].op is Ops.CUSTOMI and x.src[0].arg == ("rotating_pv_state_write_v1", spec.state)
-
-def validate_rotating_pv_wmma(x:UOp):
-  from tinygrad.uop.ops import RotatingPVPVUpdateSpec
-  if not (isinstance(x.arg, tuple) and len(x.arg) == 2 and x.arg[0] == "rotating_pv_wmma_v1" and isinstance(x.arg[1], RotatingPVPVUpdateSpec)):
-    return False
-  try: x.arg[1].validate()
-  except (TypeError, ValueError): return False
-  spec=x.arg[1]
-  if x.dtype != spec.dtype or len(x.src) != 7 or x.src[0].dtype != x.src[1].dtype != dtypes.half.vec(16) or x.src[2].dtype != dtypes.float.vec(8): return False
-  if x.src[3:6] != (spec.state.storage,spec.state.lane,spec.rng) or x.src[6].dtype != dtypes.void: return False
-  if spec.wait_generation == 0: return x.src[6].op is Ops.GROUP
-  publication=x.src[6]
-  return publication.op is Ops.CUSTOMI and publication.arg[:1] == ("rotating_pv_publication_v1",) and \
-    publication.arg[1].state.storage is spec.state.storage and publication.arg[1].state.lane is spec.state.lane and \
-    publication.arg[1].state.block == spec.state.block-1 and publication.arg[1].state.generation == spec.wait_generation
-
-def validate_rotating_pv_sequential_drain(x:UOp):
-  """Verify one block reload at a time; lowering remains intentionally absent."""
-  from tinygrad.uop.ops import RotatingPVSequentialDrainSpec
-  if not (isinstance(x.arg, tuple) and len(x.arg) == 2 and x.arg[0] == "rotating_pv_sequential_drain_v1" and
-          isinstance(x.arg[1], RotatingPVSequentialDrainSpec)):
-    return False
-  try: x.arg[1].validate()
-  except (TypeError, ValueError): return False
-  drain=x.arg[1]
-  if x.dtype != drain.dtype or len(x.src) != 6 or x.src[:5] != (drain.out,drain.group,drain.final_l,drain.state.storage,drain.state.lane):
-    return False
-  token=x.src[5]
-  if drain.state.block == 0:
-    if token.op is not Ops.END or token.dtype != dtypes.void or len(token.src) != 2 or token.src[0].op is not Ops.GROUP: return False
-    writes=token.src[0].src
-    if len(writes) != 8: return False
-    published=[]
-    for write in writes:
-      if not validate_rotating_pv_state(write) or write.arg[0] != "rotating_pv_state_write_v1": return False
-      published.append(write.arg[1])
-    return all(state.storage is drain.state.storage and state.lane is drain.state.lane and state.generation == state.block+1
-               for state in published) and {state.block for state in published} == set(range(8)) and drain.state.generation == 1
-  if token.op is not Ops.CUSTOMI or not validate_rotating_pv_sequential_drain(token): return False
-  previous=token.arg[1].state
-  return previous.storage is drain.state.storage and previous.lane is drain.state.lane and \
-    previous.generation == drain.state.generation-1 and previous.block == drain.state.block-1
-
-def validate_rotating_pv_sequence(x:UOp) -> bool:
-  """Accept only the fixed (sync, c_load, pv_wmma, c_store) ordering for one rotating-PV block."""
-  from tinygrad.uop.ops import RotatingPVSequenceSpec
-  if not isinstance(x.arg, RotatingPVSequenceSpec): return False
-  try: x.arg.validate()
-  except (TypeError, ValueError): return False
-  if x.dtype is not dtypes.void or len(x.src) != 4: return False
-  sync,c_load,pv_wmma,c_store = x.src
-  if sync.dtype is not dtypes.void or c_store.dtype is not dtypes.void: return False
-  if c_load.dtype != x.arg.dtype or pv_wmma.dtype != x.arg.dtype: return False
-  if sync.op is Ops.CUSTOMI:
-    if not (isinstance(sync.arg, tuple) and sync.arg[:1] == ("rotating_pv_publication_v1",)): return False
-  elif sync.op is not Ops.GROUP: return False
-  # c_store is the C-window LDS store: either a raw Ops.STORE or this route's typed LDS
-  # accumulator write (rotating_pv_state_write_v1 CUSTOMI), which is the real store here.
-  if c_store.op is Ops.STORE: return True
-  return c_store.op is Ops.CUSTOMI and isinstance(c_store.arg, tuple) and c_store.arg[:1] == ("rotating_pv_state_write_v1",)
-
 def validate_state_loop_read(x:UOp):
   if not (isinstance(x.arg,tuple) and len(x.arg)==3 and x.arg[0] == "state_loop_read_v1" and isinstance(x.arg[1],StateHandle) and isinstance(x.arg[2],int)):
     return False
@@ -267,9 +169,9 @@ spec_shared = PatternMatcher([
   # TODO: remove UNROLL here, it's for SPEC=2
   (UPat(Ops.GROUP, dtypes.void, src=UPat((Ops.GROUP, Ops.STORE, Ops.NOOP, Ops.UNROLL, Ops.INS))), lambda: True),
   (UPat(Ops.GROUP, dtypes.void, src=UPat(Ops.CUSTOMI, name="x")),
-   lambda x: isinstance(x.arg, tuple) and x.arg[:1] in {("amd_register_stage_pair",), ("amd_gfx1100_row_state_write_v1",), ("amd_gfx1100_attention_loop_state_write_v1",), ("state_loop_write_v1",), ("rotating_pv_state_write_v1",)}),
-  (UPat(Ops.GROUP, dtypes.void, name="x"), lambda x: all(s.op in {Ops.GROUP, Ops.STORE, Ops.NOOP, Ops.UNROLL, Ops.INS, Ops.AMD_ATTENTION_LOOP_STATE, Ops.ROTATING_PV_SEQUENCE} or
-    (s.op is Ops.CUSTOMI and isinstance(s.arg, tuple) and s.arg[:1] in {("amd_gfx1100_row_state_write_v1",), ("amd_gfx1100_attention_loop_state_write_v1",), ("state_loop_write_v1",), ("rotating_pv_state_write_v1",)}) for s in x.src)),
+   lambda x: isinstance(x.arg, tuple) and x.arg[:1] in {("amd_register_stage_pair",), ("amd_gfx1100_row_state_write_v1",), ("amd_gfx1100_attention_loop_state_write_v1",), ("state_loop_write_v1",)}),
+  (UPat(Ops.GROUP, dtypes.void, name="x"), lambda x: all(s.op in {Ops.GROUP, Ops.STORE, Ops.NOOP, Ops.UNROLL, Ops.INS, Ops.AMD_ATTENTION_LOOP_STATE} or
+    (s.op is Ops.CUSTOMI and isinstance(s.arg, tuple) and s.arg[:1] in {("amd_gfx1100_row_state_write_v1",), ("amd_gfx1100_attention_loop_state_write_v1",), ("state_loop_write_v1",)}) for s in x.src)),
 
   # TOOD: these should be buffer with different addrspace
   (UPat((Ops.DEFINE_LOCAL, Ops.DEFINE_REG)), lambda: True),
@@ -281,10 +183,7 @@ spec_shared = PatternMatcher([
         allow_any_len=True), lambda: True),
 
   # CUSTOM (inline and non inline)
-  (UPat((Ops.CUSTOMI, Ops.CUSTOM), name="x"), lambda x: validate_state_transfer(x) if isinstance(x.arg, tuple) and x.arg[:1] in {("state_publish_v1",), ("state_reload_v1",)} else validate_rotating_pv_state(x) if isinstance(x.arg, tuple) and x.arg[:1] in {("rotating_pv_state_write_v1",), ("rotating_pv_state_read_v1",)} else validate_rotating_pv_loop_read(x) if isinstance(x.arg, tuple) and x.arg[:1] == ("rotating_pv_loop_read_v1",) else validate_rotating_pv_publication(x) if isinstance(x.arg, tuple) and x.arg[:1] == ("rotating_pv_publication_v1",) else validate_rotating_pv_wmma(x) if isinstance(x.arg, tuple) and x.arg[:1] == ("rotating_pv_wmma_v1",) else validate_rotating_pv_sequential_drain(x) if isinstance(x.arg, tuple) and x.arg[:1] == ("rotating_pv_sequential_drain_v1",) else validate_state_loop_read(x) if isinstance(x.arg, tuple) and x.arg[:1] == ("state_loop_read_v1",) else validate_state_loop_write(x) if isinstance(x.arg, tuple) and x.arg[:1] == ("state_loop_write_v1",) else True),
-
-  # ROTATING_PV_SEQUENCE is a real enum op (not a CUSTOMI string tag): dedicated UPat entry
-  (UPat(Ops.ROTATING_PV_SEQUENCE, name="x"), validate_rotating_pv_sequence),
+  (UPat((Ops.CUSTOMI, Ops.CUSTOM), name="x"), lambda x: validate_state_transfer(x) if isinstance(x.arg, tuple) and x.arg[:1] in {("state_publish_v1",), ("state_reload_v1",)} else validate_state_loop_read(x) if isinstance(x.arg, tuple) and x.arg[:1] == ("state_loop_read_v1",) else validate_state_loop_write(x) if isinstance(x.arg, tuple) and x.arg[:1] == ("state_loop_write_v1",) else True),
 
   # BARRIER (on any length). TODO: this should only be in spec_program
   (UPat(Ops.BARRIER, dtypes.void), lambda: True),

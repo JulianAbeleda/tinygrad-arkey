@@ -1,3 +1,14 @@
+> **RETIRED (2026-07-23).** The rotating-PV probe and its bespoke ABI — including the
+> `ROTATING_PV_SEQUENCE` primitive described below — were removed the same day. Reasons:
+> (1) production attention is the accepted design and already compiles clean (254 VGPR, 0
+> spills) using a minimal shared 4-op vocabulary; (2) the probe's premise (cut VGPR to raise
+> occupancy) is a measured dead end — cutting VGPR regressed perf 1.4–2.5%
+> (`ATTENTION_COMPACT_VGPR_LEASE_NEGATIVE_20260723.md`) and occupancy needs ≤128 VGPR not the
+> probe's ≤192 target (`SHARED_ATTENTION_LIVE_STATE_RESIDENCY_LEDGER_20260723.md`); (3) the
+> probe was the sole source of the "re-lowering treadmill." The real open problem is the
+> BoltBeam export path for 8B/14B — see `boltbeam-export-triage-8b-14b-20260723.md`. This
+> document is retained as a historical record of the primitive work only.
+
 # Rotating-PV Sequence Primitive — Results (2026-07-23)
 
 Execution of `docs/CLAUDE_FLASHATTN_EXECUTION_PROMPT_20260723.md` (primitive-first).

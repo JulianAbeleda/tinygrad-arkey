@@ -167,10 +167,6 @@ class Ops(FastEnum):
   # logical input ownership and typed result projections.
   SCOPED_REDUCE = auto()
 
-  # strict ordered emission of one rotating-PV block's four sub-steps:
-  # publication/boundary sync, C-window LDS load, PV WMMA, C-window LDS store
-  ROTATING_PV_SEQUENCE = auto()
-
   # expander ops
   UNROLL = auto(); CONTRACT = auto(); VCAT = auto(); PTRCAT = auto()
 
