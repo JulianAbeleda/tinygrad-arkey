@@ -226,8 +226,51 @@ def _devec_stack_store(tgt:UOp, val:UOp, gate:UOp|None=None) -> UOp|None:
     stores.append(ptr.store(val.gep(i), gate.gep(i) if gate is not None else None))
   return UOp.group(*stores)
 
+def _output_load_lane(u:UOp) -> tuple[UOp, int]|None:
+  # (global/local INDEX, float4-lane) if u == GEP(LOAD([CAST] INDEX(non-REG buf, addr)), lane), else None.
+  # This is an output address that add_loads turned into a wide vector LOAD, whose lanes were then read
+  # back as the (unassignable) STORE target instead of staying an addressable INDEX.
+  if u.op is not Ops.GEP or not isinstance(u.arg, tuple) or len(u.arg) != 1: return None
+  ld = u.src[0]
+  if ld.op is not Ops.LOAD: return None
+  idx = ld.src[0]
+  if idx.op is Ops.CAST: idx = idx.src[0]
+  if idx.op is not Ops.INDEX or len(idx.src) < 2: return None
+  if getattr(idx.src[0], "addrspace", None) not in (AddrSpace.GLOBAL, AddrSpace.LOCAL): return None
+  return (idx, u.arg[0])
+
+def _devec_output_projection_store(tgt:UOp, val:UOp) -> UOp|None:
+  # Sibling of the bare-LOAD(INDEX) output-projection restoration in codegen/__init__.py:235-244
+  # (the had_deferred_reduce_projection block): that owner only matches lanes that are bare LOAD(INDEX)
+  # and assumes one distinct address per lane.  This handles the wide-load/UPCAST'd variant it misses:
+  # deferred-reduce output projection where lanes are GEP(LOAD(INDEX(out,addr))) and an UPCAST'd inner
+  # reduce axis left each distinct output address duplicated in contiguous same-size groups (the
+  # 32-value -> 16-address make_floatN(...) lvalue on gfx1100).  Restore addressable per-address global
+  # stores, horizontally ADD-reducing each group's partials (the sum the UPCAST'd reduce axis represents).
+  # Fail-closed: only fires when every lane is an output-load lane read, groups are contiguous and uniform
+  # with size>1, and each group's values are distinct (a genuine many->one reduction, not a broadcast).
+  if val.dtype.count != len(tgt.src): return None
+  info = [_output_load_lane(p) for p in tgt.src]
+  if any(x is None for x in info): return None
+  groups, i = [], 0
+  while i < len(tgt.src):
+    j = i
+    while j < len(tgt.src) and tgt.src[j] is tgt.src[i]: j += 1
+    groups.append(list(range(i, j))); i = j
+  g = len(groups[0])
+  if g < 2 or any(len(pos) != g for pos in groups): return None
+  for pos in groups:
+    if len({val.gep((p,)) for p in pos}) != g: return None      # identical values -> broadcast, leave it
+  stores = []
+  for pos in groups:
+    idx, lane = info[pos[0]]
+    addr = idx.src[0].index(idx.src[1] + UOp.const(idx.src[1].dtype, lane))
+    stores.append(addr.store(functools.reduce(lambda a,b: a+b, [val.gep((p,)) for p in pos])))
+  return UOp.group(*stores)
+
 pm_distinct_reg_store_devec = PatternMatcher([
   (UPat(Ops.GEP, src=(UPat(Ops.PTRCAT, name="cat"),), name="g"), _gep_local_ptrcat),
+  (UPat(Ops.STORE, src=(UPat(Ops.STACK, name="tgt"), UPat.var("val"))), _devec_output_projection_store),
   (UPat(Ops.STORE, src=(UPat(Ops.STACK, name="tgt"), UPat.var("val"))), _devec_distinct_reg_store),
   (UPat(Ops.STORE, src=(UPat(Ops.STACK, name="tgt"), UPat.var("val"), UPat.var("gate"))), _devec_stack_store),
   (UPat(Ops.STORE, src=(UPat(Ops.STACK, name="tgt"), UPat.var("val"))), _devec_stack_store),
