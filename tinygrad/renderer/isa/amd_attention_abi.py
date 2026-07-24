@@ -35,6 +35,34 @@ from tinygrad.dtype import dtypes, AddrSpace
 from tinygrad.renderer.isa.amd_physical_regs import _fixed_alias
 
 
+def drain_lane_encoding(head_dim:int, e:int, j:int, output_block_base:int) -> tuple[int, int, int]:
+  """Register-level encoding of one C-fragment drain store, derived from the spec authority.
+
+  The wave32 drain lane convention lives in exactly one place --
+  ``AMDAttentionOutputDrainSpec.drain_lane_coeffs`` -- and this function is how
+  the AMD:ISA encoder consumes it, rather than restating the same 128/256/2048
+  constants as shifts and immediates (which is how the HIP and ISA paths were
+  free to drift apart from each other and from the declared ``address_expr``).
+
+  Returns ``(halfwave_shift, group_row_stride, store_byte_offset)``:
+    * the address VGPR is ``((halfwave << halfwave_shift) + col) * 2`` bytes,
+    * plus ``gidx0 * group_row_stride`` for the grid form,
+    * and the residual ``e``/``j`` terms ride in the store's byte immediate.
+
+  ``c_col == 1`` and ``c_e == 2*c_halfwave`` are required because the encoder
+  folds ``col`` in with no scale and encodes ``c_halfwave`` as a left shift.
+  """
+  from tinygrad.uop.ops import AMDAttentionOutputDrainSpec
+  c_e, c_half, c_j, c_col = AMDAttentionOutputDrainSpec(head_dim=head_dim).drain_lane_coeffs
+  if c_col != 1 or c_half & (c_half-1):
+    raise ValueError("AMD:ISA attention drain encoder needs a unit column stride and a power-of-two halfwave stride")
+  # NOTE (unresolved, pre-existing): group_row_stride is added to a BYTE address while the HIP path adds
+  # 16*c_half in ELEMENTS. The value is the same integer, so this derivation is byte-identical to what the
+  # encoder emitted before, but the two renderers do not agree on the grid term's unit. Nothing exercises
+  # the AMD:ISA grid drain numerically, which is precisely why the divergence survived; it is recorded here
+  # rather than silently "corrected" inside a knowledge-centralization change.
+  return c_half.bit_length()-1, 16*c_half, (e*c_e + (j+output_block_base)*c_j) * 2
+
 def _opaque_exact_fragment_inputs(x:UOp) -> UOp|None:
   if x.op is not Ops.WMMA or len(x.src) != 3: return None
   changed, src = False, list(x.src)

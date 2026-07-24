@@ -56,7 +56,7 @@ from tinygrad.renderer.isa.amd_wmma_residency import (_uop_byte_width, _wmma_ele
   _progressive_c_reuse_proven, _progressive_c_assignment, _c_low, _candidate_register_resident, _resident_ab_enabled,
   _acc_base, _acc_top, _ab_reserved_regs, _ab_top, _ab_base, _shared_high_ab_regs, _vpool, _value_vpool, _vreg_def,
   _sptr_def, _frag_base, _record_direct_wmma_fragments, _record_resident_wmma_fragment)
-from tinygrad.renderer.isa.amd_attention_abi import (_opaque_exact_fragment_inputs, native_fragment_opaque_matcher,
+from tinygrad.renderer.isa.amd_attention_abi import (drain_lane_encoding, _opaque_exact_fragment_inputs, native_fragment_opaque_matcher,
   expand_loop_fragment, expand_native_row_softmax_repack, lower_native_row_state_gep, lower_state_phase_transfer,
   lower_state_phase_reload_gep, native_repack_matcher, native_loop_fragment_matcher, lower_native_pv_c_lane,
   lower_amd_attention_loop_state, native_state_lane_matcher, native_loop_state_matcher)
@@ -2245,21 +2245,26 @@ def lower_inst(x:UOp):
       output_block_base=payload.output_block_base
     else: output_block_base=0
     # ABI v0 is lidx0. v1=col, v2=halfwave, v3=per-store byte address / reciprocal.
+    # The drain lane convention is NOT restated here: the halfwave shift, the group row stride and the
+    # store immediate all come from drain_lane_encoding(), whose authority is
+    # AMDAttentionOutputDrainSpec.drain_lane_coeffs. This encoder only implements the Hd=128 drain (it has
+    # no head_dim in scope), so it asks the authority for Hd=128 explicitly.
+    half_shift, group_row_stride, _ = drain_lane_encoding(128, 0, 0, output_block_base)
     insts=[_ins(v_and_b32_e32(_V[1],15,_V[0]),None), _ins(v_lshrrev_b32_e32(_V[2],4,_V[0]),None)]
     if grid:
       if not isinstance(src[1].reg,Register): raise ValueError("grid attention drain lost gidx0")
-      insts.append(_ins(v_mul_lo_u32(_V[4],_Vr(src[1].reg),2048),None))
+      insts.append(_ins(v_mul_lo_u32(_V[4],_Vr(src[1].reg),group_row_stride),None))
     for j in range(blocks):
       for e in range(8):
         c=8+j*8+e; l=80+e
         insts += [_ins(v_cmp_neq_f32_e32(0,_V[l]),None), _ins(v_rcp_f32_e32(_V[3],_V[l]),None),
           _ins(v_mul_f32_e32(_V[c],_V[c],_V[3]),None), _ins(v_cndmask_b32_e32(_V[c],0,_V[c]),None),
           _ins(v_cvt_f16_f32_e32(_V[c],_V[c]),None),
-          _ins(v_lshlrev_b32_e32(_V[3],7,_V[2]),None),
+          _ins(v_lshlrev_b32_e32(_V[3],half_shift,_V[2]),None),
           _ins(v_add_nc_u32_e32(_V[3],_V[1],_V[3]),None),
           _ins(v_lshlrev_b32_e32(_V[3],1,_V[3]),None),
           *([_ins(v_add_nc_u32_e32(_V[3],_V[3],_V[4]),None)] if grid else []),
-          _ins(global_store_b16(addr=_V[3],data=_V[c],saddr=_S2(ptr),offset=(e*256+(j+output_block_base)*16)*2),None)]
+          _ins(global_store_b16(addr=_V[3],data=_V[c],saddr=_S2(ptr),offset=drain_lane_encoding(128,e,j,output_block_base)[2]),None)]
     return (insts[-1], insts)
   if a is AMDOps.ATTENTION_STATS_DRAIN:
     if len(src) != 4 or not isinstance(src[0].reg,Register) or not isinstance(src[1].reg,Register): raise ValueError("opaque attention stats drain lost ownership")

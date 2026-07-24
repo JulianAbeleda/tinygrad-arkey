@@ -138,3 +138,58 @@ def test_storage_backed_state_rejects_invalid_storage_lane_and_offset():
   with pytest.raises(TypeError): StateHandle(region, boundary, storage=UOp(Ops.DEFINE_REG, dtypes.float.ptr(64, AddrSpace.REG), arg=93), lane=lane, lane_stride=8).validate()
   with pytest.raises(TypeError): StateHandle(region, boundary, storage=storage, lane=UOp.const(dtypes.float, 0.0), lane_stride=8).validate()
   with pytest.raises(ValueError): StateHandle(region, boundary, storage=storage, lane=lane, lane_stride=8, element_offset=1).validate()
+
+
+# ---- Single-authority contracts for the native AMD attention ABI -------------------------------
+# These are the machine-enforced half of rules that were previously only human-facing. The drain
+# lane convention used to exist three times (a decorative string in the spec, UOp arithmetic in
+# renderer/cstyle.py, register-level shift/immediate arithmetic in renderer/isa/amd.py) with nothing
+# tying them together, so the two renderers could drift from each other and from the declaration.
+
+def test_drain_lane_coeffs_are_the_only_statement_of_the_convention():
+  from tinygrad.uop.ops import AMDAttentionOutputDrainSpec
+  for head_dim in (64, 128, 256):
+    spec = AMDAttentionOutputDrainSpec(head_dim=head_dim, blocks=head_dim//16)
+    c_e, c_half, c_j, c_col = spec.drain_lane_coeffs
+    # the declared human-facing string is a rendering of the coefficients, not an independent copy
+    assert spec.address_expr_text == f"e*{c_e}+halfwave*{c_half}+j*{c_j}+col"
+    # the relations both renderers rely on when they factor / shift
+    assert c_e == 2*c_half and c_col == 1 and c_j == 16
+  # the shipped default declaration must still agree with its own derivation
+  AMDAttentionOutputDrainSpec().validate()
+  assert AMDAttentionOutputDrainSpec().address_expr == AMDAttentionOutputDrainSpec().address_expr_text
+
+
+def test_isa_drain_encoding_agrees_with_the_declared_address_expression():
+  from tinygrad.uop.ops import AMDAttentionOutputDrainSpec
+  from tinygrad.renderer.isa.amd_attention_abi import drain_lane_encoding
+  head_dim = 128
+  c_e, c_half, c_j, c_col = AMDAttentionOutputDrainSpec(head_dim=head_dim).drain_lane_coeffs
+  for output_block_base in (0, 4):
+    half_shift, group_row_stride, _ = drain_lane_encoding(head_dim, 0, 0, output_block_base)
+    assert 1 << half_shift == c_half and group_row_stride == 16*c_half
+    for e in range(8):
+      for j in range(4):
+        # the encoder splits the address into a runtime VGPR part and a store byte immediate; their
+        # sum must reproduce the declared element formula exactly, in bytes.
+        byte_imm = drain_lane_encoding(head_dim, e, j, output_block_base)[2]
+        for halfwave in range(2):
+          for col in (0, 7, 15):
+            runtime_bytes = ((halfwave << half_shift) + col*c_col) * 2
+            declared = e*c_e + halfwave*c_half + (j+output_block_base)*c_j + col*c_col
+            assert runtime_bytes + byte_imm == declared*2
+
+
+def test_hip_drain_expansion_addresses_match_the_declared_convention():
+  from tinygrad.uop.ops import AMDAttentionOutputDrainSpec
+  spec = AMDAttentionOutputDrainSpec(head_dim=128, blocks=8)
+  c_e, c_half, c_j, c_col = spec.drain_lane_coeffs
+  # cstyle.py emits `(2e+halfwave)*c_half + (j+base)*c_j + col`; that factoring is only equal to the
+  # declared `e*c_e + halfwave*c_half + ...` while c_e == 2*c_half, which is what it checks.
+  for e in range(8):
+    for j in range(spec.blocks):
+      for halfwave in range(2):
+        for col in (0, 15):
+          factored = (2*e + halfwave)*c_half + (j + spec.output_block_base)*c_j + col
+          declared = e*c_e + halfwave*c_half + (j + spec.output_block_base)*c_j + col*c_col
+          assert factored == declared

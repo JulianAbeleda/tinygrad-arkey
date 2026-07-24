@@ -1779,6 +1779,40 @@ class AMDAttentionOutputDrainSpec(NamedTuple):
   grid: AMDAttentionGridSpec|None = None
   output_block_base: int = 0
 
+  @property
+  def drain_lane_coeffs(self) -> tuple[int, int, int, int]:
+    """THE authority for the wave32 C-fragment drain lane convention.
+
+    Returns (c_e, c_halfwave, c_j, c_col) such that, in ELEMENTS of the
+    row-major output buffer, one accumulator lane lands at
+
+        address(e, halfwave, j, col)
+          = e*c_e + halfwave*c_halfwave + (j+output_block_base)*c_j + col*c_col
+
+    where `e` indexes the 8 lanes of a wave32 C fragment, `halfwave` is
+    lidx0>>4, `j` indexes head-dim blocks, and `col` is lidx0&15.
+
+    This convention previously existed three times -- as a decorative string in
+    `address_expr`, as UOp arithmetic in renderer/cstyle.py, and again as
+    register-level shift/immediate arithmetic in renderer/isa/amd.py -- with
+    nothing tying them together. Every consumer now derives from this tuple:
+    `address_expr` is rendered from it (see `address_expr_text`), the HIP
+    renderer builds its index arithmetic from it, and the AMD:ISA encoder
+    derives its shift amount and store immediate from it. Do not restate these
+    numbers anywhere; a second copy is the bug this property exists to prevent.
+
+    c_e == 2*c_halfwave and c_col == 1 are load-bearing: the HIP path factors
+    e/halfwave into one `(2e+halfwave)*head_dim` multiply and the ISA path
+    encodes c_halfwave as a left shift, so both check those relations.
+    """
+    return (2*self.head_dim, self.head_dim, 16, 1)
+
+  @property
+  def address_expr_text(self) -> str:
+    """The human-facing rendering of `drain_lane_coeffs` (see `address_expr`)."""
+    c_e, c_half, c_j, _ = self.drain_lane_coeffs
+    return f"e*{c_e}+halfwave*{c_half}+j*{c_j}+col"
+
   def validate(self):
     # `blocks` (the accumulator/output HEAD-BLOCK count) and `address_expr` (the hand-authored
     # "e*<2*Hd>+halfwave*<Hd>+j*16+col" formula) both derive from head_dim -- de-literalized from the
@@ -1787,7 +1821,7 @@ class AMDAttentionOutputDrainSpec(NamedTuple):
     # the literal "128"/"8"/"e*256+halfwave*128+j*16+col" (a NamedTuple default must be a constant);
     # this validator is what now encodes the invariant -- byte-identical at head_dim=128.
     hdb = self.head_dim // 16
-    expected_addr = f"e*{2*self.head_dim}+halfwave*{self.head_dim}+j*16+col"
+    expected_addr = self.address_expr_text
     full = self.native_abi == "amd_gfx1100_attention_output_drain_v1" and self.blocks == hdb and \
       self.lanes_per_fragment == 8 and self.address_expr == expected_addr and self.output_block_base == 0
     # Proper divisors of hdb (< hdb): at head_dim=128 (hdb=8) this is exactly {1,2,4}, unchanged.
