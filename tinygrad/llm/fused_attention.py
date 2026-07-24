@@ -53,6 +53,8 @@ custom_kernel CONTRACT (verified, tensor.py:194 / uop/ops.py:1256)
   - returns [s.after(kernel) for s in srcs]; index [0] (out_buf) is the result
 """
 from __future__ import annotations
+from contextvars import ContextVar
+from typing import Any
 from tinygrad import Tensor, dtypes
 from tinygrad.uop.ops import AMDAttentionGridSpec, SharedAttentionCandidateContext
 
@@ -72,6 +74,54 @@ ADMITTED_GRIDS: frozenset = frozenset({(32, 8, 512), (40, 8, 512)})
 # which needs to inject its own carried-forward KernelInfo -- routes through this
 # SAME seam instead of ever calling the gfx1100 builder directly.
 _PREFILL_EMITTERS = {"amd_gfx1100": lambda spec, **kw: spec.emit(**kw)}
+
+# RUNTIME DISPATCH TRACE (BoltBeam observability seam)
+# --------------------------------------------------
+# extra/qk/prefill_graph_gemm_route.py already has a "candidate route census"
+# mechanism (record_model_forward_candidate), but it is purpose-built for the
+# dense-GEMM packed-WMMA roles: (a) it is a no-op unless one_buffer=True, a flag
+# that specifically means "this candidate shares one canonical weight-buffer
+# identity across the whole-model forward" -- a packed-WMMA weight concept that
+# does not apply to attention's Q/K/V/out buffers; and (b) finalize_candidate_
+# route_census cross-checks recorded rows against `registry.admissions`, i.e. the
+# dense candidate_set registry -- attention has no such registry entry. Reusing
+# that seam for attention would either require lying about one_buffer (to avoid
+# the no-op) or would record nothing at all (one_buffer=False, per the no-op
+# gate). Rather than overload that seam's semantics, this is a small,
+# attention-specific trace: a dispatch counter + last-geometry identity, so
+# extra/qk/prefill_whole_synced.py can read (not import extra/qk/ eagerly from
+# here -- see custom_kernel_attention below) whether/how many times the fused
+# custom-kernel route actually fired during a census window.
+_CUSTOM_KERNEL_ATTENTION_DISPATCH_COUNT: ContextVar[int] = ContextVar(
+  "custom_kernel_attention_dispatch_count", default=0)
+_CUSTOM_KERNEL_ATTENTION_LAST_IDENTITY: ContextVar[str | None] = ContextVar(
+  "custom_kernel_attention_last_identity", default=None)
+
+
+def _record_custom_kernel_attention_dispatch(identity: str) -> None:
+  _CUSTOM_KERNEL_ATTENTION_DISPATCH_COUNT.set(_CUSTOM_KERNEL_ATTENTION_DISPATCH_COUNT.get() + 1)
+  _CUSTOM_KERNEL_ATTENTION_LAST_IDENTITY.set(identity)
+
+
+def custom_kernel_attention_dispatch_count() -> int:
+  """How many times custom_kernel_attention has successfully dispatched (this context)."""
+  return _CUSTOM_KERNEL_ATTENTION_DISPATCH_COUNT.get()
+
+
+def custom_kernel_attention_last_identity() -> str | None:
+  """The canonical geometry identity of the most recent successful dispatch, if any."""
+  return _CUSTOM_KERNEL_ATTENTION_LAST_IDENTITY.get()
+
+
+def custom_kernel_attention_trace_snapshot() -> dict[str, Any]:
+  """Read-only snapshot for reporting (e.g. prefill_whole_synced.py's report dict)."""
+  return {"dispatches": _CUSTOM_KERNEL_ATTENTION_DISPATCH_COUNT.get(),
+          "last_identity": _CUSTOM_KERNEL_ATTENTION_LAST_IDENTITY.get()}
+
+
+def reset_custom_kernel_attention_trace() -> None:
+  _CUSTOM_KERNEL_ATTENTION_DISPATCH_COUNT.set(0)
+  _CUSTOM_KERNEL_ATTENTION_LAST_IDENTITY.set(None)
 
 
 def prefill_grid_spec(q:Tensor, k:Tensor) -> AMDAttentionGridSpec | None:
@@ -157,6 +207,13 @@ def custom_kernel_attention(q:Tensor, k:Tensor, v:Tensor, *, scale:float|None, c
   v_flat = v.cast(dtypes.half).reshape(Hkv * KV * Hd)
   out_flat = Tensor.empty(Hq * T * Hd, dtype=dtypes.half, device=q.device)
   result = out_flat.custom_kernel(q_flat, k_flat, v_flat, fxn=fxn)[0]
+  # Record the dispatch AFTER every geometry/spec gate above has passed (i.e. only
+  # once we know this call is committed to the fused custom-kernel route, not a
+  # NotImplementedError fallback). role="attention_tile" matches the manifest row's
+  # role naming convention used elsewhere for prefill roles.
+  identity = (f"amd_gfx1100_q16_grid_hd128_loop_attention:role=attention_tile,"
+              f"Hq={Hq},Hkv={Hkv},q_tokens={T},kv_tokens={KV},Hd={Hd}")
+  _record_custom_kernel_attention_dispatch(identity)
   return result.reshape(1, Hq, T, Hd)
 
 
