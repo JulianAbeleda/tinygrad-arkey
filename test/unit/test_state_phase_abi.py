@@ -193,3 +193,49 @@ def test_hip_drain_expansion_addresses_match_the_declared_convention():
           factored = (2*e + halfwave)*c_half + (j + spec.output_block_base)*c_j + col
           declared = e*c_e + halfwave*c_half + (j + spec.output_block_base)*c_j + col*c_col
           assert factored == declared
+
+
+def test_attention_loop_state_register_map_spans_are_disjoint_and_reserved():
+  """Defends amd_register_contracts.AMD_ATTENTION_LOOP_STATE (the ex-`{"m":72,"l":80,"acc":8}` dict).
+
+  The cost of this map having been an undocumented, undefended bare dict is recorded in
+  docs/shared-attention-phase-lds-negative-result-20260724.md: publishing the state through a typed
+  StateHandle LDS region created a register mirror instead of transferring ownership, because the
+  hard alias had no owner to transfer from.
+  """
+  from tinygrad.renderer.isa.amd_register_contracts import AMD_ATTENTION_LOOP_STATE as M, FRAG_BASE, WMMA_ACC_BASE
+  M.validate()
+  spans = M.spans()
+  assert len(spans) == M.blocks + 4                      # eight acc blocks plus m, l, qk_c, alpha
+  occupied = [i for _, start, end in spans for i in range(start, end)]
+  assert len(occupied) == len(set(occupied))             # no two roles alias
+  assert min(occupied) == WMMA_ACC_BASE == M.acc         # starts at the reserved low accumulator base
+  assert max(occupied) < FRAG_BASE                       # stays clear of the high fragment window
+  assert sorted(occupied) == list(range(M.acc, M.top()))  # contiguous, so runs() covers it exactly
+  assert all(start % M.lanes == 0 for _, start, _ in spans)
+  # runs() is what _n_c_runs reports, which is what makes _vpool exclude the window.
+  assert M.runs() * M.lanes == M.top() - M.acc
+
+
+def test_attention_loop_state_register_map_rejects_aliasing_and_bad_roles():
+  import pytest as _pytest
+  from tinygrad.renderer.isa.amd_register_contracts import AMDAttentionLoopStateMap, AMD_ATTENTION_LOOP_STATE as M
+  with _pytest.raises(ValueError): AMDAttentionLoopStateMap(m=80).validate()            # m aliases l
+  with _pytest.raises(ValueError): AMDAttentionLoopStateMap(m=73).validate()            # misaligned span
+  with _pytest.raises(ValueError): AMDAttentionLoopStateMap(alpha=192).validate()       # collides with fragments
+  with _pytest.raises(ValueError): M.base("acc", M.blocks)                              # block out of range
+  with _pytest.raises(ValueError): M.base("m", 1)                                       # m has no block dimension
+  with _pytest.raises(ValueError): M.base("lanes")                                      # not a role
+  with _pytest.raises(ValueError): M.base("nope")
+
+
+def test_attention_loop_state_registers_are_not_restated_in_the_renderer():
+  """No consumer may re-spell the physical map; the boundary is the only source."""
+  import pathlib, re
+  root = pathlib.Path(__file__).resolve().parents[2] / "tinygrad" / "renderer" / "isa"
+  offenders = []
+  for path in (root/"amd.py", root/"amd_attention_abi.py", root/"amd_wmma_residency.py"):
+    for n, line in enumerate(path.read_text().splitlines(), 1):
+      code = line.split("#", 1)[0]
+      if re.search(r'\{\s*"(m|l|acc|alpha)"\s*:', code): offenders.append(f"{path.name}:{n}")
+  assert not offenders, f"attention loop-state register map restated at {offenders}"

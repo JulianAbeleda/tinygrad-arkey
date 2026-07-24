@@ -63,7 +63,7 @@ from tinygrad.renderer.isa.amd_attention_abi import (drain_lane_encoding, _opaqu
 from tinygrad.renderer.isa.amd_physical_regs import (_pin, _fixed_alias, _fixed_vgpr_index, _constrained_vgpr_index,
   _fixed_contiguous_vgpr4)
 from tinygrad.renderer.isa.amd_register_contracts import (KARG, SPTR_POOL, SCNT_POOL, VBASE, TID, WGID_S0,
-  FRAG_BASE, FRAG_TOP, LDS_PACK_BASE, LDS_PACK_TOP, WMMA_ACC_BASE)
+  FRAG_BASE, FRAG_TOP, LDS_PACK_BASE, LDS_PACK_TOP, WMMA_ACC_BASE, AMD_ATTENTION_LOOP_STATE)
 from tinygrad.renderer.isa.amd_proof import (install_amd_isa_proof_hook, _proof_record, _proof_record_inst,
   _proof_carrier_meta, _store_owner_tag_from_store_arg, _store_owner_meta_from_ins)
 
@@ -474,13 +474,13 @@ def isel_customi(ctx:IselContext, x:UOp):
   if isinstance(x.arg, tuple) and x.arg[:1] == ("amd_gfx1100_attention_loop_state_write_v1",):
     _,role,block,lane=x.arg
     if role not in {"m","l","acc"} or not isinstance(block,int) or not isinstance(lane,int): raise ValueError("malformed attention loop-state write")
-    base={"m":72,"l":80,"acc":8}[role] + (block*8 if role=="acc" else 0)
+    base=AMD_ATTENTION_LOOP_STATE.base(role, block if role=="acc" else 0)
     if x.src[0].dtype != dtypes.float: raise ValueError("attention loop-state write requires scalar fp32")
     return UOp(Ops.INS,dtypes.float,src=(_tov(ctx,x.src[0]),),arg=AMDOps.MOV,tag=_pin(base,lane))
   if isinstance(x.arg, tuple) and x.arg[:1] in {("amd_gfx1100_row_state_write_v1",), ("amd_gfx1100_row_state_read_v1",)}:
     kind, owner, role, e = x.arg
     if role not in {"m", "l", "alpha"} or not isinstance(e, int) or not 0 <= e < 8: raise ValueError("malformed native row-state marker")
-    base = {"m":72, "l":80, "alpha":96}[role] if _has_hd128_attention(ctx) else _acc_base(ctx, ("amd_gfx1100_row_state_v1", owner, role))
+    base = AMD_ATTENTION_LOOP_STATE.base(role) if _has_hd128_attention(ctx) else _acc_base(ctx, ("amd_gfx1100_row_state_v1", owner, role))
     if base is None: raise NotImplementedError("native row-state fixed VGPR span exhausted")
     if kind == "amd_gfx1100_row_state_write_v1":
       if len(x.src) != 1 or x.src[0].dtype != dtypes.float: raise ValueError("native row-state write requires scalar fp32")
@@ -1219,7 +1219,7 @@ def isel_attention_loop_state(ctx:IselContext, x:UOp):
   from tinygrad.uop.ops import AMDLoopStateSpec
   if not isinstance(x.arg, AMDLoopStateSpec): raise ValueError("AMD attention loop state is missing its typed ABI")
   x.arg.validate()
-  base={"m":72,"l":80,"acc":8}[x.arg.role] + (x.arg.block*8 if x.arg.role=="acc" else 0)
+  base=AMD_ATTENTION_LOOP_STATE.base(x.arg.role, x.arg.block if x.arg.role=="acc" else 0)
   if x.arg.access == "read":
     return UOp(Ops.NOOP,dtypes.float.vec(8),tuple(_fixed_alias(base,i,dtypes.float,*x.src) for i in range(8)))
   store=x.src[0]
@@ -2256,7 +2256,7 @@ def lower_inst(x:UOp):
       insts.append(_ins(v_mul_lo_u32(_V[4],_Vr(src[1].reg),group_row_stride),None))
     for j in range(blocks):
       for e in range(8):
-        c=8+j*8+e; l=80+e
+        c=AMD_ATTENTION_LOOP_STATE.base("acc", j)+e; l=AMD_ATTENTION_LOOP_STATE.base("l")+e
         insts += [_ins(v_cmp_neq_f32_e32(0,_V[l]),None), _ins(v_rcp_f32_e32(_V[3],_V[l]),None),
           _ins(v_mul_f32_e32(_V[c],_V[c],_V[3]),None), _ins(v_cndmask_b32_e32(_V[c],0,_V[c]),None),
           _ins(v_cvt_f16_f32_e32(_V[c],_V[c]),None),
@@ -2271,8 +2271,8 @@ def lower_inst(x:UOp):
     ptr,group=src[0].reg,src[1].reg; insts=[_ins(v_lshrrev_b32_e32(_V[2],4,_V[0]),None),_ins(v_mul_lo_u32(_V[4],_Vr(group),128),None)]
     for e in range(8):
       insts += [_ins(v_lshlrev_b32_e32(_V[3],3,_V[2]),None),_ins(v_add_nc_u32_e32(_V[3],_V[3],_V[4]),None),
-        _ins(global_store_b32(addr=_V[3],data=_V[72+e],saddr=_S2(ptr),offset=e*16),None),
-        _ins(global_store_b32(addr=_V[3],data=_V[80+e],saddr=_S2(ptr),offset=e*16+4),None)]
+        _ins(global_store_b32(addr=_V[3],data=_V[AMD_ATTENTION_LOOP_STATE.base("m")+e],saddr=_S2(ptr),offset=e*16),None),
+        _ins(global_store_b32(addr=_V[3],data=_V[AMD_ATTENTION_LOOP_STATE.base("l")+e],saddr=_S2(ptr),offset=e*16+4),None)]
     return (insts[-1],insts)
   if a is AMDOps.GLOBAL_LOAD_B64:
     off_r, ptr_r, imm = src[0].reg, src[1].reg, src[2].arg

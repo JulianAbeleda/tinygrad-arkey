@@ -33,6 +33,7 @@ from __future__ import annotations
 from tinygrad.uop.ops import UOp, UPat, PatternMatcher, Ops
 from tinygrad.dtype import dtypes, AddrSpace
 from tinygrad.renderer.isa.amd_physical_regs import _fixed_alias
+from tinygrad.renderer.isa.amd_register_contracts import AMD_ATTENTION_LOOP_STATE
 
 
 def drain_lane_encoding(head_dim:int, e:int, j:int, output_block_base:int) -> tuple[int, int, int]:
@@ -342,7 +343,9 @@ def lower_native_pv_c_lane(x:UOp) -> UOp:
 def lower_amd_attention_loop_state(x:UOp) -> UOp:
   from tinygrad.uop.ops import AMDLoopStateSpec
   if not isinstance(x.arg, AMDLoopStateSpec): raise ValueError("AMD attention loop state is missing its typed ABI")
-  x.arg.validate(); base={"m":72,"l":80,"acc":8}[x.arg.role] + (x.arg.block*8 if x.arg.role=="acc" else 0)
+  # The physical VGPR map is contained in amd_register_contracts.AMD_ATTENTION_LOOP_STATE; see its
+  # docstring for the invariant, the caller list, and the negative result that came of it being a bare dict.
+  x.arg.validate(); base=AMD_ATTENTION_LOOP_STATE.base(x.arg.role, x.arg.block if x.arg.role=="acc" else 0)
   if x.arg.access in {"read","final_read"}:
     return _fixed_alias(base,x.arg.lane,dtypes.float)
   store=x.src[0]

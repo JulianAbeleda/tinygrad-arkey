@@ -36,7 +36,8 @@ from tinygrad.dtype import dtypes, PtrDType, AddrSpace
 from tinygrad.renderer.isa import IselContext
 from tinygrad.renderer.isa.extensions import get_amd_isa_extension_descriptors
 from tinygrad.renderer.isa.amd_register_allocator import AMDStageBufferSpec, allocate_amd_stage_buffer_leases
-from tinygrad.renderer.isa.amd_register_contracts import SPTR_POOL, VBASE, FRAG_BASE, FRAG_TOP, WMMA_ACC_BASE
+from tinygrad.renderer.isa.amd_register_contracts import (SPTR_POOL, VBASE, FRAG_BASE, FRAG_TOP, WMMA_ACC_BASE,
+  AMD_ATTENTION_LOOP_STATE)
 from tinygrad.renderer.isa.amd_addressing import LDSAddr, _const_base, _reg_base, _lds_key_uop, decompose_lds_index
 
 
@@ -340,10 +341,11 @@ def _has_hd128_attention(ctx:IselContext) -> bool:
 def _n_c_runs(ctx:IselContext) -> int:
   if (n := getattr(ctx, "_ncruns", None)) is None:
     if _has_hd128_attention(ctx):
-      # Eight persistent PV C fragments occupy v8..v71. Reserve v72..v87 for
-      # native m/l, v88..v95 for the transient QK C, and v96..v103 for alpha.
-      ctx._ncruns = 12
-      return 12
+      # The whole native attention loop-state window is reserved. Its layout (eight persistent PV C
+      # fragments, then m, l, the transient QK C, and alpha) is owned by
+      # amd_register_contracts.AMD_ATTENTION_LOOP_STATE, so the run count is derived, not restated.
+      ctx._ncruns = n = AMD_ATTENTION_LOOP_STATE.runs()
+      return n
     n, seen = 0, set()
     for u in ctx.uses:
       if u.op is not Ops.WMMA: continue
@@ -437,8 +439,8 @@ def _acc_base(ctx:IselContext, key) -> int:
   # _frag (which now holds ONLY the reused A/B window) so the two regions never share a running top.
   d = getattr(ctx, "_accfrag", None)
   if d is None: d = ctx._accfrag = {}
-  if isinstance(key,tuple) and key[:1]==("hd128_pv",): return WMMA_ACC_BASE+key[1]*8
-  if key == ("hd128_qk",): return WMMA_ACC_BASE+80
+  if isinstance(key,tuple) and key[:1]==("hd128_pv",): return AMD_ATTENTION_LOOP_STATE.base("acc", key[1])
+  if key == ("hd128_qk",): return AMD_ATTENTION_LOOP_STATE.base("qk_c")
   if isinstance(key, tuple) and len(key) == 2 and key[0] == "wmma_root" and \
      (assignment := _progressive_c_assignment(ctx)) is not None and key[1] in assignment[0]:
     key = ("progressive_c_serialized", 0)
