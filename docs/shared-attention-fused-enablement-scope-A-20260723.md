@@ -376,3 +376,33 @@ a clean buffer read (not via `assigned_kv = cache_kv.after(store(...))`, which r
 into the projection), with the cache store kept as a separate scheduled sink. Alternatively, stop the
 composite V-lane packing from reaching through a bufferize boundary. Both are bounded; the cache-PARAM
 read matches the harness's leaf-buffer contract most directly.
+
+### A2 — CLASS #2 FIX REQUIREMENT CONFIRMED + exact reach-through localized (2026-07-24)
+
+Isolation experiments on the fast 1-layer repro (env-gated probes in model.py, since reverted):
+- K/V as clean raw `cache_kv` PARAM reads, Q left dirty (`q.cast(half)`) -> STILL class-2 (q_proj pulled
+  in via `score`). So a PARAM leaf DOES stop the reach-through, but ALL of Q/K/V must be clean.
+- K/V clean (cache PARAM) AND Q clean (empty buffer) -> **class-2 GONE** (guard did not fire); only a
+  benign `cycle detected while indexing cache_kv` remained (my probe read the cache raw while it was
+  also being stored — an ordering cycle, not class-2). CONFIRMS: the fix is to give the composite reduce
+  leaf-buffer Q/K/V.
+
+EXACT reach-through mechanism (the fix site): the composite V-lane reconstruction
+`_pack_online_softmax_v_lanes` (composite_combines.py:173-192) and the fallback in
+`_handle_no_range_generic` (composite_combines.py:249-262) rebuild each V lane as
+`base = carrier.src[0]; base.index(*prefix, idx + off)`. In the real path V = `assigned_kv[1,...]` where
+`assigned_kv = Tensor(cache_kv.after(store(stack(k,v))))`, so `base = AFTER(cache_kv, store)` and
+`base.index(...)` drags the STORE (=> v_proj Q4_K matmul) into every reconstructed lane -> the composite
+reduce fuses the projection and collapses its weight. With a clean PARAM/BUFFER base (empty or raw cache)
+`base.index(...)` is opaque and correct.
+
+Two candidate fixes (both bounded; ordering/correctness must be preserved):
+- (F1) Composite-lowering: in the lane rebuild, peel scheduling-ordering wrappers (Ops.AFTER, and STAGE)
+  off `base` so lanes index the underlying buffer, while the composite reduce still depends on V at the
+  top level for ordering. Most general (covers Q via the score/primary path too), but must not drop the
+  store->read ordering.
+- (F2) Model-side: present Q/K/V to the attention op as genuine leaf buffers — K/V via ordered cache
+  reads whose base is the cache PARAM (not AFTER), Q via a scratch buffer. Needs the ordering-without-
+  cycle and a Q scratch buffer.
+
+Loud class-2 guard (committed 2ebdb2e15) now makes any regression here fail with a clear message.
