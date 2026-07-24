@@ -5,6 +5,7 @@ does not encode model, weight-format, or target-specific policy.
 """
 from tinygrad import Tensor
 from tinygrad.uop.ops import AMDAttentionGridSpec, SharedAttentionCandidateContext
+from tinygrad.llm.fused_attention import ADMITTED_GRIDS
 
 def shared_prefill_attention(q:Tensor, k:Tensor, v:Tensor, *, scale:float|None=None,
                              mask:Tensor|None=None, causal:bool=False,
@@ -22,7 +23,7 @@ def shared_prefill_attention(q:Tensor, k:Tensor, v:Tensor, *, scale:float|None=N
         group_ratio=groups, kv_tokens=k.shape[-2], head_dim=q.shape[-1])
       try:
         candidate.validate()
-        if (candidate.q_heads, candidate.kv_heads, candidate.q_tokens) in {(32, 8, 512), (40, 8, 512)}: grid = candidate
+        if (candidate.q_heads, candidate.kv_heads, candidate.q_tokens) in ADMITTED_GRIDS: grid = candidate
       except ValueError: pass
     # Preserve the established eager layout normalization outside the exact
     # opt-in proof. Those calls have no native descriptor and therefore must
