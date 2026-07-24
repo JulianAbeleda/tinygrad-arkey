@@ -83,7 +83,23 @@ GATE: import; construct for 8B/14B geometries; `.emit()` produces the same UOp a
 - `custom_kernel_attention` (and the postrange native-swap, postrange.py:345) bind the SPEC and call
   `spec.emit(...)` instead of importing `amd_gfx1100_q16_grid_hd128_loop_attention` by name. (Keep the
   hand-builder callable — the spec just composes it; the point is the SPEC owns the topology as data.)
+- TARGET-KEYED SELECTION (the multi-GPU seam, per user direction "other GPUs coming, don't hardcode what
+  should be modular"): the emitter/route selection keys on `spec.target` — a `target -> emitter` dispatch,
+  not a bare call to the gfx1100 builder. Today the map has ONE entry ("amd_gfx1100"); adding a GPU is a
+  new entry + a per-target emitter, a modular add not a rewrite. NO emitter-internal edits in P3 (keeps the
+  routing gate byte-identity attributable).
 GATE: a4/varkv numerics unchanged; whole-model schedules clean; captures byte-identical.
+
+### P3b — Derive remaining bare hardware scalars from descriptor fields [byte-identical, own gate]
+Per user direction "it should be derived": the emitter still carries bare hardware literals (wave `32` /
+`&15` lane math, WMMA tile `16`) that are NUMBERS and should be read from a descriptor field (e.g.
+`AMDAttentionGridSpec.wave_size`, which ALREADY EXISTS as a field but the lane math ignores). Replace those
+scalars with reads from the field — form-generic, byte-identical (32==32), gated like P1. SCOPE LIMIT: only
+values that are scalars-plugged-in. The per-target lane-math ALGORITHM (the `axes` C-fragment convention,
+the drain `address_expr`) is NOT a scalar — it is per-tensor-core code and stays behind the P3 target
+dispatch (a different GPU gets a different emitter fn, not a derived formula). Kept as its own pass so its
+byte-identity gate is not entangled with P3's routing rewire.
+GATE: isolated captures 254/0 byte-identical (all 4 routes); unit set unchanged; a4/varkv 6.1e-5.
 
 ### P4 — Manifest row + authority gate (extra/qk/route_manifest.py + a new gate)
 - Add a `prefill_flash_attention_generated` (or similar) ROUTES row: `workload=prefill`, `roles=[attention_tile]`,

@@ -66,7 +66,7 @@ class FlashPrefillAttentionSpec:
         raise ValueError("output_block_base is outside the accumulator-slice range")
     return self
 
-  def emit(self):
+  def emit(self, kernel_info=None):
     """Return a custom_kernel-shaped fxn: (out_ph, q_ph, k_ph, v_ph) -> UOp.
 
     Reproduces amd_gfx1100_q16_grid_hd128_loop_attention's call site EXACTLY as it
@@ -74,10 +74,18 @@ class FlashPrefillAttentionSpec:
     `emit` closure -- same kwargs, same argument-for-argument threading (the
     closure's `valid_kv=ctx.kv_tokens, query_start=ctx.start_pos` become this
     spec's own `self.valid_kv`/`self.query_start` fields).
+
+    `kernel_info`: optional override for the builder's `kernel_info=` kwarg, so a
+    caller that needs to carry forward its own KernelInfo (e.g. postrange.py's
+    AST-swap, which must preserve self.ast.arg's existing fields via replace())
+    can still route through this SAME emitter seam instead of calling the raw
+    builder directly. Default (None) is UNCHANGED from before this override
+    existed -- `KernelInfo(name="amd_gfx1100_q16_grid_hd128_loop_attention")`.
     """
     self.validate()
     from tinygrad.schedule.wmma import amd_gfx1100_q16_grid_hd128_loop_attention
     from tinygrad.uop.ops import KernelInfo
+    ki = kernel_info if kernel_info is not None else KernelInfo(name="amd_gfx1100_q16_grid_hd128_loop_attention")
 
     def fxn(out_ph: UOp, q_ph: UOp, k_ph: UOp, v_ph: UOp) -> UOp:
       return amd_gfx1100_q16_grid_hd128_loop_attention(
@@ -85,8 +93,7 @@ class FlashPrefillAttentionSpec:
         kv_heads=self.Hkv, kv_tokens=self.kv_tokens, scale=self.scale, causal=self.causal,
         valid_kv=self.valid_kv, query_start=self.query_start,
         output_block_base=self.output_block_base, acc_blocks=self.acc_blocks,
-        phase_abi_v1=self.phase_abi_v1,
-        kernel_info=KernelInfo(name="amd_gfx1100_q16_grid_hd128_loop_attention"))
+        phase_abi_v1=self.phase_abi_v1, kernel_info=ki)
     return fxn
 
   @property

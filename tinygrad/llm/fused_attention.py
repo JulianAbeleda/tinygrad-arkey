@@ -57,8 +57,21 @@ from tinygrad import Tensor, dtypes
 from tinygrad.uop.ops import AMDAttentionGridSpec, SharedAttentionCandidateContext
 
 # ADMITTED GEOMETRIES (Hq, Hkv, q_tokens) for which a captured kernel exists / is
-# generatable. Extend as the capture matrix grows (see B7 in the scope doc).
+# generatable. Extend as the capture matrix grows (see B7 in the scope doc). This stays
+# the proven-on-GPU shape allowlist; FlashPrefillAttentionSpec.validate() (below) is a
+# SECOND, independent geometric-legality gate -- admission requires BOTH, so today's
+# admitted set is unchanged (the allowlist is strictly narrower than what validate()
+# alone would accept).
 ADMITTED_GRIDS: frozenset = frozenset({(32, 8, 512), (40, 8, 512)})
+
+# TARGET-KEYED EMITTER DISPATCH (the multi-GPU seam): a FlashPrefillAttentionSpec
+# resolves its custom_kernel-shaped emitter fxn by spec.target. One entry today
+# (amd_gfx1100); a second GPU is a new dict entry + a per-target emitter, a modular
+# add rather than a rewrite of this routing code. **kw passes through to spec.emit()
+# (e.g. kernel_info=...) so every call site -- including postrange.py's AST-swap,
+# which needs to inject its own carried-forward KernelInfo -- routes through this
+# SAME seam instead of ever calling the gfx1100 builder directly.
+_PREFILL_EMITTERS = {"amd_gfx1100": lambda spec, **kw: spec.emit(**kw)}
 
 
 def prefill_grid_spec(q:Tensor, k:Tensor) -> AMDAttentionGridSpec | None:
@@ -86,15 +99,17 @@ def custom_kernel_attention(q:Tensor, k:Tensor, v:Tensor, *, scale:float|None, c
   -> no composite reduce -> none of the class-2 reach-through/forwarding/cycle.
 
   Mechanism (verified against postrange.py:328 + Tensor.custom_kernel):
-  - The proven UOp builder `amd_gfx1100_q16_grid_hd128_loop_attention(q,k,v,out,...)`
-    IS the custom_kernel `fxn` body. It requires BARE PARAM owners with slots
-    (Q,K,V,out)=(1,2,3,0), so we pass FLAT 1-D buffers (placeholder_like keeps
-    1-D tensors as bare PARAM; multi-dim would become RESHAPE(PARAM) and fail).
+  - A FlashPrefillAttentionSpec (extra/qk/flash_prefill_attention_spec.py) owns the
+    topology as DATA and composes the proven UOp builder
+    `amd_gfx1100_q16_grid_hd128_loop_attention(q,k,v,out,...)` via `spec.emit()`,
+    resolved through the target-keyed `_PREFILL_EMITTERS` dispatch. It requires BARE
+    PARAM owners with slots (Q,K,V,out)=(1,2,3,0), so we pass FLAT 1-D buffers
+    (placeholder_like keeps 1-D tensors as bare PARAM; multi-dim would become
+    RESHAPE(PARAM) and fail).
   - custom_kernel(out_flat; q_flat,k_flat,v_flat) assigns slots 0,1,2,3 -> exactly
     out=0, Q=1, K=2, V=3.
   """
-  from tinygrad.schedule.wmma import amd_gfx1100_q16_grid_hd128_loop_attention
-  from tinygrad.uop.ops import KernelInfo
+  from extra.qk.flash_prefill_attention_spec import FlashPrefillAttentionSpec
   grid = prefill_grid_spec(q, k)
   if grid is None: raise NotImplementedError("custom_kernel_attention: geometry not admitted")
   Hq, Hkv, T, KV, Hd = grid.q_heads, grid.kv_heads, grid.q_tokens, grid.kv_tokens, grid.head_dim
@@ -106,22 +121,31 @@ def custom_kernel_attention(q:Tensor, k:Tensor, v:Tensor, *, scale:float|None, c
     raise NotImplementedError(f"custom_kernel_attention: ctx/tensor geometry mismatch "
       f"(grid kv={grid.kv_tokens} q={grid.q_tokens}; ctx kv={ctx.kv_tokens} q={ctx.q_tokens} start={ctx.start_pos})")
   sc = float(scale) if scale is not None else 1.0 / (Hd ** 0.5)
+
+  # The SPEC owns the topology as data: it threads valid_kv/query_start from ctx explicitly (==
+  # the builder's no-padding defaults today, but robust for start_pos>0 chunks: the per-row causal
+  # boundary is ctx.start_pos, not an incidental kv_tokens-q_tokens equality). Admission is now a
+  # BOTH-gate: ADMITTED_GRIDS (proven-shapes allowlist, via prefill_grid_spec above) AND
+  # spec.validate() (geometric legality) must both hold; validate() alone accepts any %16<=4096
+  # geometry, so ADMITTED_GRIDS is what keeps this to the proven 512 shapes -- unchanged behavior.
+  spec = FlashPrefillAttentionSpec(Hq=Hq, Hkv=Hkv, Hd=Hd, q_tokens=T, kv_tokens=KV, causal=causal, scale=sc,
+    valid_kv=ctx.kv_tokens, query_start=ctx.start_pos, output_block_base=ctx.output_block_base,
+    acc_blocks=ctx.acc_blocks)
+  try:
+    spec.validate()
+  except ValueError as e:
+    raise NotImplementedError(f"custom_kernel_attention: spec rejected geometry ({e})")
+  try:
+    emitter = _PREFILL_EMITTERS[spec.target]
+  except KeyError:
+    raise NotImplementedError(f"custom_kernel_attention: no emitter registered for target {spec.target!r}")
+  fxn = emitter(spec)
+
   q_flat = q.cast(dtypes.half).reshape(Hq * T * Hd)
   k_flat = k.cast(dtypes.half).reshape(Hkv * KV * Hd)
   v_flat = v.cast(dtypes.half).reshape(Hkv * KV * Hd)
-
-  def emit(out_ph, q_ph, k_ph, v_ph):
-    # Thread valid_kv/query_start from ctx explicitly (== the builder's no-padding defaults today, but
-    # robust for start_pos>0 chunks: the per-row causal boundary is ctx.start_pos, not an incidental
-    # kv_tokens-q_tokens equality).
-    return amd_gfx1100_q16_grid_hd128_loop_attention(
-      q_ph, k_ph, v_ph, out_ph, q_tokens=T, q_heads=Hq, kv_heads=Hkv, kv_tokens=KV,
-      scale=sc, causal=causal, valid_kv=ctx.kv_tokens, query_start=ctx.start_pos,
-      output_block_base=ctx.output_block_base, acc_blocks=ctx.acc_blocks,
-      kernel_info=KernelInfo(name="amd_gfx1100_q16_grid_hd128_loop_attention"))
-
   out_flat = Tensor.empty(Hq * T * Hd, dtype=dtypes.half, device=q.device)
-  result = out_flat.custom_kernel(q_flat, k_flat, v_flat, fxn=emit)[0]
+  result = out_flat.custom_kernel(q_flat, k_flat, v_flat, fxn=fxn)[0]
   return result.reshape(1, Hq, T, Hd)
 
 
