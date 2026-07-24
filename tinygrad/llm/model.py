@@ -380,6 +380,7 @@ class TransformerConfig:
   prefill_device_facts: object|None = None  # the single immutable load-entry DeviceFacts scan
   exact_memory_plan: ExactSelectedModelPlan|None = None  # selected-GGUF ledger and admission decision
   prefill_tc_attn: bool = False          # selected once from the immutable candidate policy
+  prefill_custom_kernel_attn: bool = False  # route fused prefill attention through the custom-kernel injection (llm/fused_attention.py) instead of the composite-reduce path
   prefill_v2: bool = False               # concrete candidate binding, never a module-global switch
   prefill_ubatch: int = 512              # candidate-local physical M
   prefill_concrete_kv: bool = False      # workload/candidate policy decision
@@ -614,7 +615,7 @@ class TransformerBlock(FFNBlock):
         # but Q arrives fp32, which silently rejected the kernel into SDPA. Enforce
         # the contract; result is cast back to Q's original dtype like the SDPA path.
         import os as _os
-        if _os.environ.get("FUSED_CUSTOM_KERNEL"):
+        if self.config.prefill_custom_kernel_attn or _os.environ.get("FUSED_CUSTOM_KERNEL"):
           # Custom-kernel injection route: bypass the composite-reduce lowering
           # (class-2) by injecting the proven kernel via Tensor.custom_kernel, which
           # realizes Q/K/V as opaque buffers. See llm/fused_attention.py.
