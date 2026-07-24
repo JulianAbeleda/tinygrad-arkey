@@ -1722,7 +1722,10 @@ class AMDAttentionGridSpec(NamedTuple):
   def validate(self):
     if self.native_abi != "amd_gfx1100_attention_grid_hd128_v1" or self.group_expr != "q_tile=group%q_tiles;q_head=group//q_tiles;kv_head=q_head//group_ratio": raise ValueError("AMD attention grid has an unsupported ownership ABI")
     if not all(isinstance(x,int) and not isinstance(x,bool) for x in (self.q_tokens,self.q_heads,self.kv_heads,self.group_ratio,self.kv_tokens,self.head_dim,self.wave_size,self.local_size)): raise ValueError("AMD attention grid dimensions must be integral")
-    if self.head_dim != 128 or self.q_tokens <= 0 or self.q_tokens % 16 or self.kv_tokens <= 0 or self.kv_tokens % 16 or self.kv_tokens > 4096 or self.q_heads <= 0 or self.kv_heads <= 0 or self.group_ratio <= 0 or self.q_heads != self.kv_heads*self.group_ratio: raise ValueError("AMD attention grid requires Hd128, 16-wide tokens, and grouped heads")
+    # head_dim was pinned "!=128" here; de-literalized to "any positive 16-wide head_dim" (the 16 is
+    # our fragment granularity, hardware, and stays literal -- symmetric with decode's Hd%64 posture).
+    # Byte-identical at head_dim=128 (128<=0 is False, 128%16==0).
+    if self.head_dim <= 0 or self.head_dim % 16 or self.q_tokens <= 0 or self.q_tokens % 16 or self.kv_tokens <= 0 or self.kv_tokens % 16 or self.kv_tokens > 4096 or self.q_heads <= 0 or self.kv_heads <= 0 or self.group_ratio <= 0 or self.q_heads != self.kv_heads*self.group_ratio: raise ValueError("AMD attention grid requires a positive 16-wide head_dim, 16-wide tokens, and grouped heads")
     if self.wave_size != 32 or self.local_size < self.wave_size or self.local_size % self.wave_size:
       raise ValueError("AMD attention grid requires wave32 and a whole-wave workgroup")
     return self
@@ -1770,11 +1773,22 @@ class AMDAttentionOutputDrainSpec(NamedTuple):
   output_block_base: int = 0
 
   def validate(self):
-    full=("amd_gfx1100_attention_output_drain_v1",128,8,8,"e*256+halfwave*128+j*16+col",0)
-    slice_ok=self.native_abi == "amd_gfx1100_attention_output_drain_acc_slice_v2" and self.head_dim == 128 and \
-      self.blocks in {1,2,4} and self.lanes_per_fragment == 8 and self.address_expr == "e*256+halfwave*128+j*16+col" and \
-      0 <= self.output_block_base <= 8-self.blocks and self.output_block_base % self.blocks == 0
-    if (self.native_abi,self.head_dim,self.blocks,self.lanes_per_fragment,self.address_expr,self.output_block_base) != full and not slice_ok:
+    # `blocks` (the accumulator/output HEAD-BLOCK count) and `address_expr` (the hand-authored
+    # "e*<2*Hd>+halfwave*<Hd>+j*16+col" formula) both derive from head_dim -- de-literalized from the
+    # hardcoded 128/8/256 constants. `lanes_per_fragment==8` (qk_c_lanes, the wave32 C-fragment width)
+    # and the tile-width `16` in address_expr are hardware and stay literal. The field DEFAULTS remain
+    # the literal "128"/"8"/"e*256+halfwave*128+j*16+col" (a NamedTuple default must be a constant);
+    # this validator is what now encodes the invariant -- byte-identical at head_dim=128.
+    hdb = self.head_dim // 16
+    expected_addr = f"e*{2*self.head_dim}+halfwave*{self.head_dim}+j*16+col"
+    full = self.native_abi == "amd_gfx1100_attention_output_drain_v1" and self.blocks == hdb and \
+      self.lanes_per_fragment == 8 and self.address_expr == expected_addr and self.output_block_base == 0
+    # Proper divisors of hdb (< hdb): at head_dim=128 (hdb=8) this is exactly {1,2,4}, unchanged.
+    slice_divisors = {d for d in range(1, hdb) if hdb % d == 0}
+    slice_ok = self.native_abi == "amd_gfx1100_attention_output_drain_acc_slice_v2" and \
+      self.blocks in slice_divisors and self.lanes_per_fragment == 8 and self.address_expr == expected_addr and \
+      0 <= self.output_block_base <= hdb-self.blocks and self.output_block_base % self.blocks == 0
+    if not full and not slice_ok:
       raise ValueError("AMD attention output drain requires the exact gfx1100 Hd128 v1 ABI")
     if self.grid is not None: self.grid.validate()
     return self
@@ -1805,14 +1819,21 @@ class AMDLoopStateSpec(NamedTuple):
   block: int = 0
   lane: int = 0
   owner: int = 9404
+  # This NamedTuple has no grid field to read head_dim from (unlike AMDPackedFragmentLoopSpec), so an
+  # optional head_dim is added here, defaulted to 128 -> every existing construction site (both in
+  # tinygrad/schedule/wmma/loop_state.py) is unchanged/byte-identical without threading a new arg.
+  head_dim: int = 128
 
   def validate(self):
     if self.native_abi != "amd_gfx1100_attention_loop_state_v1":
       raise ValueError("AMD attention loop state requires the exact gfx1100 v1 ABI")
     if self.role not in {"m", "l", "acc"} or self.access not in {"init", "read", "write", "final_read"}:
       raise ValueError("AMD attention loop state has an unsupported role or access")
-    if not isinstance(self.block, int) or isinstance(self.block, bool) or not 0 <= self.block < (8 if self.role == "acc" else 1):
+    # `block` is a HEAD/ACC-BLOCK COUNT -> derives from head_dim (128//16==8, byte-identical).
+    if not isinstance(self.block, int) or isinstance(self.block, bool) or not 0 <= self.block < (self.head_dim//16 if self.role == "acc" else 1):
       raise ValueError("AMD attention loop state has an invalid block")
+    # `lane` stays literal 8: this is qk_c_lanes, the wave32 C-fragment lane width (hardware), NOT a
+    # head-block count -- do not derive it from head_dim.
     if not isinstance(self.lane, int) or isinstance(self.lane, bool) or not 0 <= self.lane < 8:
       raise ValueError("AMD attention loop state has an invalid lane")
     if not isinstance(self.owner, int) or isinstance(self.owner, bool) or self.owner < 0:
@@ -1830,7 +1851,10 @@ class AMDPackedFragmentLoopSpec(NamedTuple):
   def validate(self):
     if self.native_abi != "amd_gfx1100_packed_fragment_hd128_loop_v1" or self.role not in {"Q", "K", "V"}:
       raise ValueError("AMD loop fragment has an unsupported ABI or role")
-    if not isinstance(self.head_block, int) or isinstance(self.head_block, bool) or not 0 <= self.head_block < 8:
+    # `head_block` is a HEAD-BLOCK COUNT -> derives from the bound grid's head_dim (128//16==8,
+    # byte-identical). When grid is None, keep the legacy literal 8 default for back-compat.
+    hdb = self.grid.head_dim//16 if self.grid is not None else 8
+    if not isinstance(self.head_block, int) or isinstance(self.head_block, bool) or not 0 <= self.head_block < hdb:
       raise ValueError("AMD loop fragment has an invalid head block")
     if self.grid is not None: self.grid.validate()
     return self
