@@ -9,36 +9,14 @@ from tinygrad import Tensor, dtypes, Device, TinyJit
 from tinygrad.llm.flash_prefill_attention import shared_prefill_attention
 from tinygrad.uop.ops import SharedAttentionCandidateContext
 from extra.qk.shared_attention_promotion import composite_admission_errors
+from extra.qk.attention_harness_common import (content_sha as _sha, causal_mask as _mask, amd_sync as _sync,
+  load_shared_attention_proof as _proof, make_qkv as _inputs, reference_attention as _baseline_fn,
+  synced_time as _time, timing_summary as _summary, candidate_context as _candidate_context, ROUTES)
 
 SCHEMA="tinygrad.shared_attention_benchmark.v1"
-ROUTES=(("qwen3_8b_q4k_m_gfx1100","FULL_RESIDENT_OVERLAY",32,8),("qwen3_14b_q4k_m_gfx1100","BOUNDED_PACKED_TILES",40,8))
 DEFAULT_PROOF=Path(__file__).resolve().parents[2]/"docs/artifacts/shared-attention-m10e1-20260723/shared_attention_proof.json"
-def _sha(x): return hashlib.sha256(x.encode()).hexdigest()
-def _mask(q,kv,start): return Tensor.full((1,1,q,kv),float("-inf"),dtype=dtypes.float16,buffer=False).triu(start+1)
-def _sync(): Device["AMD"].synchronize()
-def _proof(path:Path):
-  p=json.loads(path.read_text())
-  schemas={"tinygrad.shared_attention_proof.v2","tinygrad.shared_attention_proof.acc_slice_v3",
-           "tinygrad.shared_attention_proof.phase_v4"}
-  if p.get("schema") not in schemas or p.get("status")!="PASS" or p.get("passed") is not True:
-    raise ValueError("aggregate shared-attention proof is not PASS")
-  return p
-def _inputs(hq,hkv,q,kv,seed):
-  rng=np.random.default_rng(seed)
-  vals=[rng.normal(0,.04,(1,h,q if n==0 else kv,128)).astype(np.float16) for n,h in enumerate((hq,hkv,hkv))]
-  return tuple(Tensor(x,device="AMD") for x in vals), vals
 def _candidate(q,k,v,mask,ctx): return shared_prefill_attention(q,k,v,mask=mask,candidate_context=ctx)
-def _baseline(q,k,v,mask,ctx):
-  g=ctx.hq//ctx.hkv
-  return q.scaled_dot_product_attention(k.repeat_interleave(g,dim=-3),v.repeat_interleave(g,dim=-3),attn_mask=mask)
-def _time(fn,warmup,samples):
-  for _ in range(warmup): fn().realize()
-  _sync(); out=[]
-  for _ in range(samples):
-    _sync(); st=time.perf_counter_ns(); fn().realize(); _sync(); out.append((time.perf_counter_ns()-st)/1e6)
-  return out
-def _summary(x):
-  x=sorted(x); return {"raw_ms":x,"median_ms":statistics.median(x),"p10_ms":np.percentile(x,10).item(),"p90_ms":np.percentile(x,90).item()}
+def _baseline(q,k,v,mask,ctx): return _baseline_fn(q,k,v,mask,ctx.hq,ctx.hkv)
 def _full_output_numeric_gate(candidate:np.ndarray, baseline:np.ndarray, *, candidate_id:str) -> dict[str,Any]:
   candidate,baseline=np.asarray(candidate,dtype=np.float32),np.asarray(baseline,dtype=np.float32)
   if candidate.shape != baseline.shape: raise RuntimeError(f"full-output shapes differ: candidate={candidate.shape}, baseline={baseline.shape}")
@@ -56,7 +34,7 @@ def run_one(proof_path:Path,out:Path,*,profile:str,kv:int,mode:str,samples:int,w
             candidate_admission:Mapping[str,Any]|None=None):
   proof=_proof(proof_path); route=next((x for x in ROUTES if x[0]==profile),None)
   if route is None or mode not in {"candidate","baseline"}: raise ValueError("invalid profile or mode")
-  profile,strategy,hq,hkv=route; ctx=SharedAttentionCandidateContext(profile,strategy,512,kv,kv-512,hq,hkv,128,True).validate()
+  profile,strategy,hq,hkv=route; ctx=_candidate_context(profile,strategy,hq,hkv,kv)
   if mode=="candidate":
     errors=composite_admission_errors(candidate_admission,profile=profile,context=kv,strategy=strategy)
     if composite_closure is None: errors.append("missing admitted composite closure")

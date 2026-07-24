@@ -26,6 +26,8 @@ _ROUTES = (
 def _canonical_write(path:Path,value) -> None:
   path.write_text(json.dumps(value,sort_keys=True,separators=(",",":"),allow_nan=False)+"\n")
 
+# TODO(centralize): differs from attention_harness_common.causal_mask (takes a ctx object instead of
+# (q_tokens, kv_tokens, start_pos) positional args) — left as-is.
 def _mask(ctx:SharedAttentionCandidateContext) -> Tensor:
   return Tensor.full((1,1,ctx.q_tokens,ctx.kv_tokens),float("-inf"),dtype=dtypes.float16,buffer=False).triu(ctx.start_pos+1)
 
@@ -63,6 +65,8 @@ def generate(output_dir:Path,route:str|None=None) -> None:
   selected=tuple(row for row in _ROUTES if route is None or row[0]==route)
   if not selected: raise ValueError(f"unknown route {route!r}")
   for index,(slug,profile,strategy,hq,qt,kv,start) in enumerate(selected):
+    # TODO(centralize): differs from attention_harness_common.candidate_context (explicit qt/start/hkv=8
+    # here vs the canonical q_tokens=512 default / kv-q_tokens start_pos formula) — left as-is.
     ctx=SharedAttentionCandidateContext(profile,strategy,qt,kv,start,hq,8,128,True).validate()
     schedule,call,hip,isa=_schedule(ctx); got,ref=_numeric(ctx,20260723+index)
     capture=build_shared_attention_compiler_capture(schedule=schedule,compute_call=call,hip_program=hip,

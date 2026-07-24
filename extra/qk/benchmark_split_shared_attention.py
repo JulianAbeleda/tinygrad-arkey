@@ -7,8 +7,10 @@ import numpy as np
 from tinygrad import Tensor, dtypes, Device, TinyJit
 from tinygrad.uop.ops import KernelInfo
 from tinygrad.schedule.wmma import amd_gfx1100_q16_grid_hd128_loop_attention, amd_gfx1100_q16_grid_qk_stats_stage, amd_gfx1100_q16_grid_pv_slice_stage
+from extra.qk.attention_harness_common import amd_sync as sync
 
-def sync(): Device["AMD"].synchronize()
+# TODO(centralize): samples() differs from attention_harness_common.synced_time/timing_summary (different
+# defaults and summary fields) — left as-is.
 def samples(fn, warmup=2, n=10):
   for _ in range(warmup): fn().realize()
   sync(); out=[]
