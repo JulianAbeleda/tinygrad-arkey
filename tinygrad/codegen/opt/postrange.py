@@ -1,7 +1,7 @@
 from __future__ import annotations
 import contextlib, math, itertools
 from dataclasses import replace
-from typing import cast
+from typing import cast, Callable
 from tinygrad.uop.ops import Ops, UOp, KernelInfo, NativeAttentionRequest, graph_rewrite, AxisType, ssimplify, GroupOp, remove_all_tags
 from tinygrad.uop.ops import axis_letters, axis_colors, axis_to_pos
 from tinygrad.device import Buffer
@@ -315,117 +315,36 @@ class Scheduler:
     return ret
 
   def _apply_tc_opt(self, use_tensor_cores:int, axis:int, tc_select:int, opt_level:int) -> None|list[UOp]:
+    """Orchestrator only: find the (at most one) composite reduce, offer it to any backend-specific
+    kernel substitution registered for this target, then fall back to admission policy + the generic
+    tensor-core search. The three concerns -- substitution, admission policy, and generic TC search --
+    are each owned by a dedicated helper; see _COMPOSITE_KERNEL_SUBSTITUTIONS, _composite_tc_admission_blocked,
+    and _apply_generic_tensor_core_opt."""
     if not (reduceops := self.reduceops): raise KernelOptError("no reduce ops for TensorCore")
     # One exact descriptor-owned composite route. Consume only live PARAM and
     # INDEX ownership from the canonical scalar graph; tile_fragments are
     # detached metadata and are never consulted. Any mismatch falls through
     # to the existing blanket composite guard below.
-    composites = [r for r in reduceops if getattr(r.arg[0] if isinstance(r.arg, tuple) and r.arg else None,
-                                                  "combine_fn", None) == "online_softmax_state"]
-    # Exact semantic GQA route. The descriptor is only an admission request:
-    # all four live PARAM slots and their physical sizes must match before the
-    # generic grid builder can replace the scalar semantic graph.
-    if len(composites) == 1 and self.ren.target.device == "AMD" and self.ren.target.arch == "gfx1100":
+    composites = [r for r in reduceops if getattr(_composite_descriptor(r), "combine_fn", None) == "online_softmax_state"]
+    if len(composites) == 1:
       red, comp = composites[0], composites[0].arg[0]
-      grid = getattr(comp, "attention_grid", None)
-      if grid is not None:
-        try: grid.validate()
-        except ValueError: return None
-        request = self.ast.arg.required_native_attention
-        if request is not None and (request.grid != grid or request.candidate_context != getattr(comp,"attention_context",None) or
-                                    request.combine_fn != comp.combine_fn):
-          raise KernelOptError("native attention request does not match composite owner")
-        params = sorted({u for u in self.ast.toposort() if u.op is Ops.PARAM}, key=lambda u:u.arg.slot)
-        sizes = (grid.q_heads*grid.q_tokens*128, grid.q_heads*grid.q_tokens*128,
-                 grid.kv_heads*grid.kv_tokens*128, grid.kv_heads*grid.kv_tokens*128)
-        scale = next((float(s.arg) for s in red.src[0].src if s.op is Ops.CONST and s.dtype.scalar() in dtypes.floats), None) \
-          if red.src[0].op is Ops.MUL else None
-        if [p.arg.slot for p in params] == [0,1,2,3] and tuple(p.ptrdtype.size for p in params) == sizes and \
-           all(p.ptrdtype.base == dtypes.half for p in params) and scale is not None and math.isfinite(scale) and scale > 0:
-          from extra.qk.flash_prefill_attention_spec import FlashPrefillAttentionSpec
-          # Lazily imported (matching how this file imports the builder today) to sidestep any
-          # tinygrad.llm <-> tinygrad.codegen.opt import-order coupling.
-          from tinygrad.llm.fused_attention import _PREFILL_EMITTERS
-          context = getattr(comp, "attention_context", None)
-          existing_context = self.ast.arg.candidate_context
-          if context is not None:
-            context.validate()
-            if existing_context is not None and existing_context != context:
-              raise KernelOptError("conflicting shared attention candidate context at native handoff")
-          # The SPEC owns the topology params here too (source-of-truth for q_tokens/heads/kv_tokens/
-          # scale/causal/valid_kv/query_start/acc slicing), and this now routes through the SAME
-          # target-keyed _PREFILL_EMITTERS seam fused_attention.py's custom_kernel_attention uses --
-          # no site calls the gfx1100 builder directly. The only difference from that call site is
-          # this one injects its carried-forward kernel_info (self.ast.arg's existing fields via
-          # replace()) through spec.emit()'s optional kernel_info override.
-          # Same fix as fused_attention.py:custom_kernel_attention (P4a follow-up): the literal `8`
-          # fallback (and a context whose own acc_blocks==8 default was never overridden) is the
-          # Hd=128 full-accumulator value; forwarding it unconditionally would break the full-drain
-          # case at Hd!=head_dim==128. Pass None in the full-default case so
-          # FlashPrefillAttentionSpec.__post_init__ resolves via head_dim//16 -- byte-identical at
-          # head_dim=128 (None -> 128//16==8, the exact value previously forwarded).
-          ctx_full_default = context is None or (context.output_block_base == 0 and context.acc_blocks == 8)
-          spec = FlashPrefillAttentionSpec(Hq=grid.q_heads, Hkv=grid.kv_heads, Hd=grid.head_dim,
-            q_tokens=grid.q_tokens, kv_tokens=grid.kv_tokens, causal=comp.attention_causal, scale=scale,
-            output_block_base=context.output_block_base if context is not None else 0,
-            acc_blocks=None if ctx_full_default else context.acc_blocks)
-          try: spec.validate()
-          except ValueError: return None
-          fxn = _PREFILL_EMITTERS[spec.target](spec,
-            kernel_info=replace(self.ast.arg, candidate_context=context if context is not None else existing_context))
-          self.ast = fxn(params[0], params[1], params[2], params[3])
-          self.tensor_core = next((tc for tc in self.ren.tensor_cores if tc.dims == (16,16,16) and
-                                   tc.dtype_in == dtypes.half and tc.dtype_out == dtypes.float), None)
-          if self.tensor_core is None: raise KernelOptError("gfx1100 grid attention requires fp16 16x16x16 tensor core")
-          return []
-    if len(composites) == 1 and self.ren.target.device == "AMD" and self.ren.target.arch == "gfx1100" and \
-       getattr(self.ren, "native_repack_matcher", None) is not None:
-      red, comp = composites[0], composites[0].arg[0]
-      carrier = comp.tile_carrier
-      try: carrier.validate()
-      except (AttributeError, ValueError): carrier = None
-      all_params = sorted({u for u in self.ast.toposort() if u.op is Ops.PARAM}, key=lambda u:u.arg.slot)
-      score_params = sorted({u for u in red.src[0].toposort() if u.op is Ops.PARAM}, key=lambda u:u.arg.slot)
-      aux = tuple(s for s in red.src[1:] if s.op is not Ops.RANGE)
-      value_params = sorted({u for s in aux for u in s.toposort() if u.op is Ops.PARAM}, key=lambda u:u.arg.slot)
-      stores = [u for u in self.ast.toposort() if u.op is Ops.STORE]
-      output_params = sorted({p for st in stores for p in st.src[0].toposort() if p.op is Ops.PARAM}, key=lambda u:u.arg.slot)
-      scale = next((float(s.arg) for s in red.src[0].src if s.op is Ops.CONST and s.dtype.scalar() in dtypes.floats), None) \
-        if red.src[0].op is Ops.MUL else None
-      exact = carrier is not None and carrier.typed_fragment_abi == "online_softmax_qk_pv_v1" and \
-        carrier.score_shape == carrier.value_shape == carrier.output_shape == (16,16,16) and \
-        comp.slot_shapes == ((1,1,16),(1,1,16),(1,1,16,16)) and comp.lane_shapes == ((),(),(16,)) and \
-        len(aux) == 1 and [u.arg.slot for u in all_params] == [0,1,2,3] and \
-        [u.arg.slot for u in score_params] == [1,2] and [u.arg.slot for u in value_params] == [3] and \
-        [u.arg.slot for u in output_params] == [0] and scale is not None and math.isfinite(scale) and scale > 0
-      if exact:
-        from tinygrad.schedule.wmma import amd_gfx1100_q16_attention
-        self.ast = amd_gfx1100_q16_attention(score_params[0], score_params[1], value_params[0], output_params[0],
-                                              scale=scale, kernel_info=self.ast.arg)
-        self.tensor_core = next((tc for tc in self.ren.tensor_cores if tc.dims == (16,16,16) and
-                                 tc.dtype_in == dtypes.half and tc.dtype_out == dtypes.float), None)
-        if self.tensor_core is None: raise KernelOptError("gfx1100 q16 attention requires fp16 16x16x16 tensor core")
-        return []
-    # Composite reductions currently consume scalar score/state values.  A
-    # tensor-core rewrite would pack the QK contraction into fragment lanes
-    # before the online combine can read it, violating that ABI (and producing
-    # either a shape error or numerically corrupted softmax state).  Keep this
-    # boundary fail-closed until the composite lane ABI is explicitly owned by
-    # a backend.  Ordinary REDUCE matmuls have no composite state ranges and
-    # retain the existing WMMA path unchanged.
-    composite_carriers = []
-    for reduceop in self.reduceops:
-      carg = reduceop.arg[0] if isinstance(reduceop.arg, tuple) and reduceop.arg else None
-      carrier = getattr(carg, "tile_carrier", None)
-      if carrier is not None:
-        try: carrier.validate()
-        except (AttributeError, ValueError): return None
-        composite_carriers.append(carrier)
-    # Carrier metadata is now part of WMMA candidate validation.  It proves
-    # the score/value/output tile geometry, but does not by itself authorize
-    # fragment lowering; the typed online-softmax ABI remains fail-closed.
-    if self.composite_state_ranges or composite_carriers:
-      return None
+      # Backend kernel SUBSTITUTION: a target-keyed seam (matching _PREFILL_EMITTERS in
+      # tinygrad/llm/fused_attention.py), not inline device/arch branches. Each substitution owns its
+      # own exact admission request and either replaces self.ast wholesale or declines
+      # (_TC_COMPOSITE_NO_MATCH) so the next one -- or the fail-closed admission policy below -- gets a turn.
+      target = f"{self.ren.target.device.lower()}_{self.ren.target.arch}"
+      for substitute in _COMPOSITE_KERNEL_SUBSTITUTIONS.get(target, ()):
+        result = substitute(self, red, comp)
+        if result is not _TC_COMPOSITE_NO_MATCH: return result
+    # Composite admission POLICY: fail closed until the composite lane ABI is explicitly owned by a
+    # backend. See _composite_tc_admission_blocked for the rule this enforces.
+    if _composite_tc_admission_blocked(self): return None
+    return self._apply_generic_tensor_core_opt(use_tensor_cores, axis, tc_select, opt_level, reduceops)
+
+  def _apply_generic_tensor_core_opt(self, use_tensor_cores:int, axis:int, tc_select:int, opt_level:int,
+                                      reduceops:list[UOp]) -> None|list[UOp]:
+    """Generic tensor-core optimization: pick a TC-compatible dot-product reduce and lower it to WMMA.
+    No composite/backend-substitution knowledge lives here -- callers have already ruled that out."""
     try:
       tensor_cores = self.ren.tensor_cores if tc_select == -1 else [self.ren.tensor_cores[tc_select]]
     except IndexError:
@@ -649,6 +568,129 @@ class Scheduler:
   def upcasted(self) -> int: return len(self.axes_of(AxisType.UPCAST, AxisType.UNROLL))
   @property
   def group_for_reduces(self) -> int: return len(self.axes_of(AxisType.GROUP_REDUCE))
+
+def _composite_descriptor(reduceop:UOp):
+  """The composite descriptor payload carried in a REDUCE op's arg tuple, if any."""
+  return reduceop.arg[0] if isinstance(reduceop.arg, tuple) and reduceop.arg else None
+
+# Sentinel: a composite kernel substitution's precondition wasn't met for this composite (e.g. no
+# attention_grid, or the final admission check failed) -- try the next substitution registered for
+# this target, or fall through to the generic admission policy if none matched. Distinct from `None`,
+# which a substitution returns to mean "matched, but hard-reject the whole tensor-core opt here".
+_TC_COMPOSITE_NO_MATCH = object()
+
+def _composite_native_grid_attention_swap(k:Scheduler, red:UOp, comp) -> None|list[UOp]:
+  """Exact semantic GQA native-grid attention swap (gfx1100). The descriptor is only an admission
+  request: all four live PARAM slots and their physical sizes must match before the generic grid
+  builder can replace the scalar semantic graph."""
+  grid = getattr(comp, "attention_grid", None)
+  if grid is None: return _TC_COMPOSITE_NO_MATCH
+  try: grid.validate()
+  except ValueError: return None
+  request = k.ast.arg.required_native_attention
+  if request is not None and (request.grid != grid or request.candidate_context != getattr(comp,"attention_context",None) or
+                              request.combine_fn != comp.combine_fn):
+    raise KernelOptError("native attention request does not match composite owner")
+  params = sorted({u for u in k.ast.toposort() if u.op is Ops.PARAM}, key=lambda u:u.arg.slot)
+  sizes = (grid.q_heads*grid.q_tokens*128, grid.q_heads*grid.q_tokens*128,
+           grid.kv_heads*grid.kv_tokens*128, grid.kv_heads*grid.kv_tokens*128)
+  scale = next((float(s.arg) for s in red.src[0].src if s.op is Ops.CONST and s.dtype.scalar() in dtypes.floats), None) \
+    if red.src[0].op is Ops.MUL else None
+  if not ([p.arg.slot for p in params] == [0,1,2,3] and tuple(p.ptrdtype.size for p in params) == sizes and
+          all(p.ptrdtype.base == dtypes.half for p in params) and scale is not None and math.isfinite(scale) and scale > 0):
+    return _TC_COMPOSITE_NO_MATCH
+  from extra.qk.flash_prefill_attention_spec import FlashPrefillAttentionSpec
+  # Lazily imported (matching how this file imports the builder today) to sidestep any
+  # tinygrad.llm <-> tinygrad.codegen.opt import-order coupling.
+  from tinygrad.llm.fused_attention import _PREFILL_EMITTERS
+  context = getattr(comp, "attention_context", None)
+  existing_context = k.ast.arg.candidate_context
+  if context is not None:
+    context.validate()
+    if existing_context is not None and existing_context != context:
+      raise KernelOptError("conflicting shared attention candidate context at native handoff")
+  # The SPEC owns the topology params here too (source-of-truth for q_tokens/heads/kv_tokens/
+  # scale/causal/valid_kv/query_start/acc slicing), and this now routes through the SAME
+  # target-keyed _PREFILL_EMITTERS seam fused_attention.py's custom_kernel_attention uses --
+  # no site calls the gfx1100 builder directly. The only difference from that call site is
+  # this one injects its carried-forward kernel_info (self.ast.arg's existing fields via
+  # replace()) through spec.emit()'s optional kernel_info override.
+  # Same fix as fused_attention.py:custom_kernel_attention (P4a follow-up): the literal `8`
+  # fallback (and a context whose own acc_blocks==8 default was never overridden) is the
+  # Hd=128 full-accumulator value; forwarding it unconditionally would break the full-drain
+  # case at Hd!=head_dim==128. Pass None in the full-default case so
+  # FlashPrefillAttentionSpec.__post_init__ resolves via head_dim//16 -- byte-identical at
+  # head_dim=128 (None -> 128//16==8, the exact value previously forwarded).
+  ctx_full_default = context is None or (context.output_block_base == 0 and context.acc_blocks == 8)
+  spec = FlashPrefillAttentionSpec(Hq=grid.q_heads, Hkv=grid.kv_heads, Hd=grid.head_dim,
+    q_tokens=grid.q_tokens, kv_tokens=grid.kv_tokens, causal=comp.attention_causal, scale=scale,
+    output_block_base=context.output_block_base if context is not None else 0,
+    acc_blocks=None if ctx_full_default else context.acc_blocks)
+  try: spec.validate()
+  except ValueError: return None
+  fxn = _PREFILL_EMITTERS[spec.target](spec,
+    kernel_info=replace(k.ast.arg, candidate_context=context if context is not None else existing_context))
+  k.ast = fxn(params[0], params[1], params[2], params[3])
+  k.tensor_core = next((tc for tc in k.ren.tensor_cores if tc.dims == (16,16,16) and
+                       tc.dtype_in == dtypes.half and tc.dtype_out == dtypes.float), None)
+  if k.tensor_core is None: raise KernelOptError("gfx1100 grid attention requires fp16 16x16x16 tensor core")
+  return []
+
+def _composite_q16_tile_carrier_swap(k:Scheduler, red:UOp, comp) -> None|list[UOp]:
+  """Exact-KV16 typed-fragment ABI swap (gfx1100, online_softmax_qk_pv_v1 carrier). Requires the
+  renderer's native_repack_matcher and an exact score/value/output (16,16,16) carrier shape."""
+  if getattr(k.ren, "native_repack_matcher", None) is None: return _TC_COMPOSITE_NO_MATCH
+  carrier = comp.tile_carrier
+  try: carrier.validate()
+  except (AttributeError, ValueError): carrier = None
+  all_params = sorted({u for u in k.ast.toposort() if u.op is Ops.PARAM}, key=lambda u:u.arg.slot)
+  score_params = sorted({u for u in red.src[0].toposort() if u.op is Ops.PARAM}, key=lambda u:u.arg.slot)
+  aux = tuple(s for s in red.src[1:] if s.op is not Ops.RANGE)
+  value_params = sorted({u for s in aux for u in s.toposort() if u.op is Ops.PARAM}, key=lambda u:u.arg.slot)
+  stores = [u for u in k.ast.toposort() if u.op is Ops.STORE]
+  output_params = sorted({p for st in stores for p in st.src[0].toposort() if p.op is Ops.PARAM}, key=lambda u:u.arg.slot)
+  scale = next((float(s.arg) for s in red.src[0].src if s.op is Ops.CONST and s.dtype.scalar() in dtypes.floats), None) \
+    if red.src[0].op is Ops.MUL else None
+  exact = carrier is not None and carrier.typed_fragment_abi == "online_softmax_qk_pv_v1" and \
+    carrier.score_shape == carrier.value_shape == carrier.output_shape == (16,16,16) and \
+    comp.slot_shapes == ((1,1,16),(1,1,16),(1,1,16,16)) and comp.lane_shapes == ((),(),(16,)) and \
+    len(aux) == 1 and [u.arg.slot for u in all_params] == [0,1,2,3] and \
+    [u.arg.slot for u in score_params] == [1,2] and [u.arg.slot for u in value_params] == [3] and \
+    [u.arg.slot for u in output_params] == [0] and scale is not None and math.isfinite(scale) and scale > 0
+  if not exact: return _TC_COMPOSITE_NO_MATCH
+  from tinygrad.schedule.wmma import amd_gfx1100_q16_attention
+  k.ast = amd_gfx1100_q16_attention(score_params[0], score_params[1], value_params[0], output_params[0],
+                                        scale=scale, kernel_info=k.ast.arg)
+  k.tensor_core = next((tc for tc in k.ren.tensor_cores if tc.dims == (16,16,16) and
+                       tc.dtype_in == dtypes.half and tc.dtype_out == dtypes.float), None)
+  if k.tensor_core is None: raise KernelOptError("gfx1100 q16 attention requires fp16 16x16x16 tensor core")
+  return []
+
+# Target-keyed backend kernel substitution seam for exact-descriptor composite reduces, mirroring
+# _PREFILL_EMITTERS in tinygrad/llm/fused_attention.py (same "amd_gfx1100"-shaped key). A new backend
+# or a new exact route is a new dict entry, not a new inline device/arch branch in _apply_tc_opt.
+# Entries for one target are tried in order; each declines via _TC_COMPOSITE_NO_MATCH.
+_COMPOSITE_KERNEL_SUBSTITUTIONS: dict[str, tuple[Callable[[Scheduler,UOp,object], "None|list[UOp]|object"], ...]] = {
+  "amd_gfx1100": (_composite_native_grid_attention_swap, _composite_q16_tile_carrier_swap),
+}
+
+def _composite_tc_admission_blocked(k:Scheduler) -> bool:
+  """Composite reductions currently consume scalar score/state values.  A tensor-core rewrite would
+  pack the QK contraction into fragment lanes before the online combine can read it, violating that
+  ABI (and producing either a shape error or numerically corrupted softmax state).  Keep this boundary
+  fail-closed until the composite lane ABI is explicitly owned by a backend.  Ordinary REDUCE matmuls
+  have no composite state ranges and retain the existing WMMA path unchanged."""
+  composite_carriers = []
+  for reduceop in k.reduceops:
+    carrier = getattr(_composite_descriptor(reduceop), "tile_carrier", None)
+    if carrier is not None:
+      try: carrier.validate()
+      except (AttributeError, ValueError): return True
+      composite_carriers.append(carrier)
+  # Carrier metadata is now part of WMMA candidate validation.  It proves the score/value/output tile
+  # geometry, but does not by itself authorize fragment lowering; the typed online-softmax ABI remains
+  # fail-closed.
+  return bool(k.composite_state_ranges or composite_carriers)
 
 def bufs_from_ast(ast:UOp, dname:str) -> list[Buffer]:
   glbls = sorted([x for x in ast.backward_slice if x.op is Ops.PARAM], key=lambda x: x.arg.slot)
