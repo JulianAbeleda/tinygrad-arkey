@@ -333,6 +333,52 @@ ROUTES = {
     "selector": "env_default",
     "route_attribution": "tinygrad/llm/prefill_routes.py Q6_K direct-packed branch -> extra/qk/q6k_prefill_route_spec.py Q6KPrefillRouteSpec + emit_q6k_packed_prefill_kernel; reuses the Q6_K packed-load dequant grammar while descriptor data owns prefill output layout, token axis, parts, and opts.",
     "note": "Q6_K direct-packed prefill provenance conversion. The default packed-load path no longer binds q6k_gemm_packed_load_* hand UOp templates from prefill_routes.py; it emits q6k_gen_prefill_* kernels from Q6KPrefillRouteSpec. Non-packed-load Q6_K remains an explicit legacy debug path behind PREFILL_Q6K_PACKED_LOAD=0."},
+  "packed_wmma_prefill_generated": {
+    "workload": "prefill", "profile_id": PROFILE_PREFILL, "status": "promoted_default",
+    "roles": ["attn_qo", "attn_kv", "ffn_gate_up", "ffn_down"], "excluded_roles": [],
+    "quant": ["Q4_K", "Q6_K"],
+    # docs/packed-wmma-14b-machine-search-claim-scope-20260725.md PHASE 1: claim ONLY
+    # tinygrad_scheduler_generated here. extra/qk/prefill/current_prefill_execution_adapter.py:76-87
+    # compiles an ordinary (a @ b.transpose()).schedule_linear() under Opt(OptOps.TC, 0, (-1,2,1)) --
+    # a real scheduler-generated matmul, not a hand-written kernel -- but PACKED_WMMA_GEOM
+    # (extra/qk/prefill/packed_wmma_prefill_candidates.py:38) is a FROZEN dict keyed (quant, role) with
+    # NO shape term, and its cited source (e2e_packed_wmma_bench_q6_nopad.py) does not exist anywhere in
+    # this repo's history. machine_authored_generated would assert an emitter derives extents from
+    # descriptor fields; this table does not. Do not upgrade this provenance without first (a) making the
+    # opt search itself a reproducible in-repo artifact and (b) keying the geometry by shape (Phase 2).
+    "shape_guards": [
+      {"role": "attn_qo", "M": 512, "N": 5120, "K": 5120, "quant": "Q4_K"},
+      {"role": "attn_kv", "M": 512, "N": 1024, "K": 5120, "quant": "Q4_K"},
+      {"role": "ffn_gate_up", "M": 512, "N": 17408, "K": 5120, "quant": "Q4_K"},
+      {"role": "ffn_down", "M": 512, "N": 5120, "K": 17408, "quant": "Q4_K"},
+      {"role": "attn_kv", "M": 512, "N": 1024, "K": 5120, "quant": "Q6_K"},
+      {"role": "ffn_down", "M": 512, "N": 5120, "K": 17408, "quant": "Q6_K"},
+      # PACKED_WMMA_GEOM has NO ("Q6_K", "attn_qo") or ("Q6_K", "ffn_gate_up") entry: those two
+      # (quant, role) combos silently decline (select_packed_wmma_prefill_candidate returns None) and
+      # fall through to prefill_q6k_direct_generated. This row does NOT claim them; do not add
+      # shape_guards for them until PACKED_WMMA_GEOM grows an entry and a canary gates it.
+    ],
+    "env": {"TINYGRAD_PREFILL_PACKED_WMMA": "1 (default)"},
+    "rollback": {"TINYGRAD_PREFILL_PACKED_WMMA": "0 -> direct-packed (route_direct_packed_prefill / prefill_q4k_direct_tile4x4_default, prefill_q6k_direct_generated)"},
+    "baseline_route_id": "prefill_q4k_direct_tile4x4_default",
+    "strict_fallback": True,
+    # Ordinary scheduler lowering (same adapter as prefill_wmma_lds_dbuf_generated): no route-local fixed
+    # kernel name pattern to pin, so expected_kernels stays empty like that row's.
+    "expected_kernels": [],
+    "forbidden_kernels": ["fallback_graph"],
+    "authority_gate": "extra/qk/packed_wmma_prefill_promotion_gate.py",
+    "promotion_artifacts": ["docs/packed-wmma-14b-machine-search-claim-scope-20260725.md",
+                            "docs/packed-wmma-14b-promotion-evidence-20260725.json",
+                            "extra/qk/packed_wmma_prefill_promotion_gate.py",
+                            "extra/qk/prefill_flash_e2e_parity.py",
+                            "extra/qk/prefill/packed_wmma_prefill_candidates.py",
+                            "extra/qk/prefill/packed_wmma_correctness_canary.py",
+                            "extra/qk/packed_wmma_canary_evidence.py"],
+    "purity_status": "search_generated_promoted",
+    "provenance": "tinygrad_scheduler_generated",
+    "selector": "env_default",
+    "route_attribution": "tinygrad/llm/prefill_routes.py route_prefill_linear -> route_packed_wmma_prefill (gated by packed_wmma_prefill_enabled(), getenv('TINYGRAD_PREFILL_PACKED_WMMA', 1)) -> extra/qk/prefill/packed_wmma_prefill_candidates.py select_packed_wmma_prefill_candidate, PACKED_WMMA_GEOM[(quant, role)] -> extra/qk/prefill/current_prefill_execution_adapter.py compile_current_prefill_program, an ordinary (a @ b.transpose()).schedule_linear() compiled under Opt(OptOps.TC, 0, (-1,2,1)); every (quant, role, shape) combo is correctness-gated exactly once per process via packed_wmma_correctness_canary before its warmstart schedule entry is installed, and a failed/uncached combo declines to route_direct_packed_prefill.",
+    "note": "14B Qwen3 prefill 1945/1920/1875/1785 tok/s at pp512/1024/2048/4096, beating llama.cpp same-session by +5.4/+5.7/+6.7/+8.7% (paired A/B vs TINYGRAD_PREFILL_PACKED_WMMA=0: 361/362->1926/1947 tok/s at pp512, 355/355->1774/1790 at pp4096, two reps; 14B end-to-end token parity extra/qk/prefill_flash_e2e_parity.py SDPA=90310==FUSED=90310 with the route LIVE). Registered honestly per the scope doc above: the kernel IS scheduler-generated (real, not a naming trap), but PACKED_WMMA_GEOM's opt constants (tm/tn/tk/wm/wn/bc per (quant,role)) have no reproducible in-repo search provenance and the table is shape-blind, so this row deliberately stops at tinygrad_scheduler_generated rather than claiming machine_authored_generated. shape_guards above pin exactly the 6 (quant, role) combos PACKED_WMMA_GEOM actually has entries for at the real 14B shapes; Q6_K attn_qo and Q6_K ffn_gate_up are NOT covered and silently fall back to the Q6_K direct-packed route -- this is a known coverage gap, not a claim."},
   # prefill_q4k_generated_tile_research REMOVED 2026-07-06 (no backups): PREFILL_QK_GENERATED_TILE now fails loud.
   "prefill_q4k_int8_wmma_generated_research": {
     "workload": "prefill", "profile_id": PROFILE_PREFILL, "status": "research",

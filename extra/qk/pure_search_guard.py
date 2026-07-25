@@ -51,6 +51,15 @@ def _decode_attention_rolled_back(e: dict[str, Any]) -> bool:
   return not _env_flag(e, "DECODE_LIVE_SPLIT", 1)
 
 
+def _prefill_packed_wmma_rolled_back(e: dict[str, Any]) -> bool:
+  # tinygrad/llm/prefill_routes.py packed_wmma_prefill_enabled(): the generated packed-WMMA route fires
+  # when getenv("TINYGRAD_PREFILL_PACKED_WMMA", 1) is truthy (DEFAULT-ON). Setting it to 0 rolls the
+  # family back to the direct-packed baseline (prefill_q4k_direct_tile4x4_default /
+  # prefill_q6k_direct_generated), which is itself machine_authored_generated (still pure), not a
+  # handwritten oracle -- there is no handwritten packed-WMMA kernel to roll back to.
+  return not _env_flag(e, "TINYGRAD_PREFILL_PACKED_WMMA", 1)
+
+
 def _prefill_attention_rolled_back(e: dict[str, Any]) -> bool:
   # tinygrad/llm/model.py's prefill_custom_kernel_attn dispatch branch (P5b) has no env key that
   # de-selects it: eligibility is computed from real model geometry (n_heads, n_kv_heads) + device
@@ -166,6 +175,17 @@ HOT_FAMILIES = [
    "generated": _default_route_id(workload="prefill", quant=["fp16"], roles=["attention_tile"]),
    "oracle": _default_route_id(workload="prefill", quant=["fp16"], roles=["attention_tile"]),
    "rollback_active": _prefill_attention_rolled_back},
+  # 14B packed-WMMA prefill (docs/packed-wmma-14b-machine-search-claim-scope-20260725.md). Registered
+  # tinygrad_scheduler_generated (NOT machine_authored_generated -- PACKED_WMMA_GEOM is a frozen,
+  # shape-blind (quant,role) table; see the manifest row's comment). The oracle on rollback is the
+  # already-pure direct-packed default, not a handwritten kernel.
+  {"family": "prefill_packed_wmma",
+   # Not looked up via _default_route_id: that helper requires env=={} on the manifest row, and this
+   # row's `env` documents the non-empty DEFAULT-ON getenv key (TINYGRAD_PREFILL_PACKED_WMMA=1), so it
+   # is named directly -- exactly as _PREFILL_CANDIDATE_ROUTE is above for the same reason.
+   "generated": "packed_wmma_prefill_generated",
+   "oracle": "prefill_q4k_direct_tile4x4_default",
+   "rollback_active": _prefill_packed_wmma_rolled_back},
 ]
 
 

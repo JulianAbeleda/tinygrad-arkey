@@ -1,0 +1,127 @@
+{
+  "_schema": "packed-wmma-14b-promotion-evidence.v1",
+  "route_id": "packed_wmma_prefill_generated",
+  "flag": "TINYGRAD_PREFILL_PACKED_WMMA",
+  "generated_2026-07-25": true,
+  "e2e_token_parity_14b": {
+    "status": "PASS",
+    "cmd": "flock /tmp/gpu-bench.lock -c 'cd /home/ubuntu/tinygrad-arkey && PYTHONPATH=. DEV=AMD timeout 1800 python3 extra/qk/prefill_flash_e2e_parity.py --only 14B'",
+    "route_live": true,
+    "sdpa": 90310,
+    "fused": 90310,
+    "verdict": "MATCH PASS",
+    "note": "The route was LIVE for this run (TINYGRAD_PREFILL_PACKED_WMMA was NOT set to 0). This is the ordinary shipped default, exercising route_packed_wmma_prefill end to end on the real 14B model."
+  },
+  "canary": {
+    "source": "extra/qk/prefill/packed_wmma_prefill_candidates.gate_result(quant, role, shape) after gate_combo(...); process-local _GATE_CACHE",
+    "cmd": "flock /tmp/gpu-bench.lock -c 'PYTHONPATH=. DEV=AMD timeout 600 python3 extra/qk/packed_wmma_canary_evidence.py'",
+    "combos": [
+      {
+        "quant": "Q4_K",
+        "role": "attn_qo",
+        "shape": [
+          512,
+          5120,
+          5120
+        ],
+        "passed": true,
+        "max_abs": 0.0
+      },
+      {
+        "quant": "Q4_K",
+        "role": "attn_kv",
+        "shape": [
+          512,
+          1024,
+          5120
+        ],
+        "passed": true,
+        "max_abs": 0.0
+      },
+      {
+        "quant": "Q4_K",
+        "role": "ffn_gate_up",
+        "shape": [
+          512,
+          17408,
+          5120
+        ],
+        "passed": true,
+        "max_abs": 0.0
+      },
+      {
+        "quant": "Q4_K",
+        "role": "ffn_down",
+        "shape": [
+          512,
+          5120,
+          17408
+        ],
+        "passed": true,
+        "max_abs": 0.0
+      },
+      {
+        "quant": "Q6_K",
+        "role": "attn_kv",
+        "shape": [
+          512,
+          1024,
+          5120
+        ],
+        "passed": true,
+        "max_abs": 0.0
+      },
+      {
+        "quant": "Q6_K",
+        "role": "ffn_down",
+        "shape": [
+          512,
+          5120,
+          17408
+        ],
+        "passed": true,
+        "max_abs": 0.0
+      }
+    ],
+    "summary": "6/6 PASS, max_abs=0.0 on every gated combo",
+    "known_gap": "PACKED_WMMA_GEOM has no (Q6_K, attn_qo) or (Q6_K, ffn_gate_up) entry. Those two (quant, role) combos are NOT gated, NOT claimed by the manifest row's shape_guards, and silently decline to the Q6_K direct-packed baseline (prefill_q6k_direct_generated) at runtime."
+  },
+  "throughput": {
+    "note": "Pre-existing measurements, transcribed here rather than re-run (already measured per the scope doc).",
+    "14b_tok_s_by_context": {
+      "pp512": 1945,
+      "pp1024": 1920,
+      "pp2048": 1875,
+      "pp4096": 1785
+    },
+    "llama_cpp_same_session_delta_pct": {
+      "pp512": 5.4,
+      "pp1024": 5.7,
+      "pp2048": 6.7,
+      "pp4096": 8.7
+    },
+    "paired_ab_vs_flag_0": {
+      "pp512": {
+        "flag_0_reps_tok_s": [
+          361,
+          362
+        ],
+        "flag_1_reps_tok_s": [
+          1926,
+          1947
+        ]
+      },
+      "pp4096": {
+        "flag_0_reps_tok_s": [
+          355,
+          355
+        ],
+        "flag_1_reps_tok_s": [
+          1774,
+          1790
+        ]
+      },
+      "note": "two same-session paired reps per context; flag_0 = TINYGRAD_PREFILL_PACKED_WMMA=0 (direct-packed baseline), flag_1 = default (packed-WMMA live)"
+    }
+  }
+}

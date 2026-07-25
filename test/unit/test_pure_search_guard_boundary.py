@@ -170,6 +170,21 @@ def test_shipped_default_getenv_values_keep_generated_routes_on():
   assert _drive_q6k() is False
 
 
+def test_packed_wmma_shipped_default_getenv_value_keeps_generated_route_on():
+  # tinygrad/llm/prefill_routes.py packed_wmma_prefill_enabled(): getenv("TINYGRAD_PREFILL_PACKED_WMMA", 1).
+  # Pin the UNSET-key default the guard's _prefill_packed_wmma_rolled_back encodes via _env_flag against the
+  # real runtime getenv default, so a flipped source default fails here instead of silently diverging.
+  with env(TINYGRAD_PREFILL_PACKED_WMMA=None):
+    assert getenv("TINYGRAD_PREFILL_PACKED_WMMA", 1) == 1
+  assert guard._env_flag({}, "TINYGRAD_PREFILL_PACKED_WMMA", 1) is True
+  assert guard._prefill_packed_wmma_rolled_back({}) is False
+  assert guard._prefill_packed_wmma_rolled_back({"TINYGRAD_PREFILL_PACKED_WMMA": "0"}) is True
+  packed = {r["family"]: r for r in guard.effective_routes({})}["prefill_packed_wmma"]
+  assert packed["effective_route"] == "packed_wmma_prefill_generated"
+  assert packed["provenance"] == "tinygrad_scheduler_generated"
+  assert packed["rolled_back_to_oracle"] is False and packed["pure"] is True
+
+
 def test_q4k_research_rollback_env_is_not_a_production_selector():
   assert _drive_q4k(BUBBLEBEAM_FUTURESIGHT="0") is False
   assert _drive_q4k(Q4K_GEMV_SCHEDULER="1") is False
