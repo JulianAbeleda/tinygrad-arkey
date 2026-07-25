@@ -87,6 +87,52 @@ confirmation before anyone spends on a fix.
 whole-model throughput. A conflict-rate drop with no throughput change means LDS stalls were not on the
 critical path — record that as the verdict rather than chasing it further.
 
+**TESTED 2026-07-24 (real, not artifact; one bounded padding change; net negative, reverted):**
+
+*Metric verification.* Dumped the raw per-WGP PMC samples (not just the total/max/count the tracer
+normally reports) for the top three `E_4_*` GEMM kernels and for attention, all under the same PMC
+pipeline (`SQC_LDS_BANK_CONFLICT`/`SQC_LDS_IDX_ACTIVE`, both block `SQ`, same 48-WGP sample granularity —
+no numerator/denominator scaling mismatch). Every nonzero-active WGP in every GEMM kernel reports
+`conflict/active` at bit-exact `0.125`, independent of that WGP's absolute load (e.g. one dispatch showed
+active in {524288, 655360, 786432} per WGP, conflict in {65536, 81920, 98304} respectively — each pair an
+exact 1/8). Attention's ratio, sampled through the identical pipeline, varies continuously WGP-to-WGP
+(0.0479–0.0489, no two values equal). The GEMM determinism is explained mechanistically, not by a broken
+counter: `bench/prefill-pure-full-kernel/multirole-buffer2-candidate-set-v1/candidate-set.json` shows all
+four roles (attn_qo/attn_kv/ffn_down/ffn_gate_up) share one identical `schedule.lds` block (`strides.a=b=80`,
+`padding=16`, `tile k=32/m=128/n=128`) — it's the same compile-time LDS swizzle geometry reused verbatim
+across shapes, so an identical, data-independent conflict fraction is exactly what a real deterministic
+swizzle-caused conflict looks like, not a measurement artifact. **Verdict: the 12.5% is real.**
+
+*The fix attempt.* Tried the one bounded change specified: padded the LDS row stride from 80 to 96 bytes
+(padding 16→32; unpadded row is 64 bytes = tile-k=32 × fp16). Edited `candidate-set.json`
+(`strides.a/b`, `windows.a/b`), recomputed `canonical_identity` via
+`extra.qk.runtime_specs._canonical_full_kernel_identity` so admission still validates (confirmed via
+`admit_full_kernel_candidate_set` before spending GPU time). Result was the opposite of the hypothesis:
+
+| | lds_conflict_pct (ctx512, top GEMM) | pp512 | pp1024 | pp2048 | pp4096 |
+|---|---|---|---|---|---|
+| baseline (stride 80) | 12.5% | 3607 | 3512 | 3327 | 3003 |
+| padded (stride 96) | **50.0%** | 3399 (−5.8%) | 3314 (−5.6%) | 3144 (−5.5%) | 2849 (−5.1%) |
+
+Conflict rate went 4x worse and whole-model throughput dropped ~5.5% uniformly across all four context
+lengths — consistent, monotonic, and in the direction the counter predicted. This is strong independent
+confirmation the counter is real AND that LDS conflicts on this route ARE on the critical path (contrary
+to the doc's fallback framing that a conflict-rate change with no throughput change would be the likely
+outcome — here throughput moved with conflict, in lockstep). **Change reverted; candidate-set.json is
+back to the original stride-80/padding-16 state (verified byte-identical), nothing shipped.**
+
+**Correction to the theory as written:** the theory's implicit direction (more padding = fewer conflicts)
+was WRONG for this stride/tile geometry — 80 bytes (20 dwords, gcd(20,32)=4, period 8) mod the 128-byte
+bank cycle already conflicts at a real but modest 1/8, and pushing to 96 bytes (24 dwords, gcd(24,32)=8,
+period 4) made it a 1/4-periodic, 4-way-heavier pattern — moved to the WORSE side of the modulus, not the
+better side. The naive "+1 element" pad trick is not safe here because the WMMA fragment-load addressing
+(`rdna3_wmma_output_coord` / `wmma_fragment_loads` in `extra/qk/kernel_lds.py`) is a 2D lane→row/col
+mapping, not a simple linear row scan, so the actual conflict-minimizing stride has to be derived from
+that lane mapping (or swept empirically over the 16-byte-aligned choices under `max_lds_bytes=65536`), not
+guessed. Untried and worth a future pass: strides in {64 (no pad, control), 72, 88, 112} to map the period
+and check whether ANY stride in that family beats 80, or whether 80 is already a local optimum and the
+real lever is the fragment-load lane mapping itself.
+
 ## THEORY 3 — causal tile skipping (bounded, independent)
 
 The kernel iterates **every** KV tile and masks in the softmax; it never skips a fully-masked tile.
