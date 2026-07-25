@@ -253,7 +253,7 @@ Codex must inspect and reuse these assets rather than recreating them:
 | AMD target lowering | existing AMD renderer/WMMA descriptions | No second emitter |
 | Geometry ranking | `extra/qk/bubblebeam_futuresight.py` | Shared candidate scoring/ranking |
 | Attention microbenchmark | existing SDPA/flash prefill harness assets | Extend, do not fork |
-| Whole-prefill authority | `extra/qk/prefill_whole_synced.py`, `extra/qk/prefill_harness.py` | Final 8B/14B measurement |
+| Whole-prefill authority | `extra/qk/prefill/prefill_whole_synced.py`, `extra/qk/prefill/prefill_harness.py` | Final 8B/14B measurement |
 | Route policy | existing prefill policy/route binding | Fail-closed promotion after both gates |
 
 `extra/qk/flash_kernels.py` may be used as a mathematical oracle only. Its hand

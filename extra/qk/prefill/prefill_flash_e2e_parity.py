@@ -7,7 +7,7 @@ Token-parity A/B on the REAL 8B and 14B Qwen3 models: baseline SDPA prefill
 -> amd_gfx1100_q16_grid_hd128_loop_attention). The fused route must produce the
 IDENTICAL next-token argmax as SDPA, on real weights, for the route to be promoted.
 
-Run: PYTHONPATH=. DEV=AMD python extra/qk/prefill_flash_e2e_parity.py
+Run: PYTHONPATH=. DEV=AMD python extra/qk/prefill/prefill_flash_e2e_parity.py
 
 PROCESS ISOLATION (--only): running both models in ONE process exhausted VRAM on the 14B arm --
 "fp16 KV admits 0 ... free 5.2GB, weights 9.0GB" -- because the 8B model is still resident and

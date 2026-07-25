@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Descriptor scaffolding for the machine-searched fixed-16-WMMA prefill route.
 
-Mirrors extra/qk/flash_decode_attention_spec.py (FlashDecodeTileSpec): the topology
+Mirrors extra/qk/decode/flash_decode_attention_spec.py (FlashDecodeTileSpec): the topology
 that today lives as inline `emit(...)` glue in tinygrad/llm/fused_attention.py's
 custom_kernel_attention is here owned as DATA by a frozen dataclass, so a route can
 compose it (machine_authored_generated) instead of importing the hand builder by

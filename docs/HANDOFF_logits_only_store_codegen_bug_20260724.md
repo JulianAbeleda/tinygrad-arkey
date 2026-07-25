@@ -24,7 +24,7 @@ pointers. No GPU needed to understand it; a GPU (gfx1100) is needed to repro + v
 
 ## TL;DR
 
-The prefill harness's `--logits-only` measurement path (`extra/qk/prefill_whole_synced.py`)
+The prefill harness's `--logits-only` measurement path (`extra/qk/prefill/prefill_whole_synced.py`)
 fails to compile. The HIP renderer emits a C++ statement whose **left-hand side is a
 `make_float32(...)` constructor call** — an rvalue — so gfx1100's compiler rejects it:
 
@@ -45,7 +45,7 @@ is blocked.
 cd /home/ubuntu/tinygrad-arkey
 bash extra/qk/gpu_wait_clear.sh 14 60 5          # wait for >=14GB free
 timeout 240 env PYTHONPATH=. DEV=AMD DEBUG=5 \
-  .venv/bin/python extra/qk/prefill_whole_synced.py \
+  .venv/bin/python extra/qk/prefill/prefill_whole_synced.py \
   --model /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf \
   --mode smoke --logits-only --no-artifact
 # -> CompileError: compile failed  (the make_float32(...) = ... line is echoed by comgr)

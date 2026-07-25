@@ -12,7 +12,7 @@ import pathlib
 
 from extra.qk.model_profiles import MODEL_PROFILES, ModelProfile, profile_by_id, profile_from_model_path
 
-ROOT = pathlib.Path(__file__).resolve().parents[2]
+ROOT = pathlib.Path(__file__).resolve().parents[3]
 
 DEFAULT_MODEL = "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf"
 DEFAULT_MODEL_PROFILE = "qwen3_8b_q4k_m_gfx1100"
@@ -117,7 +117,7 @@ def prefill_authority_argv(model_path: str, profile: PrefillRunProfile, *, model
   profile.validate()
   if not artifact and artifact_path: raise ValueError("prefill artifact path cannot be combined with artifact=False")
   model_profile = resolve_prefill_model_profile(model_profile_id, model_path=model_path)
-  argv = ["extra/qk/prefill_whole_synced.py", "--model", model_path, "--mode", profile.mode,
+  argv = ["extra/qk/prefill/prefill_whole_synced.py", "--model", model_path, "--mode", profile.mode,
           "--model-profile", model_profile.id,
           "-K", str(profile.K), "--warmups", str(profile.warmups), "--rounds", str(profile.rounds),
           "--start-positions", ",".join(str(x) for x in profile.start_positions),

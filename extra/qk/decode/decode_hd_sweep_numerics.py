@@ -9,7 +9,7 @@ the emitter is believed Hd-generic (R=Hd//LANES, RP=Hd//64, W=Hd+2, scale=1/Hd**
 constraint Hd%64==0 -- see flash_kernels.py line ~25) but that has never been run end-to-end.
 
 REAL entry point driven (not reimplemented, not a toy):
-  extra/qk/flash_decode_attention_executor.py:10 flash_decode_live_split_block_tile(...)
+  extra/qk/decode/flash_decode_attention_executor.py:10 flash_decode_live_split_block_tile(...)
 This is the EXACT function tinygrad/llm/decode_routes.py:157 (flash_decode_attention_route) calls
 for the production 8B/14B decode graph -- see tinygrad/llm/model.py:597. It wires
 Q/cache -> FlashDecodeAttentionSpec -> custom_kernel tile emit -> custom_kernel fused-combine emit,
@@ -40,7 +40,7 @@ Decode calling convention mirrored from tinygrad/llm/model.py (~line 569, 596-59
     (mask is all-zero / no masking needed -- causal is automatically satisfied since every cached
     token is <= the query's own position).
 
-Run: PYTHONPATH=. DEV=AMD .venv/bin/python extra/qk/decode_hd_sweep_numerics.py
+Run: PYTHONPATH=. DEV=AMD .venv/bin/python extra/qk/decode/decode_hd_sweep_numerics.py
 """
 from __future__ import annotations
 import os
@@ -52,7 +52,7 @@ import numpy as np
 from tinygrad import Tensor, dtypes
 
 from extra.qk.attention_harness_common import causal_mask, reference_attention
-from extra.qk.flash_decode_attention_executor import flash_decode_live_split_block_tile
+from extra.qk.decode.flash_decode_attention_executor import flash_decode_live_split_block_tile
 
 HQ, HKV = 32, 8          # real 8B GQA shape (G=Hq/Hkv=4); Hkv/G are orthogonal to the Hd question here
 MAXC = 512               # synthetic ring/cache capacity

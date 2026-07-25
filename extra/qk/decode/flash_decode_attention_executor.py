@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from tinygrad import Tensor, dtypes
 
-from extra.qk.flash_decode_attention_spec import describe_flash_decode_attention
+from extra.qk.decode.flash_decode_attention_spec import describe_flash_decode_attention
 
 
 def flash_decode_live_split_block_tile(q, cache_kv, Tc_u, Hd: int, Hq: int, Hkv: int, MAXC: int, S: int,

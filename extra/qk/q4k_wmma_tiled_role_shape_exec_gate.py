@@ -18,7 +18,7 @@ from tinygrad import Context, GlobalCounters, Tensor, dtypes
 from tinygrad.engine.realize import compile_linear
 from tinygrad.uop.ops import Ops
 from extra.qk.layout import Q4K_WORDS_PER_BLOCK
-from extra.qk.prefill_mmq_parity_gate import _make_q4k_words, RTOL, _rel_rmse
+from extra.qk.prefill.prefill_mmq_parity_gate import _make_q4k_words, RTOL, _rel_rmse
 from tinygrad.llm import route_ops as qk_ops
 from extra.qk.q4k_wmma_tile_lowering import (
   Int8WMMATileLoweringSpec,

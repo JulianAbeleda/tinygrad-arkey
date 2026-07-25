@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from extra.qk.model_profiles import MODEL_PROFILES, ModelProfile
-from extra.qk.prefill_harness import prefill_authority_argv, prefill_run_profile, resolve_prefill_model_profile
+from extra.qk.prefill.prefill_harness import prefill_authority_argv, prefill_run_profile, resolve_prefill_model_profile
 from extra.qk.shared_attention_capture import (ACC_SLICE_CAPTURE_SCHEMA, CAPTURE_SCHEMA, PHASE_CAPTURE_SCHEMA,
   SharedAttentionCompilerCapture)
 

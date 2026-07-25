@@ -10,7 +10,7 @@ only gatekeeps a default-value change inside one existing row's flag.
 
 The bar (docs/prefill-current-state.md "Change rule"): exact typed candidate, isolated correctness, whole-model
 parity, route-census identity, pinned timing -- and per BoltBeam's authority_completeness_gate pattern
-(extra/qk/prefill_whole_synced.py), a promotion claim is refused if any required field is missing rather than
+(extra/qk/prefill/prefill_whole_synced.py), a promotion claim is refused if any required field is missing rather than
 silently treated as satisfied.
 
 Critically: prefill_flash_attention_generated's own shape_guards admit TWO grids (8B Hq=32/Hkv=8 and 14B Hq=40/
@@ -21,7 +21,7 @@ recorded (or an evidence file that is missing/malformed) makes the gate FAIL clo
 
 This script does not flip any default. It reports PASS/FAIL for informing a human's decision only.
 
-Run: PYTHONPATH=. python3 extra/qk/prefill_causal_tile_skip_promotion_gate.py
+Run: PYTHONPATH=. python3 extra/qk/prefill/prefill_causal_tile_skip_promotion_gate.py
 """
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ from extra.qk.route_manifest import ROUTES
 
 ROUTE_ID = "prefill_flash_attention_generated"
 FLAG = "PREFILL_CAUSAL_TILE_SKIP"
-EVIDENCE_PATH = pathlib.Path(__file__).resolve().parents[2] / "docs" / "prefill-causal-tile-skip-evidence-20260724.json"
+EVIDENCE_PATH = pathlib.Path(__file__).resolve().parents[3] / "docs" / "prefill-causal-tile-skip-evidence-20260724.json"
 
 # Thresholds derived directly from the recorded evidence's own methodology section (docs/prefill-needle-theories-
 # 20260724.md "Measurement methodology"): a claim only counts as signal if it clears the measured same-config

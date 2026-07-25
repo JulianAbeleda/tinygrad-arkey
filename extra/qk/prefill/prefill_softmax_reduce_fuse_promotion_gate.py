@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Authority gate for flipping PREFILL_SOFTMAX_REDUCE_FUSE's DEFAULT from off to on.
 
-Sibling of extra/qk/prefill_causal_tile_skip_promotion_gate.py and deliberately the same shape: reads ONLY
+Sibling of extra/qk/prefill/prefill_causal_tile_skip_promotion_gate.py and deliberately the same shape: reads ONLY
 pre-collected, transcribed evidence (docs/prefill-softmax-reduce-fuse-evidence-20260724.json), embeds no
 measurements of its own, never invents a number, and FAILS CLOSED on any missing/malformed/null field
 rather than passing by omission. It does not flip any default; it reports PASS/FAIL to inform a human.
@@ -37,7 +37,7 @@ this instrument can resolve at MIN_SIGNAL_TO_NOISE, the measurement to CORROBORA
 regression at any length. Both branches require the measured signal to clear its own control noise by
 MIN_SIGNAL_TO_NOISE. Absence of a whole-model number with no such justification is a FAIL.
 
-Run: PYTHONPATH=. python3 extra/qk/prefill_softmax_reduce_fuse_promotion_gate.py
+Run: PYTHONPATH=. python3 extra/qk/prefill/prefill_softmax_reduce_fuse_promotion_gate.py
 """
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ GATE = "prefill_softmax_reduce_fuse_promotion"
 ROUTE_ID = "prefill_flash_attention_generated"
 FLAG = "PREFILL_SOFTMAX_REDUCE_FUSE"
 SCHEMA = "prefill-softmax-reduce-fuse-promotion-evidence.v1"
-EVIDENCE_PATH = pathlib.Path(__file__).resolve().parents[2] / "docs" / "prefill-softmax-reduce-fuse-evidence-20260724.json"
+EVIDENCE_PATH = pathlib.Path(__file__).resolve().parents[3] / "docs" / "prefill-softmax-reduce-fuse-evidence-20260724.json"
 
 # Same methodology thresholds as the sibling gate (docs/prefill-needle-theories-20260724.md "Measurement
 # methodology"): a delta only counts as signal if it clears the measured same-config noise by a real margin.

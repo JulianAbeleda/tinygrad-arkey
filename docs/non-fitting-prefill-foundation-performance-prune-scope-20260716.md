@@ -227,7 +227,7 @@ The tinygrad authority is:
 
 ```text
 extra/qk/bench.py --prefill
-  -> extra/qk/prefill_whole_synced.py
+  -> extra/qk/prefill/prefill_whole_synced.py
   -> synchronized production model call
 ```
 

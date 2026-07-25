@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import pathlib
 
-ROOT = pathlib.Path(__file__).resolve().parents[2]
+ROOT = pathlib.Path(__file__).resolve().parents[3]
 
 DEFAULT_MODEL = "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf"
 DEFAULT_CKPTS = (128, 512, 1024, 4096)
@@ -56,7 +56,7 @@ def decode_authority_argv(model_path: str, profile: DecodeRunProfile, *, out_pat
                           reps:int=DEFAULT_REPS) -> list[str]:
   profile.validate()
   if reps < 1: raise ValueError("decode reps must be positive")
-  return ["extra/qk/decode_runtime_overhead.py", "--model", model_path,
+  return ["extra/qk/decode/decode_runtime_overhead.py", "--model", model_path,
           "--ckpts", ",".join(str(x) for x in profile.ckpts),
           "--max-context", str(profile.max_context), "--nmeas", str(profile.nmeas),
           "--reps", str(reps), "--out", str(out_path)]

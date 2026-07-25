@@ -133,7 +133,7 @@ results.
   Ops.INS, no wmma.py), then delete the hand kernel, keeping `PURE_MACHINE_SEARCH_ONLY=1` green. PLRA/PLRAB prefetch
   is 2nd-order / deferred.
 - **Harness discipline:** phase-0 and route-bound measurement must reuse the existing whole-prefill authority harness
-  (`extra/qk/prefill_whole_synced.py`), not a new benchmark path. The route-bound correctness gate is NOT native-ISA
+  (`extra/qk/prefill/prefill_whole_synced.py`), not a new benchmark path. The route-bound correctness gate is NOT native-ISA
   evidence (its runner forces `DEV=AMD` → HIP/C renderer); a compile-only fail-closed LDS-allocation estimator
   (`--resource-search`) is what drives schedule choice before launch.
 
@@ -202,4 +202,4 @@ results.
   it closes most but not all of the −4.4% gap. Not shippable as a per-call permute. Also refuted along the way: the
   P-repack LDS hypothesis (only 10 LDS instrs/tile; attention `lds_conflict` 5.1% vs the GEMMs' 12.5%) and any
   bandwidth framing (AI = **818 FLOP/byte**, 6× past the ridge, 0.98% of HBM peak, L2 hit rising 62.8%→85.5% with
-  context). Counter path + method: `extra/qk/prefill_boltbeam_trace.py --hw-trace` (restored in `654c9b2ce`).
+  context). Counter path + method: `extra/qk/prefill/prefill_boltbeam_trace.py --hw-trace` (restored in `654c9b2ce`).

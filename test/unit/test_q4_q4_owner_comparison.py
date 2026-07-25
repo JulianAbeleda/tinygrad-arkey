@@ -2,7 +2,7 @@
 import inspect
 
 from extra.qk import mmq_q4k_q8_atom as atom
-from extra.qk import prefill_int8_wmma_spec as wmma
+from extra.qk.prefill import prefill_int8_wmma_spec as wmma
 
 
 def test_q4_candidates_have_distinct_generated_instruction_surfaces():

@@ -29,8 +29,8 @@ The authority gate below is the thing that must gate the flip, not the guard.
 
 ## Authority gate
 
-`extra/qk/prefill_causal_tile_skip_promotion_gate.py` (run: `PYTHONPATH=. python3
-extra/qk/prefill_causal_tile_skip_promotion_gate.py`):
+`extra/qk/prefill/prefill_causal_tile_skip_promotion_gate.py` (run: `PYTHONPATH=. python3
+extra/qk/prefill/prefill_causal_tile_skip_promotion_gate.py`):
 
 - Derives the **required shapes** directly from `ROUTES["prefill_flash_attention_generated"]["shape_guards"]`
   (currently 8B `Hq=32` and 14B `Hq=40`, both `Hd=128`) -- not hardcoded, so a future shape_guard addition is

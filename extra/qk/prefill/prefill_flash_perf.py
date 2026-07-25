@@ -13,9 +13,9 @@ reported a 300x-slower attention kernel as 2.7x faster). synced_time brackets ev
 sample with Device.synchronize().
 
 Run one config (robust, no cross-config JIT/memory accumulation):
-    PYTHONPATH=. DEV=AMD python extra/qk/prefill_flash_perf.py <route_idx> <kv>
+    PYTHONPATH=. DEV=AMD python extra/qk/prefill/prefill_flash_perf.py <route_idx> <kv>
 Run the default sweep (8B+14B x kv in 512/1024/2048):
-    PYTHONPATH=. DEV=AMD python extra/qk/prefill_flash_perf.py
+    PYTHONPATH=. DEV=AMD python extra/qk/prefill/prefill_flash_perf.py
 """
 import os, sys
 os.environ.setdefault("DEV", "AMD")

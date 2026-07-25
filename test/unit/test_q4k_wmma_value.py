@@ -1,7 +1,7 @@
 """VALUE-semantics gate for the int8/Q4_K WMMA prefill substrate (signed-dot regression protection).
 
 The Q4_K/Q8_1 prefill dot is expressed as `Tensor.matmul(..., dtype=int)` so RDNA3 selects the iu8 WMMA; its
-numeric correctness was checked only by standalone scripts (extra/qk/prefill_mmq_parity_gate.py,
+numeric correctness was checked only by standalone scripts (extra/qk/prefill/prefill_mmq_parity_gate.py,
 extra/qk/q4k_wmma_tiled_microgate.py) that live OUTSIDE pytest. Those scripts already do the right comparison --
 `ref = (x_dq @ ref_w.T)` vs the emitted `.numpy()` -- but nothing in the suite runs them, so a signed-dot
 regression (the unsigned-dot4 failure mode) would not be caught by the test runner. This file wires that exact
@@ -17,8 +17,8 @@ import numpy as np
 from tinygrad import Tensor, Device, dtypes
 
 from extra.qk.layout import q8_1_quantize
-from extra.qk.prefill_mmq_parity_gate import _make_q4k_words, _rel_rmse, RTOL
-from extra.qk.prefill_int8_wmma_spec import (
+from extra.qk.prefill.prefill_mmq_parity_gate import _make_q4k_words, _rel_rmse, RTOL
+from extra.qk.prefill.prefill_int8_wmma_spec import (
   describe_q4k_int8_wmma_prefill, emit_q4k_int8_wmma_prefill_tensor,
   describe_q4k_int8_wmma_tiled_prefill, emit_q4k_int8_wmma_tiled_prefill_tensor,
   emit_q4k_int8_wmma_tiled_scheduler_tensor)

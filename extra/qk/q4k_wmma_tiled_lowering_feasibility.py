@@ -5,7 +5,7 @@ from __future__ import annotations
 import json, os, pathlib, subprocess, sys, textwrap
 from typing import Any
 
-from extra.qk.prefill_int8_wmma_spec import describe_q4k_int8_wmma_tiled_prefill
+from extra.qk.prefill.prefill_int8_wmma_spec import describe_q4k_int8_wmma_tiled_prefill
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 ARTIFACT = ROOT / "bench/q4k-wmma-tiled-lowering-feasibility/latest.json"

@@ -6,7 +6,7 @@ real, reproducible, and beating llama.cpp -- but invisible to the purity system 
 HOT_FAMILIES). This gate is what makes the registration auditable rather than decorative: it reads ONLY
 pre-collected, transcribed evidence from docs/packed-wmma-14b-promotion-evidence-20260725.json, never
 computes or invents a number, and FAILS CLOSED on any manifest-admitted shape lacking evidence -- same shape
-as extra/qk/prefill_causal_tile_skip_promotion_gate.py and extra/qk/prefill_softmax_reduce_fuse_promotion_gate.py.
+as extra/qk/prefill/prefill_causal_tile_skip_promotion_gate.py and extra/qk/prefill/prefill_softmax_reduce_fuse_promotion_gate.py.
 
 TWO THINGS THIS GATE IS SPECIFICALLY GUARDING AGAINST, because both were live risks during registration:
 
@@ -27,7 +27,7 @@ TWO THINGS THIS GATE IS SPECIFICALLY GUARDING AGAINST, because both were live ri
 This script does not flip any default or touch the manifest. It reports PASS/FAIL for informing a human's
 decision only.
 
-Run: PYTHONPATH=. python3 extra/qk/packed_wmma_prefill_promotion_gate.py
+Run: PYTHONPATH=. python3 extra/qk/prefill/packed_wmma_prefill_promotion_gate.py
 """
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ from extra.qk.route_manifest import ROUTES
 ROUTE_ID = "packed_wmma_prefill_generated"
 FLAG = "TINYGRAD_PREFILL_PACKED_WMMA"
 EXPECTED_PROVENANCE = "tinygrad_scheduler_generated"
-EVIDENCE_PATH = pathlib.Path(__file__).resolve().parents[2] / "docs" / "packed-wmma-14b-promotion-evidence-20260725.json"
+EVIDENCE_PATH = pathlib.Path(__file__).resolve().parents[3] / "docs" / "packed-wmma-14b-promotion-evidence-20260725.json"
 
 
 def _required_shapes() -> list[dict]:

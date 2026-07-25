@@ -158,7 +158,7 @@ short-context ones were not.
   (`7463a6774`). Full trace: `docs/packed-wmma-14b-fault-trace-20260724.md`.
 - `TINYGRAD_PREFILL_PACKED_WMMA=0` is a **rollback to the pre-`6ca798568` default**, not a workaround.
 - OPEN: 14B end-to-end token parity has NOT been run with packed-WMMA live. A passing canary plus
-  throughput is not the same as matching tokens. `extra/qk/prefill_flash_e2e_parity.py --only 14B`.
+  throughput is not the same as matching tokens. `extra/qk/prefill/prefill_flash_e2e_parity.py --only 14B`.
 
 ## Shipped default flags (2026-07-24 late)
 

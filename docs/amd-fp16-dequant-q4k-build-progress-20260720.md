@@ -1,7 +1,7 @@
 # BUILD PROGRESS / CONTINUATION: generated fp16-dequant Q4_K primitive (AMD)
 
 ## ⭐ AUTHORITATIVE OUTCOME (2026-07-21) — read this first; supersedes all per-stage numbers below
-**The win (verified on the ONE canonical harness `extra/qk/prefill_whole_synced.py`, clean sequential A/B, no GPU contention):**
+**The win (verified on the ONE canonical harness `extra/qk/prefill/prefill_whole_synced.py`, clean sequential A/B, no GPU contention):**
 
 | context | default (direct-packed) | packed-WMMA | llama | vs default | vs llama |
 |---|---|---|---|---|---|
@@ -12,7 +12,7 @@
 
 - **BANKED WIN: packed-WMMA prefill is a real ~5× over tinygrad's default, holding 4-5× at every context.** Scheduler-native (no bespoke kernel, no int8), correctness-gated (max_abs 0.0), landed as an opt-in production route.
 - **It does NOT beat llama** (geo-mean ~89%): ~parity at pp512 (within llama's ±100 run noise), trailing to 77% by pp4096. **The residual gap is the ATTENTION path scaling (per-chunk 277→511ms vs llama's flatter flash-attn), NOT the packed-WMMA GEMMs** — those are done+correct. Beyond-parity goal (≥105% geo-mean, ≥2000) NOT met; the next lever is a flash-attention-quality prefill continuation path, an attention problem orthogonal to everything here.
-- **Reproduce:** `TINYGRAD_PREFILL_PACKED_WMMA=1 DEV=AMD python -m extra.qk.prefill_whole_synced --whole-lengths 512,1024,2048,4096` (default off = fail-closed direct-packed baseline). Commits: `da28e5efd` (codegen geometry unlock), `b10f640be` (quant-aware warmstart key), `c35b5ff53` (production Q4K/Q6K PackedWMMA candidates).
+- **Reproduce:** `TINYGRAD_PREFILL_PACKED_WMMA=1 DEV=AMD python -m extra.qk.prefill.prefill_whole_synced --whole-lengths 512,1024,2048,4096` (default off = fail-closed direct-packed baseline). Commits: `da28e5efd` (codegen geometry unlock), `b10f640be` (quant-aware warmstart key), `c35b5ff53` (production Q4K/Q6K PackedWMMA candidates).
 - **⚠️ Everything below this block is per-stage working history. Numbers like "1911 estimate", "1826 = parity", "1854 past llama" are SUPERSEDED scratch-bench overclaims — trust ONLY the canonical A/B above.** Do NOT re-explore: bespoke int8 mmq_llama stack (superseded), int8 on RDNA3 (no tensor-core rate edge), or scratch benches (use the canonical harness).
 
 ## PRIMITIVE-SUBSTRATE PIVOT (2026-07-20) — read this first
@@ -82,7 +82,7 @@ Applied correctness-gated FFN geometries (bench `scratchpad/e2e_packed_wmma_benc
 - **Step 2 (`c35b5ff53`): production candidate classes** — `extra/qk/prefill/packed_wmma_prefill_candidates.py` (`Q4K`/`Q6KPackedWmmaPrefillCandidate`, frozen 6-combo geom table, gate-once cache, warmstart-table builder). Selectable via `route_packed_wmma_prefill` (env `TINYGRAD_PREFILL_PACKED_WMMA`, default OFF, fail-closed) inside the direct_packed branch. Verified via NORMAL dispatcher (no override): opted-in **1854-1858 tok/s** (past llama), 100% coverage, 6/6 gates max_abs 0.0; opted-out byte-identical 354. 15 pre-existing unit fails unchanged (A/B verified).
 
 ## VERIFIED CANONICAL A/B (2026-07-21) — corrects earlier scratch-bench overclaims
-Ran the CANONICAL authority `extra/qk/prefill_whole_synced.py` (warms TinyJit at concrete start_pos per 512-chunk, min-of-burst, sums per-chunk — the one true harness) as a clean sequential A/B, default vs packed-WMMA (`TINYGRAD_PREFILL_PACKED_WMMA=1`), no GPU contention:
+Ran the CANONICAL authority `extra/qk/prefill/prefill_whole_synced.py` (warms TinyJit at concrete start_pos per 512-chunk, min-of-burst, sums per-chunk — the one true harness) as a clean sequential A/B, default vs packed-WMMA (`TINYGRAD_PREFILL_PACKED_WMMA=1`), no GPU contention:
 
 | context | default (direct-packed) | packed-WMMA | llama | vs default | vs llama |
 |---|---|---|---|---|---|

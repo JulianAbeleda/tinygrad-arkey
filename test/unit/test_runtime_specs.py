@@ -6,7 +6,7 @@ from extra.qk.generated_candidates import GeneratedCandidateRegistry, builtin_re
 from extra.qk.quant_specs import activation_spec, quant_spec
 from extra.qk import route_manifest
 from extra.qk import pure_search_guard
-from extra.qk import prefill_graph_gemm_route
+from extra.qk.prefill import prefill_graph_gemm_route
 from extra.qk.runtime_specs import (
   ANCHOR_SINGLE_BUFFER_CANDIDATE_HASH, FULL_KERNEL_CANDIDATE_SCHEMA, PACKED_SCALAR_DECODER_VERSION, ActivationQuantSpec, GeneratedCandidate,
   CandidateAdmissionFacts, QuantizedTensorSpec, RuntimeOpSpec, FullKernelCandidateSet, FullKernelCandidateSetEntry,

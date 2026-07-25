@@ -304,7 +304,7 @@
       ],
       "known_refuted_route_families": [],
       "quality_constraints": "none (no quantization).",
-      "impl_citation": "extra/qk/prefill_graph_gemm_route.py (prefill GEMM); extra/qk/live_split_geometry.py + extra/qk/flash_decode.py (attention)",
+      "impl_citation": "extra/qk/prefill/prefill_graph_gemm_route.py (prefill GEMM); extra/qk/live_split_geometry.py + extra/qk/flash_decode.py (attention)",
       "notes": "not a packed-quant format; no unpack. Used by prefill GEMM + decode attention.",
       "derived": {
         "metadata_bytes": 0,

@@ -4,7 +4,7 @@ This is a trace producer, not a benchmark authority replacement. It uses the sam
 whole-step tok/s, then runs one PROFILE pass to attribute the measured wall time across kernels/roles.
 
   DEV=AMD PREFILL_V2=1 PREFILL_CHUNKED=1 PREFILL_GRAPH_GEMM=1 PROFILE=1 PYTHONPATH=. \
-    python3 extra/qk/prefill_boltbeam_trace.py --model /path/model.gguf --context 512 --out timing_trace.json
+    python3 extra/qk/prefill/prefill_boltbeam_trace.py --model /path/model.gguf --context 512 --out timing_trace.json
 """
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ from tinygrad.device import Compiled
 from tinygrad.helpers import ProfileRangeEvent, prod
 from tinygrad.llm.qk_primitives import Q4KPrimitiveLinear, Q6KPrimitiveLinear
 from extra.llm.generate import load_model_and_tokenizer
-from extra.qk.prefill_harness import DEFAULT_MODEL  # was extra.qk.harness_contract (deleted 0e02a1976)
+from extra.qk.prefill.prefill_harness import DEFAULT_MODEL  # was extra.qk.harness_contract (deleted 0e02a1976)
 
 SCHEMA = "boltbeam.timing_trace.v1"
 HW_SCHEMA = "boltbeam.hw_trace.v1"

@@ -112,12 +112,12 @@ WMMA on the QK^T (and ideally PV) to get FLOP/s, which this kernel has zero prec
 
 ### 1.2 Decode executor + spec + microgate — the custom_kernel bridge
 
-- `extra/qk/flash_decode_attention_executor.py:10-25` (`flash_decode_live_split_block_tile`): flattens `q` to
+- `extra/qk/decode/flash_decode_attention_executor.py:10-25` (`flash_decode_live_split_block_tile`): flattens `q` to
   `[Hq*Hd]`, builds inputs `(q_f, cache_kv[, kv_scale][, freqs])`, calls
   `Tensor.empty(...).custom_kernel(*inputs, fxn=spec.emit_tile(Tc_u))[0]` for the tile kernel, then a second
   `custom_kernel` for `spec.emit_combine()` (the two-kernel split-combine; the old un-fused combine was removed
   2026-07-06, `fused_combine=False` now raises).
-- `extra/qk/flash_decode_attention_spec.py`: pure dataclass descriptor layer — `LiveSplitGeometrySpec`
+- `extra/qk/decode/flash_decode_attention_spec.py`: pure dataclass descriptor layer — `LiveSplitGeometrySpec`
   (`split_count`, `token_block=16` fixed; `per_split_length`/`aligned_per_split_length`/`blocks` all operate on
   a possibly-symbolic `Tc:UOp` via `ceildiv_uop`, lines 26-40), `FlashDecodeTileSpec` (validates Hq/Hd/Hkv/MAXC,
   `staging∈{KV_BOTH,K_ONLY}`, `token_block` must currently be `16`; `.emit()` calls the kernel builder in

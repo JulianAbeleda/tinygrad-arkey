@@ -185,9 +185,9 @@ machine-generated descriptor is lowered and evaluated.
   - isolated execution, guard, timeout, GPU-health, and provenance checks.
 - `extra/qk/mmq_machine_search.py`
   - candidate/evidence search surface and fail-closed promotion checks.
-- `extra/qk/q4k_prefill_route_spec.py`
+- `extra/qk/prefill/q4k_prefill_route_spec.py`
   - existing descriptor-driven Q4 prefill pattern.
-- `extra/qk/q6k_prefill_route_spec.py`
+- `extra/qk/prefill/q6k_prefill_route_spec.py`
   - existing descriptor-driven Q6 prefill pattern.
 - `extra/qk/generated_route_registry.py`
   - descriptor and emitter registry.
@@ -232,7 +232,7 @@ This is an ABI/launch/geometry correctness blocker, not a performance result.
 Add or factor a small common descriptor layer, preferably in:
 
 ```text
-extra/qk/prefill_primitive_spec.py
+extra/qk/prefill/prefill_primitive_spec.py
 ```
 
 The common descriptor should own only fields shared by generated prefill
@@ -268,7 +268,7 @@ It must not contain Q4-specific decode logic.
 Add:
 
 ```text
-extra/qk/q4k_q8_mmq_prefill_spec.py
+extra/qk/prefill/q4k_q8_mmq_prefill_spec.py
 ```
 
 The MMQ specialization adds:
@@ -682,8 +682,8 @@ Missing evidence must produce `BLOCKED_FAIL_CLOSED`.
 
 ### Grammar and specs
 
-- `extra/qk/prefill_primitive_spec.py`
-- `extra/qk/q4k_q8_mmq_prefill_spec.py`
+- `extra/qk/prefill/prefill_primitive_spec.py`
+- `extra/qk/prefill/q4k_q8_mmq_prefill_spec.py`
 - existing Q4/Q6 route specs
 
 ### Lowering

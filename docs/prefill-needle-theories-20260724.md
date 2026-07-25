@@ -1,8 +1,8 @@
 # 8B prefill: where the needle actually is (measured 2026-07-24)
 
-Derived entirely from hardware counters (`extra/qk/prefill_boltbeam_trace.py --hw-trace`, restored in
+Derived entirely from hardware counters (`extra/qk/prefill/prefill_boltbeam_trace.py --hw-trace`, restored in
 `654c9b2ce`) on 8B/gfx1100 under `TINYGRAD_PREFILL_PACKED_WMMA=0`, plus the whole-model authority
-(`extra/qk/prefill_whole_synced.py --mode authority`). Numbers here are measurements, not estimates.
+(`extra/qk/prefill/prefill_whole_synced.py --mode authority`). Numbers here are measurements, not estimates.
 
 ## The frame
 

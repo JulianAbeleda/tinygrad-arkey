@@ -17,7 +17,7 @@ _SHARED_ATTENTION_PROOF_FIELDS makes this explicit: promotion requires decode_no
 decode_nonregression_14b, because "enabling one shared compiler path changes both supported model routes".
 
 This script proves or refutes non-regression the cheap way: compile the REAL decode kernels (the exact
-emitters tinygrad/llm/decode_routes.py drives, via extra/qk/flash_decode_attention_executor.py --
+emitters tinygrad/llm/decode_routes.py drives, via extra/qk/decode/flash_decode_attention_executor.py --
 NOT flash_kernels' raw callables, which are factory functions with no .key and cannot be handed to
 to_program) and sha256 the resulting AMD code objects. Byte-identical code objects mean decode's machine
 code is untouched, which is a stronger statement than any throughput measurement.
@@ -34,10 +34,10 @@ INCONCLUSIVE, never IDENTICAL.
 Run one arm at a time (the flag is read at render time via getenv, and getenv caches). The flag is
 DEFAULT-ON since 2026-07-24, so BOTH arms must now be set explicitly; compare() asserts the recorded flag
 value per arm and reports INCONCLUSIVE rather than identity if an arm ran in the wrong state:
-  PYTHONPATH=. DEV=AMD PREFILL_SOFTMAX_REDUCE_FUSE=0 python3 extra/qk/decode_codegen_identity_check.py --out /tmp/off.json
-  PYTHONPATH=. DEV=AMD PREFILL_SOFTMAX_REDUCE_FUSE=1 python3 extra/qk/decode_codegen_identity_check.py --out /tmp/on.json
+  PYTHONPATH=. DEV=AMD PREFILL_SOFTMAX_REDUCE_FUSE=0 python3 extra/qk/decode/decode_codegen_identity_check.py --out /tmp/off.json
+  PYTHONPATH=. DEV=AMD PREFILL_SOFTMAX_REDUCE_FUSE=1 python3 extra/qk/decode/decode_codegen_identity_check.py --out /tmp/on.json
 then
-  PYTHONPATH=. python3 extra/qk/decode_codegen_identity_check.py --compare /tmp/off.json /tmp/on.json
+  PYTHONPATH=. python3 extra/qk/decode/decode_codegen_identity_check.py --compare /tmp/off.json /tmp/on.json
 """
 from __future__ import annotations
 
@@ -67,7 +67,7 @@ def collect() -> dict:
   from tinygrad import Tensor, dtypes
   from tinygrad.device import Compiler
   from tinygrad.helpers import getenv
-  from extra.qk.flash_decode_attention_executor import flash_decode_live_split_block_tile
+  from extra.qk.decode.flash_decode_attention_executor import flash_decode_live_split_block_tile
 
   captured: list[dict] = []
   orig = Compiler.compile_cached

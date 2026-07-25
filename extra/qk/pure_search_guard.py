@@ -128,14 +128,14 @@ def _prefill_candidate_selected(env: dict[str, Any]) -> bool:
   set_requested = env.get("BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_JSON") is not None or \
                   env.get("BOLTBEAM_FULL_KERNEL_CANDIDATE_SET_PATH") is not None
   if set_requested:
-    from extra.qk.prefill_graph_gemm_route import _candidate_registry_from_env
+    from extra.qk.prefill.prefill_graph_gemm_route import _candidate_registry_from_env
     return _candidate_registry_from_env(env) is not None
   payload_text = env.get("BOLTBEAM_FULL_KERNEL_CANDIDATE_JSON")
   identity = env.get("BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH")
   if payload_text is None and identity is None: return False
   if payload_text is None or identity is None:
     raise ValueError("BoltBeam full-kernel candidate payload and hash must be provided together")
-  from extra.qk.prefill_graph_gemm_route import _candidate_registry_from_env
+  from extra.qk.prefill.prefill_graph_gemm_route import _candidate_registry_from_env
   return _candidate_registry_from_env(env) is not None
 
 
@@ -243,7 +243,7 @@ def effective_routes(env: dict[str, Any] | None = None) -> list[dict[str, Any]]:
       if "BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH" in candidate_env:
         row["candidate_identity"] = str(candidate_env["BOLTBEAM_FULL_KERNEL_CANDIDATE_HASH"])
       else:
-        from extra.qk.prefill_graph_gemm_route import _candidate_registry_from_env
+        from extra.qk.prefill.prefill_graph_gemm_route import _candidate_registry_from_env
         registry=_candidate_registry_from_env(candidate_env)
         row["candidate_set_identities"]=[x.canonical_identity for x in registry.admissions]
     out.append(row)

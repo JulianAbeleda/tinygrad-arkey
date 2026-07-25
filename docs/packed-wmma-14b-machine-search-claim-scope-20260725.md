@@ -61,12 +61,12 @@ that an emitter derives extents from descriptor fields, which the frozen shape-b
    `rollback_active` reading `TINYGRAD_PREFILL_PACKED_WMMA` via `_env_flag(e, "TINYGRAD_PREFILL_PACKED_WMMA", 1)`
    (note the runtime default is 1, so an UNSET key must resolve to 1 -- `_env_flag` exists for exactly this,
    and `test/unit/test_pure_search_guard_boundary.py` pins these defaults against the real getenv defaults).
-3. **Authority gate** `extra/qk/packed_wmma_prefill_promotion_gate.py`, modelled on
-   `extra/qk/prefill_causal_tile_skip_promotion_gate.py` and
-   `extra/qk/prefill_softmax_reduce_fuse_promotion_gate.py`: reads transcribed evidence only, never invents
+3. **Authority gate** `extra/qk/prefill/packed_wmma_prefill_promotion_gate.py`, modelled on
+   `extra/qk/prefill/prefill_causal_tile_skip_promotion_gate.py` and
+   `extra/qk/prefill/prefill_softmax_reduce_fuse_promotion_gate.py`: reads transcribed evidence only, never invents
    numbers, and **fails closed** on any manifest-admitted shape lacking evidence.
 4. **Run the missing evidence:** 14B end-to-end token parity with the route live
-   (`extra/qk/prefill_flash_e2e_parity.py --only 14B`) and the 6/6 canary gate results with `max_abs`. The
+   (`extra/qk/prefill/prefill_flash_e2e_parity.py --only 14B`) and the 6/6 canary gate results with `max_abs`. The
    throughput evidence already exists (paired same-session, two reps).
 
 ## PHASE 2 -- earn `machine_authored_generated` (NOT this scope)

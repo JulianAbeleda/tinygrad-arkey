@@ -5,7 +5,7 @@ from tinygrad import Tensor, dtypes
 
 from extra.qk.layout import q8_1_quantize
 from extra.qk.mmq_ds4_logical_emitter import pack_q8_1_mmq_ds4, pack_q8_1_mmq_fused, packed_fused_candidate, packed_row_major_candidate
-from extra.qk.q4k_q8_mmq_prefill_spec import Q4KQ8MMQPrefillSpec
+from extra.qk.prefill.q4k_q8_mmq_prefill_spec import Q4KQ8MMQPrefillSpec
 
 
 def _spec(**kw):

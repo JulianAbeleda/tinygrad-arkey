@@ -17,7 +17,7 @@ entry_points = [
     "tinygrad/llm/route_ops.py",
     "tinygrad/llm/prefill_policy.py",
     "tinygrad/llm/admission.py",
-    "extra/qk/prefill_whole_synced.py",
+    "extra/qk/prefill/prefill_whole_synced.py",
     "extra/qk/prefill/packed_wmma_prefill_candidates.py",
     "extra/llm/generate.py",
 ]
@@ -41,7 +41,7 @@ dynamic_roots = [
     "extra/qk/memory_adaptive_runtime_collector.py",  # route_ops.py qk_ops.install_memory_adaptive_model_adapters
     "extra/qk/gemv_g3_codegen_lowering.py",    # route_ops.py qk_ops.q4k_g3_lanemap_gemv_kernel
     "extra/qk/quant/q6_k_gemv_primitive.py",   # route_ops.py qk_ops.q6k_parse_opt
-    "extra/qk/flash_decode_attention_executor.py",  # route_ops.py qk_ops.flash_decode_live_split_block_tile
+    "extra/qk/decode/flash_decode_attention_executor.py",  # route_ops.py qk_ops.flash_decode_live_split_block_tile
 ]
 entry_points += [F(x) for x in dynamic_roots]
 

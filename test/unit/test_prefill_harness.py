@@ -1,10 +1,11 @@
 from types import SimpleNamespace
 
-from extra.qk.prefill_harness import (
+from extra.qk.prefill.prefill_harness import (
   AUTHORITY_START_POSITIONS, AUTHORITY_WHOLE_LENGTHS, DEFAULT_MODEL, SMOKE_START_POSITIONS, SMOKE_WHOLE_LENGTHS,
   csv_ints, prefill_authority_argv, prefill_run_profile, prefill_subprocess_env, resolve_prefill_model_profile,
 )
-from extra.qk import bench, prefill_whole_synced
+from extra.qk import bench
+from extra.qk.prefill import prefill_whole_synced
 
 
 def test_prefill_run_profile_defaults():
@@ -37,7 +38,7 @@ def test_prefill_csv_and_argv_are_canonical():
   prof = prefill_run_profile("smoke", K=2, warmups=0, rounds=1)
   argv = prefill_authority_argv(DEFAULT_MODEL, prof, pin_clock=True, artifact=False,
                                require_route="prefill_q4k_int8_wmma_tiled_research")
-  assert argv[:3] == ["extra/qk/prefill_whole_synced.py", "--model", DEFAULT_MODEL]
+  assert argv[:3] == ["extra/qk/prefill/prefill_whole_synced.py", "--model", DEFAULT_MODEL]
   assert "--model-profile" in argv and "qwen3_8b_q4k_m_gfx1100" in argv
   assert "--pin-clock" in argv
   assert "--no-artifact" in argv
@@ -112,6 +113,6 @@ def test_bench_decode_dispatches_authority(monkeypatch):
   assert calls
   args, _kwargs = calls[0]
   assert args[0] == "DECODE W==D"
-  assert args[1][:3] == ["extra/qk/decode_runtime_overhead.py", "--model", DEFAULT_MODEL]
+  assert args[1][:3] == ["extra/qk/decode/decode_runtime_overhead.py", "--model", DEFAULT_MODEL]
   assert "--ckpts" in args[1] and "128" in args[1]
   assert "--out" in args[1] and "--reps" in args[1]

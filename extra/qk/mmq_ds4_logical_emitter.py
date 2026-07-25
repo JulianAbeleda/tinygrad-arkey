@@ -17,7 +17,7 @@ from extra.qk.amd_warp_reduce import _staged_shfl, warp_reduce_max
 from extra.qk.mmq_ds4_probe_contract import cooperative_128_reuse_evidence
 from extra.qk.mmq_logical_vocabulary import DotOp, MMQCandidate, packed_ds4_geometry
 from extra.qk.mmq_q4k_q8_atom import _q4k_q8_1_bounded_ds4_dot4x4_kernel
-from extra.qk.q4k_q8_mmq_prefill_spec import Q4KQ8MMQPrefillSpec
+from extra.qk.prefill.q4k_q8_mmq_prefill_spec import Q4KQ8MMQPrefillSpec
 
 def _axis_extent(candidate: MMQCandidate, name: str) -> int:
   for axis in candidate.descriptor.axes:

@@ -262,11 +262,11 @@ columns, so `max(old_m, rowmax(v)) == rowmax(max(old_m, v))`) is a wash once the
 ## Gates (all theories)
 1. Compile-only probe first: `scratchpad/kv_tile_amortization_probe.py` — confirms it builds and shows the
    static effect. Baseline **952 instrs / 16 wmma / 144 loads**.
-2. Numerics: `PYTHONPATH=. python3 extra/qk/prefill_hd_sweep_numerics.py` → `max_abs_err=6.104e-05 PASS`
+2. Numerics: `PYTHONPATH=. python3 extra/qk/prefill/prefill_hd_sweep_numerics.py` → `max_abs_err=6.104e-05 PASS`
    at Hd=64 **and** Hd=128.
-3. Real-model 8B parity: `extra/qk/prefill_flash_e2e_parity.py` → `8B: SDPA=198 FUSED=198 MATCH PASS`.
+3. Real-model 8B parity: `extra/qk/prefill/prefill_flash_e2e_parity.py` → `8B: SDPA=198 FUSED=198 MATCH PASS`.
    (The 14B arm fails on in-process VRAM and `AUTHORITY_GATE: FAIL` — pre-existing, control-verified.)
-4. Throughput: `extra/qk/prefill_whole_synced.py --mode authority --whole-lengths 512,1024,2048,4096`.
+4. Throughput: `extra/qk/prefill/prefill_whole_synced.py --mode authority --whole-lengths 512,1024,2048,4096`.
    **Paired same-session A/B, repeated at least twice** — this box drifts ~5% in absolute throughput across
    a session while back-to-back noise is 0.59%, so a recorded baseline is NOT a valid comparator.
 5. Default-OFF env flag on landing, per `fd654024e` / `c44905a18` house style; a default flip is a separate,
@@ -281,7 +281,7 @@ columns, so `max(old_m, rowmax(v)) == rowmax(max(old_m, v))`) is a wash once the
    THEORY 6's promotion were collected this way.
    Note the instrument limit that follows: with packed-WMMA off, 14B prefill is ~94% GEMM-bound (~1420 ms
    per chunk), so 14B *whole-model* throughput cannot resolve an attention-local change. Use
-   `extra/qk/prefill_flash_perf.py` for the 14B grid and treat the whole-model number as corroboration.
+   `extra/qk/prefill/prefill_flash_perf.py` for the 14B grid and treat the whole-model number as corroboration.
 
 ## THEORY 6 promotion (2026-07-24)
 
@@ -291,7 +291,7 @@ the old 952-instruction / 272-bpermute body byte-identically.
 Beyond the 8B numbers in the THEORY 6 section above, promotion required two things that section did not
 cover, both because the change is in the **shared** HIP renderer rather than the attention emitter:
 
-- **Decode non-regression.** `extra/qk/decode_codegen_identity_check.py` compiles the real decode graph
+- **Decode non-regression.** `extra/qk/decode/decode_codegen_identity_check.py` compiles the real decode graph
   both ways for both decode-admitted geometries and compares code-object sha256: **byte-identical**, 8
   kernels per arm, all executed. Decode's cross-lane reduce is a linear ladder, so the `child_count > 1`
   predicate never fires there.
@@ -302,7 +302,7 @@ cover, both because the change is in the **shared** HIP renderer rather than the
 8B whole-model, re-measured as three same-session interleaved pairs: pp512/1024/2048/4096
 **+1.37% / +2.17% / +3.71% / +6.72%** (2.3×–11.4× the 0.59% noise floor), deepest chunk **−9.9%**.
 Whole `test/unit/` failure set equal off / on / at the new default (51 failed, 1274 passed each).
-Gate: `extra/qk/prefill_softmax_reduce_fuse_promotion_gate.py`. Full write-up:
+Gate: `extra/qk/prefill/prefill_softmax_reduce_fuse_promotion_gate.py`. Full write-up:
 `docs/prefill-softmax-reduce-fuse-promotion-readiness-20260724.md`.
 
 One correction to the THEORY 6 section above: its claim that ON and OFF are "bit-identical" was inferred

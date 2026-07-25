@@ -12,8 +12,8 @@ PROBE = r"""
 import numpy as np
 from tinygrad import Tensor, dtypes
 from extra.qk.layout import q8_1_quantize
-from extra.qk.prefill_mmq_parity_gate import _make_q4k_words, _rel_rmse, RTOL
-from extra.qk.prefill_int8_wmma_spec import describe_q4k_int8_wmma_tiled_prefill, emit_q4k_int8_wmma_tiled_prefill_tensor
+from extra.qk.prefill.prefill_mmq_parity_gate import _make_q4k_words, _rel_rmse, RTOL
+from extra.qk.prefill.prefill_int8_wmma_spec import describe_q4k_int8_wmma_tiled_prefill, emit_q4k_int8_wmma_tiled_prefill_tensor
 n,k,m = 16,256,16
 words, ref_w = _make_q4k_words(n, k, 20260705)
 x = Tensor(np.random.default_rng(20260706).standard_normal((m, k)).astype(np.float32)).realize()

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Long-context prefill numerics gate.
 
-THEORY 6 long-context numerics: same real path as extra/qk/prefill_hd_sweep_numerics.py, but with
+THEORY 6 long-context numerics: same real path as extra/qk/prefill/prefill_hd_sweep_numerics.py, but with
 kv/q sweepable up to 4096 and the reference computed per-head in numpy (fp32) so VRAM does not cap it.
 
 A softmax-reduction change that breaks numerical stability shows up at long kv before short kv, which the

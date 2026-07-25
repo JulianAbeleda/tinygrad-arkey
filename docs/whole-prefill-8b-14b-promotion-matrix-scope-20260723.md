@@ -2,7 +2,7 @@
 
 Status: scoped, not runnable as a candidate promotion matrix  
 Audit revision: `6c3673360`  
-Canonical timing owner: `extra/qk/prefill_whole_synced.py`
+Canonical timing owner: `extra/qk/prefill/prefill_whole_synced.py`
 
 ## Decision
 
@@ -219,7 +219,7 @@ all concrete chunk positions explicitly:
 
 ```bash
 DEV=AMD JIT=1 PROFILE=1 PYTHONPATH=. .venv/bin/python \
-  extra/qk/prefill_whole_synced.py \
+  extra/qk/prefill/prefill_whole_synced.py \
   --model /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf \
   --model-profile 8b --mode promotion --attention-mode candidate \
   -K 1 --warmups 3 --rounds 10 \

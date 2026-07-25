@@ -265,7 +265,7 @@ class PackedWmmaPrefillCandidate:
     setattr(lin, "_prefill_full_kernel_candidate_identity", e["canonical_identity"])
     setattr(lin, "_prefill_full_kernel_candidate_one_buffer", bool(e.get("one_buffer")))
     if e.get("one_buffer"):
-      from extra.qk.prefill_graph_gemm_route import record_model_forward_candidate
+      from extra.qk.prefill.prefill_graph_gemm_route import record_model_forward_candidate
       record_model_forward_candidate(role=role, shape=shape, canonical_identity=e["canonical_identity"], one_buffer=True)
     return out.reshape(1, m, n)
 

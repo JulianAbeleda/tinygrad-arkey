@@ -1,4 +1,4 @@
-from extra.qk import prefill_whole_synced as whole
+from extra.qk.prefill import prefill_whole_synced as whole
 from tinygrad.helpers import ProfileRangeEvent
 
 

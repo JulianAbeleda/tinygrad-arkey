@@ -9,10 +9,10 @@ genuinely new measurement job exists (not a new *caller* of an existing job).
 **`extra/qk/bench.py` is THE throughput entry** (committed `8a22fba05`). It is a thin dispatcher —
 it measures nothing itself — to the two sanctioned authorities:
 
-- **prefill** → `extra/qk/prefill_whole_synced.py :: prefill_authority()` — warmed TinyJit at a
+- **prefill** → `extra/qk/prefill/prefill_whole_synced.py :: prefill_authority()` — warmed TinyJit at a
   concrete start_pos, synced burst (`dev.synchronize` before+after), min-over-K → pure
   prefill-kernel tok/s. Never `model.generate` TTFT (understates prefill ~3×).
-- **decode** → `extra/qk/decode_runtime_overhead.py` — genuine fixed-depth authority. Every repetition
+- **decode** → `extra/qk/decode/decode_runtime_overhead.py` — genuine fixed-depth authority. Every repetition
   resets request state, prefills the exact prompt through production `model.generate`, and then measures
   warmed production decode with one `.item()` readback per token. The no-item D run is diagnostic only;
   it is never called a ceiling or subtracted from W when D is slower.
@@ -22,12 +22,12 @@ it measures nothing itself — to the two sanctioned authorities:
 timing loops unless they are being actively consolidated; do not recreate the removed
 `extra/qk/harness_contract.py` just to share `synchronize()+perf_counter()+median`.
 
-**Prefill process policy** lives in `extra/qk/prefill_harness.py`. It owns the sanctioned
+**Prefill process policy** lives in `extra/qk/prefill/prefill_harness.py`. It owns the sanctioned
 `authority` and `smoke` profiles, CSV parsing, subprocess env, and child argv construction.
 `bench.py` and `prefill_whole_synced.py` both consume that module; the timing loop itself remains
 inside `prefill_whole_synced.py`.
 
-**Decode process policy** lives in `extra/qk/decode_harness.py`. It owns checkpoint contexts,
+**Decode process policy** lives in `extra/qk/decode/decode_harness.py`. It owns checkpoint contexts,
 measurement count, max-context validation, subprocess env, and child argv construction.
 `bench.py` and `decode_runtime_overhead.py` both consume that module. Every child receives an explicit,
 unique output path; artifacts are versioned and atomically replaced, so consumers cannot read a stale
@@ -39,8 +39,8 @@ shared `result.json`.
 |---|---|---|
 | gate/probe → verdict → artifact → exit | `extra/qk/gate_registry.py` | DONE (consolidated) |
 | whole-model throughput | `extra/qk/bench.py` → the two authorities | DONE |
-| prefill process profile/env/argv | `extra/qk/prefill_harness.py` | DONE |
-| decode process profile/env/argv | `extra/qk/decode_harness.py` | DONE |
+| prefill process profile/env/argv | `extra/qk/prefill/prefill_harness.py` | DONE |
+| decode process profile/env/argv | `extra/qk/decode/decode_harness.py` | DONE |
 | per-kernel timing loop | local harness loop / future explicit owner | open |
 | eval/scoring (NLL + JSON) | `extra/llm/eval_common.py` + `json_scorer.py` | ok |
 | provenance / repro-band | local to each live harness | ok (`extra/qk/harness_contract.py` removed) |

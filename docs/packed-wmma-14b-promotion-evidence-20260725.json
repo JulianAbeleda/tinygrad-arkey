@@ -5,7 +5,7 @@
   "generated_2026-07-25": true,
   "e2e_token_parity_14b": {
     "status": "PASS",
-    "cmd": "flock /tmp/gpu-bench.lock -c 'cd /home/ubuntu/tinygrad-arkey && PYTHONPATH=. DEV=AMD timeout 1800 python3 extra/qk/prefill_flash_e2e_parity.py --only 14B'",
+    "cmd": "flock /tmp/gpu-bench.lock -c 'cd /home/ubuntu/tinygrad-arkey && PYTHONPATH=. DEV=AMD timeout 1800 python3 extra/qk/prefill/prefill_flash_e2e_parity.py --only 14B'",
     "route_live": true,
     "sdpa": 90310,
     "fused": 90310,

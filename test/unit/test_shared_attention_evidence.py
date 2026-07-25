@@ -25,7 +25,7 @@ def test_geometry_domain_is_shared_and_not_a_route_selector():
 def test_both_routes_use_the_same_pinned_whole_prefill_authority_harness():
   for profile in MODEL_PROFILES:
     argv = authority_command(profile, artifact_path=f"bench/shared-flash/{profile.id}.json")
-    assert argv[:3] == ["extra/qk/prefill_whole_synced.py", "--model", argv[2]]
+    assert argv[:3] == ["extra/qk/prefill/prefill_whole_synced.py", "--model", argv[2]]
     assert "--model-profile" in argv and profile.id in argv
     assert "--pin-clock" in argv
     assert "--artifact" in argv

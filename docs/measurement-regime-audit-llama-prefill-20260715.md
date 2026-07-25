@@ -30,7 +30,7 @@ decode row to be run and should be made explicit in the record for reproducibili
 
 ## Tinygrad comparison
 
-`extra/qk/prefill_harness.py:19-29,108-124` resolves the authority profile to:
+`extra/qk/prefill/prefill_harness.py:19-29,108-124` resolves the authority profile to:
 
 ```text
 chunk_n       = 512
@@ -48,7 +48,7 @@ The exact generated 8B invocation is:
 PYTHONPATH=/home/ubuntu/tinygrad-arkey \
 PREFILL_V2=1 BOLTBEAM_MODEL_PROFILE=qwen3_8b_q4k_m_gfx1100 \
 PREFILL_GRAPH_GEMM=1 \
-python3 extra/qk/prefill_whole_synced.py \
+python3 extra/qk/prefill/prefill_whole_synced.py \
   --model /home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf \
   --mode authority --model-profile qwen3_8b_q4k_m_gfx1100 \
   -K 8 --warmups 4 --rounds 3 \

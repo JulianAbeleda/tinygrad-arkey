@@ -21,7 +21,7 @@ from contextlib import contextmanager
 from typing import Any
 
 from extra.llm.generate import load_model_and_tokenizer
-from extra.qk.prefill_harness import (
+from extra.qk.prefill.prefill_harness import (
   DEFAULT_MODEL, DEFAULT_MODEL_PROFILE, MODEL_HARNESS_ALIASES, MODEL_HARNESS_PROFILES, PREFILL_MODES, csv_ints,
   prefill_run_profile,
   resolve_prefill_model_profile,
@@ -30,7 +30,7 @@ from extra.qk.timing_harness import add_clock_pin_arg, set_clock_pin_env
 from extra.qk.pure_search_guard import effective_routes
 from extra.qk.route_manifest import promoted_prefill_candidate_policy
 
-ROOT = pathlib.Path(__file__).resolve().parents[2]
+ROOT = pathlib.Path(__file__).resolve().parents[3]
 ARTIFACT_DIR = ROOT / "bench/prefill-whole-synced"
 PREFILL_PROMOTED_CANDIDATE_ROUTE = promoted_prefill_candidate_policy()["route_id"]
 PREFILL_GENERATED_DENSE_ROLES = frozenset(("attn_qo", "attn_kv", "ffn_down", "ffn_gate_up"))
@@ -100,7 +100,7 @@ def shared_attention_attribution(model) -> dict[str, Any]:
       "boundary": "custom_kernel_fused_attention",
       "semantic_candidate": None,
       # This is the emitted kernel name from FlashPrefillAttentionSpec.emitted_kernel_names
-      # (extra/qk/flash_prefill_attention_spec.py); hardcoded here rather than imported to
+      # (extra/qk/prefill/flash_prefill_attention_spec.py); hardcoded here rather than imported to
       # avoid pulling extra/qk/ into this attribution helper's import path unconditionally --
       # it is the sole entry in that tuple today (see fused_attention.py:ADMITTED_GRIDS/emit()).
       "selected_lowering": "amd_gfx1100_q16_grid_hd128_loop_attention",
@@ -376,7 +376,7 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
     return {"min_ms": min(ts), "samples_ms": ts, "clock_pin": pin_prov,
             "profile": profile_range_summary(profile_events)}
 
-  from extra.qk.prefill_graph_gemm_route import candidate_route_census, finalize_candidate_route_census
+  from extra.qk.prefill.prefill_graph_gemm_route import candidate_route_census, finalize_candidate_route_census
   from tinygrad.llm.fused_attention import reset_custom_kernel_attention_trace, custom_kernel_attention_trace_snapshot
   candidate_registry=getattr(model, "_prefill_graph_gemm_registry", None); candidate_census=None
   reset_custom_kernel_attention_trace()

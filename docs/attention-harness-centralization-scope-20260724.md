@@ -73,7 +73,7 @@ one-line `# TODO(centralize): differs from attention_harness_common.<fn>` note. 
 - `extra/qk/benchmark_split_shared_attention.py` — `Device.synchronize` timing helper if a local `_sync`/`_time` exists.
 - `extra/qk/shared_attention_capture.py` — candidate-context build.
 - `extra/qk/shared_attention_evidence.py` — proof load.
-- `extra/qk/prefill_whole_synced.py` — reference SDPA + sync ONLY IF a byte-identical local copy exists (this file
+- `extra/qk/prefill/prefill_whole_synced.py` — reference SDPA + sync ONLY IF a byte-identical local copy exists (this file
   is subtle/authoritative; prefer leaving it and just NOTE the overlap rather than risk it).
 - sha256: files with a bare `def _sha(x): return hashlib.sha256(x.encode()).hexdigest()` may migrate to
   `content_sha`. Files whose `_sha` differs (e.g. hashes bytes, or a different digest) MUST NOT be migrated.
@@ -81,7 +81,7 @@ one-line `# TODO(centralize): differs from attention_harness_common.<fn>` note. 
 ## INVARIANTS (do not break)
 1. Behavior must be byte-identical. These are proof-gated numeric benchmarks; a changed reference/mask/seed/sha
    silently invalidates artifacts. Extract VERBATIM; do not "improve".
-2. Do NOT touch: `extra/qk/prefill_harness.py` and `extra/qk/model_profiles.py` (config, already central);
+2. Do NOT touch: `extra/qk/prefill/prefill_harness.py` and `extra/qk/model_profiles.py` (config, already central);
    `extra/llm/eval_common.py` (JSON/eval plumbing — out of scope here).
 3. Do NOT change any harness's CLI, output schema, artifact contents, or numeric tolerances.
 4. `reference_attention` must remain the exact `scaled_dot_product_attention` + `repeat_interleave(hq//hkv)`

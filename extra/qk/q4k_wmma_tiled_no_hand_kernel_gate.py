@@ -10,7 +10,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 ARTIFACT = ROOT / "bench/q4k-wmma-tiled-no-hand-kernel/latest.json"
 
 IMPLEMENTATION_FILES = (
-  "extra/qk/prefill_int8_wmma_spec.py",
+  "extra/qk/prefill/prefill_int8_wmma_spec.py",
   "tinygrad/llm/route_ops.py",
   "extra/qk/generated_candidates.py",
   "extra/qk/q4k_wmma_tile_lowering.py",

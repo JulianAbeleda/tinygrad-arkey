@@ -147,7 +147,7 @@ the selected policy.
 
 ### Candidate loading
 
-- `extra/qk/prefill_graph_gemm_route.py` still interprets `PREFILL_GRAPH_GEMM` and can load the promoted candidate
+- `extra/qk/prefill/prefill_graph_gemm_route.py` still interprets `PREFILL_GRAPH_GEMM` and can load the promoted candidate
   environment implicitly.
 - the existing promoted FP16 candidate artifact uses identities from an older canonical vocabulary;
 - the model runtime expects a `graph_gemm` policy section, but the current memory-adaptive controller never produces

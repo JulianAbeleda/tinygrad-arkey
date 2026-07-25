@@ -16,12 +16,12 @@ import time
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from extra.qk.prefill_harness import (
+from extra.qk.prefill.prefill_harness import (
   DEFAULT_MODEL_PROFILE, MODEL_HARNESS_ALIASES, MODEL_HARNESS_PROFILES, PREFILL_MODES, csv_ints,
   prefill_authority_argv, prefill_run_profile,
   prefill_subprocess_env, resolve_prefill_model_profile,
 )
-from extra.qk.decode_harness import (
+from extra.qk.decode.decode_harness import (
   csv_ints as decode_csv_ints, decode_authority_argv, decode_run_profile, decode_subprocess_env,
 )
 from extra.qk.timing_harness import add_clock_pin_arg

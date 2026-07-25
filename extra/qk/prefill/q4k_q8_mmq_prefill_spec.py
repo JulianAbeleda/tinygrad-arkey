@@ -2,7 +2,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Any, Iterable
-from extra.qk.prefill_primitive_spec import PrefillPrimitiveSpec, PrimitiveABI, LaunchMetadata, target_capabilities
+from extra.qk.prefill.prefill_primitive_spec import PrefillPrimitiveSpec, PrimitiveABI, LaunchMetadata, target_capabilities
 from extra.qk.mmq_logical_vocabulary import (
   Axis, BackendCapability, DotOp, EdgePredicate, LogicalMMQDescriptor,
   MMQCandidate,

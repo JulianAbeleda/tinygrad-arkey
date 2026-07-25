@@ -30,7 +30,7 @@ Machine: RX 7900 XTX (24 GB), AMD gfx1100. **Prefill rows re-measured 2026-07-24
 | Qwen3-14B | Q4_K_M | 66.5 tok/s | 68.2 tok/s | +1.4% / +24.9% vs llama. Generated G=5 K-only attention route + attn_v fix. |
 | Qwen3-32B | Q4_K_M | 31.9 tok/s | 32.6 tok/s | +2.3% / +9.8% vs llama. Fits 24 GB (20.9/24.2 GB at ctx512/4096). |
 
-**tinygrad-arkey prefill** (`extra/qk/prefill_whole_synced.py --mode authority`, whole-prefill tok/s):
+**tinygrad-arkey prefill** (`extra/qk/prefill/prefill_whole_synced.py --mode authority`, whole-prefill tok/s):
 
 | Model | pp512 | pp1024 | pp2048 | pp4096 | decay 1024→4096 |
 |---|---:|---:|---:|---:|---:|
@@ -102,7 +102,7 @@ An explicit `--max_context N` is still admission-checked and auto-upgrades throu
 # THE benchmark — the single canonical entry. Dispatches to the synced authority harnesses (prefill + decode),
 # each in an isolated subprocess with the correct env. This is the ONLY sanctioned way to report throughput.
 DEV=AMD JIT=1 PYTHONPATH=. .venv/bin/python extra/qk/bench.py --model /path/to/Qwen3-8B-Q4_K_M.gguf
-#   --prefill  : prefill authority only (extra/qk/prefill_whole_synced.py, synced graph-GEMM pp@L)
+#   --prefill  : prefill authority only (extra/qk/prefill/prefill_whole_synced.py, synced graph-GEMM pp@L)
 #   --decode   : genuine fixed-depth decode (exact prompt prefill, production generate route, repeated medians)
 ```
 
@@ -118,12 +118,12 @@ PYTHONPATH=. .venv/bin/python extra/audit/pure_machine_search_default_path_censu
 Start with these files and the documentation map in [docs/README.md](docs/README.md):
 
 * `tinygrad/llm/` — the core runtime (command line, model, model-file loader).
-* `extra/qk/decode_harness.py` — decode speed across context lengths.
-* `extra/qk/prefill_whole_synced.py` — prefill speed.
+* `extra/qk/decode/decode_harness.py` — decode speed across context lengths.
+* `extra/qk/prefill/prefill_whole_synced.py` — prefill speed.
 * `extra/audit/pure_machine_search_default_path_census.py` — current generated/default-route census.
 * `extra/qk/route_manifest.py` — runtime-facing route manifest, rollback flags, provenance, and refuted axes. BoltBeam owns the policy/search copy.
-* `extra/qk/flash_decode_attention_spec.py`, `extra/qk/flash_decode_attention_executor.py` — generated flash/decode attention routes.
-* `extra/qk/gemv_g3_codegen_lowering.py`, `extra/qk/q6k_route_spec.py`, `extra/qk/prefill_graph_gemm_route.py` — generated route/runtime surfaces.
+* `extra/qk/decode/flash_decode_attention_spec.py`, `extra/qk/decode/flash_decode_attention_executor.py` — generated flash/decode attention routes.
+* `extra/qk/gemv_g3_codegen_lowering.py`, `extra/qk/q6k_route_spec.py`, `extra/qk/prefill/prefill_graph_gemm_route.py` — generated route/runtime surfaces.
 * `extra/qk/prefill/packed_wmma_prefill_candidates.py` — the packed-WMMA prefill candidates that are the 14B default (frozen per-(quant,role) geometry + load-time correctness gate).
 * `extra/qk/microbench/wmma_peak.cpp` — measured achievable WMMA peak (~105 TFLOPS on gfx1100); use it as the denominator for any efficiency claim.
 

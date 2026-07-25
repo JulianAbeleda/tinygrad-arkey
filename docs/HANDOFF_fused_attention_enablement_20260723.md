@@ -103,7 +103,7 @@ chain lets the real graph reach that swap.
 | A3 | Confirm schedule reaches `postrange.py:328` native-swap and emits the 254-VGPR single kernel on the REAL graph | after A2 |
 | A4 | End-to-end correctness: real 8B+14B fused vs SDPA (earns `model_*_prefill`) | after A3 |
 | A5 | Whole-model prefill benchmarks KV 512..4096 (note: handoff doc defers these behind an in-flight multi-wave G2/G4/G5 experiment) | after A4 |
-| A6 | **Build** decode-nonregression harness (earns `decode_nonregression_*`); none exists, nearest is `extra/qk/decode_runtime_overhead.py` | after A4 |
+| A6 | **Build** decode-nonregression harness (earns `decode_nonregression_*`); none exists, nearest is `extra/qk/decode/decode_runtime_overhead.py` | after A4 |
 | A7 | Composite-proof collector: assemble `shared_attention_proof` (target+geometry+v2 artifact+8 flags) and wire memory-adaptive adapter activation into model load (zero production callers today) | after A4/A5/A6 |
 | A8 | BoltBeam prefill-attention route entry in `BoltBeam/boltbeam/policy/route_manifest.py` (none exists; template from `decode_attention_*`) | after A5/A6/A7 |
 

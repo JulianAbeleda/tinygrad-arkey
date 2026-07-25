@@ -19,7 +19,7 @@ def _has(path:str, needle:str) -> bool:
 
 def _route_local_shaped_wmma_producers() -> list[str]:
   producers: list[str] = []
-  for path in ("extra/qk/prefill_int8_wmma_spec.py", "tinygrad/llm/prefill_routes.py",
+  for path in ("extra/qk/prefill/prefill_int8_wmma_spec.py", "tinygrad/llm/prefill_routes.py",
                "extra/qk/q4k_wmma_tile_lowering.py"):
     p = ROOT / path
     if p.exists() and "Ops.SHAPED_WMMA" in p.read_text():

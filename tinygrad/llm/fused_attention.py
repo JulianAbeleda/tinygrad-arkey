@@ -77,7 +77,7 @@ _PREFILL_EMITTERS = {"amd_gfx1100": lambda spec, **kw: spec.emit(**kw)}
 
 # RUNTIME DISPATCH TRACE (BoltBeam observability seam)
 # --------------------------------------------------
-# extra/qk/prefill_graph_gemm_route.py already has a "candidate route census"
+# extra/qk/prefill/prefill_graph_gemm_route.py already has a "candidate route census"
 # mechanism (record_model_forward_candidate), but it is purpose-built for the
 # dense-GEMM packed-WMMA roles: (a) it is a no-op unless one_buffer=True, a flag
 # that specifically means "this candidate shares one canonical weight-buffer
@@ -89,7 +89,7 @@ _PREFILL_EMITTERS = {"amd_gfx1100": lambda spec, **kw: spec.emit(**kw)}
 # the no-op) or would record nothing at all (one_buffer=False, per the no-op
 # gate). Rather than overload that seam's semantics, this is a small,
 # attention-specific trace: a dispatch counter + last-geometry identity, so
-# extra/qk/prefill_whole_synced.py can read (not import extra/qk/ eagerly from
+# extra/qk/prefill/prefill_whole_synced.py can read (not import extra/qk/ eagerly from
 # here -- see custom_kernel_attention below) whether/how many times the fused
 # custom-kernel route actually fired during a census window.
 _CUSTOM_KERNEL_ATTENTION_DISPATCH_COUNT: ContextVar[int] = ContextVar(
@@ -149,7 +149,7 @@ def custom_kernel_attention(q:Tensor, k:Tensor, v:Tensor, *, scale:float|None, c
   -> no composite reduce -> none of the class-2 reach-through/forwarding/cycle.
 
   Mechanism (verified against postrange.py:328 + Tensor.custom_kernel):
-  - A FlashPrefillAttentionSpec (extra/qk/flash_prefill_attention_spec.py) owns the
+  - A FlashPrefillAttentionSpec (extra/qk/prefill/flash_prefill_attention_spec.py) owns the
     topology as DATA and composes the proven UOp builder
     `amd_gfx1100_q16_grid_hd128_loop_attention(q,k,v,out,...)` via `spec.emit()`,
     resolved through the target-keyed `_PREFILL_EMITTERS` dispatch. It requires BARE

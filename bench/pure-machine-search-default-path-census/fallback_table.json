@@ -8,7 +8,7 @@
     "writer": "generated",
     "selector": "BoltBeam_route_policy_or_env_default",
     "route_guard": "tinygrad/llm/decode_routes.py attention live-split branch (structural class B=1,Hd=128,Hkv=8,Hq%Hkv==0): default-on DECODE_LIVE_SPLIT=1 -> FlashDecodeAttentionSpec live-split block tile + fused combine",
-    "kernel_source": "extra/qk/flash_decode_attention_spec.py FlashDecodeAttentionSpec -> existing live-split UOp tile/combine emitters",
+    "kernel_source": "extra/qk/decode/flash_decode_attention_spec.py FlashDecodeAttentionSpec -> existing live-split UOp tile/combine emitters",
     "authority_artifact": "bench/tg-p14-amd-recovery-and-pure-attention-landing/phase2_final_result.json (PASS_PROMOTION_CANDIDATE; practical roofline closeout)",
     "rollback_flag": "DECODE_LIVE_SPLIT=0 exits the live-split default; no manifest fallback route row remains",
     "purity_status": "search_generated_promoted",

@@ -537,7 +537,7 @@ Reuse these owners. Do not create parallel implementations.
 | Model adapter | `tinygrad/llm/model.py` | Shared invocation and fail-closed route census |
 | Search | `extra/qk/bubblebeam_futuresight.py` and shared candidate assets | One schema and ranking path |
 | Microbenchmark | existing attention benchmark assets | Baseline/candidate in one harness |
-| Model authority | `extra/qk/prefill_whole_synced.py`, `extra/qk/prefill_harness.py` | Final 8B/14B evidence |
+| Model authority | `extra/qk/prefill/prefill_whole_synced.py`, `extra/qk/prefill/prefill_harness.py` | Final 8B/14B evidence |
 
 If repository movement has renamed a listed file, update the owner in place;
 do not fork a replacement solely because the path changed.

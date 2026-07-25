@@ -2,7 +2,7 @@
 from tinygrad import dtypes
 from tinygrad.uop.ops import UOp
 
-from extra.qk.flash_decode_attention_spec import (FlashCombineSpec, FlashDecodeAttentionSpec, LiveSplitGeometrySpec,
+from extra.qk.decode.flash_decode_attention_spec import (FlashCombineSpec, FlashDecodeAttentionSpec, LiveSplitGeometrySpec,
                                                  FlashDecodeTileSpec, describe_flash_decode_attention,
                                                  emit_flash_decode_combine, emit_flash_decode_tile)
 

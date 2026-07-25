@@ -11,7 +11,7 @@ PREFILL_ROUTE=direct_packed \
 PREFILL_Q6K_PACKED_LOAD=1 PREFILL_DIRECT_OUT=1 \
 PREFILL_DIRECT_TENSORS=output.weight \
 PREFILL_GRAPH_GEMM=0 PREFILL_V2=0 \
-python3 extra/qk/prefill_whole_synced.py --mode authority -K 8 \
+python3 extra/qk/prefill/prefill_whole_synced.py --mode authority -K 8 \
   --warmups 4 --rounds 3 --whole-lengths 512 --pin-clock
 ```
 

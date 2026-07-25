@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from extra.qk.prefill_whole_synced import shared_attention_attribution
+from extra.qk.prefill.prefill_whole_synced import shared_attention_attribution
 
 
 def test_shared_attention_attribution_reports_request_not_fusion():

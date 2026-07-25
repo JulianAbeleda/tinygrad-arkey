@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Prefill-route Hd-generic numerics sweep.
 
-Mirrors extra/qk/decode_hd_sweep_numerics.py for the PREFILL fused-attention route: proves whether
+Mirrors extra/qk/decode/decode_hd_sweep_numerics.py for the PREFILL fused-attention route: proves whether
 tinygrad/llm/fused_attention.py:custom_kernel_attention -> FlashPrefillAttentionSpec (P4a, just made
 Hd-generic: Hd threaded into the emitter; spec.validate() now allows any positive 16-multiple Hd<=128,
 not just 128) actually LOWERS and is NUMERICALLY CORRECT at Hd=64, not merely that it de-literalizes/
@@ -55,7 +55,7 @@ required and is documented+applied below):
   (amd_gfx1100_q16_grid_hd128_loop_attention) is exercised unmodified. This is a harness-side workaround
   of a ctx-construction guard, NOT a reimplementation of the kernel.
 
-Run: PYTHONPATH=. DEV=AMD .venv/bin/python extra/qk/prefill_hd_sweep_numerics.py
+Run: PYTHONPATH=. DEV=AMD .venv/bin/python extra/qk/prefill/prefill_hd_sweep_numerics.py
 """
 from __future__ import annotations
 import os

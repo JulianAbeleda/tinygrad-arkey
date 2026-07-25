@@ -1,6 +1,6 @@
 """Regression test for the --logits-only LM-head unassignable-store codegen bug.
 
-The --logits-only prefill path (extra/qk/prefill_whole_synced.py) compiles the full
+The --logits-only prefill path (extra/qk/prefill/prefill_whole_synced.py) compiles the full
 512x151936 vocab-projection reduce kernel r_16_2374_..._<hash>.  Its final output
 projection store lowers, at the reg-store-devectorize stage, to a STORE whose *target*
 is an Ops.STACK of output-logit LANE READS -- `GEP(LOAD(INDEX(data0_GLOBAL, addr)), lane)`

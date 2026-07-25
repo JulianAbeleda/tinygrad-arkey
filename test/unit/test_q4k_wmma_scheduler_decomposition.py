@@ -2,7 +2,7 @@ import pytest
 from tinygrad import Tensor, dtypes
 from extra.qk.layout import Q4K_WORDS_PER_BLOCK
 
-from extra.qk.prefill_int8_wmma_spec import describe_q4k_int8_wmma_tiled_prefill, emit_q4k_int8_wmma_tiled_scheduler_tensor
+from extra.qk.prefill.prefill_int8_wmma_spec import describe_q4k_int8_wmma_tiled_prefill, emit_q4k_int8_wmma_tiled_scheduler_tensor
 
 
 def test_large_scheduler_shape_is_fail_closed_without_output_staging():

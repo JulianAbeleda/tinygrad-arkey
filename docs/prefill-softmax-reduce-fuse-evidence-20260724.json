@@ -1,6 +1,6 @@
 {
   "_schema": "prefill-softmax-reduce-fuse-promotion-evidence.v1",
-  "_purpose": "Structured transcription of the evidence for flipping PREFILL_SOFTMAX_REDUCE_FUSE (commit 23b8e05fc) from default-OFF to default-ON on the already-promoted prefill_flash_attention_generated row. Every field cites a runnable harness and a run that actually happened. extra/qk/prefill_softmax_reduce_fuse_promotion_gate.py reads this file and embeds no results of its own, so gate and evidence stay independently auditable. A field that was not measured is null, never a guess -- the gate fails closed on null.",
+  "_purpose": "Structured transcription of the evidence for flipping PREFILL_SOFTMAX_REDUCE_FUSE (commit 23b8e05fc) from default-OFF to default-ON on the already-promoted prefill_flash_attention_generated row. Every field cites a runnable harness and a run that actually happened. extra/qk/prefill/prefill_softmax_reduce_fuse_promotion_gate.py reads this file and embeds no results of its own, so gate and evidence stay independently auditable. A field that was not measured is null, never a guess -- the gate fails closed on null.",
   "flag": "PREFILL_SOFTMAX_REDUCE_FUSE",
   "default_before": "0 (OFF)",
   "route_id": "prefill_flash_attention_generated",
@@ -13,12 +13,12 @@
     "why_it_matters": "The flag does NOT live in the attention kernel. Its predicate fires for ANY Ops.CUSTOMI with dtype float and child_count>1 in any AMD kernel. The DECODE route builds float CUSTOMI of exactly that family -- extra/qk/flash_kernels.py:98 __builtin_amdgcn_fdot2 and tinygrad/schedule/wmma/softmax.py:104 amd_gfx1100_broadcast_row_state's float \"bpermute\" -- so 'prefill-only flag' was an assumption. tinygrad/llm/prefill_policy.py:14 _SHARED_ATTENTION_PROOF_FIELDS makes this a hard requirement: decode_nonregression_8b AND decode_nonregression_14b, because 'enabling one shared compiler path changes both supported model routes'.",
     "decode_codegen_identity": {
       "status": "PASS",
-      "harness": "extra/qk/decode_codegen_identity_check.py",
-      "method": "Wrapped tinygrad.device.Compiler.compile_cached and recorded sha256(src) and sha256(lib) for every kernel compiled while the REAL decode graph was realized via extra/qk/flash_decode_attention_executor.py:flash_decode_live_split_block_tile (staging=KV_BOTH, fused_combine=True) -- the exact path tinygrad/llm/decode_routes.py drives. Both decode-admitted geometries (8B Hq=32/Hkv=8/Hd=128 and 14B Hq=40/Hkv=8/Hd=128), MAXC=512, Tc=400, S=4.",
+      "harness": "extra/qk/decode/decode_codegen_identity_check.py",
+      "method": "Wrapped tinygrad.device.Compiler.compile_cached and recorded sha256(src) and sha256(lib) for every kernel compiled while the REAL decode graph was realized via extra/qk/decode/flash_decode_attention_executor.py:flash_decode_live_split_block_tile (staging=KV_BOTH, fused_combine=True) -- the exact path tinygrad/llm/decode_routes.py drives. Both decode-admitted geometries (8B Hq=32/Hkv=8/Hd=128 and 14B Hq=40/Hkv=8/Hd=128), MAXC=512, Tc=400, S=4.",
       "proof_it_compiled": "8 kernels captured per arm (4 per geometry), every one EXECUTED to a finite output tensor. The gate refuses to report identity when either arm captured zero kernels, which is the failure mode where two identical exceptions get mistaken for two identical binaries.",
       "result": "src sha list, lib sha list AND output sha IDENTICAL between arms for BOTH geometries. Decode machine code is byte-for-byte unchanged, so no decode throughput measurement is required.",
       "non_vacuity_control": "The decode tile kernel really does contain float CUSTOMI the predicate was evaluated against -- 5 textual __builtin_amdgcn_ds_bpermute and 1 __builtin_amdgcn_fdot2 in its source, unchanged in both arms. Decode's cross-lane reduce is a LINEAR ladder (each rung has a single consumer), which is why child_count>1 never fires there; prefill's is a butterfly where every rung has two consumers.",
-      "flag_actually_took_effect_control": "Same-session positive control on the PREFILL kernel through extra/qk/prefill_hd_sweep_numerics.py: textual __builtin_amdgcn_ds_bpermute 272 -> 64, __builtin_fmaxf 240 -> 40, source 61079 -> 34195 chars, code-object sha changed. So 'decode identical' is a real negative, not a flag that silently did nothing."
+      "flag_actually_took_effect_control": "Same-session positive control on the PREFILL kernel through extra/qk/prefill/prefill_hd_sweep_numerics.py: textual __builtin_amdgcn_ds_bpermute 272 -> 64, __builtin_fmaxf 240 -> 40, source 61079 -> 34195 chars, code-object sha changed. So 'decode identical' is a real negative, not a flag that silently did nothing."
     },
     "decode_nonregression_8b": true,
     "decode_nonregression_14b": true,
@@ -54,12 +54,12 @@
       "grid_key": "Hq=32,Hkv=8,Hd=128,q_tokens=512,kv>=512 (route_manifest shape_guards[0])",
       "numerics": {
         "status": "PASS",
-        "hd_sweep": {"harness": "extra/qk/prefill_hd_sweep_numerics.py",
+        "hd_sweep": {"harness": "extra/qk/prefill/prefill_hd_sweep_numerics.py",
           "hd64_max_abs_err": 6.104e-05, "hd128_max_abs_err": 6.104e-05,
           "both_arms_max_abs_err_identical": true,
           "_note": "this harness prints a scalar max_abs_err, not the tensor, so it CANNOT establish bit-identity; the long_context sweep below does",
           "reobserved_by": "this promotion pass, in both arms, same session as the positive control"},
-        "long_context": {"harness": "extra/qk/prefill_long_context_numerics.py (QK_HQ=32)",
+        "long_context": {"harness": "extra/qk/prefill/prefill_long_context_numerics.py (QK_HQ=32)",
           "hd64_kv512": 3.905e-05, "kv_512": 6.558e-05, "kv_1024": 2.655e-06, "kv_2048": 1.865e-06, "kv_4096": 1.053e-06,
           "on_off_bit_identical": true, "all_finite": true,
           "out_sha_off": {"hd64_kv512": "ed9220e82a6c82c4", "kv512": "1e6011a5b6a9c4d6", "kv1024": "0df8a5b388881905",
@@ -71,13 +71,13 @@
       },
       "token_parity": {
         "status": "PASS",
-        "harness": "extra/qk/prefill_flash_e2e_parity.py --only 8B",
+        "harness": "extra/qk/prefill/prefill_flash_e2e_parity.py --only 8B",
         "sdpa_token": 198, "fused_token": 198, "match_in_both_arms": true,
         "measured_by": "this promotion pass, both arms, AUTHORITY_GATE PASS in each (the 14B arm no longer drags the gate to FAIL now that --only exists)"
       },
       "whole_model_paired_ab": {
         "status": "PASS",
-        "method": "THREE paired same-session interleaved A/B runs measured in THIS promotion pass (one session, OFF/ON adjacent, extra/qk/prefill_whole_synced.py --mode authority --whole-lengths 512,1024,2048,4096, inside flock, TINYGRAD_PREFILL_PACKED_WMMA=0). Recorded as the primary evidence in preference to inherited numbers because this box drifts across a session, so only same-session pairs are comparable.",
+        "method": "THREE paired same-session interleaved A/B runs measured in THIS promotion pass (one session, OFF/ON adjacent, extra/qk/prefill/prefill_whole_synced.py --mode authority --whole-lengths 512,1024,2048,4096, inside flock, TINYGRAD_PREFILL_PACKED_WMMA=0). Recorded as the primary evidence in preference to inherited numbers because this box drifts across a session, so only same-session pairs are comparable.",
         "pairs": [
           {"source": "this pass rep1", "pp512_off": 3650, "pp512_on": 3686, "pp1024_off": 3550, "pp1024_on": 3614,
            "pp2048_off": 3362, "pp2048_on": 3475, "pp4096_off": 3041, "pp4096_on": 3231,
@@ -112,7 +112,7 @@
       },
       "attention_local_paired_ab": {
         "status": "PASS",
-        "harness": "extra/qk/prefill_flash_perf.py 0 <kv>",
+        "harness": "extra/qk/prefill/prefill_flash_perf.py 0 <kv>",
         "method": "device-synced (Device.synchronize()-bracketed) median-of-30 JIT-replay timing of the fused kernel, per-config numeric-checked (num=ok required), OFF/ON interleaved, two reps. The SDPA baseline timed in the same processes is an UNCHANGED-CODE control: its spread is the noise floor.",
         "fused_ms": {
           "kv512":  {"off": [0.5280, 0.5278], "on": [0.3844, 0.3780], "mean_delta_pct": -27.79},
@@ -130,7 +130,7 @@
       "how_the_previously_reported_blocker_was_cleared": "prefill_flash_e2e_parity.py's 14B arm had been failing with 'fp16 KV admits 0 ... free 5.2GB, weights 9.0GB' and that was being read as a permanent 14B unavailability. It was in-process VRAM exhaustion: the harness loops over both models in ONE process and nothing drops the 8B buffers. Adding --only runs one model per process (free 25.5GB, weights 9.0GB) and the 14B arm passes. The separate packed-WMMA HW fault is avoided as always with TINYGRAD_PREFILL_PACKED_WMMA=0.",
       "numerics": {
         "status": "PASS",
-        "long_context": {"harness": "extra/qk/prefill_long_context_numerics.py with QK_HQ=40 (added this pass; HQ was hardcoded to 32)",
+        "long_context": {"harness": "extra/qk/prefill/prefill_long_context_numerics.py with QK_HQ=40 (added this pass; HQ was hardcoded to 32)",
           "hd64_kv512": 4.044e-05, "kv_512": 4.151e-05, "kv_1024": 2.712e-06, "kv_2048": 1.954e-06, "kv_4096": 1.053e-06,
           "on_off_bit_identical": true, "all_finite": true,
           "out_sha_off": {"hd64_kv512": "12bfb44955cfa81d", "kv512": "7b829bc64abfb7a1", "kv1024": "fad51f7a2a81e699",
@@ -142,13 +142,13 @@
       },
       "token_parity": {
         "status": "PASS",
-        "harness": "extra/qk/prefill_flash_e2e_parity.py --only 14B",
+        "harness": "extra/qk/prefill/prefill_flash_e2e_parity.py --only 14B",
         "sdpa_token": 90310, "fused_token": 90310, "match_in_both_arms": true,
         "measured_by": "this promotion pass, both arms, separate processes"
       },
       "attention_local_paired_ab": {
         "status": "PASS",
-        "harness": "extra/qk/prefill_flash_perf.py 1 <kv>",
+        "harness": "extra/qk/prefill/prefill_flash_perf.py 1 <kv>",
         "method": "identical to the 8B arm; OFF/ON interleaved with the 8B configs in one flock, two reps",
         "fused_ms": {
           "kv512":  {"off": [0.5577, 0.5568], "on": [0.4020, 0.4035], "mean_delta_pct": -27.73},
@@ -163,7 +163,7 @@
       },
       "whole_model_paired_ab": {
         "status": "UNDERPOWERED_BY_INSTRUMENT",
-        "harness": "extra/qk/prefill_whole_synced.py --model .../Qwen3-14B-Q4_K_M.gguf --model-profile 14b",
+        "harness": "extra/qk/prefill/prefill_whole_synced.py --model .../Qwen3-14B-Q4_K_M.gguf --model-profile 14b",
         "why": "14B MUST run with TINYGRAD_PREFILL_PACKED_WMMA=0 (packed-WMMA faults/hangs the GPU at the 14B grid -- docs/BOLTBEAM_GPU_HANG_DIAGNOSIS_HANDOFF_20260724.md; a driver reset costs the session). That mitigation disables 14B's packed-WMMA prefill fast path, so prefill falls back to graph-GEMM and the chunk is overwhelmingly GEMM-bound: ~1420ms per 512-token chunk, ~361 tok/s, whole-prefill nearly flat in context (361 @512 -> 352 @4096). The changed attention kernel is 1.6%-5.8% of chunk time depending on depth, so a 25-31% kernel win predicts only ~0.4%-1.5% per chunk and ~1.0% at whole-prefill@4096 -- above the raw 0.59% noise floor but BELOW the 2x signal/noise credibility bar. So the measurement was RUN and it CORROBORATES the attention-local result quantitatively; it simply cannot be the gate criterion on its own.",
         "measured_pairs": [
           {"source": "reviewing agent rep1", "pp512_off": 361, "pp512_on": 364, "pp1024_off": 360, "pp1024_on": 362,

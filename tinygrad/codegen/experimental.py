@@ -24,4 +24,4 @@ def amd_isa_extension_descriptors(default): return _attr("extra.qk.codegen_exten
 # tinygrad.llm.route_ops on purpose: postrange.py imports this lazily to sidestep the
 # tinygrad.llm <-> tinygrad.codegen.opt import-order coupling, and re-exporting would reintroduce it.
 def flash_prefill_attention_spec(*args, **kwargs):
-  return _attr("extra.qk.flash_prefill_attention_spec", "FlashPrefillAttentionSpec")(*args, **kwargs)
+  return _attr("extra.qk.prefill.flash_prefill_attention_spec", "FlashPrefillAttentionSpec")(*args, **kwargs)

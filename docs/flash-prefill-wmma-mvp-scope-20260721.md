@@ -74,11 +74,11 @@ Attention today: materialized SDPA is pinned near `B_peak` (HBM-bound by score s
 | Candidate + geometry-table + gate + warmstart structure | `extra/qk/prefill/packed_wmma_prefill_candidates.py` (`PACKED_WMMA_GEOM`, `gate_combo`, `warmstart_entry`, `PackedWmmaPrefillCandidate`) | The *pattern*: a frozen geom table keyed by (config) → tile dims, a gate, a warmstart entry builder | New table `FLASH_PREFILL_GEOM` for MVP's single config only (one row). Mirror the shape; do not fork the file's logic. |
 | Candidate scoring / ranking (for the full-build sweep later, NOT the MVP) | `extra/qk/bubblebeam_futuresight.py:score_candidate/rank_candidates` | Note it exists; the full build's geometry search plugs in here | **MVP hardcodes one geometry.** Do not build search yet. |
 | Correctness reference | `model.py:583–598` — the concrete TC-attn path (`scores = qg@kgᵀ·scale + mask; s = scores.softmax(-1); out = s@vg`) | Golden output to diff against (fp16 tolerance) | This IS the reference; the MVP must match it numerically. |
-| Measurement harness | `extra/qk/prefill_whole_synced.py` (canonical prefill harness) | DEBUG=2 `tm` GPU kernel time (never wall-clock), warmup to boost clocks (≥200 dispatch) | Add per-op time extraction for the attention kernel only. |
+| Measurement harness | `extra/qk/prefill/prefill_whole_synced.py` (canonical prefill harness) | DEBUG=2 `tm` GPU kernel time (never wall-clock), warmup to boost clocks (≥200 dispatch) | Add per-op time extraction for the attention kernel only. |
 
 **Files you will CREATE (all under `extra/qk/`, which sz.py leaves unbudgeted — do not add core budget) — both DISPOSABLE, `rm`'d at task end (§0):**
-- `extra/qk/flash_prefill_wmma_kernel.py` — the throwaway fused-WMMA proof kernel (hand-authored UOps, reused from `flash_kernels.py`). Exists to produce the gate number, then deleted.
-- `extra/qk/flash_prefill_wmma_mvp_gate.py` — throwaway correctness+roofline harness (imports the kernel, the reference, the two-ceiling measurement). Not wired into routing. Deleted at task end.
+- `extra/qk/prefill/flash_prefill_wmma_kernel.py` — the throwaway fused-WMMA proof kernel (hand-authored UOps, reused from `flash_kernels.py`). Exists to produce the gate number, then deleted.
+- `extra/qk/prefill/flash_prefill_wmma_mvp_gate.py` — throwaway correctness+roofline harness (imports the kernel, the reference, the two-ceiling measurement). Not wired into routing. Deleted at task end.
 
 **Files you will NOT touch in the MVP:** `model.py`, `prefill_routes.py`, `prefill_policy.py`, `postrange.py`, `kernel_lds.py`. No routing, no defaults, no warmstart tables. The MVP runs from its own gate script.
 

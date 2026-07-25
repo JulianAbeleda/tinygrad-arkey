@@ -105,7 +105,7 @@ in the schedule) — do not accept a 0.0 error that is fallback-vs-fallback. Thi
 ### Step 5 — Enablement tail (plumbing; see scope-A A5-A8)
 - Whole-model prefill benchmarks KV 512..4096 (note: prior handoff defers these behind an in-flight
   multi-wave G2/G4/G5 experiment — check status first).
-- BUILD a decode-nonregression harness (none exists; nearest `extra/qk/decode_runtime_overhead.py`):
+- BUILD a decode-nonregression harness (none exists; nearest `extra/qk/decode/decode_runtime_overhead.py`):
   run decode with shared-attention on vs off, assert token-parity + no perf regression. Earns
   `decode_nonregression_8b/14b`.
 - Build the composite-proof collector: assemble `shared_attention_proof` (target+geometry+v2 artifact

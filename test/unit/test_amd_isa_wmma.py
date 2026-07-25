@@ -136,7 +136,7 @@ class TestAMDISAWmmaStructuralGate(unittest.TestCase):
 
   def test_nested_q4k_contraction_renders_signed_i8_wmma(self):
     from extra.qk.layout import Q4K_WORDS_PER_BLOCK
-    from extra.qk.prefill_int8_wmma_spec import (
+    from extra.qk.prefill.prefill_int8_wmma_spec import (
       describe_q4k_int8_wmma_tiled_prefill, emit_q4k_int8_wmma_tiled_scheduler_tensor)
     n, k, m = 16, 256, 16
     spec = describe_q4k_int8_wmma_tiled_prefill(n, k, m, role="isa_nested",

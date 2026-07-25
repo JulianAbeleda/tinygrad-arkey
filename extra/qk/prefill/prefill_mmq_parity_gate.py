@@ -12,7 +12,7 @@ from tinygrad import Tensor, dtypes
 from tinygrad.helpers import getenv
 
 from extra.qk.layout import Q4_K_BLOCK_BYTES, Q4_K_BLOCK_ELEMS, q4_k_reference, q8_1_quantize
-from extra.qk.prefill_int8_wmma_spec import describe_q4k_int8_wmma_prefill, emit_q4k_int8_wmma_prefill_tensor
+from extra.qk.prefill.prefill_int8_wmma_spec import describe_q4k_int8_wmma_prefill, emit_q4k_int8_wmma_prefill_tensor
 
 RTOL = 6e-3
 

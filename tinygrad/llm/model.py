@@ -53,13 +53,13 @@ def _should_use_flash_attention(ring_freqs:Tensor|None, start_pos:int|UOp, T:int
 
 def _should_use_custom_kernel_prefill_attn(n_heads:int, n_kv_heads:int, backend:str|None, arch:str|None) -> bool:
   """Independent eligibility boundary for the proven custom-kernel-injection prefill attention route
-  (tinygrad/llm/fused_attention.py:custom_kernel_attention -> extra/qk/flash_prefill_attention_spec.py
+  (tinygrad/llm/fused_attention.py:custom_kernel_attention -> extra/qk/prefill/flash_prefill_attention_spec.py
   FlashPrefillAttentionSpec), decoupled from the legacy composite-reduce path's prefill_tc_attn /
   shared_attention_proven_eligible proof (that proof is unrelated evidence for the OFF-critical-path
   class-2-risk `shared_prefill_attention` route -- see fused_attention.py's module docstring; P5b,
   docs/flash-prefill-pure-search-lift-scope-20260724.md). True only for the PROVEN admitted 8B/14B
-  shapes on AMD/gfx1100 (extra/qk/prefill_hd_sweep_numerics.py Hd=64/128 lower+numerically correct,
-  extra/qk/prefill_flash_e2e_parity.py real-model 8B/14B token parity); every other shape/backend/arch
+  shapes on AMD/gfx1100 (extra/qk/prefill/prefill_hd_sweep_numerics.py Hd=64/128 lower+numerically correct,
+  extra/qk/prefill/prefill_flash_e2e_parity.py real-model 8B/14B token parity); every other shape/backend/arch
   safely falls back to SDPA (the existing default for all of them today)."""
   from tinygrad.llm.fused_attention import ADMITTED_GRIDS
   return (n_heads, n_kv_heads, 512) in ADMITTED_GRIDS and backend == "AMD" and arch == "gfx1100"
