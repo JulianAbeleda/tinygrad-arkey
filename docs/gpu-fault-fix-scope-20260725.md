@@ -93,8 +93,34 @@ in practice for this workload. **Do not guard it.** A workload with far more sma
 synchronising could in principle differ, but nothing near that has been observed. Probe removed once the
 verdict was recorded.
 
-**With this refuted, the remaining named suspect for the observed faults is the code object being unmapped
-while a wave is still executing**: `AMDProgram` frees `lib_gpu` from a `weakref.finalize` (`ops_amd.py:639`),
+### The strongest signal, found last and under-weighted all day: ONE FAULT PER PROCESS
+
+Pairing every fault to its client AND its pid:
+
+    SQC (inst) faults: 12 across 12 distinct pids -- exactly 1 each
+
+Not one process faulting repeatedly. Twelve processes faulting once. That is a **once-per-process lifecycle
+event**, and it argues against every "recycling under sustained load" hypothesis pursued today -- those would
+fault repeatedly inside one long-running process, and never once-and-only-once.
+
+(Earlier I dismissed teardown as "weak -- only 13 of 145 faults near a teardown marker". That count was over
+the whole unpaired population; restricted to the paired SQC faults, the per-pid distribution is unambiguous.
+Note also that dmesg has since rotated, so 12 is a subset of the 56 counted by address earlier.)
+
+**This also constrains the mechanism.** A merely *unmapped* code object would fault at the code object's own
+VA (`0x00007xxx...`), not at `0xffffffbfe000`. A constant wild PC means `kernel_object` was **garbage or
+zero**, not merely unmapped -- and the 27 faults at exactly `0x0` are the same thing with a zeroed field.
+Teardown zeroing or unmapping the queue while the CP still has a dispatch packet queued produces exactly
+that: the CP executes a zeroed packet and the wave launches at `0 + offset`.
+
+**Next step:** instrument device teardown (`AMDDevice` finalize / `remove_all_kfd_queues`, and the
+`Failed to quiesce` / `failed to remove hardware queue from MES` markers that appear in dmesg) and establish
+whether the queue is torn down without draining outstanding dispatches. `DISPATCH_TRACE` will not see this --
+it only reports faults that surface as an exception, and a teardown-time fault has no live Python frame to
+raise into.
+
+**Also still open** (weaker now, given the once-per-process signature): the code object being unmapped while
+a wave is still executing: `AMDProgram` frees `lib_gpu` from a `weakref.finalize` (`ops_amd.py:639`),
 i.e. at garbage-collection time. `lib_gpu` is allocated `nolru=True` (`:603`), so its free bypasses the LRU
 cache and really unmaps. An instruction fetch from an unmapped code object is precisely an `SQC (inst)` fault.
 
