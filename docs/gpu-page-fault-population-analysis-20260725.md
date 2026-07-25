@@ -1,5 +1,25 @@
 # GPU page-fault population analysis (2026-07-25)
 
+> **READ THIS FIRST -- 2026-07-25 late correction.** Every count below that was derived from the raw fault
+> log is INFLATED. Segmenting the log by incident shows **132 of 165 faults (80%) occur AFTER a
+> `GPU reset begin` / `failed to remove hardware queue from MES` / `Failed to quiesce`** -- they are the
+> hardware reporting collateral while a queue is being torn down, not independent events. Only **33 faults
+> are PRIMARY** (started an incident), and they fall in **4 incidents across 4 pids** (bursts of 10, 9, 8, 6).
+>
+> Consequences:
+> - The headline "56 faults at `0x0000ffffffbfe000`" is really **15 primary** (plus echoes).
+> - The claim "**exactly one fault per process**, so it is a once-per-process lifecycle event" is
+>   **RETRACTED**. That came from the client-paired subset, which was mostly collateral attributed to
+>   whichever process owned the queue being torn down. Primary faults come in **bursts of 6-10 per process**.
+>   The teardown hypothesis that was promoted on the strength of it is no longer supported by that evidence.
+> - Teardown markers are still worth attention, but as a *precursor* in some incidents, not because faults
+>   are once-per-process.
+>
+> **Method note for anyone re-deriving this: segment the log into incidents first.** A fault following a
+> reset is not a data point about the bug; it is a data point about the reset. Counting the raw log conflates
+> the two and every population number in this document was originally computed that way.
+
+
 ~21 GPU resets over six days produced 145 `gfxhub` page faults in `dmesg`. This document classifies the
 whole population and records what the classification rules out. It supersedes the lifetime-centric framing
 in `docs/BOLTBEAM_GPU_HANG_DIAGNOSIS_HANDOFF_20260724.md`.
@@ -164,3 +184,21 @@ Two concrete next steps, in order:
 
 What NOT to do again: probe data-pointer paths. Three workloads and two hooks established that the host side
 never binds a null address, and the client ID says these faults were never data accesses to begin with.
+
+
+## The primary population (the only cut that is evidence about the bug)
+
+33 faults, 4 incidents, 4 pids:
+
+| address | count | note |
+|---|---:|---|
+| `0x0000ffffffbfe000` | 15 | the wild-PC signature; SQC (inst) where the client line parsed |
+| `0x0000000000000000` | 6 | same, zeroed |
+| `0x0000000100000000` | 4 | same, +2^32 |
+| `0x00007c7a20b__000` | 8 | TCP data OOB -- **all 8 from ONE pid (2653088), 8 pages in a ~672 KiB window** |
+
+So BUG 2 is thinner still than the "7 samples" already recorded: it is **one incident, one process**, walking
+8 pages of one region. It is not a recurring phenomenon across runs, and nothing justifies a fix for it.
+
+BUG 1's primary population is 25 faults across 3 incidents -- real, but an order of magnitude less evidence
+than the raw log suggested.
