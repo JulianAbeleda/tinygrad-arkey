@@ -78,10 +78,25 @@ have the check** (`:590`):
 
     while not dev.is_usb() and sdma_queue.put_value + total_bytes - sdma_queue.read_ptr[0] > sdma_queue.ring.nbytes: pass
 
-SDMA applies backpressure against `read_ptr`; compute does not. Next step is to determine whether the
-compute ring can actually lap (measure `put_value` against the ring size and the read pointer under load), or
-whether MES/doorbell flow control makes it unreachable. **Do not add a guard before establishing that** --
-the same discipline that kept `graph/hcq.py:54` from being needlessly guarded.
+SDMA applies backpressure against `read_ptr`; compute does not. `AMDQueueDesc` exposes `read_ptr`
+(`ops_amd.py:716`), so the check is possible -- the compute path simply never consults it.
+
+**MEASURED, and it is NOT the bug.** Instrumented `AMDComputeQueue._submit` over a full 8B prefill
+(pp512 + pp4096, 3693/3235 tok/s):
+
+    5833 submits | ring = 4,194,304 dwords | max unconsumed = 47,768 (1.14% of ring)
+    laps (overrun) = 0 | max put_value = 482,390 = 0.12 ring-lengths
+
+The ring peaks at **1.14% full** and the entire run does not complete even one lap -- roughly **88x headroom**
+at the observed maximum. The missing read-pointer check is a real asymmetry with SDMA, but it is unreachable
+in practice for this workload. **Do not guard it.** A workload with far more small dispatches queued without
+synchronising could in principle differ, but nothing near that has been observed. Probe removed once the
+verdict was recorded.
+
+**With this refuted, the remaining named suspect for the observed faults is the code object being unmapped
+while a wave is still executing**: `AMDProgram` frees `lib_gpu` from a `weakref.finalize` (`ops_amd.py:639`),
+i.e. at garbage-collection time. `lib_gpu` is allocated `nolru=True` (`:603`), so its free bypasses the LRU
+cache and really unmaps. An instruction fetch from an unmapped code object is precisely an `SQC (inst)` fault.
 
 **1. The same defect exists in at least two more places.** `grep BumpAllocator(` finds every wrapping
 allocator whose memory the GPU reads asynchronously:
