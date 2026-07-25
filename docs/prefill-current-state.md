@@ -135,6 +135,20 @@ short-context ones were not.
 - Route: packed-WMMA prefill candidates (`TINYGRAD_PREFILL_PACKED_WMMA`, **default ON**), Q4_K/Q6_K,
   6/6 correctness-gated combos at `max_abs 0.0`.
 - **pp512 1948, pp4096 1787 tok/s** (was 355-364 on the direct-packed fallback) = **5.0-5.4x**.
+- **CORRECTION (same day, after the fact): the ordering fix `7463a6774` did NOT cause this recovery.**
+  A control run at `7617ff284` -- i.e. WITHOUT the ordering change -- gives **1937 tok/s**. 14B was
+  recoverable at any point simply by NOT setting `TINYGRAD_PREFILL_PACKED_WMMA=0`. The 5.0-5.4x is real but
+  it is the packed-WMMA route vs the direct-packed fallback, not a fix-vs-broken delta. I claimed causation
+  from a before/after in which the "before" arm was never run.
+- The VRAM-starvation mechanism **cannot apply to 14B at all**: 14B logs `weights 9.0GB` (Q4_K only, 8.38
+  GiB) and never realizes the fp16 overlay -- `realize_prefill_v2_weights()` returns early unless the policy
+  admits FULL_RESIDENT_OVERLAY, which 14B's ~29GB fp16 footprint cannot. Only 8B realizes it (`weights
+  18.9GB`), and 8B does not use packed-WMMA. So the documented 15:15 fault was NOT reproducible at HEAD
+  tonight and its true trigger remains **unexplained** -- most likely session/environment state (the 18GB
+  compile cache and ~20 prior model loads that the original handoff blamed before its own correction
+  retracted them as "red herrings"). Treat that retraction as itself unproven.
+- The ordering change is retained as defensible robustness -- a spawning canary should not run after a large
+  allocation -- and is measured harmless (8B 3727/3262, 14B 1948/1787). It is NOT a fix for a live fault.
 - The fault that made 14B "unrunnable" all day was NOT the kernel. Its code objects are byte-identical to
   the 6/6-gated 07-21 state (bisected compile-only,
   `docs/packed-wmma-14b-codegen-transition-bisect-20260724.md`). `6ca798568` flipped the enable default
