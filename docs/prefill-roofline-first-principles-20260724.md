@@ -51,8 +51,39 @@ untouched, giving ~16.9%.
 impossible, so GEMM's real duty is >= 0.48. Cause: the GEMM rows MERGE 72 launches while
 `GRBM_GUI_ACTIVE` is per-dispatch, so that ratio was never a duty cycle for a merged row — the same
 aggregation trap as the `counters_by_chunk` bug fixed in `654c9b2ce`.
-**Open measurement: per-dispatch counters for ONE GEMM launch, so mix and duty separate.** Until that
-lands, nobody should project a GEMM number.
+**MEASURED 2026-07-25 -- and it does not rescue the chain.** Per-dispatch counters now exist
+(`bench/prefill-pmc-per-dispatch/latest.json`, `--hw-trace --context 512 --chunk 512` under sudo;
+`raw_GRBM_GUI_ACTIVE_count == 1` proves the row carries exactly ONE dispatch). Duty =
+mean(`SQ_BUSY_CYCLES`)/`GRBM_GUI_ACTIVE`, which reproduces `occupancy_pct` exactly:
+
+| kernel | calls | share of kernel wall | **duty** | VALU% | L2 hit% |
+|---|---:|---:|---:|---:|---:|
+| `E_4_96_32_...` | 72 | 39.3% | **42.4%** | 2.03 | 31.7 |
+| `E_4_32_32_...` | 36 | 22.1% | **41.5%** | 1.75 | 54.4 |
+| `E_4_32_32_...` | 72 | 14.9% | **36.3%** | 1.60 | 40.9 |
+| `r_1187_32_...` | 1 | 8.7% | **46.1%** | 0.55 | 11.6 |
+| `E_4_8_32_...` | 72 | 4.9% | **28.8%** | 0.92 | 77.4 |
+| `amd_gfx1100_q16_grid_hd128...` (attention) | 36 | 4.1% | **33.8%** | 6.41 | 63.3 |
+
+Wall-weighted mean duty = **38.6%**. Rows with VALU% < 5 -- the WMMA-class kernels -- are **95.9%** of kernel
+wall. (Graph-GEMM kernels are named `E_*`, so `_classify_kernel` files them as elementwise; identify them by
+low VALU% + high `SQC_LDS_IDX_ACTIVE`, not by the `kind` field.)
+
+**The chain still does not close, and that is the finding.** `achieved/peak = mix x duty` with the claimed
+GEMM `achieved/peak = 0.483` and measured duty 0.424 requires `mix = 1.14 > 1`. Since mix cannot exceed 1,
+**the 48.3%-of-peak GEMM figure in the table above is overstated** -- and the "+18.4% / +46.1%" prizes in
+Section 6 are derived from it. Treat them as unproven until the achieved figure is re-derived; the duty
+number is the direct measurement and the 48.3% was inferred from config FLOPs over an assumed 79.6% runtime
+share.
+
+Caveat, stated so nobody over-reads it: counters require `PROFILE=1`, and the profiled run measures
+1536 tok/s against 3700 unprofiled, so per-dispatch `GRBM_GUI_ACTIVE` may include profiling-induced idle.
+That makes 38.6% a lower bound on true duty. It does not restore the 48.3% claim -- a *higher* true duty
+implies a *lower* mix, moving the deficit further into mix rather than resolving it.
+
+**What is solid either way:** the shader arrays are idle roughly 60% of every GEMM dispatch. That is a
+**duty** problem -- launch/drain tails, wave fill, memory stalls -- not a mix problem. Every lever pursued in
+the 07-24 session targeted mix.
 
 ## 4. Instruction counts are the wrong currency
 
@@ -104,8 +135,9 @@ attention (windowing/sparsity) = a model change, not a kernel change.
 
 | lever | whole-model | status |
 |---|---|---|
-| GEMM 48% → 60% of peak | **+18.4%** | UNEXPLORED — needs the per-dispatch duty measurement first |
-| GEMM 48% → 80% of peak | **+46.1%** | UNEXPLORED |
+| **GEMM duty 38.6% → higher** | unquantified | **the live lever** — measured 2026-07-25, see §3 |
+| GEMM 48% → 60% of peak | +18.4% | **RETRACTED** — the 48.3% achieved figure fails its own mix×duty check (§3) |
+| GEMM 48% → 80% of peak | +46.1% | **RETRACTED**, same reason |
 | all remaining attention | +6.7% | capped by the decay floor |
 | T3 causal skip | +1.66% | measured, default-OFF, gated on 14B evidence |
 | LDS bank conflicts | +0.13% | shipped (`114277f36`), conflict now bit-exact 0% |
