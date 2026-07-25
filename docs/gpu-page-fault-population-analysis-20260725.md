@@ -92,37 +92,75 @@ kernel spills past it, so scratch is never reallocated during execution and `_re
 this path at all. `GPU_LIFETIME_AUDIT` was on for the same run and stayed silent. The probe was removed once
 this verdict was recorded.
 
-## The detector that replaced it
+## THE DECISIVE CLASSIFICATION: these are instruction fetches, not data accesses
+
+`dmesg` names the faulting hardware unit and it splits the population cleanly in two:
+
+| address | UTCL2 client | what it means |
+|---|---|---|
+| `0x0000ffffffbfe000`, `0x100000000`, `0x0` | **SQC (inst)** | the **instruction** cache -- these are **program counters** |
+| every `0x00007xxx_xxxxx000` | **TCP** | the vector data cache -- ordinary data OOB |
+
+So there are **two unrelated bugs**, and the live one is not an addressing bug at all: a wave was launched at
+a bogus **PC** and tried to fetch code from nowhere. Any probe aimed at data pointers is structurally blind
+to it -- which is why the first detector below found nothing across three workloads.
+
+The PC is *identical* every time (`0xffffffbfe000`, 56 occurrences). A corrupted branch target would vary,
+so this points at the dispatch's **entry address**, not at generated control flow.
+
+### The mechanism that fits
+
+A wave's entry PC comes from `hsa_kernel_dispatch_packet_t.kernel_object`, and `ops_amd.py:359` places that
+packet **inside the kernargs allocation** (`args_state.buf.offset(prg.kernargs_segment_size)`). Those
+allocations come from a `BumpAllocator` over a 16 MiB buffer with `wrap=True` (`hcq.py:438`) that recycles
+from offset 0 with **no check that the memory it reuses belongs to a dispatch still in flight**. Overwrite a
+live dispatch packet and `kernel_object` becomes whatever lands there -- exactly a wild PC.
+
+This is the same defect class the repo already solves correctly for copy-staging buffers via
+`HCQAllocatorBase.b_timeline`. The portable fix is to extend that defer-until-drained discipline to the
+kernargs wrap.
+
+**Status: an unguarded hazard confirmed by code reading, NOT yet a demonstrated cause.** `KERNARGS_AUDIT`
+(below) fires correctly at unit level and its hook is reached in real runs (6 wraps observed under a
+deliberately shrunk allocator), but **zero in-flight wraps have been observed so far**. Do not call this
+solved.
+
+Ruled out along the way: graph captures are NOT exposed -- `HCQGraph` allocates its own exactly-sized
+kernargs buffer (`graph/hcq.py:48-58`), so the shared wrapping allocator cannot reissue a live graph's
+packet.
+
+## The detectors, and their verdicts
 
 `GPU_LIFETIME_AUDIT` was **removed** in favour of `GPU_ARG_AUDIT` (`tinygrad/device.py`), which targets the
 live signature instead of the refuted one. Keeping a probe after its verdict is recorded is an anti-pattern,
 and the free-while-in-flight verdict is recorded above.
 
-`GPU_ARG_AUDIT` guards the only two places a null base can reach the GPU, and checks two things:
+**`GPU_ARG_AUDIT` (built, run, REMOVED).** It checked the two places a null *data* pointer can reach the
+GPU -- `HCQArgsState.__init__` and `HCQGraph.__call__` -- plus under-written kernarg segments. Verdict:
+**silent across 8B prefill, 14B prefill, and the full unit suite (51 failed / 1285 passed, zero hits)**. So
+tinygrad never hands the GPU a null buffer address, and the wild PC does not come from argument binding.
+That is a real elimination, but the probe was aimed at TCP-class faults while the live signature is
+SQC (inst), and it cost 41% (8B) to 71% (14B), so it could never have been left on. Removed once its verdict
+was recorded.
 
-1. **null buffer addresses** -- at `HCQArgsState.__init__` (the `fill_kernargs` path) and at
-   `HCQGraph.__call__` (graph replay, which patches addresses into a captured command stream and is the
-   *dominant* path under TinyJit -- auditing only the first would have missed most dispatches).
-2. **under-written kernarg segments** -- a kernel declaring a larger `kernarg_size` than the
-   `prefix + bufs*8 + vals*4` we write leaves trailing bytes uninitialised, and the kernargs buffer is a
-   recycled bump allocation. A kernel reading an address out of that gap gets a stale or null base.
-
-`GPU_ARG_AUDIT=1` records and reports at exit; `=2` raises on the first hit. Backend-agnostic by
-construction: both hooks live in HCQ code, so METAL/CUDA/CPU never reach them. Pinned by
-`test/unit/test_gpu_arg_audit.py`, including that both call sites still exist -- a detector that silently
-loses its hooks reads as evidence of absence.
-
-Note it costs ~41% throughput with the graph-replay hook live (8B pp512 2188 vs 3700 tok/s), so it is a
-diagnostic, not a default.
-
-**Result so far: silent.** A full 8B prefill sweep (pp512 + pp4096) produced zero null addresses. So the
-null-base hypothesis is NOT yet confirmed, and may be wrong. Still to run under it: 14B, the unit suite, and
-the isolated-child/canary paths -- the fault log shows both `python` (106) and `python3` (38) processes, and
-the spike on Jul 24 coincided with heavy canary and isolated-execution work.
+**`KERNARGS_AUDIT` (live).** Records kernargs bump-allocator wraps that happen while the device timeline has
+not drained -- i.e. the mechanism above, actually occurring. `=1` records and reports at exit, `=2` raises on
+the first hit. One integer comparison per kernargs allocation, no graph-replay hook, so unlike its
+predecessor it is cheap enough to leave on. `BumpAllocator` gained a `wraps` counter (data only, no
+behaviour change). Backend-agnostic: no-op without an HCQ timeline signal. Pinned by
+`test/unit/test_kernargs_wrap_audit.py`, including that the single call site still exists.
 
 ## What would actually settle it
 
-The dmesg population is exhausted; it cannot attribute a fault to a dispatch. The next probe has to correlate
-in the other direction: capture the dispatch in flight when the fault fires (fault-time wave dump, or a
-serialized run that brackets each dispatch) and read the faulting kernel's address expression. Until then,
-`-(4 MiB + 8 KiB)` from a zero base is the one live thread.
+Two concrete next steps, in order:
+
+1. **Leave `KERNARGS_AUDIT=1` on** across the workloads that historically fault. It is cheap enough to run
+   permanently. A single in-flight wrap confirms the mechanism; a long silent stretch across a run that DOES
+   fault refutes it and sends the search to the other candidates for a wild PC (a freed/unmapped code object,
+   or a dispatch packet corrupted some other way).
+2. If it stays silent, correlate a fault to a dispatch directly -- the only probe that cannot come back
+   ambiguous. dmesg gives the faulting **pid** (e.g. `Process python3 pid 3066783` at the 08:21:31 reset), so
+   bracketing dispatches in a serialized run would name the kernel.
+
+What NOT to do again: probe data-pointer paths. Three workloads and two hooks established that the host side
+never binds a null address, and the client ID says these faults were never data accesses to begin with.

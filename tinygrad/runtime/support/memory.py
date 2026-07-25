@@ -3,11 +3,13 @@ from typing import Any, ClassVar
 from tinygrad.helpers import round_up, getenv
 
 class BumpAllocator:
-  def __init__(self, size:int, base:int=0, wrap:bool=True): self.size, self.ptr, self.base, self.wrap = size, 0, base, wrap
+  def __init__(self, size:int, base:int=0, wrap:bool=True):
+    self.size, self.ptr, self.base, self.wrap = size, 0, base, wrap
+    self.wraps: int = 0   # counts reuse-from-zero events; read by the kernargs wrap audit
   def alloc(self, size:int, alignment:int=1) -> int:
     if round_up(self.ptr, alignment) + size > self.size:
       if not self.wrap: raise RuntimeError("Out of memory")
-      self.ptr = 0
+      self.ptr, self.wraps = 0, self.wraps + 1
     self.ptr = (res:=round_up(self.ptr, alignment)) + size
     return res + self.base
 

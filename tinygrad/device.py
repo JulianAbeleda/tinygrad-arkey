@@ -221,61 +221,52 @@ class Buffer:
     assert offset < self.nbytes, "offset must be less than nbytes"
     return Buffer(self.device, size, dtype, base=self.base, offset=self.offset+offset)
 
-GPU_ARG_AUDIT = ContextVar("GPU_ARG_AUDIT", 0)   # 1 = record and report at exit, 2 = raise on the first hit
+KERNARGS_AUDIT = ContextVar("KERNARGS_AUDIT", 0)   # 1 = record and report at exit, 2 = raise on the first hit
 
-# DETECTOR for the one live gfx1100 page-fault signature (~21 GPU resets; see
-# docs/gpu-page-fault-population-analysis-20260725.md). 56 of 145 faults are at 0x0000ffffffbfe000, which is
-# the 48-bit sign-extension of the int32 -0x402000, and 27 more are at exactly 0x0. Both are what you get from
-# a kernel whose BASE POINTER IS ZERO and which then applies an offset -- not from a stale pointer to a real
-# buffer (real ones live at 0x00007xxx_xxxxx000 under KFD). A null base can only reach the GPU through the
-# kernarg buffer-address slots, which is exactly what CLikeArgsState writes at hcq.py:330, so that write is
-# the one place worth checking.
+# DETECTOR for the live gfx1100 fault signature. dmesg classifies it precisely: every fault at
+# 0x0000ffffffbfe000 (56), 0x100000000 (22) and 0x0 (27) reports `Faulty UTCL2 client ID: SQC (inst)` --
+# the INSTRUCTION cache. Those addresses are program counters, not data pointers; a wave was launched at a
+# bogus PC. (The separate 0x00007xxx... faults all report TCP and are ordinary data OOB -- a different bug.)
 #
-# This REPLACES GPU_LIFETIME_AUDIT, whose hypothesis (free-while-in-flight) was refuted four independent ways
-# and whose verdict is recorded in the doc above. Keeping a probe after its verdict is in is an anti-pattern.
+# A wave's entry PC comes from hsa_kernel_dispatch_packet_t.kernel_object, and ops_amd.py:359 places that
+# packet INSIDE the kernargs allocation (args_state.buf.offset(kernargs_segment_size)). Those allocations
+# come from a BumpAllocator over a 16MiB buffer with wrap=True (hcq.py:438) that recycles from offset 0 with
+# NO check that the memory it is reusing belongs to a dispatch still in flight. Overwrite a live dispatch
+# packet and kernel_object becomes whatever lands there -- which is exactly a wild PC.
 #
-# BACKEND-AGNOSTIC BY CONSTRUCTION: it hooks HCQArgsState, so non-HCQ backends (METAL, CUDA, CPU, ...) never
-# reach it and are bit-identical with the flag on or off. The check is a truthiness test on an int already in
-# hand -- no ioctl, no sync, no ordering change.
-_arg_audit_hits: list[tuple[str,str,int,int]] = []
-_arg_coverage_hits: list[tuple[str,int,int]] = []
+# So this records wraps that happen while the device timeline has not drained. It ONLY OBSERVES: no
+# synchronization, no ordering change, and it costs one comparison per kernargs allocation (unlike the
+# earlier data-pointer audit, which cost 41-71% and was aimed at the wrong client entirely).
+#
+# The fix this is designed to justify already exists in-tree for copy-staging buffers: HCQAllocatorBase
+# .b_timeline tags each buffer with the timeline value at which it becomes safe. The portable fix is to
+# extend that defer-until-drained discipline to the kernargs wrap.
+_kernargs_wrap_hits: list[tuple[str,int,int]] = []
+_kernargs_wrap_total: list[int] = [0]
 
-def _audit_kernarg_bufs(dev_name:str, prg_name:str, bufs) -> None:
-  """Record any kernel argument whose device virtual address is null. Observation only unless GPU_ARG_AUDIT>=2."""
-  if not GPU_ARG_AUDIT: return
-  for i, b in enumerate(bufs):
-    va = getattr(b, "va_addr", None)
-    # va_addr is a symbolic UOp on graph-captured buffers (the placeholder patched at replay); only a
-    # CONCRETE integer zero is a fault. Truthiness on a UOp raises, so test the type before the value.
-    if not isinstance(va, int) or va: continue
-    _arg_audit_hits.append((dev_name, prg_name, i, len(bufs)))
-    if GPU_ARG_AUDIT >= 2:
-      raise RuntimeError(f"GPU_ARG_AUDIT: {prg_name} arg {i}/{len(bufs)} has a null device address on {dev_name}. "
-                         f"A kernel offsetting from a null base is the live page-fault signature.")
+def _audit_kernargs_wrap(dev, wrapped:bool) -> None:
+  """Record a kernargs bump-allocator wrap issued while the device still has un-drained work."""
+  if not KERNARGS_AUDIT or not wrapped: return
+  _kernargs_wrap_total[0] += 1
+  sig = getattr(dev, "timeline_signal", None)
+  if sig is None: return                                  # non-HCQ backend: nothing to observe
+  try: observed, pending = sig.value, getattr(dev, "timeline_value", 0) - 1
+  except Exception: return                                # never let the detector break a run
+  if observed < pending:
+    _kernargs_wrap_hits.append((getattr(dev, "device", "?"), observed, pending))
+    if KERNARGS_AUDIT >= 2:
+      raise RuntimeError(f"KERNARGS_AUDIT: kernargs wrapped on {getattr(dev,'device','?')} with work still in "
+                         f"flight (timeline {observed} < {pending}). A live dispatch packet may be overwritten, "
+                         f"which launches a wave at a wild PC.")
 
-def _audit_kernarg_coverage(prg_name:str, written:int, declared:int|None) -> None:
-  """Record a kernel whose declared kernarg segment is larger than the bytes we actually write."""
-  if not GPU_ARG_AUDIT or declared is None or written >= declared: return
-  _arg_coverage_hits.append((prg_name, written, declared))
-  if GPU_ARG_AUDIT >= 2:
-    raise RuntimeError(f"GPU_ARG_AUDIT: {prg_name} declares a {declared}B kernarg segment but only {written}B "
-                       f"are written; the trailing {declared-written}B are uninitialised recycled memory.")
-
-def _dump_arg_audit() -> None:
-  if not GPU_ARG_AUDIT or not _arg_audit_hits: return
-  from collections import Counter
-  by_prg = Counter((d, p, i) for d, p, i, _ in _arg_audit_hits)
-  print(f"\n=== GPU_ARG_AUDIT: {len(_arg_audit_hits)} dispatch arg(s) bound with a null device address ===")
-  for (d, prg, i), n in by_prg.most_common(20): print(f"  {n:6d}  {d:10s} arg[{i}]  {prg}")
-
-def _dump_coverage_audit() -> None:
-  if not GPU_ARG_AUDIT or not _arg_coverage_hits: return
-  from collections import Counter
-  c = Counter(_arg_coverage_hits)
-  print(f"\n=== GPU_ARG_AUDIT: {len(c)} kernel(s) with an UNDER-WRITTEN kernarg segment ===")
-  for (prg, w, d), n in c.most_common(20): print(f"  {n:6d}x  wrote {w:5d}B of {d:5d}B declared  (gap {d-w:4d}B)  {prg}")
-atexit.register(_dump_coverage_audit)
-atexit.register(_dump_arg_audit)
+def _dump_kernargs_audit() -> None:
+  if not KERNARGS_AUDIT: return
+  print(f"\n=== KERNARGS_AUDIT: {_kernargs_wrap_total[0]} kernargs wrap(s), "
+        f"{len(_kernargs_wrap_hits)} with work still in flight ===")
+  if _kernargs_wrap_hits:
+    worst = max(_kernargs_wrap_hits, key=lambda h: h[2]-h[1])
+    print(f"  widest gap: {worst[2]-worst[1]} timeline values behind on {worst[0]}")
+atexit.register(_dump_kernargs_audit)
 
 DeviceType = TypeVar('DeviceType', bound='Compiled')
 

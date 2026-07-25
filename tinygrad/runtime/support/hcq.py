@@ -6,7 +6,7 @@ try: import fcntl # windows misses that
 except ImportError: fcntl = None #type:ignore[assignment]
 from tinygrad.helpers import DEV, PROFILE, getenv, to_mv, from_mv, cpu_profile, ProfilePointEvent, ProfileRangeEvent, select_first_inited, select_by_name, unwrap
 from tinygrad.helpers import suppress_finalizing, pluralize, TracingKey
-from tinygrad.device import Device, BufferSpec, Compiled, LRUAllocator, ProfileDeviceEvent, ProfileProgramEvent, _audit_kernarg_bufs, _audit_kernarg_coverage
+from tinygrad.device import Device, BufferSpec, Compiled, LRUAllocator, ProfileDeviceEvent, ProfileProgramEvent, _audit_kernargs_wrap
 from tinygrad.uop.ops import sym_infer, sint, UOp
 from tinygrad.runtime.autogen import libc
 from tinygrad.runtime.support.memory import BumpAllocator
@@ -316,7 +316,6 @@ def hcq_profile(dev:HCQCompiled, enabled, desc, queue_type:Callable[[], HWQueue]
 
 class HCQArgsState(Generic[ProgramType]):
   def __init__(self, buf:HCQBuffer, prg:ProgramType, bufs:tuple[HCQBuffer, ...], vals:tuple[sint|None, ...]=()):
-    _audit_kernarg_bufs(getattr(prg.dev, "device", "?"), getattr(prg, "name", "?"), bufs)
     self.buf, self.prg, self.bufs, self.vals = buf, prg, bufs, vals
     self.bind_data:list[tuple[tuple[sint, ...], MMIOInterface, str]] = []
 
@@ -331,11 +330,6 @@ class CLikeArgsState(HCQArgsState[ProgramType]):
     self.bind_sints_to_buf(*[b.va_addr for b in bufs], buf=self.buf, fmt='Q', offset=len(prefix or []) * 4)
     assert None not in vals
     self.bind_sints_to_buf(*cast(tuple[sint, ...], vals), buf=self.buf, fmt='I', offset=len(prefix or []) * 4 + len(bufs) * 8)
-    # A kernel declaring a larger kernarg segment than we write leaves trailing bytes UNINITIALISED -- and
-    # the kernargs buffer is a recycled bump allocation, so those bytes are stale or zero. A kernel reading
-    # an address from there gets a null/garbage base, which is the live page-fault signature.
-    _audit_kernarg_coverage(getattr(prg, "name", "?"), len(prefix or []) * 4 + len(bufs) * 8 + len(vals) * 4,
-                            getattr(prg, "kernargs_segment_size", None))
 
 class HCQProgram(Generic[HCQDeviceType]):
   def __init__(self, args_state_t:Type[HCQArgsState], dev:HCQDeviceType, name:str, kernargs_alloc_size:int,
@@ -358,9 +352,14 @@ class HCQProgram(Generic[HCQDeviceType]):
     Returns:
       Arguments state with the given buffers and values set for the program.
     """
-    argsbuf = kernargs or self.dev.kernargs_buf.offset(
-      offset=self.dev.kernargs_offset_allocator.alloc(self.kernargs_alloc_size, self.kernargs_alignment),
-                                                       size=self.kernargs_alloc_size)
+    if kernargs is None:
+      # The dispatch packet lives inside this allocation (ops_amd.py:359), so recycling it under an in-flight
+      # dispatch corrupts kernel_object -> wild PC -> SQC (inst) fault. Audit the wrap, do not change it.
+      _wraps_before = self.dev.kernargs_offset_allocator.wraps
+      off = self.dev.kernargs_offset_allocator.alloc(self.kernargs_alloc_size, self.kernargs_alignment)
+      _audit_kernargs_wrap(self.dev, self.dev.kernargs_offset_allocator.wraps != _wraps_before)
+      argsbuf = self.dev.kernargs_buf.offset(offset=off, size=self.kernargs_alloc_size)
+    else: argsbuf = kernargs
     return self.args_state_t(argsbuf, self, bufs, vals=vals)
 
   def __call__(self, *bufs:HCQBuffer, global_size:tuple[int,int,int]=(1,1,1), local_size:tuple[int,int,int]=(1,1,1),
