@@ -57,7 +57,7 @@ addresses would indicate corruption; these do not.
 
 ## What this rules out
 
-**Free-while-in-flight is refuted, now three independent ways.** `GPU_LIFETIME_AUDIT` (`02918db2a`,
+**Free-while-in-flight is refuted, four independent ways.** `GPU_LIFETIME_AUDIT` (`02918db2a`,
 `tinygrad/device.py:224-261`) fires on its positive control (2 hits at `observed=18 pending=19`) and is
 silent across: the full unit suite, a forced code-object race (`to_program_cache.clear()` + `gc.collect()`
 at `observed=54 pending=55`), and a full 8B prefill sweep at pp512/1024/2048/4096 (3700/3630/3492/3245
@@ -91,6 +91,34 @@ That is the 128-byte default at device init (`ops_amd.py:1084`), before any work
 kernel spills past it, so scratch is never reallocated during execution and `_realloc` is never reached on
 this path at all. `GPU_LIFETIME_AUDIT` was on for the same run and stayed silent. The probe was removed once
 this verdict was recorded.
+
+## The detector that replaced it
+
+`GPU_LIFETIME_AUDIT` was **removed** in favour of `GPU_ARG_AUDIT` (`tinygrad/device.py`), which targets the
+live signature instead of the refuted one. Keeping a probe after its verdict is recorded is an anti-pattern,
+and the free-while-in-flight verdict is recorded above.
+
+`GPU_ARG_AUDIT` guards the only two places a null base can reach the GPU, and checks two things:
+
+1. **null buffer addresses** -- at `HCQArgsState.__init__` (the `fill_kernargs` path) and at
+   `HCQGraph.__call__` (graph replay, which patches addresses into a captured command stream and is the
+   *dominant* path under TinyJit -- auditing only the first would have missed most dispatches).
+2. **under-written kernarg segments** -- a kernel declaring a larger `kernarg_size` than the
+   `prefix + bufs*8 + vals*4` we write leaves trailing bytes uninitialised, and the kernargs buffer is a
+   recycled bump allocation. A kernel reading an address out of that gap gets a stale or null base.
+
+`GPU_ARG_AUDIT=1` records and reports at exit; `=2` raises on the first hit. Backend-agnostic by
+construction: both hooks live in HCQ code, so METAL/CUDA/CPU never reach them. Pinned by
+`test/unit/test_gpu_arg_audit.py`, including that both call sites still exist -- a detector that silently
+loses its hooks reads as evidence of absence.
+
+Note it costs ~41% throughput with the graph-replay hook live (8B pp512 2188 vs 3700 tok/s), so it is a
+diagnostic, not a default.
+
+**Result so far: silent.** A full 8B prefill sweep (pp512 + pp4096) produced zero null addresses. So the
+null-base hypothesis is NOT yet confirmed, and may be wrong. Still to run under it: 14B, the unit suite, and
+the isolated-child/canary paths -- the fault log shows both `python` (106) and `python3` (38) processes, and
+the spike on Jul 24 coincided with heavy canary and isolated-execution work.
 
 ## What would actually settle it
 

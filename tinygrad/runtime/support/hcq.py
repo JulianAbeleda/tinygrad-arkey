@@ -6,7 +6,7 @@ try: import fcntl # windows misses that
 except ImportError: fcntl = None #type:ignore[assignment]
 from tinygrad.helpers import DEV, PROFILE, getenv, to_mv, from_mv, cpu_profile, ProfilePointEvent, ProfileRangeEvent, select_first_inited, select_by_name, unwrap
 from tinygrad.helpers import suppress_finalizing, pluralize, TracingKey
-from tinygrad.device import Device, BufferSpec, Compiled, LRUAllocator, ProfileDeviceEvent, ProfileProgramEvent
+from tinygrad.device import Device, BufferSpec, Compiled, LRUAllocator, ProfileDeviceEvent, ProfileProgramEvent, _audit_kernarg_bufs, _audit_kernarg_coverage
 from tinygrad.uop.ops import sym_infer, sint, UOp
 from tinygrad.runtime.autogen import libc
 from tinygrad.runtime.support.memory import BumpAllocator
@@ -316,6 +316,7 @@ def hcq_profile(dev:HCQCompiled, enabled, desc, queue_type:Callable[[], HWQueue]
 
 class HCQArgsState(Generic[ProgramType]):
   def __init__(self, buf:HCQBuffer, prg:ProgramType, bufs:tuple[HCQBuffer, ...], vals:tuple[sint|None, ...]=()):
+    _audit_kernarg_bufs(getattr(prg.dev, "device", "?"), getattr(prg, "name", "?"), bufs)
     self.buf, self.prg, self.bufs, self.vals = buf, prg, bufs, vals
     self.bind_data:list[tuple[tuple[sint, ...], MMIOInterface, str]] = []
 
@@ -330,6 +331,11 @@ class CLikeArgsState(HCQArgsState[ProgramType]):
     self.bind_sints_to_buf(*[b.va_addr for b in bufs], buf=self.buf, fmt='Q', offset=len(prefix or []) * 4)
     assert None not in vals
     self.bind_sints_to_buf(*cast(tuple[sint, ...], vals), buf=self.buf, fmt='I', offset=len(prefix or []) * 4 + len(bufs) * 8)
+    # A kernel declaring a larger kernarg segment than we write leaves trailing bytes UNINITIALISED -- and
+    # the kernargs buffer is a recycled bump allocation, so those bytes are stale or zero. A kernel reading
+    # an address from there gets a null/garbage base, which is the live page-fault signature.
+    _audit_kernarg_coverage(getattr(prg, "name", "?"), len(prefix or []) * 4 + len(bufs) * 8 + len(vals) * 4,
+                            getattr(prg, "kernargs_segment_size", None))
 
 class HCQProgram(Generic[HCQDeviceType]):
   def __init__(self, args_state_t:Type[HCQArgsState], dev:HCQDeviceType, name:str, kernargs_alloc_size:int,

@@ -18,7 +18,7 @@ def graph_profile_payload(entries, deps, sigs):
            "st_id": ent.st_id, "en_id": ent.en_id} for ent in entries]
   return {"schema": "tinygrad.hcq_graph_profile.v1", "entries": rows, "deps": deps}
 from tinygrad.runtime.support.hcq import HCQCompiled, HCQAllocator, HCQSignal, HCQBuffer, HWQueue, HCQArgsState, BumpAllocator, MMIOInterface
-from tinygrad.device import Buffer, BufferSpec, Compiled, Device, MultiBuffer, ProfileGraphEntry, ProfileGraphEvent
+from tinygrad.device import Buffer, BufferSpec, Compiled, Device, MultiBuffer, ProfileGraphEntry, ProfileGraphEvent, _audit_kernarg_bufs
 from tinygrad.dtype import dtypes
 from tinygrad.uop.ops import UOp, Ops, Variable
 from tinygrad.engine.jit import GraphRunner, MultiGraphRunner
@@ -322,6 +322,10 @@ class HCQGraph(MultiGraphRunner):
       dev_idx = self.calls[j][0]
       for pos, iidx in replace:
         buf = b.bufs[dev_idx] if isinstance(b:=input_uops[iidx].buffer, MultiBuffer) else b
+        # Graph replay patches buffer addresses straight into a captured command stream, bypassing
+        # fill_kernargs entirely -- so this is the second (and, under TinyJit, the dominant) way a null
+        # base can reach the GPU. Audited here as well as at HCQArgsState.
+        _audit_kernarg_bufs(buf.device, getattr(self.runtimes[j], "name", "?"), (buf._buf,))
         hcq_var_vals[self.input_replace_to_var[(j,pos)].expr] = buf._buf.va_addr
 
     for (var, qp) in self.rdma_vars.values(): hcq_var_vals[var.expr] = qp.head
