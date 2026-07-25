@@ -1302,15 +1302,28 @@ class Transformer:
     if realize:
       for s in (params:=nn.state.get_parameters(model)): s.replace(s.contiguous())
       Tensor.realize(*params)
-    # prefill v2 (opt-in): realize fp16 weights now that primitives are installed (shapes/dequant graphs ready)
-    if config.prefill_v2: model.realize_prefill_v2_weights()
     # packed-wmma prefill warmstart (default ON, see prefill_routes.packed_wmma_prefill_enabled()): built here,
     # not in __init__, because it needs the just-installed Q4_K/Q6_K packed storage on model.blk[*] linears
     # to identify which covered linears are packed-weight candidates at all.
+    #
+    # ORDER IS LOAD-BEARING: this MUST run BEFORE realize_prefill_v2_weights(). The warmstart runs the
+    # correctness canary, which SPAWNS a child process (packed_wmma_correctness_canary.run_canary ->
+    # run_isolated_guarded_execution). realize_prefill_v2_weights() materializes a full fp16 overlay
+    # (~19GB for 14B), so running the canary after it leaves the child with almost no VRAM: the child dies
+    # on its own admission ("budget 0.0GB, KV admits 0") and, in flat entry scripts, dies before draining
+    # the spawn pipe so the parent blocks in Process.start() ahead of run_isolated's timeout loop. That is
+    # the "packed-WMMA HW fault / >240s hang" in docs/BOLTBEAM_GPU_HANG_DIAGNOSIS_HANDOFF_20260724.md.
+    # The kernel itself is NOT implicated: its code objects are byte-identical to the 6/6-gated state at
+    # c35b5ff53 (bisected compile-only, docs/packed-wmma-14b-codegen-transition-bisect-20260724.md), and
+    # this path only began executing on default loads when 6ca798568 flipped
+    # TINYGRAD_PREFILL_PACKED_WMMA 0 -> 1 -- the gates that justified that promotion were captured in the
+    # opt-in configuration, which never realized the overlay first.
     if config.prefill_v2:
       from tinygrad.llm.prefill_routes import packed_wmma_prefill_enabled
       if packed_wmma_prefill_enabled():
         model._packed_wmma_warmstart, model._packed_wmma_warmstart_contexts = model._build_packed_wmma_warmstart()
+    # prefill v2 (opt-in): realize fp16 weights now that primitives are installed (shapes/dequant graphs ready)
+    if config.prefill_v2: model.realize_prefill_v2_weights()
     # Concrete-KV is now the default prefill-v2 execution mode (see prefill_concrete_kv_auto_decision),
     # so per-start_pos jits compile LAZILY on first use by default (cached on the model instance
     # thereafter, model.py's `prefill_v2_jits.setdefault` at __call__) -- a cold prompt pays the
