@@ -11,13 +11,23 @@ Two failures this guards against, both of which actually happened:
 2. Multiple modules could emit a decode tok/s number under different definitions. `model_e2e_bench.py`
    measures decode from a ONE-token seed (`model.generate([seed])`) over a growing window, so its ctx labels
    describe KV *allocation*, not decode depth. `decode_runtime_overhead.py` prefills to exactly ctx first.
-   Numbers from the two are not comparable, and the shallow one produced a physically impossible result
-   (8B decode RISING 103.9 -> 107.9 tok/s from ctx512 to ctx4096).
+   Numbers from the two are not comparable. The shallow one produced a suspicious result (8B decode RISING
+   103.9 -> 107.9 tok/s from ctx512 to ctx4096) -- suspicious because bytes/token strictly grow with depth,
+   but NOT impossible, see below.
 
-The physics, stated once so it is not re-derived: at batch=1 decode is HBM-bound and every token must read
-every weight plus the whole KV cache at the current depth. tok/s therefore MUST fall as depth grows --
-about 9% for 8B and 6% for 14B between ctx512 and ctx4096. A harness whose ctx columns do not move in that
-direction is not measuring depth, whatever its filename says.
+What the physics does and does NOT say (an earlier draft of this file overreached; do not restore it):
+  DOES: memory traffic strictly increases with depth -- every token reads every weight plus the whole KV
+        cache, so bytes/token at ctx4096 > bytes/token at ctx512, always.
+  DOES NOT: fix the direction of tok/s. Decode here runs at only ~50-57% of HBM peak (8B: 485 GB/s at
+        ctx512, 494 GB/s at ctx4096 against ~960 peak), so it is NOT bandwidth-saturated. Throughput is
+        traffic / efficiency, and efficiency is not constant -- it measurably rises with depth (8B:
+        50.5% -> 51.4% of peak). A larger efficiency gain could leave tok/s flat or rising while bytes grow.
+Additionally, none of the measurements to date pinned the GPU clock (bench.py exposes --pin-clock and it was
+not used), so run-to-run and depth-to-depth clock variation is uncontrolled and can be several percent.
+
+Therefore this file asserts STRUCTURAL properties only -- what a harness measures -- and deliberately makes
+no assertion about the direction or magnitude of the throughput curve. A rising decode curve is a reason to
+go and check the harness, not proof on its own that it is wrong.
 """
 import pathlib, re, unittest
 
@@ -64,41 +74,6 @@ class TestSingleDecodeAuthority(unittest.TestCase):
     self.assertIn("NOT A CTX-LABELLED DECODE AUTHORITY", src,
                   "model_e2e_bench.measure_decode decodes from a 1-token seed, so its ctx columns describe KV "
                   "allocation, not depth. It must be marked non-authoritative in-file.")
-
-
-class TestDecodeDepthContract(unittest.TestCase):
-  """The acceptance test any decode harness must satisfy, derived from memory traffic alone."""
-
-  # (name, weight_bytes, layers, kv_heads, head_dim)
-  MODELS = [("8B", 4.68*1024**3, 36, 8, 128), ("14B", 8.38*1024**3, 40, 8, 128)]
-
-  @staticmethod
-  def _expected_drop(weights: float, layers: int, kvh: int, hd: int, d0: int, d1: int) -> float:
-    kv = lambda d: layers*kvh*hd*2*2*d          # K and V, fp16
-    return 1.0 - (weights+kv(d0))/(weights+kv(d1))
-
-  def test_predicted_slowdown_is_material_and_negative(self):
-    # If this ever came out ~0, the contract below would be vacuous.
-    for name, w, l, k, h in self.MODELS:
-      drop = self._expected_drop(w, l, k, h, 512, 4096)
-      self.assertGreater(drop, 0.04, f"{name}: depth must cost at least a few percent")
-      self.assertLess(drop, 0.20, f"{name}: sanity bound")
-
-  def test_a_rising_decode_curve_is_rejected(self):
-    # The 07-03 README numbers: 8B 103.9 -> 107.9 tok/s across ctx512 -> ctx4096.
-    self.assertFalse(self.accepts("8B", 103.9, 107.9), "a decode curve that RISES with depth must be rejected")
-
-  def test_todays_measured_curves_are_accepted(self):
-    self.assertTrue(self.accepts("8B", 95.11, 87.69), "ours 8B (fixed-depth authority) should satisfy the contract")
-    self.assertTrue(self.accepts("8B", 97.56, 88.99), "llama-bench tg128 @ d should satisfy the contract")
-
-  @classmethod
-  def accepts(cls, model: str, tok_s_512: float, tok_s_4096: float, tol: float = 0.06) -> bool:
-    """True iff the measured drop is within `tol` of what memory traffic requires."""
-    w, l, k, h = next((w, l, k, h) for n, w, l, k, h in cls.MODELS if n == model)
-    expected = cls._expected_drop(w, l, k, h, 512, 4096)
-    measured = 1.0 - tok_s_4096/tok_s_512
-    return abs(measured - expected) <= tol
 
 
 if __name__ == "__main__":

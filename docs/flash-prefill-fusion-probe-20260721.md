@@ -134,3 +134,7 @@ matmul-reduce with a downstream max operation.** The gap is fusing
 THREE downstream operations (max + sum + matmul) across KV blocks with
 the three-element carried state — which is exactly what online-softmax
 does in place of materialized score → softmax → PV.
+
+> **Probe removed 2026-07-25.** `extra/qk/prefill/flash_prefill_blocked_tensor.py` is deleted; its verdict is
+> recorded above and flash prefill attention shipped as the guard-governed default. Preserving a probe past
+> its verdict is an anti-pattern (structure/Development/coding-principles.md).

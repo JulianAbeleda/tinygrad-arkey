@@ -223,3 +223,6 @@ GQA head-sharding (`Hq=40,Hkv=8,G=5`); multi-KV-size coverage (512→4096); the 
 If the single-kernel no-spill structure proves not landable in the rangeify scheduler within a reasonable budget (e.g. the range model can't express the cross-block `(m,l,acc)` recurrence without a buffer), that is itself the decision-relevant finding: it means B is more expensive than the 2.45× headroom justifies *right now*, and the fallback is to bank the trace + the blocker precisely (what in rangeify forces the buffer) and stop — not to silently regress to a hand kernel. Report that to Claude rather than grinding indefinitely.
 
 **Bottom line for deepseek: B-M0 trace first (confirm with Claude), then land the fused no-spill rewrite for one config (correctness before speed), then WMMA, then tune, then re-run the gate. The measured 2.45× says the prize is real; your job is to make the scheduler produce it.**
+
+> **Probes removed 2026-07-25.** `flash_prefill_wmma_kernel.py` and `flash_prefill_wmma_mvp_gate.py` are
+> deleted; the MVP they scoped shipped and is the default. Verdict recorded above.

@@ -103,3 +103,6 @@ just doesn't print it), and removed with `git worktree remove --force`. No dispa
 execution, at any point.
 
 Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+
+> **Probe removed 2026-07-25.** `extra/qk/prefill/canary_codegen_identity_probe.py` is deleted. Its verdict --
+> all six 14B canary code objects byte-identical to the 6/6-gated state -- is recorded above.

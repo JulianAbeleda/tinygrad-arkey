@@ -71,6 +71,23 @@ def qualify_decode_correctness(n_tokens:int=4) -> dict:
           "prompt_token_ids": prompt, "n_tokens": n_tokens, "oracle_token_ids": expected, "jit_replay_token_ids": replays}
 
 def measure_decode(model, n_tokens:int, skip:int):
+  """NOT A CTX-LABELLED DECODE AUTHORITY. Read this before quoting the number it returns.
+
+  This decodes from a ONE-token seed over a growing window, so the depth it measures is 0..n_tokens --
+  never the `--max_context` it was invoked with. `--max_context` sizes the KV *allocation*, not the decode
+  depth, so labelling a row from here "decode ctx4096" describes how much KV was reserved, not how much was
+  read per token.
+
+  That mislabelling produced a physically impossible README row: 8B decode RISING 103.9 -> 107.9 tok/s from
+  "ctx512" to "ctx4096". At batch=1 decode is HBM-bound -- every token reads every weight plus the whole KV
+  cache at the current depth -- so tok/s MUST fall with depth (~9% for 8B over that range). It cannot rise.
+
+  The ctx-labelled authority is extra/qk/decode/decode_runtime_overhead.py, which prefills to exactly ctx
+  through the production generate path before timing, and is reached via `extra/qk/bench.py --decode`.
+  This function stays for the VRAM/correctness role it also serves; its throughput number is a
+  growing-window figure and must not be reported as a fixed-context one.
+  Contract pinned by test/unit/test_measurement_authority.py.
+  """
   seed = 0
   gen = model.generate([seed])
   per_tok_us, per_tok_mem, generated = [], [], []
