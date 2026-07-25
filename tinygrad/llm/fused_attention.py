@@ -204,7 +204,13 @@ def custom_kernel_attention(q:Tensor, k:Tensor, v:Tensor, *, scale:float|None, c
 
   q_flat = q.cast(dtypes.half).reshape(Hq * T * Hd)
   k_flat = k.cast(dtypes.half).reshape(Hkv * KV * Hd)
-  v_flat = v.cast(dtypes.half).reshape(Hkv * KV * Hd)
+  # V VECTORIZATION (PREFILL_V_TRANSPOSED): custom_kernel already .contiguous()'s each input into a
+  # fresh buffer, so materializing V as [Hkv][Hd][KV] instead of [Hkv][KV][Hd] costs one transposed
+  # copy in place of a free reshape -- and turns the emitter's 128 2-byte V gathers per KV tile into
+  # 16 b128 loads (see amd_attention_abi.expand_loop_fragment). Element count is identical.
+  from tinygrad.helpers import getenv as _getenv
+  v_flat = (v.cast(dtypes.half).permute(0, 1, 3, 2).reshape(Hkv * Hd * KV) if _getenv("PREFILL_V_TRANSPOSED")
+            else v.cast(dtypes.half).reshape(Hkv * KV * Hd))
   out_flat = Tensor.empty(Hq * T * Hd, dtype=dtypes.half, device=q.device)
   result = out_flat.custom_kernel(q_flat, k_flat, v_flat, fxn=fxn)[0]
   # Record the dispatch AFTER every geometry/spec gate above has passed (i.e. only

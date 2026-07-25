@@ -32,6 +32,7 @@ instruction encoder.
 from __future__ import annotations
 from tinygrad.uop.ops import UOp, UPat, PatternMatcher, Ops
 from tinygrad.dtype import dtypes, AddrSpace
+from tinygrad.helpers import getenv
 from tinygrad.renderer.isa.amd_physical_regs import _fixed_alias
 from tinygrad.renderer.isa.amd_register_contracts import AMD_ATTENTION_LOOP_STATE
 
@@ -133,6 +134,16 @@ def expand_loop_fragment(x:UOp) -> UOp:
     gbase=(grid_src[0]//(grid.q_tiles*grid.group_ratio))*(grid.kv_tokens*hd)
   if role=="Q": offs=tuple(gbase+col*hd+block*16+i for i in range(16))
   elif role=="K": offs=tuple(gbase+rng*16*hd+col*hd+block*16+i for i in range(16))
+  elif getenv("PREFILL_V_TRANSPOSED") and x.arg.grid is not None:
+    # V VECTORIZATION (measured lever): row-major V is [kv][hd], so the PV WMMA B-fragment -- which
+    # wants a fixed d=block*16+col and 16 VARYING kv -- reads with stride hd and lowers to 128
+    # `global_load_d16_b16` 2-byte gathers per KV tile (8 blocks x 16). PMC: those are 89% of the
+    # kernel's VMEM instructions and VMEM is ~63-65% of SQ busy cycles at every context (kv512->4096),
+    # i.e. ~58% of the kernel. Reading a [hd][kv]-TRANSPOSED V makes `i` the contiguous index, so the
+    # same 16 halves fold into 2 `global_load_b128` per block (16 total, matching K).
+    # The caller must pass V pre-transposed (llm/fused_attention.py); gbase is unchanged because
+    # hd*kv_tokens == kv_tokens*hd.
+    offs=tuple(gbase+(block*16+col)*x.arg.grid.kv_tokens+rng*16+i for i in range(16))
   else: offs=tuple(gbase+rng*16*hd+block*16+i*hd+col for i in range(16))
   return UOp(Ops.STACK,dtypes.half.vec(16),tuple(owner.index(off).load() for off in offs),
     tag=("amd_gfx1100_fragment_load_hd128_loop_v1",role,block,x.arg,*x.src))

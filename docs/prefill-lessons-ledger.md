@@ -181,3 +181,25 @@ results.
 - **8B-vs-14B occupancy verdict (was `beam-removal-and-pmc-handoff-20260704.md`):** 14B is *proportionally more work*,
   not a 14B-specific efficiency loss. The shared Q4_K prefill GEMM is latency/occupancy/codegen-bound at ~45% occupancy
   / ~1% of fp16 peak, and a config sweep proved occupancy is **not** tunable via workgroup/parts.
+- **8B prefill V-fragment vectorization (`PREFILL_V_TRANSPOSED`, measured 2026-07-24 — MECHANISM PROVEN, NET LOSS):**
+  the PV WMMA B-fragment wants a fixed `d` and 16 varying `kv`, so a row-major `[kv][hd]` V lowers to **128
+  `global_load_d16_b16` 2-byte gathers per KV tile** (8 blocks × 16) — 89% of the kernel's VMEM instructions, and PMC
+  showed VMEM is a flat **63–65% of SQ busy cycles across kv=512→4096** (busy scales to 1.002× of perfectly linear;
+  VALU/tile flat 391–402 vs 429 counted statically). Reading a `[hd][kv]`-transposed V vectorizes it to 32 `b128`
+  loads (loop body 952→843 instrs), is numerically **exact** (6.104e-05 at Hd=64 and Hd=128) and passes real-model 8B
+  token parity (198==198). PMC confirms the mechanism: **VMEM share 63–65% → 36.6–37.5%, attention wall 717.0ms →
+  605.4ms (1.20×)**. But whole-model **LOST 3.4%** (pp4096 3003→2900; slower at all four contexts).
+  Two quantified errors in the projection, both worth remembering:
+  1. **Cycles per VMEM instruction are NOT constant.** Measured `d16` = 3.02 cyc, `b128` = **6.61 cyc (2.2×)**. So
+     cutting instructions to 0.222× cut VMEM cycles only to 0.486×, giving attention 1.20× where an
+     instruction-count model predicted 1.96×. Never convert an instruction-count delta into a cycle delta at a
+     single measured cycles/instr rate.
+  2. **The per-call transpose costs ~7% of whole-model, not the ~3% estimated** from bytes÷HBM-peak — a
+     `[kv][hd]→[hd][kv]` copy is a strided scatter, not a streaming copy, so a bandwidth estimate badly understates it.
+  Verdict: at 23% of budget a 1.20× attention is only **+3.6% whole-model**, which the transpose more than eats.
+  The idea survives ONLY with a zero-cost transpose, i.e. **storing V transposed in the KV cache** (write once at
+  generation time, prefill reads the layout it wants for free) — ceiling ~**3111 tok/s at pp4096 vs llama 3160**, so
+  it closes most but not all of the −4.4% gap. Not shippable as a per-call permute. Also refuted along the way: the
+  P-repack LDS hypothesis (only 10 LDS instrs/tile; attention `lds_conflict` 5.1% vs the GEMMs' 12.5%) and any
+  bandwidth framing (AI = **818 FLOP/byte**, 6× past the ridge, 0.98% of HBM peak, L2 hit rising 62.8%→85.5% with
+  context). Counter path + method: `extra/qk/prefill_boltbeam_trace.py --hw-trace` (restored in `654c9b2ce`).
