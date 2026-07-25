@@ -20,7 +20,7 @@ The main idea is still kernel search, but the bar is strict: a route only become
 
 Machine: RX 7900 XTX (24 GB), AMD gfx1100. **Prefill rows re-measured 2026-07-24** (same-session against llama-bench, see below). **Decode rows are still from 2026-07-03** and have NOT been re-measured since; treat them as historical. Decode = median steady-state W==D via `extra/llm/model_e2e_bench.py` (the retained `generate` artifact harness), auto clock; both runtimes measured the same way, same GGUFs, on the same box. New throughput claims should use the canonical authority entry below (`extra/qk/bench.py`); migrating this historical table to fixed-context authority artifacts is a separate methodology update.
 
-**tinygrad now leads llama.cpp on decode across all three models at both contexts** — a few percent at ctx512, widening at ctx4096 (tinygrad decode is context-robust; llama's tg falls off with KV depth). The recent lift on 14B/8B/32B comes from the attn_v route-miss fix (`DECODE_ROUTE_ATTN_V`, +8.9% 8B / +13% 14B, byte-identical).
+**tinygrad now leads llama.cpp on decode across all three models at both contexts** — a few percent at ctx512, widening at ctx4096 (tinygrad decode is context-robust; llama's tg falls off with KV depth). The 07-03 lift came from an attn_v route-miss fix (+8.9% 8B / +13% 14B, byte-identical); its opt-out flag no longer exists — the legacy dispatch path was pruned in `08945aa94` (2026-07-10) and the fix is unconditional.
 
 ### tinygrad
 
@@ -32,17 +32,17 @@ Machine: RX 7900 XTX (24 GB), AMD gfx1100. **Prefill rows re-measured 2026-07-24
 
 **tinygrad-arkey prefill** (`extra/qk/prefill_whole_synced.py --mode authority`, whole-prefill tok/s):
 
-| Model | pp512 | pp1024 | pp2048 | pp4096 | decay 512→4096 |
+| Model | pp512 | pp1024 | pp2048 | pp4096 | decay 1024→4096 |
 |---|---:|---:|---:|---:|---:|
-| Qwen3-8B Q4_K_M | **3694** | 3624 | 3485 | **3236** | -12.4% |
-| Qwen3-14B Q4_K_M | **1945** | 1920 | 1875 | **1785** | -8.2% |
+| Qwen3-8B Q4_K_M | **3694** | 3624 | 3485 | **3236** | −10.7% |
+| Qwen3-14B Q4_K_M | **1945** | 1920 | 1875 | **1785** | **−7.0%** |
 
 **llama.cpp prefill** (`llama-bench -p 512,1024,2048,4096 -n 0 -ngl 99 -fa 1`, same session, same GGUFs):
 
-| Model | pp512 | pp1024 | pp2048 | pp4096 | decay 512→4096 |
+| Model | pp512 | pp1024 | pp2048 | pp4096 | decay 1024→4096 |
 |---|---:|---:|---:|---:|---:|
-| Qwen3-8B Q4_K_M | 3347 ±242 | 3410 ±7 | 3317 ±2 | 3158 ±17 | -5.6% |
-| Qwen3-14B Q4_K_M | 1845 ±86 | 1817 ±6 | 1758 ±2 | 1642 ±9 | -11.0% |
+| Qwen3-8B Q4_K_M | 3347 ±242 | 3410 ±7 | 3317 ±2 | 3158 ±17 | −7.4% |
+| Qwen3-14B Q4_K_M | 1845 ±86 | 1817 ±6 | 1758 ±2 | 1642 ±9 | −9.6% |
 
 **Margin (ours vs llama, same session):**
 
@@ -56,10 +56,17 @@ Machine: RX 7900 XTX (24 GB), AMD gfx1100. **Prefill rows re-measured 2026-07-24
 reproduced to −0.1% and pp2048 to −0.6%, while pp512 drifted −6.3%. Trust pp1024–pp4096; treat pp512 as
 indicative.
 
-Context decay: the structural floor for causal attention on this model/range is **−6.1%** (tokens grow
-O(S), causal attention O(S²); see [docs/prefill-roofline-first-principles-20260724.md](docs/prefill-roofline-first-principles-20260724.md)).
-**14B at −8.2% is close to that floor and beats llama's −11.0%. 8B at −12.4% is worse than llama's −5.6%**
-and is the clearest remaining prefill weakness.
+Context decay is quoted from **pp1024**, not pp512, because decay inherits the reliability of its baseline
+endpoint and pp512 is the unreliable one here. The structural floor for causal attention over 1024→4096 is
+**−5.3%** (tokens grow O(S), causal attention O(S²); see
+[docs/prefill-roofline-first-principles-20260724.md](docs/prefill-roofline-first-principles-20260724.md)).
+**14B at −7.0% is near that floor and better than llama's −9.6%. 8B at −10.7% vs llama's −7.4% is the
+clearest remaining prefill weakness.**
+
+Sensitivity, stated because it is large: measured from pp512 instead, the same data reads 8B −12.4% vs llama
+−5.6% and 14B −8.2% vs llama −11.0%. And had llama's 8B pp512 landed at its prior-session 3571 rather than
+tonight's 3347, llama's own figure would be −11.6% — worse than ours. Any decay claim anchored on pp512 on
+this box should be treated as indicative only.
 
 ### llama.cpp reference
 
@@ -111,13 +118,14 @@ PYTHONPATH=. .venv/bin/python extra/audit/pure_machine_search_default_path_censu
 Start with these files and the documentation map in [docs/README.md](docs/README.md):
 
 * `tinygrad/llm/` — the core runtime (command line, model, model-file loader).
-* `extra/qk/decode_runtime_overhead.py` — decode speed across context lengths.
+* `extra/qk/decode_harness.py` — decode speed across context lengths.
 * `extra/qk/prefill_whole_synced.py` — prefill speed.
 * `extra/audit/pure_machine_search_default_path_census.py` — current generated/default-route census.
 * `extra/qk/route_manifest.py` — runtime-facing route manifest, rollback flags, provenance, and refuted axes. BoltBeam owns the policy/search copy.
-* `extra/qk/flash_decode.py` — generated flash/decode attention routes.
+* `extra/qk/flash_decode_attention_spec.py`, `extra/qk/flash_decode_attention_executor.py` — generated flash/decode attention routes.
 * `extra/qk/gemv_g3_codegen_lowering.py`, `extra/qk/q6k_route_spec.py`, `extra/qk/prefill_graph_gemm_route.py` — generated route/runtime surfaces.
-* `extra/qk/tg_p10_reg_scalar_repro.py` — minimal repro for the current final compiler-lowering blocker.
+* `extra/qk/prefill/packed_wmma_prefill_candidates.py` — the packed-WMMA prefill candidates that are the 14B default (frozen per-(quant,role) geometry + load-time correctness gate).
+* `extra/qk/microbench/wmma_peak.cpp` — measured achievable WMMA peak (~105 TFLOPS on gfx1100); use it as the denominator for any efficiency claim.
 
 BoltBeam owns model facts, candidate/search schema, evaluation policy, ledgers, roofline attribution, and reports. tinygrad owns runtime execution, compiler/backend lowering, and hardware gates.
 
