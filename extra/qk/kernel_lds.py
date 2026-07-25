@@ -9,7 +9,8 @@ from extra.qk.kernel_pipeline import (HierarchicalKernelPipelinePlan, Hierarchic
 from tinygrad.codegen.opt.kernel_lds import (PackedPrecontractOperandTemplate, PrecontractContractSpec,
   PrecontractFactors, PrecontractFragmentInstance, PrecontractKAxis, PrecontractLDSStage, PrecontractOperand,
   PrecontractOperandTemplate, PrecontractPipelineTemplate, PrecontractProducerInstance, PrecontractThreadAxes,
-  build_precontract_lds_stage, contract_symbolic_upcast, derive_precontract_factors, derive_precontract_shape_factors,
+  build_precontract_lds_stage, contract_symbolic_upcast, cooperative_store_octet_rows, cooperative_store_row,
+  cooperative_store_row_rotation, derive_precontract_factors, derive_precontract_shape_factors,
   instantiate_precontract_fragments, instantiate_precontract_producer, lower_symbolic_barrier_dependencies,
   validate_precontract_carriers, validate_precontract_contracts, validate_precontract_operand_templates,
   validate_precontract_thread_axes, validate_precontract_wmma_abi, validate_rdna3_wmma_descriptor)
@@ -90,6 +91,10 @@ def cooperative_lds_stores(geometry:KernelTileGeometry, role:str, *, element_byt
   for linear in range(vector_count):
     thread, iteration = linear % geometry.threads, linear // geometry.threads
     row, vector = divmod(linear, vectors_per_row)
+    # Same lane->row re-election the codegen applies, so this model stays the ground truth for
+    # the emitted addresses.  See cooperative_store_row_rotation for the bank derivation.
+    row = cooperative_store_row(row, vectors_per_row=vectors_per_row, rows=rows,
+                                stride_bytes=window.stride_bytes, vector_bytes=vector_bytes)
     byte_offset = window.base + row * window.stride_bytes + vector * vector_bytes
     stores.append(CooperativeLDSStore(role, thread, iteration, row, vector, byte_offset, vector_bytes))
   return tuple(stores)

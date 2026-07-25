@@ -191,6 +191,74 @@ precisely when vector-load alignment blocks padding.
 as Theory 3, NOT the large win the 79.6%-of-runtime share suggests. Extrapolated from one point; treat as
 a ceiling.
 
+**CLOSED 2026-07-24 — conflict eliminated to bit-exact ZERO; throughput did not move. Theory 2 is worth
+~+0.1%, not +1.8%. The "conflicts are on the critical path" finding above is WRONG.**
+
+*The bank model, derived and then validated to the cycle.* RDNA3 services a wave32 b128 LDS access eight
+lanes at a time (8 lanes x 4 dwords = the 32 x 4 B banks). A b128 slot only cares which aligned dword
+*quad* it lands in, so `Q(row, slot) = (row*(stride//16) + slot) mod 8`, i.e. **`Q = (5*row + slot) mod 8`**
+at stride 80. An octet is conflict-free iff its eight slots give eight distinct `Q`. Feeding the *real*
+address math (`tinygrad/codegen/opt/kernel_lds.py:497-504` stores, `:514-516` fragment loads) through that
+model reproduces every known datapoint exactly: stride 64 -> 72%, **80 -> 12.50%**, **96 -> 50.00%**,
+112 -> 12.50%, 128 -> 86%. The `gcd(S,32)` model in the section above is *not* the mechanism (it happens to
+rank these five strides in the same order); the quad-group invariant is.
+
+*Where the conflicts actually were.* Not in the WMMA fragment loads — those are **already perfectly
+conflict-free** at stride 80, because a load octet is eight consecutive rows at one fixed slot and
+`5*row mod 8` is a bijection. **100% of the conflict is in the cooperative store**, which is 50%
+conflicted: a store octet is 2 rows x 4 slots, and adjacent rows give `{c..c+3} u {c+5,c+6,c+7,c}` — `c`
+twice, `c+4` unused. Loads are 768 of the 1024 LDS cycles per wave-epoch and stores 256, so
+`0.5 * 256/1024 = 12.5%` — the measured number, from first principles.
+
+*XOR swizzle: PROVABLY DEAD, and it was the wrong target.* The only address XOR available above the 16 B
+boundary lives in the two slot-index bits, and the fragment load is one index plus a 16-wide `CONTRACT`
+(32 contiguous bytes), so a swizzle may only relocate 32 B fragment halves, never individual b128 slots.
+Exhaustive search over that space: the best pure bit-5 XOR is the identity (12.50%, no gain — it can only
+permute slots *within* a row, and a store octet's per-row slot **set** is invariant under any such
+permutation); the best expressible *layout* of any kind at stride <= 128 is 6.67%; a fully conflict-free
+layout needs stride >= 144 B = 73728 B LDS, over the 64 KiB `max_lds_bytes`. Padding was exhausted and
+swizzling is exhausted **because the conflict is not a property of the layout at all.**
+
+*The actual fix (shipped): re-elect the store's lane->row map, not the layout.* Rows at distance **4**
+give `{c..c+3} u {c+4..c+7}` = all eight. Rotating the low three row bits (`q -> ((q&1)<<2)|(q>>1)`, so
+lane-quads 0..7 take rows 0,4,1,5,2,6,3,7) pairs rows four apart inside every octet while leaving each
+lane-quad on one contiguous 64 B source row — so the wave issues the *same* global-memory segments, the
+LDS layout is byte-identical, LDS bytes are unchanged, and the term is loop-invariant so it hoists out of
+the K loop. `cooperative_store_row{,_rotation}` in `tinygrad/codegen/opt/kernel_lds.py`; the pure-Python
+model in `extra/qk/kernel_lds.py` follows it. `candidate-set.json` is untouched (identities unchanged).
+
+*Measured, paired same-session, ctx512 PMC (attention row as an unchanged-path control):*
+
+| | lds_conflict_pct (all four GEMM roles) | SQC_LDS_BANK_CONFLICT | SQC_LDS_IDX_ACTIVE | attention control |
+|---|---|---|---|---|
+| naive election | 12.50000% (bit-exact) | 6291456 | 50331648 | 5.14681% |
+| rotated election | **0.00000%** | **0** | 44040192 | 5.14681% |
+
+`IDX_ACTIVE` fell by exactly **7/8**, matching the model's predicted 1024 -> 896 cycles to the cycle.
+`SQ_INSTS_VALU` rose 0.11% (the hoisted address setup). Numerics `max_abs_err=6.104e-05 PASS` at Hd=64
+and Hd=128; `8B: SDPA=198 FUSED=198 MATCH PASS`.
+
+*Throughput: nothing.* Paired, interleaved, same-session, 2 reps (whole-prefill authority, tok/s):
+
+| arm | conflict | LDS/WG | pp512 | pp1024 | pp2048 | pp4096 | vs base80 |
+|---|---|---|---|---|---|---|---|
+| base80 (naive) | 12.5% | 40960 B | 3574 / 3570 | 3477 / 3466 | 3290 / 3288 | 2979 / 2979 | — |
+| **elect80 (shipped)** | **0.0%** | 40960 B | 3574 / 3573 | 3478 / 3476 | 3294 / 3297 | 2981 / 2984 | **+0.13%** |
+| base112 (control) | 12.5% | 57344 B | 3566 / 3545 | 3469 / 3453 | 3287 / 3276 | 2977 / 2966 | −0.31% |
+
+**+0.13% mean, sign-consistent but under the 0.59% back-to-back noise floor. The doc's +1.8% projection
+overshot by ~14x.** The error was assuming linearity. Marginal sensitivity is a *threshold*, not a slope:
+896 -> 1024 LDS cycles (+14%) costs 0.13% (0.009%/%), while 1024 -> 1792 (+75%, the stride-96 arm) costs
+5.5% (0.073%/%) — 8x steeper. At the baseline operating point the LDS pipe has slack and the 12.5%
+conflict was entirely hidden behind the GEMM's VMEM/VALU/WMMA work; stride 96 pushed it past saturation
+into being co-critical. **So "throughput tracked the counter in lockstep" was a single-point coincidence,
+not a slope.** The `base112` control also rules out LDS *footprint*/occupancy as the stride-96 mechanism:
++40% LDS bytes at identical conflict costs only 0.31%, not 5.5%.
+
+The change is shipped anyway because it is free (zero LDS, +0.11% VALU, gates green) and it removes a
+permanently misleading PMC signal — but **the 79.6%-of-runtime GEMM path does not have a bank-conflict
+needle in it. Theory 2 is closed.**
+
 ## THEORY 3 — causal tile skipping (bounded, independent)
 
 The kernel iterates **every** KV tile and masks in the softmax; it never skips a fully-masked tile.

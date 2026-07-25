@@ -45,12 +45,33 @@ def test_a_b_windows_do_not_overlap_and_padding_has_no_store_owner():
     assert {s.byte_offset for s in stores} | set(padding) == set(range(window.base, window.end, 16))
 
 
+def _elected_row(raw:int) -> int:
+  """Bank-conflict-free lane-quad election: rotate the low three row bits (0,4,1,5,2,6,3,7)."""
+  return (raw // 8) * 8 + (raw % 2) * 4 + (raw % 8) // 2
+
+
 def test_store_election_matches_two_rows_per_thread():
   for role in ("A", "B"):
     by_thread = {tid: [] for tid in range(256)}
     for store in cooperative_lds_stores(_geometry(), role): by_thread[store.thread].append(store)
     for tid, stores in by_thread.items():
-      assert [(s.row, s.vector) for s in stores] == [(tid // 4, tid % 4), (tid // 4 + 64, tid % 4)]
+      assert [(s.row, s.vector) for s in stores] == \
+        [(_elected_row(tid // 4), tid % 4), (_elected_row(tid // 4 + 64), tid % 4)]
+
+
+def test_store_octets_are_lds_bank_conflict_free():
+  """Every eight-lane b128 bank cycle must hit eight distinct aligned dword quads.
+
+  Q(row, vector) = (row*(stride//16) + vector) mod 8 = (5*row + vector) mod 8 at stride 80.
+  The naive election pairs adjacent rows and collides two-way on every store; the rotated
+  election pairs rows four apart and is conflict-free.
+  """
+  geometry = _geometry()
+  for role in ("A", "B"):
+    stores = sorted(cooperative_lds_stores(geometry, role), key=lambda s: (s.iteration, s.thread))
+    for octet in range(len(stores) // 8):
+      group = stores[octet * 8:octet * 8 + 8]
+      assert len({(s.byte_offset // 4) % 32 // 4 for s in group}) == 8, (role, octet)
 
 
 def test_semantic_wave_coordinates_cover_exact_4x2_topology():

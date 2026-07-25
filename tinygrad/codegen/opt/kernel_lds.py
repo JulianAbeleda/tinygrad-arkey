@@ -411,6 +411,59 @@ def _window(geometry:KernelTileGeometry, role:str) -> KernelLDSWindow:
   return next(w for w in geometry.lds_windows if w.role == role)
 
 
+def cooperative_store_octet_rows(vectors_per_row:int) -> int:
+  """Rows spanned by one LDS bank-cycle group of the cooperative store.
+
+  RDNA3 services a wave32 b128 LDS access eight lanes at a time (8 lanes x 4 dwords = the
+  32 x 4 B banks).  The cooperative store elects consecutive lanes onto consecutive
+  ``(row, vector)`` slots, so one such octet covers ``8 // vectors_per_row`` consecutive rows.
+  """
+  if vectors_per_row <= 0 or 8 % vectors_per_row: raise ValueError("cooperative octet must cover whole rows")
+  return 8 // vectors_per_row
+
+
+def cooperative_store_row_rotation(*, vectors_per_row:int, rows:int, stride_bytes:int, vector_bytes:int=16) -> bool:
+  """Whether re-electing lane-quads onto rotated rows removes the store bank conflict.
+
+  Bank arithmetic.  A b128 slot ``(row, vector)`` starts at dword ``row*S + vector*V`` with
+  ``S = stride_bytes//4`` and ``V = vector_bytes//4``; it occupies ``V`` consecutive dwords, so
+  the only thing that matters for a b128 access is which of the ``32//V`` aligned dword *quads*
+  it lands in:  ``Q(row, vector) = (row*(stride_bytes//vector_bytes) + vector) mod (32//V)``.
+  For the shipped geometry (stride 80, vector 16) that is ``Q = (5*row + vector) mod 8``.
+
+  An octet is conflict-free iff its eight slots hit eight distinct ``Q``.  With
+  ``vectors_per_row == 4`` an octet is two rows x four vectors:
+    * rows ``r, r+1``  -> ``{c,c+1,c+2,c+3}`` u ``{c+5,c+6,c+7,c}``  -- ``c`` twice, ``c+4`` unused
+      => 2 cycles instead of 1, i.e. a 2-way conflict on every cooperative store.
+    * rows ``r, r+4``  -> ``{c,c+1,c+2,c+3}`` u ``{c+4,c+5,c+6,c+7}``  -- all eight, conflict-free.
+  So the conflict is not a property of the LDS *layout* (which padding and XOR swizzles both
+  attack, and which is already load-optimal at stride 80) but of the store's lane->row
+  *election*.  Rotating the low three bits of the row index pairs rows four apart instead of
+  adjacent while leaving every lane-quad on one contiguous ``vector_bytes*vectors_per_row``
+  source row, so the wave still issues exactly the same global-memory segments.
+  """
+  if vector_bytes <= 0 or 32 % (vector_bytes//4) or stride_bytes % vector_bytes: return False
+  quads = 32 // (vector_bytes//4)
+  if quads != 8 or vectors_per_row != 4 or rows % 8: return False
+  m = (stride_bytes//vector_bytes) % quads
+  def conflicted(delta:int) -> bool:
+    q = [(m*row + vector) % quads for row in (0, delta) for vector in range(vectors_per_row)]
+    return len(set(q)) != len(q)
+  return conflicted(1) and not conflicted(4)
+
+
+def cooperative_store_row(raw_row, *, vectors_per_row:int, rows:int, stride_bytes:int, vector_bytes:int=16):
+  """Apply the lane->row re-election of :func:`cooperative_store_row_rotation`.
+
+  ``raw_row = linear_vector // vectors_per_row`` is the row the naive election would store.
+  The rotation ``q -> ((q & 1) << 2) | (q >> 1)`` on the low three bits maps lane-quads
+  ``0..7`` onto rows ``0,4,1,5,2,6,3,7``, so every octet (quads ``2j, 2j+1``) holds rows four
+  apart.  It is an involution-free permutation of each aligned eight-row block, hence still an
+  exact one-writer cover of the tile, and it is loop-invariant so it hoists out of the K loop.
+  """
+  if not cooperative_store_row_rotation(vectors_per_row=vectors_per_row, rows=rows,
+                                        stride_bytes=stride_bytes, vector_bytes=vector_bytes): return raw_row
+  return (raw_row//8)*8 + (raw_row % 2)*4 + (raw_row % 8)//2
 
 
 def instantiate_precontract_producer(geometry:KernelTileGeometry, *, tc, allocation:UOp,
@@ -424,9 +477,12 @@ def instantiate_precontract_producer(geometry:KernelTileGeometry, *, tc, allocat
   role_nodes=[]
   for operand in operands:
     stores=[]; window=_window(geometry,operand.role); loads=factors.loads_a if operand.role == "A" else factors.loads_b
+    rows=geometry.tile[0] if operand.role == "A" else geometry.tile[1]
     for row_iteration in range(loads):
       linear_vector=thread+row_iteration*geometry.threads
       row,vector=linear_vector//factors.vectors_per_row,linear_vector%factors.vectors_per_row
+      row=cooperative_store_row(row,vectors_per_row=factors.vectors_per_row,rows=rows,
+                                stride_bytes=window.stride_bytes,vector_bytes=vector_bytes)
       logical_k=vector*vector_elements
       logical_row = operand.row_tile_base + row
       value = operand.transform.dequant_tile(operand.source, logical_row, epoch*geometry.tile[2]+logical_k, vector_elements).value \
@@ -493,9 +549,12 @@ def build_precontract_lds_stage(geometry:KernelTileGeometry, *, tc, allocation:U
   for operand in operands:
     window = _window(geometry, operand.role)
     loads = factors.loads_a if operand.role == "A" else factors.loads_b
+    rows = geometry.tile[0] if operand.role == "A" else geometry.tile[1]
     for row_iteration in range(loads):
       linear_vector = thread + row_iteration*geometry.threads
       row, vector = linear_vector//factors.vectors_per_row, linear_vector%factors.vectors_per_row
+      row = cooperative_store_row(row, vectors_per_row=factors.vectors_per_row, rows=rows,
+                                  stride_bytes=window.stride_bytes, vector_bytes=vector_bytes)
       logical_k = vector * vector_elements
       logical_row = operand.row_tile_base + row
       value = operand.transform.dequant_tile(operand.source, logical_row, k_axis.tile_base + logical_k, vector_elements).value \
