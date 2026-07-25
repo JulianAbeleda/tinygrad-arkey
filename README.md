@@ -18,7 +18,7 @@ The main idea is still kernel search, but the bar is strict: a route only become
 
 ## Current performance state
 
-Machine: RX 7900 XTX (24 GB), AMD gfx1100. Measured 2026-07-03 on `master` (all shipping defaults incl. the attn_v route fix). Decode = median steady-state W==D via `extra/llm/model_e2e_bench.py` (the retained `generate` artifact harness), auto clock; both runtimes measured the same way, same GGUFs, on the same box. New throughput claims should use the canonical authority entry below (`extra/qk/bench.py`); migrating this historical table to fixed-context authority artifacts is a separate methodology update.
+Machine: RX 7900 XTX (24 GB), AMD gfx1100. **Prefill rows re-measured 2026-07-24** (same-session against llama-bench, see below). **Decode rows are still from 2026-07-03** and have NOT been re-measured since; treat them as historical. Decode = median steady-state W==D via `extra/llm/model_e2e_bench.py` (the retained `generate` artifact harness), auto clock; both runtimes measured the same way, same GGUFs, on the same box. New throughput claims should use the canonical authority entry below (`extra/qk/bench.py`); migrating this historical table to fixed-context authority artifacts is a separate methodology update.
 
 **tinygrad now leads llama.cpp on decode across all three models at both contexts** — a few percent at ctx512, widening at ctx4096 (tinygrad decode is context-robust; llama's tg falls off with KV depth). The recent lift on 14B/8B/32B comes from the attn_v route-miss fix (`DECODE_ROUTE_ATTN_V`, +8.9% 8B / +13% 14B, byte-identical).
 
@@ -30,20 +30,31 @@ Machine: RX 7900 XTX (24 GB), AMD gfx1100. Measured 2026-07-03 on `master` (all 
 | Qwen3-14B | Q4_K_M | 66.5 tok/s | 68.2 tok/s | +1.4% / +24.9% vs llama. Generated G=5 K-only attention route + attn_v fix. |
 | Qwen3-32B | Q4_K_M | 31.9 tok/s | 32.6 tok/s | +2.3% / +9.8% vs llama. Fits 24 GB (20.9/24.2 GB at ctx512/4096). |
 
+**Prefill (re-measured 2026-07-24, same-session vs llama-bench, paired and `flock`-serialized):**
+
+| Model | pp512 | pp4096 | vs llama pp512 | vs llama pp4096 |
+|---|---:|---:|---:|---:|
+| Qwen3-8B | 3727 tok/s | 3262 tok/s | +11.4% (soft) | **+3.3%** |
+| Qwen3-14B | 1948 tok/s | 1787 tok/s | **+5.6%** | **+8.8%** |
+
+Context decay pp512→pp4096: 8B −12.5% (llama −5.6%), 14B −8.2% (llama −11.0%). The structural floor for
+causal attention on this model/range is −6.1%, so 14B's scaling is close to optimal and 8B's is not.
+
 ### llama.cpp reference
 
 | Model | Quant | Decode ctx512 | Decode ctx4096 | Prefill pp512 | Notes |
 |---|---:|---:|---:|---:|---|
-| Qwen3-8B | Q4_K_M | 100.0 tok/s | 90.4 tok/s | 3107 tok/s | Same GGUF / RX 7900 XTX via local llama-bench (tg128). |
-| Qwen3-14B | Q4_K_M | 65.6 tok/s | 54.6 tok/s | 1702 tok/s | Same GGUF / RX 7900 XTX via local llama-bench (tg128). |
+| Qwen3-8B | Q4_K_M | 100.0 tok/s | 90.4 tok/s | **3347 tok/s** | Decode 07-03; prefill re-measured 07-24 same-session (`-fa 1 -ngl 99`), ±242 t/s. |
+| Qwen3-14B | Q4_K_M | 65.6 tok/s | 54.6 tok/s | **1845 tok/s** | Decode 07-03; prefill re-measured 07-24 same-session (`-fa 1 -ngl 99`), ±86 t/s. |
 | Qwen3-32B | Q4_K_M | 31.2 tok/s | 29.7 tok/s | 757 tok/s | Same GGUF / RX 7900 XTX via local llama-bench (tg128). |
 
 Read these as current working numbers, not a universal claim. **Decode is a tinygrad win at all sizes; prefill depends on the path:**
 
 - **Decode** — tinygrad leads llama across 8B/14B/32B, widening at long context (HBM-bound; that's the fork's headline).
-- **Prefill** — the promoted compiler-generated WMMA-LDS candidate set reaches a correctness-gated, pinned **3561 tok/s pp512** on 8B versus llama's ~3050. It is the default for its four exact admitted fp16 roles; unsupported shapes use ordinary tinygrad scheduling.
+- **Prefill** — 8B reaches **3727 tok/s pp512 / 3262 pp4096** versus llama's same-session **3347 / 3158** (+11.4% / +3.3%). The promoted compiler-generated WMMA-LDS candidate set is the default for its four exact admitted fp16 roles; unsupported shapes use ordinary tinygrad scheduling. The pp512 margin is soft — llama's own stdev there is ±242 t/s (7%).
 - **Prefill current state** — the canonical route, evidence, rollback, and closed-result ledger live in [docs/prefill-current-state.md](docs/prefill-current-state.md).
-- **Prefill on 14B/32B** — the tuned path doesn't fit (fp16 overlay ~28 GB / ~64 GB), so today they fall back to the slow universal path. Closing that is a real project (a fast-prefill path that doesn't materialize the whole model in fp16).
+- **Prefill on 14B** — **live at 1948 tok/s pp512 / 1787 pp4096** versus llama's same-session 1845 / 1642 (+5.6% / +8.8%), via the packed-WMMA candidate route (`TINYGRAD_PREFILL_PACKED_WMMA`, default ON, 6/6 combos correctness-gated at `max_abs 0.0`). This does NOT use the fp16 overlay — 14B's ~29 GB fp16 footprint cannot be admitted on a 24 GB card, so the packed route reads Q4_K/Q6_K storage directly. 14B end-to-end token parity has not yet been run with this route live.
+- **Prefill on 32B** — still falls back to the slow universal path (fp16 overlay ~64 GB, and no packed-WMMA geometry is gated for its shapes). Closing that is a real project.
 
 **Measurement discipline:** report prefill/decode throughput only from the authority harnesses via `extra/qk/bench.py` (below). Never report throughput from a `model.generate` TTFT bench; it includes unrelated Python, sampling, and host overhead.
 
