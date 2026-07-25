@@ -3,7 +3,7 @@ from dataclasses import dataclass, replace
 from collections import defaultdict
 from typing import Any, ClassVar, Generic, TypeVar, Iterator, Generator, TYPE_CHECKING
 import importlib, inspect, functools, pathlib, os, contextlib, re, atexit, pickle, decimal
-from tinygrad.helpers import LRU, getenv, diskcache_get, diskcache_put, DEBUG, GlobalCounters, flat_mv, PROFILE, temp, colored
+from tinygrad.helpers import LRU, getenv, diskcache_get, diskcache_put, DEBUG, GlobalCounters, flat_mv, PROFILE, temp, colored, ContextVar
 from tinygrad.helpers import Context, CCACHE, ALLOW_DEVICE_USAGE, MAX_BUFFER_SIZE, cpu_events, ProfileEvent, ProfilePointEvent, suppress_finalizing
 from tinygrad.helpers import select_by_name, select_first_inited, DEV, TracingKey, size_to_str, pluralize
 from tinygrad.dtype import DType, PtrDType, _to_np_dtype
@@ -221,6 +221,45 @@ class Buffer:
     assert offset < self.nbytes, "offset must be less than nbytes"
     return Buffer(self.device, size, dtype, base=self.base, offset=self.offset+offset)
 
+GPU_LIFETIME_AUDIT = ContextVar("GPU_LIFETIME_AUDIT", 0)
+
+# Phase-0 DETECTOR for the recurring gfx1100 `SQC (inst)` page fault (instruction fetch from an unmapped
+# page, GCVM_L2_PROTECTION_FAULT_STATUS:0x008012B1, ~21 GPU resets over 6 days). Hypothesis: a device
+# allocation -- including a code object -- is released while a dispatch referencing it is still in flight.
+# This ONLY OBSERVES: it inserts no synchronization and changes no ordering, so a silent run refutes the
+# hypothesis for ~zero cost rather than committing anyone to a fix.
+#
+# BACKEND-AGNOSTIC BY CONSTRUCTION: it is a no-op unless the device exposes an HCQ timeline signal, using
+# the same `hasattr(..., 'timeline_signal')` guard Compiled.synchronize() already uses. Backends without a
+# completion primitive (METAL, CUDA, CPU, ...) skip it entirely and are bit-identical with the flag on or
+# off. `signal.value` is a mapped-memory read (hcq.py:260), not an ioctl, so per-free checking is cheap.
+#
+# NOTE the fix this is designed to justify already exists in-tree for copy-staging buffers:
+# HCQAllocatorBase.b_timeline tags each staging buffer with the timeline value at which it becomes safe
+# (`b_timeline[next] <= dev.timeline_signal.value`, hcq.py:614). The portable fix is to extend that
+# defer-until-drained discipline to general frees -- NOT to synchronize on every free, which would
+# serialize every backend to fix a fault seen on one.
+_lifetime_audit_hits: list[tuple[str,str,int,int,int]] = []
+
+def _audit_free_in_flight(dev, size:int, site:str) -> None:
+  """Record a free issued while the device still has un-drained work. Observation only."""
+  if not GPU_LIFETIME_AUDIT: return
+  sig = getattr(dev, "timeline_signal", None)
+  if sig is None: return                                  # non-HCQ backend: nothing to observe
+  try: observed, pending = sig.value, getattr(dev, "timeline_value", 0) - 1
+  except Exception: return                                # never let the detector break a run
+  if observed < pending: _lifetime_audit_hits.append((getattr(dev, "device", "?"), site, size, observed, pending))
+
+def _dump_lifetime_audit() -> None:
+  if not GPU_LIFETIME_AUDIT or not _lifetime_audit_hits: return
+  from collections import Counter
+  by_site = Counter((d, s) for d, s, _, _, _ in _lifetime_audit_hits)
+  print(f"\n=== GPU_LIFETIME_AUDIT: {len(_lifetime_audit_hits)} free(s) issued with work still in flight ===")
+  for (d, s), n in by_site.most_common(20): print(f"  {n:6d}  {d:10s} {s}")
+  worst = max(_lifetime_audit_hits, key=lambda h: h[4]-h[3])
+  print(f"  widest gap: {worst[4]-worst[3]} timeline values behind ({worst[1]}, {size_to_str(worst[2])})")
+atexit.register(_dump_lifetime_audit)
+
 DeviceType = TypeVar('DeviceType', bound='Compiled')
 
 # TODO: size, dest, src are the same type. can we enforce this?
@@ -236,6 +275,7 @@ class Allocator(Generic[DeviceType]):
     except (RuntimeError, MemoryError) as e: raise MemoryError(f"Allocation of {size_to_str(size)} failed on {self.dev.device}. "
                                                                f"Used: {size_to_str(GlobalCounters.mem_used_per_device[self.dev.device])}") from e
   def free(self, opaque, size:int, options:BufferSpec|None=None):
+    _audit_free_in_flight(self.dev, size, "Allocator.free")
     self._free(opaque, options if options is not None else self.default_buffer_spec)
 
   # implemented by the runtime
@@ -266,6 +306,7 @@ class LRUAllocator(Allocator, Generic[DeviceType]):
       return super().alloc(size, options)
   def free_cache(self):
     for (sz,options),opaques in self.cache.items():
+      if opaques: _audit_free_in_flight(self.dev, sz, "LRUAllocator.free_cache")
       for opaque in opaques: super().free(opaque, sz, options)
       opaques.clear()
   def free(self, opaque:Any, size:int, options:BufferSpec|None=None):
