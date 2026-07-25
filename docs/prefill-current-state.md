@@ -1,9 +1,12 @@
-# 8B Prefill Current State
+# Prefill Current State (8B + 14B)
 
-This is the compact authority for the shipped Qwen3-8B gfx1100 prefill route. Historical scopes and failed benchmark
+This is the compact authority for the shipped Qwen3 gfx1100 prefill routes. **14B is live again as of 2026-07-24
+(`7463a6774`)** -- it had been stuck on a slow fallback and was widely believed unrunnable; see the 14B
+section below. Historical scopes and failed benchmark
 banks live in Git history, not on the active repository surface.
 
-Last updated: 2026-07-24 (aligned three-way benchmark + fused-attention contribution added; original pinned authority below unchanged).
+Last updated: 2026-07-24 (late): PREFILL_SOFTMAX_REDUCE_FUSE promoted default-ON; 14B packed-WMMA load
+fault fixed; llama.cpp re-measured SAME-SESSION, superseding every earlier cross-session llama figure.
 
 ## Shipped route
 
@@ -96,6 +99,61 @@ Findings (honest, corrected):
    best-case ~3.6k). The historical "≈145% of llama" was an artifact of the invalid
    ~4408/4413 tinygrad number (see below) plus an un-artifacted "~3050" llama estimate; the
    real aligned figure is near-parity-to-slightly-ahead short, slightly behind long.
+
+## AUTHORITATIVE NUMBERS (2026-07-24 late, same-session llama, supersedes the section above)
+
+Everything below is paired, same-session, `--mode authority`, `flock`-serialized. **Every llama figure earlier
+in this doc and in the sibling docs was CROSS-SESSION and is superseded** -- llama.cpp re-run tonight
+(`llama-bench -fa 1 -ngl 99`, same GPU state) gives materially different short-context numbers.
+
+| | pp | ours | llama (same session) | margin |
+|---|------|------|------|------|
+| 8B  | 512  | 3727 | 3347 +/- 242 | +11.4% (llama's own noisiest point, 7% stdev -- treat as soft) |
+| 8B  | 4096 | **3262** | 3158 +/- 17 | **+3.3%** |
+| 14B | 512  | **1948** | 1845 +/- 86 | **+5.6%** |
+| 14B | 4096 | **1787** | 1642 +/- 9 | **+8.8%** |
+
+Ahead on both models at both ends, on a valid comparison for the first time.
+
+### CORRECTION: the 8B decay-parity claim in the section above is WRONG
+That section claims the T6 fix brought our 8B decay to near-parity with llama (-12.08% vs -11.51%, "gap
+closed from 5.25pp to 0.57pp"). llama's -11.51% was cross-session. **Same-session llama 8B decay is
+-5.62%**, because its pp512 came in at 3347 tonight rather than 3571. Ours is -12.48%, so we are at
+**~2.2x llama's 8B decay, NOT at parity.**
+
+14B is the opposite and genuinely good: **ours -8.24% vs llama -10.99%**, i.e. our context-scaling on the
+larger model beats llama's and sits closer to the -6.14% structural floor
+(`docs/prefill-roofline-first-principles-20260724.md`).
+
+Drift note, now localized: llama 8B pp4096 reproduced to **-0.1%** across sessions and pp2048 to -0.6%, but
+pp512 drifted **-6.3%**. So "the box drifts ~5%" is right in magnitude but wrong in location -- it is
+SHORT-context variance, not a global session shift. Deep-context cross-session comparisons were roughly fair;
+short-context ones were not.
+
+## 14B route (live again, 2026-07-24)
+
+- Route: packed-WMMA prefill candidates (`TINYGRAD_PREFILL_PACKED_WMMA`, **default ON**), Q4_K/Q6_K,
+  6/6 correctness-gated combos at `max_abs 0.0`.
+- **pp512 1948, pp4096 1787 tok/s** (was 355-364 on the direct-packed fallback) = **5.0-5.4x**.
+- The fault that made 14B "unrunnable" all day was NOT the kernel. Its code objects are byte-identical to
+  the 6/6-gated 07-21 state (bisected compile-only,
+  `docs/packed-wmma-14b-codegen-transition-bisect-20260724.md`). `6ca798568` flipped the enable default
+  0->1 with gates captured in the OPT-IN configuration; that made the load-time correctness canary run on
+  every default load, and `from_gguf` ran it AFTER `realize_prefill_v2_weights()` had taken the ~19GB fp16
+  overlay, so the spawned canary child started VRAM-starved. Fix = run the canary BEFORE the overlay
+  (`7463a6774`). Full trace: `docs/packed-wmma-14b-fault-trace-20260724.md`.
+- `TINYGRAD_PREFILL_PACKED_WMMA=0` is a **rollback to the pre-`6ca798568` default**, not a workaround.
+- OPEN: 14B end-to-end token parity has NOT been run with packed-WMMA live. A passing canary plus
+  throughput is not the same as matching tokens. `extra/qk/prefill_flash_e2e_parity.py --only 14B`.
+
+## Shipped default flags (2026-07-24 late)
+
+| flag | default | worth |
+|---|---|---|
+| `PREFILL_SOFTMAX_REDUCE_FUSE` | **ON** (`24c8c0d94`) | 8B +1.37/+2.17/+3.71/+6.72% at pp512/1024/2048/4096; decode codegen proven byte-identical |
+| `TINYGRAD_PREFILL_PACKED_WMMA` | **ON** | 14B 5.0-5.4x; 8B unaffected (graph-GEMM) |
+| `PREFILL_CAUSAL_TILE_SKIP` | **OFF** (`c44905a18`) | +1.77/+1.66% measured, 3 pairs; its promotion gate correctly FAILS pending 14B evidence |
+| `PREFILL_V_TRANSPOSED` | **OFF** (`fd654024e`) | REFUTED: mechanism proven (VMEM 65%->37%) but -3.4% whole-model |
 
 ## Closed branches
 

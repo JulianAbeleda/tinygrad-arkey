@@ -1,4 +1,6 @@
-# 8B prefill: the roofline from first principles (2026-07-24)
+# Prefill roofline from first principles (2026-07-24)
+
+Derived on 8B; the decay/floor arithmetic applies to both models and 14B rows were added after it went live.
 
 Written after seven theories were tested in one session (six refuted, one worth +7.3%). Its purpose is
 to stop the next arc from re-deriving the frame, and to record the *measurement* errors that made most of
@@ -74,15 +76,26 @@ pp4096, which alone costs **−6.14%** even if attention were exactly as efficie
 
 | | decay pp512→pp4096 | excess over floor | |
 |---|---|---|---|
-| ours, before T6 | −16.76% | −10.6pp | 2.7x ideal |
-| **ours, after T6** | **−12.08%** | **−5.9pp** | **2.0x ideal** |
-| llama.cpp | −11.51% | −5.4pp | 1.9x ideal |
+| ours 8B, before T6 | −16.76% | −10.6pp | 2.7x ideal |
+| **ours 8B, after T6** | **−12.48%** | −6.3pp | 2.0x ideal |
+| llama 8B (SAME-SESSION) | **−5.62%** | +0.5pp | ~0.9x ideal |
+| **ours 14B** | **−8.24%** | −2.1pp | 1.3x ideal |
+| llama 14B (same-session) | −10.99% | −4.9pp | 1.8x ideal |
 
-**Decay is the drift-robust comparison** (a within-run ratio, so the ~5% session drift cancels).
-The T6 fix closed the decay gap to llama from **5.25pp to 0.57pp** — context-scaling parity. Absolute
-throughput margins vs llama (+1.6% to +3.4%) are SMALLER than the session drift and rest on cross-session
-llama numbers, so they are not yet a valid claim. Same-session interleaved llama re-measurement is
-required before "we beat llama" goes in any doc.
+**CORRECTED 2026-07-24 late.** The row previously read "llama −11.51%, gap closed to 0.57pp, context-scaling
+parity". That llama figure was CROSS-SESSION. Re-measured same-session, llama 8B decays only −5.62% (its
+pp512 is 3347 tonight, not 3571) so **we are at ~2.2x llama's 8B decay, NOT at parity**. The reverse holds on
+14B, where our −8.24% genuinely beats llama's −10.99% and sits closest to the floor of anything measured.
+Drift is SHORT-context: llama 8B pp4096 reproduced to −0.1% across sessions, pp512 drifted −6.3%.
+
+**Decay is still the more robust comparison** (a within-run ratio), but it is NOT drift-immune the way this
+doc originally claimed: drift is concentrated at short context, and decay is computed FROM the pp512
+endpoint, so a drifting pp512 moves the decay figure directly. That is exactly how the "0.57pp / parity"
+error arose.
+
+Same-session llama has now been measured, so the absolute margins ARE valid: **8B +3.3% @pp4096,
+14B +5.6% @pp512 and +8.8% @pp4096** (8B @pp512 is +11.4% but llama's own stdev there is 7%, so treat it as
+soft). See `docs/prefill-current-state.md` for the authoritative table.
 
 **All remaining attention headroom is +6.7%**, capped by this floor. Going below it needs sub-quadratic
 attention (windowing/sparsity) = a model change, not a kernel change.

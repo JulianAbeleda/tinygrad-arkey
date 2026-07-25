@@ -22,6 +22,11 @@ HBM, with L2 hit *rising* 62.8% -> 85.5% as context grows. A memory roofline can
 
 ## The split
 
+**STATUS 2026-07-24 late.** All three theories tested; see `docs/prefill-current-state.md` for the
+AUTHORITATIVE numbers. llama has since been re-measured same-session: its 8B **pp4096 = 3158**, so the
+`llama 3160` figures used below are confirmed accurate; only llama's pp512 was drifted (3347, not 3571).
+14B is also live again (1948/1787 tok/s) after `7463a6774`.
+
 **READ THIS BEFORE ANY NUMBER BELOW.** Two arms exist and confusing them was an error in the first
 version of this doc. The **SHIPPED** kernel is `PREFILL_V_TRANSPOSED=0`: **952 instructions per KV tile,
 16 WMMA (1.68% useful), VMEM = 65.0% of SQ busy**. The 843-instruction / VMEM-36.7% figures belong to the
