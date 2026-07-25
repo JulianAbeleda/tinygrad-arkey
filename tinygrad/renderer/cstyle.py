@@ -107,15 +107,23 @@ _HIP_FMAX_F32 = "__builtin_fmaxf({0}, {1})"
 def _hip_native_bpermute_max(x:UOp) -> UOp|None:
   """Render a cross-lane-reduction MAX as fmaxf rather than letting it decompose to a select.
 
-  Under ``PREFILL_SOFTMAX_REDUCE_FUSE`` an already-rendered fmaxf also counts as the peer. That extends
-  the rule to the online-softmax carry ``new_m = max(old_m, rowmax(...))``, whose peer is the TOP of the
-  butterfly rather than a bpermute. Without it that MAX is not native, decompositions.py rewrites it to
-  ``(a<b).where(b,a)``, and the ``where`` lowers to an exec-masked v_cmpx_lt_f32/s_cbranch_execz region
-  that LLVM's CSE will not cross -- so the entire 4-step ladder gets rematerialized inside the guard
-  (THEORY 6; see the note in renderer/isa/amd_attention_abi.py:expand_native_row_softmax_repack).
+  Under ``PREFILL_SOFTMAX_REDUCE_FUSE`` (DEFAULT ON; set ``PREFILL_SOFTMAX_REDUCE_FUSE=0`` to roll back) an
+  already-rendered fmaxf also counts as the peer. That extends the rule to the online-softmax carry
+  ``new_m = max(old_m, rowmax(...))``, whose peer is the TOP of the butterfly rather than a bpermute.
+  Without it that MAX is not native, decompositions.py rewrites it to ``(a<b).where(b,a)``, and the ``where``
+  lowers to an exec-masked v_cmpx_lt_f32/s_cbranch_execz region that LLVM's CSE will not cross -- so the
+  entire 4-step ladder gets rematerialized inside the guard (THEORY 6; see the note in
+  renderer/isa/amd_attention_abi.py:expand_native_row_softmax_repack).
+
+  NOTE: this hunk is worthless, and actively harmful, without the child_count hunk in render() below --
+  measured 952 -> 1558 instrs and 26 VGPR spills on its own, because the exec-masked region was the only
+  thing forcing the ladder into a register. The two are one change and share one flag deliberately.
+
+  Promoted to default-ON 2026-07-24: docs/prefill-softmax-reduce-fuse-promotion-readiness-20260724.md,
+  gate extra/qk/prefill_softmax_reduce_fuse_promotion_gate.py (AUTHORITY_GATE PASS).
   """
   if x.dtype != dtypes.float or len(x.src) != 2: return None
-  fuse = getenv("PREFILL_SOFTMAX_REDUCE_FUSE")
+  fuse = getenv("PREFILL_SOFTMAX_REDUCE_FUSE", 1)
   args = ("bpermute", _HIP_BPERMUTE_F32) + ((_HIP_FMAX_F32,) if fuse else ())
   peers = [s for s in x.src if s.op is Ops.CUSTOMI and s.dtype == dtypes.float and s.arg in args]
   if len(peers) != 1 and not (fuse and peers): return None
@@ -365,7 +373,16 @@ class CStyleLanguage(Renderer):
       # emits 272 where only 64 are semantically distinct. LLVM's CSE recovers most of it but not across
       # the exec-masked region that `new_m = max(old_m, row_max)` lowers to, so one whole ladder is
       # rematerialized per row. Naming multi-use float CUSTOMI makes the emitted source linear again.
-      customi_inline = u.op is not Ops.CUSTOMI or not (getenv("PREFILL_SOFTMAX_REDUCE_FUSE") and
+      #
+      # DEFAULT ON since 2026-07-24; `PREFILL_SOFTMAX_REDUCE_FUSE=0` restores unconditional inlining.
+      # This is the SHARED renderer, so the predicate is reachable from every AMD kernel, not just prefill
+      # attention -- decode builds float CUSTOMI too (flash_kernels.py's __builtin_amdgcn_fdot2 and
+      # schedule/wmma/softmax.py's "bpermute" row-state broadcast). Decode is unaffected because its
+      # cross-lane reduce is a LINEAR ladder (one consumer per rung) rather than a butterfly, and that is
+      # verified rather than assumed: extra/qk/decode_codegen_identity_check.py compiles the real decode
+      # graph both ways and compares code-object sha256 for both decode-admitted geometries (8B Hq=32 and
+      # 14B Hq=40) -- byte-identical. Re-run it if you touch this predicate.
+      customi_inline = u.op is not Ops.CUSTOMI or not (getenv("PREFILL_SOFTMAX_REDUCE_FUSE", 1) and
                                                       u.dtype is dtypes.float and child_count[u] > 1)
       if (u.op is not Ops.CAST or u.dtype.vcount == 1) and ((u.op in {Ops.CONST, Ops.GEP, Ops.INDEX, Ops.SHRINK, Ops.CUSTOMI} and customi_inline) or \
         (u.op is Ops.LOAD and u.src[0].addrspace == AddrSpace.REG) or \

@@ -208,7 +208,11 @@ ROUTES = {
     "authority_gate": "extra/qk/prefill_flash_e2e_parity.py + extra/qk/prefill_hd_sweep_numerics.py",
     "promotion_artifacts": ["extra/qk/prefill_flash_e2e_parity.py", "extra/qk/prefill_hd_sweep_numerics.py", "extra/qk/prefill_flash_perf.py",
                             "docs/prefill-needle-theories-20260724.md", "docs/prefill-causal-tile-skip-evidence-20260724.json",
-                            "extra/qk/prefill_causal_tile_skip_promotion_gate.py"],
+                            "extra/qk/prefill_causal_tile_skip_promotion_gate.py",
+                            "extra/qk/prefill_long_context_numerics.py", "extra/qk/decode_codegen_identity_check.py",
+                            "docs/prefill-softmax-reduce-fuse-evidence-20260724.json",
+                            "extra/qk/prefill_softmax_reduce_fuse_promotion_gate.py",
+                            "docs/prefill-softmax-reduce-fuse-promotion-readiness-20260724.md"],
     "purity_status": "search_generated_promoted",
     "provenance": "machine_authored_generated",
     "selector": "shape_admitted_model_config_default",
@@ -220,11 +224,36 @@ ROUTES = {
     "fully-masked causal tile is a mathematical no-op (weight 0 everywhere, old_m==new_m so alpha==1). 8B evidence is complete and "
     "passing (numerics 6.104e-05 PASS at Hd=64/128, token parity 198==198, three same-session paired A/B runs pp512 +1.77%/pp4096 "
     "+1.66% mean vs 0.59% same-config noise, attention-local PMC 1.133x vs 1.121x predicted -- see "
-    "docs/prefill-needle-theories-20260724.md THEORY 3). 14B is UNTESTED: prefill_flash_e2e_parity.py's 14B arm fails on in-process "
-    "VRAM with 8B still resident, and there is a separate known packed-WMMA canary HW-fault on this box -- neither is caused by this "
-    "flag, but this row's own shape_guards admit BOTH the 8B (Hq=32) and 14B (Hq=40) grids, so the flag is only half-proven against "
-    "this row's admitted surface. extra/qk/prefill_causal_tile_skip_promotion_gate.py enforces exactly this (fails closed on the "
-    "missing 14B evidence); do not flip PREFILL_CAUSAL_TILE_SKIP's default until it reports PASS."},
+    "docs/prefill-needle-theories-20260724.md THEORY 3). 14B evidence has NOT BEEN COLLECTED for this flag, so it stays OFF: this "
+    "row's own shape_guards admit BOTH the 8B (Hq=32) and 14B (Hq=40) grids, and a half-proven flag is not promotable. "
+    "CORRECTION 2026-07-24: the reason previously recorded here -- that the 14B arm 'fails on in-process VRAM' and is therefore "
+    "untestable -- was wrong as a blocker. That failure was simply prefill_flash_e2e_parity.py looping over BOTH models in ONE "
+    "process with nothing dropping the 8B buffers; `--only 14B` (added 2026-07-24) runs one model per process and the 14B arm PASSES "
+    "(SDPA=90310==FUSED=90310). The separate packed-WMMA HW fault is likewise mitigable with TINYGRAD_PREFILL_PACKED_WMMA=0. So 14B "
+    "IS measurable for PREFILL_CAUSAL_TILE_SKIP too -- see the sibling flag's evidence below for the full 14B recipe. Somebody just "
+    "has to run it. extra/qk/prefill_causal_tile_skip_promotion_gate.py still fails closed on the missing 14B evidence; do not flip "
+    "PREFILL_CAUSAL_TILE_SKIP's default until it reports PASS. "
+    "PROMOTED FLAG (2026-07-24, does NOT change this row's status/provenance/kernel/route_attribution): commit 23b8e05fc added "
+    "PREFILL_SOFTMAX_REDUCE_FUSE, now DEFAULT ON (rollback: PREFILL_SOFTMAX_REDUCE_FUSE=0). It is a RENDERER fix, not an algorithm "
+    "change -- two hunks in tinygrad/renderer/cstyle.py: a multi-use float Ops.CUSTOMI gets an SSA name instead of being inlined "
+    "unconditionally, and _hip_native_bpermute_max accepts an already-rendered __builtin_fmaxf as its peer so the online-softmax "
+    "carry new_m=max(old_m,row_max) renders as fmaxf instead of an exec-masked select LLVM's CSE cannot cross. Emitted HIP for the "
+    "attention kernel: textual ds_bpermute 272 -> 64, loop body 952 -> 660 instrs, v_max_f32 135 -> 33, lgkmcnt(0) 98 -> 51, 0 "
+    "spills, loads/WMMA unchanged. BOTH admitted grids are proven: numerics are OUTPUT-SHA BIT-IDENTICAL ON vs OFF at kv=512/1024/"
+    "2048/4096 on Hq=32 AND Hq=40 (extra/qk/prefill_long_context_numerics.py, QK_HQ selects the grid; out_sha added because the "
+    "original 'bit-identical' claim rested on matching max_abs_err scalars, which cannot establish it); real-model token parity "
+    "8B 198==198 and 14B 90310==90310 in both arms; 8B whole-model 3 same-session interleaved pairs pp512/1024/2048/4096 "
+    "+1.37%/+2.17%/+3.71%/+6.72% (2.3x-11.4x the 0.59% noise floor, monotone in context as a loop-body win must be, deepest chunk "
+    "-9.9%); 14B whole-model is GEMM-bound under the mandatory TINYGRAD_PREFILL_PACKED_WMMA=0 so it is under-powered (+0.85% at "
+    "pp4096, 1.4x noise) but it CORROBORATES the attention-local result -- deepest chunk -1.45% measured vs -1.50% predicted -- and "
+    "the 14B leg is carried by attention-local device-synced numeric-checked A/B (-25% to -31%). CRITICAL, because this is the SHARED "
+    "HIP renderer and not the attention emitter: decode is proven UNAFFECTED by code-object sha256, not by assumption -- "
+    "extra/qk/decode_codegen_identity_check.py compiles the real decode graph (flash_decode_live_split_block_tile, KV_BOTH, "
+    "fused_combine) both ways for BOTH decode geometries (8B Hq=32, 14B Hq=40) and finds src sha, lib sha and output sha identical, "
+    "8 kernels per arm all executed, satisfying prefill_policy.py's decode_nonregression_8b/14b requirement. Whole test/unit/ suite "
+    "(not a -k subset) is failure-set EQUAL: 51 failed / 1274 passed with the flag off, on, and at the new default. "
+    "extra/qk/prefill_softmax_reduce_fuse_promotion_gate.py reports AUTHORITY_GATE PASS; see "
+    "docs/prefill-softmax-reduce-fuse-promotion-readiness-20260724.md."},
   # ---------------- prefill GEMM ----------------
   "prefill_v2_scheduler_matmul_default": {
     "workload": "prefill", "profile_id": PROFILE_PREFILL, "status": "superseded_rollback",

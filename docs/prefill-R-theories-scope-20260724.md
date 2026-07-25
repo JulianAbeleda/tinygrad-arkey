@@ -142,7 +142,7 @@ tile falls. Judge on throughput, not on the probe's total.
 
 ---
 
-## THEORY 6 — online-softmax reduction structure (231 instrs = 24.3%) — **RESOLVED, see below**
+## THEORY 6 — online-softmax reduction structure (231 instrs = 24.3%) — **RESOLVED & PROMOTED, see below**
 
 **Claim:** `96 ds_bpermute + 135 v_max_f32` per tile is more cross-lane reduction than the algorithm needs.
 
@@ -166,7 +166,7 @@ old-`m` compare would need.
 "redundant" pass may be load-bearing for numerical stability at long context. `max_abs_err=6.104e-05` at
 Hd=64 AND Hd=128 is the floor; any drift is a rejection, not a tradeoff.
 
-### THEORY 6 — RESOLVED, SHIPPED behind `PREFILL_SOFTMAX_REDUCE_FUSE` (default OFF)
+### THEORY 6 — RESOLVED, and `PREFILL_SOFTMAX_REDUCE_FUSE` is now **DEFAULT ON**
 
 **The count was right; the diagnosis was wrong in an important way.** `4 × 8 = 32` bpermute per full
 reduction is correct, and there really were three traversals. But the algorithm emits **exactly two**
@@ -269,9 +269,45 @@ columns, so `max(old_m, rowmax(v)) == rowmax(max(old_m, v))`) is a wash once the
 4. Throughput: `extra/qk/prefill_whole_synced.py --mode authority --whole-lengths 512,1024,2048,4096`.
    **Paired same-session A/B, repeated at least twice** — this box drifts ~5% in absolute throughput across
    a session while back-to-back noise is 0.59%, so a recorded baseline is NOT a valid comparator.
-5. Default-OFF env flag, per `fd654024e` / `c44905a18` house style.
-6. GPU is a single resource: wrap every GPU run in `flock /tmp/gpu-bench.lock -c '…'`. Never run 14B.
-   Always `TINYGRAD_PREFILL_PACKED_WMMA=0`.
+5. Default-OFF env flag on landing, per `fd654024e` / `c44905a18` house style; a default flip is a separate,
+   separately-gated step (see the THEORY 6 promotion section below).
+6. GPU is a single resource: wrap every GPU run in `flock /tmp/gpu-bench.lock -c '…'`. Always
+   `TINYGRAD_PREFILL_PACKED_WMMA=0`.
+   **Correction (2026-07-24): "Never run 14B" is too strong and cost this effort real evidence.** 14B runs
+   fine *with* `TINYGRAD_PREFILL_PACKED_WMMA=0` — that flag disables the packed-WMMA path that faults, so
+   14B falls back to graph-GEMM and completes (`docs/BOLTBEAM_GPU_HANG_DIAGNOSIS_HANDOFF_20260724.md`). The
+   thing to never do is run 14B *without* it. The other 14B blocker, `fp16 KV admits 0 ... free 5.2GB`, was
+   just `prefill_flash_e2e_parity.py` holding both models in one process; use `--only 14B`. Both 14B legs of
+   THEORY 6's promotion were collected this way.
+   Note the instrument limit that follows: with packed-WMMA off, 14B prefill is ~94% GEMM-bound (~1420 ms
+   per chunk), so 14B *whole-model* throughput cannot resolve an attention-local change. Use
+   `extra/qk/prefill_flash_perf.py` for the 14B grid and treat the whole-model number as corroboration.
+
+## THEORY 6 promotion (2026-07-24)
+
+`PREFILL_SOFTMAX_REDUCE_FUSE` is **default ON**. Rollback `PREFILL_SOFTMAX_REDUCE_FUSE=0`, which reproduces
+the old 952-instruction / 272-bpermute body byte-identically.
+
+Beyond the 8B numbers in the THEORY 6 section above, promotion required two things that section did not
+cover, both because the change is in the **shared** HIP renderer rather than the attention emitter:
+
+- **Decode non-regression.** `extra/qk/decode_codegen_identity_check.py` compiles the real decode graph
+  both ways for both decode-admitted geometries and compares code-object sha256: **byte-identical**, 8
+  kernels per arm, all executed. Decode's cross-lane reduce is a linear ladder, so the `child_count > 1`
+  predicate never fires there.
+- **14B.** Output-sha bit-identical numerics on `Hq=40`, real-model token parity `90310 == 90310`,
+  attention-local A/B −25% to −31%, and a whole-model measurement whose deepest chunk (−1.45%) matches the
+  −1.50% predicted from the attention-local win.
+
+8B whole-model, re-measured as three same-session interleaved pairs: pp512/1024/2048/4096
+**+1.37% / +2.17% / +3.71% / +6.72%** (2.3×–11.4× the 0.59% noise floor), deepest chunk **−9.9%**.
+Whole `test/unit/` failure set equal off / on / at the new default (51 failed, 1274 passed each).
+Gate: `extra/qk/prefill_softmax_reduce_fuse_promotion_gate.py`. Full write-up:
+`docs/prefill-softmax-reduce-fuse-promotion-readiness-20260724.md`.
+
+One correction to the THEORY 6 section above: its claim that ON and OFF are "bit-identical" was inferred
+from matching `max_abs_err` scalars, which cannot establish bit-identity. It is now *actually* established,
+by output sha256 on both grids — `prefill_long_context_numerics.py` prints `out_sha`.
 
 ## Standing lessons that apply to all three
 - Price the machinery, not just the work removed. Every projection so far overshot because the delivery

@@ -8,8 +8,16 @@ Token-parity A/B on the REAL 8B and 14B Qwen3 models: baseline SDPA prefill
 IDENTICAL next-token argmax as SDPA, on real weights, for the route to be promoted.
 
 Run: PYTHONPATH=. DEV=AMD python extra/qk/prefill_flash_e2e_parity.py
+
+PROCESS ISOLATION (--only): running both models in ONE process exhausted VRAM on the 14B arm --
+"fp16 KV admits 0 ... free 5.2GB, weights 9.0GB" -- because the 8B model is still resident and
+nothing drops its buffers. That is an in-process allocation failure, NOT a 14B route/HW problem, and
+it made the 14B arm look permanently unavailable. `--only 14B` runs exactly one model per process so
+the full 24GB is available. Always pair it with TINYGRAD_PREFILL_PACKED_WMMA=0 for 14B: the packed-WMMA
+fast path faults/hangs the GPU at the 14B grid (docs/BOLTBEAM_GPU_HANG_DIAGNOSIS_HANDOFF_20260724.md),
+and a driver reset costs the whole session.
 """
-import os, traceback
+import os, sys, traceback
 os.environ.setdefault("DEV", "AMD")
 from extra.llm.generate import load_model_and_tokenizer
 from tinygrad import Tensor
@@ -29,7 +37,11 @@ def next_tok(model, fp, orig_policy, tokens, custom: bool) -> int:
 
 def main():
   allpass = True
-  for name, path in MODELS:
+  only = None
+  if "--only" in sys.argv: only = sys.argv[sys.argv.index("--only") + 1]
+  models = [(n, p) for n, p in MODELS if only is None or n == only]
+  if not models: raise SystemExit(f"--only {only!r} matches no model in {[n for n,_ in MODELS]}")
+  for name, path in models:
     try:
       model, _ = load_model_and_tokenizer(path, 1024, seed=20260617)
       orig_policy = model.config.prefill_policy
