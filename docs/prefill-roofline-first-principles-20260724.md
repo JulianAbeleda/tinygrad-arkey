@@ -81,9 +81,37 @@ Caveat, stated so nobody over-reads it: counters require `PROFILE=1`, and the pr
 That makes 38.6% a lower bound on true duty. It does not restore the 48.3% claim -- a *higher* true duty
 implies a *lower* mix, moving the deficit further into mix rather than resolving it.
 
-**What is solid either way:** the shader arrays are idle roughly 60% of every GEMM dispatch. That is a
-**duty** problem -- launch/drain tails, wave fill, memory stalls -- not a mix problem. Every lever pursued in
-the 07-24 session targeted mix.
+### CORRECTED same day: subtract the instrumentation floor first
+
+Every dispatch in the trace carries a **fixed 232,182 idle cycles regardless of size** -- the minimum idle
+observed across near-empty dispatches. At 2.3 GHz that is **~101 us**, where real AMD dispatch launch is
+2-5 us. It is the profiler, not the hardware. It swamps small dispatches (they read 0-15% duty, a meaningless
+number) and accounts for ~6% of the large ones.
+
+Correcting duty as `busy / (GRBM_GUI_ACTIVE - 232182)`:
+
+| dispatch | cycles | raw duty | **corrected** | scaling idle |
+|---|---:|---:|---:|---:|
+| `r_1187_32_4_16_2_2_2_4` | 52.6M | 46.1% | **46.3%** | 53.7% |
+| `E_4_32_32_...` | 3.9M | 41.5% | **44.1%** | 55.9% |
+| `E_4_96_32_...` | 3.5M | 42.4% | **45.4%** | 54.6% |
+| `E_4_32_32_...` | 1.5M | 36.3% | **43.0%** | 57.0% |
+| attention `amd_gfx1100_q16_grid_hd128` | 0.9M | 33.8% | **45.2%** | 54.8% |
+
+**Corrected duty over the four large dispatches = 46.1%, implying mix = 0.483/0.461 = 1.05.** That is within
+measurement error of the 1.00 ceiling, so **the retraction above is too strong** -- the 48.3% achieved figure
+is borderline, not refuted. Retained as "unconfirmed", not "wrong".
+
+**The finding that survives, and it is sharper than the original:** corrected duty converges on **43-46%
+across a 57x range of dispatch sizes**, for GEMM and attention alike. Size-independence is the evidence that
+this is a real in-kernel stall rather than launch/drain overhead (which would shrink with size) or
+instrumentation (removed above). And **mix ~= 1.0 means the instruction composition is already near-optimal**:
+there is no "issue better work" lever left. The whole remaining deficit is the machine stalling ~55% of the
+time inside the kernel. Every lever pursued in the 07-24 session targeted mix.
+
+Next measurement, before any fix: re-run with `SQ_WAIT_ANY`, `SQ_WAIT_INST_LDS`, `SQ_BUSY_CU_CYCLES` to split
+that 55% into memory latency / LDS / barrier / insufficient waves -- four different bugs with four opposite
+fixes. Also worth one unprofiled cross-check, since all of the above comes from a single `PROFILE=1` run.
 
 ## 4. Instruction counts are the wrong currency
 
@@ -135,9 +163,10 @@ attention (windowing/sparsity) = a model change, not a kernel change.
 
 | lever | whole-model | status |
 |---|---|---|
-| **GEMM duty 38.6% → higher** | unquantified | **the live lever** — measured 2026-07-25, see §3 |
-| GEMM 48% → 60% of peak | +18.4% | **RETRACTED** — the 48.3% achieved figure fails its own mix×duty check (§3) |
-| GEMM 48% → 80% of peak | +46.1% | **RETRACTED**, same reason |
+| **the ~55% in-kernel stall (duty 46%)** | unquantified | **the live lever** — measured 2026-07-25, uniform across a 57x size range (§3) |
+| GEMM 48% → 60% of peak | +18.4% | **UNCONFIRMED** — mix comes out at 1.05, borderline; not refuted (§3) |
+| GEMM 48% → 80% of peak | +46.1% | **UNCONFIRMED**, same reason |
+| better instruction mix, any form | ~0 | **CLOSED** — mix ≈ 1.0, nothing left to win here |
 | all remaining attention | +6.7% | capped by the decay floor |
 | T3 causal skip | +1.66% | measured, default-OFF, gated on 14B evidence |
 | LDS bank conflicts | +0.13% | shipped (`114277f36`), conflict now bit-exact 0% |
