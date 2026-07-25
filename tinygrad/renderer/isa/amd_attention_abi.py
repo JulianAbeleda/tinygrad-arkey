@@ -212,6 +212,21 @@ def expand_native_row_softmax_repack(ctx, x:UOp, native_state:bool=True) -> UOp:
       value=UOp(Ops.CUSTOMI,dtypes.float,(value,kv,qrow),"(({1}<={2})?{0}:-INFINITY)")
     if valid is not None: value = valid.where(value, UOp.const(dtypes.float, -float("inf")))
     if stores: value = value.bitcast(dtypes.uint).after(UOp.group(stores[-1])).bitcast(dtypes.float)
+    # THEORY 6 (measured, 2026-07-24) -- the two butterflies below are exactly the two the algorithm
+    # needs, but on the SHIPPED HIP path they used to cost THREE cross-lane traversals per row. Neither
+    # extra traversal is emitted here; both are artifacts of how this expression tree is RENDERED, and
+    # both are addressed by PREFILL_SOFTMAX_REDUCE_FUSE in tinygrad/renderer/cstyle.py:
+    #   (a) Ops.CUSTOMI is inlined unconditionally by the C renderer, ignoring child_count. Every rung of
+    #       these ladders has two consumers (the next fmaxf AND the next bpermute), so the emitted C grows
+    #       as 2^n: a 4-step ladder renders as 15 textual bpermutes, 272 across the 8-row repack where
+    #       only 64 are distinct.
+    #   (b) `new_m = max(old_m, row_max)` below is not a native HIP op, so decompositions.py rewrites it
+    #       to (a<b).where(b,a) -- inlining the whole ladder twice more, and lowering to an exec-masked
+    #       v_cmpx_lt_f32/s_cbranch_execz region that LLVM's CSE will not cross, so a third ladder is
+    #       REMATERIALIZED inside the guard.
+    # Result was 96 ds_bpermute_b32 + 97 mandatory s_waitcnt lgkmcnt(0) + 135 v_max_f32 per KV tile,
+    # against 64 bpermute for the two real reductions. Do not "simplify" this by hoisting row_max into a
+    # Python temp -- it already is one; the duplication is in the renderer, not here.
     row_max = value
     for mask in x.arg.xor_masks:
       addr = lane_hw.alu(Ops.XOR, UOp.const(dtypes.int, mask)).alu(Ops.MUL, UOp.const(dtypes.int, 4))

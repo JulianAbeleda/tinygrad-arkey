@@ -142,7 +142,7 @@ tile falls. Judge on throughput, not on the probe's total.
 
 ---
 
-## THEORY 6 — online-softmax reduction structure (231 instrs = 24.3%)
+## THEORY 6 — online-softmax reduction structure (231 instrs = 24.3%) — **RESOLVED, see below**
 
 **Claim:** `96 ds_bpermute + 135 v_max_f32` per tile is more cross-lane reduction than the algorithm needs.
 
@@ -165,6 +165,97 @@ old-`m` compare would need.
 **Risk:** online softmax is numerically delicate — the max-subtract is what keeps `exp` in range. A
 "redundant" pass may be load-bearing for numerical stability at long context. `max_abs_err=6.104e-05` at
 Hd=64 AND Hd=128 is the floor; any drift is a rejection, not a tradeoff.
+
+### THEORY 6 — RESOLVED, SHIPPED behind `PREFILL_SOFTMAX_REDUCE_FUSE` (default OFF)
+
+**The count was right; the diagnosis was wrong in an important way.** `4 × 8 = 32` bpermute per full
+reduction is correct, and there really were three traversals. But the algorithm emits **exactly two**
+(`expand_native_row_softmax_repack` contains one `Ops.MAX` butterfly and one `Ops.ADD` butterfly, and
+`dynamic_kv_v1`/`causal_v1` add none). All the excess was **rendering**, not algorithm:
+
+1. **Pass 1 — row max.** 32 `ds_bpermute` + 32 `v_max_f32`. Necessary.
+2. **Pass 2 — row sum of the weights.** 32 `ds_bpermute` + `v_add_f32`. Necessary. It does *not* go
+   through `Ops.MAX`; in the disassembly it is the fully-interleaved 32-bpermute block that LLVM groups by
+   xor mask, which is why a per-row read of the listing misses it.
+3. **Pass 3 — a rematerialized copy of pass 1.** `new_m = max(old_m, row_max)` is not a native HIP op, so
+   `decompositions.py` rewrites it to `(a<b).where(b,a)`. The C renderer inlines `Ops.CUSTOMI`
+   **unconditionally, ignoring `child_count`**, and every rung of the ladder has two consumers (the next
+   `fmaxf` and the next `bpermute`) — so the emitted source grows as 2ⁿ: **272 textual `ds_bpermute` for
+   64 distinct ones**. LLVM CSEs the pure part but the `where` lowers to a `v_cmpx_lt_f32` /
+   `s_cbranch_execz` exec-masked region that CSE will not cross, so the whole 4-step ladder is
+   recomputed inside the guard. 8 rows × 4 = the third 32.
+
+**And the 135 `v_max_f32` are not doing double duty as masking.** Masking is `v_cndmask_b32` (53 in the
+body, unchanged by the fix). The 135 decompose as 32 real ladder maxes + ~31 from the remat ladder +
+**72 degenerate `v_max_f32 vX, vX, vX` canonicalizations** — IEEE `fmaxf` on gfx11 requires canonical
+operands, and the duplicated-expression source denied LLVM the chance to prove an operand was already the
+result of a max. Restoring SSA form collapses all 72.
+
+**Can max and sum share one traversal?** No, and it is not needed. They are strictly ordered — the sum is
+over `exp2((value − new_m)·log2e)`, which cannot be formed until the max reduction has finished — so a
+shared butterfly would have to carry two independent accumulators through the same 4 steps and would still
+issue 2 `ds_bpermute` per step. The bpermute count is unchanged; only the (already-optimal) address
+arithmetic would be shared. Both remaining passes are necessary and irreducible.
+
+**The change** (`PREFILL_SOFTMAX_REDUCE_FUSE`, default OFF, two hunks in
+`tinygrad/renderer/cstyle.py`): give a multi-use float `Ops.CUSTOMI` an SSA name instead of inlining it,
+and accept an already-rendered `fmaxf` as the `_hip_native_bpermute_max` peer so the `new_m` carry renders
+as `__builtin_fmaxf` rather than a select. **Nothing in the emitted algorithm changes** — no reordering,
+no reassociation, no dropped reduction.
+
+**Measured, per KV tile (compile-only probe, 8B, `PREFILL_V_TRANSPOSED=0`):**
+
+| | OFF | ON | Δ |
+|---|---:|---:|---:|
+| loop-body instructions | 952 | **660** | **−30.7%** |
+| `ds_bpermute_b32` | 96 | 64 | −32 |
+| `s_waitcnt lgkmcnt(0)` | 98 | 51 | −47 |
+| `v_max_f32` | 135 | **33** | −102 |
+| `s_delay_alu` | 78 | 33 | −45 |
+| `v_cmpx_lt_f32` / `s_cbranch_execz` | 8 / 8 | 0 / 0 | branch-free |
+| textual `ds_bpermute` in HIP source | 272 | 64 | −76% |
+| global loads / WMMA / `v_exp_f32` / `v_cndmask` | 144 / 16 / 16 / 53 | 144 / 16 / 16 / 54 | unchanged |
+| VGPR spills | 0 | 0 | — |
+
+The addressable group T4 handed over (96 bpermute + 98 lgkm waits + 135 `v_max_f32` = 329 instrs, 34.5%
+of the body) went to 148. Loads, WMMA, transcendentals and masking are untouched.
+
+**Throughput, 8B `--mode authority`, paired same-session interleaved A/B, two reps:**
+
+| whole-prefill | OFF | ON | Δ |
+|---|---:|---:|---:|
+| 512 | 3611 / 3575 | 3650 / 3637 | **+1.4%** |
+| 1024 | 3516 / 3481 | 3581 / 3566 | **+2.1%** |
+| 2048 | 3329 / 3299 | 3449 / 3432 | **+3.8%** |
+| 4096 | 3010 / 2981 | 3201 / 3192 | **+6.7%** |
+
+Deepest chunk (`start_pos=3584`) 198.0/199.9 ms → 180.4/180.0 ms, −9.5%. The gain rises with context
+because the KV loop is a larger share of the chunk there — the expected shape for a loop-body win, and
+the reason this is worth more than T3's +1.7%.
+
+**Gates:** `prefill_hd_sweep_numerics.py` `max_abs_err=6.104e-05 PASS` at Hd=64 **and** Hd=128, exactly
+the floor. Long-context numerics (added: `q=512` chunk against a per-head fp32 numpy reference) at
+kv=512/1024/2048/4096 are **bit-identical between ON and OFF** — `6.558e-05 / 2.655e-06 / 1.865e-06 /
+1.053e-06`, all finite. `prefill_flash_e2e_parity.py` `8B: SDPA=198 FUSED=198 MATCH PASS` in both arms
+(`AUTHORITY_GATE: FAIL` is the pre-existing 14B VRAM arm). `test/unit/test_online_softmax_tile.py`:
+6 failed / 81 passed with the flag ON, OFF, and at HEAD — identical set, all `DEV=AMD:ISA` final-ISA
+tests. Flag OFF reproduces the 952-instruction body and the byte-identical disassembly.
+
+**Two standing lessons this corrects:**
+- *`amd.py` is not in the shipped path, but `amd_attention_abi.py` is.* `DEV=AMD` → `HIPRenderer`, which
+  lazily imports `expand_native_row_softmax_repack` / `expand_loop_fragment` / `native_repack_matcher` /
+  `native_state_lane_matcher` from the isa package. You are steering LLVM by choosing what HIP source to
+  emit, and **how the C renderer names intermediates is a first-class performance decision**, not
+  cosmetics. Everything T4 attributed to LLVM's `SIInsertWaitcnts` moved when the source shape moved.
+- *Count textual occurrences in the generated source before blaming the algorithm.* The one cheap check
+  that would have found this on day one is `grep -c` on the emitted `.cpp`: 272 vs 64.
+
+**Rejected on measurement** (kept here so nobody re-tries them): rendering `new_m` as `fmaxf` *without*
+the SSA-naming hunk makes it **worse** — 952 → 1558 instrs, 96 → 192 bpermute, 26 VGPR spills, because
+removing the exec-masked region removes the only thing that was forcing the ladder into a register.
+Algebraically folding `old_m` into the butterfly seed (exact, since row state is replicated across all 16
+columns, so `max(old_m, rowmax(v)) == rowmax(max(old_m, v))`) is a wash once the SSA hunk is in: 691 vs
+660. The renderer was the whole problem.
 
 ---
 

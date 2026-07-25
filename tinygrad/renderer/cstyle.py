@@ -102,12 +102,24 @@ extra_pm = PatternMatcher([
 ])
 
 _HIP_BPERMUTE_F32 = "__builtin_bit_cast(float, __builtin_amdgcn_ds_bpermute({0}, __builtin_bit_cast(unsigned int, {1})))"
+_HIP_FMAX_F32 = "__builtin_fmaxf({0}, {1})"
 
 def _hip_native_bpermute_max(x:UOp) -> UOp|None:
+  """Render a cross-lane-reduction MAX as fmaxf rather than letting it decompose to a select.
+
+  Under ``PREFILL_SOFTMAX_REDUCE_FUSE`` an already-rendered fmaxf also counts as the peer. That extends
+  the rule to the online-softmax carry ``new_m = max(old_m, rowmax(...))``, whose peer is the TOP of the
+  butterfly rather than a bpermute. Without it that MAX is not native, decompositions.py rewrites it to
+  ``(a<b).where(b,a)``, and the ``where`` lowers to an exec-masked v_cmpx_lt_f32/s_cbranch_execz region
+  that LLVM's CSE will not cross -- so the entire 4-step ladder gets rematerialized inside the guard
+  (THEORY 6; see the note in renderer/isa/amd_attention_abi.py:expand_native_row_softmax_repack).
+  """
   if x.dtype != dtypes.float or len(x.src) != 2: return None
-  peers = [s for s in x.src if s.op is Ops.CUSTOMI and s.dtype == dtypes.float and s.arg in ("bpermute", _HIP_BPERMUTE_F32)]
-  if len(peers) != 1: return None
-  return UOp(Ops.CUSTOMI, dtypes.float, x.src, "__builtin_fmaxf({0}, {1})")
+  fuse = getenv("PREFILL_SOFTMAX_REDUCE_FUSE")
+  args = ("bpermute", _HIP_BPERMUTE_F32) + ((_HIP_FMAX_F32,) if fuse else ())
+  peers = [s for s in x.src if s.op is Ops.CUSTOMI and s.dtype == dtypes.float and s.arg in args]
+  if len(peers) != 1 and not (fuse and peers): return None
+  return UOp(Ops.CUSTOMI, dtypes.float, x.src, _HIP_FMAX_F32)
 
 def _hip_native_row_state(x:UOp) -> UOp|None:
   if not isinstance(x.arg,tuple) or not x.arg: return None
@@ -346,7 +358,16 @@ class CStyleLanguage(Renderer):
       assert l is not None, f"failed to render {u.op} {u.dtype} {[(x.op,x.dtype) for x in u.src]} {u.arg}"
 
       if u.op in {Ops.ENDIF, Ops.END}: depth -= 1
-      if (u.op is not Ops.CAST or u.dtype.vcount == 1) and (u.op in {Ops.CONST, Ops.GEP, Ops.INDEX, Ops.SHRINK, Ops.CUSTOMI} or \
+      # PREFILL_SOFTMAX_REDUCE_FUSE: Ops.CUSTOMI is normally inlined UNCONDITIONALLY, ignoring
+      # child_count. For the attention row-softmax butterfly -- built entirely from CUSTOMI (ds_bpermute
+      # and fmaxf) where every rung has two consumers (the next fmaxf AND the next bpermute) -- that makes
+      # the emitted C grow as 2^n: a 4-step ladder appears as 15 textual bpermutes, and the 8-row repack
+      # emits 272 where only 64 are semantically distinct. LLVM's CSE recovers most of it but not across
+      # the exec-masked region that `new_m = max(old_m, row_max)` lowers to, so one whole ladder is
+      # rematerialized per row. Naming multi-use float CUSTOMI makes the emitted source linear again.
+      customi_inline = u.op is not Ops.CUSTOMI or not (getenv("PREFILL_SOFTMAX_REDUCE_FUSE") and
+                                                      u.dtype is dtypes.float and child_count[u] > 1)
+      if (u.op is not Ops.CAST or u.dtype.vcount == 1) and ((u.op in {Ops.CONST, Ops.GEP, Ops.INDEX, Ops.SHRINK, Ops.CUSTOMI} and customi_inline) or \
         (u.op is Ops.LOAD and u.src[0].addrspace == AddrSpace.REG) or \
         (u.op is Ops.CAST and u.addrspace in (AddrSpace.GLOBAL, AddrSpace.LOCAL)) or \
         (u.op in {Ops.STACK, *(GroupOp.ALU-{Ops.WHERE}), Ops.CAST, Ops.BITCAST} and child_count[u] == 1 and not getenv("EXPAND_SSA"))):
