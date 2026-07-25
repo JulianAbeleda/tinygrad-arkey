@@ -6,7 +6,8 @@ try: import fcntl # windows misses that
 except ImportError: fcntl = None #type:ignore[assignment]
 from tinygrad.helpers import DEV, PROFILE, getenv, to_mv, from_mv, cpu_profile, ProfilePointEvent, ProfileRangeEvent, select_first_inited, select_by_name, unwrap
 from tinygrad.helpers import suppress_finalizing, pluralize, TracingKey
-from tinygrad.device import Device, BufferSpec, Compiled, LRUAllocator, ProfileDeviceEvent, ProfileProgramEvent, _audit_kernargs_wrap
+from tinygrad.device import Device, BufferSpec, Compiled, LRUAllocator, ProfileDeviceEvent, ProfileProgramEvent, _audit_kernargs_wrap, KERNARGS_WRAP_DRAIN
+from tinygrad.device import DISPATCH_TRACE, _dispatch_trace_before, _dispatch_trace_after, _dispatch_trace_dump
 from tinygrad.uop.ops import sym_infer, sint, UOp
 from tinygrad.runtime.autogen import libc
 from tinygrad.runtime.support.memory import BumpAllocator
@@ -357,7 +358,15 @@ class HCQProgram(Generic[HCQDeviceType]):
       # dispatch corrupts kernel_object -> wild PC -> SQC (inst) fault. Audit the wrap, do not change it.
       _wraps_before = self.dev.kernargs_offset_allocator.wraps
       off = self.dev.kernargs_offset_allocator.alloc(self.kernargs_alloc_size, self.kernargs_alignment)
-      _audit_kernargs_wrap(self.dev, self.dev.kernargs_offset_allocator.wraps != _wraps_before)
+      if (_wrapped:=self.dev.kernargs_offset_allocator.wraps != _wraps_before) and KERNARGS_WRAP_DRAIN:
+        # THE FIX. Wrapping hands back memory that an earlier dispatch may still be reading -- and the
+        # dispatch packet lives in it (ops_amd.py:359), so a newer kernarg write landing on a live packet
+        # corrupts kernel_object and the wave launches at a wild PC (the SQC (inst) fault signature).
+        # Draining here is the same defer-until-drained discipline HCQAllocatorBase.b_timeline already
+        # applies to copy-staging buffers, and it is effectively free: 16MiB at ~256B/dispatch is ~65k
+        # dispatches per wrap, and a full 8B prefill wraps ZERO times.
+        self.dev.synchronize()
+      _audit_kernargs_wrap(self.dev, _wrapped)   # after the guard: a hit means the invariant really broke
       argsbuf = self.dev.kernargs_buf.offset(offset=off, size=self.kernargs_alloc_size)
     else: argsbuf = kernargs
     return self.args_state_t(argsbuf, self, bufs, vals=vals)
@@ -393,7 +402,13 @@ class HCQProgram(Generic[HCQDeviceType]):
 
     q.signal(self.dev.timeline_signal, self.dev.next_timeline()).submit(self.dev)
 
-    if wait: self.dev.synchronize(timeout=timeout)
+    if DISPATCH_TRACE and getattr(self.dev, "timeline_signal", None) is not None:
+      # DIAGNOSTIC fault-to-dispatch correlation probe (see tinygrad/device.py DISPATCH_TRACE). Serialize so
+      # at most one dispatch is ever in flight, and record it before the wait that could fault on it.
+      _dispatch_trace_before(self.dev, self.name, global_size, local_size)
+      self.dev.synchronize(timeout=timeout)
+      _dispatch_trace_after()
+    elif wait: self.dev.synchronize(timeout=timeout)
     return (float(sig_en.timestamp - sig_st.timestamp) / 1e6) if wait else None
 
 class HCQCompiled(Compiled, Generic[SignalType]):
@@ -454,6 +469,7 @@ class HCQCompiled(Compiled, Generic[SignalType]):
     try: self.timeline_signal.wait(self.timeline_value - 1, timeout=timeout if timeout is not None and self.can_recover else None)
     except RuntimeError as e:
       self.error_state = e
+      _dispatch_trace_dump(self, e)  # DIAGNOSTIC: name the dispatch in flight, if DISPATCH_TRACE is on
       if hasattr(self, 'on_device_hang'): self.on_device_hang()
       raise e
 

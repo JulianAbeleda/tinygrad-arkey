@@ -78,6 +78,18 @@ class TestKernargsWrapAudit(unittest.TestCase):
       D._audit_kernargs_wrap(_Dev(observed=1, pending=99), wrapped=True)
     self.assertIn("wild PC", str(cm.exception))
 
+  def test_the_fix_is_on_by_default(self):
+    # KERNARGS_WRAP_DRAIN is the fix: it drains before the kernargs allocator reuses memory an in-flight
+    # dispatch may still be reading. Measured A/B at 512B: guard off -> [15,14,15,15] reuses-in-flight,
+    # guard on -> [0,0,0,0]. If this default ever flips to 0 the hazard is live again.
+    self.assertEqual(D.KERNARGS_WRAP_DRAIN.value, 1, "the kernargs wrap drain must ship enabled")
+
+  def test_the_fix_and_its_audit_are_both_wired(self):
+    import pathlib
+    hcq = (pathlib.Path(D.__file__).parent/"runtime"/"support"/"hcq.py").read_text()
+    self.assertIn("KERNARGS_WRAP_DRAIN", hcq, "fill_kernargs lost the wrap drain (the fix)")
+    self.assertIn("self.dev.synchronize()", hcq, "the drain itself is gone")
+
   def test_the_call_site_is_still_hooked(self):
     # The detector is only as good as its one call site; if fill_kernargs loses it the detector goes silent
     # while looking healthy.

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from tinygrad.runtime.support.hcq import HCQCompiled, HCQInterfaceAllocator, HCQBuffer, HWQueue, CLikeArgsState, HCQSignal, HCQProgram, FileIOInterface
 from tinygrad.runtime.support.hcq import MMIOInterface, BumpAllocator, hcq_filter_visible_devices, hcq_profile
 from tinygrad.uop.ops import sint
-from tinygrad.device import Compiled, BufferSpec
+from tinygrad.device import Compiled, BufferSpec, PM4_IB_WRAP_DRAIN
 from tinygrad.helpers import getenv, round_up, data64_le, DEBUG, DEV, PROFILE, ProfileEvent, lo32, hi32, colored, prod, ContextVar, TracingKey
 from tinygrad.helpers import VIZ, ceildiv, unwrap, pluralize
 from tinygrad.renderer.cstyle import HIPRenderer, HIPCCRenderer
@@ -479,7 +479,24 @@ class AMDComputeAQLQueue(AMDComputeQueue):
 
   def _submit(self, dev:AMDDevice):
     cq = dev.compute_queue_desc(self.queue_idx)
-    cmds = self._cmds if dev == self.binded_device else self._prep_aql(self._q, dev.pm4_ibs.offset(dev.pm4_ib_alloc.alloc(len(self._q) * 4, 16)))
+    if dev == self.binded_device: cmds = self._cmds
+    else:
+      # The PM4 command stream itself lives inside this allocation (the CP fetches it asynchronously as an
+      # indirect buffer), so recycling it under an in-flight submission corrupts commands rather than one
+      # field -- the same defect class as the kernargs wrap (hcq.py fill_kernargs), potentially worse because
+      # it hits the whole command stream instead of one pointer. Same defer-until-drained discipline: drain
+      # before the allocator hands back memory an earlier IB may still be being fetched from.
+      #
+      # NOT dev.synchronize(): by the time _submit runs, the caller has already done
+      # `.signal(dev.timeline_signal, dev.next_timeline()).submit(dev)`, so dev.timeline_value was bumped for
+      # THIS not-yet-dispatched submission before we ever got here. Waiting for dev.timeline_value - 1 (what
+      # synchronize() does) waits for a target this very call is responsible for reaching -- deadlock,
+      # confirmed by hanging a live run. dev.timeline_value - 2 is the last target guaranteed already
+      # signaled, i.e. drain everything prior without waiting on ourselves.
+      _wraps_before = dev.pm4_ib_alloc.wraps
+      off = dev.pm4_ib_alloc.alloc(len(self._q) * 4, 16)
+      if dev.pm4_ib_alloc.wraps != _wraps_before and PM4_IB_WRAP_DRAIN: dev.timeline_signal.wait(dev.timeline_value - 2)
+      cmds = self._prep_aql(self._q, dev.pm4_ibs.offset(off))
     packets = [bytes(c) if isinstance(c, hsa.hsa_kernel_dispatch_packet_t) else c for c in cmds]
 
     assert len(packets) * 64 < cq.ring.nbytes, "submit is too large for the queue"

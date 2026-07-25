@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from tinygrad.runtime.support.hcq import HCQCompiled, HCQInterfaceAllocator, HCQBuffer, HWQueue, CLikeArgsState, HCQProgram, HCQSignal, BumpAllocator
 from tinygrad.runtime.support.hcq import MMIOInterface, FileIOInterface, hcq_filter_visible_devices, hcq_profile
 from tinygrad.uop.ops import sint
-from tinygrad.device import Compiled, BufferSpec
+from tinygrad.device import Compiled, BufferSpec, NV_CMDQ_WRAP_DRAIN
 from tinygrad.helpers import getenv, mv_address, round_up, data64, data64_le, prod, OSX, hi32, lo32, PROFILE, ContextVar, VIZ, ProfileEvent
 from tinygrad.renderer.ptx import PTXRenderer
 from tinygrad.renderer.cuda import CUDARenderer, NVCCRenderer
@@ -114,7 +114,20 @@ class NVCommandQueue(HWQueue[HCQSignal, 'NVDevice', 'NVProgram', 'NVArgsState'])
   def _submit_to_gpfifo(self, dev:NVDevice, gpfifo:GPFifo):
     if dev == self.binded_device: cmdq_addr = self.hw_page.va_addr
     else:
+      # Same defect class as the AMD kernargs/PM4-IB wraps (tinygrad/device.py PM4_IB_WRAP_DRAIN): the command
+      # buffer a GPFIFO entry points GPU-side execution at lives inside this allocation, so recycling it under
+      # an in-flight submission corrupts the command stream. UNTESTED here -- no NVIDIA GPU to reproduce or A/B
+      # against; this mirrors the proven AMD fix on the strength of the analytic match, not a measurement.
+      #
+      # NOT dev.synchronize(): the caller reaches _submit via `.signal(dev.timeline_signal,
+      # dev.next_timeline()).submit(dev)` (HCQProgram.__call__, hcq.py), so dev.timeline_value was already
+      # bumped for THIS not-yet-dispatched submission before we got here. Waiting for dev.timeline_value - 1
+      # (what synchronize() does) waits on a target this very call is responsible for reaching -- deadlock.
+      # This mirrors the AMD pm4_ib_alloc fix, where that exact mistake was caught by a hanging live run.
+      # dev.timeline_value - 2 is the last target guaranteed already signaled.
+      _wraps_before = dev.cmdq_allocator.wraps
       cmdq_addr = dev.cmdq_allocator.alloc(len(self._q) * 4, 16)
+      if dev.cmdq_allocator.wraps != _wraps_before and NV_CMDQ_WRAP_DRAIN: dev.timeline_signal.wait(dev.timeline_value - 2)
       cmdq_wptr = (cmdq_addr - dev.cmdq_page.va_addr) // 4
       dev.cmdq[cmdq_wptr : cmdq_wptr + len(self._q)] = array.array('I', self._q)
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass, replace
-from collections import defaultdict
+from collections import defaultdict, deque
 from typing import Any, ClassVar, Generic, TypeVar, Iterator, Generator, TYPE_CHECKING
 import importlib, inspect, functools, pathlib, os, contextlib, re, atexit, pickle, decimal
 from tinygrad.helpers import LRU, getenv, diskcache_get, diskcache_put, DEBUG, GlobalCounters, flat_mv, PROFILE, temp, colored, ContextVar
@@ -221,7 +221,19 @@ class Buffer:
     assert offset < self.nbytes, "offset must be less than nbytes"
     return Buffer(self.device, size, dtype, base=self.base, offset=self.offset+offset)
 
-KERNARGS_AUDIT = ContextVar("KERNARGS_AUDIT", 0)   # 1 = record and report at exit, 2 = raise on the first hit
+KERNARGS_AUDIT = ContextVar("KERNARGS_AUDIT", 0)        # 1 = record and report at exit, 2 = raise on the first hit
+KERNARGS_WRAP_DRAIN = ContextVar("KERNARGS_WRAP_DRAIN", 1)  # THE FIX. 0 rolls back to the unguarded wrap.
+
+# Same defect class as KERNARGS_WRAP_DRAIN above, at the PM4 indirect-buffer allocator (ops_amd.py pm4_ib_alloc):
+# the PM4 command stream the CP fetches asynchronously lives inside that allocation, so recycling it under an
+# in-flight submission corrupts commands rather than one field. 0 rolls back to the unguarded wrap.
+PM4_IB_WRAP_DRAIN = ContextVar("PM4_IB_WRAP_DRAIN", 1)
+
+# Same defect class again, at NV's command-queue allocator (ops_nv.py cmdq_allocator): the command buffer a
+# GPFIFO entry points GPU-side execution at lives inside that allocation. UNTESTED on this machine -- no NVIDIA
+# GPU available to reproduce or A/B; ships on by default on the strength of the analytic match to the other two
+# sites, not a measured reproduction. 0 rolls back to the unguarded wrap.
+NV_CMDQ_WRAP_DRAIN = ContextVar("NV_CMDQ_WRAP_DRAIN", 1)
 
 # DETECTOR for the live gfx1100 fault signature. dmesg classifies it precisely: every fault at
 # 0x0000ffffffbfe000 (56), 0x100000000 (22) and 0x0 (27) reports `Faulty UTCL2 client ID: SQC (inst)` --
@@ -245,7 +257,11 @@ _kernargs_wrap_hits: list[tuple[str,int,int]] = []
 _kernargs_wrap_total: list[int] = [0]
 
 def _audit_kernargs_wrap(dev, wrapped:bool) -> None:
-  """Record a kernargs bump-allocator wrap issued while the device still has un-drained work."""
+  """Record a kernargs wrap that REUSED memory while the device still had un-drained work.
+
+  Called after the guard, so a hit means the invariant was actually violated -- with KERNARGS_WRAP_DRAIN on
+  this must stay 0, and with it off it reproduces the hazard.
+  """
   if not KERNARGS_AUDIT or not wrapped: return
   _kernargs_wrap_total[0] += 1
   sig = getattr(dev, "timeline_signal", None)
@@ -267,6 +283,53 @@ def _dump_kernargs_audit() -> None:
     worst = max(_kernargs_wrap_hits, key=lambda h: h[2]-h[1])
     print(f"  widest gap: {worst[2]-worst[1]} timeline values behind on {worst[0]}")
 atexit.register(_dump_kernargs_audit)
+
+DISPATCH_TRACE = ContextVar("DISPATCH_TRACE", 0)  # 1 = serialize every dispatch and record it; dump on device error.
+
+# FAULT-TO-DISPATCH CORRELATION PROBE (docs/gpu-fault-fix-scope-20260725.md). dmesg names the faulting VA and
+# the faulting pid, but never the kernel that was running -- every probe that tried to infer it indirectly came
+# back ambiguous. This is "the one probe that cannot come back ambiguous": force at most one dispatch to ever
+# be in flight (synchronize after every single dispatch instead of only when wait=True), record its name+pid
+# right before that synchronize, and if the synchronize raises -- a fault, hang, or timeout -- the last
+# recorded dispatch IS the one that was executing when it happened. No inference, no ambiguity.
+#
+# DIAGNOSTIC ONLY, matching KERNARGS_AUDIT's shape: default-off ContextVar, and it is not something you would
+# ever leave on -- serializing every dispatch is orders of magnitude slower than normal execution. That cost
+# is deliberate and acceptable because this only runs while deliberately hunting a fault.
+#
+# Backend-agnostic by construction: gated on `getattr(dev, 'timeline_signal', None)`, the exact guard
+# KERNARGS_AUDIT uses. Backends with no HCQ timeline signal (METAL, CUDA, CPU) never take the branch, so they
+# are bit-identical whether this flag is 0 or 1.
+_dispatch_trace_ring: deque = deque(maxlen=64)      # recent dispatches, oldest first, for context around a fault
+_dispatch_trace_inflight: list[tuple|None] = [None]  # the one dispatch currently between submit and synchronize
+
+def _dispatch_trace_before(dev, name:str, global_size, local_size) -> None:
+  """Record the dispatch about to be waited on. Call AFTER submit, BEFORE the serializing dev.synchronize()."""
+  if not DISPATCH_TRACE or getattr(dev, "timeline_signal", None) is None: return  # off, or non-HCQ: no-op
+  rec = (getattr(dev, "device", "?"), name, os.getpid(), getattr(dev, "timeline_value", 0) - 1,
+         tuple(global_size), tuple(local_size))
+  _dispatch_trace_inflight[0] = rec
+  _dispatch_trace_ring.append(rec)
+
+def _dispatch_trace_after() -> None:
+  """The just-recorded dispatch drained cleanly with no error. Call AFTER a successful dev.synchronize()."""
+  if DISPATCH_TRACE: _dispatch_trace_inflight[0] = None
+
+def _dispatch_trace_dump(dev, exc:BaseException) -> None:
+  """Called from the synchronize() except-block, before any re-raise. Names the dispatch that was in flight."""
+  if not DISPATCH_TRACE: return
+  rec = _dispatch_trace_inflight[0]
+  if rec is None:
+    print(f"\n=== DISPATCH_TRACE: {getattr(dev,'device','?')} errored with no traced dispatch in flight "
+          "(error predates the first traced dispatch) ===")
+    return
+  device, name, pid, tv, gs, ls = rec
+  print(f"\n=== DISPATCH_TRACE: device error while '{name}' was in flight on {device} "
+        f"(pid={pid}, timeline={tv}, global_size={gs}, local_size={ls}) ===\n    exception: {exc!r}")
+  history = list(_dispatch_trace_ring)[:-1]
+  if history:
+    print("  preceding dispatches (most recent last):")
+    for d, n, p, t, _, _ in history[-8:]: print(f"    {d} {n} pid={p} timeline={t}")
 
 DeviceType = TypeVar('DeviceType', bound='Compiled')
 
