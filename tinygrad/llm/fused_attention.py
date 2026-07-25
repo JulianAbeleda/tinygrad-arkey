@@ -159,7 +159,7 @@ def custom_kernel_attention(q:Tensor, k:Tensor, v:Tensor, *, scale:float|None, c
   - custom_kernel(out_flat; q_flat,k_flat,v_flat) assigns slots 0,1,2,3 -> exactly
     out=0, Q=1, K=2, V=3.
   """
-  from extra.qk.flash_prefill_attention_spec import FlashPrefillAttentionSpec
+  from tinygrad.llm.route_ops import flash_prefill_attention_spec as FlashPrefillAttentionSpec
   grid = prefill_grid_spec(q, k)
   if grid is None: raise NotImplementedError("custom_kernel_attention: geometry not admitted")
   Hq, Hkv, T, KV, Hd = grid.q_heads, grid.kv_heads, grid.q_tokens, grid.kv_tokens, grid.head_dim

@@ -69,3 +69,12 @@ def flash_decode_live_split_block_tile(*args, **kwargs):
   return _attr("extra.qk.flash_decode_attention_executor", "flash_decode_live_split_block_tile")(*args, **kwargs)
 
 def assert_pure_machine_search(*args, **kwargs): return _attr("extra.qk.pure_search_guard", "assert_pure_machine_search")(*args, **kwargs)
+
+# Boundary adapters (test/unit/test_tinygrad_boundary.py): tinygrad/ must not import extra.qk directly.
+# These three were imported inline at their call sites, which the layering rule forbids.
+def flash_prefill_attention_spec(*args, **kwargs):
+  return _attr("extra.qk.flash_prefill_attention_spec", "FlashPrefillAttentionSpec")(*args, **kwargs)
+def select_packed_wmma_prefill_candidate(*args, **kwargs):
+  return _attr("extra.qk.prefill.packed_wmma_prefill_candidates", "select_packed_wmma_prefill_candidate")(*args, **kwargs)
+def build_packed_wmma_warmstart_tables(*args, **kwargs):
+  return _attr("extra.qk.prefill.packed_wmma_prefill_candidates", "build_packed_wmma_warmstart_tables")(*args, **kwargs)

@@ -303,7 +303,7 @@ def route_packed_wmma_prefill(lin, x:Tensor) -> Tensor | None:
   if not packed_wmma_prefill_enabled(): return None
   spec = _attached_direct_packed_spec(lin, x)
   if spec is None: return None
-  from extra.qk.prefill.packed_wmma_prefill_candidates import select_packed_wmma_prefill_candidate
+  from tinygrad.llm.route_ops import select_packed_wmma_prefill_candidate
   candidate = select_packed_wmma_prefill_candidate(lin, spec)
   if candidate is None: return None
   x_batch = prefill_activation(x[0].cast(dtypes.float16).contiguous())

@@ -599,7 +599,7 @@ def _composite_native_grid_attention_swap(k:Scheduler, red:UOp, comp) -> None|li
   if not ([p.arg.slot for p in params] == [0,1,2,3] and tuple(p.ptrdtype.size for p in params) == sizes and
           all(p.ptrdtype.base == dtypes.half for p in params) and scale is not None and math.isfinite(scale) and scale > 0):
     return _TC_COMPOSITE_NO_MATCH
-  from extra.qk.flash_prefill_attention_spec import FlashPrefillAttentionSpec
+  from tinygrad.codegen.experimental import flash_prefill_attention_spec as FlashPrefillAttentionSpec
   # Lazily imported (matching how this file imports the builder today) to sidestep any
   # tinygrad.llm <-> tinygrad.codegen.opt import-order coupling.
   from tinygrad.llm.fused_attention import _PREFILL_EMITTERS

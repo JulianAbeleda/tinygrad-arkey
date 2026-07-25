@@ -948,7 +948,7 @@ class Transformer:
     # table and route_packed_wmma_prefill's own per-call gate check (same cache) declines it too --
     # never dispatched ungated. NOT set into the global here -- installed only around the prefill-v2
     # forward (__call__), merged with self._pf16_warmstart.
-    from extra.qk.prefill.packed_wmma_prefill_candidates import build_packed_wmma_warmstart_tables
+    from tinygrad.llm.route_ops import build_packed_wmma_warmstart_tables
     return build_packed_wmma_warmstart_tables(self._prefill_v2_covered(), self.config.prefill_ubatch)
 
   def realize_prefill_v2_weights(self) -> int:
