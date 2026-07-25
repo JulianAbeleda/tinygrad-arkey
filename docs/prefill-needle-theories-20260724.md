@@ -22,6 +22,12 @@ HBM, with L2 hit *rising* 62.8% -> 85.5% as context grows. A memory roofline can
 
 ## The split
 
+**READ THIS BEFORE ANY NUMBER BELOW.** Two arms exist and confusing them was an error in the first
+version of this doc. The **SHIPPED** kernel is `PREFILL_V_TRANSPOSED=0`: **952 instructions per KV tile,
+16 WMMA (1.68% useful), VMEM = 65.0% of SQ busy**. The 843-instruction / VMEM-36.7% figures belong to the
+`PREFILL_V_TRANSPOSED=1` arm, which is **default OFF and net -3.4%** (`fd654024e`). Never quote the vT
+numbers as the baseline.
+
 Per-kernel, ctx512 (PMC-instrumented run; shares are what matter, not its absolute wall time):
 
 | kernel class | share of kernel time | valu | mem | occ | l2 hit | lds conflict |
@@ -45,31 +51,62 @@ advantage (llama's attention plateaus at 15.1% of budget at pp4096 vs our 23%).
 | 4x (25% of peak) | +17.5% -> **3528** | clearly ahead |
 | GEMM parity (47%) | +20.1% -> 3606 | ceiling |
 
-## THEORY 1 — work per wave (the real fix for attention's 6%)
+## THEORY 1 — work per wave — **DEAD (measured 2026-07-24, do not implement)**
 
-**Claim:** attention's loop body is **843 instructions per KV tile for 16 WMMAs (1.9% useful)**, and that
-ratio does not improve by making any single bucket cheaper. It improves only by putting more WMMA work
-behind the same overhead.
+The claim was: the loop body is mostly overhead, so put more WMMA work behind it by giving a wave 32-64
+q-rows instead of 16, funding the extra accumulators by slicing the output dim (`acc_blocks`). **Refuted
+on four independent grounds. Scope + full model: `scratchpad/theory1-work-per-wave-scope.md`,
+`scratchpad/t1_cost_model.py`, resource table `scratchpad/t1_resource_table.py`.**
 
-**Evidence it must be structural, not per-bucket:** V-fragment vectorization removed the single largest
-bucket — 112 of 144 load instructions, 89% of VMEM instructions, 58% of SQ busy cycles — and bought
-only **1.20x** on the kernel and **-3.4% whole-model**. See the ledger entry; two quantified errors there
-(cycles/VMEM-instr is NOT constant: `d16` 3.02 vs `b128` 6.61; and a strided-scatter transpose costs ~7%
-of whole-model, not the ~3% a bandwidth estimate suggests).
+**1. Slicing frees far less allocation than it frees state.** Compiled, gfx1100, zero spills/scratch
+throughout (metadata key is **`vgpr`**, not `vgprs`):
 
-**The lever:** a wave owning 32 or 64 q-rows instead of 16 amortizes K/V fragment loads across them.
-Those loads remain the largest bucket even after vectorization (VMEM 36.7% of SQ busy).
+| acc_blocks | VGPR | KV body instrs | WMMA | instr/WMMA | global_ld/tile |
+|---:|---:|---:|---:|---:|---:|
+| 8 (shipped) | **254** | 952 | 16 | 59.5 | 144 |
+| 4 | **240** | 837 | 12 | 69.8 | 80 |
+| 2 | **212** | 785 | 10 | 78.5 | 48 |
+| 1 | **171** | 753 | 9 | 83.7 | 32 |
 
-**The blocker and its existing unlock:** 2x q-rows means 2x accumulators on a kernel already at 254 VGPR.
-But slicing the *output* dim frees accumulator VGPRs to spend on q-rows: 8 blocks x 8 fp32 = 64 VGPR ->
-16 at `acc_blocks=2`. The plumbing already exists and has never been perf-tested —
-`amd_gfx1100_q16_grid_pv_slice_stage` with `acc_blocks in {1,2,4}` and `output_block_base in {0,2,4,6}`,
-plus `amd_gfx1100_q16_grid_qk_stats_stage`. `docs/SHARED_ATTENTION_SEQUENCE_AND_PATTERN_20260723.md`
-item 3 proposed exactly this ("accumulate a smaller value/output slice… initially permit QK/softmax
-recomputation") and it was never run to conclusion.
+8->4 removes 64 registers of accumulator state but only **14** of allocation: at acc<=4 the whole-kernel
+high-water mark becomes the QK K-fragment `s_clause` preload (`global_load_b128 v[236:239]`), which is
+invariant in acc_blocks. Every slice makes instr/WMMA *worse*, not better.
 
-**Warning:** slicing ALONE is a loss — `acc_blocks=2` costs 4x KV passes and 4x softmax. The experiment
-is *slice + more q per wave*, measured together. Do not report the slice arm alone as a verdict.
+**2. The register cost of extra q-rows is +144, not +64 — and this corrects the repo's own ledger.**
+`docs/SHARED_ATTENTION_LIVE_STATE_RESIDENCY_LEDGER_20260723.md` attributes 80 VGPR of long-lived state
+(64 acc + 8 m + 8 l). In the actual binary PV acc is `v0:v63` and **`v64:v127` is a 64-VGPR
+loop-invariant Q-fragment preload (16 `global_load_b128` at `0x17BC`, outside the loop) that the ledger
+does not list at all.** True long-lived per-16-q-row state is **144 VGPR**. A second 16-row group costs
+>=48 marginal VGPR even after reclaiming 56 by de-preloading Q: acc=8 -> **302 VGPR, 46 over the cap**.
+Extra q-rows exist only at >=2 KV passes.
+
+**3. The arithmetic never closes.** With `passes = 8/acc_blocks`, K VMEM scales as passes/q_groups, V VMEM
+as 1/q_groups, and **R (QK + softmax + P repack) as passes**. Calibrated from the pp4096 V-transpose A/B
+(`dSQ_BUSY/dVMEM_cycles = 0.363`): **VMEM-removable is 23.6% of busy; R is 76.4%.** One extra pass costs
++76.4%; perfect 2x load amortization buys -11.8%. Best feasible arm (q_groups=2, acc=8) is 1.134x and is
+**VGPR-infeasible**; every feasible arm is a loss (q=2/acc=4 -> 0.598x).
+
+Two independent ceilings on ANY load-side attention work: wall/VMEM slope extrapolated to zero VMEM =
+**1.449x**; VALU-issue floor (22.400M busy / 13.158M VALU) = **1.702x**. The prize table needs 2x. At the
+adversarially favourable transfer coefficient 1.0 the acc=4 arm is still 0.79x, so the verdict does not
+depend on the fitted slope.
+
+**4. This lever was ALREADY MEASURED in zero-VGPR form and lost.** `b53ebfebd` (G2 shared-K/V LDS
+staging) is exactly Theory 1's amortization without the register cost — 128 scalar-half loads -> 4 `b128`
+load sites — and it measured **1.65% SLOWER at KV4096** (two barriers per tile; a VMEM issue slot simply
+becomes an LDS issue slot). The first version of this doc listed it under "what to drop" as an unrelated
+dead end. It is not unrelated: it is this theory's refutation.
+
+**Falsifier run, and it held.** The R-dominates decomposition predicts the shipped causal tile-skip (which
+removes 12.1% of *both* VMEM and R) improves attention ~1.121x. Measured with PMC at ctx4096: aggregate
+attention busy **800.1M -> 706.3M = 1.133x**, wall 717.0ms -> 648.2ms (1.106x), and VMEM share stays flat
+(63-65% -> 62-67%) — the signature of removing VMEM and R proportionally. Per chunk the causal-waste model
+also holds: kv512 **1.830x** (predicted 1.94x), kv2048 1.146x (1.14x), kv4096 1.088x (1.06x).
+
+**Where the work actually is: R = 76.4% of SQ busy.** Per 16 WMMAs the shipped body spends 429 VALU,
+**96 cross-lane `ds_bpermute`** (the online-softmax row max/sum reductions, invariant at every
+acc_blocks), and 16 transcendentals. Nothing in this doc previously addressed the row reductions. That is
+the only remaining path to a 2x attention kernel.
 
 ## THEORY 2 — GEMM LDS bank conflicts (untouched, on 79.6% of runtime)
 
@@ -129,15 +166,57 @@ better side. The naive "+1 element" pad trick is not safe here because the WMMA 
 (`rdna3_wmma_output_coord` / `wmma_fragment_loads` in `extra/qk/kernel_lds.py`) is a 2D lane→row/col
 mapping, not a simple linear row scan, so the actual conflict-minimizing stride has to be derived from
 that lane mapping (or swept empirically over the 16-byte-aligned choices under `max_lds_bytes=65536`), not
-guessed. Untried and worth a future pass: strides in {64 (no pad, control), 72, 88, 112} to map the period
-and check whether ANY stride in that family beats 80, or whether 80 is already a local optimum and the
-real lever is the fragment-load lane mapping itself.
+guessed. **PADDING IS EXHAUSTED — that suggested stride sweep is void.** `kernel_lds.py:238` requires "K row must
+contain whole b128 vectors" and the candidate declares `load_vector_width=store_vector_width=8` (8 halves
+= 16 B), so the stride MUST be 16-byte aligned. Under that constraint every stride is a multiple of 4
+dwords, hence `gcd(S,32) >= 4` always:
+
+| stride | dwords | gcd(S,32) | 16B-aligned | |
+|---:|---:|---:|---|---|
+| 64 | 16 | 16 | yes | far worse |
+| 72 | 18 | 2 | **no** | illegal |
+| **80** | 20 | **4** | yes | **current, 12.5% — optimal by padding** |
+| 84 | 21 | **1** | **no** | conflict-free but illegal |
+| 88 | 22 | 2 | **no** | illegal |
+| 96 | 24 | 8 | yes | tested -> 50%, -5.5% |
+| 112 | 28 | 4 | yes | same as 80, no gain |
+
+The conflict-free strides are exactly the ones b128 forbids. **80 B is already the best achievable by
+padding**, so the remaining move is an **XOR swizzle** — permute banks with an address XOR above the
+16-byte boundary, preserving b128 alignment while decorrelating banks. That is the standard technique
+precisely when vector-load alignment blocks padding.
+
+**Prize sizing (upper-bound sketch):** sensitivity measured in the wrong direction is 5.5% throughput per
+37.5pp of conflict ~= 0.15%/pp, so eliminating all 12.5pp extrapolates to roughly **+1.8%** — same order
+as Theory 3, NOT the large win the 79.6%-of-runtime share suggests. Extrapolated from one point; treat as
+a ceiling.
 
 ## THEORY 3 — causal tile skipping (bounded, independent)
 
 The kernel iterates **every** KV tile and masks in the softmax; it never skips a fully-masked tile.
-Measured waste: **1.94x at chunk 0**, 1.14x at chunk 3, 1.06x at chunk 7, **1.121x (12.1%) aggregate**
-over a 4096 prefill. Worth ~+2.8% of pp4096 budget. Independent of Theories 1 and 2, so it composes.
+Predicted waste: 1.94x at chunk 0, 1.14x at chunk 3, 1.06x at chunk 7, 1.121x (12.1%) aggregate over a
+4096 prefill. **NOTE: those are ATTENTION-LOCAL ratios, not whole-model deltas** — the first version of
+this doc put them next to a pp512 row and invited reading 1.94x as a 94% pp512 gain.
+
+**IMPLEMENTED AND CONFIRMED (`c44905a18`, `PREFILL_CAUSAL_TILE_SKIP`, default off).** Expressed as a
+dynamic KV-loop bound, not an exec-mask skip: `group` (gidx0) is already a runtime SPECIAL, so
+`tiles_needed = ceildiv(query_start + q_tile*16 + 16, 16)` is a runtime UOp and `cstyle.py`'s RANGE rule
+renders it with no renderer change. Exact (masked tile => weight 0, alpha 1), numerics 6.104e-05 at Hd=64
+and Hd=128, 8B parity 198==198. Cost: +9 instructions/wave for the bound, independent of trip count.
+
+Whole-model, **three independent same-session A/B pairs**:
+
+| pair | pp512 | pp4096 |
+|---|---|---|
+| 1 | 3607 -> 3680 (+2.02%) | 3003 -> 3054 (+1.70%) |
+| 2 | 3424 -> 3481 (+1.66%) | 2880 -> 2921 (+1.42%) |
+| 3 | 3404 -> 3459 (+1.62%) | 2858 -> 2911 (+1.85%) |
+| **mean** | **+1.77%** | **+1.66%** |
+
+Back-to-back noise on the same config is 0.59%, so the signal is ~3x noise. Attention-local (PMC, ctx4096)
+**1.133x aggregate**, matching the 1.121x prediction. Estimate was +2.8%; actual +1.66% — the projection
+ignored the +9 instructions/wave. Still default-off: promotion needs a `route_manifest.py` row and an
+authority gate, not a flag flip.
 
 ## Bounded and known
 Free-transpose V via a **transposed V KV cache** (write once at generation time so prefill reads the
@@ -148,5 +227,21 @@ permute that was measured and refuted today.
 Further micro-optimization of individual instruction buckets in the attention loop. Today measured the
 cost of that approach directly. Also settled dead ends (do not re-run): VGPR/occupancy compaction
 (1.43%/2.46% SLOWER), phase-ABI LDS state (added 2048 B LDS, reduced zero VGPRs), barrier removal
-(<0.2%), G2 GQA K/V LDS sharing (1.65% slower), and the P-repack LDS hypothesis (10 LDS instrs/tile;
-attention lds_conflict 5.1% vs the GEMMs' 12.5%).
+(<0.2%), and the P-repack LDS hypothesis (10 LDS instrs/tile; attention lds_conflict 5.1% vs the GEMMs'
+12.5%). **G2 GQA K/V LDS sharing (1.65% slower) has been MOVED out of this list** — it is not an unrelated
+dead end, it is Theory 1's refutation; see there.
+
+## Measurement methodology (learned the hard way today)
+
+1. **Absolute throughput on this box drifts ~5% across a long session.** The same config back-to-back
+   varies 0.59%, but baselines hours apart differ by 5% (3607 vs 3424 at pp512). So a recorded baseline is
+   NOT a valid comparator — **every small-win claim needs a same-session PAIRED A/B**, ideally repeated.
+   The three Theory 3 pairs agree on +1.7% across a 5% absolute shift; that is what makes them credible.
+2. **Never convert an instruction-count delta into a cycle delta at one measured rate.** `d16` = 3.02
+   cyc/instr, `b128` = 6.61 (2.2x). This produced the 1.96x-vs-1.20x V-gather error.
+3. **Price the machinery, not just the work removed.** Every local win projected today came in below
+   estimate because the delivery cost was omitted: V-transpose (a strided scatter, ~7% not ~3%), causal
+   skip (+9 instrs/wave).
+4. **A bandwidth estimate badly understates a strided scatter.** bytes/HBM-peak is only valid for a
+   streaming copy.
+5. **Distinguish SHIPPED from default-off arms in every quoted number.** This doc got that wrong once.
