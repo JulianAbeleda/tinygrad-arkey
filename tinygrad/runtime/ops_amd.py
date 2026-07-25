@@ -31,7 +31,11 @@ WAIT_REG_MEM_FUNCTION_NEQ = 4 # !=
 WAIT_REG_MEM_FUNCTION_GEQ = 5 # >=
 AQL_HDR = (1 << hsa.HSA_PACKET_HEADER_BARRIER) | (hsa.HSA_FENCE_SCOPE_SYSTEM << hsa.HSA_PACKET_HEADER_SCACQUIRE_FENCE_SCOPE) \
         | (hsa.HSA_FENCE_SCOPE_SYSTEM << hsa.HSA_PACKET_HEADER_SCRELEASE_FENCE_SCOPE)
-AMD_KERNARGS_BUFFER_SPEC = BufferSpec(cpu_access=True, uncached=True)
+# Kernargs live in device-local VRAM. `uncached=True` here would set
+# KFD_IOC_ALLOC_MEM_FLAGS_GTT and move the whole 16 MiB kernargs pool into uncached
+# host memory, so every per-dispatch kernarg fetch crosses PCIe. Measured cost on
+# 8B Q4_K_M decode ctx512 (949 dispatches/token): 110.0 -> 95.1 tok/s (-13.5%).
+AMD_KERNARGS_BUFFER_SPEC = BufferSpec(cpu_access=True)
 
 def _publish_aql_packet(slot:MMIOInterface, packet:bytes) -> None:
   """Publish one complete AQL packet by making its valid header visible last."""

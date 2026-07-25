@@ -25,5 +25,8 @@ def test_hcq_program_kernargs_honor_program_alignment():
   assert first.buf.va_addr % 64 == second.buf.va_addr % 64 == 0
 
 
-def test_amd_kernargs_pool_is_cpu_visible_and_uncached():
-  assert AMD_KERNARGS_BUFFER_SPEC == BufferSpec(cpu_access=True, uncached=True)
+def test_amd_kernargs_pool_is_cpu_visible_and_device_local():
+  # Must NOT be uncached: on KFD that flag selects GTT, moving the kernargs pool out of
+  # VRAM into uncached host memory and costing ~13.5% of 8B decode throughput.
+  assert AMD_KERNARGS_BUFFER_SPEC == BufferSpec(cpu_access=True)
+  assert AMD_KERNARGS_BUFFER_SPEC.uncached is False
