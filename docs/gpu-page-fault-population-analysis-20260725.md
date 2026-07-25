@@ -81,6 +81,17 @@ mapped. The real unmap goes `Allocator.free` -> `HCQAllocatorBase._free` (`hcq.p
 site that actually unmaps. An audit hook added at `_realloc` was reverted for this reason: it could fire on
 a safe cache-insert, so it is a false-positive generator, not a detector.
 
+The scratch story dies on measurement too. A temporary probe on
+`AMDDevice._ensure_has_local_memory` over a full 8B run (pp512 + pp4096, 3715/3251 tok/s) recorded **exactly
+one** growth event:
+
+    [SCRATCH GROW] req=128B prev_max=0B old_va=0x0 observed=0 pending=0
+
+That is the 128-byte default at device init (`ops_amd.py:1084`), before any work is enqueued. No prefill
+kernel spills past it, so scratch is never reallocated during execution and `_realloc` is never reached on
+this path at all. `GPU_LIFETIME_AUDIT` was on for the same run and stayed silent. The probe was removed once
+this verdict was recorded.
+
 ## What would actually settle it
 
 The dmesg population is exhausted; it cannot attribute a fault to a dispatch. The next probe has to correlate
