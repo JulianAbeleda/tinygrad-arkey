@@ -1,0 +1,54 @@
+{
+  "_schema": "prefill-causal-tile-skip-promotion-evidence.v1",
+  "_purpose": "Structured transcription of the ALREADY-MEASURED evidence for promoting PREFILL_CAUSAL_TILE_SKIP (commit c44905a18) from default-off to default-on on the existing prefill_flash_attention_generated route. No numbers here are new measurements -- every field cites commit c44905a18 and docs/prefill-needle-theories-20260724.md THEORY 3. extra/qk/prefill_causal_tile_skip_promotion_gate.py reads this file; it does not embed thresholds/results inline so the gate and the evidence stay independently auditable.",
+  "flag": "PREFILL_CAUSAL_TILE_SKIP",
+  "default": "0 (OFF)",
+  "route_id": "prefill_flash_attention_generated",
+  "kernel": "amd_gfx1100_q16_grid_hd128_loop_attention",
+  "commit": "c44905a18bd5282a49e1d6d3701f77a23f771c1c",
+  "citation": "docs/prefill-needle-theories-20260724.md#theory-3-causal-tile-skipping-bounded-independent",
+  "exactness_argument": "A fully-masked KV tile is a mathematical no-op: weight==0 everywhere and old_m==new_m so alpha==1 (see amd_attention_abi.expand_native_row_softmax_repack); the dynamic bound only reduces trip count for waves whose causal mask already zeroed those tiles, it does not change which elements are summed.",
+  "shapes": {
+    "8B": {
+      "grid_key": "Hq=32,Hkv=8,Hd=128 (PROFILE_DECODE / PROFILE_PREFILL 8B admitted grid)",
+      "numerics": {"status": "PASS", "hd64_max_abs_err": 6.104e-05, "hd128_max_abs_err": 6.104e-05,
+                   "citation": "extra/qk/prefill_hd_sweep_numerics.py, cited in c44905a18 commit message"},
+      "token_parity": {"status": "PASS", "sdpa_token": 198, "fused_token": 198,
+                        "citation": "extra/qk/prefill_flash_e2e_parity.py 8B arm, cited in c44905a18 commit message"},
+      "whole_model_paired_ab": {
+        "status": "PASS",
+        "note": "three independent same-session paired A/B runs, tok/s, flag off -> on",
+        "pairs": [
+          {"pp512_off": 3607, "pp512_on": 3680, "pp512_delta_pct": 2.02, "pp4096_off": 3003, "pp4096_on": 3054, "pp4096_delta_pct": 1.70},
+          {"pp512_off": 3424, "pp512_on": 3481, "pp512_delta_pct": 1.66, "pp4096_off": 2880, "pp4096_on": 2921, "pp4096_delta_pct": 1.42},
+          {"pp512_off": 3404, "pp512_on": 3459, "pp512_delta_pct": 1.62, "pp4096_off": 2858, "pp4096_on": 2911, "pp4096_delta_pct": 1.85}
+        ],
+        "pp512_mean_delta_pct": 1.77,
+        "pp4096_mean_delta_pct": 1.66,
+        "back_to_back_same_config_noise_pct": 0.59,
+        "signal_to_noise": "~3x (mean delta / same-config noise)",
+        "cross_session_baseline_drift_pct": 5.0,
+        "citation": "docs/prefill-needle-theories-20260724.md THEORY 3 table"
+      },
+      "attention_local_pmc": {
+        "status": "PASS", "context": 4096, "busy_cycles_off": 800100000, "busy_cycles_on": 706300000,
+        "measured_ratio": 1.133, "predicted_ratio": 1.121,
+        "per_chunk_ratio": {"kv512": 1.830, "kv2048": 1.146, "kv4096": 1.088},
+        "citation": "docs/prefill-needle-theories-20260724.md THEORY 3 (PMC aggregate) + prize-sizing table"
+      }
+    },
+    "14B": {
+      "grid_key": "Hq=40,Hkv=8,Hd=128 (PROFILE_DECODE_LARGE / PROFILE_PREFILL 14B admitted grid)",
+      "numerics": null,
+      "token_parity": null,
+      "whole_model_paired_ab": null,
+      "attention_local_pmc": null,
+      "status": "UNTESTED",
+      "blocking_reasons": [
+        "extra/qk/prefill_flash_e2e_parity.py 14B arm fails on in-process VRAM (8B model still resident in the same process)",
+        "separate known packed-WMMA canary HW-fault on this box, independent of this flag"
+      ],
+      "note": "This is the single biggest gap in the evidence for promoting the flag's default. prefill_flash_attention_generated's own shape_guards admit BOTH the 8B (Hq=32) and 14B (Hq=40) grids, so promotion evidence restricted to 8B only proves the flag for HALF the route's admitted surface."
+    }
+  }
+}
