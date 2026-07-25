@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import math
 from tinygrad.dtype import dtypes, PtrDType, AddrSpace
+from tinygrad.helpers import getenv
 from tinygrad.uop.ops import Ops, UOp, AMDRowSoftmaxRepackSpec
 from tinygrad.schedule.wmma.softmax import amd_gfx1100_row_softmax_initial, amd_gfx1100_row_softmax_state
 from tinygrad.schedule.wmma.loop_state import loop_state_write, loop_state_read, packed_fragment_load
@@ -261,7 +262,26 @@ def amd_gfx1100_q16_grid_hd128_loop_attention(q:UOp,k:UOp,v:UOp,out:UOp,*,q_toke
   if (output_block_base,acc_blocks) != (0,hd_blocks) and (acc_blocks not in {1,2,4} or not 0 <= output_block_base <= hd_blocks-acc_blocks or output_block_base % acc_blocks): raise ValueError("grid loop requires a full or aligned accumulator slice")
   if query_start is None: query_start=valid_kv-q_tokens
   lane=UOp.special(32,"lidx0"); group=UOp.special(q_heads*grid.q_tiles,"gidx0"); col=lane.alu(Ops.AND,UOp.const(dtypes.weakint,15)); zero=UOp.const(dtypes.float.vec(8),(0.0,)*8); axes=((),(),tuple((-120-i,2) for i in range(3))); warg=("WMMA_16_16_16_half_float",(16,16,16),dtypes.half,dtypes.float,"AMD:gfx1100",32,axes,())
-  rng=UOp.range((kv_tokens+15)//16,9600,AxisType.REDUCE); creg=UOp.placeholder((acc_blocks*8,),dtypes.float,9603,addrspace=AddrSpace.REG)
+  full_kv_tiles=(kv_tokens+15)//16
+  # THEORY 3 (docs/prefill-needle-theories-20260724.md): causal_v1 masks every KV tile fully past
+  # this wave's last query row, but the loop always ran the full extent. Since a fully-masked tile
+  # is a mathematical no-op (weight==0 everywhere -> zero PV contribution, old_m==new_m -> alpha==1,
+  # see amd_attention_abi.expand_native_row_softmax_repack), a wave can stop the moment its own last
+  # query row is covered without changing the result -- a genuine loop-trip-count reduction, not a
+  # masked-value skip. `group` (gidx0) is a runtime SPECIAL, so `q_tile` and the resulting extent are
+  # runtime UOp expressions; cstyle.py's RANGE rule (`for (...; idx < {ctx[x.src[0]]}; ...)`) already
+  # renders whatever UOp sits in the extent slot, so a dynamic bound needs no renderer change.
+  # Defensive clamp to full_kv_tiles: production query_start==valid_kv-q_tokens always keeps
+  # tiles_needed<=full_kv_tiles (valid_kv<=kv_tokens), but a caller-supplied query_start need not.
+  if getenv("PREFILL_CAUSAL_TILE_SKIP") and causal:
+    q_tile=group % grid.q_tiles
+    last_row_plus1=UOp.const(dtypes.weakint,query_start+16)+q_tile*UOp.const(dtypes.weakint,16)
+    tiles_needed=(last_row_plus1+UOp.const(dtypes.weakint,15))//UOp.const(dtypes.weakint,16)
+    over=(UOp.const(dtypes.weakint,full_kv_tiles)-tiles_needed).alu(Ops.MAX,UOp.const(dtypes.weakint,0))
+    rng=UOp.range(UOp.const(dtypes.weakint,full_kv_tiles)-over,9600,AxisType.REDUCE)
+  else:
+    rng=UOp.range(full_kv_tiles,9600,AxisType.REDUCE)
+  creg=UOp.placeholder((acc_blocks*8,),dtypes.float,9603,addrspace=AddrSpace.REG)
   if phase_abi_v1:
     from tinygrad.uop.ops import StateRegionSpec, PhaseBoundarySpec, StateHandle
     phase_lds=UOp(Ops.DEFINE_LOCAL,dtypes.float.ptr(512,AddrSpace.LOCAL),arg=9610)
