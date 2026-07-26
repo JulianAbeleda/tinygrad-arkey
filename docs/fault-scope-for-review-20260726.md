@@ -3,7 +3,7 @@
 Written to be handed to an outside reviewer. Phases 1-2 are shipped; the fault investigation is the
 part under review.
 
-**Revision note (post-review).** A first draft of this scope framed the fault around the kernargs
+**Revision note (post-review, 2nd pass).** A first draft of this scope framed the fault around the kernargs
 allocator and a `kernel_object` validator. A review plus the verification below **falsified that
 framing**, and dmesg ordering evidence collected while checking it moved the whole investigation. The
 superseded reasoning is kept in §6 because the *errors* are the most useful part of the record.
@@ -23,8 +23,30 @@ GCVM_L2_PROTECTION_FAULT_STATUS: 0x008012B1
 
 Hardware: AMD RX 7900 XTX, gfx1100, 24 GB, `xccs == 1`. Hard fork of tinygrad, quantized GGUF inference.
 
-`0xffffffbfe000` is the 48-bit sign-extension of int32 `0xffbfe000` = `-(4 MiB + 8 KiB)` — a *constant
-negative int32*, recurring unchanged across weeks, across code changes, across 8B and 14B.
+### The address has an exact architectural identity (VERIFIED 2026-07-26)
+
+`0x0000ffffffbfe000` is **the KFD CWSR trap-handler base**, not sign-extended arithmetic. From
+`/usr/src/amdgpu-6.16.13-2341068.24.04/amd/amdgpu/amdgpu_vm.h`:
+
+```c
+#define AMDGPU_VA_RESERVED_CSA_SIZE     (2ULL << 20)   /* 2 MiB */
+#define AMDGPU_VA_RESERVED_SEQ64_SIZE   (2ULL << 20)   /* 2 MiB */
+#define AMDGPU_VA_RESERVED_TRAP_SIZE    (2ULL << 12)   /* 8 KiB */
+```
+```
+2^48 - 2 MiB - 2 MiB - 8 KiB = 0xFFFFFFBFE000     <- exact match
+```
+
+`amd/amdkfd/kfd_flat_memory.c` assigns `pdd->qpd.cwsr_base = AMDGPU_VA_RESERVED_TRAP_START(...)`, and KFD
+allocates an executable GTT buffer there, copies in the CWSR handler, and programs `tba_addr`.
+
+**Consequences.** Its constancy across programs, models and weeks is *expected* — KFD reserves the same
+top-of-VM address every time. It is not evidence of per-dispatch arithmetic escaping range. The fault is
+an **attempted instruction fetch of the CWSR trap handler**. That tinygrad never programs TBA/TMA is
+irrelevant: `AMDKFD_IOC_ACQUIRE_VM` makes KFD create and program this machinery.
+
+The earlier `-(4 MiB + 8 KiB)` reading is arithmetically the same number with no mechanism attached. It
+is superseded.
 
 ## 2. The measured causal chain (new — this is the finding)
 
@@ -44,18 +66,59 @@ Two facts, both verified by timestamp ordering across every incident:
 2. **`sq_intr` fires ~840 times but only 69 become faults.** There are large `sq_intr` bursts
    (07-13 11:40:15, 12:52:11, 12:54:18) with *no fault and no reset at all*.
 
+   > **Do not compute an escalation rate from this.** `sq_intr` is emitted through a **rate-limited
+   > printk warn path**, so the count is censored; it may also be one report per wave while VM faults are
+   > coalesced or suppressed. "840 → 69, therefore 8% escalate" is **invalid** and is withdrawn. Pairing
+   > requires PASID, VMID, queue/doorbell, SE/SH/CU/wave coordinates and raw interrupt words attached to a
+   > common incident — timestamps from two different reporting paths cannot pair individual events.
+   > Benign-looking bursts may simply be multiple `sq_intr` lines belonging to one incident.
+
 And `Failed to evict` / `Failed to quiesce` land **~2 seconds after** the SQC fault, every time — they
 are consequences of the hung wave, not causes. Any eviction/CWSR-first theory is refuted by ordering.
 
-**Reading:** the SQC fault is a *secondary* symptom. The primary event is a shader-quad error exception,
-which happens routinely and is usually benign; occasionally the wave ends up fetching instructions at a
-constant unmapped address and takes the GPU down. The real bug is whatever raises the SQ exception; the
-constant PC is what a wave lands on afterwards.
+### What `type 2` means (VERIFIED)
 
-**Supporting structural fact:** `grep -in "tba\|tma\|trap" tinygrad/runtime/ops_amd.py` finds no trap-handler
-programming (the only `TRAP` hits are SDMA interrupt packets). tinygrad never sets a trap base address.
-A wave that traps with TBA unprogrammed jumps to a fixed garbage vector — which is exactly the profile of
-a *constant* wild PC that arithmetic on per-dispatch data would not produce.
+From `amd/amdkfd/kfd_int_process_v11.c`:
+```c
+enum SQ_INTERRUPT_ERROR_TYPE {
+  SQ_INTERRUPT_ERROR_TYPE_EDC_FUE = 0x0,
+  SQ_INTERRUPT_ERROR_TYPE_ILLEGAL_INST,   /* 1 */
+  SQ_INTERRUPT_ERROR_TYPE_MEMVIOL,        /* 2 */
+  SQ_INTERRUPT_ERROR_TYPE_EDC_FED,        /* 3 */
+};
+```
+
+**`type 2` = MEMORY VIOLATION.** So the 791 dominant events are memory violations raised by shader waves,
+and the 49 `type 1` are illegal instructions.
+
+**The mechanism, corrected:**
+1. An application wave raises a **memory violation** — a real OOB/misaligned/illegal access in our code.
+2. Hardware transfers control to the KFD CWSR trap handler.
+3. SQC cannot fetch that handler at `0xffffffbfe000`.
+4. Recovery degrades into eviction/quiesce failure and reset.
+
+This keeps "the SQC fault is secondary" and **falsifies** "unprogrammed vector → garbage PC". The
+first-level CWSR handler checks for a second-level debugger/application TBA and has a safe
+no-next-handler path; it does not blindly jump through zero
+(`amd/amdkfd/cwsr_trap_handler_gfx10.asm`).
+
+**So the primary bug is a memory violation in a GPU kernel on the prefill path.** That is a correctness
+defect, not merely a stability one.
+
+### `priv 1` is not evidence (VERIFIED)
+
+`ops_amd.py:641` — *"Set rsrc1.priv=1 on gfx11 to workaround cwsr."* tinygrad sets `COMPUTE_PGM_RSRC1.PRIV=1`
+on **every** generated kernel. The `priv 1` in the log is fully explained by our own code and is not
+independent evidence of a privileged trap. A PRIV-vs-TBA-PTE interaction is now a serious hypothesis but
+is **not** proven by this bit.
+
+### The fault status points at permissions, not a missing mapping
+
+`GCVM_L2_PROTECTION_FAULT_STATUS = 0x008012B1` decodes (masks in
+`amd/include/asic_reg/gc/gc_11_0_0_sh_mask.h`) as `MORE_FAULTS=1, WALKER_ERROR=0, PERMISSION_FAULTS=0xb,
+MAPPING_ERROR=0, CID=9 (SQC inst), RW=0, VMID=8`. **`MAPPING_ERROR=0` with non-zero `PERMISSION_FAULTS`**
+means the lead is a TBA instruction-fetch *permission / translation-state* problem — not "the trap BO was
+never mapped". (Independent re-decode in flight.)
 
 ## 3. What the kernargs framing got wrong (verified by reading the code)
 
@@ -98,37 +161,72 @@ differs by a lot is the lead.
 
 ## 5. Revised plan
 
-**P0 — free, no GPU risk, do first.**
-1. Diff the two schedules (§4). Zero resets.
-2. `assert 0 < prog_addr < (1<<48)` at `AMDProgram.__init__:646`.
-3. Scan every host-writable GPU mapping (ring, kernargs pool, gart) for the literal dword `0xffffbfe0` /
-   `0xffbfe000`. **If the CPU never wrote that value anywhere, no producer produced it** — it comes from
-   firmware/hardware, and the entire producer-validation line closes.
-4. Record `lib_gpu` VA ranges at alloc/free (T5). Cheap. Note it predicts a fault at the code object's
-   *real* VA (`0x7xxx…`), not at `0xffffffbfe000`, so it cannot explain the live signature alone.
+The primary bug is a **memory violation in a GPU kernel**. The CWSR fetch fault is the downstream
+signature. The plan is ordered accordingly; nothing here requires a GPU benchmark until step 6.
 
-**P1 — characterize the SQ exception.** This is now the primary question. What raises
-`sq_intr type 2 priv 1`, why does it fire ~840 times mostly benignly, and what distinguishes the ~8%
-that escalate? Decode the `sq_intr` type/detail encoding for gfx11 and correlate bursts against workload
-phase.
+**Steps 1-5 are read-only and running now (low-effort subagents, no GPU, no resets).**
 
-**P2 — minimize the trigger.** Does `.contiguous()` still fault under `--logits-only` with a dummy
-contiguous of the same size? Does size matter? Is the argmax needed at all? Each answer converts a
-30-run statistical arm into a 4-run observation.
+1. **Decode + correlate the interrupt stream.** Decode every distinct
+   `GCVM_L2_PROTECTION_FAULT_STATUS` against the real masks. Extract PASID/VMID/queue/wave coords per
+   `sq_intr` and pair to the subsequent VM fault. Establish whether the printk path is rate-limited
+   before anyone quotes a count. **Stop using aggregate ratios.**
+2. **Audit tinygrad's VA management against the KFD-reserved top region.** Can tinygrad's allocator reach
+   into CSA / SEQ64 / trap space? Does it read the real aperture or assume one? Does it populate
+   `ctx_save_restore_address` / `ctx_save_restore_size` on queue creation, or leave them zero?
+3. **Hunt the memory violation.** Ranked audit of hand-authored kernels for LDS out-of-range, unclamped
+   tail/remainder indexing, misaligned vector loads, barriers in divergent flow, 32-bit index overflow.
+   Prefill attention and the Q4_K dequant + WMMA packed kernels first. Note MEMVIOL covers LDS, scratch,
+   misaligned atomics and flat violations — **not** just global-buffer OOB.
+4. **Differential on the reproducer.** CPU-side schedule diff of variant A (`.contiguous()`, 3/4 faults)
+   vs variant B (scheduler gate, 0/5): buffer count, total and peak live bytes, lifetimes, where the gate
+   fires, prefill dispatch count.
+5. **Instrument KFD process setup** — log PASID, `cwsr_base`, TBA/TMA, mapping flags and mapping success;
+   dump the queue MQD and confirm TBA and `TRAP_PRESENT`; trace CWSR BO map/unmap/evict/restore and VM
+   invalidation; inspect the TBA PTE permissions before the trigger and after any evict/restore.
 
-**P3 — only if P0-P2 come up empty.** Install `umr`; `amdgpu.vm_fault_stop=2` + `umr -O halt_waves -wa`
-yields the actual `SQ_WAVE_PC` and owning shader at fault time — the one measurement that cannot come
-back ambiguous. With a 3/4 reproducer that needs one run, not sixty. (`umr` is **not installed**;
-`vm_fault_stop` currently `0`.)
+**Then, needing GPU time or a reboot — YOUR CALL, not an agent's:**
 
-**Dropped.** Pool-shrink sweep (manufactures an absent regime). `kernel_object` validator (AQL-only).
-The 30-runs-per-arm design — with the reproducer, "does arm X change the rate of a known 3/4 trigger"
-needs n≈8 (~6 resets) and has real power, where "does arm X fault spontaneously" needs n≫30 and never
-terminates.
+6. **Trigger minimization** on the `.contiguous()` reproducer (see caveats below).
+7. **`amdgpu.cwsr_enable=0`** as a controlled mechanistic test. If the fixed-TBA fetch fault disappears
+   while the underlying failure changes form, the chain is strongly confirmed. Requires a kernel param
+   change; reset risk.
+8. **Moving-TBA test** — boot a kernel using the 64 KiB trap reservation instead of 8 KiB. Expected TBA
+   moves `0xffffffbfe000` → `0xffffffbf0000`. If the reported fault address moves with it, the address is
+   live; if it stays, sticky reporting becomes credible. This is the clean discriminator for §6.6.
+   Cheaper partial: log `qpd->cwsr_base` at process-device init.
+9. **`rocr_debug_agent`** to identify the original wave stopped for MEMORY_VIOLATION. Not installed;
+   compatibility with tinygrad's direct-KFD path must be established with a positive control first.
 
-**On the shipped kernargs fix (`f705fee2f`):** it is a 15% win with an independently verified mechanism.
-Reverting it requires strong evidence, and the 60-reset design cannot buy that evidence. Re-test it
-through the reproducer or not at all.
+### Tests that overclaim (kept as caveats, not gates)
+
+- `assert prog_addr < 2^48` is **too weak** — a corrupt offset can stay canonical and in range. Validate
+  against the actual code-object interval and entry alignment. It is no longer a plausible explanation
+  for this address anyway.
+- **The literal-dword scan is dropped as a falsification test.** "The CPU never wrote it, therefore no
+  producer produced it" is unsound: the value can be computed rather than stored, written by KFD, held in
+  an MQD or register outside user mappings, split across fields, or transient. Decisively — the real
+  value is computed from reserved-VA macros and installed by KFD, so a scan of host-writable *tinygrad*
+  allocations is structurally incapable of finding its source. Retain only as weak inventory tooling.
+- `--logits-only` removes sampling *and* changes the schedule; a clean result cannot separate the
+  contiguous buffer from the eliminated downstream work.
+- A dummy contiguous buffer changes allocation, lifetime, pressure and dispatch timing — useful trigger
+  minimization, **not** causal isolation. A size sweep simultaneously changes workgroup geometry,
+  allocator bins, VRAM pressure, reduction strategy and cache behavior. Removing argmax changes codegen
+  *and* synchronization.
+- **A producer-output validator cannot detect** illegal reads, LDS out-of-range, misaligned atomics, or
+  transient OOB stores later overwritten.
+- Any validator that inserts synchronization or realization **may suppress the race it is measuring**. A
+  clean result needs a demonstrated positive control and must be treated as potentially Heisenberg-altered.
+
+**Dropped outright.** Pool-shrink sweep (manufactures an absent regime). `kernel_object` validator
+(AQL-only). The 30-runs-per-arm design.
+
+**On the shipped kernargs fix (`f705fee2f`):** a 15% win with an independently verified mechanism.
+Reverting needs strong evidence the 60-reset design cannot buy. Re-test through the reproducer or not at all.
+
+**On variant B being "safe":** 0/5 is **not** enough to call it safe. The materialization change likely
+exposes or suppresses the underlying memory violation or a VM/CWSR state race; it does not explain the
+fixed address, and it does not establish that the primary defect is gone.
 
 ## 6. Errors in my own reasoning (kept deliberately — discount accordingly)
 
@@ -150,21 +248,32 @@ through the reproducer or not at all.
 4. **"Serialization hides the fault, therefore race" is unsound** — it also removes wrap pressure.
 5. **Resets are not free.** They degrade the machine and once silently cost 40% on all subsequent
    measurements via `power_dpm_force_performance_level` stuck in `profile_standard`.
-6. **Whether dmesg is even the source of the constant is unconfirmed.** `sleep()` (`:858-864`) carries a
-   comment about the persistent event array joining a stale fault VA to a later exception, and
-   `on_device_hang` (`:871`) only re-polls when the field is empty. One stale-report bug has already been
-   found in this struct. "The same address 56 times" is also what a sticky report looks like.
+6. **The stale-report theory does not explain the kernel journal.** tinygrad's `queue_event_arr` union bug
+   can contaminate the *userspace* exception, but not the address printed by `journalctl -k`, which comes
+   through the kernel's own fault-reporting path. A sticky hardware/driver fault-address register stays
+   theoretically possible, but the exact match to KFD's TBA makes coincidence implausible. Settled by the
+   moving-TBA test (§5.8).
+7. **I read a numerical coincidence as a mechanism.** `-(4 MiB + 8 KiB)` is arithmetically correct and
+   causally empty; the same number is `2^48 - CSA - SEQ64 - TRAP`, which has an actual cause. Being able
+   to *derive* a constant is not the same as explaining it. The `8 << 10` "coincidence" I chased was the
+   trap-reservation size showing up in a place I had already convinced myself was dead code.
+8. **I built an escalation statistic on a censored counter** (§2). Rate-limited printk output does not
+   support a ratio.
 
-## 7. Questions for the reviewer
+## 7. Open questions
 
-1. Does the `sq_intr` → SQC-fault chain hold up, and what raises `type 2, priv 1` on gfx11? The 840-vs-69
-   ratio says most SQ exceptions are benign — what determines escalation?
-2. Given tinygrad never programs TBA/TMA, is "wave traps → unprogrammed trap vector → constant PC" the
-   right explanation for the constancy? Is there a way to confirm it short of `umr`?
-3. Is the P0 constant-scan (§5.3) sound as a way to close the producer-side line entirely?
-4. What else explains a *constant* `-(4 MiB + 8 KiB)` that neither the trap-vector nor the `prog_addr`
-   theory covers?
-5. Anything in the revised plan that still can't distinguish what it claims to?
+1. **What raises the memory violation?** This is now the whole investigation. §5.3 is hunting candidates.
+2. **Why can't SQC fetch the CWSR handler?** `MAPPING_ERROR=0` with `PERMISSION_FAULTS=0xb` says the TBA
+   page is mapped but the instruction fetch is not permitted, or the translation state is wrong at fault
+   time. Is this a PTE permission issue, a TLB/VM-restore race, or an interaction with our own
+   `RSRC1.PRIV=1`?
+3. **Does `PRIV=1` interact with the TBA PTE?** tinygrad sets it on every kernel as a CWSR workaround.
+   Must be tested in a minimized reproducer — the log bit alone proves nothing.
+4. **Is the reported address live or sticky?** Settled by the moving-TBA test (§5.8).
+5. **Why do only some violations escalate?** Candidates: multiple `sq_intr` per incident; coalesced SQC
+   reporting; handler instruction/translation cached for some traps; stale TLB/PTE or VM-restore race on
+   refill; logs pairing unrelated queues/PASIDs. **The first two must be eliminated before investigating
+   the rest.**
 
 ## 8. Standing gates
 
