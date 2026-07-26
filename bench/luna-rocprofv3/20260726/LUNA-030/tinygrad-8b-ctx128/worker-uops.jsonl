@@ -1,0 +1,1 @@
+{"schema":"luna-tinygrad-worker-uop.v1","status":"NOT_AVAILABLE","reason":"the existing fixed-depth authority has no opt-in decode UOp observer, and the profiled child did not complete its authority artifact"}

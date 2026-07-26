@@ -1,0 +1,24 @@
+{
+  "schema": "luna-tinygrad-profiler-evidence.v1",
+  "task": "LUNA-030",
+  "verdict": "TOOL_FAILURE",
+  "worktree": "/home/ubuntu/worktrees/luna-tinygrad-trace-8b128",
+  "fixed_context": 128,
+  "model": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+  "profiler": "/opt/rocm/bin/rocprofv3",
+  "profiler_version": "1.1.0",
+  "command_file": "command.txt",
+  "raw_stdout": "stdout.log",
+  "raw_stderr": "stderr.log",
+  "profiler_output": "MISSING",
+  "worker_authority": "MISSING",
+  "worker_route_log": "worker-route.jsonl",
+  "worker_uop_log": "worker-uops.jsonl",
+  "positive_control": {
+    "expected": "route=flash and programs_per_token_by_route.flash > 0",
+    "observed": "MISSING",
+    "passed": false
+  },
+  "classification_rule": "An empty or absent rocprof trace is tool failure; missing worker control independently prevents route attribution.",
+  "can_proceed_to_luna_031": false
+}
