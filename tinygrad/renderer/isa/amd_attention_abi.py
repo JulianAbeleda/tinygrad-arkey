@@ -132,8 +132,41 @@ def expand_loop_fragment(x:UOp) -> UOp:
   else:
     grid=x.arg.grid
     gbase=(grid_src[0]//(grid.q_tiles*grid.group_ratio))*(grid.kv_tokens*hd)
+  # OOB LOAD GUARD (correctness fix): K/V buffers carry no padding -- kernels.py's `sizes=` check on
+  # amd_gfx1100_q16_grid_hd128_loop_attention requires the buffer to hold EXACTLY kv_heads*kv_tokens*hd
+  # elements -- but `full_kv_tiles=(kv_tokens+15)//16` at that call site CEILS the KV-tile trip count to
+  # cover a possibly-partial tail tile. On that tail tile some lanes' `token = rng*16+<lane offset>` is
+  # >= kv_tokens: without a guard here those lanes still issue a REAL global load past the end of the
+  # buffer. `expand_native_row_softmax_repack`'s `valid.where(value,-inf)`/`valid.where(weight,0)` (this
+  # module, ~line 213/237) only zero the *softmax contribution* of an invalid KV column after the fact --
+  # they never touch the load address, so an out-of-range V element that happens to be NaN/Inf (garbage
+  # or genuinely unmapped memory) still contaminates the PV accumulation as `weight(=0) * garbage`, which
+  # is not guaranteed finite (0*inf=NaN, 0*NaN=NaN). This guards the LOAD ADDRESS itself, the same idiom
+  # postrange.py's PADTO opt uses for exactly this class of bug: `(valid & ...).where(idx, UOp.invalid())`
+  # -- `UOp.valid` (tinygrad/uop/ops.py) is that exact helper, and codegen/late/gater.py's
+  # `pm_move_gates_from_index` turns `buf.index(gate.where(idx, Invalid))` into a real masked/gated LOAD
+  # (alt=0, exec-predicated), not a plain unconditional access.
+  #
+  # Only the grid-carrying construction (x.arg.grid is not None) has a `kv_tokens` to guard against; the
+  # legacy grid-less branch above (`gbase=0`, no head_dim kwarg -- a different, always-fixed-kv64 kernel
+  # family) is untouched.
+  #
+  # FOLD-AWAY (must not regress the aligned hot path): when kv_tokens is a compile-time multiple of 16,
+  # `rng` (UOp.range(full_kv_tiles,...)) has a static bound of [0, full_kv_tiles-1], so every `token`
+  # expression below has a provable static max of kv_tokens-1. tinygrad/uop/ops.py's CMPLT vmin/vmax rule
+  # (`s0_vmax<s1_vmin, s0_vmin<s1_vmax`) then makes the comparison's own vmin==vmax==True, and
+  # tinygrad/uop/symbolic.py:258-259 constant-folds any {CMPLT,...} UOp whose vmin==vmax to that constant;
+  # symbolic.py:163 (`gate.where(c0,c1) -> c0 if gate.arg else c1`) then collapses `row_ok.where(idx,
+  # Invalid)` straight back to `idx`. See test_amd_attention_kv_tile_oob_guard.py's
+  # `*_guard_folds_away_when_aligned` tests, which assert the rendered ISA for an aligned geometry is
+  # instruction-for-instruction identical to the pre-fix baseline.
+  grid_kv_tokens=x.arg.grid.kv_tokens if x.arg.grid is not None else None
+  def _row_ok(token): return None if grid_kv_tokens is None else token < grid_kv_tokens
   if role=="Q": offs=tuple(gbase+col*hd+block*16+i for i in range(16))
-  elif role=="K": offs=tuple(gbase+rng*16*hd+col*hd+block*16+i for i in range(16))
+  elif role=="K":
+    row_ok=_row_ok(rng*UOp.const(dtypes.weakint,16)+col)  # same KV row for all 16 lanes of this fragment
+    offs=tuple(gbase+rng*16*hd+col*hd+block*16+i for i in range(16))
+    if row_ok is not None: offs=tuple(o.valid(row_ok) for o in offs)
   elif getenv("PREFILL_V_TRANSPOSED") and x.arg.grid is not None:
     # V VECTORIZATION (measured lever): row-major V is [kv][hd], so the PV WMMA B-fragment -- which
     # wants a fixed d=block*16+col and 16 VARYING kv -- reads with stride hd and lowers to 128
@@ -144,7 +177,12 @@ def expand_loop_fragment(x:UOp) -> UOp:
     # The caller must pass V pre-transposed (llm/fused_attention.py); gbase is unchanged because
     # hd*kv_tokens == kv_tokens*hd.
     offs=tuple(gbase+(block*16+col)*x.arg.grid.kv_tokens+rng*16+i for i in range(16))
-  else: offs=tuple(gbase+rng*16*hd+block*16+i*hd+col for i in range(16))
+    row_oks=tuple(_row_ok(rng*UOp.const(dtypes.weakint,16)+UOp.const(dtypes.weakint,i)) for i in range(16))
+    offs=tuple(o if g is None else o.valid(g) for o,g in zip(offs,row_oks))
+  else:
+    offs=tuple(gbase+rng*16*hd+block*16+i*hd+col for i in range(16))
+    row_oks=tuple(_row_ok(rng*UOp.const(dtypes.weakint,16)+UOp.const(dtypes.weakint,i)) for i in range(16))
+    offs=tuple(o if g is None else o.valid(g) for o,g in zip(offs,row_oks))
   return UOp(Ops.STACK,dtypes.half.vec(16),tuple(owner.index(off).load() for off in offs),
     tag=("amd_gfx1100_fragment_load_hd128_loop_v1",role,block,x.arg,*x.src))
 
