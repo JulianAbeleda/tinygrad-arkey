@@ -1,0 +1,1 @@
+env -u TINYGRAD_PREFILL_PACKED_WMMA PYTHONPATH=. python3 -c import\ tinygrad\;\ import\ extra.qk.decode.decode_runtime_overhead\;\ print\(\"import-ok\"\) 

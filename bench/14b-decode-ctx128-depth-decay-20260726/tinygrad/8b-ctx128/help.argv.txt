@@ -1,0 +1,1 @@
+env -u TINYGRAD_PREFILL_PACKED_WMMA PYTHONPATH=. python3 extra/qk/decode/decode_runtime_overhead.py --help 

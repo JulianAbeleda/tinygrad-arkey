@@ -1,0 +1,2 @@
+ctx   128: W  11.14ms (89.77 tok/s) | D  36.91ms (27.09 tok/s) | host-sync N/A (D slower than W) | sdpa
+artifact: /home/ubuntu/worktrees/luna-tinygrad-worker-smoke/bench/14b-decode-ctx128-depth-decay-20260726/tinygrad/8b-ctx128/authority.json
