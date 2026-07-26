@@ -284,3 +284,104 @@ fixed address, and it does not establish that the primary defect is gone.
 - **Every probe ships with a positive control known to fire.**
 - Each theory gets a written falsification criterion and a cost cap *before* it is run.
 - Do not cite "the fault has not recurred" as evidence of anything.
+
+---
+
+## 9. Investigation results (2026-07-26, four read-only agents, no GPU)
+
+### 9.1 The log counts are censored ~40x — every count in this doc was a lower bound
+
+`print_sq_intr_info_error: N callbacks suppressed` sums to **36,541** additional `sq_intr` events never
+individually logged, against 894 printed. `gmc_v11_0_process_interrupt` suppressed **32,946** against 492
+page-fault lines. Suppression varies per burst (one 07-16 burst alone suppressed 8,181), so **no fixed
+correction factor recovers the truth**.
+
+This is not "5-6 incidents in 6 days". It is on the order of **37,000 memory violations**, continuous and
+almost entirely invisible. Every count previously quoted here, including the 840, was censored output.
+
+### 9.2 Type-1 and type-2 separate cleanly
+
+| | VM fault | no VM fault |
+|---|---:|---:|
+| type 1 (ILLEGAL_INST) | **0** | 8 |
+| type 2 (MEMVIOL) | 109 | 39 |
+
+Illegal-instruction events *never* produce a VM fault; memory violations usually do. Consistent with the
+MEMVIOL → trap → CWSR-fetch chain, inconsistent with the two being independent. Where a VM fault occurred,
+all faults in that window shared one VMID/PASID. `sq_intr` carries no VMID/PASID field, so per-event
+pairing is impossible from logs alone.
+
+### 9.3 All 11 distinct fault-status values are permission faults
+
+Every value has `PERMISSION_FAULTS != 0` and `MAPPING_ERROR == 0` (one VMID-0 outlier, `0x00000B32`,
+also has WALKER_ERROR+MAPPING_ERROR). Verified against the kernel's own decoded print. **Permission /
+translation state, not a missing mapping.**
+
+### 9.4 The fault addresses are not all the CWSR base — and the others are OURS
+
+Boot -1: `0xffffffbfe000` x188, `0x0` x62, `0x100000000` (2^32) x28, plus **~140 distinct one-off
+addresses in the `0x7exx...` range**. Boot -2: `0xffffffbfe000` x36, dominant again.
+
+tinygrad **never chooses GPU VAs**: `KFDIface.alloc` calls `anon_mmap(0, ...)` and passes the host-chosen
+address straight to `AMDKFD_IOC_ALLOC_MEMORY_OF_GPU` (`support/amd.py:807-810`). So tinygrad's buffers live
+in exactly that `0x7xxx` range. **Those one-off fault addresses are our own kernels running off the end of
+our own allocations** — a direct evidence trail, matchable to the allocation nearest below each address.
+
+### 9.5 tinygrad cannot reach the CWSR region (closed)
+
+Its VA ceiling is ordinary user mmap placement (<2^47); the reserved trap region sits near 2^48 — ~2x above
+anything it can address. `AMDGPU_GMC_HOLE_START` (2^47) clamps the KFD-exposed aperture well below the
+reserved area. tinygrad populates `ctx_save_restore_address` with its own buffer but **never calls
+`AMDKFD_IOC_SET_TRAP_HANDLER`**. The handler's location is entirely kernel-managed. **We cannot fix the
+CWSR fetch fault; we can only stop raising the violations that lead to it.**
+
+### 9.6 A real latent OOB — but NOT this fault
+
+`amd_attention_abi.py:136,147` issue **unconditional** K/V global loads; `full_kv_tiles=(kv_tokens+15)//16`
+rounds **up**; the K/V buffer is validated to be exactly `kv_heads*kv_tokens*hd` with no padding
+(`kernels.py:257-258`). The `valid`/`where` masking gates the **softmax result, not the load address** —
+the wave still issues a real VMEM load out of bounds for up to 15 tokens past the buffer.
+
+**It does not fire in the faulting harness:** `prefill_whole_synced.py` uses
+`start_positions=(0,512,1024,2048,3584)` with `chunk_n=512`, so `kv_tokens` is always a multiple of 16 and
+there is no tail tile. **But any production prompt whose length is not a multiple of 16 hits it**, on every
+subsequent chunk. We would ship a kernel that faults on ordinary prompt lengths while every benchmark
+passes. Worth fixing on its own merits; **not** the cause of these faults.
+
+There is **no device-side bounds checking anywhere** in the repo — the existing canaries
+(`host_safety_canary.py`, `guarded_execution.py`) are host-side correctness guards.
+
+### 9.7 Variant A vs B: more memory pressure, FEWER faults
+
+Standalone Gumbel-argmax subgraph, `DEV=CPU`, instrumentation positive/negative controlled (`gated=2` on a
+known-positive, `gated=0` on a known-negative):
+
+| | kernels | LOG2 recomputed | materialized buffer | aggregate bytes |
+|---|---:|---|---|---:|
+| baseline | 7 | **yes, 2x** | none | 3,042,884 |
+| A (`.contiguous()`) | 6 | no | typed `float32[151936]` = 607,744 B | 3,650,592 |
+| B (scheduler gate) | 6 | no | opaque `char[608768]` | **6,084,640** |
+
+Both collapse the double-LOG2 identically. **B touches ~1.7x the bytes of A and holds three simultaneous
+608 KB buffers in one kernel, yet B faults 0/5 while A faults 3/4.** So allocation volume / VRAM pressure
+is **not** the mechanism. The differences that remain are buffer *identity and lifetime*: A produces a
+typed user-`contiguous` tensor that collapses to tiny scratch quickly; B threads a generic opaque bufferize
+through every reduce stage.
+
+### 9.8 The gate is untargeted and fires on prefill attention
+
+Confirmed by synthetic control: a 70,000-element `EXP2` producer with 2 reduce consumers gates; the same
+expression at 4,096 elements does not. No Gumbel/argmax special-casing. `prod(buf.shape)` is a **total
+element count**, so a prefill attention-score buffer `(B,H,T,S)` trivially exceeds 65,536 — meaning
+`attn.softmax(-1)` (`model.py:763`, EXP2) is a firing site. That is consistent with the measured -2.5%
+prefill cost: the gate refuses a fusion in a **high-parallelism** consumer where fusion was fine.
+**Narrowing the predicate with consumer parallelism is the fix for task #14.**
+
+## 10. Where this leaves the investigation
+
+- The CWSR fetch fault is downstream and **not fixable by us** (9.5).
+- The fixable defect is whatever raises ~37,000 memory violations (9.1).
+- The live evidence trail is the ~140 `0x7exx` addresses (9.4), each matchable to the allocation nearest
+  below it. Extracting that mapping needs a run with allocation logging — i.e. GPU time.
+- The strongest static candidate (9.6) is real and worth fixing but is **excluded** as the cause here.
+- Pressure-based theories are refuted by 9.7.
