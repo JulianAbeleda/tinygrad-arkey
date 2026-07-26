@@ -8,6 +8,7 @@ from tinygrad.helpers import DEV, PROFILE, getenv, to_mv, from_mv, cpu_profile, 
 from tinygrad.helpers import suppress_finalizing, pluralize, TracingKey
 from tinygrad.device import Device, BufferSpec, Compiled, LRUAllocator, ProfileDeviceEvent, ProfileProgramEvent, _audit_kernargs_wrap, KERNARGS_WRAP_DRAIN
 from tinygrad.device import DISPATCH_TRACE, _dispatch_trace_before, _dispatch_trace_after, _dispatch_trace_dump
+from tinygrad.device import ALLOC_TRACE, alloc_trace_record_dispatch
 from tinygrad.uop.ops import sym_infer, sint, UOp
 from tinygrad.runtime.autogen import libc
 from tinygrad.runtime.support.memory import BumpAllocator
@@ -400,7 +401,14 @@ class HCQProgram(Generic[HCQDeviceType]):
     with hcq_profile(self.dev, queue=q, desc=self.name, enabled=wait or PROFILE) as (sig_st, sig_en):
       q.exec(self, kernargs, global_size, local_size)
 
-    q.signal(self.dev.timeline_signal, self.dev.next_timeline()).submit(self.dev)
+    target = self.dev.next_timeline()
+    q.signal(self.dev.timeline_signal, target).submit(self.dev)
+
+    if ALLOC_TRACE:
+      # Low-overhead fault-to-dispatch/allocation probe (see tinygrad/device.py ALLOC_TRACE). Unlike
+      # DISPATCH_TRACE below, this never synchronizes: it records into a fixed ring and resolves completion
+      # once, at dump time, against the signal value observed then -- not here.
+      alloc_trace_record_dispatch(getattr(self.dev, "device", "?"), self.name, global_size, local_size, bufs, target)
 
     if DISPATCH_TRACE and getattr(self.dev, "timeline_signal", None) is not None:
       # DIAGNOSTIC fault-to-dispatch correlation probe (see tinygrad/device.py DISPATCH_TRACE). Serialize so

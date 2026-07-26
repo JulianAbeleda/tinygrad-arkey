@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from collections import defaultdict, deque
 from typing import Any, ClassVar, Generic, TypeVar, Iterator, Generator, TYPE_CHECKING
-import importlib, inspect, functools, pathlib, os, contextlib, re, atexit, pickle, decimal
+import importlib, inspect, functools, pathlib, os, contextlib, re, atexit, pickle, decimal, ctypes, json, time
 from tinygrad.helpers import LRU, getenv, diskcache_get, diskcache_put, DEBUG, GlobalCounters, flat_mv, PROFILE, temp, colored, ContextVar
 from tinygrad.helpers import Context, CCACHE, ALLOW_DEVICE_USAGE, MAX_BUFFER_SIZE, cpu_events, ProfileEvent, ProfilePointEvent, suppress_finalizing
 from tinygrad.helpers import select_by_name, select_first_inited, DEV, TracingKey, size_to_str, pluralize
@@ -159,6 +159,12 @@ class Buffer:
         GlobalCounters.mem_used += self.nbytes
         GlobalCounters.mem_used_per_device[self.device] += self.nbytes
       if PROFILE: Buffer.profile_events.append(ProfilePointEvent(self.device, "alloc", self.trace_num, {"dtype":self.dtype, "sz":self.size}))
+      # ALLOC_TRACE fault-to-allocation ring (tinygrad/device.py, near KERNARGS_AUDIT/DISPATCH_TRACE): only
+      # buffers with a real GPU VA (HCQBuffer.va_addr, e.g. AMD via KFDIface.alloc) are worth recording --
+      # everything else is a no-op via getattr. `buf.size` is the KFD-reported *mapped* size, which can be
+      # page-rounded above `self.nbytes` (the requested size); both are recorded so the difference is visible.
+      if ALLOC_TRACE and (va:=getattr((buf:=self._bufs[self.device]), 'va_addr', None)) is not None:
+        self._at_alloc_id = alloc_trace_record_alloc(self.device, va, getattr(buf, 'size', self.nbytes), self.nbytes)
     return self
   def deallocate(self):
     assert self.device in self._bufs, "buffer must be allocated to deallocate"
@@ -172,6 +178,7 @@ class Buffer:
         if dev != self.device:
           Device[dev].allocator._unmap(mb)
       self.allocator.free(self._buf, self.nbytes, self.options)
+      if ALLOC_TRACE and (aid:=getattr(self, '_at_alloc_id', -1)) >= 0: alloc_trace_record_free(aid)
     elif self._base is not None:
       self._base.allocated_views -= 1
     self._bufs.clear()
@@ -330,6 +337,167 @@ def _dispatch_trace_dump(dev, exc:BaseException) -> None:
   if history:
     print("  preceding dispatches (most recent last):")
     for d, n, p, t, _, _ in history[-8:]: print(f"    {d} {n} pid={p} timeline={t}")
+
+ALLOC_TRACE = ContextVar("ALLOC_TRACE", 0)  # 1 = record every allocation and dispatch to a fixed ring; dump at exit or via alloc_trace_dump().
+
+# FAULT-TO-ALLOCATION ATTRIBUTION RING (docs/gpu-page-fault-population-analysis-20260725.md, the TCP /
+# real-VA fault population -- BUG 2 in docs/gpu-fault-fix-scope-20260725.md). Those faults land in
+# 0x00007xxx_xxxxx000, which is exactly where KFDIface.alloc's anon_mmap(0, ...) puts tinygrad's own buffers
+# (ops_amd.py:795-823: tinygrad never chooses the GPU VA, the host mmap does, and the KFD ioctl echoes it
+# back -- `assert addr == buf == mem.va_addr`, ops_amd.py:819). DISPATCH_TRACE (above) answers "what kernel
+# was running" by serializing every dispatch, which is far too expensive to leave on for a full run and to
+# use as a *allocation* probe (allocations are not the thing DISPATCH_TRACE watches). This is a SEPARATE,
+# deliberately much cheaper mechanism: no serialization, no synchronize() added anywhere, records into a
+# fixed-size preallocated ring (ctypes structures, no Python object churn in steady state) and only touches
+# disk when the process exits or alloc_trace_dump() is called explicitly.
+#
+# Same default-off ContextVar shape as KERNARGS_AUDIT / DISPATCH_TRACE. Ring capacities are read once at
+# import (functools.cache'd getenv) since they size a preallocated ctypes array -- changing them after the
+# ring is created has no effect, which the self-test pins.
+ALLOC_TRACE_ALLOCS      = getenv("ALLOC_TRACE_ALLOCS", 1 << 16)      # allocation-lifetime ring capacity
+ALLOC_TRACE_DISPATCHES  = getenv("ALLOC_TRACE_DISPATCHES", 1 << 16)  # dispatch ring capacity
+ALLOC_TRACE_MAX_ARGS    = getenv("ALLOC_TRACE_MAX_ARGS", 8)          # kernarg pointers recorded per dispatch
+ALLOC_TRACE_FILE        = getenv("ALLOC_TRACE_FILE", "")             # dump path; "" = temp("alloc_trace.json") at dump time
+
+# ts_ns fields use time.time_ns() (wall-clock, CLOCK_REALTIME via vDSO -- no syscall, ~20-40ns), not
+# perf_counter_ns() (monotonic but epoch-less). Wall-clock is deliberate: it is the only clock a `dmesg` /
+# `journalctl -k` line can be compared against, and that comparison is the entire point of this ring.
+class _ATAllocRec(ctypes.Structure):
+  _fields_ = [("alloc_id", ctypes.c_int64), ("device_id", ctypes.c_int32), ("_pad", ctypes.c_int32),
+              ("va_start", ctypes.c_uint64), ("va_end", ctypes.c_uint64),
+              ("req_size", ctypes.c_uint64), ("mapped_size", ctypes.c_uint64),
+              ("alloc_seq", ctypes.c_int64), ("free_seq", ctypes.c_int64),  # free_seq == -1: not freed (as of dump)
+              ("alloc_ts_ns", ctypes.c_int64), ("free_ts_ns", ctypes.c_int64)]  # free_ts_ns == -1: not freed
+
+class _ATDispatchRec(ctypes.Structure):
+  _fields_ = [("dispatch_id", ctypes.c_int64), ("device_id", ctypes.c_int32), ("kernel_id", ctypes.c_int32),
+              ("gx", ctypes.c_uint32), ("gy", ctypes.c_uint32), ("gz", ctypes.c_uint32),
+              ("lx", ctypes.c_uint32), ("ly", ctypes.c_uint32), ("lz", ctypes.c_uint32),
+              ("submit_seq", ctypes.c_int64), ("signal_target", ctypes.c_int64),  # completion sequence, resolved at dump time
+              ("submit_ts_ns", ctypes.c_int64),
+              ("nargs", ctypes.c_uint32), ("_pad2", ctypes.c_uint32),
+              ("arg_va", ctypes.c_uint64 * ALLOC_TRACE_MAX_ARGS), ("arg_size", ctypes.c_uint64 * ALLOC_TRACE_MAX_ARGS)]
+
+_at_alloc_ring: ctypes.Array|None = None
+_at_dispatch_ring: ctypes.Array|None = None
+_at_alloc_count  = [0]  # next allocation id to hand out == total allocations recorded
+_at_dispatch_count = [0]
+_at_seq = [0]           # single monotonic Lamport-style clock shared by allocs, frees, and dispatch submits
+_at_device_ids: dict[str,int] = {}
+_at_device_names: list[str] = []
+_at_kernel_ids: dict[str,int] = {}
+_at_kernel_names: list[str] = []
+
+def _at_init() -> None:
+  global _at_alloc_ring, _at_dispatch_ring
+  if _at_alloc_ring is None: _at_alloc_ring = (_ATAllocRec * ALLOC_TRACE_ALLOCS)()
+  if _at_dispatch_ring is None: _at_dispatch_ring = (_ATDispatchRec * ALLOC_TRACE_DISPATCHES)()
+
+def _at_id_for(name:str, ids:dict[str,int], names:list[str]) -> int:
+  i = ids.get(name)
+  if i is None: i = ids[name] = len(names); names.append(name)  # first-seen-only: no cost on the steady-state path
+  return i
+
+def alloc_trace_record_alloc(device:str, va_start:int, mapped_size:int, req_size:int) -> int:
+  """Record a logical buffer allocation. O(1), no I/O, no heap allocation once (device) is already known.
+  Returns the allocation id to hand back to alloc_trace_record_free, or -1 if tracing is off."""
+  if not ALLOC_TRACE: return -1
+  _at_init()
+  aid, seq = _at_alloc_count[0], _at_seq[0]
+  _at_alloc_count[0] += 1; _at_seq[0] += 1
+  rec = _at_alloc_ring[aid % ALLOC_TRACE_ALLOCS]
+  rec.alloc_id, rec.device_id = aid, _at_id_for(device, _at_device_ids, _at_device_names)
+  rec.va_start, rec.va_end = va_start, va_start + mapped_size
+  rec.req_size, rec.mapped_size = req_size, mapped_size
+  rec.alloc_seq, rec.free_seq = seq, -1
+  rec.alloc_ts_ns, rec.free_ts_ns = time.time_ns(), -1
+  return aid
+
+def alloc_trace_record_free(alloc_id:int) -> None:
+  """Record the free of a previously-recorded allocation. No-op if tracing is off or the id was never issued
+  (-1) or has already fallen out of the ring (wrapped past ALLOC_TRACE_ALLOCS allocations ago)."""
+  if not ALLOC_TRACE or alloc_id < 0: return
+  _at_init()
+  ts = time.time_ns()
+  if _at_alloc_count[0] - alloc_id <= ALLOC_TRACE_ALLOCS:
+    rec = _at_alloc_ring[alloc_id % ALLOC_TRACE_ALLOCS]
+    if rec.alloc_id == alloc_id: rec.free_seq, rec.free_ts_ns = _at_seq[0], ts
+  _at_seq[0] += 1
+
+def alloc_trace_record_dispatch(device:str, name:str, global_size, local_size, bufs, signal_target:int) -> None:
+  """Record one dispatch: kernel identity, grid/local dims, and the VA+size of up to ALLOC_TRACE_MAX_ARGS
+  pointer args (from `bufs`, objects with `.va_addr`/`.size` -- HCQBuffer; non-HCQ args are silently 0/0).
+  `signal_target` is the timeline value this dispatch's completion signal will reach; completion is resolved
+  against the live signal value once, at dump time -- no polling, no per-dispatch synchronize()."""
+  if not ALLOC_TRACE: return
+  _at_init()
+  did, seq = _at_dispatch_count[0], _at_seq[0]
+  _at_dispatch_count[0] += 1; _at_seq[0] += 1
+  rec = _at_dispatch_ring[did % ALLOC_TRACE_DISPATCHES]
+  rec.dispatch_id, rec.device_id = did, _at_id_for(device, _at_device_ids, _at_device_names)
+  rec.kernel_id = _at_id_for(name, _at_kernel_ids, _at_kernel_names)
+  gs, ls = (tuple(global_size) + (1,1,1))[:3], (tuple(local_size) + (1,1,1))[:3]
+  rec.gx, rec.gy, rec.gz = gs
+  rec.lx, rec.ly, rec.lz = ls
+  rec.submit_seq, rec.signal_target, rec.submit_ts_ns = seq, signal_target, time.time_ns()
+  n = min(len(bufs), ALLOC_TRACE_MAX_ARGS)
+  rec.nargs = n
+  for i in range(n):
+    rec.arg_va[i], rec.arg_size[i] = getattr(bufs[i], 'va_addr', 0), getattr(bufs[i], 'size', 0)
+
+def alloc_trace_dump(path:str|None=None) -> str|None:
+  """Write the ring contents (and the id->name tables) to a JSON file. Safe to call more than once (e.g. once
+  explicitly mid-run, then again at exit); each call is a full re-dump of current ring state. Returns the
+  path written, or None if tracing was never turned on (nothing to dump)."""
+  if not ALLOC_TRACE and _at_alloc_ring is None and _at_dispatch_ring is None: return None
+  _at_init()
+  # Resolve dispatch completion against the *current* signal value of every device seen, once, here -- not
+  # per-dispatch. Best-effort: devices are looked up by canonicalized name; a device that was closed or never
+  # opened in this process (e.g. re-analyzing a dump offline) just leaves completion unresolved (-1).
+  signal_now: dict[int,int] = {}
+  for dname, did in _at_device_ids.items():
+    try:
+      dev = Device[dname] if dname in Device._opened_devices else None
+      sig = getattr(dev, "timeline_signal", None)
+      if sig is not None: signal_now[did] = sig.value
+    except Exception: pass  # never let the dump crash a real run
+
+  n_alloc = min(_at_alloc_count[0], ALLOC_TRACE_ALLOCS)
+  n_disp  = min(_at_dispatch_count[0], ALLOC_TRACE_DISPATCHES)
+  allocs = []
+  for aid in range(max(0, _at_alloc_count[0]-n_alloc), _at_alloc_count[0]):
+    r = _at_alloc_ring[aid % ALLOC_TRACE_ALLOCS]
+    if r.alloc_id != aid: continue  # slot was overwritten by a later id sharing the same modulus (shouldn't happen given n_alloc, but be safe)
+    allocs.append({"alloc_id": r.alloc_id, "device": _at_device_names[r.device_id], "va_start": r.va_start, "va_end": r.va_end,
+                    "req_size": r.req_size, "mapped_size": r.mapped_size, "alloc_seq": r.alloc_seq,
+                    "free_seq": (None if r.free_seq < 0 else r.free_seq),
+                    "alloc_ts_ns": r.alloc_ts_ns, "free_ts_ns": (None if r.free_ts_ns < 0 else r.free_ts_ns)})
+  dispatches = []
+  for did in range(max(0, _at_dispatch_count[0]-n_disp), _at_dispatch_count[0]):
+    r = _at_dispatch_ring[did % ALLOC_TRACE_DISPATCHES]
+    if r.dispatch_id != did: continue
+    dname = _at_device_names[r.device_id]
+    completed = signal_now.get(r.device_id) is not None and signal_now[r.device_id] >= r.signal_target
+    dispatches.append({"dispatch_id": r.dispatch_id, "device": dname, "kernel": _at_kernel_names[r.kernel_id],
+                        "global_size": [r.gx, r.gy, r.gz], "local_size": [r.lx, r.ly, r.lz],
+                        "submit_seq": r.submit_seq, "signal_target": r.signal_target, "submit_ts_ns": r.submit_ts_ns,
+                        "completed": completed if signal_now.get(r.device_id) is not None else None,
+                        "args": [{"va": r.arg_va[i], "size": r.arg_size[i]} for i in range(r.nargs)]})
+
+  out = {"format": "tinygrad-alloc-trace-v1", "dumped_at_unix": time.time(),
+         "alloc_ring_capacity": ALLOC_TRACE_ALLOCS, "dispatch_ring_capacity": ALLOC_TRACE_DISPATCHES,
+         "total_allocs_recorded": _at_alloc_count[0], "total_dispatches_recorded": _at_dispatch_count[0],
+         "allocs": allocs, "dispatches": dispatches}
+  p = path or ALLOC_TRACE_FILE or temp("alloc_trace.json")
+  with open(p, "w") as f: json.dump(out, f)
+  return p
+
+def _dump_alloc_trace() -> None:
+  if not ALLOC_TRACE: return
+  p = alloc_trace_dump()
+  if p is not None:
+    print(f"\n=== ALLOC_TRACE: {_at_alloc_count[0]} allocation(s), {_at_dispatch_count[0]} dispatch(es) -> {p} ===")
+atexit.register(_dump_alloc_trace)
 
 DeviceType = TypeVar('DeviceType', bound='Compiled')
 
