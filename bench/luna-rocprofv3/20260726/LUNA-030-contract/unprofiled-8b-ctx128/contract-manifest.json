@@ -1,0 +1,19 @@
+{
+  "schema": "luna-tinygrad-command-contract.v1",
+  "task": "LUNA-030",
+  "verdict": "TOOL_FAILURE",
+  "corrected_help": {
+    "command": "env PYTHONPATH=/home/ubuntu/worktrees/luna-tinygrad-trace-8b128 /usr/bin/python3 extra/qk/decode/decode_runtime_overhead.py --help",
+    "accepted_flags_required_here": ["--warmup-decode", "--out"]
+  },
+  "unprofiled_worker": {
+    "command_file": "command.txt",
+    "stdout": "stdout.log",
+    "stderr": "stderr.log",
+    "requested_authority_file": "worker-authority.json",
+    "authority_file_observed": false,
+    "route_identity_observed": false,
+    "exit_status_file": "MISSING: wrapper did not resume after worker"
+  },
+  "next_action": "Stop. Repair worker completion before any locked smoke or rocprofv3 retry."
+}

@@ -1,0 +1,2 @@
+ctx   128: W   9.53ms (104.88 tok/s) | D  34.46ms (29.02 tok/s) | host-sync N/A (D slower than W) | flash
+artifact: /home/ubuntu/worktrees/luna-tinygrad-trace-8b128/bench/luna-rocprofv3/20260726/LUNA-030-contract/unprofiled-8b-ctx128/worker-authority.json
