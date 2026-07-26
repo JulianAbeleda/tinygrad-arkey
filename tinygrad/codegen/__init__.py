@@ -1,5 +1,6 @@
 from typing import cast
 import inspect
+import os
 from dataclasses import replace
 import itertools
 from tinygrad.helpers import DISABLE_FAST_IDIV, TRANSCENDENTAL, SPEC, DEBUG, VIZ, IMAGE, NOOPT, EMULATED_DTYPES, NOLOCALS, USE_TC, getenv
@@ -23,6 +24,7 @@ from tinygrad.codegen.late.devectorizer import load_store_folding, load_store_in
 from tinygrad.codegen.late.reduce_lowering import pm_reduce, ReduceContext
 from tinygrad.codegen.late.reg_store import pm_reduce_acc_upcast_fix, pm_distinct_reg_store_devec, pm_group_wmma_reg_store
 from tinygrad.codegen.late.coalesced_load import coalesce_loads
+from tinygrad.codegen.plan import PLAN_GATES
 from tinygrad.codegen.opt.postrange import apply_opts
 from tinygrad.codegen import experimental as cg_extras
 from tinygrad.codegen.late.gater import pm_move_gates_from_index
@@ -500,7 +502,15 @@ def _lower_cache_table() -> str:
 to_program_cache: dict[tuple, UOp] = {}
 def to_program(ast:UOp, renderer:Renderer) -> UOp:
   config = (NOOPT, EMULATED_DTYPES, NOLOCALS, USE_TC, IMAGE, DISABLE_FAST_IDIV, TRANSCENDENTAL, ALLOW_TF32)
-  key = (ast.key, type(renderer), renderer.target, *[x.value for x in config], getenv("WARP_REDUCE_LOWERING"), getenv("V_DOT2_LOWERING"), getenv("SCHED_UNROLL"), getenv("SCHED_LIST"), getenv("COALESCED_LOAD_LOWERING"), getenv("DECODE_FAST_EXP2"))
+  # LR-051: the gate suffix is derived from PLAN_GATES -- the SAME inventory OptimizationPlan.from_env reads -- rather
+  # than a second hand-picked getenv(...) list. That hand-picked list is exactly how PREFILL_SOFTMAX_REDUCE_FUSE,
+  # UNSAFE_DISABLE_MASK and REGALLOC_ADDR_REMAT went missing (they change generated code inside do_to_program's
+  # lowering pipeline -- see LOWERING_GATES_NOT_IN_CACHE_KEY in tinygrad/uop/trace.py -- but were absent from this
+  # key, so flipping one in-process silently returned the program lowered under the OTHER value). Reading the same
+  # PLAN_GATES list here means a future gate added to the plan's inventory is automatically part of the cache key
+  # too, instead of requiring someone to remember to update a second place.
+  gate_values = tuple(os.environ.get(name, default) for name, default in PLAN_GATES)
+  key = (ast.key, type(renderer), renderer.target, *[x.value for x in config], *gate_values)
   if (prg:=to_program_cache.get(key)) is not None: return prg
   _dk = None
   if LOWER_DISK_CACHE:

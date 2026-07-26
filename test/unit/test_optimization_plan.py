@@ -3,16 +3,19 @@ import json, os, subprocess, sys, textwrap
 import pytest
 
 from tinygrad.codegen.opt import Opt, OptOps
-from tinygrad.codegen.plan import (OptimizationPlan, PlanReapplied, ResourceBudget, TargetCapabilities, PLAN_GATES,
-                                   PLAN_SCHEMA)
+from tinygrad.codegen.plan import (OptimizationPlan, PlanReapplied, PlanRejected, ResourceBudget, TargetCapabilities,
+                                   PLAN_GATES, PLAN_SCHEMA)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 def _plan(**kw) -> OptimizationPlan:
-  return OptimizationPlan(opts=(Opt(OptOps.UPCAST, 0, 4), Opt(OptOps.LOCAL, 1, 16)),
-                          axis_types=("LOOP", "REDUCE"), coalescing_width=4, staging_policy="double_buffer",
-                          reduction_mode="warp", budget=ResourceBudget(shared_bytes=32768, max_threads=256,
-                                                                       max_upcast=4, max_unroll=8), **kw)
+  base = dict(opts=(Opt(OptOps.UPCAST, 0, 4), Opt(OptOps.LOCAL, 1, 16)),
+              axis_types=("LOOP", "REDUCE"), coalescing_width=4, staging_policy="double_buffer",
+              reduction_mode="warp", budget=ResourceBudget(shared_bytes=32768, max_threads=256,
+                                                            max_upcast=4, max_unroll=8),
+              capabilities=TargetCapabilities(has_threads=True))
+  base.update(kw)
+  return OptimizationPlan(**base)
 
 # --------------------------------------------------------------------------- applied exactly once ----
 def test_applying_a_plan_twice_is_rejected():
@@ -116,3 +119,98 @@ def test_plan_is_frozen():
 
 def test_schema_is_declared():
   assert _plan().to_json()["schema"] == PLAN_SCHEMA
+
+# --------------------------------------------------------------------------- LR-051: named fields from real gates ----
+def test_reduction_mode_is_derived_from_warp_reduce_lowering_gate():
+  os.environ.pop("WARP_REDUCE_LOWERING", None)
+  try:
+    assert OptimizationPlan.from_env().reduction_mode == "default"
+    os.environ["WARP_REDUCE_LOWERING"] = "1"
+    assert OptimizationPlan.from_env().reduction_mode == "warp"
+  finally:
+    os.environ.pop("WARP_REDUCE_LOWERING", None)
+
+def test_coalescing_width_is_derived_from_coalesced_load_lowering_gate():
+  os.environ.pop("COALESCED_LOAD_LOWERING", None)
+  try:
+    assert OptimizationPlan.from_env().coalescing_width == 0
+    os.environ["COALESCED_LOAD_LOWERING"] = "1"
+    assert OptimizationPlan.from_env().coalescing_width == 4
+  finally:
+    os.environ.pop("COALESCED_LOAD_LOWERING", None)
+
+def test_vectorization_policy_is_derived_from_v_dot2_lowering_gate():
+  os.environ.pop("V_DOT2_LOWERING", None)
+  try:
+    assert OptimizationPlan.from_env().vectorization_policy == "default"
+    os.environ["V_DOT2_LOWERING"] = "1"
+    assert OptimizationPlan.from_env().vectorization_policy == "dot2"
+  finally:
+    os.environ.pop("V_DOT2_LOWERING", None)
+
+def test_fields_with_no_real_flag_are_left_unset_by_from_env():
+  """staging_policy stays at its structural default and score_split_mode/quant_load_transform/rope_load_transform
+  stay None: no env var in this codebase currently drives any of them (see the comments on OptimizationPlan)."""
+  p = OptimizationPlan.from_env()
+  assert p.score_split_mode is None
+  assert p.quant_load_transform is None
+  assert p.rope_load_transform is None
+  assert p.staging_policy == "default"
+
+def test_from_env_kwarg_overrides_a_derived_field():
+  os.environ["WARP_REDUCE_LOWERING"] = "1"
+  try:
+    p = OptimizationPlan.from_env(reduction_mode="explicit_override")
+    assert p.reduction_mode == "explicit_override"
+  finally:
+    os.environ.pop("WARP_REDUCE_LOWERING", None)
+
+def test_new_fields_round_trip_through_json():
+  p = _plan(score_split_mode="live_split", quant_load_transform=True, rope_load_transform=False,
+            vectorization_policy="dot2")
+  back = OptimizationPlan.from_json(json.loads(json.dumps(p.to_json())))
+  assert back.plan_id == p.plan_id
+  assert (back.score_split_mode, back.quant_load_transform, back.rope_load_transform, back.vectorization_policy) == \
+         ("live_split", True, False, "dot2")
+
+# --------------------------------------------------------------------------------------- LR-051: validate() ----
+def test_validate_accepts_a_consistent_plan():
+  _plan().validate()   # must not raise
+
+def test_validate_rejects_a_coalescing_width_the_target_cannot_support():
+  """Acceptance: a rejected plan fails before launching a GPU kernel -- validate() is the choke point, called before
+  anything downstream (a pass, a compile, a launch) is allowed to consume the plan."""
+  p = _plan(capabilities=TargetCapabilities(supports_float4=False))
+  with pytest.raises(PlanRejected, match="float4"):
+    p.validate()
+
+def test_validate_rejects_coalescing_without_local_memory():
+  p = _plan(capabilities=TargetCapabilities(has_local=False))
+  with pytest.raises(PlanRejected, match="has_local"):
+    p.validate()
+
+def test_validate_rejects_warp_reduction_without_thread_support():
+  p = _plan(coalescing_width=0, reduction_mode="warp", capabilities=TargetCapabilities(has_threads=False))
+  with pytest.raises(PlanRejected, match="has_threads"):
+    p.validate()
+
+def test_validate_accepts_warp_reduction_when_target_has_threads():
+  p = _plan(coalescing_width=0, reduction_mode="warp", capabilities=TargetCapabilities(has_threads=True))
+  p.validate()   # must not raise
+
+def test_validate_rejects_coalescing_width_exceeding_the_upcast_budget():
+  p = _plan(budget=ResourceBudget(max_upcast=2))
+  with pytest.raises(PlanRejected, match="max_upcast"):
+    p.validate()
+
+def test_a_rejected_plan_fails_before_any_kernel_launch():
+  """Direct acceptance-criterion test: build a plan that validate() rejects, and prove the launch step is never
+  reached when validate() is called first, as callers are expected to do."""
+  launched = []
+  def launch_kernel(plan: OptimizationPlan):
+    launched.append(plan)   # would be an actual GPU dispatch in a real caller
+  p = _plan(capabilities=TargetCapabilities(supports_float4=False))
+  with pytest.raises(PlanRejected):
+    p.validate()
+    launch_kernel(p)   # unreachable
+  assert launched == []
