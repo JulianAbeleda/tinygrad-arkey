@@ -16,6 +16,7 @@ import bisect
 import json
 import os
 import pathlib
+import sys
 import time
 from contextlib import contextmanager
 from typing import Any
@@ -26,6 +27,12 @@ from extra.qk.prefill.prefill_harness import (
   prefill_run_profile,
   resolve_prefill_model_profile,
 )
+
+
+def _post_graph_marker(phase: str) -> None:
+  """Emit opt-in boundaries for isolating CPU-side post-graph stalls."""
+  if os.environ.get("PREFILL_POST_GRAPH_MARKERS", "0") != "0":
+    print(f"PREFILL_POST_GRAPH_MARKER phase={phase} t_ns={time.perf_counter_ns()}", file=sys.stderr, flush=True)
 from extra.qk.timing_harness import add_clock_pin_arg, set_clock_pin_env
 from extra.qk.pure_search_guard import effective_routes
 from extra.qk.route_manifest import promoted_prefill_candidate_policy
@@ -166,7 +173,9 @@ def _scoped_candidate_compiler_state():
   saved={name:getattr(pr,name,None) for name in names}
   try: yield
   finally:
+    _post_graph_marker("compiler_state_cleanup_start")
     for name,value in saved.items(): setattr(pr,name,value)
+    _post_graph_marker("compiler_state_cleanup_end")
 
 
 # Route provenance -> named measurement regime (F2). The prefill-whole-synced-authority schema is reused for THREE
@@ -361,17 +370,29 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
     # schedule table around the jit call (model.py:797-801). use_flash=True is required -- else __call__ clobbers
     # each block._use_flash to False (model.py:768). A harness-level TinyJit(model.forward) would bypass __call__
     # entirely, leaving _WARMSTART_OPTS empty (the phantom-1741 bench bug).
+    _post_graph_marker("warmup_start")
     for _ in range(warmups): prefill_call(sp_int).realize()
+    _post_graph_marker("warmup_complete")
+    _post_graph_marker("sync_after_warmup_start")
     dev.synchronize()
+    _post_graph_marker("sync_after_warmup_end")
     profile_start = len(Compiled.profile_events)
     ts = []
+    _post_graph_marker("power_capture_start")
     with pinned_peak_from_env() as pin_prov:
+      _post_graph_marker("measurement_loop_start")
       for _ in range(rounds):
+        _post_graph_marker("sync_before_round_start")
         dev.synchronize()
+        _post_graph_marker("sync_before_round_end")
         t0 = time.perf_counter()
         for _ in range(K): prefill_call(sp_int).realize()
+        _post_graph_marker("sync_after_round_start")
         dev.synchronize()
+        _post_graph_marker("sync_after_round_end")
         ts.append((time.perf_counter() - t0) / K * 1e3)
+      _post_graph_marker("measurement_loop_end")
+    _post_graph_marker("power_capture_end")
     profile_events = list(Compiled.profile_events[profile_start:])
     return {"min_ms": min(ts), "samples_ms": ts, "clock_pin": pin_prov,
             "profile": profile_range_summary(profile_events)}
@@ -522,8 +543,14 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
     out = pathlib.Path(args.artifact) if args.artifact else ARTIFACT_DIR / "latest.json"
     if not out.is_absolute(): out = ROOT / out
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(report, indent=2))
-  if args.json: print(json.dumps(report, indent=2))
+    _post_graph_marker("artifact_json_serialize_start")
+    artifact_json = json.dumps(report, indent=2)
+    _post_graph_marker("artifact_json_serialize_end")
+    out.write_text(artifact_json)
+  if args.json:
+    _post_graph_marker("stdout_json_serialize_start")
+    print(json.dumps(report, indent=2))
+    _post_graph_marker("stdout_json_serialize_end")
   return report
 
 
