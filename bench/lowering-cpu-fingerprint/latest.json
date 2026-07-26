@@ -1,0 +1,17 @@
+{
+  "fingerprints": {
+    "broadcast_max": "d3e04d77f1210148d70bb1a94b4af6c6bf75a7fdb8f14c93a687d1fcb561eb82",
+    "cast_dtype_roundtrip": "018af4bb1ceb59d17d0ac4bb67b08068daae645af8d0659ea13c15546c942a55",
+    "chained_reduce": "e3031fabe7ca298b00e71932189365f3052a60beb5c9bd6f29463dd9c1d9f65d",
+    "elementwise_reduce": "208a3122f27dc30f10ecaa51ca1622a3139fb499de36d5ff94e6e5d1c011b356",
+    "matmul": "9c619f28d1a64bff68a763626beef094993b2a553c8ad2b96bad23491a95b982",
+    "softmax_like": "97c867ef9e539ccf80b00470229ae1cd75e627534d9e511e6153140097829dc8",
+    "transpose_matmul": "93997f344131de17812bf52dc57ea38b215bc31f575bcfb92945c9e87c41919d"
+  },
+  "header": {
+    "command": "python3 extra/audit/lowering_fingerprint.py",
+    "device": "CPU",
+    "python_version": "3.12.3 (main, Jun 19 2026, 12:46:00) [GCC 13.3.0]",
+    "schema": "tinygrad.lowering_cpu_fingerprint.v1"
+  }
+}
