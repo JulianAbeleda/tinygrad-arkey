@@ -1,0 +1,12 @@
+{
+  "schema": "14b-llama-dispatch-ledger.v1",
+  "task_id": "LUNA-024",
+  "verdict": "TOOL_FAILURE",
+  "normalization": {"unit": "steady_decode_token", "phases": ["load_setup", "prompt", "transition", "steady_decode"], "family_join": "HIP dispatch + correlation ID + source join key"},
+  "contexts": {"128": {"status": "TOOL_FAILURE"}, "512": {"status": "NOT_RUN"}, "4096": {"status": "NOT_RUN"}},
+  "families": [],
+  "attributed_device_wall_fraction": null,
+  "unattributed_remainder": "100%: no dispatch trace exists.",
+  "blocking_evidence": "LUNA-021 retained only lock/device-query controls. rocprofv3, rocprof, rocprof-compute, and omniperf were absent; LUNA-022 and LUNA-023 could not begin.",
+  "required_to_complete": ["one bounded HIP dispatch trace each for llama ctx128, ctx512, ctx4096", "host phase markers or API correlation IDs", "kernel duration, grid/block, stream, and code-object identity"]
+}
