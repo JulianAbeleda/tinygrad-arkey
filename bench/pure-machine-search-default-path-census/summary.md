@@ -1,6 +1,6 @@
 # PMS-R0 Default-Path Kernel Census
 
-Verdict: **PMS_R0_BLOCKED_ROUTE_ATTRIBUTION_MISSING**
+Verdict: **PMS_R0_PASS_CENSUS_PINNED**
 
 Strict default purity: **TINYGRAD_DEFAULT_PURITY_PASS**
 
@@ -16,6 +16,7 @@ Headline: 7 kernels on the default path are non-tinygrad-generated. 7 are machin
 | decode_flash_live_split_g5_kvboth | decode | machine_authored_generated | yes | BoltBeam_route_policy_or_env_default | fp16 | bench/gp-track/gp4_latest.json | DECODE_LIVE_SPLIT=0 exits the live-split default; no manifest fallback route row remains |
 | prefill_flash_attention_generated | prefill | machine_authored_generated | yes | shape_admitted_model_config_default | fp16 | extra/qk/prefill/prefill_flash_e2e_parity.py | none; automatic non-admission (shape outside ADMITTED_GRIDS, non-AMD backend, or non-gfx1100 arch) falls to ordinary SDPA -- no manifest hand-kernel rollback exists or is needed |
 | prefill_wmma_lds_dbuf_generated | prefill | tinygrad_scheduler_generated | yes | promoted_candidate_set | fp16 | bench/prefill-pure-full-kernel/multirole-buffer2-candidate-set-v1/whole-model-quality.json + whole-prefill-pinned.json | none; absent exact binding selects the ordinary scheduler fallback |
+| packed_wmma_prefill_generated | prefill | tinygrad_scheduler_generated | yes | env_default | Q4_K,Q6_K | docs/packed-wmma-14b-promotion-evidence-20260725.json | TINYGRAD_PREFILL_PACKED_WMMA=0 -> direct-packed (prefill_q4k_direct_tile4x4_default / prefill_q6k_direct_generated) |
 | prefill_q4k_direct_tile4x4_default | prefill | machine_authored_generated | yes | env_default | Q4_K | docs/prefill-lessons-ledger.md | PREFILL_Q4K_DIRECT_SCHEDULE=legacy |
 | prefill_q6k_direct_generated | prefill | machine_authored_generated | yes | env_default | Q6_K | test/unit/test_q6k_prefill_route_spec.py + test/unit/test_llm_prefill_routes.py | PREFILL_Q6K_PACKED_LOAD=0 reaches the legacy non-packed debug path; no manifest default rollback remains |
 
@@ -37,6 +38,7 @@ Headline: 7 kernels on the default path are non-tinygrad-generated. 7 are machin
 - **prefill_flash_attention_generated** (default): tinygrad/llm/model.py Transformer._attention prefill_custom_kernel_attn branch (its own independent eligibility boundary, decoupled from the legacy prefill_tc_attn/shared_attention_proven_eligible proof): _should_use_custom_kernel_prefill_attn(n_heads, n_kv_heads, backend, arch) -> ADMITTED_GRIDS + AMD + gfx1100, threaded into TransformerConfig at model construction (P5b) -> route_prefill_attention(..., use_custom_kernel=True)
 - **prefill_wmma_lds_dbuf_generated** (default): selected model inventory + scanned target + memory admission produce exact per-linear bindings
 - **prefill_v2_scheduler_matmul_default** (fallback): tinygrad/llm/prefill_routes.py fallback path when no exact generated binding is attached
+- **packed_wmma_prefill_generated** (default): tinygrad/llm/prefill_routes.py route_prefill_linear -> route_packed_wmma_prefill, gated by packed_wmma_prefill_enabled() = getenv('TINYGRAD_PREFILL_PACKED_WMMA', 1), i.e. DEFAULT-ON
 - **prefill_q4k_direct_tile4x4_default** (default): tinygrad/llm/prefill_routes.py Q4_K direct-packed default -> Q4KPrefillRouteSpec + emit_q4k_packed_prefill_kernel; _direct_packed_opts selects LOCAL:0:16, LOCAL:1:16, UPCAST:0:4, UPCAST:1:4
 - **prefill_q6k_direct_generated** (default): tinygrad/llm/prefill_routes.py Q6_K direct-packed branch: PREFILL_Q6K_PACKED_LOAD default-on -> Q6KPrefillRouteSpec + emit_q6k_packed_prefill_kernel; direct_out for parts==1/PREFILL_DIRECT_OUT=1, otherwise partials
 

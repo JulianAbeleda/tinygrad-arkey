@@ -113,6 +113,23 @@ CENSUS_OVERLAY = [
     "rollback_flag": "none",
     "next_action": "retain as a pure fallback for unsupported or memory-inadmissible shapes",
   }),
+  ("packed_wmma_prefill_generated", {
+    "shape_guard": "gfx1100 pp512 Q4_K 14B role shapes: attn_qo (512,5120,5120), attn_kv (512,1024,5120), "
+                   "ffn_gate_up (512,17408,5120), ffn_down (512,5120,17408)",
+    "writer": "tinygrad_generated",
+    "selector": "env_default",
+    "route_guard": "tinygrad/llm/prefill_routes.py route_prefill_linear -> route_packed_wmma_prefill, gated by "
+                   "packed_wmma_prefill_enabled() = getenv('TINYGRAD_PREFILL_PACKED_WMMA', 1), i.e. DEFAULT-ON",
+    "kernel_source": "extra/qk/prefill/packed_wmma_prefill_candidates.py select_packed_wmma_prefill_candidate, with "
+                     "warmstart tables built at load time by build_packed_wmma_warmstart_tables",
+    "authority_artifact": "docs/packed-wmma-14b-promotion-evidence-20260725.json "
+                          "(gate: extra/qk/prefill/packed_wmma_prefill_promotion_gate.py)",
+    "rollback_flag": "TINYGRAD_PREFILL_PACKED_WMMA=0 -> direct-packed (prefill_q4k_direct_tile4x4_default / "
+                     "prefill_q6k_direct_generated)",
+    "next_action": "keep promoted for 8B. NOTE: 14B on this box must currently run with "
+                   "TINYGRAD_PREFILL_PACKED_WMMA=0 to avoid a known GPU fault, which disables this route and leaves "
+                   "the chunk ~94% GEMM-bound; that is a property of the only 14B-safe configuration, not of the route",
+  }),
   ("prefill_q4k_direct_tile4x4_default", {
     "shape_guard": "direct-packed Q4_K prefill, memory-safe 14B/32B route",
     "writer": "generated",
