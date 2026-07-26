@@ -13,8 +13,10 @@ can justify becomes noise, and noise gets disabled.
 Withdrawn during development, recorded so it is not re-proposed: "two live RANGE nodes must not share an index".
 It reads plausibly and it is false -- after `split kernels`, ranges are per-kernel, so distinct kernels legitimately
 reuse index (0, AxisType.LOOP). It fired on correct lowering the first time it ran. LR-001 hazard 1
-(IndexingContext.range_idx mutated by reference after run_rangeify returns) is real, but range uniqueness is not the
-invariant that expresses it, and a per-kernel-scoped version needs kernel boundaries this hook does not have.
+(IndexingContext.range_idx mutated by reference after run_rangeify returns) is real, but range uniqueness is not
+the invariant that expresses it, and a per-kernel-scoped version needs kernel boundaries this hook does not have.
+That hazard is now closed structurally instead: LR-041 made the counter private behind
+IndexingContext.next_range_index(), so no second module can advance it by reaching into the field.
 """
 from __future__ import annotations
 import os

@@ -33,12 +33,20 @@ class IndexingContext:
   range_map: dict[UOp, tuple[tuple[UOp, ...], tuple[UOp, ...]]] = field(default_factory=dict)
   composite_owned: set[UOp] = field(default_factory=set)
 
-  # create ranges
-  range_idx: Iterator[int] = field(default_factory=itertools.count)
+  # LR-041: range index allocation. `_range_idx` is private on purpose. It used to be read as `ctx.range_idx` from
+  # rangeify.py -- a second module advancing a counter this one owns, after run_rangeify had already returned
+  # (Phase 0 findings, hazard 1). Phase 4's acceptance is that no pass reaches into another pass's mutable context
+  # without a declared interface, so the counter is now reached only through next_range_index().
+  _range_idx: Iterator[int] = field(default_factory=itertools.count)
+
+  def next_range_index(self) -> int:
+    """Allocate the next range index. The one supported way to advance this counter, from any module."""
+    return next(self._range_idx)
+
   def new_range(self, s:sint, axistype:AxisType=AxisType.LOOP) -> UOp:
     if isinstance(s, UOp) and s.op is Ops.RANGE: return s
     # if a range has a 1 src, it's the same as UOp.const(dtypes.weakint, 0)
-    return UOp.range(s, next(self.range_idx), axistype) if resolve(s!=1) else UOp.const(dtypes.weakint, 0)
+    return UOp.range(s, self.next_range_index(), axistype) if resolve(s!=1) else UOp.const(dtypes.weakint, 0)
 
 def create_bufferize_and_index_based_on_ranges(ctx:IndexingContext, x:UOp):
   if x.op in {Ops.STAGE, Ops.INDEX, Ops.SCOPED_VALUE}: return None
