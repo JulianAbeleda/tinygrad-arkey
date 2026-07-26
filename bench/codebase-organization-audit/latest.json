@@ -234,8 +234,8 @@
     }
   ],
   "audited_commit": {
-    "commit": "7425e280908b6d35cd1d3d8695259f01f940e062",
-    "described": "mac-first-boot-20260610-3412-g7425e2809-dirty",
+    "commit": "95b484fcf783aed85d977505373b179f468af7d1",
+    "described": "mac-first-boot-20260610-3413-g95b484fcf-dirty",
     "dirty": true
   },
   "authority_keys": {
@@ -902,7 +902,7 @@
   },
   "coverage": {
     "authored_files": 472,
-    "authored_loc": 74575,
+    "authored_loc": 74601,
     "explicit_records": 116,
     "generated_files": 1,
     "generated_loc": 57,
@@ -5264,17 +5264,17 @@
     {
       "domain": null,
       "loc": 576,
+      "path": "extra/audit/codebase_organization_audit.py"
+    },
+    {
+      "domain": null,
+      "loc": 576,
       "path": "tinygrad/renderer/amd/sqtt.py"
     },
     {
       "domain": null,
       "loc": 560,
       "path": "test/unit/test_amd_isa_wmma.py"
-    },
-    {
-      "domain": null,
-      "loc": 556,
-      "path": "extra/llm/cli.py"
     }
   ],
   "loc_by": {
@@ -5293,7 +5293,7 @@
       },
       "unclassified": {
         "files": 356,
-        "loc": 57058
+        "loc": 57084
       }
     },
     "domain": {
@@ -5335,7 +5335,7 @@
       },
       "unclassified": {
         "files": 356,
-        "loc": 57058
+        "loc": 57084
       }
     },
     "role": {
@@ -5377,7 +5377,7 @@
       },
       "unclassified": {
         "files": 356,
-        "loc": 57058
+        "loc": 57084
       }
     },
     "status": {
@@ -5415,7 +5415,7 @@
       },
       "unclassified": {
         "files": 356,
-        "loc": 57058
+        "loc": 57084
       },
       "unresolved_reproducer": {
         "files": 2,
@@ -5590,6 +5590,7 @@
     "extra/qk/benchmark_shared_attention.py": [
       "docs/SHARED_ATTENTION_M10E4A_BOTTLENECK_AUDIT.md",
       "docs/attention-harness-centralization-scope-20260724.md",
+      "docs/shared-attention-evidence-bundle-gate-retirement-20260726.md",
       "extra/audit/codebase_organization_audit.py",
       "test/unit/test_shared_attention_replay_admission.py"
     ],
@@ -6437,6 +6438,7 @@
     "extra/qk/shared_attention_evidence.py": [
       "docs/HANDOFF_fused_attention_enablement_20260723.md",
       "docs/attention-harness-centralization-scope-20260724.md",
+      "docs/shared-attention-evidence-bundle-gate-retirement-20260726.md",
       "docs/shared-flash-codex-M6-M8-evidence-path-20260722.md",
       "extra/qk/generate_shared_attention_captures.py",
       "test/unit/test_shared_attention_compiler_capture.py",
@@ -6446,6 +6448,7 @@
     "extra/qk/shared_attention_promotion.py": [
       "docs/HANDOFF_fused_attention_enablement_20260723.md",
       "docs/boltbeam-export-triage-8b-14b-20260723.md",
+      "docs/shared-attention-evidence-bundle-gate-retirement-20260726.md",
       "docs/shared-flash-codex-M6-M8-evidence-path-20260722.md",
       "extra/qk/benchmark_shared_attention.py",
       "test/unit/test_shared_attention_promotion.py"
@@ -8216,6 +8219,18 @@
       "tinygrad/renderer/amd/sqtt.py",
       "tinygrad/viz/cli.py"
     ]
+  },
+  "promotion_budget": {
+    "budgeted_after_pending_promotions": 34096,
+    "budgeted_loc": 34096,
+    "cap": 35000,
+    "data_file_convertible_loc": 0,
+    "headroom": 904,
+    "intended_cap": 30000,
+    "intended_cap_note": "sz.py:13 records 35000 as temporary headroom; the standing target is 30000",
+    "over_intended_cap": 4096,
+    "pending_promotion_net_cost": 0,
+    "unbudgeted_default_path_loc": 9231
   },
   "repeated_workflow_phases": {
     "build-spec": [

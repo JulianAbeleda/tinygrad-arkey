@@ -1,6 +1,6 @@
 # Codebase organization audit
 
-Audited commit: `mac-first-boot-20260610-3412-g7425e2809-dirty` (dirty: True)
+Audited commit: `mac-first-boot-20260610-3413-g95b484fcf-dirty` (dirty: True)
 Scope: `<repository>` | manifest coverage required for: extra/qk/
 Verdict: **ORG_R1_BLOCKED_ORGANIZATION_DRIFT** (1 hard errors, 94 warnings)
 
@@ -10,7 +10,7 @@ Verdict: **ORG_R1_BLOCKED_ORGANIZATION_DRIFT** (1 hard errors, 94 warnings)
 
 ## Coverage
 
-- Authored: 472 files / 74575 token-bearing LOC (sz.py rules)
+- Authored: 472 files / 74601 token-bearing LOC (sz.py rules)
 - Generated (reported, never manifested): 1 files / 57 LOC
 - Manifest scope: 116 files / 17517 LOC (116 explicit records, 0 covered by group rule, 0 uncovered)
 
@@ -27,7 +27,7 @@ Verdict: **ORG_R1_BLOCKED_ORGANIZATION_DRIFT** (1 hard errors, 94 warnings)
 | quant_mmq | 26 | 4354 |
 | route_authority | 20 | 4221 |
 | search_promotion | 9 | 1060 |
-| unclassified | 356 | 57058 |
+| unclassified | 356 | 57084 |
 
 ## LOC by role
 
@@ -42,7 +42,7 @@ Verdict: **ORG_R1_BLOCKED_ORGANIZATION_DRIFT** (1 hard errors, 94 warnings)
 | integration | 2 | 199 |
 | research | 5 | 593 |
 | test | 5 | 520 |
-| unclassified | 356 | 57058 |
+| unclassified | 356 | 57084 |
 
 ## LOC by status
 
@@ -56,7 +56,7 @@ Verdict: **ORG_R1_BLOCKED_ORGANIZATION_DRIFT** (1 hard errors, 94 warnings)
 | promoted_default | 6 | 648 |
 | refuted | 1 | 21 |
 | retained_reference | 4 | 519 |
-| unclassified | 356 | 57058 |
+| unclassified | 356 | 57084 |
 | unresolved_reproducer | 2 | 360 |
 
 ## LOC by disposition
@@ -66,7 +66,7 @@ Verdict: **ORG_R1_BLOCKED_ORGANIZATION_DRIFT** (1 hard errors, 94 warnings)
 | consolidate | 4 | 2098 |
 | investigate | 5 | 454 |
 | keep | 107 | 14965 |
-| unclassified | 356 | 57058 |
+| unclassified | 356 | 57084 |
 
 ## Default-path source footprint
 
@@ -148,9 +148,9 @@ Verdict: **ORG_R1_BLOCKED_ORGANIZATION_DRIFT** (1 hard errors, 94 warnings)
 | 600 | `test/unit/test_runtime_specs.py` | None |
 | 598 | `tinygrad/codegen/opt/postrange.py` | None |
 | 596 | `tinygrad/mixin/__init__.py` | None |
+| 576 | `extra/audit/codebase_organization_audit.py` | None |
 | 576 | `tinygrad/renderer/amd/sqtt.py` | None |
 | 560 | `test/unit/test_amd_isa_wmma.py` | None |
-| 556 | `extra/llm/cli.py` | None |
 
 ## Duplicate authority
 
@@ -383,8 +383,8 @@ None.
 
 | path | class | former purpose | last campaign | replacement | commit | recovery | loc |
 |---|---|---|---|---|---|---|---|
-| `extra/qk/p2_probe_1.py` | delete_ready | Bisect where REDUCE-preserving fusion breaks in attention by walking max -> sum -> broadcast-subtract -> exp-sum -> softmax -> softmax@v under DEV=AMD TC_OPT=2. | flash-prefill Piece 2-A (2026-07-21) | docs/flash-prefill-piece2-probe-20260721.md | `7425e280908b` | git show ad65bd05e951f6e460d167c207fdf3e97faf5c76 -- extra/qk/p2_probe_1.py ... p2_probe_6.py | 44 |
-| `extra/qk/shared_attention_evidence_gate.py` | delete_after_verdict_capture | Validate a shared-attention evidence bundle before admitting it as promotion evidence. | shared-attention evidence pipeline | extra/qk/shared_attention_promotion.py (the gate that acts on a schema with a real producer) | `7425e280908b` | git log --diff-filter=A -- extra/qk/shared_attention_evidence_gate.py | 131 |
+| `extra/qk/p2_probe_1.py` | delete_ready | Bisect where REDUCE-preserving fusion breaks in attention by walking max -> sum -> broadcast-subtract -> exp-sum -> softmax -> softmax@v under DEV=AMD TC_OPT=2. | flash-prefill Piece 2-A (2026-07-21) | docs/flash-prefill-piece2-probe-20260721.md | `95b484fcf783` | git show ad65bd05e951f6e460d167c207fdf3e97faf5c76 -- extra/qk/p2_probe_1.py ... p2_probe_6.py | 44 |
+| `extra/qk/shared_attention_evidence_gate.py` | delete_after_verdict_capture | Validate a shared-attention evidence bundle before admitting it as promotion evidence. | shared-attention evidence pipeline | extra/qk/shared_attention_promotion.py (the gate that acts on a schema with a real producer) | `95b484fcf783` | git log --diff-filter=A -- extra/qk/shared_attention_evidence_gate.py | 131 |
 
 ## Workflow inventory
 
@@ -415,6 +415,18 @@ None.
 - `report`: ['shared-attention-evidence', 'whole-model-throughput-measurement']
 - `select-route`: ['decode-route-selection', 'prefill-route-selection']
 - `verdict`: ['packed-wmma-prefill-promotion', 'prefill-causal-tile-skip-promotion', 'prefill-softmax-fuse-promotion']
+
+## Promotion budget
+
+- Budgeted (`tinygrad`, `bench`, `structure`): **34096 / 35000** -- headroom 904
+- Against the standing 30000 target: **4096 over**. sz.py:13 records 35000 as temporary headroom; the standing target is 30000
+- Default-path LOC currently sitting unbudgeted in `extra/`: **9231**
+- Net budget cost of pending promotions (moved minus deleted): 0
+- Declarative LOC a data-file conversion would remove from the budget entirely: 0
+
+Promotion converts unbudgeted `extra/` LOC into budgeted core LOC. A promotion that moves more than it deletes
+spends headroom that nothing gives back, and `sz.py` counts only `.py`/`.js` -- a table moved to a data file
+costs zero.
 
 ## LOC impact
 

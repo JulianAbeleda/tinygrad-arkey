@@ -185,6 +185,30 @@ def test_valid_promotion_candidate_passes(tmp_path):
   assert not c["hard_errors"] and c["verdict"] == "ORG_R1_PASS_CENSUS_PINNED"
   assert c["loc_impact"]["loc_moved_not_reduced"] == 30
 
+def test_promotion_budget_counts_what_a_move_would_cost(tmp_path):
+  """Promotion converts unbudgeted extra/ LOC into budgeted core LOC; a move that deletes nothing spends headroom."""
+  files = {"tinygrad/llm/core.py": "".join(f"C{i} = {i}\n" for i in range(20)),
+           "extra/qk/prim.py": "".join(f"P{i} = {i}\n" for i in range(30))}
+  m = {"files": [rec("extra/qk/prim.py", default_path=True, promotion_decision="promote in KA-4")],
+       "actions": [{"path": "extra/qk/prim.py", "action": "promote", "promotion_readiness": "blocked",
+                    "promotion_target": "tinygrad/llm/qk_primitives.py", "loc_moved": 30, "loc_deleted": 12,
+                    "loc_to_data_file": 8}]}
+  c = run(tmp_path, files, m)
+  b = c["promotion_budget"]
+  assert b["budgeted_loc"] == 20                      # only tinygrad/ counts; extra/ is free today
+  assert b["unbudgeted_default_path_loc"] == 30       # ...and this is what promotion would put on the budget
+  assert b["pending_promotion_net_cost"] == 18        # 30 moved - 12 deleted
+  assert b["budgeted_after_pending_promotions"] == 38
+  assert b["data_file_convertible_loc"] == 8          # sz.py counts only .py/.js, so a table costs zero
+
+def test_a_promotion_that_deletes_what_it_moves_is_budget_neutral(tmp_path):
+  files = {"tinygrad/llm/core.py": "C = 1\n", "extra/qk/prim.py": "P = 1\n"}
+  m = {"files": [rec("extra/qk/prim.py")],
+       "actions": [{"path": "extra/qk/prim.py", "action": "promote", "promotion_readiness": "ready",
+                    "promotion_target": "tinygrad/llm/qk_primitives.py", "loc_moved": 40, "loc_deleted": 40}]}
+  c = run(tmp_path, files, m)
+  assert c["promotion_budget"]["pending_promotion_net_cost"] == 0
+
 # ------------------------------------------------------------------------------------------------ pruning ----
 def test_prune_candidate_with_live_consumer(tmp_path):
   files = {"extra/qk/live.py": "from extra.qk.old import O\n", "extra/qk/old.py": "O = 1\n"}

@@ -513,11 +513,35 @@ def audit(root: pathlib.Path = ROOT, manifest_path: pathlib.Path | None = None, 
     "hard_errors": sorted(hard, key=lambda x: (x["error"], x.get("path", ""), x["message"])),
     "warnings": sorted(warn, key=lambda x: (x["warning"], x.get("path", ""), x["message"])),
     "loc_impact": _loc_impact(actions),
+    "promotion_budget": _budget(root, loc, authored, actions, records),
     "human_findings": man.get("human_findings", {}),
     "coverage_limitations": man.get("coverage_limitations", []),
   }
   census["verdict"] = "ORG_R1_PASS_CENSUS_PINNED" if not hard else "ORG_R1_BLOCKED_ORGANIZATION_DRIFT"
   return census
+
+def _budget(root: pathlib.Path, loc: dict[str, int], authored: list[str], actions: list[dict], records: dict) -> dict:
+  """What promotion COSTS. sz.py budgets tinygrad/, bench/ and structure/; extra/ is reported but unbudgeted, so
+  moving a file from extra/ into tinygrad/ is not LOC-neutral -- it converts free LOC into budgeted LOC.
+
+  Two consequences the manifest has to respect:
+  - a promotion must delete at least what it moves, or it eats headroom that nothing replaces;
+  - sz.py counts only .py and .js, so a declarative table converted to a data file leaves the budget entirely.
+  """
+  budgeted = sum(l for f, l in loc.items() if f in set(authored) and f.startswith(tuple(d + "/" for d in sz.BUDGET_DIRS)))
+  cap, intended = int(os.getenv("MAX_LINE_COUNT", str(sz.DEFAULT_MAX_LINE_COUNT))), 30000
+  pending = [a for a in actions if a.get("action") == "promote" and a.get("status") != "completed"
+             and a.get("promotion_readiness") != "not justified"]
+  cost = sum(int(a.get("loc_moved") or 0) - int(a.get("loc_deleted") or 0) for a in pending)
+  return {
+    "budgeted_loc": budgeted, "cap": cap, "headroom": cap - budgeted,
+    "intended_cap": intended, "intended_cap_note": "sz.py:13 records 35000 as temporary headroom; the standing target is 30000",
+    "over_intended_cap": max(0, budgeted - intended),
+    "pending_promotion_net_cost": cost,
+    "budgeted_after_pending_promotions": budgeted + cost,
+    "unbudgeted_default_path_loc": sum(loc.get(p, 0) for p, r in records.items() if r.get("default_path") and p.startswith("extra/")),
+    "data_file_convertible_loc": sum(int(a.get("loc_to_data_file") or 0) for a in actions),
+  }
 
 def _agg(files, records, covered_by_group, groups, loc, key):
   out: dict[str, dict] = {}
@@ -616,6 +640,16 @@ def _md(c: dict) -> str:
         f"| {' -> '.join(w['phases'])} |" for w in c["workflows"]] + [""]
   L += ["## Repeated workflow phases", ""]
   L += [f"- `{k}`: {v}" for k, v in c["repeated_workflow_phases"].items()] + [""]
+  b = c["promotion_budget"]
+  L += ["## Promotion budget", "",
+        f"- Budgeted (`{'`, `'.join(sz.BUDGET_DIRS)}`): **{b['budgeted_loc']} / {b['cap']}** -- headroom {b['headroom']}",
+        f"- Against the standing {b['intended_cap']} target: **{b['over_intended_cap']} over**. {b['intended_cap_note']}",
+        f"- Default-path LOC currently sitting unbudgeted in `extra/`: **{b['unbudgeted_default_path_loc']}**",
+        f"- Net budget cost of pending promotions (moved minus deleted): {b['pending_promotion_net_cost']}",
+        f"- Declarative LOC a data-file conversion would remove from the budget entirely: {b['data_file_convertible_loc']}", "",
+        "Promotion converts unbudgeted `extra/` LOC into budgeted core LOC. A promotion that moves more than it deletes",
+        "spends headroom that nothing gives back, and `sz.py` counts only `.py`/`.js` -- a table moved to a data file",
+        "costs zero.", ""]
   imp = c["loc_impact"]
   L += ["## LOC impact", "",
         f"- **Realized** (actions {', '.join(imp['completed_actions']) or 'none'}): "
