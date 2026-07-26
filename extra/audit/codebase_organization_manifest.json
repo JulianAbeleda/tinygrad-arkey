@@ -1634,6 +1634,47 @@
       "allowed_dependency_domains": [
         "codegen_lowering"
       ],
+      "authority_keys": [],
+      "classification_confidence": "high",
+      "default_path": false,
+      "deletion_confidence": "retain_active",
+      "disposition": "consolidate",
+      "domain": "codegen_lowering",
+      "duplication_group": null,
+      "evidence": [
+        "restored from 348dceeec on branch refactor/lowering-architecture: the lowering-refactor scope names it as a source for LR-021, and it was retired with the DEV=AMD:ISA chain on 2026-07-26 before that scope was executed",
+        "depends only on core tinygrad (codegen.opt.kernel_pipeline, dtype, uop.ops) -- none of the retired ISA chain",
+        "its three test files were restored with it and pass: 22 tests + 10 subtests",
+        "test_dynamic_tile_owner.py was NOT restored; it also needs dynamic_tile_owner.py, which stays retired"
+      ],
+      "path": "extra/qk/kernel_pipeline.py",
+      "promotion_decision": "harvest into tinygrad/codegen/opt/kernel_pipeline.py under LR-021, then retire again",
+      "promotion_target": "tinygrad/codegen/opt/kernel_pipeline.py",
+      "public_surface": [
+        "DotUpdateRecurrencePlan",
+        "HierarchicalKernelPipelinePlan",
+        "hierarchical_lifecycle_events",
+        "SchedulerOutputTileLoop",
+        "build_scheduler_output_tile_loop"
+      ],
+      "purpose": "Typed plans and ownership proofs for staged kernel pipelines: dot-update recurrence graphs and proofs, hierarchical lifecycle events, and the scheduler output tile loop that enforces the core VGPR budget.",
+      "responsibilities": [
+        "recurrence plan/proof contracts",
+        "hierarchical stage lifecycle",
+        "scheduler output tile loop and its VGPR budget check"
+      ],
+      "retention_criterion": "until LR-021 has extracted the durable contracts into the core kernel_pipeline owner; this file is restored to be harvested, not to be kept",
+      "reusable_assets": [],
+      "role": "authority",
+      "status": "retained_reference",
+      "surface": "off_default",
+      "test_role": "not_test_like",
+      "workflow_ids": []
+    },
+    {
+      "allowed_dependency_domains": [
+        "codegen_lowering"
+      ],
       "authority_keys": [
         "KernelTileGeometry.__post_init__.invariants",
         "KernelCandidateContext.schema_version=boltbeam.full_kernel_candidate.v1"
