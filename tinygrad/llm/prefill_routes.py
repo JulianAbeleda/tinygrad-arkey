@@ -287,10 +287,17 @@ def packed_wmma_prefill_enabled() -> bool:
 
   Default is ON: the packed-WMMA route is correctness-gated (6/6 combos, max_abs 0.0)
   and fails closed for anything ungated or unknown-shaped. Set TINYGRAD_PREFILL_PACKED_WMMA=0
-  to revert to the direct-packed baseline only.
+  to revert to the direct-packed baseline only. The known-unsafe 14B Hq=40/Hkv=8 rollback
+  geometry is rejected by validate_packed_wmma_prefill_mode before model construction.
   """
   from tinygrad.helpers import getenv
   return bool(getenv("TINYGRAD_PREFILL_PACKED_WMMA", 1))
+
+
+def validate_packed_wmma_prefill_mode(n_heads:int, n_kv_heads:int) -> None:
+  if (n_heads, n_kv_heads) == (40, 8) and not packed_wmma_prefill_enabled():
+    raise RuntimeError("14B direct-packed prefill rollback is disabled after observed GPU MMU faults; "
+                       "unset TINYGRAD_PREFILL_PACKED_WMMA or set it to 1 to use the supported packed-WMMA path")
 
 
 def route_packed_wmma_prefill(lin, x:Tensor) -> Tensor | None:

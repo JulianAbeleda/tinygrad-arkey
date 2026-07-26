@@ -19,7 +19,7 @@ from tinygrad.llm.prefill_policy import (
   prefill_policy_uses_overlay, prefill_v2_validate_ubatch, select_prefill_runtime_policy,
   bounded_packed_projection_proven_eligible,
 )
-from tinygrad.llm.prefill_routes import is_direct_packed_prefill_linear, route_prefill_linear
+from tinygrad.llm.prefill_routes import is_direct_packed_prefill_linear, route_prefill_linear, validate_packed_wmma_prefill_mode
 from tinygrad.llm.prefill_memory_plan import Strategy
 from tinygrad.llm.prefill_route_observer import PrefillDirectPackedBinding, PrefillRouteAttachment, prefill_route_scope, notify_prefill_route
 from tinygrad.llm.qk_primitives import (
@@ -1259,6 +1259,7 @@ class Transformer:
       prefill_v2=_v2_on, prefill_ubatch=_prefill_ubatch, prefill_concrete_kv=_concrete_kv,
       prefill_workload_reuse=_workload_reuse, flash_decode=_flash_decode, lm_head_route="lazy",
       kv_quant=_kv_quant, ring=_ring_admitted)
+    if config.prefill_v2: validate_packed_wmma_prefill_mode(config.n_heads, config.n_kv_heads)
     # FAST_EMPTY_INIT: every weight is REPLACED by load_state_dict below, so building the ~254 random init graphs
     # (nn.Linear Tensor.uniform / nn.Embedding glorot_uniform) is wasted work (~2.3s of the load, per profiling).
     # Init EMPTY during construction instead -- correct because nothing reads the random values before they're replaced.
