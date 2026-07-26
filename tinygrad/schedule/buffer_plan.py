@@ -20,12 +20,22 @@ What this module deliberately does NOT take on:
     in `remove_bufferize`). Moving that logic would change control flow, which LR-042's scope explicitly rules out
     for this slice.
   * `limit_bufs`'s per-device buffer cap (`DEVICE_MAX_BUFS` in rangeify.py). That table is genuinely not
-    backend-neutral -- it hardcodes METAL/WEBGPU limits instead of asking a renderer's capabilities (the
-    `TargetCapabilities` record in `tinygrad/codegen/plan.py` already carries `global_max`/`local_max` for exactly
-    this). It cannot be routed through renderer capability today because `limit_bufs` runs inside `run_rangeify`,
-    before a renderer has been selected for the kernel graph (rangeify sees only a device *string*). Recorded here,
-    left alone: fixing it is an architecture change (rangeify would need a capability lookup keyed on device string,
-    or the cap would need to move to a later, renderer-aware pass), not a pure move.
+    backend-neutral -- it hardcodes METAL/WEBGPU limits (`{"METAL": 31, "WEBGPU": 8}`) instead of asking a renderer.
+    It cannot be routed through renderer capability today for TWO reasons, and the second is the harder one:
+      1. `limit_bufs` runs inside `run_rangeify`, before a renderer has been selected -- rangeify sees only a device
+         *string*. (`grep 'Device\['` across tinygrad/schedule/ returns exactly one hit, in memory.py.)
+      2. **No renderer declares this capability at all.** `Renderer` has no `buf_max`/`max_bufs` field. Do not reach
+         for `TargetCapabilities.global_max`/`local_max`: those are grid and workgroup DIMENSION limits, 3-tuples
+         defaulting to `(0x8FFFFFFF,)*3` and consumed by `codegen/gpudims.py` for `get_grouped_dims`. They have
+         nothing to do with a count of kernel buffer arguments. An earlier version of this note claimed otherwise
+         and was wrong.
+    So fixing this needs a new capability on `Renderer` first, then a way for a pre-renderer pass to consult it --
+    an architecture change, not a pure move.
+
+    NOTE ON COVERAGE: `limit_bufs` early-returns whenever `MAX_KERNEL_BUFFERS.value or DEVICE_MAX_BUFS.get(device, 0)`
+    is falsy. `MAX_KERNEL_BUFFERS` defaults to 0 and the table covers neither CPU nor AMD, so this pass never executes
+    on any graph in either fingerprint gate. If it is ever moved, those gates will certify the move as safe whether or
+    not it is. Anyone touching it must build coverage first.
   * `LocalAddBufferContext` and the kernel-split family (`debuf`, `handle_after`, `renumber_range`, `split_store`,
     `rangeify_codegen`). Phase 0's hazard 2 names this context as shared across five functions, with two incompatible
     call sites (`LocalAddBufferContext` at rangeify.py, a bare `itertools.count` at codegen/__init__.py). The scope

@@ -1,10 +1,13 @@
 {
   "fingerprints": {
+    "assign_self_dependent": "759811a4addb1e4980b05e66d1e64266d46e8740bc58a6ad10879cf4bd7f613d",
+    "assign_war_hazard": "086fc7e8258d439795907cd0731271ae120b398f356437c63d82e9181dd89054",
     "broadcast_max": "d3e04d77f1210148d70bb1a94b4af6c6bf75a7fdb8f14c93a687d1fcb561eb82",
     "cast_dtype_roundtrip": "018af4bb1ceb59d17d0ac4bb67b08068daae645af8d0659ea13c15546c942a55",
     "chained_reduce": "e3031fabe7ca298b00e71932189365f3052a60beb5c9bd6f29463dd9c1d9f65d",
     "elementwise_reduce": "208a3122f27dc30f10ecaa51ca1622a3139fb499de36d5ff94e6e5d1c011b356",
     "matmul": "9c619f28d1a64bff68a763626beef094993b2a553c8ad2b96bad23491a95b982",
+    "multi_output_shared_producer": "6af52748cd0185bcb485eb60af4d1ae1ff85e582d68b7b9a9f16e0365c905218",
     "softmax_like": "97c867ef9e539ccf80b00470229ae1cd75e627534d9e511e6153140097829dc8",
     "transpose_matmul": "93997f344131de17812bf52dc57ea38b215bc31f575bcfb92945c9e87c41919d"
   },

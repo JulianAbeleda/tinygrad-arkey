@@ -96,7 +96,36 @@ def _build_graphs(Tensor) -> dict[str, Callable[[], Any]]:
     # other graph here (all of which stay in a single dtype end to end).
     "cast_dtype_roundtrip": lambda: ((Tensor.rand(32, 32, device="CPU") * 100.0)
                                      .cast(dtypes.int32).cast(dtypes.float32)).sum(),
+    # The graphs below exist because a review found the gate blind to them, and the blindness was load-bearing:
+    # schedule/realize.py's realize_store_after_src has a WAR-hazard branch whose own comment cites
+    # TestAssign.test_assign_double_diamond_reduce -- a test this fork no longer contains. Nothing in test/ calls
+    # .assign() at all. So LR-040 moved a function with a branch that no gate and no test exercised.
+    "assign_self_dependent": lambda: _assign_self_dependent(Tensor),
+    "assign_war_hazard": lambda: _assign_war_hazard(Tensor),
+    "multi_output_shared_producer": lambda: _multi_output_shared_producer(Tensor),
   }
+
+
+def _assign_self_dependent(Tensor):
+  """dest.base appears in src's backward slice -- the branch that sets ctx[src] = None."""
+  a = Tensor.rand(16, 16, device="CPU").contiguous().realize()
+  a.assign(a + 1.0)
+  return a
+
+
+def _assign_war_hazard(Tensor):
+  """A write-after-read across two consumers of the same buffer, the case the deleted TestAssign covered."""
+  a = Tensor.rand(16, 16, device="CPU").contiguous().realize()
+  b = (a * 2.0).sum(axis=0)
+  a.assign(a + b.reshape(1, 16))
+  return a
+
+
+def _multi_output_shared_producer(Tensor):
+  """Two sinks over one producer: exercises realize_srcs and the producer/consumer partition that every gate
+  graph until now avoided by being single-output."""
+  x = (Tensor.rand(32, 32, device="CPU") + 1.0).contiguous()
+  return (x.sum(axis=0) * x.sum(axis=1)).sum()
 
 
 def _reset_uop_unique_counter() -> None:
