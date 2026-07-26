@@ -411,3 +411,66 @@ prefill cost: the gate refuses a fusion in a **high-parallelism** consumer where
   below it. Extracting that mapping needs a run with allocation logging — i.e. GPU time.
 - The strongest static candidate (9.6) is real and worth fixing but is **excluded** as the cause here.
 - Pressure-based theories are refuted by 9.7.
+
+---
+
+## 11. Executed 2026-07-26 (priorities 1-3 of the review plan)
+
+All three shipped. Measured 8B, gfx1100, same session, `flock`-serialized, profile `auto`, warm reps.
+
+### 11.1 K/V tail-load guard (`89b98403e`)
+
+Load ADDRESS now gated (`off.valid(row_ok)`), not the value afterward; folds away at compile time when
+`kv_tokens % 16 == 0`, asserted by test. All three address paths (K, V, V-transposed).
+
+**Scope correction:** this is a **capability change, not a crash fix**. The OOB was NOT reachable —
+`AMDAttentionGridSpec.validate()` required `kv_tokens % 16 == 0` and `fused_attention.py:137-139` catches
+that `ValueError` and falls back to SDPA. §9.6's claim that ordinary prompt lengths would fault is
+**withdrawn**. Removing the restriction newly admits unaligned KV to the fused path, which
+`ADMITTED_GRIDS` does not constrain.
+
+Guard and relaxation are inseparable — without the relaxation the guard cannot be exercised (60/64 tests
+fail at spec construction) — so they shipped together, gated on real-hardware parity first.
+
+Verified: 64 CPU tests + numeric parity at `kv_tokens=103` on gfx1100 against a numpy reference,
+confirmed genuinely dispatched (DEBUG trace shows the kernel, 153.92us / 99 GFLOPS), not a fast skip.
+
+### 11.2 Fusion predicate (`9542e82f1`)
+
+`prod(buf.shape)` replaced by consumer parallelism and reduction trip count, both readable at
+`remove_bufferize` time from `idx.src[1:]` range substitutions (`AxisType.REDUCE` is already assigned).
+
+| | now | old gate | baseline | llama (same-session, 07-24) |
+|---|---:|---:|---:|---:|
+| prefill pp512 | **3744** | 3635-3659 | 3730-3750 | 3347 +/- 242 |
+| prefill pp4096 | **3379** | ~3180 | 3262 | 3158 +/- 17 |
+| decode ctx512 | 113.86 | 115.03 | 115.31 | 97.56 |
+| decode ctx4096 | 102.57 | 103.13 | 102.89 | 88.99 |
+
+**The 2.5% prefill regression is recovered.** Decode gives up ~1% for it. pp4096's gain over 3262 is
+CROSS-SESSION and should be read as "recovered, likely improved", not banked — only same-session pairs
+are authoritative.
+
+Token parity identical at every depth. Suite 50 failed / 1410 passed, failure set **identical** to
+baseline (47 unique names, verified non-empty on both sides).
+
+### 11.3 ALLOC_TRACE attribution ring (`284482ac0`)
+
+Built and self-tested; **not yet run against a fault**. Env-gated, ~85-115ns/call off. Analyzer joins a
+dump to `journalctl -k` fault addresses. 26 synthetic self-tests, which caught two analyzer bugs.
+
+### 11.4 Process failures this session (all self-inflicted, all the same shape)
+
+- A test installed a **stub `tinygrad` into `sys.modules`**, poisoning every module collected after it.
+  Collection silently fell 1454 -> 504 with 94 errors; 883 tests stopped running while the suite still
+  "passed". Same shape as the deleted `decode_runtime_overhead.py` of Phase 1.
+- A failure-set diff printed **"IDENTICAL"** while comparing two EMPTY files — `^FAILED` never matched
+  because pytest's ANSI codes precede the word. Caught only by printing counts next to the verdict.
+- A suite run was piped through `tail -3`, so the failure names were never captured; the count looked fine.
+- A running benchmark was declared "killed" from a 37-byte log and its output file deleted underneath it,
+  destroying ~14 minutes of work and briefly double-booking the GPU lock. `pgrep` showed it alive.
+- Two agents ran `git stash` in a tree three agents were editing, leaving `postrange.py` unmerged and then
+  re-introducing conflict markers that broke `import tinygrad` entirely.
+
+**The invariant behind all five: a check that reports success while measuring nothing.** Every gate needs
+its own positive control, and counts must be printed beside verdicts.
