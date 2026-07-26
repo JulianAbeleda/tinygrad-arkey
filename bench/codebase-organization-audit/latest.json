@@ -190,6 +190,59 @@
       "tests_required": []
     },
     {
+      "action": "retain",
+      "confidence": "high",
+      "evidence": [
+        "route_manifest.py:605-616 and memory_adaptive_policy.py:39-59 drop keys RECURSIVELY at every nesting level with case/dash normalization; runtime_specs.py:163-176 pops two hardcoded paths (workload.profile, applicability.profiles) and nothing else -- same input, different output whenever a droppable key sits at another depth",
+        "three different identity formats that callers store and compare as strings: '{namespace}:sha256:{hex}', 'sha256:{hex}', and bare hex",
+        "runtime_specs alone carries a legacy dual-identity (_legacy_full_kernel_identity over the unstripped payload) so old candidate-set entries stay acceptable; the other two have no such concept",
+        "memory_adaptive_policy raises ValueError on non-finite floats before serialization; route_manifest leaves that to allow_nan=False at dumps time"
+      ],
+      "finding": "The three canonical-JSON identity implementations look like one rule and are not. Merging them would have silently changed digests on the default path.",
+      "id": "A12",
+      "loc_added": 0,
+      "loc_moved": 0,
+      "loc_removed": 0,
+      "note": "the only genuinely identical core is route_manifest <-> memory_adaptive_policy, worth about 15 LOC and requiring a decision on the finite-float check. Not worth a new module; do not re-propose.",
+      "path": "extra/qk/route_manifest.py",
+      "tests_required": []
+    },
+    {
+      "action": "retain",
+      "confidence": "high",
+      "evidence": [
+        "the to_json() bodies emit DIFFERENT key sets (mmq_q4k_q8_reference.py:76, :95, :168, :205, :304) -- they are hand-written schemas, not field dumps",
+        "the validate() overlap is roughly three lines each of tile-within-shape bounds, and each carries a domain-specific message ('invalid activation shape' vs 'invalid output shape' vs 'invalid shape m/n/k')",
+        "extending prefill/execution_bridge_contracts.Contract would create a quant_mmq -> attention_prefill dependency across a domain boundary for no LOC gain"
+      ],
+      "finding": "The five hand-rolled validate()/to_json() dataclasses are not consolidatable duplication.",
+      "id": "A13",
+      "loc_added": 0,
+      "loc_moved": 0,
+      "loc_removed": 0,
+      "note": "extraction would save about 10 LOC and cost a helper plus a label argument at every call site; duplication is cheaper than that abstraction. Do not re-propose.",
+      "path": "extra/qk/mmq_q4k_q8_reference.py",
+      "tests_required": []
+    },
+    {
+      "action": "reuse",
+      "confidence": "high",
+      "evidence": [
+        "all nine built a kernel, applied UOp.placeholder args positionally, repr'd the graph and took sha256[:16]; they differed only in builder and placeholder shapes",
+        "all ten produced hash values (nine functions plus the coop-tile alternate writeback_mode) verified byte-identical before and after",
+        "test/unit/test_mmq_q4k_q8_atom.py: 16 passed; the 14 failures under -k mmq reproduce with the change stashed and are pre-existing"
+      ],
+      "finding": "Nine structurally identical *_source_hash wrappers now express one hashing rule through one helper.",
+      "id": "A14",
+      "loc_added": 0,
+      "loc_moved": 0,
+      "loc_removed": 3,
+      "path": "extra/qk/mmq_q4k_q8_atom.py",
+      "realized_note": "66 -> 63 token-LOC. The value is one rule with one owner, NOT a LOC reduction; the earlier '90-100 LOC of pure repetition' estimate counted physical lines and did not survive measurement.",
+      "status": "completed",
+      "tests_required": []
+    },
+    {
       "action": "decouple",
       "confidence": "high",
       "evidence": [
@@ -234,8 +287,8 @@
     }
   ],
   "audited_commit": {
-    "commit": "95b484fcf783aed85d977505373b179f468af7d1",
-    "described": "mac-first-boot-20260610-3413-g95b484fcf-dirty",
+    "commit": "9ec70511234fa1c33d424e99388bc2167f39d090",
+    "described": "mac-first-boot-20260610-3414-g9ec705112-dirty",
     "dirty": true
   },
   "authority_keys": {
@@ -902,13 +955,13 @@
   },
   "coverage": {
     "authored_files": 472,
-    "authored_loc": 74601,
+    "authored_loc": 74619,
     "explicit_records": 116,
     "generated_files": 1,
     "generated_loc": 57,
     "group_covered": 0,
     "manifest_scope_files": 116,
-    "manifest_scope_loc": 17517,
+    "manifest_scope_loc": 17514,
     "uncovered": []
   },
   "coverage_limitations": [
@@ -975,7 +1028,7 @@
       "extra/qk/runtime_specs.py",
       "extra/qk/warp_reduce_lowering.py"
     ],
-    "loc": 9231,
+    "loc": 9228,
     "production_reachable_from_tinygrad": [
       "extra/hardware/sqtt/roc.py",
       "extra/llm/cli.py",
@@ -5152,6 +5205,10 @@
   "investigation_backlog": [
     {
       "path": "extra/qk/mmq_q4k_q8_atom.py",
+      "question": "amd_warp_batched_atom_source_hash, amd_dot4_batched_atom_source_hash and amd_dot4x4_batched_atom_source_hash have no importer anywhere -- dead public API in a default-path file. Deleting them only pays if the kernel builders behind them go too, which is the same question as which atom stages still teach something."
+    },
+    {
+      "path": "extra/qk/mmq_q4k_q8_atom.py",
       "question": "835 LOC hold ~10 progressively elaborated kernel stages (naive, warp, dot4, dot4x4, ds4 variants, coop-tile). Only the DS4 coop-tile stage is a confirmed evidence-capture target. Are the earlier stages still teaching anything, or is their verdict recorded elsewhere?"
     },
     {
@@ -5208,7 +5265,7 @@
     },
     {
       "domain": "quant_mmq",
-      "loc": 835,
+      "loc": 832,
       "path": "extra/qk/mmq_q4k_q8_atom.py"
     },
     {
@@ -5281,7 +5338,7 @@
     "disposition": {
       "consolidate": {
         "files": 4,
-        "loc": 2098
+        "loc": 2095
       },
       "investigate": {
         "files": 5,
@@ -5293,7 +5350,7 @@
       },
       "unclassified": {
         "files": 356,
-        "loc": 57084
+        "loc": 57105
       }
     },
     "domain": {
@@ -5323,7 +5380,7 @@
       },
       "quant_mmq": {
         "files": 26,
-        "loc": 4354
+        "loc": 4351
       },
       "route_authority": {
         "files": 20,
@@ -5335,7 +5392,7 @@
       },
       "unclassified": {
         "files": 356,
-        "loc": 57084
+        "loc": 57105
       }
     },
     "role": {
@@ -5361,7 +5418,7 @@
       },
       "execution": {
         "files": 11,
-        "loc": 2287
+        "loc": 2284
       },
       "integration": {
         "files": 2,
@@ -5377,7 +5434,7 @@
       },
       "unclassified": {
         "files": 356,
-        "loc": 57084
+        "loc": 57105
       }
     },
     "status": {
@@ -5387,7 +5444,7 @@
       },
       "active_research": {
         "files": 25,
-        "loc": 5308
+        "loc": 5305
       },
       "fallback": {
         "files": 5,
@@ -5415,7 +5472,7 @@
       },
       "unclassified": {
         "files": 356,
-        "loc": 57084
+        "loc": 57105
       },
       "unresolved_reproducer": {
         "files": 2,
@@ -5426,6 +5483,7 @@
   "loc_impact": {
     "completed_actions": [
       "A1",
+      "A14",
       "A2",
       "A3",
       "A4",
@@ -5434,8 +5492,8 @@
     "gross_loc_removed": 3,
     "loc_moved_not_reduced": 60,
     "net_authored_loc_reduction": 3,
-    "realized_gross_loc_removed": 244,
-    "realized_net_loc_reduction": 209,
+    "realized_gross_loc_removed": 247,
+    "realized_net_loc_reduction": 212,
     "realized_replacement_loc_added": 35,
     "replacement_loc_added": 0
   },
@@ -8230,7 +8288,7 @@
     "intended_cap_note": "sz.py:13 records 35000 as temporary headroom; the standing target is 30000",
     "over_intended_cap": 4096,
     "pending_promotion_net_cost": 0,
-    "unbudgeted_default_path_loc": 9231
+    "unbudgeted_default_path_loc": 9228
   },
   "repeated_workflow_phases": {
     "build-spec": [
@@ -8795,8 +8853,8 @@
       "warning": "large_file"
     },
     {
-      "loc": 835,
-      "message": "extra/qk/mmq_q4k_q8_atom.py is 835 LOC (threshold 400); responsibilities declared: 4",
+      "loc": 832,
+      "message": "extra/qk/mmq_q4k_q8_atom.py is 832 LOC (threshold 400); responsibilities declared: 4",
       "path": "extra/qk/mmq_q4k_q8_atom.py",
       "principle": "minimize what a reader must hold in their head",
       "warning": "large_file"

@@ -1,6 +1,6 @@
 # Codebase organization audit
 
-Audited commit: `mac-first-boot-20260610-3413-g95b484fcf-dirty` (dirty: True)
+Audited commit: `mac-first-boot-20260610-3414-g9ec705112-dirty` (dirty: True)
 Scope: `<repository>` | manifest coverage required for: extra/qk/
 Verdict: **ORG_R1_BLOCKED_ORGANIZATION_DRIFT** (1 hard errors, 94 warnings)
 
@@ -10,9 +10,9 @@ Verdict: **ORG_R1_BLOCKED_ORGANIZATION_DRIFT** (1 hard errors, 94 warnings)
 
 ## Coverage
 
-- Authored: 472 files / 74601 token-bearing LOC (sz.py rules)
+- Authored: 472 files / 74619 token-bearing LOC (sz.py rules)
 - Generated (reported, never manifested): 1 files / 57 LOC
-- Manifest scope: 116 files / 17517 LOC (116 explicit records, 0 covered by group rule, 0 uncovered)
+- Manifest scope: 116 files / 17514 LOC (116 explicit records, 0 covered by group rule, 0 uncovered)
 
 ## LOC by domain
 
@@ -24,10 +24,10 @@ Verdict: **ORG_R1_BLOCKED_ORGANIZATION_DRIFT** (1 hard errors, 94 warnings)
 | codegen_lowering | 15 | 2207 |
 | evidence | 10 | 1608 |
 | measurement | 18 | 2101 |
-| quant_mmq | 26 | 4354 |
+| quant_mmq | 26 | 4351 |
 | route_authority | 20 | 4221 |
 | search_promotion | 9 | 1060 |
-| unclassified | 356 | 57084 |
+| unclassified | 356 | 57105 |
 
 ## LOC by role
 
@@ -38,39 +38,39 @@ Verdict: **ORG_R1_BLOCKED_ORGANIZATION_DRIFT** (1 hard errors, 94 warnings)
 | benchmark | 2 | 99 |
 | diagnostic | 12 | 1407 |
 | evidence | 4 | 385 |
-| execution | 11 | 2287 |
+| execution | 11 | 2284 |
 | integration | 2 | 199 |
 | research | 5 | 593 |
 | test | 5 | 520 |
-| unclassified | 356 | 57084 |
+| unclassified | 356 | 57105 |
 
 ## LOC by status
 
 | status | files | loc |
 |---|---|---|
 | active_regression | 5 | 456 |
-| active_research | 25 | 5308 |
+| active_research | 25 | 5305 |
 | fallback | 5 | 272 |
 | historical_one_off | 1 | 43 |
 | production | 67 | 9890 |
 | promoted_default | 6 | 648 |
 | refuted | 1 | 21 |
 | retained_reference | 4 | 519 |
-| unclassified | 356 | 57084 |
+| unclassified | 356 | 57105 |
 | unresolved_reproducer | 2 | 360 |
 
 ## LOC by disposition
 
 | disposition | files | loc |
 |---|---|---|
-| consolidate | 4 | 2098 |
+| consolidate | 4 | 2095 |
 | investigate | 5 | 454 |
 | keep | 107 | 14965 |
-| unclassified | 356 | 57084 |
+| unclassified | 356 | 57105 |
 
 ## Default-path source footprint
 
-54 declared default-path files / 9231 LOC.
+54 declared default-path files / 9228 LOC.
 
 - `extra/qk/amd_isa_proof.py`
 - `extra/qk/amd_resource_artifact.py`
@@ -137,7 +137,7 @@ Verdict: **ORG_R1_BLOCKED_ORGANIZATION_DRIFT** (1 hard errors, 94 warnings)
 | 1067 | `tinygrad/llm/model.py` | None |
 | 973 | `extra/qk/kernel_lds.py` | codegen_lowering |
 | 903 | `tinygrad/runtime/ops_amd.py` | None |
-| 835 | `extra/qk/mmq_q4k_q8_atom.py` | quant_mmq |
+| 832 | `extra/qk/mmq_q4k_q8_atom.py` | quant_mmq |
 | 794 | `test/amd/disasm.py` | None |
 | 787 | `extra/qk/route_manifest.py` | route_authority |
 | 758 | `extra/qk/runtime_specs.py` | route_authority |
@@ -359,6 +359,7 @@ None proposed at this evidence level.
 ## Reuse candidates
 
 - **`extra/qk/prefill/packed_wmma_prefill_promotion_gate.py`** -- Three promotion gates repeat the same evidence-loading and verdict-emitting rule verbatim; a fourth gate that looks similar must NOT be folded in because its verdict semantics differ. (gross -39, +35, net -4) | evidence: packed_wmma_prefill_promotion_gate.py, prefill_softmax_reduce_fuse_promotion_gate.py and prefill_causal_tile_skip_promotion_gate.py each derive required shapes from route_manifest ROUTES shape_guards, read a fixed docs/*.json, check _schema/route_id/flag, fail closed, and print 'AUTHORITY_GATE: {verdict}' with an identical result dict; prefill_softmax_reduce_fuse_promotion_gate.py's docstring calls itself 'Sibling of ... deliberately the same shape'; the two newer gates share the MIN_PAIRS=3 / MIN_MEAN_DELTA_PCT=1.0 / MIN_SIGNAL_TO_NOISE=2.0 / MAX_NOISE_FLOOR_PCT=1.0 threshold block verbatim; EXCLUDED: extra/qk/prefill/pure_register_evaluation_gate.py has no main(), does not import route_manifest, and validates compile-artifact provenance rather than gating a route's evidence file -- different rule | tests: one shared test asserting fail-closed on missing/malformed evidence, plus the three existing per-gate tests unchanged (each still asserts its own thresholds and route id)
+- **`extra/qk/mmq_q4k_q8_atom.py`** -- Nine structurally identical *_source_hash wrappers now express one hashing rule through one helper. (gross -3, +0, net -3) | evidence: all nine built a kernel, applied UOp.placeholder args positionally, repr'd the graph and took sha256[:16]; they differed only in builder and placeholder shapes; all ten produced hash values (nine functions plus the coop-tile alternate writeback_mode) verified byte-identical before and after; test/unit/test_mmq_q4k_q8_atom.py: 16 passed; the 14 failures under -k mmq reproduce with the change stashed and are pre-existing | tests: 
 
 ## Prune candidates
 
@@ -383,8 +384,8 @@ None.
 
 | path | class | former purpose | last campaign | replacement | commit | recovery | loc |
 |---|---|---|---|---|---|---|---|
-| `extra/qk/p2_probe_1.py` | delete_ready | Bisect where REDUCE-preserving fusion breaks in attention by walking max -> sum -> broadcast-subtract -> exp-sum -> softmax -> softmax@v under DEV=AMD TC_OPT=2. | flash-prefill Piece 2-A (2026-07-21) | docs/flash-prefill-piece2-probe-20260721.md | `95b484fcf783` | git show ad65bd05e951f6e460d167c207fdf3e97faf5c76 -- extra/qk/p2_probe_1.py ... p2_probe_6.py | 44 |
-| `extra/qk/shared_attention_evidence_gate.py` | delete_after_verdict_capture | Validate a shared-attention evidence bundle before admitting it as promotion evidence. | shared-attention evidence pipeline | extra/qk/shared_attention_promotion.py (the gate that acts on a schema with a real producer) | `95b484fcf783` | git log --diff-filter=A -- extra/qk/shared_attention_evidence_gate.py | 131 |
+| `extra/qk/p2_probe_1.py` | delete_ready | Bisect where REDUCE-preserving fusion breaks in attention by walking max -> sum -> broadcast-subtract -> exp-sum -> softmax -> softmax@v under DEV=AMD TC_OPT=2. | flash-prefill Piece 2-A (2026-07-21) | docs/flash-prefill-piece2-probe-20260721.md | `9ec70511234f` | git show ad65bd05e951f6e460d167c207fdf3e97faf5c76 -- extra/qk/p2_probe_1.py ... p2_probe_6.py | 44 |
+| `extra/qk/shared_attention_evidence_gate.py` | delete_after_verdict_capture | Validate a shared-attention evidence bundle before admitting it as promotion evidence. | shared-attention evidence pipeline | extra/qk/shared_attention_promotion.py (the gate that acts on a schema with a real producer) | `9ec70511234f` | git log --diff-filter=A -- extra/qk/shared_attention_evidence_gate.py | 131 |
 
 ## Workflow inventory
 
@@ -420,7 +421,7 @@ None.
 
 - Budgeted (`tinygrad`, `bench`, `structure`): **34096 / 35000** -- headroom 904
 - Against the standing 30000 target: **4096 over**. sz.py:13 records 35000 as temporary headroom; the standing target is 30000
-- Default-path LOC currently sitting unbudgeted in `extra/`: **9231**
+- Default-path LOC currently sitting unbudgeted in `extra/`: **9228**
 - Net budget cost of pending promotions (moved minus deleted): 0
 - Declarative LOC a data-file conversion would remove from the budget entirely: 0
 
@@ -430,7 +431,7 @@ costs zero.
 
 ## LOC impact
 
-- **Realized** (actions A1, A2, A3, A4, A5): gross -244, +35, net **-209**
+- **Realized** (actions A1, A14, A2, A3, A4, A5): gross -247, +35, net **-212**
 - Still proposed: gross -3, +0, net -3
 - LOC merely moved between directories (NOT a reduction): 60
 
@@ -454,6 +455,7 @@ costs zero.
 
 ## Investigation backlog
 
+- `extra/qk/mmq_q4k_q8_atom.py`: amd_warp_batched_atom_source_hash, amd_dot4_batched_atom_source_hash and amd_dot4x4_batched_atom_source_hash have no importer anywhere -- dead public API in a default-path file. Deleting them only pays if the kernel builders behind them go too, which is the same question as which atom stages still teach something.
 - `extra/qk/mmq_q4k_q8_atom.py`: 835 LOC hold ~10 progressively elaborated kernel stages (naive, warp, dot4, dot4x4, ds4 variants, coop-tile). Only the DS4 coop-tile stage is a confirmed evidence-capture target. Are the earlier stages still teaching anything, or is their verdict recorded elsewhere?
 - `extra/qk/decode/decode_hd_sweep_numerics.py`: No recorded verdict found for Hd in {64,192,256}. Open sweep or completed one-off?
 - `extra/qk/benchmark_split_shared_attention.py`: The split-versus-fused-recompute question has no recorded closing verdict.
@@ -528,7 +530,7 @@ costs zero.
 - **high_fan_out** (prefer deep modules with small interfaces): extra/qk/decode/current_decode_execution_adapter.py imports 17 internal modules
 - **high_fan_out** (prefer deep modules with small interfaces): extra/qk/prefill/current_prefill_execution_adapter.py imports 19 internal modules
 - **large_file** (minimize what a reader must hold in their head): extra/qk/kernel_lds.py is 973 LOC (threshold 400); responsibilities declared: 7
-- **large_file** (minimize what a reader must hold in their head): extra/qk/mmq_q4k_q8_atom.py is 835 LOC (threshold 400); responsibilities declared: 4
+- **large_file** (minimize what a reader must hold in their head): extra/qk/mmq_q4k_q8_atom.py is 832 LOC (threshold 400); responsibilities declared: 4
 - **large_file** (minimize what a reader must hold in their head): extra/qk/prefill/prefill_int8_wmma_spec.py is 415 LOC (threshold 400); responsibilities declared: 4
 - **large_file** (minimize what a reader must hold in their head): extra/qk/prefill/prefill_whole_synced.py is 423 LOC (threshold 400); responsibilities declared: 5
 - **large_file** (minimize what a reader must hold in their head): extra/qk/route_manifest.py is 787 LOC (threshold 400); responsibilities declared: 7

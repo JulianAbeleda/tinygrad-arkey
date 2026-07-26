@@ -658,89 +658,90 @@ def _q4k_q8_1_bounded_ds4_coop_tile_kernel(m:int, n:int, k:int, role:str,
   return kernel
 
 
-def amd_atom_source_hash(spec: Q4KQ81MMQTileSpec) -> str:
+def _atom_source_hash(built_kernel, placeholder_specs: tuple[tuple, Any, int, ...]) -> str:
   # Stable evidence for the generated UOp atom identity. This is not a binary hash.
-  payload = repr(_q4k_q8_1_tile_kernel(spec)(UOp.placeholder((spec.tile_m, spec.tile_n), dtypes.float32, 0),
-                                             UOp.placeholder((spec.n * (spec.k // Q4_K_BLOCK_ELEMS) * Q4K_WORDS_PER_BLOCK,), dtypes.uint32, 1),
-                                             UOp.placeholder((spec.m * spec.k,), dtypes.int8, 2),
-                                             UOp.placeholder((spec.m * (spec.k // Q8_1_BLOCK_ELEMS),), dtypes.float32, 3)))
+  # `placeholder_specs` is an ordered sequence of (shape, dtype, arg_index) triples,
+  # matching the built kernel's positional argument order exactly.
+  placeholders = [UOp.placeholder(shape, dtype, idx) for shape, dtype, idx in placeholder_specs]
+  payload = repr(built_kernel(*placeholders))
   return hashlib.sha256(payload.encode()).hexdigest()[:16]
+
+
+def amd_atom_source_hash(spec: Q4KQ81MMQTileSpec) -> str:
+  return _atom_source_hash(_q4k_q8_1_tile_kernel(spec), (
+    ((spec.tile_m, spec.tile_n), dtypes.float32, 0),
+    ((spec.n * (spec.k // Q4_K_BLOCK_ELEMS) * Q4K_WORDS_PER_BLOCK,), dtypes.uint32, 1),
+    ((spec.m * spec.k,), dtypes.int8, 2),
+    ((spec.m * (spec.k // Q8_1_BLOCK_ELEMS),), dtypes.float32, 3)))
 
 
 def amd_warp_atom_source_hash(spec: Q4KQ81MMQTileSpec) -> str:
-  payload = repr(_q4k_q8_1_tile_warp_kernel(spec)(UOp.placeholder((spec.tile_m, spec.tile_n), dtypes.float32, 0),
-                                                  UOp.placeholder((spec.n * (spec.k // Q4_K_BLOCK_ELEMS) * Q4K_WORDS_PER_BLOCK,), dtypes.uint32, 1),
-                                                  UOp.placeholder((spec.m * spec.k,), dtypes.int8, 2),
-                                                  UOp.placeholder((spec.m * (spec.k // Q8_1_BLOCK_ELEMS),), dtypes.float32, 3)))
-  return hashlib.sha256(payload.encode()).hexdigest()[:16]
+  return _atom_source_hash(_q4k_q8_1_tile_warp_kernel(spec), (
+    ((spec.tile_m, spec.tile_n), dtypes.float32, 0),
+    ((spec.n * (spec.k // Q4_K_BLOCK_ELEMS) * Q4K_WORDS_PER_BLOCK,), dtypes.uint32, 1),
+    ((spec.m * spec.k,), dtypes.int8, 2),
+    ((spec.m * (spec.k // Q8_1_BLOCK_ELEMS),), dtypes.float32, 3)))
 
 
 def amd_warp_batched_atom_source_hash(m:int, n:int, k:int, role:str) -> str:
-  payload = repr(_q4k_q8_1_bounded_warp_kernel(m, n, k, role)(
-    UOp.placeholder((m, n), dtypes.float32, 0),
-    UOp.placeholder((n * (k // Q4_K_BLOCK_ELEMS) * Q4K_WORDS_PER_BLOCK,), dtypes.uint32, 1),
-    UOp.placeholder((m * k,), dtypes.int8, 2),
-    UOp.placeholder((m * (k // Q8_1_BLOCK_ELEMS),), dtypes.float32, 3)))
-  return hashlib.sha256(payload.encode()).hexdigest()[:16]
+  return _atom_source_hash(_q4k_q8_1_bounded_warp_kernel(m, n, k, role), (
+    ((m, n), dtypes.float32, 0),
+    ((n * (k // Q4_K_BLOCK_ELEMS) * Q4K_WORDS_PER_BLOCK,), dtypes.uint32, 1),
+    ((m * k,), dtypes.int8, 2),
+    ((m * (k // Q8_1_BLOCK_ELEMS),), dtypes.float32, 3)))
 
 
 def amd_dot4_batched_atom_source_hash(m:int, n:int, k:int, role:str) -> str:
-  payload = repr(_q4k_q8_1_bounded_dot4_kernel(m, n, k, role)(
-    UOp.placeholder((m, n), dtypes.float32, 0),
-    UOp.placeholder((n * (k // Q4_K_BLOCK_ELEMS) * Q4K_WORDS_PER_BLOCK,), dtypes.uint32, 1),
-    UOp.placeholder((m * k,), dtypes.int8, 2),
-    UOp.placeholder((m * (k // Q8_1_BLOCK_ELEMS),), dtypes.float32, 3)))
-  return hashlib.sha256(payload.encode()).hexdigest()[:16]
+  return _atom_source_hash(_q4k_q8_1_bounded_dot4_kernel(m, n, k, role), (
+    ((m, n), dtypes.float32, 0),
+    ((n * (k // Q4_K_BLOCK_ELEMS) * Q4K_WORDS_PER_BLOCK,), dtypes.uint32, 1),
+    ((m * k,), dtypes.int8, 2),
+    ((m * (k // Q8_1_BLOCK_ELEMS),), dtypes.float32, 3)))
 
 
 def amd_dot4x4_batched_atom_source_hash(m:int, n:int, k:int, role:str) -> str:
-  payload = repr(_q4k_q8_1_bounded_dot4x4_kernel(m, n, k, role)(
-    UOp.placeholder((m, n), dtypes.float32, 0),
-    UOp.placeholder((n * (k // Q4_K_BLOCK_ELEMS) * Q4K_WORDS_PER_BLOCK,), dtypes.uint32, 1),
-    UOp.placeholder((m * k,), dtypes.int8, 2),
-    UOp.placeholder((m * (k // Q8_1_BLOCK_ELEMS),), dtypes.float32, 3)))
-  return hashlib.sha256(payload.encode()).hexdigest()[:16]
+  return _atom_source_hash(_q4k_q8_1_bounded_dot4x4_kernel(m, n, k, role), (
+    ((m, n), dtypes.float32, 0),
+    ((n * (k // Q4_K_BLOCK_ELEMS) * Q4K_WORDS_PER_BLOCK,), dtypes.uint32, 1),
+    ((m * k,), dtypes.int8, 2),
+    ((m * (k // Q8_1_BLOCK_ELEMS),), dtypes.float32, 3)))
 
 
 def amd_ds4_dot4x4_atom_source_hash(m:int, n:int, k:int, role:str) -> str:
-  payload = repr(_q4k_q8_1_bounded_ds4_dot4x4_kernel(m, n, k, role)(
-    UOp.placeholder((m, n), dtypes.float32, 0),
-    UOp.placeholder((n * (k // Q4_K_BLOCK_ELEMS) * Q4K_WORDS_PER_BLOCK,), dtypes.uint32, 1),
-    UOp.placeholder(((k // 128) * m * 128,), dtypes.int8, 2),
-    UOp.placeholder(((k // 128) * m * 4,), dtypes.float32, 3),
-    UOp.placeholder(((k // 128) * m * 4,), dtypes.float32, 4)))
-  return hashlib.sha256(payload.encode()).hexdigest()[:16]
+  return _atom_source_hash(_q4k_q8_1_bounded_ds4_dot4x4_kernel(m, n, k, role), (
+    ((m, n), dtypes.float32, 0),
+    ((n * (k // Q4_K_BLOCK_ELEMS) * Q4K_WORDS_PER_BLOCK,), dtypes.uint32, 1),
+    (((k // 128) * m * 128,), dtypes.int8, 2),
+    (((k // 128) * m * 4,), dtypes.float32, 3),
+    (((k // 128) * m * 4,), dtypes.float32, 4)))
 
 
 def amd_ds4_warp_atom_source_hash(m:int, n:int, k:int, role:str) -> str:
-  payload = repr(_q4k_q8_1_bounded_ds4_warp_kernel(m, n, k, role)(
-    UOp.placeholder((m, n), dtypes.float32, 0),
-    UOp.placeholder((n * (k // Q4_K_BLOCK_ELEMS) * Q4K_WORDS_PER_BLOCK,), dtypes.uint32, 1),
-    UOp.placeholder(((k // 128) * m * 128,), dtypes.int8, 2),
-    UOp.placeholder(((k // 128) * m * 4,), dtypes.float32, 3),
-    UOp.placeholder(((k // 128) * m * 4,), dtypes.float32, 4)))
-  return hashlib.sha256(payload.encode()).hexdigest()[:16]
+  return _atom_source_hash(_q4k_q8_1_bounded_ds4_warp_kernel(m, n, k, role), (
+    ((m, n), dtypes.float32, 0),
+    ((n * (k // Q4_K_BLOCK_ELEMS) * Q4K_WORDS_PER_BLOCK,), dtypes.uint32, 1),
+    (((k // 128) * m * 128,), dtypes.int8, 2),
+    (((k // 128) * m * 4,), dtypes.float32, 3),
+    (((k // 128) * m * 4,), dtypes.float32, 4)))
 
 
 def amd_ds4_lds_skeleton_atom_source_hash(m:int, n:int, k:int, role:str) -> str:
-  payload = repr(_q4k_q8_1_bounded_ds4_lds_skeleton_kernel(m, n, k, role)(
-    UOp.placeholder((m, n), dtypes.float32, 0),
-    UOp.placeholder((n * (k // Q4_K_BLOCK_ELEMS) * Q4K_WORDS_PER_BLOCK,), dtypes.uint32, 1),
-    UOp.placeholder(((k // 128) * m * 128,), dtypes.int8, 2),
-    UOp.placeholder(((k // 128) * m * 4,), dtypes.float32, 3),
-    UOp.placeholder(((k // 128) * m * 4,), dtypes.float32, 4)))
-  return hashlib.sha256(payload.encode()).hexdigest()[:16]
+  return _atom_source_hash(_q4k_q8_1_bounded_ds4_lds_skeleton_kernel(m, n, k, role), (
+    ((m, n), dtypes.float32, 0),
+    ((n * (k // Q4_K_BLOCK_ELEMS) * Q4K_WORDS_PER_BLOCK,), dtypes.uint32, 1),
+    (((k // 128) * m * 128,), dtypes.int8, 2),
+    (((k // 128) * m * 4,), dtypes.float32, 3),
+    (((k // 128) * m * 4,), dtypes.float32, 4)))
 
 
 def amd_ds4_coop_tile_atom_source_hash(m:int, n:int, k:int, role:str,
                                        writeback_mode:str="gated_matrix_v0") -> str:
-  payload = repr(_q4k_q8_1_bounded_ds4_coop_tile_kernel(m, n, k, role, writeback_mode)(
-    UOp.placeholder((m, n), dtypes.float32, 0),
-    UOp.placeholder((n * (k // Q4_K_BLOCK_ELEMS) * Q4K_WORDS_PER_BLOCK,), dtypes.uint32, 1),
-    UOp.placeholder(((k // 128) * m * 128,), dtypes.int8, 2),
-    UOp.placeholder(((k // 128) * m * 4,), dtypes.float32, 3),
-    UOp.placeholder(((k // 128) * m * 4,), dtypes.float32, 4)))
-  return hashlib.sha256(payload.encode()).hexdigest()[:16]
+  return _atom_source_hash(_q4k_q8_1_bounded_ds4_coop_tile_kernel(m, n, k, role, writeback_mode), (
+    ((m, n), dtypes.float32, 0),
+    ((n * (k // Q4_K_BLOCK_ELEMS) * Q4K_WORDS_PER_BLOCK,), dtypes.uint32, 1),
+    (((k // 128) * m * 128,), dtypes.int8, 2),
+    (((k // 128) * m * 4,), dtypes.float32, 3),
+    (((k // 128) * m * 4,), dtypes.float32, 4)))
 
 
 def run_q4k_q8_1_mmq_tile_amd(q4k_bytes: np.ndarray, xq: np.ndarray, xscales: np.ndarray,
