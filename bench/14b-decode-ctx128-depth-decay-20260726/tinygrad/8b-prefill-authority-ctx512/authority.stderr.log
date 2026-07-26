@@ -1,0 +1,7 @@
+PREFILL_LIFECYCLE phase=model_load_complete
+PREFILL_LIFECYCLE phase=graph_construction_start
+PREFILL_LIFECYCLE phase=compile_start
+PREFILL_LIFECYCLE phase=first_prefill_launch_start
+PREFILL_LIFECYCLE phase=first_prefill_launch_end
+PREFILL_LIFECYCLE phase=compile_end
+PREFILL_LIFECYCLE phase=graph_construction_end
