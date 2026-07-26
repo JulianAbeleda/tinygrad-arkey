@@ -221,49 +221,6 @@
     },
     {
       "authority_files": [
-        "extra/qk/amd_isa_renderer_policy.py",
-        "extra/qk/kernel_lds.py",
-        "extra/qk/kernel_vocabulary.py"
-      ],
-      "authority_rules": [
-        "amd.isa_extension_descriptors"
-      ],
-      "default_path": false,
-      "domain": "amd_runtime",
-      "entry_points": [
-        "tinygrad/renderer/isa/amd.py"
-      ],
-      "evidence_files": [
-        "extra/qk/amd_isa_proof.py",
-        "extra/qk/mmq_llama_oracle.py",
-        "extra/qk/mmq_llama_differential.py"
-      ],
-      "execution_files": [
-        "extra/qk/mmq_llama_record_producers.py",
-        "extra/qk/mmq_llama_packed_operands.py",
-        "extra/qk/codegen_extensions.py"
-      ],
-      "inputs": [
-        "UOp graph"
-      ],
-      "outputs": [
-        "AMD ISA instructions"
-      ],
-      "phases": [
-        "descriptor-lookup",
-        "lds-staging",
-        "isel",
-        "proof-capture"
-      ],
-      "purpose": "Render AMD native ISA for the research renderer, including cooperative LDS staging and MMQ record producers.",
-      "retention_criterion": "until DEV=AMD:ISA is promoted to a supported path or the native-ISA experiment is retired",
-      "shared_assets": [
-        "compile-dispatch"
-      ],
-      "workflow_id": "amd-isa-research-rendering"
-    },
-    {
-      "authority_files": [
         "extra/qk/mmq_q4k_q8_reference.py",
         "extra/qk/mmq_atom_boundary.py",
         "extra/qk/mmq_logical_vocabulary.py"

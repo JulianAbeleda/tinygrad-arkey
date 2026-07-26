@@ -130,6 +130,7 @@
       "loc_removed": 0,
       "path": "extra/qk/kernel_lds.py",
       "question": "Do the packed-component and hierarchical-stage clusters still have an open question, or did the record-stage design supersede them? Answer decides prune (~550 LOC + 2 test files) versus retain.",
+      "status": "completed",
       "tests_required": []
     },
     {
@@ -151,6 +152,7 @@
       "path": "extra/qk/kernel_lds.py",
       "promotion_readiness": "not justified",
       "promotion_target": "tinygrad/codegen/opt/kernel_lds.py",
+      "status": "completed",
       "tests_required": []
     },
     {
@@ -168,6 +170,7 @@
       "loc_removed": 0,
       "path": "extra/qk/codegen_extensions.py",
       "question": "Does DEV=AMD:ISA remain a live research surface with an open question, or has it produced its verdict? The answer sets a retention criterion for ~3.2K LOC; nothing should be moved or deleted before it.",
+      "status": "completed",
       "tests_required": []
     },
     {
@@ -310,6 +313,7 @@
       "loc_removed": 0,
       "path": "extra/qk/quant_specs.py",
       "question": "Is quant_specs.py a not-yet-wired intended API or superseded by runtime_specs.py? Prune only if superseded.",
+      "status": "completed",
       "tests_required": []
     }
   ],
@@ -376,53 +380,6 @@
       "workflow_ids": [
         "amd-isa-proof-capture",
         "mmq-epoch-manifest-export"
-      ]
-    },
-    {
-      "allowed_dependency_domains": [
-        "amd_runtime",
-        "codegen_lowering"
-      ],
-      "authority_keys": [
-        "prefill_source_value_key resolution rule",
-        "wmma_frag_proof / wmma_frag_buffer_proof / wmma_frag_store_epoch_proof derivation rules (REQUIRED_WMMA_PROOF_FIELDS)"
-      ],
-      "classification_confidence": "medium",
-      "default_path": false,
-      "deletion_confidence": "retain_active",
-      "disposition": "keep",
-      "domain": "amd_runtime",
-      "duplication_group": null,
-      "evidence": [
-        "grep: tinygrad/renderer/isa/amd_wmma_residency.py:78-125 calls _amd_isa_renderer_policy() 8 times (imported, not just referenced)",
-        "grep: tinygrad/renderer/isa/amd.py:49 imports _amd_isa_renderer_policy, line 1252 calls it \u2014 this is the PRODUCTION renderer, not a research module",
-        "grep: extra/qk/codegen_extensions.py:3,9 wires PREFILL_AMD_ISA_RENDERER_POLICY as the renderer_policy",
-        "this file is imported by tinygrad/renderer/isa/amd_wmma_residency.py which is itself imported into tinygrad/renderer/isa/amd.py:49 alongside _amd_isa_renderer_policy \u2014 i.e. this policy sits on the live prefill codegen path, not an off-path research module",
-        "Reachable only through the DEV=AMD:ISA renderer surface (tinygrad/runtime/ops_amd.py:1015-1021 registers AMDISARenderer only when DEV.target('AMD').renderer == 'ISA'); DEV=AMD never imports it."
-      ],
-      "path": "extra/qk/amd_isa_renderer_policy.py",
-      "promotion_target": null,
-      "public_surface": [
-        "PrefillAMDISARendererPolicy",
-        "PREFILL_AMD_ISA_RENDERER_POLICY",
-        "REQUIRED_WMMA_PROOF_FIELDS"
-      ],
-      "purpose": "Owns the prefill-specific WMMA-fragment provenance rules (PrefillAMDISARendererPolicy) used by the production AMD renderer's residency/proof machinery to identify which staged LDS/global record produced a given WMMA-carrier lane, so the renderer can prove reuse/overwrite safety instead of assuming address equivalence implies identity.",
-      "responsibilities": [
-        "source-value-key resolution/validation",
-        "wmma fragment proof extraction from a UOp element",
-        "store-epoch/staged-record proof derivation (role A vs B differ structurally)",
-        "double-buffer stage candidacy detection (dbuf_stage_candidate)"
-      ],
-      "retention_criterion": "needed as long as tinygrad/renderer/isa/amd_wmma_residency.py and amd.py's production renderer call _amd_isa_renderer_policy() for prefill fragment-reuse proofs",
-      "reusable_assets": [],
-      "role": "authority",
-      "status": "active_research",
-      "surface": "dev_amd_isa_research",
-      "test_role": "active_validation",
-      "workflow_ids": [
-        "prefill-wmma-fragment-proof",
-        "amd-renderer-residency-policy"
       ]
     },
     {
@@ -855,42 +812,6 @@
     },
     {
       "allowed_dependency_domains": [
-        "amd_runtime"
-      ],
-      "authority_keys": [],
-      "classification_confidence": "high",
-      "default_path": false,
-      "deletion_confidence": "retain_active",
-      "disposition": "keep",
-      "domain": "amd_runtime",
-      "duplication_group": null,
-      "evidence": [
-        "tinygrad/renderer/isa/extensions.py:18 calls experimental.amd_isa_extension_descriptors(DEFAULT_AMD_ISA_EXTENSION_DESCRIPTORS) unconditionally (no env gate)",
-        "tinygrad/renderer/isa/amd_wmma_residency.py:79 and tinygrad/renderer/isa/amd.py:44 consume get_amd_isa_extension_descriptors()",
-        "Reachable only through the DEV=AMD:ISA renderer surface (tinygrad/runtime/ops_amd.py:1015-1021 registers AMDISARenderer only when DEV.target('AMD').renderer == 'ISA'); DEV=AMD never imports it."
-      ],
-      "path": "extra/qk/codegen_extensions.py",
-      "promotion_target": null,
-      "public_surface": [
-        "PREFILL_AMD_ISA_RENDERER_EXTENSION",
-        "amd_isa_extension_descriptors"
-      ],
-      "purpose": "Registers the single PREFILL_AMD_ISA_RENDERER_EXTENSION descriptor (proof tags, local buffer ids, machine-search hook names, renderer policy) that the AMD ISA renderer and WMMA-residency code look up for the prefill fused-attention path.",
-      "responsibilities": [
-        "declare one extension descriptor"
-      ],
-      "retention_criterion": "needed until the prefill AMD ISA extension mechanism itself is retired or folded into tinygrad core",
-      "reusable_assets": [],
-      "role": "adapter",
-      "status": "active_research",
-      "surface": "dev_amd_isa_research",
-      "test_role": "not_test_like",
-      "workflow_ids": [
-        "prefill-fused-attention-amd-isa-renderer"
-      ]
-    },
-    {
-      "allowed_dependency_domains": [
         "codegen_lowering"
       ],
       "authority_keys": [
@@ -1202,6 +1123,42 @@
     },
     {
       "allowed_dependency_domains": [
+        "attention_decode",
+        "evidence"
+      ],
+      "authority_keys": [],
+      "classification_confidence": "medium",
+      "default_path": false,
+      "deletion_confidence": "retain_active",
+      "disposition": "keep",
+      "domain": "attention_decode",
+      "duplication_group": null,
+      "evidence": [
+        "docstring states the capture contract is deliberately dispatch-free and independent of the GPU runtime",
+        "covered by test/unit/test_decode_resource_capture.py"
+      ],
+      "path": "extra/qk/decode/decode_resource_capture.py",
+      "promotion_target": null,
+      "public_surface": [],
+      "purpose": "Emits a stable JSON resource row for a generated decode code object from caller-supplied bytes and launch geometry, after checking expected kernel-name positive controls.",
+      "responsibilities": [
+        "decode resource evidence capture"
+      ],
+      "retention_criterion": "while decode resource evidence is collected for route promotion",
+      "reusable_assets": [
+        "fault-capture",
+        "artifact-schema"
+      ],
+      "role": "evidence",
+      "status": "production",
+      "surface": "off_default",
+      "test_role": "not_test_like",
+      "workflow_ids": [
+        "decode-route-selection"
+      ]
+    },
+    {
+      "allowed_dependency_domains": [
         "measurement"
       ],
       "authority_keys": [
@@ -1246,6 +1203,42 @@
       "workflow_ids": [
         "decode-authority-measurement",
         "decode-regression-debug"
+      ]
+    },
+    {
+      "allowed_dependency_domains": [
+        "attention_decode",
+        "measurement"
+      ],
+      "authority_keys": [],
+      "classification_confidence": "medium",
+      "default_path": false,
+      "deletion_confidence": "retain_active",
+      "disposition": "keep",
+      "domain": "measurement",
+      "duplication_group": null,
+      "evidence": [
+        "docstring states it is intentionally separate from the production model W/D authority",
+        "no importer: a manually invoked timing entry point, not a library"
+      ],
+      "path": "extra/qk/decode/decode_tile_timing.py",
+      "promotion_target": null,
+      "public_surface": [],
+      "purpose": "Replays the captured flash-decode tile path in isolation with synchronized AMD timing, allocating the exact executor tensors so tile time is measured without the whole-model W/D authority.",
+      "responsibilities": [
+        "isolated decode tile timing"
+      ],
+      "retention_criterion": "while the decode tile path is being tuned against the W/D authority",
+      "reusable_assets": [
+        "cli-parsing",
+        "timing-sync"
+      ],
+      "role": "diagnostic",
+      "status": "production",
+      "surface": "off_default",
+      "test_role": "operational_tool",
+      "workflow_ids": [
+        "whole-model-throughput-measurement"
       ]
     },
     {
@@ -1333,50 +1326,6 @@
       "test_role": "not_test_like",
       "workflow_ids": [
         "decode-route-execution"
-      ]
-    },
-    {
-      "allowed_dependency_domains": [
-        "codegen_lowering"
-      ],
-      "authority_keys": [
-        "dynamic_tile_owner.own_dynamic_tiles (range-closing/ownership discipline for scheduler-owned dynamic tile loops)"
-      ],
-      "classification_confidence": "high",
-      "default_path": false,
-      "deletion_confidence": "retain_active",
-      "disposition": "keep",
-      "domain": "codegen_lowering",
-      "duplication_group": null,
-      "evidence": [
-        "only production import is extra/qk/prefill/prefill_int8_wmma_spec.py:20, which backs the prefill_q4k_int8_wmma_generated_research route in route_manifest.py (status: research, not on any default path)",
-        "test/unit/test_dynamic_tile_owner.py imports and exercises all three public functions directly",
-        "single well-defined responsibility (dynamic tile seam) despite 3 functions -- they form one cohesive view/store/loop-ownership triad, not independent concerns"
-      ],
-      "path": "extra/qk/dynamic_tile_owner.py",
-      "promotion_target": null,
-      "public_surface": [
-        "DynamicTile",
-        "dynamic_tile_views",
-        "own_dynamic_tiles",
-        "dynamic_store"
-      ],
-      "purpose": "Provides the Tensor/UOp seam that lets a scheduler-owned symbolic output-tile RANGE index into flat weight/activation/scale/output tensors while keeping index arithmetic and range-closing correctness inside the generated UOp graph rather than per-tile Python unrolling.",
-      "responsibilities": [
-        "tile-indexed tensor view construction (dynamic_tile_views)",
-        "scheduler output-tile loop range-ownership/closing (own_dynamic_tiles)",
-        "indexed writeback primitive (dynamic_store)"
-      ],
-      "retention_criterion": "prefill_q4k_int8_wmma_generated_research (the only consumer's route, see route_manifest.py) stays research/refuted forever and prefill_int8_wmma_spec.py is deleted",
-      "reusable_assets": [
-        "alloc-exec-setup"
-      ],
-      "role": "execution",
-      "status": "production",
-      "surface": "off_default",
-      "test_role": "active_regression",
-      "workflow_ids": [
-        "prefill-int8-wmma-dynamic-tiling"
       ]
     },
     {
@@ -1683,150 +1632,6 @@
       "test_role": "active_validation",
       "workflow_ids": [
         "generated-candidate-selection"
-      ]
-    },
-    {
-      "allowed_dependency_domains": [
-        "codegen_lowering"
-      ],
-      "authority_keys": [
-        "cooperative_lds_stores.row_election_rule",
-        "rdna3_wmma_output_coord.native_c_map",
-        "build_packed_component_lds_stage.contract",
-        "build_packed_record_lds_stage.contract",
-        "build_hierarchical_packed_record_stage.publish_release_protocol",
-        "prove_hierarchical_packed_record_stage.invariants"
-      ],
-      "classification_confidence": "high",
-      "default_path": false,
-      "deletion_confidence": "retain_active",
-      "disposition": "consolidate",
-      "domain": "codegen_lowering",
-      "duplication_group": null,
-      "evidence": [
-        "batch manifest lists this file at 973 LOC; actual file on disk is 1181 lines (`wc -l extra/qk/kernel_lds.py` = 1181) -- evidence discrepancy worth flagging to the audit owner",
-        "6 distinct test files import disjoint symbol sets from this single module (test_packed_operand_contract.py, test_packed_component_lds_stage.py, test_hierarchical_packed_record_stage.py, test_packed_record_lds_stage.py, test_kernel_lds_mapping.py, test_precontract_int8_lds_contract.py)",
-        "module docstring says only 'Pure cooperative LDS ownership math for compiler-bound kernel geometry' -- does not describe the record/hierarchical machinery also present",
-        "Reachable only through the DEV=AMD:ISA renderer surface (tinygrad/runtime/ops_amd.py:1015-1021 registers AMDISARenderer only when DEV.target('AMD').renderer == 'ISA'); DEV=AMD never imports it."
-      ],
-      "path": "extra/qk/kernel_lds.py",
-      "promotion_target": "tinygrad/codegen/opt/kernel_lds.py already owns the lower-level PrecontractLDSStage primitives this file wraps; the durable RDNA3 output-coordinate math (rdna3_wmma_output_coord/wmma_output_owners) is a stable hardware invariant with a real core owner (tinygrad.codegen.opt.kernel_lds) and could migrate there.",
-      "public_surface": [
-        "CooperativeLDSStore",
-        "WMMAFragmentLoad",
-        "WMMAOutputOwner",
-        "semantic_wave_coords",
-        "cooperative_lds_stores",
-        "cooperative_lds_padding_offsets",
-        "rdna3_wmma_output_coord",
-        "wmma_fragment_loads",
-        "wmma_output_owners",
-        "lds_arena_bytes",
-        "lds_component_view",
-        "lds_component_views",
-        "PackedComponentLDSBinding",
-        "PackedComponentOperandTemplate",
-        "validate_packed_component_templates",
-        "build_packed_component_lds_stage",
-        "PackedRecordSource",
-        "PackedRecordFieldProducer",
-        "PackedRecordOperandTemplate",
-        "PackedRecordLDSRegionBinding",
-        "build_packed_record_lds_stage",
-        "HierarchicalPackedRecordStageDescriptor",
-        "HierarchicalPackedRecordStage",
-        "build_hierarchical_packed_record_stage",
-        "prove_hierarchical_packed_record_stage",
-        "PackedRecordCooperativeSchedule",
-        "PackedRecordCooperativeStore"
-      ],
-      "purpose": "Owns the full cooperative-LDS-staging and fragment-load ownership math for packed WMMA prefill kernels: legacy A/B window stores, typed component/record LDS bindings and stage builders, and the two-level (persistent/overwriteable) hierarchical packed-record pipeline with its own fail-closed proof.",
-      "responsibilities": [
-        "legacy A/B cooperative store election + padding accounting",
-        "RDNA3 native WMMA output-coordinate math",
-        "RDNA3 fragment-load enumeration",
-        "generic named-component LDS binding/validation/build (build_packed_component_lds_stage)",
-        "AoS/interleaved record-field LDS binding/validation/build (build_packed_record_lds_stage)",
-        "two-level hierarchical (persistent/overwriteable) packed-record pipeline build",
-        "hierarchical pipeline fail-closed proof (prove_hierarchical_packed_record_stage)"
-      ],
-      "retention_criterion": "file mixes at least 7 independently testable responsibilities (legacy A/B math, generic component staging, record staging, hierarchical two-phase pipeline + its own proof); each has its own test file, which is itself decouple evidence -- split by responsibility so a change to hierarchical-record proof logic cannot silently perturb the legacy cooperative-store math in the same module",
-      "reusable_assets": [
-        "alloc-exec-setup",
-        "artifact-schema",
-        "fault-capture"
-      ],
-      "role": "authority",
-      "status": "active_research",
-      "surface": "dev_amd_isa_research",
-      "test_role": "not_test_like",
-      "workflow_ids": [
-        "prefill-wmma-lds-staging",
-        "prefill-hierarchical-packed-record-pipeline"
-      ]
-    },
-    {
-      "allowed_dependency_domains": [
-        "codegen_lowering"
-      ],
-      "authority_keys": [
-        "prove_dot_update_recurrence.invariants",
-        "hierarchical_lifecycle_events.canonical_sequence",
-        "prove_hierarchical_lifecycle.invariants",
-        "build_scheduler_output_tile_owner.ownership_proof"
-      ],
-      "classification_confidence": "high",
-      "default_path": false,
-      "deletion_confidence": "retain_active",
-      "disposition": "consolidate",
-      "domain": "codegen_lowering",
-      "duplication_group": null,
-      "evidence": [
-        "extra/qk/kernel_lds.py:7-8 imports only HierarchicalKernelPipelinePlan/HierarchicalLifecycleEvent/hierarchical_lifecycle_events/prove_hierarchical_lifecycle",
-        "extra/qk/prefill/prefill_int8_wmma_spec.py:14 imports only SchedulerOutputTileLoop/build_scheduler_output_tile_loop",
-        "test/unit/test_grouped_dot_update_pipeline.py tests only the DotUpdate* classes, disjoint from test_hierarchical_kernel_pipeline.py and test_scheduler_output_tile_loop.py",
-        "Reachable only through the DEV=AMD:ISA renderer surface (tinygrad/runtime/ops_amd.py:1015-1021 registers AMDISARenderer only when DEV.target('AMD').renderer == 'ISA'); DEV=AMD never imports it."
-      ],
-      "path": "extra/qk/kernel_pipeline.py",
-      "promotion_target": null,
-      "public_surface": [
-        "DotUpdateRecurrencePlan",
-        "DotUpdateAttachment",
-        "DotUpdateGroupContext",
-        "DotUpdateGroupRecord",
-        "DotUpdateRecurrenceGraph",
-        "DotUpdateRecurrenceProof",
-        "prove_dot_update_recurrence",
-        "build_dot_update_recurrence",
-        "HierarchicalPipelineRole",
-        "HierarchicalKernelPipelinePlan",
-        "HierarchicalLifecycleEvent",
-        "HierarchicalLifecycleProof",
-        "hierarchical_lifecycle_events",
-        "prove_hierarchical_lifecycle",
-        "SchedulerOutputTileLoop",
-        "SchedulerOutputTileIndices",
-        "build_scheduler_output_tile_owner",
-        "build_scheduler_output_tile_loop"
-      ],
-      "purpose": "Owns typed plans and fail-closed proofs for staged kernel pipelines: the grouped mixed-dtype dot/update recurrence graph (DotUpdateRecurrencePlan/Graph/proof), the generic two-level hierarchical lifetime contract (HierarchicalKernelPipelinePlan/lifecycle events/proof), and scheduler-owned output-tile-loop builders (SchedulerOutputTileLoop).",
-      "responsibilities": [
-        "grouped dot/update recurrence plan + graph + proof",
-        "generic two-level hierarchical lifetime contract + lifecycle-event enumeration + proof",
-        "scheduler-owned output-tile-loop builders (two variants: index-tuple owner and single-range owner)"
-      ],
-      "retention_criterion": "file bundles 3 independently-consumed responsibilities (dot/update recurrence, hierarchical lifetime contract, output-tile-loop builders) each with its own dedicated test file and its own consumer set (kernel_lds.py only uses the hierarchical piece; prefill_int8_wmma_spec.py only uses SchedulerOutputTileLoop) -- split candidate",
-      "reusable_assets": [
-        "artifact-schema",
-        "promotion-gate"
-      ],
-      "role": "authority",
-      "status": "active_research",
-      "surface": "dev_amd_isa_research",
-      "test_role": "not_test_like",
-      "workflow_ids": [
-        "prefill-hierarchical-packed-record-pipeline",
-        "scheduler-owned-output-tile-loop"
       ]
     },
     {
@@ -2553,223 +2358,6 @@
       "test_role": "active_validation",
       "workflow_ids": [
         "mmq-atom-lifecycle-reporting"
-      ]
-    },
-    {
-      "allowed_dependency_domains": [
-        "quant_mmq"
-      ],
-      "authority_keys": [
-        "tinygrad.mmq_llama_structural_differential.v1",
-        "REQUIRED_DIMENSIONS"
-      ],
-      "classification_confidence": "high",
-      "default_path": false,
-      "deletion_confidence": "investigate_owner",
-      "disposition": "keep",
-      "domain": "quant_mmq",
-      "duplication_group": null,
-      "evidence": [
-        "extra/qk/mmq_llama_differential.py:1-7 docstring: correctness evidence is 'deliberately outside the vocabulary'",
-        "extra/qk/mmq_llama_packed_operands.py:12 'from extra.qk.mmq_llama_differential import LLAMA_SOURCE_COMMIT, llama_q4k_q8_structural_descriptor'",
-        "distinct from mmq_llama_oracle.py: this module only compares/derives descriptors, it does not model tile ownership or produce numeric output",
-        "Reachable only through the DEV=AMD:ISA renderer surface (tinygrad/runtime/ops_amd.py:1015-1021 registers AMDISARenderer only when DEV.target('AMD').renderer == 'ISA'); DEV=AMD never imports it."
-      ],
-      "path": "extra/qk/mmq_llama_differential.py",
-      "promotion_target": null,
-      "public_surface": [
-        "StructuralDifferential",
-        "llama_q4k_q8_structural_descriptor",
-        "current_direct_uop_descriptor",
-        "compare_structures",
-        "compare_current_direct_uop"
-      ],
-      "purpose": "Performs a fail-closed structural (not numeric) comparison between a candidate MMQ descriptor and the llama.cpp-translated oracle descriptor across 13 required dimensions (tile shape, waves, LDS panels, barriers, dot primitive, writeback, stream-k, resource fields), blocking on any missing or mismatched dimension.",
-      "responsibilities": [
-        "oracle descriptor construction from llama geometry",
-        "current-direct-UOp descriptor construction from compile evidence",
-        "structural comparison/gap reporting"
-      ],
-      "retention_criterion": "needed while the 14B hybrid MMQ atom program still requires structural (not just numeric) equivalence proof against the llama.cpp MMQ kernel before promotion",
-      "reusable_assets": [
-        "artifact-schema",
-        "parity-tolerance"
-      ],
-      "role": "authority",
-      "status": "active_research",
-      "surface": "dev_amd_isa_research",
-      "test_role": "active_validation",
-      "workflow_ids": [
-        "llama-mmq-structural-equivalence-gate"
-      ]
-    },
-    {
-      "allowed_dependency_domains": [
-        "quant_mmq"
-      ],
-      "authority_keys": [
-        "LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID",
-        "LlamaMMQOracleGeometry"
-      ],
-      "classification_confidence": "high",
-      "default_path": false,
-      "deletion_confidence": "retain_reproducer",
-      "disposition": "keep",
-      "domain": "quant_mmq",
-      "duplication_group": null,
-      "evidence": [
-        "extra/qk/mmq_llama_oracle.py:2-8 docstring: 'oracle model for llama.cpp's Q4_K MMQ cooperative tile ownership...not a production kernel'",
-        "extra/qk/mmq_llama_oracle.py:190 'numeric_oracle': 'extra.qk.mmq_q4k_q8_reference.q4k_q8_1_mmq_ds4_tile_reference' -- explicitly delegates numeric truth elsewhere, keeping its own scope to geometry/ownership",
-        "extra/qk/mmq_llama_differential.py:13 imports LLAMA_MMQ_CUH, LlamaMMQOracleGeometry from this module",
-        "no direct test_mmq_llama_oracle.py found by grep; consumed via mmq_llama_differential and named in 4 docs",
-        "Reachable only through the DEV=AMD:ISA renderer surface (tinygrad/runtime/ops_amd.py:1015-1021 registers AMDISARenderer only when DEV.target('AMD').renderer == 'ISA'); DEV=AMD never imports it."
-      ],
-      "path": "extra/qk/mmq_llama_oracle.py",
-      "promotion_target": null,
-      "public_surface": [
-        "LlamaMMQOracleGeometry",
-        "LlamaMMQOracleResult",
-        "llama_mma_sum_slot_mapping",
-        "llama_mmq_source_policy",
-        "llama_mma_writeback_owners",
-        "llama_mma_writeback_coverage",
-        "run_llama_mmq_coop_tile_oracle",
-        "LLAMA_MMQ_CUH"
-      ],
-      "purpose": "Translates llama.cpp's mmq.cuh cooperative-tile/warp ownership and MMA writeback model (mmq_write_back_mma sum[] slot formula, per-warp m/n ranges) into a Python geometry+ownership oracle, and runs it against the existing numpy Q4_K/Q8_1 reference algebra to produce a tile output restricted to llama's writeback ownership.",
-      "responsibilities": [
-        "geometry dataclass + validation",
-        "per-thread sum-slot ownership mapping (static probe)",
-        "writeback owner/coverage enumeration (duplicate/missing detection)",
-        "wraps mmq_q4k_q8_reference numeric algebra for the oracle's numeric output"
-      ],
-      "retention_criterion": "needed while mmq_llama_differential.py's structural gate is active; a genuinely distinct authority from mmq_q4k_q8_reference.py (numeric algebra) and mmq_q4k_q8_atom.py (executable kernels) since it owns tile-ownership/geometry translated directly from llama.cpp source, not algebra or execution",
-      "reusable_assets": [
-        "artifact-schema"
-      ],
-      "role": "authority",
-      "status": "retained_reference",
-      "surface": "dev_amd_isa_research",
-      "test_role": "retained_reference",
-      "workflow_ids": [
-        "llama-mmq-oracle-tile-ownership",
-        "llama-mmq-structural-equivalence-gate"
-      ]
-    },
-    {
-      "allowed_dependency_domains": [
-        "quant_mmq"
-      ],
-      "authority_keys": [
-        "llama.q4_k.global_block.v1",
-        "llama.q8_1.ds4.global_and_lds_row.v1",
-        "llama.q4_k.decoded_lds_row.v1",
-        "llama.q4_k.decoded_fp16_group_lds_row.v1",
-        "llama.activation.fp16_k32_group_row.v1",
-        "SOURCE_ANCHORS"
-      ],
-      "classification_confidence": "high",
-      "default_path": false,
-      "deletion_confidence": "retain_active",
-      "disposition": "keep",
-      "domain": "quant_mmq",
-      "duplication_group": null,
-      "evidence": [
-        "extra/qk/mmq_llama_packed_operands.py:1-6 docstring: 'Descriptors only: this module deliberately owns no route, emitter, compiler, or lowering behavior'",
-        "extra/qk/mmq_llama_record_producers.py:15-16 imports ACTIVATION_FP16_GROUP_ROW, Q4_K_DECODED_GROUP_LDS_ROW, Q4_K_DECODED_LDS_ROW, Q8_1_DS4_ROW",
-        "distinct from mmq_llama_oracle.py (tile/warp ownership) and mmq_llama_differential.py (structural comparison): this file owns only byte-level PackedOperandTransform component layouts",
-        "Reachable only through the DEV=AMD:ISA renderer surface (tinygrad/runtime/ops_amd.py:1015-1021 registers AMDISARenderer only when DEV.target('AMD').renderer == 'ISA'); DEV=AMD never imports it."
-      ],
-      "path": "extra/qk/mmq_llama_packed_operands.py",
-      "promotion_target": null,
-      "public_surface": [
-        "Q4_K_GLOBAL_BLOCK",
-        "Q8_1_DS4_ROW",
-        "Q4_K_DECODED_LDS_ROW",
-        "Q4_K_DECODED_GROUP_LDS_ROW",
-        "ACTIVATION_FP16_GROUP_ROW",
-        "LlamaPackedOperandOracle",
-        "llama_packed_operand_oracle",
-        "validate_llama_packed_operand_oracle"
-      ],
-      "purpose": "Defines source-line-anchored PackedOperandTransform byte-layout descriptors (Q4_K global block, Q8_1 DS4 row, Q4_K decoded LDS row, fp16-decode-group row, plain-fp16 activation row) translated from specific llama.cpp mmq.cuh/quantize.cu line ranges, plus the LlamaPackedOperandOracle bundling tile/arena layout constants for the 128x128x256 llama MMQ kernel.",
-      "responsibilities": [
-        "byte-layout component descriptors per named source row",
-        "LlamaPackedOperandOracle bundling tile/arena geometry constants and cross-checking them against _canonical_fields()"
-      ],
-      "retention_criterion": "needed while mmq_llama_record_producers.py builds cooperative record templates from these byte-layout transforms",
-      "reusable_assets": [
-        "artifact-schema"
-      ],
-      "role": "authority",
-      "status": "retained_reference",
-      "surface": "dev_amd_isa_research",
-      "test_role": "active_validation",
-      "workflow_ids": [
-        "llama-mmq-packed-operand-byte-layout"
-      ]
-    },
-    {
-      "allowed_dependency_domains": [
-        "codegen_lowering",
-        "quant_mmq"
-      ],
-      "authority_keys": [
-        "llama-q8-ds4-producer-instance.v1",
-        "Q8_DS4_RECORD_COPY",
-        "Q4_K_RECORD_DECODE",
-        "Q4_K_RECORD_DECODE_GROUP",
-        "ACTIVATION_FP16_RECORD_COPY"
-      ],
-      "classification_confidence": "medium",
-      "default_path": false,
-      "deletion_confidence": "investigate_owner",
-      "disposition": "keep",
-      "domain": "codegen_lowering",
-      "duplication_group": null,
-      "evidence": [
-        "extra/qk/amd_isa_renderer_policy.py:9 'from extra.qk.mmq_llama_record_producers import RecordProducerInstanceWitness'",
-        "extra/qk/mmq_llama_record_producers.py:52-58 explicit note that a bare NOOP is not proof, only a typed AFTER payload counts",
-        "extra/qk/mmq_llama_record_producers.py:198-210 explicit cross-reference to wmma.py decode_group/get_scale_min_k4",
-        "file bundles at least 5 independent responsibilities (witness plumbing, Q8 copy, Q4 nibble decode, Q4 fp16 decode, activation copy, schedule builders) -- decouple candidate",
-        "Reachable only through the DEV=AMD:ISA renderer surface (tinygrad/runtime/ops_amd.py:1015-1021 registers AMDISARenderer only when DEV.target('AMD').renderer == 'ISA'); DEV=AMD never imports it."
-      ],
-      "path": "extra/qk/mmq_llama_record_producers.py",
-      "promotion_target": null,
-      "public_surface": [
-        "build_q8_ds4_record_template",
-        "build_split_q8_ds4_record_template",
-        "build_q4_k_record_template",
-        "build_llama_q4_k_fp16_group_record_template",
-        "build_llama_activation_fp16_group_record_template",
-        "RecordProducerInstanceWitness",
-        "record_producer_instance_value",
-        "record_producer_instance_witnesses",
-        "is_record_producer_instance_dependency"
-      ],
-      "purpose": "Builds source-derived UOp record-producer callbacks (Q8 DS4 copy/split-adapter, Q4_K packed-nibble/scale-min decode, Q4_K fp16-per-group decode mirroring wmma.py's decode_group, plain-fp16 activation copy) and their PackedRecordOperandTemplate/CooperativeSchedule wiring, plus a typed RecordProducerInstanceWitness carried on UOp.AFTER nodes for dependency-graph proof.",
-      "responsibilities": [
-        "typed witness carrier for producer-dependency proof",
-        "Q8 DS4 record producers (interleaved + split-buffer variants)",
-        "Q4_K packed-nibble/scale-min decode callbacks",
-        "Q4_K fp16-per-group decode callback (mirrors wmma.py decode_group)",
-        "plain fp16 activation copy callback",
-        "cooperative schedule construction (linear-256, wave-row)"
-      ],
-      "retention_criterion": "needed while the fp16-dequant-in-register Q4_K decode / llama record-producer approach (implementation plan PART I/II) is still an active line of work referenced from wmma.py and the two 20260716/20260720 docs",
-      "reusable_assets": [
-        "cli-parsing:false",
-        "device-model-discovery:false",
-        "alloc-exec-setup",
-        "compile-dispatch"
-      ],
-      "role": "authority",
-      "status": "active_research",
-      "surface": "dev_amd_isa_research",
-      "test_role": "active_validation",
-      "workflow_ids": [
-        "llama-mmq-record-producer-cooperative-copy",
-        "fp16-dequant-in-register-q4k-decode"
       ]
     },
     {
@@ -4277,46 +3865,6 @@
     },
     {
       "allowed_dependency_domains": [
-        "codegen_lowering"
-      ],
-      "authority_keys": [
-        "execution_bridge.prefill_source_value_key (informal: the sole definition of this key shape)"
-      ],
-      "classification_confidence": "high",
-      "default_path": false,
-      "deletion_confidence": "retain_active",
-      "disposition": "keep",
-      "domain": "codegen_lowering",
-      "duplication_group": null,
-      "evidence": [
-        "grep: extra/qk/amd_isa_renderer_policy.py:7 imports PrefillSourceValueKey from this module",
-        "Reachable only through the DEV=AMD:ISA renderer surface (tinygrad/runtime/ops_amd.py:1015-1021 registers AMDISARenderer only when DEV.target('AMD').renderer == 'ISA'); DEV=AMD never imports it."
-      ],
-      "path": "extra/qk/prefill/prefill_value_key.py",
-      "promotion_target": null,
-      "public_surface": [
-        "PrefillSourceValueKey",
-        "stable_uop_token",
-        "single_buffer_stage_value_key"
-      ],
-      "purpose": "Defines PrefillSourceValueKey, the canonical hashable identity for one generated prefill LDS-staging source value (role/tile/epoch/phase/offset/source/buffer), used to key warmstart/staging state across compiler passes.",
-      "responsibilities": [
-        "define the frozen dataclass key",
-        "define the UOp->stable-token helper",
-        "define one convenience constructor for the single-buffer case"
-      ],
-      "retention_criterion": "needed while amd_isa_renderer_policy.py depends on it for staging-value identity",
-      "reusable_assets": [],
-      "role": "authority",
-      "status": "active_research",
-      "surface": "dev_amd_isa_research",
-      "test_role": "not_test_like",
-      "workflow_ids": [
-        "prefill-lds-staging-key"
-      ]
-    },
-    {
-      "allowed_dependency_domains": [
         "measurement",
         "route_authority"
       ],
@@ -4738,115 +4286,6 @@
         "quant_mmq"
       ],
       "authority_keys": [
-        "LLAMA_Q4K_Q8_1_DS4_SOURCE_ANCHORS"
-      ],
-      "classification_confidence": "high",
-      "default_path": false,
-      "deletion_confidence": "investigate_owner",
-      "disposition": "keep",
-      "domain": "quant_mmq",
-      "duplication_group": null,
-      "evidence": [
-        "module docstring: 'Neither emitter is a production route.'",
-        "5 distinct describe_*/emit_* variant families in one file, each independently tested, none reachable from tinygrad/llm/route_ops.py",
-        "Reachable only through the DEV=AMD:ISA renderer surface (tinygrad/runtime/ops_amd.py:1015-1021 registers AMDISARenderer only when DEV.target('AMD').renderer == 'ISA'); DEV=AMD never imports it."
-      ],
-      "path": "extra/qk/q4k_q8_mmq_uop.py",
-      "promotion_target": null,
-      "public_surface": [
-        "Q4KQ8MMQUOpSpec",
-        "describe_q4k_q8_mmq_uop",
-        "emit_q4k_q8_mmq_uop",
-        "Q4KQ8MMQWMMASpec",
-        "describe_q4k_q8_mmq_wmma",
-        "emit_q4k_q8_mmq_wmma",
-        "Q4KQ8MMQWideWMMASpec",
-        "describe_q4k_q8_mmq_wide_wmma",
-        "emit_q4k_q8_mmq_wide_wmma",
-        "Q4KQ8MMQSumOriginalFPWMMASpec",
-        "describe_q4k_q8_mmq_sum_original_fp_wmma",
-        "emit_q4k_q8_mmq_sum_original_fp_wmma",
-        "Q4KQ8MMQRoleSizedWMMASpec",
-        "describe_q4k_q8_mmq_role_sized_wmma",
-        "emit_q4k_q8_mmq_role_sized_wmma"
-      ],
-      "purpose": "Direct-UOp research emitters for Q4_K x Q8_1 MMQ (scalar owner, generic-TC-lowering-driven WMMA candidate, wide-N variant, and llama-DS4-original-fp-sum-ABI variants) proving explicit grid/index execution and generic UOp->WMMA lowering without handwritten kernels; explicitly documented as research, not production.",
-      "responsibilities": [
-        "scalar owner emitter",
-        "aligned generic-TC WMMA emitter",
-        "wide 16x32 WMMA experiment",
-        "llama DS4-sum-ABI emitters (logical + physical layouts)"
-      ],
-      "retention_criterion": "explicitly research/never-production per docstring ('Neither emitter is a production route'); retire when the MMQ research line it feeds (q4k_q8_mmq_uop_validation.py, mmq_llama_differential.py) is concluded and its verdict recorded",
-      "reusable_assets": [
-        "route-spec"
-      ],
-      "role": "research",
-      "status": "active_research",
-      "surface": "dev_amd_isa_research",
-      "test_role": "active_validation",
-      "workflow_ids": [
-        "q4k-q8-mmq-research"
-      ]
-    },
-    {
-      "allowed_dependency_domains": [
-        "measurement",
-        "quant_mmq"
-      ],
-      "authority_keys": [
-        "admit_evidence.pass_fail_contract",
-        "PROTOCOL=tinygrad.q4k_q8_mmq_uop_validation.v2"
-      ],
-      "classification_confidence": "high",
-      "default_path": false,
-      "deletion_confidence": "retain_reproducer",
-      "disposition": "keep",
-      "domain": "measurement",
-      "duplication_group": null,
-      "evidence": [
-        "module docstring: 'The parent process is deliberately import-light and never opens an AMD device. Use run_amd_validation to run ... in a separate interpreter with a hard deadline.'",
-        "line 138: subprocess.run([python, '-m', 'extra.qk.q4k_q8_mmq_uop_validation', '--worker', '--mode', mode], ...)"
-      ],
-      "path": "extra/qk/q4k_q8_mmq_uop_validation.py",
-      "promotion_target": null,
-      "public_surface": [
-        "independent_packed_byte_reference",
-        "classify_isa",
-        "inspect_uop_graph",
-        "admit_evidence",
-        "run_amd_validation",
-        "main"
-      ],
-      "purpose": "Fail-closed validation harness for the scalar and bounded-WMMA Q4_K x Q8_1 kernels: an independent packed-byte numpy reference, ISA-source classification (scalar vs WMMA vs signed-integer-WMMA), UOp-graph structural inspection, and an isolated-subprocess AMD worker with a hard timeout that the parent (import-light, no device) dispatches to.",
-      "responsibilities": [
-        "independent numpy reference decode",
-        "ISA text classification",
-        "UOp graph structural inspection",
-        "evidence admission/pass-fail contract",
-        "subprocess worker isolation with timeout"
-      ],
-      "retention_criterion": "needed while the q4k_q8_mmq_uop research line stays open; this is the canonical isolated-worker canary pattern for that line specifically (subprocess boundary + hard deadline), distinct from other qk gates",
-      "reusable_assets": [
-        "cli-parsing",
-        "device-model-discovery",
-        "fault-capture",
-        "parity-tolerance"
-      ],
-      "role": "diagnostic",
-      "status": "active_research",
-      "surface": "off_default",
-      "test_role": "operational_tool",
-      "workflow_ids": [
-        "q4k-q8-mmq-research",
-        "isolated-amd-canary"
-      ]
-    },
-    {
-      "allowed_dependency_domains": [
-        "quant_mmq"
-      ],
-      "authority_keys": [
         "Q4K_D_OFFSET",
         "Q4K_DMIN_OFFSET",
         "Q4K_SCALE_MIN_OFFSET",
@@ -5035,50 +4474,6 @@
       "workflow_ids": [
         "q6k-gemm-prefill"
       ]
-    },
-    {
-      "allowed_dependency_domains": [
-        "quant_mmq",
-        "route_authority"
-      ],
-      "authority_keys": [
-        "QUANT_FORMAT_SPECS layout metadata (block_size/group_size/scale_layout/min_layout per Q4_K/Q6_K) -- NOT claimed elsewhere; distinct from runtime_specs.QUANT_FORMATS which is only a bare name tuple with no layout fields"
-      ],
-      "classification_confidence": "medium",
-      "default_path": false,
-      "deletion_confidence": "investigate_owner",
-      "disposition": "investigate",
-      "domain": "quant_mmq",
-      "duplication_group": null,
-      "evidence": [
-        "grep -rn 'from extra.qk.quant_specs import\\|import extra.qk.quant_specs' --include=*.py . -> only test/unit/test_runtime_specs.py:6",
-        "NOT a duplication_group with runtime_specs.py: runtime_specs.py's QUANT_FORMATS (line 12) is a bare tuple of format-name strings ('Q4_K','Q6_K','fp16','fp8','int8','unknown') used for _check() validation; quant_specs.py's QUANT_FORMAT_SPECS is a dict of dataclasses carrying block_size/group_size/scale_layout/min_layout -- these are different knowledge (a name-vocabulary vs. a layout-metadata registry), quant_specs.py builds ON TOP of runtime_specs types (QuantizedTensorSpec/ActivationQuantSpec) rather than re-declaring them, so this is layering, not overlapping exclusive authority",
-        "route_manifest.py's per-route `quant` lists (e.g. [\"Q4_K\"], [\"Q6_K\"], [\"fp16\"]) are also bare format-name tags for route eligibility, not layout metadata -- no overlap with quant_specs.py's QUANT_FORMAT_SPECS content either",
-        "no CI/doc/bench/test other than test_runtime_specs.py references quant_spec/activation_spec by name"
-      ],
-      "path": "extra/qk/quant_specs.py",
-      "promotion_target": null,
-      "public_surface": [
-        "QuantFormatSpec",
-        "ActivationFormatSpec",
-        "QUANT_FORMAT_SPECS",
-        "ACTIVATION_FORMAT_SPECS",
-        "quant_spec",
-        "activation_spec"
-      ],
-      "purpose": "Defines QuantFormatSpec/ActivationFormatSpec dataclasses plus the QUANT_FORMAT_SPECS/ACTIVATION_FORMAT_SPECS registries (block_size, group_size, scale/min layout strings per format) and the quant_spec()/activation_spec() lookup functions, converting these into runtime_specs.QuantizedTensorSpec/ActivationQuantSpec.",
-      "responsibilities": [
-        "quant-format layout metadata registry",
-        "activation-format layout metadata registry",
-        "conversion to runtime_specs value objects"
-      ],
-      "retention_criterion": "unclear -- only known consumer is a unit test (test_runtime_specs.py) exercising this module itself; no production route/gate/adapter imports quant_spec()/activation_spec() or QUANT_FORMAT_SPECS anywhere in the repo",
-      "reusable_assets": [],
-      "role": "authority",
-      "status": "retained_reference",
-      "surface": "off_default",
-      "test_role": "orphan_unknown",
-      "workflow_ids": []
     },
     {
       "allowed_dependency_domains": [
@@ -5909,49 +5304,6 @@
         "route-spec"
       ],
       "workflow_id": "quant-kernel-lowering"
-    },
-    {
-      "authority_files": [
-        "extra/qk/amd_isa_renderer_policy.py",
-        "extra/qk/kernel_lds.py",
-        "extra/qk/kernel_vocabulary.py"
-      ],
-      "authority_rules": [
-        "amd.isa_extension_descriptors"
-      ],
-      "default_path": false,
-      "domain": "amd_runtime",
-      "entry_points": [
-        "tinygrad/renderer/isa/amd.py"
-      ],
-      "evidence_files": [
-        "extra/qk/amd_isa_proof.py",
-        "extra/qk/mmq_llama_oracle.py",
-        "extra/qk/mmq_llama_differential.py"
-      ],
-      "execution_files": [
-        "extra/qk/mmq_llama_record_producers.py",
-        "extra/qk/mmq_llama_packed_operands.py",
-        "extra/qk/codegen_extensions.py"
-      ],
-      "inputs": [
-        "UOp graph"
-      ],
-      "outputs": [
-        "AMD ISA instructions"
-      ],
-      "phases": [
-        "descriptor-lookup",
-        "lds-staging",
-        "isel",
-        "proof-capture"
-      ],
-      "purpose": "Render AMD native ISA for the research renderer, including cooperative LDS staging and MMQ record producers.",
-      "retention_criterion": "until DEV=AMD:ISA is promoted to a supported path or the native-ISA experiment is retired",
-      "shared_assets": [
-        "compile-dispatch"
-      ],
-      "workflow_id": "amd-isa-research-rendering"
     },
     {
       "authority_files": [

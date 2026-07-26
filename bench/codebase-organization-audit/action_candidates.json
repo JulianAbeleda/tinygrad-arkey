@@ -130,6 +130,7 @@
       "loc_removed": 0,
       "path": "extra/qk/kernel_lds.py",
       "question": "Do the packed-component and hierarchical-stage clusters still have an open question, or did the record-stage design supersede them? Answer decides prune (~550 LOC + 2 test files) versus retain.",
+      "status": "completed",
       "tests_required": []
     },
     {
@@ -151,6 +152,7 @@
       "path": "extra/qk/kernel_lds.py",
       "promotion_readiness": "not justified",
       "promotion_target": "tinygrad/codegen/opt/kernel_lds.py",
+      "status": "completed",
       "tests_required": []
     },
     {
@@ -168,6 +170,7 @@
       "loc_removed": 0,
       "path": "extra/qk/codegen_extensions.py",
       "question": "Does DEV=AMD:ISA remain a live research surface with an open question, or has it produced its verdict? The answer sets a retention criterion for ~3.2K LOC; nothing should be moved or deleted before it.",
+      "status": "completed",
       "tests_required": []
     },
     {
@@ -310,6 +313,7 @@
       "loc_removed": 0,
       "path": "extra/qk/quant_specs.py",
       "question": "Is quant_specs.py a not-yet-wired intended API or superseded by runtime_specs.py? Prune only if superseded.",
+      "status": "completed",
       "tests_required": []
     }
   ],
@@ -346,19 +350,23 @@
   "loc_impact": {
     "completed_actions": [
       "A1",
+      "A10",
       "A14",
       "A15",
       "A2",
       "A3",
       "A4",
       "A5",
+      "A6",
+      "A7",
+      "A8",
       "A9"
     ],
-    "gross_loc_removed": 3,
+    "gross_loc_removed": 0,
     "loc_moved_not_reduced": 60,
-    "net_authored_loc_reduction": 3,
-    "realized_gross_loc_removed": 1385,
-    "realized_net_loc_reduction": 1350,
+    "net_authored_loc_reduction": 0,
+    "realized_gross_loc_removed": 1388,
+    "realized_net_loc_reduction": 1353,
     "realized_replacement_loc_added": 35,
     "replacement_loc_added": 0
   },

@@ -1,8 +1,8 @@
 # Codebase organization audit
 
-Audited commit: `mac-first-boot-20260610-3416-ga59eabb79-dirty` (dirty: True)
+Audited commit: `mac-first-boot-20260610-3419-gbece3963e-dirty` (dirty: True)
 Scope: `<repository>` | manifest coverage required for: extra/qk/
-Verdict: **ORG_R1_BLOCKED_ORGANIZATION_DRIFT** (1 hard errors, 89 warnings)
+Verdict: **ORG_R1_BLOCKED_ORGANIZATION_DRIFT** (1 hard errors, 82 warnings)
 
 > Machine-derived facts (discovery, LOC, imports, references, coverage, boundary checks) are produced by this
 > script. Every purpose, role, status, disposition, action, and promotion/prune judgment below is human-authored
@@ -10,66 +10,66 @@ Verdict: **ORG_R1_BLOCKED_ORGANIZATION_DRIFT** (1 hard errors, 89 warnings)
 
 ## Coverage
 
-- Authored: 460 files / 73287 token-bearing LOC (sz.py rules)
+- Authored: 435 files / 68387 token-bearing LOC (sz.py rules)
 - Generated (reported, never manifested): 1 files / 57 LOC
-- Manifest scope: 107 files / 16338 LOC (107 explicit records, 0 covered by group rule, 0 uncovered)
+- Manifest scope: 96 files / 13275 LOC (96 explicit records, 0 covered by group rule, 0 uncovered)
 
 ## LOC by domain
 
 | domain | files | loc |
 |---|---|---|
-| amd_runtime | 5 | 657 |
-| attention_decode | 9 | 735 |
+| amd_runtime | 3 | 420 |
+| attention_decode | 10 | 788 |
 | attention_prefill | 4 | 574 |
-| codegen_lowering | 15 | 2207 |
+| codegen_lowering | 10 | 560 |
 | evidence | 10 | 1608 |
-| measurement | 17 | 2063 |
-| quant_mmq | 23 | 3668 |
-| route_authority | 16 | 3819 |
+| measurement | 17 | 1941 |
+| quant_mmq | 18 | 2930 |
+| route_authority | 16 | 3447 |
 | search_promotion | 8 | 1007 |
-| unclassified | 353 | 56949 |
+| unclassified | 339 | 55112 |
 
 ## LOC by role
 
 | role | files | loc |
 |---|---|---|
-| adapter | 12 | 1153 |
-| authority | 60 | 10550 |
+| adapter | 11 | 1143 |
+| authority | 51 | 7830 |
 | benchmark | 2 | 99 |
-| diagnostic | 11 | 1354 |
-| evidence | 4 | 385 |
-| execution | 10 | 1869 |
+| diagnostic | 11 | 1232 |
+| evidence | 5 | 438 |
+| execution | 9 | 1811 |
 | integration | 2 | 199 |
-| research | 5 | 593 |
+| research | 4 | 387 |
 | test | 1 | 136 |
-| unclassified | 353 | 56949 |
+| unclassified | 339 | 55112 |
 
 ## LOC by status
 
 | status | files | loc |
 |---|---|---|
-| active_research | 22 | 4623 |
+| active_research | 13 | 2285 |
 | fallback | 5 | 272 |
 | historical_one_off | 1 | 43 |
-| production | 66 | 9852 |
+| production | 67 | 9532 |
 | promoted_default | 6 | 648 |
 | refuted | 1 | 21 |
-| retained_reference | 4 | 519 |
-| unclassified | 353 | 56949 |
+| retained_reference | 1 | 114 |
+| unclassified | 339 | 55112 |
 | unresolved_reproducer | 2 | 360 |
 
 ## LOC by disposition
 
 | disposition | files | loc |
 |---|---|---|
-| consolidate | 4 | 2095 |
-| investigate | 3 | 307 |
-| keep | 100 | 13936 |
-| unclassified | 353 | 56949 |
+| consolidate | 2 | 864 |
+| investigate | 2 | 256 |
+| keep | 92 | 12155 |
+| unclassified | 339 | 55112 |
 
 ## Default-path source footprint
 
-54 declared default-path files / 9228 LOC.
+54 declared default-path files / 8856 LOC.
 
 - `extra/qk/amd_isa_proof.py`
 - `extra/qk/amd_resource_artifact.py`
@@ -134,22 +134,22 @@ Verdict: **ORG_R1_BLOCKED_ORGANIZATION_DRIFT** (1 hard errors, 89 warnings)
 | 2124 | `tinygrad/uop/ops.py` | None |
 | 1084 | `test/unit/test_online_softmax_tile.py` | None |
 | 1067 | `tinygrad/llm/model.py` | None |
-| 973 | `extra/qk/kernel_lds.py` | codegen_lowering |
 | 903 | `tinygrad/runtime/ops_amd.py` | None |
 | 832 | `extra/qk/mmq_q4k_q8_atom.py` | quant_mmq |
 | 794 | `test/amd/disasm.py` | None |
-| 787 | `extra/qk/route_manifest.py` | route_authority |
 | 758 | `extra/qk/runtime_specs.py` | route_authority |
 | 700 | `tinygrad/tensor.py` | None |
 | 660 | `tinygrad/schedule/rangeify.py` | None |
+| 641 | `test/unit/test_runtime_specs.py` | None |
 | 634 | `tinygrad/runtime/ops_nv.py` | None |
 | 619 | `tinygrad/renderer/isa/x86.py` | None |
-| 601 | `test/unit/test_runtime_specs.py` | None |
 | 598 | `tinygrad/codegen/opt/postrange.py` | None |
 | 596 | `tinygrad/mixin/__init__.py` | None |
 | 576 | `extra/audit/codebase_organization_audit.py` | None |
 | 576 | `tinygrad/renderer/amd/sqtt.py` | None |
 | 556 | `extra/llm/cli.py` | None |
+| 552 | `tinygrad/viz/js/profiler.js` | None |
+| 538 | `test/unit/test_amd_isa_wmma.py` | None |
 
 ## Duplicate authority
 
@@ -188,6 +188,7 @@ for human classification, not a death sentence.
 - `scratch_attn_bench.py`
 - `scratch_attn_bench2.py`
 - `test/backend/test_softmax_fusion.py`
+- `test/helpers.py`
 - `test/test_guarded_execution.py`
 - `test/test_runtime_bridge.py`
 - `test/unit/test_alloc_trace.py`
@@ -199,7 +200,6 @@ for human classification, not a death sentence.
 - `test/unit/test_amd_elf_entry_offset.py`
 - `test/unit/test_amd_epilogue_address_schedule_probe.py`
 - `test/unit/test_amd_final_elf_capture_20260712.py`
-- `test/unit/test_amd_isa_extension_interfaces.py`
 - `test/unit/test_amd_isa_extraction_fixtures.py`
 - `test/unit/test_amd_isa_integer_vector_loads.py`
 - `test/unit/test_amd_isa_integer_wmma_hardware_correctness.py`
@@ -210,6 +210,7 @@ for human classification, not a death sentence.
 - `test/unit/test_amdllvm_waitcnt.py`
 - `test/unit/test_analyze_faults.py`
 - `test/unit/test_attn_qo_register_compile.py`
+- `test/unit/test_bench_entrypoint.py`
 - `test/unit/test_candidate_context_propagation.py`
 - `test/unit/test_clock_pin.py`
 - `test/unit/test_compiler_amd_pure_disassembly_20260712.py`
@@ -218,11 +219,11 @@ for human classification, not a death sentence.
 - `test/unit/test_composite_tile_carrier.py`
 - `test/unit/test_current_decode_execution_adapter.py`
 - `test/unit/test_current_prefill_execution_adapter.py`
+- `test/unit/test_decode_resource_capture.py`
 - `test/unit/test_devectorizer_memory_widths.py`
 - `test/unit/test_devectorizer_reconstruction.py`
 - `test/unit/test_disk_staging_timeout.py`
 - `test/unit/test_dispatch_trace.py`
-- `test/unit/test_dynamic_tile_owner.py`
 - `test/unit/test_executable_artifact_preparation.py`
 - `test/unit/test_execution_bridge_contracts.py`
 - `test/unit/test_final_regalloc_proof_transport_20260712.py`
@@ -230,12 +231,9 @@ for human classification, not a death sentence.
 - `test/unit/test_gemm_consumer_adapters.py`
 - `test/unit/test_generated_quant_binding_audit.py`
 - `test/unit/test_gguf_memory_scan.py`
-- `test/unit/test_grouped_dot_update_pipeline.py`
 - `test/unit/test_hcq_graph_profile_export.py`
 - `test/unit/test_hcq_interface_allocator.py`
 - `test/unit/test_hcq_kernargs_contract.py`
-- `test/unit/test_hierarchical_kernel_pipeline.py`
-- `test/unit/test_hierarchical_packed_record_stage.py`
 - `test/unit/test_host_safety_canary_20260713.py`
 - `test/unit/test_isolated_guarded_executor.py`
 - `test/unit/test_kernel_candidate_context.py`
@@ -258,10 +256,6 @@ for human classification, not a death sentence.
 - `test/unit/test_mmq_ds4_logical_emitter.py`
 - `test/unit/test_mmq_epoch_manifest_export.py`
 - `test/unit/test_mmq_lifecycle.py`
-- `test/unit/test_mmq_llama_differential.py`
-- `test/unit/test_mmq_llama_packed_operands.py`
-- `test/unit/test_mmq_llama_record_producers.py`
-- `test/unit/test_mmq_llama_split_q8_record_producer.py`
 - `test/unit/test_mmq_logical_vocabulary.py`
 - `test/unit/test_model_facts.py`
 - `test/unit/test_model_profiles.py`
@@ -269,9 +263,6 @@ for human classification, not a death sentence.
 - `test/unit/test_online_softmax_state_split.py`
 - `test/unit/test_operand_attribution_20260714.py`
 - `test/unit/test_operand_path_execution_worker.py`
-- `test/unit/test_packed_component_lds_stage.py`
-- `test/unit/test_packed_operand_contract.py`
-- `test/unit/test_packed_record_lds_stage.py`
 - `test/unit/test_packed_weight.py`
 - `test/unit/test_packed_wmma_compile_gate.py`
 - `test/unit/test_packed_wmma_correctness_canary.py`
@@ -292,8 +283,6 @@ for human classification, not a death sentence.
 - `test/unit/test_q4_q4_owner_comparison.py`
 - `test/unit/test_q4k_prefill_route_spec.py`
 - `test/unit/test_q4k_q8_mmq_prefill_spec.py`
-- `test/unit/test_q4k_q8_mmq_uop_validation.py`
-- `test/unit/test_q4k_q8_mmq_wide_grid.py`
 - `test/unit/test_q4k_w_f16_decode.py`
 - `test/unit/test_qk_route_purity.py`
 - `test/unit/test_rangeify_multireduce.py`
@@ -303,7 +292,6 @@ for human classification, not a death sentence.
 - `test/unit/test_regalloc_rematerialization.py`
 - `test/unit/test_regalloc_spans.py`
 - `test/unit/test_register_contracts.py`
-- `test/unit/test_scheduler_output_tile_loop.py`
 - `test/unit/test_shared_attention_evidence.py`
 - `test/unit/test_shared_attention_promotion.py`
 - `test/unit/test_shared_attention_replay_admission.py`
@@ -333,11 +321,11 @@ for human classification, not a death sentence.
 
 | test_role | count | files |
 |---|---|---|
-| active_regression | 10 | `extra/qk/clock_pin.py`, `extra/qk/decode/decode_codegen_identity_check.py`, `extra/qk/dynamic_tile_owner.py`, `extra/qk/live_split_geometry.py`, `extra/qk/packed_wmma_compile_gate.py`, `extra/qk/prefill/pure_register_compile_capture.py`, `extra/qk/prefill/pure_register_evaluation_gate.py`, `extra/qk/prefill/q4k_prefill_route_spec.py`, `extra/qk/prefill/q4k_q8_mmq_prefill_spec.py`, `extra/qk/timing_harness.py` |
-| active_validation | 30 | `extra/qk/amd_isa_proof.py`, `extra/qk/amd_isa_renderer_policy.py`, `extra/qk/amd_resource_artifact.py`, `extra/qk/bench.py`, `extra/qk/benchmark_shared_attention.py`, `extra/qk/decode/decode_runtime_overhead.py`, `extra/qk/generated_candidates.py`, `extra/qk/memory_adaptive_allocation_observer.py`, `extra/qk/memory_adaptive_policy.py`, `extra/qk/memory_adaptive_runtime_collector.py`, `extra/qk/mmq_atom_boundary.py`, `extra/qk/mmq_ds4_logical_emitter.py`, `extra/qk/mmq_epoch_manifest_export.py`, `extra/qk/mmq_lifecycle.py`, `extra/qk/mmq_llama_differential.py`, `extra/qk/mmq_llama_packed_operands.py`, `extra/qk/mmq_llama_record_producers.py`, `extra/qk/mmq_logical_vocabulary.py`, `extra/qk/mmq_q4k_q8_atom.py`, `extra/qk/mmq_q4k_q8_reference.py`, `extra/qk/prefill/packed_wmma_correctness_canary.py`, `extra/qk/prefill/prefill_graph_gemm_route.py`, `extra/qk/prefill/prefill_harness.py`, `extra/qk/prefill/prefill_primitive_spec.py`, `extra/qk/prefill/prefill_whole_synced.py`, `extra/qk/pure_search_guard.py`, `extra/qk/q4k_q8_mmq_uop.py`, `extra/qk/shared_attention_capture.py`, `extra/qk/shared_attention_evidence.py`, `extra/qk/shared_attention_promotion.py` |
-| operational_tool | 14 | `extra/qk/decode/current_decode_execution_adapter.py`, `extra/qk/decode/decode_harness.py`, `extra/qk/generate_shared_attention_captures.py`, `extra/qk/mmq_compile_evidence.py`, `extra/qk/packed_wmma_canary_evidence.py`, `extra/qk/phase_abi_v1_resource_probe.py`, `extra/qk/prefill/host_safety_canary.py`, `extra/qk/prefill/packed_wmma_prefill_promotion_gate.py`, `extra/qk/prefill/prefill_boltbeam_trace.py`, `extra/qk/prefill/prefill_causal_tile_skip_promotion_gate.py`, `extra/qk/prefill/prefill_flash_e2e_parity.py`, `extra/qk/prefill/prefill_flash_perf.py`, `extra/qk/prefill/prefill_softmax_reduce_fuse_promotion_gate.py`, `extra/qk/q4k_q8_mmq_uop_validation.py` |
-| orphan_unknown | 2 | `extra/qk/bubblebeam_futuresight.py`, `extra/qk/quant_specs.py` |
-| retained_reference | 3 | `extra/qk/mmq_ds4_probe_contract.py`, `extra/qk/mmq_llama_oracle.py`, `extra/qk/q4k_tile_loader.py` |
+| active_regression | 9 | `extra/qk/clock_pin.py`, `extra/qk/decode/decode_codegen_identity_check.py`, `extra/qk/live_split_geometry.py`, `extra/qk/packed_wmma_compile_gate.py`, `extra/qk/prefill/pure_register_compile_capture.py`, `extra/qk/prefill/pure_register_evaluation_gate.py`, `extra/qk/prefill/q4k_prefill_route_spec.py`, `extra/qk/prefill/q4k_q8_mmq_prefill_spec.py`, `extra/qk/timing_harness.py` |
+| active_validation | 25 | `extra/qk/amd_isa_proof.py`, `extra/qk/amd_resource_artifact.py`, `extra/qk/bench.py`, `extra/qk/benchmark_shared_attention.py`, `extra/qk/decode/decode_runtime_overhead.py`, `extra/qk/generated_candidates.py`, `extra/qk/memory_adaptive_allocation_observer.py`, `extra/qk/memory_adaptive_policy.py`, `extra/qk/memory_adaptive_runtime_collector.py`, `extra/qk/mmq_atom_boundary.py`, `extra/qk/mmq_ds4_logical_emitter.py`, `extra/qk/mmq_epoch_manifest_export.py`, `extra/qk/mmq_lifecycle.py`, `extra/qk/mmq_logical_vocabulary.py`, `extra/qk/mmq_q4k_q8_atom.py`, `extra/qk/mmq_q4k_q8_reference.py`, `extra/qk/prefill/packed_wmma_correctness_canary.py`, `extra/qk/prefill/prefill_graph_gemm_route.py`, `extra/qk/prefill/prefill_harness.py`, `extra/qk/prefill/prefill_primitive_spec.py`, `extra/qk/prefill/prefill_whole_synced.py`, `extra/qk/pure_search_guard.py`, `extra/qk/shared_attention_capture.py`, `extra/qk/shared_attention_evidence.py`, `extra/qk/shared_attention_promotion.py` |
+| operational_tool | 14 | `extra/qk/decode/current_decode_execution_adapter.py`, `extra/qk/decode/decode_harness.py`, `extra/qk/decode/decode_tile_timing.py`, `extra/qk/generate_shared_attention_captures.py`, `extra/qk/mmq_compile_evidence.py`, `extra/qk/packed_wmma_canary_evidence.py`, `extra/qk/phase_abi_v1_resource_probe.py`, `extra/qk/prefill/host_safety_canary.py`, `extra/qk/prefill/packed_wmma_prefill_promotion_gate.py`, `extra/qk/prefill/prefill_boltbeam_trace.py`, `extra/qk/prefill/prefill_causal_tile_skip_promotion_gate.py`, `extra/qk/prefill/prefill_flash_e2e_parity.py`, `extra/qk/prefill/prefill_flash_perf.py`, `extra/qk/prefill/prefill_softmax_reduce_fuse_promotion_gate.py` |
+| orphan_unknown | 1 | `extra/qk/bubblebeam_futuresight.py` |
+| retained_reference | 2 | `extra/qk/mmq_ds4_probe_contract.py`, `extra/qk/q4k_tile_loader.py` |
 | unresolved_reproducer | 4 | `extra/qk/benchmark_split_shared_attention.py`, `extra/qk/decode/decode_hd_sweep_numerics.py`, `extra/qk/prefill/prefill_hd_sweep_numerics.py`, `extra/qk/prefill/prefill_long_context_numerics.py` |
 
 ## Decouple candidates
@@ -382,9 +370,9 @@ None.
 
 | path | class | former purpose | last campaign | replacement | commit | recovery | loc |
 |---|---|---|---|---|---|---|---|
-| `extra/qk/p2_probe_1.py` | delete_ready | Bisect where REDUCE-preserving fusion breaks in attention by walking max -> sum -> broadcast-subtract -> exp-sum -> softmax -> softmax@v under DEV=AMD TC_OPT=2. | flash-prefill Piece 2-A (2026-07-21) | docs/flash-prefill-piece2-probe-20260721.md | `a59eabb79a22` | git show ad65bd05e951f6e460d167c207fdf3e97faf5c76 -- extra/qk/p2_probe_1.py ... p2_probe_6.py | 44 |
-| `extra/qk/shared_attention_evidence_gate.py` | delete_after_verdict_capture | Validate a shared-attention evidence bundle before admitting it as promotion evidence. | shared-attention evidence pipeline | extra/qk/shared_attention_promotion.py (the gate that acts on a schema with a real producer) | `a59eabb79a22` | git log --diff-filter=A -- extra/qk/shared_attention_evidence_gate.py | 131 |
-| `extra/qk/q4k_wmma_tile_lowering.py` | delete_after_verdict_capture | Route Q4_K prefill matmuls through RDNA3 v_wmma_i32_16x16x16_iu8 int8 tensor-core tiles. | q4k int8 WMMA-tiled prefill (2026-07-05 to 2026-07-14) | docs/q4k-int8-wmma-tiled-campaign-retirement-20260726.md | `a59eabb79a22` | git show 05b67146a -- <path> | 1138 |
+| `extra/qk/p2_probe_1.py` | delete_ready | Bisect where REDUCE-preserving fusion breaks in attention by walking max -> sum -> broadcast-subtract -> exp-sum -> softmax -> softmax@v under DEV=AMD TC_OPT=2. | flash-prefill Piece 2-A (2026-07-21) | docs/flash-prefill-piece2-probe-20260721.md | `bece3963e9a7` | git show ad65bd05e951f6e460d167c207fdf3e97faf5c76 -- extra/qk/p2_probe_1.py ... p2_probe_6.py | 44 |
+| `extra/qk/shared_attention_evidence_gate.py` | delete_after_verdict_capture | Validate a shared-attention evidence bundle before admitting it as promotion evidence. | shared-attention evidence pipeline | extra/qk/shared_attention_promotion.py (the gate that acts on a schema with a real producer) | `bece3963e9a7` | git log --diff-filter=A -- extra/qk/shared_attention_evidence_gate.py | 131 |
+| `extra/qk/q4k_wmma_tile_lowering.py` | delete_after_verdict_capture | Route Q4_K prefill matmuls through RDNA3 v_wmma_i32_16x16x16_iu8 int8 tensor-core tiles. | q4k int8 WMMA-tiled prefill (2026-07-05 to 2026-07-14) | docs/q4k-int8-wmma-tiled-campaign-retirement-20260726.md | `bece3963e9a7` | git show 05b67146a -- <path> | 1138 |
 
 ## Workflow inventory
 
@@ -394,7 +382,6 @@ None.
 | decode-route-selection | attention_decode | True | `tinygrad/llm/decode_routes.py` | select-route -> build-spec -> emit-kernel -> execute |
 | prefill-route-selection | attention_prefill | True | `tinygrad/llm/prefill_routes.py` | select-route -> build-spec -> compile -> guard -> execute |
 | quant-kernel-lowering | quant_mmq | True | `tinygrad/llm/qk_primitives.py` | parse-opt -> build-spec -> emit-kernel |
-| amd-isa-research-rendering | amd_runtime | False | `tinygrad/renderer/isa/amd.py` | descriptor-lookup -> lds-staging -> isel -> proof-capture |
 | mmq-atom-search | quant_mmq | False | `extra/qk/mmq_q4k_q8_atom.py` | build-candidate -> compile -> measure -> compare-reference -> record |
 | packed-wmma-prefill-promotion | search_promotion | False | `extra/qk/prefill/packed_wmma_prefill_promotion_gate.py` | load-evidence -> check-shape-guards -> verdict -> emit-record |
 | prefill-softmax-fuse-promotion | search_promotion | False | `extra/qk/prefill/prefill_softmax_reduce_fuse_promotion_gate.py` | load-evidence -> check-shape-guards -> verdict -> emit-record |
@@ -418,9 +405,9 @@ None.
 
 ## Promotion budget
 
-- Budgeted (`tinygrad`, `bench`, `structure`): **34089 / 35000** -- headroom 911
-- Against the standing 30000 target: **4089 over**. sz.py:13 records 35000 as temporary headroom; the standing target is 30000
-- Default-path LOC currently sitting unbudgeted in `extra/`: **9228**
+- Budgeted (`tinygrad`, `bench`, `structure`): **34087 / 35000** -- headroom 913
+- Against the standing 30000 target: **4087 over**. sz.py:13 records 35000 as temporary headroom; the standing target is 30000
+- Default-path LOC currently sitting unbudgeted in `extra/`: **8856**
 - Net budget cost of pending promotions (moved minus deleted): 0
 - Declarative LOC a data-file conversion would remove from the budget entirely: 0
 
@@ -430,8 +417,8 @@ costs zero.
 
 ## LOC impact
 
-- **Realized** (actions A1, A14, A15, A2, A3, A4, A5, A9): gross -1385, +35, net **-1350**
-- Still proposed: gross -3, +0, net -3
+- **Realized** (actions A1, A10, A14, A15, A2, A3, A4, A5, A6, A7, A8, A9): gross -1388, +35, net **-1353**
+- Still proposed: gross -0, +0, net -0
 - LOC merely moved between directories (NOT a reduction): 60
 
 ## Recommended sequence
@@ -522,25 +509,18 @@ costs zero.
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/route_manifest.py is on the default production path from extra/ with no promotion or retention decision
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/runtime_specs.py is on the default production path from extra/ with no promotion or retention decision
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/warp_reduce_lowering.py is on the default production path from extra/ with no promotion or retention decision
-- **high_fan_in** (a widely-imported module is a de-facto authority): extra/qk/kernel_vocabulary.py is imported by 16 modules
-- **high_fan_in** (a widely-imported module is a de-facto authority): extra/qk/layout.py is imported by 23 modules
+- **high_fan_in** (a widely-imported module is a de-facto authority): extra/qk/layout.py is imported by 21 modules
 - **high_fan_in** (a widely-imported module is a de-facto authority): extra/qk/route_manifest.py is imported by 20 modules
-- **high_fan_in** (a widely-imported module is a de-facto authority): extra/qk/runtime_specs.py is imported by 13 modules
 - **high_fan_out** (prefer deep modules with small interfaces): extra/qk/decode/current_decode_execution_adapter.py imports 17 internal modules
 - **high_fan_out** (prefer deep modules with small interfaces): extra/qk/prefill/current_prefill_execution_adapter.py imports 19 internal modules
-- **large_file** (minimize what a reader must hold in their head): extra/qk/kernel_lds.py is 973 LOC (threshold 400); responsibilities declared: 7
 - **large_file** (minimize what a reader must hold in their head): extra/qk/mmq_q4k_q8_atom.py is 832 LOC (threshold 400); responsibilities declared: 4
 - **large_file** (minimize what a reader must hold in their head): extra/qk/prefill/prefill_whole_synced.py is 423 LOC (threshold 400); responsibilities declared: 5
-- **large_file** (minimize what a reader must hold in their head): extra/qk/route_manifest.py is 787 LOC (threshold 400); responsibilities declared: 7
+- **large_file** (minimize what a reader must hold in their head): extra/qk/route_manifest.py is 415 LOC (threshold 400); responsibilities declared: 7
 - **large_file** (minimize what a reader must hold in their head): extra/qk/runtime_specs.py is 758 LOC (threshold 400); responsibilities declared: 5
 - **large_file** (minimize what a reader must hold in their head): extra/qk/shared_attention_capture.py is 463 LOC (threshold 400); responsibilities declared: 4
 - **multiple_authority_keys** (centralize authoritative knowledge under one owner): extra/qk/clock_pin.py declares 4 authority keys: ['clock_pin.PIN_PEAK_CMD', 'clock_pin.SET_AUTO_CMD', 'clock_pin.ROCM_SMI_PIN_CMD', 'clock_pin.RESET_PERF_DETERMINISM']
-- **multiple_authority_keys** (centralize authoritative knowledge under one owner): extra/qk/kernel_lds.py declares 6 authority keys: ['cooperative_lds_stores.row_election_rule', 'rdna3_wmma_output_coord.native_c_map', 'build_packed_component_lds_stage.contract', 'build_packed_record_lds_stage.contract', 'build_hierarchical_packed_record_stage.publish_release_protocol', 'prove_hierarchical_packed_record_stage.invariants']
-- **multiple_authority_keys** (centralize authoritative knowledge under one owner): extra/qk/kernel_pipeline.py declares 4 authority keys: ['prove_dot_update_recurrence.invariants', 'hierarchical_lifecycle_events.canonical_sequence', 'prove_hierarchical_lifecycle.invariants', 'build_scheduler_output_tile_owner.ownership_proof']
 - **multiple_authority_keys** (centralize authoritative knowledge under one owner): extra/qk/memory_adaptive_policy.py declares 4 authority keys: ['tinygrad.memory_adaptive_policy.v1', 'tinygrad.memory_adaptive_policy_cache.v1', 'tinygrad.accelerated_candidate.production_eligibility.v1', 'tinygrad.accelerated_candidate.production_eligibility_requirement.v1']
 - **multiple_authority_keys** (centralize authoritative knowledge under one owner): extra/qk/mmq_atom_boundary.py declares 4 authority keys: ['PREFILL_14B_Q4K_Q8_1_HYBRID_MMQ_ATOM_ROUTE_ID', 'Prefill14BHybridMMQAtomSpec', 'Prefill14BHybridMMQAtomDescriptor', 'milestone_evidence(M1..M7)']
-- **multiple_authority_keys** (centralize authoritative knowledge under one owner): extra/qk/mmq_llama_packed_operands.py declares 6 authority keys: ['llama.q4_k.global_block.v1', 'llama.q8_1.ds4.global_and_lds_row.v1', 'llama.q4_k.decoded_lds_row.v1', 'llama.q4_k.decoded_fp16_group_lds_row.v1', 'llama.activation.fp16_k32_group_row.v1', 'SOURCE_ANCHORS']
-- **multiple_authority_keys** (centralize authoritative knowledge under one owner): extra/qk/mmq_llama_record_producers.py declares 5 authority keys: ['llama-q8-ds4-producer-instance.v1', 'Q8_DS4_RECORD_COPY', 'Q4_K_RECORD_DECODE', 'Q4_K_RECORD_DECODE_GROUP', 'ACTIVATION_FP16_RECORD_COPY']
 - **multiple_authority_keys** (centralize authoritative knowledge under one owner): extra/qk/mmq_logical_vocabulary.py declares 4 authority keys: ['mmq-logical-vocabulary/1', 'LogicalMMQDescriptor', 'MMQCandidate', 'packed_ds4_geometry canonical grammar (256/32/4 Q4_K, 32/128/4 Q8_1)']
 - **multiple_authority_keys** (centralize authoritative knowledge under one owner): extra/qk/mmq_q4k_q8_atom.py declares 12 authority keys: ['BACKEND_ATOM_ID', 'AMD_BACKEND_ATOM_ID', 'AMD_WARP_BACKEND_ATOM_ID', 'AMD_WARP_BATCHED_BACKEND_ATOM_ID', 'AMD_DOT4_BATCHED_BACKEND_ATOM_ID', 'AMD_DOT4X4_BATCHED_BACKEND_ATOM_ID', 'AMD_STAGED_DS4_BACKEND_ATOM_ID', 'AMD_DS4_WARP_BACKEND_ATOM_ID', 'AMD_DS4_DOT4X4_BACKEND_ATOM_ID', 'AMD_DS4_LDS_SKELETON_BACKEND_ATOM_ID', 'AMD_DS4_COOP_TILE_BACKEND_ATOM_ID', 'MMQ_WRITEBACK_MODES']
 - **multiple_authority_keys** (centralize authoritative knowledge under one owner): extra/qk/mmq_q4k_q8_reference.py declares 5 authority keys: ['Q8_1_MMQ_DS4_LAYOUT', 'Q8_1_ROW_MAJOR_LAYOUT', 'Q4KQ81MMQTileSpec', 'Q81MMQDS4ActivationSpec', 'MMQOutputTileSpec']

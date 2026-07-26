@@ -130,6 +130,7 @@
       "loc_removed": 0,
       "path": "extra/qk/kernel_lds.py",
       "question": "Do the packed-component and hierarchical-stage clusters still have an open question, or did the record-stage design supersede them? Answer decides prune (~550 LOC + 2 test files) versus retain.",
+      "status": "completed",
       "tests_required": []
     },
     {
@@ -151,6 +152,7 @@
       "path": "extra/qk/kernel_lds.py",
       "promotion_readiness": "not justified",
       "promotion_target": "tinygrad/codegen/opt/kernel_lds.py",
+      "status": "completed",
       "tests_required": []
     },
     {
@@ -168,6 +170,7 @@
       "loc_removed": 0,
       "path": "extra/qk/codegen_extensions.py",
       "question": "Does DEV=AMD:ISA remain a live research surface with an open question, or has it produced its verdict? The answer sets a retention criterion for ~3.2K LOC; nothing should be moved or deleted before it.",
+      "status": "completed",
       "tests_required": []
     },
     {
@@ -310,18 +313,16 @@
       "loc_removed": 0,
       "path": "extra/qk/quant_specs.py",
       "question": "Is quant_specs.py a not-yet-wired intended API or superseded by runtime_specs.py? Prune only if superseded.",
+      "status": "completed",
       "tests_required": []
     }
   ],
   "audited_commit": {
-    "commit": "a59eabb79a22436edf30ca72f627fc40432a460b",
-    "described": "mac-first-boot-20260610-3416-ga59eabb79-dirty",
+    "commit": "bece3963e9a74d4e041a8c547666fd53ca5484eb",
+    "described": "mac-first-boot-20260610-3419-gbece3963e-dirty",
     "dirty": true
   },
   "authority_keys": {
-    "ACTIVATION_FP16_RECORD_COPY": [
-      "extra/qk/mmq_llama_record_producers.py"
-    ],
     "AMD_BACKEND_ATOM_ID": [
       "extra/qk/mmq_q4k_q8_atom.py"
     ],
@@ -391,17 +392,8 @@
     "KernelTileGeometry.__post_init__.invariants": [
       "extra/qk/kernel_vocabulary.py"
     ],
-    "LLAMA_MMQ_COOP_TILE_ORACLE_BACKEND_ID": [
-      "extra/qk/mmq_llama_oracle.py"
-    ],
-    "LLAMA_Q4K_Q8_1_DS4_SOURCE_ANCHORS": [
-      "extra/qk/q4k_q8_mmq_uop.py"
-    ],
     "LanePartition.lane_expr": [
       "extra/qk/lane_partition_reduce.py"
-    ],
-    "LlamaMMQOracleGeometry": [
-      "extra/qk/mmq_llama_oracle.py"
     ],
     "LogicalMMQDescriptor": [
       "extra/qk/mmq_logical_vocabulary.py"
@@ -432,9 +424,6 @@
     ],
     "PREFILL_CAUSAL_TILE_SKIP.promotion_verdict": [
       "extra/qk/prefill/prefill_causal_tile_skip_promotion_gate.py"
-    ],
-    "PROTOCOL=tinygrad.q4k_q8_mmq_uop_validation.v2": [
-      "extra/qk/q4k_q8_mmq_uop_validation.py"
     ],
     "PURE_MACHINE_SEARCH_ONLY enforcement": [
       "extra/qk/pure_search_guard.py"
@@ -478,12 +467,6 @@
     "Q4K_SCALE_MIN_OFFSET": [
       "extra/qk/q4k_tile_loader.py"
     ],
-    "Q4_K_RECORD_DECODE": [
-      "extra/qk/mmq_llama_record_producers.py"
-    ],
-    "Q4_K_RECORD_DECODE_GROUP": [
-      "extra/qk/mmq_llama_record_producers.py"
-    ],
     "Q6KGEMVRouteSpec (sole data schema for Q6_K decode-GEMV route shape/family)": [
       "extra/qk/q6k_route_spec.py"
     ],
@@ -501,15 +484,6 @@
     ],
     "Q8_1_ROW_MAJOR_LAYOUT": [
       "extra/qk/mmq_q4k_q8_reference.py"
-    ],
-    "Q8_DS4_RECORD_COPY": [
-      "extra/qk/mmq_llama_record_producers.py"
-    ],
-    "QUANT_FORMAT_SPECS layout metadata (block_size/group_size/scale_layout/min_layout per Q4_K/Q6_K) -- NOT claimed elsewhere; distinct from runtime_specs.QUANT_FORMATS which is only a bare name tuple with no layout fields": [
-      "extra/qk/quant_specs.py"
-    ],
-    "REQUIRED_DIMENSIONS": [
-      "extra/qk/mmq_llama_differential.py"
     ],
     "REQUIRED_FLAGS (correctness/score_resident/qk_wmma/pv_wmma/model_8b_prefill/model_14b_prefill/decode_nonregression_8b/decode_nonregression_14b)": [
       "extra/qk/shared_attention_promotion.py"
@@ -532,9 +506,6 @@
     "SHIPPING_DECISIONS": [
       "extra/qk/prefill/execution_bridge_contracts.py"
     ],
-    "SOURCE_ANCHORS": [
-      "extra/qk/mmq_llama_packed_operands.py"
-    ],
     "_EPOCH_ORDER": [
       "extra/qk/mmq_compile_evidence.py"
     ],
@@ -556,9 +527,6 @@
     "abi_dataflow_v1": [
       "extra/qk/operand_attribution.py"
     ],
-    "admit_evidence.pass_fail_contract": [
-      "extra/qk/q4k_q8_mmq_uop_validation.py"
-    ],
     "amd-isa-renderer-proof-manifest-row.v1 (row shape produced by _ProofHook.record/record_inst)": [
       "extra/qk/amd_isa_proof.py"
     ],
@@ -573,18 +541,6 @@
     ],
     "boltbeam.timing_trace.v1": [
       "extra/qk/prefill/prefill_boltbeam_trace.py"
-    ],
-    "build_hierarchical_packed_record_stage.publish_release_protocol": [
-      "extra/qk/kernel_lds.py"
-    ],
-    "build_packed_component_lds_stage.contract": [
-      "extra/qk/kernel_lds.py"
-    ],
-    "build_packed_record_lds_stage.contract": [
-      "extra/qk/kernel_lds.py"
-    ],
-    "build_scheduler_output_tile_owner.ownership_proof": [
-      "extra/qk/kernel_pipeline.py"
     ],
     "clock_pin.PIN_PEAK_CMD": [
       "extra/qk/clock_pin.py"
@@ -601,14 +557,8 @@
     "coalesce_loads.upcast_promotion_rule": [
       "extra/qk/coalesced_load_lowering.py"
     ],
-    "cooperative_lds_stores.row_election_rule": [
-      "extra/qk/kernel_lds.py"
-    ],
     "decode_q6k_coop_generated writer identity (shared with route_manifest.py, which cites this file by name)": [
       "extra/qk/q6k_route_spec.py"
-    ],
-    "dynamic_tile_owner.own_dynamic_tiles (range-closing/ownership discipline for scheduler-owned dynamic tile loops)": [
-      "extra/qk/dynamic_tile_owner.py"
     ],
     "effective_routes() family->route resolution": [
       "extra/qk/pure_search_guard.py"
@@ -627,9 +577,6 @@
     ],
     "execution_bridge.phase_orchestration": [
       "extra/qk/prefill/operand_path_execution_worker.py"
-    ],
-    "execution_bridge.prefill_source_value_key (informal: the sole definition of this key shape)": [
-      "extra/qk/prefill/prefill_value_key.py"
     ],
     "execution_bridge.request.v1": [
       "extra/qk/prefill/execution_bridge_contracts.py"
@@ -727,9 +674,6 @@
     "guarded-execution.v1": [
       "extra/qk/prefill/guarded_execution.py"
     ],
-    "hierarchical_lifecycle_events.canonical_sequence": [
-      "extra/qk/kernel_pipeline.py"
-    ],
     "host-safety-canary.v1": [
       "extra/qk/prefill/host_safety_canary.py"
     ],
@@ -744,24 +688,6 @@
     ],
     "live_split_geometry.LiveSplitGeometry (per-split length/inner-block-count formula for live-context decode attention splits)": [
       "extra/qk/live_split_geometry.py"
-    ],
-    "llama-q8-ds4-producer-instance.v1": [
-      "extra/qk/mmq_llama_record_producers.py"
-    ],
-    "llama.activation.fp16_k32_group_row.v1": [
-      "extra/qk/mmq_llama_packed_operands.py"
-    ],
-    "llama.q4_k.decoded_fp16_group_lds_row.v1": [
-      "extra/qk/mmq_llama_packed_operands.py"
-    ],
-    "llama.q4_k.decoded_lds_row.v1": [
-      "extra/qk/mmq_llama_packed_operands.py"
-    ],
-    "llama.q4_k.global_block.v1": [
-      "extra/qk/mmq_llama_packed_operands.py"
-    ],
-    "llama.q8_1.ds4.global_and_lds_row.v1": [
-      "extra/qk/mmq_llama_packed_operands.py"
     ],
     "lower_warp_reduce.auto_detect_rule": [
       "extra/qk/warp_reduce_lowering.py"
@@ -820,20 +746,8 @@
     "prefill_softmax_reduce_fuse_promotion.verdict": [
       "extra/qk/prefill/prefill_softmax_reduce_fuse_promotion_gate.py"
     ],
-    "prefill_source_value_key resolution rule": [
-      "extra/qk/amd_isa_renderer_policy.py"
-    ],
     "promotion.evidence_loading_rule": [
       "extra/qk/prefill/promotion_gate_common.py"
-    ],
-    "prove_dot_update_recurrence.invariants": [
-      "extra/qk/kernel_pipeline.py"
-    ],
-    "prove_hierarchical_lifecycle.invariants": [
-      "extra/qk/kernel_pipeline.py"
-    ],
-    "prove_hierarchical_packed_record_stage.invariants": [
-      "extra/qk/kernel_lds.py"
     ],
     "pure_search_violations() purity verdict": [
       "extra/qk/pure_search_guard.py"
@@ -855,9 +769,6 @@
     ],
     "quantize_q4_k.qkx2_search_algorithm": [
       "extra/qk/quantize.py"
-    ],
-    "rdna3_wmma_output_coord.native_c_map": [
-      "extra/qk/kernel_lds.py"
     ],
     "role_from_name.taxonomy": [
       "extra/qk/layout.py"
@@ -897,9 +808,6 @@
     ],
     "tinygrad.memory_adaptive_policy_cache.v1": [
       "extra/qk/memory_adaptive_policy.py"
-    ],
-    "tinygrad.mmq_llama_structural_differential.v1": [
-      "extra/qk/mmq_llama_differential.py"
     ],
     "tinygrad.model_memory_adaptive_request.v1": [
       "extra/qk/memory_adaptive_runtime_collector.py"
@@ -951,20 +859,17 @@
     ],
     "warp_shfl_xor.ds_bpermute_abi": [
       "extra/qk/amd_warp_reduce.py"
-    ],
-    "wmma_frag_proof / wmma_frag_buffer_proof / wmma_frag_store_epoch_proof derivation rules (REQUIRED_WMMA_PROOF_FIELDS)": [
-      "extra/qk/amd_isa_renderer_policy.py"
     ]
   },
   "coverage": {
-    "authored_files": 460,
-    "authored_loc": 73287,
-    "explicit_records": 107,
+    "authored_files": 435,
+    "authored_loc": 68387,
+    "explicit_records": 96,
     "generated_files": 1,
     "generated_loc": 57,
     "group_covered": 0,
-    "manifest_scope_files": 107,
-    "manifest_scope_loc": 16338,
+    "manifest_scope_files": 96,
+    "manifest_scope_loc": 13275,
     "uncovered": []
   },
   "coverage_limitations": [
@@ -1031,19 +936,17 @@
       "extra/qk/runtime_specs.py",
       "extra/qk/warp_reduce_lowering.py"
     ],
-    "loc": 9228,
+    "loc": 8856,
     "production_reachable_from_tinygrad": [
       "extra/hardware/sqtt/roc.py",
       "extra/llm/cli.py",
       "extra/nv_gpu_driver/nv_ioctl.py",
       "extra/qk/amd_isa_proof.py",
-      "extra/qk/amd_isa_renderer_policy.py",
       "extra/qk/amd_resource_artifact.py",
       "extra/qk/amd_warp_reduce.py",
       "extra/qk/attention_harness_common.py",
       "extra/qk/bubblebeam_futuresight.py",
       "extra/qk/coalesced_load_lowering.py",
-      "extra/qk/codegen_extensions.py",
       "extra/qk/codegen_list_scheduler.py",
       "extra/qk/codegen_recurrence_unroll.py",
       "extra/qk/cooperative_stage_lanemap.py",
@@ -1054,8 +957,6 @@
       "extra/qk/flash_kernels.py",
       "extra/qk/gemv_g2_lanemap.py",
       "extra/qk/gemv_g3_codegen_lowering.py",
-      "extra/qk/kernel_lds.py",
-      "extra/qk/kernel_pipeline.py",
       "extra/qk/kernel_vocabulary.py",
       "extra/qk/kv_load.py",
       "extra/qk/lane_partition_reduce.py",
@@ -1071,10 +972,6 @@
       "extra/qk/mmq_ds4_probe_contract.py",
       "extra/qk/mmq_epoch_manifest_export.py",
       "extra/qk/mmq_lifecycle.py",
-      "extra/qk/mmq_llama_differential.py",
-      "extra/qk/mmq_llama_oracle.py",
-      "extra/qk/mmq_llama_packed_operands.py",
-      "extra/qk/mmq_llama_record_producers.py",
       "extra/qk/mmq_logical_vocabulary.py",
       "extra/qk/mmq_q4k_q8_atom.py",
       "extra/qk/mmq_q4k_q8_reference.py",
@@ -1094,14 +991,12 @@
       "extra/qk/prefill/packed_wmma_prefill_candidates.py",
       "extra/qk/prefill/prefill_graph_gemm_route.py",
       "extra/qk/prefill/prefill_primitive_spec.py",
-      "extra/qk/prefill/prefill_value_key.py",
       "extra/qk/prefill/pure_register_compile_capture.py",
       "extra/qk/prefill/pure_register_evaluation_gate.py",
       "extra/qk/prefill/q4k_prefill_route_spec.py",
       "extra/qk/prefill/q4k_q8_mmq_prefill_spec.py",
       "extra/qk/prefill/q6k_prefill_route_spec.py",
       "extra/qk/pure_search_guard.py",
-      "extra/qk/q4k_q8_mmq_uop.py",
       "extra/qk/q4k_tile_loader.py",
       "extra/qk/q6k_route_spec.py",
       "extra/qk/quant/q4_k_gemv_primitive.py",
@@ -1123,7 +1018,6 @@
     "dynamic_seam_edges": {
       "tinygrad/codegen/experimental.py": [
         "extra/qk/coalesced_load_lowering.py",
-        "extra/qk/codegen_extensions.py",
         "extra/qk/codegen_list_scheduler.py",
         "extra/qk/codegen_recurrence_unroll.py",
         "extra/qk/fdot2_lowering.py",
@@ -1261,13 +1155,6 @@
         "tinygrad/helpers.py",
         "tinygrad/renderer/isa/amd.py"
       ],
-      "extra/qk/amd_isa_renderer_policy.py": [
-        "extra/qk/mmq_llama_record_producers.py",
-        "extra/qk/prefill/prefill_value_key.py",
-        "tinygrad/codegen/opt/__init__.py",
-        "tinygrad/dtype.py",
-        "tinygrad/uop/ops.py"
-      ],
       "extra/qk/amd_resource_artifact.py": [
         "tinygrad/codegen/opt/register_contracts.py"
       ],
@@ -1311,10 +1198,6 @@
         "tinygrad/helpers.py",
         "tinygrad/uop/ops.py"
       ],
-      "extra/qk/codegen_extensions.py": [
-        "extra/qk/amd_isa_renderer_policy.py",
-        "tinygrad/renderer/isa/extensions.py"
-      ],
       "extra/qk/codegen_list_scheduler.py": [
         "tinygrad/helpers.py",
         "tinygrad/uop/ops.py"
@@ -1356,12 +1239,19 @@
         "extra/qk/decode/flash_decode_attention_executor.py",
         "tinygrad/__init__.py"
       ],
+      "extra/qk/decode/decode_resource_capture.py": [
+        "extra/qk/mmq_compile_evidence.py"
+      ],
       "extra/qk/decode/decode_runtime_overhead.py": [
         "extra/llm/generate.py",
         "extra/qk/decode/decode_harness.py",
         "tinygrad/__init__.py",
         "tinygrad/llm/route_policy.py",
         "tinygrad/uop/ops.py"
+      ],
+      "extra/qk/decode/decode_tile_timing.py": [
+        "extra/qk/decode/flash_decode_attention_executor.py",
+        "tinygrad/__init__.py"
       ],
       "extra/qk/decode/flash_decode_attention_executor.py": [
         "extra/qk/decode/flash_decode_attention_spec.py",
@@ -1370,11 +1260,6 @@
       "extra/qk/decode/flash_decode_attention_spec.py": [
         "extra/qk/flash_kernels.py",
         "extra/qk/live_split_geometry.py",
-        "tinygrad/uop/ops.py"
-      ],
-      "extra/qk/dynamic_tile_owner.py": [
-        "extra/qk/kernel_pipeline.py",
-        "tinygrad/__init__.py",
         "tinygrad/uop/ops.py"
       ],
       "extra/qk/fdot2_lowering.py": [
@@ -1420,19 +1305,6 @@
       "extra/qk/generated_candidates.py": [
         "extra/qk/route_manifest.py",
         "extra/qk/runtime_specs.py"
-      ],
-      "extra/qk/kernel_lds.py": [
-        "extra/qk/kernel_pipeline.py",
-        "extra/qk/kernel_vocabulary.py",
-        "tinygrad/codegen/opt/kernel_lds.py",
-        "tinygrad/codegen/opt/packed_weight.py",
-        "tinygrad/dtype.py",
-        "tinygrad/uop/ops.py"
-      ],
-      "extra/qk/kernel_pipeline.py": [
-        "tinygrad/codegen/opt/kernel_pipeline.py",
-        "tinygrad/dtype.py",
-        "tinygrad/uop/ops.py"
       ],
       "extra/qk/kernel_vocabulary.py": [
         "tinygrad/codegen/opt/packed_weight.py",
@@ -1498,26 +1370,6 @@
       ],
       "extra/qk/mmq_epoch_manifest_export.py": [
         "extra/qk/amd_isa_proof.py"
-      ],
-      "extra/qk/mmq_llama_differential.py": [
-        "extra/qk/mmq_llama_oracle.py",
-        "extra/qk/q4k_q8_mmq_uop.py"
-      ],
-      "extra/qk/mmq_llama_oracle.py": [
-        "extra/qk/layout.py",
-        "extra/qk/mmq_q4k_q8_reference.py"
-      ],
-      "extra/qk/mmq_llama_packed_operands.py": [
-        "extra/qk/mmq_llama_differential.py",
-        "tinygrad/codegen/opt/packed_weight.py",
-        "tinygrad/dtype.py"
-      ],
-      "extra/qk/mmq_llama_record_producers.py": [
-        "extra/qk/kernel_lds.py",
-        "extra/qk/mmq_llama_packed_operands.py",
-        "tinygrad/codegen/opt/packed_weight.py",
-        "tinygrad/dtype.py",
-        "tinygrad/uop/ops.py"
       ],
       "extra/qk/mmq_q4k_q8_atom.py": [
         "extra/qk/amd_warp_reduce.py",
@@ -1729,20 +1581,6 @@
         "extra/qk/kernel_vocabulary.py",
         "extra/qk/layout.py"
       ],
-      "extra/qk/q4k_q8_mmq_uop.py": [
-        "extra/qk/layout.py",
-        "tinygrad/__init__.py",
-        "tinygrad/codegen/opt/__init__.py",
-        "tinygrad/uop/ops.py"
-      ],
-      "extra/qk/q4k_q8_mmq_uop_validation.py": [
-        "extra/qk/q4k_q8_mmq_uop.py",
-        "tinygrad/__init__.py",
-        "tinygrad/codegen/opt/__init__.py",
-        "tinygrad/engine/realize.py",
-        "tinygrad/helpers.py",
-        "tinygrad/uop/ops.py"
-      ],
       "extra/qk/q4k_tile_loader.py": [
         "extra/qk/layout.py"
       ],
@@ -1766,9 +1604,6 @@
         "tinygrad/codegen/opt/__init__.py",
         "tinygrad/helpers.py",
         "tinygrad/uop/ops.py"
-      ],
-      "extra/qk/quant_specs.py": [
-        "extra/qk/runtime_specs.py"
       ],
       "extra/qk/reg_store_devec.py": [
         "tinygrad/uop/ops.py"
@@ -1929,10 +1764,6 @@
         "tinygrad/renderer/amd/elf.py",
         "tinygrad/uop/ops.py"
       ],
-      "test/unit/test_amd_isa_extension_interfaces.py": [
-        "extra/qk/codegen_extensions.py",
-        "tinygrad/renderer/isa/extensions.py"
-      ],
       "test/unit/test_amd_isa_extraction_fixtures.py": [
         "extra/qk/amd_isa_proof.py",
         "test/unit/test_amd_isa_wmma.py",
@@ -2055,6 +1886,9 @@
         "tinygrad/renderer/isa/amd.py",
         "tinygrad/uop/ops.py"
       ],
+      "test/unit/test_bench_entrypoint.py": [
+        "extra/qk/bench.py"
+      ],
       "test/unit/test_candidate_context_propagation.py": [
         "extra/qk/kernel_vocabulary.py",
         "tinygrad/codegen/opt/postrange.py",
@@ -2114,6 +1948,9 @@
         "extra/qk/runtime_specs.py",
         "tinygrad/uop/ops.py"
       ],
+      "test/unit/test_decode_resource_capture.py": [
+        "extra/qk/decode/decode_resource_capture.py"
+      ],
       "test/unit/test_devectorizer_memory_widths.py": [
         "tinygrad/__init__.py",
         "tinygrad/codegen/late/devectorizer.py",
@@ -2131,13 +1968,6 @@
       ],
       "test/unit/test_dispatch_trace.py": [
         "tinygrad/device.py"
-      ],
-      "test/unit/test_dynamic_tile_owner.py": [
-        "extra/qk/dynamic_tile_owner.py",
-        "extra/qk/kernel_pipeline.py",
-        "tinygrad/__init__.py",
-        "tinygrad/callify.py",
-        "tinygrad/uop/ops.py"
       ],
       "test/unit/test_executable_artifact_preparation.py": [
         "extra/qk/prefill/executable_artifact_preparation.py",
@@ -2173,11 +2003,6 @@
         "tinygrad/llm/gguf_memory_scan.py",
         "tinygrad/llm/memory_ledger.py"
       ],
-      "test/unit/test_grouped_dot_update_pipeline.py": [
-        "extra/qk/kernel_pipeline.py",
-        "tinygrad/__init__.py",
-        "tinygrad/uop/ops.py"
-      ],
       "test/unit/test_hcq_graph_profile_export.py": [
         "tinygrad/device.py",
         "tinygrad/runtime/graph/hcq.py"
@@ -2189,19 +2014,6 @@
         "tinygrad/device.py",
         "tinygrad/runtime/ops_amd.py",
         "tinygrad/runtime/support/hcq.py"
-      ],
-      "test/unit/test_hierarchical_kernel_pipeline.py": [
-        "extra/qk/kernel_pipeline.py"
-      ],
-      "test/unit/test_hierarchical_packed_record_stage.py": [
-        "extra/qk/kernel_lds.py",
-        "extra/qk/kernel_pipeline.py",
-        "extra/qk/kernel_vocabulary.py",
-        "tinygrad/__init__.py",
-        "tinygrad/codegen/opt/packed_weight.py",
-        "tinygrad/codegen/opt/tc.py",
-        "tinygrad/dtype.py",
-        "tinygrad/uop/ops.py"
       ],
       "test/unit/test_host_safety_canary_20260713.py": [
         "extra/qk/prefill/guarded_execution.py",
@@ -2228,7 +2040,6 @@
         "tinygrad/uop/ops.py"
       ],
       "test/unit/test_kernel_lds_mapping.py": [
-        "extra/qk/kernel_lds.py",
         "extra/qk/kernel_vocabulary.py",
         "tinygrad/__init__.py",
         "tinygrad/codegen/opt/kernel_lds.py",
@@ -2337,29 +2148,6 @@
       "test/unit/test_mmq_lifecycle.py": [
         "extra/qk/mmq_lifecycle.py"
       ],
-      "test/unit/test_mmq_llama_differential.py": [
-        "extra/qk/mmq_llama_differential.py",
-        "extra/qk/q4k_q8_mmq_uop.py"
-      ],
-      "test/unit/test_mmq_llama_packed_operands.py": [
-        "extra/qk/mmq_llama_packed_operands.py",
-        "tinygrad/codegen/opt/packed_weight.py",
-        "tinygrad/dtype.py"
-      ],
-      "test/unit/test_mmq_llama_record_producers.py": [
-        "extra/qk/amd_isa_renderer_policy.py",
-        "extra/qk/mmq_llama_record_producers.py",
-        "test/helpers.py",
-        "tinygrad/__init__.py",
-        "tinygrad/uop/ops.py"
-      ],
-      "test/unit/test_mmq_llama_split_q8_record_producer.py": [
-        "extra/qk/mmq_llama_packed_operands.py",
-        "extra/qk/mmq_llama_record_producers.py",
-        "test/helpers.py",
-        "tinygrad/__init__.py",
-        "tinygrad/uop/ops.py"
-      ],
       "test/unit/test_mmq_logical_vocabulary.py": [
         "extra/qk/mmq_logical_vocabulary.py"
       ],
@@ -2430,30 +2218,6 @@
         "extra/qk/prefill/isolated_guarded_executor.py",
         "extra/qk/prefill/operand_path_execution_worker.py"
       ],
-      "test/unit/test_packed_component_lds_stage.py": [
-        "extra/qk/kernel_lds.py",
-        "extra/qk/kernel_vocabulary.py",
-        "tinygrad/__init__.py",
-        "tinygrad/codegen/opt/packed_weight.py",
-        "tinygrad/codegen/opt/tc.py",
-        "tinygrad/dtype.py",
-        "tinygrad/uop/ops.py"
-      ],
-      "test/unit/test_packed_operand_contract.py": [
-        "extra/qk/kernel_lds.py",
-        "extra/qk/kernel_vocabulary.py",
-        "tinygrad/codegen/opt/packed_weight.py",
-        "tinygrad/dtype.py"
-      ],
-      "test/unit/test_packed_record_lds_stage.py": [
-        "extra/qk/kernel_lds.py",
-        "extra/qk/kernel_vocabulary.py",
-        "tinygrad/__init__.py",
-        "tinygrad/codegen/opt/packed_weight.py",
-        "tinygrad/codegen/opt/tc.py",
-        "tinygrad/dtype.py",
-        "tinygrad/uop/ops.py"
-      ],
       "test/unit/test_packed_weight.py": [
         "extra/qk/kernel_vocabulary.py",
         "extra/qk/layout.py",
@@ -2472,7 +2236,6 @@
         "tinygrad/device.py"
       ],
       "test/unit/test_precontract_int8_lds_contract.py": [
-        "extra/qk/kernel_lds.py",
         "extra/qk/kernel_vocabulary.py",
         "tinygrad/__init__.py",
         "tinygrad/codegen/opt/kernel_lds.py",
@@ -2564,32 +2327,6 @@
         "extra/qk/prefill/prefill_primitive_spec.py",
         "extra/qk/prefill/q4k_q8_mmq_prefill_spec.py"
       ],
-      "test/unit/test_q4k_q8_mmq_uop.py": [
-        "extra/qk/mmq_compile_evidence.py",
-        "extra/qk/mmq_q4k_q8_reference.py",
-        "extra/qk/q4k_q8_mmq_uop.py",
-        "extra/qk/q4k_q8_mmq_uop_validation.py",
-        "tinygrad/__init__.py",
-        "tinygrad/codegen/__init__.py",
-        "tinygrad/codegen/opt/__init__.py",
-        "tinygrad/device.py",
-        "tinygrad/helpers.py",
-        "tinygrad/renderer/isa/amd.py",
-        "tinygrad/uop/ops.py"
-      ],
-      "test/unit/test_q4k_q8_mmq_uop_validation.py": [
-        "extra/qk/q4k_q8_mmq_uop.py",
-        "extra/qk/q4k_q8_mmq_uop_validation.py",
-        "tinygrad/__init__.py",
-        "tinygrad/uop/ops.py"
-      ],
-      "test/unit/test_q4k_q8_mmq_wide_grid.py": [
-        "extra/qk/q4k_q8_mmq_uop.py",
-        "test/unit/test_q4k_q8_mmq_uop.py",
-        "tinygrad/__init__.py",
-        "tinygrad/codegen/opt/__init__.py",
-        "tinygrad/uop/ops.py"
-      ],
       "test/unit/test_q4k_w_f16_decode.py": [
         "extra/qk/layout.py",
         "extra/qk/quant/q4_k_gemv_primitive.py",
@@ -2657,16 +2394,8 @@
         "extra/qk/generated_candidates.py",
         "extra/qk/prefill/prefill_graph_gemm_route.py",
         "extra/qk/pure_search_guard.py",
-        "extra/qk/quant_specs.py",
         "extra/qk/route_manifest.py",
         "extra/qk/runtime_specs.py"
-      ],
-      "test/unit/test_scheduler_output_tile_loop.py": [
-        "extra/qk/kernel_pipeline.py",
-        "tinygrad/__init__.py",
-        "tinygrad/codegen/opt/heuristic.py",
-        "tinygrad/codegen/opt/postrange.py",
-        "tinygrad/uop/ops.py"
       ],
       "test/unit/test_shared_attention_compiler_capture.py": [
         "extra/qk/shared_attention_capture.py",
@@ -3219,9 +2948,6 @@
         "tinygrad/renderer/isa/extensions.py",
         "tinygrad/uop/ops.py"
       ],
-      "tinygrad/renderer/isa/extensions.py": [
-        "tinygrad/codegen/experimental.py"
-      ],
       "tinygrad/renderer/isa/x86.py": [
         "tinygrad/dtype.py",
         "tinygrad/helpers.py",
@@ -3736,17 +3462,15 @@
       "extra/llm/sft_smoke_train.py": 0,
       "extra/nv_gpu_driver/nv_ioctl.py": 2,
       "extra/qk/amd_isa_proof.py": 4,
-      "extra/qk/amd_isa_renderer_policy.py": 2,
       "extra/qk/amd_resource_artifact.py": 6,
       "extra/qk/amd_warp_reduce.py": 7,
       "extra/qk/attention_harness_common.py": 8,
-      "extra/qk/bench.py": 2,
+      "extra/qk/bench.py": 3,
       "extra/qk/benchmark_shared_attention.py": 1,
       "extra/qk/benchmark_split_shared_attention.py": 0,
       "extra/qk/bubblebeam_futuresight.py": 1,
       "extra/qk/clock_pin.py": 2,
       "extra/qk/coalesced_load_lowering.py": 1,
-      "extra/qk/codegen_extensions.py": 2,
       "extra/qk/codegen_list_scheduler.py": 1,
       "extra/qk/codegen_recurrence_unroll.py": 1,
       "extra/qk/cooperative_stage_lanemap.py": 1,
@@ -3754,10 +3478,11 @@
       "extra/qk/decode/decode_codegen_identity_check.py": 0,
       "extra/qk/decode/decode_harness.py": 2,
       "extra/qk/decode/decode_hd_sweep_numerics.py": 0,
+      "extra/qk/decode/decode_resource_capture.py": 1,
       "extra/qk/decode/decode_runtime_overhead.py": 0,
-      "extra/qk/decode/flash_decode_attention_executor.py": 3,
+      "extra/qk/decode/decode_tile_timing.py": 0,
+      "extra/qk/decode/flash_decode_attention_executor.py": 4,
       "extra/qk/decode/flash_decode_attention_spec.py": 2,
-      "extra/qk/dynamic_tile_owner.py": 1,
       "extra/qk/fdot2_lowering.py": 1,
       "extra/qk/flash_common.py": 2,
       "extra/qk/flash_kernels.py": 1,
@@ -3765,12 +3490,10 @@
       "extra/qk/gemv_g3_codegen_lowering.py": 2,
       "extra/qk/generate_shared_attention_captures.py": 0,
       "extra/qk/generated_candidates.py": 2,
-      "extra/qk/kernel_lds.py": 7,
-      "extra/qk/kernel_pipeline.py": 7,
-      "extra/qk/kernel_vocabulary.py": 16,
+      "extra/qk/kernel_vocabulary.py": 11,
       "extra/qk/kv_load.py": 1,
       "extra/qk/lane_partition_reduce.py": 2,
-      "extra/qk/layout.py": 23,
+      "extra/qk/layout.py": 21,
       "extra/qk/layout_coalesce_check.py": 2,
       "extra/qk/live_split_geometry.py": 1,
       "extra/qk/memory_adaptive_allocation_observer.py": 4,
@@ -3782,13 +3505,9 @@
       "extra/qk/mmq_ds4_probe_contract.py": 2,
       "extra/qk/mmq_epoch_manifest_export.py": 3,
       "extra/qk/mmq_lifecycle.py": 3,
-      "extra/qk/mmq_llama_differential.py": 2,
-      "extra/qk/mmq_llama_oracle.py": 1,
-      "extra/qk/mmq_llama_packed_operands.py": 3,
-      "extra/qk/mmq_llama_record_producers.py": 3,
       "extra/qk/mmq_logical_vocabulary.py": 4,
       "extra/qk/mmq_q4k_q8_atom.py": 4,
-      "extra/qk/mmq_q4k_q8_reference.py": 7,
+      "extra/qk/mmq_q4k_q8_reference.py": 5,
       "extra/qk/model_profiles.py": 6,
       "extra/qk/operand_attribution.py": 2,
       "extra/qk/packed_wmma_canary_evidence.py": 0,
@@ -3816,7 +3535,6 @@
       "extra/qk/prefill/prefill_long_context_numerics.py": 0,
       "extra/qk/prefill/prefill_primitive_spec.py": 2,
       "extra/qk/prefill/prefill_softmax_reduce_fuse_promotion_gate.py": 0,
-      "extra/qk/prefill/prefill_value_key.py": 1,
       "extra/qk/prefill/prefill_whole_synced.py": 3,
       "extra/qk/prefill/promotion_gate_common.py": 3,
       "extra/qk/prefill/pure_register_compile_capture.py": 3,
@@ -3826,17 +3544,14 @@
       "extra/qk/prefill/q6k_prefill_route_spec.py": 1,
       "extra/qk/pure_search_guard.py": 4,
       "extra/qk/q4k_fused_mmq_contract.py": 0,
-      "extra/qk/q4k_q8_mmq_uop.py": 6,
-      "extra/qk/q4k_q8_mmq_uop_validation.py": 2,
       "extra/qk/q4k_tile_loader.py": 2,
       "extra/qk/q6k_route_spec.py": 1,
       "extra/qk/quant/q4_k_gemv_primitive.py": 5,
       "extra/qk/quant/q6_k_gemv_primitive.py": 3,
-      "extra/qk/quant_specs.py": 1,
       "extra/qk/quantize.py": 1,
       "extra/qk/reg_store_devec.py": 1,
       "extra/qk/route_manifest.py": 20,
-      "extra/qk/runtime_specs.py": 13,
+      "extra/qk/runtime_specs.py": 12,
       "extra/qk/shared_attention_capture.py": 4,
       "extra/qk/shared_attention_evidence.py": 4,
       "extra/qk/shared_attention_promotion.py": 2,
@@ -3852,7 +3567,7 @@
       "test/amd/disasm.py": 1,
       "test/amd/helpers.py": 1,
       "test/backend/test_softmax_fusion.py": 0,
-      "test/helpers.py": 2,
+      "test/helpers.py": 0,
       "test/mockgpu/cuda/cuda.py": 1,
       "test/test_guarded_execution.py": 0,
       "test/test_runtime_bridge.py": 0,
@@ -3866,7 +3581,6 @@
       "test/unit/test_amd_elf_entry_offset.py": 0,
       "test/unit/test_amd_epilogue_address_schedule_probe.py": 0,
       "test/unit/test_amd_final_elf_capture_20260712.py": 0,
-      "test/unit/test_amd_isa_extension_interfaces.py": 0,
       "test/unit/test_amd_isa_extraction_fixtures.py": 0,
       "test/unit/test_amd_isa_frag_waitcnt.py": 0,
       "test/unit/test_amd_isa_integer_vector_loads.py": 0,
@@ -3882,6 +3596,7 @@
       "test/unit/test_attention_residency_contract.py": 0,
       "test/unit/test_attention_semantic.py": 0,
       "test/unit/test_attn_qo_register_compile.py": 0,
+      "test/unit/test_bench_entrypoint.py": 0,
       "test/unit/test_candidate_context_propagation.py": 0,
       "test/unit/test_clock_pin.py": 0,
       "test/unit/test_codebase_organization_audit.py": 0,
@@ -3892,11 +3607,11 @@
       "test/unit/test_composite_tile_carrier.py": 0,
       "test/unit/test_current_decode_execution_adapter.py": 0,
       "test/unit/test_current_prefill_execution_adapter.py": 0,
+      "test/unit/test_decode_resource_capture.py": 0,
       "test/unit/test_devectorizer_memory_widths.py": 0,
       "test/unit/test_devectorizer_reconstruction.py": 0,
       "test/unit/test_disk_staging_timeout.py": 0,
       "test/unit/test_dispatch_trace.py": 0,
-      "test/unit/test_dynamic_tile_owner.py": 0,
       "test/unit/test_executable_artifact_preparation.py": 0,
       "test/unit/test_execution_bridge_contracts.py": 0,
       "test/unit/test_final_regalloc_proof_transport_20260712.py": 0,
@@ -3904,12 +3619,9 @@
       "test/unit/test_gemm_consumer_adapters.py": 0,
       "test/unit/test_generated_quant_binding_audit.py": 0,
       "test/unit/test_gguf_memory_scan.py": 0,
-      "test/unit/test_grouped_dot_update_pipeline.py": 0,
       "test/unit/test_hcq_graph_profile_export.py": 0,
       "test/unit/test_hcq_interface_allocator.py": 0,
       "test/unit/test_hcq_kernargs_contract.py": 0,
-      "test/unit/test_hierarchical_kernel_pipeline.py": 0,
-      "test/unit/test_hierarchical_packed_record_stage.py": 0,
       "test/unit/test_host_safety_canary_20260713.py": 0,
       "test/unit/test_isolated_guarded_executor.py": 0,
       "test/unit/test_kernargs_wrap_audit.py": 0,
@@ -3935,10 +3647,6 @@
       "test/unit/test_mmq_ds4_logical_emitter.py": 0,
       "test/unit/test_mmq_epoch_manifest_export.py": 0,
       "test/unit/test_mmq_lifecycle.py": 0,
-      "test/unit/test_mmq_llama_differential.py": 0,
-      "test/unit/test_mmq_llama_packed_operands.py": 0,
-      "test/unit/test_mmq_llama_record_producers.py": 0,
-      "test/unit/test_mmq_llama_split_q8_record_producer.py": 0,
       "test/unit/test_mmq_logical_vocabulary.py": 0,
       "test/unit/test_mmq_q4k_q8_atom.py": 0,
       "test/unit/test_mmq_q4k_q8_reference.py": 0,
@@ -3950,9 +3658,6 @@
       "test/unit/test_online_softmax_tile.py": 0,
       "test/unit/test_operand_attribution_20260714.py": 0,
       "test/unit/test_operand_path_execution_worker.py": 0,
-      "test/unit/test_packed_component_lds_stage.py": 0,
-      "test/unit/test_packed_operand_contract.py": 0,
-      "test/unit/test_packed_record_lds_stage.py": 0,
       "test/unit/test_packed_weight.py": 0,
       "test/unit/test_packed_wmma_compile_gate.py": 0,
       "test/unit/test_packed_wmma_correctness_canary.py": 0,
@@ -3974,9 +3679,6 @@
       "test/unit/test_q4_q4_owner_comparison.py": 0,
       "test/unit/test_q4k_prefill_route_spec.py": 0,
       "test/unit/test_q4k_q8_mmq_prefill_spec.py": 0,
-      "test/unit/test_q4k_q8_mmq_uop.py": 1,
-      "test/unit/test_q4k_q8_mmq_uop_validation.py": 0,
-      "test/unit/test_q4k_q8_mmq_wide_grid.py": 0,
       "test/unit/test_q4k_w_f16_decode.py": 0,
       "test/unit/test_qk_route_purity.py": 0,
       "test/unit/test_rangeify_multireduce.py": 0,
@@ -3989,7 +3691,6 @@
       "test/unit/test_regalloc_spans.py": 0,
       "test/unit/test_register_contracts.py": 0,
       "test/unit/test_runtime_specs.py": 1,
-      "test/unit/test_scheduler_output_tile_loop.py": 0,
       "test/unit/test_shared_attention_compiler_capture.py": 0,
       "test/unit/test_shared_attention_evidence.py": 0,
       "test/unit/test_shared_attention_promotion.py": 0,
@@ -4008,10 +3709,10 @@
       "test/unit/test_wmma_value_semantics.py": 0,
       "test/unit/test_wrapping_allocator_invariant.py": 0,
       "test/unit/test_x86_encoding_fixtures.py": 0,
-      "tinygrad/__init__.py": 107,
-      "tinygrad/callify.py": 2,
-      "tinygrad/codegen/__init__.py": 29,
-      "tinygrad/codegen/experimental.py": 5,
+      "tinygrad/__init__.py": 94,
+      "tinygrad/callify.py": 1,
+      "tinygrad/codegen/__init__.py": 28,
+      "tinygrad/codegen/experimental.py": 4,
       "tinygrad/codegen/gpudims.py": 1,
       "tinygrad/codegen/late/composite_combines.py": 5,
       "tinygrad/codegen/late/devectorizer.py": 5,
@@ -4022,23 +3723,23 @@
       "tinygrad/codegen/late/reduce_lowering.py": 5,
       "tinygrad/codegen/late/reg_store.py": 4,
       "tinygrad/codegen/late/regalloc.py": 9,
-      "tinygrad/codegen/opt/__init__.py": 25,
+      "tinygrad/codegen/opt/__init__.py": 20,
       "tinygrad/codegen/opt/compiler_policies.py": 13,
       "tinygrad/codegen/opt/gemm_consumer.py": 1,
-      "tinygrad/codegen/opt/heuristic.py": 2,
-      "tinygrad/codegen/opt/kernel_lds.py": 7,
-      "tinygrad/codegen/opt/kernel_pipeline.py": 6,
-      "tinygrad/codegen/opt/packed_weight.py": 13,
-      "tinygrad/codegen/opt/postrange.py": 14,
+      "tinygrad/codegen/opt/heuristic.py": 1,
+      "tinygrad/codegen/opt/kernel_lds.py": 6,
+      "tinygrad/codegen/opt/kernel_pipeline.py": 5,
+      "tinygrad/codegen/opt/packed_weight.py": 5,
+      "tinygrad/codegen/opt/postrange.py": 13,
       "tinygrad/codegen/opt/register_contracts.py": 5,
-      "tinygrad/codegen/opt/tc.py": 14,
+      "tinygrad/codegen/opt/tc.py": 11,
       "tinygrad/codegen/simplify.py": 3,
-      "tinygrad/device.py": 46,
-      "tinygrad/dtype.py": 127,
+      "tinygrad/device.py": 45,
+      "tinygrad/dtype.py": 117,
       "tinygrad/engine/jit.py": 6,
-      "tinygrad/engine/realize.py": 10,
+      "tinygrad/engine/realize.py": 9,
       "tinygrad/function.py": 1,
-      "tinygrad/helpers.py": 151,
+      "tinygrad/helpers.py": 149,
       "tinygrad/llm/__main__.py": 0,
       "tinygrad/llm/admission.py": 4,
       "tinygrad/llm/decode_routes.py": 4,
@@ -4079,7 +3780,7 @@
       "tinygrad/renderer/cstyle.py": 15,
       "tinygrad/renderer/cuda.py": 4,
       "tinygrad/renderer/isa/__init__.py": 23,
-      "tinygrad/renderer/isa/amd.py": 26,
+      "tinygrad/renderer/isa/amd.py": 25,
       "tinygrad/renderer/isa/amd_addressing.py": 2,
       "tinygrad/renderer/isa/amd_attention_abi.py": 3,
       "tinygrad/renderer/isa/amd_physical_regs.py": 2,
@@ -4087,7 +3788,7 @@
       "tinygrad/renderer/isa/amd_register_allocator.py": 2,
       "tinygrad/renderer/isa/amd_register_contracts.py": 6,
       "tinygrad/renderer/isa/amd_wmma_residency.py": 1,
-      "tinygrad/renderer/isa/extensions.py": 4,
+      "tinygrad/renderer/isa/extensions.py": 2,
       "tinygrad/renderer/isa/x86.py": 2,
       "tinygrad/renderer/isa/x86_encode.py": 1,
       "tinygrad/renderer/llvmir.py": 3,
@@ -4147,7 +3848,7 @@
       "tinygrad/uop/__init__.py": 17,
       "tinygrad/uop/decompositions.py": 3,
       "tinygrad/uop/divandmod.py": 1,
-      "tinygrad/uop/ops.py": 200,
+      "tinygrad/uop/ops.py": 182,
       "tinygrad/uop/render.py": 5,
       "tinygrad/uop/spec.py": 7,
       "tinygrad/uop/symbolic.py": 9,
@@ -4189,6 +3890,7 @@
       "extra/qk/decode/decode_codegen_identity_check.py",
       "extra/qk/decode/decode_hd_sweep_numerics.py",
       "extra/qk/decode/decode_runtime_overhead.py",
+      "extra/qk/decode/decode_tile_timing.py",
       "extra/qk/generate_shared_attention_captures.py",
       "extra/qk/packed_wmma_canary_evidence.py",
       "extra/qk/phase_abi_v1_resource_probe.py",
@@ -4209,6 +3911,7 @@
       "scratch_attn_bench.py",
       "scratch_attn_bench2.py",
       "test/backend/test_softmax_fusion.py",
+      "test/helpers.py",
       "test/test_guarded_execution.py",
       "test/test_runtime_bridge.py",
       "test/test_tiny.py",
@@ -4221,7 +3924,6 @@
       "test/unit/test_amd_elf_entry_offset.py",
       "test/unit/test_amd_epilogue_address_schedule_probe.py",
       "test/unit/test_amd_final_elf_capture_20260712.py",
-      "test/unit/test_amd_isa_extension_interfaces.py",
       "test/unit/test_amd_isa_extraction_fixtures.py",
       "test/unit/test_amd_isa_frag_waitcnt.py",
       "test/unit/test_amd_isa_integer_vector_loads.py",
@@ -4236,6 +3938,7 @@
       "test/unit/test_attention_residency_contract.py",
       "test/unit/test_attention_semantic.py",
       "test/unit/test_attn_qo_register_compile.py",
+      "test/unit/test_bench_entrypoint.py",
       "test/unit/test_candidate_context_propagation.py",
       "test/unit/test_clock_pin.py",
       "test/unit/test_codebase_organization_audit.py",
@@ -4246,11 +3949,11 @@
       "test/unit/test_composite_tile_carrier.py",
       "test/unit/test_current_decode_execution_adapter.py",
       "test/unit/test_current_prefill_execution_adapter.py",
+      "test/unit/test_decode_resource_capture.py",
       "test/unit/test_devectorizer_memory_widths.py",
       "test/unit/test_devectorizer_reconstruction.py",
       "test/unit/test_disk_staging_timeout.py",
       "test/unit/test_dispatch_trace.py",
-      "test/unit/test_dynamic_tile_owner.py",
       "test/unit/test_executable_artifact_preparation.py",
       "test/unit/test_execution_bridge_contracts.py",
       "test/unit/test_final_regalloc_proof_transport_20260712.py",
@@ -4258,12 +3961,9 @@
       "test/unit/test_gemm_consumer_adapters.py",
       "test/unit/test_generated_quant_binding_audit.py",
       "test/unit/test_gguf_memory_scan.py",
-      "test/unit/test_grouped_dot_update_pipeline.py",
       "test/unit/test_hcq_graph_profile_export.py",
       "test/unit/test_hcq_interface_allocator.py",
       "test/unit/test_hcq_kernargs_contract.py",
-      "test/unit/test_hierarchical_kernel_pipeline.py",
-      "test/unit/test_hierarchical_packed_record_stage.py",
       "test/unit/test_host_safety_canary_20260713.py",
       "test/unit/test_isolated_guarded_executor.py",
       "test/unit/test_kernargs_wrap_audit.py",
@@ -4289,10 +3989,6 @@
       "test/unit/test_mmq_ds4_logical_emitter.py",
       "test/unit/test_mmq_epoch_manifest_export.py",
       "test/unit/test_mmq_lifecycle.py",
-      "test/unit/test_mmq_llama_differential.py",
-      "test/unit/test_mmq_llama_packed_operands.py",
-      "test/unit/test_mmq_llama_record_producers.py",
-      "test/unit/test_mmq_llama_split_q8_record_producer.py",
       "test/unit/test_mmq_logical_vocabulary.py",
       "test/unit/test_mmq_q4k_q8_atom.py",
       "test/unit/test_mmq_q4k_q8_reference.py",
@@ -4304,9 +4000,6 @@
       "test/unit/test_online_softmax_tile.py",
       "test/unit/test_operand_attribution_20260714.py",
       "test/unit/test_operand_path_execution_worker.py",
-      "test/unit/test_packed_component_lds_stage.py",
-      "test/unit/test_packed_operand_contract.py",
-      "test/unit/test_packed_record_lds_stage.py",
       "test/unit/test_packed_weight.py",
       "test/unit/test_packed_wmma_compile_gate.py",
       "test/unit/test_packed_wmma_correctness_canary.py",
@@ -4328,8 +4021,6 @@
       "test/unit/test_q4_q4_owner_comparison.py",
       "test/unit/test_q4k_prefill_route_spec.py",
       "test/unit/test_q4k_q8_mmq_prefill_spec.py",
-      "test/unit/test_q4k_q8_mmq_uop_validation.py",
-      "test/unit/test_q4k_q8_mmq_wide_grid.py",
       "test/unit/test_q4k_w_f16_decode.py",
       "test/unit/test_qk_route_purity.py",
       "test/unit/test_rangeify_multireduce.py",
@@ -4341,7 +4032,6 @@
       "test/unit/test_regalloc_rematerialization.py",
       "test/unit/test_regalloc_spans.py",
       "test/unit/test_register_contracts.py",
-      "test/unit/test_scheduler_output_tile_loop.py",
       "test/unit/test_shared_attention_compiler_capture.py",
       "test/unit/test_shared_attention_evidence.py",
       "test/unit/test_shared_attention_promotion.py",
@@ -4392,6 +4082,7 @@
       "scratch_attn_bench.py",
       "scratch_attn_bench2.py",
       "test/backend/test_softmax_fusion.py",
+      "test/helpers.py",
       "test/test_guarded_execution.py",
       "test/test_runtime_bridge.py",
       "test/unit/test_alloc_trace.py",
@@ -4403,7 +4094,6 @@
       "test/unit/test_amd_elf_entry_offset.py",
       "test/unit/test_amd_epilogue_address_schedule_probe.py",
       "test/unit/test_amd_final_elf_capture_20260712.py",
-      "test/unit/test_amd_isa_extension_interfaces.py",
       "test/unit/test_amd_isa_extraction_fixtures.py",
       "test/unit/test_amd_isa_integer_vector_loads.py",
       "test/unit/test_amd_isa_integer_wmma_hardware_correctness.py",
@@ -4414,6 +4104,7 @@
       "test/unit/test_amdllvm_waitcnt.py",
       "test/unit/test_analyze_faults.py",
       "test/unit/test_attn_qo_register_compile.py",
+      "test/unit/test_bench_entrypoint.py",
       "test/unit/test_candidate_context_propagation.py",
       "test/unit/test_clock_pin.py",
       "test/unit/test_compiler_amd_pure_disassembly_20260712.py",
@@ -4422,11 +4113,11 @@
       "test/unit/test_composite_tile_carrier.py",
       "test/unit/test_current_decode_execution_adapter.py",
       "test/unit/test_current_prefill_execution_adapter.py",
+      "test/unit/test_decode_resource_capture.py",
       "test/unit/test_devectorizer_memory_widths.py",
       "test/unit/test_devectorizer_reconstruction.py",
       "test/unit/test_disk_staging_timeout.py",
       "test/unit/test_dispatch_trace.py",
-      "test/unit/test_dynamic_tile_owner.py",
       "test/unit/test_executable_artifact_preparation.py",
       "test/unit/test_execution_bridge_contracts.py",
       "test/unit/test_final_regalloc_proof_transport_20260712.py",
@@ -4434,12 +4125,9 @@
       "test/unit/test_gemm_consumer_adapters.py",
       "test/unit/test_generated_quant_binding_audit.py",
       "test/unit/test_gguf_memory_scan.py",
-      "test/unit/test_grouped_dot_update_pipeline.py",
       "test/unit/test_hcq_graph_profile_export.py",
       "test/unit/test_hcq_interface_allocator.py",
       "test/unit/test_hcq_kernargs_contract.py",
-      "test/unit/test_hierarchical_kernel_pipeline.py",
-      "test/unit/test_hierarchical_packed_record_stage.py",
       "test/unit/test_host_safety_canary_20260713.py",
       "test/unit/test_isolated_guarded_executor.py",
       "test/unit/test_kernel_candidate_context.py",
@@ -4462,10 +4150,6 @@
       "test/unit/test_mmq_ds4_logical_emitter.py",
       "test/unit/test_mmq_epoch_manifest_export.py",
       "test/unit/test_mmq_lifecycle.py",
-      "test/unit/test_mmq_llama_differential.py",
-      "test/unit/test_mmq_llama_packed_operands.py",
-      "test/unit/test_mmq_llama_record_producers.py",
-      "test/unit/test_mmq_llama_split_q8_record_producer.py",
       "test/unit/test_mmq_logical_vocabulary.py",
       "test/unit/test_model_facts.py",
       "test/unit/test_model_profiles.py",
@@ -4473,9 +4157,6 @@
       "test/unit/test_online_softmax_state_split.py",
       "test/unit/test_operand_attribution_20260714.py",
       "test/unit/test_operand_path_execution_worker.py",
-      "test/unit/test_packed_component_lds_stage.py",
-      "test/unit/test_packed_operand_contract.py",
-      "test/unit/test_packed_record_lds_stage.py",
       "test/unit/test_packed_weight.py",
       "test/unit/test_packed_wmma_compile_gate.py",
       "test/unit/test_packed_wmma_correctness_canary.py",
@@ -4496,8 +4177,6 @@
       "test/unit/test_q4_q4_owner_comparison.py",
       "test/unit/test_q4k_prefill_route_spec.py",
       "test/unit/test_q4k_q8_mmq_prefill_spec.py",
-      "test/unit/test_q4k_q8_mmq_uop_validation.py",
-      "test/unit/test_q4k_q8_mmq_wide_grid.py",
       "test/unit/test_q4k_w_f16_decode.py",
       "test/unit/test_qk_route_purity.py",
       "test/unit/test_rangeify_multireduce.py",
@@ -4507,7 +4186,6 @@
       "test/unit/test_regalloc_rematerialization.py",
       "test/unit/test_regalloc_spans.py",
       "test/unit/test_register_contracts.py",
-      "test/unit/test_scheduler_output_tile_loop.py",
       "test/unit/test_shared_attention_evidence.py",
       "test/unit/test_shared_attention_promotion.py",
       "test/unit/test_shared_attention_replay_admission.py",
@@ -4564,7 +4242,6 @@
       "extra/llm/sft_smoke_train.py": 2,
       "extra/nv_gpu_driver/nv_ioctl.py": 3,
       "extra/qk/amd_isa_proof.py": 2,
-      "extra/qk/amd_isa_renderer_policy.py": 5,
       "extra/qk/amd_resource_artifact.py": 1,
       "extra/qk/amd_warp_reduce.py": 2,
       "extra/qk/attention_harness_common.py": 2,
@@ -4574,7 +4251,6 @@
       "extra/qk/bubblebeam_futuresight.py": 6,
       "extra/qk/clock_pin.py": 0,
       "extra/qk/coalesced_load_lowering.py": 4,
-      "extra/qk/codegen_extensions.py": 2,
       "extra/qk/codegen_list_scheduler.py": 2,
       "extra/qk/codegen_recurrence_unroll.py": 2,
       "extra/qk/cooperative_stage_lanemap.py": 1,
@@ -4582,10 +4258,11 @@
       "extra/qk/decode/decode_codegen_identity_check.py": 4,
       "extra/qk/decode/decode_harness.py": 0,
       "extra/qk/decode/decode_hd_sweep_numerics.py": 3,
+      "extra/qk/decode/decode_resource_capture.py": 1,
       "extra/qk/decode/decode_runtime_overhead.py": 5,
+      "extra/qk/decode/decode_tile_timing.py": 2,
       "extra/qk/decode/flash_decode_attention_executor.py": 2,
       "extra/qk/decode/flash_decode_attention_spec.py": 3,
-      "extra/qk/dynamic_tile_owner.py": 3,
       "extra/qk/fdot2_lowering.py": 2,
       "extra/qk/flash_common.py": 3,
       "extra/qk/flash_kernels.py": 5,
@@ -4593,8 +4270,6 @@
       "extra/qk/gemv_g3_codegen_lowering.py": 6,
       "extra/qk/generate_shared_attention_captures.py": 10,
       "extra/qk/generated_candidates.py": 2,
-      "extra/qk/kernel_lds.py": 6,
-      "extra/qk/kernel_pipeline.py": 3,
       "extra/qk/kernel_vocabulary.py": 2,
       "extra/qk/kv_load.py": 2,
       "extra/qk/lane_partition_reduce.py": 4,
@@ -4610,10 +4285,6 @@
       "extra/qk/mmq_ds4_probe_contract.py": 0,
       "extra/qk/mmq_epoch_manifest_export.py": 1,
       "extra/qk/mmq_lifecycle.py": 0,
-      "extra/qk/mmq_llama_differential.py": 2,
-      "extra/qk/mmq_llama_oracle.py": 2,
-      "extra/qk/mmq_llama_packed_operands.py": 3,
-      "extra/qk/mmq_llama_record_producers.py": 5,
       "extra/qk/mmq_logical_vocabulary.py": 0,
       "extra/qk/mmq_q4k_q8_atom.py": 11,
       "extra/qk/mmq_q4k_q8_reference.py": 3,
@@ -4644,7 +4315,6 @@
       "extra/qk/prefill/prefill_long_context_numerics.py": 3,
       "extra/qk/prefill/prefill_primitive_spec.py": 0,
       "extra/qk/prefill/prefill_softmax_reduce_fuse_promotion_gate.py": 2,
-      "extra/qk/prefill/prefill_value_key.py": 0,
       "extra/qk/prefill/prefill_whole_synced.py": 11,
       "extra/qk/prefill/promotion_gate_common.py": 0,
       "extra/qk/prefill/pure_register_compile_capture.py": 1,
@@ -4654,13 +4324,10 @@
       "extra/qk/prefill/q6k_prefill_route_spec.py": 6,
       "extra/qk/pure_search_guard.py": 2,
       "extra/qk/q4k_fused_mmq_contract.py": 2,
-      "extra/qk/q4k_q8_mmq_uop.py": 4,
-      "extra/qk/q4k_q8_mmq_uop_validation.py": 6,
       "extra/qk/q4k_tile_loader.py": 1,
       "extra/qk/q6k_route_spec.py": 5,
       "extra/qk/quant/q4_k_gemv_primitive.py": 5,
       "extra/qk/quant/q6_k_gemv_primitive.py": 5,
-      "extra/qk/quant_specs.py": 1,
       "extra/qk/quantize.py": 0,
       "extra/qk/reg_store_devec.py": 1,
       "extra/qk/route_manifest.py": 1,
@@ -4694,7 +4361,6 @@
       "test/unit/test_amd_elf_entry_offset.py": 6,
       "test/unit/test_amd_epilogue_address_schedule_probe.py": 4,
       "test/unit/test_amd_final_elf_capture_20260712.py": 3,
-      "test/unit/test_amd_isa_extension_interfaces.py": 2,
       "test/unit/test_amd_isa_extraction_fixtures.py": 8,
       "test/unit/test_amd_isa_frag_waitcnt.py": 6,
       "test/unit/test_amd_isa_integer_vector_loads.py": 7,
@@ -4710,6 +4376,7 @@
       "test/unit/test_attention_residency_contract.py": 11,
       "test/unit/test_attention_semantic.py": 13,
       "test/unit/test_attn_qo_register_compile.py": 9,
+      "test/unit/test_bench_entrypoint.py": 1,
       "test/unit/test_candidate_context_propagation.py": 3,
       "test/unit/test_clock_pin.py": 2,
       "test/unit/test_codebase_organization_audit.py": 1,
@@ -4720,11 +4387,11 @@
       "test/unit/test_composite_tile_carrier.py": 6,
       "test/unit/test_current_decode_execution_adapter.py": 5,
       "test/unit/test_current_prefill_execution_adapter.py": 8,
+      "test/unit/test_decode_resource_capture.py": 1,
       "test/unit/test_devectorizer_memory_widths.py": 4,
       "test/unit/test_devectorizer_reconstruction.py": 4,
       "test/unit/test_disk_staging_timeout.py": 1,
       "test/unit/test_dispatch_trace.py": 1,
-      "test/unit/test_dynamic_tile_owner.py": 5,
       "test/unit/test_executable_artifact_preparation.py": 3,
       "test/unit/test_execution_bridge_contracts.py": 1,
       "test/unit/test_final_regalloc_proof_transport_20260712.py": 3,
@@ -4732,17 +4399,14 @@
       "test/unit/test_gemm_consumer_adapters.py": 5,
       "test/unit/test_generated_quant_binding_audit.py": 3,
       "test/unit/test_gguf_memory_scan.py": 2,
-      "test/unit/test_grouped_dot_update_pipeline.py": 3,
       "test/unit/test_hcq_graph_profile_export.py": 2,
       "test/unit/test_hcq_interface_allocator.py": 1,
       "test/unit/test_hcq_kernargs_contract.py": 3,
-      "test/unit/test_hierarchical_kernel_pipeline.py": 1,
-      "test/unit/test_hierarchical_packed_record_stage.py": 8,
       "test/unit/test_host_safety_canary_20260713.py": 3,
       "test/unit/test_isolated_guarded_executor.py": 3,
       "test/unit/test_kernargs_wrap_audit.py": 2,
       "test/unit/test_kernel_candidate_context.py": 8,
-      "test/unit/test_kernel_lds_mapping.py": 5,
+      "test/unit/test_kernel_lds_mapping.py": 4,
       "test/unit/test_kernel_naming.py": 7,
       "test/unit/test_kernel_pipeline_expansion.py": 7,
       "test/unit/test_linearizer_stable_priority.py": 3,
@@ -4763,10 +4427,6 @@
       "test/unit/test_mmq_ds4_logical_emitter.py": 4,
       "test/unit/test_mmq_epoch_manifest_export.py": 1,
       "test/unit/test_mmq_lifecycle.py": 1,
-      "test/unit/test_mmq_llama_differential.py": 2,
-      "test/unit/test_mmq_llama_packed_operands.py": 3,
-      "test/unit/test_mmq_llama_record_producers.py": 5,
-      "test/unit/test_mmq_llama_split_q8_record_producer.py": 5,
       "test/unit/test_mmq_logical_vocabulary.py": 1,
       "test/unit/test_mmq_q4k_q8_atom.py": 6,
       "test/unit/test_mmq_q4k_q8_reference.py": 4,
@@ -4778,14 +4438,11 @@
       "test/unit/test_online_softmax_tile.py": 11,
       "test/unit/test_operand_attribution_20260714.py": 1,
       "test/unit/test_operand_path_execution_worker.py": 3,
-      "test/unit/test_packed_component_lds_stage.py": 7,
-      "test/unit/test_packed_operand_contract.py": 4,
-      "test/unit/test_packed_record_lds_stage.py": 7,
       "test/unit/test_packed_weight.py": 5,
       "test/unit/test_packed_wmma_compile_gate.py": 1,
       "test/unit/test_packed_wmma_correctness_canary.py": 2,
       "test/unit/test_pm4_ib_and_nv_cmdq_wrap_drain.py": 1,
-      "test/unit/test_precontract_int8_lds_contract.py": 7,
+      "test/unit/test_precontract_int8_lds_contract.py": 6,
       "test/unit/test_prefill_graph_gemm_route.py": 6,
       "test/unit/test_prefill_harness.py": 3,
       "test/unit/test_prefill_memory_plan.py": 1,
@@ -4802,9 +4459,6 @@
       "test/unit/test_q4_q4_owner_comparison.py": 1,
       "test/unit/test_q4k_prefill_route_spec.py": 5,
       "test/unit/test_q4k_q8_mmq_prefill_spec.py": 2,
-      "test/unit/test_q4k_q8_mmq_uop.py": 11,
-      "test/unit/test_q4k_q8_mmq_uop_validation.py": 4,
-      "test/unit/test_q4k_q8_mmq_wide_grid.py": 5,
       "test/unit/test_q4k_w_f16_decode.py": 4,
       "test/unit/test_qk_route_purity.py": 2,
       "test/unit/test_rangeify_multireduce.py": 2,
@@ -4816,8 +4470,7 @@
       "test/unit/test_regalloc_rematerialization.py": 6,
       "test/unit/test_regalloc_spans.py": 4,
       "test/unit/test_register_contracts.py": 2,
-      "test/unit/test_runtime_specs.py": 6,
-      "test/unit/test_scheduler_output_tile_loop.py": 5,
+      "test/unit/test_runtime_specs.py": 5,
       "test/unit/test_shared_attention_compiler_capture.py": 10,
       "test/unit/test_shared_attention_evidence.py": 2,
       "test/unit/test_shared_attention_promotion.py": 1,
@@ -4915,7 +4568,7 @@
       "tinygrad/renderer/isa/amd_register_allocator.py": 2,
       "tinygrad/renderer/isa/amd_register_contracts.py": 2,
       "tinygrad/renderer/isa/amd_wmma_residency.py": 7,
-      "tinygrad/renderer/isa/extensions.py": 1,
+      "tinygrad/renderer/isa/extensions.py": 0,
       "tinygrad/renderer/isa/x86.py": 7,
       "tinygrad/renderer/isa/x86_encode.py": 4,
       "tinygrad/renderer/llvmir.py": 11,
@@ -5164,11 +4817,6 @@
       "path": "tinygrad/llm/model.py"
     },
     {
-      "domain": "codegen_lowering",
-      "loc": 973,
-      "path": "extra/qk/kernel_lds.py"
-    },
-    {
       "domain": null,
       "loc": 903,
       "path": "tinygrad/runtime/ops_amd.py"
@@ -5182,11 +4830,6 @@
       "domain": null,
       "loc": 794,
       "path": "test/amd/disasm.py"
-    },
-    {
-      "domain": "route_authority",
-      "loc": 787,
-      "path": "extra/qk/route_manifest.py"
     },
     {
       "domain": "route_authority",
@@ -5205,6 +4848,11 @@
     },
     {
       "domain": null,
+      "loc": 641,
+      "path": "test/unit/test_runtime_specs.py"
+    },
+    {
+      "domain": null,
       "loc": 634,
       "path": "tinygrad/runtime/ops_nv.py"
     },
@@ -5212,11 +4860,6 @@
       "domain": null,
       "loc": 619,
       "path": "tinygrad/renderer/isa/x86.py"
-    },
-    {
-      "domain": null,
-      "loc": 601,
-      "path": "test/unit/test_runtime_specs.py"
     },
     {
       "domain": null,
@@ -5242,43 +4885,53 @@
       "domain": null,
       "loc": 556,
       "path": "extra/llm/cli.py"
+    },
+    {
+      "domain": null,
+      "loc": 552,
+      "path": "tinygrad/viz/js/profiler.js"
+    },
+    {
+      "domain": null,
+      "loc": 538,
+      "path": "test/unit/test_amd_isa_wmma.py"
     }
   ],
   "loc_by": {
     "disposition": {
       "consolidate": {
-        "files": 4,
-        "loc": 2095
+        "files": 2,
+        "loc": 864
       },
       "investigate": {
-        "files": 3,
-        "loc": 307
+        "files": 2,
+        "loc": 256
       },
       "keep": {
-        "files": 100,
-        "loc": 13936
+        "files": 92,
+        "loc": 12155
       },
       "unclassified": {
-        "files": 353,
-        "loc": 56949
+        "files": 339,
+        "loc": 55112
       }
     },
     "domain": {
       "amd_runtime": {
-        "files": 5,
-        "loc": 657
+        "files": 3,
+        "loc": 420
       },
       "attention_decode": {
-        "files": 9,
-        "loc": 735
+        "files": 10,
+        "loc": 788
       },
       "attention_prefill": {
         "files": 4,
         "loc": 574
       },
       "codegen_lowering": {
-        "files": 15,
-        "loc": 2207
+        "files": 10,
+        "loc": 560
       },
       "evidence": {
         "files": 10,
@@ -5286,33 +4939,33 @@
       },
       "measurement": {
         "files": 17,
-        "loc": 2063
+        "loc": 1941
       },
       "quant_mmq": {
-        "files": 23,
-        "loc": 3668
+        "files": 18,
+        "loc": 2930
       },
       "route_authority": {
         "files": 16,
-        "loc": 3819
+        "loc": 3447
       },
       "search_promotion": {
         "files": 8,
         "loc": 1007
       },
       "unclassified": {
-        "files": 353,
-        "loc": 56949
+        "files": 339,
+        "loc": 55112
       }
     },
     "role": {
       "adapter": {
-        "files": 12,
-        "loc": 1153
+        "files": 11,
+        "loc": 1143
       },
       "authority": {
-        "files": 60,
-        "loc": 10550
+        "files": 51,
+        "loc": 7830
       },
       "benchmark": {
         "files": 2,
@@ -5320,37 +4973,37 @@
       },
       "diagnostic": {
         "files": 11,
-        "loc": 1354
+        "loc": 1232
       },
       "evidence": {
-        "files": 4,
-        "loc": 385
+        "files": 5,
+        "loc": 438
       },
       "execution": {
-        "files": 10,
-        "loc": 1869
+        "files": 9,
+        "loc": 1811
       },
       "integration": {
         "files": 2,
         "loc": 199
       },
       "research": {
-        "files": 5,
-        "loc": 593
+        "files": 4,
+        "loc": 387
       },
       "test": {
         "files": 1,
         "loc": 136
       },
       "unclassified": {
-        "files": 353,
-        "loc": 56949
+        "files": 339,
+        "loc": 55112
       }
     },
     "status": {
       "active_research": {
-        "files": 22,
-        "loc": 4623
+        "files": 13,
+        "loc": 2285
       },
       "fallback": {
         "files": 5,
@@ -5361,8 +5014,8 @@
         "loc": 43
       },
       "production": {
-        "files": 66,
-        "loc": 9852
+        "files": 67,
+        "loc": 9532
       },
       "promoted_default": {
         "files": 6,
@@ -5373,12 +5026,12 @@
         "loc": 21
       },
       "retained_reference": {
-        "files": 4,
-        "loc": 519
+        "files": 1,
+        "loc": 114
       },
       "unclassified": {
-        "files": 353,
-        "loc": 56949
+        "files": 339,
+        "loc": 55112
       },
       "unresolved_reproducer": {
         "files": 2,
@@ -5389,19 +5042,23 @@
   "loc_impact": {
     "completed_actions": [
       "A1",
+      "A10",
       "A14",
       "A15",
       "A2",
       "A3",
       "A4",
       "A5",
+      "A6",
+      "A7",
+      "A8",
       "A9"
     ],
-    "gross_loc_removed": 3,
+    "gross_loc_removed": 0,
     "loc_moved_not_reduced": 60,
-    "net_authored_loc_reduction": 3,
-    "realized_gross_loc_removed": 1385,
-    "realized_net_loc_reduction": 1350,
+    "net_authored_loc_reduction": 0,
+    "realized_gross_loc_removed": 1388,
+    "realized_net_loc_reduction": 1353,
     "realized_replacement_loc_added": 35,
     "replacement_loc_added": 0
   },
@@ -5507,10 +5164,6 @@
       "extra/qk/prefill/current_prefill_execution_adapter.py",
       "test/unit/test_amd_isa_extraction_fixtures.py"
     ],
-    "extra/qk/amd_isa_renderer_policy.py": [
-      "extra/qk/codegen_extensions.py",
-      "test/unit/test_mmq_llama_record_producers.py"
-    ],
     "extra/qk/amd_resource_artifact.py": [
       "extra/qk/prefill/pure_register_compile_capture.py",
       "extra/qk/prefill/pure_register_evaluation_gate.py",
@@ -5550,6 +5203,7 @@
       "docs/non-fitting-prefill-foundation-performance-prune-scope-20260716.md",
       "docs/shared-flash-codex-M6-M8-evidence-path-20260722.md",
       "extra/llm/model_e2e_bench.py",
+      "test/unit/test_bench_entrypoint.py",
       "test/unit/test_codebase_organization_audit.py",
       "test/unit/test_measurement_authority.py"
     ],
@@ -5584,11 +5238,6 @@
       "tinygrad/codegen/__init__.py",
       "tinygrad/codegen/experimental.py"
     ],
-    "extra/qk/codegen_extensions.py": [
-      "scratchpad/audit_bfs.py",
-      "test/unit/test_amd_isa_extension_interfaces.py",
-      "tinygrad/codegen/experimental.py"
-    ],
     "extra/qk/codegen_list_scheduler.py": [
       "scratchpad/audit_bfs.py",
       "tinygrad/codegen/experimental.py"
@@ -5605,10 +5254,10 @@
       "scratchpad/audit_bfs.py"
     ],
     "extra/qk/decode/decode_codegen_identity_check.py": [
+      "bench/qk-search-spaces/default_route_manifest.json",
       "docs/prefill-R-theories-scope-20260724.md",
       "docs/prefill-softmax-reduce-fuse-evidence-20260724.json",
       "docs/prefill-softmax-reduce-fuse-promotion-readiness-20260724.md",
-      "extra/qk/route_manifest.py",
       "tinygrad/renderer/cstyle.py"
     ],
     "extra/qk/decode/decode_harness.py": [
@@ -5619,8 +5268,11 @@
       "test/unit/test_measurement_authority.py"
     ],
     "extra/qk/decode/decode_hd_sweep_numerics.py": [
-      "extra/qk/prefill/prefill_hd_sweep_numerics.py",
-      "extra/qk/route_manifest.py"
+      "bench/qk-search-spaces/default_route_manifest.json",
+      "extra/qk/prefill/prefill_hd_sweep_numerics.py"
+    ],
+    "extra/qk/decode/decode_resource_capture.py": [
+      "test/unit/test_decode_resource_capture.py"
     ],
     "extra/qk/decode/decode_runtime_overhead.py": [
       ".claude/loop.md",
@@ -5634,18 +5286,21 @@
       "extra/llm/model_authority_bench.py",
       "extra/llm/model_e2e_bench.py",
       "extra/qk/decode/decode_harness.py",
-      "extra/qk/route_manifest.py",
       "test/unit/test_measurement_authority.py",
       "test/unit/test_prefill_harness.py"
     ],
+    "extra/qk/decode/decode_tile_timing.py": [
+      "docs/14b-decode-g5-authority-timing-20260726.json"
+    ],
     "extra/qk/decode/flash_decode_attention_executor.py": [
       "README.md",
+      "bench/qk-search-spaces/default_route_manifest.json",
       "docs/flash-prefill-scope-20260721.md",
       "docs/prefill-softmax-reduce-fuse-evidence-20260724.json",
       "docs/prefill-softmax-reduce-fuse-promotion-readiness-20260724.md",
       "extra/qk/decode/decode_codegen_identity_check.py",
       "extra/qk/decode/decode_hd_sweep_numerics.py",
-      "extra/qk/route_manifest.py",
+      "extra/qk/decode/decode_tile_timing.py",
       "scratchpad/audit_bfs.py",
       "tinygrad/llm/route_ops.py"
     ],
@@ -5659,11 +5314,7 @@
       "extra/audit/pure_machine_search_default_path_census.py",
       "extra/qk/decode/flash_decode_attention_executor.py",
       "extra/qk/prefill/flash_prefill_attention_spec.py",
-      "extra/qk/route_manifest.py",
       "test/unit/test_flash_decode_attention_spec.py"
-    ],
-    "extra/qk/dynamic_tile_owner.py": [
-      "test/unit/test_dynamic_tile_owner.py"
     ],
     "extra/qk/fdot2_lowering.py": [
       "scratchpad/audit_bfs.py",
@@ -5674,6 +5325,7 @@
       "extra/qk/live_split_geometry.py"
     ],
     "extra/qk/flash_kernels.py": [
+      "docs/14b-decode-g5-steady-state-recovery-scope-20260726.md",
       "docs/HANDOFF_14b_decode_depth_decay_20260726.md",
       "docs/flash-composite-reduce-orchestration-plan-20260722.md",
       "docs/flash-prefill-B-task-deepseek-20260721.md",
@@ -5695,8 +5347,7 @@
       "extra/audit/pure_machine_search_default_path_census.py",
       "extra/qk/cooperative_stage_lanemap.py",
       "extra/qk/decode/current_decode_execution_adapter.py",
-      "extra/qk/gemv_g3_codegen_lowering.py",
-      "extra/qk/route_manifest.py"
+      "extra/qk/gemv_g3_codegen_lowering.py"
     ],
     "extra/qk/gemv_g3_codegen_lowering.py": [
       "README.md",
@@ -5720,40 +5371,13 @@
       "test/unit/test_generated_quant_binding_audit.py",
       "test/unit/test_runtime_specs.py"
     ],
-    "extra/qk/kernel_lds.py": [
-      "docs/amd-fp16-dequant-q4k-primitive-implementation-plan-20260720.md",
-      "docs/packed-wmma-14b-fault-trace-20260724.md",
-      "docs/prefill-needle-theories-20260724.md",
-      "extra/qk/mmq_llama_record_producers.py",
-      "test/unit/test_hierarchical_packed_record_stage.py",
-      "test/unit/test_kernel_lds_mapping.py",
-      "test/unit/test_packed_component_lds_stage.py",
-      "test/unit/test_packed_operand_contract.py",
-      "test/unit/test_packed_record_lds_stage.py",
-      "test/unit/test_precontract_int8_lds_contract.py"
-    ],
-    "extra/qk/kernel_pipeline.py": [
-      "docs/amd-fp16-dequant-q4k-primitive-implementation-plan-20260720.md",
-      "extra/qk/dynamic_tile_owner.py",
-      "extra/qk/kernel_lds.py",
-      "test/unit/test_dynamic_tile_owner.py",
-      "test/unit/test_grouped_dot_update_pipeline.py",
-      "test/unit/test_hierarchical_kernel_pipeline.py",
-      "test/unit/test_hierarchical_packed_record_stage.py",
-      "test/unit/test_scheduler_output_tile_loop.py"
-    ],
     "extra/qk/kernel_vocabulary.py": [
-      "extra/qk/kernel_lds.py",
       "extra/qk/q4k_fused_mmq_contract.py",
       "extra/qk/runtime_specs.py",
       "test/unit/test_candidate_context_propagation.py",
-      "test/unit/test_hierarchical_packed_record_stage.py",
       "test/unit/test_kernel_candidate_context.py",
       "test/unit/test_kernel_lds_mapping.py",
       "test/unit/test_kernel_naming.py",
-      "test/unit/test_packed_component_lds_stage.py",
-      "test/unit/test_packed_operand_contract.py",
-      "test/unit/test_packed_record_lds_stage.py",
       "test/unit/test_packed_weight.py",
       "test/unit/test_precontract_int8_lds_contract.py",
       "test/unit/test_pure_pipe_graph_abi.py",
@@ -5778,13 +5402,11 @@
       "extra/qk/gemv_g2_lanemap.py",
       "extra/qk/mmq_atom_boundary.py",
       "extra/qk/mmq_ds4_logical_emitter.py",
-      "extra/qk/mmq_llama_oracle.py",
       "extra/qk/mmq_q4k_q8_atom.py",
       "extra/qk/mmq_q4k_q8_reference.py",
       "extra/qk/prefill/q4k_prefill_route_spec.py",
       "extra/qk/prefill/q6k_prefill_route_spec.py",
       "extra/qk/q4k_fused_mmq_contract.py",
-      "extra/qk/q4k_q8_mmq_uop.py",
       "extra/qk/q4k_tile_loader.py",
       "extra/qk/q6k_route_spec.py",
       "extra/qk/quant/q4_k_gemv_primitive.py",
@@ -5840,13 +5462,13 @@
     ],
     "extra/qk/mmq_compile_evidence.py": [
       "extra/qk/decode/current_decode_execution_adapter.py",
+      "extra/qk/decode/decode_resource_capture.py",
       "extra/qk/phase_abi_v1_resource_probe.py",
       "extra/qk/prefill/current_prefill_execution_adapter.py",
       "extra/qk/shared_attention_capture.py",
       "scratchpad/kv_tile_amortization_probe.py",
       "scratchpad/t4_dump.py",
-      "test/unit/test_online_softmax_tile.py",
-      "test/unit/test_q4k_q8_mmq_uop.py"
+      "test/unit/test_online_softmax_tile.py"
     ],
     "extra/qk/mmq_ds4_logical_emitter.py": [
       "scratchpad/audit_bfs.py",
@@ -5868,26 +5490,6 @@
       "test/unit/test_mmq_lifecycle.py",
       "test/unit/test_mmq_q4k_q8_atom.py"
     ],
-    "extra/qk/mmq_llama_differential.py": [
-      "extra/qk/mmq_llama_packed_operands.py",
-      "test/unit/test_mmq_llama_differential.py"
-    ],
-    "extra/qk/mmq_llama_oracle.py": [
-      "docs/14b-mmq-pure-machine-search-scope-20260714.md",
-      "extra/qk/mmq_llama_differential.py"
-    ],
-    "extra/qk/mmq_llama_packed_operands.py": [
-      "extra/qk/mmq_llama_record_producers.py",
-      "test/unit/test_mmq_llama_packed_operands.py",
-      "test/unit/test_mmq_llama_split_q8_record_producer.py"
-    ],
-    "extra/qk/mmq_llama_record_producers.py": [
-      "docs/amd-fp16-dequant-q4k-build-progress-20260720.md",
-      "docs/qwen3-14b-generated-prefill-claude-handoff-20260716.md",
-      "extra/qk/amd_isa_renderer_policy.py",
-      "test/unit/test_mmq_llama_record_producers.py",
-      "test/unit/test_mmq_llama_split_q8_record_producer.py"
-    ],
     "extra/qk/mmq_logical_vocabulary.py": [
       "docs/mmq-lowering-resource-audit-20260715.md",
       "extra/qk/mmq_ds4_logical_emitter.py",
@@ -5905,12 +5507,10 @@
       "docs/14b-mmq-pure-machine-search-scope-20260714.md",
       "docs/qwen3-14b-prefill-mmq-one-role-evidence-20260718.json",
       "extra/qk/mmq_compile_evidence.py",
-      "extra/qk/mmq_llama_oracle.py",
       "extra/qk/mmq_q4k_q8_atom.py",
       "extra/qk/runtime_specs.py",
       "test/unit/test_mmq_q4k_q8_atom.py",
-      "test/unit/test_mmq_q4k_q8_reference.py",
-      "test/unit/test_q4k_q8_mmq_uop.py"
+      "test/unit/test_mmq_q4k_q8_reference.py"
     ],
     "extra/qk/model_profiles.py": [
       "docs/attention-harness-centralization-scope-20260724.md",
@@ -5926,8 +5526,8 @@
       "test/unit/test_operand_attribution_20260714.py"
     ],
     "extra/qk/packed_wmma_canary_evidence.py": [
-      "docs/packed-wmma-14b-promotion-evidence-20260725.json",
-      "extra/qk/route_manifest.py"
+      "bench/qk-search-spaces/default_route_manifest.json",
+      "docs/packed-wmma-14b-promotion-evidence-20260725.json"
     ],
     "extra/qk/packed_wmma_compile_gate.py": [
       "extra/qk/prefill/current_prefill_execution_adapter.py",
@@ -5941,14 +5541,14 @@
       "extra/qk/prefill/packed_wmma_prefill_candidates.py"
     ],
     "extra/qk/prefill/current_prefill_execution_adapter.py": [
+      "bench/qk-search-spaces/default_route_manifest.json",
       "docs/amd-fp16-dequant-q4k-build-progress-20260720.md",
       "docs/non-fitting-prefill-foundation-performance-prune-scope-20260716.md",
       "docs/packed-wmma-14b-machine-search-claim-scope-20260725.md",
       "extra/qk/prefill/operand_path_execution_worker.py",
       "extra/qk/prefill/packed_wmma_correctness_canary.py",
       "extra/qk/prefill/packed_wmma_prefill_candidates.py",
-      "extra/qk/prefill/packed_wmma_prefill_promotion_gate.py",
-      "extra/qk/route_manifest.py"
+      "extra/qk/prefill/packed_wmma_prefill_promotion_gate.py"
     ],
     "extra/qk/prefill/executable_artifact_preparation.py": [
       "extra/qk/prefill/current_prefill_execution_adapter.py",
@@ -5966,10 +5566,10 @@
     "extra/qk/prefill/flash_prefill_attention_spec.py": [
       "bench/pure-machine-search-default-path-census/default_route_table.json",
       "bench/pure-machine-search-default-path-census/latest.json",
+      "bench/qk-search-spaces/default_route_manifest.json",
       "docs/flash-prefill-pure-search-lift-scope-20260724.md",
       "extra/audit/pure_machine_search_default_path_census.py",
       "extra/qk/prefill/prefill_whole_synced.py",
-      "extra/qk/route_manifest.py",
       "tinygrad/codegen/experimental.py",
       "tinygrad/llm/fused_attention.py",
       "tinygrad/llm/model.py",
@@ -6007,14 +5607,15 @@
       "test/unit/test_operand_path_execution_worker.py"
     ],
     "extra/qk/prefill/packed_wmma_correctness_canary.py": [
+      "bench/qk-search-spaces/default_route_manifest.json",
       "docs/amd-fp16-dequant-q4k-build-progress-20260720.md",
       "extra/qk/prefill/packed_wmma_prefill_candidates.py",
-      "extra/qk/route_manifest.py",
       "test/unit/test_current_prefill_execution_adapter.py",
       "test/unit/test_packed_wmma_correctness_canary.py"
     ],
     "extra/qk/prefill/packed_wmma_prefill_candidates.py": [
       "README.md",
+      "bench/qk-search-spaces/default_route_manifest.json",
       "docs/14b-packed-wmma-warmstart-handoff-20260721.md",
       "docs/amd-fp16-dequant-q4k-build-progress-20260720.md",
       "docs/flash-prefill-wmma-mvp-scope-20260721.md",
@@ -6025,36 +5626,35 @@
       "docs/q4k-int8-wmma-tiled-campaign-retirement-20260726.md",
       "extra/qk/packed_wmma_canary_evidence.py",
       "extra/qk/prefill/packed_wmma_prefill_promotion_gate.py",
-      "extra/qk/route_manifest.py",
       "scratchpad/audit_bfs.py",
       "tinygrad/llm/prefill_routes.py",
       "tinygrad/llm/route_ops.py"
     ],
     "extra/qk/prefill/packed_wmma_prefill_promotion_gate.py": [
-      "docs/packed-wmma-14b-machine-search-claim-scope-20260725.md",
-      "extra/qk/route_manifest.py"
+      "bench/qk-search-spaces/default_route_manifest.json",
+      "docs/packed-wmma-14b-machine-search-claim-scope-20260725.md"
     ],
     "extra/qk/prefill/prefill_boltbeam_trace.py": [
       "bench/qk-search-spaces/default_route_manifest.json",
       "docs/HANDOFF_14b_decode_depth_decay_20260726.md",
       "docs/decode-regression-debug-scope-20260725.md",
       "docs/prefill-lessons-ledger.md",
-      "docs/prefill-needle-theories-20260724.md",
-      "extra/qk/route_manifest.py"
+      "docs/prefill-needle-theories-20260724.md"
     ],
     "extra/qk/prefill/prefill_causal_tile_skip_promotion_gate.py": [
+      "bench/qk-search-spaces/default_route_manifest.json",
       "docs/packed-wmma-14b-machine-search-claim-scope-20260725.md",
       "docs/prefill-causal-tile-skip-evidence-20260724.json",
       "docs/prefill-causal-tile-skip-promotion-readiness-20260724.md",
       "docs/prefill-softmax-reduce-fuse-promotion-readiness-20260724.md",
       "extra/qk/prefill/packed_wmma_prefill_promotion_gate.py",
-      "extra/qk/prefill/prefill_softmax_reduce_fuse_promotion_gate.py",
-      "extra/qk/route_manifest.py"
+      "extra/qk/prefill/prefill_softmax_reduce_fuse_promotion_gate.py"
     ],
     "extra/qk/prefill/prefill_flash_e2e_parity.py": [
       "bench/pure-machine-search-default-path-census/default_route_table.json",
       "bench/pure-machine-search-default-path-census/latest.json",
       "bench/pure-machine-search-default-path-census/summary.md",
+      "bench/qk-search-spaces/default_route_manifest.json",
       "docs/packed-wmma-14b-machine-search-claim-scope-20260725.md",
       "docs/packed-wmma-14b-promotion-evidence-20260725.json",
       "docs/prefill-R-theories-scope-20260724.md",
@@ -6063,13 +5663,12 @@
       "docs/prefill-softmax-reduce-fuse-evidence-20260724.json",
       "docs/prefill-softmax-reduce-fuse-promotion-readiness-20260724.md",
       "extra/audit/pure_machine_search_default_path_census.py",
-      "extra/qk/route_manifest.py",
       "tinygrad/llm/model.py"
     ],
     "extra/qk/prefill/prefill_flash_perf.py": [
+      "bench/qk-search-spaces/default_route_manifest.json",
       "docs/prefill-R-theories-scope-20260724.md",
-      "docs/prefill-softmax-reduce-fuse-evidence-20260724.json",
-      "extra/qk/route_manifest.py"
+      "docs/prefill-softmax-reduce-fuse-evidence-20260724.json"
     ],
     "extra/qk/prefill/prefill_graph_gemm_route.py": [
       "README.md",
@@ -6101,18 +5700,18 @@
     "extra/qk/prefill/prefill_hd_sweep_numerics.py": [
       "bench/pure-machine-search-default-path-census/default_route_table.json",
       "bench/pure-machine-search-default-path-census/latest.json",
+      "bench/qk-search-spaces/default_route_manifest.json",
       "docs/prefill-R-theories-scope-20260724.md",
       "docs/prefill-causal-tile-skip-evidence-20260724.json",
       "docs/prefill-softmax-reduce-fuse-evidence-20260724.json",
       "extra/audit/pure_machine_search_default_path_census.py",
       "extra/qk/prefill/prefill_long_context_numerics.py",
-      "extra/qk/route_manifest.py",
       "tinygrad/llm/model.py"
     ],
     "extra/qk/prefill/prefill_long_context_numerics.py": [
+      "bench/qk-search-spaces/default_route_manifest.json",
       "docs/prefill-softmax-reduce-fuse-evidence-20260724.json",
-      "docs/prefill-softmax-reduce-fuse-promotion-readiness-20260724.md",
-      "extra/qk/route_manifest.py"
+      "docs/prefill-softmax-reduce-fuse-promotion-readiness-20260724.md"
     ],
     "extra/qk/prefill/prefill_primitive_spec.py": [
       "docs/14b-mmq-pure-machine-search-scope-20260714.md",
@@ -6120,15 +5719,12 @@
       "test/unit/test_q4k_q8_mmq_prefill_spec.py"
     ],
     "extra/qk/prefill/prefill_softmax_reduce_fuse_promotion_gate.py": [
+      "bench/qk-search-spaces/default_route_manifest.json",
       "docs/packed-wmma-14b-machine-search-claim-scope-20260725.md",
       "docs/prefill-R-theories-scope-20260724.md",
       "docs/prefill-softmax-reduce-fuse-evidence-20260724.json",
       "docs/prefill-softmax-reduce-fuse-promotion-readiness-20260724.md",
-      "extra/qk/route_manifest.py",
       "tinygrad/renderer/cstyle.py"
-    ],
-    "extra/qk/prefill/prefill_value_key.py": [
-      "extra/qk/amd_isa_renderer_policy.py"
     ],
     "extra/qk/prefill/prefill_whole_synced.py": [
       "README.md",
@@ -6180,7 +5776,6 @@
       "docs/14b-mmq-pure-machine-search-scope-20260714.md",
       "docs/BOLTBEAM_Q4K_VOCAB_OUTPUT_ROUTE_SCOPE_20260723.md",
       "extra/audit/pure_machine_search_default_path_census.py",
-      "extra/qk/route_manifest.py",
       "test/unit/test_q4k_prefill_route_spec.py",
       "tinygrad/llm/route_ops.py"
     ],
@@ -6197,7 +5792,6 @@
       "bench/qk-search-spaces/default_route_manifest.json",
       "docs/14b-mmq-pure-machine-search-scope-20260714.md",
       "extra/audit/pure_machine_search_default_path_census.py",
-      "extra/qk/route_manifest.py",
       "tinygrad/llm/route_ops.py"
     ],
     "extra/qk/pure_search_guard.py": [
@@ -6208,18 +5802,6 @@
       "docs/prefill-softmax-reduce-fuse-evidence-20260724.json",
       "extra/qk/prefill/prefill_whole_synced.py",
       "tinygrad/llm/route_ops.py"
-    ],
-    "extra/qk/q4k_q8_mmq_uop.py": [
-      "extra/qk/mmq_llama_differential.py",
-      "extra/qk/q4k_q8_mmq_uop_validation.py",
-      "test/unit/test_mmq_llama_differential.py",
-      "test/unit/test_q4k_q8_mmq_uop.py",
-      "test/unit/test_q4k_q8_mmq_uop_validation.py",
-      "test/unit/test_q4k_q8_mmq_wide_grid.py"
-    ],
-    "extra/qk/q4k_q8_mmq_uop_validation.py": [
-      "test/unit/test_q4k_q8_mmq_uop.py",
-      "test/unit/test_q4k_q8_mmq_uop_validation.py"
     ],
     "extra/qk/q4k_tile_loader.py": [
       "docs/14b-mmq-llama-kernel-reduction-roadmap-20260710.md",
@@ -6234,7 +5816,6 @@
       "bench/qk-search-spaces/default_route_manifest.json",
       "extra/audit/pure_machine_search_default_path_census.py",
       "extra/qk/prefill/q6k_prefill_route_spec.py",
-      "extra/qk/route_manifest.py",
       "scratchpad/audit_bfs.py",
       "tinygrad/llm/route_ops.py"
     ],
@@ -6252,9 +5833,6 @@
       "extra/qk/q6k_route_spec.py",
       "scratchpad/audit_bfs.py",
       "tinygrad/llm/route_ops.py"
-    ],
-    "extra/qk/quant_specs.py": [
-      "test/unit/test_runtime_specs.py"
     ],
     "extra/qk/quantize.py": [
       "tinygrad/llm/route_ops.py"
@@ -6310,7 +5888,6 @@
       "extra/qk/prefill/packed_wmma_correctness_canary.py",
       "extra/qk/prefill/packed_wmma_prefill_candidates.py",
       "extra/qk/prefill/prefill_graph_gemm_route.py",
-      "extra/qk/quant_specs.py",
       "extra/qk/route_manifest.py",
       "test/unit/test_attn_qo_register_compile.py",
       "test/unit/test_current_prefill_execution_adapter.py",
@@ -6373,10 +5950,6 @@
     "test/amd/helpers.py": [
       "test/amd/disasm.py"
     ],
-    "test/helpers.py": [
-      "test/unit/test_mmq_llama_record_producers.py",
-      "test/unit/test_mmq_llama_split_q8_record_producer.py"
-    ],
     "test/test_tiny.py": [
       "docs/flash-prefill-piece2-rest-task-deepseek-20260722.md",
       "extra/hardware/sqtt/generate_examples.py",
@@ -6438,9 +6011,6 @@
       "docs/packed-wmma-14b-machine-search-claim-scope-20260725.md",
       "extra/qk/pure_search_guard.py"
     ],
-    "test/unit/test_q4k_q8_mmq_uop.py": [
-      "test/unit/test_q4k_q8_mmq_wide_grid.py"
-    ],
     "test/unit/test_regalloc_end_liveness.py": [
       "docs/qwen3-14b-generated-prefill-claude-handoff-20260716.md"
     ],
@@ -6469,7 +6039,6 @@
       "tinygrad/llm/route_ops.py"
     ],
     "tinygrad/callify.py": [
-      "test/unit/test_dynamic_tile_owner.py",
       "tinygrad/tensor.py"
     ],
     "tinygrad/codegen/__init__.py": [
@@ -6596,7 +6165,6 @@
       "test/unit/test_gemm_consumer_adapters.py"
     ],
     "tinygrad/codegen/opt/heuristic.py": [
-      "test/unit/test_scheduler_output_tile_loop.py",
       "tinygrad/codegen/opt/postrange.py"
     ],
     "tinygrad/codegen/opt/kernel_lds.py": [
@@ -6606,7 +6174,6 @@
       "docs/authored-core-loc-consolidation-scope-20260716.md",
       "docs/packed-wmma-14b-codegen-transition-bisect-20260724.md",
       "docs/prefill-needle-theories-20260724.md",
-      "extra/qk/kernel_lds.py",
       "extra/qk/runtime_specs.py",
       "test/unit/test_kernel_lds_mapping.py",
       "test/unit/test_precontract_int8_lds_contract.py",
@@ -6615,7 +6182,6 @@
       "tinygrad/codegen/opt/postrange.py"
     ],
     "tinygrad/codegen/opt/kernel_pipeline.py": [
-      "extra/qk/kernel_pipeline.py",
       "extra/qk/runtime_specs.py",
       "test/unit/test_stage1_wmma_compile_evidence.py",
       "tinygrad/codegen/opt/heuristic.py",
@@ -6624,21 +6190,14 @@
     ],
     "tinygrad/codegen/opt/packed_weight.py": [
       "docs/authored-core-loc-consolidation-scope-20260716.md",
-      "extra/qk/kernel_lds.py",
       "extra/qk/kernel_vocabulary.py",
-      "extra/qk/mmq_llama_packed_operands.py",
-      "extra/qk/mmq_llama_record_producers.py",
       "extra/qk/runtime_specs.py",
-      "test/unit/test_hierarchical_packed_record_stage.py",
-      "test/unit/test_mmq_llama_packed_operands.py",
-      "test/unit/test_packed_component_lds_stage.py",
-      "test/unit/test_packed_operand_contract.py",
-      "test/unit/test_packed_record_lds_stage.py",
       "test/unit/test_packed_weight.py",
       "test/unit/test_strided_lds_record_layout.py",
       "tinygrad/codegen/opt/kernel_lds.py"
     ],
     "tinygrad/codegen/opt/postrange.py": [
+      "bench/qk-search-spaces/default_route_manifest.json",
       "docs/14b-packed-wmma-warmstart-handoff-20260721.md",
       "docs/HANDOFF_fused_attention_enablement_20260723.md",
       "docs/SHARED_ATTENTION_COMPILER_PHASE_ABI_SCOPE_20260723.md",
@@ -6653,11 +6212,9 @@
       "extra/qk/prefill/packed_wmma_prefill_candidates.py",
       "extra/qk/prefill/prefill_graph_gemm_route.py",
       "extra/qk/prefill/prefill_whole_synced.py",
-      "extra/qk/route_manifest.py",
       "test/unit/test_composite_axis_constraints.py",
       "test/unit/test_kernel_naming.py",
       "test/unit/test_prefill_whole_synced.py",
-      "test/unit/test_scheduler_output_tile_loop.py",
       "tinygrad/codegen/__init__.py",
       "tinygrad/codegen/opt/heuristic.py",
       "tinygrad/engine/realize.py",
@@ -6676,13 +6233,9 @@
       "docs/flash-prefill-wmma-mvp-scope-20260721.md",
       "docs/shared-flash-attention-codex-completion-scope-20260722.md",
       "docs/shared-flash-scoped-reduce-completion-scope-20260722.md",
-      "extra/qk/route_manifest.py",
       "extra/qk/runtime_specs.py",
       "test/unit/test_gemm_consumer_adapters.py",
-      "test/unit/test_hierarchical_packed_record_stage.py",
       "test/unit/test_kernel_lds_mapping.py",
-      "test/unit/test_packed_component_lds_stage.py",
-      "test/unit/test_packed_record_lds_stage.py",
       "test/unit/test_precontract_int8_lds_contract.py",
       "tinygrad/renderer/__init__.py",
       "tinygrad/renderer/isa/amd.py"
@@ -6718,7 +6271,6 @@
       "test/unit/test_kernargs_wrap_audit.py",
       "test/unit/test_kernel_candidate_context.py",
       "test/unit/test_pm4_ib_and_nv_cmdq_wrap_drain.py",
-      "test/unit/test_q4k_q8_mmq_uop.py",
       "test/unit/test_wrapping_allocator_invariant.py",
       "tinygrad/__init__.py",
       "tinygrad/callify.py",
@@ -6749,21 +6301,16 @@
     ],
     "tinygrad/dtype.py": [
       "extra/gpu_fault_analysis/bench_alloc_trace.py",
-      "extra/qk/amd_isa_renderer_policy.py",
       "extra/qk/amd_warp_reduce.py",
       "extra/qk/bubblebeam_futuresight.py",
       "extra/qk/coalesced_load_lowering.py",
       "extra/qk/decode/current_decode_execution_adapter.py",
       "extra/qk/fdot2_lowering.py",
       "extra/qk/gemv_g3_codegen_lowering.py",
-      "extra/qk/kernel_lds.py",
-      "extra/qk/kernel_pipeline.py",
       "extra/qk/kernel_vocabulary.py",
       "extra/qk/lane_partition_reduce.py",
       "extra/qk/live_split_geometry.py",
       "extra/qk/mmq_compile_evidence.py",
-      "extra/qk/mmq_llama_packed_operands.py",
-      "extra/qk/mmq_llama_record_producers.py",
       "extra/qk/mmq_q4k_q8_atom.py",
       "extra/qk/prefill/guarded_execution.py",
       "extra/qk/runtime_specs.py",
@@ -6785,17 +6332,12 @@
       "test/unit/test_devectorizer_memory_widths.py",
       "test/unit/test_devectorizer_reconstruction.py",
       "test/unit/test_gemm_consumer_adapters.py",
-      "test/unit/test_hierarchical_packed_record_stage.py",
       "test/unit/test_kernel_candidate_context.py",
       "test/unit/test_kernel_naming.py",
       "test/unit/test_kernel_pipeline_expansion.py",
       "test/unit/test_logits_only_reg_store.py",
-      "test/unit/test_mmq_llama_packed_operands.py",
       "test/unit/test_nested_composite_reduce.py",
       "test/unit/test_online_softmax_tile.py",
-      "test/unit/test_packed_component_lds_stage.py",
-      "test/unit/test_packed_operand_contract.py",
-      "test/unit/test_packed_record_lds_stage.py",
       "test/unit/test_precontract_int8_lds_contract.py",
       "test/unit/test_pure_pipe_graph_abi.py",
       "test/unit/test_pure_register_do_assemble_capture_boundary_20260712.py",
@@ -6889,7 +6431,6 @@
       "extra/qk/mmq_compile_evidence.py",
       "extra/qk/prefill/current_prefill_execution_adapter.py",
       "extra/qk/prefill/host_safety_canary.py",
-      "extra/qk/q4k_q8_mmq_uop_validation.py",
       "test/backend/test_softmax_fusion.py",
       "test/unit/test_attn_qo_register_compile.py",
       "tinygrad/engine/jit.py",
@@ -6931,7 +6472,6 @@
       "extra/qk/prefill/prefill_whole_synced.py",
       "extra/qk/prefill/q4k_prefill_route_spec.py",
       "extra/qk/prefill/q6k_prefill_route_spec.py",
-      "extra/qk/q4k_q8_mmq_uop_validation.py",
       "extra/qk/q6k_route_spec.py",
       "extra/qk/quant/q4_k_gemv_primitive.py",
       "extra/qk/quant/q6_k_gemv_primitive.py",
@@ -6962,7 +6502,6 @@
       "test/unit/test_online_softmax_tile.py",
       "test/unit/test_prefill_graph_gemm_route.py",
       "test/unit/test_prefill_whole_synced.py",
-      "test/unit/test_q4k_q8_mmq_uop.py",
       "test/unit/test_regalloc_addr_lifetime.py",
       "test/unit/test_regalloc_rematerialization.py",
       "test/unit/test_shared_attention_compiler_capture.py",
@@ -7073,6 +6612,7 @@
       "bench/pure-machine-search-default-path-census/latest.json",
       "bench/pure-machine-search-default-path-census/summary.md",
       "bench/qk-search-spaces/default_route_manifest.json",
+      "docs/14b-decode-g5-steady-state-recovery-scope-20260726.md",
       "docs/HANDOFF_14b_decode_depth_decay_20260726.md",
       "docs/flash-prefill-scope-20260721.md",
       "docs/prefill-softmax-reduce-fuse-evidence-20260724.json",
@@ -7112,6 +6652,7 @@
     "tinygrad/llm/fused_attention.py": [
       "bench/pure-machine-search-default-path-census/default_route_table.json",
       "bench/pure-machine-search-default-path-census/latest.json",
+      "bench/qk-search-spaces/default_route_manifest.json",
       "docs/flash-prefill-pure-search-lift-scope-20260724.md",
       "extra/audit/pure_machine_search_default_path_census.py",
       "extra/qk/prefill/flash_prefill_attention_spec.py",
@@ -7119,7 +6660,6 @@
       "extra/qk/prefill/prefill_hd_sweep_numerics.py",
       "extra/qk/prefill/prefill_long_context_numerics.py",
       "extra/qk/prefill/prefill_whole_synced.py",
-      "extra/qk/route_manifest.py",
       "scratchpad/kv_tile_amortization_probe.py",
       "scratchpad/t4_dump.py",
       "tinygrad/codegen/opt/postrange.py",
@@ -7131,7 +6671,6 @@
       "docs/amd-fp16-dequant-q4k-build-progress-20260720.md",
       "docs/amd-fp16-dequant-q4k-primitive-implementation-plan-20260720.md",
       "extra/qk/layout.py",
-      "extra/qk/mmq_llama_record_producers.py",
       "tinygrad/llm/gguf_memory_scan.py",
       "tinygrad/llm/model.py",
       "tinygrad/llm/qk_primitives.py"
@@ -7188,7 +6727,6 @@
       "extra/llm/model_e2e_bench.py",
       "extra/qk/decode/decode_hd_sweep_numerics.py",
       "extra/qk/pure_search_guard.py",
-      "extra/qk/route_manifest.py",
       "scratchpad/audit_bfs.py",
       "test/unit/test_llm_decode_correctness.py",
       "test/unit/test_llm_decode_routes.py",
@@ -7261,7 +6799,6 @@
       "extra/audit/pure_machine_search_default_path_census.py",
       "extra/qk/prefill/packed_wmma_prefill_candidates.py",
       "extra/qk/pure_search_guard.py",
-      "extra/qk/route_manifest.py",
       "scratchpad/audit_bfs.py",
       "test/unit/test_pure_search_guard_boundary.py",
       "test/unit/test_shared_prefill_policy.py",
@@ -7372,7 +6909,6 @@
       "extra/qk/generate_shared_attention_captures.py",
       "extra/qk/phase_abi_v1_resource_probe.py",
       "extra/qk/prefill/prefill_softmax_reduce_fuse_promotion_gate.py",
-      "extra/qk/route_manifest.py",
       "scratchpad/kv_tile_amortization_probe.py",
       "scratchpad/t4_dump.py",
       "test/unit/test_amd_attention_kv_tile_oob_guard.py",
@@ -7396,6 +6932,7 @@
       "tinygrad/runtime/ops_nv.py"
     ],
     "tinygrad/renderer/isa/amd.py": [
+      "bench/qk-search-spaces/default_route_manifest.json",
       "docs/14b-mmq-renderer-asm-proof-introspection-20260710.md",
       "docs/SHARED_ATTENTION_COMPILER_PHASE_ABI_SCOPE_20260723.md",
       "docs/amd-fp16-dequant-q4k-build-progress-20260720.md",
@@ -7404,8 +6941,6 @@
       "docs/shared-flash-prefill-rewrite-handoff-20260723.md",
       "extra/qk/amd_isa_proof.py",
       "extra/qk/generate_shared_attention_captures.py",
-      "extra/qk/mmq_llama_oracle.py",
-      "extra/qk/route_manifest.py",
       "extra/qk/shared_attention_capture.py",
       "test/unit/test_amd_attention_kv_tile_oob_guard.py",
       "test/unit/test_amd_compile_capture_fail_closed_20260712.py",
@@ -7421,7 +6956,6 @@
       "test/unit/test_attention_semantic.py",
       "test/unit/test_attn_qo_register_compile.py",
       "test/unit/test_online_softmax_tile.py",
-      "test/unit/test_q4k_q8_mmq_uop.py",
       "test/unit/test_regalloc_pressure_schedule.py",
       "test/unit/test_regalloc_rematerialization.py",
       "test/unit/test_shared_attention_compiler_capture.py",
@@ -7464,9 +6998,7 @@
       "tinygrad/renderer/isa/amd.py"
     ],
     "tinygrad/renderer/isa/extensions.py": [
-      "extra/qk/codegen_extensions.py",
       "scratchpad/audit_bfs.py",
-      "test/unit/test_amd_isa_extension_interfaces.py",
       "tinygrad/renderer/isa/amd.py",
       "tinygrad/renderer/isa/amd_wmma_residency.py"
     ],
@@ -7506,6 +7038,7 @@
     ],
     "tinygrad/runtime/ops_amd.py": [
       "docs/prefill-R-theories-scope-20260724.md",
+      "docs/prefill-lessons-ledger.md",
       "docs/task_workflow/output/codebase-organization-audit-report.md",
       "extra/hardware/amdpci/proclogs.py",
       "extra/hardware/sqtt/rgptool.py",
@@ -7526,7 +7059,6 @@
     "tinygrad/runtime/ops_python.py": [
       "test/helpers.py",
       "test/unit/test_kernel_candidate_context.py",
-      "test/unit/test_kernel_lds_mapping.py",
       "test/unit/test_kernel_naming.py",
       "test/unit/test_pure_pipe_graph_abi.py"
     ],
@@ -7740,12 +7272,12 @@
     "tinygrad/schedule/wmma/kernels.py": [
       "bench/pure-machine-search-default-path-census/default_route_table.json",
       "bench/pure-machine-search-default-path-census/latest.json",
+      "bench/qk-search-spaces/default_route_manifest.json",
       "docs/flash-prefill-pure-search-lift-scope-20260724.md",
       "docs/prefill-R-theories-scope-20260724.md",
       "extra/audit/pure_machine_search_default_path_census.py",
       "extra/qk/prefill/prefill_causal_tile_skip_promotion_gate.py",
       "extra/qk/prefill/prefill_hd_sweep_numerics.py",
-      "extra/qk/route_manifest.py",
       "tinygrad/schedule/wmma/__init__.py"
     ],
     "tinygrad/schedule/wmma/loop_state.py": [
@@ -7804,7 +7336,6 @@
       "docs/shared-flash-scoped-reduce-completion-scope-20260722.md",
       "extra/hardware/sqtt/roc.py",
       "extra/llm/cli.py",
-      "extra/qk/amd_isa_renderer_policy.py",
       "extra/qk/amd_warp_reduce.py",
       "extra/qk/attention_harness_common.py",
       "extra/qk/benchmark_shared_attention.py",
@@ -7817,21 +7348,17 @@
       "extra/qk/decode/current_decode_execution_adapter.py",
       "extra/qk/decode/decode_runtime_overhead.py",
       "extra/qk/decode/flash_decode_attention_spec.py",
-      "extra/qk/dynamic_tile_owner.py",
       "extra/qk/fdot2_lowering.py",
       "extra/qk/flash_common.py",
       "extra/qk/gemv_g2_lanemap.py",
       "extra/qk/gemv_g3_codegen_lowering.py",
       "extra/qk/generate_shared_attention_captures.py",
-      "extra/qk/kernel_lds.py",
-      "extra/qk/kernel_pipeline.py",
       "extra/qk/kv_load.py",
       "extra/qk/lane_partition_reduce.py",
       "extra/qk/layout_coalesce_check.py",
       "extra/qk/live_split_geometry.py",
       "extra/qk/mmq_compile_evidence.py",
       "extra/qk/mmq_ds4_logical_emitter.py",
-      "extra/qk/mmq_llama_record_producers.py",
       "extra/qk/mmq_q4k_q8_atom.py",
       "extra/qk/phase_abi_v1_resource_probe.py",
       "extra/qk/prefill/current_prefill_execution_adapter.py",
@@ -7843,8 +7370,6 @@
       "extra/qk/prefill/prefill_long_context_numerics.py",
       "extra/qk/prefill/q4k_prefill_route_spec.py",
       "extra/qk/prefill/q6k_prefill_route_spec.py",
-      "extra/qk/q4k_q8_mmq_uop.py",
-      "extra/qk/q4k_q8_mmq_uop_validation.py",
       "extra/qk/q6k_route_spec.py",
       "extra/qk/quant/q4_k_gemv_primitive.py",
       "extra/qk/quant/q6_k_gemv_primitive.py",
@@ -7878,35 +7403,25 @@
       "test/unit/test_current_prefill_execution_adapter.py",
       "test/unit/test_devectorizer_memory_widths.py",
       "test/unit/test_devectorizer_reconstruction.py",
-      "test/unit/test_dynamic_tile_owner.py",
       "test/unit/test_executable_artifact_preparation.py",
       "test/unit/test_final_regalloc_proof_transport_20260712.py",
       "test/unit/test_flash_decode_attention_spec.py",
       "test/unit/test_gemm_consumer_adapters.py",
-      "test/unit/test_grouped_dot_update_pipeline.py",
-      "test/unit/test_hierarchical_packed_record_stage.py",
       "test/unit/test_kernel_candidate_context.py",
       "test/unit/test_kernel_naming.py",
       "test/unit/test_kernel_pipeline_expansion.py",
       "test/unit/test_linearizer_stable_priority.py",
       "test/unit/test_llm_decode_routes.py",
       "test/unit/test_logits_only_reg_store.py",
-      "test/unit/test_mmq_llama_record_producers.py",
-      "test/unit/test_mmq_llama_split_q8_record_producer.py",
       "test/unit/test_mmq_q4k_q8_atom.py",
       "test/unit/test_nested_composite_reduce.py",
       "test/unit/test_online_softmax_state_split.py",
       "test/unit/test_online_softmax_tile.py",
-      "test/unit/test_packed_component_lds_stage.py",
-      "test/unit/test_packed_record_lds_stage.py",
       "test/unit/test_packed_weight.py",
       "test/unit/test_precontract_int8_lds_contract.py",
       "test/unit/test_pure_pipe_graph_abi.py",
       "test/unit/test_pure_register_do_assemble_capture_boundary_20260712.py",
       "test/unit/test_q4k_prefill_route_spec.py",
-      "test/unit/test_q4k_q8_mmq_uop.py",
-      "test/unit/test_q4k_q8_mmq_uop_validation.py",
-      "test/unit/test_q4k_q8_mmq_wide_grid.py",
       "test/unit/test_q4k_w_f16_decode.py",
       "test/unit/test_recompute_hostile_cost_gate.py",
       "test/unit/test_regalloc_addr_lifetime.py",
@@ -7915,7 +7430,6 @@
       "test/unit/test_regalloc_pressure_schedule.py",
       "test/unit/test_regalloc_rematerialization.py",
       "test/unit/test_regalloc_spans.py",
-      "test/unit/test_scheduler_output_tile_loop.py",
       "test/unit/test_shared_attention_compiler_capture.py",
       "test/unit/test_stage1_wmma_compile_evidence.py",
       "test/unit/test_state_phase_abi.py",
@@ -8090,16 +7604,16 @@
     ]
   },
   "promotion_budget": {
-    "budgeted_after_pending_promotions": 34089,
-    "budgeted_loc": 34089,
+    "budgeted_after_pending_promotions": 34087,
+    "budgeted_loc": 34087,
     "cap": 35000,
     "data_file_convertible_loc": 0,
-    "headroom": 911,
+    "headroom": 913,
     "intended_cap": 30000,
     "intended_cap_note": "sz.py:13 records 35000 as temporary headroom; the standing target is 30000",
-    "over_intended_cap": 4089,
+    "over_intended_cap": 4087,
     "pending_promotion_net_cost": 0,
-    "unbudgeted_default_path_loc": 9228
+    "unbudgeted_default_path_loc": 8856
   },
   "repeated_workflow_phases": {
     "build-spec": [
@@ -8206,7 +7720,6 @@
     "active_regression": [
       "extra/qk/clock_pin.py",
       "extra/qk/decode/decode_codegen_identity_check.py",
-      "extra/qk/dynamic_tile_owner.py",
       "extra/qk/live_split_geometry.py",
       "extra/qk/packed_wmma_compile_gate.py",
       "extra/qk/prefill/pure_register_compile_capture.py",
@@ -8217,7 +7730,6 @@
     ],
     "active_validation": [
       "extra/qk/amd_isa_proof.py",
-      "extra/qk/amd_isa_renderer_policy.py",
       "extra/qk/amd_resource_artifact.py",
       "extra/qk/bench.py",
       "extra/qk/benchmark_shared_attention.py",
@@ -8230,9 +7742,6 @@
       "extra/qk/mmq_ds4_logical_emitter.py",
       "extra/qk/mmq_epoch_manifest_export.py",
       "extra/qk/mmq_lifecycle.py",
-      "extra/qk/mmq_llama_differential.py",
-      "extra/qk/mmq_llama_packed_operands.py",
-      "extra/qk/mmq_llama_record_producers.py",
       "extra/qk/mmq_logical_vocabulary.py",
       "extra/qk/mmq_q4k_q8_atom.py",
       "extra/qk/mmq_q4k_q8_reference.py",
@@ -8242,7 +7751,6 @@
       "extra/qk/prefill/prefill_primitive_spec.py",
       "extra/qk/prefill/prefill_whole_synced.py",
       "extra/qk/pure_search_guard.py",
-      "extra/qk/q4k_q8_mmq_uop.py",
       "extra/qk/shared_attention_capture.py",
       "extra/qk/shared_attention_evidence.py",
       "extra/qk/shared_attention_promotion.py"
@@ -8250,6 +7758,7 @@
     "operational_tool": [
       "extra/qk/decode/current_decode_execution_adapter.py",
       "extra/qk/decode/decode_harness.py",
+      "extra/qk/decode/decode_tile_timing.py",
       "extra/qk/generate_shared_attention_captures.py",
       "extra/qk/mmq_compile_evidence.py",
       "extra/qk/packed_wmma_canary_evidence.py",
@@ -8260,16 +7769,13 @@
       "extra/qk/prefill/prefill_causal_tile_skip_promotion_gate.py",
       "extra/qk/prefill/prefill_flash_e2e_parity.py",
       "extra/qk/prefill/prefill_flash_perf.py",
-      "extra/qk/prefill/prefill_softmax_reduce_fuse_promotion_gate.py",
-      "extra/qk/q4k_q8_mmq_uop_validation.py"
+      "extra/qk/prefill/prefill_softmax_reduce_fuse_promotion_gate.py"
     ],
     "orphan_unknown": [
-      "extra/qk/bubblebeam_futuresight.py",
-      "extra/qk/quant_specs.py"
+      "extra/qk/bubblebeam_futuresight.py"
     ],
     "retained_reference": [
       "extra/qk/mmq_ds4_probe_contract.py",
-      "extra/qk/mmq_llama_oracle.py",
       "extra/qk/q4k_tile_loader.py"
     ],
     "unresolved_reproducer": [
@@ -8606,15 +8112,8 @@
       "warning": "extra_on_default_path"
     },
     {
-      "count": 16,
-      "message": "extra/qk/kernel_vocabulary.py is imported by 16 modules",
-      "path": "extra/qk/kernel_vocabulary.py",
-      "principle": "a widely-imported module is a de-facto authority",
-      "warning": "high_fan_in"
-    },
-    {
-      "count": 23,
-      "message": "extra/qk/layout.py is imported by 23 modules",
+      "count": 21,
+      "message": "extra/qk/layout.py is imported by 21 modules",
       "path": "extra/qk/layout.py",
       "principle": "a widely-imported module is a de-facto authority",
       "warning": "high_fan_in"
@@ -8623,13 +8122,6 @@
       "count": 20,
       "message": "extra/qk/route_manifest.py is imported by 20 modules",
       "path": "extra/qk/route_manifest.py",
-      "principle": "a widely-imported module is a de-facto authority",
-      "warning": "high_fan_in"
-    },
-    {
-      "count": 13,
-      "message": "extra/qk/runtime_specs.py is imported by 13 modules",
-      "path": "extra/qk/runtime_specs.py",
       "principle": "a widely-imported module is a de-facto authority",
       "warning": "high_fan_in"
     },
@@ -8648,13 +8140,6 @@
       "warning": "high_fan_out"
     },
     {
-      "loc": 973,
-      "message": "extra/qk/kernel_lds.py is 973 LOC (threshold 400); responsibilities declared: 7",
-      "path": "extra/qk/kernel_lds.py",
-      "principle": "minimize what a reader must hold in their head",
-      "warning": "large_file"
-    },
-    {
       "loc": 832,
       "message": "extra/qk/mmq_q4k_q8_atom.py is 832 LOC (threshold 400); responsibilities declared: 4",
       "path": "extra/qk/mmq_q4k_q8_atom.py",
@@ -8669,8 +8154,8 @@
       "warning": "large_file"
     },
     {
-      "loc": 787,
-      "message": "extra/qk/route_manifest.py is 787 LOC (threshold 400); responsibilities declared: 7",
+      "loc": 415,
+      "message": "extra/qk/route_manifest.py is 415 LOC (threshold 400); responsibilities declared: 7",
       "path": "extra/qk/route_manifest.py",
       "principle": "minimize what a reader must hold in their head",
       "warning": "large_file"
@@ -8696,18 +8181,6 @@
       "warning": "multiple_authority_keys"
     },
     {
-      "message": "extra/qk/kernel_lds.py declares 6 authority keys: ['cooperative_lds_stores.row_election_rule', 'rdna3_wmma_output_coord.native_c_map', 'build_packed_component_lds_stage.contract', 'build_packed_record_lds_stage.contract', 'build_hierarchical_packed_record_stage.publish_release_protocol', 'prove_hierarchical_packed_record_stage.invariants']",
-      "path": "extra/qk/kernel_lds.py",
-      "principle": "centralize authoritative knowledge under one owner",
-      "warning": "multiple_authority_keys"
-    },
-    {
-      "message": "extra/qk/kernel_pipeline.py declares 4 authority keys: ['prove_dot_update_recurrence.invariants', 'hierarchical_lifecycle_events.canonical_sequence', 'prove_hierarchical_lifecycle.invariants', 'build_scheduler_output_tile_owner.ownership_proof']",
-      "path": "extra/qk/kernel_pipeline.py",
-      "principle": "centralize authoritative knowledge under one owner",
-      "warning": "multiple_authority_keys"
-    },
-    {
       "message": "extra/qk/memory_adaptive_policy.py declares 4 authority keys: ['tinygrad.memory_adaptive_policy.v1', 'tinygrad.memory_adaptive_policy_cache.v1', 'tinygrad.accelerated_candidate.production_eligibility.v1', 'tinygrad.accelerated_candidate.production_eligibility_requirement.v1']",
       "path": "extra/qk/memory_adaptive_policy.py",
       "principle": "centralize authoritative knowledge under one owner",
@@ -8716,18 +8189,6 @@
     {
       "message": "extra/qk/mmq_atom_boundary.py declares 4 authority keys: ['PREFILL_14B_Q4K_Q8_1_HYBRID_MMQ_ATOM_ROUTE_ID', 'Prefill14BHybridMMQAtomSpec', 'Prefill14BHybridMMQAtomDescriptor', 'milestone_evidence(M1..M7)']",
       "path": "extra/qk/mmq_atom_boundary.py",
-      "principle": "centralize authoritative knowledge under one owner",
-      "warning": "multiple_authority_keys"
-    },
-    {
-      "message": "extra/qk/mmq_llama_packed_operands.py declares 6 authority keys: ['llama.q4_k.global_block.v1', 'llama.q8_1.ds4.global_and_lds_row.v1', 'llama.q4_k.decoded_lds_row.v1', 'llama.q4_k.decoded_fp16_group_lds_row.v1', 'llama.activation.fp16_k32_group_row.v1', 'SOURCE_ANCHORS']",
-      "path": "extra/qk/mmq_llama_packed_operands.py",
-      "principle": "centralize authoritative knowledge under one owner",
-      "warning": "multiple_authority_keys"
-    },
-    {
-      "message": "extra/qk/mmq_llama_record_producers.py declares 5 authority keys: ['llama-q8-ds4-producer-instance.v1', 'Q8_DS4_RECORD_COPY', 'Q4_K_RECORD_DECODE', 'Q4_K_RECORD_DECODE_GROUP', 'ACTIVATION_FP16_RECORD_COPY']",
-      "path": "extra/qk/mmq_llama_record_producers.py",
       "principle": "centralize authoritative knowledge under one owner",
       "warning": "multiple_authority_keys"
     },
@@ -9022,49 +8483,6 @@
         "route-spec"
       ],
       "workflow_id": "quant-kernel-lowering"
-    },
-    {
-      "authority_files": [
-        "extra/qk/amd_isa_renderer_policy.py",
-        "extra/qk/kernel_lds.py",
-        "extra/qk/kernel_vocabulary.py"
-      ],
-      "authority_rules": [
-        "amd.isa_extension_descriptors"
-      ],
-      "default_path": false,
-      "domain": "amd_runtime",
-      "entry_points": [
-        "tinygrad/renderer/isa/amd.py"
-      ],
-      "evidence_files": [
-        "extra/qk/amd_isa_proof.py",
-        "extra/qk/mmq_llama_oracle.py",
-        "extra/qk/mmq_llama_differential.py"
-      ],
-      "execution_files": [
-        "extra/qk/mmq_llama_record_producers.py",
-        "extra/qk/mmq_llama_packed_operands.py",
-        "extra/qk/codegen_extensions.py"
-      ],
-      "inputs": [
-        "UOp graph"
-      ],
-      "outputs": [
-        "AMD ISA instructions"
-      ],
-      "phases": [
-        "descriptor-lookup",
-        "lds-staging",
-        "isel",
-        "proof-capture"
-      ],
-      "purpose": "Render AMD native ISA for the research renderer, including cooperative LDS staging and MMQ record producers.",
-      "retention_criterion": "until DEV=AMD:ISA is promoted to a supported path or the native-ISA experiment is retired",
-      "shared_assets": [
-        "compile-dispatch"
-      ],
-      "workflow_id": "amd-isa-research-rendering"
     },
     {
       "authority_files": [

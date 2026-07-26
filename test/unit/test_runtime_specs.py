@@ -1,9 +1,9 @@
 import pytest
 import json, pickle
 import hashlib
+from dataclasses import dataclass
 
 from extra.qk.generated_candidates import GeneratedCandidateRegistry, builtin_registry, select_generated_candidate
-from extra.qk.quant_specs import activation_spec, quant_spec
 from extra.qk import route_manifest
 from extra.qk import pure_search_guard
 from extra.qk.prefill import prefill_graph_gemm_route
@@ -16,6 +16,62 @@ from extra.qk.runtime_specs import (
   bind_full_kernel_candidate, full_kernel_candidate_set_from_legacy, full_kernel_candidate_capability,
   full_kernel_workload, q4k_q8_1_five_buffer_abi_plan, rebind_full_kernel_workload,
 )
+
+
+# Inlined from the retired quant-spec helper module in extra/qk (retired 2026-07-26, see
+# docs/prefill-lessons-ledger.md) -- these fixtures build RuntimeOpSpec/GeneratedCandidate test data
+# for runtime_specs.py, which is live production code.
+@dataclass(frozen=True)
+class _QuantFormatSpec:
+  format: str
+  block_size: int
+  group_size: int
+  scale_layout: str
+  min_layout: str = ""
+  signed: bool = False
+  supported_activation_formats: tuple[str, ...] = ("fp16",)
+
+  def tensor_spec(self) -> QuantizedTensorSpec:
+    return QuantizedTensorSpec(self.format, block_size=self.block_size, group_size=self.group_size,
+                               scale_layout=self.scale_layout, min_layout=self.min_layout, signed=self.signed)
+
+
+@dataclass(frozen=True)
+class _ActivationFormatSpec:
+  format: str
+  block_size: int | None
+  signed: bool | None
+  scale_layout: str = ""
+
+  def activation_spec(self) -> ActivationQuantSpec:
+    return ActivationQuantSpec(self.format, block_size=self.block_size, signed=self.signed, scale_layout=self.scale_layout)
+
+
+_QUANT_FORMAT_SPECS: dict[str, _QuantFormatSpec] = {
+  "Q4_K": _QuantFormatSpec("Q4_K", block_size=256, group_size=32, scale_layout="ggml_q4_k.scales",
+                          min_layout="ggml_q4_k.mins", signed=False,
+                          supported_activation_formats=("fp16", "Q8_1")),
+  "Q6_K": _QuantFormatSpec("Q6_K", block_size=256, group_size=16, scale_layout="ggml_q6_k.scales",
+                          signed=True, supported_activation_formats=("fp16",)),
+}
+
+_ACTIVATION_FORMAT_SPECS: dict[str, _ActivationFormatSpec] = {
+  "Q8_1": _ActivationFormatSpec("Q8_1", block_size=32, signed=True, scale_layout="block_scale_sum"),
+  "fp16": _ActivationFormatSpec("fp16", block_size=None, signed=None),
+  "fp32": _ActivationFormatSpec("fp32", block_size=None, signed=None),
+  "none": _ActivationFormatSpec("none", block_size=None, signed=None),
+}
+
+
+def quant_spec(fmt:str) -> _QuantFormatSpec:
+  key = fmt.upper()
+  if key not in _QUANT_FORMAT_SPECS: raise KeyError(f"unknown quant format {fmt!r}")
+  return _QUANT_FORMAT_SPECS[key]
+
+
+def activation_spec(fmt:str) -> _ActivationFormatSpec:
+  if fmt not in _ACTIVATION_FORMAT_SPECS: raise KeyError(f"unknown activation format {fmt!r}")
+  return _ACTIVATION_FORMAT_SPECS[fmt]
 
 
 def _manifest_authority_gates(route_id):

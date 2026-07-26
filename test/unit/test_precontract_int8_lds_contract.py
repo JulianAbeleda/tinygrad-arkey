@@ -3,7 +3,6 @@ from types import SimpleNamespace
 import pytest
 
 from tinygrad import dtypes
-from extra.qk.kernel_lds import wmma_fragment_loads
 from tinygrad.codegen.opt.kernel_lds import (PrecontractContractSpec, PrecontractKAxis, PrecontractOperandTemplate,
   PrecontractThreadAxes, build_precontract_lds_stage, derive_precontract_factors, instantiate_precontract_fragments,
   validate_precontract_carriers, validate_precontract_wmma_abi, validate_rdna3_wmma_descriptor)
@@ -80,13 +79,6 @@ def test_32_wide_native_outputs_leave_a_float_group_epilogue_boundary():
   group_sum = native[0].cast(dtypes.float.vec(8)) + native[1].cast(dtypes.float.vec(8))
   assert group_sum.dtype == dtypes.float.vec(8)
   assert all(node.src[2].op is not Ops.WMMA for node in native)
-
-
-def test_int8_fragment_offsets_are_byte_addressed():
-  loads = wmma_fragment_loads(_geometry(), "B", tc=_tc())
-  first = next(x for x in loads if x.thread == 0 and x.subtile == 0 and x.k_substep == 0 and x.element == 0)
-  second = next(x for x in loads if x.thread == 0 and x.subtile == 0 and x.k_substep == 0 and x.element == 1)
-  assert first.byte_offset == 32_768 and second.byte_offset == first.byte_offset + 1
 
 
 def test_int8_abi_rejects_mixed_carriers_and_incorrect_layouts():

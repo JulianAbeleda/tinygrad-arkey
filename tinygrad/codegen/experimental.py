@@ -18,7 +18,6 @@ def line_lower_fdot2(*args, **kwargs): return _attr("extra.qk.fdot2_lowering", "
 def lower_fdot2_add(*args, **kwargs): return _attr("extra.qk.fdot2_lowering", "lower_fdot2_add")(*args, **kwargs)
 def list_schedule(*args, **kwargs): return _attr("extra.qk.codegen_list_scheduler", "list_schedule")(*args, **kwargs)
 def structural_ops(): return _attr("extra.qk.codegen_list_scheduler", "_STRUCTURAL")
-def amd_isa_extension_descriptors(default): return _attr("extra.qk.codegen_extensions", "amd_isa_extension_descriptors")(default)
 
 # Boundary adapter (test/unit/test_tinygrad_boundary.py). Defined here rather than re-exported from
 # tinygrad.llm.route_ops on purpose: postrange.py imports this lazily to sidestep the

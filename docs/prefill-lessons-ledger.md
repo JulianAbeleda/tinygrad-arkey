@@ -170,6 +170,21 @@ results.
     `DEV=AMD:ISA` renderer assembling decode/GEMV straight to RDNA3; never promoted to default, no external importers,
     bench dirs gone — recoverable only from git history. Established Q6_K direct half-warp route for `lm_head`, PINNED
     VGPR accumulators + LDS reclaim, consumer-only waitcnt, hardware `exp2→v_exp_f32` lowering.
+  - *AMD native-ISA support chain in `extra/qk/` (13 files/2,801 LOC, retired 2026-07-26):* the second half of the arc
+    above — the `extra/qk` side that fed `tinygrad/renderer/isa/` through the
+    `codegen_extensions -> amd_isa_renderer_policy` seam. Reachable only under `DEV=AMD:ISA`, which
+    `tinygrad/runtime/ops_amd.py:1015-1021` registers only when `DEV.target("AMD").renderer == "ISA"` ("Native ISA is
+    research tooling, not part of ordinary AMD execution"); `DEV=AMD` never imported it. Retired for the same reason
+    the 07-03 half was: never promoted, no default-path consumer, no open question. **The ISA renderer itself
+    (`tinygrad/renderer/isa/`) is NOT retired** — only its `extra/qk` extension providers. Its extension hook now
+    returns the empty default, which every call site in `amd_wmma_residency.py` already handled as `policy is None`.
+    What it established, and what is lost with the code: `mmq_llama_oracle.py` was a translated *structure* oracle of
+    llama.cpp's Q4_K MMQ cooperative tile ownership (tile/warp geometry, not a vendored kernel), with
+    `mmq_llama_differential.py` doing structural — explicitly non-numeric — comparison against it; `kernel_lds.py` held
+    a hand-computed cooperative-store/WMMA-fragment addressing model used as a verification oracle against
+    `postrange.py`-driven codegen, plus two never-adopted staging designs (packed-component, and a two-lifetime
+    hierarchical publish/release stage with its own ~115-line prover). Recover with
+    `git show 348dceeec -- extra/qk/<file>`.
 - **14B prefill vs llama roofline (was `prefill-14b-llama-parity-trace-20260704.md`):** tinygrad 144 tok/s @ 2.23
   effective packed GB/s vs llama.cpp 1624.9 tok/s @ 27.2 GB/s (8.9%). Six packed-GEMM rows are ~93–95% of the tinygrad
   step; elementwise/norm overhead is only ~3% (NOT the first-order gap). Verdict: the remaining gap is the

@@ -35,32 +35,47 @@
       "citation": "docs/decode-two-kernel-problem-audit-result-20260625.md"
     },
     {
-      "axis": "g5_block_tile_8b_as_default",
+      "axis": "g5_block_tile_as_default",
+      "compatibility_aliases": [
+        "g5_block_tile_8b_as_default"
+      ],
       "domain": "attention",
       "disposition": "correct_not_fast: token-identical + route-bound but 87.6% of owned @ctx512 / 95.6% @ctx4096 (TG-P5)",
       "citation": "bench/tg-p5-attention-generated-default/latest.json",
-      "route_id": "decode_flash_block_tile_g5_8b_refuted"
+      "legacy_route_id": "decode_flash_block_tile_g5_8b_refuted"
     },
     {
-      "axis": "g5_block_tile_8b_L_geometry",
+      "axis": "g5_block_tile_L_geometry",
+      "compatibility_aliases": [
+        "g5_block_tile_8b_L_geometry"
+      ],
       "domain": "attention",
       "disposition": "refuted: L=128 is the geometry optimum (87.7%/95.9%); larger L monotonically worse (69%/75.6% at L=576, occupancy-starved) -- the generated route needs ~36 splits for parallelism so it over-launches at low ctx (TG-P8.2)",
       "citation": "bench/tg-p8-generated-8b-attention-parity/geometry_search.json"
     },
     {
-      "axis": "g5_block_tile_8b_combine_lifecycle_cap",
+      "axis": "g5_block_tile_combine_lifecycle_cap",
+      "compatibility_aliases": [
+        "g5_block_tile_8b_combine_lifecycle_cap"
+      ],
       "domain": "attention",
       "disposition": "blocking: the generated 3-kernel gmax+combine lifecycle is 556us/fwd (83% of the ctx4096 attention delta) vs owned's fused 224us -> BINDING cap at ctx4096 (95.9%); a perfect tile saves only 112us. Combine COLLAPSE is refuted (guardrail #3); reopen only with a NEW non-collapse coordination primitive (TG-P8.1/P8.2)",
       "citation": "bench/tg-p8-generated-8b-attention-parity/latest.json"
     },
     {
-      "axis": "live_split_geometry_8b_tile",
+      "axis": "live_split_geometry_tile",
+      "compatibility_aliases": [
+        "live_split_geometry_8b_tile"
+      ],
       "domain": "attention",
       "disposition": "SOLVED/PROMOTED: live-context split geometry (fixed S, per=ceildiv(Tc,S)) is expressible in generated UOp; the live-split route plus KV_BOTH staging and fused combine is now the 8B generated default. extra/qk/live_split_geometry.py",
       "citation": "bench/tg-p9-pure-attention-primitive-route/live_split_tile_microgate.json"
     },
     {
-      "axis": "split_preserving_lse_combine_8b",
+      "axis": "split_preserving_lse_combine",
+      "compatibility_aliases": [
+        "split_preserving_lse_combine_8b"
+      ],
       "domain": "attention",
       "disposition": "EMITTER_BLOCKED (TG-P9.4): a split-preserving generated combine (de-dup the per-d fexp / fuse gmax without collapsing Hq*S or Hq*Hd) mis-vectorizes the reduction-accumulator REG to a non-assignable make_float4(...) store; REG_STORE_DEVEC=1 compiles but NaNs. The ctx4096 556us combine cap cannot be removed in current AMD codegen. Reopen: a codegen fix keeping the reduction-accumulator REG scalar for a multi-reduce/weight-sharing combine.",
       "citation": "bench/tg-p9-pure-attention-primitive-route/combine_microgate.json"
