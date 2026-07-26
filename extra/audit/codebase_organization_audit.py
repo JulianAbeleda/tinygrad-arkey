@@ -81,7 +81,9 @@ def loc_of(path: pathlib.Path) -> int:
   try:
     with tokenize.open(str(path)) as f:
       toks = [t for t in tokenize.generate_tokens(f.readline) if t.type in sz.TOKEN_WHITELIST and not sz.is_docstring(t)]
-  except (tokenize.TokenizeError, SyntaxError, UnicodeDecodeError, OSError): return 0
+  # NB: the name is tokenize.TokenError. sz.py:44 catches `tokenize.TokenizeError`, which does not exist -- that except
+  # clause raises AttributeError instead of skipping the file. Do not copy the typo.
+  except (tokenize.TokenError, SyntaxError, UnicodeDecodeError, ValueError, OSError): return 0
   return len({x for t in toks for x in range(t.start[0], t.end[0] + 1)})
 
 # ------------------------------------------------------------------------------------------------- import graph ----
@@ -386,6 +388,13 @@ def audit(root: pathlib.Path = ROOT, manifest_path: pathlib.Path | None = None, 
   actions, workflows = man.get("actions", []), man["workflows"]
   for a in actions:
     p = a.get("path")
+    # A completed action is a ledger entry, not a proposal: its path is gone on purpose, so the checks that defend a
+    # pending candidate (has a record, has no live consumer, is not still wired) no longer apply.
+    if a.get("status") == "completed":
+      # only a completed *prune* implies the path is gone; a completed centralize/reuse/decouple leaves it in place
+      if p and a.get("action") == "prune" and (root / p).exists():
+        E("completed_prune_path_still_exists", f"action {a.get('id')} is a completed prune but {p} still exists", path=p)
+      continue
     if p and p not in records and not any(group_match(g, p) for g in groups):
       E("action_without_record", f"action candidate {p} has no manifest record", path=p)
     if a.get("action") == "promote" and a.get("promotion_readiness") == "ready":
@@ -533,11 +542,15 @@ def _test_inventory(records, covered_by_group, groups):
   return {k: sorted(v) for k, v in sorted(inv.items())}
 
 def _loc_impact(actions):
-  gross = sum(int(a.get("loc_removed") or 0) for a in actions)
-  added = sum(int(a.get("loc_added") or 0) for a in actions)
-  moved = sum(int(a.get("loc_moved") or 0) for a in actions)
-  return {"gross_loc_removed": gross, "replacement_loc_added": added, "net_authored_loc_reduction": gross - added,
-          "loc_moved_not_reduced": moved}
+  def tot(seq, k): return sum(int(a.get(k) or 0) for a in seq)
+  done = [a for a in actions if a.get("status") == "completed"]
+  todo = [a for a in actions if a.get("status") != "completed"]
+  return {"gross_loc_removed": tot(todo, "loc_removed"), "replacement_loc_added": tot(todo, "loc_added"),
+          "net_authored_loc_reduction": tot(todo, "loc_removed") - tot(todo, "loc_added"),
+          "loc_moved_not_reduced": tot(todo, "loc_moved"),
+          "realized_gross_loc_removed": tot(done, "loc_removed"), "realized_replacement_loc_added": tot(done, "loc_added"),
+          "realized_net_loc_reduction": tot(done, "loc_removed") - tot(done, "loc_added"),
+          "completed_actions": sorted(a.get("id", "?") for a in done)}
 
 # ------------------------------------------------------------------------------------------------------ report -----
 def _md(c: dict) -> str:
@@ -604,10 +617,12 @@ def _md(c: dict) -> str:
   L += ["## Repeated workflow phases", ""]
   L += [f"- `{k}`: {v}" for k, v in c["repeated_workflow_phases"].items()] + [""]
   imp = c["loc_impact"]
-  L += ["## LOC impact of proposed actions", "",
-        f"- Gross authored LOC removed: {imp['gross_loc_removed']}",
-        f"- Replacement LOC added: {imp['replacement_loc_added']}",
-        f"- **Net authored LOC reduction: {imp['net_authored_loc_reduction']}**",
+  L += ["## LOC impact", "",
+        f"- **Realized** (actions {', '.join(imp['completed_actions']) or 'none'}): "
+        f"gross -{imp['realized_gross_loc_removed']}, +{imp['realized_replacement_loc_added']}, "
+        f"net **-{imp['realized_net_loc_reduction']}**",
+        f"- Still proposed: gross -{imp['gross_loc_removed']}, +{imp['replacement_loc_added']}, "
+        f"net -{imp['net_authored_loc_reduction']}",
         f"- LOC merely moved between directories (NOT a reduction): {imp['loc_moved_not_reduced']}", ""]
   if seq := c["human_findings"].get("recommended_sequence"):
     L += ["## Recommended sequence", ""] + [f"{i+1}. {s}" for i, s in enumerate(seq)] + [""]

@@ -16,7 +16,7 @@ from tinygrad.runtime.support.compiler_amd import compile_hip
 from tinygrad.uop.ops import KernelInfo, Ops
 from tinygrad.schedule.wmma import amd_gfx1100_q16_grid_hd128_loop_attention
 
-from extra.qk.amdgpu_metadata import parse_amdgpu_metadata
+from extra.qk.mmq_compile_evidence import parse_amdgpu_metadata
 
 SCHEMA = "tinygrad.shared_attention.phase_abi_v1_resource_probe.v1"
 

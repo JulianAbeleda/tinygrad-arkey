@@ -668,7 +668,7 @@ def test_gfx1100_acc_slice_v2_two_launch_causal_diagnostic():
   from tinygrad.renderer.isa.amd import AMDISARenderer
   from tinygrad.schedule.wmma import amd_gfx1100_q16_grid_hd128_loop_attention
   from tinygrad.uop.ops import KernelInfo, Ops, ParamArg
-  from extra.qk.amdgpu_metadata import parse_amdgpu_metadata
+  from extra.qk.mmq_compile_evidence import parse_amdgpu_metadata
   hq,hkv,q_tokens,kv_tokens=8,2,32,64; scale=.25; rng=np.random.default_rng(20260723)
   q=rng.normal(0,.2,(hq,q_tokens,128)).astype(np.float16)
   k=rng.normal(0,.2,(hkv,kv_tokens,128)).astype(np.float16)
@@ -722,7 +722,7 @@ def test_gfx1100_split_score_state_pv_slice_direct_diagnostic():
   from tinygrad.renderer.isa.amd import AMDISARenderer
   from tinygrad.schedule.wmma import amd_gfx1100_q16_grid_qk_stats_stage, amd_gfx1100_q16_grid_pv_slice_stage
   from tinygrad.uop.ops import KernelInfo, Ops, ParamArg
-  from extra.qk.amdgpu_metadata import parse_amdgpu_metadata
+  from extra.qk.mmq_compile_evidence import parse_amdgpu_metadata
   hq,hkv,qt,kv=8,2,32,64; scale=.25; rng=np.random.default_rng(20260724)
   q=rng.normal(0,.2,(hq,qt,128)).astype(np.float16); k=rng.normal(0,.2,(hkv,kv,128)).astype(np.float16); v=rng.normal(0,.4,(hkv,kv,128)).astype(np.float16)
   qn,kn,outn=hq*qt*128,hkv*kv*128,hq*qt*128; statsn=hq*qt*2
@@ -781,7 +781,7 @@ def test_gfx1100_lds_rotating_pv_pressure_compile_microgate():
   from tinygrad.helpers import Target
   from tinygrad.renderer.cstyle import HIPRenderer
   from tinygrad.renderer.isa.amd import AMDISARenderer
-  from extra.qk.amdgpu_metadata import parse_amdgpu_metadata
+  from extra.qk.mmq_compile_evidence import parse_amdgpu_metadata
   ast=_gfx1100_lds_rotating_pv_pressure_ast()
   hip=to_program(ast,HIPRenderer(Target.parse("AMD:HIP:gfx1100")))
   binary=next(u.arg for u in hip.src if u.op is Ops.BINARY); resources=parse_amdgpu_metadata(binary)

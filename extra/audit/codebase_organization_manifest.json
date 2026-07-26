@@ -14,6 +14,7 @@
       "loc_moved": 0,
       "loc_removed": 30,
       "path": "extra/qk/amdgpu_metadata.py",
+      "status": "completed",
       "target": "extra/qk/mmq_compile_evidence.py",
       "tests_required": [
         "repoint test/unit/test_q4k_q8_mmq_uop.py and test/unit/test_online_softmax_tile.py at the surviving owner; both already project a key subset, so the extra max_workgroup_threads field is inert"
@@ -39,6 +40,7 @@
       "path": "extra/qk/p2_probe_1.py",
       "recovery": "git show ad65bd05e951f6e460d167c207fdf3e97faf5c76 -- extra/qk/p2_probe_1.py ... p2_probe_6.py",
       "replacement": "docs/flash-prefill-piece2-probe-20260721.md",
+      "status": "completed",
       "tests_required": []
     },
     {
@@ -56,10 +58,12 @@
       "last_campaign": "shared-attention evidence pipeline",
       "loc_added": 0,
       "loc_moved": 0,
-      "loc_removed": 93,
+      "loc_removed": 131,
       "path": "extra/qk/shared_attention_evidence_gate.py",
+      "realized_note": "93 in the gate plus 38 in test/unit/test_shared_attention_evidence_gate.py; verdict captured in docs/shared-attention-evidence-bundle-gate-retirement-20260726.md",
       "recovery": "git log --diff-filter=A -- extra/qk/shared_attention_evidence_gate.py",
       "replacement": "extra/qk/shared_attention_promotion.py (the gate that acts on a schema with a real producer)",
+      "status": "completed",
       "tests_required": [
         "delete test/unit/test_shared_attention_evidence_gate.py with it"
       ]
@@ -78,6 +82,7 @@
       "loc_removed": 0,
       "note": "no code change required; this is a manifest authority correction that keeps the duplicate-authority check honest",
       "path": "extra/qk/attention_harness_common.py",
+      "status": "completed",
       "target": "extra/qk/shared_attention_evidence.py",
       "tests_required": [
         "existing test/unit/test_shared_attention_evidence.py already covers the producer"
@@ -94,15 +99,17 @@
       ],
       "finding": "Three promotion gates repeat the same evidence-loading and verdict-emitting rule verbatim; a fourth gate that looks similar must NOT be folded in because its verdict semantics differ.",
       "id": "A5",
-      "loc_added": 30,
+      "loc_added": 35,
       "loc_moved": 0,
-      "loc_removed": 40,
+      "loc_removed": 39,
       "path": "extra/qk/prefill/packed_wmma_prefill_promotion_gate.py",
       "proposed_interface": [
         "load_manifest_evidence(route_id, flag, schema, evidence_path) -> dict|None",
         "run_gate(gate_name, route_check, required_shapes, failures) -> dict",
         "main() printer"
       ],
+      "realized_note": "39 token-LOC out of the three gates, 35 into promotion_gate_common.py; net -4. The projection of -10 was close, but the physical-line delta is +21 -- the win is one rule, not fewer lines.",
+      "status": "completed",
       "target": "extra/qk/prefill/promotion_gate_common.py (proposed)",
       "tests_required": [
         "one shared test asserting fail-closed on missing/malformed evidence, plus the three existing per-gate tests unchanged (each still asserts its own thresholds and route id)"
@@ -431,43 +438,6 @@
       "workflow_ids": [
         "decode-q4k-gemv-lane-reduce",
         "flash-decode-warp-reduce"
-      ]
-    },
-    {
-      "allowed_dependency_domains": [
-        "amd_runtime"
-      ],
-      "authority_keys": [],
-      "classification_confidence": "high",
-      "default_path": false,
-      "deletion_confidence": "investigate_owner",
-      "disposition": "consolidate",
-      "domain": "amd_runtime",
-      "duplication_group": "amdgpu_metadata_parse",
-      "evidence": [
-        "extra/qk/mmq_compile_evidence.py:80-92 independently defines its OWN parse_amdgpu_metadata(binary) with nearly identical regex logic (same field names vgpr_count/sgpr_count/.../wavefront_size) but a different tool-invocation path (_run_binary_tool with tool-version string) and one extra field (max_workgroup_threads) not present in this file's version",
-        "grep: decode/prefill DEFAULT-PATH execution adapters (extra/qk/decode/current_decode_execution_adapter.py:118,120,147,149-150 and extra/qk/prefill/current_prefill_execution_adapter.py:143,146) import parse_amdgpu_metadata FROM extra.qk.mmq_compile_evidence, NOT from this module",
-        "grep: extra/qk/shared_attention_capture.py:471-472 and scratchpad/*.py also import from extra.qk.mmq_compile_evidence, not this file",
-        "this file (extra/qk/amdgpu_metadata.py) is only consumed by test/unit/test_q4k_q8_mmq_uop.py, test/unit/test_online_softmax_tile.py, and extra/qk/phase_abi_v1_resource_probe.py \u2014 none of them the shipped decode/prefill default path"
-      ],
-      "path": "extra/qk/amdgpu_metadata.py",
-      "promotion_target": null,
-      "public_surface": [
-        "parse_amdgpu_metadata"
-      ],
-      "purpose": "Runs llvm-readelf --notes on a compiled AMDGPU code object and parses its .amdhsa note fields (vgpr/sgpr counts, spills, lds/scratch bytes, wavefront size, symbol, target) into a plain dict, used as a lightweight resource-fact reader by tests and decode-side evidence collection.",
-      "responsibilities": [
-        "locate an llvm-readelf binary",
-        "parse specific .amdhsa note fields via regex"
-      ],
-      "retention_criterion": "superseded once every consumer is migrated to a single parse_amdgpu_metadata implementation (this file's version, or extra/qk/mmq_compile_evidence.py's, whichever is designated canonical)",
-      "reusable_assets": [],
-      "role": "diagnostic",
-      "status": "production",
-      "surface": "off_default",
-      "test_role": "not_test_like",
-      "workflow_ids": [
-        "amdgpu-metadata-read"
       ]
     },
     {
@@ -3100,7 +3070,7 @@
     },
     {
       "allowed_dependency_domains": [
-        "amd_runtime",
+        "evidence",
         "measurement"
       ],
       "authority_keys": [
@@ -4420,6 +4390,52 @@
     },
     {
       "allowed_dependency_domains": [
+        "search_promotion"
+      ],
+      "authority_keys": [
+        "promotion.evidence_loading_rule"
+      ],
+      "classification_confidence": "high",
+      "default_path": false,
+      "deletion_confidence": "retain_active",
+      "disposition": "keep",
+      "domain": "search_promotion",
+      "duplication_group": null,
+      "evidence": [
+        "extracted from packed_wmma_prefill_promotion_gate.py, prefill_softmax_reduce_fuse_promotion_gate.py and prefill_causal_tile_skip_promotion_gate.py; all three gates verified byte-identical stdout and exit code before and after",
+        "deliberately excludes prefill/pure_register_evaluation_gate.py, which validates compile-artifact provenance rather than gating a route's evidence file",
+        "per-route thresholds, route ids, schemas and evidence paths stay in the gates, not here"
+      ],
+      "path": "extra/qk/prefill/promotion_gate_common.py",
+      "promotion_target": null,
+      "public_surface": [
+        "load_evidence",
+        "fail",
+        "build_result",
+        "main"
+      ],
+      "purpose": "Owns how a route's promotion evidence file is located, schema-checked, failed closed, and rendered as an AUTHORITY_GATE verdict record, so the sibling gates cannot drift apart on that rule.",
+      "responsibilities": [
+        "fail-closed evidence loading",
+        "verdict record assembly and CLI reporting"
+      ],
+      "retention_criterion": "while more than one route can be promoted or rolled back",
+      "reusable_assets": [
+        "promotion-gate",
+        "artifact-schema"
+      ],
+      "role": "authority",
+      "status": "production",
+      "surface": "off_default",
+      "test_role": "not_test_like",
+      "workflow_ids": [
+        "packed-wmma-prefill-promotion",
+        "prefill-softmax-fuse-promotion",
+        "prefill-causal-tile-skip-promotion"
+      ]
+    },
+    {
+      "allowed_dependency_domains": [
         "amd_runtime",
         "evidence"
       ],
@@ -5729,48 +5745,6 @@
     },
     {
       "allowed_dependency_domains": [
-        "evidence"
-      ],
-      "authority_keys": [
-        "tinygrad.shared_attention_evidence_bundle.v1"
-      ],
-      "classification_confidence": "high",
-      "default_path": false,
-      "deletion_confidence": "investigate_owner",
-      "disposition": "keep",
-      "domain": "evidence",
-      "duplication_group": null,
-      "evidence": [
-        "grep -rln 'shared_attention_evidence_gate|classify_shared_attention_evidence|summarize_checkpoint' returns only this file, its own test, and one doc mention -- no production producer of the schema it validates was found anywhere in the repo",
-        "grep -rln 'shared_attention_evidence_bundle' returns only this file itself, confirming the schema string is never constructed elsewhere",
-        "this differs functionally from extra/qk/shared_attention_promotion.py, which validates a different, actually-produced schema (COMPOSITE_ADMISSION_SCHEMA) consumed by benchmark_shared_attention.py"
-      ],
-      "path": "extra/qk/shared_attention_evidence_gate.py",
-      "promotion_target": null,
-      "public_surface": [
-        "classify_shared_attention_evidence",
-        "summarize_checkpoint",
-        "GateResult"
-      ],
-      "purpose": "Fail-closed CPU-only classifier (classify_shared_attention_evidence, summarize_checkpoint) that would validate a single tinygrad.shared_attention_evidence_bundle.v1 record (schedule/allocation/correctness/WMMA/timing/health) before a fused-tiled-attention lowering could be promoted, but no producer in this codebase ever builds that evidence-bundle schema.",
-      "responsibilities": [
-        "evidence-bundle schema/field validation (single-CALL, allocation residency, fp32 correctness, WMMA, paired GPU timing, GPU health)",
-        "GO/NO-GO checkpoint summarizer distinct from the strict all-or-nothing classifier"
-      ],
-      "retention_criterion": "activate (wire to a real producer) once something actually assembles a tinygrad.shared_attention_evidence_bundle.v1 record, or retire if the fused-tiled-attention path is proven/refuted through shared_attention_promotion.py's composite-admission route instead",
-      "reusable_assets": [
-        "promotion-gate"
-      ],
-      "role": "authority",
-      "status": "deletion_candidate",
-      "surface": "off_default",
-      "test_role": "orphan_unknown",
-      "workflow_ids": [
-        "prefill-composite-promotion"
-      ]
-    },
-    {
-      "allowed_dependency_domains": [
         "search_promotion"
       ],
       "authority_keys": [
@@ -5909,32 +5883,7 @@
       ]
     }
   ],
-  "groups": [
-    {
-      "allowed_dependency_domains": [
-        "evidence"
-      ],
-      "default_path": false,
-      "deletion_confidence": "delete_ready",
-      "disposition": "delete",
-      "domain": "evidence",
-      "evidence": [
-        "added by commit ad65bd05e951f6e460d167c207fdf3e97faf5c76 '[docs] Piece 2-A probe: REDUCE-preserving fusion breakpoint in attention' (2026-07-21)",
-        "verdict preserved in docs/flash-prefill-piece2-probe-20260721.md and echoed in production comments in tinygrad/schedule/flash_fusion.py, tinygrad/schedule/rangeify.py, tinygrad/codegen/opt/heuristic.py",
-        "zero inbound references across *.py/*.md/*.json/*.sh/*.yml"
-      ],
-      "group_id": "p2_softmax_decomposition_probes",
-      "path_prefixes": [
-        "extra/qk/p2_probe_"
-      ],
-      "purpose": "One-shot DEV=AMD TC_OPT=2 expression probes that bisected where REDUCE-preserving fusion breaks in attention (max, sum, broadcast-subtract, exp-sum, softmax, softmax@v).",
-      "retention_criterion": "none: the bisection closed and its conclusion is recorded outside the probes",
-      "role": "research",
-      "status": "historical_one_off",
-      "test_role": "historical_one_off",
-      "why_uniform": "all six are 7-9 token-LOC standalone scripts added by one commit for one bisection, share no harness, expose no symbol, and have a single shared verdict"
-    }
-  ],
+  "groups": [],
   "human_findings": {
     "not_reproposed": [
       "attention harness centralization (settled 2026-07-24; attention_harness_common.py is the owner and the character-identical migration rule stands)",

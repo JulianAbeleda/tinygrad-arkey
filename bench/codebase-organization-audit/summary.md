@@ -1,6 +1,6 @@
 # Codebase organization audit
 
-Audited commit: `mac-first-boot-20260610-3411-g003f3b22e-dirty` (dirty: True)
+Audited commit: `mac-first-boot-20260610-3412-g7425e2809-dirty` (dirty: True)
 Scope: `<repository>` | manifest coverage required for: extra/qk/
 Verdict: **ORG_R1_BLOCKED_ORGANIZATION_DRIFT** (1 hard errors, 94 warnings)
 
@@ -10,65 +10,63 @@ Verdict: **ORG_R1_BLOCKED_ORGANIZATION_DRIFT** (1 hard errors, 94 warnings)
 
 ## Coverage
 
-- Authored: 480 files / 74774 token-bearing LOC (sz.py rules)
+- Authored: 472 files / 74575 token-bearing LOC (sz.py rules)
 - Generated (reported, never manifested): 1 files / 57 LOC
-- Manifest scope: 123 files / 17688 LOC (117 explicit records, 6 covered by group rule, 0 uncovered)
+- Manifest scope: 116 files / 17517 LOC (116 explicit records, 0 covered by group rule, 0 uncovered)
 
 ## LOC by domain
 
 | domain | files | loc |
 |---|---|---|
-| amd_runtime | 6 | 687 |
+| amd_runtime | 5 | 657 |
 | attention_decode | 9 | 735 |
 | attention_prefill | 4 | 574 |
 | codegen_lowering | 15 | 2207 |
-| evidence | 17 | 1745 |
+| evidence | 10 | 1608 |
 | measurement | 18 | 2101 |
 | quant_mmq | 26 | 4354 |
 | route_authority | 20 | 4221 |
-| search_promotion | 8 | 1064 |
-| unclassified | 357 | 57086 |
+| search_promotion | 9 | 1060 |
+| unclassified | 356 | 57058 |
 
 ## LOC by role
 
 | role | files | loc |
 |---|---|---|
 | adapter | 12 | 1153 |
-| authority | 63 | 10943 |
+| authority | 63 | 10874 |
 | benchmark | 2 | 99 |
-| diagnostic | 13 | 1465 |
+| diagnostic | 12 | 1407 |
 | evidence | 4 | 385 |
 | execution | 11 | 2287 |
 | integration | 2 | 199 |
-| research | 11 | 637 |
+| research | 5 | 593 |
 | test | 5 | 520 |
-| unclassified | 357 | 57086 |
+| unclassified | 356 | 57058 |
 
 ## LOC by status
 
 | status | files | loc |
 |---|---|---|
 | active_regression | 5 | 456 |
-| active_research | 25 | 5336 |
-| deletion_candidate | 1 | 93 |
+| active_research | 25 | 5308 |
 | fallback | 5 | 272 |
-| historical_one_off | 7 | 87 |
-| production | 67 | 9896 |
+| historical_one_off | 1 | 43 |
+| production | 67 | 9890 |
 | promoted_default | 6 | 648 |
 | refuted | 1 | 21 |
 | retained_reference | 4 | 519 |
-| unclassified | 357 | 57086 |
+| unclassified | 356 | 57058 |
 | unresolved_reproducer | 2 | 360 |
 
 ## LOC by disposition
 
 | disposition | files | loc |
 |---|---|---|
-| consolidate | 5 | 2128 |
-| delete | 6 | 44 |
+| consolidate | 4 | 2098 |
 | investigate | 5 | 454 |
-| keep | 107 | 15062 |
-| unclassified | 357 | 57086 |
+| keep | 107 | 14965 |
+| unclassified | 356 | 57058 |
 
 ## Default-path source footprint
 
@@ -184,12 +182,6 @@ for human classification, not a death sentence.
 - `extra/hardware/sqtt/rgptool.py`
 - `extra/llm/llama_kv_ctx_slope_bench.py`
 - `extra/llm/sft_smoke_train.py`
-- `extra/qk/p2_probe_1.py`
-- `extra/qk/p2_probe_2.py`
-- `extra/qk/p2_probe_3.py`
-- `extra/qk/p2_probe_4.py`
-- `extra/qk/p2_probe_5.py`
-- `extra/qk/p2_probe_6.py`
 - `extra/remote/bench.py`
 - `extra/tools/amd_isa_generate.py`
 - `extra/tools/check_doc_links.py`
@@ -316,7 +308,6 @@ for human classification, not a death sentence.
 - `test/unit/test_register_contracts.py`
 - `test/unit/test_scheduler_output_tile_loop.py`
 - `test/unit/test_shared_attention_evidence.py`
-- `test/unit/test_shared_attention_evidence_gate.py`
 - `test/unit/test_shared_attention_promotion.py`
 - `test/unit/test_shared_attention_replay_admission.py`
 - `test/unit/test_shared_attention_synchronization_capture.py`
@@ -347,9 +338,8 @@ for human classification, not a death sentence.
 |---|---|---|
 | active_regression | 11 | `extra/qk/clock_pin.py`, `extra/qk/decode/decode_codegen_identity_check.py`, `extra/qk/dynamic_tile_owner.py`, `extra/qk/live_split_geometry.py`, `extra/qk/packed_wmma_compile_gate.py`, `extra/qk/prefill/pure_register_compile_capture.py`, `extra/qk/prefill/pure_register_evaluation_gate.py`, `extra/qk/prefill/q4k_prefill_route_spec.py`, `extra/qk/prefill/q4k_q8_mmq_prefill_spec.py`, `extra/qk/q4k_wmma_tiled_role_shape_exec_gate.py`, `extra/qk/timing_harness.py` |
 | active_validation | 32 | `extra/qk/amd_isa_proof.py`, `extra/qk/amd_isa_renderer_policy.py`, `extra/qk/amd_resource_artifact.py`, `extra/qk/bench.py`, `extra/qk/benchmark_shared_attention.py`, `extra/qk/decode/decode_runtime_overhead.py`, `extra/qk/generated_candidates.py`, `extra/qk/memory_adaptive_allocation_observer.py`, `extra/qk/memory_adaptive_policy.py`, `extra/qk/memory_adaptive_runtime_collector.py`, `extra/qk/mmq_atom_boundary.py`, `extra/qk/mmq_ds4_logical_emitter.py`, `extra/qk/mmq_epoch_manifest_export.py`, `extra/qk/mmq_lifecycle.py`, `extra/qk/mmq_llama_differential.py`, `extra/qk/mmq_llama_packed_operands.py`, `extra/qk/mmq_llama_record_producers.py`, `extra/qk/mmq_logical_vocabulary.py`, `extra/qk/mmq_q4k_q8_atom.py`, `extra/qk/mmq_q4k_q8_reference.py`, `extra/qk/prefill/packed_wmma_correctness_canary.py`, `extra/qk/prefill/prefill_graph_gemm_route.py`, `extra/qk/prefill/prefill_harness.py`, `extra/qk/prefill/prefill_int8_wmma_spec.py`, `extra/qk/prefill/prefill_mmq_parity_gate.py`, `extra/qk/prefill/prefill_primitive_spec.py`, `extra/qk/prefill/prefill_whole_synced.py`, `extra/qk/pure_search_guard.py`, `extra/qk/q4k_q8_mmq_uop.py`, `extra/qk/shared_attention_capture.py`, `extra/qk/shared_attention_evidence.py`, `extra/qk/shared_attention_promotion.py` |
-| historical_one_off | 6 | `extra/qk/p2_probe_1.py`, `extra/qk/p2_probe_2.py`, `extra/qk/p2_probe_3.py`, `extra/qk/p2_probe_4.py`, `extra/qk/p2_probe_5.py`, `extra/qk/p2_probe_6.py` |
 | operational_tool | 15 | `extra/qk/decode/current_decode_execution_adapter.py`, `extra/qk/decode/decode_harness.py`, `extra/qk/generate_shared_attention_captures.py`, `extra/qk/mmq_compile_evidence.py`, `extra/qk/packed_wmma_canary_evidence.py`, `extra/qk/phase_abi_v1_resource_probe.py`, `extra/qk/prefill/host_safety_canary.py`, `extra/qk/prefill/packed_wmma_prefill_promotion_gate.py`, `extra/qk/prefill/prefill_boltbeam_trace.py`, `extra/qk/prefill/prefill_causal_tile_skip_promotion_gate.py`, `extra/qk/prefill/prefill_flash_e2e_parity.py`, `extra/qk/prefill/prefill_flash_perf.py`, `extra/qk/prefill/prefill_softmax_reduce_fuse_promotion_gate.py`, `extra/qk/q4k_q8_mmq_uop_validation.py`, `extra/qk/q4k_wmma_tiled_lowering_feasibility.py` |
-| orphan_unknown | 4 | `extra/qk/bubblebeam_futuresight.py`, `extra/qk/q4k_wmma_tile_lowering.py`, `extra/qk/quant_specs.py`, `extra/qk/shared_attention_evidence_gate.py` |
+| orphan_unknown | 3 | `extra/qk/bubblebeam_futuresight.py`, `extra/qk/q4k_wmma_tile_lowering.py`, `extra/qk/quant_specs.py` |
 | retained_reference | 3 | `extra/qk/mmq_ds4_probe_contract.py`, `extra/qk/mmq_llama_oracle.py`, `extra/qk/q4k_tile_loader.py` |
 | unresolved_reproducer | 8 | `extra/qk/benchmark_split_shared_attention.py`, `extra/qk/decode/decode_hd_sweep_numerics.py`, `extra/qk/prefill/prefill_hd_sweep_numerics.py`, `extra/qk/prefill/prefill_long_context_numerics.py`, `extra/qk/q4k_wmma_full_role_contract_gate.py`, `extra/qk/q4k_wmma_tiled_microgate.py`, `extra/qk/q4k_wmma_tiled_no_hand_kernel_gate.py`, `extra/qk/q4k_wmma_tiled_surface_gate.py` |
 
@@ -368,12 +358,12 @@ None proposed at this evidence level.
 
 ## Reuse candidates
 
-- **`extra/qk/prefill/packed_wmma_prefill_promotion_gate.py`** -- Three promotion gates repeat the same evidence-loading and verdict-emitting rule verbatim; a fourth gate that looks similar must NOT be folded in because its verdict semantics differ. (gross -40, +30, net -10) | evidence: packed_wmma_prefill_promotion_gate.py, prefill_softmax_reduce_fuse_promotion_gate.py and prefill_causal_tile_skip_promotion_gate.py each derive required shapes from route_manifest ROUTES shape_guards, read a fixed docs/*.json, check _schema/route_id/flag, fail closed, and print 'AUTHORITY_GATE: {verdict}' with an identical result dict; prefill_softmax_reduce_fuse_promotion_gate.py's docstring calls itself 'Sibling of ... deliberately the same shape'; the two newer gates share the MIN_PAIRS=3 / MIN_MEAN_DELTA_PCT=1.0 / MIN_SIGNAL_TO_NOISE=2.0 / MAX_NOISE_FLOOR_PCT=1.0 threshold block verbatim; EXCLUDED: extra/qk/prefill/pure_register_evaluation_gate.py has no main(), does not import route_manifest, and validates compile-artifact provenance rather than gating a route's evidence file -- different rule | tests: one shared test asserting fail-closed on missing/malformed evidence, plus the three existing per-gate tests unchanged (each still asserts its own thresholds and route id)
+- **`extra/qk/prefill/packed_wmma_prefill_promotion_gate.py`** -- Three promotion gates repeat the same evidence-loading and verdict-emitting rule verbatim; a fourth gate that looks similar must NOT be folded in because its verdict semantics differ. (gross -39, +35, net -4) | evidence: packed_wmma_prefill_promotion_gate.py, prefill_softmax_reduce_fuse_promotion_gate.py and prefill_causal_tile_skip_promotion_gate.py each derive required shapes from route_manifest ROUTES shape_guards, read a fixed docs/*.json, check _schema/route_id/flag, fail closed, and print 'AUTHORITY_GATE: {verdict}' with an identical result dict; prefill_softmax_reduce_fuse_promotion_gate.py's docstring calls itself 'Sibling of ... deliberately the same shape'; the two newer gates share the MIN_PAIRS=3 / MIN_MEAN_DELTA_PCT=1.0 / MIN_SIGNAL_TO_NOISE=2.0 / MAX_NOISE_FLOOR_PCT=1.0 threshold block verbatim; EXCLUDED: extra/qk/prefill/pure_register_evaluation_gate.py has no main(), does not import route_manifest, and validates compile-artifact provenance rather than gating a route's evidence file -- different rule | tests: one shared test asserting fail-closed on missing/malformed evidence, plus the three existing per-gate tests unchanged (each still asserts its own thresholds and route id)
 
 ## Prune candidates
 
 - **`extra/qk/p2_probe_1.py`** -- Six one-shot fusion-bisection probes whose conclusion is recorded in a doc and in production comments. (gross -44, +0, net -44) | evidence: zero inbound references of any kind; durable verdict in docs/flash-prefill-piece2-probe-20260721.md; conclusion echoed in tinygrad/schedule/flash_fusion.py, tinygrad/schedule/rangeify.py, tinygrad/codegen/opt/heuristic.py | tests: 
-- **`extra/qk/shared_attention_evidence_gate.py`** -- A validator for a bundle schema that no code in the repository ever produces. (gross -93, +0, net -93) | evidence: the schema string 'tinygrad.shared_attention_evidence_bundle.v1' appears exactly once repo-wide -- its own definition at extra/qk/shared_attention_evidence_gate.py:12; imported only by test/unit/test_shared_attention_evidence_gate.py; contrast: extra/qk/shared_attention_promotion.py gates COMPOSITE_ADMISSION_SCHEMA, which is produced and consumed live | tests: delete test/unit/test_shared_attention_evidence_gate.py with it
+- **`extra/qk/shared_attention_evidence_gate.py`** -- A validator for a bundle schema that no code in the repository ever produces. (gross -131, +0, net -131) | evidence: the schema string 'tinygrad.shared_attention_evidence_bundle.v1' appears exactly once repo-wide -- its own definition at extra/qk/shared_attention_evidence_gate.py:12; imported only by test/unit/test_shared_attention_evidence_gate.py; contrast: extra/qk/shared_attention_promotion.py gates COMPOSITE_ADMISSION_SCHEMA, which is produced and consumed live | tests: delete test/unit/test_shared_attention_evidence_gate.py with it
 
 ## Promotion candidates
 
@@ -393,8 +383,8 @@ None.
 
 | path | class | former purpose | last campaign | replacement | commit | recovery | loc |
 |---|---|---|---|---|---|---|---|
-| `extra/qk/p2_probe_1.py` | delete_ready | Bisect where REDUCE-preserving fusion breaks in attention by walking max -> sum -> broadcast-subtract -> exp-sum -> softmax -> softmax@v under DEV=AMD TC_OPT=2. | flash-prefill Piece 2-A (2026-07-21) | docs/flash-prefill-piece2-probe-20260721.md | `003f3b22e991` | git show ad65bd05e951f6e460d167c207fdf3e97faf5c76 -- extra/qk/p2_probe_1.py ... p2_probe_6.py | 44 |
-| `extra/qk/shared_attention_evidence_gate.py` | delete_after_verdict_capture | Validate a shared-attention evidence bundle before admitting it as promotion evidence. | shared-attention evidence pipeline | extra/qk/shared_attention_promotion.py (the gate that acts on a schema with a real producer) | `003f3b22e991` | git log --diff-filter=A -- extra/qk/shared_attention_evidence_gate.py | 93 |
+| `extra/qk/p2_probe_1.py` | delete_ready | Bisect where REDUCE-preserving fusion breaks in attention by walking max -> sum -> broadcast-subtract -> exp-sum -> softmax -> softmax@v under DEV=AMD TC_OPT=2. | flash-prefill Piece 2-A (2026-07-21) | docs/flash-prefill-piece2-probe-20260721.md | `7425e280908b` | git show ad65bd05e951f6e460d167c207fdf3e97faf5c76 -- extra/qk/p2_probe_1.py ... p2_probe_6.py | 44 |
+| `extra/qk/shared_attention_evidence_gate.py` | delete_after_verdict_capture | Validate a shared-attention evidence bundle before admitting it as promotion evidence. | shared-attention evidence pipeline | extra/qk/shared_attention_promotion.py (the gate that acts on a schema with a real producer) | `7425e280908b` | git log --diff-filter=A -- extra/qk/shared_attention_evidence_gate.py | 131 |
 
 ## Workflow inventory
 
@@ -426,11 +416,10 @@ None.
 - `select-route`: ['decode-route-selection', 'prefill-route-selection']
 - `verdict`: ['packed-wmma-prefill-promotion', 'prefill-causal-tile-skip-promotion', 'prefill-softmax-fuse-promotion']
 
-## LOC impact of proposed actions
+## LOC impact
 
-- Gross authored LOC removed: 210
-- Replacement LOC added: 30
-- **Net authored LOC reduction: 180**
+- **Realized** (actions A1, A2, A3, A4, A5): gross -244, +35, net **-209**
+- Still proposed: gross -3, +0, net -3
 - LOC merely moved between directories (NOT a reduction): 60
 
 ## Recommended sequence

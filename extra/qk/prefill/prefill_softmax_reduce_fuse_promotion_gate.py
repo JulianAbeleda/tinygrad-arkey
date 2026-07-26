@@ -46,6 +46,7 @@ import pathlib
 import sys
 
 from extra.qk.route_manifest import ROUTES
+from extra.qk.prefill.promotion_gate_common import load_evidence, fail, build_result, main as _common_main
 
 GATE = "prefill_softmax_reduce_fuse_promotion"
 ROUTE_ID = "prefill_flash_attention_generated"
@@ -77,15 +78,6 @@ def _required_shape_keys() -> list[str]:
     elif hq == 40: keys.append("14B")
     else: keys.append(f"Hq={hq}")
   return keys
-
-
-def _load_evidence() -> dict | None:
-  if not EVIDENCE_PATH.is_file(): return None
-  try: data = json.loads(EVIDENCE_PATH.read_text())
-  except (json.JSONDecodeError, OSError): return None
-  if data.get("_schema") != SCHEMA: return None
-  if data.get("route_id") != ROUTE_ID or data.get("flag") != FLAG: return None
-  return data
 
 
 def _check_shared_renderer(ev: dict) -> list[str]:
@@ -330,17 +322,15 @@ def _check_underpowered_whole_model(name: str, ab: dict) -> list[str]:
 def evaluate() -> dict:
   route_row = ROUTES.get(ROUTE_ID)
   if route_row is None:
-    return {"gate": GATE, "verdict": "FAIL", "reason": f"manifest has no route {ROUTE_ID!r}"}
+    return fail(GATE, f"manifest has no route {ROUTE_ID!r}")
   if route_row.get("provenance") != "machine_authored_generated":
-    return {"gate": GATE, "verdict": "FAIL",
-            "reason": f"{ROUTE_ID} provenance={route_row.get('provenance')!r}, expected machine_authored_generated "
-                      f"(a renderer naming change must not move this row out of the allowed-default set)"}
+    return fail(GATE, f"{ROUTE_ID} provenance={route_row.get('provenance')!r}, expected machine_authored_generated "
+                       f"(a renderer naming change must not move this row out of the allowed-default set)")
 
   required = _required_shape_keys()
-  evidence = _load_evidence()
+  evidence = load_evidence(EVIDENCE_PATH, SCHEMA, ROUTE_ID, FLAG)
   if evidence is None:
-    return {"gate": GATE, "verdict": "FAIL",
-            "reason": f"evidence artifact missing or invalid: {EVIDENCE_PATH}", "required_shapes": required}
+    return fail(GATE, f"evidence artifact missing or invalid: {EVIDENCE_PATH}", required_shapes=required)
 
   shapes = evidence.get("shapes", {})
   failures: dict[str, list[str]] = {}
@@ -350,26 +340,23 @@ def evaluate() -> dict:
   if fails := _check_suite_and_guards(evidence): failures["_suite_and_guards"] = fails
 
   verdict = "PASS" if not failures else "FAIL"
-  return {
-    "gate": GATE, "route_id": ROUTE_ID, "flag": FLAG,
-    "provenance": route_row.get("provenance"),
-    "required_shapes": required,
-    "required_decode_shapes": list(DECODE_SHAPES),
-    "evidence_path": str(EVIDENCE_PATH),
-    "failures": failures,
-    "verdict": verdict,
-    "note": ("every manifest-admitted prefill shape has complete passing evidence, decode codegen is proven "
-             "byte-identical on both decode-admitted geometries, the whole unit-test failure set is unchanged, "
-             "and the purity/manifest guards pass -- the default may be flipped ON" if verdict == "PASS" else
-             "at least one leg is incomplete; leave the default OFF"),
-  }
+  return build_result(
+    gate=GATE, route_id=ROUTE_ID, flag=FLAG,
+    provenance=route_row.get("provenance"),
+    required_shapes=required,
+    evidence_path=EVIDENCE_PATH,
+    failures=failures,
+    verdict=verdict,
+    extra={"required_decode_shapes": list(DECODE_SHAPES)},
+    note=("every manifest-admitted prefill shape has complete passing evidence, decode codegen is proven "
+          "byte-identical on both decode-admitted geometries, the whole unit-test failure set is unchanged, "
+          "and the purity/manifest guards pass -- the default may be flipped ON" if verdict == "PASS" else
+          "at least one leg is incomplete; leave the default OFF"),
+  )
 
 
 def main() -> int:
-  report = evaluate()
-  print(json.dumps(report, indent=2))
-  print(f"AUTHORITY_GATE: {report['verdict']}")
-  return 0 if report["verdict"] == "PASS" else 1
+  return _common_main(evaluate)
 
 
 if __name__ == "__main__":

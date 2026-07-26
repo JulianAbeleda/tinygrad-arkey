@@ -10,7 +10,7 @@ from tinygrad.helpers import Target
 from tinygrad.renderer.isa.amd import AMDISARenderer
 from tinygrad.uop.ops import AxisType, KernelInfo, Ops, UOp
 
-from extra.qk.amdgpu_metadata import parse_amdgpu_metadata
+from extra.qk.mmq_compile_evidence import parse_amdgpu_metadata
 from extra.qk.q4k_q8_mmq_uop import (describe_q4k_q8_mmq_uop, describe_q4k_q8_mmq_wmma,
   describe_q4k_q8_mmq_sum_original_fp_wmma, describe_q4k_q8_mmq_role_sized_wmma, describe_q4k_q8_mmq_wide_wmma,
   emit_q4k_q8_mmq_uop, emit_q4k_q8_mmq_wmma, emit_q4k_q8_mmq_sum_original_fp_wmma,

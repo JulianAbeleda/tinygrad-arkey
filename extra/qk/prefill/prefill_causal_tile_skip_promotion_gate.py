@@ -30,10 +30,13 @@ import pathlib
 import sys
 
 from extra.qk.route_manifest import ROUTES
+from extra.qk.prefill.promotion_gate_common import load_evidence, fail, build_result, main as _common_main
 
+GATE = "prefill_causal_tile_skip_promotion"
 ROUTE_ID = "prefill_flash_attention_generated"
 FLAG = "PREFILL_CAUSAL_TILE_SKIP"
 EVIDENCE_PATH = pathlib.Path(__file__).resolve().parents[3] / "docs" / "prefill-causal-tile-skip-evidence-20260724.json"
+SCHEMA = "prefill-causal-tile-skip-promotion-evidence.v1"
 
 # Thresholds derived directly from the recorded evidence's own methodology section (docs/prefill-needle-theories-
 # 20260724.md "Measurement methodology"): a claim only counts as signal if it clears the measured same-config
@@ -54,17 +57,6 @@ def _required_shape_keys() -> list[str]:
     elif hq == 40: keys.append("14B")
     else: keys.append(f"Hq={hq}")
   return keys
-
-
-def _load_evidence() -> dict | None:
-  if not EVIDENCE_PATH.is_file(): return None
-  try:
-    data = json.loads(EVIDENCE_PATH.read_text())
-  except (json.JSONDecodeError, OSError):
-    return None
-  if data.get("_schema") != "prefill-causal-tile-skip-promotion-evidence.v1": return None
-  if data.get("route_id") != ROUTE_ID or data.get("flag") != FLAG: return None
-  return data
 
 
 def _check_shape(name: str, entry: dict | None) -> list[str]:
@@ -103,18 +95,15 @@ def _check_shape(name: str, entry: dict | None) -> list[str]:
 def evaluate() -> dict:
   route_row = ROUTES.get(ROUTE_ID)
   if route_row is None:
-    return {"gate": "prefill_causal_tile_skip_promotion", "verdict": "FAIL",
-            "reason": f"manifest has no route {ROUTE_ID!r}"}
+    return fail(GATE, f"manifest has no route {ROUTE_ID!r}")
   if route_row.get("provenance") != "machine_authored_generated":
-    return {"gate": "prefill_causal_tile_skip_promotion", "verdict": "FAIL",
-            "reason": f"{ROUTE_ID} provenance={route_row.get('provenance')!r}, expected machine_authored_generated "
-                      f"(a dynamic loop bound derived from descriptor fields must stay in the allowed-default set)"}
+    return fail(GATE, f"{ROUTE_ID} provenance={route_row.get('provenance')!r}, expected machine_authored_generated "
+                       f"(a dynamic loop bound derived from descriptor fields must stay in the allowed-default set)")
 
   required = _required_shape_keys()
-  evidence = _load_evidence()
+  evidence = load_evidence(EVIDENCE_PATH, SCHEMA, ROUTE_ID, FLAG)
   if evidence is None:
-    return {"gate": "prefill_causal_tile_skip_promotion", "verdict": "FAIL",
-            "reason": f"evidence artifact missing or invalid: {EVIDENCE_PATH}", "required_shapes": required}
+    return fail(GATE, f"evidence artifact missing or invalid: {EVIDENCE_PATH}", required_shapes=required)
 
   shapes = evidence.get("shapes", {})
   failures: dict[str, list[str]] = {}
@@ -123,25 +112,20 @@ def evaluate() -> dict:
     if fails: failures[name] = fails
 
   verdict = "PASS" if not failures else "FAIL"
-  return {
-    "gate": "prefill_causal_tile_skip_promotion",
-    "route_id": ROUTE_ID,
-    "flag": FLAG,
-    "provenance": route_row.get("provenance"),
-    "required_shapes": required,
-    "evidence_path": str(EVIDENCE_PATH),
-    "failures": failures,
-    "verdict": verdict,
-    "note": ("all required shapes have complete, passing, sufficiently-powered evidence" if verdict == "PASS" else
-             "at least one manifest-admitted shape lacks complete promotion evidence; do NOT flip the default"),
-  }
+  return build_result(
+    gate=GATE, route_id=ROUTE_ID, flag=FLAG,
+    provenance=route_row.get("provenance"),
+    required_shapes=required,
+    evidence_path=EVIDENCE_PATH,
+    failures=failures,
+    verdict=verdict,
+    note=("all required shapes have complete, passing, sufficiently-powered evidence" if verdict == "PASS" else
+          "at least one manifest-admitted shape lacks complete promotion evidence; do NOT flip the default"),
+  )
 
 
 def main() -> int:
-  report = evaluate()
-  print(json.dumps(report, indent=2))
-  print(f"AUTHORITY_GATE: {report['verdict']}")
-  return 0 if report["verdict"] == "PASS" else 1
+  return _common_main(evaluate)
 
 
 if __name__ == "__main__":

@@ -36,11 +36,14 @@ import pathlib
 import sys
 
 from extra.qk.route_manifest import ROUTES
+from extra.qk.prefill.promotion_gate_common import load_evidence, fail, build_result, main as _common_main
 
+GATE = "packed_wmma_prefill_promotion"
 ROUTE_ID = "packed_wmma_prefill_generated"
 FLAG = "TINYGRAD_PREFILL_PACKED_WMMA"
 EXPECTED_PROVENANCE = "tinygrad_scheduler_generated"
 EVIDENCE_PATH = pathlib.Path(__file__).resolve().parents[3] / "docs" / "packed-wmma-14b-promotion-evidence-20260725.json"
+SCHEMA = "packed-wmma-14b-promotion-evidence.v1"
 
 
 def _required_shapes() -> list[dict]:
@@ -52,17 +55,6 @@ def _required_shapes() -> list[dict]:
     if not all(k in g for k in ("role", "M", "N", "K", "quant")): continue
     out.append({"quant": g["quant"], "role": g["role"], "shape": [g["M"], g["N"], g["K"]]})
   return out
-
-
-def _load_evidence() -> dict | None:
-  if not EVIDENCE_PATH.is_file(): return None
-  try:
-    data = json.loads(EVIDENCE_PATH.read_text())
-  except (json.JSONDecodeError, OSError):
-    return None
-  if data.get("_schema") != "packed-wmma-14b-promotion-evidence.v1": return None
-  if data.get("route_id") != ROUTE_ID or data.get("flag") != FLAG: return None
-  return data
 
 
 def _check_canary(required: list[dict], evidence: dict) -> list[str]:
@@ -117,21 +109,18 @@ def _check_throughput(evidence: dict) -> list[str]:
 def evaluate() -> dict:
   route_row = ROUTES.get(ROUTE_ID)
   if route_row is None:
-    return {"gate": "packed_wmma_prefill_promotion", "verdict": "FAIL", "reason": f"manifest has no route {ROUTE_ID!r}"}
+    return fail(GATE, f"manifest has no route {ROUTE_ID!r}")
   if route_row.get("provenance") != EXPECTED_PROVENANCE:
-    return {"gate": "packed_wmma_prefill_promotion", "verdict": "FAIL",
-            "reason": f"{ROUTE_ID} provenance={route_row.get('provenance')!r}, expected exactly {EXPECTED_PROVENANCE!r} "
-                      f"(PACKED_WMMA_GEOM is a frozen shape-blind table -- machine_authored_generated is not earned yet)"}
+    return fail(GATE, f"{ROUTE_ID} provenance={route_row.get('provenance')!r}, expected exactly {EXPECTED_PROVENANCE!r} "
+                       f"(PACKED_WMMA_GEOM is a frozen shape-blind table -- machine_authored_generated is not earned yet)")
 
   required = _required_shapes()
   if not required:
-    return {"gate": "packed_wmma_prefill_promotion", "verdict": "FAIL",
-            "reason": f"{ROUTE_ID} shape_guards has no exact (role, M, N, K, quant) entries to check"}
+    return fail(GATE, f"{ROUTE_ID} shape_guards has no exact (role, M, N, K, quant) entries to check")
 
-  evidence = _load_evidence()
+  evidence = load_evidence(EVIDENCE_PATH, SCHEMA, ROUTE_ID, FLAG)
   if evidence is None:
-    return {"gate": "packed_wmma_prefill_promotion", "verdict": "FAIL",
-            "reason": f"evidence artifact missing or invalid: {EVIDENCE_PATH}", "required_shapes": required}
+    return fail(GATE, f"evidence artifact missing or invalid: {EVIDENCE_PATH}", required_shapes=required)
 
   failures = []
   failures += _check_canary(required, evidence)
@@ -139,25 +128,20 @@ def evaluate() -> dict:
   failures += _check_throughput(evidence)
 
   verdict = "PASS" if not failures else "FAIL"
-  return {
-    "gate": "packed_wmma_prefill_promotion",
-    "route_id": ROUTE_ID,
-    "flag": FLAG,
-    "provenance": route_row.get("provenance"),
-    "required_shapes": required,
-    "evidence_path": str(EVIDENCE_PATH),
-    "failures": failures,
-    "verdict": verdict,
-    "note": ("all manifest-admitted shapes have complete, passing canary + e2e parity + throughput evidence" if verdict == "PASS"
-             else "at least one manifest-admitted shape lacks complete promotion evidence; do NOT treat this row as fully proven"),
-  }
+  return build_result(
+    gate=GATE, route_id=ROUTE_ID, flag=FLAG,
+    provenance=route_row.get("provenance"),
+    required_shapes=required,
+    evidence_path=EVIDENCE_PATH,
+    failures=failures,
+    verdict=verdict,
+    note=("all manifest-admitted shapes have complete, passing canary + e2e parity + throughput evidence" if verdict == "PASS"
+          else "at least one manifest-admitted shape lacks complete promotion evidence; do NOT treat this row as fully proven"),
+  )
 
 
 def main() -> int:
-  report = evaluate()
-  print(json.dumps(report, indent=2))
-  print(f"AUTHORITY_GATE: {report['verdict']}")
-  return 0 if report["verdict"] == "PASS" else 1
+  return _common_main(evaluate)
 
 
 if __name__ == "__main__":

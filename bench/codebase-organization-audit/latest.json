@@ -14,6 +14,7 @@
       "loc_moved": 0,
       "loc_removed": 30,
       "path": "extra/qk/amdgpu_metadata.py",
+      "status": "completed",
       "target": "extra/qk/mmq_compile_evidence.py",
       "tests_required": [
         "repoint test/unit/test_q4k_q8_mmq_uop.py and test/unit/test_online_softmax_tile.py at the surviving owner; both already project a key subset, so the extra max_workgroup_threads field is inert"
@@ -39,6 +40,7 @@
       "path": "extra/qk/p2_probe_1.py",
       "recovery": "git show ad65bd05e951f6e460d167c207fdf3e97faf5c76 -- extra/qk/p2_probe_1.py ... p2_probe_6.py",
       "replacement": "docs/flash-prefill-piece2-probe-20260721.md",
+      "status": "completed",
       "tests_required": []
     },
     {
@@ -56,10 +58,12 @@
       "last_campaign": "shared-attention evidence pipeline",
       "loc_added": 0,
       "loc_moved": 0,
-      "loc_removed": 93,
+      "loc_removed": 131,
       "path": "extra/qk/shared_attention_evidence_gate.py",
+      "realized_note": "93 in the gate plus 38 in test/unit/test_shared_attention_evidence_gate.py; verdict captured in docs/shared-attention-evidence-bundle-gate-retirement-20260726.md",
       "recovery": "git log --diff-filter=A -- extra/qk/shared_attention_evidence_gate.py",
       "replacement": "extra/qk/shared_attention_promotion.py (the gate that acts on a schema with a real producer)",
+      "status": "completed",
       "tests_required": [
         "delete test/unit/test_shared_attention_evidence_gate.py with it"
       ]
@@ -78,6 +82,7 @@
       "loc_removed": 0,
       "note": "no code change required; this is a manifest authority correction that keeps the duplicate-authority check honest",
       "path": "extra/qk/attention_harness_common.py",
+      "status": "completed",
       "target": "extra/qk/shared_attention_evidence.py",
       "tests_required": [
         "existing test/unit/test_shared_attention_evidence.py already covers the producer"
@@ -94,15 +99,17 @@
       ],
       "finding": "Three promotion gates repeat the same evidence-loading and verdict-emitting rule verbatim; a fourth gate that looks similar must NOT be folded in because its verdict semantics differ.",
       "id": "A5",
-      "loc_added": 30,
+      "loc_added": 35,
       "loc_moved": 0,
-      "loc_removed": 40,
+      "loc_removed": 39,
       "path": "extra/qk/prefill/packed_wmma_prefill_promotion_gate.py",
       "proposed_interface": [
         "load_manifest_evidence(route_id, flag, schema, evidence_path) -> dict|None",
         "run_gate(gate_name, route_check, required_shapes, failures) -> dict",
         "main() printer"
       ],
+      "realized_note": "39 token-LOC out of the three gates, 35 into promotion_gate_common.py; net -4. The projection of -10 was close, but the physical-line delta is +21 -- the win is one rule, not fewer lines.",
+      "status": "completed",
       "target": "extra/qk/prefill/promotion_gate_common.py (proposed)",
       "tests_required": [
         "one shared test asserting fail-closed on missing/malformed evidence, plus the three existing per-gate tests unchanged (each still asserts its own thresholds and route id)"
@@ -227,8 +234,8 @@
     }
   ],
   "audited_commit": {
-    "commit": "003f3b22e99107cde937bfee945bc05bc667baab",
-    "described": "mac-first-boot-20260610-3411-g003f3b22e-dirty",
+    "commit": "7425e280908b6d35cd1d3d8695259f01f940e062",
+    "described": "mac-first-boot-20260610-3412-g7425e2809-dirty",
     "dirty": true
   },
   "authority_keys": {
@@ -742,6 +749,9 @@
     "prefill_source_value_key resolution rule": [
       "extra/qk/amd_isa_renderer_policy.py"
     ],
+    "promotion.evidence_loading_rule": [
+      "extra/qk/prefill/promotion_gate_common.py"
+    ],
     "prove_dot_update_recurrence.invariants": [
       "extra/qk/kernel_pipeline.py"
     ],
@@ -865,9 +875,6 @@
     "tinygrad.shared_attention_evidence.v1": [
       "extra/qk/shared_attention_evidence.py"
     ],
-    "tinygrad.shared_attention_evidence_bundle.v1": [
-      "extra/qk/shared_attention_evidence_gate.py"
-    ],
     "tinygrad.shared_attention_phase_plan.v1": [
       "extra/qk/shared_attention_capture.py"
     ],
@@ -894,14 +901,14 @@
     ]
   },
   "coverage": {
-    "authored_files": 480,
-    "authored_loc": 74774,
-    "explicit_records": 117,
+    "authored_files": 472,
+    "authored_loc": 74575,
+    "explicit_records": 116,
     "generated_files": 1,
     "generated_loc": 57,
-    "group_covered": 6,
-    "manifest_scope_files": 123,
-    "manifest_scope_loc": 17688,
+    "group_covered": 0,
+    "manifest_scope_files": 116,
+    "manifest_scope_loc": 17517,
     "uncovered": []
   },
   "coverage_limitations": [
@@ -1478,35 +1485,11 @@
         "extra/qk/q4k_tile_loader.py",
         "tinygrad/__init__.py"
       ],
-      "extra/qk/p2_probe_1.py": [
-        "tinygrad/__init__.py",
-        "tinygrad/helpers.py"
-      ],
-      "extra/qk/p2_probe_2.py": [
-        "tinygrad/__init__.py",
-        "tinygrad/helpers.py"
-      ],
-      "extra/qk/p2_probe_3.py": [
-        "tinygrad/__init__.py",
-        "tinygrad/helpers.py"
-      ],
-      "extra/qk/p2_probe_4.py": [
-        "tinygrad/__init__.py",
-        "tinygrad/helpers.py"
-      ],
-      "extra/qk/p2_probe_5.py": [
-        "tinygrad/__init__.py",
-        "tinygrad/helpers.py"
-      ],
-      "extra/qk/p2_probe_6.py": [
-        "tinygrad/__init__.py",
-        "tinygrad/helpers.py"
-      ],
       "extra/qk/packed_wmma_canary_evidence.py": [
         "extra/qk/prefill/packed_wmma_prefill_candidates.py"
       ],
       "extra/qk/phase_abi_v1_resource_probe.py": [
-        "extra/qk/amdgpu_metadata.py",
+        "extra/qk/mmq_compile_evidence.py",
         "tinygrad/__init__.py",
         "tinygrad/codegen/__init__.py",
         "tinygrad/helpers.py",
@@ -1594,6 +1577,7 @@
         "tinygrad/llm/prefill_routes.py"
       ],
       "extra/qk/prefill/packed_wmma_prefill_promotion_gate.py": [
+        "extra/qk/prefill/promotion_gate_common.py",
         "extra/qk/route_manifest.py"
       ],
       "extra/qk/prefill/prefill_boltbeam_trace.py": [
@@ -1605,6 +1589,7 @@
         "tinygrad/llm/qk_primitives.py"
       ],
       "extra/qk/prefill/prefill_causal_tile_skip_promotion_gate.py": [
+        "extra/qk/prefill/promotion_gate_common.py",
         "extra/qk/route_manifest.py"
       ],
       "extra/qk/prefill/prefill_flash_e2e_parity.py": [
@@ -1657,6 +1642,7 @@
         "tinygrad/helpers.py"
       ],
       "extra/qk/prefill/prefill_softmax_reduce_fuse_promotion_gate.py": [
+        "extra/qk/prefill/promotion_gate_common.py",
         "extra/qk/route_manifest.py"
       ],
       "extra/qk/prefill/prefill_whole_synced.py": [
@@ -2413,7 +2399,7 @@
         "tinygrad/uop/ops.py"
       ],
       "test/unit/test_online_softmax_tile.py": [
-        "extra/qk/amdgpu_metadata.py",
+        "extra/qk/mmq_compile_evidence.py",
         "tinygrad/__init__.py",
         "tinygrad/codegen/__init__.py",
         "tinygrad/codegen/opt/compiler_policies.py",
@@ -2569,7 +2555,7 @@
         "extra/qk/prefill/q4k_q8_mmq_prefill_spec.py"
       ],
       "test/unit/test_q4k_q8_mmq_uop.py": [
-        "extra/qk/amdgpu_metadata.py",
+        "extra/qk/mmq_compile_evidence.py",
         "extra/qk/mmq_q4k_q8_reference.py",
         "extra/qk/q4k_q8_mmq_uop.py",
         "extra/qk/q4k_q8_mmq_uop_validation.py",
@@ -2703,9 +2689,6 @@
       "test/unit/test_shared_attention_evidence.py": [
         "extra/qk/model_profiles.py",
         "extra/qk/shared_attention_evidence.py"
-      ],
-      "test/unit/test_shared_attention_evidence_gate.py": [
-        "extra/qk/shared_attention_evidence_gate.py"
       ],
       "test/unit/test_shared_attention_promotion.py": [
         "extra/qk/shared_attention_promotion.py"
@@ -3762,7 +3745,6 @@
       "extra/qk/amd_isa_renderer_policy.py": 2,
       "extra/qk/amd_resource_artifact.py": 6,
       "extra/qk/amd_warp_reduce.py": 7,
-      "extra/qk/amdgpu_metadata.py": 3,
       "extra/qk/attention_harness_common.py": 8,
       "extra/qk/bench.py": 2,
       "extra/qk/benchmark_shared_attention.py": 1,
@@ -3801,7 +3783,7 @@
       "extra/qk/memory_adaptive_policy.py": 3,
       "extra/qk/memory_adaptive_runtime_collector.py": 3,
       "extra/qk/mmq_atom_boundary.py": 2,
-      "extra/qk/mmq_compile_evidence.py": 3,
+      "extra/qk/mmq_compile_evidence.py": 6,
       "extra/qk/mmq_ds4_logical_emitter.py": 2,
       "extra/qk/mmq_ds4_probe_contract.py": 2,
       "extra/qk/mmq_epoch_manifest_export.py": 3,
@@ -3815,12 +3797,6 @@
       "extra/qk/mmq_q4k_q8_reference.py": 7,
       "extra/qk/model_profiles.py": 7,
       "extra/qk/operand_attribution.py": 2,
-      "extra/qk/p2_probe_1.py": 0,
-      "extra/qk/p2_probe_2.py": 0,
-      "extra/qk/p2_probe_3.py": 0,
-      "extra/qk/p2_probe_4.py": 0,
-      "extra/qk/p2_probe_5.py": 0,
-      "extra/qk/p2_probe_6.py": 0,
       "extra/qk/packed_wmma_canary_evidence.py": 0,
       "extra/qk/packed_wmma_compile_gate.py": 2,
       "extra/qk/phase_abi_v1_resource_probe.py": 0,
@@ -3850,6 +3826,7 @@
       "extra/qk/prefill/prefill_softmax_reduce_fuse_promotion_gate.py": 0,
       "extra/qk/prefill/prefill_value_key.py": 1,
       "extra/qk/prefill/prefill_whole_synced.py": 3,
+      "extra/qk/prefill/promotion_gate_common.py": 3,
       "extra/qk/prefill/pure_register_compile_capture.py": 3,
       "extra/qk/prefill/pure_register_evaluation_gate.py": 3,
       "extra/qk/prefill/q4k_prefill_route_spec.py": 2,
@@ -3877,7 +3854,6 @@
       "extra/qk/runtime_specs.py": 13,
       "extra/qk/shared_attention_capture.py": 4,
       "extra/qk/shared_attention_evidence.py": 4,
-      "extra/qk/shared_attention_evidence_gate.py": 1,
       "extra/qk/shared_attention_promotion.py": 2,
       "extra/qk/timing_harness.py": 3,
       "extra/qk/warp_reduce_lowering.py": 3,
@@ -4034,7 +4010,6 @@
       "test/unit/test_scheduler_output_tile_loop.py": 0,
       "test/unit/test_shared_attention_compiler_capture.py": 0,
       "test/unit/test_shared_attention_evidence.py": 0,
-      "test/unit/test_shared_attention_evidence_gate.py": 0,
       "test/unit/test_shared_attention_promotion.py": 0,
       "test/unit/test_shared_attention_replay_admission.py": 0,
       "test/unit/test_shared_attention_synchronization_capture.py": 0,
@@ -4051,7 +4026,7 @@
       "test/unit/test_wmma_value_semantics.py": 0,
       "test/unit/test_wrapping_allocator_invariant.py": 0,
       "test/unit/test_x86_encoding_fixtures.py": 0,
-      "tinygrad/__init__.py": 118,
+      "tinygrad/__init__.py": 112,
       "tinygrad/callify.py": 2,
       "tinygrad/codegen/__init__.py": 29,
       "tinygrad/codegen/experimental.py": 5,
@@ -4081,7 +4056,7 @@
       "tinygrad/engine/jit.py": 6,
       "tinygrad/engine/realize.py": 11,
       "tinygrad/function.py": 1,
-      "tinygrad/helpers.py": 159,
+      "tinygrad/helpers.py": 153,
       "tinygrad/llm/__main__.py": 0,
       "tinygrad/llm/admission.py": 4,
       "tinygrad/llm/decode_routes.py": 4,
@@ -4233,12 +4208,6 @@
       "extra/qk/decode/decode_hd_sweep_numerics.py",
       "extra/qk/decode/decode_runtime_overhead.py",
       "extra/qk/generate_shared_attention_captures.py",
-      "extra/qk/p2_probe_1.py",
-      "extra/qk/p2_probe_2.py",
-      "extra/qk/p2_probe_3.py",
-      "extra/qk/p2_probe_4.py",
-      "extra/qk/p2_probe_5.py",
-      "extra/qk/p2_probe_6.py",
       "extra/qk/packed_wmma_canary_evidence.py",
       "extra/qk/phase_abi_v1_resource_probe.py",
       "extra/qk/prefill/packed_wmma_prefill_promotion_gate.py",
@@ -4398,7 +4367,6 @@
       "test/unit/test_scheduler_output_tile_loop.py",
       "test/unit/test_shared_attention_compiler_capture.py",
       "test/unit/test_shared_attention_evidence.py",
-      "test/unit/test_shared_attention_evidence_gate.py",
       "test/unit/test_shared_attention_promotion.py",
       "test/unit/test_shared_attention_replay_admission.py",
       "test/unit/test_shared_attention_synchronization_capture.py",
@@ -4440,12 +4408,6 @@
       "extra/hardware/sqtt/rgptool.py",
       "extra/llm/llama_kv_ctx_slope_bench.py",
       "extra/llm/sft_smoke_train.py",
-      "extra/qk/p2_probe_1.py",
-      "extra/qk/p2_probe_2.py",
-      "extra/qk/p2_probe_3.py",
-      "extra/qk/p2_probe_4.py",
-      "extra/qk/p2_probe_5.py",
-      "extra/qk/p2_probe_6.py",
       "extra/remote/bench.py",
       "extra/tools/amd_isa_generate.py",
       "extra/tools/check_doc_links.py",
@@ -4572,7 +4534,6 @@
       "test/unit/test_register_contracts.py",
       "test/unit/test_scheduler_output_tile_loop.py",
       "test/unit/test_shared_attention_evidence.py",
-      "test/unit/test_shared_attention_evidence_gate.py",
       "test/unit/test_shared_attention_promotion.py",
       "test/unit/test_shared_attention_replay_admission.py",
       "test/unit/test_shared_attention_synchronization_capture.py",
@@ -4631,7 +4592,6 @@
       "extra/qk/amd_isa_renderer_policy.py": 5,
       "extra/qk/amd_resource_artifact.py": 1,
       "extra/qk/amd_warp_reduce.py": 2,
-      "extra/qk/amdgpu_metadata.py": 0,
       "extra/qk/attention_harness_common.py": 2,
       "extra/qk/bench.py": 3,
       "extra/qk/benchmark_shared_attention.py": 5,
@@ -4684,12 +4644,6 @@
       "extra/qk/mmq_q4k_q8_reference.py": 3,
       "extra/qk/model_profiles.py": 0,
       "extra/qk/operand_attribution.py": 0,
-      "extra/qk/p2_probe_1.py": 2,
-      "extra/qk/p2_probe_2.py": 2,
-      "extra/qk/p2_probe_3.py": 2,
-      "extra/qk/p2_probe_4.py": 2,
-      "extra/qk/p2_probe_5.py": 2,
-      "extra/qk/p2_probe_6.py": 2,
       "extra/qk/packed_wmma_canary_evidence.py": 1,
       "extra/qk/packed_wmma_compile_gate.py": 0,
       "extra/qk/phase_abi_v1_resource_probe.py": 8,
@@ -4704,9 +4658,9 @@
       "extra/qk/prefill/operand_path_execution_worker.py": 3,
       "extra/qk/prefill/packed_wmma_correctness_canary.py": 7,
       "extra/qk/prefill/packed_wmma_prefill_candidates.py": 9,
-      "extra/qk/prefill/packed_wmma_prefill_promotion_gate.py": 1,
+      "extra/qk/prefill/packed_wmma_prefill_promotion_gate.py": 2,
       "extra/qk/prefill/prefill_boltbeam_trace.py": 6,
-      "extra/qk/prefill/prefill_causal_tile_skip_promotion_gate.py": 1,
+      "extra/qk/prefill/prefill_causal_tile_skip_promotion_gate.py": 2,
       "extra/qk/prefill/prefill_flash_e2e_parity.py": 3,
       "extra/qk/prefill/prefill_flash_perf.py": 3,
       "extra/qk/prefill/prefill_graph_gemm_route.py": 7,
@@ -4716,9 +4670,10 @@
       "extra/qk/prefill/prefill_long_context_numerics.py": 3,
       "extra/qk/prefill/prefill_mmq_parity_gate.py": 4,
       "extra/qk/prefill/prefill_primitive_spec.py": 0,
-      "extra/qk/prefill/prefill_softmax_reduce_fuse_promotion_gate.py": 1,
+      "extra/qk/prefill/prefill_softmax_reduce_fuse_promotion_gate.py": 2,
       "extra/qk/prefill/prefill_value_key.py": 0,
       "extra/qk/prefill/prefill_whole_synced.py": 11,
+      "extra/qk/prefill/promotion_gate_common.py": 0,
       "extra/qk/prefill/pure_register_compile_capture.py": 1,
       "extra/qk/prefill/pure_register_evaluation_gate.py": 2,
       "extra/qk/prefill/q4k_prefill_route_spec.py": 6,
@@ -4746,7 +4701,6 @@
       "extra/qk/runtime_specs.py": 9,
       "extra/qk/shared_attention_capture.py": 5,
       "extra/qk/shared_attention_evidence.py": 3,
-      "extra/qk/shared_attention_evidence_gate.py": 0,
       "extra/qk/shared_attention_promotion.py": 0,
       "extra/qk/timing_harness.py": 1,
       "extra/qk/warp_reduce_lowering.py": 3,
@@ -4903,7 +4857,6 @@
       "test/unit/test_scheduler_output_tile_loop.py": 5,
       "test/unit/test_shared_attention_compiler_capture.py": 10,
       "test/unit/test_shared_attention_evidence.py": 2,
-      "test/unit/test_shared_attention_evidence_gate.py": 1,
       "test/unit/test_shared_attention_promotion.py": 1,
       "test/unit/test_shared_attention_replay_admission.py": 1,
       "test/unit/test_shared_attention_synchronization_capture.py": 1,
@@ -5327,12 +5280,8 @@
   "loc_by": {
     "disposition": {
       "consolidate": {
-        "files": 5,
-        "loc": 2128
-      },
-      "delete": {
-        "files": 6,
-        "loc": 44
+        "files": 4,
+        "loc": 2098
       },
       "investigate": {
         "files": 5,
@@ -5340,17 +5289,17 @@
       },
       "keep": {
         "files": 107,
-        "loc": 15062
+        "loc": 14965
       },
       "unclassified": {
-        "files": 357,
-        "loc": 57086
+        "files": 356,
+        "loc": 57058
       }
     },
     "domain": {
       "amd_runtime": {
-        "files": 6,
-        "loc": 687
+        "files": 5,
+        "loc": 657
       },
       "attention_decode": {
         "files": 9,
@@ -5365,8 +5314,8 @@
         "loc": 2207
       },
       "evidence": {
-        "files": 17,
-        "loc": 1745
+        "files": 10,
+        "loc": 1608
       },
       "measurement": {
         "files": 18,
@@ -5381,12 +5330,12 @@
         "loc": 4221
       },
       "search_promotion": {
-        "files": 8,
-        "loc": 1064
+        "files": 9,
+        "loc": 1060
       },
       "unclassified": {
-        "files": 357,
-        "loc": 57086
+        "files": 356,
+        "loc": 57058
       }
     },
     "role": {
@@ -5396,15 +5345,15 @@
       },
       "authority": {
         "files": 63,
-        "loc": 10943
+        "loc": 10874
       },
       "benchmark": {
         "files": 2,
         "loc": 99
       },
       "diagnostic": {
-        "files": 13,
-        "loc": 1465
+        "files": 12,
+        "loc": 1407
       },
       "evidence": {
         "files": 4,
@@ -5419,16 +5368,16 @@
         "loc": 199
       },
       "research": {
-        "files": 11,
-        "loc": 637
+        "files": 5,
+        "loc": 593
       },
       "test": {
         "files": 5,
         "loc": 520
       },
       "unclassified": {
-        "files": 357,
-        "loc": 57086
+        "files": 356,
+        "loc": 57058
       }
     },
     "status": {
@@ -5438,23 +5387,19 @@
       },
       "active_research": {
         "files": 25,
-        "loc": 5336
-      },
-      "deletion_candidate": {
-        "files": 1,
-        "loc": 93
+        "loc": 5308
       },
       "fallback": {
         "files": 5,
         "loc": 272
       },
       "historical_one_off": {
-        "files": 7,
-        "loc": 87
+        "files": 1,
+        "loc": 43
       },
       "production": {
         "files": 67,
-        "loc": 9896
+        "loc": 9890
       },
       "promoted_default": {
         "files": 6,
@@ -5469,8 +5414,8 @@
         "loc": 519
       },
       "unclassified": {
-        "files": 357,
-        "loc": 57086
+        "files": 356,
+        "loc": 57058
       },
       "unresolved_reproducer": {
         "files": 2,
@@ -5479,10 +5424,20 @@
     }
   },
   "loc_impact": {
-    "gross_loc_removed": 210,
+    "completed_actions": [
+      "A1",
+      "A2",
+      "A3",
+      "A4",
+      "A5"
+    ],
+    "gross_loc_removed": 3,
     "loc_moved_not_reduced": 60,
-    "net_authored_loc_reduction": 180,
-    "replacement_loc_added": 30
+    "net_authored_loc_reduction": 3,
+    "realized_gross_loc_removed": 244,
+    "realized_net_loc_reduction": 209,
+    "realized_replacement_loc_added": 35,
+    "replacement_loc_added": 0
   },
   "manifest_scope": [
     "extra/qk/"
@@ -5606,11 +5561,6 @@
       "extra/qk/mmq_ds4_logical_emitter.py",
       "extra/qk/mmq_q4k_q8_atom.py",
       "extra/qk/warp_reduce_lowering.py"
-    ],
-    "extra/qk/amdgpu_metadata.py": [
-      "extra/qk/phase_abi_v1_resource_probe.py",
-      "test/unit/test_online_softmax_tile.py",
-      "test/unit/test_q4k_q8_mmq_uop.py"
     ],
     "extra/qk/attention_harness_common.py": [
       "docs/attention-harness-centralization-scope-20260724.md",
@@ -5935,10 +5885,13 @@
     ],
     "extra/qk/mmq_compile_evidence.py": [
       "extra/qk/decode/current_decode_execution_adapter.py",
+      "extra/qk/phase_abi_v1_resource_probe.py",
       "extra/qk/prefill/current_prefill_execution_adapter.py",
       "extra/qk/shared_attention_capture.py",
       "scratchpad/kv_tile_amortization_probe.py",
-      "scratchpad/t4_dump.py"
+      "scratchpad/t4_dump.py",
+      "test/unit/test_online_softmax_tile.py",
+      "test/unit/test_q4k_q8_mmq_uop.py"
     ],
     "extra/qk/mmq_ds4_logical_emitter.py": [
       "scratchpad/audit_bfs.py",
@@ -6273,6 +6226,11 @@
       "test/unit/test_shared_prefill_measurement.py",
       "tinygrad/llm/fused_attention.py"
     ],
+    "extra/qk/prefill/promotion_gate_common.py": [
+      "extra/qk/prefill/packed_wmma_prefill_promotion_gate.py",
+      "extra/qk/prefill/prefill_causal_tile_skip_promotion_gate.py",
+      "extra/qk/prefill/prefill_softmax_reduce_fuse_promotion_gate.py"
+    ],
     "extra/qk/prefill/pure_register_compile_capture.py": [
       "extra/qk/prefill/executable_artifact_preparation.py",
       "test/unit/test_pure_register_compile_capture.py",
@@ -6280,6 +6238,7 @@
     ],
     "extra/qk/prefill/pure_register_evaluation_gate.py": [
       "extra/qk/prefill/prefill_graph_gemm_route.py",
+      "extra/qk/prefill/promotion_gate_common.py",
       "test/unit/test_pure_register_compile_capture.py",
       "test/unit/test_pure_register_evaluation_gate.py"
     ],
@@ -6483,10 +6442,6 @@
       "test/unit/test_shared_attention_compiler_capture.py",
       "test/unit/test_shared_attention_evidence.py",
       "test/unit/test_shared_prefill_policy.py"
-    ],
-    "extra/qk/shared_attention_evidence_gate.py": [
-      "docs/task_workflow/output/codebase-organization-audit-report.md",
-      "test/unit/test_shared_attention_evidence_gate.py"
     ],
     "extra/qk/shared_attention_promotion.py": [
       "docs/HANDOFF_fused_attention_enablement_20260723.md",
@@ -7079,12 +7034,6 @@
       "extra/qk/generate_shared_attention_captures.py",
       "extra/qk/layout.py",
       "extra/qk/memory_adaptive_allocation_observer.py",
-      "extra/qk/p2_probe_1.py",
-      "extra/qk/p2_probe_2.py",
-      "extra/qk/p2_probe_3.py",
-      "extra/qk/p2_probe_4.py",
-      "extra/qk/p2_probe_5.py",
-      "extra/qk/p2_probe_6.py",
       "extra/qk/phase_abi_v1_resource_probe.py",
       "extra/qk/prefill/current_prefill_execution_adapter.py",
       "extra/qk/prefill/host_safety_canary.py",
@@ -8417,14 +8366,6 @@
       "extra/qk/shared_attention_evidence.py",
       "extra/qk/shared_attention_promotion.py"
     ],
-    "historical_one_off": [
-      "extra/qk/p2_probe_1.py",
-      "extra/qk/p2_probe_2.py",
-      "extra/qk/p2_probe_3.py",
-      "extra/qk/p2_probe_4.py",
-      "extra/qk/p2_probe_5.py",
-      "extra/qk/p2_probe_6.py"
-    ],
     "operational_tool": [
       "extra/qk/decode/current_decode_execution_adapter.py",
       "extra/qk/decode/decode_harness.py",
@@ -8445,8 +8386,7 @@
     "orphan_unknown": [
       "extra/qk/bubblebeam_futuresight.py",
       "extra/qk/q4k_wmma_tile_lowering.py",
-      "extra/qk/quant_specs.py",
-      "extra/qk/shared_attention_evidence_gate.py"
+      "extra/qk/quant_specs.py"
     ],
     "retained_reference": [
       "extra/qk/mmq_ds4_probe_contract.py",

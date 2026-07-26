@@ -14,6 +14,7 @@
       "loc_moved": 0,
       "loc_removed": 30,
       "path": "extra/qk/amdgpu_metadata.py",
+      "status": "completed",
       "target": "extra/qk/mmq_compile_evidence.py",
       "tests_required": [
         "repoint test/unit/test_q4k_q8_mmq_uop.py and test/unit/test_online_softmax_tile.py at the surviving owner; both already project a key subset, so the extra max_workgroup_threads field is inert"
@@ -39,6 +40,7 @@
       "path": "extra/qk/p2_probe_1.py",
       "recovery": "git show ad65bd05e951f6e460d167c207fdf3e97faf5c76 -- extra/qk/p2_probe_1.py ... p2_probe_6.py",
       "replacement": "docs/flash-prefill-piece2-probe-20260721.md",
+      "status": "completed",
       "tests_required": []
     },
     {
@@ -56,10 +58,12 @@
       "last_campaign": "shared-attention evidence pipeline",
       "loc_added": 0,
       "loc_moved": 0,
-      "loc_removed": 93,
+      "loc_removed": 131,
       "path": "extra/qk/shared_attention_evidence_gate.py",
+      "realized_note": "93 in the gate plus 38 in test/unit/test_shared_attention_evidence_gate.py; verdict captured in docs/shared-attention-evidence-bundle-gate-retirement-20260726.md",
       "recovery": "git log --diff-filter=A -- extra/qk/shared_attention_evidence_gate.py",
       "replacement": "extra/qk/shared_attention_promotion.py (the gate that acts on a schema with a real producer)",
+      "status": "completed",
       "tests_required": [
         "delete test/unit/test_shared_attention_evidence_gate.py with it"
       ]
@@ -78,6 +82,7 @@
       "loc_removed": 0,
       "note": "no code change required; this is a manifest authority correction that keeps the duplicate-authority check honest",
       "path": "extra/qk/attention_harness_common.py",
+      "status": "completed",
       "target": "extra/qk/shared_attention_evidence.py",
       "tests_required": [
         "existing test/unit/test_shared_attention_evidence.py already covers the producer"
@@ -94,15 +99,17 @@
       ],
       "finding": "Three promotion gates repeat the same evidence-loading and verdict-emitting rule verbatim; a fourth gate that looks similar must NOT be folded in because its verdict semantics differ.",
       "id": "A5",
-      "loc_added": 30,
+      "loc_added": 35,
       "loc_moved": 0,
-      "loc_removed": 40,
+      "loc_removed": 39,
       "path": "extra/qk/prefill/packed_wmma_prefill_promotion_gate.py",
       "proposed_interface": [
         "load_manifest_evidence(route_id, flag, schema, evidence_path) -> dict|None",
         "run_gate(gate_name, route_check, required_shapes, failures) -> dict",
         "main() printer"
       ],
+      "realized_note": "39 token-LOC out of the three gates, 35 into promotion_gate_common.py; net -4. The projection of -10 was close, but the physical-line delta is +21 -- the win is one rule, not fewer lines.",
+      "status": "completed",
       "target": "extra/qk/prefill/promotion_gate_common.py (proposed)",
       "tests_required": [
         "one shared test asserting fail-closed on missing/malformed evidence, plus the three existing per-gate tests unchanged (each still asserts its own thresholds and route id)"
@@ -253,10 +260,20 @@
     }
   ],
   "loc_impact": {
-    "gross_loc_removed": 210,
+    "completed_actions": [
+      "A1",
+      "A2",
+      "A3",
+      "A4",
+      "A5"
+    ],
+    "gross_loc_removed": 3,
     "loc_moved_not_reduced": 60,
-    "net_authored_loc_reduction": 180,
-    "replacement_loc_added": 30
+    "net_authored_loc_reduction": 3,
+    "realized_gross_loc_removed": 244,
+    "realized_net_loc_reduction": 209,
+    "realized_replacement_loc_added": 35,
+    "replacement_loc_added": 0
   },
   "reusable_asset_candidates": [
     {
