@@ -2,6 +2,13 @@ from extra.qk.prefill import prefill_whole_synced as whole
 from tinygrad.helpers import ProfileRangeEvent
 
 
+def test_lifecycle_marker_is_opt_in(capsys):
+  whole._lifecycle_marker(False, "model_load_complete")
+  assert capsys.readouterr().err == ""
+  whole._lifecycle_marker(True, "model_load_complete")
+  assert capsys.readouterr().err == "PREFILL_LIFECYCLE phase=model_load_complete\n"
+
+
 def _report(**overrides):
   route={"prefill_route_family":whole.PREFILL_PROMOTED_CANDIDATE_ROUTE,"prefill_route_pure":True,
          "prefill_route_rolled_back":False,"prefill_route_provenance":"tinygrad_scheduler_generated"}
