@@ -12,7 +12,7 @@ decode timing begins; JIT capture is warmed in a separate request.
 """
 from __future__ import annotations
 
-import argparse, hashlib, json, os, pathlib, statistics, sys, tempfile, time
+import argparse, atexit, hashlib, json, os, pathlib, statistics, sys, tempfile, time
 
 from extra.qk.decode.decode_harness import DEFAULT_MODEL, csv_ints, decode_run_profile
 
@@ -33,6 +33,37 @@ def _atomic_json(path:pathlib.Path, payload:dict) -> None:
     try: os.unlink(temporary)
     except FileNotFoundError: pass
     raise
+
+
+def _install_lifecycle_reporter(out_path:pathlib.Path, argv:list[str]) -> tuple[callable, callable]:
+  """Make progress observable even when the authority artifact is not yet valid."""
+  status_path = out_path.with_suffix(out_path.suffix + ".status.json")
+  state = {"finished": False, "phase": "startup"}
+
+  def report(phase:str, **details) -> None:
+    state["phase"] = phase
+    payload = {"schema": "tinygrad.decode.fixed_depth.lifecycle.v1", "phase": phase,
+               "pid": os.getpid(), "updated_unix_ns": time.time_ns(), "argv": argv, **details}
+    _atomic_json(status_path, payload)
+    print(f"@@DECODE_STATUS@@ phase={phase}", file=sys.stderr, flush=True)
+
+  def finished() -> None:
+    state["finished"] = True
+    report("completed", artifact=str(out_path))
+
+  def unexpected_exit() -> None:
+    if not state["finished"] and state["phase"] != "failed":
+      report("exited_before_completion", last_phase=state["phase"])
+
+  previous_hook = sys.excepthook
+  def exception_hook(exc_type, exc, tb) -> None:
+    report("failed", last_phase=state["phase"], exception_type=exc_type.__name__, exception=str(exc))
+    previous_hook(exc_type, exc, tb)
+
+  atexit.register(unexpected_exit)
+  sys.excepthook = exception_hook
+  report("started", status_path=str(status_path))
+  return report, finished
 
 
 def _model_identity(path:str) -> dict:
@@ -151,9 +182,12 @@ def main(argv:list[str] | None=None) -> int:
   if args.reps < 1: raise ValueError("reps must be positive")
   if args.warmup_decode < 2: raise ValueError("warmup-decode must be at least 2 to capture the production TinyJit")
   if args.chunk_size < 1: raise ValueError("chunk-size must be positive")
+  out_path = pathlib.Path(args.out).expanduser().resolve()
+  report, finished = _install_lifecycle_reporter(out_path, list(sys.argv if argv is None else argv))
   profile = decode_run_profile(ckpts=csv_ints(args.ckpts) if args.ckpts else None,
                                max_context=args.max_context, nmeas=args.nmeas)
 
+  report("loading_model")
   from tinygrad import Device
   from extra.llm.generate import load_model_and_tokenizer
 
@@ -164,11 +198,13 @@ def main(argv:list[str] | None=None) -> int:
 
   rows = []
   for depth in profile.ckpts:
+    report("warming", ctx=depth)
     prompt = _make_prompt(base_ids, depth)
     _warm_depth(model, prompt, args.chunk_size, args.warmup_decode)
     w_reps, d_reps = [], []
     route_reps, token_reps = [], []
     for rep in range(args.reps):
+      report("measuring", ctx=depth, rep=rep)
       w_elapsed, per_token, generated = _measure_w(model, dev, prompt, args.chunk_size, profile.nmeas)
       d_elapsed, routes, final_token = _measure_d(model, dev, prompt, args.chunk_size, profile.nmeas, profile.max_context)
       w_reps.append({"rep": rep, "elapsed_s": w_elapsed, "tok_s": profile.nmeas / w_elapsed,
@@ -225,9 +261,10 @@ def main(argv:list[str] | None=None) -> int:
                                    "ring": bool(model.config.ring)},
               "method": "genuine prompt prefill; W=production generate item/token; D=same model JITs with final sync",
               "rows": rows, "median_host_sync_pct": median_host}
-  out_path = pathlib.Path(args.out).expanduser().resolve()
+  report("writing_artifact")
   _atomic_json(out_path, artifact)
   print(f"artifact: {out_path}", file=sys.stderr)
+  finished()
   print("@@DONE@@")
   return 0
 
