@@ -429,3 +429,16 @@ The task is complete only when both are true:
 - Dead probes and superseded candidates are removed.
 
 If Track A completes but no honest Track B candidate closes the gap, publish Track A independently and close Track B with a precise mechanism, measured ceiling, and bounded next task. Do not withhold a correctness repair because the performance target remains open.
+
+## 13. Branch retirement
+
+This feature branch is temporary. After accepted Track A and Track B work has been promoted to the production pipeline:
+
+1. Confirm every useful code change, regression test, authority artifact, findings document, and cleanup ledger exists on the promoted branch.
+2. Confirm no uncommitted or unpushed work remains in `/home/ubuntu/worktrees/14b-decode-ctx128-and-depth-decay`.
+3. Remove the feature worktree.
+4. Delete the local `feature/14b-decode-ctx128-and-depth-decay` branch.
+5. Delete the remote feature branch after its promoted commit is reachable from the retained production or integration branch.
+6. Record branch retirement in the final findings.
+
+Do not retain the branch as a research archive. Rejected implementations remain recoverable from Git history, while durable conclusions belong in the findings documents and ledgers.
