@@ -17,6 +17,11 @@ from tinygrad.schedule.realize import (ALWAYS_CONTIGUOUS, realize, realize_srcs,
 # it as `tinygrad.schedule.indexing.BufferizeOpts` (directly or via rangeify.py's re-export) is unaffected.
 from tinygrad.schedule.buffer_plan import BufferizeOpts  # noqa: F401
 
+# LR-043: the composite/scoped-reduction ownership decision this loop makes (below, in run_rangeify) is described,
+# not changed, by tinygrad/schedule/scopes.py. Import kept local to the call sites so this module pays nothing when
+# COMPOSITE_PLAN recording is off.
+from tinygrad.schedule import scopes as composite_scopes
+
 def _resolve_composite_axis_owner(owner_ranges:tuple[UOp, ...], axis:int|None) -> UOp|None:
   """Return the live RANGE owning a logical axis, or None if collapsed/local."""
   if axis is None or axis == -1 or not isinstance(axis, int): return None
@@ -209,8 +214,12 @@ def run_rangeify(tsink:UOp, debug:bool=False) -> tuple[UOp, IndexingContext]:
   # whose source is on that slice may bypass the matmul realization guard.
   for x in tsink_toposort:
     if x.op is Ops.REDUCE and hasattr(x.arg[0], "combine_fn"):
-      rctx.composite_owned.update(x.src[0].backward_slice)
+      rctx.composite_owned.update(owned:=x.src[0].backward_slice)
       rctx.composite_owned.add(x.src[0])
+      # LR-043: describe this ownership decision as data (tinygrad/schedule/scopes.py). This does not change what
+      # was just computed above; it is read back below, no-op when COMPOSITE_PLAN is unset.
+      if composite_scopes.ENABLED:
+        composite_scopes.record(composite_scopes.describe_composite_reduce(x.arg[0], owner=x.src[0], owned_slice_size=len(owned)+1))
     # A SCOPED_REDUCE is an explicit nested producer contract.  Its producer
     # is not a materialized auxiliary tensor: it is evaluated in the owning
     # outer reduction scope.  Transfer ownership before rangeify consults the
@@ -223,6 +232,9 @@ def run_rangeify(tsink:UOp, debug:bool=False) -> tuple[UOp, IndexingContext]:
       rctx.composite_owned.add(producer)
       for u in owned:
         rctx.realize_map.pop(u, None)
+      # LR-043: same, for the ScopedReduceSpec ownership site.
+      if composite_scopes.ENABLED:
+        composite_scopes.record(composite_scopes.describe_scoped_reduce(x.arg, owner=producer, owned_slice_size=len(owned)+1))
 
   # explicit rangeify
   ending_ranges: dict[UOp, list[UOp]] = {}
