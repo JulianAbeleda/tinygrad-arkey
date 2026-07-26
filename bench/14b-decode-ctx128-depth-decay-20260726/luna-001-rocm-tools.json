@@ -1,0 +1,20 @@
+{
+  "schema": "luna-rocm-tool-census.v1",
+  "task_id": "LUNA-001",
+  "verdict": "TOOL_FAILURE",
+  "device_queries_only": true,
+  "tools": {
+    "rocprofv3": {"available": false},
+    "rocprof": {"available": false},
+    "rocprof-compute": {"available": false},
+    "omniperf": {"available": false},
+    "rocm-smi": {"available": true, "path": "/usr/bin/rocm-smi", "version": "1.4.1", "kernel_version": "6.16.13", "capabilities": ["json", "power", "clocks", "compute_partition", "processes"]},
+    "rocminfo": {"available": true, "path": "/usr/bin/rocminfo", "runtime_version": "1.1", "gpu": "gfx1100", "wavefront_size": 32},
+    "ROCtx": {"available": true, "header": "/opt/rocm-7.2.4/include/rocprofiler-sdk-roctx/roctx.h", "library": "/opt/rocm-7.2.4/lib/libroctx64.so.4.1.70204"}
+  },
+  "bounded_dispatch_trace_method": null,
+  "counter_collection": {"available": false, "gfx1100_semantics_available": false},
+  "positive_control": {"rocm_smi_device_query": true, "rocminfo_gfx1100_query": true},
+  "blocker": "No installed rocprofv3, rocprof, rocprof-compute, or omniperf executable. ROCtx alone cannot collect a trace.",
+  "uses_gpu": false
+}

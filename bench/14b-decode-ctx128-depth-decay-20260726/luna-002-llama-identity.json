@@ -1,0 +1,13 @@
+{
+  "schema": "luna-llama-model-identity.v1",
+  "task_id": "LUNA-002",
+  "verdict": "PASS_WITH_PROVENANCE_LIMITATION",
+  "llama_source": {"path": "/home/ubuntu/env/llama.cpp", "commit": "ac4cddeb0dbd778f650bf568f6f08344a06abe3a", "branch": "master", "dirty_paths": [".rocprofv3/", "bench/"], "remote": "https://github.com/ggerganov/llama.cpp"},
+  "binary": {"path": "/home/ubuntu/env/llama.cpp/build/bin/llama-bench", "sha256": "54d76ba75a03e6708253f950e406dc096fab5502d151a214d68f87f174715c86", "build_id": "b6acc925c3192b4775daa32c36a42a425e1719f5"},
+  "build": {"type": "Release", "hip": true, "hip_compiler": "/opt/rocm/bin/amdclang++", "hip_platform": "amd", "amdgpu_targets": "gfx1100", "hip_graphs": true, "hip_mfma_mmq": true, "vulkan": false, "cuda": false},
+  "linked_rocm_libraries": ["libggml-hip.so.0", "libhipblas.so.3", "librocblas.so.5", "libamdhip64.so.7", "libroctx64.so.4"],
+  "runtime_backend_positive_control": "llama-bench --help enumerated one ROCm device: AMD Radeon RX 7900 XTX, gfx1100, wave size 32",
+  "model": {"path": "/home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf", "size_bytes": 9001752960, "mtime_epoch_seconds": 1781139524, "sha256": "500a8806e85ee9c83f3ae08420295592451379b4f8cf2d0f41c15dffeb6b81f0", "name": "Qwen3 14B Awq Compatible Instruct", "architecture": "qwen3", "quantization_filename": "Q4_K_M"},
+  "positive_control": {"binary_links_libggml_hip": true, "runtime_enumerates_gfx1100": true, "ngl_99_supported_by_cli": true},
+  "limitation": "The source tree is dirty, and no retained build command or compile database-to-binary provenance proof was found. The source commit is recorded for later source mapping, but exact binary/source reproducibility remains unproven."
+}
