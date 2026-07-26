@@ -393,7 +393,11 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
     # each block._use_flash to False (model.py:768). A harness-level TinyJit(model.forward) would bypass __call__
     # entirely, leaving _WARMSTART_OPTS empty (the phantom-1741 bench bug).
     _post_graph_marker("warmup_start")
-    for _ in range(warmups): first_realized_prefill(sp_int)
+    for warmup_idx in range(warmups):
+      warmup_phase = "warmup_first" if warmup_idx == 0 else "warmup_subsequent"
+      _post_graph_marker(f"{warmup_phase}_start")
+      first_realized_prefill(sp_int)
+      _post_graph_marker(f"{warmup_phase}_end")
     _post_graph_marker("warmup_complete")
     _post_graph_marker("sync_after_warmup_start")
     dev.synchronize()
