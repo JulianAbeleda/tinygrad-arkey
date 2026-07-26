@@ -16,6 +16,7 @@ import bisect
 import json
 import os
 import pathlib
+import sys
 import time
 from contextlib import contextmanager
 from typing import Any
@@ -34,6 +35,23 @@ ROOT = pathlib.Path(__file__).resolve().parents[3]
 ARTIFACT_DIR = ROOT / "bench/prefill-whole-synced"
 PREFILL_PROMOTED_CANDIDATE_ROUTE = promoted_prefill_candidate_policy()["route_id"]
 PREFILL_GENERATED_DENSE_ROLES = frozenset(("attn_qo", "attn_kv", "ffn_down", "ffn_gate_up"))
+
+
+def artifact_output_path(requested: str) -> pathlib.Path:
+  """Resolve a CLI artifact path once, relative to the repository root."""
+  out = pathlib.Path(requested) if requested else ARTIFACT_DIR / "latest.json"
+  return out if out.is_absolute() else ROOT / out
+
+
+def write_artifact(report: dict[str, Any], out: pathlib.Path) -> None:
+  """Atomically replace an artifact, preserving the prior complete report on failure."""
+  out.parent.mkdir(parents=True, exist_ok=True)
+  tmp = out.with_name(f".{out.name}.{os.getpid()}.tmp")
+  try:
+    tmp.write_text(json.dumps(report, indent=2))
+    tmp.replace(out)
+  finally:
+    if tmp.exists(): tmp.unlink()
 
 
 def _git_short() -> str:
@@ -518,12 +536,15 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
                              primitive_class=args.primitive_class or None, threshold=threshold,
                              ledger=args.ledger or None, quality_gate=quality_gate,
                              model_profile_id=args.model_profile or None)
-  if not args.no_artifact:
-    out = pathlib.Path(args.artifact) if args.artifact else ARTIFACT_DIR / "latest.json"
-    if not out.is_absolute(): out = ROOT / out
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(report, indent=2))
+  out = None if args.no_artifact else artifact_output_path(args.artifact)
+  report["artifact"] = {"path": str(out) if out is not None else None,
+                        "write_mode": "atomic" if out is not None else "disabled"}
+  if out is not None:
+    write_artifact(report, out)
+    print(f"PREFILL_ARTIFACT_WRITTEN path={out}", file=sys.stderr, flush=True)
   if args.json: print(json.dumps(report, indent=2))
+  if profile.mode == "smoke":
+    print(f"PREFILL_SMOKE_COMPLETE artifact={out if out is not None else 'disabled'}", file=sys.stderr, flush=True)
   return report
 
 
