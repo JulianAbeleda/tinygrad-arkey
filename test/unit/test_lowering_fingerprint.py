@@ -19,7 +19,7 @@ def test_compute_fingerprints_is_deterministic_across_two_in_process_runs():
   first = lf.compute_fingerprints()
   second = lf.compute_fingerprints()
   assert first == second
-  assert len(first) == 7
+  assert len(first) == len(lf._build_graphs(__import__('tinygrad', fromlist=['Tensor']).Tensor))
   assert all(isinstance(h, str) and len(h) == 64 for h in first.values())
 
 
@@ -28,6 +28,9 @@ def test_all_graph_names_present():
   expected = {
     "elementwise_reduce", "matmul", "chained_reduce", "broadcast_max", "softmax_like",
     "transpose_matmul", "cast_dtype_roundtrip",
+    # Added after a review found the gate blind to assign: realize_store_after_src's WAR-hazard branch fires on
+    # these and on nothing else in the corpus. Do not drop them without replacing that coverage.
+    "assign_self_dependent", "assign_war_hazard", "multi_output_shared_producer",
   }
   assert set(fp) == expected
 
