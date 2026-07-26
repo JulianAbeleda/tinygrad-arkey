@@ -141,12 +141,12 @@ ROUTES = {
     "selector": "BoltBeam_route_policy_or_env_default",
     "route_attribution": "tinygrad/llm/decode_routes.py attention live-split branch: B=1,Hq=32,Hkv=8,Hd=128 -> extra/qk/decode/flash_decode_attention_executor.py flash_decode_live_split_block_tile -> extra/qk/decode/flash_decode_attention_spec.py FlashDecodeAttentionSpec (FlashDecodeTileSpec + LiveSplitGeometrySpec + FlashCombineSpec).",
     "note": "Promoted 8B long-context decode attention replacement. TG-P14 practical roofline closeout: worst-of-3 speed ctx512 98.5% / ctx4096 98.3% of owned, 48/48 deterministic prefilled token parity, route-bound, no hidden fallback. Provenance conversion 2026-07-06: the default binding is now descriptor-owned through FlashDecodeAttentionSpec; no handwritten HIP attention route remains."},
-  "decode_flash_block_tile_g5_konly": {
+  "decode_flash_live_split_g5_kvboth": {
     "workload": "decode", "profile_id": PROFILE_DECODE_LARGE, "status": "promoted_default",
     "roles": ["attention_tile", "attention_combine"], "excluded_roles": [],
     "quant": ["fp16"],
     "shape_guards": [{"B": 1, "Hq": 40, "Hkv": 8, "Hd": 128, "ctx": ">=512"}],
-    "env": {},  # DEFAULT-ON for the validated G=5 shape; BoltBeam QK_ROUTE_POLICY can select it by shape.
+    "env": {},  # DEFAULT-ON for the admitted G=5 KV_BOTH shape.
     "rollback": {"DECODE_LIVE_SPLIT": "0"},  # exits the live-split default; no manifest fallback route row remains
     "baseline_route_id": "retired_owned_attention_ceiling",
     "strict_fallback": True,
@@ -159,8 +159,21 @@ ROUTES = {
     "provenance": "machine_authored_generated",
     "replacement_scope": "",
     "selector": "BoltBeam_route_policy_or_env_default",
-    "route_attribution": "tinygrad/llm/decode_routes.py flash_decode_attention_route UNIFIED live-split branch (structural class B=1,Hd=128,Hkv=8,Hq%Hkv==0; covers 14B Hq=40/G=5). QK_ROUTE_POLICY selected_route=decode_flash_block_tile_g5_konly if present, else DECODE_LIVE_SPLIT default 1. Binding flows through extra/qk/decode/flash_decode_attention_executor.py -> FlashDecodeAttentionSpec.",
-    "note": "Promoted 2026-07-03: 14B (Hq=40/Hkv=8/Hd=128) decode now shares the modular live-split route with 8B/32B. Live per-split length ceildiv(Tc,S_occ) is seqlen-bound: 14B decode is flat across max_context (69.24 tok/s @MAXC=1024 vs 69.04 @MAXC=8192, live ctx ~550). W==D token-identical to the generic generated flash reference at 8B/14B/32B. Provenance conversion 2026-07-06: the default binding is descriptor-owned through FlashDecodeAttentionSpec."},
+    "route_attribution": "tinygrad/llm/decode_routes.py explicit G=5 KV_BOTH live-split candidate (B=1,Hq=40,Hkv=8,Hd=128,G=5) -> extra/qk/decode/flash_decode_attention_executor.py -> FlashDecodeAttentionSpec.",
+    "note": "Shipped G=5 KV_BOTH route identity. Initially byte-equivalent to the existing emitter; separate identity keeps G4/G5 admission and evidence honest. This row does not claim new performance promotion evidence beyond the admitted production binding."},
+  "decode_flash_block_tile_g5_konly": {
+    "workload": "decode", "profile_id": PROFILE_DECODE_LARGE, "status": "research",
+    "roles": ["attention_tile", "attention_combine"], "excluded_roles": [], "quant": ["fp16"],
+    "shape_guards": [{"B": 1, "Hq": 40, "Hkv": 8, "Hd": 128, "ctx": ">=512", "staging": "K_ONLY"}],
+    "env": {"QK_ROUTE_POLICY": "decode_flash_block_tile_g5_konly (research-only; not selected by default)"},
+    "rollback": {"DECODE_LIVE_SPLIT": "0"}, "baseline_route_id": "decode_flash_live_split_g5_kvboth", "strict_fallback": True,
+    "expected_kernels": ["flash_block_tiled_xlane_score_pv_tile_whole_cache_40_128", "flash_fused_gmax_combine"],
+    "forbidden_kernels": ["owned_flash_tile_gqa_whole", "fallback_graph"],
+    "authority_gate": "G5 K_ONLY correctness, resource, and timing qualification (not yet run)", "promotion_artifacts": [],
+    "purity_status": "research", "provenance": "machine_authored_generated", "replacement_scope": "",
+    "selector": "research_descriptor_only",
+    "route_attribution": "tinygrad/llm/decode_routes.py legacy K_ONLY candidate identity; production selection is explicit decode_flash_live_split_g5_kvboth KV_BOTH.",
+    "note": "Blocked research only: runtime does not select this K_ONLY entry and G5 correctness/evidence are not established. Do not classify as refuted or promoted."},
   # decode_flash_block_tile_g5_8b_refuted row REMOVED 2026-07-06 (no backups): historical TG-P5/TG-P8 route; its
   # kernels (flash_state_gmax/flash_state_combine) and route_attribution branch no longer exist.
   # Generic flash fallback row REMOVED 2026-07-06 (no backups): the DECODE_LIVE_SPLIT=0 fallback implementation was

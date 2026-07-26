@@ -7,15 +7,16 @@
   "manifest_errors": [],
   "attribution_complete": false,
   "missing_from_census": [
-    "decode_flash_live_split_g4_kvboth"
+    "packed_wmma_prefill_generated"
   ],
   "headline": {
     "question": "Which non-tinygrad-generated kernels run on the DEFAULT path?",
-    "count_non_tinygrad_generated_default_kernels": 6,
+    "count_non_tinygrad_generated_default_kernels": 7,
     "non_tinygrad_generated_default_route_ids": [
       "decode_q4k_g3_generated",
       "decode_q6k_coop_generated",
-      "decode_flash_block_tile_g5_konly",
+      "decode_flash_live_split_g4_kvboth",
+      "decode_flash_live_split_g5_kvboth",
       "prefill_flash_attention_generated",
       "prefill_q4k_direct_tile4x4_default",
       "prefill_q6k_direct_generated"
@@ -23,7 +24,8 @@
     "of_which_search_generated": [
       "decode_q4k_g3_generated",
       "decode_q6k_coop_generated",
-      "decode_flash_block_tile_g5_konly",
+      "decode_flash_live_split_g4_kvboth",
+      "decode_flash_live_split_g5_kvboth",
       "prefill_flash_attention_generated",
       "prefill_q4k_direct_tile4x4_default",
       "prefill_q6k_direct_generated"
@@ -31,7 +33,7 @@
     "of_which_final_purity_debt": [],
     "of_which_transitional": [],
     "of_which_forbidden_final_default": [],
-    "interpretation": "6 kernels on the default path are non-tinygrad-generated. 6 are machine-authored/generated (decode_q4k_g3_generated, decode_q6k_coop_generated, decode_flash_block_tile_g5_konly, prefill_flash_attention_generated, prefill_q4k_direct_tile4x4_default, prefill_q6k_direct_generated); 0 are final-default purity debt. Everything else in the model is tinygrad_scheduler-generated."
+    "interpretation": "7 kernels on the default path are non-tinygrad-generated. 7 are machine-authored/generated (decode_q4k_g3_generated, decode_q6k_coop_generated, decode_flash_live_split_g4_kvboth, decode_flash_live_split_g5_kvboth, prefill_flash_attention_generated, prefill_q4k_direct_tile4x4_default, prefill_q6k_direct_generated); 0 are final-default purity debt. Everything else in the model is tinygrad_scheduler-generated."
   },
   "purity_report": {
     "verdict": "TINYGRAD_DEFAULT_PURITY_PASS",
@@ -39,11 +41,12 @@
       "decode_q4k_g3_generated",
       "decode_q6k_coop_generated",
       "decode_flash_live_split_g4_kvboth",
-      "decode_flash_block_tile_g5_konly",
+      "decode_flash_live_split_g5_kvboth",
       "prefill_flash_attention_generated",
       "prefill_wmma_lds_dbuf_generated",
       "prefill_q4k_direct_tile4x4_default",
-      "prefill_q6k_direct_generated"
+      "prefill_q6k_direct_generated",
+      "packed_wmma_prefill_generated"
     ],
     "rows": [
       {
@@ -68,7 +71,7 @@
         "final_default_allowed": true
       },
       {
-        "route_id": "decode_flash_block_tile_g5_konly",
+        "route_id": "decode_flash_live_split_g5_kvboth",
         "status": "promoted_default",
         "provenance": "machine_authored_generated",
         "replacement_scope": "",
@@ -99,6 +102,13 @@
         "route_id": "prefill_q6k_direct_generated",
         "status": "promoted_default",
         "provenance": "machine_authored_generated",
+        "replacement_scope": "",
+        "final_default_allowed": true
+      },
+      {
+        "route_id": "packed_wmma_prefill_generated",
+        "status": "promoted_default",
+        "provenance": "tinygrad_scheduler_generated",
         "replacement_scope": "",
         "final_default_allowed": true
       }
@@ -152,7 +162,7 @@
       "final_default_allowed": true
     },
     {
-      "route_id": "decode_flash_live_split_g4_8b_kvboth",
+      "route_id": "decode_flash_live_split_g4_kvboth",
       "workload": "decode",
       "role": "attention_tile,attention_combine",
       "quant": "fp16",
@@ -165,26 +175,26 @@
       "rollback_flag": "DECODE_LIVE_SPLIT=0 exits the live-split default; no manifest fallback route row remains",
       "purity_status": "search_generated_promoted",
       "next_action": "keep promoted; no handwritten attention kernel on the hot path",
-      "current_default": false,
+      "current_default": true,
       "in_manifest": true,
       "provenance": "machine_authored_generated",
       "replacement_scope": "",
       "final_default_allowed": true
     },
     {
-      "route_id": "decode_flash_block_tile_g5_konly",
+      "route_id": "decode_flash_live_split_g5_kvboth",
       "workload": "decode",
       "role": "attention_tile,attention_combine",
       "quant": "fp16",
-      "shape_guard": "B=1 Hq=40 Hkv=8 Hd=128 ctx>=512",
+      "shape_guard": "B=1 Hq=40 Hkv=8 Hd=128 G=5 ctx>=512 KV_BOTH",
       "writer": "generated",
       "selector": "BoltBeam_route_policy_or_env_default",
-      "route_guard": "tinygrad/llm/decode_routes.py attention live-split branch (structural class B=1,Hd=128,Hkv=8,Hq%Hkv==0; covers 14B Hq=40/G=5): QK_ROUTE_POLICY selected_route=decode_flash_block_tile_g5_konly if present, else DECODE_LIVE_SPLIT default 1; FlashDecodeAttentionSpec owns staging/geometry/combine",
+      "route_guard": "tinygrad/llm/decode_routes.py explicit G=5 KV_BOTH live-split candidate (B=1,Hq=40,Hkv=8,Hd=128,G=5) -> FlashDecodeAttentionSpec",
       "kernel_source": "extra/qk/decode/flash_decode_attention_spec.py FlashDecodeAttentionSpec -> live-split block tile path (staging='KV_BOTH', seqlen-bound per-split length)",
       "authority_artifact": "bench/gp-track/gp4_latest.json (GP4_PASS_TIER_A); W==D 8B/14B/32B token-identical to generic flash ref; 14B tok/s flat 69.24@MAXC1024 vs 69.04@MAXC8192 (no-collapse)",
       "rollback_flag": "DECODE_LIVE_SPLIT=0 exits the live-split default; no manifest fallback route row remains",
       "purity_status": "search_generated_promoted",
-      "next_action": "keep promoted; 8B/14B/32B now share one modular structural-class route",
+      "next_action": "keep promoted; G5 KV_BOTH has its own route identity and evidence boundary",
       "current_default": true,
       "in_manifest": true,
       "provenance": "machine_authored_generated",
@@ -334,19 +344,39 @@
       "final_default_allowed": true
     },
     {
-      "route_id": "decode_flash_block_tile_g5_konly",
+      "route_id": "decode_flash_live_split_g4_kvboth",
       "workload": "decode",
       "role": "attention_tile,attention_combine",
       "quant": "fp16",
-      "shape_guard": "B=1 Hq=40 Hkv=8 Hd=128 ctx>=512",
+      "shape_guard": "B=1 Hq=32 Hkv=8 Hd=128 G=4 ctx>=512",
       "writer": "generated",
       "selector": "BoltBeam_route_policy_or_env_default",
-      "route_guard": "tinygrad/llm/decode_routes.py attention live-split branch (structural class B=1,Hd=128,Hkv=8,Hq%Hkv==0; covers 14B Hq=40/G=5): QK_ROUTE_POLICY selected_route=decode_flash_block_tile_g5_konly if present, else DECODE_LIVE_SPLIT default 1; FlashDecodeAttentionSpec owns staging/geometry/combine",
+      "route_guard": "tinygrad/llm/decode_routes.py attention live-split branch (structural class B=1,Hd=128,Hkv=8,Hq%Hkv==0): default-on DECODE_LIVE_SPLIT=1 -> FlashDecodeAttentionSpec live-split block tile + fused combine",
+      "kernel_source": "extra/qk/decode/flash_decode_attention_spec.py FlashDecodeAttentionSpec -> existing live-split UOp tile/combine emitters",
+      "authority_artifact": "bench/tg-p14-amd-recovery-and-pure-attention-landing/phase2_final_result.json (PASS_PROMOTION_CANDIDATE; practical roofline closeout)",
+      "rollback_flag": "DECODE_LIVE_SPLIT=0 exits the live-split default; no manifest fallback route row remains",
+      "purity_status": "search_generated_promoted",
+      "next_action": "keep promoted; no handwritten attention kernel on the hot path",
+      "current_default": true,
+      "in_manifest": true,
+      "provenance": "machine_authored_generated",
+      "replacement_scope": "",
+      "final_default_allowed": true
+    },
+    {
+      "route_id": "decode_flash_live_split_g5_kvboth",
+      "workload": "decode",
+      "role": "attention_tile,attention_combine",
+      "quant": "fp16",
+      "shape_guard": "B=1 Hq=40 Hkv=8 Hd=128 G=5 ctx>=512 KV_BOTH",
+      "writer": "generated",
+      "selector": "BoltBeam_route_policy_or_env_default",
+      "route_guard": "tinygrad/llm/decode_routes.py explicit G=5 KV_BOTH live-split candidate (B=1,Hq=40,Hkv=8,Hd=128,G=5) -> FlashDecodeAttentionSpec",
       "kernel_source": "extra/qk/decode/flash_decode_attention_spec.py FlashDecodeAttentionSpec -> live-split block tile path (staging='KV_BOTH', seqlen-bound per-split length)",
       "authority_artifact": "bench/gp-track/gp4_latest.json (GP4_PASS_TIER_A); W==D 8B/14B/32B token-identical to generic flash ref; 14B tok/s flat 69.24@MAXC1024 vs 69.04@MAXC8192 (no-collapse)",
       "rollback_flag": "DECODE_LIVE_SPLIT=0 exits the live-split default; no manifest fallback route row remains",
       "purity_status": "search_generated_promoted",
-      "next_action": "keep promoted; 8B/14B/32B now share one modular structural-class route",
+      "next_action": "keep promoted; G5 KV_BOTH has its own route identity and evidence boundary",
       "current_default": true,
       "in_manifest": true,
       "provenance": "machine_authored_generated",
@@ -435,26 +465,6 @@
     }
   ],
   "fallback_table": [
-    {
-      "route_id": "decode_flash_live_split_g4_8b_kvboth",
-      "workload": "decode",
-      "role": "attention_tile,attention_combine",
-      "quant": "fp16",
-      "shape_guard": "B=1 Hq=32 Hkv=8 Hd=128 G=4 ctx>=512",
-      "writer": "generated",
-      "selector": "BoltBeam_route_policy_or_env_default",
-      "route_guard": "tinygrad/llm/decode_routes.py attention live-split branch (structural class B=1,Hd=128,Hkv=8,Hq%Hkv==0): default-on DECODE_LIVE_SPLIT=1 -> FlashDecodeAttentionSpec live-split block tile + fused combine",
-      "kernel_source": "extra/qk/decode/flash_decode_attention_spec.py FlashDecodeAttentionSpec -> existing live-split UOp tile/combine emitters",
-      "authority_artifact": "bench/tg-p14-amd-recovery-and-pure-attention-landing/phase2_final_result.json (PASS_PROMOTION_CANDIDATE; practical roofline closeout)",
-      "rollback_flag": "DECODE_LIVE_SPLIT=0 exits the live-split default; no manifest fallback route row remains",
-      "purity_status": "search_generated_promoted",
-      "next_action": "keep promoted; no handwritten attention kernel on the hot path",
-      "current_default": false,
-      "in_manifest": true,
-      "provenance": "machine_authored_generated",
-      "replacement_scope": "",
-      "final_default_allowed": true
-    },
     {
       "route_id": "prefill_v2_scheduler_matmul_default",
       "workload": "prefill",

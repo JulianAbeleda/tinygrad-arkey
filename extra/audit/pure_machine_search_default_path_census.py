@@ -61,7 +61,7 @@ CENSUS_OVERLAY = [
     "next_action": "keep promoted; BoltBeam owns Q6_K generated selection; TG-P4/P5 remain",
   }),
   # ----- decode attention -----
-  ("decode_flash_live_split_g4_8b_kvboth", {
+  ("decode_flash_live_split_g4_kvboth", {
     "shape_guard": "B=1 Hq=32 Hkv=8 Hd=128 G=4 ctx>=512",
     "writer": "generated",
     "selector": "BoltBeam_route_policy_or_env_default",
@@ -71,15 +71,15 @@ CENSUS_OVERLAY = [
     "rollback_flag": "DECODE_LIVE_SPLIT=0 exits the live-split default; no manifest fallback route row remains",
     "next_action": "keep promoted; no handwritten attention kernel on the hot path",
   }),
-  ("decode_flash_block_tile_g5_konly", {
-    "shape_guard": "B=1 Hq=40 Hkv=8 Hd=128 ctx>=512",
+  ("decode_flash_live_split_g5_kvboth", {
+    "shape_guard": "B=1 Hq=40 Hkv=8 Hd=128 G=5 ctx>=512 KV_BOTH",
     "writer": "generated",
     "selector": "BoltBeam_route_policy_or_env_default",
-    "route_guard": "tinygrad/llm/decode_routes.py attention live-split branch (structural class B=1,Hd=128,Hkv=8,Hq%Hkv==0; covers 14B Hq=40/G=5): QK_ROUTE_POLICY selected_route=decode_flash_block_tile_g5_konly if present, else DECODE_LIVE_SPLIT default 1; FlashDecodeAttentionSpec owns staging/geometry/combine",
+    "route_guard": "tinygrad/llm/decode_routes.py explicit G=5 KV_BOTH live-split candidate (B=1,Hq=40,Hkv=8,Hd=128,G=5) -> FlashDecodeAttentionSpec",
     "kernel_source": "extra/qk/decode/flash_decode_attention_spec.py FlashDecodeAttentionSpec -> live-split block tile path (staging='KV_BOTH', seqlen-bound per-split length)",
     "authority_artifact": "bench/gp-track/gp4_latest.json (GP4_PASS_TIER_A); W==D 8B/14B/32B token-identical to generic flash ref; 14B tok/s flat 69.24@MAXC1024 vs 69.04@MAXC8192 (no-collapse)",
     "rollback_flag": "DECODE_LIVE_SPLIT=0 exits the live-split default; no manifest fallback route row remains",
-    "next_action": "keep promoted; 8B/14B/32B now share one modular structural-class route",
+    "next_action": "keep promoted; G5 KV_BOTH has its own route identity and evidence boundary",
   }),
   # ----- prefill attention -----
   ("prefill_flash_attention_generated", {

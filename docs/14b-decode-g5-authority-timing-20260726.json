@@ -1,0 +1,26 @@
+{
+  "scope": "14B decode G5 steady-state throughput recovery",
+  "date": "2026-07-26",
+  "harness": "extra/qk/decode/decode_tile_timing.py",
+  "device": "AMD gfx1100 wave32",
+  "lock": "/tmp/gpu-bench.lock",
+  "power_control": "/sys/class/drm/card1/device/power_dpm_force_performance_level",
+  "power_checks": ["auto before each config", "auto after each config", "auto after all configs"],
+  "warmups": 3,
+  "samples": 15,
+  "positive_control": {
+    "expected_match_count": 2,
+    "finite_nonzero_output": true,
+    "jit_runner_names_available": false,
+    "jit_runner_names_note": "Cached binaries do not expose auxiliary runner names; exact source/name match count is the accepted control."
+  },
+  "tile_formula": "Hkv * S * (ceil_to_16(ceil(Tc / S)) / 16)",
+  "configs": [
+    {"name":"G4_Hq32_Tc512","Hq":32,"Tc":512,"tiles":384,"median_ms":0.083436,"p10_ms":0.0822268,"p90_ms":0.1054562,"normalized_ns_per_tile":217.28125,"raw_ms":[0.419498,0.088265,0.083427,0.083436,0.083738,0.082576,0.082746,0.081994,0.082986,0.082805,0.084709,0.081292,0.088807,0.092063,0.114385]},
+    {"name":"G5_Hq40_Tc512","Hq":40,"Tc":512,"tiles":384,"median_ms":0.08524,"p10_ms":0.0839054,"p90_ms":0.0900234,"normalized_ns_per_tile":222.0,"raw_ms":[0.425669,0.090781,0.088887,0.08524,0.087334,0.085951,0.084989,0.08478,0.085511,0.083777,0.084098,0.084458,0.083577,0.086352,0.084379]},
+    {"name":"G4_Hq32_Tc4096","Hq":32,"Tc":4096,"tiles":2304,"median_ms":0.127941,"p10_ms":0.1263814,"p90_ms":0.1318556,"normalized_ns_per_tile":55.5299479167,"raw_ms":[0.304152,0.132148,0.129473,0.128581,0.127941,0.129804,0.127679,0.126628,0.128692,0.127008,0.12757,0.126628,0.131417,0.125636,0.126217]},
+    {"name":"G5_Hq40_Tc4096","Hq":40,"Tc":4096,"tiles":2304,"median_ms":0.169178,"p10_ms":0.1676234,"p90_ms":0.176651,"normalized_ns_per_tile":73.4288194444,"raw_ms":[0.346571,0.172814,0.169889,0.168266,0.169178,0.167355,0.169007,0.168026,0.169188,0.167244,0.176561,0.176711,0.17021,0.168546,0.168797]}
+  ],
+  "ratios": {"G5_over_G4_shallow":1.021715,"G5_over_G4_deep":1.322285},
+  "verdict": "AUTHORITY_COMPLETE_G5_DEEP_CLIFF_REPRODUCED"
+}

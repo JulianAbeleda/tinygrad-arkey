@@ -304,3 +304,17 @@ def test_flash_decode_binding_has_fixed_production_parameters(monkeypatch):
   assert (binding.target, binding.split_size, binding.staging) == ("AMD", 48, "KV_BOTH")
   assert decode_routes.FLASH_DECODE_CANDIDATE.bind(2, 32, 8, 128, "AMD") is None
   assert decode_routes.FLASH_DECODE_CANDIDATE.bind(1, 32, 8, 128, "CPU") is None
+
+
+def test_flash_decode_binding_splits_g4_and_g5_route_identity_cpu_only():
+  g4 = decode_routes.FLASH_DECODE_CANDIDATE.bind(1, 32, 8, 128, "AMD")
+  g5 = decode_routes.FLASH_DECODE_G5_CANDIDATE.bind(1, 40, 8, 128, "AMD")
+  assert g4 is not None and g4.route_id == "decode_flash_live_split_g4_kvboth"
+  assert g5 is not None and g5.route_id == "decode_flash_live_split_g5_kvboth"
+  assert (g4.split_size, g4.staging) == (48, "KV_BOTH")
+  assert (g5.split_size, g5.staging) == (48, "KV_BOTH")
+  assert decode_routes.FLASH_DECODE_CANDIDATE.bind(1, 40, 8, 128, "AMD") is None
+  assert decode_routes.FLASH_DECODE_G5_CANDIDATE.bind(1, 32, 8, 128, "AMD") is None
+  for hq in (24, 36, 48):
+    assert decode_routes.FLASH_DECODE_CANDIDATE.bind(1, hq, 8, 128, "AMD") is None
+    assert decode_routes.FLASH_DECODE_G5_CANDIDATE.bind(1, hq, 8, 128, "AMD") is None

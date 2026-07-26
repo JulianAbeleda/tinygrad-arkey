@@ -119,16 +119,22 @@ class _FlashDecodeCandidate:
   candidate_id: str = "attention_decode.flash_live_split"
   route_id: str = "decode_flash_live_split_g4_kvboth"
   target: str = "AMD"
+  query_heads: int = 32
   split_size: int = 48
   staging: str = "KV_BOTH"
 
   def bind(self, B:int, Hq:int, Hkv:int, Hd:int, device:str) -> _FlashDecodeBinding | None:
     if not (device == self.target or device.startswith(self.target+":")): return None
-    if B != 1 or Hq <= 0 or Hd != 128 or Hkv != 8 or Hq % Hkv != 0: return None
+    if B != 1 or Hq != self.query_heads or Hd != 128 or Hkv != 8: return None
     return _FlashDecodeBinding(self.candidate_id, self.route_id, self.target, B, Hq, Hkv, Hd,
                                self.split_size, self.staging)
 
 FLASH_DECODE_CANDIDATE = _FlashDecodeCandidate()
+FLASH_DECODE_G5_CANDIDATE = _FlashDecodeCandidate(
+  candidate_id="attention_decode.flash_live_split_g5",
+  route_id="decode_flash_live_split_g5_kvboth",
+  query_heads=40,
+)
 
 def flash_decode_attention_route(q:Tensor, assigned_kv:Tensor, start_pos:int|UOp, T:int|UOp, B:int,
                                  Hq:int, Hkv:int, Hd:int, max_context:int, kv_scale:Tensor|None=None,
@@ -138,7 +144,8 @@ def flash_decode_attention_route(q:Tensor, assigned_kv:Tensor, start_pos:int|UOp
   # full-ring (ctx>=N): the ring buffer is full and start_pos is the wrapped WRITE slot, so the live read length is the
   # whole buffer (all MAXC slots valid) -- a CONCRETE Tc, not vsp+T. Keeps the graph's read extent constant across wrap.
   _tc = MAXC if ring_full else (vsp + T)
-  binding = FLASH_DECODE_CANDIDATE.bind(B, Hq, Hkv, Hd, str(q.device))
+  candidate = FLASH_DECODE_G5_CANDIDATE if Hq == FLASH_DECODE_G5_CANDIDATE.query_heads else FLASH_DECODE_CANDIDATE
+  binding = candidate.bind(B, Hq, Hkv, Hd, str(q.device))
   # KV-quant (assigned_kv int8 + kv_scale) and rope-at-read (assigned_kv holds UN-roped K, rotated in-kernel from
   # `freqs`) are BOTH only supported on the live-split route -- every other route here reads fp16 pre-roped KV and would
   # silently misread. Fail loud rather than emit a phantom result. The live-split path below threads kv_scale + freqs.

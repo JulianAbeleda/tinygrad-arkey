@@ -13,7 +13,7 @@ from tinygrad.llm.device_facts import scan_device_facts
 from tinygrad.llm.gguf import MODEL_PARAMETER_ALLOCATION_OWNER, gguf_load, gguf_load_metadata, gguf_load_with_metadata
 from tinygrad.llm.gguf_memory_scan import RuntimeGeometry, selected_gguf_backing_bytes
 from tinygrad.llm import route_ops as qk_ops
-from tinygrad.llm.decode_routes import FLASH_DECODE_CANDIDATE, flash_decode_attention_route
+from tinygrad.llm.decode_routes import FLASH_DECODE_CANDIDATE, FLASH_DECODE_G5_CANDIDATE, flash_decode_attention_route
 from tinygrad.llm.prefill_policy import (
   immutable_prefill_policy, prefill_concrete_kv_auto_decision, prefill_policy_strategy,
   prefill_policy_uses_overlay, prefill_v2_validate_ubatch, select_prefill_runtime_policy,
@@ -1214,8 +1214,8 @@ class Transformer:
       workload_reuse=_workload_reuse)
     _workload_reuse = bool(_runtime_policy.get("workload_reuse", False))
     _concrete_kv, _ = prefill_concrete_kv_auto_decision(_workload_reuse, _v2_on)
-    _flash_decode = FLASH_DECODE_CANDIDATE.bind(1, n_heads, n_kv_heads, head_dim,
-                                                _device_facts.selected_device) is not None
+    _flash_decode = any(candidate.bind(1, n_heads, n_kv_heads, head_dim, _device_facts.selected_device) is not None
+                        for candidate in (FLASH_DECODE_CANDIDATE, FLASH_DECODE_G5_CANDIDATE))
 
     # Permute RoPE weights from interleaved to half-split layout.
     for name in state_dict:
