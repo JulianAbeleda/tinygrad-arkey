@@ -13,7 +13,7 @@ import functools
 from tinygrad.helpers import prod
 from tinygrad.uop.ops import UOp, Ops, dtypes, AxisType, AddrSpace
 from tinygrad.dtype import PtrDType
-from tinygrad.uop.ops import identity_element, CompositeReduce, AccumulatorSlot
+from tinygrad.uop.ops import identity_element, CompositeReduce, AccumulatorSlot, CompositeReduceTag, composite_reduce_provenance
 
 def validate_composite_state(result, composite):
     """Require one state value per declared accumulator slot.
@@ -303,7 +303,7 @@ def _lower_composite_no_range_pm(red):
     auxiliary_inputs = candidates[-ninputs:] if ninputs else ()
     result = _handle_no_range_generic(red.src[0], composite, red, auxiliary_inputs)
     # Keep the UOp constructor's source ABI explicit for one-slot combines.
-    return UOp(Ops.TUPLE, dtypes.void, result if isinstance(result, tuple) else (result,)).replace(tag=("composite_reduce", composite))
+    return UOp(Ops.TUPLE, dtypes.void, result if isinstance(result, tuple) else (result,)).replace(tag=CompositeReduceTag(composite))
 
 def resolve_reduce_slot_tensor(slot):
   """Graph-local projection from the structured composite reduction result."""
@@ -327,8 +327,7 @@ def resolve_reduce_slot_tensor(slot):
   # This leaves no TUPLE/GETTUPLE operation for the renderer and preserves
   # the one reduction's shared END dependencies.
   result = src.src[slot.arg]
-  metadata = src.tag if isinstance(src.tag, tuple) and len(src.tag) == 2 and src.tag[0] == "composite_reduce" else None
-  composite = metadata[1] if metadata is not None else None
+  composite = composite_reduce_provenance(src.tag)
   # A generic COMPOSITE_ACCUMULATOR lowers to a tagged tuple too, but it is
   # only an opt-in carrier adapter, not a REDUCE producer.  REDUCE_SLOT must
   # never infer projection semantics from its shape metadata.
@@ -381,6 +380,7 @@ def resolve_composite_reduce_slot_prebufferize(slot):
   def find_composite(value, seen=None):
     """Find an actual CompositeReduce in bounded UOp metadata ancestry."""
     if isinstance(value, CompositeReduce): return value
+    if isinstance(value, CompositeReduceTag): return value.composite
     if seen is None: seen = set()
     if isinstance(value, UOp):
       if value in seen: return None

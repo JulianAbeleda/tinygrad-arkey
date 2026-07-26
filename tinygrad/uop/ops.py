@@ -565,7 +565,8 @@ class UOp(RandMixin, metaclass=UOpMetaClass):
     # Ordinary INDEX nodes remain untagged and therefore cannot masquerade as
     # REDUCE_SLOT projections.
     tag = kwargs.pop("tag", None)
-    if tag is None and isinstance(self.tag, tuple) and self.tag and self.tag[0] in ("composite_slot", "composite_reduce", "composite_view"):
+    if tag is None and (isinstance(self.tag, CompositeReduceTag) or
+                        (isinstance(self.tag, tuple) and self.tag and self.tag[0] in ("composite_slot", "composite_reduce", "composite_view"))):
       tag = ("composite_view", self.tag)
     return UOp(Ops.INDEX, kwargs.pop("dtype", self.dtype if ptr else self.dtype.base), (self,)+tuple([x for x in srcs if x is not None]), tag=tag, **kwargs)
   def __getitem__(self, idx):
@@ -1391,6 +1392,28 @@ class CompositeReduce(NamedTuple):
   attention_grid: Any = None
   attention_causal: bool = False
   attention_context: Any = None
+
+@dataclass(frozen=True)
+class CompositeReduceTag:
+  """Typed provenance for a composite-reduce TUPLE result.
+
+  Replaces the legacy ``("composite_reduce", composite)`` 2-tuple tag (LR-020).
+  Producers should attach this via ``UOp.replace(tag=CompositeReduceTag(composite))``.
+  Consumers should read provenance through ``composite_reduce_provenance()``, which
+  also accepts the legacy tuple form so producers and consumers can migrate
+  independently.
+  """
+  composite: 'CompositeReduce'
+
+def composite_reduce_provenance(tag) -> 'CompositeReduce|None':
+  """Compatibility reader: recover the CompositeReduce from a tag, whether it is
+  the typed CompositeReduceTag or the legacy ("composite_reduce", composite) tuple.
+
+  Returns None if `tag` carries no composite-reduce provenance.
+  """
+  if isinstance(tag, CompositeReduceTag): return tag.composite
+  if isinstance(tag, tuple) and len(tag) == 2 and tag[0] == "composite_reduce": return tag[1]
+  return None
 
 class SharedAttentionCandidateContext(NamedTuple):
   profile: str
@@ -2690,11 +2713,12 @@ def _clear_non_composite_tag(x: UOp):
   # Backend scheduling may clear ordinary register/optimization tags, but
   # validated composite provenance is part of the REDUCE_SLOT type contract.
   if x.tag is None: return None
+  if isinstance(x.tag, CompositeReduceTag): return None
   if isinstance(x.tag, tuple) and len(x.tag) == 2:
     kind, payload = x.tag
     valid = (kind in ("composite_reduce", "composite_slot") and hasattr(payload, "slots")) or \
-            (kind == "composite_view" and isinstance(payload, tuple) and len(payload) >= 2 and
-             payload[0] in ("composite_reduce", "composite_slot", "composite_view"))
+            (kind == "composite_view" and (isinstance(payload, CompositeReduceTag) or
+             (isinstance(payload, tuple) and len(payload) >= 2 and payload[0] in ("composite_reduce", "composite_slot", "composite_view"))))
     if valid: return None
   return x.replace(tag=None)
 remove_all_tags = PatternMatcher([(UPat(GroupOp.All, name="x"), _clear_non_composite_tag)])

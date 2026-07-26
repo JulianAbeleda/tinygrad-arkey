@@ -1,7 +1,7 @@
 import functools
 from dataclasses import dataclass
 from tinygrad.dtype import dtypes, DType, AddrSpace
-from tinygrad.uop.ops import UOp, Ops, UPat, PatternMatcher, GroupOp, RegisterResidentAccumulator, identity_element, AxisType
+from tinygrad.uop.ops import UOp, Ops, UPat, PatternMatcher, GroupOp, RegisterResidentAccumulator, identity_element, AxisType, CompositeReduceTag
 from tinygrad.helpers import flatten, prod
 
 # *** Ops.REDUCE -> Ops.DEFINE_ACC ***
@@ -181,7 +181,7 @@ def reduce_to_acc(ctx:ReduceContext, red:UOp):
       from tinygrad.codegen.late.composite_combines import _handle_no_range_generic
       # UOp src is always a tuple; a one-slot combine may return a scalar UOp.
       result = _handle_no_range_generic(inp, composite, red, auxiliary_inputs)
-      return UOp(Ops.TUPLE, dtypes.void, result if isinstance(result, tuple) else (result,)).replace(tag=("composite_reduce", composite))
+      return UOp(Ops.TUPLE, dtypes.void, result if isinstance(result, tuple) else (result,)).replace(tag=CompositeReduceTag(composite))
     rngs = tuple(UOp.range(UOp.const(dtypes.weakint, red.src[0].shape[i]), i, AxisType.REDUCE) for i in axis)
     red = UOp(Ops.REDUCE, red.dtype, src=(red.src[0],) + rngs + extra_srcs, arg=(red.arg[0], ()))
     inp, reduce_range = red.src[0], rngs
@@ -240,7 +240,7 @@ def reduce_to_acc(ctx:ReduceContext, red:UOp):
         raise RuntimeError(f"unknown composite combine {composite.combine_fn!r}")
       combine_fn = combine_fn or _independent_slots
       result = validate_composite_state(combine_fn(ctx, accs, acc_reads, inp, composite, input_ranges, reduce_range, red, v_inp=v_inp), composite)
-      return UOp(Ops.TUPLE, dtypes.void, result if isinstance(result, tuple) else (result,)).replace(tag=("composite_reduce", composite))
+      return UOp(Ops.TUPLE, dtypes.void, result if isinstance(result, tuple) else (result,)).replace(tag=CompositeReduceTag(composite))
 
     if not isinstance(red.arg[0], Ops):
       raise RuntimeError(f"non-ALU reduction reached ordinary lowering: arg={red.arg!r}, composite={composite!r}, src_ops={[x.op for x in red.src]}")

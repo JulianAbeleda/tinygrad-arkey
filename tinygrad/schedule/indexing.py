@@ -3,7 +3,7 @@ import functools, itertools
 from dataclasses import dataclass, field, replace
 from tinygrad.dtype import dtypes, AddrSpace
 from tinygrad.uop.ops import PatternMatcher, UPat, Ops, UOp, resolve, GroupOp, graph_rewrite, sint, AxisType, profile_matches
-from tinygrad.uop.ops import consumer_map_from_toposort, gate_kernel_sink
+from tinygrad.uop.ops import consumer_map_from_toposort, gate_kernel_sink, CompositeReduceTag
 from tinygrad.uop.symbolic import symbolic, pm_simplify_valid, pm_drop_and_clauses
 from tinygrad.helpers import argsort, all_same, cpu_profile, PCONTIG, colored, Context, SPEC
 
@@ -88,7 +88,8 @@ def create_bufferize_and_index_based_on_ranges(ctx:IndexingContext, x:UOp):
         # the subsequent INDEX remains a typed REDUCE_SLOT view.  Never copy
         # arbitrary tags onto STAGE nodes.
         candidate_tag = s.tag if s.tag is not None else new_src.tag
-        stage_tag = candidate_tag if isinstance(candidate_tag, tuple) and len(candidate_tag) == 2 and candidate_tag[0] in ("composite_reduce", "composite_slot", "composite_view") else None
+        stage_tag = candidate_tag if (isinstance(candidate_tag, CompositeReduceTag) or
+          (isinstance(candidate_tag, tuple) and len(candidate_tag) == 2 and candidate_tag[0] in ("composite_reduce", "composite_slot", "composite_view"))) else None
         new_src = UOp(Ops.STAGE, s.dtype, src=(new_src,)+closed_ranges, arg=opts, tag=stage_tag)
         if x in ctx.range_map: new_src = new_src.index(*[r for i,r in enumerate(ctx.range_map[x][0]) if i in realized_ranges])
     new_srcs.append(new_src)
