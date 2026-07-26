@@ -16,6 +16,7 @@ import bisect
 import json
 import os
 import pathlib
+import sys
 import time
 from contextlib import contextmanager
 from typing import Any
@@ -34,6 +35,11 @@ ROOT = pathlib.Path(__file__).resolve().parents[3]
 ARTIFACT_DIR = ROOT / "bench/prefill-whole-synced"
 PREFILL_PROMOTED_CANDIDATE_ROUTE = promoted_prefill_candidate_policy()["route_id"]
 PREFILL_GENERATED_DENSE_ROLES = frozenset(("attn_qo", "attn_kv", "ffn_down", "ffn_gate_up"))
+
+
+def _lifecycle_marker(enabled: bool, phase: str) -> None:
+  """Emit an immediately visible, opt-in diagnostic phase boundary."""
+  if enabled: print(f"PREFILL_LIFECYCLE phase={phase}", file=sys.stderr, flush=True)
 
 
 def _git_short() -> str:
@@ -325,7 +331,8 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
                       require_route: str | None = None, comparator_id: str | None = None,
                       candidate_id: str | None = None, primitive_class: str | None = None,
                       threshold: dict[str, Any] | None = None, ledger: str | None = None,
-                      quality_gate: dict[str, Any] | None = None, model_profile_id: str | None = None) -> dict[str, Any]:
+                      quality_gate: dict[str, Any] | None = None, model_profile_id: str | None = None,
+                      lifecycle_markers: bool = False) -> dict[str, Any]:
   if K < 1 or warmups < 0 or rounds < 1: raise ValueError("K >= 1, warmups >= 0, and rounds >= 1 are required")
   model_profile = resolve_prefill_model_profile(model_profile_id, model_path=model_path)
   for key, value in model_profile.env.items(): os.environ.setdefault(key, value)
@@ -337,6 +344,7 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
 
   dev = Device["AMD"]
   model, _ = load_model_and_tokenizer(model_path, max_context, seed=20260617)
+  _lifecycle_marker(lifecycle_markers, "model_load_complete")
   runtime_route_env = _runtime_route_env(model)
   for block in model.blk: block._use_flash, block._prefill_v2 = True, True
   temp = Tensor([0.0])
@@ -355,13 +363,28 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
     finally:
       pr._WARMSTART_OPTS = saved
 
+  first_prefill = True
+
+  def first_realized_prefill(sp_int: int) -> None:
+    nonlocal first_prefill
+    if first_prefill:
+      _lifecycle_marker(lifecycle_markers, "graph_construction_start")
+      _lifecycle_marker(lifecycle_markers, "compile_start")
+      _lifecycle_marker(lifecycle_markers, "first_prefill_launch_start")
+      prefill_call(sp_int).realize()
+      _lifecycle_marker(lifecycle_markers, "first_prefill_launch_end")
+      _lifecycle_marker(lifecycle_markers, "compile_end")
+      _lifecycle_marker(lifecycle_markers, "graph_construction_end")
+      first_prefill = False
+    else: prefill_call(sp_int).realize()
+
   def burst(sp_int: int) -> dict[str, Any]:
     # Measure the real production path: model.__call__ with a concrete int start_pos + concrete chunk.shape[1]=512
     # takes the prefill_v2_jits[start_pos] per-start_pos branch (model.py:788-789) AND installs the warmstart
     # schedule table around the jit call (model.py:797-801). use_flash=True is required -- else __call__ clobbers
     # each block._use_flash to False (model.py:768). A harness-level TinyJit(model.forward) would bypass __call__
     # entirely, leaving _WARMSTART_OPTS empty (the phantom-1741 bench bug).
-    for _ in range(warmups): prefill_call(sp_int).realize()
+    for _ in range(warmups): first_realized_prefill(sp_int)
     dev.synchronize()
     profile_start = len(Compiled.profile_events)
     ts = []
@@ -369,7 +392,7 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
       for _ in range(rounds):
         dev.synchronize()
         t0 = time.perf_counter()
-        for _ in range(K): prefill_call(sp_int).realize()
+        for _ in range(K): first_realized_prefill(sp_int)
         dev.synchronize()
         ts.append((time.perf_counter() - t0) / K * 1e3)
     profile_events = list(Compiled.profile_events[profile_start:])
@@ -483,6 +506,9 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
   ap.add_argument("--artifact", default="", help="write JSON artifact to this path; default writes latest.json")
   ap.add_argument("--no-artifact", action="store_true")
   ap.add_argument("--json", action="store_true", help="print JSON report after the human summary")
+  ap.add_argument("--lifecycle-markers", action="store_true",
+                  default=os.environ.get("PREFILL_WHOLE_LIFECYCLE_MARKERS", "0") != "0",
+                  help="emit flushed stderr phase markers for model load, first prefill capture, and artifact write")
   ap.add_argument("--logits-only", action="store_true", default=os.environ.get("PREFILL_WHOLE_LOGITS_ONLY", "0") != "0",
                   help="time prefill logits and skip the final sampling/argmax expression")
   ap.add_argument("--require-route", default="",
@@ -517,12 +543,15 @@ def main(argv: list[str] | None = None) -> dict[str, Any]:
                              comparator_id=args.comparator_id or None, candidate_id=args.candidate_id or None,
                              primitive_class=args.primitive_class or None, threshold=threshold,
                              ledger=args.ledger or None, quality_gate=quality_gate,
-                             model_profile_id=args.model_profile or None)
+                             model_profile_id=args.model_profile or None,
+                             lifecycle_markers=args.lifecycle_markers)
   if not args.no_artifact:
     out = pathlib.Path(args.artifact) if args.artifact else ARTIFACT_DIR / "latest.json"
     if not out.is_absolute(): out = ROOT / out
     out.parent.mkdir(parents=True, exist_ok=True)
+    _lifecycle_marker(args.lifecycle_markers, "artifact_write_start")
     out.write_text(json.dumps(report, indent=2))
+    _lifecycle_marker(args.lifecycle_markers, "artifact_write_end")
   if args.json: print(json.dumps(report, indent=2))
   return report
 
