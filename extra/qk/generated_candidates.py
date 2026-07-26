@@ -49,7 +49,7 @@ def _lifecycle_from_manifest(route_id:str) -> str:
   status = str(_manifest(route_id).get("status", ""))
   if status in ("promoted_default", "default_shipped"): return "shipped"
   if status == "research": return "diagnostic"
-  if status in ("correct_not_fast", "superseded_rollback"): return "refuted"
+  if status in ("refuted", "correct_not_fast", "superseded_rollback"): return "refuted"
   return "deferred"
 
 

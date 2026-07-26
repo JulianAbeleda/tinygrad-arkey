@@ -1,8 +1,8 @@
 # Codebase organization audit
 
-Audited commit: `mac-first-boot-20260610-3414-g9ec705112-dirty` (dirty: True)
+Audited commit: `mac-first-boot-20260610-3416-ga59eabb79-dirty` (dirty: True)
 Scope: `<repository>` | manifest coverage required for: extra/qk/
-Verdict: **ORG_R1_BLOCKED_ORGANIZATION_DRIFT** (1 hard errors, 94 warnings)
+Verdict: **ORG_R1_BLOCKED_ORGANIZATION_DRIFT** (1 hard errors, 89 warnings)
 
 > Machine-derived facts (discovery, LOC, imports, references, coverage, boundary checks) are produced by this
 > script. Every purpose, role, status, disposition, action, and promotion/prune judgment below is human-authored
@@ -10,9 +10,9 @@ Verdict: **ORG_R1_BLOCKED_ORGANIZATION_DRIFT** (1 hard errors, 94 warnings)
 
 ## Coverage
 
-- Authored: 472 files / 74619 token-bearing LOC (sz.py rules)
+- Authored: 460 files / 73287 token-bearing LOC (sz.py rules)
 - Generated (reported, never manifested): 1 files / 57 LOC
-- Manifest scope: 116 files / 17514 LOC (116 explicit records, 0 covered by group rule, 0 uncovered)
+- Manifest scope: 107 files / 16338 LOC (107 explicit records, 0 covered by group rule, 0 uncovered)
 
 ## LOC by domain
 
@@ -23,40 +23,39 @@ Verdict: **ORG_R1_BLOCKED_ORGANIZATION_DRIFT** (1 hard errors, 94 warnings)
 | attention_prefill | 4 | 574 |
 | codegen_lowering | 15 | 2207 |
 | evidence | 10 | 1608 |
-| measurement | 18 | 2101 |
-| quant_mmq | 26 | 4351 |
-| route_authority | 20 | 4221 |
-| search_promotion | 9 | 1060 |
-| unclassified | 356 | 57105 |
+| measurement | 17 | 2063 |
+| quant_mmq | 23 | 3668 |
+| route_authority | 16 | 3819 |
+| search_promotion | 8 | 1007 |
+| unclassified | 353 | 56949 |
 
 ## LOC by role
 
 | role | files | loc |
 |---|---|---|
 | adapter | 12 | 1153 |
-| authority | 63 | 10874 |
+| authority | 60 | 10550 |
 | benchmark | 2 | 99 |
-| diagnostic | 12 | 1407 |
+| diagnostic | 11 | 1354 |
 | evidence | 4 | 385 |
-| execution | 11 | 2284 |
+| execution | 10 | 1869 |
 | integration | 2 | 199 |
 | research | 5 | 593 |
-| test | 5 | 520 |
-| unclassified | 356 | 57105 |
+| test | 1 | 136 |
+| unclassified | 353 | 56949 |
 
 ## LOC by status
 
 | status | files | loc |
 |---|---|---|
-| active_regression | 5 | 456 |
-| active_research | 25 | 5305 |
+| active_research | 22 | 4623 |
 | fallback | 5 | 272 |
 | historical_one_off | 1 | 43 |
-| production | 67 | 9890 |
+| production | 66 | 9852 |
 | promoted_default | 6 | 648 |
 | refuted | 1 | 21 |
 | retained_reference | 4 | 519 |
-| unclassified | 356 | 57105 |
+| unclassified | 353 | 56949 |
 | unresolved_reproducer | 2 | 360 |
 
 ## LOC by disposition
@@ -64,9 +63,9 @@ Verdict: **ORG_R1_BLOCKED_ORGANIZATION_DRIFT** (1 hard errors, 94 warnings)
 | disposition | files | loc |
 |---|---|---|
 | consolidate | 4 | 2095 |
-| investigate | 5 | 454 |
-| keep | 107 | 14965 |
-| unclassified | 356 | 57105 |
+| investigate | 3 | 307 |
+| keep | 100 | 13936 |
+| unclassified | 353 | 56949 |
 
 ## Default-path source footprint
 
@@ -145,12 +144,12 @@ Verdict: **ORG_R1_BLOCKED_ORGANIZATION_DRIFT** (1 hard errors, 94 warnings)
 | 660 | `tinygrad/schedule/rangeify.py` | None |
 | 634 | `tinygrad/runtime/ops_nv.py` | None |
 | 619 | `tinygrad/renderer/isa/x86.py` | None |
-| 600 | `test/unit/test_runtime_specs.py` | None |
+| 601 | `test/unit/test_runtime_specs.py` | None |
 | 598 | `tinygrad/codegen/opt/postrange.py` | None |
 | 596 | `tinygrad/mixin/__init__.py` | None |
 | 576 | `extra/audit/codebase_organization_audit.py` | None |
 | 576 | `tinygrad/renderer/amd/sqtt.py` | None |
-| 560 | `test/unit/test_amd_isa_wmma.py` | None |
+| 556 | `extra/llm/cli.py` | None |
 
 ## Duplicate authority
 
@@ -182,6 +181,7 @@ for human classification, not a death sentence.
 - `extra/hardware/sqtt/rgptool.py`
 - `extra/llm/llama_kv_ctx_slope_bench.py`
 - `extra/llm/sft_smoke_train.py`
+- `extra/qk/q4k_fused_mmq_contract.py`
 - `extra/remote/bench.py`
 - `extra/tools/amd_isa_generate.py`
 - `extra/tools/check_doc_links.py`
@@ -295,9 +295,6 @@ for human classification, not a death sentence.
 - `test/unit/test_q4k_q8_mmq_uop_validation.py`
 - `test/unit/test_q4k_q8_mmq_wide_grid.py`
 - `test/unit/test_q4k_w_f16_decode.py`
-- `test/unit/test_q4k_wmma_scheduler_decomposition.py`
-- `test/unit/test_q4k_wmma_tiled_gates.py`
-- `test/unit/test_q4k_wmma_value.py`
 - `test/unit/test_qk_route_purity.py`
 - `test/unit/test_rangeify_multireduce.py`
 - `test/unit/test_recompute_hostile_cost_gate.py`
@@ -336,12 +333,12 @@ for human classification, not a death sentence.
 
 | test_role | count | files |
 |---|---|---|
-| active_regression | 11 | `extra/qk/clock_pin.py`, `extra/qk/decode/decode_codegen_identity_check.py`, `extra/qk/dynamic_tile_owner.py`, `extra/qk/live_split_geometry.py`, `extra/qk/packed_wmma_compile_gate.py`, `extra/qk/prefill/pure_register_compile_capture.py`, `extra/qk/prefill/pure_register_evaluation_gate.py`, `extra/qk/prefill/q4k_prefill_route_spec.py`, `extra/qk/prefill/q4k_q8_mmq_prefill_spec.py`, `extra/qk/q4k_wmma_tiled_role_shape_exec_gate.py`, `extra/qk/timing_harness.py` |
-| active_validation | 32 | `extra/qk/amd_isa_proof.py`, `extra/qk/amd_isa_renderer_policy.py`, `extra/qk/amd_resource_artifact.py`, `extra/qk/bench.py`, `extra/qk/benchmark_shared_attention.py`, `extra/qk/decode/decode_runtime_overhead.py`, `extra/qk/generated_candidates.py`, `extra/qk/memory_adaptive_allocation_observer.py`, `extra/qk/memory_adaptive_policy.py`, `extra/qk/memory_adaptive_runtime_collector.py`, `extra/qk/mmq_atom_boundary.py`, `extra/qk/mmq_ds4_logical_emitter.py`, `extra/qk/mmq_epoch_manifest_export.py`, `extra/qk/mmq_lifecycle.py`, `extra/qk/mmq_llama_differential.py`, `extra/qk/mmq_llama_packed_operands.py`, `extra/qk/mmq_llama_record_producers.py`, `extra/qk/mmq_logical_vocabulary.py`, `extra/qk/mmq_q4k_q8_atom.py`, `extra/qk/mmq_q4k_q8_reference.py`, `extra/qk/prefill/packed_wmma_correctness_canary.py`, `extra/qk/prefill/prefill_graph_gemm_route.py`, `extra/qk/prefill/prefill_harness.py`, `extra/qk/prefill/prefill_int8_wmma_spec.py`, `extra/qk/prefill/prefill_mmq_parity_gate.py`, `extra/qk/prefill/prefill_primitive_spec.py`, `extra/qk/prefill/prefill_whole_synced.py`, `extra/qk/pure_search_guard.py`, `extra/qk/q4k_q8_mmq_uop.py`, `extra/qk/shared_attention_capture.py`, `extra/qk/shared_attention_evidence.py`, `extra/qk/shared_attention_promotion.py` |
-| operational_tool | 15 | `extra/qk/decode/current_decode_execution_adapter.py`, `extra/qk/decode/decode_harness.py`, `extra/qk/generate_shared_attention_captures.py`, `extra/qk/mmq_compile_evidence.py`, `extra/qk/packed_wmma_canary_evidence.py`, `extra/qk/phase_abi_v1_resource_probe.py`, `extra/qk/prefill/host_safety_canary.py`, `extra/qk/prefill/packed_wmma_prefill_promotion_gate.py`, `extra/qk/prefill/prefill_boltbeam_trace.py`, `extra/qk/prefill/prefill_causal_tile_skip_promotion_gate.py`, `extra/qk/prefill/prefill_flash_e2e_parity.py`, `extra/qk/prefill/prefill_flash_perf.py`, `extra/qk/prefill/prefill_softmax_reduce_fuse_promotion_gate.py`, `extra/qk/q4k_q8_mmq_uop_validation.py`, `extra/qk/q4k_wmma_tiled_lowering_feasibility.py` |
-| orphan_unknown | 3 | `extra/qk/bubblebeam_futuresight.py`, `extra/qk/q4k_wmma_tile_lowering.py`, `extra/qk/quant_specs.py` |
+| active_regression | 10 | `extra/qk/clock_pin.py`, `extra/qk/decode/decode_codegen_identity_check.py`, `extra/qk/dynamic_tile_owner.py`, `extra/qk/live_split_geometry.py`, `extra/qk/packed_wmma_compile_gate.py`, `extra/qk/prefill/pure_register_compile_capture.py`, `extra/qk/prefill/pure_register_evaluation_gate.py`, `extra/qk/prefill/q4k_prefill_route_spec.py`, `extra/qk/prefill/q4k_q8_mmq_prefill_spec.py`, `extra/qk/timing_harness.py` |
+| active_validation | 30 | `extra/qk/amd_isa_proof.py`, `extra/qk/amd_isa_renderer_policy.py`, `extra/qk/amd_resource_artifact.py`, `extra/qk/bench.py`, `extra/qk/benchmark_shared_attention.py`, `extra/qk/decode/decode_runtime_overhead.py`, `extra/qk/generated_candidates.py`, `extra/qk/memory_adaptive_allocation_observer.py`, `extra/qk/memory_adaptive_policy.py`, `extra/qk/memory_adaptive_runtime_collector.py`, `extra/qk/mmq_atom_boundary.py`, `extra/qk/mmq_ds4_logical_emitter.py`, `extra/qk/mmq_epoch_manifest_export.py`, `extra/qk/mmq_lifecycle.py`, `extra/qk/mmq_llama_differential.py`, `extra/qk/mmq_llama_packed_operands.py`, `extra/qk/mmq_llama_record_producers.py`, `extra/qk/mmq_logical_vocabulary.py`, `extra/qk/mmq_q4k_q8_atom.py`, `extra/qk/mmq_q4k_q8_reference.py`, `extra/qk/prefill/packed_wmma_correctness_canary.py`, `extra/qk/prefill/prefill_graph_gemm_route.py`, `extra/qk/prefill/prefill_harness.py`, `extra/qk/prefill/prefill_primitive_spec.py`, `extra/qk/prefill/prefill_whole_synced.py`, `extra/qk/pure_search_guard.py`, `extra/qk/q4k_q8_mmq_uop.py`, `extra/qk/shared_attention_capture.py`, `extra/qk/shared_attention_evidence.py`, `extra/qk/shared_attention_promotion.py` |
+| operational_tool | 14 | `extra/qk/decode/current_decode_execution_adapter.py`, `extra/qk/decode/decode_harness.py`, `extra/qk/generate_shared_attention_captures.py`, `extra/qk/mmq_compile_evidence.py`, `extra/qk/packed_wmma_canary_evidence.py`, `extra/qk/phase_abi_v1_resource_probe.py`, `extra/qk/prefill/host_safety_canary.py`, `extra/qk/prefill/packed_wmma_prefill_promotion_gate.py`, `extra/qk/prefill/prefill_boltbeam_trace.py`, `extra/qk/prefill/prefill_causal_tile_skip_promotion_gate.py`, `extra/qk/prefill/prefill_flash_e2e_parity.py`, `extra/qk/prefill/prefill_flash_perf.py`, `extra/qk/prefill/prefill_softmax_reduce_fuse_promotion_gate.py`, `extra/qk/q4k_q8_mmq_uop_validation.py` |
+| orphan_unknown | 2 | `extra/qk/bubblebeam_futuresight.py`, `extra/qk/quant_specs.py` |
 | retained_reference | 3 | `extra/qk/mmq_ds4_probe_contract.py`, `extra/qk/mmq_llama_oracle.py`, `extra/qk/q4k_tile_loader.py` |
-| unresolved_reproducer | 8 | `extra/qk/benchmark_split_shared_attention.py`, `extra/qk/decode/decode_hd_sweep_numerics.py`, `extra/qk/prefill/prefill_hd_sweep_numerics.py`, `extra/qk/prefill/prefill_long_context_numerics.py`, `extra/qk/q4k_wmma_full_role_contract_gate.py`, `extra/qk/q4k_wmma_tiled_microgate.py`, `extra/qk/q4k_wmma_tiled_no_hand_kernel_gate.py`, `extra/qk/q4k_wmma_tiled_surface_gate.py` |
+| unresolved_reproducer | 4 | `extra/qk/benchmark_split_shared_attention.py`, `extra/qk/decode/decode_hd_sweep_numerics.py`, `extra/qk/prefill/prefill_hd_sweep_numerics.py`, `extra/qk/prefill/prefill_long_context_numerics.py` |
 
 ## Decouple candidates
 
@@ -365,6 +362,7 @@ None proposed at this evidence level.
 
 - **`extra/qk/p2_probe_1.py`** -- Six one-shot fusion-bisection probes whose conclusion is recorded in a doc and in production comments. (gross -44, +0, net -44) | evidence: zero inbound references of any kind; durable verdict in docs/flash-prefill-piece2-probe-20260721.md; conclusion echoed in tinygrad/schedule/flash_fusion.py, tinygrad/schedule/rangeify.py, tinygrad/codegen/opt/heuristic.py | tests: 
 - **`extra/qk/shared_attention_evidence_gate.py`** -- A validator for a bundle schema that no code in the repository ever produces. (gross -131, +0, net -131) | evidence: the schema string 'tinygrad.shared_attention_evidence_bundle.v1' appears exactly once repo-wide -- its own definition at extra/qk/shared_attention_evidence_gate.py:12; imported only by test/unit/test_shared_attention_evidence_gate.py; contrast: extra/qk/shared_attention_promotion.py gates COMPOSITE_ADMISSION_SCHEMA, which is produced and consumed live | tests: delete test/unit/test_shared_attention_evidence_gate.py with it
+- **`extra/qk/q4k_wmma_tile_lowering.py`** -- The q4k int8 WMMA-tiled campaign is closed: correct on all four Qwen3-14B role shapes, speed-refuted at 140 tok/s against a 364.5 tok/s direct-packed baseline, dispatch already removed in 45cfc399c. (gross -1138, +0, net -1138) | evidence: verdict recorded in route_manifest.py's note for prefill_q4k_int8_wmma_tiled_research; 45cfc399c (2026-07-21) removed the dispatch: 'superseded by the shipped scheduler-native packed-WMMA route'; last substantive change 05b67146a (2026-07-14); 383c71c72 (2026-07-25) was a path move only; its gate scanned prefill_routes.py for a q8_mode == 'wmma_tiled' branch that no longer exists, so it could never pass again; the strict-xfail wording 'WIP research; not yet PASS' was stale; 31 failures under -k 'wmma or q4k or mmq or prefill' before and after, byte-identical, all pre-existing | tests: 
 
 ## Promotion candidates
 
@@ -384,8 +382,9 @@ None.
 
 | path | class | former purpose | last campaign | replacement | commit | recovery | loc |
 |---|---|---|---|---|---|---|---|
-| `extra/qk/p2_probe_1.py` | delete_ready | Bisect where REDUCE-preserving fusion breaks in attention by walking max -> sum -> broadcast-subtract -> exp-sum -> softmax -> softmax@v under DEV=AMD TC_OPT=2. | flash-prefill Piece 2-A (2026-07-21) | docs/flash-prefill-piece2-probe-20260721.md | `9ec70511234f` | git show ad65bd05e951f6e460d167c207fdf3e97faf5c76 -- extra/qk/p2_probe_1.py ... p2_probe_6.py | 44 |
-| `extra/qk/shared_attention_evidence_gate.py` | delete_after_verdict_capture | Validate a shared-attention evidence bundle before admitting it as promotion evidence. | shared-attention evidence pipeline | extra/qk/shared_attention_promotion.py (the gate that acts on a schema with a real producer) | `9ec70511234f` | git log --diff-filter=A -- extra/qk/shared_attention_evidence_gate.py | 131 |
+| `extra/qk/p2_probe_1.py` | delete_ready | Bisect where REDUCE-preserving fusion breaks in attention by walking max -> sum -> broadcast-subtract -> exp-sum -> softmax -> softmax@v under DEV=AMD TC_OPT=2. | flash-prefill Piece 2-A (2026-07-21) | docs/flash-prefill-piece2-probe-20260721.md | `a59eabb79a22` | git show ad65bd05e951f6e460d167c207fdf3e97faf5c76 -- extra/qk/p2_probe_1.py ... p2_probe_6.py | 44 |
+| `extra/qk/shared_attention_evidence_gate.py` | delete_after_verdict_capture | Validate a shared-attention evidence bundle before admitting it as promotion evidence. | shared-attention evidence pipeline | extra/qk/shared_attention_promotion.py (the gate that acts on a schema with a real producer) | `a59eabb79a22` | git log --diff-filter=A -- extra/qk/shared_attention_evidence_gate.py | 131 |
+| `extra/qk/q4k_wmma_tile_lowering.py` | delete_after_verdict_capture | Route Q4_K prefill matmuls through RDNA3 v_wmma_i32_16x16x16_iu8 int8 tensor-core tiles. | q4k int8 WMMA-tiled prefill (2026-07-05 to 2026-07-14) | docs/q4k-int8-wmma-tiled-campaign-retirement-20260726.md | `a59eabb79a22` | git show 05b67146a -- <path> | 1138 |
 
 ## Workflow inventory
 
@@ -419,8 +418,8 @@ None.
 
 ## Promotion budget
 
-- Budgeted (`tinygrad`, `bench`, `structure`): **34096 / 35000** -- headroom 904
-- Against the standing 30000 target: **4096 over**. sz.py:13 records 35000 as temporary headroom; the standing target is 30000
+- Budgeted (`tinygrad`, `bench`, `structure`): **34089 / 35000** -- headroom 911
+- Against the standing 30000 target: **4089 over**. sz.py:13 records 35000 as temporary headroom; the standing target is 30000
 - Default-path LOC currently sitting unbudgeted in `extra/`: **9228**
 - Net budget cost of pending promotions (moved minus deleted): 0
 - Declarative LOC a data-file conversion would remove from the budget entirely: 0
@@ -431,7 +430,7 @@ costs zero.
 
 ## LOC impact
 
-- **Realized** (actions A1, A14, A2, A3, A4, A5): gross -247, +35, net **-212**
+- **Realized** (actions A1, A14, A15, A2, A3, A4, A5, A9): gross -1385, +35, net **-1350**
 - Still proposed: gross -3, +0, net -3
 - LOC merely moved between directories (NOT a reduction): 60
 
@@ -524,14 +523,13 @@ costs zero.
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/runtime_specs.py is on the default production path from extra/ with no promotion or retention decision
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/warp_reduce_lowering.py is on the default production path from extra/ with no promotion or retention decision
 - **high_fan_in** (a widely-imported module is a de-facto authority): extra/qk/kernel_vocabulary.py is imported by 16 modules
-- **high_fan_in** (a widely-imported module is a de-facto authority): extra/qk/layout.py is imported by 30 modules
-- **high_fan_in** (a widely-imported module is a de-facto authority): extra/qk/route_manifest.py is imported by 21 modules
+- **high_fan_in** (a widely-imported module is a de-facto authority): extra/qk/layout.py is imported by 23 modules
+- **high_fan_in** (a widely-imported module is a de-facto authority): extra/qk/route_manifest.py is imported by 20 modules
 - **high_fan_in** (a widely-imported module is a de-facto authority): extra/qk/runtime_specs.py is imported by 13 modules
 - **high_fan_out** (prefer deep modules with small interfaces): extra/qk/decode/current_decode_execution_adapter.py imports 17 internal modules
 - **high_fan_out** (prefer deep modules with small interfaces): extra/qk/prefill/current_prefill_execution_adapter.py imports 19 internal modules
 - **large_file** (minimize what a reader must hold in their head): extra/qk/kernel_lds.py is 973 LOC (threshold 400); responsibilities declared: 7
 - **large_file** (minimize what a reader must hold in their head): extra/qk/mmq_q4k_q8_atom.py is 832 LOC (threshold 400); responsibilities declared: 4
-- **large_file** (minimize what a reader must hold in their head): extra/qk/prefill/prefill_int8_wmma_spec.py is 415 LOC (threshold 400); responsibilities declared: 4
 - **large_file** (minimize what a reader must hold in their head): extra/qk/prefill/prefill_whole_synced.py is 423 LOC (threshold 400); responsibilities declared: 5
 - **large_file** (minimize what a reader must hold in their head): extra/qk/route_manifest.py is 787 LOC (threshold 400); responsibilities declared: 7
 - **large_file** (minimize what a reader must hold in their head): extra/qk/runtime_specs.py is 758 LOC (threshold 400); responsibilities declared: 5
@@ -559,10 +557,6 @@ costs zero.
 - **repeated_workflow_phase** (modularize execution without scattering authority): phase 'load-evidence' is re-implemented by 3 workflows: ['packed-wmma-prefill-promotion', 'prefill-causal-tile-skip-promotion', 'prefill-softmax-fuse-promotion']
 - **repeated_workflow_phase** (modularize execution without scattering authority): phase 'verdict' is re-implemented by 3 workflows: ['packed-wmma-prefill-promotion', 'prefill-causal-tile-skip-promotion', 'prefill-softmax-fuse-promotion']
 - **role_location_conflict** (organize around domain meaning, not accident of location): extra/qk/decode/decode_codegen_identity_check.py declares role=test but does not live in test/ or name itself a test
-- **role_location_conflict** (organize around domain meaning, not accident of location): extra/qk/q4k_wmma_tiled_microgate.py declares role=test but does not live in test/ or name itself a test
-- **role_location_conflict** (organize around domain meaning, not accident of location): extra/qk/q4k_wmma_tiled_no_hand_kernel_gate.py declares role=test but does not live in test/ or name itself a test
-- **role_location_conflict** (organize around domain meaning, not accident of location): extra/qk/q4k_wmma_tiled_role_shape_exec_gate.py declares role=test but does not live in test/ or name itself a test
-- **role_location_conflict** (organize around domain meaning, not accident of location): extra/qk/q4k_wmma_tiled_surface_gate.py declares role=test but does not live in test/ or name itself a test
 
 ## Coverage limitations
 

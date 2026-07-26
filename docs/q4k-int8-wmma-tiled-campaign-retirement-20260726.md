@@ -82,3 +82,28 @@ which asserts every `.py` path named in the manifest's `authority_gate` string e
    in the same change so no future reader treats them as current.
 
 Estimated authored LOC removed: ~1,100 in `extra/qk`, plus test LOC.
+
+## What actually landed (2026-07-26)
+
+Seven of the eight sources were at `extra/qk/*.py`, not `extra/qk/prefill/*.py`; only `prefill_int8_wmma_spec.py` was
+under `prefill/`. Also removed: `extra/qk/prefill/prefill_mmq_parity_gate.py` (its only two functions came from the
+deleted spec, and its only caller was a deleted test), three test files, and 10 `bench/q4k-wmma-*` artifact
+directories. `test/unit/test_amd_isa_wmma.py` and `test_q4_q4_owner_comparison.py` were trimmed, not deleted.
+
+**A second route was affected.** `prefill_int8_wmma_spec.py` was shared with `prefill_q4k_int8_wmma_generated_research`
+(env `PREFILL_Q4K_Q8=wmma`, the non-tiled variant). Its dispatch died in the same commit (`45cfc399c`) and both gates
+it named were already gone — `int8_wmma_codegen_gate.py` did not exist before this change. It is therefore retired
+too, but **unmeasured**: unlike the tiled route it has no head-to-head number, so its status is left as `research`
+rather than claimed as refuted. If anyone wants that comparison, the route must be rebuilt from history first.
+
+**A latent bug surfaced.** Setting the tiled route's status to `refuted` made it the first route in the manifest with
+that status, which revealed that `generated_candidates._lifecycle_from_manifest` handled `promoted_default`,
+`research`, `correct_not_fast` and `superseded_rollback` but omitted `refuted` — its own vocabulary word — silently
+falling through to `deferred`. Fixed to map `refuted -> refuted`.
+`test_runtime_specs.py::test_builtin_registry_selects_wmma_tiled_candidate` asserted the retired candidate was still
+selectable; it now asserts selection is `blocked` and the row reads `refuted`. The registry rows for both routes are
+kept as records — they carry metadata only and import nothing from the deleted code.
+
+Verified: 31 failures under `-k "wmma or q4k or mmq or prefill"` before and after, byte-identical, all pre-existing
+(the two that disappeared were inside deleted files and were already failing). `route_ops` and `prefill_routes` still
+import. `validate_manifest()` clean.

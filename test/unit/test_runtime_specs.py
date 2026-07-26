@@ -69,14 +69,20 @@ def test_builtin_registry_selects_wmma_and_blocks_unknown():
   assert blocked.candidate is None
 
 
-def test_builtin_registry_selects_wmma_tiled_candidate():
+def test_builtin_registry_refuses_the_retired_wmma_tiled_candidate():
+  """The tiled WMMA route was retired 2026-07-26 (speed-refuted 140 vs 364.5 tok/s; implementation deleted).
+
+  Its registry row is kept as a record, but selection must refuse it even with allow_research=True -- a route whose
+  emit path no longer exists must never be handed to a caller.
+  """
   op = RuntimeOpSpec("QuantizedLinear", "prefill", "ffn_down", {"M": 512, "N": 5120, "K": 17408},
                      quant_spec("Q4_K").tensor_spec(), activation_spec("Q8_1").activation_spec(),
                      lowering_strategy="iu8_wmma_tiled_grouped_dot", target={"backend":"AMD", "arch":"gfx1100", "wave_size":32},
                      admission=CandidateAdmissionFacts(scheduler_owned=True))
   selected = select_generated_candidate(op, preferred=("quant_linear_prefill.q4k_int8_wmma_tiled_substrate",), allow_research=True)
-  assert selected.status == "selected"
-  assert selected.candidate and selected.candidate.route_id == "prefill_q4k_int8_wmma_tiled_research"
+  assert selected.status == "blocked"
+  row = next(c for c in builtin_registry().all() if c.candidate_id == "quant_linear_prefill.q4k_int8_wmma_tiled_substrate")
+  assert row.lifecycle == "refuted"
 
 
 def test_primitive_selection_uses_target_shape_and_typed_admission_facts():

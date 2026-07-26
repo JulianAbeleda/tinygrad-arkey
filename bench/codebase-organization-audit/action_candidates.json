@@ -187,6 +187,8 @@
       "loc_removed": 0,
       "path": "extra/qk/q4k_wmma_tiled_no_hand_kernel_gate.py",
       "question": "Is the WMMA-tiled route being revived (keep the gates and fix the branch) or is it closed (retire ~1.1K LOC of gates plus the stale bench artifacts)? The measured verdict already argues for closed.",
+      "resolution": "Answered 2026-07-26: retire. The route was speed-refuted (140 vs 364.5 tok/s) and its dispatch was already gone; executed as A15.",
+      "status": "completed",
       "tests_required": []
     },
     {
@@ -239,6 +241,31 @@
       "loc_removed": 3,
       "path": "extra/qk/mmq_q4k_q8_atom.py",
       "realized_note": "66 -> 63 token-LOC. The value is one rule with one owner, NOT a LOC reduction; the earlier '90-100 LOC of pure repetition' estimate counted physical lines and did not survive measurement.",
+      "status": "completed",
+      "tests_required": []
+    },
+    {
+      "action": "prune",
+      "confidence": "high",
+      "deletion_confidence": "delete_after_verdict_capture",
+      "evidence": [
+        "verdict recorded in route_manifest.py's note for prefill_q4k_int8_wmma_tiled_research",
+        "45cfc399c (2026-07-21) removed the dispatch: 'superseded by the shipped scheduler-native packed-WMMA route'",
+        "last substantive change 05b67146a (2026-07-14); 383c71c72 (2026-07-25) was a path move only",
+        "its gate scanned prefill_routes.py for a q8_mode == 'wmma_tiled' branch that no longer exists, so it could never pass again; the strict-xfail wording 'WIP research; not yet PASS' was stale",
+        "31 failures under -k 'wmma or q4k or mmq or prefill' before and after, byte-identical, all pre-existing"
+      ],
+      "finding": "The q4k int8 WMMA-tiled campaign is closed: correct on all four Qwen3-14B role shapes, speed-refuted at 140 tok/s against a 364.5 tok/s direct-packed baseline, dispatch already removed in 45cfc399c.",
+      "former_purpose": "Route Q4_K prefill matmuls through RDNA3 v_wmma_i32_16x16x16_iu8 int8 tensor-core tiles.",
+      "id": "A15",
+      "last_campaign": "q4k int8 WMMA-tiled prefill (2026-07-05 to 2026-07-14)",
+      "loc_added": 0,
+      "loc_moved": 0,
+      "loc_removed": 1138,
+      "path": "extra/qk/q4k_wmma_tile_lowering.py",
+      "realized_note": "8 sources + prefill_mmq_parity_gate + 3 test files + 10 bench artifact dirs. Two test files were trimmed rather than deleted. The sibling route prefill_q4k_int8_wmma_generated_research shared the implementation and is retired too, but UNMEASURED -- left as status research, not claimed refuted.",
+      "recovery": "git show 05b67146a -- <path>",
+      "replacement": "docs/q4k-int8-wmma-tiled-campaign-retirement-20260726.md",
       "status": "completed",
       "tests_required": []
     },
@@ -320,16 +347,18 @@
     "completed_actions": [
       "A1",
       "A14",
+      "A15",
       "A2",
       "A3",
       "A4",
-      "A5"
+      "A5",
+      "A9"
     ],
     "gross_loc_removed": 3,
     "loc_moved_not_reduced": 60,
     "net_authored_loc_reduction": 3,
-    "realized_gross_loc_removed": 247,
-    "realized_net_loc_reduction": 212,
+    "realized_gross_loc_removed": 1385,
+    "realized_net_loc_reduction": 1350,
     "realized_replacement_loc_added": 35,
     "replacement_loc_added": 0
   },

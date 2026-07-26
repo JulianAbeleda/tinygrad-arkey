@@ -187,6 +187,8 @@
       "loc_removed": 0,
       "path": "extra/qk/q4k_wmma_tiled_no_hand_kernel_gate.py",
       "question": "Is the WMMA-tiled route being revived (keep the gates and fix the branch) or is it closed (retire ~1.1K LOC of gates plus the stale bench artifacts)? The measured verdict already argues for closed.",
+      "resolution": "Answered 2026-07-26: retire. The route was speed-refuted (140 vs 364.5 tok/s) and its dispatch was already gone; executed as A15.",
+      "status": "completed",
       "tests_required": []
     },
     {
@@ -239,6 +241,31 @@
       "loc_removed": 3,
       "path": "extra/qk/mmq_q4k_q8_atom.py",
       "realized_note": "66 -> 63 token-LOC. The value is one rule with one owner, NOT a LOC reduction; the earlier '90-100 LOC of pure repetition' estimate counted physical lines and did not survive measurement.",
+      "status": "completed",
+      "tests_required": []
+    },
+    {
+      "action": "prune",
+      "confidence": "high",
+      "deletion_confidence": "delete_after_verdict_capture",
+      "evidence": [
+        "verdict recorded in route_manifest.py's note for prefill_q4k_int8_wmma_tiled_research",
+        "45cfc399c (2026-07-21) removed the dispatch: 'superseded by the shipped scheduler-native packed-WMMA route'",
+        "last substantive change 05b67146a (2026-07-14); 383c71c72 (2026-07-25) was a path move only",
+        "its gate scanned prefill_routes.py for a q8_mode == 'wmma_tiled' branch that no longer exists, so it could never pass again; the strict-xfail wording 'WIP research; not yet PASS' was stale",
+        "31 failures under -k 'wmma or q4k or mmq or prefill' before and after, byte-identical, all pre-existing"
+      ],
+      "finding": "The q4k int8 WMMA-tiled campaign is closed: correct on all four Qwen3-14B role shapes, speed-refuted at 140 tok/s against a 364.5 tok/s direct-packed baseline, dispatch already removed in 45cfc399c.",
+      "former_purpose": "Route Q4_K prefill matmuls through RDNA3 v_wmma_i32_16x16x16_iu8 int8 tensor-core tiles.",
+      "id": "A15",
+      "last_campaign": "q4k int8 WMMA-tiled prefill (2026-07-05 to 2026-07-14)",
+      "loc_added": 0,
+      "loc_moved": 0,
+      "loc_removed": 1138,
+      "path": "extra/qk/q4k_wmma_tile_lowering.py",
+      "realized_note": "8 sources + prefill_mmq_parity_gate + 3 test files + 10 bench artifact dirs. Two test files were trimmed rather than deleted. The sibling route prefill_q4k_int8_wmma_generated_research shared the implementation and is retired too, but UNMEASURED -- left as status research, not claimed refuted.",
+      "recovery": "git show 05b67146a -- <path>",
+      "replacement": "docs/q4k-int8-wmma-tiled-campaign-retirement-20260726.md",
       "status": "completed",
       "tests_required": []
     },
@@ -4115,58 +4142,6 @@
     },
     {
       "allowed_dependency_domains": [
-        "codegen_lowering",
-        "quant_mmq"
-      ],
-      "authority_keys": [],
-      "classification_confidence": "medium",
-      "default_path": false,
-      "deletion_confidence": "investigate_owner",
-      "disposition": "keep",
-      "domain": "quant_mmq",
-      "duplication_group": null,
-      "evidence": [
-        "route_manifest.py:380-417: both prefill_q4k_int8_wmma_generated_research and prefill_q4k_int8_wmma_tiled_research entries have status:'research', selector:'env_guard', strict_fallback:True",
-        "route_manifest.py:417 note: 'A route-bound replay measured 140 tok/s versus the recorded direct-packed authority baseline of 364.5 tok/s, so this schedule remains research-only and must not become the default.' -- this is the durable verdict for the tiled route, recorded in route_manifest.py itself",
-        "IMPORTANT CORRECTION to the user's memory framing: I could NOT find a doc recording int8 prefill as a flat 'dead end' -- route_manifest.py still lists it as an active (if default-off, underperforming) research route with live tests and route_ops.py wiring, not a superseded/refuted file. It is closer to 'known loss, kept as research infrastructure' than 'dead code'. Treat this file as active_research, not deletion_candidate, absent a more explicit refutation doc.",
-        "grep -rn \"int8\" docs/*.md found no doc file that declares this route dead; the only recorded perf verdict lives inline in extra/qk/route_manifest.py:417"
-      ],
-      "path": "extra/qk/prefill/prefill_int8_wmma_spec.py",
-      "promotion_target": null,
-      "public_surface": [
-        "Q4KInt8WMMAPrefillSpec",
-        "Q4KInt8WMMATiledPrefillSpec",
-        "describe_q4k_int8_wmma_prefill",
-        "describe_q4k_int8_wmma_tiled_prefill",
-        "emit_q4k_int8_wmma_prefill_tensor",
-        "emit_q4k_int8_wmma_tiled_prefill_tensor",
-        "emit_q4k_int8_wmma_tiled_lifecycle_tensor",
-        "emit_q4k_int8_wmma_tiled_exec_tensor",
-        "emit_q4k_int8_wmma_tiled_scheduler_tensor",
-        "build_fused_q4k_mmq_dynamic_owner"
-      ],
-      "purpose": "Defines Q4KInt8WMMAPrefillSpec/Q4KInt8WMMATiledPrefillSpec and the emit_q4k_int8_wmma_* family that express Q4_K/Q8_1 int8 MMQ as ordinary tinygrad Tensor int matmuls (relying on codegen TC matching to select iu8 WMMA, never a handwritten kernel), backing the PREFILL_Q4K_Q8=wmma and wmma_tiled research routes.",
-      "responsibilities": [
-        "one-tile/vectorized Q4_K int8 WMMA emitter",
-        "tiled multi-output-tile lifecycle emitter",
-        "scheduler-owned staged/full emitter",
-        "dynamic fused-owner graph builder"
-      ],
-      "retention_criterion": "this is env-guarded research infrastructure (PREFILL_Q4K_Q8=wmma/wmma_tiled, default off); route_manifest.py:417 already records a real-hardware verdict (140 tok/s vs 364.5 tok/s direct-packed authority baseline) for the tiled route -- a recorded LOSS, not yet formally 'refuted' in status but explicitly 'must not become the default'",
-      "reusable_assets": [
-        "route-spec"
-      ],
-      "role": "execution",
-      "status": "active_research",
-      "surface": "off_default",
-      "test_role": "active_validation",
-      "workflow_ids": [
-        "prefill-q4k-int8-wmma-research",
-        "prefill-q4k-mmq-substrate"
-      ]
-    },
-    {
-      "allowed_dependency_domains": [
         "measurement"
       ],
       "authority_keys": [],
@@ -4202,48 +4177,6 @@
       "workflow_ids": [
         "prefill-softmax-reduce-fuse-promotion",
         "prefill-long-context-numerics"
-      ]
-    },
-    {
-      "allowed_dependency_domains": [
-        "measurement",
-        "quant_mmq"
-      ],
-      "authority_keys": [],
-      "classification_confidence": "high",
-      "default_path": false,
-      "deletion_confidence": "retain_active",
-      "disposition": "keep",
-      "domain": "measurement",
-      "duplication_group": null,
-      "evidence": [
-        "route_manifest.py:394 names this file as the authority_gate for the wmma research route",
-        "two other modules (q4k_wmma_tiled_role_shape_exec_gate.py, q4k_wmma_tiled_microgate.py) import its fixture helpers _make_q4k_words/_rel_rmse/RTOL rather than reimplementing them -- this file is itself already the shared reused primitive for that duplication"
-      ],
-      "path": "extra/qk/prefill/prefill_mmq_parity_gate.py",
-      "promotion_target": null,
-      "public_surface": [
-        "_make_q4k_words",
-        "_rel_rmse",
-        "run",
-        "RTOL"
-      ],
-      "purpose": "Numeric-parity gate for the generated int8-WMMA Q4_K prefill substrate (prefill_int8_wmma_spec.py): builds finite synthetic Q4_K weights + Q8_1 activations and compares the generated Tensor-matmul-int emitter's output against a dequant reference via relative RMSE.",
-      "responsibilities": [
-        "synthetic Q4_K test-fixture generation (reused by 2 other gate modules)",
-        "the __main__ CLI parity sweep + PASS/FAIL gate"
-      ],
-      "retention_criterion": "needed while prefill_q4k_int8_wmma_generated_research remains a live (if default-off) route in route_manifest.py",
-      "reusable_assets": [
-        "parity-tolerance"
-      ],
-      "role": "authority",
-      "status": "production",
-      "surface": "off_default",
-      "test_role": "active_validation",
-      "workflow_ids": [
-        "prefill-q4k-int8-wmma-research",
-        "prefill-mmq-parity"
       ]
     },
     {
@@ -4951,317 +4884,6 @@
       "test_role": "retained_reference",
       "workflow_ids": [
         "q4k-q8-mmq-research"
-      ]
-    },
-    {
-      "allowed_dependency_domains": [
-        "quant_mmq",
-        "route_authority"
-      ],
-      "authority_keys": [
-        "q4k-wmma-full-role-contract-gate.v1"
-      ],
-      "classification_confidence": "medium",
-      "default_path": false,
-      "deletion_confidence": "investigate_owner",
-      "disposition": "investigate",
-      "domain": "route_authority",
-      "duplication_group": null,
-      "evidence": [
-        "bench/q4k-wmma-full-role-contract/latest.json currently shows verdict=Q4K_WMMA_FULL_ROLE_CONTRACT_PASS, but `grep -n \"q8_mode\\|PREFILL_Q4K_Q8\" tinygrad/llm/prefill_routes.py` returns nothing -- the route dispatch branch this contract is for has been removed from the router, so the artifact is stale relative to current code",
-        "extra/qk/route_manifest.py:412 still lists this file in authority_gate for prefill_q4k_int8_wmma_tiled_research"
-      ],
-      "path": "extra/qk/q4k_wmma_full_role_contract_gate.py",
-      "promotion_target": null,
-      "public_surface": [
-        "build_report",
-        "main"
-      ],
-      "purpose": "Aggregates the surface, no-hand-kernel, and role-shape-exec gate artifacts for the Q4_K/Q8_1 full-role tiled WMMA lowering contract into one Q4K_WMMA_FULL_ROLE_CONTRACT_PASS/BLOCKED verdict for the prefill_q4k_int8_wmma_tiled_research route.",
-      "responsibilities": [
-        "reads SURFACE_ARTIFACT and NO_HAND_ARTIFACT JSON off disk",
-        "re-derives spec/roles/loop-contract from q4k_wmma_tile_lowering",
-        "aggregates into one verdict"
-      ],
-      "retention_criterion": "Route_manifest.py's note on prefill_q4k_int8_wmma_tiled_research already records the conclusion: a route-bound replay measured 140 tok/s vs. a 364.5 tok/s direct-packed baseline, so 'this schedule remains research-only and must not become the default.' However this gate is not directly imported by any test/unit file (unlike no_hand/role_shape_exec), and its live re-run depends on tinygrad/llm/prefill_routes.py's wmma_tiled branch, which is no longer present (see evidence) -- an owner should confirm whether this file (and the checked-in bench/q4k-wmma-full-role-contract/latest.json PASS artifact, which predates that removal) is still meant to be regenerated or is now stale.",
-      "reusable_assets": [
-        "cli-parsing",
-        "artifact-schema",
-        "promotion-gate"
-      ],
-      "role": "authority",
-      "status": "active_regression",
-      "surface": "off_default",
-      "test_role": "unresolved_reproducer",
-      "workflow_ids": [
-        "prefill-q4k-int8-wmma-tiled-research"
-      ]
-    },
-    {
-      "allowed_dependency_domains": [
-        "quant_mmq",
-        "route_authority"
-      ],
-      "authority_keys": [
-        "build_scheduler_owned_tile_loop_contract.SCHEDULER_OWNED_TILE_LOOP_CONTRACT_v1",
-        "Int8WMMATileLoweringSpec.kernel_name_formula"
-      ],
-      "classification_confidence": "medium",
-      "default_path": false,
-      "deletion_confidence": "investigate_owner",
-      "disposition": "keep",
-      "domain": "quant_mmq",
-      "duplication_group": null,
-      "evidence": [
-        "grep for `extra\\.qk\\.q4k_wmma_tile_lowering\\b` returns only extra/qk/q4k_wmma_tiled_role_shape_exec_gate.py and extra/qk/q4k_wmma_full_role_contract_gate.py, both outside this batch's scope"
-      ],
-      "path": "extra/qk/q4k_wmma_tile_lowering.py",
-      "promotion_target": null,
-      "public_surface": [
-        "build_scheduler_owned_tile_loop_contract",
-        "Int8WMMATileLoweringSpec",
-        "Q4KWMMAFullRoleLoweringSpec",
-        "describe_int8_wmma_tile_lowering",
-        "describe_q4k_full_role_lowering",
-        "describe_qwen3_14b_q4k_full_role_lowering",
-        "q4k_prefill_role_shape_tuples",
-        "QWEN3_14B_Q4K_ROLE_SHAPES"
-      ],
-      "purpose": "Data-only (no UOp construction) full-role lowering contract for Q4_K/Q8_1 tiled WMMA prefill: Int8WMMATileLoweringSpec (tile/grid/bound arithmetic per role) and Q4KWMMAFullRoleLoweringSpec (aggregate across all prefill roles for a model profile), plus the scheduler-owned-tile-loop contract descriptor.",
-      "responsibilities": [
-        "per-role tile/grid arithmetic + bounds spec",
-        "aggregate full-role lowering spec across a model profile",
-        "scheduler-owned-tile-loop-contract descriptor builder"
-      ],
-      "retention_criterion": "consumed only by two *_gate.py modules in extra/qk (not in this batch, not checked for their own liveness); no test/unit/*.py imports it directly and no route_ops.py reference found -- cannot honestly confirm production status without inspecting the two gate consumers",
-      "reusable_assets": [
-        "route-spec"
-      ],
-      "role": "authority",
-      "status": "active_research",
-      "surface": "off_default",
-      "test_role": "orphan_unknown",
-      "workflow_ids": [
-        "prefill-q4k-wmma-tiled-research"
-      ]
-    },
-    {
-      "allowed_dependency_domains": [
-        "quant_mmq",
-        "search_promotion"
-      ],
-      "authority_keys": [
-        "q4k_wmma_tiled_lowering_feasibility.v1 (schema/verdict for this specific probe)"
-      ],
-      "classification_confidence": "high",
-      "default_path": false,
-      "deletion_confidence": "retain_active",
-      "disposition": "keep",
-      "domain": "search_promotion",
-      "duplication_group": null,
-      "evidence": [
-        "extra/qk/q4k_wmma_tiled_surface_gate.py:8 `from extra.qk.q4k_wmma_tiled_lowering_feasibility import _run_probe as _run_tc_matcher_probe`",
-        "extra/qk/route_manifest.py:412 authority_gate string lists this file among 5 gates for the Q4_K int8 WMMA research row",
-        "route status in route_manifest.py for prefill_q4k_int8_wmma_generated_research is 'research', not promoted"
-      ],
-      "path": "extra/qk/q4k_wmma_tiled_lowering_feasibility.py",
-      "promotion_target": null,
-      "public_surface": [
-        "build",
-        "_run_probe"
-      ],
-      "purpose": "Standalone feasibility probe/gate proving a bounded Q4_K/Q8_1 int8 RAW tile lowers to RDNA3 iu8 WMMA via Tensor.matmul under TC=1, writing a Q4K_WMMA_TILED_LOWERING_FEASIBLE/BLOCKED verdict artifact for the research route prefill_q4k_int8_wmma_tiled_research.",
-      "responsibilities": [
-        "subprocess probe of a synthetic matmul lowering",
-        "artifact build+write+CLI exit-code gate"
-      ],
-      "retention_criterion": "needed until prefill_q4k_int8_wmma_tiled_research (route_manifest.py) is either promoted or refuted/pruned",
-      "reusable_assets": [
-        "cli-parsing",
-        "artifact-schema",
-        "promotion-gate"
-      ],
-      "role": "diagnostic",
-      "status": "active_research",
-      "surface": "off_default",
-      "test_role": "operational_tool",
-      "workflow_ids": [
-        "prefill-q4k-int8-wmma-research"
-      ]
-    },
-    {
-      "allowed_dependency_domains": [
-        "quant_mmq"
-      ],
-      "authority_keys": [
-        "q4k_wmma_tiled_microgate.v1"
-      ],
-      "classification_confidence": "high",
-      "default_path": false,
-      "deletion_confidence": "retain_reproducer",
-      "disposition": "keep",
-      "domain": "quant_mmq",
-      "duplication_group": null,
-      "evidence": [
-        "bench/q4k-wmma-tiled-microgate/latest.json exists with verdict=Q4K_WMMA_TILED_MICROGATE_PASS",
-        "test/unit/test_q4k_wmma_value.py:4-8 explicitly names this file's comparison as the reference it duplicates into pytest, i.e. this script itself is NOT run by the test suite"
-      ],
-      "path": "extra/qk/q4k_wmma_tiled_microgate.py",
-      "promotion_target": null,
-      "public_surface": [
-        "build",
-        "_run_probe"
-      ],
-      "purpose": "One-tile numeric microgate: runs a subprocess probe of a single 16x256x16 Q4_K/Q8_1 tiled WMMA output tile against a dequant reference, checking rel-RMSE < RTOL and that the emitted ISA contains wmma_i32_16x16x16_iu8, writing Q4K_WMMA_TILED_MICROGATE_PASS/FAIL to bench/q4k-wmma-tiled-microgate/latest.json.",
-      "responsibilities": [
-        "subprocess probe construction/execution",
-        "artifact I/O",
-        "pass/fail verdict"
-      ],
-      "retention_criterion": "Same conclusion as the other prefill_q4k_int8_wmma_tiled_research gates: route_manifest.py records the route is research-only, perf-inferior to the direct-packed baseline, and should not become default. Retain as long as that route entry stays in route_manifest.py as a documented dead end; delete only alongside a decision to remove the whole research route.",
-      "reusable_assets": [
-        "artifact-schema",
-        "promotion-gate",
-        "fault-capture"
-      ],
-      "role": "test",
-      "status": "active_regression",
-      "surface": "off_default",
-      "test_role": "unresolved_reproducer",
-      "workflow_ids": [
-        "prefill-q4k-int8-wmma-tiled-research"
-      ]
-    },
-    {
-      "allowed_dependency_domains": [
-        "route_authority"
-      ],
-      "authority_keys": [
-        "q4k_wmma_tiled_no_hand_kernel_gate.v1"
-      ],
-      "classification_confidence": "high",
-      "default_path": false,
-      "deletion_confidence": "retain_active",
-      "disposition": "keep",
-      "domain": "route_authority",
-      "duplication_group": null,
-      "evidence": [
-        "Live run: `PYTHONPATH=. python3 -c \"from extra.qk.q4k_wmma_tiled_no_hand_kernel_gate import build; print(build()['verdict'])\"` -> Q4K_WMMA_TILED_NO_HAND_KERNEL_FAIL with finding route.missing_wmma_tiled_branch",
-        "grep for 'q8_mode' and 'PREFILL_Q4K_Q8' in tinygrad/llm/prefill_routes.py returns zero hits",
-        "test/unit/test_q4k_wmma_tiled_gates.py:19 xfail(strict=True, reason='Q4K-WMMA-tiled scheduler-owned route is WIP research; not yet PASS') confirms this is a known, tracked, currently-failing state, not a silent break"
-      ],
-      "path": "extra/qk/q4k_wmma_tiled_no_hand_kernel_gate.py",
-      "promotion_target": null,
-      "public_surface": [
-        "build",
-        "Finding"
-      ],
-      "purpose": "Static-scan gate proving the Q4_K/Q8_1 wmma_tiled prefill route implementation stays generated/tinygrad-owned: scans a fixed file list plus the tinygrad/llm/prefill_routes.py wmma_tiled branch for forbidden tokens (inline asm, route-local __builtin_amdgcn_wmma, Ops.WMMA, custom_kernel, handwritten prefill wmma import).",
-      "responsibilities": [
-        "forbidden-token text scan",
-        "wmma_tiled route-branch extraction from prefill_routes.py"
-      ],
-      "retention_criterion": "Directly imported and run by test/unit/test_q4k_wmma_tiled_gates.py (marked xfail(strict=True), i.e. it is EXPECTED to currently fail as WIP research) and by q4k_wmma_tiled_surface_gate.py. Verified live: running build() now returns Q4K_WMMA_TILED_NO_HAND_KERNEL_FAIL because the `if q8_mode == \"wmma_tiled\":` branch it scans for is no longer present in tinygrad/llm/prefill_routes.py -- the route's own dispatch branch appears to have been removed from the router even though route_manifest.py and this gate chain still describe it as an active research route. This matches the test's xfail expectation, so the suite is consistent, but an owner should confirm whether wmma_tiled routing was deliberately removed (in which case this whole gate family is testing a route stub that no longer exists) or needs restoring.",
-      "reusable_assets": [
-        "artifact-schema"
-      ],
-      "role": "test",
-      "status": "active_regression",
-      "surface": "off_default",
-      "test_role": "unresolved_reproducer",
-      "workflow_ids": [
-        "prefill-q4k-int8-wmma-tiled-research"
-      ]
-    },
-    {
-      "allowed_dependency_domains": [
-        "measurement",
-        "quant_mmq",
-        "route_authority"
-      ],
-      "authority_keys": [
-        "q4k_wmma_tiled_role_shape_exec_gate.v1"
-      ],
-      "classification_confidence": "high",
-      "default_path": false,
-      "deletion_confidence": "retain_active",
-      "disposition": "keep",
-      "domain": "route_authority",
-      "duplication_group": null,
-      "evidence": [
-        "test/unit/test_q4k_wmma_tiled_gates.py:26-60 has two full tests (test_q4k_wmma_tiled_role_shape_exec_pass_requires_scheduler_evidence, test_q4k_wmma_tiled_role_shape_exec_all_numeric_ok_requires_all_roles) that monkeypatch _role_row and assert on build()'s output structure -- these are real, currently-passing regression tests, not xfail"
-      ],
-      "path": "extra/qk/q4k_wmma_tiled_role_shape_exec_gate.py",
-      "promotion_target": null,
-      "public_surface": [
-        "build",
-        "_role_row",
-        "_raw_tile_steps",
-        "_derive_synthetic_shape"
-      ],
-      "purpose": "Executes bounded full-K scheduler-owned subgraphs for all four exact Qwen3-14B role shapes of the Q4_K/Q8_1 wmma_tiled prefill route (attn_qo/attn_kv/ffn_gate_up/ffn_down) and verifies both generated iu8 WMMA presence and numeric parity against a dequant reference, distinct from the shape-enumeration-only q4k_wmma_tiled_role_shape classifier.",
-      "responsibilities": [
-        "synthetic-shape derivation bounded by SYNTHETIC_MAX_RAW_TILE_STEPS",
-        "per-role compile+execute+numeric-check",
-        "aggregate verdict + loop-contract check"
-      ],
-      "retention_criterion": "test/unit/test_q4k_wmma_tiled_gates.py directly exercises build()/_role_row via monkeypatch, so this is a live regression target, not just a standalone script. Retain as long as prefill_q4k_int8_wmma_tiled_research stays documented in route_manifest.py, same caveat as the no_hand gate about the route's live dispatch branch appearing removed from prefill_routes.py.",
-      "reusable_assets": [
-        "compile-dispatch",
-        "parity-tolerance",
-        "artifact-schema",
-        "promotion-gate"
-      ],
-      "role": "test",
-      "status": "active_regression",
-      "surface": "off_default",
-      "test_role": "active_regression",
-      "workflow_ids": [
-        "prefill-q4k-int8-wmma-tiled-research"
-      ]
-    },
-    {
-      "allowed_dependency_domains": [
-        "route_authority",
-        "search_promotion"
-      ],
-      "authority_keys": [
-        "q4k_wmma_tiled_surface_gate.v1"
-      ],
-      "classification_confidence": "medium",
-      "default_path": false,
-      "deletion_confidence": "investigate_owner",
-      "disposition": "investigate",
-      "domain": "route_authority",
-      "duplication_group": null,
-      "evidence": [
-        "No hit for 'q4k_wmma_tiled_surface_gate' inside test/ (only route_manifest.py references it)",
-        "bench/q4k-wmma-tiled-surface/latest.json shows verdict=Q4K_WMMA_TILED_SURFACE_TC_MATCHER_SELECTED but depends on no_hand_build() which now returns FAIL live"
-      ],
-      "path": "extra/qk/q4k_wmma_tiled_surface_gate.py",
-      "promotion_target": null,
-      "public_surface": [
-        "build",
-        "_tc_matcher_surface",
-        "_shaped_wmma_surface"
-      ],
-      "purpose": "Selects/records which generated WMMA surface (tc_matcher_tile via Tensor.matmul(dtype=int)+tc.py, or the not-yet-producer-backed shaped_wmma_tile via Ops.SHAPED_WMMA) is used for the bounded Q4_K/Q8_1 tiled prefill route, and requires the no-hand-kernel scan to also pass before declaring Q4K_WMMA_TILED_SURFACE_TC_MATCHER_SELECTED.",
-      "responsibilities": [
-        "tc_matcher surface probe (subprocess, real GPU)",
-        "shaped_wmma infrastructure/producer presence check (text scan)",
-        "final surface selection + verdict"
-      ],
-      "retention_criterion": "No test/unit file directly imports this module (unlike no_hand_kernel_gate and role_shape_exec_gate, which test/unit/test_q4k_wmma_tiled_gates.py imports by name); it is only named in route_manifest.py's authority_gate string and its own bench/q4k-wmma-tiled-surface/latest.json artifact. Given the no_hand_kernel_gate it depends on now fails live (route branch removed from prefill_routes.py), this gate's own checked-in PASS artifact is likely stale too -- an owner should confirm before treating either as current.",
-      "reusable_assets": [
-        "artifact-schema",
-        "promotion-gate"
-      ],
-      "role": "test",
-      "status": "active_regression",
-      "surface": "off_default",
-      "test_role": "unresolved_reproducer",
-      "workflow_ids": [
-        "prefill-q4k-int8-wmma-tiled-research"
       ]
     },
     {

@@ -26,13 +26,6 @@ def q4k_gemm_packed_load_reduce_out_kernel(*args, **kwargs):
 def describe_q4k_packed_prefill_generated(*args, **kwargs): return _attr("extra.qk.prefill.q4k_prefill_route_spec", "describe_q4k_packed_prefill")(*args, **kwargs)
 def emit_q4k_packed_prefill_kernel(*args, **kwargs):
   return _attr("extra.qk.prefill.q4k_prefill_route_spec", "emit_q4k_packed_prefill_kernel")(*args, **kwargs)
-def describe_q4k_int8_wmma_prefill(*args, **kwargs): return _attr("extra.qk.prefill.prefill_int8_wmma_spec", "describe_q4k_int8_wmma_prefill")(*args, **kwargs)
-def describe_q4k_int8_wmma_tiled_prefill(*args, **kwargs): return _attr("extra.qk.prefill.prefill_int8_wmma_spec", "describe_q4k_int8_wmma_tiled_prefill")(*args, **kwargs)
-def emit_q4k_int8_wmma_prefill_tensor(*args, **kwargs): return _attr("extra.qk.prefill.prefill_int8_wmma_spec", "emit_q4k_int8_wmma_prefill_tensor")(*args, **kwargs)
-def emit_q4k_int8_wmma_tiled_prefill_tensor(*args, **kwargs): return _attr("extra.qk.prefill.prefill_int8_wmma_spec", "emit_q4k_int8_wmma_tiled_prefill_tensor")(*args, **kwargs)
-def emit_q4k_int8_wmma_tiled_exec_tensor(*args, **kwargs): return _attr("extra.qk.prefill.prefill_int8_wmma_spec", "emit_q4k_int8_wmma_tiled_exec_tensor")(*args, **kwargs)
-def emit_q4k_int8_wmma_tiled_lifecycle_tensor(*args, **kwargs): return _attr("extra.qk.prefill.prefill_int8_wmma_spec", "emit_q4k_int8_wmma_tiled_lifecycle_tensor")(*args, **kwargs)
-def emit_q4k_int8_wmma_tiled_scheduler_tensor(*args, **kwargs): return _attr("extra.qk.prefill.prefill_int8_wmma_spec", "emit_q4k_int8_wmma_tiled_scheduler_tensor")(*args, **kwargs)
 def q8_1_quantize(*args, **kwargs): return _attr("extra.qk.layout", "q8_1_quantize")(*args, **kwargs)
 def packed_ds4_candidate(*args, **kwargs): return _attr("extra.qk.mmq_ds4_logical_emitter", "packed_ds4_candidate")(*args, **kwargs)
 def packed_row_major_candidate(*args, **kwargs): return _attr("extra.qk.mmq_ds4_logical_emitter", "packed_row_major_candidate")(*args, **kwargs)
