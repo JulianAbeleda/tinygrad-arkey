@@ -1,0 +1,8 @@
+{
+  "schema": "luna-safety-ownership.v1",
+  "task_id": "LUNA-000",
+  "verdict": "PASS",
+  "state_record": "docs/task_workflow/in_progress/14b-decode-luna-state-20260726.json",
+  "positive_control": {"feature_branch_and_exact_worktree_recorded": true},
+  "uses_gpu": false
+}
