@@ -1,5 +1,7 @@
 from types import SimpleNamespace
 
+import pytest
+
 from extra.qk.prefill.prefill_harness import (
   AUTHORITY_START_POSITIONS, AUTHORITY_WHOLE_LENGTHS, DEFAULT_MODEL, SMOKE_START_POSITIONS, SMOKE_WHOLE_LENGTHS,
   csv_ints, prefill_authority_argv, prefill_run_profile, prefill_subprocess_env, resolve_prefill_model_profile,
@@ -63,6 +65,13 @@ def test_prefill_model_profile_only_selects_the_14b_fixture():
   run = prefill_run_profile("smoke")
   argv = prefill_authority_argv(prof.default_model, run, model_profile_id=prof.id)
   assert "--model-profile" in argv and prof.id in argv
+
+
+def test_prefill_model_profile_rejects_the_8b_default_for_14b():
+  with pytest.raises(ValueError, match="model/profile mismatch"):
+    resolve_prefill_model_profile("14b", model_path=DEFAULT_MODEL)
+  with pytest.raises(ValueError, match="model/profile mismatch"):
+    prefill_whole_synced.main(["--model-profile", "14b", "--mode", "smoke", "--no-artifact"])
 
 
 def test_prefill_authority_attributes_the_loaded_runtime_registry(monkeypatch):
