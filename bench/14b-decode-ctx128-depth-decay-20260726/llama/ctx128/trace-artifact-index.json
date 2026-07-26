@@ -1,0 +1,17 @@
+{
+  "task": "LUNA-021",
+  "verdict": "TOOL_FAILURE",
+  "base_commit": "923f6ff02",
+  "boot_id": "recorded in manifest-before-trace.txt",
+  "profiler": "/opt/rocm/bin/rocprofv3 1.1.0 (ROCm 7.2.4)",
+  "profiler_config": ["--kernel-trace", "--hip-runtime-trace", "--stats", "--output-config on", "--output-format json"],
+  "argv_artifact": "trace-command.sh",
+  "environment_artifact": "manifest-before-trace.txt",
+  "device_positive_control": "positive-control-device-rocminfo.txt",
+  "expected_outputs": ["llama-bench-stdout.json", "rocprofv3-stderr.txt", "rocprofv3-raw/out_config.json", "rocprofv3-raw/*.json"],
+  "observed_outputs": ["manifest-before-trace.txt", "positive-control-device-rocminfo.txt", "rocprofv3-help.txt", "rocprofv3-version.txt", "trace-command.sh"],
+  "missing_positive_controls": ["bounded llama stdout", "profiler configuration output", "kernel dispatch JSON", "kernel name", "grid/block", "duration", "lock-owner record"],
+  "exact_failure": "The flock-wrapped invocation returned exit status 0 in 4.5 seconds, but produced no llama stdout, rocprofv3 stderr, profiler configuration, or trace data. Therefore no exact profiler error exists to retain. Per scope section 14.2, a zero exit with a missing positive control is TOOL_FAILURE.",
+  "kernel_records": [],
+  "cleanup": "No AMD kernel trace was retained; no timeout, pkill, kill -9, or interrupt was used. The empty rocprofv3-raw directory is retained as evidence of the missing output."
+}

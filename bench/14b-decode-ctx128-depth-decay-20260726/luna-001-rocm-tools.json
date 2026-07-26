@@ -1,0 +1,25 @@
+{
+  "task": "LUNA-001",
+  "verdict": "PASS",
+  "supersedes": "The prior TOOL_FAILURE recorded before /opt/rocm/bin was on PATH.",
+  "rocm_path": "/opt/rocm",
+  "path_prefix": "/opt/rocm/bin",
+  "rocprofv3": {
+    "path": "/opt/rocm/bin/rocprofv3",
+    "version": "1.1.0",
+    "rocm_version": "7.2.4",
+    "capabilities_positive_control": ["--kernel-trace", "--hip-runtime-trace", "--output-format json", "--output-config"]
+  },
+  "device_positive_control": {
+    "command": "rocminfo",
+    "gpu": "AMD Radeon RX 7900 XTX",
+    "architecture": "gfx1100",
+    "wavefront_size": 32,
+    "artifact": "llama/ctx128/positive-control-device-rocminfo.txt"
+  },
+  "evidence": [
+    "llama/ctx128/rocprofv3-version.txt",
+    "llama/ctx128/rocprofv3-help.txt",
+    "llama/ctx128/positive-control-device-rocminfo.txt"
+  ]
+}
