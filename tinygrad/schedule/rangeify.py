@@ -502,6 +502,12 @@ def gate_substitute(ctx, b:UOp) -> None:
 pm_gate_substitute = PatternMatcher([(UPat(GroupOp.All, name="b"), gate_substitute)], compiled=False)
 # if a buffer is being stored just for permutes or something, remove it
 # we want to reexpress the indexes of idx2 in terms of the implied b1
+# Recompute-hostile ops: inlining a WIDE producer containing these into a reduction root loses more than the
+# materialisation it saves. See the COST GATE in remove_bufferize.
+_RECOMPUTE_HOSTILE_OPS = {Ops.LOG2, Ops.EXP2, Ops.SIN, Ops.SQRT, Ops.POW}
+# Attention producers are tile-sized; a vocab row is 151936 wide. The threshold sits between by orders of magnitude.
+_WIDE_PRODUCER_ELEMS = 65536
+
 def remove_bufferize(src:UOp, buf:UOp, idx:UOp):
   # see if we can't do it, should this ever hit?
   assert len(buf.src) == len(idx.src), f"index on wrong bufferize, {len(buf.src)} != {len(idx.src)}"
@@ -509,6 +515,24 @@ def remove_bufferize(src:UOp, buf:UOp, idx:UOp):
 
   # if it's user contiguous, we never remove it
   if src.op in ALWAYS_RUN_OPS or not buf.arg.removable: return None
+
+  # COST GATE (2026-07-26): do not duplicate an expensive WIDE producer across reduction roots.
+  # remove_bufferize runs once per consumer, and every path here ends in src.substitute(...), which INLINES
+  # the producer into that consumer. For a cheap producer that is exactly what fusion is for. For a wide
+  # producer holding transcendentals it is ruinous: the work is recomputed once per consumer, inside
+  # whatever parallelism that consumer happens to have.
+  #
+  # Measured: Gumbel-max sampling. A (151936,) producer with 2 transcendentals was substituted into BOTH
+  # argmax reductions. argmax lowers to a low-parallelism reduce, so the emitted log2 calls ran 1187 times
+  # in a ONE-workgroup/32-thread kernel -- 417us + 92us per token, against 13.8us to materialise the row
+  # once across 1187 workgroups. 8B decode ctx512 109.7 -> ~115.3 tok/s.
+  #
+  # Structural on purpose: keyed on producer width x transcendental presence, never on an expression or op
+  # name, so it cannot become a Gumbel/argmax special case. Attention producers are tile-sized, orders of
+  # magnitude below the threshold, so the intended attention fusion is unaffected.
+  if prod([x for x in buf.shape if isinstance(x, int)] or [0]) >= _WIDE_PRODUCER_ELEMS and \
+     any(u.op in _RECOMPUTE_HOSTILE_OPS for u in src.toposort()):
+    return None
 
   # *** here is where we compute the cost ***
   # if we return None, the bufferize is kept
