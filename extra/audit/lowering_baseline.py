@@ -49,7 +49,7 @@ Run:
 """
 from __future__ import annotations
 
-import argparse
+import argparse, os
 import json
 import pathlib
 import subprocess
@@ -73,6 +73,7 @@ OUT_DIR = ROOT / "bench" / "lowering-refactor-baseline"
 OUT_PATH = OUT_DIR / "latest.json"
 SCHEMA = "tinygrad.lowering_refactor_baseline.v1"
 TARGET_DEVICE = "AMD"
+AMD_TARGET = "AMD:HIP:gfx1100"   # the fingerprinted target; stated, not discovered
 
 # Qwen3-8B / Qwen3-14B role shapes, taken verbatim from extra/qk/route_manifest.json shape_guards (decode_q4k_g3_generated,
 # decode_q6k_coop_generated, prefill_flash_attention_generated, decode_flash_live_split_g4_kvboth,
@@ -94,11 +95,19 @@ ATTN_SHAPES = {"8B": {"Hq": 32, "Hkv": 8, "Hd": 128}, "14B": {"Hq": 40, "Hkv": 8
 
 def _amd_renderer():
   """Return the AMD renderer or fail loudly. Never falls back to another device/renderer."""
-  try:
-    dev = Device[TARGET_DEVICE]
-  except Exception as exc:
-    raise RuntimeError(f"AMD device is unavailable ({exc!r}); refusing to fingerprint against a different renderer") from exc
-  renderer = getattr(dev, "renderer", None)
+  # Constructed from the target string, NOT by opening a device. This is a compile-only gate; requiring a GPU to run
+  # it was a contradiction, and it meant the gate could not run while a benchmark held the card. Verified to produce
+  # byte-identical fingerprints to the device-derived renderer.
+  if os.environ.get("LOWERING_BASELINE_USE_DEVICE", "0") not in ("0", "", "false"):
+    try:
+      dev = Device[TARGET_DEVICE]
+    except Exception as exc:
+      raise RuntimeError(f"AMD device is unavailable ({exc!r}); refusing to fingerprint against a different renderer") from exc
+    renderer = getattr(dev, "renderer", None)
+  else:
+    from tinygrad.renderer.cstyle import HIPRenderer
+    from tinygrad.renderer import Target
+    renderer = HIPRenderer(Target.parse(AMD_TARGET))
   if renderer is None or type(renderer).__name__ != "HIPRenderer":
     raise RuntimeError(f"Device[{TARGET_DEVICE!r}].renderer is not the expected HIP renderer (got {type(renderer)!r})")
   return renderer
