@@ -7,23 +7,10 @@ from tinygrad.uop.ops import consumer_map_from_toposort, gate_kernel_sink, Compo
 from tinygrad.uop.symbolic import symbolic, pm_simplify_valid, pm_drop_and_clauses
 from tinygrad.helpers import argsort, all_same, cpu_profile, PCONTIG, colored, Context, SPEC
 
-ALWAYS_CONTIGUOUS: set[Ops] = {Ops.CONTIGUOUS, Ops.AFTER, Ops.COPY, Ops.BUFFER, Ops.SLICE,
-                     Ops.CONST, Ops.BIND, Ops.DEVICE, Ops.MSELECT, Ops.MSTACK, Ops.PARAM,
-                     Ops.DEFINE_LOCAL, Ops.DEFINE_REG, Ops.LOAD, Ops.CALL, Ops.FUNCTION, Ops.MEMORY_SEMANTIC}
-
-def realize(ctx:dict[UOp, None], tr:UOp) -> None: ctx[tr] = None
-
-def realize_srcs(ctx:dict[UOp, None], rb:UOp) -> None:
-  for s in rb.src:
-    if s.base.op not in ALWAYS_CONTIGUOUS: ctx[s] = None
-
-def realize_store_after_src(ctx:dict[UOp, None], dest:UOp, src:UOp):
-  # don't realize COPY/SLICE when they are the direct source of STORE+AFTER — the target buffer is the output
-  if src.op in {Ops.COPY, Ops.SLICE} and src in ctx \
-     and not dest.op_in_backward_slice_with_self(Ops.SHRINK, Ops.PERMUTE, Ops.FLIP, Ops.PAD):
-    del ctx[src]
-  # you don't usually have to do this for assign unless there's a WAR hazard like TestAssign.test_assign_double_diamond_reduce
-  if dest.base in src.backward_slice_with_self: ctx[src] = None
+# LR-040: the realization map moved to its owner, tinygrad/schedule/realize.py. Re-exported here so
+# this module's public surface is unchanged while the rewrite that consumes it stays put.
+from tinygrad.schedule.realize import (ALWAYS_CONTIGUOUS, realize, realize_srcs,  # noqa: F401
+                                       realize_store_after_src, pm_generate_realize_map)
 
 def _resolve_composite_axis_owner(owner_ranges:tuple[UOp, ...], axis:int|None) -> UOp|None:
   """Return the live RANGE owning a logical axis, or None if collapsed/local."""
@@ -31,15 +18,6 @@ def _resolve_composite_axis_owner(owner_ranges:tuple[UOp, ...], axis:int|None) -
   if axis < 0 or axis >= len(owner_ranges): return None
   owner = owner_ranges[axis]
   return owner if owner.op is Ops.RANGE else None
-
-pm_generate_realize_map = PatternMatcher([
-  # always realize
-  (UPat({Ops.COPY, Ops.CONTIGUOUS, Ops.STORE}, name="tr"), realize),
-  # realize srcs of these
-  (UPat((Ops.COPY, Ops.MSELECT, Ops.MSTACK), name="rb"), realize_srcs),
-  # sometimes we need to realize the src of STORE if there's a self-access
-  (UPat(Ops.STORE, src=(UPat.var("dest"), UPat.var("src"))), realize_store_after_src),
-])
 
 @dataclass(frozen=True)
 class BufferizeOpts:
