@@ -1,0 +1,12 @@
+{
+  "schema": "14b-traffic-compute-model.v1",
+  "task_id": "LUNA-041",
+  "verdict": "INCONCLUSIVE",
+  "geometry_assumption": {"layers": 48, "query_heads": 40, "kv_heads": 8, "head_dim": 128, "gqa_group": 5, "kv_dtype": "F16 assumed pending LUNA-002"},
+  "logical_kv_write_bytes_per_token": 196608,
+  "logical_kv_payload_bytes": {"128": 25165824, "512": 100663296, "4096": 805306368},
+  "formula": "layers * (K bytes + V bytes) = 48 * 2 * 8 * 128 * 2",
+  "excluded": ["allocator padding", "cache metadata", "staging", "transients", "quant-linear weights", "duplicate reads", "instruction counts"],
+  "why_not_reconciled": "LUNA-024/025 dispatch and resource ledgers and LUNA-032/033 tinygrad captures do not exist; LUNA-026 counters are unavailable because installed ROCm profiling executables are absent.",
+  "required_evidence": ["per-family trace counts and durations", "verified KV dtype/layout", "code-object instruction/resource rows", "same-definition counters if available"]
+}
