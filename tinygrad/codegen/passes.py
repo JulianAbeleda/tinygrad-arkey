@@ -344,3 +344,46 @@ def stage_counts(registry: dict[str, PassDescriptor] = REGISTRY) -> dict[str, in
   for d in registry.values():
     counts[d.stage] = counts.get(d.stage, 0) + 1
   return counts
+
+
+# ------------------------------------------------------------------------------------------------------------------
+# LR-032b: what this registry can and cannot be held to
+# ------------------------------------------------------------------------------------------------------------------
+# The intent of LR-032b was to make this registry load-bearing by asserting, inside graph_rewrite's existing hook,
+# that the observed `name=` sequence matches `default_order()`. That assertion cannot be written, and the reason is
+# a property of the two things being compared rather than a gap that more work would close:
+#
+#   * This registry names passes at FUNCTION granularity, inherited from the LR-001 inventory: 93 descriptors across
+#     36 distinct owner_files, one per PatternMatcher-bearing function.
+#   * `graph_rewrite(name=...)` names them at CALL granularity: on the CPU fingerprint corpus, 64 distinct names
+#     originating from only 9 files. Most descriptors here do not correspond to a named rewrite at all -- their
+#     PatternMatcher is merged into a matcher that some *other*, named, rewrite runs.
+#
+# Joining the two by name matches 7 of 64. Joining by owner_file matches 48 of the 53 names whose call site can be
+# located statically. Neither is a sequence that can be compared against `default_order()`, because the registry is
+# not a permutation of the observed pipeline -- it is a finer partition of it.
+#
+# So the pinning happens where the granularity is real: `extra/audit/lowering_fingerprint.py` records the collapsed
+# observed pass order per graph into its artifact, and `--check` fails on any reorder, rename, insertion, or
+# removal. That gate is falsifiable and was falsified before being trusted -- renaming one `name=` string produced
+# 10 REORDERED rows and, tellingly, 0 fingerprint differences: a pipeline change that byte-identical codegen is
+# completely blind to. `default_order()` remains what it always claimed to be -- a reconstruction for reasoning
+# about proposed reorderings, not a description of observed control flow.
+#
+# The gate's own resolution limit, measured rather than assumed: 218 of 981 collapsed steps (22%) report as
+# `<unnamed>`, from `graph_rewrite` calls that pass no `name=`. Reordering two unnamed rewrites relative to each
+# other is invisible to it. Naming them is a real, mechanical improvement to observability and is the honest
+# follow-on to this task; it is not done here because adding 200+ names is a diff no gate on this branch can
+# certify as behaviour-preserving.
+
+OBSERVED_NAME_JOIN = {
+  "distinct_observed_names": 64,      # on the CPU fingerprint corpus
+  "matched_by_name": 7,
+  "call_sites_located_statically": 53,
+  "matched_by_owner_file": 48,
+  "registry_descriptors": 93,
+  "registry_owner_files": 36,
+  "call_site_files": 9,
+  "unnamed_collapsed_steps": 218,
+  "total_collapsed_steps": 981,
+}

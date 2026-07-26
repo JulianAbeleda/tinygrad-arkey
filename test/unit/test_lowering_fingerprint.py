@@ -42,7 +42,7 @@ def test_all_graph_names_present():
 def test_check_passes_against_a_freshly_written_baseline(tmp_path, monkeypatch):
   out_path = tmp_path / "latest.json"
   monkeypatch.setattr(lf, "OUT_PATH", out_path)
-  artifact = lf.build_artifact([])
+  artifact = lf.build_artifact([], require_cold=False)
   out_path.write_text(json.dumps(artifact, indent=2, sort_keys=True) + "\n")
   assert lf.run_check([]) == 0
 
@@ -50,7 +50,7 @@ def test_check_passes_against_a_freshly_written_baseline(tmp_path, monkeypatch):
 def test_check_detects_a_mutated_hash_and_reports_which_graph_changed(tmp_path, monkeypatch, capsys):
   out_path = tmp_path / "latest.json"
   monkeypatch.setattr(lf, "OUT_PATH", out_path)
-  artifact = lf.build_artifact([])
+  artifact = lf.build_artifact([], require_cold=False)
   mutated = copy.deepcopy(artifact)
   mutated["fingerprints"]["matmul"] = "0" * 64
   out_path.write_text(json.dumps(mutated, indent=2, sort_keys=True) + "\n")
@@ -108,3 +108,97 @@ def test_leaked_prefill_env_var_does_not_change_the_fingerprint(monkeypatch):
   import os
   # strip_gate_env_vars() runs inside compute_fingerprints(); confirm the leaked var is gone afterward too.
   assert "PREFILL_SOFTMAX_REDUCE_FUSE" not in os.environ
+
+
+# --------------------------------------------------------------------------------------------------------------
+# LR-032b: pass order is pinned, and the registry's coverage claim is measured rather than asserted
+# --------------------------------------------------------------------------------------------------------------
+
+def test_collapse_drops_matcher_construction_and_consecutive_repeats():
+  seq = ["process UPat", "simplify", "simplify", "compile UPat", "simplify", "pad", "pad"]
+  # Matcher-construction names are dropped FIRST, so the two simplify runs they separated become one run and
+  # collapse together. That ordering is deliberate: 'compile UPat' appears wherever a matcher happens to be built
+  # first, so letting it split a run would make the order depend on corpus iteration order.
+  assert lf._collapse(seq) == ["simplify", "pad"]
+
+
+def test_collapse_keeps_a_pass_that_is_genuinely_re_entered():
+  """Collapsing must not deduplicate globally -- 'simplify, pad, simplify' means the pipeline came back to
+  simplify, which is exactly the kind of structure this gate exists to pin."""
+  assert lf._collapse(["simplify", "pad", "simplify"]) == ["simplify", "pad", "simplify"]
+
+
+def test_pass_orders_are_deterministic_across_two_cold_runs():
+  assert lf.pass_orders_in_fresh_process() == lf.pass_orders_in_fresh_process()
+
+
+def test_a_warm_process_refuses_to_report_a_pass_order():
+  """The gate's sharpest edge. A warm run records 132 collapsed steps where a cold run records 981, because
+  UOp-keyed caches skip the rewrites entirely -- so a warm order silently looks like a massive pipeline change.
+  Returning that would be far worse than refusing."""
+  import pytest
+  lf._run_corpus()                       # warm this process, whatever ran before
+  with pytest.raises(lf.WarmProcessError):
+    lf.compute_pass_orders()
+
+
+def test_every_graph_has_a_nonempty_pass_order():
+  orders = lf.pass_orders_in_fresh_process()
+  assert set(orders) == set(lf.compute_fingerprints())
+  assert all(len(v) > 10 for v in orders.values())
+
+
+def test_enabling_the_trace_does_not_change_the_fingerprint():
+  """The load-bearing claim behind capturing order inside the fingerprint run: tracing is an observer. If
+  record_rewrite ever touched the graph, the stored fingerprints would move and this gate would be measuring its
+  own instrumentation."""
+  import json as _json, pathlib
+  stored = _json.loads(pathlib.Path(lf.OUT_PATH).read_text())["fingerprints"]
+  assert lf.compute_fingerprints() == stored
+
+
+def test_order_diff_names_the_pass_that_moved():
+  old = {"g": ["a", "b", "c", "d"]}
+  new = {"g": ["a", "b", "renamed", "d"]}
+  rows = lf._classify_order_diff(old, new)
+  assert len(rows) == 1 and rows[0][1] == "REORDERED"
+  assert "'c'" in rows[0][2] and "'renamed'" in rows[0][2]
+
+
+def test_order_diff_detects_an_inserted_pass():
+  rows = lf._classify_order_diff({"g": ["a", "b"]}, {"g": ["a", "new", "b"]})
+  assert len(rows) == 1 and "len 2 -> 3" in rows[0][2]
+
+
+def test_order_diff_is_silent_on_an_identical_order():
+  assert lf._classify_order_diff({"g": ["a", "b"]}, {"g": ["a", "b"]}) == []
+
+
+def test_registry_coverage_numbers_are_recomputed_not_asserted():
+  """OBSERVED_NAME_JOIN records why the pass registry cannot be asserted against the observed pass sequence
+  (function granularity vs call granularity). Those numbers are a finding, so they must be recomputed from the
+  live registry and the live trace -- a stale comment claiming 7/64 would be worse than no comment."""
+  from tinygrad.codegen.passes import OBSERVED_NAME_JOIN, REGISTRY
+
+  orders = lf.pass_orders_in_fresh_process()
+  observed = {n for v in orders.values() for n in v}
+  assert len(observed) == OBSERVED_NAME_JOIN["distinct_observed_names"]
+
+  def norm(s: str) -> str: return s.lower().replace(" ", "-").replace("-", "_")
+  reg_leaf = {norm(pid.split(".")[-1]) for pid in REGISTRY}
+  assert sum(1 for o in observed if norm(o) in reg_leaf) == OBSERVED_NAME_JOIN["matched_by_name"]
+
+  assert len(REGISTRY) == OBSERVED_NAME_JOIN["registry_descriptors"]
+  assert len({d.owner_file for d in REGISTRY.values()}) == OBSERVED_NAME_JOIN["registry_owner_files"]
+
+  steps = [n for v in orders.values() for n in v]
+  assert len(steps) == OBSERVED_NAME_JOIN["total_collapsed_steps"]
+  assert steps.count("<unnamed>") == OBSERVED_NAME_JOIN["unnamed_collapsed_steps"]
+
+
+def test_unnamed_rewrites_are_a_bounded_and_declared_blind_spot():
+  """The order gate cannot see a reorder among rewrites that pass no name=. That limit is acceptable only while it
+  is known and bounded; if it grows, this fails and the number in passes.py has to be re-argued."""
+  from tinygrad.codegen.passes import OBSERVED_NAME_JOIN
+  frac = OBSERVED_NAME_JOIN["unnamed_collapsed_steps"] / OBSERVED_NAME_JOIN["total_collapsed_steps"]
+  assert frac < 0.25, f"unnamed rewrites now {frac:.0%} of the pipeline; name them or re-argue the gate's resolution"

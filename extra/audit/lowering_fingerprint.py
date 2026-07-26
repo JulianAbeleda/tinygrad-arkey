@@ -142,16 +142,109 @@ def _reset_uop_unique_counter() -> None:
   UOp.unique_num = itertools.count(0)
 
 
-def compute_fingerprints() -> dict[str, str]:
+# Names that `graph_rewrite` is called with that are NOT lowering passes: they are PatternMatcher construction,
+# which happens lazily the first time a matcher is used and therefore appears in whichever graph happens to run
+# first. Including them would make the order artifact depend on corpus iteration order rather than on lowering.
+NON_PASS_REWRITE_NAMES = frozenset({"process UPat", "compile UPat"})
+
+
+def _collapse(seq: list[str]) -> list[str]:
+  """Drop matcher-construction names, then collapse runs of the same name to one entry.
+
+  A pass that rewrites to a fixed point calls `graph_rewrite` a data-dependent number of times (`simplify` alone
+  accounts for ~180 of the ~440 raw calls on the CPU corpus). That count tracks how many rewrites a *graph*
+  needed, not what the pipeline is, so it would turn every unrelated graph edit into an order diff. The collapsed
+  sequence is the thing this gate is actually pinning: which passes run, in which order, how many times the
+  pipeline re-enters each one.
+  """
+  kept = [n for n in seq if n not in NON_PASS_REWRITE_NAMES]
+  return [n for i, n in enumerate(kept) if i == 0 or kept[i - 1] != n]
+
+
+class WarmProcessError(RuntimeError):
+  """Raised when a pass order is requested from a process that has already lowered the corpus once."""
+
+
+_CORPUS_RUNS = 0
+
+
+def _run_corpus() -> tuple[dict[str, str], dict[str, list[str]] | None]:
+  """Build and lower every graph once, returning (fingerprints, collapsed pass orders).
+
+  **The pass order is only meaningful on the FIRST corpus run in a process, and this returns None for it on any
+  later run rather than returning a wrong one.** Measured: run 1 records 981 collapsed steps across 64 distinct
+  pass names, run 2 in the same process records 132 across 13.
+
+  The cause is memoization keyed on UOp identity. `_reset_uop_unique_counter()` deliberately makes the second run's
+  graphs byte-identical to the first's, which is what makes the *fingerprint* reproducible -- and which therefore
+  turns every UOp-keyed cache into a hit. `tinygrad/schedule/indexing.py` has two `functools.cache` functions,
+  `_apply_reshape` and `apply_movement_op`, that each contain a named `graph_rewrite` ("reshape", "pad",
+  "minimum_valid" -- 144 collapsed steps between them); on a warm run those rewrites never execute, so the trace
+  cannot see them. They are not the only such cache, which is exactly why this is enforced structurally instead of
+  by clearing a list of caches that would silently go stale.
+
+  Note what this implies for the fingerprint too: a second in-process run is substantially a cache hit, not an
+  independent re-derivation. It is still a real check that lowering is reproducible given identical input, but it
+  is weaker than it looks, and only the cold run exercises the full pipeline.
+
+  Both artifacts come from a single pass over the corpus so they can never describe different runs. The lowering
+  trace is switched on in-process rather than through LOWER_TRACE, because `strip_gate_env_vars()` strips the
+  LOWER_ prefix by design -- and it should keep stripping it, so an inherited LOWER_* from a caller still cannot
+  reach the fingerprint. Tracing is an observer: `record_rewrite` appends to a list and returns, it does not touch
+  the graph. The fingerprints below are the control for that claim -- if enabling the trace changed lowering, they
+  would move.
+  """
+  global _CORPUS_RUNS
+  cold = _CORPUS_RUNS == 0
+  _CORPUS_RUNS += 1
   Tensor, Device = _prepare_env_and_import_tinygrad()
   _cpu_renderer(Device)  # fail loudly if CPU is somehow unavailable; never silently pick another device
   _reset_uop_unique_counter()
+  from tinygrad.uop import trace
   graphs = _build_graphs(Tensor)
-  out: dict[str, str] = {}
-  for name, build in graphs.items():
-    Tensor.manual_seed(1337)
-    out[name] = hashlib.sha256(build().schedule_linear().key).hexdigest()
-  return out
+  fingerprints: dict[str, str] = {}
+  orders: dict[str, list[str]] = {}
+  was_enabled = trace.ENABLED
+  try:
+    trace.ENABLED = True
+    for name, build in graphs.items():
+      Tensor.manual_seed(1337)
+      trace.reset(reread_env=False)   # reread_env=False: keep tracing on; LOWER_TRACE is stripped from the env
+      fingerprints[name] = hashlib.sha256(build().schedule_linear().key).hexdigest()
+      active = trace.active()
+      orders[name] = _collapse(active.order()) if active is not None else []
+  finally:
+    trace.reset(reread_env=False)
+    trace.ENABLED = was_enabled
+  return fingerprints, (orders if cold else None)
+
+
+def compute_fingerprints() -> dict[str, str]:
+  return _run_corpus()[0]
+
+
+def compute_pass_orders() -> dict[str, list[str]]:
+  """Collapsed pass order per graph. Raises WarmProcessError unless this is the process's first corpus run --
+  see _run_corpus. Callers that need this from a used process should use pass_orders_in_fresh_process()."""
+  orders = _run_corpus()[1]
+  if orders is None:
+    raise WarmProcessError(
+      "pass order requested from a warm process: UOp-keyed caches make later runs skip most rewrites "
+      "(981 collapsed steps cold vs 132 warm). Use pass_orders_in_fresh_process().")
+  return orders
+
+
+def pass_orders_in_fresh_process() -> dict[str, list[str]]:
+  """compute_pass_orders() in a clean subprocess, so it is a cold run by construction."""
+  import subprocess
+  src = ("import json,sys; sys.path.insert(0, %r); "
+         "from extra.audit import lowering_fingerprint as lf; "
+         "print(json.dumps(lf.compute_pass_orders()))" % str(ROOT))
+  r = subprocess.run([sys.executable, "-c", src], cwd=str(ROOT), capture_output=True, text=True,
+                     env={**os.environ, "PYTHONPATH": str(ROOT)})
+  if r.returncode != 0:
+    raise RuntimeError(f"fresh-process pass order run failed:\n{r.stderr[-2000:]}")
+  return json.loads(r.stdout.strip().splitlines()[-1])
 
 
 def build_header(argv: list[str]) -> dict[str, Any]:
@@ -163,10 +256,24 @@ def build_header(argv: list[str]) -> dict[str, Any]:
   }
 
 
-def build_artifact(argv: list[str]) -> dict[str, Any]:
+def build_artifact(argv: list[str], *, require_cold: bool = True) -> dict[str, Any]:
+  """The artifact for this run. `pass_orders` is present only when it is real.
+
+  require_cold=True (the CLI, which is always a cold process) refuses to build an artifact whose pass order would
+  be a cache-hit artefact. require_cold=False is for in-process callers that only care about fingerprints -- they
+  get an artifact with no `pass_orders` key at all, so a warm order can never be written to disk or compared
+  against a cold one. Omission is safe here in a way that a wrong order would not be: every consumer treats a
+  missing order as "not checked" and says so, rather than as "unchanged".
+  """
   header = build_header(argv)
-  fingerprints = compute_fingerprints()
-  return {"header": header, "fingerprints": fingerprints}
+  fingerprints, pass_orders = _run_corpus()
+  if pass_orders is None and require_cold:
+    raise WarmProcessError(
+      "build_artifact() called twice in one process: the second call cannot observe a true pass order. The CLI "
+      "always runs cold; in-process callers must pass require_cold=False or use a fresh process.")
+  out: dict[str, Any] = {"header": header, "fingerprints": fingerprints}
+  if pass_orders is not None: out["pass_orders"] = pass_orders
+  return out
 
 
 # --------------------------------------------------------------------------------------------------------------
@@ -188,22 +295,67 @@ def _classify_diff(old: dict[str, str], new: dict[str, str]) -> list[tuple[str, 
   return rows
 
 
+def _first_divergence(old: list[str], new: list[str]) -> str:
+  """Where two pass orders first disagree, in pass names rather than indices.
+
+  A pass-order diff is only actionable if it says which pass moved. Reporting `len 102 -> 101` sends the reader
+  back to the artifact to diff it by hand, which is how an order gate ends up being ignored.
+  """
+  for i, (a, b) in enumerate(itertools.zip_longest(old, new)):
+    if a != b:
+      ctx = " after " + " -> ".join(old[max(0, i - 2):i]) if i else " at the start"
+      return f"step {i}{ctx}: expected {a!r}, observed {b!r} (len {len(old)} -> {len(new)})"
+  return f"identical ({len(old)} steps)"
+
+
+def _classify_order_diff(old: dict[str, list[str]], new: dict[str, list[str]]) -> list[tuple[str, str, str]]:
+  rows: list[tuple[str, str, str]] = []
+  for name in sorted(set(old) | set(new)):
+    o, n = old.get(name), new.get(name)
+    if o is None:
+      rows.append((name, "ADDED", f"new graph, {len(n or [])} pass steps"))
+    elif n is None:
+      rows.append((name, "REMOVED", f"graph missing from fresh run, was {len(o)} pass steps"))
+    elif o != n:
+      rows.append((name, "REORDERED", _first_divergence(o, n)))
+  return rows
+
+
 def run_check(argv: list[str]) -> int:
   if not OUT_PATH.is_file():
     print(f"FAIL: no stored fingerprint at {OUT_PATH}; run without --check first")
     return 1
   stored = json.loads(OUT_PATH.read_text())
-  fresh = build_artifact(argv)
+  fresh = build_artifact(argv, require_cold=False)
   stored_fp = stored.get("fingerprints", {})
   fresh_fp = fresh.get("fingerprints", {})
   rows = _classify_diff(stored_fp, fresh_fp)
   print(f"{'graph':24s} {'status':8s} detail")
   for name, status, detail in rows:
     print(f"{name:24s} {status:8s} {detail}")
-  if not rows:
-    print(f"verdict: PASS ({len(fresh_fp)} graphs, lowering fingerprint unchanged)")
+
+  # Pass order is checked separately and reported separately: identical generated code with a changed pipeline is a
+  # real finding (a pass was reordered, split, or renamed without moving output on this corpus), and so is the
+  # reverse. Collapsing both into one verdict would hide whichever one the reader was not looking for.
+  stored_po = stored.get("pass_orders")
+  order_rows: list[tuple[str, str, str]] = []
+  if "pass_orders" not in fresh:
+    print("\npass order: NOT CHECKED (warm process -- most rewrites are cache hits and would report as removed)")
+  elif stored_po is None:
+    print("\npass order: no stored order in this artifact (predates the order gate); rerun without --check to pin it")
+  else:
+    order_rows = _classify_order_diff(stored_po, fresh.get("pass_orders", {}))
+    print(f"\n{'graph':24s} {'status':10s} detail")
+    for name, status, detail in order_rows:
+      print(f"{name:24s} {status:10s} {detail}")
+    if not order_rows:
+      steps = sum(len(v) for v in fresh.get("pass_orders", {}).values())
+      print(f"pass order: PASS ({steps} collapsed pass steps across {len(fresh_fp)} graphs, order unchanged)")
+
+  if not rows and not order_rows:
+    print(f"verdict: PASS ({len(fresh_fp)} graphs, lowering fingerprint and pass order unchanged)")
     return 0
-  print(f"verdict: FAIL ({len(rows)}/{len(set(stored_fp) | set(fresh_fp))} graphs differ)")
+  print(f"verdict: FAIL ({len(rows)} fingerprint, {len(order_rows)} pass-order differences)")
   return 1
 
 
