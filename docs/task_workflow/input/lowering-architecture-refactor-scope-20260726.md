@@ -581,6 +581,64 @@ Stop the current slice and revert it if any of the following occurs:
 
 Do not continue layering new abstractions over a failed contract. Return to the last green slice and revise the boundary.
 
+## 10b. Addendum after adversarial review (2026-07-26, phases 0-6 complete)
+
+An independent review of the branch at 16/22 tasks corrected three of my judgments and found a gate blind spot.
+Recorded here because the remaining phases should be executed against the corrected plan, not the original one.
+
+### Corrections to how this work should be measured
+
+- **Do not count inert lines.** The test of whether a contract earns its place is whether it surfaced a fact that
+  control flow was hiding. By that test LR-051 (found and fixed a real cache-key hole), LR-042 (its refusal is the
+  finding) and LR-060 (`FlashDecodeAttentionSpec` cannot name its own buffer roles) pay for themselves; LR-030 and
+  LR-043 largely re-encode reasoning that already existed in comments.
+- **"Moved to a new module" is two different things.** Real transfer means the old dependency edge is gone: LR-050
+  moved `coalesced_load` into core, core imports it directly, and the `extra.qk` adapter was deleted. Cosmetic means
+  only the definition moved: LR-040's `realize.py` holds the pattern matcher while `indexing.py` still invokes the
+  pass and mutates the same context. Test to apply: *after the move, does anything import the new module for a reason
+  other than continuing to do what it already did?*
+- **Measure promotion in core->extra import edges removed, not lines.** That number has a small finite ceiling. Most
+  of the ~9.2K default-path lines in `extra/qk` are route specs at real gfx1100 geometry and are correctly there.
+
+### Known gate blind spots
+
+Both fingerprints are compile-only and certify exactly one configuration. They do NOT cover:
+
+- **`limit_bufs`** -- `MAX_KERNEL_BUFFERS` defaults to 0 and `DEVICE_MAX_BUFS` covers only METAL/WEBGPU, so the pass
+  early-returns on every graph in both gates. If it is ever moved, the gates will certify the move regardless of
+  correctness. Build coverage first.
+- **The 36 env-gated passes.** `lowering_fingerprint.py` deliberately strips gate env vars for determinism, so it
+  certifies the default configuration only.
+- **Runtime behaviour.** Byte-identical source that was always wrong stays byte-identical.
+- **(closed 2026-07-26)** assign / multi-output / WAR-hazard: three graphs added after the review found
+  `realize_store_after_src`'s WAR branch had no coverage and cited a test this fork no longer contains.
+
+There is no independent upstream suite to fall back on: `test_schedule.py`, `test_assign.py` and `test_ops.py` went
+with the 394-file sweep in `45cfc399c`. Every gate on this branch was authored by the same process being gated, which
+is a standing structural risk. Prefer adding coverage that a future slice cannot trivially satisfy.
+
+### A defect to resolve before OptimizationPlan is made load-bearing
+
+`tinygrad/helpers.py:165` decorates `getenv` with `@functools.cache`, so `os.environ` is effectively frozen per
+process after first read. `OptimizationPlan.from_env` reads `os.environ` **live**. Every consumer reads through the
+cached `getenv`. The moment the plan is threaded into lowering, `plan.gate("X")` and a pass's `getenv("X")` can
+disagree in a long-lived process -- in the module whose stated purpose is that one variable cannot have two effective
+values. Fix `from_env` to read through `getenv`, or construct the plan once at import and freeze it, BEFORE promotion.
+
+### Revised order for the remaining phases
+
+1. **LR-032b -- make the pass registry load-bearing.** Assert in `graph_rewrite`'s existing hook that the observed
+   `name=` sequence matches the registry's declared order. Default off, on in CI. This converts "pass order exists
+   only as statement order" from a finding into an enforced invariant, costs one comparison, touches no pass, and
+   makes every subsequent move safer rather than just one. Do this before any further structural work.
+2. **Phase 8 (LR-080/081) early.** Deletion produces value immediately and the candidates are already identified.
+   With (1) in place, dead-path claims can be proven rather than asserted.
+3. **LR-061 with its premise corrected** -- see the task record: three of the four named files never consume the
+   route manifest, so the task is a consistency gate between manifest `shape_guards` and the spec's admission
+   predicate, NOT a unification of admission.
+4. **LR-062, LR-070/071** as scoped.
+5. **OptimizationPlan made load-bearing last**, after the `getenv` divergence above is resolved.
+
 ## 11. Definition of done
 
 This scope is complete only when:
