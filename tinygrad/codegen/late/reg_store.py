@@ -227,7 +227,8 @@ def _devec_stack_store(tgt:UOp, val:UOp, gate:UOp|None=None) -> UOp|None:
   return UOp.group(*stores)
 
 def _output_load_lane(u:UOp) -> tuple[UOp, int]|None:
-  # (GLOBAL INDEX, float4-lane) if u == GEP(LOAD([CAST] INDEX(GLOBAL buf, addr)), lane), else None.
+  # (GLOBAL INDEX, load-lane) if u is a scalar LOAD(INDEX(...)) or
+  # GEP(LOAD([CAST] INDEX(...)), lane), else None.
   # This is an output address that add_loads turned into a wide vector LOAD, whose lanes were then read
   # back as the (unassignable) STORE target instead of staying an addressable INDEX.
   # GLOBAL-only ON PURPOSE (see _devec_output_projection_store): the only validated producer is the GLOBAL
@@ -235,14 +236,15 @@ def _output_load_lane(u:UOp) -> tuple[UOp, int]|None:
   # combine intermediate whose reduction may be MAX (gmax) or MUL -- ADD-combining that would be silently
   # wrong (the reduce op is unrecoverable at this stage), so those are excluded here and owned by
   # reduce_acc_upcast_fix / a future op-aware combine lowering.
-  if u.op is not Ops.GEP or not isinstance(u.arg, tuple) or len(u.arg) != 1: return None
-  ld = u.src[0]
+  if u.op is Ops.LOAD: ld, lane = u, 0
+  elif u.op is Ops.GEP and isinstance(u.arg, tuple) and len(u.arg) == 1: ld, lane = u.src[0], u.arg[0]
+  else: return None
   if ld.op is not Ops.LOAD: return None
   idx = ld.src[0]
   if idx.op is Ops.CAST: idx = idx.src[0]
   if idx.op is not Ops.INDEX or len(idx.src) < 2: return None
   if getattr(idx.src[0], "addrspace", None) is not AddrSpace.GLOBAL: return None
-  return (idx, u.arg[0])
+  return (idx, lane)
 
 def _devec_output_projection_store(tgt:UOp, val:UOp) -> UOp|None:
   # Sibling of the bare-LOAD(INDEX) output-projection restoration in codegen/__init__.py:235-244
@@ -262,7 +264,9 @@ def _devec_output_projection_store(tgt:UOp, val:UOp) -> UOp|None:
   # reduce op so a MAX/MUL combine lowers correctly) is deferred to the fused-combine work, where a MAX
   # producer actually exists to test against; adding untested MAX handling here now would be speculative.
   # Fail-closed: only fires when every lane is a GLOBAL output-load lane read, groups are contiguous and
-  # uniform with size>1, and each group's values are distinct (a genuine many->one reduction, not a broadcast).
+  # uniform with size>1, and every group is either a genuine many->one reduction (distinct values) or an
+  # exact broadcast (one value repeated for the same address). The latter must still be scalarized: leaving
+  # it in the vector store makes the C renderer assign to a make_floatN(...) rvalue.
   if val.dtype.count != len(tgt.src): return None
   info = [_output_load_lane(p) for p in tgt.src]
   if any(x is None for x in info): return None
@@ -273,13 +277,14 @@ def _devec_output_projection_store(tgt:UOp, val:UOp) -> UOp|None:
     groups.append(list(range(i, j))); i = j
   g = len(groups[0])
   if g < 2 or any(len(pos) != g for pos in groups): return None
-  for pos in groups:
-    if len({val.gep((p,)) for p in pos}) != g: return None      # identical values -> broadcast, leave it
   stores = []
   for pos in groups:
     idx, lane = info[pos[0]]
     addr = idx.src[0].index(idx.src[1] + UOp.const(idx.src[1].dtype, lane))
-    stores.append(addr.store(functools.reduce(lambda a,b: a+b, [val.gep((p,)) for p in pos])))
+    vals = [val.gep((p,)) for p in pos]
+    if len(set(vals)) == 1: stores.append(addr.store(vals[0]))
+    elif len(set(vals)) == g: stores.append(addr.store(functools.reduce(lambda a,b: a+b, vals)))
+    else: return None
   return UOp.group(*stores)
 
 pm_distinct_reg_store_devec = PatternMatcher([
