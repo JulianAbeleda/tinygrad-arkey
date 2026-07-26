@@ -34,5 +34,5 @@ class TestRocprofV3Index(unittest.TestCase):
       root = pathlib.Path(temp); trace = root / "trace.csv"; trace.write_text("kernel_name\nknown_control\n")
       with self.assertRaisesRegex(ValueError, "positive control mismatch"):
         index_evidence(self._manifest(root, trace))
-      with self.assertRaisesRegex(ValueError, "required fields"):
+      with self.assertRaisesRegex(ValueError, "positive control requires"):
         index_evidence(self._manifest(root, trace, expected_kernel_name=None))
