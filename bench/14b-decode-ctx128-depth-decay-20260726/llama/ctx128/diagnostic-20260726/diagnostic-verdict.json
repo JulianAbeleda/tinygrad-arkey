@@ -1,0 +1,14 @@
+{
+  "task": "LUNA-021 diagnostic follow-up",
+  "verdict": "SUPPORTED_WORKING_TRACE_RECIPE",
+  "scope_verdict": "LUNA-021 remains TOOL_FAILURE because the required n=128 bounded trace was not rerun in this diagnostic follow-up.",
+  "base_commit": "a6c4e717d",
+  "controls": {
+    "direct_unprofiled": {"exit_status": 0, "stdout": "direct-smoke-stdout.json", "stderr": "direct-smoke-stderr.txt", "backend": "ROCm", "gpu": "gfx1100"},
+    "simple_rocprofv3": {"exit_status": 0, "stdout": "simple-kernel-trace-stdout.json", "stderr": "simple-kernel-trace-stderr.txt", "trace": "simple-kernel-trace/ubuntu-dualboot/143113_results.json", "kernel_name_records": 923}
+  },
+  "working_command": "/opt/rocm/bin/rocprofv3 --kernel-trace --output-directory <absolute-output-directory> --output-format json -- /home/ubuntu/env/llama.cpp/build/bin/llama-bench -m /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf -ngl 99 -p 0 -n 1 -d 128 -b 512 -ub 512 -fa 1 -r 1 -o json",
+  "nonworking_command": "/opt/rocm/bin/rocprofv3 --kernel-trace --hip-runtime-trace --stats --output-config on --output-directory <relative-output-directory> --output-format json -- /home/ubuntu/env/llama.cpp/build/bin/llama-bench -m /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf -ngl 99 -p 0 -n 128 -d 128 -b 512 -ub 512 -fa 1 -r 1 -o json",
+  "diagnosis": "Child process visibility and direct KFD/HIP kernel tracing work. The failed capture is attributable to its added option/output configuration combination; this diagnostic does not isolate one individual flag because the bounded follow-up stopped at the first working recipe.",
+  "safety": "Each GPU control used flock -n /tmp/gpu-bench.lock. No timeout, pkill, kill -9, or interruption was used."
+}

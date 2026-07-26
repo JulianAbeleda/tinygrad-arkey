@@ -1,0 +1,9 @@
+W20260726 17:32:19.376678 133956317643136 simple_timer.cpp:55] [rocprofv3] tool initialization ::     0.001666 sec
+W20260726 17:32:19.397864 133956317643136 simple_timer.cpp:55] [rocprofv3] '/home/ubuntu/env/llama.cpp/build/bin/llama-bench -m /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf -ngl 99 -p 0 -n 1 -d 128 -b 512 -ub 512 -fa 1 -r 1 -o json' ::     0.000000 sec
+W20260726 17:32:19.422635 133956317643136 tool.cpp:2422] HSA version 8.20.4 initialized (instance=0)
+ggml_cuda_init: found 1 ROCm devices (Total VRAM: 24560 MiB):
+  Device 0: AMD Radeon RX 7900 XTX, gfx1100 (0x1100), VMM: no, Wave Size: 32, VRAM: 24560 MiB
+W20260726 17:32:23.151834 133956317643136 simple_timer.cpp:55] [rocprofv3] '/home/ubuntu/env/llama.cpp/build/bin/llama-bench -m /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf -ngl 99 -p 0 -n 1 -d 128 -b 512 -ub 512 -fa 1 -r 1 -o json' ::     3.753970 sec
+E20260726 17:32:23.163292 133956317643136 output_stream.cpp:111] Opened result file: bench/14b-decode-ctx128-depth-decay-20260726/llama/ctx128/diagnostic-20260726/simple-kernel-trace/ubuntu-dualboot/143113_results.json
+W20260726 17:32:23.197952 133956317643136 simple_timer.cpp:55] [rocprofv3] output generation ::     0.044466 sec
+W20260726 17:32:23.198286 133956317643136 simple_timer.cpp:55] [rocprofv3] tool finalization ::     0.044826 sec

@@ -1,0 +1,6 @@
+kind=rocprofv3-simple-kernel-trace
+base_commit=a6c4e717dfaf6acfc6d14b2fa1173b69d847eb4f
+boot_id=298b04ee-0cec-42de-9fc1-f903fd992bf4
+PATH=/opt/rocm/bin:/home/ubuntu/.local/bin:/home/ubuntu/.codex/packages/standalone/releases/0.145.0-x86_64-unknown-linux-musl/codex-path:/home/ubuntu/.codex/tmp/arg0/codex-arg0kUWUYc:/home/ubuntu/.local/bin:/home/ubuntu/.kimi-code/bin:/home/ubuntu/.local/kimi-cli/kimi:/home/ubuntu/.grok/bin:/home/ubuntu/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin
+pid=143110
+argv=/opt/rocm/bin/rocprofv3 --kernel-trace --output-directory bench/14b-decode-ctx128-depth-decay-20260726/llama/ctx128/diagnostic-20260726/simple-kernel-trace --output-format json -- /home/ubuntu/env/llama.cpp/build/bin/llama-bench -m /home/ubuntu/models/Qwen3-14B-Q4_K_M.gguf -ngl 99 -p 0 -n 1 -d 128 -b 512 -ub 512 -fa 1 -r 1 -o json
