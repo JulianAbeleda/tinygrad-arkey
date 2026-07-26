@@ -136,6 +136,28 @@ def test_relative_imports_resolve(tmp_path):
   c = run(tmp_path, files, m)
   assert c["graph"]["edges"].get("extra/qk/prefill/a.py") == ["extra/qk/b.py"]
 
+def test_function_local_import_is_deferred_not_a_load_time_edge(tmp_path):
+  """An import inside a function does not run at import time, so it must not put its target on the default path.
+  Conflating the two is what made a research module look production-reachable."""
+  files = {"tinygrad/llm/route_ops.py": "from extra.qk.adapter import go\n",
+           "extra/qk/adapter.py": "def go():\n  from extra.qk.research import heavy\n  return heavy()\n",
+           "extra/qk/research.py": "def heavy(): return 1\n"}
+  m = {"files": [rec("extra/qk/adapter.py", default_path=True, promotion_decision="keep"),
+                 rec("extra/qk/research.py", role="research", status="refuted")]}
+  c = run(tmp_path, files, m)
+  assert c["graph"]["edges"].get("extra/qk/adapter.py") is None          # nothing loaded at import time
+  assert c["graph"]["deferred_import_edges"]["extra/qk/adapter.py"] == ["extra/qk/research.py"]
+  assert "extra/qk/research.py" not in c["default_path_footprint"]["production_reachable_from_tinygrad"]
+  assert not c["hard_errors"]                                            # a refuted module behind a deferred import is fine
+
+def test_module_scope_import_inside_a_try_block_still_counts(tmp_path):
+  """try/if/with at module level DO run at import time -- only function bodies are deferred."""
+  files = {"extra/qk/a.py": "try:\n  from extra.qk.b import Y\nexcept ImportError:\n  Y = None\n",
+           "extra/qk/b.py": "Y = 1\n"}
+  m = {"files": [rec("extra/qk/a.py"), rec("extra/qk/b.py")]}
+  c = run(tmp_path, files, m)
+  assert c["graph"]["edges"]["extra/qk/a.py"] == ["extra/qk/b.py"]
+
 def test_lazy_attr_seam_is_seen_as_a_dependency_edge(tmp_path):
   """route_ops.py-style wrappers import by string at call time; a plain AST import graph would call the whole of
   extra/qk unreachable from production."""

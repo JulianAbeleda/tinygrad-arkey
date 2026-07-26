@@ -1,8 +1,8 @@
 # Codebase organization audit
 
-Audited commit: `mac-first-boot-20260610-3419-gbece3963e-dirty` (dirty: True)
+Audited commit: `mac-first-boot-20260610-3421-g382d43d97-dirty` (dirty: True)
 Scope: `<repository>` | manifest coverage required for: extra/qk/
-Verdict: **ORG_R1_BLOCKED_ORGANIZATION_DRIFT** (1 hard errors, 82 warnings)
+Verdict: **ORG_R1_PASS_CENSUS_PINNED** (0 hard errors, 68 warnings)
 
 > Machine-derived facts (discovery, LOC, imports, references, coverage, boundary checks) are produced by this
 > script. Every purpose, role, status, disposition, action, and promotion/prune judgment below is human-authored
@@ -10,7 +10,7 @@ Verdict: **ORG_R1_BLOCKED_ORGANIZATION_DRIFT** (1 hard errors, 82 warnings)
 
 ## Coverage
 
-- Authored: 435 files / 68387 token-bearing LOC (sz.py rules)
+- Authored: 435 files / 68401 token-bearing LOC (sz.py rules)
 - Generated (reported, never manifested): 1 files / 57 LOC
 - Manifest scope: 96 files / 13275 LOC (96 explicit records, 0 covered by group rule, 0 uncovered)
 
@@ -27,7 +27,7 @@ Verdict: **ORG_R1_BLOCKED_ORGANIZATION_DRIFT** (1 hard errors, 82 warnings)
 | quant_mmq | 18 | 2930 |
 | route_authority | 16 | 3447 |
 | search_promotion | 8 | 1007 |
-| unclassified | 339 | 55112 |
+| unclassified | 339 | 55126 |
 
 ## LOC by role
 
@@ -42,7 +42,7 @@ Verdict: **ORG_R1_BLOCKED_ORGANIZATION_DRIFT** (1 hard errors, 82 warnings)
 | integration | 2 | 199 |
 | research | 4 | 387 |
 | test | 1 | 136 |
-| unclassified | 339 | 55112 |
+| unclassified | 339 | 55126 |
 
 ## LOC by status
 
@@ -55,7 +55,7 @@ Verdict: **ORG_R1_BLOCKED_ORGANIZATION_DRIFT** (1 hard errors, 82 warnings)
 | promoted_default | 6 | 648 |
 | refuted | 1 | 21 |
 | retained_reference | 1 | 114 |
-| unclassified | 339 | 55112 |
+| unclassified | 339 | 55126 |
 | unresolved_reproducer | 2 | 360 |
 
 ## LOC by disposition
@@ -65,17 +65,15 @@ Verdict: **ORG_R1_BLOCKED_ORGANIZATION_DRIFT** (1 hard errors, 82 warnings)
 | consolidate | 2 | 864 |
 | investigate | 2 | 256 |
 | keep | 92 | 12155 |
-| unclassified | 339 | 55112 |
+| unclassified | 339 | 55126 |
 
 ## Default-path source footprint
 
-54 declared default-path files / 8856 LOC.
+42 declared default-path files / 6241 LOC.
 
 - `extra/qk/amd_isa_proof.py`
 - `extra/qk/amd_resource_artifact.py`
 - `extra/qk/amd_warp_reduce.py`
-- `extra/qk/attention_harness_common.py`
-- `extra/qk/cooperative_stage_lanemap.py`
 - `extra/qk/decode/current_decode_execution_adapter.py`
 - `extra/qk/decode/flash_decode_attention_executor.py`
 - `extra/qk/decode/flash_decode_attention_spec.py`
@@ -91,16 +89,8 @@ Verdict: **ORG_R1_BLOCKED_ORGANIZATION_DRIFT** (1 hard errors, 82 warnings)
 - `extra/qk/memory_adaptive_allocation_observer.py`
 - `extra/qk/memory_adaptive_policy.py`
 - `extra/qk/memory_adaptive_runtime_collector.py`
-- `extra/qk/mmq_atom_boundary.py`
-- `extra/qk/mmq_compile_evidence.py`
-- `extra/qk/mmq_ds4_probe_contract.py`
 - `extra/qk/mmq_epoch_manifest_export.py`
-- `extra/qk/mmq_lifecycle.py`
-- `extra/qk/mmq_logical_vocabulary.py`
-- `extra/qk/mmq_q4k_q8_atom.py`
-- `extra/qk/mmq_q4k_q8_reference.py`
 - `extra/qk/model_profiles.py`
-- `extra/qk/operand_attribution.py`
 - `extra/qk/packed_wmma_compile_gate.py`
 - `extra/qk/prefill/candidate_payloads.py`
 - `extra/qk/prefill/current_prefill_execution_adapter.py`
@@ -115,10 +105,8 @@ Verdict: **ORG_R1_BLOCKED_ORGANIZATION_DRIFT** (1 hard errors, 82 warnings)
 - `extra/qk/prefill/packed_wmma_prefill_candidates.py`
 - `extra/qk/prefill/prefill_graph_gemm_route.py`
 - `extra/qk/prefill/pure_register_compile_capture.py`
-- `extra/qk/prefill/pure_register_evaluation_gate.py`
 - `extra/qk/prefill/q4k_prefill_route_spec.py`
 - `extra/qk/prefill/q6k_prefill_route_spec.py`
-- `extra/qk/q4k_tile_loader.py`
 - `extra/qk/q6k_route_spec.py`
 - `extra/qk/quant/q4_k_gemv_primitive.py`
 - `extra/qk/quant/q6_k_gemv_primitive.py`
@@ -145,7 +133,7 @@ Verdict: **ORG_R1_BLOCKED_ORGANIZATION_DRIFT** (1 hard errors, 82 warnings)
 | 619 | `tinygrad/renderer/isa/x86.py` | None |
 | 598 | `tinygrad/codegen/opt/postrange.py` | None |
 | 596 | `tinygrad/mixin/__init__.py` | None |
-| 576 | `extra/audit/codebase_organization_audit.py` | None |
+| 590 | `extra/audit/codebase_organization_audit.py` | None |
 | 576 | `tinygrad/renderer/amd/sqtt.py` | None |
 | 556 | `extra/llm/cli.py` | None |
 | 552 | `tinygrad/viz/js/profiler.js` | None |
@@ -161,10 +149,10 @@ None.
 
 ## Import cycles
 
-- ['extra/hardware/sqtt/roc.py', 'tinygrad/renderer/amd/sqtt.py', 'tinygrad/viz/http.py', 'tinygrad/viz/profile.py', 'tinygrad/viz/render.py', 'tinygrad/viz/serve.py']
-- ['tinygrad/__init__.py', 'tinygrad/callify.py', 'tinygrad/codegen/__init__.py', 'tinygrad/codegen/gpudims.py', 'tinygrad/codegen/late/composite_combines.py', 'tinygrad/codegen/late/devectorizer.py', 'tinygrad/codegen/late/expander.py', 'tinygrad/codegen/late/flash_attn.py', 'tinygrad/codegen/late/gater.py', 'tinygrad/codegen/late/linearizer.py', 'tinygrad/codegen/late/reduce_lowering.py', 'tinygrad/codegen/late/reg_store.py', 'tinygrad/codegen/late/regalloc.py', 'tinygrad/codegen/opt/heuristic.py', 'tinygrad/codegen/opt/kernel_lds.py', 'tinygrad/codegen/opt/kernel_pipeline.py', 'tinygrad/codegen/opt/packed_weight.py', 'tinygrad/codegen/opt/postrange.py', 'tinygrad/codegen/simplify.py', 'tinygrad/device.py', 'tinygrad/engine/jit.py', 'tinygrad/engine/realize.py', 'tinygrad/function.py', 'tinygrad/llm/fused_attention.py', 'tinygrad/mixin/__init__.py', 'tinygrad/mixin/movement.py', 'tinygrad/mixin/rand.py', 'tinygrad/mixin/reduce.py', 'tinygrad/nn/state.py', 'tinygrad/renderer/__init__.py', 'tinygrad/renderer/isa/__init__.py', 'tinygrad/schedule/__init__.py', 'tinygrad/schedule/allreduce.py', 'tinygrad/schedule/flash_fusion.py', 'tinygrad/schedule/indexing.py', 'tinygrad/schedule/memory.py', 'tinygrad/schedule/multi.py', 'tinygrad/schedule/rangeify.py', 'tinygrad/schedule/wmma/__init__.py', 'tinygrad/schedule/wmma/composite.py', 'tinygrad/schedule/wmma/fragments.py', 'tinygrad/schedule/wmma/kernels.py', 'tinygrad/schedule/wmma/loop_state.py', 'tinygrad/schedule/wmma/softmax.py', 'tinygrad/tensor.py', 'tinygrad/uop/decompositions.py', 'tinygrad/uop/divandmod.py', 'tinygrad/uop/ops.py', 'tinygrad/uop/render.py', 'tinygrad/uop/spec.py', 'tinygrad/uop/symbolic.py', 'tinygrad/uop/upat.py', 'tinygrad/uop/validate.py']
-- ['tinygrad/renderer/cstyle.py', 'tinygrad/renderer/isa/amd.py', 'tinygrad/renderer/llvmir.py', 'tinygrad/runtime/graph/hcq.py', 'tinygrad/runtime/ops_amd.py', 'tinygrad/runtime/support/am/amdev.py', 'tinygrad/runtime/support/c.py', 'tinygrad/runtime/support/compiler_amd.py', 'tinygrad/runtime/support/hcq.py', 'tinygrad/runtime/support/system.py', 'tinygrad/runtime/support/usb.py']
+- ['tinygrad/__init__.py', 'tinygrad/codegen/late/flash_attn.py', 'tinygrad/engine/jit.py', 'tinygrad/function.py', 'tinygrad/nn/state.py', 'tinygrad/tensor.py']
+- ['tinygrad/codegen/simplify.py', 'tinygrad/device.py', 'tinygrad/mixin/__init__.py', 'tinygrad/mixin/movement.py', 'tinygrad/mixin/rand.py', 'tinygrad/mixin/reduce.py', 'tinygrad/renderer/__init__.py', 'tinygrad/schedule/allreduce.py', 'tinygrad/schedule/indexing.py', 'tinygrad/schedule/multi.py', 'tinygrad/schedule/rangeify.py', 'tinygrad/uop/decompositions.py', 'tinygrad/uop/divandmod.py', 'tinygrad/uop/ops.py', 'tinygrad/uop/render.py', 'tinygrad/uop/spec.py', 'tinygrad/uop/symbolic.py']
 - ['tinygrad/runtime/graph/cuda.py', 'tinygrad/runtime/ops_cuda.py']
+- ['tinygrad/runtime/graph/hcq.py', 'tinygrad/runtime/ops_amd.py', 'tinygrad/runtime/support/am/amdev.py', 'tinygrad/runtime/support/hcq.py', 'tinygrad/runtime/support/system.py', 'tinygrad/runtime/support/usb.py']
 
 ## Files with no inbound import and no reference anywhere
 
@@ -370,9 +358,9 @@ None.
 
 | path | class | former purpose | last campaign | replacement | commit | recovery | loc |
 |---|---|---|---|---|---|---|---|
-| `extra/qk/p2_probe_1.py` | delete_ready | Bisect where REDUCE-preserving fusion breaks in attention by walking max -> sum -> broadcast-subtract -> exp-sum -> softmax -> softmax@v under DEV=AMD TC_OPT=2. | flash-prefill Piece 2-A (2026-07-21) | docs/flash-prefill-piece2-probe-20260721.md | `bece3963e9a7` | git show ad65bd05e951f6e460d167c207fdf3e97faf5c76 -- extra/qk/p2_probe_1.py ... p2_probe_6.py | 44 |
-| `extra/qk/shared_attention_evidence_gate.py` | delete_after_verdict_capture | Validate a shared-attention evidence bundle before admitting it as promotion evidence. | shared-attention evidence pipeline | extra/qk/shared_attention_promotion.py (the gate that acts on a schema with a real producer) | `bece3963e9a7` | git log --diff-filter=A -- extra/qk/shared_attention_evidence_gate.py | 131 |
-| `extra/qk/q4k_wmma_tile_lowering.py` | delete_after_verdict_capture | Route Q4_K prefill matmuls through RDNA3 v_wmma_i32_16x16x16_iu8 int8 tensor-core tiles. | q4k int8 WMMA-tiled prefill (2026-07-05 to 2026-07-14) | docs/q4k-int8-wmma-tiled-campaign-retirement-20260726.md | `bece3963e9a7` | git show 05b67146a -- <path> | 1138 |
+| `extra/qk/p2_probe_1.py` | delete_ready | Bisect where REDUCE-preserving fusion breaks in attention by walking max -> sum -> broadcast-subtract -> exp-sum -> softmax -> softmax@v under DEV=AMD TC_OPT=2. | flash-prefill Piece 2-A (2026-07-21) | docs/flash-prefill-piece2-probe-20260721.md | `382d43d97fde` | git show ad65bd05e951f6e460d167c207fdf3e97faf5c76 -- extra/qk/p2_probe_1.py ... p2_probe_6.py | 44 |
+| `extra/qk/shared_attention_evidence_gate.py` | delete_after_verdict_capture | Validate a shared-attention evidence bundle before admitting it as promotion evidence. | shared-attention evidence pipeline | extra/qk/shared_attention_promotion.py (the gate that acts on a schema with a real producer) | `382d43d97fde` | git log --diff-filter=A -- extra/qk/shared_attention_evidence_gate.py | 131 |
+| `extra/qk/q4k_wmma_tile_lowering.py` | delete_after_verdict_capture | Route Q4_K prefill matmuls through RDNA3 v_wmma_i32_16x16x16_iu8 int8 tensor-core tiles. | q4k int8 WMMA-tiled prefill (2026-07-05 to 2026-07-14) | docs/q4k-int8-wmma-tiled-campaign-retirement-20260726.md | `382d43d97fde` | git show 05b67146a -- <path> | 1138 |
 
 ## Workflow inventory
 
@@ -407,7 +395,7 @@ None.
 
 - Budgeted (`tinygrad`, `bench`, `structure`): **34087 / 35000** -- headroom 913
 - Against the standing 30000 target: **4087 over**. sz.py:13 records 35000 as temporary headroom; the standing target is 30000
-- Default-path LOC currently sitting unbudgeted in `extra/`: **8856**
+- Default-path LOC currently sitting unbudgeted in `extra/`: **6241**
 - Net budget cost of pending promotions (moved minus deleted): 0
 - Declarative LOC a data-file conversion would remove from the budget entirely: 0
 
@@ -451,15 +439,13 @@ costs zero.
 
 ## Hard errors
 
-- **default_path_dead_status**: extra/qk/mmq_ds4_probe_contract.py is default_path but status is 'refuted'
+None.
 
 ## Warnings
 
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/amd_isa_proof.py is on the default production path from extra/ with no promotion or retention decision
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/amd_resource_artifact.py is on the default production path from extra/ with no promotion or retention decision
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/amd_warp_reduce.py is on the default production path from extra/ with no promotion or retention decision
-- **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/attention_harness_common.py is on the default production path from extra/ with no promotion or retention decision
-- **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/cooperative_stage_lanemap.py is on the default production path from extra/ with no promotion or retention decision
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/decode/current_decode_execution_adapter.py is on the default production path from extra/ with no promotion or retention decision
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/decode/flash_decode_attention_executor.py is on the default production path from extra/ with no promotion or retention decision
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/decode/flash_decode_attention_spec.py is on the default production path from extra/ with no promotion or retention decision
@@ -475,16 +461,8 @@ costs zero.
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/memory_adaptive_allocation_observer.py is on the default production path from extra/ with no promotion or retention decision
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/memory_adaptive_policy.py is on the default production path from extra/ with no promotion or retention decision
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/memory_adaptive_runtime_collector.py is on the default production path from extra/ with no promotion or retention decision
-- **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/mmq_atom_boundary.py is on the default production path from extra/ with no promotion or retention decision
-- **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/mmq_compile_evidence.py is on the default production path from extra/ with no promotion or retention decision
-- **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/mmq_ds4_probe_contract.py is on the default production path from extra/ with no promotion or retention decision
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/mmq_epoch_manifest_export.py is on the default production path from extra/ with no promotion or retention decision
-- **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/mmq_lifecycle.py is on the default production path from extra/ with no promotion or retention decision
-- **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/mmq_logical_vocabulary.py is on the default production path from extra/ with no promotion or retention decision
-- **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/mmq_q4k_q8_atom.py is on the default production path from extra/ with no promotion or retention decision
-- **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/mmq_q4k_q8_reference.py is on the default production path from extra/ with no promotion or retention decision
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/model_profiles.py is on the default production path from extra/ with no promotion or retention decision
-- **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/operand_attribution.py is on the default production path from extra/ with no promotion or retention decision
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/packed_wmma_compile_gate.py is on the default production path from extra/ with no promotion or retention decision
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/prefill/candidate_payloads.py is on the default production path from extra/ with no promotion or retention decision
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/prefill/current_prefill_execution_adapter.py is on the default production path from extra/ with no promotion or retention decision
@@ -499,20 +477,16 @@ costs zero.
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/prefill/packed_wmma_prefill_candidates.py is on the default production path from extra/ with no promotion or retention decision
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/prefill/prefill_graph_gemm_route.py is on the default production path from extra/ with no promotion or retention decision
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/prefill/pure_register_compile_capture.py is on the default production path from extra/ with no promotion or retention decision
-- **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/prefill/pure_register_evaluation_gate.py is on the default production path from extra/ with no promotion or retention decision
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/prefill/q4k_prefill_route_spec.py is on the default production path from extra/ with no promotion or retention decision
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/prefill/q6k_prefill_route_spec.py is on the default production path from extra/ with no promotion or retention decision
-- **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/q4k_tile_loader.py is on the default production path from extra/ with no promotion or retention decision
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/q6k_route_spec.py is on the default production path from extra/ with no promotion or retention decision
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/quant/q4_k_gemv_primitive.py is on the default production path from extra/ with no promotion or retention decision
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/quant/q6_k_gemv_primitive.py is on the default production path from extra/ with no promotion or retention decision
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/route_manifest.py is on the default production path from extra/ with no promotion or retention decision
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/runtime_specs.py is on the default production path from extra/ with no promotion or retention decision
 - **extra_on_default_path** (production behavior should live with its domain owner): extra/qk/warp_reduce_lowering.py is on the default production path from extra/ with no promotion or retention decision
-- **high_fan_in** (a widely-imported module is a de-facto authority): extra/qk/layout.py is imported by 21 modules
-- **high_fan_in** (a widely-imported module is a de-facto authority): extra/qk/route_manifest.py is imported by 20 modules
-- **high_fan_out** (prefer deep modules with small interfaces): extra/qk/decode/current_decode_execution_adapter.py imports 17 internal modules
-- **high_fan_out** (prefer deep modules with small interfaces): extra/qk/prefill/current_prefill_execution_adapter.py imports 19 internal modules
+- **high_fan_in** (a widely-imported module is a de-facto authority): extra/qk/layout.py is imported by 19 modules
+- **high_fan_in** (a widely-imported module is a de-facto authority): extra/qk/route_manifest.py is imported by 19 modules
 - **large_file** (minimize what a reader must hold in their head): extra/qk/mmq_q4k_q8_atom.py is 832 LOC (threshold 400); responsibilities declared: 4
 - **large_file** (minimize what a reader must hold in their head): extra/qk/prefill/prefill_whole_synced.py is 423 LOC (threshold 400); responsibilities declared: 5
 - **large_file** (minimize what a reader must hold in their head): extra/qk/route_manifest.py is 415 LOC (threshold 400); responsibilities declared: 7

@@ -105,13 +105,29 @@ def _resolve(mod: str, idx: dict[str, str]) -> str | None:
     if hit: return hit
   return None
 
-def imports_of(root: pathlib.Path, rel: str, idx: dict[str, str]) -> list[str]:
+def _module_scope_nodes(tree: ast.Module):
+  """Statements that run at import time. Descends into if/try/with at module level but NOT into function bodies:
+  an import inside a function is a deferred dependency, not something the importer loads."""
+  stack, out = list(tree.body), []
+  while stack:
+    node = stack.pop()
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)): continue
+    out.append(node)
+    for field in ("body", "orelse", "finalbody", "handlers"):
+      stack.extend(x for x in getattr(node, field, []) if isinstance(x, ast.stmt) or isinstance(x, ast.ExceptHandler))
+  return out
+
+def imports_of(root: pathlib.Path, rel: str, idx: dict[str, str], scope: str = "module") -> list[str]:
+  """scope='module': only imports taken at import time -- this is what "on the default path" means.
+  scope='all': every import anywhere in the file, including deferred function-local ones."""
   if not rel.endswith(".py"): return []
   try: tree = ast.parse((root / rel).read_text(errors="ignore"))
   except (SyntaxError, ValueError, OSError): return []
   pkg = rel[:-len("/__init__.py")] if rel.endswith("/__init__.py") else os.path.dirname(rel)
   out = set()
-  for node in ast.walk(tree):
+  nodes = ast.walk(tree) if scope == "all" else [n for top in _module_scope_nodes(tree) for n in ast.walk(top)
+                                                 if not isinstance(top, (ast.FunctionDef, ast.AsyncFunctionDef))]
+  for node in nodes:
     if isinstance(node, ast.Import):
       for a in node.names:
         if (hit := _resolve(a.name, idx)) and hit != rel: out.add(hit)
@@ -239,6 +255,10 @@ def audit(root: pathlib.Path = ROOT, manifest_path: pathlib.Path | None = None, 
 
   idx = module_index(files)
   edges = {f: imports_of(root, f, idx) for f in authored}
+  # A function-local import is a real dependency but NOT a load-time one; keeping it out of `edges` is what lets the
+  # default-path closure mean "what actually loads". Reported separately so it is visible, not invisible.
+  deferred = {f: [d for d in imports_of(root, f, idx, scope="all") if d not in edges.get(f, [])] for f in authored}
+  deferred = {f: v for f, v in deferred.items() if v}
   dyn = {f: [d for d in dynamic_imports_of(root, f, idx) if d not in edges.get(f, [])] for f in authored}
   dyn = {f: v for f, v in dyn.items() if v}
   reach = {f: sorted(set(edges.get(f, [])) | set(dyn.get(f, []))) for f in authored}
@@ -493,6 +513,7 @@ def audit(root: pathlib.Path = ROOT, manifest_path: pathlib.Path | None = None, 
     "graph": {
       "edges": {f: edges[f] for f in sorted(scope_files) if edges.get(f)},
       "dynamic_seam_edges": {f: dyn[f] for f in sorted(dyn)},
+      "deferred_import_edges": {f: deferred[f] for f in sorted(deferred) if scope is None or f.startswith(scope)},
       "inbound_counts": {f: len(inbound.get(f, [])) for f in sorted(scope_files)},
       "outbound_counts": {f: len(edges.get(f, [])) for f in sorted(scope_files)},
       "strongly_connected_components": comps,

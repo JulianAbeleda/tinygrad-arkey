@@ -18,8 +18,11 @@ from tinygrad.device import Device
 from tinygrad.dtype import dtypes
 from tinygrad.uop.ops import Ops, UOp
 
-from extra.qk.mmq_q4k_q8_atom import Q4K_WORDS_PER_BLOCK, _q4k_q8_1_bounded_ds4_coop_tile_kernel
-from extra.qk.mmq_q4k_q8_reference import Q4_K_BLOCK_ELEMS
+# Block-layout constants come from their core owner, tinygrad.llm.qk_layout. They used to be pulled from
+# mmq_q4k_q8_atom and mmq_q4k_q8_reference, which put ~1200 LOC of MMQ search code -- and, through the atom,
+# the refuted mmq_ds4_probe_contract -- on the module-scope import path of the shipped prefill/decode adapters.
+# Those adapters only ever call parse_amdgpu_metadata / disassemble_amdgpu / analyze_final_isa from this module.
+from tinygrad.llm.qk_layout import Q4K_WORDS_PER_BLOCK, Q4_K_BLOCK_ELEMS
 from extra.qk.attention_harness_common import content_sha as _sha256
 
 SHAPE = {"M": 16, "N": 16, "K": 256}
@@ -37,7 +40,12 @@ COMPILER_ENV = (
 
 
 def build_mmq_sink(spec:Any) -> UOp:
-  """Construct the sole canonical source sink used for compile evidence."""
+  """Construct the sole canonical source sink used for compile evidence.
+
+  The MMQ atom is imported here, not at module scope: this is the one research entry point in this module, and a
+  module-scope import would put the whole atom search file back on the shipped adapters' import path.
+  """
+  from extra.qk.mmq_q4k_q8_atom import _q4k_q8_1_bounded_ds4_coop_tile_kernel
   if getattr(spec, "writeback_mode", None) not in ("gated_matrix_v0", "direct_owner_v0"):
     raise ValueError("spec has no supported writeback_mode")
   m, n, k = SHAPE.values()

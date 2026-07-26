@@ -483,7 +483,7 @@
       ],
       "authority_keys": [],
       "classification_confidence": "high",
-      "default_path": true,
+      "default_path": false,
       "deletion_confidence": "retain_active",
       "disposition": "keep",
       "domain": "attention_prefill",
@@ -520,7 +520,7 @@
       ],
       "role": "adapter",
       "status": "production",
-      "surface": "default",
+      "surface": "off_default",
       "test_role": "not_test_like",
       "workflow_ids": [
         "prefill-attention-benchmarking",
@@ -895,7 +895,7 @@
         "CooperativeStageLaneMap.elem_index_formula"
       ],
       "classification_confidence": "high",
-      "default_path": true,
+      "default_path": false,
       "deletion_confidence": "retain_active",
       "disposition": "keep",
       "domain": "codegen_lowering",
@@ -918,7 +918,7 @@
       "reusable_assets": [],
       "role": "authority",
       "status": "active_research",
-      "surface": "default",
+      "surface": "off_default",
       "test_role": "not_test_like",
       "workflow_ids": [
         "decode-stage-coalesce",
@@ -927,10 +927,8 @@
     },
     {
       "allowed_dependency_domains": [
-        "amd_runtime",
         "attention_decode",
         "evidence",
-        "measurement",
         "quant_mmq",
         "route_authority"
       ],
@@ -1207,7 +1205,6 @@
     },
     {
       "allowed_dependency_domains": [
-        "attention_decode",
         "measurement"
       ],
       "authority_keys": [],
@@ -1412,8 +1409,7 @@
     },
     {
       "allowed_dependency_domains": [
-        "attention_decode",
-        "codegen_lowering"
+        "attention_decode"
       ],
       "authority_keys": [],
       "classification_confidence": "high",
@@ -2075,7 +2071,7 @@
         "milestone_evidence(M1..M7)"
       ],
       "classification_confidence": "high",
-      "default_path": true,
+      "default_path": false,
       "deletion_confidence": "retain_active",
       "disposition": "keep",
       "domain": "quant_mmq",
@@ -2107,7 +2103,7 @@
       ],
       "role": "authority",
       "status": "unresolved_reproducer",
-      "surface": "default",
+      "surface": "off_default",
       "test_role": "active_validation",
       "workflow_ids": [
         "prefill-14b-hybrid-mmq-atom-boundary"
@@ -2116,8 +2112,7 @@
     {
       "allowed_dependency_domains": [
         "attention_prefill",
-        "evidence",
-        "quant_mmq"
+        "evidence"
       ],
       "authority_keys": [
         "COMPILER_ENV",
@@ -2125,7 +2120,7 @@
         "MMQCompileEvidence.manifest schema tinygrad.mmq_compile_manifest.v1"
       ],
       "classification_confidence": "high",
-      "default_path": true,
+      "default_path": false,
       "deletion_confidence": "retain_active",
       "disposition": "keep",
       "domain": "evidence",
@@ -2161,7 +2156,7 @@
       ],
       "role": "diagnostic",
       "status": "production",
-      "surface": "default",
+      "surface": "off_default",
       "test_role": "operational_tool",
       "workflow_ids": [
         "mmq-compile-isa-evidence",
@@ -2227,7 +2222,7 @@
         "COOP_128_REUSE_PROBE_ID"
       ],
       "classification_confidence": "high",
-      "default_path": true,
+      "default_path": false,
       "deletion_confidence": "retain_reproducer",
       "disposition": "keep",
       "domain": "evidence",
@@ -2253,7 +2248,7 @@
       ],
       "role": "evidence",
       "status": "refuted",
-      "surface": "default",
+      "surface": "off_default",
       "test_role": "retained_reference",
       "workflow_ids": [
         "prefill-ds4-coop-128-reuse-probe"
@@ -2320,7 +2315,7 @@
         "EPOCH_COUNTERS"
       ],
       "classification_confidence": "high",
-      "default_path": true,
+      "default_path": false,
       "deletion_confidence": "retain_active",
       "disposition": "keep",
       "domain": "measurement",
@@ -2354,7 +2349,7 @@
       ],
       "role": "authority",
       "status": "production",
-      "surface": "default",
+      "surface": "off_default",
       "test_role": "active_validation",
       "workflow_ids": [
         "mmq-atom-lifecycle-reporting"
@@ -2371,7 +2366,7 @@
         "packed_ds4_geometry canonical grammar (256/32/4 Q4_K, 32/128/4 Q8_1)"
       ],
       "classification_confidence": "high",
-      "default_path": true,
+      "default_path": false,
       "deletion_confidence": "retain_active",
       "disposition": "keep",
       "domain": "quant_mmq",
@@ -2413,7 +2408,7 @@
       ],
       "role": "authority",
       "status": "production",
-      "surface": "default",
+      "surface": "off_default",
       "test_role": "active_validation",
       "workflow_ids": [
         "mmq-logical-candidate-vocabulary"
@@ -2441,7 +2436,7 @@
         "MMQ_WRITEBACK_MODES"
       ],
       "classification_confidence": "medium",
-      "default_path": true,
+      "default_path": false,
       "deletion_confidence": "investigate_owner",
       "disposition": "consolidate",
       "domain": "quant_mmq",
@@ -2488,7 +2483,7 @@
       ],
       "role": "execution",
       "status": "active_research",
-      "surface": "default",
+      "surface": "off_default",
       "test_role": "active_validation",
       "workflow_ids": [
         "prefill-14b-hybrid-mmq-atom-boundary",
@@ -2508,7 +2503,7 @@
         "MMQOutputTileSpec"
       ],
       "classification_confidence": "high",
-      "default_path": true,
+      "default_path": false,
       "deletion_confidence": "retain_active",
       "disposition": "keep",
       "domain": "quant_mmq",
@@ -2549,7 +2544,7 @@
       ],
       "role": "authority",
       "status": "production",
-      "surface": "default",
+      "surface": "off_default",
       "test_role": "active_validation",
       "workflow_ids": [
         "mmq-numeric-ground-truth",
@@ -2614,7 +2609,7 @@
         "abi_dataflow_v1"
       ],
       "classification_confidence": "high",
-      "default_path": true,
+      "default_path": false,
       "deletion_confidence": "n_a",
       "disposition": "keep",
       "domain": "evidence",
@@ -2641,7 +2636,7 @@
       ],
       "role": "adapter",
       "status": "production",
-      "surface": "default",
+      "surface": "off_default",
       "test_role": "not_test_like",
       "workflow_ids": [
         "prefill-amd-isa-proof-manifest"
@@ -2649,7 +2644,6 @@
     },
     {
       "allowed_dependency_domains": [
-        "attention_prefill",
         "evidence"
       ],
       "authority_keys": [],
@@ -3311,7 +3305,6 @@
     {
       "allowed_dependency_domains": [
         "attention_prefill",
-        "evidence",
         "route_authority"
       ],
       "authority_keys": [
@@ -3593,8 +3586,7 @@
     },
     {
       "allowed_dependency_domains": [
-        "route_authority",
-        "search_promotion"
+        "route_authority"
       ],
       "authority_keys": [
         "prefill-candidate-set-route-census.v1"
@@ -4015,14 +4007,13 @@
     },
     {
       "allowed_dependency_domains": [
-        "amd_runtime",
         "search_promotion"
       ],
       "authority_keys": [
         "prefill-pure-register-evaluation-gate.v1"
       ],
       "classification_confidence": "medium",
-      "default_path": true,
+      "default_path": false,
       "deletion_confidence": "retain_active",
       "disposition": "keep",
       "domain": "search_promotion",
@@ -4060,7 +4051,7 @@
       ],
       "role": "authority",
       "status": "active_research",
-      "surface": "default",
+      "surface": "off_default",
       "test_role": "active_regression",
       "workflow_ids": [
         "prefill-pure-register-route",
@@ -4292,7 +4283,7 @@
         "Q4K_QS_OFFSET byte-offset layout"
       ],
       "classification_confidence": "high",
-      "default_path": true,
+      "default_path": false,
       "deletion_confidence": "retain_reproducer",
       "disposition": "keep",
       "domain": "quant_mmq",
@@ -4319,7 +4310,7 @@
       "reusable_assets": [],
       "role": "research",
       "status": "retained_reference",
-      "surface": "default",
+      "surface": "off_default",
       "test_role": "retained_reference",
       "workflow_ids": [
         "q4k-q8-mmq-research"
@@ -4631,7 +4622,6 @@
     {
       "allowed_dependency_domains": [
         "codegen_lowering",
-        "quant_mmq",
         "route_authority"
       ],
       "authority_keys": [
