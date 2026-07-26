@@ -234,14 +234,24 @@ def compute_pass_orders() -> dict[str, list[str]]:
   return orders
 
 
+# The only environment the subprocess below inherits. This is an ALLOWLIST, not a denylist, and that distinction
+# was earned: an earlier version inherited os.environ minus STRIP_PREFIXES and recorded 1006 collapsed steps under
+# the full test suite versus 981 standalone, because some variable outside those prefixes changed the pipeline.
+# A gate whose pinned value depends on who invoked it is not a gate. Only what is needed to start Python and find
+# the tree is passed through; everything else is dropped, so an unknown future gate variable cannot silently move
+# the number either.
+_ENV_ALLOWLIST = ("PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "LD_LIBRARY_PATH", "PYTHONHASHSEED")
+
+
 def pass_orders_in_fresh_process() -> dict[str, list[str]]:
-  """compute_pass_orders() in a clean subprocess, so it is a cold run by construction."""
+  """compute_pass_orders() in a clean subprocess: a cold run, in a known environment, by construction."""
   import subprocess
   src = ("import json,sys; sys.path.insert(0, %r); "
          "from extra.audit import lowering_fingerprint as lf; "
          "print(json.dumps(lf.compute_pass_orders()))" % str(ROOT))
-  r = subprocess.run([sys.executable, "-c", src], cwd=str(ROOT), capture_output=True, text=True,
-                     env={**os.environ, "PYTHONPATH": str(ROOT)})
+  env = {k: os.environ[k] for k in _ENV_ALLOWLIST if k in os.environ}
+  env["PYTHONPATH"] = str(ROOT)
+  r = subprocess.run([sys.executable, "-c", src], cwd=str(ROOT), capture_output=True, text=True, env=env)
   if r.returncode != 0:
     raise RuntimeError(f"fresh-process pass order run failed:\n{r.stderr[-2000:]}")
   return json.loads(r.stdout.strip().splitlines()[-1])
@@ -359,7 +369,26 @@ def run_check(argv: list[str]) -> int:
   return 1
 
 
+def purge_env_to_allowlist() -> list[str]:
+  """Reduce os.environ to _ENV_ALLOWLIST (plus CACHELEVEL, set by the import prep). Returns the keys removed.
+
+  CLI-ONLY, and deliberately not called from run_check/build_artifact. STRIP_PREFIXES catches the repo's own gate
+  variables, but it is a denylist, and lowering responds to variables outside it: with NOOPT=1 in the environment
+  this gate reports a genuine pass-order difference ('shift (0,) 2 upcast' replaced by 'flatten range'). That is
+  the gate working -- the pipeline really is different -- but a gate is supposed to measure the code change rather
+  than the caller's shell, so the CLI removes the ambiguity at the source.
+
+  This is not applied to in-process callers because it mutates os.environ, and under pytest that would delete
+  environment other tests depend on. In-process callers get the same guarantee a different way:
+  pass_orders_in_fresh_process() builds the allowlist environment for a subprocess instead of destroying its own.
+  """
+  removed = [k for k in os.environ if k not in _ENV_ALLOWLIST]
+  for k in removed: os.environ.pop(k, None)
+  return sorted(removed)
+
+
 def main() -> int:
+  purge_env_to_allowlist()
   ap = argparse.ArgumentParser(description="CPU-only lowering fingerprint gate.")
   ap.add_argument("--check", action="store_true", help="recompute and diff against the stored latest.json; write nothing")
   args, _unknown = ap.parse_known_args()

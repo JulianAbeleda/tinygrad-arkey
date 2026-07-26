@@ -1,6 +1,6 @@
 import unittest
 
-from extra.qk.kernel_pipeline import SchedulerOutputTileLoop
+from tinygrad.codegen.opt.kernel_pipeline import SchedulerOutputTileLoop
 from tinygrad.codegen.opt.compiler_policies import ResourcePlan
 from tinygrad.codegen.opt.kernel_pipeline import PINNED_WMMA_VGPR_BUDGET, resource_plan_for_scheduler_tile_loop
 

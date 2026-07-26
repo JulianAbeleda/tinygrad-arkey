@@ -790,8 +790,8 @@
         "tinygrad/codegen/__init__.py:133 imports coalesce_loads directly from tinygrad.codegen.late.coalesced_load and gates the call behind getenv(\"COALESCED_LOAD_LOWERING\") and ren.target.device==\"AMD\" (validation-scope gate, kept at the call site)"
       ],
       "path": "extra/qk/coalesced_load_lowering.py",
-      "promotion_target": "tinygrad/codegen/late/coalesced_load.py",
       "promotion_decision": "promoted under LR-050; this file re-exports coalesce_loads rather than forking it",
+      "promotion_target": "tinygrad/codegen/late/coalesced_load.py",
       "public_surface": [
         "coalesce_loads"
       ],
@@ -1633,44 +1633,6 @@
       "allowed_dependency_domains": [
         "codegen_lowering"
       ],
-      "authority_keys": [],
-      "classification_confidence": "high",
-      "default_path": false,
-      "deletion_confidence": "retain_active",
-      "disposition": "consolidate",
-      "domain": "codegen_lowering",
-      "duplication_group": null,
-      "evidence": [
-        "restored from 348dceeec on branch refactor/lowering-architecture: the lowering-refactor scope names it as a source for LR-021, and it was retired with the DEV=AMD:ISA chain on 2026-07-26 before that scope was executed",
-        "LR-050: every contract this file used to define (DotUpdateRecurrencePlan family, HierarchicalKernelPipelinePlan family, SchedulerOutputTileLoop family) is generic -- built only on core UOp/AxisType/Ops, no backend-specific assumption -- and was harvested into tinygrad/codegen/opt/kernel_pipeline.py; this file is now a re-export shim",
-        "its three test files (test_hierarchical_kernel_pipeline.py, test_grouped_dot_update_pipeline.py, test_scheduler_output_tile_loop.py) still import from extra.qk.kernel_pipeline and pass unchanged against the shim"
-      ],
-      "path": "extra/qk/kernel_pipeline.py",
-      "promotion_decision": "harvested into tinygrad/codegen/opt/kernel_pipeline.py under LR-050; this file re-exports rather than forking",
-      "promotion_target": "tinygrad/codegen/opt/kernel_pipeline.py",
-      "public_surface": [
-        "DotUpdateRecurrencePlan",
-        "HierarchicalKernelPipelinePlan",
-        "hierarchical_lifecycle_events",
-        "SchedulerOutputTileLoop",
-        "build_scheduler_output_tile_loop"
-      ],
-      "purpose": "Re-exports the core kernel-pipeline contracts (tinygrad/codegen/opt/kernel_pipeline.py) for extra/qk and existing test callers: dot-update recurrence graphs and proofs, hierarchical lifecycle events, and the scheduler output tile loop that enforces the core VGPR budget.",
-      "responsibilities": [
-        "re-export the recurrence/hierarchical/tile-loop contracts from core codegen"
-      ],
-      "retention_criterion": "kept as a stable extra/qk import path for existing callers/tests; safe to delete once callers import tinygrad.codegen.opt.kernel_pipeline directly",
-      "reusable_assets": [],
-      "role": "authority",
-      "status": "retained_reference",
-      "surface": "off_default",
-      "test_role": "not_test_like",
-      "workflow_ids": []
-    },
-    {
-      "allowed_dependency_domains": [
-        "codegen_lowering"
-      ],
       "authority_keys": [
         "KernelTileGeometry.__post_init__.invariants",
         "KernelCandidateContext.schema_version=boltbeam.full_kernel_candidate.v1"
@@ -1875,8 +1837,8 @@
         "extra/qk/bubblebeam_futuresight.py:15 imports axis_stride, vector_width from this shim"
       ],
       "path": "extra/qk/layout_coalesce_check.py",
-      "promotion_target": "tinygrad/codegen/late/coalesced_load.py",
       "promotion_decision": "promoted under LR-050; this file re-exports axis_stride/is_coalesced/vector_width rather than forking them",
+      "promotion_target": "tinygrad/codegen/late/coalesced_load.py",
       "public_surface": [
         "axis_stride",
         "is_coalesced",

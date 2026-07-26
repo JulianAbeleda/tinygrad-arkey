@@ -38,7 +38,7 @@ from tinygrad.codegen.opt import Opt
 from tinygrad.codegen.opt.compiler_policies import PipelinePolicy, ResourcePlan
 from tinygrad.codegen.plan import TargetCapabilities
 
-from extra.qk import route_manifest
+from tinygrad.llm.route_ops import route_manifest_route
 
 
 # ---- 7/8. correctness / performance evidence --------------------------------------------------------
@@ -130,7 +130,7 @@ class KernelSpec:
   def manifest_entry(self) -> dict:
     """The real, current route_manifest.json row for this spec's route_id. Raises KeyError if the
     route_id is not (or no longer) in the manifest -- a spec must never invent a manifest identity."""
-    return route_manifest.route(self.route_id)
+    return route_manifest_route(self.route_id)
 
   def to_manifest_row(self) -> dict[str, Any]:
     """Emit the subset of the manifest row this descriptor can honestly derive from its own typed
