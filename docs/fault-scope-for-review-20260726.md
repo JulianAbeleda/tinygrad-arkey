@@ -17,7 +17,7 @@ sq_intr: error, detail 0x00000000, type 2, sh {0,1}, priv 1     <- MANY, both sh
 [gfxhub] page fault (src_id:0 ring:88 vmid:8 pasid:32774)
   in page starting at address 0x0000ffffffbfe000 from client 10
 GCVM_L2_PROTECTION_FAULT_STATUS: 0x008012B1
-  Faulty UTCL2 client ID: SQC (inst) (0x9)                      <- wave at a wild program counter
+  Faulty UTCL2 client ID: SQC (inst) (0x9)                      <- instruction fetch (see below: CWSR TBA)
 -> Failed to evict queue 0 / Failed to quiesce KFD / GPU reset begin
 ```
 
