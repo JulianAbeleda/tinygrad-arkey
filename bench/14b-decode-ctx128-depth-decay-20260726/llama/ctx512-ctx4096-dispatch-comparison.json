@@ -1,0 +1,10 @@
+{
+  "contexts": {"ctx512": {"dispatches": 110983, "tokens_per_second": 57.965381}, "ctx4096": {"dispatches": 118844, "tokens_per_second": 55.961050}},
+  "kernel_name_inventory": {"ctx512_only": 0, "ctx4096_only": 0, "verdict": "same metadata kernel-name inventory"},
+  "material_dispatch_differences": [
+    {"family": "mul_mat_q Q4 type12 M128", "ctx512_dispatches": 238, "ctx512_total_duration_ns": 222278346, "ctx4096_dispatches": 1904, "ctx4096_total_duration_ns": 1695042720, "sample_grid": "1280x32x1", "sample_block": "32x8x1"},
+    {"family": "flash_attn_ext_f16", "ctx512_dispatches": 40, "ctx512_total_duration_ns": 13747772, "ctx4096_dispatches": 320, "ctx4096_total_duration_ns": 351586808},
+    {"family": "flash_attn_tile", "ctx512_dispatches": 5160, "ctx512_total_duration_ns": 52876938, "ctx4096_dispatches": 5160, "ctx4096_total_duration_ns": 163202374, "sample_grid": "32x16x40", "sample_block": "32x2x1"}
+  ],
+  "interpretation": "This is trace evidence of changed dispatch counts and device duration at depth, not an ordinary throughput authority comparison."
+}
