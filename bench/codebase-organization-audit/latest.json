@@ -318,8 +318,8 @@
     }
   ],
   "audited_commit": {
-    "commit": "aa98656766a84abad9fe9def0d229242d58ff665",
-    "described": "mac-first-boot-20260610-3451-gaa9865676-dirty",
+    "commit": "30ee51f1f1774950ed73510195f1479c34aa9046",
+    "described": "mac-first-boot-20260610-3452-g30ee51f1f-dirty",
     "dirty": true
   },
   "authority_keys": {
@@ -857,13 +857,13 @@
   },
   "coverage": {
     "authored_files": 463,
-    "authored_loc": 71649,
+    "authored_loc": 71704,
     "explicit_records": 96,
     "generated_files": 1,
     "generated_loc": 57,
     "group_covered": 0,
     "manifest_scope_files": 96,
-    "manifest_scope_loc": 13231,
+    "manifest_scope_loc": 13241,
     "uncovered": []
   },
   "coverage_limitations": [
@@ -918,7 +918,7 @@
       "extra/qk/runtime_specs.py",
       "extra/qk/warp_reduce_lowering.py"
     ],
-    "loc": 6242,
+    "loc": 6252,
     "production_reachable_from_tinygrad": [
       "extra/llm/cli.py",
       "extra/nv_gpu_driver/nv_ioctl.py",
@@ -5144,11 +5144,11 @@
       },
       "keep": {
         "files": 90,
-        "loc": 12106
+        "loc": 12116
       },
       "unclassified": {
         "files": 367,
-        "loc": 58418
+        "loc": 58463
       }
     },
     "domain": {
@@ -5158,7 +5158,7 @@
       },
       "attention_decode": {
         "files": 10,
-        "loc": 788
+        "loc": 798
       },
       "attention_prefill": {
         "files": 4,
@@ -5190,7 +5190,7 @@
       },
       "unclassified": {
         "files": 367,
-        "loc": 58418
+        "loc": 58463
       }
     },
     "role": {
@@ -5200,7 +5200,7 @@
       },
       "authority": {
         "files": 51,
-        "loc": 7786
+        "loc": 7803
       },
       "benchmark": {
         "files": 2,
@@ -5216,7 +5216,7 @@
       },
       "execution": {
         "files": 9,
-        "loc": 1811
+        "loc": 1804
       },
       "integration": {
         "files": 2,
@@ -5232,7 +5232,7 @@
       },
       "unclassified": {
         "files": 367,
-        "loc": 58418
+        "loc": 58463
       }
     },
     "status": {
@@ -5250,11 +5250,11 @@
       },
       "production": {
         "files": 67,
-        "loc": 9526
+        "loc": 9519
       },
       "promoted_default": {
         "files": 6,
-        "loc": 648
+        "loc": 665
       },
       "refuted": {
         "files": 1,
@@ -5266,7 +5266,7 @@
       },
       "unclassified": {
         "files": 367,
-        "loc": 58418
+        "loc": 58463
       },
       "unresolved_reproducer": {
         "files": 2,
@@ -5310,6 +5310,7 @@
       "bench/lowering-refactor-baseline/latest.json",
       "docs/lowering-refactor-phase0-findings-20260726.md",
       "extra/qk/amd_resource_artifact.py",
+      "extra/qk/decode/flash_decode_attention_spec.py",
       "test/unit/test_lowering_baseline.py"
     ],
     "extra/audit/lowering_fingerprint.py": [
@@ -8250,16 +8251,16 @@
     ]
   },
   "promotion_budget": {
-    "budgeted_after_pending_promotions": 35239,
-    "budgeted_loc": 35239,
+    "budgeted_after_pending_promotions": 35284,
+    "budgeted_loc": 35284,
     "cap": 50000,
     "data_file_convertible_loc": 0,
-    "headroom": 14761,
+    "headroom": 14716,
     "intended_cap": 30000,
     "intended_cap_note": "sz.py:13 records 35000 as temporary headroom; the standing target is 30000",
-    "over_intended_cap": 5239,
+    "over_intended_cap": 5284,
     "pending_promotion_net_cost": 0,
-    "unbudgeted_default_path_loc": 6242
+    "unbudgeted_default_path_loc": 6252
   },
   "repeated_workflow_phases": {
     "build-spec": [

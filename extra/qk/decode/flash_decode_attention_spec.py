@@ -41,6 +41,23 @@ class LiveSplitGeometrySpec:
 
 
 @dataclass(frozen=True)
+class BufferRole:
+  """One entry in a custom kernel's binding contract: what a buffer IS, not just that it exists.
+
+  LR-062: the tile builder takes `(pout, q, cache, *extra)` where `extra` is `[kvscale] if quant` then
+  `[freqs] if rope`. Until now that order lived in a comment inside extra/qk/flash_kernels.py, and every caller
+  that constructs placeholders -- the route, extra/audit/lowering_baseline.py, each ad-hoc harness -- re-derived
+  the shapes by hand from the same prose. A spec that can name its emitted KERNELS but not the buffers those
+  kernels bind is not a descriptor of the kernel, and a mismatch shows up as a shape error deep in lowering
+  rather than as a rejected contract.
+  """
+  name: str
+  dtype: str            # dtype attribute name on tinygrad.dtype.dtypes, e.g. "float32"
+  shape: tuple[int, ...]
+  optional_on: str | None = None   # the spec flag that makes this buffer present ("quant"/"rope"), None = always
+
+
+@dataclass(frozen=True)
 class FlashDecodeTileSpec:
   Hq: int
   Hd: int
@@ -63,6 +80,26 @@ class FlashDecodeTileSpec:
     if self.token_block != 16:
       raise ValueError(f"token_block must currently be 16, got {self.token_block}")
     self.geometry.validate()
+
+  @property
+  def buffer_roles(self) -> tuple[BufferRole, ...]:
+    """The tile kernel's binding contract, in the exact positional order the builder unpacks.
+
+    Derived from this spec's own fields rather than restated, so a spec that says quant=True cannot describe a
+    binding that omits the scale buffer. `test_buffer_roles_match_the_builder_arity` proves this agrees with
+    what the builder actually accepts.
+    """
+    W2 = self.Hd + 2
+    roles = [
+      BufferRole("pout", "float32", (self.Hq * self.split_count * W2,)),
+      BufferRole("q", "float16", (self.Hq * self.Hd,)),
+      BufferRole("cache", "float16", (2, 1, self.Hkv, self.MAXC, self.Hd)),
+    ]
+    # Order matters and is the builder's, not this list's: kvscale before freqs. See flash_kernels.py's
+    # `_ex.pop(0) if quant` / `_ex.pop(0) if rope` unpacking.
+    if self.quant: roles.append(BufferRole("kvscale", "float16", (2, 1, self.Hkv, self.MAXC), optional_on="quant"))
+    if self.rope: roles.append(BufferRole("freqs", "float16", (2, self.MAXC, self.Hd // 2), optional_on="rope"))
+    return tuple(roles)
 
   @property
   def geometry(self) -> LiveSplitGeometrySpec:
