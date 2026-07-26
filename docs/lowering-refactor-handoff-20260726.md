@@ -114,3 +114,60 @@ But note the default arm faults too, so "the rollback path is broken and the def
 paths fault, at different rates. Also note the rollback arm takes ~248s per run against ~100s for default, so it has
 ~2.5x the exposure window; some of the ratio may be exposure rather than path. See
 `docs/task_workflow/input/14b-prefill-fault-and-current-numbers-scope-20260726.md` for what to do next.
+
+---
+
+# Update — all 22 LR tasks complete on the branch (2026-07-26, later)
+
+Branch `refactor/lowering-architecture` (worktree `/home/ubuntu/lowering-refactor`), head `fe93fe026`.
+**Unit-suite parity with master: exact.** 34 failures on both, the same set in both directions — zero
+regressions and nothing newly fixed. Four gates green: 30 AMD kernels byte-identical, 10 CPU fingerprints,
+981 collapsed pass steps in pinned order, 12 kernels across 3 variant arms.
+
+## The item above about the "latent cache bug" is now wrong twice over, and worth reading as a lesson
+
+Point 4 said those three gates were missing from the `to_program` cache key and that LR-051 was where it gets
+fixed. LR-051 added them — by deriving the key from `PLAN_GATES` with a **live `os.environ` read**, while every
+pass inside `do_to_program` reads the same variables through `getenv`, which is `@functools.cache`d and frozen at
+first read. So flipping a gate mid-process moved the KEY while changing nothing the lowering saw: cache miss,
+recompile from the same frozen values, byte-identical program filed under a second key asserting the new setting.
+Measured with `UNSAFE_DISABLE_MASK`: 1 → 2 entries, identical program UOp key.
+
+That is worse than the stale HIT it replaced, and the comment I wrote claimed it was a fix. LR-019 corrects it:
+the key is built from `plan.observed_gate_values()`, which reads each gate the way its own passes read it.
+`with Context(NOOPT=1)` — a real lowering change — still moves the key; a stale `os.environ` flip no longer does.
+
+The generalisable trap: `functools.cache` keys on the **argument tuple**, so `getenv("X")`, `getenv("X", 0)` and
+`getenv("X", "0")` are three separate entries frozen at three different times. `ContextVar.__init__` calls
+`getenv` too, so a ContextVar flag has a frozen import-time entry that `Context(...)` never updates. Matching what
+a pass sees means matching its ARITY, not just its default value. `GATE_READERS` in `codegen/plan.py` records all
+twelve and a test re-derives it from the tree.
+
+## What the remaining phases actually turned out to be
+
+Three of the scope's premises did not survive contact and were re-aimed rather than executed as written:
+
+- **LR-032b** (make the registry load-bearing) is **impossible as scoped**. The registry names passes at function
+  granularity (93 descriptors, 36 files); `graph_rewrite` names them at call granularity (64 names, 9 files).
+  Joining by name matches 7 of 64. It is not a permutation of the observed pipeline, it is a finer partition.
+  So the order is pinned where the granularity is real — in the CPU gate artifact.
+- **LR-061** (unify prefill and decode admission) — the two paths are not two copies of one algorithm. The real
+  duplication was every guard stated twice, once on the candidate and once in `route_manifest.json`, with one copy
+  as an unparsed prose string (`k_multiple=1024` vs `(K//256)%4==0`). Built a consistency gate instead.
+- **LR-070** (decompose the flash builder) — `flash_kernels.py` is 156 lines with one builder; the ~32 orphans it
+  describes were deleted on 2026-07-06. The real defect was ~18 lines duplicated between two score variants.
+
+## Two things any promotion review should look at first
+
+1. **`extra/qk/kernel_pipeline.py` is gone** (point 2 above, resolved): it had been a pure re-export shim since
+   LR-050, its own manifest record set the retirement condition, the four test callers were repointed.
+2. **Gate coverage is still partial and the gaps are declared, not hidden.** 218 of 981 collapsed pass steps (22%)
+   are `<unnamed>` and invisible to reorder detection. `limit_bufs` executes in neither fingerprint gate. The
+   65 env-gated passes are certified in the all-default configuration except the three flash arms now covered by
+   `flash_variant_fingerprint.py`. Each is recorded at its site with a test that fails if the gap grows.
+
+**Not done, deliberately:** `OptimizationPlan` is still inert — nothing outside its own tests constructs one. Its
+docstrings previously implied it was "the ONE place environment is read"; they now say what is actually
+load-bearing (`PLAN_GATES` + `observed_gate_values`, via the cache key) and what is not. Threading it into
+lowering needs a verification harness that does not exist yet; the design decision and the honest oracle for it are
+in `docs/task_workflow/input/lr-019-gate-mechanism-divergence-scope-20260726.md` on the branch.

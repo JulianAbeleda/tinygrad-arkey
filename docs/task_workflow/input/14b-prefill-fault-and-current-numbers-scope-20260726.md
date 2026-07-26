@@ -226,3 +226,68 @@ agent's. Until then, treat the address as unreliable evidence and do not build a
 - The lowering-architecture refactor (`docs/task_workflow/input/lowering-architecture-refactor-scope-20260726.md`).
 - Any change to default routes, promotion state, or the route manifest.
 - Rewriting the allocator or the scheduler.
+## Execution revision: targeted discriminator replaces the full rate campaign
+
+This section supersedes any later instruction to complete 20 alternating runs per arm. The original campaign is too expensive for the question it can answer: successful rollback runs take roughly four minutes, so a full campaign costs about two hours while producing only a better incidence estimate. The immediate engineering question is causal: which allocation and dispatch precede the rollback-path fault?
+
+### Evidence already banked
+
+- Valid controlled samples: rollback `1/8` faults; default `0/9` faults.
+- The rollback fault reproduced the established signature: `MMU fault: 0xFFFFFFBFE000`, SQC instruction faults, failed queue eviction/quiesce, reset, and `memory_lost=1`.
+- A default run immediately after the fault completed successfully, confirming recovery for that sample.
+- Do not report `1/8` versus `0/9` as a precise fault-rate estimate. It is only enough, together with the earlier `2/2` rollback and `0/3` default observation, to justify targeted instrumentation.
+- Rollback sample 9 and default sample 10 are invalid. Both failed during model load with `NameError: _lower_trace is not defined` after the shared source tree changed concurrently. They are neither GPU faults nor evidence about either arm.
+
+### Revised execution rules
+
+1. Do not resume in the mutable shared checkout.
+2. Create an isolated worktree pinned to a known-good commit containing this scope and the intended prefill implementation.
+3. Record the pinned commit, environment, model, command, route identity, and artifact path before collecting evidence.
+4. Use the shortest workload that positively proves it dispatched the same direct-packed rollback kernels. A short run without route or kernel identity is not a valid discriminator.
+5. Run one clean default control in the same pinned worktree.
+6. Run the rollback path with `ALLOC_TRACE=1` until either one live GPU fault is captured or eight valid rollback attempts complete without a fault.
+7. On a fault, preserve the allocation trace, dispatch sequence, benchmark log, kernel journal, and nearest-lower allocation match. Stop rate testing and analyze the causal boundary.
+8. If eight positively controlled rollback attempts are clean, record the non-reproduction and stop. Do not expand automatically to the original 20-pair campaign.
+9. Run the full authority workload only once after a candidate fix, for correctness, performance, and non-regression evidence.
+
+### Positive controls
+
+Every probe must demonstrate that it observed the intended subprocess and route. At minimum, retain:
+
+- a known allocation and dispatch emitted by `ALLOC_TRACE`;
+- the selected prefill route and packed/direct-packed kernel identity;
+- the child process exit status and artifact creation status;
+- the boot ID and bounded kernel-log interval for the run.
+
+An empty trace, empty journal search, missing artifact, or parent-only instrumentation is a broken probe until a positive control proves otherwise.
+
+### Revised decision tree
+
+- If the rollback path faults and the default control does not, use the trace to identify the last valid dispatch and the allocation immediately below each one-off `0x7exx` address. Rank candidates by reproducible address/allocation proximity, not by VRAM pressure.
+- If both paths fault under the pinned workload, the flag is not a sufficient discriminator. Stop route-specific theory and compare their common dispatch prefix.
+- If neither path faults, do not claim the rollback is healthy. Preserve the bounded negative result and defer additional GPU time until there is a stronger trigger or a deterministic reproducer.
+- Treat `0xFFFFFFBFE000` as downstream or possibly stale until the operator-gated moving-TBA boot test resolves it. It is not the producer-side localization target.
+
+### Documentation corrections required by this task
+
+- Correct claims that 14B must run with `TINYGRAD_PREFILL_PACKED_WMMA=0`; the current default path is healthy and faster than the recorded baseline.
+- Remove or qualify the claim that commit `7463a6774` proved the canary/19 GB overlay ordering was the root cause. Later control evidence says 14B cannot realize that overlay, so the causal story is contradicted.
+- Re-derive the `~94% GEMM-bound at 14B` statement on the current default path. Evidence from the rollback path cannot support it.
+- Update current-number tables only from named, retained artifacts. Keep performance measurement separate from fault incidence.
+
+### Probe and artifact cleanup
+
+- Delete task-specific probes once their retained evidence has been promoted into the findings document or a reusable diagnostic utility.
+- Keep a probe only if it has a documented owner, positive control, input contract, and a plausible second use.
+- Fold benchmark results into the existing ledger when possible; do not leave one-off runners or duplicate current-number documents behind.
+- List every deleted probe and every promoted reusable asset in the final findings.
+
+### Revised completion criteria
+
+The task is complete when one of these bounded outcomes is documented:
+
+- a live rollback-path fault is paired with its allocation/dispatch trace and a ranked producer-side cause;
+- a candidate fix removes the traced violation and passes one default plus one rollback authority run; or
+- eight valid, positively controlled rollback attempts in the pinned worktree do not reproduce, and the investigation is explicitly closed as bounded non-reproduction.
+
+Exact fault-rate estimation and the moving-TBA boot experiment are not completion requirements.
