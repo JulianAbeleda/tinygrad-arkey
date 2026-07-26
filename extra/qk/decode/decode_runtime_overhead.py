@@ -123,11 +123,21 @@ def _route(model, start_pos, token_extent:int) -> bool:
   return bool(model.config.flash_decode and should_use_flash_decode(start_pos, token_extent))
 
 
-def _warm_depth(model, prompt:list[int], chunk_size:int, warmup_decode:int) -> None:
+def _warm_depth(model, prompt:list[int], chunk_size:int, warmup_decode:int, report=None) -> None:
+  from tinygrad import UOp
   _reset(model)
+  if report is not None:
+    report("warming", stage="prefill_first_token", prompt_tokens=len(prompt), chunk_size=chunk_size,
+           detail="next(generate) may compile prefill graphs")
   gen, _ = _prefill(model, prompt, chunk_size)
   try:
-    for _ in range(warmup_decode): next(gen)
+    for step in range(warmup_decode):
+      start_pos = len(prompt) + step
+      route = "flash" if _route(model, UOp.variable("start_pos", 0, model.max_context - 1).bind(start_pos), 1) else "sdpa"
+      if report is not None:
+        report("warming", stage="decode_token", warmup_step=step + 1, start_pos=start_pos, route=route,
+               detail="next(generate) may capture the selected decode TinyJit")
+      next(gen)
   finally: gen.close()
 
 
@@ -198,9 +208,12 @@ def main(argv:list[str] | None=None) -> int:
 
   rows = []
   for depth in profile.ckpts:
-    report("warming", ctx=depth)
+    report("warming", ctx=depth, stage="prompt", warmup_decode=args.warmup_decode,
+           flash_decode_threshold=int(os.environ.get("FLASH_DECODE_THRESHOLD", "512")),
+           flash_decode_capable=bool(model.config.flash_decode))
     prompt = _make_prompt(base_ids, depth)
-    _warm_depth(model, prompt, args.chunk_size, args.warmup_decode)
+    _warm_depth(model, prompt, args.chunk_size, args.warmup_decode,
+                report=lambda phase, **details: report(phase, ctx=depth, **details))
     w_reps, d_reps = [], []
     route_reps, token_reps = [], []
     for rep in range(args.reps):
