@@ -5,6 +5,11 @@ from typing import Callable, Any
 
 from tinygrad import Tensor, UOp, dtypes
 from tinygrad.llm import route_ops as qk_ops
+from tinygrad.llm.decode_route_observer import notify_decode_route_execution
+
+def _model_identity(linear:Any) -> str | None:
+  identity = getattr(linear, "_decode_route_model_identity", None)
+  return identity if isinstance(identity, str) and identity else None
 
 def _decode_shape(x:Tensor) -> tuple[Any, Any, Any]:
   shape = tuple(getattr(x, "shape", ()))
@@ -49,7 +54,11 @@ class _Q4KDecodeCandidate:
     _w = linear.q4k_storage.words.to(x.device).contiguous() if linear.q4k_storage.mode == "q4_ondemand" else linear.q4k_storage.words.to(x.device)
     _xv = x[:, 0, :].reshape(binding.K).cast(dtypes.float16).contiguous()
     _out = Tensor.empty(binding.N, dtype=dtypes.float32, device=x.device)
-    return _out.custom_kernel(_w, _xv, fxn=qk_ops.q4k_g3_lanemap_gemv_kernel(binding.N, binding.K))[0].reshape(1, 1, binding.N)
+    out = _out.custom_kernel(_w, _xv, fxn=qk_ops.q4k_g3_lanemap_gemv_kernel(binding.N, binding.K))[0].reshape(1, 1, binding.N)
+    notify_decode_route_execution(route_id=binding.route_id, candidate_id=binding.candidate_id,
+      model_identity=_model_identity(linear), shape=(binding.B, binding.T, binding.K, binding.N),
+      tile_name="q4k_g3_lanemap_gemv", combine_name="none", output_path="custom_kernel.reshape", output=out)
+    return out
 
 Q4K_DECODE_CANDIDATE = _Q4KDecodeCandidate()
 
@@ -91,8 +100,13 @@ class _Q6KDecodeCandidate:
     partial = partials.custom_kernel(linear.q6k_storage.halfs.to(x.device), x_vec, fxn=qk_ops.emit_q6k_gemv_kernel(spec))[0]
     if qk_ops.q6k_vocab_scalar_reduce_eligible(spec):
       out = Tensor.empty(binding.N, dtype=dtypes.float32, device=x.device)
-      return out.custom_kernel(partial, fxn=qk_ops.emit_q6k_vocab_scalar_reduce_kernel(spec))[0].reshape(1, 1, binding.N)
-    return partial.sum(axis=1).reshape(1, 1, binding.N)
+      result, combine, output_path = out.custom_kernel(partial, fxn=qk_ops.emit_q6k_vocab_scalar_reduce_kernel(spec))[0].reshape(1, 1, binding.N), "q6k_vocab_scalar_reduce", "custom_kernel.reshape"
+    else:
+      result, combine, output_path = partial.sum(axis=1).reshape(1, 1, binding.N), "sum_axis_1", "custom_kernel.sum.reshape"
+    notify_decode_route_execution(route_id=binding.route_id, candidate_id=binding.candidate_id,
+      model_identity=_model_identity(linear), shape=(binding.B, binding.T, binding.K, binding.N),
+      tile_name="q6k_generated_coop", combine_name=combine, output_path=output_path, output=result)
+    return result
 
 Q6K_DECODE_CANDIDATE = _Q6KDecodeCandidate()
 
@@ -161,6 +175,10 @@ def flash_decode_attention_route(q:Tensor, assigned_kv:Tensor, start_pos:int|UOp
     # (rather than silently emitting a deleted handwritten flash kernel); model.py gates flash vs SDPA upstream.
     raise RuntimeError(f"flash_decode_attention_route: shape B={B} Hd={Hd} Hkv={Hkv} Hq={Hq} is not served by "
                        "the generated live-split route, and all handwritten fallback flash routes were deleted.")
-  return qk_ops.flash_decode_live_split_block_tile(q.reshape(binding.Hq, binding.Hd), assigned_kv, _tc,
+  out = qk_ops.flash_decode_live_split_block_tile(q.reshape(binding.Hq, binding.Hd), assigned_kv, _tc,
     binding.Hd, binding.Hq, binding.Hkv, MAXC, binding.split_size, staging=binding.staging,
     fused_combine=True, kv_scale=kv_scale, freqs=freqs)
+  notify_decode_route_execution(route_id=binding.route_id, candidate_id=binding.candidate_id, model_identity=None,
+    shape=(binding.B, binding.Hq, binding.Hkv, binding.Hd, binding.split_size), tile_name="flash_live_split_block_tile",
+    combine_name="fused_combine", output_path="custom_kernel.fused_combine", output=out)
+  return out
