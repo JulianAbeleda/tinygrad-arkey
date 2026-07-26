@@ -1,0 +1,149 @@
+{
+  "artifact_version": 2,
+  "ckpts": [
+    512
+  ],
+  "created_unix_ns": 1785102884766660249,
+  "device": {
+    "runtime_type": "AMDDevice",
+    "tinygrad_device": "AMD"
+  },
+  "hardware": "AMD / AMDDevice",
+  "max_context": 4608,
+  "median_host_sync_pct": null,
+  "method": "genuine prompt prefill; W=production generate item/token; D=same model JITs with final sync",
+  "model": {
+    "identity_sha256": "b8ef0be84bfa0588efae9fb84a3b3e5b7beb53f5620ada7d8c48bd3a26633605",
+    "mtime_ns": 1781138912862342896,
+    "path": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+    "size_bytes": 5027783488
+  },
+  "model_id": "Qwen3-8B-Q4_K_M",
+  "model_identity": {
+    "identity_sha256": "b8ef0be84bfa0588efae9fb84a3b3e5b7beb53f5620ada7d8c48bd3a26633605",
+    "mtime_ns": 1781138912862342896,
+    "path": "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+    "size_bytes": 5027783488
+  },
+  "nmeas": 1,
+  "reps": 1,
+  "rows": [
+    {
+      "D_interpretation": "not_an_upper_bound; host/runtime subtraction refused",
+      "D_reps": [
+        {
+          "elapsed_s": 0.03204373000335181,
+          "final_token_id": 567,
+          "rep": 0,
+          "tok_s": 31.2073531981264
+        }
+      ],
+      "W_reps": [
+        {
+          "elapsed_s": 0.008578403998399153,
+          "per_token_ms": [
+            8.578403998399153
+          ],
+          "rep": 0,
+          "tok_s": 116.57180055714484
+        }
+      ],
+      "ctx": 512,
+      "decode_tokens": 1,
+      "dispatch_ms_D": 32.04373000335181,
+      "fixed_depth": 512,
+      "flash": true,
+      "generated_reps_identical": true,
+      "generated_token_evidence": [
+        {
+          "count": 1,
+          "first_token_ids": [
+            567
+          ],
+          "sha256": "97a6d21df7c51e8289ac1a8c026aaac143e15aa1957f54f42e30d8f8a85c3a55"
+        }
+      ],
+      "host_sync_pct_of_wall": null,
+      "host_sync_residual_ms": null,
+      "programs_per_token_by_route": {
+        "flash": 1021
+      },
+      "prompt_evidence": {
+        "count": 512,
+        "first_token_ids": [
+          1782,
+          3974,
+          13876,
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876,
+          38835,
+          34208,
+          13,
+          279,
+          3974,
+          13876,
+          38835
+        ],
+        "sha256": "e536e95f0307d714bc77b286f8ee4a6f7f38dc5ebc3c7321eda2170149308c49"
+      },
+      "reps": 1,
+      "route": "flash",
+      "route_sequence": [
+        "flash"
+      ],
+      "route_sequences_identical": true,
+      "routes": [
+        "flash"
+      ],
+      "tok_s_D_diagnostic": 31.2073531981264,
+      "tok_s_W": 116.57180055714484,
+      "wall_ms_W": 8.578403998399153
+    }
+  ],
+  "runtime_settings": {
+    "flash_decode_capable": true,
+    "flash_decode_mode": "auto",
+    "flash_decode_threshold": 512,
+    "kv_cache": "fp16",
+    "ring": false
+  },
+  "schema": "tinygrad.decode.fixed_depth.v2",
+  "tool": {
+    "argv": [
+      "extra/qk/decode/decode_runtime_overhead.py",
+      "--model",
+      "/home/ubuntu/models/Qwen3-8B-Q4_K_M.gguf",
+      "--ckpts",
+      "512",
+      "--max-context",
+      "4608",
+      "--nmeas",
+      "1",
+      "--reps",
+      "1",
+      "--warmup-decode",
+      "2",
+      "--chunk-size",
+      "32",
+      "--out",
+      "/home/ubuntu/worktrees/luna-tinygrad-worker-smoke/bench/14b-decode-ctx128-depth-decay-20260726/tinygrad/8b-ctx512/lifecycle-authority.json"
+    ],
+    "path": "/home/ubuntu/worktrees/luna-tinygrad-worker-smoke/extra/qk/decode/decode_runtime_overhead.py"
+  },
+  "workload": {
+    "chunk_size": 32,
+    "ckpts": [
+      512
+    ],
+    "decode_tokens": 1,
+    "max_context": 4608,
+    "reps": 1,
+    "seed": 20260617,
+    "temperature": 0.0,
+    "warmup_decode": 2
+  }
+}

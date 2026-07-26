@@ -1,0 +1,4 @@
+@@DECODE_STATUS@@ phase=started
+@@DECODE_STATUS@@ phase=loading_model
+@@DECODE_STATUS@@ phase=warming
+@@DECODE_STATUS@@ phase=warming
