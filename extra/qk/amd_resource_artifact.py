@@ -16,10 +16,18 @@ AMD_ARTIFACT_SCHEMA = "tinygrad.amd.resource_artifact.v1"
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
 
-def _hash(value: bytes | str, name: str) -> str:
+def artifact_sha256(value: bytes | str, name: str) -> str:
+  """The one hashing rule for backend artifact identity: sha256 hex of the exact bytes.
+
+  Public because more than one auditor needs it (this module's artifact join, and the LR-000 lowering fingerprint in
+  extra/audit/lowering_baseline.py). Any second implementation of this would let two fingerprints of the same program
+  disagree, so callers import this rather than rolling their own.
+  """
   if isinstance(value, str): value = value.encode()
   if not isinstance(value, bytes): raise TypeError(f"{name} must be bytes or str")
   return hashlib.sha256(value).hexdigest()
+
+_hash = artifact_sha256   # retained: in-module call sites below, and any existing importer
 
 
 @dataclass(frozen=True)
