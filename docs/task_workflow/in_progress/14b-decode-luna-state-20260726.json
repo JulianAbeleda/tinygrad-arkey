@@ -1,0 +1,26 @@
+{
+  "schema": "luna-safety-ownership.v1",
+  "task_id": "LUNA-000",
+  "verdict": "PASS",
+  "feature_branch": "feature/14b-decode-ctx128-and-depth-decay",
+  "feature_commit": "923f6ff0237f9a46aa656a27efc778f7ac6412fc",
+  "task_branch": "luna-foundation",
+  "task_worktree": "/home/ubuntu/worktrees/luna-foundation",
+  "task_worktree_dirty_paths": [],
+  "known_active_worktrees": [
+    {"path": "/home/ubuntu/tinygrad-arkey", "branch": "master", "commit": "bd6092fc29fcd3abfad12d2d0ef2ea4b7b98896d"},
+    {"path": "/home/ubuntu/lowering-refactor", "branch": "refactor/lowering-architecture", "commit": "ee6918ef8672cc5a71d369903c7ee95c47ef83b5"},
+    {"path": "/home/ubuntu/worktrees/14b-decode-ctx128-and-depth-decay", "branch": "feature/14b-decode-ctx128-and-depth-decay", "commit": "923f6ff0237f9a46aa656a27efc778f7ac6412fc"},
+    {"path": "/home/ubuntu/worktrees/luna-llama-source-map", "branch": "luna-llama-source-map", "commit": "923f6ff0237f9a46aa656a27efc778f7ac6412fc"},
+    {"path": "/home/ubuntu/worktrees/luna-tinygrad-workload", "branch": "luna/tinygrad-workload", "commit": "923f6ff0237f9a46aa656a27efc778f7ac6412fc"}
+  ],
+  "unowned_detached_worktree": {"path": "/home/ubuntu/tinygrad-0716", "commit": "dbec46337650f0714c1bb0c839f0ed0db3679ebe"},
+  "stash_count": 8,
+  "boot_id": "298b04ee-0cec-42de-9fc1-f903fd992bf4",
+  "gpu_lock": {"path": "/tmp/gpu-bench.lock", "state": "unlocked"},
+  "gpu_processes": [],
+  "power_state": {"performance_level": "auto"},
+  "artifact_paths_reserved": ["bench/14b-decode-ctx128-depth-decay-20260726/", "docs/task_workflow/in_progress/"],
+  "positive_control": {"feature_branch_and_exact_worktree_recorded": true},
+  "notes": "No active GPU benchmark process was observed. Existing worktrees and stashes are ownership boundaries and were not modified."
+}
