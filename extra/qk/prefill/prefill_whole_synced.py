@@ -515,16 +515,28 @@ def prefill_authority(model_path: str = DEFAULT_MODEL, chunk_n: int = 512,
 
 
 def main(argv: list[str] | None = None) -> dict[str, Any]:
-  ap = argparse.ArgumentParser(description=__doc__)
+  command_matrix = """\
+single timed prefill call (one position, one round, one call):
+  PREFILL_POST_GRAPH_MARKERS=1 python3 extra/qk/prefill/prefill_whole_synced.py --start-positions 0 --warmups 0 --rounds 1 -K 1
+first warmup/capture, then one timed prefill call:
+  PREFILL_POST_GRAPH_MARKERS=1 python3 extra/qk/prefill/prefill_whole_synced.py --start-positions 0 --warmups 1 --rounds 1 -K 1
+first and reused warmups, then one timed prefill call:
+  PREFILL_POST_GRAPH_MARKERS=1 python3 extra/qk/prefill/prefill_whole_synced.py --start-positions 0 --warmups 2 --rounds 1 -K 1
+
+Each start position executes a separate burst. -K is calls per timed round; --rounds is timed samples.
+"""
+  ap = argparse.ArgumentParser(description=__doc__, epilog=command_matrix,
+                               formatter_class=argparse.RawDescriptionHelpFormatter)
   ap.add_argument("--model", default=os.environ.get("QK_MODEL", DEFAULT_MODEL), help="GGUF path")
   ap.add_argument("--model-profile", default=os.environ.get("QK_MODEL_PROFILE", ""),
                   choices=("", *MODEL_HARNESS_PROFILES.keys(), *MODEL_HARNESS_ALIASES),
                   help=f"model/profile defaults; default infers from --model or uses {DEFAULT_MODEL_PROFILE}")
   ap.add_argument("--mode", choices=PREFILL_MODES, default="authority")
-  ap.add_argument("-K", type=int, default=None, help="bursts to min over")
+  ap.add_argument("-K", type=int, default=None, help="realized prefill calls per timed round")
   ap.add_argument("--warmups", type=int, default=None, help="TinyJit warm/capture forwards per start position")
-  ap.add_argument("--rounds", type=int, default=None, help="timing rounds per start position")
-  ap.add_argument("--start-positions", default=None, help="comma-separated concrete start_pos values")
+  ap.add_argument("--rounds", type=int, default=None, help="timed samples per start position; report uses their minimum")
+  ap.add_argument("--start-positions", default=None,
+                  help="comma-separated concrete start_pos values; each runs a separate warmup/measurement burst")
   ap.add_argument("--whole-lengths", default=None, help="comma-separated whole-prefill lengths")
   ap.add_argument("--max-context", type=int, default=4608)
   ap.add_argument("--artifact", default="", help="write JSON artifact to this path; default writes latest.json")
