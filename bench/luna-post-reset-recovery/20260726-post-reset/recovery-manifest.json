@@ -1,0 +1,62 @@
+{
+  "schema": "luna.post_reset_recovery.v1",
+  "date": "2026-07-26",
+  "worktree": "/home/ubuntu/worktrees/luna-post-reset-recovery",
+  "base_branch": "feature/14b-decode-ctx128-and-depth-decay",
+  "lock": "/tmp/gpu-bench.lock",
+  "boot_id": "298b04ee-0cec-42de-9fc1-f903fd992bf4",
+  "device": {
+    "node": "/dev/kfd",
+    "status": "exists mode=660 owner=root:render",
+    "gpu": "AMD Radeon RX 7900 XTX",
+    "arch": "gfx1100",
+    "uuid": "GPU-db466b901e983568",
+    "wavefront_size": 32
+  },
+  "initial_state_artifacts": {
+    "rocm_smi": "rocm-smi.txt",
+    "rocminfo": "rocminfo.txt",
+    "dev_kfd": "dev-kfd.txt"
+  },
+  "positive_control": {
+    "command": "PYTHONPATH=. DEV=AMD python3 -c 'from tinygrad import Tensor; from tinygrad.device import Device; x=Tensor.ones(16,16).sum().realize(); Device.default.synchronize(); print(\"TINYGRAD_AMD_POSITIVE_CONTROL value=\", x.item())'",
+    "result": "passed",
+    "exit_code": 0,
+    "stdout": "TINYGRAD_AMD_POSITIVE_CONTROL value= 256.0",
+    "new_page_fault_or_reset": false,
+    "artifacts": [
+      "tinygrad-positive-control.stdout.txt",
+      "tinygrad-positive-control.stderr.txt",
+      "tinygrad-positive-control.exit-code.txt",
+      "dmesg-before-tinygrad-positive-control.txt",
+      "dmesg-after-tinygrad-positive-control.txt",
+      "dmesg-tinygrad-positive-control.diff.txt"
+    ]
+  },
+  "prefill_control": {
+    "command": "env -u PROFILE PYTHONPATH=. DEV=AMD python3 extra/qk/prefill/prefill_whole_synced.py --model-profile qwen3_8b_q4k_m_gfx1100 --mode smoke --whole-lengths 512 -K 1 --warmups 1 --rounds 1 --artifact bench/luna-post-reset-recovery/20260726-post-reset/prefill-8b-ctx512.json --json",
+    "fresh_process": true,
+    "profiler": false,
+    "timeout_or_signal_wrapper": false,
+    "stdout_report_complete": true,
+    "stdout_sample_ms": 2097.1998,
+    "route_binding_gate": "PREFILL_ROUTE_BINDING_PASS",
+    "new_page_fault_or_reset": false,
+    "required_completion_artifacts_missing": [
+      "prefill-8b-ctx512.json",
+      "prefill-8b-ctx512.exit-code.txt",
+      "dmesg-after-prefill-8b-ctx512.txt",
+      "dmesg-prefill-8b-ctx512.diff.txt",
+      "prefill-8b-ctx512.finished-at"
+    ]
+  },
+  "final_device_state_artifacts": {
+    "rocm_smi": "rocm-smi-after-missing-completion.txt",
+    "rocminfo": "rocminfo-after-missing-completion.txt",
+    "dev_kfd": "dev-kfd-after-missing-completion.txt",
+    "dmesg": "dmesg-after-missing-completion.txt",
+    "dmesg_delta": "dmesg-missing-completion.diff.txt"
+  },
+  "verdict": "BLOCKED_MISSING_COMPLETION_ARTIFACTS",
+  "gpu_safe_for_further_work": false
+}
