@@ -214,3 +214,89 @@ def test_a_rejected_plan_fails_before_any_kernel_launch():
     p.validate()
     launch_kernel(p)   # unreachable
   assert launched == []
+
+
+# --------------------------------------------------------------------------- LR-019: readers, not just values ----
+# The plan is NOT the single reader of these variables today. These tests hold the line that the module at least
+# describes the real readers accurately, since the to_program cache key is built from that description.
+
+def test_gate_readers_match_the_real_call_sites():
+  """GATE_READERS records HOW each gate is read, and observed_gate_values() depends on that being exact.
+
+  It has to be exact rather than approximately right because getenv is @functools.cache'd and lru_cache keys on the
+  argument tuple: getenv("X"), getenv("X", 0) and getenv("X", "0") are three separate entries frozen at three
+  different times. Reading a gate "like the pass does" means matching its ARITY, not just its default.
+  """
+  import pathlib, re
+  from tinygrad.codegen.plan import GATE_READERS
+  root = pathlib.Path(ROOT) / "tinygrad"
+  for name, reader in GATE_READERS.items():
+    getenv_defaults, ctxvar = set(), False
+    for p in root.rglob("*.py"):
+      if p.name in ("plan.py", "trace.py"): continue
+      text = p.read_text()
+      for m in re.finditer(r'getenv\(\s*"' + re.escape(name) + r'"\s*(?:,\s*([^)]*))?\)', text):
+        getenv_defaults.add((m.group(1) or "").strip())
+      if re.search(r'ContextVar\(\s*"' + re.escape(name) + r'"', text): ctxvar = True
+
+    if reader[0] == "contextvar":
+      assert ctxvar, f"{name} declared contextvar but no ContextVar({name!r}) exists"
+    elif reader[0] == "none":
+      assert not getenv_defaults and not ctxvar, f"{name} declared unread but has readers {getenv_defaults}"
+    else:
+      expected = "" if len(reader) == 1 else str(reader[1])
+      assert getenv_defaults == {expected}, \
+        f"{name}: declared getenv arity {reader!r} but call sites use defaults {sorted(getenv_defaults)!r}"
+
+
+def test_observed_values_are_what_a_pass_sees_not_what_environ_says():
+  """The bug this exists to prevent, stated as a test: a gate flipped after first read must NOT change the observed
+  value, because it does not change what the pass does either."""
+  from tinygrad.helpers import getenv
+  from tinygrad.codegen.plan import observed_gate_value
+  os.environ.pop("UNSAFE_DISABLE_MASK", None)
+  before = observed_gate_value("UNSAFE_DISABLE_MASK")
+  assert before == getenv("UNSAFE_DISABLE_MASK", 0)
+  os.environ["UNSAFE_DISABLE_MASK"] = "1"
+  try:
+    assert observed_gate_value("UNSAFE_DISABLE_MASK") == before, \
+      "observed_gate_value tracked os.environ instead of the frozen value the pass reads"
+    assert OptimizationPlan.from_env().gate("UNSAFE_DISABLE_MASK") == "1", \
+      "from_env is documented to read live env; if that changed, the cache-key comment needs revisiting"
+  finally:
+    os.environ.pop("UNSAFE_DISABLE_MASK", None)
+
+
+def test_the_cache_key_no_longer_moves_without_the_program_moving():
+  """Regression test for the defect LR-051 introduced: the to_program key was built from a LIVE os.environ read
+  while the passes read frozen getenv, so flipping a gate created a second cache entry for a byte-identical
+  program."""
+  from tinygrad import Tensor, Device
+  from tinygrad.codegen import to_program, to_program_cache
+  from tinygrad.uop.ops import Ops
+  os.environ.pop("UNSAFE_DISABLE_MASK", None)
+  lin = ((Tensor.rand(32, 32, device="CPU") + 1.0) * 2.0).sum().schedule_linear()
+  ast = [u.src[0] for u in lin.src if u.op is Ops.CALL and u.src[0].op is Ops.SINK][0]
+  ren = Device["CPU"].renderer
+  p1 = to_program(ast, ren); n1 = len(to_program_cache)
+  os.environ["UNSAFE_DISABLE_MASK"] = "1"
+  try:
+    p2 = to_program(ast, ren)
+    assert p1.key == p2.key, "same frozen gates must give the same program"
+    assert len(to_program_cache) == n1, "a second cache entry was created for an identical program"
+  finally:
+    os.environ.pop("UNSAFE_DISABLE_MASK", None)
+
+
+def test_lowering_gates_are_in_the_cache_key():
+  """trace.py's LOWERING_GATES_NOT_IN_CACHE_KEY is historical; its name is now the opposite of the truth."""
+  from tinygrad.uop.trace import LOWERING_GATES_NOT_IN_CACHE_KEY
+  assert set(LOWERING_GATES_NOT_IN_CACHE_KEY) <= {n for n, _ in PLAN_GATES}
+
+
+def test_decode_fast_exp2_has_no_reader_and_says_so():
+  """Kept in the inventory rather than deleted: the record that someone believed this gated lowering is worth more
+  than the line it costs. If a reader ever appears, GATE_READERS must be updated deliberately."""
+  from tinygrad.codegen.plan import GATE_READERS, observed_gate_value
+  assert GATE_READERS["DECODE_FAST_EXP2"] == ("none",)
+  assert observed_gate_value("DECODE_FAST_EXP2") is None

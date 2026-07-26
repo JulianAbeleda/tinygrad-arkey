@@ -607,7 +607,7 @@ Both fingerprints are compile-only and certify exactly one configuration. They d
 - **`limit_bufs`** -- `MAX_KERNEL_BUFFERS` defaults to 0 and `DEVICE_MAX_BUFS` covers only METAL/WEBGPU, so the pass
   early-returns on every graph in both gates. If it is ever moved, the gates will certify the move regardless of
   correctness. Build coverage first.
-- **The 36 env-gated passes.** `lowering_fingerprint.py` deliberately strips gate env vars for determinism, so it
+- **The 65 env-gated passes.** `lowering_fingerprint.py` deliberately strips gate env vars for determinism, so it
   certifies the default configuration only.
 - **Runtime behaviour.** Byte-identical source that was always wrong stays byte-identical.
 - **(closed 2026-07-26)** assign / multi-output / WAR-hazard: three graphs added after the review found

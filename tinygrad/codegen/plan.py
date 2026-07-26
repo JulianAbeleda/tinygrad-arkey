@@ -16,6 +16,13 @@ Design notes:
   * Frozen and hashable. `plan_id` is a stable digest, so two plans can be compared across processes.
   * Gates are captured ONCE, in `from_env`. The acceptance criterion is that environment variables are not read deep
     inside transformations, and the only way to hold that line is for the plan to be the single reader.
+
+    IT IS NOT THE SINGLE READER TODAY, and this docstring used to imply otherwise. Nothing outside
+    test/unit/test_optimization_plan.py constructs an OptimizationPlan; the eleven `getenv` call sites listed in
+    GATE_READERS still read these variables directly, and for NOOPT the authority is a ContextVar that no env read
+    tracks. What IS load-bearing is PLAN_GATES + observed_gate_values(), which build the `to_program` cache key.
+    Treat this module as the gate INVENTORY plus a plan type that is ready to be threaded in -- not as a claim that
+    the threading happened. See docs/task_workflow/input/lr-019-gate-mechanism-divergence-scope-20260726.md.
   * Applying a plan is recorded on the plan, not on the graph, so double application is detectable rather than
     silently doubling an upcast.
 """
@@ -36,6 +43,58 @@ PLAN_GATES: tuple[tuple[str, str], ...] = (
   ("PREFILL_SOFTMAX_REDUCE_FUSE", "1"), ("PREFILL_V_TRANSPOSED", "0"), ("UNSAFE_DISABLE_MASK", "0"),
   ("REGALLOC_ADDR_REMAT", "0"), ("TINYGRAD_ONLINE_SOFTMAX_STATE", "0"),
 )
+
+# HOW each gate is actually read by the code it gates. This is not documentation -- `observed_gate_values()` below
+# depends on it being exact, and `test_gate_readers_match_the_real_call_sites` re-derives it from the tree.
+#
+# It has to exist because `getenv` is `@functools.cache`d (helpers.py:165) and lru_cache keys on the ARGUMENT
+# TUPLE. So `getenv("X")`, `getenv("X", 0)` and `getenv("X", "0")` are THREE separate cache entries, each frozen
+# at its own first read, even though the first two are semantically identical. Reading a gate "the same way" as a
+# pass means reproducing its arity, not just its default value. Verified in-process: with NOOPT=1 set after
+# import, getenv("NOOPT") returns 1 while getenv("NOOPT", 0) returns 0.
+#
+#   ("getenv",)        -> read as getenv("NAME")            -- no default argument
+#   ("getenv", <int>)  -> read as getenv("NAME", <int>)
+#   ("contextvar",)    -> a helpers.ContextVar; ITS `.value` is the authority, not any getenv entry. ContextVar
+#                         .__init__ calls getenv(key, default) at import time (helpers.py:188), so the getenv
+#                         entry is a frozen import-time artifact that `with Context(NOOPT=1)` does not update.
+#   ("none",)          -> nothing in tinygrad/ reads it. Recorded rather than silently carried.
+GATE_READERS: dict[str, tuple] = {
+  "NOOPT": ("contextvar",),
+  "SCHED_UNROLL": ("getenv",),
+  "SCHED_LIST": ("getenv",),
+  "COALESCED_LOAD_LOWERING": ("getenv",),
+  "WARP_REDUCE_LOWERING": ("getenv",),
+  "V_DOT2_LOWERING": ("getenv",),
+  "DECODE_FAST_EXP2": ("none",),
+  "PREFILL_SOFTMAX_REDUCE_FUSE": ("getenv", 1),
+  "PREFILL_V_TRANSPOSED": ("getenv",),
+  "UNSAFE_DISABLE_MASK": ("getenv", 0),
+  "REGALLOC_ADDR_REMAT": ("getenv", 0),
+  "TINYGRAD_ONLINE_SOFTMAX_STATE": ("getenv", 0),
+}
+
+
+def observed_gate_value(name: str):
+  """What the code gated by `name` actually sees right now -- not what os.environ currently says.
+
+  This is the value a cache key must be built from. Reading os.environ live instead produces a key that asserts a
+  gate setting the compiled program was not compiled under.
+  """
+  kind, *rest = GATE_READERS[name]
+  if kind == "contextvar":
+    from tinygrad.helpers import ContextVar
+    cv = ContextVar._cache.get(name)
+    return None if cv is None else cv.value
+  if kind == "getenv":
+    from tinygrad.helpers import getenv
+    return getenv(name, rest[0]) if rest else getenv(name)
+  return None
+
+
+def observed_gate_values() -> tuple:
+  """PLAN_GATES in order, as the passes see them. Used for the to_program cache key."""
+  return tuple(observed_gate_value(name) for name, _ in PLAN_GATES)
 
 @dataclass(frozen=True)
 class TargetCapabilities:
@@ -141,7 +200,13 @@ class OptimizationPlan:
   # ---- construction -------------------------------------------------------------------------------------
   @staticmethod
   def from_env(*, renderer=None, opts: tuple[Opt, ...] = (), **kw) -> OptimizationPlan:
-    """The ONE place environment is read. Acceptance: gates are parsed once into a plan, not read inside passes."""
+    """Capture the gate inventory into a plan, once.
+
+    NOTE the deliberate difference from `observed_gate_values()`: this reads os.environ LIVE, so it reports what the
+    environment says now. `observed_gate_values()` reports what the passes actually see, which for a gate already
+    read through the @functools.cache'd `getenv` may be a different, older value. The cache key must use the latter.
+    Until the plan is genuinely threaded into lowering, a plan built here can disagree with the passes it describes.
+    """
     gates = tuple((name, os.environ.get(name, default)) for name, default in PLAN_GATES)
     caps = TargetCapabilities.from_renderer(renderer) if renderer is not None else TargetCapabilities()
     gate_map = dict(gates)

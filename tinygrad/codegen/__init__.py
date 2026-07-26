@@ -24,7 +24,7 @@ from tinygrad.codegen.late.devectorizer import load_store_folding, load_store_in
 from tinygrad.codegen.late.reduce_lowering import pm_reduce, ReduceContext
 from tinygrad.codegen.late.reg_store import pm_reduce_acc_upcast_fix, pm_distinct_reg_store_devec, pm_group_wmma_reg_store
 from tinygrad.codegen.late.coalesced_load import coalesce_loads
-from tinygrad.codegen.plan import PLAN_GATES
+from tinygrad.codegen.plan import PLAN_GATES, observed_gate_values  # noqa: F401  (PLAN_GATES re-exported for callers)
 from tinygrad.codegen.opt.postrange import apply_opts
 from tinygrad.codegen import experimental as cg_extras
 from tinygrad.codegen.late.gater import pm_move_gates_from_index
@@ -502,14 +502,21 @@ def _lower_cache_table() -> str:
 to_program_cache: dict[tuple, UOp] = {}
 def to_program(ast:UOp, renderer:Renderer) -> UOp:
   config = (NOOPT, EMULATED_DTYPES, NOLOCALS, USE_TC, IMAGE, DISABLE_FAST_IDIV, TRANSCENDENTAL, ALLOW_TF32)
-  # LR-051: the gate suffix is derived from PLAN_GATES -- the SAME inventory OptimizationPlan.from_env reads -- rather
-  # than a second hand-picked getenv(...) list. That hand-picked list is exactly how PREFILL_SOFTMAX_REDUCE_FUSE,
-  # UNSAFE_DISABLE_MASK and REGALLOC_ADDR_REMAT went missing (they change generated code inside do_to_program's
-  # lowering pipeline -- see LOWERING_GATES_NOT_IN_CACHE_KEY in tinygrad/uop/trace.py -- but were absent from this
-  # key, so flipping one in-process silently returned the program lowered under the OTHER value). Reading the same
-  # PLAN_GATES list here means a future gate added to the plan's inventory is automatically part of the cache key
-  # too, instead of requiring someone to remember to update a second place.
-  gate_values = tuple(os.environ.get(name, default) for name, default in PLAN_GATES)
+  # LR-051: the gate suffix is derived from PLAN_GATES -- the SAME inventory OptimizationPlan reads -- rather than a
+  # second hand-picked getenv(...) list. That hand-picked list is how PREFILL_SOFTMAX_REDUCE_FUSE,
+  # UNSAFE_DISABLE_MASK and REGALLOC_ADDR_REMAT went missing from this key: they change generated code inside
+  # do_to_program's lowering pipeline but were absent here. Deriving from PLAN_GATES means a gate added to the
+  # inventory is part of the cache key automatically instead of requiring someone to update a second place.
+  #
+  # LR-019: read via observed_gate_values(), NOT os.environ. An earlier version of this line read os.environ live,
+  # which was wrong in a way that looked correct. The passes inside do_to_program read these gates through
+  # `getenv`, which is @functools.cache'd and frozen at first read. So flipping a gate mid-process moved THIS key
+  # while changing nothing the lowering actually saw: the cache missed, do_to_program recompiled from the same
+  # frozen values, and the byte-identical program was stored under a second key asserting the new gate setting.
+  # Demonstrated in-tree with UNSAFE_DISABLE_MASK: 1 -> 2 cache entries, identical program UOp key. That is worse
+  # than the stale HIT it replaced, because a cache that quietly holds two keys for one program is harder to
+  # notice than one that returns an obviously stale answer. The key must describe what was compiled.
+  gate_values = observed_gate_values()
   key = (ast.key, type(renderer), renderer.target, *[x.value for x in config], *gate_values)
   if (prg:=to_program_cache.get(key)) is not None: return prg
   _dk = None

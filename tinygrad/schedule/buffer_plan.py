@@ -1,4 +1,4 @@
-"""LR-042: the buffer/storage decision -- what a surviving STAGE turns into, recorded as a result.
+r"""LR-042: the buffer/storage decision -- what a surviving STAGE turns into, recorded as a result.
 
 `create_bufferize_and_index_based_on_ranges` (indexing.py) decides *whether* a STAGE node is inserted, and with what
 `BufferizeOpts` -- device, address space, removability, composite-consumer status. `remove_bufferize` (rangeify.py,

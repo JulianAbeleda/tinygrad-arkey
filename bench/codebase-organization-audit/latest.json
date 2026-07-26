@@ -318,8 +318,8 @@
     }
   ],
   "audited_commit": {
-    "commit": "f2c4e2bca42424506e25bf2b715f16da40cdabc1",
-    "described": "mac-first-boot-20260610-3449-gf2c4e2bca-dirty",
+    "commit": "aa98656766a84abad9fe9def0d229242d58ff665",
+    "described": "mac-first-boot-20260610-3451-gaa9865676-dirty",
     "dirty": true
   },
   "authority_keys": {
@@ -856,8 +856,8 @@
     ]
   },
   "coverage": {
-    "authored_files": 462,
-    "authored_loc": 71482,
+    "authored_files": 463,
+    "authored_loc": 71649,
     "explicit_records": 96,
     "generated_files": 1,
     "generated_loc": 57,
@@ -1194,7 +1194,11 @@
         "tinygrad/schedule/rangeify.py"
       ],
       "test/unit/test_optimization_plan.py": [
-        "tinygrad/__init__.py"
+        "tinygrad/__init__.py",
+        "tinygrad/codegen/__init__.py",
+        "tinygrad/helpers.py",
+        "tinygrad/uop/ops.py",
+        "tinygrad/uop/trace.py"
       ],
       "test/unit/test_prefill_graph_gemm_route.py": [
         "tinygrad/helpers.py",
@@ -1239,6 +1243,9 @@
         "tinygrad/codegen/opt/heuristic.py",
         "tinygrad/llm/fused_attention.py",
         "tinygrad/schedule/wmma/__init__.py"
+      ],
+      "tinygrad/codegen/plan.py": [
+        "tinygrad/helpers.py"
       ],
       "tinygrad/device.py": [
         "tinygrad/__init__.py"
@@ -2631,6 +2638,10 @@
         "tinygrad/codegen/opt/register_contracts.py",
         "tinygrad/renderer/isa/amd_register_contracts.py"
       ],
+      "test/unit/test_route_admission_consistency.py": [
+        "extra/qk/route_manifest.py",
+        "tinygrad/llm/decode_routes.py"
+      ],
       "test/unit/test_runtime_specs.py": [
         "extra/qk/generated_candidates.py",
         "extra/qk/prefill/prefill_graph_gemm_route.py",
@@ -3773,7 +3784,7 @@
       "extra/qk/quant/q6_k_gemv_primitive.py": 3,
       "extra/qk/quantize.py": 1,
       "extra/qk/reg_store_devec.py": 1,
-      "extra/qk/route_manifest.py": 20,
+      "extra/qk/route_manifest.py": 21,
       "extra/qk/runtime_specs.py": 8,
       "extra/qk/shared_attention_capture.py": 4,
       "extra/qk/shared_attention_evidence.py": 4,
@@ -3928,6 +3939,7 @@
       "test/unit/test_regalloc_rematerialization.py": 0,
       "test/unit/test_regalloc_spans.py": 0,
       "test/unit/test_register_contracts.py": 0,
+      "test/unit/test_route_admission_consistency.py": 0,
       "test/unit/test_runtime_specs.py": 1,
       "test/unit/test_scheduler_output_tile_loop.py": 0,
       "test/unit/test_shared_attention_compiler_capture.py": 0,
@@ -3984,7 +3996,7 @@
       "tinygrad/helpers.py": 138,
       "tinygrad/llm/__main__.py": 0,
       "tinygrad/llm/admission.py": 4,
-      "tinygrad/llm/decode_routes.py": 4,
+      "tinygrad/llm/decode_routes.py": 5,
       "tinygrad/llm/device_facts.py": 7,
       "tinygrad/llm/flash_prefill_attention.py": 8,
       "tinygrad/llm/fused_attention.py": 5,
@@ -4298,6 +4310,7 @@
       "test/unit/test_regalloc_rematerialization.py",
       "test/unit/test_regalloc_spans.py",
       "test/unit/test_register_contracts.py",
+      "test/unit/test_route_admission_consistency.py",
       "test/unit/test_scheduler_output_tile_loop.py",
       "test/unit/test_shared_attention_compiler_capture.py",
       "test/unit/test_shared_attention_evidence.py",
@@ -4412,7 +4425,6 @@
       "test/unit/test_model_route_plan.py",
       "test/unit/test_operand_attribution_20260714.py",
       "test/unit/test_operand_path_execution_worker.py",
-      "test/unit/test_optimization_plan.py",
       "test/unit/test_packed_wmma_compile_gate.py",
       "test/unit/test_packed_wmma_correctness_canary.py",
       "test/unit/test_pass_registry.py",
@@ -4428,6 +4440,7 @@
       "test/unit/test_q4_q4_owner_comparison.py",
       "test/unit/test_q4k_prefill_route_spec.py",
       "test/unit/test_q4k_q8_mmq_prefill_spec.py",
+      "test/unit/test_route_admission_consistency.py",
       "test/unit/test_scheduler_output_tile_loop.py",
       "test/unit/test_shared_attention_evidence.py",
       "test/unit/test_shared_attention_promotion.py",
@@ -4728,6 +4741,7 @@
       "test/unit/test_regalloc_rematerialization.py": 6,
       "test/unit/test_regalloc_spans.py": 4,
       "test/unit/test_register_contracts.py": 2,
+      "test/unit/test_route_admission_consistency.py": 2,
       "test/unit/test_runtime_specs.py": 5,
       "test/unit/test_scheduler_output_tile_loop.py": 5,
       "test/unit/test_shared_attention_compiler_capture.py": 5,
@@ -5133,8 +5147,8 @@
         "loc": 12106
       },
       "unclassified": {
-        "files": 366,
-        "loc": 58251
+        "files": 367,
+        "loc": 58418
       }
     },
     "domain": {
@@ -5175,8 +5189,8 @@
         "loc": 1007
       },
       "unclassified": {
-        "files": 366,
-        "loc": 58251
+        "files": 367,
+        "loc": 58418
       }
     },
     "role": {
@@ -5217,8 +5231,8 @@
         "loc": 136
       },
       "unclassified": {
-        "files": 366,
-        "loc": 58251
+        "files": 367,
+        "loc": 58418
       }
     },
     "status": {
@@ -5251,8 +5265,8 @@
         "loc": 114
       },
       "unclassified": {
-        "files": 366,
-        "loc": 58251
+        "files": 367,
+        "loc": 58418
       },
       "unresolved_reproducer": {
         "files": 2,
@@ -6404,6 +6418,9 @@
       "docs/prefill-R-theories-scope-20260724.md",
       "docs/wmma-modularization-scope-20260724.md"
     ],
+    "test/unit/test_optimization_plan.py": [
+      "tinygrad/codegen/plan.py"
+    ],
     "test/unit/test_packed_weight.py": [
       "bench/lowering-refactor-baseline/pass_inventory.json"
     ],
@@ -6510,8 +6527,7 @@
       "test/unit/test_pass_registry.py",
       "tinygrad/codegen/experimental.py",
       "tinygrad/codegen/late/coalesced_load.py",
-      "tinygrad/codegen/plan.py",
-      "tinygrad/uop/trace.py"
+      "tinygrad/codegen/plan.py"
     ],
     "tinygrad/codegen/experimental.py": [
       "docs/HANDOFF_logits_only_store_codegen_bug_20260724.md",
@@ -6754,6 +6770,7 @@
       "test/unit/test_pass_registry.py"
     ],
     "tinygrad/codegen/plan.py": [
+      "docs/task_workflow/input/lr-019-gate-mechanism-divergence-scope-20260726.md",
       "test/unit/test_codegen_cache_key_gates.py",
       "test/unit/test_kernel_specs.py",
       "test/unit/test_optimization_plan.py",
@@ -7034,6 +7051,7 @@
       "test/unit/test_composite_reduce.py",
       "test/unit/test_llm_decode_correctness.py",
       "test/unit/test_online_softmax_tile.py",
+      "test/unit/test_optimization_plan.py",
       "test/unit/test_prefill_graph_gemm_route.py",
       "test/unit/test_prefill_whole_synced.py",
       "test/unit/test_regalloc_addr_lifetime.py",
@@ -7055,6 +7073,7 @@
       "tinygrad/codegen/late/regalloc.py",
       "tinygrad/codegen/opt/heuristic.py",
       "tinygrad/codegen/opt/postrange.py",
+      "tinygrad/codegen/plan.py",
       "tinygrad/codegen/simplify.py",
       "tinygrad/device.py",
       "tinygrad/dtype.py",
@@ -7161,6 +7180,7 @@
       "extra/qk/route_manifest.json",
       "extra/qk/route_manifest.py",
       "test/unit/test_pure_search_guard_boundary.py",
+      "test/unit/test_route_admission_consistency.py",
       "tinygrad/codegen/plan.py",
       "tinygrad/llm/model.py",
       "tinygrad/llm/qk_primitives.py"
@@ -7351,6 +7371,7 @@
       "extra/qk/route_manifest.json",
       "scratchpad/audit_bfs.py",
       "test/unit/test_pure_search_guard_boundary.py",
+      "test/unit/test_route_admission_consistency.py",
       "test/unit/test_shared_prefill_policy.py",
       "tinygrad/llm/model.py"
     ],
@@ -8032,6 +8053,7 @@
       "test/unit/test_nested_composite_reduce.py",
       "test/unit/test_online_softmax_state_split.py",
       "test/unit/test_online_softmax_tile.py",
+      "test/unit/test_optimization_plan.py",
       "test/unit/test_packed_weight.py",
       "test/unit/test_precontract_int8_lds_contract.py",
       "test/unit/test_pure_pipe_graph_abi.py",
@@ -8176,7 +8198,7 @@
     ],
     "tinygrad/uop/trace.py": [
       "test/unit/test_codegen_cache_key_gates.py",
-      "tinygrad/codegen/__init__.py",
+      "test/unit/test_optimization_plan.py",
       "tinygrad/codegen/passes.py",
       "tinygrad/codegen/plan.py"
     ],
@@ -8228,14 +8250,14 @@
     ]
   },
   "promotion_budget": {
-    "budgeted_after_pending_promotions": 35213,
-    "budgeted_loc": 35213,
+    "budgeted_after_pending_promotions": 35239,
+    "budgeted_loc": 35239,
     "cap": 50000,
     "data_file_convertible_loc": 0,
-    "headroom": 14787,
+    "headroom": 14761,
     "intended_cap": 30000,
     "intended_cap_note": "sz.py:13 records 35000 as temporary headroom; the standing target is 30000",
-    "over_intended_cap": 5213,
+    "over_intended_cap": 5239,
     "pending_promotion_net_cost": 0,
     "unbudgeted_default_path_loc": 6242
   },
@@ -8671,8 +8693,8 @@
       "warning": "high_fan_in"
     },
     {
-      "count": 20,
-      "message": "extra/qk/route_manifest.py is imported by 20 modules",
+      "count": 21,
+      "message": "extra/qk/route_manifest.py is imported by 21 modules",
       "path": "extra/qk/route_manifest.py",
       "principle": "a widely-imported module is a de-facto authority",
       "warning": "high_fan_in"

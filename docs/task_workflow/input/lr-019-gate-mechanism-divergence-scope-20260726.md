@@ -63,7 +63,7 @@ Requires the plan to pass the byte-identical default each call site uses, and a 
 expect `from_env` to observe it; arguably those tests assert the wrong contract. Does nothing for `NOOPT`.
 
 **B. Thread the plan everywhere and delete the `getenv` calls.** The actual goal. Large, touches every gated
-pass, and cannot be verified by the byte-identical gates — 36 env-gated passes are certified in exactly one
+pass, and cannot be verified by the byte-identical gates — 65 env-gated passes are certified in exactly one
 configuration (all-default), so the gates would call the change safe whether or not it is.
 
 **C. Make the plan refuse to be inconsistent.** `plan.validate()` already exists as the choke point before any
@@ -106,3 +106,59 @@ def validate(self):
 Note the comment in the helper: inspecting `getenv.__wrapped__` or `getenv.cache_info()` is required, because
 calling `getenv(name, default)` to find out what a pass sees would itself create the cache entry and make the
 answer trivially agree. That is the part of C most likely to be wrong.
+
+---
+
+# Review outcome (2026-07-26) — three corrections to the above, and what was done
+
+An independent review checked this scope's claims against the tree. Three of them were wrong, and the framing
+was wrong in a way that changed the answer. Corrections recorded here rather than edited silently into the text
+above, so the mistakes stay visible.
+
+**1. The divergence was already shipped, and the plan was not its source.** `to_program`'s cache key
+(`codegen/__init__.py`) read `os.environ` LIVE while every pass inside `do_to_program` read the same variables
+through frozen `getenv`. That is the same hazard this document attributes to a hypothetical future threading of
+`OptimizationPlan` — except it was live, on the hot path, introduced by LR-051, and defended by a comment
+claiming it had FIXED a staleness bug. Verified in-tree with `UNSAFE_DISABLE_MASK`: flipping it mid-process took
+the cache from 1 to 2 entries whose programs had the identical UOp key. The previous behaviour was a stale cache
+HIT; the LR-051 behaviour was a stale MISS that recompiles from the same frozen values and files a byte-identical
+program under a key asserting the new setting. That is worse, because it looks correct.
+
+Fixed: the key is now built by `plan.observed_gate_values()`, which reads each gate the way its passes read it.
+Same test, after: 1 entry, identical program. `test_the_cache_key_no_longer_moves_without_the_program_moving`.
+
+**2. "Nothing in tinygrad/ calls getenv('NOOPT')" was false.** `ContextVar.__init__` (`helpers.py:188`) calls
+`getenv(key, default)`, so `ContextVar("NOOPT", 0)` populates the `("NOOPT", 0)` entry at import time. The
+conclusion (the plan cannot see `Context(NOOPT=1)`) was right; the reason was not. The real shape is a three-way
+split on one name, confirmed in-process with NOOPT=1 set after import: `getenv("NOOPT")` → 1,
+`getenv("NOOPT", 0)` → 0, `NOOPT.value` → 0. The authority is `NOOPT.value`; the `getenv` entries are artifacts.
+`GATE_READERS` now records this, and option A is not merely incomplete for NOOPT — it would make NOOPT actively
+wrong while appearing to fix it.
+
+**3. `functools.cache` splits three ways, not two.** `getenv("X")` and `getenv("X", 0)` are also separate entries
+despite being semantically identical, because `lru_cache` keys on the argument tuple. So matching a pass means
+matching its ARITY, not just its default value. The 12-row arity table was derived from the tree and verified:
+six gates are read with no default argument, four with an int default, one is a ContextVar, and
+`DECODE_FAST_EXP2` has no reader anywhere in `tinygrad/`.
+
+**4. The "36 env-gated passes" figure was unsourced and wrong.** The registry reports 65 descriptors carrying at
+least one env flag, across 76 distinct flags. Corrected here and in the main scope.
+
+**Also corrected:** `uop/trace.py`'s `LOWERING_GATES_NOT_IN_CACHE_KEY` still claimed those three gates were
+missing from the cache key. They have been in it since LR-051. The tuple is now marked historical and a test
+asserts the opposite of its name.
+
+## What is still open
+
+Option C's helper CAN be written — the review showed `getenv.cache_info().misses` distinguishes "we became the
+first reader" from "this was already frozen", so a probe is honest rather than trivially self-agreeing. It was
+NOT implemented here, because with the cache key fixed the plan is inert again and a construction-time probe
+guards a path nothing walks. It becomes the right move the moment a pass reads the plan, and it belongs in
+`from_env`, not `validate()` — a temporal property checked one step after the value is captured, in a module
+whose thesis is that WHEN you read a value matters, would be the wrong place.
+
+The verification problem for B is unchanged and remains the real blocker: the honest oracle is that a per-pass
+migration must be a no-op, provable by rendering a fixed AST corpus under both settings of the gate in separate
+processes, before and after the migration, with no trusted baseline required — the pre-migration binary is the
+baseline. That harness does not exist yet, and it is blocked on exactly the freeze this document describes,
+which is the actual argument for doing the gate work before B.
