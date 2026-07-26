@@ -72,7 +72,9 @@ def _run(desc: str, argv: list[str], env_extra: dict[str, str], label: str = "au
   if throughput_re is None:
     return proc.returncode
 
-  values = [float(m) for m in throughput_re.findall(proc.stdout)]
+  # Scan BOTH streams. decode_runtime_overhead.py:203-207 prints its "ctx N: W ..ms (.. tok/s)" rows to stderr, so a
+  # stdout-only scan made the decode authority path raise NoThroughputProduced on every successful run.
+  values = [float(m) for m in throughput_re.findall(proc.stdout + proc.stderr)]
   if not values:
     raise NoThroughputProduced(
       f"{desc} ({label}) produced no parsable throughput number (rc={proc.returncode}) -- "
