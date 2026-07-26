@@ -1,0 +1,11 @@
+{
+  "schema": "luna-run-manifest-collector.v1",
+  "task_id": "LUNA-003",
+  "verdict": "PASS",
+  "collector": "extra/qk/decode/run_manifest.py",
+  "unit_test": "test/unit/test_run_manifest.py",
+  "side_effect_free_until_explicit_invocation": true,
+  "required_field_policy": "fail_closed",
+  "positive_control": {"known_command_branch_dirty_path_and_worktree_fixture": true, "boot_id_fixture": true, "power_fixture": true, "missing_positive_control_rejected": true},
+  "uses_gpu": false
+}
